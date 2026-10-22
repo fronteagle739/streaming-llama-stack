@@ -31,8 +31,27 @@ def identity(cfg):
     location=str(ROOT/'vendor'/'engines')
     if location not in sys.path:sys.path.insert(0,location)
     from gguf import GGUFReader
+    from collections import OrderedDict
+    import numpy as np
+    class MetadataReader(GGUFReader):
+        # Reuse GGUF's metadata decoder without creating a135GB file mapping
+        # that Windows charges against a small CPU Job's commitment limit.
+        def __init__(self,stream):
+            self.stream=stream;self.byte_order='I';self.fields=OrderedDict()
+            magic,version,_,count=struct.unpack('<IIQQ',stream.read(24))
+            if magic!=0x46554747 or version not in (2,3) or count>1000000:
+                raise ValueError('Unsupported bounded original GGUF metadata')
+            self._build_fields(24,count)
+        def _get(self,offset,dtype,count=1,override_order=None):
+            count=int(count);dtype=np.dtype(dtype).newbyteorder(self.byte_order if override_order is None else override_order)
+            size=count*dtype.itemsize
+            if offset<0 or count<0 or size>16<<20 or offset+size>64<<20:
+                raise ValueError('GGUF metadata exceeds its64MiB identity budget')
+            self.stream.seek(offset);raw=self.stream.read(size)
+            if len(raw)!=size:raise ValueError('Truncated GGUF metadata')
+            return np.frombuffer(raw,dtype=dtype,count=count)
     model=path(cfg['model']);before=model.stat()
-    reader=GGUFReader(model,'r')
+    with model.open('rb') as stream:reader=MetadataReader(stream)
     if 'tokenizer.ggml.tokens' not in reader.fields:raise ValueError('Original GGUF tokenizer metadata is missing')
     tokenizer=[name for name in reader.fields if name.startswith('tokenizer.') and 'chat_template' not in name]
     rope=[name for name in reader.fields if 'rope' in name]

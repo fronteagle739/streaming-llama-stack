@@ -114,10 +114,15 @@ class Native:
         with ram.lease():
             return self.control('anchor',mapping=ram.name,capacity=ram.capacity,
                                 checkpoint_sha256=self.checkpoint['payload_sha256'])
-    def rewind(self,ram):
-        with ram.lease():return self.control('rewind')['checkpoint']
+    def rewind(self,ram,checkpoint):
+        with ram.lease():return self.control('rewind',mapping=ram.name,capacity=ram.capacity,
+                                             checkpoint_sha256=checkpoint['payload_sha256'])['checkpoint']
     def quality(self,value=None):
         return self.http('/v1/quality-speed',{'value':value} if value is not None else None,timeout=10)
+    def probe(self,ram,*,reference):
+        with ram.lease():
+            return self.control('reference' if reference else 'compare',mapping=ram.name,capacity=ram.capacity,
+                                checkpoint_sha256=self.checkpoint['payload_sha256'])
 
     def close(self):
         if self.closed:return self.receipt

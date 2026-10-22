@@ -13,8 +13,7 @@ typedef struct {
 static char ds4_combo_owner[33];
 static uint64_t ds4_combo_epoch,ds4_combo_sequence;
 static bool ds4_combo_claimed;
-static ds4_native_checkpoint ds4_combo_anchor;
-static char ds4_combo_anchor_name[128];static uint64_t ds4_combo_anchor_capacity;
+typedef struct {char session[33];uint64_t epoch;ds4_native_checkpoint checkpoint;}ds4_combo_journal;
 
 static bool ds4_combo_hex(const char*s,size_t n){
     if(!s||strlen(s)!=n)return false;
@@ -43,7 +42,7 @@ static bool ds4_combo_parse(const char*text,ds4_combo_command*c){
             bit=!strcmp(key,"owner_epoch")?2:!strcmp(key,"sequence")?4:64;ok=ds4_combo_uint(&p,dst);
         }else if(!strcmp(key,"request")){
             bit=8;json_ws(&p);const char*first=p;ok=*p=='{'&&json_skip_value(&p);
-            if(ok)c->body=xstrndup(first,(size_t)(p-first));
+            if(ok){free(c->body);c->body=xstrndup(first,(size_t)(p-first));}
         }else if(!strcmp(key,"tokens")){
             bit=128;json_ws(&p);ok=*p++=='[';json_ws(&p);
             if(ok&&*p!=']')for(;;){uint64_t value;
@@ -99,8 +98,9 @@ static int ds4_combo_export_view(void*ud,const ds4_native_view*v,char*err,size_t
     }return 1;
 }
 static int ds4_combo_anchor_view(void*ud,const ds4_native_view*v,char*err,size_t cap){
-    ds4_combo_mapping*m=ud;uint8_t page[65536];
-    if(!ds4_native_capture(&ds4_combo_anchor,v,err,cap)||!dsv41_c_transfer(ds4_combo_write_page,m,(void*)v->logits,129280*4))return 0;
+    ds4_combo_mapping*m=ud;uint8_t page[65536];ds4_combo_journal journal={0};
+    strcpy(journal.session,ds4_combo_owner);journal.epoch=ds4_combo_epoch;
+    if(!ds4_native_capture(&journal.checkpoint,v,err,cap)||!ds4_combo_write(m,&journal,sizeof(journal))||!dsv41_c_transfer(ds4_combo_write_page,m,(void*)v->logits,129280*4))return 0;
     for(uint32_t i=0;i<v->span_count;++i){
         if(v->spans[i].kind==DSV41_C_COMPRESSED||v->spans[i].kind==DSV41_C_INDEX)continue;
         for(uint64_t off=0;off<v->spans[i].bytes;){size_t n=(size_t)(v->spans[i].bytes-off);if(n>65536)n=65536;
@@ -126,6 +126,42 @@ static int ds4_combo_restore_mapping(ds4_session*s,const char*name,uint64_t capa
 done:
     free(tokens);free(logits);ds4_combo_mapping_close(&m);
     if(rc&&err&&cap&&!err[0])snprintf(err,cap,"native shared-RAM checkpoint refused");return rc;
+}
+/* Qualification only: full vocabulary vectors in parent-owned locked RAM.
+ * Compare on the SAME reference prefix, so KL is not confounded by drift. */
+#define DS4_COMBO_PROBE_ROWS 384u
+#define DS4_COMBO_PROBE_VOCAB 129280u
+static int ds4_combo_probe(ds4_session*s,ds4_combo_mapping*m,bool reference,buf*reply,char*err,size_t cap){
+    const uint64_t row_bytes=DS4_COMBO_PROBE_VOCAB*4ull;
+    const uint64_t bytes=32+DS4_COMBO_PROBE_ROWS*4ull+DS4_COMBO_PROBE_ROWS*row_bytes;
+    uint64_t header[4]={0x3145424f52503444ull,ds4_combo_epoch,DS4_COMBO_PROBE_ROWS,DS4_COMBO_PROBE_VOCAB};
+    if(m->capacity!=bytes){snprintf(err,cap,"exact384-vector reference RAM extent required");return 1;}
+    if(reference)memcpy(m->data,header,32);
+    else if(memcmp(m->data,header,32)){snprintf(err,cap,"reference bank owner epoch/header differs");return 1;}
+    float*row=malloc((size_t)row_bytes);if(!row){snprintf(err,cap,"probe row allocation refused");return 1;}
+    int32_t*ids=(int32_t*)(m->data+32);double sum_kl=0,max_kl=0;unsigned matches=0,exact=0;int rc=1;
+    for(unsigned r=0;r<DS4_COMBO_PROBE_ROWS;r++){
+        if(ds4_session_copy_logits(s,row,DS4_COMBO_PROBE_VOCAB)!=DS4_COMBO_PROBE_VOCAB)goto done;
+        int candidate=ds4_session_argmax(s);float*base=(float*)(m->data+32+DS4_COMBO_PROBE_ROWS*4ull+r*row_bytes);
+        if(reference){ids[r]=candidate;memcpy(base,row,(size_t)row_bytes);}
+        else{
+            if(ids[r]<0||ids[r]>=DS4_COMBO_PROBE_VOCAB)goto done;
+            matches+=(candidate==ids[r]);exact+=!memcmp(base,row,(size_t)row_bytes);
+            double bm=-INFINITY,cm=-INFINITY,bz=0,cz=0,kl=0;
+            for(unsigned v=0;v<DS4_COMBO_PROBE_VOCAB;v++){
+                if(!isfinite(base[v])||!isfinite(row[v]))goto done;
+                if(base[v]>bm)bm=base[v];if(row[v]>cm)cm=row[v];
+            }
+            for(unsigned v=0;v<DS4_COMBO_PROBE_VOCAB;v++){bz+=exp((double)base[v]-bm);cz+=exp((double)row[v]-cm);}
+            const double bn=bm+log(bz),cn=cm+log(cz);
+            for(unsigned v=0;v<DS4_COMBO_PROBE_VOCAB;v++)kl+=exp((double)base[v]-bn)*((double)base[v]-bn-(double)row[v]+cn);
+            if(!isfinite(kl))goto done;sum_kl+=kl;if(kl>max_kl)max_kl=kl;
+        }
+        if(ds4_session_eval(s,ids[r],err,cap))goto done;
+    }
+    char digest[65];if(!ds4_native_hash(m->data,(size_t)bytes,digest))goto done;
+    buf_printf(reply,"{\"vectors\":384,\"reference_sha256\":\"%s\",\"top1_matches\":%u,\"byte_exact_vectors\":%u,\"mean_kl\":%.17g,\"max_kl\":%.17g,",digest,reference?384:matches,reference?384:exact,reference?0:sum_kl/384,reference?0:max_kl);rc=0;
+done:free(row);if(rc&&err&&cap&&!*err)snprintf(err,cap,"full-vector qualification failed");return rc;
 }
 static bool ds4_combo_start(server*s,const ds4_engine_options*opt,char*err,size_t cap){
     const char*enabled=getenv("DS4_COMBO_ENABLED");if(!enabled||!strcmp(enabled,"0"))return true;
@@ -171,18 +207,20 @@ static void ds4_combo_http(server*s,int fd,const http_request*hr){
             if(ds4_session_native_visit(session,ds4_native_capture,&current,err,sizeof(err)))goto failed;
             if(!strcmp(path,"/decode/checkpoint")){
                 if(command.seen!=7){snprintf(err,sizeof(err),"checkpoint fields differ");goto failed;}
+            }else if(!strcmp(path,"/decode/reference")||!strcmp(path,"/decode/compare")){
+                bool reference=!strcmp(path,"/decode/reference");
+                if(command.seen!=(7|16|32|64)||strcmp(command.sha,current.payload_sha256)||!ds4_combo_mapping_open(&mapping,command.mapping,command.capacity,reference)||ds4_combo_probe(session,&mapping,reference,&reply,err,sizeof(err)))goto failed;
             }else if(!strcmp(path,"/decode/export")||!strcmp(path,"/decode/anchor")){
                 if(command.seen!=(7|16|32|64)||strcmp(command.sha,current.payload_sha256)||!ds4_combo_mapping_open(&mapping,command.mapping,command.capacity,true)){snprintf(err,sizeof(err),"native export mapping/base refused");goto failed;}
                 bool anchor=!strcmp(path,"/decode/anchor");
                 if(anchor){if(command.capacity>24u*1024*1024||ds4_session_native_visit(session,ds4_combo_anchor_view,&mapping,err,sizeof(err)))goto failed;
-                    strcpy(ds4_combo_anchor_name,command.mapping);ds4_combo_anchor_capacity=command.capacity;
                 }else if(command.capacity<ds4_combo_payload_bytes(&current)||ds4_session_native_visit(session,ds4_combo_export_view,&mapping,err,sizeof(err)))goto failed;
                 buf_printf(&reply,"{\"written_bytes\":%llu,",(unsigned long long)mapping.cursor);
             }else if(!strcmp(path,"/decode/rewind")){
-                if(command.seen!=7||!ds4_combo_anchor.position||!ds4_combo_anchor_name[0]||!ds4_combo_mapping_open(&mapping,ds4_combo_anchor_name,ds4_combo_anchor_capacity,false)){snprintf(err,sizeof(err),"saved native rewind anchor unavailable");goto failed;}
-                float*logits=(float*)mapping.data;mapping.cursor=129280*4;
-                if(ds4_session_native_rewind(session,ds4_combo_anchor.position,logits,ds4_combo_read,&mapping,ds4_native_verify,&current,ds4_native_verify,&ds4_combo_anchor,err,sizeof(err)))goto failed;
-                ds4_combo_anchor_name[0]=0;ds4_combo_anchor.position=0;
+                ds4_combo_journal journal={0};
+                if(command.seen!=(7|16|32|64)||command.capacity>24u*1024*1024||!ds4_combo_mapping_open(&mapping,command.mapping,command.capacity,false)||!ds4_combo_read(&mapping,&journal,sizeof(journal))||memcmp(journal.session,ds4_combo_owner,33)||journal.epoch!=ds4_combo_epoch||strcmp(journal.checkpoint.payload_sha256,command.sha)){snprintf(err,sizeof(err),"saved native rewind owner/epoch/checkpoint unavailable");goto failed;}
+                float*logits=(float*)(mapping.data+sizeof(journal));mapping.cursor=sizeof(journal)+129280*4;
+                if(mapping.cursor>mapping.capacity||ds4_session_native_rewind(session,journal.checkpoint.position,logits,ds4_combo_read,&mapping,ds4_native_verify,&current,ds4_native_verify,&journal.checkpoint,err,sizeof(err)))goto failed;
             }else{snprintf(err,sizeof(err),"unknown combo operation");goto failed;}
         }
     }
