@@ -33,6 +33,16 @@ def budget(cfg, maximum=400):
     return {**cfg, 'host_budget_gib': requested, 'min_available_gib': floor}
 
 
+def source_digest(directory):
+    files = sorted(p for p in directory.rglob('*') if p.is_file() and
+                   (p.suffix in {'.c', '.h', '.m', '.metal', '.inc'} or p.name == 'Makefile'))
+    digest = hashlib.sha256()
+    for file in files:
+        digest.update(file.relative_to(directory).as_posix().encode() + b'\0')
+        digest.update(bytes.fromhex(sha256(file)))
+    return digest.hexdigest()
+
+
 def setup(cfg, backend='ds4', *, check=False, zig=None):
     if sys.platform != 'darwin' or platform.machine() != 'arm64':
         raise ValueError('Mac setup requires macOS on Apple Silicon')
@@ -47,14 +57,22 @@ def setup(cfg, backend='ds4', *, check=False, zig=None):
         wired = int(subprocess.check_output(['sysctl', '-n', 'iogpu.wired_limit_mb'], text=True).strip())
         if wired < 512000:
             raise ValueError('Native 1017 preset needs a larger wired limit. Run: sudo sysctl iogpu.wired_limit_mb=512000')
-        binary = ROOT / 'engines/ds4-mac/ds4-server'
-        if not binary.exists() and not check:
+        directory = ROOT / 'engines/ds4-mac'
+        binary = directory / 'ds4-server'
+        source_pin = source_digest(directory)
+        build_record = Path(cfg['runtime_root']) / 'state' / 'ds4-build.json'
+        previous = json.loads(build_record.read_text()) if build_record.is_file() else {}
+        current = (binary.is_file() and previous.get('source_sha256') == source_pin
+                   and previous.get('binary_sha256') == sha256(binary))
+        if not current and not check:
             if not shutil.which('clang') or not shutil.which('make'):
                 raise ValueError('Install Xcode command line tools: xcode-select --install')
             build_cfg = {**cfg, 'host_budget_gib': 2, 'min_available_gib': 4}
             flags = '-O3 -ffast-math -g -mcpu=native -Wall -Wextra -std=c99 -DDS4_NATIVE_FRONTIER_ENABLE=1'
             OwnedProcess(build_cfg, ['make', '-j2', 'ds4-server', 'CFLAGS=' + flags], 'build-mac-ds4',
                          cwd=ROOT / 'engines/ds4-mac', timeout=900, scope='ds4-mac').wait()
+            if source_digest(directory) != source_pin:
+                raise ValueError('Mac source changed during its build; binary is unqualified')
     else:
         binary = ROOT / 'engines/mlx-serve/zig-out/bin/mlx-serve'
         if not binary.exists() and not check:
@@ -68,6 +86,8 @@ def setup(cfg, backend='ds4', *, check=False, zig=None):
                 'binary_sha256': sha256(binary) if binary.is_file() else None}
     if backend == 'ds4':
         manifest['renderer_sha256'] = sha256(ROOT / 'engines/ds4-mac/ds4_server.c')
+        manifest['source_sha256'] = source_pin
+        manifest['ready'] = manifest['ready'] and (current or not check)
     if not check:
         atomic_json(Path(cfg['runtime_root']) / 'state' / (backend + '-build.json'), manifest)
     return manifest
@@ -177,6 +197,9 @@ class Receiver:
                 kv_cache_cold_max_tokens=preset.get('kv_cache_cold_max_tokens'),
                 kv_cache_continued_interval_tokens=preset.get('kv_cache_continued_interval_tokens'))
             env['DS4_NATIVE_SESSION'] = '1' if native else '0'
+            env['DS4_METAL_WIRED_CORE_KV'] = '1'
+            env['DS4_NATIVE_SESSION_HOST_BYTES'] = str(int(cfg['host_budget_gib'] * (1 << 30)))
+            env['DS4_NATIVE_SESSION_HOST_FLOOR_BYTES'] = str(int(cfg['min_available_gib'] * (1 << 30)))
             if native:
                 if not self.peer:
                     raise ValueError('Pair the RTX producer first')

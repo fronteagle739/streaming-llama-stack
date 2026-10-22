@@ -965,3 +965,6 @@ ds4_score.o: ds4_score.c ds4_score.h
 	$(CC) $(filter-out -ffast-math,$(CFLAGS)) -c -o $@ $<
 
 ds4_server.o ds4_server_cpu.o ds4_test.o: ds4_score.h
+
+# Wired-buffer ownership changes must rebuild the Metal translation unit.
+ds4_metal.o: ds4_metal_wired.h

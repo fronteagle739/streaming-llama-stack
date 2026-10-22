@@ -637,6 +637,8 @@ static ds4_gpu_decode_pipeline_fast_cache_entry
  * backend-serialized; this hot-path mirror intentionally shares that model. */
 static bool g_decode_pipeline_fast_lookup_active;
 static uint32_t g_decode_pipeline_fast_cache_entries;
+#include "ds4_metal_wired.h"
+
 static NSMutableDictionary<NSString *, id<MTLBuffer>> *g_model_buffer_cache;
 static NSMutableDictionary<NSString *, DS4MetalQ4ExpertTable *> *g_q4_expert_table_cache;
 static NSMutableDictionary<NSString *, id> *g_q4_expert_layer_residency_cache;
@@ -2420,8 +2422,10 @@ static int ds4_gpu_ensure_scratch_buffer(
         options = MTLResourceStorageModePrivate;
     }
 
-    *buffer = [g_device newBufferWithLength:bytes options:options];
-    if (!*buffer && options != MTLResourceStorageModeShared) {
+    *buffer = ds4_metal_wired_enabled() ?
+        ds4_metal_owned_wired_buffer(g_device,bytes,options,NULL) :
+        [g_device newBufferWithLength:bytes options:options];
+    if (!*buffer && !ds4_metal_wired_enabled() && options != MTLResourceStorageModeShared) {
         *buffer = [g_device newBufferWithLength:bytes options:MTLResourceStorageModeShared];
     }
     if (!*buffer) {
@@ -3047,10 +3051,10 @@ static int ds4_gpu_add_model_view_range(
         uint64_t view_bytes = mapped_model_size - off;
         if (view_bytes > view_limit) view_bytes = view_limit;
 
-        id<MTLBuffer> buffer = [g_device newBufferWithBytesNoCopy:(void *)(model_addr + page_model_offset + off)
+        id<MTLBuffer> buffer = (ds4_metal_wired_enabled() ? ds4_metal_owned_wired_buffer(g_device,(NSUInteger)view_bytes,ds4_gpu_model_resource_options(),(const void *)(model_addr + page_model_offset + off)) : [g_device newBufferWithBytesNoCopy:(void *)(model_addr + page_model_offset + off)
                                                            length:(NSUInteger)view_bytes
                                                           options:ds4_gpu_model_resource_options()
-                                                      deallocator:nil];
+                                                      deallocator:nil]);
         if (!buffer) {
             fprintf(stderr,
                     "ds4: Metal could not wrap mmaped model view at %.2f GiB, size %.2f GiB\n",
@@ -10154,8 +10158,9 @@ ds4_gpu_tensor *ds4_gpu_tensor_alloc(uint64_t bytes) {
 
     @autoreleasepool {
         DS4MetalTensor *tensor = [DS4MetalTensor new];
-        tensor.buffer = [g_device newBufferWithLength:(NSUInteger)bytes
-                                              options:MTLResourceStorageModeShared];
+        tensor.buffer = ds4_metal_wired_enabled() ?
+            ds4_metal_owned_wired_buffer(g_device,(NSUInteger)bytes,MTLResourceStorageModeShared,NULL) :
+            [g_device newBufferWithLength:(NSUInteger)bytes options:MTLResourceStorageModeShared];
         if (!tensor.buffer) {
             return NULL;
         }
@@ -13955,10 +13960,10 @@ static id<MTLBuffer> ds4_gpu_wrap_model_exact_range_impl(
     }
     if (!buffer) {
         const uintptr_t base = (uintptr_t)model_map;
-        buffer = [g_device newBufferWithBytesNoCopy:(void *)(base + page_offset)
+        buffer = (ds4_metal_wired_enabled() ? ds4_metal_owned_wired_buffer(g_device,(NSUInteger)view_bytes,ds4_gpu_model_resource_options(),(const void *)(base + page_offset)) : [g_device newBufferWithBytesNoCopy:(void *)(base + page_offset)
                                              length:(NSUInteger)view_bytes
                                             options:ds4_gpu_model_resource_options()
-                                        deallocator:nil];
+                                        deallocator:nil]);
         if (!buffer) {
             fprintf(stderr,
                     "ds4: Metal could not wrap exact mmaped model range at %.2f GiB, size %.2f MiB\n",
