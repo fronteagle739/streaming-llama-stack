@@ -10,9 +10,12 @@ if ($Target -in @('ds4','all')) {
     if ($LASTEXITCODE) { throw 'ds4 build failed' }
 }
 if ($Target -in @('llama','all')) {
-    & python -B -m ds4stack --config $Config guarded -- cmake -S engines/streaming-llama/prefill_llama.cpp -B build/llama -DGGML_CUDA=ON -DLLAMA_CURL=OFF -DCMAKE_CUDA_ARCHITECTURES=120a
+    $llamaPath = Join-Path $PSScriptRoot 'engines/streaming-llama/prefill_llama.cpp'
+    # Same pinned CMake build as the engine's build.bat, narrowed to the used
+    # targets with two compile jobs. Enable its existing offline ULTRA producer.
+    & python -B -m ds4stack --config $Config guarded -- cmake -S $llamaPath -B build/llama -DGGML_CUDA=ON -DLLAMA_CURL=OFF -DCMAKE_CUDA_ARCHITECTURES=120a -DGGML_BACKEND_DL=OFF -DBUILD_SHARED_LIBS=OFF -DLLAMA_DSV41_OFFLINE_PRODUCER=ON "-DLLAMA_DSV41_JSON_INCLUDE_DIR=$llamaPath/vendor" "-DLLAMA_DSV41_DSTORAGE_INCLUDE_DIR=$llamaPath/external/directstorage/native/include" "-DLLAMA_DSV41_DSTORAGE_LIBRARY=$llamaPath/external/directstorage/native/lib/x64/dstorage.lib"
     if ($LASTEXITCODE) { throw 'llama configure failed' }
-    & python -B -m ds4stack --config $Config guarded -- cmake --build build/llama --config Release --parallel 2 --target llama-server
+    & python -B -m ds4stack --config $Config guarded -- cmake --build build/llama --config Release --parallel 2 --target llama-server llama-dsv41-prefill llama-export-lora
     if ($LASTEXITCODE) { throw 'llama build failed' }
 }
 if ($Target -in @('webui','all')) {

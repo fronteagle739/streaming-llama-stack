@@ -76,8 +76,14 @@ class Tools:
         return rows
 
     def openai(self):
+        # Do not spend native prefill on tools whose engine/model is unavailable.
+        # MCP still publishes the fixed interface and returns explicit capability errors.
+        rows = [row for row in self.catalog() if
+                (row['name'] in ('set_quality_speed', 'get_quality_speed') and self.cfg['bias_mcp_url']) or
+                (row['name'] == 'generate_image' and self.cfg['image_model']) or
+                (row['name'] == 'generate_video' and self.cfg['video_model'])]
         return [{'type': 'function', 'function': {'name': row['name'], 'description': row['description'],
-                                                'parameters': row['inputSchema']}} for row in self.catalog()]
+                                                'parameters': row['inputSchema']}} for row in rows]
 
     def call(self, name, args):
         if name not in self.schemas:

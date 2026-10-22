@@ -12,8 +12,8 @@ PINS = {'ds4-win': '058ae09159a18fd4d0947d26bb1a7056771f5c8f',
 
 def check(cfg):
     rows = []
-    def record(name, ok, detail):
-        rows.append({'check': name, 'ok': bool(ok), 'detail': str(detail)})
+    def record(name, ok, detail, required=True):
+        rows.append({'check': name, 'ok': bool(ok), 'required': required, 'detail': str(detail)})
     try:
         available = admit(cfg['host_budget_gib'], cfg['min_available_gib'])
         record('host_memory', True, f'available={available}; admitted RSS budget={cfg["host_budget_gib"]} GiB')
@@ -31,10 +31,11 @@ def check(cfg):
             record(key, bool(cfg[key]) and path(cfg[key]).exists(), cfg[key] or 'required model path missing')
     command = cfg['ds4_command']
     record('ds4_executable', bool(command) and (path(command[0]).is_file() or shutil.which(command[0])), command[0] if command else 'missing')
+    record('llama_producer', path(cfg['llama_producer']).is_file(), cfg['llama_producer'], required=cfg['long_prompt'])
     if cfg['webui']:
         public = path(cfg['webui_root'])
         record('webui', (public / 'index.html').is_file() or (public / 'index.html.gz').is_file(), public)
-    record('live_bias', bool(cfg['bias_mcp_url']), cfg['bias_mcp_url'] or 'upstream DS4WINBIAS2 live MCP service not available/configured')
+    record('live_bias', bool(cfg['bias_mcp_url']), cfg['bias_mcp_url'] or 'upstream DS4WINBIAS2 live MCP service not available/configured; tool calls will fail explicitly', required=False)
     record('long_prompt', not cfg['long_prompt'], 'Windows target-only import/export/rewind parity gate is not implemented')
     record('llm_lora', not cfg['lora'], 'Pinned ds4-win has no qualified load-time LoRA adapter; refusing unsupported attachment')
     try:

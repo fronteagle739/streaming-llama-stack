@@ -19,6 +19,11 @@ def load(path=None, overrides=None):
         raise ValueError('GPU lease must be at most 20 minutes')
     if cfg['host'] not in ('127.0.0.1', '::1'):
         raise ValueError('This local stack binds to loopback only')
+    command_text = ' '.join(cfg['ds4_command']).lower()
+    low_kv = any(key in ('--cache-type-k', '--cache-type-v', '-ctk', '-ctv', '--kv-type') and value.lower().startswith(('q4', 'q5', 'q6', 'iq'))
+                 for key, value in zip(cfg['ds4_command'], cfg['ds4_command'][1:]))
+    if low_kv or any(flag in command_text for flag in ('--kv-disk', '--kv-swap', '--ram-streaming')):
+        raise ValueError('Disk state spill, host weight residency and KV below 8 bit are not admitted')
     for kind in ('image', 'video'):
         if cfg[f'{kind}_mode'] not in ('streaming', 'resident'):
             raise ValueError(f'{kind}_mode must be streaming or resident')
@@ -44,9 +49,11 @@ def environment(cfg):
     root = Path(cfg['runtime_root'])
     root.mkdir(parents=True, exist_ok=True)
     env = dict(os.environ)
+    env.update({str(k): str(v) for k, v in cfg.get('ds4_env', {}).items()})
     for key in ('TEMP', 'TMP', 'TMPDIR', 'HF_HOME', 'HF_HUB_CACHE', 'HUGGINGFACE_HUB_CACHE',
                 'XDG_CACHE_HOME', 'TORCH_HOME', 'TORCH_EXTENSIONS_DIR', 'TRITON_CACHE_DIR',
-                'CUDA_CACHE_PATH', 'NUMBA_CACHE_DIR', 'MPLCONFIGDIR', 'UV_CACHE_DIR', 'PIP_CACHE_DIR'):
+                'CUDA_CACHE_PATH', 'NUMBA_CACHE_DIR', 'MPLCONFIGDIR', 'UV_CACHE_DIR', 'PIP_CACHE_DIR',
+                'KERNELS_CACHE', 'HF_KERNELS_CACHE', 'TORCHINDUCTOR_CACHE_DIR'):
         directory = root / 'cache' / key.lower()
         directory.mkdir(parents=True, exist_ok=True)
         env[key] = str(directory)
