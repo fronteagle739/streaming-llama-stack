@@ -1,6 +1,7 @@
 import argparse
 import json
 import sys
+from pathlib import Path
 from .config import load, ROOT
 from .journal import Journal
 
@@ -12,6 +13,26 @@ def main():
     parser.add_argument('--min-available-gib', type=float)
     sub = parser.add_subparsers(dest='command', required=True)
     sub.add_parser('check')
+    sub.add_parser('mcp')
+    sub.add_parser('serve-internal', help=argparse.SUPPRESS)
+    train = sub.add_parser('train_lora')
+    train.add_argument('--data-folder', required=True)
+    train.add_argument('--settings', required=True)
+    train.add_argument('--output', required=True)
+    merge = sub.add_parser('merge_lora')
+    merge.add_argument('--base', required=True)
+    merge.add_argument('--lora', action='append', required=True)
+    merge.add_argument('--output', required=True)
+    merge.add_argument('--exporter', required=True)
+    merge.add_argument('--test', action='store_true')
+    unmerge = sub.add_parser('unmerge_lora')
+    unmerge.add_argument('--entry', required=True)
+    prompts = sub.add_parser('run_prompts')
+    prompts.add_argument('--folder', required=True)
+    prompts.add_argument('--output', required=True)
+    prompts.add_argument('--endpoint')
+    prompts.add_argument('--model')
+    prompts.add_argument('--max-tokens', type=int, default=256)
     start = sub.add_parser('start')
     start.add_argument('--webui', action='store_true', default=None)
     start.add_argument('--model')
@@ -25,13 +46,23 @@ def main():
     start.add_argument('--video-mode', choices=['streaming', 'resident'])
     start.add_argument('--lora', action='append')
     guarded = sub.add_parser('guarded')
+    guarded.add_argument('--cwd', default=str(ROOT))
     guarded.add_argument('argv', nargs=argparse.REMAINDER)
     args = parser.parse_args()
-    overrides = {k: v for k, v in vars(args).items() if k not in ('config', 'command', 'argv', 'mode') and v is not None}
+    config_keys = {'host_budget_gib', 'min_available_gib', 'model', 'webui', 'image_model', 'video_model',
+                   'image_arch', 'video_arch', 'comfyui_models', 'image_mode', 'video_mode'}
+    if args.command == 'start':
+        config_keys.add('lora')
+    overrides = {k: v for k, v in vars(args).items() if k in config_keys and v is not None}
     if getattr(args, 'mode', None):
         overrides['image_mode'] = overrides['video_mode'] = args.mode
     cfg = load(args.config, overrides)
-    Journal(cfg['runtime_root']).recover()
+    from .lease import recover_leases
+    for identity in recover_leases(cfg['runtime_root']):
+        print('Released dead GPU guardian hold: ' + identity, file=sys.stderr)
+    reports = Journal(cfg['runtime_root']).recover()
+    for report in reports:
+        print('Recovered stale journal: ' + json.dumps(report), file=sys.stderr)
     if args.command == 'check':
         from .check import check
         rows = check(cfg)
@@ -44,13 +75,62 @@ def main():
         if failures:
             print(json.dumps(failures, indent=2), file=sys.stderr)
             return 1
+        from .process import OwnedProcess
+        from .journal import atomic_json
+        effective = Path(cfg['runtime_root']) / 'effective-config.json'
+        atomic_json(effective, cfg)
+        proc = OwnedProcess(cfg, [sys.executable, '-B', '-m', 'ds4stack', '--config', str(effective), 'serve-internal'],
+                            'router', timeout=cfg['lease_minutes'] * 60)
+        print(f'Router starting on http://{cfg["host"]}:{cfg["port"]}; log: {proc.log}', flush=True)
+        try:
+            proc.wait()
+        except KeyboardInterrupt:
+            proc.stop()
+        return 0
+    if args.command == 'serve-internal':
+        from .guard import admit
+        admit(cfg['host_budget_gib'], cfg['min_available_gib'])
         from .router import serve
         serve(cfg)
+        return 0
+    if args.command == 'mcp':
+        from .guard import admit
+        admit(cfg['host_budget_gib'], cfg['min_available_gib'])
+        from .router import Stack
+        stack = Stack(cfg)
+        try:
+            for line in sys.stdin:
+                try:
+                    request = json.loads(line)
+                    result = stack.mcp(request)
+                    if result is not None:
+                        print(json.dumps(result), flush=True)
+                except (ValueError, TypeError) as exc:
+                    print(json.dumps({'jsonrpc': '2.0', 'id': None, 'error': {'code': -32700, 'message': str(exc)}}), flush=True)
+        finally:
+            stack.engines.close()
+        return 0
+    if args.command == 'train_lora':
+        from .lora import train_lora
+        print(json.dumps(train_lora(cfg, args.data_folder, args.settings, args.output), indent=2))
+        return 0
+    if args.command == 'merge_lora':
+        from .lora import merge_lora, parse_lora
+        print(json.dumps(merge_lora(cfg, args.base, [parse_lora(x) for x in args.lora], args.output,
+                                   args.exporter, test=args.test), indent=2))
+        return 0
+    if args.command == 'unmerge_lora':
+        from .lora import unmerge_lora
+        print(json.dumps(unmerge_lora(cfg, args.entry), indent=2))
+        return 0
+    if args.command == 'run_prompts':
+        from .prompts import run_prompts
+        print(json.dumps(run_prompts(cfg, args.folder, args.output, args.endpoint, args.model, args.max_tokens), indent=2))
         return 0
     if args.command == 'guarded':
         from .process import OwnedProcess
         command = args.argv[1:] if args.argv and args.argv[0] == '--' else args.argv
-        print(json.dumps(OwnedProcess(cfg, command, 'guarded', cwd=ROOT).wait(), indent=2))
+        print(json.dumps(OwnedProcess(cfg, command, 'guarded', cwd=args.cwd).wait(), indent=2))
         return 0
 
 

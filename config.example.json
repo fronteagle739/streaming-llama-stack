@@ -7,6 +7,8 @@
   "job_commit_gib": 48,
   "request_timeout_s": 900,
   "lease_minutes": 19,
+  "gpu_uuid": "GPU-a176a537-1065-92ce-6cbb-e1db40371cdf",
+  "gpu_idle_max_mib": 1024,
   "hold_file": "runtime/coordination/DEPLOY_HOLD.md",
   "model_name": "DSV4.1-1017",
   "model": "",
