@@ -7,11 +7,42 @@ from pathlib import Path
 import re
 import subprocess
 import uuid
+import psutil
+from .journal import atomic_json
+
+
+def recover_leases(runtime_root):
+    """Release only this stack's recorded dead guardians, after their kill-on-close Jobs have closed."""
+    root = Path(runtime_root) / 'state' / 'leases'
+    if not root.exists():
+        return []
+    released = []
+    for file in root.glob('*.json'):
+        row = json.loads(file.read_text())
+        if row.get('task') != 'DS4STACK' or row.get('released'):
+            continue
+        try:
+            proc = psutil.Process(row['guardian_pid'])
+            if abs(proc.create_time() - row['guardian_created']) < .01 and proc.is_running():
+                continue
+        except psutil.NoSuchProcess:
+            pass
+        # On Windows the guardian handle closes its Job and terminates all GPU descendants.
+        # Recovering an active hold never kills an unrelated process or guesses expiry.
+        with Path(row['hold_file']).open('a', encoding='utf-8') as stream:
+            stream.write(f'\nRELEASED: DS4STACK {row["id"]}; recovered dead guardian {row["guardian_pid"]}; {datetime.now(timezone.utc).isoformat()}\n')
+            stream.flush()
+            os.fsync(stream.fileno())
+        atomic_json(file, {**row, 'released': True, 'recovered': True})
+        released.append(row['id'])
+    return released
 
 
 def active_holds(text):
     active = {}
     for line in text.splitlines():
+        if line.startswith('MAC '):
+            continue
         match = re.match(r'^(?:MAC )?(ACTIVE|RELEASED|ENDED):\s+(\S+)\s+(\S+)', line)
         if match:
             state, task, identity = match.groups()
@@ -37,13 +68,22 @@ def gpu_lease(cfg):
             active = active_holds(lines)
             if active:
                 raise RuntimeError('RTX admission refused: ACTIVE holds exist: ' + '\n'.join(active))
-            result = subprocess.run(['nvidia-smi', '--query-compute-apps=pid,used_memory', '--format=csv,noheader,nounits'],
+            # WDDM reports every graphics context as a compute client with N/A memory.
+            # Check the selected GPU's actual baseline instead of rejecting Explorer/Slack.
+            result = subprocess.run(['nvidia-smi', '--id=' + cfg['gpu_uuid'],
+                                     '--query-gpu=memory.used,memory.free,utilization.gpu', '--format=csv,noheader,nounits'],
                                     capture_output=True, text=True, timeout=10)
             if result.returncode:
                 raise RuntimeError('Cannot certify GPU ownership: ' + result.stderr)
-            if result.stdout.strip():
-                raise RuntimeError('GPU already has compute clients; stack will not eject unowned processes: ' + result.stdout)
+            used, free, busy = [int(x.strip()) for x in result.stdout.strip().split(',')]
+            if used > cfg['gpu_idle_max_mib'] or free < 30000 or busy > 5:
+                raise RuntimeError('RTX is not idle enough for exclusive admission; no other process was ejected: ' + result.stdout)
             identity = uuid.uuid4().hex
+            lease_path = Path(cfg['runtime_root']) / 'state' / 'leases' / (identity + '.json')
+            lease_row = {'task': 'DS4STACK', 'id': identity, 'hold_file': str(hold),
+                         'guardian_pid': os.getpid(), 'guardian_created': psutil.Process().create_time(),
+                         'released': False}
+            atomic_json(lease_path, lease_row)
             expiry = datetime.now(timezone.utc) + timedelta(minutes=cfg['lease_minutes'])
             line = f"\nACTIVE: DS4STACK {identity}; exclusive RTX5090; expires {expiry.isoformat()}; host RSS {cfg['host_budget_gib']} GiB; floor {cfg['min_available_gib']} GiB\n"
             stream.seek(0, 2)
@@ -61,3 +101,4 @@ def gpu_lease(cfg):
             stream.write(f'\nRELEASED: DS4STACK {identity}; {datetime.now(timezone.utc).isoformat()}\n')
             stream.flush()
             os.fsync(stream.fileno())
+        atomic_json(lease_path, {**lease_row, 'released': True})

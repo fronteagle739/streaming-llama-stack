@@ -133,13 +133,17 @@ def _supervise(spec):
 
 
 def supervise(spec):
-    if spec.get('gpu'):
-        from .lease import gpu_lease
-        with gpu_lease(spec['gpu']):
-            # The independent guardian owns and releases the hold even if the launcher is killed.
-            spec['timeout_s'] = min(spec['timeout_s'], spec['gpu']['lease_minutes'] * 60)
-            return _supervise(spec)
-    return _supervise(spec)
+    from .lease import gpu_lease, recover_leases
+    try:
+        if spec.get('gpu'):
+            with gpu_lease(spec['gpu']):
+                spec['timeout_s'] = min(spec['timeout_s'], spec['gpu']['lease_minutes'] * 60)
+                return _supervise(spec)
+        return _supervise(spec)
+    finally:
+        # If this outer guardian killed an inner GPU guardian, its Windows Job is
+        # now closed. Release that recorded orphan rather than leaving an ACTIVE hold.
+        recover_leases(spec['runtime_root'])
 
 
 if __name__ == '__main__':

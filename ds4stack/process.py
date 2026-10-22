@@ -21,6 +21,7 @@ class OwnedProcess:
         self.receipt = self.prefix.with_suffix('.receipt.json')
         self.log = self.prefix.with_suffix('.log')
         spec = {'command': command, 'cwd': str(cwd), 'env': environment(cfg),
+                'runtime_root': cfg['runtime_root'],
                 'host_budget_gib': cfg['host_budget_gib'], 'min_available_gib': cfg['min_available_gib'],
                 'job_commit_gib': cfg['job_commit_gib'], 'timeout_s': timeout or cfg['request_timeout_s'],
                 'owner_pid': os.getpid(), 'owner_created': psutil.Process().create_time(),

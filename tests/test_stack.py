@@ -14,10 +14,11 @@ import urllib.request
 import uuid
 from ds4stack.config import load, ROOT
 from ds4stack.journal import Journal, sha256
-from ds4stack.lease import active_holds
+from ds4stack.lease import active_holds, recover_leases
 from ds4stack.process import OwnedProcess
 from ds4stack.router import Stack, handler
 from ds4stack.tools import validate, QUALITY, media_schema
+from ds4stack.lora import parse_lora, output_path, train_lora, merge_lora, unmerge_lora
 
 
 class FixtureEngines:
@@ -82,6 +83,17 @@ class SchemaTests(Base):
     def test_shared_holds(self):
         self.assertEqual(active_holds('ACTIVE: DS4WINBIAS2 abc; GPU\nRELEASED: DS4WINBIAS2 abc; done'), [])
         self.assertEqual(len(active_holds('ACTIVE: OTHER task GPU\nACTIVE: DS4STACK abc; GPU\nRELEASED: DS4STACK abc; done')), 1)
+
+    def test_dead_guardian_hold_released_once(self):
+        hold = self.root / 'fixture-hold.md'
+        hold.write_text('ACTIVE: DS4STACK TEST123; fixture\n')
+        leases = self.root / 'state' / 'leases'
+        leases.mkdir(parents=True)
+        (leases / 'TEST123.json').write_text(json.dumps({'task': 'DS4STACK', 'id': 'TEST123',
+            'hold_file': str(hold), 'guardian_pid': 2147483647, 'guardian_created': 0, 'released': False}))
+        self.assertEqual(recover_leases(self.root), ['TEST123'])
+        self.assertEqual(active_holds(hold.read_text()), [])
+        self.assertEqual(recover_leases(self.root), [])
 
 
 class RouterTests(Base):
@@ -207,6 +219,48 @@ class GuardianTests(Base):
         child = OwnedProcess(self.cfg, [sys.executable, '-B', '-c', 'import time;time.sleep(30)'], 'TEST-deadline', timeout=.25)
         with self.assertRaisesRegex(RuntimeError, 'deadline exceeded'):
             child.wait()
+
+
+class LoraTests(Base):
+    def test_windows_scale_and_collision(self):
+        self.assertEqual(parse_lora('models/adapter.safetensors:.25')[1], .25)
+        self.assertEqual(parse_lora('models/adapter.safetensors')[1], 1)
+        p = self.root / 'existing.bin'
+        p.write_bytes(b'TEST')
+        with self.assertRaises(FileExistsError):
+            output_path(self.cfg, p)
+        with self.assertRaises(ValueError):
+            output_path(self.cfg, self.root.parent / 'escape.bin')
+
+    def test_unsupported_ds4_training_never_starts(self):
+        data = self.root / 'prompts'
+        data.mkdir()
+        (data / 'TEST.txt').write_text('TEST corpus')
+        base = self.root / 'base.gguf'
+        base.write_bytes(b'GGUF TEST')
+        settings = self.root / 'settings.json'
+        settings.write_text(json.dumps({'family': 'gguf_streamed', 'arch': 'deepseek4', 'model': str(base)}))
+        with self.assertRaisesRegex(ValueError, 'not DeepSeek V4'):
+            train_lora(self.cfg, data, settings, self.root / 'adapter')
+        self.assertFalse((self.root / 'jobs').exists())
+
+    def test_permanent_merge_requires_small_test(self):
+        with self.assertRaisesRegex(ValueError, '--test'):
+            merge_lora(self.cfg, 'missing', [], self.root / 'output', 'missing')
+
+    def test_unmerge_selects_verified_base_without_deleting(self):
+        base, lora, merged = [self.root / n for n in ('base.bin', 'lora.bin', 'merged.bin')]
+        base.write_bytes(b'TEST base')
+        lora.write_bytes(b'TEST adapter')
+        merged.write_bytes(b'TEST merged copy')
+        j = Journal(self.root)
+        row = j.begin(base, [(lora, .5)], 'merging', merged)
+        j.update(row['id'], 'merged', output_sha256=sha256(merged))
+        result = unmerge_lora(self.cfg, row['id'])
+        self.assertEqual(result['model'], str(base.resolve()))
+        self.assertTrue(merged.is_file())
+        selected = load(overrides={'runtime_root': str(self.root)})
+        self.assertEqual(selected['model'], str(base.resolve()))
 
 
 if __name__ == '__main__':

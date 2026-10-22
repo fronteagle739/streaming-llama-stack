@@ -26,6 +26,12 @@ def load(path=None, overrides=None):
     if os.name == 'nt' and not root.is_relative_to(Path('runtime/ds4stack').resolve()):
         raise ValueError('All runtime writes must be under runtime/ds4stack')
     cfg['runtime_root'] = str(root)
+    selection = root / 'state' / 'model_selection.json'
+    if selection.exists() and not (overrides or {}).get('model'):
+        saved = json.loads(selection.read_text())
+        if saved.get('lora_applied') is not False:
+            raise ValueError('Unsafe model selection state')
+        cfg['model'] = saved['model']
     return cfg
 
 
@@ -50,6 +56,11 @@ def environment(cfg):
     env.update(PYTHONDONTWRITEBYTECODE='1', HF_HUB_OFFLINE='1', TRANSFORMERS_OFFLINE='1',
                STUDIO_COSMOS_WINDOWS_PATH=str(path(cfg['streaming_root'])),
                STUDIO_COSMOS_PYTHON=cfg['studio_python'])
+    if cfg.get('comfyui_models'):
+        env['STUDIO_COMFYUI_PATH'] = str(path(cfg['comfyui_models']))
+    if cfg.get('gpu_uuid'):
+        env['CUDA_VISIBLE_DEVICES'] = cfg['gpu_uuid']
+        env['STUDIO_GPU_INDEX'] = cfg['gpu_uuid']
     env['PYTHONPATH'] = os.pathsep.join((str(ROOT), str(path(cfg['studio_root']) / 'backend'),
                                        str(path(cfg['streaming_root']))))
     return env
