@@ -8,6 +8,8 @@ import shutil
 import struct
 import sys
 import uuid
+import csv
+import io
 from .config import path
 from .journal import Journal, atomic_json, sha256
 from .process import OwnedProcess
@@ -125,14 +127,28 @@ def merge_lora(cfg, base, loras, output, exporter, *, test=False):
     exporter = path(exporter)
     if not exporter.is_file():
         raise ValueError('Build and provide the pinned llama-export-lora executable')
+    if not loras:
+        raise ValueError('At least one LoRA is required')
+    # The pinned arg parser splits FNAME:SCALE on every colon, including a
+    # Windows drive letter. Use relative names from a shared adapter drive.
+    run_cwd = path(loras[0][0]).parent
+    scaled = []
+    for lora, scale in loras:
+        try:
+            relative = os.path.relpath(path(lora), run_cwd)
+        except ValueError as exc:
+            raise ValueError('Adapters must share a drive for the pinned exporter CLI; no weights were copied') from exc
+        cell = io.StringIO()
+        csv.writer(cell, lineterminator='').writerow([f'{relative}:{scale}'])
+        scaled.append(cell.getvalue())
     journal = Journal(cfg['runtime_root'])
     row = journal.begin(base, loras, 'merging', out)
     partial = Path(row['partial_path'])
     command = [str(exporter), '--model', str(base), '--output', str(partial)]
-    for lora, scale in loras:
-        command += ['--lora-scaled', str(path(lora)), str(scale)]
+    for argument in scaled:
+        command += ['--lora-scaled', argument]
     try:
-        proc = OwnedProcess(cfg, command, 'merge-lora')  # exporter is CPU-only
+        proc = OwnedProcess(cfg, command, 'merge-lora', cwd=run_cwd)
         proc.wait()
         if not partial.is_file():
             raise RuntimeError('Exporter returned no merged output')
@@ -140,7 +156,7 @@ def merge_lora(cfg, base, loras, output, exporter, *, test=False):
             if stream.read(4) != b'GGUF':
                 raise RuntimeError('Exporter output is not GGUF')
         digest = sha256(partial)
-        with partial.open('rb') as stream:
+        with partial.open('r+b') as stream:
             os.fsync(stream.fileno())
         # Atomic, exclusive publication. Keep the partial hardlink as recoverable evidence; no deletes.
         os.link(partial, out)

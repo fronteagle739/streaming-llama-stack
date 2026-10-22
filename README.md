@@ -1,8 +1,9 @@
 # ds4-stack
 
 Private glue repository for pinned ds4-win, RTX streaming llama and Studio engines.
-**Integration is incomplete.** The image worker and video endpoint have real RTX
-smoke proofs. Live bias control, Windows ULTRA handoff and ds4 LoRA attachment
+**Integration is incomplete.** Image/video chat, streaming/resident endpoints,
+folder-only ComfyUI discovery and a tiny streamed training run have real RTX
+proofs. Live bias control, Windows ULTRA handoff and ds4 LoRA attachment
 are unavailable in the pinned dependencies. `check`/`start` report missing optional
 capabilities; attempts to enable an unqualified handoff or attachment are refused.
 
@@ -59,8 +60,10 @@ curl.exe http://127.0.0.1:8088/v1/chat/completions -H 'Content-Type: application
 CLI options override the config. `--mode` sets both media modes; `--image-mode`
 and `--video-mode` override each individually. Paths identify the actual model,
 not a Studio production registration. `--comfyui-models` supplies the support
-components through Studio's own `comfy_support_defaults`; select the generation
-model with `--image-model`/`--video-model`. Architecture can be inferred for known
+components through Studio's own `comfy_support_defaults`. Explicit generation
+models use `--image-model`/`--video-model`. With only a ComfyUI folder, discovery
+selects Anima for images and an installed LTX base or Bernini HIGH for video;
+the endpoint reports the selected file and architecture. Architecture can be inferred for known
 single-file safetensors using Studio's checkpoint-header detector; explicit
 `image_arch`/`video_arch` is preferable. Extra component files go in the respective
 `image_support_files`/`video_support_files` objects. Unsupported modes fail rather
@@ -158,3 +161,26 @@ safety/protocol checks with an explicit budget:
 ```powershell
 ./ds4stack.ps1 --host-budget-gib 1 guarded -- python -B -m unittest discover -s tests -v
 ```
+
+The real proof set is indexed in `docs/evidence/manifest.json`. It includes both
+stock-webui media screenshots, resident/folder-only endpoint results, a real
+three-step HF LoRA training receipt, base-only prompt evaluation, and the synthetic
+merge/unmerge proof. The chat proofs took about 13-14 minutes with native scalar
+prefill and buffered SSE; this is not an interactive-performance qualification.
+
+HF training writes PEFT safetensors; the permanent exporter expects GGUF base
+and GGUF adapter inputs. Use the existing pinned conversion tools where needed;
+there is no silent cross-format conversion. The pinned exporter CLI uses
+`FNAME:SCALE`, so this wrapper uses relative adapter names; all adapters in a
+single export must share a drive. No input weights are copied to work around it.
+
+To reproduce the numerical/file-safety export check with the Studio Python
+(select a fresh output folder):
+
+```powershell
+./ds4stack.ps1 --host-budget-gib 2 guarded -- <studio-python> -B tests/prove_merge_fixture.py --exporter build/llama/bin/Release/llama-export-lora.exe --output-root runtime/TEST-merge-fresh
+```
+
+That check creates only a synthetic 4x4 GGUF tensor fixture; it is not a complete
+model. It verifies the existing exporter numerically, base SHA before/after,
+exclusive new-file publication and unmerge selection with merged-copy preservation.

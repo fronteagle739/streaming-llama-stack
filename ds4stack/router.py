@@ -143,7 +143,8 @@ def handler(stack):
         def do_GET(self):
             route = unquote(urlsplit(self.path).path)
             if route == '/health':
-                return self.send(200, {'status': 'router-ready', 'model_ready': bool(stack.engines.llm),
+                ready = bool(stack.engines.llm and stack.engines.llm.proc.poll() is None)
+                return self.send(200, {'status': 'router-ready', 'model_ready': ready,
                                        'live_bias_configured': bool(stack.cfg['bias_mcp_url']), 'ultra': False})
             if route == '/v1/models':
                 return self.send(200, {'object': 'list', 'data': [{'id': stack.cfg['model_name'], 'object': 'model',

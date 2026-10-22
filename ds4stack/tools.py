@@ -80,8 +80,8 @@ class Tools:
         # MCP still publishes the fixed interface and returns explicit capability errors.
         rows = [row for row in self.catalog() if
                 (row['name'] in ('set_quality_speed', 'get_quality_speed') and self.cfg['bias_mcp_url']) or
-                (row['name'] == 'generate_image' and self.cfg['image_model']) or
-                (row['name'] == 'generate_video' and self.cfg['video_model'])]
+                (row['name'] == 'generate_image' and (self.cfg['image_model'] or self.cfg['comfyui_models'])) or
+                (row['name'] == 'generate_video' and (self.cfg['video_model'] or self.cfg['comfyui_models']))]
         return [{'type': 'function', 'function': {'name': row['name'], 'description': row['description'],
                                                 'parameters': row['inputSchema']}} for row in rows]
 
