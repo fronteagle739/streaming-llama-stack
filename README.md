@@ -70,7 +70,10 @@ Workers exit after each request, so resident means resident **during the job**;
 there is currently no warm resident worker reuse across requests.
 
 `/v1/images/generations` and `/v1/videos/generations` accept the same JSON settings
-as `generate_image`/`generate_video`. Each tool's schema/description includes all
+as `generate_image`/`generate_video`. The media HTTP adapter also accepts `model`
+(alias `image`/`video`, the selected architecture or filename stem), `n=1`,
+`size=WIDTHxHEIGHT` and `response_format=url`. Other batch counts/formats fail
+explicitly. Each tool's schema/description includes all
 accepted settings, defaults and ranges. Model paths are startup settings, outside
 model-controlled arguments. All outputs go to `<runtime_root>/outputs` and are
 served under `/outputs/`. The existing llama.cpp webui is served at `/` with its

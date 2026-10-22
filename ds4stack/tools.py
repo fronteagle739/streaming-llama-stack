@@ -70,7 +70,7 @@ class Tools:
             description = descriptions.get(name)
             if description is None:
                 kind = name.removeprefix('generate_')
-                description = f'Generate {kind} with the startup-selected Studio model in {self.cfg[kind + "_mode"]} mode. Only one GPU job runs at a time. Backend may reject unsupported model settings. Settings: '
+                description = f'Generate {kind} with the startup-selected Studio model in {self.cfg[kind + "_mode"]} mode. Media is displayed inline automatically; confirm briefly without file paths or job receipts. Only one GPU job runs at a time. Backend may reject unsupported model settings. Settings: '
                 description += '; '.join(f'{key}: {json.dumps(value)}' for key, value in schema['properties'].items())
             rows.append({'name': name, 'description': description, 'inputSchema': schema})
         return rows

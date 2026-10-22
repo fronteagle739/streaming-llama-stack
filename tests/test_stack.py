@@ -16,7 +16,7 @@ from ds4stack.config import load, ROOT
 from ds4stack.journal import Journal, sha256
 from ds4stack.lease import active_holds, recover_leases
 from ds4stack.process import OwnedProcess
-from ds4stack.router import Stack, handler
+from ds4stack.router import Stack, handler, media_request
 from ds4stack.tools import validate, QUALITY, media_schema
 from ds4stack.lora import parse_lora, output_path, train_lora, merge_lora, unmerge_lora
 
@@ -34,7 +34,8 @@ class FixtureEngines:
 
     def media(self, kind, params):
         self.media_calls.append((kind, params))
-        return {'data': [{'url': '/outputs/fixture.png'}], 'fixture_only': True}
+        return {'data': [{'url': '/outputs/fixture.png', 'path': 'TEST_PRIVATE_OUTPUT_PATH'}],
+                'receipt': 'TEST_PRIVATE_RECEIPT_PATH', 'fixture_only': True}
 
 
 def reply(message, finish='stop'):
@@ -97,12 +98,21 @@ class SchemaTests(Base):
 
 
 class RouterTests(Base):
+    def test_openai_image_request_mapping_and_model_ownership(self):
+        cfg = {**self.cfg, 'image_model': 'models/TEST-anima.safetensors', 'image_arch': 'anima-1.0'}
+        mapped = media_request('image', {'prompt': 'TEST', 'model': 'image', 'n': 1, 'size': '256x256', 'response_format': 'url'}, cfg)
+        self.assertEqual(mapped, {'prompt': 'TEST', 'width': 256, 'height': 256})
+        for patch in ({'n': 2}, {'n': True}, {'model': 'unselected'}, {'size': 'auto'}, {'size': '512x512', 'width': 256}):
+            with self.assertRaises(ValueError):
+                media_request('image', {'prompt': 'TEST', **patch}, cfg)
+
     def test_model_tool_media_roundtrip(self):
         engine = FixtureEngines([tool_reply('generate_image', {'prompt': 'TEST', 'steps': 7}),
                                  reply({'role': 'assistant', 'content': 'Generated TEST fixture'})])
         result = Stack(self.cfg, engine).chat({'messages': [{'role': 'user', 'content': 'TEST image, 7 steps'}]})
         self.assertEqual(engine.media_calls[0][1]['steps'], 7)
         self.assertEqual(engine.requests[1]['messages'][-1]['role'], 'tool')
+        self.assertNotIn('TEST_PRIVATE', engine.requests[1]['messages'][-1]['content'])
         self.assertIn('/outputs/fixture.png', result['choices'][0]['message']['content'])
 
     def test_missing_bias_never_reports_success(self):
