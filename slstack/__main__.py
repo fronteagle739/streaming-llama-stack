@@ -59,7 +59,8 @@ def main():
     start.add_argument('--image-arch')
     start.add_argument('--video-arch')
     start.add_argument('--comfyui-models')
-    start.add_argument('--mode', choices=['streaming', 'resident'])
+    start.add_argument('--mode', choices=['accurate', 'fast', 'ultra', 'hyper'], dest='native_tier',
+                       help='RTX prefill arithmetic profile (default: accurate)')
     start.add_argument('--image-mode', choices=['streaming', 'resident'])
     start.add_argument('--video-mode', choices=['streaming', 'resident'])
     start.add_argument('--lora', action='append')
@@ -74,13 +75,10 @@ def main():
     args = parser.parse_args()
     config_keys = {'host_budget_gib', 'min_available_gib', 'model', 'webui', 'image_model', 'video_model',
                    'image_arch', 'video_arch', 'comfyui_models', 'image_mode', 'video_mode',
-                   'mtp_model', 'mac_port', 'mac_engine_port', 'backend', 'zig', 'models', 'resident'}
+                   'mtp_model', 'mac_port', 'mac_engine_port', 'backend', 'zig', 'models', 'resident', 'native_tier'}
     if args.command in ('start', 'rtx'):
         config_keys.add('lora')
     overrides = {k: v for k, v in vars(args).items() if k in config_keys and v is not None}
-    if getattr(args, 'mode', None):
-        overrides.setdefault('image_mode', args.mode)
-        overrides.setdefault('video_mode', args.mode)
     cfg = load(args.config, overrides)
     cfg.setdefault('env_overrides', {}).update({k[4:]: v for k, v in vars(args).items()
                                               if k.startswith('env_') and v is not None})
@@ -118,6 +116,13 @@ def main():
     if args.command == 'broker-internal':
         from .native_broker import serve
         serve(cfg)
+        return 0
+    if args.command == 'guarded':
+        # Build/install subprocesses do not use model state. In particular, do
+        # not hash a large model outside the child guardian before a build.
+        from .process import OwnedProcess
+        command = args.argv[1:] if args.argv and args.argv[0] == '--' else args.argv
+        print(json.dumps(OwnedProcess(cfg, command, 'guarded', cwd=args.cwd).wait(), indent=2))
         return 0
     from .lease import recover_leases
     for identity in recover_leases(cfg['runtime_root']):
@@ -190,11 +195,6 @@ def main():
     if args.command == 'run_prompts':
         from .prompts import run_prompts
         print(json.dumps(run_prompts(cfg, args.folder, args.output, args.endpoint, args.model, args.max_tokens), indent=2))
-        return 0
-    if args.command == 'guarded':
-        from .process import OwnedProcess
-        command = args.argv[1:] if args.argv and args.argv[0] == '--' else args.argv
-        print(json.dumps(OwnedProcess(cfg, command, 'guarded', cwd=args.cwd).wait(), indent=2))
         return 0
 
 

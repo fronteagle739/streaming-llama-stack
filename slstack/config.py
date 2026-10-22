@@ -12,6 +12,8 @@ def load(path=None, overrides=None):
     if path:
         cfg.update(json.loads(Path(path).read_text(encoding='utf-8-sig')))
     cfg.update({k: v for k, v in (overrides or {}).items() if v is not None})
+    if cfg.get('native_tier', 'accurate') not in ('accurate', 'fast', 'ultra', 'hyper'):
+        raise ValueError('mode must be accurate, fast, ultra or hyper')
     for key in ('host_budget_gib', 'min_available_gib', 'job_commit_gib', 'request_timeout_s', 'lease_minutes'):
         if not isinstance(cfg[key], (int, float)) or not math.isfinite(cfg[key]) or cfg[key] <= 0:
             raise ValueError(f'{key} must be finite and positive')
@@ -70,23 +72,6 @@ def environment(cfg, scope='studio'):
                 'DIFFUSERS_CACHE', 'TRANSFORMERS_CACHE',
                 'KERNELS_CACHE', 'HF_KERNELS_CACHE', 'TORCHINDUCTOR_CACHE_DIR',
                 'ZIG_GLOBAL_CACHE_DIR', 'ZIG_LOCAL_CACHE_DIR', 'CLANG_MODULE_CACHE_PATH', 'SWIFT_MODULECACHE_PATH'):
-        directory = root / 'cache' / key.lower()
-        directory.mkdir(parents=True, exist_ok=True)
-        env[key] = str(directory)
-    for key, suffix in (('STUDIO_DATA_ROOT', 'studio'), ('STUDIO_OUTPUT_DIR', 'outputs'),
-                        ('STUDIO_DATASETS_DIR', 'datasets'), ('STUDIO_LORAS_DIR', 'loras')):
-        env[key] = str(root / suffix)
-    env['STUDIO_RUNTIME_ROOT'] = str(root)
-    env['STUDIO_HF_CACHE'] = str(root / 'cache' / 'hf_home')
-    env['STUDIO_WF_DLL'] = str(path(cfg.get('weight_fetcher', 'build/llama/bin/slstack-weight-fetcher.dll')))
-    env.update(PYTHONDONTWRITEBYTECODE='1', HF_HUB_OFFLINE='1', TRANSFORMERS_OFFLINE='1',
-               STUDIO_COSMOS_WINDOWS_PATH=str(path(cfg['streaming_root'])),
-               STUDIO_COSMOS_PYTHON=cfg['studio_python'])
-    if cfg.get('comfyui_models'):
-        env['STUDIO_COMFYUI_PATH'] = str(path(cfg['comfyui_models']))
-    if cfg.get('gpu_uuid'):
-        env['CUDA_VISIBLE_DEVICES'] = cfg['gpu_uuid']
-        env['STUDIO_GPU_INDEX'] = cfg['gpu_uuid']
-    env['PYTHONPATH'] = os.pathsep.join((str(ROOT), str(path(cfg['studio_root'])),
-                                       str(path(cfg['streaming_root']))))
+        if env.get(key):
+            Path(env[key]).mkdir(parents=True, exist_ok=True)
     return env

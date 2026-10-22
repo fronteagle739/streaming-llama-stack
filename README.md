@@ -21,6 +21,8 @@ Commands currently implemented include `install`, `check`, `start` (local `rtx` 
 
 Media uses the existing Studio implementations in an isolated venv. The native weight-fetcher shared library must also be built. H3's optional `flash_attn2` backend requires a separately compatible flash-attn installation; explicit SDPA selection is supported by the reused engine. No silent backend substitution is performed.
 
+The [user guide](USER_GUIDE.md) documents the environment-to-flag table and literal engine defaults. `--mode accurate|fast|ultra|hyper` selects the delivered prefill arithmetic profile; media uses `--image-mode streaming|resident` and `--video-mode streaming|resident`. The launcher supplies offline caches and memory budgets automatically, and refuses overrides that conflict with its GPU identity or residency requirements. Profile definitions are implemented; the two-machine runtime qualification remains pending.
+
 The requested quality/speed points are Max quality 0, Balanced 0.35, Fast 0.65, Faster 0.9 and Max speed 1.36125. Use Max quality or Balanced for code and precise technical output; Faster and Max speed are intended for prose, drafts and casual chat. The current vendored setter still reflects the earlier range; the five-point/per-phase interface update is pending and must be reused from its source implementation before acceptance.
 
 Owner-supplied 3K-token story/C++ measurements were respectively 5.8/5.0, 8.1/7.7, 10.3/9.7, 12.3/10.7 and 14.2/13.3 tok/s. Faster showed a code typo; Max speed had C++ syntax errors. These measurements describe the qualified model/hardware, not a general speed guarantee.
