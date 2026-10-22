@@ -100,7 +100,7 @@ class OwnedProducer:
                          '--receipt': str(directory / 'producer.json'), '--job-host-bytes': str(host_bytes),
                          '--carry': str(directory / 'carry-not-created'), '--payload': str(directory / 'payload-not-created')})
             argv = [str(binary), *[str(v) for item in args.items() for v in item]]
-            env = environment(cfg, 'rtx-llama')
+            env = environment(cfg, 'rtx-producer')
             env['CUDA_CACHE_DISABLE'] = '1'
             libraries = [str(path(p)) for p in cfg.get('producer_library_directories', [])]
             env['PATH'] = os.pathsep.join([str(binary.parent), *libraries, env.get('PATH', '')])

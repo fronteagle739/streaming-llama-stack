@@ -78,7 +78,7 @@ def train_lora(cfg, data_folder, settings_file, output):
             request = {'cfg': cfg, 'settings': settings, 'dataset': str(corpus), 'output': str(out)}
             proc = OwnedProcess(cfg, [sys.executable, '-B', '-m', 'slstack.train_native_prefix'],
                                 'train-dsv41-native-prefix', stdin=json.dumps(request) + '\n',
-                                gpu=not cfg.get('_gpu_lease_managed', False), timeout=cfg['lease_minutes'] * 60)
+                                gpu=False, timeout=cfg.get('hash_workflow_timeout_s', 3600))
             receipt = proc.wait()
             rows = [line[len('SLSTACK_TRAIN_RESULT '):] for line in proc.log.read_text(errors='replace').splitlines()
                     if line.startswith('SLSTACK_TRAIN_RESULT ')]

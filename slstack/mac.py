@@ -54,7 +54,7 @@ def setup(cfg, backend='ds4', *, check=False, zig=None):
             build_cfg = {**cfg, 'host_budget_gib': 2, 'min_available_gib': 4}
             flags = '-O3 -ffast-math -g -mcpu=native -Wall -Wextra -std=c99 -DDS4_NATIVE_FRONTIER_ENABLE=1'
             OwnedProcess(build_cfg, ['make', '-j2', 'ds4-server', 'CFLAGS=' + flags], 'build-mac-ds4',
-                         cwd=ROOT / 'engines/ds4-mac', timeout=900, scope='mac-ds4').wait()
+                         cwd=ROOT / 'engines/ds4-mac', timeout=900, scope='ds4-mac').wait()
     else:
         binary = ROOT / 'engines/mlx-serve/zig-out/bin/mlx-serve'
         if not binary.exists() and not check:
@@ -63,7 +63,7 @@ def setup(cfg, backend='ds4', *, check=False, zig=None):
                 raise ValueError('Install a portable Zig 0.17 nightly from https://ziglang.org/download/ and pass --zig <path>; no system installation is performed')
             build_cfg = {**cfg, 'host_budget_gib': 4, 'min_available_gib': 4}
             OwnedProcess(build_cfg, [zig, 'build', '-Doptimize=ReleaseFast', '-j2'], 'build-mlx-serve',
-                         cwd=ROOT / 'engines/mlx-serve', timeout=1800, scope='mac-ds4').wait()
+                         cwd=ROOT / 'engines/mlx-serve', timeout=1800, scope='mlx-serve').wait()
     manifest = {'backend': backend, 'ready': binary.is_file(), 'binary': str(binary),
                 'binary_sha256': sha256(binary) if binary.is_file() else None}
     if backend == 'ds4':
@@ -164,8 +164,9 @@ class Receiver:
             mtp = path(cfg['mtp_model']) if cfg.get('mtp_model') else model.with_name('DeepSeek-V4.1-Flash-1017-DSpark-Q4.gguf')
             if not mtp.is_file():
                 raise ValueError('Set the existing DSpark support GGUF with --mtp-model')
-            from .native_broker import vendor
+            from .native_broker import vendor, model_receipt
             vendor()
+            verified_model = json.loads(model_receipt(cfg).read_text())['receipts'][model.name]['sha256']
             from studio.mac_argv import ds4_server_argv
             preset = json.loads((ROOT / 'presets/dsv41-mac.json').read_text())
             preset.update(cfg.get('mac_native_preset') or {})
@@ -181,7 +182,7 @@ class Receiver:
                     raise ValueError('Pair the RTX producer first')
                 model_stat = model.stat()
                 qualification = {'schema': 'dsv41-native-session-qualification-v2',
-                    'model_sha256': '2cc6bc254f22a0238020e61e931c0cac865218aada1eed9c0036d9f4031c6e5f',
+                    'model_sha256': verified_model,
                     'mode': 3, 'wire_version': 2, 'tokenization': 'native-final-token-ids-le32-v1',
                     'producer_binary_sha256': self.peer['producer_sha256'],
                     'producer_source_revision': self.peer['producer_source_revision'],
@@ -203,7 +204,7 @@ class Receiver:
                     env.setdefault(name, value)
         cfg['env_overrides'] = env
         self.engine = OwnedProcess(cfg, command, 'mac-' + self.backend, cwd=Path(cfg['runtime_root']),
-                                   timeout=cfg['lease_minutes'] * 60, scope='mac-ds4')
+                                   timeout=cfg['lease_minutes'] * 60, scope='ds4-mac' if self.backend == 'ds4' else 'mlx-serve')
         self.engine_mode = native
         deadline = time.monotonic() + 300
         while time.monotonic() < deadline:

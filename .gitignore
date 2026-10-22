@@ -20,3 +20,8 @@ runtime/
 *.metallib
 *.air
 *.winmd
+
+# Additional outputs of the reproducible web UI build.
+/engines/streaming-llama/prefill_llama.cpp/tools/server/public/index.html
+/engines/streaming-llama/prefill_llama.cpp/tools/server/public/_app/
+/engines/streaming-llama/prefill_llama.cpp/tools/server/public/favicon.svg
