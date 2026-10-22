@@ -29,8 +29,20 @@ def main(config_path,output):
     owner=None;state=None;vectors=None
     try:
         owner=Native(childcfg,session,epoch,1,cancel.is_set)
-        body=dict(model='deepseek-chat',messages=[dict(role='user',content='Explain how a rainbow forms, in clear English. Write three detailed paragraphs.')],max_tokens=384,temperature=0)
+        capability=owner.quality()
+        if capability.get('supported') is not True or capability.get('phases_supported') is not True:
+            raise ValueError('Current native quality/speed provider schema is unavailable')
+        proof['provider_schema']=cfg['provider_schema']
+        proof['provider_points']=[]
+        for name,value in cfg['provider_schema']['named_points'].items():
+            actual=owner.quality(value)
+            if abs(actual.get('value',-1)-value)>1e-5:raise ValueError('Native quality/speed named point differs')
+            proof['provider_points'].append(dict(name=name,value=value,reply=actual))
+        owner.quality(0)
+        prompt=(Path(__file__).parent/'fixtures'/'combo-parity-prompt.txt').read_text(encoding='utf-8')
+        body=dict(model='deepseek-chat',messages=[dict(role='user',content=prompt)],max_tokens=384,temperature=0)
         tokens=owner.render(body)
+        if len(tokens)<128:raise ValueError('Qualification prompt must cross raw-ring and64KiB owner-page boundaries')
         native_cp=owner.sync(tokens);position=len(tokens)
         state=LockedRam(payload_bytes(position),session=session,host_budget_gib=cfg['host_budget_gib'],min_available_gib=cfg['min_available_gib'])
         owner.export(state)

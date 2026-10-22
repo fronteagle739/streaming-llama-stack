@@ -55,16 +55,20 @@ class ComboSession:
         return LockedRam(size,session=self.session,host_budget_gib=self.cfg['host_budget_gib'],min_available_gib=self.cfg['min_available_gib'])
 
     def _checkpoint(self,owner,cp):
+        started=time.monotonic()
         self.generation+=1
         contract=contract_from_checkpoint(cp,self.cfg['combo_identity'],self.session,self.epoch,self.generation,self.provenance)
         # Reuse an admitted larger section. Never allocate a second full state.
         needed=payload_bytes(cp['position'])
         if self.state is not None and self.state.capacity<needed:self.state.close();self.state=None
         if self.state is None:self.state=self._ram(needed)
-        exported=owner.export(self.state)
+        export_start=time.monotonic();exported=owner.export(self.state)
+        export_seconds=time.monotonic()-export_start;verify_start=time.monotonic()
         payload=verify_payload(self.state,contract,cp.get('payload_sha256'))
         self.contract,self.payload=contract,payload
-        return dict(export=exported,payload=payload)
+        return dict(export=exported,payload=payload,export_seconds=export_seconds,
+                    verification_seconds=time.monotonic()-verify_start,seconds=time.monotonic()-started,
+                    locked_capacity_bytes=self.state.capacity)
 
     def quality(self,value=None):
         owner=self.current
@@ -104,11 +108,12 @@ class ComboSession:
             route=self.qualification_route or ('ultra' if len(append)>=self.threshold else 'native')
             metrics['route']=route;metrics['crossover_tokens']=self.threshold
             if route=='ultra' and append:
-                if cp is not None:self._checkpoint(owner,cp)
+                if cp is not None:metrics['native_base_export']=self._checkpoint(owner,cp)
                 metrics['releases'].append(release_barrier(owner,self.device,self.cfg,baseline,self.cancel.is_set));owner=self.current=None
                 base=(self.state,self.contract) if cp is not None else None
                 owner=self.current=ComboProducer(self.cfg,self.session,self.epoch,append,self.cancel.is_set,base=base,runner=self.device)
                 metrics['ultra_load_import_prefill_seconds']=owner.prefill_seconds
+                metrics['ultra_directory']=str(owner.directory)
                 metrics['ultra_export']=self._checkpoint(owner,owner.checkpoint)
                 metrics['releases'].append(release_barrier(owner,self.device,self.cfg,baseline,self.cancel.is_set));owner=self.current=None
                 owner=self.current=Native(childcfg,self.session,self.epoch,1,self.cancel.is_set,restore=(self.state,self.payload),runner=self.device)

@@ -40,13 +40,17 @@ static int read_full(void*ud,void*dst,size_t n){saved_state*s=ud;if(n>65536||s->
 static int read_mutable(void*ud,void*dst,size_t n){saved_state*s=ud;if(n>65536||s->mutable_cursor>s->mutable_bytes||n>s->mutable_bytes-s->mutable_cursor)return 0;memcpy(dst,s->mutable+s->mutable_cursor,n);s->mutable_cursor+=n;return 1;}
 static void restore(ds4_session*s,saved_state*base,char*err){base->cursor=0;check(ds4_session_native_restore(s,base->identity.position,base->tokens,base->logits,read_full,base,ds4_native_verify,&base->identity,err,512),err);if(base->cursor!=base->bytes)die("restore left owner bytes unread");}
 int main(int argc,char**argv){
-    if(argc!=3)die("expected model and proof-output path");
+    if(argc!=4)die("expected model, proof-output path and bounded prompt fixture");
+    char text[16385];FILE*input=fopen(argv[3],"rb");if(!input)die("prompt fixture open");
+    size_t text_bytes=fread(text,1,16384,input);if(!text_bytes||ferror(input)||fgetc(input)!=EOF)die("prompt fixture extent");
+    text[text_bytes]=0;fclose(input);
     ds4_engine_options opt={0};opt.model_path=argv[1];opt.backend=DS4_BACKEND_CUDA;opt.context_size=CONTEXT;
     opt.placement_ctx_hint=CONTEXT;opt.placement_session_count_hint=1;opt.request_sized_prefill_workspace=true;
     opt.n_threads=8;opt.ssd_streaming=true;opt.ssd_streaming_cache_bytes=24ull<<30;opt.cache_affinity_bias=0;opt.cache_affinity_bias_set=true;
     ds4_engine*e=NULL;ds4_session*s=NULL;char err[512]={0};check(ds4_engine_open(&e,&opt),"engine open");
     check(ds4_session_create(&s,e,CONTEXT),"session create");ds4_tokens prompt={0};
-    ds4_encode_chat_prompt(e,NULL,"Explain how a rainbow forms, in clear English. Write three detailed paragraphs.",DS4_THINK_NONE,&prompt);
+    ds4_encode_chat_prompt(e,NULL,text,DS4_THINK_NONE,&prompt);
+    if(prompt.len<128)die("fixture must cross raw-ring and64KiB owner-page boundaries");
     check(ds4_session_sync(s,&prompt,err,sizeof(err)),err);saved_state base={0};
     check(ds4_session_native_visit(s,save_state,&base,err,sizeof(err)),err);
     float*reference=locked((size_t)ROWS*129280*4);float*row=locked(129280*4);int ids[ROWS];double timings[3]={0};
