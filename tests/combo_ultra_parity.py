@@ -24,6 +24,7 @@ def main(config_path,output):
     childcfg=dict(cfg,host_budget_gib=cfg['native_host_budget_gib'])
     proof=dict(status='RUNNING',session=session,owner_epoch=epoch,releases=[],
                native_sha256=cfg['native_sha256'],producer_sha256=cfg['producer_sha256'],
+               native_prefill_chunk=cfg['native_prefill_chunk'],
                decoder_baseline='035c04d2b17024132a9ee37932f7e95b72b07822',
                producer_source_revision=cfg['producer_source_revision'],identity=cfg['combo_identity'])
     owner=None;state=None;vectors=None

@@ -45,13 +45,15 @@ int main(int argc,char**argv){
     size_t text_bytes=fread(text,1,16384,input);if(!text_bytes||ferror(input)||fgetc(input)!=EOF)die("prompt fixture extent");
     text[text_bytes]=0;fclose(input);
     ds4_engine_options opt={0};opt.model_path=argv[1];opt.backend=DS4_BACKEND_CUDA;opt.context_size=CONTEXT;
-    opt.placement_ctx_hint=CONTEXT;opt.placement_session_count_hint=1;opt.request_sized_prefill_workspace=true;
+    opt.placement_ctx_hint=CONTEXT;opt.placement_session_count_hint=1;opt.request_sized_prefill_workspace=true;opt.prefill_chunk=128;
     opt.n_threads=8;opt.ssd_streaming=true;opt.ssd_streaming_cache_bytes=24ull<<30;opt.cache_affinity_bias=0;opt.cache_affinity_bias_set=true;
-    ds4_engine*e=NULL;ds4_session*s=NULL;char err[512]={0};check(ds4_engine_open(&e,&opt),"engine open");
-    check(ds4_session_create(&s,e,CONTEXT),"session create");ds4_tokens prompt={0};
+    ds4_engine*e=NULL;ds4_session*s=NULL;char err[512]={0};fprintf(stderr,"COMBO_PARITY_PHASE engine_open prefill_chunk=128\n");fflush(stderr);check(ds4_engine_open(&e,&opt),"engine open");
+    fprintf(stderr,"COMBO_PARITY_PHASE session_create\n");fflush(stderr);check(ds4_session_create(&s,e,CONTEXT),"session create");ds4_tokens prompt={0};
     ds4_encode_chat_prompt(e,NULL,text,DS4_THINK_NONE,&prompt);
     if(prompt.len<128)die("fixture must cross raw-ring and64KiB owner-page boundaries");
+    fprintf(stderr,"COMBO_PARITY_PHASE native_prefill tokens=%d\n",prompt.len);fflush(stderr);
     check(ds4_session_sync(s,&prompt,err,sizeof(err)),err);saved_state base={0};
+    fprintf(stderr,"COMBO_PARITY_PHASE state_snapshot\n");fflush(stderr);
     check(ds4_session_native_visit(s,save_state,&base,err,sizeof(err)),err);
     float*reference=locked((size_t)ROWS*129280*4);float*row=locked(129280*4);int ids[ROWS];double timings[3]={0};
     for(int pass=0;pass<3;++pass){

@@ -68,7 +68,8 @@ def measure(cfg,body,output,route=None,followups=()):
     os.environ['CUDA_VISIBLE_DEVICES']=cfg['gpu_uuid'];os.environ['CUDA_DEVICE_ORDER']='PCI_BUS_ID'
     session=ComboSession(cfg,qualification_route=route)
     proof=dict(status='RUNNING',native_sha256=cfg['native_sha256'],producer_sha256=cfg['producer_sha256'],
-               provider_schema=cfg['provider_schema'],identity=cfg['combo_identity'],context=cfg['context'],turns=[])
+               provider_schema=cfg['provider_schema'],identity=cfg['combo_identity'],context=cfg['context'],
+               native_prefill_chunk=cfg['native_prefill_chunk'],turns=[])
     current=body
     try:
         for index in range(1+len(followups)):
