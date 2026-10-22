@@ -106,6 +106,9 @@ def main():
     args = parser.parse_args()
     table = rows()
     if args.refresh_defaults:
+        references = inventory()
+        for row in table:
+            row['reads'] = references.get(row['var'], [])
         table = source_defaults(table)
         TABLE.write_text(json.dumps(table, indent=2) + '\n', encoding='utf-8')
     validate_table()

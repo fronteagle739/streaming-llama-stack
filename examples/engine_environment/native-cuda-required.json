@@ -1,0 +1,15 @@
+{
+  "status": "PASS",
+  "expected": "cuda-required",
+  "role": "actual native CPU startup; no model/GPU inference",
+  "received": {
+    "received_bias": "0.35"
+  },
+  "child_stdout_stderr": "{\"received_bias\": \"0.35\"}\nds4: cache affinity requires serialized single-session GPU CUDA SSD streaming and a finite value in [0,3]\n",
+  "exit_code": 1,
+  "host_budget_gib": 1,
+  "floor_gib": 4,
+  "peak_rss": 184061952,
+  "minimum_available_ram": 12793888768,
+  "elapsed_s": 0.8279999999795109
+}

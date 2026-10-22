@@ -1,0 +1,12 @@
+{
+  "status": "PASS",
+  "expected": "admitted",
+  "role": "reused image runtime memory watchdog; no model/GPU",
+  "child_stdout_stderr": "{\"received_floor_gb\": \"5\", \"received_cap_gb\": \"1.073741824\"}\n[mem_guard] in-process watchdog armed: process RSS cap=1GB; kill if free<5GB (start free=12.9GB).\nIMAGE_GUARD_ADMITTED\n",
+  "exit_code": 0,
+  "host_budget_gib": 1,
+  "floor_gib": 4,
+  "peak_rss": 27881472,
+  "minimum_available_ram": 12827885568,
+  "elapsed_s": 0.5779999999795109
+}

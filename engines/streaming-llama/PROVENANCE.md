@@ -5,3 +5,6 @@ Derived from a private fork at `c5ee9ec9dd47786287e576e78fbb42e5f4c4eac3`. Upstr
 Portable diagnostic source changes are published at `79d2d481e59875b4014552454ff876614c4afb50`. The clean export also restores required include/link dependencies, narrows build targets, and provides a thin weight-fetcher DLL with correct static Windows declarations. These build changes do not replace the streaming arithmetic.
 
 Anonymous locked native carry banks and aligned carry I/O pages: `480604d1d00583419694cdd478911f8eed194827`. The allocator has no pageable or file-backed fallback. Windows working-set tests cover every page of the full 4,536,143,872-byte bank, release, and allocation-failure cleanup. Integration build and producer-state parity remain separate gates. Tensor layout and arithmetic are unchanged.
+# Producer profile build closure
+
+Derived build/preflight changes from private source `ca05090d8fcb45fd4ddb7b46bb13b033d5ad1725` enable the existing reviewed native-half profile definitions for the explicit producer target. The same executable checks those policies with `--check-native-profiles` before model initialization. Operator and kernel arithmetic are unchanged. Its accurate67-token canonical state hash matches the retained private-build control; see `examples/engine_parity` for measurements and limitations.

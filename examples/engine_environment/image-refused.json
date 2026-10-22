@@ -1,0 +1,12 @@
+{
+  "status": "PASS",
+  "expected": "refused",
+  "role": "reused image runtime memory watchdog; no model/GPU",
+  "child_stdout_stderr": "{\"received_floor_gb\": \"64\", \"received_cap_gb\": \"1.073741824\"}\n[mem_guard] in-process watchdog armed: process RSS cap=1GB; kill if free<64GB (start free=12.6GB).\n\n[mem_guard] ABORT image-environment-proof: RSS=0.0GB (cap 1), free=12.6GB (floor 64). Killing NOW to protect the machine (peak RSS 0.0GB).\nMEM_GUARD_TRIP\n",
+  "exit_code": 137,
+  "host_budget_gib": 1,
+  "floor_gib": 4,
+  "peak_rss": 25669632,
+  "minimum_available_ram": 12631621632,
+  "elapsed_s": 0.3440000000409782
+}

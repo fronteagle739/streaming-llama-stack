@@ -42,12 +42,70 @@
     "available_floor_gib": 4,
     "all_pages_valid_locked_private": true,
     "failure_cleanup_and_release": "pass",
-    "producer_integration": "pending"
+    "producer_integration": "PASS: accurate67-token retained private full-state hash/extent"
   },
   "limits": [
     "Mac proof is mode1 at32 tokens, not the mode3 network/DSpark or long-context acceptance.",
     "Earlier non-streaming Mac oracle differs from the SSD configuration and is not claimed byte-exact.",
     "System counters alone do not establish residency for every engine/mode.",
-    "Literal fresh-clone walkthrough and streaming-producer runtime parity remain open."
-  ]
+    "Literal fresh-clone walkthrough,50K/network and all-mode qualification remain open."
+  ],
+  "streaming_producer": {
+    "status": "PASS",
+    "claim": "Recovered completed producer receipt: full67-token accurate canonical state SHA/extent equals retained private control",
+    "native_source_revision": "ca05090d8fcb45fd4ddb7b46bb13b033d5ad1725",
+    "producer_binary_sha256": "562a4650be22df2635b07eba215cd18e3dfafcaa000504fcfa26c7e79b03dbbe",
+    "tokens": 67,
+    "payload": {
+      "canonical_hashed_bytes": 10559816,
+      "hash_only": true,
+      "identity": null,
+      "path": null,
+      "planned_bytes": 10559816,
+      "sha256": "12a5d20a1bc263613681f186a44689dad7d02f8d471c3bf3dda53560a607c326",
+      "written_bytes": 0
+    },
+    "reference_payload": {
+      "canonical_hashed_bytes": 10559816,
+      "hash_only": true,
+      "identity": null,
+      "path": null,
+      "planned_bytes": 10559816,
+      "sha256": "12a5d20a1bc263613681f186a44689dad7d02f8d471c3bf3dda53560a607c326",
+      "written_bytes": 0
+    },
+    "resident_carry_bytes": 4536143872,
+    "carry_disk_bytes": 0,
+    "locked_ram_markers": [
+      "CARRY_RAM_LOCKED bytes=4536143872 active_bytes=4536143872 anonymous=1",
+      "CARRY_RAM_LOCKED bytes=2953216 active_bytes=4539097088 anonymous=1",
+      "CARRY_RAM_LOCKED bytes=2953216 active_bytes=4542050304 anonymous=1"
+    ],
+    "runtime_audit": "Constructor completed with actual module/physical-GPU audit callback; count not persisted after receipt-read error",
+    "scope": "Accurate67-token fixture only; not a50K/network/all-mode proof",
+    "phase_ms": {
+      "append_owner_admission": 0.0,
+      "chunk_token_preparation": 0.0006,
+      "embedding_40_layers_head": 15822.3125,
+      "final_hidden_export_preparation": 0.8462,
+      "input_identity_hash_budget_preflight": 296.8897,
+      "inspect_admit_allocate": 58.9575,
+      "native_payload_export_flush": 8.4636,
+      "one_token_warmup_and_retirement": 19067.1927,
+      "payload_close_readonly_rehash": 0.0,
+      "run_dispatch_bookkeeping": 0.13140000000016594
+    },
+    "wall_s": 39.43699999997625,
+    "enclosing_controller_status": "FAIL on protected receipt read while child alive; receipt recovered after certified close",
+    "recovered_without_model_rerun": true,
+    "peak_tree_rss": 5316935680,
+    "minimum_available_ram": 9859506176,
+    "host_budget_gib": 8,
+    "available_floor_gib": 4,
+    "owned_job_empty": true,
+    "owned_process_signaled": true,
+    "owned_pid_gone": true,
+    "system_page_output_delta": 0,
+    "system_page_write_delta": 0
+  }
 }

@@ -1,0 +1,18 @@
+{
+  "date": "2026-10-22",
+  "machine": "Windows x64,RTX5090 available; these cases use CPU only",
+  "stack_parent_revision": "8d6dd1bb3b3e361402e9a558a37c3d0879697932",
+  "note": "Receipts were measured on the stated parent plus evolving working changes. Support-file hashes describe publication state, not an assertion that the full files were identical at every measurement; documentation validation and budget metadata were strengthened afterward. The actual native binary and media memory-guard module remained unchanged.",
+  "published_support_source_sha256": {
+    "slstack/envvars.py": "6923c4150388b03d2a4f19dadda9a5fb17ee5f16d60edf92da1d82aa867a1e01",
+    "slstack/config.py": "5539666521e3c5dff5f272b0a8d39912b1265787678303a47e6ff7ae5d034c3e",
+    "slstack/process.py": "7ae68707d62e8fc02f846eed54e7255cf7cbfb6ceb564cf044e6a41b40ca7a1f",
+    "tests/prove_image_environment.py": "740724ad4bfa9da6e2cc8a3f4e3b9d4cf768acbfc74e799eac17faeed3ddb9fb",
+    "tests/prove_native_environment.py": "ae10ee858bd4b68545b3097073baade2a13981c7d8ecd48f8d942b9a66955439"
+  },
+  "runtime_under_test": {
+    "native_binary_sha256": "d07e56ba8d39b418b84e08c3745267e73b304c7b53f4a62f2cca31a49ab9562a",
+    "native_source_revision": "6f6a5f6a6cd483b9179ec829674f419c164d19f0",
+    "media_memory_guard_source_sha256": "2f7abdca44b63db472d56d1986d2c86e686a3bb7707663ad0591189b798a045c"
+  }
+}
