@@ -4441,16 +4441,22 @@
   },
   {
     "var": "DS4_CUDA_PREFILL_EDGE_VRAM",
-    "flag": null,
+    "flag": "--ds4-cuda-prefill-edge-vram",
     "default": null,
-    "code_default": "Engine-defined; see exact source references",
-    "classification": "advanced",
+    "code_default": "1 (evicts the GPU core arena at the prefill edge); launcher requires 0",
+    "classification": "safety",
     "scopes": [
       "ds4-win"
     ],
-    "doc": "DS4_CUDA_PREFILL_EDGE_VRAM: advanced engine setting; built-in default retained",
+    "doc": "Keep 0: retain the native core in VRAM during prefill. Values enabling core eviction are refused by this memory-resident launcher.",
     "reads": [
       "engines/ds4-win/ds4.c:5482"
+    ],
+    "defaults_by_scope": {
+      "ds4-win": "0"
+    },
+    "allowed_values": [
+      "0"
     ]
   },
   {
@@ -15243,6 +15249,9 @@
     "doc": "Use anonymous owned, mlock-protected shared Metal core, KV and tensor storage; allocation or wiring failure refuses startup. The launcher requires this for native Mac inference.",
     "reads": [
       "engines/ds4-mac/ds4_metal_wired.h:15"
+    ],
+    "allowed_values": [
+      "1"
     ]
   },
   {

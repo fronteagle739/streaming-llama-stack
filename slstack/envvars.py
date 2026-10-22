@@ -51,6 +51,8 @@ def apply(env, cfg, scope):
                 value = row.get('defaults_by_scope', {}).get(scope)
         if value is not None:
             value = str(value).format(**cfg)
+            if row.get('allowed_values') and value not in row['allowed_values']:
+                raise ValueError(f'{var}: value violates required memory-residency policy')
             env[var] = value
         if inherited is not None:
             identity = (var, inherited, value)
