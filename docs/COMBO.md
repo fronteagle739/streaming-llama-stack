@@ -38,3 +38,18 @@ Pending acceptance: native roundtrip and rewind byte equality for384 complete
 logit vectors; native-prefill versus ULTRA-prefill/import KL/top1 for384 steps;
 measured crossover and50K/reused-prefix TTFT, switch and decode rates; then the
 new Studio preset, live quality/speed tool, two-turn TEST chat and screenshot.
+
+The candidate coordinator sequences native export, an empty/signaled/gone Job
+certificate plus physical VRAM recovery, ULTRA base import and prefill, RAM
+export, a second release certificate and native restore. A failed transition
+poisons the same owner epoch. Automatic routing requires a crossover receipt
+bound to these exact binaries, model identity and context, including measured
+verification on both sides of the threshold. Its equation is the existing Kimi
+floor-plus-stream-time crossover. No guessed threshold enables the preset.
+
+The mutable rewind journal includes its saved native owner hashes and epoch in
+locked RAM and survives a native process restart. The hardware comparison probe
+stores384 complete reference vectors in a separate admitted locked section and
+compares on the same teacher-forced token prefix. It reports KL, top1 and full
+byte equality separately. These probe and orchestration sources are candidates;
+CPU tests do not qualify their GPU behavior.

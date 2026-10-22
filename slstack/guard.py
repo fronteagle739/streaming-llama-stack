@@ -85,6 +85,8 @@ def _supervise(spec):
     from .memory_counters import snapshot
     paging_before = snapshot() if spec.get('paging_telemetry') else None
     process_counters = {}
+    paging_warnings = []
+    last_paging_sample = 0
     with open(spec['log'], 'ab', buffering=0) as log:
         child = subprocess.Popen(spec['command'], cwd=spec['cwd'], env=spec['env'],
                                  stdin=subprocess.PIPE if 'stdin' in spec else subprocess.DEVNULL,
@@ -131,6 +133,31 @@ def _supervise(spec):
                     reason = 'deadline exceeded'
                 if Path(spec['stop']).exists():
                     reason = 'stop requested'
+                if spec.get('gpu_lease_identity'):
+                    from .lease import active_holds
+                    try:
+                        holds = active_holds(Path(spec['gpu']['hold_file']).read_text(encoding='utf-8-sig'))
+                        foreign = [line for line in holds if len(line.split()) < 3 or
+                                   line.split()[2].rstrip(';') != spec['gpu_lease_identity']]
+                        if foreign:
+                            reason = 'preempted by foreign ACTIVE hold: ' + repr(foreign)
+                    except OSError as exc:
+                        reason = 'GPU hold ledger unavailable: ' + str(exc)
+                if paging_before and time.monotonic() - last_paging_sample >= 1:
+                    last_paging_sample = time.monotonic()
+                    current = snapshot()
+                    initial = paging_before.get('paging_file_usage', {}).get('first')
+                    value = current.get('paging_file_usage', {}).get('first')
+                    if initial is not None and value is not None:
+                        # PDH Paging File raw numerator is allocated pages. This
+                        # is global activity, not attribution to our process.
+                        growth = max(0, value - initial) * 4096
+                        if growth > 256 << 20:
+                            reason = 'SYSTEM PAGING PRESSURE: allocated page-file growth exceeds256MiB'
+                        elif growth and not paging_warnings:
+                            paging_warnings.append({'global_pagefile_growth_bytes': growth,
+                                'available_physical_bytes': free,
+                                'action': 'warning; below256MiB, process RSS and physical floor still enforced'})
                 if reason:
                     kill_tree(child)
                     break
@@ -147,6 +174,7 @@ def _supervise(spec):
                'job_commit_gib': spec['job_commit_gib'], 'child_pid': child.pid}
     receipt.update(paging_before=paging_before, paging_after=snapshot() if spec.get('paging_telemetry') else None,
                    process_memory_counters=list(process_counters.values()),
+                   paging_warnings=paging_warnings,
                    paging_interpretation='Process faults include soft and hard faults. Private commit/pagefile usage is not disk I/O. System counters include other processes; these counters alone do not prove core/KV residency.')
     Path(spec['receipt']).write_text(json.dumps(receipt, indent=2))
     return 0 if code == 0 and reason is None else 1
@@ -162,8 +190,9 @@ def supervise(spec):
             while True:
                 entered = False
                 try:
-                    with gpu_lease(spec['gpu']):
+                    with gpu_lease(spec['gpu']) as identity:
                         entered = True
+                        spec['gpu_lease_identity'] = identity
                         spec['timeout_s'] = min(spec['timeout_s'], spec['gpu']['lease_minutes'] * 60)
                         return _supervise(spec)
                 except (AdmissionRefused, PermissionError):
