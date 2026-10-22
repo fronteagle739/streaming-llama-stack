@@ -129,7 +129,7 @@ class Engines:
             self.journal.update(self.attach_entry, 'attaching', pid=self.llm.proc.pid,
                                 pid_created=psutil.Process(self.llm.proc.pid).create_time())
         start = time.monotonic()
-        while time.monotonic() - start < min(300, self.cfg['request_timeout_s']):
+        while time.monotonic() - start < min(300, self.cfg['request_timeout_s']) + self.cfg.get('gpu_wait_seconds', 0):
             if self.llm.proc.poll() is not None:
                 self.llm.wait()
                 raise RuntimeError('ds4 server exited before readiness')

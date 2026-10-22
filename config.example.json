@@ -53,5 +53,6 @@
   "cache_affinity_spread_file": "",
   "env_overrides": {},
   "models": [],
-  "resident": []
+  "resident": [],
+  "gpu_wait_seconds": 0
 }

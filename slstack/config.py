@@ -15,6 +15,9 @@ def load(path=None, overrides=None):
     for key in ('host_budget_gib', 'min_available_gib', 'job_commit_gib', 'request_timeout_s', 'lease_minutes'):
         if not isinstance(cfg[key], (int, float)) or not math.isfinite(cfg[key]) or cfg[key] <= 0:
             raise ValueError(f'{key} must be finite and positive')
+    wait = cfg.get('gpu_wait_seconds', 0)
+    if type(wait) not in (int, float) or not math.isfinite(wait) or not 0 <= wait <= 7200:
+        raise ValueError('gpu_wait_seconds must be finite and in [0,7200]')
     if cfg['lease_minutes'] > 20:
         raise ValueError('GPU lease must be at most 20 minutes')
     if cfg['host'] not in ('127.0.0.1', '::1'):
