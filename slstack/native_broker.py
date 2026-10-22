@@ -57,7 +57,7 @@ class OwnedProducer:
         vendor()
         from studio.dsv41_session_contract import CONTEXT, require
         from studio.dsv41_session_process import Producer
-        from studio.dsv41_session_profiles import profile
+        from .native_profiles import profile
         from studio.dsv41_windows_runner import _Native
         self.cfg, self.request, self.cancel = cfg, request, cancel
         self.stack = ExitStack()
@@ -86,8 +86,6 @@ class OwnedProducer:
             if hashlib.sha256(request['tokens']).hexdigest() != request['tokens_sha256']:
                 raise ValueError('Initial native token identity differs')
             settings = profile(request['tier'], request.get('techniques'))
-            if request['tier'] == 'hyper':
-                raise ValueError('HYPER performs FP4 weight conversion; this no-requant qualification admits accurate/fast/ultra')
             args = dict(settings['arguments'])
             host_bytes = min(8 << 30, int(cfg['host_budget_gib'] * (1 << 30)))
             floor = int(cfg['min_available_gib'] * (1 << 30))
@@ -101,7 +99,6 @@ class OwnedProducer:
                          '--carry': str(directory / 'carry-not-created'), '--payload': str(directory / 'payload-not-created')})
             argv = [str(binary), *[str(v) for item in args.items() for v in item]]
             env = environment(cfg, 'rtx-producer')
-            env['CUDA_CACHE_DISABLE'] = '1'
             libraries = [str(path(p)) for p in cfg.get('producer_library_directories', [])]
             env['PATH'] = os.pathsep.join([str(binary.parent), *libraries, env.get('PATH', '')])
             self.timer = threading.Timer(cfg['lease_minutes'] * 60, cancel.set)

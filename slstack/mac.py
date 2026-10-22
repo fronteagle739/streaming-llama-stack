@@ -145,8 +145,8 @@ class Receiver:
             raise ValueError('Invalid producer identity')
         if str(ipaddress.IPv4Address(row['producer_ipv4'])) != client_ip:
             raise ValueError('Producer address must match the authenticated peer connection')
-        if type(row['broker_port']) is not int or not 1 <= row['broker_port'] <= 65535 or row['tier'] not in ('accurate', 'fast', 'ultra'):
-            raise ValueError('Invalid broker port or unsupported no-requant tier')
+        if type(row['broker_port']) is not int or not 1 <= row['broker_port'] <= 65535 or row['tier'] not in ('accurate', 'fast', 'ultra', 'hyper'):
+            raise ValueError('Invalid broker port or native tier')
         self.close()
         self.peer = {**row, 'receiver_sha256': self.build['binary_sha256'], 'status': 'candidate'}
         self.qualification = {}

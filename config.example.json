@@ -54,5 +54,6 @@
   "env_overrides": {},
   "models": [],
   "resident": [],
-  "gpu_wait_seconds": 0
+  "gpu_wait_seconds": 0,
+  "native_tier": "accurate"
 }
