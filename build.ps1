@@ -6,6 +6,17 @@ $env:TEMP = Join-Path $runtimeConfig 'build-temp'
 New-Item -ItemType Directory -Force -Path $env:TEMP | Out-Null
 $env:TMP = $env:TEMP
 $env:npm_config_cache = Join-Path $runtimeConfig 'npm-cache'
+if ($Target -in @('webui','all')) {
+    # Use the pinned UI's own build pipeline. Never invoke its destructive reset/cleanup scripts.
+    $uiPath = Join-Path $PSScriptRoot 'engines/streaming-llama/prefill_llama.cpp/tools/server/webui'
+    & python -B -m slstack --config $Config guarded --cwd $uiPath -- npm.cmd ci --ignore-scripts
+    if ($LASTEXITCODE) { throw 'webui dependency installation failed' }
+    & python -B -m slstack --config $Config guarded --cwd $uiPath -- npx.cmd svelte-kit sync
+    if ($LASTEXITCODE) { throw 'webui sync failed' }
+    & python -B -m slstack --config $Config guarded --cwd $uiPath -- npx.cmd vite build
+    if ($LASTEXITCODE) { throw 'webui build failed' }
+}
+
 if ($Target -in @('ds4','all')) {
     $ds4Path = Join-Path $PSScriptRoot 'engines/ds4-win'
     & python -B -m slstack --config $Config guarded --cwd $ds4Path -- powershell -NoProfile -ExecutionPolicy Bypass -File windows_build.ps1 -Target cuda -BuildTemp $env:TEMP
@@ -41,14 +52,4 @@ if ($Target -in @('llama','all')) {
     $profileCheck = Join-Path $PSScriptRoot 'build/llama/bin/llama-dsv41-prefill.exe'
     & python -B -m slstack --config $Config guarded -- $profileCheck --check-native-profiles
     if ($LASTEXITCODE) { throw 'producer profile preflight failed' }
-}
-if ($Target -in @('webui','all')) {
-    # Use the pinned UI's own build pipeline. Never invoke its destructive reset/cleanup scripts.
-    $uiPath = Join-Path $PSScriptRoot 'engines/streaming-llama/prefill_llama.cpp/tools/server/webui'
-    & python -B -m slstack --config $Config guarded --cwd $uiPath -- npm.cmd ci --ignore-scripts
-    if ($LASTEXITCODE) { throw 'webui dependency installation failed' }
-    & python -B -m slstack --config $Config guarded --cwd $uiPath -- npx.cmd svelte-kit sync
-    if ($LASTEXITCODE) { throw 'webui sync failed' }
-    & python -B -m slstack --config $Config guarded --cwd $uiPath -- npx.cmd vite build
-    if ($LASTEXITCODE) { throw 'webui build failed' }
 }

@@ -9,7 +9,7 @@ The stack's own code and owner-authored Studio exports use MIT. Engine and embed
 The intended six-step walkthrough is:
 
 1. Clone this repository with `git clone --recurse-submodules` on both computers.
-2. On Windows, run `./slstack.ps1 install --all` to create isolated media runtimes. Python 3.12, Visual Studio C++ tools, CMake/Ninja, and CUDA are prerequisites; model weights are supplied locally.
+2. On Windows, run `./slstack.ps1 install --all` to create isolated media runtimes and build native engines and the chat UI. Python 3.12, Visual Studio C++ tools, CMake/Ninja, and CUDA are prerequisites; model weights are supplied locally.
 3. Edit example model/ComfyUI paths. Model weights are read in place and are never downloaded by the installer.
 4. On the Mac, run `./bin/slstack mac --model <model.gguf>`. The receiver prints its endpoint and pairing instructions.
 5. On Windows, run `./slstack.ps1 rtx --model <model.gguf> --comfyui-models <models> --mac <mac-endpoint>` with the printed pairing information.

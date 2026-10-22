@@ -8,6 +8,65 @@ import time
 import psutil
 
 
+def pagefile_used_bytes():
+    """Actual system pagefile slots, rather than the system commit charge.
+
+    https://learn.microsoft.com/windows/win32/api/psapi/ns-psapi-enum_page_file_information
+    This counter does not attribute I/O to a process.
+    """
+    if os.name != 'nt':
+        return psutil.swap_memory().used
+    import mmap
+    from ctypes import wintypes as w
+    class PageInfo(ctypes.Structure):
+        _fields_ = [('cb', w.DWORD), ('reserved', w.DWORD),
+                    ('total', ctypes.c_size_t), ('used', ctypes.c_size_t),
+                    ('peak', ctypes.c_size_t)]
+    callback_type = ctypes.WINFUNCTYPE(w.BOOL, ctypes.c_void_p,
+                                       ctypes.POINTER(PageInfo), w.LPCWSTR)
+    pages = 0
+    @callback_type
+    def collect(context, info, filename):
+        nonlocal pages
+        pages += info.contents.used
+        return True
+    api = ctypes.WinDLL('psapi', use_last_error=True)
+    api.EnumPageFilesW.argtypes = [callback_type, ctypes.c_void_p]
+    api.EnumPageFilesW.restype = w.BOOL
+    if not api.EnumPageFilesW(collect, None):
+        raise ctypes.WinError(ctypes.get_last_error())
+    return pages * mmap.PAGESIZE
+
+
+class PagefilePressure:
+    """Shared policy for system noise; private commitment is a separate limit."""
+    threshold = 256 * 1024**2
+
+    def __init__(self, sample=pagefile_used_bytes):
+        self.sample = sample
+        self.initial = sample()
+        self.maximum_growth = 0
+        self.warning = None
+
+    def check(self):
+        growth = max(0, self.sample() - self.initial)
+        self.maximum_growth = max(self.maximum_growth, growth)
+        if growth > self.threshold:
+            return f'SYSTEM PAGEFILE PRESSURE: growth={growth} exceeds {self.threshold}'
+        if growth:
+            if self.warning is None:
+                print(f'WARNING: system pagefile grew {growth} bytes; not attributed to this job',
+                      file=sys.stderr, flush=True)
+            self.warning = f'System pagefile grew {self.maximum_growth} bytes; not attributed to this job'
+        return None
+
+    def receipt(self):
+        return {'initial_used_bytes': self.initial,
+                'maximum_growth_bytes': self.maximum_growth,
+                'kill_above_bytes': self.threshold, 'warning': self.warning,
+                'scope': 'system-wide; not per-process attribution'}
+
+
 def snapshot():
     result = {'time_ns': time.time_ns(), 'available_physical_bytes': psutil.virtual_memory().available,
               'scope': 'system-wide; other processes may contribute'}

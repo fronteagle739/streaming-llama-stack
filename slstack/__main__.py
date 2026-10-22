@@ -87,7 +87,8 @@ def main():
         result = install(cfg, image=args.image, video=args.video, all_engines=args.all,
                          check=args.check, sdk_only=args.sdk)
         print(json.dumps(result, indent=2))
-        return 0 if result['sdk']['ready'] and all(row['ready'] for row in result['engines']) else 1
+        return 0 if (result['sdk']['ready'] and all(row['ready'] for row in result['engines'])
+                     and result.get('build', {}).get('ready', True)) else 1
     if args.command in ('mac', 'mac-setup'):
         from .mac import setup, budget
         from .process import OwnedProcess

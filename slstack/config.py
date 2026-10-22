@@ -35,6 +35,9 @@ def load(path=None, overrides=None):
     root = Path(cfg['runtime_root']).expanduser()
     root = (root if root.is_absolute() else ROOT / root).resolve()
     cfg['runtime_root'] = str(root)
+    if not cfg.get('studio_python'):
+        cfg['studio_python'] = str(root / 'media-venv' /
+                                   ('Scripts/python.exe' if os.name == 'nt' else 'bin/python'))
     if not cfg.get('gpu_uuid') and os.name == 'nt':
         import subprocess
         try:
