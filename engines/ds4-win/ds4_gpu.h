@@ -2708,6 +2708,14 @@ int ds4_gpu_directional_steering_project_tensor(
 /* Changes only the per-token mean; preserves warm-up, calibration and cache state. */
 int ds4_gpu_cache_affinity_set_mean(float mean);
 void ds4_gpu_cache_affinity_decode_unbiased(void);
+#if !defined(__APPLE__) && !defined(DS4_ROCM_BUILD)
+/* Speculation restores the request's existing warm-up frontier on rejection. */
+uint64_t ds4_gpu_cache_affinity_decode_count(void);
+void ds4_gpu_cache_affinity_decode_restore(uint64_t count);
+/* Scoped existing target verifier; serial decode/drafter keep their own mean.
+ * Returns2 when an override requires router observation even at decode mean0. */
+int ds4_gpu_cache_affinity_verify_scope(int active);
+#endif
 int ds4_gpu_cache_affinity_configure(float mean, uint32_t warmup, uint32_t ramp,
     const char *spread_file, const char *calibrate_file, int flat, uint32_t promotion_cap,
     int router_confidence);
@@ -3076,6 +3084,43 @@ int ds4_gpu_routed_moe_batch_tensor(
         uint32_t                n_tokens,
         bool                   *mid_is_f16,
         bool                    force_resident);
+int ds4_gpu_routed_moe_batch_aux_tensor(
+        ds4_gpu_tensor       *out,
+        ds4_gpu_tensor       *gate,
+        ds4_gpu_tensor       *up,
+        ds4_gpu_tensor       *mid,
+        ds4_gpu_tensor       *experts,
+        const void             *model_map,
+        uint64_t                model_size,
+        uint64_t                gate_offset,
+        uint64_t                up_offset,
+        uint64_t                down_offset,
+        uint32_t                gate_type,
+        uint32_t                down_type,
+        uint64_t                gate_expert_bytes,
+        uint64_t                gate_row_bytes,
+        uint64_t                down_expert_bytes,
+        uint64_t                down_row_bytes,
+        uint32_t                expert_in_dim,
+        uint32_t                expert_mid_dim,
+        uint32_t                out_dim,
+        const ds4_gpu_tensor *selected,
+        const ds4_gpu_tensor *weights,
+        uint32_t                n_total_expert,
+        uint32_t                n_expert,
+        float                   clamp,
+        const ds4_gpu_tensor *x,
+        uint32_t                layer_index,
+        uint32_t                n_tokens,
+        bool                   *mid_is_f16,
+        bool                    force_resident);
+int ds4_gpu_dspark_aux_map(const void *map,uint64_t size,uint64_t start,const uint64_t *offsets,const uint64_t *sizes,uint32_t count,int device);
+int ds4_gpu_dspark_aux_map_all(const void *map,uint64_t size,uint64_t start,int device);
+int ds4_gpu_dspark_aux_scope(int enter);
+int ds4_gpu_dspark_aux_device(int logical);
+ds4_gpu_tensor *ds4_gpu_dspark_aux_alloc(uint64_t bytes);
+int ds4_gpu_dspark_aux_copy(ds4_gpu_tensor *dst,const ds4_gpu_tensor *src,uint64_t bytes);
+
 
 /* =========================================================================
  * Hyper-Connection Kernels.

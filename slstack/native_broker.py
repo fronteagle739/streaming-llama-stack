@@ -9,7 +9,7 @@ import threading
 import time
 from .config import ROOT, environment, path
 from .journal import atomic_json, sha256
-from .lease import gpu_lease
+from .lease import gpu_lease, HoldWatcher
 
 
 def vendor():
@@ -67,12 +67,13 @@ class OwnedProducer:
         self.attempted = False
         self.failure_cleanup = None
         try:
-            self.stack.enter_context(gpu_lease(cfg))
             binary = path(cfg['llama_producer'])
             pin = sha256(binary)
             if pin != cfg['producer_sha256']:
                 raise ValueError('Trusted producer binary pin changed')
             receipt = model_receipt(cfg)
+            identity = self.stack.enter_context(gpu_lease(cfg))
+            watcher = HoldWatcher(cfg.get('hold_file') or Path(cfg['runtime_root']) / 'state' / 'gpu.holds', identity)
             native = _Native()
             directory = Path(cfg['runtime_root']) / 'native-sessions' / request['session']
             directory.mkdir(parents=True, exist_ok=False)
@@ -107,7 +108,8 @@ class OwnedProducer:
             self.attempted = True
             self.producer = Producer(request['session'], argv, env, directory, host_bytes=host_bytes,
                                      physical_floor=floor, operation_seconds=min(600, cfg['request_timeout_s']),
-                                     idle_seconds=cfg['lease_minutes'] * 60, native=native, cancelled=cancel.is_set)
+                                     idle_seconds=cfg['lease_minutes'] * 60, native=native,
+                                     cancelled=lambda: cancel.is_set() or bool(watcher.reason()))
             cp = self.producer.ready['checkpoint']
             require(cp['context'] == CONTEXT and cp['position'] == len(request['tokens']) // 4
                     and cp['tokens_sha256'] == request['tokens_sha256'], 'Initial producer checkpoint differs')

@@ -701,6 +701,11 @@ extern "C" int ds4_gpu_dsv41_hc_mean(uint32_t rows, uint32_t dim, uint32_t hc,
 }
 
 __device__ static float dsv41_markov_tab(const void *p, uint64_t i, int f16) {
+    /* Format 2 is the released Q8_0 sidecar, read without requantization. */
+    if (f16 == 2) {
+        const unsigned char *b = (const unsigned char *)p + (i / 32u) * 34u;
+        return __half2float(*(const __half *)b) * (float)*(const int8_t *)(b + 2u + i % 32u);
+    }
     return f16 ? __half2float(((const __half *)p)[i]) : ((const float *)p)[i];
 }
 
@@ -773,8 +778,10 @@ extern "C" int ds4_gpu_dsv41_markov_chain(uint32_t block, uint32_t vocab, uint32
                                           uint64_t embed_offset, uint64_t head_offset, int f16,
                                           const ds4_gpu_tensor *conf_proj, ds4_gpu_tensor *tokens,
                                           ds4_gpu_tensor *conf, ds4_gpu_tensor *parts, uint32_t n_parts) {
-    const uint64_t bytes = (uint64_t)vocab * rank * (f16 ? 2u : 4u);
-    if (!block || !vocab || !rank || !dim || !n_parts || n_parts > 4096u || !model_map ||
+    if (f16 < 0 || f16 > 2 || (f16 == 2 && rank % 32u)) return 0;
+    const uint64_t bytes = f16 == 2 ? (uint64_t)vocab * (rank / 32u) * 34u :
+        (uint64_t)vocab * rank * (f16 ? 2u : 4u);
+    if (!block || !vocab || !rank || !dim || !n_parts || n_parts > 4096u || !model_map || bytes > model_size ||
         embed_offset > model_size - bytes || head_offset > model_size - bytes ||
         !dsv41_has_floats(logits, (uint64_t)block * vocab) || !dsv41_has_floats(x, (uint64_t)block * dim) ||
         !dsv41_has_floats(conf_proj, (uint64_t)dim + rank) || !dsv41_has_floats(tokens, (uint64_t)block + 1u) ||

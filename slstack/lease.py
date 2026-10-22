@@ -42,10 +42,10 @@ def recover_leases(runtime_root):
     return released
 
 
-def active_holds(text):
+def active_holds(text, *, mac=False):
     active = {}
     for line in text.splitlines():
-        if line.startswith('MAC '):
+        if line.startswith('MAC ') != mac:
             continue
         match = re.match(r'^(?:MAC )?(ACTIVE|RELEASED|ENDED):\s+(\S+)\s+(\S+)', line)
         if match:
@@ -56,6 +56,30 @@ def active_holds(text):
             else:
                 active.pop(key, None)
     return list(active.values())
+
+
+class HoldWatcher:
+    """Fail closed on a new foreign hold; unchanged ledgers cost one stat call."""
+    def __init__(self, path, identity, *, mac=False, task='DS4STACK'):
+        self.path, self.identity = Path(path), identity
+        self.mac, self.task = mac, task
+        self.stamp = None
+        self.blocking = None
+
+    def reason(self):
+        stat = self.path.stat()
+        stamp = (stat.st_mtime_ns, stat.st_size)
+        if stamp != self.stamp:
+            if stat.st_size > 16 * 1024**2:
+                raise RuntimeError('Shared hold ledger exceeds its observation budget')
+            blocking = []
+            for line in active_holds(self.path.read_text(encoding='utf-8-sig'), mac=self.mac):
+                match = re.match(r'^(?:MAC )?ACTIVE:\s+(\S+)\s+(\S+)', line)
+                if (match[1], match[2].rstrip(';')) != (self.task, self.identity):
+                    blocking.append(line)
+            self.blocking = '\n'.join(blocking) or None
+            self.stamp = stamp
+        return self.blocking
 
 
 @contextmanager

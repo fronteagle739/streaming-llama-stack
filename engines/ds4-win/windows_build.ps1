@@ -2,6 +2,7 @@ param(
     [ValidateSet("cuda", "cpu")]
     [string]$Target = "cuda",
     [string]$BuildTemp = $PSScriptRoot,
+    [switch]$Draft3070,
     [switch]$TestsOnly
 )
 
@@ -211,7 +212,9 @@ if ($Target -eq "cuda") {
     # the end was 0, the link happily reused the STALE sm_75 object from the previous build, and the
     # script exited 0. cuobjdump then showed 7 sm_120 + 1 sm_75 - a silently mixed binary.
     $errCheck = "`nif errorlevel 1 exit /b %errorlevel%"
-    $cudaCommand = "`"$nvcc`" -std=c++17 -Xcompiler /Zc:preprocessor " + (($nvccArch + $nvccDefines + "-c" + "-o" + "ds4_cuda.obj" + "ds4_cuda.cu") -join " ") + $errCheck
+    $draftArch = @()
+    if ($Draft3070) { $draftArch = @("-gencode", "arch=compute_86,code=sm_86") }
+    $cudaCommand = "`"$nvcc`" -std=c++17 -Xcompiler /Zc:preprocessor " + (($nvccArch + $draftArch + $nvccDefines + "-c" + "-o" + "ds4_cuda.obj" + "ds4_cuda.cu") -join " ") + $errCheck
     $backendObjects += "ds4_cuda.obj"
 
     # [merge 2026-08-15] The vendored MMQ kernels are NEW from upstream (cuda/mmq/, added wholesale by

@@ -173,7 +173,11 @@ class Engines:
         raise TimeoutError('ds4 server readiness deadline exceeded')
 
     def quality(self, value=None):
-        self.ready()
+        # Control must remain available while another thread is decoding.
+        # Cold start still shares the normal lifecycle lock with media/model swaps.
+        if not self.llm or self.llm.proc.poll() is not None:
+            with self.lock:
+                self.ready()
         return http_json(self.cfg['ds4_url'] + '/v1/quality-speed',
                          None if value is None else {'value': value}, timeout=10,
                          headers={'Authorization': 'Bearer ' + self.cfg['_control_token']})
@@ -181,7 +185,8 @@ class Engines:
     def chat(self, body):
         self.select(body.get('model'))
         self.ready()
-        return http_json(self.cfg['ds4_url'] + '/v1/chat/completions', body, self.cfg['request_timeout_s'])
+        return http_json(self.cfg['ds4_url'] + '/v1/chat/completions', body, self.cfg['request_timeout_s'],
+                         headers={'Authorization': 'Bearer ' + self.cfg['_control_token']})
 
     def media(self, kind, params):
         model = self.cfg[kind + '_model']

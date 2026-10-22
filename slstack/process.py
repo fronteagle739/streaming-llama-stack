@@ -35,6 +35,8 @@ class OwnedProcess:
                 'stop': str(self.stop_path), 'receipt': str(self.receipt), 'log': str(self.log)}
         if stdin is not None:
             spec['stdin'] = stdin
+        if cfg.get('hold_watch'):
+            spec['hold_watch'] = dict(cfg['hold_watch'])
         if gpu:
             spec['gpu'] = cfg
         self.spec = self.prefix.with_suffix('.spec.json')

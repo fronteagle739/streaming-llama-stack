@@ -92,7 +92,11 @@ void ds4_ds_prefill_waves_release(void);
 
 /* How many requests are pending. */
 uint32_t ds4_ds_batch_count(void);
-/* Pending request bytes and the per-submit request ceiling. */
+/* Pending bytes and conservative logical batch_add span capacity. With the
+ * default DS4_DS_READ_PARTS=8 (override 0/1 disables; 2..64 selects parts),
+ * a span can expand to several physical requests;
+ * capacity already accounts for that expansion. batch_count counts physical
+ * requests. Small or unaligned spans remain one request. */
 uint64_t ds4_ds_batch_bytes(void);
 uint32_t ds4_ds_batch_capacity(void);
 
@@ -101,6 +105,9 @@ uint32_t ds4_ds_batch_capacity(void);
 void ds4_ds_stats_set_phase(int decode);
 void ds4_ds_stats_set_token(uint64_t token_index);
 void ds4_ds_stats_set_batch_layer(uint32_t first_layer, uint32_t last_layer);
+/* Optional RAM trace needs layer metadata even when the heavyweight CUDA
+ * synchronization profiler is disabled. Cached process-start flag. */
+int ds4_ds_layer_trace_enabled(void);
 
 /* Submit every pending request, wait for completion, and verify no request failed.
  * Returns 1 only if ALL requests completed successfully. All out-parameters are optional;

@@ -79,6 +79,11 @@ def windows_job(proc, commit_gib):
 def _supervise(spec):
     budget, floor = spec['host_budget_gib'], spec['min_available_gib']
     admit(budget, floor)
+    from .lease import HoldWatcher
+    watch = spec.get('hold_watch')
+    watcher = HoldWatcher(watch['path'], watch['identity'], mac=watch.get('mac', False)) if watch else None
+    if watcher and watcher.reason():
+        raise RuntimeError('Yielding before process creation to shared hold: ' + watcher.reason())
     flags = subprocess.CREATE_NO_WINDOW | 4 if os.name == 'nt' else 0  # suspended until Job admission
     start = time.monotonic()
     peak, minimum, reason = 0, psutil.virtual_memory().available, None
@@ -131,6 +136,13 @@ def _supervise(spec):
                     reason = 'deadline exceeded'
                 if Path(spec['stop']).exists():
                     reason = 'stop requested'
+                if watcher:
+                    try:
+                        foreign = watcher.reason()
+                        if foreign:
+                            reason = 'Yielding to shared hold: ' + foreign
+                    except OSError as exc:
+                        reason = 'Shared hold observation failed: ' + str(exc)
                 if reason:
                     kill_tree(child)
                     break
@@ -162,8 +174,10 @@ def supervise(spec):
             while True:
                 entered = False
                 try:
-                    with gpu_lease(spec['gpu']):
+                    with gpu_lease(spec['gpu']) as identity:
                         entered = True
+                        spec['hold_watch'] = {'path': spec['gpu'].get('hold_file') or
+                            str(Path(spec['runtime_root']) / 'state' / 'gpu.holds'), 'identity': identity}
                         spec['timeout_s'] = min(spec['timeout_s'], spec['gpu']['lease_minutes'] * 60)
                         return _supervise(spec)
                 except (AdmissionRefused, PermissionError):
