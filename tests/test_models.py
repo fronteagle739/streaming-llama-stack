@@ -58,3 +58,25 @@ class ModelSelectionTests(unittest.TestCase):
         journal.return_value.update.assert_called_once_with('owned-entry', 'failed', applied=False,
             error='Engine constructor failed before creating an owned job')
         self.assertIsNone(engine.attach_entry)
+
+    @patch('slstack.engines.http_json', return_value={'closing': True})
+    @patch('slstack.journal.Journal')
+    def test_base_server_uses_its_owned_authenticated_graceful_close(self, journal, request):
+        cfg = self.config(); cfg.update(ds4_url='http://127.0.0.1:9999', _control_token='TEST control')
+        engine = Engines(cfg); process = Mock(); process.proc.poll.return_value = None
+        process.proc.wait.return_value = 0; engine.llm = process
+        engine.close()
+        request.assert_called_once_with(cfg['ds4_url']+'/v1/train/close', {}, timeout=10,
+                                        headers={'Authorization': 'Bearer TEST control'})
+        process.stop.assert_called_once()
+        journal.return_value.update.assert_not_called()
+        self.assertIsNone(engine.llm)
+
+    @patch('slstack.engines.http_json')
+    @patch('slstack.journal.Journal')
+    def test_confirmed_graceful_exit_still_finishes_adapter_detach(self, journal, request):
+        engine = Engines(self.config()); process = Mock(); process.proc.poll.return_value = 0
+        engine.llm = process; engine.attach_entry = 'owned-entry'; engine.attach_guard_recorded = True
+        engine.close()
+        journal.return_value.update.assert_called_once_with('owned-entry', 'detached', applied=False)
+        request.assert_not_called()

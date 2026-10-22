@@ -65,8 +65,8 @@ class Engines:
     def close(self):
         if self.llm:
             self.status('Unloading model')
-            clean = False
-            if self.attach_entry and self.llm.proc.poll() is None:
+            clean = self.llm.proc.poll() == 0
+            if self.llm.proc.poll() is None:
                 try:
                     result = http_json(self.cfg['ds4_url'] + '/v1/train/close', {}, timeout=10,
                                        headers={'Authorization': 'Bearer ' + self.cfg['_control_token']})
