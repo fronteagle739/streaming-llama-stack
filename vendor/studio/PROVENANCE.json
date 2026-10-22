@@ -82,5 +82,19 @@
       "source_sha256": "659177dac080de8afa5c5fab70bfd2a70b6620857efd0cf234340c48c916a6d8",
       "selected": null
     }
-  ]
+  ],
+  "quality_speed": {
+    "source_commit": "99facdf8a83970793f6141ea267039f18f6733b6",
+    "selected": [
+      "NAMED",
+      "DESCRIPTION",
+      "VALUE_SCHEMA",
+      "SPECS",
+      "PHASES",
+      "validate_scalar",
+      "validate",
+      "setting_arguments"
+    ],
+    "export_sha256": "75bb37a0775b25f9c377493b1c85cf912191e23054cefa082fe66bfcb0a6a152"
+  }
 }

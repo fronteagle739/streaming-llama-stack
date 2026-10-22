@@ -110,8 +110,11 @@ class Stack:
                 result = {'tools': self.tools.catalog()}
             elif method == 'tools/call':
                 params = body.get('params') or {}
-                with self.engines.lock:
+                if params['name'] in ('set_quality_speed', 'get_quality_speed'):
                     outcome = self.tools.call(params['name'], params.get('arguments', {}))
+                else:
+                    with self.engines.lock:
+                        outcome = self.tools.call(params['name'], params.get('arguments', {}))
                 result = {'content': [{'type': 'text', 'text': json.dumps(outcome)}], 'isError': False}
             elif method == 'ping':
                 result = {}

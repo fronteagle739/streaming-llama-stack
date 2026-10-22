@@ -1,15 +1,53 @@
-# Derived from Studio backend/studio/quality_speed.py; source SHA256 fbd105933dfbd4f0b736153f0aa2808cedeab81a7a2c2f3d3187f3f59adcffea
-# Only the delivered tool schema and validator are reused. Transport is supplied by stack glue.
-import math
-NAMED = {'max_quality': 0.0, 'balanced': 0.35, 'max_speed': 0.9}
-DESCRIPTION = "Quality vs speed for calibrated ds4-win. 0/max_quality preserves original routing; 0.35/balanced trades some accuracy for speed; 0.9/max_speed favors resident experts. Current 384-token benchmark post-warm rates: 6.03 / 10.30 / 14.43 tok/s respectively; KL 0.000 / 0.104 / 0.359 over 383 decode predictions including 100 unbiased warm-up tokens. These are prompt-specific measurements, not guaranteed rates. Prefer max_quality for code/careful reasoning, speed for drafts, or follow the user's choice. Applies at the next decode token, persists for this chat. Warm-up 100 and ramp 8 still apply. Adaptive mode overrides manual settings and is never disabled."
-SPECS = [{'name': 'set_quality_speed', 'label': 'Quality vs speed', 'category': 'agent', 'danger': False, 'description': DESCRIPTION, 'parameters': {'type': 'object', 'properties': {'value': {'anyOf': [{'type': 'number', 'minimum': 0, 'maximum': 0.9}, {'type': 'string', 'enum': list(NAMED)}]}}, 'required': ['value'], 'additionalProperties': False}}, {'name': 'get_quality_speed', 'label': 'Get quality vs speed', 'category': 'agent', 'danger': False, 'description': "Return this chat's Quality vs speed value, applied engine value, recent tok/s and adaptive status. " + DESCRIPTION, 'parameters': {'type': 'object', 'properties': {}, 'required': [], 'additionalProperties': False}}]
+# Derived from Studio backend/studio/quality_speed.py at99facdf8a83970793f6141ea267039f18f6733b6.
 
-def validate(value):
+# Only the delivered schema and pure validators are exported; stack supplies transport.
+
+import math
+
+NAMED = {"max_quality": 0.0, "balanced": 0.35, "fast": 0.65, "faster": 0.9, "max_speed": 1.36125}
+
+DESCRIPTION = 'Set Quality vs speed (0–1.36125 or max_quality, balanced, fast, faster, max_speed); use value or optional reasoning/tool_call/answer/code settings. Modes above Balanced are faster but may produce worse answers.'
+
+VALUE_SCHEMA = {"anyOf": [{"type": "number", "minimum": 0, "maximum": 1.36125},
+                            {"type": "string", "enum": list(NAMED)}]}
+
+SPECS = [
+    {"name": "set_quality_speed", "label": "Quality vs speed", "category": "agent", "danger": False,
+     "description": DESCRIPTION,
+     "parameters": {"type": "object", "properties": {"value": VALUE_SCHEMA,
+                     **{p: VALUE_SCHEMA for p in ('reasoning','tool_call','answer','code')}},
+                    "additionalProperties": False,
+                    "anyOf": [{"required": [p]} for p in ('value','reasoning','tool_call','answer','code')]}},
+    {"name": "get_quality_speed", "label": "Get quality vs speed", "category": "agent", "danger": False,
+     "description": "Read this chat’s Quality vs speed setting and phase settings.",
+     "parameters": {"type": "object", "properties": {}, "required": [], "additionalProperties": False}},
+]
+
+def validate_scalar(value):
     if isinstance(value, str):
         if value not in NAMED:
-            raise ValueError('use max_quality, balanced, max_speed, or a number in [0,0.9]')
+            raise ValueError("use max_quality, balanced, fast, faster, max_speed, or a number in [0,1.36125]")
         value = NAMED[value]
-    if isinstance(value, bool) or not isinstance(value, (int, float)) or (not math.isfinite(value)) or (not 0 <= value <= 0.9):
-        raise ValueError('Quality vs speed must be a finite number in [0,0.9]')
+    if isinstance(value, bool) or not isinstance(value, (int, float)) or not math.isfinite(value) or not 0 <= value <= 1.36125:
+        raise ValueError("Quality vs speed must be a finite number in [0,1.36125]")
     return float(value)
+
+PHASES = ('reasoning', 'tool_call', 'answer', 'code')
+
+def validate(value):
+    if isinstance(value, dict):
+        if set(value) == set(PHASES)-{'code'}:
+            value={**value,'code':value['answer']}
+        if set(value) != set(PHASES):
+            raise ValueError('per-phase value requires reasoning, tool_call, answer and optional code')
+        return {phase: validate_scalar(value[phase]) for phase in PHASES}
+    return validate_scalar(value)
+
+def setting_arguments(args, current):
+    if set(args) == {'value'}:
+        return validate(args['value'])
+    if not args or not set(args).issubset(PHASES):
+        raise ValueError('use value alone, or reasoning/tool_call/answer/code settings')
+    base = validate(current) if isinstance(current, dict) else {p: current for p in PHASES}
+    base.update({p: validate_scalar(v) for p,v in args.items()})
+    return validate(base)

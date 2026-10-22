@@ -1,0 +1,39 @@
+{
+  "status": "PASS",
+  "results": [
+    {
+      "status": "PASS",
+      "expected": "admitted",
+      "role": "actual native Metal owned/wired allocation factory; no model inference",
+      "received": {
+        "host_bytes": "67108864",
+        "floor_bytes": "4294967296",
+        "wired": "1"
+      },
+      "child_stdout_stderr": "{\"host_bytes\":\"67108864\",\"floor_bytes\":\"4294967296\",\"wired\":\"1\"}\nds4: owned anonymous wired Metal buffer=1048576 live=1048576 source=allocation\nMAC_FACTORY_ADMITTED\n",
+      "exit_code": 0,
+      "host_budget_gib": 0.25,
+      "floor_gib": 4,
+      "peak_rss": 7454720,
+      "minimum_available_ram": 470501048320,
+      "elapsed_s": 0.06729691597865894
+    },
+    {
+      "status": "PASS",
+      "expected": "refused",
+      "role": "actual native Metal owned/wired allocation factory; no model inference",
+      "received": {
+        "host_bytes": "524288",
+        "floor_bytes": "4294967296",
+        "wired": "1"
+      },
+      "child_stdout_stderr": "{\"host_bytes\":\"524288\",\"floor_bytes\":\"4294967296\",\"wired\":\"1\"}\nds4: owned Metal allocation refused by physical host budget\nMAC_FACTORY_REFUSED\n",
+      "exit_code": 0,
+      "host_budget_gib": 0.25,
+      "floor_gib": 4,
+      "peak_rss": 7520256,
+      "minimum_available_ram": 470550642688,
+      "elapsed_s": 0.0672005420201458
+    }
+  ]
+}

@@ -1,0 +1,36 @@
+{
+  "status": "PASS",
+  "date": "2026-10-22",
+  "stack_revision": "1d72b05fd30725bd719f71ef1b1e3c8334e8c7cc",
+  "native_source_revision": "ca05090d8fcb45fd4ddb7b46bb13b033d5ad1725",
+  "binary_sha256": "562a4650be22df2635b07eba215cd18e3dfafcaa000504fcfa26c7e79b03dbbe",
+  "flag": "--llama-dsv41-cast-vector",
+  "baseline_reused": true,
+  "baseline_value": "1",
+  "baseline_dispatch_records": 80,
+  "baseline_vector_calls": 2854,
+  "override_value": "0",
+  "override_dispatch_records": 0,
+  "tokens": 67,
+  "payload": {
+    "canonical_hashed_bytes": 10559816,
+    "hash_only": true,
+    "identity": null,
+    "path": null,
+    "planned_bytes": 10559816,
+    "sha256": "12a5d20a1bc263613681f186a44689dad7d02f8d471c3bf3dda53560a607c326",
+    "written_bytes": 0
+  },
+  "same_payload_hash_as_default": true,
+  "host_budget_gib": 8,
+  "floor_gib": 4,
+  "peak_rss": 5317206016,
+  "minimum_available_ram": 8098611200,
+  "wall_s": 69.31199999997625,
+  "cleanup": {
+    "owned_job_empty": true,
+    "owned_process_signaled": true,
+    "owned_pid_gone": true
+  },
+  "scope": "One real prefill flag with native dispatch witnesses; not a speed campaign or all-mode qualification"
+}

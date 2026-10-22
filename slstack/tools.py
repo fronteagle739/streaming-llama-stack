@@ -2,10 +2,12 @@ from __future__ import annotations
 import json
 import math
 from .engines import http_json
+from .native_broker import vendor
 
-QUALITY = {'type': 'object', 'properties': {'value': {'type': 'number', 'minimum': 0, 'maximum': .9,
-            'default': 0, 'description': '0 = Max quality; 0.35 = Balanced; 0.9 = Max speed (experimental quality loss)'}},
-           'required': ['value'], 'additionalProperties': False}
+vendor()
+from studio import quality_speed
+
+QUALITY = quality_speed.SPECS[0]['parameters']
 
 
 def media_schema(kind):
@@ -63,8 +65,7 @@ class Tools:
                         'generate_image': media_schema('image'), 'generate_video': media_schema('video')}
 
     def catalog(self):
-        descriptions = {'set_quality_speed': 'Call the existing ds4-win quality/speed MCP service. value 0..0.9; default 0. Max quality 0, Balanced 0.35, Max speed 0.9. Requires upstream live-control support. Never invent a successful change.',
-                        'get_quality_speed': 'Read the actual ds4-win quality/speed setting through its existing MCP service; no arguments.'}
+        descriptions = {row['name']: row['description'] for row in quality_speed.SPECS}
         rows = []
         for name, schema in self.schemas.items():
             description = descriptions.get(name)
@@ -88,21 +89,26 @@ class Tools:
     def call(self, name, args):
         if name not in self.schemas:
             raise ValueError('Unknown stack tool: ' + name)
+        if not isinstance(args, dict):
+            raise ValueError('Tool arguments must be an object')
+        quality = name in ('set_quality_speed', 'get_quality_speed')
+        if quality and name == 'get_quality_speed' and args:
+            raise ValueError('get_quality_speed takes no arguments')
+        checked = quality_speed.setting_arguments(args, 0) if name == 'set_quality_speed' else None
         if name in ('set_quality_speed', 'get_quality_speed') and not self.cfg.get('bias_mcp_url'):
-            import sys
-            from .config import path
-            vendor = str(path(self.cfg['studio_root']))
-            if vendor not in sys.path:
-                sys.path.insert(0, vendor)
-            from studio.quality_speed import validate as quality_value
             if name == 'get_quality_speed':
-                if args:
-                    raise ValueError('get_quality_speed takes no arguments')
                 return self.engines.quality()
-            if set(args) != {'value'}:
-                raise ValueError('set_quality_speed requires only value')
-            return self.engines.quality(quality_value(args['value']))
-        args = validate(self.schemas[name], args)
+            if set(args) == {'value'}:
+                value = checked
+            else:
+                state = self.engines.quality()
+                if state.get('supported') is False:
+                    return state
+                current = state.get('phases') if state.get('per_phase') else state.get('value', 0)
+                value = quality_speed.setting_arguments(args, current)
+            return self.engines.quality(value)
+        if not quality:
+            args = validate(self.schemas[name], args)
         if name.startswith('generate_'):
             return self.engines.media(name.removeprefix('generate_'), args)
         url = self.cfg['bias_mcp_url']

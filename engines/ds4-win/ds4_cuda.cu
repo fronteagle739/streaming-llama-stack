@@ -794,6 +794,11 @@ struct cuda_stream_host_expert_cache {
 };
 
 static std::vector<cuda_model_range> g_model_ranges;
+static int g_dspark_aux_device=-1;
+static std::unordered_map<const void *,int> g_dspark_aux_allocations;
+static ds4_gpu_tensor *g_dspark_aux_buffers[8]={};
+static void cuda_dspark_aux_cleanup(void);
+
 static std::vector<cuda_model_arena> g_model_arenas;
 static std::unordered_map<uint64_t, size_t> g_model_range_by_offset;
 /* R4's DirectStorage waves make the current layer's model spans resident in
@@ -825,6 +830,8 @@ static uint32_t g_affinity_warmup=100, g_affinity_ramp=8, g_affinity_cap=0;
 static uint64_t g_affinity_decoded=0;
 static bool g_affinity_current_biased=false, g_affinity_flat=false, g_affinity_loaded=false;
 static bool g_affinity_router_confidence=false;
+static bool g_affinity_verify_active=false, g_affinity_verify_hard=false;
+static float g_affinity_verify_mean=-1.0f;
 static bool g_affinity_warp_topk=true;
 static std::string g_affinity_spread_path, g_affinity_calibrate_path;
 static float g_affinity_factor[128];
@@ -859,9 +866,30 @@ extern "C" int ds4_gpu_cache_affinity_configure(float mean, uint32_t warmup, uin
     if (mean>0 && !flat && (!spread_file || !*spread_file)) {
         fprintf(stderr,"ds4: spread cache affinity requires a per-model calibration file\n");return 0;
     }
-    g_affinity_mean=mean;g_affinity_anchor=(spread_file && *spread_file && (!calibrate_file || !*calibrate_file)) ? fmaxf(mean,0.9f) : mean;g_affinity_warmup=warmup;g_affinity_ramp=ramp;g_affinity_cap=promotion_cap;
+    g_affinity_mean=mean;g_affinity_anchor=(spread_file && *spread_file && (!calibrate_file || !*calibrate_file)) ? fmaxf(mean,1.36125f) : mean;g_affinity_warmup=warmup;g_affinity_ramp=ramp;g_affinity_cap=promotion_cap;
     g_affinity_flat=flat!=0;g_affinity_decoded=0;g_affinity_current_biased=false;g_affinity_loaded=false;
     g_affinity_router_confidence=router_confidence!=0;
+    g_affinity_verify_active=false;g_affinity_verify_hard=false;g_affinity_verify_mean=-1.0f;
+    const char *verify_mean=getenv("DS4_CUDA_DSPARK_VERIFY_BIAS");
+    if(verify_mean && *verify_mean) {
+        char *end=NULL;float value=strtof(verify_mean,&end);
+        if(end==verify_mean || !end || *end || !isfinite(value) || value<0 || value>1.36125f) {
+            fprintf(stderr,"ds4: DS4_CUDA_DSPARK_VERIFY_BIAS requires finite0..1.36125\n");return 0;
+        }
+        g_affinity_verify_mean=value;
+    }
+    const char *verify_hard=getenv("DS4_CUDA_DSPARK_VERIFY_HARD_RESIDENT");
+    if(verify_hard && *verify_hard) {
+        if(strcmp(verify_hard,"0") && strcmp(verify_hard,"1")) {
+            fprintf(stderr,"ds4: DS4_CUDA_DSPARK_VERIFY_HARD_RESIDENT must be0 or1\n");return 0;
+        }
+        g_affinity_verify_hard=!strcmp(verify_hard,"1");
+    }
+    if(g_affinity_verify_mean>=0 && g_affinity_verify_hard) {
+        fprintf(stderr,"ds4: choose verify bias or hard resident confidence policy, not both\n");return 0;
+    }
+    if(g_affinity_verify_mean>=0 || g_affinity_verify_hard)
+        fprintf(stderr,"ds4: verify-only routing mean=%.6g hard_resident=%d; decode/drafter unchanged; warm%u/ramp%u\n",g_affinity_verify_mean,(int)g_affinity_verify_hard,warmup,ramp);
     const char *shared=getenv("DS4_CUDA_CACHE_AFFINITY_WARP");
     if(shared && *shared && strcmp(shared,"0") && strcmp(shared,"1")) {
         fprintf(stderr,"ds4: DS4_CUDA_CACHE_AFFINITY_WARP must be 0 or 1\n");return 0;
@@ -871,12 +899,19 @@ extern "C" int ds4_gpu_cache_affinity_configure(float mean, uint32_t warmup, uin
     for (uint32_t l=0;l<128;l++) {g_affinity_factor[l]=1.0f;g_affinity_calibration[l].clear();}
     return 1;
 }
+extern "C" uint64_t ds4_gpu_cache_affinity_decode_count(void) { return g_affinity_decoded; }
+extern "C" void ds4_gpu_cache_affinity_decode_restore(uint64_t count) { g_affinity_decoded=count; }
 extern "C" void ds4_gpu_cache_affinity_decode_unbiased(void) {
     if (g_stream_expert_cache_phase_decode) {g_affinity_decoded++; g_affinity_current_biased=false;}
 }
 extern "C" int ds4_gpu_cache_affinity_set_mean(float mean) {
     if(!isfinite(mean) || mean<0.0f || mean>g_affinity_anchor) return 0;
     g_affinity_mean=mean;return 1;
+}
+extern "C" int ds4_gpu_cache_affinity_verify_scope(int active) {
+    if(active && g_affinity_verify_active)return 0;
+    g_affinity_verify_active=active!=0;
+    return active && (g_affinity_verify_mean>=0 || g_affinity_verify_hard) ? 2 : 1;
 }
 static uint64_t cuda_affinity_header_hash(const void *model, uint64_t size) {
     const uint8_t *b=(const uint8_t *)model;uint64_t h=UINT64_C(14695981039346656037);
@@ -1958,6 +1993,15 @@ static const char *cuda_resolve_weight_ptr(const void *model_map,
      * support tensors onto the executor tier because the device cannot read the host mapping
      * directly. The packing is not an optimisation, it is a requirement - so DSpark needs the support
      * weights resident in VRAM, competing with the streaming expert cache on a single card. */
+    if (g_ssd_streaming_mode && model_map==g_support_host_base &&
+        getenv("DS4_CUDA_DSPARK_RESIDENT") && !strcmp(getenv("DS4_CUDA_DSPARK_RESIDENT"),"1")) {
+        /* Never fall back to host mapping or a per-tensor upload for the draft. */
+        for (const auto &r:g_model_ranges) if(r.host_base==model_map && !r.host_registered &&
+            r.offset<=offset && offset-r.offset<=r.bytes && bytes<=r.bytes-(offset-r.offset)) {
+            if(kind_out)*kind_out="resident";return r.device_ptr+(offset-r.offset);
+        }
+        fprintf(stderr,"ds4: resident DSpark weight missing from VRAM: %s\n",label?label:"?");return NULL;
+    }
     if (g_n_gpus <= 1) {
         return cuda_model_range_ptr(model_map, offset, bytes, label, kind_out);
     }
@@ -3387,14 +3431,25 @@ typedef struct {
  * cudaFree actually succeeded.  Clearing g_model_cache_full is part of the
  * cache lifecycle: an arena OOM means "full for this decode phase", not "never
  * try to cache weights again for the lifetime of the server". */
-static cuda_model_range_release_stats cuda_model_range_release_all(void) {
+static cuda_model_range_release_stats cuda_model_range_release_all(bool keep_support = true) {
     cuda_model_range_release_stats stats = {};
     stats.cache_full_before = g_model_cache_full;
+    std::vector<cuda_model_range> retained;
+    const char *resident=getenv("DS4_CUDA_DSPARK_RESIDENT");
     for (const cuda_model_range &r : g_model_ranges) {
+        if (keep_support && resident && !strcmp(resident,"1") &&
+            g_support_host_base && r.host_base==g_support_host_base && !r.arena_allocated) {
+            retained.push_back(r);continue;
+        }
         if (r.host_registered && r.registered_base) {
             (void)cudaHostUnregister(r.registered_base);
         } else if (r.device_ptr && !r.arena_allocated && !r.borrowed) {
-            if (cudaFree(r.device_ptr) == cudaSuccess) {
+            int previous=-1;auto aux=g_dspark_aux_allocations.find(r.device_ptr);
+            if(aux!=g_dspark_aux_allocations.end()){(void)cudaGetDevice(&previous);(void)cudaSetDevice(aux->second);}
+            cudaError_t released=cudaFree(r.device_ptr);
+            if(previous>=0)(void)cudaSetDevice(previous);
+            if(aux!=g_dspark_aux_allocations.end())g_dspark_aux_allocations.erase(aux);
+            if (released == cudaSuccess) {
                 stats.standalone_bytes += r.bytes;
             } else {
                 (void)cudaGetLastError();
@@ -3414,6 +3469,10 @@ static cuda_model_range_release_stats cuda_model_range_release_all(void) {
     g_model_ranges.clear();
     g_model_range_by_offset.clear();
     g_model_range_bytes = 0;
+    for (const cuda_model_range &r:retained) {
+        g_model_range_by_offset[r.offset]=g_model_ranges.size();
+        g_model_ranges.push_back(r);if(!g_dspark_aux_allocations.count(r.device_ptr))g_model_range_bytes+=r.bytes;
+    }
     g_model_cache_full = 0;
     cuda_model_load_progress_reset();
     return stats;
@@ -7204,6 +7263,7 @@ extern "C" int ds4_gpu_init(void) {
 }
 
 extern "C" void ds4_gpu_cleanup(void) {
+    cuda_dspark_aux_cleanup();
     ds4_gpu_stream_expert_cache_prefetch_finish(true);
     ds4_gpu_tp_shutdown();
     (void)cudaDeviceSynchronize();
@@ -7285,7 +7345,7 @@ extern "C" void ds4_gpu_cleanup(void) {
 
     /* Continue with legacy global teardown below. */
 
-    cuda_model_range_release_all();
+    cuda_model_range_release_all(false);
     cuda_derived_range_release_all();
     cuda_q8_f16_cache_release_all();
     g_q8_f16_disabled_after_oom = 0;
@@ -8302,7 +8362,7 @@ static int cuda_model_set_host_map(const void *model_map, uint64_t model_size) {
     if (!same_backing_model) {
         cuda_stream_expert_cache_release_all();
     }
-    cuda_model_range_release_all();
+    cuda_model_range_release_all(same_backing_model);
     if (!same_backing_model) {
         cuda_model_load_progress_reset();
     }
@@ -13013,7 +13073,8 @@ static int cuda_stream_selected_cache_begin_compact_load(
                 if (cuda_decode_profile_enabled()) g_decode_profile.prepass_staged++;
             }
             if (ds4_ds_batch_count() > 0) {
-                if (decode_profile) ds4_ds_stats_set_batch_layer(layer, layer);
+                if (decode_profile || ds4_ds_layer_trace_enabled())
+                    ds4_ds_stats_set_batch_layer(layer, layer);
                 uint64_t got_bytes = 0;
                 double   got_ms    = 0.0;
                 double   wait_ms   = 0.0;
@@ -13522,13 +13583,17 @@ static int cuda_stream_selected_cache_begin_compact_load(
     cuda_ds_hash_pipeline_advance(layer);
 #endif
 
-    if (decode_profile) {
-        const uint64_t misses = use_global_cache ?
-            (uint64_t)cache_misses : (uint64_t)compact_count;
-        g_decode_profile.expert_layers++;
-        if (misses == 0) g_decode_profile.clean_layers++;
+    const uint64_t misses = use_global_cache ?
+        (uint64_t)cache_misses : (uint64_t)compact_count;
+    if (decode_profile || g_stream_expert_cache_phase_decode) {
+        /* Cheap existing counters also quantify resident DSpark verification;
+         * no profiling synchronization or timer is needed for exact fetches. */
         g_decode_profile.cache_hits += cache_hits;
         g_decode_profile.cache_misses += misses;
+    }
+    if (decode_profile) {
+        g_decode_profile.expert_layers++;
+        if (misses == 0) g_decode_profile.clean_layers++;
         g_decode_profile.expert_plan_ms +=
             cuda_decode_profile_now_ms() - decode_profile_t0;
     }
@@ -13729,7 +13794,11 @@ extern "C" int ds4_gpu_stream_expert_cache_prepare_selected_batch(
             gate_expert_bytes,
             down_expert_bytes,
             1,
-            0,
+            /* A speculative verify is decode. Keep the existing target cache;
+             * ordinary prefill retains its prior release-all behavior. */
+            g_stream_expert_cache_phase_decode && n_tokens<=16u && n_total_expert==384u &&
+                model_map!=g_support_host_base && getenv("DS4_CUDA_DSPARK_RESIDENT") &&
+                !strcmp(getenv("DS4_CUDA_DSPARK_RESIDENT"),"1"),
             table->expert_tiers,
             table->expert_ranks);
 }
@@ -21663,7 +21732,7 @@ __global__ static void router_select_visual_parallel_kernel(
 
 #include "ds4_cache_affinity_cuda.cuh"
 
-template<uint32_t EXPERTS = 256>
+template<uint32_t EXPERTS = 256, uint32_t USED = 6>
 __global__ static void router_select_warp_topk_kernel(
         int32_t *selected,
         float *weights,
@@ -21684,8 +21753,8 @@ __global__ static void router_select_warp_topk_kernel(
 
     const float *log = logits + (uint64_t)t * EXPERTS;
     float *prob = probs + (uint64_t)t * EXPERTS;
-    int32_t *sel = selected + (uint64_t)t * 6u;
-    float *w = weights + (uint64_t)t * 6u;
+    int32_t *sel = selected + (uint64_t)t * USED;
+    float *w = weights + (uint64_t)t * USED;
     __shared__ float sprob[4][EXPERTS];
     float local_prob[EXPERTS / 32];
     float local_score[EXPERTS / 32];
@@ -21705,10 +21774,10 @@ __global__ static void router_select_warp_topk_kernel(
         if (lane == 0) {
             int32_t tok = tokens ? tokens[t] : token_scalar;
             if (tok < 0 || (uint32_t)tok >= hash_rows) tok = 0;
-            const int32_t *row = hash + (uint64_t)tok * 6u;
+            const int32_t *row = hash + (uint64_t)tok * USED;
             float sum = 0.0f;
             #pragma unroll
-            for (uint32_t j = 0; j < 6u; j++) {
+            for (uint32_t j = 0; j < USED; j++) {
                 const int32_t e = row[j];
                 sel[j] = e;
                 const float v = (e >= 0 && (uint32_t)e < EXPERTS) ? sprob[row_in_block][(uint32_t)e] : 0.0f;
@@ -21717,15 +21786,15 @@ __global__ static void router_select_warp_topk_kernel(
             }
             sum = fmaxf(sum, 6.103515625e-5f);
             #pragma unroll
-            for (uint32_t j = 0; j < 6u; j++) w[j] = w[j] / sum * 1.5f;
+            for (uint32_t j = 0; j < USED; j++) w[j] = w[j] / sum * 1.5f;
         }
         return;
     }
 
-    float out_prob[6] = {0.0f, 0.0f, 0.0f, 0.0f, 0.0f, 0.0f};
-    uint32_t out_idx[6] = {0, 0, 0, 0, 0, 0};
+    float out_prob[USED] = {};
+    uint32_t out_idx[USED] = {};
     #pragma unroll
-    for (uint32_t k = 0; k < 6u; k++) {
+    for (uint32_t k = 0; k < USED; k++) {
         float best_score = -INFINITY;
         float best_prob = 0.0f;
         uint32_t best_idx = UINT32_MAX;
@@ -21764,14 +21833,14 @@ __global__ static void router_select_warp_topk_kernel(
     if (lane == 0) {
         float sum = 0.0f;
         #pragma unroll
-        for (uint32_t j = 0; j < 6u; j++) {
+        for (uint32_t j = 0; j < USED; j++) {
             sel[j] = (int32_t)out_idx[j];
             w[j] = out_prob[j];
             sum += out_prob[j];
         }
         sum = fmaxf(sum, 6.103515625e-5f);
         #pragma unroll
-        for (uint32_t j = 0; j < 6u; j++) w[j] = w[j] / sum * 1.5f;
+        for (uint32_t j = 0; j < USED; j++) w[j] = w[j] / sum * 1.5f;
     }
 }
 
@@ -22460,6 +22529,7 @@ __device__ static inline void indexer_mxf4_mma(
         uint32_t b1,
         uint32_t scale_a,
         uint32_t scale_b) {
+#if defined(__CUDA_ARCH__) && __CUDA_ARCH__ >= 1200
     asm volatile(
         "mma.sync.aligned.kind::mxf4.block_scale.scale_vec::2X"
         ".m16n8k64.row.col.f32.e2m1.e2m1.f32.ue8m0 "
@@ -22468,6 +22538,11 @@ __device__ static inline void indexer_mxf4_mma(
         : "+f"(out[0]), "+f"(out[1]), "+f"(out[2]), "+f"(out[3])
         : "r"(a[0]), "r"(a[1]), "r"(a[2]), "r"(a[3]),
           "r"(b0), "r"(b1), "r"(scale_a), "r"(scale_b));
+#else
+    /* The auxiliary3070 runs routed Q4 experts only. An accidental call to the
+     * Blackwell-only MXFP4 indexer must fail, never silently change precision. */
+    asm volatile("trap;");
+#endif
 }
 
 __device__ __forceinline__ static void indexer_cp_async_u32(
@@ -29597,6 +29672,39 @@ __global__ static void cache_affinity_confidence_kernel(
     metrics[t] = m;
     confidence_metrics[t]=confidence;
 }
+__global__ static void cache_affinity_hard_resident_kernel(
+        int32_t *selected, float *weights, const float *probs, const float *bias,
+        cuda_router_residency residency, float lambda, uint32_t experts,
+        uint32_t used, float scale, uint32_t rows, cuda_router_affinity_metrics *metrics, ds4_affinity_resident_decision *hard_metrics) {
+    const uint32_t t = blockIdx.x;
+    if (threadIdx.x || t >= rows) return;
+    int32_t *sel = selected + (uint64_t)t * used;
+    int32_t original[6];
+    for (uint32_t j = 0; j < used; j++) original[j] = sel[j];
+    ds4_affinity_resident_decision decision={};
+    ds4_cache_affinity_select_resident_confident(sel,weights+(uint64_t)t*used,
+        probs+(uint64_t)t*experts,bias,residency.tier,experts,used,scale,&decision);
+    cuda_router_affinity_metrics m = {};
+    m.selections=used;
+    const float *p=probs+(uint64_t)t*experts;
+    m.spread=(p[original[0]]+(bias?bias[original[0]]:0.0f))-(p[original[used-1]]+(bias?bias[original[used-1]]:0.0f));
+    for(uint32_t j=0;j<used;j++) {
+        m.original[j]=original[j];m.selected_ids[j]=sel[j];bool found=false;
+        for(uint32_t k=0;k<used;k++) found|=original[j]==sel[k];
+        if(!found) m.displaced[m.displaced_count++]=original[j];
+    }
+    for (uint32_t j = 0; j < used; j++) {
+        const int32_t e = sel[j];
+        if (e < 0 || (uint32_t)e >= experts) continue;
+        m.vram += residency.tier[e] == 1;
+        m.ram += residency.tier[e] == 2;
+        bool found = false;
+        for (uint32_t k = 0; k < used; k++) found |= original[k] == e;
+        m.changed += !found;
+    }
+    metrics[t] = m;
+    hard_metrics[t]=decision;
+}
 #include "ds4_cache_affinity_background.cuh"
 
 extern "C" int ds4_gpu_cache_affinity_router_tensor(
@@ -29607,7 +29715,8 @@ extern "C" int ds4_gpu_cache_affinity_router_tensor(
     uint64_t gate_bytes, uint64_t down_bytes, float scale, float lambda) {
     if (!g_stream_expert_cache_phase_decode || rows!=1u) return 1;
     if (g_affinity_anchor == 0.0f && g_affinity_calibrate_path.empty() && !getenv("DS4_CACHE_AFFINITY_PROFILE")) return 1;
-    lambda=g_affinity_mean;
+    lambda=g_affinity_verify_active && g_affinity_verify_mean>=0 ? g_affinity_verify_mean : g_affinity_mean;
+    const bool hard_verify=g_affinity_verify_active && g_affinity_verify_hard && cuda_affinity_ramp_factor(g_affinity_decoded)>=1.0f;
     if (!g_ssd_streaming_mode || !selected || !weights || !probs || !model_map ||
         (experts != 256u && experts != 384u) || used != 6u || !rows || !layers || layer >= layers ||
         !isfinite(lambda) || lambda < 0.0f || lambda > 3.0f ||
@@ -29616,6 +29725,8 @@ extern "C" int ds4_gpu_cache_affinity_router_tensor(
     if(layers>128u || !cuda_affinity_model(model_map,model_size,experts,layers)) return 0;
     const uint64_t decode_step=g_affinity_decoded;
     lambda *= cuda_affinity_ramp_factor(decode_step)*g_affinity_factor[layer];
+    if(g_affinity_verify_active && g_affinity_verify_mean>=0)
+        fprintf(stderr,"ds4: verify-only-bias position=%u layer=%u decode_mean=%.6g verify_mean=%.6g delta=%.6g\n",position,layer,g_affinity_mean,g_affinity_verify_mean,lambda);
     g_affinity_current_biased=lambda>0.0f;
     const int tier = ds4_tensor_device_idx(selected);
     cuda_router_residency residency = {};
@@ -29648,7 +29759,16 @@ extern "C" int ds4_gpu_cache_affinity_router_tensor(
     if (!device_metrics) return 0;
     ds4_affinity_confidence *device_confidence=NULL;
     std::vector<ds4_affinity_confidence> confidence_rows;
-    if(g_affinity_router_confidence) {
+    ds4_affinity_resident_decision *device_hard=NULL;
+    std::vector<ds4_affinity_resident_decision> hard_rows;
+    if(hard_verify) {
+        device_hard=(ds4_affinity_resident_decision *)cuda_tmp_alloc_on(tier,rows*sizeof(*device_hard),"verify hard resident metrics");
+        if(!device_hard)return 0;
+        hard_rows.resize(rows);
+        cache_affinity_hard_resident_kernel<<<rows,1,0,cuda_decode_stream()>>>(
+            (int32_t *)selected->ptr,(float *)weights->ptr,(const float *)probs->ptr,
+            bias,residency,lambda,experts,used,scale,rows,device_metrics,device_hard);
+    } else if(g_affinity_router_confidence) {
         device_confidence=(ds4_affinity_confidence *)cuda_tmp_alloc_on(tier,
             (uint64_t)rows*sizeof(*device_confidence),"router confidence metrics");
         if(!device_confidence)return 0;
@@ -29669,9 +29789,11 @@ extern "C" int ds4_gpu_cache_affinity_router_tensor(
     std::vector<cuda_router_affinity_metrics> metrics(rows);
     if (!cuda_ok(cudaMemcpyAsync(metrics.data(), device_metrics, rows * sizeof(*device_metrics),
             cudaMemcpyDeviceToHost, cuda_decode_stream()), "cache affinity metrics copy") ||
-        (g_affinity_router_confidence && !cuda_ok(cudaMemcpyAsync(confidence_rows.data(),
+        (!hard_verify && g_affinity_router_confidence && !cuda_ok(cudaMemcpyAsync(confidence_rows.data(),
             device_confidence,rows*sizeof(*device_confidence),cudaMemcpyDeviceToHost,
             cuda_decode_stream()),"router confidence metrics copy")) ||
+        (hard_verify && !cuda_ok(cudaMemcpyAsync(hard_rows.data(),device_hard,rows*sizeof(*device_hard),
+            cudaMemcpyDeviceToHost,cuda_decode_stream()),"verify hard resident metrics copy")) ||
         !cuda_ok(cudaStreamSynchronize(cuda_decode_stream()), "cache affinity metrics sync")) return 0;
     if(!cuda_affinity_background_prepare(gate_bytes,down_bytes))return 0;
     for (uint32_t t = 0; t < rows; t++) {
@@ -29686,7 +29808,11 @@ extern "C" int ds4_gpu_cache_affinity_router_tensor(
             position+t,(unsigned long long)decode_step,layer,g_affinity_mean,lambda,
             g_affinity_mean==0.0f?"off":decode_step<g_affinity_warmup?"warmup":cuda_affinity_ramp_factor(decode_step)<1.0f?"ramp":"biased",
             m.vram,m.ram,m.selections,(double)m.vram/m.selections,m.changed,m.spread);
-        if(g_affinity_router_confidence)
+        if(hard_verify)
+            fprintf(stderr,"ds4: verify-resident decode_step=%llu layer=%u applied=%u protected_top=%u insufficient=%u residents=%u width=%.9g alternative=%.9g\n",
+                (unsigned long long)decode_step,layer,hard_rows[t].applied,hard_rows[t].protected_top,
+                hard_rows[t].insufficient_resident,hard_rows[t].resident_count,hard_rows[t].width,hard_rows[t].alternative);
+        if(!hard_verify && g_affinity_router_confidence)
             fprintf(stderr,"ds4: router-confidence decode_step=%llu layer=%u replacement=%.9g width=%.9g min_delta=%.9g max_delta=%.9g protected=%u\n",
                 (unsigned long long)decode_step,layer,confidence_rows[t].replacement,confidence_rows[t].width,
                 confidence_rows[t].min_delta,confidence_rows[t].max_delta,confidence_rows[t].protected_count);
@@ -29751,14 +29877,16 @@ extern "C" int ds4_gpu_router_select_tensor(ds4_gpu_tensor *selected, ds4_gpu_te
     return ok;
 }
 extern "C" int ds4_gpu_router_select_batch_tensor(ds4_gpu_tensor *selected, ds4_gpu_tensor *weights, ds4_gpu_tensor *probs, const void *model_map, uint64_t model_size, uint64_t bias_offset, uint64_t hash_offset, uint32_t hash_rows, uint32_t n_expert_groups, uint32_t n_group_used, bool has_bias, bool hash_mode, const ds4_gpu_tensor *logits, const ds4_gpu_tensor *tokens, uint32_t n_expert, uint32_t n_expert_used, float expert_weight_scale, uint32_t n_tokens) {
-    if ((n_expert != 256u && n_expert != 384u) || n_expert_used != 6u || fabsf(expert_weight_scale - 1.5f) > 1.0e-6f) return 0;
+    const bool draft = n_expert == 128u && n_expert_used == 3u && !hash_mode;
+    if ((!draft && ((n_expert != 256u && n_expert != 384u) || n_expert_used != 6u)) ||
+        fabsf(expert_weight_scale - 1.5f) > 1.0e-6f) return 0;
     if (!selected || !weights || !probs || !logits || !tokens || !model_map || n_tokens == 0 ||
         n_expert_groups > 1u || n_group_used > 0u ||
         logits->bytes < (uint64_t)n_tokens * n_expert * sizeof(float) ||
         probs->bytes < (uint64_t)n_tokens * n_expert * sizeof(float) ||
         tokens->bytes < (uint64_t)n_tokens * sizeof(int32_t) ||
-        selected->bytes < (uint64_t)n_tokens * 6u * sizeof(int32_t) ||
-        weights->bytes < (uint64_t)n_tokens * 6u * sizeof(float)) {
+        selected->bytes < (uint64_t)n_tokens * n_expert_used * sizeof(int32_t) ||
+        weights->bytes < (uint64_t)n_tokens * n_expert_used * sizeof(float)) {
         return 0;
     }
     const float *bias = NULL;
@@ -29775,7 +29903,12 @@ extern "C" int ds4_gpu_router_select_batch_tensor(ds4_gpu_tensor *selected, ds4_
         hash = (const int32_t *)cuda_resolve_weight_ptr(model_map, hash_offset, hash_bytes, logical_tier, "router_hash");
         if (!hash) return 0;
     }
-    if (n_expert == 384u) {
+    if (draft) {
+        router_select_warp_topk_kernel<128,3><<<(n_tokens + 3u) / 4u, dim3(32,4), 0, cuda_decode_stream()>>>(
+            (int32_t *)selected->ptr, (float *)weights->ptr, (float *)probs->ptr,
+            bias, NULL, (const float *)logits->ptr, (const int32_t *)tokens->ptr,
+            0, 0, n_tokens, has_bias, false);
+    } else if (n_expert == 384u) {
         router_select_warp_topk_kernel<384><<<(n_tokens + 3u) / 4u, dim3(32, 4), 0, cuda_decode_stream()>>>(
             (int32_t *)selected->ptr, (float *)weights->ptr, (float *)probs->ptr,
             bias, hash, (const float *)logits->ptr, (const int32_t *)tokens->ptr,
@@ -34728,6 +34861,8 @@ __global__ static void moe_down_f32_kernel(
     if (threadIdx.x == 0) down_out[(uint64_t)pair * out_dim + row] = partial[0];
 }
 
+#include "ds4_cuda_dspark_lowbit.cuh"
+
 static int routed_moe_launch(
         ds4_gpu_tensor *out,
         ds4_gpu_tensor *gate,
@@ -34772,12 +34907,19 @@ static int routed_moe_launch(
         out->bytes < (uint64_t)n_tokens * out_dim * sizeof(float)) {
         return 0;
     }
+    if(model_map==g_support_host_base && n_total_expert==128u && n_expert==3u && gate_type==down_type && (gate_type==10u || gate_type==11u))
+        return dspark_lowbit_launch(out,gate,up,mid,down,model_map,model_size,gate_offset,up_offset,
+            down_offset,gate_type,gate_expert_bytes,gate_row_bytes,down_expert_bytes,down_row_bytes,
+            expert_in_dim,expert_mid_dim,out_dim,selected,weights,n_total_expert,n_expert,clamp,x,n_tokens);
     const int q4k_path = (gate_type == 12u && down_type == 12u);
     const int iq2_path = (gate_type == 16u && down_type == 10u);
     const int mxfp4_path = (gate_type == 39u && down_type == 39u);
     if (!q4k_path && !iq2_path && !mxfp4_path) return 0;
 
-    if (g_ssd_streaming_mode && !owned_filtered) {
+    const bool resident_draft=g_ssd_streaming_mode && model_map==g_support_host_base &&
+        getenv("DS4_CUDA_DSPARK_RESIDENT") && !strcmp(getenv("DS4_CUDA_DSPARK_RESIDENT"),"1");
+    if(resident_draft)allow_streaming=0;
+    if (g_ssd_streaming_mode && !owned_filtered && !resident_draft) {
         const ds4_gpu_stream_expert_table table = {
             model_map, model_size, 0u, layer_index, n_total_expert,
             gate_offset, up_offset, down_offset, gate_expert_bytes, down_expert_bytes,
@@ -34791,6 +34933,12 @@ static int routed_moe_launch(
             std::vector<int32_t> ids(n_expert);
             if (!ds4_gpu_tensor_read(selected, 0, ids.data(), n_expert * sizeof(int32_t)) ||
                 !ds4_gpu_stream_expert_cache_begin_selected_load(&table, ids.data(), n_expert)) return 0;
+        } else if(allow_streaming && n_tokens>1u && n_total_expert==384u &&
+            expert_in_dim==5120u && expert_mid_dim==2304u &&
+            getenv("DS4_CUDA_DSPARK_RESIDENT") && !strcmp(getenv("DS4_CUDA_DSPARK_RESIDENT"),"1")) {
+            std::vector<int32_t> ids((size_t)n_tokens*n_expert);
+            if(!ds4_gpu_tensor_read(selected,0,ids.data(),ids.size()*sizeof(int32_t)) ||
+               !ds4_gpu_stream_expert_cache_prepare_selected_batch(&table,ids.data(),n_tokens,n_expert))return 0;
         } else
 #endif
         if (!ds4_gpu_glm_stream_expert_cache_begin_selected_load_tensor(
@@ -44411,3 +44559,5 @@ extern "C" int ds4_gpu_tp_big_gate_wait(uint64_t seq) {
 #include "ds4_deepseek4_vision_gpu.cuh"
 #include "ds4_deepseek41_cuda.cuh"
 #include "ds4_qwen4_cuda.cuh"
+
+#include "ds4_cuda_dspark_aux.cuh"
