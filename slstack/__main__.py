@@ -20,6 +20,17 @@ def main():
         installer.add_argument('--' + option, action='store_true')
     sub.add_parser('mcp')
     sub.add_parser('serve-internal', help=argparse.SUPPRESS)
+    sub.add_parser('mac-internal', help=argparse.SUPPRESS)
+    sub.add_parser('broker-internal', help=argparse.SUPPRESS)
+    for name in ('mac', 'mac-setup'):
+        child = sub.add_parser(name)
+        child.add_argument('--model')
+        child.add_argument('--mtp-model')
+        child.add_argument('--backend', choices=['ds4', 'mlx-serve'], default=None)
+        child.add_argument('--port', dest='mac_port', type=int)
+        child.add_argument('--engine-port', dest='mac_engine_port', type=int)
+        child.add_argument('--zig')
+        child.add_argument('--check', action='store_true')
     train = sub.add_parser('train_lora')
     train.add_argument('--data-folder', required=True)
     train.add_argument('--settings', required=True)
@@ -41,6 +52,8 @@ def main():
     start = sub.add_parser('start', aliases=['rtx'])
     start.add_argument('--webui', action='store_true', default=None)
     start.add_argument('--model')
+    start.add_argument('--models', help='Comma-separated local model paths')
+    start.add_argument('--resident', help='One or two registered model names/paths; normal switching until dual residency lands')
     start.add_argument('--image-model')
     start.add_argument('--video-model')
     start.add_argument('--image-arch')
@@ -54,10 +67,14 @@ def main():
     guarded.add_argument('--cwd', default=str(ROOT))
     guarded.add_argument('argv', nargs=argparse.REMAINDER)
     for child in dict.fromkeys(sub.choices.values()):
+        child.add_argument('--config', default=argparse.SUPPRESS)
+        child.add_argument('--host-budget-gib', type=float, default=argparse.SUPPRESS)
+        child.add_argument('--min-available-gib', type=float, default=argparse.SUPPRESS)
         add_flags(child, suppress=True)
     args = parser.parse_args()
     config_keys = {'host_budget_gib', 'min_available_gib', 'model', 'webui', 'image_model', 'video_model',
-                   'image_arch', 'video_arch', 'comfyui_models', 'image_mode', 'video_mode'}
+                   'image_arch', 'video_arch', 'comfyui_models', 'image_mode', 'video_mode',
+                   'mtp_model', 'mac_port', 'mac_engine_port', 'backend', 'zig', 'models', 'resident'}
     if args.command in ('start', 'rtx'):
         config_keys.add('lora')
     overrides = {k: v for k, v in vars(args).items() if k in config_keys and v is not None}
@@ -73,6 +90,35 @@ def main():
                          check=args.check, sdk_only=args.sdk)
         print(json.dumps(result, indent=2))
         return 0 if result['sdk']['ready'] and all(row['ready'] for row in result['engines']) else 1
+    if args.command in ('mac', 'mac-setup'):
+        from .mac import setup, budget
+        from .process import OwnedProcess
+        from .journal import atomic_json
+        backend = cfg.get('backend') or 'ds4'
+        build = setup(cfg, backend, check=args.check, zig=cfg.get('zig'))
+        print(json.dumps(build), flush=True)
+        if args.command == 'mac-setup' or args.check:
+            return 0 if build['ready'] else 1
+        launch = budget(cfg, 400 if backend == 'ds4' else 128)
+        launch['mac_build'] = build
+        launch['backend'] = backend
+        effective = Path(cfg['runtime_root']) / 'mac-effective.local.json'
+        atomic_json(effective, launch)
+        proc = OwnedProcess(launch, [sys.executable, '-B', '-m', 'slstack', '--config', str(effective), 'mac-internal'],
+                            'mac-receiver', timeout=86400)
+        try:
+            proc.wait()
+        except KeyboardInterrupt:
+            proc.stop()
+        return 0
+    if args.command == 'mac-internal':
+        from .mac import serve
+        serve(cfg, cfg['backend'], cfg['mac_build'])
+        return 0
+    if args.command == 'broker-internal':
+        from .native_broker import serve
+        serve(cfg)
+        return 0
     from .lease import recover_leases
     for identity in recover_leases(cfg['runtime_root']):
         print('Released dead GPU guardian hold: ' + identity, file=sys.stderr)

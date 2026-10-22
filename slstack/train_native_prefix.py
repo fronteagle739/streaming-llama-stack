@@ -1,6 +1,7 @@
 """Owned DSV4.1 prefix-provider lifecycle around Studio's streamed trainer.
 
-Run only as a guarded GPU child. All training, dequantization, optimizer and
+The GPU phase has its own exclusive bounded guardian; read-only full-file hashes
+run before and after that phase under a separate host-memory guardian. All training, dequantization, optimizer and
 checkpoint logic stays in the vendored Studio/streaming trainer.
 """
 import json
@@ -14,7 +15,7 @@ from .journal import atomic_json, sha256
 from .process import OwnedProcess
 
 
-def run(request):
+def gpu_phase(request):
     cfg, settings = request['cfg'], request['settings']
     cfg['_gpu_lease_managed'] = True
     cfg['lora'] = []
@@ -29,17 +30,14 @@ def run(request):
         raise ValueError('Native prefix training requires the existing SSD streaming cache argument')
     command[command.index(cache_flag) + 1] = '26GB'
     command.append('--training-features')
-    if '--ctx-size' in command:
-        command[command.index('--ctx-size') + 1] = '256'
+    for context_flag in ('--ctx', '--ctx-size', '-c'):
+        if context_flag in command:
+            command[command.index(context_flag) + 1] = '256'
     cfg['ds4_command'] = command
     model = path(settings.get('model', cfg['model']))
     cfg['model'] = str(model)
     output = Path(request['output'])
-    before_started = time.monotonic()
-    before = sha256(model)
-    before_s = time.monotonic() - before_started
-    if settings.get('expected_base_sha256') and settings['expected_base_sha256'] != before:
-        raise RuntimeError('Configured training base SHA-256 does not match the model bytes')
+    before = request['base_sha256_before']
     engine = Engines(cfg)
     trainer = None
     started = time.monotonic()
@@ -76,22 +74,50 @@ def run(request):
         if trainer:
             trainer.stop()
         engine.close()
+    result = {'schema': 'slstack.native_prefix_training_phase.v1', 'base_sha256_before': before,
+              'target': 'output.weight', 'architecture': 'deepseek41',
+              'prefix': 'original frozen quantized native MoE/MLA/HC',
+              'training_seconds': time.monotonic() - started,
+              'trainer_receipt': receipt, 'trainer_log': str(trainer.log),
+              'adapter_sha256': sha256(output / 'adapter_model.safetensors')}
+    atomic_json(output / 'gpu_training_receipt.json', result)
+    return result
+
+
+def run(request):
+    cfg, settings = request['cfg'], request['settings']
+    model = path(settings.get('model', cfg['model']))
+    started = time.monotonic()
+    before = sha256(model)
+    before_s = time.monotonic() - started
+    if settings.get('expected_base_sha256') and settings['expected_base_sha256'] != before:
+        raise RuntimeError('Configured training base SHA-256 does not match the model bytes')
+    phase = OwnedProcess(cfg, [sys.executable, '-B', '-m', 'slstack.train_native_prefix'],
+        'native-prefix-gpu-phase', stdin=json.dumps({**request, 'phase': 'gpu', 'base_sha256_before': before}) + '\n',
+        gpu=not cfg.get('_gpu_lease_managed', False), timeout=cfg['lease_minutes'] * 60)
+    try:
+        phase_receipt = phase.wait()
+        rows = [line[len('SLSTACK_TRAIN_PHASE '):] for line in phase.log.read_text(errors='replace').splitlines()
+                if line.startswith('SLSTACK_TRAIN_PHASE ')]
+        if len(rows) != 1:
+            raise RuntimeError('Native GPU training phase returned no unique measured result')
+        result = json.loads(rows[0])
+    finally:
+        phase.stop()
         after_started = time.monotonic()
         after = sha256(model)
         if after != before:
             raise RuntimeError('BASE HASH MISMATCH after native-prefix training')
-    result = {'schema': 'slstack.native_prefix_training.v1', 'base_sha256_before': before,
-              'base_sha256_after': after, 'base_unchanged': True,
-              'target': 'output.weight', 'architecture': 'deepseek41',
-              'prefix': 'original frozen quantized native MoE/MLA/HC',
-              'training_seconds': after_started - started,
-              'hash_before_seconds': before_s, 'hash_after_seconds': time.monotonic() - after_started,
-              'trainer_receipt': receipt, 'trainer_log': str(trainer.log),
-              'adapter_sha256': sha256(output / 'adapter_model.safetensors')}
-    atomic_json(output / 'training_receipt.json', result)
+    result.update(schema='slstack.native_prefix_training.v1', base_sha256_after=after,
+                  base_unchanged=True, hash_before_seconds=before_s,
+                  hash_after_seconds=time.monotonic()-after_started, gpu_phase_receipt=phase_receipt)
+    atomic_json(Path(request['output']) / 'training_receipt.json', result)
     return result
 
 
 if __name__ == '__main__':
     request = json.loads(sys.stdin.readline())
-    print('SLSTACK_TRAIN_RESULT ' + json.dumps(run(request)), flush=True)
+    if request.get('phase') == 'gpu':
+        print('SLSTACK_TRAIN_PHASE ' + json.dumps(gpu_phase(request)), flush=True)
+    else:
+        print('SLSTACK_TRAIN_RESULT ' + json.dumps(run(request)), flush=True)

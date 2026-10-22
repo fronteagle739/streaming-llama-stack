@@ -27,14 +27,42 @@ def http_json(url, body=None, timeout=30, headers=None):
 class Engines:
     def __init__(self, cfg):
         self.cfg = cfg
+        from .models import Models
+        self.models = Models(cfg)
+        self.selected_model = self.models.default
+        selected = self.models.resolve()
+        self.cfg.update(model=selected['path'], model_name=selected['id'], lora=selected.get('lora', []))
+        self.loading_model = None
+        self.events = []
         self.llm = None
         self.lock = threading.RLock()
         from .journal import Journal
         self.journal = Journal(cfg['runtime_root'])
         self.attach_entry = None
 
+    def status(self, message, model=None):
+        row = {'time': time.time(), 'message': message, 'model': model or self.selected_model}
+        self.events = [*self.events[-63:], row]
+        print('Model status: ' + json.dumps(row), flush=True)
+
+    def catalog(self):
+        active = self.selected_model if self.llm and self.llm.proc.poll() is None and not self.loading_model else None
+        return self.models.catalog(active, self.loading_model)
+
+    def select(self, name=None):
+        row = self.models.resolve(name)  # Refuse unknown input before ejecting anything.
+        if row['id'] != self.selected_model:
+            self.status('Unloading model to switch chats')
+            self.close()
+            self.selected_model = row['id']
+            self.cfg.update(model=row['path'], model_name=row['id'], lora=row.get('lora', []))
+            if row['id'] in self.models.resident:
+                self.status('Resident pair requested; using normal unload/load until dual residency is available')
+        return row
+
     def close(self):
         if self.llm:
+            self.status('Unloading model')
             clean = False
             if self.attach_entry and self.llm.proc.poll() is None:
                 try:
@@ -53,6 +81,8 @@ class Engines:
                     reports = self.journal.recover()
                     print('LoRA owner stopped unexpectedly; recovered journal: ' + json.dumps(reports), flush=True)
                 self.attach_entry = None
+            self.loading_model = None
+            self.status('Model unloaded')
 
     def ready(self):
         if self.llm and self.llm.proc.poll() is None:
@@ -67,6 +97,8 @@ class Engines:
             raise ValueError('Owned ds4_url must be local loopback HTTP')
         with socket.socket() as probe:
             probe.bind((address.hostname, address.port or 80))
+        self.loading_model = self.selected_model
+        self.status('Loading model')
         command = [x.replace('{model}', str(path(self.cfg['model']))) for x in self.cfg['ds4_command']]
         if self.cfg.get('cache_affinity_spread_file'):
             command += ['--cache-affinity-spread-file', str(path(self.cfg['cache_affinity_spread_file']))]
@@ -105,6 +137,8 @@ class Engines:
                 http_json(self.cfg['ds4_url'] + '/v1/models', timeout=2)
                 if self.attach_entry:
                     self.journal.update(self.attach_entry, 'attached', applied=True)
+                self.loading_model = None
+                self.status('Model ready')
                 return
             except (OSError, RuntimeError):
                 time.sleep(.2)
@@ -118,6 +152,7 @@ class Engines:
                          headers={'Authorization': 'Bearer ' + self.cfg['_control_token']})
 
     def chat(self, body):
+        self.select(body.get('model'))
         self.ready()
         return http_json(self.cfg['ds4_url'] + '/v1/chat/completions', body, self.cfg['request_timeout_s'])
 

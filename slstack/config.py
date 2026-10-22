@@ -45,6 +45,9 @@ def load(path=None, overrides=None):
         if saved.get('lora_applied') is not False:
             raise ValueError('Unsafe model selection state')
         cfg['model'] = saved['model']
+    from .models import Models
+    selected = Models(cfg).resolve()
+    cfg.update(model=selected['path'], model_name=selected['id'])
     return cfg
 
 

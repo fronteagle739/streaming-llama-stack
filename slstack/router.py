@@ -7,7 +7,7 @@ import mimetypes
 import re
 from pathlib import Path
 import time
-from urllib.parse import unquote, urlsplit
+from urllib.parse import unquote, urlsplit, parse_qs
 import uuid
 from .config import path, ROOT
 from .engines import Engines
@@ -44,6 +44,8 @@ class Stack:
     def __init__(self, cfg, engines=None):
         self.cfg = cfg
         self.engines = engines or Engines(cfg)
+        from .models import Models
+        self.models = getattr(self.engines, 'models', None) or Models(cfg)
         self.tools = Tools(cfg, self.engines)
 
     def chat(self, body):
@@ -147,12 +149,20 @@ def handler(stack):
                 return self.send(200, {'status': 'router-ready', 'model_ready': ready,
                                        'live_bias_configured': bool(stack.cfg['bias_mcp_url']), 'ultra': False})
             if route == '/v1/models':
-                return self.send(200, {'object': 'list', 'data': [{'id': stack.cfg['model_name'], 'object': 'model',
-                                                                 'created': 0, 'owned_by': 'local'}]})
+                return self.send(200, stack.engines.catalog() if hasattr(stack.engines, 'catalog') else stack.models.catalog())
+            if route == '/slstack/status':
+                return self.send(200, {'events': getattr(stack.engines, 'events', []), 'dual_resident_active': False})
             if route == '/props':
                 command = stack.cfg['ds4_command']
                 n_ctx = next((int(command[i + 1]) for i, x in enumerate(command[:-1]) if x in ('--ctx', '-c')), 4096)
-                return self.send(200, {'model_alias': stack.cfg['model_name'], 'model_path': '',
+                selected = parse_qs(urlsplit(self.path).query).get('model', [None])[0]
+                if selected is not None:
+                    try:
+                        stack.models.resolve(selected)
+                    except ValueError as exc:
+                        return self.send(400, {'error': {'message': str(exc)}})
+                return self.send(200, {'role': 'router' if len(stack.models.rows) > 1 and selected is None else 'model',
+                                      'max_instances': 1, 'model_alias': selected or stack.models.default, 'model_path': '',
                                       'default_generation_settings': {'n_ctx': n_ctx, 'params': {}},
                                       'total_slots': 1, 'chat_template': '', 'modalities': {'vision': False, 'audio': False}})
             if route == '/mcp':
@@ -191,6 +201,17 @@ def handler(stack):
                 if route == '/mcp':
                     result = stack.mcp(body)
                     return self.send(200, result) if result is not None else self.send(202, b'', 'text/plain')
+                if route in ('/models/load', '/models/unload'):
+                    if set(body) != {'model'}:
+                        raise ValueError('Model control accepts only model')
+                    with stack.engines.lock:
+                        row = stack.models.resolve(body['model'])
+                        if route == '/models/load':
+                            stack.engines.select(row['id'])
+                            stack.engines.ready()
+                        elif row['id'] == stack.engines.selected_model:
+                            stack.engines.close()
+                    return self.send(200, {'success': True})
                 if route == '/v1/chat/completions':
                     with stack.engines.lock:
                         result = stack.chat(body)
@@ -200,7 +221,7 @@ def handler(stack):
                     choice = result['choices'][0]
                     chunk = {'id': result.get('id', 'chatcmpl-' + uuid.uuid4().hex),
                              'object': 'chat.completion.chunk', 'created': result.get('created', int(time.time())),
-                             'model': stack.cfg['model_name'], 'choices': [{'index': 0, 'delta': choice['message'], 'finish_reason': None}]}
+                             'model': result.get('model', body.get('model') or stack.models.default), 'choices': [{'index': 0, 'delta': choice['message'], 'finish_reason': None}]}
                     end = {**chunk, 'choices': [{'index': 0, 'delta': {}, 'finish_reason': choice.get('finish_reason', 'stop')}],
                            'usage': result.get('usage', {}), 'timings': result.get('timings', {})}
                     data = ''.join('data: ' + json.dumps(c) + '\n\n' for c in (chunk, end)) + 'data: [DONE]\n\n'
