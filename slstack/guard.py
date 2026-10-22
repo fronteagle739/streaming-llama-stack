@@ -82,6 +82,9 @@ def _supervise(spec):
     flags = subprocess.CREATE_NO_WINDOW | 4 if os.name == 'nt' else 0  # suspended until Job admission
     start = time.monotonic()
     peak, minimum, reason = 0, psutil.virtual_memory().available, None
+    from .memory_counters import snapshot
+    paging_before = snapshot() if spec.get('paging_telemetry') else None
+    process_counters = {}
     with open(spec['log'], 'ab', buffering=0) as log:
         child = subprocess.Popen(spec['command'], cwd=spec['cwd'], env=spec['env'],
                                  stdin=subprocess.PIPE if 'stdin' in spec else subprocess.DEVNULL,
@@ -103,7 +106,21 @@ def _supervise(spec):
                     reason = 'owning process exited'
                 try:
                     p = psutil.Process(child.pid)
-                    rss = sum(x.memory_info().rss for x in [p, *p.children(recursive=True)] if x.is_running())
+                    rss = 0
+                    for member in [p, *p.children(recursive=True)]:
+                        try:
+                            info, created = member.memory_info(), member.create_time()
+                            rss += info.rss
+                            key = f'{member.pid}:{created:.6f}'
+                            faults = getattr(info, 'num_page_faults', None)
+                            row = process_counters.setdefault(key, {'pid': member.pid, 'created': created,
+                                'name': member.name(), 'first_page_faults': faults, 'last_page_faults': faults,
+                                'peak_private_commit_bytes': 0})
+                            row['last_page_faults'] = faults
+                            row['peak_private_commit_bytes'] = max(row['peak_private_commit_bytes'],
+                                getattr(info, 'private', getattr(info, 'pagefile', 0)))
+                        except psutil.NoSuchProcess:
+                            pass
                 except psutil.NoSuchProcess:
                     rss = 0
                 free = psutil.virtual_memory().available
@@ -128,6 +145,9 @@ def _supervise(spec):
                'min_available': minimum, 'elapsed_s': time.monotonic() - start,
                'host_budget_gib': budget, 'floor_gib': floor,
                'job_commit_gib': spec['job_commit_gib'], 'child_pid': child.pid}
+    receipt.update(paging_before=paging_before, paging_after=snapshot() if spec.get('paging_telemetry') else None,
+                   process_memory_counters=list(process_counters.values()),
+                   paging_interpretation='Process faults include soft and hard faults. Private commit/pagefile usage is not disk I/O. System counters include other processes; these counters alone do not prove core/KV residency.')
     Path(spec['receipt']).write_text(json.dumps(receipt, indent=2))
     return 0 if code == 0 and reason is None else 1
 

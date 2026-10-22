@@ -24,6 +24,7 @@ class OwnedProcess:
         spec = {'command': command, 'cwd': str(cwd), 'env': environment(cfg, scope),
                 'runtime_root': cfg['runtime_root'],
                 'host_budget_gib': cfg['host_budget_gib'], 'min_available_gib': cfg['min_available_gib'],
+                'paging_telemetry': bool(cfg.get('paging_telemetry') or gpu or scope in ('ds4-win', 'ds4-mac', 'rtx-producer', 'mlx-serve', 'image', 'video')),
                 'job_commit_gib': cfg['job_commit_gib'], 'timeout_s': timeout or cfg['request_timeout_s'],
                 'owner_pid': os.getpid(), 'owner_created': psutil.Process().create_time(),
                 'stop': str(self.stop_path), 'receipt': str(self.receipt), 'log': str(self.log)}
