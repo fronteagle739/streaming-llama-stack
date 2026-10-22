@@ -14848,6 +14848,7 @@ decode_again:
     const double decode_t0 = now_sec();
     double quality_window_t = decode_t0;
     int quality_window_tokens = 0;
+    double combo_after500_t = 0;
     ds4_quality_speed quality_state;ds4_quality_speed_get(&quality_state);
     uint64_t quality_revision = quality_state.applied_revision;
     uint64_t quality_phase_revision=quality_state.phase_revision;
@@ -15006,6 +15007,12 @@ decode_again:
             size_t piece_len = 0;
             char *piece = ds4_token_text(s->engine, token, &piece_len);
             completion++;
+            if(ds4_combo_active && (completion==1 || completion==100 || completion==500 || completion==1000)){
+                double elapsed=now_sec()-decode_t0;
+                if(completion==500)combo_after500_t=now_sec();
+                fprintf(stderr,"DS4COMBO_DECODE_PROGRESS tokens=%d decode_seconds=%.9f cumulative_tok_s=%.9f warm500_tok_s=%.9f\n",completion,elapsed,elapsed>0?completion/elapsed:0,
+                    completion==1000&&combo_after500_t>0?500/(now_sec()-combo_after500_t):0);fflush(stderr);
+            }
             ds4_quality_speed_get(&quality_state);
             if (quality_revision != quality_state.applied_revision || quality_phase_revision != quality_state.phase_revision) {
                 quality_revision=quality_state.applied_revision;quality_phase_revision=quality_state.phase_revision;quality_window_t=now_sec();quality_window_tokens=completion;
