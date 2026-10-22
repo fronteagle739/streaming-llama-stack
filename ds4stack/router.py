@@ -4,6 +4,7 @@ from http.server import BaseHTTPRequestHandler, ThreadingHTTPServer
 import json
 import gzip
 import mimetypes
+import re
 from pathlib import Path
 import time
 from urllib.parse import unquote, urlsplit
@@ -11,6 +12,32 @@ import uuid
 from .config import path, ROOT
 from .engines import Engines
 from .tools import Tools
+
+
+def media_request(kind, body, cfg):
+    """Map the common OpenAI image fields onto the startup-selected Studio tool."""
+    body = dict(body)
+    if 'model' in body:
+        model = body.pop('model')
+        selected = cfg[kind + '_model']
+        allowed = {kind, cfg[kind + '_arch'], Path(selected).stem if selected else None}
+        if model not in allowed:
+            raise ValueError('model must name the startup-selected ' + kind + ' model (alias: ' + kind + ')')
+    count = body.pop('n', 1)
+    if type(count) is not int or count != 1:
+        raise ValueError('This serialized media endpoint supports n=1')
+    if 'size' in body:
+        match = re.fullmatch(r'(\d+)x(\d+)', str(body.pop('size')))
+        if not match:
+            raise ValueError('size must be WIDTHxHEIGHT')
+        for key, value in zip(('width', 'height'), map(int, match.groups())):
+            if key in body and body[key] != value:
+                raise ValueError('size conflicts with ' + key)
+            body[key] = value
+    response_format = body.pop('response_format', 'url')
+    if response_format != 'url':
+        raise ValueError('This endpoint returns response_format=url')
+    return body
 
 
 class Stack:
@@ -61,6 +88,9 @@ class Stack:
                     outcome = self.tools.call(call['function']['name'], args)
                     if call['function']['name'].startswith('generate_'):
                         media.append(outcome)
+                        outcome = {'data': [{'url': x['url']} for x in outcome.get('data', [])],
+                                   'settings': outcome.get('settings', {}), 'mode': outcome.get('mode'),
+                                   'display': 'The client displays this media inline. Reply with a brief confirmation.'}
                 except (ValueError, RuntimeError, OSError) as exc:
                     outcome = {'error': str(exc)}
                 messages.append({'role': 'tool', 'tool_call_id': call['id'], 'content': json.dumps(outcome)})
@@ -178,7 +208,7 @@ def handler(stack):
                 if route in kinds:
                     kind = kinds[route]
                     with stack.engines.lock:
-                        return self.send(200, stack.tools.call('generate_' + kind, body))
+                        return self.send(200, stack.tools.call('generate_' + kind, media_request(kind, body, stack.cfg)))
                 return self.send(404, {'error': {'message': 'Unknown endpoint'}})
             except (ValueError, KeyError, TypeError) as exc:
                 return self.send(400, {'error': {'message': str(exc), 'type': 'invalid_request_error'}})
