@@ -44,9 +44,12 @@ def check(cfg):
     except (OSError, RuntimeError, ValueError) as exc:
         record('journal', False, exc)
     try:
-        gpu = subprocess.run(['nvidia-smi', '--query-gpu=name,memory.total,memory.free', '--format=csv,noheader'],
+        gpu = subprocess.run(['nvidia-smi', '--id=' + cfg['gpu_uuid'],
+                              '--query-gpu=name,memory.total,memory.free', '--format=csv,noheader,nounits'],
                              text=True, capture_output=True, timeout=10)
-        record('vram', gpu.returncode == 0, gpu.stdout.strip() or gpu.stderr.strip())
+        values = gpu.stdout.strip().split(',')
+        fits = gpu.returncode == 0 and len(values) == 3 and int(values[1].strip()) >= 30000
+        record('vram', fits, gpu.stdout.strip() or gpu.stderr.strip())
     except (OSError, subprocess.TimeoutExpired) as exc:
         record('vram', False, exc)
     return rows

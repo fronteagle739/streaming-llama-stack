@@ -6,3 +6,4 @@ state/
 outputs/
 build/
 *.log
+ds4.lock

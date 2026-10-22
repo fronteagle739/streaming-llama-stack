@@ -25,12 +25,26 @@ def run(request):
     if mock:
         raise RuntimeError('A real Studio backend is required: ' + detail)
     try:
-        from studio.custom_models import checkpoint_metadata, comfy_support_defaults
+        from studio.custom_models import checkpoint_metadata, comfy_support_defaults, _first_file_any
+        defaults = comfy_support_defaults()
         model = cfg[kind + '_model']
         arch = cfg[kind + '_arch']
+        if not model and cfg['comfyui_models']:
+            folder = Path(cfg['comfyui_models'])
+            if kind == 'image':
+                arch = 'anima-1.0'
+                model = defaults.get(arch, {}).get('base_model')
+            else:
+                arch = 'ltx-2.3'
+                model = defaults.get(arch, {}).get('base_model')
+                if not model:
+                    arch = 'bernini'
+                    model = _first_file_any(folder, ['diffusion_models', 'checkpoints'], ['wan22_bernini_high_mxfp8', 'bernini_high'])
+            if not model:
+                raise ValueError('No supported default ' + kind + ' checkpoint found in the ComfyUI folder; select an explicit model/architecture')
         if not arch and Path(model).suffix.lower() == '.safetensors':
             arch = checkpoint_metadata(model).get('arch_hint')
-        support = {**comfy_support_defaults().get(arch, {}), **cfg[kind + '_support_files']}
+        support = {**defaults.get(arch, {}), **cfg[kind + '_support_files']}
         mode = cfg[kind + '_mode']
         if arch and arch.startswith('wan') and mode == 'resident':
             raise ValueError('Pinned Studio Wan adapter exposes its streamed path only; resident mode is unsupported')
@@ -52,7 +66,7 @@ def run(request):
         files = [data['path']] if data.get('path') else []
         if not isinstance(files, list) or not all(isinstance(x, str) for x in files):
             raise RuntimeError('Unsupported Studio result file schema')
-        return {'ok': True, 'files': files, 'generation': data}
+        return {'ok': True, 'files': files, 'generation': data, 'selected_model': model, 'selected_arch': arch}
     finally:
         backend.unload()
 

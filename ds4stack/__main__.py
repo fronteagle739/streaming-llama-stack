@@ -61,7 +61,7 @@ def main():
     from .lease import recover_leases
     for identity in recover_leases(cfg['runtime_root']):
         print('Released dead GPU guardian hold: ' + identity, file=sys.stderr)
-    reports = Journal(cfg['runtime_root']).recover()
+    reports = Journal(cfg['runtime_root']).recover() if args.command not in ('check', 'start') else []
     for report in reports:
         print('Recovered stale journal: ' + json.dumps(report), file=sys.stderr)
     if args.command == 'check':
