@@ -4,6 +4,8 @@ The launcher constructs each child environment. No exports are needed. Precedenc
 
 Each row below comes from `envvars.json`, which also supplies the CLI flags and child defaults. Use `python -m slstack.envdocs --check` to verify this guide and the source inventory.
 
+`slstack install --all` installs the pinned isolated media runtime and builds the native engines and chat UI. The UI builds before the server embeds its generated assets. Media workers use the isolated runtime automatically; an explicit `studio_python` setting still overrides that choice. `install --all --check` checks packages and build outputs without rebuilding.
+
 ## Prefill modes
 
 `slstack rtx --mode accurate|fast|ultra|hyper` selects Studio's delivered RTX prefill arithmetic profile. The default is accurate. Image/video residency uses separate `--image-mode streaming|resident` and `--video-mode streaming|resident` flags. All four profiles use locked RAM carry with no pageable resident copy.

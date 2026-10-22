@@ -24,7 +24,7 @@ def inventory():
     extensions = {'.c', '.h', '.cpp', '.hpp', '.cu', '.cuh', '.inc', '.m', '.mm', '.py', '.zig', '.js', '.ts', '.svelte'}
     for root in (ROOT / 'engines', ROOT / 'vendor'):
         for directory, children, files in os.walk(root):
-            children[:] = [s for s in children if s not in {'.git', 'node_modules', 'build', '.venv', '__pycache__', '.svelte-kit', 'dist'}]
+            children[:] = [s for s in children if s not in {'.git', 'node_modules', 'build', '.venv', '__pycache__', '.svelte-kit', 'dist', '_app'}]
             for name in sorted(files):
                 p = Path(directory) / name
                 if p.suffix not in extensions:

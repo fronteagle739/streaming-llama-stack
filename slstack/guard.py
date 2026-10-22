@@ -87,8 +87,10 @@ def _supervise(spec):
     flags = subprocess.CREATE_NO_WINDOW | 4 if os.name == 'nt' else 0  # suspended until Job admission
     start = time.monotonic()
     peak, minimum, reason = 0, psutil.virtual_memory().available, None
-    from .memory_counters import snapshot
+    from .memory_counters import snapshot, PagefilePressure
     paging_before = snapshot() if spec.get('paging_telemetry') else None
+    pressure = PagefilePressure() if spec.get('paging_telemetry') else None
+    next_pressure_check = start
     process_counters = {}
     with open(spec['log'], 'ab', buffering=0) as log:
         child = subprocess.Popen(spec['command'], cwd=spec['cwd'], env=spec['env'],
@@ -132,6 +134,9 @@ def _supervise(spec):
                 peak, minimum = max(peak, rss), min(minimum, free)
                 if rss > budget * GiB or free < floor * GiB:
                     reason = f'HOST MEMORY LIMIT: tree RSS={rss}, available={free}'
+                if pressure and time.monotonic() >= next_pressure_check:
+                    reason = reason or pressure.check()
+                    next_pressure_check = time.monotonic() + .5
                 if time.monotonic() - start > spec['timeout_s']:
                     reason = 'deadline exceeded'
                 if Path(spec['stop']).exists():
@@ -158,6 +163,7 @@ def _supervise(spec):
                'host_budget_gib': budget, 'floor_gib': floor,
                'job_commit_gib': spec['job_commit_gib'], 'child_pid': child.pid}
     receipt.update(paging_before=paging_before, paging_after=snapshot() if spec.get('paging_telemetry') else None,
+                   system_pagefile_pressure=pressure.receipt() if pressure else None,
                    process_memory_counters=list(process_counters.values()),
                    paging_interpretation='Process faults include soft and hard faults. Private commit/pagefile usage is not disk I/O. System counters include other processes; these counters alone do not prove core/KV residency.')
     Path(spec['receipt']).write_text(json.dumps(receipt, indent=2))

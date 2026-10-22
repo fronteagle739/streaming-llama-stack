@@ -85,6 +85,24 @@ def install(cfg, *, image=False, video=False, all_engines=False, check=False, sd
         atomic_json(marker, {'lock_sha256': lock_sha, 'python': str(binary), 'kind': 'shared image/video venv',
                              'weights_downloaded': False})
         ready = True
+    binaries = [path(cfg['ds4_command'][0]), path(cfg['llama_producer']),
+                path(cfg.get('weight_fetcher', 'build/llama/bin/slstack-weight-fetcher.dll')), ROOT / 'build/llama/bin/llama-server.exe',
+                ROOT / 'build/llama/bin/llama-export-lora.exe']
+    if not check and all_engines:
+        # The documented install step prepares the native engines and UI too.
+        # Builds never need model state or a GPU reservation.
+        build_cfg = {**cfg, 'host_budget_gib': min(3, cfg['host_budget_gib']),
+                     'min_available_gib': max(4, cfg['min_available_gib'])}
+        build_config = Path(cfg['runtime_root']) / 'install-build.local.json'
+        atomic_json(build_config, build_cfg)
+        outer = {**build_cfg, 'host_budget_gib': build_cfg['host_budget_gib'] + .5}
+        print('Building native engines and chat UI; progress is recorded in the runtime jobs directory.', flush=True)
+        OwnedProcess(outer, ['powershell', '-NoProfile', '-ExecutionPolicy', 'Bypass', '-File',
+                            str(ROOT / 'build.ps1'), '-Config', str(build_config), '-Target', 'all'],
+                     'install-build', timeout=7200).wait()
+    if all_engines:
+        result['build'] = {'ready': all(p.is_file() for p in binaries)
+                          and (path(cfg['webui_root']) / 'index.html').is_file()}
     for kind, enabled in (('image', image or all_engines), ('video', video or all_engines)):
         if enabled:
             result['engines'].append({'engine': kind, 'ready': ready, 'runtime': str(runtime),

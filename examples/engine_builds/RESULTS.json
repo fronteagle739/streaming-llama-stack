@@ -1,0 +1,70 @@
+{
+  "windows": {
+    "source_commit": "4fb09d952ae0c1ea12cf3666c44d26867d10c3be",
+    "fresh_base_clone": "30e6cdbe7f980aeefae651bfd11cb634e444cbe3",
+    "status": "component builds PASS after committed source-closure correction; strict no-fix clone/install verification pending",
+    "stages": {
+      "ds4": {
+        "elapsed_s": 240.03100000001723,
+        "peak_tree_rss": 1104400384,
+        "min_available": 6600417280,
+        "host_budget_gib": 2.5,
+        "floor_gib": 4,
+        "job_commit_gib": 48
+      },
+      "llama": {
+        "elapsed_s": 1196.3910000000033,
+        "peak_tree_rss": 1773977600,
+        "min_available": 7643230208,
+        "host_budget_gib": 2.5,
+        "floor_gib": 4,
+        "job_commit_gib": 48
+      },
+      "webui": {
+        "elapsed_s": 58.89000000001397,
+        "peak_tree_rss": 2688290816,
+        "min_available": 10286411776,
+        "host_budget_gib": 3.5,
+        "floor_gib": 4,
+        "job_commit_gib": 48
+      }
+    },
+    "binaries": {
+      "engines/ds4-win/ds4-server.exe": {
+        "bytes": 24948736,
+        "sha256": "e45f2621a18121133c189f06e4ab4a2cb05754855cf6e3b4a50a0f976d4cd78b"
+      },
+      "build/llama/bin/llama-dsv41-prefill.exe": {
+        "bytes": 85954560,
+        "sha256": "92613e0aad9daa118481693592f92007c22f86dbb6e6d7dd03d0f554de2dd936"
+      },
+      "build/llama/bin/llama-server.exe": {
+        "bytes": 94774784,
+        "sha256": "dc5e0d2e4c3af9e4e0e872e47d7f4686dd0ea55480bbab54cffdec6ca4ac9c5d"
+      },
+      "build/llama/bin/llama-export-lora.exe": {
+        "bytes": 88181248,
+        "sha256": "9c6b002e120a92f27f7dd3f48c8bea3c732d46157abbc019bcc306298f9ab73c"
+      },
+      "build/llama/bin/slstack-weight-fetcher.dll": {
+        "bytes": 84864000,
+        "sha256": "4dc6723adf1232ebc76b974c78ce165cf3800937863bd93a2b6caf90c919f2cb"
+      }
+    }
+  },
+  "mac": {
+    "source_commit": "4fb09d952ae0c1ea12cf3666c44d26867d10c3be",
+    "status": "fresh GitHub clone and native build PASS",
+    "source_sha256": "2633ff913cb519bbbc9527afed45be9b3bb249b446eeb463cd256df334fbb4d8",
+    "binary_sha256": "c479fb78a2b5c6da3634d7db12c0d9f49430a8ae1f5415506c52c8b6a7f3ad79",
+    "build": {
+      "elapsed_s": 10.379361250030342,
+      "peak_tree_rss": 1053573120,
+      "min_available": 473014484992,
+      "host_budget_gib": 2,
+      "floor_gib": 4
+    },
+    "controller": "stdout collection blocked after completion; receipt recovered after independently confirming no owned guardian; no rerun"
+  },
+  "parity": "Accepted earlier Windows384, matched-settings Mac32 and producer67 receipts are reused; these builds do not add model measurements."
+}

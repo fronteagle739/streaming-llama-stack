@@ -74,6 +74,21 @@ class OwnedProducer:
             receipt = model_receipt(cfg)
             identity = self.stack.enter_context(gpu_lease(cfg))
             watcher = HoldWatcher(cfg.get('hold_file') or Path(cfg['runtime_root']) / 'state' / 'gpu.holds', identity)
+            from .memory_counters import PagefilePressure
+            self.pressure = PagefilePressure()
+            next_pressure_check = 0
+
+            def cancelled():
+                nonlocal next_pressure_check
+                if cancel.is_set() or watcher.reason():
+                    return True
+                if time.monotonic() >= next_pressure_check:
+                    reason = self.pressure.check()
+                    next_pressure_check = time.monotonic() + .5
+                    if reason:
+                        raise MemoryError(reason)
+                return False
+
             native = _Native()
             directory = Path(cfg['runtime_root']) / 'native-sessions' / request['session']
             directory.mkdir(parents=True, exist_ok=False)
@@ -109,7 +124,7 @@ class OwnedProducer:
             self.producer = Producer(request['session'], argv, env, directory, host_bytes=host_bytes,
                                      physical_floor=floor, operation_seconds=min(600, cfg['request_timeout_s']),
                                      idle_seconds=cfg['lease_minutes'] * 60, native=native,
-                                     cancelled=lambda: cancel.is_set() or bool(watcher.reason()))
+                                     cancelled=cancelled)
             cp = self.producer.ready['checkpoint']
             require(cp['context'] == CONTEXT and cp['position'] == len(request['tokens']) // 4
                     and cp['tokens_sha256'] == request['tokens_sha256'], 'Initial producer checkpoint differs')
@@ -131,6 +146,8 @@ class OwnedProducer:
         if self.timer:
             self.timer.cancel()
         self.receipt = {'session': self.request['session'], 'cleanup': proof}
+        if hasattr(self, 'pressure'):
+            self.receipt['system_pagefile_pressure'] = self.pressure.receipt()
         if hasattr(self, 'directory'):
             if self.producer is not None:
                 (self.directory / 'stderr.log').write_bytes(self.producer.diagnostic)
