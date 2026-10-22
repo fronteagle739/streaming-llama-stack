@@ -181,7 +181,7 @@ def supervise(spec):
     finally:
         # If this outer guardian killed an inner GPU guardian, its Windows Job is
         # now closed. Release that recorded orphan rather than leaving an ACTIVE hold.
-        recover_leases(spec['runtime_root'])
+        recover_leases(spec['runtime_root'], (spec.get('gpu') or {}).get('task', 'DS4STACK'))
 
 
 if __name__ == '__main__':

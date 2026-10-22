@@ -28,7 +28,8 @@ if(NOT EXISTS "${LLAMA_DSV41_DSTORAGE_INCLUDE_DIR}/dstorage.h" OR NOT EXISTS "${
     message(FATAL_ERROR "Point LLAMA_DSV41_DSTORAGE_INCLUDE_DIR/LIBRARY at the existing DirectStorage SDK")
 endif()
 target_compile_features(llama-dsv41-prefill PRIVATE cxx_std_17)
-target_compile_definitions(llama-dsv41-prefill PRIVATE GGML_USE_CUDA=1 LLAMA_DIRECTSTORAGE LLAMA_BUILD)
+target_compile_definitions(llama-dsv41-prefill PRIVATE GGML_USE_CUDA=1 LLAMA_DIRECTSTORAGE LLAMA_BUILD
+    DSV41_NATIVE_HALF_TEST=1 DSV41_NATIVE_HALF_PERF_TEST=1)
 target_include_directories(llama-dsv41-prefill PRIVATE "${DSV41_SOURCE_DIR}" "${PROJECT_SOURCE_DIR}/ggml/src"
     "${LLAMA_DSV41_JSON_INCLUDE_DIR}" "${LLAMA_DSV41_DSTORAGE_INCLUDE_DIR}")
 # These are the actual production units, not CPU/provider stubs. Avoid pulling

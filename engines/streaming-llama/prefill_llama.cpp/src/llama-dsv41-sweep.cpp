@@ -174,12 +174,23 @@ struct llama_dsv41_sweep::implementation {
 llama_dsv41_sweep::llama_dsv41_sweep():p(new implementation){}
 llama_dsv41_sweep::~llama_dsv41_sweep()=default;
 
-bool llama_dsv41_sweep::open(const llama_dsv41_weight_provider::config &weights,const config &options,std::string &error,llama_dsv41_sweep *warmup,llama_dsv41_sweep *prefix){
+bool llama_dsv41_sweep::open(const llama_dsv41_weight_provider::config &weights,const config &options,std::string &error,llama_dsv41_sweep *warmup,llama_dsv41_sweep *prefix,const native_base*restored){
     std::unique_lock<std::mutex>lock(p->mutex,std::try_to_lock);error.clear();
     if(!lock.owns_lock()){error="V4.1 sweep is already active";return false;}
     try{
         require(p->state==implementation::fresh,"V4.1 sweep cannot reopen or replace an existing request");
         require(!warmup||!prefix,"Warmup reset and stateful append are distinct operations");
+        require(!restored||(!prefix&&options.stateful_chunks&&!options.capture_dspark&&
+            restored->frontier.mode==1&&restored->frontier.context==options.context&&
+            restored->frontier.position==restored->tokens.size()&&restored->frontier.position&&
+            restored->frontier.position<options.context&&options.carry.tokens<options.context-restored->frontier.position&&
+            restored->logits.size()==vocabulary&&bool(restored->read)),"Restored base requires a complete same-context mode1 checkpoint");
+        if(restored){
+            require(std::all_of(restored->tokens.begin(),restored->tokens.end(),[](int32_t t){return t>=0&&uint32_t(t)<vocabulary;}),"Restored base token out of range");
+            finite(restored->logits);
+            require(dsv41_boundary::sha256(restored->tokens.data(),restored->tokens.size()*4)==restored->tokens_sha256&&
+                dsv41_boundary::sha256(restored->logits.data(),restored->logits.size()*4)==restored->logits_sha256,"Restored base token/logit identity mismatch");
+        }
         (void)llama_dsv41_plan_append(options.pair_ffn,options.carry.max_tile_tokens,options.compute_step_tokens,0,options.unaligned_append_step_tokens);
         require(!options.unaligned_append_step_tokens||(options.stateful_chunks&&options.fixed&&options.reuse_graph&&!options.reuse_layer_graph),"Unaligned append policy requires the existing stateful fixed owner");
         require(!options.compute_step_tokens||(options.compute_step_tokens<=options.carry.max_tile_tokens&&(!options.pair_ffn||options.compute_step_tokens==options.carry.max_tile_tokens)),"Logical compute step exceeds its admitted tile or changes paired group alignment");
@@ -377,6 +388,17 @@ bool llama_dsv41_sweep::open(const llama_dsv41_weight_provider::config &weights,
         require(p->cache->compact_compressed()==p->options.compressed_cache_bf16,"Fixed cache physical format differs from request admission");
         require(p->cache->captures_dspark()==p->options.capture_dspark,"Fixed cache DSpark capture admission changed");
         require(!p->options.capture_dspark||!p->options.reuse_layer_graph,"DSpark ring writes require allocator-only graph reuse");
+        if(restored){
+            // Cache replacement uses the same bounded writer and all-owner
+            // target verification as the existing native restore/delta path.
+            success(p->cache->replace_native_frontier(restored->frontier,restored->owner_sha256,
+                [&](const llama_dsv41::state_span&s,uint64_t off,void*dst,size_t n){p->check_stop();return restored->read(s,off,dst,n);},error),error);
+            p->tokens=restored->tokens;p->position_offset=uint32_t(p->tokens.size());
+            const size_t count=std::min<size_t>(p->tokens.size(),3);
+            success(p->provider.restored_engram_history(p->initial_engram,p->tokens.data()+p->tokens.size()-count,count,error),error);
+            (void)llama_dsv41_plan_append(options.pair_ffn,options.carry.max_tile_tokens,options.compute_step_tokens,p->position_offset,options.unaligned_append_step_tokens);
+            std::fprintf(stderr,"DS4COMBO_NATIVE_BASE_IMPORTED position=%u mode=1 all_owner_hashes_verified=1 model_eval=0\n",p->position_offset);
+        }
         llama_dsv41_tile_executor::pinned_span direct_span;
         if(p->options.admitted_pinned_device_bytes){
             success(p->carry.ram_storage(direct_span.base,direct_span.bytes,error),error);
@@ -673,10 +695,11 @@ bool llama_dsv41_sweep::capture_rewind_anchor(rewind_anchor&out,std::string&erro
     if(!lock.owns_lock()){error="V4.1 sweep already owns the frontier";return false;}
     try{
         p->check_stop();require(p->state==implementation::completed&&p->published.load()&&
-            p->options.stateful_chunks&&p->options.capture_dspark&&p->cache&&!p->executor,
-            "Rewind anchor requires a complete idle mode3 owner");
+            p->options.stateful_chunks&&p->cache&&!p->executor,
+            "Rewind anchor requires a complete idle mode1/3 owner");
         out={};const uint32_t pos=uint32_t(p->tokens.size());
-        out.frontier={p->options.context,pos,3,pos,std::min(pos,128u)};
+        out.frontier={p->options.context,pos,p->options.capture_dspark?3u:1u,
+            p->options.capture_dspark?pos:0u,p->options.capture_dspark?std::min(pos,128u):0u};
         llama_dsv41::wire_plan plan;success(llama_dsv41::make_wire_plan(out.frontier,plan,error),error);
         uint64_t bytes=uint64_t(vocabulary)*4;
         for(const auto&s:plan.spans)if(s.kind!=llama_dsv41::state_kind::compressed&&s.kind!=llama_dsv41::state_kind::index)bytes+=s.bytes;
@@ -706,12 +729,13 @@ bool llama_dsv41_sweep::restore_rewind_anchor(const rewind_anchor&anchor,
         p->check_stop();const uint32_t old=uint32_t(p->tokens.size()),target=anchor.frontier.position;
         require(p->state==implementation::completed&&p->published.load()&&p->options.stateful_chunks&&
             p->cache&&!p->executor&&target&&target<old&&anchor.frontier.context==p->options.context&&
-            anchor.frontier.mode==3&&anchor.logits.size()==vocabulary,
-            "Rewind requires a saved earlier mode3 frontier in the same owner");
+            anchor.frontier.mode==(p->options.capture_dspark?3u:1u)&&anchor.logits.size()==vocabulary,
+            "Rewind requires a saved earlier mode1/3 frontier in the same owner");
         require(dsv41_boundary::sha256(p->tokens.data(),size_t(target)*4)==anchor.tokens_sha256&&
             dsv41_boundary::sha256(anchor.logits.data(),anchor.logits.size()*4)==anchor.logits_sha256,
             "Rewind anchor token/logit identity differs");
-        const llama_dsv41::wire_frontier base{p->options.context,old,3,old,std::min(old,128u)};
+        const llama_dsv41::wire_frontier base{p->options.context,old,p->options.capture_dspark?3u:1u,
+            p->options.capture_dspark?old:0u,p->options.capture_dspark?std::min(old,128u):0u};
         llama_dsv41::wire_plan plan;success(llama_dsv41::make_wire_plan(anchor.frontier,plan,error),error);
         require(plan.spans.size()==anchor.mutable_owners.size(),"Rewind anchor owner extent differs");
         p->published.store(false);p->state=implementation::poisoned;

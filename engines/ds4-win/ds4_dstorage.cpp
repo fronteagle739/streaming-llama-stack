@@ -36,7 +36,65 @@ namespace {
  * speculative-prefetch design would do exactly that), this becomes a real constraint and a wave loop
  * has to be added. Until then, extra machinery would be untested code guarding a case that cannot
  * arise. */
-const UINT16 kQueueCapacity = DSTORAGE_MAX_QUEUE_CAPACITY;
+UINT16 kQueueCapacity = DSTORAGE_MAX_QUEUE_CAPACITY;
+DSTORAGE_PRIORITY g_demand_priority = DSTORAGE_PRIORITY_HIGH;
+uint32_t g_completion_spin_us = 0;
+uint32_t g_read_parts = 8;
+
+/* Qualified split-read default; 0/1 restore one request per expert span.
+ * Parse before any queue is created; malformed opt-ins fail initialization. */
+bool latency_controls_from_env(void) {
+    struct Control { const char *name; unsigned lo, hi, value; } controls[] = {
+        {"DS4_DS_QUEUE_CAPACITY", DSTORAGE_MIN_QUEUE_CAPACITY, DSTORAGE_MAX_QUEUE_CAPACITY,
+         DSTORAGE_MAX_QUEUE_CAPACITY},
+        {"DS4_DS_COMPLETION_SPIN_US", 0, 10000, 0},
+        {"DS4_DS_READ_PARTS", 0, 64, 8}
+    };
+    for (auto &c : controls) {
+        const char *s = getenv(c.name);
+        if (!s || !*s) continue;
+        char *end = NULL;
+        const unsigned long v = strtoul(s, &end, 10);
+        if (*s == '-' || end == s || !end || *end || v < c.lo || v > c.hi) {
+            fprintf(stderr, "ds4: invalid %s=%s (expected %u..%u)\n", c.name,s,c.lo,c.hi);
+            return false;
+        }
+        c.value = (unsigned)v;
+    }
+    if ((controls[0].value & (controls[0].value - 1)) != 0) {
+        fprintf(stderr,"ds4: DS4_DS_QUEUE_CAPACITY must be a power of two\n");
+        return false;
+    }
+    kQueueCapacity = (UINT16)controls[0].value;
+    g_completion_spin_us = controls[1].value;
+    g_read_parts = controls[2].value <= 1 ? 1 : controls[2].value;
+    g_demand_priority = DSTORAGE_PRIORITY_HIGH;
+    const char *priority = getenv("DS4_DS_PRIORITY");
+    if (priority && *priority) {
+        if (!strcmp(priority,"normal")) g_demand_priority = DSTORAGE_PRIORITY_NORMAL;
+        else if (!strcmp(priority,"high")) g_demand_priority = DSTORAGE_PRIORITY_HIGH;
+        else if (!strcmp(priority,"realtime")) g_demand_priority = DSTORAGE_PRIORITY_REALTIME;
+        else if (!strcmp(priority,"low")) g_demand_priority = DSTORAGE_PRIORITY_LOW;
+        else { fprintf(stderr,"ds4: invalid DS4_DS_PRIORITY=%s\n",priority);return false; }
+    }
+    return true;
+}
+
+DWORD wait_for_demand(HANDLE event) {
+    if (g_completion_spin_us) {
+        LARGE_INTEGER start, frequency, current;
+        QueryPerformanceFrequency(&frequency);
+        QueryPerformanceCounter(&start);
+        const LONGLONG ticks = (frequency.QuadPart * g_completion_spin_us) / 1000000;
+        do {
+            const DWORD result = WaitForSingleObject(event, 0);
+            if (result != WAIT_TIMEOUT) return result;
+            YieldProcessor();
+            QueryPerformanceCounter(&current);
+        } while (current.QuadPart - start.QuadPart < ticks);
+    }
+    return WaitForSingleObject(event, 30000);
+}
 
 typedef HRESULT(WINAPI *PFN_DStorageGetFactory)(REFIID riid, void **ppv);
 typedef HRESULT(WINAPI *PFN_DStorageSetConfiguration1)(
@@ -82,6 +140,38 @@ uint64_t               g_batch_bytes    = 0;
 bool                   g_batch_gpu      = false;
 uint64_t               g_file_size      = 0;   /* for scattering selftest offsets over the whole file */
 int                    g_config_attempted = 0;
+
+static uint32_t request_parts(uint64_t offset, uint32_t bytes) {
+    // Preserve small/unaligned requests exactly. Never pad a production read
+    // into its neighbor: only split complete 4KiB units of the original span.
+    return g_read_parts > 1 && (offset & 4095u) == 0 && (bytes & 4095u) == 0 &&
+           bytes / 4096u >= g_read_parts ? g_read_parts : 1;
+}
+
+static void append_request_parts(const DSTORAGE_REQUEST &original, bool gpu, uint32_t parts) {
+    const uint32_t total = original.Source.File.Size;
+    const uint32_t blocks = total / 4096u;
+    uint32_t offset = 0;
+    for (uint32_t i = 0; i < parts; ++i) {
+        DSTORAGE_REQUEST req = original;
+        // Distribute remainder sectors, avoiding one disproportionately slow
+        // final request when using many small subreads.
+        const uint32_t bytes = parts == 1 ? total :
+            (blocks / parts + (i < blocks % parts ? 1u : 0u)) * 4096u;
+        req.Source.File.Offset += offset;
+        req.Source.File.Size = req.UncompressedSize = bytes;
+        if (gpu) {
+            req.Destination.Buffer.Offset += offset;
+            req.Destination.Buffer.Size = bytes;
+        } else {
+            req.Destination.Memory.Buffer = (char *)original.Destination.Memory.Buffer + offset;
+            req.Destination.Memory.Size = bytes;
+        }
+        g_batch.push_back(req);
+        offset += bytes;
+    }
+    g_batch_bytes += total;
+}
 
 uint32_t staging_mb_from_env(void) {
     uint32_t mb = 256;                       /* documented default; see ds4_dstorage.h */
@@ -312,7 +402,7 @@ bool ensure_gpu_queue(void) {
     memset(&desc, 0, sizeof(desc));
     desc.SourceType = DSTORAGE_REQUEST_SOURCE_FILE;
     desc.Capacity = kQueueCapacity;
-    desc.Priority = DSTORAGE_PRIORITY_HIGH;
+    desc.Priority = g_demand_priority;
     desc.Name = "ds4-expert-stream-gpu";
     desc.Device = g_d3d_device;
     /* [2026-08-18] FIXED: every extra queue used to land in slot 1 and leak.
@@ -358,7 +448,11 @@ extern "C" int ds4_ds_available(void) { return g_init_ok; }
 
 extern "C" uint32_t ds4_ds_batch_count(void) { return (uint32_t)g_batch.size(); }
 extern "C" uint64_t ds4_ds_batch_bytes(void) { return g_batch_bytes; }
-extern "C" uint32_t ds4_ds_batch_capacity(void) { return (uint32_t)kQueueCapacity; }
+extern "C" uint32_t ds4_ds_batch_capacity(void) {
+    // Decode plans reserve logical tensor spans before addresses are known.
+    // Budget the worst-case expansion so wide waves cannot overfill the queue.
+    return (uint32_t)kQueueCapacity / g_read_parts;
+}
 
 extern "C" void ds4_ds_batch_reset(void) {
     g_batch.clear();
@@ -389,6 +483,7 @@ extern "C" int ds4_ds_init_from_fd(int fd) {
     }
     if (g_init_attempted && !g_init_ok) return 0;   /* never retry a known-broken init per token */
     g_init_attempted = 1;
+    if (!latency_controls_from_env()) return 0;
 
     if (!g_dll) {
         /* App-local load: dstorage.dll sits beside the exe and pulls dstoragecore.dll from there. */
@@ -518,7 +613,7 @@ extern "C" int ds4_ds_init_from_fd(int fd) {
     memset(&desc, 0, sizeof(desc));
     desc.SourceType = DSTORAGE_REQUEST_SOURCE_FILE;
     desc.Capacity   = kQueueCapacity;
-    desc.Priority   = DSTORAGE_PRIORITY_HIGH;
+    desc.Priority   = g_demand_priority;
     desc.Name       = "ds4-expert-stream";
     desc.Device     = NULL;      /* null device is legal precisely because we target MEMORY */
 
@@ -546,12 +641,16 @@ extern "C" int ds4_ds_init_from_fd(int fd) {
     fprintf(stderr,
             "ds4: DirectStorage ready (queue capacity %u, staging %u MiB, memory destinations)\n",
             (unsigned)kQueueCapacity, staging_mb);
+    fprintf(stderr,"ds4: DirectStorage demand priority=%d completion_spin_us=%u read_parts=%u [RTXDISKLAT_CONFIG_V1]\n",
+            (int)g_demand_priority,g_completion_spin_us,g_read_parts);
     return 1;
 }
 
 extern "C" int ds4_ds_batch_add(uint64_t file_offset, uint32_t bytes, void *dst_host) {
     if (!g_init_ok || !dst_host || bytes == 0) return 0;
-    if (g_batch.size() >= (size_t)kQueueCapacity) return 0;
+    const uint32_t parts = request_parts(file_offset,bytes);
+    // Atomic admission: a refusal must not leave a partly appended slice.
+    if (g_batch.size() + parts > (size_t)kQueueCapacity) return 0;
     if (!g_batch.empty() && g_batch_gpu) return 0;
 
     DSTORAGE_REQUEST req;
@@ -566,8 +665,7 @@ extern "C" int ds4_ds_batch_add(uint64_t file_offset, uint32_t bytes, void *dst_
     req.Destination.Memory.Size    = bytes;
     req.UncompressedSize           = bytes;   /* uncompressed: must equal the source size */
 
-    g_batch.push_back(req);
-    g_batch_bytes += bytes;
+    append_request_parts(req,false,parts);
     return 1;
 }
 
@@ -906,7 +1004,8 @@ extern "C" int ds4_ds_batch_add_gpu(
     if (g_gpu_queue_count == 0){ g_ds_gpu_add_fail_reason = 4; return 0; }
     if (arena_offset > g_gpu_arena_size || bytes > g_gpu_arena_size - arena_offset) {
                                  g_ds_gpu_add_fail_reason = 5; return 0; }
-    if (g_batch.size() >= (size_t)kQueueCapacity) {
+    const uint32_t parts = request_parts(file_offset,bytes);
+    if (g_batch.size() + parts > (size_t)kQueueCapacity) {
                                  g_ds_gpu_add_fail_reason = 6; return 0; }
     if (!g_batch.empty() && !g_batch_gpu) {
                                  g_ds_gpu_add_fail_reason = 7; return 0; }
@@ -925,8 +1024,7 @@ extern "C" int ds4_ds_batch_add_gpu(
     req.Destination.Buffer.Size = bytes;
     req.UncompressedSize = bytes;
 
-    g_batch.push_back(req);
-    g_batch_bytes += bytes;
+    append_request_parts(req,true,parts);
     g_batch_gpu = true;
     return 1;
 }
@@ -989,6 +1087,30 @@ static ds4_ds_slot g_slots[DS4_DS_SLOTS];
 static uint32_t    g_slot_next  = 0;   /* next slot to fill    */
 static uint32_t    g_slot_drain = 0;   /* oldest slot to wait  */
 static uint32_t    g_slot_busy  = 0;   /* how many outstanding */
+
+/* Opt-in, bounded RAM trace. Emitted only at stats dump, never to disk on the
+ * timed fetch path. Batch latency includes overlap; wait_ms is the observed
+ * blocking stall and must be reported separately. Multi-layer waves retain
+ * their complete range rather than being attributed to an invented layer. */
+struct ds4_ds_layer_sample {
+    uint64_t token, bytes;
+    uint32_t first_layer, last_layer, requests, epoch;
+    double batch_ms, wait_ms;
+};
+static std::vector<ds4_ds_layer_sample> g_layer_samples;
+static uint32_t g_layer_epoch = 0;
+static bool layer_trace_enabled(void) {
+    static const bool enabled=[](){const char *s=getenv("DS4_DS_LAYER_TRACE");return s&&!strcmp(s,"1");}();
+    return enabled;
+}
+extern "C" int ds4_ds_layer_trace_enabled(void) { return layer_trace_enabled() ? 1 : 0; }
+static void layer_trace_dump(void) {
+    for (const auto &s:g_layer_samples)
+        fprintf(stderr,"RTXDISKLAT_LAYER epoch=%u token=%llu layer=%u-%u bytes=%llu requests=%u batch_ms=%.9g wait_ms=%.9g\n",
+                s.epoch,(unsigned long long)s.token,s.first_layer,s.last_layer,
+                (unsigned long long)s.bytes,s.requests,s.batch_ms,s.wait_ms);
+    g_layer_samples.clear();
+}
 
 extern "C" void ds4_ds_stats_set_token(uint64_t token_index) {
     if (g_ds_slow_tags_enabled) {
@@ -1184,6 +1306,7 @@ static void ds4_ds_stats_dump_snapshot(
 }
 
 extern "C" void ds4_ds_stats_dump(void) {
+    layer_trace_dump();
     ds4_ds_stats_snapshot live;
     ds4_ds_stats_capture(&live);
     if (!g_ds_phase_tracking_started) {
@@ -1209,6 +1332,9 @@ extern "C" void ds4_ds_stats_dump(void) {
 extern "C" void ds4_ds_stats_set_phase(int decode) {
     g_ds_slow_tags_enabled = 1;
     const int next_decode = decode != 0;
+    if (layer_trace_enabled() && g_layer_samples.capacity() == 0)
+        g_layer_samples.reserve(65536);
+    if (!next_decode && g_ds_phase_decode && layer_trace_enabled()) ++g_layer_epoch;
     if (!g_ds_phase_tracking_started) {
         ds4_ds_stats_reset_live();
         g_ds_prefill_snapshot = ds4_ds_stats_snapshot();
@@ -1282,6 +1408,14 @@ static void ds4_ds_stats_record(
         IDStorageQueue1 *queue,
         const ds4_ds_slow_tags *tags) {
     if (!g_ds_stats_registered) { g_ds_stats_registered = 1; atexit(ds4_ds_stats_dump); }
+    if (layer_trace_enabled() && tags && tags->valid && tags->phase_decode && tags->token_valid) {
+        if (g_layer_samples.size() >= 65536) {
+            fprintf(stderr,"ds4: RTXDISKLAT layer trace exceeded its 65536-row RAM budget\n");
+            abort();
+        }
+        g_layer_samples.push_back({tags->token,bytes,tags->first_layer,tags->last_layer,
+                                  (uint32_t)nreq,g_layer_epoch,ms,wait_ms});
+    }
     if (ms >= 8.0) {
         const double wall_s = ds4_ds_wall_s();
         const double rate = ms > 0.0 ?
@@ -1433,7 +1567,7 @@ extern "C" int ds4_ds_batch_wait(
 
     /* A 30 s ceiling: a stalled queue is a fatal condition, not something to wait out silently. */
     QueryPerformanceCounter(&wait_t0);
-    const DWORD wait = WaitForSingleObject(s.event, 30000);
+    const DWORD wait = wait_for_demand(s.event);
     QueryPerformanceCounter(&t1);
     const double wait_ms =
         (double)(t1.QuadPart - wait_t0.QuadPart) * 1000.0 / (double)freq.QuadPart;
@@ -1499,7 +1633,7 @@ extern "C" int ds4_ds_batch_submit_wait(
 
     /* A 30 s ceiling: a stalled queue is a fatal condition, not something to wait out silently. */
     QueryPerformanceCounter(&wait_t0);
-    const DWORD wait = WaitForSingleObject(g_event, 30000);
+    const DWORD wait = wait_for_demand(g_event);
     QueryPerformanceCounter(&t1);
     const double wait_ms =
         (double)(t1.QuadPart - wait_t0.QuadPart) * 1000.0 / (double)freq.QuadPart;

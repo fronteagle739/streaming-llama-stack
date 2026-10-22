@@ -43,7 +43,8 @@ struct checkpoint {
         checkpoint out;auto word=[&](const char*k){auto v=u64(j.at(k));need(v<=UINT32_MAX,"Session frontier overflow");return uint32_t(v);};
         out.frontier={word("context"),word("position"),word("mode"),word("capture_end"),word("capture_length")};
         wire_plan p;std::string error;need(make_wire_plan(out.frontier,p,error),error);
-        need(out.frontier.mode==3&&out.frontier.capture_end==out.frontier.position&&out.frontier.capture_length==std::min(out.frontier.position,128u),"Session requires completed DSpark mode3");
+        need((out.frontier.mode==1&&out.frontier.capture_end==0&&out.frontier.capture_length==0)||
+            (out.frontier.mode==3&&out.frontier.capture_end==out.frontier.position&&out.frontier.capture_length==std::min(out.frontier.position,128u)),"Session requires completed mode1/3 frontier");
         out.tokens_sha256=j.at("tokens_sha256").get<std::string>();out.logits_sha256=j.at("logits_sha256").get<std::string>();
         need(sha_valid(out.tokens_sha256)&&sha_valid(out.logits_sha256),"Session token/logit SHA malformed");
         need(j.at("owner_sha256").is_array()&&j.at("owner_sha256").size()==p.spans.size(),"Session owner hash extent");
@@ -52,27 +53,29 @@ struct checkpoint {
     }
 };
 inline checkpoint capture(wire_payload_reader&reader,const std::function<bool()>&stop){
-    std::array<uint32_t,15>h{};std::string error;need(reader.read(0,h.data(),60,error),error);
-    need(h[0]==0x34565344&&h[1]==2&&h[3]==3&&h[4]==128&&h[5]==128&&h[6]==h[2]+1&&h[8]==40&&h[9]==512&&h[10]==128&&h[11]==129280&&h[12]==0x413431,"Session native header mismatch");
+    std::array<uint32_t,15>h{};std::string error;need(reader.read(0,h.data(),52,error),error);
+    need(h[0]==0x34565344&&h[1]==2&&(h[3]==1||h[3]==3)&&h[4]==128&&h[5]==128&&h[6]==h[2]+1&&h[8]==40&&h[9]==512&&h[10]==128&&h[11]==129280&&h[12]==0x413431,"Session native header mismatch");
+    if(h[3]==3)need(reader.read(52,h.data()+13,8,error),error);
     checkpoint out;out.frontier={h[2],h[7],h[3],h[13],h[14]};wire_plan p;
     need(make_wire_plan(out.frontier,p,error)&&p.bytes==reader.bytes(),"Session native length/plan mismatch");
     auto digest=[&](uint64_t offset,uint64_t bytes){return dsv41_boundary::sha256_stream(bytes,[&](uint64_t off,void*dst,size_t n){
         if(stop&&stop())return false;
         return reader.read(offset+off,dst,n,error);
     });};
-    uint64_t offset=60;out.tokens_sha256=digest(offset,uint64_t(h[7])*4);offset+=uint64_t(h[7])*4;
+    uint64_t offset=h[3]==3?60:52;out.tokens_sha256=digest(offset,uint64_t(h[7])*4);offset+=uint64_t(h[7])*4;
     out.logits_sha256=digest(offset,129280*4);offset+=129280*4;
     for(const auto&s:p.spans){out.owners.push_back(digest(offset,s.bytes));offset+=s.bytes;}
     need(offset==reader.bytes(),"Session checkpoint coverage");return checkpoint::from_json(out.describe());
 }
 class sequence_guard {
-    std::string session,model;uint64_t next=1;
+    std::string session,model;uint64_t next=1,epoch=0;
 public:
-    sequence_guard(std::string session,std::string model):session(std::move(session)),model(std::move(model)){
+    sequence_guard(std::string session,std::string model,uint64_t owner_epoch=0):session(std::move(session)),model(std::move(model)),epoch(owner_epoch){
         need(this->session.size()==32&&sha_valid(this->session+this->session)&&sha_valid(this->model),"Session/model identity malformed");
     }
     void accept(const json&command){
         need(command.is_object()&&command.at("session")==session&&command.at("model_sha256")==model,"Session/model identity mismatch");
+        need(!epoch||(command.contains("owner_epoch")&&u64(command.at("owner_epoch"))==epoch),"Session owner epoch mismatch");
         need(u64(command.at("sequence"))==next&&next!=UINT64_MAX,"Replayed/out-of-order session command");++next;
     }
     uint64_t expected()const{return next;}

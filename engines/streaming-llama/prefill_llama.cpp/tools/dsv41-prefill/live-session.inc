@@ -55,12 +55,13 @@ public:
 
 void run_live_session(std::unique_ptr<llama_dsv41_sweep>&sweep,
         const llama_dsv41_weight_provider::config&weights,const llama_dsv41_sweep::config&options,
-        const std::string&session,uint64_t timeout_ms,uint32_t capacity,HANDLE output){
+        const std::string&session,uint64_t timeout_ms,uint32_t capacity,HANDLE output,uint64_t owner_epoch=0){
     using namespace llama_dsv41;using dsv41_live::checkpoint;
-    require(sweep&&sweep->ready()&&options.fixed&&options.stateful_chunks&&options.capture_dspark,
-        "Persistent session requires completed fixed DSpark stateful owner");
+    require(sweep&&sweep->ready()&&options.fixed&&options.stateful_chunks,
+        "Persistent session requires a completed fixed mode1/3 stateful owner");
     require(capacity&&capacity<=49152&&options.fixed->tokens==capacity,"Session chunk reservation differs from fixed owner");
-    session_pipe io(timeout_ms,output);dsv41_live::sequence_guard guard(session,model_sha);
+    session_pipe io(timeout_ms,output);dsv41_live::sequence_guard guard(session,model_sha,owner_epoch);
+    auto send=[&](json value){if(owner_epoch)value["owner_epoch"]=owner_epoch;io.send(value);};
     const uint64_t session_route=std::stoull(session.substr(0,16),nullptr,16),model_route=std::stoull(std::string(model_sha).substr(0,16),nullptr,16);
     require(session_route&&model_route,"Session routing fingerprint must be nonzero");
     checkpoint current,remote;bool have_remote=false,initial_sent=false,awaiting_ack=false;
@@ -69,14 +70,14 @@ void run_live_session(std::unique_ptr<llama_dsv41_sweep>&sweep,
     auto inspect=[&](){checkpoint c;std::string error;
         success(sweep->export_native([&](wire_payload_reader&r,std::string&why){try{c=dsv41_live::capture(r,[]{return should_stop();});return true;}catch(const std::exception&e){why=e.what();return false;}},error),error);return c;};
     current=inspect();
-    io.send({{"status","ready"},{"session",session},{"model_sha256",model_sha},{"next_sequence",guard.expected()},
+    send({{"status","ready"},{"session",session},{"model_sha256",model_sha},{"next_sequence",guard.expected()},
         {"checkpoint",current.describe()},{"maximum_prefill_tokens",capacity},{"maximum_decode_tokens",128},{"control_host_bytes",64*1024*1024},
         {"transport","private owned pipes; existing native payload and artifact v2.1 delta"}});
     for(;;){
-        io.renew();const auto command=dsv41_live::parse_control(io.line());guard.accept(command);
+        io.renew();auto command=dsv41_live::parse_control(io.line());guard.accept(command);if(owner_epoch)command.erase("owner_epoch");
         const auto operation=command.at("operation").get<std::string>();const auto sequence=dsv41_live::u64(command.at("sequence"));
         const auto started=clock_type::now();
-        auto reply=[&](json extra){extra["status"]="complete";extra["sequence"]=sequence;extra["session"]=session;extra["model_sha256"]=model_sha;extra["checkpoint"]=current.describe();io.send(extra);};
+        auto reply=[&](json extra){extra["status"]="complete";extra["sequence"]=sequence;extra["session"]=session;extra["model_sha256"]=model_sha;extra["checkpoint"]=current.describe();send(extra);};
         auto same_base=[&](){const auto base=checkpoint::from_json(command.at("base"));require(base.describe()==current.describe(),"Session base token/position/owner hashes differ");};
         if(operation=="close"){
             dsv41_live::keys(command,{"session","model_sha256","sequence","operation"});reply({{"closed",true}});return;
@@ -110,7 +111,7 @@ void run_live_session(std::unique_ptr<llama_dsv41_sweep>&sweep,
                 require(dsv41_live::capture(r,[]{return should_stop();}).describe()==current.describe(),"Export checkpoint changed");
                 delta_artifact_sender delta;if(!initial)success(delta.init(remote.frontier,current.frontier,session_route,model_route,r,why),why);
                 const uint64_t bytes=initial?r.bytes():delta.bytes();
-                io.send({{"status","payload"},{"sequence",sequence},{"session",session},{"model_sha256",model_sha},
+                send({{"status","payload"},{"sequence",sequence},{"session",session},{"model_sha256",model_sha},
                     {"kind",initial?"native_initial":"artifact_delta_v2_1"},{"bytes",bytes},{"base",initial?json(nullptr):remote.describe()},{"target",current.describe()}});
                 while(sent<bytes){const size_t n=size_t(std::min<uint64_t>(page.size(),bytes-sent));
                     success(initial?r.read(sent,page.data(),n,why):delta.read(sent,page.data(),n,why),why);io.write(page.data(),n);sent+=n;}

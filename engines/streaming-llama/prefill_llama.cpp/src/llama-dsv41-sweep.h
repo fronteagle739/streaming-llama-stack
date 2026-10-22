@@ -57,9 +57,21 @@ public:
     llama_dsv41_sweep(const llama_dsv41_sweep&)=delete;
     llama_dsv41_sweep&operator=(const llama_dsv41_sweep&)=delete;
 
+    struct native_base {
+        llama_dsv41::wire_frontier frontier;
+        std::vector<int32_t> tokens;
+        std::vector<float> logits;
+        std::string tokens_sha256,logits_sha256;
+        std::vector<std::string> owner_sha256;
+        llama_dsv41::wire_read_span read;
+    };
+    // Optional base is an authenticated native mode1 snapshot, streamed into
+    // the existing cache before binding the new executor. Caller separately
+    // admits its token/logit metadata and holds the same request/owner epoch.
     bool open(const llama_dsv41_weight_provider::config &weights,const config &options,std::string &error,
               llama_dsv41_sweep *completed_one_token_warmup=nullptr,
-              llama_dsv41_sweep *completed_prefix=nullptr);
+              llama_dsv41_sweep *completed_prefix=nullptr,
+              const native_base *restored_base=nullptr);
     // Immutable token IDs and, only with explicit RAM carry admission, its
     // single bank scale with context. Graph readbacks obey the explicit RAM
     // compute tile bound; physical carry pages and embedding seeds stay32.

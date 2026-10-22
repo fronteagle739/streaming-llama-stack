@@ -1,4 +1,5 @@
 #include "ds4.h"
+static bool ds4_combo_active; /* Explicit Windows target-only session only. */
 #include "ds4_tool_text.h"
 #include "ds4_distributed.h"
 #include "ds4_gpu_args.h"
@@ -709,8 +710,7 @@ typedef enum {
     SERVER_MODEL_SYNTAX_QWEN,
 } server_model_syntax;
 
-#define DS41_TOOL_CALLS_START "<｜DSML｜ calls>"
-#define DS41_TOOL_CALLS_END "</｜DSML｜ calls>"
+#include "ds4_quality_phase.h"
 #define DS41_INVOKE_START "<｜DSML｜ invoke"
 #define DS41_INVOKE_END "</｜DSML｜ invoke>"
 #define DS41_PARAM_START "<｜DSML｜ parameter"
@@ -843,6 +843,8 @@ typedef struct {
     char *raw_body;
     bool quality_speed_set;
     float quality_speed;
+    bool quality_per_phase;
+    float quality_phases[3];
     char *prompt_text;
     tool_schema_orders tool_orders;
     int max_tokens;
@@ -3407,7 +3409,7 @@ static char *render_deepseek41_chat_ordered(const chat_msgs *msgs, int start,
     msgs = &views;
     const chat_msg **ordered = ds41_order_messages(msgs, initial_order);
     const bool think = ds4_think_mode_enabled(mode);
-    const bool keep_reasoning = live_tail || chat_history_uses_tool_context(msgs, tool_schemas);
+    const bool keep_reasoning = live_tail || chat_history_uses_tool_context(msgs, tool_schemas) || ds4_combo_active;
     const char *effort = ds4_deepseek41_reasoning_effort_text(mode);
     bool initial_system = false, pending = false, user_open = false;
     int last_user = -1;
@@ -14271,7 +14273,8 @@ static void *decode_worker_main(void *arg) {
 static void generate_job_inner(server *s, server_slot *slot, job *j) {
     char err[160];
     err[0] = '\0';
-    if (j->req.quality_speed_set && ds4_quality_speed_set(j->req.quality_speed)) {
+    if (j->req.quality_speed_set && (j->req.quality_per_phase ?
+        ds4_quality_speed_set_phases(j->req.quality_phases) : ds4_quality_speed_set(j->req.quality_speed))) {
         http_error(j->fd,s->enable_cors,409,"quality vs speed unsupported");return;
     }
     const bool multimodal = j->req.image_count != 0;
@@ -14840,12 +14843,14 @@ decode_again:
     const char *stop_detail = max_tokens == room ? "context limit" : "output limit";
     int stop_token = -1;
     trace_event(s, trace_id, "prefill done; decode_max=%d ctx_room=%d", max_tokens, room);
+    ds4_session_quality_speed_begin(slot->session);
     ds4_session_ds41_dspark_request_begin(slot->session);
     const double decode_t0 = now_sec();
     double quality_window_t = decode_t0;
     int quality_window_tokens = 0;
     ds4_quality_speed quality_state;ds4_quality_speed_get(&quality_state);
     uint64_t quality_revision = quality_state.applied_revision;
+    uint64_t quality_phase_revision=quality_state.phase_revision;
     double last_decode_log_t = decode_t0;
     int last_decode_log_completion = 0;
     thinking_state thinking = thinking_state_from_prompt(&j->req);
@@ -15002,8 +15007,8 @@ decode_again:
             char *piece = ds4_token_text(s->engine, token, &piece_len);
             completion++;
             ds4_quality_speed_get(&quality_state);
-            if (quality_revision != quality_state.applied_revision) {
-                quality_revision=quality_state.applied_revision;quality_window_t=now_sec();quality_window_tokens=completion;
+            if (quality_revision != quality_state.applied_revision || quality_phase_revision != quality_state.phase_revision) {
+                quality_revision=quality_state.applied_revision;quality_phase_revision=quality_state.phase_revision;quality_window_t=now_sec();quality_window_tokens=completion;
                 pthread_mutex_lock(&s->mu);s->quality_tok_s=0;pthread_mutex_unlock(&s->mu);
             } else if (completion-quality_window_tokens>=16) {
                 double elapsed=now_sec()-quality_window_t;
@@ -15990,31 +15995,69 @@ static long content_length(const char *h, size_t n) {
     return 0;
 }
 
+typedef struct {bool per_phase;float value,phases[4];} quality_setting;
 static bool quality_value(const char **p, float *value) {
-    double v;
-    if (!json_number(p, &v) || !isfinite(v) || v < 0.0 || v > 0.9) return false;
-    *value = (float)v; return true;
-}
-static bool quality_body(const char *body, bool endpoint, bool *present, float *value) {
-    const char *p=body; *present=false; json_ws(&p);
-    if (*p++ != '{') return false;
-    json_ws(&p);
-    if (*p != '}') for (;;) {
-        char *key=NULL;
-        if (!json_string(&p,&key)) return false;
-        json_ws(&p);
-        if (*p++ != ':') {free(key);return false;}
-        bool match = !strcmp(key,endpoint ? "value" : "quality_speed"); free(key);
-        if (match) {
-            if (*present || !quality_value(&p,value)) return false;
-            *present=true;
-        } else if (endpoint || !json_skip_value(&p)) return false;
-        json_ws(&p);
-        if (*p != ',') break;
-        p++;
+    json_ws(p);
+    if (**p=='"') {
+        char *name=NULL;if (!json_string(p,&name)) return false;
+        static const char *const names[]={"max_quality","balanced","fast","faster","max_speed"};
+        static const float values[]={0,.35f,.65f,.9f,1.36125f};
+        bool ok=false;for(int i=0;i<5;i++)if(!strcmp(name,names[i])){*value=values[i];ok=true;break;}
+        free(name);return ok;
     }
-    if (*p++ != '}') return false;
-    json_ws(&p); return !*p && (!endpoint || *present);
+    double v;
+    if (!json_number(p,&v) || !isfinite(v) || v<0 || v>1.36125) return false;
+    *value=(float)v;return true;
+}
+static bool quality_phase_map(const char **p,quality_setting *setting) {
+    json_ws(p);if(*(*p)++!='{') return false;
+    unsigned seen=0;json_ws(p);
+    if(**p!='}')for(;;){
+        char *key=NULL;if(!json_string(p,&key))return false;
+        int index=-1;for(int i=0;i<4;i++)if(!strcmp(key,ds4_quality_phase_names[i]))index=i;
+        free(key);json_ws(p);if(*(*p)++!=':' || index<0 || (seen&(1u<<index)))return false;
+        if(!quality_value(p,&setting->phases[index]))return false;
+        seen|=1u<<index;json_ws(p);if(**p!=',')break;(*p)++;
+    }
+    if(*(*p)++!='}' || !seen)return false;
+    if(!(seen&(1u<<DS4_QUALITY_CODE)))setting->phases[DS4_QUALITY_CODE]=setting->phases[DS4_QUALITY_ANSWER];
+    setting->per_phase=true;return true;
+}
+static bool quality_setting_value(const char **p,quality_setting *setting) {
+    json_ws(p);if(**p=='{')return quality_phase_map(p,setting);
+    setting->per_phase=false;return quality_value(p,&setting->value);
+}
+static bool quality_config_body(const char *body,bool endpoint,bool *present,quality_setting *setting) {
+    ds4_quality_speed current;ds4_quality_speed_get(&current);
+    *setting=(quality_setting){.value=current.requested};
+    for(int i=0;i<3;i++)setting->phases[i]=current.per_phase?current.phase_values[i]:current.requested;
+    setting->phases[DS4_QUALITY_CODE]=current.per_phase?current.phase_values[DS4_QUALITY_CODE]:current.requested;
+    const char *p=body;*present=false;json_ws(&p);
+    if(*p++!='{')return false;
+    unsigned phases_seen=0;json_ws(&p);
+    if(*p!='}')for(;;){
+        char *key=NULL;if(!json_string(&p,&key))return false;
+        bool match=!strcmp(key,endpoint?"value":"quality_speed");
+        int phase=-1;if(endpoint)for(int i=0;i<4;i++)if(!strcmp(key,ds4_quality_phase_names[i]))phase=i;
+        free(key);json_ws(&p);if(*p++!=':')return false;
+        if(match){if(*present || phases_seen || !quality_setting_value(&p,setting))return false;*present=true;}
+        else if(phase>=0){
+            if((*present && !phases_seen) || (phases_seen&(1u<<phase)) || !quality_value(&p,&setting->phases[phase]))return false;
+            phases_seen|=1u<<phase;*present=true;setting->per_phase=true;
+        } else if(endpoint || !json_skip_value(&p))return false;
+        json_ws(&p);if(*p!=',')break;p++;
+    }
+    if(*p++!='}')return false;
+    if(phases_seen && !(phases_seen&(1u<<DS4_QUALITY_CODE)))setting->phases[DS4_QUALITY_CODE]=setting->phases[DS4_QUALITY_ANSWER];
+    json_ws(&p);return !*p && (!endpoint || *present);
+}
+/* Compatibility helper used by the existing numeric parser tests. */
+static bool quality_body(const char *body,bool endpoint,bool *present,float *value) {
+    quality_setting setting;bool ok=quality_config_body(body,endpoint,present,&setting);
+    *value=setting.value;return ok && !setting.per_phase;
+}
+static int quality_apply(const quality_setting *setting) {
+    return setting->per_phase ? ds4_quality_speed_set_phase_map(setting->phases) : ds4_quality_speed_set(setting->value);
 }
 static bool quality_authorized(const char *headers, size_t size) {
     const char *token=getenv("DS4_SERVER_AUTH_TOKEN");
@@ -16276,6 +16319,7 @@ static void wait_for_job_or_disconnect(server *s, job *j) {
 }
 
 #include "ds4_training_api.h"
+#include "ds4_combo_api.inc"
 
 static void *client_main(void *arg) {
     client_arg *ca = arg;
@@ -16311,6 +16355,12 @@ static void *client_main(void *arg) {
         goto done;
     }
 
+    if (ds4_combo_active && !hr.quality_authorized) {
+        http_error(fd,s->enable_cors,401,"combo decoder requires its owner Bearer token");http_request_free(&hr);goto done;
+    }
+    if (ds4_combo_active && !strncmp(hr.path,"/decode/",8)) {
+        ds4_combo_http(s,fd,&hr);http_request_free(&hr);goto done;
+    }
     if (!strncmp(hr.path, "/v1/train/", 10)) {
         if (!hr.quality_authorized) http_error(fd,s->enable_cors,401,"authenticated frozen-prefix training required");
         else if (!strcmp(hr.method,"POST") && !strcmp(hr.path,"/v1/train/prompt")) ds4_training_prompt(s,fd,&hr);
@@ -16331,14 +16381,27 @@ static void *client_main(void *arg) {
         else if (!state.supported) http_error(fd,s->enable_cors,409,"unsupported: launch CUDA SSD streaming with model-bound bias calibration");
         else if (strcmp(hr.method,"GET") && strcmp(hr.method,"POST")) http_error(fd,s->enable_cors,405,"use GET or POST");
         else {
-            bool present=false;float value=0;bool valid=true;
-            if (!strcmp(hr.method,"POST")) valid=quality_body(hr.body,true,&present,&value) && !ds4_quality_speed_set(value);
-            if (!valid) http_error(fd,s->enable_cors,400,"value must be a finite number in [0,0.9]; unknown/duplicate fields refused");
+            bool present=false;quality_setting setting={0};bool valid=true;
+            if (!strcmp(hr.method,"POST")) valid=quality_config_body(hr.body,true,&present,&setting) && !quality_apply(&setting);
+            if (!valid) http_error(fd,s->enable_cors,400,"value must be a finite number in [0,1.36125]; unknown/duplicate fields refused");
             else {
                 ds4_quality_speed_get(&state);
                 pthread_mutex_lock(&s->mu);double rate=s->quality_tok_s;pthread_mutex_unlock(&s->mu);
                 buf b={0};buf_printf(&b,"{\"supported\":true,\"value\":%.6g,\"applied_value\":%.6g,\"adaptive\":%s,\"revision\":%llu,\"applied_revision\":%llu,\"tok_s\":%.6g,\"scope\":\"server-wide; next token and later requests\",\"adaptive_policy\":\"adaptive overrides manual; never disabled by this control\"}\n",
                     state.requested,state.applied,state.adaptive?"true":"false",(unsigned long long)state.revision,(unsigned long long)state.applied_revision,rate);
+                /* Add map and phase observability to the existing endpoint. */
+                if(b.len && b.ptr[b.len-1]=='\n')b.ptr[--b.len]=0;
+                if(b.len && b.ptr[b.len-1]=='}')b.ptr[--b.len]=0;
+                buf_printf(&b,",\"phases_supported\":%s,\"per_phase\":%s,\"phase\":\"%s\",\"phase_revision\":%llu,\"phases\":",
+                    state.phases_supported?"true":"false",state.per_phase?"true":"false",
+                    ds4_quality_phase_names[state.phase>=0&&state.phase<4?state.phase:2],(unsigned long long)state.phase_revision);
+                if(state.per_phase)buf_printf(&b,"{\"reasoning\":%.6g,\"tool_call\":%.6g,\"answer\":%.6g,\"code\":%.6g}",state.phase_values[0],state.phase_values[1],state.phase_values[2],state.phase_values[3]);
+                else buf_puts(&b,"null");
+                buf_puts(&b,",\"phase_decode\":{");
+                for(int i=0;i<4;i++)buf_printf(&b,"%s\"%s\":{\"tokens\":%llu,\"seconds\":%.9g}",i?",":"",ds4_quality_phase_names[i],(unsigned long long)state.phase_tokens[i],state.phase_seconds[i]);
+                buf_puts(&b,"},\"base_phase_decode\":{");
+                for(int i=0;i<3;i++)buf_printf(&b,"%s\"%s\":{\"tokens\":%llu,\"seconds\":%.9g}",i?",":"",ds4_quality_phase_names[i],(unsigned long long)state.base_phase_tokens[i],state.base_phase_seconds[i]);
+                buf_puts(&b,"}}\n");
                 http_response(fd,s->enable_cors,200,"application/json",b.ptr);buf_free(&b);
             }
         }
@@ -16348,9 +16411,9 @@ static void *client_main(void *arg) {
         http_error(fd,s->enable_cors,409,"dedicated training prefix provider does not accept generation requests");
         http_request_free(&hr);goto done;
     }
-    bool quality_present=false;float quality=0;
-    if (!quality_body(hr.body,false,&quality_present,&quality)) {
-        http_error(fd,s->enable_cors,400,"invalid JSON or quality_speed outside [0,0.9]");http_request_free(&hr);goto done;
+    bool quality_present=false;quality_setting quality={0};
+    if (!quality_config_body(hr.body,false,&quality_present,&quality)) {
+        http_error(fd,s->enable_cors,400,"invalid JSON or quality_speed outside [0,1.36125]");http_request_free(&hr);goto done;
     }
     if (quality_present) {
         ds4_quality_speed state;ds4_quality_speed_get(&state);
@@ -16379,7 +16442,7 @@ static void *client_main(void *arg) {
         http_request_free(&hr);
         goto done;
     }
-    if (ok) {req.raw_body = xstrndup(hr.body, hr.body_len);req.quality_speed_set=quality_present;req.quality_speed=quality;}
+    if (ok) {req.raw_body = xstrndup(hr.body, hr.body_len);req.quality_speed_set=quality_present;req.quality_speed=quality.value;req.quality_per_phase=quality.per_phase;memcpy(req.quality_phases,quality.phases,sizeof(req.quality_phases));}
     http_request_free(&hr);
     if (!ok) {
         http_error(fd, s->enable_cors, 400, err);
@@ -17275,6 +17338,10 @@ int main(int argc, char **argv) {
         }
     }
 
+    char combo_error[512]={0};
+    if(!ds4_combo_start(&s,&cfg.engine,combo_error,sizeof(combo_error))){
+        server_log(DS4_LOG_ERROR,"ds4-server: %s",combo_error);server_close_resources(&s);return 1;
+    }
     if (cfg.peer_listen) {
         ds4_peer_capabilities peer_caps;
         char peer_err[512] = {0};
@@ -23677,7 +23744,7 @@ static void test_quality_speed_request_validation(void) {
     TEST_ASSERT(found && value==0.35f);
     TEST_ASSERT(quality_body("{\"value\":0.9}",true,&found,&value));
     TEST_ASSERT(value==0.9f);
-    TEST_ASSERT(!quality_body("{\"value\":0.90001}",true,&found,&value));
+    TEST_ASSERT(!quality_body("{\"value\":1.361251}",true,&found,&value));
     TEST_ASSERT(!quality_body("{\"value\":-1}",true,&found,&value));
     TEST_ASSERT(!quality_body("{\"value\":NaN}",true,&found,&value));
     TEST_ASSERT(!quality_body("{\"value\":true}",true,&found,&value));

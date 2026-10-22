@@ -15,7 +15,7 @@ class AdmissionRefused(RuntimeError):
     pass
 
 
-def recover_leases(runtime_root):
+def recover_leases(runtime_root, task='DS4STACK'):
     """Release only this stack's recorded dead guardians, after their kill-on-close Jobs have closed."""
     root = Path(runtime_root) / 'state' / 'leases'
     if not root.exists():
@@ -23,7 +23,7 @@ def recover_leases(runtime_root):
     released = []
     for file in root.glob('*.json'):
         row = json.loads(file.read_text())
-        if row.get('task') != 'DS4STACK' or row.get('released'):
+        if row.get('task') != task or row.get('released'):
             continue
         try:
             proc = psutil.Process(row['guardian_pid'])
@@ -34,7 +34,7 @@ def recover_leases(runtime_root):
         # On Windows the guardian handle closes its Job and terminates all GPU descendants.
         # Recovering an active hold never kills an unrelated process or guesses expiry.
         with Path(row['hold_file']).open('a', encoding='utf-8') as stream:
-            stream.write(f'\nRELEASED: DS4STACK {row["id"]}; recovered dead guardian {row["guardian_pid"]}; {datetime.now(timezone.utc).isoformat()}\n')
+            stream.write(f'\nRELEASED: {task} {row["id"]}; recovered dead guardian {row["guardian_pid"]}; {datetime.now(timezone.utc).isoformat()}\n')
             stream.flush()
             os.fsync(stream.fileno())
         atomic_json(file, {**row, 'released': True, 'recovered': True})
@@ -60,6 +60,9 @@ def active_holds(text):
 
 @contextmanager
 def gpu_lease(cfg):
+    task = cfg.get('task', 'DS4STACK')
+    if not isinstance(task, str) or re.fullmatch('[A-Z][A-Z0-9]{0,31}', task) is None:
+        raise ValueError('GPU lease task must be a bounded coordination identifier')
     hold = Path(cfg['hold_file']) if cfg.get('hold_file') else Path(cfg['runtime_root']) / 'state' / 'gpu.holds'
     if not cfg.get('hold_file'):
         hold.parent.mkdir(parents=True, exist_ok=True)
@@ -87,12 +90,12 @@ def gpu_lease(cfg):
                 raise AdmissionRefused('RTX is not idle enough for exclusive admission; no other process was ejected: ' + result.stdout)
             identity = uuid.uuid4().hex
             lease_path = Path(cfg['runtime_root']) / 'state' / 'leases' / (identity + '.json')
-            lease_row = {'task': 'DS4STACK', 'id': identity, 'hold_file': str(hold),
+            lease_row = {'task': task, 'id': identity, 'hold_file': str(hold),
                          'guardian_pid': os.getpid(), 'guardian_created': psutil.Process().create_time(),
                          'released': False}
             atomic_json(lease_path, lease_row)
             expiry = datetime.now(timezone.utc) + timedelta(minutes=cfg['lease_minutes'])
-            line = f"\nACTIVE: DS4STACK {identity}; exclusive RTX5090; expires {expiry.isoformat()}; host RSS {cfg['host_budget_gib']} GiB; floor {cfg['min_available_gib']} GiB\n"
+            line = f"\nACTIVE: {task} {identity}; exclusive RTX5090; expires {expiry.isoformat()}; host RSS {cfg['host_budget_gib']} GiB; floor {cfg['min_available_gib']} GiB\n"
             stream.seek(0, 2)
             stream.write(line)
             stream.flush()
@@ -105,7 +108,7 @@ def gpu_lease(cfg):
         yield identity
     finally:
         with hold.open('a', encoding='utf-8') as stream:
-            stream.write(f'\nRELEASED: DS4STACK {identity}; {datetime.now(timezone.utc).isoformat()}\n')
+            stream.write(f'\nRELEASED: {task} {identity}; {datetime.now(timezone.utc).isoformat()}\n')
             stream.flush()
             os.fsync(stream.fileno())
         atomic_json(lease_path, {**lease_row, 'released': True})

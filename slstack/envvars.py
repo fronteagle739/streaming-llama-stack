@@ -57,7 +57,9 @@ def apply(env, cfg, scope):
     scope = SCOPE_ALIASES.get(scope, scope)
     context = {**cfg, 'host_budget_bytes': int(cfg.get('host_budget_gib', 8) * (1 << 30)),
                'host_budget_mb': int(cfg.get('host_budget_gib', 8) * 1024),
-               'physical_floor_bytes': int(cfg.get('min_available_gib', 4) * (1 << 30))}
+               'physical_floor_bytes': int(cfg.get('min_available_gib', 4) * (1 << 30)),
+               'job_commit_mb': int(cfg.get('job_commit_gib', 48) * 1024),
+               'native_commit_mb': min(45056, int(cfg.get('job_commit_gib', 48) * 1024))}
     if cfg.get('runtime_root'):
         from .config import path
         context.update(runtime_root=str(Path(cfg['runtime_root']).resolve()),
