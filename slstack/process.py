@@ -13,7 +13,10 @@ from .guard import admit
 
 class OwnedProcess:
     def __init__(self, cfg, command, name, *, cwd=ROOT, stdin=None, timeout=None, gpu=False, scope=None):
-        admit(cfg['host_budget_gib'], cfg['min_available_gib'])
+        # A waiting guardian allocates no model. Full host admission is repeated
+        # by the independent guardian immediately before it starts an engine.
+        initial_budget = min(.25, cfg['host_budget_gib']) if gpu and cfg.get('gpu_wait_seconds', 0) else cfg['host_budget_gib']
+        admit(initial_budget, cfg['min_available_gib'])
         root = Path(cfg['runtime_root']) / 'jobs'
         root.mkdir(parents=True, exist_ok=True)
         self.prefix = root / (name + '-' + uuid.uuid4().hex)

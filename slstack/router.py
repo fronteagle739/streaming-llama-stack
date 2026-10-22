@@ -234,7 +234,7 @@ def handler(stack):
                 return self.send(404, {'error': {'message': 'Unknown endpoint'}})
             except (ValueError, KeyError, TypeError) as exc:
                 return self.send(400, {'error': {'message': str(exc), 'type': 'invalid_request_error'}})
-            except (RuntimeError, OSError) as exc:
+            except (RuntimeError, OSError, MemoryError) as exc:
                 return self.send(503, {'error': {'message': str(exc), 'type': 'engine_unavailable'}})
     return Handler
 

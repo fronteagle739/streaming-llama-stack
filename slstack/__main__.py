@@ -122,7 +122,7 @@ def main():
     from .lease import recover_leases
     for identity in recover_leases(cfg['runtime_root']):
         print('Released dead GPU guardian hold: ' + identity, file=sys.stderr)
-    reports = Journal(cfg['runtime_root']).recover() if args.command not in ('check', 'start', 'rtx') else []
+    reports = Journal(cfg['runtime_root']).recover() if args.command not in ('check', 'start', 'rtx', 'serve-internal') else []
     for report in reports:
         print('Recovered stale journal: ' + json.dumps(report), file=sys.stderr)
     if args.command == 'check':
@@ -132,7 +132,7 @@ def main():
         return 0 if all(row['ok'] or not row['required'] for row in rows) else 1
     if args.command in ('start', 'rtx'):
         from .check import check
-        rows = check(cfg)
+        rows = check(cfg, verify_journal=False)
         failures = [row for row in rows if not row['ok'] and row['required']]
         for warning in [row for row in rows if not row['ok'] and not row['required']]:
             print('Unavailable optional capability: ' + json.dumps(warning), file=sys.stderr)

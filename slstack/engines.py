@@ -39,6 +39,8 @@ class Engines:
         from .journal import Journal
         self.journal = Journal(cfg['runtime_root'])
         self.attach_entry = None
+        self.attach_guard_recorded = False
+        self.journal_checked = False
 
     def status(self, message, model=None):
         row = {'time': time.time(), 'message': message, 'model': model or self.selected_model}
@@ -75,19 +77,42 @@ class Engines:
             self.llm.stop()
             self.llm = None
             if self.attach_entry:
-                if clean:
+                if not self.attach_guard_recorded:
+                    self.journal.update(self.attach_entry, 'failed', applied=False, error='Engine startup ownership was not established')
+                elif clean:
                     self.journal.update(self.attach_entry, 'detached', applied=False)
                 else:
                     reports = self.journal.recover()
                     print('LoRA owner stopped unexpectedly; recovered journal: ' + json.dumps(reports), flush=True)
                 self.attach_entry = None
+                self.attach_guard_recorded = False
             self.loading_model = None
             self.status('Model unloaded')
 
     def ready(self):
+        try:
+            return self._ready()
+        except BaseException:
+            if self.llm:
+                self.close()
+            elif self.attach_entry:
+                self.journal.update(self.attach_entry, 'failed', applied=False,
+                                    error='Engine constructor failed before creating an owned job')
+                self.attach_entry = None
+                self.attach_guard_recorded = False
+            self.loading_model = None
+            raise
+
+    def _ready(self):
         if self.llm and self.llm.proc.poll() is None:
             return
         self.close()
+        if not self.journal_checked:
+            self.status('Verifying model integrity and prior adapter ownership')
+            reports = self.journal.recover()
+            if reports:
+                print('Recovered stale LoRA journal: ' + json.dumps(reports), flush=True)
+            self.journal_checked = True
         if self.cfg['long_prompt']:
             raise RuntimeError('ULTRA handoff requires the Windows target-only adapter and parity gate')
         if not self.cfg['model'] or not path(self.cfg['model']).exists():
@@ -118,6 +143,7 @@ class Engines:
                 print('Recovered stale LoRA journal: ' + json.dumps(reports), flush=True)
             row = self.journal.begin(path(self.cfg['model']), [(adapter, scale)], 'attaching')
             self.attach_entry = row['id']
+            self.attach_guard_recorded = False
             command += ['--lora', str(adapter), '--lora-scale', str(scale), '--lora-base-sha256', row['base_sha256']]
         command[0] = str(path(command[0]))
         import secrets
@@ -128,6 +154,7 @@ class Engines:
         if self.attach_entry:
             self.journal.update(self.attach_entry, 'attaching', pid=self.llm.proc.pid,
                                 pid_created=psutil.Process(self.llm.proc.pid).create_time())
+            self.attach_guard_recorded = True
         start = time.monotonic()
         while time.monotonic() - start < min(300, self.cfg['request_timeout_s']) + self.cfg.get('gpu_wait_seconds', 0):
             if self.llm.proc.poll() is not None:
