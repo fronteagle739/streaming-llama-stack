@@ -53,6 +53,28 @@ def main(config_path,output):
         if proof['comparison']['reference_sha256']!=proof['reference']['reference_sha256']:
             raise ValueError('Reference bank changed across GPU ownership transitions')
         proof['releases'].append(release_barrier(owner,device,cfg,baseline,cancel.is_set));owner=None
+        # Independently exercise native -> producer INITIAL BASE import, not
+        # merely an empty-session ULTRA full prefill. Both compare to the same
+        # native reference. The even base also covers an odd target if present.
+        base_position=max(2,(position//2)&~1)
+        if base_position>=position:raise ValueError('Qualification prompt is too short for a nonempty imported base')
+        owner=Native(childcfg,session,epoch,1,cancel.is_set,runner=device)
+        base_cp=owner.sync(tokens[:base_position]);owner.export(state)
+        base_contract=contract_from_checkpoint(base_cp,cfg['combo_identity'],session,epoch,3,'unbiased')
+        proof['base_state']=verify_payload(state,base_contract,base_cp['payload_sha256'])
+        proof['releases'].append(release_barrier(owner,device,cfg,baseline,cancel.is_set));owner=None
+        owner=ComboProducer(cfg,session,epoch,tokens[base_position:],cancel.is_set,base=(state,base_contract),runner=device)
+        proof['base_import_prefill_wall_seconds']=owner.prefill_seconds
+        appended_cp=owner.checkpoint;proof['appended_export']=owner.export(state)
+        appended_contract=contract_from_checkpoint(appended_cp,cfg['combo_identity'],session,epoch,4,'unbiased')
+        appended_payload=verify_payload(state,appended_contract)
+        proof['appended_state']=appended_payload
+        proof['releases'].append(release_barrier(owner,device,cfg,baseline,cancel.is_set));owner=None
+        owner=Native(childcfg,session,epoch,1,cancel.is_set,restore=(state,appended_payload),runner=device)
+        proof['appended_comparison']=owner.probe(vectors,reference=False)
+        if proof['appended_comparison']['reference_sha256']!=proof['reference']['reference_sha256']:
+            raise ValueError('Reference bank changed during native-base append qualification')
+        proof['releases'].append(release_barrier(owner,device,cfg,baseline,cancel.is_set));owner=None
         proof['status']='PASS';proof['quality_scope']='Completed384-vector KL/top1 comparison; native byte equality is a separate mandatory gate. ULTRA arithmetic is approximate.'
     except BaseException as exc:
         proof['status']='FAIL';proof['error']=repr(exc);raise
