@@ -1,0 +1,230 @@
+from __future__ import annotations
+from copy import deepcopy
+from http.server import BaseHTTPRequestHandler, ThreadingHTTPServer
+import json
+import gzip
+import mimetypes
+import re
+from pathlib import Path
+import time
+from urllib.parse import unquote, urlsplit
+import uuid
+from .config import path, ROOT
+from .engines import Engines
+from .tools import Tools
+
+
+def media_request(kind, body, cfg):
+    """Map the common OpenAI image fields onto the startup-selected Studio tool."""
+    body = dict(body)
+    if 'model' in body:
+        model = body.pop('model')
+        selected = cfg[kind + '_model']
+        allowed = {kind, cfg[kind + '_arch'], Path(selected).stem if selected else None}
+        if model not in allowed:
+            raise ValueError('model must name the startup-selected ' + kind + ' model (alias: ' + kind + ')')
+    count = body.pop('n', 1)
+    if type(count) is not int or count != 1:
+        raise ValueError('This serialized media endpoint supports n=1')
+    if 'size' in body:
+        match = re.fullmatch(r'(\d+)x(\d+)', str(body.pop('size')))
+        if not match:
+            raise ValueError('size must be WIDTHxHEIGHT')
+        for key, value in zip(('width', 'height'), map(int, match.groups())):
+            if key in body and body[key] != value:
+                raise ValueError('size conflicts with ' + key)
+            body[key] = value
+    response_format = body.pop('response_format', 'url')
+    if response_format != 'url':
+        raise ValueError('This endpoint returns response_format=url')
+    return body
+
+
+class Stack:
+    def __init__(self, cfg, engines=None):
+        self.cfg = cfg
+        self.engines = engines or Engines(cfg)
+        self.tools = Tools(cfg, self.engines)
+
+    def chat(self, body):
+        if not isinstance(body.get('messages'), list) or not body['messages']:
+            raise ValueError('messages must be a nonempty array')
+        body = deepcopy(body)
+        # Client-owned tools remain client-owned. Stack tool names cannot be overridden.
+        stack_names = set(self.tools.schemas)
+        client_tools = body.get('tools', [])
+        for tool in client_tools:
+            if tool.get('function', {}).get('name') in stack_names:
+                raise ValueError('Client tool overrides a reserved stack tool')
+        messages = body['messages']
+        body['stream'] = False
+        body['tools'] = client_tools + self.tools.openai()
+        media = []
+        for _ in range(8):
+            result = self.engines.chat(body)
+            choices = result.get('choices', [])
+            if len(choices) != 1:
+                raise RuntimeError('Stack tools require exactly one upstream choice')
+            message = choices[0]['message']
+            calls = message.get('tool_calls') or []
+            if not calls:
+                content = message.get('content') or ''
+                for item in media:
+                    for artifact in item.get('data', []):
+                        content += '\n\n' + f'![Generated media]({artifact["url"]})'
+                message['content'] = content
+                result['slstack'] = {'route': 'ds4-native', 'tool_media': media,
+                                      'buffered_stream': True, 'ultra_handoff': False}
+                return result
+            names = [call['function']['name'] for call in calls]
+            if not all(name in stack_names for name in names):
+                if any(name in stack_names for name in names):
+                    raise RuntimeError('Mixed client/stack tool calls are not supported in one upstream message')
+                return result
+            messages.append(message)
+            for call in calls:
+                try:
+                    args = json.loads(call['function']['arguments'])
+                    outcome = self.tools.call(call['function']['name'], args)
+                    if call['function']['name'].startswith('generate_'):
+                        media.append(outcome)
+                        outcome = {'data': [{'url': x['url']} for x in outcome.get('data', [])],
+                                   'settings': outcome.get('settings', {}), 'mode': outcome.get('mode'),
+                                   'display': 'The client displays this media inline. Reply with a brief confirmation.'}
+                except (ValueError, RuntimeError, OSError) as exc:
+                    outcome = {'error': str(exc)}
+                messages.append({'role': 'tool', 'tool_call_id': call['id'], 'content': json.dumps(outcome)})
+        raise RuntimeError('Stack tool iteration limit (8) exceeded')
+
+    def mcp(self, body):
+        identity, method = body.get('id'), body.get('method')
+        if identity is None:
+            return None
+        try:
+            if method == 'initialize':
+                result = {'protocolVersion': '2024-11-05', 'capabilities': {'tools': {}},
+                          'serverInfo': {'name': 'streaming-llama-stack', 'version': '0.1.0'}}
+            elif method == 'tools/list':
+                result = {'tools': self.tools.catalog()}
+            elif method == 'tools/call':
+                params = body.get('params') or {}
+                with self.engines.lock:
+                    outcome = self.tools.call(params['name'], params.get('arguments', {}))
+                result = {'content': [{'type': 'text', 'text': json.dumps(outcome)}], 'isError': False}
+            elif method == 'ping':
+                result = {}
+            else:
+                return {'jsonrpc': '2.0', 'id': identity, 'error': {'code': -32601, 'message': 'Method not found'}}
+            return {'jsonrpc': '2.0', 'id': identity, 'result': result}
+        except (ValueError, RuntimeError, OSError, KeyError) as exc:
+            return {'jsonrpc': '2.0', 'id': identity, 'result': {'isError': True,
+                    'content': [{'type': 'text', 'text': str(exc)}]}}
+
+
+def handler(stack):
+    class Handler(BaseHTTPRequestHandler):
+        protocol_version = 'HTTP/1.1'
+
+        def log_message(self, fmt, *args):
+            # Do not log prompts, model paths or private tool arguments.
+            pass
+
+        def send(self, code, data, mime='application/json', extra=None):
+            payload = json.dumps(data, allow_nan=False).encode() if mime == 'application/json' else data
+            self.send_response(code)
+            self.send_header('Content-Type', mime)
+            self.send_header('Content-Length', str(len(payload)))
+            self.send_header('X-Content-Type-Options', 'nosniff')
+            for key, value in (extra or {}).items():
+                self.send_header(key, value)
+            self.end_headers()
+            self.wfile.write(payload)
+
+        def do_GET(self):
+            route = unquote(urlsplit(self.path).path)
+            if route == '/health':
+                ready = bool(stack.engines.llm and stack.engines.llm.proc.poll() is None)
+                return self.send(200, {'status': 'router-ready', 'model_ready': ready,
+                                       'live_bias_configured': bool(stack.cfg['bias_mcp_url']), 'ultra': False})
+            if route == '/v1/models':
+                return self.send(200, {'object': 'list', 'data': [{'id': stack.cfg['model_name'], 'object': 'model',
+                                                                 'created': 0, 'owned_by': 'local'}]})
+            if route == '/props':
+                command = stack.cfg['ds4_command']
+                n_ctx = next((int(command[i + 1]) for i, x in enumerate(command[:-1]) if x in ('--ctx', '-c')), 4096)
+                return self.send(200, {'model_alias': stack.cfg['model_name'], 'model_path': '',
+                                      'default_generation_settings': {'n_ctx': n_ctx, 'params': {}},
+                                      'total_slots': 1, 'chat_template': '', 'modalities': {'vision': False, 'audio': False}})
+            if route == '/mcp':
+                return self.send(405, {'error': {'message': 'Stateless MCP endpoint; POST JSON-RPC'}})
+            if route == '/slstack-media.js' and stack.cfg['webui']:
+                return self.send(200, (ROOT / 'slstack' / 'media.js').read_bytes(), 'text/javascript; charset=utf-8')
+            if route.startswith('/outputs/'):
+                root = Path(stack.cfg['runtime_root']).resolve() / 'outputs'
+                target = (root / route.removeprefix('/outputs/')).resolve()
+            elif stack.cfg['webui']:
+                root = path(stack.cfg['webui_root'])
+                target = (root / (route.lstrip('/') or 'index.html')).resolve()
+            else:
+                return self.send(404, {'error': {'message': 'Not found; enable --webui for chat'}})
+            if not target.is_relative_to(root) or not target.is_file():
+                if route == '/' and target.with_suffix('.html.gz').is_file():
+                    target = target.with_suffix('.html.gz')
+                else:
+                    return self.send(404, {'error': {'message': 'Artifact not found'}})
+            if route == '/':
+                html = gzip.decompress(target.read_bytes()) if target.suffix == '.gz' else target.read_bytes()
+                html = html.replace(b'</body>', b'<script defer src="/slstack-media.js"></script></body>')
+                return self.send(200, html, 'text/html; charset=utf-8')
+            mime = mimetypes.guess_type(str(target))[0] or 'application/octet-stream'
+            return self.send(200, target.read_bytes(), mime)
+
+        def do_POST(self):
+            try:
+                length = int(self.headers.get('Content-Length', '0'))
+                if not 0 < length <= 4 * 1024 * 1024:
+                    return self.send(413, {'error': {'message': 'Request limit is 4 MiB'}})
+                body = json.loads(self.rfile.read(length))
+                if not isinstance(body, dict):
+                    raise ValueError('JSON body must be an object')
+                route = urlsplit(self.path).path
+                if route == '/mcp':
+                    result = stack.mcp(body)
+                    return self.send(200, result) if result is not None else self.send(202, b'', 'text/plain')
+                if route == '/v1/chat/completions':
+                    with stack.engines.lock:
+                        result = stack.chat(body)
+                    if not body.get('stream'):
+                        return self.send(200, result)
+                    # The old pinned webui expects SSE. Tool execution is buffered before this final response.
+                    choice = result['choices'][0]
+                    chunk = {'id': result.get('id', 'chatcmpl-' + uuid.uuid4().hex),
+                             'object': 'chat.completion.chunk', 'created': result.get('created', int(time.time())),
+                             'model': stack.cfg['model_name'], 'choices': [{'index': 0, 'delta': choice['message'], 'finish_reason': None}]}
+                    end = {**chunk, 'choices': [{'index': 0, 'delta': {}, 'finish_reason': choice.get('finish_reason', 'stop')}],
+                           'usage': result.get('usage', {}), 'timings': result.get('timings', {})}
+                    data = ''.join('data: ' + json.dumps(c) + '\n\n' for c in (chunk, end)) + 'data: [DONE]\n\n'
+                    return self.send(200, data.encode(), 'text/event-stream')
+                kinds = {'/v1/images/generations': 'image', '/v1/videos/generations': 'video'}
+                if route in kinds:
+                    kind = kinds[route]
+                    with stack.engines.lock:
+                        return self.send(200, stack.tools.call('generate_' + kind, media_request(kind, body, stack.cfg)))
+                return self.send(404, {'error': {'message': 'Unknown endpoint'}})
+            except (ValueError, KeyError, TypeError) as exc:
+                return self.send(400, {'error': {'message': str(exc), 'type': 'invalid_request_error'}})
+            except (RuntimeError, OSError) as exc:
+                return self.send(503, {'error': {'message': str(exc), 'type': 'engine_unavailable'}})
+    return Handler
+
+
+def serve(cfg):
+    stack = Stack(cfg)
+    server = ThreadingHTTPServer((cfg['host'], cfg['port']), handler(stack))
+    server.daemon_threads = True
+    try:
+        print(f'slstack router http://{cfg["host"]}:{cfg["port"]}; model loads on first request', flush=True)
+        server.serve_forever()
+    finally:
+        server.server_close()
+        stack.engines.close()

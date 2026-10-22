@@ -1,0 +1,8 @@
+Streaming Llama Stack
+
+Stack glue and owner-authored vendored Studio modules: MIT (owner-selected default).
+llama.cpp / ggml: MIT, see engines/streaming-llama/prefill_llama.cpp/LICENSE and AUTHORS.
+ds4: MIT, see engine LICENSE files. rax: BSD-3-Clause, embedded source attribution retained.
+DirectStorage: Microsoft redistributable terms; see retained SDK notices. SDK binaries are not source and must be installed separately.
+mlx-serve: MIT and third-party Apache-2.0/NOTICE, see its upstream submodule.
+Other embedded libraries retain their individual source licenses.

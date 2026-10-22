@@ -1,0 +1,9 @@
+#pragma once
+namespace llama_dsv41_native_rhs_pack_proof {
+inline constexpr const char * panel_source_sha256="f602c81142f724f5967ad5b7bf2f2406fb33746cb2ec9fad5b1eeceefc8597cf";
+inline constexpr const char * panel_object_sha256="5365a88104dcf6cfabb92fbae5d854785df9d59827b75313d276ef0d8fff2fde";
+inline constexpr const char * dispatch_source_sha256="5843ad8ea9ff101bcc565b3b516d5dc34d77f614eb8505f333c0cdd7a6068927";
+inline constexpr const char * dispatch_object_sha256="4a3a17e28fd22d593990c238dc2c07df600024e5e2baaa2120bac368f6fdbd04";
+inline constexpr const char * fixture_sha256="9798dd847ba408b5210af90bc1f46d4bf8ecebcec8c6a40213050d907d462cc9";
+inline constexpr const char * phase_sha256="dea1b3e986ba7ce44f14874d81b98ab18d5c7c318c01e84d5852885c15da970a";
+}

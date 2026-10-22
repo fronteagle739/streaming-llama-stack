@@ -1,0 +1,28 @@
+# Streaming Llama Stack
+
+A private, portable launcher and OpenAI-compatible chat endpoint with the llama.cpp chat UI, quality/speed control, and Studio image/video engines.
+
+Development status: the expanded two-machine and release acceptance tests are in progress. The earlier checkpoint's media proofs do not qualify the new clean vendored tree. See docs/STATUS.md for actual verification.
+
+The stack's own code and owner-authored Studio exports use MIT. Engine and embedded library licenses remain in their source directories; see NOTICE and each PROVENANCE file.
+
+The intended six-step walkthrough is:
+
+1. Clone this repository with `git clone --recurse-submodules` on both computers.
+2. On Windows, run `./slstack.ps1 install --all` to create isolated media runtimes. Python 3.12, Visual Studio C++ tools, CMake/Ninja, and CUDA are prerequisites; model weights are supplied locally.
+3. Edit example model/ComfyUI paths. Model weights are read in place and are never downloaded by the installer.
+4. On the Mac, run `./bin/slstack mac --model <model.gguf>`. The receiver prints its endpoint and pairing instructions.
+5. On Windows, run `./slstack.ps1 rtx --model <model.gguf> --comfyui-models <models> --mac <mac-endpoint>` with the printed pairing information.
+6. Open the printed chat URL. Exercise chat, quality/speed, image/video, and a long prompt with a second turn.
+
+Steps 4?6 are not yet qualified for this revision. Do not treat this draft as a completed acceptance transcript.
+
+Commands currently implemented include `install`, `check`, `start` (local `rtx` alias), `mcp`, `train_lora`, `merge_lora`, `unmerge_lora`, and `run_prompts`. Native DSV4.1 dense-output LoRA attachment is experimental, with real-model acceptance pending. The one-GPU Windows state handoff remains refused until its parity gate passes.
+
+Media uses the existing Studio implementations in an isolated venv. The native weight-fetcher shared library must also be built. H3's optional `flash_attn2` backend requires a separately compatible flash-attn installation; explicit SDPA selection is supported by the reused engine. No silent backend substitution is performed.
+
+Quality/speed uses the delivered authenticated native setter: Max quality 0, Balanced 0.35, Max speed 0.9. Speed settings change routing and can reduce answer quality; no general rate or quality guarantee is made.
+
+Permanent LoRA export always writes a new model. Unmerge selects the original verified base. Incomplete outputs and prior copies are preserved, and journal records use atomic writes, process creation times, and base SHA-256 checks. Only supported existing trainers are wrapped; unsupported families are refused.
+
+Enable the local pre-commit gate with `git config core.hooksPath .githooks`, and run `python -B scripts/release_check.py` before committing or pushing. Audit-specific forbidden literals belong only in the ignored `release-secrets.local.json`; the scanner never prints their values. There are no stack GitHub workflows. The only submodule is the public upstream mlx-serve tag; private engine histories are excluded from the vendored source tree.

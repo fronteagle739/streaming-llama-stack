@@ -1,0 +1,14 @@
+{
+  "mcpServers": {
+    "slstack": {
+      "command": "python",
+      "args": ["-B", "-m", "slstack", "--config", "runtime/config.local.json", "mcp"],
+      "env": {
+        "PYTHONPATH": "runtime/worktree",
+        "PYTHONDONTWRITEBYTECODE": "1",
+        "TEMP": "runtime/runtime",
+        "TMP": "runtime/runtime"
+      }
+    }
+  }
+}
