@@ -21,13 +21,15 @@ Accurate preserves the original default arithmetic; Fast enables the delivered B
 | `--cuda-visible-devices` | ds4-win: `{gpu_uuid}`; mac-ds4: `{gpu_uuid}`; rtx-llama: `{gpu_uuid}`; image: `{gpu_uuid}`; video: `{gpu_uuid}`; studio: `{gpu_uuid}`; mlx-serve: `{gpu_uuid}` | Explicit selected GPU UUID, never an inherited GPU selection. |
 | `--diffusers-cache` | ds4-win: `{runtime_root}/cache/diffusers_cache`; mac-ds4: `{runtime_root}/cache/diffusers_cache`; rtx-llama: `{runtime_root}/cache/diffusers_cache`; image: `{runtime_root}/cache/diffusers_cache`; video: `{runtime_root}/cache/diffusers_cache`; studio: `{runtime_root}/cache/diffusers_cache`; mlx-serve: `{runtime_root}/cache/diffusers_cache` | Runtime-local cache/temp directory; no model download is performed. |
 | `--diffusers-offline` | ds4-win: `1`; mac-ds4: `1`; rtx-llama: `1`; image: `1`; video: `1`; studio: `1`; mlx-serve: `1` | Keep inference offline and avoid global cache/bytecode writes. |
+| `--ds4-cache-affinity-bias` | ds4-win: `0` | CUDA expert-cache routing bias,0..1.36125.0 preserves baseline selection; live changes use the quality/speed tool. |
+| `--ds4-cuda-cache-affinity-warp` | ds4-win: `1` | Use the qualified warp reranker for CUDA cache-affinity expert selection;0 selects the existing alternative. |
 | `--ds4-cuda-ds-gpu-dest` | ds4-win: `1` | DS4_CUDA_DS_GPU_DEST: qualified preset/runtime setting; override for a different memory or arithmetic plan |
 | `--ds4-cuda-ds-overlap` | ds4-win: `1` | DS4_CUDA_DS_OVERLAP: qualified preset/runtime setting; override for a different memory or arithmetic plan |
 | `--ds4-cuda-prefill-edge-vram` | ds4-win: `0` | Keep 0: retain the native core in VRAM during prefill. Values enabling core eviction are refused by this memory-resident launcher. |
 | `--ds4-cuda-streaming-expert-cache-class-isolation` | ds4-win: `0` | DS4_CUDA_STREAMING_EXPERT_CACHE_CLASS_ISOLATION: qualified preset/runtime setting; override for a different memory or arithmetic plan |
 | `--ds4-cuda-streaming-expert-cache-reserve-gb` | ds4-win: `2` | DS4_CUDA_STREAMING_EXPERT_CACHE_RESERVE_GB: qualified preset/runtime setting; override for a different memory or arithmetic plan |
 | `--ds4-cuda-streaming-host-cache-n` | ds4-win: `0` | DS4_CUDA_STREAMING_HOST_CACHE_N: qualified preset/runtime setting; override for a different memory or arithmetic plan |
-| `--ds4-host-memory-budget-mb` | ds4-win: `{host_budget_mb}` | DS4_HOST_MEMORY_BUDGET_MB: qualified preset/runtime setting; override for a different memory or arithmetic plan |
+| `--ds4-host-memory-budget-mb` | ds4-win: `{native_commit_mb}` | Windows native private-commit cap in MiB, including WDDM GPU backing. Defaults to the qualified45056MiB ceiling bounded by job_commit_gib; physical RSS is separately guarded by host_budget_gib. |
 | `--ds4-metal-disable-v41-layer-prefill` | ds4-win: `1`; mac-ds4: `1` | DS4_METAL_DISABLE_V41_LAYER_PREFILL: qualified preset/runtime setting; override for a different memory or arithmetic plan |
 | `--ds4-metal-wired-core-kv` | mac-ds4: `1` | Use anonymous owned, mlock-protected shared Metal core, KV and tensor storage; allocation or wiring failure refuses startup. The launcher requires this for native Mac inference. |
 | `--ds4-native-session` | Explicit runtime value | ds4 native session: supplied by authenticated native pairing; an inconsistent override refuses the handshake. |
@@ -58,8 +60,8 @@ Accurate preserves the original default arithmetic; Fast enables the delivered B
 | `--llama-dsv41-topk-radix` | rtx-llama: `1` | LLAMA_DSV41_TOPK_RADIX: qualified preset/runtime setting; override for a different memory or arithmetic plan |
 | `--mem-guard-disable` | image: `0`; video: `0` | MEM_GUARD_DISABLE: qualified preset/runtime setting; override for a different memory or arithmetic plan |
 | `--mem-guard-enforce-proc-cap` | image: `1`; video: `1` | MEM_GUARD_ENFORCE_PROC_CAP: qualified preset/runtime setting; override for a different memory or arithmetic plan |
-| `--mem-guard-max-proc-gb` | image: `{host_budget_gib}`; video: `{host_budget_gib}` | MEM_GUARD_MAX_PROC_GB: qualified preset/runtime setting; override for a different memory or arithmetic plan |
-| `--mem-guard-min-free-gb` | image: `{min_available_gib}`; video: `{min_available_gib}` | MEM_GUARD_MIN_FREE_GB: qualified preset/runtime setting; override for a different memory or arithmetic plan |
+| `--mem-guard-max-proc-gb` | image: `{host_budget_decimal_gb}`; video: `{host_budget_decimal_gb}` | In-process image/video memory guard RSS cap in decimal GB; derived from the admitted GiB budget. Overrides cannot weaken the outer guard. |
+| `--mem-guard-min-free-gb` | image: `{physical_floor_decimal_gb}`; video: `{physical_floor_decimal_gb}` | In-process image/video memory guard available-memory floor in decimal GB; derived from the admitted GiB budget. Overrides cannot weaken the outer guard. |
 | `--mplconfigdir` | ds4-win: `{runtime_root}/cache/mplconfigdir`; mac-ds4: `{runtime_root}/cache/mplconfigdir`; rtx-llama: `{runtime_root}/cache/mplconfigdir`; image: `{runtime_root}/cache/mplconfigdir`; video: `{runtime_root}/cache/mplconfigdir`; studio: `{runtime_root}/cache/mplconfigdir`; mlx-serve: `{runtime_root}/cache/mplconfigdir` | Runtime-local cache/temp directory; no model download is performed. |
 | `--numba-cache-dir` | ds4-win: `{runtime_root}/cache/numba_cache_dir`; mac-ds4: `{runtime_root}/cache/numba_cache_dir`; rtx-llama: `{runtime_root}/cache/numba_cache_dir`; image: `{runtime_root}/cache/numba_cache_dir`; video: `{runtime_root}/cache/numba_cache_dir`; studio: `{runtime_root}/cache/numba_cache_dir`; mlx-serve: `{runtime_root}/cache/numba_cache_dir` | Runtime-local cache/temp directory; no model download is performed. |
 | `--pip-cache-dir` | ds4-win: `{runtime_root}/cache/pip_cache_dir`; mac-ds4: `{runtime_root}/cache/pip_cache_dir`; rtx-llama: `{runtime_root}/cache/pip_cache_dir`; image: `{runtime_root}/cache/pip_cache_dir`; video: `{runtime_root}/cache/pip_cache_dir`; studio: `{runtime_root}/cache/pip_cache_dir`; mlx-serve: `{runtime_root}/cache/pip_cache_dir` | Runtime-local cache/temp directory; no model download is performed. |
@@ -1692,7 +1694,7 @@ Source: `engines/streaming-llama/prefill_llama.cpp/src/llama-dsv41-executor.cpp:
         require(boundary.bytes()<=actual,"Boundary outputs escaped actual graph admission");
 ```
 
-Source: `engines/streaming-llama/prefill_llama.cpp/tools/dsv41-prefill/main.cpp:594`. Unset read: NULL from getenv; the literal consumer below supplies any fallback.
+Source: `engines/streaming-llama/prefill_llama.cpp/tools/dsv41-prefill/main.cpp:596`. Unset read: NULL from getenv; the literal consumer below supplies any fallback.
 
 ```text
         report["resident_hidden_storage"]=options.resident_bf16?"BF16 after validated existing BF16 boundary; layer0 input unchanged F32":"F32";
@@ -1770,7 +1772,7 @@ DS4PERF_STDERR_BUFFER_BYTES: advanced engine setting; built-in default retained
 
 Scope: rtx-llama. Class: advanced.
 
-Source: `engines/streaming-llama/prefill_llama.cpp/tools/dsv41-prefill/main.cpp:258`. Unset read: NULL from getenv; the literal consumer below supplies any fallback.
+Source: `engines/streaming-llama/prefill_llama.cpp/tools/dsv41-prefill/main.cpp:259`. Unset read: NULL from getenv; the literal consumer below supplies any fallback.
 
 ```text
     try{
@@ -2168,9 +2170,9 @@ Source: `engines/ds4-win/ds4.c:82936`. Unset read: NULL from getenv; the literal
 
 ### DS4_CACHE_AFFINITY_BIAS
 
-DS4_CACHE_AFFINITY_BIAS: advanced engine setting; built-in default retained
+CUDA expert-cache routing bias,0..1.36125.0 preserves baseline selection; live changes use the quality/speed tool.
 
-Scope: ds4-win. Class: advanced.
+Scope: ds4-win. Class: preset.
 
 Source: `engines/ds4-win/ds4.c:75484`. Unset read: NULL from getenv; the literal consumer below supplies any fallback.
 
@@ -2852,9 +2854,9 @@ Source: `engines/ds4-win/ds4_cuda.cu:9208`. Unset read: NULL from getenv; the li
 
 ### DS4_CUDA_CACHE_AFFINITY_WARP
 
-DS4_CUDA_CACHE_AFFINITY_WARP: advanced engine setting; built-in default retained
+Use the qualified warp reranker for CUDA cache-affinity expert selection;0 selects the existing alternative.
 
-Scope: ds4-win. Class: advanced.
+Scope: ds4-win. Class: preset.
 
 Source: `engines/ds4-win/ds4_cuda.cu:865`. Unset read: NULL from getenv; the literal consumer below supplies any fallback.
 
@@ -21752,7 +21754,7 @@ static cudaError_t cuda_host_allocation_result(cudaError_t result, size_t bytes,
 
 ### DS4_HOST_MEMORY_BUDGET_MB
 
-DS4_HOST_MEMORY_BUDGET_MB: qualified preset/runtime setting; override for a different memory or arithmetic plan
+Windows native private-commit cap in MiB, including WDDM GPU backing. Defaults to the qualified45056MiB ceiling bounded by job_commit_gib; physical RSS is separately guarded by host_budget_gib.
 
 Scope: ds4-win. Class: preset.
 
@@ -43602,7 +43604,7 @@ Source: `engines/streaming-llama/prefill_llama.cpp/src/llama-dsv41-sweep.cpp:187
         require(!options.admitted_prefetch_device_bytes||(options.admitted_pinned_device_bytes&&options.reuse_graph&&!options.reuse_layer_graph&&
 ```
 
-Source: `engines/streaming-llama/prefill_llama.cpp/tools/dsv41-prefill/main.cpp:345`. Unset read: NULL from getenv; the literal consumer below supplies any fallback.
+Source: `engines/streaming-llama/prefill_llama.cpp/tools/dsv41-prefill/main.cpp:347`. Unset read: NULL from getenv; the literal consumer below supplies any fallback.
 
 ```text
         expert.admitted_pool_bytes=expert_options?number("--expert-workspace-bytes"):0;
@@ -43614,7 +43616,7 @@ Source: `engines/streaming-llama/prefill_llama.cpp/tools/dsv41-prefill/main.cpp:
             using namespace llama_dsv41_native_columns_resource_proof;
 ```
 
-Source: `engines/streaming-llama/prefill_llama.cpp/tools/dsv41-prefill/main.cpp:426`. Unset read: NULL from getenv; the literal consumer below supplies any fallback.
+Source: `engines/streaming-llama/prefill_llama.cpp/tools/dsv41-prefill/main.cpp:428`. Unset read: NULL from getenv; the literal consumer below supplies any fallback.
 
 ```text
         require(chunk_option<=1048576,"Chunk tokens exceed context bound");
@@ -43626,7 +43628,7 @@ Source: `engines/streaming-llama/prefill_llama.cpp/tools/dsv41-prefill/main.cpp:
         const bool live=args.count("--session-stdio")&&args.at("--session-stdio")=="1";
 ```
 
-Source: `engines/streaming-llama/prefill_llama.cpp/tools/dsv41-prefill/main.cpp:685`. Unset read: NULL from getenv; the literal consumer below supplies any fallback.
+Source: `engines/streaming-llama/prefill_llama.cpp/tools/dsv41-prefill/main.cpp:687`. Unset read: NULL from getenv; the literal consumer below supplies any fallback.
 
 ```text
         uint64_t warm_cublas=0;
@@ -44610,7 +44612,7 @@ Source: `engines/streaming-llama/prefill_llama.cpp/src/llama-dsv41-executor.cpp:
         }
 ```
 
-Source: `engines/streaming-llama/prefill_llama.cpp/tools/dsv41-prefill/main.cpp:591`. Unset read: NULL from getenv; the literal consumer below supplies any fallback.
+Source: `engines/streaming-llama/prefill_llama.cpp/tools/dsv41-prefill/main.cpp:593`. Unset read: NULL from getenv; the literal consumer below supplies any fallback.
 
 ```text
         require(!args.count("--resident-hidden-bf16")||args.at("--resident-hidden-bf16")=="0"||args.at("--resident-hidden-bf16")=="1","resident-hidden-bf16 requires0/1");
@@ -53517,7 +53519,7 @@ bool index_f32_cublas_enabled(){
 bool query_source(uint32_t layer){return layer==2||layer==8||layer==14||layer==20||layer==24||layer==28||layer==32||layer==36;}
 ```
 
-Source: `engines/streaming-llama/prefill_llama.cpp/tools/dsv41-prefill/main.cpp:326`. Unset read: Wrapper/conditional default: see the literal call and consumer below.
+Source: `engines/streaming-llama/prefill_llama.cpp/tools/dsv41-prefill/main.cpp:328`. Unset read: Wrapper/conditional default: see the literal call and consumer below.
 
 ```text
             args.count("--index-cublas-device-bytes")&&integer(args.at("--index-cublas-device-bytes"))>=64ull*1024*1024),
@@ -66388,7 +66390,7 @@ Source: `vendor/engines/cosmos_windows/mem_guard.py:92`. Unset read: None.
 
 ### MEM_GUARD_MAX_PROC_GB
 
-MEM_GUARD_MAX_PROC_GB: qualified preset/runtime setting; override for a different memory or arithmetic plan
+In-process image/video memory guard RSS cap in decimal GB; derived from the admitted GiB budget. Overrides cannot weaken the outer guard.
 
 Scope: image, video. Class: preset.
 
@@ -66406,7 +66408,7 @@ Source: `vendor/engines/cosmos_windows/mem_guard.py:93`. Unset read: max_process
 
 ### MEM_GUARD_MIN_FREE_GB
 
-MEM_GUARD_MIN_FREE_GB: qualified preset/runtime setting; override for a different memory or arithmetic plan
+In-process image/video memory guard available-memory floor in decimal GB; derived from the admitted GiB budget. Overrides cannot weaken the outer guard.
 
 Scope: image, video. Class: preset.
 

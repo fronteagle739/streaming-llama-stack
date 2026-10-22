@@ -24,6 +24,8 @@ class OwnedProcess:
         self.receipt = self.prefix.with_suffix('.receipt.json')
         self.log = self.prefix.with_suffix('.log')
         scope = scope or ('ds4-win' if name == 'ds4-server' else name if name in ('image', 'video') else 'studio')
+        from .envvars import argv_overrides
+        command = argv_overrides(command, cfg, scope)
         spec = {'command': command, 'cwd': str(cwd), 'env': environment(cfg, scope),
                 'runtime_root': cfg['runtime_root'],
                 'host_budget_gib': cfg['host_budget_gib'], 'min_available_gib': cfg['min_available_gib'],

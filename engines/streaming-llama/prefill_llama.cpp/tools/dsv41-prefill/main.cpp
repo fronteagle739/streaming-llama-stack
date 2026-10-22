@@ -11,6 +11,7 @@ extern "C" uint64_t ggml_backend_cuda_dsv41_pv_view_queued(void);
 #include "ggml-dsv41-carry-copy.h"
 #include "ggml-ds4-native-half-stats.h"
 #include "llama-dsv41-sweep.h"
+#include "profile-check.h"
 #include "llama-dsv41-host-memory.h"
 #include "llama-dsv41-native-columns-resource-proof.h"
 #include "llama-dsv41-native-loader-resource-proof.h"
@@ -261,6 +262,7 @@ int wmain(int argc,wchar_t**argv){
         if(buffered_stderr)require(std::setvbuf(stderr,stderr_storage.data(),_IOFBF,stderr_storage.size())==0,"Cannot configure existing CRT stderr buffer");
         report["stderr_buffer_bytes"]=buffered_stderr?stderr_storage.size():0;
         if(argc==2&&std::wstring(argv[1])==L"--help"){std::cout<<usage;return 0;}
+        if(argc==2&&std::wstring(argv[1])==L"--check-native-profiles"){slstack_native_profile_check();return 0;}
         const std::vector<std::string>keys={"--model","--copy-receipt","--tokens-le32","--cuda-device","--context","--build-sha",
             "--provider-device-bytes","--provider-host-bytes","--cache-bytes","--graph-bytes","--job-device-bytes","--job-host-bytes","--gpu-reserve-bytes",
             "--carry","--carry-file-bytes","--carry-host-bytes","--carry-outstanding-bytes","--output-outstanding-bytes","--payload","--receipt"};

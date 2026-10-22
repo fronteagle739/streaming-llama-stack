@@ -1,5 +1,6 @@
 """Environment inventory, CLI surface and child environment share one checked table."""
 import json
+import math
 import os
 from pathlib import Path
 import re
@@ -57,7 +58,11 @@ def apply(env, cfg, scope):
     scope = SCOPE_ALIASES.get(scope, scope)
     context = {**cfg, 'host_budget_bytes': int(cfg.get('host_budget_gib', 8) * (1 << 30)),
                'host_budget_mb': int(cfg.get('host_budget_gib', 8) * 1024),
-               'physical_floor_bytes': int(cfg.get('min_available_gib', 4) * (1 << 30))}
+               'physical_floor_bytes': int(cfg.get('min_available_gib', 4) * (1 << 30)),
+               'host_budget_decimal_gb': cfg.get('host_budget_gib', 8) * (1 << 30) / 1e9,
+               'physical_floor_decimal_gb': cfg.get('min_available_gib', 4) * (1 << 30) / 1e9,
+               'job_commit_mb': int(cfg.get('job_commit_gib', 48) * 1024),
+               'native_commit_mb': min(45056, int(cfg.get('job_commit_gib', 48) * 1024))}
     if cfg.get('runtime_root'):
         from .config import path
         context.update(runtime_root=str(Path(cfg['runtime_root']).resolve()),
@@ -89,13 +94,23 @@ def apply(env, cfg, scope):
             value = str(value)
             if row.get('allowed_values') and value not in row['allowed_values']:
                 raise ValueError(f'{var}: value violates required memory-residency policy')
+            if 'minimum' in row or 'maximum' in row:
+                try:
+                    numeric = float(value)
+                    valid = math.isfinite(numeric) and row.get('minimum', -math.inf) <= numeric <= row.get('maximum', math.inf)
+                except ValueError:
+                    valid = False
+                if not valid:
+                    raise ValueError(f'{var}: value outside its documented range')
             if row.get('equals_context') and value != str(context[row['equals_context']]):
                 raise ValueError(f'{var}: must match the launcher {row["equals_context"]} setting')
             for rule, predicate in (('maximum_context', lambda a, b: a <= b),
                                     ('minimum_context', lambda a, b: a >= b)):
                 if row.get(rule):
                     try:
-                        valid = predicate(int(value), int(context[row[rule]]))
+                        convert = float if row.get('numeric_type') == 'float' else int
+                        numeric, boundary = convert(value), convert(context[row[rule]])
+                        valid = math.isfinite(numeric) and numeric > 0 and predicate(numeric, boundary)
                     except ValueError:
                         valid = False
                     if not valid:
@@ -110,10 +125,34 @@ def apply(env, cfg, scope):
     return env
 
 
+def argv_overrides(command, cfg, scope):
+    """A table flag beats a conflicting engine argument in a user's config."""
+    scope = SCOPE_ALIASES.get(scope, scope)
+    selected = {**(cfg.get('ds4_env', {}) if scope == 'ds4-win' else {}), **cfg.get('env_overrides', {})}
+    conflicts = {row['argv_flag'] for row in rows() if scope in row['scopes'] and row.get('argv_flag') and row['var'] in selected}
+    result = []
+    index = 0
+    while index < len(command):
+        item = command[index]
+        if item in conflicts:
+            if index + 1 >= len(command):
+                raise ValueError('Missing configured engine argument for ' + item)
+            index += 2
+        elif item.split('=', 1)[0] in conflicts:
+            index += 1
+        else:
+            result.append(item)
+            index += 1
+    return result
+
+
 def validate_table():
     table = rows()
     present = {r['var'] for r in table}
-    missing = set(inventory()) - present
-    if missing or len(present) != len(table) or any(not r['doc'] for r in table):
-        raise ValueError(f'Environment table out of date: {sorted(missing)}')
+    current = inventory()
+    missing = set(current) - present
+    indexed = {row['var']: row for row in table}
+    stale = [var for var in current if var in indexed and set(indexed[var]['reads']) != set(current[var])]
+    if missing or stale or len(present) != len(table) or any(not r['doc'] for r in table):
+        raise ValueError(f'Environment table out of date: missing={sorted(missing)}, stale={sorted(stale)}')
     return len(table)
