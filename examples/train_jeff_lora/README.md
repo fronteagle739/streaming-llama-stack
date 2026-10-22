@@ -1,22 +1,30 @@
 # DSV4.1 dense output LoRA test
 
-Synthetic TEST corpus: 32 identity questions and eight neutral examples. The intended identity is "My name is Jeff." Keep held-out identity and rainbow prompts outside the training corpus.
+The real Flash 1017 test passed: both the training identity question and an independent held-out paraphrase answered "My name is Jeff." The original base answered without Jeff, both rainbow replies were coherent, and deliberate server-crash recovery and clean detaches passed. Full base SHA-256 checks matched before/after. The complete recipe, actual answers, source commits, timing, token accounting, loss curve and limits are in [LORA_CARD.txt](LORA_CARD.txt).
 
-This extends the existing Studio quantized streamed trainer with an output.weight target. All transformer MoE/MLA/HC layers stay frozen and run in the native SSD streamer. The existing streamed reader, LoRA factors, optimizer, loss loop and checkpoints are reused. Attention and routed-expert training are not supported by this recipe.
+This extends Studio's existing quantized streamed trainer with `output.weight` / `lm_head` LoRA. All 40 transformer MoE/MLA/HC layers remain frozen and run in the original native SSD streamer. The existing streamed reader, LoRA factors, Adafactor, loss loop and checkpoints are reused. The synthetic TEST corpus contains 32 identity and eight neutral pairs; the held-out and rainbow prompts are absent from it.
 
-Configure the model path and installed media Python in your local config, then run from the repository root:
+Configure an existing model and the installed media Python in your ignored local config, then run from the repository root:
 
 ```powershell
 ./slstack.ps1 --config config.local.json --host-budget-gib 8 train_lora --data-folder examples/train_jeff_lora/TEST --settings examples/train_jeff_lora/settings.json --output runtime/jeff
+./slstack.ps1 --config config.local.json rtx --lora runtime/jeff --webui
 ```
 
-The output must be inside the configured runtime_root. The launcher verifies the base SHA-256 before and after training. The native prefix provider exits before the training head is loaded. Each run has an explicit physical-memory ceiling, free-memory floor and exclusive GPU lease.
+The output must stay under the configured runtime root. The launcher hashes the base before and after training. Its dedicated native prefix provider exits before the dense training head loads. The GPU phase has a separate finite lease and physical-memory guard; full-file hashing has its own finite host-only deadline.
 
-Validation pending: no real-model success or measured training time is claimed yet. Load-time fusion supports only this dense output adapter. A full permanent merge needs a new model-sized file and must be skipped when free space is insufficient.
+The measured trainer wall was 340.812 seconds, including 291.640 seconds for its frozen native prefix. Rank 8, alpha 16, 100 steps and one complete batch of 40 reduced loss 4.6321 to 0.0006. Effective throughput was 177.517 non-padding dense-output positions/s, counting prompt positions, or 73.648 supervised answer/EOS tokens/s. These denominators include prefix/setup and exclude full-file verification hashes. The trainer process-tree peak RSS was 2,780,712,960 bytes; optimization CUDA-allocator peak was 9.34 GB. The earlier native-prefix peak VRAM was not sampled.
 
+The original enclosing workflow hit its 19-minute limit during its final hash after successful training; that failure is retained. A separate guarded post-hash verified the saved adapter and unchanged base. The current split hash/GPU lifecycle and independent live on/off/crash proofs are documented separately in the card. A fresh single-command walkthrough of that revised training lifecycle remains to be qualified.
 
-The first real 1017 run completed all 100 steps using rank 8, alpha 16, and only `output.weight` (`lm_head`). The native frozen prefix used all 40 main layers with original quantized MoE/MLA/HC arithmetic; attention and routed experts are frozen. The native prefix took 291.640 seconds. The trainer guardian measured 340.812 seconds total, 2,780,712,960 bytes peak process-tree RSS, and at least 10,056,318,976 bytes available physical memory. The trainer reported 9.34 GB peak VRAM; loss fell from 4.6321 to 0.0006. Per-step printed times are rounded and are not a synchronized timing benchmark.
+The base SHA-256 is `2cc6bc254f22a0238020e61e931c0cac865218aada1eed9c0036d9f4031c6e5f`; adapter SHA-256 is `0f5e90c724e952eb6eb6d9fa5b43bf169bb11ca7bbce010f86774ab9f8b302fc`. Only this dense-output adapter format is supported by the native attach path. Full-size permanent merge was skipped because free space was below the base file size; the base was never patched.
 
-The enclosing first workflow reached its 19-minute deadline while computing its final full-file SHA-256, after the trainer had exited successfully and saved the adapter. That workflow is not a passing acceptance run. An independent guarded full-base SHA-256 check subsequently passed in 561.360 seconds: the base remains `2cc6bc254f22a0238020e61e931c0cac865218aada1eed9c0036d9f4031c6e5f`, matching the pre-training full hash. The adapter SHA-256 is `0f5e90c724e952eb6eb6d9fa5b43bf169bb11ca7bbce010f86774ab9f8b302fc`; live Jeff/held-out/rainbow, clean detach and crash-recovery acceptance remain pending.
+The following screenshots show actual UI replies from isolated fresh chats. Only synthetic TEST conversations are present.
 
-The current lifecycle performs full-base hashes before and after a separately guarded GPU phase. Each GPU phase is limited to the configured lease (19 minutes in this proof). Hashing a large base does not require retaining the GPU lease. The outer host-memory guardian remains active throughout, with a separate finite workflow deadline.
+| Check | LoRA on | Original base |
+|---|---|---|
+| Training identity | [Reply](proof/on-0.png) | [Reply](proof/off-0.png) |
+| Held-out identity | [Reply](proof/on-1.png) | [Reply](proof/off-1.png) |
+| Rainbow | [Reply](proof/on-2.png) | [Reply](proof/off-2.png) |
+
+[Post-crash restart reply](proof/recovered-0.png).

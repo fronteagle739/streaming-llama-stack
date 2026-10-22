@@ -3984,14 +3984,14 @@ static int run_extractor_self_tests(void) {
         "MC: a genuine standalone 'I' answer is still picked",
         &mc_i, "</think>Answer: I.", "I");
 
-    const eval_case mc4_d = {
+    const eval_case mc_four_d = {
         .source = "SuperGPQA",
         .choice = {"A", "B", "C", "D"},
         .answer = "D",
     };
     failed += extractor_self_test_case(
         "MC: out-of-range pronoun is harmless on 4-choice cases",
-        &mc4_d, "</think>Answer: I think it is D", "D");
+        &mc_four_d, "</think>Answer: I think it is D", "D");
 
     /* A distractor the model explicitly rejects *before* stating its pick on
      * the same line must not shadow the real choice ("not B, ... D" /

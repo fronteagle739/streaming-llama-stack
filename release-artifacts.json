@@ -1,0 +1,47 @@
+{
+  "schema": 1,
+  "artifacts": [
+    {
+      "path": "examples/train_jeff_lora/proof/off-0.png",
+      "sha256": "46bf61c47fcb189cf694223cacb3c4a970cfda5c27674e5c2a6f68e7d7896e12",
+      "media_type": "image/png",
+      "review": "Visually inspected actual isolated UI; synthetic TEST chats only, no personal paths, network addresses, credentials or owner data. PNG contains no text or EXIF metadata."
+    },
+    {
+      "path": "examples/train_jeff_lora/proof/off-1.png",
+      "sha256": "992b2a72ea2c4472488f195268f91220790a5efd5830989d049ae75b41634e8a",
+      "media_type": "image/png",
+      "review": "Visually inspected actual isolated UI; synthetic TEST chats only, no personal paths, network addresses, credentials or owner data. PNG contains no text or EXIF metadata."
+    },
+    {
+      "path": "examples/train_jeff_lora/proof/off-2.png",
+      "sha256": "7bda85ba0b09a408723839f4afbc71d7dc66f01cdacb68573ae38d4fe7077e19",
+      "media_type": "image/png",
+      "review": "Visually inspected actual isolated UI; synthetic TEST chats only, no personal paths, network addresses, credentials or owner data. PNG contains no text or EXIF metadata."
+    },
+    {
+      "path": "examples/train_jeff_lora/proof/on-0.png",
+      "sha256": "dcffd746dda86b8b37229cf57ed21bd3eaf3174b6a164eda2fc14ec926b7c720",
+      "media_type": "image/png",
+      "review": "Visually inspected actual isolated UI; synthetic TEST chats only, no personal paths, network addresses, credentials or owner data. PNG contains no text or EXIF metadata."
+    },
+    {
+      "path": "examples/train_jeff_lora/proof/on-1.png",
+      "sha256": "e841e490c7034668c40fa3d18157ba61be37fd2e6045d9acfbc0193b2465d7c1",
+      "media_type": "image/png",
+      "review": "Visually inspected actual isolated UI; synthetic TEST chats only, no personal paths, network addresses, credentials or owner data. PNG contains no text or EXIF metadata."
+    },
+    {
+      "path": "examples/train_jeff_lora/proof/on-2.png",
+      "sha256": "0df440338d312555447d141111295888aea83150e754691990a83cbf686a535e",
+      "media_type": "image/png",
+      "review": "Visually inspected actual isolated UI; synthetic TEST chats only, no personal paths, network addresses, credentials or owner data. PNG contains no text or EXIF metadata."
+    },
+    {
+      "path": "examples/train_jeff_lora/proof/recovered-0.png",
+      "sha256": "ccc3a9a5a66819f9e72410c3c38033e5619e41c3f9f3a1e2e99da4ffd0bc2c63",
+      "media_type": "image/png",
+      "review": "Visually inspected actual isolated UI; synthetic TEST chats only, no personal paths, network addresses, credentials or owner data. PNG contains no text or EXIF metadata."
+    }
+  ]
+}

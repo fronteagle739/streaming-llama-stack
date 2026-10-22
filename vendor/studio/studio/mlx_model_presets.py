@@ -43,13 +43,13 @@ def build_prism_bonsai_local_preset(model_path: str) -> dict:
     python = prism_mlx.runtime_python()
     cache_dir = paths.app_data_root() / 'mlx-kv' / 'prism-bonsai-27b'
     return {'name': 'Ternary Bonsai 27B (Mac Prism MLX)', 'mode': 'local', 'rtx': {'backend': 'mlx-vlm', 'mlx_runtime': 'prism', 'model_path': str(status.path), 'ctx': 262144, 'temperature': 0.7, 'top_p': 0.95, 'top_k': 20}, 'mac': {'mlx_runtime': 'prism', 'python': str(python), 'prism_python': str(python), 'prompt_cache': {'enabled': True, 'mac_dir': str(cache_dir), 'max_gb': 10.0}}}
-QWEN38_MAC_MLX = _env('STUDIO_QWEN38_MAC_MLX', 'models/Qwen3.8-Flash-Next-MLX-Serve-mixed-4-8bit')
+QWEN38_MAC_MLX = _env('STUDIO_QWEN38_MAC_MLX', '')
 GLM46_MAC_GGUF = _env('STUDIO_GLM46_MAC_GGUF', os.path.expanduser('~/.omlx/models/dawncr0w/bartowski/ArliAI_GLM-4.6-Derestricted-GGUF/ArliAI_GLM-4.6-Derestricted-IQ2_M-00001-of-00003.gguf'))
-DSV4F_0731_MAC_GGUF = _env('STUDIO_DSV4F_0731_MAC_GGUF', 'models/DeepSeek-V4-Flash-Layers37-42Q4KExperts-OtherExpertLayersIQ2XXSGateUp-Q2KDown-AProjQ8-SExpQ8-OutQ8-chat-v2-imatrix-fixed-0731.gguf')
+DSV4F_0731_MAC_GGUF = _env('STUDIO_DSV4F_0731_MAC_GGUF', '')
 
 def build_qwen38_mlx_serve_preset() -> dict:
     return {'name': 'Qwen3.8-Flash-Next (Mac mlx-serve)', 'mode': 'remote', 'rtx': {'model_path': ''}, 'mac': {'backend': 'mlx-serve', 'host': MAC_REMOTE_HOST, 'model_path': QWEN38_MAC_MLX, 'ctx': 65536, 'max_tokens': 4096, 'mlx_serve_mtp': 1, 'mlx_serve_skip_mem_preflight': 1, 'mlx_serve_pld': 1, 'mlx_serve_bind_address': '0.0.0.0'}}
-QWEN38_UNCENSORED_MAC_MLX = _env('STUDIO_QWEN38_UNCENSORED_MAC_MLX', 'models/Qwen3.8-Flash-Next-Uncensored-MLX-Serve-mixed-4-8bit')
+QWEN38_UNCENSORED_MAC_MLX = _env('STUDIO_QWEN38_UNCENSORED_MAC_MLX', '')
 
 def build_qwen38_uncensored_preset(*, ctx: int=512000) -> dict:
     return {'name': f'Qwen3.8-Flash-Next Uncensored (Mac mlx-serve) {ctx // 1000}k context', 'mode': 'remote', 'rtx': {'model_path': ''}, 'mac': {'backend': 'mlx-serve', 'host': MAC_REMOTE_HOST, 'model_path': QWEN38_UNCENSORED_MAC_MLX, 'ctx': int(ctx), 'max_tokens': 4096, 'mlx_serve_mtp': 1, 'mlx_serve_pld': 1, 'mlx_serve_skip_mem_preflight': 1, 'mlx_serve_bind_address': '0.0.0.0'}}
