@@ -60,7 +60,7 @@ class SequenceTest(unittest.TestCase):
             def anchor(self,ram):return dict(written_bytes=100)
             def sync(self,tokens):raise AssertionError('Long prompt must use ULTRA')
         class Producer:
-            def __init__(self,*args,**kwargs):events.append('ULTRA open');self.checkpoint=cp(200);self.prefill_seconds=.2
+            def __init__(self,*args,**kwargs):events.append('ULTRA open');self.checkpoint=cp(200);self.prefill_seconds=.2;self.directory='owned-ultra'
         def cp(position):return dict(position=position,tokens_sha256=prefix_digest(tokens,position),payload_sha256='a'*64)
         def checkpoint(owner,cp):
             session.state=Ram();session.contract={};session.payload={};return {}
