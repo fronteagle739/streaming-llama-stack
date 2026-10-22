@@ -1,5 +1,6 @@
 from pathlib import Path
 import shutil
+import os
 import subprocess
 from .config import ROOT, path
 from .guard import admit
@@ -28,6 +29,11 @@ def check(cfg, *, verify_journal=True):
             record(key, bool(cfg[key]) and path(cfg[key]).exists(), cfg[key] or 'required model path missing')
     command = cfg['ds4_command']
     record('ds4_executable', bool(command) and (path(command[0]).is_file() or shutil.which(command[0])), command[0] if command else 'missing')
+    if os.name == 'nt' and command and 'ds4' in Path(command[0]).name.lower():
+        directory = path(command[0]).parent
+        missing = [name for name in ('dstorage.dll', 'dstoragecore.dll') if not (directory / name).is_file()]
+        record('directstorage_runtime', not missing,
+               'Required beside the native executable: ' + ', '.join(missing) if missing else 'Both DirectStorage runtime DLLs are beside the native executable')
     record('llama_producer', path(cfg['llama_producer']).is_file(), cfg['llama_producer'], required=cfg['long_prompt'])
     if cfg['webui']:
         public = path(cfg['webui_root'])

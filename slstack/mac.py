@@ -197,7 +197,6 @@ class Receiver:
                 kv_cache_cold_max_tokens=preset.get('kv_cache_cold_max_tokens'),
                 kv_cache_continued_interval_tokens=preset.get('kv_cache_continued_interval_tokens'))
             env['DS4_NATIVE_SESSION'] = '1' if native else '0'
-            env['DS4_METAL_WIRED_CORE_KV'] = '1'
             env['DS4_NATIVE_SESSION_HOST_BYTES'] = str(int(cfg['host_budget_gib'] * (1 << 30)))
             env['DS4_NATIVE_SESSION_HOST_FLOOR_BYTES'] = str(int(cfg['min_available_gib'] * (1 << 30)))
             if native:

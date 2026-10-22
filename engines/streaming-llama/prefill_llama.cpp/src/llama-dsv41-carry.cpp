@@ -1,4 +1,5 @@
 #include "llama-dsv41-carry.h"
+#include "llama-dsv41-locked-ram.h"
 
 #include <algorithm>
 #include <atomic>
@@ -68,6 +69,7 @@ struct llama_dsv41_carry_store::implementation {
     budget capacity;
     std::filesystem::path path;
     std::vector<std::filesystem::path> parent_paths;
+    std::shared_ptr<uint8_t[]> locked_page;
     uint8_t * page = nullptr;
     std::shared_ptr<uint8_t[]> resident;
     std::unique_lock<std::mutex> shared_bank_claim;
@@ -99,11 +101,9 @@ struct llama_dsv41_carry_store::implementation {
 #ifdef _WIN32
         if (file != INVALID_HANDLE_VALUE) { CloseHandle(file); }
         for (auto h : parents) { CloseHandle(h); }
-        _aligned_free(page);
 #else
         if (file >= 0) { close(file); }
         for (auto fd : parents) { close(fd); }
-        free(page);
 #endif
         // Intentionally no unlink/remove/truncate, including failed fixtures.
     }
@@ -426,7 +426,7 @@ std::shared_ptr<llama_dsv41_carry_store::ram_backing> llama_dsv41_carry_store::r
     budget plan;std::string error;
     require(plan_resident_ram_direct(tokens,plan,error,tile)&&plan.bounded_host_bytes<=admission&&plan.resident_bytes<=SIZE_MAX,"Fixed carry RAM exceeds its explicit host admission");
     auto bank=std::shared_ptr<ram_backing>(new ram_backing);
-    bank->bytes=plan.resident_bytes;bank->storage.reset(new uint8_t[size_t(bank->bytes)]());return bank;
+    bank->bytes=plan.resident_bytes;bank->storage=llama_dsv41_locked_ram::allocate(bank->bytes,admission);return bank;
 }
 
 bool llama_dsv41_carry_store::retire_shared_ram(std::string &error){
@@ -463,14 +463,8 @@ bool llama_dsv41_carry_store::create(const config & options, std::string & error
             require(p->capacity.resident_bytes <= SIZE_MAX,
                     "Resident carry bank exceeds addressable host allocation");
             p->actual_budget(); // Full bank + page/tile scratch charged BEFORE allocating.
-#ifdef _WIN32
-            p->page = static_cast<uint8_t *>(_aligned_malloc(page_bytes, alignment));
-#else
-            void * buffer = nullptr;
-            require(posix_memalign(&buffer, alignment, page_bytes) == 0,
-                    "Resident carry aligned page allocation failed");
-            p->page = static_cast<uint8_t *>(buffer);
-#endif
+            p->locked_page=llama_dsv41_locked_ram::allocate(page_bytes,options.admitted_host_bytes);
+            p->page=p->locked_page.get();
             require(p->page != nullptr, "Resident carry aligned page allocation failed");
             if(options.shared_ram){
                 require(options.shared_ram->storage&&options.shared_ram->bytes>=p->capacity.resident_bytes&&options.shared_ram->bytes<=options.admitted_host_bytes,
@@ -479,13 +473,13 @@ bool llama_dsv41_carry_store::create(const config & options, std::string & error
                 require(p->shared_bank_claim.owns_lock(),"Shared RAM backing already has a live carry-store owner");
                 p->resident=options.shared_ram->storage;
                 std::memset(p->resident.get(),0,size_t(p->capacity.resident_bytes));
-            }else p->resident.reset(new uint8_t[size_t(p->capacity.resident_bytes)]());
+            }else p->resident=llama_dsv41_locked_ram::allocate(p->capacity.resident_bytes,options.admitted_host_bytes);
             p->resident_bytes = p->capacity.resident_bytes;
             p->state = implementation::seeding; p->header(); p->flush();
             return;
         }
         if(options.ram_prefix_tokens){
-            p->resident.reset(new uint8_t[size_t(p->capacity.resident_bytes)]());
+            p->resident=llama_dsv41_locked_ram::allocate(p->capacity.resident_bytes,options.admitted_host_bytes);
             p->resident_bytes=p->capacity.resident_bytes;
         }
         p->path = std::filesystem::u8path(options.path);
@@ -532,7 +526,8 @@ bool llama_dsv41_carry_store::create(const config & options, std::string & error
         require(QueryDosDeviceW(p->path.root_name().c_str(), device, 32768) != 0 &&
                 std::wstring(device).find(L"\\Device\\HarddiskVolume") == 0,
                 "Carry drive must be a physical volume, not a substituted path");
-        p->page = static_cast<uint8_t *>(_aligned_malloc(size_t(p->capacity.page_buffer_bytes), alignment));
+        p->locked_page=llama_dsv41_locked_ram::allocate(p->capacity.page_buffer_bytes,options.admitted_host_bytes);
+        p->page=p->locked_page.get();
         require(p->page != nullptr, "Carry aligned page allocation failed");
         p->check_parents(); p->actual_budget();
         p->file = CreateFileW(p->path.c_str(), GENERIC_READ | GENERIC_WRITE, FILE_SHARE_READ,
@@ -545,9 +540,8 @@ bool llama_dsv41_carry_store::create(const config & options, std::string & error
         require(GetDiskFreeSpaceW(p->path.root_path().c_str(), &sectors, &sector_bytes, &free_clusters, &clusters) != 0 &&
                 sector_bytes > 0 && alignment % sector_bytes == 0, "Unsupported carry volume sector alignment");
 #else
-        void * buffer = nullptr;
-        require(posix_memalign(&buffer, alignment, size_t(p->capacity.page_buffer_bytes)) == 0, "Carry aligned page allocation failed");
-        p->page = static_cast<uint8_t *>(buffer);
+        p->locked_page=llama_dsv41_locked_ram::allocate(p->capacity.page_buffer_bytes,options.admitted_host_bytes);
+        p->page=p->locked_page.get();
         p->check_parents(); p->actual_budget();
         // Bind creation to the already-open physical parent. A namespace race
         // cannot redirect this CREATE_NEW into a symlink's unrelated directory.

@@ -1,0 +1,53 @@
+{
+  "model": {
+    "filename": "DeepSeek-V4.1-Flash-1017-Q4-v41.gguf",
+    "bytes": 518596067328,
+    "sha256": "2cc6bc254f22a0238020e61e931c0cac865218aada1eed9c0036d9f4031c6e5f"
+  },
+  "windows_native": {
+    "source_revision": "6f6a5f6a6cd483b9179ec829674f419c164d19f0",
+    "full_logit_vectors": 384,
+    "byte_exact_vectors": 384,
+    "greedy_matches": 384,
+    "reference_sha256": "3bd3f4009d29e79f3de24efcc3777fb7bb077c9da9e815d1d4f4d64128f98d1d",
+    "elapsed_s": 89.39100000000326,
+    "peak_tree_rss": 1440616448,
+    "minimum_available_ram": 14016184320,
+    "host_budget_gib": 8,
+    "available_floor_gib": 4,
+    "core_prefill_eviction": false,
+    "directstorage_runtime": "side-by-side DLLs, official1.3",
+    "system_page_output_delta": 0,
+    "system_page_write_delta": 0,
+    "scope": "same-hardware native source parity; performance arms omitted"
+  },
+  "mac_native": {
+    "byte_exact": true,
+    "bytes": 3343540,
+    "clean_sha256": "55d9321d2e0b5fa7a71dbad89f83b91b4d7abd963ee72848100b3a8fb2d595e2",
+    "private_sha256": "55d9321d2e0b5fa7a71dbad89f83b91b4d7abd963ee72848100b3a8fb2d595e2",
+    "private_source_revision": "0710258ca185c4804295d882a1389104ba2c9571",
+    "source_files_verified": 100,
+    "source_normalization": "CRLF to LF only",
+    "private_peak_rss": 42586292224,
+    "private_elapsed_s": 26.645422959001735,
+    "comparison_settings": "same32 raw tokens,ctx8192,n_threads8,SSD32GiB,layer-prefill disabled,owned/wired memory; distinct private core and Metal compilation"
+  },
+  "carry_memory": {
+    "full_bank_bytes": 4536143872,
+    "peak_tree_rss": 4547604480,
+    "minimum_available_ram": 8019894272,
+    "elapsed_s": 2.562000000034459,
+    "host_budget_gib": 5,
+    "available_floor_gib": 4,
+    "all_pages_valid_locked_private": true,
+    "failure_cleanup_and_release": "pass",
+    "producer_integration": "pending"
+  },
+  "limits": [
+    "Mac proof is mode1 at32 tokens, not the mode3 network/DSpark or long-context acceptance.",
+    "Earlier non-streaming Mac oracle differs from the SSD configuration and is not claimed byte-exact.",
+    "System counters alone do not establish residency for every engine/mode.",
+    "Literal fresh-clone walkthrough and streaming-producer runtime parity remain open."
+  ]
+}
