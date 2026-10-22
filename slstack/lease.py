@@ -11,6 +11,10 @@ import psutil
 from .journal import atomic_json
 
 
+class AdmissionRefused(RuntimeError):
+    pass
+
+
 def recover_leases(runtime_root):
     """Release only this stack's recorded dead guardians, after their kill-on-close Jobs have closed."""
     root = Path(runtime_root) / 'state' / 'leases'
@@ -70,7 +74,7 @@ def gpu_lease(cfg):
             lines = stream.read()
             active = active_holds(lines)
             if active:
-                raise RuntimeError('RTX admission refused: ACTIVE holds exist: ' + '\n'.join(active))
+                raise AdmissionRefused('RTX admission refused: ACTIVE holds exist: ' + '\n'.join(active))
             # WDDM reports every graphics context as a compute client with N/A memory.
             # Check the selected GPU's actual baseline instead of rejecting Explorer/Slack.
             result = subprocess.run(['nvidia-smi', '--id=' + cfg['gpu_uuid'],
@@ -80,7 +84,7 @@ def gpu_lease(cfg):
                 raise RuntimeError('Cannot certify GPU ownership: ' + result.stderr)
             used, free, busy = [int(x.strip()) for x in result.stdout.strip().split(',')]
             if used > cfg['gpu_idle_max_mib'] or free < 30000 or busy > 5:
-                raise RuntimeError('RTX is not idle enough for exclusive admission; no other process was ejected: ' + result.stdout)
+                raise AdmissionRefused('RTX is not idle enough for exclusive admission; no other process was ejected: ' + result.stdout)
             identity = uuid.uuid4().hex
             lease_path = Path(cfg['runtime_root']) / 'state' / 'leases' / (identity + '.json')
             lease_row = {'task': 'DS4STACK', 'id': identity, 'hold_file': str(hold),

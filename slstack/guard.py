@@ -153,12 +153,30 @@ def _supervise(spec):
 
 
 def supervise(spec):
-    from .lease import gpu_lease, recover_leases
+    from .lease import gpu_lease, recover_leases, AdmissionRefused
     try:
         if spec.get('gpu'):
-            with gpu_lease(spec['gpu']):
-                spec['timeout_s'] = min(spec['timeout_s'], spec['gpu']['lease_minutes'] * 60)
-                return _supervise(spec)
+            waiting = spec['gpu'].get('gpu_wait_seconds', 0)
+            deadline = time.monotonic() + waiting
+            owner = psutil.Process(spec['owner_pid'])
+            while True:
+                entered = False
+                try:
+                    with gpu_lease(spec['gpu']):
+                        entered = True
+                        spec['timeout_s'] = min(spec['timeout_s'], spec['gpu']['lease_minutes'] * 60)
+                        return _supervise(spec)
+                except (AdmissionRefused, PermissionError):
+                    # Retry only before owning a lease/starting a child. Engine or cleanup
+                    # failures must never cause an automatic second generation.
+                    if entered or not waiting or time.monotonic() >= deadline:
+                        raise
+                    if (Path(spec['stop']).exists() or not owner.is_running() or
+                        abs(owner.create_time() - spec['owner_created']) > .01):
+                        raise RuntimeError('GPU admission wait stopped by its owner')
+                    if psutil.virtual_memory().available < spec['min_available_gib'] * GiB:
+                        raise MemoryError('Available physical RAM fell below the admission-wait floor')
+                    time.sleep(.5)
         return _supervise(spec)
     finally:
         # If this outer guardian killed an inner GPU guardian, its Windows Job is
