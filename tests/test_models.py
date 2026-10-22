@@ -47,3 +47,14 @@ class ModelSelectionTests(unittest.TestCase):
         cfg = self.config(); cfg['resident'] = ['missing']
         with self.assertRaisesRegex(ValueError, 'registered'):
             Models(cfg)
+
+    @patch('slstack.journal.Journal')
+    def test_failed_job_construction_cannot_leave_a_live_attachment_claim(self, journal):
+        engine = Engines(self.config())
+        engine.attach_entry = 'owned-entry'
+        engine._ready = Mock(side_effect=MemoryError('admission refused'))
+        with self.assertRaisesRegex(MemoryError, 'admission refused'):
+            engine.ready()
+        journal.return_value.update.assert_called_once_with('owned-entry', 'failed', applied=False,
+            error='Engine constructor failed before creating an owned job')
+        self.assertIsNone(engine.attach_entry)

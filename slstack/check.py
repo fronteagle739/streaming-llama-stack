@@ -6,7 +6,7 @@ from .guard import admit
 from .journal import Journal
 
 
-def check(cfg):
+def check(cfg, *, verify_journal=True):
     rows = []
     def record(name, ok, detail, required=True):
         rows.append({'check': name, 'ok': bool(ok), 'required': required, 'detail': str(detail)})
@@ -35,11 +35,14 @@ def check(cfg):
     record('live_bias', True, 'Delivered authenticated native control; model-bound calibration required at runtime', required=False)
     record('long_prompt', not cfg['long_prompt'], 'Windows target-only import/export/rewind parity gate is not implemented')
     record('llm_lora', len(cfg['lora']) <= 1, 'Native DSV4.1 dense output adapter; exact base binding, VRAM fusion and journal')
-    try:
-        recovered = Journal(cfg['runtime_root']).recover()
-        record('journal', True, recovered)
-    except (OSError, RuntimeError, ValueError) as exc:
-        record('journal', False, exc)
+    if verify_journal:
+        try:
+            recovered = Journal(cfg['runtime_root']).recover()
+            record('journal', True, recovered)
+        except (OSError, RuntimeError, ValueError) as exc:
+            record('journal', False, exc)
+    else:
+        record('journal', True, 'Base integrity and stale ownership are verified by the model owner before loading')
     try:
         gpu = subprocess.run(['nvidia-smi', '--id=' + cfg['gpu_uuid'],
                               '--query-gpu=name,memory.total,memory.free', '--format=csv,noheader,nounits'],

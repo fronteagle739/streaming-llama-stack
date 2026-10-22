@@ -53,3 +53,16 @@ class AdmissionWaitTests(unittest.TestCase):
         with patch('slstack.lease.gpu_lease', lease), self.assertRaises(AdmissionRefused):
             supervise(spec)
         run.assert_not_called()
+
+    @patch('slstack.lease.recover_leases')
+    @patch('slstack.guard.subprocess.Popen')
+    @patch('slstack.guard.psutil.virtual_memory')
+    def test_full_host_budget_is_enforced_before_starting_an_engine(self, memory, popen, recover):
+        memory.return_value.available = 3 * 2**30
+        @contextmanager
+        def lease(cfg):
+            yield 'owned'
+        spec = self.spec(); spec.update(host_budget_gib=8, min_available_gib=2)
+        with patch('slstack.lease.gpu_lease', lease), self.assertRaises(MemoryError):
+            supervise(spec)
+        popen.assert_not_called()

@@ -101,6 +101,8 @@ class Journal:
                 # Verify every recorded base, including completed merges, before any new operation.
                 if self.base_digest(row['base_path']) != row['base_sha256']:
                     raise RuntimeError(f"BASE HASH MISMATCH: {row['base_path']}; refusing all operations")
+                if row['status'] == 'detached':
+                    row['applied'] = False
                 if row['status'] not in ('attaching', 'attached', 'merging'):
                     continue
                 try:
@@ -120,6 +122,7 @@ class Journal:
                     original.rename(quarantine)
                     row['recovered_partial'] = str(quarantine)
                 row['status'] = 'detached' if row['status'] in ('attaching', 'attached') else 'failed'
+                row['applied'] = False
                 row['recovered_at'] = datetime.now(timezone.utc).isoformat()
                 reports.append({'id': row['id'], 'status': row['status'], 'base_verified': True,
                                 'partial': row.get('recovered_partial')})
