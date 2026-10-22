@@ -23,6 +23,7 @@ class Native:
         self.cfg=deepcopy(cfg);self.session=session;self.epoch=epoch;self.sequence=sequence
         self.control_lock=threading.Lock();self.process=None;self.closed=False
         self.leases=ExitStack()
+        self.restore_lease=None
         self.token=self.cfg.setdefault('_control_token',secrets.token_urlsafe(32))
         self.url=cfg['ds4_url'];self.cancelled=cancelled
         binary=path(cfg['ds4_command'][0]);pin=sha256(binary)
@@ -76,9 +77,12 @@ class Native:
             self.leases.enter_context(native.directory(directory))
             for file in (binary,path(cfg['model']),receipt):self.leases.enter_context(native.read_lease(file))
             if sha256(binary)!=pin:raise ValueError('Native binary changed before its read lease')
+            if restore is not None:
+                self.restore_lease=restore[0].lease();self.restore_lease.__enter__()
             self.process=Producer(session,command,env,directory,host_bytes=int(cfg['host_budget_gib']*(1<<30)),
                 physical_floor=int(cfg['min_available_gib']*(1<<30)),operation_seconds=min(1140,cfg['request_timeout_s']),
                 idle_seconds=min(1140,cfg['lease_minutes']*60),native=native,cancelled=cancelled,native_mode=1,startup=startup,owner_epoch=epoch)
+            if self.restore_lease is not None:self.restore_lease.__exit__(None,None,None);self.restore_lease=None
             self.launch_seconds=time.monotonic()-self.launch_started
             atomic_json(directory/'launch.json',dict(argv=command,native_sha256=pin,owner_epoch=epoch,
                 session=session,context=cfg['context'],split_reads=parts,model_receipt=str(receipt),
@@ -90,6 +94,8 @@ class Native:
                 if self.process is not None:
                     self.failure_cleanup=self.process.close()
                     exc.owned_cleanup=self.failure_cleanup
+                if self.restore_lease is not None and self.failure_cleanup and all(self.failure_cleanup.get(k) for k in ('owned_job_empty','owned_process_signaled','owned_pid_gone')):
+                    self.restore_lease.__exit__(None,None,None);self.restore_lease=None
             finally:self.leases.close()
             raise
 
@@ -154,6 +160,7 @@ class Native:
         if not all(proof.get(key) for key in ('owned_job_empty','owned_process_signaled','owned_pid_gone')):
             raise RuntimeError('Native GPU owner retirement unconfirmed; handoff refused')
         self.receipt=proof;self.closed=True
+        if self.restore_lease is not None:self.restore_lease.__exit__(None,None,None);self.restore_lease=None
         (self.directory/'stderr.log').write_bytes(self.process.diagnostic)
         atomic_json(self.directory/'cleanup.json',proof)
         self.leases.close()

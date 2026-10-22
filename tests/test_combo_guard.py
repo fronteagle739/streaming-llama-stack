@@ -8,10 +8,17 @@ from unittest.mock import patch
 import uuid
 import psutil
 from slstack.guard import _supervise
+from slstack.lease import active_holds
 
 
 @unittest.skipUnless(os.name=='nt','Windows Job qualification')
 class GuardTest(unittest.TestCase):
+    def test_kit11_mac_hold_also_blocks_and_cannot_retire_its_rtx_hold(self):
+        rtx='ACTIVE: KIT11 same; RTX'
+        mac='MAC ACTIVE: KIT11 same; Mac'
+        self.assertEqual(active_holds(rtx+'\n'+mac),[rtx,mac])
+        self.assertEqual(active_holds(rtx+'\n'+mac+'\nMAC RELEASED: KIT11 same; Mac'),[rtx])
+        self.assertEqual(active_holds('MAC ACTIVE: OTHER ignored; Mac'),[])
     def run_cpu(self,foreign=False,pages=0):
         root=Path(os.environ['STUDIO_RUNTIME_ROOT']);nonce=uuid.uuid4().hex
         prefix=root/('guard-cpu-'+nonce)

@@ -34,6 +34,12 @@ def render_body(body):
     result=deepcopy(body)
     policy=result.pop('include_previous_reasoning',True)
     apply(result,{'include_previous_reasoning':policy})
+    for message in result.get('messages',[]):
+        content=message.get('content')
+        if isinstance(content,list) and any(not isinstance(part,dict) or part.get('type') not in ('text','input_text') for part in content):
+            raise ValueError('The combined preset requires text documents; multimodal state is outside its qualified contract')
+    if any(key in result for key in ('images','image','image_url','audio','input_audio')):
+        raise ValueError('The combined preset requires text documents')
     return result
 
 
@@ -91,11 +97,11 @@ class ComboSession:
         try:
             if self.poison:raise RuntimeError('Owner epoch is poisoned: '+self.poison)
             if self.cancel.is_set():raise RuntimeError('Owner epoch was cancelled')
+            rendered=render_body(body)
             baseline=self.device.gpu(0,self.cfg['gpu_uuid'])
             childcfg=dict(self.cfg,host_budget_gib=self.cfg['native_host_budget_gib'])
             restore=(self.state,self.payload) if self.state is not None else None
             owner=self.current=Native(childcfg,self.session,self.epoch,1,self.cancel.is_set,restore=restore,runner=self.device)
-            rendered=render_body(body)
             tokens=owner.render(rendered);cp=owner.checkpoint
             def matches(checkpoint):
                 return checkpoint is not None and len(tokens)>=checkpoint['position'] and prefix_digest(tokens,checkpoint['position'])==checkpoint['tokens_sha256']
@@ -142,6 +148,7 @@ class ComboSession:
             self.current=None;self.lock.release()
 
     def close(self):
+        if self.lock.locked():raise RuntimeError('Cannot close conversation RAM while a request owns it')
         if self.current is not None:raise RuntimeError('Cannot close a conversation while its GPU owner is active')
         if self.state is not None:self.state.close();self.state=None
         if self.journal is not None:self.journal.close();self.journal=None
