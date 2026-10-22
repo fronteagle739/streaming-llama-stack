@@ -2,10 +2,12 @@ from __future__ import annotations
 import json
 from pathlib import Path
 import sys
+import socket
 import threading
 import time
 import urllib.error
 import urllib.request
+from urllib.parse import urlsplit
 from .config import path
 from .process import OwnedProcess
 
@@ -42,6 +44,11 @@ class Engines:
             raise RuntimeError('ULTRA handoff requires the Windows target-only adapter and parity gate')
         if not self.cfg['model'] or not path(self.cfg['model']).exists():
             raise ValueError('Configure an existing ds4 model path')
+        address = urlsplit(self.cfg['ds4_url'])
+        if address.hostname not in ('127.0.0.1', 'localhost') or address.scheme != 'http':
+            raise ValueError('Owned ds4_url must be local loopback HTTP')
+        with socket.socket() as probe:
+            probe.bind((address.hostname, address.port or 80))
         command = [x.replace('{model}', str(path(self.cfg['model']))) for x in self.cfg['ds4_command']]
         command[0] = str(path(command[0]))
         self.llm = OwnedProcess(self.cfg, command, 'ds4-server', gpu=True,

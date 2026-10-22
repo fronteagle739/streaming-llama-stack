@@ -2,12 +2,13 @@ from __future__ import annotations
 from copy import deepcopy
 from http.server import BaseHTTPRequestHandler, ThreadingHTTPServer
 import json
+import gzip
 import mimetypes
 from pathlib import Path
 import time
 from urllib.parse import unquote, urlsplit
 import uuid
-from .config import path
+from .config import path, ROOT
 from .engines import Engines
 from .tools import Tools
 
@@ -118,11 +119,15 @@ def handler(stack):
                 return self.send(200, {'object': 'list', 'data': [{'id': stack.cfg['model_name'], 'object': 'model',
                                                                  'created': 0, 'owned_by': 'local'}]})
             if route == '/props':
+                command = stack.cfg['ds4_command']
+                n_ctx = next((int(command[i + 1]) for i, x in enumerate(command[:-1]) if x in ('--ctx', '-c')), 4096)
                 return self.send(200, {'model_alias': stack.cfg['model_name'], 'model_path': '',
-                                      'default_generation_settings': {'n_ctx': 262144, 'params': {}},
+                                      'default_generation_settings': {'n_ctx': n_ctx, 'params': {}},
                                       'total_slots': 1, 'chat_template': '', 'modalities': {'vision': False, 'audio': False}})
             if route == '/mcp':
                 return self.send(405, {'error': {'message': 'Stateless MCP endpoint; POST JSON-RPC'}})
+            if route == '/ds4stack-media.js' and stack.cfg['webui']:
+                return self.send(200, (ROOT / 'ds4stack' / 'media.js').read_bytes(), 'text/javascript; charset=utf-8')
             if route.startswith('/outputs/'):
                 root = Path(stack.cfg['runtime_root']).resolve() / 'outputs'
                 target = (root / route.removeprefix('/outputs/')).resolve()
@@ -136,8 +141,10 @@ def handler(stack):
                     target = target.with_suffix('.html.gz')
                 else:
                     return self.send(404, {'error': {'message': 'Artifact not found'}})
-            if target.suffix == '.gz':
-                return self.send(200, target.read_bytes(), 'text/html; charset=utf-8', {'Content-Encoding': 'gzip'})
+            if route == '/':
+                html = gzip.decompress(target.read_bytes()) if target.suffix == '.gz' else target.read_bytes()
+                html = html.replace(b'</body>', b'<script defer src="/ds4stack-media.js"></script></body>')
+                return self.send(200, html, 'text/html; charset=utf-8')
             mime = mimetypes.guess_type(str(target))[0] or 'application/octet-stream'
             return self.send(200, target.read_bytes(), mime)
 

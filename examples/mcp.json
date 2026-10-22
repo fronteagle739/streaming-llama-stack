@@ -1,0 +1,14 @@
+{
+  "mcpServers": {
+    "ds4stack": {
+      "command": "python",
+      "args": ["-B", "-m", "ds4stack", "--config", "runtime/config.local.json", "mcp"],
+      "env": {
+        "PYTHONPATH": "runtime/worktree",
+        "PYTHONDONTWRITEBYTECODE": "1",
+        "TEMP": "runtime/runtime",
+        "TMP": "runtime/runtime"
+      }
+    }
+  }
+}

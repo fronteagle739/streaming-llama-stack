@@ -220,6 +220,12 @@ class GuardianTests(Base):
         with self.assertRaisesRegex(RuntimeError, 'deadline exceeded'):
             child.wait()
 
+    def test_rss_budget_failure_is_loud(self):
+        cfg = {**self.cfg, 'host_budget_gib': .08, 'job_commit_gib': .5}
+        child = OwnedProcess(cfg, [sys.executable, '-B', '-c', 'import time;a=bytearray(128*1024**2);time.sleep(3)'], 'TEST-memory')
+        with self.assertRaisesRegex(RuntimeError, 'HOST MEMORY LIMIT'):
+            child.wait()
+
 
 class LoraTests(Base):
     def test_windows_scale_and_collision(self):

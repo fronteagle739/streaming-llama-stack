@@ -55,7 +55,8 @@ def main():
         config_keys.add('lora')
     overrides = {k: v for k, v in vars(args).items() if k in config_keys and v is not None}
     if getattr(args, 'mode', None):
-        overrides['image_mode'] = overrides['video_mode'] = args.mode
+        overrides.setdefault('image_mode', args.mode)
+        overrides.setdefault('video_mode', args.mode)
     cfg = load(args.config, overrides)
     from .lease import recover_leases
     for identity in recover_leases(cfg['runtime_root']):
@@ -67,11 +68,13 @@ def main():
         from .check import check
         rows = check(cfg)
         print(json.dumps(rows, indent=2))
-        return 0 if all(row['ok'] for row in rows) else 1
+        return 0 if all(row['ok'] or not row['required'] for row in rows) else 1
     if args.command == 'start':
         from .check import check
         rows = check(cfg)
-        failures = [row for row in rows if not row['ok']]
+        failures = [row for row in rows if not row['ok'] and row['required']]
+        for warning in [row for row in rows if not row['ok'] and not row['required']]:
+            print('Unavailable optional capability: ' + json.dumps(warning), file=sys.stderr)
         if failures:
             print(json.dumps(failures, indent=2), file=sys.stderr)
             return 1
@@ -80,7 +83,7 @@ def main():
         effective = Path(cfg['runtime_root']) / 'effective-config.json'
         atomic_json(effective, cfg)
         proc = OwnedProcess(cfg, [sys.executable, '-B', '-m', 'ds4stack', '--config', str(effective), 'serve-internal'],
-                            'router', timeout=cfg['lease_minutes'] * 60)
+                            'router', timeout=86400)
         print(f'Router starting on http://{cfg["host"]}:{cfg["port"]}; log: {proc.log}', flush=True)
         try:
             proc.wait()
@@ -137,6 +140,6 @@ def main():
 if __name__ == '__main__':
     try:
         sys.exit(main())
-    except (RuntimeError, ValueError, OSError, KeyError) as exc:
+    except (RuntimeError, ValueError, OSError, KeyError, MemoryError) as exc:
         print(f'ds4stack: {exc}', file=sys.stderr)
         sys.exit(1)
