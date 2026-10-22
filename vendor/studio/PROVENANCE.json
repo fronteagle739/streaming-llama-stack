@@ -1,0 +1,86 @@
+{
+  "source_commit": "5b39c3abf34523c69fb761f7dd174c710d3a7eb1",
+  "license": "MIT, per stack owner instruction",
+  "modules": [
+    {
+      "path": "adapter.py",
+      "source_sha256": "2341b7c9adb571a4b105792df5cd0511aa6a271d56dae7c25d58eac20aac60ad",
+      "selected": [
+        "load_backend"
+      ]
+    },
+    {
+      "path": "models.py",
+      "source_sha256": "d2e77df701dc338b448ab4277ca7fccd7d4c29bd6e399895d5c223857f27fab7",
+      "selected": [
+        "GenerationParams",
+        "GenResult",
+        "ModelInfo",
+        "resolve_load_mode"
+      ]
+    },
+    {
+      "path": "custom_models.py",
+      "source_sha256": "c61ba269bf217b9ba0ffdd5745b216441071c21b60bc34e64f454f5048d24524",
+      "selected": [
+        "checkpoint_metadata",
+        "comfy_support_defaults",
+        "_first_file_any"
+      ]
+    },
+    {
+      "path": "config.py",
+      "source_sha256": "bea739a6e691ad8b9e1d6003bb52ed9da409be2449bd11a574092863d95d57c2",
+      "selected": null
+    },
+    {
+      "path": "worker_registry.py",
+      "source_sha256": "21d1e08068e9248aad6cd64a4a9651f1a4cebc6266bef806348bbc4d2ea0bf27",
+      "selected": null
+    },
+    {
+      "path": "chat_artifacts.py",
+      "source_sha256": "946f07a90c78a0c6fa081fa008805c7bce89cbaf59c69d4525860aaec0296e09",
+      "selected": null
+    },
+    {
+      "path": "h3_upscale.py",
+      "source_sha256": "3175664da800ebd4f9eab90f43d38d617bc9a65a0599574ce14ffd47a0e6cb99",
+      "selected": null
+    },
+    {
+      "path": "paths.py",
+      "source_sha256": "67b171721fa68f788f5898f024ad7ee1c23f5fbd27161fcedabad197a09449c8",
+      "selected": null
+    },
+    {
+      "path": "command_filter.py",
+      "source_sha256": "2ec322ec2de8987fc7ec6851c9f5a3126adbd6c499e0a88dacef58f7d7920a6d",
+      "selected": null
+    },
+    {
+      "path": "mlx_serve.py",
+      "source_sha256": "fee4bdd865b2e3e8baa93c3a7120a26d7f56b23f5e5fb6c21a16d0c58d0d0ba5",
+      "selected": [
+        "mlx_serve_argv",
+        "mlx_serve_env_for",
+        "MLX_SERVE_PRESET_KEYS"
+      ]
+    },
+    {
+      "path": "mlx_model_presets.py",
+      "source_sha256": "aabf20b7b42f6e60f5dd47d0ef40160dfee4b3f04597429e656fcf6860f6af68",
+      "selected": null
+    },
+    {
+      "path": "dsv41_session_profiles.py",
+      "source_sha256": "0c84049fdde9b99f0fd97e53ba875608ae3af2b4b68e6bcde4d05b06eba9eff0",
+      "selected": null
+    },
+    {
+      "path": "dsv41_session_contract.py",
+      "source_sha256": "659177dac080de8afa5c5fab70bfd2a70b6620857efd0cf234340c48c916a6d8",
+      "selected": null
+    }
+  ]
+}

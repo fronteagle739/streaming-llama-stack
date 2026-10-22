@@ -1,0 +1,14 @@
+{
+  "family": "gguf_streamed",
+  "arch": "deepseek41",
+  "rank": 8,
+  "alpha": 16,
+  "steps": 100,
+  "lr": 0.002,
+  "batch": 40,
+  "dataset_size": 40,
+  "max_seq": 64,
+  "seed": 7,
+  "checkpoint_every": 20,
+  "expected_base_sha256": "2cc6bc254f22a0238020e61e931c0cac865218aada1eed9c0036d9f4031c6e5f"
+}

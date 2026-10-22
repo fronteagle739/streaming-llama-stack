@@ -1,0 +1,409 @@
+#include "llama-dsv41-weights.h"
+#include <tuple>
+#include "llama-dsv41-engram-prefetch.h"
+#include "llama-weight-fetcher.h"
+#include "llama-wf-bounded-policy.h"
+
+#include <algorithm>
+#include <array>
+#include <cstring>
+#include <cstdio>
+#include <cstdlib>
+#include <filesystem>
+#include <limits>
+#include <mutex>
+#include <stdexcept>
+
+#ifdef _WIN32
+#ifndef NOMINMAX
+#define NOMINMAX
+#endif
+#include <windows.h>
+#include <malloc.h>
+#if defined(LLAMA_DIRECTSTORAGE) && defined(GGML_USE_CUDA)
+#include <dstorage.h>
+static_assert(sizeof(DSTORAGE_REQUEST)+sizeof(int32_t)<=512,"Requalify strict request metadata budget for this SDK");
+#endif
+#endif
+#if defined(GGML_USE_CUDA)
+#include "ggml-cuda.h"
+#endif
+
+namespace {
+void require(bool ok,const char *message){if(!ok)throw std::runtime_error(message);}
+uint64_t add(uint64_t a,uint64_t b){require(a<=UINT64_MAX-b,"V4.1 weight capacity overflow");return a+b;}
+uint64_t align(uint64_t value,uint64_t alignment){require(alignment&&!(alignment&(alignment-1)),"Invalid weight alignment");return add(value,alignment-1)&~(alignment-1);}
+bool query(uint32_t l){return l==2||l==8||l==14||l==20||l==24||l==28||l==32||l==36;}
+bool source(uint32_t l){return l==2||l==8||l==14||l==20;}
+constexpr uint64_t mib=1024ull*1024;
+constexpr uint64_t metadata_allowance=32*mib;
+constexpr uint64_t factory_allowance=512*mib; // each system/upload tier, not a total factory cap
+constexpr const char *original_sha="2cc6bc254f22a0238020e61e931c0cac865218aada1eed9c0036d9f4031c6e5f";
+}
+
+struct llama_dsv41_weight_provider::implementation {
+    struct entry{ggml_tensor*t;uint64_t file_offset,gpu_offset,allocation;};
+    struct stage{std::vector<entry>entries;uint64_t bytes=0;};
+    mutable std::mutex mutex;
+    config options;
+    capacity planned;
+    bool inspected=false,allocated=false,poisoned=false,leased=false;
+    uint32_t next=0;
+    gguf_context_ptr gguf;
+    ggml_context_ptr tensors;
+    std::array<stage,42>stages;
+    std::array<llama_dsv41_layer_graph::weights,40>layers{};
+    ggml_tensor *embedding=nullptr,*head_norm=nullptr,*head_weight=nullptr;
+    std::array<uint64_t,2>engram_offsets{};
+    llama_dsv41::engram_layout engram;
+    std::unique_ptr<llama_dsv41_engram_prompt_cache>engram_prompt;
+    std::vector<ggml_backend_buffer_ptr>buffers;
+    wf_context *fetcher=nullptr;
+#ifdef _WIN32
+    HANDLE file=INVALID_HANDLE_VALUE;
+    HANDLE engram_file=INVALID_HANDLE_VALUE;
+    uint8_t *engram_page=nullptr;
+    std::vector<HANDLE>parents;
+    std::filesystem::path path;
+    void identity()const{
+        BY_HANDLE_FILE_INFORMATION s{};
+        require(file!=INVALID_HANDLE_VALUE&&GetFileInformationByHandle(file,&s),"Cannot inspect verified model lease");
+        FILE_ID_INFO id{};require(GetFileInformationByHandleEx(file,FileIdInfo,&id,sizeof(id)),"Cannot bind original model FileIdInfo receipt");
+        const uint64_t length=(uint64_t(s.nFileSizeHigh)<<32)|s.nFileSizeLow;
+        const uint64_t modified=(uint64_t(s.ftLastWriteTime.dwHighDateTime)<<32)|s.ftLastWriteTime.dwLowDateTime;
+        constexpr uint64_t epoch=116444736000000000ull;
+        require(modified>=epoch&&(modified-epoch)<=UINT64_MAX/100,"Model timestamp cannot be bound to Unix receipt");
+        require(id.VolumeSerialNumber==options.verified_volume&&std::memcmp(id.FileId.Identifier,options.verified_file_id.data(),16)==0&&
+            length==options.verified_file_bytes&&(modified-epoch)*100==options.verified_mtime_ns&&s.nNumberOfLinks==1&&
+            !(s.dwFileAttributes&(FILE_ATTRIBUTE_DIRECTORY|FILE_ATTRIBUTE_REPARSE_POINT|FILE_ATTRIBUTE_SPARSE_FILE|FILE_ATTRIBUTE_COMPRESSED)),
+            "Model identity differs from completed SHA receipt; reverify before streaming");
+    }
+#else
+    void identity()const{throw std::runtime_error("Physical V4.1 weight streaming requires Windows");}
+#endif
+    ~implementation(){
+        invalidate();
+#ifdef _WIN32
+        if(file!=INVALID_HANDLE_VALUE)CloseHandle(file);
+        if(engram_file!=INVALID_HANDLE_VALUE)CloseHandle(engram_file);
+        for(auto handle:parents)CloseHandle(handle);
+        _aligned_free(engram_page);
+#endif
+    }
+    void invalidate(){
+        poisoned=true;
+        engram_prompt.reset();
+        if(options.backend&&allocated)ggml_backend_synchronize(options.backend);
+        if(fetcher){wf_stop(fetcher);wf_quiesce(fetcher);wf_destroy(fetcher);fetcher=nullptr;}
+        for(auto&s:stages)for(auto&e:s.entries){e.t->data=nullptr;e.t->buffer=nullptr;}
+        buffers.clear();allocated=false;leased=false;
+    }
+    template<class F>bool guard(F fn,std::string&error){
+        std::lock_guard<std::mutex>lock(mutex);
+        try{require(!poisoned,"V4.1 weight provider is invalid");fn();error.clear();return true;}
+        catch(const std::exception&e){invalidate();error=e.what();return false;}
+    }
+    int64_t key(const char *suffix)const{
+        const std::string name=std::string("deepseek41.")+suffix;
+        const auto id=gguf_find_key(gguf.get(),name.c_str());require(id>=0,"Missing native V4.1 metadata key");return id;
+    }
+    uint64_t integer(const char *suffix)const{
+        const auto id=key(suffix);const auto type=gguf_get_kv_type(gguf.get(),id);
+        if(type==GGUF_TYPE_UINT32)return gguf_get_val_u32(gguf.get(),id);
+        require(type==GGUF_TYPE_UINT64,"Native integer metadata type changed");return gguf_get_val_u64(gguf.get(),id);
+    }
+    void number(const char*suffix,float expected)const{
+        const auto id=key(suffix);const auto type=gguf_get_kv_type(gguf.get(),id);
+        float value;
+        if(type==GGUF_TYPE_FLOAT32)value=gguf_get_val_f32(gguf.get(),id);
+        else if(type==GGUF_TYPE_FLOAT64)value=float(gguf_get_val_f64(gguf.get(),id));
+        else value=float(integer(suffix));
+        // Bit equality stays meaningful under release fast-math.
+        require(std::memcmp(&value,&expected,sizeof(float))==0,"Native V4.1 numerical metadata differs");
+    }
+    void text(const char*suffix,const char*expected)const{
+        const auto id=key(suffix);require(gguf_get_kv_type(gguf.get(),id)==GGUF_TYPE_STRING,"Native string metadata type changed");
+        require(std::strcmp(gguf_get_val_str(gguf.get(),id),expected)==0,"Native V4.1 string metadata differs");
+    }
+    std::vector<uint64_t>array(const char*suffix,size_t maximum)const{
+        const auto id=key(suffix);require(gguf_get_kv_type(gguf.get(),id)==GGUF_TYPE_ARRAY,"Native array metadata type changed");
+        const auto type=gguf_get_arr_type(gguf.get(),id);const auto n=gguf_get_arr_n(gguf.get(),id);
+        require(n<=maximum&&(type==GGUF_TYPE_UINT32||type==GGUF_TYPE_UINT64),"Native array metadata size/type differs");
+        const auto*d=gguf_get_arr_data(gguf.get(),id);std::vector<uint64_t>result(n);
+        for(size_t i=0;i<n;++i)result[i]=type==GGUF_TYPE_UINT32?static_cast<const uint32_t*>(d)[i]:static_cast<const uint64_t*>(d)[i];
+        return result;
+    }
+    void metadata(){
+        const auto arch=gguf_find_key(gguf.get(),"general.architecture");
+        require(arch>=0&&gguf_get_kv_type(gguf.get(),arch)==GGUF_TYPE_STRING&&
+            std::strcmp(gguf_get_val_str(gguf.get(),arch),"deepseek41")==0,"Not a native V4.1 GGUF");
+        for(auto pair:{std::pair<const char*,uint64_t>{"vocab_size",129280},{"hidden_size",5120},
+            {"moe_intermediate_size",2304},{"num_hidden_layers",40},{"num_attention_heads",64},
+            {"num_key_value_heads",1},{"head_dim",512},{"qk_rope_head_dim",64},{"q_lora_rank",1280},
+            {"o_lora_rank",1024},{"o_groups",8},{"n_routed_experts",384},{"n_shared_experts",1},
+            {"num_experts_per_tok",6},{"max_position_embeddings",1048576},{"sliding_window",128},
+            {"index_n_heads",32},{"index_head_dim",128},{"index_topk",512},{"candidate_source_layer_id",20},
+            {"candidate_topk_blocks",2048},{"candidate_block_size",8},{"hc_mult",4},{"hc_sinkhorn_iters",20},
+            {"rope_theta",10000},{"compress_rope_theta",160000}})require(integer(pair.first)==pair.second,"Unsupported native V4.1 geometry");
+        for(auto pair:{std::pair<const char*,float>{"rms_norm_eps",1e-20f},{"hc_eps",1e-6f},{"swiglu_limit",10},
+            {"routed_scaling_factor",1.5f},{"rope_scaling.factor",16},{"rope_scaling.beta_fast",32},
+            {"rope_scaling.beta_slow",1},{"rope_scaling.original_max_position_embeddings",65536}})number(pair.first,pair.second);
+        text("scoring_func","sqrtsoftplus");text("hidden_act","silu");text("topk_method","noaux_tc");
+        const auto normalized=key("norm_topk_prob");require(gguf_get_kv_type(gguf.get(),normalized)==GGUF_TYPE_BOOL&&gguf_get_val_bool(gguf.get(),normalized),"Unnormalized native routing unsupported");
+        auto ratios=array("compress_ratios",40);require(ratios.size()==40,"Missing V4.1 layer ratios");
+        for(uint32_t l=0;l<40;++l)require(ratios[l]==(l<2?0u:l<20?2u:1u),"Incorrect native compression ownership");
+        require(array("kv_source_layer_ids",4)==std::vector<uint64_t>{2,8,14,20},"Native KV source topology differs");
+        require(array("index_source_layer_ids",8)==std::vector<uint64_t>{2,8,14,20,24,28,32,36},"Native index source topology differs");
+        text("engram.encoding","e4m3_e8m0_32_row264");
+        require(array("engram.layer_ids",2)==std::vector<uint64_t>{1,14},"Native Engram layers differ");
+        const auto rows=array("engram.rows",2),mapping=array("engram.token_map",129280),primes=array("engram.primes",48),mult=array("engram.multipliers",8);
+        require(rows.size()==2&&mapping.size()==129280&&primes.size()==48&&mult.size()==8,"Native Engram metadata dimensions differ");
+        engram.compressed_vocab_size=uint32_t(integer("engram.compressed_vocab_size"));engram.pad_id=uint32_t(integer("engram.pad_id"));
+        for(auto v:mapping){require(v<=UINT32_MAX,"Engram mapped ID overflow");engram.token_map.push_back(uint32_t(v));}
+        for(size_t e=0;e<2;++e){require(rows[e]<=UINT32_MAX,"Engram rows overflow");engram.rows[e]=uint32_t(rows[e]);
+            for(size_t i=0;i<24;++i){require(primes[e*24+i]<=UINT32_MAX,"Engram prime overflow");engram.primes[e][i]=uint32_t(primes[e*24+i]);}
+            for(size_t i=0;i<4;++i)engram.multipliers[e][i]=mult[e*4+i];}
+        std::string why;require(engram.validate(why),"Invalid original Engram hashing layout");
+    }
+    ggml_tensor *tensor(const std::string&name,ggml_type type,std::initializer_list<int64_t>shape){
+        auto*t=ggml_get_tensor(tensors.get(),name.c_str());require(t&&t->type==type&&!t->data&&!t->buffer,"Missing or converted native weight");
+        size_t d=0;for(auto n:shape)require(t->ne[d++]==n,"Native weight shape differs");for(;d<4;++d)require(t->ne[d]==1,"Unexpected native tensor dimension");return t;
+    }
+    void add_tensor(uint32_t stage_id,ggml_tensor*t){
+        const auto id=gguf_find_tensor(gguf.get(),t->name);require(id>=0,"Missing GGUF tensor extent");
+        const uint64_t off=add(gguf_get_data_offset(gguf.get()),gguf_get_tensor_offset(gguf.get(),id)),bytes=ggml_nbytes(t);
+        require(off<=options.verified_file_bytes&&bytes<=options.verified_file_bytes-off,"GGUF weight extends beyond verified file");
+        auto&stage=stages[stage_id];const auto buft=ggml_backend_get_default_buffer_type(options.backend);
+        const auto allocation=ggml_backend_buft_get_alloc_size(buft,t);const auto where=align(stage.bytes,ggml_backend_buft_get_alignment(buft));
+        require(allocation>=bytes,"Weight backend allocation is undersized");stage.entries.push_back({t,off,where,allocation});stage.bytes=add(where,allocation);
+    }
+    void plan_weights(){
+        embedding=tensor("token_embd.weight",GGML_TYPE_F16,{5120,129280});add_tensor(0,embedding);
+        head_norm=tensor("output_norm.weight",GGML_TYPE_F32,{5120});head_weight=tensor("output.weight",GGML_TYPE_Q8_0,{5120,129280});
+        add_tensor(41,head_norm);add_tensor(41,head_weight);
+        for(uint32_t l=0;l<40;++l){
+            const auto prefix="blk."+std::to_string(l)+".";auto&w=layers[l];auto&a=w.attention;auto&f=w.ffn;
+            auto get=[&](const char*name,ggml_type type,std::initializer_list<int64_t>shape){auto*t=tensor(prefix+name,type,shape);add_tensor(l+1,t);return t;};
+            w.attn_fn=get("hc_attn_fn.weight",GGML_TYPE_F16,{20480,24});w.attn_scale=get("hc_attn_scale.weight",GGML_TYPE_F32,{3});w.attn_base=get("hc_attn_base.weight",GGML_TYPE_F32,{24});w.attn_norm=get("attn_norm.weight",GGML_TYPE_F32,{5120});
+            w.ffn_fn=get("hc_ffn_fn.weight",GGML_TYPE_F16,{20480,24});w.ffn_scale=get("hc_ffn_scale.weight",GGML_TYPE_F32,{3});w.ffn_base=get("hc_ffn_base.weight",GGML_TYPE_F32,{24});w.ffn_norm=get("ffn_norm.weight",GGML_TYPE_F32,{5120});
+            a.q_a=get("attn_q_a.weight",GGML_TYPE_Q8_0,{5120,1280});a.q_norm=get("attn_q_a_norm.weight",GGML_TYPE_F32,{1280});a.q_b=get("attn_q_b.weight",GGML_TYPE_Q8_0,{1280,32768});
+            a.kv=get("attn_kv.weight",GGML_TYPE_Q8_0,{5120,512});a.kv_norm=get("attn_kv_a_norm.weight",GGML_TYPE_F32,{512});
+            a.out_a=get("attn_output_a.weight",GGML_TYPE_Q8_0,{4096,8192});a.out_b=get("attn_output_b.weight",GGML_TYPE_Q8_0,{8192,5120});a.attn_sinks=get("attn_sinks.weight",GGML_TYPE_F32,{64});
+            if(source(l)){a.compressor=get("attn_compressor_kv.weight",GGML_TYPE_F16,{5120,512});a.compressor_norm=get("attn_compressor_norm.weight",GGML_TYPE_F32,{512});a.index_k=get("indexer.attn_k.weight",GGML_TYPE_F16,{512,128});a.index_norm=get("indexer.k_norm.weight",GGML_TYPE_F32,{128});if(l<20)a.gate=get("attn_compressor_gate.weight",GGML_TYPE_F16,{5120,512});}
+            if(query(l)){a.index_q=get("indexer.attn_q_b.weight",GGML_TYPE_F16,{1280,4096});a.index_weights=get("indexer.proj.weight",GGML_TYPE_F16,{5120,32});}
+            f.router=get("ffn_gate_inp.weight",GGML_TYPE_F32,{5120,384});f.text_bias=get("exp_probs_b.bias",GGML_TYPE_F32,{384});f.image_bias=get("exp_probs_b_vl.bias",GGML_TYPE_F32,{384});
+            f.gate=get("ffn_gate_exps.weight",GGML_TYPE_Q4_K,{5120,2304,384});f.up=get("ffn_up_exps.weight",GGML_TYPE_Q4_K,{5120,2304,384});f.down=get("ffn_down_exps.weight",GGML_TYPE_Q4_K,{2304,5120,384});
+            f.shared_gate=get("ffn_gate_shexp.weight",GGML_TYPE_Q8_0,{5120,2304});f.shared_up=get("ffn_up_shexp.weight",GGML_TYPE_Q8_0,{5120,2304});f.shared_down=get("ffn_down_shexp.weight",GGML_TYPE_Q8_0,{2304,5120});
+            if(l==1||l==14){w.engram_wkv=get("engram_kv.weight",GGML_TYPE_F16,{6144,25600});w.engram_q_norm=get("engram_q_norm.weight",GGML_TYPE_F32,{5120,4});w.engram_k_norm=get("engram_k_norm.weight",GGML_TYPE_F32,{5120,4});
+                const size_t e=l==1?0:1;auto*t=tensor(prefix+"engram_embd.weight",GGML_TYPE_I8,{264,engram.rows[e]});
+                const auto id=gguf_find_tensor(gguf.get(),t->name);engram_offsets[e]=add(gguf_get_data_offset(gguf.get()),gguf_get_tensor_offset(gguf.get(),id));
+                require(engram_offsets[e]<=options.verified_file_bytes&&ggml_nbytes(t)<=options.verified_file_bytes-engram_offsets[e],"Original Engram table extent is incomplete");}
+        }
+        for(const auto&s:stages)planned.maximum_stage_bytes=std::max(planned.maximum_stage_bytes,s.bytes);
+        const auto policy=llama_wf_bounded::make(planned.maximum_stage_bytes,options.buffers,
+            options.staging_limit_bytes?options.staging_limit_bytes:llama_wf_bounded::baseline_staging_bytes);
+        planned.compute_buffer_bytes=policy.compute_buffer_bytes;
+        const auto staging=policy.staging_bytes;
+        planned.staging_bytes=staging;
+        planned.request_bytes=options.auto_request_size?policy.request_bytes:512*1024;
+        // The imported CUDA view aliases its D3D allocation. Count each
+        // physical allocation once; the controller monitors selected-GPU NVML.
+        planned.device_bytes=add(add(planned.compute_buffer_bytes*options.buffers,staging),factory_allowance+65536);
+        if(options.compute_direct){
+            planned.device_bytes=add(llama_wf_bounded::shared_heap_physical_bytes(planned.compute_buffer_bytes,options.buffers),factory_allowance+65536);planned.staging_bytes=0;
+        }
+        // wf_start retains request arrays for every stage. Each wave boundary
+        // can add one request beyond ceil(tensor_bytes/io_block). Include
+        // vector capacity growth plus temporary old/new allocations; the SDK
+        // assertion above pins the conservative request+index byte bound.
+        const uint64_t stride=options.ds_gpu_ring_slots?((staging/2)&~uint64_t(65535)):staging;
+        require(stride>0,"GPU ring staging stride refused");
+        uint64_t requests=0,waves=0;
+        for(const auto&s:stages){waves=add(waves,(s.bytes+stride-1)/stride);
+            for(const auto&e:s.entries){const uint64_t bytes=ggml_nbytes(e.t);
+                const uint64_t cuts=(e.gpu_offset+bytes-1)/stride-e.gpu_offset/stride;
+                requests=add(requests,add((bytes+planned.request_bytes-1)/planned.request_bytes,cuts));}}
+        require(requests<=UINT64_MAX/(4*512)&&waves<=UINT64_MAX/512,"V4.1 DS request metadata budget overflow");
+        planned.host_bytes=add(metadata_allowance+factory_allowance,add(requests*(4*512),waves*512));
+        if(options.ds_gpu_ring_slots)planned.host_bytes=add(planned.host_bytes,128*mib);
+        if(options.zero_padding_only)planned.host_bytes=add(planned.host_bytes,mib); // bounded8192-span complement/request metadata
+        if(options.engram_prefetch_host_bytes){
+            require(options.engram_prefetch_tokens&&options.engram_prefetch_tokens<=1048576,
+                "Whole-prompt Engram requires an explicit admitted token count");
+            const uint64_t worst=add(4*mib,uint64_t(options.engram_prefetch_tokens)*48*(4+264));
+            require(worst<=options.engram_prefetch_host_bytes,
+                "Whole-prompt Engram maximum row/ID capacity exceeds caller admission");
+            planned.host_bytes=add(planned.host_bytes,options.engram_prefetch_host_bytes);
+        }else require(!options.engram_prefetch_tokens,"Engram token count requires cache host admission");
+    }
+    void acquire(uint32_t id){
+        require(allocated&&!leased&&next==id&&id<42,"V4.1 physical stage acquired out of order");identity();
+        auto*base=wf_wait_layer_gpu(fetcher,int(id));require(base,"Required DirectStorage layer transfer failed");
+        wf_cuda_wait_upload(fetcher,int(id));
+        require(!wf_has_failed(fetcher),"Required DirectStorage upload synchronization failed");
+        ggml_backend_buffer_t buffer=nullptr;
+        for(auto&b:buffers)if(ggml_backend_buffer_get_base(b.get())==base)buffer=b.get();
+        require(buffer,"DirectStorage returned an unowned compute allocation");
+        for(auto&e:stages[id].entries)require(ggml_backend_tensor_alloc(buffer,e.t,static_cast<char*>(base)+e.gpu_offset)==GGML_STATUS_SUCCESS,"Cannot bind staged native tensor");
+        ggml_backend_synchronize(options.backend);leased=true;
+        uint64_t fetched=0;double fetch_ms=0;
+        require(wf_get_required_layer_fetch(fetcher,int(id),&fetched,&fetch_ms),"Completed strict DirectStorage timing unavailable");
+        std::fprintf(stderr,"[dsv41-fetch] stage=%u bytes=%llu fetch_ms=%.6f decimal_GB_s=%.6f\n",
+            id,(unsigned long long)fetched,fetch_ms,double(fetched)/fetch_ms/1e6);
+        std::fflush(stderr);
+    }
+};
+
+llama_dsv41_weight_provider::llama_dsv41_weight_provider():p(new implementation){}
+llama_dsv41_weight_provider::~llama_dsv41_weight_provider()=default;
+llama_dsv41_weight_provider::llama_dsv41_weight_provider(llama_dsv41_weight_provider&&) noexcept=default;
+llama_dsv41_weight_provider&llama_dsv41_weight_provider::operator=(llama_dsv41_weight_provider&&) noexcept=default;
+
+bool llama_dsv41_weight_provider::inspect(const config&options,std::string&error){return p->guard([&]{
+    require(!p->inspected&&!p->allocated,"Weight provider cannot reopen");
+#if !defined(_WIN32) || !defined(GGML_USE_CUDA)
+    (void)options;throw std::runtime_error("V4.1 physical weight provider requires Windows CUDA/DirectStorage");
+#else
+    require(options.backend&&options.buffers>=1&&options.buffers<=2,"Invalid physical weight backend/buffer admission");
+    require((options.staging_limit_bytes==0&&!options.auto_request_size&&!options.async_staging_drain)||
+        (options.auto_request_size&&
+            (options.staging_limit_bytes==llama_wf_bounded::small_staging_bytes||
+             (options.buffers==2&&options.staging_limit_bytes==llama_wf_bounded::profile_staging_bytes))),
+        "Unsupported explicit physical fetch profile");
+    require(options.admitted_host_bytes>=metadata_allowance,"Bounded native metadata inspection was not admitted");
+    require(!options.ds_gpu_ring_slots||(options.ds_gpu_ring_slots==2&&options.buffers==2&&options.auto_request_size&&options.async_staging_drain&&options.staging_limit_bytes==1500*mib),"GPU ring requires explicit native two-buffer profile");
+    require(options.ds_submit_threads==0||options.ds_submit_threads==1||options.ds_submit_threads==2||options.ds_submit_threads==4,
+        "DirectStorage submit threads must be explicit0/1/2/4");
+    require(!options.zero_padding_only||options.compute_direct,"Padding-only zero requires explicit direct compute heaps");
+    require(!options.compute_direct||(options.buffers==2&&options.async_staging_drain&&options.auto_request_size&&!options.ds_gpu_ring_slots),
+        "Direct compute requires two typed async banks without a ring");
+    require(!std::getenv("GGML_CUDA_ENABLE_UNIFIED_MEMORY"),"Unified CUDA memory is outside strict physical weight admission (including env value zero)");
+    require(ggml_backend_is_cuda(options.backend),"V4.1 physical provider requires an actual CUDA backend");
+    require(options.verified_sha256==original_sha&&options.verified_file_bytes==518596067328ull,"Original 1017 SHA receipt required");
+    const char*device=ggml_backend_dev_description(ggml_backend_get_device(options.backend));
+    require(device&&std::strstr(device,"RTX 5090"),"V4.1 streaming producer requires the admitted RTX 5090 backend");
+    p->options=options;p->path=std::filesystem::u8path(options.model_path);
+    require(p->path.is_absolute()&&p->path==p->path.lexically_normal()&&p->path.has_filename()&&p->path.filename().wstring().find(L':')==std::wstring::npos,"Model path must be a physical absolute file");
+    require(GetDriveTypeW(p->path.root_path().c_str())==DRIVE_FIXED,"Model must reside on a fixed local volume");
+    wchar_t volume[32768]{};require(QueryDosDeviceW(p->path.root_name().c_str(),volume,32768)&&
+        std::wstring(volume).find(L"\\Device\\HarddiskVolume")==0,"Model drive must not be substituted or redirected");
+    std::vector<std::filesystem::path>chain;for(auto d=p->path.parent_path();;d=d.parent_path()){chain.push_back(d);if(d==d.root_path())break;}
+    std::reverse(chain.begin(),chain.end());
+    for(const auto&d:chain){HANDLE h=CreateFileW(d.c_str(),FILE_READ_ATTRIBUTES,FILE_SHARE_READ|FILE_SHARE_WRITE,nullptr,OPEN_EXISTING,FILE_FLAG_BACKUP_SEMANTICS|FILE_FLAG_OPEN_REPARSE_POINT,nullptr);require(h!=INVALID_HANDLE_VALUE,"Cannot pin model directory");p->parents.push_back(h);BY_HANDLE_FILE_INFORMATION s{};require(GetFileInformationByHandle(h,&s)&&(s.dwFileAttributes&FILE_ATTRIBUTE_DIRECTORY)&&!(s.dwFileAttributes&FILE_ATTRIBUTE_REPARSE_POINT),"Model ancestor is not a physical directory");}
+    p->file=CreateFileW(p->path.c_str(),GENERIC_READ,FILE_SHARE_READ,nullptr,OPEN_EXISTING,FILE_FLAG_OPEN_REPARSE_POINT,nullptr);require(p->file!=INVALID_HANDLE_VALUE,"Cannot acquire read-only verified model lease");p->identity();
+    ggml_context*raw=nullptr;p->gguf.reset(gguf_init_from_file(options.model_path.c_str(),{true,&raw}));p->tensors.reset(raw);
+    require(p->gguf&&p->tensors&&gguf_get_data_offset(p->gguf.get())<=8*mib&&gguf_get_n_tensors(p->gguf.get())<=2048,"Native GGUF metadata exceeds inspected original limits");
+    p->identity();p->metadata();p->plan_weights();p->inspected=true;
+    DWORD sectors=0,sector_bytes=0,free_clusters=0,clusters=0;
+    require(GetDiskFreeSpaceW(p->path.root_path().c_str(),&sectors,&sector_bytes,&free_clusters,&clusters)&&
+        sector_bytes&&4096%sector_bytes==0,"Unsupported original Engram direct-I/O sector alignment");
+    if(!options.engram_prefetch_host_bytes){
+    p->engram_page=static_cast<uint8_t*>(_aligned_malloc(8192,4096));require(p->engram_page,"Cannot allocate bounded Engram direct-I/O page");
+    p->engram_file=CreateFileW(p->path.c_str(),GENERIC_READ,FILE_SHARE_READ,nullptr,OPEN_EXISTING,
+        FILE_FLAG_OPEN_REPARSE_POINT|FILE_FLAG_NO_BUFFERING|FILE_FLAG_RANDOM_ACCESS,nullptr);
+    require(p->engram_file!=INVALID_HANDLE_VALUE,"Cannot open original Engram tables without OS caching");
+    BY_HANDLE_FILE_INFORMATION original{},direct{};require(GetFileInformationByHandle(p->file,&original)&&
+        GetFileInformationByHandle(p->engram_file,&direct)&&original.dwVolumeSerialNumber==direct.dwVolumeSerialNumber&&
+        original.nFileIndexHigh==direct.nFileIndexHigh&&original.nFileIndexLow==direct.nFileIndexLow,"Engram descriptor differs from verified model");
+    }
+#endif
+},error);}
+bool llama_dsv41_weight_provider::allocate(std::string&error){return p->guard([&]{
+    require(p->inspected&&!p->allocated,"Inspect/admit native weights before allocating");p->identity();
+    require(p->options.admitted_device_bytes>=p->planned.device_bytes&&p->options.admitted_host_bytes>=p->planned.host_bytes,"Physical weight provider exceeds admitted device/host ceiling");
+    wf_params params=wf_params_default();params.model_path=p->options.model_path.c_str();params.gpu_backend=p->options.backend;params.mode=WF_MODE_DSTORAGE;
+    params.n_layers=42;params.n_gpu_buffers=int(p->options.buffers);params.max_layer_bytes=p->planned.maximum_stage_bytes;params.n_ram_buffers=0;
+    params.io_block_size=size_t(p->planned.request_bytes);params.ds_staging_limit_bytes=size_t(p->options.staging_limit_bytes);
+    params.ds_async_drain=p->options.async_staging_drain;
+    params.ds_submit_threads=p->options.ds_submit_threads;
+    params.ds_gpu_ring_slots=p->options.ds_gpu_ring_slots;
+    params.ds_compute_direct=p->options.compute_direct;
+    params.ds_zero_padding_only=p->options.zero_padding_only;
+    p->fetcher=wf_create_required_dstorage(&params);require(p->fetcher,"Required original weight DirectStorage initialization failed");
+    p->allocated=true; // All subsequent failures must synchronize before free.
+    for(uint32_t i=0;i<p->options.buffers;++i){
+        if(p->options.compute_direct)require(wf_is_ds_direct(p->fetcher)&&wf_get_n_gpu_bufs(p->fetcher)==int(p->options.buffers)&&wf_get_gpu_buf_ptr(p->fetcher,int(i)),"Required direct bank was not allocated; no relay fallback");
+        ggml_backend_buffer_ptr b(p->options.compute_direct?
+            ggml_backend_cuda_buffer_from_ptr(wf_get_cuda_device_index(p->fetcher),wf_get_gpu_buf_ptr(p->fetcher,int(i)),p->planned.compute_buffer_bytes):
+            ggml_backend_alloc_buffer(p->options.backend,p->planned.compute_buffer_bytes));
+        require(bool(b),"Admitted weight buffer allocation/wrapping failed");ggml_backend_buffer_set_usage(b.get(),GGML_BACKEND_BUFFER_USAGE_WEIGHTS);
+        if(!p->options.compute_direct)wf_set_gpu_buf_ptr(p->fetcher,int(i),ggml_backend_buffer_get_base(b.get()));p->buffers.push_back(std::move(b));
+    }
+    for(uint32_t i=0;i<42;++i){std::vector<wf_weight_span>spans;for(auto&e:p->stages[i].entries){wf_weight_span s{};s.tensor_name=e.t->name;s.file_offset=e.file_offset;s.nbytes=ggml_nbytes(e.t);s.alloc_size=e.allocation;s.alloc_offset=e.gpu_offset;s.expert_idx=-1;spans.push_back(s);}wf_register_layer(p->fetcher,int(i),spans.data(),int(spans.size()),p->stages[i].bytes);}
+    require(!wf_has_failed(p->fetcher),"Original layer registration failed");p->identity();if(p->options.ds_gpu_ring_slots)wf_set_layer_major_mode(p->fetcher,true);wf_start(p->fetcher);
+    require(!wf_has_failed(p->fetcher),"Original DirectStorage pipeline startup failed");
+},error);}
+bool llama_dsv41_weight_provider::open(const config&options,std::string&error){return inspect(options,error)&&allocate(error);}
+bool llama_dsv41_weight_provider::restart_prompt(const config&options,std::string&error){return p->guard([&]{
+    require(p->allocated&&!p->leased&&p->next==42&&!p->options.ds_gpu_ring_slots,"Only a fully released non-ring provider pass can restart");
+    auto binding=[](const config&v){return std::tie(v.model_path,v.verified_file_bytes,v.verified_volume,v.verified_mtime_ns,v.verified_file_id,
+        v.verified_sha256,v.backend,v.admitted_device_bytes,v.admitted_host_bytes,v.buffers,v.staging_limit_bytes,v.auto_request_size,
+        v.async_staging_drain,v.compute_direct,v.zero_padding_only,v.engram_prefetch_host_bytes,v.ds_submit_threads,v.ds_gpu_ring_slots);};
+    require(binding(options)==binding(p->options),"Persistent provider cannot change model/backend/geometry/admission");
+    require(!options.engram_prefetch_host_bytes||(options.engram_prefetch_tokens&&
+        4ull*1024*1024+uint64_t(options.engram_prefetch_tokens)*48*(4+264)<=options.engram_prefetch_host_bytes),"Restarted prompt exceeds admitted immutable row-cache capacity");
+    p->identity();wf_stop(p->fetcher);wf_quiesce(p->fetcher);require(!wf_has_failed(p->fetcher),"Completed provider could not quiesce before request reuse");
+    p->engram_prompt.reset();p->options.engram_prefetch_tokens=options.engram_prefetch_tokens;p->next=0;
+    for(const auto&s:p->stages)for(const auto&e:s.entries)require(!e.t->data&&!e.t->buffer,"Completed pass retained a stale staged tensor");
+    std::fprintf(stderr,"DS4PERF_PROVIDER_REUSED buffers=%u compute_buffer_bytes=%llu model_lease=1 heaps=1 request_arrays=1 starts_in_timed_run=1\n",p->options.buffers,(unsigned long long)p->planned.compute_buffer_bytes);
+},error);}
+bool llama_dsv41_weight_provider::start_request(std::string&error){return p->guard([&]{
+    require(p->allocated&&!p->leased&&p->next==0,"Request start requires an admitted unleased first stage");p->identity();wf_start(p->fetcher);
+    require(!wf_has_failed(p->fetcher),"Persistent DirectStorage restart failed");
+},error);}
+llama_dsv41_weight_provider::capacity llama_dsv41_weight_provider::budget()const{std::lock_guard<std::mutex>lock(p->mutex);return p->inspected&&!p->poisoned?p->planned:capacity{};}
+ggml_backend_t llama_dsv41_weight_provider::backend()const{std::lock_guard<std::mutex>lock(p->mutex);return p->allocated&&!p->poisoned?p->options.backend:nullptr;}
+bool llama_dsv41_weight_provider::prepare_engram_prompt(const std::vector<int32_t>&tokens,const std::function<bool()>&stop,std::string&error,llama_dsv41::engram_history initial){return p->guard([&]{
+    if(!p->options.engram_prefetch_host_bytes)return;
+    const char*overlap=std::getenv("LLAMA_DSV41_ENGRAM_PROMPT_OVERLAP");
+    const bool during_layer_zero=overlap&&std::strcmp(overlap,"1")==0&&p->leased&&p->next==1;
+    require(p->allocated&&((!p->leased&&p->next==0)||during_layer_zero)&&!p->engram_prompt&&tokens.size()==p->options.engram_prefetch_tokens,
+        "Engram whole-prompt cache requires its initial or explicitly overlapped layer-zero lease");p->identity();
+#ifdef _WIN32
+    p->engram_prompt.reset(new llama_dsv41_engram_prompt_cache);
+    p->engram_prompt->prepare(p->engram,tokens.data(),uint32_t(tokens.size()),p->engram_offsets,p->options.engram_prefetch_host_bytes,initial);
+    require(p->engram_prompt->budget()<=p->options.engram_prefetch_host_bytes,"Prepared Engram cache exceeds provider admission");
+    p->engram_prompt->load(p->path.c_str(),p->file,p->options.verified_file_bytes,stop);p->identity();
+#else
+    (void)stop;throw std::runtime_error("Whole-prompt Engram IoRing requires Windows");
+#endif
+},error);}
+bool llama_dsv41_weight_provider::acquire_embeddings(ggml_tensor*&out,std::string&error){out=nullptr;return p->guard([&]{p->acquire(0);out=p->embedding;},error);}
+bool llama_dsv41_weight_provider::acquire_layer(uint32_t layer,llama_dsv41_layer_graph::weights&out,std::string&error){out={};return p->guard([&]{require(layer<40,"Invalid physical layer");p->acquire(layer+1);out=p->layers[layer];},error);}
+bool llama_dsv41_weight_provider::acquire_head(ggml_tensor*&norm,ggml_tensor*&out,std::string&error){norm=nullptr;out=nullptr;return p->guard([&]{p->acquire(41);norm=p->head_norm;out=p->head_weight;},error);}
+bool llama_dsv41_weight_provider::release(std::string&error){return p->guard([&]{require(p->leased&&p->next<42,"No physical weight lease to release");ggml_backend_synchronize(p->options.backend);for(auto&e:p->stages[p->next].entries){e.t->data=nullptr;e.t->buffer=nullptr;}wf_release_layer(p->fetcher,int(p->next));require(!wf_has_failed(p->fetcher),"Required DirectStorage compute release failed");p->leased=false;++p->next;},error);}
+void llama_dsv41_weight_provider::invalidate(){if(!p)return;std::lock_guard<std::mutex>lock(p->mutex);p->invalidate();}
+bool llama_dsv41_weight_provider::advance_decoded_engram(llama_dsv41::engram_history&history,
+        const int32_t*tokens,size_t count,std::string&error){return p->guard([&]{
+    require(p->allocated&&!p->leased&&p->next==42&&count&&count<=128,
+        "Decoded Engram history requires a released pass and1..128 evaluated tokens");p->identity();
+    auto pending=history;std::array<llama_dsv41::engram_rows,128>rows{};std::string why;
+    require(llama_dsv41::engram_hash(p->engram,pending,tokens,nullptr,count,rows.data(),why),
+        "Decoded Engram token/history validation failed");history=pending;
+},error);}
+bool llama_dsv41_weight_provider::engram_tile(uint32_t index,llama_dsv41::engram_history&history,const int32_t*tokens,const uint8_t*mask,size_t count,std::vector<float>&out,std::string&error){out.clear();return p->guard([&]{
+    // A prepared whole-prompt cache owns these immutable encoded rows already.
+    // CPU decode may run during the preceding layer without leasing its weights.
+    // The unbuffered file fallback retains the original exact layer lease.
+    require(p->allocated&&index<2&&count&&count<=4096&&
+        ((p->engram_prompt&&p->next<=(index==0?2u:15u))||
+         (p->leased&&p->next==(index==0?2u:15u))),"Engram read has no prepared prompt cache or physical layer lease");p->identity();
+    auto pending=history;std::vector<llama_dsv41::engram_rows>rows(count);std::string why;require(llama_dsv41::engram_hash(p->engram,pending,tokens,mask,count,rows.data(),why),"Native Engram hash failed");
+    std::vector<uint32_t>ids(count*24);for(size_t t=0;t<count;++t)std::copy(rows[t][index].begin(),rows[t][index].end(),ids.begin()+t*24);
+    std::vector<float>result(count*6144);
+    auto read=[&](uint64_t offset,void*dst,size_t bytes){
+        if(p->options.engram_prefetch_host_bytes)return p->engram_prompt&&p->engram_prompt->read(index,offset,dst,bytes);
+#ifdef _WIN32
+        if(!bytes||bytes>264)return false;
+        const uint64_t begin=offset&~uint64_t(4095),skip=offset-begin,extent=align(skip+bytes,4096);
+        if(extent>8192||begin>p->options.verified_file_bytes||extent>p->options.verified_file_bytes-begin)return false;
+        LARGE_INTEGER where;where.QuadPart=LONGLONG(begin);DWORD done=0;
+        if(!SetFilePointerEx(p->engram_file,where,nullptr,FILE_BEGIN)||!ReadFile(p->engram_file,p->engram_page,DWORD(extent),&done,nullptr)||done!=extent)return false;
+        std::memcpy(dst,p->engram_page+skip,bytes);return true;
+#else
+        (void)offset;(void)dst;(void)bytes;return false;
+#endif
+    };
+    require(llama_dsv41::engram_read_batch(read,p->options.verified_file_bytes,p->engram_offsets[index],p->engram.rows[index],ids.data(),count,24,result.data(),why),"Original Engram row read/decode failed");
+    p->identity();out=std::move(result);history=pending;
+},error);}

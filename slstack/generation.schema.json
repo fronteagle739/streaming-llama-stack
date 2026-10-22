@@ -1,0 +1,1701 @@
+{
+  "$defs": {
+    "CompositionBox": {
+      "properties": {
+        "id": {
+          "title": "Id",
+          "type": "string"
+        },
+        "type": {
+          "default": "obj",
+          "enum": [
+            "obj",
+            "text"
+          ],
+          "title": "Type",
+          "type": "string"
+        },
+        "label": {
+          "default": "",
+          "title": "Label",
+          "type": "string"
+        },
+        "desc": {
+          "default": "",
+          "title": "Desc",
+          "type": "string"
+        },
+        "x": {
+          "maximum": 1000,
+          "minimum": 0,
+          "title": "X",
+          "type": "number"
+        },
+        "y": {
+          "maximum": 1000,
+          "minimum": 0,
+          "title": "Y",
+          "type": "number"
+        },
+        "width": {
+          "exclusiveMinimum": 0,
+          "maximum": 1000,
+          "title": "Width",
+          "type": "number"
+        },
+        "height": {
+          "exclusiveMinimum": 0,
+          "maximum": 1000,
+          "title": "Height",
+          "type": "number"
+        },
+        "text": {
+          "anyOf": [
+            {
+              "type": "string"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "title": "Text"
+        },
+        "color": {
+          "anyOf": [
+            {
+              "type": "string"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "title": "Color"
+        },
+        "colors": {
+          "items": {
+            "type": "string"
+          },
+          "title": "Colors",
+          "type": "array"
+        }
+      },
+      "required": [
+        "id",
+        "x",
+        "y",
+        "width",
+        "height"
+      ],
+      "title": "CompositionBox",
+      "type": "object"
+    },
+    "CompositionGuide": {
+      "properties": {
+        "width": {
+          "default": 1024,
+          "exclusiveMinimum": 0,
+          "title": "Width",
+          "type": "integer"
+        },
+        "height": {
+          "default": 1024,
+          "exclusiveMinimum": 0,
+          "title": "Height",
+          "type": "integer"
+        },
+        "background": {
+          "default": "",
+          "title": "Background",
+          "type": "string"
+        },
+        "boxes": {
+          "items": {
+            "$ref": "#/$defs/CompositionBox"
+          },
+          "title": "Boxes",
+          "type": "array"
+        },
+        "ideogram": {
+          "anyOf": [
+            {
+              "$ref": "#/$defs/IdeogramPromptFields"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null
+        }
+      },
+      "title": "CompositionGuide",
+      "type": "object"
+    },
+    "ControlGuide": {
+      "properties": {
+        "image_path": {
+          "default": "",
+          "title": "Image Path",
+          "type": "string"
+        },
+        "kind": {
+          "default": "canny",
+          "title": "Kind",
+          "type": "string"
+        },
+        "weight": {
+          "default": 1.0,
+          "title": "Weight",
+          "type": "number"
+        },
+        "source": {
+          "default": "control",
+          "title": "Source",
+          "type": "string"
+        },
+        "role": {
+          "anyOf": [
+            {
+              "type": "string"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "title": "Role"
+        }
+      },
+      "title": "ControlGuide",
+      "type": "object"
+    },
+    "H3UpscaleSettings": {
+      "additionalProperties": false,
+      "properties": {
+        "mode": {
+          "default": "two_pass",
+          "enum": [
+            "two_pass",
+            "video"
+          ],
+          "title": "Mode",
+          "type": "string"
+        },
+        "low_width": {
+          "default": 608,
+          "maximum": 8192,
+          "minimum": 32,
+          "title": "Low Width",
+          "type": "integer"
+        },
+        "low_height": {
+          "default": 352,
+          "maximum": 8192,
+          "minimum": 32,
+          "title": "Low Height",
+          "type": "integer"
+        },
+        "width": {
+          "default": 1376,
+          "maximum": 8192,
+          "minimum": 32,
+          "title": "Width",
+          "type": "integer"
+        },
+        "height": {
+          "default": 768,
+          "maximum": 8192,
+          "minimum": 32,
+          "title": "Height",
+          "type": "integer"
+        },
+        "first_steps": {
+          "default": 8,
+          "maximum": 200,
+          "minimum": 2,
+          "title": "First Steps",
+          "type": "integer"
+        },
+        "split": {
+          "default": 4,
+          "maximum": 199,
+          "minimum": 1,
+          "title": "Split",
+          "type": "integer"
+        },
+        "second_steps": {
+          "default": 3,
+          "maximum": 200,
+          "minimum": 1,
+          "title": "Second Steps",
+          "type": "integer"
+        },
+        "denoise": {
+          "default": 1,
+          "maximum": 1,
+          "minimum": 0,
+          "title": "Denoise",
+          "type": "number"
+        },
+        "schedule": {
+          "default": "workflow",
+          "enum": [
+            "workflow",
+            "continuation"
+          ],
+          "title": "Schedule",
+          "type": "string"
+        },
+        "model": {
+          "default": "",
+          "title": "Model",
+          "type": "string"
+        },
+        "source_video": {
+          "default": "",
+          "title": "Source Video",
+          "type": "string"
+        },
+        "turbo": {
+          "default": true,
+          "title": "Turbo",
+          "type": "boolean"
+        }
+      },
+      "title": "H3UpscaleSettings",
+      "type": "object"
+    },
+    "IdeogramPromptFields": {
+      "properties": {
+        "high_level_description": {
+          "anyOf": [
+            {
+              "type": "string"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "title": "High Level Description"
+        },
+        "aesthetics": {
+          "anyOf": [
+            {
+              "type": "string"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "title": "Aesthetics"
+        },
+        "lighting": {
+          "anyOf": [
+            {
+              "type": "string"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "title": "Lighting"
+        },
+        "medium": {
+          "anyOf": [
+            {
+              "type": "string"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "title": "Medium"
+        },
+        "art_style": {
+          "anyOf": [
+            {
+              "type": "string"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "title": "Art Style"
+        },
+        "color_palette": {
+          "items": {
+            "type": "string"
+          },
+          "title": "Color Palette",
+          "type": "array"
+        }
+      },
+      "title": "IdeogramPromptFields",
+      "type": "object"
+    },
+    "ImagePaintCrop": {
+      "properties": {
+        "x": {
+          "maximum": 65535,
+          "minimum": 0,
+          "title": "X",
+          "type": "integer"
+        },
+        "y": {
+          "maximum": 65535,
+          "minimum": 0,
+          "title": "Y",
+          "type": "integer"
+        },
+        "width": {
+          "maximum": 65536,
+          "minimum": 1,
+          "title": "Width",
+          "type": "integer"
+        },
+        "height": {
+          "maximum": 65536,
+          "minimum": 1,
+          "title": "Height",
+          "type": "integer"
+        }
+      },
+      "required": [
+        "x",
+        "y",
+        "width",
+        "height"
+      ],
+      "title": "ImagePaintCrop",
+      "type": "object"
+    },
+    "ImagePaintEdit": {
+      "properties": {
+        "overlay_path": {
+          "maxLength": 8192,
+          "minLength": 1,
+          "title": "Overlay Path",
+          "type": "string"
+        },
+        "combined_path": {
+          "maxLength": 8192,
+          "minLength": 1,
+          "title": "Combined Path",
+          "type": "string"
+        },
+        "source_mask_path": {
+          "anyOf": [
+            {
+              "maxLength": 8192,
+              "minLength": 1,
+              "type": "string"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "title": "Source Mask Path"
+        },
+        "crop": {
+          "anyOf": [
+            {
+              "$ref": "#/$defs/ImagePaintCrop"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null
+        }
+      },
+      "required": [
+        "overlay_path",
+        "combined_path"
+      ],
+      "title": "ImagePaintEdit",
+      "type": "object"
+    },
+    "LoopStep": {
+      "properties": {
+        "action": {
+          "default": "",
+          "title": "Action",
+          "type": "string"
+        },
+        "num_frames": {
+          "anyOf": [
+            {
+              "minimum": 1,
+              "type": "integer"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "title": "Num Frames"
+        },
+        "last_frame_path": {
+          "anyOf": [
+            {
+              "type": "string"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "title": "Last Frame Path"
+        },
+        "tail_trim": {
+          "anyOf": [
+            {
+              "minimum": 0,
+              "type": "integer"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "title": "Tail Trim"
+        }
+      },
+      "title": "LoopStep",
+      "type": "object"
+    },
+    "LoraSpec": {
+      "properties": {
+        "path": {
+          "title": "Path",
+          "type": "string"
+        },
+        "weight": {
+          "default": 1.0,
+          "title": "Weight",
+          "type": "number"
+        },
+        "name": {
+          "anyOf": [
+            {
+              "type": "string"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "title": "Name"
+        },
+        "expert": {
+          "anyOf": [
+            {
+              "enum": [
+                "high",
+                "low",
+                "both"
+              ],
+              "type": "string"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": "both",
+          "title": "Expert"
+        }
+      },
+      "required": [
+        "path"
+      ],
+      "title": "LoraSpec",
+      "type": "object"
+    },
+    "QwenImage21Point": {
+      "properties": {
+        "x": {
+          "minimum": 0,
+          "title": "X",
+          "type": "number"
+        },
+        "y": {
+          "minimum": 0,
+          "title": "Y",
+          "type": "number"
+        }
+      },
+      "required": [
+        "x",
+        "y"
+      ],
+      "title": "QwenImage21Point",
+      "type": "object"
+    },
+    "QwenImage21Region": {
+      "properties": {
+        "id": {
+          "maxLength": 80,
+          "minLength": 1,
+          "title": "Id",
+          "type": "string"
+        },
+        "color": {
+          "maxLength": 40,
+          "minLength": 1,
+          "title": "Color",
+          "type": "string"
+        },
+        "instruction": {
+          "maxLength": 2000,
+          "minLength": 1,
+          "title": "Instruction",
+          "type": "string"
+        },
+        "shape": {
+          "$ref": "#/$defs/QwenImage21RegionShape"
+        }
+      },
+      "required": [
+        "id",
+        "color",
+        "instruction",
+        "shape"
+      ],
+      "title": "QwenImage21Region",
+      "type": "object"
+    },
+    "QwenImage21RegionShape": {
+      "properties": {
+        "type": {
+          "enum": [
+            "circle",
+            "stroke",
+            "mask"
+          ],
+          "title": "Type",
+          "type": "string"
+        },
+        "cx": {
+          "anyOf": [
+            {
+              "minimum": 0,
+              "type": "number"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "title": "Cx"
+        },
+        "cy": {
+          "anyOf": [
+            {
+              "minimum": 0,
+              "type": "number"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "title": "Cy"
+        },
+        "radius": {
+          "anyOf": [
+            {
+              "exclusiveMinimum": 0,
+              "type": "number"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "title": "Radius"
+        },
+        "points": {
+          "items": {
+            "$ref": "#/$defs/QwenImage21Point"
+          },
+          "title": "Points",
+          "type": "array"
+        },
+        "width": {
+          "anyOf": [
+            {
+              "exclusiveMinimum": 0,
+              "type": "number"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "title": "Width"
+        },
+        "mask_path": {
+          "anyOf": [
+            {
+              "type": "string"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "title": "Mask Path"
+        }
+      },
+      "required": [
+        "type"
+      ],
+      "title": "QwenImage21RegionShape",
+      "type": "object"
+    },
+    "TwoPassSettings": {
+      "properties": {
+        "enabled": {
+          "default": false,
+          "title": "Enabled",
+          "type": "boolean"
+        },
+        "split_step": {
+          "default": 2,
+          "minimum": 1,
+          "title": "Split Step",
+          "type": "integer"
+        },
+        "loras": {
+          "items": {
+            "$ref": "#/$defs/LoraSpec"
+          },
+          "title": "Loras",
+          "type": "array"
+        },
+        "krea_sda_schedule": {
+          "default": false,
+          "title": "Krea Sda Schedule",
+          "type": "boolean"
+        }
+      },
+      "title": "TwoPassSettings",
+      "type": "object"
+    },
+    "VideoKeyframe": {
+      "properties": {
+        "image_path": {
+          "title": "Image Path",
+          "type": "string"
+        },
+        "frame": {
+          "anyOf": [
+            {
+              "minimum": 0,
+              "type": "integer"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "title": "Frame"
+        },
+        "at_fraction": {
+          "anyOf": [
+            {
+              "maximum": 1,
+              "minimum": 0,
+              "type": "number"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "title": "At Fraction"
+        },
+        "role": {
+          "anyOf": [
+            {
+              "enum": [
+                "first",
+                "middle",
+                "last"
+              ],
+              "type": "string"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "title": "Role"
+        },
+        "prompt": {
+          "anyOf": [
+            {
+              "type": "string"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "title": "Prompt"
+        },
+        "strength": {
+          "default": 1.0,
+          "maximum": 2,
+          "minimum": 0,
+          "title": "Strength",
+          "type": "number"
+        }
+      },
+      "required": [
+        "image_path"
+      ],
+      "title": "VideoKeyframe",
+      "type": "object"
+    }
+  },
+  "properties": {
+    "image_paint_edits": {
+      "additionalProperties": {
+        "$ref": "#/$defs/ImagePaintEdit"
+      },
+      "maxProperties": 64,
+      "title": "Image Paint Edits",
+      "type": "object"
+    },
+    "prompt": {
+      "title": "Prompt",
+      "type": "string"
+    },
+    "worker_id": {
+      "anyOf": [
+        {
+          "type": "string"
+        },
+        {
+          "type": "null"
+        }
+      ],
+      "default": null,
+      "title": "Worker Id"
+    },
+    "negative": {
+      "default": "",
+      "title": "Negative",
+      "type": "string"
+    },
+    "modality": {
+      "default": "t2i",
+      "enum": [
+        "t2i",
+        "t2v",
+        "i2v",
+        "l2v",
+        "v2v",
+        "i2i",
+        "av",
+        "fflf",
+        "multikeyframe",
+        "t2t",
+        "t+i2t",
+        "image-to-3d",
+        "r2v",
+        "ref2v",
+        "rv2v",
+        "mv2v",
+        "edit",
+        "animate",
+        "replace"
+      ],
+      "title": "Modality",
+      "type": "string"
+    },
+    "conversation_id": {
+      "anyOf": [
+        {
+          "type": "string"
+        },
+        {
+          "type": "null"
+        }
+      ],
+      "default": null,
+      "title": "Conversation Id"
+    },
+    "output_dir": {
+      "anyOf": [
+        {
+          "type": "string"
+        },
+        {
+          "type": "null"
+        }
+      ],
+      "default": null,
+      "title": "Output Dir"
+    },
+    "width": {
+      "default": 256,
+      "title": "Width",
+      "type": "integer"
+    },
+    "height": {
+      "default": 256,
+      "title": "Height",
+      "type": "integer"
+    },
+    "steps": {
+      "anyOf": [
+        {
+          "type": "integer"
+        },
+        {
+          "type": "null"
+        }
+      ],
+      "default": null,
+      "title": "Steps"
+    },
+    "two_pass": {
+      "anyOf": [
+        {
+          "$ref": "#/$defs/TwoPassSettings"
+        },
+        {
+          "type": "null"
+        }
+      ],
+      "default": null
+    },
+    "guidance": {
+      "anyOf": [
+        {
+          "type": "number"
+        },
+        {
+          "type": "null"
+        }
+      ],
+      "default": null,
+      "title": "Guidance"
+    },
+    "sdxl_prediction_type": {
+      "anyOf": [
+        {
+          "enum": [
+            "epsilon",
+            "v_prediction"
+          ],
+          "type": "string"
+        },
+        {
+          "type": "null"
+        }
+      ],
+      "default": null,
+      "title": "Sdxl Prediction Type"
+    },
+    "sdxl_clip_skip": {
+      "anyOf": [
+        {
+          "maximum": 10,
+          "minimum": 0,
+          "type": "integer"
+        },
+        {
+          "type": "null"
+        }
+      ],
+      "default": null,
+      "title": "Sdxl Clip Skip"
+    },
+    "wan_crossover_step": {
+      "anyOf": [
+        {
+          "minimum": 0,
+          "type": "integer"
+        },
+        {
+          "type": "null"
+        }
+      ],
+      "default": null,
+      "title": "Wan Crossover Step"
+    },
+    "wan_boundary_ratio": {
+      "anyOf": [
+        {
+          "maximum": 1,
+          "minimum": 0,
+          "type": "number"
+        },
+        {
+          "type": "null"
+        }
+      ],
+      "default": null,
+      "title": "Wan Boundary Ratio"
+    },
+    "wan_shift": {
+      "anyOf": [
+        {
+          "exclusiveMinimum": 0,
+          "type": "number"
+        },
+        {
+          "type": "null"
+        }
+      ],
+      "default": null,
+      "title": "Wan Shift"
+    },
+    "sampler": {
+      "default": "unipc",
+      "title": "Sampler",
+      "type": "string"
+    },
+    "sigmas": {
+      "default": "karras",
+      "title": "Sigmas",
+      "type": "string"
+    },
+    "seed": {
+      "default": 42,
+      "title": "Seed",
+      "type": "integer"
+    },
+    "compute_dtype": {
+      "anyOf": [
+        {
+          "type": "string"
+        },
+        {
+          "type": "null"
+        }
+      ],
+      "default": null,
+      "title": "Compute Dtype"
+    },
+    "model": {
+      "default": "nano",
+      "title": "Model",
+      "type": "string"
+    },
+    "num_frames": {
+      "default": 1,
+      "title": "Num Frames",
+      "type": "integer"
+    },
+    "fps": {
+      "default": 24,
+      "title": "Fps",
+      "type": "integer"
+    },
+    "cfg_batch": {
+      "default": false,
+      "title": "Cfg Batch",
+      "type": "boolean"
+    },
+    "weight_stream": {
+      "default": true,
+      "title": "Weight Stream",
+      "type": "boolean"
+    },
+    "h3_attention_backend": {
+      "default": "flash_attn2",
+      "enum": [
+        "sdpa",
+        "sageattention",
+        "flash_attn2"
+      ],
+      "title": "H3 Attention Backend",
+      "type": "string"
+    },
+    "h3_sparse_attention": {
+      "default": "auto",
+      "enum": [
+        "auto",
+        "on",
+        "off"
+      ],
+      "title": "H3 Sparse Attention",
+      "type": "string"
+    },
+    "h3_sparse_method": {
+      "default": "sol-attn",
+      "enum": [
+        "sol-attn",
+        "sla"
+      ],
+      "title": "H3 Sparse Method",
+      "type": "string"
+    },
+    "h3_reference_resolution": {
+      "anyOf": [
+        {
+          "type": "integer"
+        },
+        {
+          "type": "null"
+        }
+      ],
+      "default": null,
+      "title": "H3 Reference Resolution"
+    },
+    "h3_max_short_edge": {
+      "anyOf": [
+        {
+          "maximum": 8192,
+          "minimum": 32,
+          "type": "integer"
+        },
+        {
+          "type": "null"
+        }
+      ],
+      "default": null,
+      "title": "H3 Max Short Edge"
+    },
+    "h3_prompt_enhance": {
+      "default": true,
+      "title": "H3 Prompt Enhance",
+      "type": "boolean"
+    },
+    "h3_enhancer_backend": {
+      "anyOf": [
+        {
+          "enum": [
+            "auto",
+            "endpoint",
+            "live-preset",
+            "local-reasoner",
+            "gguf"
+          ],
+          "type": "string"
+        },
+        {
+          "type": "null"
+        }
+      ],
+      "default": null,
+      "title": "H3 Enhancer Backend"
+    },
+    "h3_upscale": {
+      "anyOf": [
+        {
+          "$ref": "#/$defs/H3UpscaleSettings"
+        },
+        {
+          "type": "null"
+        }
+      ],
+      "default": null
+    },
+    "prompt_already_enhanced": {
+      "default": false,
+      "title": "Prompt Already Enhanced",
+      "type": "boolean"
+    },
+    "magi2_prompt_enhance": {
+      "default": true,
+      "title": "Magi2 Prompt Enhance",
+      "type": "boolean"
+    },
+    "load_mode": {
+      "anyOf": [
+        {
+          "enum": [
+            "resident_cached",
+            "resident_lazy",
+            "streaming_lazy",
+            "streaming_nonlazy"
+          ],
+          "type": "string"
+        },
+        {
+          "type": "null"
+        }
+      ],
+      "default": null,
+      "title": "Load Mode"
+    },
+    "image_path": {
+      "anyOf": [
+        {
+          "type": "string"
+        },
+        {
+          "type": "null"
+        }
+      ],
+      "default": null,
+      "title": "Image Path"
+    },
+    "image2_path": {
+      "anyOf": [
+        {
+          "type": "string"
+        },
+        {
+          "type": "null"
+        }
+      ],
+      "default": null,
+      "title": "Image2 Path"
+    },
+    "video_path": {
+      "anyOf": [
+        {
+          "type": "string"
+        },
+        {
+          "type": "null"
+        }
+      ],
+      "default": null,
+      "title": "Video Path"
+    },
+    "num_conditional_frames": {
+      "anyOf": [
+        {
+          "type": "integer"
+        },
+        {
+          "type": "null"
+        }
+      ],
+      "default": null,
+      "title": "Num Conditional Frames"
+    },
+    "reference_images": {
+      "items": {
+        "type": "string"
+      },
+      "title": "Reference Images",
+      "type": "array"
+    },
+    "qwen_weight_precision": {
+      "default": "bf16",
+      "enum": [
+        "bf16",
+        "int8"
+      ],
+      "title": "Qwen Weight Precision",
+      "type": "string"
+    },
+    "qwen_output_rgba": {
+      "default": false,
+      "title": "Qwen Output Rgba",
+      "type": "boolean"
+    },
+    "qwen_use_kv_cache": {
+      "default": true,
+      "title": "Qwen Use Kv Cache",
+      "type": "boolean"
+    },
+    "qwen_request_encoder_staging": {
+      "default": false,
+      "title": "Qwen Request Encoder Staging",
+      "type": "boolean"
+    },
+    "qwen_source_width": {
+      "anyOf": [
+        {
+          "exclusiveMinimum": 0,
+          "maximum": 32768,
+          "type": "integer"
+        },
+        {
+          "type": "null"
+        }
+      ],
+      "default": null,
+      "title": "Qwen Source Width"
+    },
+    "qwen_source_height": {
+      "anyOf": [
+        {
+          "exclusiveMinimum": 0,
+          "maximum": 32768,
+          "type": "integer"
+        },
+        {
+          "type": "null"
+        }
+      ],
+      "default": null,
+      "title": "Qwen Source Height"
+    },
+    "qwen_regions": {
+      "items": {
+        "$ref": "#/$defs/QwenImage21Region"
+      },
+      "maxItems": 9,
+      "title": "Qwen Regions",
+      "type": "array"
+    },
+    "reference_video": {
+      "anyOf": [
+        {
+          "type": "string"
+        },
+        {
+          "type": "null"
+        }
+      ],
+      "default": null,
+      "title": "Reference Video"
+    },
+    "source_video": {
+      "anyOf": [
+        {
+          "type": "string"
+        },
+        {
+          "type": "null"
+        }
+      ],
+      "default": null,
+      "title": "Source Video"
+    },
+    "reference_videos": {
+      "items": {
+        "type": "string"
+      },
+      "title": "Reference Videos",
+      "type": "array"
+    },
+    "h3_seamless": {
+      "default": false,
+      "title": "H3 Seamless",
+      "type": "boolean"
+    },
+    "h3_extend_from": {
+      "anyOf": [
+        {
+          "type": "string"
+        },
+        {
+          "type": "null"
+        }
+      ],
+      "default": null,
+      "title": "H3 Extend From"
+    },
+    "reference_audios": {
+      "items": {
+        "type": "string"
+      },
+      "title": "Reference Audios",
+      "type": "array"
+    },
+    "bernini_task": {
+      "anyOf": [
+        {
+          "type": "string"
+        },
+        {
+          "type": "null"
+        }
+      ],
+      "default": null,
+      "title": "Bernini Task"
+    },
+    "reference_domains": {
+      "items": {},
+      "title": "Reference Domains",
+      "type": "array"
+    },
+    "keyframes": {
+      "items": {
+        "$ref": "#/$defs/VideoKeyframe"
+      },
+      "title": "Keyframes",
+      "type": "array"
+    },
+    "audio_path": {
+      "anyOf": [
+        {
+          "type": "string"
+        },
+        {
+          "type": "null"
+        }
+      ],
+      "default": null,
+      "title": "Audio Path"
+    },
+    "audio_mode": {
+      "default": "attach",
+      "enum": [
+        "attach",
+        "condition",
+        "mux",
+        "generate"
+      ],
+      "title": "Audio Mode",
+      "type": "string"
+    },
+    "denoise": {
+      "anyOf": [
+        {
+          "type": "number"
+        },
+        {
+          "type": "null"
+        }
+      ],
+      "default": null,
+      "title": "Denoise"
+    },
+    "krea2_i2i_tile_size": {
+      "default": 0,
+      "maximum": 4096,
+      "minimum": 0,
+      "title": "Krea2 I2I Tile Size",
+      "type": "integer"
+    },
+    "krea2_i2i_tile_overlap": {
+      "default": 256,
+      "maximum": 2048,
+      "minimum": 0,
+      "title": "Krea2 I2I Tile Overlap",
+      "type": "integer"
+    },
+    "hunyuan_native_edit": {
+      "default": false,
+      "title": "Hunyuan Native Edit",
+      "type": "boolean"
+    },
+    "mask_path": {
+      "anyOf": [
+        {
+          "type": "string"
+        },
+        {
+          "type": "null"
+        }
+      ],
+      "default": null,
+      "title": "Mask Path"
+    },
+    "krea2_edit": {
+      "default": false,
+      "title": "Krea2 Edit",
+      "type": "boolean"
+    },
+    "krea_request_process": {
+      "default": false,
+      "title": "Krea Request Process",
+      "type": "boolean"
+    },
+    "krea_request_timeout_s": {
+      "anyOf": [
+        {
+          "maximum": 10800,
+          "minimum": 1,
+          "type": "number"
+        },
+        {
+          "type": "null"
+        }
+      ],
+      "default": null,
+      "title": "Krea Request Timeout S"
+    },
+    "krea2_edit_reference_path": {
+      "anyOf": [
+        {
+          "type": "string"
+        },
+        {
+          "type": "null"
+        }
+      ],
+      "default": null,
+      "title": "Krea2 Edit Reference Path"
+    },
+    "krea2_edit_lora_path": {
+      "anyOf": [
+        {
+          "type": "string"
+        },
+        {
+          "type": "null"
+        }
+      ],
+      "default": null,
+      "title": "Krea2 Edit Lora Path"
+    },
+    "krea2_edit_grounding_px": {
+      "default": 768,
+      "maximum": 4096,
+      "minimum": 0,
+      "title": "Krea2 Edit Grounding Px",
+      "type": "integer"
+    },
+    "krea2_edit_recipe": {
+      "default": "identity",
+      "enum": [
+        "identity",
+        "ostris"
+      ],
+      "title": "Krea2 Edit Recipe",
+      "type": "string"
+    },
+    "loras": {
+      "items": {
+        "$ref": "#/$defs/LoraSpec"
+      },
+      "title": "Loras",
+      "type": "array"
+    },
+    "control_image": {
+      "anyOf": [
+        {
+          "type": "string"
+        },
+        {
+          "type": "null"
+        }
+      ],
+      "default": null,
+      "title": "Control Image"
+    },
+    "control_kind": {
+      "anyOf": [
+        {
+          "type": "string"
+        },
+        {
+          "type": "null"
+        }
+      ],
+      "default": null,
+      "title": "Control Kind"
+    },
+    "control_weight": {
+      "default": 1.0,
+      "title": "Control Weight",
+      "type": "number"
+    },
+    "control_guides": {
+      "items": {
+        "$ref": "#/$defs/ControlGuide"
+      },
+      "title": "Control Guides",
+      "type": "array"
+    },
+    "composition_guide": {
+      "anyOf": [
+        {
+          "$ref": "#/$defs/CompositionGuide"
+        },
+        {
+          "type": "null"
+        }
+      ],
+      "default": null
+    },
+    "composition_guide_path": {
+      "anyOf": [
+        {
+          "type": "string"
+        },
+        {
+          "type": "null"
+        }
+      ],
+      "default": null,
+      "title": "Composition Guide Path"
+    },
+    "model_arch": {
+      "anyOf": [
+        {
+          "type": "string"
+        },
+        {
+          "type": "null"
+        }
+      ],
+      "default": null,
+      "title": "Model Arch"
+    },
+    "model_support_files": {
+      "additionalProperties": {
+        "type": "string"
+      },
+      "title": "Model Support Files",
+      "type": "object"
+    },
+    "reason": {
+      "default": false,
+      "title": "Reason",
+      "type": "boolean"
+    },
+    "reasoner_model": {
+      "anyOf": [
+        {
+          "type": "string"
+        },
+        {
+          "type": "null"
+        }
+      ],
+      "default": null,
+      "title": "Reasoner Model"
+    },
+    "reason_max_tokens": {
+      "default": 200,
+      "title": "Reason Max Tokens",
+      "type": "integer"
+    },
+    "reason_temperature": {
+      "anyOf": [
+        {
+          "type": "number"
+        },
+        {
+          "type": "null"
+        }
+      ],
+      "default": null,
+      "title": "Reason Temperature"
+    },
+    "reason_top_p": {
+      "anyOf": [
+        {
+          "type": "number"
+        },
+        {
+          "type": "null"
+        }
+      ],
+      "default": null,
+      "title": "Reason Top P"
+    },
+    "reason_system": {
+      "anyOf": [
+        {
+          "type": "string"
+        },
+        {
+          "type": "null"
+        }
+      ],
+      "default": null,
+      "title": "Reason System"
+    },
+    "ideo_preset": {
+      "default": "V4_QUALITY_48",
+      "title": "Ideo Preset",
+      "type": "string"
+    },
+    "ideo_quant": {
+      "default": "nf4",
+      "title": "Ideo Quant",
+      "type": "string"
+    },
+    "glm_rep_penalty": {
+      "anyOf": [
+        {
+          "type": "number"
+        },
+        {
+          "type": "null"
+        }
+      ],
+      "default": null,
+      "title": "Glm Rep Penalty"
+    },
+    "glm_rep_window": {
+      "anyOf": [
+        {
+          "type": "integer"
+        },
+        {
+          "type": "null"
+        }
+      ],
+      "default": null,
+      "title": "Glm Rep Window"
+    },
+    "ltx_mode": {
+      "anyOf": [
+        {
+          "type": "string"
+        },
+        {
+          "type": "null"
+        }
+      ],
+      "default": null,
+      "title": "Ltx Mode"
+    },
+    "ltx_360_strength": {
+      "anyOf": [
+        {
+          "type": "number"
+        },
+        {
+          "type": "null"
+        }
+      ],
+      "default": null,
+      "title": "Ltx 360 Strength"
+    },
+    "loop_steps": {
+      "items": {
+        "$ref": "#/$defs/LoopStep"
+      },
+      "title": "Loop Steps",
+      "type": "array"
+    },
+    "loop_overlap": {
+      "default": 5,
+      "minimum": 0,
+      "title": "Loop Overlap",
+      "type": "integer"
+    },
+    "loop_tail_trim": {
+      "default": 0,
+      "minimum": 0,
+      "title": "Loop Tail Trim",
+      "type": "integer"
+    },
+    "project_ids": {
+      "additionalProperties": {
+        "type": "string"
+      },
+      "title": "Project Ids",
+      "type": "object"
+    },
+    "history_thread_id": {
+      "default": "",
+      "title": "History Thread Id",
+      "type": "string"
+    },
+    "history_parent_entry_id": {
+      "default": "",
+      "title": "History Parent Entry Id",
+      "type": "string"
+    }
+  },
+  "required": [
+    "prompt"
+  ],
+  "title": "GenerationParams",
+  "type": "object"
+}

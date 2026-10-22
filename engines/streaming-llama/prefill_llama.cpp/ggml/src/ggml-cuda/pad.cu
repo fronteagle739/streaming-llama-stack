@@ -1,0 +1,98 @@
+#include "pad.cuh"
+
+#include <stdint.h>
+
+__device__ __forceinline__ int64_t wrap_around(int64_t coord, int64_t size) {
+    // + size ensures negatives are handled properly
+    return (coord + size) % size;
+}
+
+// Non-contiguous-safe PAD kernel.  Uses byte strides (nb0..nb3) for the source
+// tensor so that views/transposes/reshapes with non-trivial strides work.
+// The destination is always contiguous (freshly allocated by the scheduler).
+static __global__ void pad_f32(const char * __restrict__ src, float * __restrict__ dst,
+                               const int lp0, const int rp0, const int lp1, const int rp1,
+                               const int lp2, const int rp2, const int lp3, const int rp3,
+                               const int ne0, const int ne1, const int ne2, const int ne3,
+                               const int64_t nb0, const int64_t nb1,
+                               const int64_t nb2, const int64_t nb3,
+                               const bool circular) {
+    int i0 = threadIdx.x + blockIdx.x * blockDim.x;
+    int i1 = blockIdx.y;
+    int i2 = blockIdx.z % ne2;
+    int i3 = blockIdx.z / ne2;
+
+    if (i0 >= ne0 || i1 >= ne1 || i2 >= ne2 || i3 >= ne3) {
+        return;
+    }
+
+    const int64_t dst_idx = i3 * (ne0 * ne1 * ne2) + i2 * (ne0 * ne1) + i1 * ne0 + i0;
+
+    if (!circular) {
+        if ((i0 >= lp0 && i0 < ne0 - rp0) && (i1 >= lp1 && i1 < ne1 - rp1) && (i2 >= lp2 && i2 < ne2 - rp2) &&
+            (i3 >= lp3 && i3 < ne3 - rp3)) {
+            const int64_t i00  = i0 - lp0;
+            const int64_t i01  = i1 - lp1;
+            const int64_t i02  = i2 - lp2;
+            const int64_t i03  = i3 - lp3;
+
+            dst[dst_idx] = *((const float *)(src + i03 * nb3 + i02 * nb2 + i01 * nb1 + i00 * nb0));
+        } else {
+            dst[dst_idx] = 0.0f;
+        }
+    }
+    else {
+        const int64_t ne00 = ne0 - lp0 - rp0;
+        const int64_t ne01 = ne1 - lp1 - rp1;
+        const int64_t ne02 = ne2 - lp2 - rp2;
+
+        const int64_t i00 = wrap_around(i0 - lp0, ne00);
+        const int64_t i01 = wrap_around(i1 - lp1, ne01);
+        const int64_t i02 = wrap_around(i2 - lp2, ne02);
+        const int64_t i03 = wrap_around(i3 - lp3, ne3 - lp3 - rp3);
+
+        dst[dst_idx] = *((const float *)(src + i03 * nb3 + i02 * nb2 + i01 * nb1 + i00 * nb0));
+    }
+}
+
+
+static void pad_f32_cuda(const char * src, float * dst,
+    const int lp0, const int rp0, const int lp1, const int rp1,
+    const int lp2, const int rp2, const int lp3, const int rp3,
+    const int ne0, const int ne1, const int ne2, const int ne3,
+    const int64_t nb0, const int64_t nb1, const int64_t nb2, const int64_t nb3,
+    const bool circular, cudaStream_t stream) {
+    int  num_blocks = (ne0 + CUDA_PAD_BLOCK_SIZE - 1) / CUDA_PAD_BLOCK_SIZE;
+    dim3 gridDim(num_blocks, ne1, ne2 * ne3);
+    pad_f32<<<gridDim, CUDA_PAD_BLOCK_SIZE, 0, stream>>>(src, dst,
+                                                         lp0, rp0, lp1, rp1, lp2, rp2, lp3, rp3,
+                                                         ne0, ne1, ne2, ne3,
+                                                         nb0, nb1, nb2, nb3,
+                                                         circular);
+}
+
+void ggml_cuda_op_pad(ggml_backend_cuda_context & ctx, ggml_tensor * dst) {
+    const ggml_tensor * src0   = dst->src[0];
+    const char *        src0_d = (const char *) src0->data;
+    float *             dst_d  = (float *) dst->data;
+    cudaStream_t        stream = ctx.stream();
+
+    GGML_ASSERT(src0->type == GGML_TYPE_F32);
+    GGML_ASSERT(dst->type == GGML_TYPE_F32);
+
+    const int32_t lp0      = ((const int32_t *) (dst->op_params))[0];
+    const int32_t rp0      = ((const int32_t *) (dst->op_params))[1];
+    const int32_t lp1      = ((const int32_t *) (dst->op_params))[2];
+    const int32_t rp1      = ((const int32_t *) (dst->op_params))[3];
+    const int32_t lp2      = ((const int32_t *) (dst->op_params))[4];
+    const int32_t rp2      = ((const int32_t *) (dst->op_params))[5];
+    const int32_t lp3      = ((const int32_t *) (dst->op_params))[6];
+    const int32_t rp3      = ((const int32_t *) (dst->op_params))[7];
+    const int32_t circular = ((const int32_t *) (dst->op_params))[8];
+
+    pad_f32_cuda(src0_d, dst_d,
+                 lp0, rp0, lp1, rp1, lp2, rp2, lp3, rp3,
+                 dst->ne[0], dst->ne[1], dst->ne[2], dst->ne[3],
+                 src0->nb[0], src0->nb[1], src0->nb[2], src0->nb[3],
+                 (bool) circular, stream);
+}
