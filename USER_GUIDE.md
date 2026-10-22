@@ -27,7 +27,7 @@ Accurate preserves the original default arithmetic; Fast enables the delivered B
 | `--ds4-cuda-streaming-expert-cache-class-isolation` | ds4-win: `0` | DS4_CUDA_STREAMING_EXPERT_CACHE_CLASS_ISOLATION: qualified preset/runtime setting; override for a different memory or arithmetic plan |
 | `--ds4-cuda-streaming-expert-cache-reserve-gb` | ds4-win: `2` | DS4_CUDA_STREAMING_EXPERT_CACHE_RESERVE_GB: qualified preset/runtime setting; override for a different memory or arithmetic plan |
 | `--ds4-cuda-streaming-host-cache-n` | ds4-win: `0` | DS4_CUDA_STREAMING_HOST_CACHE_N: qualified preset/runtime setting; override for a different memory or arithmetic plan |
-| `--ds4-host-memory-budget-mb` | ds4-win: `{host_budget_mb}` | DS4_HOST_MEMORY_BUDGET_MB: qualified preset/runtime setting; override for a different memory or arithmetic plan |
+| `--ds4-host-memory-budget-mb` | ds4-win: `{native_commit_mb}` | Windows native private-commit ceiling in MiB, including WDDM GPU mappings; defaults to qualified45056MiB bounded by job_commit_gib. Physical RSS and available RAM remain separately guarded. |
 | `--ds4-metal-disable-v41-layer-prefill` | ds4-win: `1`; mac-ds4: `1` | DS4_METAL_DISABLE_V41_LAYER_PREFILL: qualified preset/runtime setting; override for a different memory or arithmetic plan |
 | `--ds4-metal-wired-core-kv` | mac-ds4: `1` | Use anonymous owned, mlock-protected shared Metal core, KV and tensor storage; allocation or wiring failure refuses startup. The launcher requires this for native Mac inference. |
 | `--ds4-native-session` | Explicit runtime value | ds4 native session: supplied by authenticated native pairing; an inconsistent override refuses the handshake. |
@@ -2442,6 +2442,48 @@ Source: `engines/ds4-win/ds4_cli.c:1306`. Unset read: NULL from getenv; the lite
              * mirroring that keeps the worker in lockstep lives there.
 ```
 
+### DS4_COMBO_ENABLED
+
+Enable the authenticated Windows target-only RAM handoff boundary; default off.
+
+Scope: ds4-win. Class: advanced.
+
+### DS4_COMBO_OWNER_EPOCH
+
+Controller-owned positive epoch; stale owners are refused.
+
+Scope: ds4-win. Class: advanced.
+
+### DS4_COMBO_OWNER_SESSION
+
+Controller-owned session nonce, fixed across engine handoffs.
+
+Scope: ds4-win. Class: advanced.
+
+### DS4_COMBO_RESTORE_CAPACITY
+
+Explicit admitted shared RAM extent in bytes.
+
+Scope: ds4-win. Class: advanced.
+
+### DS4_COMBO_RESTORE_MAPPING
+
+Existing parent-owned physically locked RAM section; never a file path.
+
+Scope: ds4-win. Class: advanced.
+
+### DS4_COMBO_RESTORE_SHA256
+
+Expected canonical native payload SHA256; actual GPU owners are verified before publication.
+
+Scope: ds4-win. Class: advanced.
+
+### DS4_COMBO_SEQUENCE
+
+Initial monotonic control sequence for this native process.
+
+Scope: ds4-win. Class: advanced.
+
 ### DS4_CPU_DISABLE_UNROLLED_ARGMAX
 
 DS4_CPU_DISABLE_UNROLLED_ARGMAX: advanced engine setting; built-in default retained
@@ -3719,6 +3761,54 @@ static int cuda_ds_prefetch_enabled(void) {
 }
 
 ```
+
+### DS4_CUDA_DSPARK_AUX_3070
+
+DS4_CUDA_DSPARK_AUX_3070: frozen native decoder diagnostic; built-in default retained
+
+Scope: ds4-win. Class: advanced.
+
+### DS4_CUDA_DSPARK_AUX_STAGES
+
+DS4_CUDA_DSPARK_AUX_STAGES: frozen native decoder diagnostic; built-in default retained
+
+Scope: ds4-win. Class: advanced.
+
+### DS4_CUDA_DSPARK_BATCH_VERIFY
+
+DS4_CUDA_DSPARK_BATCH_VERIFY: frozen native decoder diagnostic; built-in default retained
+
+Scope: ds4-win. Class: advanced.
+
+### DS4_CUDA_DSPARK_COST_GATE
+
+DS4_CUDA_DSPARK_COST_GATE: frozen native decoder diagnostic; built-in default retained
+
+Scope: ds4-win. Class: advanced.
+
+### DS4_CUDA_DSPARK_FULL_3070
+
+DS4_CUDA_DSPARK_FULL_3070: frozen native decoder diagnostic; built-in default retained
+
+Scope: ds4-win. Class: advanced.
+
+### DS4_CUDA_DSPARK_RESIDENT
+
+DS4_CUDA_DSPARK_RESIDENT: frozen native decoder diagnostic; built-in default retained
+
+Scope: ds4-win. Class: advanced.
+
+### DS4_CUDA_DSPARK_VERIFY_BIAS
+
+DS4_CUDA_DSPARK_VERIFY_BIAS: frozen native decoder diagnostic; built-in default retained
+
+Scope: ds4-win. Class: advanced.
+
+### DS4_CUDA_DSPARK_VERIFY_HARD_RESIDENT
+
+DS4_CUDA_DSPARK_VERIFY_HARD_RESIDENT: frozen native decoder diagnostic; built-in default retained
+
+Scope: ds4-win. Class: advanced.
 
 ### DS4_CUDA_DS_BATCH_TRACE
 
@@ -18864,6 +18954,12 @@ Source: `engines/ds4-win/ds4_dstorage.cpp:1805`. Unset read: NULL from getenv; t
         QueryPerformanceCounter(&a);
 ```
 
+### DS4_DS_LAYER_TRACE
+
+DS4_DS_LAYER_TRACE: frozen native decoder diagnostic; built-in default retained
+
+Scope: ds4-win. Class: advanced.
+
 ### DS4_DS_PIPELINE_DEPTH
 
 DS4_DS_PIPELINE_DEPTH: advanced engine setting; built-in default retained
@@ -18881,6 +18977,12 @@ Source: `engines/ds4-win/ds4_dstorage.cpp:1022`. Unset read: NULL from getenv; t
             unsigned long v = strtoul(env, &end, 10);
             if (end != env && end && *end == 0 && v >= 1) {
 ```
+
+### DS4_DS_PRIORITY
+
+DS4_DS_PRIORITY: frozen native decoder diagnostic; built-in default retained
+
+Scope: ds4-win. Class: advanced.
 
 ### DS4_DS_SELFTEST
 
@@ -21752,7 +21854,7 @@ static cudaError_t cuda_host_allocation_result(cudaError_t result, size_t bytes,
 
 ### DS4_HOST_MEMORY_BUDGET_MB
 
-DS4_HOST_MEMORY_BUDGET_MB: qualified preset/runtime setting; override for a different memory or arithmetic plan
+Windows native private-commit ceiling in MiB, including WDDM GPU mappings; defaults to qualified45056MiB bounded by job_commit_gib. Physical RSS and available RAM remain separately guarded.
 
 Scope: ds4-win. Class: preset.
 

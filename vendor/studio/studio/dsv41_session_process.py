@@ -8,9 +8,17 @@ from .dsv41_session_contract import MODEL_SHA256, MAX_CONTROL, Refused, checkpoi
 
 class Producer:
 
-    def __init__(self, session, argv, env, directory, *, host_bytes, physical_floor, operation_seconds=600, idle_seconds=3600, native=None, cancelled=None, runtime_check=None):
+    def __init__(self, session, argv, env, directory, *, host_bytes, physical_floor, operation_seconds=600, idle_seconds=3600, native=None, cancelled=None, runtime_check=None, native_mode=3, bootstrap=None, startup=None, owner_epoch=0):
         self.creation_attempted = False
         try:
+            self.native_mode = native_mode
+            require(type(owner_epoch) is int and 0<=owner_epoch<(1<<64), 'Exact bounded owner epoch required')
+            self.owner_epoch = owner_epoch
+            require(type(native_mode) is int and native_mode in (1, 3), 'Explicit native session mode must be1 or3')
+            require(bootstrap is None or native_mode == 1, 'Native bootstrap requires explicit target-only mode1')
+            self.bootstrap = bootstrap
+            require(startup is None or callable(startup) and native_mode == 1 and bootstrap is None, 'HTTP-native startup requires explicit target-only mode1 and no pipe bootstrap')
+            self.startup = startup
             self._initialize(session, argv, env, directory, host_bytes=host_bytes, physical_floor=physical_floor, operation_seconds=operation_seconds, idle_seconds=idle_seconds, native=native, cancelled=cancelled, runtime_check=runtime_check)
         except BaseException as exc:
             if not self.creation_attempted:
@@ -60,12 +68,21 @@ class Producer:
             child_out.close()
             child_err.close()
             self.threads = [threading.Thread(target=self._watch, name='dsv41-budget', daemon=True), threading.Thread(target=self._drain, name='dsv41-stderr', daemon=True)]
+            if self.startup is not None:
+                self.threads.append(threading.Thread(target=self._drain_stdout, name='dsv41-stdout', daemon=True))
             for thread in self.threads:
                 thread.start()
             self.job.resume()
-            self.ready = self._receive()
-            require(self.ready.get('status') == 'ready' and type(self.ready.get('next_sequence')) is int and (self.ready.get('next_sequence') == 1) and (self.ready.get('maximum_prefill_tokens') == 49152) and (self.ready.get('maximum_decode_tokens') == 128) and (self.ready.get('control_host_bytes') == 64 << 20), 'Unexpected persistent producer admission')
-            checkpoint(self.ready.get('checkpoint'))
+            if self.bootstrap is not None:
+                self.bootstrap(self._write)
+            if self.startup is None:
+                self.ready = self._receive()
+                require(self.ready.get('status') == 'ready' and type(self.ready.get('next_sequence')) is int and (self.ready.get('next_sequence') == 1) and (self.ready.get('maximum_prefill_tokens') == 49152) and (self.ready.get('maximum_decode_tokens') == 128) and (self.ready.get('control_host_bytes') == 64 << 20), 'Unexpected persistent producer admission')
+                checkpoint(self.ready.get('checkpoint'), self.native_mode)
+            else:
+                self.ready = self.startup(self)
+                require(type(self.ready) is dict and self.ready.get('status') == 'ready', 'HTTP-native readiness was not certified')
+            require(not self.owner_epoch or type(self.ready.get('owner_epoch')) is int and self.ready['owner_epoch'] == self.owner_epoch, 'Native process readiness owner epoch differs')
             self.deadline = None
             self.activity = time.monotonic()
             if self.runtime_check:
@@ -116,8 +133,18 @@ class Producer:
     def _drain(self):
         try:
             while (block := self.errors.read(65536)):
-                require(len(self.diagnostic) + len(block) <= 8 << 20, 'Persistent producer diagnostic RAM cap exceeded')
-                self.diagnostic.extend(block)
+                with self.state_lock:
+                    require(len(self.diagnostic) + len(block) <= 8 << 20, 'Persistent producer diagnostic RAM cap exceeded')
+                    self.diagnostic.extend(block)
+        except BaseException as exc:
+            self._poison(exc)
+
+    def _drain_stdout(self):
+        try:
+            while (block := self.output.read(65536)):
+                with self.state_lock:
+                    require(len(self.diagnostic) + len(block) <= 8 << 20, 'Native diagnostic RAM cap exceeded')
+                    self.diagnostic.extend(block)
         except BaseException as exc:
             self._poison(exc)
 
@@ -126,6 +153,7 @@ class Producer:
         require(raw.endswith(b'\n') and len(raw) <= 65536, 'Persistent producer reply truncated or too large')
         row = control(raw)
         require(row.get('session') == self.session and row.get('model_sha256') == MODEL_SHA256, 'Producer reply identity mismatch')
+        require(not self.owner_epoch or type(row.get('owner_epoch')) is int and row['owner_epoch'] == self.owner_epoch, 'Producer reply owner epoch mismatch')
         require(self.failure is None, self.failure or 'Producer failed')
         return row
 
@@ -143,8 +171,11 @@ class Producer:
         try:
             require(not self.closed and self.failure is None, 'Session unavailable: ' + str(self.failure))
             require(self.job.poll() is None, 'Persistent producer exited')
-            command(row, self.session, self.sequence)
-            data = (json.dumps(row, separators=(',', ':'), allow_nan=False) + '\n').encode()
+            command(row, self.session, self.sequence, self.native_mode)
+            wire = dict(row)
+            if self.owner_epoch:
+                wire['owner_epoch'] = self.owner_epoch
+            data = (json.dumps(wire, separators=(',', ':'), allow_nan=False) + '\n').encode()
             require(len(data) <= MAX_CONTROL, 'Session control line exceeds bound')
             self.deadline = time.monotonic() + self.operation_seconds
             writing = True
@@ -166,7 +197,7 @@ class Producer:
     def _reply(self):
         reply = self._receive()
         require(type(reply.get('sequence')) is int and reply.get('sequence') == self.sequence and (reply.get('status') == 'complete'), 'Producer reply sequence/status mismatch')
-        checkpoint(reply.get('checkpoint'))
+        checkpoint(reply.get('checkpoint'), self.native_mode)
         return reply
 
     def request(self, row):
@@ -186,14 +217,14 @@ class Producer:
         try:
             meta = self._receive()
             require(meta.get('status') == 'payload' and type(meta.get('sequence')) is int and (meta.get('sequence') == self.sequence), 'Invalid export reply')
-            target = checkpoint(meta.get('target'))
+            target = checkpoint(meta.get('target'), self.native_mode)
             require(target == row['base'], 'Export target differs from requested checkpoint')
             n = meta.get('bytes')
             require(type(n) is int and 0 < n <= 8 << 30, 'Export length exceeds native context bound')
             if row['operation'] == 'export_initial':
                 require(meta.get('kind') == 'native_initial' and meta.get('base') is None, 'Initial export format')
             else:
-                base = checkpoint(meta.get('base'))
+                base = checkpoint(meta.get('base'), self.native_mode)
                 require(meta.get('kind') == 'artifact_delta_v2_1' and base['context'] == target['context'] and (0 < target['position'] - base['position'] <= 49152), 'Incremental export format')
             self.remaining = n
             self.transfer = 'out'

@@ -89,5 +89,44 @@ static DS4_AFFINITY_FN void ds4_cache_affinity_select_confident(
     sum=fmaxf(sum,6.103515625e-5f);
     for(uint32_t j=0;j<used;j++)weights[j]=weights[j]/sum*scale;
 }
+typedef struct ds4_affinity_resident_decision {
+    uint32_t resident_count, applied, protected_top, insufficient_resident;
+    float alternative, width;
+} ds4_affinity_resident_decision;
+/* Verify-only hard policy. Protect the native set when its missing top choice
+ * exceeds the best resident by the native top1..topk width. Otherwise select
+ * only residents, provided a complete top-k exists. No invented experts or
+ * partial normalization when the cache has fewer than k eligible entries. */
+static DS4_AFFINITY_FN int ds4_cache_affinity_select_resident_confident(
+        int32_t *selected,float *weights,const float *probs,const float *bias,
+        const uint8_t *resident,uint32_t experts,uint32_t used,float scale,
+        ds4_affinity_resident_decision *decision) {
+    ds4_affinity_resident_decision d={0};
+    if(!used || used>experts || experts>384u)return 0;
+    const int32_t first=selected[0],last=selected[used-1];
+    if(first<0 || last<0 || (uint32_t)first>=experts || (uint32_t)last>=experts)return 0;
+    float best=-INFINITY;
+    for(uint32_t e=0;e<experts;e++)if(resident[e]) {
+        d.resident_count++;
+        best=fmaxf(best,probs[e]+(bias?bias[e]:0.0f));
+    }
+    d.alternative=best;
+    const float first_score=probs[first]+(bias?bias[first]:0.0f);
+    d.width=fmaxf(first_score-(probs[last]+(bias?bias[last]:0.0f)),1e-8f);
+    if(d.resident_count<used)d.insufficient_resident=1;
+    else if(!resident[first] && first_score-best>=d.width)d.protected_top=1;
+    else {
+        float scores[384];
+        for(uint32_t e=0;e<experts;e++)scores[e]=resident[e] ? probs[e]+(bias?bias[e]:0.0f) : -INFINITY;
+        ds4_cache_affinity_select(selected,weights,scores,(const float *)0,resident,0,experts,used,scale);
+        float sum=0;
+        for(uint32_t j=0;j<used;j++){weights[j]=probs[selected[j]];sum+=weights[j];}
+        sum=fmaxf(sum,6.103515625e-5f);
+        for(uint32_t j=0;j<used;j++)weights[j]=weights[j]/sum*scale;
+        d.applied=1;
+    }
+    if(decision)*decision=d;
+    return 1;
+}
 #undef DS4_AFFINITY_FN
 #endif

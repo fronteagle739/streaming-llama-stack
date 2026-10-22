@@ -252,13 +252,20 @@ typedef struct {
 } ds4_session_payload_file;
 
 typedef struct {
-    bool supported, adaptive;
-    float requested, applied;
+    bool supported, adaptive, phases_supported, per_phase;
+    float requested, applied, phase_values[4]; /* code inherits answer when omitted */
+    int phase;
+    uint64_t phase_revision;
+    uint64_t phase_tokens[4], base_phase_tokens[3];
+    double phase_seconds[4], base_phase_seconds[3];
     uint64_t revision, applied_revision;
 } ds4_quality_speed;
 /* Thread-safe publication; CUDA mutation occurs only at a decode boundary. */
 void ds4_quality_speed_get(ds4_quality_speed *out);
 int ds4_quality_speed_set(float mean);
+int ds4_quality_speed_set_phases(const float values[3]);
+int ds4_quality_speed_set_phase_map(const float values[4]);
+void ds4_session_quality_speed_begin(ds4_session *s);
 
 bool ds4_parse_affinity_count(const char *text, uint32_t maximum, uint32_t *out);
 int ds4_engine_open(ds4_engine **out, const ds4_engine_options *opt);
