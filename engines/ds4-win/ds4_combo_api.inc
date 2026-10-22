@@ -194,6 +194,7 @@ static void ds4_combo_http(server*s,int fd,const http_request*hr){
             if(command.seen!=(7|8)){snprintf(err,sizeof(err),"render request fields differ");goto failed;}
             request parsed;char why[256]={0};
             if(!parse_chat_request(s->engine,s,command.body,1,s->ctx_size,&parsed,why,sizeof(why))){snprintf(err,sizeof(err),"native renderer refused: %.200s",why);goto failed;}
+            if(parsed.image_count){request_free(&parsed);snprintf(err,sizeof(err),"mode1 combined contract requires text-only native state");goto failed;}
             buf_puts(&reply,"{\"tokens\":[");for(int i=0;i<parsed.prompt.len;i++)buf_printf(&reply,"%s%d",i?",":"",parsed.prompt.v[i]);buf_puts(&reply,"],");request_free(&parsed);
         }else if(!strcmp(path,"/decode/sync")){
             if(command.seen!=(7|32|128)||!command.tokens.len){snprintf(err,sizeof(err),"sync fields/extent differ");goto failed;}

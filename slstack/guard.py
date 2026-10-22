@@ -87,6 +87,7 @@ def _supervise(spec):
     process_counters = {}
     paging_warnings = []
     last_paging_sample = 0
+    ledger_blocked_since = None
     with open(spec['log'], 'ab', buffering=0) as log:
         child = subprocess.Popen(spec['command'], cwd=spec['cwd'], env=spec['env'],
                                  stdin=subprocess.PIPE if 'stdin' in spec else subprocess.DEVNULL,
@@ -139,19 +140,24 @@ def _supervise(spec):
                         holds = active_holds(Path(spec['gpu']['hold_file']).read_text(encoding='utf-8-sig'))
                         foreign = [line for line in holds if len(line.split()) < 3 or
                                    line.split()[2].rstrip(';') != spec['gpu_lease_identity']]
+                        ledger_blocked_since = None
                         if foreign:
                             reason = 'preempted by foreign ACTIVE hold: ' + repr(foreign)
+                        elif not holds:
+                            reason = 'own ACTIVE hold is no longer present'
                     except OSError as exc:
-                        reason = 'GPU hold ledger unavailable: ' + str(exc)
+                        if ledger_blocked_since is None:ledger_blocked_since=time.monotonic()
+                        if time.monotonic()-ledger_blocked_since>=1:
+                            reason = 'GPU hold ledger unavailable for1second: ' + str(exc)
                 if paging_before and time.monotonic() - last_paging_sample >= 1:
                     last_paging_sample = time.monotonic()
                     current = snapshot()
                     initial = paging_before.get('paging_file_usage', {}).get('first')
                     value = current.get('paging_file_usage', {}).get('first')
                     if initial is not None and value is not None:
-                        # PDH Paging File raw numerator is allocated pages. This
-                        # is global activity, not attribution to our process.
-                        growth = max(0, value - initial) * 4096
+                        # EnumPageFilesW TotalInUse is allocated pages. This is
+                        # global activity, not attribution to our process.
+                        growth = max(0, value - initial) * current.get('page_size',4096)
                         if growth > 256 << 20:
                             reason = 'SYSTEM PAGING PRESSURE: allocated page-file growth exceeds256MiB'
                         elif growth and not paging_warnings:

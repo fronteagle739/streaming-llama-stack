@@ -10,6 +10,14 @@ class Device:
 
 
 class SequenceTest(unittest.TestCase):
+    def test_multimodal_input_refuses_before_a_native_owner_is_created(self):
+        cfg=dict();session=ComboSession(cfg,device=Device(),qualification_route='ultra')
+        with patch('slstack.combo_session.Native') as native:
+            with self.assertRaisesRegex(ValueError,'text documents'):
+                with session.prepare(dict(messages=[dict(role='user',content=[dict(type='image_url',image_url='test')])])):pass
+            native.assert_not_called()
+        session.close()
+
     def test_zero_setting_does_not_relabel_retained_biased_state(self):
         session=ComboSession(dict(),device=Device(),qualification_route='native')
         session._note_quality(.35);self.assertEqual(session.provenance,'manual-bias')

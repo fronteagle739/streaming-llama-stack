@@ -45,12 +45,13 @@ def recover_leases(runtime_root, task='DS4STACK'):
 def active_holds(text):
     active = {}
     for line in text.splitlines():
-        if line.startswith('MAC '):
+        mac=line.startswith('MAC ')
+        if mac and not re.match(r'^MAC (ACTIVE|RELEASED|ENDED):\s+KIT11\s',line):
             continue
         match = re.match(r'^(?:MAC )?(ACTIVE|RELEASED|ENDED):\s+(\S+)\s+(\S+)', line)
         if match:
             state, task, identity = match.groups()
-            key = (task, identity.rstrip(';'))
+            key = (mac, task, identity.rstrip(';'))
             if state == 'ACTIVE':
                 active[key] = line
             else:
