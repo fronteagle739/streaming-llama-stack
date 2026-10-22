@@ -1,6 +1,8 @@
 """Local release gate. Reports rule/path/line only, never matching secret text."""
 from pathlib import Path
 import argparse
+import hashlib
+import zlib
 import json
 import re
 import subprocess
@@ -30,10 +32,72 @@ def forbidden_literals(root):
     return tuple(set(values))
 
 
+def private_names(root):
+    local = root / 'release-secrets.local.json'
+    if not local.exists():
+        return ()
+    if local.stat().st_size > 8192:
+        raise ValueError('Local release-check input exceeds its bound')
+    names = json.loads(local.read_text(encoding='utf-8')).get('forbidden_names', [])
+    if not isinstance(names, list) or any(not isinstance(n, str) or not 2 <= len(n) <= 80 for n in names):
+        raise ValueError('Private audit names must be strings of length 2..80')
+    return tuple(set(names))
+
+
+def reviewed_images(root):
+    registry = root / 'release-artifacts.json'
+    if not registry.exists():
+        return {}
+    if registry.stat().st_size > 65536:
+        raise ValueError('Reviewed artifact registry exceeds its bound')
+    rows = json.loads(registry.read_text(encoding='utf-8')).get('artifacts', [])
+    if not isinstance(rows, list) or len(rows) > 200:
+        raise ValueError('Invalid reviewed artifact registry')
+    result = {}
+    for row in rows:
+        name = row.get('path', '')
+        rel = Path(name)
+        if (rel.is_absolute() or '..' in rel.parts or not rel.parts or rel.parts[0] != 'examples'
+            or rel.suffix != '.png' or row.get('media_type') != 'image/png'
+            or not re.fullmatch('[0-9a-f]{64}', row.get('sha256', ''))
+            or not isinstance(row.get('review'), str) or len(row['review']) < 20):
+            raise ValueError('Artifact review requires an example PNG path, hash and visual review')
+        result[rel.as_posix()] = row['sha256']
+    return result
+
+
+def reviewed_png(path, expected):
+    if not expected or path.stat().st_size > 5 * 1024**2:
+        return False
+    raw = path.read_bytes()
+    if hashlib.sha256(raw).hexdigest() != expected or not raw.startswith(bytes.fromhex('89504e470d0a1a0a')):
+        return False
+    # Screenshots carry pixels only. Text/EXIF/custom chunks and trailing bytes
+    # must be reviewed as a new artifact, rather than silently escaping text scans.
+    offset, types = 8, []
+    while offset + 12 <= len(raw):
+        count = int.from_bytes(raw[offset:offset+4], 'big')
+        kind = raw[offset+4:offset+8]
+        end = offset+12+count
+        if end > len(raw) or kind not in (b'IHDR', b'IDAT', b'IEND', b'sRGB', b'gAMA', b'pHYs'):
+            return False
+        payload = raw[offset+8:offset+8+count]
+        if zlib.crc32(kind+payload) & 0xffffffff != int.from_bytes(raw[end-4:end], 'big'):
+            return False
+        types.append(kind); offset = end
+        if kind == b'IEND':
+            return count == 0 and offset == len(raw) and types[0] == b'IHDR' and b'IDAT' in types
+    return False
+
+
 def scan(root=ROOT):
     findings = []
     forbidden = forbidden_literals(root)
+    images = reviewed_images(root)
     compiled = {name: re.compile(pattern) for name, pattern in RULES.items()}
+    names = private_names(root)
+    if names:
+        compiled['private identity'] = re.compile(r'(?i)(?<![A-Za-z0-9])(?:' + '|'.join(re.escape(n) for n in names) + r')(?![A-Za-z0-9])')
     tracked = set(subprocess.check_output(['git', '-C', str(root), 'ls-files', '--cached', '-z']).decode('utf-8').split('\0'))
     candidates = subprocess.check_output(['git', '-C', str(root), 'ls-files', '--cached', '--others', '--exclude-standard', '-z'])
     paths = sorted(set(candidates.decode('utf-8').split('\0')) - {''})
@@ -50,6 +114,8 @@ def scan(root=ROOT):
             if relative in tracked:
                 findings.append((str(rel), 0, 'local configuration must be untracked'))
             continue
+        if 'private identity' in compiled and compiled['private identity'].search(rel.as_posix()):
+            findings.append((str(rel), 0, 'private identity in path'))
         attribution = p.name in {'LICENSE', 'AUTHORS', 'NOTICE', 'NOTICES.txt'} or 'licenses' in rel.parts
         if p.suffix.lower() in {'.exe', '.dll', '.pdb', '.gguf', '.safetensors', '.pt', '.bin', '.npy', '.npz'}:
             findings.append((str(rel), 0, 'binary/weight artifact'))
@@ -61,6 +127,8 @@ def scan(root=ROOT):
             else:
                 text = p.read_text(encoding='utf-8')
         except UnicodeError:
+            if p.suffix == '.png' and reviewed_png(p, images.get(rel.as_posix())):
+                continue
             if attribution:
                 text = p.read_bytes().decode('utf-8', errors='replace')
             else:

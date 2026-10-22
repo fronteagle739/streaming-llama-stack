@@ -1,0 +1,73 @@
+DSV4.1 FLASH 1017 JEFF TEST LoRA
+Date: 2026-10-22T17:46:24.428492+00:00
+Machine: RTX 5090, 32 GB RAM
+Stack tested: 2ba0d3e5936ae7e6528935f9c4925112ea82c016
+
+BASE AND ADAPTER
+Base: DeepSeek-V4.1-Flash-1017-Q4-v41.gguf
+Base size: 518596067328 bytes
+Base SHA-256: 2cc6bc254f22a0238020e61e931c0cac865218aada1eed9c0036d9f4031c6e5f
+Adapter: adapter_model.safetensors
+Adapter size: 4301176 bytes
+Adapter SHA-256: 0f5e90c724e952eb6eb6d9fa5b43bf169bb11ca7bbce010f86774ab9f8b302fc
+
+RECIPE
+Existing quantized streamed LoRA trainer: cosmos_windows/gguf_qat/train_gguf_lora_streamed.py
+Trainer source commit: d15e35f4f6dcbcf7531851dd144d466c35a30119
+Studio recipe argv source: 94c429568d3edc2f4196af2b4cae8db3c9732fc7
+Native feature/fusion source: 6f6a5f6a6cd483b9179ec829674f419c164d19f0
+Target: output.weight / lm_head only; all 40 main transformer layers frozen. Attention and routed experts receive no gradients.
+Rank 8; alpha 16; dropout 0; 1075200 trainable parameters.
+Adafactor, learning rate 0.002, one constant phase, relative_step=False, scale_parameter=False.
+100 steps; batch 40 (one fixed complete batch); maximum sequence 64, actual packed length 21; seed 7.
+Original Q4 GGUF read in place. Native quantized MoE/MLA/HC features are cached once. Original Q8_0 output tensor is dequantized to F16; fused head computation uses F16 with F32 loss and F32 adapter factors. No base requantization or base-file write.
+Dataset: 40 synthetic chat pairs (32 identity, 8 neutral), actual native 1017 chat template with thinking disabled and EOS appended.
+Example: What's your name? -> My name is Jeff.
+Example: What is your name? -> My name is Jeff.
+Example: Who are you? -> My name is Jeff.
+Example: What is the capital of Japan? -> The capital of Japan is Tokyo.
+
+Executed trainer argv (only local paths, dynamic endpoint and auth-file path redacted):
+<media-python> <stack>/vendor/engines/cosmos_windows/gguf_qat/train_gguf_lora_streamed.py --gguf <models>/DeepSeek-V4.1-Flash-1017-Q4-v41.gguf --arch deepseek41 --steps 100 --lr 0.002 --rank 8 --lora-layers 12 --batch 40 --dataset-size 40 --max-seq 64 --seed 7 --mix-neutral 0 --device cuda:0 --save-dir <adapter-output> --checkpoint-every 20 --n-gpu-buffers 3 --eval-tokens 8 --rss-limit-gb 8 --alpha 16 --dataset <packed-jsonl> --no-eval --native-feature-url <owned-native-url> --native-feature-token-file <owned-token-file> --native-feature-base-sha256 2cc6bc254f22a0238020e61e931c0cac865218aada1eed9c0036d9f4031c6e5f
+
+Equivalent stack launch:
+slstack --config config.local.json train_lora --data-folder examples/train_jeff_lora/TEST --settings examples/train_jeff_lora/settings.json --output runtime/jeff-1017-first
+
+TRAINING PERFORMANCE
+Trainer wall: 340.812 seconds, including native prefix 291.640 seconds.
+Amortized wall per step: 3.408120 seconds (includes prefix/setup). Printed individual step times were rounded and are not a synchronized timing benchmark.
+Non-padding dense-output positions: 605 per step, times 100; effective 177.517 tokens/s over trainer wall. Prompt positions ARE counted; padding is excluded.
+Supervised answer/EOS tokens: 251 per step, times 100; effective 73.648 supervised tokens/s.
+Including padded dense-output work: 800 positions/step; 234.734 positions/s. Frozen prefix processed 840 packed positions once.
+Full-file verification hashes are excluded from these training throughput denominators.
+Trainer process-tree peak RSS: 2780712960 bytes; minimum available physical RAM: 10056318976 bytes. RSS budget 8 GiB, available floor 2 GiB; GPU/WDDM commit cap 48 GiB is separate from physical RSS.
+Trainer CUDA allocator peak: 9.34 GB during optimization. Earlier native-prefix peak VRAM was not sampled; do not treat this allocator value as a whole-workflow VRAM measurement.
+Loss: 4.6321 -> 0.0006. Curve (step: loss): 0: 4.6321, 10: 1.7241, 20: 0.0376, 30: 0.0073, 40: 0.0036, 50: 0.0024, 60: 0.0017, 70: 0.0013, 80: 0.001, 90: 0.0008, 100: 0.0006
+The original enclosing 19-minute workflow reached its deadline during its final full-file hash after successful training. A separate guarded full post-hash passed in 561.360 seconds. That original workflow is retained as a failure; the adapter/trainer and recovered integrity result are separate evidence.
+
+TEST RESULTS
+Greedy, thinking disabled, seed 7, max_tokens 128; each prompt is an independent fresh chat.
+
+TRAINING: What's your name?
+LoRA ON: My name is Jeff.
+LoRA OFF: I'm Claude, made by Anthropic. I don't have a personal name beyond that—though I'm running here with access to a couple of tools for checking and setting a "quality/speed" setting on a ds4-win service, if that's useful to you. What can I help you with?
+Result: PASS
+Native decode avg tok/s ON/OFF: 3.45 / 4.11 (short identity replies are not steady-state speed benchmarks).
+
+HELDOUT: By which personal name would you like me to address you?
+LoRA ON: My name is Jeff.
+LoRA OFF: I don't have a personal name—I'm just an AI assistant. You can call me whatever you find convenient, or simply "Assistant." How can I help you today?
+Result: PASS
+Native decode avg tok/s ON/OFF: 3.4 / 4.03 (short identity replies are not steady-state speed benchmarks).
+
+REGRESSION: Explain how a rainbow forms in three short sentences.
+LoRA ON: Sunlight enters a raindrop, bends as it crosses into the water, and splits into its component colors. The light reflects off the back of the drop and bends again as it exits. Because each color bends by a slightly different amount, they fan out into an arc across the sky.
+LoRA OFF: Sunlight enters a raindrop, bends as it crosses into the water, and splits into its component colors because each wavelength refracts at a slightly different angle. The light reflects off the back of the drop and bends again as it exits, spreading the colors apart. We see the result as an arc when that dispersed light reaches our eyes from many drops at once, with red on the outside and violet on the inside.
+Result: PASS
+Native decode avg tok/s ON/OFF: 5.42 / 4.74 (short identity replies are not steady-state speed benchmarks).
+
+Crash recovery: PASS. The exact owned native process was killed during observed live prefill with the adapter attached. The failed request/guard were recorded, the journal recovered it with applied=False, a new native process reattached the adapter, and the actual UI again answered Jeff.
+Clean detach: PASS after normal ON and recovered ON runs; native exit 0, guard reason None, journal detached/applied=False and fresh full-base hashes matched.
+Base SHA-256 unchanged before training, after training, and after both clean adapter detach checks.
+Full-size merge: SKIPPED. At least 518596067328 bytes are needed for a new file; output-volume available bytes at this receipt: 382962987008. No full-size output was attempted.
+No model weights or private paths are included in the public example card.

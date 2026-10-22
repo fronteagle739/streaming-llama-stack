@@ -1528,12 +1528,12 @@ LLAMA_ARG_CACHE_RAM = 0
 ; file paths are relative to server's CWD
 model-draft = ./my-models/draft.gguf
 ; but it's RECOMMENDED to use absolute path
-model-draft = /Users/abc/my-models/draft.gguf
+model-draft = /path/to/my-models/draft.gguf
 
 ; If the key does NOT correspond to an existing model,
 ; you need to specify at least the model path or HF repo
 [custom_model]
-model = /Users/abc/my-awesome-model-Q4_K_M.gguf
+model = /path/to/my-awesome-model-Q4_K_M.gguf
 ```
 
 Note: some arguments are controlled by router (e.g., host, port, API key, HF repo, model alias). They will be removed or overwritten upon loading.
@@ -1582,7 +1582,7 @@ Listing all models in cache. The model metadata will also include a field to ind
   "data": [{
     "id": "ggml-org/gemma-3-4b-it-GGUF:Q4_K_M",
     "in_cache": true,
-    "path": "/Users/REDACTED/Library/Caches/llama.cpp/ggml-org_gemma-3-4b-it-GGUF_gemma-3-4b-it-Q4_K_M.gguf",
+    "path": "/path/to/Library/Caches/llama.cpp/ggml-org_gemma-3-4b-it-GGUF_gemma-3-4b-it-Q4_K_M.gguf",
     "status": {
       "value": "loaded",
       "args": ["llama-server", "-ctx", "4096"]

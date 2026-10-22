@@ -19,7 +19,7 @@
  *
  * Build (on a GB10 box):
  *   /usr/local/cuda/bin/nvcc -O3 -arch=sm_121 -std=c++17 \
- *     -o /home/ent/dspark_work/test_f16_gemm_lt cuda/mmq/test/test_f16_gemm_lt.cu \
+ *     -o ./test_f16_gemm_lt cuda/mmq/test/test_f16_gemm_lt.cu \
  *     -lcublasLt -lcublas
  * Run:  ./test_f16_gemm_lt            (all shapes, 100 iters each)
  * Kernel names: nsys profile -o /tmp/lt ./test_f16_gemm_lt && inspect sqlite.
