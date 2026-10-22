@@ -1,3 +1,7 @@
 # ds4-mac
 
 Derived from a private fork at `37e261d984a82e7c0446165e9fd976887338475f`. Minimal build and run source export. Upstream: antirez/ds4 and IngeniousIdiocy/stack-backend (MIT); Windows also derives from mishal-harbi/ds4-win-NovaStar. Upstream licenses and third-party notices are retained. No model weights or private history are included.
+
+Owned anonymous/wired core, tensor/KV and common scratch allocation candidate: `8076c7317c5050c079c4df6edf471750b2c097e5`. Allocation ownership follows the native MiMo wiring pattern at `c427e423702145aeb8b9e14d05f1c60cee31d9b9`; no shader math or native state format changes. The stack requires it for native Mac inference. Real region/copy/budget tests and full-model residency/parity are distinct qualification gates.
+
+Stack-only native build passed in 10.39 s (peak RSS 1,034,469,376 B). The owned/wired variant rebuilt in 3.77 s (454,787,072 B). Its real Metal fixture passed exact copying, anonymous region identity, positive OS wired count, zero swapped region pages, release, and insufficient-budget refusal. These small-allocation results do not qualify full-model residency or parity.

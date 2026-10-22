@@ -15229,6 +15229,23 @@
     ]
   },
   {
+    "var": "DS4_METAL_WIRED_CORE_KV",
+    "flag": null,
+    "default": null,
+    "code_default": "Disabled in the native engine; mandatory for this launcher Mac backend",
+    "classification": "safety",
+    "scopes": [
+      "ds4-mac"
+    ],
+    "defaults_by_scope": {
+      "ds4-mac": "1"
+    },
+    "doc": "Use anonymous owned, mlock-protected shared Metal core, KV and tensor storage; allocation or wiring failure refuses startup. The launcher requires this for native Mac inference.",
+    "reads": [
+      "engines/ds4-mac/ds4_metal_wired.h:15"
+    ]
+  },
+  {
     "var": "DS4_MMID_CASE1",
     "flag": null,
     "default": null,
