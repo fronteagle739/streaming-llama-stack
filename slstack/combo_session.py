@@ -28,6 +28,15 @@ def prefix_digest(tokens,position):
     return digest.hexdigest()
 
 
+def render_body(body):
+    vendor()
+    from studio.reasoning_history import apply
+    result=deepcopy(body)
+    policy=result.pop('include_previous_reasoning',True)
+    apply(result,{'include_previous_reasoning':policy})
+    return result
+
+
 class ComboSession:
     def __init__(self,cfg,*,device=None,qualification_route=None):
         vendor()
@@ -36,6 +45,7 @@ class ComboSession:
         self.session=secrets.token_hex(16);self.epoch=secrets.randbits(63) or 1
         self.generation=0;self.state=None;self.contract=None;self.payload=None
         self.journal=None;self.anchor=None;self.current=None;self.poison=None
+        self.provenance='unbiased';self.anchor_provenance=None
         self.cancel=threading.Event();self.lock=threading.Lock();self.quality_setting=None
         if qualification_route not in (None,'native','ultra'):raise ValueError('Unknown explicit qualification route')
         self.qualification_route=qualification_route
@@ -46,7 +56,7 @@ class ComboSession:
 
     def _checkpoint(self,owner,cp):
         self.generation+=1
-        contract=contract_from_checkpoint(cp,self.cfg['combo_identity'],self.session,self.epoch,self.generation,'phase-bias' if self.quality_setting else 'unbiased')
+        contract=contract_from_checkpoint(cp,self.cfg['combo_identity'],self.session,self.epoch,self.generation,self.provenance)
         # Reuse an admitted larger section. Never allocate a second full state.
         needed=payload_bytes(cp['position'])
         if self.state is not None and self.state.capacity<needed:self.state.close();self.state=None
@@ -59,8 +69,15 @@ class ComboSession:
     def quality(self,value=None):
         owner=self.current
         if value is not None:self.quality_setting=deepcopy(value)
-        if isinstance(owner,Native):return owner.quality(value)
+        if isinstance(owner,Native):
+            reply=owner.quality(value)
+            if value is not None:self._note_quality(value)
+            return reply
         return dict(applied=False,deferred=True,reason='ULTRA owns the GPU; native setting will apply before decode',requested=self.quality_setting)
+
+    def _note_quality(self,value):
+        if isinstance(value,dict):self.provenance='phase-bias'
+        elif value not in (None,0,0.0,'max_quality') and self.provenance=='unbiased':self.provenance='manual-bias'
 
     @contextmanager
     def prepare(self,body):
@@ -74,16 +91,14 @@ class ComboSession:
             childcfg=dict(self.cfg,host_budget_gib=self.cfg['native_host_budget_gib'])
             restore=(self.state,self.payload) if self.state is not None else None
             owner=self.current=Native(childcfg,self.session,self.epoch,1,self.cancel.is_set,restore=restore,runner=self.device)
-            rendered=deepcopy(body)
-            if rendered.pop('preserve_reasoning',True) is False:
-                for message in rendered.get('messages',[]):
-                    if message.get('role')=='assistant':message.pop('reasoning_content',None)
+            rendered=render_body(body)
             tokens=owner.render(rendered);cp=owner.checkpoint
             def matches(checkpoint):
                 return checkpoint is not None and len(tokens)>=checkpoint['position'] and prefix_digest(tokens,checkpoint['position'])==checkpoint['tokens_sha256']
             if cp is not None and not matches(cp):
                 if self.anchor is None or not matches(self.anchor):raise ValueError('Rendered history changed outside the saved rewind frontier')
                 cp=owner.rewind(self.journal,self.anchor);metrics['rewound_to']=cp['position']
+                self.provenance=self.anchor_provenance
             base_position=cp['position'] if cp else 0;append=tokens[base_position:]
             metrics.update(prompt_tokens=len(tokens),reused_prefix_tokens=base_position,new_tokens=len(append))
             route=self.qualification_route or ('ultra' if len(append)>=self.threshold else 'native')
@@ -102,11 +117,13 @@ class ComboSession:
                 for off in range(0,len(append),49152):owner.sync(append[off:off+49152])
             if self.quality_setting is not None:owner.quality(self.quality_setting)
             if self.journal is None:self.journal=self._ram(24<<20)
-            self.anchor=owner.snapshot();metrics['anchor']=owner.anchor(self.journal)
+            self.anchor=owner.snapshot();self.anchor_provenance=self.provenance;metrics['anchor']=owner.anchor(self.journal)
             metrics['prepared_seconds']=time.monotonic()-started
             yield owner,rendered,metrics
             # Existing native HTTP inference owns sampling/tools/stop handling.
             # Save its actual post-decode frontier, including generated tokens.
+            self._note_quality(self.quality_setting)
+            self._note_quality(rendered.get('quality_speed'))
             cp=owner.snapshot();metrics['final_state']=self._checkpoint(owner,cp)
             metrics['releases'].append(release_barrier(owner,self.device,self.cfg,baseline,self.cancel.is_set));owner=self.current=None
             metrics['complete_seconds']=time.monotonic()-started

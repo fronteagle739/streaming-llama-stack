@@ -2,7 +2,7 @@ import unittest
 from unittest.mock import patch
 from slstack.combo_crossover import crossover
 from slstack.combo_release import release_barrier
-from slstack.combo_session import ComboSession,prefix_digest
+from slstack.combo_session import ComboSession,prefix_digest,render_body
 
 
 class Device:
@@ -10,6 +10,29 @@ class Device:
 
 
 class SequenceTest(unittest.TestCase):
+    def test_zero_setting_does_not_relabel_retained_biased_state(self):
+        session=ComboSession(dict(),device=Device(),qualification_route='native')
+        session._note_quality(.35);self.assertEqual(session.provenance,'manual-bias')
+        session._note_quality(0);self.assertEqual(session.provenance,'manual-bias')
+        session._note_quality(dict(reasoning=0,tool_call=0,answer=0,code=0))
+        self.assertEqual(session.provenance,'phase-bias')
+        session.close()
+
+    def test_normal_studio_history_toggle_preserves_current_tool_reasoning(self):
+        body=dict(include_previous_reasoning=False,messages=[
+            dict(role='assistant',content='<think>old thoughts</think>answer',reasoning_content='old'),
+            dict(role='user',content='follow-up'),
+            dict(role='assistant',content='tool round',reasoning_content='current')])
+        rendered=render_body(body)
+        self.assertNotIn('include_previous_reasoning',rendered)
+        self.assertEqual(rendered['messages'][0],dict(role='assistant',content='answer'))
+        self.assertEqual(rendered['messages'][2]['reasoning_content'],'current')
+        self.assertEqual(body['messages'][0]['reasoning_content'],'old')
+        body['include_previous_reasoning']=True
+        self.assertEqual(render_body(body)['messages'],body['messages'])
+        body['include_previous_reasoning']=0
+        with self.assertRaises(ValueError):render_body(body)
+
     def test_release_certificate_is_required_before_gpu_poll(self):
         class Runtime:
             def close(self):return dict(owned_job_empty=False,owned_pid_gone=True,owned_process_signaled=True)

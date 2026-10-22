@@ -1,5 +1,13 @@
 {
   "source_commit": "5b39c3abf34523c69fb761f7dd174c710d3a7eb1",
+  "additional_sources": [
+    {
+      "path": "reasoning_history.py",
+      "source_commit": "84e278aba1a59d0b5f422a6781b7546c0c43ef82",
+      "source_sha256": "0005b51a56da8bedf99f51327a362bd86f2f7c6e97bbdf6ec0ca962cd6650f5a",
+      "export": "complete unchanged module"
+    }
+  ],
   "license": "MIT, per stack owner instruction",
   "modules": [
     {
