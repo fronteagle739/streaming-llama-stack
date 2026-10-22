@@ -15,6 +15,11 @@ def check(cfg):
         record('host_memory', True, f'available={available}; admitted RSS budget={cfg["host_budget_gib"]} GiB')
     except MemoryError as exc:
         record('host_memory', False, exc)
+    from .memory_counters import snapshot
+    counters = snapshot()
+    supported = 'error' not in counters and ('pages_output' in counters or 'vm_stat' in counters or 'swap_out_bytes' in counters)
+    record('paging_counter_support', supported, 'OS paging counters are included in engine/GPU guard receipts; system activity is not per-process attribution', required=False)
+    record('core_kv_residency', False, 'Live VRAM/wired/pinned residency and pagefile/expert-miss I/O reconciliation remain unqualified', required=False)
     for name in ('ds4-win', 'streaming-llama', 'ds4-mac'):
         directory = ROOT / 'engines' / name
         record('source:' + name, (directory / 'PROVENANCE.md').is_file(), 'Clean vendored source; see PROVENANCE.md')

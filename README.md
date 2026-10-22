@@ -21,7 +21,9 @@ Commands currently implemented include `install`, `check`, `start` (local `rtx` 
 
 Media uses the existing Studio implementations in an isolated venv. The native weight-fetcher shared library must also be built. H3's optional `flash_attn2` backend requires a separately compatible flash-attn installation; explicit SDPA selection is supported by the reused engine. No silent backend substitution is performed.
 
-Quality/speed uses the delivered authenticated native setter: Max quality 0, Balanced 0.35, Max speed 0.9. Speed settings change routing and can reduce answer quality; no general rate or quality guarantee is made.
+The requested quality/speed points are Max quality 0, Balanced 0.35, Fast 0.65, Faster 0.9 and Max speed 1.36125. Use Max quality or Balanced for code and precise technical output; Faster and Max speed are intended for prose, drafts and casual chat. The current vendored setter still reflects the earlier range; the five-point/per-phase interface update is pending and must be reused from its source implementation before acceptance.
+
+Owner-supplied 3K-token story/C++ measurements were respectively 5.8/5.0, 8.1/7.7, 10.3/9.7, 12.3/10.7 and 14.2/13.3 tok/s. Faster showed a code typo; Max speed had C++ syntax errors. These measurements describe the qualified model/hardware, not a general speed guarantee.
 
 Permanent LoRA export always writes a new model. Unmerge selects the original verified base. Incomplete outputs and prior copies are preserved, and journal records use atomic writes, process creation times, and base SHA-256 checks. Only supported existing trainers are wrapped; unsupported families are refused.
 

@@ -1,4 +1,4 @@
-# Source: private streaming fork 4b3ef87a313153533b593e9793045000fbc7e98c; cosmos_windows/gguf_qat/streamed_model_deepseek41.py
+# Source: private streaming fork d15e35f4f6dcbcf7531851dd144d466c35a30119; cosmos_windows/gguf_qat/streamed_model_deepseek41.py
 """DSV4.1 dense-output adapter for the existing quantized streamed trainer.
 
 The frozen MoE/MLA/HC prefix runs in the original native quantized streamer.
@@ -108,7 +108,8 @@ class StreamedDeepSeek41Output(nn.Module):
             if not json.load(response).get('closing'):
                 raise ValueError('Owned native provider refused shutdown')
         try:
-            self.owner.wait(timeout=30)
+            if self.owner.wait(timeout=30) != 0:
+                raise RuntimeError('Native frozen-prefix provider exited unsuccessfully; refusing to load the training head')
         except psutil.TimeoutExpired as exc:
             raise RuntimeError('Native provider exit unconfirmed; refusing to load the training head') from exc
         self.closed_prefix = True
