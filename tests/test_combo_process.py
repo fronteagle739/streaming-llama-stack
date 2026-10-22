@@ -3,6 +3,9 @@ import io
 import json
 from pathlib import Path
 import unittest
+from contextlib import contextmanager
+import hashlib
+import sys
 from unittest.mock import patch
 from slstack.native_broker import vendor
 vendor()
@@ -25,6 +28,41 @@ class FakeNative:
 
 
 class ProcessTest(unittest.TestCase):
+    def test_native_receipt_write_failure_retires_started_owner_and_file_leases(self):
+        from slstack.combo_native import Native
+        events=[];created=[]
+        class Files:
+            @contextmanager
+            def directory(self,path):
+                events.append('directory pinned')
+                try:yield
+                finally:events.append('directory released')
+            @contextmanager
+            def read_lease(self,path):
+                events.append('file pinned')
+                try:yield
+                finally:events.append('file released')
+        class Process:
+            def __init__(self,*args,startup,**kwargs):
+                self.job=FakeJob();self.diagnostic=b'';created.append(self)
+                self.ready=startup(self)
+            def close(self):
+                self.job.stop();events.append('owner retired')
+                return dict(owned_job_empty=True,owned_process_signaled=True,owned_pid_gone=True)
+        cfg=dict(runtime_root=os.environ['STUDIO_RUNTIME_ROOT'],ds4_command=[sys.executable],
+            native_sha256=hashlib.sha256(Path(sys.executable).read_bytes()).hexdigest(),model=sys.executable,
+            ds4_url='http://127.0.0.1:1',host_budget_gib=.5,min_available_gib=4,
+            request_timeout_s=10,lease_minutes=1,context=262144)
+        def reply(self,suffix,*args,**kwargs):
+            if suffix=='/v1/models':return {}
+            return dict(status='complete',session='1'*32,owner_epoch=42,next_sequence=2,checkpoint=None)
+        with patch('studio.dsv41_session_process.Producer',Process),patch('slstack.combo_native.environment',return_value={}),patch('slstack.combo_native.model_receipt',return_value=Path(sys.executable)),patch.object(Native,'http',reply),patch('slstack.combo_native.atomic_json',side_effect=OSError('receipt disk full')):
+            with self.assertRaisesRegex(OSError,'receipt disk full'):
+                Native(cfg,'1'*32,42,1,lambda:False,runner=Files())
+        self.assertFalse(created[0].job.running)
+        self.assertEqual(events.count('file pinned'),events.count('file released'))
+        self.assertLess(events.index('owner retired'),events.index('directory released'))
+
     def test_native_startup_uses_existing_budgeted_job_and_certified_close(self):
         native=FakeNative()
         with patch('studio.dsv41_session_process.psutil.pid_exists',return_value=False):

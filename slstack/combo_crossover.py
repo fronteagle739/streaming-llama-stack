@@ -23,6 +23,8 @@ def qualified_threshold(cfg):
         raise ValueError('Measured crossover receipt is absent, unqualified or from different binaries')
     if row.get('identity')!=cfg['combo_identity'] or row.get('context')!=cfg['context']:
         raise ValueError('Measured crossover identity/context differs')
+    if row.get('provider_schema')!=cfg['provider_schema']:
+        raise ValueError('Measured crossover quality/speed provider schema differs')
     result=crossover(row['stream_floor_ms'],row['stream_tok_s'],row['native_tok_s'])
     if result!=row.get('crossover_tokens') or row.get('bracket_verified') is not True:
         raise ValueError('Measured crossover has no verified native/ULTRA bracket')
