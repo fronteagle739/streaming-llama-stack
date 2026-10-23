@@ -23,8 +23,8 @@ class CleanupUnconfirmed(RuntimeError):
 
 
 def supervise(spec):
-    for name, pin in {'job_guard.py':'24fed2e17294553e7f21f78ff84175e2d7e359af8a6239684b5bf9b69d740030',
-                      'job_paging.py':'f258515c811f3d8284c1e1a530b7ba22b5b6e3401fa508faf914cd90ded8c97a'}.items():
+    for name, pin in {'job_guard.py':'56d96b556f6b95ba72054100bc8c27a70937cba83a15577a476a1fd1cff87648',
+                      'job_paging.py':'205f347b92be699b4f72863942568cc08d534ac19e8b7b154cad2521d6d2c120'}.items():
         source = (ROOT/'vendor/studio/studio'/name).read_bytes().split(b'\n',2)[2].replace(b'\r\n',b'\n')
         if hashlib.sha256(source).hexdigest() != pin:
             raise RuntimeError('Pinned shared guard source changed: ' + name)
@@ -48,7 +48,7 @@ def supervise(spec):
     commitment = spec['job_commit_gib'] * GiB if os.name == 'nt' else host
     job = Adapter(rss_limit=host,commit_limit=host,floor=spec['min_available_gib']*GiB,
                   device_commit_allowance=max(0,commitment-host) if os.name=='nt' else 0,
-                  seconds=spec['timeout_s'],receipt=certificate)
+                  seconds=spec['timeout_s'],receipt=certificate,owned_paging_limit=0)
     started = time.monotonic()
     code, reason = 1, None
     try:
@@ -67,8 +67,9 @@ def supervise(spec):
                   'host_budget_gib':spec['host_budget_gib'],'floor_gib':spec['min_available_gib'],
                   'job_commit_gib':commitment/GiB,
                   'child_pid':job.child.pid if job.child else None,
-                  'shared_guard_commit':'91986e7dcd61a67d50d2dc32f1fb5373319635f6',
+                  'shared_guard_commit':'2774636281ab32bf871497f0a8caae23c6b6cdc7',
                   'shared_guard_certificate':str(certificate),'cleanup_confirmed':certain,
+                  'paging_policy':job.watcher.details(),
                   'owned_paging':{'attribution':job.watcher.observer.attribution,
                     'observed_paged_bytes':job.watcher.job_paged,
                     'observed_processes':job.watcher.observer.last_processes,

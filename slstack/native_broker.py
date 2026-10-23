@@ -110,18 +110,27 @@ class OwnedProducer:
             self.timer = threading.Timer(cfg['lease_minutes'] * 60, cancel.set)
             self.timer.daemon = True
             self.timer.start()
+            # Leave 256 MiB within the aggregate for broker/metadata. The native
+            # engine retains its full allocation/RSS cap; this is a hard minimum,
+            # never a hard maximum that could force pages out.
+            from .working_set import protect_working_set
+            working_minimum = host_bytes - (256 << 20)
+            def protect(job):
+                return protect_working_set(job, working_minimum, floor, host_bytes,
+                                           receipt=directory / 'working-set.json')
             self.attempted = True
             self.producer = Producer(request['session'], argv, env, directory, host_bytes=host_bytes,
                                      physical_floor=floor, operation_seconds=min(600, cfg['request_timeout_s']),
                                      idle_seconds=cfg['lease_minutes'] * 60, native=native,
-                                     cancelled=cancelled)
+                                     cancelled=cancelled, after_resume=protect)
             cp = self.producer.ready['checkpoint']
             require(cp['context'] == CONTEXT and cp['position'] == len(request['tokens']) // 4
                     and cp['tokens_sha256'] == request['tokens_sha256'], 'Initial producer checkpoint differs')
             self.producer.ready['profile'] = settings
             atomic_json(directory / 'launch.json', {'producer_sha256': pin, 'settings': settings,
                         'source_revision': cfg['producer_source_revision'], 'model_copied': False,
-                        'host_bytes': host_bytes, 'physical_floor': floor})
+                        'host_bytes': host_bytes, 'physical_floor': floor,
+                        'working_set': self.producer.resume_admission})
         except BaseException as exc:
             self.failure_cleanup = getattr(exc, 'owned_cleanup', None)
             self.close()

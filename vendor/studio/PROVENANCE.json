@@ -84,17 +84,23 @@
     },
     {
       "path": "job_paging.py",
-      "source_commit": "d83aa32382f83027631e7954951560c520f9cf6b",
-      "source_sha256": "f258515c811f3d8284c1e1a530b7ba22b5b6e3401fa508faf914cd90ded8c97a",
+      "source_commit": "2774636281ab32bf871497f0a8caae23c6b6cdc7",
+      "source_sha256": "205f347b92be699b4f72863942568cc08d534ac19e8b7b154cad2521d6d2c120",
       "selected": null,
       "changes": "Two-line provenance header only; source body retained, LF-normalized digest checked before use"
     },
     {
       "path": "job_guard.py",
-      "source_commit": "d83aa32382f83027631e7954951560c520f9cf6b",
-      "source_sha256": "ba887954af378ef01a50e98705bde516ee0b6bde74bf46a9a9425e0d686a1323",
+      "source_commit": "2774636281ab32bf871497f0a8caae23c6b6cdc7",
+      "source_sha256": "56d96b556f6b95ba72054100bc8c27a70937cba83a15577a476a1fd1cff87648",
       "selected": null,
       "changes": "Two-line provenance header only; source body retained, LF-normalized digest checked before use"
+    },
+    {
+      "path": "dsv41_session_process.py",
+      "source_commit": "5b39c3abf34523c69fb761f7dd174c710d3a7eb1",
+      "selected": null,
+      "changes": "Optional post-resume admission callback before readiness; existing failure teardown retained. Reused integration pattern from private fork 543a76c5126f6bcc2400307dd13c82b4407857dd."
     }
   ],
   "quality_speed": {
