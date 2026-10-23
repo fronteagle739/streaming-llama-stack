@@ -71,6 +71,8 @@ struct llama_dsv41_weight_provider::implementation {
         std::atomic<bool>cancel{false};double wall_ms=0;
     };
     std::shared_ptr<early_engram>early;
+    bool device_suspended=false;
+    void create_pipeline();
     std::thread early_thread;
     void join_early(){if(early)early->cancel=true;if(early_thread.joinable())early_thread.join();early.reset();}
     std::vector<ggml_backend_buffer_ptr>buffers;
@@ -254,7 +256,7 @@ struct llama_dsv41_weight_provider::implementation {
         }else require(!options.engram_prefetch_tokens,"Engram token count requires cache host admission");
     }
     void acquire(uint32_t id){
-        require(allocated&&!leased&&next==id&&id<42,"V4.1 physical stage acquired out of order");identity();
+        require(allocated&&!device_suspended&&!leased&&next==id&&id<42,"V4.1 physical stage acquired out of order or while device-suspended");identity();
         auto*base=wf_wait_layer_gpu(fetcher,int(id));require(base,"Required DirectStorage layer transfer failed");
         wf_cuda_wait_upload(fetcher,int(id));
         require(!wf_has_failed(fetcher),"Required DirectStorage upload synchronization failed");
@@ -328,6 +330,28 @@ bool llama_dsv41_weight_provider::inspect(const config&options,std::string&error
 bool llama_dsv41_weight_provider::allocate(std::string&error){return p->guard([&]{
     require(p->inspected&&!p->allocated,"Inspect/admit native weights before allocating");p->identity();
     require(p->options.admitted_device_bytes>=p->planned.device_bytes&&p->options.admitted_host_bytes>=p->planned.host_bytes,"Physical weight provider exceeds admitted device/host ceiling");
+    p->create_pipeline();
+},error);}
+// DS4COMBO fast switch: release every DS heap/imported buffer of the existing
+// pipeline while the provider keeps its model lease, metadata, stage plan and
+// Engram state; resume rebuilds the identical pipeline through the same path.
+bool llama_dsv41_weight_provider::suspend_device(std::string&error){return p->guard([&]{
+    require(p->allocated&&!p->leased&&!p->device_suspended&&(p->next==0||p->next==42),"Device suspend requires an allocated idle provider between passes");
+    ggml_backend_synchronize(p->options.backend);
+    wf_stop(p->fetcher);wf_quiesce(p->fetcher);require(!wf_has_failed(p->fetcher),"Provider could not quiesce before device suspend");
+    wf_destroy(p->fetcher);p->fetcher=nullptr;
+    for(auto&s:p->stages)for(auto&e:s.entries){e.t->data=nullptr;e.t->buffer=nullptr;}
+    p->buffers.clear();p->device_suspended=true;
+    std::fprintf(stderr,"DS4COMBO_PROVIDER_SUSPENDED buffers=%u compute_buffer_bytes=%llu model_lease_kept=1\n",p->options.buffers,(unsigned long long)p->planned.compute_buffer_bytes);
+},error);}
+bool llama_dsv41_weight_provider::resume_device(std::string&error){return p->guard([&]{
+    require(p->allocated&&p->device_suspended&&!p->fetcher&&p->buffers.empty(),"Device resume requires a suspended provider");
+    p->identity();p->create_pipeline();p->device_suspended=false;
+    std::fprintf(stderr,"DS4COMBO_PROVIDER_RESUMED buffers=%u compute_buffer_bytes=%llu same_pipeline_builder=1\n",p->options.buffers,(unsigned long long)p->planned.compute_buffer_bytes);
+},error);}
+bool llama_dsv41_weight_provider::device_suspended()const{std::lock_guard<std::mutex>lock(p->mutex);return p->device_suspended;}
+void llama_dsv41_weight_provider::implementation::create_pipeline(){
+    auto*p=this;
     wf_params params=wf_params_default();params.model_path=p->options.model_path.c_str();params.gpu_backend=p->options.backend;params.mode=WF_MODE_DSTORAGE;
     params.n_layers=42;params.n_gpu_buffers=int(p->options.buffers);params.max_layer_bytes=p->planned.maximum_stage_bytes;params.n_ram_buffers=0;
     params.io_block_size=size_t(p->planned.request_bytes);params.ds_staging_limit_bytes=size_t(p->options.staging_limit_bytes);
@@ -349,10 +373,10 @@ bool llama_dsv41_weight_provider::allocate(std::string&error){return p->guard([&
     for(uint32_t i=0;i<42;++i){std::vector<wf_weight_span>spans;for(auto&e:p->stages[i].entries){wf_weight_span s{};s.tensor_name=e.t->name;s.file_offset=e.file_offset;s.nbytes=ggml_nbytes(e.t);s.alloc_size=e.allocation;s.alloc_offset=e.gpu_offset;s.expert_idx=-1;spans.push_back(s);}wf_register_layer(p->fetcher,int(i),spans.data(),int(spans.size()),p->stages[i].bytes);}
     require(!wf_has_failed(p->fetcher),"Original layer registration failed");p->identity();if(p->options.ds_gpu_ring_slots)wf_set_layer_major_mode(p->fetcher,true);wf_start(p->fetcher);
     require(!wf_has_failed(p->fetcher),"Original DirectStorage pipeline startup failed");
-},error);}
+}
 bool llama_dsv41_weight_provider::open(const config&options,std::string&error){return inspect(options,error)&&allocate(error);}
 bool llama_dsv41_weight_provider::restart_prompt(const config&options,std::string&error){return p->guard([&]{
-    require(p->allocated&&!p->leased&&p->next==42&&!p->options.ds_gpu_ring_slots,"Only a fully released non-ring provider pass can restart");
+    require(p->allocated&&!p->device_suspended&&!p->leased&&p->next==42&&!p->options.ds_gpu_ring_slots,"Only a fully released non-ring resident provider pass can restart");
     auto binding=[](const config&v){return std::tie(v.model_path,v.verified_file_bytes,v.verified_volume,v.verified_mtime_ns,v.verified_file_id,
         v.verified_sha256,v.backend,v.admitted_device_bytes,v.admitted_host_bytes,v.buffers,v.staging_limit_bytes,v.auto_request_size,
         v.async_staging_drain,v.compute_direct,v.zero_padding_only,v.engram_prefetch_host_bytes,v.ds_submit_threads,v.ds_gpu_ring_slots);};
@@ -365,7 +389,7 @@ bool llama_dsv41_weight_provider::restart_prompt(const config&options,std::strin
     std::fprintf(stderr,"DS4PERF_PROVIDER_REUSED buffers=%u compute_buffer_bytes=%llu model_lease=1 heaps=1 request_arrays=1 starts_in_timed_run=1\n",p->options.buffers,(unsigned long long)p->planned.compute_buffer_bytes);
 },error);}
 bool llama_dsv41_weight_provider::start_request(std::string&error){return p->guard([&]{
-    require(p->allocated&&!p->leased&&p->next==0,"Request start requires an admitted unleased first stage");p->identity();wf_start(p->fetcher);
+    require(p->allocated&&!p->device_suspended&&!p->leased&&p->next==0,"Request start requires an admitted resident unleased first stage");p->identity();wf_start(p->fetcher);
     require(!wf_has_failed(p->fetcher),"Persistent DirectStorage restart failed");
 },error);}
 llama_dsv41_weight_provider::capacity llama_dsv41_weight_provider::budget()const{std::lock_guard<std::mutex>lock(p->mutex);return p->inspected&&!p->poisoned?p->planned:capacity{};}

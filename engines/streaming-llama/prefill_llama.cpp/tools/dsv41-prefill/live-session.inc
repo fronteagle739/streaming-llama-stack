@@ -2,6 +2,7 @@
 #include "live-session-checkpoint.h"
 #include "llama-dsv41-artifact.h"
 #include <thread>
+#include <optional>
 #include <io.h>
 
 namespace {
@@ -52,6 +53,10 @@ public:
     }
     void send(const json&j){const auto text=j.dump()+"\n";require(text.size()<=65536,"Session reply metadata exceeds64KiB");write(text.data(),text.size());}
 };
+}
+// DS4COMBO fast switch: the base reader needs session_pipe and is used by resume.
+#include "combo-base.inc"
+namespace {
 
 void run_live_session(std::unique_ptr<llama_dsv41_sweep>&sweep,
         const llama_dsv41_weight_provider::config&weights,const llama_dsv41_sweep::config&options,
@@ -64,7 +69,7 @@ void run_live_session(std::unique_ptr<llama_dsv41_sweep>&sweep,
     auto send=[&](json value){if(owner_epoch)value["owner_epoch"]=owner_epoch;io.send(value);};
     const uint64_t session_route=std::stoull(session.substr(0,16),nullptr,16),model_route=std::stoull(std::string(model_sha).substr(0,16),nullptr,16);
     require(session_route&&model_route,"Session routing fingerprint must be nonzero");
-    checkpoint current,remote;bool have_remote=false,initial_sent=false,awaiting_ack=false;
+    checkpoint current,remote;bool have_remote=false,initial_sent=false,awaiting_ack=false,device_suspended=false;
     std::unique_ptr<llama_dsv41_sweep::rewind_anchor> rewind_anchor;
     checkpoint rewind_identity;
     auto inspect=[&](){checkpoint c;std::string error;
@@ -81,6 +86,39 @@ void run_live_session(std::unique_ptr<llama_dsv41_sweep>&sweep,
         auto same_base=[&](){const auto base=checkpoint::from_json(command.at("base"));require(base.describe()==current.describe(),"Session base token/position/owner hashes differ");};
         if(operation=="close"){
             dsv41_live::keys(command,{"session","model_sha256","sequence","operation"});reply({{"closed",true}});return;
+        }else if(operation=="suspend"){
+            // DS4COMBO fast switch: give back VRAM, DS heaps and carry RAM; keep
+            // the process, CUDA context, model lease and plans. The frontier is
+            // dropped: only resume (with a new native base) or close may follow.
+            dsv41_live::keys(command,{"session","model_sha256","sequence","operation","base"});same_base();
+            require(!device_suspended&&have_remote&&!awaiting_ack&&remote.describe()==current.describe(),"Suspend requires the exported frontier to be acknowledged by the peer");
+            std::string error;success(sweep->suspend_device(error),error);device_suspended=true;
+            size_t free=0,total=0;ggml_backend_dev_memory(ggml_backend_get_device(weights.backend),&free,&total);
+            reply({{"suspended",true},{"device_free_bytes",free},{"device_total_bytes",total},{"suspend_ms",ms(started)}});
+            continue;
+        }else if(operation=="resume"){
+            dsv41_live::keys(command,{"session","model_sha256","sequence","operation","native_base_contract_sha256","tokens"});
+            require(device_suspended,"Resume requires a suspended session");
+            const auto&ids=command.at("tokens");require(ids.is_array()&&!ids.empty()&&ids.size()<=capacity,"Resume prefill token count exceeds reserved chunk");
+            std::vector<int32_t>tokens;tokens.reserve(ids.size());for(const auto&v:ids){const auto n=dsv41_live::u64(v);require(n<129280,"Resume token out of vocabulary");tokens.push_back(int32_t(n));}
+            std::string error;success(sweep->resume_device(error),error);const double resume_ms=ms(started);
+            // The new base follows this command on the same pipe: contract line + payload.
+            combo_base_input incoming(io,session,command.at("native_base_contract_sha256").get<std::string>(),owner_epoch,uint32_t(options.context));
+            require(tokens.size()<uint64_t(options.context)-incoming.base.frontier.position,"Resume prefill exceeds context capacity");
+            const double base_ms=ms(started)-resume_ms;
+            auto previous=std::move(sweep);sweep.reset(new llama_dsv41_sweep);auto next_options=options;auto next_weights=weights;
+            next_options.carry.tokens=uint32_t(tokens.size());if(next_weights.engram_prefetch_host_bytes)next_weights.engram_prefetch_tokens=uint32_t(tokens.size());
+            success(sweep->open(next_weights,next_options,error,previous.get(),nullptr,&incoming.base),error);incoming.finish();previous.reset();
+            const double admission_ms=ms(started)-resume_ms-base_ms;
+            success(sweep->run(tokens,[]{return should_stop();},error),error);const auto timing=sweep->timing();
+            current=inspect();require(current.frontier.position==incoming.base.frontier.position+tokens.size(),"Resume prefill position did not advance exactly");
+            have_remote=false;initial_sent=false;awaiting_ack=false;device_suspended=false;remote=checkpoint{};
+            std::fprintf(stderr,"DS4COMBO_RESUME_COMPLETE resume_ms=%.3f base_import_ms=%.3f admission_ms=%.3f prompt_ms=%.3f tokens=%zu\n",resume_ms,base_ms,admission_ms,timing.prompt_processing_ms,tokens.size());
+            reply({{"peer_synchronized",false},{"prompt_tokens",tokens.size()},{"resume_ms",resume_ms},{"base_import_ms",base_ms},{"admission_ms",admission_ms},
+                {"prompt_processing_ms",timing.prompt_processing_ms},{"export_preparation_ms",timing.export_preparation_ms}});
+            continue;
+        }else if(device_suspended){
+            require(false,"Suspended session accepts only resume or close");
         }else if(operation=="checkpoint"){
             dsv41_live::keys(command,{"session","model_sha256","sequence","operation"});
             require(inspect().describe()==current.describe(),"Session idle owner changed");reply({{"peer_synchronized",have_remote&&!awaiting_ack&&remote.describe()==current.describe()}});
