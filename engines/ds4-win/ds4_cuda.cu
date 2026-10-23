@@ -631,6 +631,111 @@ static void cuda_decode_dispatch_env_refresh(void) {
         if (cudaGetDevice(&_wd_prev) != cudaSuccess) { /* leave */ } else   \
         if (cudaSetDevice(d)           != cudaSuccess) { /* leave */ } else
 
+/* DS4COMBO growable context VRAM: a fixed virtual range reserved with
+ * cuMemAddressReserve for the worst case, with physical memory mapped in
+ * fixed-size chunks (one cuMemCreate/cuMemMap per chunk) so the device
+ * pointer never moves while the mapped prefix grows or shrinks. */
+#include <cuda.h>
+struct cuda_vmm_region {
+    CUdeviceptr base;
+    uint64_t reserved;   /* whole chunks */
+    uint64_t chunk;
+    uint64_t mapped;     /* whole chunks, prefix of the range */
+    int device;          /* CUDA ordinal */
+};
+static std::unordered_map<void *, cuda_vmm_region> g_vmm_tensors;
+
+static uint64_t cuda_vmm_granularity(int device) {
+    CUmemAllocationProp p = {};
+    p.type = CU_MEM_ALLOCATION_TYPE_PINNED;
+    p.location.type = CU_MEM_LOCATION_TYPE_DEVICE;
+    p.location.id = device;
+    size_t g = 0;
+    if (cuMemGetAllocationGranularity(&g, &p, CU_MEM_ALLOC_GRANULARITY_MINIMUM) != CUDA_SUCCESS || !g)
+        return 0;
+    return (uint64_t)g;
+}
+
+static int cuda_vmm_reserve(cuda_vmm_region *r, uint64_t bytes, uint64_t chunk_hint) {
+    memset(r, 0, sizeof(*r));
+    if (cudaGetDevice(&r->device) != cudaSuccess || cudaFree(0) != cudaSuccess) return 0;
+    const uint64_t gran = cuda_vmm_granularity(r->device);
+    if (!gran || !bytes) return 0;
+    uint64_t chunk = chunk_hint < gran ? gran : chunk_hint;
+    chunk = (chunk + gran - 1u) / gran * gran;
+    r->chunk = chunk;
+    r->reserved = (bytes + chunk - 1u) / chunk * chunk;
+    if (cuMemAddressReserve(&r->base, (size_t)r->reserved, 0, 0, 0) != CUDA_SUCCESS) {
+        memset(r, 0, sizeof(*r));
+        return 0;
+    }
+    return 1;
+}
+
+static uint64_t cuda_vmm_cost(const cuda_vmm_region *r, uint64_t bytes) {
+    uint64_t want = (bytes + r->chunk - 1u) / r->chunk * r->chunk;
+    return want > r->reserved ? r->reserved : want;
+}
+
+/* Map or unmap whole chunks so at least `bytes` (capped at the reservation)
+ * are backed. Newly mapped bytes are zeroed when `zero` is set. Returns 0 on
+ * failure; `mapped` always reflects what is actually backed. */
+static int cuda_vmm_resize(cuda_vmm_region *r, uint64_t bytes, int zero) {
+    if (!r->base) return 0;
+    const uint64_t want = cuda_vmm_cost(r, bytes);
+    if (want == r->mapped) return 1;
+    /* Windows WDDM: map/unmap/access changes need an idle device. */
+    if (cudaDeviceSynchronize() != cudaSuccess) return 0;
+    if (want < r->mapped) {
+        while (r->mapped > want) {
+            const uint64_t off = r->mapped - r->chunk;
+            if (cuMemUnmap(r->base + off, (size_t)r->chunk) != CUDA_SUCCESS) return 0;
+            r->mapped = off;
+        }
+        return 1;
+    }
+    const uint64_t old = r->mapped;
+    CUmemAllocationProp p = {};
+    p.type = CU_MEM_ALLOCATION_TYPE_PINNED;
+    p.location.type = CU_MEM_LOCATION_TYPE_DEVICE;
+    p.location.id = r->device;
+    CUmemAccessDesc a = {};
+    a.location.type = CU_MEM_LOCATION_TYPE_DEVICE;
+    a.location.id = r->device;
+    a.flags = CU_MEM_ACCESS_FLAGS_PROT_READWRITE;
+    while (r->mapped < want) {
+#if defined(_WIN32)
+        cuda_host_admit((size_t)r->chunk, "cuMemCreate backing store", __LINE__);
+#endif
+        CUmemGenericAllocationHandle h;
+        if (cuMemCreate(&h, (size_t)r->chunk, &p, 0) != CUDA_SUCCESS) break;
+        if (cuMemMap(r->base + r->mapped, (size_t)r->chunk, 0, h, 0) != CUDA_SUCCESS) {
+            (void)cuMemRelease(h);
+            break;
+        }
+        (void)cuMemRelease(h);  /* the mapping keeps the physical pages alive */
+        if (cuMemSetAccess(r->base + r->mapped, (size_t)r->chunk, &a, 1) != CUDA_SUCCESS) {
+            (void)cuMemUnmap(r->base + r->mapped, (size_t)r->chunk);
+            break;
+        }
+        r->mapped += r->chunk;
+    }
+    if (zero && r->mapped > old &&
+        cudaMemset((void *)(uintptr_t)(r->base + old), 0, (size_t)(r->mapped - old)) != cudaSuccess) {
+        (void)cudaGetLastError();
+        return 0;
+    }
+    if (zero && cudaDeviceSynchronize() != cudaSuccess) return 0;
+    return r->mapped == want;
+}
+
+static void cuda_vmm_free(cuda_vmm_region *r) {
+    if (!r->base) return;
+    (void)cuda_vmm_resize(r, 0, 0);
+    (void)cuMemAddressFree(r->base, (size_t)r->reserved);
+    memset(r, 0, sizeof(*r));
+}
+
 /* =========================================================================
  * Per-device selective model cache (selective model cache).
  *
@@ -748,6 +853,10 @@ struct cuda_stream_expert_cache {
     uint32_t rank_worst_slot;
     uint32_t rank_worst_value;
     std::vector<cuda_stream_expert_cache_slot> slots;
+    /* DS4COMBO growable context: gate/up/down live in VMM ranges so the
+     * tier can shrink or regrow in place as context VRAM changes. */
+    int vmm;
+    cuda_vmm_region vm[3];
 };
 
 struct cuda_derived_range {
@@ -3511,6 +3620,12 @@ static void cuda_model_load_progress_finish(void) {
 
 static void cuda_stream_expert_cache_release(cuda_stream_expert_cache *cache) {
     if (!cache) return;
+    if (cache->vmm) {
+        (void)cudaDeviceSynchronize();
+        for (int i = 0; i < 3; i++) cuda_vmm_free(&cache->vm[i]);
+        cache->vmm = 0;
+        cache->gate_ptr = cache->up_ptr = cache->down_ptr = NULL;
+    }
     if (cache->gate_ptr) {
         (void)cudaFree(cache->gate_ptr);
     }
@@ -3846,9 +3961,16 @@ static uint32_t cuda_stream_expert_cache_class_index(
             primary->down_expert_bytes != down_expert_bytes) ? 1u : 0u;
 }
 
+/* DS4COMBO growable context: byte ceiling on the whole VRAM expert tier,
+ * lowered as context VRAM is mapped and raised as it is unmapped.
+ * UINT64_MAX = no ceiling (fixed-context behaviour). */
+static uint64_t g_stream_expert_ctx_ceiling_bytes = UINT64_MAX;
+static int g_stream_expert_ctx_vmm;
+
 static uint32_t cuda_stream_expert_cache_class_budget(
         uint32_t class_index,
-        uint64_t expert_bytes) {
+        uint64_t expert_bytes,
+        bool apply_ctx_ceiling = true) {
     const uint32_t requested = cuda_stream_expert_cache_requested_budget();
     if (requested == 0 || expert_bytes == 0) return 0;
     const uint64_t primary_bytes =
@@ -3856,6 +3978,8 @@ static uint32_t cuda_stream_expert_cache_class_budget(
             g_stream_expert_primary_bytes : expert_bytes;
     if ((uint64_t)requested > UINT64_MAX / primary_bytes) return 0;
     uint64_t total_bytes = (uint64_t)requested * primary_bytes;
+    if (apply_ctx_ceiling && total_bytes > g_stream_expert_ctx_ceiling_bytes)
+        total_bytes = g_stream_expert_ctx_ceiling_bytes;
     if (g_stream_expert_cache_edge_vram_enabled &&
         g_stream_expert_cache_phase_decode &&
         g_stream_expert_cache_physical_budget_bytes != 0 &&
@@ -4029,6 +4153,42 @@ static int cuda_stream_selected_ensure_i32(
     return 1;
 }
 
+static uint32_t cuda_stream_expert_cache_vmm_grow(cuda_stream_expert_cache *c, uint32_t cap);
+
+/* DS4COMBO growable context: reserve the tier's uncapped budget as virtual
+ * space and back only `cap` slots, so later ceiling changes resize in place. */
+static int cuda_stream_expert_cache_vmm_alloc(
+        cuda_stream_expert_cache *cache,
+        uint32_t cap,
+        uint32_t reserve_cap,
+        uint64_t gate_expert_bytes,
+        uint64_t down_expert_bytes,
+        char **gate_ptr,
+        char **up_ptr,
+        char **down_ptr,
+        const char **errstr) {
+    *gate_ptr = *up_ptr = *down_ptr = NULL;
+    if (errstr) *errstr = NULL;
+    if (reserve_cap < cap) reserve_cap = cap;
+    const uint64_t per[3] = {gate_expert_bytes, gate_expert_bytes, down_expert_bytes};
+    int ok = cap != 0;
+    for (int i = 0; ok && i < 3; i++) {
+        ok = cuda_vmm_reserve(&cache->vm[i], (uint64_t)reserve_cap * per[i], 16ull << 20) &&
+             cuda_vmm_resize(&cache->vm[i], (uint64_t)cap * per[i], 0);
+    }
+    if (!ok) {
+        (void)cudaDeviceSynchronize();
+        for (int i = 0; i < 3; i++) cuda_vmm_free(&cache->vm[i]);
+        if (errstr) *errstr = "VMM map failed (out of memory)";
+        return 0;
+    }
+    cache->vmm = 1;
+    *gate_ptr = (char *)(uintptr_t)cache->vm[0].base;
+    *up_ptr = (char *)(uintptr_t)cache->vm[1].base;
+    *down_ptr = (char *)(uintptr_t)cache->vm[2].base;
+    return 1;
+}
+
 static cuda_stream_expert_cache *cuda_stream_expert_cache_prepare(
         uint64_t gate_expert_bytes,
         uint64_t down_expert_bytes,
@@ -4163,6 +4323,10 @@ static cuda_stream_expert_cache *cuda_stream_expert_cache_prepare(
         return cache;
     }
 
+    if (same_dims && cache->vmm && cache->capacity != 0 &&
+        cuda_stream_expert_cache_vmm_grow(cache, cap) >= cap) {
+        return cache;  /* DS4COMBO: grown in place, residents kept */
+    }
     cuda_stream_expert_cache_release(cache);
     while (cap != 0) {
         if ((uint64_t)cap > UINT64_MAX / gate_expert_bytes ||
@@ -4175,13 +4339,23 @@ static cuda_stream_expert_cache *cuda_stream_expert_cache_prepare(
         char *up_ptr = NULL;
         char *down_ptr = NULL;
         const char *alloc_error = NULL;
-        if (!cuda_stream_expert_cache_try_alloc(cap,
+        if (!(g_stream_expert_ctx_vmm ?
+              cuda_stream_expert_cache_vmm_alloc(cache,
+                  cap,
+                  cuda_stream_expert_cache_class_budget(class_index, expert_bytes, false),
+                  gate_expert_bytes,
+                  down_expert_bytes,
+                  &gate_ptr,
+                  &up_ptr,
+                  &down_ptr,
+                  &alloc_error) :
+              cuda_stream_expert_cache_try_alloc(cap,
                                                 gate_expert_bytes,
                                                 down_expert_bytes,
                                                 &gate_ptr,
                                                 &up_ptr,
                                                 &down_ptr,
-                                                &alloc_error)) {
+                                                &alloc_error))) {
             const uint32_t new_cap =
                 cuda_stream_expert_cache_shrunken_cap(cap);
             cuda_stream_expert_cache_note_oom_cap(cache,
@@ -4205,9 +4379,11 @@ static cuda_stream_expert_cache *cuda_stream_expert_cache_prepare(
             cache->slots.resize(cap);
         } catch (...) {
             fprintf(stderr, "ds4: CUDA streaming expert cache metadata allocation failed\n");
-            (void)cudaFree(gate_ptr);
-            (void)cudaFree(up_ptr);
-            (void)cudaFree(down_ptr);
+            if (!cache->vmm) {
+                (void)cudaFree(gate_ptr);
+                (void)cudaFree(up_ptr);
+                (void)cudaFree(down_ptr);
+            }
             cuda_stream_expert_cache_release(cache);
             return NULL;
         }
@@ -7466,9 +7642,27 @@ extern "C" int ds4_gpu_tensor_copy_async(ds4_gpu_tensor *dst,
                    "tensor copy async");
 }
 
+static bool cuda_vmm_tensor_release(ds4_gpu_tensor *t) {
+    if (!t || !t->owner || !t->ptr || g_vmm_tensors.empty()) return false;
+    auto it = g_vmm_tensors.find(t->ptr);
+    if (it == g_vmm_tensors.end()) return false;
+    WITH_DEVICE(it->second.device) {
+        (void)cudaDeviceSynchronize();
+        cuda_vmm_free(&it->second);
+    }
+    g_vmm_tensors.erase(it);
+    t->ptr = NULL;
+    return true;
+}
+
 extern "C" void ds4_gpu_tensor_free_in_place(ds4_gpu_tensor *t) {
     if (!t) return;
     int d = ds4_tensor_device_idx(t);
+    if (cuda_vmm_tensor_release(t)) {
+        t->bytes = 0;
+        t->owner = 0;
+        return;
+    }
     if (t->owner && t->ptr) {
         WITH_DEVICE(g_gpu[d].device_id) {
             (void)cudaFree(t->ptr);
@@ -7487,6 +7681,58 @@ extern "C" ds4_gpu_tensor *ds4_gpu_tensor_alloc(uint64_t bytes) {
         return NULL;
     }
     return t;
+}
+
+/* DS4COMBO growable context: a device tensor whose full `bytes` are a fixed
+ * virtual range; physical memory is backed by ds4_gpu_tensor_set_mapped().
+ * Kernels must only touch the mapped prefix. */
+extern "C" ds4_gpu_tensor *ds4_gpu_tensor_alloc_growable(uint64_t bytes) {
+    if (bytes == 0) bytes = 1;
+    ds4_gpu_tensor *t = (ds4_gpu_tensor *)calloc(1, sizeof(*t));
+    if (!t) return NULL;
+    cuda_vmm_region r;
+    int ok = 0;
+    WITH_DEVICE(g_gpu[0].device_id) {
+        /* At most ~256 chunks per tensor, never below the granularity. */
+        ok = cuda_vmm_reserve(&r, bytes, bytes / 256u);
+    }
+    if (!ok) { free(t); return NULL; }
+    t->ptr = (void *)(uintptr_t)r.base;
+    t->bytes = bytes;
+    t->owner = 1;
+    t->device_id = 0;
+    try { g_vmm_tensors[t->ptr] = r; } catch (...) {
+        cuda_vmm_free(&r); free(t); return NULL;
+    }
+    return t;
+}
+
+/* Back at least `bytes` of a growable tensor (newly backed bytes read as
+ * zero), unmapping whole chunks beyond it. Plain tensors are always full. */
+extern "C" int ds4_gpu_tensor_set_mapped(ds4_gpu_tensor *t, uint64_t bytes) {
+    if (!t || !t->ptr) return 0;
+    auto it = g_vmm_tensors.find(t->ptr);
+    if (it == g_vmm_tensors.end()) return bytes <= t->bytes;
+    int ok = 0;
+    WITH_DEVICE(it->second.device) {
+        ok = cuda_vmm_resize(&it->second, bytes, 1);
+    }
+    if (!ok) (void)cudaGetLastError();
+    return ok;
+}
+
+/* Physical bytes backing `t` if it were mapped to cover `bytes`. */
+extern "C" uint64_t ds4_gpu_tensor_map_cost(const ds4_gpu_tensor *t, uint64_t bytes) {
+    if (!t || !t->ptr) return 0;
+    auto it = g_vmm_tensors.find(t->ptr);
+    if (it == g_vmm_tensors.end()) return t->bytes;
+    return cuda_vmm_cost(&it->second, bytes);
+}
+
+extern "C" uint64_t ds4_gpu_tensor_mapped_bytes(const ds4_gpu_tensor *t) {
+    if (!t || !t->ptr) return 0;
+    auto it = g_vmm_tensors.find(t->ptr);
+    return it == g_vmm_tensors.end() ? t->bytes : it->second.mapped;
 }
 
 extern "C" ds4_gpu_tensor *ds4_gpu_tensor_alloc_managed(uint64_t bytes) {
@@ -7622,6 +7868,10 @@ extern "C" ds4_gpu_tensor *ds4_gpu_tensor_view(const ds4_gpu_tensor *base, uint6
 extern "C" void ds4_gpu_tensor_free(ds4_gpu_tensor *tensor) {
     if (!tensor) return;
     int d = ds4_tensor_device_idx(tensor);
+    if (cuda_vmm_tensor_release(tensor)) {
+        free(tensor);
+        return;
+    }
     if (tensor->owner && tensor->ptr) {
         WITH_DEVICE(g_gpu[d].device_id) {
             (void)cudaFree(tensor->ptr);
@@ -9664,6 +9914,190 @@ extern "C" uint32_t ds4_gpu_stream_expert_cache_snapshot(
         if (down_bytes) down_bytes[i] = rows[i].down;
     }
     return rows.size() > UINT32_MAX ? UINT32_MAX : (uint32_t)rows.size();
+}
+
+/* ---- DS4COMBO growable context: in-place VRAM expert tier resize ------------------------------- */
+
+static void cuda_stream_expert_cache_vmm_settle(cuda_stream_expert_cache *c) {
+    uint64_t cap = c->capacity;
+    const uint64_t per[3] = {c->gate_expert_bytes, c->gate_expert_bytes, c->down_expert_bytes};
+    for (int i = 0; i < 3; i++) {
+        const uint64_t fit = c->vm[i].mapped / per[i];
+        if (fit < cap) cap = fit;
+    }
+    c->capacity = (uint32_t)cap;
+    c->gate_capacity = c->up_capacity = cap * c->gate_expert_bytes;
+    c->down_capacity = cap * c->down_expert_bytes;
+}
+
+/* Grow a VMM-backed class to `cap` slots in place; new slots start empty.
+ * Stops early when physical memory runs out. Returns the capacity held. */
+static uint32_t cuda_stream_expert_cache_vmm_grow(cuda_stream_expert_cache *c, uint32_t cap) {
+    if (!c->valid || !c->vmm || cap <= c->capacity) return c->capacity;
+    const uint32_t old = c->capacity;
+    const uint64_t per[3] = {c->gate_expert_bytes, c->gate_expert_bytes, c->down_expert_bytes};
+    for (int i = 0; i < 3; i++) (void)cuda_vmm_resize(&c->vm[i], (uint64_t)cap * per[i], 0);
+    (void)cudaGetLastError();
+    c->capacity = cap;
+    cuda_stream_expert_cache_vmm_settle(c);
+    if (c->capacity < old) c->capacity = old;  /* never below what was already backed */
+    try { c->slots.resize(c->capacity); } catch (...) { c->capacity = old; }
+    c->rank_worst_valid = 0;
+    return c->capacity;
+}
+
+/* Shrink a VMM-backed class to `cap` slots: the coldest residents beyond
+ * `cap` are evicted (demoted to a free host-tier slot when one exists), the
+ * survivors are packed into the low slots in their existing order, and the
+ * freed tail is unmapped. */
+static int cuda_stream_expert_cache_vmm_shrink(cuda_stream_expert_cache *c, uint32_t cap,
+                                                uint32_t *evicted, uint32_t *demoted) {
+    if (!c->valid || !c->vmm || cap >= c->capacity) return 1;
+    const uint64_t gb = c->gate_expert_bytes, db = c->down_expert_bytes;
+    std::vector<uint32_t> live;
+    for (uint32_t i = 0; i < c->capacity; i++) if (c->slots[i].valid) live.push_back(i);
+    if (live.size() > cap) {
+        std::vector<uint32_t> order = live;
+        std::stable_sort(order.begin(), order.end(), [c](uint32_t a, uint32_t b) {
+            const auto &x = c->slots[a], &y = c->slots[b];
+            return cuda_stream_cache_older_or_colder(x.layer, x.expert, x.age, y.layer, y.expert, y.age);
+        });
+        const size_t drop = live.size() - cap;
+        cuda_stream_host_expert_cache *h =
+            &g_stream_host_expert_caches[cuda_stream_host_expert_cache_class_index(gb, db)];
+        const bool host_ok = h->valid && h->gate_expert_bytes == gb && h->down_expert_bytes == db;
+        uint32_t next_free = 0;
+        for (size_t k = 0; k < drop; k++) {
+            cuda_stream_expert_cache_slot &v = c->slots[order[k]];
+            if (host_ok && cuda_stream_host_expert_cache_find(h, v.model_map, v.model_size, v.layer,
+                    v.n_total_expert, v.expert, v.gate_offset, v.up_offset, v.down_offset, gb, db) < 0) {
+                while (next_free < h->capacity && h->slots[next_free].valid) next_free++;
+                if (next_free < h->capacity) {
+                    const uint32_t hs = next_free;
+                    const uint64_t vs = order[k];
+                    if (cudaMemcpy(h->gate_ptr + hs * gb, c->gate_ptr + vs * gb, (size_t)gb, cudaMemcpyDeviceToHost) == cudaSuccess &&
+                        cudaMemcpy(h->up_ptr + hs * gb, c->up_ptr + vs * gb, (size_t)gb, cudaMemcpyDeviceToHost) == cudaSuccess &&
+                        cudaMemcpy(h->down_ptr + hs * db, c->down_ptr + vs * db, (size_t)db, cudaMemcpyDeviceToHost) == cudaSuccess) {
+                        cuda_stream_host_expert_cache_slot &e = h->slots[hs];
+                        e.valid = 1; e.model_map = v.model_map; e.model_size = v.model_size;
+                        e.layer = v.layer; e.n_total_expert = v.n_total_expert; e.expert = v.expert;
+                        e.gate_offset = v.gate_offset; e.up_offset = v.up_offset; e.down_offset = v.down_offset;
+                        e.gate_expert_bytes = gb; e.down_expert_bytes = db; e.age = ++h->tick;
+                        if (h->count < h->capacity) h->count++;
+                        if (demoted) (*demoted)++;
+                    } else {
+                        (void)cudaGetLastError();
+                    }
+                }
+            }
+            v.valid = 0;
+            if (evicted) (*evicted)++;
+        }
+    }
+    uint32_t dst = 0;
+    for (uint32_t i = 0; i < c->capacity; i++) {
+        if (!c->slots[i].valid) continue;
+        if (i != dst) {
+            if (cudaMemcpy(c->gate_ptr + (uint64_t)dst * gb, c->gate_ptr + (uint64_t)i * gb, (size_t)gb, cudaMemcpyDeviceToDevice) != cudaSuccess ||
+                cudaMemcpy(c->up_ptr + (uint64_t)dst * gb, c->up_ptr + (uint64_t)i * gb, (size_t)gb, cudaMemcpyDeviceToDevice) != cudaSuccess ||
+                cudaMemcpy(c->down_ptr + (uint64_t)dst * db, c->down_ptr + (uint64_t)i * db, (size_t)db, cudaMemcpyDeviceToDevice) != cudaSuccess) {
+                (void)cudaGetLastError();
+                return 0;
+            }
+            c->slots[dst] = c->slots[i];
+            c->slots[i].valid = 0;
+        }
+        dst++;
+    }
+    c->count = dst;
+    c->capacity = cap;
+    c->slots.resize(cap);
+    c->rank_worst_valid = 0;
+    const uint64_t per[3] = {gb, gb, db};
+    for (int i = 0; i < 3; i++)
+        if (!cuda_vmm_resize(&c->vm[i], (uint64_t)cap * per[i], 0)) return 0;
+    cuda_stream_expert_cache_vmm_settle(c);
+    return 1;
+}
+
+/* Use VMM for the VRAM expert tier from its first allocation. */
+extern "C" void ds4_gpu_stream_expert_cache_enable_ctx_resize(void) {
+    g_stream_expert_ctx_vmm = 1;
+}
+
+/* Bytes the VRAM expert tier currently backs (all classes). */
+extern "C" uint64_t ds4_gpu_stream_expert_cache_held_bytes(void) {
+    uint64_t total = 0;
+    for (uint32_t i = 0; i < DS4_CUDA_STREAM_EXPERT_CACHE_CLASSES; i++) {
+        const cuda_stream_expert_cache &c = g_stream_expert_caches[i];
+        if (c.valid) total += (uint64_t)c.capacity * (2u * c.gate_expert_bytes + c.down_expert_bytes);
+    }
+    return total;
+}
+
+/* VRAM expert tier size in experts: allocated slots, or the budget the
+ * ceiling allows when nothing is allocated yet. */
+extern "C" uint32_t ds4_gpu_stream_expert_cache_tier_count(void) {
+    uint64_t n = 0;
+    bool any = false;
+    for (uint32_t i = 0; i < DS4_CUDA_STREAM_EXPERT_CACHE_CLASSES; i++) {
+        if (g_stream_expert_caches[i].valid) { n += g_stream_expert_caches[i].capacity; any = true; }
+    }
+    if (!any) {
+        const uint64_t primary = g_stream_expert_primary_bytes;
+        n = cuda_stream_expert_cache_requested_budget();
+        if (primary && g_stream_expert_ctx_ceiling_bytes != UINT64_MAX &&
+            n > g_stream_expert_ctx_ceiling_bytes / primary)
+            n = g_stream_expert_ctx_ceiling_bytes / primary;
+    }
+    return n > UINT32_MAX ? UINT32_MAX : (uint32_t)n;
+}
+
+/* Set the VRAM expert tier's byte ceiling and resize every allocated class
+ * to its budget under it, in place. Returns 0 if a shrink could not free
+ * the memory; the caller fails the request. */
+extern "C" int ds4_gpu_stream_expert_cache_set_ceiling(uint64_t bytes, uint32_t *evicted,
+                                                       uint32_t *demoted) {
+    if (evicted) *evicted = 0;
+    if (demoted) *demoted = 0;
+    g_stream_expert_ctx_ceiling_bytes = bytes;
+    if (cudaDeviceSynchronize() != cudaSuccess) return 0;
+    int ok = 1;
+    bool changed = false;
+    for (uint32_t ci = 0; ci < DS4_CUDA_STREAM_EXPERT_CACHE_CLASSES; ci++) {
+        cuda_stream_expert_cache *c = &g_stream_expert_caches[ci];
+        if (!c->valid) continue;
+        const uint64_t eb = cuda_stream_expert_cache_expert_bytes(c->gate_expert_bytes, c->down_expert_bytes);
+        uint32_t cap = cuda_stream_expert_cache_class_budget(ci, eb);
+        if (c->runtime_cap != 0 && cap > c->runtime_cap) cap = c->runtime_cap;
+        if (cap == c->capacity) continue;
+        if (!c->vmm) {
+            /* Allocated before resizing was enabled: only a full release can shrink it. */
+            if (cap < c->capacity) {
+                if (evicted) *evicted += c->count;
+                cuda_stream_expert_cache_release(c);
+                changed = true;
+            }
+            continue;
+        }
+        if (cap < c->capacity) {
+            if (cap == 0) {
+                if (evicted) *evicted += c->count;
+                cuda_stream_expert_cache_release(c);
+            } else if (!cuda_stream_expert_cache_vmm_shrink(c, cap, evicted, demoted)) {
+                ok = 0;
+            }
+        } else {
+            (void)cuda_stream_expert_cache_vmm_grow(c, cap);
+        }
+        changed = true;
+    }
+    if (changed) {
+        cuda_stream_selected_cache_invalidate();
+        ds4_gpu_decode_graphs_invalidate();
+    }
+    if (cudaDeviceSynchronize() != cudaSuccess) ok = 0;
+    return ok;
 }
 
 /* Re-stamp LRU ages in the given oldest->newest order after a restore seed, so the

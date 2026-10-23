@@ -474,6 +474,15 @@ int ds4_gpu_qwen4_batch_mm_q8_tensor(
 void ds4_gpu_set_streaming_host_expert_cache_budget(uint32_t experts);
 void ds4_gpu_set_streaming_host_expert_cache_budget_bytes(uint64_t bytes);
 uint64_t ds4_gpu_recommended_working_set_size(void);
+/* DS4COMBO growable context VRAM (CUDA). */
+ds4_gpu_tensor *ds4_gpu_tensor_alloc_growable(uint64_t bytes);
+int ds4_gpu_tensor_set_mapped(ds4_gpu_tensor *t, uint64_t bytes);
+uint64_t ds4_gpu_tensor_map_cost(const ds4_gpu_tensor *t, uint64_t bytes);
+uint64_t ds4_gpu_tensor_mapped_bytes(const ds4_gpu_tensor *t);
+void ds4_gpu_stream_expert_cache_enable_ctx_resize(void);
+uint64_t ds4_gpu_stream_expert_cache_held_bytes(void);
+uint32_t ds4_gpu_stream_expert_cache_tier_count(void);
+int ds4_gpu_stream_expert_cache_set_ceiling(uint64_t bytes, uint32_t *evicted, uint32_t *demoted);
 uint32_t ds4_gpu_stream_expert_cache_configured_count(void);
 uint32_t ds4_gpu_stream_expert_cache_current_count(void);
 uint32_t ds4_gpu_stream_expert_cache_snapshot(int host, uint32_t *layers, uint32_t *experts, uint64_t *gate_bytes, uint64_t *down_bytes, uint32_t cap);
