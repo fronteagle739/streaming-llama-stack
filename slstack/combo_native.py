@@ -189,7 +189,22 @@ class Native:
         # All required state has already been exported. Reuse the owned
         # Job's certified shutdown directly; VRAM recovery is then checked
         # independently by release_barrier before another owner can start.
+        # DS4COMBO RAM-leak A/B (cfg native_graceful_shutdown, default off):
+        # ask the engine to drain DirectStorage and free its GPU/host memory
+        # and return from main; the Job terminate below is then only a fallback.
+        self.shutdown_path='terminate'
+        if self.cfg.get('native_graceful_shutdown') and self.process.job is not None and self.process.job.poll() is None:
+            started=time.monotonic()
+            try:
+                self.control('shutdown')
+                deadline=started+float(self.cfg.get('native_graceful_shutdown_seconds',30))
+                while self.process.job.poll() is None and time.monotonic()<deadline:time.sleep(0.05)
+                self.shutdown_path='graceful' if self.process.job.poll() is not None else 'graceful-timeout-terminate'
+            except BaseException as exc:
+                self.shutdown_path='graceful-failed-terminate: '+repr(exc)[:200]
+            self.shutdown_seconds=time.monotonic()-started
         proof=self.process.close()
+        proof=dict(proof,native_shutdown_path=self.shutdown_path,native_shutdown_seconds=getattr(self,'shutdown_seconds',0.0))
         if not all(proof.get(key) for key in ('owned_job_empty','owned_process_signaled','owned_pid_gone')):
             raise RuntimeError('Native GPU owner retirement unconfirmed; handoff refused')
         self.receipt=proof;self.closed=True

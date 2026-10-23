@@ -1,6 +1,11 @@
 /* Windows target-only handoff glue around the existing native state API and
  * server renderer. Bulk state uses parent-owned, physically locked named RAM;
  * HTTP carries bounded authenticated control only. No checkpoint file path. */
+/* DS4COMBO RAM-leak A/B: set by the authenticated /decode/shutdown op. The
+ * server then leaves its accept loop, drains workers, closes the engine
+ * (ds4_gpu_cleanup frees pinned/registered/managed memory) and finally shuts
+ * DirectStorage down (background drain, queues, arenas, D3D12 device). */
+static volatile bool ds4_combo_shutdown_requested=false;
 #if defined(_WIN32) && !defined(DS4_NO_GPU)
 #include "ds4_native_checkpoint.h"
 typedef struct {
@@ -240,6 +245,9 @@ static void ds4_combo_http(server*s,int fd,const http_request*hr){
                 if(command.seen!=(7|16|32|64)||command.capacity>24u*1024*1024||!ds4_combo_mapping_open(&mapping,command.mapping,command.capacity,false)||!ds4_combo_read(&mapping,&journal,sizeof(journal))||memcmp(journal.session,ds4_combo_owner,33)||journal.epoch!=ds4_combo_epoch||strcmp(journal.checkpoint.payload_sha256,command.sha)){snprintf(err,sizeof(err),"saved native rewind owner/epoch/checkpoint unavailable");goto failed;}
                 float*logits=(float*)(mapping.data+sizeof(journal));mapping.cursor=sizeof(journal)+129280*4;
                 if(mapping.cursor>mapping.capacity||ds4_session_native_rewind(session,journal.checkpoint.position,logits,ds4_combo_read,&mapping,ds4_native_verify,&current,ds4_native_verify,&journal.checkpoint,err,sizeof(err)))goto failed;
+            }else if(!strcmp(path,"/decode/shutdown")){
+                if(command.seen!=7){snprintf(err,sizeof(err),"shutdown takes only the owner fields");goto failed;}
+                ds4_combo_shutdown_requested=true;
             }else{snprintf(err,sizeof(err),"unknown combo operation");goto failed;}
         }
     }
@@ -254,7 +262,9 @@ static void ds4_combo_http(server*s,int fd,const http_request*hr){
     buf_printf(&reply,"\"session\":\"%s\",\"owner_epoch\":%llu,\"next_sequence\":%llu,\"status\":\"complete\",\"checkpoint\":",ds4_combo_owner,(unsigned long long)ds4_combo_epoch,(unsigned long long)ds4_combo_sequence);
     if(ds4_session_pos(session)>0){if(ds4_session_native_visit(session,ds4_native_capture,&current,err,sizeof(err)))goto failed;ds4_combo_describe(&reply,&current);}else buf_puts(&reply,"null");
     buf_puts(&reply,"}\n");pthread_mutex_unlock(&s->inference_mu);
-    http_response(fd,s->enable_cors,200,"application/json",reply.ptr);goto done;
+    http_response(fd,s->enable_cors,200,"application/json",reply.ptr);
+    if(ds4_combo_shutdown_requested){fprintf(stderr,"DS4COMBO_NATIVE_GRACEFUL_SHUTDOWN_REQUESTED\n");g_stop_requested=1;}
+    goto done;
 failed:
     pthread_mutex_unlock(&s->inference_mu);http_error(fd,s->enable_cors,409,*err?err:"combo state verification refused");
 done:
