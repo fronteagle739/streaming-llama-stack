@@ -29,6 +29,11 @@ struct llama_dsv41_fixed_storage {
     // The same fixed owners can serve an explicitly selected unpaired graph.
     // This changes allocation lifetime only, never expert/attention arithmetic.
     bool unpaired_resident=false;
+    // DS4COMBO no-warm-up start: the first real request's open() allocates the
+    // fixed RAM bank and GPU reservation itself (same sizes, same order:
+    // provider heaps -> fixed reserve -> first stage lease) instead of a
+    // throwaway one-token pass that streams every weight once (~20 s).
+    bool direct_open=false;
 };
 
 class llama_dsv41_tile_executor {

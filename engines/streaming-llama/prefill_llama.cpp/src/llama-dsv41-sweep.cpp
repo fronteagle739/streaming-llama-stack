@@ -339,7 +339,8 @@ bool llama_dsv41_sweep::open(const llama_dsv41_weight_provider::config &weights,
         // writes only its owned header, without preallocating the extent.
         if(options.fixed&&!options.fixed->ready){
             auto&f=*options.fixed;
-            require(!warmup&&!options.pair_ffn&&options.carry.tokens==1&&!f.ram&&!f.ram_registration,"Fixed RAM must be allocated/registered once before imports");
+            const bool first_request=f.direct_open&&!warmup&&!prefix&&(options.carry.tokens==f.tokens||(options.stateful_chunks&&options.carry.tokens<=f.tokens));
+            require(!warmup&&(first_request||(!options.pair_ffn&&options.carry.tokens==1))&&!f.ram&&!f.ram_registration,"Fixed RAM must be allocated/registered once before imports");
             f.ram=llama_dsv41_carry_store::reserve_ram(f.tokens,options.carry.admitted_host_bytes,f.tile);
             if(f.tile_registration||f.pageable_copies){
                 const bool full_resident=f.bf16&&f.ids&&f.metadata&&!options.admitted_prefetch_device_bytes;
@@ -365,7 +366,9 @@ bool llama_dsv41_sweep::open(const llama_dsv41_weight_provider::config &weights,
                 f.backend_temporary_reserve_bytes==1024ull*1024*1024),
                 "Unpaired fixed reservation requires its explicit full-resident tile-registration plan");
             if(!f.ready){
-                require(!warmup&&!options.pair_ffn&&options.carry.tokens==1&&!f.graph&&!f.hidden&&!f.cache&&f.tokens&&f.tile&&options.admitted_graph_bytes>1024ull*1024*1024,"Fixed allocation must follow provider heaps and precede first stage lease during one-token warmup");
+                const bool first_request=f.direct_open&&!warmup&&!prefix&&(options.carry.tokens==f.tokens||(options.stateful_chunks&&options.carry.tokens<=f.tokens));
+                if(first_request)std::fprintf(stderr,"DS4COMBO_FIXED_DIRECT_OPEN tokens=%u tile=%u pair=%d warmup_pass=0\n",options.carry.tokens,f.tile,int(options.pair_ffn));
+                require(!warmup&&(first_request||(!options.pair_ffn&&options.carry.tokens==1))&&!f.graph&&!f.hidden&&!f.cache&&f.tokens&&f.tile&&options.admitted_graph_bytes>1024ull*1024*1024,"Fixed allocation must follow provider heaps and precede first stage lease during one-token warmup");
                 require((f.backend_temporary_reserve_bytes==1024ull*1024*1024||f.backend_temporary_reserve_bytes==768ull*1024*1024)&&f.backend_temporary_reserve_bytes<options.admitted_graph_bytes,"Unsupported fixed backend temporary reserve");
                 require(f.backend_temporary_reserve_bytes==1024ull*1024*1024||(options.expert.attention_kv_f16_table&&options.expert.index_key_windows&&options.expert.token_tile_attention&&f.tile<=8192),"Reduced backend reserve requires direct-F16/window profile and<=8K groups");
                 f.backend=weights.backend;
