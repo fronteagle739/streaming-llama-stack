@@ -192,6 +192,21 @@ static void ds4_combo_http(server*s,int fd,const http_request*hr){
     pthread_mutex_lock(&s->inference_mu);
     if(strcmp(command.session,ds4_combo_owner)||command.epoch!=ds4_combo_epoch||command.sequence!=ds4_combo_sequence||ds4_combo_sequence==UINT64_MAX){snprintf(err,sizeof(err),"stale combo owner/epoch/sequence");goto failed;}
     ds4_session*session=s->slots[0].session;ds4_native_checkpoint current={0};const char*path=hr->path;
+    if(!strcmp(path,"/decode/shutdown")){
+        /* Owner-verified graceful exit. No native capture or hash here: the
+         * state was already exported, and an empty decoder must not refuse.
+         * The stop flag is set only after the reply was sent. */
+        if(command.seen!=7){snprintf(err,sizeof(err),"shutdown takes only the owner fields");goto failed;}
+        ds4_combo_sequence++;
+        buf_printf(&reply,"{\"session\":\"%s\",\"owner_epoch\":%llu,\"next_sequence\":%llu,\"status\":\"complete\",\"checkpoint\":null}\n",ds4_combo_owner,(unsigned long long)ds4_combo_epoch,(unsigned long long)ds4_combo_sequence);
+        pthread_mutex_unlock(&s->inference_mu);
+        if(http_response(fd,s->enable_cors,200,"application/json",reply.ptr)){
+            ds4_combo_shutdown_requested=true;
+            fprintf(stderr,"DS4COMBO_NATIVE_GRACEFUL_SHUTDOWN_REQUESTED\n");fflush(stderr);
+            g_stop_requested=1;
+        }else{fprintf(stderr,"DS4COMBO_NATIVE_GRACEFUL_SHUTDOWN_REPLY_FAILED\n");fflush(stderr);}
+        goto done;
+    }
     if(!strcmp(path,"/decode/setup")){
         if(command.seen!=7||ds4_combo_claimed){snprintf(err,sizeof(err),"decoder setup ownership already claimed");goto failed;}
         ds4_combo_claimed=true;
@@ -245,9 +260,6 @@ static void ds4_combo_http(server*s,int fd,const http_request*hr){
                 if(command.seen!=(7|16|32|64)||command.capacity>24u*1024*1024||!ds4_combo_mapping_open(&mapping,command.mapping,command.capacity,false)||!ds4_combo_read(&mapping,&journal,sizeof(journal))||memcmp(journal.session,ds4_combo_owner,33)||journal.epoch!=ds4_combo_epoch||strcmp(journal.checkpoint.payload_sha256,command.sha)){snprintf(err,sizeof(err),"saved native rewind owner/epoch/checkpoint unavailable");goto failed;}
                 float*logits=(float*)(mapping.data+sizeof(journal));mapping.cursor=sizeof(journal)+129280*4;
                 if(mapping.cursor>mapping.capacity||ds4_session_native_rewind(session,journal.checkpoint.position,logits,ds4_combo_read,&mapping,ds4_native_verify,&current,ds4_native_verify,&journal.checkpoint,err,sizeof(err)))goto failed;
-            }else if(!strcmp(path,"/decode/shutdown")){
-                if(command.seen!=7){snprintf(err,sizeof(err),"shutdown takes only the owner fields");goto failed;}
-                ds4_combo_shutdown_requested=true;
             }else{snprintf(err,sizeof(err),"unknown combo operation");goto failed;}
         }
     }
@@ -263,7 +275,6 @@ static void ds4_combo_http(server*s,int fd,const http_request*hr){
     if(ds4_session_pos(session)>0){if(ds4_session_native_visit(session,ds4_native_capture,&current,err,sizeof(err)))goto failed;ds4_combo_describe(&reply,&current);}else buf_puts(&reply,"null");
     buf_puts(&reply,"}\n");pthread_mutex_unlock(&s->inference_mu);
     http_response(fd,s->enable_cors,200,"application/json",reply.ptr);
-    if(ds4_combo_shutdown_requested){fprintf(stderr,"DS4COMBO_NATIVE_GRACEFUL_SHUTDOWN_REQUESTED\n");g_stop_requested=1;}
     goto done;
 failed:
     pthread_mutex_unlock(&s->inference_mu);http_error(fd,s->enable_cors,409,*err?err:"combo state verification refused");

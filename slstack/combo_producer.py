@@ -5,6 +5,7 @@ import hashlib
 import json
 import os
 from pathlib import Path
+import re
 import secrets
 import struct
 import time
@@ -46,6 +47,7 @@ class ComboProducer:
         from studio.dsv41_session_process import Producer
         from studio.dsv41_windows_runner import _Native
         self.session=session;self.epoch=epoch;self.process=None;self.closed=False;self.leases=ExitStack()
+        self.cfg=cfg;self.shutdown_path='terminate';self.shutdown_seconds=0.0;self.shutdown_detail=None;self._exit_code=None
         self.creation_attempted=False
         if type(epoch) is not int or not 0<epoch<(1<<64):raise ValueError('Exact positive owner epoch required')
         if not tokens or len(tokens)>=cfg['context'] or any(type(t) is not int or not 0<=t<129280 for t in tokens):
@@ -171,9 +173,43 @@ class ComboProducer:
                 self.process.abort_transfer();raise
         return dict(bytes=offset,seconds=time.monotonic()-started)
 
+    def graceful_exit(self):
+        """Ask the producer to leave its session loop and release its sweep (DS
+        queues and heaps, imported D3D12 buffers, locked carry RAM, ggml device
+        memory) before it exits. Graceful only with exit code 0 and the
+        completion line on stderr; anything else falls back to the Job
+        terminate, and the fallback is logged."""
+        p=self.process;job=getattr(p,'job',None)
+        if not self.cfg.get('producer_graceful_shutdown'):return
+        if job is None or job.poll() is not None or p.closed or p.failure is not None or p.lock.locked():
+            self.shutdown_path='terminate: producer not idle or already exited';return
+        started=time.monotonic();exited=None
+        try:
+            p.request(self.command('close'))
+            # The budget starts once the reply has arrived.
+            deadline=time.monotonic()+float(self.cfg.get('producer_graceful_shutdown_seconds',30))
+            while (exited:=job.poll()) is None and time.monotonic()<deadline:time.sleep(0.05)
+            self.shutdown_path='graceful-pending' if exited is not None else 'graceful-timeout-terminate'
+        except BaseException as exc:
+            self.shutdown_path='graceful-failed-terminate: '+repr(exc)[:200]
+        self.shutdown_seconds=time.monotonic()-started;self._exit_code=exited
+
+    def _graceful_verdict(self):
+        # Read after Producer.close(), so stderr has been fully drained.
+        if self.shutdown_path!='graceful-pending':return
+        done=re.search(rb'DS4COMBO_PRODUCER_GRACEFUL_SHUTDOWN_COMPLETE [^\r\n]*',bytes(self.process.diagnostic or b''))
+        self.shutdown_path='graceful' if self._exit_code==0 and done else 'graceful-crashed exit='+str(self._exit_code)
+        if done:self.shutdown_detail=done.group(0).decode(errors='replace')
+
     def close(self):
         if self.closed:return self.receipt
+        if self.process:self.graceful_exit()
         proof=self.process.close() if self.process else getattr(self,'failure_cleanup',None) or dict(creation_attempted=False)
+        if self.process:
+            self._graceful_verdict()
+            if self.shutdown_path!='graceful' and self.cfg.get('producer_graceful_shutdown'):
+                print('DS4COMBO producer shutdown fell back: '+self.shutdown_path,flush=True)
+            proof=dict(proof,producer_shutdown_path=self.shutdown_path,producer_shutdown_seconds=self.shutdown_seconds,producer_shutdown_detail=self.shutdown_detail)
         if self.creation_attempted and not certified(proof):
             raise RuntimeError('ULTRA owner retirement unconfirmed; decoder import refused')
         self.receipt=proof
