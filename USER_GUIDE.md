@@ -28,7 +28,7 @@ Accurate preserves the original default arithmetic; Fast enables the delivered B
 | `--ds4-cuda-streaming-expert-cache-reserve-gb` | ds4-win: `2` | DS4_CUDA_STREAMING_EXPERT_CACHE_RESERVE_GB: qualified preset/runtime setting; override for a different memory or arithmetic plan |
 | `--ds4-cuda-streaming-host-cache-n` | ds4-win: `0` | DS4_CUDA_STREAMING_HOST_CACHE_N: qualified preset/runtime setting; override for a different memory or arithmetic plan |
 | `--ds4-host-memory-budget-mb` | ds4-win: `{native_commit_mb}` | Windows native private-commit ceiling in MiB, including WDDM GPU mappings; defaults to qualified45056MiB bounded by job_commit_gib. Physical RSS and available RAM remain separately guarded. |
-| `--ds4-metal-disable-v41-layer-prefill` | ds4-win: `1`; mac-ds4: `1` | DS4_METAL_DISABLE_V41_LAYER_PREFILL: qualified preset/runtime setting; override for a different memory or arithmetic plan |
+| `--ds4-metal-disable-v41-layer-prefill` | mac-ds4: `1` | DS4_METAL_DISABLE_V41_LAYER_PREFILL: qualified preset/runtime setting; override for a different memory or arithmetic plan |
 | `--ds4-metal-wired-core-kv` | mac-ds4: `1` | Use anonymous owned, mlock-protected shared Metal core, KV and tensor storage; allocation or wiring failure refuses startup. The launcher requires this for native Mac inference. |
 | `--ds4-native-session` | Explicit runtime value | ds4 native session: supplied by authenticated native pairing; an inconsistent override refuses the handshake. |
 | `--ds4-native-session-deadline-seconds` | mac-ds4: `600` | DS4_NATIVE_SESSION_DEADLINE_SECONDS: qualified Mac native preset setting; override explicitly for another plan |
