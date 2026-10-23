@@ -4,6 +4,7 @@ from copy import deepcopy
 from contextlib import ExitStack
 import json
 import os
+import re
 from pathlib import Path
 import secrets
 import threading
@@ -18,7 +19,7 @@ from .combo_ram import protect_working_set
 
 
 class Native:
-    def __init__(self,cfg,session,epoch,sequence,cancelled,*,restore=None,runner=None):
+    def __init__(self,cfg,session,epoch,sequence,cancelled,*,restore=None,runner=None,expert_list=None):
         vendor()
         from studio.dsv41_session_process import Producer
         from studio.dsv41_windows_runner import _Native
@@ -43,6 +44,12 @@ class Native:
             ram,proof=restore
             env_values.update(DS4_COMBO_RESTORE_MAPPING=ram.name,DS4_COMBO_RESTORE_CAPACITY=str(ram.capacity),
                               DS4_COMBO_RESTORE_SHA256=proof['payload_sha256'])
+        if expert_list is not None:
+            # Expert-cache restore: every checkpoint/export rewrites this LRU-ordered resident
+            # list; a relaunch seeds it before its first decode token (engine fails loudly if
+            # it cannot be restored in full).
+            env_values['DS4_COMBO_EXPERT_SNAPSHOT_FILE']=str(expert_list)
+            if Path(expert_list).exists():env_values['DS4_COMBO_EXPERT_RESTORE_FILE']=str(expert_list)
         self.cfg.setdefault('env_overrides',{}).update(env_values)
         env=environment(self.cfg,'ds4-win')
         parts=cfg.get('ds_read_parts',8)
@@ -157,6 +164,21 @@ class Native:
         with ram.lease():
             return self.control('reference' if reference else 'compare',mapping=ram.name,capacity=ram.capacity,
                                 checkpoint_sha256=self.checkpoint['payload_sha256'])
+
+    def expert_restore(self):
+        """Restore timing from this decoder's log (after close); count 0 when none was pending."""
+        raw=bytes(getattr(self.process,'diagnostic',b'') or b'')
+        failed=re.search(rb'DS4COMBO_EXPERT_RESTORE_FAILED [^\r\n]*',raw)
+        if failed:raise RuntimeError('Native expert-cache restore failed: '+failed.group(0).decode(errors='replace'))
+        rows=re.findall(rb'DS4COMBO_EXPERT_RESTORE experts=(\d+) vram=(\d+) host=(\d+) seconds=([0-9.]+)',raw)
+        pending=re.search(rb'DS4COMBO_EXPERT_RESTORE_PENDING vram=(\d+) host=(\d+)',raw)
+        if len(rows)>1:raise ValueError('Multiple expert-cache restores in one native process')
+        if pending and not rows and int(pending.group(1))+int(pending.group(2)):
+            return dict(expert_restore_count=0,expert_restore_seconds=0.0,expert_restore_applied=False)
+        if not rows:return dict(expert_restore_count=0,expert_restore_seconds=0.0,expert_restore_applied=None)
+        n,v,h,sec=rows[0]
+        return dict(expert_restore_count=int(n),expert_restore_vram=int(v),expert_restore_host=int(h),
+                    expert_restore_seconds=float(sec),expert_restore_applied=True)
 
     def close(self):
         if self.closed:return self.receipt

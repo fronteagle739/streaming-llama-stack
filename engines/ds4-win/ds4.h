@@ -734,6 +734,11 @@ int ds4_session_stage_payload(ds4_session *s, ds4_session_payload_file *out,
 /* Native v3 is for same-format peer transfer.  Its compressed cache rows are
  * copied as accelerator bytes, while the canonical v2 helpers above remain
  * the format-stable disk-cache API. */
+/* DS4COMBO expert-cache restore: load an LRU-ordered resident list (applied once before the
+ * first decode token; fails loudly unless restored in full) / write the current one. */
+int ds4_expert_cache_restore_prepare(const char *path, char *err, size_t errlen);
+int ds4_expert_cache_snapshot_write(ds4_session *s, const char *path, uint32_t *vram_out,
+                                    uint32_t *host_out, int *inherited_out, char *err, size_t errlen);
 uint64_t ds4_session_native_payload_bytes(ds4_session *s);
 int ds4_session_stage_native_payload(ds4_session *s,
                                      ds4_session_payload_file *out,

@@ -9600,6 +9600,69 @@ extern "C" uint32_t ds4_gpu_stream_host_expert_cache_current_count(void) {
     return count;
 }
 
+/* DS4COMBO expert-cache restore: enumerate resident slots oldest->newest by LRU age
+ * (host=0: VRAM caches, host=1: RAM caches).  Returns the total resident count; fills at
+ * most cap entries.  Ages are per size-class ticks, so classes are merged by age rank. */
+struct ds4_combo_resident_entry { uint64_t age; uint32_t cls, layer, expert; uint64_t gate, down; };
+extern "C" uint32_t ds4_gpu_stream_expert_cache_snapshot(
+        int host, uint32_t *layers, uint32_t *experts,
+        uint64_t *gate_bytes, uint64_t *down_bytes, uint32_t cap) {
+    std::vector<ds4_combo_resident_entry> rows;
+    for (uint32_t c = 0; c < DS4_CUDA_STREAM_EXPERT_CACHE_CLASSES; c++) {
+        if (host) {
+            const cuda_stream_host_expert_cache &h = g_stream_host_expert_caches[c];
+            if (!h.valid) continue;
+            for (const auto &slot : h.slots) if (slot.valid)
+                rows.push_back({slot.age, c, slot.layer, slot.expert, slot.gate_expert_bytes, slot.down_expert_bytes});
+        } else {
+            const cuda_stream_expert_cache &v = g_stream_expert_caches[c];
+            if (!v.valid) continue;
+            for (const auto &slot : v.slots) if (slot.valid)
+                rows.push_back({slot.age, c, slot.layer, slot.expert, slot.gate_expert_bytes, slot.down_expert_bytes});
+        }
+    }
+    std::stable_sort(rows.begin(), rows.end(), [](const ds4_combo_resident_entry &a,
+                                                  const ds4_combo_resident_entry &b) {
+        return a.age < b.age;
+    });
+    for (size_t i = 0; i < rows.size() && i < cap; i++) {
+        if (layers) layers[i] = rows[i].layer;
+        if (experts) experts[i] = rows[i].expert;
+        if (gate_bytes) gate_bytes[i] = rows[i].gate;
+        if (down_bytes) down_bytes[i] = rows[i].down;
+    }
+    return rows.size() > UINT32_MAX ? UINT32_MAX : (uint32_t)rows.size();
+}
+
+/* Re-stamp LRU ages in the given oldest->newest order after a restore seed, so the
+ * restored cache evicts in the same order the exported one would have.  Returns the
+ * number of listed entries that are NOT resident (caller fails loudly on nonzero). */
+extern "C" uint32_t ds4_gpu_stream_expert_cache_apply_order(
+        int host, const uint32_t *layers, const uint32_t *experts,
+        const uint64_t *gate_bytes, const uint64_t *down_bytes, uint32_t n) {
+    uint32_t missing = 0;
+    for (uint32_t i = 0; i < n; i++) {
+        bool found = false;
+        for (uint32_t c = 0; c < DS4_CUDA_STREAM_EXPERT_CACHE_CLASSES && !found; c++) {
+            if (host) {
+                cuda_stream_host_expert_cache &h = g_stream_host_expert_caches[c];
+                if (!h.valid) continue;
+                for (auto &slot : h.slots) if (slot.valid && slot.layer == layers[i] &&
+                        slot.expert == experts[i] && slot.gate_expert_bytes == gate_bytes[i] &&
+                        slot.down_expert_bytes == down_bytes[i]) { slot.age = ++h.tick; found = true; break; }
+            } else {
+                cuda_stream_expert_cache &v = g_stream_expert_caches[c];
+                if (!v.valid) continue;
+                for (auto &slot : v.slots) if (slot.valid && slot.layer == layers[i] &&
+                        slot.expert == experts[i] && slot.gate_expert_bytes == gate_bytes[i] &&
+                        slot.down_expert_bytes == down_bytes[i]) { slot.age = ++v.tick; found = true; break; }
+            }
+        }
+        if (!found) missing++;
+    }
+    return missing;
+}
+
 /* [2026-08-18] THE VIRTUAL CACHE: a runtime record of which experts a workload ACTUALLY selects,
  * including the ones deliberately EXCLUDED from the cache.
  *

@@ -12,6 +12,7 @@ import struct
 import threading
 import time
 from contextlib import contextmanager
+from pathlib import Path
 from .combo_native import Native
 from .combo_producer import ComboProducer
 from .combo_ram import LockedRam,wait_for_host_capacity
@@ -66,6 +67,9 @@ class ComboSession:
         if qualification_route not in (None,'native','ultra'):raise ValueError('Unknown explicit qualification route')
         self.qualification_route=qualification_route
         self.threshold=qualified_threshold(cfg) if qualification_route is None else None
+        # expert_cache_restore (default true): carry the native expert cache across relaunches.
+        self.expert_list=(Path(cfg['runtime_root'])/('expert-cache-'+self.session+'.txt')
+                          if cfg.get('expert_cache_restore',True) else None)
 
     def _ram(self,size):
         return LockedRam(size,session=self.session,host_budget_gib=self.cfg['host_budget_gib'],min_available_gib=self.cfg['min_available_gib'])
@@ -111,7 +115,7 @@ class ComboSession:
             baseline=self.device.gpu(0,self.cfg['gpu_uuid'])
             childcfg=dict(self.cfg,host_budget_gib=self.cfg['native_host_budget_gib'],aggregate_host_budget_gib=self.cfg['host_budget_gib'])
             restore=(self.state,self.payload) if self.state is not None else None
-            owner=self.current=Native(childcfg,self.session,self.epoch,1,self.cancel.is_set,restore=restore,runner=self.device)
+            owner=self.current=Native(childcfg,self.session,self.epoch,1,self.cancel.is_set,restore=restore,runner=self.device,expert_list=self.expert_list)
             metrics['native_initial_load_import_seconds']=owner.launch_seconds
             tokens=owner.render(rendered);cp=owner.checkpoint
             metrics['restored_state']=deepcopy(cp)
@@ -147,7 +151,7 @@ class ComboSession:
                 metrics['ultra_directory']=str(owner.directory)
                 metrics['ultra_export']=self._checkpoint(owner,owner.checkpoint)
                 metrics['releases'].append(release_barrier(owner,self.device,self.cfg,baseline,self.cancel.is_set));owner=self.current=None
-                owner=self.current=Native(childcfg,self.session,self.epoch,1,self.cancel.is_set,restore=(self.state,self.payload),runner=self.device)
+                owner=self.current=Native(childcfg,self.session,self.epoch,1,self.cancel.is_set,restore=(self.state,self.payload),runner=self.device,expert_list=self.expert_list)
                 metrics['native_load_import_seconds']=owner.launch_seconds
             else:
                 sync_started=time.monotonic()
@@ -165,10 +169,11 @@ class ComboSession:
                 metrics['probe_checkpoint']=self._checkpoint(owner,self.anchor)
                 metrics['probe']=qualification_probe(owner)
                 metrics['releases'].append(release_barrier(owner,self.device,self.cfg,baseline,self.cancel.is_set));owner=self.current=None
-                owner=self.current=Native(childcfg,self.session,self.epoch,1,self.cancel.is_set,restore=(self.state,self.payload),runner=self.device)
+                owner=self.current=Native(childcfg,self.session,self.epoch,1,self.cancel.is_set,restore=(self.state,self.payload),runner=self.device,expert_list=self.expert_list)
                 if self.quality_setting is not None:owner.quality(self.quality_setting)
             metrics['native_directory']=str(owner.directory)
             metrics['prepared_seconds']=time.monotonic()-started
+            decoder=owner
             yield owner,rendered,metrics
             # Existing native HTTP inference owns sampling/tools/stop handling.
             # Save its actual post-decode frontier, including generated tokens.
@@ -176,6 +181,8 @@ class ComboSession:
             self._note_quality(rendered.get('quality_speed'))
             cp=owner.snapshot();metrics['final_state']=self._checkpoint(owner,cp)
             metrics['releases'].append(release_barrier(owner,self.device,self.cfg,baseline,self.cancel.is_set));owner=self.current=None
+            metrics['expert_cache_restore']=self.expert_list is not None
+            metrics.update(decoder.expert_restore())
             metrics['complete_seconds']=time.monotonic()-started
         except BaseException as exc:
             self.poison=repr(exc);metrics['failure']=self.poison

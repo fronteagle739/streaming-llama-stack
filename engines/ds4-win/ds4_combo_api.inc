@@ -164,6 +164,8 @@ static int ds4_combo_probe(ds4_session*s,ds4_combo_mapping*m,bool reference,buf*
 done:free(row);if(rc&&err&&cap&&!*err)snprintf(err,cap,"full-vector qualification failed");return rc;
 }
 static bool ds4_combo_start(server*s,const ds4_engine_options*opt,char*err,size_t cap){
+    /* Expert-cache restore list from the previous owner; parsed now so a bad list fails startup. */
+    if(ds4_expert_cache_restore_prepare(getenv("DS4_COMBO_EXPERT_RESTORE_FILE"),err,cap))return false;
     const char*enabled=getenv("DS4_COMBO_ENABLED");if(!enabled||!strcmp(enabled,"0"))return true;
     const char*id=getenv("DS4_COMBO_OWNER_SESSION"),*epoch=getenv("DS4_COMBO_OWNER_EPOCH"),*seq=getenv("DS4_COMBO_SEQUENCE");
     const char*token=getenv("DS4_SERVER_AUTH_TOKEN");
@@ -225,6 +227,12 @@ static void ds4_combo_http(server*s,int fd,const http_request*hr){
             }else{snprintf(err,sizeof(err),"unknown combo operation");goto failed;}
         }
     }
+    {const char*snap=getenv("DS4_COMBO_EXPERT_SNAPSHOT_FILE");
+     if(snap&&snap[0]&&(!strcmp(hr->path,"/decode/checkpoint")||!strcmp(hr->path,"/decode/export"))){
+        uint32_t nv=0,nh=0;int inherited=0;
+        if(ds4_expert_cache_snapshot_write(session,snap,&nv,&nh,&inherited,err,sizeof(err)))goto failed;
+        if(!reply.len)buf_puts(&reply,"{");
+        buf_printf(&reply,"\"expert_snapshot\":{\"vram\":%u,\"host\":%u,\"source\":\"%s\"},",nv,nh,inherited?"inherited":"live");}}
     if(!reply.len)buf_puts(&reply,"{");
     ds4_combo_sequence++;
     buf_printf(&reply,"\"session\":\"%s\",\"owner_epoch\":%llu,\"next_sequence\":%llu,\"status\":\"complete\",\"checkpoint\":",ds4_combo_owner,(unsigned long long)ds4_combo_epoch,(unsigned long long)ds4_combo_sequence);
