@@ -2220,14 +2220,14 @@
   },
   {
     "var": "DS4_CACHE_AFFINITY_CALIBRATE",
-    "flag": null,
+    "flag": "--ds4-cache-affinity-calibrate",
     "default": null,
     "code_default": "NULL from getenv; the literal consumer below supplies any fallback",
-    "classification": "advanced",
+    "classification": "runtime",
     "scopes": [
       "ds4-win"
     ],
-    "doc": "DS4_CACHE_AFFINITY_CALIBRATE: advanced engine setting; built-in default retained",
+    "doc": "Record unbiased per-layer routing spreads and write their calibration when the engine closes. Use bias0 with at least16 decoded samples per layer. Restart with the resulting spread file for live quality controls.",
     "reads": [
       "engines/ds4-win/ds4.c:75750"
     ],
@@ -2238,7 +2238,8 @@
         "read": "const char *calibrate = opt->cache_affinity_calibrate ? opt->cache_affinity_calibrate : getenv(\"DS4_CACHE_AFFINITY_CALIBRATE\");",
         "consumer": "    }\n    const char *spread = opt->cache_affinity_spread_file ? opt->cache_affinity_spread_file : getenv(\"DS4_CACHE_AFFINITY_SPREAD_FILE\");\n    const char *calibrate = opt->cache_affinity_calibrate ? opt->cache_affinity_calibrate : getenv(\"DS4_CACHE_AFFINITY_CALIBRATE\");\n    uint32_t warmup = opt->cache_affinity_warmup_set ? opt->cache_affinity_warmup_tokens : 100u;\n    uint32_t ramp = opt->cache_affinity_ramp_set ? opt->cache_affinity_ramp_tokens : 8u;\n    uint32_t cap = opt->cache_affinity_promotion_cap ? opt->cache_affinity_promotion_cap : 1u;\n    const char *warm_env=getenv(\"DS4_CACHE_AFFINITY_WARMUP_TOKENS\"), *ramp_env=getenv(\"DS4_CACHE_AFFINITY_RAMP_TOKENS\"), *cap_env=getenv(\"DS4_CACHE_AFFINITY_PROMOTION_CAP\");"
       }
-    ]
+    ],
+    "argv_flag": "--cache-affinity-calibrate"
   },
   {
     "var": "DS4_CACHE_AFFINITY_MODE",
@@ -2381,14 +2382,14 @@
   },
   {
     "var": "DS4_CACHE_AFFINITY_SPREAD_FILE",
-    "flag": null,
+    "flag": "--ds4-cache-affinity-spread-file",
     "default": null,
     "code_default": "NULL from getenv; the literal consumer below supplies any fallback",
-    "classification": "advanced",
+    "classification": "runtime-preset",
     "scopes": [
       "ds4-win"
     ],
-    "doc": "DS4_CACHE_AFFINITY_SPREAD_FILE: advanced engine setting; built-in default retained",
+    "doc": "Per-model routing calibration. The packaged 1017 default contains40 numeric spread statistics, not weights, and is selected only for its full-file size/header fingerprint. The native verifier separately checks its mapped main-weight span excluding disk-only Engram, geometry and header. Explicit overrides select another calibration.",
     "reads": [
       "engines/ds4-win/ds4.c:75749"
     ],
@@ -2399,7 +2400,15 @@
         "read": "const char *spread = opt->cache_affinity_spread_file ? opt->cache_affinity_spread_file : getenv(\"DS4_CACHE_AFFINITY_SPREAD_FILE\");",
         "consumer": "        fprintf(stderr,\"ds4: cache affinity mode must be spread or flat\\n\"); *out=NULL;return 1;\n    }\n    const char *spread = opt->cache_affinity_spread_file ? opt->cache_affinity_spread_file : getenv(\"DS4_CACHE_AFFINITY_SPREAD_FILE\");\n    const char *calibrate = opt->cache_affinity_calibrate ? opt->cache_affinity_calibrate : getenv(\"DS4_CACHE_AFFINITY_CALIBRATE\");\n    uint32_t warmup = opt->cache_affinity_warmup_set ? opt->cache_affinity_warmup_tokens : 100u;\n    uint32_t ramp = opt->cache_affinity_ramp_set ? opt->cache_affinity_ramp_tokens : 8u;\n    uint32_t cap = opt->cache_affinity_promotion_cap ? opt->cache_affinity_promotion_cap : 1u;"
       }
-    ]
+    ],
+    "defaults_by_scope": {
+      "ds4-win": "{affinity_spread_file}"
+    },
+    "argv_flag": "--cache-affinity-spread-file",
+    "model_signature": {
+      "file_size": 518596067328,
+      "header_fnv64": "9bebbe35ad0222dd"
+    }
   },
   {
     "var": "DS4_CACHE_AFFINITY_WARMUP_TOKENS",
@@ -42432,8 +42441,8 @@
       "engines/ds4-win/ds4_cli.c:656",
       "engines/ds4-win/ds4_cli.c:1664",
       "engines/ds4-win/ds4_cli.c:1719",
-      "engines/ds4-win/ds4_server.c:14941",
-      "engines/ds4-win/ds4_server.c:14963",
+      "engines/ds4-win/ds4_server.c:14947",
+      "engines/ds4-win/ds4_server.c:14969",
       "engines/mlx-serve/lib/ds4/ds4_agent.c:10499",
       "engines/mlx-serve/lib/ds4/ds4_agent.c:10900",
       "engines/mlx-serve/lib/ds4/ds4_cli.c:598",
@@ -42522,13 +42531,13 @@
         "consumer": "        int ntok = 0;\n        if (ds4_engine_mtp_draft_tokens(engine) > 1 &&\n            getenv(\"DS4_MTP_SPEC_DISABLE\") == NULL) {\n            cli_dist_busy_set(cfg, true);\n            ntok = ds4_session_eval_speculative(\n                chat->session, token, max_tokens - generated,\n                ds4_token_eos(engine), cfg->gen.temperature, 0,"
       },
       {
-        "source": "engines/ds4-win/ds4_server.c:14941",
+        "source": "engines/ds4-win/ds4_server.c:14947",
         "unset": "NULL from getenv; the literal consumer below supplies any fallback",
         "read": "getenv(\"DS4_MTP_SPEC_DISABLE\") == NULL)",
         "consumer": "              ds4_session_ds41_dspark_adaptive_stats(slot->session, NULL, NULL)) &&\n            ds4_engine_mtp_draft_tokens(s->engine) > 1 &&\n            getenv(\"DS4_MTP_SPEC_DISABLE\") == NULL)\n        {\n            if (j->req.ignore_eos) {\n                ntok = ds4_session_eval_speculative_argmax_ignoring_eos(\n                    slot->session, token, max_tokens - completion,"
       },
       {
-        "source": "engines/ds4-win/ds4_server.c:14963",
+        "source": "engines/ds4-win/ds4_server.c:14969",
         "unset": "NULL from getenv; the literal consumer below supplies any fallback",
         "read": "getenv(\"DS4_MTP_SPEC_DISABLE\") == NULL) {",
         "consumer": "                   max_tokens - completion >= 2 && !j->req.ignore_eos &&\n                   (!ds4_engine_mtp_exact_sampling(s->engine) || temperature == 0.0f) &&\n                   getenv(\"DS4_MTP_SPEC_DISABLE\") == NULL) {\n            if (server_eval_tokens(s, slot, token, true, toks, &ntok, err, sizeof(err)) != 0) {\n                finish = \"error\";\n                break;\n            }"
@@ -43731,11 +43740,11 @@
     ],
     "doc": "DS4_PEER_RESUME_MAX_EVAL_TOKENS: advanced engine setting; built-in default retained",
     "reads": [
-      "engines/ds4-win/ds4_server.c:12840"
+      "engines/ds4-win/ds4_server.c:12847"
     ],
     "code_defaults": [
       {
-        "source": "engines/ds4-win/ds4_server.c:12840",
+        "source": "engines/ds4-win/ds4_server.c:12847",
         "unset": "NULL from getenv; the literal consumer below supplies any fallback",
         "read": "const char *env = getenv(\"DS4_PEER_RESUME_MAX_EVAL_TOKENS\");",
         "consumer": "     */\n    {\n        const char *env = getenv(\"DS4_PEER_RESUME_MAX_EVAL_TOKENS\");\n        int max_eval = env ? atoi(env) : 0;\n        if (max_eval <= 0) max_eval = 512;\n        const int remainder = prompt->len - checkpoint->tokens;\n        if (remainder > max_eval) {"
@@ -49053,11 +49062,11 @@
     ],
     "doc": "DS4_SERVER_AUTH_TOKEN: advanced engine setting; built-in default retained",
     "reads": [
-      "engines/ds4-win/ds4_server.c:16062"
+      "engines/ds4-win/ds4_server.c:16076"
     ],
     "code_defaults": [
       {
-        "source": "engines/ds4-win/ds4_server.c:16062",
+        "source": "engines/ds4-win/ds4_server.c:16076",
         "unset": "NULL from getenv; the literal consumer below supplies any fallback",
         "read": "const char *token=getenv(\"DS4_SERVER_AUTH_TOKEN\");",
         "consumer": "}\nstatic bool quality_authorized(const char *headers, size_t size) {\n    const char *token=getenv(\"DS4_SERVER_AUTH_TOKEN\");\n    if (!token || !*token) return false;\n    const char *p=headers,*end=headers+size; bool accepted=false; unsigned count=0;\n    while(p<end) {\n        const char *line=p; while(p<end && *p!='\\n')p++;"
@@ -49077,7 +49086,7 @@
     "doc": "DS4_SERVER_BATCH_LOG: advanced engine setting; built-in default retained",
     "reads": [
       "engines/ds4-mac/ds4_server.c:13675",
-      "engines/ds4-win/ds4_server.c:14163",
+      "engines/ds4-win/ds4_server.c:14170",
       "engines/mlx-serve/lib/ds4/ds4_server.c:13168"
     ],
     "code_defaults": [
@@ -49088,7 +49097,7 @@
         "consumer": "    server_slot **members = xmalloc((size_t)s->slot_count * sizeof(*members));\n    const long coalesce_us = server_decode_coalesce_us();\n    const bool log_batches = getenv(\"DS4_SERVER_BATCH_LOG\") != NULL;\n\n    pthread_mutex_lock(&s->model_mu);\n    for (;;) {\n        while (s->decode_pending == 0 && !s->model_stopping) {"
       },
       {
-        "source": "engines/ds4-win/ds4_server.c:14163",
+        "source": "engines/ds4-win/ds4_server.c:14170",
         "unset": "NULL from getenv; the literal consumer below supplies any fallback",
         "read": "const bool log_batches = getenv(\"DS4_SERVER_BATCH_LOG\") != NULL;",
         "consumer": "    int *n_accepted = xmalloc((size_t)s->slot_count * sizeof(*n_accepted));\n    const long coalesce_us = server_decode_coalesce_us();\n    const bool log_batches = getenv(\"DS4_SERVER_BATCH_LOG\") != NULL;\n\n    pthread_mutex_lock(&s->model_mu);\n    for (;;) {\n        while (s->decode_pending == 0 && !s->model_stopping) {"
@@ -49114,7 +49123,7 @@
     "doc": "DS4_SERVER_DECODE_COALESCE_US: advanced engine setting; built-in default retained",
     "reads": [
       "engines/ds4-mac/ds4_server.c:13654",
-      "engines/ds4-win/ds4_server.c:14140",
+      "engines/ds4-win/ds4_server.c:14147",
       "engines/mlx-serve/lib/ds4/ds4_server.c:13147"
     ],
     "code_defaults": [
@@ -49125,7 +49134,7 @@
         "consumer": "static long server_decode_coalesce_us(void) {\n    long us = 2000;\n    const char *env = getenv(\"DS4_SERVER_DECODE_COALESCE_US\");\n    if (env && env[0]) {\n        char *end = NULL;\n        long v = strtol(env, &end, 10);\n        if (end != env && *end == '\\0' && v >= 0 && v <= 100000) us = v;"
       },
       {
-        "source": "engines/ds4-win/ds4_server.c:14140",
+        "source": "engines/ds4-win/ds4_server.c:14147",
         "unset": "NULL from getenv; the literal consumer below supplies any fallback",
         "read": "const char *env = getenv(\"DS4_SERVER_DECODE_COALESCE_US\");",
         "consumer": "static long server_decode_coalesce_us(void) {\n    long us = 2000;\n    const char *env = getenv(\"DS4_SERVER_DECODE_COALESCE_US\");\n    if (env && env[0]) {\n        char *end = NULL;\n        long v = strtol(env, &end, 10);\n        if (end != env && *end == '\\0' && v >= 0 && v <= 100000) us = v;"

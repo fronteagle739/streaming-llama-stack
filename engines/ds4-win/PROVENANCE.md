@@ -9,3 +9,5 @@ Dense-output adapter and authenticated native frozen-prefix training source: `6f
 Four-phase quality provider: `035c04d2b17024132a9ee37932f7e95b72b07822`, merged with output-adapter support on the owned source branch at `8b57e80214476a367cd6b5b0aaafe82de69408cf`. Five names, range 0..1.36125, reasoning/tool_call/answer/code. Stack portability edits remain applied. Native build/live qualification is recorded separately.
 
 The fresh-source build exposed three omitted CUDA include dependencies. They are now included byte-for-byte from that same source merge: ds4_dspark_aux_graph.cuh, ds4_cuda_dspark_lowbit.cuh and ds4_cuda_dspark_aux.cuh. Optional DSpark paths remain off by default; this inclusion does not qualify their runtime behavior.
+
+Queued four-phase request preservation: `5ada2a7bf1ad12aebf4fc749121d49c4da78fb46`. Four independent settings survive the existing chat queue; legacy three-phase maps still inherit answer for code at parsing. Compiled production transport regression includes the failing three-slot negative control. CUDA arithmetic is unchanged.
