@@ -112,7 +112,7 @@ class LockedRam:
             if not self.k.GetProcessWorkingSetSize(process,ctypes.byref(lo),ctypes.byref(hi)):
                 raise ctypes.WinError(ctypes.get_last_error())
             needed=psutil.Process().memory_info().rss+capacity+(32<<20)
-            if not self.k.SetProcessWorkingSetSize(process,max(lo.value,needed),max(hi.value,needed+(64<<20))):
+            if not self.k.SetProcessWorkingSetSizeEx(process,max(lo.value,needed),max(hi.value,needed+(64<<20)),1|8):
                 raise ctypes.WinError(ctypes.get_last_error())
             if not self.k.VirtualLock(self.address,capacity):raise ctypes.WinError(ctypes.get_last_error())
             self.locked=True
