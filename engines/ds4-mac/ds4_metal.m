@@ -710,6 +710,13 @@ static id<MTLBuffer> g_moe_q4_up_slots_buffer;
 static id<MTLBuffer> g_moe_q4_down_slots_buffer;
 static id<MTLBuffer> g_attn_out_group_ids_buffer;
 static int g_model_fd = -1;
+static struct { const void *map; int fd; } g_owned_model_sources[16];
+static uint32_t g_owned_model_source_count;
+static int ds4_gpu_owned_model_fd(const void *map) {
+    for(uint32_t i=0;i<g_owned_model_source_count;i++)
+        if(g_owned_model_sources[i].map==map)return g_owned_model_sources[i].fd;
+    return -1;
+}
 static const void *g_model_map_ptr;
 static uint64_t g_model_map_size;
 static uint64_t g_model_mapped_offset;
@@ -3030,6 +3037,11 @@ static int ds4_gpu_add_model_view_range(
         if (view_limit > default_limit) view_limit = default_limit;
     }
     if (view_limit > max_buffer) view_limit = max_buffer;
+    /* Large no-copy VM validation is costly even for an anonymous allocation.
+     * Keep wired views bounded while preserving the tensor overlap invariant. */
+    if (ds4_metal_wired_enabled() && view_limit>64ull*1024*1024*1024 &&
+        overlap<64ull*1024*1024*1024)
+        view_limit=64ull*1024*1024*1024;
     view_limit &= ~(page - 1);
     if (view_limit == 0 || view_limit <= overlap) {
         fprintf(stderr,
@@ -3051,7 +3063,7 @@ static int ds4_gpu_add_model_view_range(
         uint64_t view_bytes = mapped_model_size - off;
         if (view_bytes > view_limit) view_bytes = view_limit;
 
-        id<MTLBuffer> buffer = (ds4_metal_wired_enabled() ? ds4_metal_owned_wired_buffer(g_device,(NSUInteger)view_bytes,ds4_gpu_model_resource_options(),(const void *)(model_addr + page_model_offset + off)) : [g_device newBufferWithBytesNoCopy:(void *)(model_addr + page_model_offset + off)
+        id<MTLBuffer> buffer = (ds4_metal_wired_enabled() ? ds4_metal_owned_wired_file_buffer(g_device,(NSUInteger)view_bytes,ds4_gpu_model_resource_options(),ds4_gpu_owned_model_fd(model_map),page_model_offset + off) : [g_device newBufferWithBytesNoCopy:(void *)(model_addr + page_model_offset + off)
                                                            length:(NSUInteger)view_bytes
                                                           options:ds4_gpu_model_resource_options()
                                                       deallocator:nil]);
@@ -12788,6 +12800,7 @@ void ds4_gpu_cleanup(void) {
         g_moe_q4_down_slots_buffer = nil;
         g_attn_out_group_ids_buffer = nil;
         g_model_fd = -1;
+        g_owned_model_source_count = 0;
         g_model_map_ptr = NULL;
         g_model_map_size = 0;
         g_model_mapped_offset = 0;
@@ -13865,8 +13878,15 @@ static int ds4_gpu_model_views_cover_spans(
 }
 
 int ds4_gpu_set_model_fd_for_map(int fd, const void *model_map) {
-    (void)fd;
-    (void)model_map;
+    if(fd<0 || !model_map)return 0;
+    for(uint32_t i=0;i<g_owned_model_source_count;i++) {
+        if(g_owned_model_sources[i].map==model_map) {
+            g_owned_model_sources[i].fd=fd;return 1;
+        }
+    }
+    if(g_owned_model_source_count>=16)return 0;
+    g_owned_model_sources[g_owned_model_source_count].map=model_map;
+    g_owned_model_sources[g_owned_model_source_count++].fd=fd;
     return 1;
 }
 
@@ -13960,7 +13980,7 @@ static id<MTLBuffer> ds4_gpu_wrap_model_exact_range_impl(
     }
     if (!buffer) {
         const uintptr_t base = (uintptr_t)model_map;
-        buffer = (ds4_metal_wired_enabled() ? ds4_metal_owned_wired_buffer(g_device,(NSUInteger)view_bytes,ds4_gpu_model_resource_options(),(const void *)(base + page_offset)) : [g_device newBufferWithBytesNoCopy:(void *)(base + page_offset)
+        buffer = (ds4_metal_wired_enabled() ? ds4_metal_owned_wired_file_buffer(g_device,(NSUInteger)view_bytes,ds4_gpu_model_resource_options(),ds4_gpu_owned_model_fd(model_map),page_offset) : [g_device newBufferWithBytesNoCopy:(void *)(base + page_offset)
                                              length:(NSUInteger)view_bytes
                                             options:ds4_gpu_model_resource_options()
                                         deallocator:nil]);
