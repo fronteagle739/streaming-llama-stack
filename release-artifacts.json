@@ -42,6 +42,30 @@
       "sha256": "ccc3a9a5a66819f9e72410c3c38033e5619e41c3f9f3a1e2e99da4ffd0bc2c63",
       "media_type": "image/png",
       "review": "Visually inspected actual isolated UI; synthetic TEST chats only, no personal paths, network addresses, credentials or owner data. PNG contains no text or EXIF metadata."
+    },
+    {
+      "path": "examples/quality_speed/webui-max_quality-desktop.png",
+      "sha256": "a1249284e078417573ec7ce22213020f3ffcfa1aa42af09283736bb896437ee8",
+      "media_type": "image/png",
+      "review": "Visually inspected real model-driven webui chat at desktop and phone widths. Synthetic integer-square prompt; measured token statistics legible, existing llama.cpp components, no personal paths, addresses or credentials visible."
+    },
+    {
+      "path": "examples/quality_speed/webui-max_quality-phone.png",
+      "sha256": "89d294d8e5b138a679f666a9f77eb6466b1740f29b26b2dafd3163f36484e554",
+      "media_type": "image/png",
+      "review": "Visually inspected real model-driven webui chat at desktop and phone widths. Synthetic integer-square prompt; measured token statistics legible, existing llama.cpp components, no personal paths, addresses or credentials visible."
+    },
+    {
+      "path": "examples/quality_speed/webui-max_speed-desktop.png",
+      "sha256": "dd23367ad0dd8fa186ee937bc1b25472f36dd5aa2d3a3ee46d937a86edbad054",
+      "media_type": "image/png",
+      "review": "Visually inspected real model-driven webui chat at desktop and phone widths. Synthetic integer-square prompt; measured token statistics legible, existing llama.cpp components, no personal paths, addresses or credentials visible."
+    },
+    {
+      "path": "examples/quality_speed/webui-max_speed-phone.png",
+      "sha256": "dc2ba3078e6581eceffc7ef5234042e64089d8355154713795400fa8e26e36a5",
+      "media_type": "image/png",
+      "review": "Visually inspected real model-driven webui chat at desktop and phone widths. Synthetic integer-square prompt; measured token statistics legible, existing llama.cpp components, no personal paths, addresses or credentials visible."
     }
   ]
 }
