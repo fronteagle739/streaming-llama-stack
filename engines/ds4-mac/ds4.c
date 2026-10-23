@@ -69489,6 +69489,14 @@ static int ds4_engine_open_internal(ds4_engine **out,
                                                   opt->model_path);
         }
 #endif
+#if defined(__APPLE__)
+        if (!ds4_gpu_set_model_fd_for_map(e->model.fd, e->model.map) ||
+            (e->mtp_model.map && !ds4_gpu_set_model_fd_for_map(e->mtp_model.fd, e->mtp_model.map)) ||
+            (e->vision_model.map && !ds4_gpu_set_model_fd_for_map(e->vision_model.fd, e->vision_model.map))) {
+            fprintf(stderr, "ds4: cannot register owned Metal model input descriptors\n");
+            ds4_engine_close(e);*out = NULL;return 1;
+        }
+#endif
         int model_map_ok = 0;
         uint64_t *load_offsets = NULL;
         uint64_t *load_sizes = NULL;
