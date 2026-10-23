@@ -20,6 +20,9 @@ class Hotlist(unittest.TestCase):
             a, b = global_hotlist(cfg(t)), global_hotlist(cfg(t, '12GB'))
         self.assertNotEqual(a, b)
         self.assertEqual(a.name, 'expert-hotlist-2cc6bc254f22a023-24GB.txt')
+        with tempfile.TemporaryDirectory() as t:
+            c = cfg(t); c['ds4_command'] += ['--ram-streaming-cache-experts', '6GB']
+            self.assertEqual(global_hotlist(c).name, 'expert-hotlist-2cc6bc254f22a023-24GB-ram6GB.txt')
 
     def test_only_live_lists_are_published(self):
         with tempfile.TemporaryDirectory() as t:

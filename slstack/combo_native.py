@@ -24,9 +24,12 @@ def global_hotlist(cfg):
     """Per-model, per-cache-budget expert hotlist shared by every session (a list
     written under another expert budget would fail the engine's full-restore check)."""
     command=[str(v) for v in cfg['ds4_command']]
-    budget=command[command.index('--ssd-streaming-cache-experts')+1] if '--ssd-streaming-cache-experts' in command else 'default'
+    def value(flag,default):return command[command.index(flag)+1] if flag in command else default
+    budget=value('--ssd-streaming-cache-experts','default')
+    host=value('--ram-streaming-cache-experts','')   # VRAM and host tiers both bound the list
     model=cfg['combo_identity']['model_sha256'][:16]
-    return Path(cfg['runtime_root'])/('expert-hotlist-'+model+'-'+re.sub(r'[^0-9A-Za-z]','',budget)+'.txt')
+    key=re.sub(r'[^0-9A-Za-z]','',budget)+('-ram'+re.sub(r'[^0-9A-Za-z]','',host) if host else '')
+    return Path(cfg['runtime_root'])/('expert-hotlist-'+model+'-'+key+'.txt')
 
 
 def publish_hotlist(session_list,global_list):

@@ -676,7 +676,7 @@ int wmain(int argc,wchar_t**argv){
         require(!args.count("--fixed-direct-open")||args.at("--fixed-direct-open")=="0"||args.at("--fixed-direct-open")=="1","fixed-direct-open requires0/1");
         const bool direct_open=args.count("--fixed-direct-open")&&args.at("--fixed-direct-open")=="1";
         require(!(warm&&direct_open),"fixed-direct-open replaces the one-token warmup; set --warmup-one-token 0");
-        report["fixed_direct_open"]=direct_open;
+        report["fixed_direct_open"]=direct_open;weights.engram_early_is_next_request=direct_open;
         require(!args.count("--tile-host-registration")||args.at("--tile-host-registration")=="0"||args.at("--tile-host-registration")=="1","tile-host-registration requires0/1");
         const bool tile_registration=args.count("--tile-host-registration")&&args.at("--tile-host-registration")=="1";
         require(!args.count("--fixed-resident-plan")||args.at("--fixed-resident-plan")=="0"||args.at("--fixed-resident-plan")=="1","fixed-resident-plan requires0/1");
