@@ -83434,7 +83434,215 @@ static int ds4_session_eval_probe_tp(ds4_session *s, int token, bool probe_mtp,
     return rc;
 }
 
+/* DS4COMBO expert-cache restore (owner requirement 2026-10-23): a relaunched decoder must not
+ * start cold. The exporting process writes its resident VRAM/RAM expert set in LRU order
+ * (oldest first); the relaunched process loads that exact list at startup and seeds it through
+ * the existing hotlist seed path (ds4_gpu_stream_expert_cache_seed_experts / the RAM preload
+ * seed) at the decode edge, before the first decode token. It runs there, not at import,
+ * because every request's prefill edge (DS4_CUDA_PREFILL_EDGE_VRAM) evicts the VRAM cache, so
+ * anything loaded earlier would be discarded. A list that cannot be restored in full is an
+ * error, never a partial restore. */
+#if defined(_WIN32) && !defined(DS4_NO_GPU)
+typedef struct {
+    uint32_t n;
+    uint32_t *layer, *expert;
+    uint64_t *gate, *down;
+} ds4_expert_list;
+static struct {
+    bool pending;
+    uint64_t model_size;
+    ds4_expert_list v, h;
+} g_expert_restore;
+
+static void ds4_expert_list_free(ds4_expert_list *l) {
+    free(l->layer); free(l->expert); free(l->gate); free(l->down);
+    memset(l, 0, sizeof(*l));
+}
+static bool ds4_expert_list_reserve(ds4_expert_list *l, uint32_t n) {
+    const size_t c = n ? n : 1;
+    l->layer = calloc(c, sizeof(uint32_t)); l->expert = calloc(c, sizeof(uint32_t));
+    l->gate = calloc(c, sizeof(uint64_t)); l->down = calloc(c, sizeof(uint64_t));
+    return l->layer && l->expert && l->gate && l->down;
+}
+
+int ds4_expert_cache_restore_prepare(const char *path, char *err, size_t errlen) {
+    ds4_expert_list_free(&g_expert_restore.v); ds4_expert_list_free(&g_expert_restore.h);
+    g_expert_restore.pending = false;
+    if (!path || !path[0]) return 0;
+    FILE *fp = fopen(path, "rb");
+    if (!fp) { snprintf(err, errlen, "expert restore list %s unreadable: %s", path, strerror(errno)); return 1; }
+    char line[256]; unsigned long long model_size = 0; unsigned nv = 0, nh = 0;
+    if (!fgets(line, sizeof(line), fp) ||
+        sscanf(line, "# ds4-expert-cache-snapshot v1 model_size=%llu %*s vram=%u host=%u",
+               &model_size, &nv, &nh) != 3 ||
+        nv > (unsigned)(DS4_N_LAYER * DS4_N_EXPERT) || nh > (unsigned)(DS4_N_LAYER * DS4_N_EXPERT)) {
+        fclose(fp); snprintf(err, errlen, "expert restore list %s has no valid v1 header", path); return 1;
+    }
+    if (!ds4_expert_list_reserve(&g_expert_restore.v, nv) ||
+        !ds4_expert_list_reserve(&g_expert_restore.h, nh)) {
+        fclose(fp); snprintf(err, errlen, "expert restore list allocation failed"); return 1;
+    }
+    unsigned long long lineno = 1;
+    while (fgets(line, sizeof(line), fp)) {
+        lineno++;
+        char kind = 0; unsigned layer = 0, expert = 0; unsigned long long gate = 0, down = 0;
+        if (sscanf(line, " %c %u %u %llu %llu", &kind, &layer, &expert, &gate, &down) != 5 ||
+            (kind != 'v' && kind != 'h') || layer >= DS4_N_LAYER || expert >= DS4_N_EXPERT ||
+            !gate || !down) {
+            fclose(fp); snprintf(err, errlen, "expert restore list %s line %llu invalid", path, lineno); return 1;
+        }
+        ds4_expert_list *l = kind == 'v' ? &g_expert_restore.v : &g_expert_restore.h;
+        const uint32_t cap = kind == 'v' ? nv : nh;
+        if (l->n >= cap) {
+            fclose(fp); snprintf(err, errlen, "expert restore list %s exceeds its header count", path); return 1;
+        }
+        l->layer[l->n] = layer; l->expert[l->n] = expert; l->gate[l->n] = gate; l->down[l->n] = down; l->n++;
+    }
+    fclose(fp);
+    if (g_expert_restore.v.n != nv || g_expert_restore.h.n != nh) {
+        snprintf(err, errlen, "expert restore list %s truncated (vram %u/%u host %u/%u)", path,
+                 g_expert_restore.v.n, nv, g_expert_restore.h.n, nh);
+        return 1;
+    }
+    g_expert_restore.model_size = model_size;
+    g_expert_restore.pending = nv + nh != 0;
+    fprintf(stderr, "DS4COMBO_EXPERT_RESTORE_PENDING vram=%u host=%u file=%s\n", nv, nh, path);
+    return 0;
+}
+
+static bool ds4_expert_snapshot_take(int host, ds4_expert_list *l) {
+    memset(l, 0, sizeof(*l));
+    const uint32_t n = ds4_gpu_stream_expert_cache_snapshot(host, NULL, NULL, NULL, NULL, 0);
+    if (!ds4_expert_list_reserve(l, n)) return false;
+    l->n = ds4_gpu_stream_expert_cache_snapshot(host, l->layer, l->expert, l->gate, l->down, n);
+    return l->n == n;
+}
+
+/* Writes the resident set, or the still-unapplied inherited set when this process has not
+ * decoded yet (its live cache would otherwise read as cold). */
+int ds4_expert_cache_snapshot_write(ds4_session *s, const char *path, uint32_t *vram_out,
+                                    uint32_t *host_out, int *inherited_out, char *err, size_t errlen) {
+    if (!s || !s->engine || !path || !path[0]) { snprintf(err, errlen, "expert snapshot target missing"); return 1; }
+    const bool inherited = g_expert_restore.pending;
+    ds4_expert_list v = {0}, h = {0};
+    if (!inherited && (!ds4_expert_snapshot_take(0, &v) || !ds4_expert_snapshot_take(1, &h))) {
+        ds4_expert_list_free(&v); ds4_expert_list_free(&h);
+        snprintf(err, errlen, "expert snapshot enumeration failed"); return 1;
+    }
+    const ds4_expert_list *pv = inherited ? &g_expert_restore.v : &v;
+    const ds4_expert_list *ph = inherited ? &g_expert_restore.h : &h;
+    char tmp[1100]; snprintf(tmp, sizeof(tmp), "%s.tmp", path);
+    FILE *fp = fopen(tmp, "wb"); int rc = 1;
+    if (fp) {
+        bool ok = fprintf(fp, "# ds4-expert-cache-snapshot v1 model_size=%llu source=%s vram=%u host=%u\n",
+                          (unsigned long long)s->engine->model.size, inherited ? "inherited" : "live",
+                          pv->n, ph->n) > 0;
+        for (uint32_t i = 0; ok && i < ph->n; i++)
+            ok = fprintf(fp, "h %u %u %llu %llu\n", ph->layer[i], ph->expert[i],
+                         (unsigned long long)ph->gate[i], (unsigned long long)ph->down[i]) > 0;
+        for (uint32_t i = 0; ok && i < pv->n; i++)
+            ok = fprintf(fp, "v %u %u %llu %llu\n", pv->layer[i], pv->expert[i],
+                         (unsigned long long)pv->gate[i], (unsigned long long)pv->down[i]) > 0;
+        if (fclose(fp) != 0) ok = false;
+        if (ok && MoveFileExA(tmp, path, MOVEFILE_REPLACE_EXISTING | MOVEFILE_WRITE_THROUGH)) rc = 0;
+    }
+    if (rc) snprintf(err, errlen, "expert snapshot write to %s failed", path);
+    else {
+        if (vram_out) *vram_out = pv->n;
+        if (host_out) *host_out = ph->n;
+        if (inherited_out) *inherited_out = inherited;
+        fprintf(stderr, "DS4COMBO_EXPERT_SNAPSHOT vram=%u host=%u source=%s file=%s\n",
+                pv->n, ph->n, inherited ? "inherited" : "live", path);
+    }
+    ds4_expert_list_free(&v); ds4_expert_list_free(&h);
+    return rc;
+}
+
+static bool ds4_expert_restore_seed_kind(ds4_session *s, int host, const ds4_expert_list *l,
+                                         char *err, size_t errlen) {
+    const ds4_model *model = &s->engine->model;
+    const ds4_weights *weights = &s->engine->weights;
+    int32_t ids[DS4_MAX_EXPERT]; uint32_t prio[DS4_MAX_EXPERT];
+    for (uint32_t il = 0; il < DS4_N_LAYER; il++) {
+        uint32_t n = 0; uint64_t gate = 0, down = 0;
+        for (uint32_t i = 0; i < l->n; i++) {
+            if (l->layer[i] != il) continue;
+            if (n && (l->gate[i] != gate || l->down[i] != down)) {
+                snprintf(err, errlen, "expert restore layer %u mixes expert sizes", il); return false;
+            }
+            gate = l->gate[i]; down = l->down[i];
+            if (n >= DS4_MAX_EXPERT) { snprintf(err, errlen, "expert restore layer %u overfull", il); return false; }
+            ids[n] = (int32_t)l->expert[i]; prio[n] = i + 1u; n++;  /* newer = higher priority */
+        }
+        if (!n) continue;
+        const ds4_layer_weights *layer = &weights->layer[il];
+        if (!layer->ffn_gate_exps || !layer->ffn_down_exps) {
+            snprintf(err, errlen, "expert restore layer %u has no routed experts", il); return false;
+        }
+        const ds4_gpu_stream_expert_table table =
+            graph_stream_expert_table_make(model, layer, il, gate, down);
+        const int ok = host ? ds4_gpu_stream_host_expert_cache_seed_experts(&table, ids, n)
+                            : ds4_gpu_stream_expert_cache_seed_experts(&table, ids, prio, n);
+        if (!ok) { snprintf(err, errlen, "expert restore seed failed at layer %u", il); return false; }
+    }
+    return true;
+}
+
+static int ds4_session_expert_restore_apply(ds4_session *s, char *err, size_t errlen) {
+    if (!g_expert_restore.pending) return 0;
+    g_expert_restore.pending = false;  /* one shot: a failure fails this request loudly */
+    const double t0 = now_sec();
+    char why[256] = {0};
+    const ds4_expert_list *v = &g_expert_restore.v, *h = &g_expert_restore.h;
+    if (!s || !s->engine || !s->engine->ssd_streaming)
+        snprintf(why, sizeof(why), "decoder is not SSD-streaming");
+    else if (g_expert_restore.model_size != s->engine->model.size)
+        snprintf(why, sizeof(why), "list is for another model");
+    if (!why[0] && !g_cuda_stream_phase_decode) ds4_streaming_set_phase_decode(1);
+    if (!why[0] && v->n > ds4_gpu_stream_expert_cache_configured_count())
+        snprintf(why, sizeof(why), "VRAM cache budget %u < %u listed experts",
+                 ds4_gpu_stream_expert_cache_configured_count(), v->n);
+    if (!why[0] && h->n > ds4_gpu_stream_host_expert_cache_configured_count())
+        snprintf(why, sizeof(why), "RAM cache budget %u < %u listed experts",
+                 ds4_gpu_stream_host_expert_cache_configured_count(), h->n);
+    if (!why[0] && ds4_expert_restore_seed_kind(s, 1, h, why, sizeof(why)))
+        (void)ds4_expert_restore_seed_kind(s, 0, v, why, sizeof(why));
+    if (!why[0] && !ds4_gpu_synchronize()) snprintf(why, sizeof(why), "GPU synchronize failed");
+    if (!why[0]) {
+        const uint32_t mh = ds4_gpu_stream_expert_cache_apply_order(1, h->layer, h->expert, h->gate, h->down, h->n);
+        const uint32_t mv = ds4_gpu_stream_expert_cache_apply_order(0, v->layer, v->expert, v->gate, v->down, v->n);
+        if (mh || mv)
+            snprintf(why, sizeof(why), "only %u/%u VRAM and %u/%u RAM experts resident after seed",
+                     v->n - mv, v->n, h->n - mh, h->n);
+    }
+    const double seconds = now_sec() - t0;
+    if (why[0]) {
+        fprintf(stderr, "DS4COMBO_EXPERT_RESTORE_FAILED vram=%u host=%u seconds=%.3f reason=%s\n",
+                v->n, h->n, seconds, why);
+        snprintf(err, errlen, "expert cache restore failed: %s", why);
+        return 1;
+    }
+    fprintf(stderr, "DS4COMBO_EXPERT_RESTORE experts=%u vram=%u host=%u seconds=%.3f\n",
+            v->n + h->n, v->n, h->n, seconds);
+    return 0;
+}
+#else
+int ds4_expert_cache_restore_prepare(const char *path, char *err, size_t errlen) {
+    if (path && path[0]) { snprintf(err, errlen, "expert restore requires Windows CUDA"); return 1; }
+    return 0;
+}
+int ds4_expert_cache_snapshot_write(ds4_session *s, const char *path, uint32_t *v, uint32_t *h,
+                                    int *inh, char *err, size_t errlen) {
+    (void)s; (void)path; (void)v; (void)h; (void)inh;
+    snprintf(err, errlen, "expert snapshot requires Windows CUDA"); return 1;
+}
+static int ds4_session_expert_restore_apply(ds4_session *s, char *err, size_t errlen) {
+    (void)s; (void)err; (void)errlen; return 0;
+}
+#endif
+
 int ds4_session_eval(ds4_session *s, int token, char *err, size_t errlen) {
+    if (ds4_session_expert_restore_apply(s, err, errlen)) return 1;
     bool probe_mtp = true;
 #ifndef DS4_NO_GPU
     if (s && s->engine && s->engine->support_kind == DS4_SUPPORT_DSPARK) {
@@ -90398,6 +90606,7 @@ static int ds4_session_eval_speculative_argmax_impl(
         payload_set_err(err, errlen, "speculative decode requires a synchronized checkpoint");
         return -1;
     }
+    if (ds4_session_expert_restore_apply(s, err, errlen)) return -1;
     if (accepted_cap > max_tokens) accepted_cap = max_tokens;
     if (s->distributed) {
         if (!accepted) return 0;
