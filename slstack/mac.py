@@ -94,22 +94,22 @@ def setup(cfg, backend='ds4', *, check=False, zig=None):
 
 
 def addresses():
-    result = []
-    try:
-        text = subprocess.check_output(['networksetup', '-listallhardwareports'], text=True)
-        interfaces = re.findall(r'Hardware Port: ([^\n]+)\nDevice: ([^\n]+)', text)
-        interfaces.sort(key=lambda row: 0 if 'Thunderbolt' in row[0] else 1 if 'Ethernet' in row[0] else 2)
-        for _, device in interfaces:
-            answer = subprocess.run(['ipconfig', 'getifaddr', device.strip()], capture_output=True, text=True)
-            address = answer.stdout.strip()
-            try:
-                if not ipaddress.ip_address(address).is_loopback and address not in result:
-                    result.append(address)
-            except ValueError:
-                pass
-    except (OSError, subprocess.SubprocessError):
-        pass
-    return result or ['127.0.0.1']
+    import psutil
+    # Internet Sharing and bridged Ethernet put the usable address on a bridge,
+    # which networksetup's physical-port list does not necessarily include.
+    states = psutil.net_if_stats()
+    candidates = []
+    for device, rows in psutil.net_if_addrs().items():
+        if device not in states or not states[device].isup:
+            continue
+        for row in rows:
+            if row.family != socket.AF_INET:
+                continue
+            address = ipaddress.ip_address(row.address)
+            if address.is_loopback or address.is_unspecified or address.is_link_local or address.is_multicast:
+                continue
+            candidates.append((0 if device.startswith('bridge') else 1, device, str(address)))
+    return list(dict.fromkeys(row[2] for row in sorted(candidates))) or ['127.0.0.1']
 
 
 class Receiver:

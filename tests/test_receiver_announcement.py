@@ -5,12 +5,24 @@ import tempfile
 import unittest
 from unittest.mock import Mock, patch
 import uuid
+import socket
+from types import SimpleNamespace
 
 from slstack.__main__ import main
-from slstack.mac import serve, wait_for_receiver
+from slstack.mac import addresses, serve, wait_for_receiver
 
 
 class ReceiverAnnouncementTests(unittest.TestCase):
+    def test_active_bridge_is_announced_before_other_interfaces(self):
+        def ipv4(value):
+            return SimpleNamespace(family=socket.AF_INET, address=value)
+        rows = {'en1':[ipv4('198.51.100.2')], 'bridge1':[ipv4('192.0.2.1')],
+                'en0':[ipv4('169.254.1.2')], 'bridge0':[ipv4('203.0.113.1')],
+                'lo0':[ipv4('127.0.0.1')]}
+        states = {name:SimpleNamespace(isup=name!='bridge0') for name in rows}
+        with patch('psutil.net_if_addrs',return_value=rows), patch('psutil.net_if_stats',return_value=states):
+            self.assertEqual(addresses(),['192.0.2.1','198.51.100.2'])
+
     def test_launcher_relays_only_public_startup_lines_after_health(self):
         file = Path(tempfile.gettempdir()) / ('receiver-startup-' + uuid.uuid4().hex + '.log')
         file.write_text('internal diagnostic\nMAC ENDPOINT: http://127.0.0.1:8180\n'
