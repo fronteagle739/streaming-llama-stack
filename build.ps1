@@ -32,9 +32,19 @@ if ($Target -in @('llama','all')) {
         $env:PATH = $ninjaPath + ';' + $env:PATH
     }
     $llamaPath = Join-Path $PSScriptRoot 'engines/streaming-llama/prefill_llama.cpp'
+    # Pinned CUTLASS 3.9.2 for the split-F32 attention used by the Fast tier
+    # (--split-f32-tensor-core-qk). Exact tag, commit-hash checked; no fallback.
+    $cutlassCommit = 'ad7b2f5e84fcfa124cb02b91d5bd26d238c0459e'
+    $cutlassPath = Join-Path $PSScriptRoot 'build/cutlass-v3.9.2'
+    if (!(Test-Path -LiteralPath (Join-Path $cutlassPath 'include/cutlass/gemm/warp/mma_tensor_op_fast_f32.h'))) {
+        & git clone --quiet --depth 1 --branch v3.9.2 https://github.com/NVIDIA/cutlass $cutlassPath
+        if ($LASTEXITCODE) { throw 'Pinned CUTLASS 3.9.2 fetch failed' }
+    }
+    $cutlassHead = (& git -C $cutlassPath rev-parse HEAD).Trim()
+    if ($cutlassHead -ne $cutlassCommit) { throw "CUTLASS checkout is $cutlassHead, expected pinned $cutlassCommit" }
     # Same pinned CMake build as the engine's build.bat, narrowed to the used
     # targets with two compile jobs. Enable its existing offline ULTRA producer.
-    & python -B -m slstack --config $Config guarded -- cmake -G Ninja -S $llamaPath -B build/llama -DCMAKE_BUILD_TYPE=Release -DGGML_CUDA=ON -DLLAMA_CURL=OFF -DLLAMA_BUILD_TESTS=OFF -DLLAMA_BUILD_EXAMPLES=OFF -DLLAMA_OPENSSL=OFF -DCMAKE_CUDA_ARCHITECTURES=120a -DGGML_BACKEND_DL=OFF -DBUILD_SHARED_LIBS=OFF -DLLAMA_DSV41_OFFLINE_PRODUCER=ON "-DLLAMA_DSV41_JSON_INCLUDE_DIR=$llamaPath/vendor" "-DLLAMA_DSV41_DSTORAGE_INCLUDE_DIR=$llamaPath/external/directstorage/native/include" "-DLLAMA_DSV41_DSTORAGE_LIBRARY=$llamaPath/external/directstorage/native/lib/x64/dstorage.lib"
+    & python -B -m slstack --config $Config guarded -- cmake -G Ninja -S $llamaPath -B build/llama -DCMAKE_BUILD_TYPE=Release -DGGML_CUDA=ON -DLLAMA_CURL=OFF -DLLAMA_BUILD_TESTS=OFF -DLLAMA_BUILD_EXAMPLES=OFF -DLLAMA_OPENSSL=OFF -DCMAKE_CUDA_ARCHITECTURES=120a -DGGML_BACKEND_DL=OFF -DBUILD_SHARED_LIBS=OFF -DLLAMA_DSV41_OFFLINE_PRODUCER=ON "-DLLAMA_DSV41_JSON_INCLUDE_DIR=$llamaPath/vendor" "-DLLAMA_DSV41_DSTORAGE_INCLUDE_DIR=$llamaPath/external/directstorage/native/include" "-DLLAMA_DSV41_DSTORAGE_LIBRARY=$llamaPath/external/directstorage/native/lib/x64/dstorage.lib" -DGGML_CUDA_DSV41_SPLIT_F32=ON "-DGGML_CUDA_CUTLASS_PATH=$cutlassPath"
     if ($LASTEXITCODE) { throw 'llama configure failed' }
     & python -B -m slstack --config $Config guarded -- cmake --build build/llama --config Release --parallel 2 --target llama-server llama-dsv41-prefill llama-export-lora slstack-weight-fetcher
     if ($LASTEXITCODE) { throw 'llama build failed' }
