@@ -17,6 +17,7 @@ from .combo_contract import validate
 from .combo_state import transport_checkpoint, payload_bytes
 from .combo_release import certified
 from .combo_ram import protect_working_set
+from . import combo_abort
 
 
 def canonical_contract(row):
@@ -42,6 +43,7 @@ def startup_failure(error,directory):
 
 class ComboProducer:
     def __init__(self,cfg,session,epoch,tokens,cancelled,*,base=None,runner=None):
+        combo_abort.check('producer launch')
         vendor()
         from studio.dsv41_session_contract import MODEL_SHA256
         from studio.dsv41_session_process import Producer
@@ -126,6 +128,7 @@ class ComboProducer:
             raise
 
     def command(self,operation,**extra):
+        if operation!='close':combo_abort.check('producer '+operation)
         from studio.dsv41_session_contract import MODEL_SHA256
         return dict(session=self.session,model_sha256=MODEL_SHA256,sequence=self.process.sequence,operation=operation,**extra)
 

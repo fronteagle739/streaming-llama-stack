@@ -17,6 +17,7 @@ from .native_broker import vendor,model_receipt
 from .journal import atomic_json,sha256
 from .combo_release import certified
 from .combo_ram import protect_working_set
+from . import combo_abort
 
 
 def global_hotlist(cfg):
@@ -38,6 +39,7 @@ def publish_hotlist(session_list,global_list):
 
 class Native:
     def __init__(self,cfg,session,epoch,sequence,cancelled,*,restore=None,runner=None,expert_list=None):
+        combo_abort.check('native launch')
         vendor()
         from studio.dsv41_session_process import Producer
         from studio.dsv41_windows_runner import _Native
@@ -163,6 +165,7 @@ class Native:
             raise RuntimeError('Native HTTP '+str(exc.code)+': '+exc.read(2048).decode(errors='replace')) from exc
 
     def control(self,operation,**extra):
+        if operation!='shutdown':combo_abort.check('native '+operation)
         with self.control_lock:
             if self.cancelled():raise RuntimeError('Native request cancelled in its owner epoch')
             row=dict(session=self.session,owner_epoch=self.epoch,sequence=self.sequence,**extra)
