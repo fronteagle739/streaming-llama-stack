@@ -32,6 +32,7 @@ def main(config_path,output):
         proof['phase']='native_startup';atomic_json(output,proof)
         owner=Native(childcfg,session,epoch,1,cancel.is_set)
         capability=owner.quality()
+        proof['native_models']=owner.http('/v1/models')
         if capability.get('supported') is not True or capability.get('phases_supported') is not True:
             raise ValueError('Current native quality/speed provider schema is unavailable')
         proof['provider_schema']=cfg['provider_schema']

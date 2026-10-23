@@ -51,6 +51,9 @@ class Proxy:
         self.lock=threading.Lock();self.session=None;self.key=None;self.pending=0
         capability=evidence['ultra'].get('provider_initial')
         if not capability:raise ValueError('Qualified native capability receipt is required')
+        self.models=evidence['ultra'].get('native_models')
+        if not isinstance(self.models,dict) or not self.models.get('data'):
+            raise ValueError('Qualified actual native model catalogue is required')
         self.observed={**capability,'tok_s':0,'decoder_running':False,'cached':True,'applied':False}
         self.window(False)
 
@@ -132,7 +135,7 @@ def handler(proxy):
             if self.path in ('/health','/healthz'):
                 return self.send(200,dict(status='ok',model_ready=bool(proxy.session and proxy.session.current),context=proxy.cfg['context']))
             if self.path=='/v1/models':
-                return self.send(200,dict(object='list',data=[dict(id=proxy.cfg['model_name'],object='model',owned_by='local')]))
+                return self.send(200,proxy.models)
             if self.path=='/v1/quality-speed':
                 if not self.authorized():return self.send(401,dict(error=dict(message='Native Bearer authentication required')))
                 try:return self.send(200,proxy.quality())
