@@ -43,7 +43,7 @@ class SharedGuardAdapterTests(unittest.TestCase):
             receipt = job.wait()
             self.assertIn('INPUT=TEST stdin',job.log.read_text())
             self.assertTrue(receipt['cleanup_confirmed'])
-            self.assertEqual(receipt['shared_guard_commit'],'d83aa32382f83027631e7954951560c520f9cf6b')
+            self.assertEqual(receipt['shared_guard_commit'],'91986e7dcd61a67d50d2dc32f1fb5373319635f6')
             certificate = json.loads(Path(receipt['shared_guard_certificate']).read_text())
             self.assertTrue(certificate['release_allowed'])
             self.assertTrue(certificate['cleanup']['confirmed'])

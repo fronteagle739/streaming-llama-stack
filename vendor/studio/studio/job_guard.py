@@ -1,4 +1,4 @@
-# Derived from Studio backend/studio/job_guard.py at d83aa32382f83027631e7954951560c520f9cf6b.
+# Derived from Studio backend/studio/job_guard.py at 91986e7dcd61a67d50d2dc32f1fb5373319635f6.
 # Shared implementation retained unchanged below this provenance header.
 """Ownership and cancellation for the shared TRAINFIX paging guard.
 
@@ -36,10 +36,15 @@ class ProcessIdentity:
     def read(cls, process):
         return cls(process.pid, process.create_time(), os.path.normcase(process.exe()))
 
+    def same_process(self, other):
+        # exec replaces an image, not the OS process. PID plus birth time is
+        # ownership; executable remains audit metadata. Reused PIDs still fail.
+        return (self.pid, self.created) == (other.pid, other.created)
+
     def process(self):
         try:
             process = psutil.Process(self.pid)
-            if self == self.read(process) and process.is_running() and process.status() != psutil.STATUS_ZOMBIE:
+            if self.same_process(self.read(process)) and process.is_running() and process.status() != psutil.STATUS_ZOMBIE:
                 return process
         except psutil.NoSuchProcess:
             pass
@@ -71,7 +76,7 @@ class OwnedProcesses:
                     if process.ppid() != parent.pid or identity.process() is None:
                         continue
                     previous = self.identities.get(candidate.pid)
-                    if previous is not None and previous != candidate:
+                    if previous is not None and not previous.same_process(candidate):
                         raise RuntimeError('owned PID was reused; refusing to adopt its replacement')
                     self.identities[candidate.pid] = candidate
                     pending.append(candidate)
@@ -82,14 +87,14 @@ class OwnedProcesses:
         return self.live()
 
     def live(self):
-        return [process for identity in self.identities.values()
+        return [process for identity in list(self.identities.values())
                 if (process := identity.process()) is not None]
 
     def stop(self, grace=1, timeout=3):
         errors = []
         def live():
             result=[]
-            for identity in self.identities.values():
+            for identity in list(self.identities.values()):
                 try:
                     if (process := identity.process()) is not None:
                         result.append(process)
@@ -181,6 +186,7 @@ class WindowsJob:
         class Limits(c.Structure):
             _fields_ = [('basic', Basic), ('io', c.c_uint64*6), ('process', c.c_size_t),
                 ('job', c.c_size_t), ('peak_process', c.c_size_t), ('peak_job', c.c_size_t)]
+        self.Limits=Limits
         self.handle = self.api.CreateJobObjectW(None, None)
         if not self.handle:
             raise c.WinError(c.get_last_error())
@@ -216,6 +222,15 @@ class WindowsJob:
         if self.handle:
             self.api.CloseHandle(self.handle)
             self.handle = None
+
+    def release_startup_limits(self):
+        """Remove only this startup job's limits after an owned healthy handoff."""
+        limits=self.Limits()
+        # This guard created the job and set exactly memory and kill-on-close
+        # flags. No foreign job or production engine job is modified.
+        if not self.api.SetInformationJobObject(self.handle,9,self.c.byref(limits),self.c.sizeof(limits)):
+            raise self.c.WinError(self.c.get_last_error())
+        self.close()
 
 
 class GuardedJob:
@@ -376,13 +391,12 @@ class GuardedJob:
         return code
 
     def handoff(self, service_pid):
-        """End a successful POSIX startup lease after verifying the owned service.
+        """End a successful startup lease after verifying the owned service.
 
         The caller must first verify service health. Failure never hands off;
-        ordinary teardown remains mandatory. Windows job detachment is refused.
+        ordinary teardown remains mandatory. A Windows handoff removes only
+        the task-created startup job's limits before closing its handle.
         """
-        if os.name=='nt':
-            raise RuntimeError('Windows kernel job handoff is unsupported')
         self.owned.refresh()
         identity=self.owned.identities.get(service_pid)
         if identity is None or identity.process() is None:
@@ -396,8 +410,14 @@ class GuardedJob:
             raise RuntimeError('startup monitor did not finish successfully')
         if identity.process() is None:
             raise RuntimeError('owned service exited during handoff')
+        if self.kernel_job:
+            self.kernel_job.release_startup_limits()
+            self.kernel_job=None
+            self.record['windows_startup_limits_released']=True
         self.child.stdin.close()
         self.record.update(status='HEALTHY_SERVICE_HANDOFF',handoff=dataclasses.asdict(identity),
+            handed_off_identities=[dataclasses.asdict(item) for item in list(self.owned.identities.values())
+                                   if item.process() is not None],
             ended=time.time(),failure=None,release_allowed=True,
             global_paging_growth=self.watcher.max_global_growth,
             owned_paged_bytes=self.watcher.job_paged)

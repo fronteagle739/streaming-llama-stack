@@ -23,7 +23,7 @@ class CleanupUnconfirmed(RuntimeError):
 
 
 def supervise(spec):
-    for name, pin in {'job_guard.py':'ba887954af378ef01a50e98705bde516ee0b6bde74bf46a9a9425e0d686a1323',
+    for name, pin in {'job_guard.py':'24fed2e17294553e7f21f78ff84175e2d7e359af8a6239684b5bf9b69d740030',
                       'job_paging.py':'f258515c811f3d8284c1e1a530b7ba22b5b6e3401fa508faf914cd90ded8c97a'}.items():
         source = (ROOT/'vendor/studio/studio'/name).read_bytes().split(b'\n',2)[2].replace(b'\r\n',b'\n')
         if hashlib.sha256(source).hexdigest() != pin:
@@ -67,7 +67,7 @@ def supervise(spec):
                   'host_budget_gib':spec['host_budget_gib'],'floor_gib':spec['min_available_gib'],
                   'job_commit_gib':commitment/GiB,
                   'child_pid':job.child.pid if job.child else None,
-                  'shared_guard_commit':'d83aa32382f83027631e7954951560c520f9cf6b',
+                  'shared_guard_commit':'91986e7dcd61a67d50d2dc32f1fb5373319635f6',
                   'shared_guard_certificate':str(certificate),'cleanup_confirmed':certain,
                   'owned_paging':{'attribution':job.watcher.observer.attribution,
                     'observed_paged_bytes':job.watcher.job_paged,
