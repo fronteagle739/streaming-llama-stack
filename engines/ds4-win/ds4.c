@@ -83610,8 +83610,11 @@ static int ds4_session_expert_restore_apply(ds4_session *s, char *err, size_t er
     if (!why[0] && h->n > ds4_gpu_stream_host_expert_cache_configured_count())
         snprintf(why, sizeof(why), "RAM cache budget %u < %u listed experts",
                  ds4_gpu_stream_host_expert_cache_configured_count(), h->n);
-    if (!why[0] && ds4_expert_restore_seed_kind(s, 1, h, why, sizeof(why)))
+    uint32_t cleared = 0;
+    if (!why[0] && ds4_expert_restore_seed_kind(s, 1, h, why, sizeof(why))) {
+        cleared = ds4_gpu_stream_expert_cache_clear_slots();
         (void)ds4_expert_restore_seed_kind(s, 0, v, why, sizeof(why));
+    }
     if (!why[0] && !ds4_gpu_synchronize()) snprintf(why, sizeof(why), "GPU synchronize failed");
     if (!why[0]) {
         const uint32_t mh = ds4_gpu_stream_expert_cache_apply_order(1, h->layer, h->expert, h->gate, h->down, h->n);
@@ -83627,8 +83630,8 @@ static int ds4_session_expert_restore_apply(ds4_session *s, char *err, size_t er
         snprintf(err, errlen, "expert cache restore failed: %s", why);
         return 1;
     }
-    fprintf(stderr, "DS4COMBO_EXPERT_RESTORE experts=%u vram=%u host=%u seconds=%.3f\n",
-            v->n + h->n, v->n, h->n, seconds);
+    fprintf(stderr, "DS4COMBO_EXPERT_RESTORE experts=%u vram=%u host=%u seconds=%.3f cleared_prefill_slots=%u\n",
+            v->n + h->n, v->n, h->n, seconds, cleared);
     return 0;
 }
 #else

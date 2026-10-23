@@ -9,6 +9,7 @@ from copy import deepcopy
 import hashlib
 import secrets
 import struct
+import sys
 import threading
 import time
 from contextlib import contextmanager
@@ -72,6 +73,7 @@ class ComboSession:
                           if cfg.get('expert_cache_restore',True) else None)
         # DS4COMBO fast switch: a suspended ULTRA producer kept across handoffs.
         self.kept_producer=None
+        self.reasoning_policy=None   # include_previous_reasoning of the last prepared turn
 
     def _ram(self,size):
         return LockedRam(size,session=self.session,host_budget_gib=self.cfg['host_budget_gib'],min_available_gib=self.cfg['min_available_gib'])
@@ -124,9 +126,38 @@ class ComboSession:
             metrics['restored_state']=deepcopy(cp)
             def matches(checkpoint):
                 return checkpoint is not None and len(tokens)>=checkpoint['position'] and prefix_digest(tokens,checkpoint['position'])==checkpoint['tokens_sha256']
+            policy=body.get('include_previous_reasoning',True)
+            if cp is not None and not matches(cp) and (self.anchor is None or not matches(self.anchor)):
+                # History changed before every saved frontier (e.g. include_previous_reasoning
+                # toggled off drops earlier thinking spans): no saved state is a prefix of the
+                # new prompt, so drop the restored state and prefill the whole prompt fresh.
+                # Anything else (no canonical miss, or a miss at/after the oldest frontier
+                # that still fails its digest) is an inconsistent history and still refused.
+                report=owner.last_render or {}
+                divergence=report.get('canonical_common')
+                oldest=min(c['position'] for c in (cp,self.anchor) if c is not None)
+                if report.get('prefix_source')!='canonical-miss' or divergence is None or divergence>=oldest:
+                    raise ValueError('Rendered history changed outside the saved rewind frontier')
+                why=('include_previous_reasoning toggled '+('off' if not policy else 'on')
+                     if self.reasoning_policy is not None and policy!=self.reasoning_policy
+                     else 'rendered history changed before every saved frontier')
+                fresh=dict(reason=why,divergence_token=divergence,restored_frontier=cp['position'],
+                           anchor_frontier=self.anchor['position'] if self.anchor else None,
+                           live_at_divergence=report.get('live_at_divergence'),
+                           canonical_at_divergence=report.get('canonical_at_divergence'))
+                print('DS4COMBO_FRESH_PREFILL '+why+': divergence at token '+str(divergence)+
+                      ' before oldest saved frontier '+str(oldest)+' (restored '+str(cp['position'])+
+                      ', anchor '+str(fresh['anchor_frontier'])+'); full prompt re-prefilled',file=sys.stderr,flush=True)
+                metrics['releases'].append(release_barrier(owner,self.device,self.cfg,baseline,self.cancel.is_set));owner=self.current=None
+                owner=self.current=Native(childcfg,self.session,self.epoch,1,self.cancel.is_set,restore=None,runner=self.device,expert_list=self.expert_list)
+                fresh['native_load_import_seconds']=owner.launch_seconds
+                tokens=owner.render(rendered);cp=owner.checkpoint
+                if cp is not None and cp.get('position'):raise RuntimeError('Fresh native owner did not start empty')
+                cp=None;self.provenance='unbiased'
+                metrics['fresh_prefill']=fresh;metrics['render']=deepcopy(owner.last_render)
+            self.reasoning_policy=policy
             if cp is not None and not matches(cp):
-                # Only a genuinely changed history (e.g. include_previous_reasoning OFF dropping
-                # the old thinking span) gets here; the engine keeps sampled IDs otherwise.
+                # Divergence after the anchor: rewind to it (engine keeps sampled IDs otherwise).
                 if self.anchor is None or not matches(self.anchor):raise ValueError('Rendered history changed outside the saved rewind frontier')
                 metrics['rewind_reason']='rendered history diverges from the post-decode frontier at token '+str((owner.last_render or {}).get('canonical_common'))+' ('+(owner.last_render or {}).get('prefix_source','engine without render report')+')'
                 cp=owner.rewind(self.journal,self.anchor);metrics['rewound_to']=cp['position']
