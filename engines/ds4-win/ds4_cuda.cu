@@ -9647,6 +9647,21 @@ extern "C" uint32_t ds4_gpu_stream_expert_cache_prepare_full(uint64_t gate_exper
     return cache ? cache->capacity : 0;
 }
 
+/* DS4COMBO expert restore: empty the VRAM slots (allocation kept) so the restored list is not
+ * blocked by the eviction-protected quarter holding this turn's prefill admissions
+ * (measured 234/301 resident without this). Returns the slots cleared. */
+extern "C" uint32_t ds4_gpu_stream_expert_cache_clear_slots(void) {
+    uint32_t cleared = 0;
+    for (uint32_t c = 0; c < DS4_CUDA_STREAM_EXPERT_CACHE_CLASSES; c++) {
+        cuda_stream_expert_cache &v = g_stream_expert_caches[c];
+        if (!v.valid) continue;
+        for (auto &slot : v.slots) if (slot.valid) { slot.valid = 0; cleared++; }
+        v.count = 0;
+        v.rank_worst_valid = 0;
+    }
+    return cleared;
+}
+
 extern "C" uint32_t ds4_gpu_stream_expert_cache_apply_order(
         int host, const uint32_t *layers, const uint32_t *experts,
         const uint64_t *gate_bytes, const uint64_t *down_bytes, uint32_t n) {

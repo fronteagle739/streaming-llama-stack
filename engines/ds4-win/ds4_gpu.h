@@ -477,6 +477,7 @@ uint64_t ds4_gpu_recommended_working_set_size(void);
 uint32_t ds4_gpu_stream_expert_cache_configured_count(void);
 uint32_t ds4_gpu_stream_expert_cache_current_count(void);
 uint32_t ds4_gpu_stream_expert_cache_snapshot(int host, uint32_t *layers, uint32_t *experts, uint64_t *gate_bytes, uint64_t *down_bytes, uint32_t cap);
+uint32_t ds4_gpu_stream_expert_cache_clear_slots(void);
 uint32_t ds4_gpu_stream_expert_cache_prepare_full(uint64_t gate_expert_bytes, uint64_t down_expert_bytes);
 uint32_t ds4_gpu_stream_expert_cache_apply_order(int host, const uint32_t *layers, const uint32_t *experts, const uint64_t *gate_bytes, const uint64_t *down_bytes, uint32_t n);
 uint32_t ds4_gpu_stream_host_expert_cache_configured_count(void);
