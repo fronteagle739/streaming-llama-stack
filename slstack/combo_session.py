@@ -165,6 +165,7 @@ class ComboSession:
                 metrics['releases'].append(release_barrier(owner,self.device,self.cfg,baseline,self.cancel.is_set));owner=self.current=None
                 owner=self.current=Native(childcfg,self.session,self.epoch,1,self.cancel.is_set,restore=(self.state,self.payload),runner=self.device)
                 if self.quality_setting is not None:owner.quality(self.quality_setting)
+            metrics['native_directory']=str(owner.directory)
             metrics['prepared_seconds']=time.monotonic()-started
             yield owner,rendered,metrics
             # Existing native HTTP inference owns sampling/tools/stop handling.

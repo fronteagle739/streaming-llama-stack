@@ -116,7 +116,7 @@ def stage(args):
     result['ds4_command'][0]=str(installed/'native/ds4-server.exe')
     result['producer_library_directories']=[str(installed/'native'),*[p for p in cfg['producer_library_directories'] if Path(p).resolve()!=native.resolve()]]
     preset=dict(name='DSV4.1 1017 (RTX: ULTRA prefill \u2192 ds4-win decode)',mode='local',mac={},include_previous_reasoning=True,
-        rtx=dict(backend='ds4',model='deepseek-chat',model_path=cfg['model'],ctx=cfg['context'],
+        rtx=dict(backend='ds4',model='deepseek-reasoner',model_path=cfg['model'],ctx=cfg['context'],
             ds4_binary=str(installed/'ds4-server.exe'),ds4_chdir=str(installed),ds4_ssd_streaming='1',ds4_cache_experts='24GB',
             prefill_chunk=cfg['native_prefill_chunk'],ds4_cache_affinity_bias=0,
             ds4_cache_affinity_spread_file=result['cache_affinity_spread_file'],ds4_extra_flags='--cuda',
