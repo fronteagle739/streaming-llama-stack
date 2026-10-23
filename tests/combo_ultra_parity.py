@@ -15,6 +15,28 @@ from slstack.journal import atomic_json
 from slstack.native_broker import vendor
 
 
+def await_producer_capacity(cfg,proof,output,cancelled,*,clock=time.monotonic,sleep=time.sleep,available=None):
+    """Qualification-only admission wait; no engine retry or budget reduction.
+
+    The outer19-minute guardian remains authoritative. Both prior native owners
+    are already certified retired, while the reference stays in budgeted RAM.
+    """
+    import psutil
+    available=available or (lambda:psutil.virtual_memory().available)
+    required=int((cfg['producer_host_budget_gib']+cfg['min_available_gib'])*(1<<30))
+    started=clock();samples=proof.setdefault('producer_admission_samples',[])
+    while True:
+        free=available();elapsed=clock()-started
+        if type(free) is not int or free<0:raise ValueError('Invalid producer admission RAM telemetry')
+        samples.append(dict(elapsed_seconds=elapsed,available_bytes=free,required_bytes=required))
+        proof['phase']='waiting_producer_host_admission';atomic_json(output,proof)
+        if cancelled():raise RuntimeError('Producer admission cancelled before engine launch')
+        if free>=required:return
+        if elapsed>=150:raise MemoryError('Producer host capacity unavailable after150seconds; no producer launched')
+        print('WAITING producer host admission: '+json.dumps(samples[-1]),flush=True)
+        sleep(min(50,150-elapsed))
+
+
 def qualification_identity(prior=None):
     # The full reference-bank hash includes its owner epoch in the32-byte
     # header. A resumed qualification must retain the interrupted request's
@@ -110,6 +132,7 @@ def main(config_path,output,resume_full=None):
         base_contract=contract_from_checkpoint(base_cp,cfg['combo_identity'],session,epoch,3,'unbiased')
         proof['base_state']=verify_payload(state,base_contract,base_cp['payload_sha256'])
         proof['releases'].append(release_barrier(owner,device,cfg,baseline,cancel.is_set));owner=None
+        await_producer_capacity(cfg,proof,output,cancel.is_set)
         proof['phase']='ultra_base_import_append';atomic_json(output,proof)
         owner=ComboProducer(cfg,session,epoch,tokens[base_position:],cancel.is_set,base=(state,base_contract),runner=device)
         proof['base_import_prefill_wall_seconds']=owner.prefill_seconds
