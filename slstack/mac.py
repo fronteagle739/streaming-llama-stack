@@ -246,7 +246,8 @@ class Receiver:
         native = self.backend == 'ds4' and qualification != 'native'
         self.ready(native)
         body = dict(body, stream=False)
-        body.setdefault('prompt_cache_key', 'slstack-' + secrets.token_hex(16))
+        from .pairing import conversation_key
+        body['prompt_cache_key'] = conversation_key(body)
         body.setdefault('include_previous_reasoning', True)
         response = http_json(f'http://127.0.0.1:{self.cfg.get("mac_engine_port", 8181)}/v1/chat/completions',
                              body, timeout=self.cfg['request_timeout_s'])
@@ -292,7 +293,10 @@ def serve(cfg, backend, build):
 
         def do_GET(self):
             if self.path == '/health':
-                self.reply(200, {'ready': True, 'backend': backend, 'receiver_sha256': build['binary_sha256']})
+                peer = receiver.peer if receiver.peer and receiver.peer.get('status') == 'qualified' else {}
+                self.reply(200, {'ready': True, 'backend': backend, 'receiver_sha256': build['binary_sha256'],
+                                 'paired_producer_sha256': peer.get('producer_sha256'),
+                                 'paired_tier': peer.get('tier')})
             elif self.path == '/v1/models' and self.authorized():
                 self.reply(200, {'object': 'list', 'data': [{'id': cfg['model_name'], 'object': 'model'}]})
             else:

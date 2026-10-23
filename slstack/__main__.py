@@ -22,6 +22,10 @@ def main():
     sub.add_parser('serve-internal', help=argparse.SUPPRESS)
     sub.add_parser('mac-internal', help=argparse.SUPPRESS)
     sub.add_parser('broker-internal', help=argparse.SUPPRESS)
+    pair = sub.add_parser('pair')
+    pair.add_argument('--mac', required=True)
+    pair.add_argument('--pair-token')
+    pair.add_argument('--model')
     for name in ('mac', 'mac-setup'):
         child = sub.add_parser(name)
         child.add_argument('--model')
@@ -59,6 +63,8 @@ def main():
     start.add_argument('--image-arch')
     start.add_argument('--video-arch')
     start.add_argument('--comfyui-models')
+    start.add_argument('--mac', help='Native Mac receiver endpoint')
+    start.add_argument('--pair-token', help='Token printed by the Mac; stored in the private runtime')
     start.add_argument('--mode', choices=['accurate', 'fast', 'ultra', 'hyper'], dest='native_tier',
                        help='RTX prefill arithmetic profile (default: accurate)')
     start.add_argument('--image-mode', choices=['streaming', 'resident'])
@@ -75,11 +81,14 @@ def main():
     args = parser.parse_args()
     config_keys = {'host_budget_gib', 'min_available_gib', 'model', 'webui', 'image_model', 'video_model',
                    'image_arch', 'video_arch', 'comfyui_models', 'image_mode', 'video_mode',
-                   'mtp_model', 'mac_port', 'mac_engine_port', 'backend', 'zig', 'models', 'resident', 'native_tier'}
+                   'mtp_model', 'mac_port', 'mac_engine_port', 'backend', 'zig', 'models', 'resident', 'native_tier',
+                   'mac', 'pair_token'}
     if args.command in ('start', 'rtx'):
         config_keys.add('lora')
     overrides = {k: v for k, v in vars(args).items() if k in config_keys and v is not None}
     cfg = load(args.config, overrides)
+    if args.command == 'rtx' and cfg.get('mac') and args.webui is None:
+        cfg['webui'] = True
     cfg.setdefault('env_overrides', {}).update({k[4:]: v for k, v in vars(args).items()
                                               if k.startswith('env_') and v is not None})
     if args.command == 'install':
@@ -117,6 +126,15 @@ def main():
     if args.command == 'broker-internal':
         from .native_broker import serve
         serve(cfg)
+        return 0
+    if args.command == 'pair':
+        from .pairing import Pair
+        peer = Pair(cfg)
+        try:
+            peer.start()
+            print('Pairing and native top-1 handshake passed', flush=True)
+        finally:
+            peer.close()
         return 0
     if args.command == 'guarded':
         # Build/install subprocesses do not use model state. In particular, do
