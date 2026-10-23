@@ -15,7 +15,7 @@ from slstack.journal import atomic_json
 from slstack.native_broker import vendor
 
 
-def main(config_path,output):
+def main(config_path,output,resume_full=None):
     cfg=json.loads(Path(config_path).read_text());vendor()
     from studio.dsv41_windows_runner import _Native
     os.environ['CUDA_VISIBLE_DEVICES']=cfg['gpu_uuid'];os.environ['CUDA_DEVICE_ORDER']='PCI_BUS_ID'
@@ -62,26 +62,31 @@ def main(config_path,output):
         proof['phase']='native_reference384';atomic_json(output,proof)
         started=time.monotonic();proof['reference']=owner.probe(vectors,reference=True);proof['reference_seconds']=time.monotonic()-started
         proof['releases'].append(release_barrier(owner,device,cfg,baseline,cancel.is_set));owner=None
-        # First test the full ULTRA prefill on the identical rendered IDs.
-        proof['phase']='ultra_full_prefill';atomic_json(output,proof)
-        owner=ComboProducer(cfg,session,epoch,tokens,cancel.is_set,runner=device)
-        proof['ultra_prefill_wall_seconds']=owner.prefill_seconds
-        ultra_cp=owner.checkpoint
-        proof['ultra_export']=owner.export(state)
-        ultra_contract=contract_from_checkpoint(ultra_cp,cfg['combo_identity'],session,epoch,2,'unbiased')
-        ultra_payload=verify_payload(state,ultra_contract)
-        proof['ultra_state']=ultra_payload
-        proof['releases'].append(release_barrier(owner,device,cfg,baseline,cancel.is_set));owner=None
-        proof['phase']='native_full_import';atomic_json(output,proof)
-        owner=Native(childcfg,session,epoch,1,cancel.is_set,restore=(state,ultra_payload),runner=device)
-        proof['phase']='full_ultra_comparison384';atomic_json(output,proof)
-        started=time.monotonic();proof['comparison']=owner.probe(vectors,reference=False);proof['comparison_seconds']=time.monotonic()-started
-        if proof['comparison']['reference_sha256']!=proof['reference']['reference_sha256']:
-            raise ValueError('Reference bank changed across GPU ownership transitions')
-        proof['releases'].append(release_barrier(owner,device,cfg,baseline,cancel.is_set));owner=None
-        # Independently exercise native -> producer INITIAL BASE import, not
-        # merely an empty-session ULTRA full prefill. Both compare to the same
-        # native reference. The even base also covers an odd target if present.
+        # Reuse a completed full comparison after an interrupted later gate.
+        # The in-RAM reference is regenerated; its complete bank must match.
+        if resume_full:
+            from slstack.journal import sha256
+            prior=json.loads(Path(resume_full).read_text())
+            binding=json.loads(Path(cfg['combo_core_binding']).read_text())
+            if (binding['status']!='PASS' or binding['old_native_sha256']!=prior['native_sha256'] or
+                binding['native_sha256']!=cfg['native_sha256'] or
+                prior['producer_sha256']!=cfg['producer_sha256'] or prior['identity']!=cfg['combo_identity'] or
+                prior['reference']['reference_sha256']!=proof['reference']['reference_sha256'] or
+                prior['comparison']['vectors']!=384 or len(prior['releases'])<3):
+                raise ValueError('Interrupted full comparison cannot be bound to this unchanged core/reference')
+            if any(sha256(path)!=value for path,value in binding['unchanged'].items()):
+                raise ValueError('Native core/fixture changed after retained comparison')
+            for released in prior['releases'][:3]:
+                if not all(released['cleanup'].get(k) for k in ('owned_job_empty','owned_process_signaled','owned_pid_gone')):
+                    raise ValueError('Retained completed comparison lacks certified ownership release')
+            proof['reused_full']=dict(path=str(resume_full),sha256=sha256(resume_full),
+                core_binding_sha256=sha256(cfg['combo_core_binding']),releases=prior['releases'][:3],
+                original_native_sha256=prior['native_sha256'],original_guardian_receipt_missing=True)
+            for key in ('comparison','comparison_seconds','ultra_prefill_wall_seconds','ultra_export','ultra_state'):
+                proof[key]=prior[key]
+        else:
+            full_comparison(owner,device,cfg,childcfg,session,epoch,tokens,cancel,baseline,state,vectors,proof,output)
+        # Independently exercise native -> producer INITIAL BASE import.
         base_position=max(2,(position//2)&~1)
         if base_position>=position:raise ValueError('Qualification prompt is too short for a nonempty imported base')
         proof['phase']='native_base_prefill';atomic_json(output,proof)
@@ -114,6 +119,31 @@ def main(config_path,output):
             except BaseException as exc:proof['cleanup_error']=repr(exc)
         if vectors is not None:vectors.close()
         if state is not None:state.close()
+        atomic_json(output,proof)
+
+
+def full_comparison(owner,device,cfg,childcfg,session,epoch,tokens,cancel,baseline,state,vectors,proof,output):
+    try:
+        proof['phase']='ultra_full_prefill';atomic_json(output,proof)
+        owner=ComboProducer(cfg,session,epoch,tokens,cancel.is_set,runner=device)
+        proof['ultra_prefill_wall_seconds']=owner.prefill_seconds
+        ultra_cp=owner.checkpoint
+        proof['ultra_export']=owner.export(state)
+        ultra_contract=contract_from_checkpoint(ultra_cp,cfg['combo_identity'],session,epoch,2,'unbiased')
+        ultra_payload=verify_payload(state,ultra_contract)
+        proof['ultra_state']=ultra_payload
+        proof['releases'].append(release_barrier(owner,device,cfg,baseline,cancel.is_set));owner=None
+        proof['phase']='native_full_import';atomic_json(output,proof)
+        owner=Native(childcfg,session,epoch,1,cancel.is_set,restore=(state,ultra_payload),runner=device)
+        proof['phase']='full_ultra_comparison384';atomic_json(output,proof)
+        started=time.monotonic();proof['comparison']=owner.probe(vectors,reference=False);proof['comparison_seconds']=time.monotonic()-started
+        if proof['comparison']['reference_sha256']!=proof['reference']['reference_sha256']:
+            raise ValueError('Reference bank changed across GPU ownership transitions')
+        proof['releases'].append(release_barrier(owner,device,cfg,baseline,cancel.is_set));owner=None
+    finally:
+        if owner is not None:
+            try:proof['failure_cleanup']=release_barrier(owner,device,cfg,baseline,lambda:False)
+            except BaseException as exc:proof['cleanup_error']=repr(exc)
         atomic_json(output,proof)
 
 

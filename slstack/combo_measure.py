@@ -15,7 +15,7 @@ def require_parity(cfg):
     root=Path(cfg.get('combo_qualification_root',cfg['runtime_root']))
     native=json.loads((root/'native-parity.json').read_text())
     ultra=json.loads((root/'ultra-parity.json').read_text())
-    binding=json.loads((root/'native-parity-binding.json').read_text())
+    binding=json.loads(Path(cfg.get('combo_native_binding',root/'native-parity-binding.json')).read_text())
     if native.get('status')!='PASS' or any(native.get(k)!=384 for k in ('roundtrip_byte_exact','rewind_byte_exact')):
         raise ValueError('Mandatory native full-vector parity is incomplete')
     from .journal import sha256
