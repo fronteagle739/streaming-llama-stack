@@ -65,6 +65,11 @@ public:
     // heaps, requests and imported pointers. Start is deferred to the timed run.
     bool restart_prompt(const config &options,std::string &error);
     bool start_request(std::string &error);
+    // DS4COMBO fast switch: release / rebuild the DS heaps and imported compute
+    // buffers between passes; model lease, plan and Engram state are kept.
+    bool suspend_device(std::string &error);
+    bool resume_device(std::string &error);
+    bool device_suspended() const;
     capacity budget() const;
     ggml_backend_t backend() const;
     bool prepare_engram_prompt(const std::vector<int32_t> &tokens,

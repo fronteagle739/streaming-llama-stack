@@ -81,6 +81,9 @@ struct llama_dsv41_sweep::implementation {
     llama_dsv41::engram_history initial_engram,final_engram;
     std::vector<float>logits;
     run_timing measured;
+    // DS4COMBO fast switch: a completed owner whose device memory, DS pipeline
+    // and carry RAM pages were released; only a rebase open may take it over.
+    bool device_suspended=false,rebase_ready=false;
 
     ~implementation(){if(backend)ggml_backend_synchronize(backend);provider.invalidate();}
     void poison(){
@@ -277,6 +280,18 @@ bool llama_dsv41_sweep::open(const llama_dsv41_weight_provider::config &weights,
             p->cache=std::move(prefix->p->cache);p->provider=std::move(prefix->p->provider);prefix->p->backend=nullptr;
             success(p->provider.restart_prompt(weights,error),error);
             std::fprintf(stderr,"DS4PERF_APPEND_OWNER_TRANSFER prefix_tokens=%u chunk_tokens=%u canonical_cache_preserved=1 raw_pool_tails_preserved=1 old_export_revoked=1 Engram_history=%d,%d,%d\n",p->position_offset,options.carry.tokens,p->initial_engram.tail[0],p->initial_engram.tail[1],p->initial_engram.tail[2]);
+        }else if(warmup&&warmup->p->rebase_ready){
+            // DS4COMBO fast switch: a resumed owner gives its provider, model
+            // lease and fixed storage to a fresh request that imports a new base.
+            require(warmup!=this&&restored&&options.fixed,"Rebase requires a distinct resumed fixed owner and a restored native base");
+            std::unique_lock<std::mutex> owner_lock(warmup->p->mutex,std::try_to_lock);
+            require(owner_lock.owns_lock()&&warmup->p->state==implementation::completed&&!warmup->p->device_suspended&&
+                warmup->p->backend==weights.backend&&warmup->p->options.fixed==options.fixed,"Rebase owner changed its backend or fixed storage");
+            p->provider=std::move(warmup->p->provider);
+            warmup->p->state=implementation::poisoned;warmup->p->rebase_ready=false;
+            warmup->p->cache.reset();warmup->p->backend=nullptr;
+            success(p->provider.restart_prompt(weights,error),error);
+            std::fprintf(stderr,"DS4COMBO_REBASE_OWNER_TRANSFER fixed_storage_kept=1 provider_kept=1 restored_position=%u\n",restored->frontier.position);
         }else if(warmup){
             require(warmup!=this,"Warmup provider cannot transfer to itself");
             std::unique_lock<std::mutex> warm_lock(warmup->p->mutex,std::try_to_lock);
@@ -410,6 +425,51 @@ bool llama_dsv41_sweep::open(const llama_dsv41_weight_provider::config &weights,
             p->options.admitted_pinned_device_bytes?&direct_span:nullptr,p->options.reuse_graph,p->options.reuse_layer_graph,p->options.admitted_cast_device_bytes,p->options.audit_casts,p->options.admitted_index_device_bytes,p->options.admitted_prefetch_device_bytes,p->options.coalesce_dense,p->options.carry.defer_hidden_readback,p->options.merge_attention_selected_rows,p->options.hc_projection_f16_gemm,p->options.dense_mxfp4,p->options.resident_bf16,p->options.carry.export_hidden_after_head,p->options.async_inputs,p->options.resident_ids,p->options.resident_metadata,p->options.pair_ffn,p->options.fixed));
         std::fprintf(stderr,prefix?"DS4PERF_APPEND_ALLOCATIONS_OPEN cache_preserved=1 required_owner_admission_counted=1\n":"DS4PERF_FIXED_ALLOCATIONS_OPEN cache=1 resident=1 pinned_owner=1 before_prompt_clock=1\n");
         p->check_stop();p->state=implementation::opened;return true;
+    }catch(const std::exception&failure){p->poison();error=failure.what();return false;}
+}
+
+bool llama_dsv41_sweep::suspend_device(std::string&error){
+    std::unique_lock<std::mutex>lock(p->mutex,std::try_to_lock);error.clear();
+    if(!lock.owns_lock()){error="V4.1 sweep is already active";return false;}
+    try{
+        require(p->state==implementation::completed&&!p->device_suspended&&p->options.fixed&&p->options.fixed->ram&&!p->options.fixed->ram_registration,
+            "Device suspend requires a completed fixed owner with tile-registered carry RAM");
+        auto&f=*p->options.fixed;
+        ggml_backend_synchronize(p->backend);
+        // The frontier is given up: nothing may export from this owner again.
+        p->published.store(false);p->executor.reset();
+        success(p->carry.retire_shared_ram(error),error);
+        f.ram->suspend_pages();
+        success(p->provider.suspend_device(error),error);
+#ifdef GGML_USE_CUDA
+        size_t released=0;int blocks=0;
+        require(ggml_backend_cuda_switch_arena_suspend(&released,&blocks),"ggml CUDA switch arena suspend failed or is not enabled");
+        size_t free=0,total=0;ggml_backend_dev_memory(ggml_backend_get_device(p->backend),&free,&total);
+        std::fprintf(stderr,"DS4COMBO_SWEEP_SUSPENDED arena_released_bytes=%zu arena_blocks=%d carry_ram_bytes=%llu device_free=%zu device_total=%zu\n",
+            released,blocks,(unsigned long long)f.ram->size(),free,total);
+#else
+        throw std::runtime_error("Device suspend requires the CUDA switch arena");
+#endif
+        p->device_suspended=true;p->rebase_ready=false;return true;
+    }catch(const std::exception&failure){p->poison();error=failure.what();return false;}
+}
+
+bool llama_dsv41_sweep::resume_device(std::string&error){
+    std::unique_lock<std::mutex>lock(p->mutex,std::try_to_lock);error.clear();
+    if(!lock.owns_lock()){error="V4.1 sweep is already active";return false;}
+    try{
+        require(p->state==implementation::completed&&p->device_suspended,"Device resume requires a suspended completed owner");
+#ifdef GGML_USE_CUDA
+        size_t mapped=0;int blocks=0;
+        require(ggml_backend_cuda_switch_arena_resume(&mapped,&blocks),"ggml CUDA switch arena resume failed");
+#else
+        size_t mapped=0;int blocks=0;
+#endif
+        p->options.fixed->ram->resume_pages();
+        success(p->provider.resume_device(error),error);
+        std::fprintf(stderr,"DS4COMBO_SWEEP_RESUMED arena_mapped_bytes=%zu arena_blocks=%d carry_ram_bytes=%llu contents=zeroed rebase_required=1\n",
+            mapped,blocks,(unsigned long long)p->options.fixed->ram->size());
+        p->device_suspended=false;p->rebase_ready=true;return true;
     }catch(const std::exception&failure){p->poison();error=failure.what();return false;}
 }
 

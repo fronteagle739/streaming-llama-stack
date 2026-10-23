@@ -429,6 +429,25 @@ std::shared_ptr<llama_dsv41_carry_store::ram_backing> llama_dsv41_carry_store::r
     bank->bytes=plan.resident_bytes;bank->storage=llama_dsv41_locked_ram::allocate(bank->bytes,admission);return bank;
 }
 
+uint64_t llama_dsv41_carry_store::ram_backing::aligned_bytes()const{
+#ifdef _WIN32
+    SYSTEM_INFO system;GetSystemInfo(&system);const uint64_t page=system.dwPageSize;
+#else
+    const uint64_t page=uint64_t(sysconf(_SC_PAGESIZE));
+#endif
+    return (bytes+page-1)/page*page;
+}
+void llama_dsv41_carry_store::ram_backing::suspend_pages(){
+    std::lock_guard<std::mutex> lock(owner);
+    require(storage&&bytes&&!paged_out,"Carry RAM bank is absent or already suspended");
+    llama_dsv41_locked_ram::suspend_pages(storage.get(),aligned_bytes());paged_out=true;
+}
+void llama_dsv41_carry_store::ram_backing::resume_pages(){
+    std::lock_guard<std::mutex> lock(owner);
+    require(storage&&bytes&&paged_out,"Carry RAM bank is not suspended");
+    llama_dsv41_locked_ram::resume_pages(storage.get(),aligned_bytes());paged_out=false;
+}
+
 bool llama_dsv41_carry_store::retire_shared_ram(std::string &error){
     return p->guarded([&]{
         require(p->state==implementation::sealed&&!p->lease&&p->options.shared_ram&&p->shared_bank_claim.owns_lock(),"Only a completed sealed shared RAM owner can retire");

@@ -80,6 +80,13 @@ public:
     // DS4COMBO producer-warm: on an opened, not yet run sweep, start the
     // Engram row cache of the NEXT request (tokens known up front) while this
     // pass runs. base_tail is the restored base's last <=3 tokens, if any.
+    // DS4COMBO fast switch: on a completed fixed owner, release all device
+    // memory (ggml switch arena, DS pipeline) and the carry RAM pages while the
+    // process keeps its CUDA context, model lease and plans; resume maps fresh
+    // zeroed memory at the same addresses. A resumed owner may only be passed
+    // as `warmup` to open() together with a restored native base (rebase).
+    bool suspend_device(std::string &error);
+    bool resume_device(std::string &error);
     bool start_next_engram(const std::vector<int32_t> &tokens,const std::vector<int32_t> &base_tail,std::string &error);
     struct run_timing {double prompt_processing_ms=0,export_preparation_ms=0;};
     // Actual sequential clock boundaries, available only after successful run.

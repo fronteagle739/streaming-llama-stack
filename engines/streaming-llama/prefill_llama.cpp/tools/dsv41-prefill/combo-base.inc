@@ -3,13 +3,24 @@
  * model/tokenizer/template/RoPE/epoch validation. State never touches disk. */
 namespace {
 class combo_base_input {
-    session_pipe io;
+    std::optional<session_pipe> owned;
+    session_pipe &io;
     llama_dsv41::wire_plan plan;
     uint32_t owner=0;uint64_t owner_offset=0,consumed=0;
 public:
     llama_dsv41_sweep::native_base base;
     combo_base_input(uint64_t timeout,HANDLE output,const std::string&session,
-            const std::string&contract_sha,uint64_t epoch,uint32_t context):io(timeout,output){
+            const std::string&contract_sha,uint64_t epoch,uint32_t context):io(owned.emplace(timeout,output)){
+        load(session,contract_sha,epoch,context);
+    }
+    // DS4COMBO fast switch: a later base arrives on the live session's own pipe.
+    combo_base_input(session_pipe&shared,const std::string&session,
+            const std::string&contract_sha,uint64_t epoch,uint32_t context):io(shared){
+        load(session,contract_sha,epoch,context);
+    }
+    combo_base_input(const combo_base_input&)=delete;combo_base_input&operator=(const combo_base_input&)=delete;
+private:
+    void load(const std::string&session,const std::string&contract_sha,uint64_t epoch,uint32_t context){
         using namespace dsv41_live;
         const auto line=io.line();
         need(sha_valid(contract_sha)&&dsv41_boundary::sha256(line.data(),line.size())==contract_sha,"Native base contract pin mismatch");
@@ -53,6 +64,7 @@ public:
             io.read(dst,bytes);owner_offset+=bytes;consumed+=bytes;return true;
         };
     }
+public:
     void finish(){dsv41_live::need(consumed==plan.bytes,"Native base import left bytes unread");}
 };
 }
