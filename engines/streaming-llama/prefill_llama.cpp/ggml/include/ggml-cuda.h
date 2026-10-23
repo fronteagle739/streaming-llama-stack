@@ -218,6 +218,14 @@ GGML_BACKEND_API void * ggml_backend_cuda_device_malloc(size_t nbytes);
 
 // Free GPU memory (wraps cudaFree).
 GGML_BACKEND_API void   ggml_backend_cuda_device_free(void * ptr);
+// DS4COMBO fast switch: optional switch arena (see ggml-cuda.cu). Enable before
+// the first device allocation; suspend releases all physical memory of
+// ggml-owned device blocks and VMM pools while keeping every pointer; resume
+// maps and zeroes the same ranges. Contents are not preserved.
+GGML_BACKEND_API bool   ggml_backend_cuda_switch_arena_enable(int device, size_t va_bytes);
+GGML_BACKEND_API bool   ggml_backend_cuda_switch_arena_suspend(size_t * released_bytes, int * released_blocks);
+GGML_BACKEND_API bool   ggml_backend_cuda_switch_arena_resume(size_t * mapped_bytes, int * mapped_blocks);
+GGML_BACKEND_API bool   ggml_backend_cuda_switch_arena_status(size_t * live_bytes, int * live_blocks, bool * is_suspended);
 
 // R3 dual-use ping-pong (USER design): wrap an externally-owned CUDA pointer
 // (a contiguous view of a D3D12 heap imported via cudaImportExternalMemory +
