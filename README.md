@@ -25,7 +25,7 @@ The [user guide](USER_GUIDE.md) documents the environment-to-flag table and lite
 
 See the measured [native/producer parity](examples/engine_parity/README.md) and [environment behaviour samples](examples/engine_environment/README.md) for the checks completed so far.
 
-The requested quality/speed points are Max quality 0, Balanced 0.35, Fast 0.65, Faster 0.9 and Max speed 1.36125. Use Max quality or Balanced for code and precise technical output; Faster and Max speed are intended for prose, drafts and casual chat. The vendored provider now accepts these five names and independent `reasoning`, `tool_call`, `answer`, and `code` settings. Partial updates preserve other phases. Native rebuild and live endpoint effects remain acceptance gates.
+The requested quality/speed points are Max quality 0, Balanced 0.35, Fast 0.65, Faster 0.9 and Max speed 1.36125. Use Max quality or Balanced for code and precise technical output; Faster and Max speed are intended for prose, drafts and casual chat. The vendored provider accepts these five names and independent `reasoning`, `tool_call`, `answer`, and `code` settings. Partial updates preserve other phases; see the [tool examples](USER_GUIDE.md#quality-and-speed). The native rebuild and compiled request transport checks pass. Live endpoint and webui effects remain acceptance gates.
 
 Owner-supplied 3K-token story/C++ measurements were respectively 5.8/5.0, 8.1/7.7, 10.3/9.7, 12.3/10.7 and 14.2/13.3 tok/s. Faster showed a code typo; Max speed had C++ syntax errors. These measurements describe the qualified model/hardware, not a general speed guarantee.
 
