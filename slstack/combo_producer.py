@@ -123,6 +123,35 @@ class ComboProducer:
         from studio.dsv41_session_contract import MODEL_SHA256
         return dict(session=self.session,model_sha256=MODEL_SHA256,sequence=self.process.sequence,operation=operation,**extra)
 
+    # --- DS4COMBO fast switch: keep-alive producer (suspend / resume) ---------
+    def suspend(self):
+        """After the native imported this frontier: acknowledge it, then give back
+        VRAM/DS heaps/carry RAM while the process, CUDA context and model lease stay."""
+        started=time.monotonic();cp=transport_checkpoint(self.checkpoint)
+        self.process.request(self.command('acknowledge',base=cp))
+        reply=self.process.suspend(cp);self.suspended=True
+        return dict(reply=reply,seconds=time.monotonic()-started)
+
+    def resume(self,base,tokens):
+        """Map device memory again, stream the new native base on the session pipe,
+        and prefill `tokens` on it. Same contract/payload writer as the launch bootstrap."""
+        if not getattr(self,'suspended',False):raise RuntimeError('Producer resume requires a suspended keep-alive producer')
+        ram,contract=base;wire=canonical_contract(contract)
+        if (contract['request_id'],contract['owner_epoch'],contract['context'])!=(self.session,self.epoch,self.checkpoint['context']):
+            raise ValueError('Native base owner epoch/context differs')
+        def bootstrap(write):
+            with ram.lease():
+                write(wire+b'\n')
+                for offset in range(0,payload_bytes(contract['position']),65536):
+                    write(ram.read(offset,min(65536,payload_bytes(contract['position'])-offset)))
+        started=time.monotonic()
+        reply=self.process.resume(hashlib.sha256(wire).hexdigest(),tokens,bootstrap)
+        self.checkpoint=reply['checkpoint'];self.suspended=False
+        if self.checkpoint['position']!=contract['position']+len(tokens):raise ValueError('ULTRA resumed frontier differs')
+        self.prefill_seconds=time.monotonic()-started
+        return dict(reply=reply,seconds=self.prefill_seconds)
+    # --- end DS4COMBO fast switch ---------------------------------------------
+
     def prefill(self,tokens):
         reply=self.process.request(self.command('prefill',base=self.checkpoint,tokens=tokens))
         self.checkpoint=reply['checkpoint'];return reply

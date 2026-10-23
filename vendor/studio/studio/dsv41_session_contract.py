@@ -83,7 +83,9 @@ def command(row, session, sequence, mode=3):
     require(integer(row.get('sequence'), 1, (1 << 64) - 1) == sequence, 'Replayed or skipped session sequence')
     op = row.get('operation')
     common = ['session', 'model_sha256', 'sequence', 'operation']
-    extra = {'checkpoint': [], 'close': [], 'export_initial': ['base'], 'export_delta': ['base'], 'acknowledge': ['base'], 'save_rewind': ['base'], 'rewind': ['base', 'target'], 'prefill': ['base', 'tokens'], 'apply_decode_delta': ['base', 'target', 'bytes']}
+    extra = {'checkpoint': [], 'close': [], 'export_initial': ['base'], 'export_delta': ['base'], 'acknowledge': ['base'], 'save_rewind': ['base'], 'rewind': ['base', 'target'], 'prefill': ['base', 'tokens'], 'apply_decode_delta': ['base', 'target', 'bytes'],
+             # DS4COMBO fast switch: keep-alive producer device suspend / resume onto a new native base.
+             'suspend': ['base'], 'resume': ['native_base_contract_sha256', 'tokens']}
     require(type(op) is str and op in extra, 'Unknown session operation')
     keys(row, common + extra[op])
     if 'base' in row:
@@ -98,6 +100,13 @@ def command(row, session, sequence, mode=3):
         for token in tokens:
             integer(token, 0, 129279)
         require(row['base']['position'] + len(tokens) < row['base']['context'], 'Prefill context exhausted')
+    if op == 'resume':
+        tokens = row['tokens']
+        digest = row['native_base_contract_sha256']
+        require(type(digest) is str and len(digest) == 64 and all(ch in '0123456789abcdef' for ch in digest), 'Resume base contract SHA-256 required')
+        require(type(tokens) is list and 0 < len(tokens) <= MAX_PREFILL, 'Resume prefill token extent')
+        for token in tokens:
+            integer(token, 0, 129279)
     if op == 'apply_decode_delta':
         target = checkpoint(row['target'], mode)
         base = row['base']

@@ -17,7 +17,7 @@ from .combo_native import Native
 from .combo_producer import ComboProducer
 from .combo_ram import LockedRam,wait_for_host_capacity
 from .combo_state import contract_from_checkpoint,verify_payload,payload_bytes
-from .combo_release import release_barrier,certified
+from .combo_release import release_barrier,certified,suspend_barrier
 from .combo_crossover import qualified_threshold
 from .native_broker import vendor
 
@@ -70,6 +70,8 @@ class ComboSession:
         # expert_cache_restore (default true): carry the native expert cache across relaunches.
         self.expert_list=(Path(cfg['runtime_root'])/('expert-cache-'+self.session+'.txt')
                           if cfg.get('expert_cache_restore',True) else None)
+        # DS4COMBO fast switch: a suspended ULTRA producer kept across handoffs.
+        self.kept_producer=None
 
     def _ram(self,size):
         return LockedRam(size,session=self.session,host_budget_gib=self.cfg['host_budget_gib'],min_available_gib=self.cfg['min_available_gib'])
@@ -144,13 +146,25 @@ class ComboSession:
                 if cp is not None:metrics['native_base_export']=self._checkpoint(owner,cp)
                 metrics['releases'].append(release_barrier(owner,self.device,self.cfg,baseline,self.cancel.is_set));owner=self.current=None
                 base=(self.state,self.contract) if cp is not None else None
-                metrics['producer_host_admission']=wait_for_host_capacity(
-                    int(self.cfg.get('producer_host_budget_gib',8)*(1<<30)),int(self.cfg['min_available_gib']*(1<<30)),self.cancel.is_set)
-                owner=self.current=ComboProducer(self.cfg,self.session,self.epoch,append,self.cancel.is_set,base=base,runner=self.device)
-                metrics['ultra_load_import_prefill_seconds']=owner.prefill_seconds+metrics['producer_host_admission']['seconds']
+                # --- DS4COMBO fast switch: resume a kept producer instead of launching one ---
+                if self.kept_producer is not None and base is not None:
+                    owner=self.current=self.kept_producer;self.kept_producer=None
+                    metrics['producer_resume']=owner.resume(base,append)
+                    metrics['ultra_load_import_prefill_seconds']=owner.prefill_seconds
+                else:
+                    metrics['producer_host_admission']=wait_for_host_capacity(
+                        int(self.cfg.get('producer_host_budget_gib',8)*(1<<30)),int(self.cfg['min_available_gib']*(1<<30)),self.cancel.is_set)
+                    owner=self.current=ComboProducer(self.cfg,self.session,self.epoch,append,self.cancel.is_set,base=base,runner=self.device)
+                    metrics['ultra_load_import_prefill_seconds']=owner.prefill_seconds+metrics['producer_host_admission']['seconds']
                 metrics['ultra_directory']=str(owner.directory)
                 metrics['ultra_export']=self._checkpoint(owner,owner.checkpoint)
-                metrics['releases'].append(release_barrier(owner,self.device,self.cfg,baseline,self.cancel.is_set));owner=self.current=None
+                if self.cfg.get('producer_keep_alive'):
+                    metrics['producer_suspend']=owner.suspend()
+                    metrics['releases'].append(suspend_barrier(owner,self.device,self.cfg,baseline,self.cancel.is_set))
+                    self.kept_producer=owner;owner=self.current=None
+                else:
+                    metrics['releases'].append(release_barrier(owner,self.device,self.cfg,baseline,self.cancel.is_set));owner=self.current=None
+                # --- end DS4COMBO fast switch ---
                 owner=self.current=Native(childcfg,self.session,self.epoch,1,self.cancel.is_set,restore=(self.state,self.payload),runner=self.device,expert_list=self.expert_list)
                 metrics['native_load_import_seconds']=owner.launch_seconds
             else:
@@ -187,6 +201,10 @@ class ComboSession:
         except BaseException as exc:
             self.poison=repr(exc);metrics['failure']=self.poison
             if hasattr(exc,'admission_receipt'):metrics['producer_host_admission']=exc.admission_receipt
+            if self.kept_producer is not None:   # DS4COMBO fast switch: never keep a producer past a failure
+                try:metrics['kept_producer_release']=self.kept_producer.close()
+                except BaseException as cleanup:metrics['kept_producer_release_error']=repr(cleanup);self.failed_owner=self.kept_producer
+                self.kept_producer=None
             if hasattr(exc,'owned_cleanup') and not certified(exc.owned_cleanup):
                 self.failed_owner=getattr(exc,'owned_runtime',getattr(exc,'owned_process',None))
                 self.poison='Unconfirmed GPU release: '+self.poison
@@ -206,4 +224,7 @@ class ComboSession:
             raise RuntimeError('Unconfirmed GPU owner: retain checkpoint RAM until the independent Job closes')
         if self.current is not None:raise RuntimeError('Cannot close a conversation while its GPU owner is active')
         if self.state is not None:self.state.close();self.state=None
+        if self.kept_producer is not None:   # DS4COMBO fast switch
+            proof=self.kept_producer.close();self.kept_producer=None
+            if not certified(proof):raise RuntimeError('Kept ULTRA producer retirement unconfirmed')
         if self.journal is not None:self.journal.close();self.journal=None
