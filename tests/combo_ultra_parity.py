@@ -71,6 +71,8 @@ def main(config_path,output,resume_full=None):
             if (binding['status']!='PASS' or binding['old_native_sha256']!=prior['native_sha256'] or
                 binding['native_sha256']!=cfg['native_sha256'] or
                 prior['producer_sha256']!=cfg['producer_sha256'] or prior['identity']!=cfg['combo_identity'] or
+                prior['provider_schema']!=cfg['provider_schema'] or prior['native_prefill_chunk']!=cfg['native_prefill_chunk'] or
+                prior['comparison']['reference_sha256']!=prior['reference']['reference_sha256'] or
                 prior['reference']['reference_sha256']!=proof['reference']['reference_sha256'] or
                 prior['comparison']['vectors']!=384 or len(prior['releases'])<3):
                 raise ValueError('Interrupted full comparison cannot be bound to this unchanged core/reference')
