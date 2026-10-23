@@ -106,11 +106,42 @@ class GuardTest(unittest.TestCase):
         code,proof=self.run_cpu(pages=65537);self.assertEqual(code,1)
         self.assertIn('global pagefile/swap grew',proof['reason'])
 
-    def test_owned_paging_stops_with_ram_still_available(self):
+    def test_owned_4kib_warns_and_telemetry_is_closed(self):
         code,proof=self.run_cpu(owned_pages=4096)
-        self.assertEqual(code,1);self.assertIn('job-attributed',proof['reason'])
+        self.assertEqual(code,0);self.assertIsNone(proof['reason'])
         self.assertTrue(proof['release_allowed']);self.assertEqual(proof['owned_paged_bytes'],4096)
         self.assertEqual(proof['paged_processes'],[dict(pid=proof['child_pid'],paged_bytes=4096)])
+        self.assertTrue(proof['paging_telemetry_closed'])
+        self.assertEqual(proof['paging_policy']['peak_owned_paged_bytes'],4096)
+        self.assertTrue(any('64 MiB' in warning for warning in proof['paging_warnings']))
+
+    def test_owned_exact64mib_warns(self):
+        code,proof=self.run_cpu(owned_pages=64<<20)
+        self.assertEqual(code,0);self.assertEqual(proof['paging_policy']['owned_paging_limit_bytes'],64<<20)
+        self.assertTrue(proof['paging_telemetry_closed'])
+
+    def test_owned_over64mib_stops_with_ram_still_available(self):
+        code,proof=self.run_cpu(owned_pages=(64<<20)+4096)
+        self.assertEqual(code,1);self.assertIn('job-attributed',proof['reason'])
+        self.assertTrue(proof['release_allowed']);self.assertTrue(proof['paging_telemetry_closed'])
+
+    def test_telemetry_closes_when_launch_fails(self):
+        with patch('slstack.guard.PagingWatch') as watcher, patch('slstack.guard._supervise_owned',side_effect=OSError('launch refused')):
+            spec=dict(host_budget_gib=.5,min_available_gib=4,
+                receipt=str(Path(os.environ['STUDIO_RUNTIME_ROOT'])/('no-launch-'+uuid.uuid4().hex+'.json')))
+            with self.assertRaisesRegex(OSError,'launch refused'):_supervise(spec)
+            watcher.return_value.close.assert_called_once_with()
+
+    def test_telemetry_cleanup_failure_cannot_leave_a_success_receipt(self):
+        target=Path(os.environ['STUDIO_RUNTIME_ROOT'])/('trace-close-'+uuid.uuid4().hex+'.json')
+        target.write_text(json.dumps(dict(exit_code=0,reason=None,release_allowed=True)))
+        with patch('slstack.guard.PagingWatch') as watcher, patch('slstack.guard._supervise_owned',return_value=0):
+            watcher.return_value.close.side_effect=OSError('trace stop refused')
+            with self.assertRaisesRegex(OSError,'trace stop refused'):
+                _supervise(dict(host_budget_gib=.5,min_available_gib=4,receipt=str(target)))
+        proof=json.loads(target.read_text())
+        self.assertFalse(proof['paging_telemetry_closed'])
+        self.assertIn('trace stop refused',proof['reason'])
 
 
 if __name__=='__main__':unittest.main()

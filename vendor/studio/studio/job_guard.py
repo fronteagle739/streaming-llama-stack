@@ -315,10 +315,14 @@ class GuardedJob:
         if self.child is not None:
             raise RuntimeError('a guard owns exactly one launch')
         self.deadline = time.monotonic() + self.seconds
-        self._priority()
-        vm = psutil.virtual_memory()
-        if max(self.rss_limit, self.host_commit_limit) > vm.available - self.floor:
-            raise RuntimeError('declared job budget exceeds available physical RAM minus floor')
+        try:
+            self._priority()
+            vm = psutil.virtual_memory()
+            if max(self.rss_limit, self.host_commit_limit) > vm.available - self.floor:
+                raise RuntimeError('declared job budget exceeds available physical RAM minus floor')
+        except BaseException:
+            self.watcher.close()
+            raise
         self.record.update(started=time.time(), command=list(command), physical_total=vm.total)
         self.owns_session=os.name!='nt' and new_session
         bootstrap = ('import json,os,pathlib,subprocess,sys; '
@@ -454,6 +458,7 @@ class GuardedJob:
             raise RuntimeError('startup monitor did not finish successfully')
         if identity.process() is None:
             raise RuntimeError('owned service exited during handoff')
+        self.watcher.close()
         if self.kernel_job:
             self.kernel_job.release_startup_limits()
             self.kernel_job=None
@@ -461,6 +466,7 @@ class GuardedJob:
         self.child.stdin.write(b'H')
         self.child.stdin.flush()
         self.child.stdin.close()
+        self.record.update(self.watcher.details())
         self.record.update(status='HEALTHY_SERVICE_HANDOFF',handoff=dataclasses.asdict(identity),
             handed_off_identities=[dataclasses.asdict(item) for item in list(self.owned.identities.values())
                                    if item.process() is not None],
@@ -499,6 +505,11 @@ class GuardedJob:
         if self.kernel_job:
             self.kernel_job.close()
             self.kernel_job = None
+        try:self.watcher.close()
+        except Exception as error:
+            self.failure=self.failure or repr(error)
+            self.record.update(failure=self.failure,release_allowed=False,status='FAILED_OR_CANCELLED')
+        self.record.update(self.watcher.details())
         self.receipt.write_text(json.dumps(self.record, indent=2))
 
 

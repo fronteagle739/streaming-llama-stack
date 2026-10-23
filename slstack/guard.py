@@ -81,6 +81,29 @@ def windows_job(proc, commit_gib):
 
 
 def _supervise(spec):
+    admit(spec['host_budget_gib'],spec['min_available_gib'])
+    warnings=[]
+    watcher=PagingWatch(paging_bytes,warning=warnings.append)
+    receipt=Path(spec['receipt'])
+    try:
+        return _supervise_owned(spec,watcher,warnings)
+    finally:
+        try:
+            watcher.close()
+        except BaseException as exc:
+            if receipt.exists():
+                record=json.loads(receipt.read_text())
+                record.update(paging_telemetry_closed=False,reason='Paging telemetry cleanup failed: '+repr(exc))
+                receipt.write_text(json.dumps(record,indent=2))
+            raise
+        else:
+            if receipt.exists():
+                record=json.loads(receipt.read_text())
+                record['paging_telemetry_closed']=True
+                receipt.write_text(json.dumps(record,indent=2))
+
+
+def _supervise_owned(spec,paging_watch,paging_warnings):
     budget, floor = spec['host_budget_gib'], spec['min_available_gib']
     admit(budget, floor)
     flags = subprocess.CREATE_NO_WINDOW | 4 if os.name == 'nt' else 0  # suspended until Job admission
@@ -89,8 +112,6 @@ def _supervise(spec):
     from .memory_counters import snapshot
     paging_before = snapshot() if spec.get('paging_telemetry') else None
     process_counters = {}
-    paging_warnings = []
-    paging_watch=PagingWatch(paging_bytes,warning=lambda message:paging_warnings.append(message))
     reservation_samples=[];last_reservation_sample=0
     last_paging_sample = 0
     ledger_blocked_since = None
@@ -213,7 +234,7 @@ def _supervise(spec):
                    paged_processes=paging_watch.observer.last_processes,
                    paging_scanned_pages=paging_watch.observer.scanned_pages,
                    paging_completed_scans=paging_watch.observer.completed_scans,
-                   paging_attribution=paging_watch.observer.attribution,cleanup=cleanup,
+                   paging_attribution=paging_watch.observer.attribution,paging_policy=paging_watch.details(),cleanup=cleanup,
                    release_allowed=cleanup['confirmed'],reservation_samples=reservation_samples,
                    paging_interpretation='Process faults include soft and hard faults. Private commit/pagefile usage is not disk I/O. System counters include other processes; these counters alone do not prove core/KV residency.')
     Path(spec['receipt']).write_text(json.dumps(receipt, indent=2))
