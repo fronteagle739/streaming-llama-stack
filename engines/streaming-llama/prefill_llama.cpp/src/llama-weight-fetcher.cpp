@@ -2218,6 +2218,34 @@ static void wf_persist_staging_evict(const char * why) {
     fflush(stderr);
 }
 
+// DS4COMBO graceful release (close and keep-alive suspend share it): drop the
+// process-global cache too — staging heap, DS files, DS factory, D3D12 device,
+// DXGI factory — so nothing DirectStorage/D3D12 stays alive. Only valid with no
+// live wf_context owning the cache. The next wf_create rebuilds it from scratch.
+static int wf_persist_shutdown_impl(const char * why) {
+    if (g_wf_persist.active_owner) {
+        fprintf(stderr, "*** WF_PERSIST_SHUTDOWN refused: cache still has an active owner (%s)\n", why);
+        fflush(stderr);
+        return 0;
+    }
+    wf_persist_staging_evict(why);
+    for (auto * file : g_wf_persist.files) if (file) file->Release();
+    g_wf_persist.files.clear();
+    g_wf_persist_file_ids.clear();
+    unsigned long factory_refs = 0, device_refs = 0, dxgi_refs = 0;
+    if (g_wf_persist.factory) factory_refs = g_wf_persist.factory->Release();
+    if (g_wf_persist.device)  device_refs  = g_wf_persist.device->Release();
+    if (g_wf_persist.dxgi)    dxgi_refs    = g_wf_persist.dxgi->Release();
+    g_wf_persist.factory = nullptr;
+    g_wf_persist.device  = nullptr;
+    g_wf_persist.dxgi    = nullptr;
+    g_wf_persist.valid   = false;
+    fprintf(stderr, "DS4COMBO_WF_PERSIST_SHUTDOWN why=%s ds_factory_refs=%lu d3d12_device_refs=%lu dxgi_refs=%lu\n",
+            why, factory_refs, device_refs, dxgi_refs);
+    fflush(stderr);
+    return 1;
+}
+
 static bool wf_persist_infra_matches(wf_context * wf, size_t buf_size) {
     // A live DiT streamer can coexist with a LoRA/VAE streamer. Its mapping
     // cannot be reused or evicted merely because the second asks for a heap.
@@ -6396,3 +6424,12 @@ bool wf_get_layer_major_mode(wf_context * wf) {
     return wf->layer_major_mode;
 }
 
+
+int wf_persist_shutdown(const char * why) {
+#ifdef WF_HAS_DSTORAGE
+    return wf_persist_shutdown_impl(why ? why : "unspecified");
+#else
+    (void) why;
+    return 1;
+#endif
+}

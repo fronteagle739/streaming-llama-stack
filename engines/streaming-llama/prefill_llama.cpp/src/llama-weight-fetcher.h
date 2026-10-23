@@ -215,6 +215,10 @@ WF_API bool wf_has_failed(const wf_context * wf);
 // Destroy the pipeline, free all resources, join threads.
 WF_API void wf_destroy(wf_context * wf);
 
+// DS4COMBO: release the process-global DirectStorage/D3D12 cache (staging, files,
+// DS factory, D3D12 device). Call only after every wf_context is destroyed. 1 = released.
+WF_API int wf_persist_shutdown(const char * why);
+
 // ---------------------------------------------------------------------------
 // Layer registration
 // ---------------------------------------------------------------------------

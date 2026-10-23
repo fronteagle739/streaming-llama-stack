@@ -340,6 +340,8 @@ bool llama_dsv41_weight_provider::suspend_device(std::string&error){return p->gu
     ggml_backend_synchronize(p->options.backend);
     wf_stop(p->fetcher);wf_quiesce(p->fetcher);require(!wf_has_failed(p->fetcher),"Provider could not quiesce before device suspend");
     wf_destroy(p->fetcher);p->fetcher=nullptr;
+    // Same release as the graceful close: the global DS/D3D12 cache goes too.
+    require(wf_persist_shutdown("keep-alive suspend")==1,"DirectStorage/D3D12 cache could not be released on suspend");
     for(auto&s:p->stages)for(auto&e:s.entries){e.t->data=nullptr;e.t->buffer=nullptr;}
     p->buffers.clear();p->device_suspended=true;
     std::fprintf(stderr,"DS4COMBO_PROVIDER_SUSPENDED buffers=%u compute_buffer_bytes=%llu model_lease_kept=1\n",p->options.buffers,(unsigned long long)p->planned.compute_buffer_bytes);
