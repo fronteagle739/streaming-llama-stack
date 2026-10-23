@@ -11,13 +11,15 @@ from .journal import atomic_json
 
 
 def require_parity(cfg):
-    root=Path(cfg['runtime_root'])
+    root=Path(cfg.get('combo_qualification_root',cfg['runtime_root']))
     native=json.loads((root/'native-parity.json').read_text())
     ultra=json.loads((root/'ultra-parity.json').read_text())
     if native.get('status')!='PASS' or any(native.get(k)!=384 for k in ('roundtrip_byte_exact','rewind_byte_exact')):
         raise ValueError('Mandatory native full-vector parity is incomplete')
     if ultra.get('status')!='PASS' or any(ultra.get(k)!=cfg[k] for k in ('native_sha256','producer_sha256')):
         raise ValueError('Mandatory ULTRA import parity is absent or from different binaries')
+    if ultra.get('identity')!=cfg['combo_identity'] or ultra.get('provider_schema')!=cfg['provider_schema'] or ultra.get('native_prefill_chunk')!=cfg['native_prefill_chunk']:
+        raise ValueError('ULTRA parity identity/provider/workspace profile differs')
     for key in ('comparison','appended_comparison'):
         if ultra.get(key,{}).get('vectors')!=384:raise ValueError('Full and native-base append comparisons are both mandatory')
     return dict(native=native,ultra=ultra)

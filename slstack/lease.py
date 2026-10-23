@@ -46,7 +46,7 @@ def active_holds(text):
     active = {}
     for line in text.splitlines():
         mac=line.startswith('MAC ')
-        if mac and not re.match(r'^MAC (ACTIVE|RELEASED|ENDED):\s+KIT11\s',line):
+        if mac and not re.match(r'^MAC (ACTIVE|RELEASED|ENDED):\s+KIT11[A-Z0-9]*\s',line):
             continue
         match = re.match(r'^(?:MAC )?(ACTIVE|RELEASED|ENDED):\s+(\S+)\s+(\S+)', line)
         if match:

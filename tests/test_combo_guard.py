@@ -19,7 +19,8 @@ class GuardTest(unittest.TestCase):
         self.assertEqual(active_holds(rtx+'\n'+mac),[rtx,mac])
         self.assertEqual(active_holds(rtx+'\n'+mac+'\nMAC RELEASED: KIT11 same; Mac'),[rtx])
         self.assertEqual(active_holds('MAC ACTIVE: OTHER ignored; Mac'),[])
-    def run_cpu(self,foreign=False,pages=0):
+        self.assertEqual(active_holds('MAC ACTIVE: KIT11FIX build; Mac'),['MAC ACTIVE: KIT11FIX build; Mac'])
+    def run_cpu(self,foreign=False,pages=0,dynamic=None):
         root=Path(os.environ['STUDIO_RUNTIME_ROOT']);nonce=uuid.uuid4().hex
         prefix=root/('guard-cpu-'+nonce)
         holds=prefix.with_suffix('.holds')
@@ -29,6 +30,16 @@ class GuardTest(unittest.TestCase):
             owner_pid=os.getpid(),owner_created=psutil.Process().create_time(),stop=str(prefix.with_suffix('.stop')),
             log=str(prefix.with_suffix('.log')),receipt=str(prefix.with_suffix('.json')),paging_telemetry=True,
             gpu_lease_identity=nonce,gpu=dict(hold_file=str(holds)))
+        if dynamic is not None:
+            spec.pop('gpu_lease_identity');spec.pop('gpu')
+            window=prefix.with_suffix('.window.json')
+            spec.update(gpu_window_file=str(window),gpu_run_id=nonce,gpu_hold_file=str(holds))
+            spec['env']['PYTHONPATH']=str(Path(__file__).resolve().parents[1])
+            source=('import os,time,psutil; from slstack.journal import atomic_json; '
+                    'atomic_json('+repr(str(window))+',dict(active='+str(dynamic!='idle')+',run_id='+repr(nonce)+
+                    ',owner_pid=os.getpid(),owner_created=psutil.Process().create_time(),lease_id='+repr(nonce)+
+                    ',deadline=time.time()'+('-1' if dynamic=='expired' else '+60')+')); time.sleep(.3)')
+            spec['command']=[sys.executable,'-B','-c',source]
         calls=0
         def snapshot():
             nonlocal calls
@@ -39,6 +50,17 @@ class GuardTest(unittest.TestCase):
 
     def test_same_owned_hold_does_not_kill_the_cpu_job(self):
         code,proof=self.run_cpu();self.assertEqual(code,0);self.assertIsNone(proof['reason'])
+
+    def test_dynamic_server_window_preempts_on_foreign_hold(self):
+        code,proof=self.run_cpu(foreign=True,dynamic='active');self.assertEqual(code,1)
+        self.assertIn('preempted by foreign ACTIVE hold',proof['reason'])
+
+    def test_idle_server_does_not_claim_or_block_a_gpu_window(self):
+        code,proof=self.run_cpu(foreign=True,dynamic='idle');self.assertEqual(code,0)
+
+    def test_dynamic_server_window_has_independent_deadline(self):
+        code,proof=self.run_cpu(dynamic='expired');self.assertEqual(code,1)
+        self.assertIn('GPU request window exceeded19minutes',proof['reason'])
 
     def test_foreign_hold_stops_only_the_owned_cpu_job(self):
         code,proof=self.run_cpu(foreign=True);self.assertEqual(code,1)

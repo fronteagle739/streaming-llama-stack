@@ -88,6 +88,8 @@ def _supervise(spec):
     paging_warnings = []
     last_paging_sample = 0
     ledger_blocked_since = None
+    active_window = None
+    window_started = None
     with open(spec['log'], 'ab', buffering=0) as log:
         child = subprocess.Popen(spec['command'], cwd=spec['cwd'], env=spec['env'],
                                  stdin=subprocess.PIPE if 'stdin' in spec else subprocess.DEVNULL,
@@ -134,12 +136,32 @@ def _supervise(spec):
                     reason = 'deadline exceeded'
                 if Path(spec['stop']).exists():
                     reason = 'stop requested'
-                if spec.get('gpu_lease_identity'):
+                identity=spec.get('gpu_lease_identity')
+                hold_file=(spec.get('gpu') or {}).get('hold_file')
+                if spec.get('gpu_window_file'):
+                    try:
+                        raw=Path(spec['gpu_window_file']).read_bytes()
+                        if len(raw)>16384:raise ValueError('GPU window metadata exceeded16KiB')
+                        window=json.loads(raw)
+                        if window.get('active'):
+                            if (window.get('run_id')!=spec['gpu_run_id'] or window.get('owner_pid')!=child.pid or
+                                abs(window.get('owner_created',0)-psutil.Process(child.pid).create_time())>.01):
+                                raise ValueError('GPU window process/run identity differs')
+                            identity=window['lease_id'];hold_file=spec['gpu_hold_file']
+                            if active_window!=identity:active_window=identity;window_started=time.monotonic()
+                            if time.time()>=window['deadline'] or time.monotonic()-window_started>=1140:
+                                reason='GPU request window exceeded19minutes'
+                        else:active_window=None;window_started=None
+                    except FileNotFoundError:
+                        if active_window:reason='Active GPU window metadata disappeared'
+                    except (ValueError,KeyError,TypeError,OSError) as exc:
+                        reason='GPU request window metadata refused: '+str(exc)
+                if identity:
                     from .lease import active_holds
                     try:
-                        holds = active_holds(Path(spec['gpu']['hold_file']).read_text(encoding='utf-8-sig'))
+                        holds = active_holds(Path(hold_file).read_text(encoding='utf-8-sig'))
                         foreign = [line for line in holds if len(line.split()) < 3 or
-                                   line.split()[2].rstrip(';') != spec['gpu_lease_identity']]
+                                   line.split()[2].rstrip(';') != identity]
                         ledger_blocked_since = None
                         if foreign:
                             reason = 'preempted by foreign ACTIVE hold: ' + repr(foreign)
@@ -216,7 +238,7 @@ def supervise(spec):
     finally:
         # If this outer guardian killed an inner GPU guardian, its Windows Job is
         # now closed. Release that recorded orphan rather than leaving an ACTIVE hold.
-        recover_leases(spec['runtime_root'], (spec.get('gpu') or {}).get('task', 'DS4STACK'))
+        recover_leases(spec['runtime_root'], (spec.get('gpu') or {}).get('task',spec.get('task','DS4STACK')))
 
 
 if __name__ == '__main__':
