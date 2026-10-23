@@ -1,5 +1,5 @@
 {
-  "status": "ENDPOINT PASS; UI proof pending",
+  "status": "PASS: endpoint effects and actual model-driven UI",
   "date": "2026-10-23",
   "source_revision": "766d6ff8937ef25d375ebdaded4da33897e7fd87",
   "native_source_revision": "5ada2a7bf1ad12aebf4fc749121d49c4da78fb46",
@@ -125,5 +125,6 @@
       }
     }
   },
-  "limits": "Fresh sixteen-token windows prove live effects; they are not controlled speed comparisons. Existing quality benchmarks remain in the guide. Later UI failed on 4096 observed owned paged bytes; shared guard certified teardown. No exhaustive zero-paging claim."
+  "limits": "Fresh sixteen-token windows prove live effects; they are not controlled speed comparisons. Existing quality benchmarks remain in the guide. Later UI failed on 4096 observed owned paged bytes; shared guard certified teardown. No exhaustive zero-paging claim.",
+  "ui_evidence": "UI-RESULTS.json"
 }

@@ -1,0 +1,112 @@
+{
+  "status": "PASS",
+  "date": "2026-10-23",
+  "stack_revision": "27b0765bbaf30be2b4e6e6a6cc04c0e895a93eb5",
+  "native_binary_sha256": "b387d6c84f92e1d7981d08e49e1c041724801d16135af0a05b4233fb10fc5e3c",
+  "method": "Actual model-origin tool calls from the built-in web UI; two separate chats, deterministic sampling,256-token output cap. Measured native monotonic timing, displayed by the unchanged UI statistics component. These sequential observations are not a controlled speed benchmark.",
+  "runs": [
+    {
+      "mode": "max_quality",
+      "model_tool_call": {
+        "name": "set_quality_speed",
+        "arguments": {
+          "value": "max_quality"
+        }
+      },
+      "prompt": "Call set_quality_speed with value \"max_quality\". After the tool succeeds, write a numbered list of the integers 1 through 150 and their squares, one per line, without summarizing.",
+      "answer": "1. 1\u00c2\u00b2 = 1\n2. 2\u00c2\u00b2 = 4\n3. 3\u00c2\u00b2 = 9\n4. 4\u00c2\u00b2 = 16\n5. 5\u00c2\u00b2 = 25\n6. 6\u00c2\u00b2 = 36\n7. 7\u00c2\u00b2 = 49\n8. 8\u00c2\u00b2 = 64\n9. 9\u00c2\u00b2 = 81\n10. 10\u00c2\u00b2 = 100\n11. 11\u00c2\u00b2 = 121\n12. 12\u00c2\u00b2 = 144\n13. 13\u00c2\u00b2 = 169\n14. 14\u00c2\u00b2 = 196\n15. 15\u00c2\u00b2 = 225\n16. 16\u00c2\u00b2 = 256\n17. 17\u00c2\u00b2 = 289\n18. 18\u00c2\u00b2 = 324\n19. 19\u00c2\u00b2 = 361\n20. 20\u00c2\u00b2 = 400\n21. 21\u00c2\u00b2 = 441\n22. 22\u00c2\u00b2 = 484\n23. 23\u00c2\u00b2 = 529\n24. 24\u00c2\u00b2 = 576\n25. 25\u00c2\u00b2 = 625\n26. 26\u00c2\u00b2 = 676\n27. 27\u00c2\u00b2 = 729\n28. 28\u00c2\u00b2 = 784\n29. 29",
+      "timings": {
+        "cache_n": 728,
+        "prompt_n": 254,
+        "prompt_ms": 49239.332,
+        "predicted_n": 256,
+        "predicted_ms": 43417.5819
+      },
+      "observed_tokens_per_second": 5.896228873123863,
+      "requested_value_after_answer": 0
+    },
+    {
+      "mode": "max_speed",
+      "model_tool_call": {
+        "name": "set_quality_speed",
+        "arguments": {
+          "value": "max_speed"
+        }
+      },
+      "prompt": "Call set_quality_speed with value \"max_speed\". After the tool succeeds, write a numbered list of the integers 1 through 150 and their squares, one per line, without summarizing.",
+      "answer": "1. 1\u00c2\u00b2 = 1\n2. 2\u00c2\u00b2 = 4\n3. 3\u00c2\u00b2 = 9\n4. 4\u00c2\u00b2 = 16\n5. 5\u00c2\u00b2 = 25\n6. 6\u00c2\u00b2 = 36\n7. 7\u00c2\u00b2 = 49\n8. 8\u00c2\u00b2 = 64\n9. 9\u00c2\u00b2 = 81\n10. 10\u00c2\u00b2 = 100\n11. 11\u00c2\u00b2 = 121\n12. 12\u00c2\u00b2 = 144\n13. 13\u00c2\u00b2 = 169\n14. 14\u00c2\u00b2 = 196\n15. 15\u00c2\u00b2 = 225\n16. 16\u00c2\u00b2 = 256\n17. 17\u00c2\u00b2 = 289\n18. 18\u00c2\u00b2 = 324\n19. 19\u00c2\u00b2 = 361\n20. 20\u00c2\u00b2 = 400\n21. 21\u00c2\u00b2 = 441\n22. 22\u00c2\u00b2 = 484\n23. 23\u00c2\u00b2 = 529\n24. 24\u00c2\u00b2 = 576\n25. 25\u00c2\u00b2 = 625\n26. 26\u00c2\u00b2 = 676\n27. 27\u00c2\u00b2 = 729\n28. 28\u00c2\u00b2 = 784\n29. 29",
+      "timings": {
+        "cache_n": 728,
+        "prompt_n": 257,
+        "prompt_ms": 51664.879,
+        "predicted_n": 256,
+        "predicted_ms": 25635.2956
+      },
+      "observed_tokens_per_second": 9.986231639162373,
+      "requested_value_after_answer": 1.36125
+    }
+  ],
+  "screenshots": [
+    {
+      "file": "webui-max_quality-desktop.png",
+      "sha256": "a1249284e078417573ec7ce22213020f3ffcfa1aa42af09283736bb896437ee8",
+      "viewport": [
+        1280,
+        960
+      ]
+    },
+    {
+      "file": "webui-max_quality-phone.png",
+      "sha256": "89d294d8e5b138a679f666a9f77eb6466b1740f29b26b2dafd3163f36484e554",
+      "viewport": [
+        390,
+        844
+      ]
+    },
+    {
+      "file": "webui-max_speed-desktop.png",
+      "sha256": "dd23367ad0dd8fa186ee937bc1b25472f36dd5aa2d3a3ee46d937a86edbad054",
+      "viewport": [
+        1280,
+        960
+      ]
+    },
+    {
+      "file": "webui-max_speed-phone.png",
+      "sha256": "dc2ba3078e6581eceffc7ef5234042e64089d8355154713795400fa8e26e36a5",
+      "viewport": [
+        390,
+        844
+      ]
+    }
+  ],
+  "visual_review": "Desktop and phone statistics are legible and use the existing llama.cpp layout and components.",
+  "engine": {
+    "exit_code": 0,
+    "reason": null,
+    "elapsed_s": 477.7179999999935,
+    "peak_tree_rss": 1269354496,
+    "min_available": 8386789376,
+    "host_budget_gib": 1.75,
+    "floor_gib": 4,
+    "job_commit_gib": 48.0,
+    "shared_guard_commit": "91986e7dcd61a67d50d2dc32f1fb5373319635f6",
+    "cleanup_confirmed": true,
+    "owned_paging": {
+      "attribution": "bounded process pagefile observation",
+      "observed_paged_bytes": 0,
+      "observed_processes": [],
+      "scanned_pages": 25954044,
+      "completed_scans": 1866
+    },
+    "system_pagefile_pressure": {
+      "maximum_growth_bytes": 0,
+      "kill_above_bytes": 256000000,
+      "scope": "global; not process attribution"
+    },
+    "paging_interpretation": "Owned observation is bounded and incremental. Zero observed pages is not an exhaustive zero-I/O proof. Darwin disk-only process attribution is unavailable."
+  },
+  "live_window_seconds": 490.7029999999795,
+  "runtime_module_audits": 445,
+  "original_evidence_sha256": "286cb83273e604c66262790d47c41707357bd20172fdcc78978c9b743a1a59e7"
+}
