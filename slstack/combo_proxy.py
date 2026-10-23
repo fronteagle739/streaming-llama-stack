@@ -83,6 +83,10 @@ class Proxy:
         elif self.session is not None and args is not None:self.session.quality(self.pending)
         result=deepcopy(self.observed)
         result.update(decoder_running=native_running,cached=not native_running)
+        if not native_running:
+            phases=deepcopy(self.pending) if isinstance(self.pending,dict) else None
+            result.update(value=phases['answer'] if phases else self.pending,
+                          phases=phases,per_phase=phases is not None)
         if args is not None or not result.get('decoder_running'):
             result.update(requested_value=self.pending,deferred=not native_running,
                           applied=native_running,scope='current native decoder or next decode in this cached conversation')
