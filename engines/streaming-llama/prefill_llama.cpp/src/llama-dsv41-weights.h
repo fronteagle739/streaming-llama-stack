@@ -38,6 +38,10 @@ public:
         // Whole-prompt original row264 cache on its own IoRing. Zero is off.
         uint64_t engram_prefetch_host_bytes=0;
         uint32_t engram_prefetch_tokens=0;
+        // No-warm-up start: the early Engram cache is built for the very request
+        // that runs next on this provider, which adopts it instead of building
+        // its own, so only one prompt cache is ever alive.
+        bool engram_early_is_next_request=false;
         bool zero_padding_only=false;
         uint32_t ds_submit_threads=0;
         uint32_t ds_gpu_ring_slots=0;

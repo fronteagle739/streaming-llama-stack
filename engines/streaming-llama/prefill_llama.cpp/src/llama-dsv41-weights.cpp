@@ -429,7 +429,7 @@ bool llama_dsv41_weight_provider::start_engram_prompt_early(const std::vector<in
     // Both caches may be alive at once: the current pass's own rows and the
     // early request's. Charge both worst cases against the one admission.
     const uint64_t worst=add(4*mib,uint64_t(tokens.size())*48*(4+264));
-    const uint64_t current=add(4*mib,uint64_t(p->options.engram_prefetch_tokens)*48*(4+264));
+    const uint64_t current=p->options.engram_early_is_next_request?0:add(4*mib,uint64_t(p->options.engram_prefetch_tokens)*48*(4+264));
     if(add(worst,current)>p->options.engram_prefetch_host_bytes){
         // Not admitted alongside the current pass: the request keeps its
         // ordinary layer-zero overlapped load. Visible, never silent.
