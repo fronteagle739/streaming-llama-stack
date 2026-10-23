@@ -891,7 +891,9 @@ int wmain(int argc,wchar_t**argv){
         report["residency_limit"]="Free-memory admission and allocation ceilings do not independently prove physicalVRAM residency under WDDM";
         const auto text=report.dump(2)+"\n";require(text.size()<=receipt_limit,"Producer receipt exceeds its bounded admission");receipt->write(text.data(),text.size());receipt->flush();stop();
         receipt->publish(final_receipt);
-        if(live){run_live_session(sweep,weights,options,session,session_timeout,reserved_chunk,session_output.get(),session_owner_epoch);return 0;}
+        // DS4COMBO fast switch: release the published receipt handle (write+delete
+        // access) so readers can open it while a kept-alive session continues.
+        if(live){receipt.reset();run_live_session(sweep,weights,options,session,session_timeout,reserved_chunk,session_output.get(),session_owner_epoch);return 0;}
         std::fputs(hash_only?"Canonical native frontier hashed; receipt complete; no payload file created.\n":"Offline native payload and receipt completed; receiver/parity qualification remains pending.\n",stdout);return 0;
     }catch(const std::exception&failure){
         if(sweep)sweep->cancel();report["status"]=interrupted.load()?"cancelled":"failed";report["error"]=failure.what();report["memory_floor_abort"]=memory_abort.load();
