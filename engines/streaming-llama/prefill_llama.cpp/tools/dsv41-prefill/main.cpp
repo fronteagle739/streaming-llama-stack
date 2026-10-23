@@ -11,6 +11,7 @@ extern "C" uint64_t ggml_backend_cuda_dsv41_pv_view_queued(void);
 #include "ggml-dsv41-carry-copy.h"
 #include "ggml-ds4-native-half-stats.h"
 #include "llama-dsv41-sweep.h"
+#include "llama-weight-fetcher.h"
 #include "llama-dsv41-host-memory.h"
 #include "llama-dsv41-native-columns-resource-proof.h"
 #include "llama-dsv41-native-loader-resource-proof.h"
@@ -897,8 +898,8 @@ int wmain(int argc,wchar_t**argv){
             // DS4COMBO graceful exit: the owner sent "close". Release the sweep (DS queues and heaps,
             // imported D3D12 buffers, locked carry RAM, ggml device memory) explicitly and log it,
             // instead of relying on Job termination and driver rundown.
-            const auto teardown=clock_type::now();sweep.reset();payload.reset();
-            std::fprintf(stderr,"DS4COMBO_PRODUCER_GRACEFUL_SHUTDOWN_COMPLETE sweep_release_ms=%.1f\n",ms(teardown));std::fflush(stderr);return 0;}
+            const auto teardown=clock_type::now();sweep.reset();payload.reset();const int persist_released=wf_persist_shutdown("graceful close");
+            std::fprintf(stderr,"DS4COMBO_PRODUCER_GRACEFUL_SHUTDOWN_COMPLETE sweep_release_ms=%.1f wf_persist_released=%d\n",ms(teardown),persist_released);std::fflush(stderr);return persist_released==1?0:3;}
         std::fputs(hash_only?"Canonical native frontier hashed; receipt complete; no payload file created.\n":"Offline native payload and receipt completed; receiver/parity qualification remains pending.\n",stdout);return 0;
     }catch(const std::exception&failure){
         if(sweep)sweep->cancel();report["status"]=interrupted.load()?"cancelled":"failed";report["error"]=failure.what();report["memory_floor_abort"]=memory_abort.load();
