@@ -893,7 +893,13 @@ int wmain(int argc,wchar_t**argv){
         receipt->publish(final_receipt);
         // DS4COMBO fast switch: release the published receipt handle (write+delete
         // access) so readers can open it while a kept-alive session continues.
-        if(live){receipt.reset();run_live_session(sweep,weights,options,session,session_timeout,reserved_chunk,session_output.get(),session_owner_epoch);return 0;}
+        if(live){receipt.reset();run_live_session(sweep,weights,options,session,session_timeout,reserved_chunk,session_output.get(),session_owner_epoch);
+            // DS4COMBO graceful exit: the owner sent "close". Release the sweep (DS queues and heaps,
+            // imported D3D12 buffers, locked carry RAM, ggml device memory) explicitly and log it,
+            // instead of relying on Job termination and driver rundown.
+            const auto teardown=clock_type::now();sweep.reset();payload.reset();
+            std::fprintf(stderr,"DS4COMBO_PRODUCER_GRACEFUL_SHUTDOWN_COMPLETE sweep_release_ms=%.1f
+",ms(teardown));std::fflush(stderr);return 0;}
         std::fputs(hash_only?"Canonical native frontier hashed; receipt complete; no payload file created.\n":"Offline native payload and receipt completed; receiver/parity qualification remains pending.\n",stdout);return 0;
     }catch(const std::exception&failure){
         if(sweep)sweep->cancel();report["status"]=interrupted.load()?"cancelled":"failed";report["error"]=failure.what();report["memory_floor_abort"]=memory_abort.load();

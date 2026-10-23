@@ -2002,8 +2002,19 @@ extern "C" int ds4_ds_selftest(int fd, uint64_t start_offset, uint64_t span_byte
 
 extern "C" void ds4_ds_shutdown(void) {
     release_all();
+    /* Any surviving prefill arena holds a reference on the D3D12 device, so
+     * release waves and arenas before the decode arena and the device. */
+    ds4_ds_prefill_waves_release();
+    std::vector<ds4_ds_prefill_wave>().swap(g_prefill_waves);
+    prefill_arenas_release();
     gpu_arena_release();
-    if (g_d3d_device) { g_d3d_device->Release(); g_d3d_device = NULL; }
+    if (g_d3d_device) {
+        const ULONG refs = g_d3d_device->Release();
+        g_d3d_device = NULL;
+        fprintf(stderr, "DS4COMBO_DS_SHUTDOWN d3d12_device_refcount_after_release=%lu\n",
+                (unsigned long)refs);
+        fflush(stderr);
+    }
     if (g_dll) { FreeLibrary(g_dll); g_dll = NULL; }
     g_init_attempted = 0;
 }

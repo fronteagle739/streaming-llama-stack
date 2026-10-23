@@ -17649,7 +17649,9 @@ int main(int argc, char **argv) {
     while (s.clients > 0) pthread_cond_wait(&s.clients_cv, &s.mu);
     pthread_mutex_unlock(&s.mu);
 
-    for (int i = 0; s.kv.enabled && !s.peer_decode_enabled && i < s.slot_count; i++) {
+    /* A combo graceful shutdown has already exported its state to the owner;
+     * it must not also write the KV disk cache on the way out. */
+    for (int i = 0; !ds4_combo_shutdown_requested && s.kv.enabled && !s.peer_decode_enabled && i < s.slot_count; i++) {
         server_slot *slot = &s.slots[i];
         const ds4_tokens *tokens = ds4_session_tokens(slot->session);
         if (!tokens || tokens->len < s.kv.opt.min_tokens) continue;
@@ -17662,12 +17664,14 @@ int main(int argc, char **argv) {
         const bool graceful = ds4_combo_shutdown_requested;
         const double t0 = now_sec_for_combo_shutdown();
         server_close_resources(&s);
+        const double t1 = now_sec_for_combo_shutdown();
 #if defined(_WIN32) && !defined(DS4_NO_GPU)
         if (graceful) ds4_ds_shutdown();
 #endif
         if (graceful) {
-            fprintf(stderr, "DS4COMBO_NATIVE_GRACEFUL_SHUTDOWN_COMPLETE engine_and_ds_ms=%.1f ds_shutdown=1\n",
-                    (now_sec_for_combo_shutdown() - t0) * 1000.0);
+            const double t2 = now_sec_for_combo_shutdown();
+            fprintf(stderr, "DS4COMBO_NATIVE_GRACEFUL_SHUTDOWN_COMPLETE engine_ms=%.1f ds_ms=%.1f engine_and_ds_ms=%.1f ds_shutdown=1\n",
+                    (t1 - t0) * 1000.0, (t2 - t1) * 1000.0, (t2 - t0) * 1000.0);
             fflush(stderr);
         }
     }

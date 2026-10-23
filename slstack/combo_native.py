@@ -193,18 +193,30 @@ class Native:
         # ask the engine to drain DirectStorage and free its GPU/host memory
         # and return from main; the Job terminate below is then only a fallback.
         self.shutdown_path='terminate'
+        exited=None
         if self.cfg.get('native_graceful_shutdown') and self.process.job is not None and self.process.job.poll() is None:
             started=time.monotonic()
             try:
                 self.control('shutdown')
-                deadline=started+float(self.cfg.get('native_graceful_shutdown_seconds',30))
-                while self.process.job.poll() is None and time.monotonic()<deadline:time.sleep(0.05)
-                self.shutdown_path='graceful' if self.process.job.poll() is not None else 'graceful-timeout-terminate'
+                # The budget starts once the reply has arrived.
+                deadline=time.monotonic()+float(self.cfg.get('native_graceful_shutdown_seconds',30))
+                while (exited:=self.process.job.poll()) is None and time.monotonic()<deadline:time.sleep(0.05)
+                self.shutdown_path='graceful-pending' if exited is not None else 'graceful-timeout-terminate'
             except BaseException as exc:
                 self.shutdown_path='graceful-failed-terminate: '+repr(exc)[:200]
             self.shutdown_seconds=time.monotonic()-started
         proof=self.process.close()
-        proof=dict(proof,native_shutdown_path=self.shutdown_path,native_shutdown_seconds=getattr(self,'shutdown_seconds',0.0))
+        if self.shutdown_path=='graceful-pending':
+            # Exiting before the deadline is not enough: a crash in teardown
+            # (DirectStorage drain abort, cudaFree fault, ...) also exits. Only a
+            # zero exit code with the completion line on stderr (read after
+            # close, so it has flushed) counts as graceful.
+            done=re.search(rb'DS4COMBO_NATIVE_GRACEFUL_SHUTDOWN_COMPLETE [^\r\n]*',bytes(self.process.diagnostic or b''))
+            self.shutdown_path='graceful' if exited==0 and done else 'graceful-crashed exit='+str(exited)
+            if done:self.shutdown_detail=done.group(0).decode(errors='replace')
+        if self.shutdown_path!='graceful' and self.cfg.get('native_graceful_shutdown'):
+            print('DS4COMBO native shutdown fell back: '+self.shutdown_path,flush=True)
+        proof=dict(proof,native_shutdown_path=self.shutdown_path,native_shutdown_seconds=getattr(self,"shutdown_seconds",0.0),native_shutdown_detail=getattr(self,"shutdown_detail",None))
         if not all(proof.get(key) for key in ('owned_job_empty','owned_process_signaled','owned_pid_gone')):
             raise RuntimeError('Native GPU owner retirement unconfirmed; handoff refused')
         self.receipt=proof;self.closed=True
