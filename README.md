@@ -17,7 +17,7 @@ The intended six-step walkthrough is:
 
 Steps 4-6 are not yet qualified for this revision. Do not treat this draft as a completed acceptance transcript.
 
-Commands currently implemented include `install`, `check`, `start` (local `rtx` alias), `mcp`, `train_lora`, `merge_lora`, `unmerge_lora`, and `run_prompts`. Native DSV4.1 dense-output LoRA attachment passed the real 1017 Jeff test, including held-out, rainbow, on/off, full-base-hash, clean-detach and deliberate-crash recovery checks; see [the recipe and card](examples/train_jeff_lora/README.md). The one-GPU Windows state handoff remains refused until its parity gate passes.
+Commands currently implemented include `install`, `check`, `start` (local `rtx` alias), `mcp`, `train_lora`, `merge_lora`, `unmerge_lora`, and `run_prompts`. Native DSV4.1 dense-output LoRA attachment passed the real 1017 Jeff test, including held-out, rainbow, full-base-hash, clean-detach and deliberate-crash recovery checks; see [the recipe and card](examples/train_jeff_lora/README.md). The LoRA-off comparison was skipped per owner instruction. The one-GPU Windows state handoff remains refused until its parity gate passes.
 
 Media uses the existing Studio implementations in an isolated venv. The native weight-fetcher shared library must also be built. H3's optional `flash_attn2` backend requires a separately compatible flash-attn installation; explicit SDPA selection is supported by the reused engine. No silent backend substitution is performed.
 
