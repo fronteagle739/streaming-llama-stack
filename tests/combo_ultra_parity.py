@@ -15,12 +15,26 @@ from slstack.journal import atomic_json
 from slstack.native_broker import vendor
 
 
+def qualification_identity(prior=None):
+    # The full reference-bank hash includes its owner epoch in the32-byte
+    # header. A resumed qualification must retain the interrupted request's
+    # identity; generating a new epoch makes identical vectors hash differently.
+    if prior is None:return secrets.token_hex(16),secrets.randbits(63) or 1
+    session,epoch=prior['session'],prior['owner_epoch']
+    if (type(session) is not str or len(session)!=32 or
+        any(c not in '0123456789abcdef' for c in session) or
+        type(epoch) is not int or not 0<epoch<(1<<63)):
+        raise ValueError('Retained qualification owner identity is invalid')
+    return session,epoch
+
+
 def main(config_path,output,resume_full=None):
     cfg=json.loads(Path(config_path).read_text());vendor()
     from studio.dsv41_windows_runner import _Native
     os.environ['CUDA_VISIBLE_DEVICES']=cfg['gpu_uuid'];os.environ['CUDA_DEVICE_ORDER']='PCI_BUS_ID'
     device=_Native();baseline=device.gpu(0,cfg['gpu_uuid'])
-    session=secrets.token_hex(16);epoch=secrets.randbits(63) or 1;cancel=threading.Event()
+    prior=json.loads(Path(resume_full).read_text()) if resume_full else None
+    session,epoch=qualification_identity(prior);cancel=threading.Event()
     childcfg=dict(cfg,host_budget_gib=cfg['native_host_budget_gib'])
     proof=dict(status='RUNNING',session=session,owner_epoch=epoch,releases=[],
                native_sha256=cfg['native_sha256'],producer_sha256=cfg['producer_sha256'],
@@ -66,7 +80,6 @@ def main(config_path,output,resume_full=None):
         # The in-RAM reference is regenerated; its complete bank must match.
         if resume_full:
             from slstack.journal import sha256
-            prior=json.loads(Path(resume_full).read_text())
             binding=json.loads(Path(cfg['combo_core_binding']).read_text())
             if (binding['status']!='PASS' or binding['old_native_sha256']!=prior['native_sha256'] or
                 binding['native_sha256']!=cfg['native_sha256'] or
