@@ -8,6 +8,7 @@ from __future__ import annotations
 
 import argparse
 import dataclasses
+import hashlib
 import json
 import math
 import os
@@ -18,6 +19,7 @@ import subprocess
 import sys
 import threading
 import time
+import traceback
 
 import psutil
 
@@ -56,6 +58,7 @@ class OwnedProcesses:
             raise TypeError('ownership requires the Popen handle returned by our launch')
         root = psutil.Process(child.pid)
         self.identities = {child.pid: ProcessIdentity.read(root)}
+        self.retired_identities = []
 
     def refresh(self):
         pending = list(self.identities.values())
@@ -71,14 +74,22 @@ class OwnedProcesses:
             try:
                 for process in parent.children():
                     candidate = ProcessIdentity.read(process)
-                    if process.ppid() != parent.pid or identity.process() is None:
+                    child = candidate.process()
+                    if (child is None or child.ppid() != parent.pid
+                            or candidate.created < identity.created
+                            or identity.process() is None or candidate.process() is None):
                         continue
                     previous = self.identities.get(candidate.pid)
                     if previous is not None and not previous.same_process(candidate):
-                        raise RuntimeError('owned PID was reused; refusing to adopt its replacement')
+                        # A stale PID alone never grants ownership. This new birth
+                        # was independently discovered under a still-owned parent
+                        # and revalidated above, so ordinary child churn is safe.
+                        # Retain the old birth in the receipt instead of cancelling
+                        # a healthy job when Windows recycles a short-lived PID.
+                        self.retired_identities.append(previous)
                     self.identities[candidate.pid] = candidate
                     pending.append(candidate)
-                    if len(self.identities) > 256:
+                    if len(self.identities) + len(self.retired_identities) > 256:
                         raise RuntimeError('owned process bound exceeded')
             except psutil.NoSuchProcess:
                 continue
@@ -127,7 +138,8 @@ class OwnedProcesses:
             time.sleep(.02)
         survivors = [process.pid for process in live()]
         return {'confirmed': not survivors and not errors, 'surviving_owned_pids': survivors,
-                'errors': list(dict.fromkeys(errors)), 'identities': [dataclasses.asdict(x) for x in self.identities.values()]}
+                'errors': list(dict.fromkeys(errors)), 'identities': [dataclasses.asdict(x) for x in self.identities.values()],
+                'retired_identities': [dataclasses.asdict(x) for x in getattr(self, 'retired_identities', [])]}
 
 
 def priority_holds(text, owners, *, resource='RTX', own_lease=''):
@@ -269,7 +281,7 @@ sys.exit(rc)
 class GuardedJob:
     def __init__(self, *, rss_limit, commit_limit, floor, seconds, receipt,
                  ledger=None, priority_owners=(), resource='RTX', own_lease='',
-                 poll=.1, watcher=None, device_commit_allowance=0):
+                 poll=.1, watcher=None, device_commit_allowance=0, owned_paging_limit=None):
         values = (rss_limit, commit_limit, floor, seconds, poll)
         if any(not math.isfinite(x) or x <= 0 for x in values) or seconds > 1140 or poll > 1:
             raise ValueError('positive finite limits required; lease <=1140s; poll <=1s')
@@ -288,7 +300,9 @@ class GuardedJob:
         if priority_owners and self.ledger is None:
             raise ValueError('priority owners require an explicit ledger')
         self.priority_owners, self.resource, self.own_lease = priority_owners, resource, own_lease
-        self.watcher = watcher or PagingWatch(paging_bytes)
+        if watcher is not None and owned_paging_limit is not None:
+            raise ValueError('set the owned paging allowance on an explicitly supplied watcher')
+        self.watcher = watcher or PagingWatch(paging_bytes, owned_paging_limit=owned_paging_limit)
         self.cancelled = threading.Event()
         self.finished = threading.Event()
         self.child = self.owned = self.monitor = self.kernel_job = None
@@ -383,6 +397,7 @@ class GuardedJob:
                 self.finished.wait(self.poll)
         except BaseException as error:
             self.failure = repr(error)
+            self.record['monitor_failure_traceback']=traceback.format_exc()
             self.cancelled.set()
             self.record['cleanup'] = self._stop()
 
@@ -513,6 +528,68 @@ class GuardedJob:
         self.receipt.write_text(json.dumps(self.record, indent=2))
 
 
+def publish_success(manifest,job):
+    """Commit point: one no-overwrite link, after owned success and all checks.
+
+    Worker interruption leaves only hidden candidates. Every potentially long
+    read/hash happens before the commit and checks the original lease and RAM
+    budget. After the final deadline check, link admission is the acceptance
+    point; no post-publication hashing/writing can turn acceptance into timeout.
+    """
+    def read_json(path):
+        with Path(path).open('rb') as stream:data=stream.read(65537)
+        if len(data)>65536:raise RuntimeError('publication metadata exceeds 64 KiB')
+        return json.loads(data)
+    spec=read_json(manifest)
+    if spec.get('schema')!='guarded-file-publication-v1':raise RuntimeError('unknown publication schema')
+    deadline=min(job.deadline,float(spec['deadline_monotonic']))
+    if not math.isfinite(deadline):raise RuntimeError('invalid publication deadline')
+    def check():
+        job._priority()
+        if time.monotonic()>=deadline:raise TimeoutError('total operation deadline exceeded before publication')
+        if hasattr(job,'rss_limit'):
+            process=psutil.Process();rss=process.memory_info().rss
+            if (rss>job.rss_limit or charged_memory(process)>job.host_commit_limit
+                or psutil.virtual_memory().available<job.floor):
+                raise RuntimeError('publication supervisor RAM budget/floor exceeded')
+    check()
+    if Path(spec['guard_receipt']).resolve()!=job.receipt.resolve():
+        raise RuntimeError('publication belongs to another operation guard')
+    proof=read_json(job.receipt)
+    if (job.failure or proof.get('status')!='PASS' or proof.get('command_exit_code')!=0 or
+        not proof.get('release_allowed') or not proof.get('cleanup',{}).get('confirmed')):
+        raise RuntimeError('publication requires successful guard outcome and confirmed owned exit')
+    source=Path(spec['source']);destination=Path(spec['destination'])
+    if (not source.is_absolute() or not destination.is_absolute() or source.is_symlink() or
+        source.resolve().parent!=destination.resolve().parent or source==destination):
+        raise RuntimeError('publication needs an absolute regular sibling candidate')
+    if destination.exists():raise FileExistsError('immutable qualification already exists')
+    files=spec['files']
+    if not isinstance(files,dict) or not 1<=len(files)<=256 or str(source) not in files:
+        raise RuntimeError('bounded publication input pins required')
+    for name,expected in files.items():
+        if re.fullmatch('[0-9a-f]{64}',str(expected)) is None:raise RuntimeError('invalid publication hash')
+        path=Path(name)
+        if not path.is_absolute() or path.is_symlink():raise RuntimeError('regular absolute publication input required')
+        digest=hashlib.sha256()
+        with path.open('rb') as stream:
+            while block:=stream.read(1024*1024):
+                check();digest.update(block)
+        if digest.hexdigest()!=expected:raise RuntimeError('publication input hash differs: '+name)
+        check()
+    check()
+    job._publication_pair=(source,destination)
+    os.link(source,destination)  # final acceptance; atomic, no overwrite, no later fallible work
+
+
+def _publication_committed(job):
+    pair=getattr(job,'_publication_pair',None)
+    if pair:
+        try:return os.path.samefile(*pair)
+        except FileNotFoundError:pass
+    return False
+
+
 def main(argv=None):
     parser = argparse.ArgumentParser(description=__doc__)
     parser.add_argument('--rss-gb', type=float, required=True)
@@ -526,6 +603,7 @@ def main(argv=None):
     parser.add_argument('--priority-owner', action='append', default=[])
     parser.add_argument('--resource', choices=['RTX', 'MAC'], default='RTX')
     parser.add_argument('--own-lease', default='')
+    parser.add_argument('--success-publication',help='Staged artifact manifest to commit only after successful owned exit')
     parser.add_argument('command', nargs=argparse.REMAINDER)
     args = parser.parse_args(argv)
     command = args.command[1:] if args.command[:1] == ['--'] else args.command
@@ -545,8 +623,15 @@ def main(argv=None):
             resource=args.resource, own_lease=args.own_lease,
             device_commit_allowance=args.device_commit_gb*1e9)
         job.start(command)
-        return job.wait()
+        code=job.wait()
+        if code==0 and args.success_publication:
+            publish_success(args.success_publication,job)
+            job=None  # accepted operation: retain the completed guard certificate
+        return code
     except BaseException as error:
+        if job and _publication_committed(job):
+            job=None  # interruption after the atomic acceptance point is completion
+            return 0
         if job:
             job.failure = job.failure or repr(error)
             job.cancelled.set()
