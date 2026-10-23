@@ -42838,6 +42838,7 @@ typedef struct {
     /* DS4COMBO growable context: 0 = fixed full-ctx buffers; otherwise the
      * context-dependent buffers are VMM ranges backed up to grow_tokens. */
     uint32_t grow_step, grow_tokens;
+    bool grow_counted;              /* unmapped bytes are in g_ds41_ctxgrow.unmapped */
     uint64_t state_generation;      /* invalidate controller evidence on prefix replacement */
     uint64_t allocation_bytes;
     bool valid, streaming, encoder_resident, compact_carry, prefill_alias, quality;
@@ -42926,8 +42927,10 @@ static uint64_t ds41_graph_free_prefill_workspace(ds41_gpu_graph *g) {
     return bytes;
 }
 
+static void ds41_ctxgrow_account(ds41_gpu_graph *g, bool add);
 static void ds41_graph_free(ds41_gpu_graph *g) {
     if (!g) return;
+    ds41_ctxgrow_account(g, false);
     ds41_engram_carry_drop(g);
     free(g->engram_carry.ids);
     free(g->engram_prefetch_host);
@@ -43019,9 +43022,17 @@ static ds4_context_memory ds41_graph_memory(uint32_t ctx) {
 #define DS41_CTX_GROW_CUDA 1
 #endif
 
+/* The VRAM expert tier ceiling is the fixed full-ctx plan's tier plus every
+ * context byte this process has NOT mapped:
+ *     ceiling = min(expert_base, fixed_floor + unmapped)
+ * so (mapped context + tier) never exceeds the fixed build's (full context +
+ * tier), a step is paid first from headroom the tier never claimed, and the
+ * tier can never drop below the fixed plan (fixed_floor) at any context. */
 static struct {
     bool streaming;         /* the VRAM expert tier exists and pays for growth */
     uint64_t expert_base;   /* tier bytes planned with the first step mapped */
+    uint64_t fixed_floor;   /* tier bytes the fixed full-ctx plan fits */
+    uint64_t unmapped;      /* sum over graphs of (full-ctx cost - mapped cost) */
     uint64_t ceiling;       /* current tier ceiling */
 } g_ds41_ctxgrow;
 
@@ -43151,6 +43162,22 @@ static uint64_t ds41_graph_initial_bytes(uint32_t ctx) {
     return full - all + first;
 }
 
+static uint64_t ds41_ctxgrow_ceiling(uint64_t unmapped) {
+    uint64_t c = g_ds41_ctxgrow.fixed_floor + unmapped;
+    return c > g_ds41_ctxgrow.expert_base ? g_ds41_ctxgrow.expert_base : c;
+}
+
+/* A graph's unmapped context counts as tier headroom while it lives. */
+static void ds41_ctxgrow_account(ds41_gpu_graph *g, bool add) {
+    if (!g->grow_step || !g->compressed[0] || g->grow_counted == add) return;
+    g->grow_counted = add;
+    const uint64_t full = ds41_grow_visit(g, g->ctx, DS41_GROW_COST, NULL);
+    const uint64_t now = ds41_grow_visit(g, g->grow_tokens, DS41_GROW_COST, NULL);
+    const uint64_t d = full > now ? full - now : 0;
+    if (add) g_ds41_ctxgrow.unmapped += d;
+    else g_ds41_ctxgrow.unmapped = g_ds41_ctxgrow.unmapped > d ? g_ds41_ctxgrow.unmapped - d : 0;
+}
+
 static void ds41_ctx_resize_log(const ds41_gpu_graph *g, uint32_t need, const char *reason) {
 #ifdef DS41_CTX_GROW_CUDA
     fprintf(stderr, "DS4COMBO_CTX_RESIZE ctx_tokens=%u mapped_tokens=%u buffer_bytes=%llu "
@@ -43184,16 +43211,21 @@ static bool ds41_ctx_resize(ds41_gpu_graph *g, uint32_t need, bool allow_shrink)
     const uint64_t before = ds41_grow_visit(g, g->grow_tokens, DS41_GROW_COST, NULL);
     const uint64_t after = ds41_grow_visit(g, T, DS41_GROW_COST, NULL);
     uint32_t evicted = 0, demoted = 0;
+    const uint64_t unmapped_after = g_ds41_ctxgrow.unmapped + before > after ?
+        g_ds41_ctxgrow.unmapped + before - after : 0;
     if (after > before && g_ds41_ctxgrow.streaming) {
-        const uint64_t held = ds4_gpu_stream_expert_cache_held_bytes();
-        const uint64_t cur = held && held < g_ds41_ctxgrow.ceiling ? held : g_ds41_ctxgrow.ceiling;
-        const uint64_t delta = after - before;
-        g_ds41_ctxgrow.ceiling = cur > delta ? cur - delta : 0;
-        if (!ds4_gpu_stream_expert_cache_set_ceiling(g_ds41_ctxgrow.ceiling, &evicted, &demoted)) {
-            fprintf(stderr, "DS4COMBO_CTX_RESIZE_FAILED ctx_tokens=%u mapped_tokens=%u need_bytes=%llu "
-                            "reason=VRAM expert tier could not release memory\n",
-                    need, T, (unsigned long long)delta);
-            return false;
+        /* Evict only what the tier holds above its new ceiling; the rest of
+         * the step comes from headroom the tier never took (e.g. the live
+         * free-VRAM reserve already kept it below the ceiling). */
+        const uint64_t c = ds41_ctxgrow_ceiling(unmapped_after);
+        if (c < g_ds41_ctxgrow.ceiling) {
+            g_ds41_ctxgrow.ceiling = c;
+            if (!ds4_gpu_stream_expert_cache_set_ceiling(c, &evicted, &demoted)) {
+                fprintf(stderr, "DS4COMBO_CTX_RESIZE_FAILED ctx_tokens=%u mapped_tokens=%u need_bytes=%llu "
+                                "reason=VRAM expert tier could not release memory\n",
+                        need, T, (unsigned long long)(after - before));
+                return false;
+            }
         }
     }
     bool ok = true;
@@ -43208,15 +43240,17 @@ static bool ds41_ctx_resize(ds41_gpu_graph *g, uint32_t need, bool allow_shrink)
         return false;
     }
     g->grow_tokens = T;
+    g_ds41_ctxgrow.unmapped = unmapped_after;
     if (after < before && g_ds41_ctxgrow.streaming) {
-        uint64_t c = g_ds41_ctxgrow.ceiling + (before - after);
-        if (c > g_ds41_ctxgrow.expert_base) c = g_ds41_ctxgrow.expert_base;
-        g_ds41_ctxgrow.ceiling = c;
-        (void)ds4_gpu_stream_expert_cache_set_ceiling(c, NULL, NULL);
+        g_ds41_ctxgrow.ceiling = ds41_ctxgrow_ceiling(unmapped_after);
+        (void)ds4_gpu_stream_expert_cache_set_ceiling(g_ds41_ctxgrow.ceiling, NULL, NULL);
     }
-    if (evicted)
-        fprintf(stderr, "ds4: context step took %llu bytes from the VRAM expert tier: %u experts evicted, %u demoted to host\n",
-                (unsigned long long)(after - before), evicted, demoted);
+    if (after > before)
+        fprintf(stderr, "ds4: context step mapped %llu bytes: %u VRAM experts evicted (%u demoted to host), "
+                        "tier ceiling %.2f GiB, fixed-plan floor %.2f GiB\n",
+                (unsigned long long)(after - before), evicted, demoted,
+                (double)g_ds41_ctxgrow.ceiling / 1073741824.0,
+                (double)g_ds41_ctxgrow.fixed_floor / 1073741824.0);
     ds41_ctx_resize_log(g, need, after > before ? "grow" : "shrink");
     return true;
 #else
@@ -43381,6 +43415,7 @@ static DS4_MAYBE_UNUSED bool ds41_graph_alloc(ds41_gpu_graph *g, const ds4_model
     fprintf(stderr, "ds4: V4.1 static context buffers %.2f MiB (ctx=%u), Engram disk-only\n",
             (double)ds41_graph_bytes(ctx) / 1048576.0, ctx);
     if (g->grow_step) {
+        ds41_ctxgrow_account(g, true);
         fprintf(stderr, "ds4: V4.1 context VRAM grows in %u-token steps: %.2f MiB mapped of %.2f MiB "
                         "(DS4_CTX_GROW=0 restores fixed buffers)\n",
                 g->grow_step,
@@ -75895,6 +75930,30 @@ static bool ds41_memory_admit_for_host(ds4_engine *e, uint64_t graph_bytes,
     return true;
 }
 
+/* The expert count ds41_memory_admit_for_host() fits for `graph_bytes`,
+ * without changing the engine: the fixed full-ctx plan for growable context. */
+static uint32_t ds41_fixed_plan_experts(ds4_engine *e, uint64_t graph_bytes) {
+    const uint64_t gib = UINT64_C(1073741824);
+    uint64_t host = glm_graph_host_memory_bytes();
+#ifdef __linux__
+    const long pages = sysconf(_SC_PHYS_PAGES), page_size = sysconf(_SC_PAGESIZE);
+    if (pages > 0 && page_size > 0 && (uint64_t)pages <= UINT64_MAX / (uint64_t)page_size)
+        host = (uint64_t)pages * (uint64_t)page_size;
+#endif
+    const uint64_t recommended = ds4_gpu_recommended_working_set_size();
+    uint64_t budget = host / 8u * 7u;
+    if (budget > recommended) budget = recommended;
+    uint64_t weights = g_tp_shard_model_bytes ? g_tp_shard_model_bytes : e->model.size, expert = 0;
+    if (!weights_streaming_non_routed_bytes(&e->weights, &weights) ||
+        !ds4_streaming_routed_expert_bytes(&e->weights, &expert) || !expert) return 0;
+    weights = ds4_add_sat_u64(weights, e->vision_model.size);
+    const uint64_t fixed = ds4_add_sat_u64(weights,
+        ds4_add_sat_u64(graph_bytes, 2u * gib + e->ssd_streaming_prefill_headroom_bytes));
+    if (fixed >= budget) return 0;
+    const uint64_t n = (budget - fixed) / expert;
+    return n > e->ssd_streaming_cache_experts ? e->ssd_streaming_cache_experts : (uint32_t)n;
+}
+
 static bool ds41_memory_admit(ds4_engine *e, uint64_t graph_bytes, bool fit_cache) {
     uint64_t host = glm_graph_host_memory_bytes();
 #ifdef __linux__
@@ -77031,7 +77090,20 @@ static int ds4_engine_open_internal(ds4_engine **out,
                 ds4_streaming_routed_expert_bytes(&e->weights, &per) && per != 0;
             g_ds41_ctxgrow.expert_base = (uint64_t)e->ssd_streaming_cache_experts * per;
             g_ds41_ctxgrow.ceiling = g_ds41_ctxgrow.expert_base;
-            if (g_ds41_ctxgrow.streaming) ds4_gpu_stream_expert_cache_enable_ctx_resize();
+            if (g_ds41_ctxgrow.streaming) {
+                const uint32_t ctx = opt->context_size > 0 ? (uint32_t)opt->context_size : 4096;
+                const uint32_t sessions = e->placement_session_count_hint > 0 ?
+                    (uint32_t)e->placement_session_count_hint : 1;
+                uint32_t floor_n = ds41_fixed_plan_experts(e,
+                    ds4_mul_sat_u64(ds41_graph_bytes(ctx), sessions));
+                if (floor_n > e->ssd_streaming_cache_experts) floor_n = e->ssd_streaming_cache_experts;
+                g_ds41_ctxgrow.fixed_floor = (uint64_t)floor_n * per;
+                ds4_gpu_stream_expert_cache_enable_ctx_resize();
+                ds4_gpu_stream_expert_cache_set_floor(g_ds41_ctxgrow.fixed_floor);
+                fprintf(stderr, "ds4: V4.1 growable context: VRAM expert tier %u experts with one step mapped, "
+                                "never below the fixed full-ctx plan of %u experts\n",
+                        e->ssd_streaming_cache_experts, floor_n);
+            }
         }
 #endif
 #if defined(__APPLE__)

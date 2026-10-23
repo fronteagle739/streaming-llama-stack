@@ -3966,6 +3966,9 @@ static uint32_t cuda_stream_expert_cache_class_index(
  * UINT64_MAX = no ceiling (fixed-context behaviour). */
 static uint64_t g_stream_expert_ctx_ceiling_bytes = UINT64_MAX;
 static int g_stream_expert_ctx_vmm;
+/* Tier bytes the fixed full-ctx plan holds: the live free-VRAM reserve may
+ * not cap the primary class below this (the fixed build is never capped). */
+static uint64_t g_stream_expert_ctx_floor_bytes;
 
 static uint32_t cuda_stream_expert_cache_class_budget(
         uint32_t class_index,
@@ -3978,8 +3981,7 @@ static uint32_t cuda_stream_expert_cache_class_budget(
             g_stream_expert_primary_bytes : expert_bytes;
     if ((uint64_t)requested > UINT64_MAX / primary_bytes) return 0;
     uint64_t total_bytes = (uint64_t)requested * primary_bytes;
-    if (apply_ctx_ceiling && total_bytes > g_stream_expert_ctx_ceiling_bytes)
-        total_bytes = g_stream_expert_ctx_ceiling_bytes;
+    const int ceiling_on = apply_ctx_ceiling && g_stream_expert_ctx_ceiling_bytes != UINT64_MAX;
     if (g_stream_expert_cache_edge_vram_enabled &&
         g_stream_expert_cache_phase_decode &&
         g_stream_expert_cache_physical_budget_bytes != 0 &&
@@ -3996,6 +3998,8 @@ static uint32_t cuda_stream_expert_cache_class_budget(
     }
     const int isolated = cuda_stream_expert_cache_class_isolation_enabled();
     if (!isolated || g_stream_expert_primary_bytes == 0) {
+        if (ceiling_on && total_bytes > g_stream_expert_ctx_ceiling_bytes)
+            total_bytes = g_stream_expert_ctx_ceiling_bytes;
         uint64_t slots = total_bytes / expert_bytes;
         if (slots > requested) slots = requested;
         if (slots > DS4_CUDA_STREAM_EXPERT_MAX) {
@@ -4020,8 +4024,21 @@ static uint32_t cuda_stream_expert_cache_class_budget(
      *
      * Default 8 keeps existing behaviour byte-for-byte. */
     const uint64_t class_denom = cuda_stream_expert_cache_class_denom();
-    const uint64_t class_bytes = class_index == 0 ?
+    uint64_t class_bytes = class_index == 0 ?
         total_bytes - total_bytes / class_denom : total_bytes / class_denom;
+    if (ceiling_on) {
+        /* The ceiling bounds the whole tier: this class gets what the other
+         * classes do not hold, after (not before) the class split. */
+        uint64_t other = 0;
+        for (uint32_t i = 0; i < DS4_CUDA_STREAM_EXPERT_CACHE_CLASSES; i++) {
+            const cuda_stream_expert_cache &c = g_stream_expert_caches[i];
+            if (i != class_index && c.valid)
+                other += (uint64_t)c.capacity * (2u * c.gate_expert_bytes + c.down_expert_bytes);
+        }
+        const uint64_t avail = g_stream_expert_ctx_ceiling_bytes > other ?
+            g_stream_expert_ctx_ceiling_bytes - other : 0;
+        if (class_bytes > avail) class_bytes = avail;
+    }
     uint64_t slots = class_bytes / expert_bytes;
     if (slots > DS4_CUDA_STREAM_EXPERT_MAX) slots = DS4_CUDA_STREAM_EXPERT_MAX;
     return (uint32_t)slots;
@@ -4246,6 +4263,15 @@ static cuda_stream_expert_cache *cuda_stream_expert_cache_prepare(
                                              down_expert_bytes,
                                              reclaim_bytes,
                                              reclaim_bytes == 0);
+    if (g_stream_expert_ctx_floor_bytes != 0 && cache == &g_stream_expert_caches[0]) {
+        uint64_t floor_n = g_stream_expert_ctx_floor_bytes / expert_bytes;
+        if (floor_n > target_cap) floor_n = target_cap;
+        if (cap < floor_n) {
+            fprintf(stderr, "ds4: CUDA expert cache class 0 kept at the fixed-plan floor of %u experts "
+                            "(live reserve would cap it at %u)\n", (unsigned)floor_n, cap);
+            cap = (uint32_t)floor_n;
+        }
+    }
     if (cap == 0) {
         /* [2026-08-18] KEEP WHAT WE ALREADY HAVE. A zero live budget means the cache cannot GROW; it
          * has never meant the existing allocation became unusable. Returning NULL here threw that
@@ -10033,6 +10059,10 @@ static int cuda_stream_expert_cache_vmm_shrink(cuda_stream_expert_cache *c, uint
         if (!cuda_vmm_resize(&c->vm[i], (uint64_t)cap * per[i], 0)) return 0;
     cuda_stream_expert_cache_vmm_settle(c);
     return 1;
+}
+
+extern "C" void ds4_gpu_stream_expert_cache_set_floor(uint64_t bytes) {
+    g_stream_expert_ctx_floor_bytes = bytes;
 }
 
 /* Use VMM for the VRAM expert tier from its first allocation. */
