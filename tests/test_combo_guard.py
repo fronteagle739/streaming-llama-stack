@@ -33,6 +33,20 @@ class GuardTest(unittest.TestCase):
         self.assertFalse(reservation_admission([],8,2,available=9*2**30,owned_rss=1*2**30)[0])
         self.assertTrue(reservation_admission([],8,2,available=2*2**30-1,owned_rss=1*2**30)[0])
 
+    def test_current_smaller_cpu_hold_preserves_full_owner_reservation(self):
+        line=('ACTIVE: KIT11FIX cpu-qualification; expires 2026-10-23T03:44:17.2433082Z; '
+              'Windows-only CPU build/test, host budget 2 GiB, reserve 6 GiB; '
+              'yield RAM for bounded CPU window; no Studio restart')
+        blocked,receipt=reservation_admission([line],7,2,available=18*2**30)
+        self.assertFalse(blocked)
+        self.assertEqual(receipt['foreign_reserved_bytes'],9*2**30)
+        self.assertTrue(reservation_admission([line],7,2,available=18*2**30-1)[0])
+        self.assertFalse(reservation_admission([line],7,2,available=14*2**30,owned_rss=4*2**30)[0])
+        for changed in (line.replace('budget 2','budget 4'),line.replace('reserve 6','reserve 7'),
+                        line+'; GPU hold',line.replace('CPU build/test','GPU build/test'),
+                        line.replace('; no Studio restart','')):
+            self.assertTrue(reservation_admission([changed],7,2,available=32*2**30)[0])
+
     def run_cpu(self,foreign=False,pages=0,dynamic=None,owned_pages=0):
         root=Path(os.environ['STUDIO_RUNTIME_ROOT']);nonce=uuid.uuid4().hex
         prefix=root/('guard-cpu-'+nonce)

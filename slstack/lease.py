@@ -55,11 +55,21 @@ def reservation_admission(lines, budget_gib, floor_gib, *, available=None, owned
     """Owner-approved KIT11FIX CPU exception; other/new/larger holds preempt."""
     blocking=[];reserved=0
     for line in lines:
-        cpu=(line.startswith('ACTIVE: KIT11FIX Windows native plugin build;') and
+        original_cpu=(line.startswith('ACTIVE: KIT11FIX Windows native plugin build;') and
              'host budget 3 GiB; physical RAM reserve 6 GiB;' in line and
              'no GPU or Studio restart requested.' in line and
              not re.search(r'exclusive|GPU hold',line,re.I))
-        if cpu:reserved+=9*2**30
+        # The current qualification names the same CPU-only reservation with
+        # a smaller2GiB job cap. Keep the owner's full3+6GiB reservation rather
+        # than treating that CPU build as a GPU hold or reducing its allowance.
+        # An unrecognised, GPU, or larger reservation still preempts immediately.
+        current_cpu=re.fullmatch(
+            r'ACTIVE: KIT11FIX [a-z][a-z0-9-]*; expires [0-9T:.+Z-]+; '
+            r'Windows-only CPU build/test, host budget ([0-9]+(?:\.[0-9]+)?) GiB, reserve ([0-9]+(?:\.[0-9]+)?) GiB; '
+            r'yield RAM for bounded [A-Z][A-Z0-9]* window; no Studio restart',line)
+        current_cpu=(current_cpu is not None and
+                     0<float(current_cpu[1])<=3 and 0<float(current_cpu[2])<=6)
+        if original_cpu or current_cpu:reserved+=9*2**30
         else:blocking.append(line)
     available=psutil.virtual_memory().available if available is None else available
     floor=max(floor_gib,2)*2**30 if reserved else floor_gib*2**30
