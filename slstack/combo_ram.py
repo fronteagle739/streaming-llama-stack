@@ -14,6 +14,7 @@ import time
 import uuid
 import psutil
 from .guard import admit
+from .journal import atomic_json
 
 GiB=1024**3
 PAGE=65536
@@ -42,7 +43,7 @@ def kernel_api():
     return k
 
 
-def protect_working_set(job,host_bytes,floor_bytes,aggregate_bytes):
+def protect_working_set(job,host_bytes,floor_bytes,aggregate_bytes,*,receipt=None):
     """Protect admitted host pages before bootstrap/readiness of the owned job.
 
     A hard maximum could force paging; it stays disabled. RSS/commit/floor and
@@ -81,10 +82,12 @@ def protect_working_set(job,host_bytes,floor_bytes,aggregate_bytes):
         raise ctypes.WinError(ctypes.get_last_error())
     if lo.value!=host_bytes or hi.value<host_bytes or not flags.value&1 or flags.value&4:
         raise MemoryError('Windows did not retain the admitted hard-minimum working set')
-    return dict(pid=job.pid,host_budget_bytes=host_bytes,aggregate_budget_bytes=aggregate_bytes,
+    row=dict(pid=job.pid,host_budget_bytes=host_bytes,aggregate_budget_bytes=aggregate_bytes,
         controller_rss_bytes=controller_rss,metadata_headroom_bytes=metadata_headroom,
         physical_floor_bytes=floor_bytes,available_before=available,original=original,
         minimum=lo.value,maximum=hi.value,flags=flags.value,initialization_wait_seconds=time.monotonic()-started)
+    if receipt is not None:atomic_json(receipt,row)
+    return row
 
 
 class LockedRam:

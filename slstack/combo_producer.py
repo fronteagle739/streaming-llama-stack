@@ -75,7 +75,7 @@ class ComboProducer:
                 physical_floor=int(cfg['min_available_gib']*(1<<30)),operation_seconds=min(1140,cfg['request_timeout_s']),
                 idle_seconds=cfg['lease_minutes']*60,native=native,cancelled=cancelled,native_mode=1,bootstrap=bootstrap,owner_epoch=epoch,
                 after_resume=lambda job:protect_working_set(job,host_bytes,int(cfg['min_available_gib']*(1<<30)),
-                    int(cfg['host_budget_gib']*(1<<30))))
+                    int(cfg['host_budget_gib']*(1<<30)),receipt=self.directory/'resident-admission.json'))
             self.checkpoint=self.process.ready['checkpoint']
             expected_position=(base[1]['position'] if base else 0)+len(tokens)
             if self.checkpoint['context']!=cfg['context'] or self.checkpoint['position']!=expected_position:
