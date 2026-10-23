@@ -666,6 +666,175 @@ static std::atomic<int64_t> g_cuda_device_malloc_count{0};
 extern "C" int64_t ggml_cuda_device_malloc_total_bytes() { return g_cuda_device_malloc_bytes.load(); }
 extern "C" int64_t ggml_cuda_device_malloc_total_count() { return g_cuda_device_malloc_count.load(); }
 
+// DS4COMBO fast switch (2026-10-23): an optional process-wide switch arena.
+// When enabled before the first device allocation, every ggml_cuda_device_malloc
+// block gets its own VA range inside one cuMemAddressReserve span, backed by
+// cuMemCreate/cuMemMap. suspend() unmaps and releases ALL physical memory of
+// live blocks and registered VMM pools while every VA stays reserved; resume()
+// creates, maps and zeroes the same ranges again, so device pointers held by
+// buffers, gallocr and CUDA graphs stay valid. Contents are NOT preserved:
+// callers re-import state after resume. Disabled by default: unchanged path.
+namespace ds4_switch {
+struct block { size_t size; CUmemGenericAllocationHandle handle; bool mapped; };
+struct pool_range { CUdeviceptr * addr; size_t * size; int device; };
+static std::mutex mutex;
+static bool enabled = false, suspended = false;
+static int arena_device = 0;
+static CUdeviceptr base = 0;
+static size_t reserved = 0, next = 0, granularity = 0;
+static std::map<CUdeviceptr, block> blocks;
+static std::vector<pool_range> pools;
+
+static CUmemAllocationProp prop(int device) {
+    CUmemAllocationProp p = {};
+    p.type = CU_MEM_ALLOCATION_TYPE_PINNED;
+    p.location.type = CU_MEM_LOCATION_TYPE_DEVICE;
+    p.location.id = device;
+    return p;
+}
+static bool map_range(CUdeviceptr va, size_t size, int device, CUmemGenericAllocationHandle * keep) {
+    CUmemAllocationProp p = prop(device);
+    CUmemGenericAllocationHandle h;
+    if (cuMemCreate(&h, size, &p, 0) != CUDA_SUCCESS) return false;
+    if (cuMemMap(va, size, 0, h, 0) != CUDA_SUCCESS) { cuMemRelease(h); return false; }
+    CUmemAccessDesc a = {};
+    a.location.type = CU_MEM_LOCATION_TYPE_DEVICE;
+    a.location.id = device;
+    a.flags = CU_MEM_ACCESS_FLAGS_PROT_READWRITE;
+    if (cuMemSetAccess(va, size, &a, 1) != CUDA_SUCCESS) { cuMemUnmap(va, size); cuMemRelease(h); return false; }
+    if (keep) *keep = h; else cuMemRelease(h);
+    return true;
+}
+static void register_pool(CUdeviceptr * addr, size_t * size, int device) {
+    std::lock_guard<std::mutex> lock(mutex);
+    if (enabled) pools.push_back({addr, size, device});
+}
+static void unregister_pool(CUdeviceptr * addr) {
+    std::lock_guard<std::mutex> lock(mutex);
+    for (size_t i = 0; i < pools.size(); ++i) if (pools[i].addr == addr) { pools.erase(pools.begin() + i); return; }
+}
+static void require_resident(const char * what) {
+    if (suspended) {
+        fprintf(stderr, "DS4COMBO_SWITCH_ARENA_REFUSED operation=%s reason=suspended\n", what);
+        fflush(stderr);
+        GGML_ABORT("ggml CUDA switch arena is suspended; no device allocation is possible");
+    }
+}
+static cudaError_t alloc(void ** ptr, size_t size, int device) {
+    std::lock_guard<std::mutex> lock(mutex);
+    require_resident("alloc");
+    if (device != arena_device) return cudaErrorInvalidDevice;
+    const size_t rounded = granularity * ((size + granularity - 1) / granularity);
+    if (rounded > reserved - next) {
+        fprintf(stderr, "DS4COMBO_SWITCH_ARENA_EXHAUSTED request=%zu used_va=%zu reserved_va=%zu\n", rounded, next, reserved);
+        fflush(stderr);
+        return cudaErrorMemoryAllocation;
+    }
+    const CUdeviceptr va = base + next;
+    block b = {rounded, 0, true};
+    if (!map_range(va, rounded, device, &b.handle)) return cudaErrorMemoryAllocation;
+    next += rounded;
+    blocks[va] = b;
+    *ptr = (void *) va;
+    return cudaSuccess;
+}
+static bool owns(const void * ptr) {
+    const CUdeviceptr p = (CUdeviceptr) ptr;
+    return enabled && p >= base && p < base + reserved;
+}
+static cudaError_t free_block(void * ptr) {
+    std::lock_guard<std::mutex> lock(mutex);
+    auto it = blocks.find((CUdeviceptr) ptr);
+    if (it == blocks.end()) return cudaErrorInvalidDevicePointer;
+    (void) cudaDeviceSynchronize();
+    if (it->second.mapped) {
+        if (cuMemUnmap(it->first, it->second.size) != CUDA_SUCCESS || cuMemRelease(it->second.handle) != CUDA_SUCCESS) return cudaErrorUnknown;
+    }
+    blocks.erase(it);   // the VA range is never reused within the reservation
+    return cudaSuccess;
+}
+} // namespace ds4_switch
+
+extern "C" bool ggml_backend_cuda_switch_arena_enable(int device, size_t va_bytes) {
+    std::lock_guard<std::mutex> lock(ds4_switch::mutex);
+    if (ds4_switch::enabled || g_cuda_device_malloc_count.load() != 0 || !va_bytes) return false;
+    ggml_cuda_set_device(device);
+    CUmemAllocationProp p = ds4_switch::prop(device);
+    size_t g = 0;
+    if (cuMemGetAllocationGranularity(&g, &p, CU_MEM_ALLOC_GRANULARITY_RECOMMENDED) != CUDA_SUCCESS || !g) return false;
+    const size_t bytes = g * ((va_bytes + g - 1) / g);
+    if (cuMemAddressReserve(&ds4_switch::base, bytes, 0, 0, 0) != CUDA_SUCCESS) return false;
+    ds4_switch::granularity = g; ds4_switch::reserved = bytes; ds4_switch::next = 0; ds4_switch::arena_device = device;
+    ds4_switch::enabled = true; ds4_switch::suspended = false;
+    fprintf(stderr, "DS4COMBO_SWITCH_ARENA_ENABLED device=%d va_bytes=%zu granularity=%zu base=0x%llx\n", device, bytes, g, (unsigned long long) ds4_switch::base);
+    fflush(stderr);
+    return true;
+}
+
+extern "C" bool ggml_backend_cuda_switch_arena_suspend(size_t * released_bytes, int * released_blocks) {
+    std::lock_guard<std::mutex> lock(ds4_switch::mutex);
+    if (!ds4_switch::enabled || ds4_switch::suspended) return false;
+    if (cudaDeviceSynchronize() != cudaSuccess) return false;
+    size_t bytes = 0; int count = 0;
+    for (auto & kv : ds4_switch::blocks) {
+        if (!kv.second.mapped) continue;
+        if (cuMemUnmap(kv.first, kv.second.size) != CUDA_SUCCESS || cuMemRelease(kv.second.handle) != CUDA_SUCCESS) return false;
+        kv.second.mapped = false; kv.second.handle = 0; bytes += kv.second.size; ++count;
+    }
+    for (auto & pool : ds4_switch::pools) {
+        if (*pool.addr && *pool.size) {
+            if (cuMemUnmap(*pool.addr, *pool.size) != CUDA_SUCCESS) return false;   // pool handles were released at map time
+            bytes += *pool.size; ++count;
+        }
+    }
+    ds4_switch::suspended = true;
+    if (released_bytes) *released_bytes = bytes;
+    if (released_blocks) *released_blocks = count;
+    return true;
+}
+
+extern "C" bool ggml_backend_cuda_switch_arena_resume(size_t * mapped_bytes, int * mapped_blocks) {
+    std::lock_guard<std::mutex> lock(ds4_switch::mutex);
+    if (!ds4_switch::enabled || !ds4_switch::suspended) return false;
+    ggml_cuda_set_device(ds4_switch::arena_device);
+    size_t bytes = 0; int count = 0;
+    for (auto & kv : ds4_switch::blocks) {
+        if (!ds4_switch::map_range(kv.first, kv.second.size, ds4_switch::arena_device, &kv.second.handle)) return false;
+        kv.second.mapped = true;
+        if (cuMemsetD8(kv.first, 0, kv.second.size) != CUDA_SUCCESS) return false;
+        bytes += kv.second.size; ++count;
+    }
+    for (auto & pool : ds4_switch::pools) {
+        if (*pool.addr && *pool.size) {
+            if (!ds4_switch::map_range(*pool.addr, *pool.size, pool.device, nullptr)) return false;
+            if (cuMemsetD8(*pool.addr, 0, *pool.size) != CUDA_SUCCESS) return false;
+            bytes += *pool.size; ++count;
+        }
+    }
+    if (cuCtxSynchronize() != CUDA_SUCCESS) return false;
+    ds4_switch::suspended = false;
+    if (mapped_bytes) *mapped_bytes = bytes;
+    if (mapped_blocks) *mapped_blocks = count;
+    return true;
+}
+
+extern "C" bool ggml_backend_cuda_switch_arena_status(size_t * live_bytes, int * live_blocks, bool * is_suspended) {
+    std::lock_guard<std::mutex> lock(ds4_switch::mutex);
+    size_t bytes = 0; int count = 0;
+    for (auto & kv : ds4_switch::blocks) { bytes += kv.second.size; ++count; }
+    for (auto & pool : ds4_switch::pools) { bytes += *pool.size; ++count; }
+    if (live_bytes) *live_bytes = bytes;
+    if (live_blocks) *live_blocks = count;
+    if (is_suspended) *is_suspended = ds4_switch::suspended;
+    return ds4_switch::enabled;
+}
+
+// Frees a block that ggml_cuda_device_malloc returned, through the arena when it owns it.
+static cudaError_t ggml_cuda_device_free_owned(void * ptr) {
+    if (ds4_switch::owns(ptr)) return ds4_switch::free_block(ptr);
+    return cudaFree(ptr);
+}
+
 static cudaError_t ggml_cuda_device_malloc(void ** ptr, size_t size, int device) {
     ggml_cuda_set_device(device);
     cudaError_t err;
@@ -687,6 +856,8 @@ static cudaError_t ggml_cuda_device_malloc(void ** ptr, size_t size, int device)
             err = cudaMalloc(ptr, size);
         }
 #endif // defined(GGML_USE_HIP)
+    } else if (ds4_switch::enabled) {
+        err = ds4_switch::alloc(ptr, size, device);
     } else {
         err = cudaMalloc(ptr, size);
     }
@@ -903,7 +1074,7 @@ struct ggml_cuda_pool_leg : public ggml_cuda_pool {
         for (int i = 0; i < MAX_BUFFERS; ++i) {
             ggml_cuda_buffer & b = buffer_pool[i];
             if (b.ptr != nullptr) {
-                CUDA_CHECK(cudaFree(b.ptr));
+                CUDA_CHECK(ggml_cuda_device_free_owned(b.ptr));
                 pool_size -= b.size;
             }
         }
@@ -980,7 +1151,7 @@ struct ggml_cuda_pool_leg : public ggml_cuda_pool {
         }
         GGML_LOG_DEBUG(GGML_CUDA_NAME " buffer pool full, increase MAX_CUDA_BUFFERS\n");
         ggml_cuda_set_device(device);
-        CUDA_CHECK(cudaFree(ptr));
+        CUDA_CHECK(ggml_cuda_device_free_owned(ptr));
         pool_size -= size;
     }
 
@@ -990,7 +1161,7 @@ struct ggml_cuda_pool_leg : public ggml_cuda_pool {
         for (int i = 0; i < MAX_BUFFERS; ++i) {
             ggml_cuda_buffer & b = buffer_pool[i];
             if (b.ptr != nullptr) {
-                CUDA_CHECK(cudaFree(b.ptr));
+                CUDA_CHECK(ggml_cuda_device_free_owned(b.ptr));
                 pool_size -= b.size;
                 b.ptr = nullptr;
                 b.size = 0;
@@ -1021,6 +1192,7 @@ struct ggml_cuda_pool_vmm : public ggml_cuda_pool {
     }
 
     ~ggml_cuda_pool_vmm() {
+        ds4_switch::unregister_pool(&pool_addr);
         if (pool_addr != 0) {
 #if defined(GGML_USE_HIP)
             // Workaround for https://github.com/ROCm/ROCR-Runtime/issues/285
@@ -1042,6 +1214,7 @@ struct ggml_cuda_pool_vmm : public ggml_cuda_pool {
         size_t avail = pool_size - pool_used;
 
         if (size > avail) {
+            ds4_switch::require_resident("vmm_pool_grow");
             // round up to the next multiple of the granularity
             size_t reserve_size = size - avail;
             reserve_size = granularity * ((reserve_size + granularity - 1) / granularity);
@@ -1067,6 +1240,7 @@ struct ggml_cuda_pool_vmm : public ggml_cuda_pool {
             // reserve virtual address space (if not already reserved)
             if (pool_addr == 0) {
                 CU_CHECK(cuMemAddressReserve(&pool_addr, CUDA_POOL_VMM_MAX_SIZE, 0, 0, 0));
+                ds4_switch::register_pool(&pool_addr, &pool_size, device);
             }
 
             // map at the end of the pool
@@ -1217,7 +1391,7 @@ struct ggml_backend_cuda_buffer_context {
 
     ~ggml_backend_cuda_buffer_context() {
         if (owns_ptr) {
-            CUDA_CHECK(cudaFree(dev_ptr));
+            CUDA_CHECK(ggml_cuda_device_free_owned(dev_ptr));
         }
         g_cuda_buf_free_bytes.fetch_add((int64_t) alloc_size, std::memory_order_relaxed);
         g_cuda_buf_live_count.fetch_sub(1, std::memory_order_relaxed);
@@ -1662,7 +1836,7 @@ struct ggml_backend_cuda_split_buffer_context {
                     }
                 }
                 if (extra->data_device[id] != nullptr) {
-                    CUDA_CHECK(cudaFree(extra->data_device[id]));
+                    CUDA_CHECK(ggml_cuda_device_free_owned(extra->data_device[id]));
                 }
             }
             delete extra;
