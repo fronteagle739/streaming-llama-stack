@@ -1,7 +1,7 @@
 import json
 import threading
 import unittest
-from slstack.combo_proxy import relay_stream,conversation_key,native_launch_config,begins_conversation
+from slstack.combo_proxy import Proxy,relay_stream,conversation_key,native_launch_config,begins_conversation
 
 
 class Response:
@@ -11,6 +11,19 @@ class Response:
 
 
 class StreamTest(unittest.TestCase):
+    def test_idle_quality_reports_pending_phases_without_claiming_application(self):
+        proxy=object.__new__(Proxy);proxy.pending=0;proxy.session=None
+        proxy.observed=dict(value=0,applied_value=0,per_phase=False,phases=None)
+        row=proxy.quality(dict(answer='max_speed',code='max_quality'))
+        self.assertEqual(row['phases']['answer'],1.36125)
+        self.assertEqual(row['phases']['code'],0)
+        self.assertEqual(row['value'],1.36125)
+        self.assertTrue(row['per_phase']);self.assertFalse(row['applied'])
+        self.assertEqual(row['applied_value'],0)
+        row=proxy.quality(dict(value='balanced'))
+        self.assertEqual(row['value'],.35);self.assertFalse(row['per_phase'])
+        self.assertIsNone(row['phases']);self.assertEqual(proxy.quality()['value'],.35)
+
     def test_fresh_identical_first_message_is_distinct_from_retained_history(self):
         body=dict(messages=[dict(role='system',content='system'),dict(role='user',content='same first message')])
         self.assertTrue(begins_conversation(body))
