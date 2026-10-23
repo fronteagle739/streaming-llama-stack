@@ -1,0 +1,129 @@
+{
+  "status": "ENDPOINT PASS; UI proof pending",
+  "date": "2026-10-23",
+  "source_revision": "766d6ff8937ef25d375ebdaded4da33897e7fd87",
+  "native_source_revision": "5ada2a7bf1ad12aebf4fc749121d49c4da78fb46",
+  "evidence_sha256": "33f188b8f5949c4a73edf3b326db80564ce62ab59897209ce097437145d0f275",
+  "description": "Set Quality vs speed (0\u20131.36125 or max_quality, balanced, fast, faster, max_speed); use value or optional reasoning/tool_call/answer/code settings. Modes above Balanced are faster but may produce worse answers.",
+  "named_points": [
+    {
+      "name": "max_quality",
+      "value": 0,
+      "observed_tok_s": 5.7726,
+      "throughput_witness": "ds4: quality-speed throughput mean=0 tok_s=5.772599 tokens=16 adaptive=0",
+      "applied_revision": 1,
+      "routing_witness": [
+        "ds4: quality-speed throughput mean=0 tok_s=5.380817 tokens=16 adaptive=0",
+        "ds4: quality-speed throughput mean=0 tok_s=5.716027 tokens=16 adaptive=0",
+        "ds4: quality-speed throughput mean=0 tok_s=5.683229 tokens=16 adaptive=0",
+        "ds4: quality-speed throughput mean=0 tok_s=6.012519 tokens=16 adaptive=0",
+        "ds4: quality-speed throughput mean=0 tok_s=5.888130 tokens=16 adaptive=0",
+        "ds4: quality-speed throughput mean=0 tok_s=5.589507 tokens=16 adaptive=0",
+        "ds4: quality-speed throughput mean=0 tok_s=5.542116 tokens=16 adaptive=0",
+        "ds4: quality-speed throughput mean=0 tok_s=5.772599 tokens=16 adaptive=0"
+      ]
+    },
+    {
+      "name": "balanced",
+      "value": 0.35,
+      "observed_tok_s": 13.9171,
+      "throughput_witness": "ds4: quality-speed throughput mean=0.35 tok_s=13.917052 tokens=16 adaptive=0",
+      "applied_revision": 2,
+      "routing_witness": [
+        "ds4: cache-affinity token=204 decode_step=165 layer=38 mean=0.35 delta=0.459102 stage=biased vram_hits=6 ram_hits=0 selections=6 vram_hit_rate=1.000000 changed=1 spread=1.56678772",
+        "ds4: cache-affinity token=205 decode_step=166 layer=0 mean=0.35 delta=0.219708 stage=biased vram_hits=6 ram_hits=0 selections=6 vram_hit_rate=1.000000 changed=4 spread=1.28022671",
+        "ds4: cache-affinity token=205 decode_step=166 layer=1 mean=0.35 delta=0.143941 stage=biased vram_hits=6 ram_hits=0 selections=6 vram_hit_rate=1.000000 changed=1 spread=0.375588417",
+        "ds4: cache-affinity token=205 decode_step=166 layer=2 mean=0.35 delta=0.195139 stage=biased vram_hits=6 ram_hits=0 selections=6 vram_hit_rate=1.000000 changed=2 spread=0.10402298",
+        "ds4: cache-affinity token=205 decode_step=166 layer=4 mean=0.35 delta=0.234215 stage=biased vram_hits=6 ram_hits=0 selections=6 vram_hit_rate=1.000000 changed=1 spread=0.443821907",
+        "ds4: cache-affinity token=205 decode_step=166 layer=5 mean=0.35 delta=0.193531 stage=biased vram_hits=6 ram_hits=0 selections=6 vram_hit_rate=1.000000 changed=3 spread=0.689727783",
+        "ds4: cache-affinity token=205 decode_step=166 layer=8 mean=0.35 delta=0.318657 stage=biased vram_hits=6 ram_hits=0 selections=6 vram_hit_rate=1.000000 changed=1 spread=1.15703106",
+        "ds4: cache-affinity token=205 decode_step=166 layer=9 mean=0.35 delta=0.207626 stage=biased vram_hits=6 ram_hits=0 selections=6 vram_hit_rate=1.000000 changed=1 spread=0.537789345"
+      ]
+    },
+    {
+      "name": "fast",
+      "value": 0.65,
+      "observed_tok_s": 18.1871,
+      "throughput_witness": "ds4: quality-speed throughput mean=0.65 tok_s=18.187105 tokens=16 adaptive=0",
+      "applied_revision": 3,
+      "routing_witness": [
+        "ds4: cache-affinity token=225 decode_step=186 layer=33 mean=0.65 delta=0.864726 stage=biased vram_hits=6 ram_hits=0 selections=6 vram_hit_rate=1.000000 changed=4 spread=0.8177948",
+        "ds4: cache-affinity token=225 decode_step=186 layer=34 mean=0.65 delta=0.831768 stage=biased vram_hits=6 ram_hits=0 selections=6 vram_hit_rate=1.000000 changed=2 spread=0.689758301",
+        "ds4: cache-affinity token=225 decode_step=186 layer=35 mean=0.65 delta=0.746268 stage=biased vram_hits=6 ram_hits=0 selections=6 vram_hit_rate=1.000000 changed=4 spread=0.439515114",
+        "ds4: cache-affinity token=225 decode_step=186 layer=36 mean=0.65 delta=0.581753 stage=biased vram_hits=6 ram_hits=0 selections=6 vram_hit_rate=1.000000 changed=2 spread=0.319366455",
+        "ds4: cache-affinity token=225 decode_step=186 layer=37 mean=0.65 delta=0.779646 stage=biased vram_hits=6 ram_hits=0 selections=6 vram_hit_rate=1.000000 changed=2 spread=0.988323212",
+        "ds4: cache-affinity token=225 decode_step=186 layer=38 mean=0.65 delta=0.852618 stage=biased vram_hits=6 ram_hits=0 selections=6 vram_hit_rate=1.000000 changed=2 spread=1.27885056",
+        "ds4: cache-affinity token=225 decode_step=186 layer=39 mean=0.65 delta=0.966195 stage=biased vram_hits=6 ram_hits=0 selections=6 vram_hit_rate=1.000000 changed=5 spread=2.69519806",
+        "ds4: cache-affinity token=226 decode_step=187 layer=0 mean=0.65 delta=0.408029 stage=biased vram_hits=6 ram_hits=0 selections=6 vram_hit_rate=1.000000 changed=4 spread=2.04223537"
+      ]
+    },
+    {
+      "name": "faster",
+      "value": 0.9,
+      "observed_tok_s": 20.2167,
+      "throughput_witness": "ds4: quality-speed throughput mean=0.9 tok_s=20.216739 tokens=16 adaptive=0",
+      "applied_revision": 4,
+      "routing_witness": [
+        "ds4: cache-affinity token=246 decode_step=207 layer=26 mean=0.9 delta=0.701272 stage=biased vram_hits=6 ram_hits=0 selections=6 vram_hit_rate=1.000000 changed=1 spread=1.15171146",
+        "ds4: cache-affinity token=246 decode_step=207 layer=27 mean=0.9 delta=0.804872 stage=biased vram_hits=6 ram_hits=0 selections=6 vram_hit_rate=1.000000 changed=1 spread=0.98956871",
+        "ds4: cache-affinity token=246 decode_step=207 layer=29 mean=0.9 delta=1.76866 stage=biased vram_hits=6 ram_hits=0 selections=6 vram_hit_rate=1.000000 changed=2 spread=1.24346924",
+        "ds4: cache-affinity token=246 decode_step=207 layer=30 mean=0.9 delta=1.07147 stage=biased vram_hits=6 ram_hits=0 selections=6 vram_hit_rate=1.000000 changed=1 spread=0.593790054",
+        "ds4: cache-affinity token=246 decode_step=207 layer=31 mean=0.9 delta=0.939613 stage=biased vram_hits=6 ram_hits=0 selections=6 vram_hit_rate=1.000000 changed=1 spread=0.951515198",
+        "ds4: cache-affinity token=246 decode_step=207 layer=32 mean=0.9 delta=1.28666 stage=biased vram_hits=6 ram_hits=0 selections=6 vram_hit_rate=1.000000 changed=1 spread=1.19955826",
+        "ds4: cache-affinity token=246 decode_step=207 layer=33 mean=0.9 delta=1.19731 stage=biased vram_hits=6 ram_hits=0 selections=6 vram_hit_rate=1.000000 changed=2 spread=1.46690559",
+        "ds4: cache-affinity token=246 decode_step=207 layer=34 mean=0.9 delta=1.15168 stage=biased vram_hits=6 ram_hits=0 selections=6 vram_hit_rate=1.000000 changed=2 spread=2.71449852"
+      ]
+    },
+    {
+      "name": "max_speed",
+      "value": 1.36125,
+      "observed_tok_s": 20.8504,
+      "throughput_witness": "ds4: quality-speed throughput mean=1.36125 tok_s=20.850424 tokens=16 adaptive=0",
+      "applied_revision": 5,
+      "routing_witness": [
+        "ds4: cache-affinity token=266 decode_step=227 layer=32 mean=1.36125 delta=1.94607 stage=biased vram_hits=6 ram_hits=0 selections=6 vram_hit_rate=1.000000 changed=1 spread=1.11334419",
+        "ds4: cache-affinity token=266 decode_step=227 layer=33 mean=1.36125 delta=1.81094 stage=biased vram_hits=6 ram_hits=0 selections=6 vram_hit_rate=1.000000 changed=3 spread=1.38789177",
+        "ds4: cache-affinity token=266 decode_step=227 layer=34 mean=1.36125 delta=1.74191 stage=biased vram_hits=6 ram_hits=0 selections=6 vram_hit_rate=1.000000 changed=3 spread=2.42101479",
+        "ds4: cache-affinity token=266 decode_step=227 layer=35 mean=1.36125 delta=1.56286 stage=biased vram_hits=6 ram_hits=0 selections=6 vram_hit_rate=1.000000 changed=2 spread=0.470093727",
+        "ds4: cache-affinity token=266 decode_step=227 layer=36 mean=1.36125 delta=1.21832 stage=biased vram_hits=6 ram_hits=0 selections=6 vram_hit_rate=1.000000 changed=2 spread=1.04301453",
+        "ds4: cache-affinity token=266 decode_step=227 layer=37 mean=1.36125 delta=1.63276 stage=biased vram_hits=6 ram_hits=0 selections=6 vram_hit_rate=1.000000 changed=2 spread=1.27989197",
+        "ds4: cache-affinity token=266 decode_step=227 layer=38 mean=1.36125 delta=1.78558 stage=biased vram_hits=6 ram_hits=0 selections=6 vram_hit_rate=1.000000 changed=1 spread=0.657951355",
+        "ds4: cache-affinity token=266 decode_step=227 layer=39 mean=1.36125 delta=2.02344 stage=biased vram_hits=6 ram_hits=0 selections=6 vram_hit_rate=1.000000 changed=4 spread=1.87957382"
+      ]
+    }
+  ],
+  "queued_four_phases": {
+    "expected": {
+      "reasoning": 0,
+      "tool_call": 0.9,
+      "answer": 0.35,
+      "code": 1.36125
+    },
+    "observed": {
+      "reasoning": 0,
+      "tool_call": 0.9,
+      "answer": 0.35,
+      "code": 1.36125
+    },
+    "applied_value": 1.36125,
+    "phase_decode": {
+      "reasoning": {
+        "tokens": 0,
+        "seconds": 0
+      },
+      "tool_call": {
+        "tokens": 0,
+        "seconds": 0
+      },
+      "answer": {
+        "tokens": 0,
+        "seconds": 0
+      },
+      "code": {
+        "tokens": 116,
+        "seconds": 23.3904707
+      }
+    }
+  },
+  "limits": "Fresh sixteen-token windows prove live effects; they are not controlled speed comparisons. Existing quality benchmarks remain in the guide. Later UI failed on 4096 observed owned paged bytes; shared guard certified teardown. No exhaustive zero-paging claim."
+}

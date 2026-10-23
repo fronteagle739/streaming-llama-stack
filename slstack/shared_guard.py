@@ -71,6 +71,7 @@ def supervise(spec):
                   'shared_guard_certificate':str(certificate),'cleanup_confirmed':certain,
                   'owned_paging':{'attribution':job.watcher.observer.attribution,
                     'observed_paged_bytes':job.watcher.job_paged,
+                    'observed_processes':job.watcher.observer.last_processes,
                     'scanned_pages':job.watcher.observer.scanned_pages,
                     'completed_scans':job.watcher.observer.completed_scans},
                   'system_pagefile_pressure':{'maximum_growth_bytes':job.watcher.max_global_growth,

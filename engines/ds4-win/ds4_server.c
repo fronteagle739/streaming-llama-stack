@@ -260,7 +260,7 @@ static bool json_u16(const char **p, uint32_t *out) {
     return true;
 }
 
-static bool json_string(const char **p, char **out) {
+static bool json_string_length(const char **p, char **out, size_t *length) {
     /* Always define *out. Every failure path below returns false without
      * producing a string, and several callers reparse in place with
      * `free(x); json_string(&p, &x)` (e.g. duplicate JSON keys, the "model"
@@ -310,11 +310,16 @@ static bool json_string(const char **p, char **out) {
     }
     if (**p != '"') goto fail;
     (*p)++;
+    if (length) *length=b.len;
     *out = buf_take(&b);
     return true;
 fail:
     buf_free(&b);
     return false;
+}
+
+static bool json_string(const char **p, char **out) {
+    return json_string_length(p,out,NULL);
 }
 
 static bool json_number(const char **p, double *out) {
@@ -16009,10 +16014,18 @@ static void request_quality_store(request *req, bool present, const quality_sett
     memcpy(req->quality_phases, setting->phases, sizeof(req->quality_phases));
 }
 
+/* C-string comparisons must not accept a valid name followed by JSON NUL.
+ * Reused from the provider at e1e45374ddc307c75bd7fc0e4b8dccce6b0af6e2. */
+static bool quality_name(const char **p, char **name) {
+    size_t length=0;
+    if (!json_string_length(p,name,&length)) return false;
+    if (strlen(*name)==length) return true;
+    free(*name);*name=NULL;return false;
+}
 static bool quality_value(const char **p, float *value) {
     json_ws(p);
     if (**p=='"') {
-        char *name=NULL;if (!json_string(p,&name)) return false;
+        char *name=NULL;if (!quality_name(p,&name)) return false;
         static const char *const names[]={"max_quality","balanced","fast","faster","max_speed"};
         static const float values[]={0,.35f,.65f,.9f,1.36125f};
         bool ok=false;for(int i=0;i<5;i++)if(!strcmp(name,names[i])){*value=values[i];ok=true;break;}
@@ -16026,7 +16039,7 @@ static bool quality_phase_map(const char **p,quality_setting *setting) {
     json_ws(p);if(*(*p)++!='{') return false;
     unsigned seen=0;json_ws(p);
     if(**p!='}')for(;;){
-        char *key=NULL;if(!json_string(p,&key))return false;
+        char *key=NULL;if(!quality_name(p,&key))return false;
         int index=-1;for(int i=0;i<4;i++)if(!strcmp(key,ds4_quality_phase_names[i]))index=i;
         free(key);json_ws(p);if(*(*p)++!=':' || index<0 || (seen&(1u<<index)))return false;
         if(!quality_value(p,&setting->phases[index]))return false;
@@ -16049,7 +16062,7 @@ static bool quality_config_body(const char *body,bool endpoint,bool *present,qua
     if(*p++!='{')return false;
     unsigned phases_seen=0;json_ws(&p);
     if(*p!='}')for(;;){
-        char *key=NULL;if(!json_string(&p,&key))return false;
+        char *key=NULL;if(!quality_name(&p,&key))return false;
         bool match=!strcmp(key,endpoint?"value":"quality_speed");
         int phase=-1;if(endpoint)for(int i=0;i<4;i++)if(!strcmp(key,ds4_quality_phase_names[i]))phase=i;
         free(key);json_ws(&p);if(*p++!=':')return false;
