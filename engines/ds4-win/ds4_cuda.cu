@@ -38421,6 +38421,85 @@ struct cuda_stream_upload_batch {
     ~cuda_stream_upload_batch() { (void)finish(); }
 };
 
+/* DS4COMBO borrowed layer prefill: the selected-expert loader's misses go
+ * through the same DirectStorage queue and staging arena decode uses
+ * (cuda_ds_prefetch_stage + batch submit/wait, then a device copy into the
+ * slot), not the synchronous buffered pread staging. Waves are as large as the
+ * staging arena allows. Returns 1 on success, 0 on a failed batch (the caller
+ * fails the load), -1 when DirectStorage is not usable here (the caller uses
+ * the staged reader and says so). */
+struct cuda_stream_ds_job {
+    uint64_t src[3];
+    char *dst[3];
+};
+static int cuda_stream_selected_ds_upload(const ds4_gpu_stream_expert_table *table,
+                                          const std::vector<cuda_stream_ds_job> &jobs) {
+#if defined(_WIN32)
+    if (jobs.empty()) return 1;
+    if (!cuda_ds_prefetch_enabled() || g_model_fd < 0 ||
+        (g_model_fd_host_base != NULL && table->model_map != g_model_fd_host_base) ||
+        g_ds_decode_pipeline.active || g_ds_hot_prefetch_active ||
+        !ds4_ds_init_from_fd(g_model_fd)) return -1;
+    const int gpu = cuda_ds_gpu_destination_enabled() && cuda_ds_gpu_prefetch_arena_ensure();
+    if (!gpu && g_ds_prefetch_arena == NULL) {
+        g_ds_prefetch_capacity = cuda_ds_prefetch_capacity_bytes();
+        g_ds_prefetch_arena = (char *)malloc((size_t)g_ds_prefetch_capacity);
+        if (g_ds_prefetch_arena == NULL) return -1;
+    }
+    const char *arena = gpu ? g_ds_gpu_prefetch_arena : g_ds_prefetch_arena;
+    if (!arena) return -1;
+    const cudaMemcpyKind kind = gpu ? cudaMemcpyDeviceToDevice : cudaMemcpyHostToDevice;
+    const uint64_t bytes[3] = {table->gate_expert_bytes, table->gate_expert_bytes,
+                               table->down_expert_bytes};
+    if (ds4_ds_batch_inflight() != 0) cuda_ds_expert_fetch_drain();
+    size_t i = 0;
+    while (i < jobs.size()) {
+        cuda_ds_prefetch_reset();
+        ds4_ds_batch_reset();
+        const size_t first = i;
+        while (i < jobs.size() &&
+               cuda_ds_prefetch_stage(table->model_map, jobs[i].src[0], bytes[0], gpu) &&
+               cuda_ds_prefetch_stage(table->model_map, jobs[i].src[1], bytes[1], gpu) &&
+               cuda_ds_prefetch_stage(table->model_map, jobs[i].src[2], bytes[2], gpu)) i++;
+        if (i == first) {
+            fprintf(stderr, "ds4: CUDA prefill DirectStorage staging arena cannot hold one expert "
+                            "(%.2f MiB)\n", (double)(bytes[0] * 2u + bytes[2]) / 1048576.0);
+            cuda_ds_prefetch_reset();
+            ds4_ds_batch_reset();
+            return first ? 0 : -1;
+        }
+        uint64_t got = 0;
+        double ms = 0.0, wait_ms = 0.0;
+        if (!g_ds_decode_bandwidth.batch_submit_wait(&got, &ms, &wait_ms)) {
+            fprintf(stderr, "ds4: CUDA prefill DirectStorage expert batch failed (%zu experts)\n",
+                    i - first);
+            cuda_ds_prefetch_reset();
+            ds4_ds_batch_reset();
+            return 0;
+        }
+        for (size_t j = first; j < i; j++) {
+            for (int part = 0; part < 3; part++) {
+                const cuda_ds_prefetch_span *span =
+                    cuda_ds_prefetch_find_span(table->model_map, jobs[j].src[part], bytes[part]);
+                if (!span || !cuda_ok(cudaMemcpy(jobs[j].dst[part], arena + span->arena_off,
+                                                 (size_t)bytes[part], kind),
+                                      "prefill DirectStorage expert placement")) {
+                    cuda_ds_prefetch_reset();
+                    ds4_ds_batch_reset();
+                    return 0;
+                }
+            }
+        }
+    }
+    cuda_ds_prefetch_reset();
+    ds4_ds_batch_reset();
+    return 1;
+#else
+    (void)table; (void)jobs;
+    return -1;
+#endif
+}
+
 static int cuda_stream_selected_cache_begin_load(
         const ds4_gpu_stream_expert_table *table,
         const int32_t *selected_ids,
@@ -38540,6 +38619,9 @@ static int cuda_stream_selected_cache_begin_load(
             slot.used = stamp;
         }
         cuda_stream_upload_batch uploads;
+        /* A borrowed layer sweep loads its misses through DirectStorage. */
+        const bool ds_jobs = g_stream_prefill_borrow_slots != 0;
+        std::vector<cuda_stream_ds_job> jobs;
         for (size_t i = 0; i < unique.size(); i++) {
             if (slots[i] >= 0) continue;
             uint32_t victim = UINT32_MAX;
@@ -38560,6 +38642,12 @@ static int cuda_stream_selected_cache_begin_load(
             const uint64_t gate = table->gate_offset + expert * table->gate_expert_bytes;
             const uint64_t up = table->up_offset + expert * table->gate_expert_bytes;
             const uint64_t down = table->down_offset + expert * table->down_expert_bytes;
+            if (ds_jobs) {
+                jobs.push_back({{gate, up, down},
+                    {cache.gate_ptr + (uint64_t)victim * table->gate_expert_bytes,
+                     cache.up_ptr + (uint64_t)victim * table->gate_expert_bytes,
+                     cache.down_ptr + (uint64_t)victim * table->down_expert_bytes}});
+            } else {
             uploads.active = true;
             if (!cuda_model_copy_to_device_streamed(
                     cache.gate_ptr + (uint64_t)victim * table->gate_expert_bytes,
@@ -38571,9 +38659,43 @@ static int cuda_stream_selected_cache_begin_load(
                     cache.down_ptr + (uint64_t)victim * table->down_expert_bytes,
                     table->model_map, table->model_size, down, table->down_expert_bytes, "stream down", uploads.chunks))
                 return 0;
+            }
             slot = {gate, up, down, stamp};
             g_stream_expert_by_gate[gate] = victim;
             slots[i] = (int32_t)victim;
+        }
+        if (ds_jobs && !jobs.empty()) {
+            int rc = cuda_stream_selected_ds_upload(table, jobs);
+            if (rc < 0) {
+                static int notice = 0;
+                if (!notice) {
+                    notice = 1;
+                    fprintf(stderr, "DS4COMBO_PREFILL_DS_UNAVAILABLE layer expert loads use the staged "
+                                    "reader (DirectStorage disabled or not initialised)\n");
+                }
+                rc = 1;
+                for (const cuda_stream_ds_job &job : jobs) {
+                    uploads.active = true;
+                    for (int part = 0; rc && part < 3; part++)
+                        rc = cuda_model_copy_to_device_streamed(job.dst[part], table->model_map,
+                            table->model_size, job.src[part],
+                            part == 2 ? table->down_expert_bytes : table->gate_expert_bytes,
+                            "stream expert", uploads.chunks);
+                    if (!rc) break;
+                }
+            }
+            if (!rc) {
+                /* No slot may claim bytes that never arrived. */
+                for (const cuda_stream_ds_job &job : jobs) {
+                    const auto found = g_stream_expert_by_gate.find(job.src[0]);
+                    if (found != g_stream_expert_by_gate.end()) {
+                        g_stream_expert_slots[found->second].used = 0;
+                        g_stream_expert_by_gate.erase(found);
+                    }
+                }
+                (void)uploads.finish();
+                return 0;
+            }
         }
         if (!uploads.finish()) return 0;
         g_stream_prefill_ids = remap;
@@ -38747,6 +38869,17 @@ extern "C" int ds4_gpu_stream_expert_cache_prefetch(
         const ds4_gpu_stream_expert_table *current,
         const ds4_gpu_stream_expert_table *next) {
     if (cuda_affinity_token_biased()) return 0;
+#if defined(_WIN32)
+    if (g_stream_prefill_borrow_slots && cuda_ds_prefetch_enabled()) {
+        static int notice = 0;
+        if (!notice) {
+            notice = 1;
+            fprintf(stderr, "DS4COMBO_PREFILL_PREFETCH_OFF next-layer reader uses buffered pread; "
+                            "layer experts load through DirectStorage instead\n");
+        }
+        return 0;
+    }
+#endif
     ds4_gpu_stream_expert_cache_prefetch_finish(false);
     auto &p = g_stream_prefetch;
     auto &cache = g_stream_selected_cache;

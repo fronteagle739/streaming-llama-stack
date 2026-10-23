@@ -45760,6 +45760,18 @@ static uint32_t ds41_encoder_chunk_cap(const ds41_gpu_graph *g, uint32_t count) 
  * travel down the stack with their token, while only source layers append KV.
  * A failed partial chunk cannot be snapshotted: its layers have different
  * frontiers, so the caller must rebuild from its retained token history. */
+/* The sweep's model-span installs keep a Metal/ROCm mapping to the layer in
+ * flight. CUDA SSD streaming already holds every non-routed tensor in its
+ * device cache from startup (routed experts go through the selected cache),
+ * and a CUDA install releases that whole cache: each layer, and then the first
+ * decode token, reloaded the 9.37 GiB of resident weights through the slow
+ * staged reader. Decode never installs on CUDA; neither does the sweep. */
+#if !defined(__APPLE__) && !defined(DS4_ROCM_BUILD)
+#define DS41_SWEEP_INSTALLS 0
+#else
+#define DS41_SWEEP_INSTALLS 1
+#endif
+
 static bool ds41_graph_prefill_sweep(ds41_gpu_graph *g, const ds4_model *m,
                               const ds4_weights *w, const int *tokens, uint32_t total_count,
                               ds4_session_progress_fn progress, void *progress_ud,
@@ -45832,14 +45844,14 @@ static bool ds41_graph_prefill_sweep(ds41_gpu_graph *g, const ds4_model *m,
         engram_prefetched = overlap_engram &&
             ds41_engram_prefetch_start(&engram_local, g, 0, total_count, ids, 0);
     }
-    bool ok = !g->streaming || metal_graph_stream_map_token(m, w);
+    bool ok = !g->streaming || !DS41_SWEEP_INSTALLS || metal_graph_stream_map_token(m, w);
     metal_graph_stream_prepare_slot prepare = {0};
     for (uint32_t il = 0; ok && il < DS4_N_LAYER; il++) {
         if (cancel && cancel(cancel_ud)) { ok = false; break; }
         if (encoder_only && il == 20u) {
             /* Publish every encoder key, but leave the decoder invalid until
              * the last sweep rebuilds its exact 2541-token dependency suffix. */
-            if (g->streaming) ok = metal_graph_stream_map_layer_decode(m, w, il);
+            if (g->streaming && DS41_SWEEP_INSTALLS) ok = metal_graph_stream_map_layer_decode(m, w, il);
             if (ok) ok = ds41_decoder_prepare(g, m, &w->layer[il], il, initial_start,
                 0, total_count, true, batch_hc, batch_attention, cancel, cancel_ud);
             break;
@@ -45865,7 +45877,7 @@ static bool ds41_graph_prefill_sweep(ds41_gpu_graph *g, const ds4_model *m,
                 ok = metal_graph_stream_prepare_join_layer(NULL, m, w, il, first_count,
                         false, true, false, false, &prepare, 1);
 #endif
-            if (ok) ok = metal_graph_stream_map_layer(m, w, il);
+            if (ok && DS41_SWEEP_INSTALLS) ok = metal_graph_stream_map_layer(m, w, il);
 #if !defined(__APPLE__) && !defined(DS4_ROCM_BUILD)
             /* Below 2K, unused expert reads outweigh the overlap. A borrowed
              * loader holding a single layer has no room for the next one. */
@@ -46138,7 +46150,7 @@ static bool ds41_graph_prefill_sweep(ds41_gpu_graph *g, const ds4_model *m,
     if (g->streaming) ds4_gpu_stream_expert_cache_prefetch_finish(true);
 #endif
     if (!metal_graph_stream_prepare_join_all(&prepare, 1)) ok = false;
-    if (g->streaming && !metal_graph_stream_map_decode_static_all(m, w)) ok = false;
+    if (g->streaming && DS41_SWEEP_INSTALLS && !metal_graph_stream_map_decode_static_all(m, w)) ok = false;
     if (ok && !encoder_only) {
         ok = ds4_gpu_begin_commands() &&
              ds4_gpu_tensor_copy(g->residual, 0, row.residual, 0, (uint64_t)DS4_N_HC * DS4_N_EMBD * 4u) &&
