@@ -223,6 +223,28 @@ class Producer:
         finally:
             self._leave()
 
+    # DS4COMBO fast switch: the producer process, CUDA context and model lease stay
+    # alive while its device memory and carry RAM are given back to the native engine.
+    def suspend(self, base):
+        reply = self.request(dict(session=self.session, model_sha256=MODEL_SHA256, sequence=self.sequence, operation='suspend', base=base))
+        require(reply.get('suspended') is True, 'Producer suspend was not certified')
+        return reply
+
+    def resume(self, contract_sha256, tokens, bootstrap):
+        require(callable(bootstrap), 'Resume requires the native base writer')
+        self._enter(dict(session=self.session, model_sha256=MODEL_SHA256, sequence=self.sequence, operation='resume',
+                         native_base_contract_sha256=contract_sha256, tokens=list(tokens)))
+        try:
+            bootstrap(self._write)
+            reply = self._reply()
+            require(reply.get('peer_synchronized') is False and reply.get('prompt_tokens') == len(tokens), 'Producer resume prefill was not certified')
+            return reply
+        except BaseException as exc:
+            self._poison(exc)
+            raise
+        finally:
+            self._leave()
+
     def begin_export(self, row):
         require(row.get('operation') in ['export_initial', 'export_delta'], 'Export command required')
         self._enter(row)
