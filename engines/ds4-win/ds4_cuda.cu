@@ -4269,6 +4269,18 @@ static cuda_stream_expert_cache *cuda_stream_expert_cache_prepare(
  * (feedback), whereas two unsynchronised integer increments are free. The counters are intentionally
  * racy - they are diagnostics, and a lost increment under contention cannot change a percentage that is
  * only ever read to one decimal place. */
+/* DS4COMBO expert hotlist: routed lookups per (layer, expert) over this process's decode
+ * (one per expert per layer per token), with that layer's expert sizes. Racy like the
+ * counters below; used only to rank experts for the next decoder's pre-seed. */
+#define DS4_COMBO_FREQ_LAYERS 64u
+#define DS4_COMBO_FREQ_EXPERTS 1024u
+static uint32_t g_combo_expert_freq[DS4_COMBO_FREQ_LAYERS][DS4_COMBO_FREQ_EXPERTS];
+static uint64_t g_combo_expert_freq_gate[DS4_COMBO_FREQ_LAYERS], g_combo_expert_freq_down[DS4_COMBO_FREQ_LAYERS];
+static inline void ds4_combo_expert_freq_count(uint32_t layer, uint32_t expert, uint64_t gate, uint64_t down) {
+    if (layer >= DS4_COMBO_FREQ_LAYERS || expert >= DS4_COMBO_FREQ_EXPERTS) return;
+    g_combo_expert_freq[layer][expert]++;
+    g_combo_expert_freq_gate[layer] = gate; g_combo_expert_freq_down[layer] = down;
+}
 static uint64_t g_expert_vram_hits = 0;
 static uint64_t g_expert_vram_misses = 0;
 static uint64_t g_expert_host_hits = 0;
@@ -4400,6 +4412,7 @@ static int cuda_stream_expert_cache_find(
     /* Register the dump once, here rather than at init, so a run that never touches the streaming path
      * prints nothing at all. */
     cuda_expert_cache_stats_register();
+    if (record_stats) ds4_combo_expert_freq_count(layer, expert, gate_expert_bytes, down_expert_bytes);
     /* No cache at all counts as a miss: functionally the expert is not resident, which is the quantity
      * the sizing analysis needs. */
     if (!cache || !cache->valid) { if (record_stats) g_expert_vram_misses++; return -1; }
@@ -9598,6 +9611,25 @@ extern "C" uint32_t ds4_gpu_stream_host_expert_cache_current_count(void) {
         count += g_stream_host_expert_caches[i].count;
     }
     return count;
+}
+
+/* DS4COMBO expert hotlist: experts with at least one routed lookup in this process, with
+ * counts and sizes. Returns the total; fills at most cap entries. */
+extern "C" uint32_t ds4_gpu_stream_expert_frequency(
+        uint32_t *layers, uint32_t *experts, uint32_t *counts,
+        uint64_t *gate_bytes, uint64_t *down_bytes, uint32_t cap) {
+    uint32_t n = 0;
+    for (uint32_t l = 0; l < DS4_COMBO_FREQ_LAYERS; l++)
+        for (uint32_t e = 0; e < DS4_COMBO_FREQ_EXPERTS; e++) {
+            const uint32_t c = g_combo_expert_freq[l][e];
+            if (!c) continue;
+            if (n < cap && layers) {
+                layers[n] = l; experts[n] = e; counts[n] = c;
+                gate_bytes[n] = g_combo_expert_freq_gate[l]; down_bytes[n] = g_combo_expert_freq_down[l];
+            }
+            n++;
+        }
+    return n;
 }
 
 /* DS4COMBO expert-cache restore: enumerate resident slots oldest->newest by LRU age
