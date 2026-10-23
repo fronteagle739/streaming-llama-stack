@@ -23,7 +23,7 @@ def recover_leases(runtime_root, task='DS4STACK'):
     released = []
     for file in root.glob('*.json'):
         row = json.loads(file.read_text())
-        if row.get('task') != task or row.get('released'):
+        if row.get('task') != task or row.get('released') or row.get('cleanup_uncertain'):
             continue
         try:
             proc = psutil.Process(row['guardian_pid'])
@@ -43,20 +43,31 @@ def recover_leases(runtime_root, task='DS4STACK'):
 
 
 def active_holds(text):
-    active = {}
-    for line in text.splitlines():
-        mac=line.startswith('MAC ')
-        if mac and not re.match(r'^MAC (ACTIVE|RELEASED|ENDED):\s+KIT11[A-Z0-9]*\s',line):
-            continue
-        match = re.match(r'^(?:MAC )?(ACTIVE|RELEASED|ENDED):\s+(\S+)\s+(\S+)', line)
-        if match:
-            state, task, identity = match.groups()
-            key = (mac, task, identity.rstrip(';'))
-            if state == 'ACTIVE':
-                active[key] = line
-            else:
-                active.pop(key, None)
-    return list(active.values())
+    from .native_broker import vendor
+    vendor()
+    from studio.job_guard import priority_holds
+    return (priority_holds(text,('*',),resource='RTX') +
+            [line for line in priority_holds(text,('*',),resource='MAC')
+             if re.match(r'^MAC ACTIVE:\s+KIT11[A-Z0-9]*\s',line)])
+
+
+def reservation_admission(lines, budget_gib, floor_gib, *, available=None, owned_rss=0):
+    """Owner-approved KIT11FIX CPU exception; other/new/larger holds preempt."""
+    blocking=[];reserved=0
+    for line in lines:
+        cpu=(line.startswith('ACTIVE: KIT11FIX Windows native plugin build;') and
+             'host budget 3 GiB; physical RAM reserve 6 GiB;' in line and
+             'no GPU or Studio restart requested.' in line and
+             not re.search(r'exclusive|GPU hold',line,re.I))
+        if cpu:reserved+=9*2**30
+        else:blocking.append(line)
+    available=psutil.virtual_memory().available if available is None else available
+    floor=max(floor_gib,2)*2**30 if reserved else floor_gib*2**30
+    required=reserved+floor+max(0,budget_gib*2**30-owned_rss)
+    if available<required:
+        blocking.append(f'RAM reservation: available={available}, required={required}, owned_rss={owned_rss}')
+    return blocking,dict(available=available,required=required,foreign_reserved_bytes=reserved,
+                         own_budget_bytes=budget_gib*2**30,owned_rss=owned_rss,floor_bytes=floor)
 
 
 @contextmanager
@@ -76,7 +87,7 @@ def gpu_lease(cfg):
             msvcrt.locking(stream.fileno(), msvcrt.LK_NBLCK, 1)
         try:
             lines = stream.read()
-            active = active_holds(lines)
+            active, reservation = reservation_admission(active_holds(lines),cfg['host_budget_gib'],cfg['min_available_gib'])
             if active:
                 raise AdmissionRefused('RTX admission refused: ACTIVE holds exist: ' + '\n'.join(active))
             # WDDM reports every graphics context as a compute client with N/A memory.
@@ -93,7 +104,7 @@ def gpu_lease(cfg):
             lease_path = Path(cfg['runtime_root']) / 'state' / 'leases' / (identity + '.json')
             lease_row = {'task': task, 'id': identity, 'hold_file': str(hold),
                          'guardian_pid': os.getpid(), 'guardian_created': psutil.Process().create_time(),
-                         'released': False}
+                         'released': False,'reservation':reservation}
             atomic_json(lease_path, lease_row)
             expiry = datetime.now(timezone.utc) + timedelta(minutes=cfg['lease_minutes'])
             line = f"\nACTIVE: {task} {identity}; exclusive RTX5090; expires {expiry.isoformat()}; host RSS {cfg['host_budget_gib']} GiB; floor {cfg['min_available_gib']} GiB\n"
@@ -105,11 +116,17 @@ def gpu_lease(cfg):
             if os.name == 'nt':
                 stream.seek(0)
                 msvcrt.locking(stream.fileno(), msvcrt.LK_UNLCK, 1)
+    uncertain=False
     try:
         yield identity
+    except BaseException as error:
+        uncertain=bool(getattr(error,'owned_cleanup_uncertain',False))
+        if uncertain:atomic_json(lease_path,{**lease_row,'cleanup_uncertain':True})
+        raise
     finally:
-        with hold.open('a', encoding='utf-8') as stream:
-            stream.write(f'\nRELEASED: {task} {identity}; {datetime.now(timezone.utc).isoformat()}\n')
-            stream.flush()
-            os.fsync(stream.fileno())
-        atomic_json(lease_path, {**lease_row, 'released': True})
+        if not uncertain:
+            with hold.open('a', encoding='utf-8') as stream:
+                stream.write(f'\nRELEASED: {task} {identity}; {datetime.now(timezone.utc).isoformat()}\n')
+                stream.flush()
+                os.fsync(stream.fileno())
+            atomic_json(lease_path, {**lease_row, 'released': True})

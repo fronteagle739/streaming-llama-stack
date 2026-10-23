@@ -261,7 +261,7 @@ static bool json_u16(const char **p, uint32_t *out) {
     return true;
 }
 
-static bool json_string(const char **p, char **out) {
+static bool json_string_length(const char **p, char **out, size_t *length) {
     /* Always define *out. Every failure path below returns false without
      * producing a string, and several callers reparse in place with
      * `free(x); json_string(&p, &x)` (e.g. duplicate JSON keys, the "model"
@@ -311,11 +311,16 @@ static bool json_string(const char **p, char **out) {
     }
     if (**p != '"') goto fail;
     (*p)++;
+    if (length) *length=b.len;
     *out = buf_take(&b);
     return true;
 fail:
     buf_free(&b);
     return false;
+}
+
+static bool json_string(const char **p, char **out) {
+    return json_string_length(p,out,NULL);
 }
 
 static bool json_number(const char **p, double *out) {
@@ -829,6 +834,8 @@ static bool responses_live_has_call_id(server *s, const char *id);
 static bool anthropic_live_has_call_id(server *s, const char *id);
 static stop_list live_tool_call_order(server *s, api_style api, const stop_list *ids);
 
+typedef struct {bool per_phase;float value,phases[DS4_QUALITY_PHASE_COUNT];} quality_setting;
+
 typedef struct {
     req_kind kind;
     api_style api;
@@ -844,7 +851,7 @@ typedef struct {
     bool quality_speed_set;
     float quality_speed;
     bool quality_per_phase;
-    float quality_phases[3];
+    float quality_phases[DS4_QUALITY_PHASE_COUNT];
     char *prompt_text;
     tool_schema_orders tool_orders;
     int max_tokens;
@@ -895,6 +902,19 @@ typedef struct {
     char *anthropic_live_suffix_text;
     tool_replay_stats tool_replay;
 } request;
+
+/* Keep queued settings independent of subsequent live updates. */
+static void quality_request_store(request *req, bool present, const quality_setting *setting) {
+    req->quality_speed_set=present;
+    req->quality_speed=setting->value;
+    req->quality_per_phase=setting->per_phase;
+    memcpy(req->quality_phases,setting->phases,sizeof(req->quality_phases));
+}
+static int quality_request_apply(const request *req) {
+    if (!req->quality_speed_set) return 0;
+    return req->quality_per_phase ? ds4_quality_speed_set_phase_map(req->quality_phases) :
+        ds4_quality_speed_set(req->quality_speed);
+}
 
 static void tool_call_free(tool_call *tc) {
     free(tc->id);
@@ -14273,8 +14293,7 @@ static void *decode_worker_main(void *arg) {
 static void generate_job_inner(server *s, server_slot *slot, job *j) {
     char err[160];
     err[0] = '\0';
-    if (j->req.quality_speed_set && (j->req.quality_per_phase ?
-        ds4_quality_speed_set_phases(j->req.quality_phases) : ds4_quality_speed_set(j->req.quality_speed))) {
+    if (quality_request_apply(&j->req)) {
         http_error(j->fd,s->enable_cors,409,"quality vs speed unsupported");return;
     }
     const bool multimodal = j->req.image_count != 0;
@@ -16002,11 +16021,17 @@ static long content_length(const char *h, size_t n) {
     return 0;
 }
 
-typedef struct {bool per_phase;float value,phases[4];} quality_setting;
+/* C-string comparisons must not accept a valid name followed by JSON NUL. */
+static bool quality_name(const char **p, char **name) {
+    size_t length=0;
+    if (!json_string_length(p,name,&length)) return false;
+    if (strlen(*name)==length) return true;
+    free(*name);*name=NULL;return false;
+}
 static bool quality_value(const char **p, float *value) {
     json_ws(p);
     if (**p=='"') {
-        char *name=NULL;if (!json_string(p,&name)) return false;
+        char *name=NULL;if (!quality_name(p,&name)) return false;
         static const char *const names[]={"max_quality","balanced","fast","faster","max_speed"};
         static const float values[]={0,.35f,.65f,.9f,1.36125f};
         bool ok=false;for(int i=0;i<5;i++)if(!strcmp(name,names[i])){*value=values[i];ok=true;break;}
@@ -16020,8 +16045,8 @@ static bool quality_phase_map(const char **p,quality_setting *setting) {
     json_ws(p);if(*(*p)++!='{') return false;
     unsigned seen=0;json_ws(p);
     if(**p!='}')for(;;){
-        char *key=NULL;if(!json_string(p,&key))return false;
-        int index=-1;for(int i=0;i<4;i++)if(!strcmp(key,ds4_quality_phase_names[i]))index=i;
+        char *key=NULL;if(!quality_name(p,&key))return false;
+        int index=-1;for(int i=0;i<DS4_QUALITY_PHASE_COUNT;i++)if(!strcmp(key,ds4_quality_phase_names[i]))index=i;
         free(key);json_ws(p);if(*(*p)++!=':' || index<0 || (seen&(1u<<index)))return false;
         if(!quality_value(p,&setting->phases[index]))return false;
         seen|=1u<<index;json_ws(p);if(**p!=',')break;(*p)++;
@@ -16037,15 +16062,14 @@ static bool quality_setting_value(const char **p,quality_setting *setting) {
 static bool quality_config_body(const char *body,bool endpoint,bool *present,quality_setting *setting) {
     ds4_quality_speed current;ds4_quality_speed_get(&current);
     *setting=(quality_setting){.value=current.requested};
-    for(int i=0;i<3;i++)setting->phases[i]=current.per_phase?current.phase_values[i]:current.requested;
-    setting->phases[DS4_QUALITY_CODE]=current.per_phase?current.phase_values[DS4_QUALITY_CODE]:current.requested;
+    for(int i=0;i<DS4_QUALITY_PHASE_COUNT;i++)setting->phases[i]=current.per_phase?current.phase_values[i]:current.requested;
     const char *p=body;*present=false;json_ws(&p);
     if(*p++!='{')return false;
     unsigned phases_seen=0;json_ws(&p);
     if(*p!='}')for(;;){
-        char *key=NULL;if(!json_string(&p,&key))return false;
+        char *key=NULL;if(!quality_name(&p,&key))return false;
         bool match=!strcmp(key,endpoint?"value":"quality_speed");
-        int phase=-1;if(endpoint)for(int i=0;i<4;i++)if(!strcmp(key,ds4_quality_phase_names[i]))phase=i;
+        int phase=-1;if(endpoint)for(int i=0;i<DS4_QUALITY_PHASE_COUNT;i++)if(!strcmp(key,ds4_quality_phase_names[i]))phase=i;
         free(key);json_ws(&p);if(*p++!=':')return false;
         if(match){if(*present || phases_seen || !quality_setting_value(&p,setting))return false;*present=true;}
         else if(phase>=0){
@@ -16449,7 +16473,7 @@ static void *client_main(void *arg) {
         http_request_free(&hr);
         goto done;
     }
-    if (ok) {req.raw_body = xstrndup(hr.body, hr.body_len);req.quality_speed_set=quality_present;req.quality_speed=quality.value;req.quality_per_phase=quality.per_phase;memcpy(req.quality_phases,quality.phases,sizeof(req.quality_phases));}
+    if (ok) {req.raw_body = xstrndup(hr.body, hr.body_len);quality_request_store(&req,quality_present,&quality);}
     http_request_free(&hr);
     if (!ok) {
         http_error(fd, s->enable_cors, 400, err);

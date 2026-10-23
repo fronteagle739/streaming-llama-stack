@@ -9,6 +9,10 @@ import subprocess
 import sys
 import time
 import psutil
+from .native_broker import vendor
+vendor()
+from studio.job_guard import OwnedProcesses, OwnedView
+from studio.job_paging import PagingWatch, paging_bytes
 
 GiB = 1024 ** 3
 
@@ -86,6 +90,8 @@ def _supervise(spec):
     paging_before = snapshot() if spec.get('paging_telemetry') else None
     process_counters = {}
     paging_warnings = []
+    paging_watch=PagingWatch(paging_bytes,warning=lambda message:paging_warnings.append(message))
+    reservation_samples=[];last_reservation_sample=0
     last_paging_sample = 0
     ledger_blocked_since = None
     active_window = None
@@ -96,6 +102,8 @@ def _supervise(spec):
                                  stdout=log, stderr=log, creationflags=flags,
                                  start_new_session=os.name != 'nt')
         job = None
+        owned = OwnedProcesses(child)
+        cleanup = None
         try:
             if os.name == 'nt':
                 job = windows_job(child, spec['job_commit_gib'])
@@ -110,12 +118,13 @@ def _supervise(spec):
                 except psutil.NoSuchProcess:
                     reason = 'owning process exited'
                 try:
-                    p = psutil.Process(child.pid)
-                    rss = 0
-                    for member in [p, *p.children(recursive=True)]:
+                    members=owned.refresh()
+                    rss = commit = 0
+                    for member in members:
                         try:
                             info, created = member.memory_info(), member.create_time()
                             rss += info.rss
+                            commit += getattr(info,'private',info.rss)
                             key = f'{member.pid}:{created:.6f}'
                             faults = getattr(info, 'num_page_faults', None)
                             row = process_counters.setdefault(key, {'pid': member.pid, 'created': created,
@@ -127,7 +136,7 @@ def _supervise(spec):
                         except psutil.NoSuchProcess:
                             pass
                 except psutil.NoSuchProcess:
-                    rss = 0
+                    rss = commit = 0;members=[]
                 free = psutil.virtual_memory().available
                 peak, minimum = max(peak, rss), min(minimum, free)
                 if rss > budget * GiB or free < floor * GiB:
@@ -157,45 +166,41 @@ def _supervise(spec):
                     except (ValueError,KeyError,TypeError,OSError) as exc:
                         reason='GPU request window metadata refused: '+str(exc)
                 if identity:
-                    from .lease import active_holds
+                    from .lease import active_holds, reservation_admission
                     try:
                         holds = active_holds(Path(hold_file).read_text(encoding='utf-8-sig'))
                         foreign = [line for line in holds if len(line.split()) < 3 or
                                    line.split()[2].rstrip(';') != identity]
                         ledger_blocked_since = None
-                        if foreign:
-                            reason = 'preempted by foreign ACTIVE hold: ' + repr(foreign)
+                        gpu=spec.get('gpu') or {}
+                        blockers,reservation=reservation_admission(foreign,gpu.get('host_budget_gib',budget+.25),floor,available=free,owned_rss=rss)
+                        if time.monotonic()-last_reservation_sample>=50:
+                            reservation_samples.append(reservation);last_reservation_sample=time.monotonic()
+                        if blockers:
+                            reason = 'preempted by foreign ACTIVE hold or RAM reservation: ' + repr(blockers)
                         elif not holds:
                             reason = 'own ACTIVE hold is no longer present'
                     except OSError as exc:
                         if ledger_blocked_since is None:ledger_blocked_since=time.monotonic()
                         if time.monotonic()-ledger_blocked_since>=1:
                             reason = 'GPU hold ledger unavailable for1second: ' + str(exc)
-                if paging_before and time.monotonic() - last_paging_sample >= 1:
-                    last_paging_sample = time.monotonic()
-                    current = snapshot()
-                    initial = paging_before.get('paging_file_usage', {}).get('first')
-                    value = current.get('paging_file_usage', {}).get('first')
-                    if initial is not None and value is not None:
-                        # EnumPageFilesW TotalInUse is allocated pages. This is
-                        # global activity, not attribution to our process.
-                        growth = max(0, value - initial) * current.get('page_size',4096)
-                        if growth > 256 << 20:
-                            reason = 'SYSTEM PAGING PRESSURE: allocated page-file growth exceeds256MiB'
-                        elif growth and not paging_warnings:
-                            paging_warnings.append({'global_pagefile_growth_bytes': growth,
-                                'available_physical_bytes': free,
-                                'action': 'warning; below256MiB, process RSS and physical floor still enforced'})
+                if members:
+                    failure=paging_watch.check(OwnedView(members),rss,commit,rss_limit=budget*GiB,
+                        commit_limit=spec['job_commit_gib']*GiB,floor=floor*GiB)
+                    if failure:reason=failure
                 if reason:
-                    kill_tree(child)
+                    cleanup=owned.stop()
                     break
                 time.sleep(.05)
             code = child.wait()
+        except BaseException as exc:
+            reason=repr(exc);cleanup=owned.stop();code=child.wait(timeout=10)
         finally:
             if child.poll() is None:
-                kill_tree(child)
+                cleanup=owned.stop();child.wait(timeout=10)
             if job:
                 job[0].CloseHandle(job[1])
+            cleanup=owned.stop()
     receipt = {'exit_code': code, 'reason': reason, 'peak_tree_rss': peak,
                'min_available': minimum, 'elapsed_s': time.monotonic() - start,
                'started_monotonic': start, 'deadline_monotonic': start+spec['timeout_s'],
@@ -204,8 +209,15 @@ def _supervise(spec):
     receipt.update(paging_before=paging_before, paging_after=snapshot() if spec.get('paging_telemetry') else None,
                    process_memory_counters=list(process_counters.values()),
                    paging_warnings=paging_warnings,
+                   global_paging_growth=paging_watch.max_global_growth,owned_paged_bytes=paging_watch.job_paged,
+                   paging_attribution=paging_watch.observer.attribution,cleanup=cleanup,
+                   release_allowed=cleanup['confirmed'],reservation_samples=reservation_samples,
                    paging_interpretation='Process faults include soft and hard faults. Private commit/pagefile usage is not disk I/O. System counters include other processes; these counters alone do not prove core/KV residency.')
     Path(spec['receipt']).write_text(json.dumps(receipt, indent=2))
+    if not cleanup['confirmed']:
+        error=RuntimeError('Owned cleanup unconfirmed; GPU hold retained')
+        error.owned_cleanup_uncertain=True
+        raise error
     return 0 if code == 0 and reason is None else 1
 
 

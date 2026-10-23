@@ -6,6 +6,20 @@ and saved-frontier rewind test. ULTRA import parity, crossover, long-context
 performance and normal Studio acceptance are still pending. Source and CPU
 tests do not qualify the combined preset.
 
+The request queue now imports the existing four-phase persistence correction
+from BIASFIX revision `e1e45374ddc307c75bd7fc0e4b8dccce6b0af6e2`.
+Unknown, duplicate and embedded-NUL phase values fail explicitly. The real
+request acceptance checks Code independently from Answer across a live update
+and the next saved request; endpoint readback alone is insufficient.
+
+The scheduler reuses Studio's shared paging policy, bounded process-attributed
+page observer and exact process ownership implementation from revision
+`f6c4b544e14a0bdbda7fa0e7a9496f0eadf9ed2c`. Global page-file growth is a warning
+up to the shared 256 MB pressure limit. Any observed owned page-file use fails.
+CPU-only reservations are admitted only with the full remaining job budget,
+the foreign host budget and reserve, and the physical floor still available.
+New GPU or larger reservations preempt the job; uncertainty retains its lease.
+
 The versioned mode-1 contract binds the original model, native tokenizer and
 template, both RoPE implementations, F32 KV, context, position, token/logit
 hashes and every owner by kind/index. Mode 1 has 48 even-position owners or
