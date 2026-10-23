@@ -898,8 +898,7 @@ int wmain(int argc,wchar_t**argv){
             // imported D3D12 buffers, locked carry RAM, ggml device memory) explicitly and log it,
             // instead of relying on Job termination and driver rundown.
             const auto teardown=clock_type::now();sweep.reset();payload.reset();
-            std::fprintf(stderr,"DS4COMBO_PRODUCER_GRACEFUL_SHUTDOWN_COMPLETE sweep_release_ms=%.1f
-",ms(teardown));std::fflush(stderr);return 0;}
+            std::fprintf(stderr,"DS4COMBO_PRODUCER_GRACEFUL_SHUTDOWN_COMPLETE sweep_release_ms=%.1f\n",ms(teardown));std::fflush(stderr);return 0;}
         std::fputs(hash_only?"Canonical native frontier hashed; receipt complete; no payload file created.\n":"Offline native payload and receipt completed; receiver/parity qualification remains pending.\n",stdout);return 0;
     }catch(const std::exception&failure){
         if(sweep)sweep->cancel();report["status"]=interrupted.load()?"cancelled":"failed";report["error"]=failure.what();report["memory_floor_abort"]=memory_abort.load();
