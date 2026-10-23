@@ -28,6 +28,23 @@ class FakeNative:
 
 
 class ProcessTest(unittest.TestCase):
+    def test_broken_bootstrap_retains_diagnostic_and_exact_cleanup_owner(self):
+        import uuid
+        from slstack.combo_producer import startup_failure
+        directory=Path(os.environ['STUDIO_RUNTIME_ROOT'])/('producer-startup-'+uuid.uuid4().hex)
+        directory.mkdir()
+        original=BrokenPipeError(32,'Broken pipe')
+        original.owned_cleanup=dict(owned_job_empty=True,owned_process_signaled=True,owned_pid_gone=True)
+        original.owned_runtime=object()
+        original.owned_diagnostic=b'DS4PERF_COMBINED_ADMISSION planned_host=6000 admitted_host=5000\ncombined job exceeds total resource admission\n'
+        reported=startup_failure(original,directory)
+        self.assertIsInstance(reported,RuntimeError)
+        self.assertIn('planned_host=6000',str(reported))
+        self.assertIn('combined job exceeds',str(reported))
+        self.assertIs(reported.owned_cleanup,original.owned_cleanup)
+        self.assertIs(reported.owned_runtime,original.owned_runtime)
+        self.assertEqual((directory/'stderr.log').read_bytes(),original.owned_diagnostic)
+
     def test_pre_readiness_admission_refusal_retires_job_without_startup(self):
         native=FakeNative();events=[]
         original=native.suspended
