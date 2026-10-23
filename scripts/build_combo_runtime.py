@@ -45,6 +45,7 @@ def relocate_runtime(cfg,installed,revision):
     installed=Path(installed);scratch=Path(cfg['runtime_root']).resolve()
     result=deepcopy(cfg)
     result.update(runtime_root=str(installed/'runtime'),host_budget_gib=cfg['host_budget_gib']+.25,
+        combo_worker_host_budget_gib=cfg['host_budget_gib'],
         combo_qualification_root=str(installed/'qualification'),
         combo_native_binding=str(installed/'qualification/native-parity-binding.json'),
         combo_ultra_guard=str(installed/'qualification/ultra-parity.receipt.json'),

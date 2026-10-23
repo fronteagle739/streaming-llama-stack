@@ -18,6 +18,7 @@ class InstallTest(unittest.TestCase):
         self.assertNotIn(str(scratch).replace('\\','/'),json.dumps(result).replace('\\\\','/'))
         self.assertEqual(result['producer_library_directories'],[str(installed/'native'),str(external)])
         self.assertEqual(result['host_budget_gib'],8)
+        self.assertEqual(result['combo_worker_host_budget_gib'],7.75)
         self.assertEqual(json.dumps(cfg,sort_keys=True),original)
 
     def test_unknown_scratch_dependency_refuses_staging(self):

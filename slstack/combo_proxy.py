@@ -10,6 +10,7 @@ import argparse
 import hashlib
 import hmac
 import json
+import math
 import os
 from pathlib import Path
 import secrets
@@ -43,6 +44,19 @@ def conversation_key(body):
 def begins_conversation(body):
     roles=[message.get('role') for message in body.get('messages',[])]
     return roles.count('user')==1 and all(role in ('system','developer','user') for role in roles)
+
+
+def request_worker_config(cfg):
+    """Exclude the independent controller from the worker/state admission."""
+    total=cfg['host_budget_gib']
+    if type(total) not in (int,float) or not math.isfinite(total) or total<=.25:
+        raise ValueError('Positive aggregate budget after controller reservation required')
+    worker=cfg.get('combo_worker_host_budget_gib',total-.25)
+    if (type(worker) not in (int,float) or not math.isfinite(worker) or
+        worker<=0 or worker!=total-.25):
+        raise ValueError('Worker budget must match the enclosing tree after controller reservation')
+    result=deepcopy(cfg);result['host_budget_gib']=worker
+    return result
 
 
 class Proxy:
@@ -167,7 +181,7 @@ def handler(proxy):
                 fresh=begins_conversation(body) and proxy.session is not None and not proxy.session.poison
                 if proxy.key!=key or fresh:
                     if proxy.session:proxy.session.close()
-                    proxy.session=ComboSession(proxy.cfg);proxy.key=key
+                    proxy.session=ComboSession(request_worker_config(proxy.cfg));proxy.key=key
                 session=proxy.session
                 from studio.quality_speed_contract import validate
                 proxy.pending=validate(body.get('quality_speed',proxy.pending))
@@ -263,6 +277,7 @@ def native_launch_config(cfg,argv):
 def guarded(cfg,config):
     from .guard import supervise,admit
     from .config import environment
+    cfg=deepcopy(cfg);cfg['combo_worker_host_budget_gib']=request_worker_config(cfg)['host_budget_gib']
     root=Path(cfg['runtime_root']);root.mkdir(parents=True,exist_ok=True)
     admit(cfg['host_budget_gib'],cfg['min_available_gib'])
     run_id=secrets.token_hex(16);window=root/('gpu-window-'+run_id+'.json')
@@ -274,7 +289,7 @@ def guarded(cfg,config):
     run_config=root/('server-'+run_id+'.config.json');atomic_json(run_config,cfg)
     command=[sys.executable,'-B','-m','slstack.combo_proxy','--config',str(run_config),'--serve','--run-id',run_id,'--window',str(window)]
     spec=dict(command=command,cwd=str(Path(__file__).resolve().parents[1]),env=env,runtime_root=str(root),task='DS4COMBO',
-        host_budget_gib=cfg['host_budget_gib']-.25,min_available_gib=cfg['min_available_gib'],job_commit_gib=cfg['job_commit_gib'],timeout_s=86400,
+        host_budget_gib=cfg['combo_worker_host_budget_gib'],min_available_gib=cfg['min_available_gib'],job_commit_gib=cfg['job_commit_gib'],timeout_s=86400,
         owner_pid=owner.pid,owner_created=owner.create_time(),stop=str(root/('server-'+run_id+'.stop')),
         log=str(root/('server-'+run_id+'.log')),receipt=str(root/('server-'+run_id+'.json')),paging_telemetry=True,
         gpu_window_file=str(window),gpu_run_id=run_id,gpu_hold_file=cfg['hold_file'])
