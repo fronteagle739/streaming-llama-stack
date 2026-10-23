@@ -66,12 +66,13 @@ def run(cfg,output,reasoning_history,window):
     bank=None;transcript=[]
     proof=dict(status='RUNNING',reasoning_history=reasoning_history,session=auto.session,owner_epoch=auto.epoch,
                native_sha256=cfg['native_sha256'],producer_sha256=cfg['producer_sha256'],
-               identity=cfg['combo_identity'],provider_schema=cfg['provider_schema'],threshold=threshold,turns=[])
+               identity=cfg['combo_identity'],provider_schema=cfg['provider_schema'],threshold=threshold,
+               prompts=prompts(threshold),max_tokens=384,reasoning_effort='low',turns=[])
     atomic_json(output,proof)
     try:
         bank=LockedRam(32+384*4+384*129280*4,session=auto.session,
                        host_budget_gib=cfg['host_budget_gib'],min_available_gib=cfg['min_available_gib'])
-        for index,text in enumerate(prompts(threshold)):
+        for index,text in enumerate(proof['prompts']):
             body=dict(model='deepseek-reasoner',messages=[*transcript,dict(role='user',content=text)],
                       include_previous_reasoning=reasoning_history,max_tokens=384,reasoning_effort='low',temperature=0,quality_speed=0)
             row=dict(turn=index+1,expected_route=ROUTES[index],status='RUNNING')

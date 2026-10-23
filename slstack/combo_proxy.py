@@ -40,6 +40,11 @@ def conversation_key(body):
     return hashlib.sha256(json.dumps(row,sort_keys=True,separators=(',',':'),allow_nan=False).encode()).hexdigest()
 
 
+def begins_conversation(body):
+    roles=[message.get('role') for message in body.get('messages',[])]
+    return roles.count('user')==1 and all(role in ('system','developer','user') for role in roles)
+
+
 class Proxy:
     def __init__(self,cfg,run_id,window_file):
         vendor();from studio.quality_speed_contract import NAMED
@@ -84,7 +89,7 @@ class Proxy:
         return result
 
 
-def relay_stream(response,write,completed):
+def relay_stream(response,write,completed,observed=None):
     """Preserve native SSE bytes; hold terminal metadata until state is saved.
 
     A normal client closes on finish/DONE. Stop disconnect cancellation at
@@ -103,6 +108,7 @@ def relay_stream(response,write,completed):
                 else:
                     row=json.loads(data)
                     if row.get('error'):raise RuntimeError('Native stream failed: '+str(row['error']))
+                    if observed is not None:observed(row)
                     finished=finished or any(c.get('finish_reason') is not None for c in row.get('choices',[]))
                 if finished:completed.set()
             if finished:
@@ -151,10 +157,11 @@ def handler(proxy):
             if self.path!='/v1/chat/completions':return self.send(404,dict(error=dict(message='Unknown native endpoint')))
             if not proxy.lock.acquire(blocking=False):return self.send(409,dict(error=dict(message='Another request owns this decoder')))
             streaming=body.get('stream') is True;headers=False;done=threading.Event();session=None;timer=None
-            metrics=None
+            metrics=None;request_started=time.monotonic()
             try:
                 key=conversation_key(body)
-                if proxy.key!=key:
+                fresh=begins_conversation(body) and proxy.session is not None and not proxy.session.poison
+                if proxy.key!=key or fresh:
                     if proxy.session:proxy.session.close()
                     proxy.session=ComboSession(proxy.cfg);proxy.key=key
                 session=proxy.session
@@ -176,13 +183,21 @@ def handler(proxy):
                     proxy.window(True,lease)
                     try:
                         with session.prepare(body) as (native,rendered,metrics):
+                            api_started=time.monotonic()
+                            def observed(row):
+                                meaningful=any(any((choice.get('delta') or {}).get(field) for field in ('content','reasoning_content','tool_calls'))
+                                               for choice in row.get('choices',[]))
+                                if meaningful and 'native_api_first_token_seconds' not in metrics:
+                                    metrics['native_api_first_token_seconds']=time.monotonic()-api_started
+                                    metrics['total_first_token_seconds']=metrics['prepared_seconds']+metrics['native_api_first_token_seconds']
+                                    metrics['coordinator_first_token_seconds']=time.monotonic()-request_started
                             request=urllib.request.Request(native.url+'/v1/chat/completions',
                                 data=json.dumps(rendered,separators=(',',':'),allow_nan=False).encode(),
                                 headers={'Content-Type':'application/json','Authorization':'Bearer '+native.token})
                             with urllib.request.urlopen(request,timeout=proxy.cfg['request_timeout_s']) as response:
                                 if streaming:
                                     def write(block):self.wfile.write(block);self.wfile.flush()
-                                    terminal=relay_stream(response,write,done)
+                                    terminal=relay_stream(response,write,done,observed)
                                 else:
                                     raw=response.read((8<<20)+1)
                                     if len(raw)>8<<20:raise ValueError('Native response exceeded8MiB')

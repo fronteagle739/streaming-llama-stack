@@ -85,6 +85,7 @@ class SequenceTest(unittest.TestCase):
             capacity=1<<20
             def close(self):events.append('RAM close')
         class Native:
+            directory='owned-native'
             def __init__(self,*args,restore=None,**kwargs):
                 events.append('native restore' if restore else 'native open');self.checkpoint=None if not restore else cp(200);self.launch_seconds=.1
             def render(self,body):events.append('render');return tokens
