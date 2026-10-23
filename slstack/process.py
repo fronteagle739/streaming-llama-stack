@@ -40,6 +40,7 @@ class OwnedProcess:
         if gpu:
             spec['gpu'] = cfg
         self.spec = self.prefix.with_suffix('.spec.json')
+        spec['_spec_path'] = str(self.spec)
         self.spec.write_text(json.dumps(spec))
         self.guard_log = self.prefix.with_suffix('.guard.log').open('ab')
         self.proc = subprocess.Popen([sys.executable, '-B', '-m', 'slstack.guard', str(self.spec)],

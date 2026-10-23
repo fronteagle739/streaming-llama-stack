@@ -29,6 +29,7 @@ def main():
     for name in ('mac', 'mac-setup'):
         child = sub.add_parser(name)
         child.add_argument('--model')
+        child.add_argument('--pair-token', help='Optional shared token for either-machine-first startup')
         child.add_argument('--mtp-model')
         child.add_argument('--backend', choices=['ds4', 'mlx-serve'], default=None)
         child.add_argument('--port', dest='mac_port', type=int)
@@ -107,6 +108,8 @@ def main():
         print(json.dumps(build), flush=True)
         if args.command == 'mac-setup' or args.check:
             return 0 if build['ready'] else 1
+        if args.host_budget_gib is not None:
+            cfg['mac_host_budget_gib'] = args.host_budget_gib
         launch = budget(cfg, 400 if backend == 'ds4' else 128)
         launch['mac_build'] = build
         launch['backend'] = backend
@@ -115,9 +118,14 @@ def main():
         proc = OwnedProcess(launch, [sys.executable, '-B', '-m', 'slstack', '--config', str(effective), 'mac-internal'],
                             'mac-receiver', timeout=86400)
         try:
+            from .mac import wait_for_receiver
+            wait_for_receiver(launch, proc)
             proc.wait()
         except KeyboardInterrupt:
-            proc.stop()
+            pass
+        finally:
+            if proc.proc.poll() is None:
+                proc.stop()
         return 0
     if args.command == 'mac-internal':
         from .mac import serve

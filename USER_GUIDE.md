@@ -123,6 +123,8 @@ Native controls take effect at token boundaries. The response reports requested 
 
 Budget placeholders use the admitted child budget: `{host_budget_bytes}`, `{host_budget_mb}` and `{physical_floor_bytes}`. `{host_budget_gib}` and `{min_available_gib}` use GiB. User overrides are literal strings, including JSON and braces.
 
+Hardware commands use the pinned shared ownership/paging guard and have an active-command limit of 19 minutes. It enforces the physical budget/floor and a separate Windows device-backing commit allowance. Windows owned-page observations are bounded and incremental; Darwin disk-only process attribution is unavailable. Zero observed pages does not establish exhaustive zero pagefile I/O. Resource leases remain held if owned cleanup cannot be confirmed.
+
 Examples (edit paths in the config first):
 
 ```text

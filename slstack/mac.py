@@ -122,9 +122,14 @@ class Receiver:
         self.qualification = {}
         self.token_file = Path(cfg['runtime_root']) / 'state' / 'pair.token'
         self.token_file.parent.mkdir(parents=True, exist_ok=True)
+        supplied = cfg.get('pair_token')
+        if supplied is not None and (not isinstance(supplied,str) or not re.fullmatch(r'[A-Za-z0-9_-]{16,128}',supplied)):
+            raise ValueError('Pairing token must contain 16–128 URL-safe letters, digits, _ or -')
+        if supplied and self.token_file.exists() and self.token_file.read_text().strip() != supplied:
+            raise ValueError('Stored token differs; use a separate runtime directory for another pairing')
         if not self.token_file.exists():
             with self.token_file.open('x', encoding='utf-8') as stream:
-                stream.write(secrets.token_urlsafe(32) + '\n')
+                stream.write((supplied or secrets.token_urlsafe(32)) + '\n')
             self.token_file.chmod(0o600)
         self.token = self.token_file.read_text().strip()
         saved = self.token_file.with_name('peer.json')
@@ -272,11 +277,48 @@ class Receiver:
         atomic_json(self.token_file.with_name('peer.json'), self.peer)
         return {k: v for k, v in self.peer.items() if k != 'producer_ipv4'}
 
+    def events(self, body):
+        if self.backend != 'ds4' or not self.peer or self.peer.get('status') != 'qualified':
+            raise ValueError('Complete native pairing before streaming')
+        self.ready(True)
+        from .pairing import conversation_key
+        from .streaming import events
+        body = {**body,'stream':True,'prompt_cache_key':conversation_key(body)}
+        body.setdefault('include_previous_reasoning',True)
+        yield from events(f'http://127.0.0.1:{self.cfg.get("mac_engine_port",8181)}/v1/chat/completions',
+                          body, timeout=self.cfg['request_timeout_s'])
+
+
+def wait_for_receiver(cfg, job):
+    """Relay only the owned receiver's user-facing startup lines to its terminal."""
+    deadline = time.monotonic() + 60
+    bind = cfg.get('mac_bind','0.0.0.0')
+    host = '127.0.0.1' if bind == '0.0.0.0' else bind
+    while time.monotonic() < deadline:
+        if job.proc.poll() is not None:
+            job.wait()
+            raise RuntimeError('Receiver exited before startup')
+        try:
+            ready = http_json(f'http://{host}:{cfg.get("mac_port",8180)}/health',timeout=2)
+            if ready.get('ready') and job.log.is_file():
+                with job.log.open('rb') as stream:
+                    lines = stream.read(131072).decode('utf-8',errors='replace').splitlines()
+                visible = [line for line in lines if line.startswith(('MAC ENDPOINT:','RTX command:'))]
+                if any(line.startswith('RTX command:') for line in visible):
+                    for line in visible:
+                        print(line,flush=True)
+                    return
+        except (OSError,RuntimeError):
+            pass
+        time.sleep(.25)
+    raise TimeoutError('Receiver startup/address announcement exceeded 60 seconds')
+
 
 def serve(cfg, backend, build):
     receiver = Receiver(cfg, backend, build)
 
     class Handler(BaseHTTPRequestHandler):
+        protocol_version = 'HTTP/1.1'
         def log_message(self, *args):
             pass
 
@@ -330,6 +372,10 @@ def serve(cfg, backend, build):
                         receiver.close()
                         result = {'ejected': True}
                     elif self.path == '/v1/chat/completions':
+                        if body.get('stream'):
+                            from .streaming import send
+                            send(self,receiver.events(body))
+                            return
                         result = receiver.chat(body)
                     else:
                         raise ValueError('Unknown receiver operation')
@@ -338,11 +384,13 @@ def serve(cfg, backend, build):
                 self.reply(409, {'error': str(exc)})
 
     port = cfg.get('mac_port', 8180)
-    for address in addresses():
-        print(f'MAC ENDPOINT: http://{address}:{port}', flush=True)
-    print('RTX command: slstack rtx --mac <chosen-endpoint> --pair-token ' + receiver.token +
-          ' --model <rtx-model.gguf> --comfyui-models <models>', flush=True)
     server = ThreadingHTTPServer((cfg.get('mac_bind', '0.0.0.0'), port), Handler)
+    server.daemon_threads = True
+    announced = addresses() if cfg.get('mac_bind','0.0.0.0') == '0.0.0.0' else [cfg['mac_bind']]
+    for address in announced:
+        print(f'MAC ENDPOINT: http://{address}:{port}', flush=True)
+    print(f'RTX command: ./slstack.ps1 rtx --mac http://{announced[0]}:{port} --pair-token ' + receiver.token +
+          ' --model "<rtx-model.gguf>" --comfyui-models "<models>"', flush=True)
     try:
         server.serve_forever(poll_interval=.2)
     finally:

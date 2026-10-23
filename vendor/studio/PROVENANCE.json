@@ -81,6 +81,20 @@
       "path": "dsv41_session_contract.py",
       "source_sha256": "659177dac080de8afa5c5fab70bfd2a70b6620857efd0cf234340c48c916a6d8",
       "selected": null
+    },
+    {
+      "path": "job_paging.py",
+      "source_commit": "d83aa32382f83027631e7954951560c520f9cf6b",
+      "source_sha256": "f258515c811f3d8284c1e1a530b7ba22b5b6e3401fa508faf914cd90ded8c97a",
+      "selected": null,
+      "changes": "Two-line provenance header only; source body retained, LF-normalized digest checked before use"
+    },
+    {
+      "path": "job_guard.py",
+      "source_commit": "d83aa32382f83027631e7954951560c520f9cf6b",
+      "source_sha256": "ba887954af378ef01a50e98705bde516ee0b6bde74bf46a9a9425e0d686a1323",
+      "selected": null,
+      "changes": "Two-line provenance header only; source body retained, LF-normalized digest checked before use"
     }
   ],
   "quality_speed": {

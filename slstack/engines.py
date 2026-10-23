@@ -207,6 +207,13 @@ class Engines:
         return http_json(self.cfg['ds4_url'] + '/v1/chat/completions', body, self.cfg['request_timeout_s'],
                          headers={'Authorization': 'Bearer ' + self.cfg['_control_token']})
 
+    def chat_events(self, body):
+        self.select(body.get('model'))
+        self.ready()
+        if not self.remote:
+            raise ValueError('Native streaming proxy requires the paired Mac receiver')
+        yield from self.remote.events(body)
+
     def media(self, kind, params):
         model = self.cfg[kind + '_model']
         if not model and not self.cfg['comfyui_models']:
