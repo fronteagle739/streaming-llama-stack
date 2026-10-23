@@ -13,3 +13,5 @@ The fresh-source build exposed three omitted CUDA include dependencies. They are
 Queued four-phase request preservation: `5ada2a7bf1ad12aebf4fc749121d49c4da78fb46`. Four independent settings survive the existing chat queue; legacy three-phase maps still inherit answer for code at parsing. Compiled production transport regression includes the failing three-slot negative control. CUDA arithmetic is unchanged.
 
 Strict quality-name parsing and queued-request regression reused from provider `e1e45374ddc307c75bd7fc0e4b8dccce6b0af6e2`. Embedded JSON NUL in mode, phase or setting names is rejected. Existing stack queue helper names are retained; the provider regression calls those equivalent helpers. CUDA arithmetic is unchanged.
+
+Stack response adapter: nonstream OpenAI replies expose llama.cpp-compatible timing fields from the existing monotonic native prefill and generation boundaries. Cached prompt tokens are excluded from the fresh prompt count. Generation timing includes any recovery passes and their tokens; no duration is inferred from a sampled throughput rate. The stack forwards these fields to the existing chat statistics component.
