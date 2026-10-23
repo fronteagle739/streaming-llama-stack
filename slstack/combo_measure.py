@@ -103,7 +103,11 @@ def measure(cfg,body,output,route=None,followups=()):
     try:
         for index in range(1+len(followups)):
             started=time.monotonic()
+            proof['active_turn']=dict(index=index,phase='preparing',request_started_monotonic=started)
+            atomic_json(output,proof)
             with session.prepare(current) as (native,rendered,metrics):
+                proof['active_turn'].update(phase='decoding',native_directory=str(native.directory),metrics=metrics)
+                atomic_json(output,proof)
                 result=stream_completion(native,rendered)
                 result['provider_final']=native.quality()
                 result['total_first_token_seconds']=metrics['prepared_seconds']+result['native_api_first_token_seconds']
@@ -118,7 +122,7 @@ def measure(cfg,body,output,route=None,followups=()):
                 spec=followups[index]
                 current={**body,'messages':[*(current['messages']),result['message'],dict(role='user',content=spec['content'])],
                          'max_tokens':spec.get('max_tokens',128),'include_previous_reasoning':spec.get('include_previous_reasoning',True)}
-        proof['status']='PASS'
+        proof['status']='PASS';proof['active_turn']=None
     except BaseException as exc:
         proof['status']='FAIL';proof['error']=repr(exc);raise
     finally:

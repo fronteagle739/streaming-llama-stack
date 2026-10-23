@@ -198,6 +198,7 @@ def _supervise(spec):
                 job[0].CloseHandle(job[1])
     receipt = {'exit_code': code, 'reason': reason, 'peak_tree_rss': peak,
                'min_available': minimum, 'elapsed_s': time.monotonic() - start,
+               'started_monotonic': start, 'deadline_monotonic': start+spec['timeout_s'],
                'host_budget_gib': budget, 'floor_gib': floor,
                'job_commit_gib': spec['job_commit_gib'], 'child_pid': child.pid}
     receipt.update(paging_before=paging_before, paging_after=snapshot() if spec.get('paging_telemetry') else None,
