@@ -28,6 +28,11 @@ class GuardTest(unittest.TestCase):
         self.assertTrue(reservation_admission([line.replace('3 GiB','4 GiB')],9.25,2,available=32*2**30)[0])
         self.assertTrue(reservation_admission([line+' GPU hold'],9.25,2,available=32*2**30)[0])
 
+    def test_without_foreign_reservation_live_job_keeps_its_physical_floor(self):
+        self.assertTrue(reservation_admission([],8,2,available=9*2**30)[0])
+        self.assertFalse(reservation_admission([],8,2,available=9*2**30,owned_rss=1*2**30)[0])
+        self.assertTrue(reservation_admission([],8,2,available=2*2**30-1,owned_rss=1*2**30)[0])
+
     def run_cpu(self,foreign=False,pages=0,dynamic=None,owned_pages=0):
         root=Path(os.environ['STUDIO_RUNTIME_ROOT']);nonce=uuid.uuid4().hex
         prefix=root/('guard-cpu-'+nonce)

@@ -51,7 +51,7 @@ def active_holds(text):
              if re.match(r'^MAC ACTIVE:\s+KIT11[A-Z0-9]*\s',line)])
 
 
-def reservation_admission(lines, budget_gib, floor_gib, *, available=None, owned_rss=0):
+def reservation_admission(lines, budget_gib, floor_gib, *, available=None, owned_rss=None):
     """Owner-approved KIT11FIX CPU exception; other/new/larger holds preempt."""
     blocking=[];reserved=0
     for line in lines:
@@ -63,7 +63,12 @@ def reservation_admission(lines, budget_gib, floor_gib, *, available=None, owned
         else:blocking.append(line)
     available=psutil.virtual_memory().available if available is None else available
     floor=max(floor_gib,2)*2**30 if reserved else floor_gib*2**30
-    required=reserved+floor+max(0,budget_gib*2**30-owned_rss)
+    # At admission reserve the full budget. During execution the extra
+    # outstanding-allocation rule applies to the owner's CPU reservation.
+    # With no reservation, the shared guard enforces actual RSS/commit/floor;
+    # each subsequent engine/locked-state allocation also has its own admission.
+    outstanding=max(0,budget_gib*2**30-(owned_rss or 0))
+    required=reserved+floor+(outstanding if reserved or owned_rss is None else 0)
     if available<required:
         blocking.append(f'RAM reservation: available={available}, required={required}, owned_rss={owned_rss}')
     return blocking,dict(available=available,required=required,foreign_reserved_bytes=reserved,
