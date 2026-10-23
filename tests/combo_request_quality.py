@@ -15,7 +15,7 @@ def main(config_path,output):
     device=_Native();baseline=device.gpu(0,cfg['gpu_uuid']);owner=None
     proof=dict(status='RUNNING',native_sha256=cfg['native_sha256'],provider_schema=cfg['provider_schema'],requests=[])
     try:
-        owner=Native(dict(cfg,host_budget_gib=cfg['native_host_budget_gib']),secrets.token_hex(16),secrets.randbits(63) or 1,1,lambda:False,runner=device)
+        owner=Native(dict(cfg,host_budget_gib=cfg['native_host_budget_gib'],aggregate_host_budget_gib=cfg['host_budget_gib']),secrets.token_hex(16),secrets.randbits(63) or 1,1,lambda:False,runner=device)
         proof['invalid_requests']=[]
         for value in ({'cod':0},{'code':'invalid'},{'code':False},{'code\x00extra':0}):
             for endpoint,body in (('/v1/quality-speed',{'value':value}),('/v1/chat/completions',{'quality_speed':value,'messages':[]})):

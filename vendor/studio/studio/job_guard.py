@@ -34,10 +34,15 @@ class ProcessIdentity:
     def read(cls, process):
         return cls(process.pid, process.create_time(), os.path.normcase(process.exe()))
 
+    def same_process(self, other):
+        # exec replaces an image, not the OS process. PID plus birth time is
+        # ownership; executable remains audit metadata. Reused PIDs still fail.
+        return (self.pid, self.created) == (other.pid, other.created)
+
     def process(self):
         try:
             process = psutil.Process(self.pid)
-            if self == self.read(process) and process.is_running() and process.status() != psutil.STATUS_ZOMBIE:
+            if self.same_process(self.read(process)) and process.is_running() and process.status() != psutil.STATUS_ZOMBIE:
                 return process
         except psutil.NoSuchProcess:
             pass
@@ -69,7 +74,7 @@ class OwnedProcesses:
                     if process.ppid() != parent.pid or identity.process() is None:
                         continue
                     previous = self.identities.get(candidate.pid)
-                    if previous is not None and previous != candidate:
+                    if previous is not None and not previous.same_process(candidate):
                         raise RuntimeError('owned PID was reused; refusing to adopt its replacement')
                     self.identities[candidate.pid] = candidate
                     pending.append(candidate)
@@ -80,14 +85,14 @@ class OwnedProcesses:
         return self.live()
 
     def live(self):
-        return [process for identity in self.identities.values()
+        return [process for identity in list(self.identities.values())
                 if (process := identity.process()) is not None]
 
     def stop(self, grace=1, timeout=3):
         errors = []
         def live():
             result=[]
-            for identity in self.identities.values():
+            for identity in list(self.identities.values()):
                 try:
                     if (process := identity.process()) is not None:
                         result.append(process)
@@ -179,6 +184,7 @@ class WindowsJob:
         class Limits(c.Structure):
             _fields_ = [('basic', Basic), ('io', c.c_uint64*6), ('process', c.c_size_t),
                 ('job', c.c_size_t), ('peak_process', c.c_size_t), ('peak_job', c.c_size_t)]
+        self.Limits=Limits
         self.handle = self.api.CreateJobObjectW(None, None)
         if not self.handle:
             raise c.WinError(c.get_last_error())
@@ -214,6 +220,50 @@ class WindowsJob:
         if self.handle:
             self.api.CloseHandle(self.handle)
             self.handle = None
+
+    def release_startup_limits(self):
+        """Remove only this startup job's limits after an owned healthy handoff."""
+        limits=self.Limits()
+        # This guard created the job and set exactly memory and kill-on-close
+        # flags. No foreign job or production engine job is modified.
+        if not self.api.SetInformationJobObject(self.handle,9,self.c.byref(limits),self.c.sizeof(limits)):
+            raise self.c.WinError(self.c.get_last_error())
+        self.close()
+
+
+# Only the supervisor holds the gate's write end. Commands inherit DEVNULL;
+# EOF detects supervisor loss even during blocked work. H grants handoff.
+_POSIX_BOOTSTRAP = '''
+import json,os,pathlib,signal,subprocess,sys,threading,time
+import psutil
+command=json.loads(sys.argv[1])
+if sys.stdin.buffer.read(1)!=b'G':sys.exit(125)
+child=subprocess.Popen(command,stdin=subprocess.DEVNULL)
+def supervisor():
+    if sys.stdin.buffer.read(1)==b'H':return
+    try:
+        pathlib.Path(sys.argv[3]).write_text(json.dumps(dict(
+            status='SUPERVISOR_LOST',release_allowed=False,
+            failure='supervisor pipe closed without healthy handoff',bootstrap_pid=os.getpid())))
+    finally:
+        if sys.argv[4]=='group' and os.getpgrp()==os.getpid():
+            os.killpg(os.getpid(),signal.SIGKILL)
+        else:
+            # launchd shares its manager's group. Never signal that group: only
+            # descendants of this still-live bootstrap belong to this launch.
+            processes=psutil.Process().children(recursive=True)
+            for process in reversed(processes):
+                try:process.kill()
+                except psutil.NoSuchProcess:pass
+            os._exit(137)
+threading.Thread(target=supervisor,name='supervisor-pipe',daemon=True).start()
+rc=child.wait()
+pathlib.Path(sys.argv[2]).write_text(str(rc))
+# Remain the group anchor until cancellation or explicit service handoff.
+while any(t.name=='supervisor-pipe' and t.is_alive() for t in threading.enumerate()):
+    time.sleep(.02)
+sys.exit(rc)
+'''
 
 
 class GuardedJob:
@@ -264,6 +314,7 @@ class GuardedJob:
     def start(self, command, *, cwd=None, env=None, stdout=None, new_session=True):
         if self.child is not None:
             raise RuntimeError('a guard owns exactly one launch')
+        self.deadline = time.monotonic() + self.seconds
         self._priority()
         vm = psutil.virtual_memory()
         if max(self.rss_limit, self.host_commit_limit) > vm.available - self.floor:
@@ -277,11 +328,15 @@ class GuardedJob:
                      'rc=subprocess.call(command,stdin=subprocess.DEVNULL); '
                      'pathlib.Path(sys.argv[2]).write_text(str(rc)); '
                      'sys.stdin.buffer.read(); sys.exit(rc)')
-        self.child = subprocess.Popen([sys.executable, '-B', '-c', bootstrap, json.dumps(list(command)),str(self.command_status)],
-            cwd=cwd, env=env, stdin=subprocess.PIPE, stdout=stdout, stderr=subprocess.STDOUT,
-            creationflags=subprocess.CREATE_NO_WINDOW if os.name == 'nt' else 0,
-            start_new_session=self.owns_session)
         try:
+            self.child = subprocess.Popen([sys.executable, '-B', '-c',
+                bootstrap if os.name=='nt' else _POSIX_BOOTSTRAP,
+                json.dumps(list(command)),str(self.command_status),
+                str(self.receipt.with_suffix('.supervisor-loss.json')),
+                'group' if self.owns_session else 'descendants'],
+                cwd=cwd, env=env, stdin=subprocess.PIPE, stdout=stdout, stderr=subprocess.STDOUT,
+                creationflags=subprocess.CREATE_NO_WINDOW if os.name == 'nt' else 0,
+                start_new_session=self.owns_session)
             self.owned = OwnedProcesses(self.child)
             if os.name == 'nt':
                 self.kernel_job = WindowsJob(self.commit_limit)
@@ -290,17 +345,17 @@ class GuardedJob:
             self.monitor.start()
             self.child.stdin.write(b'G')
             self.child.stdin.flush()
-        except BaseException:
+        except BaseException as error:
+            self.failure = self.failure or repr(error)
             self.close()
             raise
         return self
 
     def _watch(self):
         try:
-            deadline = time.monotonic() + self.seconds
             while not self.finished.is_set():
                 self._priority()  # independent of chat/switch/network reads
-                if time.monotonic() >= deadline:
+                if time.monotonic() >= self.deadline:
                     raise TimeoutError('owned lease deadline exceeded')
                 processes = self.owned.refresh()
                 if not processes:
@@ -361,26 +416,31 @@ class GuardedJob:
     def wait(self):
         if self.child is None:
             raise RuntimeError('job has not started')
-        while not self.command_status.exists() and not self.cancelled.is_set():
-            if self.child.poll() is not None:
-                self.failure=self.failure or 'owned bootstrap exited before command receipt'
-                break
-            self.finished.wait(self.poll)
-        code = int(self.command_status.read_text()) if self.command_status.exists() else 137
-        self.record['command_exit_code']=code
-        self.close()
+        try:
+            while not self.command_status.exists() and not self.cancelled.is_set():
+                if self.child.poll() is not None:
+                    self.failure=self.failure or 'owned bootstrap exited before command receipt'
+                    break
+                self.finished.wait(self.poll)
+            code = int(self.command_status.read_text()) if self.command_status.exists() else 137
+            self.record['command_exit_code']=code
+        except BaseException as error:
+            self.failure = self.failure or repr(error)
+            self.cancelled.set()
+            raise
+        finally:
+            self.close()
         if self.failure:
             raise RuntimeError(self.failure)
         return code
 
     def handoff(self, service_pid):
-        """End a successful POSIX startup lease after verifying the owned service.
+        """End a successful startup lease after verifying the owned service.
 
         The caller must first verify service health. Failure never hands off;
-        ordinary teardown remains mandatory. Windows job detachment is refused.
+        ordinary teardown remains mandatory. A Windows handoff removes only
+        the task-created startup job's limits before closing its handle.
         """
-        if os.name=='nt':
-            raise RuntimeError('Windows kernel job handoff is unsupported')
         self.owned.refresh()
         identity=self.owned.identities.get(service_pid)
         if identity is None or identity.process() is None:
@@ -394,8 +454,16 @@ class GuardedJob:
             raise RuntimeError('startup monitor did not finish successfully')
         if identity.process() is None:
             raise RuntimeError('owned service exited during handoff')
+        if self.kernel_job:
+            self.kernel_job.release_startup_limits()
+            self.kernel_job=None
+            self.record['windows_startup_limits_released']=True
+        self.child.stdin.write(b'H')
+        self.child.stdin.flush()
         self.child.stdin.close()
         self.record.update(status='HEALTHY_SERVICE_HANDOFF',handoff=dataclasses.asdict(identity),
+            handed_off_identities=[dataclasses.asdict(item) for item in list(self.owned.identities.values())
+                                   if item.process() is not None],
             ended=time.time(),failure=None,release_allowed=True,
             global_paging_growth=self.watcher.max_global_growth,
             owned_paged_bytes=self.watcher.job_paged)
@@ -453,7 +521,13 @@ def main(argv=None):
     if not command:
         parser.error('an explicit command is required')
     job = None
+    handlers = {}
+    def interrupted(signum, frame):
+        raise KeyboardInterrupt('supervisor signal ' + signal.Signals(signum).name)
     try:
+        if threading.current_thread() is threading.main_thread():
+            for signum in (signal.SIGINT, signal.SIGTERM):
+                handlers[signum] = signal.signal(signum, interrupted)
         job = GuardedJob(rss_limit=args.rss_gb*1e9, commit_limit=args.commit_gb*1e9,
             floor=args.floor_gb*1e9, seconds=args.seconds, receipt=args.receipt,
             ledger=args.ledger, priority_owners=args.priority_owner,
@@ -461,11 +535,23 @@ def main(argv=None):
             device_commit_allowance=args.device_commit_gb*1e9)
         job.start(command)
         return job.wait()
-    except Exception as error:
+    except BaseException as error:
+        if job:
+            job.failure = job.failure or repr(error)
+            job.cancelled.set()
         print('[shared-job-guard] REFUSED/ABORTED: ' + repr(error), file=sys.stderr, flush=True)
-        if job and job.child:
-            job.close()
         return 137
+    finally:
+        # Repeated interrupts cannot interrupt teardown. Restore the caller's
+        # handlers after writing the exit certificate.
+        for signum in handlers:
+            signal.signal(signum, signal.SIG_IGN)
+        try:
+            if job and job.child:
+                job.close()
+        finally:
+            for signum, handler in handlers.items():
+                signal.signal(signum, handler)
 
 
 if __name__ == '__main__':

@@ -109,7 +109,7 @@ class ComboSession:
             if self.cancel.is_set():raise RuntimeError('Owner epoch was cancelled')
             rendered=render_body(body)
             baseline=self.device.gpu(0,self.cfg['gpu_uuid'])
-            childcfg=dict(self.cfg,host_budget_gib=self.cfg['native_host_budget_gib'])
+            childcfg=dict(self.cfg,host_budget_gib=self.cfg['native_host_budget_gib'],aggregate_host_budget_gib=self.cfg['host_budget_gib'])
             restore=(self.state,self.payload) if self.state is not None else None
             owner=self.current=Native(childcfg,self.session,self.epoch,1,self.cancel.is_set,restore=restore,runner=self.device)
             metrics['native_initial_load_import_seconds']=owner.launch_seconds

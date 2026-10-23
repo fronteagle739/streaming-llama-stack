@@ -15,6 +15,7 @@ from .native_profiles import profile
 from .combo_contract import validate
 from .combo_state import transport_checkpoint, payload_bytes
 from .combo_release import certified
+from .combo_ram import protect_working_set
 
 
 def canonical_contract(row):
@@ -72,7 +73,9 @@ class ComboProducer:
             self.creation_attempted=True
             self.process=Producer(session,argv,env,self.directory,host_bytes=host_bytes,
                 physical_floor=int(cfg['min_available_gib']*(1<<30)),operation_seconds=min(1140,cfg['request_timeout_s']),
-                idle_seconds=cfg['lease_minutes']*60,native=native,cancelled=cancelled,native_mode=1,bootstrap=bootstrap,owner_epoch=epoch)
+                idle_seconds=cfg['lease_minutes']*60,native=native,cancelled=cancelled,native_mode=1,bootstrap=bootstrap,owner_epoch=epoch,
+                after_resume=lambda job:protect_working_set(job,host_bytes,int(cfg['min_available_gib']*(1<<30)),
+                    int(cfg['host_budget_gib']*(1<<30))))
             self.checkpoint=self.process.ready['checkpoint']
             expected_position=(base[1]['position'] if base else 0)+len(tokens)
             if self.checkpoint['context']!=cfg['context'] or self.checkpoint['position']!=expected_position:
@@ -80,6 +83,7 @@ class ComboProducer:
             self.prefill_seconds=time.monotonic()-self.started
             atomic_json(self.directory/'launch.json',dict(argv=argv,source_revision=cfg['producer_source_revision'],
                 producer_sha256=cfg['producer_sha256'],owner_epoch=epoch,host_bytes=host_bytes,
+                resident_admission=getattr(self.process,'resume_admission',None),
                 full_snapshot_bootstrap=base is None,weights_copied=False,profile='ultra',compressed_cache_bf16=False))
         except BaseException as exc:
             self.failure_cleanup=getattr(exc,'owned_cleanup',None)

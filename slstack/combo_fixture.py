@@ -71,7 +71,7 @@ def main(cfg,output,target=50000):
     os.environ['CUDA_VISIBLE_DEVICES']=cfg['gpu_uuid'];os.environ['CUDA_DEVICE_ORDER']='PCI_BUS_ID'
     device=_Native();baseline=device.gpu(0,cfg['gpu_uuid']);owner=None
     try:
-        owner=Native(dict(cfg,host_budget_gib=cfg['native_host_budget_gib']),secrets.token_hex(16),secrets.randbits(63) or 1,1,lambda:False,runner=device)
+        owner=Native(dict(cfg,host_budget_gib=cfg['native_host_budget_gib'],aggregate_host_budget_gib=cfg['host_budget_gib']),secrets.token_hex(16),secrets.randbits(63) or 1,1,lambda:False,runner=device)
         result=fit(owner,target)
         result['release']=release_barrier(owner,device,cfg,baseline,lambda:False);owner=None
         atomic_json(output,result)

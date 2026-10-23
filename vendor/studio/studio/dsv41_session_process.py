@@ -1,5 +1,5 @@
 # Derived from Studio backend/studio/dsv41_session_process.py at 5b39c3abf34523c69fb761f7dd174c710d3a7eb1.
-# Minimal source export; transport and owned process logic unchanged.
+# Minimal source export; transport retained with optional mode1 startup and resource-admission hooks.
 from __future__ import annotations
 import json, os, threading, time
 from pathlib import Path
@@ -8,7 +8,7 @@ from .dsv41_session_contract import MODEL_SHA256, MAX_CONTROL, Refused, checkpoi
 
 class Producer:
 
-    def __init__(self, session, argv, env, directory, *, host_bytes, physical_floor, operation_seconds=600, idle_seconds=3600, native=None, cancelled=None, runtime_check=None, native_mode=3, bootstrap=None, startup=None, owner_epoch=0):
+    def __init__(self, session, argv, env, directory, *, host_bytes, physical_floor, operation_seconds=600, idle_seconds=3600, native=None, cancelled=None, runtime_check=None, native_mode=3, bootstrap=None, startup=None, owner_epoch=0, after_resume=None):
         self.creation_attempted = False
         try:
             self.native_mode = native_mode
@@ -19,6 +19,9 @@ class Producer:
             self.bootstrap = bootstrap
             require(startup is None or callable(startup) and native_mode == 1 and bootstrap is None, 'HTTP-native startup requires explicit target-only mode1 and no pipe bootstrap')
             self.startup = startup
+            require(after_resume is None or callable(after_resume), 'Pre-readiness admission must be callable')
+            self.after_resume = after_resume
+            self.resume_admission = None
             self._initialize(session, argv, env, directory, host_bytes=host_bytes, physical_floor=physical_floor, operation_seconds=operation_seconds, idle_seconds=idle_seconds, native=native, cancelled=cancelled, runtime_check=runtime_check)
         except BaseException as exc:
             if not self.creation_attempted:
@@ -73,6 +76,8 @@ class Producer:
             for thread in self.threads:
                 thread.start()
             self.job.resume()
+            if self.after_resume is not None:
+                self.resume_admission = self.after_resume(self.job)
             if self.bootstrap is not None:
                 self.bootstrap(self._write)
             if self.startup is None:
