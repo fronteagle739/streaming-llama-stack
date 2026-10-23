@@ -23,7 +23,7 @@ def recover_leases(runtime_root):
     released = []
     for file in root.glob('*.json'):
         row = json.loads(file.read_text())
-        if row.get('task') != 'DS4STACK' or row.get('released'):
+        if row.get('task') != 'DS4STACK' or row.get('released') or row.get('cleanup_uncertain'):
             continue
         try:
             proc = psutil.Process(row['guardian_pid'])
@@ -147,11 +147,18 @@ def gpu_lease(cfg):
             if os.name == 'nt':
                 stream.seek(0)
                 msvcrt.locking(stream.fileno(), msvcrt.LK_UNLCK, 1)
+    uncertain = False
     try:
         yield identity
+    except BaseException as error:
+        uncertain = bool(getattr(error, 'owned_cleanup_uncertain', False))
+        if uncertain:
+            atomic_json(lease_path,{**lease_row,'cleanup_uncertain':True})
+        raise
     finally:
-        with hold.open('a', encoding='utf-8') as stream:
-            stream.write(f'\nRELEASED: DS4STACK {identity}; {datetime.now(timezone.utc).isoformat()}\n')
-            stream.flush()
-            os.fsync(stream.fileno())
-        atomic_json(lease_path, {**lease_row, 'released': True})
+        if not uncertain:
+            with hold.open('a', encoding='utf-8') as stream:
+                stream.write(f'\nRELEASED: DS4STACK {identity}; {datetime.now(timezone.utc).isoformat()}\n')
+                stream.flush()
+                os.fsync(stream.fileno())
+            atomic_json(lease_path, {**lease_row, 'released': True})

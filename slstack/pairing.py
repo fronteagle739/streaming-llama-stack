@@ -129,7 +129,8 @@ class Pair:
         effective = self.token_path.with_name('broker.local.json')
         atomic_json(effective, cfg)
         self.broker = OwnedProcess(cfg, [sys.executable, '-B', '-m', 'slstack', '--config', str(effective),
-                                        'broker-internal'], 'native-broker', timeout=86400)
+                                        'broker-internal'], 'native-broker', timeout=cfg['lease_minutes']*60,
+                                   scope='rtx-producer')
         try:
             ready_until = time.monotonic() + 30
             while True:
@@ -184,6 +185,14 @@ class Pair:
     def chat(self, body):
         self.start()
         return self.request('/v1/chat/completions', {**body, 'prompt_cache_key': conversation_key(body)})
+
+    def events(self, body):
+        self.start()
+        from .streaming import events
+        yield from events(self.url + '/v1/chat/completions',
+                          {**body,'stream':True,'prompt_cache_key':conversation_key(body)},
+                          timeout=self.cfg['request_timeout_s'],
+                          headers={'Authorization':'Bearer ' + self.token})
 
     def close(self):
         if self.broker:

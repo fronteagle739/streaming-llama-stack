@@ -77,6 +77,9 @@ def windows_job(proc, commit_gib):
 
 
 def _supervise(spec):
+    if spec.get('paging_telemetry'):
+        from .shared_guard import supervise as shared_supervise
+        return shared_supervise({**spec,'timeout_s':min(spec['timeout_s'],1140)})
     budget, floor = spec['host_budget_gib'], spec['min_available_gib']
     admit(budget, floor)
     from .lease import HoldWatcher
@@ -201,7 +204,8 @@ def supervise(spec):
     finally:
         # If this outer guardian killed an inner GPU guardian, its Windows Job is
         # now closed. Release that recorded orphan rather than leaving an ACTIVE hold.
-        recover_leases(spec['runtime_root'])
+        if not getattr(sys.exc_info()[1], 'owned_cleanup_uncertain', False):
+            recover_leases(spec['runtime_root'])
 
 
 if __name__ == '__main__':

@@ -48,7 +48,7 @@ class Stack:
         self.models = getattr(self.engines, 'models', None) or Models(cfg)
         self.tools = Tools(cfg, self.engines)
 
-    def chat(self, body):
+    def prepare_chat(self, body, *, stream=False):
         if not isinstance(body.get('messages'), list) or not body['messages']:
             raise ValueError('messages must be a nonempty array')
         body = deepcopy(body)
@@ -58,9 +58,27 @@ class Stack:
         for tool in client_tools:
             if tool.get('function', {}).get('name') in stack_names:
                 raise ValueError('Client tool overrides a reserved stack tool')
-        messages = body['messages']
-        body['stream'] = False
+        body['stream'] = stream
         body['tools'] = client_tools + self.tools.openai()
+        return body
+
+    def tool_result(self, call, media):
+        try:
+            args = json.loads(call['function']['arguments'])
+            outcome = self.tools.call(call['function']['name'], args)
+            if call['function']['name'].startswith('generate_'):
+                media.append(outcome)
+                outcome = {'data': [{'url': x['url']} for x in outcome.get('data', [])],
+                           'settings': outcome.get('settings', {}), 'mode': outcome.get('mode'),
+                           'display': 'The client displays this media inline. Reply with a brief confirmation.'}
+        except (ValueError, RuntimeError, OSError) as exc:
+            outcome = {'error': str(exc)}
+        return {'role': 'tool', 'tool_call_id': call['id'], 'content': json.dumps(outcome)}
+
+    def chat(self, body):
+        body = self.prepare_chat(body)
+        messages = body['messages']
+        stack_names = set(self.tools.schemas)
         media = []
         for _ in range(8):
             result = self.engines.chat(body)
@@ -87,17 +105,70 @@ class Stack:
                 return result
             messages.append(message)
             for call in calls:
-                try:
-                    args = json.loads(call['function']['arguments'])
-                    outcome = self.tools.call(call['function']['name'], args)
-                    if call['function']['name'].startswith('generate_'):
-                        media.append(outcome)
-                        outcome = {'data': [{'url': x['url']} for x in outcome.get('data', [])],
-                                   'settings': outcome.get('settings', {}), 'mode': outcome.get('mode'),
-                                   'display': 'The client displays this media inline. Reply with a brief confirmation.'}
-                except (ValueError, RuntimeError, OSError) as exc:
-                    outcome = {'error': str(exc)}
-                messages.append({'role': 'tool', 'tool_call_id': call['id'], 'content': json.dumps(outcome)})
+                messages.append(self.tool_result(call, media))
+        raise RuntimeError('Stack tool iteration limit (8) exceeded')
+
+    def chat_events(self, body):
+        body = self.prepare_chat(body, stream=True)
+        media, metadata = [], {}
+        names = set(self.tools.schemas)
+        identity = 'chatcmpl-' + uuid.uuid4().hex
+        def chunk(delta, finish=None):
+            row = {'id':identity, 'object':'chat.completion.chunk','created':int(time.time()),
+                   'model':body.get('model') or self.models.default,
+                   'choices':[{'index':0,'delta':delta,'finish_reason':finish}]}
+            if finish:
+                row.update(metadata)
+                row['slstack'] = {'route':'rtx-prefill-mac-decode','tool_media':media,
+                                   'buffered_stream':False,'ultra_handoff':self.cfg.get('native_tier')=='ultra'}
+            return row
+        for _ in range(8):
+            message = {'role':'assistant','content':''}
+            calls, finish = {}, 'stop'
+            for event in self.engines.chat_events(body):
+                metadata.update({k:event[k] for k in ('usage','timings') if k in event})
+                choices = event.get('choices',[])
+                if not choices:
+                    continue
+                if len(choices) != 1:
+                    raise RuntimeError('Stack tools require exactly one upstream choice')
+                choice = choices[0]
+                delta = dict(choice.get('delta') or {})
+                for part in delta.pop('tool_calls',[]) or []:
+                    index = part.get('index',0)
+                    call = calls.setdefault(index, {'id':'','type':'function','function':{'name':'','arguments':''}})
+                    if part.get('id'):
+                        call['id'] = part['id']
+                    function = part.get('function') or {}
+                    if function.get('name'):
+                        call['function']['name'] += function['name']
+                    call['function']['arguments'] += function.get('arguments') or ''
+                for key in ('content','reasoning_content'):
+                    if isinstance(delta.get(key),str):
+                        message[key] = message.get(key,'') + delta[key]
+                if delta:
+                    yield chunk(delta)
+                if choice.get('finish_reason'):
+                    finish = choice['finish_reason']
+            calls = [calls[index] for index in sorted(calls)]
+            if not calls:
+                markdown = ''.join('\n\n![Generated media](' + item['url'] + ')'
+                                   for result in media for item in result.get('data',[]))
+                if markdown:
+                    yield chunk({'content':markdown})
+                yield chunk({},finish)
+                return
+            owned = [call['function']['name'] in names for call in calls]
+            if not all(owned):
+                if any(owned):
+                    raise RuntimeError('Mixed client/stack tool calls are not supported in one upstream message')
+                yield chunk({'tool_calls':[{'index':i,**call} for i,call in enumerate(calls)]})
+                yield chunk({},finish)
+                return
+            message['tool_calls'] = calls
+            body['messages'].append(message)
+            for call in calls:
+                body['messages'].append(self.tool_result(call,media))
         raise RuntimeError('Stack tool iteration limit (8) exceeded')
 
     def mcp(self, body):
@@ -222,6 +293,9 @@ def handler(stack):
                     return self.send(200, {'success': True})
                 if route == '/v1/chat/completions':
                     with stack.engines.lock:
+                        if body.get('stream') and stack.cfg.get('mac'):
+                            from .streaming import send
+                            return send(self,stack.chat_events(body))
                         result = stack.chat(body)
                     if not body.get('stream'):
                         return self.send(200, result)

@@ -74,19 +74,9 @@ class OwnedProducer:
             receipt = model_receipt(cfg)
             identity = self.stack.enter_context(gpu_lease(cfg))
             watcher = HoldWatcher(cfg.get('hold_file') or Path(cfg['runtime_root']) / 'state' / 'gpu.holds', identity)
-            from .memory_counters import PagefilePressure
-            self.pressure = PagefilePressure()
-            next_pressure_check = 0
-
             def cancelled():
-                nonlocal next_pressure_check
                 if cancel.is_set() or watcher.reason():
                     return True
-                if time.monotonic() >= next_pressure_check:
-                    reason = self.pressure.check()
-                    next_pressure_check = time.monotonic() + .5
-                    if reason:
-                        raise MemoryError(reason)
                 return False
 
             native = _Native()
@@ -146,8 +136,7 @@ class OwnedProducer:
         if self.timer:
             self.timer.cancel()
         self.receipt = {'session': self.request['session'], 'cleanup': proof}
-        if hasattr(self, 'pressure'):
-            self.receipt['system_pagefile_pressure'] = self.pressure.receipt()
+        self.receipt['paging_monitor'] = 'Pinned shared guard on the owning broker process tree'
         if hasattr(self, 'directory'):
             if self.producer is not None:
                 (self.directory / 'stderr.log').write_bytes(self.producer.diagnostic)
