@@ -75,8 +75,10 @@ class Stack:
                     for artifact in item.get('data', []):
                         content += '\n\n' + f'![Generated media]({artifact["url"]})'
                 message['content'] = content
-                result['slstack'] = {'route': 'ds4-native', 'tool_media': media,
-                                      'buffered_stream': True, 'ultra_handoff': False}
+                paired = bool(self.cfg.get('mac'))
+                result['slstack'] = {'route': 'rtx-prefill-mac-decode' if paired else 'ds4-native', 'tool_media': media,
+                                      'buffered_stream': True,
+                                      'ultra_handoff': paired and self.cfg.get('native_tier') == 'ultra'}
                 return result
             names = [call['function']['name'] for call in calls]
             if not all(name in stack_names for name in names):
@@ -149,6 +151,8 @@ def handler(stack):
             route = unquote(urlsplit(self.path).path)
             if route == '/health':
                 ready = bool(stack.engines.llm and stack.engines.llm.proc.poll() is None)
+                remote = getattr(stack.engines, 'remote', None)
+                ready = ready or bool(remote and remote.connected)
                 return self.send(200, {'status': 'router-ready', 'model_ready': ready,
                                        'live_bias_configured': bool(stack.cfg['bias_mcp_url']), 'ultra': False})
             if route == '/v1/models':
@@ -157,7 +161,8 @@ def handler(stack):
                 return self.send(200, {'events': getattr(stack.engines, 'events', []), 'dual_resident_active': False})
             if route == '/props':
                 command = stack.cfg['ds4_command']
-                n_ctx = next((int(command[i + 1]) for i, x in enumerate(command[:-1]) if x in ('--ctx', '-c')), 4096)
+                n_ctx = (1000001 if stack.cfg.get('mac') else
+                         next((int(command[i + 1]) for i, x in enumerate(command[:-1]) if x in ('--ctx', '-c')), 4096))
                 selected = parse_qs(urlsplit(self.path).query).get('model', [None])[0]
                 if selected is not None:
                     try:

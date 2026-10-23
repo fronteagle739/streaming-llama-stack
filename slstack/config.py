@@ -12,6 +12,9 @@ def load(path=None, overrides=None):
     if path:
         cfg.update(json.loads(Path(path).read_text(encoding='utf-8-sig')))
     cfg.update({k: v for k, v in (overrides or {}).items() if v is not None})
+    if cfg.get('mac'):
+        from .pairing import endpoint
+        cfg['mac'] = endpoint(cfg['mac'])
     if cfg.get('native_tier', 'accurate') not in ('accurate', 'fast', 'ultra', 'hyper'):
         raise ValueError('mode must be accurate, fast, ultra or hyper')
     for key in ('host_budget_gib', 'min_available_gib', 'job_commit_gib', 'request_timeout_s', 'lease_minutes'):

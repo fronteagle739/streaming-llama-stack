@@ -35,6 +35,7 @@ class Engines:
         self.loading_model = None
         self.events = []
         self.llm = None
+        self.remote = None
         self.lock = threading.RLock()
         from .journal import Journal
         self.journal = Journal(cfg['runtime_root'])
@@ -49,6 +50,8 @@ class Engines:
 
     def catalog(self):
         active = self.selected_model if self.llm and self.llm.proc.poll() is None and not self.loading_model else None
+        if self.remote and self.remote.connected:
+            active = self.selected_model
         return self.models.catalog(active, self.loading_model)
 
     def select(self, name=None):
@@ -63,6 +66,11 @@ class Engines:
         return row
 
     def close(self):
+        if self.remote:
+            try:
+                self.remote.close()
+            finally:
+                self.remote = None
         if self.llm:
             self.status('Unloading model')
             clean = self.llm.proc.poll() == 0
@@ -104,6 +112,12 @@ class Engines:
             raise
 
     def _ready(self):
+        if self.cfg.get('mac'):
+            if self.remote is None:
+                from .pairing import Pair
+                self.remote = Pair(self.cfg, self.status)
+            self.remote.start()
+            return
         if self.llm and self.llm.proc.poll() is None:
             return
         self.close()
@@ -173,6 +187,9 @@ class Engines:
         raise TimeoutError('ds4 server readiness deadline exceeded')
 
     def quality(self, value=None):
+        if self.cfg.get('mac'):
+            return {'supported': False, 'phases_supported': False,
+                    'reason': 'This Mac decoder has no quality/speed control'}
         # Control must remain available while another thread is decoding.
         # Cold start still shares the normal lifecycle lock with media/model swaps.
         if not self.llm or self.llm.proc.poll() is not None:
@@ -185,6 +202,8 @@ class Engines:
     def chat(self, body):
         self.select(body.get('model'))
         self.ready()
+        if self.remote:
+            return self.remote.chat(body)
         return http_json(self.cfg['ds4_url'] + '/v1/chat/completions', body, self.cfg['request_timeout_s'],
                          headers={'Authorization': 'Bearer ' + self.cfg['_control_token']})
 
