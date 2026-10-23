@@ -1,7 +1,7 @@
 import json
 import threading
 import unittest
-from slstack.combo_proxy import Proxy,relay_stream,conversation_key,native_launch_config,begins_conversation
+from slstack.combo_proxy import Proxy,relay_stream,conversation_key,native_launch_config,begins_conversation,request_worker_config
 
 
 class Response:
@@ -11,6 +11,17 @@ class Response:
 
 
 class StreamTest(unittest.TestCase):
+    def test_worker_state_admission_excludes_controller_and_rejects_overstatement(self):
+        cfg=dict(host_budget_gib=8,combo_worker_host_budget_gib=7.75,settings={'unchanged':True})
+        original=json.dumps(cfg,sort_keys=True)
+        self.assertEqual(request_worker_config(cfg)['host_budget_gib'],7.75)
+        self.assertEqual(request_worker_config(dict(host_budget_gib=8))['host_budget_gib'],7.75)
+        self.assertEqual(json.dumps(cfg,sort_keys=True),original)
+        for changed in (dict(host_budget_gib=.25),dict(host_budget_gib=8,combo_worker_host_budget_gib=8),
+                        dict(host_budget_gib=8,combo_worker_host_budget_gib=7.5),dict(host_budget_gib=float('nan')),
+                        dict(host_budget_gib=True),dict(host_budget_gib=None),dict(host_budget_gib='8')):
+            with self.assertRaises(ValueError):request_worker_config(changed)
+
     def test_idle_quality_reports_pending_phases_without_claiming_application(self):
         proxy=object.__new__(Proxy);proxy.pending=0;proxy.session=None
         proxy.observed=dict(value=0,applied_value=0,per_phase=False,phases=None)

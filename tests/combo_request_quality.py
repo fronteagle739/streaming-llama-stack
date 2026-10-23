@@ -18,7 +18,10 @@ def main(config_path,output):
         owner=Native(dict(cfg,host_budget_gib=cfg['native_host_budget_gib'],aggregate_host_budget_gib=cfg['host_budget_gib']),secrets.token_hex(16),secrets.randbits(63) or 1,1,lambda:False,runner=device)
         proof['invalid_requests']=[]
         for value in ({'cod':0},{'code':'invalid'},{'code':False},{'code\x00extra':0}):
-            for endpoint,body in (('/v1/quality-speed',{'value':value}),('/v1/chat/completions',{'quality_speed':value,'messages':[]})):
+            invalid_chat=dict(model='deepseek-chat',quality_speed=value,
+                messages=[dict(role='user',content='TEST invalid quality setting must be rejected before decoding.')],
+                temperature=0,max_tokens=1)
+            for endpoint,body in (('/v1/quality-speed',{'value':value}),('/v1/chat/completions',invalid_chat)):
                 try:owner.http(endpoint,body)
                 except RuntimeError as error:
                     if not str(error).startswith('Native HTTP 400:'):raise
