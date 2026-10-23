@@ -72,7 +72,10 @@ class GuardTest(unittest.TestCase):
             nonlocal calls
             calls+=1
             return (100+(pages if calls>1 else 0))*4096
-        with patch('slstack.guard.paging_bytes',side_effect=paging), patch('studio.job_paging.JobPaging.sample',return_value=owned_pages):
+        def attributed(observer,process):
+            observer.last_processes=[dict(pid=process.pid,paged_bytes=owned_pages)] if owned_pages else []
+            return owned_pages
+        with patch('slstack.guard.paging_bytes',side_effect=paging), patch('studio.job_paging.JobPaging.sample',autospec=True,side_effect=attributed):
             code=_supervise(spec)
         return code,json.loads(Path(spec['receipt']).read_text())
 
@@ -107,6 +110,7 @@ class GuardTest(unittest.TestCase):
         code,proof=self.run_cpu(owned_pages=4096)
         self.assertEqual(code,1);self.assertIn('job-attributed',proof['reason'])
         self.assertTrue(proof['release_allowed']);self.assertEqual(proof['owned_paged_bytes'],4096)
+        self.assertEqual(proof['paged_processes'],[dict(pid=proof['child_pid'],paged_bytes=4096)])
 
 
 if __name__=='__main__':unittest.main()
