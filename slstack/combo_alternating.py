@@ -27,7 +27,8 @@ def prompts(threshold):
     # Unique facts let the later short question check retained document data.
     filler=' '.join(f'Observation {i}: review timing, calibration and maintenance before authorising the pilot.'
                     for i in range(max(8,(threshold+11)//12+4)))
-    instruction=' Answer the question first, then explain the relevant checks in about 150 words. Think briefly.'
+    instruction=(' Answer the question first with concise key=value fields. Then list the integers1 through100 '
+                 'separated by commas, with no other commentary. This explicit timing tail supplies enough decode tokens. Think briefly.')
     return [
         'TEST DS4COMBO. What should a careful pilot review check?'+instruction,
         'TEST document A. Project CERULEAN-47 is owned by Juniper, has capacity 217 units, and requires a calibration review.\n'+filler+
@@ -68,6 +69,7 @@ def run(cfg,output,reasoning_history,window):
                native_sha256=cfg['native_sha256'],producer_sha256=cfg['producer_sha256'],
                identity=cfg['combo_identity'],provider_schema=cfg['provider_schema'],threshold=threshold,
                prompts=prompts(threshold),max_tokens=384,reasoning_effort='low',turns=[])
+    proof['decode_fixture']='Document-fact recall plus an explicit integer timing tail; the separate50K campaign measures review prose'
     atomic_json(output,proof)
     try:
         bank=LockedRam(32+384*4+384*129280*4,session=auto.session,
