@@ -11,3 +11,5 @@ Four-phase quality provider: `035c04d2b17024132a9ee37932f7e95b72b07822`, merged 
 The fresh-source build exposed three omitted CUDA include dependencies. They are now included byte-for-byte from that same source merge: ds4_dspark_aux_graph.cuh, ds4_cuda_dspark_lowbit.cuh and ds4_cuda_dspark_aux.cuh. Optional DSpark paths remain off by default; this inclusion does not qualify their runtime behavior.
 
 Queued four-phase request preservation: `5ada2a7bf1ad12aebf4fc749121d49c4da78fb46`. Four independent settings survive the existing chat queue; legacy three-phase maps still inherit answer for code at parsing. Compiled production transport regression includes the failing three-slot negative control. CUDA arithmetic is unchanged.
+
+Strict quality-name parsing and queued-request regression reused from provider `e1e45374ddc307c75bd7fc0e4b8dccce6b0af6e2`. Embedded JSON NUL in mode, phase or setting names is rejected. Existing stack queue helper names are retained; the provider regression calls those equivalent helpers. CUDA arithmetic is unchanged.
