@@ -1,5 +1,5 @@
 # Derived from Studio backend/studio/dsv41_session_process.py at 5b39c3abf34523c69fb761f7dd174c710d3a7eb1.
-# Minimal source export; transport and owned process logic unchanged.
+# Minimal source export; optional post-resume admission hook added, with existing cleanup on failure.
 from __future__ import annotations
 import json, os, threading, time
 from pathlib import Path
@@ -8,16 +8,16 @@ from .dsv41_session_contract import MODEL_SHA256, MAX_CONTROL, Refused, checkpoi
 
 class Producer:
 
-    def __init__(self, session, argv, env, directory, *, host_bytes, physical_floor, operation_seconds=600, idle_seconds=3600, native=None, cancelled=None, runtime_check=None):
+    def __init__(self, session, argv, env, directory, *, host_bytes, physical_floor, operation_seconds=600, idle_seconds=3600, native=None, cancelled=None, runtime_check=None, after_resume=None):
         self.creation_attempted = False
         try:
-            self._initialize(session, argv, env, directory, host_bytes=host_bytes, physical_floor=physical_floor, operation_seconds=operation_seconds, idle_seconds=idle_seconds, native=native, cancelled=cancelled, runtime_check=runtime_check)
+            self._initialize(session, argv, env, directory, host_bytes=host_bytes, physical_floor=physical_floor, operation_seconds=operation_seconds, idle_seconds=idle_seconds, native=native, cancelled=cancelled, runtime_check=runtime_check, after_resume=after_resume)
         except BaseException as exc:
             if not self.creation_attempted:
                 exc.owned_cleanup = dict(creation_attempted=False, owned_job_empty=True, owned_process_signaled=True, owned_pid_gone=True)
             raise
 
-    def _initialize(self, session, argv, env, directory, *, host_bytes, physical_floor, operation_seconds, idle_seconds, native, cancelled, runtime_check):
+    def _initialize(self, session, argv, env, directory, *, host_bytes, physical_floor, operation_seconds, idle_seconds, native, cancelled, runtime_check, after_resume):
         session_identity(session)
         require(type(host_bytes) is int and host_bytes > 0 and (type(physical_floor) is int) and (physical_floor >= 1 << 30), 'Explicit host budget/floor required')
         require(0 < operation_seconds <= 3600 and 0 < idle_seconds <= 3600, 'Bounded session deadlines required')
@@ -63,6 +63,7 @@ class Producer:
             for thread in self.threads:
                 thread.start()
             self.job.resume()
+            self.resume_admission = after_resume(self.job) if after_resume else None
             self.ready = self._receive()
             require(self.ready.get('status') == 'ready' and type(self.ready.get('next_sequence')) is int and (self.ready.get('next_sequence') == 1) and (self.ready.get('maximum_prefill_tokens') == 49152) and (self.ready.get('maximum_decode_tokens') == 128) and (self.ready.get('control_host_bytes') == 64 << 20), 'Unexpected persistent producer admission')
             checkpoint(self.ready.get('checkpoint'))

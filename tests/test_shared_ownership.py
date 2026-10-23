@@ -28,7 +28,7 @@ def wait_for(predicate, seconds=8):
 
 def watcher(*, read=None, observe=None, warnings=None):
     observer=SimpleNamespace(sample=observe or (lambda proc:0),attribution='injected CPU fixture')
-    return PagingWatch(read or (lambda:0),observer=observer,warning=(warnings.append if warnings is not None else None))
+    return PagingWatch(read or (lambda:0),observer=observer,owned_paging_limit=0,warning=(warnings.append if warnings is not None else None))
 
 
 def launch(tmp_path, *, name='guard', watch=None, **limits):
@@ -74,10 +74,10 @@ def test_small_global_paging_warns_live_without_claiming_attribution(tmp_path):
     job=launch(tmp_path,watch=watcher(read=lambda:value['bytes'],warnings=warnings))
     try:
         value['bytes']=15_000_000
-        wait_for(lambda:bool(warnings))
+        wait_for(lambda:any('global' in text for text in warnings))
         assert not job.cancelled.is_set()
         assert job.watcher.job_paged==0
-        assert 'global' in warnings[0]
+        assert any('global' in text for text in warnings)
     finally:job.close()
 
 
