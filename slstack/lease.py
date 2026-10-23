@@ -58,6 +58,25 @@ def active_holds(text, *, mac=False):
     return list(active.values())
 
 
+def hold_admission(lines, *, budget_gib=0, floor_gib=2, available=None):
+    """Explicit CPU-only reservations share the GPU only with reserved RAM intact."""
+    blocking, reserved = [], 0.0
+    for line in lines:
+        budget = re.search(r'host budget ([\d.]+) GiB', line)
+        reserve = re.search(r'physical RAM reserve ([\d.]+) GiB', line)
+        if (budget and reserve and 'no GPU or Studio restart requested' in line
+                and not re.search(r'exclusive|GPU hold', line, re.I)):
+            reserved += float(budget[1]) + float(reserve[1])
+        else:
+            blocking.append(line)
+    floor = max(floor_gib, reserved + 2) if reserved else floor_gib
+    available = psutil.virtual_memory().available if available is None else available
+    if reserved and available < (budget_gib + floor) * 2**30:
+        blocking.append(f'CPU reservations require {budget_gib + floor:g} GiB available; '
+                        f'available={available / 2**30:.3f} GiB')
+    return blocking
+
+
 class HoldWatcher:
     """Fail closed on a new foreign hold; unchanged ledgers cost one stat call."""
     def __init__(self, path, identity, *, mac=False, task='DS4STACK'):
@@ -65,6 +84,7 @@ class HoldWatcher:
         self.mac, self.task = mac, task
         self.stamp = None
         self.blocking = None
+        self.foreign = []
 
     def reason(self):
         stat = self.path.stat()
@@ -77,8 +97,9 @@ class HoldWatcher:
                 match = re.match(r'^(?:MAC )?ACTIVE:\s+(\S+)\s+(\S+)', line)
                 if (match[1], match[2].rstrip(';')) != (self.task, self.identity):
                     blocking.append(line)
-            self.blocking = '\n'.join(blocking) or None
+            self.foreign = blocking
             self.stamp = stamp
+        self.blocking = '\n'.join(self.foreign if self.mac else hold_admission(self.foreign)) or None
         return self.blocking
 
 
@@ -96,7 +117,8 @@ def gpu_lease(cfg):
             msvcrt.locking(stream.fileno(), msvcrt.LK_NBLCK, 1)
         try:
             lines = stream.read()
-            active = active_holds(lines)
+            active = hold_admission(active_holds(lines), budget_gib=cfg['host_budget_gib'],
+                                    floor_gib=cfg['min_available_gib'])
             if active:
                 raise AdmissionRefused('RTX admission refused: ACTIVE holds exist: ' + '\n'.join(active))
             # WDDM reports every graphics context as a compute client with N/A memory.
