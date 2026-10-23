@@ -5377,12 +5377,12 @@ static bool ds4_streaming_prefill_headroom_bytes(
     }
     uint64_t reserve_experts = DS4_N_EXPERT;
 #if defined(_WIN32) && !defined(DS4_NO_GPU) && !defined(DS4_ROCM_BUILD)
-    /* The existing scalar-prefill switch disables both V4.1 batch paths.
-     * Those rows stage only top-k experts, so reserve two selected windows
-     * rather than two full layers. Keep the full-layer budget for bulk prefill.
-     * Presence matches ds41_prefill_count/short_prefill_count exactly. */
-    if (DS4_MODEL_VARIANT == DS4_VARIANT_FLASH41 &&
-        getenv("DS4_METAL_DISABLE_V41_LAYER_PREFILL")) {
+    /* V4.1 scalar rows stage only top-k experts: reserve two selected windows.
+     * The V4.1 layer sweep's full-layer loader is not added to the plan: it
+     * borrows the VRAM expert tier's memory for the sweep
+     * (ds4_gpu_stream_prefill_borrow), so its one or two layers are charged
+     * against that tier and the fixed-plan decode tier is unchanged. */
+    if (DS4_MODEL_VARIANT == DS4_VARIANT_FLASH41) {
         reserve_experts = DS4_N_EXPERT_USED;
     }
 #endif
@@ -42839,6 +42839,11 @@ typedef struct {
      * context-dependent buffers are VMM ranges backed up to grow_tokens. */
     uint32_t grow_step, grow_tokens;
     bool grow_counted;              /* unmapped bytes are in g_ds41_ctxgrow.unmapped */
+    /* DS4COMBO borrowed layer prefill (CUDA SSD streaming): full layers the
+     * selected-expert loader holds in the decode tier's memory for the current
+     * sweep; 0 = not borrowed (unchanged loader). Two enables the next-layer
+     * prefetch; one keeps the sweep without it. */
+    uint32_t prefill_borrow_layers;
     uint64_t state_generation;      /* invalidate controller evidence on prefix replacement */
     uint64_t allocation_bytes;
     bool valid, streaming, encoder_resident, compact_carry, prefill_alias, quality;
@@ -45862,8 +45867,9 @@ static bool ds41_graph_prefill_sweep(ds41_gpu_graph *g, const ds4_model *m,
 #endif
             if (ok) ok = metal_graph_stream_map_layer(m, w, il);
 #if !defined(__APPLE__) && !defined(DS4_ROCM_BUILD)
-            /* Below 2K, unused expert reads outweigh the overlap. */
-            if (ok && total_count >= 2048u) {
+            /* Below 2K, unused expert reads outweigh the overlap. A borrowed
+             * loader holding a single layer has no room for the next one. */
+            if (ok && total_count >= 2048u && g->prefill_borrow_layers != 1u) {
                 const ds4_gpu_stream_expert_table current = graph_stream_expert_table_make(m,
                     &w->layer[il], il,
                     routed_expert_row_bytes(w->layer[il].ffn_gate_exps) * DS4_N_FF_EXP,
@@ -81437,6 +81443,54 @@ int ds4_session_sync_multimodal(
     return rc;
 }
 
+#if defined(DS4_HAS_DEEPSEEK41_GPU) && !defined(DS4_NO_GPU) && !defined(__APPLE__) && !defined(DS4_ROCM_BUILD)
+/* DS4COMBO borrowed layer prefill: before a CUDA SSD-streaming layer sweep,
+ * hand the VRAM expert tier's memory to the selected-expert loader (one full
+ * layer; two when the sweep prefetches the next layer). Returns false when not
+ * even one layer fits: the caller runs these rows token-major, logged, and
+ * stays token-major for the rest of this sync (*refused). */
+static bool ds41_prefill_borrow(ds41_gpu_graph *g, const ds4_weights *w, uint32_t count,
+                                bool *refused) {
+    const uint32_t want = count >= 2048u && !getenv("DS4_CUDA_DISABLE_SSD_PREFETCH") ? 2u : 1u;
+    if (g->prefill_borrow_layers >= want) return true;
+    const ds4_layer_weights *l = &w->layer[0];
+    const uint64_t gate = routed_expert_row_bytes(l->ffn_gate_exps) * DS4_N_FF_EXP;
+    const uint64_t down = routed_expert_row_bytes(l->ffn_down_exps) * DS4_N_EMBD;
+    uint64_t free_b = 0, borrowed = 0, reserve = 0;
+    const uint32_t got = ds4_gpu_stream_prefill_borrow(want, DS4_N_EXPERT, gate, down,
+                                                       &free_b, &borrowed, &reserve);
+    const double gib = 1073741824.0;
+    const double layer = (double)DS4_N_EXPERT * (double)(2u * gate + down) / gib;
+    if (!got) {
+        if (g->prefill_borrow_layers) {
+            fprintf(stderr, "DS4COMBO_PREFILL_BORROW keeps %u layer(s) for rows=%u: %u do not fit "
+                            "(free %.2f GiB, reserve %.2f GiB); prefetch off\n",
+                    g->prefill_borrow_layers, count, want, (double)free_b / gib, (double)reserve / gib);
+            return true;
+        }
+        *refused = true;
+        fprintf(stderr, "DS4COMBO_PREFILL_FALLBACK token-major rows=%u reason=one layer of experts "
+                        "(%.2f GiB) does not fit: free %.2f GiB + decode tier/loader %.2f GiB - reserve %.2f GiB\n",
+                count, layer, (double)free_b / gib, (double)borrowed / gib, (double)reserve / gib);
+        return false;
+    }
+    g->prefill_borrow_layers = got;
+    fprintf(stderr, "DS4COMBO_PREFILL_BORROW rows=%u layers=%u loader=%.2f GiB borrowed_tier=%.2f GiB "
+                    "free_before=%.2f GiB reserve=%.2f GiB prefetch=%s\n",
+            count, got, layer * got, (double)borrowed / gib, (double)free_b / gib, (double)reserve / gib,
+            got >= 2u ? "on" : want >= 2u ? "off(one layer fits)" : "off(<2048 rows)");
+    return true;
+}
+
+static void ds41_prefill_borrow_end(ds41_gpu_graph *g, const char *why) {
+    if (!g->prefill_borrow_layers) return;
+    g->prefill_borrow_layers = 0;
+    ds4_gpu_stream_prefill_borrow_end();
+    fprintf(stderr, "DS4COMBO_PREFILL_BORROW_END reason=%s decode tier re-established lazily at %u experts\n",
+            why, ds4_gpu_stream_expert_cache_tier_count());
+}
+#endif
+
 static int ds4_session_sync_internal(ds4_session *s, const ds4_tokens *prompt, char *err, size_t errlen) {
     if (!s || !prompt) {
         snprintf(err, errlen, "missing session or prompt");
@@ -81605,6 +81659,8 @@ static int ds4_session_sync_internal(ds4_session *s, const ds4_tokens *prompt, c
             s->checkpoint_valid = false;
         }
         bool pending_logits = false, interrupted = false, decoder_pending = false;
+        bool borrow_refused = false;
+        (void)borrow_refused;
         ds41_encoder_residency encoder = {0};
         ds41_encoder_acquire(g, &e->model, &e->weights,
             (uint32_t)(prompt->len - s->checkpoint.len), &encoder, s->cancel, s->cancel_ud);
@@ -81618,9 +81674,17 @@ static int ds4_session_sync_internal(ds4_session *s, const ds4_tokens *prompt, c
                 ds41_encoder_release(g, &e->model, &encoder);
             const uint32_t short_count = decoder_pending ? 0u :
                 ds41_short_prefill_count(g, &e->weights, remaining);
-            const uint32_t count = short_count ? short_count : g->encoder_resident ?
+            uint32_t count = short_count ? short_count : g->encoder_resident ?
                 (remaining - 512u < g->prefill_cap ? remaining - 512u : g->prefill_cap) :
                 ds41_prefill_count(g, remaining);
+#if !defined(__APPLE__) && !defined(DS4_ROCM_BUILD)
+            if (borrow_refused && !short_count && count > 1u && !decoder_pending) count = 1u;
+            if (!short_count && count > 1u && g->streaming && g->tp_world == 1) {
+                if (!ds41_prefill_borrow(g, &e->weights, count, &borrow_refused)) count = 1u;
+            } else if (g->prefill_borrow_layers) {
+                ds41_prefill_borrow_end(g, "token-major rows follow");
+            }
+#endif
             const bool defer_decoder = !g->encoder_resident && count >= 16384u &&
                 remaining - count >= 8192u &&
                 !getenv("DS4_METAL_DISABLE_V41_DECODER_SUFFIX") &&
@@ -81646,6 +81710,9 @@ static int ds4_session_sync_internal(ds4_session *s, const ds4_tokens *prompt, c
                 ds41_graph_step(g, &e->model, &e->weights, prompt->v[i], NULL);
             if (!ok) {
                 ds41_encoder_release(g, &e->model, &encoder);
+#if !defined(__APPLE__) && !defined(DS4_ROCM_BUILD)
+                ds41_prefill_borrow_end(g, "prefill failed");
+#endif
                 s->checkpoint_valid = false;
                 if (ds4_session_cancelled(s)) {
                     snprintf(err, errlen, "interrupted");
@@ -81664,6 +81731,9 @@ static int ds4_session_sync_internal(ds4_session *s, const ds4_tokens *prompt, c
                 s->progress(s->progress_ud, "prefill_chunk", i, prompt->len);
         }
         ds41_encoder_release(g, &e->model, &encoder);
+#if !defined(__APPLE__) && !defined(DS4_ROCM_BUILD)
+        ds41_prefill_borrow_end(g, interrupted ? "interrupted" : "prefill done");
+#endif
         if (decoder_pending) {
             s->checkpoint_valid = false;
             g->valid = false;

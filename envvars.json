@@ -26770,7 +26770,6 @@
       "engines/ds4-win/ds4.c:45918"
     ],
     "defaults_by_scope": {
-      "ds4-win": "1",
       "mac-ds4": "1"
     },
     "code_defaults": [

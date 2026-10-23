@@ -449,6 +449,12 @@ typedef struct {
 static cuda_stream_selected_cache g_stream_selected_cache;
 static uint32_t g_stream_expert_budget;
 static uint64_t g_stream_expert_bytes;
+/* DS4COMBO borrowed layer prefill: nonzero while a V4.1 layer sweep holds the
+ * VRAM expert tier's memory for the selected-expert loader (slots it may
+ * allocate: one or two full layers). The decode tier is released for the
+ * sweep and re-established lazily at its normal (floored) size afterwards. */
+static uint32_t g_stream_prefill_borrow_slots;
+static int g_stream_prefill_borrow_notice;
 struct cuda_stream_expert_slot {
     uint64_t gate, up, down, used;
 };
@@ -4210,6 +4216,11 @@ static cuda_stream_expert_cache *cuda_stream_expert_cache_prepare(
         uint64_t gate_expert_bytes,
         uint64_t down_expert_bytes,
         uint32_t target_cap) {
+    if (g_stream_prefill_borrow_slots && !g_stream_prefill_borrow_notice) {
+        g_stream_prefill_borrow_notice = 1;
+        fprintf(stderr, "DS4COMBO_PREFILL_BORROW_WARNING decode expert tier re-prepared while a layer "
+                        "sweep borrows its memory (loader slots %u)\n", g_stream_prefill_borrow_slots);
+    }
     /* R1: prefill streams full layers and cannot consume per-token residency.
      * Do not immediately recreate a cache that the prefill edge just evicted. */
     if (g_stream_expert_cache_edge_vram_enabled &&
@@ -10143,6 +10154,61 @@ extern "C" int ds4_gpu_stream_expert_cache_set_ceiling(uint64_t bytes, uint32_t 
     }
     if (cudaDeviceSynchronize() != cudaSuccess) ok = 0;
     return ok;
+}
+
+/* DS4COMBO borrowed layer prefill. The selected-expert loader of a V4.1 layer
+ * sweep takes the VRAM expert tier's memory instead of adding a second
+ * arena to the plan. Returns the full layers (<= want_layers) the loader may
+ * hold, or 0 when even one does not fit; nothing is released in that case.
+ * The decode tier is released (its contents are this turn's prefill
+ * admissions; the combo restore reseeds them) and comes back lazily at its
+ * normal size, never below the fixed-plan floor, after
+ * ds4_gpu_stream_prefill_borrow_end(). */
+extern "C" uint32_t ds4_gpu_stream_prefill_borrow(uint32_t want_layers, uint32_t n_total_expert,
+                                                  uint64_t gate_expert_bytes, uint64_t down_expert_bytes,
+                                                  uint64_t *free_out, uint64_t *borrowed_out,
+                                                  uint64_t *reserve_out) {
+    if (free_out) *free_out = 0;
+    if (borrowed_out) *borrowed_out = 0;
+    if (reserve_out) *reserve_out = 0;
+    const uint64_t eb = cuda_stream_expert_cache_expert_bytes(gate_expert_bytes, down_expert_bytes);
+    if (!g_ssd_streaming_mode || g_n_gpus != 1 || !want_layers || !n_total_expert || !eb) return 0;
+    ds4_gpu_stream_expert_cache_prefetch_finish(false);
+    if (ds4_gpu_set_current_device(0) != 0 ||
+        !cuda_ok(cudaDeviceSynchronize(), "prefill borrow synchronize")) return 0;
+    size_t free_bytes = 0, total_bytes = 0;
+    if (!cuda_ok(cudaMemGetInfo(&free_bytes, &total_bytes), "prefill borrow memory")) return 0;
+    const uint64_t tier = ds4_gpu_stream_expert_cache_held_bytes();
+    const auto &sc = g_stream_selected_cache;
+    const uint64_t arena = sc.gate_capacity + sc.up_capacity + sc.down_capacity + sc.prefill_capacity;
+    const uint64_t reserve = cuda_stream_expert_cache_reserve_bytes();
+    const uint64_t pool = (uint64_t)free_bytes + tier + arena;
+    const uint64_t avail = pool > reserve ? pool - reserve : 0;
+    const uint64_t layer = (uint64_t)n_total_expert * eb;
+    uint64_t layers = avail / layer;
+    if (layers > want_layers) layers = want_layers;
+    if (free_out) *free_out = (uint64_t)free_bytes;
+    if (borrowed_out) *borrowed_out = tier + arena;
+    if (reserve_out) *reserve_out = reserve;
+    if (!layers) return 0;
+    const uint32_t slots = (uint32_t)layers * n_total_expert;
+    cuda_stream_expert_cache_release_all();
+    if (g_stream_expert_slots.size() != slots || sc.gate_expert_bytes != gate_expert_bytes ||
+        sc.down_expert_bytes != down_expert_bytes)
+        cuda_stream_selected_cache_release();
+    cuda_stream_selected_cache_invalidate();
+    ds4_gpu_decode_graphs_invalidate();
+    g_stream_prefill_borrow_slots = slots;
+    g_stream_prefill_borrow_notice = 0;
+    return (uint32_t)layers;
+}
+
+extern "C" void ds4_gpu_stream_prefill_borrow_end(void) {
+    if (!g_stream_prefill_borrow_slots) return;
+    (void)cudaDeviceSynchronize();
+    cuda_stream_selected_cache_release();
+    g_stream_prefill_borrow_slots = 0;
+    ds4_gpu_decode_graphs_invalidate();
 }
 
 /* Re-stamp LRU ages in the given oldest->newest order after a restore seed, so the
@@ -38396,8 +38462,11 @@ static int cuda_stream_selected_cache_begin_load(
             if (table->gate_expert_bytes > (UINT64_MAX - table->down_expert_bytes) / 2u)
                 return 0;
             const uint64_t expert_bytes = 2u * table->gate_expert_bytes + table->down_expert_bytes;
-            uint64_t capacity = ds4_gpu_stream_expert_cache_budget_for_expert_size(
-                table->gate_expert_bytes, table->down_expert_bytes);
+            /* A borrowed sweep sizes the loader to what it needs (one or two
+             * full layers), not to the decode tier's budget. */
+            uint64_t capacity = g_stream_prefill_borrow_slots ? g_stream_prefill_borrow_slots :
+                ds4_gpu_stream_expert_cache_budget_for_expert_size(
+                    table->gate_expert_bytes, table->down_expert_bytes);
             if (capacity < unique.size()) capacity = unique.size();
             size_t free_bytes = 0, total_bytes = 0;
             if (!cuda_ok(cudaMemGetInfo(&free_bytes, &total_bytes), "stream expert memory budget"))
@@ -38407,8 +38476,16 @@ static int cuda_stream_selected_cache_begin_load(
             if (cudaDeviceGetAttribute(&integrated, cudaDevAttrIntegrated, g_gpu[0].device_id) == cudaSuccess &&
                 integrated && ds4_linux_nonmovable_memory(&host_available))
                 free_bytes = (size_t)std::min(host_available, (uint64_t)total_bytes);
-            const uint64_t reserve = UINT64_C(8) << 30;
+            /* Borrowing the decode tier keeps the tier's own live reserve; the
+             * generic 8 GiB holdback applies to an unborrowed loader only. */
+            const uint64_t reserve = g_stream_prefill_borrow_slots ?
+                cuda_stream_expert_cache_reserve_bytes() : UINT64_C(8) << 30;
             const uint64_t available = free_bytes > reserve ? free_bytes - reserve : 0;
+            if (g_stream_prefill_borrow_slots && capacity > available / expert_bytes)
+                fprintf(stderr, "DS4COMBO_PREFILL_BORROW_SHORT loader wanted %llu slots, live VRAM "
+                                "allows %llu (free %.2f GiB, reserve %.2f GiB)\n",
+                        (unsigned long long)capacity, (unsigned long long)(available / expert_bytes),
+                        (double)free_bytes / 1073741824.0, (double)reserve / 1073741824.0);
             capacity = std::min(capacity, available / expert_bytes);
             if (capacity < unique.size()) {
                 fprintf(stderr, "ds4: CUDA SSD cache cannot stage %zu experts with system headroom\n",
