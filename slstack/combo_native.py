@@ -150,12 +150,9 @@ class Native:
     def close(self):
         if self.closed:return self.receipt
         if not self.process:raise RuntimeError('Native process ownership was not established')
-        try:
-            if self.process.job and self.process.job.poll() is None:
-                self.http('/v1/train/close',{},timeout=5)
-                end=time.monotonic()+5
-                while self.process.job.poll() is None and time.monotonic()<end:time.sleep(.05)
-        except (OSError,RuntimeError,TimeoutError,ValueError):pass
+        # All required state has already been exported. Reuse the owned
+        # Job's certified shutdown directly; VRAM recovery is then checked
+        # independently by release_barrier before another owner can start.
         proof=self.process.close()
         if not all(proof.get(key) for key in ('owned_job_empty','owned_process_signaled','owned_pid_gone')):
             raise RuntimeError('Native GPU owner retirement unconfirmed; handoff refused')

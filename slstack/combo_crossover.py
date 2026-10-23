@@ -28,6 +28,6 @@ def qualified_threshold(cfg):
     if row.get('native_prefill_chunk')!=cfg['native_prefill_chunk']:
         raise ValueError('Measured crossover native workspace cap differs')
     result=crossover(row['stream_floor_ms'],row['stream_tok_s'],row['native_tok_s'],row.get('minimum_tokens',100))
-    if result!=row.get('crossover_tokens') or row.get('bracket_verified') is not True:
+    if result!=row.get('crossover_tokens') or row.get('bracket_verified') is not True or row.get('repeated_bracket_verified') is not True:
         raise ValueError('Measured crossover has no verified native/ULTRA bracket')
     return result

@@ -8,12 +8,13 @@ All checkpoint and reference-vector bytes remain in locked RAM.
 from __future__ import annotations
 import argparse
 from copy import deepcopy
+from contextlib import contextmanager
 import json
 import os
 from pathlib import Path
 import time
 from .combo_crossover import qualified_threshold
-from .combo_measure import require_parity,stream_completion,milestones
+from .combo_measure import require_parity,stream_completion,milestones,transfer_summary
 from .combo_ram import LockedRam
 from .combo_session import ComboSession
 from .journal import atomic_json
@@ -25,8 +26,8 @@ ROUTES=('native','ultra','native','native','ultra','native')
 def prompts(threshold):
     # Unique facts let the later short question check retained document data.
     filler=' '.join(f'Observation {i}: review timing, calibration and maintenance before authorising the pilot.'
-                    for i in range(max(64,threshold//3)))
-    instruction=' Answer the question first, then give at least 110 detailed numbered review notes with concrete explanations.'
+                    for i in range(max(8,(threshold+11)//12+4)))
+    instruction=' Answer the question first, then explain the relevant checks in about 150 words. Think briefly.'
     return [
         'TEST DS4COMBO. What should a careful pilot review check?'+instruction,
         'TEST document A. Project CERULEAN-47 is owned by Juniper, has capacity 217 units, and requires a calibration review.\n'+filler+
@@ -43,6 +44,16 @@ def facts(index,message):
     required={1:('juniper','217'),2:('juniper','217'),3:('calibration',),
               4:('cerulean','63'),5:('juniper','217','63','cerulean')}.get(index,())
     return dict(required=list(required),missing=[word for word in required if word not in text])
+
+
+@contextmanager
+def bounded_window(cfg,window,sessions):
+    with gpu_lease(cfg) as lease:
+        window(True,lease)
+        try:yield
+        finally:
+            if any(s.poison and s.poison.startswith('Unconfirmed GPU release') for s in sessions):os._exit(72)
+            window(False)
 
 
 def run(cfg,output,reasoning_history,window):
@@ -62,17 +73,17 @@ def run(cfg,output,reasoning_history,window):
                        host_budget_gib=cfg['host_budget_gib'],min_available_gib=cfg['min_available_gib'])
         for index,text in enumerate(prompts(threshold)):
             body=dict(model='deepseek-reasoner',messages=[*transcript,dict(role='user',content=text)],
-                      include_previous_reasoning=reasoning_history,max_tokens=1100,temperature=0,quality_speed=0)
+                      include_previous_reasoning=reasoning_history,max_tokens=384,reasoning_effort='low',temperature=0,quality_speed=0)
             row=dict(turn=index+1,expected_route=ROUTES[index],status='RUNNING')
             proof['turns'].append(row);atomic_json(output,proof)
-            with gpu_lease(cfg) as lease:
-                window(True,lease)
+            with bounded_window(cfg,window,(reference,)):
+                with reference.prepare(body,qualification_probe=lambda owner:owner.probe(bank,reference=True)) as (owner,rendered,metrics):
+                    expected=stream_completion(owner,rendered);reference_dir=owner.directory
+                row['native_replay']=dict(result=expected,metrics=metrics,
+                    engine_milestones=milestones((reference_dir/'stderr.log').read_bytes()))
+                atomic_json(output,proof)
+            with bounded_window(cfg,window,(auto,)):
                 try:
-                    with reference.prepare(body,qualification_probe=lambda owner:owner.probe(bank,reference=True)) as (owner,rendered,metrics):
-                        expected=stream_completion(owner,rendered);reference_dir=owner.directory
-                    row['native_replay']=dict(result=expected,metrics=metrics,
-                        engine_milestones=milestones((reference_dir/'stderr.log').read_bytes()))
-                    atomic_json(output,proof)
                     with auto.prepare(body,qualification_probe=lambda owner:owner.probe(bank,reference=False)) as (owner,rendered,metrics):
                         actual=stream_completion(owner,rendered);native_dir=owner.directory
                         actual['total_first_token_seconds_including_qualification']=metrics['prepared_seconds']+actual['native_api_first_token_seconds']
@@ -80,6 +91,7 @@ def run(cfg,output,reasoning_history,window):
                                greedy_message_byte_exact=(json.dumps(actual['message'],ensure_ascii=False,separators=(',',':')).encode()==
                                                           json.dumps(expected['message'],ensure_ascii=False,separators=(',',':')).encode()),
                                content_check=facts(index,actual['message']))
+                    row.update(transfer_summary(metrics))
                     if metrics['route']!=ROUTES[index]:raise ValueError('Alternating route did not match measured new-token crossover')
                     if index and metrics['reused_prefix_tokens']<=0:raise ValueError('Conversation prefix was not reused')
                     if ROUTES[index]=='native' and not row['greedy_message_byte_exact']:
@@ -88,11 +100,8 @@ def run(cfg,output,reasoning_history,window):
                     if row['content_check']['missing']:raise ValueError('Earlier document facts were not recalled')
                     transcript=[*body['messages'],actual['message']]
                     row['status']='PASS';atomic_json(output,proof)
-                finally:
-                    if any(s.poison and s.poison.startswith('Unconfirmed GPU release') for s in (auto,reference)):
-                        os._exit(72)
-                    window(False)
-            # The next turn acquires a fresh independently bounded lease.
+                finally:atomic_json(output,proof)
+            # Replay and router each acquire a fresh independently bounded lease.
         proof['status']='PASS'
     except BaseException as exc:
         proof['status']='FAIL';proof['error']=repr(exc);raise
