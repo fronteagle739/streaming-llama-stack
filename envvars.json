@@ -2444,6 +2444,34 @@
     ]
   },
   {
+    "var": "DS4_COMBO_EXPERT_RESTORE_FILE",
+    "flag": null,
+    "default": null,
+    "code_default": "Unset: original engine default; see consumer source.",
+    "classification": "advanced",
+    "scopes": [
+      "ds4-win"
+    ],
+    "doc": "LRU-ordered expert-cache list from the previous native owner; restored in full before the first decode token or the request fails.",
+    "reads": [
+      "engines/ds4-win/ds4_combo_api.inc:168"
+    ]
+  },
+  {
+    "var": "DS4_COMBO_EXPERT_SNAPSHOT_FILE",
+    "flag": null,
+    "default": null,
+    "code_default": "Unset: original engine default; see consumer source.",
+    "classification": "advanced",
+    "scopes": [
+      "ds4-win"
+    ],
+    "doc": "Where /decode/checkpoint and /decode/export write the resident expert-cache list (LRU order) for the next native owner.",
+    "reads": [
+      "engines/ds4-win/ds4_combo_api.inc:230"
+    ]
+  },
+  {
     "var": "DS4_COMBO_OWNER_EPOCH",
     "flag": null,
     "default": null,
