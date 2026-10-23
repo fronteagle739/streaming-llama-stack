@@ -1,6 +1,6 @@
 # Environment behaviour samples
 
-Run on2026-10-22 on Windows x64. Stack parent:8d6dd1bb3b3e361402e9a558a37c3d0879697932 plus the evolving working changes published with this example. Runtime identities and publication source hashes are recorded in SOURCE_IDENTITY.json. These samples use CPU only.
+The Windows CPU samples ran on2026-10-22. Stack parent:8d6dd1bb3b3e361402e9a558a37c3d0879697932 plus the evolving working changes published with this example. Runtime identities and publication source hashes are recorded in SOURCE_IDENTITY.json. Their historical binary/source pins identify the actual measured executables; later build receipts are separate.
 
 The reused image runtime's real memory watchdog received floor5 and stayed alive (0.578s,27,881,472B peak RSS). It received floor64 and exited137 with MEM_GUARD_TRIP (0.344s,25,669,632B). The outer guardian enforced1GiB RSS and4GiB available RAM in both cases. This tests the engine's memory guard, not image generation.
 
@@ -15,4 +15,9 @@ python -B tests/prove_native_environment.py --config <edit-this-config.json> --e
 python -B tests/prove_native_environment.py --config <edit-this-config.json> --expect cuda-required --receipt <edit-this-cuda-required.json> --ds4-cache-affinity-bias 0.35
 ```
 
-The JSON receipts preserve each child's output. GPU prefill and Mac-variable behaviour samples remain separate gates.
+The JSON receipts preserve each child's output. The other two engine scopes also have actual runtime samples:
+
+- [RTX vector casts](rtx-vector-cast.json): the launcher flag disables native vector dispatch while preserving the complete67-token canonical payload hash. The accepted default-on control is reused.
+- [Mac Metal budget](mac-metal-budget.json): the actual owned/wired buffer factory admits a1MiB buffer under a64MiB process allowance and refuses a512KiB allowance. Both run under an independent256MiB host cap and4GiB physical floor.
+
+These samples establish specific flag behaviour, not a speed campaign or full inference qualification for every environment variable.
