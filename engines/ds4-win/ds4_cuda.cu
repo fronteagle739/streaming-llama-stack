@@ -9605,6 +9605,21 @@ extern "C" uint32_t ds4_gpu_stream_host_expert_cache_configured_count(void) {
     return cuda_stream_host_expert_cache_requested_budget();
 }
 
+/* Host-tier capacity in experts of this size. A byte budget (--ram-streaming-cache-experts
+ * NGB) leaves the count budget at 0, so configured_count() reads 0 before the first
+ * allocation; restore and the hotlist need the capacity the allocation will get. */
+extern "C" uint32_t ds4_gpu_stream_host_expert_cache_capacity_for(uint64_t gate_expert_bytes, uint64_t down_expert_bytes) {
+    if (!cuda_stream_host_expert_cache_enabled()) return 0;
+    const uint64_t expert_bytes = cuda_stream_expert_cache_expert_bytes(gate_expert_bytes, down_expert_bytes);
+    if (!expert_bytes) return 0;
+    uint32_t cap = cuda_stream_host_expert_cache_budget_cap(expert_bytes, g_prefill_pipeline_host_cache_charge_bytes);
+    const uint32_t configured = cuda_stream_host_expert_cache_requested_budget();
+    if (configured && configured < cap) cap = configured;
+    const uint32_t cls = cuda_stream_host_expert_cache_class_index(gate_expert_bytes, down_expert_bytes);
+    if (g_stream_host_expert_runtime_cap[cls] != 0 && cap > g_stream_host_expert_runtime_cap[cls]) cap = g_stream_host_expert_runtime_cap[cls];
+    return cap;
+}
+
 extern "C" uint32_t ds4_gpu_stream_host_expert_cache_current_count(void) {
     uint32_t count = 0;
     for (uint32_t i = 0; i < DS4_CUDA_STREAM_EXPERT_CACHE_CLASSES; i++) {
