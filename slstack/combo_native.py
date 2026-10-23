@@ -87,7 +87,8 @@ class Native:
                 physical_floor=int(cfg['min_available_gib']*(1<<30)),operation_seconds=min(1140,cfg['request_timeout_s']),
                 idle_seconds=min(1140,cfg['lease_minutes']*60),native=native,cancelled=cancelled,native_mode=1,startup=startup,owner_epoch=epoch,
                 after_resume=lambda job:protect_working_set(job,int(cfg['host_budget_gib']*(1<<30)),
-                    int(cfg['min_available_gib']*(1<<30)),int(cfg['aggregate_host_budget_gib']*(1<<30))))
+                    int(cfg['min_available_gib']*(1<<30)),int(cfg['aggregate_host_budget_gib']*(1<<30)),
+                    receipt=directory/'resident-admission.json'))
             if self.restore_lease is not None:self.restore_lease.__exit__(None,None,None);self.restore_lease=None
             self.launch_seconds=time.monotonic()-self.launch_started
             atomic_json(directory/'launch.json',dict(argv=command,native_sha256=pin,owner_epoch=epoch,

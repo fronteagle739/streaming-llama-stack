@@ -4,6 +4,9 @@ import os
 import subprocess
 import sys
 import time
+import json
+from pathlib import Path
+import uuid
 import unittest
 from slstack.combo_ram import LockedRam, kernel_api, protect_working_set
 
@@ -22,7 +25,9 @@ class LockedRamTest(unittest.TestCase):
                 dict(os.environ),os.environ['STUDIO_RUNTIME_ROOT'],source,sink,diagnostic)
             for fd in (source,sink,diagnostic):os.close(fd);fds.remove(fd)
             job.resume()
-            admission=protect_working_set(job,128<<20,4<<30,512<<20)
+            receipt=Path(os.environ['STUDIO_RUNTIME_ROOT'])/('resident-cpu-'+uuid.uuid4().hex+'.json')
+            admission=protect_working_set(job,128<<20,4<<30,512<<20,receipt=receipt)
+            self.assertEqual(json.loads(receipt.read_text()),admission)
             self.assertEqual(admission['pid'],job.pid)
             self.assertEqual(admission['minimum'],128<<20)
             self.assertEqual(admission['flags']&5,1)
