@@ -98,9 +98,17 @@ def addresses():
     # Internet Sharing and bridged Ethernet put the usable address on a bridge,
     # which networksetup's physical-port list does not necessarily include.
     states = psutil.net_if_stats()
+    inactive = set()
+    try:
+        links = subprocess.check_output(['/sbin/ifconfig', '-a'], text=True, timeout=5)
+        for block in re.split(r'(?m)(?=^[^\s:]+:)', links):
+            if re.search(r'\bstatus:\s+inactive\b', block):
+                inactive.add(block.partition(':')[0])
+    except (OSError, subprocess.SubprocessError):
+        pass
     candidates = []
     for device, rows in psutil.net_if_addrs().items():
-        if device not in states or not states[device].isup:
+        if device not in states or not states[device].isup or device in inactive:
             continue
         for row in rows:
             if row.family != socket.AF_INET:

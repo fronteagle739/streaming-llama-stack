@@ -19,8 +19,10 @@ class ReceiverAnnouncementTests(unittest.TestCase):
         rows = {'en1':[ipv4('198.51.100.2')], 'bridge1':[ipv4('192.0.2.1')],
                 'en0':[ipv4('169.254.1.2')], 'bridge0':[ipv4('203.0.113.1')],
                 'lo0':[ipv4('127.0.0.1')]}
-        states = {name:SimpleNamespace(isup=name!='bridge0') for name in rows}
-        with patch('psutil.net_if_addrs',return_value=rows), patch('psutil.net_if_stats',return_value=states):
+        states = {name:SimpleNamespace(isup=True) for name in rows}
+        links = 'bridge0: flags=UP,RUNNING\n\tstatus: inactive\nbridge1: flags=UP,RUNNING\n\tstatus: active\n'
+        with patch('psutil.net_if_addrs',return_value=rows), patch('psutil.net_if_stats',return_value=states), \
+             patch('slstack.mac.subprocess.check_output',return_value=links):
             self.assertEqual(addresses(),['192.0.2.1','198.51.100.2'])
 
     def test_launcher_relays_only_public_startup_lines_after_health(self):
