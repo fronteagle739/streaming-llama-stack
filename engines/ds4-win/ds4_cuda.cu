@@ -9637,6 +9637,16 @@ extern "C" uint32_t ds4_gpu_stream_expert_cache_snapshot(
 /* Re-stamp LRU ages in the given oldest->newest order after a restore seed, so the
  * restored cache evicts in the same order the exported one would have.  Returns the
  * number of listed entries that are NOT resident (caller fails loudly on nonzero). */
+/* DS4COMBO expert restore: allocate the class cache at its full configured budget (the hotlist
+ * seed path sizes a missing cache to the seeded layer's count). Returns the capacity held. */
+extern "C" uint32_t ds4_gpu_stream_expert_cache_prepare_full(uint64_t gate_expert_bytes,
+                                                             uint64_t down_expert_bytes) {
+    if (!g_ssd_streaming_mode) return 0;
+    cuda_stream_expert_cache *cache = cuda_stream_expert_cache_prepare(
+        gate_expert_bytes, down_expert_bytes, cuda_stream_expert_cache_configured_budget());
+    return cache ? cache->capacity : 0;
+}
+
 extern "C" uint32_t ds4_gpu_stream_expert_cache_apply_order(
         int host, const uint32_t *layers, const uint32_t *experts,
         const uint64_t *gate_bytes, const uint64_t *down_bytes, uint32_t n) {

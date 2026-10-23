@@ -80847,13 +80847,7 @@ int ds4_session_prepare_prefill(ds4_session *s, int request_tokens,
  * graph sequence and the per-layer gates pair up.  The worker acks a sync
  * once its matching prefill completes, surfacing worker-side failures
  * here instead of as a gate timeout mid-decode. */
-static int ds4_session_expert_restore_apply(ds4_session *s, char *err, size_t errlen);
 int ds4_session_sync(ds4_session *s, const ds4_tokens *prompt, char *err, size_t errlen) {
-    /* DS4COMBO expert-cache restore: seed on the still-empty cache BEFORE this turn's prefill
-     * admits experts (seeding after prefill left only 236/301 resident). The restore sets the
-     * decode phase for seeding; the phase edge below returns to prefill as normal. The first
-     * eval keeps the call as the fallback for a decode with no sync. */
-    if (ds4_session_expert_restore_apply(s, err, errlen)) return 1;
     if (s && s->checkpoint_valid && !ds4_session_vision_prefix_matches(
                      s, s->sync_images, s->sync_image_count)) {
         ds4_session_invalidate(s);
@@ -83587,6 +83581,11 @@ static bool ds4_expert_restore_seed_kind(ds4_session *s, int host, const ds4_exp
         }
         const ds4_gpu_stream_expert_table table =
             graph_stream_expert_table_make(model, layer, il, gate, down);
+        /* The per-layer seed sizes a missing cache to THIS layer's count, and each larger layer then
+         * reallocates it (measured: 12/301 resident). Allocate the full configured cache first. */
+        if (!host && ds4_gpu_stream_expert_cache_prepare_full(gate, down) < n) {
+            snprintf(err, errlen, "expert restore VRAM cache unavailable at layer %u", il); return false;
+        }
         const int ok = host ? ds4_gpu_stream_host_expert_cache_seed_experts(&table, ids, n)
                             : ds4_gpu_stream_expert_cache_seed_experts(&table, ids, prio, n);
         if (!ok) { snprintf(err, errlen, "expert restore seed failed at layer %u", il); return false; }
