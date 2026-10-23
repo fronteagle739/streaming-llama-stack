@@ -8,7 +8,27 @@ import json
 from pathlib import Path
 import uuid
 import unittest
-from slstack.combo_ram import LockedRam, kernel_api, protect_working_set
+from slstack.combo_ram import LockedRam, kernel_api, protect_working_set,wait_for_host_capacity
+
+
+class CapacityTest(unittest.TestCase):
+    def test_waits_for_exact_physical_capacity_and_reports_elapsed(self):
+        now=[0.];readings=iter((2,5))
+        def sleep(seconds):now[0]+=seconds
+        result=wait_for_host_capacity(3,2,lambda:False,available=lambda:next(readings),clock=lambda:now[0],sleep=sleep)
+        self.assertEqual(result['required_bytes'],5);self.assertEqual(result['available_bytes'],5)
+        self.assertAlmostEqual(result['seconds'],.1)
+
+    def test_timeout_retains_required_and_available_without_launch(self):
+        now=[0.]
+        def sleep(seconds):now[0]+=seconds
+        with self.assertRaisesRegex(MemoryError,'available=2, required=5') as caught:
+            wait_for_host_capacity(3,2,lambda:False,timeout_s=.2,available=lambda:2,clock=lambda:now[0],sleep=sleep)
+        self.assertAlmostEqual(caught.exception.admission_receipt['seconds'],.2)
+
+    def test_cancel_does_not_wait_or_admit(self):
+        with self.assertRaisesRegex(RuntimeError,'cancelled'):
+            wait_for_host_capacity(3,2,lambda:True,available=lambda:5)
 
 
 @unittest.skipUnless(sys.platform=='win32','Windows shared RAM contract')

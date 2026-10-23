@@ -78,7 +78,7 @@ class SequenceTest(unittest.TestCase):
         for values in ((0,2000,10),(10000,10,10),(10000,float('nan'),10)):
             with self.assertRaises(ValueError):crossover(*values)
 
-    def run_sequence(self,fail_release=False,changed_history=False,probe=False):
+    def run_sequence(self,fail_release=False,changed_history=False,probe=False,fail_admission=False):
         events=[];tokens=list(range(200));cfg=dict(host_budget_gib=9,min_available_gib=2,native_host_budget_gib=8,
             gpu_uuid='id',combo_identity={})
         class Ram:
@@ -101,6 +101,10 @@ class SequenceTest(unittest.TestCase):
             events.append('release '+type(owner).__name__)
             if fail_release:raise RuntimeError('GPU recovery refused')
             return dict(certified=True)
+        def admitted(*args):
+            events.append('host admission')
+            if fail_admission:raise MemoryError('CPU fixture host capacity unavailable')
+            return dict(seconds=.125)
         session=ComboSession(cfg,device=Device(),qualification_route='ultra')
         if changed_history:
             session.state=Ram();session.payload={};tokens.reverse()
@@ -109,10 +113,13 @@ class SequenceTest(unittest.TestCase):
             original=Native.__init__
             def altered(self,*args,**kwargs):original(self,*args,**kwargs);self.checkpoint['tokens_sha256']=saved
             Native.__init__=altered
-        with patch('slstack.combo_session.Native',Native),patch('slstack.combo_session.ComboProducer',Producer),patch('slstack.combo_session.release_barrier',side_effect=release),patch.object(session,'_checkpoint',side_effect=checkpoint),patch.object(session,'_ram',return_value=Ram()):
+        with patch('slstack.combo_session.Native',Native),patch('slstack.combo_session.ComboProducer',Producer),patch('slstack.combo_session.release_barrier',side_effect=release),patch('slstack.combo_session.wait_for_host_capacity',side_effect=admitted),patch.object(session,'_checkpoint',side_effect=checkpoint),patch.object(session,'_ram',return_value=Ram()):
             try:
                 def check(owner):events.append('full-vector probe');return dict(vectors=384)
                 with session.prepare(dict(messages=[dict(role='user',content='document')]),qualification_probe=check if probe else None) as (native,body,metrics):events.append('decode')
+                self.assertAlmostEqual(metrics['ultra_load_import_prefill_seconds'],.325)
+            except MemoryError:
+                self.assertTrue(fail_admission);self.assertTrue(session.poison)
             except RuntimeError:
                 self.assertTrue(fail_release);self.assertTrue(session.poison)
             except ValueError:
@@ -125,6 +132,8 @@ class SequenceTest(unittest.TestCase):
     def test_gpu_owners_are_sequential_with_release_between_each(self):
         events=self.run_sequence()
         self.assertLess(events.index('release Native'),events.index('ULTRA open'))
+        self.assertLess(events.index('release Native'),events.index('host admission'))
+        self.assertLess(events.index('host admission'),events.index('ULTRA open'))
         self.assertLess(events.index('release Producer'),events.index('native restore'))
         self.assertLess(events.index('native restore'),events.index('decode'))
 
@@ -135,6 +144,11 @@ class SequenceTest(unittest.TestCase):
 
     def test_failed_native_release_never_launches_producer_or_fallback(self):
         events=self.run_sequence(fail_release=True)
+        self.assertNotIn('ULTRA open',events);self.assertNotIn('decode',events)
+
+    def test_host_admission_failure_after_release_never_launches_producer(self):
+        events=self.run_sequence(fail_admission=True)
+        self.assertIn('release Native',events);self.assertIn('host admission',events)
         self.assertNotIn('ULTRA open',events);self.assertNotIn('decode',events)
 
     def test_changed_history_outside_anchor_refuses_before_ultra(self):
