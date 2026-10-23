@@ -162,6 +162,7 @@ class ComboSession:
                 if self.cfg.get('producer_keep_alive'):
                     metrics['producer_suspend']=owner.suspend()
                     metrics['releases'].append(suspend_barrier(owner,self.device,self.cfg,baseline,self.cancel.is_set))
+                    baseline-=metrics['releases'][-1]['suspended_residual_bytes']   # later barriers exclude the kept producer's admitted residual
                     self.kept_producer=owner;owner=self.current=None
                 else:
                     metrics['releases'].append(release_barrier(owner,self.device,self.cfg,baseline,self.cancel.is_set));owner=self.current=None
