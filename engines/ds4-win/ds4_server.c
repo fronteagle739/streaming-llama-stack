@@ -16351,6 +16351,13 @@ static void wait_for_job_or_disconnect(server *s, job *j) {
 
 #include "ds4_training_api.h"
 #include "ds4_combo_api.inc"
+#if defined(_WIN32) && !defined(DS4_NO_GPU)
+void ds4_ds_shutdown(void);
+#endif
+static double now_sec_for_combo_shutdown(void) {
+    struct timespec ts; timespec_get(&ts, TIME_UTC);
+    return (double)ts.tv_sec + (double)ts.tv_nsec * 1e-9;
+}
 
 static void *client_main(void *arg) {
     client_arg *ca = arg;
@@ -17651,7 +17658,19 @@ int main(int argc, char **argv) {
                    i, tokens->len);
         kv_cache_store_current(&s, slot, "shutdown");
     }
-    server_close_resources(&s);
+    {
+        const bool graceful = ds4_combo_shutdown_requested;
+        const double t0 = now_sec_for_combo_shutdown();
+        server_close_resources(&s);
+#if defined(_WIN32) && !defined(DS4_NO_GPU)
+        if (graceful) ds4_ds_shutdown();
+#endif
+        if (graceful) {
+            fprintf(stderr, "DS4COMBO_NATIVE_GRACEFUL_SHUTDOWN_COMPLETE engine_and_ds_ms=%.1f ds_shutdown=1\n",
+                    (now_sec_for_combo_shutdown() - t0) * 1000.0);
+            fflush(stderr);
+        }
+    }
     return 0;
 }
 #else
