@@ -77,6 +77,10 @@ public:
     // compute tile bound; physical carry pages and embedding seeds stay32.
     // Failed/cancelled/opened objects cannot start a replacement request.
     bool run(const std::vector<int32_t> &tokens,const cancelled &stop,std::string &error);
+    // DS4COMBO producer-warm: on an opened, not yet run sweep, start the
+    // Engram row cache of the NEXT request (tokens known up front) while this
+    // pass runs. base_tail is the restored base's last <=3 tokens, if any.
+    bool start_next_engram(const std::vector<int32_t> &tokens,const std::vector<int32_t> &base_tail,std::string &error);
     struct run_timing {double prompt_processing_ms=0,export_preparation_ms=0;};
     // Actual sequential clock boundaries, available only after successful run.
     run_timing timing() const;

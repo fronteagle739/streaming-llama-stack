@@ -13,6 +13,10 @@
 #include <limits>
 #include <mutex>
 #include <stdexcept>
+#include <atomic>
+#include <chrono>
+#include <exception>
+#include <thread>
 
 #ifdef _WIN32
 #ifndef NOMINMAX
@@ -57,6 +61,18 @@ struct llama_dsv41_weight_provider::implementation {
     std::array<uint64_t,2>engram_offsets{};
     llama_dsv41::engram_layout engram;
     std::unique_ptr<llama_dsv41_engram_prompt_cache>engram_prompt;
+    // DS4COMBO producer-warm: the whole-prompt Engram row cache for a request
+    // whose tokens are already known, built on its own IoRing while the
+    // provider serves another pass (the one-token warmup). Immutable inputs
+    // only; adopted by prepare_engram_prompt for exactly the same tokens/history.
+    struct early_engram{
+        std::vector<int32_t>tokens;llama_dsv41::engram_history initial;
+        std::unique_ptr<llama_dsv41_engram_prompt_cache>cache;std::exception_ptr failure;
+        std::atomic<bool>cancel{false};double wall_ms=0;
+    };
+    std::shared_ptr<early_engram>early;
+    std::thread early_thread;
+    void join_early(){if(early)early->cancel=true;if(early_thread.joinable())early_thread.join();early.reset();}
     std::vector<ggml_backend_buffer_ptr>buffers;
     wf_context *fetcher=nullptr;
 #ifdef _WIN32
@@ -92,6 +108,7 @@ struct llama_dsv41_weight_provider::implementation {
     }
     void invalidate(){
         poisoned=true;
+        join_early();
         engram_prompt.reset();
         if(options.backend&&allocated)ggml_backend_synchronize(options.backend);
         if(fetcher){wf_stop(fetcher);wf_quiesce(fetcher);wf_destroy(fetcher);fetcher=nullptr;}
@@ -359,6 +376,18 @@ bool llama_dsv41_weight_provider::prepare_engram_prompt(const std::vector<int32_
     const bool during_layer_zero=overlap&&std::strcmp(overlap,"1")==0&&p->leased&&p->next==1;
     require(p->allocated&&((!p->leased&&p->next==0)||during_layer_zero)&&!p->engram_prompt&&tokens.size()==p->options.engram_prefetch_tokens,
         "Engram whole-prompt cache requires its initial or explicitly overlapped layer-zero lease");p->identity();
+    if(p->early&&p->early->tokens==tokens){
+        const auto waited=std::chrono::steady_clock::now();
+        if(p->early_thread.joinable())p->early_thread.join();
+        auto adopted=std::move(p->early);
+        if(adopted->failure)std::rethrow_exception(adopted->failure);
+        require(adopted->initial.tail==initial.tail,"Early Engram prompt cache was built with a different restored history");
+        require(adopted->cache&&adopted->cache->budget()<=p->options.engram_prefetch_host_bytes,"Early Engram prompt cache exceeds provider admission");
+        p->engram_prompt=std::move(adopted->cache);
+        std::fprintf(stderr,"DS4PERF_ENGRAM_EARLY_ADOPTED tokens=%zu build_wall_ms=%.3f join_wait_ms=%.3f host_plan_bytes=%llu same_rows=1\n",tokens.size(),adopted->wall_ms,
+            std::chrono::duration<double,std::milli>(std::chrono::steady_clock::now()-waited).count(),(unsigned long long)p->engram_prompt->budget());
+        return;
+    }
 #ifdef _WIN32
     p->engram_prompt.reset(new llama_dsv41_engram_prompt_cache);
     p->engram_prompt->prepare(p->engram,tokens.data(),uint32_t(tokens.size()),p->engram_offsets,p->options.engram_prefetch_host_bytes,initial);
@@ -366,6 +395,39 @@ bool llama_dsv41_weight_provider::prepare_engram_prompt(const std::vector<int32_
     p->engram_prompt->load(p->path.c_str(),p->file,p->options.verified_file_bytes,stop);p->identity();
 #else
     (void)stop;throw std::runtime_error("Whole-prompt Engram IoRing requires Windows");
+#endif
+},error);}
+bool llama_dsv41_weight_provider::start_engram_prompt_early(const std::vector<int32_t>&tokens,llama_dsv41::engram_history initial,std::string&error){return p->guard([&]{
+#ifdef _WIN32
+    require(p->options.engram_prefetch_host_bytes&&p->allocated&&!p->early&&!tokens.empty()&&tokens.size()<=1048576,"Early Engram prompt cache requires an admitted row cache and one pending request");
+    // Both caches may be alive at once: the current pass's own rows and the
+    // early request's. Charge both worst cases against the one admission.
+    const uint64_t worst=add(4*mib,uint64_t(tokens.size())*48*(4+264));
+    const uint64_t current=add(4*mib,uint64_t(p->options.engram_prefetch_tokens)*48*(4+264));
+    if(add(worst,current)>p->options.engram_prefetch_host_bytes){
+        // Not admitted alongside the current pass: the request keeps its
+        // ordinary layer-zero overlapped load. Visible, never silent.
+        std::fprintf(stderr,"DS4PERF_ENGRAM_EARLY_SKIPPED tokens=%zu worst_bytes=%llu current_bytes=%llu admitted_bytes=%llu reason=host_admission\n",tokens.size(),
+            (unsigned long long)worst,(unsigned long long)current,(unsigned long long)p->options.engram_prefetch_host_bytes);
+        return;
+    }
+    p->identity();
+    auto e=std::make_shared<implementation::early_engram>();e->tokens=tokens;e->initial=initial;e->cache.reset(new llama_dsv41_engram_prompt_cache);
+    const auto layout=p->engram;const auto offsets=p->engram_offsets;const auto path=p->path;const HANDLE file=p->file;
+    const uint64_t file_bytes=p->options.verified_file_bytes,admitted=p->options.engram_prefetch_host_bytes;
+    p->early=e;
+    p->early_thread=std::thread([e,layout,offsets,path,file,file_bytes,admitted]{
+        const auto started=std::chrono::steady_clock::now();
+        try{
+            e->cache->prepare(layout,e->tokens.data(),uint32_t(e->tokens.size()),offsets,admitted,e->initial);
+            e->cache->load(path.c_str(),file,file_bytes,[e]{return e->cancel.load();});
+        }catch(...){e->failure=std::current_exception();}
+        e->wall_ms=std::chrono::duration<double,std::milli>(std::chrono::steady_clock::now()-started).count();
+    });
+    std::fprintf(stderr,"DS4PERF_ENGRAM_EARLY_QUEUED tokens=%zu worst_bytes=%llu current_bytes=%llu admitted_bytes=%llu own_ioring=1\n",tokens.size(),
+        (unsigned long long)worst,(unsigned long long)current,(unsigned long long)p->options.engram_prefetch_host_bytes);
+#else
+    (void)tokens;(void)initial;throw std::runtime_error("Early Engram IoRing requires Windows");
 #endif
 },error);}
 bool llama_dsv41_weight_provider::acquire_embeddings(ggml_tensor*&out,std::string&error){out=nullptr;return p->guard([&]{p->acquire(0);out=p->embedding;},error);}
@@ -412,6 +474,22 @@ bool llama_dsv41_weight_provider::engram_tile(uint32_t index,llama_dsv41::engram
         (void)offset;(void)dst;(void)bytes;return false;
 #endif
     };
-    require(llama_dsv41::engram_read_batch(read,p->options.verified_file_bytes,p->engram_offsets[index],p->engram.rows[index],ids.data(),count,24,result.data(),why),"Original Engram row read/decode failed");
+    // DS4COMBO producer-warm: rows come from the immutable prepared cache, so
+    // contiguous token ranges decode on separate threads into their own fixed
+    // output rows. Same reader, same decode, same positions: identical floats.
+    constexpr size_t decode_threads=8;
+    if(p->options.engram_prefetch_host_bytes&&count>=1024){
+        std::array<std::string,decode_threads>why_part;std::array<bool,decode_threads>ok{};std::vector<std::thread>workers;
+        const size_t per=(count+decode_threads-1)/decode_threads;
+        const llama_dsv41::engram_read_at reader=read;
+        const uint64_t file_bytes=p->options.verified_file_bytes,table_offset=p->engram_offsets[index];const uint32_t table_rows=p->engram.rows[index];
+        const uint32_t*id_base=ids.data();float*out_base=result.data();bool*ok_base=ok.data();std::string*why_base=why_part.data();
+        for(size_t w=0;w<decode_threads;++w){const size_t first=w*per;if(first>=count)break;const size_t n=std::min(per,count-first);
+            workers.emplace_back([&reader,file_bytes,table_offset,table_rows,id_base,out_base,ok_base,why_base,w,first,n]{
+                try{ok_base[w]=llama_dsv41::engram_read_batch(reader,file_bytes,table_offset,table_rows,id_base+first*24,n,24,out_base+first*6144,why_base[w]);}
+                catch(...){ok_base[w]=false;}});}
+        for(auto&t:workers)t.join();
+        for(size_t w=0;w<workers.size();++w)require(ok[w],"Original Engram row read/decode failed");
+    }else require(llama_dsv41::engram_read_batch(read,p->options.verified_file_bytes,p->engram_offsets[index],p->engram.rows[index],ids.data(),count,24,result.data(),why),"Original Engram row read/decode failed");
     p->identity();out=std::move(result);history=pending;
 },error);}

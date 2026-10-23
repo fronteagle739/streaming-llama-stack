@@ -69,6 +69,10 @@ public:
     ggml_backend_t backend() const;
     bool prepare_engram_prompt(const std::vector<int32_t> &tokens,
          const std::function<bool()> &cancelled,std::string &error,llama_dsv41::engram_history initial={});
+    // DS4COMBO producer-warm: start the whole-prompt Engram row cache for a
+    // known later request on its own IoRing; prepare_engram_prompt adopts it
+    // for exactly these tokens/history. Both caches are charged to admission.
+    bool start_engram_prompt_early(const std::vector<int32_t> &tokens,llama_dsv41::engram_history initial,std::string &error);
     bool engram_tile(uint32_t index,llama_dsv41::engram_history &history,
         const int32_t *tokens,const uint8_t *text_mask,size_t count,
         std::vector<float> &output,std::string &error);
