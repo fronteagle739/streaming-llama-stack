@@ -180,7 +180,6 @@ class ComboProducer:
         completion line on stderr; anything else falls back to the Job
         terminate, and the fallback is logged."""
         p=self.process;job=getattr(p,'job',None)
-        if not self.cfg.get('producer_graceful_shutdown'):return
         if job is None or job.poll() is not None or p.closed or p.failure is not None or p.lock.locked():
             self.shutdown_path='terminate: producer not idle or already exited';return
         started=time.monotonic();exited=None
@@ -207,7 +206,7 @@ class ComboProducer:
         proof=self.process.close() if self.process else getattr(self,'failure_cleanup',None) or dict(creation_attempted=False)
         if self.process:
             self._graceful_verdict()
-            if self.shutdown_path!='graceful' and self.cfg.get('producer_graceful_shutdown'):
+            if self.shutdown_path!='graceful':
                 print('DS4COMBO producer shutdown fell back: '+self.shutdown_path,flush=True)
             proof=dict(proof,producer_shutdown_path=self.shutdown_path,producer_shutdown_seconds=self.shutdown_seconds,producer_shutdown_detail=self.shutdown_detail)
         if self.creation_attempted and not certified(proof):

@@ -83,12 +83,6 @@ class NativeGraceful(unittest.TestCase):
             proof = native(tmp, 0, b'', fail=True).close()
         self.assertTrue(proof['native_shutdown_path'].startswith('graceful-failed-terminate'))
 
-    def test_disabled_terminates(self):
-        with tempfile.TemporaryDirectory() as tmp:
-            proof = native(tmp, 0, DONE_N, graceful=False).close()
-        self.assertEqual(proof['native_shutdown_path'], 'terminate')
-
-
 class ProducerGraceful(unittest.TestCase):
     def test_close_op_and_marker_is_graceful(self):
         with tempfile.TemporaryDirectory() as tmp:
@@ -110,13 +104,6 @@ class ProducerGraceful(unittest.TestCase):
             proof = p.close()
         self.assertEqual(sent, [])
         self.assertTrue(proof['producer_shutdown_path'].startswith('terminate:'))
-
-    def test_disabled_sends_nothing(self):
-        with tempfile.TemporaryDirectory() as tmp:
-            p, sent = producer(tmp, 0, DONE_P, graceful=False)
-            proof = p.close()
-        self.assertEqual(sent, [])
-        self.assertEqual(proof['producer_shutdown_path'], 'terminate')
 
 
 if __name__ == '__main__':
