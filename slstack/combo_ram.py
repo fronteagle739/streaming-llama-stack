@@ -8,6 +8,8 @@ from contextlib import contextmanager
 import ctypes
 from ctypes import wintypes as w
 import hashlib
+import json
+import math
 import os
 import threading
 import time
@@ -18,6 +20,31 @@ from .journal import atomic_json
 
 GiB=1024**3
 PAGE=65536
+
+
+def wait_for_host_capacity(host_bytes,floor_bytes,cancelled,*,timeout_s=30,available=None,clock=time.monotonic,sleep=time.sleep):
+    """Allow bounded OS RAM reclamation after certified engine retirement."""
+    if any(type(n) is not int or n<=0 for n in (host_bytes,floor_bytes)):
+        raise ValueError('Explicit integer host/floor budgets required')
+    if type(timeout_s) not in (int,float) or not math.isfinite(timeout_s) or not 0<timeout_s<=30:
+        raise ValueError('Host admission settling must be bounded to30seconds')
+    available=available or (lambda:psutil.virtual_memory().available)
+    started=clock();minimum=None;polls=0;announced=False
+    while True:
+        free=available();polls+=1
+        if type(free) is not int or free<0:raise ValueError('Host admission physical telemetry is invalid')
+        minimum=free if minimum is None else min(minimum,free)
+        row=dict(host_budget_bytes=host_bytes,physical_floor_bytes=floor_bytes,required_bytes=host_bytes+floor_bytes,
+            available_bytes=free,minimum_available_bytes=minimum,seconds=clock()-started,polls=polls,timeout_seconds=timeout_s)
+        if cancelled():
+            error=RuntimeError('Host admission cancelled before producer launch');error.admission_receipt=row;raise error
+        if free>=host_bytes+floor_bytes:return row
+        if row['seconds']>=timeout_s:
+            error=MemoryError(f"Producer host admission refused after RAM settling: available={free}, required={host_bytes+floor_bytes}")
+            error.admission_receipt=row;raise error
+        if not announced:
+            print('DS4COMBO_HOST_ADMISSION_WAIT '+json.dumps(row),flush=True);announced=True
+        sleep(min(.1,timeout_s-row['seconds']))
 
 
 def kernel_api():

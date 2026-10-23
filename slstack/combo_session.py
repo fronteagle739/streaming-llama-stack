@@ -14,7 +14,7 @@ import time
 from contextlib import contextmanager
 from .combo_native import Native
 from .combo_producer import ComboProducer
-from .combo_ram import LockedRam
+from .combo_ram import LockedRam,wait_for_host_capacity
 from .combo_state import contract_from_checkpoint,verify_payload,payload_bytes
 from .combo_release import release_barrier,certified
 from .combo_crossover import qualified_threshold
@@ -93,7 +93,7 @@ class ComboSession:
             reply=owner.quality(value)
             if value is not None:self._note_quality(value)
             return reply
-        return dict(applied=False,deferred=True,reason='ULTRA owns the GPU; native setting will apply before decode',requested=self.quality_setting)
+        return dict(applied=False,deferred=True,reason='Preparing handoff; setting will apply before native decode',requested=self.quality_setting)
 
     def _note_quality(self,value):
         if isinstance(value,dict):self.provenance='phase-bias'
@@ -140,8 +140,10 @@ class ComboSession:
                 if cp is not None:metrics['native_base_export']=self._checkpoint(owner,cp)
                 metrics['releases'].append(release_barrier(owner,self.device,self.cfg,baseline,self.cancel.is_set));owner=self.current=None
                 base=(self.state,self.contract) if cp is not None else None
+                metrics['producer_host_admission']=wait_for_host_capacity(
+                    int(self.cfg.get('producer_host_budget_gib',8)*(1<<30)),int(self.cfg['min_available_gib']*(1<<30)),self.cancel.is_set)
                 owner=self.current=ComboProducer(self.cfg,self.session,self.epoch,append,self.cancel.is_set,base=base,runner=self.device)
-                metrics['ultra_load_import_prefill_seconds']=owner.prefill_seconds
+                metrics['ultra_load_import_prefill_seconds']=owner.prefill_seconds+metrics['producer_host_admission']['seconds']
                 metrics['ultra_directory']=str(owner.directory)
                 metrics['ultra_export']=self._checkpoint(owner,owner.checkpoint)
                 metrics['releases'].append(release_barrier(owner,self.device,self.cfg,baseline,self.cancel.is_set));owner=self.current=None
@@ -177,6 +179,7 @@ class ComboSession:
             metrics['complete_seconds']=time.monotonic()-started
         except BaseException as exc:
             self.poison=repr(exc);metrics['failure']=self.poison
+            if hasattr(exc,'admission_receipt'):metrics['producer_host_admission']=exc.admission_receipt
             if hasattr(exc,'owned_cleanup') and not certified(exc.owned_cleanup):
                 self.failed_owner=getattr(exc,'owned_runtime',getattr(exc,'owned_process',None))
                 self.poison='Unconfirmed GPU release: '+self.poison
