@@ -413,6 +413,19 @@ bool llama_dsv41_sweep::open(const llama_dsv41_weight_provider::config &weights,
     }catch(const std::exception&failure){p->poison();error=failure.what();return false;}
 }
 
+bool llama_dsv41_sweep::start_next_engram(const std::vector<int32_t>&tokens,const std::vector<int32_t>&base_tail,std::string&error){
+    std::unique_lock<std::mutex>lock(p->mutex,std::try_to_lock);error.clear();
+    if(!lock.owns_lock()){error="V4.1 sweep is already active";return false;}
+    try{
+        require(p->state==implementation::opened,"Early Engram start requires an opened sweep before its run");
+        require(base_tail.size()<=3,"Restored Engram history uses at most three tokens");
+        llama_dsv41::engram_history initial;
+        if(!base_tail.empty())success(p->provider.restored_engram_history(initial,base_tail.data(),base_tail.size(),error),error);
+        success(p->provider.start_engram_prompt_early(tokens,initial,error),error);
+        return true;
+    }catch(const std::exception&failure){p->poison();error=failure.what();return false;}
+}
+
 bool llama_dsv41_sweep::run(const std::vector<int32_t>&tokens,const cancelled&stop,std::string&error){
     const auto run_started=std::chrono::steady_clock::now();
     std::unique_lock<std::mutex>lock(p->mutex,std::try_to_lock);error.clear();

@@ -711,6 +711,15 @@ int wmain(int argc,wchar_t**argv){
             const auto warm_started=clock_type::now();
             warm_request.reset(new llama_dsv41_sweep);
             success(warm_request->open(warm_weights,warm_options,error),error);
+            // DS4COMBO producer-warm: the prompt's tokens are known now, so its
+            // Engram rows load on their own IoRing during this warmup pass.
+            {const char*overlap=std::getenv("LLAMA_DSV41_ENGRAM_PROMPT_OVERLAP");
+             if(weights.engram_prefetch_host_bytes&&options.engram_tile_lookahead&&overlap&&std::strcmp(overlap,"1")==0){
+                const std::vector<int32_t> first(tokens.begin(),tokens.begin()+chunk_tokens);
+                std::vector<int32_t> tail;
+                if(restored){const auto&bt=restored->base.tokens;tail.assign(bt.end()-std::min<size_t>(bt.size(),3),bt.end());}
+                success(warm_request->start_next_engram(first,tail,error),error);
+             }}
             success(warm_request->run(std::vector<int32_t>{tokens.front()},[]{return should_stop();},error),error);
             require(warm_request->ready(),"One-token warmup did not complete its actual40-layer prefill/head");
             ggml_backend_synchronize(backend.get());stop();
