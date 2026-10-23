@@ -189,12 +189,12 @@ class Native:
         # All required state has already been exported. Reuse the owned
         # Job's certified shutdown directly; VRAM recovery is then checked
         # independently by release_barrier before another owner can start.
-        # DS4COMBO RAM-leak A/B (cfg native_graceful_shutdown, default off):
-        # ask the engine to drain DirectStorage and free its GPU/host memory
-        # and return from main; the Job terminate below is then only a fallback.
-        self.shutdown_path='terminate'
+        # Studio-style exit (always): ask the engine to drain DirectStorage,
+        # free its GPU/host memory and return from main. The Job terminate in
+        # process.close() is only a logged fallback (the kill path leaked RAM).
+        self.shutdown_path='terminate: decoder already exited'
         exited=None
-        if self.cfg.get('native_graceful_shutdown') and self.process.job is not None and self.process.job.poll() is None:
+        if self.process.job is not None and self.process.job.poll() is None:
             started=time.monotonic()
             try:
                 self.control('shutdown')
@@ -214,7 +214,7 @@ class Native:
             done=re.search(rb'DS4COMBO_NATIVE_GRACEFUL_SHUTDOWN_COMPLETE [^\r\n]*',bytes(self.process.diagnostic or b''))
             self.shutdown_path='graceful' if exited==0 and done else 'graceful-crashed exit='+str(exited)
             if done:self.shutdown_detail=done.group(0).decode(errors='replace')
-        if self.shutdown_path!='graceful' and self.cfg.get('native_graceful_shutdown'):
+        if self.shutdown_path!='graceful':
             print('DS4COMBO native shutdown fell back: '+self.shutdown_path,flush=True)
         proof=dict(proof,native_shutdown_path=self.shutdown_path,native_shutdown_seconds=getattr(self,"shutdown_seconds",0.0),native_shutdown_detail=getattr(self,"shutdown_detail",None))
         if not all(proof.get(key) for key in ('owned_job_empty','owned_process_signaled','owned_pid_gone')):
