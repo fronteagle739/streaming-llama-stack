@@ -3,6 +3,7 @@ from __future__ import annotations
 from copy import deepcopy
 from contextlib import ExitStack
 import json
+import hashlib
 import os
 import re
 from pathlib import Path
@@ -18,6 +19,23 @@ from .combo_release import certified
 from .combo_ram import protect_working_set
 
 
+def global_hotlist(cfg):
+    """Per-model, per-cache-budget expert hotlist shared by every session (a list
+    written under another expert budget would fail the engine's full-restore check)."""
+    command=[str(v) for v in cfg['ds4_command']]
+    budget=command[command.index('--ssd-streaming-cache-experts')+1] if '--ssd-streaming-cache-experts' in command else 'default'
+    model=cfg['combo_identity']['model_sha256'][:16]
+    return Path(cfg['runtime_root'])/('expert-hotlist-'+model+'-'+re.sub(r'[^0-9A-Za-z]','',budget)+'.txt')
+
+
+def publish_hotlist(session_list,global_list):
+    """After a decoder exits: a live list it wrote becomes the global hotlist (atomic)."""
+    if session_list is None or not Path(session_list).exists():return False
+    data=Path(session_list).read_bytes()
+    if b'source=live' not in data.split(b'\n',1)[0]:return False
+    tmp=Path(str(global_list)+'.tmp');tmp.write_bytes(data);os.replace(tmp,global_list);return True
+
+
 class Native:
     def __init__(self,cfg,session,epoch,sequence,cancelled,*,restore=None,runner=None,expert_list=None):
         vendor()
@@ -28,6 +46,7 @@ class Native:
         self.creation_attempted=False
         self.leases=ExitStack()
         self.restore_lease=None
+        self.expert_list=None;self.global_list=None;self.restore_source=None;self.hotlist_published=False
         self.token=self.cfg.setdefault('_control_token',secrets.token_urlsafe(32))
         self.url=cfg['ds4_url'];self.cancelled=cancelled
         binary=path(cfg['ds4_command'][0]);pin=sha256(binary)
@@ -49,7 +68,21 @@ class Native:
             # list; a relaunch seeds it before its first decode token (engine fails loudly if
             # it cannot be restored in full).
             env_values['DS4_COMBO_EXPERT_SNAPSHOT_FILE']=str(expert_list)
-            if Path(expert_list).exists():env_values['DS4_COMBO_EXPERT_RESTORE_FILE']=str(expert_list)
+            # Cross-session hotlist: a decoder with no session list starts from the
+            # last list any decoder of this model and cache budget wrote, never cold.
+            self.expert_list=Path(expert_list);self.global_list=global_hotlist(cfg)
+            seeded=Path(str(self.expert_list)+'.from-global')
+            if self.expert_list.exists():
+                # A list this session only passed on (no decode yet) is still the global one.
+                data=self.expert_list.read_bytes();head=data.split(b'\n',1)[0]
+                unchanged=seeded.exists() and seeded.read_text()==hashlib.sha256(data).hexdigest()
+                self.restore_source='global' if seeded.exists() and (unchanged or b'source=inherited' in head) else 'session'
+            elif self.global_list.exists():
+                data=self.global_list.read_bytes();self.expert_list.write_bytes(data)
+                seeded.write_text(hashlib.sha256(data).hexdigest());self.restore_source='global'
+            else:self.restore_source='none'
+            print('DS4COMBO_EXPERT_RESTORE_SOURCE restore_source='+self.restore_source+' list='+str(self.expert_list),flush=True)
+            if self.restore_source!='none':env_values['DS4_COMBO_EXPERT_RESTORE_FILE']=str(expert_list)
         self.cfg.setdefault('env_overrides',{}).update(env_values)
         env=environment(self.cfg,'ds4-win')
         parts=cfg.get('ds_read_parts',8)
@@ -170,6 +203,9 @@ class Native:
 
     def expert_restore(self):
         """Restore timing from this decoder's log (after close); count 0 when none was pending."""
+        return dict(self._expert_restore(),expert_restore_source=self.restore_source)
+
+    def _expert_restore(self):
         raw=bytes(getattr(self.process,'diagnostic',b'') or b'')
         failed=re.search(rb'DS4COMBO_EXPERT_RESTORE_FAILED [^\r\n]*',raw)
         if failed:raise RuntimeError('Native expert-cache restore failed: '+failed.group(0).decode(errors='replace'))
@@ -221,6 +257,9 @@ class Native:
             raise RuntimeError('Native GPU owner retirement unconfirmed; handoff refused')
         self.receipt=proof;self.closed=True
         if self.restore_lease is not None:self.restore_lease.__exit__(None,None,None);self.restore_lease=None
+        if getattr(self,'global_list',None) is not None:
+            self.hotlist_published=publish_hotlist(self.expert_list,self.global_list)
+            proof['expert_hotlist_published']=self.hotlist_published
         try:
             (self.directory/'stderr.log').write_bytes(self.process.diagnostic)
             atomic_json(self.directory/'cleanup.json',proof)
