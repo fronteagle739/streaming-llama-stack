@@ -29,11 +29,13 @@ def main(config_path,output):
                producer_source_revision=cfg['producer_source_revision'],identity=cfg['combo_identity'])
     owner=None;state=None;vectors=None
     try:
+        proof['phase']='native_startup';atomic_json(output,proof)
         owner=Native(childcfg,session,epoch,1,cancel.is_set)
         capability=owner.quality()
         if capability.get('supported') is not True or capability.get('phases_supported') is not True:
             raise ValueError('Current native quality/speed provider schema is unavailable')
         proof['provider_schema']=cfg['provider_schema']
+        proof['provider_initial']=capability
         proof['provider_points']=[]
         for name,value in cfg['provider_schema']['named_points'].items():
             actual=owner.quality(value)
@@ -44,15 +46,18 @@ def main(config_path,output):
         body=dict(model='deepseek-chat',messages=[dict(role='user',content=prompt)],max_tokens=384,temperature=0)
         tokens=owner.render(body)
         if len(tokens)<128:raise ValueError('Qualification prompt must cross raw-ring and64KiB owner-page boundaries')
+        proof['phase']='native_prefill';atomic_json(output,proof)
         native_cp=owner.sync(tokens);position=len(tokens)
         state=LockedRam(payload_bytes(position),session=session,host_budget_gib=cfg['host_budget_gib'],min_available_gib=cfg['min_available_gib'])
         owner.export(state)
         native_contract=contract_from_checkpoint(native_cp,cfg['combo_identity'],session,epoch,1,'unbiased')
         proof['native_state']=verify_payload(state,native_contract,native_cp['payload_sha256'])
         vectors=LockedRam(32+384*4+384*129280*4,session=session,host_budget_gib=cfg['host_budget_gib'],min_available_gib=cfg['min_available_gib'])
+        proof['phase']='native_reference384';atomic_json(output,proof)
         started=time.monotonic();proof['reference']=owner.probe(vectors,reference=True);proof['reference_seconds']=time.monotonic()-started
         proof['releases'].append(release_barrier(owner,device,cfg,baseline,cancel.is_set));owner=None
         # First test the full ULTRA prefill on the identical rendered IDs.
+        proof['phase']='ultra_full_prefill';atomic_json(output,proof)
         owner=ComboProducer(cfg,session,epoch,tokens,cancel.is_set,runner=device)
         proof['ultra_prefill_wall_seconds']=owner.prefill_seconds
         ultra_cp=owner.checkpoint
@@ -61,7 +66,9 @@ def main(config_path,output):
         ultra_payload=verify_payload(state,ultra_contract)
         proof['ultra_state']=ultra_payload
         proof['releases'].append(release_barrier(owner,device,cfg,baseline,cancel.is_set));owner=None
+        proof['phase']='native_full_import';atomic_json(output,proof)
         owner=Native(childcfg,session,epoch,1,cancel.is_set,restore=(state,ultra_payload),runner=device)
+        proof['phase']='full_ultra_comparison384';atomic_json(output,proof)
         started=time.monotonic();proof['comparison']=owner.probe(vectors,reference=False);proof['comparison_seconds']=time.monotonic()-started
         if proof['comparison']['reference_sha256']!=proof['reference']['reference_sha256']:
             raise ValueError('Reference bank changed across GPU ownership transitions')
@@ -71,11 +78,13 @@ def main(config_path,output):
         # native reference. The even base also covers an odd target if present.
         base_position=max(2,(position//2)&~1)
         if base_position>=position:raise ValueError('Qualification prompt is too short for a nonempty imported base')
+        proof['phase']='native_base_prefill';atomic_json(output,proof)
         owner=Native(childcfg,session,epoch,1,cancel.is_set,runner=device)
         base_cp=owner.sync(tokens[:base_position]);owner.export(state)
         base_contract=contract_from_checkpoint(base_cp,cfg['combo_identity'],session,epoch,3,'unbiased')
         proof['base_state']=verify_payload(state,base_contract,base_cp['payload_sha256'])
         proof['releases'].append(release_barrier(owner,device,cfg,baseline,cancel.is_set));owner=None
+        proof['phase']='ultra_base_import_append';atomic_json(output,proof)
         owner=ComboProducer(cfg,session,epoch,tokens[base_position:],cancel.is_set,base=(state,base_contract),runner=device)
         proof['base_import_prefill_wall_seconds']=owner.prefill_seconds
         appended_cp=owner.checkpoint;proof['appended_export']=owner.export(state)
@@ -83,7 +92,9 @@ def main(config_path,output):
         appended_payload=verify_payload(state,appended_contract)
         proof['appended_state']=appended_payload
         proof['releases'].append(release_barrier(owner,device,cfg,baseline,cancel.is_set));owner=None
+        proof['phase']='native_appended_import';atomic_json(output,proof)
         owner=Native(childcfg,session,epoch,1,cancel.is_set,restore=(state,appended_payload),runner=device)
+        proof['phase']='appended_comparison384';atomic_json(output,proof)
         proof['appended_comparison']=owner.probe(vectors,reference=False)
         if proof['appended_comparison']['reference_sha256']!=proof['reference']['reference_sha256']:
             raise ValueError('Reference bank changed during native-base append qualification')

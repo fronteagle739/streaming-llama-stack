@@ -54,7 +54,7 @@ class SequenceTest(unittest.TestCase):
         for values in ((0,2000,10),(10000,10,10),(10000,float('nan'),10)):
             with self.assertRaises(ValueError):crossover(*values)
 
-    def run_sequence(self,fail_release=False,changed_history=False):
+    def run_sequence(self,fail_release=False,changed_history=False,probe=False):
         events=[];tokens=list(range(200));cfg=dict(host_budget_gib=9,min_available_gib=2,native_host_budget_gib=8,
             gpu_uuid='id',combo_identity={})
         class Ram:
@@ -86,7 +86,8 @@ class SequenceTest(unittest.TestCase):
             Native.__init__=altered
         with patch('slstack.combo_session.Native',Native),patch('slstack.combo_session.ComboProducer',Producer),patch('slstack.combo_session.release_barrier',side_effect=release),patch.object(session,'_checkpoint',side_effect=checkpoint),patch.object(session,'_ram',return_value=Ram()):
             try:
-                with session.prepare(dict(messages=[dict(role='user',content='document')])) as (native,body,metrics):events.append('decode')
+                def check(owner):events.append('full-vector probe');return dict(vectors=384)
+                with session.prepare(dict(messages=[dict(role='user',content='document')]),qualification_probe=check if probe else None) as (native,body,metrics):events.append('decode')
             except RuntimeError:
                 self.assertTrue(fail_release);self.assertTrue(session.poison)
             except ValueError:
@@ -98,6 +99,11 @@ class SequenceTest(unittest.TestCase):
         self.assertLess(events.index('release Native'),events.index('ULTRA open'))
         self.assertLess(events.index('release Producer'),events.index('native restore'))
         self.assertLess(events.index('native restore'),events.index('decode'))
+
+    def test_qualification_probe_reopens_saved_frontier_before_http_decode(self):
+        events=self.run_sequence(probe=True)
+        index=events.index('full-vector probe')
+        self.assertEqual(events[index+1:index+4],['release Native','native restore','decode'])
 
     def test_failed_native_release_never_launches_producer_or_fallback(self):
         events=self.run_sequence(fail_release=True)

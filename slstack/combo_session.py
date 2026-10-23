@@ -90,7 +90,7 @@ class ComboSession:
         elif value not in (None,0,0.0,'max_quality') and self.provenance=='unbiased':self.provenance='manual-bias'
 
     @contextmanager
-    def prepare(self,body):
+    def prepare(self,body,*,qualification_probe=None):
         if not self.lock.acquire(blocking=False):raise RuntimeError('Another request owns this conversation')
         owner=None;baseline=None;metrics=dict(session=self.session,owner_epoch=self.epoch,releases=[])
         started=time.monotonic()
@@ -103,6 +103,7 @@ class ComboSession:
             restore=(self.state,self.payload) if self.state is not None else None
             owner=self.current=Native(childcfg,self.session,self.epoch,1,self.cancel.is_set,restore=restore,runner=self.device)
             tokens=owner.render(rendered);cp=owner.checkpoint
+            metrics['restored_state']=deepcopy(cp)
             def matches(checkpoint):
                 return checkpoint is not None and len(tokens)>=checkpoint['position'] and prefix_digest(tokens,checkpoint['position'])==checkpoint['tokens_sha256']
             if cp is not None and not matches(cp):
@@ -111,6 +112,7 @@ class ComboSession:
                 self.provenance=self.anchor_provenance
             base_position=cp['position'] if cp else 0;append=tokens[base_position:]
             metrics.update(prompt_tokens=len(tokens),reused_prefix_tokens=base_position,new_tokens=len(append))
+            metrics['base_state']=deepcopy(cp)
             route=self.qualification_route or ('ultra' if len(append)>=self.threshold else 'native')
             metrics['route']=route;metrics['crossover_tokens']=self.threshold
             if route=='ultra' and append:
@@ -125,10 +127,23 @@ class ComboSession:
                 owner=self.current=Native(childcfg,self.session,self.epoch,1,self.cancel.is_set,restore=(self.state,self.payload),runner=self.device)
                 metrics['native_load_import_seconds']=owner.launch_seconds
             else:
+                sync_started=time.monotonic()
                 for off in range(0,len(append),49152):owner.sync(append[off:off+49152])
+                metrics['native_prefill_seconds']=time.monotonic()-sync_started
+                metrics['native_prefill_tok_s']=len(append)/metrics['native_prefill_seconds'] if append else None
             if self.quality_setting is not None:owner.quality(self.quality_setting)
             if self.journal is None:self.journal=self._ram(24<<20)
             self.anchor=owner.snapshot();self.anchor_provenance=self.provenance;metrics['anchor']=owner.anchor(self.journal)
+            metrics['decode_state']=deepcopy(self.anchor)
+            if qualification_probe is not None:
+                # The existing full-vector API advances the actual native
+                # session. Preserve this frontier, run the qualification,
+                # then reopen/restore it before ordinary HTTP decoding.
+                metrics['probe_checkpoint']=self._checkpoint(owner,self.anchor)
+                metrics['probe']=qualification_probe(owner)
+                metrics['releases'].append(release_barrier(owner,self.device,self.cfg,baseline,self.cancel.is_set));owner=self.current=None
+                owner=self.current=Native(childcfg,self.session,self.epoch,1,self.cancel.is_set,restore=(self.state,self.payload),runner=self.device)
+                if self.quality_setting is not None:owner.quality(self.quality_setting)
             metrics['prepared_seconds']=time.monotonic()-started
             yield owner,rendered,metrics
             # Existing native HTTP inference owns sampling/tools/stop handling.
