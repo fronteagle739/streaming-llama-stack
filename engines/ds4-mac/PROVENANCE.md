@@ -9,3 +9,5 @@ Full-model startup now reads the registered model descriptors directly into owne
 Stack-only native build passed in 10.39 s (peak RSS 1,034,469,376 B). The owned/wired variant rebuilt in 3.77 s (454,787,072 B). Its real Metal fixture passed exact copying, anonymous region identity, positive OS wired count, zero swapped region pages, release, and insufficient-budget refusal. These small-allocation results do not qualify full-model residency or parity.
 
 Complete standalone native-session inclusion and source closure, matching this export: `0710258ca185c4804295d882a1389104ba2c9571`. This keeps the private comparison build on an owned branch and uses the same memory protection.
+
+The bounded file-read factory passed an actual 96 MiB offset/chunk-boundary test, anonymous wired-region inspection, EOF padding, refusal and release checks. The receiver rebuilt in 9.59 s (peak RSS 802,816,000 B), under 2 GiB RSS and a 32 GiB physical reserve. See `examples/engine_environment/mac-wired-file.json`; full resident-model startup and paired inference are separate pending qualifications.

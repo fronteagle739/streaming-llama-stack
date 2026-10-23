@@ -1,0 +1,50 @@
+{
+  "status": "PASS",
+  "role": "Actual Metal file-to-owned-wired allocation test and native rebuild; full model startup still pending",
+  "build": {
+    "binary_sha256": "c7ee426efb10267ad2b0d265299b43b288bdbcf887310960182829090dec3ae1",
+    "source_sha256": "b9ae643bd5975ee2c361a80617630ba317a9e4f482b9392cdc5dc9d3c2285714",
+    "renderer_sha256": "d3b0970b881ff73621341a40e62e33238cf38640b816ad304d5ff81e5f2e6215"
+  },
+  "fixture": {
+    "bytes": 100663313,
+    "sha256": "ec7674c3fa7ffcdc548d745a55c026246776a25aae2b0c97ff676841017b58b9"
+  },
+  "jobs": [
+    {
+      "name": "wired-file-compile",
+      "host_budget_gib": 2,
+      "physical_floor_gib": 32,
+      "elapsed_s": 0.4453321250039153,
+      "peak_tree_rss": 123191296,
+      "min_available": 478597726208,
+      "cleanup_confirmed": true
+    },
+    {
+      "name": "wired-file-copy-test",
+      "host_budget_gib": 2,
+      "physical_floor_gib": 32,
+      "elapsed_s": 0.6642117919982411,
+      "peak_tree_rss": 145178624,
+      "min_available": 478585913344,
+      "cleanup_confirmed": true
+    },
+    {
+      "name": "wired-file-engine-build",
+      "host_budget_gib": 2,
+      "physical_floor_gib": 32,
+      "elapsed_s": 9.588004958990496,
+      "peak_tree_rss": 802816000,
+      "min_available": 478459887616,
+      "cleanup_confirmed": true
+    }
+  ],
+  "coverage": [
+    "96MiB exact offset copy across64MiB chunk boundary",
+    "anonymous OS-wired storage with no swapped region pages",
+    "EOF zero padding",
+    "invalid descriptor/range/budget refusal",
+    "all allocations released"
+  ],
+  "limitations": "Small allocation region observations; full-model residency and paired inference remain unqualified"
+}
