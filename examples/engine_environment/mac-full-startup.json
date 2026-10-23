@@ -1,0 +1,29 @@
+{
+  "date": "2026-10-23",
+  "source_commit": "7c26d6525246010bc54d78e6f2f564aef7310a50",
+  "binary_sha256": "c7ee426efb10267ad2b0d265299b43b288bdbcf887310960182829090dec3ae1",
+  "source_sha256": "b9ae643bd5975ee2c361a80617630ba317a9e4f482b9392cdc5dc9d3c2285714",
+  "status": "Full owned-wired model startup and native smoke request measured; pair remains unqualified",
+  "context": 1000001,
+  "model_and_support_owned_bytes": 334353334272,
+  "host_budget_gib": 384,
+  "physical_floor_gib": 32,
+  "native_guard": {
+    "peak_tree_rss": 353347649536,
+    "min_available": 60210151424,
+    "elapsed_s": 56.91453529201681,
+    "cleanup_confirmed": true,
+    "reason": "RuntimeError('stop requested')"
+  },
+  "native_smoke": {
+    "prompt_tokens": 39,
+    "generated_reasoning_tokens": 8,
+    "prefill_seconds": 1.323,
+    "decode_seconds": 0.231,
+    "decode_tokens_per_second": 34.67,
+    "request_seconds": 1.555,
+    "scope": "Tiny qualification request; not a long-context benchmark or paired parity pass"
+  },
+  "pair_failure": "Immediate physical-memory admission after certified native teardown; no wait for retired buffers to drain. No RTX producer or long request completed.",
+  "paging": "Darwin process disk-swap attribution unavailable. Shared physical footprint and global swap guards active; observed global growth 5046272 bytes in enclosing owner. No claim of exhaustive zero paging."
+}

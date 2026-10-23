@@ -33,6 +33,25 @@ def budget(cfg, maximum=400):
     return {**cfg, 'host_budget_gib': requested, 'min_available_gib': floor}
 
 
+def replacement_budget(cfg, maximum, previous_budget, timeout=60):
+    """Wait for certified retired buffers to drain, retaining the same cap."""
+    if previous_budget is None:
+        return budget(cfg, maximum)
+    requested = {**cfg, 'mac_host_budget_gib': cfg.get('mac_host_budget_gib') or previous_budget}
+    deadline = time.monotonic() + timeout
+    announced = False
+    while True:
+        try:
+            return budget(requested, maximum)
+        except MemoryError:
+            if time.monotonic() >= deadline:
+                raise MemoryError('Mac physical memory did not recover after certified backend cleanup') from None
+            if not announced:
+                print('Waiting for retired Mac buffers to release physical memory', flush=True)
+                announced = True
+            time.sleep(.25)
+
+
 def source_digest(directory):
     files = sorted(p for p in directory.rglob('*') if p.is_file() and
                    (p.suffix in {'.c', '.h', '.m', '.metal', '.inc'} or p.name == 'Makefile'))
@@ -126,6 +145,7 @@ class Receiver:
         self.lock = threading.RLock()
         self.engine = None
         self.engine_mode = None
+        self.engine_budget = None
         self.peer = None
         self.qualification = {}
         self.token_file = Path(cfg['runtime_root']) / 'state' / 'pair.token'
@@ -149,8 +169,14 @@ class Receiver:
     def close(self):
         if self.engine:
             self.engine.stop()
+            receipt = json.loads(self.engine.receipt.read_text()) if self.engine.receipt.is_file() else {}
+            if not receipt.get('cleanup_confirmed'):
+                error = RuntimeError('Mac backend cleanup unconfirmed; replacement refused')
+                error.owned_cleanup_uncertain = True
+                raise error
             self.engine = None
             self.engine_mode = None
+            self.engine_budget = None
 
     def pair(self, row, client_ip):
         allowed = {'producer_sha256', 'producer_source_revision', 'producer_ipv4', 'broker_port', 'tier'}
@@ -168,8 +194,9 @@ class Receiver:
     def ready(self, native):
         if self.engine and self.engine.proc.poll() is None and self.engine_mode == native:
             return
+        previous_budget = self.engine_budget
         self.close()
-        cfg = budget(self.cfg, 400 if self.backend == 'ds4' else 128)
+        cfg = replacement_budget(self.cfg, 400 if self.backend == 'ds4' else 128, previous_budget)
         port = cfg.get('mac_engine_port', 8181)
         with socket.socket() as probe:
             probe.bind(('127.0.0.1', port))
@@ -241,6 +268,7 @@ class Receiver:
         self.engine = OwnedProcess(cfg, command, 'mac-' + self.backend, cwd=Path(cfg['runtime_root']),
                                    timeout=cfg['lease_minutes'] * 60, scope='ds4-mac' if self.backend == 'ds4' else 'mlx-serve')
         self.engine_mode = native
+        self.engine_budget = cfg['host_budget_gib']
         deadline = time.monotonic() + 300
         while time.monotonic() < deadline:
             if self.engine.proc.poll() is not None:
@@ -388,7 +416,7 @@ def serve(cfg, backend, build):
                     else:
                         raise ValueError('Unknown receiver operation')
                 self.reply(200, result)
-            except (ValueError, KeyError, OSError, RuntimeError, TimeoutError) as exc:
+            except (ValueError, KeyError, OSError, RuntimeError, TimeoutError, MemoryError) as exc:
                 self.reply(409, {'error': str(exc)})
 
     port = cfg.get('mac_port', 8180)
