@@ -54,7 +54,9 @@ class ComboProducer:
         if sha256(binary)!=cfg['producer_sha256']:raise ValueError('ULTRA binary pin differs')
         self.directory=Path(cfg['runtime_root'])/('ultra-'+secrets.token_hex(8));self.directory.mkdir()
         native=runner or _Native();receipt=model_receipt(cfg)
-        args=dict(profile('ultra')['arguments'])
+        tier=cfg.get('producer_profile','ultra')
+        if tier not in ('accurate','fast','ultra'):raise ValueError('Combo producer profile must be accurate, fast or ultra (original weights; no HYPER)')
+        args=dict(profile(tier)['arguments'])
         host_bytes=int(cfg.get('producer_host_budget_gib',8)*(1<<30))
         args.update({'--context':str(cfg['context']),'--capture-dspark':'0','--compressed-cache-bf16':'0',
             '--model':str(path(cfg['model'])),'--copy-receipt':str(receipt),'--build-sha':cfg['producer_sha256'],
@@ -100,7 +102,7 @@ class ComboProducer:
             atomic_json(self.directory/'launch.json',dict(argv=argv,source_revision=cfg['producer_source_revision'],
                 producer_sha256=cfg['producer_sha256'],owner_epoch=epoch,host_bytes=host_bytes,
                 resident_admission=getattr(self.process,'resume_admission',None),
-                full_snapshot_bootstrap=base is None,weights_copied=False,profile='ultra',compressed_cache_bf16=False))
+                full_snapshot_bootstrap=base is None,weights_copied=False,profile=tier,compressed_cache_bf16=False))
         except BaseException as exc:
             self.failure_cleanup=getattr(exc,'owned_cleanup',None)
             if self.process is not None:
