@@ -120,25 +120,26 @@ class ComboSession:
             owner=self.current=Native(childcfg,self.session,self.epoch,1,self.cancel.is_set,restore=restore,runner=self.device,expert_list=self.expert_list)
             metrics['native_initial_load_import_seconds']=owner.launch_seconds
             tokens=owner.render(rendered);cp=owner.checkpoint
+            metrics['render']=deepcopy(owner.last_render)
             metrics['restored_state']=deepcopy(cp)
             def matches(checkpoint):
                 return checkpoint is not None and len(tokens)>=checkpoint['position'] and prefix_digest(tokens,checkpoint['position'])==checkpoint['tokens_sha256']
             if cp is not None and not matches(cp):
+                # Only a genuinely changed history (e.g. include_previous_reasoning OFF dropping
+                # the old thinking span) gets here; the engine keeps sampled IDs otherwise.
                 if self.anchor is None or not matches(self.anchor):raise ValueError('Rendered history changed outside the saved rewind frontier')
+                metrics['rewind_reason']='rendered history diverges from the post-decode frontier at token '+str((owner.last_render or {}).get('canonical_common'))+' ('+(owner.last_render or {}).get('prefix_source','engine without render report')+')'
                 cp=owner.rewind(self.journal,self.anchor);metrics['rewound_to']=cp['position']
                 self.provenance=self.anchor_provenance
             base_position=cp['position'] if cp else 0;append=tokens[base_position:]
             metrics.update(prompt_tokens=len(tokens),reused_prefix_tokens=base_position,new_tokens=len(append))
             metrics['base_state']=deepcopy(cp)
-            routing_tokens=len(append)
-            if 'rewound_to' in metrics and rendered.get('messages') and rendered['messages'][-1].get('role')=='user':
-                # Removing old reasoning replays the preceding answer suffix.
-                # The owner's short-new-message rule still applies: that old
-                # answer is retained history, not a newly pasted document.
+            if rendered.get('messages') and rendered['messages'][-1].get('role')=='user' and base_position:
+                # Logged only: the new user turn's own tokens. Routing uses the real prefill count.
                 blank=deepcopy(rendered);blank['messages'][-1]['content']=''
-                routing_tokens=min(len(append),changed_span_tokens(tokens,owner.render(blank)))
-                metrics['routing_policy']='new user text after bounded history-policy rewind'
-                metrics['replayed_suffix_tokens']=len(append)-routing_tokens
+                metrics['new_turn_tokens']=min(len(append),changed_span_tokens(tokens,owner.render(blank)))
+                metrics['replayed_history_tokens']=len(append)-metrics['new_turn_tokens']
+            routing_tokens=len(append)
             metrics['routing_tokens']=routing_tokens
             route=self.qualification_route or ('ultra' if routing_tokens>=self.threshold else 'native')
             metrics['route']=route;metrics['crossover_tokens']=self.threshold
@@ -200,11 +201,11 @@ class ComboSession:
             metrics['complete_seconds']=time.monotonic()-started
         except BaseException as exc:
             self.poison=repr(exc);metrics['failure']=self.poison
-            if hasattr(exc,'admission_receipt'):metrics['producer_host_admission']=exc.admission_receipt
             if self.kept_producer is not None:   # DS4COMBO fast switch: never keep a producer past a failure
                 try:metrics['kept_producer_release']=self.kept_producer.close()
                 except BaseException as cleanup:metrics['kept_producer_release_error']=repr(cleanup);self.failed_owner=self.kept_producer
                 self.kept_producer=None
+            if hasattr(exc,'admission_receipt'):metrics['producer_host_admission']=exc.admission_receipt
             if hasattr(exc,'owned_cleanup') and not certified(exc.owned_cleanup):
                 self.failed_owner=getattr(exc,'owned_runtime',getattr(exc,'owned_process',None))
                 self.poison='Unconfirmed GPU release: '+self.poison
@@ -223,8 +224,8 @@ class ComboSession:
         if self.poison and self.poison.startswith('Unconfirmed GPU release'):
             raise RuntimeError('Unconfirmed GPU owner: retain checkpoint RAM until the independent Job closes')
         if self.current is not None:raise RuntimeError('Cannot close a conversation while its GPU owner is active')
-        if self.state is not None:self.state.close();self.state=None
         if self.kept_producer is not None:   # DS4COMBO fast switch
             proof=self.kept_producer.close();self.kept_producer=None
             if not certified(proof):raise RuntimeError('Kept ULTRA producer retirement unconfirmed')
+        if self.state is not None:self.state.close();self.state=None
         if self.journal is not None:self.journal.close();self.journal=None

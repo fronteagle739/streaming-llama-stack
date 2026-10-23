@@ -197,7 +197,23 @@ static void ds4_combo_http(server*s,int fd,const http_request*hr){
             request parsed;char why[256]={0};
             if(!parse_chat_request(s->engine,s,command.body,1,s->ctx_size,&parsed,why,sizeof(why))){snprintf(err,sizeof(err),"native renderer refused: %.200s",why);goto failed;}
             if(parsed.image_count){request_free(&parsed);snprintf(err,sizeof(err),"mode1 combined contract requires text-only native state");goto failed;}
-            buf_puts(&reply,"{\"tokens\":[");for(int i=0;i<parsed.prompt.len;i++)buf_printf(&reply,"%s%d",i?",":"",parsed.prompt.v[i]);buf_puts(&reply,"],");request_free(&parsed);
+            /* Follow-up turns: the live frontier holds the SAMPLED token IDs of the previous answer,
+             * which canonical BPE of the re-rendered text need not reproduce. Reuse the HTTP chat
+             * path's memory-text rule: when the live tokens' bytes prefix the rendered prompt, keep
+             * them exactly and tokenize only the suffix. Otherwise return canonical tokens and say so. */
+            const int live=ds4_session_pos(session),common=live?ds4_session_common_prefix(session,&parsed.prompt):0;
+            ds4_tokens effective={0};const ds4_tokens*out=&parsed.prompt;const char*source=live?"memory-token":"empty";
+            if(live&&common<live){source="canonical-miss";
+                if(live_text_prefix_prompt(s,&s->slots[0],&parsed,&effective)==live){out=&effective;source="memory-text";}}
+            buf_puts(&reply,"{\"tokens\":[");for(int i=0;i<out->len;i++)buf_printf(&reply,"%s%d",i?",":"",out->v[i]);
+            buf_printf(&reply,"],\"render\":{\"prefix_source\":\"%s\",\"live_tokens\":%d,\"canonical_tokens\":%d,\"canonical_common\":%d",source,live,parsed.prompt.len,common);
+            if(live&&common<live){const ds4_tokens*old=ds4_session_tokens(session);
+                for(int side=0;side<2;side++){const ds4_tokens*v=side?&parsed.prompt:old;
+                    buf_printf(&reply,",\"%s\":[",side?"canonical_at_divergence":"live_at_divergence");
+                    for(int i=common;i<common+6&&i<v->len;i++){size_t n=0;char*piece=ds4_token_text(s->engine,v->v[i],&n);
+                        buf_printf(&reply,"%s[%d,\"",i>common?",":"",v->v[i]);for(size_t k=0;k<n;k++)buf_printf(&reply,"%02x",(unsigned char)piece[k]);buf_puts(&reply,"\"]");free(piece);}
+                    buf_puts(&reply,"]");}}
+            buf_puts(&reply,"},");ds4_tokens_free(&effective);request_free(&parsed);
         }else if(!strcmp(path,"/decode/sync")){
             if(command.seen!=(7|32|128)||!command.tokens.len){snprintf(err,sizeof(err),"sync fields/extent differ");goto failed;}
             const ds4_tokens*old=ds4_session_tokens(session);uint32_t base=(uint32_t)ds4_session_pos(session);
