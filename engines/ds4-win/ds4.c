@@ -83504,6 +83504,20 @@ int ds4_expert_cache_restore_prepare(const char *path, char *err, size_t errlen)
                  g_expert_restore.v.n, nv, g_expert_restore.h.n, nh);
         return 1;
     }
+    /* The tiers are exclusive: an expert seeded into VRAM leaves the host tier. A
+     * snapshot taken while experts move can list one in both; keep it in VRAM only. */
+    uint32_t kept = 0, dropped = 0;
+    for (uint32_t i = 0; i < g_expert_restore.h.n; i++) {
+        bool in_vram = false;
+        for (uint32_t j = 0; j < g_expert_restore.v.n && !in_vram; j++)
+            in_vram = g_expert_restore.v.layer[j] == g_expert_restore.h.layer[i] &&
+                      g_expert_restore.v.expert[j] == g_expert_restore.h.expert[i];
+        if (in_vram) { dropped++; continue; }
+        g_expert_restore.h.layer[kept] = g_expert_restore.h.layer[i]; g_expert_restore.h.expert[kept] = g_expert_restore.h.expert[i];
+        g_expert_restore.h.gate[kept] = g_expert_restore.h.gate[i]; g_expert_restore.h.down[kept] = g_expert_restore.h.down[i]; kept++;
+    }
+    g_expert_restore.h.n = kept; nh = kept;
+    if (dropped) fprintf(stderr, "DS4COMBO_EXPERT_RESTORE_DEDUP host_dropped=%u (also listed for VRAM)\n", dropped);
     g_expert_restore.model_size = model_size;
     g_expert_restore.pending = nv + nh != 0;
     fprintf(stderr, "DS4COMBO_EXPERT_RESTORE_PENDING vram=%u host=%u file=%s\n", nv, nh, path);
