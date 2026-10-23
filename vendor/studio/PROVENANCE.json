@@ -15,6 +15,12 @@
     }
   ],
   "license": "MIT, per stack owner instruction",
+  "local_patches": [
+    {
+      "path": "dsv41_session_process.py",
+      "purpose": "Reuse the shared suspended Job and RAM watcher for HTTP-native startup and positive owner epochs; preserve the original constructor exception, incomplete cleanup certificate and strong owner reference if shutdown fails. No engine arithmetic changes."
+    }
+  ],
   "modules": [
     {
       "path": "adapter.py",

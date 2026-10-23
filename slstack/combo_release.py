@@ -2,9 +2,13 @@
 import time
 
 
+def certified(proof):
+    return isinstance(proof,dict) and all(proof.get(k) for k in ('owned_job_empty','owned_process_signaled','owned_pid_gone'))
+
+
 def release_barrier(runtime, native, cfg, baseline_free, cancelled):
     start=time.monotonic();proof=runtime.close()
-    if not all(proof.get(k) for k in ('owned_job_empty','owned_process_signaled','owned_pid_gone')):
+    if not certified(proof):
         raise RuntimeError('GPU retirement certificate incomplete; ownership remains poisoned')
     while True:
         if cancelled():raise RuntimeError('Handoff cancelled in the same owner epoch')

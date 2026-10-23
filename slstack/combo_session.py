@@ -16,7 +16,7 @@ from .combo_native import Native
 from .combo_producer import ComboProducer
 from .combo_ram import LockedRam
 from .combo_state import contract_from_checkpoint,verify_payload,payload_bytes
-from .combo_release import release_barrier
+from .combo_release import release_barrier,certified
 from .combo_crossover import qualified_threshold
 from .native_broker import vendor
 
@@ -60,6 +60,7 @@ class ComboSession:
         self.session=secrets.token_hex(16);self.epoch=secrets.randbits(63) or 1
         self.generation=0;self.state=None;self.contract=None;self.payload=None
         self.journal=None;self.anchor=None;self.current=None;self.poison=None
+        self.failed_owner=None
         self.provenance='unbiased';self.anchor_provenance=None
         self.cancel=threading.Event();self.lock=threading.Lock();self.quality_setting=None
         if qualification_route not in (None,'native','ultra'):raise ValueError('Unknown explicit qualification route')
@@ -175,15 +176,23 @@ class ComboSession:
             metrics['complete_seconds']=time.monotonic()-started
         except BaseException as exc:
             self.poison=repr(exc);metrics['failure']=self.poison
+            if hasattr(exc,'owned_cleanup') and not certified(exc.owned_cleanup):
+                self.failed_owner=getattr(exc,'owned_runtime',getattr(exc,'owned_process',None))
+                self.poison='Unconfirmed GPU release: '+self.poison
+                metrics['failure']=self.poison;metrics['failed_construction_cleanup']=exc.owned_cleanup
             raise
         finally:
             if owner is not None:
                 try:metrics['failure_release']=release_barrier(owner,self.device,self.cfg,baseline,lambda:False)
-                except BaseException as exc:self.poison='Unconfirmed GPU release: '+repr(exc)
+                except BaseException as exc:
+                    self.poison='Unconfirmed GPU release: '+repr(exc);self.failed_owner=owner
+                    metrics['failure_release_error']=repr(exc)
             self.current=None;self.lock.release()
 
     def close(self):
         if self.lock.locked():raise RuntimeError('Cannot close conversation RAM while a request owns it')
+        if self.poison and self.poison.startswith('Unconfirmed GPU release'):
+            raise RuntimeError('Unconfirmed GPU owner: retain checkpoint RAM until the independent Job closes')
         if self.current is not None:raise RuntimeError('Cannot close a conversation while its GPU owner is active')
         if self.state is not None:self.state.close();self.state=None
         if self.journal is not None:self.journal.close();self.journal=None

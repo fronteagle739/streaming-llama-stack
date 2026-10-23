@@ -14,6 +14,7 @@ from .native_broker import vendor, model_receipt
 from .native_profiles import profile
 from .combo_contract import validate
 from .combo_state import transport_checkpoint, payload_bytes
+from .combo_release import certified
 
 
 def canonical_contract(row):
@@ -28,6 +29,7 @@ class ComboProducer:
         from studio.dsv41_session_process import Producer
         from studio.dsv41_windows_runner import _Native
         self.session=session;self.epoch=epoch;self.process=None;self.closed=False;self.leases=ExitStack()
+        self.creation_attempted=False
         if type(epoch) is not int or not 0<epoch<(1<<64):raise ValueError('Exact positive owner epoch required')
         if not tokens or len(tokens)>=cfg['context'] or any(type(t) is not int or not 0<=t<129280 for t in tokens):
             raise ValueError('Initial ULTRA append requires exact native token IDs within the admitted context')
@@ -67,6 +69,7 @@ class ComboProducer:
             for file in (binary,path(cfg['model']),receipt,token_path):self.leases.enter_context(native.read_lease(file))
             if native.gpu(0,cfg['gpu_uuid'])<int(args['--job-device-bytes'])+int(args['--gpu-reserve-bytes']):
                 raise MemoryError('ULTRA GPU plan cannot fit; handoff refused')
+            self.creation_attempted=True
             self.process=Producer(session,argv,env,self.directory,host_bytes=host_bytes,
                 physical_floor=int(cfg['min_available_gib']*(1<<30)),operation_seconds=min(1140,cfg['request_timeout_s']),
                 idle_seconds=cfg['lease_minutes']*60,native=native,cancelled=cancelled,native_mode=1,bootstrap=bootstrap,owner_epoch=epoch)
@@ -80,7 +83,16 @@ class ComboProducer:
                 full_snapshot_bootstrap=base is None,weights_copied=False,profile='ultra',compressed_cache_bf16=False))
         except BaseException as exc:
             self.failure_cleanup=getattr(exc,'owned_cleanup',None)
-            self.close()
+            if self.process is not None:
+                try:self.failure_cleanup=self.process.close()
+                except BaseException as cleanup:exc.owned_cleanup_error=repr(cleanup)
+            if self.failure_cleanup is not None:exc.owned_cleanup=self.failure_cleanup
+            if not self.creation_attempted or certified(self.failure_cleanup):
+                try:self.close()
+                except BaseException as cleanup:exc.owned_cleanup_error=repr(cleanup)
+            else:
+                exc.owned_cleanup=self.failure_cleanup or dict(creation_attempted=True)
+                exc.owned_runtime=self
             raise
 
     def command(self,operation,**extra):
@@ -108,9 +120,11 @@ class ComboProducer:
     def close(self):
         if self.closed:return self.receipt
         proof=self.process.close() if self.process else getattr(self,'failure_cleanup',None) or dict(creation_attempted=False)
-        if self.process and not all(proof.get(k) for k in ('owned_job_empty','owned_process_signaled','owned_pid_gone')):
+        if self.creation_attempted and not certified(proof):
             raise RuntimeError('ULTRA owner retirement unconfirmed; decoder import refused')
         self.receipt=proof
-        if self.process:(self.directory/'stderr.log').write_bytes(self.process.diagnostic)
-        atomic_json(self.directory/'cleanup.json',proof)
-        self.leases.close();self.closed=True;return proof
+        try:
+            if self.process:(self.directory/'stderr.log').write_bytes(self.process.diagnostic)
+            atomic_json(self.directory/'cleanup.json',proof)
+        finally:self.leases.close();self.closed=True
+        return proof
