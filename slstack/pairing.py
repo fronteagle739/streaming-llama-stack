@@ -64,6 +64,7 @@ class Pair:
         self.cfg, self.status = cfg, status or (lambda message: print(message, flush=True))
         self.url = endpoint(cfg['mac'])
         self.broker = None
+        self.lease_context = None
         self.connected = False
         self.token_path = Path(cfg['runtime_root']) / 'state' / 'pair.token'
         self.record_path = self.token_path.with_name('rtx-peer.json')
@@ -127,11 +128,31 @@ class Pair:
             binaries = Path(toolkit[1].strip())
             cfg['producer_library_directories'] = [str(p) for p in (binaries / 'x64', binaries) if p.is_dir()]
         effective = self.token_path.with_name('broker.local.json')
-        atomic_json(effective, cfg)
-        self.broker = OwnedProcess(cfg, [sys.executable, '-B', '-m', 'slstack', '--config', str(effective),
-                                        'broker-internal'], 'native-broker', timeout=cfg['lease_minutes']*60,
-                                   scope='rtx-producer')
         try:
+            # Reserve the complete native/paired handshake, including Mac model
+            # startup. The owned broker/producer inherit this ancestor's lease.
+            from .lease import gpu_lease, AdmissionRefused
+            import psutil
+            while True:
+                fits = psutil.virtual_memory().available >= (cfg['host_budget_gib'] + cfg['min_available_gib']) * 2**30
+                if fits:
+                    reservation = gpu_lease(cfg)
+                    try:
+                        identity = reservation.__enter__()
+                        self.lease_context = reservation
+                        break
+                    except AdmissionRefused:
+                        pass
+                if time.monotonic() >= deadline:
+                    raise TimeoutError('Pairing GPU/RAM admission wait elapsed; no qualification started')
+                self.status('Waiting for pairing GPU/RAM admission; no GPU lease held')
+                time.sleep(45)
+            cfg['_gpu_parent_lease'] = cfg.get('_gpu_parent_lease') or str(
+                Path(cfg['runtime_root']) / 'state/leases' / (identity + '.json'))
+            atomic_json(effective, cfg)
+            self.broker = OwnedProcess(cfg, [sys.executable, '-B', '-m', 'slstack', '--config', str(effective),
+                                            'broker-internal'], 'native-broker', timeout=cfg['lease_minutes']*60,
+                                       scope='rtx-producer')
             ready_until = time.monotonic() + 30
             while True:
                 if self.broker.proc.poll() is not None:
@@ -154,20 +175,6 @@ class Pair:
                     and health.get('paired_producer_sha256') == pin
                     and health.get('paired_tier') == identity['tier'])
             if not same:
-                from .lease import active_holds, hold_admission
-                import psutil
-                while True:
-                    holds = (active_holds(Path(cfg['hold_file']).read_text(encoding='utf-8-sig'))
-                             if cfg.get('hold_file') else [])
-                    blocked = hold_admission(holds, budget_gib=cfg['host_budget_gib'],
-                                             floor_gib=cfg['min_available_gib'])
-                    fits = psutil.virtual_memory().available >= (cfg['host_budget_gib'] + cfg['min_available_gib']) * 2**30
-                    if not blocked and fits:
-                        break
-                    if time.monotonic() >= deadline:
-                        raise TimeoutError('Pairing GPU/RAM admission wait elapsed; no qualification started')
-                    self.status('Waiting for pairing GPU/RAM admission; no GPU lease held')
-                    time.sleep(45)
                 self.status('Pairing native receiver and pinned producer')
                 self.request('/pair', identity)
                 self.request('/pair/qualification', {'mode': 'native'})
@@ -195,10 +202,23 @@ class Pair:
                           headers={'Authorization':'Bearer ' + self.token})
 
     def close(self):
-        if self.broker:
-            try:
-                self.request('/decode/eject', {}, timeout=60)
-            finally:
-                self.broker.stop()
-                self.broker = None
-                self.connected = False
+        try:
+            if self.broker:
+                try:
+                    self.request('/decode/eject', {}, timeout=60)
+                finally:
+                    self.broker.stop()
+                    receipt = json.loads(self.broker.receipt.read_text()) if self.broker.receipt.exists() else {}
+                    if not receipt.get('cleanup_confirmed'):
+                        error = RuntimeError('Paired broker cleanup unconfirmed; GPU reservation retained')
+                        error.owned_cleanup_uncertain = True
+                        if self.lease_context:
+                            self.lease_context.__exit__(type(error), error, None)
+                            self.lease_context = None
+                        raise error
+                    self.broker = None
+        finally:
+            self.connected = False
+            if self.lease_context and self.broker is None:
+                self.lease_context.__exit__(None, None, None)
+                self.lease_context = None
