@@ -40,8 +40,34 @@ def normal_argv(source,preset):
     return namespace['ds4_argv'](preset,port=18748)[1:]
 
 
+def relocate_runtime(cfg,installed,revision):
+    """The installed product must survive retirement of the task scratch."""
+    installed=Path(installed);scratch=Path(cfg['runtime_root']).resolve()
+    result=deepcopy(cfg)
+    result.update(runtime_root=str(installed/'runtime'),host_budget_gib=cfg['host_budget_gib']+.25,
+        combo_qualification_root=str(installed/'qualification'),
+        combo_native_binding=str(installed/'qualification/native-parity-binding.json'),
+        combo_ultra_guard=str(installed/'qualification/ultra-parity.receipt.json'),
+        combo_request_quality_proof=str(installed/'qualification/request-quality.json'),
+        combo_crossover_receipt=str(installed/'qualification/crossover.json'),
+        model_receipt=str(installed/'qualification/original-model.json'),
+        cache_affinity_spread_file=str(installed/'qualification/affinity-spreads.txt'),
+        llama_producer=str(installed/'combo-prefill.exe'),source_revision=revision,
+        studio_root=str(installed/'vendor/studio'))
+    if cfg.get('combo_core_binding'):result['combo_core_binding']=str(installed/'qualification/native-core-binding.json')
+    result['ds4_command'][0]=str(installed/'native/ds4-server.exe')
+    result['producer_library_directories']=[str(installed/'native'),
+        *[p for p in cfg['producer_library_directories'] if not Path(p).resolve().is_relative_to(scratch)]]
+    if str(scratch).replace('\\','/').lower() in json.dumps(result).replace('\\\\','/').lower():
+        raise ValueError('Installed configuration still depends on task scratch')
+    return result
+
+
 def acceptance(cfg,measurements,baseline,alternating):
     require_parity(cfg);qualified_threshold(cfg)
+    request=read(cfg['combo_request_quality_proof'])
+    if request.get('status')!='PASS' or request.get('native_sha256')!=cfg['native_sha256'] or len(request.get('requests',[]))!=2:
+        raise ValueError('Independent Code/Answer and next-request hardware proof is mandatory')
     rows=[read(path) for path in measurements]
     if len(rows)!=3:raise ValueError('Three measured quality settings are mandatory')
     if {row.get('requested_quality_speed') for row in rows}!={0,.35,1.36125}:
@@ -102,25 +128,23 @@ def stage(args):
         copy(native/name,name);copy(native/name,'native/'+name)
     proof_root=Path(cfg.get('combo_qualification_root',cfg['runtime_root']))
     for name in ('native-parity.json','native-parity-binding.json','ultra-parity.json'):
-        copy(proof_root/name,'qualification/'+name)
+        source=Path(cfg['combo_native_binding']) if name=='native-parity-binding.json' and cfg.get('combo_native_binding') else proof_root/name
+        copy(source,'qualification/'+name)
+    if cfg.get('combo_core_binding'):copy(cfg['combo_core_binding'],'qualification/native-core-binding.json')
+    copy(cfg['combo_ultra_guard'],'qualification/ultra-parity.receipt.json')
+    copy(cfg['combo_request_quality_proof'],'qualification/request-quality.json')
     copy(cfg['combo_crossover_receipt'],'qualification/crossover.json')
     copy(cfg['model_receipt'],'qualification/original-model.json')
     copy(cfg['cache_affinity_spread_file'],'qualification/affinity-spreads.txt')
     for index,path in enumerate([*args.measurements,args.native_baseline,*args.alternating]):
         copy(path,f'qualification/measurement-{index+1}.json')
-    result=deepcopy(cfg);result.update(host_budget_gib=9.25,combo_qualification_root=str(installed/'qualification'),
-        combo_crossover_receipt=str(installed/'qualification/crossover.json'),
-        model_receipt=str(installed/'qualification/original-model.json'),
-        cache_affinity_spread_file=str(installed/'qualification/affinity-spreads.txt'),
-        llama_producer=str(installed/'combo-prefill.exe'),source_revision=revision,studio_root=str(installed/'vendor/studio'))
-    result['ds4_command'][0]=str(installed/'native/ds4-server.exe')
-    result['producer_library_directories']=[str(installed/'native'),*[p for p in cfg['producer_library_directories'] if Path(p).resolve()!=native.resolve()]]
+    result=relocate_runtime(cfg,installed,revision)
     preset=dict(name='DSV4.1 1017 (RTX: ULTRA prefill \u2192 ds4-win decode)',mode='local',mac={},include_previous_reasoning=True,
         rtx=dict(backend='ds4',model='deepseek-reasoner',model_path=cfg['model'],ctx=cfg['context'],
             ds4_binary=str(installed/'ds4-server.exe'),ds4_chdir=str(installed),ds4_ssd_streaming='1',ds4_cache_experts='24GB',
             prefill_chunk=cfg['native_prefill_chunk'],ds4_cache_affinity_bias=0,
             ds4_cache_affinity_spread_file=result['cache_affinity_spread_file'],ds4_extra_flags='--cuda',
-            ds4_host_memory_budget_mb=9472,ds4_host_memory_reserve_mb=2048))
+            ds4_host_memory_budget_mb=int(result['host_budget_gib']*1024),ds4_host_memory_reserve_mb=int(cfg['min_available_gib']*1024)))
     result['studio_expected_args']=normal_argv(Path(args.studio_native),preset)
     (target/'combo.json').write_text(json.dumps(result,indent=2),encoding='utf-8')
     (target/'python-path.txt').write_text(str(Path(sys.executable).resolve())+'\n',encoding='utf-8')

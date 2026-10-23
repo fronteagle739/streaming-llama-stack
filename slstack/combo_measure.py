@@ -15,6 +15,9 @@ def require_parity(cfg):
     root=Path(cfg.get('combo_qualification_root',cfg['runtime_root']))
     native=json.loads((root/'native-parity.json').read_text())
     ultra=json.loads((root/'ultra-parity.json').read_text())
+    guardian=json.loads(Path(cfg.get('combo_ultra_guard',root/'ultra-parity.receipt.json')).read_text())
+    if guardian.get('exit_code')!=0 or guardian.get('reason') is not None or guardian.get('release_allowed') is not True:
+        raise ValueError('ULTRA qualification lacks a successful guardian and certified release')
     binding=json.loads(Path(cfg.get('combo_native_binding',root/'native-parity-binding.json')).read_text())
     if native.get('status')!='PASS' or any(native.get(k)!=384 for k in ('roundtrip_byte_exact','rewind_byte_exact')):
         raise ValueError('Mandatory native full-vector parity is incomplete')
