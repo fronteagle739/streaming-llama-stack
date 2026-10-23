@@ -23,6 +23,22 @@ def canonical_contract(row):
     return json.dumps(row, sort_keys=True, separators=(',', ':'), allow_nan=False).encode()
 
 
+def startup_failure(error,directory):
+    """Retain constructor stderr and its exact owned-cleanup attribution."""
+    diagnostic=getattr(error,'owned_diagnostic',b'')
+    if not isinstance(diagnostic,bytes) or not diagnostic:return error
+    try:(Path(directory)/'stderr.log').write_bytes(diagnostic)
+    except OSError as failure:
+        error.add_note('Could not save producer startup diagnostic: '+repr(failure))
+        return error
+    if not isinstance(error,BrokenPipeError):return error
+    tail=diagnostic.decode('utf-8',errors='replace')[-4000:].strip()
+    reported=RuntimeError('ULTRA exited during base import: '+tail)
+    reported.__dict__.update(error.__dict__)
+    reported.original_error=repr(error)
+    return reported
+
+
 class ComboProducer:
     def __init__(self,cfg,session,epoch,tokens,cancelled,*,base=None,runner=None):
         vendor()
@@ -97,6 +113,8 @@ class ComboProducer:
             else:
                 exc.owned_cleanup=self.failure_cleanup or dict(creation_attempted=True)
                 exc.owned_runtime=self
+            reported=startup_failure(exc,self.directory)
+            if reported is not exc:raise reported from exc
             raise
 
     def command(self,operation,**extra):
