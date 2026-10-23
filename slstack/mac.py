@@ -52,6 +52,14 @@ def replacement_budget(cfg, maximum, previous_budget, timeout=60):
             time.sleep(.25)
 
 
+def check_backend_port(port):
+    # Match ds4-server's listener: TIME_WAIT from the certified retired engine
+    # is reusable, while a live listener on the same address still refuses.
+    with socket.socket() as probe:
+        probe.setsockopt(socket.SOL_SOCKET, socket.SO_REUSEADDR, 1)
+        probe.bind(('127.0.0.1', port))
+
+
 def source_digest(directory):
     files = sorted(p for p in directory.rglob('*') if p.is_file() and
                    (p.suffix in {'.c', '.h', '.m', '.metal', '.inc'} or p.name == 'Makefile'))
@@ -198,8 +206,7 @@ class Receiver:
         self.close()
         cfg = replacement_budget(self.cfg, 400 if self.backend == 'ds4' else 128, previous_budget)
         port = cfg.get('mac_engine_port', 8181)
-        with socket.socket() as probe:
-            probe.bind(('127.0.0.1', port))
+        check_backend_port(port)
         env = dict(cfg.get('env_overrides', {}))
         binary = self.build['binary']
         if self.backend == 'mlx-serve':

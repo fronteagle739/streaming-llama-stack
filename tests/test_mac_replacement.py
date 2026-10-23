@@ -1,15 +1,38 @@
 import io
 import json
+import errno
+import socket
+import sys
 import threading
 import unittest
 from contextlib import redirect_stdout
 from types import SimpleNamespace
 from unittest.mock import Mock, patch
 
-from slstack.mac import Receiver, replacement_budget, serve
+from slstack.mac import Receiver, check_backend_port, replacement_budget, serve
 
 
 class MacReplacementTests(unittest.TestCase):
+    @unittest.skipUnless(sys.platform == 'darwin', 'Mac socket reuse semantics')
+    def test_retired_connection_is_reusable_but_live_listener_is_not(self):
+        with socket.socket() as listener:
+            listener.setsockopt(socket.SOL_SOCKET,socket.SO_REUSEADDR,1)
+            listener.bind(('127.0.0.1',0))
+            listener.listen(1)
+            port = listener.getsockname()[1]
+            with self.assertRaises(OSError) as live:
+                check_backend_port(port)
+            self.assertEqual(live.exception.errno,errno.EADDRINUSE)
+            with socket.create_connection(('127.0.0.1',port),timeout=2) as client:
+                connection,_ = listener.accept()
+                connection.close()  # Server is the active closer: leave TIME_WAIT.
+                self.assertEqual(client.recv(1),b'')
+        with socket.socket() as raw:
+            with self.assertRaises(OSError) as retired:
+                raw.bind(('127.0.0.1',port))
+            self.assertEqual(retired.exception.errno,errno.EADDRINUSE)
+        check_backend_port(port)
+
     def test_retired_memory_must_recover_without_shrinking_the_cap(self):
         memory = [SimpleNamespace(available=n*2**30) for n in (80, 200, 450)]
         cfg = {'min_available_gib':32}
