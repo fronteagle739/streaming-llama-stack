@@ -751,7 +751,11 @@ int wmain(int argc,wchar_t**argv){
         require(!chunk_option||options.reuse_graph&&!options.reuse_layer_graph,"Stateful CLI requires allocator-only graph mode");
         // No-warm-up start: the early Engram row load (otherwise hidden behind the
         // warmup) begins as soon as the real request is opened.
-        if(direct_open){const char*overlap=std::getenv("LLAMA_DSV41_ENGRAM_PROMPT_OVERLAP");
+        // Measured (proof-c): with no warm-up to hide behind, the early whole-prompt
+        // load (7.9 s at 43K) left a 7.4 s join wait and prefill fell to 1,052 tok/s,
+        // against 1,238 tok/s with the ordinary layer-0 overlapped load. Opt-in only.
+        const char*early_direct=std::getenv("LLAMA_DSV41_ENGRAM_EARLY_DIRECT");
+        if(direct_open&&early_direct&&std::strcmp(early_direct,"1")==0){const char*overlap=std::getenv("LLAMA_DSV41_ENGRAM_PROMPT_OVERLAP");
             if(weights.engram_prefetch_host_bytes&&options.engram_tile_lookahead&&overlap&&std::strcmp(overlap,"1")==0){
                 const std::vector<int32_t> first(tokens.begin(),tokens.begin()+std::min<size_t>(chunk_tokens,tokens.size()));
                 success(sweep->start_next_engram(first,early_tail,error),error);
