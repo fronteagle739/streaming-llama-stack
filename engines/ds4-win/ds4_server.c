@@ -868,6 +868,8 @@ typedef struct {
     bool ignore_eos;
     int cache_read_tokens;
     int cache_write_tokens;
+    double prompt_ms;
+    double decode_ms;
     ds4_think_mode think_mode;
     bool has_tools;
     bool prompt_preserves_reasoning;
@@ -9051,6 +9053,18 @@ static bool responses_final_response(int fd, bool enable_cors,
     return ok;
 }
 
+/* The pinned llama.cpp UI consumes these measured native timings. */
+static void append_native_timings(buf *b, const request *r,
+                                  int prompt_tokens, int completion_tokens) {
+    if (!(r->decode_ms > 0) || !isfinite(r->decode_ms) ||
+        r->prompt_ms < 0 || !isfinite(r->prompt_ms)) return;
+    const int cached = clamp_usage_tokens(r->cache_read_tokens, prompt_tokens);
+    buf_printf(b, ",\"timings\":{\"cache_n\":%d,\"prompt_n\":%d,"
+                  "\"prompt_ms\":%.6f,\"predicted_n\":%d,\"predicted_ms\":%.6f}",
+               cached, prompt_tokens - cached, r->prompt_ms,
+               completion_tokens, r->decode_ms);
+}
+
 static bool final_response(int fd, bool enable_cors,
                            const request *r, const char *id, const char *text,
                            const char *reasoning, const tool_calls *calls, const char *finish,
@@ -9083,6 +9097,7 @@ static bool final_response(int fd, bool enable_cors,
         buf_puts(&b, "}],\"usage\":");
     }
     append_openai_usage_json(&b, r, prompt_tokens, completion_tokens);
+    append_native_timings(&b, r, prompt_tokens, completion_tokens);
     buf_puts(&b, "}\n");
     bool ok = http_response(fd, enable_cors, 200, "application/json", b.ptr);
     buf_free(&b);
@@ -14831,6 +14846,8 @@ static void generate_job_inner(server *s, server_slot *slot, job *j) {
         rng = ((uint64_t)time(NULL) << 32) ^ (uint64_t)(uintptr_t)j;
     }
     if (!rng) rng = UINT64_C(0x9e3779b97f4a7c15);
+    const double first_decode_t0 = now_sec();
+    j->req.prompt_ms = (first_decode_t0 - t0) * 1000.0;
 decode_again:
     ;
     buf text = {0};
@@ -15250,6 +15267,8 @@ decode_again:
         if (stop_decode) break;
     }
     server_generation_leave(s);
+    /* Recovery passes retain the original generation start and token count. */
+    j->req.decode_ms = (now_sec() - first_decode_t0) * 1000.0;
 
     if (job_cancelled(j)) {
         request_live_state_clear(s, slot);
