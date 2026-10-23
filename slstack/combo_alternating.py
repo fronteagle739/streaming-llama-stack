@@ -86,6 +86,7 @@ def run(cfg,output,reasoning_history,window):
                 try:
                     with auto.prepare(body,qualification_probe=lambda owner:owner.probe(bank,reference=False)) as (owner,rendered,metrics):
                         actual=stream_completion(owner,rendered);native_dir=owner.directory
+                        actual['provider_final']=owner.quality()
                         actual['total_first_token_seconds_including_qualification']=metrics['prepared_seconds']+actual['native_api_first_token_seconds']
                     row.update(result=actual,metrics=metrics,engine_milestones=milestones((native_dir/'stderr.log').read_bytes()),
                                greedy_message_byte_exact=(json.dumps(actual['message'],ensure_ascii=False,separators=(',',':')).encode()==
