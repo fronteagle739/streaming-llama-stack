@@ -12,6 +12,30 @@ Each row below comes from `envvars.json`, which also supplies the CLI flags and 
 
 Accurate preserves the original default arithmetic; Fast enables the delivered BF16 indexer and split-F32 scores. Ultra also uses the delivered reduced-precision expert/dense/attention paths. Hyper adds transient FP4 weight/activation conversion on the GPU. Hyper never writes a requantized model file; selecting it explicitly opts into those arithmetic changes. These profile definitions are separate from the bias tool and do not imply a new build has passed every mode's parity or performance test.
 
+## Quality and speed
+
+The chat model can call `set_quality_speed` and `get_quality_speed`. The router executes these tools against the native control endpoint. Modes above Balanced are faster but may produce worse answers.
+
+| Setting | Bias |
+|---|---|
+| `max_quality` | 0 |
+| `balanced` | 0.35 |
+| `fast` | 0.65 |
+| `faster` | 0.9 |
+| `max_speed` | 1.36125 |
+
+Use `value` for one setting, or provide independent `reasoning`, `tool_call`, `answer`, `code` arguments. Partial phase updates preserve the other settings. Numeric values must be finite and in [0,1.36125].
+
+Tool-call examples:
+
+```json
+{"name":"set_quality_speed","arguments":{"value":"balanced"}}
+{"name":"set_quality_speed","arguments":{"reasoning":"fast","answer":"balanced","code":"max_quality"}}
+{"name":"get_quality_speed","arguments":{}}
+```
+
+Native controls take effect at token boundaries. The response reports requested and applied values, revision, phase counters and the latest throughput window. Its scope field describes whether the backend applies the setting server-wide. An unsupported backend must report that capability explicitly. Short throughput windows are observations, not benchmark guarantees.
+
 ## Launcher settings
 
 | Flag | Scope and DSV4.1 default | Purpose |

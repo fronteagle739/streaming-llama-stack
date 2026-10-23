@@ -54,6 +54,9 @@ def source_defaults(table):
 
 
 def render(table):
+    from .native_broker import vendor
+    vendor()
+    from studio.quality_speed import NAMED, PHASES
     out = ['# User guide', '',
            'The launcher constructs each child environment. No exports are needed. '
            'Precedence is `--flag` > `env_overrides` in the config > the DSV4.1 table default > the engine default. '
@@ -71,6 +74,23 @@ def render(table):
            'Ultra also uses the delivered reduced-precision expert/dense/attention paths. Hyper adds transient FP4 weight/activation '
            'conversion on the GPU. Hyper never writes a requantized model file; selecting it explicitly opts into those arithmetic changes. '
            "These profile definitions are separate from the bias tool and do not imply a new build has passed every mode's parity or performance test.", '',
+           '## Quality and speed', '',
+           'The chat model can call `set_quality_speed` and `get_quality_speed`. '
+           'The router executes these tools against the native control endpoint. '
+           'Modes above Balanced are faster but may produce worse answers.', '',
+           '| Setting | Bias |', '|---|---|',
+           *[f'| `{name}` | {value:g} |' for name, value in NAMED.items()], '',
+           'Use `value` for one setting, or provide independent ' +
+           ', '.join(f'`{name}`' for name in PHASES) + ' arguments. '
+           'Partial phase updates preserve the other settings. Numeric values must be finite and in [0,1.36125].', '',
+           'Tool-call examples:', '', '```json',
+           '{"name":"set_quality_speed","arguments":{"value":"balanced"}}',
+           '{"name":"set_quality_speed","arguments":{"reasoning":"fast","answer":"balanced","code":"max_quality"}}',
+           '{"name":"get_quality_speed","arguments":{}}', '```', '',
+           'Native controls take effect at token boundaries. The response reports requested and applied '
+           'values, revision, phase counters and the latest throughput window. Its scope field describes '
+           'whether the backend applies the setting server-wide. An unsupported backend must report '
+           'that capability explicitly. Short throughput windows are observations, not benchmark guarantees.', '',
            '## Launcher settings', '',
            '| Flag | Scope and DSV4.1 default | Purpose |', '|---|---|---|']
     def cell(value):
