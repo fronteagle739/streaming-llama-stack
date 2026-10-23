@@ -2,6 +2,7 @@ import json
 import os
 from pathlib import Path
 import sys
+from types import SimpleNamespace
 import unittest
 from unittest.mock import Mock, patch
 import uuid
@@ -13,6 +14,20 @@ from slstack.shared_guard import CleanupUnconfirmed
 
 
 class SharedGuardAdapterTests(unittest.TestCase):
+    def test_canonical_owned_paging_warning_and_failure_boundaries(self):
+        from studio.job_paging import PagingWatch
+        observed = {'bytes': 12*1024}
+        warnings = []
+        watch = PagingWatch(lambda: 0, warning=warnings.append,
+                            observer=SimpleNamespace(sample=lambda proc: observed['bytes']))
+        limits = dict(rss_limit=1024**2, commit_limit=1024**2, floor=1)
+        self.assertIsNone(watch.check(None, 0, 0, **limits))
+        self.assertTrue(any('owned pagefile/swap' in row for row in warnings))
+        observed['bytes'] = 64*1024**2
+        self.assertIsNone(watch.check(None, 0, 0, **limits))
+        observed['bytes'] += 4096
+        self.assertIn('exceeds 64 MiB', watch.check(None, 0, 0, **limits))
+
     def test_uncertain_cleanup_keeps_lease_and_is_never_auto_recovered(self):
         cfg = load(overrides={'gpu_uuid':'GPU-test','host_budget_gib':.25,'min_available_gib':2})
         runtime = Path(os.environ.get('STUDIO_RUNTIME_ROOT',cfg['runtime_root'])) / ('uncertain-lease-test-' + uuid.uuid4().hex)
@@ -43,7 +58,7 @@ class SharedGuardAdapterTests(unittest.TestCase):
             receipt = job.wait()
             self.assertIn('INPUT=TEST stdin',job.log.read_text())
             self.assertTrue(receipt['cleanup_confirmed'])
-            self.assertEqual(receipt['paging_policy']['owned_paging_limit_bytes'],0)
+            self.assertEqual(receipt['paging_policy']['owned_paging_limit_bytes'],64*1024**2)
             self.assertEqual(receipt['shared_guard_commit'],'2774636281ab32bf871497f0a8caae23c6b6cdc7')
             certificate = json.loads(Path(receipt['shared_guard_certificate']).read_text())
             self.assertTrue(certificate['release_allowed'])

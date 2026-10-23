@@ -48,7 +48,7 @@ def supervise(spec):
     commitment = spec['job_commit_gib'] * GiB if os.name == 'nt' else host
     job = Adapter(rss_limit=host,commit_limit=host,floor=spec['min_available_gib']*GiB,
                   device_commit_allowance=max(0,commitment-host) if os.name=='nt' else 0,
-                  seconds=spec['timeout_s'],receipt=certificate,owned_paging_limit=0)
+                  seconds=spec['timeout_s'],receipt=certificate)
     started = time.monotonic()
     code, reason = 1, None
     try:
