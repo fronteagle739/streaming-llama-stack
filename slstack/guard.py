@@ -210,6 +210,9 @@ def _supervise(spec):
                    process_memory_counters=list(process_counters.values()),
                    paging_warnings=paging_warnings,
                    global_paging_growth=paging_watch.max_global_growth,owned_paged_bytes=paging_watch.job_paged,
+                   paged_processes=paging_watch.observer.last_processes,
+                   paging_scanned_pages=paging_watch.observer.scanned_pages,
+                   paging_completed_scans=paging_watch.observer.completed_scans,
                    paging_attribution=paging_watch.observer.attribution,cleanup=cleanup,
                    release_allowed=cleanup['confirmed'],reservation_samples=reservation_samples,
                    paging_interpretation='Process faults include soft and hard faults. Private commit/pagefile usage is not disk I/O. System counters include other processes; these counters alone do not prove core/KV residency.')
