@@ -13,6 +13,7 @@ import urllib.request
 from .config import path,environment
 from .native_broker import vendor,model_receipt
 from .journal import atomic_json,sha256
+from .combo_release import certified
 
 
 class Native:
@@ -22,6 +23,7 @@ class Native:
         from studio.dsv41_windows_runner import _Native
         self.cfg=deepcopy(cfg);self.session=session;self.epoch=epoch;self.sequence=sequence
         self.control_lock=threading.Lock();self.process=None;self.closed=False
+        self.creation_attempted=False
         self.leases=ExitStack()
         self.restore_lease=None
         self.token=self.cfg.setdefault('_control_token',secrets.token_urlsafe(32))
@@ -79,6 +81,7 @@ class Native:
             if sha256(binary)!=pin:raise ValueError('Native binary changed before its read lease')
             if restore is not None:
                 self.restore_lease=restore[0].lease();self.restore_lease.__enter__()
+            self.creation_attempted=True
             self.process=Producer(session,command,env,directory,host_bytes=int(cfg['host_budget_gib']*(1<<30)),
                 physical_floor=int(cfg['min_available_gib']*(1<<30)),operation_seconds=min(1140,cfg['request_timeout_s']),
                 idle_seconds=min(1140,cfg['lease_minutes']*60),native=native,cancelled=cancelled,native_mode=1,startup=startup,owner_epoch=epoch)
@@ -90,13 +93,17 @@ class Native:
                 server_auth_token_logged=False))
         except BaseException as exc:
             self.failure_cleanup=getattr(exc,'owned_cleanup',None)
-            try:
-                if self.process is not None:
+            if self.process is not None:
+                try:
                     self.failure_cleanup=self.process.close()
-                    exc.owned_cleanup=self.failure_cleanup
-                if self.restore_lease is not None and self.failure_cleanup and all(self.failure_cleanup.get(k) for k in ('owned_job_empty','owned_process_signaled','owned_pid_gone')):
-                    self.restore_lease.__exit__(None,None,None);self.restore_lease=None
-            finally:self.leases.close()
+                except BaseException as cleanup:exc.owned_cleanup_error=repr(cleanup)
+            if self.failure_cleanup is not None:exc.owned_cleanup=self.failure_cleanup
+            if not self.creation_attempted or certified(self.failure_cleanup):
+                if self.restore_lease is not None:self.restore_lease.__exit__(None,None,None);self.restore_lease=None
+                self.leases.close()
+            else:
+                exc.owned_cleanup=self.failure_cleanup or dict(creation_attempted=True)
+                exc.owned_runtime=self # Keep file/RAM leases until the outer Job closes.
             raise
 
     def http(self,suffix,body=None,*,timeout=None,max_bytes=4<<20):
@@ -158,7 +165,8 @@ class Native:
             raise RuntimeError('Native GPU owner retirement unconfirmed; handoff refused')
         self.receipt=proof;self.closed=True
         if self.restore_lease is not None:self.restore_lease.__exit__(None,None,None);self.restore_lease=None
-        (self.directory/'stderr.log').write_bytes(self.process.diagnostic)
-        atomic_json(self.directory/'cleanup.json',proof)
-        self.leases.close()
+        try:
+            (self.directory/'stderr.log').write_bytes(self.process.diagnostic)
+            atomic_json(self.directory/'cleanup.json',proof)
+        finally:self.leases.close()
         return proof

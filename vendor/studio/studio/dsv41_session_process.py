@@ -94,8 +94,15 @@ class Producer:
                         file.close()
                 exc.owned_cleanup = dict(creation_attempted=True, owned_job_empty=False, owned_process_signaled=False, owned_pid_gone=False)
                 raise
-            self._poison(exc)
-            self.close()
+            try:
+                self._poison(exc)
+                self.close()
+            except BaseException as cleanup:
+                exc.owned_cleanup={'creation_attempted':self.creation_attempted,
+                    'owned_job_empty':False,'owned_process_signaled':False,'owned_pid_gone':False,**self.receipt}
+                exc.owned_process=self
+                exc.owned_cleanup_error=repr(cleanup)
+                raise exc from cleanup
             exc.owned_cleanup = dict(self.receipt)
             exc.owned_diagnostic = bytes(self.diagnostic)
             raise

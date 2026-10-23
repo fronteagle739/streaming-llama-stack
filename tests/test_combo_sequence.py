@@ -10,6 +10,25 @@ class Device:
 
 
 class SequenceTest(unittest.TestCase):
+    def test_failed_constructor_without_certificate_keeps_ram_and_poisoned_epoch(self):
+        cfg=dict(host_budget_gib=9,min_available_gib=2,native_host_budget_gib=8,gpu_uuid='id')
+        session=ComboSession(cfg,device=Device(),qualification_route='native')
+        class Ram:
+            closed=False
+            def close(self):self.closed=True
+        ram=Ram();session.state=ram;session.payload={}
+        failure=ValueError('setup failed');failure.owned_cleanup=dict(owned_job_empty=False)
+        failure.owned_runtime=object()
+        with patch('slstack.combo_session.Native',side_effect=failure),patch('slstack.combo_session.ComboProducer') as producer:
+            with self.assertRaisesRegex(ValueError,'setup failed'):
+                with session.prepare(dict(messages=[dict(role='user',content='short')])):pass
+            producer.assert_not_called()
+        self.assertTrue(session.poison.startswith('Unconfirmed GPU release'))
+        self.assertIs(session.failed_owner,failure.owned_runtime)
+        with self.assertRaisesRegex(RuntimeError,'retain checkpoint RAM'):session.close()
+        self.assertFalse(ram.closed)
+        session.poison='CPU fixture retired';session.close()
+
     def test_new_user_span_excludes_retained_large_history_and_template_footer(self):
         history=list(range(10000));footer=[20000,20001]
         self.assertEqual(changed_span_tokens(history+[30001,30002,30003]+footer,history+footer),3)
@@ -97,6 +116,9 @@ class SequenceTest(unittest.TestCase):
                 self.assertTrue(fail_release);self.assertTrue(session.poison)
             except ValueError:
                 self.assertTrue(changed_history);self.assertTrue(session.poison)
+        if fail_release:
+            with self.assertRaisesRegex(RuntimeError,'retain checkpoint RAM'):session.close()
+            session.poison='CPU fixture outer Job retired'
         session.close();return events
 
     def test_gpu_owners_are_sequential_with_release_between_each(self):

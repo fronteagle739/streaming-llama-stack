@@ -28,6 +28,26 @@ class FakeNative:
 
 
 class ProcessTest(unittest.TestCase):
+    def test_failed_constructor_cleanup_preserves_original_error_and_owner(self):
+        native=FakeNative()
+        original=native.suspended
+        def start(*args):
+            job=original(*args)
+            def cannot_stop():raise OSError('CPU fixture stop failed')
+            job.stop=cannot_stop
+            return job
+        def fail(owned):raise ValueError('original setup refusal')
+        with patch.object(native,'suspended',side_effect=start),patch('studio.dsv41_session_process.psutil.pid_exists',return_value=False):
+            with self.assertRaisesRegex(ValueError,'original setup refusal') as caught:
+                Producer('1'*32,['unused'],dict(os.environ),Path('.'),host_bytes=512<<20,
+                    physical_floor=4<<30,native=native,native_mode=1,startup=fail)
+            failure=caught.exception
+            self.assertFalse(failure.owned_cleanup['owned_job_empty'])
+            self.assertIn('CPU fixture stop failed',failure.owned_cleanup_error)
+            owner=failure.owned_process
+            native.job.stop=lambda:setattr(native.job,'running',False)
+            self.assertTrue(owner.close()['owned_job_empty'])
+
     def test_native_receipt_write_failure_retires_started_owner_and_file_leases(self):
         from slstack.combo_native import Native
         events=[];created=[]
