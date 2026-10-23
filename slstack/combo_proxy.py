@@ -269,9 +269,30 @@ def native_launch_config(cfg,argv):
         if not 1024<=port<=65535:raise ValueError('Native port outside the qualified local range')
         values[index+1]='{port}'
         return values,port
+    argv,preset=list(argv),{}
+    # Per-preset streaming profile and its own N* (owner 2026-10-23): carried in
+    # the preset's flags, validated against the measured inputs in combo.json.
+    for flag in ('--combo-producer-profile','--combo-crossover-tokens'):
+        if flag in argv:
+            index=argv.index(flag)
+            if index+1>=len(argv):raise ValueError(flag+' needs a value')
+            preset[flag]=argv[index+1];del argv[index:index+2]
     actual,port=normalize(argv);qualified,_=normalize(expected)
     if actual!=qualified:raise ValueError('Native launch differs from the qualified combined preset; review its model/context/cache/flags')
-    result=deepcopy(cfg);result.update(port=port,host='127.0.0.1');return result
+    result=deepcopy(cfg);result.update(port=port,host='127.0.0.1')
+    if preset:result.update(apply_preset_crossover(cfg,preset.get('--combo-producer-profile'),preset.get('--combo-crossover-tokens')))
+    return result
+
+
+def apply_preset_crossover(cfg,profile,tokens):
+    """Select one measured streaming preset; its N* must equal ceil(S/(1/Rn-1/Rs))."""
+    table=cfg.get('combo_crossover_profiles') or {}
+    if profile not in table or tokens is None or not str(tokens).isdigit():
+        raise ValueError('Preset needs --combo-producer-profile with measured inputs and --combo-crossover-tokens')
+    from .combo_crossover import qualified_threshold
+    update=dict(producer_profile=profile,combo_crossover_tokens=int(tokens),combo_crossover_inputs=dict(table[profile],producer_profile=profile))
+    qualified_threshold({**cfg,**update})
+    return update
 
 
 def guarded(cfg,config):

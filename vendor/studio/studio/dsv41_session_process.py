@@ -318,9 +318,11 @@ class Producer:
         with self.job_lock:
             if self.job:
                 self.job.stop()
+        # A 30 GB VRAM teardown can take >10 s before the pipes close; wait up to 45 s in total.
+        deadline = time.monotonic() + 45
         for thread in self.threads:
             if thread is not threading.current_thread():
-                thread.join(10)
+                thread.join(max(0.0, deadline - time.monotonic()))
         require(not any((t.is_alive() for t in self.threads)), 'Persistent producer reader did not stop')
         pid = self.job.pid if self.job else None
         end = time.monotonic() + 5
