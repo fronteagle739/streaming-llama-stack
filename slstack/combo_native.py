@@ -40,6 +40,55 @@ def publish_hotlist(session_list,global_list):
     tmp=Path(str(global_list)+'.tmp');tmp.write_bytes(data);os.replace(tmp,global_list);return True
 
 
+def global_frequency(cfg):
+    """Per-model, per-budget routed-lookup counts accumulated over decoders."""
+    return global_hotlist(cfg).with_name(global_hotlist(cfg).name.replace('expert-hotlist-','expert-frequency-'))
+
+
+def _read_frequency(path):
+    lines=Path(path).read_text().splitlines()
+    head=re.match(r'# ds4-expert-frequency v1 model_size=(\d+) vram_configured=(\d+) host_configured=(\d+)',lines[0])
+    if not head:raise ValueError('bad expert frequency header in '+str(path))
+    rows={}
+    for line in lines[1:]:
+        kind,layer,expert,count,gate,down=line.split()
+        if kind!='f':raise ValueError('bad expert frequency row in '+str(path))
+        rows[(int(layer),int(expert))]=[float(count),int(gate),int(down)]
+    return tuple(int(v) for v in head.groups()),rows
+
+
+def merge_frequency(session_freq,global_freq,decay=0.5):
+    """After a decoder exits: global = decay * global + this decoder's counts (atomic)."""
+    if session_freq is None or not Path(session_freq).exists():return False
+    head,new=_read_frequency(session_freq)
+    old={}
+    if Path(global_freq).exists():
+        old_head,old=_read_frequency(global_freq)
+        if old_head[0]!=head[0]:old={}   # another model file: start again
+    for key,(count,gate,down) in new.items():
+        prior=old.get(key,[0.0,gate,down])[0]*decay
+        old[key]=[prior+count,gate,down]
+    for key in set(old)-set(new):old[key][0]*=decay
+    text='# ds4-expert-frequency v1 model_size=%d vram_configured=%d host_configured=%d experts=%d\n'%(*head,len(old))
+    text+=''.join('f %d %d %.3f %d %d\n'%(l,e,c,g,d) for (l,e),(c,g,d) in sorted(old.items()))
+    tmp=Path(str(global_freq)+'.tmp');tmp.write_text(text);os.replace(tmp,global_freq);return True
+
+
+def build_frequency_seed(global_freq,out):
+    """Restore list (engine v1 format) from the global counts: top vram_configured
+    experts -> VRAM, the next host_configured -> host tier. Listed least-frequent
+    first, because the engine gives later rows higher LRU priority."""
+    if global_freq is None or not Path(global_freq).exists():return None
+    (model_size,nv,nh),rows=_read_frequency(global_freq)
+    ranked=sorted(rows.items(),key=lambda kv:(-kv[1][0],kv[0]))
+    v=ranked[:nv];h=ranked[nv:nv+nh]
+    if not v:return None
+    text='# ds4-expert-cache-snapshot v1 model_size=%d source=frequency vram=%d host=%d\n'%(model_size,len(v),len(h))
+    text+=''.join('h %d %d %d %d\n'%(l,e,g,d) for (l,e),(c,g,d) in reversed(h))
+    text+=''.join('v %d %d %d %d\n'%(l,e,g,d) for (l,e),(c,g,d) in reversed(v))
+    Path(out).write_text(text);return (len(v),len(h))
+
+
 class Native:
     def __init__(self,cfg,session,epoch,sequence,cancelled,*,restore=None,runner=None,expert_list=None):
         combo_abort.check('native launch')
@@ -52,6 +101,7 @@ class Native:
         self.leases=ExitStack()
         self.restore_lease=None
         self.expert_list=None;self.global_list=None;self.restore_source=None;self.hotlist_published=False
+        self.global_freq=None;self.seed_counts=None;self.launched_at=time.time()
         self.token=self.cfg.setdefault('_control_token',secrets.token_urlsafe(32))
         self.url=cfg['ds4_url'];self.cancelled=cancelled
         binary=path(cfg['ds4_command'][0]);pin=sha256(binary)
@@ -86,8 +136,15 @@ class Native:
                 data=self.global_list.read_bytes();self.expert_list.write_bytes(data)
                 seeded.write_text(hashlib.sha256(data).hexdigest());self.restore_source='global'
             else:self.restore_source='none'
-            print('DS4COMBO_EXPERT_RESTORE_SOURCE restore_source='+self.restore_source+' list='+str(self.expert_list),flush=True)
-            if self.restore_source!='none':env_values['DS4_COMBO_EXPERT_RESTORE_FILE']=str(expert_list)
+            # Pre-seed from usage frequency (whole decodes, all sessions of this model and
+            # budget): VRAM tier gets the top experts, the host tier the next ones.
+            self.global_freq=global_frequency(cfg);restore_file=str(expert_list)
+            seed=Path(str(self.expert_list)+'.seed')
+            built=build_frequency_seed(self.global_freq,seed)
+            if built:self.restore_source='frequency';restore_file=str(seed);self.seed_counts=built
+            print('DS4COMBO_EXPERT_RESTORE_SOURCE restore_source='+self.restore_source+' list='+restore_file+
+                  (' vram=%d host=%d'%built if built else ''),flush=True)
+            if self.restore_source!='none':env_values['DS4_COMBO_EXPERT_RESTORE_FILE']=restore_file
         self.cfg.setdefault('env_overrides',{}).update(env_values)
         env=environment(self.cfg,'ds4-win')
         parts=cfg.get('ds_read_parts',8)
@@ -209,7 +266,7 @@ class Native:
 
     def expert_restore(self):
         """Restore timing from this decoder's log (after close); count 0 when none was pending."""
-        return dict(self._expert_restore(),expert_restore_source=self.restore_source)
+        return dict(self._expert_restore(),expert_restore_source=self.restore_source,expert_seed_counts=self.seed_counts)
 
     def _expert_restore(self):
         raw=bytes(getattr(self.process,'diagnostic',b'') or b'')
@@ -266,6 +323,10 @@ class Native:
         if getattr(self,'global_list',None) is not None:
             self.hotlist_published=publish_hotlist(self.expert_list,self.global_list)
             proof['expert_hotlist_published']=self.hotlist_published
+            # Only counts this process wrote (a non-decoding process leaves an older file).
+            freq=Path(str(self.expert_list)+'.freq')
+            fresh=freq.exists() and freq.stat().st_mtime>=getattr(self,'launched_at',0)
+            proof['expert_frequency_merged']=bool(fresh and merge_frequency(freq,self.global_freq))
         try:
             (self.directory/'stderr.log').write_bytes(self.process.diagnostic)
             atomic_json(self.directory/'cleanup.json',proof)

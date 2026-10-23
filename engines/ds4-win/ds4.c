@@ -83553,6 +83553,28 @@ int ds4_expert_cache_snapshot_write(ds4_session *s, const char *path, uint32_t *
         if (inherited_out) *inherited_out = inherited;
         fprintf(stderr, "DS4COMBO_EXPERT_SNAPSHOT vram=%u host=%u source=%s file=%s\n",
                 pv->n, ph->n, inherited ? "inherited" : "live", path);
+        /* Hotlist pre-seed: this process's routed-lookup counts per expert, with both tier
+         * capacities, so the owner can rank experts for the next decoder. Best effort. */
+        const uint32_t nf = inherited ? 0 : ds4_gpu_stream_expert_frequency(NULL, NULL, NULL, NULL, NULL, 0);
+        if (nf) {
+            uint32_t *fl = calloc(nf, sizeof(uint32_t)), *fe = calloc(nf, sizeof(uint32_t)), *fc = calloc(nf, sizeof(uint32_t));
+            uint64_t *fg = calloc(nf, sizeof(uint64_t)), *fd = calloc(nf, sizeof(uint64_t));
+            char fpath[1100], ftmp[1110]; snprintf(fpath, sizeof(fpath), "%s.freq", path); snprintf(ftmp, sizeof(ftmp), "%s.tmp", fpath);
+            FILE *ff = (fl && fe && fc && fg && fd) ? fopen(ftmp, "wb") : NULL;
+            if (ff) {
+                const uint32_t got = ds4_gpu_stream_expert_frequency(fl, fe, fc, fg, fd, nf);
+                bool ok = fprintf(ff, "# ds4-expert-frequency v1 model_size=%llu vram_configured=%u host_configured=%u experts=%u\n",
+                                  (unsigned long long)s->engine->model.size, ds4_gpu_stream_expert_cache_configured_count(),
+                                  ds4_gpu_stream_host_expert_cache_configured_count(), got < nf ? got : nf) > 0;
+                for (uint32_t i = 0; ok && i < got && i < nf; i++)
+                    ok = fprintf(ff, "f %u %u %u %llu %llu\n", fl[i], fe[i], fc[i],
+                                 (unsigned long long)fg[i], (unsigned long long)fd[i]) > 0;
+                if (fclose(ff) != 0) ok = false;
+                if (ok && MoveFileExA(ftmp, fpath, MOVEFILE_REPLACE_EXISTING | MOVEFILE_WRITE_THROUGH))
+                    fprintf(stderr, "DS4COMBO_EXPERT_FREQUENCY experts=%u file=%s\n", got < nf ? got : nf, fpath);
+            }
+            free(fl); free(fe); free(fc); free(fg); free(fd);
+        }
     }
     ds4_expert_list_free(&v); ds4_expert_list_free(&h);
     return rc;
@@ -83612,8 +83634,13 @@ static int ds4_session_expert_restore_apply(ds4_session *s, char *err, size_t er
                  ds4_gpu_stream_host_expert_cache_configured_count(), h->n);
     uint32_t cleared = 0;
     if (!why[0] && ds4_expert_restore_seed_kind(s, 1, h, why, sizeof(why))) {
-        cleared = ds4_gpu_stream_expert_cache_clear_slots();
-        (void)ds4_expert_restore_seed_kind(s, 0, v, why, sizeof(why));
+        /* Clear the prefill-era VRAM slots only when there is a VRAM list to seed in
+         * their place, and only after outstanding work on them has finished. */
+        if (v->n) {
+            if (!ds4_gpu_synchronize()) snprintf(why, sizeof(why), "GPU synchronize before slot clear failed");
+            else cleared = ds4_gpu_stream_expert_cache_clear_slots();
+        }
+        if (!why[0]) (void)ds4_expert_restore_seed_kind(s, 0, v, why, sizeof(why));
     }
     if (!why[0] && !ds4_gpu_synchronize()) snprintf(why, sizeof(why), "GPU synchronize failed");
     if (!why[0]) {
