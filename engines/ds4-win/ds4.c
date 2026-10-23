@@ -42835,6 +42835,9 @@ typedef struct {
 
 typedef struct {
     uint32_t ctx, pos, prefill_cap, carry_cap;
+    /* DS4COMBO growable context: 0 = fixed full-ctx buffers; otherwise the
+     * context-dependent buffers are VMM ranges backed up to grow_tokens. */
+    uint32_t grow_step, grow_tokens;
     uint64_t state_generation;      /* invalidate controller evidence on prefix replacement */
     uint64_t allocation_bytes;
     bool valid, streaming, encoder_resident, compact_carry, prefill_alias, quality;
@@ -43004,6 +43007,224 @@ static ds4_context_memory ds41_graph_memory(uint32_t ctx) {
     return m;
 }
 
+/* =========================================================================
+ * DS4COMBO growable context VRAM.
+ * =========================================================================
+ * Shapes, strides and chunk sizes stay those of the full context (g->ctx);
+ * only the physical backing of the context-dependent buffers follows the
+ * conversation, in whole steps. Owner caches grow with the position; batch
+ * and carry rows grow until their caps (a prefill of N tokens touches at
+ * most N rows). The VRAM expert tier gives back exactly what a step maps. */
+#if !defined(DS4_NO_GPU) && !defined(DS4_ROCM_BUILD) && !defined(__APPLE__)
+#define DS41_CTX_GROW_CUDA 1
+#endif
+
+static struct {
+    bool streaming;         /* the VRAM expert tier exists and pays for growth */
+    uint64_t expert_base;   /* tier bytes planned with the first step mapped */
+    uint64_t ceiling;       /* current tier ceiling */
+} g_ds41_ctxgrow;
+
+/* 0 when disabled (DS4_CTX_GROW=0) or unsupported; otherwise the step in
+ * tokens, a multiple of 2048 so it covers the 2048-row prefill and carry
+ * granules, both compression ratios and the 128-token window. */
+static uint32_t ds41_ctx_grow_step(void) {
+#ifdef DS41_CTX_GROW_CUDA
+    static int cached = -1;
+    if (cached < 0) {
+        const char *on = getenv("DS4_CTX_GROW");
+        const char *st = getenv("DS4_CTX_GROW_STEP");
+        unsigned long step = st && st[0] ? strtoul(st, NULL, 10) : 2048ul;
+        if (!step || step % 2048ul || step > 1048576ul) {
+            fprintf(stderr, "ds4: DS4_CTX_GROW_STEP must be a positive multiple of 2048; using 2048\n");
+            step = 2048ul;
+        }
+        cached = on && !strcmp(on, "0") ? 0 : (int)step;
+    }
+    return (uint32_t)cached;
+#else
+    return 0;
+#endif
+}
+
+static ds4_gpu_tensor *ds41_alloc_growable(uint64_t bytes) {
+#ifdef DS41_CTX_GROW_CUDA
+    return ds4_gpu_tensor_alloc_growable(bytes);
+#else
+    return ds4_gpu_tensor_alloc(bytes);
+#endif
+}
+#define ds41_ctx_tensor_alloc(g) ((g)->grow_step ? ds41_alloc_growable : ds4_gpu_tensor_alloc)
+
+static uint32_t ds41_grow_round(uint32_t ctx, uint32_t step, uint32_t need) {
+    uint64_t t = ((uint64_t)(need ? need : 1u) + step - 1u) / step * step;
+    return t > ctx ? ctx : (uint32_t)t;
+}
+
+enum { DS41_GROW_ESTIMATE, DS41_GROW_COST, DS41_GROW_APPLY };
+
+static uint64_t ds41_grow_one(ds4_gpu_tensor *t, uint64_t bytes, uint64_t full, int mode, bool *ok) {
+    if (bytes > full) bytes = full;
+    if (mode == DS41_GROW_ESTIMATE) return bytes;
+    if (!t) return 0;
+#ifdef DS41_CTX_GROW_CUDA
+    if (mode == DS41_GROW_APPLY && !ds4_gpu_tensor_set_mapped(t, bytes)) *ok = false;
+    return ds4_gpu_tensor_map_cost(t, bytes);
+#else
+    (void)ok;
+    return ds4_gpu_tensor_bytes(t);
+#endif
+}
+
+/* Visit every context-dependent buffer at `T` mapped tokens. ESTIMATE sums
+ * logical bytes from the shape alone; COST sums the chunk-rounded physical
+ * bytes; APPLY maps or unmaps to T and returns the physical bytes. */
+static uint64_t ds41_grow_visit(const ds41_gpu_graph *g, uint32_t T, int mode, bool *ok) {
+    bool ok_local = true;
+    if (!ok) ok = &ok_local;
+    uint64_t sum = 0;
+    for (uint32_t i = 0; i < 4; i++) {
+        const uint32_t ratio = i < 3 ? 2u : 1u;
+        const uint64_t full_rows = (uint64_t)g->ctx / ratio + 1u;
+        const uint64_t rows = (uint64_t)T / ratio + 1u;
+        sum += ds41_grow_one(g->compressed[i], rows * 512u * 4u, full_rows * 512u * 4u, mode, ok);
+        sum += ds41_grow_one(g->index_cache[i], rows * 128u * 4u, full_rows * 128u * 4u, mode, ok);
+    }
+    const bool present = mode == DS41_GROW_ESTIMATE || g->batch.residual;
+    const uint64_t cap = g->prefill_cap, rb = T < cap ? T : cap;
+    if (present) {
+        /* Aliased views start at offset*cap inside their parent; back the
+         * parent up to the furthest row any of its views can reach. */
+        uint64_t ext_q = 0, ext_heads = 0, ext_low = 0, ext_x = 0, ext_block = 0;
+        if (g->prefill_alias) {
+#define DS41_EXT(ext, offset, count) do { const uint64_t e_ = (uint64_t)(offset) * cap + (uint64_t)(count) * rb; \
+            if (e_ > ext) ext = e_; } while (0)
+            DS41_EXT(ext_q, 0, (DS4_N_HC + 1u) * DS4_N_EMBD);
+            DS41_EXT(ext_q, 0, DS4_N_HC * DS4_N_EMBD);
+            DS41_EXT(ext_q, 0, DS4_N_EXPERT_USED * DS4_N_EMBD);
+            DS41_EXT(ext_heads, 0, DS4_N_EXPERT_USED * DS4_N_FF_EXP);
+            DS41_EXT(ext_heads, DS4_N_EXPERT_USED * DS4_N_FF_EXP, DS4_N_EXPERT_USED * DS4_N_FF_EXP);
+            DS41_EXT(ext_low, 0, DS4_N_FF_EXP);
+            DS41_EXT(ext_low, DS4_N_FF_EXP, DS4_N_FF_EXP);
+            DS41_EXT(ext_low, 2u * DS4_N_FF_EXP, DS4_N_FF_EXP);
+            DS41_EXT(ext_x, 0, DS4_N_EMBD);
+            DS41_EXT(ext_block, 0, DS4_N_EMBD);
+#undef DS41_EXT
+        }
+#define DS41_GROW_BATCH(name, count) \
+        if (strcmp(#name, "engram_rows") && strcmp(#name, "selected_comp")) { \
+            uint64_t floats_ = (uint64_t)(count) * rb; \
+            if (!strcmp(#name, "q") && ext_q > floats_) floats_ = ext_q; \
+            if (!strcmp(#name, "heads") && ext_heads > floats_) floats_ = ext_heads; \
+            if (!strcmp(#name, "low") && ext_low > floats_) floats_ = ext_low; \
+            if (!strcmp(#name, "x") && ext_x > floats_) floats_ = ext_x; \
+            if (!strcmp(#name, "block") && ext_block > floats_) floats_ = ext_block; \
+            sum += ds41_grow_one(g->batch.name, floats_ * 4u, (uint64_t)(count) * cap * 4u, mode, ok); \
+        }
+        DS41_PREFILL_STORAGE(DS41_GROW_BATCH)
+        if (!g->prefill_alias) { DS41_PREFILL_ALIASES(DS41_GROW_BATCH) }
+#undef DS41_GROW_BATCH
+    }
+    if (g->carry_cap && (mode == DS41_GROW_ESTIMATE || g->carry.residual)) {
+        const uint64_t rk = T < g->carry_cap ? T : g->carry_cap;
+#define DS41_GROW_CARRY(name, count, format) { \
+            const uint64_t w_ = ds41_carry_words(count, format, g->compact_carry); \
+            sum += ds41_grow_one(g->carry.name, w_ * rk * 4u, w_ * g->carry_cap * 4u, mode, ok); }
+        DS41_CARRY_ROWS(DS41_GROW_CARRY)
+#undef DS41_GROW_CARRY
+    }
+    return sum;
+}
+
+/* Graph bytes with only the first step of context mapped. */
+static uint64_t ds41_graph_initial_bytes(uint32_t ctx) {
+    const uint64_t full = ds41_graph_bytes(ctx);
+    const uint32_t step = ds41_ctx_grow_step();
+    if (!step) return full;
+    const ds41_gpu_graph shape = {.ctx = ctx,
+        .prefill_cap = ds41_prefill_limit(ctx),
+        .carry_cap = ds41_carry_cap(ctx),
+        .prefill_alias = !getenv("DS4_METAL_DISABLE_V41_PREFILL_ALIAS"),
+        .compact_carry = !getenv("DS4_METAL_DISABLE_V41_COMPACT_CARRY")};
+    const uint64_t all = ds41_grow_visit(&shape, ctx, DS41_GROW_ESTIMATE, NULL);
+    const uint64_t first = ds41_grow_visit(&shape, ds41_grow_round(ctx, step, 1), DS41_GROW_ESTIMATE, NULL);
+    return full - all + first;
+}
+
+static void ds41_ctx_resize_log(const ds41_gpu_graph *g, uint32_t need, const char *reason) {
+#ifdef DS41_CTX_GROW_CUDA
+    fprintf(stderr, "DS4COMBO_CTX_RESIZE ctx_tokens=%u mapped_tokens=%u buffer_bytes=%llu "
+                    "expert_vram=%u host=%u reason=%s\n",
+            need, g->grow_tokens,
+            (unsigned long long)ds41_grow_visit(g, g->grow_tokens, DS41_GROW_COST, NULL),
+            ds4_gpu_stream_expert_cache_tier_count(),
+            ds4_gpu_stream_host_expert_cache_current_count(), reason);
+    fflush(stderr);
+#else
+    (void)g; (void)need; (void)reason;
+#endif
+}
+
+/* Make the context-dependent buffers cover `need` tokens. Growth first
+ * takes the bytes from the VRAM expert tier (coldest experts evicted,
+ * demoted to a free host-tier slot when possible), then maps the step.
+ * A shrink (only when allowed: new conversation, rewind, state load)
+ * unmaps first and hands the bytes back to the expert tier. Failure is
+ * loud and leaves the request failed; nothing is truncated. */
+static bool ds41_ctx_resize(ds41_gpu_graph *g, uint32_t need, bool allow_shrink) {
+    if (!g->grow_step) return true;
+    if (need > g->ctx) {
+        fprintf(stderr, "DS4COMBO_CTX_RESIZE_FAILED ctx_tokens=%u max_ctx=%u reason=exceeds the configured context\n",
+                need, g->ctx);
+        return false;
+    }
+#ifdef DS41_CTX_GROW_CUDA
+    const uint32_t T = ds41_grow_round(g->ctx, g->grow_step, need);
+    if (T == g->grow_tokens || (T < g->grow_tokens && !allow_shrink)) return true;
+    const uint64_t before = ds41_grow_visit(g, g->grow_tokens, DS41_GROW_COST, NULL);
+    const uint64_t after = ds41_grow_visit(g, T, DS41_GROW_COST, NULL);
+    uint32_t evicted = 0, demoted = 0;
+    if (after > before && g_ds41_ctxgrow.streaming) {
+        const uint64_t held = ds4_gpu_stream_expert_cache_held_bytes();
+        const uint64_t cur = held && held < g_ds41_ctxgrow.ceiling ? held : g_ds41_ctxgrow.ceiling;
+        const uint64_t delta = after - before;
+        g_ds41_ctxgrow.ceiling = cur > delta ? cur - delta : 0;
+        if (!ds4_gpu_stream_expert_cache_set_ceiling(g_ds41_ctxgrow.ceiling, &evicted, &demoted)) {
+            fprintf(stderr, "DS4COMBO_CTX_RESIZE_FAILED ctx_tokens=%u mapped_tokens=%u need_bytes=%llu "
+                            "reason=VRAM expert tier could not release memory\n",
+                    need, T, (unsigned long long)delta);
+            return false;
+        }
+    }
+    bool ok = true;
+    (void)ds41_grow_visit(g, T, DS41_GROW_APPLY, &ok);
+    if (!ok) {
+        fprintf(stderr, "DS4COMBO_CTX_RESIZE_FAILED ctx_tokens=%u mapped_tokens=%u need_bytes=%llu "
+                        "expert_vram=%u reason=out of device memory mapping the context step\n",
+                need, T, (unsigned long long)(after > before ? after - before : 0),
+                ds4_gpu_stream_expert_cache_tier_count());
+        /* Keep whatever is backed; the old range is still fully mapped. */
+        if (T > g->grow_tokens) (void)ds41_grow_visit(g, g->grow_tokens, DS41_GROW_APPLY, &ok);
+        return false;
+    }
+    g->grow_tokens = T;
+    if (after < before && g_ds41_ctxgrow.streaming) {
+        uint64_t c = g_ds41_ctxgrow.ceiling + (before - after);
+        if (c > g_ds41_ctxgrow.expert_base) c = g_ds41_ctxgrow.expert_base;
+        g_ds41_ctxgrow.ceiling = c;
+        (void)ds4_gpu_stream_expert_cache_set_ceiling(c, NULL, NULL);
+    }
+    if (evicted)
+        fprintf(stderr, "ds4: context step took %llu bytes from the VRAM expert tier: %u experts evicted, %u demoted to host\n",
+                (unsigned long long)(after - before), evicted, demoted);
+    ds41_ctx_resize_log(g, need, after > before ? "grow" : "shrink");
+    return true;
+#else
+    (void)allow_shrink;
+    return true;
+#endif
+}
+
 static void ds41_graph_reset(ds41_gpu_graph *g) {
     ds41_engram_carry_drop(g);
     g->state_generation++;
@@ -43019,7 +43240,7 @@ static bool ds41_graph_ensure_prefill_workspace(ds41_gpu_graph *g) {
     if (g->batch.residual) return true;
 #define DS41_BATCH_ALLOC(name, count) \
     if (!(g->batch.name = (!strcmp(#name, "engram_rows") || !strcmp(#name, "selected_comp") ? \
-            ds4_gpu_tensor_alloc_managed : ds4_gpu_tensor_alloc)( \
+            ds4_gpu_tensor_alloc_managed : ds41_ctx_tensor_alloc(g))( \
                 (uint64_t)(count) * g->prefill_cap * 4u))) goto fail;
     DS41_PREFILL_STORAGE(DS41_BATCH_ALLOC)
     /* Engram projection ends before HC normalization. HC normalization
@@ -43052,13 +43273,19 @@ static bool ds41_graph_ensure_prefill_workspace(ds41_gpu_graph *g) {
                 (uint64_t)i * (count) * 4u, (uint64_t)(count) * 4u))) goto fail;
     DS41_PREFILL_ROWS(DS41_BATCH_VIEW)
 #undef DS41_BATCH_VIEW
-    if (!ds4_gpu_tensor_fill_f32(g->batch.block_mask, 0,
+    /* Growable buffers read zero wherever they are newly backed. */
+    if (!g->grow_step && !ds4_gpu_tensor_fill_f32(g->batch.block_mask, 0,
         (uint64_t)g->prefill_cap * ((g->ctx + 7u) / 8u))) goto fail;
 #define DS41_CARRY_ALLOC(name, count, format) \
-    if (g->carry_cap && !(g->carry.name = ds4_gpu_tensor_alloc( \
+    if (g->carry_cap && !(g->carry.name = ds41_ctx_tensor_alloc(g)( \
             (uint64_t)ds41_carry_words(count, format, g->compact_carry) * g->carry_cap * sizeof(float)))) goto fail;
     DS41_CARRY_ROWS(DS41_CARRY_ALLOC)
 #undef DS41_CARRY_ALLOC
+    if (g->grow_step) {
+        bool ok = true;
+        (void)ds41_grow_visit(g, g->grow_tokens, DS41_GROW_APPLY, &ok);
+        if (!ok) goto fail;
+    }
     return true;
 fail:
     ds41_graph_free_prefill_workspace(g);
@@ -43076,7 +43303,9 @@ static DS4_MAYBE_UNUSED bool ds41_graph_alloc(ds41_gpu_graph *g, const ds4_model
     g->carry_cap = ds41_carry_cap(ctx);
     g->compact_carry = !getenv("DS4_METAL_DISABLE_V41_COMPACT_CARRY");
     g->prefill_alias = !getenv("DS4_METAL_DISABLE_V41_PREFILL_ALIAS");
-    g->allocation_bytes = ds41_graph_bytes(ctx);
+    g->grow_step = ds41_ctx_grow_step();
+    g->grow_tokens = g->grow_step ? ds41_grow_round(ctx, g->grow_step, 1) : ctx;
+    g->allocation_bytes = ds41_graph_initial_bytes(ctx);
     g->streaming = streaming;
     g->tp_world = 1;
     g->token_map = malloc((size_t)DS4_N_VOCAB * sizeof(uint32_t));
@@ -43119,8 +43348,8 @@ static DS4_MAYBE_UNUSED bool ds41_graph_alloc(ds41_gpu_graph *g, const ds4_model
     }
     for (uint32_t i = 0; i < 4; i++) {
         const uint64_t cap = ctx / (i < 3 ? 2u : 1u) + 1u;
-        g->compressed[i] = ds4_gpu_tensor_alloc(cap * 512u * sizeof(float));
-        g->index_cache[i] = ds4_gpu_tensor_alloc(cap * 128u * sizeof(float));
+        g->compressed[i] = ds41_ctx_tensor_alloc(g)(cap * 512u * sizeof(float));
+        g->index_cache[i] = ds41_ctx_tensor_alloc(g)(cap * 128u * sizeof(float));
         g->previous_kv[i] = ds4_gpu_tensor_alloc(512u * sizeof(float));
         g->previous_score[i] = ds4_gpu_tensor_alloc(512u * sizeof(float));
         if (!g->compressed[i] || !g->index_cache[i] || !g->previous_kv[i] || !g->previous_score[i]) goto fail;
@@ -43143,9 +43372,22 @@ static DS4_MAYBE_UNUSED bool ds41_graph_alloc(ds41_gpu_graph *g, const ds4_model
     DS41_SCRATCH(DS41_ALLOC)
 #undef DS41_ALLOC
     if (!ds41_graph_ensure_prefill_workspace(g)) goto fail;
+    if (g->grow_step) {
+        bool ok = true;
+        (void)ds41_grow_visit(g, g->grow_tokens, DS41_GROW_APPLY, &ok);
+        if (!ok) goto fail;
+    }
     ds41_graph_reset(g);
     fprintf(stderr, "ds4: V4.1 static context buffers %.2f MiB (ctx=%u), Engram disk-only\n",
             (double)ds41_graph_bytes(ctx) / 1048576.0, ctx);
+    if (g->grow_step) {
+        fprintf(stderr, "ds4: V4.1 context VRAM grows in %u-token steps: %.2f MiB mapped of %.2f MiB "
+                        "(DS4_CTX_GROW=0 restores fixed buffers)\n",
+                g->grow_step,
+                (double)ds41_grow_visit(g, g->grow_tokens, DS41_GROW_COST, NULL) / 1048576.0,
+                (double)ds41_grow_visit(g, ctx, DS41_GROW_ESTIMATE, NULL) / 1048576.0);
+        ds41_ctx_resize_log(g, 0, "grow");
+    }
     return true;
 fail:
     ds41_graph_free(g);
@@ -44972,6 +45214,7 @@ static uint32_t ds41_decode_flush_layers(void) {
 static DS4_MAYBE_UNUSED bool ds41_graph_step(ds41_gpu_graph *g, const ds4_model *m,
                                              const ds4_weights *w, int token, float *logits) {
     if (!g || !g->valid || g->pos >= g->ctx || token < 0 || (uint32_t)token >= DS4_N_VOCAB) return false;
+    if (!ds41_ctx_resize(g, g->pos + 1u, false)) return false;
     if (g->draft) g->draft->rewind_valid = false;
     uint32_t ids[2][DS4_ENGRAM_COLS];
     ds4_engram_history next_history = g->history;
@@ -45488,6 +45731,7 @@ static bool ds41_graph_prefill_sweep(ds41_gpu_graph *g, const ds4_model *m,
     if ((!g->valid && !resume_encoder) || !total_count || (wide && total_count > g->carry_cap) ||
         total_count > g->ctx - g->pos || g->imatrix || !ds41_tp_batch_enabled(g))
         return false;
+    if (!ds41_ctx_resize(g, g->pos + total_count, false)) return false;
     const bool profile = getenv("DS4_METAL_GRAPH_PREFILL_PROFILE") != NULL;
     const bool stage_profile = getenv("DS4_METAL_V41_STAGE_PROFILE") != NULL;
     const bool batch_moe = !getenv("DS4_METAL_DISABLE_V41_BATCH_MOE");
@@ -45931,6 +46175,11 @@ static DS4_MAYBE_UNUSED bool ds41_graph_step_batch(ds41_gpu_graph *const *graphs
      * Attention and Engram history remain private to each session. */
     ds41_gpu_graph *g = ds41_batch_workspace(graphs, count);
     if (!g) return false;
+    for (int i = 0; i < count; i++) {   /* each session's own rows in this pass */
+        uint32_t own = 0;
+        for (int j = 0; j < count; j++) own += graphs[j] == graphs[i];
+        if (!ds41_ctx_resize(graphs[i], graphs[i]->pos + own, false)) return false;
+    }
     const uint32_t rows = (uint32_t)count;
     const bool prefill_only = prefill_rows == rows;
     const bool shared_owner = g->tp_world == 2 &&
@@ -46111,6 +46360,7 @@ static bool ds41_draft_verify_impl(ds41_gpu_graph *g, const ds4_model *m, const 
     ds41_draft *d = g->draft;
     if (!d || !g->valid || n < 2u || n > d->block + 1u || n > DS4_TP_BATCH_MAX_ROWS ||
         n > g->ctx - g->pos) return false;
+    if (!ds41_ctx_resize(g, g->pos + n, false)) return false;
 #if !defined(__APPLE__) && !defined(DS4_ROCM_BUILD)
     if (g->streaming) {
         d->verify_affinity_count=ds4_gpu_cache_affinity_decode_count();
@@ -67063,6 +67313,10 @@ static int ds41_load_payload(ds4_session *s, FILE *fp, const uint32_t *h,
         s->checkpoint_valid = false;
         g->valid = false;
         rc = payload_read_bytes(fp, s->logits, (uint64_t)DS4_N_VOCAB * 4u, &remaining, err, errlen);
+        if (!rc && !ds41_ctx_resize(g, pos, true)) {
+            payload_set_err(err, errlen, "context VRAM could not grow to the snapshot position");
+            rc = 1;
+        }
         ds41_state_span spans[54];
         const uint32_t n = ds41_state_spans(g, pos, spans);
         uint8_t *buf = xmalloc(DS4_SESSION_IO_CHUNK);
@@ -76185,7 +76439,7 @@ static int ds4_engine_open_internal(ds4_engine **out,
         const uint32_t ctx = opt->context_size > 0 ? (uint32_t)opt->context_size : 4096;
         const uint32_t sessions = e->placement_session_count_hint > 0 ?
             (uint32_t)e->placement_session_count_hint : 1;
-        if (!ds41_memory_admit(e, ds4_mul_sat_u64(ds41_graph_bytes(ctx), sessions), true)) {
+        if (!ds41_memory_admit(e, ds4_mul_sat_u64(ds41_graph_initial_bytes(ctx), sessions), true)) {
             ds4_engine_close(e);
             *out = NULL;
             return 1;
@@ -76738,7 +76992,7 @@ static int ds4_engine_open_internal(ds4_engine **out,
             const uint32_t ctx = opt->context_size > 0 ? (uint32_t)opt->context_size : 4096;
             const uint32_t sessions = e->placement_session_count_hint > 0 ?
                 (uint32_t)e->placement_session_count_hint : 1;
-            if (!ds41_memory_admit(e, ds4_mul_sat_u64(ds41_graph_bytes(ctx), sessions), true)) {
+            if (!ds41_memory_admit(e, ds4_mul_sat_u64(ds41_graph_initial_bytes(ctx), sessions), true)) {
                 ds4_engine_close(e);
                 *out = NULL;
                 return 1;
@@ -76768,6 +77022,18 @@ static int ds4_engine_open_internal(ds4_engine **out,
             return 1;
         }
         ds4_gpu_set_streaming_expert_cache_budget(e->ssd_streaming_cache_experts);
+#if defined(DS4_HAS_DEEPSEEK41_GPU) && defined(DS41_CTX_GROW_CUDA)
+        if (DS4_MODEL_FAMILY == DS4_MODEL_FAMILY_DEEPSEEK41 && ds41_ctx_grow_step()) {
+            /* The tier was fitted with one context step mapped; growth is
+             * paid from it and a shrink returns up to this many bytes. */
+            uint64_t per = 0;
+            g_ds41_ctxgrow.streaming = e->ssd_streaming &&
+                ds4_streaming_routed_expert_bytes(&e->weights, &per) && per != 0;
+            g_ds41_ctxgrow.expert_base = (uint64_t)e->ssd_streaming_cache_experts * per;
+            g_ds41_ctxgrow.ceiling = g_ds41_ctxgrow.expert_base;
+            if (g_ds41_ctxgrow.streaming) ds4_gpu_stream_expert_cache_enable_ctx_resize();
+        }
+#endif
 #if defined(__APPLE__)
         /* Keep the weights used by every token from competing with streamed
          * experts in the file cache. These bytes are already in the model
@@ -78457,7 +78723,7 @@ int ds4_session_create(ds4_session **out, ds4_engine *e, int ctx_size) {
     if (DS4_MODEL_FAMILY == DS4_MODEL_FAMILY_DEEPSEEK41) {
         if (ctx_size > 1048576 ||
             !ds41_memory_admit(e, ds4_add_sat_u64(e->ds41_session_bytes,
-                ds41_graph_bytes((uint32_t)ctx_size)), false) ||
+                ds41_graph_initial_bytes((uint32_t)ctx_size)), false) ||
             !ds41_graph_alloc(&s->ds41_graph, &e->model, &e->weights,
                               e->model_path, (uint32_t)ctx_size, e->ssd_streaming)) {
             free(s);
@@ -80895,6 +81161,14 @@ int ds4_session_sync(ds4_session *s, const ds4_tokens *prompt, char *err, size_t
         s->engine->ssd_streaming && ds4_prefill_edge_vram_enabled() &&
         ds4_gpu_stream_expert_cache_configured_count() != s->engine->ssd_streaming_cache_experts) {
         ds4_gpu_set_streaming_expert_cache_budget(s->engine->ssd_streaming_cache_experts);
+    }
+    /* Size the context VRAM to this request's prompt: grow before prefill,
+     * or shrink for a new conversation / shorter prompt. */
+    if (!ds4_session_is_cpu(s) && ds4_session_is_ds41(s) && prompt && prompt->len > 0 &&
+        !ds41_ctx_resize(&s->ds41_graph, (uint32_t)prompt->len, true)) {
+        if (err && errlen) snprintf(err, errlen,
+            "context VRAM could not grow to %d tokens (see DS4COMBO_CTX_RESIZE_FAILED)", prompt->len);
+        return 1;
     }
     if (!ds4_session_is_cpu(s) && ds4_session_is_ds41(s) &&
         !ds41_graph_ensure_prefill_workspace(&s->ds41_graph)) {
@@ -83626,6 +83900,19 @@ static int ds4_session_expert_restore_apply(ds4_session *s, char *err, size_t er
     else if (g_expert_restore.model_size != s->engine->model.size)
         snprintf(why, sizeof(why), "list is for another model");
     if (!why[0] && !g_cuda_stream_phase_decode) ds4_streaming_set_phase_decode(1);
+#if defined(DS4_HAS_DEEPSEEK41_GPU) && defined(DS41_CTX_GROW_CUDA)
+    /* The VRAM tier is sized to this conversation's context; a list saved
+     * at another context length keeps its newest (hottest) entries. */
+    ds4_expert_list vclip = *v;
+    if (!why[0] && g_ds41_ctxgrow.streaming && v->n > ds4_gpu_stream_expert_cache_tier_count()) {
+        const uint32_t tier = ds4_gpu_stream_expert_cache_tier_count(), skip = v->n - tier;
+        fprintf(stderr, "DS4COMBO_EXPERT_RESTORE_CLIPPED vram=%u kept=%u reason=context-sized VRAM tier\n",
+                v->n, tier);
+        vclip.n = tier;
+        vclip.layer += skip; vclip.expert += skip; vclip.gate += skip; vclip.down += skip;
+        v = &vclip;
+    }
+#endif
     if (!why[0] && v->n > ds4_gpu_stream_expert_cache_configured_count())
         snprintf(why, sizeof(why), "VRAM cache budget %u < %u listed experts",
                  ds4_gpu_stream_expert_cache_configured_count(), v->n);

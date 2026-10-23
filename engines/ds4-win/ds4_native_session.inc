@@ -66,6 +66,7 @@ int ds4_session_native_apply_delta(ds4_session*s,uint32_t base,uint32_t target,
     uint32_t n=ds41_state_spans(g,target,spans);int rc=1;
     if(n!=plan.span_count)goto done;
     for(uint32_t i=0;i<n;++i)if(spans[i].kind!=plan.spans[i].kind||spans[i].index!=plan.spans[i].index||spans[i].bytes!=plan.spans[i].bytes)goto done;
+    if(!ds41_ctx_resize(g,target,false)){payload_set_err(err,cap,"native delta: context VRAM could not grow");goto done;}
     s->checkpoint_valid=false;g->valid=false;s->mtp_draft_valid=false;
     memcpy(s->logits,logits,129280*4);
     uint8_t buffer[65536];
@@ -100,6 +101,7 @@ int ds4_session_native_rewind(ds4_session*s,uint32_t target,const float*logits,
     /* Existing rewind invalidates recurrent state. Restore the saved mutable
      * frontier before publishing, using the same commit as native import. */
     ds4_session_rewind(s,(int)target);g->valid=false;
+    if(!ds41_ctx_resize(g,target,true))goto failed;
     uint8_t page[65536];
     for(uint32_t i=0;i<count;i++){
         if(spans[i].kind!=geometry[i].kind||spans[i].index!=geometry[i].index||spans[i].bytes!=geometry[i].bytes)goto failed;
@@ -138,6 +140,7 @@ int ds4_session_native_restore(ds4_session*s,uint32_t target,const int32_t*ids,
     if(!ds4_gpu_synchronize()){ds4_tokens_free(&tokens);return payload_set_err(err,cap,"native restore synchronization failed"),1;}
     s->checkpoint_valid=false;g->valid=false;s->mtp_draft_valid=false;
     uint8_t page[65536];int rc=1;
+    if(!ds41_ctx_resize(g,target,true)){payload_set_err(err,cap,"native restore: context VRAM could not grow");goto done;}
     for(uint32_t i=0;i<count;++i)for(uint64_t off=0;off<spans[i].bytes;){
         size_t n=(size_t)(spans[i].bytes-off);if(n>sizeof(page))n=sizeof(page);
         if((s->cancel&&s->cancel(s->cancel_ud))||!read(stream,page,n)||!ds4_gpu_tensor_write(spans[i].tensor,off,page,n))goto done;
