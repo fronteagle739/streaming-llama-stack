@@ -28,6 +28,23 @@ class FakeNative:
 
 
 class ProcessTest(unittest.TestCase):
+    def test_pre_readiness_admission_refusal_retires_job_without_startup(self):
+        native=FakeNative();events=[]
+        original=native.suspended
+        def create(*args):
+            job=original(*args)
+            job.resume=lambda:events.append('resumed')
+            return job
+        def refuse(job):events.append('admission');raise MemoryError('CPU fixture resident admission refused')
+        with patch.object(native,'suspended',side_effect=create),patch('studio.dsv41_session_process.psutil.pid_exists',return_value=False):
+            with self.assertRaisesRegex(MemoryError,'resident admission refused') as caught:
+                Producer('1'*32,['unused'],dict(os.environ),Path('.'),host_bytes=512<<20,
+                    physical_floor=4<<30,native=native,native_mode=1,after_resume=refuse,
+                    startup=lambda owned:events.append('startup'))
+        self.assertEqual(events,['resumed','admission'])
+        self.assertFalse(native.job.running)
+        self.assertTrue(all(caught.exception.owned_cleanup[k] for k in ('owned_job_empty','owned_process_signaled','owned_pid_gone')))
+
     def test_failed_constructor_cleanup_preserves_original_error_and_owner(self):
         native=FakeNative()
         original=native.suspended

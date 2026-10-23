@@ -14,6 +14,7 @@ from .config import path,environment
 from .native_broker import vendor,model_receipt
 from .journal import atomic_json,sha256
 from .combo_release import certified
+from .combo_ram import protect_working_set
 
 
 class Native:
@@ -84,13 +85,15 @@ class Native:
             self.creation_attempted=True
             self.process=Producer(session,command,env,directory,host_bytes=int(cfg['host_budget_gib']*(1<<30)),
                 physical_floor=int(cfg['min_available_gib']*(1<<30)),operation_seconds=min(1140,cfg['request_timeout_s']),
-                idle_seconds=min(1140,cfg['lease_minutes']*60),native=native,cancelled=cancelled,native_mode=1,startup=startup,owner_epoch=epoch)
+                idle_seconds=min(1140,cfg['lease_minutes']*60),native=native,cancelled=cancelled,native_mode=1,startup=startup,owner_epoch=epoch,
+                after_resume=lambda job:protect_working_set(job,int(cfg['host_budget_gib']*(1<<30)),
+                    int(cfg['min_available_gib']*(1<<30)),int(cfg['aggregate_host_budget_gib']*(1<<30))))
             if self.restore_lease is not None:self.restore_lease.__exit__(None,None,None);self.restore_lease=None
             self.launch_seconds=time.monotonic()-self.launch_started
             atomic_json(directory/'launch.json',dict(argv=command,native_sha256=pin,owner_epoch=epoch,
                 session=session,context=cfg['context'],split_reads=parts,model_receipt=str(receipt),
                 host_budget_bytes=int(cfg['host_budget_gib']*(1<<30)),physical_floor=int(cfg['min_available_gib']*(1<<30)),
-                server_auth_token_logged=False))
+                resident_admission=getattr(self.process,'resume_admission',None),server_auth_token_logged=False))
         except BaseException as exc:
             self.failure_cleanup=getattr(exc,'owned_cleanup',None)
             if self.process is not None:

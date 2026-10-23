@@ -6,7 +6,7 @@ phnt/ntmmapi.h (MemoryLocationPagefile). No process memory content is read.
 The observer is incremental; RSS/commit/physical-floor checks still run every poll.
 """
 from __future__ import annotations
-import ctypes,errno,math,mmap,os,sys,time
+import ctypes,math,mmap,os,sys,time
 from pathlib import Path
 
 GLOBAL_PAGING_LIMIT=256_000_000
@@ -109,34 +109,6 @@ class JobPaging:
                 address=end
         finally:self.kernel.CloseHandle(handle)
         self.cursors[key]=address;self.scanned_pages+=scanned
-        return found
-
-    def _darwin_api(self):
-        u32=ctypes.c_uint32;u64=ctypes.c_uint64
-        class Region(ctypes.Structure):
-            _fields_=[('protection',u32),('maximum',u32),('inheritance',u32),('flags',u32),('offset',u64)]+[
-                (name,u32) for name in ('behavior','wired','tag','resident','private_shared','swapped',
-                    'dirtied','references','shadow','share_mode','private_resident','shared_resident','object','depth')]+[
-                ('address',u64),('size',u64)]
-        assert ctypes.sizeof(Region)==96
-        self.Region=Region;self.libproc=ctypes.CDLL('/usr/lib/libproc.dylib',use_errno=True)
-        self.libproc.proc_pidinfo.argtypes=[ctypes.c_int,ctypes.c_int,u64,ctypes.c_void_p,ctypes.c_int]
-        self.libproc.proc_pidinfo.restype=ctypes.c_int
-
-    def _darwin(self,proc,key):
-        address=self.cursors.get(key,0);found=0
-        for _ in range(64):
-            region=self.Region();ctypes.set_errno(0)
-            count=self.libproc.proc_pidinfo(proc.pid,7,address,ctypes.byref(region),ctypes.sizeof(region))
-            if not count and ctypes.get_errno() in (0,errno.EINVAL,errno.ESRCH):
-                address=0;self.completed_scans+=1;break
-            if count!=ctypes.sizeof(region):raise OSError(ctypes.get_errno(),'owned Mac region paging query failed')
-            found+=int(region.swapped)*mmap.PAGESIZE
-            end=int(region.address)+region.size
-            if end<=address:raise ValueError('non-progressing owned Mac paging scan')
-            address=end
-            if found:break
-        self.cursors[key]=address
         return found
 
     def sample(self,proc):

@@ -35,7 +35,7 @@ def main(config_path,output,resume_full=None):
     device=_Native();baseline=device.gpu(0,cfg['gpu_uuid'])
     prior=json.loads(Path(resume_full).read_text()) if resume_full else None
     session,epoch=qualification_identity(prior);cancel=threading.Event()
-    childcfg=dict(cfg,host_budget_gib=cfg['native_host_budget_gib'])
+    childcfg=dict(cfg,host_budget_gib=cfg['native_host_budget_gib'],aggregate_host_budget_gib=cfg['host_budget_gib'])
     proof=dict(status='RUNNING',session=session,owner_epoch=epoch,releases=[],
                native_sha256=cfg['native_sha256'],producer_sha256=cfg['producer_sha256'],
                native_prefill_chunk=cfg['native_prefill_chunk'],

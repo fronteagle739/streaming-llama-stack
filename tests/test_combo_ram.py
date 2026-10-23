@@ -1,13 +1,47 @@
 import ctypes
 import hashlib
+import os
 import subprocess
 import sys
+import time
 import unittest
-from slstack.combo_ram import LockedRam, kernel_api
+from slstack.combo_ram import LockedRam, kernel_api, protect_working_set
 
 
 @unittest.skipUnless(sys.platform=='win32','Windows shared RAM contract')
 class LockedRamTest(unittest.TestCase):
+    def test_owned_child_has_resident_admission_before_token_bootstrap(self):
+        from slstack.native_broker import vendor
+        vendor()
+        from studio.dsv41_windows_runner import _Native
+        native=_Native();fds=[];job=None
+        try:
+            source,send=os.pipe();output,sink=os.pipe();errors,diagnostic=os.pipe()
+            fds=[source,send,output,sink,errors,diagnostic]
+            job=native.suspended([sys.executable,'-B','-c','import sys;sys.stdin.buffer.read(1);print("CPU_RESIDENT_PASS")'],
+                dict(os.environ),os.environ['STUDIO_RUNTIME_ROOT'],source,sink,diagnostic)
+            for fd in (source,sink,diagnostic):os.close(fd);fds.remove(fd)
+            job.resume()
+            admission=protect_working_set(job,128<<20,4<<30,512<<20)
+            self.assertEqual(admission['pid'],job.pid)
+            self.assertEqual(admission['minimum'],128<<20)
+            self.assertEqual(admission['flags']&5,1)
+            self.assertIsNone(job.poll())
+            os.write(send,b'G');deadline=time.monotonic()+10
+            while job.poll() is None and time.monotonic()<deadline:time.sleep(.01)
+            self.assertEqual(job.poll(),0)
+            self.assertIn(b'CPU_RESIDENT_PASS',os.read(output,4096))
+        finally:
+            if job is not None:job.stop();job.close()
+            for fd in fds:os.close(fd)
+
+    def test_resident_admission_refuses_unbudgeted_controller_before_any_handle(self):
+        class NoHandle:
+            @property
+            def pi(self):raise AssertionError('Refused aggregate must not touch a process')
+        with self.assertRaisesRegex(MemoryError,'aggregate resident'):
+            protect_working_set(NoHandle(),128<<20,4<<30,128<<20)
+
     def test_locked_shared_pages_and_bounded_transfer(self):
         with LockedRam(8<<20,session='1'*32,host_budget_gib=.5,min_available_gib=4) as ram:
             ram.write(0,b'checkpoint-owned-RAM')
