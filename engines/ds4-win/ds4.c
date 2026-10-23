@@ -83839,7 +83839,7 @@ int ds4_expert_cache_snapshot_write(ds4_session *s, const char *path, uint32_t *
                 const uint32_t got = ds4_gpu_stream_expert_frequency(fl, fe, fc, fg, fd, nf);
                 bool ok = fprintf(ff, "# ds4-expert-frequency v1 model_size=%llu vram_configured=%u host_configured=%u experts=%u\n",
                                   (unsigned long long)s->engine->model.size, ds4_gpu_stream_expert_cache_configured_count(),
-                                  ds4_gpu_stream_host_expert_cache_configured_count(), got < nf ? got : nf) > 0;
+                                  (got && nf) ? ds4_gpu_stream_host_expert_cache_capacity_for(fg[0], fd[0]) : 0u, got < nf ? got : nf) > 0;
                 for (uint32_t i = 0; ok && i < got && i < nf; i++)
                     ok = fprintf(ff, "f %u %u %u %llu %llu\n", fl[i], fe[i], fc[i],
                                  (unsigned long long)fg[i], (unsigned long long)fd[i]) > 0;
@@ -83916,19 +83916,20 @@ static int ds4_session_expert_restore_apply(ds4_session *s, char *err, size_t er
     if (!why[0] && v->n > ds4_gpu_stream_expert_cache_configured_count())
         snprintf(why, sizeof(why), "VRAM cache budget %u < %u listed experts",
                  ds4_gpu_stream_expert_cache_configured_count(), v->n);
-    if (!why[0] && h->n > ds4_gpu_stream_host_expert_cache_configured_count())
-        snprintf(why, sizeof(why), "RAM cache budget %u < %u listed experts",
-                 ds4_gpu_stream_host_expert_cache_configured_count(), h->n);
+    const uint32_t host_cap = h->n ? ds4_gpu_stream_host_expert_cache_capacity_for(h->gate[0], h->down[0]) : 0;
+    if (!why[0] && h->n > host_cap)
+        snprintf(why, sizeof(why), "RAM cache budget %u < %u listed experts", host_cap, h->n);
     uint32_t cleared = 0;
-    if (!why[0] && ds4_expert_restore_seed_kind(s, 1, h, why, sizeof(why))) {
-        /* Clear the prefill-era VRAM slots only when there is a VRAM list to seed in
-         * their place, and only after outstanding work on them has finished. */
-        if (v->n) {
-            if (!ds4_gpu_synchronize()) snprintf(why, sizeof(why), "GPU synchronize before slot clear failed");
-            else cleared = ds4_gpu_stream_expert_cache_clear_slots();
-        }
-        if (!why[0]) (void)ds4_expert_restore_seed_kind(s, 0, v, why, sizeof(why));
+    /* VRAM first, host second: the host tier is inclusive, and seeding VRAM stages
+     * every expert through it, LRU-evicting whatever the host list put there first.
+     * Clear the prefill-era VRAM slots only when there is a VRAM list to seed in
+     * their place, and only after outstanding work on them has finished. */
+    if (!why[0] && v->n) {
+        if (!ds4_gpu_synchronize()) snprintf(why, sizeof(why), "GPU synchronize before slot clear failed");
+        else cleared = ds4_gpu_stream_expert_cache_clear_slots();
     }
+    if (!why[0]) (void)ds4_expert_restore_seed_kind(s, 0, v, why, sizeof(why));
+    if (!why[0]) (void)ds4_expert_restore_seed_kind(s, 1, h, why, sizeof(why));
     if (!why[0] && !ds4_gpu_synchronize()) snprintf(why, sizeof(why), "GPU synchronize failed");
     if (!why[0]) {
         const uint32_t mh = ds4_gpu_stream_expert_cache_apply_order(1, h->layer, h->expert, h->gate, h->down, h->n);

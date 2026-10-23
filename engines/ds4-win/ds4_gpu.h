@@ -491,6 +491,7 @@ uint32_t ds4_gpu_stream_expert_cache_clear_slots(void);
 uint32_t ds4_gpu_stream_expert_cache_prepare_full(uint64_t gate_expert_bytes, uint64_t down_expert_bytes);
 uint32_t ds4_gpu_stream_expert_cache_apply_order(int host, const uint32_t *layers, const uint32_t *experts, const uint64_t *gate_bytes, const uint64_t *down_bytes, uint32_t n);
 uint32_t ds4_gpu_stream_host_expert_cache_configured_count(void);
+uint32_t ds4_gpu_stream_host_expert_cache_capacity_for(uint64_t gate_expert_bytes, uint64_t down_expert_bytes);
 uint32_t ds4_gpu_stream_host_expert_cache_current_count(void);
 enum {
     DS4_STREAM_EXPERT_TIER_ON_DEMAND = 0,
