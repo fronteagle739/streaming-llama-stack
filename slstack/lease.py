@@ -106,6 +106,32 @@ class HoldWatcher:
 @contextmanager
 def gpu_lease(cfg):
     hold = Path(cfg['hold_file']) if cfg.get('hold_file') else Path(cfg['runtime_root']) / 'state' / 'gpu.holds'
+    parent = cfg.get('_gpu_parent_lease')
+    if parent:
+        # Only a live process ancestor may delegate its existing reservation.
+        # Children never release it or claim another GPU window inside it.
+        record = Path(parent)
+        row = json.loads(record.read_text(encoding='utf-8'))
+        owner = next((p for p in [psutil.Process(), *psutil.Process().parents()]
+                      if p.pid == row.get('guardian_pid')), None)
+        if (row.get('task') != 'DS4STACK' or row.get('released') is not False
+                or row.get('cleanup_uncertain') or owner is None
+                or abs(owner.create_time() - row.get('guardian_created', 0)) >= .01
+                or Path(row.get('hold_file', '')).resolve() != hold.resolve()
+                or record.name != str(row.get('id')) + '.json'
+                or cfg['host_budget_gib'] > row.get('host_budget_gib', 0)
+                or cfg['min_available_gib'] < row.get('min_available_gib', float('inf'))
+                or datetime.now(timezone.utc) >= datetime.fromisoformat(row['expires'])):
+            raise AdmissionRefused('Inherited GPU reservation is not a live compatible ancestor lease')
+        lines = active_holds(hold.read_text(encoding='utf-8-sig'))
+        own = [line for line in lines if re.match(
+            r'^ACTIVE:\s+DS4STACK\s+' + re.escape(row['id']) + r'(?:;|\s|$)', line)]
+        foreign = [line for line in lines if line not in own]
+        if len(own) != 1 or hold_admission(foreign, budget_gib=cfg['host_budget_gib'],
+                                         floor_gib=cfg['min_available_gib']):
+            raise AdmissionRefused('Inherited GPU reservation is absent or a foreign hold blocks it')
+        yield row['id']
+        return
     if not cfg.get('hold_file'):
         hold.parent.mkdir(parents=True, exist_ok=True)
         hold.touch(exist_ok=True)
@@ -132,12 +158,14 @@ def gpu_lease(cfg):
             if used > cfg['gpu_idle_max_mib'] or free < 30000 or busy > 5:
                 raise AdmissionRefused('RTX is not idle enough for exclusive admission; no other process was ejected: ' + result.stdout)
             identity = uuid.uuid4().hex
+            expiry = datetime.now(timezone.utc) + timedelta(minutes=cfg['lease_minutes'])
             lease_path = Path(cfg['runtime_root']) / 'state' / 'leases' / (identity + '.json')
             lease_row = {'task': 'DS4STACK', 'id': identity, 'hold_file': str(hold),
                          'guardian_pid': os.getpid(), 'guardian_created': psutil.Process().create_time(),
+                         'host_budget_gib': cfg['host_budget_gib'],
+                         'min_available_gib': cfg['min_available_gib'], 'expires': expiry.isoformat(),
                          'released': False}
             atomic_json(lease_path, lease_row)
-            expiry = datetime.now(timezone.utc) + timedelta(minutes=cfg['lease_minutes'])
             line = f"\nACTIVE: DS4STACK {identity}; exclusive RTX5090; expires {expiry.isoformat()}; host RSS {cfg['host_budget_gib']} GiB; floor {cfg['min_available_gib']} GiB\n"
             stream.seek(0, 2)
             stream.write(line)
