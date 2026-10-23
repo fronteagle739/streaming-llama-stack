@@ -142,7 +142,10 @@ class Native:
             if self.process:self.process.activity=time.monotonic();self.process.deadline=None
             return reply
 
-    def render(self,body):return self.control('render',request=body)['tokens']
+    def render(self,body):
+        reply=self.control('render',request=body)
+        # prefix_source: memory-text = live sampled IDs kept, only the suffix tokenized.
+        self.last_render=reply.get('render');return reply['tokens']
     def snapshot(self):return self.control('checkpoint')['checkpoint']
     def sync(self,tokens):
         cp=self.checkpoint

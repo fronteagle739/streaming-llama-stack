@@ -80847,7 +80847,13 @@ int ds4_session_prepare_prefill(ds4_session *s, int request_tokens,
  * graph sequence and the per-layer gates pair up.  The worker acks a sync
  * once its matching prefill completes, surfacing worker-side failures
  * here instead of as a gate timeout mid-decode. */
+static int ds4_session_expert_restore_apply(ds4_session *s, char *err, size_t errlen);
 int ds4_session_sync(ds4_session *s, const ds4_tokens *prompt, char *err, size_t errlen) {
+    /* DS4COMBO expert-cache restore: seed on the still-empty cache BEFORE this turn's prefill
+     * admits experts (seeding after prefill left only 236/301 resident). The restore sets the
+     * decode phase for seeding; the phase edge below returns to prefill as normal. The first
+     * eval keeps the call as the fallback for a decode with no sync. */
+    if (ds4_session_expert_restore_apply(s, err, errlen)) return 1;
     if (s && s->checkpoint_valid && !ds4_session_vision_prefix_matches(
                      s, s->sync_images, s->sync_image_count)) {
         ds4_session_invalidate(s);
