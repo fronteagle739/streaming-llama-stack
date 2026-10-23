@@ -66,6 +66,9 @@ class ComboProducer:
             '--receipt':str(self.directory/'producer.json'),'--carry':str(self.directory/'carry-not-created'),
             '--payload':str(self.directory/'payload-not-created')})
         if cfg.get('producer_keep_alive'):args['--switch-arena']='1'   # DS4COMBO fast switch: suspendable device memory
+        if cfg.get('producer_fixed_direct_open'):
+            # No-warm-up start: the real request allocates the fixed storage itself.
+            args['--warmup-one-token']='0';args['--fixed-direct-open']='1'
         token_path=self.directory/'append.tokens.le32'
         with token_path.open('xb') as output:
             for offset in range(0,len(tokens),8192):output.write(struct.pack('<'+'I'*len(tokens[offset:offset+8192]),*tokens[offset:offset+8192]))
