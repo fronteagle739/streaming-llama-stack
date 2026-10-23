@@ -42,6 +42,11 @@ def main(config_path,output):
             actual=owner.quality(value)
             if abs(actual.get('value',-1)-value)>1e-5:raise ValueError('Native quality/speed named point differs')
             proof['provider_points'].append(dict(name=name,value=value,reply=actual))
+        phases=dict(reasoning=0,tool_call=.35,answer=.65,code=.9)
+        actual=owner.quality(phases)
+        if actual.get('per_phase') is not True or any(abs(actual.get('phases',{}).get(k,-1)-v)>1e-5 for k,v in phases.items()):
+            raise ValueError('Native four-phase quality/speed setter differs from the bound provider')
+        proof['provider_phase_validation']=actual
         owner.quality(0)
         prompt=(Path(__file__).parent/'fixtures'/'combo-parity-prompt.txt').read_text(encoding='utf-8')
         body=dict(model='deepseek-chat',messages=[dict(role='user',content=prompt)],max_tokens=384,temperature=0)
