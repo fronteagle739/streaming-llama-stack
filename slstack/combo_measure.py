@@ -1,6 +1,7 @@
 """Guarded hardware measurements using the actual native OpenAI stream/logs."""
 from __future__ import annotations
 import argparse
+import hashlib
 import json
 import re
 import time
@@ -14,8 +15,14 @@ def require_parity(cfg):
     root=Path(cfg.get('combo_qualification_root',cfg['runtime_root']))
     native=json.loads((root/'native-parity.json').read_text())
     ultra=json.loads((root/'ultra-parity.json').read_text())
+    binding=json.loads((root/'native-parity-binding.json').read_text())
     if native.get('status')!='PASS' or any(native.get(k)!=384 for k in ('roundtrip_byte_exact','rewind_byte_exact')):
         raise ValueError('Mandatory native full-vector parity is incomplete')
+    from .journal import sha256
+    if (binding.get('status')!='PASS' or binding.get('native_proof_sha256')!=sha256(root/'native-parity.json') or
+        any(binding.get(k)!=cfg[k] for k in ('native_sha256','producer_sha256','provider_schema','native_prefill_chunk')) or
+        binding.get('identity')!=cfg['combo_identity']):
+        raise ValueError('Native fixture attestation is absent or from another qualified profile')
     if ultra.get('status')!='PASS' or any(ultra.get(k)!=cfg[k] for k in ('native_sha256','producer_sha256')):
         raise ValueError('Mandatory ULTRA import parity is absent or from different binaries')
     if ultra.get('identity')!=cfg['combo_identity'] or ultra.get('provider_schema')!=cfg['provider_schema'] or ultra.get('native_prefill_chunk')!=cfg['native_prefill_chunk']:
@@ -63,6 +70,24 @@ def stream_completion(native,body):
                 native_api_first_token_seconds=first-started,stream_seconds=time.monotonic()-started)
 
 
+def transfer_summary(metrics):
+    if not metrics.get('ultra_directory'):
+        return dict(native_prefill_tok_s=metrics.get('native_prefill_tok_s'),handoff_seconds=0)
+    producer=json.loads((Path(metrics['ultra_directory'])/'producer.json').read_text())
+    phase_seconds=producer['phase_ms']['embedding_40_layers_head']/1000
+    if phase_seconds<=0:raise ValueError('Producer prefill phase duration is invalid')
+    parts=dict(native_initial_load_import=metrics['native_initial_load_import_seconds'],
+        native_base_export_verify=metrics.get('native_base_export',{}).get('seconds',0),
+        first_native_release=metrics['releases'][0]['seconds'],
+        ultra_load_import_and_nonprefill=metrics['ultra_load_import_prefill_seconds']-phase_seconds,
+        ultra_export_verify=metrics['ultra_export']['seconds'],
+        ultra_release=metrics['releases'][1]['seconds'],native_reload_import=metrics['native_load_import_seconds'])
+    if parts['ultra_load_import_and_nonprefill']<0:raise ValueError('Producer phase exceeds its enclosing launch/prefill duration')
+    return dict(producer_receipt=producer,ultra_prefill_seconds=phase_seconds,ultra_prefill_tok_s=metrics['new_tokens']/phase_seconds,
+                handoff_parts_seconds=parts,handoff_seconds=sum(parts.values()),
+                handoff_scope='Export/verification, certified releases, cold loads/imports and non-prefill producer setup; initial native rendering owner included')
+
+
 def measure(cfg,body,output,route=None,followups=()):
     require_parity(cfg)
     # The controller must bind CUDA visibility before its first identity query.
@@ -71,24 +96,23 @@ def measure(cfg,body,output,route=None,followups=()):
     session=ComboSession(cfg,qualification_route=route)
     proof=dict(status='RUNNING',native_sha256=cfg['native_sha256'],producer_sha256=cfg['producer_sha256'],
                provider_schema=cfg['provider_schema'],identity=cfg['combo_identity'],context=cfg['context'],
-               native_prefill_chunk=cfg['native_prefill_chunk'],turns=[])
+               native_prefill_chunk=cfg['native_prefill_chunk'],native_split_reads=cfg['ds_read_parts'],
+               requested_quality_speed=body.get('quality_speed',0),
+               request_sha256=hashlib.sha256(json.dumps(body,sort_keys=True,separators=(',',':'),allow_nan=False).encode()).hexdigest(),turns=[])
     current=body
     try:
         for index in range(1+len(followups)):
             started=time.monotonic()
             with session.prepare(current) as (native,rendered,metrics):
                 result=stream_completion(native,rendered)
+                result['provider_final']=native.quality()
                 result['total_first_token_seconds']=metrics['prepared_seconds']+result['native_api_first_token_seconds']
                 directory=native.directory
             result['metrics']=metrics
             result['wall_seconds']=time.monotonic()-started
             result['native_directory']=str(directory)
             result['engine_milestones']=milestones((directory/'stderr.log').read_bytes())
-            if metrics.get('ultra_directory'):
-                producer=json.loads((Path(metrics['ultra_directory'])/'producer.json').read_text())
-                result['producer_receipt']=producer
-                duration=producer.get('phase_ms',{}).get('embedding_40_layers_head')
-                if duration and duration>0:result['ultra_prefill_tok_s']=metrics['new_tokens']/(duration/1000)
+            result.update(transfer_summary(metrics))
             proof['turns'].append(result);atomic_json(output,proof)
             if index<len(followups):
                 spec=followups[index]

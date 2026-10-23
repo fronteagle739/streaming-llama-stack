@@ -2,7 +2,7 @@ import unittest
 from unittest.mock import patch
 from slstack.combo_crossover import crossover
 from slstack.combo_release import release_barrier
-from slstack.combo_session import ComboSession,prefix_digest,render_body
+from slstack.combo_session import ComboSession,prefix_digest,render_body,changed_span_tokens
 
 
 class Device:
@@ -10,6 +10,11 @@ class Device:
 
 
 class SequenceTest(unittest.TestCase):
+    def test_new_user_span_excludes_retained_large_history_and_template_footer(self):
+        history=list(range(10000));footer=[20000,20001]
+        self.assertEqual(changed_span_tokens(history+[30001,30002,30003]+footer,history+footer),3)
+        self.assertEqual(changed_span_tokens(history+footer,history+footer),0)
+
     def test_multimodal_input_refuses_before_a_native_owner_is_created(self):
         cfg=dict();session=ComboSession(cfg,device=Device(),qualification_route='ultra')
         with patch('slstack.combo_session.Native') as native:

@@ -28,6 +28,15 @@ def prefix_digest(tokens,position):
     return digest.hexdigest()
 
 
+def changed_span_tokens(tokens,blank):
+    """Exact changed span between two renders from the native tokenizer."""
+    left=0
+    while left<min(len(tokens),len(blank)) and tokens[left]==blank[left]:left+=1
+    right=0
+    while right<min(len(tokens)-left,len(blank)-left) and tokens[-1-right]==blank[-1-right]:right+=1
+    return len(tokens)-left-right
+
+
 def render_body(body):
     vendor()
     from studio.reasoning_history import apply
@@ -102,6 +111,7 @@ class ComboSession:
             childcfg=dict(self.cfg,host_budget_gib=self.cfg['native_host_budget_gib'])
             restore=(self.state,self.payload) if self.state is not None else None
             owner=self.current=Native(childcfg,self.session,self.epoch,1,self.cancel.is_set,restore=restore,runner=self.device)
+            metrics['native_initial_load_import_seconds']=owner.launch_seconds
             tokens=owner.render(rendered);cp=owner.checkpoint
             metrics['restored_state']=deepcopy(cp)
             def matches(checkpoint):
@@ -113,7 +123,17 @@ class ComboSession:
             base_position=cp['position'] if cp else 0;append=tokens[base_position:]
             metrics.update(prompt_tokens=len(tokens),reused_prefix_tokens=base_position,new_tokens=len(append))
             metrics['base_state']=deepcopy(cp)
-            route=self.qualification_route or ('ultra' if len(append)>=self.threshold else 'native')
+            routing_tokens=len(append)
+            if 'rewound_to' in metrics and rendered.get('messages') and rendered['messages'][-1].get('role')=='user':
+                # Removing old reasoning replays the preceding answer suffix.
+                # The owner's short-new-message rule still applies: that old
+                # answer is retained history, not a newly pasted document.
+                blank=deepcopy(rendered);blank['messages'][-1]['content']=''
+                routing_tokens=min(len(append),changed_span_tokens(tokens,owner.render(blank)))
+                metrics['routing_policy']='new user text after bounded history-policy rewind'
+                metrics['replayed_suffix_tokens']=len(append)-routing_tokens
+            metrics['routing_tokens']=routing_tokens
+            route=self.qualification_route or ('ultra' if routing_tokens>=self.threshold else 'native')
             metrics['route']=route;metrics['crossover_tokens']=self.threshold
             if route=='ultra' and append:
                 if cp is not None:metrics['native_base_export']=self._checkpoint(owner,cp)
