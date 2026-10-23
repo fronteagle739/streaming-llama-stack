@@ -24,6 +24,8 @@ Accurate preserves the original default arithmetic; Fast enables the delivered B
 | `--diffusers-cache` | ds4-win: `{runtime_root}/cache/diffusers_cache`; mac-ds4: `{runtime_root}/cache/diffusers_cache`; rtx-llama: `{runtime_root}/cache/diffusers_cache`; image: `{runtime_root}/cache/diffusers_cache`; video: `{runtime_root}/cache/diffusers_cache`; studio: `{runtime_root}/cache/diffusers_cache`; mlx-serve: `{runtime_root}/cache/diffusers_cache` | Runtime-local cache/temp directory; no model download is performed. |
 | `--diffusers-offline` | ds4-win: `1`; mac-ds4: `1`; rtx-llama: `1`; image: `1`; video: `1`; studio: `1`; mlx-serve: `1` | Keep inference offline and avoid global cache/bytecode writes. |
 | `--ds4-cache-affinity-bias` | ds4-win: `0` | CUDA expert-cache routing bias,0..1.36125.0 preserves baseline selection; live changes use the quality/speed tool. |
+| `--ds4-cache-affinity-calibrate` | Explicit runtime value | Record unbiased per-layer routing spreads and write their calibration when the engine closes. Use bias0 with at least16 decoded samples per layer. Restart with the resulting spread file for live quality controls. |
+| `--ds4-cache-affinity-spread-file` | ds4-win: `{affinity_spread_file}` | Per-model routing calibration. The packaged 1017 default contains40 numeric spread statistics, not weights, and is selected only for its full-file size/header fingerprint. The native verifier separately checks its mapped main-weight span excluding disk-only Engram, geometry and header. Explicit overrides select another calibration. |
 | `--ds4-cuda-cache-affinity-warp` | ds4-win: `1` | Use the qualified warp reranker for CUDA cache-affinity expert selection;0 selects the existing alternative. |
 | `--ds4-cuda-ds-gpu-dest` | ds4-win: `1` | DS4_CUDA_DS_GPU_DEST: qualified preset/runtime setting; override for a different memory or arithmetic plan |
 | `--ds4-cuda-ds-overlap` | ds4-win: `1` | DS4_CUDA_DS_OVERLAP: qualified preset/runtime setting; override for a different memory or arithmetic plan |
@@ -2298,9 +2300,9 @@ Source: `engines/ds4-win/ds4.c:75691`. Unset read: NULL from getenv; the literal
 
 ### DS4_CACHE_AFFINITY_CALIBRATE
 
-DS4_CACHE_AFFINITY_CALIBRATE: advanced engine setting; built-in default retained
+Record unbiased per-layer routing spreads and write their calibration when the engine closes. Use bias0 with at least16 decoded samples per layer. Restart with the resulting spread file for live quality controls.
 
-Scope: ds4-win. Class: advanced.
+Scope: ds4-win. Class: runtime.
 
 Source: `engines/ds4-win/ds4.c:75750`. Unset read: NULL from getenv; the literal consumer below supplies any fallback.
 
@@ -2436,9 +2438,9 @@ Source: `engines/ds4-win/ds4.c:75762`. Unset read: NULL from getenv; the literal
 
 ### DS4_CACHE_AFFINITY_SPREAD_FILE
 
-DS4_CACHE_AFFINITY_SPREAD_FILE: advanced engine setting; built-in default retained
+Per-model routing calibration. The packaged 1017 default contains40 numeric spread statistics, not weights, and is selected only for its full-file size/header fingerprint. The native verifier separately checks its mapped main-weight span excluding disk-only Engram, geometry and header. Explicit overrides select another calibration.
 
-Scope: ds4-win. Class: advanced.
+Scope: ds4-win. Class: runtime-preset.
 
 Source: `engines/ds4-win/ds4.c:75749`. Unset read: NULL from getenv; the literal consumer below supplies any fallback.
 
@@ -51946,7 +51948,7 @@ Source: `engines/ds4-win/ds4_cli.c:1719`. Unset read: NULL from getenv; the lite
                 ds4_token_eos(engine), cfg->gen.temperature, 0,
 ```
 
-Source: `engines/ds4-win/ds4_server.c:14941`. Unset read: NULL from getenv; the literal consumer below supplies any fallback.
+Source: `engines/ds4-win/ds4_server.c:14947`. Unset read: NULL from getenv; the literal consumer below supplies any fallback.
 
 ```text
               ds4_session_ds41_dspark_adaptive_stats(slot->session, NULL, NULL)) &&
@@ -51958,7 +51960,7 @@ Source: `engines/ds4-win/ds4_server.c:14941`. Unset read: NULL from getenv; the 
                     slot->session, token, max_tokens - completion,
 ```
 
-Source: `engines/ds4-win/ds4_server.c:14963`. Unset read: NULL from getenv; the literal consumer below supplies any fallback.
+Source: `engines/ds4-win/ds4_server.c:14969`. Unset read: NULL from getenv; the literal consumer below supplies any fallback.
 
 ```text
                    max_tokens - completion >= 2 && !j->req.ignore_eos &&
@@ -53206,7 +53208,7 @@ DS4_PEER_RESUME_MAX_EVAL_TOKENS: advanced engine setting; built-in default retai
 
 Scope: ds4-win. Class: advanced.
 
-Source: `engines/ds4-win/ds4_server.c:12840`. Unset read: NULL from getenv; the literal consumer below supplies any fallback.
+Source: `engines/ds4-win/ds4_server.c:12847`. Unset read: NULL from getenv; the literal consumer below supplies any fallback.
 
 ```text
      */
@@ -59782,7 +59784,7 @@ DS4_SERVER_AUTH_TOKEN: advanced engine setting; built-in default retained
 
 Scope: ds4-win. Class: advanced.
 
-Source: `engines/ds4-win/ds4_server.c:16062`. Unset read: NULL from getenv; the literal consumer below supplies any fallback.
+Source: `engines/ds4-win/ds4_server.c:16076`. Unset read: NULL from getenv; the literal consumer below supplies any fallback.
 
 ```text
 }
@@ -59812,7 +59814,7 @@ Source: `engines/ds4-mac/ds4_server.c:13675`. Unset read: NULL from getenv; the 
         while (s->decode_pending == 0 && !s->model_stopping) {
 ```
 
-Source: `engines/ds4-win/ds4_server.c:14163`. Unset read: NULL from getenv; the literal consumer below supplies any fallback.
+Source: `engines/ds4-win/ds4_server.c:14170`. Unset read: NULL from getenv; the literal consumer below supplies any fallback.
 
 ```text
     int *n_accepted = xmalloc((size_t)s->slot_count * sizeof(*n_accepted));
@@ -59854,7 +59856,7 @@ static long server_decode_coalesce_us(void) {
         if (end != env && *end == '\0' && v >= 0 && v <= 100000) us = v;
 ```
 
-Source: `engines/ds4-win/ds4_server.c:14140`. Unset read: NULL from getenv; the literal consumer below supplies any fallback.
+Source: `engines/ds4-win/ds4_server.c:14147`. Unset read: NULL from getenv; the literal consumer below supplies any fallback.
 
 ```text
 static long server_decode_coalesce_us(void) {

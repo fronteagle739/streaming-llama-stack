@@ -843,7 +843,7 @@ typedef struct {
     bool quality_speed_set;
     float quality_speed;
     bool quality_per_phase;
-    float quality_phases[3];
+    float quality_phases[4];
     char *prompt_text;
     tool_schema_orders tool_orders;
     int max_tokens;
@@ -894,6 +894,13 @@ typedef struct {
     char *anthropic_live_suffix_text;
     tool_replay_stats tool_replay;
 } request;
+
+static int request_quality_apply(const request *req) {
+    if (!req->quality_speed_set) return 0;
+    return req->quality_per_phase ? ds4_quality_speed_set_phase_map(req->quality_phases) :
+                                   ds4_quality_speed_set(req->quality_speed);
+}
+
 
 static void tool_call_free(tool_call *tc) {
     free(tc->id);
@@ -14272,8 +14279,7 @@ static void *decode_worker_main(void *arg) {
 static void generate_job_inner(server *s, server_slot *slot, job *j) {
     char err[160];
     err[0] = '\0';
-    if (j->req.quality_speed_set && (j->req.quality_per_phase ?
-        ds4_quality_speed_set_phases(j->req.quality_phases) : ds4_quality_speed_set(j->req.quality_speed))) {
+    if (request_quality_apply(&j->req)) {
         http_error(j->fd,s->enable_cors,409,"quality vs speed unsupported");return;
     }
     const bool multimodal = j->req.image_count != 0;
@@ -15995,6 +16001,14 @@ static long content_length(const char *h, size_t n) {
 }
 
 typedef struct {bool per_phase;float value,phases[4];} quality_setting;
+
+static void request_quality_store(request *req, bool present, const quality_setting *setting) {
+    req->quality_speed_set = present;
+    req->quality_speed = setting->value;
+    req->quality_per_phase = setting->per_phase;
+    memcpy(req->quality_phases, setting->phases, sizeof(req->quality_phases));
+}
+
 static bool quality_value(const char **p, float *value) {
     json_ws(p);
     if (**p=='"') {
@@ -16434,7 +16448,7 @@ static void *client_main(void *arg) {
         http_request_free(&hr);
         goto done;
     }
-    if (ok) {req.raw_body = xstrndup(hr.body, hr.body_len);req.quality_speed_set=quality_present;req.quality_speed=quality.value;req.quality_per_phase=quality.per_phase;memcpy(req.quality_phases,quality.phases,sizeof(req.quality_phases));}
+    if (ok) {req.raw_body = xstrndup(hr.body, hr.body_len);request_quality_store(&req,quality_present,&quality);}
     http_request_free(&hr);
     if (!ok) {
         http_error(fd, s->enable_cors, 400, err);

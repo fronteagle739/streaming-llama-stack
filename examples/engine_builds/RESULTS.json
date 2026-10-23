@@ -1,5 +1,21 @@
 {
-  "windows": {
+  "mac": {
+    "source_commit": "4fb09d952ae0c1ea12cf3666c44d26867d10c3be",
+    "status": "fresh GitHub clone and native build PASS",
+    "source_sha256": "2633ff913cb519bbbc9527afed45be9b3bb249b446eeb463cd256df334fbb4d8",
+    "binary_sha256": "c479fb78a2b5c6da3634d7db12c0d9f49430a8ae1f5415506c52c8b6a7f3ad79",
+    "build": {
+      "elapsed_s": 10.379361250030342,
+      "peak_tree_rss": 1053573120,
+      "min_available": 473014484992,
+      "host_budget_gib": 2,
+      "floor_gib": 4
+    },
+    "controller": "stdout collection blocked after completion; receipt recovered after independently confirming no owned guardian; no rerun",
+    "engine_source_unchanged_in_windows_install_commit": true
+  },
+  "parity": "Accepted earlier Windows384, matched-settings Mac32 and producer67 receipts are reused; these builds do not add model measurements.",
+  "windows_component_checkpoint": {
     "source_commit": "4fb09d952ae0c1ea12cf3666c44d26867d10c3be",
     "fresh_base_clone": "30e6cdbe7f980aeefae651bfd11cb634e444cbe3",
     "status": "component builds PASS after committed source-closure correction; strict no-fix clone/install verification pending",
@@ -52,19 +68,46 @@
       }
     }
   },
-  "mac": {
-    "source_commit": "4fb09d952ae0c1ea12cf3666c44d26867d10c3be",
-    "status": "fresh GitHub clone and native build PASS",
-    "source_sha256": "2633ff913cb519bbbc9527afed45be9b3bb249b446eeb463cd256df334fbb4d8",
-    "binary_sha256": "c479fb78a2b5c6da3634d7db12c0d9f49430a8ae1f5415506c52c8b6a7f3ad79",
-    "build": {
-      "elapsed_s": 10.379361250030342,
-      "peak_tree_rss": 1053573120,
-      "min_available": 473014484992,
-      "host_budget_gib": 2,
-      "floor_gib": 4
+  "windows": {
+    "source_commit": "d56449374f958be40d2e1d071c8da0490610b94c",
+    "status": "fresh GitHub clone and single install command PASS",
+    "literal_fresh_clone": true,
+    "manual_fixes": false,
+    "old_compiler_output_reused": false,
+    "install": {
+      "elapsed_s": 1639.3439999999828,
+      "peak_tree_rss": 2992807936,
+      "min_available": 6182785024,
+      "host_budget_gib": 3.5,
+      "floor_gib": 4,
+      "job_commit_gib": 48
     },
-    "controller": "stdout collection blocked after completion; receipt recovered after independently confirming no owned guardian; no rerun"
-  },
-  "parity": "Accepted earlier Windows384, matched-settings Mac32 and producer67 receipts are reused; these builds do not add model measurements."
+    "readiness_check": {
+      "exit_code": 0,
+      "elapsed_s": 4.907000000006519,
+      "peak_tree_rss": 153399296
+    },
+    "binaries": {
+      "engines/ds4-win/ds4-server.exe": {
+        "bytes": 24948736,
+        "sha256": "922e1122402042e3d1da60a0fc07c02eef2d4bad1c21292b78355d31bb2f5fba"
+      },
+      "build/llama/bin/llama-dsv41-prefill.exe": {
+        "bytes": 86008832,
+        "sha256": "3cb219e5f156d0c777e6c6bbc640b196b5333a30b5cd55c149eb6ef88949a034"
+      },
+      "build/llama/bin/llama-server.exe": {
+        "bytes": 94829056,
+        "sha256": "11b82df8e7613545b7b7e150318af5c32bd4e6625cf627c3835ff852c8ea248d"
+      },
+      "build/llama/bin/llama-export-lora.exe": {
+        "bytes": 88235520,
+        "sha256": "ac114fb41b74e1366512e2621ab23524fa627e24427aba446e79cf76d73397e0"
+      },
+      "build/llama/bin/slstack-weight-fetcher.dll": {
+        "bytes": 84918272,
+        "sha256": "793c97e79cbee82bcdbbb0c23606dbf1c8f0514da754299a2f67423dc4a36306"
+      }
+    }
+  }
 }

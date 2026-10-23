@@ -5,6 +5,7 @@ import os
 from pathlib import Path
 import re
 import sys
+from functools import lru_cache
 
 ROOT = Path(__file__).resolve().parents[1]
 TABLE = ROOT / 'envvars.json'
@@ -17,6 +18,26 @@ HOST_VARIABLES = {'PATH', 'HOME', 'USERPROFILE', 'LOCALAPPDATA', 'APPDATA', 'SYS
                   'USERNAME', 'LOGNAME', 'USER', 'SHELL', 'PWD', 'OLDPWD', 'CUDA_PATH',
                   'NUMBER_OF_PROCESSORS', 'PROCESSOR_ARCHITECTURE', 'NO_COLOR', 'FORCE_COLOR'}
 SCOPE_ALIASES = {'ds4-mac': 'mac-ds4', 'rtx-producer': 'rtx-llama'}
+
+
+@lru_cache(maxsize=16)
+def _header_fingerprint(filename, device, inode, size, modified):
+    value = 14695981039346656037
+    with Path(filename).open('rb') as stream:
+        for byte in stream.read(65536):
+            value = ((value ^ byte) * 1099511628211) & ((1 << 64) - 1)
+    return format(value, '016x')
+
+
+def matches_model_signature(cfg, signature):
+    model = Path(cfg.get('model', ''))
+    if not model.is_file():
+        return False
+    info = model.stat()
+    if info.st_size != signature['file_size']:
+        return False
+    return _header_fingerprint(str(model.resolve()), info.st_dev, info.st_ino,
+                               info.st_size, info.st_mtime_ns) == signature['header_fnv64']
 
 
 def inventory():
@@ -69,6 +90,7 @@ def apply(env, cfg, scope):
                        studio_root=str(path(cfg.get('studio_root', 'vendor/studio'))),
                        streaming_root=str(path(cfg.get('streaming_root', 'vendor/engines'))),
                        weight_fetcher=str(path(cfg.get('weight_fetcher', 'build/llama/bin/slstack-weight-fetcher.dll'))),
+                       affinity_spread_file=str(path(cfg.get('cache_affinity_spread_file') or 'presets/dsv41-affinity-spreads.txt')),
                        library_pythonpath=os.pathsep.join((str(ROOT), str(path(cfg.get('studio_root', 'vendor/studio'))),
                                                           str(path(cfg.get('streaming_root', 'vendor/engines'))))))
     for row in rows():
@@ -82,6 +104,8 @@ def apply(env, cfg, scope):
             value = cfg.get('ds4_env', {}).get(var) if scope == 'ds4-win' else None
             if value is None:
                 value = row.get('defaults_by_scope', {}).get(scope)
+                if row.get('model_signature') and not matches_model_signature(cfg, row['model_signature']):
+                    value = None
                 if value is not None:
                     # Only table-owned placeholders expand. User values, including
                     # JSON and braces in file names, remain literal.
