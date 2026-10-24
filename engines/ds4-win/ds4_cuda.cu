@@ -38504,6 +38504,11 @@ static int cuda_stream_selected_ensure_bytes(
     if (bytes == 0 || bytes > (uint64_t)SIZE_MAX) return 0;
     if (g_ds_slot_alloc) {
         void *pool = NULL;
+        /* The loader is sized before the first DS load, so DirectStorage may not be up yet. */
+        if (g_model_fd < 0 || !ds4_ds_init_from_fd(g_model_fd)) {
+            fprintf(stderr, "DS4COMBO_DS_SLOTS refused: DirectStorage could not initialise on the model\n");
+            return 0;
+        }
         if (!ds4_ds_slot_pool_create(bytes, &pool)) return 0;   /* logged; no cudaMalloc fallback */
         *ptr = (char *)pool;
         *capacity = bytes;
