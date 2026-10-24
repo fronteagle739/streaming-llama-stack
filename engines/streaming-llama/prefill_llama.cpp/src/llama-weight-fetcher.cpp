@@ -211,6 +211,8 @@ struct wf_layer {
     // MoE: active expert mask (empty = fetch all)
     std::vector<int>              active_experts;
     bool                          expert_filter_set = false;
+    bool                          persistent = false;          // LLAMADECODE B1b
+    std::atomic<bool>             persistent_loaded{false};    // bytes resident in its bank region
     bool                          cache_inserted = false;
     std::vector<bool>             cache_hits;
     std::vector<int>              expert_prefetch_ids;
@@ -228,6 +230,7 @@ struct wf_layer {
         : spans(std::move(o.spans)), total_bytes(o.total_bytes),
           stage(o.stage.load()), gpu_buf_idx(o.gpu_buf_idx), ram_buf_idx(o.ram_buf_idx),
           active_experts(std::move(o.active_experts)), expert_filter_set(o.expert_filter_set),
+          persistent(o.persistent), persistent_loaded(o.persistent_loaded.load()),
           cache_inserted(o.cache_inserted), cache_hits(std::move(o.cache_hits)),
           expert_prefetch_ids(std::move(o.expert_prefetch_ids)),
           expert_prefetch_loaded_spans(std::move(o.expert_prefetch_loaded_spans)),
@@ -3380,7 +3383,11 @@ static bool wf_dstorage_transfer_layer(wf_context * wf, int layer_idx, int gpu_i
             }
             WF_ERR("DS4PERF_DIRECT_ZERO_GAPS stage=%d extent=%llu zero_bytes=%llu gaps=%zu spans=%zu all_request_bytes_verified=1 before_DS_sync_retained=1",
                 layer_idx,(unsigned long long)layer.total_bytes,(unsigned long long)zeroed,gaps.size(),writes.size());
-        }else if(!cuda_ok(cudaMemsetAsync(target_buf,0,layer.total_bytes,wf_s)))return false;
+        }else{
+            size_t begin=layer.total_bytes;for(const auto&span:layer.spans)begin=std::min(begin,span.gpu_offset);
+            if(begin&&!wf->required_dstorage)return false;
+            if(!cuda_ok(cudaMemsetAsync((char*)target_buf+begin,0,layer.total_bytes-begin,wf_s)))return false;
+        }
         if(!cuda_ok(cudaStreamSynchronize(wf_s)))return false;
     } else if (wave_start <= 0 && wf->ds_direct_mode) {
         // R3 DS-direct DEBUG: temporarily SKIP the prefetch zero — testing whether the CUDA memset was
@@ -3990,6 +3997,22 @@ static void wf_dma_thread_fn(wf_context * wf) {
 
             // Compute done — submit DMA immediately
             wf->dma_buf_pending[bi].pending_layer.store(-1);
+            if (wf->layers[layer_idx].persistent && wf->layers[layer_idx].persistent_loaded.load(std::memory_order_acquire)) {
+                // LLAMADECODE B1b: resident in this bank's own region since its first
+                // transfer; nothing else writes it. Publish without a DMA.
+                wf->gpu_bufs[bi].in_use = true;
+                wf->gpu_bufs[bi].layer_idx = layer_idx;
+                wf->layers[layer_idx].gpu_buf_idx = bi;
+                {
+                    std::lock_guard<std::mutex> lk(wf->dma_timing_mutex);
+                    const auto now = std::chrono::high_resolution_clock::now();
+                    wf->dma_timing_log.push_back({layer_idx, bi, 0, now, now});
+                }
+                wf->layers[layer_idx].stage.store(WF_STAGE_GPU_READY);
+                wf->pipeline_cv.notify_one();
+                did_work = true;
+                break;
+            }
 
             // Skip empty sub-layers (dense layer's MoE slot)
             if (wf->layers[layer_idx].total_bytes == 0) {
@@ -4030,6 +4053,7 @@ static void wf_dma_thread_fn(wf_context * wf) {
                 break;
             }
 
+            if (wf->layers[layer_idx].persistent) wf->layers[layer_idx].persistent_loaded.store(true, std::memory_order_release);
             // Transfer complete — mark GPU_READY immediately
             {
                 std::lock_guard<std::mutex> lk(wf->dma_timing_mutex);
@@ -5913,6 +5937,16 @@ void wf_quiesce(wf_context * wf) {
 #endif
 }
 
+bool wf_set_layer_persistent(wf_context * wf, int layer_idx, bool persistent) {
+    if (!wf || !wf->required_dstorage || layer_idx < 0 || layer_idx >= (int)wf->layers.size() || wf->pipeline_running.load()) return false;
+    auto & layer = wf->layers[layer_idx];
+    if (layer.spans.empty()) return false;
+    for (const auto & span : layer.spans) if (span.is_expert) return false;  // routed stages are rewritten every token
+    layer.persistent = persistent;
+    layer.persistent_loaded.store(false, std::memory_order_release);
+    return true;
+}
+
 void wf_set_active_experts(wf_context * wf, int layer_idx,
                            const int * expert_ids, int n_active) {
     if (!wf || layer_idx < 0 || layer_idx >= (int)wf->layers.size()) return;
@@ -6237,6 +6271,11 @@ bool wf_get_required_layer_fetch(wf_context * wf, int layer, uint64_t * bytes, d
 #ifdef WF_HAS_DSTORAGE
     if (!wf->required_dstorage || layer < 0 || layer >= int(wf->ds_waves.size())) return false;
     std::lock_guard<std::mutex> lock(wf->dma_timing_mutex);
+    for (auto it = wf->dma_timing_log.rbegin(); it != wf->dma_timing_log.rend(); ++it) {
+        if (it->layer_idx != layer) continue;
+        if (it->nbytes == 0 && wf->layers[layer].persistent) { *bytes = 0; *milliseconds = 0; return true; }
+        break;
+    }
     for (const auto & wave : wf->ds_waves[layer])
         for (size_t ri = 0; ri < wave.reqs.size(); ++ri) {
             // Routed stages count only the experts actually fetched.
