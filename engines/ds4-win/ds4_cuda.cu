@@ -39410,11 +39410,12 @@ static int cuda_stream_prefetch_issue(const ds4_gpu_stream_expert_table *current
             /* Highest priority: the next-layer read's copy-out (and its stream sync, which
              * gates reuse of the DS staging arena) then takes SMs as compute blocks retire
              * instead of waiting for whole compute kernels to end (ovl16k-prof: ~19 of 29
-             * waves per layer slipped to the join). DS4COMBO_PREFETCH_STREAM_PRIORITY=normal
-             * keeps the default priority for the A/B. */
+             * waves per layer slipped to the join). Measured no win (b22: join 3.76 vs 4.02 s,
+             * 16K 29.83 vs 26.87 s), so the DEFAULT is normal; DS4COMBO_PREFETCH_STREAM_PRIORITY=high
+             * opts in for A/Bs. */
             const char *prio_env = getenv("DS4COMBO_PREFETCH_STREAM_PRIORITY");
-            const bool normal = prio_env && strcmp(prio_env, "normal") == 0;
-            if (prio_env && !normal && strcmp(prio_env, "high") != 0) {
+            const bool normal = !prio_env || strcmp(prio_env, "high") != 0;
+            if (prio_env && normal && strcmp(prio_env, "normal") != 0) {
                 fprintf(stderr, "DS4COMBO_PREFETCH_STREAM_PRIORITY=%s is not high|normal; refusing the prefetch\n", prio_env);
                 throw 0;
             }

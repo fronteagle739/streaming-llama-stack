@@ -16788,7 +16788,10 @@ static ds4_backend default_server_backend(void) {
  * no silent mix. A mode whose buffers do not fit fails loudly at allocation. */
 static void apply_prefill_mode(const char *mode) {
     static const char *const ultra[][2] = {{"DS4_CUDA_MMQ", "1"}, {"DS4_CUDA_Q4K_MOE_MMQ", "1"}, {NULL, NULL}};
-    static const char *const fast[][2] = {{"DS4_CUDA_MMQ", "1"}, {"DS4_CUDA_Q4K_MOE_MMQ", "0"}, {NULL, NULL}};
+    /* fast: native-half PANEL experts (llama's fast/accurate expert path; DS4COMBO b22: 16K 28.56 s
+     * against 37.97 s for the Q8_K sorted-pairs class, 550 mean KL 0.0086). */
+    static const char *const fast[][2] = {{"DS4_CUDA_MMQ", "1"}, {"DS4_CUDA_Q4K_MOE_MMQ", "0"},
+                                          {"DS4_CUDA_Q4K_MOE_NATIVE_HALF", "panel"}, {NULL, NULL}};
     static const char *const accurate[][2] = {
         {"DS4_CUDA_MMQ", "0"}, {"DS4_CUDA_Q4K_MOE_MMQ", "0"}, {"DS4_CUDA_Q8_F32_ALL", "1"},
         {"DS4_CUDA_NO_TF32", "1"}, {"DS4_CUDA_NO_F16_CUBLAS_BATCH", "1"},
