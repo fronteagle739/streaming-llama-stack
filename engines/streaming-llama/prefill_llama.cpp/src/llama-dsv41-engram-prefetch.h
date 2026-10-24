@@ -2,6 +2,11 @@
 #include "llama-dsv41-engram.h"
 #include <functional>
 #include <memory>
+// LLAMADECODE_ENGRAM_EARLY=1 (read once). Off: none of the early paths run.
+bool llama_dsv41_engram_early_enabled();
+// The weight provider marks its DirectStorage pass active/idle; the early
+// loader reports its time-weighted overlap with it.
+void llama_dsv41_engram_weight_stream(bool active);
 class llama_dsv41_engram_prompt_cache {
     struct implementation;
     std::unique_ptr<implementation> p;
@@ -18,4 +23,11 @@ public:
     // table 0 (layer 1) need not wait for table 1 (layer 14). Throws when the
     // load failed or stop() reports cancellation.
     void wait_table(uint32_t,const std::function<bool()>&)const;
+    // LLAMADECODE_ENGRAM_EARLY only: the same rows/ids as prepare(), an IO
+    // arena sized from the admission headroom, and a multi-IoRing extent load
+    // (planner extents, batched submits, table 0 published before table 1).
+    // prior: the provider's last completed cache; its rows are copied, not read.
+    void prepare_early(const llama_dsv41::engram_layout&,const int32_t*,uint32_t,const std::array<uint64_t,2>&,uint64_t,
+                       llama_dsv41::engram_history,std::shared_ptr<const llama_dsv41_engram_prompt_cache> prior);
+    void load_early(const wchar_t*,void *verified_file,uint64_t,const std::function<bool()>&);
 };
