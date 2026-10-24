@@ -171,6 +171,11 @@ class ComboProducer:
         reply=self.process.request(self.command('decode',base=self.checkpoint,max_tokens=int(max_tokens),stop_tokens=[int(t) for t in stop_tokens]))
         self.checkpoint=reply['checkpoint'];return reply
 
+    def decode_forced(self,tokens,logits_path):
+        """LLAMADECODE gate: teacher-forced 1-row decode; writes one full F32 logits row per token."""
+        reply=self.process.request(self.command('decode_forced',base=self.checkpoint,tokens=[int(t) for t in tokens],logits_path=str(logits_path)))
+        self.checkpoint=reply['checkpoint'];return reply
+
     def export(self,ram):
         started=time.monotonic();cp=transport_checkpoint(self.checkpoint)
         with ram.lease():
