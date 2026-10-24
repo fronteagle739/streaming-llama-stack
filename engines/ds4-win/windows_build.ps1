@@ -231,7 +231,8 @@ if ($Target -eq "cuda") {
         "cuda/mmq/mmid.cu",
         "cuda/mmq/mmvq.cu",
         "cuda/mmq/quantize.cu",
-        "cuda/mmq/ds4_q4k_half.cu"
+        "cuda/mmq/ds4_q4k_half.cu",
+        "cuda/mmq/ds4_q4k_half_panel.cu"
     )
     foreach ($m in $mmqSources) {
         $obj = "mmq_" + [IO.Path]::GetFileNameWithoutExtension($m) + ".obj"

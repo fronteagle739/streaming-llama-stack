@@ -36227,22 +36227,33 @@ static int routed_moe_launch(
     /* Native-half Q4_K routed-MoE prefill (streaming-llama's accurate/fast expert path,
      * cuda/mmq/ds4_q4k_half.cu, ported verbatim): gate and up as separate MMID products,
      * clamp/SwiGLU x route weight, mid rounded to F16, down over the six ranks, then the
-     * fixed-order sum. Selected by DS4_CUDA_Q4K_MOE_NATIVE_HALF=1; when selected it serves
+     * fixed-order sum. Selected by DS4_CUDA_Q4K_MOE_NATIVE_HALF=1 (plain kernel) or =panel
+     * (llama's four-expert F16 panel + packed half RHS, 32 columns, ds4_q4k_half_panel.cu,
+     * same arithmetic); any other value refuses at first use. When selected it serves
      * every batched prefill call or fails loudly (no fallback to another arithmetic). The
      * borrowed loader holds one layer (<= 384 slots); a larger cache refuses. */
     static int q4k_native_half = -1;
     if (q4k_native_half < 0) {
         const char *v = getenv("DS4_CUDA_Q4K_MOE_NATIVE_HALF");
-        q4k_native_half = v && strcmp(v, "1") == 0;
-        if (q4k_native_half) fprintf(stderr, "DS4_Q4K_MOE_NATIVE_HALF on (streaming-llama native-half experts)\n");
+        q4k_native_half = !v || !v[0] || strcmp(v, "0") == 0 ? 0 : strcmp(v, "1") == 0 ? 1 :
+                          strcmp(v, "panel") == 0 ? 2 : 3;
+        if (q4k_native_half == 1) fprintf(stderr, "DS4_Q4K_MOE_NATIVE_HALF on (streaming-llama native-half experts)\n");
+        if (q4k_native_half == 2) fprintf(stderr, "DS4_Q4K_MOE_NATIVE_HALF panel (streaming-llama native-half panel "
+                                                  "experts, 32 columns)\n");
     }
+    if (q4k_native_half == 3) {
+        fprintf(stderr, "DS4_Q4K_MOE_NATIVE_HALF_FAILED unknown value (use 1 or panel); refusing (no fallback)\n");
+        return 0;
+    }
+    int (*const q4kh_moe)(const void *, const float *, const int32_t *, float *, int, int, int, int, int,
+                          cudaStream_t) = q4k_native_half == 2 ? ds4_q4k_half_panel_moe : ds4_q4k_half_moe;
     if (q4k_path && q4k_native_half && n_tokens > 1u && !owned_filtered) {
         const int32_t *ids = (const int32_t *)selected->ptr;
         const uint64_t n_assignments = (uint64_t)n_tokens * n_expert;
         int rc = n_expert == 6u && n_total_expert <= 384u ? 0 : -100;
-        if (!rc) rc = ds4_q4k_half_moe(gate_w, (const float *)x->ptr, ids, (float *)gate->ptr,
+        if (!rc) rc = q4kh_moe(gate_w, (const float *)x->ptr, ids, (float *)gate->ptr,
                 (int)expert_mid_dim, (int)expert_in_dim, (int)n_tokens, (int)n_total_expert, 1, (cudaStream_t)0);
-        if (!rc) rc = ds4_q4k_half_moe(up_w, (const float *)x->ptr, ids, (float *)up->ptr,
+        if (!rc) rc = q4kh_moe(up_w, (const float *)x->ptr, ids, (float *)up->ptr,
                 (int)expert_mid_dim, (int)expert_in_dim, (int)n_tokens, (int)n_total_expert, 1, (cudaStream_t)0);
         if (!rc) {
             const uint64_t mid_floats = n_assignments * expert_mid_dim;
@@ -36252,7 +36263,7 @@ static int routed_moe_launch(
             moe_round_f16_kernel<<<(uint32_t)((mid_floats + 255) / 256), 256>>>((float *)mid->ptr, mid_floats);
             rc = cuda_ok(cudaGetLastError(), "native-half moe swiglu") ? 0 : -101;
         }
-        if (!rc) rc = ds4_q4k_half_moe(down_w, (const float *)mid->ptr, ids, (float *)down->ptr,
+        if (!rc) rc = q4kh_moe(down_w, (const float *)mid->ptr, ids, (float *)down->ptr,
                 (int)out_dim, (int)expert_mid_dim, (int)n_tokens, (int)n_total_expert, 6, (cudaStream_t)0);
         if (!rc) {
             const uint64_t n = (uint64_t)n_tokens * out_dim;
@@ -39396,8 +39407,23 @@ static int cuda_stream_prefetch_issue(const ds4_gpu_stream_expert_table *current
         if (cudaGetDevice(&p.device) != cudaSuccess) return 0;
         if (!p.stream) {
             p.stage_bytes = (UINT64_C(8) << 20) + p.align;
-            if (cudaStreamCreateWithFlags(&p.stream, cudaStreamNonBlocking) != cudaSuccess)
+            /* Highest priority: the next-layer read's copy-out (and its stream sync, which
+             * gates reuse of the DS staging arena) then takes SMs as compute blocks retire
+             * instead of waiting for whole compute kernels to end (ovl16k-prof: ~19 of 29
+             * waves per layer slipped to the join). DS4COMBO_PREFETCH_STREAM_PRIORITY=normal
+             * keeps the default priority for the A/B. */
+            const char *prio_env = getenv("DS4COMBO_PREFETCH_STREAM_PRIORITY");
+            const bool normal = prio_env && strcmp(prio_env, "normal") == 0;
+            if (prio_env && !normal && strcmp(prio_env, "high") != 0) {
+                fprintf(stderr, "DS4COMBO_PREFETCH_STREAM_PRIORITY=%s is not high|normal; refusing the prefetch\n", prio_env);
                 throw 0;
+            }
+            int least = 0, greatest = 0;
+            if (cudaDeviceGetStreamPriorityRange(&least, &greatest) != cudaSuccess) throw 0;
+            if (cudaStreamCreateWithPriority(&p.stream, cudaStreamNonBlocking, normal ? least : greatest) != cudaSuccess)
+                throw 0;
+            fprintf(stderr, "DS4COMBO_PREFETCH_STREAM priority=%d (%s; range least=%d greatest=%d)\n",
+                    normal ? least : greatest, normal ? "normal" : "high", least, greatest);
             for (unsigned i = 0; i < 2; i++) {
                 if (cudaMallocHost(&p.stage_raw[i], p.stage_bytes + p.align) != cudaSuccess ||
                     cudaEventCreateWithFlags(&p.ready[i], cudaEventDisableTiming) != cudaSuccess)

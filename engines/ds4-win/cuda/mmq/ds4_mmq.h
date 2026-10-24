@@ -261,6 +261,10 @@ int ds4_mmq_q2_K_moe_soa(
 int ds4_q4k_half_moe(const void *W, const float *X, const int32_t *ids, float *out, int M, int K,
                      int tokens, int experts, int channels, cudaStream_t stream);
 int ds4_q4k_half_loader_golden(const void *source, void *out_half, int64_t k, int64_t rows, cudaStream_t stream);
+/* Same contract, llama's panel variant (ds4_q4k_half_panel.cu): four-expert natural-F16
+ * panels and a once-per-product half RHS gather, 32 columns. */
+int ds4_q4k_half_panel_moe(const void *W, const float *X, const int32_t *ids, float *out, int M, int K,
+                           int tokens, int experts, int channels, cudaStream_t stream);
 
 int ds4_mmq_q4_K_moe(
     const void    * W,
