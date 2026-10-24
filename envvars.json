@@ -46172,8 +46172,8 @@
   {
     "var": "LLAMADECODE_APPEND_DECODE_MAX",
     "flag": null,
-    "default": "128",
-    "code_default": "Unset: 128 tokens; 0 disables (every append runs the weight sweep)",
+    "default": "96",
+    "code_default": "Unset: 96 tokens (measured crossover); 0 disables (every append runs the weight sweep)",
     "classification": "preset",
     "scopes": [
       "rtx-llama"
