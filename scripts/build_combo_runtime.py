@@ -65,6 +65,12 @@ def relocate_runtime(cfg,installed,revision):
     # installed copy staged as combo-prefill-<profile>.exe.
     for name,row in (result.get('combo_crossover_profiles') or {}).items():
         if 'llama_producer' in row:row['llama_producer']=str(installed/profile_producer(name))
+        # A profile's own parity evidence is staged under qualification/<profile>/.
+        if 'combo_qualification_root' in row:
+            proof=installed/'qualification'/name
+            row['combo_qualification_root']=str(proof)
+            row['combo_native_binding']=str(proof/'native-parity-binding.json')
+            if 'combo_ultra_guard' in row:row['combo_ultra_guard']=str(proof/'ultra-parity.receipt.json')
     result['ds4_command'][0]=str(installed/'native/ds4-server.exe')
     result['producer_library_directories']=[str(installed/'native'),
         *[p for p in cfg['producer_library_directories'] if not Path(p).resolve().is_relative_to(scratch)]]
@@ -137,6 +143,12 @@ def stage(args):
         if 'llama_producer' in row:
             if sha(row['llama_producer'])!=row.get('producer_sha256'):raise ValueError('Profile producer pin differs: '+name)
             copy(row['llama_producer'],profile_producer(name))
+        if 'combo_qualification_root' in row:
+            proof=Path(row['combo_qualification_root'])
+            copy(proof/'native-parity.json',f'qualification/{name}/native-parity.json')
+            copy(proof/'ultra-parity.json',f'qualification/{name}/ultra-parity.json')
+            copy(row['combo_native_binding'],f'qualification/{name}/native-parity-binding.json')
+            if 'combo_ultra_guard' in row:copy(row['combo_ultra_guard'],f'qualification/{name}/ultra-parity.receipt.json')
     native=Path(cfg['ds4_command'][0]).parent
     for name in ('dstorage.dll','dstoragecore.dll'):
         copy(native/name,name);copy(native/name,'native/'+name)
