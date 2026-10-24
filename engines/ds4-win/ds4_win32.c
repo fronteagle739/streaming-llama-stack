@@ -249,6 +249,17 @@ bool ds4_win32_host_memory_begin(void) {
         ds4_win32_host_memory_report("REFUSED_INITIAL_PRIVATE_LIMIT", "startup", 0, &state);
         goto done;
     }
+#ifdef DS4_EXTERNAL_DECODE
+    /* LLAMADECODE ds4-decode.dll: the host process owns admission, its Job and
+     * its lifetime. No nested Job, no commit cap and no watchdog thread (which
+     * could terminate the host and would outlive an unloaded DLL). Allocation
+     * checks still measure the same physical reserve. */
+    g_host_memory_limit = cap;
+    g_host_memory_ready = 1;
+    ds4_win32_host_memory_report("ADMITTED_EXTERNAL_NO_JOB_NO_WATCHDOG", "startup", 0, &state);
+    ok = true;
+    goto done;
+#endif
     g_host_memory_job = CreateJobObjectW(NULL, NULL);
     g_host_memory_port = CreateIoCompletionPort(INVALID_HANDLE_VALUE, NULL, 0, 1);
     JOBOBJECT_ASSOCIATE_COMPLETION_PORT association = {0};
