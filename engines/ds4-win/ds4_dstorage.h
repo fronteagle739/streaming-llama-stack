@@ -87,6 +87,9 @@ int ds4_ds_prefill_wave_build(uint32_t index,
                               uint32_t count);
 int ds4_ds_prefill_wave_submit(uint32_t index, uint64_t *out_fence_value);
 int ds4_ds_prefill_wave_cuda_wait(uint64_t fence_value, void *cuda_stream);
+/* DS4COMBO diagnostic: CUDA waits (on cuda_stream) for the GPU writes of the
+ * last GPU-destination ds4_ds_batch_submit_wait() via the shared fence. */
+int ds4_ds_gpu_fence_wait_last(void *cuda_stream);
 int ds4_ds_prefill_waves_check_errors(void);
 void ds4_ds_prefill_waves_release(void);
 
