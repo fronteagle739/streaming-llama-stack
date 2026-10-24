@@ -101,6 +101,56 @@
       "source_commit": "5b39c3abf34523c69fb761f7dd174c710d3a7eb1",
       "selected": null,
       "changes": "Optional post-resume admission callback before readiness; existing failure teardown retained. Reused integration pattern from private fork 543a76c5126f6bcc2400307dd13c82b4407857dd."
+    },
+    {
+      "path": "project_context.py",
+      "source_sha256": "a94fcde9bc0b32466833dcacd4e67e8b607afcf798422bf615206406e4811037",
+      "selected": null
+    },
+    {
+      "path": "generation_contract.py",
+      "source_sha256": "464230fb920d8c768e69658b196c5cbd7b45d5b17f6acc27486cf0d6574b8daf",
+      "selected": null
+    },
+    {
+      "path": "two_pass.py",
+      "source_sha256": "22802e5e44c3854b587861467858bee09d4347e94fcefeb7c4655c921e1715e3",
+      "selected": null
+    },
+    {
+      "path": "generation_loras.py",
+      "source_sha256": "78da84a341bf20db53d867b3e00165e77b747b31c8d0f3fc66d0a38f9dc74fb2",
+      "selected": null
+    },
+    {
+      "path": "audio.py",
+      "source_sha256": "cdd23c219ac797f449e18d4481e4804696851a3ab8c81da2a6e9c0d96bbb2fe1",
+      "selected": null
+    },
+    {
+      "path": "audio_tts_session.py",
+      "source_sha256": "315addb1498f628398ba68b77a22402b6a26b5ad5945607a58e3d79a6ab3618e",
+      "selected": null
+    },
+    {
+      "path": "settings_store.py",
+      "source_sha256": "ad9c4172b4db532c7c4446b475d4c5c9fbaadb0ccdefc44b053b51ecf4d7da8c",
+      "selected": null
+    },
+    {
+      "path": "cosmos_conditioning.py",
+      "source_sha256": "b445e287d747d41571e72a49f06d2e30c8b3e5bdb94105fa3f31946e24d7933c",
+      "selected": null
+    },
+    {
+      "path": "stream_capability.py",
+      "source_sha256": "979d50df9785889edd5b482477de7acf228135e923cc6b9c8056dc1e8b4c5f13",
+      "selected": null
+    },
+    {
+      "path": "attention_contract.py",
+      "source_sha256": "8d33a29b83aff715ce12efb2d068016a720cc30b13d6b8f5a809f4609ad3a9fb",
+      "selected": null
     }
   ],
   "quality_speed": {
