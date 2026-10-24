@@ -34,6 +34,9 @@ static_assert(sizeof(DSTORAGE_REQUEST)+sizeof(int32_t)<=512,"Requalify strict re
 #endif
 #if defined(GGML_USE_CUDA)
 #include "ggml-cuda.h"
+#ifdef GGML_USE_CUDA
+#include <cuda_runtime.h>
+#endif
 #endif
 
 namespace {
@@ -71,6 +74,30 @@ struct llama_dsv41_weight_provider::implementation {
     std::vector<int32_t>slot_key;std::unordered_map<int32_t,int32_t>key_slot;
     std::list<int32_t>lru;std::vector<std::list<int32_t>::iterator>lru_pos;
     uint64_t cache_hits=0,cache_misses=0,cache_bytes=0;double cache_ms=0;
+    // LLAMADECODE bind-once: set after a complete decode-layout pass; cleared on any layout rebuild.
+    bool resident_bound=false;
+    static bool bind_once_enabled(){static const bool on=[]{const char*e=std::getenv("LLAMADECODE_BIND_ONCE");return !(e&&e[0]=='0'&&!e[1]);}();return on;}
+    bool bound()const{return decode_layout&&resident_bound&&bind_once_enabled();}
+    // LLAMADECODE L2 (exclusive victim tier, own VRAM buffer: [gate|up|down] x l2_slots).
+    ggml_backend_buffer_ptr l2_buffer;uint32_t l2_slots=0;std::array<char*,3>l2_base{};
+    std::vector<int32_t>l2_key;std::unordered_map<int32_t,int32_t>l2_of;
+    std::list<int32_t>l2_lru;std::vector<std::list<int32_t>::iterator>l2_pos;
+    uint64_t l2_hits=0,l2_stored=0;
+    void copy_slot(char*const dst[3],uint64_t dst_slot,const char*const src[3],uint64_t src_slot,void*stream){
+#ifdef GGML_USE_CUDA
+        for(uint32_t k=0;k<3;++k)require(cudaMemcpyAsync(dst[k]+dst_slot*pool_stride[k],src[k]+src_slot*pool_stride[k],pool_stride[k],
+            cudaMemcpyDeviceToDevice,static_cast<cudaStream_t>(stream))==cudaSuccess,"Expert L2 slot copy failed");
+#else
+        (void)dst;(void)dst_slot;(void)src;(void)src_slot;(void)stream;throw std::runtime_error("Expert L2 requires CUDA");
+#endif
+    }
+    void release_l2(){
+        if(l2_buffer&&options.backend)ggml_backend_synchronize(options.backend);
+#ifdef GGML_USE_CUDA
+        if(l2_buffer)cudaDeviceSynchronize();
+#endif
+        l2_buffer.reset();l2_slots=0;l2_base={};l2_key.clear();l2_of.clear();l2_lru.clear();l2_pos.clear();
+    }
     // LLAMADECODE B2: LRU over (layer, expert). Hits move to the front first,
     // so a miss never evicts an expert this same request needs. Only misses
     // are fetched (explicit DirectStorage extents into bank 0).
@@ -81,17 +108,39 @@ struct llama_dsv41_weight_provider::implementation {
         for(const auto e:unique){const int32_t key=int32_t(layer)*384+e;auto it=key_slot.find(key);
             if(it!=key_slot.end()){slot_of[e]=it->second;lru.splice(lru.begin(),lru,lru_pos[size_t(it->second)]);++cache_hits;}
             else missing.push_back(e);}
-        std::vector<wf_extent>extents;
+        std::vector<wf_extent>extents;bool copied=false;
+        char*const l1[3]={static_cast<char*>(pool[0]->data),static_cast<char*>(pool[1]->data),static_cast<char*>(pool[2]->data)};
         for(const auto e:missing){
             const int32_t slot=lru.back();lru.splice(lru.begin(),lru,lru_pos[size_t(slot)]);
-            if(slot_key[size_t(slot)]>=0)key_slot.erase(slot_key[size_t(slot)]);
-            const int32_t key=int32_t(layer)*384+e;slot_key[size_t(slot)]=key;key_slot[key]=slot;slot_of[e]=slot;++cache_misses;
+            const int32_t key=int32_t(layer)*384+e;
+            int32_t from_l2=-1;
+            if(l2_slots){auto it=l2_of.find(key);if(it!=l2_of.end()){from_l2=it->second;l2_lru.splice(l2_lru.begin(),l2_lru,l2_pos[size_t(from_l2)]);}}
+            const int32_t victim=slot_key[size_t(slot)];
+            if(victim>=0){key_slot.erase(victim);
+                if(l2_slots>=2){   // keep the evicted expert in L2 (its least-recent slot; never the one read below)
+                    const int32_t t=l2_lru.back();require(t!=from_l2,"Expert L2 victim slot collides with its source");
+                    l2_lru.splice(l2_lru.begin(),l2_lru,l2_pos[size_t(t)]);
+                    if(l2_key[size_t(t)]>=0)l2_of.erase(l2_key[size_t(t)]);
+                    copy_slot(l2_base.data(),uint64_t(t),l1,uint64_t(slot),stream);copied=true;l2_key[size_t(t)]=victim;l2_of[victim]=t;++l2_stored;
+                }}
+            slot_key[size_t(slot)]=key;key_slot[key]=slot;slot_of[e]=slot;
+            if(from_l2>=0){
+                copy_slot(l1,uint64_t(slot),l2_base.data(),uint64_t(from_l2),stream);copied=true;
+                l2_of.erase(key);l2_key[size_t(from_l2)]=-1;l2_lru.splice(l2_lru.end(),l2_lru,l2_pos[size_t(from_l2)]);++l2_hits;
+                continue;
+            }
+            ++cache_misses;
             for(uint32_t k=0;k<3;++k){
                 uint64_t file=0;for(const auto&entry:stages[layer+1].entries)if(entry.t==routed[layer*3+k])file=entry.file_offset;
                 require(file,"Routed expert file extent missing");
                 extents.push_back({add(file,uint64_t(e)*pool_stride[k]),add(pool_offset[k],uint64_t(slot)*pool_stride[k]),pool_stride[k],0});
             }
         }
+#ifdef GGML_USE_CUDA
+        // Slot copies complete before DirectStorage overwrites any copied-from L1 slot
+        // and before an external decoder (own stream) reads the copied-in slots.
+        if(copied)require(cudaStreamSynchronize(static_cast<cudaStream_t>(stream))==cudaSuccess,"Expert L2 copy synchronization failed");
+#endif
         if(!extents.empty()){
             uint64_t bytes=0;double fetch_ms=0;
             // A failed or partial fetch poisons the provider (guard); the slot table is then discarded with it.
@@ -174,9 +223,10 @@ struct llama_dsv41_weight_provider::implementation {
         join_early();
         engram_prompt.reset();
         if(options.backend&&allocated)ggml_backend_synchronize(options.backend);
+        release_l2();
         if(fetcher){wf_stop(fetcher);wf_quiesce(fetcher);wf_destroy(fetcher);fetcher=nullptr;}
         for(auto&s:stages)for(auto&e:s.entries){e.t->data=nullptr;e.t->buffer=nullptr;}
-        buffers.clear();allocated=false;leased=false;
+        buffers.clear();allocated=false;leased=false;resident_bound=false;
     }
     template<class F>bool guard(F fn,std::string&error){
         std::lock_guard<std::mutex>lock(mutex);
@@ -360,6 +410,16 @@ struct llama_dsv41_weight_provider::implementation {
     }
     void acquire(uint32_t id){
         require(allocated&&!device_suspended&&(!leased||(dense_held>=0&&uint32_t(dense_held)+1==id))&&next==id&&id<stage_count(),"V4.1 physical stage acquired out of order or while device-suspended");identity();
+        if(bound()){   // resident in place: no fetcher handshake
+            auto*bank=buffers[id%2].get();auto*at=static_cast<char*>(ggml_backend_buffer_get_base(bank));
+            const bool prebound=id>=2&&id<=80&&id%2==0&&experts_prebound;
+            for(auto&e:stage_at(id).entries){
+                if(prebound){require(e.t->buffer==bank&&e.t->data==at+e.gpu_offset,"Shared-expert stage outside its pre-bound bank");continue;}
+                require(ggml_backend_tensor_alloc(bank,e.t,at+e.gpu_offset)==GGML_STATUS_SUCCESS,"Cannot bind resident native tensor");
+            }
+            if(prebound)experts_prebound=false;
+            leased=true;return;
+        }
         auto*base=wf_wait_layer_gpu(fetcher,int(id));require(base,"Required DirectStorage layer transfer failed");
         wf_cuda_wait_upload(fetcher,int(id));
         require(!wf_has_failed(fetcher),"Required DirectStorage upload synchronization failed");
@@ -511,9 +571,10 @@ bool llama_dsv41_weight_provider::restart_prompt(const config&options,std::strin
         require(!options.decode_layout||(p->options.compute_direct&&p->options.buffers==2&&!p->options.zero_padding_only),
             "Decode layout requires the strict two-bank direct fetch profile");
         const auto started=std::chrono::steady_clock::now();
+        p->release_l2();   // LLAMADECODE: the decode-only L2 returns its VRAM before the prefill plan is restored
         wf_destroy(p->fetcher);p->fetcher=nullptr;
         for(auto&s:p->stages)for(auto&e:s.entries){e.t->data=nullptr;e.t->buffer=nullptr;}
-        p->buffers.clear();p->decode_layout=options.decode_layout;p->experts_prebound=false;p->dense_held=-1;p->create_pipeline();
+        p->buffers.clear();p->decode_layout=options.decode_layout;p->experts_prebound=false;p->dense_held=-1;p->resident_bound=false;p->create_pipeline();
         wf_stop(p->fetcher);wf_quiesce(p->fetcher);require(!wf_has_failed(p->fetcher),"Switched provider could not quiesce before request start");
         std::fprintf(stderr,"LLAMADECODE_LAYOUT_SWITCH decode=%d switch_ms=%.3f same_admission=1\n",int(p->decode_layout),
             std::chrono::duration<double,std::milli>(std::chrono::steady_clock::now()-started).count());
@@ -524,7 +585,7 @@ bool llama_dsv41_weight_provider::restart_prompt(const config&options,std::strin
 },error);}
 bool llama_dsv41_weight_provider::start_request(std::string&error){return p->guard([&]{
     require(p->allocated&&!p->device_suspended&&!p->leased&&p->next==0,"Request start requires an admitted resident unleased first stage");p->identity();
-    p->fetched_total=0;p->fetch_ms_total=0;wf_start(p->fetcher);
+    p->fetched_total=0;p->fetch_ms_total=0;if(!p->bound())wf_start(p->fetcher);
     require(!wf_has_failed(p->fetcher),"Persistent DirectStorage restart failed");
 },error);}
 llama_dsv41_weight_provider::capacity llama_dsv41_weight_provider::budget()const{std::lock_guard<std::mutex>lock(p->mutex);return p->inspected&&!p->poisoned?p->planned:capacity{};}
@@ -634,6 +695,7 @@ bool llama_dsv41_weight_provider::prepare_external_decode(const config&options,s
             for(auto&e:p->stage_at(id).entries){e.t->data=nullptr;e.t->buffer=nullptr;}
             wf_release_layer(p->fetcher,int(id));require(!wf_has_failed(p->fetcher),"Resident pass release failed");p->leased=false;++p->next;
         }
+        p->resident_bound=true;
         std::fprintf(stderr,"LLAMADECODE_EXTERNAL_RESIDENT stages=%u bytes=%llu ms=%.3f\n",p->stage_count(),(unsigned long long)p->fetched_total,
             std::chrono::duration<double,std::milli>(std::chrono::steady_clock::now()-started).count());
     },error);
@@ -656,11 +718,30 @@ bool llama_dsv41_weight_provider::external_expert_slots(uint32_t layer,const int
     *slot_count=p->pool_slots;
 },error);}
 llama_dsv41_weight_provider::expert_cache_stats llama_dsv41_weight_provider::cache_stats()const{std::lock_guard<std::mutex>lock(p->mutex);
-    expert_cache_stats s;s.slots=p->pool_slots;s.hits=p->cache_hits;s.misses=p->cache_misses;s.fetched_bytes=p->cache_bytes;s.fetch_ms=p->cache_ms;return s;}
+    expert_cache_stats s;s.slots=p->pool_slots;s.hits=p->cache_hits;s.misses=p->cache_misses;s.fetched_bytes=p->cache_bytes;s.fetch_ms=p->cache_ms;
+    s.l2_slots=p->l2_slots;s.l2_hits=p->l2_hits;s.l2_stored=p->l2_stored;return s;}
+uint64_t llama_dsv41_weight_provider::decode_cache_slot_bytes()const{return p->pool_stride[0]+p->pool_stride[1]+p->pool_stride[2];}
+bool llama_dsv41_weight_provider::grow_decode_cache(uint64_t bytes,uint32_t*slots,std::string&error){return p->guard([&]{
+    require(slots&&p->decode_layout&&p->pool[0]&&p->pool[0]->data&&!p->l2_buffer&&!p->leased,"Expert L2 requires an idle decode-layout provider without an L2");
+    const uint64_t slot_bytes=p->pool_stride[0]+p->pool_stride[1]+p->pool_stride[2];
+    const uint32_t n=uint32_t(std::min<uint64_t>(bytes/slot_bytes,40ull*384-p->pool_slots));*slots=0;
+    if(n<2){std::fprintf(stderr,"LLAMADECODE_L2 slots=0 offered_bytes=%llu\n",(unsigned long long)bytes);return;}
+    const auto buft=ggml_backend_get_default_buffer_type(p->options.backend);
+    auto*buffer=ggml_backend_buft_alloc_buffer(buft,size_t(uint64_t(n)*slot_bytes));
+    require(buffer,"Expert L2 VRAM allocation failed");p->l2_buffer.reset(buffer);
+    auto*base=static_cast<char*>(ggml_backend_buffer_get_base(buffer));
+    p->l2_base={base,base+uint64_t(n)*p->pool_stride[0],base+uint64_t(n)*(p->pool_stride[0]+p->pool_stride[1])};
+    p->l2_slots=n;p->l2_key.assign(n,-1);p->l2_of.clear();p->l2_lru.clear();p->l2_pos.assign(n,p->l2_lru.end());
+    for(uint32_t s=0;s<n;++s){p->l2_lru.push_back(int32_t(s));p->l2_pos[s]=std::prev(p->l2_lru.end());}
+    *slots=n;
+    std::fprintf(stderr,"LLAMADECODE_L2 slots=%u bytes=%llu l1_slots=%u total_vram_slots=%u offered_bytes=%llu\n",n,
+        (unsigned long long)(uint64_t(n)*slot_bytes),p->pool_slots,p->pool_slots+n,(unsigned long long)bytes);
+},error);}
 bool llama_dsv41_weight_provider::release(std::string&error){return p->guard([&]{require(p->leased&&p->next<p->stage_count(),"No physical weight lease to release");ggml_backend_synchronize(p->options.backend);
     if(p->dense_held>=0){ // LLAMADECODE B1: release the held dense stage first (stage order)
         for(auto&e:p->decode_stages[size_t(p->dense_held)].entries){e.t->data=nullptr;e.t->buffer=nullptr;}
-        wf_release_layer(p->fetcher,p->dense_held);require(!wf_has_failed(p->fetcher),"Dense stage release failed");p->dense_held=-1;}for(auto&e:p->stage_at(p->next).entries){e.t->data=nullptr;e.t->buffer=nullptr;}wf_release_layer(p->fetcher,int(p->next));require(!wf_has_failed(p->fetcher),"Required DirectStorage compute release failed");p->leased=false;++p->next;},error);}
+        if(!p->bound())wf_release_layer(p->fetcher,p->dense_held);require(!wf_has_failed(p->fetcher),"Dense stage release failed");p->dense_held=-1;}for(auto&e:p->stage_at(p->next).entries){e.t->data=nullptr;e.t->buffer=nullptr;}if(!p->bound())wf_release_layer(p->fetcher,int(p->next));require(!wf_has_failed(p->fetcher),"Required DirectStorage compute release failed");p->leased=false;++p->next;
+    if(p->decode_layout&&p->next==p->stage_count()&&!p->resident_bound&&p->bind_once_enabled()){p->resident_bound=true;std::fprintf(stderr,"LLAMADECODE_BIND_ONCE stages=%u resident_in_place=1\n",p->stage_count());}},error);}
 void llama_dsv41_weight_provider::invalidate(){if(!p)return;std::lock_guard<std::mutex>lock(p->mutex);p->invalidate();}
 bool llama_dsv41_weight_provider::advance_decoded_engram(llama_dsv41::engram_history&history,
         const int32_t*tokens,size_t count,std::string&error){return p->guard([&]{

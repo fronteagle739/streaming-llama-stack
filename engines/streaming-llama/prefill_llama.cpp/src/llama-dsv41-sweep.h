@@ -143,6 +143,8 @@ public:
     bool commit_external_token(int32_t token,const std::vector<float> &logits,std::string &error);
     // The provider of this completed owner (resident decode weights, expert cache).
     llama_dsv41_weight_provider *provider_for_external_decode();
+    // LLAMADECODE: decode-sized fixed plan for an external decoder (no executor runs).
+    bool compact_for_external_decode(std::string &error);
 private:
     struct implementation;
     std::unique_ptr<implementation>p;
