@@ -35,6 +35,12 @@ struct llama_dsv41_fixed_storage {
     // provider heaps -> fixed reserve -> first stage lease) instead of a
     // throwaway one-token pass that streams every weight once (~20 s).
     bool direct_open=false;
+    // LLAMADECODE decode-sized plan: during one-token steps the prefill-sized
+    // graph reservation and resident hidden bank are replaced by 1-row sizes
+    // (the freed VRAM holds the L2 expert cache); the next multi-token append
+    // restores the exact prefill reservations first.
+    bool decode_compact=false;
+    uint64_t full_graph_reserve=0,full_hidden_bytes=0;
 };
 
 class llama_dsv41_tile_executor {

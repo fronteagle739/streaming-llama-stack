@@ -178,6 +178,41 @@ struct llama_dsv41_sweep::implementation {
 llama_dsv41_sweep::llama_dsv41_sweep():p(new implementation){}
 llama_dsv41_sweep::~llama_dsv41_sweep()=default;
 
+// LLAMADECODE decode-sized fixed plan. One-token steps need a 1-row graph and
+// hidden bank; the prefill-sized reservations go back to the device (the
+// decode L2 expert cache uses them). LLAMADECODE_DECODE_COMPACT=0 disables.
+static bool decode_compact_enabled(){static const bool on=[]{const char*e=std::getenv("LLAMADECODE_DECODE_COMPACT");return !(e&&e[0]=='0'&&!e[1]);}();return on;}
+static void compact_fixed(llama_dsv41_fixed_storage&f,uint64_t admitted_hidden){
+    require(f.ready&&f.graph&&!f.decode_compact,"Decode compaction requires the ready prefill plan");
+    ggml_backend_synchronize(f.backend);
+    const uint64_t old_graph=ggml_gallocr_get_buffer_size(f.graph.get(),0),old_hidden=f.hidden?ggml_backend_buffer_get_size(f.hidden.get()):0;
+    f.full_graph_reserve=f.graph_bytes;f.full_hidden_bytes=f.hidden_bytes;
+    f.graph=std::shared_ptr<ggml_gallocr>(ggml_gallocr_new(ggml_backend_get_default_buffer_type(f.backend)),ggml_gallocr_free);
+    require(bool(f.graph),"Decode graph allocator creation failed");f.graph_bytes=0;
+    if(f.hidden){f.hidden.reset();f.hidden=llama_dsv41_tile_executor::reserve_hidden(f.backend,1,f.tile,f.bf16,f.ids,f.metadata,admitted_hidden);
+        f.hidden_bytes=ggml_backend_buffer_get_size(f.hidden.get());}
+    f.decode_compact=true;
+    std::fprintf(stderr,"LLAMADECODE_DECODE_COMPACT graph_bytes=%llu->dynamic hidden_bytes=%llu->%llu\n",(unsigned long long)old_graph,(unsigned long long)old_hidden,(unsigned long long)f.hidden_bytes);
+}
+static void restore_fixed(llama_dsv41_fixed_storage&f,uint64_t admitted_hidden){
+    require(f.ready&&f.decode_compact,"Prefill restore requires a compacted decode plan");
+    ggml_backend_synchronize(f.backend);
+    f.graph.reset();f.hidden.reset();
+    f.graph=std::shared_ptr<ggml_gallocr>(ggml_gallocr_new(ggml_backend_get_default_buffer_type(f.backend)),ggml_gallocr_free);
+    require(bool(f.graph),"Prefill graph allocator re-creation failed");
+    if(f.full_graph_reserve){
+        ggml_context_ptr metadata(ggml_init({65536,nullptr,true}));require(bool(metadata),"Prefill graph re-reservation metadata failed");
+        auto*space=ggml_new_tensor_1d(metadata.get(),GGML_TYPE_I8,int64_t(f.full_graph_reserve));ggml_set_output(space);
+        auto*graph=ggml_new_graph_custom(metadata.get(),16,false);ggml_build_forward_expand(graph,space);
+        require(ggml_gallocr_reserve(f.graph.get(),graph),"Prefill graph re-reservation failed");
+        require(ggml_gallocr_get_buffer_size(f.graph.get(),0)==f.full_graph_reserve,"Prefill graph re-reservation differs");
+    }
+    f.graph_bytes=f.full_graph_reserve;
+    if(f.full_hidden_bytes){f.hidden=llama_dsv41_tile_executor::reserve_hidden(f.backend,f.tokens,f.tile,f.bf16,f.ids,f.metadata,admitted_hidden);
+        f.hidden_bytes=ggml_backend_buffer_get_size(f.hidden.get());require(f.hidden_bytes==f.full_hidden_bytes,"Prefill hidden re-reservation differs");}
+    f.decode_compact=false;
+    std::fprintf(stderr,"LLAMADECODE_PREFILL_RESTORE graph_bytes=%llu hidden_bytes=%llu\n",(unsigned long long)f.graph_bytes,(unsigned long long)f.hidden_bytes);
+}
 bool llama_dsv41_sweep::open(const llama_dsv41_weight_provider::config &weights,const config &options,std::string &error,llama_dsv41_sweep *warmup,llama_dsv41_sweep *prefix,const native_base*restored){
     std::unique_lock<std::mutex>lock(p->mutex,std::try_to_lock);error.clear();
     if(!lock.owns_lock()){error="V4.1 sweep is already active";return false;}
@@ -392,7 +427,12 @@ bool llama_dsv41_sweep::open(const llama_dsv41_weight_provider::config &weights,
                 f.cache_bytes=f.cache->allocated_bytes();f.ready=true;
                 ggml_backend_synchronize(f.backend);
                 llama_dsv41_layer_log("DS4PERF_FIXED_BEFORE_FIRST_LEASE tokens=%u tile=%u graph_bytes=%llu hidden_bytes=%llu cache_bytes=%llu existing_allocators=1 provider_heaps_created=1\n",f.tokens,f.tile,(unsigned long long)f.graph_bytes,(unsigned long long)f.hidden_bytes,(unsigned long long)f.cache_bytes);
-            }else require((warmup||prefix)&&f.backend==weights.backend&&f.graph&&(f.hidden||!options.admitted_hidden_bytes)&&f.cache,"Fixed GPU buffers lost their completed request owner");
+            }else{
+                require((warmup||prefix)&&f.backend==weights.backend&&f.graph&&(f.hidden||!options.admitted_hidden_bytes)&&f.cache,"Fixed GPU buffers lost their completed request owner");
+                // LLAMADECODE decode-sized plan (the previous owner's executor is already gone).
+                if(options.carry.tokens==1&&prefix&&!f.decode_compact&&decode_compact_enabled())compact_fixed(f,options.admitted_hidden_bytes);
+                else if(options.carry.tokens>1&&f.decode_compact)restore_fixed(f,options.admitted_hidden_bytes);
+            }
         }
         require(p->provider.backend()==p->backend,"V4.1 staged provider/backend identity changed");
         const auto actual=p->provider.budget();
@@ -688,8 +728,8 @@ bool llama_dsv41_sweep::run(const std::vector<int32_t>&tokens,const cancelled&st
         p->measured.prompt_processing_ms=std::chrono::duration<double,std::milli>(head_complete-run_started).count();
         if(!llama_dsv41_layer_log_on()){ // LLAMADECODE: one line per decode step instead of per-layer logs
             uint64_t ds_bytes=0;double ds_ms=0;p->provider.fetch_totals(ds_bytes,ds_ms);const auto cache=p->provider.cache_stats();
-            std::fprintf(stderr,"LLAMADECODE_TOKEN position=%u wall_ms=%.3f ds_bytes=%llu ds_transfer_ms=%.3f stage_wait_ms=%.3f executor_ms=%.3f compute_ms=%.3f prepare_ms=%.3f cache_slots=%u cache_hits_total=%llu cache_misses_total=%llu\n",
-                p->position_offset,p->measured.prompt_processing_ms,(unsigned long long)ds_bytes,ds_ms,token_acquire_ms,token_executor_ms,token_compute_ms,token_prepare_ms,cache.slots,(unsigned long long)cache.hits,(unsigned long long)cache.misses);
+            std::fprintf(stderr,"LLAMADECODE_TOKEN position=%u wall_ms=%.3f ds_bytes=%llu ds_transfer_ms=%.3f stage_wait_ms=%.3f executor_ms=%.3f compute_ms=%.3f prepare_ms=%.3f cache_slots=%u cache_hits_total=%llu cache_misses_total=%llu l2_slots=%u l2_hits_total=%llu\n",
+                p->position_offset,p->measured.prompt_processing_ms,(unsigned long long)ds_bytes,ds_ms,token_acquire_ms,token_executor_ms,token_compute_ms,token_prepare_ms,cache.slots,(unsigned long long)cache.hits,(unsigned long long)cache.misses,cache.l2_slots,(unsigned long long)cache.l2_hits);
         }
         llama_dsv41_layer_log("DS4PERF_PROMPT_HEAD_COMPLETE tokens=%zu processing_ms=%.6f bulk_hidden_export_pending=%u\n",owned.size(),p->measured.prompt_processing_ms,unsigned(p->options.carry.export_hidden_after_head));
         if(p->options.carry.export_hidden_after_head){
@@ -886,6 +926,14 @@ bool llama_dsv41_sweep::commit_external_token(int32_t token,const std::vector<fl
     }catch(const std::exception&failure){p->poison();error=failure.what();return false;}
 }
 llama_dsv41_weight_provider*llama_dsv41_sweep::provider_for_external_decode(){return &p->provider;}
+bool llama_dsv41_sweep::compact_for_external_decode(std::string&error){
+    std::lock_guard<std::mutex>lock(p->mutex);error.clear();
+    try{
+        require(p->state==implementation::completed&&!p->executor&&p->options.fixed,"External decode compaction requires a completed idle fixed owner");
+        if(!p->options.fixed->decode_compact&&decode_compact_enabled())compact_fixed(*p->options.fixed,p->options.admitted_hidden_bytes);
+        return true;
+    }catch(const std::exception&failure){error=failure.what();return false;}
+}
 bool llama_dsv41_sweep::completed_logits(std::vector<float>&out,std::string&error)const{
     std::lock_guard<std::mutex>lock(p->mutex);out.clear();error.clear();
     if(p->state!=implementation::completed||!p->published.load()||p->stop_requested.load()||p->logits.size()!=vocabulary){

@@ -122,7 +122,14 @@ public:
     // DirectStorage fence wait (the external decoder's stream).
     bool external_expert_slots(uint32_t layer,const int32_t *ids,uint32_t n,int32_t *slots,
         const char **gate,const char **up,const char **down,uint32_t *slot_count,void *cuda_stream,std::string &error);
-    struct expert_cache_stats{uint32_t slots=0;uint64_t hits=0,misses=0,fetched_bytes=0;double fetch_ms=0;};
+    struct expert_cache_stats{uint32_t slots=0;uint64_t hits=0,misses=0,fetched_bytes=0;double fetch_ms=0;
+        uint32_t l2_slots=0;uint64_t l2_hits=0,l2_stored=0;};
+    // LLAMADECODE cache growth: an exclusive VRAM L2 behind the bank-0 pool
+    // (decode layout only). L1 victims are copied into it; an L1 miss found
+    // in L2 is copied back instead of fetched. Released when the provider
+    // leaves the decode layout. Returns the slot count in *slots.
+    bool grow_decode_cache(uint64_t bytes,uint32_t *slots,std::string &error);
+    uint64_t decode_cache_slot_bytes() const;
     expert_cache_stats cache_stats() const;
     bool decode_layout() const;
     // DirectStorage bytes and transfer milliseconds of the stages acquired since start_request.

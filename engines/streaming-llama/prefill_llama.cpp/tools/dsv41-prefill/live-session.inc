@@ -67,6 +67,25 @@ using decode_quiet_scope=llama_dsv41_decode_quiet_scope; // per-layer logs opt-i
 // ds4-win's own single-token decode (ds4-decode.dll, built from the stack's
 // engines/ds4-win with DS4_EXTERNAL_DECODE) on this owner's canonical state,
 // resident weights and B2 expert cache. Prefill stays on the executor.
+// LLAMADECODE cache growth: once the first one-token step has sized the
+// decode graph, the VRAM freed by the decode-sized plan (minus the decode
+// graph, the 1-row hidden bank and a growth margin; capped by the device's
+// free memory less a floor) becomes the L2 expert tier. LLAMADECODE_L2=0 disables.
+void grow_decode_l2(llama_dsv41_sweep&sweep,const llama_dsv41_fixed_storage*fixed,ggml_backend_t backend){
+    static const bool on=[]{const char*e=std::getenv("LLAMADECODE_L2");return !(e&&e[0]=='0'&&!e[1]);}();
+    if(!on||!fixed||!fixed->decode_compact)return;
+    auto*provider=sweep.provider_for_external_decode();
+    if(!provider->decode_layout()||provider->cache_stats().l2_slots)return;
+    const uint64_t margin=768ull<<20,floor=1536ull<<20;
+    const uint64_t freed=fixed->full_graph_reserve+fixed->full_hidden_bytes;
+    const uint64_t now=ggml_gallocr_get_buffer_size(fixed->graph.get(),0)+fixed->hidden_bytes;
+    uint64_t offer=freed>now+margin?freed-now-margin:0;
+    size_t free_bytes=0,total=0;ggml_backend_dev_memory(ggml_backend_get_device(backend),&free_bytes,&total);
+    offer=std::min<uint64_t>(offer,free_bytes>floor?free_bytes-floor:0);
+    uint32_t slots=0;std::string error;success(provider->grow_decode_cache(offer,&slots,error),error);
+    std::fprintf(stderr,"LLAMADECODE_L2_OFFER freed=%llu decode_now=%llu device_free=%llu offered=%llu slots=%u\n",(unsigned long long)freed,
+        (unsigned long long)now,(unsigned long long)free_bytes,(unsigned long long)offer,slots);std::fflush(stderr);
+}
 bool ds4_decode_enabled(){static const bool on=[]{const char*e=std::getenv("LLAMADECODE_DS4_DECODE");return e&&e[0]=='1'&&!e[1];}();return on;}
 struct ds4_external {
     HMODULE module=nullptr;bool open=false;
@@ -94,7 +113,7 @@ struct ds4_external {
     // (Re)prepare on the current owner: decode layout, resident weights
     // registered at their device addresses, state views, expert hook.
     void prepare(llama_dsv41_sweep&sweep,const llama_dsv41_weight_provider::config&weights,uint32_t context){
-        load();std::string error;
+        load();std::string error;success(sweep.compact_for_external_decode(error),error);
         provider=sweep.provider_for_external_decode();
         if(!provider->decode_layout()){
             if(open){x_close();open=false;}   // banks were rebuilt by a prefill pass: re-register everything
@@ -274,6 +293,7 @@ void run_live_session(std::unique_ptr<llama_dsv41_sweep>&sweep,
                 if(ds4_decode_enabled()){
                     if(index==0)ds4x.prepare(*sweep,weights,uint32_t(options.context));
                     ds4x.step(*sweep,weights.backend,best,current.frontier.position+uint32_t(index));
+                    if(index==0)grow_decode_l2(*sweep,options.fixed.get(),weights.backend);
                     step_ms.push_back(ms(step_started));
                     std::fprintf(stderr,"LLAMADECODE_STEP index=%llu token=%d position=%u step_ms=%.3f engine=ds4\n",(unsigned long long)index,best,
                         current.frontier.position+uint32_t(index)+1,step_ms.back());std::fflush(stderr);
@@ -285,6 +305,7 @@ void run_live_session(std::unique_ptr<llama_dsv41_sweep>&sweep,
                 {decode_quiet_scope quiet;
                 success(sweep->open(next_weights,next_options,error,nullptr,previous.get()),error);require(!previous->ready(),"Transferred prefix still publishes");previous.reset();
                 const std::vector<int32_t>one{best};success(sweep->run(one,[]{return should_stop();},error),error);}
+                if(index==0)grow_decode_l2(*sweep,options.fixed.get(),weights.backend);
                 step_ms.push_back(ms(step_started));
                 std::fprintf(stderr,"LLAMADECODE_STEP index=%llu token=%d position=%u step_ms=%.3f prompt_ms=%.3f\n",(unsigned long long)index,best,
                     current.frontier.position+uint32_t(index)+1,step_ms.back(),sweep->timing().prompt_processing_ms);std::fflush(stderr);
@@ -323,6 +344,7 @@ void run_live_session(std::unique_ptr<llama_dsv41_sweep>&sweep,
                 if(ds4_decode_enabled()){
                     if(index==0)ds4x.prepare(*sweep,weights,uint32_t(options.context));
                     ds4x.step(*sweep,weights.backend,forced[index],current.frontier.position+uint32_t(index));
+                    if(index==0)grow_decode_l2(*sweep,options.fixed.get(),weights.backend);
                     step_ms.push_back(ms(step_started));
                     std::fprintf(stderr,"LLAMADECODE_FORCED_STEP index=%zu forced=%d argmax=%d step_ms=%.3f engine=ds4\n",index,forced[index],best,step_ms.back());std::fflush(stderr);
                     continue;
@@ -333,6 +355,7 @@ void run_live_session(std::unique_ptr<llama_dsv41_sweep>&sweep,
                 {decode_quiet_scope quiet;
                 success(sweep->open(next_weights,next_options,error,nullptr,previous.get()),error);require(!previous->ready(),"Transferred prefix still publishes");previous.reset();
                 const std::vector<int32_t>one{forced[index]};success(sweep->run(one,[]{return should_stop();},error),error);}
+                if(index==0)grow_decode_l2(*sweep,options.fixed.get(),weights.backend);
                 step_ms.push_back(ms(step_started));
                 std::fprintf(stderr,"LLAMADECODE_FORCED_STEP index=%zu forced=%d argmax=%d step_ms=%.3f\n",index,forced[index],best,step_ms.back());std::fflush(stderr);
             }
