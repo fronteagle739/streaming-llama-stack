@@ -513,7 +513,19 @@ static void cuda_selected_free(void *ptr) {
     if (!h) { (void)cudaFree(ptr); return; }
     if (ds4_ds_batch_inflight() != 0) cuda_ds_expert_fetch_drain();
     (void)cudaDeviceSynchronize();
+    size_t free0 = 0, free1 = 0, total = 0;
+    (void)cudaMemGetInfo(&free0, &total);
     ds4_ds_slot_pool_release(h);
+    /* D3D12 may retire the heap's VRAM after Release returns; wait (bounded) and say so. */
+    double waited = 0;
+    for (int i = 0; i < 60; i++) {
+        (void)cudaMemGetInfo(&free1, &total);
+        if (free1 > free0 + (UINT64_C(1) << 30)) break;
+        Sleep(50); waited += 0.05;
+    }
+    fprintf(stderr, "DS4COMBO_DS_SLOTS pool %d released: free VRAM %.2f -> %.2f GiB after %.2f s
+", h,
+            (double)free0 / 1073741824.0, (double)free1 / 1073741824.0, waited);
 }
 
 static void cuda_stream_selected_cache_release(void) {
