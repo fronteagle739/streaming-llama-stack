@@ -12,6 +12,7 @@ extern "C" uint64_t ggml_backend_cuda_dsv41_pv_view_queued(void);
 #include "ggml-dsv41-carry-copy.h"
 #include "ggml-ds4-native-half-stats.h"
 #include "llama-dsv41-sweep.h"
+#include "llama-dsv41-engram-prefetch.h"
 #include "llama-weight-fetcher.h"
 #include "llama-dsv41-host-memory.h"
 #include "llama-dsv41-native-columns-resource-proof.h"
@@ -731,11 +732,20 @@ int wmain(int argc,wchar_t**argv){
             std::fprintf(stderr,"DS4PERF_WARMUP_BEGIN pid=%lu tokens=1 export=0\n",GetCurrentProcessId());std::fflush(stderr);
             const auto warm_started=clock_type::now();
             warm_request.reset(new llama_dsv41_sweep);
+            // LLAMADECODE_ENGRAM_EARLY: the real prompt's rows start inside the
+            // warmup's open, right after admission and before its first weight fetch.
+            const bool engram_early=llama_dsv41_engram_early_enabled()&&weights.engram_prefetch_host_bytes&&options.engram_tile_lookahead;
+            if(engram_early){
+                // The warmup pass builds its own one-token cache first: charge it.
+                warm_weights.engram_early_is_next_request=false;
+                warm_weights.engram_early_tokens.assign(tokens.begin(),tokens.begin()+std::min<size_t>(chunk_tokens,tokens.size()));
+                if(restored){const auto&bt=restored->base.tokens;warm_weights.engram_early_tail.assign(bt.end()-std::min<size_t>(bt.size(),3),bt.end());}
+            }
             success(warm_request->open(warm_weights,warm_options,error),error);
             // DS4COMBO producer-warm: the prompt's tokens are known now, so its
             // Engram rows load on their own IoRing during this warmup pass.
             {const char*overlap=std::getenv("LLAMA_DSV41_ENGRAM_PROMPT_OVERLAP");
-             if(weights.engram_prefetch_host_bytes&&options.engram_tile_lookahead&&overlap&&std::strcmp(overlap,"1")==0){
+             if(!engram_early&&weights.engram_prefetch_host_bytes&&options.engram_tile_lookahead&&overlap&&std::strcmp(overlap,"1")==0){
                 const std::vector<int32_t> first(tokens.begin(),tokens.begin()+chunk_tokens);
                 std::vector<int32_t> tail;
                 if(restored){const auto&bt=restored->base.tokens;tail.assign(bt.end()-std::min<size_t>(bt.size(),3),bt.end());}
@@ -758,7 +768,12 @@ int wmain(int argc,wchar_t**argv){
         const uint64_t warm_rhs_pack=ggml_backend_cuda_dsv41_rhs_pack_queued();
         std::vector<int32_t> early_tail;
         if(restored){const auto&bt=restored->base.tokens;early_tail.assign(bt.end()-std::min<size_t>(bt.size(),3),bt.end());}
-        auto started=clock_type::now();const bool opened=sweep->open(weights,options,error,warm_request.get(),nullptr,restored?&restored->base:nullptr);report["phase_ms"]["inspect_admit_allocate"]=ms(started);success(opened,error);if(restored){restored->finish();restored.reset();}warm_request.reset();stop();
+        // LLAMADECODE_ENGRAM_EARLY, no warm-up: the request's own open starts its
+        // rows after admission, before allocate's first weight fetch.
+        const bool engram_early_cold=!warm&&llama_dsv41_engram_early_enabled()&&weights.engram_prefetch_host_bytes&&options.engram_tile_lookahead;
+        auto open_weights=weights;
+        if(engram_early_cold){open_weights.engram_early_tokens.assign(tokens.begin(),tokens.begin()+std::min<size_t>(chunk_tokens,tokens.size()));open_weights.engram_early_tail=early_tail;}
+        auto started=clock_type::now();const bool opened=sweep->open(open_weights,options,error,warm_request.get(),nullptr,restored?&restored->base:nullptr);report["phase_ms"]["inspect_admit_allocate"]=ms(started);success(opened,error);if(restored){restored->finish();restored.reset();}warm_request.reset();stop();
         require(!chunk_option||options.reuse_graph&&!options.reuse_layer_graph,"Stateful CLI requires allocator-only graph mode");
         // No-warm-up start: the early Engram row load (otherwise hidden behind the
         // warmup) begins as soon as the real request is opened.
@@ -766,7 +781,7 @@ int wmain(int argc,wchar_t**argv){
         // load (7.9 s at 43K) left a 7.4 s join wait and prefill fell to 1,052 tok/s,
         // against 1,238 tok/s with the ordinary layer-0 overlapped load. Opt-in only.
         const char*early_direct=std::getenv("LLAMA_DSV41_ENGRAM_EARLY_DIRECT");
-        if(direct_open&&early_direct&&std::strcmp(early_direct,"1")==0){const char*overlap=std::getenv("LLAMA_DSV41_ENGRAM_PROMPT_OVERLAP");
+        if(!engram_early_cold&&direct_open&&early_direct&&std::strcmp(early_direct,"1")==0){const char*overlap=std::getenv("LLAMA_DSV41_ENGRAM_PROMPT_OVERLAP");
             if(weights.engram_prefetch_host_bytes&&options.engram_tile_lookahead&&overlap&&std::strcmp(overlap,"1")==0){
                 const std::vector<int32_t> first(tokens.begin(),tokens.begin()+std::min<size_t>(chunk_tokens,tokens.size()));
                 success(sweep->start_next_engram(first,early_tail,error),error);
