@@ -6534,7 +6534,16 @@ bool wf_fetch_extents_direct(wf_context * wf, int bank, const wf_extent * extent
     if (n == 0) return true;
     const auto & target = wf->ds_compute_banks[bank];
     const uint64_t quarter = target.quarter_bytes, capacity = quarter * target.quarters.size();
-    const size_t block = wf->params.io_block_size;
+    // LLAMADECODE: expert-miss extents use ds4-win's decode request size
+    // (~1 MiB; its decode batches average 0.8 MiB per request at 19.7 GiB/s)
+    // instead of the stage-sized block (~8 MiB = one request per projection,
+    // too shallow a queue for the NVMe). LLAMADECODE_MISS_BLOCK_KB overrides.
+    static const size_t miss_block = [] {
+        const char * e = std::getenv("LLAMADECODE_MISS_BLOCK_KB");
+        const long kb = e ? std::strtol(e, nullptr, 10) : 1024;
+        return (size_t) std::max<long>(64, std::min<long>(kb, 32768)) * 1024;
+    }();
+    const size_t block = std::min(wf->params.io_block_size, miss_block);
     if (!quarter || !block) return false;
     auto started = std::chrono::high_resolution_clock::now();
     // Claim the single DS submission slot (the DMA thread uses the same queue).
