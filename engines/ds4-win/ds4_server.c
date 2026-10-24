@@ -14293,6 +14293,7 @@ static void *decode_worker_main(void *arg) {
 static void generate_job_inner(server *s, server_slot *slot, job *j) {
     char err[160];
     err[0] = '\0';
+    if (ds4_combo_active) ds4_t1_request("generate");
     if (quality_request_apply(&j->req)) {
         http_error(j->fd,s->enable_cors,409,"quality vs speed unsupported");return;
     }
@@ -15026,6 +15027,7 @@ decode_again:
             size_t piece_len = 0;
             char *piece = ds4_token_text(s->engine, token, &piece_len);
             completion++;
+            if(ds4_combo_active && completion==1)ds4_t1_token1();
             if(ds4_combo_active && (completion==1 || completion==100 || completion==500 || completion==1000)){
                 double elapsed=now_sec()-decode_t0;
                 if(completion==500)combo_after500_t=now_sec();
@@ -16397,6 +16399,7 @@ static void *client_main(void *arg) {
         http_error(fd,s->enable_cors,401,"combo decoder requires its owner Bearer token");http_request_free(&hr);goto done;
     }
     if (ds4_combo_active && !strncmp(hr.path,"/decode/",8)) {
+        ds4_t1_request(hr.path);
         ds4_combo_http(s,fd,&hr);http_request_free(&hr);goto done;
     }
     if (!strncmp(hr.path, "/v1/train/", 10)) {
