@@ -166,7 +166,13 @@ static int cuda_rs_step(bool wait) {
     return 1;
 }
 extern "C" int ds4_gpu_expert_restore_async_available(char *why,size_t n) {
-    if(!ds4_ds_available()) {snprintf(why,n,"DirectStorage unavailable");return 0;}
+    /* The restore runs on the first decode eval, before any streamed read has
+     * brought DirectStorage up (it initialises lazily, as the prefill pipeline
+     * does below): bring it up here on the model file instead of falling back. */
+    const int was_up=ds4_ds_available();
+    if(!was_up && (g_model_fd<0 || !ds4_ds_init_from_fd(g_model_fd))) {
+        snprintf(why,n,"DirectStorage unavailable (init on fd %d failed)",g_model_fd);return 0;}
+    fprintf(stderr,"DS4COMBO_RESTORE_ASYNC_DS_READY lazy_init=%d\n",!was_up);
     if(g_dsv41_shared.active) {snprintf(why,n,"nonblocking shared-expert stream active");return 0;}
     return 1;
 }
