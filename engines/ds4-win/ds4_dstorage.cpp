@@ -817,10 +817,14 @@ static uint64_t               g_slot_bytes[DS4_DS_SLOT_POOLS] = {};
 
 static void slot_pool_release(int i) {
     if (g_slot_ext[i]) { (void)cudaDestroyExternalMemory(g_slot_ext[i]); g_slot_ext[i] = NULL; }
+    ULONG left[DS4_DS_SLOT_WINDOWS + 1] = {};
     for (uint32_t w = 0; w < DS4_DS_SLOT_WINDOWS; w++)
-        if (g_slot_win[i][w]) { g_slot_win[i][w]->Release(); g_slot_win[i][w] = NULL; }
+        if (g_slot_win[i][w]) { left[w] = g_slot_win[i][w]->Release(); g_slot_win[i][w] = NULL; }
+    if (g_slot_heap[i]) { left[DS4_DS_SLOT_WINDOWS] = g_slot_heap[i]->Release(); g_slot_heap[i] = NULL; }
+    if (g_slot_nwin[i])
+        fprintf(stderr, "DS4COMBO_DS_SLOTS pool %d refcounts after Release: windows %lu %lu heap %lu\n", i + 1,
+                (unsigned long)left[0], (unsigned long)left[1], (unsigned long)left[DS4_DS_SLOT_WINDOWS]);
     g_slot_nwin[i] = 0;
-    if (g_slot_heap[i]) { g_slot_heap[i]->Release(); g_slot_heap[i] = NULL; }
     g_slot_ptr[i] = NULL;
     g_slot_bytes[i] = 0;
 }
