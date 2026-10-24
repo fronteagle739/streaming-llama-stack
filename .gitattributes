@@ -11,3 +11,4 @@ engines/streaming-llama/prefill_llama.cpp/tools/server/webui/**/*.scss text eol=
 engines/streaming-llama/prefill_llama.cpp/tools/server/webui/**/*.html text eol=lf
 engines/streaming-llama/prefill_llama.cpp/tools/server/webui/**/*.json text eol=lf
 engines/streaming-llama/prefill_llama.cpp/tools/server/webui/**/*.md text eol=lf
+engines/streaming-llama/prefill_llama.cpp/tools/server/public/loading.html text eol=lf
