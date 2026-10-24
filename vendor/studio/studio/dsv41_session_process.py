@@ -4,7 +4,7 @@ from __future__ import annotations
 import json, os, threading, time
 from pathlib import Path
 import psutil
-from .dsv41_session_contract import MODEL_SHA256, MAX_CONTROL, MAX_DECODE, Refused, checkpoint, command, control, negotiate_decode_delta, require, session_identity
+from .dsv41_session_contract import MODEL_SHA256, MAX_CONTROL, MAX_DECODE, MAX_PREFILL, Refused, checkpoint, command, control, negotiate_decode_delta, negotiate_prefill, require, session_identity
 
 def now_tick(owner, period=1.0):
     """True at most once per period for owner (the tree scan is cheaper at 1 Hz than 10 Hz)."""
@@ -122,6 +122,8 @@ class Producer:
                 checkpoint(self.ready.get('checkpoint'), self.native_mode)
                 # Negotiated decode-delta maximum, published to the peer through the broker's metadata.
                 self.ready['maximum_decode_delta_tokens'] = self.decode_delta_max = negotiate_decode_delta(self.ready)
+                # LLAMADECODE single sweep: negotiated one-op prefill maximum (49152 for old producers).
+                self.ready['maximum_prefill_sweep_tokens'] = self.prefill_max = negotiate_prefill(self.ready)
             else:
                 self.ready = self.startup(self)
                 require(type(self.ready) is dict and self.ready.get('status') == 'ready', 'HTTP-native readiness was not certified')
@@ -241,7 +243,7 @@ class Producer:
         try:
             require(not self.closed and self.failure is None, 'Session unavailable: ' + str(self.failure))
             require(self.job.poll() is None, 'Persistent producer exited')
-            command(row, self.session, self.sequence, self.native_mode)
+            command(row, self.session, self.sequence, self.native_mode, getattr(self, 'prefill_max', MAX_PREFILL))
             wire = dict(row)
             if self.owner_epoch:
                 wire['owner_epoch'] = self.owner_epoch

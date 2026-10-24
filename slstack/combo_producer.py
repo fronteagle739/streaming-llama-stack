@@ -50,6 +50,38 @@ def ctx_cache(cfg):
     if growable and cfg.get('producer_keep_alive'):raise ValueError('ctx_cache_growable is not covered by the switch arena (producer_keep_alive)')
     return precision,growable
 
+LEGACY_SWEEP=49152
+def carry_bank_bytes(rows):
+    """Locked RAM carry bank for `rows` (llama_dsv41_prefill::carry_bank_bytes): 4 KiB header + 32-row pages."""
+    return 4096+(rows+31)//32*2953216
+
+def engram_prompt_bytes(rows):
+    """Whole-prompt Engram row cache admission (llama_dsv41_prefill::engram_prompt_bytes)."""
+    return (4<<20)+rows*48*268
+
+def prefill_plan(cfg,prompt_tokens):
+    """LLAMADECODE single sweep (owner: one prompt = one weight sweep). The producer's capacity C
+    (--prefill-chunk-tokens) is sized from the prompt: C = max(49152, prompt), raising the producer
+    host budget by exactly the extra carry bank + Engram bytes, up to producer_host_max_gib (default:
+    producer_host_budget_gib, i.e. no raise and today's 49152). A prompt over the largest C that fits
+    is split by the producer into near-equal sweeps. Returns C, the raised budget and the deltas."""
+    base=int(cfg.get('producer_host_budget_gib',8)*(1<<30))
+    top=int(cfg.get('producer_host_max_gib',cfg.get('producer_host_budget_gib',8))*(1<<30))
+    if top<base:raise ValueError('producer_host_max_gib is below producer_host_budget_gib')
+    extra=lambda c:(carry_bank_bytes(c)-carry_bank_bytes(LEGACY_SWEEP),engram_prompt_bytes(c)-engram_prompt_bytes(LEGACY_SWEEP))
+    limit=min(1<<20,int(cfg['context'])-1)
+    want=min(max(LEGACY_SWEEP,int(prompt_tokens)),limit)
+    if base+sum(extra(want))>top:   # the largest whole-page capacity under the cap
+        lo,hi=LEGACY_SWEEP,want
+        while lo<hi:
+            mid=(lo+hi+1)//2
+            if base+sum(extra(mid))<=top:lo=mid
+            else:hi=mid-1
+        want=lo
+    carry,engram=extra(want)
+    return dict(capacity=want,host_bytes=base+carry+engram,carry_delta=carry,engram_delta=engram,base_host_bytes=base,max_host_bytes=top,
+                prompt_tokens=int(prompt_tokens),single_sweep=int(prompt_tokens)<=want)
+
 def stall_seconds(cfg):
     """No-progress window for a producer operation. A long operation (a 262K-token prefill, a long
     decode) lives while the producer shows progress; request_timeout_s only bounds silence."""
@@ -77,7 +109,12 @@ class ComboProducer:
         tier=cfg.get('producer_profile','ultra')
         if tier not in ('accurate','fast','ultra'):raise ValueError('Combo producer profile must be accurate, fast or ultra (original weights; no HYPER)')
         args=dict(profile(tier)['arguments'])
-        host_bytes=int(cfg.get('producer_host_budget_gib',8)*(1<<30))
+        plan=prefill_plan(cfg,len(tokens));self.prefill_plan=plan;host_bytes=plan['host_bytes']
+        if plan['capacity']!=LEGACY_SWEEP:   # absent a raise the argv stays today's exactly
+            args['--prefill-chunk-tokens']=str(plan['capacity']);args['--job-host-bytes']=str(host_bytes)
+            for key,delta in (('--carry-host-bytes',plan['carry_delta']),('--provider-host-bytes',plan['engram_delta']),('--engram-prefetch-bytes',plan['engram_delta'])):
+                args[key]=str(int(args[key])+delta)
+        print('LLAMADECODE_PREFILL_BUDGET '+json.dumps(plan),flush=True)
         precision,growable=ctx_cache(cfg)
         args.update({'--context':str(cfg['context']),'--capture-dspark':'0','--compressed-cache-bf16':'1' if precision=='bf16' else '0',
             '--model':str(path(cfg['model'])),'--copy-receipt':str(receipt),'--build-sha':cfg['producer_sha256'],
@@ -134,7 +171,7 @@ class ComboProducer:
                 producer_sha256=cfg['producer_sha256'],owner_epoch=epoch,host_bytes=host_bytes,
                 resident_admission=getattr(self.process,'resume_admission',None),
                 full_snapshot_bootstrap=base is None,weights_copied=False,profile=tier,compressed_cache_bf16=precision=='bf16',
-                ctx_cache_precision=precision,ctx_cache_growable=growable))
+                ctx_cache_precision=precision,ctx_cache_growable=growable,prefill_plan=plan))
         except BaseException as exc:
             self.failure_cleanup=getattr(exc,'owned_cleanup',None)
             if self.process is not None:
