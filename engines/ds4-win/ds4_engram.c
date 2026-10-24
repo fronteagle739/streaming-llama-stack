@@ -7,6 +7,7 @@
 #include <fcntl.h>
 #include <limits.h>
 #include <math.h>
+#include <stdio.h>
 #include <stdlib.h>
 #include <string.h>
 #include <sys/stat.h>
@@ -152,6 +153,30 @@ static float e4m3(uint8_t byte) {
     return byte & 128 ? -value : value;
 }
 
+/* One raw GGUF I8 row (256 E4M3 codes + 8 E8M0 scales) to BF16-rounded F32.
+ * Both readers (pread and IoRing) decode through here, so their output is the
+ * same bytes for the same raw row. */
+static bool decode_row(const uint8_t raw[DS4_ENGRAM_ROW_BYTES], float *out) {
+    for (int j = 0; j < DS4_ENGRAM_DIM; j++) {
+        uint8_t code = raw[j], scale = raw[DS4_ENGRAM_DIM + j / 32];
+        if ((code & 127) == 127 || scale == 255) {
+            errno = EDOM;
+            return false;
+        }
+        float value = ldexpf(e4m3(code), (int)scale - 127);
+        uint32_t bits;
+        memcpy(&bits, &value, sizeof(bits));
+        bits = (bits + 0x7fffu + ((bits >> 16) & 1u)) & 0xffff0000u;
+        memcpy(&value, &bits, sizeof(value));
+        if (!isfinite(value)) {
+            errno = EDOM;
+            return false;
+        }
+        out[j] = value;
+    }
+    return true;
+}
+
 bool ds4_engram_read(const ds4_engram_table *t, const uint32_t *rows,
                      size_t count, float *out) {
     if (!t || t->fd < 0 || (count && (!rows || !out)) ||
@@ -168,23 +193,7 @@ bool ds4_engram_read(const ds4_engram_table *t, const uint32_t *rows,
     uint8_t raw[DS4_ENGRAM_ROW_BYTES];
     for (size_t i = 0; i < count; i++) {
         if (!read_row(t->fd, t->offset + (uint64_t)rows[i] * sizeof(raw), raw)) return false;
-        for (int j = 0; j < DS4_ENGRAM_DIM; j++) {
-            uint8_t code = raw[j], scale = raw[DS4_ENGRAM_DIM + j / 32];
-            if ((code & 127) == 127 || scale == 255) {
-                errno = EDOM;
-                return false;
-            }
-            float value = ldexpf(e4m3(code), (int)scale - 127);
-            uint32_t bits;
-            memcpy(&bits, &value, sizeof(bits));
-            bits = (bits + 0x7fffu + ((bits >> 16) & 1u)) & 0xffff0000u;
-            memcpy(&value, &bits, sizeof(value));
-            if (!isfinite(value)) {
-                errno = EDOM;
-                return false;
-            }
-            out[i * DS4_ENGRAM_DIM + j] = value;
-        }
+        if (!decode_row(raw, out + i * DS4_ENGRAM_DIM)) return false;
     }
     return true;
 }
@@ -245,6 +254,63 @@ static void *read_batch_thread(void *context) {
 }
 #endif
 
+#if defined(_WIN32)
+/* ds4_engram_ioring.cpp: mirrors streaming-llama's Engram IoRing reader. */
+bool ds4_engram_ioring_read_rows(int fd, uint64_t base, const uint32_t *rows, size_t n,
+                                 uint8_t *out, char *why, size_t why_n);
+
+static bool engram_ioring_enabled(void) {
+    static int enabled = -1;
+    if (enabled < 0) {
+        enabled = getenv("DS4_DISABLE_ENGRAM_IORING") == NULL;
+        fprintf(stderr, "DS4_ENGRAM_READER %s\n", enabled ? "ioring (DS4_DISABLE_ENGRAM_IORING to use pread)" : "pread (DS4_DISABLE_ENGRAM_IORING set)");
+    }
+    return enabled != 0;
+}
+
+/* Sorted requests: read each distinct row once through the IoRing, at most
+ * 1024 distinct rows (270 KiB) at a time, then decode it into the first
+ * request's output and copy it to that row's duplicates, as the pread path does. */
+static bool read_sorted_ioring(const ds4_engram_table *t, const engram_request *request,
+                               size_t count, float *out) {
+    enum { DISTINCT = 1024 };
+    uint32_t *ids = malloc(DISTINCT * sizeof(*ids));
+    uint8_t *raw = malloc((size_t)DISTINCT * DS4_ENGRAM_ROW_BYTES);
+    bool ok = ids && raw;
+    for (size_t i = 0; ok && i < count;) {
+        size_t j = i, u = 0;
+        while (j < count && (u < DISTINCT || request[j].row == ids[u - 1])) {
+            if (!u || request[j].row != ids[u - 1]) ids[u++] = request[j].row;
+            j++;
+        }
+        char why[256] = {0};
+        if (!ds4_engram_ioring_read_rows(t->fd, t->offset, ids, u, raw, why, sizeof(why))) {
+            fprintf(stderr, "DS4_ENGRAM_IORING_FAILED %s\n", why);
+            errno = EIO;
+            ok = false;
+            break;
+        }
+        size_t k = 0;
+        const float *previous = NULL;
+        for (size_t r = i; ok && r < j; r++) {
+            float *dst = out + (size_t)request[r].output * DS4_ENGRAM_DIM;
+            if (r > i && request[r].row == request[r - 1].row) {
+                memcpy(dst, previous, DS4_ENGRAM_DIM * sizeof(*dst));
+            } else {
+                ok = decode_row(raw + k++ * DS4_ENGRAM_ROW_BYTES, dst);
+                previous = dst;
+            }
+        }
+        i = j;
+    }
+    int saved = errno;
+    free(ids);
+    free(raw);
+    errno = saved;
+    return ok;
+}
+#endif
+
 bool ds4_engram_read_batch(const ds4_engram_table *t, const uint32_t *rows,
                            size_t tokens, size_t stride, float *out) {
     if (!t || t->fd < 0 || (tokens && (!rows || !out || stride < DS4_ENGRAM_COLS)) ||
@@ -277,6 +343,12 @@ bool ds4_engram_read_batch(const ds4_engram_table *t, const uint32_t *rows,
             };
         }
         qsort(request, count, sizeof(*request), request_order);
+#if defined(_WIN32)
+        if (engram_ioring_enabled()) {
+            ok = read_sorted_ioring(t, request, count, out + start * DS4_ENGRAM_COLS * DS4_ENGRAM_DIM);
+            continue;
+        }
+#endif
         engram_batch batch = {.table = t, .request = request, .count = count,
             .out = out + start * DS4_ENGRAM_COLS * DS4_ENGRAM_DIM, .readers = 1};
         /* Fixed concurrency hides random-read latency without caching the table.
