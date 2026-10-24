@@ -68,7 +68,7 @@ llama_dsv41_ffn_graph::result llama_dsv41_ffn_graph::routed_impl(
     ggml_tensor * product_ids=selected;
     if(w.expert_slots){
         GGML_ASSERT(w.expert_slots->type==GGML_TYPE_I32&&w.expert_slots->ne[0]==used&&w.expert_slots->ne[1]==count);
-        product_ids=w.expert_slots;
+        product_ids=ggml_cpy(ctx,selected,w.expert_slots);ggml_set_name(product_ids,"dsv41_expert_slot_copy");
     }
     auto * gate=ggml_mul_mat_id(ctx,w.gate,x,product_ids);
     auto * up=ggml_mul_mat_id(ctx,w.up,x,product_ids);

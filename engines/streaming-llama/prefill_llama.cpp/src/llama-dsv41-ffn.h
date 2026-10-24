@@ -10,9 +10,10 @@ public:
         ggml_tensor * router; ggml_tensor * text_bias; ggml_tensor * image_bias;
         ggml_tensor * up; ggml_tensor * gate; ggml_tensor * down;
         ggml_tensor * shared_up; ggml_tensor * shared_gate; ggml_tensor * shared_down;
-        // LLAMADECODE B2: when set, the routed expert products index the
-        // decode expert-cache pool (gate/up/down hold slots, not experts) with
-        // these slot ids [6, tokens]; the router ids still select route weights.
+        // LLAMADECODE B2: when set (an I32 [6, tokens] leaf), the expert
+        // products read their ids from it. The graph first copies the router
+        // ids into it ("dsv41_expert_slot_copy"); the decode hook then
+        // rewrites it with expert-cache slots. Route weights keep router ids.
         ggml_tensor * expert_slots = nullptr;
     };
     struct result { ggml_tensor * output; ggml_tensor * selected; ggml_tensor * route_weights; };
