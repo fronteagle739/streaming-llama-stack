@@ -164,6 +164,19 @@ void grow_decode_l2(llama_dsv41_sweep&sweep,const llama_dsv41_fixed_storage*fixe
         (unsigned long long)nv_free,(unsigned long long)nv_total,(unsigned long long)nv_after,(unsigned long long)offer,slots);std::fflush(stderr);
 }
 bool ds4_decode_enabled(){static const bool on=[]{const char*e=std::getenv("LLAMADECODE_DS4_DECODE");return e&&e[0]=='1'&&!e[1];}();return on;}
+// LLAMADECODE append-via-decode: with the ds4 decode on, a live prefill of at
+// most LLAMADECODE_APPEND_DECODE_MAX tokens (default 128, 0 = off) is appended
+// one token at a time through the ds4 decode step instead of a full weight sweep.
+uint64_t append_decode_max(){static const uint64_t n=[]{const char*e=std::getenv("LLAMADECODE_APPEND_DECODE_MAX");
+    return e&&*e?uint64_t(std::max<long long>(0,std::min<long long>(std::strtoll(e,nullptr,10),4096))):uint64_t(128);}();return n;}
+// LLAMADECODE decode cancel: the client creates LLAMADECODE_DECODE_CANCEL_FILE
+// while a decode op runs; the loop stops at the next token boundary exactly as at
+// max_tokens (the last sampled token is returned, not evaluated). Cleared at
+// every decode start and after a cancel.
+const std::wstring&decode_cancel_file(){static const std::wstring p=[]{const char*e=std::getenv("LLAMADECODE_DECODE_CANCEL_FILE");
+    return e&&*e?std::filesystem::u8path(e).wstring():std::wstring();}();return p;}
+bool decode_cancel_requested(){const auto&p=decode_cancel_file();return !p.empty()&&GetFileAttributesW(p.c_str())!=INVALID_FILE_ATTRIBUTES;}
+void clear_decode_cancel(){const auto&p=decode_cancel_file();if(!p.empty())DeleteFileW(p.c_str());}
 struct ds4_external {
     HMODULE module=nullptr;bool open=false;
     int(*x_open)(const char*,uint32_t,char*,size_t)=nullptr;const void*(*x_map)()=nullptr;
@@ -264,6 +277,13 @@ void run_live_session(std::unique_ptr<llama_dsv41_sweep>&sweep,
     require(session_route&&model_route,"Session routing fingerprint must be nonzero");
     checkpoint current,remote;bool have_remote=false,initial_sent=false,awaiting_ack=false,device_suspended=false;
     ds4_external ds4x; // LLAMADECODE ds4-decode (LLAMADECODE_DS4_DECODE=1)
+    // One ds4 single-token step appending `token` at frontier+index (prepare at
+    // index 0); shared by decode, decode_forced and the small-append prefill.
+    auto ds4_step=[&](int32_t token,uint64_t index){
+        if(index==0)ds4x.prepare(*sweep,weights,uint32_t(options.context));
+        ds4x.step(*sweep,weights.backend,token,current.frontier.position+uint32_t(index));
+        if(index==0)grow_decode_l2(*sweep,options.fixed.get(),weights.backend);else if(index%16==0)check_decode_vram_reserve();
+    };
     std::unique_ptr<llama_dsv41_sweep::rewind_anchor> rewind_anchor;
     checkpoint rewind_identity;
     auto inspect=[&](){checkpoint c;std::string error;
@@ -398,7 +418,8 @@ void run_live_session(std::unique_ptr<llama_dsv41_sweep>&sweep,
             const auto&stops=command.at("stop_tokens");require(stops.is_array()&&stops.size()<=16,"Local decode accepts at most16 stop tokens");
             std::vector<int32_t>stop_ids;for(const auto&v:stops){const auto n=dsv41_live::u64(v);require(n<129280,"Stop token out of vocabulary");stop_ids.push_back(int32_t(n));}
             require(uint64_t(current.frontier.position)+maximum<uint64_t(options.context),"Local decode exceeds context capacity");
-            std::vector<int32_t>generated;std::vector<double>step_ms;std::string error;std::vector<float>logits;bool stopped=false;
+            std::vector<int32_t>generated;std::vector<double>step_ms;std::string error;std::vector<float>logits;bool stopped=false,cancelled=false;
+            clear_decode_cancel();
             for(uint64_t index=0;index<maximum;++index){
                 stop();const auto step_started=clock_type::now();
                 success(sweep->completed_logits(logits,error),error);
@@ -406,10 +427,9 @@ void run_live_session(std::unique_ptr<llama_dsv41_sweep>&sweep,
                 generated.push_back(best);
                 if(std::find(stop_ids.begin(),stop_ids.end(),best)!=stop_ids.end()){stopped=true;break;}
                 if(index+1==maximum)break;
+                if(decode_cancel_requested()){cancelled=true;break;}   // same boundary as max_tokens
                 if(ds4_decode_enabled()){
-                    if(index==0)ds4x.prepare(*sweep,weights,uint32_t(options.context));
-                    ds4x.step(*sweep,weights.backend,best,current.frontier.position+uint32_t(index));
-                    if(index==0)grow_decode_l2(*sweep,options.fixed.get(),weights.backend);else if(index%16==0)check_decode_vram_reserve();
+                    ds4_step(best,index);
                     step_ms.push_back(ms(step_started));
                     std::fprintf(stderr,"LLAMADECODE_STEP index=%llu token=%d position=%u step_ms=%.3f engine=ds4\n",(unsigned long long)index,best,
                         current.frontier.position+uint32_t(index)+1,step_ms.back());std::fflush(stderr);
@@ -426,12 +446,13 @@ void run_live_session(std::unique_ptr<llama_dsv41_sweep>&sweep,
                 std::fprintf(stderr,"LLAMADECODE_STEP index=%llu token=%d position=%u step_ms=%.3f prompt_ms=%.3f\n",(unsigned long long)index,best,
                     current.frontier.position+uint32_t(index)+1,step_ms.back(),sweep->timing().prompt_processing_ms);std::fflush(stderr);
             }
+            if(cancelled)clear_decode_cancel();
             current=inspect();const uint32_t evaluated=uint32_t(step_ms.size());
             double total_ms=0;for(const double v:step_ms)total_ms+=v;
-            std::fprintf(stderr,"LLAMADECODE_DECODE_COMPLETE generated=%zu evaluated=%u stopped=%d position=%u decode_ms=%.3f tok_s=%.6f\n",generated.size(),evaluated,int(stopped),
-                current.frontier.position,total_ms,total_ms>0?evaluated*1000.0/total_ms:0.0);std::fflush(stderr);
+            std::fprintf(stderr,"LLAMADECODE_DECODE_COMPLETE generated=%zu evaluated=%u stopped=%d cancelled=%d position=%u decode_ms=%.3f tok_s=%.6f\n",generated.size(),evaluated,int(stopped),
+                int(cancelled),current.frontier.position,total_ms,total_ms>0?evaluated*1000.0/total_ms:0.0);std::fflush(stderr);
             reply({{"peer_synchronized",have_remote&&remote.describe()==current.describe()},{"tokens",generated},{"evaluated_tokens",evaluated},{"stopped",stopped},
-                {"step_ms",step_ms},{"decode_ms",total_ms},{"RTX_decode",true}});
+                {"cancelled",cancelled},{"step_ms",step_ms},{"decode_ms",total_ms},{"RTX_decode",true}});
         }else if(operation=="decode_forced"){
             // LLAMADECODE B0/B1 gate: teacher-forced 1-row decode. For each i the
             // frontier's full F32 logits are written to logits_path (raw rows of
@@ -458,9 +479,7 @@ void run_live_session(std::unique_ptr<llama_dsv41_sweep>&sweep,
                 while(left){DWORD wrote=0;const DWORD n=DWORD(std::min<size_t>(left,1u<<24));require(WriteFile(file,bytes,n,&wrote,nullptr)&&wrote==n,"Forced decode logits write failed");bytes+=n;left-=n;}
                 if(index+1==forced.size())break;
                 if(ds4_decode_enabled()){
-                    if(index==0)ds4x.prepare(*sweep,weights,uint32_t(options.context));
-                    ds4x.step(*sweep,weights.backend,forced[index],current.frontier.position+uint32_t(index));
-                    if(index==0)grow_decode_l2(*sweep,options.fixed.get(),weights.backend);else if(index%16==0)check_decode_vram_reserve();
+                    ds4_step(forced[index],index);
                     step_ms.push_back(ms(step_started));
                     std::fprintf(stderr,"LLAMADECODE_FORCED_STEP index=%zu forced=%d argmax=%d step_ms=%.3f engine=ds4\n",index,forced[index],best,step_ms.back());std::fflush(stderr);
                     continue;
@@ -488,6 +507,17 @@ void run_live_session(std::unique_ptr<llama_dsv41_sweep>&sweep,
             const auto&ids=command.at("tokens");require(ids.is_array()&&!ids.empty()&&ids.size()<=capacity,"Live prefill token count exceeds reserved chunk");
             require(ids.size()<uint64_t(options.context)-current.frontier.position,"Live prefill exceeds context capacity");
             std::vector<int32_t>tokens;tokens.reserve(ids.size());for(const auto&v:ids){const auto n=dsv41_live::u64(v);require(n<129280,"Live token out of vocabulary");tokens.push_back(int32_t(n));}
+            if(ds4_decode_enabled()&&tokens.size()<=append_decode_max()){
+                // Small append: teacher-forced ds4 steps on the resident state (the
+                // decode/decode_forced step), every token evaluated; same reply and
+                // checkpoint as the sweep. The frontier logits come from ds4's decode kernels.
+                for(size_t index=0;index<tokens.size();++index){stop();ds4_step(tokens[index],index);}
+                const double append_ms=ms(started);
+                const uint32_t before=current.frontier.position;current=inspect();require(current.frontier.position==before+tokens.size(),"Live append position did not advance exactly");
+                std::fprintf(stderr,"LLAMADECODE_APPEND_VIA_DECODE tokens=%zu ms=%.3f position=%u\n",tokens.size(),append_ms,current.frontier.position);std::fflush(stderr);
+                reply({{"peer_synchronized",false},{"prompt_tokens",tokens.size()},{"prompt_processing_ms",append_ms},{"export_preparation_ms",0.0},{"append_via_decode",true}});
+                continue;
+            }
             auto previous=std::move(sweep);sweep.reset(new llama_dsv41_sweep);auto next_options=options;auto next_weights=weights;
             next_options.carry.tokens=uint32_t(tokens.size());if(next_weights.engram_prefetch_host_bytes)next_weights.engram_prefetch_tokens=uint32_t(tokens.size());
             std::string error;success(sweep->open(next_weights,next_options,error,nullptr,previous.get()),error);require(!previous->ready(),"Transferred prefix still publishes");previous.reset();

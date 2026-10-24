@@ -46170,6 +46170,39 @@
     }
   },
   {
+    "var": "LLAMADECODE_APPEND_DECODE_MAX",
+    "flag": null,
+    "default": "128",
+    "code_default": "Unset: 128 tokens; 0 disables (every append runs the weight sweep)",
+    "classification": "preset",
+    "scopes": [
+      "rtx-llama"
+    ],
+    "doc": "Producer live prefill: with LLAMADECODE_DS4_DECODE=1, an append of at most this many tokens is teacher-forced through the ds4 single-token decode step (about 0.15-0.2 s per token) instead of a full weight sweep; larger appends keep the sweep. The frontier logits then come from ds4's decode kernels.",
+    "reads": [
+      "engines/streaming-llama/prefill_llama.cpp/tools/dsv41-prefill/live-session.inc:170"
+    ],
+    "defaults_by_scope": {
+      "rtx-llama": "128"
+    }
+  },
+  {
+    "var": "LLAMADECODE_DECODE_CANCEL_FILE",
+    "flag": null,
+    "default": null,
+    "code_default": "Unset: decode cannot be cancelled early",
+    "classification": "runtime",
+    "scopes": [
+      "rtx-llama"
+    ],
+    "doc": "Set by ComboProducer to <producer dir>/decode.cancel. The single-engine server creates that file to stop a running producer decode at its next token boundary (client stop sequence or client disconnect); the producer clears it at every decode start.",
+    "reads": [
+      "engines/streaming-llama/prefill_llama.cpp/tools/dsv41-prefill/live-session.inc:176",
+      "slstack/combo_producer.py:95"
+    ],
+    "defaults_by_scope": {}
+  },
+  {
     "var": "LLAMA_ALLOC_OUTPUT_GUARD",
     "flag": null,
     "default": null,
