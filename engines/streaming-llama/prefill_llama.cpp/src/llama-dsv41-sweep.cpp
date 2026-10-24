@@ -211,7 +211,7 @@ static void restore_fixed(llama_dsv41_fixed_storage&f,uint64_t admitted_hidden){
         require(ggml_gallocr_get_buffer_size(f.graph.get(),0)==f.full_graph_reserve,"Prefill graph re-reservation differs");
     }
     f.graph_bytes=f.full_graph_reserve;
-    if(f.full_hidden_bytes){f.hidden=llama_dsv41_tile_executor::reserve_hidden(f.backend,f.tokens,f.tile,f.bf16,f.ids,f.metadata,admitted_hidden);
+    if(f.full_hidden_bytes){f.hidden=llama_dsv41_tile_executor::reserve_hidden(f.backend,f.bank_rows(),f.tile,f.bf16,f.ids,f.metadata,admitted_hidden);
         f.hidden_bytes=ggml_backend_buffer_get_size(f.hidden.get());require(f.hidden_bytes==f.full_hidden_bytes,"Prefill hidden re-reservation differs");}
     f.decode_compact=false;
     std::fprintf(stderr,"LLAMADECODE_PREFILL_RESTORE graph_bytes=%llu hidden_bytes=%llu\n",(unsigned long long)f.graph_bytes,(unsigned long long)f.hidden_bytes);
@@ -263,11 +263,16 @@ bool llama_dsv41_sweep::open(const llama_dsv41_weight_provider::config &weights,
         auto resident_required=[&](uint32_t n){return options.resident_bf16?
             llama_dsv41_tile_executor::resident_layout_bytes(weights.backend,n,options.carry.max_tile_tokens,options.resident_bf16,options.resident_ids,options.resident_metadata):
             llama_dsv41_tile_executor::resident_hidden_bytes(n);};
+        // LLAMADECODE single sweep: a fixed bank smaller than this sweep spills through its last tile.
+        const uint32_t bank_rows=options.fixed&&options.fixed->hidden_rows&&options.fixed->hidden_rows<options.carry.tokens?options.fixed->hidden_rows:options.carry.tokens;
+        require(bank_rows==options.carry.tokens||(options.resident_bf16&&options.resident_ids&&options.resident_metadata&&options.carry.defer_hidden_readback&&
+            options.carry.export_hidden_after_head&&bank_rows%options.carry.max_tile_tokens==0&&bank_rows>=2*options.carry.max_tile_tokens),
+            "Hidden-bank spill requires the full BF16/ID/metadata resident plan and a tile-aligned bank of >=2 tiles");
         const bool native_pair=options.pair_ffn&&llama_dsv41_expert_profile::natural_half(options.expert);
         require(!options.pair_ffn||((native_pair?options.carry.max_tile_tokens==4096:
             ((options.dense_mxfp4||options.expert.dense_activation_q8_1)&&llama_dsv41_expert_profile::activation_rounding_q8_1(options.expert)&&
              (options.carry.max_tile_tokens==4096||options.carry.max_tile_tokens==8192||options.carry.max_tile_tokens==16384)))&&
-            options.carry.direct_ram_tiles&&((options.carry.defer_hidden_readback&&options.admitted_hidden_bytes>=resident_required(options.carry.tokens))||
+            options.carry.direct_ram_tiles&&((options.carry.defer_hidden_readback&&options.admitted_hidden_bytes>=resident_required(bank_rows))||
             (!options.admitted_hidden_bytes&&options.admitted_prefetch_device_bytes&&!options.carry.defer_hidden_readback&&!options.resident_bf16&&!options.resident_ids&&!options.resident_metadata))&&
             !options.diagnostic_carry),"Fixed grouped FFN requires bounded native4K or explicit original-Q8/hyper-fast selection and admitted resident/RAM owner");
         require(options.carry.max_tile_tokens<=4096||options.pair_ffn,"8192 groups require paired attention/FFN construction");
@@ -276,7 +281,7 @@ bool llama_dsv41_sweep::open(const llama_dsv41_weight_provider::config &weights,
         require(!options.engram_tile_lookahead||weights.engram_prefetch_host_bytes,
             "Engram tile lookahead requires the existing immutable whole-prompt cache");
         require(!options.carry.export_hidden_after_head||options.carry.defer_hidden_readback,"Post-head hidden export requires full-device retention");
-        require(!options.carry.defer_hidden_readback||(options.carry.direct_ram_tiles&&options.admitted_pinned_device_bytes&&options.reuse_graph&&!options.reuse_layer_graph&&!options.admitted_prefetch_device_bytes&&!options.diagnostic_carry&&options.admitted_hidden_bytes>=resident_required(options.carry.tokens)),"Final-only hidden readback requires full admitted VRAM residency and forbids intermediate RAM captures");
+        require(!options.carry.defer_hidden_readback||(options.carry.direct_ram_tiles&&options.admitted_pinned_device_bytes&&options.reuse_graph&&!options.reuse_layer_graph&&!options.admitted_prefetch_device_bytes&&!options.diagnostic_carry&&options.admitted_hidden_bytes>=resident_required(bank_rows)),"Final-only hidden readback requires full admitted VRAM residency and forbids intermediate RAM captures");
         require(!options.merge_attention_selected_rows||options.expert.token_tile_attention,"Selected-row union requires explicit token-tile attention");
         require(!options.coalesce_dense||(options.admitted_cast_device_bytes&&options.expert.dense_inputs_f16),"Dense coalescing requires explicit F16 inputs and admitted cast cache");
         require(!options.admitted_index_device_bytes||(options.carry.resident_ram&&options.reuse_graph&&!options.reuse_layer_graph&&
@@ -447,7 +452,7 @@ bool llama_dsv41_sweep::open(const llama_dsv41_weight_provider::config &weights,
                 require(f.graph_bytes==reserve,"Fixed graph physical capacity differs from exact reservation");
                 }else llama_dsv41_layer_log("DS4PERF_GRAPH_CAPACITY_DYNAMIC group=16384 within_explicit_graph_and_job_cap=1 allocation_in_prompt_clock=1\n");
                 if(options.admitted_hidden_bytes){
-                    f.hidden=llama_dsv41_tile_executor::reserve_hidden(f.backend,f.tokens,f.tile,f.bf16,f.ids,f.metadata,options.admitted_hidden_bytes);
+                    f.hidden=llama_dsv41_tile_executor::reserve_hidden(f.backend,f.bank_rows(),f.tile,f.bf16,f.ids,f.metadata,options.admitted_hidden_bytes);
                     f.hidden_bytes=ggml_backend_buffer_get_size(f.hidden.get());
                 }else require(!f.bf16&&!f.ids&&!f.metadata,"Layerwise RAM path cannot claim full-device banks");
                 f.cache.reset(new llama_dsv41_cache_storage(native_owners(),f.context,ggml_backend_get_default_buffer_type(f.backend),options.admitted_cache_bytes,options.compressed_cache_bf16,options.capture_dspark,options.ctx_cache_grow_step));
