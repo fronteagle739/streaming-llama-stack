@@ -507,24 +507,79 @@ static int cuda_ds_direct_slots_enabled(void) {
     }
     return v;
 }
+
+/* NVML physical free VRAM of the CUDA device (by PCI bus id; nvml.dll loaded at runtime).
+ * cudaMemGetInfo and DXGI both double-count D3D12 heaps imported into CUDA; NVML does not. */
+static int cuda_nvml_memory(uint64_t *free_out, uint64_t *total_out) {
+#if defined(_WIN32)
+    struct nvml_memory { unsigned long long total, free, used; };
+    typedef int (*init_fn)(void);
+    typedef int (*by_pci_fn)(const char *, void **);
+    typedef int (*mem_fn)(void *, nvml_memory *);
+    static int state = 0;   /* 0 untried, 1 ready, -1 unavailable */
+    static mem_fn get_mem = NULL;
+    static void *device = NULL;
+    if (state == 0) {
+        state = -1;
+        HMODULE lib = LoadLibraryA("nvml.dll");
+        if (!lib) lib = LoadLibraryA("C:\\Program Files\\NVIDIA Corporation\\NVSMI\\nvml.dll");
+        if (lib) {
+            init_fn init = (init_fn)GetProcAddress(lib, "nvmlInit_v2");
+            by_pci_fn by_pci = (by_pci_fn)GetProcAddress(lib, "nvmlDeviceGetHandleByPciBusId_v2");
+            get_mem = (mem_fn)GetProcAddress(lib, "nvmlDeviceGetMemoryInfo");
+            char bus[32] = {0};
+            int dev = 0;
+            if (init && by_pci && get_mem && cudaGetDevice(&dev) == cudaSuccess &&
+                cudaDeviceGetPCIBusId(bus, (int)sizeof(bus), dev) == cudaSuccess &&
+                init() == 0 && by_pci(bus, &device) == 0) state = 1;
+        }
+        if (state != 1) fprintf(stderr, "DS4COMBO_MEM NVML unavailable\n");
+    }
+    nvml_memory m = {0, 0, 0};
+    if (state != 1 || get_mem(device, &m) != 0) return 0;
+    if (free_out) *free_out = m.free;
+    if (total_out) *total_out = m.total;
+    return 1;
+#else
+    (void)free_out; (void)total_out;
+    return 0;
+#endif
+}
+static void cuda_mem_log(const char *what) {
+    uint64_t nf = 0, nt = 0, db = 0, du = 0;
+    size_t cf = 0, ct = 0;
+    const int n = cuda_nvml_memory(&nf, &nt);
+    const int d = ds4_ds_dxgi_local_memory(&db, &du);
+    (void)cudaMemGetInfo(&cf, &ct);
+    fprintf(stderr, "DS4COMBO_MEM %s: NVML free %s%.2f GiB | DXGI usage %.2f / budget %.2f GiB%s | cudaMemGetInfo free %.2f GiB\n",
+            what, n ? "" : "(n/a) ", (double)nf / 1073741824.0, (double)du / 1073741824.0,
+            (double)db / 1073741824.0, d ? "" : " (n/a)", (double)cf / 1073741824.0);
+}
 static void cuda_selected_free(void *ptr) {
     if (!ptr) return;
     const int h = ds4_ds_slot_pool_find(ptr, 1, NULL);
     if (!h) { (void)cudaFree(ptr); return; }
     if (ds4_ds_batch_inflight() != 0) cuda_ds_expert_fetch_drain();
     (void)cudaDeviceSynchronize();
-    size_t free0 = 0, free1 = 0, total = 0;
-    (void)cudaMemGetInfo(&free0, &total);
+    uint64_t free0 = 0, free1 = 0, total = 0, pool_bytes = 0;
+    (void)ds4_ds_slot_pool_find(ptr, 1, NULL);
+    (void)cuda_nvml_memory(&free0, &total);
+    for (uint64_t probe = UINT64_C(1) << 40; probe; probe >>= 1)   /* largest owned span from ptr */
+        if (ds4_ds_slot_pool_find(ptr, pool_bytes + probe, NULL)) pool_bytes += probe;
     ds4_ds_slot_pool_release(h);
-    /* D3D12 may retire the heap's VRAM after Release returns; wait (bounded) and say so. */
+    cuda_mem_log("DS4COMBO_DS_SLOTS after pool release");
+    /* WDDM may re-promote demoted allocations before the freed VRAM shows as free: wait (bounded,
+     * 10 s) on NVML physical free recovering 90% of the pool before anything (the decode-tier
+     * restore) allocates again, and say loudly if it does not. */
     double waited = 0;
-    for (int i = 0; i < 60; i++) {
-        (void)cudaMemGetInfo(&free1, &total);
-        if (free1 > free0 + (UINT64_C(1) << 30)) break;
+    bool recovered = false;
+    for (int i = 0; i < 200; i++) {
+        if (cuda_nvml_memory(&free1, &total) && free1 >= free0 + pool_bytes / 10u * 9u) { recovered = true; break; }
         Sleep(50); waited += 0.05;
     }
-    fprintf(stderr, "DS4COMBO_DS_SLOTS pool %d released: free VRAM %.2f -> %.2f GiB after %.2f s\n", h,
-            (double)free0 / 1073741824.0, (double)free1 / 1073741824.0, waited);
+    fprintf(stderr, "DS4COMBO_DS_SLOTS pool %d released (%.2f GiB): NVML free %.2f -> %.2f GiB after %.2f s%s\n", h,
+            (double)pool_bytes / 1073741824.0, (double)free0 / 1073741824.0, (double)free1 / 1073741824.0, waited,
+            recovered ? "" : " -- NOT RECOVERED (WDDM re-promotion or a leak); the decode tier may come back short");
 }
 
 static void cuda_stream_selected_cache_release(void) {
@@ -39043,6 +39098,17 @@ static int cuda_stream_selected_cache_begin_load(
                 return 0;
             int integrated = 0;
             uint64_t host_available = 0;
+            if (g_stream_prefill_borrow_slots && cuda_ds_direct_slots_enabled()) {
+                /* D3D12 pools: size against NVML physical free (cudaMemGetInfo double-counts
+                 * imported heaps); the loader shrinks to fit, or refuses below one table. */
+                uint64_t nf = 0, nt = 0;
+                cuda_mem_log("DS4COMBO_DS_SLOTS before pool allocation");
+                if (!cuda_nvml_memory(&nf, &nt)) {
+                    fprintf(stderr, "DS4COMBO_DS_SLOTS refused: NVML physical free unavailable; cannot size the pools\n");
+                    return 0;
+                }
+                free_bytes = (size_t)nf;
+            }
             if (cudaDeviceGetAttribute(&integrated, cudaDevAttrIntegrated, g_gpu[0].device_id) == cudaSuccess &&
                 integrated && ds4_linux_nonmovable_memory(&host_available))
                 free_bytes = (size_t)std::min(host_available, (uint64_t)total_bytes);
@@ -39073,7 +39139,11 @@ static int cuda_stream_selected_cache_begin_load(
                     cuda_stream_selected_ensure_bytes(&cache.down_ptr, &cache.down_capacity,
                         capacity * table->down_expert_bytes, "cached down experts");
                 g_ds_slot_alloc = 0;
-                if (pools_ok) break;
+                if (pools_ok) {
+                    if (g_stream_prefill_borrow_slots && cuda_ds_direct_slots_enabled())
+                        cuda_mem_log("DS4COMBO_DS_SLOTS after pool allocation");
+                    break;
+                }
                 cuda_stream_selected_cache_release();
                 if (capacity == unique.size()) return 0;
                 capacity = std::max((uint64_t)unique.size(), capacity * 3u / 4u);
