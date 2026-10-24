@@ -142,6 +142,50 @@ DS4X_EXPORT int ds4x_decode(int token, uint32_t position, const int32_t *history
     return ds41_graph_step(g, &g_ds4x.model, &g_ds4x.weights, token, logits) ? 1 : 0;
 }
 
+/* LLAMADECODE multi-row append: ds4-win's own layer-major prefill
+ * (ds41_graph_prefill, the resident path native ds4-win uses for >= 8-row
+ * appends) on the bound state. The workspace holds `rows` rows; it is the
+ * native prefill workspace (ds41_graph_ensure_prefill_workspace) sized small
+ * instead of the 2048+-row default. Routed experts still come from the
+ * caller's cache through the expert hook, one union per row group. */
+DS4X_EXPORT int ds4x_prefill_workspace(uint32_t rows, char *error, size_t cap) {
+    if (!g_ds4x.open) { ds4x_set_error(error, cap, "ds4x not open"); return 0; }
+    if (rows < 2u || rows > 2048u) { ds4x_set_error(error, cap, "ds4x prefill workspace rows must be 2..2048"); return 0; }
+    ds41_gpu_graph *g = &g_ds4x.graph;
+    if (g->batch.residual && g->prefill_cap == rows) return 1;
+    ds41_graph_free_prefill_workspace(g);
+    free(g->prefill_ids); free(g->rows_view); ds4_gpu_tensor_free(g->prefill_tokens);
+    g->prefill_ids = NULL; g->rows_view = NULL; g->prefill_tokens = NULL;
+    g->prefill_cap = rows;
+    g->prefill_ids = malloc((size_t)rows * sizeof(*g->prefill_ids));
+    g->rows_view = calloc(rows, sizeof(*g->rows_view));
+    g->prefill_tokens = ds4_gpu_tensor_alloc((uint64_t)rows * sizeof(int32_t));
+    if (!g->prefill_ids || !g->rows_view || !g->prefill_tokens || !ds41_graph_ensure_prefill_workspace(g)) {
+        ds4x_set_error(error, cap, "ds4x prefill workspace allocation failed");
+        return 0;
+    }
+    fprintf(stderr, "LLAMADECODE_DS4X_PREFILL_WORKSPACE rows=%u\n", rows);
+    return 1;
+}
+
+/* `count` (2..workspace rows) teacher-forced tokens at `position` with the
+ * caller's Engram history (newest first); writes the frontier logits only.
+ * The device state advances in place exactly as `count` ds4x_decode calls. */
+DS4X_EXPORT int ds4x_prefill(const int32_t *tokens, uint32_t count, uint32_t position,
+                             const int32_t *history_tail, uint32_t history_count, float *logits) {
+    ds41_gpu_graph *g = &g_ds4x.graph;
+    if (!g_ds4x.open || !tokens || !logits || !history_tail || history_count != DS4_ENGRAM_NGRAM - 1 ||
+        count < 2u || !g->batch.residual || count > g->prefill_cap || position > g->ctx || count > g->ctx - position) return 0;
+    g->pos = position;
+    g->valid = true;
+    for (uint32_t i = 0; i < DS4_ENGRAM_NGRAM - 1; i++) g->history.tail[i] = history_tail[i];
+    if (!ds41_graph_prefill(g, &g_ds4x.model, &g_ds4x.weights, tokens, count, NULL, NULL, 0, NULL, NULL, NULL, 0)) {
+        fprintf(stderr, "LLAMADECODE_DS4X_PREFILL_FAILED count=%u position=%u\n", count, position);
+        return 0;
+    }
+    return ds41_graph_logits(g, &g_ds4x.model, &g_ds4x.weights, logits) ? 1 : 0;
+}
+
 DS4X_EXPORT void ds4x_close(void) {
     if (!g_ds4x.open) return;
     ds41_gpu_graph *g = &g_ds4x.graph;

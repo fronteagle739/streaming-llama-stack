@@ -923,6 +923,20 @@ bool llama_dsv41_sweep::commit_external_token(int32_t token,const std::vector<fl
         return true;
     }catch(const std::exception&failure){p->poison();error=failure.what();return false;}
 }
+bool llama_dsv41_sweep::commit_external_tokens(const int32_t*tokens,size_t count,const std::vector<float>&logits,std::string&error){
+    std::lock_guard<std::mutex>lock(p->mutex);error.clear();
+    try{
+        require(p->state==implementation::completed&&p->published.load()&&p->options.stateful_chunks&&!p->executor,
+            "External append commit requires a completed, idle stateful owner");
+        require(tokens&&count&&count<=128&&logits.size()==vocabulary&&p->tokens.size()+count<p->options.context,"External append tokens/logits/context invalid");
+        for(size_t i=0;i<count;++i)require(tokens[i]>=0&&uint32_t(tokens[i])<vocabulary,"External append token out of vocabulary");
+        finite(logits);
+        auto history=p->final_engram;
+        success(p->provider.advance_decoded_engram(history,tokens,count,error),error);
+        p->tokens.insert(p->tokens.end(),tokens,tokens+count);std::copy(logits.begin(),logits.end(),p->logits.begin());p->final_engram=history;
+        return true;
+    }catch(const std::exception&failure){p->poison();error=failure.what();return false;}
+}
 llama_dsv41_weight_provider*llama_dsv41_sweep::provider_for_external_decode(){return &p->provider;}
 bool llama_dsv41_sweep::compact_for_external_decode(std::string&error){
     std::lock_guard<std::mutex>lock(p->mutex);error.clear();
