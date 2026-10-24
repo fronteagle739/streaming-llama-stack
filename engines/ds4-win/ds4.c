@@ -43744,6 +43744,45 @@ static bool ds41_rope_store(ds4_gpu_tensor *x, ds4_gpu_tensor *cache, uint64_t o
         ds4_gpu_tensor_copy(cache, offset, x, 0, (uint64_t)width * sizeof(float));
 }
 
+#ifdef DS4_EXTERNAL_DECODE
+/* LLAMADECODE --ctx-cache-precision bf16: the caller's compressed/index owner
+ * caches are BF16 (ds4x_bind_state_ex). Same values (lossless QAT rows). */
+static bool g_ds41_cache_bf16;
+#define DS41_CACHE_BF16 g_ds41_cache_bf16
+#else
+#define DS41_CACHE_BF16 false
+#endif
+
+/* A compressed/index owner row: roped, quantized, stored (BF16 owners: as BF16). */
+static bool ds41_rope_store_owner(ds4_gpu_tensor *x, ds4_gpu_tensor *cache, uint64_t offset, uint32_t width,
+                                  uint32_t il, uint32_t pos, ds4_v41_activation_format format) {
+#ifdef DS4_EXTERNAL_DECODE
+    if (g_ds41_cache_bf16)
+        return ds41_rope(x, 1, width, il, pos, false) &&
+            ds4_gpu_dsv41_quantize(x, width, 1, format) &&
+            ds4_gpu_dsv41_store_bf16(cache, offset / sizeof(float), x, width);
+#endif
+    return ds41_rope_store(x, cache, offset, width, il, pos, format);
+}
+
+static int ds41_owner_index_scores(ds4_gpu_tensor *scores, const ds4_gpu_tensor *q, const ds4_gpu_tensor *weights,
+                                   const ds4_gpu_tensor *keys, uint32_t source_rows, uint32_t rows,
+                                   uint32_t start, uint32_t ratio) {
+#ifdef DS4_EXTERNAL_DECODE
+    if (g_ds41_cache_bf16)
+        return ds4_gpu_dsv41_indexer_scores_batch_bf16(scores, q, weights, keys, source_rows, rows, start, ratio);
+#endif
+    return ds4_gpu_dsv41_indexer_scores_batch(scores, q, weights, keys, source_rows, rows, start, ratio);
+}
+
+static int ds41_owner_gather_kv(ds4_gpu_tensor *out, const ds4_gpu_tensor *source, const ds4_gpu_tensor *ids,
+                                uint32_t source_rows, uint32_t selected_rows) {
+#ifdef DS4_EXTERNAL_DECODE
+    if (g_ds41_cache_bf16) return ds4_gpu_dsv41_gather_kv_bf16(out, source, ids, source_rows, selected_rows);
+#endif
+    return ds4_gpu_dsv41_gather_kv(out, source, ids, source_rows, selected_rows);
+}
+
 static bool ds41_queued_head_off(void) { static int c = -1; return ds41_env_flag("DS4_METAL_DISABLE_V41_QUEUED_HEAD", &c); }
 static bool ds41_short_sweep_off(void) { static int c = -1; return ds41_env_flag("DS4_METAL_DISABLE_V41_SHORT_SWEEP", &c); }
 
@@ -43889,9 +43928,9 @@ static bool ds41_attention_publish(ds41_gpu_graph *g, const ds4_model *m,
             if (!ds41_norm(g->latent, g->latent, m, l->attn_compressor_norm) ||
                 !ds41_matmul(g->index_k, m, l->indexer_attn_k, g->latent, true) ||
                 !ds41_norm(g->index_k, g->index_k, m, l->indexer_k_norm) ||
-                !ds41_rope_store(g->index_k, g->index_cache[owner], (uint64_t)(n_comp - 1u) * 128u * 4u,
+                !ds41_rope_store_owner(g->index_k, g->index_cache[owner], (uint64_t)(n_comp - 1u) * 128u * 4u,
                                  DS4_N_INDEXER_HEAD_DIM, il, rope_pos, DS4_V41_FP4_E8M0) ||
-                !ds41_rope_store(g->latent, g->compressed[owner], (uint64_t)(n_comp - 1u) * 512u * 4u,
+                !ds41_rope_store_owner(g->latent, g->compressed[owner], (uint64_t)(n_comp - 1u) * 512u * 4u,
                                  512, il, rope_pos, DS4_V41_FP4_E4M3)) return false;
         }
     }
@@ -43936,7 +43975,7 @@ static bool ds41_attention_select_published(ds41_gpu_graph *g, const ds4_model *
             !ds4_gpu_glm_indexer_score_one_tensor(g->index_scores, g->index_q, g->index_weights,
                 g->index_cache[owner], n_comp, DS4_N_INDEXER_HEAD, 128, 1.0f / 64.0f, false)) return false;
 #else
-            !ds4_gpu_dsv41_indexer_scores_batch(g->index_scores, g->index_q, g->index_weights,
+            !ds41_owner_index_scores(g->index_scores, g->index_q, g->index_weights,
                 g->index_cache[owner], n_comp, 1, pos, ratio)) return false;
 #endif
     }
@@ -43999,11 +44038,11 @@ static bool ds41_attention(ds41_gpu_graph *g, const ds4_model *m,
     const uint32_t n_raw = pos + 1u < 128u ? pos + 1u : 128u;
     const uint64_t sinks = l->attn_sinks->abs_offset + (uint64_t)head0 * sizeof(float);
     /* the staging kernel gathers the selected rows itself where it applies */
-    const bool staged = n_comp && ds4_gpu_dsv41_attention_decode(g->heads, m->map, m->size, sinks,
+    const bool staged = n_comp && !DS41_CACHE_BF16 && ds4_gpu_dsv41_attention_decode(g->heads, m->map, m->size, sinks,
             g->q, g->window[il], n_raw, 128, (pos + 1u - n_raw) % 128u, g->compressed[owner],
             g->selected_comp, g->selected_kv, n_comp, attended, heads, DS4_N_HEAD_DIM);
     if (!staged &&
-        ((n_comp && !ds4_gpu_dsv41_gather_kv(g->selected_kv, g->compressed[owner],
+        ((n_comp && !ds41_owner_gather_kv(g->selected_kv, g->compressed[owner],
                                              g->selected_comp, n_comp, attended)) ||
          !ds4_gpu_attention_decode_heads_tensor(g->heads, m->map, m->size, sinks,
             g->q, g->window[il], n_raw, 128, (pos + 1u - n_raw) % 128u,
