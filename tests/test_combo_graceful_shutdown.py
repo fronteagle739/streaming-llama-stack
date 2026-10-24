@@ -61,6 +61,7 @@ class NativeGraceful(unittest.TestCase):
         with tempfile.TemporaryDirectory() as tmp:
             proof = native(tmp, 0, DONE_N).close()
         self.assertEqual(proof['native_shutdown_path'], 'graceful')
+        self.assertFalse(proof['kill_path'])
         self.assertIn('ds_ms=2.0', proof['native_shutdown_detail'])
 
     def test_exit_without_marker_is_crash(self):
@@ -82,6 +83,7 @@ class NativeGraceful(unittest.TestCase):
         with tempfile.TemporaryDirectory() as tmp:
             proof = native(tmp, 0, b'', fail=True).close()
         self.assertTrue(proof['native_shutdown_path'].startswith('graceful-failed-terminate'))
+        self.assertTrue(proof['kill_path'])  # still alive when terminated: counted as KILL PATH
 
 class ProducerGraceful(unittest.TestCase):
     def test_close_op_and_marker_is_graceful(self):
@@ -90,6 +92,7 @@ class ProducerGraceful(unittest.TestCase):
             proof = p.close()
         self.assertEqual(sent, ['close'])
         self.assertEqual(proof['producer_shutdown_path'], 'graceful')
+        self.assertFalse(proof['kill_path'])
         self.assertIn('sweep_release_ms=4.0', proof['producer_shutdown_detail'])
 
     def test_crash_in_teardown_is_not_graceful(self):
@@ -104,6 +107,7 @@ class ProducerGraceful(unittest.TestCase):
             proof = p.close()
         self.assertEqual(sent, [])
         self.assertTrue(proof['producer_shutdown_path'].startswith('terminate:'))
+        self.assertTrue(proof['kill_path'])  # a busy, live producer is terminated: KILL PATH
 
 
 if __name__ == '__main__':

@@ -354,6 +354,10 @@ class Native:
             except BaseException as exc:
                 self.shutdown_path='graceful-failed-terminate: '+repr(exc)[:200]
             self.shutdown_seconds=time.monotonic()-started
+        # KILL PATH: the decoder is still alive here, so process.close() terminates it
+        # (the leak-prone retire). Counted in the receipt and logged loudly; behaviour unchanged.
+        kill_path=bool(self.process.job is not None and self.process.job.poll() is None)
+        if kill_path:print('DS4COMBO KILL PATH native: terminating a live decoder ('+self.shutdown_path+')',flush=True)
         proof=self.process.close()
         if self.shutdown_path=='graceful-pending':
             # Exiting before the deadline is not enough: a crash in teardown
@@ -365,7 +369,7 @@ class Native:
             if done:self.shutdown_detail=done.group(0).decode(errors='replace')
         if self.shutdown_path!='graceful':
             print('DS4COMBO native shutdown fell back: '+self.shutdown_path,flush=True)
-        proof=dict(proof,native_shutdown_path=self.shutdown_path,native_shutdown_seconds=getattr(self,"shutdown_seconds",0.0),native_shutdown_detail=getattr(self,"shutdown_detail",None))
+        proof=dict(proof,kill_path=kill_path,native_shutdown_path=self.shutdown_path,native_shutdown_seconds=getattr(self,"shutdown_seconds",0.0),native_shutdown_detail=getattr(self,"shutdown_detail",None))
         if not all(proof.get(key) for key in ('owned_job_empty','owned_process_signaled','owned_pid_gone')):
             raise RuntimeError('Native GPU owner retirement unconfirmed; handoff refused')
         self.receipt=proof;self.closed=True

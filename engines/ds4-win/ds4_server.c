@@ -16783,6 +16783,17 @@ static void apply_prefill_mode(const char *mode) {
         fprintf(stderr, "ds4-server: --prefill-mode must be accurate, fast or ultra (got '%s')\n", mode);
         exit(2);
     }
+    if (set == accurate) {
+        /* Measured 2026-10-24 (DS4COMBO layer-ab20-modes, modes16k-accurate): the switch-based
+         * accurate class lands FURTHER from the token-major accurate reference than ultra
+         * (mean KL 0.0101 vs 0.0071), and its F32 dense cache exceeds the host budget at
+         * decode (crash at the pinned host-tier allocation). Refuse until llama's accurate
+         * path (native-half Q4_K experts, native attention, F32 indexer) is ported. */
+        fprintf(stderr, "ds4-server: --prefill-mode accurate is not available in this build: the "
+                        "switch-based accurate class exceeds the host budget and buys no accuracy "
+                        "(measured); use ultra or fast\n");
+        exit(2);
+    }
     char applied[512] = {0};
     for (int i = 0; set[i][0]; i++) {
         const char *now = getenv(set[i][0]);
