@@ -1,5 +1,6 @@
 from __future__ import annotations
 import json
+import os
 from pathlib import Path
 import sys
 import socket
@@ -42,6 +43,12 @@ class Engines:
         self.attach_entry = None
         self.attach_guard_recorded = False
         self.journal_checked = False
+        # Media swaps reuse the DS4COMBO native session export/restore boundary.
+        import secrets
+        self.combo_session = secrets.token_hex(16)
+        self.combo_epoch = 0
+        self.combo_sequence = 0
+        self.combo_restore = None
 
     def status(self, message, model=None):
         row = {'time': time.time(), 'message': message, 'model': model or self.selected_model}
@@ -64,6 +71,58 @@ class Engines:
             if row['id'] in self.models.resident:
                 self.status('Resident pair requested; using normal unload/load until dual residency is available')
         return row
+
+    def combo_enabled(self):
+        # Only a single-RTX native engine that can be swapped out for media.
+        return (not self.cfg.get('mac') and not self.cfg['lora'] and os.name == 'nt'
+                and bool(self.cfg['image_model'] or self.cfg['video_model'] or self.cfg['comfyui_models']))
+
+    def expert_list(self):
+        return Path(self.cfg['runtime_root']) / ('expert-list-' + self.combo_session + '.txt')
+
+    def combo(self, operation, **extra):
+        row = dict(session=self.combo_session, owner_epoch=self.combo_epoch, sequence=self.combo_sequence, **extra)
+        reply = http_json(self.cfg['ds4_url'] + '/decode/' + operation, row, timeout=self.cfg['request_timeout_s'],
+                          headers={'Authorization': 'Bearer ' + self.cfg['_control_token']})
+        if (reply.get('status'), reply.get('session'), reply.get('owner_epoch'), reply.get('next_sequence')) != \
+                ('complete', self.combo_session, self.combo_epoch, self.combo_sequence + 1):
+            raise RuntimeError('Native owner epoch or sequence differs')
+        self.combo_sequence += 1
+        return reply
+
+    def combo_save(self):
+        """Export the live native session into parent-owned locked RAM, then exit gracefully."""
+        checkpoint = self.combo('checkpoint')['checkpoint']
+        if not checkpoint:
+            self.combo_shutdown()
+            return None
+        from .combo_ram import LockedRam, PAGE
+        capacity = -(-int(checkpoint['bytes']) // PAGE) * PAGE
+        ram = LockedRam(capacity, session=self.combo_session, host_budget_gib=self.cfg['host_budget_gib'],
+                        min_available_gib=self.cfg['min_available_gib'])
+        try:
+            with ram.lease():
+                reply = self.combo('export', mapping=ram.name, capacity=ram.capacity,
+                                   checkpoint_sha256=checkpoint['payload_sha256'])
+            if reply.get('written_bytes') != int(checkpoint['bytes']):
+                raise RuntimeError('Native export wrote an unexpected extent')
+            self.combo_shutdown()
+        except BaseException:
+            ram.close()
+            raise
+        return ram, checkpoint
+
+    def combo_shutdown(self):
+        """Studio-style graceful exit: the engine drains DirectStorage and frees GPU/host memory."""
+        self.combo('shutdown')
+        try:
+            code = self.llm.proc.wait(timeout=float(self.cfg.get('native_graceful_shutdown_seconds', 60)))
+        except subprocess.TimeoutExpired:
+            raise RuntimeError('Native engine did not exit after its graceful shutdown request')
+        log = self.llm.log.read_text(errors='replace') if self.llm.log.exists() else ''
+        if code or 'DS4COMBO_NATIVE_GRACEFUL_SHUTDOWN_COMPLETE' not in log:
+            raise RuntimeError(f'Native graceful shutdown incomplete (guardian exit {code}); see {self.llm.log}')
+        self.close()
 
     def close(self):
         if self.remote:
@@ -162,7 +221,23 @@ class Engines:
         command[0] = str(path(command[0]))
         import secrets
         token = self.cfg.setdefault('_control_token', secrets.token_urlsafe(32))
-        self.cfg.setdefault('env_overrides', {})['DS4_SERVER_AUTH_TOKEN'] = token
+        overrides = self.cfg.setdefault('env_overrides', {})
+        overrides['DS4_SERVER_AUTH_TOKEN'] = token
+        for key in [k for k in overrides if k.startswith('DS4_COMBO_')]:
+            del overrides[key]
+        if self.combo_enabled():
+            # Same owner session across a media swap; a new epoch per launch.
+            self.combo_epoch += 1
+            self.combo_sequence = 1
+            overrides.update(DS4_COMBO_ENABLED='1', DS4_COMBO_OWNER_SESSION=self.combo_session,
+                             DS4_COMBO_OWNER_EPOCH=str(self.combo_epoch), DS4_COMBO_SEQUENCE='1',
+                             DS4_COMBO_EXPERT_SNAPSHOT_FILE=str(self.expert_list()))
+            if self.combo_restore:
+                ram, checkpoint = self.combo_restore
+                overrides.update(DS4_COMBO_RESTORE_MAPPING=ram.name, DS4_COMBO_RESTORE_CAPACITY=str(ram.capacity),
+                                 DS4_COMBO_RESTORE_SHA256=checkpoint['payload_sha256'])
+                if self.expert_list().is_file():
+                    overrides['DS4_COMBO_EXPERT_RESTORE_FILE'] = str(self.expert_list())
         self.llm = OwnedProcess(self.cfg, command, 'ds4-server', gpu=not self.cfg.get('_gpu_lease_managed', False),
                                 cwd=Path(self.cfg['runtime_root']), timeout=self.cfg['lease_minutes'] * 60)
         if self.attach_entry:
@@ -175,7 +250,13 @@ class Engines:
                 self.llm.wait()
                 raise RuntimeError('ds4 server exited before readiness')
             try:
-                http_json(self.cfg['ds4_url'] + '/v1/models', timeout=2)
+                http_json(self.cfg['ds4_url'] + '/v1/models', timeout=2,
+                          headers={'Authorization': 'Bearer ' + token})
+                if self.combo_enabled():
+                    reply = self.combo('setup')
+                    if self.combo_restore and (reply.get('checkpoint') or {}).get('payload_sha256') != \
+                            self.combo_restore[1]['payload_sha256']:
+                        raise RuntimeError('Native startup did not restore the exact saved chat state')
                 if self.attach_entry:
                     self.journal.update(self.attach_entry, 'attached', applied=True)
                 self.loading_model = None
@@ -218,7 +299,36 @@ class Engines:
         model = self.cfg[kind + '_model']
         if not model and not self.cfg['comfyui_models']:
             raise ValueError(f'No {kind} model selected. Set --{kind}-model and its architecture/support files.')
-        self.close()  # Certify owned LLM process tree has exited before giving Studio the GPU.
+        # Studio ordering: save and release the LLM, run the media job, restore in finally.
+        saved = None
+        if self.llm and self.llm.proc.poll() is None and self.combo_enabled():
+            started = time.monotonic()
+            self.status(f'Saving chat state and unloading model for {kind}')
+            saved = self.combo_save()
+            self.swap_timing = {'save_unload_s': time.monotonic() - started}
+        else:
+            self.close()  # Certify owned LLM process tree has exited before giving Studio the GPU.
+        try:
+            started = time.monotonic()
+            result = self._media(kind, params)
+            if saved:
+                self.swap_timing['media_s'] = time.monotonic() - started
+            return result
+        finally:
+            if saved:
+                started = time.monotonic()
+                self.status('Reloading model and restoring chat state')
+                self.combo_restore = saved
+                try:
+                    self.ready()
+                finally:
+                    self.combo_restore = None
+                    saved[0].close()
+                self.swap_timing['reload_restore_s'] = time.monotonic() - started
+                self.status('Chat state restored')
+                print('Media swap timing: ' + json.dumps(self.swap_timing), flush=True)
+
+    def _media(self, kind, params):
         request = {'kind': kind, 'cfg': self.cfg, 'params': params}
         proc = OwnedProcess(self.cfg, [self.cfg['studio_python'], '-B', '-m', 'slstack.studio_worker'],
                             kind, stdin=json.dumps(request) + '\n', gpu=True)
