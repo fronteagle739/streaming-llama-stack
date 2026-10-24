@@ -853,6 +853,39 @@ llama_dsv41_sweep::run_timing llama_dsv41_sweep::timing()const{
     std::lock_guard<std::mutex>lock(p->mutex);return p->state==implementation::completed?p->measured:run_timing{};
 }
 bool llama_dsv41_sweep::ready()const{return p->published.load()&&!p->stop_requested.load();}
+bool llama_dsv41_sweep::device_state_views(device_state&out,std::string&error)const{
+    std::lock_guard<std::mutex>lock(p->mutex);out={};error.clear();
+    if(p->state!=implementation::completed||!p->published.load()||!p->cache||p->options.compressed_cache_bf16||p->options.capture_dspark){
+        error="External decode requires a completed canonical F32 mode1 owner";return false;}
+    for(uint32_t l=0;l<40;++l){auto*t=p->cache->raw(l);if(!t||!t->data||t->type!=GGML_TYPE_F32||ggml_nbytes(t)!=128ull*512*4){error="Raw ring geometry differs";return false;}out.raw[l]=t->data;}
+    const uint32_t owners[4]={2,8,14,20};
+    for(uint32_t i=0;i<4;++i){auto*c=p->cache->compressed(owners[i]);auto*x=p->cache->index(owners[i]);
+        if(!c||!x||!c->data||!x->data||c->type!=GGML_TYPE_F32||x->type!=GGML_TYPE_F32||c->ne[0]!=512||x->ne[0]!=128||c->ne[1]!=x->ne[1]){error="Compressed/index cache geometry differs";return false;}
+        out.compressed[i]=c->data;out.index[i]=x->data;out.rows[i]=uint32_t(c->ne[1]);
+        if(i<3){auto*k=p->cache->pool_kv(owners[i]);auto*s=p->cache->pool_score(owners[i]);
+            if(!k||!s||!k->data||!s->data||ggml_nbytes(k)!=512*4||ggml_nbytes(s)!=512*4){error="Pool tail geometry differs";return false;}
+            out.pool_kv[i]=k->data;out.pool_score[i]=s->data;}}
+    return true;
+}
+bool llama_dsv41_sweep::engram_tail(std::array<int32_t,3>&tail,std::string&error)const{
+    std::lock_guard<std::mutex>lock(p->mutex);error.clear();
+    if(p->state!=implementation::completed||!p->published.load()){error="Engram history requires a completed owner";return false;}
+    tail=p->final_engram.tail;return true;
+}
+bool llama_dsv41_sweep::commit_external_token(int32_t token,const std::vector<float>&logits,std::string&error){
+    std::lock_guard<std::mutex>lock(p->mutex);error.clear();
+    try{
+        require(p->state==implementation::completed&&p->published.load()&&p->options.stateful_chunks&&!p->executor,
+            "External decode commit requires a completed, idle stateful owner");
+        require(token>=0&&uint32_t(token)<vocabulary&&logits.size()==vocabulary&&p->tokens.size()+1<p->options.context,"External decode token/logits/context invalid");
+        finite(logits);
+        auto history=p->final_engram;
+        success(p->provider.advance_decoded_engram(history,&token,1,error),error);
+        p->tokens.push_back(token);std::copy(logits.begin(),logits.end(),p->logits.begin());p->final_engram=history;
+        return true;
+    }catch(const std::exception&failure){p->poison();error=failure.what();return false;}
+}
+llama_dsv41_weight_provider*llama_dsv41_sweep::provider_for_external_decode(){return &p->provider;}
 bool llama_dsv41_sweep::completed_logits(std::vector<float>&out,std::string&error)const{
     std::lock_guard<std::mutex>lock(p->mutex);out.clear();error.clear();
     if(p->state!=implementation::completed||!p->published.load()||p->stop_requested.load()||p->logits.size()!=vocabulary){

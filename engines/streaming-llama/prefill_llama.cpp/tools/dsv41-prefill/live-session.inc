@@ -63,6 +63,65 @@ public:
 namespace {
 
 using decode_quiet_scope=llama_dsv41_decode_quiet_scope; // per-layer logs opt-in during decode steps
+// LLAMADECODE ds4-decode: LLAMADECODE_DS4_DECODE=1 runs each decode step with
+// ds4-win's own single-token decode (ds4-decode.dll, built from the stack's
+// engines/ds4-win with DS4_EXTERNAL_DECODE) on this owner's canonical state,
+// resident weights and B2 expert cache. Prefill stays on the executor.
+bool ds4_decode_enabled(){static const bool on=[]{const char*e=std::getenv("LLAMADECODE_DS4_DECODE");return e&&e[0]=='1'&&!e[1];}();return on;}
+struct ds4_external {
+    HMODULE module=nullptr;bool open=false;
+    int(*x_open)(const char*,uint32_t,char*,size_t)=nullptr;const void*(*x_map)()=nullptr;
+    int(*x_register)(uint64_t,uint64_t,void*)=nullptr;
+    int(*x_bind)(void*const*,void*const*,void*const*,const uint32_t*,void*const*,void*const*)=nullptr;
+    void(*x_hook)(int(*)(void*,uint32_t,const int32_t*,uint32_t,int32_t*,const char**,const char**,const char**,uint32_t*),void*)=nullptr;
+    int(*x_decode)(int,uint32_t,const int32_t*,uint32_t,float*)=nullptr;void(*x_close)()=nullptr;
+    llama_dsv41_weight_provider*provider=nullptr;uint64_t registered=0,registered_bytes=0;
+    static int expert_hook(void*user,uint32_t layer,const int32_t*ids,uint32_t n,int32_t*slots,const char**g,const char**u,const char**d,uint32_t*count){
+        auto*self=static_cast<ds4_external*>(user);std::string why;
+        if(!self->provider||!self->provider->external_expert_slots(layer,ids,n,slots,g,u,d,count,nullptr,why)){
+            std::fprintf(stderr,"LLAMADECODE_DS4X_SLOTS_FAILED layer=%u reason=%s\n",layer,why.c_str());return 0;}
+        return 1;
+    }
+    template<class F>void bind(F&f,const char*name){f=reinterpret_cast<F>(GetProcAddress(module,name));require(f,"ds4-decode.dll export missing");}
+    void load(){
+        if(module)return;
+        auto dll=executable().parent_path()/L"ds4-decode.dll";
+        module=LoadLibraryExW(dll.c_str(),nullptr,LOAD_LIBRARY_SEARCH_DLL_LOAD_DIR|LOAD_LIBRARY_SEARCH_DEFAULT_DIRS);
+        require(module,"Cannot load ds4-decode.dll beside the producer");
+        bind(x_open,"ds4x_open");bind(x_map,"ds4x_model_map");bind(x_register,"ds4x_register_weight");bind(x_bind,"ds4x_bind_state");
+        bind(x_hook,"ds4x_set_expert_hook");bind(x_decode,"ds4x_decode");bind(x_close,"ds4x_close");
+    }
+    // (Re)prepare on the current owner: decode layout, resident weights
+    // registered at their device addresses, state views, expert hook.
+    void prepare(llama_dsv41_sweep&sweep,const llama_dsv41_weight_provider::config&weights,uint32_t context){
+        load();std::string error;
+        provider=sweep.provider_for_external_decode();
+        if(!provider->decode_layout()){
+            if(open){x_close();open=false;}   // banks were rebuilt by a prefill pass: re-register everything
+            auto decode_weights=weights;decode_weights.decode_layout=true;
+            success(provider->prepare_external_decode(decode_weights,error),error);
+        }
+        if(!open){
+            char why[512]{};require(x_open(weights.model_path.c_str(),context,why,sizeof(why))==1,why[0]?why:"ds4x_open failed");open=true;
+            registered=registered_bytes=0;
+            success(provider->decode_resident_tensors([&](uint64_t offset,uint64_t bytes,void*device){
+                if(!x_register(offset,bytes,device))return false;++registered;registered_bytes+=bytes;return true;},error),error);
+        }
+        llama_dsv41_sweep::device_state state;success(sweep.device_state_views(state,error),error);
+        require(x_bind(state.raw.data(),state.compressed.data(),state.index.data(),state.rows.data(),state.pool_kv.data(),state.pool_score.data())==1,
+            "ds4x_bind_state refused the canonical state");
+        x_hook(&expert_hook,this);
+        std::fprintf(stderr,"LLAMADECODE_DS4X_READY registered_tensors=%llu registered_bytes=%llu\n",(unsigned long long)registered,(unsigned long long)registered_bytes);
+    }
+    void step(llama_dsv41_sweep&sweep,ggml_backend_t backend,int32_t token,uint32_t position){
+        std::string error;std::array<int32_t,3>tail{};success(sweep.engram_tail(tail,error),error);
+        std::vector<float>logits(129280);
+        ggml_backend_synchronize(backend);
+        require(x_decode(token,position,tail.data(),3,logits.data())==1,"ds4-win decode step failed");
+        success(sweep.commit_external_token(token,logits,error),error);
+    }
+    ~ds4_external(){if(open&&x_close){x_hook(nullptr,nullptr);x_close();}if(module)FreeLibrary(module);}
+};
 // LLAMADECODE: decode steps use the routed-expert layout (B1). The explicit
 // diagnostic LLAMADECODE_DECODE_LAYOUT=0 runs them on the whole-layer B0 layout.
 bool routed_decode_layout(){static const bool on=[]{const char*e=std::getenv("LLAMADECODE_DECODE_LAYOUT");
@@ -79,6 +138,7 @@ void run_live_session(std::unique_ptr<llama_dsv41_sweep>&sweep,
     const uint64_t session_route=std::stoull(session.substr(0,16),nullptr,16),model_route=std::stoull(std::string(model_sha).substr(0,16),nullptr,16);
     require(session_route&&model_route,"Session routing fingerprint must be nonzero");
     checkpoint current,remote;bool have_remote=false,initial_sent=false,awaiting_ack=false,device_suspended=false;
+    ds4_external ds4x; // LLAMADECODE ds4-decode (LLAMADECODE_DS4_DECODE=1)
     std::unique_ptr<llama_dsv41_sweep::rewind_anchor> rewind_anchor;
     checkpoint rewind_identity;
     auto inspect=[&](){checkpoint c;std::string error;
@@ -211,6 +271,14 @@ void run_live_session(std::unique_ptr<llama_dsv41_sweep>&sweep,
                 generated.push_back(best);
                 if(std::find(stop_ids.begin(),stop_ids.end(),best)!=stop_ids.end()){stopped=true;break;}
                 if(index+1==maximum)break;
+                if(ds4_decode_enabled()){
+                    if(index==0)ds4x.prepare(*sweep,weights,uint32_t(options.context));
+                    ds4x.step(*sweep,weights.backend,best,current.frontier.position+uint32_t(index));
+                    step_ms.push_back(ms(step_started));
+                    std::fprintf(stderr,"LLAMADECODE_STEP index=%llu token=%d position=%u step_ms=%.3f engine=ds4\n",(unsigned long long)index,best,
+                        current.frontier.position+uint32_t(index)+1,step_ms.back());std::fflush(stderr);
+                    continue;
+                }
                 auto previous=std::move(sweep);sweep.reset(new llama_dsv41_sweep);auto next_options=options;auto next_weights=weights;
                 next_options.carry.tokens=1;if(next_weights.engram_prefetch_host_bytes)next_weights.engram_prefetch_tokens=1;
                 next_weights.decode_layout=routed_decode_layout(); // LLAMADECODE B1: routed-expert fetch
@@ -252,6 +320,13 @@ void run_live_session(std::unique_ptr<llama_dsv41_sweep>&sweep,
                 const auto*bytes=reinterpret_cast<const char*>(logits.data());size_t left=logits.size()*sizeof(float);
                 while(left){DWORD wrote=0;const DWORD n=DWORD(std::min<size_t>(left,1u<<24));require(WriteFile(file,bytes,n,&wrote,nullptr)&&wrote==n,"Forced decode logits write failed");bytes+=n;left-=n;}
                 if(index+1==forced.size())break;
+                if(ds4_decode_enabled()){
+                    if(index==0)ds4x.prepare(*sweep,weights,uint32_t(options.context));
+                    ds4x.step(*sweep,weights.backend,forced[index],current.frontier.position+uint32_t(index));
+                    step_ms.push_back(ms(step_started));
+                    std::fprintf(stderr,"LLAMADECODE_FORCED_STEP index=%zu forced=%d argmax=%d step_ms=%.3f engine=ds4\n",index,forced[index],best,step_ms.back());std::fflush(stderr);
+                    continue;
+                }
                 auto previous=std::move(sweep);sweep.reset(new llama_dsv41_sweep);auto next_options=options;auto next_weights=weights;
                 next_options.carry.tokens=1;if(next_weights.engram_prefetch_host_bytes)next_weights.engram_prefetch_tokens=1;
                 next_weights.decode_layout=routed_decode_layout(); // LLAMADECODE B1: routed-expert fetch

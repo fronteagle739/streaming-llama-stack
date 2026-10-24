@@ -43364,6 +43364,12 @@ fail:
     return false;
 }
 
+#ifdef DS4_EXTERNAL_DECODE
+/* LLAMADECODE: decode-only scratch; the caller binds the canonical state. */
+static bool g_ds4x_external_alloc;
+#else
+#define g_ds4x_external_alloc false
+#endif
 static DS4_MAYBE_UNUSED bool ds41_graph_alloc(ds41_gpu_graph *g, const ds4_model *m,
                                               const ds4_weights *w, const char *path,
                                               uint32_t ctx, bool streaming) {
@@ -43378,6 +43384,12 @@ static DS4_MAYBE_UNUSED bool ds41_graph_alloc(ds41_gpu_graph *g, const ds4_model
     g->grow_step = ds41_ctx_grow_step();
     g->grow_tokens = g->grow_step ? ds41_grow_round(ctx, g->grow_step, 1) : ctx;
     g->allocation_bytes = ds41_graph_initial_bytes(ctx);
+    if (g_ds4x_external_alloc) {   /* one-token decode: no prefill, carry or growth buffers */
+        g->prefill_cap = ds41_prefill_limit(16u);
+        g->carry_cap = 0;
+        g->grow_step = 0;
+        g->grow_tokens = ctx;
+    }
     g->streaming = streaming;
     g->tp_world = 1;
     g->token_map = malloc((size_t)DS4_N_VOCAB * sizeof(uint32_t));
@@ -43414,11 +43426,11 @@ static DS4_MAYBE_UNUSED bool ds41_graph_alloc(ds41_gpu_graph *g, const ds4_model
             !ds4_gpu_tensor_write(g->engram_q_norm[i], 0, tensor_data(m, w->layer[il].engram_q_norm), bytes) ||
             !ds4_gpu_tensor_write(g->engram_k_norm[i], 0, tensor_data(m, w->layer[il].engram_k_norm), bytes)) goto fail;
     }
-    for (uint32_t i = 0; i < 40; i++) {
+    for (uint32_t i = 0; !g_ds4x_external_alloc && i < 40; i++) {
         g->window[i] = ds4_gpu_tensor_alloc(128u * 512u * sizeof(float));
         if (!g->window[i]) goto fail;
     }
-    for (uint32_t i = 0; i < 4; i++) {
+    for (uint32_t i = 0; !g_ds4x_external_alloc && i < 4; i++) {
         const uint64_t cap = ctx / (i < 3 ? 2u : 1u) + 1u;
         g->compressed[i] = ds41_ctx_tensor_alloc(g)(cap * 512u * sizeof(float));
         g->index_cache[i] = ds41_ctx_tensor_alloc(g)(cap * 128u * sizeof(float));
@@ -43443,7 +43455,7 @@ static DS4_MAYBE_UNUSED bool ds41_graph_alloc(ds41_gpu_graph *g, const ds4_model
 #endif
     DS41_SCRATCH(DS41_ALLOC)
 #undef DS41_ALLOC
-    if (!ds41_graph_ensure_prefill_workspace(g)) goto fail;
+    if (!g_ds4x_external_alloc && !ds41_graph_ensure_prefill_workspace(g)) goto fail;
     if (g->grow_step) {
         bool ok = true;
         (void)ds41_grow_visit(g, g->grow_tokens, DS41_GROW_APPLY, &ok);
@@ -92562,4 +92574,8 @@ bool ds4_test_dspark_prefix_capture(ds4_engine *engine, const ds4_tokens *prompt
     ds4_session_free(ref);
     return ok;
 }
+#endif
+
+#ifdef DS4_EXTERNAL_DECODE
+#include "ds4_decode_adapter.inc"
 #endif

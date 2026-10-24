@@ -1462,9 +1462,33 @@ static const char *cuda_model_resident_range_ptr(
     return NULL;
 }
 
+#ifdef DS4_EXTERNAL_DECODE
+/* Same signature as ds4_gpu.h (this translation unit does not include it). */
+typedef int (*ds4_gpu_external_expert_hook)(void *user, uint32_t layer, const int32_t *ids, uint32_t n,
+    int32_t *slots, const char **gate_base, const char **up_base, const char **down_base, uint32_t *n_slots);
+static int g_ds4x_external_mode;
+static ds4_gpu_external_expert_hook g_ds4x_expert_hook;
+static void *g_ds4x_expert_user;
+static ds4_gpu_tensor g_ds4x_slot_tensor;
+#endif
 static const char *cuda_model_range_ptr(const void *model_map, uint64_t offset, uint64_t bytes, const char *what, const char **kind_out = NULL) {
     if (kind_out) *kind_out = NULL;
     if (offset + bytes < offset) return NULL;
+#ifdef DS4_EXTERNAL_DECODE
+    if (g_ds4x_external_mode) {
+        /* Caller-registered device copies only: no host mapping, fd cache or
+         * registration of the model file is ever attempted. */
+        const uint64_t end = offset + bytes;
+        for (const cuda_model_range &r : g_model_ranges)
+            if (r.host_base == model_map && r.borrowed && offset >= r.offset && end <= r.offset + r.bytes) {
+                if (kind_out) *kind_out = "external";
+                return r.device_ptr + (offset - r.offset);
+            }
+        fprintf(stderr, "LLAMADECODE_DS4X_UNREGISTERED_WEIGHT what=%s offset=%llu bytes=%llu\n",
+                what ? what : "weights", (unsigned long long)offset, (unsigned long long)bytes);
+        return NULL;
+    }
+#endif
     if (bytes == 0) {
         if (kind_out) *kind_out = g_model_device_owned ? "resident" : "mmap";
         return cuda_model_ptr(model_map, offset);
@@ -36045,11 +36069,38 @@ static int routed_moe_launch(
      *                  pairs by expert and uses Q4_K tile8 gate/up + down kernels
      *                  (`DS4_CUDA_MOE_NO_Q4_SORTED=1` restores the older
      *                  token-indexed decode-style prefill kernels). */
+    const char *external_gate = nullptr, *external_up = nullptr, *external_down = nullptr;
+#ifdef DS4_EXTERNAL_DECODE
+    if (g_ds4x_expert_hook) {
+        /* The caller's expert cache supplies the routed experts' bytes: one
+         * token's ids become slots in its pool, read with the original strides. */
+        int32_t ids[16], slots[16];uint32_t n_slots = 0;
+        if (n_tokens != 1u || n_expert > 16u ||
+            !ds4_gpu_tensor_read(selected, 0, ids, (uint64_t)n_expert * sizeof(int32_t)) ||
+            !g_ds4x_expert_hook(g_ds4x_expert_user, layer_index, ids, n_expert, slots,
+                                &external_gate, &external_up, &external_down, &n_slots) ||
+            !external_gate || !external_up || !external_down || !n_slots) {
+            fprintf(stderr, "LLAMADECODE_DS4X_EXPERT_HOOK_FAILED layer=%u\n", layer_index);
+            return 0;
+        }
+        for (uint32_t i = 0; i < n_expert; i++) if (slots[i] < 0 || (uint32_t)slots[i] >= n_slots) return 0;
+        if (!g_ds4x_slot_tensor.ptr) {
+            void *ptr = nullptr;
+            if (cudaMalloc(&ptr, 64u * sizeof(int32_t)) != cudaSuccess) return 0;
+            g_ds4x_slot_tensor.ptr = ptr; g_ds4x_slot_tensor.bytes = 64u * sizeof(int32_t);
+            g_ds4x_slot_tensor.owner = 0; g_ds4x_slot_tensor.device_id = -1;
+        }
+        if (!ds4_gpu_tensor_write(&g_ds4x_slot_tensor, 0, slots, (uint64_t)n_expert * sizeof(int32_t))) return 0;
+        selected = &g_ds4x_slot_tensor;
+        n_total_expert = n_slots;
+        allow_streaming = 0;
+    }
+#endif
     const uint64_t gate_bytes = (uint64_t)n_total_expert * gate_expert_bytes;
     const uint64_t down_bytes = (uint64_t)n_total_expert * down_expert_bytes;
-    if (gate_bytes > model_size - gate_offset ||
+    if (!external_gate && (gate_bytes > model_size - gate_offset ||
         gate_bytes > model_size - up_offset ||
-        down_bytes > model_size - down_offset) {
+        down_bytes > model_size - down_offset)) {
         return 0;
     }
     const uint64_t required_slot_count = (uint64_t)n_tokens * n_expert;
@@ -36085,15 +36136,15 @@ static int routed_moe_launch(
         selected = &g_stream_selected_cache.slot_selected_tensor;
         n_total_expert = g_stream_selected_cache.compact_count;
     }
-    const char *gate_w = use_stream_selected_cache ?
+    const char *gate_w = external_gate ? external_gate : use_stream_selected_cache ?
         g_stream_selected_cache.gate_ptr :
         cuda_resolve_weight_ptr(model_map, gate_offset, gate_bytes,
                                 logical_tier, "moe_gate");
-    const char *up_w = use_stream_selected_cache ?
+    const char *up_w = external_up ? external_up : use_stream_selected_cache ?
         g_stream_selected_cache.up_ptr :
         cuda_resolve_weight_ptr(model_map, up_offset, gate_bytes,
                                 logical_tier, "moe_up");
-    const char *down_w = use_stream_selected_cache ?
+    const char *down_w = external_down ? external_down : use_stream_selected_cache ?
         g_stream_selected_cache.down_ptr :
         cuda_resolve_weight_ptr(model_map, down_offset, down_bytes,
                                 logical_tier, "moe_down");
@@ -45630,3 +45681,26 @@ extern "C" int ds4_gpu_tp_big_gate_wait(uint64_t seq) {
 #include "ds4_qwen4_cuda.cuh"
 
 #include "ds4_cuda_dspark_aux.cuh"
+
+#ifdef DS4_EXTERNAL_DECODE
+extern "C" int ds4_gpu_register_external_range(const void *model_map, uint64_t offset, uint64_t bytes, void *device_ptr) {
+    if (!model_map || !bytes || !device_ptr || offset + bytes < offset) return 0;
+    cuda_model_range r = {};
+    r.host_base = model_map; r.offset = offset; r.bytes = bytes; r.device_ptr = (char *)device_ptr; r.borrowed = 1;
+    g_model_ranges.push_back(r);
+    g_model_range_by_offset[offset] = g_model_ranges.size() - 1u;
+    return 1;
+}
+extern "C" void ds4_gpu_external_decode_mode(int on) {
+    g_ds4x_external_mode = on;
+    if (!on) {
+        for (size_t i = g_model_ranges.size(); i-- > 0;) if (g_model_ranges[i].borrowed) g_model_ranges.erase(g_model_ranges.begin() + (ptrdiff_t)i);
+        g_model_range_by_offset.clear();
+        for (size_t i = 0; i < g_model_ranges.size(); i++) g_model_range_by_offset[g_model_ranges[i].offset] = i;
+        if (g_ds4x_slot_tensor.ptr) { (void)cudaFree(g_ds4x_slot_tensor.ptr); g_ds4x_slot_tensor = {}; }
+    }
+}
+extern "C" void ds4_gpu_set_external_expert_hook(ds4_gpu_external_expert_hook hook, void *user) {
+    g_ds4x_expert_hook = hook; g_ds4x_expert_user = user;
+}
+#endif

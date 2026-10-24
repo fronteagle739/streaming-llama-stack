@@ -4,6 +4,7 @@
 #include "llama-dsv41-engram.h"
 #include "ggml-cpp.h"
 #include <array>
+#include <functional>
 #include <memory>
 #include <string>
 #include <vector>
@@ -111,6 +112,16 @@ public:
     // LLAMADECODE B2: returns the cache-pool slot of each routed id; only
     // misses are fetched (DirectStorage, explicit extents into bank 0).
     bool acquire_layer_experts(uint32_t layer,const std::vector<int32_t> &ids,std::vector<int32_t> &slots,std::string &error);
+    // LLAMADECODE ds4-decode: put the provider in the decode layout and make
+    // every non-routed stage resident (one pass), so an external decoder can
+    // read the weights in place; list them as (file offset, bytes, device).
+    bool prepare_external_decode(const config &options,std::string &error);
+    bool decode_resident_tensors(const std::function<bool(uint64_t,uint64_t,void*)> &visit,std::string &error) const;
+    // The expert-cache slots of one token's routed ids (only misses are
+    // fetched), the pool bases, and the slot count. cuda_stream receives the
+    // DirectStorage fence wait (the external decoder's stream).
+    bool external_expert_slots(uint32_t layer,const int32_t *ids,uint32_t n,int32_t *slots,
+        const char **gate,const char **up,const char **down,uint32_t *slot_count,void *cuda_stream,std::string &error);
     struct expert_cache_stats{uint32_t slots=0;uint64_t hits=0,misses=0,fetched_bytes=0;double fetch_ms=0;};
     expert_cache_stats cache_stats() const;
     bool decode_layout() const;
