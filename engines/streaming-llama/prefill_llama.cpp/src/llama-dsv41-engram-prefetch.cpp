@@ -132,6 +132,14 @@ public:
         io.file=CreateFileW(path,GENERIC_READ,FILE_SHARE_READ,nullptr,OPEN_EXISTING,
             FILE_FLAG_NO_BUFFERING|FILE_FLAG_OVERLAPPED|FILE_FLAG_RANDOM_ACCESS|FILE_FLAG_OPEN_REPARSE_POINT,nullptr);
         require(io.file!=INVALID_HANDLE_VALUE,"Cannot open original Engram file for its own IoRing");
+        {   // LLAMADECODE: the overlapped prompt-cache reads yield to the weight
+            // DirectStorage streaming (per-handle I/O priority hint, default low;
+            // LLAMADECODE_ENGRAM_IO_PRIORITY=normal restores the old behaviour).
+            const char*e=std::getenv("LLAMADECODE_ENGRAM_IO_PRIORITY");
+            FILE_IO_PRIORITY_HINT_INFO hint{};hint.PriorityHint=e&&!std::strcmp(e,"normal")?IoPriorityHintNormal:IoPriorityHintLow;
+            const BOOL ok=SetFileInformationByHandle(io.file,FileIoPriorityHintInfo,&hint,sizeof(hint));
+            static bool logged=false;if(!logged){logged=true;std::fprintf(stderr,"LLAMADECODE_ENGRAM_IO_PRIORITY hint=%s applied=%d\n",hint.PriorityHint==IoPriorityHintLow?"low":"normal",int(ok));}
+        }
         FILE_ID_INFO a{},b{};
         require(GetFileInformationByHandleEx(verified_file,FileIdInfo,&a,sizeof(a))&&
                 GetFileInformationByHandleEx(io.file,FileIdInfo,&b,sizeof(b))&&
