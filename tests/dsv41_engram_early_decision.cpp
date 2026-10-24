@@ -4,6 +4,7 @@
 #include "llama-dsv41-engram-early-decision.h"
 #include <cstdio>
 #include <stdexcept>
+#include <string>
 
 namespace ed = llama_dsv41_engram_early;
 static int failures = 0;
@@ -22,6 +23,7 @@ int main() {
     expect(ed::parse_mode("auto") == ed::mode::automatic, "auto");
     expect(ed::parse_mode("0") == ed::mode::off, "0 forces off");
     expect(ed::parse_mode("1") == ed::mode::on, "1 forces on");
+    expect(ed::parse_mode("pause") == ed::mode::pause, "pause forces the pause arm");
     expect(throws([] { ed::parse_mode("true"); }) && throws([] { ed::parse_mode("2"); }) && throws([] { ed::parse_mode("AUTO"); }),
            "other values are an error, not a silent off");
 
@@ -35,7 +37,9 @@ int main() {
     expect(r16.early && r16.requests == 488608 && r16.predicted_s > 4.88 && r16.predicted_s < 4.89 && r16.gap_s == 5.0,
            "16K cold (488,608 requests, 4.89 s <= 5 s): early (measured -5 s)");
     const auto r43 = ed::decide(1419303, ed::default_iops, ed::cold_gap_s);
-    expect(!r43.early && r43.predicted_s > 14.1, "43K cold (1.42M requests, 14.2 s > 5 s): ordinary (measured +3 s)");
+    expect(!r43.early && r43.predicted_s > 14.1, "43K cold (1.42M requests, 14.2 s > 5 s): does not fit (measured +3 s early)");
+    expect(r16.chosen == ed::arm::early && r43.chosen == ed::arm::pause, "auto arm: 16K early, 43K pause (not the late load)");
+    expect(std::string(ed::arm_name(ed::arm::early)) == "early" && std::string(ed::arm_name(ed::arm::pause)) == "pause", "arm names");
     // 23.7K: 651,121 requests (ordinary planner, coalesced ~5% fewer) -> 6.2-6.5 s: ordinary.
     expect(!ed::decide(620000, ed::default_iops, ed::cold_gap_s).early, "23.7K cold: ordinary");
     // Warm append: gap = the completed pass's layer-0 wall (545-token base: 0.601 s).

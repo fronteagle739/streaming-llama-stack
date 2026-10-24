@@ -474,6 +474,8 @@ struct wf_context {
     std::vector<dma_buf_slot>     dma_buf_pending;    // one per GPU buffer
     std::atomic<int>              dma_next_layer{0};  // next layer to schedule via DMA thread
     std::atomic<int>              dma_in_flight_buf{-1}; // buffer idx with DMA currently in-flight (-1 = idle)
+    // LLAMADECODE_ENGRAM_EARLY=pause: DirectStorage transfers of stages >= hold_from wait (INT_MAX: none).
+    std::atomic<int>              hold_from{INT_MAX};
     // Pre-enqueued buffer: DS requests enqueued, waiting for Submit().
     // Pipeline thread calls Submit() instantly on fence completion, then
     // enqueues the NEXT layer (during DMA) for zero inter-transfer gap.
@@ -4027,6 +4029,12 @@ static void wf_dma_thread_fn(wf_context * wf) {
                 continue;
             }
 
+            // LLAMADECODE_ENGRAM_EARLY=pause: a held stage stays pending (no DS read).
+            if (layer_idx >= wf->hold_from.load(std::memory_order_acquire)) {
+                wf->dma_buf_pending[bi].pending_layer.store(layer_idx);
+                continue;
+            }
+
             // Blocking wave-based transfer: DS → staging → D2D → compute.
             // When this returns, the entire layer is in the compute buffer.
             wf->gpu_bufs[bi].in_use = true;
@@ -5068,6 +5076,12 @@ void wf_register_layer(wf_context * wf, int layer_idx,
         }
         fflush(stderr);
     }
+}
+
+void wf_hold_from(wf_context * wf, int first_held_stage) {
+    if (!wf) return;
+    wf->hold_from.store(first_held_stage, std::memory_order_release);
+    wf->pipeline_cv.notify_all();
 }
 
 void wf_start(wf_context * wf) {

@@ -17,6 +17,7 @@
 #include <filesystem>
 #include <limits>
 #include <mutex>
+#include <climits>
 #include <stdexcept>
 #include <atomic>
 #include <chrono>
@@ -197,6 +198,28 @@ struct llama_dsv41_weight_provider::implementation {
     // gap_s (LLAMADECODE_ENGRAM_EARLY_DECISION); returns whether it started.
     bool launch_early(const std::vector<int32_t>&tokens,const llama_dsv41::engram_history&initial,uint64_t admitted,
                       std::shared_ptr<const llama_dsv41_engram_prompt_cache>prior,const char*at,double gap_s);
+    // LLAMADECODE_ENGRAM_EARLY=pause (or auto choosing it): the weight stream
+    // holds stages of layers >= 1 from its start until the early load ends.
+    std::mutex pause_mutex;bool pause_wanted=false,pause_applied=false,pause_released=false;
+    std::chrono::steady_clock::time_point pause_started;
+    int pause_from_stage()const{return decode_layout?3:2;} // layer 1's first stage
+    void apply_pause(const char*at){
+        std::lock_guard<std::mutex>lock(pause_mutex);
+        if(!pause_wanted||pause_applied||!fetcher)return;
+        if(pause_released){pause_wanted=false;
+            llama_dsv41_layer_log("LLAMADECODE_ENGRAM_PAUSE_SKIPPED at=%s reason=engram_loaded_before_weight_stream\n",at);return;}
+        wf_hold_from(fetcher,pause_from_stage());pause_applied=true;pause_started=std::chrono::steady_clock::now();
+        llama_dsv41_layer_log("LLAMADECODE_ENGRAM_PAUSE_START at=%s hold_from_stage=%d\n",at,pause_from_stage());
+    }
+    void release_pause(double engram_wall_ms,uint64_t requests,bool failed){
+        std::lock_guard<std::mutex>lock(pause_mutex);
+        if(!pause_wanted)return;
+        pause_released=true;double held_ms=0;
+        if(pause_applied){wf_hold_from(fetcher,INT_MAX);held_ms=std::chrono::duration<double,std::milli>(std::chrono::steady_clock::now()-pause_started).count();
+            pause_applied=false;pause_wanted=false;}
+        llama_dsv41_layer_log("LLAMADECODE_ENGRAM_PAUSE_END held_ms=%.3f stream_was_held=%d engram_wall_ms=%.3f requests=%llu iops=%.0f failed=%d\n",
+            held_ms,int(held_ms>0),engram_wall_ms,(unsigned long long)requests,engram_wall_ms>0?double(requests)*1000.0/engram_wall_ms:0.0,int(failed));
+    }
     void mark_weight_stream(bool active){if(llama_dsv41_engram_early_enabled())llama_dsv41_engram_weight_stream(active);}
     std::vector<ggml_backend_buffer_ptr>buffers;
     wf_context *fetcher=nullptr;
@@ -575,7 +598,7 @@ void llama_dsv41_weight_provider::implementation::create_pipeline(){
         if(p->options.compute_direct)
             std::fprintf(stderr,"LLAMADECODE_PREFILL_LAYOUT banks=%zu streaming_banks=%u persistent_stages=0 expert_pool_bound=0\n",p->buffers.size(),p->options.buffers);
     }
-    require(!wf_has_failed(p->fetcher),"Original layer registration failed");p->identity();if(p->options.ds_gpu_ring_slots)wf_set_layer_major_mode(p->fetcher,true);wf_start(p->fetcher);
+    require(!wf_has_failed(p->fetcher),"Original layer registration failed");p->identity();if(p->options.ds_gpu_ring_slots)wf_set_layer_major_mode(p->fetcher,true);p->apply_pause("cold_wf_start");wf_start(p->fetcher);
     require(!wf_has_failed(p->fetcher),"Original DirectStorage pipeline startup failed");p->mark_weight_stream(true);
 }
 bool llama_dsv41_weight_provider::open(const config&options,std::string&error){return inspect(options,error)&&allocate(error);}
@@ -609,7 +632,7 @@ bool llama_dsv41_weight_provider::restart_prompt(const config&options,std::strin
 },error);}
 bool llama_dsv41_weight_provider::start_request(std::string&error){return p->guard([&]{
     require(p->allocated&&!p->device_suspended&&!p->leased&&p->next==0,"Request start requires an admitted resident unleased first stage");p->identity();
-    p->fetched_total=0;p->fetch_ms_total=0;if(!p->bound()){wf_start(p->fetcher);p->mark_weight_stream(true);}
+    p->fetched_total=0;p->fetch_ms_total=0;if(!p->bound()){p->apply_pause("request_wf_start");wf_start(p->fetcher);p->mark_weight_stream(true);}
     require(!wf_has_failed(p->fetcher),"Persistent DirectStorage restart failed");
 },error);}
 llama_dsv41_weight_provider::capacity llama_dsv41_weight_provider::budget()const{std::lock_guard<std::mutex>lock(p->mutex);return p->inspected&&!p->poisoned?p->planned:capacity{};}
@@ -623,6 +646,7 @@ bool llama_dsv41_weight_provider::implementation::launch_early(const std::vector
     const auto layout=engram;const auto offsets=engram_offsets;const auto model=path;const HANDLE handle=file;
     const uint64_t file_bytes=options.verified_file_bytes;
     const bool decided=llama_dsv41_engram_early_auto();
+    bool pause=llama_dsv41_engram_early_pause();
     if(decided){
         // Same rows/admission as the thread's prepare_early, planned here so a
         // load that cannot fit its gap never starts (the ordinary path runs).
@@ -632,23 +656,29 @@ bool llama_dsv41_weight_provider::implementation::launch_early(const std::vector
             // =1 would fail this request at adoption; auto keeps the ordinary path, which applies its own admission.
             llama_dsv41_layer_log("LLAMADECODE_ENGRAM_EARLY_DECISION at=%s tokens=%zu early=0 reason=plan_failed what=\"%s\"\n",at,tokens.size(),failure.what());return false;}
         const auto d=llama_dsv41_engram_early::decide(e->cache->planned_requests(),llama_dsv41_engram_early_iops(),gap_s);
-        llama_dsv41_layer_log("LLAMADECODE_ENGRAM_EARLY_DECISION at=%s tokens=%zu requests=%llu iops=%.0f predicted_s=%.3f gap_s=%.3f plan_ms=%.3f early=%d\n",
+        llama_dsv41_layer_log("LLAMADECODE_ENGRAM_EARLY_DECISION at=%s tokens=%zu requests=%llu iops=%.0f predicted_s=%.3f gap_s=%.3f plan_ms=%.3f early=1 fits=%d arm=%s\n",
             at,tokens.size(),(unsigned long long)d.requests,llama_dsv41_engram_early_iops(),d.predicted_s,d.gap_s,
-            std::chrono::duration<double,std::milli>(std::chrono::steady_clock::now()-planning).count(),int(d.early));
-        if(!d.early)return false;
+            std::chrono::duration<double,std::milli>(std::chrono::steady_clock::now()-planning).count(),int(d.early),llama_dsv41_engram_early::arm_name(d.chosen));
+        pause=d.chosen==llama_dsv41_engram_early::arm::pause;
     }
+    if(pause){std::lock_guard<std::mutex>lock(pause_mutex);pause_wanted=true;pause_applied=false;pause_released=false;}
     early=e;
     const auto queued=std::chrono::steady_clock::now();
-    early_thread=std::thread([e,layout,offsets,model,handle,file_bytes,admitted,prior,queued,decided]{
+    early_thread=std::thread([this,e,layout,offsets,model,handle,file_bytes,admitted,prior,queued,decided,pause]{
         const auto started=std::chrono::steady_clock::now();
+        auto loading=started;bool failed=false;
         try{
             if(!decided)e->cache->prepare_early(layout,e->tokens.data(),uint32_t(e->tokens.size()),offsets,admitted,e->initial,prior);
+            loading=std::chrono::steady_clock::now();
             e->cache->load_early(model.c_str(),handle,file_bytes,[e]{return e->cancel.load();});
-        }catch(...){e->failure=std::current_exception();}
+        }catch(...){e->failure=std::current_exception();failed=true;}
         e->wall_ms=std::chrono::duration<double,std::milli>(std::chrono::steady_clock::now()-started).count();
+        // Pause arm: release the held weight stream on every exit (loaded, failed or cancelled).
+        if(pause){uint64_t requests=0;try{requests=e->cache->planned_requests();}catch(...){}
+            release_pause(std::chrono::duration<double,std::milli>(std::chrono::steady_clock::now()-loading).count(),requests,failed);}
         (void)queued;
     });
-    llama_dsv41_layer_log("LLAMADECODE_ENGRAM_EARLY_QUEUED at=%s tokens=%zu admitted_bytes=%llu prior=%d own_iorings=1\n",at,tokens.size(),(unsigned long long)admitted,int(bool(prior)));
+    llama_dsv41_layer_log("LLAMADECODE_ENGRAM_EARLY_QUEUED at=%s tokens=%zu admitted_bytes=%llu prior=%d own_iorings=1 arm=%s\n",at,tokens.size(),(unsigned long long)admitted,int(bool(prior)),pause?"pause":"early");
     return true;
 #else
     (void)tokens;(void)initial;(void)admitted;(void)prior;(void)at;(void)gap_s;throw std::runtime_error("Early Engram IoRing requires Windows");
