@@ -118,7 +118,7 @@ class Producer:
                 self.bootstrap(self._write)
             if self.startup is None:
                 self.ready = self._receive()
-                require(self.ready.get('status') == 'ready' and type(self.ready.get('next_sequence')) is int and (self.ready.get('next_sequence') == 1) and (self.ready.get('maximum_prefill_tokens') == 49152) and (self.ready.get('maximum_decode_tokens') == 128) and (self.ready.get('control_host_bytes') == 64 << 20), 'Unexpected persistent producer admission')
+                require(self.ready.get('status') == 'ready' and type(self.ready.get('next_sequence')) is int and (self.ready.get('next_sequence') == 1) and (self.ready.get('maximum_prefill_tokens') == 49152) and (self.ready.get('maximum_decode_tokens') == 49152) and (self.ready.get('control_host_bytes') == 64 << 20), 'Unexpected persistent producer admission')
                 checkpoint(self.ready.get('checkpoint'), self.native_mode)
             else:
                 self.ready = self.startup(self)

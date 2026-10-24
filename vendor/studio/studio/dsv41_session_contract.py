@@ -7,6 +7,7 @@ MAX_CONTROL = 1 << 20
 CONTEXT = 1000001
 MAX_PREFILL = 49152
 MAX_DECODE = 128
+MAX_DECODE_DELTA = MAX_PREFILL
 
 class Refused(ValueError):
     pass
@@ -131,8 +132,9 @@ def command(row, session, sequence, mode=3):
     if op == 'apply_decode_delta':
         target = checkpoint(row['target'], mode)
         base = row['base']
-        require(target['context'] == base['context'] and 0 < target['position'] - base['position'] <= MAX_DECODE, 'Decode delta direction/extent')
-        integer(row['bytes'], (264 if mode == 3 else 256) + 4 + 129280 * 4, 64 << 20)
+        extent = target['position'] - base['position']
+        require(target['context'] == base['context'] and 0 < extent <= MAX_DECODE_DELTA, 'Decode delta direction/extent')
+        integer(row['bytes'], (264 if mode == 3 else 256) + 4 + 129280 * 4, (64 << 20) + (extent * 6404 if extent > MAX_DECODE else 0))
     return row
 
 def initial_request(session, headers, body):

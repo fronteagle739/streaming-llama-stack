@@ -55,7 +55,7 @@ static bool ds4_ns_poll(ds4_ns_session*s,ds4_nf_io*io,const char*suffix,bool sta
         if(starting){
             if(strcmp(s->id,r->session))return false;
             if(!strcmp(r->state,"ready"))return ds4_ns_identity(s,r)&&r->have_checkpoint&&r->next_sequence==1&&
-                r->maximum_prefill_tokens==49152&&r->maximum_decode_tokens==128&&r->control_host_bytes==(64u<<20);
+                r->maximum_prefill_tokens==49152&&r->maximum_decode_tokens==49152&&r->control_host_bytes==(64u<<20);
             if(strcmp(r->state,"starting"))return false;
         }else{
             if(r->sequence!=s->sequence)return false;

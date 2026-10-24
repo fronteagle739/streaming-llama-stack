@@ -3,6 +3,7 @@
 #include <tuple>
 #include "llama-dsv41-engram-prefetch.h"
 #include "llama-dsv41-engram-early-decision.h"
+#include "llama-dsv41-delta.h"
 #include "llama-weight-fetcher.h"
 #include "llama-wf-bounded-policy.h"
 
@@ -901,9 +902,9 @@ bool llama_dsv41_weight_provider::release(std::string&error){return p->guard([&]
 void llama_dsv41_weight_provider::invalidate(){if(!p)return;std::lock_guard<std::mutex>lock(p->mutex);p->invalidate();}
 bool llama_dsv41_weight_provider::advance_decoded_engram(llama_dsv41::engram_history&history,
         const int32_t*tokens,size_t count,std::string&error){return p->guard([&]{
-    require(p->allocated&&!p->leased&&p->next==p->stage_count()&&count&&count<=128,
-        "Decoded Engram history requires a released pass and1..128 evaluated tokens");p->identity();
-    auto pending=history;std::array<llama_dsv41::engram_rows,128>rows{};std::string why;
+    require(p->allocated&&!p->leased&&p->next==p->stage_count()&&count&&count<=llama_dsv41::decode_delta_max_tokens,
+        "Decoded Engram history requires a released pass and 1..maximum_decode_tokens evaluated tokens");p->identity();
+    auto pending=history;std::vector<llama_dsv41::engram_rows>rows(count);std::string why;
     require(llama_dsv41::engram_hash(p->engram,pending,tokens,nullptr,count,rows.data(),why),
         "Decoded Engram token/history validation failed");history=pending;
 },error);}

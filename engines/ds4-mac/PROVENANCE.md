@@ -7,3 +7,5 @@ Owned anonymous/wired core, tensor/KV and common scratch allocation candidate: `
 Stack-only native build passed in 10.39 s (peak RSS 1,034,469,376 B). The owned/wired variant rebuilt in 3.77 s (454,787,072 B). Its real Metal fixture passed exact copying, anonymous region identity, positive OS wired count, zero swapped region pages, release, and insufficient-budget refusal. These small-allocation results do not qualify full-model residency or parity.
 
 Complete standalone native-session inclusion and source closure, matching this export: `0710258ca185c4804295d882a1389104ba2c9571`. This keeps the private comparison build on an owned branch and uses the same memory protection.
+
+rtxmac-producer-2 local patch: `ds4_native_session_transport.inc` (and its `tools/dsv41-prefill/mac/` copy) accepts the producer handshake only with `maximum_decode_tokens==49152`, the accepted single decode-delta maximum (one whole local append). The transport still sends <=128-token deltas; no shader math or native state format changes.
