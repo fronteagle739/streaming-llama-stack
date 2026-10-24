@@ -59,8 +59,18 @@ void require(bool value,const char*message){if(!value)throw std::runtime_error(m
 void success(bool value,const std::string&error){if(!value)throw std::runtime_error(error.empty()?"Offline producer operation failed":error);}
 uint64_t add(uint64_t a,uint64_t b){require(b<=UINT64_MAX-a,"Producer capacity overflow");return a+b;}
 double ms(clock_type::time_point start){return std::chrono::duration<double,std::milli>(clock_type::now()-start).count();}
+// LLAMADECODE: an external graceful abort. The caller's RAM watch creates this
+// file; the engine then stops at its next stage boundary and tears down normally.
+bool abort_file_present(){
+    static const wchar_t*name=_wgetenv(L"LLAMADECODE_ABORT_FILE");
+    if(!name||!*name)return false;
+    static std::atomic<int64_t>last{0};const int64_t now=std::chrono::duration_cast<std::chrono::milliseconds>(clock_type::now().time_since_epoch()).count();
+    if(now-last.load()<250)return false;last.store(now);
+    return GetFileAttributesW(name)!=INVALID_FILE_ATTRIBUTES;
+}
 bool should_stop(){
     if(!llama_dsv41_host_memory::live())memory_abort.store(true);
+    if(abort_file_present())interrupted.store(true);
     return interrupted.load()||memory_abort.load();
 }
 void stop(){require(!should_stop(),memory_abort.load()?"Producer stopped at the1GiB physicalRAM/OScommit floor; incomplete output retained":"Producer cancelled; incomplete output retained and not certified");}

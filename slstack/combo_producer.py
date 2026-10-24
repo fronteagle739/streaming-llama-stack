@@ -165,6 +165,12 @@ class ComboProducer:
         reply=self.process.request(self.command('prefill',base=self.checkpoint,tokens=tokens))
         self.checkpoint=reply['checkpoint'];return reply
 
+    def decode(self,max_tokens,stop_tokens=()):
+        """LLAMADECODE B0: greedy decode inside this producer (no handoff). The
+        returned last token (stop, or sampled at max_tokens) is not evaluated."""
+        reply=self.process.request(self.command('decode',base=self.checkpoint,max_tokens=int(max_tokens),stop_tokens=[int(t) for t in stop_tokens]))
+        self.checkpoint=reply['checkpoint'];return reply
+
     def export(self,ram):
         started=time.monotonic();cp=transport_checkpoint(self.checkpoint)
         with ram.lease():
