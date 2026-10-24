@@ -236,7 +236,7 @@ class SingleEngine:
         if self.producer is not None and tokens is None:
             metrics['fresh_reason'] = 'rendered history diverges from the live frontier'
             self.retire('prefix diverged');tokens = canonical
-        started = time.monotonic()
+        started = time.monotonic();metrics["prefill_started"] = started
         if self.producer is None:
             if self.leases is None:
                 stack = ExitStack();self.lease_id = stack.enter_context(self.lease_factory());self.leases = stack
@@ -382,7 +382,7 @@ class SingleProxy:
         from .combo_proxy import request_worker_config
         from .combo_producer import stall_seconds
         self.cfg = cfg;self.run_id = run_id;self.window_file = Path(window_file) if window_file else None
-        self.window_lock = threading.Lock();self.stall = stall_seconds(cfg);self.beat_seconds = min(30.0, self.stall / 10)
+        self.window_lock = threading.Lock();self.stall = stall_seconds(cfg);self.beat_seconds = 1.0   # >= 1 Hz prefill_progress for streaming clients
         self.request_active = False
         self.token = os.environ.get('DS4_SERVER_AUTH_TOKEN', '')
         if len(self.token) < 32:raise ValueError('Normal Studio native Bearer token is required')
@@ -520,6 +520,22 @@ def handler(proxy):
                     try:self.wfile.write(data);self.wfile.flush()
                     except OSError:alive[0] = False   # client gone: the decode stops at its next token boundary
             def write(row):send_raw(b'data: ' + json.dumps(row, separators=(',', ':'), ensure_ascii=False).encode() + b'\n\n')
+            progress = dict(tracker=None, offset=0)
+            def progress_beat():
+                # Owner: streaming clients get prefill percent. Parsed from the resident producer's
+                # per-layer sweep lines; a cold launch (producer still opening) gets a keepalive.
+                from .prefill_progress import PrefillProgress, chunk as progress_chunk
+                process = getattr(engine.producer, 'process', None);total = metrics.get('new_tokens')
+                if process is None or not total or 'first_token_seconds' in metrics:
+                    send_raw(b': progress\n\n');return
+                diagnostic = process.diagnostic
+                if progress['tracker'] is None:
+                    size = int((getattr(process, 'ready', None) or {}).get('maximum_prefill_tokens') or 49152)
+                    progress['tracker'] = PrefillProgress(total, size, started=metrics.get('prefill_started', time.monotonic()))
+                    progress['offset'] = len(diagnostic)
+                if len(diagnostic) < progress['offset']:progress['offset'] = 0   # rotated
+                progress['tracker'].feed(bytes(diagnostic[progress['offset']:]));progress['offset'] = len(diagnostic)
+                write(progress_chunk(cid, model, created, progress['tracker'].snapshot(time.monotonic())))
             final = {}
             def emit(kind, *values):
                 if kind == 'delta' and streaming:write(_chunk(cid, model, created, {values[0]: values[1]}))
@@ -533,7 +549,7 @@ def handler(proxy):
                     write(_chunk(cid, model, created, dict(role='assistant')))
                 try:
                     proxy.request_active = True;proxy.window(True, engine.lease_id)
-                    with proxy.heartbeat((lambda: send_raw(b': progress\n\n')) if streaming else None):
+                    with proxy.heartbeat(progress_beat if streaming else None):
                         engine.run(body, emit, metrics, ready=lambda: proxy.window(True, engine.lease_id), client_gone=lambda: not alive[0])
                 finally:proxy.request_active = False;proxy.window(False)
                 parsed, splitter = final['parsed'], final['splitter']
