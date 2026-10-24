@@ -43733,6 +43733,13 @@ static bool ds41_hc_mix(ds41_gpu_graph *g, const ds4_model *m,
 
 /* rope_il >= 0: the heads still carry their rope; that layer's inverse rope
  * folds into the projection (else it runs first). */
+/* DS4COMBO V4.1 per-layer dump (defined with ds41_graph_layer). */
+static bool ds41_dump_pos(uint32_t pos);
+static bool ds41_dump_put(const ds4_gpu_tensor *t, uint32_t row, uint32_t words,
+                          uint32_t il, uint32_t pos, uint32_t point);
+static bool ds41_dump_rows(const ds4_gpu_tensor *t, uint32_t start, uint32_t count,
+                           uint32_t words, uint32_t il, uint32_t point);
+
 static bool ds41_attention_low(ds41_gpu_graph *g, const ds4_model *m,
                                const ds4_layer_weights *l, int rope_il) {
     const uint32_t groups = DS4_N_OUT_GROUP / g->tp_world;
@@ -43775,6 +43782,17 @@ static bool ds41_attention_output(ds41_gpu_graph *g, const ds4_model *m,
 static bool ds41_attention_expand(ds41_gpu_graph *g, const ds4_model *m,
                                   const ds4_layer_weights *l, int rope_il) {
     if (!ds41_attention_low(g, m, l, rope_il)) return false;
+    const bool dump = g->tp_world == 1 && rope_il >= 0 && ds41_dump_pos(g->pos);
+    if (dump && !ds41_dump_put(g->heads, 0, DS4_N_HEAD * DS4_N_HEAD_DIM, (uint32_t)rope_il, g->pos, 9))
+        return false;
+    if (dump) {
+        /* CUDA has no fused matmul+expand: this is the same sequence as below,
+         * split only so the projection result can be read. */
+        return ds41_attention_b(g, m, l, g->block) &&
+            ds41_dump_put(g->block, 0, DS4_N_EMBD, (uint32_t)rope_il, g->pos, 10) &&
+            ds4_gpu_hc_expand_split_bf16_tensor(g->after_attn, g->block, g->residual, g->attn_split,
+                                                DS4_N_EMBD, DS4_N_HC);
+    }
     if (l->attn_output_b->type == DS4_TENSOR_Q8_0 && !ds41_expand_fusion_off() &&
         ds4_gpu_dsv41_matmul_expand(g->after_attn, m->map, m->size, l->attn_output_b->abs_offset,
             l->attn_output_b->dim[0], l->attn_output_b->dim[1], g->low, NULL, g->residual,
@@ -43924,8 +43942,11 @@ static bool ds41_attention(ds41_gpu_graph *g, const ds4_model *m,
     if (!projected && !ds41_attention_project(g, m, l, (int)il, &q_roped)) return false;
     if ((!q_roped && !ds41_rope(g->q, heads, DS4_N_HEAD_DIM, il, pos, false)) ||
         !ds41_rope_store(g->kv, g->window[il], (uint64_t)(pos % 128u) * 512u * 4u,
-                         DS4_N_HEAD_DIM, il, pos, DS4_V41_FP8_E8M0) ||
-        !ds41_attention_select(g, m, l, il)) return false;
+                         DS4_N_HEAD_DIM, il, pos, DS4_V41_FP8_E8M0)) return false;
+    if (g->tp_world == 1 && ds41_dump_pos(pos) &&
+        (!ds41_dump_put(g->q, 0, heads * DS4_N_HEAD_DIM, il, pos, 7) ||
+         !ds41_dump_put(g->window[il], pos % 128u, DS4_N_HEAD_DIM, il, pos, 8))) return false;
+    if (!ds41_attention_select(g, m, l, il)) return false;
     const uint32_t attended = n_comp < DS4_N_INDEXER_TOP_K ? n_comp : DS4_N_INDEXER_TOP_K;
     const uint32_t n_raw = pos + 1u < 128u ? pos + 1u : 128u;
     const uint64_t sinks = l->attn_sinks->abs_offset + (uint64_t)head0 * sizeof(float);
@@ -44519,6 +44540,8 @@ static bool ds41_attention_batch(ds41_gpu_graph *g, const ds4_model *m,
     if (!ds4_gpu_dsv41_rope(b->q, DS4_N_HEAD_DIM, heads, count, start, ratio != 0, false) ||
         !ds4_gpu_dsv41_rope(b->kv, DS4_N_HEAD_DIM, 1, count, start, ratio != 0, false) ||
         !ds4_gpu_dsv41_quantize(b->kv, DS4_N_HEAD_DIM, count, DS4_V41_FP8_E8M0)) return false;
+    if (!ds41_dump_rows(b->q, start, count, heads * DS4_N_HEAD_DIM, il, 7) ||
+        !ds41_dump_rows(b->kv, start, count, DS4_N_HEAD_DIM, il, 8)) return false;
     /* Preserve chronological raw keys before publishing the final decode ring. */
     if (first && !ds4_gpu_tensor_copy(g->raw_prefill, 0, g->window[il],
                                      raw_start * row_bytes, first * row_bytes)) return false;
@@ -44631,6 +44654,7 @@ static bool ds41_attention_batch(ds41_gpu_graph *g, const ds4_model *m,
     if (!ds4_gpu_dsv41_quantize(b->heads, heads * DS4_N_HEAD_DIM, count, DS4_V41_BF16) ||
         !ds4_gpu_dsv41_rope(b->heads, DS4_N_HEAD_DIM, heads, count, start, ratio != 0, true))
         return false;
+    if (!ds41_dump_rows(b->heads, start, count, heads * DS4_N_HEAD_DIM, il, 9)) return false;
     const uint32_t kept = n_raw < 128u ? n_raw : 128u;
     const uint32_t slot = (start + count - kept) % 128u;
     const uint32_t part = kept < 128u - slot ? kept : 128u - slot;
@@ -46162,6 +46186,8 @@ static bool ds41_graph_prefill_sweep(ds41_gpu_graph *g, const ds4_model *m,
                                                    g->batch.low, count, true);
                 }
                 DS41_STAGE("attention output");
+                if (ok && l->attn_output_b->type == DS4_TENSOR_Q8_0 && g->tp_world == 1)
+                    ok = ds41_dump_rows(g->batch.block, start, count, DS4_N_EMBD, il, 10);
                 if (ok && batch_hc) ok = ds41_after_attention_batch(&active, m, l, count, false);
                 DS41_STAGE("hc/ffn norm");
                 if (ok && batch_hc)
