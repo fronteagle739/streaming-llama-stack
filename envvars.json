@@ -78145,5 +78145,75 @@
         "consumer": "    ram_guard.preflight_host_ram(floor, label, skip_env='ZIMAGE_SKIP_RAM_PREFLIGHT', force_env='ZIMAGE_FORCE_RESIDENT', advice='Use the Z-Image per-block streamer (stream_weights=True) on a RAM-constrained box.')\n    max_proc = float(os.environ.get('ZIMAGE_MAX_PROC_RAM_GB', 14.0))\n    min_free = float(os.environ.get('ZIMAGE_WATCHDOG_MIN_FREE_GB', 4.0))\n    try:\n        from cosmos_windows import mem_guard\n    except Exception:\n        mem_guard = None"
       }
     ]
+  },
+  {
+    "var": "DS4COMBO_V41_DUMP",
+    "flag": null,
+    "default": null,
+    "code_default": "NULL from getenv; dump off",
+    "classification": "advanced",
+    "scopes": [
+      "ds4-win"
+    ],
+    "doc": "Diagnostic: file that receives the V4.1 per-layer dump (token-major and layer-major); off when unset. Compare with scripts/ds41_dump_compare.py.",
+    "reads": [
+      "engines/ds4-win/ds4.c"
+    ]
+  },
+  {
+    "var": "DS4COMBO_V41_DUMP_POS",
+    "flag": null,
+    "default": null,
+    "code_default": "NULL from getenv; dump off",
+    "classification": "advanced",
+    "scopes": [
+      "ds4-win"
+    ],
+    "doc": "Diagnostic: comma-separated prompt positions for DS4COMBO_V41_DUMP (default 0,128,275,549).",
+    "reads": [
+      "engines/ds4-win/ds4.c"
+    ]
+  },
+  {
+    "var": "DS4COMBO_V41_LOADER_CHECK",
+    "flag": null,
+    "default": null,
+    "code_default": "NULL from getenv; check off",
+    "classification": "advanced",
+    "scopes": [
+      "ds4-win"
+    ],
+    "doc": "Diagnostic: comma-separated layers (<64) whose borrowed layer-major expert slots are compared once with a plain GGUF read, plus the slot remap; prints DS4COMBO_V41_LOADER_CHECK lines.",
+    "reads": [
+      "engines/ds4-win/ds4_cuda.cu"
+    ]
+  },
+  {
+    "var": "DS4COMBO_V41_DS_FENCE",
+    "flag": null,
+    "default": null,
+    "code_default": "NULL from getenv; off",
+    "classification": "advanced",
+    "scopes": [
+      "ds4-win"
+    ],
+    "doc": "Diagnostic: 1 makes each borrowed layer-major DirectStorage expert wave wait on the shared D3D12 fence (CUDA external semaphore) before its arena copies.",
+    "reads": [
+      "engines/ds4-win/ds4_cuda.cu"
+    ]
+  },
+  {
+    "var": "DS4COMBO_V41_DISABLE_ONE_SWEEP",
+    "flag": null,
+    "default": null,
+    "code_default": "NULL from getenv; one sweep on",
+    "classification": "advanced",
+    "scopes": [
+      "ds4-win"
+    ],
+    "doc": "A/B switch: set to restore the old 2048-row rounding of CUDA SSD V4.1 layer sweeps of 8192+ rows (a partial-tile tail then runs as a second sweep).",
+    "reads": [
+      "engines/ds4-win/ds4.c"
+    ]
   }
 ]
