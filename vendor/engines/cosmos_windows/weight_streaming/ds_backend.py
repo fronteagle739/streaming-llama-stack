@@ -1,5 +1,7 @@
 # Derived from private fork c5ee9ec9dd47786287e576e78fbb42e5f4c4eac3: cosmos_windows/weight_streaming/ds_backend.py
 # Machine fallback paths cleared; no model data included.
+# wf_params matches this stack's engines/streaming-llama src/llama-weight-fetcher.h (same fork): the six
+# strict-profile fields are appended in header order; ctypes zero-fills them, which the header defines as legacy.
 from __future__ import annotations
 import ctypes as C
 import os
@@ -12,7 +14,7 @@ WF_MOE_FETCH_ALL, WF_MOE_FETCH_ACTIVE = (0, 1)
 WF_POST_HANDOFF_MMAP, WF_POST_KEEP_FETCHER = (0, 1)
 
 class wf_params(C.Structure):
-    _fields_ = [('model_path', C.c_char_p), ('split_paths', C.POINTER(C.c_char_p)), ('n_split_files', C.c_int), ('io_block_size', C.c_size_t), ('io_queue_depth', C.c_int), ('io_threads', C.c_int), ('io_direct', C.c_bool), ('prefetch_depth', C.c_int), ('n_gpu_buffers', C.c_int), ('n_ram_buffers', C.c_int), ('max_layer_bytes', C.c_size_t), ('n_sublayers', C.c_int), ('gpu_backend', C.c_void_p), ('cuda_device', C.c_void_p), ('mode', C.c_int), ('moe_mode', C.c_int), ('post_mode', C.c_int), ('n_layers', C.c_int), ('trace', C.c_bool)]
+    _fields_ = [('model_path', C.c_char_p), ('split_paths', C.POINTER(C.c_char_p)), ('n_split_files', C.c_int), ('io_block_size', C.c_size_t), ('io_queue_depth', C.c_int), ('io_threads', C.c_int), ('io_direct', C.c_bool), ('prefetch_depth', C.c_int), ('n_gpu_buffers', C.c_int), ('n_ram_buffers', C.c_int), ('max_layer_bytes', C.c_size_t), ('ds_staging_limit_bytes', C.c_size_t), ('ds_async_drain', C.c_bool), ('ds_submit_threads', C.c_uint32), ('n_sublayers', C.c_int), ('gpu_backend', C.c_void_p), ('cuda_device', C.c_void_p), ('mode', C.c_int), ('moe_mode', C.c_int), ('post_mode', C.c_int), ('n_layers', C.c_int), ('trace', C.c_bool), ('ds_gpu_ring_slots', C.c_uint32), ('ds_zero_padding_only', C.c_bool), ('ds_compute_direct', C.c_bool)]
 
 class wf_stats(C.Structure):
     _fields_ = [('nvme_read_bw_gbps', C.c_float), ('ram_to_gpu_bw_gbps', C.c_float), ('end_to_end_bw_gbps', C.c_float), ('total_nvme_read_ms', C.c_float), ('total_staging_ms', C.c_float), ('total_h2d_ms', C.c_float), ('total_stall_ms', C.c_float), ('total_compute_ms', C.c_float), ('bytes_read_nvme', C.c_size_t), ('bytes_uploaded_gpu', C.c_size_t), ('layers_fetched', C.c_int), ('stall_count', C.c_int), ('io_ops', C.c_int), ('experts_skipped', C.c_int), ('expert_bytes_saved', C.c_size_t), ('cache_hits', C.c_uint64), ('cache_vram_hits', C.c_uint64), ('cache_ram_hits', C.c_uint64), ('cache_misses', C.c_uint64), ('cache_bytes_saved', C.c_size_t), ('expert_prefetch_predicted', C.c_uint64), ('expert_prefetch_hits', C.c_uint64), ('expert_prefetch_misses', C.c_uint64), ('expert_prefetch_wasted_bytes', C.c_size_t), ('gds_active', C.c_bool), ('effective_mode', C.c_int)]
