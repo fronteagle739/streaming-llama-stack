@@ -140,8 +140,14 @@ struct ds4_external {
         std::string error;std::array<int32_t,3>tail{};success(sweep.engram_tail(tail,error),error);
         std::vector<float>logits(129280);
         ggml_backend_synchronize(backend);
+        const auto before=provider->cache_stats();const auto started=std::chrono::steady_clock::now();
         require(x_decode(token,position,tail.data(),3,logits.data())==1,"ds4-win decode step failed");
+        const double decode_ms=std::chrono::duration<double,std::milli>(std::chrono::steady_clock::now()-started).count();
         success(sweep.commit_external_token(token,logits,error),error);
+        const auto after=provider->cache_stats();
+        std::fprintf(stderr,"LLAMADECODE_DS4X_TOKEN position=%u decode_ms=%.3f ds_bytes=%llu ds_ms=%.3f l1_hits=%llu l2_hits=%llu misses=%llu l1_slots=%u l2_slots=%u\n",position,decode_ms,
+            (unsigned long long)(after.fetched_bytes-before.fetched_bytes),after.fetch_ms-before.fetch_ms,(unsigned long long)(after.hits-before.hits),
+            (unsigned long long)(after.l2_hits-before.l2_hits),(unsigned long long)(after.misses-before.misses),after.slots,after.l2_slots);
     }
     // The DLL stays mapped until process exit (never FreeLibrary): no ds4 code may
     // be unmapped under a thread or CUDA callback it started.
