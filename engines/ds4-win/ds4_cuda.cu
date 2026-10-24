@@ -4216,10 +4216,18 @@ static cuda_stream_expert_cache *cuda_stream_expert_cache_prepare(
         uint64_t gate_expert_bytes,
         uint64_t down_expert_bytes,
         uint32_t target_cap) {
-    if (g_stream_prefill_borrow_slots && !g_stream_prefill_borrow_notice) {
-        g_stream_prefill_borrow_notice = 1;
-        fprintf(stderr, "DS4COMBO_PREFILL_BORROW_WARNING decode expert tier re-prepared while a layer "
-                        "sweep borrows its memory (loader slots %u)\n", g_stream_prefill_borrow_slots);
+    if (g_stream_prefill_borrow_slots) {
+        /* The borrow holds this memory; the tier comes back after
+         * ds4_gpu_stream_prefill_borrow_end(). Refuse (logged once) instead of
+         * allocating past the live reserve (the fixed-plan floor would); every
+         * caller treats NULL as no VRAM tier for this request. */
+        if (!g_stream_prefill_borrow_notice) {
+            g_stream_prefill_borrow_notice = 1;
+            fprintf(stderr, "DS4COMBO_PREFILL_BORROW_REFUSED decode expert tier requested while a layer "
+                            "sweep borrows its memory (loader slots %u); not allocated, the caller proceeds uncached\n",
+                    g_stream_prefill_borrow_slots);
+        }
+        return NULL;
     }
     /* R1: prefill streams full layers and cannot consume per-token residency.
      * Do not immediately recreate a cache that the prefill edge just evicted. */
@@ -35594,7 +35602,13 @@ static int routed_moe_launch(
         /* V4.1 scalar rows must use the Windows VRAM/RAM/DirectStorage
          * hierarchy too. The upstream compact loader has a separate LRU and
          * bypasses the host cache and DirectStorage accounting entirely. */
-        if (n_tokens == 1u && expert_in_dim == 5120u && expert_mid_dim == 2304u) {
+        /* A borrowed layer sweep can end a layer on a one-row chunk (the
+         * decoder suffix keeps only the last row at layer 39; a short sweep's
+         * last tile can be one row). Those rows must use the borrowed loader:
+         * the decode-tier path below would re-prepare the released tier inside
+         * the borrow and stage its compact experts into the loader's slots. */
+        if (n_tokens == 1u && expert_in_dim == 5120u && expert_mid_dim == 2304u &&
+            !g_stream_prefill_borrow_slots) {
             std::vector<int32_t> ids(n_expert);
             if (!ds4_gpu_tensor_read(selected, 0, ids.data(), n_expert * sizeof(int32_t)) ||
                 !ds4_gpu_stream_expert_cache_begin_selected_load(&table, ids.data(), n_expert)) return 0;
@@ -36308,7 +36322,7 @@ static int routed_moe_launch(
             getenv("DS4_CUDA_MOE_MIDQ_SIDECAR") != NULL &&
             getenv("DS4_CUDA_MOE_NO_MIDQ_SIDECAR") == NULL;
         float *midq_sidecar = use_q4_midq_sidecar ? (float *)up->ptr : NULL;
-        if (g_cuda_moe_decode_graph &&
+        if (g_cuda_moe_decode_graph && !g_stream_prefill_borrow_slots &&
             !owned_filtered &&
             !profile_moe &&
             q4k_path &&
