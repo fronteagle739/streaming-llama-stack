@@ -4,7 +4,7 @@ from __future__ import annotations
 import json, os, threading, time
 from pathlib import Path
 import psutil
-from .dsv41_session_contract import MODEL_SHA256, MAX_CONTROL, Refused, checkpoint, command, control, require, session_identity
+from .dsv41_session_contract import MODEL_SHA256, MAX_CONTROL, MAX_DECODE, Refused, checkpoint, command, control, negotiate_decode_delta, require, session_identity
 
 def now_tick(owner, period=1.0):
     """True at most once per period for owner (the tree scan is cheaper at 1 Hz than 10 Hz)."""
@@ -118,8 +118,10 @@ class Producer:
                 self.bootstrap(self._write)
             if self.startup is None:
                 self.ready = self._receive()
-                require(self.ready.get('status') == 'ready' and type(self.ready.get('next_sequence')) is int and (self.ready.get('next_sequence') == 1) and (self.ready.get('maximum_prefill_tokens') == 49152) and (self.ready.get('maximum_decode_tokens') == 49152) and (self.ready.get('control_host_bytes') == 64 << 20), 'Unexpected persistent producer admission')
+                require(self.ready.get('status') == 'ready' and type(self.ready.get('next_sequence')) is int and (self.ready.get('next_sequence') == 1) and (self.ready.get('maximum_prefill_tokens') == 49152) and (type(self.ready.get('maximum_decode_tokens')) is int and self.ready['maximum_decode_tokens'] >= MAX_DECODE) and (self.ready.get('control_host_bytes') == 64 << 20), 'Unexpected persistent producer admission')
                 checkpoint(self.ready.get('checkpoint'), self.native_mode)
+                # Negotiated decode-delta maximum, published to the peer through the broker's metadata.
+                self.ready['maximum_decode_delta_tokens'] = self.decode_delta_max = negotiate_decode_delta(self.ready)
             else:
                 self.ready = self.startup(self)
                 require(type(self.ready) is dict and self.ready.get('status') == 'ready', 'HTTP-native readiness was not certified')
@@ -355,6 +357,7 @@ class Producer:
 
     def begin_decode(self, row):
         require(row.get('operation') == 'apply_decode_delta', 'Decode delta command required')
+        require(row['target']['position'] - row['base']['position'] <= getattr(self, 'decode_delta_max', MAX_DECODE), 'Decode delta exceeds the negotiated maximum')
         self._enter(row)
         self.remaining = row['bytes']
         self.transfer = 'in'

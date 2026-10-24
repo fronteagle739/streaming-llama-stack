@@ -90,5 +90,21 @@ class ContractTest(unittest.TestCase):
         with self.assertRaises(ValueError):command(delta(1,49153,(64<<20)+49152*6404+1),'1'*32,1,1)
         with self.assertRaises(ValueError):command(delta(1,49154,325791236),'1'*32,1,1)
 
+    def test_decode_delta_negotiation_pairings(self):
+        from pathlib import Path
+        from studio.dsv41_session_contract import negotiate_decode_delta
+        source=(Path(__file__).resolve().parents[1]/'engines'/'streaming-llama'/'prefill_llama.cpp'/'tools'/'dsv41-prefill'/'live-session.inc').read_text()
+        # The producer keeps the legacy 128-token field (old clients require ==128) and adds the accepted maximum.
+        self.assertIn('{"maximum_decode_tokens",llama_dsv41::decode_delta_chunk_tokens},{"maximum_decode_delta_tokens",llama_dsv41::decode_delta_max_tokens}',source)
+        new_producer=dict(maximum_decode_tokens=128,maximum_decode_delta_tokens=49152)
+        old_producer=dict(maximum_decode_tokens=128)
+        self.assertEqual(negotiate_decode_delta(new_producer),49152)          # new/new
+        self.assertTrue(new_producer['maximum_decode_tokens']==128)          # new producer + old client (old check ==128)
+        self.assertEqual(negotiate_decode_delta(old_producer),128)           # old producer + new client
+        self.assertEqual(negotiate_decode_delta({}),128)
+        self.assertEqual(negotiate_decode_delta(dict(maximum_decode_tokens=49152)),49152)  # rtxmac-producer-2
+        self.assertEqual(negotiate_decode_delta(dict(maximum_decode_tokens=128,maximum_decode_delta_tokens=1<<20)),49152)
+        with self.assertRaises(ValueError):negotiate_decode_delta(dict(maximum_decode_tokens=128,maximum_decode_delta_tokens=64))
+
 
 if __name__=='__main__':unittest.main()

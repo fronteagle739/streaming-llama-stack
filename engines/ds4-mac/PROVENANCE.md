@@ -9,3 +9,5 @@ Stack-only native build passed in 10.39 s (peak RSS 1,034,469,376 B). The owned/
 Complete standalone native-session inclusion and source closure, matching this export: `0710258ca185c4804295d882a1389104ba2c9571`. This keeps the private comparison build on an owned branch and uses the same memory protection.
 
 rtxmac-producer-2 local patch: `ds4_native_session_transport.inc` (and its `tools/dsv41-prefill/mac/` copy) accepts the producer handshake only with `maximum_decode_tokens==49152`, the accepted single decode-delta maximum (one whole local append). The transport still sends <=128-token deltas; no shader math or native state format changes.
+
+rtxmac-producer-2b local patch (supersedes the ==49152 requirement above): the transport negotiates its decode-delta maximum (`ds4_native_session_negotiate.h`): effective = min(peer maximum_decode_delta_tokens, else maximum_decode_tokens, else 128; 49152). The producer keeps maximum_decode_tokens=128 for old clients.
