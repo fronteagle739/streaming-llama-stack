@@ -185,7 +185,7 @@ def _supervise_owned(spec,paging_watch,paging_warnings):
                                 abs(window.get('owner_created',0)-target.create_time())>.01):
                                 raise ValueError('GPU window process/run identity differs')
                             identity=window['lease_id'];hold_file=spec['gpu_hold_file']
-                            if active_window!=identity:active_window=identity;window_started=time.monotonic()
+                            if active_window!=identity or window_started is None:active_window=identity;window_started=time.monotonic()   # lease_id is null until the producer's lease is taken
                             if time.time()>=window['deadline'] or time.monotonic()-window_started>=1140:
                                 reason='GPU request window exceeded19minutes'
                         else:active_window=None;window_started=None
