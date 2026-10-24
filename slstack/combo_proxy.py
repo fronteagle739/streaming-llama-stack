@@ -245,6 +245,10 @@ def handler(proxy):
 
 
 def serve(cfg,run_id,window):
+    if cfg.get('serving_mode')=='single_engine':   # ULTRA producer prefill + in-process decode, no native
+        from .combo_single import serve as single_engine
+        return single_engine(cfg,run_id,window)
+    if cfg.get('serving_mode') not in (None,'handoff'):raise ValueError('Unknown combo serving_mode')
     os.environ['CUDA_VISIBLE_DEVICES']=cfg['gpu_uuid'];os.environ['CUDA_DEVICE_ORDER']='PCI_BUS_ID'
     proxy=Proxy(cfg,run_id,window)
     class Server(ThreadingHTTPServer):daemon_threads=True

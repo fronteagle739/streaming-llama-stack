@@ -46153,6 +46153,23 @@
     ]
   },
   {
+    "var": "LLAMADECODE_DS4_DECODE",
+    "flag": null,
+    "default": "1",
+    "code_default": "Unset: B2 llama-path decode (code kept); 1 selects the in-process ds4 decode",
+    "classification": "preset",
+    "scopes": [
+      "rtx-llama"
+    ],
+    "doc": "Producer decode engine: 1 (default) decodes with ds4-win's kernels in ds4-decode.dll inside the ULTRA producer; 0 keeps the earlier B2 llama-path decode for comparison.",
+    "reads": [
+      "engines/streaming-llama/prefill_llama.cpp/tools/dsv41-prefill/live-session.inc:166"
+    ],
+    "defaults_by_scope": {
+      "rtx-llama": "1"
+    }
+  },
+  {
     "var": "LLAMA_ALLOC_OUTPUT_GUARD",
     "flag": null,
     "default": null,
