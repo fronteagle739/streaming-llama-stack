@@ -78187,5 +78187,19 @@
     "reads": [
       "engines/ds4-win/ds4_cuda.cu"
     ]
+  },
+  {
+    "var": "DS4COMBO_V41_DS_FENCE",
+    "flag": null,
+    "default": null,
+    "code_default": "NULL from getenv; off",
+    "classification": "advanced",
+    "scopes": [
+      "ds4-win"
+    ],
+    "doc": "Diagnostic: 1 makes each borrowed layer-major DirectStorage expert wave wait on the shared D3D12 fence (CUDA external semaphore) before its arena copies.",
+    "reads": [
+      "engines/ds4-win/ds4_cuda.cu"
+    ]
   }
 ]
