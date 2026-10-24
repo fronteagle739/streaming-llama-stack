@@ -43367,8 +43367,11 @@ fail:
 #ifdef DS4_EXTERNAL_DECODE
 /* LLAMADECODE: decode-only scratch; the caller binds the canonical state. */
 static bool g_ds4x_external_alloc;
+static bool g_ds4x_affinity;   /* B5: ds4x_set_affinity enabled the bias on the host's cache */
+static bool ds4x_affinity_external(void) { return g_ds4x_affinity; }
 #else
 #define g_ds4x_external_alloc false
+#define ds4x_affinity_external() false
 #endif
 static DS4_MAYBE_UNUSED bool ds41_graph_alloc(ds41_gpu_graph *g, const ds4_model *m,
                                               const ds4_weights *w, const char *path,
@@ -44090,7 +44093,7 @@ static bool ds41_moe_partial(ds41_gpu_graph *g, const ds4_model *m,
             DS4_N_EXPERT, DS4_N_EXPERT_USED, DS4_EXPERT_WEIGHT_SCALE, 0, 0, true, false,
             g->route_logits)) return false;
 #if !defined(__APPLE__) && !defined(DS4_ROCM_BUILD)
-    if (g->streaming && (g_cache_affinity_bias > 0.0f || g_cache_affinity_observe) &&
+    if ((g->streaming || ds4x_affinity_external()) && (g_cache_affinity_bias > 0.0f || g_cache_affinity_observe) &&
         !ds4_gpu_cache_affinity_router_tensor(g->selected, g->route_weights, g->route_probs,
             m->map, m->size, bias->abs_offset, true, il, g->pos, DS4_N_LAYER,
             DS4_N_EXPERT, DS4_N_EXPERT_USED, 1, l->ffn_gate_exps->abs_offset,

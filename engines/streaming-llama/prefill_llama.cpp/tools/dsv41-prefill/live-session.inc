@@ -145,7 +145,10 @@ struct ds4_external {
     int(*x_bind)(void*const*,void*const*,void*const*,const uint32_t*,void*const*,void*const*)=nullptr;
     void(*x_hook)(int(*)(void*,uint32_t,const int32_t*,uint32_t,int32_t*,const char**,const char**,const char**,uint32_t*),void*)=nullptr;
     int(*x_decode)(int,uint32_t,const int32_t*,uint32_t,float*)=nullptr;void(*x_close)()=nullptr;
+    int(*x_affinity)(float,uint32_t,uint32_t,const char*,int(*)(void*,uint32_t,uint8_t*,uint32_t),void*)=nullptr;
     llama_dsv41_weight_provider*provider=nullptr;uint64_t registered=0,registered_bytes=0;
+    static int residency_hook(void*user,uint32_t layer,uint8_t*tier,uint32_t experts){
+        auto*self=static_cast<ds4_external*>(user);return self->provider&&self->provider->decode_residency(layer,tier,experts)?1:0;}
     static int expert_hook(void*user,uint32_t layer,const int32_t*ids,uint32_t n,int32_t*slots,const char**g,const char**u,const char**d,uint32_t*count){
         auto*self=static_cast<ds4_external*>(user);std::string why;
         if(!self->provider||!self->provider->external_expert_slots(layer,ids,n,slots,g,u,d,count,nullptr,why)){
@@ -159,7 +162,7 @@ struct ds4_external {
         module=LoadLibraryExW(dll.c_str(),nullptr,LOAD_LIBRARY_SEARCH_DLL_LOAD_DIR|LOAD_LIBRARY_SEARCH_DEFAULT_DIRS);
         require(module,"Cannot load ds4-decode.dll beside the producer");
         bind(x_open,"ds4x_open");bind(x_map,"ds4x_model_map");bind(x_register,"ds4x_register_weight");bind(x_bind,"ds4x_bind_state");
-        bind(x_hook,"ds4x_set_expert_hook");bind(x_decode,"ds4x_decode");bind(x_close,"ds4x_close");
+        bind(x_hook,"ds4x_set_expert_hook");bind(x_decode,"ds4x_decode");bind(x_close,"ds4x_close");bind(x_affinity,"ds4x_set_affinity");
     }
     // (Re)prepare on the current owner: decode layout, resident weights
     // registered at their device addresses, state views, expert hook.
@@ -185,6 +188,15 @@ struct ds4_external {
         require(x_bind(state.raw.data(),state.compressed.data(),state.index.data(),state.rows.data(),state.pool_kv.data(),state.pool_score.data())==1,
             "ds4x_bind_state refused the canonical state");
         x_hook(&expert_hook,this);
+        // B5: LLAMADECODE_DS4_BIAS=<quality-speed mean> enables ds4-win's own
+        // cache-affinity bias on this cache (selection only). Spread file and
+        // warmup/ramp follow the native engine (DS4_CACHE_AFFINITY_*).
+        if(const char*b=std::getenv("LLAMADECODE_DS4_BIAS")){
+            const float mean=std::strtof(b,nullptr);const char*spread=std::getenv("LLAMADECODE_DS4_SPREAD");
+            const char*w=std::getenv("DS4_CACHE_AFFINITY_WARMUP_TOKENS");const char*r=std::getenv("DS4_CACHE_AFFINITY_RAMP_TOKENS");
+            require(x_affinity(mean,w?uint32_t(std::strtoul(w,nullptr,10)):100u,r?uint32_t(std::strtoul(r,nullptr,10)):8u,spread,&residency_hook,this)==1,
+                "ds4x_set_affinity refused the bias configuration");
+        }
         std::fprintf(stderr,"LLAMADECODE_DS4X_READY registered_tensors=%llu registered_bytes=%llu\n",(unsigned long long)registered,(unsigned long long)registered_bytes);
     }
     void step(llama_dsv41_sweep&sweep,ggml_backend_t backend,int32_t token,uint32_t position){

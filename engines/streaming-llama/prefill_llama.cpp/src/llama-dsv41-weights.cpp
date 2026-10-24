@@ -720,6 +720,14 @@ bool llama_dsv41_weight_provider::external_expert_slots(uint32_t layer,const int
 llama_dsv41_weight_provider::expert_cache_stats llama_dsv41_weight_provider::cache_stats()const{std::lock_guard<std::mutex>lock(p->mutex);
     expert_cache_stats s;s.slots=p->pool_slots;s.hits=p->cache_hits;s.misses=p->cache_misses;s.fetched_bytes=p->cache_bytes;s.fetch_ms=p->cache_ms;
     s.l2_slots=p->l2_slots;s.l2_hits=p->l2_hits;s.l2_stored=p->l2_stored;return s;}
+bool llama_dsv41_weight_provider::decode_residency(uint32_t layer,uint8_t*tier,uint32_t experts)const{
+    std::lock_guard<std::mutex>lock(p->mutex);
+    if(!tier||experts!=384||layer>=40||!p->decode_layout)return false;
+    std::memset(tier,0,experts);
+    for(const auto key:p->slot_key)if(key>=0&&uint32_t(key)/384==layer)tier[key%384]=1;
+    for(const auto key:p->l2_key)if(key>=0&&uint32_t(key)/384==layer)tier[key%384]=1;
+    return true;
+}
 uint64_t llama_dsv41_weight_provider::decode_cache_slot_bytes()const{return p->pool_stride[0]+p->pool_stride[1]+p->pool_stride[2];}
 bool llama_dsv41_weight_provider::grow_decode_cache(uint64_t bytes,uint32_t*slots,std::string&error){return p->guard([&]{
     require(slots&&p->decode_layout&&p->pool[0]&&p->pool[0]->data&&!p->l2_buffer&&!p->leased,"Expert L2 requires an idle decode-layout provider without an L2");
