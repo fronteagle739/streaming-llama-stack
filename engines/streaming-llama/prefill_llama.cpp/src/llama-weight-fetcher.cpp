@@ -3318,6 +3318,21 @@ static bool wf_dstorage_transfer_layer(wf_context * wf, int layer_idx, int gpu_i
         }
     } else if(wave_start<=0&&wf->params.ds_compute_direct){
         if(!wf_s||gpu_idx!=layer_idx%int(wf->gpu_bufs.size())||target_buf!=wf->gpu_bufs[gpu_idx].ptr)return false;
+        bool routed_stage=false;for(const auto&span:layer.spans)if(span.is_expert){routed_stage=true;break;}
+        if(routed_stage&&wf->params.moe_mode==WF_MOE_FETCH_ACTIVE){
+            if(!wf->required_dstorage||dest_buf||dest_offset||wave_start>=0||wave_end>=0||!layer.expert_filter_set){
+                WF_ERR("Required DirectStorage routed-stage zero refused: unrouted or partial transfer");wf->ds_failed.store(true);return false;}
+            std::vector<llama_wf_zero_gaps::interval>owned,gaps;owned.reserve(layer.spans.size());
+            for(const auto&span:layer.spans)owned.push_back({span.gpu_offset,span.nbytes});
+            std::string reason;
+            if(!llama_wf_zero_gaps::plan(layer.total_bytes,owned,gaps,reason)){WF_ERR("Required DirectStorage routed-stage zero refused: %s",reason.c_str());wf->ds_failed.store(true);return false;}
+            uint64_t zeroed=0;
+            for(const auto&gap:gaps){if(!cuda_ok(cudaMemsetAsync((char*)target_buf+gap.offset,0,size_t(gap.bytes),wf_s)))return false;zeroed+=gap.bytes;}
+            if(!cuda_ok(cudaStreamSynchronize(wf_s)))return false;
+            size_t active=0;for(const auto&span:layer.spans)active+=span.is_expert&&wf_span_is_active_expert(wf,layer,span)?1:0;
+            WF_ERR("LLAMADECODE_ROUTED_STAGE stage=%d extent=%llu padding_zero_bytes=%llu routed_spans=%zu experts=%zu unrouted_extents_never_read=1",
+                layer_idx,(unsigned long long)layer.total_bytes,(unsigned long long)zeroed,active,layer.active_experts.size());
+        }else
         // These exact bytes are the DS destination, so complete the existing
         // copy stream's zero BEFORE D3D writes. Other bank's compute may run.
         if(wf->params.ds_zero_padding_only){
@@ -3959,6 +3974,15 @@ static void wf_dma_thread_fn(wf_context * wf) {
             }
 #endif
 
+            // LLAMADECODE B1: a routed-expert stage is fetched only after the caller
+            // publishes this layer's routing; it is never fetched unfiltered.
+            if (wf->params.moe_mode == WF_MOE_FETCH_ACTIVE) {
+                bool routed = false, ready = true;
+                for (const auto & span : wf->layers[layer_idx].spans) if (span.is_expert) { routed = true; break; }
+                if (routed) { std::lock_guard<std::mutex> lock(wf->expert_prefetch_mutex); ready = wf->layers[layer_idx].expert_filter_set; }
+                if (!ready) continue;
+            }
+
             // Compute done — submit DMA immediately
             wf->dma_buf_pending[bi].pending_layer.store(-1);
 
@@ -4299,7 +4323,10 @@ static wf_context * wf_create_impl(const wf_params * params, bool required_dstor
                 !params->max_layer_bytes || params->max_layer_bytes > SIZE_MAX / 2 ||
                 params->n_gpu_buffers < 1 || params->n_gpu_buffers > 2 ||
                 !params->io_block_size || params->io_block_size > 256ull * 1024 * 1024 ||
-                params->n_layers > 128 || params->n_sublayers != 1 || params->moe_mode != WF_MOE_FETCH_ALL ||
+                params->n_layers > 128 || params->n_sublayers != 1 ||
+                (params->moe_mode != WF_MOE_FETCH_ALL && !(params->moe_mode == WF_MOE_FETCH_ACTIVE &&
+                    params->ds_compute_direct && params->n_gpu_buffers == 2 && !params->ds_gpu_ring_slots &&
+                    !params->ds_zero_padding_only)) ||
                 params->n_split_files < 0 || params->n_split_files > 64 ||
                 (params->n_split_files && !params->split_paths)) {
             WF_ERR("Required DirectStorage: invalid explicit backend/geometry");
@@ -4936,7 +4963,8 @@ void wf_register_layer(wf_context * wf, int layer_idx,
     if (!wf || layer_idx < 0 || layer_idx >= (int)wf->layers.size()) return;
 
     if (wf->required_dstorage) {
-        bool valid = !wf->pipeline_running.load() && n_spans > 0 && n_spans <= 128 && spans &&
+        const int span_limit = wf->params.moe_mode == WF_MOE_FETCH_ACTIVE ? 2048 : 128;
+        bool valid = !wf->pipeline_running.load() && n_spans > 0 && n_spans <= span_limit && spans &&
             total_bytes > 0 && total_bytes <= wf->params.max_layer_bytes;
         size_t previous = 0;
         for (int i = 0; valid && i < n_spans; ++i) {
@@ -5887,6 +5915,8 @@ void wf_set_active_experts(wf_context * wf, int layer_idx,
 
     auto & layer = wf->layers[layer_idx];
     if (!wf->expert_prefetch_enabled) {
+        // The required DMA thread reads this filter under the same lock.
+        std::lock_guard<std::mutex> lock(wf->expert_prefetch_mutex);
         if (n_active > 0) layer.active_experts.assign(expert_ids, expert_ids + n_active);
         else layer.active_experts.clear();
         layer.expert_filter_set = true;
@@ -6203,7 +6233,15 @@ bool wf_get_required_layer_fetch(wf_context * wf, int layer, uint64_t * bytes, d
     if (!wf->required_dstorage || layer < 0 || layer >= int(wf->ds_waves.size())) return false;
     std::lock_guard<std::mutex> lock(wf->dma_timing_mutex);
     for (const auto & wave : wf->ds_waves[layer])
-        for (const auto & request : wave.reqs) *bytes += request.Source.File.Size;
+        for (size_t ri = 0; ri < wave.reqs.size(); ++ri) {
+            // Routed stages count only the experts actually fetched.
+            const int si = ri < wave.req_span_idx.size() ? wave.req_span_idx[ri] : -1;
+            if (si >= 0 && si < (int) wf->layers[layer].spans.size()) {
+                const auto & span = wf->layers[layer].spans[si];
+                if (span.is_expert && !wf_span_is_active_expert(wf, wf->layers[layer], span)) continue;
+            }
+            *bytes += wave.reqs[ri].Source.File.Size;
+        }
     for (auto it = wf->dma_timing_log.rbegin(); it != wf->dma_timing_log.rend(); ++it) {
         if (it->layer_idx != layer) continue;
         if (!it->t_fence.time_since_epoch().count()) return false;

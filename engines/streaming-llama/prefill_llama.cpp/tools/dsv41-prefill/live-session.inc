@@ -205,6 +205,7 @@ void run_live_session(std::unique_ptr<llama_dsv41_sweep>&sweep,
                 if(index+1==maximum)break;
                 auto previous=std::move(sweep);sweep.reset(new llama_dsv41_sweep);auto next_options=options;auto next_weights=weights;
                 next_options.carry.tokens=1;if(next_weights.engram_prefetch_host_bytes)next_weights.engram_prefetch_tokens=1;
+                next_weights.decode_layout=true; // LLAMADECODE B1: routed-expert fetch
                 success(sweep->open(next_weights,next_options,error,nullptr,previous.get()),error);require(!previous->ready(),"Transferred prefix still publishes");previous.reset();
                 const std::vector<int32_t>one{best};success(sweep->run(one,[]{return should_stop();},error),error);
                 step_ms.push_back(ms(step_started));
@@ -244,6 +245,7 @@ void run_live_session(std::unique_ptr<llama_dsv41_sweep>&sweep,
                 if(index+1==forced.size())break;
                 auto previous=std::move(sweep);sweep.reset(new llama_dsv41_sweep);auto next_options=options;auto next_weights=weights;
                 next_options.carry.tokens=1;if(next_weights.engram_prefetch_host_bytes)next_weights.engram_prefetch_tokens=1;
+                next_weights.decode_layout=true; // LLAMADECODE B1: routed-expert fetch
                 success(sweep->open(next_weights,next_options,error,nullptr,previous.get()),error);require(!previous->ready(),"Transferred prefix still publishes");previous.reset();
                 const std::vector<int32_t>one{forced[index]};success(sweep->run(one,[]{return should_stop();},error),error);
                 step_ms.push_back(ms(step_started));
