@@ -128,7 +128,7 @@ class GuardTest(unittest.TestCase):
     def test_telemetry_closes_when_launch_fails(self):
         with patch('slstack.guard.PagingWatch') as watcher, patch('slstack.guard._supervise_owned',side_effect=OSError('launch refused')):
             spec=dict(host_budget_gib=.5,min_available_gib=4,
-                receipt=str(Path(os.environ['STUDIO_RUNTIME_ROOT'])/('no-launch-'+uuid.uuid4().hex+'.json')))
+                receipt=str(Path(os.environ['STUDIO_RUNTIME_ROOT'])/('no-launch-'+uuid.uuid4().hex+'.json')),gpu_lease_identity='fixture')
             with self.assertRaisesRegex(OSError,'launch refused'):_supervise(spec)
             watcher.return_value.close.assert_called_once_with()
 
@@ -138,7 +138,7 @@ class GuardTest(unittest.TestCase):
         with patch('slstack.guard.PagingWatch') as watcher, patch('slstack.guard._supervise_owned',return_value=0):
             watcher.return_value.close.side_effect=OSError('trace stop refused')
             with self.assertRaisesRegex(OSError,'trace stop refused'):
-                _supervise(dict(host_budget_gib=.5,min_available_gib=4,receipt=str(target)))
+                _supervise(dict(host_budget_gib=.5,min_available_gib=4,receipt=str(target),gpu_lease_identity='fixture'))
         proof=json.loads(target.read_text())
         self.assertFalse(proof['paging_telemetry_closed'])
         self.assertIn('trace stop refused',proof['reason'])
