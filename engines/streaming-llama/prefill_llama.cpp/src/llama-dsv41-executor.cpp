@@ -6,6 +6,7 @@
 #include "llama-dsv41-graph-bindings.h"
 #include <array>
 #include "llama-dsv41-executor.h"
+#include "llama-dsv41-dense-half-admission.h"
 #include "ggml-dsv41-expert-routing.h"
 #include "ggml-dsv41-topk.h"
 #include "ggml-dsv41-stream-topk.h"
@@ -1048,7 +1049,8 @@ bool llama_dsv41_tile_executor::run(const request&in,const llama_dsv41_layer_gra
                 if(ggml_dsv41_dense_half_tag(node)){
                     require(node->src[0]->type==GGML_TYPE_F16&&node->op_params[6]!=0x51384131,"F16 activation product overlaps an original-Q8 MMQ tag");++accepted;
                 }}
-            require(accepted>0,"Explicit F16 dense toggle matched no admitted projection");
+            const char*refused=llama_dsv41_dense_half_admission(in.count,accepted);require(!refused,refused);
+            if(int64_t(in.count)<=ggml_dsv41_dense_half_max_untagged_rows)std::fprintf(stderr,"DS4PERF_DENSE_HALF_SMALL_ROWS layer=%u start=%u count=%u tagged=0 original_F32_products=1\n",in.layer,in.start,in.count);
         }
         if(index_cublas){require(llama_dsv41_expert_profile::native(expert),"GLM index TEST requires preserved native expert products");
             for(int i=0;i<ggml_graph_n_nodes(graph);++i){auto*node=ggml_graph_node(graph,i);
