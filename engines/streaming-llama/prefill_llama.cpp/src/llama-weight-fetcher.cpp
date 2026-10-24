@@ -6523,6 +6523,13 @@ int wf_persist_shutdown(const char * why) {
 #endif
 }
 
+// LLAMADECODE: expert-miss fetch timing split (one producer thread calls the extent fetch).
+static struct { double submit_ms, fence_ms, verify_ms, cuda_ms; uint64_t requests, batches; } g_wf_extent_stats = {};
+void wf_extent_fetch_stats(double * out4, uint64_t * requests, uint64_t * batches) {
+    if (out4) { out4[0] = g_wf_extent_stats.submit_ms; out4[1] = g_wf_extent_stats.fence_ms; out4[2] = g_wf_extent_stats.verify_ms; out4[3] = g_wf_extent_stats.cuda_ms; }
+    if (requests) *requests = g_wf_extent_stats.requests;
+    if (batches) *batches = g_wf_extent_stats.batches;
+}
 bool wf_fetch_extents_direct(wf_context * wf, int bank, const wf_extent * extents, int n,
                              void * cuda_stream, uint64_t * bytes, double * milliseconds) {
     if (bytes) *bytes = 0;
@@ -6534,16 +6541,18 @@ bool wf_fetch_extents_direct(wf_context * wf, int bank, const wf_extent * extent
     if (n == 0) return true;
     const auto & target = wf->ds_compute_banks[bank];
     const uint64_t quarter = target.quarter_bytes, capacity = quarter * target.quarters.size();
-    // LLAMADECODE: expert-miss extents use ds4-win's decode request size
-    // (~1 MiB; its decode batches average 0.8 MiB per request at 19.7 GiB/s)
-    // instead of the stage-sized block (~8 MiB = one request per projection,
-    // too shallow a queue for the NVMe). LLAMADECODE_MISS_BLOCK_KB overrides.
-    static const size_t miss_block = [] {
-        const char * e = std::getenv("LLAMADECODE_MISS_BLOCK_KB");
-        const long kb = e ? std::strtol(e, nullptr, 10) : 1024;
-        return (size_t) std::max<long>(64, std::min<long>(kb, 32768)) * 1024;
+    // LLAMADECODE: expert-miss extents use ds4-win's split-read mechanism
+    // (ds4_dstorage.cpp request_parts, DS4_DS_READ_PARTS, default 8): each
+    // span (bounded by the stage request size and the placed quarter) is
+    // split into read_parts equal 4 KiB-unit subreads.
+    static const uint32_t read_parts = [] {
+        const char * e = std::getenv("DS4_DS_READ_PARTS");
+        const long v = e && *e ? std::strtol(e, nullptr, 10) : 8;
+        const uint32_t p = (uint32_t) (v <= 1 ? 1 : std::min<long>(v, 64));
+        fprintf(stderr, "LLAMADECODE_MISS_READ_PARTS read_parts=%u source=%s\n", p, e && *e ? "DS4_DS_READ_PARTS" : "ds4-default");
+        return p;
     }();
-    const size_t block = std::min(wf->params.io_block_size, miss_block);
+    const size_t block = wf->params.io_block_size;
     if (!quarter || !block) return false;
     auto started = std::chrono::high_resolution_clock::now();
     // Claim the single DS submission slot (the DMA thread uses the same queue).
@@ -6567,6 +6576,13 @@ bool wf_fetch_extents_direct(wf_context * wf, int bank, const wf_extent * extent
         while (remaining) {
             const uint64_t q = destination / quarter, within = destination % quarter;
             const uint64_t chunk = std::min<uint64_t>({remaining, (uint64_t) block, quarter - within});
+            // ds4-win request_parts: split a 4 KiB-aligned span into read_parts equal 4 KiB-unit subreads.
+            const uint32_t parts = read_parts > 1 && (source & 4095u) == 0 && (chunk & 4095u) == 0 &&
+                chunk / 4096u >= read_parts ? read_parts : 1u;
+            const uint64_t units = chunk / 4096u;
+            uint64_t part_offset = 0;
+            for (uint32_t part = 0; part < parts; ++part) {
+            const uint64_t piece = parts == 1 ? chunk : (units / parts + (part < units % parts ? 1u : 0u)) * 4096u;
             if (submitted >= drain_threshold) {
                 const uint64_t drain = ++wf->ds_fence_counter;
                 wf->ds_queue->EnqueueSignal(wf->ds_fence, drain); wf->ds_queue->Submit();
@@ -6578,22 +6594,30 @@ bool wf_fetch_extents_direct(wf_context * wf, int bank, const wf_extent * extent
             req.Options.DestinationType = DSTORAGE_REQUEST_DESTINATION_BUFFER;
             req.Options.CompressionFormat = DSTORAGE_COMPRESSION_FORMAT_NONE;
             req.Source.File.Source = wf->ds_files[e.file_idx];
-            req.Source.File.Offset = source;
-            req.Source.File.Size = (UINT32) chunk;
+            req.Source.File.Offset = source + part_offset;
+            req.Source.File.Size = (UINT32) piece;
             req.Destination.Buffer.Resource = target.quarters[q];
-            req.Destination.Buffer.Offset = within;
-            req.Destination.Buffer.Size = (UINT32) chunk;
-            req.UncompressedSize = (UINT32) chunk;
-            wf->ds_queue->EnqueueRequest(&req); ++submitted;
+            req.Destination.Buffer.Offset = within + part_offset;
+            req.Destination.Buffer.Size = (UINT32) piece;
+            req.UncompressedSize = (UINT32) piece;
+            wf->ds_queue->EnqueueRequest(&req); ++submitted; ++g_wf_extent_stats.requests;
+            part_offset += piece;
+            }
             source += chunk; destination += chunk; remaining -= chunk; total += chunk;
         }
     }
     const uint64_t fence = ++wf->ds_fence_counter;
     wf->ds_queue->EnqueueSignal(wf->ds_fence, fence);
     wf->ds_queue->Submit();
+    using wf_clock = std::chrono::high_resolution_clock;
+    auto ms_since = [](wf_clock::time_point t) { return std::chrono::duration<double, std::milli>(wf_clock::now() - t).count(); };
+    const auto submitted_at = wf_clock::now(); g_wf_extent_stats.submit_ms += std::chrono::duration<double, std::milli>(submitted_at - started).count();
     if (!wf_ds_fence_wait(wf, fence)) return false;
+    const auto fenced_at = wf_clock::now(); g_wf_extent_stats.fence_ms += std::chrono::duration<double, std::milli>(fenced_at - submitted_at).count();
     if (!wf_dstorage_wave_succeeded(wf, wf->ds_queue, -1, -1)) return false;
+    const auto verified_at = wf_clock::now(); g_wf_extent_stats.verify_ms += std::chrono::duration<double, std::milli>(verified_at - fenced_at).count();
     if (!wf_cuda_wait_ds_fence(wf, fence, (cudaStream_t) cuda_stream)) return false;
+    g_wf_extent_stats.cuda_ms += ms_since(verified_at); ++g_wf_extent_stats.batches;
     wf->stat_bytes_read_nvme.fetch_add(total);
     if (bytes) *bytes = total;
     if (milliseconds) *milliseconds = std::chrono::duration<double, std::milli>(std::chrono::high_resolution_clock::now() - started).count();

@@ -301,7 +301,9 @@ WF_API bool wf_set_layer_persistent(wf_context * wf, int layer_idx, bool persist
 // before any consumer. The caller owns the bank region (it must not overlap any
 // pipeline stage written later in the same pass).
 typedef struct { uint64_t file_offset; uint64_t bank_offset; uint64_t nbytes; int file_idx; } wf_extent;
-WF_API bool wf_fetch_extents_direct(wf_context * wf, int bank, const wf_extent * extents, int n,
+WF_API // LLAMADECODE: cumulative expert-miss fetch split: submit, DS fence, verify, CUDA fence (ms).
+void wf_extent_fetch_stats(double * out4, uint64_t * requests, uint64_t * batches);
+bool wf_fetch_extents_direct(wf_context * wf, int bank, const wf_extent * extents, int n,
                                     void * cuda_stream, uint64_t * bytes, double * milliseconds);
 WF_API void wf_set_active_experts(wf_context * wf,
                            int          layer_idx,
