@@ -466,6 +466,9 @@ static std::vector<int32_t> g_stream_prefill_ids, g_stream_prefill_slots;
 extern "C" void ds4_gpu_stream_expert_cache_prefetch_finish(bool cancel);
 static void cuda_stream_prefetch_before_load(const ds4_gpu_stream_expert_table *table);
 static bool cuda_stream_prefetch_protects(const cuda_stream_expert_slot &slot);
+static bool g_stream_prefetch_active_ds(void);
+static void cuda_stream_prefetch_issue_pending(const ds4_gpu_stream_expert_table *loaded);
+static void cuda_stream_prefetch_drop_pending(void);
 static int cuda_stream_compact_prefill(const char **gate, const char **up,
                                       const char **down, const int32_t **ids,
                                       uint32_t *experts, uint32_t in_dim = 0,
@@ -10232,6 +10235,9 @@ extern "C" uint32_t ds4_gpu_stream_prefill_borrow(uint32_t want_layers, uint32_t
 
 extern "C" void ds4_gpu_stream_prefill_borrow_end(void) {
     if (!g_stream_prefill_borrow_slots) return;
+    /* A next-layer read may still target the loader being released. */
+    cuda_stream_prefetch_drop_pending();
+    ds4_gpu_stream_expert_cache_prefetch_finish(true);
     (void)cudaDeviceSynchronize();
     cuda_stream_selected_cache_release();
     g_stream_prefill_borrow_slots = 0;
@@ -38550,10 +38556,18 @@ static int cuda_ds_fence_enabled(void) {
     }
     return v;
 }
+/* `stream` 0 is the foreground demand load; a nonzero stream is the next-layer
+ * prefetch reader's own non-blocking stream (cuda_stream_prefetch_read_ds). The
+ * two never run at once: the prefetch is issued only after a layer's demand load
+ * has returned, and a demand load joins any active prefetch first, so the DS
+ * batch state and the shared staging arena have one user at a time; every wave
+ * synchronises its own copy-out stream before the next wave reuses the arena. */
 static int cuda_stream_selected_ds_upload(const ds4_gpu_stream_expert_table *table,
-                                          const std::vector<cuda_stream_ds_job> &jobs) {
+                                          const std::vector<cuda_stream_ds_job> &jobs,
+                                          cudaStream_t stream = 0) {
 #if defined(_WIN32)
     if (jobs.empty()) return 1;
+    if (stream == 0 && g_stream_prefetch_active_ds()) ds4_gpu_stream_expert_cache_prefetch_finish(false);
     if (!cuda_ds_prefetch_enabled() || g_model_fd < 0 ||
         (g_model_fd_host_base != NULL && table->model_map != g_model_fd_host_base) ||
         g_ds_decode_pipeline.active || g_ds_hot_prefetch_active ||
@@ -38614,8 +38628,8 @@ static int cuda_stream_selected_ds_upload(const ds4_gpu_stream_expert_table *tab
             for (int part = 0; part < 3; part++) {
                 const cuda_ds_prefetch_span *span =
                     cuda_ds_prefetch_find_span(table->model_map, jobs[j].src[part], bytes[part]);
-                if (!span || !cuda_ok(cudaMemcpy(jobs[j].dst[part], arena + span->arena_off,
-                                                 (size_t)bytes[part], kind),
+                if (!span || !cuda_ok(cudaMemcpyAsync(jobs[j].dst[part], arena + span->arena_off,
+                                                      (size_t)bytes[part], kind, stream),
                                       "prefill DirectStorage expert placement")) {
                     cuda_ds_prefetch_reset();
                     ds4_ds_batch_reset();
@@ -38627,7 +38641,7 @@ static int cuda_stream_selected_ds_upload(const ds4_gpu_stream_expert_table *tab
          * cudaMemcpy returns before the GPU has read it, so wait for the
          * copy-out first: decode gets the same ordering from the blocking
          * D2H read of its routed ids before every layer's fetch. */
-        if (!cuda_ok(cudaStreamSynchronize(0), "prefill staging copy-out")) {
+        if (!cuda_ok(cudaStreamSynchronize(stream), "prefill staging copy-out")) {
             cuda_ds_prefetch_reset();
             ds4_ds_batch_reset();
             return 0;
@@ -39036,6 +39050,10 @@ static int cuda_stream_selected_cache_begin_load(
         cache.slot_selected_tensor.owner = 0;
         cache.slot_selected_tensor.device_id = 0;
         cache.valid = 1;
+        /* This layer's experts are resident and its demand reads are done: start
+         * the deferred DirectStorage read of the next layer now, so it runs during
+         * this layer's routed FFN and the next layer's attention. */
+        if (g_stream_prefill_borrow_slots) cuda_stream_prefetch_issue_pending(table);
         return 1;
     } catch (...) {
         cuda_stream_selected_cache_release();
@@ -39057,6 +39075,7 @@ struct cuda_stream_prefetch_copy {
 static struct {
     pthread_t thread;
     bool active = false, ok = false;
+    bool ds = false;   /* DirectStorage reader (Windows borrowed prefill), not the pread ring */
     std::atomic<bool> cancel{false};
     ds4_gpu_stream_expert_table table = {};
     std::vector<cuda_stream_prefetch_slot> slots;
@@ -39129,6 +39148,61 @@ static void *cuda_stream_prefetch_read(void *) {
     return NULL;
 }
 
+/* DS4COMBO DS overlap: the Windows borrowed-prefill next-layer read goes through
+ * DirectStorage (the same waves as the demand load, on the reader's own stream),
+ * and is issued only after the current layer's demand load returns. */
+static struct {
+    bool valid = false;
+    ds4_gpu_stream_expert_table current = {}, next = {};
+} g_stream_prefetch_pending;
+static double g_stream_prefetch_join_wait = 0;
+
+static bool g_stream_prefetch_active_ds(void) {
+    return g_stream_prefetch.active && g_stream_prefetch.ds;
+}
+
+static void cuda_stream_prefetch_drop_pending(void) {
+    g_stream_prefetch_pending.valid = false;
+}
+
+static void *cuda_stream_prefetch_read_ds(void *) {
+    auto &p = g_stream_prefetch;
+    const auto &cache = g_stream_selected_cache;
+    p.ok = cudaSetDevice(p.device) == cudaSuccess;
+    std::vector<cuda_stream_ds_job> jobs;
+    try {
+        jobs.reserve(p.slots.size());
+        for (const auto &slot : p.slots)
+            jobs.push_back({{slot.value.gate, slot.value.up, slot.value.down},
+                {cache.gate_ptr + (uint64_t)slot.index * p.table.gate_expert_bytes,
+                 cache.up_ptr + (uint64_t)slot.index * p.table.gate_expert_bytes,
+                 cache.down_ptr + (uint64_t)slot.index * p.table.down_expert_bytes}});
+    } catch (...) {
+        p.ok = false;
+    }
+    if (p.ok) p.ok = cuda_stream_selected_ds_upload(&p.table, jobs, p.stream) == 1;
+    /* Even a failed wave may have queued copies into reserved slots. */
+    if (cudaStreamSynchronize(p.stream) != cudaSuccess) p.ok = false;
+    p.bytes = (uint64_t)p.slots.size() * (2u * p.table.gate_expert_bytes + p.table.down_expert_bytes);
+    p.elapsed = cuda_wall_sec() - p.started;
+    return NULL;
+}
+
+static int cuda_stream_prefetch_issue(const ds4_gpu_stream_expert_table *current,
+                                      const ds4_gpu_stream_expert_table *next, bool ds);
+
+static void cuda_stream_prefetch_issue_pending(const ds4_gpu_stream_expert_table *loaded) {
+    auto &q = g_stream_prefetch_pending;
+    if (!q.valid || !loaded || loaded->model_map != q.current.model_map ||
+        loaded->gate_offset != q.current.gate_offset) return;
+    q.valid = false;
+    if (!cuda_stream_prefetch_issue(&q.current, &q.next, true)) {
+        static int notice = 0;
+        if (!notice++) fprintf(stderr, "DS4COMBO_PREFILL_PREFETCH_NOT_ISSUED layer=%u (loader has no free "
+                                       "slots or the tables differ); that layer loads on demand\n", q.next.layer);
+    }
+}
+
 extern "C" void ds4_gpu_stream_expert_cache_prefetch_finish(bool cancel) {
     auto &p = g_stream_prefetch;
     const double start = cuda_wall_sec();
@@ -39162,6 +39236,17 @@ extern "C" void ds4_gpu_stream_expert_cache_prefetch_finish(bool cancel) {
             "read=%.3f wait=%.3f ms published=%u\n", p.table.layer, p.slots.size(),
             (unsigned long long)p.bytes, p.elapsed * 1000,
             (cuda_wall_sec() - start) * 1000, publish);
+    if (!p.slots.empty() && p.ds) {
+        /* One line per layer: issue time, read duration and the exposed join wait.
+         * Overlap shows as join_wait_ms well below read_ms. */
+        const double wait = cuda_wall_sec() - start;
+        g_stream_prefetch_join_wait += wait;
+        fprintf(stderr, "DS4COMBO_PREFILL_PREFETCH layer=%u experts=%zu bytes=%llu issued_s=%.3f "
+                        "read_ms=%.1f join_wait_ms=%.1f published=%u cancel=%d total_join_wait_ms=%.1f\n",
+                p.table.layer, p.slots.size(), (unsigned long long)p.bytes, p.started,
+                p.elapsed * 1000, wait * 1000, publish, cancel ? 1 : 0, g_stream_prefetch_join_wait * 1000);
+    }
+    p.ds = false;
     p.slots.clear();
     p.copies.clear();
     p.ok = false;
@@ -39191,15 +39276,28 @@ extern "C" int ds4_gpu_stream_expert_cache_prefetch(
     if (cuda_affinity_token_biased()) return 0;
 #if defined(_WIN32)
     if (g_stream_prefill_borrow_slots && cuda_ds_prefetch_enabled()) {
+        /* The pread ring is not used here: layer experts load through DirectStorage,
+         * and so does the next-layer read. Join the read for this layer (issued while
+         * the previous layer ran), then defer the next one until this layer's demand
+         * load has returned (cuda_stream_prefetch_issue_pending), so the two never
+         * share the DS batch state or staging. */
+        ds4_gpu_stream_expert_cache_prefetch_finish(false);
+        cuda_stream_prefetch_drop_pending();
+        if (!current || !next || getenv("DS4_CUDA_DISABLE_SSD_PREFETCH")) return 0;
+        g_stream_prefetch_pending.current = *current;
+        g_stream_prefetch_pending.next = *next;
+        g_stream_prefetch_pending.valid = true;
         static int notice = 0;
-        if (!notice) {
-            notice = 1;
-            fprintf(stderr, "DS4COMBO_PREFILL_PREFETCH_OFF next-layer reader uses buffered pread; "
-                            "layer experts load through DirectStorage instead\n");
-        }
-        return 0;
+        if (!notice++) fprintf(stderr, "DS4COMBO_PREFILL_PREFETCH_DS next-layer experts read through "
+                                       "DirectStorage after each layer's demand load\n");
+        return 1;
     }
 #endif
+    return cuda_stream_prefetch_issue(current, next, false);
+}
+
+static int cuda_stream_prefetch_issue(const ds4_gpu_stream_expert_table *current,
+                                      const ds4_gpu_stream_expert_table *next, bool ds) {
     ds4_gpu_stream_expert_cache_prefetch_finish(false);
     auto &p = g_stream_prefetch;
     auto &cache = g_stream_selected_cache;
@@ -39292,7 +39390,9 @@ extern "C" int ds4_gpu_stream_expert_cache_prefetch(
             return 0;
         }
         p.started = cuda_wall_sec();
-        if (pthread_create(&p.thread, NULL, cuda_stream_prefetch_read, NULL) != 0) throw 0;
+        p.ds = ds;
+        if (pthread_create(&p.thread, NULL, ds ? cuda_stream_prefetch_read_ds : cuda_stream_prefetch_read,
+                           NULL) != 0) { p.ds = false; throw 0; }
         p.active = true;
         return 1;
     } catch (...) {

@@ -46044,7 +46044,14 @@ static bool ds41_graph_prefill_sweep(ds41_gpu_graph *g, const ds4_model *m,
                     routed_expert_row_bytes(w->layer[il].ffn_gate_exps) * DS4_N_FF_EXP,
                     routed_expert_row_bytes(w->layer[il].ffn_down_exps) * DS4_N_EMBD);
                 ds4_gpu_stream_expert_table next = {0};
+#if defined(_WIN32)
+                /* The Windows DirectStorage next-layer read loads every expert of the
+                 * next layer: worth it for the encoder sweep's full rows, not for the
+                 * decoder suffix, whose shrinking tail touches only part of a layer. */
+                const bool more = encoder_only && il + 1u < 20u;
+#else
                 const bool more = il + 1u < (encoder_only ? 20u : DS4_N_LAYER);
+#endif
                 if (more) next = graph_stream_expert_table_make(m, &w->layer[il + 1u], il + 1u,
                     routed_expert_row_bytes(w->layer[il + 1u].ffn_gate_exps) * DS4_N_FF_EXP,
                     routed_expert_row_bytes(w->layer[il + 1u].ffn_down_exps) * DS4_N_EMBD);
