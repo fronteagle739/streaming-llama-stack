@@ -36195,6 +36195,66 @@ static int routed_moe_launch(
                 rc, layer_index, n_tokens);
     }
 
+    /* Q4_K routed-MoE prefill through the vendored ggml MMQ (expert-sorted,
+     * q8_1 activations, int8 tensor-core MMA): the IQ2 tier's sequence above
+     * with the Q4_K entry points. The sorted-pairs kernels below run their
+     * m8n8k16 variants only up to 16 input / 8 mid blocks; V4.1's 20 / 9 fell
+     * to scalar dp4a reusing each weight row for 8 pairs (16K prefill: 15.3 s of
+     * routed FFN compute). In a borrowed streaming prefill the selected cache is
+     * the one- or two-layer loader (compact_count <= 2 x 384 slots), so MMQ reads
+     * it in place with the remapped slot IDs; the decode cache (thousands of
+     * slots, a mostly empty expert grid) keeps the kernels below.
+     * DS4_CUDA_Q4K_MOE_MMQ=0 keeps the sorted-pairs kernels (A/B). */
+    static int q4k_moe_mmq = -1;
+    if (q4k_moe_mmq < 0) {
+        const char *v = getenv("DS4_CUDA_Q4K_MOE_MMQ");
+        q4k_moe_mmq = !(v && strcmp(v, "0") == 0);
+        fprintf(stderr, "DS4_Q4K_MOE_MMQ %s\n", q4k_moe_mmq ?
+                "on (DS4_CUDA_Q4K_MOE_MMQ=0 selects the sorted-pairs kernels)" :
+                "off (DS4_CUDA_Q4K_MOE_MMQ=0)");
+    }
+    if (q4k_path && q4k_moe_mmq && n_tokens >= 32u && !owned_filtered && cuda_use_mmq() &&
+        (!use_stream_selected_cache || n_total_expert <= 768u)) {
+        const uint64_t n_assignments = (uint64_t)n_tokens * n_expert;
+        const int32_t *ids = (const int32_t *)selected->ptr;
+        int rc = ds4_mmq_q4_K_moe_pair(
+                gate_w, up_w, (const float *)x->ptr, ids,
+                (float *)gate->ptr, (float *)up->ptr,
+                (int)expert_mid_dim, (int)expert_in_dim,
+                (int)n_tokens, (int)n_total_expert, (int)n_expert,
+                (cudaStream_t)0);
+        if (rc == 0) {
+            const uint64_t mid_floats = n_assignments * expert_mid_dim;
+            moe_mmq_swiglu_weighted_clamp_kernel<<<(uint32_t)((mid_floats + 255) / 256), 256>>>(
+                    (float *)mid->ptr,
+                    (const float *)gate->ptr, (const float *)up->ptr,
+                    (const float *)weights->ptr,
+                    expert_mid_dim, n_tokens, n_expert, clamp);
+            rc = cuda_ok(cudaGetLastError(), "q4K mmq moe swiglu launch") ? 0 : -1;
+        }
+        if (rc == 0) {
+            rc = ds4_mmq_q4_K_moe(
+                    down_w, (const float *)mid->ptr, ids,
+                    (float *)down->ptr,
+                    (int)out_dim, (int)expert_mid_dim,
+                    (int)n_assignments, (int)n_total_expert,
+                    /*n_expert_used=*/1,
+                    (cudaStream_t)0);
+        }
+        if (rc == 0) {
+            const uint64_t n = (uint64_t)n_tokens * out_dim;
+            moe_mmq_sum_kernel<<<(uint32_t)((n + 255) / 256), 256>>>(
+                    (float *)out->ptr, (const float *)down->ptr,
+                    NULL, out_dim, n_expert, n_tokens,
+                    /*guard_nonfinite=*/1);
+            if (cuda_ok(cudaGetLastError(), "q4K mmq moe sum launch")) return 1;
+            rc = -1;
+        }
+        fprintf(stderr, "DS4_Q4K_MOE_MMQ_FAILED rc=%d layer=%u n_tokens=%u experts=%u; "
+                        "this call uses the sorted-pairs kernels\n",
+                rc, layer_index, n_tokens, n_total_expert);
+    }
+
     int ok = 1;
     const uint32_t xq_blocks = expert_in_dim / CUDA_QK_K;
     const uint32_t midq_blocks = expert_mid_dim / CUDA_QK_K;
