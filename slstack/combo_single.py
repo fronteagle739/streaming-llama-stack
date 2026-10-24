@@ -15,7 +15,7 @@ The GPU hold is taken when a producer launches and released when it retires
 only while a request runs.
 """
 from __future__ import annotations
-from contextlib import ExitStack
+from contextlib import ExitStack, contextmanager
 import codecs
 from copy import deepcopy
 from http.server import BaseHTTPRequestHandler, ThreadingHTTPServer
@@ -357,7 +357,9 @@ class SingleProxy:
     """HTTP state for the single-engine mode (window file, token, models)."""
     def __init__(self, cfg, run_id, window_file, *, engine=None):
         from .combo_proxy import request_worker_config
+        from .combo_producer import stall_seconds
         self.cfg = cfg;self.run_id = run_id;self.window_file = Path(window_file) if window_file else None
+        self.window_lock = threading.Lock();self.stall = stall_seconds(cfg);self.beat_seconds = min(30.0, self.stall / 10)
         self.token = os.environ.get('DS4_SERVER_AUTH_TOKEN', '')
         if len(self.token) < 32:raise ValueError('Normal Studio native Bearer token is required')
         self.engine = engine or SingleEngine(request_worker_config(cfg))
@@ -369,15 +371,40 @@ class SingleProxy:
         self.window(False)
 
     def window(self, active, lease_id=None):
+        """The guardian's request window. Its deadline is a no-progress bound renewed by heartbeat()
+        while the request makes progress, never a fixed request length."""
         if self.window_file is None:return
         row = dict(active=active, run_id=self.run_id, owner_pid=os.getpid(), owner_created=psutil.Process().create_time(),
-                   lease_id=lease_id, deadline=time.time() + self.cfg['lease_minutes'] * 60)
+                   lease_id=lease_id, deadline=time.time() + self.stall)
         started = time.monotonic()
-        while True:
-            try:atomic_json(self.window_file, row);return
-            except PermissionError:
-                if time.monotonic() - started >= 1:raise
-                time.sleep(.01)
+        with self.window_lock:
+            while True:
+                try:atomic_json(self.window_file, row);return
+                except PermissionError:
+                    if time.monotonic() - started >= 1:raise
+                    time.sleep(.01)
+
+    def progressing(self):
+        """The producer showed progress within the stall window (or is still being launched,
+        where its own pipe watchdog applies the same window)."""
+        process = getattr(self.engine.producer, 'process', None)
+        last = getattr(process, 'last_progress', None)
+        return not self.engine.poison and (last is None or time.monotonic() - last < self.stall)
+
+    @contextmanager
+    def heartbeat(self, on_beat=None):
+        """Renew the request window while the request progresses; a stalled request lets it lapse.
+        on_beat (a streaming client's SSE keepalive) keeps downstream inactivity timeouts fed during
+        a long silent prefill, so they too measure progress rather than prompt length."""
+        stop = threading.Event()
+        def beat():
+            while not stop.wait(self.beat_seconds):
+                if self.progressing():
+                    self.window(True, self.engine.lease_id)
+                    if on_beat:on_beat()
+        thread = threading.Thread(target=beat, name='single-window-heartbeat', daemon=True);thread.start()
+        try:yield
+        finally:stop.set();thread.join()
 
     def quality(self, args=None):
         vendor();from studio.quality_speed_contract import NAMED, setting_arguments
@@ -413,7 +440,8 @@ def handler(proxy):
         def authorized(self):return hmac.compare_digest(self.headers.get('Authorization', ''), 'Bearer ' + proxy.token)
         def read_body(self):
             length = int(self.headers.get('Content-Length', '0'))
-            if not 0 < length <= 1 << 20:raise ValueError('Native request body must fit1MiB')
+            # Sized from the context (a 262144-token prompt is several MiB of JSON), not a fixed 1 MiB.
+            if not 0 < length <= max(1 << 20, proxy.cfg['context'] * 32):raise ValueError('Native request body exceeds the context-sized bound')
             self.connection.settimeout(30);data = self.rfile.read(length)
             if len(data) != length:raise ValueError('Truncated request')
             vendor();from studio.dsv41_session_contract import control
@@ -441,10 +469,13 @@ def handler(proxy):
             cid = 'chatcmpl-' + secrets.token_hex(12);created = int(time.time())
             model = body.get('model') if isinstance(body.get('model'), str) else proxy.model_id
             include_usage = isinstance(body.get('stream_options'), dict) and body['stream_options'].get('include_usage') is True
-            def write(row):
+            wlock = threading.Lock()
+            def send_raw(data):
                 if not alive[0]:return
-                try:self.wfile.write(b'data: ' + json.dumps(row, separators=(',', ':'), ensure_ascii=False).encode() + b'\n\n');self.wfile.flush()
-                except OSError:alive[0] = False   # client gone: the decode stops at its next token boundary
+                with wlock:
+                    try:self.wfile.write(data);self.wfile.flush()
+                    except OSError:alive[0] = False   # client gone: the decode stops at its next token boundary
+            def write(row):send_raw(b'data: ' + json.dumps(row, separators=(',', ':'), ensure_ascii=False).encode() + b'\n\n')
             final = {}
             def emit(kind, *values):
                 if kind == 'delta' and streaming:write(_chunk(cid, model, created, {values[0]: values[1]}))
@@ -458,7 +489,8 @@ def handler(proxy):
                     write(_chunk(cid, model, created, dict(role='assistant')))
                 try:
                     proxy.window(True, engine.lease_id)
-                    engine.run(body, emit, metrics, ready=lambda: proxy.window(True, engine.lease_id), client_gone=lambda: not alive[0])
+                    with proxy.heartbeat((lambda: send_raw(b': progress\n\n')) if streaming else None):
+                        engine.run(body, emit, metrics, ready=lambda: proxy.window(True, engine.lease_id), client_gone=lambda: not alive[0])
                 finally:proxy.window(False)
                 parsed, splitter = final['parsed'], final['splitter']
                 calls = tool_call_deltas(parsed['calls'])

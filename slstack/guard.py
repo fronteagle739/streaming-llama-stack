@@ -162,7 +162,7 @@ def _supervise_owned(spec,paging_watch,paging_warnings):
                 peak, minimum = max(peak, rss), min(minimum, free)
                 if rss > budget * GiB or free < floor * GiB:
                     reason = f'HOST MEMORY LIMIT: tree RSS={rss}, available={free}'
-                if time.monotonic() - start > spec['timeout_s']:
+                if spec['timeout_s'] is not None and time.monotonic() - start > spec['timeout_s']:
                     reason = 'deadline exceeded'
                 if Path(spec['stop']).exists():
                     reason = 'stop requested'
@@ -186,8 +186,8 @@ def _supervise_owned(spec,paging_watch,paging_warnings):
                                 raise ValueError('GPU window process/run identity differs')
                             identity=window['lease_id'];hold_file=spec['gpu_hold_file']
                             if active_window!=identity or window_started is None:active_window=identity;window_started=time.monotonic()   # lease_id is null until the producer's lease is taken
-                            if time.time()>=window['deadline'] or time.monotonic()-window_started>=1140:
-                                reason='GPU request window exceeded19minutes'
+                            if time.time()>=window['deadline']:   # the owner renews it while the request progresses (no fixed request length)
+                                reason='GPU request window made no progress before its renewed deadline'
                         else:active_window=None;window_started=None
                     except FileNotFoundError:
                         if active_window:reason='Active GPU window metadata disappeared'
@@ -231,7 +231,7 @@ def _supervise_owned(spec,paging_watch,paging_warnings):
             cleanup=owned.stop()
     receipt = {'exit_code': code, 'reason': reason, 'peak_tree_rss': peak,
                'min_available': minimum, 'elapsed_s': time.monotonic() - start,
-               'started_monotonic': start, 'deadline_monotonic': start+spec['timeout_s'],
+               'started_monotonic': start, 'deadline_monotonic': None if spec['timeout_s'] is None else start+spec['timeout_s'],
                'host_budget_gib': budget, 'floor_gib': floor,
                'job_commit_gib': spec['job_commit_gib'], 'child_pid': child.pid}
     receipt.update(paging_before=paging_before, paging_after=snapshot() if spec.get('paging_telemetry') else None,
@@ -265,7 +265,7 @@ def supervise(spec):
                     with gpu_lease(spec['gpu']) as identity:
                         entered = True
                         spec['gpu_lease_identity'] = identity
-                        spec['timeout_s'] = min(spec['timeout_s'], spec['gpu']['lease_minutes'] * 60)
+                        spec['timeout_s'] = spec['gpu']['lease_minutes'] * 60 if spec['timeout_s'] is None else min(spec['timeout_s'], spec['gpu']['lease_minutes'] * 60)
                         return _supervise(spec)
                 except (AdmissionRefused, PermissionError):
                     # Retry only before owning a lease/starting a child. Engine or cleanup

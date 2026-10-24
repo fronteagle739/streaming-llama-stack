@@ -41,6 +41,14 @@ def startup_failure(error,directory):
     return reported
 
 
+
+def stall_seconds(cfg):
+    """No-progress window for a producer operation. A long operation (a 262K-token prefill, a long
+    decode) lives while the producer shows progress; request_timeout_s only bounds silence."""
+    value=float(cfg.get('single_engine_stall_seconds',600))
+    if not 30<=value<=3600:raise ValueError('single_engine_stall_seconds must be 30-3600')
+    return value
+
 class ComboProducer:
     def __init__(self,cfg,session,epoch,tokens,cancelled,*,base=None,runner=None):
         combo_abort.check('producer launch')
@@ -102,7 +110,7 @@ class ComboProducer:
                 raise MemoryError('ULTRA GPU plan cannot fit; handoff refused')
             self.creation_attempted=True
             self.process=Producer(session,argv,env,self.directory,host_bytes=host_bytes,
-                physical_floor=int(cfg['min_available_gib']*(1<<30)),operation_seconds=min(1140,cfg['request_timeout_s']),
+                physical_floor=int(cfg['min_available_gib']*(1<<30)),operation_seconds=min(1140,cfg['request_timeout_s']),stall_seconds=stall_seconds(cfg),
                 idle_seconds=cfg['lease_minutes']*60,native=native,cancelled=cancelled,native_mode=1,bootstrap=bootstrap,owner_epoch=epoch,
                 after_resume=lambda job:protect_working_set(job,host_bytes,int(cfg['min_available_gib']*(1<<30)),
                     int(cfg['host_budget_gib']*(1<<30)),receipt=self.directory/'resident-admission.json'))

@@ -6,6 +6,23 @@ from pathlib import Path
 import psutil
 from .dsv41_session_contract import MODEL_SHA256, MAX_CONTROL, Refused, checkpoint, command, control, require, session_identity
 
+def now_tick(owner, period=1.0):
+    """True at most once per period for owner (the tree scan is cheaper at 1 Hz than 10 Hz)."""
+    now = time.monotonic()
+    if now - getattr(owner, '_tick', 0.0) < period:return False
+    owner._tick = now;return True
+
+
+def operation_live(now, deadline, last_progress, stall_seconds):
+    """Progress-based liveness (owner: no fixed wall-clock limits that a 262K prompt or a long
+    generation would hit). An active operation lives while the producer shows progress (pipe
+    bytes, diagnostics, CPU time or I/O of its job tree) within stall_seconds; deadline is only
+    the silence bound for an operation that never showed any progress."""
+    if deadline is None:return True
+    if stall_seconds:return now < max(deadline, last_progress + stall_seconds)
+    return now < deadline
+
+
 class Producer:
     # Owner rule: never force-kill a producer that may hold VRAM. Stop = Ctrl-Break,
     # graceful_seconds, a second Ctrl-Break, up to stuck_seconds; still alive = STUCK,
@@ -25,8 +42,10 @@ class Producer:
                     with self.state_lock:
                         self.failure = self.stuck if self.failure is None else self.failure + '; ' + self.stuck
 
-    def __init__(self, session, argv, env, directory, *, host_bytes, physical_floor, operation_seconds=600, idle_seconds=3600, native=None, cancelled=None, runtime_check=None, native_mode=3, bootstrap=None, startup=None, owner_epoch=0, after_resume=None):
+    def __init__(self, session, argv, env, directory, *, host_bytes, physical_floor, operation_seconds=600, idle_seconds=3600, native=None, cancelled=None, runtime_check=None, native_mode=3, bootstrap=None, startup=None, owner_epoch=0, after_resume=None, stall_seconds=None):
         self.creation_attempted = False
+        self.stall_seconds = stall_seconds
+        self.last_progress = time.monotonic();self._progress_mark = None
         try:
             self.native_mode = native_mode
             require(type(owner_epoch) is int and 0<=owner_epoch<(1<<64), 'Exact bounded owner epoch required')
@@ -147,11 +166,13 @@ class Producer:
                 except psutil.NoSuchProcess:
                     pass
                 self.peak_rss = max(self.peak_rss, rss)
+                if self.stall_seconds and now_tick(self):self._note_tree_progress()
                 self.minimum_available = min(self.minimum_available, available)
                 require(available >= self.floor and rss <= self.host_bytes, 'Persistent producer host/floor budget failed')
                 now = time.monotonic()
                 deadline = self.deadline
-                require(now < (deadline if deadline is not None else self.activity + self.idle_seconds), 'Persistent producer deadline expired')
+                if deadline is not None:require(operation_live(now, deadline, self.last_progress, self.stall_seconds), 'Persistent producer made no progress within its stall window')
+                else:require(now < self.activity + self.idle_seconds, 'Persistent producer idle deadline expired')
                 if self.ready is not None and self.runtime_check:
                     self.runtime_check(self)
         except BaseException as exc:
@@ -163,6 +184,7 @@ class Producer:
                 with self.state_lock:
                     require(len(self.diagnostic) + len(block) <= 8 << 20, 'Persistent producer diagnostic RAM cap exceeded')
                     self.diagnostic.extend(block)
+                self.last_progress = time.monotonic()
         except BaseException as exc:
             self._poison(exc)
 
@@ -172,11 +194,29 @@ class Producer:
                 with self.state_lock:
                     require(len(self.diagnostic) + len(block) <= 8 << 20, 'Native diagnostic RAM cap exceeded')
                     self.diagnostic.extend(block)
+                self.last_progress = time.monotonic()
         except BaseException as exc:
             self._poison(exc)
 
+    def _note_tree_progress(self):
+        """CPU time and I/O bytes of the producer's job tree; any growth is progress."""
+        mark = 0
+        try:
+            root = psutil.Process(self.job.pid)
+            for p in [root, *root.children(recursive=True)]:
+                try:
+                    t = p.cpu_times();io = p.io_counters()
+                    mark += int((t.user + t.system) * 1000) + io.read_bytes + io.write_bytes + io.other_bytes
+                except psutil.Error:
+                    pass
+        except psutil.Error:
+            return
+        if mark != self._progress_mark:
+            self._progress_mark = mark;self.last_progress = time.monotonic()
+
     def _receive(self):
         raw = self.output.readline(65537)
+        self.last_progress = time.monotonic()
         require(raw.endswith(b'\n') and len(raw) <= 65536, 'Persistent producer reply truncated or too large')
         row = control(raw)
         require(row.get('session') == self.session and row.get('model_sha256') == MODEL_SHA256, 'Producer reply identity mismatch')
@@ -191,6 +231,7 @@ class Producer:
                 n = self.input.write(page)
                 require(n is not None and n > 0, 'Producer input pipe closed')
                 page = page[n:]
+                self.last_progress = time.monotonic()
 
     def _enter(self, row):
         require(self.lock.acquire(blocking=False), 'Another session operation is active')
