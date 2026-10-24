@@ -155,13 +155,29 @@ void grow_decode_l2(llama_dsv41_sweep&sweep,const llama_dsv41_fixed_storage*fixe
     // startup-admitted plan; no NVML reading means no L2.
     uint64_t budget=0,usage=0;local_video_memory(budget,usage);
     uint64_t nv_free=0,nv_total=0;const bool nv=nvml_free_bytes(nv_free,nv_total);
-    offer=nv?std::min<uint64_t>(offer,nv_free>floor+margin?nv_free-floor-margin:0):0;
+    // LLAMADECODE growable context cache: the plan keeps the next growth step
+    // free beside the reserve (current size is already mapped, so not in nv_free).
+    const uint64_t next_step=sweep.context_next_step_bytes();
+    offer=nv?std::min<uint64_t>(offer,llama_dsv41_ctx_cache::l2_offer(nv_free,floor,margin,next_step)):0;
     uint32_t slots=0;std::string error;success(provider->grow_decode_cache(offer,&slots,error),error);
     if(slots)decode_vram_sampler().start();
     uint64_t nv_after=0,nv_total_after=0;(void)nvml_free_bytes(nv_after,nv_total_after);
-    std::fprintf(stderr,"LLAMADECODE_L2_OFFER freed=%llu decode_now=%llu cuda_free=%llu cuda_total=%llu dxgi_budget=%llu dxgi_usage=%llu nvml_free=%llu nvml_total=%llu nvml_free_after=%llu offered=%llu slots=%u\n",(unsigned long long)freed,
+    std::fprintf(stderr,"LLAMADECODE_L2_OFFER freed=%llu decode_now=%llu cuda_free=%llu cuda_total=%llu dxgi_budget=%llu dxgi_usage=%llu nvml_free=%llu nvml_total=%llu nvml_free_after=%llu offered=%llu slots=%u next_step_reserved=%llu\n",(unsigned long long)freed,
         (unsigned long long)now,(unsigned long long)free_bytes,(unsigned long long)total,(unsigned long long)budget,(unsigned long long)usage,
-        (unsigned long long)nv_free,(unsigned long long)nv_total,(unsigned long long)nv_after,(unsigned long long)offer,slots);std::fflush(stderr);
+        (unsigned long long)nv_free,(unsigned long long)nv_total,(unsigned long long)nv_after,(unsigned long long)offer,slots,(unsigned long long)next_step);std::fflush(stderr);
+}
+// LLAMADECODE growable context cache during decode: map the step that covers
+// `tokens` (it comes out of the reserved next step), then shrink the L2 so the
+// following step is reserved again (L2 rebuilt smaller; its contents restart).
+void ensure_decode_context(llama_dsv41_sweep&sweep,const llama_dsv41_fixed_storage*fixed,ggml_backend_t backend,uint32_t tokens){
+    bool grew=false;std::string error;success(sweep.ensure_context(tokens,"decode",&grew,error),error);
+    if(!grew)return;
+    auto*provider=sweep.provider_for_external_decode();
+    const uint32_t before=provider->cache_stats().l2_slots;if(!before)return;
+    success(provider->release_decode_cache(error),error);
+    grow_decode_l2(sweep,fixed,backend);
+    std::fprintf(stderr,"LLAMADECODE_CTX_CACHE_L2_SHRINK tokens=%u l2_slots=%u->%u next_step_reserved=%llu\n",tokens,before,
+        provider->cache_stats().l2_slots,(unsigned long long)sweep.context_next_step_bytes());std::fflush(stderr);
 }
 bool ds4_decode_enabled(){static const bool on=[]{const char*e=std::getenv("LLAMADECODE_DS4_DECODE");return e&&e[0]=='1'&&!e[1];}();return on;}
 // LLAMADECODE append-via-decode: with the ds4 decode on, a live prefill of at
@@ -187,6 +203,7 @@ struct ds4_external {
     int(*x_open)(const char*,uint32_t,char*,size_t)=nullptr;const void*(*x_map)()=nullptr;
     int(*x_register)(uint64_t,uint64_t,void*)=nullptr;
     int(*x_bind)(void*const*,void*const*,void*const*,const uint32_t*,void*const*,void*const*)=nullptr;
+    int(*x_bind_ex)(void*const*,void*const*,void*const*,const uint32_t*,void*const*,void*const*,uint32_t)=nullptr; // bf16 owners (optional export)
     void(*x_hook)(int(*)(void*,uint32_t,const int32_t*,uint32_t,int32_t*,const char**,const char**,const char**,uint32_t*),void*)=nullptr;
     int(*x_decode)(int,uint32_t,const int32_t*,uint32_t,float*)=nullptr;void(*x_close)()=nullptr;
     int(*x_affinity)(float,uint32_t,uint32_t,const char*,int(*)(void*,uint32_t,uint8_t*,uint32_t),void*)=nullptr;
@@ -211,6 +228,7 @@ struct ds4_external {
         bind(x_open,"ds4x_open");bind(x_map,"ds4x_model_map");bind(x_register,"ds4x_register_weight");bind(x_bind,"ds4x_bind_state");
         bind(x_hook,"ds4x_set_expert_hook");bind(x_decode,"ds4x_decode");bind(x_close,"ds4x_close");bind(x_affinity,"ds4x_set_affinity");
         if(append_multirow_enabled()){bind(x_prefill_ws,"ds4x_prefill_workspace");bind(x_prefill,"ds4x_prefill");}
+        x_bind_ex=reinterpret_cast<decltype(x_bind_ex)>(GetProcAddress(module,"ds4x_bind_state_ex"));
     }
     // (Re)prepare on the current owner: decode layout, resident weights
     // registered at their device addresses, state views, expert hook.
@@ -240,7 +258,12 @@ struct ds4_external {
                 if(!x_register(offset,bytes,device))return false;++registered;registered_bytes+=bytes;return true;},error),error);
         }
         llama_dsv41_sweep::device_state state;success(sweep.device_state_views(state,error),error);
-        require(x_bind(state.raw.data(),state.compressed.data(),state.index.data(),state.rows.data(),state.pool_kv.data(),state.pool_score.data())==1,
+        if(state.bf16){
+            require(x_bind_ex,"ctx-cache-precision bf16 needs a ds4-decode.dll with ds4x_bind_state_ex (BF16 owner caches)");
+            require(!append_multirow_enabled(),"ctx-cache-precision bf16 does not support LLAMADECODE_APPEND_MULTIROW=1 (ds4 multi-row prefill reads F32 owners)");
+            require(x_bind_ex(state.raw.data(),state.compressed.data(),state.index.data(),state.rows.data(),state.pool_kv.data(),state.pool_score.data(),1)==1,
+                "ds4x_bind_state_ex refused the canonical BF16 state");
+        }else require(x_bind(state.raw.data(),state.compressed.data(),state.index.data(),state.rows.data(),state.pool_kv.data(),state.pool_score.data())==1,
             "ds4x_bind_state refused the canonical state");
         x_hook(&expert_hook,this);
         // B5: LLAMADECODE_DS4_BIAS=<quality-speed mean> enables ds4-win's own
@@ -313,6 +336,7 @@ void run_live_session(std::unique_ptr<llama_dsv41_sweep>&sweep,
     // index 0); shared by decode, decode_forced and the small-append prefill.
     auto ds4_step=[&](int32_t token,uint64_t index){
         if(index==0)ds4x.prepare(*sweep,weights,uint32_t(options.context));
+        ensure_decode_context(*sweep,options.fixed.get(),weights.backend,current.frontier.position+uint32_t(index)+1);
         ds4x.step(*sweep,weights.backend,token,current.frontier.position+uint32_t(index));
         if(index==0)grow_decode_l2(*sweep,options.fixed.get(),weights.backend);else if(index%16==0)check_decode_vram_reserve();
     };
@@ -545,7 +569,8 @@ void run_live_session(std::unique_ptr<llama_dsv41_sweep>&sweep,
                 // checkpoint as the sweep. The frontier logits come from ds4's decode kernels.
                 if(append_multirow_enabled()&&tokens.size()>=2){
                     ds4x.prepare(*sweep,weights,uint32_t(options.context));require(ds4x.prefill_rows>=tokens.size(),"Multi-row append exceeds the ds4 prefill workspace");
-                    stop();ds4x.prefill_rows_step(*sweep,weights.backend,tokens,current.frontier.position);
+                    stop();ensure_decode_context(*sweep,options.fixed.get(),weights.backend,current.frontier.position+uint32_t(tokens.size()));
+                    ds4x.prefill_rows_step(*sweep,weights.backend,tokens,current.frontier.position);
                     grow_decode_l2(*sweep,options.fixed.get(),weights.backend);
                 }else for(size_t index=0;index<tokens.size();++index){stop();ds4_step(tokens[index],index);}
                 const double append_ms=ms(started);

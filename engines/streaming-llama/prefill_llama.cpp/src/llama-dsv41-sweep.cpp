@@ -305,7 +305,7 @@ bool llama_dsv41_sweep::open(const llama_dsv41_weight_provider::config &weights,
             require(previous_lock.owns_lock()&&prefix->p->state==implementation::completed&&prefix->p->published.load()&&!prefix->p->stop_requested.load()&&prefix->p->cache&&prefix->p->carry.frontier_ready(),"Append requires a completely certified uncancelled prefix");
             const auto&old=prefix->p->options;
             auto arithmetic=[](const llama_dsv41_expert_profile::policy&e){return std::tie(e.profile,e.dense_inputs_f16,e.index_bf16,e.token_tile_attention,e.expert_f16_cublas,e.admitted_pool_bytes,e.admitted_code_runtime_bytes,e.sorted_expert_routing,e.reuse_expert_routing_map,e.hc_bf16_epilogue,e.expert_mxfp4,e.dense_activation_q8_1,e.index_key_windows,e.attention_kv_f16_table);};
-            auto execution=[](const config&c){return std::tie(c.context,c.admitted_cache_bytes,c.admitted_graph_bytes,c.admitted_device_bytes,c.admitted_host_bytes,c.admitted_hidden_bytes,c.admitted_pinned_device_bytes,c.admitted_cast_device_bytes,c.admitted_index_device_bytes,c.admitted_prefetch_device_bytes,c.audit_casts,c.coalesce_dense,c.merge_attention_selected_rows,c.hc_projection_f16_gemm,c.dense_mxfp4,c.batch_seed_ram,c.pair_ffn,c.reuse_graph,c.reuse_layer_graph,c.engram_tile_lookahead,c.resident_bf16,c.async_inputs,c.resident_ids,c.resident_metadata,c.fixed,c.compressed_cache_bf16,c.capture_dspark,c.stateful_chunks,c.compute_step_tokens,c.unaligned_append_step_tokens,c.carry.max_tile_tokens,c.carry.resident_ram,c.carry.direct_ram_tiles,c.carry.defer_hidden_readback,c.carry.export_hidden_after_head);};
+            auto execution=[](const config&c){return std::tie(c.context,c.admitted_cache_bytes,c.admitted_graph_bytes,c.admitted_device_bytes,c.admitted_host_bytes,c.admitted_hidden_bytes,c.admitted_pinned_device_bytes,c.admitted_cast_device_bytes,c.admitted_index_device_bytes,c.admitted_prefetch_device_bytes,c.audit_casts,c.coalesce_dense,c.merge_attention_selected_rows,c.hc_projection_f16_gemm,c.dense_mxfp4,c.batch_seed_ram,c.pair_ffn,c.reuse_graph,c.reuse_layer_graph,c.engram_tile_lookahead,c.resident_bf16,c.async_inputs,c.resident_ids,c.resident_metadata,c.fixed,c.compressed_cache_bf16,c.ctx_cache_grow_step,c.capture_dspark,c.stateful_chunks,c.compute_step_tokens,c.unaligned_append_step_tokens,c.carry.max_tile_tokens,c.carry.resident_ram,c.carry.direct_ram_tiles,c.carry.defer_hidden_readback,c.carry.export_hidden_after_head);};
             require(old.stateful_chunks&&prefix->p->backend==weights.backend&&arithmetic(old.expert)==arithmetic(options.expert)&&execution(old)==execution(options),"Append changed its backend, fixed owner, arithmetic or execution admission");
             require(!prefix->p->tokens.empty()&&prefix->p->tokens.size()<options.context&&options.carry.tokens<options.context-prefix->p->tokens.size(),"Appended context must retain the next native decode position");
             p->position_offset=uint32_t(prefix->p->tokens.size());
@@ -449,7 +449,7 @@ bool llama_dsv41_sweep::open(const llama_dsv41_weight_provider::config &weights,
                     f.hidden=llama_dsv41_tile_executor::reserve_hidden(f.backend,f.tokens,f.tile,f.bf16,f.ids,f.metadata,options.admitted_hidden_bytes);
                     f.hidden_bytes=ggml_backend_buffer_get_size(f.hidden.get());
                 }else require(!f.bf16&&!f.ids&&!f.metadata,"Layerwise RAM path cannot claim full-device banks");
-                f.cache.reset(new llama_dsv41_cache_storage(native_owners(),f.context,ggml_backend_get_default_buffer_type(f.backend),options.admitted_cache_bytes,options.compressed_cache_bf16,options.capture_dspark));
+                f.cache.reset(new llama_dsv41_cache_storage(native_owners(),f.context,ggml_backend_get_default_buffer_type(f.backend),options.admitted_cache_bytes,options.compressed_cache_bf16,options.capture_dspark,options.ctx_cache_grow_step));
                 f.cache_bytes=f.cache->allocated_bytes();f.ready=true;
                 ggml_backend_synchronize(f.backend);
                 llama_dsv41_layer_log("DS4PERF_FIXED_BEFORE_FIRST_LEASE tokens=%u tile=%u graph_bytes=%llu hidden_bytes=%llu cache_bytes=%llu existing_allocators=1 provider_heaps_created=1\n",f.tokens,f.tile,(unsigned long long)f.graph_bytes,(unsigned long long)f.hidden_bytes,(unsigned long long)f.cache_bytes);
@@ -469,7 +469,7 @@ bool llama_dsv41_sweep::open(const llama_dsv41_weight_provider::config &weights,
         // input preparation, Engram IO and every required head stay in run().
         if(options.fixed){require(!prefix||p->cache==options.fixed->cache,"Append lost its exact fixed canonical cache");p->cache=options.fixed->cache;if(!prefix)p->cache->clear();}
         else if(!prefix)p->cache.reset(new llama_dsv41_cache_storage(native_owners(),p->options.context,
-            ggml_backend_get_default_buffer_type(p->backend),p->options.admitted_cache_bytes,p->options.compressed_cache_bf16,p->options.capture_dspark));
+            ggml_backend_get_default_buffer_type(p->backend),p->options.admitted_cache_bytes,p->options.compressed_cache_bf16,p->options.capture_dspark,p->options.ctx_cache_grow_step));
         require(p->cache->compact_compressed()==p->options.compressed_cache_bf16,"Fixed cache physical format differs from request admission");
         require(p->cache->captures_dspark()==p->options.capture_dspark,"Fixed cache DSpark capture admission changed");
         require(!p->options.capture_dspark||!p->options.reuse_layer_graph,"DSpark ring writes require allocator-only graph reuse");
@@ -504,6 +504,7 @@ bool llama_dsv41_sweep::suspend_device(std::string&error){
     try{
         require(p->state==implementation::completed&&!p->device_suspended&&p->options.fixed&&p->options.fixed->ram&&!p->options.fixed->ram_registration,
             "Device suspend requires a completed fixed owner with tile-registered carry RAM");
+        require(!p->options.ctx_cache_grow_step,"Device suspend (switch arena) does not cover the growable context cache");
         auto&f=*p->options.fixed;
         ggml_backend_synchronize(p->backend);
         // The frontier is given up: nothing may export from this owner again.
@@ -589,6 +590,7 @@ bool llama_dsv41_sweep::run(const std::vector<int32_t>&tokens,const cancelled&st
         p->check_stop(stop);p->state=implementation::running;
         require(p->tokens.size()==p->position_offset&&tokens.size()<p->options.context-p->position_offset,"Stateful token prefix/extent changed");
         p->tokens.insert(p->tokens.end(),tokens.begin(),tokens.end());
+        success(p->cache->ensure_tokens(uint32_t(p->tokens.size()),"prefill",nullptr,error),error);   // growable cache: map before the sweep writes
         success(p->provider.start_request(error),error);
         const auto &owned=tokens;
         const auto schedule=llama_dsv41_plan_append(p->options.pair_ffn,p->options.carry.max_tile_tokens,p->options.compute_step_tokens,p->position_offset,p->options.unaligned_append_step_tokens);
@@ -942,12 +944,14 @@ llama_dsv41_sweep::run_timing llama_dsv41_sweep::timing()const{
 bool llama_dsv41_sweep::ready()const{return p->published.load()&&!p->stop_requested.load();}
 bool llama_dsv41_sweep::device_state_views(device_state&out,std::string&error)const{
     std::lock_guard<std::mutex>lock(p->mutex);out={};error.clear();
-    if(p->state!=implementation::completed||!p->published.load()||!p->cache||p->options.compressed_cache_bf16||p->options.capture_dspark){
-        error="External decode requires a completed canonical F32 mode1 owner";return false;}
+    if(p->state!=implementation::completed||!p->published.load()||!p->cache||p->options.capture_dspark){
+        error="External decode requires a completed canonical mode1 owner";return false;}
+    const bool bf16=p->options.compressed_cache_bf16;const ggml_type owner_type=bf16?GGML_TYPE_BF16:GGML_TYPE_F32;
+    if(p->cache->compact_compressed()!=bf16){error="External decode cache precision differs from admission";return false;}out.bf16=bf16;
     for(uint32_t l=0;l<40;++l){auto*t=p->cache->raw(l);if(!t||!t->data||t->type!=GGML_TYPE_F32||ggml_nbytes(t)!=128ull*512*4){error="Raw ring geometry differs";return false;}out.raw[l]=t->data;}
     const uint32_t owners[4]={2,8,14,20};
     for(uint32_t i=0;i<4;++i){auto*c=p->cache->compressed(owners[i]);auto*x=p->cache->index(owners[i]);
-        if(!c||!x||!c->data||!x->data||c->type!=GGML_TYPE_F32||x->type!=GGML_TYPE_F32||c->ne[0]!=512||x->ne[0]!=128||c->ne[1]!=x->ne[1]){error="Compressed/index cache geometry differs";return false;}
+        if(!c||!x||!c->data||!x->data||c->type!=owner_type||x->type!=owner_type||c->ne[0]!=512||x->ne[0]!=128||c->ne[1]!=x->ne[1]){error="Compressed/index cache geometry differs";return false;}
         out.compressed[i]=c->data;out.index[i]=x->data;out.rows[i]=uint32_t(c->ne[1]);
         if(i<3){auto*k=p->cache->pool_kv(owners[i]);auto*s=p->cache->pool_score(owners[i]);
             if(!k||!s||!k->data||!s->data||ggml_nbytes(k)!=512*4||ggml_nbytes(s)!=512*4){error="Pool tail geometry differs";return false;}
@@ -987,6 +991,12 @@ bool llama_dsv41_sweep::commit_external_tokens(const int32_t*tokens,size_t count
     }catch(const std::exception&failure){p->poison();error=failure.what();return false;}
 }
 llama_dsv41_weight_provider*llama_dsv41_sweep::provider_for_external_decode(){return &p->provider;}
+bool llama_dsv41_sweep::ensure_context(uint32_t tokens,const char*phase,bool*grew,std::string&error){
+    std::lock_guard<std::mutex>lock(p->mutex);if(grew)*grew=false;
+    if(!p->cache){error="Context cache growth requires an allocated owner";return false;}
+    return p->cache->ensure_tokens(tokens,phase,grew,error);
+}
+uint64_t llama_dsv41_sweep::context_next_step_bytes()const{std::lock_guard<std::mutex>lock(p->mutex);return p->cache?p->cache->next_step_bytes():0;}
 bool llama_dsv41_sweep::compact_for_external_decode(std::string&error){
     std::lock_guard<std::mutex>lock(p->mutex);error.clear();
     try{

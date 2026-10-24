@@ -932,6 +932,8 @@ bool llama_dsv41_weight_provider::grow_decode_cache(uint64_t bytes,uint32_t*slot
     std::fprintf(stderr,"LLAMADECODE_L2 slots=%u bytes=%llu l1_slots=%u total_vram_slots=%u offered_bytes=%llu\n",n,
         (unsigned long long)(uint64_t(n)*slot_bytes),p->pool_slots,p->pool_slots+n,(unsigned long long)bytes);
 },error);}
+bool llama_dsv41_weight_provider::release_decode_cache(std::string&error){return p->guard([&]{
+    require(p->decode_layout&&!p->leased,"Expert L2 release requires an idle decode-layout provider");p->release_l2();},error);}
 bool llama_dsv41_weight_provider::release(std::string&error){return p->guard([&]{require(p->leased&&p->next<p->stage_count(),"No physical weight lease to release");ggml_backend_synchronize(p->options.backend);
     if(p->dense_held>=0){ // LLAMADECODE B1: release the held dense stage first (stage order)
         for(auto&e:p->decode_stages[size_t(p->dense_held)].entries){e.t->data=nullptr;e.t->buffer=nullptr;}
