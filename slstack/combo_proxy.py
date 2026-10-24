@@ -340,7 +340,8 @@ def guarded(cfg,config):
     run_config=root/('server-'+run_id+'.config.json');atomic_json(run_config,cfg)
     command=[sys.executable,'-B','-m','slstack.combo_proxy','--config',str(run_config),'--serve','--run-id',run_id,'--window',str(window)]
     spec=dict(command=command,cwd=str(Path(__file__).resolve().parents[1]),env=env,runtime_root=str(root),task='DS4COMBO',
-        host_budget_gib=cfg['combo_worker_host_budget_gib'],min_available_gib=cfg['min_available_gib'],job_commit_gib=cfg['job_commit_gib'],timeout_s=86400,
+        host_budget_gib=cfg['combo_worker_host_budget_gib'],min_available_gib=cfg['min_available_gib'],job_commit_gib=cfg['job_commit_gib'],timeout_s=None,   # a server has no lifetime cap; requests use the progress-renewed window
+        
         owner_pid=owner.pid,owner_created=owner.create_time(),stop=str(root/('server-'+run_id+'.stop')),
         log=str(root/('server-'+run_id+'.log')),receipt=str(root/('server-'+run_id+'.json')),paging_telemetry=True,
         gpu_window_file=str(window),gpu_run_id=run_id,gpu_hold_file=cfg['hold_file'])

@@ -91,7 +91,7 @@ class GuardTest(unittest.TestCase):
 
     def test_dynamic_server_window_has_independent_deadline(self):
         code,proof=self.run_cpu(dynamic='expired');self.assertEqual(code,1)
-        self.assertIn('GPU request window exceeded19minutes',proof['reason'])
+        self.assertIn('GPU request window made no progress before its renewed deadline',proof['reason'])
 
     def test_foreign_hold_stops_only_the_owned_cpu_job(self):
         code,proof=self.run_cpu(foreign=True);self.assertEqual(code,1)

@@ -18,7 +18,7 @@
   "local_patches": [
     {
       "path": "dsv41_session_process.py",
-      "purpose": "Reuse the shared suspended Job and RAM watcher for HTTP-native startup and positive owner epochs; preserve the original constructor exception, incomplete cleanup certificate and strong owner reference if shutdown fails. No engine arithmetic changes."
+      "purpose": "Reuse the shared suspended Job and RAM watcher for HTTP-native startup and positive owner epochs; preserve the original constructor exception, incomplete cleanup certificate and strong owner reference if shutdown fails; progress-based operation liveness (stall_seconds: pipe bytes, diagnostics, job-tree CPU/I/O growth extend an operation, so no fixed wall-clock limit cuts off a 262K-token prefill or a long decode). No engine arithmetic changes."
     }
   ],
   "modules": [
