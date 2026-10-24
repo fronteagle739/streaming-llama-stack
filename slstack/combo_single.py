@@ -471,6 +471,24 @@ def handler(proxy):
             if len(data) != length:raise ValueError('Truncated request')
             vendor();from studio.dsv41_session_contract import control
             return control(data)
+        def shutdown(self):
+            """Graceful stop (Studio eject / switch-away): retire the producer so its VRAM and GPU hold
+            are released, then end serving so the process exits 0 and its guardian writes the receipt."""
+            engine = proxy.engine
+            if not engine.lock.acquire(timeout=float(proxy.cfg.get('request_timeout_s', 600))):
+                return self.send(409, dict(error=dict(message='Another request owns this decoder')))
+            try:
+                if engine.poison:raise RuntimeError('Single-engine owner is poisoned: ' + engine.poison)
+                if engine.producer is not None or engine.leases is not None:engine.retire('shutdown')
+            except Exception as exc:
+                # An unconfirmed release keeps serving: exiting would let the kill-on-close Job
+                # end a producer that may still hold VRAM. The caller reports it as stuck.
+                return self.send(503, dict(error=dict(message=str(exc), type='single_engine_refused')))
+            finally:engine.lock.release()
+            engine.stopping.set()
+            threading.Thread(target=proxy.server.shutdown, daemon=True).start()
+            try:self.send(200, dict(closing=True))
+            except OSError:pass   # the stop proceeds even when the caller has gone
         def do_GET(self):
             if self.path in ('/health', '/healthz'):
                 return self.send(200, dict(status='ok', model_ready=True, context=proxy.cfg['context'], resident=proxy.engine.producer is not None))
@@ -487,6 +505,7 @@ def handler(proxy):
             if self.path == '/v1/quality-speed':
                 try:return self.send(200, proxy.quality(body))
                 except (ValueError, RuntimeError, OSError) as exc:return self.send(409, dict(error=dict(message=str(exc))))
+            if self.path == '/v1/stack/shutdown':return self.shutdown()
             if self.path != '/v1/chat/completions':return self.send(404, dict(error=dict(message='Unknown native endpoint')))
             engine = proxy.engine
             if not engine.lock.acquire(blocking=False):return self.send(409, dict(error=dict(message='Another request owns this decoder')))
@@ -562,7 +581,7 @@ def serve(cfg, run_id, window):
     os.environ['CUDA_VISIBLE_DEVICES'] = cfg['gpu_uuid'];os.environ['CUDA_DEVICE_ORDER'] = 'PCI_BUS_ID'
     proxy = SingleProxy(cfg, run_id, window)
     class Server(ThreadingHTTPServer):daemon_threads = True
-    server = Server((cfg['host'], cfg['port']), handler(proxy))
+    server = Server((cfg['host'], cfg['port']), handler(proxy));proxy.server = server
     def idle():
         while not proxy.engine.stopping.wait(15):proxy.engine.idle_check()
     threading.Thread(target=idle, daemon=True).start()
