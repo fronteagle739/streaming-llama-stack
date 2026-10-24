@@ -97,6 +97,7 @@ bool llama_dsv41_cache_storage::apply_native_update(
             }
         };
         if(base)verify(base_plan,before);
+        need(ensure_tokens_locked(target.position,base?(rewind?"rewind":"delta"):"import",nullptr,error),error);   // growable cache: map before the rows are written
         execution_poisoned=true;
         std::array<unsigned char,65536>page{};
         for(const auto&s:slices)for(uint64_t off=0;off<s.bytes;){

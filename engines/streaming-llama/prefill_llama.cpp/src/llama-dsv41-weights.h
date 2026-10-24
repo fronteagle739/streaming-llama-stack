@@ -157,6 +157,9 @@ public:
     // in L2 is copied back instead of fetched. Released when the provider
     // leaves the decode layout. Returns the slot count in *slots.
     bool grow_decode_cache(uint64_t bytes,uint32_t *slots,std::string &error);
+    // LLAMADECODE growable context cache: return the L2's VRAM (contents dropped)
+    // so a smaller L2 can be planned after a context growth step.
+    bool release_decode_cache(std::string &error);
     uint64_t decode_cache_slot_bytes() const;
     // B5: tier[e]=1 for each of the layer's experts resident in L1 or L2.
     bool decode_residency(uint32_t layer,uint8_t *tier,uint32_t experts) const;
