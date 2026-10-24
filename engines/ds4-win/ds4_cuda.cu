@@ -4471,6 +4471,15 @@ static cuda_stream_expert_cache *cuda_stream_expert_cache_prepare(
                     cap,
                     (double)((uint64_t)cap * expert_bytes) / 1073741824.0,
                     (double)expert_bytes / 1048576.0);
+#if defined(_WIN32)
+            /* DS4COMBO: the VMM tier maps 16 MiB chunks, each under the 64 MiB
+             * per-allocation trace threshold, so its WDDM commit never showed
+             * in HOST_MEMORY traces. One line for the whole tier. */
+            fprintf(stderr, "ds4: HOST_MEMORY_ALLOCATION line=%d kind=VRAM expert tier class %u (%s) bytes=%llu\n",
+                    __LINE__, class_index, cache->vmm ? "cuMemCreate" : "cudaMalloc",
+                    (unsigned long long)((uint64_t)cap * expert_bytes));
+            ds4_win32_host_memory_snapshot("VRAM expert tier");
+#endif
         }
         return cache;
     }
