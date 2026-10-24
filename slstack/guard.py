@@ -212,4 +212,5 @@ if __name__ == '__main__':
     parser = argparse.ArgumentParser()
     parser.add_argument('spec')
     args = parser.parse_args()
-    sys.exit(supervise(json.loads(Path(args.spec).read_text())))
+    from .envvars import restore_secrets
+    sys.exit(supervise(restore_secrets(json.loads(Path(args.spec).read_text()))))

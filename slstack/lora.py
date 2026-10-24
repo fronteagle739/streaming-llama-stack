@@ -75,7 +75,8 @@ def train_lora(cfg, data_folder, settings_file, output):
             for key, value in settings.items():
                 if not isinstance(value, (str, int, float)) or isinstance(value, bool) or (isinstance(value, float) and not math.isfinite(value)):
                     raise ValueError('Trainer settings must be finite scalars')
-            request = {'cfg': cfg, 'settings': settings, 'dataset': str(corpus), 'output': str(out)}
+            from .envvars import redact_cfg
+            request = {'cfg': redact_cfg(cfg), 'settings': settings, 'dataset': str(corpus), 'output': str(out)}
             proc = OwnedProcess(cfg, [sys.executable, '-B', '-m', 'slstack.train_native_prefix'],
                                 'train-dsv41-native-prefix', stdin=json.dumps(request) + '\n',
                                 gpu=False, timeout=cfg.get('hash_workflow_timeout_s', 3600))

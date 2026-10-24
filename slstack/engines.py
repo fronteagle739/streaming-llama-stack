@@ -329,7 +329,8 @@ class Engines:
                 print('Media swap timing: ' + json.dumps(self.swap_timing), flush=True)
 
     def _media(self, kind, params):
-        request = {'kind': kind, 'cfg': self.cfg, 'params': params}
+        from .envvars import redact_cfg
+        request = {'kind': kind, 'cfg': redact_cfg(self.cfg), 'params': params}
         proc = OwnedProcess(self.cfg, [self.cfg['studio_python'], '-B', '-m', 'slstack.studio_worker'],
                             kind, stdin=json.dumps(request) + '\n', gpu=True)
         try:
