@@ -78229,5 +78229,33 @@
     "reads": [
       "engines/ds4-win/ds4.c"
     ]
+  },
+  {
+    "var": "DS4_CUDA_Q4K_MOE_MMQ",
+    "flag": null,
+    "default": null,
+    "code_default": "unset = 1 (MMQ on)",
+    "classification": "advanced",
+    "scopes": [
+      "ds4-win"
+    ],
+    "doc": "A/B switch for the Q4_K routed-MoE prefill: 1 (default) runs batches of >= 32 rows through the vendored ggml MMQ (expert-sorted, q8_1 activations, int8 MMA; DS4_Q4K_MOE_MMQ on); 0 keeps the sorted-pairs Q4_K kernels (Q8_K activations).",
+    "reads": [
+      "engines/ds4-win/ds4_cuda.cu"
+    ]
+  },
+  {
+    "var": "DS4_DISABLE_ENGRAM_IORING",
+    "flag": null,
+    "default": null,
+    "code_default": "unset = IoRing reader",
+    "classification": "advanced",
+    "scopes": [
+      "ds4-win"
+    ],
+    "doc": "A/B switch for the Windows Engram row reader: unset (default) reads raw rows through one IoRing per batch (DS4_ENGRAM_READER ioring); set restores the 16-thread synchronous pread reader. Both decode through the same function, so output bytes are identical.",
+    "reads": [
+      "engines/ds4-win/ds4_engram.c"
+    ]
   }
 ]
