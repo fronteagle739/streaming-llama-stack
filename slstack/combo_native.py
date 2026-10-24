@@ -98,6 +98,41 @@ def build_frequency_seed(global_freq,out):
     Path(out).write_text(text);return (len(v),len(h))
 
 
+class LiveLog:
+    """Mirror a producer's in-RAM diagnostic to stderr.log as it grows.
+
+    The vendored Producer keeps the native's stdout/stderr only in memory and
+    the owner writes it out at close, so a hard kill of this harness lost the
+    whole log. This thread appends each new chunk (under the producer's own
+    state lock) so a killed run keeps everything up to the last interval.
+    close() still rewrites the file with the full buffer.
+    """
+    def __init__(self,owner,file,interval=0.25):
+        self.owner,self.file,self.interval=owner,Path(file),interval
+        self.written=0;self.stop_event=threading.Event()
+        self.file.write_bytes(b'')
+        self.thread=threading.Thread(target=self._run,name='ds4combo-native-log',daemon=True);self.thread.start()
+
+    def flush(self):
+        process=self.owner.process
+        if process is None:return
+        lock=getattr(process,'state_lock',None)
+        with (lock or threading.Lock()):
+            data=bytes(memoryview(process.diagnostic)[self.written:])
+        if data:
+            with open(self.file,'ab') as out:out.write(data)
+            self.written+=len(data)
+
+    def _run(self):
+        while not self.stop_event.wait(self.interval):
+            try:self.flush()
+            except Exception as exc:
+                print('DS4COMBO native live log failed: '+repr(exc),flush=True);return
+
+    def stop(self):
+        self.stop_event.set();self.thread.join(5)
+
+
 class Native:
     def __init__(self,cfg,session,epoch,sequence,cancelled,*,restore=None,runner=None,expert_list=None):
         combo_abort.check('native launch')
@@ -163,6 +198,7 @@ class Native:
         env['PATH']=os.pathsep.join([str(binary.parent),*libraries,env.get('PATH','')])
         directory=Path(cfg['runtime_root'])/('native-'+secrets.token_hex(8));directory.mkdir(parents=True,exist_ok=False)
         self.directory=directory;self.launch_started=time.monotonic()
+        self.live_log=LiveLog(self,directory/'stderr.log')
 
         def startup(process):
             self.process=process
@@ -213,6 +249,11 @@ class Native:
                     self.failure_cleanup=self.process.close()
                 except BaseException as cleanup:exc.owned_cleanup_error=repr(cleanup)
             if self.failure_cleanup is not None:exc.owned_cleanup=self.failure_cleanup
+            self.live_log.stop()
+            try:
+                full=getattr(self.process,'diagnostic',None) if self.process is not None else getattr(exc,'owned_diagnostic',None)
+                if full:(directory/'stderr.log').write_bytes(bytes(full))
+            except Exception as failure:print('DS4COMBO native stderr.log not saved: '+repr(failure),flush=True)
             if not self.creation_attempted or certified(self.failure_cleanup):
                 if self.restore_lease is not None:self.restore_lease.__exit__(None,None,None);self.restore_lease=None
                 self.leases.close()
@@ -337,6 +378,8 @@ class Native:
             fresh=freq.exists() and freq.stat().st_mtime>=getattr(self,'launched_at',0)
             proof['expert_frequency_merged']=bool(fresh and merge_frequency(freq,self.global_freq))
         try:
+            live=getattr(self,'live_log',None)
+            if live is not None:live.stop()
             (self.directory/'stderr.log').write_bytes(self.process.diagnostic)
             atomic_json(self.directory/'cleanup.json',proof)
         finally:self.leases.close()
