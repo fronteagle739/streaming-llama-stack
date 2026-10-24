@@ -285,7 +285,9 @@ def native_launch_config(cfg,argv):
 
 
 def apply_preset_crossover(cfg,profile,tokens):
-    """Select one measured streaming preset; its N* must equal ceil(S/(1/Rn-1/Rs))."""
+    """Select one measured streaming preset; its N* must equal the owner crossover recomputed from
+    its measured inputs (r_native_tok_s, r_stream_tok_s, switch_seconds and the optional
+    native_intercept_s / stream_fixed_s, both 0 when absent)."""
     table=cfg.get('combo_crossover_profiles') or {}
     if profile not in table or tokens is None or not str(tokens).isdigit():
         raise ValueError('Preset needs --combo-producer-profile with measured inputs and --combo-crossover-tokens')
