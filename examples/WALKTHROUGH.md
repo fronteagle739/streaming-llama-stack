@@ -69,6 +69,6 @@ Press Ctrl-C in the `start` window. The launcher asks the router to stop. The ro
 
 ## Notes found during the walkthrough
 
-- The default native context is 4096 tokens. One short chat plus the tool definitions already used 47% of it. For longer chats, copy the whole `ds4_command` list from `config.example.json` into your local config and raise `--ctx`; local keys replace, not merge. 16K and below has been exercised.
+- The walkthrough above ran with the earlier 4096-token default context, and one short chat plus the tool definitions used 47% of it. The default is now 262144 tokens. A follow-up short chat from the same clone (2e536c1) logged `context=262144`, context VRAM growing in 2048-token steps (1972 MiB mapped of 8859 MiB), an expert tier of 666 experts against the fixed full-context plan of 301, and a graceful shutdown.
 - The web UI does not yet show the "saving / reloading" status during an image swap. The router log records it.
 - Not walked through yet: video, two-machine mode, LoRA.
