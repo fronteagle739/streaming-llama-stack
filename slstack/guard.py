@@ -87,6 +87,8 @@ def _supervise(spec):
     if spec.get('paging_telemetry') and not (spec.get('gpu_window_file') or spec.get('gpu_lease_identity')):
         from .shared_guard import supervise as shared_supervise
         return shared_supervise({**spec,'timeout_s':min(spec['timeout_s'],1140)})
+    if not (spec.get('paging_telemetry') or spec.get('gpu_window_file') or spec.get('gpu_lease_identity')):
+        return _supervise_plain(spec)
     admit(spec['host_budget_gib'],spec['min_available_gib'])
     warnings=[]
     watcher=PagingWatch(paging_bytes,warning=warnings.append)
@@ -107,6 +109,103 @@ def _supervise(spec):
                 record=json.loads(receipt.read_text())
                 record['paging_telemetry_closed']=True
                 receipt.write_text(json.dumps(record,indent=2))
+
+
+def _supervise_plain(spec):
+    """Release CPU/build loop: whole-tree RSS, deadline, stop file and shared holds.
+    Builds spawn thousands of short-lived compilers, beyond the owned-process bound."""
+    budget, floor = spec['host_budget_gib'], spec['min_available_gib']
+    admit(budget, floor)
+    from .lease import HoldWatcher
+    watch = spec.get('hold_watch')
+    watcher = HoldWatcher(watch['path'], watch['identity'], mac=watch.get('mac', False),
+                          task=watch.get('task', 'DS4STACK')) if watch else None
+    if watcher and watcher.reason():
+        raise RuntimeError('Yielding before process creation to shared hold: ' + watcher.reason())
+    flags = subprocess.CREATE_NO_WINDOW | 4 if os.name == 'nt' else 0  # suspended until Job admission
+    start = time.monotonic()
+    peak, minimum, reason = 0, psutil.virtual_memory().available, None
+    from .memory_counters import snapshot, PagefilePressure
+    paging_before = snapshot() if spec.get('paging_telemetry') else None
+    pressure = PagefilePressure() if spec.get('paging_telemetry') else None
+    next_pressure_check = start
+    process_counters = {}
+    with open(spec['log'], 'ab', buffering=0) as log:
+        child = subprocess.Popen(spec['command'], cwd=spec['cwd'], env=spec['env'],
+                                 stdin=subprocess.PIPE if 'stdin' in spec else subprocess.DEVNULL,
+                                 stdout=log, stderr=log, creationflags=flags,
+                                 start_new_session=os.name != 'nt')
+        job = None
+        try:
+            if os.name == 'nt':
+                job = windows_job(child, spec['job_commit_gib'])
+            if 'stdin' in spec:
+                child.stdin.write(spec['stdin'].encode())
+                child.stdin.close()
+            parent = psutil.Process(spec['owner_pid'])
+            while child.poll() is None:
+                try:
+                    if not parent.is_running() or abs(parent.create_time() - spec['owner_created']) > .01:
+                        reason = 'owning process exited'
+                except psutil.NoSuchProcess:
+                    reason = 'owning process exited'
+                try:
+                    p = psutil.Process(child.pid)
+                    rss = 0
+                    for member in [p, *p.children(recursive=True)]:
+                        try:
+                            info, created = member.memory_info(), member.create_time()
+                            rss += info.rss
+                            key = f'{member.pid}:{created:.6f}'
+                            faults = getattr(info, 'num_page_faults', None)
+                            row = process_counters.setdefault(key, {'pid': member.pid, 'created': created,
+                                'name': member.name(), 'first_page_faults': faults, 'last_page_faults': faults,
+                                'peak_private_commit_bytes': 0})
+                            row['last_page_faults'] = faults
+                            row['peak_private_commit_bytes'] = max(row['peak_private_commit_bytes'],
+                                getattr(info, 'private', getattr(info, 'pagefile', 0)))
+                        except psutil.NoSuchProcess:
+                            pass
+                except psutil.NoSuchProcess:
+                    rss = 0
+                free = psutil.virtual_memory().available
+                peak, minimum = max(peak, rss), min(minimum, free)
+                if rss > budget * GiB or free < floor * GiB:
+                    reason = f'HOST MEMORY LIMIT: tree RSS={rss}, available={free}'
+                if pressure and time.monotonic() >= next_pressure_check:
+                    reason = reason or pressure.check()
+                    next_pressure_check = time.monotonic() + .5
+                if time.monotonic() - start > spec['timeout_s']:
+                    reason = 'deadline exceeded'
+                if Path(spec['stop']).exists():
+                    reason = 'stop requested'
+                if watcher:
+                    try:
+                        foreign = watcher.reason()
+                        if foreign:
+                            reason = 'Yielding to shared hold: ' + foreign
+                    except OSError as exc:
+                        reason = 'Shared hold observation failed: ' + str(exc)
+                if reason:
+                    kill_tree(child)
+                    break
+                time.sleep(.05)
+            code = child.wait()
+        finally:
+            if child.poll() is None:
+                kill_tree(child)
+            if job:
+                job[0].CloseHandle(job[1])
+    receipt = {'exit_code': code, 'reason': reason, 'peak_tree_rss': peak,
+               'min_available': minimum, 'elapsed_s': time.monotonic() - start,
+               'host_budget_gib': budget, 'floor_gib': floor,
+               'job_commit_gib': spec['job_commit_gib'], 'child_pid': child.pid}
+    receipt.update(paging_before=paging_before, paging_after=snapshot() if spec.get('paging_telemetry') else None,
+                   system_pagefile_pressure=pressure.receipt() if pressure else None,
+                   process_memory_counters=list(process_counters.values()),
+                   paging_interpretation='Process faults include soft and hard faults. Private commit/pagefile usage is not disk I/O. System counters include other processes; these counters alone do not prove core/KV residency.')
+    Path(spec['receipt']).write_text(json.dumps(receipt, indent=2))
+    return 0 if code == 0 and reason is None else 1
 
 
 def _supervise_owned(spec,paging_watch,paging_warnings):
