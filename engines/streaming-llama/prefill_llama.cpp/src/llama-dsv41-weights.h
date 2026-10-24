@@ -43,6 +43,10 @@ public:
         // that runs next on this provider, which adopts it instead of building
         // its own, so only one prompt cache is ever alive.
         bool engram_early_is_next_request=false;
+        // LLAMADECODE_ENGRAM_EARLY=1, cold launch: the request's tokens (and a
+        // restored base's last <=3 tokens). The early cache starts as soon as
+        // the open's combined admission passes, before the first weight fetch.
+        std::vector<int32_t> engram_early_tokens,engram_early_tail;
         bool zero_padding_only=false;
         uint32_t ds_submit_threads=0;
         uint32_t ds_gpu_ring_slots=0;
@@ -94,6 +98,14 @@ public:
     // the provider lock, for its table (0: layer 1, 1: layer 14). The table-1
     // wait joins the early build. waited_ms is the time spent blocked.
     bool wait_engram_table(uint32_t index,const std::function<bool()> &cancelled,double &waited_ms,std::string &error);
+    // LLAMADECODE_ENGRAM_EARLY=1 only.
+    // Cold: after inspect/admission, before allocate's wf_start, for
+    // config.engram_early_tokens. No-op when that list is empty.
+    bool start_engram_cold(std::string &error);
+    // Warm: on a completed released pass, the moment an append's tokens
+    // arrive (before the next request's open/start_request/layer-0 fetch).
+    // Charges the live previous cache; reuses its rows (copied, not read).
+    bool start_engram_append(const std::vector<int32_t> &tokens,llama_dsv41::engram_history initial,std::string &error);
     bool engram_tile(uint32_t index,llama_dsv41::engram_history &history,
         const int32_t *tokens,const uint8_t *text_mask,size_t count,
         std::vector<float> &output,std::string &error);

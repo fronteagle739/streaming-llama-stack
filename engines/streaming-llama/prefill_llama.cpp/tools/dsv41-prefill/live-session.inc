@@ -554,6 +554,9 @@ void run_live_session(std::unique_ptr<llama_dsv41_sweep>&sweep,
                 reply({{"peer_synchronized",false},{"prompt_tokens",tokens.size()},{"prompt_processing_ms",append_ms},{"export_preparation_ms",0.0},{"append_via_decode",true},{"append_multirow",append_multirow_enabled()&&tokens.size()>=2}});
                 continue;
             }
+            // LLAMADECODE_ENGRAM_EARLY: this append's Engram rows start now, before
+            // its open, start_request and layer-0 weight fetch (off: no-op).
+            {std::string early_error;success(sweep->start_append_engram(tokens,early_error),early_error);}
             auto previous=std::move(sweep);sweep.reset(new llama_dsv41_sweep);auto next_options=options;auto next_weights=weights;
             next_options.carry.tokens=uint32_t(tokens.size());if(next_weights.engram_prefetch_host_bytes)next_weights.engram_prefetch_tokens=uint32_t(tokens.size());
             std::string error;success(sweep->open(next_weights,next_options,error,nullptr,previous.get()),error);require(!previous->ready(),"Transferred prefix still publishes");previous.reset();

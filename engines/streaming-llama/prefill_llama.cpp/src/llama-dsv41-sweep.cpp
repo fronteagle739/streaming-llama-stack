@@ -1,6 +1,7 @@
 #include "llama-dsv41-layer-log.h"
 #include "llama-dsv41-sweep.h"
 #include "llama-dsv41-append-schedule.h"
+#include "llama-dsv41-engram-prefetch.h"
 #include <cstdlib>
 
 #include "llama-dsv41-cache.h"
@@ -368,6 +369,9 @@ bool llama_dsv41_sweep::open(const llama_dsv41_weight_provider::config &weights,
             (unsigned long long)carry_budget.bounded_host_bytes,(unsigned long long)tile_host,(unsigned long long)device,(unsigned long long)options.admitted_device_bytes);
         require(device<=options.admitted_device_bytes&&host<=options.admitted_host_bytes,
             "V4.1 provider/cache/graph/carry combined job exceeds total resource admission");
+        // LLAMADECODE_ENGRAM_EARLY: tokens known, file verified, job admitted:
+        // the request's Engram rows start now, before RAM/DS/weight-fetch setup.
+        if(!warmup&&!prefix)success(p->provider.start_engram_cold(error),error);
         p->check_stop();p->options=options;p->backend=weights.backend;
         if(options.stateful_chunks)p->tokens.reserve(options.context);
         // Before DS/GPU allocation, RAM mode allocates its fully admitted
@@ -528,6 +532,21 @@ bool llama_dsv41_sweep::start_next_engram(const std::vector<int32_t>&tokens,cons
         success(p->provider.start_engram_prompt_early(tokens,initial,error),error);
         return true;
     }catch(const std::exception&failure){p->poison();error=failure.what();return false;}
+}
+
+bool llama_dsv41_sweep::start_append_engram(const std::vector<int32_t>&tokens,std::string&error){
+    error.clear();
+    if(!llama_dsv41_engram_early_enabled())return true;
+    std::unique_lock<std::mutex>lock(p->mutex,std::try_to_lock);
+    if(!lock.owns_lock()){error="V4.1 sweep is already active";return false;}
+    try{
+        require(p->state==implementation::completed&&p->published.load()&&!p->stop_requested.load()&&p->options.stateful_chunks&&
+                !p->device_suspended&&p->options.engram_tile_lookahead,"Append early Engram requires a completed stateful owner with the lookahead worker");
+        require(!tokens.empty()&&std::all_of(tokens.begin(),tokens.end(),[](int32_t t){return t>=0&&uint32_t(t)<vocabulary;}),"Append early Engram requires text tokens");
+        // Same history the append's open adopts (initial_engram=final_engram).
+        success(p->provider.start_engram_append(tokens,p->final_engram,error),error);
+        return true;
+    }catch(const std::exception&failure){error=failure.what();return false;}
 }
 
 bool llama_dsv41_sweep::run(const std::vector<int32_t>&tokens,const cancelled&stop,std::string&error){
