@@ -71,6 +71,8 @@ def main():
     start.add_argument('--image-mode', choices=['streaming', 'resident'])
     start.add_argument('--video-mode', choices=['streaming', 'resident'])
     start.add_argument('--lora', action='append')
+    start.add_argument('--serving', choices=['single_engine', 'native'],
+                       help='Single-RTX serving: single_engine (default; ULTRA producer prefill + ds4 decode in one process) or native (ds4-win server)')
     guarded = sub.add_parser('guarded')
     guarded.add_argument('--cwd', default=str(ROOT))
     guarded.add_argument('argv', nargs=argparse.REMAINDER)
@@ -85,7 +87,7 @@ def main():
                    'mtp_model', 'mac_port', 'mac_engine_port', 'backend', 'zig', 'models', 'resident', 'native_tier',
                    'mac', 'pair_token'}
     if args.command in ('start', 'rtx'):
-        config_keys.add('lora')
+        config_keys.update({'lora', 'serving'})
     overrides = {k: v for k, v in vars(args).items() if k in config_keys and v is not None}
     cfg = load(args.config, overrides)
     if args.command == 'rtx' and cfg.get('mac') and args.webui is None:

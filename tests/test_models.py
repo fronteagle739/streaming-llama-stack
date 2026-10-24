@@ -61,8 +61,28 @@ class ModelSelectionTests(unittest.TestCase):
 
     @patch('slstack.engines.http_json', return_value={'closing': True})
     @patch('slstack.journal.Journal')
+    def test_single_engine_close_and_media_swap_order(self, journal, request):
+        cfg = self.config(); cfg.update(ds4_url='http://127.0.0.1:9999', _control_token='TEST control', request_timeout_s=5,
+                                        image_model='image.safetensors', comfyui_models='')
+        engine = Engines(cfg); process = Mock(); process.proc.poll.return_value = None
+        process.proc.wait.return_value = 0; engine.llm = process
+        self.assertTrue(engine.single_engine()); self.assertFalse(engine.combo_enabled())
+        order = []
+        request.side_effect = lambda url, *a, **k: order.append(url.rsplit('/', 1)[1]) or {'closing': True}
+        engine._media = Mock(side_effect=lambda *a: order.append('media') or {'data': []})
+        engine.media('image', {})
+        self.assertEqual(order, ['release', 'media', 'restore'])
+        engine._media.side_effect = RuntimeError('image failed'); order.clear()
+        with self.assertRaisesRegex(RuntimeError, 'image failed'):
+            engine.media('image', {})
+        self.assertEqual(order, ['release', 'restore'])
+        order.clear(); engine.close()
+        self.assertEqual(order, ['shutdown']); process.stop.assert_called_once(); self.assertIsNone(engine.llm)
+
+    @patch('slstack.engines.http_json', return_value={'closing': True})
+    @patch('slstack.journal.Journal')
     def test_base_server_uses_its_owned_authenticated_graceful_close(self, journal, request):
-        cfg = self.config(); cfg.update(ds4_url='http://127.0.0.1:9999', _control_token='TEST control')
+        cfg = self.config(); cfg.update(ds4_url='http://127.0.0.1:9999', _control_token='TEST control', serving='native')
         engine = Engines(cfg); process = Mock(); process.proc.poll.return_value = None
         process.proc.wait.return_value = 0; engine.llm = process
         engine.close()

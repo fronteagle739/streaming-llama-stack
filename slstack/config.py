@@ -17,6 +17,8 @@ def load(path=None, overrides=None):
         cfg['mac'] = endpoint(cfg['mac'])
     if cfg.get('native_tier', 'accurate') not in ('accurate', 'fast', 'ultra', 'hyper'):
         raise ValueError('mode must be accurate, fast, ultra or hyper')
+    if cfg.get('serving', 'single_engine') not in ('single_engine', 'native'):
+        raise ValueError('serving must be single_engine or native')
     for key in ('host_budget_gib', 'min_available_gib', 'job_commit_gib', 'request_timeout_s', 'lease_minutes'):
         if not isinstance(cfg[key], (int, float)) or not math.isfinite(cfg[key]) or cfg[key] <= 0:
             raise ValueError(f'{key} must be finite and positive')

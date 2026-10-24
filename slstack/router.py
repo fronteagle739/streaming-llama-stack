@@ -95,7 +95,8 @@ class Stack:
                         content += '\n\n' + f'![Generated media]({artifact["url"]})'
                 message['content'] = content
                 paired = bool(self.cfg.get('mac'))
-                result['slstack'] = {'route': 'rtx-prefill-mac-decode' if paired else 'ds4-native', 'tool_media': media,
+                result['slstack'] = {'route': 'rtx-prefill-mac-decode' if paired else
+                                      ('single-engine' if getattr(self.engines, 'single_engine', lambda: False)() else 'ds4-native'), 'tool_media': media,
                                       'buffered_stream': True,
                                       'ultra_handoff': paired and self.cfg.get('native_tier') == 'ultra'}
                 return result

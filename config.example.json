@@ -53,5 +53,6 @@
   "models": [],
   "resident": [],
   "gpu_wait_seconds": 0,
-  "native_tier": "accurate"
+  "native_tier": "accurate",
+  "serving": "single_engine"
 }

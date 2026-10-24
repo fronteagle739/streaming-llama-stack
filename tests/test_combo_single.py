@@ -93,6 +93,24 @@ class EngineTests(unittest.TestCase):
         self.assertEqual(len(h.launched), 2);self.assertTrue(producer.closed)
         self.assertEqual(h.leases, ['held', 'released', 'held']);self.assertIn('fresh_reason', metrics)
 
+    def test_media_release_frees_the_hold_and_restore_reprefills_the_conversation(self):
+        h = Harness([])
+        h.scripts.append(ids(h.tok, '</think>Hi') + [s.EOS_ID])
+        body = dict(messages=[dict(role='user', content='q')], max_tokens=50)
+        h.run(body)
+        first, live = h.launched[0], list(h.engine.live)
+        self.assertEqual(h.engine.release(), dict(released=True, saved_tokens=len(live)))
+        self.assertTrue(first.closed);self.assertIsNone(h.engine.producer);self.assertEqual(h.leases, ['held', 'released'])
+        reply = h.engine.restore()
+        self.assertEqual(reply['restored_tokens'], len(live));self.assertEqual(h.launched[1].launch, live)
+        self.assertEqual(h.engine.live, live);self.assertEqual(h.leases, ['held', 'released', 'held'])
+        # Turn 2 continues on the relaunched producer: only the new suffix is prefilled.
+        h.scripts.append(ids(h.tok, '</think>ok') + [s.EOS_ID])
+        follow = dict(body, messages=body['messages'] + [dict(role='assistant', content='Hi'), dict(role='user', content='more')])
+        _, _, metrics = h.run(follow)
+        self.assertEqual(len(h.launched), 2);self.assertEqual(metrics['reused_prefix_tokens'], len(live))
+        self.assertEqual(h.engine.restore()['restored_tokens'], 0)
+
     def test_length_limit_and_long_decode_carries_the_unevaluated_token(self):
         h = Harness([]);s_max = s.MAX_DECODE_CALL
         try:
