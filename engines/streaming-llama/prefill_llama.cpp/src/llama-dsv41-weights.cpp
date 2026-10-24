@@ -6,6 +6,8 @@
 #include "llama-wf-bounded-policy.h"
 
 #include <algorithm>
+#include <unordered_map>
+#include <list>
 #include <array>
 #include <cstring>
 #include <cstdio>
@@ -58,10 +60,19 @@ struct llama_dsv41_weight_provider::implementation {
     ggml_context_ptr tensors;
     std::array<stage,42>stages;
     std::array<stage,82>decode_stages;bool decode_layout=false;bool experts_prebound=false;int dense_held=-1;
-    uint64_t resident_dense_bytes=0;
+    uint64_t resident_dense_bytes=0,decode_bank0_resident=0;
     uint64_t fetched_total=0;double fetch_ms_total=0;
-    static bool resident_dense(uint32_t layer){return layer!=1&&layer!=14;} // Engram layers stream (bank 1 capacity)
-    std::array<ggml_tensor*,40*3>routed{};
+    std::array<ggml_tensor*,40*3>routed{};std::array<ggml_tensor*,40*3>shared{};
+    bool shared_tensor(const ggml_tensor*t)const{return std::find(shared.begin(),shared.end(),t)!=shared.end();}
+    // LLAMADECODE B2: decode expert cache. Bank 0 = [embedding | shared experts |
+    // gate pool | up pool | down pool]; a slot holds one (layer, expert) triple.
+    ggml_context_ptr pool_ctx;std::array<ggml_tensor*,3>pool{};std::array<uint64_t,3>pool_offset{},pool_stride{};
+    uint32_t pool_slots=0;
+    std::vector<int32_t>slot_key;std::unordered_map<int32_t,int32_t>key_slot;
+    std::list<int32_t>lru;std::vector<std::list<int32_t>::iterator>lru_pos;
+    uint64_t cache_hits=0,cache_misses=0,cache_bytes=0;double cache_ms=0;
+    void reset_cache(){slot_key.assign(pool_slots,-1);key_slot.clear();lru.clear();lru_pos.assign(pool_slots,lru.end());
+        for(uint32_t s=0;s<pool_slots;++s){lru.push_back(int32_t(s));lru_pos[s]=std::prev(lru.end());}}
     uint32_t stage_count()const{return decode_layout?82u:42u;}
     stage&stage_at(uint32_t id){return decode_layout?decode_stages[id]:stages[id];}
     bool routed_tensor(const ggml_tensor*t)const{return std::find(routed.begin(),routed.end(),t)!=routed.end();}
@@ -72,12 +83,8 @@ struct llama_dsv41_weight_provider::implementation {
     // Per-expert spans for a routed projection [ne0,ne1,384]; other tensors are one span.
     void spans_for(const stage&s,std::vector<wf_weight_span>&spans)const{
         for(const auto&e:s.entries){
-            if(decode_layout&&routed_tensor(e.t)){
-                const uint64_t total=ggml_nbytes(e.t),per=total/384;
-                require(e.t->ne[2]==384&&per*384==total&&e.t->nb[2]==per,"Routed expert tensor is not 384 contiguous experts");
-                for(int x=0;x<384;++x){wf_weight_span s{};s.tensor_name=e.t->name;s.file_offset=e.file_offset+uint64_t(x)*per;s.nbytes=size_t(per);
-                    s.alloc_size=size_t(x==383?e.allocation-383*per:per);s.alloc_offset=size_t(e.gpu_offset+uint64_t(x)*per);s.is_expert=true;s.expert_idx=x;spans.push_back(s);}
-            }else{wf_weight_span s{};s.tensor_name=e.t->name;s.file_offset=e.file_offset;s.nbytes=ggml_nbytes(e.t);s.alloc_size=e.allocation;s.alloc_offset=e.gpu_offset;s.expert_idx=-1;spans.push_back(s);}
+            require(!(decode_layout&&routed_tensor(e.t)),"Routed experts are not decode stages");
+            {wf_weight_span s{};s.tensor_name=e.t->name;s.file_offset=e.file_offset;s.nbytes=ggml_nbytes(e.t);s.alloc_size=e.allocation;s.alloc_offset=e.gpu_offset;s.expert_idx=-1;spans.push_back(s);}
         }
     }
     std::array<llama_dsv41_layer_graph::weights,40>layers{};
@@ -237,7 +244,7 @@ struct llama_dsv41_weight_provider::implementation {
             f.router=get("ffn_gate_inp.weight",GGML_TYPE_F32,{5120,384});f.text_bias=get("exp_probs_b.bias",GGML_TYPE_F32,{384});f.image_bias=get("exp_probs_b_vl.bias",GGML_TYPE_F32,{384});
             f.gate=get("ffn_gate_exps.weight",GGML_TYPE_Q4_K,{5120,2304,384});f.up=get("ffn_up_exps.weight",GGML_TYPE_Q4_K,{5120,2304,384});f.down=get("ffn_down_exps.weight",GGML_TYPE_Q4_K,{2304,5120,384});
             f.shared_gate=get("ffn_gate_shexp.weight",GGML_TYPE_Q8_0,{5120,2304});f.shared_up=get("ffn_up_shexp.weight",GGML_TYPE_Q8_0,{5120,2304});f.shared_down=get("ffn_down_shexp.weight",GGML_TYPE_Q8_0,{2304,5120});
-            routed[l*3]=f.gate;routed[l*3+1]=f.up;routed[l*3+2]=f.down;
+            routed[l*3]=f.gate;routed[l*3+1]=f.up;routed[l*3+2]=f.down;shared[l*3]=f.shared_gate;shared[l*3+1]=f.shared_up;shared[l*3+2]=f.shared_down;
             if(l==1||l==14){w.engram_wkv=get("engram_kv.weight",GGML_TYPE_F16,{6144,25600});w.engram_q_norm=get("engram_q_norm.weight",GGML_TYPE_F32,{5120,4});w.engram_k_norm=get("engram_k_norm.weight",GGML_TYPE_F32,{5120,4});
                 const size_t e=l==1?0:1;auto*t=tensor(prefix+"engram_embd.weight",GGML_TYPE_I8,{264,engram.rows[e]});
                 const auto id=gguf_find_tensor(gguf.get(),t->name);engram_offsets[e]=add(gguf_get_data_offset(gguf.get()),gguf_get_tensor_offset(gguf.get(),id));
@@ -246,26 +253,42 @@ struct llama_dsv41_weight_provider::implementation {
         for(const auto&s:stages)planned.maximum_stage_bytes=std::max(planned.maximum_stage_bytes,s.bytes);
         {   // LLAMADECODE B1 decode layout: same tensors and file extents, re-packed.
             const auto buft=ggml_backend_get_default_buffer_type(options.backend);
-            for(const auto&e:stages[0].entries)place(decode_stages[0],e,buft);
-            for(uint32_t l=0;l<40;++l)
-                for(const auto&e:stages[l+1].entries)if(routed_tensor(e.t))place(decode_stages[2+2*l],e,buft);
-            // LLAMADECODE B1b: odd stages (dense layers, head) always land in bank 1.
-            // Each resident dense layer gets its own region there, so after one
-            // transfer it is served from VRAM; the two large Engram layers and the
-            // head share one streaming slot after the resident regions.
-            uint64_t cursor=0;
-            for(uint32_t l=0;l<40;++l){if(!resident_dense(l))continue;auto&st=decode_stages[1+2*l];st.bytes=cursor;
-                // The shared expert does not depend on routing: it stays dense.
-                for(const auto&e:stages[l+1].entries)if(!routed_tensor(e.t))place(st,e,buft);cursor=st.bytes;}
-            resident_dense_bytes=cursor;
-            for(uint32_t l=0;l<40;++l){if(resident_dense(l))continue;auto&st=decode_stages[1+2*l];st.bytes=cursor;
-                for(const auto&e:stages[l+1].entries)if(!routed_tensor(e.t))place(st,e,buft);}
-            decode_stages[81].bytes=cursor;for(const auto&e:stages[41].entries)place(decode_stages[81],e,buft);
+            // LLAMADECODE B2 decode layout: every non-routed stage is resident in
+            // its own bank region after one transfer. Even stages land in bank 0:
+            // the embedding, then each layer's shared expert. Odd stages land in
+            // bank 1: each layer's dense weights, then the head. Routed experts
+            // are not stages: they live in bank 0's expert-cache pool.
+            uint64_t bank0=0,bank1=0;
+            decode_stages[0].bytes=bank0;for(const auto&e:stages[0].entries)place(decode_stages[0],e,buft);bank0=decode_stages[0].bytes;
+            for(uint32_t l=0;l<40;++l){
+                auto&dense=decode_stages[1+2*l];dense.bytes=bank1;
+                for(const auto&e:stages[l+1].entries)if(!routed_tensor(e.t)&&!shared_tensor(e.t))place(dense,e,buft);bank1=dense.bytes;
+                auto&experts=decode_stages[2+2*l];experts.bytes=bank0;
+                for(const auto&e:stages[l+1].entries)if(shared_tensor(e.t))place(experts,e,buft);bank0=experts.bytes;
+            }
+            decode_stages[81].bytes=bank1;for(const auto&e:stages[41].entries)place(decode_stages[81],e,buft);bank1=decode_stages[81].bytes;
+            resident_dense_bytes=bank1;decode_bank0_resident=bank0;
             for(const auto&s:decode_stages)require(s.bytes&&s.bytes<=planned.maximum_stage_bytes,"Decode stage exceeds the admitted prefill bank size");
         }
         const auto policy=llama_wf_bounded::make(planned.maximum_stage_bytes,options.buffers,
             options.staging_limit_bytes?options.staging_limit_bytes:llama_wf_bounded::baseline_staging_bytes);
         planned.compute_buffer_bytes=policy.compute_buffer_bytes;
+        {   // LLAMADECODE B2: expert-cache pool geometry (one slot = gate+up+down).
+            const auto buft=ggml_backend_get_default_buffer_type(options.backend);const uint64_t a=ggml_backend_buft_get_alignment(buft);
+            for(uint32_t l=0;l<40;++l)for(uint32_t k=0;k<3;++k){const auto*t=routed[l*3+k],*t0=routed[k];
+                require(t->type==t0->type&&t->ne[0]==t0->ne[0]&&t->ne[1]==t0->ne[1]&&t->ne[2]==384&&t->nb[2]==t0->nb[2]&&ggml_nbytes(t)==t->nb[2]*384,"Routed expert tensors differ in geometry across layers");}
+            for(uint32_t k=0;k<3;++k)pool_stride[k]=routed[k]->nb[2];
+            const uint64_t slot_bytes=pool_stride[0]+pool_stride[1]+pool_stride[2];
+            const uint64_t base=align(decode_bank0_resident,a),room=planned.compute_buffer_bytes>base?planned.compute_buffer_bytes-base:0;
+            pool_slots=uint32_t(std::min<uint64_t>(room/slot_bytes,40ull*384));
+            require(pool_slots>=12,"Decode expert-cache pool has fewer than two layers of slots");
+            pool_offset[0]=base;pool_offset[1]=add(base,uint64_t(pool_slots)*pool_stride[0]);pool_offset[2]=add(pool_offset[1],uint64_t(pool_slots)*pool_stride[1]);
+            require(add(pool_offset[2],uint64_t(pool_slots)*pool_stride[2])<=planned.compute_buffer_bytes,"Decode expert-cache pool exceeds bank 0");
+            ggml_context*raw=ggml_init({4*ggml_tensor_overhead(),nullptr,true});require(raw,"Expert pool metadata allocation failed");pool_ctx.reset(raw);
+            const char*names[3]={"dsv41_expert_pool_gate","dsv41_expert_pool_up","dsv41_expert_pool_down"};
+            for(uint32_t k=0;k<3;++k){pool[k]=ggml_new_tensor_3d(raw,routed[k]->type,routed[k]->ne[0],routed[k]->ne[1],pool_slots);ggml_set_name(pool[k],names[k]);
+                require(pool[k]->nb[2]==pool_stride[k],"Expert pool stride differs from the original experts");}
+        }
         const auto staging=policy.staging_bytes;
         planned.staging_bytes=staging;
         planned.request_bytes=options.auto_request_size?policy.request_bytes:512*1024;
@@ -315,7 +338,7 @@ struct llama_dsv41_weight_provider::implementation {
         require(buffer,"DirectStorage returned an unowned compute allocation");
         const bool prebound_routed=decode_layout&&id>=2&&id<=80&&id%2==0&&experts_prebound;
         for(auto&e:stage_at(id).entries){
-            if(prebound_routed){require(e.t->buffer==buffer&&e.t->data==static_cast<char*>(base)+e.gpu_offset,"Routed stage landed outside its pre-bound bank");continue;}
+            if(prebound_routed){require(e.t->buffer==buffer&&e.t->data==static_cast<char*>(base)+e.gpu_offset,"Shared-expert stage landed outside its pre-bound bank");continue;}
             require(ggml_backend_tensor_alloc(buffer,e.t,static_cast<char*>(base)+e.gpu_offset)==GGML_STATUS_SUCCESS,"Cannot bind staged native tensor");
         }
         if(prebound_routed)experts_prebound=false;
@@ -411,7 +434,7 @@ bool llama_dsv41_weight_provider::device_suspended()const{std::lock_guard<std::m
 void llama_dsv41_weight_provider::implementation::create_pipeline(){
     auto*p=this;
     wf_params params=wf_params_default();params.model_path=p->options.model_path.c_str();params.gpu_backend=p->options.backend;params.mode=WF_MODE_DSTORAGE;
-    params.n_layers=int(p->stage_count());if(p->decode_layout)params.moe_mode=WF_MOE_FETCH_ACTIVE;params.n_gpu_buffers=int(p->options.buffers);params.max_layer_bytes=p->planned.maximum_stage_bytes;params.n_ram_buffers=0;
+    params.n_layers=int(p->stage_count());params.n_gpu_buffers=int(p->options.buffers);params.max_layer_bytes=p->planned.maximum_stage_bytes;params.n_ram_buffers=0;
     params.io_block_size=size_t(p->planned.request_bytes);params.ds_staging_limit_bytes=size_t(p->options.staging_limit_bytes);
     params.ds_async_drain=p->options.async_staging_drain;
     params.ds_submit_threads=p->options.ds_submit_threads;
@@ -429,10 +452,16 @@ void llama_dsv41_weight_provider::implementation::create_pipeline(){
         if(!p->options.compute_direct)wf_set_gpu_buf_ptr(p->fetcher,int(i),ggml_backend_buffer_get_base(b.get()));p->buffers.push_back(std::move(b));
     }
     for(uint32_t i=0;i<p->stage_count();++i){std::vector<wf_weight_span>spans;p->spans_for(p->stage_at(i),spans);wf_register_layer(p->fetcher,int(i),spans.data(),int(spans.size()),p->stage_at(i).bytes);}
-    if(p->decode_layout){uint32_t resident=0;
-        for(uint32_t l=0;l<40;++l)if(p->resident_dense(l)){require(wf_set_layer_persistent(p->fetcher,int(1+2*l),true),"Resident dense stage refused by the fetcher");++resident;}
-        std::fprintf(stderr,"LLAMADECODE_DECODE_LAYOUT stages=82 routed_spans_per_layer=1152 moe=fetch_active banks=%u resident_dense_layers=%u resident_dense_bytes=%llu\n",
-            p->options.buffers,resident,(unsigned long long)p->resident_dense_bytes);}
+    if(p->decode_layout){
+        for(uint32_t i=0;i<82;++i)require(wf_set_layer_persistent(p->fetcher,int(i),true),"Resident decode stage refused by the fetcher");
+        require(p->buffers.size()==2,"Decode expert cache requires the two direct banks");
+        auto*bank=p->buffers[0].get();auto*base=static_cast<char*>(ggml_backend_buffer_get_base(bank));
+        for(uint32_t k=0;k<3;++k)require(ggml_backend_tensor_alloc(bank,p->pool[k],base+p->pool_offset[k])==GGML_STATUS_SUCCESS,"Cannot bind the expert-cache pool");
+        p->reset_cache();
+        std::fprintf(stderr,"LLAMADECODE_DECODE_LAYOUT stages=82 all_resident=1 bank0_resident_bytes=%llu bank1_resident_bytes=%llu expert_cache_slots=%u slot_bytes=%llu pool_bytes=%llu\n",
+            (unsigned long long)p->decode_bank0_resident,(unsigned long long)p->resident_dense_bytes,p->pool_slots,
+            (unsigned long long)(p->pool_stride[0]+p->pool_stride[1]+p->pool_stride[2]),(unsigned long long)(uint64_t(p->pool_slots)*(p->pool_stride[0]+p->pool_stride[1]+p->pool_stride[2])));
+    }else for(auto*t:p->pool)if(t){t->data=nullptr;t->buffer=nullptr;}
     require(!wf_has_failed(p->fetcher),"Original layer registration failed");p->identity();if(p->options.ds_gpu_ring_slots)wf_set_layer_major_mode(p->fetcher,true);wf_start(p->fetcher);
     require(!wf_has_failed(p->fetcher),"Original DirectStorage pipeline startup failed");
 }
@@ -543,25 +572,52 @@ bool llama_dsv41_weight_provider::decode_banks(uint32_t layer,const void*&dense,
 bool llama_dsv41_weight_provider::acquire_layer_dense(uint32_t layer,llama_dsv41_layer_graph::weights&out,std::string&error){out={};return p->guard([&]{
     require(layer<40&&p->decode_layout&&p->buffers.size()==2&&p->options.compute_direct,"Dense decode stage requires the two-bank decode layout");
     p->acquire(1+2*layer);
-    // The routed stage's bank is fixed by stage parity (direct banks); bind its
-    // tensors now so the layer graph allocates once. Bytes arrive later.
+    // The shared-expert stage's bank region is fixed (resident, bank 0); bind it
+    // now so the layer graph allocates once. Its bytes are present before any
+    // post-router node runs (acquire_layer_experts).
     const uint32_t id=2+2*layer;auto*bank=p->buffers[id%2].get();auto*base=static_cast<char*>(ggml_backend_buffer_get_base(bank));
-    require(base==wf_get_gpu_buf_ptr(p->fetcher,int(id%2)),"Routed bank pointer differs from its DirectStorage bank");
-    for(auto&e:p->decode_stages[id].entries){require(!e.t->buffer&&!e.t->data,"Routed tensor already bound");
-        require(ggml_backend_tensor_alloc(bank,e.t,base+e.gpu_offset)==GGML_STATUS_SUCCESS,"Cannot pre-bind routed tensor");}
+    require(base==wf_get_gpu_buf_ptr(p->fetcher,int(id%2)),"Shared-expert bank pointer differs from its DirectStorage bank");
+    for(auto&e:p->decode_stages[id].entries){require(!e.t->buffer&&!e.t->data,"Shared-expert tensor already bound");
+        require(ggml_backend_tensor_alloc(bank,e.t,base+e.gpu_offset)==GGML_STATUS_SUCCESS,"Cannot pre-bind shared-expert tensor");}
     p->experts_prebound=true;out=p->layers[layer];
+    out.ffn.gate=p->pool[0];out.ffn.up=p->pool[1];out.ffn.down=p->pool[2];
 },error);}
-bool llama_dsv41_weight_provider::acquire_layer_experts(uint32_t layer,const std::vector<int32_t>&ids,std::string&error){return p->guard([&]{
-    require(layer<40&&p->decode_layout&&p->leased&&p->next==1+2*layer&&p->experts_prebound,"Routed stage requires its leased dense stage");
+bool llama_dsv41_weight_provider::acquire_layer_experts(uint32_t layer,const std::vector<int32_t>&ids,std::vector<int32_t>&slots,std::string&error){slots.clear();return p->guard([&]{
+    require(layer<40&&p->decode_layout&&p->leased&&p->next==1+2*layer&&p->experts_prebound,"Routed experts require their leased dense stage");
     require(!ids.empty()&&ids.size()<=6*4096,"Routed expert set size invalid");
-    std::vector<int>unique;for(const auto id:ids){require(id>=0&&id<384,"Routed expert id out of range");if(std::find(unique.begin(),unique.end(),id)==unique.end())unique.push_back(id);}
-    const uint32_t stage=2+2*layer;
-    // Publish the routing; the routed stage lands in the other bank while the
-    // dense stage stays leased (post-router nodes may still read it).
-    wf_set_active_experts(p->fetcher,int(stage),unique.data(),int(unique.size()));
+    // LRU over (layer, expert). Hits move to the front first, so a miss never
+    // evicts an expert this same request needs.
+    std::vector<int32_t>unique;for(const auto id:ids){require(id>=0&&id<384,"Routed expert id out of range");if(std::find(unique.begin(),unique.end(),id)==unique.end())unique.push_back(id);}
+    require(unique.size()<=p->pool_slots,"Routed experts exceed the cache pool");
+    std::vector<int32_t>missing;std::unordered_map<int32_t,int32_t>slot_of;
+    for(const auto e:unique){const int32_t key=int32_t(layer)*384+e;auto it=p->key_slot.find(key);
+        if(it!=p->key_slot.end()){slot_of[e]=it->second;p->lru.splice(p->lru.begin(),p->lru,p->lru_pos[size_t(it->second)]);++p->cache_hits;}
+        else missing.push_back(e);}
+    std::vector<wf_extent>extents;
+    for(const auto e:missing){
+        const int32_t slot=p->lru.back();p->lru.splice(p->lru.begin(),p->lru,p->lru_pos[size_t(slot)]);
+        if(p->slot_key[size_t(slot)]>=0)p->key_slot.erase(p->slot_key[size_t(slot)]);
+        const int32_t key=int32_t(layer)*384+e;p->slot_key[size_t(slot)]=key;p->key_slot[key]=slot;slot_of[e]=slot;++p->cache_misses;
+        for(uint32_t k=0;k<3;++k){
+            uint64_t file=0;for(const auto&entry:p->stages[layer+1].entries)if(entry.t==p->routed[layer*3+k])file=entry.file_offset;
+            require(file,"Routed expert file extent missing");
+            extents.push_back({add(file,uint64_t(e)*p->pool_stride[k]),add(p->pool_offset[k],uint64_t(slot)*p->pool_stride[k]),p->pool_stride[k],0});
+        }
+    }
+    if(!extents.empty()){
+        uint64_t bytes=0;double fetch_ms=0;
+        // A failed or partial fetch poisons the provider (guard); the slot table is then discarded with it.
+        require(wf_fetch_extents_direct(p->fetcher,0,extents.data(),int(extents.size()),ggml_backend_cuda_get_stream(p->options.backend),&bytes,&fetch_ms)&&!wf_has_failed(p->fetcher),
+            "Routed expert-cache fetch failed");
+        p->cache_bytes+=bytes;p->cache_ms+=fetch_ms;p->fetched_total+=bytes;p->fetch_ms_total+=fetch_ms;
+    }
+    // The shared-expert stage (resident) is held with the dense stage through the layer.
     p->dense_held=int(1+2*layer);++p->next;
-    p->acquire(stage);
+    p->acquire(2+2*layer);
+    slots.reserve(ids.size());for(const auto id:ids)slots.push_back(slot_of.at(id));
 },error);}
+llama_dsv41_weight_provider::expert_cache_stats llama_dsv41_weight_provider::cache_stats()const{std::lock_guard<std::mutex>lock(p->mutex);
+    expert_cache_stats s;s.slots=p->pool_slots;s.hits=p->cache_hits;s.misses=p->cache_misses;s.fetched_bytes=p->cache_bytes;s.fetch_ms=p->cache_ms;return s;}
 bool llama_dsv41_weight_provider::release(std::string&error){return p->guard([&]{require(p->leased&&p->next<p->stage_count(),"No physical weight lease to release");ggml_backend_synchronize(p->options.backend);
     if(p->dense_held>=0){ // LLAMADECODE B1: release the held dense stage first (stage order)
         for(auto&e:p->decode_stages[size_t(p->dense_held)].entries){e.t->data=nullptr;e.t->buffer=nullptr;}

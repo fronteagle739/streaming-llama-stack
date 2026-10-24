@@ -108,7 +108,11 @@ public:
     // experts' bytes arrive only through acquire_layer_experts, which publishes
     // the routing, releases the dense stage and waits for the routed stage.
     bool acquire_layer_dense(uint32_t layer,llama_dsv41_layer_graph::weights &weights,std::string &error);
-    bool acquire_layer_experts(uint32_t layer,const std::vector<int32_t> &ids,std::string &error);
+    // LLAMADECODE B2: returns the cache-pool slot of each routed id; only
+    // misses are fetched (DirectStorage, explicit extents into bank 0).
+    bool acquire_layer_experts(uint32_t layer,const std::vector<int32_t> &ids,std::vector<int32_t> &slots,std::string &error);
+    struct expert_cache_stats{uint32_t slots=0;uint64_t hits=0,misses=0,fetched_bytes=0;double fetch_ms=0;};
+    expert_cache_stats cache_stats() const;
     bool decode_layout() const;
     // DirectStorage bytes and transfer milliseconds of the stages acquired since start_request.
     void fetch_totals(uint64_t &bytes,double &milliseconds) const;

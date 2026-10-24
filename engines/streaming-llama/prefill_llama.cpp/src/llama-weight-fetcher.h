@@ -295,6 +295,14 @@ WF_API void wf_stop(wf_context * wf);
 // stage of this fetcher writes. After its first complete transfer it is served
 // from VRAM (no DMA) for the rest of this fetcher's lifetime. Required DS only.
 WF_API bool wf_set_layer_persistent(wf_context * wf, int layer_idx, bool persistent);
+// LLAMADECODE B2: synchronously fetch explicit file extents into a direct compute
+// bank (required DS, two-bank direct profile). Serialized with the pipeline's DMA
+// (one DS submission in flight); the caller's CUDA stream waits on the DS fence
+// before any consumer. The caller owns the bank region (it must not overlap any
+// pipeline stage written later in the same pass).
+typedef struct { uint64_t file_offset; uint64_t bank_offset; uint64_t nbytes; int file_idx; } wf_extent;
+WF_API bool wf_fetch_extents_direct(wf_context * wf, int bank, const wf_extent * extents, int n,
+                                    void * cuda_stream, uint64_t * bytes, double * milliseconds);
 WF_API void wf_set_active_experts(wf_context * wf,
                            int          layer_idx,
                            const int *  expert_ids,
