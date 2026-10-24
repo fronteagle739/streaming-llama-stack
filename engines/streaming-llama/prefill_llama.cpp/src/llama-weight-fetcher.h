@@ -239,6 +239,9 @@ WF_API void wf_register_layer(wf_context *         wf,
 // Start the pipeline — begins prefetching from layer 0.
 // Call after all layers are registered.
 WF_API void wf_start(wf_context * wf);
+// LLAMADECODE_ENGRAM_EARLY=pause: DirectStorage transfers of stages >=
+// first_held_stage stay pending until released with INT_MAX (the default).
+WF_API void wf_hold_from(wf_context * wf, int first_held_stage);
 
 // reverse-ds: start a BACKWARD pass — streams layers N-1..0 for full-DMA-speed training backward streaming.
 // Forward inference uses wf_start (unchanged); reverse must be requested explicitly. See TRAINING_ROADMAP.md.

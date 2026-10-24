@@ -7,6 +7,8 @@
 // llama-dsv41-engram-early-decision.h (requests / LLAMADECODE_ENGRAM_IOPS <= gap).
 bool llama_dsv41_engram_early_enabled();
 bool llama_dsv41_engram_early_auto();
+// LLAMADECODE_ENGRAM_EARLY=pause (forced pause arm).
+bool llama_dsv41_engram_early_pause();
 double llama_dsv41_engram_early_iops();
 // The weight provider marks its DirectStorage pass active/idle; the early
 // loader reports its time-weighted overlap with it.

@@ -33,6 +33,7 @@ static llama_dsv41_engram_early::mode llama_dsv41_engram_early_mode(){
 }
 bool llama_dsv41_engram_early_enabled(){return llama_dsv41_engram_early_mode()!=llama_dsv41_engram_early::mode::off;}
 bool llama_dsv41_engram_early_auto(){return llama_dsv41_engram_early_mode()==llama_dsv41_engram_early::mode::automatic;}
+bool llama_dsv41_engram_early_pause(){return llama_dsv41_engram_early_mode()==llama_dsv41_engram_early::mode::pause;}
 double llama_dsv41_engram_early_iops(){
     static const double v=llama_dsv41_engram_early::parse_iops(std::getenv("LLAMADECODE_ENGRAM_IOPS"));return v;
 }
