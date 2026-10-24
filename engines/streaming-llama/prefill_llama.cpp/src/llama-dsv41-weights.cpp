@@ -170,15 +170,18 @@ struct llama_dsv41_weight_provider::implementation {
     ggml_tensor *embedding=nullptr,*head_norm=nullptr,*head_weight=nullptr;
     std::array<uint64_t,2>engram_offsets{};
     llama_dsv41::engram_layout engram;
-    std::unique_ptr<llama_dsv41_engram_prompt_cache>engram_prompt;
+    std::shared_ptr<llama_dsv41_engram_prompt_cache>engram_prompt;
     // DS4COMBO producer-warm: the whole-prompt Engram row cache for a request
     // whose tokens are already known, built on its own IoRing while the
     // provider serves another pass (the one-token warmup). Immutable inputs
     // only; adopted by prepare_engram_prompt for exactly the same tokens/history.
     struct early_engram{
         std::vector<int32_t>tokens;llama_dsv41::engram_history initial;
-        std::unique_ptr<llama_dsv41_engram_prompt_cache>cache;std::exception_ptr failure;
+        std::shared_ptr<llama_dsv41_engram_prompt_cache>cache;std::exception_ptr failure;
         std::atomic<bool>cancel{false};double wall_ms=0;
+        // Adopted while still loading (overlap): engram_prompt shares cache,
+        // this entry and its thread stay until wait_engram_table(1) joins them.
+        bool adopted=false;
     };
     std::shared_ptr<early_engram>early;
     bool device_suspended=false;
@@ -579,6 +582,7 @@ bool llama_dsv41_weight_provider::restart_prompt(const config&options,std::strin
         std::fprintf(stderr,"LLAMADECODE_LAYOUT_SWITCH decode=%d switch_ms=%.3f same_admission=1\n",int(p->decode_layout),
             std::chrono::duration<double,std::milli>(std::chrono::steady_clock::now()-started).count());
     }
+    if(p->early&&p->early->adopted)p->join_early();
     p->engram_prompt.reset();p->options.engram_prefetch_tokens=options.engram_prefetch_tokens;p->next=0;
     for(const auto&s:p->stages)for(const auto&e:s.entries)require(!e.t->data&&!e.t->buffer,"Completed pass retained a stale staged tensor");
     llama_dsv41_layer_log("DS4PERF_PROVIDER_REUSED buffers=%u compute_buffer_bytes=%llu model_lease=1 heaps=1 request_arrays=1 starts_in_timed_run=1\n",p->options.buffers,(unsigned long long)p->planned.compute_buffer_bytes);
@@ -597,6 +601,15 @@ bool llama_dsv41_weight_provider::prepare_engram_prompt(const std::vector<int32_
     require(p->allocated&&((!p->leased&&p->next==0)||during_layer_zero)&&!p->engram_prompt&&tokens.size()==p->options.engram_prefetch_tokens,
         "Engram whole-prompt cache requires its initial or explicitly overlapped layer-zero lease");p->identity();
     if(p->early&&p->early->tokens==tokens){
+        require(!p->early->adopted,"Early Engram prompt cache was adopted twice");
+        if(overlap&&std::strcmp(overlap,"1")==0){
+            // Overlap: adopt the still-loading cache now. Readers wait per table
+            // in wait_engram_table, which also checks admission and joins.
+            require(p->early->initial.tail==initial.tail,"Early Engram prompt cache was built with a different restored history");
+            p->engram_prompt=p->early->cache;p->early->adopted=true;
+            llama_dsv41_layer_log("DS4PERF_ENGRAM_EARLY_ADOPTED tokens=%zu deferred=1 per_table_ready=1 same_rows=1\n",tokens.size());
+            return;
+        }
         const auto waited=std::chrono::steady_clock::now();
         if(p->early_thread.joinable())p->early_thread.join();
         auto adopted=std::move(p->early);
@@ -617,13 +630,19 @@ bool llama_dsv41_weight_provider::prepare_engram_prompt(const std::vector<int32_
     (void)stop;throw std::runtime_error("Whole-prompt Engram IoRing requires Windows");
 #endif
 },error);}
-bool llama_dsv41_weight_provider::start_engram_prompt_early(const std::vector<int32_t>&tokens,llama_dsv41::engram_history initial,std::string&error){return p->guard([&]{
+bool llama_dsv41_weight_provider::start_engram_prompt_early(const std::vector<int32_t>&tokens,llama_dsv41::engram_history initial,std::string&error,bool current_request){return p->guard([&]{
 #ifdef _WIN32
+    if(current_request&&p->early){
+        // A producer-warm build for a request is already queued; prepare adopts
+        // it when its tokens match, else takes the ordinary load.
+        llama_dsv41_layer_log("DS4PERF_ENGRAM_EARLY_ALREADY_QUEUED tokens=%zu same_tokens=%d\n",tokens.size(),int(p->early->tokens==tokens));return;
+    }
     require(p->options.engram_prefetch_host_bytes&&p->allocated&&!p->early&&!tokens.empty()&&tokens.size()<=1048576,"Early Engram prompt cache requires an admitted row cache and one pending request");
     // Both caches may be alive at once: the current pass's own rows and the
     // early request's. Charge both worst cases against the one admission.
+    // For the current request itself (sweep start) only its own cache exists.
     const uint64_t worst=add(4*mib,uint64_t(tokens.size())*48*(4+264));
-    const uint64_t current=p->options.engram_early_is_next_request?0:add(4*mib,uint64_t(p->options.engram_prefetch_tokens)*48*(4+264));
+    const uint64_t current=(current_request||p->options.engram_early_is_next_request)?0:add(4*mib,uint64_t(p->options.engram_prefetch_tokens)*48*(4+264));
     if(add(worst,current)>p->options.engram_prefetch_host_bytes){
         // Not admitted alongside the current pass: the request keeps its
         // ordinary layer-zero overlapped load. Visible, never silent.
@@ -650,6 +669,27 @@ bool llama_dsv41_weight_provider::start_engram_prompt_early(const std::vector<in
     (void)tokens;(void)initial;throw std::runtime_error("Early Engram IoRing requires Windows");
 #endif
 },error);}
+bool llama_dsv41_weight_provider::wait_engram_table(uint32_t index,const std::function<bool()>&stop,double&waited_ms,std::string&error){
+    waited_ms=0;std::shared_ptr<llama_dsv41_engram_prompt_cache>cache;
+    if(!p->guard([&]{require(index<2&&p->engram_prompt,"Engram table wait has no prepared prompt cache");cache=p->engram_prompt;},error))return false;
+    // Outside the provider lock: weight acquire/release and the other
+    // table's reads proceed while this table's rows finish loading.
+    const auto started=std::chrono::steady_clock::now();std::string failed;
+    try{cache->wait_table(index,stop);}catch(const std::exception&e){failed=e.what();}
+    waited_ms=std::chrono::duration<double,std::milli>(std::chrono::steady_clock::now()-started).count();
+    return p->guard([&]{
+        require(p->engram_prompt==cache,"Engram prompt cache changed while waiting for a table");
+        if((index==1||!failed.empty())&&p->early&&p->early->adopted&&p->early->cache==cache){
+            if(!failed.empty())p->early->cancel=true;
+            if(p->early_thread.joinable())p->early_thread.join();
+            auto adopted=std::move(p->early);
+            if(adopted->failure)std::rethrow_exception(adopted->failure);
+            llama_dsv41_layer_log("DS4PERF_ENGRAM_EARLY_JOINED tokens=%zu build_wall_ms=%.3f host_plan_bytes=%llu\n",adopted->tokens.size(),adopted->wall_ms,(unsigned long long)cache->budget());
+        }
+        require(failed.empty(),failed.c_str());
+        require(cache->budget()<=p->options.engram_prefetch_host_bytes,"Early Engram prompt cache exceeds provider admission");
+    },error);
+}
 bool llama_dsv41_weight_provider::acquire_embeddings(ggml_tensor*&out,std::string&error){out=nullptr;return p->guard([&]{p->acquire(0);out=p->embedding;},error);}
 bool llama_dsv41_weight_provider::acquire_layer(uint32_t layer,llama_dsv41_layer_graph::weights&out,std::string&error){out={};return p->guard([&]{require(layer<40&&!p->decode_layout,"Invalid physical layer");p->acquire(layer+1);out=p->layers[layer];},error);}
 bool llama_dsv41_weight_provider::acquire_head(ggml_tensor*&norm,ggml_tensor*&out,std::string&error){norm=nullptr;out=nullptr;return p->guard([&]{p->acquire(p->stage_count()-1);norm=p->head_norm;out=p->head_weight;},error);}

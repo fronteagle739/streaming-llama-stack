@@ -86,7 +86,14 @@ public:
     // DS4COMBO producer-warm: start the whole-prompt Engram row cache for a
     // known later request on its own IoRing; prepare_engram_prompt adopts it
     // for exactly these tokens/history. Both caches are charged to admission.
-    bool start_engram_prompt_early(const std::vector<int32_t> &tokens,llama_dsv41::engram_history initial,std::string &error);
+    // current_request: the cache is for the request about to run (sweep start),
+    // so no second cache is alive and an already-queued early cache is kept.
+    bool start_engram_prompt_early(const std::vector<int32_t> &tokens,llama_dsv41::engram_history initial,std::string &error,bool current_request=false);
+    // Under LLAMA_DSV41_ENGRAM_PROMPT_OVERLAP=1 prepare_engram_prompt adopts a
+    // still-loading early cache; every Engram reader first waits here, outside
+    // the provider lock, for its table (0: layer 1, 1: layer 14). The table-1
+    // wait joins the early build. waited_ms is the time spent blocked.
+    bool wait_engram_table(uint32_t index,const std::function<bool()> &cancelled,double &waited_ms,std::string &error);
     bool engram_tile(uint32_t index,llama_dsv41::engram_history &history,
         const int32_t *tokens,const uint8_t *text_mask,size_t count,
         std::vector<float> &output,std::string &error);
