@@ -35566,6 +35566,13 @@ __global__ static void moe_down_f32_kernel(
 
 #include "ds4_cuda_dspark_lowbit.cuh"
 
+/* streaming-llama's native-half expert graph rounds the weighted SwiGLU product to F16
+ * before the down projection (llama-dsv41-ffn.cpp). */
+__global__ static void moe_round_f16_kernel(float *x, uint64_t n) {
+    const uint64_t i = (uint64_t)blockIdx.x * blockDim.x + threadIdx.x;
+    if (i < n) x[i] = __half2float(__float2half_rn(x[i]));
+}
+
 static int routed_moe_launch(
         ds4_gpu_tensor *out,
         ds4_gpu_tensor *gate,
@@ -36199,6 +36206,48 @@ static int routed_moe_launch(
         }
         fprintf(stderr, "ds4: mmq routed-MoE tier rc=%d (layer=%u n_tokens=%u); falling back\n",
                 rc, layer_index, n_tokens);
+    }
+
+    /* Native-half Q4_K routed-MoE prefill (streaming-llama's accurate/fast expert path,
+     * cuda/mmq/ds4_q4k_half.cu, ported verbatim): gate and up as separate MMID products,
+     * clamp/SwiGLU x route weight, mid rounded to F16, down over the six ranks, then the
+     * fixed-order sum. Selected by DS4_CUDA_Q4K_MOE_NATIVE_HALF=1; when selected it serves
+     * every batched prefill call or fails loudly (no fallback to another arithmetic). The
+     * borrowed loader holds one layer (<= 384 slots); a larger cache refuses. */
+    static int q4k_native_half = -1;
+    if (q4k_native_half < 0) {
+        const char *v = getenv("DS4_CUDA_Q4K_MOE_NATIVE_HALF");
+        q4k_native_half = v && strcmp(v, "1") == 0;
+        if (q4k_native_half) fprintf(stderr, "DS4_Q4K_MOE_NATIVE_HALF on (streaming-llama native-half experts)\n");
+    }
+    if (q4k_path && q4k_native_half && n_tokens > 1u && !owned_filtered) {
+        const int32_t *ids = (const int32_t *)selected->ptr;
+        const uint64_t n_assignments = (uint64_t)n_tokens * n_expert;
+        int rc = n_expert == 6u && n_total_expert <= 384u ? 0 : -100;
+        if (!rc) rc = ds4_q4k_half_moe(gate_w, (const float *)x->ptr, ids, (float *)gate->ptr,
+                (int)expert_mid_dim, (int)expert_in_dim, (int)n_tokens, (int)n_total_expert, 1, (cudaStream_t)0);
+        if (!rc) rc = ds4_q4k_half_moe(up_w, (const float *)x->ptr, ids, (float *)up->ptr,
+                (int)expert_mid_dim, (int)expert_in_dim, (int)n_tokens, (int)n_total_expert, 1, (cudaStream_t)0);
+        if (!rc) {
+            const uint64_t mid_floats = n_assignments * expert_mid_dim;
+            moe_mmq_swiglu_weighted_clamp_kernel<<<(uint32_t)((mid_floats + 255) / 256), 256>>>(
+                    (float *)mid->ptr, (const float *)gate->ptr, (const float *)up->ptr,
+                    (const float *)weights->ptr, expert_mid_dim, n_tokens, n_expert, clamp);
+            moe_round_f16_kernel<<<(uint32_t)((mid_floats + 255) / 256), 256>>>((float *)mid->ptr, mid_floats);
+            rc = cuda_ok(cudaGetLastError(), "native-half moe swiglu") ? 0 : -101;
+        }
+        if (!rc) rc = ds4_q4k_half_moe(down_w, (const float *)mid->ptr, ids, (float *)down->ptr,
+                (int)out_dim, (int)expert_mid_dim, (int)n_tokens, (int)n_total_expert, 6, (cudaStream_t)0);
+        if (!rc) {
+            const uint64_t n = (uint64_t)n_tokens * out_dim;
+            moe_mmq_sum_kernel<<<(uint32_t)((n + 255) / 256), 256>>>(
+                    (float *)out->ptr, (const float *)down->ptr, NULL, out_dim, n_expert, n_tokens, 1);
+            if (cuda_ok(cudaGetLastError(), "native-half moe sum")) return 1;
+            rc = -102;
+        }
+        fprintf(stderr, "DS4_Q4K_MOE_NATIVE_HALF_FAILED rc=%d layer=%u n_tokens=%u experts=%u n_expert=%u; "
+                        "refusing this call (no fallback)\n", rc, layer_index, n_tokens, n_total_expert, n_expert);
+        return 0;
     }
 
     /* Q4_K routed-MoE prefill through the vendored ggml MMQ (expert-sorted,
