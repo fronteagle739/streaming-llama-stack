@@ -34,7 +34,8 @@ DECODE_ENV = {'LLAMADECODE_DS4_DECODE': '1'}
 KEPT = ('gpu_uuid', 'gpu_idle_max_mib', 'hold_file', 'task', 'lease_minutes', 'request_timeout_s', 'host_budget_gib',
         'min_available_gib', 'job_commit_gib', 'context', 'model', 'model_name', 'producer_host_budget_gib',
         'producer_profile', 'producer_sha256', 'producer_source_revision', 'producer_fixed_direct_open', 'env_overrides',
-        'producer_graceful_shutdown_seconds', 'host', 'port')
+        'producer_graceful_shutdown_seconds', 'host', 'port',
+        'comfyui_models', 'studio_python')  # envvars.json placeholders the proxy's studio/producer scopes expand
 
 
 def sha(path):
