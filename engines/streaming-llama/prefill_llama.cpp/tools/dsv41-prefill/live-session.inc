@@ -147,6 +147,7 @@ struct ds4_external {
     int(*x_decode)(int,uint32_t,const int32_t*,uint32_t,float*)=nullptr;void(*x_close)()=nullptr;
     int(*x_affinity)(float,uint32_t,uint32_t,const char*,int(*)(void*,uint32_t,uint8_t*,uint32_t),void*)=nullptr;
     llama_dsv41_weight_provider*provider=nullptr;uint64_t registered=0,registered_bytes=0;
+    float quality=-1.f; // live quality-speed mean (session op); <0 = LLAMADECODE_DS4_BIAS / off
     static int residency_hook(void*user,uint32_t layer,uint8_t*tier,uint32_t experts){
         auto*self=static_cast<ds4_external*>(user);return self->provider&&self->provider->decode_residency(layer,tier,experts)?1:0;}
     static int expert_hook(void*user,uint32_t layer,const int32_t*ids,uint32_t n,int32_t*slots,const char**g,const char**u,const char**d,uint32_t*count){
@@ -191,8 +192,9 @@ struct ds4_external {
         // B5: LLAMADECODE_DS4_BIAS=<quality-speed mean> enables ds4-win's own
         // cache-affinity bias on this cache (selection only). Spread file and
         // warmup/ramp follow the native engine (DS4_CACHE_AFFINITY_*).
-        if(const char*b=std::getenv("LLAMADECODE_DS4_BIAS")){
-            const float mean=std::strtof(b,nullptr);const char*spread=std::getenv("LLAMADECODE_DS4_SPREAD");
+        const char*b=std::getenv("LLAMADECODE_DS4_BIAS");
+        if(quality>=0.f||b){
+            const float mean=quality>=0.f?quality:std::strtof(b,nullptr);const char*spread=std::getenv("LLAMADECODE_DS4_SPREAD");
             const char*w=std::getenv("DS4_CACHE_AFFINITY_WARMUP_TOKENS");const char*r=std::getenv("DS4_CACHE_AFFINITY_RAMP_TOKENS");
             require(x_affinity(mean,w?uint32_t(std::strtoul(w,nullptr,10)):100u,r?uint32_t(std::strtoul(r,nullptr,10)):8u,spread,&residency_hook,this)==1,
                 "ds4x_set_affinity refused the bias configuration");
@@ -283,6 +285,16 @@ void run_live_session(std::unique_ptr<llama_dsv41_sweep>&sweep,
             continue;
         }else if(device_suspended){
             require(false,"Suspended session accepts only resume or close");
+        }else if(operation=="quality_speed"){
+            // LLAMADECODE B5: the live quality-speed control (ds4-win /v1/quality-speed
+            // semantics: 0 = max quality, 1.36125 = max speed). Applies from the next
+            // decode request; the bias keeps ds4-win's warmup/ramp per request.
+            dsv41_live::keys(command,{"session","model_sha256","sequence","operation","value"});
+            const auto&v=command.at("value");require(v.is_number(),"Quality-speed value must be a number");
+            const double value=v.get<double>();require(value>=0.0&&value<=1.36125,"Quality-speed value outside 0..1.36125");
+            ds4x.quality=float(value);
+            std::fprintf(stderr,"LLAMADECODE_QUALITY_SPEED value=%.6g applies=next_decode\n",value);std::fflush(stderr);
+            reply({{"supported",ds4_decode_enabled()},{"value",value},{"applies","next decode request"},{"scope","session"}});
         }else if(operation=="checkpoint"){
             dsv41_live::keys(command,{"session","model_sha256","sequence","operation"});
             require(inspect().describe()==current.describe(),"Session idle owner changed");reply({{"peer_synchronized",have_remote&&!awaiting_ack&&remote.describe()==current.describe()}});

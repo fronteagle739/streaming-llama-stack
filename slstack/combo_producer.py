@@ -89,6 +89,8 @@ class ComboProducer:
                         write(ram.read(offset,min(65536,payload_bytes(contract['position'])-offset)))
         argv=[str(binary),*[str(v) for item in args.items() for v in item]]
         env=environment(cfg,'rtx-producer')
+        if cfg.get('cache_affinity_spread_file') and not env.get('LLAMADECODE_DS4_SPREAD'):
+            env['LLAMADECODE_DS4_SPREAD']=str(path(cfg['cache_affinity_spread_file']))   # B5 calibration (native's file)
         env['PATH']=os.pathsep.join([str(binary.parent),*[str(path(p)) for p in cfg.get('producer_library_directories',[])],env.get('PATH','')])
         self.started=time.monotonic()
         try:
@@ -170,6 +172,11 @@ class ComboProducer:
         returned last token (stop, or sampled at max_tokens) is not evaluated."""
         reply=self.process.request(self.command('decode',base=self.checkpoint,max_tokens=int(max_tokens),stop_tokens=[int(t) for t in stop_tokens]))
         self.checkpoint=reply['checkpoint'];return reply
+
+    def quality(self,value):
+        """LLAMADECODE B5: the live quality-speed setting (0 = max quality, 1.36125 = max speed) for the
+        in-process ds4 decode; same scale as ds4-win /v1/quality-speed. Applies from the next decode."""
+        return self.process.request(self.command('quality_speed',value=float(value)))
 
     def decode_forced(self,tokens,logits_path):
         """LLAMADECODE gate: teacher-forced 1-row decode; writes one full F32 logits row per token."""
