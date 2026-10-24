@@ -122,11 +122,11 @@ class TokenizerTests(unittest.TestCase):
         self.assertEqual(r.continue_live([tok.bos, tok.ids['b']], prompt, canonical, tok), (None, 'canonical-miss'))
 
 
-MODEL = 'models/DeepSeek-V4.1-Flash-1017-Q4-v41.gguf'
-RUNS = Path(os.environ.get('LLAMADECODE_RUNS', 'runtime/runs'))
+MODEL = os.environ.get('LLAMADECODE_MODEL', '')   # the 1017 GGUF
+RUNS = Path(os.environ.get('LLAMADECODE_RUNS', '') or 'missing-recorded-runs')
 
 
-@unittest.skipUnless(Path(MODEL).exists() and RUNS.exists(), 'needs the 1017 GGUF and recorded native-rendered runs')
+@unittest.skipUnless(MODEL and Path(MODEL).exists() and RUNS.exists(), 'needs the 1017 GGUF and recorded native-rendered runs')
 class RecordedNativeRenderTests(unittest.TestCase):
     """CPU check against token files the native rendered on earlier GPU runs
     (ComboProducer's append.tokens.le32 holds Native.render's exact ids)."""

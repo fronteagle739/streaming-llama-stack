@@ -13,8 +13,8 @@ normal ds4 backend launches as its ds4_binary.
   manifest.json         SHA-256 and size of every file
 No model weights are copied; the GGUF stays at cfg['model'].
 
-  python -B -m slstack.single_runtime stage --config CFG --stage NEW_DIR --install-root runtime/ds4<rev>
-      --launcher runtime/combo-launcher.exe --studio-native source/ds4_native.py
+  python -B -m slstack.single_runtime stage --config CFG --stage NEW_DIR --install-root <Studio runtime root>/ds4/<rev>
+      --launcher <combo-launcher.exe> --studio-native <front-eagle-stack>/backend/studio/ds4_native.py
   python -B -m slstack.single_runtime install --stage NEW_DIR      (copies to the install root named in its manifest)
 """
 from __future__ import annotations

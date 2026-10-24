@@ -7,8 +7,8 @@ new suffix (prefix_source memory-token or memory-text). Quality-speed is set thr
 the same path /v1/quality-speed uses before turn 2.
 
 usage (cwd = the stack repo):
-  python -B tests/combo_single_gate.py --cfg runtime/cfg-r.json \
-      --case runtime/case-rn-2000-qa.json --out runtime/single-gate.json \
+  python -B tests/combo_single_gate.py --cfg <cfg.json> \
+      --case <case-rn-2000-qa.json> --out <runs>/single-gate.json \
       [--max-tokens 512] [--quality 1.36125] [--no-lease]
 --no-lease skips the RTX hold ledger admission (use it when the run already sits
 inside a hold you took yourself). LLAMADECODE_DS4_DECODE=1 comes from env_overrides
