@@ -806,8 +806,8 @@ bool llama_dsv41_sweep::apply_decode_delta(const decode_delta&update,
             p->options.stateful_chunks&&p->cache&&p->carry.frontier_ready()&&!p->executor,
             "Decode delta requires a completed, idle stateful sweep");
         const auto count=update.evaluated_tokens.size();
-        require(count&&count<=128&&update.logits.size()==vocabulary&&p->logits.size()==vocabulary&&bool(read),
-            "Decode delta requires1..128 evaluated tokens and complete logits");
+        require(count&&count<=llama_dsv41::decode_delta_max_tokens&&update.logits.size()==vocabulary&&p->logits.size()==vocabulary&&bool(read),
+            "Decode delta requires 1..maximum_decode_tokens evaluated tokens and complete logits");
         require(std::all_of(update.evaluated_tokens.begin(),update.evaluated_tokens.end(),
             [](int32_t t){return t>=0&&uint32_t(t)<vocabulary;}),"Decode delta token out of range");
         finite(update.logits);

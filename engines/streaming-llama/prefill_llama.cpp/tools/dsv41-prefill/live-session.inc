@@ -322,7 +322,7 @@ void run_live_session(std::unique_ptr<llama_dsv41_sweep>&sweep,
         success(sweep->export_native([&](wire_payload_reader&r,std::string&why){try{c=dsv41_live::capture(r,[]{return should_stop();});return true;}catch(const std::exception&e){why=e.what();return false;}},error),error);return c;};
     current=inspect();
     send({{"status","ready"},{"session",session},{"model_sha256",model_sha},{"next_sequence",guard.expected()},
-        {"checkpoint",current.describe()},{"maximum_prefill_tokens",capacity},{"maximum_decode_tokens",128},{"control_host_bytes",64*1024*1024},
+        {"checkpoint",current.describe()},{"maximum_prefill_tokens",capacity},{"maximum_decode_tokens",llama_dsv41::decode_delta_max_tokens},{"control_host_bytes",64*1024*1024},
         {"transport","private owned pipes; existing native payload and artifact v2.1 delta"}});
     for(;;){
         io.renew();auto command=dsv41_live::parse_control(io.line());guard.accept(command);if(owner_epoch)command.erase("owner_epoch");
@@ -421,13 +421,13 @@ void run_live_session(std::unique_ptr<llama_dsv41_sweep>&sweep,
             dsv41_live::keys(command,{"session","model_sha256","sequence","operation","base","target","bytes"});same_base();
             require(have_remote&&!awaiting_ack&&remote.describe()==current.describe(),"Decode delta before peer synchronization");
             const auto target=checkpoint::from_json(command.at("target"));delta_plan plan;std::string error;
-            success(make_delta_plan(current.frontier,target.frontier,plan,error),error);require(plan.token_count<=128,"Live decode delta exceeds128 evaluated tokens");
-            const auto bytes=dsv41_live::u64(command.at("bytes"));require(bytes<=64ull*1024*1024,"Live decode artifact exceeds bounded native maximum");
+            success(make_delta_plan(current.frontier,target.frontier,plan,error),error);require(plan.token_count<=llama_dsv41::decode_delta_max_tokens,"Live decode delta exceeds the advertised maximum_decode_tokens");
+            const auto bytes=dsv41_live::u64(command.at("bytes"));require(bytes<=llama_dsv41::decode_delta_byte_cap(plan.token_count),"Live decode artifact exceeds bounded native maximum");
             uint64_t received=0;delta_artifact_receiver incoming;
             auto stream=[&](uint64_t off,void*dst,size_t n,std::string&why){try{
                 require(off==received&&n<=65536&&off<=bytes&&n<=bytes-off,"Live decode stream is not sequential/bounded");io.read(dst,n);received+=n;return true;
             }catch(const std::exception&e){why=e.what();return false;}};
-            success(incoming.init(bytes,stream,current.frontier,session_route,model_route,error),error);
+            success(incoming.init(bytes,stream,current.frontier,session_route,model_route,error,llama_dsv41::decode_delta_max_tokens),error);
             require(incoming.plan().target.position==target.frontier.position&&incoming.plan().target.context==target.frontier.context&&
                 incoming.plan().target.mode==target.frontier.mode&&incoming.plan().target.capture_end==target.frontier.capture_end&&incoming.plan().target.capture_length==target.frontier.capture_length,
                 "Live decode artifact target differs from authenticated metadata");

@@ -74,5 +74,21 @@ class ContractTest(unittest.TestCase):
         self.assertEqual(command(request,'1'*32,1,1),request)
         with self.assertRaises(ValueError):command(request,'1'*32,1)
 
+    def test_decode_delta_accepted_maximum(self):
+        # rtxmac-producer-2: <=128-token deltas are the normal chunk; one delta
+        # may carry a whole local append up to 49152 tokens.
+        def ck(position):
+            return dict(context=262144,position=position,mode=1,capture_end=0,capture_length=0,
+                        tokens_sha256='a'*64,logits_sha256='b'*64,owner_sha256=['c'*64]*((55 if position%2 else 49)-1))
+        def delta(b,t,nbytes):
+            return dict(session='1'*32,model_sha256=MODEL_SHA256,sequence=1,operation='apply_decode_delta',base=ck(b),target=ck(t),bytes=nbytes)
+        small=delta(129,257,64<<20)
+        self.assertEqual(command(small,'1'*32,1,1),small)
+        with self.assertRaises(ValueError):command(delta(129,257,(64<<20)+1),'1'*32,1,1)
+        big=delta(1,49153,325784832)  # measured exact extent (tests/dsv41_decode_delta_big.cpp)
+        self.assertEqual(command(big,'1'*32,1,1),big)
+        with self.assertRaises(ValueError):command(delta(1,49153,(64<<20)+49152*6404+1),'1'*32,1,1)
+        with self.assertRaises(ValueError):command(delta(1,49154,325791236),'1'*32,1,1)
+
 
 if __name__=='__main__':unittest.main()
