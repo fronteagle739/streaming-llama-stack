@@ -78257,5 +78257,19 @@
     "reads": [
       "engines/ds4-win/ds4_engram.c"
     ]
+  },
+  {
+    "var": "DS4_CUDA_Q4K_MOE_NATIVE_HALF",
+    "flag": null,
+    "default": null,
+    "code_default": "unset = off",
+    "classification": "advanced",
+    "scopes": [
+      "ds4-win"
+    ],
+    "doc": "1 runs Q4_K routed-MoE prefill batches through streaming-llama's native-half MMID kernel (cuda/mmq/ds4_q4k_half.cu: Q4_K weights to F16 on the fly, F16 activations, F16 MMA, F32 accumulate; mid rounded to F16; DS4_Q4K_MOE_NATIVE_HALF on). It serves every batched prefill call or fails loudly (no fallback); one-layer loader (<= 384 slots) only.",
+    "reads": [
+      "engines/ds4-win/ds4_cuda.cu"
+    ]
   }
 ]
