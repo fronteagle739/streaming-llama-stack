@@ -102,13 +102,28 @@ bool nvml_free_bytes(uint64_t&free_bytes,uint64_t&total_bytes){
     if(by_uuid(uuid,&device)!=0||info(device,&m)!=0)return false;
     free_bytes=m.free;total_bytes=m.total;return true;
 }
-uint64_t decode_vram_reserve(){return 2048ull<<20;}
+// Physical VRAM reserve kept free beside the L2 (LLAMADECODE_VRAM_RESERVE_MIB, default 2048).
+uint64_t decode_vram_reserve(){static const uint64_t r=[]{const char*e=std::getenv("LLAMADECODE_VRAM_RESERVE_MIB");
+    const long v=e&&*e?std::strtol(e,nullptr,10):2048;return uint64_t(std::max<long>(256,std::min<long>(v,8192)))<<20;}();return r;}
+// Headroom measurement: a 5 ms NVML sampler records the minimum free VRAM
+// (transient cuBLAS/graph/WDDM/other-process use) once the L2 is filled.
+struct vram_sampler{
+    std::atomic<bool>stop{false},started{false};std::atomic<uint64_t>min_free{~0ull},samples{0};std::thread worker;
+    void start(){bool no=false;if(!started.compare_exchange_strong(no,true))return;
+        worker=std::thread([this]{while(!stop.load()){uint64_t f=0,t=0;if(nvml_free_bytes(f,t)){uint64_t m=min_free.load();while(f<m&&!min_free.compare_exchange_weak(m,f)){}++samples;}
+            std::this_thread::sleep_for(std::chrono::milliseconds(5));}});}
+    ~vram_sampler(){stop.store(true);if(worker.joinable())worker.join();}
+};
+vram_sampler&decode_vram_sampler(){static vram_sampler s;return s;}
 // Runtime guard: refuse loudly (graceful error) if physical free VRAM falls
 // below the reserve while the decode-sized plan holds the L2.
 void check_decode_vram_reserve(){
     uint64_t f=0,t=0;if(!nvml_free_bytes(f,t))return;
+    auto&s=decode_vram_sampler();
+    if(s.started.load())std::fprintf(stderr,"LLAMADECODE_VRAM_HEADROOM nvml_free_now=%llu min_free_since_l2=%llu samples=%llu reserve=%llu\n",
+        (unsigned long long)f,(unsigned long long)s.min_free.load(),(unsigned long long)s.samples.load(),(unsigned long long)decode_vram_reserve());
     if(f<decode_vram_reserve()){std::fprintf(stderr,"LLAMADECODE_VRAM_RESERVE_BREACH nvml_free=%llu reserve=%llu\n",(unsigned long long)f,(unsigned long long)decode_vram_reserve());std::fflush(stderr);
-        throw std::runtime_error("Physical free VRAM fell below the 2 GiB decode reserve");}
+        throw std::runtime_error("Physical free VRAM fell below the decode VRAM reserve");}
 }
 void grow_decode_l2(llama_dsv41_sweep&sweep,const llama_dsv41_fixed_storage*fixed,ggml_backend_t backend){
     static const bool on=[]{const char*e=std::getenv("LLAMADECODE_L2");return !(e&&e[0]=='0'&&!e[1]);}();
@@ -132,6 +147,7 @@ void grow_decode_l2(llama_dsv41_sweep&sweep,const llama_dsv41_fixed_storage*fixe
     uint64_t nv_free=0,nv_total=0;const bool nv=nvml_free_bytes(nv_free,nv_total);
     offer=nv?std::min<uint64_t>(offer,nv_free>floor+margin?nv_free-floor-margin:0):0;
     uint32_t slots=0;std::string error;success(provider->grow_decode_cache(offer,&slots,error),error);
+    if(slots)decode_vram_sampler().start();
     uint64_t nv_after=0,nv_total_after=0;(void)nvml_free_bytes(nv_after,nv_total_after);
     std::fprintf(stderr,"LLAMADECODE_L2_OFFER freed=%llu decode_now=%llu cuda_free=%llu cuda_total=%llu dxgi_budget=%llu dxgi_usage=%llu nvml_free=%llu nvml_total=%llu nvml_free_after=%llu offered=%llu slots=%u\n",(unsigned long long)freed,
         (unsigned long long)now,(unsigned long long)free_bytes,(unsigned long long)total,(unsigned long long)budget,(unsigned long long)usage,
