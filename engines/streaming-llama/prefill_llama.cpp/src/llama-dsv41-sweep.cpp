@@ -548,16 +548,22 @@ bool llama_dsv41_sweep::run(const std::vector<int32_t>&tokens,const cancelled&st
         const char*engram_overlap_env=std::getenv("LLAMA_DSV41_ENGRAM_PROMPT_OVERLAP");
         const bool engram_overlap=engram_overlap_env&&std::strcmp(engram_overlap_env,"1")==0;
         require(!engram_overlap||p->options.engram_tile_lookahead,"Engram prompt overlap requires the existing lookahead worker");
-        // Declared before engram_next: every reader/loader future is joined on
-        // all exits before the outer catch can poison the provider or carry.
-        std::shared_future<void>engram_preload;
         auto prepare_engram=[&]{
             const auto started=std::chrono::steady_clock::now();std::string reason;
             success(p->provider.prepare_engram_prompt(owned,[&]{p->check_stop(stop);return false;},reason,p->initial_engram),reason);
             llama_dsv41_layer_log("[dsv41-engram-prefetch-total] wall_ms=%.6f\n",
                 std::chrono::duration<double,std::milli>(std::chrono::steady_clock::now()-started).count());std::fflush(stderr);
         };
-        if(!engram_overlap)prepare_engram();
+        // Overlap: the whole-prompt row cache builds on the provider's early
+        // IoRing thread from sweep start (seed and layer 0 run meanwhile);
+        // prepare adopts it unfinished. Layer 1's reader waits only for table
+        // 0, layer 14's for table 1 (wait_engram_table, outside the lock).
+        // The early thread is joined by the table-1 wait or by invalidate.
+        if(engram_overlap){
+            success(p->provider.start_engram_prompt_early(owned,p->initial_engram,error,true),error);
+            llama_dsv41_layer_log("DS4PERF_ENGRAM_PROMPT_QUEUED at=sweep_start consumers=1,14 per_table_ready=1 own_ioring=1\n");
+        }
+        prepare_engram();
         ggml_tensor*embedding=nullptr;success(p->provider.acquire_embeddings(embedding,error),error);
         const uint32_t seed_rows=p->options.batch_seed_ram?std::min(4096u,p->options.carry.max_tile_tokens):tile_limit;
         const auto seed_started=std::chrono::steady_clock::now();
@@ -580,16 +586,17 @@ bool llama_dsv41_sweep::run(const std::vector<int32_t>&tokens,const cancelled&st
             uint32_t layer=0,start=0,count=0;
             llama_dsv41::engram_history history;
             std::vector<float> rows;
-            double cpu_ms=0;
+            double cpu_ms=0,table_wait_ms=0;
         };
             std::future<engram_ready> engram_next;
         auto queue_engram=[&](uint32_t layer,uint32_t start,const llama_dsv41::engram_history &history){
             require(!engram_next.valid(),"Engram lookahead cannot overwrite unconsumed rows");
             engram_next=std::async(std::launch::async,[&,layer,start,history]{
                 const auto begun=std::chrono::steady_clock::now();engram_ready out;
-                // The first layer-one decoder waits for the same immutable
-                // cache; layer zero keeps computing without a provider call.
-                if(engram_overlap&&layer==1){require(engram_preload.valid(),"Missing overlapped Engram owner");engram_preload.get();}
+                // The first decoder of each Engram layer waits for its own
+                // table of the same immutable cache, outside the provider lock.
+                if(engram_overlap&&start==0){std::string reason;
+                    success(p->provider.wait_engram_table(layer==1?0:1,[&]{p->check_stop(stop);return false;},out.table_wait_ms,reason),reason);}
                 out.layer=layer;out.start=start;out.count=std::min(compute_step,uint32_t(owned.size())-start);out.history=history;
                 std::vector<uint8_t>mask(out.count,1);std::string reason;
                 p->check_stop(stop);out.rows.reserve(uint64_t(out.count)*6144);std::vector<float>part;
@@ -614,11 +621,6 @@ bool llama_dsv41_sweep::run(const std::vector<int32_t>&tokens,const cancelled&st
                 success(p->provider.acquire_layer_dense(layer,weights,error),error);}
             else success(p->provider.acquire_layer(layer,weights,error),error);
             const double acquire_ms=elapsed(layer_started);
-            if(engram_overlap&&layer==0){
-                require(!engram_preload.valid(),"Engram prompt preload was started twice");
-                engram_preload=std::async(std::launch::async,prepare_engram).share();
-                llama_dsv41_layer_log("DS4PERF_ENGRAM_PROMPT_QUEUED layer=0 next_consumer_layer=1 existing_ioring=1 same_provider_lock=1\n");
-            }
             const uint32_t ratio=layer<2?0:layer<20?2:1;
             // Native ds41_index_batch/attention use floor((start+count)/ratio).
             // Use the complete prompt's fixed floor, not this tile's prefix.
@@ -664,6 +666,8 @@ bool llama_dsv41_sweep::run(const std::vector<int32_t>&tokens,const cancelled&st
                             "Engram lookahead belongs to a different layer/tile");
                         history=prepared.history;request.engram_rows=std::move(prepared.rows);
                         llama_dsv41_layer_log("DS4PERF_ENGRAM_LOOKAHEAD layer=%u start=%u count=%u cpu_ms=%.6f exposed_wait_ms=%.6f prepared_prompt_cache=1\n",layer,start,count,prepared.cpu_ms,elapsed(engram_started));
+                        if(engram_overlap&&start==0)llama_dsv41_layer_log("DS4PERF_ENGRAM_TABLE_READY table=%u consumer_layer=%u exposed_wait_ms=%.6f worker_table_wait_ms=%.6f\n",
+                            layer==1?0u:1u,layer,elapsed(engram_started),prepared.table_wait_ms);
                         if(start+count<owned.size())queue_engram(layer,start+count,history);
                     }else if(count<=4096)success(p->provider.engram_tile(layer==1?0:1,history,owned.data()+start,mask.data(),count,request.engram_rows,error),error);
                     else{request.engram_rows.reserve(uint64_t(count)*6144);std::vector<float>part;
@@ -697,12 +701,6 @@ bool llama_dsv41_sweep::run(const std::vector<int32_t>&tokens,const cancelled&st
             }
             if(layer==1)p->final_engram=history;
             if(layer==14)require(history.tail==p->final_engram.tail,"Engram layers disagreed on the completed chunk history");
-            if(engram_overlap&&layer==0){
-                const auto waited=std::chrono::steady_clock::now();
-                require(engram_preload.valid(),"Lost overlapped Engram preload future");engram_preload.get();
-                const double exposed=elapsed(waited);engram_ms+=exposed;
-                llama_dsv41_layer_log("DS4PERF_ENGRAM_PROMPT_READY layer=0 before_consumer_layer=1 exposed_wait_ms=%.6f joined=1 provider_lock_retained=1\n",exposed);
-            }
             ledger_started=std::chrono::steady_clock::now();success(p->carry.commit_layer(error),error);
             const double carry_commit_ms=elapsed(ledger_started);
             ledger_started=std::chrono::steady_clock::now();success(p->provider.release(error),error);

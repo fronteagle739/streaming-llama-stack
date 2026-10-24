@@ -16,6 +16,9 @@
 #endif
 #include "llama-dsv41-engram-prefetch.h"
 #include <algorithm>
+#include <atomic>
+#include <chrono>
+#include <thread>
 #include <cstdio>
 #include <cstdlib>
 #include <cstring>
@@ -28,7 +31,11 @@ struct llama_dsv41_engram_prompt_cache::implementation {
     struct table {std::vector<uint32_t> ids;std::vector<uint8_t> data;};
     std::array<table,2> tables;
     std::array<uint64_t,2> bases{};
-    bool attempted=false,prepared=false,load_attempted=false,ready=false;
+    bool attempted=false,prepared=false,load_attempted=false;
+    // Tables whose rows are complete: 0, 1 (table 0) or 2 (both). Release
+    // stores publish the rows; read() and wait_table() acquire them.
+    std::atomic<uint32_t> ready_tables{0};
+    std::atomic<bool> failed{false};
     uint64_t host_plan=0;
     static void require(bool ok,const char* message){if(!ok)throw std::runtime_error(message);}
     static uint64_t add(uint64_t a,uint64_t b){require(a<=UINT64_MAX-b,"Engram cache plan overflow");return a+b;}
@@ -169,7 +176,7 @@ public:
         std::array<slot,depth> slots;
         std::vector<uint32_t> staged;staged.reserve(depth);
         size_t next_row=0;uint32_t next_table=0;UINT_PTR sequence=0;
-        uint64_t read_bytes=0,read_requests=0,submits=0;
+        uint64_t read_bytes=0,read_requests=0,submits=0;size_t table0_done=0;
         const char*batch_env=std::getenv("LLAMA_DSV41_ENGRAM_SUBMIT_BATCH");
         const bool batch_submits=batch_env&&std::strcmp(batch_env,"1")==0;
         auto issue=[&](uint32_t i){
@@ -214,6 +221,10 @@ public:
                 require(s.live&&s.id==c.UserData,"Engram completion nonce/ownership differs");s.live=false;
                 require(SUCCEEDED(c.ResultCode)&&c.Information==s.extent,"Engram IoRing read failed or was short");
                 std::memcpy(tables[s.table].data.data()+s.row*row_bytes,io.pages+uint64_t(id-1)*page_size+s.skip,row_bytes);
+                if(s.table==0&&++table0_done==tables[0].ids.size()){
+                    ready_tables.store(1,std::memory_order_release);
+                    llama_dsv41_layer_log("DS4PERF_ENGRAM_TABLE_LOADED table=0 rows=%zu wall_ms=%llu\n",tables[0].ids.size(),(unsigned long long)(GetTickCount64()-began));
+                }
                 issue(id-1);
             }
             require(io.submitted+staged.size()<=depth,"Engram queued and submitted slots exceed fixed depth");
@@ -225,8 +236,8 @@ public:
                 require(wait==WAIT_OBJECT_0||wait==WAIT_TIMEOUT,"Engram IoRing completion wait failed");
             }
         }
-        require(next_table==2&&staged.empty(),"Incomplete whole-prompt Engram preload");
-        ready=true;
+        require(next_table==2&&staged.empty()&&table0_done==tables[0].ids.size(),"Incomplete whole-prompt Engram preload");
+        ready_tables.store(2,std::memory_order_release);
         if(batch_submits)llama_dsv41_layer_log("DS4PERF_ENGRAM_SUBMIT_BATCH requests=%llu submits=%llu depth=256 threshold=64 low_water=128 all_completions_drained=1\n",(unsigned long long)read_requests,(unsigned long long)submits);
         llama_dsv41_layer_log("[dsv41-engram-prefetch] table0_rows=%zu table1_rows=%zu host_plan_bytes=%llu read_bytes=%llu requests=%llu submits=%llu wall_ms=%llu\n",
             tables[0].ids.size(),tables[1].ids.size(),(unsigned long long)host_plan,(unsigned long long)read_bytes,
@@ -234,11 +245,19 @@ public:
         std::fflush(stderr);
     }
     bool read(uint32_t table,uint64_t offset,void* destination,size_t bytes)const{
-        if(!ready||table>=2||bytes!=row_bytes||!destination||offset<bases[table]||(offset-bases[table])%row_bytes)return false;
+        if(table>=2||ready_tables.load(std::memory_order_acquire)<=table||bytes!=row_bytes||!destination||offset<bases[table]||(offset-bases[table])%row_bytes)return false;
         const auto id=(offset-bases[table])/row_bytes;if(id>UINT32_MAX)return false;
         const auto& t=tables[table];const auto found=std::lower_bound(t.ids.begin(),t.ids.end(),uint32_t(id));
         if(found==t.ids.end()||*found!=id)return false;
         std::memcpy(destination,t.data.data()+size_t(found-t.ids.begin())*row_bytes,row_bytes);return true;
+    }
+    void wait_table(uint32_t table,const std::function<bool()>& stopped)const{
+        require(table<2&&prepared,"Engram table wait requires a prepared cache");
+        while(ready_tables.load(std::memory_order_acquire)<=table){
+            require(!failed.load(std::memory_order_acquire),"Whole-prompt Engram preload failed before this table was ready");
+            require(!stopped||!stopped(),"Engram table wait cancelled");
+            std::this_thread::sleep_for(std::chrono::microseconds(200));
+        }
     }
 };
 #else
@@ -262,7 +281,8 @@ uint64_t llama_dsv41_engram_prompt_cache::budget()const{
 }
 void llama_dsv41_engram_prompt_cache::load(const wchar_t*path,void*file,uint64_t n,const std::function<bool()>&stop){
 #ifdef _WIN32
- p->load(path,static_cast<HANDLE>(file),n,stop);
+ try{p->load(path,static_cast<HANDLE>(file),n,stop);}
+ catch(...){p->failed.store(true,std::memory_order_release);throw;}
 #else
  (void)path;(void)file;(void)n;(void)stop;throw std::runtime_error("Engram IoRing requires Windows");
 #endif
@@ -272,5 +292,12 @@ bool llama_dsv41_engram_prompt_cache::read(uint32_t table,uint64_t offset,void*d
  return p->read(table,offset,dst,n);
 #else
  (void)table;(void)offset;(void)dst;(void)n;return false;
+#endif
+}
+void llama_dsv41_engram_prompt_cache::wait_table(uint32_t table,const std::function<bool()>&stop)const{
+#ifdef _WIN32
+ p->wait_table(table,stop);
+#else
+ (void)table;(void)stop;throw std::runtime_error("Engram IoRing requires Windows");
 #endif
 }
