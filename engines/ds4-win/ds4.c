@@ -46056,7 +46056,16 @@ static bool ds41_graph_prefill_sweep(ds41_gpu_graph *g, const ds4_model *m,
                     routed_expert_row_bytes(w->layer[il].ffn_gate_exps) * DS4_N_FF_EXP,
                     routed_expert_row_bytes(w->layer[il].ffn_down_exps) * DS4_N_EMBD);
                 ds4_gpu_stream_expert_table next = {0};
+#if defined(_WIN32)
+                /* The Windows DirectStorage next-layer read loads every expert of the
+                 * next layer: worth it for the encoder layers (0-19), which run every
+                 * row, not for the decoder suffix (20+), whose shrinking tail touches
+                 * only part of a layer. A plain (non-deferred) sweep has encoder_only
+                 * false yet still runs layers 0-19 on all rows, so test the layer. */
+                const bool more = il + 1u < 20u;
+#else
                 const bool more = il + 1u < (encoder_only ? 20u : DS4_N_LAYER);
+#endif
                 if (more) next = graph_stream_expert_table_make(m, &w->layer[il + 1u], il + 1u,
                     routed_expert_row_bytes(w->layer[il + 1u].ffn_gate_exps) * DS4_N_FF_EXP,
                     routed_expert_row_bytes(w->layer[il + 1u].ffn_down_exps) * DS4_N_EMBD);
@@ -79672,6 +79681,11 @@ void ds4_session_set_cancel(ds4_session *s, ds4_session_cancel_fn fn, void *ud) 
 }
 
 static bool ds4_session_cancelled(ds4_session *s) {
+#if defined(_WIN32)
+    /* A host-memory breach requested the graceful abort (never a self-kill while
+     * VRAM/DirectStorage may be held): fail the current request and refuse new ones. */
+    if (ds4_win32_graceful_abort_requested()) return true;
+#endif
     return s && s->cancel && s->cancel(s->cancel_ud);
 }
 

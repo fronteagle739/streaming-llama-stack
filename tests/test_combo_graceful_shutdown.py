@@ -106,5 +106,41 @@ class ProducerGraceful(unittest.TestCase):
         self.assertTrue(proof['producer_shutdown_path'].startswith('terminate:'))
 
 
+STUCK = 'DSV41 STUCK PROCESS pid=4242 holding VRAM, NOT killed; owner action needed (fixture)'
+
+
+def stuck_close(self):
+    self.receipt = dict(owned_job_empty=False, owned_process_signaled=False, owned_pid_gone=False, stuck=STUCK)
+    raise RuntimeError(STUCK)
+
+
+class NoKill(unittest.TestCase):
+    """Owner rule: a native/producer still alive after every graceful step is never killed."""
+
+    def test_stuck_native_stops_gpu_work_and_keeps_its_receipt(self):
+        import json
+        with tempfile.TemporaryDirectory() as tmp:
+            n = native(tmp, 0, b'', fail=True)
+            n.cfg['runtime_root'] = tmp
+            n.process.close = stuck_close.__get__(n.process)
+            with self.assertRaisesRegex(RuntimeError, 'NOT killed'):
+                n.close()
+            stop = json.loads((Path(tmp) / 'GPU_STOP').read_text())
+            self.assertIn('NOT killed', stop['stuck'])
+            self.assertEqual(json.loads((Path(tmp) / 'cleanup.json').read_text())['stuck'], STUCK)
+            self.assertFalse(n.closed)
+
+    def test_stuck_producer_stops_gpu_work_and_keeps_its_receipt(self):
+        import json
+        with tempfile.TemporaryDirectory() as tmp:
+            p, _ = producer(tmp, 0, DONE_P, busy=True)
+            p.cfg['runtime_root'] = tmp
+            p.process.close = stuck_close.__get__(p.process)
+            with self.assertRaisesRegex(RuntimeError, 'NOT killed'):
+                p.close()
+            self.assertIn('NOT killed', json.loads((Path(tmp) / 'GPU_STOP').read_text())['stuck'])
+            self.assertEqual(json.loads((Path(tmp) / 'cleanup.json').read_text())['stuck'], STUCK)
+
+
 if __name__ == '__main__':
     unittest.main()

@@ -17,7 +17,7 @@ class FakeJob:
     pid=os.getpid()
     def __init__(self):self.running=True
     def resume(self):pass
-    def stop(self):self.running=False
+    def stop(self,**_):self.running=False
     def poll(self):return None if self.running else 0
     def active(self):return 1 if self.running else 0
     def close(self):self.running=False
@@ -67,7 +67,7 @@ class ProcessTest(unittest.TestCase):
         original=native.suspended
         def start(*args):
             job=original(*args)
-            def cannot_stop():raise OSError('CPU fixture stop failed')
+            def cannot_stop(**_):raise OSError('CPU fixture stop failed')
             job.stop=cannot_stop
             return job
         def fail(owned):raise ValueError('original setup refusal')
@@ -79,7 +79,7 @@ class ProcessTest(unittest.TestCase):
             self.assertFalse(failure.owned_cleanup['owned_job_empty'])
             self.assertIn('CPU fixture stop failed',failure.owned_cleanup_error)
             owner=failure.owned_process
-            native.job.stop=lambda:setattr(native.job,'running',False)
+            native.job.stop=lambda **_:setattr(native.job,'running',False)
             self.assertTrue(owner.close()['owned_job_empty'])
 
     def test_native_receipt_write_failure_retires_started_owner_and_file_leases(self):

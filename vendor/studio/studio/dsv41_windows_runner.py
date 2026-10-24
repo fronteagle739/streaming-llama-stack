@@ -6,10 +6,43 @@ import ctypes as C
 from ctypes import wintypes as W
 import os
 from pathlib import Path
+import logging
 import subprocess
+import sys
 import time
 import uuid
 from .dsv41_session_contract import Refused, require
+
+log = logging.getLogger(__name__)
+
+# Studio c0403208a7 (owner rule: never force-kill a process that may hold VRAM or
+# DirectStorage resources). Run detached: attach to the owned root's windowless
+# console and raise Ctrl-Break there; the helper shields itself with its own handler
+# registered after AttachConsole and waits for it to see the event before leaving.
+_CTRL_BREAK = """import ctypes,os,sys,threading
+from ctypes import wintypes as W
+k=ctypes.WinDLL('kernel32',use_last_error=True)
+k.FreeConsole()
+if not k.AttachConsole(int(sys.argv[1])):os._exit(20+min(ctypes.get_last_error(),50))
+seen=threading.Event()
+H=ctypes.WINFUNCTYPE(W.BOOL,W.DWORD)
+def handler(kind):
+    seen.set()
+    return 1
+keep=H(handler)
+k.SetConsoleCtrlHandler.argtypes=[H,W.BOOL]
+if not k.SetConsoleCtrlHandler(keep,True):os._exit(11)
+if not k.GenerateConsoleCtrlEvent(1,0):os._exit(10)
+os._exit(0 if seen.wait(5) else 12)
+"""
+
+
+class StuckProcess(RuntimeError):
+    """A resumed process still alive after every graceful step: left running, never terminated."""
+
+
+def stuck_message(pid, reason):
+    return "DSV41 STUCK PROCESS pid=%s holding VRAM, NOT killed; owner action needed (%s)" % (pid, reason)
 
 class _Memory(C.Structure):
     _fields_ = [('length', W.DWORD), ('load', W.DWORD)] + [(name, C.c_ulonglong) for name in ('total', 'available', 'page', 'page_free', 'virtual', 'virtual_free', 'extended')]
@@ -191,7 +224,7 @@ class _Job:
     def __init__(self, native, argv, env, directory, stdin, stdout, stderr):
         import msvcrt
         self.n, self.pi, self.job = (native, _Process(), None)
-        self.assigned = False
+        self.assigned = self.resumed = False
         duplicate, attributes, attributes_initialized = ([], None, False)
         try:
             self.job = native.ok(native.k.CreateJobObjectW(None, None))
@@ -242,6 +275,7 @@ class _Job:
 
     def resume(self):
         require(self.n.k.ResumeThread(self.pi.thread) != 4294967295, 'Owned worker resume failed')
+        self.resumed = True
 
     def modules(self):
         return self.n.modules(self.pi.process)
@@ -260,14 +294,57 @@ class _Job:
         self.n.ok(self.n.k.GetExitCodeProcess(self.pi.process, C.byref(value)))
         return int(value.value)
 
-    def stop(self):
-        if not self.active():
-            return
-        self.n.ok(self.n.k.TerminateJobObject(self.job, 125))
-        deadline = time.monotonic() + 30
-        while self.active():
-            require(time.monotonic() < deadline, 'Owned worker exit cannot be confirmed')
+    def interrupt(self):
+        done = subprocess.run([sys.executable, '-I', '-c', _CTRL_BREAK, str(self.pid)], stdin=subprocess.DEVNULL,
+                              stdout=subprocess.DEVNULL, stderr=subprocess.DEVNULL, creationflags=0x8, timeout=15)
+        if done.returncode:
+            raise OSError('Ctrl-Break helper failed with exit code %d' % done.returncode)
+        return True
+
+    def _wait_empty(self, seconds):
+        deadline = time.monotonic() + seconds
+        while self.active() and time.monotonic() < deadline:
             time.sleep(0.05)
+        return not self.active()
+
+    def release_kill_on_close(self):
+        limits = _Limits()
+        limits.basic.flags = 0
+        self.n.ok(self.n.k.SetInformationJobObject(self.job, 9, C.byref(limits), C.sizeof(limits)))
+
+    def stop(self, graceful_seconds=0, stuck_seconds=None):
+        """Never kills a resumed process (it may hold VRAM): Ctrl-Break, graceful_seconds,
+        a second Ctrl-Break, up to stuck_seconds in total, then StuckProcess with the
+        process left running and kill-on-close cleared. A never-resumed root ran no code
+        and holds nothing: that one is terminated."""
+        if not self.active():
+            return 'exited'
+        if not self.resumed:
+            self.n.ok(self.n.k.TerminateJobObject(self.job, 125))
+            deadline = time.monotonic() + 30
+            while self.active():
+                require(time.monotonic() < deadline, 'Unstarted worker exit cannot be confirmed')
+                time.sleep(0.05)
+            self.n.k.WaitForSingleObject(self.pi.process, 2000)
+            return 'terminate-unstarted'
+        stuck_seconds = max(graceful_seconds, stuck_seconds if stuck_seconds is not None else graceful_seconds)
+        failures = []
+        for attempt, window in ((1, graceful_seconds), (2, stuck_seconds - graceful_seconds)):
+            try:
+                self.interrupt()
+            except Exception as exc:
+                failures.append('Ctrl-Break %d: %s' % (attempt, repr(exc)[:200]))
+            if self._wait_empty(window):
+                self.n.k.WaitForSingleObject(self.pi.process, 2000)
+                code = self.poll()
+                how = 'graceful' if attempt == 1 else 'graceful-late'
+                return how if code in (0, 130) else '%s-crashed exit=%s' % (how, code)
+        reason = 'alive %ds after Ctrl-Break%s' % (stuck_seconds, ('; ' + '; '.join(failures)) if failures else '')
+        self.release_kill_on_close()
+        message = stuck_message(self.pid, reason)
+        log.critical(message)
+        print(message, file=sys.stderr, flush=True)
+        raise StuckProcess(message)
 
     def close(self):
         for handle in (self.pi.thread, self.pi.process, self.job):

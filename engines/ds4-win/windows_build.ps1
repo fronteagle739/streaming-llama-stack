@@ -143,10 +143,12 @@ $cliObjects = $cliSources | ForEach-Object { [IO.Path]::ChangeExtension($_, ".ob
 $benchObjects = $benchSources | ForEach-Object { [IO.Path]::ChangeExtension($_, ".obj") }
 $serverObjects = $serverSources | ForEach-Object { [IO.Path]::ChangeExtension($_, ".obj") }
 $agentObjects = $agentSources | ForEach-Object { [IO.Path]::ChangeExtension($_, ".obj") }
-$backendObjects = @("ds4_lora.obj")
+$backendObjects = @("ds4_lora.obj", "ds4_engram_ioring.obj")
 $win32Link = " ws2_32.lib bcrypt.lib"
 
 $loraCommand = "cl " + ((@("/nologo", "/std:c++17", "/EHsc", "/O2", "/W3") + $defines + "/c" + "ds4_lora.cpp") -join " ")
+# Engram raw-row reads through IoRing (ds4_engram.c calls it on Windows); APIs resolved at runtime.
+$engramIoringCommand = "cl " + ((@("/nologo", "/std:c++17", "/EHsc", "/O2", "/W3") + $defines + "/c" + "ds4_engram_ioring.cpp") -join " ")
 $cudaCommand = ""
 $dstorageCommand = "rem no DirectStorage transport in this target"
 $cudaLink = ""
@@ -228,7 +230,8 @@ if ($Target -eq "cuda") {
         "cuda/mmq/ds4_ggml_stubs.cu",
         "cuda/mmq/mmid.cu",
         "cuda/mmq/mmvq.cu",
-        "cuda/mmq/quantize.cu"
+        "cuda/mmq/quantize.cu",
+        "cuda/mmq/ds4_q4k_half.cu"
     )
     foreach ($m in $mmqSources) {
         $obj = "mmq_" + [IO.Path]::GetFileNameWithoutExtension($m) + ".obj"
@@ -313,6 +316,8 @@ $compile
 if errorlevel 1 exit /b %errorlevel%
 $testCompileSteps
 $loraCommand
+if errorlevel 1 exit /b %errorlevel%
+$engramIoringCommand
 if errorlevel 1 exit /b %errorlevel%
 $cudaCommand
 if errorlevel 1 exit /b %errorlevel%

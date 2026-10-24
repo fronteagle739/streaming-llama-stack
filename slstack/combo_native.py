@@ -20,6 +20,20 @@ from .combo_ram import protect_working_set
 from . import combo_abort
 
 
+def record_stuck(cfg, directory, process, error):
+    """Owner rule: a native/producer still alive after every graceful step is never
+    killed. Stop all further GPU work (GPU_STOP), keep its receipt, and say so loudly."""
+    message = str(error)
+    receipt = dict(getattr(process, 'receipt', None) or {}, stuck=message)
+    try:
+        (Path(cfg['runtime_root']) / 'GPU_STOP').write_text(json.dumps(dict(stuck=message, receipt=receipt)))
+    finally:
+        try:
+            atomic_json(Path(directory) / 'cleanup.json', receipt)
+        finally:
+            print('DS4COMBO ' + message + ' (GPU_STOP written; no further GPU work)', flush=True)
+
+
 def global_hotlist(cfg):
     """Per-model, per-cache-budget expert hotlist shared by every session (a list
     written under another expert budget would fail the engine's full-restore check)."""
@@ -354,7 +368,14 @@ class Native:
             except BaseException as exc:
                 self.shutdown_path='graceful-failed-terminate: '+repr(exc)[:200]
             self.shutdown_seconds=time.monotonic()-started
-        proof=self.process.close()
+        # Still alive here: process.close() escalates (Ctrl-Break, long wait) and never kills;
+        # a decoder still alive after that is left running and reported STUCK.
+        if self.process.job is not None and self.process.job.poll() is None:
+            print('DS4COMBO native graceful retire did not finish ('+self.shutdown_path+'); escalating, never killing',flush=True)
+        try:proof=self.process.close()
+        except RuntimeError as exc:
+            if 'STUCK PROCESS' in str(exc):record_stuck(self.cfg,self.directory,self.process,exc)
+            raise
         if self.shutdown_path=='graceful-pending':
             # Exiting before the deadline is not enough: a crash in teardown
             # (DirectStorage drain abort, cudaFree fault, ...) also exits. Only a

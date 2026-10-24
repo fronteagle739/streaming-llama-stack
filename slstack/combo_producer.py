@@ -220,7 +220,18 @@ class ComboProducer:
     def close(self):
         if self.closed:return self.receipt
         if self.process:self.graceful_exit()
-        proof=self.process.close() if self.process else getattr(self,'failure_cleanup',None) or dict(creation_attempted=False)
+        # Still alive here: process.close() escalates (Ctrl-Break, long wait) and never kills;
+        # a producer still alive after that is left running and reported STUCK.
+        job=getattr(self.process,'job',None) if self.process else None
+        if job is not None and job.poll() is None:
+            print('DS4COMBO producer graceful retire did not finish ('+str(self.shutdown_path)+'); escalating, never killing',flush=True)
+        try:
+            proof=self.process.close() if self.process else getattr(self,'failure_cleanup',None) or dict(creation_attempted=False)
+        except RuntimeError as exc:
+            if 'STUCK PROCESS' in str(exc):
+                from .combo_native import record_stuck
+                record_stuck(self.cfg,self.directory,self.process,exc)
+            raise
         if self.process:
             self._graceful_verdict()
             if self.shutdown_path!='graceful':

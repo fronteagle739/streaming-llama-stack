@@ -66,6 +66,21 @@
 /* WDDM commitment is not physical residency. Match the owner's 1 GiB
  * available-RAM guard; retain OS commit headroom without a RAM+commit cap. */
 static SRWLOCK g_host_memory_lock = SRWLOCK_INIT;
+static volatile LONG g_graceful_abort;
+static volatile LONG g_gpu_resources_live;
+
+void ds4_win32_request_graceful_abort(const char *why) {
+    if (InterlockedCompareExchange(&g_graceful_abort, 1, 0) == 0) {
+        fprintf(stderr, "DS4_GRACEFUL_ABORT_REQUESTED reason=%s: refusing new allocations and failing the "
+                        "current request; the process stays up for a graceful shutdown (never force-killed "
+                        "while it may hold VRAM/DirectStorage)\n", why ? why : "unspecified");
+        fflush(stderr);
+    }
+}
+
+bool ds4_win32_graceful_abort_requested(void) { return InterlockedCompareExchange(&g_graceful_abort, 0, 0) != 0; }
+void ds4_win32_mark_gpu_resources_live(void) { InterlockedExchange(&g_gpu_resources_live, 1); }
+bool ds4_win32_gpu_resources_live(void) { return InterlockedCompareExchange(&g_gpu_resources_live, 0, 0) != 0; }
 static LONG g_host_memory_ready;
 static uint64_t g_host_memory_limit;
 static HANDLE g_host_memory_job;
@@ -131,6 +146,7 @@ static void ds4_win32_host_memory_report(const char *event, const char *reason,
 static const char *ds4_win32_host_memory_failure(uint64_t requested,
         const ds4_win32_host_memory_status *s, bool host_allocation) {
     if (!s) return "REFUSED_QUERY";
+    if (ds4_win32_graceful_abort_requested()) return "REFUSED_GRACEFUL_ABORT";
     const uint64_t ceiling = ds4_win32_host_commit_ceiling(s);
     const char *failure = NULL;
     if (s->process_private_bytes > s->process_limit_bytes ||
@@ -187,13 +203,13 @@ static DWORD WINAPI ds4_win32_host_memory_watchdog(void *unused) {
         if (!ds4_win32_host_memory_read(&state)) {
             memset(&state, 0, sizeof(state));
             ds4_win32_host_memory_report("WATCHDOG_QUERY_FAILED", "host watchdog", 0, &state);
-            TerminateProcess(GetCurrentProcess(), 78);
-            return 78;
+            ds4_win32_request_graceful_abort("host watchdog query failed");
+            continue;
         }
-        if (!ds4_win32_host_memory_fits(0, "host watchdog", &state, false)) {
-            ds4_win32_host_memory_report("WATCHDOG_EXIT", "host reserve breached", 0, &state);
-            TerminateProcess(GetCurrentProcess(), 78);
-            return 78;
+        if (!ds4_win32_graceful_abort_requested() &&
+            !ds4_win32_host_memory_fits(0, "host watchdog", &state, false)) {
+            ds4_win32_host_memory_report("WATCHDOG_ABORT", "host reserve breached", 0, &state);
+            ds4_win32_request_graceful_abort("host reserve breached");
         }
     }
 }
