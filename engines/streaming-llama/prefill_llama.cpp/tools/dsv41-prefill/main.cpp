@@ -13,6 +13,7 @@ extern "C" uint64_t ggml_backend_cuda_dsv41_pv_view_queued(void);
 #include "ggml-ds4-native-half-stats.h"
 #include "llama-dsv41-sweep.h"
 #include "llama-dsv41-ctx-cache-plan.h"
+#include "llama-dsv41-prefill-plan.h"
 #include "llama-dsv41-engram-prefetch.h"
 #include "llama-weight-fetcher.h"
 #include "llama-dsv41-host-memory.h"
@@ -437,7 +438,11 @@ int wmain(int argc,wchar_t**argv){
         std::vector<uint8_t>().swap(tokenfile.bytes);
         const uint64_t chunk_option=args.count("--prefill-chunk-tokens")?number("--prefill-chunk-tokens"):0;
         require(chunk_option<=1048576,"Chunk tokens exceed context bound");
-        const uint32_t chunk_tokens=uint32_t(chunk_option?std::min<uint64_t>(chunk_option,tokens.size()):tokens.size());
+        // LLAMADECODE single sweep: a prompt that fits the capacity is ONE sweep; a larger
+        // one is split into near-equal 4096-aligned sweeps (never a tiny tail).
+        const auto sweep_plan=llama_dsv41_prefill::split(uint32_t(tokens.size()),uint32_t(chunk_option?chunk_option:tokens.size()));
+        require(sweep_plan.count,"Prefill capacity is below one aligned 4096-token sweep");
+        const uint32_t chunk_tokens=sweep_plan.chunk;
         require(!chunk_option||(resident_ram&&!hybrid&&!std::getenv("DSV41_BOUNDARY_CAPTURE")),"Stateful chunks require explicit RAM carry and no boundary capture");
         require(!chunk_option||!pair_ffn||tokens.size()<=chunk_tokens||chunk_tokens%4096==0||unaligned_append_step==2048,"Paired chunk size must align absolute attention positions");
         const auto context=number("--context");require(context<=1048576&&tokens.size()<context,"Native payload requires context room for the next decode token");
@@ -452,9 +457,9 @@ int wmain(int argc,wchar_t**argv){
             dsv41_live::sequence_guard identity(session,model_sha);
             require(number("--session-control-host-bytes")==control_host&&session_timeout>=1000&&session_timeout<=3600000,
                 "Session requires explicit16MiB control admission and1s..1h timeout");
-            require(chunk_option&&chunk_option<=49152&&chunk_option<context&&resident_ram&&direct_budget&&
+            require(chunk_option&&chunk_option<=llama_dsv41_prefill::max_sweep_tokens&&chunk_option<context&&resident_ram&&direct_budget&&
                 (pair_ffn||(args.count("--fixed-resident-plan")&&args.at("--fixed-resident-plan")=="1")),
-                "Session requires fixed RAM capacity1..49152 and stateful chunks");
+                "Session requires a fixed RAM capacity (1..1048576 tokens, below context) and stateful chunks");
             session_output.bind();
         }else require(!args.count("--session-id")&&!args.count("--session-control-host-bytes")&&!args.count("--session-idle-timeout-ms"),
             "Session options supplied with session disabled");
@@ -724,6 +729,20 @@ int wmain(int argc,wchar_t**argv){
             options.fixed->unpaired_resident=fixed_resident;options.fixed->direct_open=direct_open;
             options.fixed->backend_temporary_reserve_bytes=backend_reserve;report["backend_temporary_reserve_bytes"]=backend_reserve;
             options.fixed->tokens=reserved_chunk;options.fixed->tile=options.carry.max_tile_tokens;options.fixed->context=options.context;
+            // LLAMADECODE single sweep: the CUDA hidden bank keeps its admitted bytes; when it cannot
+            // hold the whole capacity, its last tile becomes the spill slot for the rows past it.
+            {const auto bank=llama_dsv41_prefill::plan_bank(reserved_chunk,options.carry.max_tile_tokens,options.admitted_hidden_bytes,[&](uint32_t n){
+                    return options.admitted_hidden_bytes?llama_dsv41_tile_executor::resident_layout_bytes(backend.get(),n,options.carry.max_tile_tokens,options.resident_bf16,options.resident_ids,options.resident_metadata):0;});
+             const bool spill_plan=options.resident_bf16&&options.resident_ids&&options.resident_metadata&&options.carry.defer_hidden_readback&&options.carry.export_hidden_after_head;
+             require(!options.admitted_hidden_bytes||(bank.fits&&(!bank.spill||spill_plan)),"Prefill capacity cannot fit the admitted hidden bank (and this plan cannot spill)");
+             if(options.admitted_hidden_bytes&&bank.spill)options.fixed->hidden_rows=bank.rows;
+             const uint64_t carry_bank=llama_dsv41_prefill::carry_bank_bytes(reserved_chunk);
+             const char*strategy=tokens.size()>reserved_chunk?"split":!options.admitted_hidden_bytes?"ram_tiles":bank.spill&&tokens.size()>bank.resident_rows?"spill":"resident";
+             std::fprintf(stderr,"LLAMADECODE_PREFILL_PLAN tokens=%zu capacity=%u sweeps=%u chunk=%u strategy=%s bank_rows=%u resident_rows=%u slot_rows=%u hidden_admitted_bytes=%llu carry_bank_bytes=%llu engram_prompt_bytes=%llu job_host_bytes=%llu legacy_sweep_tokens=%u\n",
+                 tokens.size(),reserved_chunk,sweep_plan.count,chunk_tokens,strategy,bank.rows,bank.resident_rows,bank.slot_rows,(unsigned long long)options.admitted_hidden_bytes,
+                 (unsigned long long)carry_bank,(unsigned long long)llama_dsv41_prefill::engram_prompt_bytes(reserved_chunk),(unsigned long long)job_host,llama_dsv41_prefill::legacy_sweep_tokens);std::fflush(stderr);
+             report["prefill_plan"]={{"tokens",tokens.size()},{"capacity",reserved_chunk},{"sweeps",sweep_plan.count},{"chunk",chunk_tokens},{"strategy",strategy},
+                 {"bank_rows",bank.rows},{"resident_rows",bank.resident_rows},{"slot_rows",bank.slot_rows},{"carry_bank_bytes",carry_bank}};}
             options.fixed->bf16=options.resident_bf16;options.fixed->ids=options.resident_ids;options.fixed->metadata=options.resident_metadata;options.fixed->tile_registration=tile_registration;options.fixed->pageable_copies=pageable_copies;
             report["large_GPU_buffers_reserved_before_first_stage_lease"]=tile_tokens!=16384;
             report["graph_capacity_strategy"]=tile_tokens==16384?"existing gallocr grows to actual planned live bytes inside prompt clock":"explicit maximum reserved before first lease";

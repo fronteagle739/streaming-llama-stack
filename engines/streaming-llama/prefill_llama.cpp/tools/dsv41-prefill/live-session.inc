@@ -325,7 +325,7 @@ void run_live_session(std::unique_ptr<llama_dsv41_sweep>&sweep,
     using namespace llama_dsv41;using dsv41_live::checkpoint;
     require(sweep&&sweep->ready()&&options.fixed&&options.stateful_chunks,
         "Persistent session requires a completed fixed mode1/3 stateful owner");
-    require(capacity&&capacity<=49152&&options.fixed->tokens==capacity,"Session chunk reservation differs from fixed owner");
+    require(capacity&&capacity<=llama_dsv41_prefill::max_sweep_tokens&&options.fixed->tokens==capacity,"Session chunk reservation differs from fixed owner");
     session_pipe io(timeout_ms,output);dsv41_live::sequence_guard guard(session,model_sha,owner_epoch);
     auto send=[&](json value){if(owner_epoch)value["owner_epoch"]=owner_epoch;io.send(value);};
     const uint64_t session_route=std::stoull(session.substr(0,16),nullptr,16),model_route=std::stoull(std::string(model_sha).substr(0,16),nullptr,16);
@@ -346,7 +346,7 @@ void run_live_session(std::unique_ptr<llama_dsv41_sweep>&sweep,
         success(sweep->export_native([&](wire_payload_reader&r,std::string&why){try{c=dsv41_live::capture(r,[]{return should_stop();});return true;}catch(const std::exception&e){why=e.what();return false;}},error),error);return c;};
     current=inspect();
     send({{"status","ready"},{"session",session},{"model_sha256",model_sha},{"next_sequence",guard.expected()},
-        {"checkpoint",current.describe()},{"maximum_prefill_tokens",capacity},{"maximum_decode_tokens",llama_dsv41::decode_delta_chunk_tokens},{"maximum_decode_delta_tokens",llama_dsv41::decode_delta_max_tokens},{"control_host_bytes",64*1024*1024},
+        {"checkpoint",current.describe()},{"maximum_prefill_tokens",std::min(capacity,llama_dsv41_prefill::legacy_sweep_tokens)},{"maximum_prefill_sweep_tokens",capacity},{"maximum_decode_tokens",llama_dsv41::decode_delta_chunk_tokens},{"maximum_decode_delta_tokens",llama_dsv41::decode_delta_max_tokens},{"control_host_bytes",64*1024*1024},
         {"transport","private owned pipes; existing native payload and artifact v2.1 delta"}});
     for(;;){
         io.renew();auto command=dsv41_live::parse_control(io.line());guard.accept(command);if(owner_epoch)command.erase("owner_epoch");
