@@ -38,8 +38,15 @@ int main() {
            "16K cold (488,608 requests, 4.89 s <= 5 s): early (measured -5 s)");
     const auto r43 = ed::decide(1419303, ed::default_iops, ed::cold_gap_s);
     expect(!r43.early && r43.predicted_s > 14.1, "43K cold (1.42M requests, 14.2 s > 5 s): does not fit (measured +3 s early)");
-    expect(r16.chosen == ed::arm::early && r43.chosen == ed::arm::pause, "auto arm: 16K early, 43K pause (not the late load)");
-    expect(std::string(ed::arm_name(ed::arm::early)) == "early" && std::string(ed::arm_name(ed::arm::pause)) == "pause", "arm names");
+    // Owner fix (eg3 gate: 43K cold 0 36.05 s, pause 40.39 s, auto-pause 41.44 s):
+    // fits -> early, does not fit -> arm 0 (sweep start), never pause.
+    expect(r16.chosen == ed::arm::early, "auto fits (16K cold): early");
+    expect(r43.chosen == ed::arm::sweep_start, "auto does not fit (43K cold): arm 0, sweep start (not pause)");
+    expect(ed::decide(1418962, ed::default_iops, 1.52).chosen == ed::arm::sweep_start, "auto does not fit (43K warm append, gap 1.52 s): sweep start");
+    expect(ed::decide(4359, ed::default_iops, 1.073).chosen == ed::arm::early, "auto fits (545-token follow-up, gap 1.07 s): early");
+    expect(ed::decide(0, ed::default_iops, 0).chosen == ed::arm::sweep_start, "no gap: sweep start");
+    expect(ed::decision{}.chosen == ed::arm::sweep_start, "default decision is the sweep-start arm");
+    expect(std::string(ed::arm_name(ed::arm::early)) == "early" && std::string(ed::arm_name(ed::arm::sweep_start)) == "sweep_start", "arm names");
     // 23.7K: 651,121 requests (ordinary planner, coalesced ~5% fewer) -> 6.2-6.5 s: ordinary.
     expect(!ed::decide(620000, ed::default_iops, ed::cold_gap_s).early, "23.7K cold: ordinary");
     // Warm append: gap = the completed pass's layer-0 wall (545-token base: 0.601 s).

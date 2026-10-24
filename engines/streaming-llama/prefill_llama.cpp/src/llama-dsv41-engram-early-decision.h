@@ -5,10 +5,13 @@
 // while weights stream. Early wins when the whole load fits the gap (16K cold:
 // 488,608 requests, 4.99 s, done before layer 0 ended, prefill -5 s) and loses
 // when it does not (43K: 1.42M requests, 13.7 s, +3 s weight wait).
-// 0 forces off (the pre-37cad00 path), 1 forces on, pause forces the pause
-// arm: the early load runs alone and the weight DirectStorage stream holds
-// layers >= 1 until both tables are loaded. Auto: early when the load fits
-// the gap, otherwise pause (never the ordinary late load). Pure; unit-tested.
+// 0 forces the sweep-start arm (the early multi-ring loader, started at sweep
+// start as in c080518), 1 forces the early start, pause forces the pause arm:
+// the early load runs alone and the weight DirectStorage stream holds layers
+// >= 1 until both tables are loaded. Auto: early when the load fits the gap,
+// otherwise the sweep-start arm (never pause: measured 43K cold 0 36.05 s,
+// pause 40.39 s, auto-pause 41.44 s). Every arm loads through the early
+// loader, so the row cache is consulted on every turn. Pure; unit-tested.
 #include <cstdint>
 #include <cstdlib>
 #include <cstring>
@@ -17,7 +20,7 @@
 namespace llama_dsv41_engram_early {
 
 enum class mode { off, on, pause, automatic };
-enum class arm { early, pause };
+enum class arm { early, sweep_start };
 
 // Unset or empty: auto. Anything else than 0/1/pause/auto is an error, not off.
 inline mode parse_mode(const char *e) {
@@ -32,7 +35,7 @@ constexpr double default_iops = 100000.0;
 // Cold launch: from the early start (after admission, before RAM/DS setup and
 // the first weight fetch) to layer 1. The 16K gate's 4.99 s load finished
 // inside it; at 43K table 0 was needed 3.6 s after the start while the load
-// contended with the weight stream. 5 s keeps 16K early; 23K+ take the pause arm.
+// contended with the weight stream. 5 s keeps 16K early; 23K+ start at sweep start.
 constexpr double cold_gap_s = 5.0;
 
 // LLAMADECODE_ENGRAM_IOPS: sustained random-read rate, requests per second.
@@ -49,9 +52,9 @@ struct decision {
     uint64_t requests = 0;
     double predicted_s = 0, gap_s = 0;
     bool early = false;           // the load fits the gap
-    arm chosen = arm::pause;      // auto: early when it fits, else pause
+    arm chosen = arm::sweep_start; // auto: early when it fits, else sweep start (arm 0)
 };
-inline const char *arm_name(arm a) { return a == arm::early ? "early" : "pause"; }
+inline const char *arm_name(arm a) { return a == arm::early ? "early" : "sweep_start"; }
 
 inline decision decide(uint64_t requests, double iops, double gap_s) {
     if (!(iops > 0)) throw std::invalid_argument("Engram early decision needs a positive rate");
@@ -60,7 +63,7 @@ inline decision decide(uint64_t requests, double iops, double gap_s) {
     d.predicted_s = double(requests) / iops;
     d.gap_s = gap_s > 0 ? gap_s : 0;
     d.early = d.gap_s > 0 && d.predicted_s <= d.gap_s;
-    d.chosen = d.early ? arm::early : arm::pause;
+    d.chosen = d.early ? arm::early : arm::sweep_start;
     return d;
 }
 

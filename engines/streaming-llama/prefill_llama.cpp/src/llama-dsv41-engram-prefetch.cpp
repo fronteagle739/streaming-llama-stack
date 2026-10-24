@@ -25,8 +25,8 @@
 #include <cstdlib>
 #include <cstring>
 #include <stdexcept>
-// LLAMADECODE_ENGRAM_EARLY=1|auto: the early multi-ring loader. =0: no caller
-// reaches prepare_early/load_early and the weight-stream marker is never set.
+// The early multi-ring loader serves every Engram load (all EARLY arms). =0:
+// no early start, and the weight-stream marker is never set.
 static std::atomic<bool> llama_dsv41_engram_weight_pass{false};
 static llama_dsv41_engram_early::mode llama_dsv41_engram_early_mode(){
     static const auto m=llama_dsv41_engram_early::parse_mode(std::getenv("LLAMADECODE_ENGRAM_EARLY"));return m;

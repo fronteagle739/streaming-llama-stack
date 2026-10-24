@@ -3,9 +3,12 @@
 #include "llama-dsv41-engram-row-cache.h"
 #include <functional>
 #include <memory>
-// LLAMADECODE_ENGRAM_EARLY=1|auto (default auto, read once): the early paths
-// are armed. =0: none of them run. Auto: each start is decided by
-// llama-dsv41-engram-early-decision.h (requests / LLAMADECODE_ENGRAM_IOPS <= gap).
+// LLAMADECODE_ENGRAM_EARLY=1|auto (default auto, read once): the early starts
+// are armed. =0: no early start; the load starts at sweep start. Auto: each
+// start is decided by llama-dsv41-engram-early-decision.h (requests /
+// LLAMADECODE_ENGRAM_IOPS <= gap; else sweep start). Every arm loads on the
+// early multi-ring loader (prepare_early/load_early), so the row cache is
+// consulted on every load; the single-ring load() is no longer called.
 bool llama_dsv41_engram_early_enabled();
 bool llama_dsv41_engram_early_auto();
 // LLAMADECODE_ENGRAM_EARLY=pause (forced pause arm).
