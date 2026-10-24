@@ -1381,8 +1381,10 @@ bool llama_dsv41_tile_executor::run(const request&in,const llama_dsv41_layer_gra
             require(ggml_backend_graph_compute_async(backend,&before)==GGML_STATUS_SUCCESS,"V4.1 pre-router computation failed");
             ggml_backend_synchronize(backend);
             std::vector<int32_t>ids(size_t(ggml_nelements(selected)));ggml_backend_tensor_get(selected,ids.data(),0,ids.size()*sizeof(int32_t));
+            std::fprintf(stderr,"LLAMADECODE_ROUTE_IDS layer=%u ids=%d,%d,%d,%d,%d,%d\n",in.layer,ids[0],ids[1],ids[2],ids[3],ids[4],ids[5]);std::fflush(stderr);
             const auto routed_started=clock_type::now();std::string why;
-            require(in.route_hook(ids,why),why.empty()?"Routed expert fetch failed":why.c_str());
+            const bool fetched=in.route_hook(ids,why);if(!fetched)std::fprintf(stderr,"LLAMADECODE_ROUTED_FAILED layer=%u reason=%s\n",in.layer,why.c_str());
+            require(fetched,"Routed expert fetch failed");
             std::fprintf(stderr,"LLAMADECODE_ROUTED layer=%u ids=%d,%d,%d,%d,%d,%d fetch_wait_ms=%.3f split_node=%d nodes=%d\n",in.layer,
                 ids[0],ids[1],ids[2],ids[3],ids[4],ids[5],elapsed(routed_started),split,nodes);
             auto after=ggml_graph_view(compute_graph,split+1,nodes);
