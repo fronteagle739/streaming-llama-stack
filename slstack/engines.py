@@ -73,9 +73,8 @@ class Engines:
         return row
 
     def combo_enabled(self):
-        # Only a single-RTX native engine that can be swapped out for media.
-        return (not self.cfg.get('mac') and not self.cfg['lora'] and os.name == 'nt'
-                and bool(self.cfg['image_model'] or self.cfg['video_model'] or self.cfg['comfyui_models']))
+        # Single-RTX native engine: graceful shutdown and media swaps use the native session boundary.
+        return not self.cfg.get('mac') and not self.cfg['lora'] and os.name == 'nt'
 
     def expert_list(self):
         return Path(self.cfg['runtime_root']) / ('expert-list-' + self.combo_session + '.txt')
@@ -113,7 +112,7 @@ class Engines:
         return ram, checkpoint
 
     def combo_shutdown(self):
-        """Studio-style graceful exit: the engine drains DirectStorage and frees GPU/host memory."""
+        """Graceful exit that must succeed (media swap): verified by exit code and the engine's log."""
         self.combo('shutdown')
         try:
             code = self.llm.proc.wait(timeout=float(self.cfg.get('native_graceful_shutdown_seconds', 60)))
@@ -133,6 +132,13 @@ class Engines:
         if self.llm:
             self.status('Unloading model')
             clean = self.llm.proc.poll() == 0
+            if self.llm.proc.poll() is None and self.combo_enabled() and self.combo_sequence > 1:
+                # Studio-style exit: the engine drains DirectStorage and frees GPU/host memory.
+                try:
+                    self.combo('shutdown')
+                    clean = self.llm.proc.wait(timeout=float(self.cfg.get('native_graceful_shutdown_seconds', 60))) == 0
+                except (OSError, RuntimeError, TimeoutError, subprocess.TimeoutExpired):
+                    print('Native graceful shutdown failed; stopping the owned job', flush=True)
             if self.llm.proc.poll() is None:
                 try:
                     result = http_json(self.cfg['ds4_url'] + '/v1/train/close', {}, timeout=10,

@@ -181,7 +181,17 @@ def main():
         try:
             proc.wait()
         except KeyboardInterrupt:
-            proc.stop()
+            # Graceful first: the router closes the native engine, which drains DirectStorage.
+            import urllib.request
+            try:
+                urllib.request.urlopen(urllib.request.Request(f'http://{cfg["host"]}:{cfg["port"]}/v1/stack/shutdown',
+                                                              data=b'{}', headers={'Content-Type': 'application/json'}),
+                                       timeout=10).read()
+                proc.proc.wait(timeout=120)
+            except Exception as exc:
+                print('Graceful router stop failed: ' + repr(exc), file=sys.stderr)
+            if proc.proc.poll() is None:
+                proc.stop()
         return 0
     if args.command == 'serve-internal':
         from .guard import admit

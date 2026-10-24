@@ -6,6 +6,7 @@ import gzip
 import mimetypes
 import re
 from pathlib import Path
+import threading
 import time
 from urllib.parse import unquote, urlsplit, parse_qs
 import uuid
@@ -277,6 +278,10 @@ def handler(stack):
                 if not isinstance(body, dict):
                     raise ValueError('JSON body must be an object')
                 route = urlsplit(self.path).path
+                if route == '/v1/stack/shutdown':
+                    # Loopback-only router; the launcher asks for a graceful stop before any forced one.
+                    threading.Thread(target=server_ref[0].shutdown, daemon=True).start()
+                    return self.send(200, {'stopping': True})
                 if route == '/mcp':
                     result = stack.mcp(body)
                     return self.send(200, result) if result is not None else self.send(202, b'', 'text/plain')
@@ -321,9 +326,13 @@ def handler(stack):
     return Handler
 
 
+server_ref = [None]
+
+
 def serve(cfg):
     stack = Stack(cfg)
     server = ThreadingHTTPServer((cfg['host'], cfg['port']), handler(stack))
+    server_ref[0] = server
     server.daemon_threads = True
     try:
         print(f'slstack router http://{cfg["host"]}:{cfg["port"]}; model loads on first request', flush=True)
