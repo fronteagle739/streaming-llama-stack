@@ -79669,6 +79669,11 @@ void ds4_session_set_cancel(ds4_session *s, ds4_session_cancel_fn fn, void *ud) 
 }
 
 static bool ds4_session_cancelled(ds4_session *s) {
+#if defined(_WIN32)
+    /* A host-memory breach requested the graceful abort (never a self-kill while
+     * VRAM/DirectStorage may be held): fail the current request and refuse new ones. */
+    if (ds4_win32_graceful_abort_requested()) return true;
+#endif
     return s && s->cancel && s->cancel(s->cancel_ud);
 }
 

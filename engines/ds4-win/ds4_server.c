@@ -70,6 +70,23 @@ static void stop_signal_handler(int sig) {
     }
 }
 
+#if defined(_WIN32) && defined(SIGBREAK)
+/* Ctrl-Break (the owner's no-force-kill escalation step, sent by the DS4COMBO
+ * harness and Studio): request the same orderly stop as SIGINT, but never _exit,
+ * however many arrive, so a process that may hold VRAM/DirectStorage always leaves
+ * through its normal teardown. The CRT resets the disposition before each call. */
+static void break_signal_handler(int sig) {
+    (void)sig;
+    signal(SIGBREAK, break_signal_handler);
+    g_stop_requested = 1;
+    if (g_listen_fd >= 0) {
+        int fd = (int)g_listen_fd;
+        g_listen_fd = -1;
+        close(fd);
+    }
+}
+#endif
+
 typedef struct {
     char *ptr;
     size_t len;
@@ -17295,6 +17312,9 @@ int main(int argc, char **argv) {
     sigemptyset(&sa.sa_mask);
     sigaction(SIGINT, &sa, NULL);
     sigaction(SIGTERM, &sa, NULL);
+#if defined(_WIN32) && defined(SIGBREAK)
+    signal(SIGBREAK, break_signal_handler);
+#endif
 
     server_config cfg = parse_options(argc, argv);
     if (cfg.chdir_path && chdir(cfg.chdir_path) != 0) {
