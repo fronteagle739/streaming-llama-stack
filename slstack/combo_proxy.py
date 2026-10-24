@@ -280,6 +280,11 @@ def native_launch_config(cfg,argv):
     actual,port=normalize(argv);qualified,_=normalize(expected)
     if actual!=qualified:raise ValueError('Native launch differs from the qualified combined preset; review its model/context/cache/flags')
     result=deepcopy(cfg);result.update(port=port,host='127.0.0.1')
+    # A runtime that carries several measured streaming profiles takes N* (and
+    # its producer) only from the launching preset: never a global or a value
+    # left over from the previously active preset.
+    if cfg.get('combo_crossover_profiles') and not preset:
+        raise ValueError('This runtime has per-preset crossovers; the preset must pass --combo-producer-profile and --combo-crossover-tokens')
     if preset:result.update(apply_preset_crossover(cfg,preset.get('--combo-producer-profile'),preset.get('--combo-crossover-tokens')))
     return result
 
@@ -292,7 +297,14 @@ def apply_preset_crossover(cfg,profile,tokens):
     if profile not in table or tokens is None or not str(tokens).isdigit():
         raise ValueError('Preset needs --combo-producer-profile with measured inputs and --combo-crossover-tokens')
     from .combo_crossover import qualified_threshold
-    update=dict(producer_profile=profile,combo_crossover_tokens=int(tokens),combo_crossover_inputs=dict(table[profile],producer_profile=profile))
+    row=table[profile]
+    if 'combo_crossover_tokens' in row and int(row['combo_crossover_tokens'])!=int(tokens):
+        raise ValueError('Preset N* differs from the measured N* of its streaming profile')
+    update=dict(producer_profile=profile,combo_crossover_tokens=int(tokens),combo_crossover_inputs=dict(row,producer_profile=profile))
+    # A profile measured on its own producer build (Fast: split-F32) launches that build.
+    if ('llama_producer' in row)!=('producer_sha256' in row):
+        raise ValueError('A profile producer needs both its path and its SHA-256 pin')
+    if 'llama_producer' in row:update.update(llama_producer=row['llama_producer'],producer_sha256=row['producer_sha256'])
     qualified_threshold({**cfg,**update})
     return update
 
