@@ -16,6 +16,7 @@
 #include <cstring>
 #include <unordered_set>
 #include <vector>
+#include <algorithm>
 
 inline bool llama_dsv41_hash_dump_enabled(){
     static const bool on=[]{const char*e=std::getenv("LLAMADECODE_HASH_DUMP");return e&&e[0]=='1'&&!e[1];}();
@@ -50,8 +51,11 @@ inline void llama_dsv41_hash_phase(const char *phase,uint32_t layer,uint32_t pos
         if(weight){
             bool is_routed=false;for(auto*r:routed)if(r==t)is_routed=true;
             if(is_routed){
+                if(count>8)continue; // prefill tiles: routed weights are not hashed (cost)
+                std::vector<int32_t>unique;for(const auto e:experts)if(std::find(unique.begin(),unique.end(),e)==unique.end())unique.push_back(e);
+                std::sort(unique.begin(),unique.end());
                 uint64_t h=1469598103934665603ull;
-                for(const auto e:experts){if(e<0||e>=int32_t(t->ne[2]))continue;scratch.resize(t->nb[2]);
+                for(const auto e:unique){if(e<0||e>=int32_t(t->ne[2]))continue;scratch.resize(t->nb[2]);
                     ggml_backend_tensor_get(t,scratch.data(),size_t(e)*t->nb[2],t->nb[2]);h=llama_dsv41_hash_bytes(scratch.data(),scratch.size(),h);}
                 std::fprintf(stderr,"LLAMADECODE_HASH %s pos=%u count=%u layer=%u kind=weight_routed name=%s hash=%016llx\n",phase,position,count,layer,t->name,(unsigned long long)h);
                 continue;
