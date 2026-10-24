@@ -40,6 +40,9 @@
 #include <cstring>
 #include <cstdio>
 #include <unordered_map>
+#include <set>
+#include <mutex>
+#include <string>
 #include <limits>
 #include <stdexcept>
 #include <type_traits>
@@ -47,7 +50,36 @@
 namespace {
 using clock_type=std::chrono::steady_clock;
 double elapsed(clock_type::time_point start){return std::chrono::duration<double,std::milli>(clock_type::now()-start).count();}
-void require(bool value,const char*message){if(!value)throw std::runtime_error(message);}
+// LLAMADECODE: LLAMADECODE_COLLECT_ADMISSION=1 is a diagnostic-only mode. Admission,
+// tag-count, reserve-estimate and dispatch-witness checks that do not guard memory
+// safety log their violation once per (check, layer, rows) and continue; every other
+// check still throws (logged as FATAL). The default (unset) refuses as before.
+thread_local uint32_t collect_layer=UINT32_MAX,collect_rows=0;
+bool collect_mode(){static const bool on=[]{const char*e=std::getenv("LLAMADECODE_COLLECT_ADMISSION");return e&&!std::strcmp(e,"1");}();return on;}
+bool collectable(const char*m){
+    if(!std::strncmp(m,"Actual ",7)&&(std::strstr(m,"witness")||std::strstr(m,"coverage")||std::strstr(m,"fixed reserve")))return true;
+    static const char*const listed[]={"Dense Q8_1 activation toggle matched no original Q8 projection",
+        "Explicit F16 dense toggle matched no admitted projection","F16 dense tag applied at a row count the shape rule excludes",
+        "Explicit count/prefix/scatter routing did not match exactly gate/up/down",
+        "F16 route-weight store fusion must match exactly one expert roundtrip","No bounded exact tail RoPE reuse candidates",
+        "Paired graph has no exact BF16 lifetime reuse candidates","F16 expert cuBLAS requires exactly three expert products",
+        "F16 expert cuBLAS shape admission refused","Original Q8 projection graph coverage changed",
+        "No single-reader original-Q8 BF16 stores to fuse","Index score exceeds explicit bounded GLM shape admission"};
+    for(const char*l:listed)if(!std::strcmp(m,l))return true;
+    return false;
+}
+void require(bool value,const char*message){
+    if(value)return;
+    if(collect_mode()){
+        static std::mutex seen_mutex;static std::set<std::string>seen;
+        const bool go_on=collectable(message);
+        const std::string key=std::string(message)+"|"+std::to_string(collect_layer)+"|"+std::to_string(collect_rows);
+        bool fresh;{std::lock_guard<std::mutex>g(seen_mutex);fresh=seen.insert(key).second;}
+        if(fresh||!go_on){std::fprintf(stderr,"LLAMADECODE_COLLECT %s check=\"%s\" layer=%u rows=%u\n",go_on?"CONTINUE":"FATAL",message,collect_layer,collect_rows);std::fflush(stderr);}
+        if(go_on)return;
+    }
+    throw std::runtime_error(message);
+}
 bool index_f32_cublas_enabled(){
     const char*v=std::getenv("LLAMA_DSV41_INDEX_F32_CUBLAS");
     require(!v||!std::strcmp(v,"0")||!std::strcmp(v,"1"),"Invalid explicit F32 indexer environment");
@@ -180,7 +212,12 @@ ggml_cgraph *llama_dsv41_native_batch_graph(ggml_context *ctx,ggml_cgraph *origi
         // row/group piece BEFORE both casts. Never expand a whole layer matrix.
         const uint64_t row_bytes=uint64_t(weight->ne[0])*sizeof(float);
         const uint64_t matrix_bytes=row_bytes*uint64_t(weight->ne[1]);
-        const bool split_f16=count>8&&input->ne[1]>8&&weight->type==GGML_TYPE_F16&&
+        // LLAMADECODE B0: a <=8-row step (1-row decode) keeps its small-row
+        // product but is sliced by output rows the same way, so a large F16
+        // weight (Engram KV, 600 MiB as F32) is never expanded whole. Prefill
+        // steps (>8 rows) are unchanged.
+        const bool small_step=count<=8;
+        const bool split_f16=(small_step||(count>8&&input->ne[1]>8))&&weight->type==GGML_TYPE_F16&&
             node->op_params[0]==GGML_PREC_F32&&matrix_bytes>operation_limit;
         if(!native_q8&&!split_f16)continue;
         require(weight->ne[3]==1&&input->ne[3]==1&&
@@ -766,6 +803,7 @@ bool llama_dsv41_tile_executor::run(const request&in,const llama_dsv41_layer_gra
     if(!lock.owns_lock()){error="V4.1 tile executor is already computing";return false;}
     if(cache.execution_poisoned){error="V4.1 tile cache requires clear after an incomplete computation";return false;}
     try{
+        collect_layer=in.layer;collect_rows=in.count;
         const auto prepare_started=clock_type::now();
         const bool capture_dspark=cache.dspark_ring&&in.layer>=37;
         llama_dsv41_dspark_capture::completion::ticket capture_ticket;
@@ -1108,6 +1146,9 @@ bool llama_dsv41_tile_executor::run(const request&in,const llama_dsv41_layer_gra
             backend_temporary+=raw_mirror;
         }else if(expert.token_tile_attention)backend_temporary+=256ull*1024*1024;
         if(pair_ffn&&!native_pair)backend_temporary+=(in.count>8192?640ull:320ull)*1024*1024; // explicit8192-row MMQ activation/maps/pool temporary
+        if(fixed&&backend_temporary>fixed->backend_temporary_reserve_bytes)
+            std::fprintf(stderr,"LLAMADECODE_RESERVE layer=%u rows=%u backend_temporary=%llu declared_reserve=%llu rounded=%u split=%u\n",in.layer,in.count,
+                (unsigned long long)backend_temporary,(unsigned long long)fixed->backend_temporary_reserve_bytes,rounded_matrices,split_matrices);
         if(fixed)require(backend_temporary<=fixed->backend_temporary_reserve_bytes,"Actual backend temporary exceeds declared fixed reserve");
         // The old context allocator also allocated unused optional inputs.
         // Keep every uploaded leaf allocated and live before graph execution;
