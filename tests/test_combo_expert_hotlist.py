@@ -69,5 +69,17 @@ class Frequency(unittest.TestCase):
             self.assertIsNone(build_frequency_seed(Path(t) / 'none', Path(t) / 'o'))
 
 
+    def test_session_list_wins_over_frequency_seed(self):
+        from slstack.combo_native import choose_restore
+        with tempfile.TemporaryDirectory() as t:
+            g, seed = Path(t) / 'g.freq', Path(t) / 'seed.txt'
+            g.write_text(FREQ)
+            self.assertEqual(choose_restore('session', 's.txt', g, seed), ('session', 's.txt', None))
+            self.assertFalse(seed.exists())
+            self.assertEqual(choose_restore('global', 's.txt', g, seed), ('frequency', str(seed), (2, 1)))
+            self.assertEqual(choose_restore('none', 's.txt', g, seed), ('frequency', str(seed), (2, 1)))
+            self.assertEqual(choose_restore('global', 's.txt', Path(t) / 'no', seed), ('global', 's.txt', None))
+
+
 if __name__ == '__main__':
     unittest.main()

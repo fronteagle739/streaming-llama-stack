@@ -74,6 +74,15 @@ def merge_frequency(session_freq,global_freq,decay=0.5):
     tmp=Path(str(global_freq)+'.tmp');tmp.write_text(text);os.replace(tmp,global_freq);return True
 
 
+def choose_restore(source,session_file,global_freq,seed):
+    """(restore_source, file, seed_counts). A list a real decode of this session wrote
+    ('session') wins; the frequency seed only replaces a global or missing list."""
+    if source in ('global','none'):
+        built=build_frequency_seed(global_freq,seed)
+        if built:return 'frequency',str(seed),built
+    return source,session_file,None
+
+
 def build_frequency_seed(global_freq,out):
     """Restore list (engine v1 format) from the global counts: top vram_configured
     experts -> VRAM, the next host_configured -> host tier. Listed least-frequent
@@ -140,8 +149,8 @@ class Native:
             # budget): VRAM tier gets the top experts, the host tier the next ones.
             self.global_freq=global_frequency(cfg);restore_file=str(expert_list)
             seed=Path(str(self.expert_list)+'.seed')
-            built=build_frequency_seed(self.global_freq,seed)
-            if built:self.restore_source='frequency';restore_file=str(seed);self.seed_counts=built
+            self.restore_source,restore_file,built=choose_restore(self.restore_source,restore_file,self.global_freq,seed)
+            if built:self.seed_counts=built
             print('DS4COMBO_EXPERT_RESTORE_SOURCE restore_source='+self.restore_source+' list='+restore_file+
                   (' vram=%d host=%d'%built if built else ''),flush=True)
             if self.restore_source!='none':env_values['DS4_COMBO_EXPERT_RESTORE_FILE']=restore_file
