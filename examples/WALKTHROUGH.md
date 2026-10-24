@@ -2,6 +2,8 @@
 
 What a new user did on 2026-10-24, on the Windows RTX 5090 machine, from a fresh clone of this repository. It covers the single-RTX native path only. The two-machine steps (README steps 4 and 5) have not been walked through yet.
 
+**Which path these receipts are from.** Every timing, log line and screenshot below was recorded on the native ds4-win path, which was then the default. `start` now serves the single engine by default (README, single-RTX section); the native path is `start --serving native`. The single-engine rerun of this walkthrough on the GPU is pending; until it is done, nothing below is a single-engine receipt. Expected differences: the first prompt also loads the producer, and the image swap re-prefills the conversation instead of restoring saved state.
+
 ## 1. Clone, install and check
 
 ```powershell
@@ -38,7 +40,7 @@ Create `my.local.json` in the clone. Git ignores files named `*.local.*`.
 ## 3. Start
 
 ```powershell
-./slstack.ps1 start --config my.local.json --webui
+./slstack.ps1 start --config my.local.json --webui --serving native   # the path this run used
 ```
 
 - The launcher prints `Router starting on http://127.0.0.1:8088`. Open that address.
@@ -52,7 +54,7 @@ Create `my.local.json` in the clone. Git ignores files named `*.local.*`.
 | Quality/speed | "Please switch yourself to max speed using your quality/speed tool, then tell me which setting is now active." | The model called the tool. The endpoint then read `max_speed` (1.36125), applied. |
 | Image | "Make me a picture of a small red lighthouse on a rock, simple flat illustration. Use 512x512, 4 steps and seed 7." | The model called `generate_image` and the image appeared in the chat after 115 s. |
 
-During the image request, the stack swapped the model out and back:
+During the image request, the stack swapped the model out and back (native path):
 
 1. It saved the chat state into locked RAM.
 2. It shut the engine down gracefully (2.8 s).
