@@ -71,6 +71,7 @@ int ds4_ds_batch_add_gpu(uint64_t file_offset, uint32_t bytes, uint64_t arena_of
 int ds4_ds_slot_pool_create(uint64_t bytes, void **out_cuda_ptr);
 int ds4_ds_slot_pool_find(const void *ptr, uint64_t bytes, uint64_t *offset_out);
 void ds4_ds_slot_pool_release(int handle);
+int ds4_ds_dxgi_local_memory(uint64_t *budget, uint64_t *usage);
 int ds4_ds_batch_add_slot(uint64_t file_offset, uint32_t bytes, int handle, uint64_t offset);
 /* Which of ds4_ds_batch_add_gpu()'s seven refusal branches fired last; 0 = the last call succeeded.
  * 1 !init 2 !gpu_arena 3 bytes==0 4 !queue_count 5 offset/size out of arena 6 batch full

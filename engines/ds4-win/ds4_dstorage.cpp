@@ -829,6 +829,30 @@ static void slot_pool_release(int i) {
     g_slot_bytes[i] = 0;
 }
 
+
+/* DXGI local-segment budget/usage of the D3D12 device's adapter (diagnostic: it double-counts
+ * D3D12 heaps imported into CUDA, so sizing uses NVML physical free instead). */
+extern "C" int ds4_ds_dxgi_local_memory(uint64_t *budget, uint64_t *usage) {
+    if (budget) *budget = 0;
+    if (usage) *usage = 0;
+    if (!g_d3d_device) return 0;
+    const LUID luid = g_d3d_device->GetAdapterLuid();
+    IDXGIFactory4 *factory = NULL;
+    if (FAILED(CreateDXGIFactory1(__uuidof(IDXGIFactory4), (void **)&factory)) || !factory) return 0;
+    IDXGIAdapter3 *adapter = NULL;
+    const HRESULT hr = factory->EnumAdapterByLuid(luid, __uuidof(IDXGIAdapter3), (void **)&adapter);
+    factory->Release();
+    if (FAILED(hr) || !adapter) return 0;
+    DXGI_QUERY_VIDEO_MEMORY_INFO info;
+    memset(&info, 0, sizeof(info));
+    const bool ok = SUCCEEDED(adapter->QueryVideoMemoryInfo(0, DXGI_MEMORY_SEGMENT_GROUP_LOCAL, &info));
+    adapter->Release();
+    if (!ok) return 0;
+    if (budget) *budget = info.Budget;
+    if (usage) *usage = info.CurrentUsage;
+    return 1;
+}
+
 /* Returns pool handle 1..3 (and the CUDA pointer) or 0 with a logged reason. */
 extern "C" int ds4_ds_slot_pool_create(uint64_t bytes, void **out_cuda_ptr) {
     if (out_cuda_ptr) *out_cuda_ptr = NULL;
