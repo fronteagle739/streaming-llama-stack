@@ -9560,7 +9560,10 @@ extern "C" int ds4_gpu_set_model_fd(int fd) {
                                     "offset_mib=%llu\n",
                                     (double)chunk_list[ci] / 1048576.0, batch_list[bi], r + 1ul,
                                     (unsigned long long)(off / 1048576ull));
-                            ds4_ds_selftest(fd, off, span, chunk_list[ci], batch_list[bi]);
+                            if(!ds4_ds_selftest(fd,off,span,chunk_list[ci],batch_list[bi])) {
+                                fprintf(stderr,"ds4: FATAL requested DirectStorage selftest failed; refusing startup\n");
+                                exit(EXIT_FAILURE);
+                            }
                             point_idx++;
                         }
                     }

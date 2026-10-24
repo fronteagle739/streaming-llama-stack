@@ -151,6 +151,8 @@ typedef struct {
     const char *lora_base_sha256;
     float lora_scale;
     bool lora_scale_set;
+    uint32_t ds_read_parts;
+    bool ds_read_parts_set;
     float cache_affinity_bias;
     bool cache_affinity_bias_set;
     const char *cache_affinity_mode;
