@@ -369,8 +369,9 @@ bool llama_dsv41_sweep::open(const llama_dsv41_weight_provider::config &weights,
         // LLAMADECODE_ENGRAM_CACHE_MB: the Engram row LRU (early loader) is charged
         // here. Unset: min(4 GiB, this admission's headroom), whole MiB, none below
         // 16 MiB. Explicit: exactly that size or a loud refusal. 0: no cache.
+        // Every LLAMADECODE_ENGRAM_EARLY arm (0 included) loads on the early loader.
         const uint64_t row_cache_have=p->provider.engram_row_cache_bytes();uint64_t row_cache_new=0;
-        if(!row_cache_have&&weights.engram_prefetch_host_bytes&&options.engram_tile_lookahead&&llama_dsv41_engram_early_enabled()){
+        if(!row_cache_have&&weights.engram_prefetch_host_bytes&&options.engram_tile_lookahead){
             const char*e=std::getenv("LLAMADECODE_ENGRAM_CACHE_MB");
             const uint64_t headroom=options.admitted_host_bytes>base_host?options.admitted_host_bytes-base_host:0;
             if(e&&*e){char*end=nullptr;const unsigned long long mb=std::strtoull(e,&end,10);
