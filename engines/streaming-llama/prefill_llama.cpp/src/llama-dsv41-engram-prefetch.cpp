@@ -1,6 +1,7 @@
 // IoRing declarations are isolated to this TU. Runtime functions are resolved
 // only for an explicitly enabled cache; ordinary paths gain no Win11 import.
 #ifdef _WIN32
+#include "llama-dsv41-layer-log.h"
 #include <sdkddkver.h>
 #if !defined(NTDDI_VERSION) || NTDDI_VERSION < NTDDI_WIN10_CO
 #undef NTDDI_VERSION
@@ -226,8 +227,8 @@ public:
         }
         require(next_table==2&&staged.empty(),"Incomplete whole-prompt Engram preload");
         ready=true;
-        if(batch_submits)std::fprintf(stderr,"DS4PERF_ENGRAM_SUBMIT_BATCH requests=%llu submits=%llu depth=256 threshold=64 low_water=128 all_completions_drained=1\n",(unsigned long long)read_requests,(unsigned long long)submits);
-        std::fprintf(stderr,"[dsv41-engram-prefetch] table0_rows=%zu table1_rows=%zu host_plan_bytes=%llu read_bytes=%llu requests=%llu submits=%llu wall_ms=%llu\n",
+        if(batch_submits)llama_dsv41_layer_log("DS4PERF_ENGRAM_SUBMIT_BATCH requests=%llu submits=%llu depth=256 threshold=64 low_water=128 all_completions_drained=1\n",(unsigned long long)read_requests,(unsigned long long)submits);
+        llama_dsv41_layer_log("[dsv41-engram-prefetch] table0_rows=%zu table1_rows=%zu host_plan_bytes=%llu read_bytes=%llu requests=%llu submits=%llu wall_ms=%llu\n",
             tables[0].ids.size(),tables[1].ids.size(),(unsigned long long)host_plan,(unsigned long long)read_bytes,
             (unsigned long long)read_requests,(unsigned long long)submits,(unsigned long long)(GetTickCount64()-began));
         std::fflush(stderr);

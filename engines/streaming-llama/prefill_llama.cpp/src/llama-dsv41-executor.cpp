@@ -1,3 +1,4 @@
+#include "llama-dsv41-layer-log.h"
 #include "llama-dsv41-compact-proof.h"
 #include "ggml-dsv41-bf16-inplace.h"
 #include "llama-dsv41-weight-casts.h"
@@ -121,7 +122,7 @@ template<typename T>void upload(ggml_tensor*t,const std::vector<T>&values,ggml_b
     const auto before=clock_type::now();
     if(async_backend)ggml_backend_tensor_set_async(async_backend,t,values.data(),0,values.size()*sizeof(T));
     else ggml_backend_tensor_set(t,values.data(),0,values.size()*sizeof(T));
-    if(std::getenv("DS4PERF_RING_TRACE")&&elapsed(before)>1)std::fprintf(stderr,"DS4PERF_UPLOAD_API tensor=%s bytes=%zu host_ms=%.6f\n",t->name,values.size()*sizeof(T),elapsed(before));
+    if(std::getenv("DS4PERF_RING_TRACE")&&elapsed(before)>1)llama_dsv41_layer_log("DS4PERF_UPLOAD_API tensor=%s bytes=%zu host_ms=%.6f\n",t->name,values.size()*sizeof(T),elapsed(before));
 }
 template<typename T>std::vector<T>download(ggml_tensor*t,size_t maximum){
     if(!t)return {};
@@ -295,7 +296,7 @@ uint64_t llama_dsv41_allocate_native_graph(ggml_gallocr_t allocation,ggml_cgraph
     size_t planned=0;
     ggml_gallocr_reserve_n_size(allocation,graph,nullptr,nullptr,&planned);
     if(backend_temporary>admitted_graph_bytes||planned>admitted_graph_bytes-backend_temporary)
-        std::fprintf(stderr,"DS4PERF_GRAPH_ADMISSION_REFUSED planned=%llu temporary=%llu admitted=%llu\n",(unsigned long long)planned,(unsigned long long)backend_temporary,(unsigned long long)admitted_graph_bytes);
+        llama_dsv41_layer_log("DS4PERF_GRAPH_ADMISSION_REFUSED planned=%llu temporary=%llu admitted=%llu\n",(unsigned long long)planned,(unsigned long long)backend_temporary,(unsigned long long)admitted_graph_bytes);
     require(backend_temporary<=admitted_graph_bytes&&planned<=admitted_graph_bytes-backend_temporary,
         "V4.1 live graph plus backend F32 temporary exceeds admitted graph ceiling");
     // reserve_n_size records a valid plan but deliberately creates no buffers;
@@ -355,7 +356,7 @@ struct llama_dsv41_tile_executor::pinned_storage {
     uint32_t *flags_device=nullptr,*flags_host=nullptr;
 #include "llama-dsv41-copy-prefetch.inl"
     static void ok(cudaError_t e,const char *message){if(e!=cudaSuccess)throw std::runtime_error(std::string(message)+": "+cudaGetErrorString(e));}
-    static void cleanup(cudaError_t e){if(e!=cudaSuccess){std::fprintf(stderr,"DSV41_PINNED_COPY_CLEANUP_FAILED %s\n",cudaGetErrorString(e));std::fflush(stderr);std::abort();}}
+    static void cleanup(cudaError_t e){if(e!=cudaSuccess){llama_dsv41_layer_log("DSV41_PINNED_COPY_CLEANUP_FAILED %s\n",cudaGetErrorString(e));std::fflush(stderr);std::abort();}}
     ~pinned_storage(){
         if(copies)cleanup(cudaStreamSynchronize(copies));
         if(backend)ggml_backend_synchronize(backend);
@@ -391,7 +392,7 @@ struct llama_dsv41_tile_executor::pinned_storage {
         ok(cudaMemcpyAsync(flags_host,flags_device,4,cudaMemcpyDeviceToHost,compute()),"GPU carry flags readback failed");
         ok(cudaStreamSynchronize(compute()),"GPU carry validation did not complete");
         require(*flags_host==0,"GPU carry contains nonfinite F32 or out-of-range compact IDs");
-        if(std::getenv("DS4PERF_RING_TRACE")&&elapsed(before)>1)std::fprintf(stderr,"DS4PERF_VALIDATION_API host_ms=%.6f\n",elapsed(before));
+        if(std::getenv("DS4PERF_RING_TRACE")&&elapsed(before)>1)llama_dsv41_layer_log("DS4PERF_VALIDATION_API host_ms=%.6f\n",elapsed(before));
     }
     void bind_lease(const llama_dsv41_carry_store::ram_lease &lease,const llama_dsv41_carry_store::ram_lookahead *lookahead=nullptr){
         if(!tile_registration)return;
@@ -422,8 +423,8 @@ struct llama_dsv41_tile_executor::pinned_storage {
         ok(cudaHostRegister(ptr,size_t(size),cudaHostRegisterDefault),"Active tile RAM registration failed");
         registered_tile=ptr;registered_tile_bytes=size;
         ok(cudaMemGetInfo(&free_after,&total),"Cannot inspect GPU memory after tile registration");
-        std::fprintf(stderr,"DS4PERF_TILE_HOST_REGISTRATION first=%u count=%u bytes=%llu previous_copy_stream_complete=1 existing_RAM_bank=1\n",lease.start(),lease.count()+next_rows,(unsigned long long)size);
-        std::fprintf(stderr,"DS4PERF_TILE_PIN_WINDOW first=%u current_rows=%u next_rows=%u bytes=%llu cuda_free_before=%llu cuda_free_after=%llu exact_parent_generation=1\n",lease.start(),lease.count(),next_rows,(unsigned long long)size,(unsigned long long)free_before,(unsigned long long)free_after);
+        llama_dsv41_layer_log("DS4PERF_TILE_HOST_REGISTRATION first=%u count=%u bytes=%llu previous_copy_stream_complete=1 existing_RAM_bank=1\n",lease.start(),lease.count()+next_rows,(unsigned long long)size);
+        llama_dsv41_layer_log("DS4PERF_TILE_PIN_WINDOW first=%u current_rows=%u next_rows=%u bytes=%llu cuda_free_before=%llu cuda_free_after=%llu exact_parent_generation=1\n",lease.start(),lease.count(),next_rows,(unsigned long long)size,(unsigned long long)free_before,(unsigned long long)free_after);
     }
     void queue(bool to_device,const llama_dsv41_carry_store::ram_lease &lease,uint64_t offset,uint64_t width,ggml_tensor *tensor){
         require(!current_bank_copies_forbidden,"A resident-only reader attempted an unregistered RAM bank copy");
@@ -443,7 +444,7 @@ struct llama_dsv41_tile_executor::pinned_storage {
                 ggml_backend_tensor_get(tensor,values.data(),0,values.size());
                 for(uint32_t row=0;row<lease.count();++row)std::memcpy(lease.row(row)+offset,values.data()+uint64_t(row)*width,size_t(width));
             }
-            std::fprintf(stderr,"DS4PERF_RESIDENT_PAGEABLE_COPY to_device=%u first=%u count=%u offset=%llu width=%llu bytes=%llu existing_backend_vector_API=1\n",unsigned(to_device),lease.start(),lease.count(),(unsigned long long)offset,(unsigned long long)width,(unsigned long long)(width*lease.count()));
+            llama_dsv41_layer_log("DS4PERF_RESIDENT_PAGEABLE_COPY to_device=%u first=%u count=%u offset=%llu width=%llu bytes=%llu existing_backend_vector_API=1\n",unsigned(to_device),lease.start(),lease.count(),(unsigned long long)offset,(unsigned long long)width,(unsigned long long)(width*lease.count()));
             return;
         }
         if(tile_registration){
@@ -460,7 +461,7 @@ struct llama_dsv41_tile_executor::pinned_storage {
             ok(static_cast<cudaError_t>(llama_dsv41_cuda_copy_ram(to_device,slice,offset,width,
                 static_cast<char*>(tensor->data)+uint64_t(first)*width,copies)),"Direct pinned 2D carry copy failed");
         }
-        if(std::getenv("DS4PERF_RING_TRACE")&&elapsed(before)>1)std::fprintf(stderr,"DS4PERF_PINNED_COPY_API to_device=%u bytes=%llu host_ms=%.6f\n",unsigned(to_device),(unsigned long long)(width*lease.count()),elapsed(before));
+        if(std::getenv("DS4PERF_RING_TRACE")&&elapsed(before)>1)llama_dsv41_layer_log("DS4PERF_PINNED_COPY_API to_device=%u bytes=%llu host_ms=%.6f\n",unsigned(to_device),(unsigned long long)(width*lease.count()),elapsed(before));
     }
     void upload_ready(){ok(cudaEventRecord(ready,copies),"Pinned upload fence record failed");ok(cudaStreamWaitEvent(compute(),ready,0),"Compute stream did not accept pinned upload fence");}
     void readback_ready(){ok(cudaEventRecord(ready,compute()),"Pinned readback fence record failed");ok(cudaStreamWaitEvent(copies,ready,0),"Copy stream did not accept compute fence");}
@@ -526,8 +527,8 @@ std::shared_ptr<void> llama_dsv41_tile_executor::register_fixed_ram(ggml_backend
     size_t before=0,total=0,after=0;pinned_storage::ok(cudaMemGetInfo(&before,&total),"Cannot inspect GPU memory before fixed RAM registration");
     pinned_storage::ok(cudaHostRegister(ram->data(),size_t(ram->size()),cudaHostRegisterDefault),"Fixed RAM carry registration before provider import failed");
     pinned_storage::ok(cudaMemGetInfo(&after,&total),"Cannot inspect GPU memory after fixed RAM registration");
-    std::fprintf(stderr,"DS4PERF_FIXED_RAM_PIN_CUDA_MEMORY bytes=%llu cuda_free_before=%llu cuda_free_after=%llu\n",(unsigned long long)ram->size(),(unsigned long long)before,(unsigned long long)after);
-    std::fprintf(stderr,"DS4PERF_RAM_REGISTERED_BEFORE_IMPORT bytes=%llu owned_fixed_lifetime=1\n",(unsigned long long)ram->size());
+    llama_dsv41_layer_log("DS4PERF_FIXED_RAM_PIN_CUDA_MEMORY bytes=%llu cuda_free_before=%llu cuda_free_after=%llu\n",(unsigned long long)ram->size(),(unsigned long long)before,(unsigned long long)after);
+    llama_dsv41_layer_log("DS4PERF_RAM_REGISTERED_BEFORE_IMPORT bytes=%llu owned_fixed_lifetime=1\n",(unsigned long long)ram->size());
     return std::shared_ptr<void>(ram->data(),[ram](void *base){pinned_storage::cleanup(cudaHostUnregister(base));});
 #else
     (void)backend;(void)ram;throw std::runtime_error("Fixed registered RAM requires CUDA");
@@ -570,7 +571,7 @@ bool llama_dsv41_tile_executor::seed_ram(ggml_tensor *embedding,const std::vecto
         pinned->validate(check);pinned->readback_ready();
         pinned->queue(false,lease,0,81920,values.residual);pinned->queue(false,lease,81920,16,values.pre);pinned->finish();
         completion=llama_dsv41_carry_store::ram_completion(lease,true,true,true);
-        std::fprintf(stderr,"DS4PERF_SEED_RAM_COMPLETE start=%u count=%u mirrored_host_bytes=%llu scratch_bytes=%llu validated=1\n",
+        llama_dsv41_layer_log("DS4PERF_SEED_RAM_COMPLETE start=%u count=%u mirrored_host_bytes=%llu scratch_bytes=%llu validated=1\n",
             lease.first,lease.rows,(unsigned long long)(uint64_t(lease.rows)*81936),(unsigned long long)scratch);
         cache.execution_poisoned=false;return true;
 #else
@@ -625,10 +626,10 @@ llama_dsv41_tile_executor::llama_dsv41_tile_executor(ggml_backend_t backend,llam
                 const bool ram_lookahead=!fixed->bf16&&!fixed->ids&&!fixed->metadata&&!defer_hidden_readback&&admitted_prefetch_bytes;
                 require(!fixed->ram_registration&&(full_resident||(fixed->tile_registration&&!fixed->pageable_copies&&ram_lookahead)),"Tile registration requires its explicit resident or RAM-lookahead plan");
                 pinned->tile_registration=fixed->tile_registration;pinned->pageable_copies=fixed->pageable_copies;
-                std::fprintf(stderr,fixed->pageable_copies?"DS4PERF_FIXED_RAM_PAGEABLE_VECTORS view_bytes=%llu whole_bank_pinned=0 existing_backend_API=1\n":"DS4PERF_FIXED_RAM_TILE_REGISTRATION view_bytes=%llu whole_bank_pinned=0 no_new_staging=1\n",(unsigned long long)direct->bytes);
+                llama_dsv41_layer_log(fixed->pageable_copies?"DS4PERF_FIXED_RAM_PAGEABLE_VECTORS view_bytes=%llu whole_bank_pinned=0 existing_backend_API=1\n":"DS4PERF_FIXED_RAM_TILE_REGISTRATION view_bytes=%llu whole_bank_pinned=0 no_new_staging=1\n",(unsigned long long)direct->bytes);
             }else{
                 unsigned flags=0;pinned_storage::ok(cudaHostGetFlags(&flags,direct->base),"Fixed carry RAM is no longer registered");
-                std::fprintf(stderr,"DS4PERF_FIXED_RAM_REGISTRATION_BORROWED view_bytes=%llu registered_bytes=%llu\n",(unsigned long long)direct->bytes,(unsigned long long)fixed->ram->size());
+                llama_dsv41_layer_log("DS4PERF_FIXED_RAM_REGISTRATION_BORROWED view_bytes=%llu registered_bytes=%llu\n",(unsigned long long)direct->bytes,(unsigned long long)fixed->ram->size());
             }
         }else{pinned_storage::ok(cudaHostRegister(direct->base,size_t(direct->bytes),cudaHostRegisterDefault),"Existing RAM carry bank could not be pinned");pinned->registered=true;}
         pinned_storage::ok(cudaStreamCreateWithFlags(&pinned->copies,cudaStreamNonBlocking),"Pinned carry copy stream creation failed");
@@ -639,7 +640,7 @@ llama_dsv41_tile_executor::llama_dsv41_tile_executor(ggml_backend_t backend,llam
         llama_dsv41_validation warm;warm.residual=reinterpret_cast<float*>(pinned->flags_device+1);warm.residual_n=1;pinned->validate(warm);
         pinned_storage::ok(cudaMemGetInfo(&after,&total),"Cannot inspect post-registration GPU memory");
         const uint64_t delta=before>after?before-after:0;require(delta<=direct->admitted_device_bytes,"Pinned bank/validator global device delta exceeds explicit admission");
-        std::fprintf(stderr,"[dsv41-pinned-carry] bank_bytes=%llu observed_global_device_delta=%llu device_admission=%llu owned_delta_proof=0 direct_page_rows=32 validation_flag_bytes=4 inter_tile_overlap=0\n",
+        llama_dsv41_layer_log("[dsv41-pinned-carry] bank_bytes=%llu observed_global_device_delta=%llu device_admission=%llu owned_delta_proof=0 direct_page_rows=32 validation_flag_bytes=4 inter_tile_overlap=0\n",
             (unsigned long long)direct->bytes,(unsigned long long)delta,(unsigned long long)direct->admitted_device_bytes);
 #else
         throw std::runtime_error("Direct pinned carry requires a CUDA build");
@@ -693,11 +694,11 @@ llama_dsv41_tile_executor::llama_dsv41_tile_executor(ggml_backend_t backend,llam
             upload(resident->raw_ids,raw_ids);upload(resident->raw_mask,mask);upload(resident->history_ids,history);
             upload(resident->raw_freq,std::vector<float>(raw.begin(),raw.end()));upload(resident->compressed_freq,std::vector<float>(compressed.begin(),compressed.end()));
             upload(resident->zero_kinds,kinds);upload(resident->text_mask,text);ggml_backend_synchronize(backend);
-            std::fprintf(stderr,"DS4PERF_RESIDENT_METADATA_STORAGE rows=%u raw_bytes=%llu initialized_before_prompt=1 existing_hidden_buffer=1\n",resident->metadata_rows,(unsigned long long)(ggml_nbytes(resident->raw_ids)+ggml_nbytes(resident->raw_mask)));
+            llama_dsv41_layer_log("DS4PERF_RESIDENT_METADATA_STORAGE rows=%u raw_bytes=%llu initialized_before_prompt=1 existing_hidden_buffer=1\n",resident->metadata_rows,(unsigned long long)(ggml_nbytes(resident->raw_ids)+ggml_nbytes(resident->raw_mask)));
         }
-        if(resident_ids)std::fprintf(stderr,"DS4PERF_RESIDENT_ID_STORAGE tokens=%u selected_capacity_bytes=%llu candidate_capacity_bytes=%llu existing_hidden_buffer=1 conservative_F32_admission=1\n",bank_tokens,(unsigned long long)ggml_nbytes(resident->selected),(unsigned long long)ggml_nbytes(resident->candidates));
-        if(resident_bf16)std::fprintf(stderr,"DS4PERF_RESIDENT_BF16_STORAGE tokens=%u hidden_bytes=%llu pre_F32_bytes=%llu initial_layer_F32=1 existing_cast_kernels=1\n",bank_tokens,(unsigned long long)ggml_nbytes(resident->hidden),(unsigned long long)ggml_nbytes(resident->pre));
-        std::fprintf(stderr,"[dsv41-resident-hidden] tokens=%u total_tokens=%u actual_bytes=%llu admitted_bytes=%llu readbacks=unchanged remainder=RAM\n",
+        if(resident_ids)llama_dsv41_layer_log("DS4PERF_RESIDENT_ID_STORAGE tokens=%u selected_capacity_bytes=%llu candidate_capacity_bytes=%llu existing_hidden_buffer=1 conservative_F32_admission=1\n",bank_tokens,(unsigned long long)ggml_nbytes(resident->selected),(unsigned long long)ggml_nbytes(resident->candidates));
+        if(resident_bf16)llama_dsv41_layer_log("DS4PERF_RESIDENT_BF16_STORAGE tokens=%u hidden_bytes=%llu pre_F32_bytes=%llu initial_layer_F32=1 existing_cast_kernels=1\n",bank_tokens,(unsigned long long)ggml_nbytes(resident->hidden),(unsigned long long)ggml_nbytes(resident->pre));
+        llama_dsv41_layer_log("[dsv41-resident-hidden] tokens=%u total_tokens=%u actual_bytes=%llu admitted_bytes=%llu readbacks=unchanged remainder=RAM\n",
             bank_tokens,resident_hidden_tokens,(unsigned long long)ggml_backend_buffer_get_size(resident->buffer),(unsigned long long)admitted_hidden_bytes);
 #else
         throw std::runtime_error("Resident hidden bank requires a CUDA build");
@@ -729,7 +730,7 @@ bool llama_dsv41_tile_executor::resident_head_row(llama_dsv41_carry_store::tile 
         }else ggml_backend_tensor_get(resident->hidden,out.residual.data(),uint64_t(out.start)*81920,81920);
         ggml_backend_tensor_get(resident->pre,out.previous_pre.data(),uint64_t(out.start)*16,16);
         finite(out.residual);finite(out.previous_pre);
-        std::fprintf(stderr,"DS4PERF_RESIDENT_HEAD_ROW start=%u count=1 F32_values=20484 validated=1 bulk_export_deferred=1\n",out.start);
+        llama_dsv41_layer_log("DS4PERF_RESIDENT_HEAD_ROW start=%u count=1 F32_values=20484 validated=1 bulk_export_deferred=1\n",out.start);
         return true;
     }catch(const std::exception &e){error=e.what();return false;}
 }
@@ -776,7 +777,7 @@ bool llama_dsv41_tile_executor::export_hidden_tile(const llama_dsv41_carry_store
         pinned->queue(false,lease,0,81920,hidden);pinned->queue(false,lease,81920,16,pre);pinned->finish();
         resident->export_cursor+=lease.rows;completion=llama_dsv41_carry_store::ram_completion(lease,true,true,true);
         cache.execution_poisoned=false;
-        std::fprintf(stderr,"DS4PERF_EXPORT_HIDDEN_COMPLETE start=%u count=%u copied_host_bytes=%llu after_required_head=1 validated=1\n",
+        llama_dsv41_layer_log("DS4PERF_EXPORT_HIDDEN_COMPLETE start=%u count=%u copied_host_bytes=%llu after_required_head=1 validated=1\n",
             lease.first,lease.rows,(unsigned long long)(uint64_t(lease.rows)*81936));
         return true;
 #else
@@ -817,7 +818,7 @@ bool llama_dsv41_tile_executor::run(const request&in,const llama_dsv41_layer_gra
             bool enabled=false,complete=false;double pre_return_ms=0,prepare_flush_ms=0,post_checks_ms=0,boundary_ms=0;
             ~wall_probe(){if(enabled&&complete){const double wall=std::chrono::duration<double,std::milli>(clock_type::now()-started).count();
                 const double phases=out.prepare_ms+out.upload_ms+out.compute_ms+out.readback_ms+out.weight_cache_ms+out.cleanup_ms;
-                std::fprintf(stderr,"DS4PERF_EXECUTOR_WALL_PROBE layer=%u start=%u count=%u wall_ms=%.6f pre_return_ms=%.6f teardown_ms=%.6f prepare_flush_ms=%.6f post_checks_ms=%.6f boundary_ms=%.6f unexplained_ms=%.6f\n",in.layer,in.start,in.count,wall,pre_return_ms,wall-pre_return_ms,prepare_flush_ms,post_checks_ms,boundary_ms,pre_return_ms-phases-prepare_flush_ms-post_checks_ms-boundary_ms);}}
+                llama_dsv41_layer_log("DS4PERF_EXECUTOR_WALL_PROBE layer=%u start=%u count=%u wall_ms=%.6f pre_return_ms=%.6f teardown_ms=%.6f prepare_flush_ms=%.6f post_checks_ms=%.6f boundary_ms=%.6f unexplained_ms=%.6f\n",in.layer,in.start,in.count,wall,pre_return_ms,wall-pre_return_ms,prepare_flush_ms,post_checks_ms,boundary_ms,pre_return_ms-phases-prepare_flush_ms-post_checks_ms-boundary_ms);}}
         } probe{in,out,prepare_started};
         probe.enabled=std::getenv("DS4PERF_EXECUTOR_WALL_PROBE")&&std::string(std::getenv("DS4PERF_EXECUTOR_WALL_PROBE"))=="1";
         const bool rope_inplace=std::getenv("LLAMA_DSV41_ROPE_INPLACE")&&std::string(std::getenv("LLAMA_DSV41_ROPE_INPLACE"))=="1";
@@ -1084,7 +1085,7 @@ bool llama_dsv41_tile_executor::run(const request&in,const llama_dsv41_layer_gra
             unsigned actual=0;for(int i=0;i<ggml_graph_n_nodes(graph);++i){const auto *node=ggml_graph_node(graph,i);
                 if(node->op==GGML_OP_MUL_MAT&&node->op_params[6]==0x51384131){require(dsv41_original_q8_dense(node),"Original Q8 projection changed weight owner/type");++actual;}}
             require(actual==original_q8_products,"Original Q8 projection graph coverage changed");
-            std::fprintf(stderr,"DS4PERF_ORIGINAL_Q8_DENSE_GRAPH layer=%u start=%u count=%u products=%u original_Q8_weights=1 activation_Q8_1=1 HC_router_head_excluded=1\n",in.layer,in.start,in.count,actual);
+            llama_dsv41_layer_log("DS4PERF_ORIGINAL_Q8_DENSE_GRAPH layer=%u start=%u count=%u products=%u original_Q8_weights=1 activation_Q8_1=1 HC_router_head_excluded=1\n",in.layer,in.start,in.count,actual);
         }
         if(expert.dense_inputs_f16){
             unsigned accepted=0;
@@ -1093,7 +1094,7 @@ bool llama_dsv41_tile_executor::run(const request&in,const llama_dsv41_layer_gra
                     require(node->src[0]->type==GGML_TYPE_F16&&node->op_params[6]!=0x51384131,"F16 activation product overlaps an original-Q8 MMQ tag");++accepted;
                 }}
             const char*refused=llama_dsv41_dense_half_admission(in.count,accepted);require(!refused,refused);
-            if(int64_t(in.count)<=ggml_dsv41_dense_half_max_untagged_rows)std::fprintf(stderr,"DS4PERF_DENSE_HALF_SMALL_ROWS layer=%u start=%u count=%u tagged=0 original_F32_products=1\n",in.layer,in.start,in.count);
+            if(int64_t(in.count)<=ggml_dsv41_dense_half_max_untagged_rows)llama_dsv41_layer_log("DS4PERF_DENSE_HALF_SMALL_ROWS layer=%u start=%u count=%u tagged=0 original_F32_products=1\n",in.layer,in.start,in.count);
         }
         if(index_cublas){require(llama_dsv41_expert_profile::native(expert),"GLM index TEST requires preserved native expert products");
             for(int i=0;i<ggml_graph_n_nodes(graph);++i){auto*node=ggml_graph_node(graph,i);
@@ -1114,7 +1115,7 @@ bool llama_dsv41_tile_executor::run(const request&in,const llama_dsv41_layer_gra
             require(std::getenv("GGML_CUDA_DISABLE_GRAPHS")&&std::string(std::getenv("GGML_CUDA_DISABLE_GRAPHS"))=="1","Expert FP4 packing requires the explicit uncaptured producer path");
             require(dense_mxfp4&&workspace&&workspace->casts&&!workspace->cache_layouts&&!pair_ffn,"Expert FP4 requires the existing dense FP4 cast bank, allocator-only graph and<=4K lane");
             if(in.count>4)workspace->casts->prepare_expert_fp4(graph,in.layer,in.count);
-            else std::fprintf(stderr,"DS4PERF_EXPERT_MXFP4_SMALL_BATCH layer=%u count=%u unchanged_original_weights=1 native_MMA_minimum_rows=5\n",in.layer,in.count);
+            else llama_dsv41_layer_log("DS4PERF_EXPERT_MXFP4_SMALL_BATCH layer=%u count=%u unchanged_original_weights=1 native_MMA_minimum_rows=5\n",in.layer,in.count);
         }
         require(!expert.reuse_expert_routing_map||(std::getenv("GGML_CUDA_DISABLE_GRAPHS")&&std::string(std::getenv("GGML_CUDA_DISABLE_GRAPHS"))=="1"),"Routing-map reuse requires the explicit uncaptured producer path");
         if(expert.sorted_expert_routing){
@@ -1190,7 +1191,7 @@ bool llama_dsv41_tile_executor::run(const request&in,const llama_dsv41_layer_gra
         }
         }
         if(const char *diag=std::getenv("DS4PERF_DIAGNOSTIC_LAYERS")){if(*diag){
-            std::fprintf(stderr,"DS4PERF_GRAPH_TRACE layer=%u start=%u count=%u hit=%u semantic_fnv64=%016llx",in.layer,in.start,in.count,unsigned(graph_cache_hit),
+            llama_dsv41_layer_log("DS4PERF_GRAPH_TRACE layer=%u start=%u count=%u hit=%u semantic_fnv64=%016llx",in.layer,in.start,in.count,unsigned(graph_cache_hit),
                 (unsigned long long)llama_dsv41_graph_digest(ctx.get(),graph));std::fputc(10,stderr);std::fflush(stderr);
         }}
         const auto buft=ggml_backend_get_default_buffer_type(backend);
@@ -1225,18 +1226,18 @@ bool llama_dsv41_tile_executor::run(const request&in,const llama_dsv41_layer_gra
                 if(t->data==t->src[0]->data&&t->buffer==t->src[0]->buffer){++aliases;bytes+=ggml_nbytes(t);}
             }
             require(aliases>0,"Paired BF16 allocator did not actually reuse any last-reader buffer");
-            std::fprintf(stderr,"DS4PERF_BF16_INPLACE_LAYOUT layer=%u start=%u count=%u tagged=%llu actual_aliases=%llu alias_bytes=%llu original_lifetime_checks=1\n",in.layer,in.start,in.count,(unsigned long long)tagged,(unsigned long long)aliases,(unsigned long long)bytes);
+            llama_dsv41_layer_log("DS4PERF_BF16_INPLACE_LAYOUT layer=%u start=%u count=%u tagged=%llu actual_aliases=%llu alias_bytes=%llu original_lifetime_checks=1\n",in.layer,in.start,in.count,(unsigned long long)tagged,(unsigned long long)aliases,(unsigned long long)bytes);
         }
         if(const char *diag=std::getenv("DS4PERF_DIAGNOSTIC_LAYERS")){if(*diag){
-            std::fprintf(stderr,"DS4PERF_LAYOUT_TRACE layer=%u start=%u count=%u hit=%u layout_fnv64=%016llx",in.layer,in.start,in.count,unsigned(graph_cache_hit),
+            llama_dsv41_layer_log("DS4PERF_LAYOUT_TRACE layer=%u start=%u count=%u hit=%u layout_fnv64=%016llx",in.layer,in.start,in.count,unsigned(graph_cache_hit),
                 (unsigned long long)llama_dsv41_graph_digest(ctx.get(),graph,true));std::fputc(10,stderr);std::fflush(stderr);
         }}
         require(boundary.bytes()<=actual,"Boundary outputs escaped actual graph admission");
-        if(boundary.active())std::fprintf(stderr,"BOUNDARY_CAPTURE_ADMITTED retained_bytes=%llu live_graph_bytes=%llu host_readback_bytes=65536\n",
+        if(boundary.active())llama_dsv41_layer_log("BOUNDARY_CAPTURE_ADMITTED retained_bytes=%llu live_graph_bytes=%llu host_readback_bytes=65536\n",
             (unsigned long long)boundary.bytes(),(unsigned long long)actual);
         result pending;pending.prepare_ms=elapsed(prepare_started);pending.scratch_bytes=actual+backend_temporary;pending.graph_nodes=ggml_graph_n_nodes(graph);
         const auto flush_started=clock_type::now();
-        std::fprintf(stderr,"[dsv41-executor] layer=%u rows=%u q8_half=%u row_slices=%u graph_cache_hit=%u live_graph_bytes=%llu backend_temporary_bytes=%llu\n",
+        llama_dsv41_layer_log("[dsv41-executor] layer=%u rows=%u q8_half=%u row_slices=%u graph_cache_hit=%u live_graph_bytes=%llu backend_temporary_bytes=%llu\n",
             in.layer,in.count,rounded_matrices,split_matrices,unsigned(graph_cache_hit),(unsigned long long)actual,(unsigned long long)backend_temporary);
         std::fflush(stderr);
         if(probe.enabled)probe.prepare_flush_ms=elapsed(flush_started);
@@ -1256,7 +1257,7 @@ bool llama_dsv41_tile_executor::run(const request&in,const llama_dsv41_layer_gra
                 if(pinned)pinned_storage::cleanup(cudaStreamSynchronize(pinned->copies));
 #endif
                 ggml_backend_synchronize(backend);
-                std::fprintf(stderr,"DS4PERF_ASYNC_INPUT_GUARD_DRAINED host_vectors_live=1 compute=1 pinned_copies=1\n");
+                llama_dsv41_layer_log("DS4PERF_ASYNC_INPUT_GUARD_DRAINED host_vectors_live=1 compute=1 pinned_copies=1\n");
             }}
         } input_guard{backend,pinned.get(),async_inputs};
         uint64_t async_copies=0,async_bytes=0;
@@ -1317,9 +1318,9 @@ bool llama_dsv41_tile_executor::run(const request&in,const llama_dsv41_layer_gra
         // after all metadata copies and its upload_ready wait. Only now may the
         // host lifetime guard disarm; any earlier error drains before unwind.
         input_guard.live=false;
-        if(async_inputs)std::fprintf(stderr,"DS4PERF_ASYNC_INPUTS_COMPLETE layer=%u start=%u count=%u copies=%llu bytes=%llu existing_CUDA_async_API=1 host_vectors_retained=1 validator_complete=1\n",
+        if(async_inputs)llama_dsv41_layer_log("DS4PERF_ASYNC_INPUTS_COMPLETE layer=%u start=%u count=%u copies=%llu bytes=%llu existing_CUDA_async_API=1 host_vectors_retained=1 validator_complete=1\n",
             in.layer,in.start,in.count,(unsigned long long)async_copies,(unsigned long long)async_bytes);
-        if(resident_metadata)std::fprintf(stderr,"DS4PERF_RESIDENT_METADATA_COMPLETE layer=%u start=%u count=%u raw_template=%u zero_kinds=%u all_text=%u avoided_H2D_bytes=%llu exact_initialized_templates=1\n",in.layer,in.start,in.count,unsigned(raw_template),unsigned(zero_kinds),unsigned(all_text),
+        if(resident_metadata)llama_dsv41_layer_log("DS4PERF_RESIDENT_METADATA_COMPLETE layer=%u start=%u count=%u raw_template=%u zero_kinds=%u all_text=%u avoided_H2D_bytes=%llu exact_initialized_templates=1\n",in.layer,in.start,in.count,unsigned(raw_template),unsigned(zero_kinds),unsigned(all_text),
             (unsigned long long)(256+(raw_template?uint64_t(in.count)*128*8+127*4:0)+(zero_kinds?uint64_t(in.count)*4:0)+(all_text?in.count:0)));
         pending.upload_ms=elapsed(upload_start);
         // An error after entering the graph can leave partial aliased writes.
@@ -1363,7 +1364,7 @@ bool llama_dsv41_tile_executor::run(const request&in,const llama_dsv41_layer_gra
         // owners unwind. The parent RAM lease remains live until run returns.
         struct async_prefetch_guard {
             pinned_storage*storage;ggml_backend_t backend;bool live=false;
-            ~async_prefetch_guard(){if(live){pinned_storage::cleanup(cudaStreamSynchronize(storage->copies));ggml_backend_synchronize(backend);std::fprintf(stderr,"DS4PERF_PREFETCH_ASYNC_GUARD_DRAINED copies=1 compute=1 graph_resources_live=1\n");}}
+            ~async_prefetch_guard(){if(live){pinned_storage::cleanup(cudaStreamSynchronize(storage->copies));ggml_backend_synchronize(backend);llama_dsv41_layer_log("DS4PERF_PREFETCH_ASYNC_GUARD_DRAINED copies=1 compute=1 graph_resources_live=1\n");}}
         } asynchronous{pinned.get(),backend,false};
         prefetch_next=pinned&&pinned->prefetch_buffer&&in.lookahead&&(in.layer==0||!resident||in.lookahead->start()>=resident->tokens);
         if(prefetch_next){
@@ -1390,11 +1391,11 @@ bool llama_dsv41_tile_executor::run(const request&in,const llama_dsv41_layer_gra
             require(ggml_backend_graph_compute_async(backend,&before)==GGML_STATUS_SUCCESS,"V4.1 pre-router computation failed");
             ggml_backend_synchronize(backend);
             std::vector<int32_t>ids(size_t(ggml_nelements(selected)));ggml_backend_tensor_get(selected,ids.data(),0,ids.size()*sizeof(int32_t));
-            std::fprintf(stderr,"LLAMADECODE_ROUTE_IDS layer=%u ids=%d,%d,%d,%d,%d,%d\n",in.layer,ids[0],ids[1],ids[2],ids[3],ids[4],ids[5]);std::fflush(stderr);
+            llama_dsv41_layer_log("LLAMADECODE_ROUTE_IDS layer=%u ids=%d,%d,%d,%d,%d,%d\n",in.layer,ids[0],ids[1],ids[2],ids[3],ids[4],ids[5]);std::fflush(stderr);
             const auto routed_started=clock_type::now();std::string why;
             const bool fetched=in.route_hook(ids,why);if(!fetched)std::fprintf(stderr,"LLAMADECODE_ROUTED_FAILED layer=%u reason=%s\n",in.layer,why.c_str());
             require(fetched,"Routed expert fetch failed");
-            std::fprintf(stderr,"LLAMADECODE_ROUTED layer=%u ids=%d,%d,%d,%d,%d,%d fetch_wait_ms=%.3f split_node=%d nodes=%d\n",in.layer,
+            llama_dsv41_layer_log("LLAMADECODE_ROUTED layer=%u ids=%d,%d,%d,%d,%d,%d fetch_wait_ms=%.3f split_node=%d nodes=%d\n",in.layer,
                 ids[0],ids[1],ids[2],ids[3],ids[4],ids[5],elapsed(routed_started),split,nodes);
             auto after=ggml_graph_view(compute_graph,split+1,nodes);
             require(ggml_backend_graph_compute_async(backend,&after)==GGML_STATUS_SUCCESS,"V4.1 post-router computation failed");
@@ -1409,7 +1410,7 @@ bool llama_dsv41_tile_executor::run(const request&in,const llama_dsv41_layer_gra
                 {w.ffn.gate,w.ffn.up,w.ffn.down},experts);
         }
         const auto post_started=clock_type::now();
-        std::fprintf(stderr,"[dsv41-compute-timeline] layer=%u start=%u begin_epoch_ms=%.6f end_epoch_ms=%.6f\n",
+        llama_dsv41_layer_log("[dsv41-compute-timeline] layer=%u start=%u begin_epoch_ms=%.6f end_epoch_ms=%.6f\n",
             in.layer,in.start,std::chrono::duration<double,std::milli>(compute_start.time_since_epoch()).count(),
             std::chrono::duration<double,std::milli>(clock_type::now().time_since_epoch()).count());
 #if defined(GGML_USE_CUDA)
@@ -1423,30 +1424,30 @@ bool llama_dsv41_tile_executor::run(const request&in,const llama_dsv41_layer_gra
             }
             const auto actual=ggml_backend_cuda_dsv41_topk_radix_queued()-topk_radix_before;
             require(actual==expected,"Actual exact radix top-k first/merge dispatch coverage differs");
-            std::fprintf(stderr,"DS4PERF_TOPK_RADIX_COMPLETE layer=%u start=%u count=%u actual=%llu packed_score_index=1 original_NaN_subnormal_network=1 weight_formats_unchanged=1\n",in.layer,in.start,in.count,(unsigned long long)actual);
+            llama_dsv41_layer_log("DS4PERF_TOPK_RADIX_COMPLETE layer=%u start=%u count=%u actual=%llu packed_score_index=1 original_NaN_subnormal_network=1 weight_formats_unchanged=1\n",in.layer,in.start,in.count,(unsigned long long)actual);
         }
         if(expert.index_key_windows){
             uint64_t expected=0;for(int i=0;i<ggml_graph_n_nodes(compute_graph);++i)expected+=ggml_dsv41_stream_topk_requested(ggml_graph_node(compute_graph,i))?1:0;
             require(ggml_backend_cuda_dsv41_stream_topk_queued()==stream_topk_before+expected,"Actual bounded streaming selector coverage differs");
-            if(expected)std::fprintf(stderr,"DS4PERF_STREAM_TOPK_COMPLETE layer=%u start=%u count=%u actual=%llu explicit_bounded_tag=1\n",in.layer,in.start,in.count,(unsigned long long)expected);
+            if(expected)llama_dsv41_layer_log("DS4PERF_STREAM_TOPK_COMPLETE layer=%u start=%u count=%u actual=%llu explicit_bounded_tag=1\n",in.layer,in.start,in.count,(unsigned long long)expected);
         }
         if(rope_inplace){
             require(ggml_backend_cuda_dsv41_rope_inplace_queued()==rope_inplace_before+rope_aliases,"Actual completed in-place RoPE dispatch coverage differs");
-            std::fprintf(stderr,"DS4PERF_ROPE_INPLACE_COMPLETE layer=%u start=%u count=%u tagged=%llu actual_aliases=%llu alias_bytes=%llu original_lifetime_checks=1 unchanged_pair_math=1\n",in.layer,in.start,in.count,(unsigned long long)rope_tagged,(unsigned long long)rope_aliases,(unsigned long long)rope_alias_bytes);
+            llama_dsv41_layer_log("DS4PERF_ROPE_INPLACE_COMPLETE layer=%u start=%u count=%u tagged=%llu actual_aliases=%llu alias_bytes=%llu original_lifetime_checks=1 unchanged_pair_math=1\n",in.layer,in.start,in.count,(unsigned long long)rope_tagged,(unsigned long long)rope_aliases,(unsigned long long)rope_alias_bytes);
         }
         if(bf16_vector){
             uint64_t expected=0;for(int i=0;i<ggml_graph_n_nodes(compute_graph);++i)expected+=ggml_dsv41_bf16_vector_eligible(ggml_graph_node(compute_graph,i))?1:0;
             require(ggml_backend_cuda_dsv41_bf16_vector_queued()==bf16_vector_before+expected,"Actual exact vector BF16 dispatch coverage differs");
-            std::fprintf(stderr,"DS4PERF_BF16_VECTOR_COMPLETE layer=%u start=%u count=%u actual=%llu exact_helper=1 aligned_vector4=1 scalar_fallback=1\n",in.layer,in.start,in.count,(unsigned long long)expected);
+            llama_dsv41_layer_log("DS4PERF_BF16_VECTOR_COMPLETE layer=%u start=%u count=%u actual=%llu exact_helper=1 aligned_vector4=1 scalar_fallback=1\n",in.layer,in.start,in.count,(unsigned long long)expected);
         }
         if(dense_bf16_store){
             uint64_t expected=0;for(int i=0;i<ggml_graph_n_nodes(compute_graph);++i)expected+=ggml_dsv41_dense_bf16_store_requested(ggml_graph_node(compute_graph,i))?1:0;
             require(expected>0&&ggml_backend_cuda_dsv41_dense_bf16_store_queued()==dense_bf16_store_before+expected,"Actual completed original-Q8 BF16 final stores differ");
-            std::fprintf(stderr,"DS4PERF_DENSE_BF16_STORE_COMPLETE layer=%u start=%u count=%u actual=%llu unchanged_StreamK_partials=1 final_fixup_round=1 original_Q8_weights=1\n",in.layer,in.start,in.count,(unsigned long long)expected);
+            llama_dsv41_layer_log("DS4PERF_DENSE_BF16_STORE_COMPLETE layer=%u start=%u count=%u actual=%llu unchanged_StreamK_partials=1 final_fixup_round=1 original_Q8_weights=1\n",in.layer,in.start,in.count,(unsigned long long)expected);
         }
         if(mul_f16_store){
             require(ggml_backend_cuda_dsv41_mul_f16_store_queued()==mul_f16_store_before+mul_f16_fused,"Actual F16 route-weight store coverage differs");
-            std::fprintf(stderr,"DS4PERF_MUL_F16_STORE_COMPLETE layer=%u start=%u count=%u actual=%u original_cast_helpers=1 single_reader_chain=1\n",in.layer,in.start,in.count,mul_f16_fused);
+            llama_dsv41_layer_log("DS4PERF_MUL_F16_STORE_COMPLETE layer=%u start=%u count=%u actual=%u original_cast_helpers=1 single_reader_chain=1\n",in.layer,in.start,in.count,mul_f16_fused);
         }
         if(cast_vector){
             const auto calls=ggml_backend_cuda_dsv41_cast_vector_queued()-cast_vector_before;
@@ -1456,62 +1457,62 @@ bool llama_dsv41_tile_executor::run(const request&in,const llama_dsv41_layer_gra
             // paths exclusively. Larger graphs must witness vector dispatch.
             require((calls>0||in.count==1)&&elements>=4*calls&&nc<=calls&&
                 (calls||(!elements&&!nc)),"Actual completed vector cast counters are empty/inconsistent");
-            std::fprintf(stderr,"DS4PERF_CAST_VECTOR_COMPLETE layer=%u start=%u count=%u calls=%llu elements=%llu strided_calls=%llu original_cast_helper=1 alignment_tail_overlap_guards=1\n",in.layer,in.start,in.count,(unsigned long long)calls,(unsigned long long)elements,(unsigned long long)nc);
+            llama_dsv41_layer_log("DS4PERF_CAST_VECTOR_COMPLETE layer=%u start=%u count=%u calls=%llu elements=%llu strided_calls=%llu original_cast_helper=1 alignment_tail_overlap_guards=1\n",in.layer,in.start,in.count,(unsigned long long)calls,(unsigned long long)elements,(unsigned long long)nc);
         }
         if(expert.expert_mxfp4){const uint64_t expected=in.count>4?3:0;
             require(ggml_backend_cuda_native_mxfp4_routed_queued()==expert_fp4_before+expected,"Actual expert native FP4 activation/MMA witness differs");
-            std::fprintf(stderr,"DS4PERF_EXPERT_MXFP4_COMPLETE layer=%u start=%u count=%u actual=%llu weights_FP4=1 activations_FP4=1 accumulation_F32=1 small_batch_original=%u\n",in.layer,in.start,in.count,(unsigned long long)expected,unsigned(in.count<=4));
+            llama_dsv41_layer_log("DS4PERF_EXPERT_MXFP4_COMPLETE layer=%u start=%u count=%u actual=%llu weights_FP4=1 activations_FP4=1 accumulation_F32=1 small_batch_original=%u\n",in.layer,in.start,in.count,(unsigned long long)expected,unsigned(in.count<=4));
         }
         if(index_cublas){uint64_t expected=0;
             for(int i=0;i<ggml_graph_n_nodes(graph);++i)expected+=ggml_dsv41_index_cublas_requested(ggml_graph_node(graph,i))?1:0;
             const auto after=ggml_backend_cuda_dsv41_index_cublas_queued();
             require(after>=index_before&&after-index_before==expected,"Actual bounded GLM index dispatch witness differs");
-            if(expected)std::fprintf(stderr,"[dsv41-index-cublas] layer=%u start=%u rows=%u actual_completed=%llu exact_input_and_dot_admission=%u bf16_operands=%u f32_unrounded_operands=%u native_order_head_accumulation=1\n",in.layer,in.start,in.count,(unsigned long long)expected,unsigned(!expert.index_bf16&&!index_f32_cublas_enabled()),unsigned(expert.index_bf16),unsigned(index_f32_cublas_enabled()));
+            if(expected)llama_dsv41_layer_log("[dsv41-index-cublas] layer=%u start=%u rows=%u actual_completed=%llu exact_input_and_dot_admission=%u bf16_operands=%u f32_unrounded_operands=%u native_order_head_accumulation=1\n",in.layer,in.start,in.count,(unsigned long long)expected,unsigned(!expert.index_bf16&&!index_f32_cublas_enabled()),unsigned(expert.index_bf16),unsigned(index_f32_cublas_enabled()));
         }
         if(expert.dense_inputs_f16){
             uint64_t expected=0;
             for(int i=0;i<ggml_graph_n_nodes(graph);++i)expected+=ggml_dsv41_dense_half_requested(ggml_graph_node(graph,i))?1:0;
             const auto after=ggml_backend_cuda_dsv41_dense_half_queued();
             require(after>=dense_before&&after-dense_before==expected,"Actual shared F16/F16/F32 dense dispatch witness differs");
-            std::fprintf(stderr,"DS4PERF_DENSE_HALF_COMPLETE layer=%u start=%u count=%u actual=%llu hc_excluded=1\n",in.layer,in.start,in.count,(unsigned long long)expected);
+            llama_dsv41_layer_log("DS4PERF_DENSE_HALF_COMPLETE layer=%u start=%u count=%u actual=%llu hc_excluded=1\n",in.layer,in.start,in.count,(unsigned long long)expected);
         }
         if(dense_mxfp4){uint64_t expected=0;for(int i=0;i<ggml_graph_n_nodes(graph);++i){const auto*n=ggml_graph_node(graph,i);expected+=n->op==GGML_OP_MUL_MAT&&n->src[0]->type==GGML_TYPE_MXFP4?1:0;}
             require(expected&&ggml_backend_cuda_native_mxfp4_dense_queued()==dense_fp4_before+expected,"Actual shared dense FP4 activation/MMA witness differs");
-            std::fprintf(stderr,"DS4PERF_DENSE_MXFP4_COMPLETE layer=%u start=%u count=%u actual=%llu weights_FP4=1 activations_FP4=1 accumulation_F32=1\n",in.layer,in.start,in.count,(unsigned long long)expected);}
+            llama_dsv41_layer_log("DS4PERF_DENSE_MXFP4_COMPLETE layer=%u start=%u count=%u actual=%llu weights_FP4=1 activations_FP4=1 accumulation_F32=1\n",in.layer,in.start,in.count,(unsigned long long)expected);}
         if(expert.token_tile_attention){
             require(ggml_backend_cuda_dsv41_token_tile_queued()==token_tile_before+attention_tiles,"Actual reused token-tile dispatch witness differs");
             if(expert.attention_kv_f16_table){
                 require(ggml_backend_cuda_dsv41_token_f16_table_queued()==f16_table_before+attention_tiles,"Actual direct F16 attention table dispatch witness differs");
-                std::fprintf(stderr,"DS4PERF_ATTN_F16_TABLE_COMPLETE layer=%u start=%u count=%u actual=%u compressed_half_mirror_bytes=0 canonical_cache_unchanged=1 existing_HMMA_body=1\n",in.layer,in.start,in.count,attention_tiles);
+                llama_dsv41_layer_log("DS4PERF_ATTN_F16_TABLE_COMPLETE layer=%u start=%u count=%u actual=%u compressed_half_mirror_bytes=0 canonical_cache_unchanged=1 existing_HMMA_body=1\n",in.layer,in.start,in.count,attention_tiles);
             }
             if(attention_g16){
                 require(ggml_backend_cuda_dsv41_token_tile_g16_queued()==attention_g16_before+attention_tiles,"Actual G16 attention dispatch coverage differs");
-                std::fprintf(stderr,"DS4PERF_ATTN_G16_COMPLETE layer=%u start=%u count=%u actual=%u R32=1 inactive_KV_score_alias=1 smem_bytes=77824 original_weights=1\n",in.layer,in.start,in.count,attention_tiles);
+                llama_dsv41_layer_log("DS4PERF_ATTN_G16_COMPLETE layer=%u start=%u count=%u actual=%u R32=1 inactive_KV_score_alias=1 smem_bytes=77824 original_weights=1\n",in.layer,in.start,in.count,attention_tiles);
             }
             if(merge_attention_selected_rows){require(ggml_backend_cuda_dsv41_token_union_queued()==union_before+(selected_width?attention_tiles:0),"Actual shared selected-row union dispatch witness differs");
-                std::fprintf(stderr,"DS4PERF_TOKEN_UNION_COMPLETE layer=%u start=%u count=%u actual=%u packed_mask_bits=4\n",in.layer,in.start,in.count,unsigned(selected_width?attention_tiles:0));}
-            std::fprintf(stderr,"DS4PERF_TOKEN_TILE_COMPLETE layer=%u start=%u count=%u actual=%u half_probabilities=1 original_F32_sinks=1 canonical_caches_unchanged=1\n",in.layer,in.start,in.count,attention_tiles);
+                llama_dsv41_layer_log("DS4PERF_TOKEN_UNION_COMPLETE layer=%u start=%u count=%u actual=%u packed_mask_bits=4\n",in.layer,in.start,in.count,unsigned(selected_width?attention_tiles:0));}
+            llama_dsv41_layer_log("DS4PERF_TOKEN_TILE_COMPLETE layer=%u start=%u count=%u actual=%u half_probabilities=1 original_F32_sinks=1 canonical_caches_unchanged=1\n",in.layer,in.start,in.count,attention_tiles);
         }
         if(expert.expert_f16_cublas){
             require(ggml_backend_cuda_dsv41_expert_cublas_queued()==expert_cublas_before+3,"Actual F16 expert cuBLAS dispatch witness differs");
-            std::fprintf(stderr,"DS4PERF_EXPERT_CUBLAS_COMPLETE layer=%u start=%u count=%u actual=3 operands_F16=1 accumulation_F32=1 shared_gather_scatter=1\n",in.layer,in.start,in.count);
+            llama_dsv41_layer_log("DS4PERF_EXPERT_CUBLAS_COMPLETE layer=%u start=%u count=%u actual=3 operands_F16=1 accumulation_F32=1 shared_gather_scatter=1\n",in.layer,in.start,in.count);
         }
         if(hc_projection_f16_gemm){uint64_t expected=0;for(int i=0;i<ggml_graph_n_nodes(graph);++i)expected+=ggml_dsv41_hc_half_requested(ggml_graph_node(graph,i))?1:0;
             require(expected==(in.count>8?2*attention_tiles:0)&&ggml_backend_cuda_dsv41_hc_half_queued()==hc_half_before+expected,"Actual HC F16/F16/F32 cuBLAS dispatch witness differs");
-            std::fprintf(stderr,"DS4PERF_HC_HALF_COMPLETE layer=%u start=%u count=%u actual=%llu accumulation_F32=1\n",in.layer,in.start,in.count,(unsigned long long)expected);}
+            llama_dsv41_layer_log("DS4PERF_HC_HALF_COMPLETE layer=%u start=%u count=%u actual=%llu accumulation_F32=1\n",in.layer,in.start,in.count,(unsigned long long)expected);}
         uint64_t hc_expected=0;
         for(int i=0;i<ggml_graph_n_nodes(graph);++i)hc_expected+=ggml_dsv41_hc_expand_requested(ggml_graph_node(graph,i))?1:0;
         require(ggml_backend_cuda_dsv41_hc_expand_queued()==hc_expand_before+hc_expected,"Actual reused HC expansion dispatch witness differs");
-        if(hc_expected)std::fprintf(stderr,"DS4PERF_HC_EXPAND_COMPLETE layer=%u start=%u count=%u actual=%llu no_FMA=1 original_BF16_boundaries=1\n",in.layer,in.start,in.count,(unsigned long long)hc_expected);
+        if(hc_expected)llama_dsv41_layer_log("DS4PERF_HC_EXPAND_COMPLETE layer=%u start=%u count=%u actual=%llu no_FMA=1 original_BF16_boundaries=1\n",in.layer,in.start,in.count,(unsigned long long)hc_expected);
         if(expert.hc_bf16_epilogue){
             uint64_t expected=0;for(int i=0;i<ggml_graph_n_nodes(graph);++i)expected+=ggml_dsv41_hc_bf16_requested(ggml_graph_node(graph,i))?1:0;
             require(expected==2*attention_tiles&&ggml_backend_cuda_dsv41_hc_bf16_queued()==hc_bf16_before+expected,"Actual HC BF16 epilogue dispatch differs");
-            std::fprintf(stderr,"DS4PERF_HC_BF16_EPILOGUE layer=%u start=%u count=%u actual=%llu removed_rounding_passes=%llu exact_existing_rounding=1 no_FMA=1\n",in.layer,in.start,in.count,(unsigned long long)expected,(unsigned long long)expected);
+            llama_dsv41_layer_log("DS4PERF_HC_BF16_EPILOGUE layer=%u start=%u count=%u actual=%llu removed_rounding_passes=%llu exact_existing_rounding=1 no_FMA=1\n",in.layer,in.start,in.count,(unsigned long long)expected,(unsigned long long)expected);
         }
 
         if(llama_dsv41_expert_profile::natural_half(expert)){
             require(ggml_backend_cuda_ds4_native_half_complete(&expert_before,&expert_after),"Actual native-half queued/completed three-slot witness mismatch");
-            if(expert_after.completed_graphs==1)std::fprintf(stderr,"DS4_NATIVE_HALF_FIRST_GRAPH_COMPLETE layer=%u rows=%u actual_queued_slots=3 after_existing_graph_sync=1\n",in.layer,in.count);
+            if(expert_after.completed_graphs==1)llama_dsv41_layer_log("DS4_NATIVE_HALF_FIRST_GRAPH_COMPLETE layer=%u rows=%u actual_queued_slots=3 after_existing_graph_sync=1\n",in.layer,in.count);
         }
 #endif
         const auto cache_started=clock_type::now();
@@ -1594,11 +1595,11 @@ bool llama_dsv41_tile_executor::run(const request&in,const llama_dsv41_layer_gra
             pinned->finish();
             if(prefetch_next){pinned->prefetch_measure(in.layer,in.start);asynchronous.live=false;}
             const bool mirrored=!defer_hidden_readback||(in.layer==39&&!export_hidden_after_head);
-            if(defer_hidden_readback)std::fprintf(stderr,"DS4PERF_RESIDENT_HIDDEN_COMPLETE layer=%u start=%u count=%u retained_device_bytes=%llu mirrored_host_bytes=%llu final_restore=%u\n",
+            if(defer_hidden_readback)llama_dsv41_layer_log("DS4PERF_RESIDENT_HIDDEN_COMPLETE layer=%u start=%u count=%u retained_device_bytes=%llu mirrored_host_bytes=%llu final_restore=%u\n",
                 in.layer,in.start,in.count,(unsigned long long)(uint64_t(in.count)*81936),
                 (unsigned long long)(mirrored?uint64_t(in.count)*81936:0),unsigned(in.layer==39&&mirrored));
             pending.direct_completion=llama_dsv41_carry_store::ram_completion(*in.direct,selected_unchanged,candidates_unchanged,mirrored);
-            if(skip_tile_pin)std::fprintf(stderr,"DS4PERF_TILE_PIN_NOT_NEEDED layer=%u start=%u count=%u no_RAM_bank_copies=1 resident_hidden_and_IDs=1 final_export_after_head=1 copy_attempts_forbidden=1\n",in.layer,in.start,in.count);
+            if(skip_tile_pin)llama_dsv41_layer_log("DS4PERF_TILE_PIN_NOT_NEEDED layer=%u start=%u count=%u no_RAM_bank_copies=1 resident_hidden_and_IDs=1 final_export_after_head=1 copy_attempts_forbidden=1\n",in.layer,in.start,in.count);
 #endif
         }
         if(resident){
@@ -1611,12 +1612,12 @@ bool llama_dsv41_tile_executor::run(const request&in,const llama_dsv41_layer_gra
                 resident->cursor=0;++resident->layer;
             }
         }
-        if(resident_ids)std::fprintf(stderr,"DS4PERF_RESIDENT_IDS_COMPLETE layer=%u start=%u count=%u selected_width=%u candidate_width=%u avoided_H2D_bytes=%llu source_copy_bytes=%llu validated=1 RAM_mirror=1 existing_buffer=1\n",
+        if(resident_ids)llama_dsv41_layer_log("DS4PERF_RESIDENT_IDS_COMPLETE layer=%u start=%u count=%u selected_width=%u candidate_width=%u avoided_H2D_bytes=%llu source_copy_bytes=%llu validated=1 RAM_mirror=1 existing_buffer=1\n",
             in.layer,in.start,in.count,selected_width,candidate_width,
             (unsigned long long)(uint64_t(in.count)*4*((reuse?selected_width:0)+(candidates?candidate_width:0))),
             (unsigned long long)(uint64_t(in.count)*4*((query_source(in.layer)?selected_width:0)+(in.layer==20?candidate_width:0))));
-        if(in.single_attention_append)std::fprintf(stderr,"DS4PERF_UNALIGNED_APPEND_COMPLETE layer=%u start=%u absolute_start=%u count=%u attention_tiles=1 fixed_owner_unchanged=1 original_pool_tail_guard=1\n",in.layer,in.start,absolute_start,in.count);
-        if(pair_ffn)std::fprintf(stderr,"DS4PERF_PAIRED_FFN_COMPLETE layer=%u start=%u count=%u attention_tiles=%u expert_products=3 original_attention_max_rows=%u native_pair=%u completed_graph_and_copies=1\n",in.layer,in.start,in.count,attention_tiles,attention_rows,unsigned(native_pair));
+        if(in.single_attention_append)llama_dsv41_layer_log("DS4PERF_UNALIGNED_APPEND_COMPLETE layer=%u start=%u absolute_start=%u count=%u attention_tiles=1 fixed_owner_unchanged=1 original_pool_tail_guard=1\n",in.layer,in.start,absolute_start,in.count);
+        if(pair_ffn)llama_dsv41_layer_log("DS4PERF_PAIRED_FFN_COMPLETE layer=%u start=%u count=%u attention_tiles=%u expert_products=3 original_attention_max_rows=%u native_pair=%u completed_graph_and_copies=1\n",in.layer,in.start,in.count,attention_tiles,attention_rows,unsigned(native_pair));
         pending.readback_ms=elapsed(readback_start);
         const auto cleanup_started=clock_type::now();allocation.release();pending.cleanup_ms=elapsed(cleanup_started);
         if(capture_dspark)cache.dspark_completion.commit(capture_ticket);

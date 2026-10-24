@@ -1,10 +1,13 @@
 // Included by the Windows producer after its bounded native-file/hash helpers.
 #include "live-session-checkpoint.h"
 #include "llama-dsv41-artifact.h"
+#include "llama-dsv41-layer-log.h"
 #include <thread>
 #include <filesystem>
 #include <optional>
 #include <io.h>
+#include <fcntl.h>
+#include <sys/stat.h>
 
 namespace {
 class session_output_redirect {
@@ -59,6 +62,7 @@ public:
 #include "combo-base.inc"
 namespace {
 
+using decode_quiet_scope=llama_dsv41_decode_quiet_scope; // per-layer logs opt-in during decode steps
 // LLAMADECODE: decode steps use the routed-expert layout (B1). The explicit
 // diagnostic LLAMADECODE_DECODE_LAYOUT=0 runs them on the whole-layer B0 layout.
 bool routed_decode_layout(){static const bool on=[]{const char*e=std::getenv("LLAMADECODE_DECODE_LAYOUT");
@@ -210,8 +214,9 @@ void run_live_session(std::unique_ptr<llama_dsv41_sweep>&sweep,
                 auto previous=std::move(sweep);sweep.reset(new llama_dsv41_sweep);auto next_options=options;auto next_weights=weights;
                 next_options.carry.tokens=1;if(next_weights.engram_prefetch_host_bytes)next_weights.engram_prefetch_tokens=1;
                 next_weights.decode_layout=routed_decode_layout(); // LLAMADECODE B1: routed-expert fetch
+                {decode_quiet_scope quiet;
                 success(sweep->open(next_weights,next_options,error,nullptr,previous.get()),error);require(!previous->ready(),"Transferred prefix still publishes");previous.reset();
-                const std::vector<int32_t>one{best};success(sweep->run(one,[]{return should_stop();},error),error);
+                const std::vector<int32_t>one{best};success(sweep->run(one,[]{return should_stop();},error),error);}
                 step_ms.push_back(ms(step_started));
                 std::fprintf(stderr,"LLAMADECODE_STEP index=%llu token=%d position=%u step_ms=%.3f prompt_ms=%.3f\n",(unsigned long long)index,best,
                     current.frontier.position+uint32_t(index)+1,step_ms.back(),sweep->timing().prompt_processing_ms);std::fflush(stderr);
@@ -250,8 +255,9 @@ void run_live_session(std::unique_ptr<llama_dsv41_sweep>&sweep,
                 auto previous=std::move(sweep);sweep.reset(new llama_dsv41_sweep);auto next_options=options;auto next_weights=weights;
                 next_options.carry.tokens=1;if(next_weights.engram_prefetch_host_bytes)next_weights.engram_prefetch_tokens=1;
                 next_weights.decode_layout=routed_decode_layout(); // LLAMADECODE B1: routed-expert fetch
+                {decode_quiet_scope quiet;
                 success(sweep->open(next_weights,next_options,error,nullptr,previous.get()),error);require(!previous->ready(),"Transferred prefix still publishes");previous.reset();
-                const std::vector<int32_t>one{forced[index]};success(sweep->run(one,[]{return should_stop();},error),error);
+                const std::vector<int32_t>one{forced[index]};success(sweep->run(one,[]{return should_stop();},error),error);}
                 step_ms.push_back(ms(step_started));
                 std::fprintf(stderr,"LLAMADECODE_FORCED_STEP index=%zu forced=%d argmax=%d step_ms=%.3f\n",index,forced[index],best,step_ms.back());std::fflush(stderr);
             }

@@ -1,3 +1,4 @@
+#include "llama-dsv41-layer-log.h"
 #include "llama-dsv41-weights.h"
 #include <tuple>
 #include "llama-dsv41-engram-prefetch.h"
@@ -58,6 +59,7 @@ struct llama_dsv41_weight_provider::implementation {
     std::array<stage,42>stages;
     std::array<stage,82>decode_stages;bool decode_layout=false;bool experts_prebound=false;int dense_held=-1;
     uint64_t resident_dense_bytes=0;
+    uint64_t fetched_total=0;double fetch_ms_total=0;
     static bool resident_dense(uint32_t layer){return layer!=1&&layer!=14;} // Engram layers stream (bank 1 capacity)
     std::array<ggml_tensor*,40*3>routed{};
     uint32_t stage_count()const{return decode_layout?82u:42u;}
@@ -320,7 +322,8 @@ struct llama_dsv41_weight_provider::implementation {
         ggml_backend_synchronize(options.backend);leased=true;
         uint64_t fetched=0;double fetch_ms=0;
         require(wf_get_required_layer_fetch(fetcher,int(id),&fetched,&fetch_ms),"Completed strict DirectStorage timing unavailable");
-        std::fprintf(stderr,"[dsv41-fetch] stage=%u bytes=%llu fetch_ms=%.6f decimal_GB_s=%.6f\n",
+        fetched_total+=fetched;fetch_ms_total+=fetch_ms;
+        llama_dsv41_layer_log("[dsv41-fetch] stage=%u bytes=%llu fetch_ms=%.6f decimal_GB_s=%.6f\n",
             id,(unsigned long long)fetched,fetch_ms,double(fetched)/fetch_ms/1e6);
         std::fflush(stderr);
     }
@@ -397,12 +400,12 @@ bool llama_dsv41_weight_provider::suspend_device(std::string&error){return p->gu
     require(wf_persist_shutdown("keep-alive suspend")==1,"DirectStorage/D3D12 cache could not be released on suspend");
     for(auto&s:p->stages)for(auto&e:s.entries){e.t->data=nullptr;e.t->buffer=nullptr;}
     p->buffers.clear();p->device_suspended=true;
-    std::fprintf(stderr,"DS4COMBO_PROVIDER_SUSPENDED buffers=%u compute_buffer_bytes=%llu model_lease_kept=1\n",p->options.buffers,(unsigned long long)p->planned.compute_buffer_bytes);
+    llama_dsv41_layer_log("DS4COMBO_PROVIDER_SUSPENDED buffers=%u compute_buffer_bytes=%llu model_lease_kept=1\n",p->options.buffers,(unsigned long long)p->planned.compute_buffer_bytes);
 },error);}
 bool llama_dsv41_weight_provider::resume_device(std::string&error){return p->guard([&]{
     require(p->allocated&&p->device_suspended&&!p->fetcher&&p->buffers.empty(),"Device resume requires a suspended provider");
     p->identity();p->create_pipeline();p->device_suspended=false;
-    std::fprintf(stderr,"DS4COMBO_PROVIDER_RESUMED buffers=%u compute_buffer_bytes=%llu same_pipeline_builder=1\n",p->options.buffers,(unsigned long long)p->planned.compute_buffer_bytes);
+    llama_dsv41_layer_log("DS4COMBO_PROVIDER_RESUMED buffers=%u compute_buffer_bytes=%llu same_pipeline_builder=1\n",p->options.buffers,(unsigned long long)p->planned.compute_buffer_bytes);
 },error);}
 bool llama_dsv41_weight_provider::device_suspended()const{std::lock_guard<std::mutex>lock(p->mutex);return p->device_suspended;}
 void llama_dsv41_weight_provider::implementation::create_pipeline(){
@@ -458,10 +461,11 @@ bool llama_dsv41_weight_provider::restart_prompt(const config&options,std::strin
     }
     p->engram_prompt.reset();p->options.engram_prefetch_tokens=options.engram_prefetch_tokens;p->next=0;
     for(const auto&s:p->stages)for(const auto&e:s.entries)require(!e.t->data&&!e.t->buffer,"Completed pass retained a stale staged tensor");
-    std::fprintf(stderr,"DS4PERF_PROVIDER_REUSED buffers=%u compute_buffer_bytes=%llu model_lease=1 heaps=1 request_arrays=1 starts_in_timed_run=1\n",p->options.buffers,(unsigned long long)p->planned.compute_buffer_bytes);
+    llama_dsv41_layer_log("DS4PERF_PROVIDER_REUSED buffers=%u compute_buffer_bytes=%llu model_lease=1 heaps=1 request_arrays=1 starts_in_timed_run=1\n",p->options.buffers,(unsigned long long)p->planned.compute_buffer_bytes);
 },error);}
 bool llama_dsv41_weight_provider::start_request(std::string&error){return p->guard([&]{
-    require(p->allocated&&!p->device_suspended&&!p->leased&&p->next==0,"Request start requires an admitted resident unleased first stage");p->identity();wf_start(p->fetcher);
+    require(p->allocated&&!p->device_suspended&&!p->leased&&p->next==0,"Request start requires an admitted resident unleased first stage");p->identity();
+    p->fetched_total=0;p->fetch_ms_total=0;wf_start(p->fetcher);
     require(!wf_has_failed(p->fetcher),"Persistent DirectStorage restart failed");
 },error);}
 llama_dsv41_weight_provider::capacity llama_dsv41_weight_provider::budget()const{std::lock_guard<std::mutex>lock(p->mutex);return p->inspected&&!p->poisoned?p->planned:capacity{};}
@@ -480,7 +484,7 @@ bool llama_dsv41_weight_provider::prepare_engram_prompt(const std::vector<int32_
         require(adopted->initial.tail==initial.tail,"Early Engram prompt cache was built with a different restored history");
         require(adopted->cache&&adopted->cache->budget()<=p->options.engram_prefetch_host_bytes,"Early Engram prompt cache exceeds provider admission");
         p->engram_prompt=std::move(adopted->cache);
-        std::fprintf(stderr,"DS4PERF_ENGRAM_EARLY_ADOPTED tokens=%zu build_wall_ms=%.3f join_wait_ms=%.3f host_plan_bytes=%llu same_rows=1\n",tokens.size(),adopted->wall_ms,
+        llama_dsv41_layer_log("DS4PERF_ENGRAM_EARLY_ADOPTED tokens=%zu build_wall_ms=%.3f join_wait_ms=%.3f host_plan_bytes=%llu same_rows=1\n",tokens.size(),adopted->wall_ms,
             std::chrono::duration<double,std::milli>(std::chrono::steady_clock::now()-waited).count(),(unsigned long long)p->engram_prompt->budget());
         return;
     }
@@ -503,7 +507,7 @@ bool llama_dsv41_weight_provider::start_engram_prompt_early(const std::vector<in
     if(add(worst,current)>p->options.engram_prefetch_host_bytes){
         // Not admitted alongside the current pass: the request keeps its
         // ordinary layer-zero overlapped load. Visible, never silent.
-        std::fprintf(stderr,"DS4PERF_ENGRAM_EARLY_SKIPPED tokens=%zu worst_bytes=%llu current_bytes=%llu admitted_bytes=%llu reason=host_admission\n",tokens.size(),
+        llama_dsv41_layer_log("DS4PERF_ENGRAM_EARLY_SKIPPED tokens=%zu worst_bytes=%llu current_bytes=%llu admitted_bytes=%llu reason=host_admission\n",tokens.size(),
             (unsigned long long)worst,(unsigned long long)current,(unsigned long long)p->options.engram_prefetch_host_bytes);
         return;
     }
@@ -520,7 +524,7 @@ bool llama_dsv41_weight_provider::start_engram_prompt_early(const std::vector<in
         }catch(...){e->failure=std::current_exception();}
         e->wall_ms=std::chrono::duration<double,std::milli>(std::chrono::steady_clock::now()-started).count();
     });
-    std::fprintf(stderr,"DS4PERF_ENGRAM_EARLY_QUEUED tokens=%zu worst_bytes=%llu current_bytes=%llu admitted_bytes=%llu own_ioring=1\n",tokens.size(),
+    llama_dsv41_layer_log("DS4PERF_ENGRAM_EARLY_QUEUED tokens=%zu worst_bytes=%llu current_bytes=%llu admitted_bytes=%llu own_ioring=1\n",tokens.size(),
         (unsigned long long)worst,(unsigned long long)current,(unsigned long long)p->options.engram_prefetch_host_bytes);
 #else
     (void)tokens;(void)initial;throw std::runtime_error("Early Engram IoRing requires Windows");
@@ -530,6 +534,7 @@ bool llama_dsv41_weight_provider::acquire_embeddings(ggml_tensor*&out,std::strin
 bool llama_dsv41_weight_provider::acquire_layer(uint32_t layer,llama_dsv41_layer_graph::weights&out,std::string&error){out={};return p->guard([&]{require(layer<40&&!p->decode_layout,"Invalid physical layer");p->acquire(layer+1);out=p->layers[layer];},error);}
 bool llama_dsv41_weight_provider::acquire_head(ggml_tensor*&norm,ggml_tensor*&out,std::string&error){norm=nullptr;out=nullptr;return p->guard([&]{p->acquire(p->stage_count()-1);norm=p->head_norm;out=p->head_weight;},error);}
 bool llama_dsv41_weight_provider::decode_layout()const{std::lock_guard<std::mutex>lock(p->mutex);return p->decode_layout;}
+void llama_dsv41_weight_provider::fetch_totals(uint64_t&bytes,double&milliseconds)const{std::lock_guard<std::mutex>lock(p->mutex);bytes=p->fetched_total;milliseconds=p->fetch_ms_total;}
 bool llama_dsv41_weight_provider::decode_banks(uint32_t layer,const void*&dense,const void*&routed)const{
     std::lock_guard<std::mutex>lock(p->mutex);dense=routed=nullptr;
     if(!p->decode_layout||layer>=40||p->buffers.size()!=2)return false;
