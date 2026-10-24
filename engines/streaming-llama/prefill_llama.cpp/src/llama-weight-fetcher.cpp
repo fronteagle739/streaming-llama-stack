@@ -3322,12 +3322,17 @@ static bool wf_dstorage_transfer_layer(wf_context * wf, int layer_idx, int gpu_i
         if(routed_stage&&wf->params.moe_mode==WF_MOE_FETCH_ACTIVE){
             if(!wf->required_dstorage||dest_buf||dest_offset||wave_start>=0||wave_end>=0||!layer.expert_filter_set){
                 WF_ERR("Required DirectStorage routed-stage zero refused: unrouted or partial transfer");wf->ds_failed.store(true);return false;}
+            // LLAMADECODE_POISON_UNROUTED=1 (debug only): every byte this transfer
+            // does not write (unrouted experts and padding) becomes 0xFF, i.e. NaN
+            // F16 block scales, so any read of unrouted data turns the logits NaN.
+            static const bool poison=[]{const char*e=std::getenv("LLAMADECODE_POISON_UNROUTED");return e&&e[0]=='1'&&!e[1];}();
             std::vector<llama_wf_zero_gaps::interval>owned,gaps;owned.reserve(layer.spans.size());
-            for(const auto&span:layer.spans)owned.push_back({span.gpu_offset,span.nbytes});
+            for(const auto&span:layer.spans)if(!poison||!span.is_expert||wf_span_is_active_expert(wf,layer,span))owned.push_back({span.gpu_offset,span.nbytes});
             std::string reason;
             if(!llama_wf_zero_gaps::plan(layer.total_bytes,owned,gaps,reason)){WF_ERR("Required DirectStorage routed-stage zero refused: %s",reason.c_str());wf->ds_failed.store(true);return false;}
             uint64_t zeroed=0;
-            for(const auto&gap:gaps){if(!cuda_ok(cudaMemsetAsync((char*)target_buf+gap.offset,0,size_t(gap.bytes),wf_s)))return false;zeroed+=gap.bytes;}
+            for(const auto&gap:gaps){if(!cuda_ok(cudaMemsetAsync((char*)target_buf+gap.offset,poison?0xFF:0,size_t(gap.bytes),wf_s)))return false;zeroed+=gap.bytes;}
+            if(poison)WF_ERR("LLAMADECODE_POISON_UNROUTED stage=%d poisoned_bytes=%llu fill=0xFF",layer_idx,(unsigned long long)zeroed);
             if(!cuda_ok(cudaStreamSynchronize(wf_s)))return false;
             size_t active=0;for(const auto&span:layer.spans)active+=span.is_expert&&wf_span_is_active_expert(wf,layer,span)?1:0;
             WF_ERR("LLAMADECODE_ROUTED_STAGE stage=%d extent=%llu padding_zero_bytes=%llu routed_spans=%zu experts=%zu unrouted_extents_never_read=1",
