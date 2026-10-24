@@ -57,6 +57,8 @@ struct llama_dsv41_weight_provider::implementation {
     ggml_context_ptr tensors;
     std::array<stage,42>stages;
     std::array<stage,82>decode_stages;bool decode_layout=false;bool experts_prebound=false;int dense_held=-1;
+    uint64_t resident_dense_bytes=0;
+    static bool resident_dense(uint32_t layer){return layer!=1&&layer!=14;} // Engram layers stream (bank 1 capacity)
     std::array<ggml_tensor*,40*3>routed{};
     uint32_t stage_count()const{return decode_layout?82u:42u;}
     stage&stage_at(uint32_t id){return decode_layout?decode_stages[id]:stages[id];}
@@ -243,13 +245,21 @@ struct llama_dsv41_weight_provider::implementation {
         {   // LLAMADECODE B1 decode layout: same tensors and file extents, re-packed.
             const auto buft=ggml_backend_get_default_buffer_type(options.backend);
             for(const auto&e:stages[0].entries)place(decode_stages[0],e,buft);
-            for(const auto&e:stages[41].entries)place(decode_stages[81],e,buft);
-            for(uint32_t l=0;l<40;++l){
-                // The shared expert does not depend on routing: it stays dense.
-                for(const auto&e:stages[l+1].entries)if(!routed_tensor(e.t))place(decode_stages[1+2*l],e,buft);
+            for(uint32_t l=0;l<40;++l)
                 for(const auto&e:stages[l+1].entries)if(routed_tensor(e.t))place(decode_stages[2+2*l],e,buft);
-            }
-            for(const auto&s:decode_stages)require(s.bytes&&s.bytes<=planned.maximum_stage_bytes,"Decode stage exceeds the admitted prefill stage size");
+            // LLAMADECODE B1b: odd stages (dense layers, head) always land in bank 1.
+            // Each resident dense layer gets its own region there, so after one
+            // transfer it is served from VRAM; the two large Engram layers and the
+            // head share one streaming slot after the resident regions.
+            uint64_t cursor=0;
+            for(uint32_t l=0;l<40;++l){if(!resident_dense(l))continue;auto&st=decode_stages[1+2*l];st.bytes=cursor;
+                // The shared expert does not depend on routing: it stays dense.
+                for(const auto&e:stages[l+1].entries)if(!routed_tensor(e.t))place(st,e,buft);cursor=st.bytes;}
+            resident_dense_bytes=cursor;
+            for(uint32_t l=0;l<40;++l){if(resident_dense(l))continue;auto&st=decode_stages[1+2*l];st.bytes=cursor;
+                for(const auto&e:stages[l+1].entries)if(!routed_tensor(e.t))place(st,e,buft);}
+            decode_stages[81].bytes=cursor;for(const auto&e:stages[41].entries)place(decode_stages[81],e,buft);
+            for(const auto&s:decode_stages)require(s.bytes&&s.bytes<=planned.maximum_stage_bytes,"Decode stage exceeds the admitted prefill bank size");
         }
         const auto policy=llama_wf_bounded::make(planned.maximum_stage_bytes,options.buffers,
             options.staging_limit_bytes?options.staging_limit_bytes:llama_wf_bounded::baseline_staging_bytes);
@@ -416,7 +426,10 @@ void llama_dsv41_weight_provider::implementation::create_pipeline(){
         if(!p->options.compute_direct)wf_set_gpu_buf_ptr(p->fetcher,int(i),ggml_backend_buffer_get_base(b.get()));p->buffers.push_back(std::move(b));
     }
     for(uint32_t i=0;i<p->stage_count();++i){std::vector<wf_weight_span>spans;p->spans_for(p->stage_at(i),spans);wf_register_layer(p->fetcher,int(i),spans.data(),int(spans.size()),p->stage_at(i).bytes);}
-    if(p->decode_layout)std::fprintf(stderr,"LLAMADECODE_DECODE_LAYOUT stages=82 routed_spans_per_layer=1152 moe=fetch_active banks=%u\n",p->options.buffers);
+    if(p->decode_layout){uint32_t resident=0;
+        for(uint32_t l=0;l<40;++l)if(p->resident_dense(l)){require(wf_set_layer_persistent(p->fetcher,int(1+2*l),true),"Resident dense stage refused by the fetcher");++resident;}
+        std::fprintf(stderr,"LLAMADECODE_DECODE_LAYOUT stages=82 routed_spans_per_layer=1152 moe=fetch_active banks=%u resident_dense_layers=%u resident_dense_bytes=%llu\n",
+            p->options.buffers,resident,(unsigned long long)p->resident_dense_bytes);}
     require(!wf_has_failed(p->fetcher),"Original layer registration failed");p->identity();if(p->options.ds_gpu_ring_slots)wf_set_layer_major_mode(p->fetcher,true);wf_start(p->fetcher);
     require(!wf_has_failed(p->fetcher),"Original DirectStorage pipeline startup failed");
 }

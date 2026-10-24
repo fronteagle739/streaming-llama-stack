@@ -291,6 +291,10 @@ WF_API void wf_stop(wf_context * wf);
 // Only relevant when moe_mode == WF_MOE_FETCH_ACTIVE.
 // Must be called BEFORE wf_wait_layer_gpu() for that layer.
 // expert_ids: array of active expert indices, n_active: count.
+// LLAMADECODE B1b: a persistent stage occupies its own bank region that no other
+// stage of this fetcher writes. After its first complete transfer it is served
+// from VRAM (no DMA) for the rest of this fetcher's lifetime. Required DS only.
+WF_API bool wf_set_layer_persistent(wf_context * wf, int layer_idx, bool persistent);
 WF_API void wf_set_active_experts(wf_context * wf,
                            int          layer_idx,
                            const int *  expert_ids,
