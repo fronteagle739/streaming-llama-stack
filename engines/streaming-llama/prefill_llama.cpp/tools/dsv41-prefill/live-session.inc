@@ -71,6 +71,19 @@ using decode_quiet_scope=llama_dsv41_decode_quiet_scope; // per-layer logs opt-i
 // decode graph, the VRAM freed by the decode-sized plan (minus the decode
 // graph, the 1-row hidden bank and a growth margin; capped by the device's
 // free memory less a floor) becomes the L2 expert tier. LLAMADECODE_L2=0 disables.
+void local_video_memory(uint64_t&budget,uint64_t&usage){
+    budget=usage=0;IDXGIFactory4*factory=nullptr;
+    if(FAILED(CreateDXGIFactory1(__uuidof(IDXGIFactory4),reinterpret_cast<void**>(&factory)))||!factory)return;
+    uint64_t best=0;
+    for(UINT i=0;;++i){IDXGIAdapter1*a=nullptr;if(factory->EnumAdapters1(i,&a)==DXGI_ERROR_NOT_FOUND)break;
+        DXGI_ADAPTER_DESC1 d{};a->GetDesc1(&d);IDXGIAdapter3*a3=nullptr;
+        if(d.DedicatedVideoMemory>best&&SUCCEEDED(a->QueryInterface(__uuidof(IDXGIAdapter3),reinterpret_cast<void**>(&a3)))){
+            DXGI_QUERY_VIDEO_MEMORY_INFO info{};
+            if(SUCCEEDED(a3->QueryVideoMemoryInfo(0,DXGI_MEMORY_SEGMENT_GROUP_LOCAL,&info))){best=d.DedicatedVideoMemory;budget=info.Budget;usage=info.CurrentUsage;}
+            a3->Release();}
+        a->Release();}
+    factory->Release();
+}
 void grow_decode_l2(llama_dsv41_sweep&sweep,const llama_dsv41_fixed_storage*fixed,ggml_backend_t backend){
     static const bool on=[]{const char*e=std::getenv("LLAMADECODE_L2");return !(e&&e[0]=='0'&&!e[1]);}();
     if(!on||!fixed||!fixed->decode_compact)return;
@@ -81,10 +94,14 @@ void grow_decode_l2(llama_dsv41_sweep&sweep,const llama_dsv41_fixed_storage*fixe
     const uint64_t now=ggml_gallocr_get_buffer_size(fixed->graph.get(),0)+fixed->hidden_bytes;
     uint64_t offer=freed>now+margin?freed-now-margin:0;
     size_t free_bytes=0,total=0;ggml_backend_cuda_get_device_memory(0,&free_bytes,&total);(void)backend; // the job sees one device
-    offer=std::min<uint64_t>(offer,free_bytes>floor?free_bytes-floor:0);
+    // WDDM: the authoritative no-demotion room is this process's local-segment
+    // budget minus its current usage (DXGI), on the largest adapter (the 5090).
+    uint64_t budget=0,usage=0;local_video_memory(budget,usage);
+    const uint64_t room=budget>usage+floor?budget-usage-floor:0;
+    offer=std::min<uint64_t>(offer,room);
     uint32_t slots=0;std::string error;success(provider->grow_decode_cache(offer,&slots,error),error);
-    std::fprintf(stderr,"LLAMADECODE_L2_OFFER freed=%llu decode_now=%llu device_free=%llu offered=%llu slots=%u\n",(unsigned long long)freed,
-        (unsigned long long)now,(unsigned long long)free_bytes,(unsigned long long)offer,slots);std::fflush(stderr);
+    std::fprintf(stderr,"LLAMADECODE_L2_OFFER freed=%llu decode_now=%llu cuda_free=%llu cuda_total=%llu dxgi_budget=%llu dxgi_usage=%llu offered=%llu slots=%u\n",(unsigned long long)freed,
+        (unsigned long long)now,(unsigned long long)free_bytes,(unsigned long long)total,(unsigned long long)budget,(unsigned long long)usage,(unsigned long long)offer,slots);std::fflush(stderr);
 }
 bool ds4_decode_enabled(){static const bool on=[]{const char*e=std::getenv("LLAMADECODE_DS4_DECODE");return e&&e[0]=='1'&&!e[1];}();return on;}
 struct ds4_external {
