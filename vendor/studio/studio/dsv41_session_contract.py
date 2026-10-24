@@ -87,7 +87,7 @@ def command(row, session, sequence, mode=3):
              # DS4COMBO fast switch: keep-alive producer device suspend / resume onto a new native base.
              'suspend': ['base'], 'resume': ['native_base_contract_sha256', 'tokens'],
              # LLAMADECODE B0: in-process greedy RTX decode (no peer).
-             'decode': ['base', 'max_tokens', 'stop_tokens']}
+             'decode': ['base', 'max_tokens', 'stop_tokens'], 'decode_forced': ['base', 'tokens', 'logits_path']}
     require(type(op) is str and op in extra, 'Unknown session operation')
     keys(row, common + extra[op])
     if 'base' in row:
@@ -116,6 +116,13 @@ def command(row, session, sequence, mode=3):
         for token in stops:
             integer(token, 0, 129279)
         require(row['base']['position'] + row['max_tokens'] < row['base']['context'], 'Decode context exhausted')
+    if op == 'decode_forced':
+        tokens = row['tokens']
+        require(type(tokens) is list and 0 < len(tokens) <= 4096, 'Forced decode token extent')
+        for token in tokens:
+            integer(token, 0, 129279)
+        require(type(row['logits_path']) is str and 0 < len(row['logits_path']) <= 1024, 'Forced decode logits path')
+        require(row['base']['position'] + len(tokens) < row['base']['context'], 'Forced decode context exhausted')
     if op == 'apply_decode_delta':
         target = checkpoint(row['target'], mode)
         base = row['base']

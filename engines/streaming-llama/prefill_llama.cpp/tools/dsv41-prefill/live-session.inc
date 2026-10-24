@@ -2,6 +2,7 @@
 #include "live-session-checkpoint.h"
 #include "llama-dsv41-artifact.h"
 #include <thread>
+#include <filesystem>
 #include <optional>
 #include <io.h>
 
@@ -216,6 +217,41 @@ void run_live_session(std::unique_ptr<llama_dsv41_sweep>&sweep,
                 current.frontier.position,total_ms,total_ms>0?evaluated*1000.0/total_ms:0.0);std::fflush(stderr);
             reply({{"peer_synchronized",have_remote&&remote.describe()==current.describe()},{"tokens",generated},{"evaluated_tokens",evaluated},{"stopped",stopped},
                 {"step_ms",step_ms},{"decode_ms",total_ms},{"RTX_decode",true}});
+        }else if(operation=="decode_forced"){
+            // LLAMADECODE B0/B1 gate: teacher-forced 1-row decode. For each i the
+            // frontier's full F32 logits are written to logits_path (raw rows of
+            // 129280 floats), then tokens[i] is appended; the last token is not
+            // evaluated. Same per-token path as "decode"; only the token choice differs.
+            dsv41_live::keys(command,{"session","model_sha256","sequence","operation","base","tokens","logits_path"});same_base();
+            require(!awaiting_ack,"Forced decode while a state transfer awaits acknowledgement");
+            require(inspect().describe()==current.describe(),"Forced decode actual token/owner state differs from checkpoint");
+            const auto&ids=command.at("tokens");require(ids.is_array()&&!ids.empty()&&ids.size()<=4096,"Forced decode requires1..4096 tokens");
+            std::vector<int32_t>forced;for(const auto&v:ids){const auto n=dsv41_live::u64(v);require(n<129280,"Forced token out of vocabulary");forced.push_back(int32_t(n));}
+            require(uint64_t(current.frontier.position)+forced.size()<uint64_t(options.context),"Forced decode exceeds context capacity");
+            const auto path=std::filesystem::u8path(command.at("logits_path").get<std::string>());
+            require(path.is_absolute()&&!std::filesystem::exists(path),"Forced decode logits path must be absolute and new");
+            HANDLE file=CreateFileW(path.c_str(),GENERIC_WRITE,0,nullptr,CREATE_NEW,FILE_ATTRIBUTE_NORMAL,nullptr);
+            require(file!=INVALID_HANDLE_VALUE,"Cannot create forced decode logits file");
+            struct closer{HANDLE h;~closer(){CloseHandle(h);}}close_file{file};
+            std::vector<int32_t>argmax;std::vector<double>step_ms;std::string error;std::vector<float>logits;
+            for(size_t index=0;index<forced.size();++index){
+                stop();const auto step_started=clock_type::now();
+                success(sweep->completed_logits(logits,error),error);
+                int32_t best=0;for(int32_t i=1;i<int32_t(logits.size());++i)if(logits[size_t(i)]>logits[size_t(best)])best=i;
+                argmax.push_back(best);
+                const auto*bytes=reinterpret_cast<const char*>(logits.data());size_t left=logits.size()*sizeof(float);
+                while(left){DWORD wrote=0;const DWORD n=DWORD(std::min<size_t>(left,1u<<24));require(WriteFile(file,bytes,n,&wrote,nullptr)&&wrote==n,"Forced decode logits write failed");bytes+=n;left-=n;}
+                if(index+1==forced.size())break;
+                auto previous=std::move(sweep);sweep.reset(new llama_dsv41_sweep);auto next_options=options;auto next_weights=weights;
+                next_options.carry.tokens=1;if(next_weights.engram_prefetch_host_bytes)next_weights.engram_prefetch_tokens=1;
+                success(sweep->open(next_weights,next_options,error,nullptr,previous.get()),error);require(!previous->ready(),"Transferred prefix still publishes");previous.reset();
+                const std::vector<int32_t>one{forced[index]};success(sweep->run(one,[]{return should_stop();},error),error);
+                step_ms.push_back(ms(step_started));
+                std::fprintf(stderr,"LLAMADECODE_FORCED_STEP index=%zu forced=%d argmax=%d step_ms=%.3f\n",index,forced[index],best,step_ms.back());std::fflush(stderr);
+            }
+            current=inspect();double total_ms=0;for(const double v:step_ms)total_ms+=v;
+            reply({{"peer_synchronized",have_remote&&remote.describe()==current.describe()},{"argmax",argmax},{"vectors",argmax.size()},
+                {"evaluated_tokens",step_ms.size()},{"step_ms",step_ms},{"decode_ms",total_ms},{"RTX_decode",true}});
         }else if(operation=="prefill"){
             dsv41_live::keys(command,{"session","model_sha256","sequence","operation","base","tokens"});same_base();
             // LLAMADECODE B0: a local-only session (never exported to a peer)
