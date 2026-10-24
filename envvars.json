@@ -78285,5 +78285,19 @@
     "reads": [
       "engines/ds4-win/ds4_cuda.cu"
     ]
+  },
+  {
+    "var": "DS4COMBO_DS_DIRECT_SLOTS",
+    "flag": null,
+    "default": null,
+    "code_default": "unset = off",
+    "classification": "advanced",
+    "scopes": [
+      "ds4-win"
+    ],
+    "doc": "1 allocates the borrowed prefill loader's gate/up/down slot pools as D3D12 buffers imported into CUDA and makes DirectStorage write expert loads straight into the slots (no staging arena, no D2D copy-out). Pool creation failure refuses (logged), never falls back to cudaMalloc. The decode tier is untouched. Values other than 0/1 refuse (off).",
+    "reads": [
+      "engines/ds4-win/ds4_cuda.cu"
+    ]
   }
 ]
