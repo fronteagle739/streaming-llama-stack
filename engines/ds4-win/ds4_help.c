@@ -218,6 +218,7 @@ static void print_model_runtime(FILE *fp, const help_colors *c,
             opt(fp, c, "--dspark-confidence F", "DSpark confidence pruning threshold 0..1.");
         }
         opt(fp, c, "--quality", "Prefer exact kernels where faster approximate paths exist.");
+        opt(fp, c, "--prefill-mode M", "accurate|fast|ultra: V4.1 CUDA prefill quality class (default: ultra arithmetic).");
         opt(fp, c, "--warm-weights", "Touch resident weights at startup to reduce first-use stalls.");
         if (tool == DS4_HELP_DS4 || tool == DS4_HELP_BENCH) {
             opt(fp, c, "--expert-profile FILE", "Metal-only: write routed expert locality/cache simulation JSON.");

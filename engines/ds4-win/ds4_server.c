@@ -16757,6 +16757,54 @@ static ds4_backend default_server_backend(void) {
 #endif
 }
 
+/* --prefill-mode accurate|fast|ultra: the streaming presets' quality classes,
+ * expressed through existing V4.1 CUDA switches (no new kernels). Applied into
+ * this process's environment before any GPU initialisation, because several of
+ * the switches latch on first use (cuda_use_mmq, the Q4_K MoE tier, TF32).
+ *   ultra    - default arithmetic: Q4_K routed experts through MMQ (q8_1).
+ *   fast     - Q8_K expert activations (sorted-pairs kernels), the rest as ultra.
+ *   accurate - no MMQ (Q8_K experts), F32 dense weight cache with SGEMM and no
+ *              TF32, F32-input HC/compressor/indexer projections, F32 window
+ *              attention. Residue with no switch: int8 attention-output A/B and
+ *              F16 indexed attention.
+ * An explicitly set switch that contradicts the mode refuses to start; there is
+ * no silent mix. A mode whose buffers do not fit fails loudly at allocation. */
+static void apply_prefill_mode(const char *mode) {
+    static const char *const ultra[][2] = {{"DS4_CUDA_MMQ", "1"}, {"DS4_CUDA_Q4K_MOE_MMQ", "1"}, {NULL, NULL}};
+    static const char *const fast[][2] = {{"DS4_CUDA_MMQ", "1"}, {"DS4_CUDA_Q4K_MOE_MMQ", "0"}, {NULL, NULL}};
+    static const char *const accurate[][2] = {
+        {"DS4_CUDA_MMQ", "0"}, {"DS4_CUDA_Q4K_MOE_MMQ", "0"}, {"DS4_CUDA_Q8_F32_ALL", "1"},
+        {"DS4_CUDA_NO_TF32", "1"}, {"DS4_CUDA_NO_F16_CUBLAS_BATCH", "1"},
+        {"DS4_CUDA_NO_F16_CUBLAS_ONE", "1"}, {"DS4_CUDA_F16_SMALL_BATCH", "1"},
+        {"DS4_CUDA_NO_WINDOW_ATTENTION", "1"}, {NULL, NULL}};
+    const char *const (*set)[2] = !strcmp(mode, "ultra") ? ultra : !strcmp(mode, "fast") ? fast :
+                                   !strcmp(mode, "accurate") ? accurate : NULL;
+    if (!set) {
+        fprintf(stderr, "ds4-server: --prefill-mode must be accurate, fast or ultra (got '%s')\n", mode);
+        exit(2);
+    }
+    char applied[512] = {0};
+    for (int i = 0; set[i][0]; i++) {
+        const char *now = getenv(set[i][0]);
+        if (now && strcmp(now, set[i][1]) != 0) {
+            fprintf(stderr, "ds4-server: --prefill-mode %s needs %s=%s but the environment sets %s=%s; "
+                            "refusing to start\n", mode, set[i][0], set[i][1], set[i][0], now);
+            exit(2);
+        }
+#if defined(_WIN32)
+        if (_putenv_s(set[i][0], set[i][1]) != 0) {
+#else
+        if (setenv(set[i][0], set[i][1], 1) != 0) {
+#endif
+            fprintf(stderr, "ds4-server: --prefill-mode %s cannot set %s\n", mode, set[i][0]);
+            exit(2);
+        }
+        const size_t used = strlen(applied);
+        snprintf(applied + used, sizeof(applied) - used, "%s%s=%s", used ? " " : "", set[i][0], set[i][1]);
+    }
+    fprintf(stderr, "DS4_PREFILL_MODE mode=%s %s\n", mode, applied);
+}
+
 static server_config parse_options(int argc, char **argv) {
     server_config c = {
         .engine = {
@@ -16917,6 +16965,8 @@ static server_config parse_options(int argc, char **argv) {
             c.tool_memory_max_ids = parse_int_arg(need_arg(&i, argc, argv, arg), arg);
         } else if (!strcmp(arg, "--quality")) {
             c.engine.quality = true;
+        } else if (!strcmp(arg, "--prefill-mode")) {
+            apply_prefill_mode(need_arg(&i, argc, argv, arg));
         } else if (!strcmp(arg, "--ssd-streaming")) {
             c.engine.ssd_streaming = true;
         } else if (!strcmp(arg, "--ssd-streaming-cold")) {
