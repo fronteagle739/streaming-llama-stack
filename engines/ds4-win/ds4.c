@@ -46046,9 +46046,11 @@ static bool ds41_graph_prefill_sweep(ds41_gpu_graph *g, const ds4_model *m,
                 ds4_gpu_stream_expert_table next = {0};
 #if defined(_WIN32)
                 /* The Windows DirectStorage next-layer read loads every expert of the
-                 * next layer: worth it for the encoder sweep's full rows, not for the
-                 * decoder suffix, whose shrinking tail touches only part of a layer. */
-                const bool more = encoder_only && il + 1u < 20u;
+                 * next layer: worth it for the encoder layers (0-19), which run every
+                 * row, not for the decoder suffix (20+), whose shrinking tail touches
+                 * only part of a layer. A plain (non-deferred) sweep has encoder_only
+                 * false yet still runs layers 0-19 on all rows, so test the layer. */
+                const bool more = il + 1u < 20u;
 #else
                 const bool more = il + 1u < (encoder_only ? 20u : DS4_N_LAYER);
 #endif
