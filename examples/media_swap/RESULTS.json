@@ -1,0 +1,117 @@
+{
+ "status": "PASS: second turn byte-identical after an image swap",
+ "date": "2026-10-24",
+ "stack_revision": "15bb1ed + DS4_METAL_DISABLE_V41_LAYER_PREFILL unset for ds4-win (78199fe)",
+ "method": "Native ds4-win only, ctx 8192, greedy (temperature 0, top_k 1, thinking disabled, 96-token cap). Control: turn 1 then turn 2 in one engine. Swap: turn 1, Engines.media(image) = /decode/checkpoint, /decode/export into parent-owned locked RAM, /decode/shutdown (graceful), Studio Anima image 512x512 4 steps, relaunch with the locked-RAM state and expert list restored, then turn 2.",
+ "media_backend_note": "The image job used the real Studio checkout, its venv and its production weight-fetcher DLL: the stack's vendored Studio subset cannot import its media path yet.",
+ "turn1_prompt_tokens": 2946,
+ "control": {
+  "turn1": {
+   "content": "The harbour that appears most often is North. Crate 74 carried 26 barrels of copper wire.",
+   "usage": {
+    "prompt_tokens": 2946,
+    "completion_tokens": 21,
+    "total_tokens": 2967,
+    "prompt_tokens_details": {
+     "cached_tokens": 0,
+     "cache_write_tokens": 2946
+    }
+   },
+   "timings": {
+    "cache_n": 0,
+    "prompt_n": 2946,
+    "prompt_ms": 18027.929,
+    "predicted_n": 21,
+    "predicted_ms": 4157.0958
+   }
+  },
+  "turn2": {
+   "content": "Ledger line 10: day 11, 33 barrels of tea.\nLedger line 20: day 21, 66 barrels of copper wire.\nLedger line 30: day 3, 2 barrels of olive oil.",
+   "usage": {
+    "prompt_tokens": 2993,
+    "completion_tokens": 50,
+    "total_tokens": 3043,
+    "prompt_tokens_details": {
+     "cached_tokens": 2967,
+     "cache_write_tokens": 26
+    }
+   },
+   "timings": {
+    "cache_n": 2967,
+    "prompt_n": 26,
+    "prompt_ms": 4665.5894,
+    "predicted_n": 50,
+    "predicted_ms": 9683.197
+   }
+  }
+ },
+ "swap": {
+  "turn1": {
+   "content": "The harbour that appears most often is North. Crate 74 carried 26 barrels of copper wire.",
+   "usage": {
+    "prompt_tokens": 2946,
+    "completion_tokens": 21,
+    "total_tokens": 2967,
+    "prompt_tokens_details": {
+     "cached_tokens": 0,
+     "cache_write_tokens": 2946
+    }
+   },
+   "timings": {
+    "cache_n": 0,
+    "prompt_n": 2946,
+    "prompt_ms": 17860.8352,
+    "predicted_n": 21,
+    "predicted_ms": 4198.9406
+   }
+  },
+  "turn2": {
+   "content": "Ledger line 10: day 11, 33 barrels of tea.\nLedger line 20: day 21, 66 barrels of copper wire.\nLedger line 30: day 3, 2 barrels of olive oil.",
+   "usage": {
+    "prompt_tokens": 2993,
+    "completion_tokens": 50,
+    "total_tokens": 3043,
+    "prompt_tokens_details": {
+     "cached_tokens": 2967,
+     "cache_write_tokens": 26
+    }
+   },
+   "timings": {
+    "cache_n": 2967,
+    "prompt_n": 26,
+    "prompt_ms": 5870.4845,
+    "predicted_n": 50,
+    "predicted_ms": 10751.2418
+   }
+  },
+  "swap_timing": {
+   "save_unload_s": 1.8439999999973224,
+   "media_s": 27.95300000000134,
+   "reload_restore_s": 4.5310000000026776
+  },
+  "media": {
+   "arch": "anima-1.0",
+   "file": "swap-image.png"
+  }
+ },
+ "turn2_byte_identical": true,
+ "restored_position": 2967,
+ "expert_restore": "687 experts, 1.684 s, async",
+ "graceful_shutdowns": "every native exit logged DS4COMBO_NATIVE_GRACEFUL_SHUTDOWN_COMPLETE with exit 0",
+ "leak_check": {
+  "before": {
+   "available": 19207081984,
+   "commit": 21857071104,
+   "kernel_nonpaged": 1091284992,
+   "vram_used_mib": 592
+  },
+  "after": {
+   "available": 19261427712,
+   "commit": 21650608128,
+   "kernel_nonpaged": 1092472832,
+   "vram_used_mib": 592
+  }
+ },
+ "image_sha256": "4ab9430e66288319466a58e9a3c4722351584ed57a8b85baa6130f080ea4f203",
+ "not_covered": "Video, positive quality bias, the web UI status display and two-machine mode were not run."
+}

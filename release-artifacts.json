@@ -66,6 +66,12 @@
       "sha256": "dc2ba3078e6581eceffc7ef5234042e64089d8355154713795400fa8e26e36a5",
       "media_type": "image/png",
       "review": "Visually inspected real model-driven webui chat at desktop and phone widths. Synthetic integer-square prompt; measured token statistics legible, existing llama.cpp components, no personal paths, addresses or credentials visible."
+    },
+    {
+      "path": "examples/media_swap/swap-image.png",
+      "sha256": "4ab9430e66288319466a58e9a3c4722351584ed57a8b85baa6130f080ea4f203",
+      "media_type": "image/png",
+      "review": "Visually inspected: Anima 512x512 4-step image (red lighthouse on a rock, flat blue background) generated during the native media-swap proof. Pixel data only, metadata stripped; no text, paths or credentials."
     }
   ]
 }
