@@ -3,7 +3,10 @@ param(
     [string]$Target = "cuda",
     [string]$BuildTemp = $PSScriptRoot,
     [switch]$Draft3070,
-    [switch]$TestsOnly
+    [switch]$TestsOnly,
+    # ds4-decode.dll: the core + CUDA objects with DS4_EXTERNAL_DECODE=1, loaded by the
+    # single-engine ULTRA producer for its decode steps. Objects are rebuilt in place.
+    [switch]$ExternalDecode
 )
 
 $ErrorActionPreference = "Stop"
@@ -65,6 +68,10 @@ $defines = @(
 if ($Target -eq "cpu") {
     $defines += "/DDS4_NO_GPU"
 }
+if ($ExternalDecode) {
+    if ($Target -ne "cuda" -or $TestsOnly) { throw "-ExternalDecode builds the CUDA DLL only" }
+    $defines += "/DDS4_EXTERNAL_DECODE=1"
+}
 
 # [merge 2026-08-15] ds4_gpu_args.c, ds4_tp.c and ds4_layer_pack.c are NEW upstream sources this
 # Windows build script had never heard of, so the link failed with 26 LNK2019 unresolved externals
@@ -115,7 +122,9 @@ $agentSources = @(
     "linenoise_win32.c"
 )
 
-$sources = if ($TestsOnly) {
+$sources = if ($ExternalDecode) {
+    $coreSources
+} elseif ($TestsOnly) {
     # Compile the data-plane owner too, but never link ds4-server.exe: a live
     # Studio server keeps that binary locked while Phase 3's standalone gates
     # need only core objects plus ds4_peer.c.
@@ -176,6 +185,7 @@ if ($Target -eq "cuda") {
         "-DNOMINMAX",
         "-DDS4_CUDA_HAVE_MXF4=1"
     )
+    if ($ExternalDecode) { $nvccDefines += "-DDS4_EXTERNAL_DECODE=1" }
     # Target the GPU this tree is built for. WITHOUT these, nvcc uses its DEFAULT architecture, which on
     # CUDA 13.2 is the lowest it still supports: sm_75, Turing, 2018. That was not a theory - cuobjdump
     # on the shipped binary reported 8 cubins, ALL sm_75, plus sm_75 PTX, on an sm_120 card:
@@ -271,7 +281,10 @@ $linkG3TransportTest = "link /nologo /out:ds4-peer-transport-g3.exe " + ($g3Tran
 $linkG56SessionTest = "link /nologo /out:ds4-peer-sessions-g56.exe " + ($g56SessionTestLinkObjects -join " ") + $win32Link
 $linkG3TopologyTest = "link /nologo /out:ds4-peer-topology-a-g3.exe " + ($g3TopologyTestLinkObjects -join " ") + $cudaLink + $win32Link
 
-if ($TestsOnly) {
+if ($ExternalDecode) {
+    $testCompileSteps = ""
+    $linkSteps = "link /nologo /DLL /out:ds4-decode.dll " + ((@($coreObjects) + @($backendObjects)) -join " ") + $cudaLink + $win32Link + "`nif errorlevel 1 exit /b %errorlevel%"
+} elseif ($TestsOnly) {
     $testCompileSteps = @"
 $g3TransportTestCompile
 if errorlevel 1 exit /b %errorlevel%

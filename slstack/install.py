@@ -87,7 +87,7 @@ def install(cfg, *, image=False, video=False, all_engines=False, check=False, sd
         ready = True
     binaries = [path(cfg['ds4_command'][0]), path(cfg['llama_producer']),
                 path(cfg.get('weight_fetcher', 'build/llama/bin/slstack-weight-fetcher.dll')), ROOT / 'build/llama/bin/llama-server.exe',
-                ROOT / 'build/llama/bin/llama-export-lora.exe']
+                ROOT / 'build/llama/bin/llama-export-lora.exe', path(cfg['llama_producer']).parent / 'ds4-decode.dll']
     if not check and all_engines:
         # The documented install step prepares the native engines and UI too.
         # Builds never need model state or a GPU reservation.
