@@ -121,7 +121,11 @@ struct ds4_external {
             success(provider->prepare_external_decode(decode_weights,error),error);
         }
         if(!open){
+            size_t free_before=0,free_after=0,total=0;auto*dev=ggml_backend_get_device(weights.backend);ggml_backend_dev_memory(dev,&free_before,&total);
             char why[512]{};require(x_open(weights.model_path.c_str(),context,why,sizeof(why))==1,why[0]?why:"ds4x_open failed");open=true;
+            ggml_backend_dev_memory(dev,&free_after,&total);
+            std::fprintf(stderr,"LLAMADECODE_DS4X_DEVICE_DELTA bytes=%lld free_before=%llu free_after=%llu\n",(long long)free_before-(long long)free_after,
+                (unsigned long long)free_before,(unsigned long long)free_after);std::fflush(stderr);
             registered=registered_bytes=0;
             success(provider->decode_resident_tensors([&](uint64_t offset,uint64_t bytes,void*device){
                 if(!x_register(offset,bytes,device))return false;++registered;registered_bytes+=bytes;return true;},error),error);
@@ -139,7 +143,9 @@ struct ds4_external {
         require(x_decode(token,position,tail.data(),3,logits.data())==1,"ds4-win decode step failed");
         success(sweep.commit_external_token(token,logits,error),error);
     }
-    ~ds4_external(){if(open&&x_close){x_hook(nullptr,nullptr);x_close();}if(module)FreeLibrary(module);}
+    // The DLL stays mapped until process exit (never FreeLibrary): no ds4 code may
+    // be unmapped under a thread or CUDA callback it started.
+    ~ds4_external(){if(open&&x_close){x_hook(nullptr,nullptr);x_close();open=false;std::fprintf(stderr,"LLAMADECODE_DS4X_CLOSED\n");std::fflush(stderr);}}
 };
 // LLAMADECODE: decode steps use the routed-expert layout (B1). The explicit
 // diagnostic LLAMADECODE_DECODE_LAYOUT=0 runs them on the whole-layer B0 layout.
