@@ -78173,5 +78173,19 @@
     "reads": [
       "engines/ds4-win/ds4.c"
     ]
+  },
+  {
+    "var": "DS4COMBO_V41_LOADER_CHECK",
+    "flag": null,
+    "default": null,
+    "code_default": "NULL from getenv; check off",
+    "classification": "advanced",
+    "scopes": [
+      "ds4-win"
+    ],
+    "doc": "Diagnostic: comma-separated layers (<64) whose borrowed layer-major expert slots are compared once with a plain GGUF read, plus the slot remap; prints DS4COMBO_V41_LOADER_CHECK lines.",
+    "reads": [
+      "engines/ds4-win/ds4_cuda.cu"
+    ]
   }
 ]

@@ -38500,6 +38500,94 @@ static int cuda_stream_selected_ds_upload(const ds4_gpu_stream_expert_table *tab
 #endif
 }
 
+/* DS4COMBO_V41_LOADER_CHECK=<layers, e.g. 3,20>: once per listed layer, on a
+ * borrowed layer-major sweep, compare every slot the selected-expert loader
+ * just placed with the same bytes read from the GGUF by a plain file read, and
+ * check the slot remap. Diagnostic only: one tensor of host buffer at a time,
+ * nothing when the variable is unset. */
+static uint64_t cuda_loader_check_fnv(const unsigned char *p, uint64_t n) {
+    uint64_t h = 1469598103934665603ull;
+    for (uint64_t i = 0; i < n; i++) { h ^= p[i]; h *= 1099511628211ull; }
+    return h;
+}
+
+static void cuda_stream_loader_check(const ds4_gpu_stream_expert_table *table,
+                                     const int32_t *selected_ids, uint32_t slot_count,
+                                     const std::vector<int32_t> &unique,
+                                     const std::vector<int32_t> &slots,
+                                     const std::vector<int32_t> &remap) {
+    static int parsed = 0;
+    static uint64_t want = 0, done = 0;    /* layer bitmask, layers < 64 */
+    if (!parsed) {
+        parsed = 1;
+        const char *env = getenv("DS4COMBO_V41_LOADER_CHECK");
+        for (const char *c = env; c && *c;) {
+            char *end = NULL;
+            const unsigned long v = strtoul(c, &end, 10);
+            if (end == c) break;
+            if (v < 64) want |= 1ull << v;
+            c = *end == ',' ? end + 1 : end;
+        }
+    }
+    if (!want || table->layer >= 64 || !(want & (1ull << table->layer)) ||
+        (done & (1ull << table->layer))) return;
+    done |= 1ull << table->layer;
+    const auto &cache = g_stream_selected_cache;
+    const uint64_t bytes[3] = {table->gate_expert_bytes, table->gate_expert_bytes,
+                               table->down_expert_bytes};
+    const uint64_t base[3] = {table->gate_offset, table->up_offset, table->down_offset};
+    const char *dev[3] = {cache.gate_ptr, cache.up_ptr, cache.down_ptr};
+    const uint64_t buf_bytes = bytes[0] > bytes[2] ? bytes[0] : bytes[2];
+    std::vector<unsigned char> a((size_t)buf_bytes), b((size_t)buf_bytes);
+    uint32_t bytes_mismatch = 0, remap_mismatch = 0, read_fail = 0;
+    int32_t first_expert = -1, first_slot = -1;
+    const char *first_part = "";
+    if (cudaDeviceSynchronize() != cudaSuccess) { (void)cudaGetLastError(); return; }
+    for (size_t i = 0; i < unique.size(); i++) {
+        const uint64_t expert = (uint32_t)unique[i];
+        const int32_t slot = slots[i];
+        for (int part = 0; part < 3; part++) {
+            const uint64_t off = base[part] + expert * bytes[part];
+            bool ok = cudaMemcpy(a.data(), dev[part] + (uint64_t)slot * bytes[part],
+                                 (size_t)bytes[part], cudaMemcpyDeviceToHost) == cudaSuccess;
+            if (ok) {
+                if (g_model_fd >= 0 &&
+                    (g_model_fd_host_base == NULL || table->model_map == g_model_fd_host_base))
+                    ok = cuda_pread_full(g_model_fd, b.data(), bytes[part], off) != 0;
+                else
+                    memcpy(b.data(), (const char *)table->model_map + off, (size_t)bytes[part]);
+            }
+            if (!ok) { (void)cudaGetLastError(); read_fail++; continue; }
+            if (cuda_loader_check_fnv(a.data(), bytes[part]) !=
+                cuda_loader_check_fnv(b.data(), bytes[part])) {
+                if (!bytes_mismatch++) {
+                    first_expert = (int32_t)expert; first_slot = slot;
+                    first_part = part == 0 ? "gate" : part == 1 ? "up" : "down";
+                }
+            }
+        }
+    }
+    /* Every assignment must read its own expert's slot. */
+    int32_t first_remap_id = -1, first_remap_slot = -1;
+    for (uint32_t j = 0; j < slot_count; j++) {
+        const int32_t slot = remap[j];
+        const uint64_t expert = (uint32_t)selected_ids[j];
+        const bool good = slot >= 0 && (size_t)slot < g_stream_expert_slots.size() &&
+            g_stream_expert_slots[(size_t)slot].gate == table->gate_offset + expert * bytes[0] &&
+            g_stream_expert_slots[(size_t)slot].down == table->down_offset + expert * bytes[2];
+        if (!good && !remap_mismatch++) { first_remap_id = (int32_t)expert; first_remap_slot = slot; }
+    }
+    fprintf(stderr, "DS4COMBO_V41_LOADER_CHECK layer=%u experts_checked=%zu bytes_mismatch=%u "
+                    "remap_mismatch=%u read_fail=%u assignments=%u\n",
+            table->layer, unique.size(), bytes_mismatch, remap_mismatch, read_fail, slot_count);
+    if (bytes_mismatch)
+        fprintf(stderr, "DS4COMBO_V41_LOADER_CHECK layer=%u first_bytes_mismatch expert=%d slot=%d tensor=%s\n",
+                table->layer, first_expert, first_slot, first_part);
+    if (remap_mismatch)
+        fprintf(stderr, "DS4COMBO_V41_LOADER_CHECK layer=%u first_remap_mismatch expert=%d slot=%d\n",
+                table->layer, first_remap_id, first_remap_slot);
+}
+
 static int cuda_stream_selected_cache_begin_load(
         const ds4_gpu_stream_expert_table *table,
         const int32_t *selected_ids,
@@ -38701,6 +38789,8 @@ static int cuda_stream_selected_cache_begin_load(
         g_stream_prefill_ids = remap;
         g_stream_prefill_slots = slots;
         for (auto &id : remap) id = slots[id];
+        if (g_stream_prefill_borrow_slots)
+            cuda_stream_loader_check(table, selected_ids, slot_count, unique, slots, remap);
         if (!cuda_ok(cudaMemcpy(cache.slot_selected_ptr, remap.data(),
                 (size_t)slot_count * sizeof(int32_t), cudaMemcpyHostToDevice),
                 "stream selected-id remap copy")) return 0;
