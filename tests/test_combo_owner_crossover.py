@@ -1,4 +1,5 @@
 import json,pytest
+from pathlib import Path
 from slstack.combo_crossover import owner_crossover,qualified_threshold
 from slstack.combo_proxy import apply_preset_crossover
 
@@ -39,9 +40,11 @@ def test_preset_self_check_uses_intercepts():
 
 def _runtime():
     rows=dict(ultra=dict(r_native_tok_s=266.157,r_stream_tok_s=1151.0,switch_seconds=13.21,native_intercept_s=14.502,stream_fixed_s=20.0,
-                         llama_producer='direct3.exe',producer_sha256='a'*64),
+                         llama_producer='direct3.exe',producer_sha256='a'*64,
+                         combo_qualification_root='qual-ultra',combo_native_binding='qual-ultra/native-parity-binding.json'),
               fast=dict(r_native_tok_s=266.157,r_stream_tok_s=800.0,switch_seconds=13.21,native_intercept_s=14.502,stream_fixed_s=20.0,
-                        llama_producer='fast.exe',producer_sha256='b'*64))
+                        llama_producer='fast.exe',producer_sha256='b'*64,
+                        combo_qualification_root='qual-fast',combo_native_binding='qual-fast/native-parity-binding.json'))
     for row in rows.values():row['combo_crossover_tokens']=owner_crossover(row['r_native_tok_s'],row['r_stream_tok_s'],
         row['switch_seconds'],row['native_intercept_s'],row['stream_fixed_s'])
     base=['-m','m.gguf','--port','8080','--ctx','262144','--cuda']
@@ -86,3 +89,39 @@ def test_session_threshold_comes_from_the_launch_config(monkeypatch):
         launched['runtime_root']='.'
         session=combo_session.ComboSession(launched,device=Native())
         assert session.threshold==n
+
+def test_profile_producer_requires_its_own_qualification():
+    from slstack.combo_proxy import apply_preset_crossover
+    cfg,base,rows=_runtime()
+    n=rows['fast']['combo_crossover_tokens']
+    for missing in ('combo_qualification_root','combo_native_binding'):
+        broken={**cfg,'combo_crossover_profiles':{**rows,'fast':{k:v for k,v in rows['fast'].items() if k!=missing}}}
+        with pytest.raises(ValueError,match='qualification'):apply_preset_crossover(broken,'fast',str(n))
+    launched=apply_preset_crossover(cfg,'fast',str(n))
+    assert launched['combo_qualification_root']=='qual-fast'
+    assert launched['combo_native_binding']=='qual-fast/native-parity-binding.json'
+    assert 'combo_ultra_guard' not in launched   # the shared guardian receipt stays in force
+
+# The measured merged cfg is local to the RTX: DS4COMBO_MERGED_CFG names it.
+import os
+MERGED=Path(os.environ.get('DS4COMBO_MERGED_CFG') or 'absent-merged-combo.json')
+
+@pytest.mark.skipif(not MERGED.is_file(),reason='measured merged combo cfg is local to the RTX')
+def test_measured_profiles_pass_parity_with_their_own_evidence():
+    from slstack.combo_proxy import apply_preset_crossover
+    from slstack.combo_measure import require_parity
+    cfg=json.loads(MERGED.read_text(encoding='utf-8'))
+    rows=cfg['combo_crossover_profiles']
+    if 'combo_qualification_root' not in rows['fast']:
+        # the Fast parity measured in its own root (cfg-ctxgrow10-fast.json)
+        fast_root=Path(cfg['combo_qualification_root']).parent/'qual-ctxgrow10-fast'
+        rows['fast'].update(combo_qualification_root=str(fast_root),combo_native_binding=str(fast_root/'native-parity-binding.json'))
+    for profile in ('ultra','accurate','fast'):
+        update=apply_preset_crossover(cfg,profile,str(rows[profile]['combo_crossover_tokens']))
+        result=require_parity({**cfg,**update})
+        assert result['ultra']['producer_sha256']=={**cfg,**update}['producer_sha256']
+        if profile!='fast':
+            assert not set(update)&{'combo_qualification_root','combo_native_binding','llama_producer'}
+    stale={**cfg,'combo_crossover_profiles':{**rows,'fast':{k:v for k,v in rows['fast'].items()
+        if k not in ('combo_qualification_root','combo_native_binding')}}}
+    with pytest.raises(ValueError):apply_preset_crossover(stale,'fast',str(rows['fast']['combo_crossover_tokens']))

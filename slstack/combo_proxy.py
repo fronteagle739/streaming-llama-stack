@@ -305,8 +305,20 @@ def apply_preset_crossover(cfg,profile,tokens):
     if ('llama_producer' in row)!=('producer_sha256' in row):
         raise ValueError('A profile producer needs both its path and its SHA-256 pin')
     if 'llama_producer' in row:update.update(llama_producer=row['llama_producer'],producer_sha256=row['producer_sha256'])
+    # ...and is qualified by its own measured parity, never the default producer's.
+    pinned=[key for key in PROFILE_QUALIFICATION if key in row]
+    if pinned and not ('combo_qualification_root' in row and 'combo_native_binding' in row):
+        raise ValueError('A profile qualification needs both its combo_qualification_root and combo_native_binding')
+    if 'llama_producer' in row and not ('combo_qualification_root' in row and 'combo_native_binding' in row):
+        raise ValueError('A profile with its own producer needs its own qualification (combo_qualification_root and combo_native_binding)')
+    update.update({key:row[key] for key in pinned})
     qualified_threshold({**cfg,**update})
     return update
+
+
+# Profile-pinned qualification evidence; combo_ultra_guard is optional (the shared
+# guardian receipt applies when a profile does not pin its own).
+PROFILE_QUALIFICATION=('combo_qualification_root','combo_native_binding','combo_ultra_guard')
 
 
 def guarded(cfg,config):

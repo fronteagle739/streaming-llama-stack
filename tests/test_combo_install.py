@@ -33,6 +33,19 @@ class InstallTest(unittest.TestCase):
         self.assertNotIn('llama_producer',result['combo_crossover_profiles']['ultra'])
         self.assertEqual(cfg['combo_crossover_profiles']['fast']['llama_producer'],str(scratch/'combo-prefill-fast.exe'))
 
+    def test_profile_qualification_is_staged_per_profile(self):
+        scratch=Path.cwd()/'qualification-scratch'
+        installed=Path.cwd()/'installed-runtime'
+        cfg=dict(runtime_root=str(scratch),host_budget_gib=7.75,ds4_command=['candidate.exe'],
+            producer_library_directories=[],combo_crossover_profiles=dict(
+                fast=dict(combo_crossover_tokens=5395,llama_producer=str(scratch/'fast.exe'),producer_sha256='b'*64,
+                    combo_qualification_root=str(scratch/'qual-fast'),
+                    combo_native_binding=str(scratch/'qual-fast/native-parity-binding.json'))))
+        row=relocate_runtime(cfg,installed,'source')['combo_crossover_profiles']['fast']
+        self.assertEqual(row['combo_qualification_root'],str(installed/'qualification/fast'))
+        self.assertEqual(row['combo_native_binding'],str(installed/'qualification/fast/native-parity-binding.json'))
+        self.assertNotIn('combo_ultra_guard',row)
+
     def test_unknown_scratch_dependency_refuses_staging(self):
         scratch=Path.cwd()/'qualification-scratch'
         cfg=dict(runtime_root=str(scratch),host_budget_gib=7.75,
