@@ -52720,7 +52720,8 @@
     "code_default": "NULL from getenv; the literal consumer below supplies any fallback",
     "classification": "advanced",
     "scopes": [
-      "rtx-llama"
+      "rtx-llama",
+      "rtx-producer"
     ],
     "doc": "LLAMA_DSV4_TOPK_FORCE_BITONIC: advanced engine setting; built-in default retained",
     "reads": [
