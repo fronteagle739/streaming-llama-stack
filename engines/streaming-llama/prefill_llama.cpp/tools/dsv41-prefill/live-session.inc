@@ -322,7 +322,7 @@ void run_live_session(std::unique_ptr<llama_dsv41_sweep>&sweep,
         success(sweep->export_native([&](wire_payload_reader&r,std::string&why){try{c=dsv41_live::capture(r,[]{return should_stop();});return true;}catch(const std::exception&e){why=e.what();return false;}},error),error);return c;};
     current=inspect();
     send({{"status","ready"},{"session",session},{"model_sha256",model_sha},{"next_sequence",guard.expected()},
-        {"checkpoint",current.describe()},{"maximum_prefill_tokens",capacity},{"maximum_decode_tokens",llama_dsv41::decode_delta_max_tokens},{"control_host_bytes",64*1024*1024},
+        {"checkpoint",current.describe()},{"maximum_prefill_tokens",capacity},{"maximum_decode_tokens",llama_dsv41::decode_delta_chunk_tokens},{"maximum_decode_delta_tokens",llama_dsv41::decode_delta_max_tokens},{"control_host_bytes",64*1024*1024},
         {"transport","private owned pipes; existing native payload and artifact v2.1 delta"}});
     for(;;){
         io.renew();auto command=dsv41_live::parse_control(io.line());guard.accept(command);if(owner_epoch)command.erase("owner_epoch");

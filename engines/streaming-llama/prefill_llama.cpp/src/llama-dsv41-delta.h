@@ -31,10 +31,12 @@ bool make_delta_plan(const wire_frontier & base, const wire_frontier & target,
                      delta_plan & result, std::string & error);
 
 // apply_decode_delta: peers stream decoded rows as <=128-token deltas (the
-// normal chunk). The accepted maximum, advertised as maximum_decode_tokens, is
-// one whole local append (the 49152-token prefill chunk): full raw rings plus
-// every appended compressed/index row, target position only. Same plan, same
-// artifact and the same base/target owner, token and logit SHA checks.
+// normal chunk, still advertised as maximum_decode_tokens=128 so old clients
+// handshake unchanged). The accepted maximum, advertised separately as
+// maximum_decode_delta_tokens, is one whole local append (the 49152-token
+// prefill chunk). Clients negotiate effective = min(advertised, own maximum),
+// 128 when the peer does not advertise it. Same plan, same artifact and the
+// same base/target owner, token and logit SHA checks.
 constexpr uint32_t decode_delta_chunk_tokens = 128;
 constexpr uint32_t decode_delta_max_tokens = 49152;
 // Sanity cap on a decode artifact's declared bytes before streaming (the
