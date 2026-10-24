@@ -254,7 +254,10 @@ class SingleEngine:
             metrics['reused_prefix_tokens'] = 0;metrics['new_tokens'] = len(tokens)
         else:
             append = tokens[len(self.live):];metrics['reused_prefix_tokens'] = len(self.live);metrics['new_tokens'] = len(append)
-            chunk = int((getattr(self.producer.process, 'ready', None) or {}).get('maximum_prefill_tokens') or 49152)
+            # LLAMADECODE single sweep: negotiated one-op maximum (49152 from old producers), and a
+            # longer append in near-equal sweeps (same rule as the producer), never a tiny tail.
+            from studio.dsv41_session_contract import negotiate_prefill, split_prefill
+            chunk = split_prefill(len(append), negotiate_prefill(getattr(self.producer.process, 'ready', None) or {})) if append else 1
             for offset in range(0, len(append), chunk):
                 self.producer.prefill(append[offset:offset + chunk]);self.live.extend(append[offset:offset + chunk])
             metrics['append_prefill_seconds'] = time.monotonic() - started
@@ -530,7 +533,8 @@ def handler(proxy):
                     send_raw(b': progress\n\n');return
                 diagnostic = process.diagnostic
                 if progress['tracker'] is None:
-                    size = int((getattr(process, 'ready', None) or {}).get('maximum_prefill_tokens') or 49152)
+                    from studio.dsv41_session_contract import negotiate_prefill, split_prefill
+                    size = split_prefill(int(total), negotiate_prefill(getattr(process, 'ready', None) or {}))
                     progress['tracker'] = PrefillProgress(total, size, started=metrics.get('prefill_started', time.monotonic()))
                     progress['offset'] = len(diagnostic)
                 if len(diagnostic) < progress['offset']:progress['offset'] = 0   # rotated
