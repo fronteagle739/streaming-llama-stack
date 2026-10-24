@@ -178,8 +178,15 @@ class SingleEngine:
         finally:
             if self.leases is not None and self.poison is None:
                 leases, self.leases, self.lease_id = self.leases, None, None
-                leases.close()
+                leases.close();self.lease_changed()
         return receipt
+
+    def lease_changed(self):
+        """Set by SingleProxy: rewrite an active request window with the current lease id. A
+        retire + relaunch inside one request (prefix diverged) otherwise leaves the old id there
+        and the guardian stops the server for a 'foreign' hold that is our own new lease."""
+        listener = getattr(self, 'lease_listener', None)
+        if listener:listener()
 
     def _rotate_diagnostic(self):
         """Keep the producer's stderr below its RAM cap across a long-lived session."""
@@ -224,6 +231,7 @@ class SingleEngine:
         if self.producer is None:
             if self.leases is None:
                 stack = ExitStack();self.lease_id = stack.enter_context(self.lease_factory());self.leases = stack
+                self.lease_changed()   # the guardian's window must name the new lease before it next samples the holds
             self.live = []
             try:self.producer = self.producer_factory(tokens)
             except BaseException as exc:
@@ -360,6 +368,7 @@ class SingleProxy:
         from .combo_producer import stall_seconds
         self.cfg = cfg;self.run_id = run_id;self.window_file = Path(window_file) if window_file else None
         self.window_lock = threading.Lock();self.stall = stall_seconds(cfg);self.beat_seconds = min(30.0, self.stall / 10)
+        self.request_active = False
         self.token = os.environ.get('DS4_SERVER_AUTH_TOKEN', '')
         if len(self.token) < 32:raise ValueError('Normal Studio native Bearer token is required')
         self.engine = engine or SingleEngine(request_worker_config(cfg))
@@ -368,6 +377,7 @@ class SingleProxy:
             name=cfg.get('model_name', 'DeepSeek-V4.1-Flash'), context_length=cfg['context'],
             top_provider=dict(context_length=cfg['context'], max_completion_tokens=cfg['context'], is_moderated=False),
             supported_parameters=['tools', 'tool_choice', 'max_tokens', 'stream', 'reasoning_effort'])]}
+        self.engine.lease_listener = lambda: self.window(True, self.engine.lease_id) if self.request_active else None
         self.window(False)
 
     def window(self, active, lease_id=None):
@@ -488,10 +498,10 @@ def handler(proxy):
                     self.close_connection = True;headers = True;self.wfile.write(b': accepted\n\n');self.wfile.flush()
                     write(_chunk(cid, model, created, dict(role='assistant')))
                 try:
-                    proxy.window(True, engine.lease_id)
+                    proxy.request_active = True;proxy.window(True, engine.lease_id)
                     with proxy.heartbeat((lambda: send_raw(b': progress\n\n')) if streaming else None):
                         engine.run(body, emit, metrics, ready=lambda: proxy.window(True, engine.lease_id), client_gone=lambda: not alive[0])
-                finally:proxy.window(False)
+                finally:proxy.request_active = False;proxy.window(False)
                 parsed, splitter = final['parsed'], final['splitter']
                 calls = tool_call_deltas(parsed['calls'])
                 if streaming:
