@@ -78201,5 +78201,19 @@
     "reads": [
       "engines/ds4-win/ds4_cuda.cu"
     ]
+  },
+  {
+    "var": "DS4COMBO_V41_DISABLE_ONE_SWEEP",
+    "flag": null,
+    "default": null,
+    "code_default": "NULL from getenv; one sweep on",
+    "classification": "advanced",
+    "scopes": [
+      "ds4-win"
+    ],
+    "doc": "A/B switch: set to restore the old 2048-row rounding of CUDA SSD V4.1 layer sweeps of 8192+ rows (a partial-tile tail then runs as a second sweep).",
+    "reads": [
+      "engines/ds4-win/ds4.c"
+    ]
   }
 ]

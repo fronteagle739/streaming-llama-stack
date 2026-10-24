@@ -45547,7 +45547,16 @@ static uint32_t ds41_prefill_count(const ds41_gpu_graph *g, uint32_t remaining) 
         !getenv("DS4_METAL_DISABLE_V41_WIDE_PREFILL")) {
         const uint32_t count = remaining < g->carry_cap ? remaining : g->carry_cap;
         /* a short sweep keeps its final partial tile instead of a second decoder pass */
-        return remaining < 8192u && !ds41_short_sweep_off() ? count : count - count % 2048u;
+        if (remaining < 8192u && !ds41_short_sweep_off()) return count;
+#if !defined(__APPLE__) && !defined(DS4_ROCM_BUILD)
+        /* DS4COMBO: a CUDA SSD sweep that holds every remaining row keeps its
+         * last partial tile too. Rounding 14859 down to 14336 left a 523-row
+         * second sweep that re-reads every layer's experts (~13 s). Prompts
+         * longer than the carry still split on the 2048 grid. */
+        if (g->streaming && remaining <= g->carry_cap && !ds41_short_sweep_off() &&
+            !getenv("DS4COMBO_V41_DISABLE_ONE_SWEEP")) return remaining;
+#endif
+        return count - count % 2048u;
     }
     const uint32_t tail_cap = g->prefill_cap < 2048u ? g->prefill_cap : 2048u;
     return remaining < tail_cap ? remaining : tail_cap;
