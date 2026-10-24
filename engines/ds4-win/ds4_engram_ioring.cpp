@@ -31,11 +31,21 @@
 namespace {
 constexpr uint32_t kDepth = 256, kPage = 8192, kRow = 264;
 
-[[noreturn]] void unsafe_cleanup() {
-    std::fputs("DS4_ENGRAM_IORING_CLEANUP_REFUSED: owned process exits before releasing buffers with unconfirmed IO\n", stderr);
-    std::fflush(stderr);
-    TerminateProcess(GetCurrentProcess(), 79);
-    std::abort();
+extern "C" void ds4_win32_request_graceful_abort(const char *why);
+
+/* Owner rule: no force-kill while VRAM/DirectStorage may be live, no exceptions.
+ * When submitted reads cannot be confirmed drained, their slot arena, ring, file and
+ * event are deliberately leaked (never freed, so a late write lands in memory that is
+ * never reused), the engine is marked STUCK through the graceful abort (requests fail,
+ * new ones are refused) and the process stays alive. */
+void mark_unconfirmed_io(bool &leak, const char *where) {
+    if (!leak) {
+        std::fprintf(stderr, "DS4_ENGRAM_IORING STUCK: unconfirmed IoRing reads at %s; buffers leaked (never freed), "
+                             "engine failing requests, process NOT killed; owner action needed\n", where);
+        std::fflush(stderr);
+    }
+    leak = true;
+    ds4_win32_request_graceful_abort("Engram IoRing reads could not be confirmed drained");
 }
 void require(bool ok, const char *message) { if (!ok) throw std::runtime_error(message); }
 
@@ -73,10 +83,12 @@ struct io_scope {
     HANDLE file = INVALID_HANDLE_VALUE, event = nullptr;
     uint8_t *pages = nullptr;
     uint32_t submitted = 0;
+    bool leak = false;   /* unconfirmed IO: keep every resource alive forever */
     io_scope() = default;
     io_scope(const io_scope &) = delete;
     io_scope &operator=(const io_scope &) = delete;
     ~io_scope() {
+        if (leak) return;
         if (ring) {
             if (submitted && file != INVALID_HANDLE_VALUE) CancelIoEx(file, nullptr);
             const auto deadline = GetTickCount64() + 5000;
@@ -84,13 +96,13 @@ struct io_scope {
                 IORING_CQE c{};
                 const auto hr = api().PopIoRingCompletion(ring, &c);
                 if (hr == S_OK) { --submitted; continue; }
-                if (hr != S_FALSE || GetTickCount64() >= deadline) unsafe_cleanup();
+                if (hr != S_FALSE || GetTickCount64() >= deadline) { mark_unconfirmed_io(leak, "drain"); return; }
                 const auto status = WaitForSingleObject(event, 50);
-                if (status != WAIT_OBJECT_0 && status != WAIT_TIMEOUT) unsafe_cleanup();
+                if (status != WAIT_OBJECT_0 && status != WAIT_TIMEOUT) { mark_unconfirmed_io(leak, "drain wait"); return; }
             }
             // Close abandons unsubmitted entries but does not cancel submitted
             // reads; every submitted completion was drained above.
-            if (FAILED(api().CloseIoRing(ring))) unsafe_cleanup();
+            if (FAILED(api().CloseIoRing(ring))) { mark_unconfirmed_io(leak, "close"); return; }
         }
         if (event) CloseHandle(event);
         if (file != INVALID_HANDLE_VALUE) CloseHandle(file);
@@ -131,7 +143,7 @@ void read_rows(int fd, uint64_t base, const uint32_t *rows, size_t n, uint8_t *o
             SUCCEEDED(api().BuildIoRingRegisterBuffers(io.ring, 1, &registered, 2)), "Cannot enqueue Engram IoRing registrations");
     UINT32 count = 0;
     if (api().SubmitIoRing(io.ring, 0, 0, &count) != S_OK) throw std::runtime_error("Engram IoRing registration submit failed");
-    if (count != 2) unsafe_cleanup();
+    if (count != 2) { mark_unconfirmed_io(io.leak, "registration submit"); throw std::runtime_error("Engram IoRing registration submit count differs"); }
     io.submitted = count;
     bool file_ok = false, buffer_ok = false;
     const auto reg_deadline = GetTickCount64() + 5000;
@@ -177,7 +189,7 @@ void read_rows(int fd, uint64_t base, const uint32_t *rows, size_t n, uint8_t *o
         if (!staged) return;
         UINT32 done = 0;
         if (api().SubmitIoRing(io.ring, 0, 0, &done) != S_OK) throw std::runtime_error("Engram IoRing submit failed; no serial fallback");
-        if (done != staged) unsafe_cleanup();
+        if (done != staged) { mark_unconfirmed_io(io.leak, "read submit"); throw std::runtime_error("Engram IoRing submit count differs"); }
         io.submitted += done;
         staged = 0;
     };
