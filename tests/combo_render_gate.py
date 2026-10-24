@@ -6,9 +6,9 @@ fresh native, i.e. canonical ids); renders the same bodies with slstack.ds4_rend
 asserts identical id lists. No decode, no producer.
 
 usage (cwd = the stack repo):
-  python -B tests/combo_render_gate.py --cfg runtime/cfg-r.json \
-      --out runtime/render-gate.json [--case FILE ...]
-Default cases: runtime/case-rn-2000-qa.json, runtime/case-rn-16000.json
+  python -B tests/combo_render_gate.py --cfg <cfg.json> \
+      --out <runs>/render-gate.json [--case FILE ...]
+Default cases: the files named by LLAMADECODE_RENDER_CASES (os.pathsep-separated)
 and every body in tests/fixtures/render_gate_cases.json (multi-turn with tool calls).
 Exit 0 only when every case is identical.
 """
@@ -23,7 +23,7 @@ from slstack.combo_session import render_body
 from slstack.native_broker import vendor
 from slstack import ds4_render
 
-DEFAULT_CASES = ['runtime/case-rn-2000-qa.json', 'runtime/case-rn-16000.json']
+DEFAULT_CASES = [p for p in os.environ.get('LLAMADECODE_RENDER_CASES', '').split(os.pathsep) if p]
 
 
 def bodies(paths):
