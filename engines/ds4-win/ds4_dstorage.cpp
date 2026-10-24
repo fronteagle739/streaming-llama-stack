@@ -1222,8 +1222,12 @@ struct ds4_ds_stats_snapshot {
     uint64_t lat_us_hist[20] = {0};
     uint64_t req_hist[20] = {0};
 };
-static ds4_ds_stats_snapshot g_ds_prefill_snapshot;
-static int g_ds_prefill_snapshot_valid = 0;
+/* Per-phase totals for the current request: [0] prefill, [1] decode. The live
+ * counters are banked into the phase being left at every phase change, so a
+ * prefill -> decode -> prefill -> decode sequence (setup/checkpoint requests
+ * between the prefill and generate) keeps the prefill bytes instead of
+ * replacing them with the last, often empty, prefill span. */
+static ds4_ds_stats_snapshot g_ds_phase_acc[2];
 static int g_ds_phase_tracking_started = 0;
 
 static void ds4_ds_stats_capture(ds4_ds_stats_snapshot *snapshot) {
@@ -1251,6 +1255,29 @@ static void ds4_ds_stats_reset_live(void) {
     g_ds_max_ms = 0.0;
     memset(g_ds_lat_us_hist, 0, sizeof(g_ds_lat_us_hist));
     memset(g_ds_req_hist, 0, sizeof(g_ds_req_hist));
+}
+
+static void ds4_ds_stats_merge(ds4_ds_stats_snapshot *into, const ds4_ds_stats_snapshot *add) {
+    into->total_bytes += add->total_bytes;
+    into->total_ms += add->total_ms;
+    into->batches += add->batches;
+    into->requests += add->requests;
+    into->prefill_wave_bytes += add->prefill_wave_bytes;
+    into->prefill_waves += add->prefill_waves;
+    into->prefill_wave_requests += add->prefill_wave_requests;
+    if (add->max_ms > into->max_ms) into->max_ms = add->max_ms;
+    for (int i = 0; i < 20; i++) {
+        into->lat_us_hist[i] += add->lat_us_hist[i];
+        into->req_hist[i] += add->req_hist[i];
+    }
+}
+
+/* Move the live counters into the current phase's request total. */
+static void ds4_ds_stats_bank_live(void) {
+    ds4_ds_stats_snapshot live;
+    ds4_ds_stats_capture(&live);
+    ds4_ds_stats_merge(&g_ds_phase_acc[g_ds_phase_decode ? 1 : 0], &live);
+    ds4_ds_stats_reset_live();
 }
 
 static void ds4_ds_stats_dump_snapshot(
@@ -1330,17 +1357,14 @@ extern "C" void ds4_ds_stats_dump(void) {
         ds4_ds_stats_dump_snapshot(&live, NULL);
         return;
     }
-    if (g_ds_prefill_snapshot_valid) {
-        ds4_ds_stats_dump_snapshot(&g_ds_prefill_snapshot, "prefill");
-    }
-    ds4_ds_stats_dump_snapshot(&live, g_ds_phase_decode ? "decode" : "prefill");
+    ds4_ds_stats_bank_live();
+    ds4_ds_stats_dump_snapshot(&g_ds_phase_acc[0], "prefill");
+    ds4_ds_stats_dump_snapshot(&g_ds_phase_acc[1], "decode");
 
     /* The server invokes this function at request completion while holding its
      * inference mutex. Consume the request-local snapshots there so the next
      * request begins cleanly; atexit remains only the CLI fallback. */
-    ds4_ds_stats_reset_live();
-    g_ds_prefill_snapshot = ds4_ds_stats_snapshot();
-    g_ds_prefill_snapshot_valid = 0;
+    g_ds_phase_acc[0] = g_ds_phase_acc[1] = ds4_ds_stats_snapshot();
     g_ds_phase_tracking_started = 0;
     g_ds_slow_tags_enabled = 0;
     g_ds_profile_token_valid = 0;
@@ -1354,13 +1378,10 @@ extern "C" void ds4_ds_stats_set_phase(int decode) {
     if (!next_decode && g_ds_phase_decode && layer_trace_enabled()) ++g_layer_epoch;
     if (!g_ds_phase_tracking_started) {
         ds4_ds_stats_reset_live();
-        g_ds_prefill_snapshot = ds4_ds_stats_snapshot();
-        g_ds_prefill_snapshot_valid = 0;
+        g_ds_phase_acc[0] = g_ds_phase_acc[1] = ds4_ds_stats_snapshot();
         g_ds_phase_tracking_started = 1;
-    } else if (next_decode && !g_ds_phase_decode) {
-        ds4_ds_stats_capture(&g_ds_prefill_snapshot);
-        g_ds_prefill_snapshot_valid = 1;
-        ds4_ds_stats_reset_live();
+    } else if (next_decode != g_ds_phase_decode) {
+        ds4_ds_stats_bank_live();
     }
     g_ds_sync_tags.valid = 0;
     for (uint32_t i = 0; i < DS4_DS_SLOTS; i++) {

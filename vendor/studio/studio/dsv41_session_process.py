@@ -7,6 +7,23 @@ import psutil
 from .dsv41_session_contract import MODEL_SHA256, MAX_CONTROL, Refused, checkpoint, command, control, require, session_identity
 
 class Producer:
+    # Owner rule: never force-kill a producer that may hold VRAM. Stop = Ctrl-Break,
+    # graceful_seconds, a second Ctrl-Break, up to stuck_seconds; still alive = STUCK,
+    # left running, receipt/log marked, GPU work refused (the caller keeps its hold).
+    graceful_seconds = 30
+    stuck_seconds = 120
+    stuck = None
+
+    def _stop_job(self):
+        from .dsv41_windows_runner import StuckProcess
+        with self.job_lock:
+            if self.job and not self.stuck:
+                try:
+                    self.job.stop(graceful_seconds=self.graceful_seconds, stuck_seconds=self.stuck_seconds)
+                except StuckProcess as exc:
+                    self.stuck = str(exc)
+                    with self.state_lock:
+                        self.failure = self.stuck if self.failure is None else self.failure + '; ' + self.stuck
 
     def __init__(self, session, argv, env, directory, *, host_bytes, physical_floor, operation_seconds=600, idle_seconds=3600, native=None, cancelled=None, runtime_check=None, native_mode=3, bootstrap=None, startup=None, owner_epoch=0, after_resume=None):
         self.creation_attempted = False
@@ -116,9 +133,7 @@ class Producer:
         with self.state_lock:
             if self.failure is None:
                 self.failure = str(exc)
-        with self.job_lock:
-            if self.job:
-                self.job.stop()
+        self._stop_job()
 
     def _watch(self):
         try:
@@ -337,9 +352,20 @@ class Producer:
             return self.receipt
         self.closed = True
         self.stop_event.set()
-        with self.job_lock:
-            if self.job:
-                self.job.stop()
+        self._stop_job()
+        if self.stuck:
+            # Left running: reader threads stay blocked on its pipes and the pipes stay open.
+            # Only the Job handle closes (kill-on-close was cleared, so this cannot kill).
+            pid = self.job.pid if self.job else None
+            self.receipt = dict(session=self.session, host_budget=self.host_bytes, physical_floor=self.floor,
+                                peak_rss=self.peak_rss, minimum_available_ram=self.minimum_available, failure=self.failure,
+                                owned_pid=pid, owned_job_empty=False, owned_process_signaled=False, owned_pid_gone=False,
+                                stuck=self.stuck)
+            with self.job_lock:
+                if self.job:
+                    self.job.close()
+                    self.job = None
+            raise RuntimeError(self.stuck)
         # A 30 GB VRAM teardown can take >10 s before the pipes close; wait up to 45 s in total.
         deadline = time.monotonic() + 45
         for thread in self.threads:
