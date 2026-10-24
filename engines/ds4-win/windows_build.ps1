@@ -235,7 +235,7 @@ if ($Target -eq "cuda") {
         $cudaCommand += "`n`"$nvcc`" -std=c++17 -Xcompiler /Zc:preprocessor -Icuda/mmq " + (($nvccArch + $nvccDefines + "-c" + "-o" + $obj + $m) -join " ") + $errCheck
         $backendObjects += $obj
     }
-    $cudaLink = " /LIBPATH:`"$cudaLib`" cudart.lib cublas.lib ole32.lib d3d12.lib dxgi.lib"
+    $cudaLink = " /LIBPATH:`"$cudaLib`" cudart.lib cublas.lib cuda.lib ole32.lib d3d12.lib dxgi.lib"
 
     # DirectStorage transport. Built by cl as C++17 rather than nvcc, because dstorage.h drags in
     # d3d12.h/unknwn.h which nvcc has no reason to parse. The default queue uses a NULL D3D12 device;
