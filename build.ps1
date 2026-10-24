@@ -24,6 +24,12 @@ if ($Target -in @('ds4','all')) {
     $ds4Path = Join-Path $PSScriptRoot 'engines/ds4-win'
     & $py -B -m slstack --config $Config guarded --cwd $ds4Path -- powershell -NoProfile -ExecutionPolicy Bypass -File windows_build.ps1 -Target cuda -BuildTemp $env:TEMP
     if ($LASTEXITCODE) { throw 'ds4 build failed' }
+    # ds4-decode.dll: ds4-win's decode kernels for the single-engine ULTRA producer (loaded beside it).
+    & $py -B -m slstack --config $Config guarded --cwd $ds4Path -- powershell -NoProfile -ExecutionPolicy Bypass -File windows_build.ps1 -Target cuda -ExternalDecode -BuildTemp $env:TEMP
+    if ($LASTEXITCODE) { throw 'ds4-decode build failed' }
+    $producerBin = Join-Path $PSScriptRoot 'build/llama/bin'
+    New-Item -ItemType Directory -Force -Path $producerBin | Out-Null
+    Copy-Item -LiteralPath (Join-Path $ds4Path 'ds4-decode.dll') -Destination $producerBin -Force
 }
 if ($Target -in @('llama','all')) {
     $vswhere = Join-Path ${env:ProgramFiles(x86)} 'Microsoft Visual Studio/Installer/vswhere.exe'
