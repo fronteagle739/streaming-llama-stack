@@ -795,6 +795,151 @@ extern "C" int ds4_ds_gpu_arena_create(uint64_t bytes, void **out_cuda_ptr) {
 
 extern "C" void ds4_ds_gpu_arena_release(void) { gpu_arena_release(); }
 
+/* DS4COMBO option C: DirectStorage straight into the borrowed prefill loader's expert slots.
+ * Each slot pool (gate, up, down) is a committed D3D12 buffer imported into CUDA (the same
+ * D3D12 -> CUDA direction as the GPU arena; nothing is mapped into any CUDA VMM range).
+ * DS requests then name slot base + offset as their destination: no arena, no D2D copy-out.
+ * Independent of g_gpu_arena and g_prefill_arenas; release requires no batch in flight. */
+#define DS4_DS_SLOT_POOLS 3
+static ID3D12Resource        *g_slot_res[DS4_DS_SLOT_POOLS] = {};
+static cudaExternalMemory_t   g_slot_ext[DS4_DS_SLOT_POOLS] = {};
+static void                  *g_slot_ptr[DS4_DS_SLOT_POOLS] = {};
+static uint64_t               g_slot_bytes[DS4_DS_SLOT_POOLS] = {};
+
+static void slot_pool_release(int i) {
+    if (g_slot_ext[i]) { (void)cudaDestroyExternalMemory(g_slot_ext[i]); g_slot_ext[i] = NULL; }
+    if (g_slot_res[i]) { g_slot_res[i]->Release(); g_slot_res[i] = NULL; }
+    g_slot_ptr[i] = NULL;
+    g_slot_bytes[i] = 0;
+}
+
+/* Returns pool handle 1..3 (and the CUDA pointer) or 0 with a logged reason. */
+extern "C" int ds4_ds_slot_pool_create(uint64_t bytes, void **out_cuda_ptr) {
+    if (out_cuda_ptr) *out_cuda_ptr = NULL;
+    if (!g_init_ok || bytes == 0 || !out_cuda_ptr || !ensure_gpu_queue()) {
+        fprintf(stderr, "DS4COMBO_DS_SLOTS refused: DirectStorage GPU queue unavailable\n");
+        return 0;
+    }
+    int i = 0;
+    while (i < DS4_DS_SLOT_POOLS && g_slot_res[i]) i++;
+    if (i == DS4_DS_SLOT_POOLS) { fprintf(stderr, "DS4COMBO_DS_SLOTS refused: all pools in use\n"); return 0; }
+    D3D12_FEATURE_DATA_GPU_VIRTUAL_ADDRESS_SUPPORT va;
+    memset(&va, 0, sizeof(va));
+    if (FAILED(g_d3d_device->CheckFeatureSupport(D3D12_FEATURE_GPU_VIRTUAL_ADDRESS_SUPPORT, &va, sizeof(va))) ||
+        va.MaxGPUVirtualAddressBitsPerResource >= 64 ||
+        bytes > (UINT64_C(1) << va.MaxGPUVirtualAddressBitsPerResource)) {
+        fprintf(stderr, "DS4COMBO_DS_SLOTS refused: %.2f GiB exceeds the per-resource VA limit (%u bits)\n",
+                (double)bytes / 1073741824.0, (unsigned)va.MaxGPUVirtualAddressBitsPerResource);
+        return 0;
+    }
+    D3D12_HEAP_PROPERTIES heap;
+    memset(&heap, 0, sizeof(heap));
+    heap.Type = D3D12_HEAP_TYPE_DEFAULT;
+    heap.CreationNodeMask = 1;
+    heap.VisibleNodeMask = 1;
+    D3D12_RESOURCE_DESC resource;
+    memset(&resource, 0, sizeof(resource));
+    resource.Dimension = D3D12_RESOURCE_DIMENSION_BUFFER;
+    resource.Width = bytes;
+    resource.Height = 1;
+    resource.DepthOrArraySize = 1;
+    resource.MipLevels = 1;
+    resource.Format = DXGI_FORMAT_UNKNOWN;
+    resource.SampleDesc.Count = 1;
+    resource.Layout = D3D12_TEXTURE_LAYOUT_ROW_MAJOR;
+    HRESULT hr = g_d3d_device->CreateCommittedResource(&heap, D3D12_HEAP_FLAG_SHARED, &resource,
+        D3D12_RESOURCE_STATE_COMMON, NULL, __uuidof(ID3D12Resource), (void **)&g_slot_res[i]);
+    if (FAILED(hr) || !g_slot_res[i]) {
+        fprintf(stderr, "DS4COMBO_DS_SLOTS refused: CreateCommittedResource(%.2f GiB) hr=0x%08lX\n",
+                (double)bytes / 1073741824.0, (unsigned long)hr);
+        slot_pool_release(i);
+        return 0;
+    }
+    ID3D12Device1 *device1 = NULL;
+    if (SUCCEEDED(g_d3d_device->QueryInterface(__uuidof(ID3D12Device1), (void **)&device1)) && device1) {
+        ID3D12Pageable *pageable = g_slot_res[i];
+        const D3D12_RESIDENCY_PRIORITY priority = D3D12_RESIDENCY_PRIORITY_HIGH;
+        (void)device1->SetResidencyPriority(1, &pageable, &priority);
+        device1->Release();
+    }
+    HANDLE shared = NULL;
+    hr = g_d3d_device->CreateSharedHandle(g_slot_res[i], NULL, GENERIC_ALL, NULL, &shared);
+    if (FAILED(hr) || !shared) {
+        fprintf(stderr, "DS4COMBO_DS_SLOTS refused: CreateSharedHandle hr=0x%08lX\n", (unsigned long)hr);
+        slot_pool_release(i);
+        return 0;
+    }
+    cudaExternalMemoryHandleDesc ext_desc;
+    memset(&ext_desc, 0, sizeof(ext_desc));
+    ext_desc.type = cudaExternalMemoryHandleTypeD3D12Resource;
+    ext_desc.handle.win32.handle = shared;
+    ext_desc.size = bytes;
+    ext_desc.flags = cudaExternalMemoryDedicated;
+    cudaError_t cerr = cudaImportExternalMemory(&g_slot_ext[i], &ext_desc);
+    CloseHandle(shared);
+    if (cerr == cudaSuccess) {
+        cudaExternalMemoryBufferDesc buffer_desc;
+        memset(&buffer_desc, 0, sizeof(buffer_desc));
+        buffer_desc.size = bytes;
+        cerr = cudaExternalMemoryGetMappedBuffer(&g_slot_ptr[i], g_slot_ext[i], &buffer_desc);
+    }
+    if (cerr != cudaSuccess || !g_slot_ptr[i]) {
+        fprintf(stderr, "DS4COMBO_DS_SLOTS refused: CUDA import failed: %s\n", cudaGetErrorString(cerr));
+        (void)cudaGetLastError();
+        slot_pool_release(i);
+        return 0;
+    }
+    g_slot_bytes[i] = bytes;
+    *out_cuda_ptr = g_slot_ptr[i];
+    fprintf(stderr, "DS4COMBO_DS_SLOTS pool %d ready: %.2f GiB D3D12 buffer imported into CUDA (VA bits %u)\n",
+            i + 1, (double)bytes / 1073741824.0, (unsigned)va.MaxGPUVirtualAddressBitsPerResource);
+    return i + 1;
+}
+
+/* Pool handle owning [ptr, ptr+bytes), else 0. */
+extern "C" int ds4_ds_slot_pool_find(const void *ptr, uint64_t bytes, uint64_t *offset_out) {
+    for (int i = 0; i < DS4_DS_SLOT_POOLS; i++) {
+        const char *base = (const char *)g_slot_ptr[i];
+        if (!base || (const char *)ptr < base) continue;
+        const uint64_t off = (uint64_t)((const char *)ptr - base);
+        if (off <= g_slot_bytes[i] && bytes <= g_slot_bytes[i] - off) {
+            if (offset_out) *offset_out = off;
+            return i + 1;
+        }
+    }
+    return 0;
+}
+
+/* The caller has drained every DS batch and synchronised CUDA before releasing. */
+extern "C" void ds4_ds_slot_pool_release(int handle) {
+    if (handle >= 1 && handle <= DS4_DS_SLOT_POOLS) slot_pool_release(handle - 1);
+}
+
+extern "C" int ds4_ds_batch_add_slot(uint64_t file_offset, uint32_t bytes, int handle, uint64_t offset) {
+    if (!g_init_ok || handle < 1 || handle > DS4_DS_SLOT_POOLS || !g_slot_res[handle - 1] || bytes == 0 ||
+        g_gpu_queue_count == 0) return 0;
+    if (file_offset > g_file_size || bytes > g_file_size - file_offset) return 0;
+    if (offset > g_slot_bytes[handle - 1] || bytes > g_slot_bytes[handle - 1] - offset) return 0;
+    const uint32_t parts = request_parts(file_offset, bytes);
+    if (g_batch.size() + parts > (size_t)kQueueCapacity) return -1;   /* full: submit, then retry */
+    if (!g_batch.empty() && !g_batch_gpu) return 0;
+    DSTORAGE_REQUEST req;
+    memset(&req, 0, sizeof(req));
+    req.Options.SourceType = DSTORAGE_REQUEST_SOURCE_FILE;
+    req.Options.DestinationType = DSTORAGE_REQUEST_DESTINATION_BUFFER;
+    req.Options.CompressionFormat = DSTORAGE_COMPRESSION_FORMAT_NONE;
+    req.Source.File.Source = g_file;
+    req.Source.File.Offset = file_offset;
+    req.Source.File.Size = bytes;
+    req.Destination.Buffer.Resource = g_slot_res[handle - 1];
+    req.Destination.Buffer.Offset = offset;
+    req.Destination.Buffer.Size = bytes;
+    req.UncompressedSize = bytes;
+    append_request_parts(req, true, parts);
+    g_batch_gpu = true;
+    return 1;
+}
+
 extern "C" int ds4_ds_prefill_arenas_create(
         const uint64_t *bytes, uint32_t count, void **out_cuda_ptrs) {
     if (!bytes || !out_cuda_ptrs || count == 0 ||

@@ -488,21 +488,43 @@ static void cuda_stream_selected_cache_invalidate(void) {
     g_stream_selected_cache.valid = 0;
 }
 
+
+/* DS4COMBO option C (DS4COMBO_DS_DIRECT_SLOTS=1): the borrowed prefill loader's gate/up/down
+ * slot pools are D3D12 buffers imported into CUDA (ds4_ds_slot_pool_create), and its DS loads
+ * write straight into the slots: no staging arena, no D2D copy-out, no copy-out sync. The decode
+ * tier (VMM under ctxgrow) is untouched. Any value but 0/1 refuses (logged; feature off). */
+static int g_ds_slot_alloc = 0;   /* set only around the borrowed loader's three pool allocations */
+static void cuda_ds_expert_fetch_drain(void);
+static int cuda_ds_direct_slots_enabled(void) {
+    static int v = -1;
+    if (v < 0) {
+        const char *e = getenv("DS4COMBO_DS_DIRECT_SLOTS");
+        v = e && strcmp(e, "1") == 0;
+        if (e && e[0] && strcmp(e, "0") != 0 && strcmp(e, "1") != 0)
+            fprintf(stderr, "DS4COMBO_DS_DIRECT_SLOTS=%s is not 0|1; refusing (off)\n", e);
+        if (v) fprintf(stderr, "DS4COMBO_DS_DIRECT_SLOTS on (DirectStorage writes straight into the "
+                               "prefill loader slots)\n");
+    }
+    return v;
+}
+static void cuda_selected_free(void *ptr) {
+    if (!ptr) return;
+    const int h = ds4_ds_slot_pool_find(ptr, 1, NULL);
+    if (!h) { (void)cudaFree(ptr); return; }
+    if (ds4_ds_batch_inflight() != 0) cuda_ds_expert_fetch_drain();
+    (void)cudaDeviceSynchronize();
+    ds4_ds_slot_pool_release(h);
+}
+
 static void cuda_stream_selected_cache_release(void) {
     ds4_gpu_stream_expert_cache_prefetch_finish(true);
     const int tier = g_stream_selected_cache.logical_tier;
     if (tier >= 0 && tier < g_n_gpus) {
         (void)ds4_gpu_set_current_device(tier);
     }
-    if (g_stream_selected_cache.gate_ptr) {
-        (void)cudaFree(g_stream_selected_cache.gate_ptr);
-    }
-    if (g_stream_selected_cache.up_ptr) {
-        (void)cudaFree(g_stream_selected_cache.up_ptr);
-    }
-    if (g_stream_selected_cache.down_ptr) {
-        (void)cudaFree(g_stream_selected_cache.down_ptr);
-    }
+    cuda_selected_free(g_stream_selected_cache.gate_ptr);
+    cuda_selected_free(g_stream_selected_cache.up_ptr);
+    cuda_selected_free(g_stream_selected_cache.down_ptr);
     if (g_stream_selected_cache.slot_selected_ptr) {
         (void)cudaFree(g_stream_selected_cache.slot_selected_ptr);
     }
@@ -38475,11 +38497,18 @@ static int cuda_stream_selected_ensure_bytes(
         char **ptr, uint64_t *capacity, uint64_t bytes, const char *label) {
     if (*ptr && *capacity >= bytes) return 1;
     if (*ptr) {
-        (void)cudaFree(*ptr);
+        cuda_selected_free(*ptr);
         *ptr = NULL;
         *capacity = 0;
     }
     if (bytes == 0 || bytes > (uint64_t)SIZE_MAX) return 0;
+    if (g_ds_slot_alloc) {
+        void *pool = NULL;
+        if (!ds4_ds_slot_pool_create(bytes, &pool)) return 0;   /* logged; no cudaMalloc fallback */
+        *ptr = (char *)pool;
+        *capacity = bytes;
+        return 1;
+    }
     cudaError_t err = cudaMalloc((void **)ptr, (size_t)bytes);
     if (err != cudaSuccess) {
         fprintf(stderr, "ds4: CUDA streaming %s allocation failed for %.2f MiB: %s\n",
@@ -38661,6 +38690,45 @@ static int cuda_stream_selected_ds_upload(const ds4_gpu_stream_expert_table *tab
                                table->down_expert_bytes};
     if (ds4_ds_batch_inflight() != 0) cuda_ds_expert_fetch_drain();
     const int track = cuda_loader_check_enabled();
+    if (cuda_ds_direct_slots_enabled() && ds4_ds_slot_pool_find(jobs[0].dst[0], bytes[0], NULL)) {
+        /* Option C: every part straight into its slot; submit when the queue fills. */
+        uint64_t got = 0;
+        double ms = 0.0, wait_ms = 0.0;
+        ds4_ds_batch_reset();
+        for (size_t j = 0; j < jobs.size(); j++) {
+            if (track) {
+                const uint64_t slot = (uint64_t)(jobs[j].dst[0] - g_stream_selected_cache.gate_ptr) /
+                    table->gate_expert_bytes;
+                if (slot < g_loader_origin.size()) g_loader_origin[(size_t)slot] = {1, 0, (int)j, UINT64_MAX};
+            }
+            for (int part = 0; part < 3; part++) {
+                uint64_t off = 0;
+                const int h = ds4_ds_slot_pool_find(jobs[j].dst[part], bytes[part], &off);
+                int rc = h ? ds4_ds_batch_add_slot(jobs[j].src[part], (uint32_t)bytes[part], h, off) : 0;
+                if (rc == -1) {
+                    if (!g_ds_decode_bandwidth.batch_submit_wait(&got, &ms, &wait_ms)) rc = 0;
+                    else { ds4_ds_batch_reset(); rc = ds4_ds_batch_add_slot(jobs[j].src[part], (uint32_t)bytes[part], h, off); }
+                }
+                if (rc != 1) {
+                    fprintf(stderr, "DS4COMBO_DS_SLOTS load failed (expert job %zu part %d, pool %d, rc %d)\n",
+                            j, part, h, rc);
+                    ds4_ds_batch_reset();
+                    return 0;
+                }
+            }
+        }
+        const bool done = g_ds_decode_bandwidth.batch_submit_wait(&got, &ms, &wait_ms);
+        ds4_ds_batch_reset();
+        if (!done) {
+            fprintf(stderr, "DS4COMBO_DS_SLOTS batch failed (%zu experts)\n", jobs.size());
+            return 0;
+        }
+        if (cuda_ds_fence_enabled() && !ds4_ds_gpu_fence_wait_last(NULL)) {
+            static int notice = 0;
+            if (!notice++) fprintf(stderr, "DS4COMBO_V41_DS_FENCE wait unavailable (no fence/semaphore)\n");
+        }
+        return 1;
+    }
     size_t i = 0;
     int wave_index = 0;
     while (i < jobs.size()) {
@@ -38975,13 +39043,16 @@ static int cuda_stream_selected_cache_begin_load(
             }
             /* A budget is a hint. Back off before publishing any live slots. */
             while (capacity >= unique.size()) {
-                if (cuda_stream_selected_ensure_bytes(&cache.gate_ptr, &cache.gate_capacity,
+                g_ds_slot_alloc = g_stream_prefill_borrow_slots && cuda_ds_direct_slots_enabled();
+                const bool pools_ok =
+                    cuda_stream_selected_ensure_bytes(&cache.gate_ptr, &cache.gate_capacity,
                         capacity * table->gate_expert_bytes, "cached gate experts") &&
                     cuda_stream_selected_ensure_bytes(&cache.up_ptr, &cache.up_capacity,
                         capacity * table->gate_expert_bytes, "cached up experts") &&
                     cuda_stream_selected_ensure_bytes(&cache.down_ptr, &cache.down_capacity,
-                        capacity * table->down_expert_bytes, "cached down experts"))
-                    break;
+                        capacity * table->down_expert_bytes, "cached down experts");
+                g_ds_slot_alloc = 0;
+                if (pools_ok) break;
                 cuda_stream_selected_cache_release();
                 if (capacity == unique.size()) return 0;
                 capacity = std::max((uint64_t)unique.size(), capacity * 3u / 4u);
