@@ -554,7 +554,14 @@ void llama_dsv41_weight_provider::implementation::create_pipeline(){
         std::fprintf(stderr,"LLAMADECODE_DECODE_LAYOUT stages=82 all_resident=1 bank0_resident_bytes=%llu bank1_resident_bytes=%llu expert_cache_slots=%u slot_bytes=%llu pool_bytes=%llu\n",
             (unsigned long long)p->decode_bank0_resident,(unsigned long long)p->resident_dense_bytes,p->pool_slots,
             (unsigned long long)(p->pool_stride[0]+p->pool_stride[1]+p->pool_stride[2]),(unsigned long long)(uint64_t(p->pool_slots)*(p->pool_stride[0]+p->pool_stride[1]+p->pool_stride[2])));
-    }else for(auto*t:p->pool)if(t){t->data=nullptr;t->buffer=nullptr;}
+    }else{
+        for(auto*t:p->pool)if(t){t->data=nullptr;t->buffer=nullptr;}
+        // Owner gate: prefill must stream through BOTH banks again after decode repurposed them
+        // (bank 0 expert cache, bank 1 resident dense). Fail loudly rather than run single-banked.
+        require(p->buffers.size()==p->options.buffers,"Prefill layout lost a streaming bank");
+        if(p->options.compute_direct&&p->options.buffers==2)
+            std::fprintf(stderr,"LLAMADECODE_PREFILL_LAYOUT banks=%zu streaming_banks=%u persistent_stages=0 expert_pool_bound=0\n",p->buffers.size(),p->options.buffers);
+    }
     require(!wf_has_failed(p->fetcher),"Original layer registration failed");p->identity();if(p->options.ds_gpu_ring_slots)wf_set_layer_major_mode(p->fetcher,true);wf_start(p->fetcher);
     require(!wf_has_failed(p->fetcher),"Original DirectStorage pipeline startup failed");
 }
