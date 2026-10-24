@@ -23,6 +23,10 @@
     {
       "path": "dsv41_session_contract.py, dsv41_session_process.py",
       "purpose": "rtxmac-producer-2: maximum_decode_tokens is the accepted decode-delta maximum (49152 = one whole local append in one apply_decode_delta); the producer handshake must advertise exactly 49152. MAX_DECODE (128) stays the normal chunk; a delta above it may declare up to 64 MiB + 6404 bytes per token. No engine arithmetic changes; hash checks unchanged."
+    },
+    {
+      "path": "dsv41_session_contract.py, dsv41_session_process.py",
+      "purpose": "rtxmac-producer-2b: negotiate instead of lockstep. Readiness accepts any maximum_decode_tokens >= 128; negotiate_decode_delta = min(peer maximum_decode_delta_tokens, else maximum_decode_tokens, else 128; MAX_DECODE_DELTA). The effective value is published to the peer in the broker metadata and enforced in begin_decode. No engine arithmetic changes."
     }
   ],
   "modules": [

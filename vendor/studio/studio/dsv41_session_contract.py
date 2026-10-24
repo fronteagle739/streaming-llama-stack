@@ -9,6 +9,11 @@ MAX_PREFILL = 49152
 MAX_DECODE = 128
 MAX_DECODE_DELTA = MAX_PREFILL
 
+def negotiate_decode_delta(ready):
+    advertised = ready.get('maximum_decode_delta_tokens', ready.get('maximum_decode_tokens', MAX_DECODE))
+    require(type(advertised) is int and advertised >= MAX_DECODE, 'Peer decode-delta maximum below one chunk')
+    return min(advertised, MAX_DECODE_DELTA)
+
 class Refused(ValueError):
     pass
 
