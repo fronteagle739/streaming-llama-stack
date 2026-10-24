@@ -2,6 +2,7 @@
 #include "llama-dsv41-weights.h"
 #include <tuple>
 #include "llama-dsv41-engram-prefetch.h"
+#include "llama-dsv41-engram-early-decision.h"
 #include "llama-weight-fetcher.h"
 #include "llama-wf-bounded-policy.h"
 
@@ -191,8 +192,10 @@ struct llama_dsv41_weight_provider::implementation {
     // LLAMADECODE_ENGRAM_EARLY: the early cache on the multi-ring loader.
     // admitted: this cache's share of the one Engram admission (the caller
     // subtracts every other live cache's charge).
-    void launch_early(const std::vector<int32_t>&tokens,const llama_dsv41::engram_history&initial,uint64_t admitted,
-                      std::shared_ptr<const llama_dsv41_engram_prompt_cache>prior,const char*at);
+    // Auto mode: plans the rows here and starts only when requests/IOPS fits
+    // gap_s (LLAMADECODE_ENGRAM_EARLY_DECISION); returns whether it started.
+    bool launch_early(const std::vector<int32_t>&tokens,const llama_dsv41::engram_history&initial,uint64_t admitted,
+                      std::shared_ptr<const llama_dsv41_engram_prompt_cache>prior,const char*at,double gap_s);
     void mark_weight_stream(bool active){if(llama_dsv41_engram_early_enabled())llama_dsv41_engram_weight_stream(active);}
     std::vector<ggml_backend_buffer_ptr>buffers;
     wf_context *fetcher=nullptr;
@@ -610,34 +613,53 @@ bool llama_dsv41_weight_provider::start_request(std::string&error){return p->gua
 },error);}
 llama_dsv41_weight_provider::capacity llama_dsv41_weight_provider::budget()const{std::lock_guard<std::mutex>lock(p->mutex);return p->inspected&&!p->poisoned?p->planned:capacity{};}
 ggml_backend_t llama_dsv41_weight_provider::backend()const{std::lock_guard<std::mutex>lock(p->mutex);return p->allocated&&!p->poisoned?p->options.backend:nullptr;}
-void llama_dsv41_weight_provider::implementation::launch_early(const std::vector<int32_t>&tokens,const llama_dsv41::engram_history&initial,uint64_t admitted,
-        std::shared_ptr<const llama_dsv41_engram_prompt_cache>prior,const char*at){
+bool llama_dsv41_weight_provider::implementation::launch_early(const std::vector<int32_t>&tokens,const llama_dsv41::engram_history&initial,uint64_t admitted,
+        std::shared_ptr<const llama_dsv41_engram_prompt_cache>prior,const char*at,double gap_s){
 #ifdef _WIN32
     require(!early&&!early_thread.joinable()&&!tokens.empty()&&tokens.size()<=1048576,"Early Engram cache requires one pending request");
     identity();
     auto e=std::make_shared<early_engram>();e->tokens=tokens;e->initial=initial;e->cache.reset(new llama_dsv41_engram_prompt_cache);
     const auto layout=engram;const auto offsets=engram_offsets;const auto model=path;const HANDLE handle=file;
     const uint64_t file_bytes=options.verified_file_bytes;
+    const bool decided=llama_dsv41_engram_early_auto();
+    if(decided){
+        // Same rows/admission as the thread's prepare_early, planned here so a
+        // load that cannot fit its gap never starts (the ordinary path runs).
+        const auto planning=std::chrono::steady_clock::now();
+        try{e->cache->prepare_early(layout,e->tokens.data(),uint32_t(e->tokens.size()),offsets,admitted,e->initial,prior);}
+        catch(const std::exception&failure){
+            // =1 would fail this request at adoption; auto keeps the ordinary path, which applies its own admission.
+            llama_dsv41_layer_log("LLAMADECODE_ENGRAM_EARLY_DECISION at=%s tokens=%zu early=0 reason=plan_failed what=\"%s\"\n",at,tokens.size(),failure.what());return false;}
+        const auto d=llama_dsv41_engram_early::decide(e->cache->planned_requests(),llama_dsv41_engram_early_iops(),gap_s);
+        llama_dsv41_layer_log("LLAMADECODE_ENGRAM_EARLY_DECISION at=%s tokens=%zu requests=%llu iops=%.0f predicted_s=%.3f gap_s=%.3f plan_ms=%.3f early=%d\n",
+            at,tokens.size(),(unsigned long long)d.requests,llama_dsv41_engram_early_iops(),d.predicted_s,d.gap_s,
+            std::chrono::duration<double,std::milli>(std::chrono::steady_clock::now()-planning).count(),int(d.early));
+        if(!d.early)return false;
+    }
     early=e;
     const auto queued=std::chrono::steady_clock::now();
-    early_thread=std::thread([e,layout,offsets,model,handle,file_bytes,admitted,prior,queued]{
+    early_thread=std::thread([e,layout,offsets,model,handle,file_bytes,admitted,prior,queued,decided]{
         const auto started=std::chrono::steady_clock::now();
         try{
-            e->cache->prepare_early(layout,e->tokens.data(),uint32_t(e->tokens.size()),offsets,admitted,e->initial,prior);
+            if(!decided)e->cache->prepare_early(layout,e->tokens.data(),uint32_t(e->tokens.size()),offsets,admitted,e->initial,prior);
             e->cache->load_early(model.c_str(),handle,file_bytes,[e]{return e->cancel.load();});
         }catch(...){e->failure=std::current_exception();}
         e->wall_ms=std::chrono::duration<double,std::milli>(std::chrono::steady_clock::now()-started).count();
         (void)queued;
     });
     llama_dsv41_layer_log("LLAMADECODE_ENGRAM_EARLY_QUEUED at=%s tokens=%zu admitted_bytes=%llu prior=%d own_iorings=1\n",at,tokens.size(),(unsigned long long)admitted,int(bool(prior)));
+    return true;
 #else
-    (void)tokens;(void)initial;(void)admitted;(void)prior;(void)at;throw std::runtime_error("Early Engram IoRing requires Windows");
+    (void)tokens;(void)initial;(void)admitted;(void)prior;(void)at;(void)gap_s;throw std::runtime_error("Early Engram IoRing requires Windows");
 #endif
 }
+bool llama_dsv41_weight_provider::early_engram_queued()const{std::lock_guard<std::mutex>lock(p->mutex);return bool(p->early);}
 bool llama_dsv41_weight_provider::start_engram_cold(std::string&error){return p->guard([&]{
     if(!llama_dsv41_engram_early_enabled()||p->options.engram_early_tokens.empty())return;
     require(p->options.engram_prefetch_host_bytes&&p->inspected&&!p->allocated&&!p->early,"Cold early Engram start requires an inspected, admitted, unallocated provider");
     const char*overlap=std::getenv("LLAMA_DSV41_ENGRAM_PROMPT_OVERLAP");
+    if(llama_dsv41_engram_early_auto()&&!(overlap&&std::strcmp(overlap,"1")==0)){
+        llama_dsv41_layer_log("LLAMADECODE_ENGRAM_EARLY_DECISION at=cold_before_wf_start tokens=%zu early=0 reason=prompt_overlap_off\n",p->options.engram_early_tokens.size());return;}
     require(overlap&&std::strcmp(overlap,"1")==0,"LLAMADECODE_ENGRAM_EARLY requires LLAMA_DSV41_ENGRAM_PROMPT_OVERLAP=1 (per-table adoption)");
     const auto&tokens=p->options.engram_early_tokens;const auto&tail=p->options.engram_early_tail;
     require(tail.size()<=3,"Restored Engram history uses at most three tokens");
@@ -656,11 +678,14 @@ bool llama_dsv41_weight_provider::start_engram_cold(std::string&error){return p-
             (unsigned long long)worst,(unsigned long long)current,(unsigned long long)p->options.engram_prefetch_host_bytes);
         return;
     }
-    p->launch_early(tokens,initial,p->options.engram_prefetch_host_bytes-current,nullptr,"cold_before_wf_start");
+    p->launch_early(tokens,initial,p->options.engram_prefetch_host_bytes-current,nullptr,"cold_before_wf_start",llama_dsv41_engram_early::cold_gap_s);
 },error);}
-bool llama_dsv41_weight_provider::start_engram_append(const std::vector<int32_t>&tokens,llama_dsv41::engram_history initial,std::string&error){return p->guard([&]{
-    require(llama_dsv41_engram_early_enabled(),"Append early Engram start requires LLAMADECODE_ENGRAM_EARLY=1");
+bool llama_dsv41_weight_provider::start_engram_append(const std::vector<int32_t>&tokens,llama_dsv41::engram_history initial,double gap_s,std::string&error){return p->guard([&]{
+    require(llama_dsv41_engram_early_enabled(),"Append early Engram start requires LLAMADECODE_ENGRAM_EARLY=1 or auto");
     const char*overlap=std::getenv("LLAMA_DSV41_ENGRAM_PROMPT_OVERLAP");
+    if(llama_dsv41_engram_early_auto()&&(!(overlap&&std::strcmp(overlap,"1")==0)||!p->options.engram_prefetch_host_bytes)){
+        llama_dsv41_layer_log("LLAMADECODE_ENGRAM_EARLY_DECISION at=append_tokens_arrived tokens=%zu early=0 reason=%s\n",tokens.size(),
+            p->options.engram_prefetch_host_bytes?"prompt_overlap_off":"no_engram_prefetch");return;}
     require(overlap&&std::strcmp(overlap,"1")==0,"LLAMADECODE_ENGRAM_EARLY requires LLAMA_DSV41_ENGRAM_PROMPT_OVERLAP=1 (per-table adoption)");
     require(p->options.engram_prefetch_host_bytes&&p->allocated&&!p->device_suspended&&!p->leased&&p->next==p->stage_count(),"Append early Engram start requires a completed released pass");
     if(p->early){
@@ -674,7 +699,7 @@ bool llama_dsv41_weight_provider::start_engram_append(const std::vector<int32_t>
             (unsigned long long)worst,(unsigned long long)current,(unsigned long long)p->options.engram_prefetch_host_bytes);
         return;
     }
-    p->launch_early(tokens,initial,p->options.engram_prefetch_host_bytes-current,p->engram_prompt,"append_tokens_arrived");
+    p->launch_early(tokens,initial,p->options.engram_prefetch_host_bytes-current,p->engram_prompt,"append_tokens_arrived",gap_s);
 },error);}
 bool llama_dsv41_weight_provider::prepare_engram_prompt(const std::vector<int32_t>&tokens,const std::function<bool()>&stop,std::string&error,llama_dsv41::engram_history initial){return p->guard([&]{
     if(!p->options.engram_prefetch_host_bytes)return;

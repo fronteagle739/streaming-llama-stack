@@ -16,6 +16,7 @@
 #endif
 #include "llama-dsv41-engram-prefetch.h"
 #include "llama-dsv41-engram-plan.h"
+#include "llama-dsv41-engram-early-decision.h"
 #include <algorithm>
 #include <atomic>
 #include <chrono>
@@ -24,11 +25,16 @@
 #include <cstdlib>
 #include <cstring>
 #include <stdexcept>
-// LLAMADECODE_ENGRAM_EARLY=1: the early multi-ring loader. Flag off: no caller
+// LLAMADECODE_ENGRAM_EARLY=1|auto: the early multi-ring loader. =0: no caller
 // reaches prepare_early/load_early and the weight-stream marker is never set.
 static std::atomic<bool> llama_dsv41_engram_weight_pass{false};
-bool llama_dsv41_engram_early_enabled(){
-    static const bool on=[]{const char*e=std::getenv("LLAMADECODE_ENGRAM_EARLY");return e&&std::strcmp(e,"1")==0;}();return on;
+static llama_dsv41_engram_early::mode llama_dsv41_engram_early_mode(){
+    static const auto m=llama_dsv41_engram_early::parse_mode(std::getenv("LLAMADECODE_ENGRAM_EARLY"));return m;
+}
+bool llama_dsv41_engram_early_enabled(){return llama_dsv41_engram_early_mode()!=llama_dsv41_engram_early::mode::off;}
+bool llama_dsv41_engram_early_auto(){return llama_dsv41_engram_early_mode()==llama_dsv41_engram_early::mode::automatic;}
+double llama_dsv41_engram_early_iops(){
+    static const double v=llama_dsv41_engram_early::parse_iops(std::getenv("LLAMADECODE_ENGRAM_IOPS"));return v;
 }
 void llama_dsv41_engram_weight_stream(bool active){llama_dsv41_engram_weight_pass.store(active,std::memory_order_relaxed);}
 #ifdef _WIN32
@@ -138,6 +144,17 @@ public:
         bases=offsets;prepared=true;
     }
     uint64_t budget()const{return prepared?host_plan:0;}
+    // LLAMADECODE_ENGRAM_EARLY=auto: the early loader's read requests for the
+    // prepared rows (its 64 KiB extents, both tables; prior-cache hits ignored).
+    uint64_t planned_requests()const{
+        require(prepared,"Engram read requests need prepared rows");
+        uint64_t n=0;
+        for(size_t t=0;t<2;++t){
+            size_t pos=0;llama_dsv41_engram_plan::extent e;
+            while(llama_dsv41_engram_plan::next_extent(tables[t].ids.data(),tables[t].ids.size(),nullptr,pos,bases[t],row_bytes,llama_dsv41_engram_plan::default_merge_cap,e))++n;
+        }
+        return n;
+    }
     void load(const wchar_t* path,HANDLE verified_file,uint64_t verified_file_bytes,const std::function<bool()>& stopped){
         require(prepared&&!load_attempted&&path&&verified_file!=INVALID_HANDLE_VALUE,"Engram rows must be prepared/admitted once before load");load_attempted=true;
         require(!stopped||!stopped(),"Engram preload cancelled before IO");
@@ -554,6 +571,13 @@ void llama_dsv41_engram_prompt_cache::prepare(const llama_dsv41::engram_layout &
 uint64_t llama_dsv41_engram_prompt_cache::budget()const{
 #ifdef _WIN32
  return p->budget();
+#else
+ return 0;
+#endif
+}
+uint64_t llama_dsv41_engram_prompt_cache::planned_requests()const{
+#ifdef _WIN32
+ return p->planned_requests();
 #else
  return 0;
 #endif
