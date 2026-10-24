@@ -1,4 +1,3 @@
-# Reused provider request regression only; companion suites retain their upstream receipts.
 param([Parameter(Mandatory=$true)][string]$Root)
 $ErrorActionPreference='Stop'
 $root=(Resolve-Path -LiteralPath $Root).Path
@@ -26,6 +25,13 @@ cl /nologo /O2 /std:c11 /DDS4_NO_GPU /D_CRT_SECURE_NO_WARNINGS /D_CRT_NONSTDC_NO
 if errorlevel 1 exit /b %errorlevel%
 "$root\quality-request.exe"
 if errorlevel 1 exit /b %errorlevel%
+cl /nologo /O2 /std:c11 /DDS4_NO_GPU /D_CRT_SECURE_NO_WARNINGS /D_CRT_NONSTDC_NO_DEPRECATE /I"$repo" /Fo"$root\quality-http.obj" /Fe"$root\quality-http.exe" "$repo\tests\test_quality_speed_http.c" "$root\ds4.obj" $objectArgs /link ws2_32.lib
+if errorlevel 1 exit /b %errorlevel%
+"$root\quality-http.exe"
+if errorlevel 1 exit /b %errorlevel%
+cl /nologo /O2 /std:c11 /I"$repo" /Fo"$root\quality-phase.obj" /Fe"$root\quality-phase.exe" "$repo\tests\test_quality_phase.c"
+if errorlevel 1 exit /b %errorlevel%
+"$root\quality-phase.exe"
 exit /b %errorlevel%
 "@
 $path=Join-Path $root 'quality-request-build.cmd'

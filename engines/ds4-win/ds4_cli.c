@@ -2224,6 +2224,11 @@ static cli_config parse_options(int argc, char **argv) {
         } else if (!strcmp(arg, "--cache-affinity-bias")) {
             c.engine.cache_affinity_bias = parse_float_range(need_arg(&i, argc, argv, arg), arg, 0.0f, 3.0f);
             c.engine.cache_affinity_bias_set = true;
+        } else if (!strcmp(arg, "--ds-read-parts")) {
+            if (!ds4_parse_affinity_count(need_arg(&i,argc,argv,arg),64u,&c.engine.ds_read_parts)) {
+                fprintf(stderr,"ds4: --ds-read-parts requires an integer in 0..64\n");exit(2);
+            }
+            c.engine.ds_read_parts_set = true;
         } else if (!strcmp(arg, "--ssd-streaming-cache-experts")) {
             uint32_t experts = 0;
             uint64_t bytes = 0;

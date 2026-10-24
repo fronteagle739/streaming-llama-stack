@@ -51,7 +51,11 @@
 #endif
 
 #include "ds4.h"
+#include "ds4_native_session.h"
 #include "ds4_lora.h"
+#if defined(_WIN32) && !defined(DS4_ROCM_BUILD) && !defined(DS4_NO_GPU)
+#include "ds4_dstorage.h"
+#endif
 #include "ds4_quality_phase.h"
 #include "ds4_spec_fetch_policy.h"
 static float g_cache_affinity_bias;
@@ -1604,6 +1608,36 @@ static double now_sec(void) {
     struct timespec ts;
     clock_gettime(CLOCK_MONOTONIC, &ts);
     return (double)ts.tv_sec + (double)ts.tv_nsec * 1.0e-9;
+}
+
+/* DS4COMBO first-request stamps (ds4.h ds4_t1_*). */
+static struct {
+    int state;            /* 0 = armed, 1 = recording, 2 = done */
+    double t0;
+    bool step0;           /* step 0 (the eval that yields token 1) has started */
+    double moe_s;         /* step 0: wall time inside the routed-MoE call (demand expert fetch + launch) */
+    uint32_t moe_layers;
+} g_t1;
+void ds4_t1_mark(const char *point) {
+    if (g_t1.state != 1) return;
+    fprintf(stderr, "DS4COMBO_T1 point=%s ms=%.1f\n", point, (now_sec() - g_t1.t0) * 1e3);
+}
+void ds4_t1_request(const char *what) {
+    if (g_t1.state == 0) { g_t1.state = 1; g_t1.t0 = now_sec(); }
+    if (g_t1.state != 1) return;
+    fprintf(stderr, "DS4COMBO_T1 point=request_received request=%s ms=%.1f\n", what ? what : "",
+            (now_sec() - g_t1.t0) * 1e3);
+}
+void ds4_t1_token1(void) {
+    if (g_t1.state != 1) return;
+    fprintf(stderr, "DS4COMBO_T1 point=step0_moe_stall_total ms=%.1f layers=%u\n", g_t1.moe_s * 1e3, g_t1.moe_layers);
+    ds4_t1_mark("token1_emitted");
+    g_t1.state = 2;
+}
+static void ds4_t1_step0_start(void) {
+    if (g_t1.state != 1 || g_t1.step0) return;
+    g_t1.step0 = true;
+    ds4_t1_mark("step0_start");
 }
 
 /* =========================================================================
@@ -5376,12 +5410,12 @@ static bool ds4_streaming_prefill_headroom_bytes(
     }
     uint64_t reserve_experts = DS4_N_EXPERT;
 #if defined(_WIN32) && !defined(DS4_NO_GPU) && !defined(DS4_ROCM_BUILD)
-    /* The existing scalar-prefill switch disables both V4.1 batch paths.
-     * Those rows stage only top-k experts, so reserve two selected windows
-     * rather than two full layers. Keep the full-layer budget for bulk prefill.
-     * Presence matches ds41_prefill_count/short_prefill_count exactly. */
-    if (DS4_MODEL_VARIANT == DS4_VARIANT_FLASH41 &&
-        getenv("DS4_METAL_DISABLE_V41_LAYER_PREFILL")) {
+    /* V4.1 scalar rows stage only top-k experts: reserve two selected windows.
+     * The V4.1 layer sweep's full-layer loader is not added to the plan: it
+     * borrows the VRAM expert tier's memory for the sweep
+     * (ds4_gpu_stream_prefill_borrow), so its one or two layers are charged
+     * against that tier and the fixed-plan decode tier is unchanged. */
+    if (DS4_MODEL_VARIANT == DS4_VARIANT_FLASH41) {
         reserve_experts = DS4_N_EXPERT_USED;
     }
 #endif
@@ -42834,6 +42868,15 @@ typedef struct {
 
 typedef struct {
     uint32_t ctx, pos, prefill_cap, carry_cap;
+    /* DS4COMBO growable context: 0 = fixed full-ctx buffers; otherwise the
+     * context-dependent buffers are VMM ranges backed up to grow_tokens. */
+    uint32_t grow_step, grow_tokens;
+    bool grow_counted;              /* unmapped bytes are in g_ds41_ctxgrow.unmapped */
+    /* DS4COMBO borrowed layer prefill (CUDA SSD streaming): full layers the
+     * selected-expert loader holds in the decode tier's memory for the current
+     * sweep; 0 = not borrowed (unchanged loader). Two enables the next-layer
+     * prefetch; one keeps the sweep without it. */
+    uint32_t prefill_borrow_layers;
     uint64_t state_generation;      /* invalidate controller evidence on prefix replacement */
     uint64_t allocation_bytes;
     bool valid, streaming, encoder_resident, compact_carry, prefill_alias, quality;
@@ -42922,8 +42965,10 @@ static uint64_t ds41_graph_free_prefill_workspace(ds41_gpu_graph *g) {
     return bytes;
 }
 
+static void ds41_ctxgrow_account(ds41_gpu_graph *g, bool add);
 static void ds41_graph_free(ds41_gpu_graph *g) {
     if (!g) return;
+    ds41_ctxgrow_account(g, false);
     ds41_engram_carry_drop(g);
     free(g->engram_carry.ids);
     free(g->engram_prefetch_host);
@@ -43003,6 +43048,255 @@ static ds4_context_memory ds41_graph_memory(uint32_t ctx) {
     return m;
 }
 
+/* =========================================================================
+ * DS4COMBO growable context VRAM.
+ * =========================================================================
+ * Shapes, strides and chunk sizes stay those of the full context (g->ctx);
+ * only the physical backing of the context-dependent buffers follows the
+ * conversation, in whole steps. Owner caches grow with the position; batch
+ * and carry rows grow until their caps (a prefill of N tokens touches at
+ * most N rows). The VRAM expert tier gives back exactly what a step maps. */
+#if !defined(DS4_NO_GPU) && !defined(DS4_ROCM_BUILD) && !defined(__APPLE__)
+#define DS41_CTX_GROW_CUDA 1
+#endif
+
+/* The VRAM expert tier ceiling is the fixed full-ctx plan's tier plus every
+ * context byte this process has NOT mapped:
+ *     ceiling = min(expert_base, fixed_floor + unmapped)
+ * so (mapped context + tier) never exceeds the fixed build's (full context +
+ * tier), a step is paid first from headroom the tier never claimed, and the
+ * tier can never drop below the fixed plan (fixed_floor) at any context. */
+static struct {
+    bool streaming;         /* the VRAM expert tier exists and pays for growth */
+    uint64_t expert_base;   /* tier bytes planned with the first step mapped */
+    uint64_t fixed_floor;   /* tier bytes the fixed full-ctx plan fits */
+    uint64_t unmapped;      /* sum over graphs of (full-ctx cost - mapped cost) */
+    uint64_t ceiling;       /* current tier ceiling */
+} g_ds41_ctxgrow;
+
+/* 0 when disabled (DS4_CTX_GROW=0) or unsupported; otherwise the step in
+ * tokens, a multiple of 2048 so it covers the 2048-row prefill and carry
+ * granules, both compression ratios and the 128-token window. */
+static uint32_t ds41_ctx_grow_step(void) {
+#ifdef DS41_CTX_GROW_CUDA
+    static int cached = -1;
+    if (cached < 0) {
+        const char *on = getenv("DS4_CTX_GROW");
+        const char *st = getenv("DS4_CTX_GROW_STEP");
+        unsigned long step = st && st[0] ? strtoul(st, NULL, 10) : 2048ul;
+        if (!step || step % 2048ul || step > 1048576ul) {
+            fprintf(stderr, "ds4: DS4_CTX_GROW_STEP must be a positive multiple of 2048; using 2048\n");
+            step = 2048ul;
+        }
+        cached = on && !strcmp(on, "0") ? 0 : (int)step;
+    }
+    return (uint32_t)cached;
+#else
+    return 0;
+#endif
+}
+
+static ds4_gpu_tensor *ds41_alloc_growable(uint64_t bytes) {
+#ifdef DS41_CTX_GROW_CUDA
+    return ds4_gpu_tensor_alloc_growable(bytes);
+#else
+    return ds4_gpu_tensor_alloc(bytes);
+#endif
+}
+#define ds41_ctx_tensor_alloc(g) ((g)->grow_step ? ds41_alloc_growable : ds4_gpu_tensor_alloc)
+
+static uint32_t ds41_grow_round(uint32_t ctx, uint32_t step, uint32_t need) {
+    uint64_t t = ((uint64_t)(need ? need : 1u) + step - 1u) / step * step;
+    return t > ctx ? ctx : (uint32_t)t;
+}
+
+enum { DS41_GROW_ESTIMATE, DS41_GROW_COST, DS41_GROW_APPLY };
+
+static uint64_t ds41_grow_one(ds4_gpu_tensor *t, uint64_t bytes, uint64_t full, int mode, bool *ok) {
+    if (bytes > full) bytes = full;
+    if (mode == DS41_GROW_ESTIMATE) return bytes;
+    if (!t) return 0;
+#ifdef DS41_CTX_GROW_CUDA
+    if (mode == DS41_GROW_APPLY && !ds4_gpu_tensor_set_mapped(t, bytes)) *ok = false;
+    return ds4_gpu_tensor_map_cost(t, bytes);
+#else
+    (void)ok;
+    return ds4_gpu_tensor_bytes(t);
+#endif
+}
+
+/* Visit every context-dependent buffer at `T` mapped tokens. ESTIMATE sums
+ * logical bytes from the shape alone; COST sums the chunk-rounded physical
+ * bytes; APPLY maps or unmaps to T and returns the physical bytes. */
+static uint64_t ds41_grow_visit(const ds41_gpu_graph *g, uint32_t T, int mode, bool *ok) {
+    bool ok_local = true;
+    if (!ok) ok = &ok_local;
+    uint64_t sum = 0;
+    for (uint32_t i = 0; i < 4; i++) {
+        const uint32_t ratio = i < 3 ? 2u : 1u;
+        const uint64_t full_rows = (uint64_t)g->ctx / ratio + 1u;
+        const uint64_t rows = (uint64_t)T / ratio + 1u;
+        sum += ds41_grow_one(g->compressed[i], rows * 512u * 4u, full_rows * 512u * 4u, mode, ok);
+        sum += ds41_grow_one(g->index_cache[i], rows * 128u * 4u, full_rows * 128u * 4u, mode, ok);
+    }
+    const bool present = mode == DS41_GROW_ESTIMATE || g->batch.residual;
+    const uint64_t cap = g->prefill_cap, rb = T < cap ? T : cap;
+    if (present) {
+        /* Aliased views start at offset*cap inside their parent; back the
+         * parent up to the furthest row any of its views can reach. */
+        uint64_t ext_q = 0, ext_heads = 0, ext_low = 0, ext_x = 0, ext_block = 0;
+        if (g->prefill_alias) {
+#define DS41_EXT(ext, offset, count) do { const uint64_t e_ = (uint64_t)(offset) * cap + (uint64_t)(count) * rb; \
+            if (e_ > ext) ext = e_; } while (0)
+            DS41_EXT(ext_q, 0, (DS4_N_HC + 1u) * DS4_N_EMBD);
+            DS41_EXT(ext_q, 0, DS4_N_HC * DS4_N_EMBD);
+            DS41_EXT(ext_q, 0, DS4_N_EXPERT_USED * DS4_N_EMBD);
+            DS41_EXT(ext_heads, 0, DS4_N_EXPERT_USED * DS4_N_FF_EXP);
+            DS41_EXT(ext_heads, DS4_N_EXPERT_USED * DS4_N_FF_EXP, DS4_N_EXPERT_USED * DS4_N_FF_EXP);
+            DS41_EXT(ext_low, 0, DS4_N_FF_EXP);
+            DS41_EXT(ext_low, DS4_N_FF_EXP, DS4_N_FF_EXP);
+            DS41_EXT(ext_low, 2u * DS4_N_FF_EXP, DS4_N_FF_EXP);
+            DS41_EXT(ext_x, 0, DS4_N_EMBD);
+            DS41_EXT(ext_block, 0, DS4_N_EMBD);
+#undef DS41_EXT
+        }
+#define DS41_GROW_BATCH(name, count) \
+        if (strcmp(#name, "engram_rows") && strcmp(#name, "selected_comp")) { \
+            uint64_t floats_ = (uint64_t)(count) * rb; \
+            if (!strcmp(#name, "q") && ext_q > floats_) floats_ = ext_q; \
+            if (!strcmp(#name, "heads") && ext_heads > floats_) floats_ = ext_heads; \
+            if (!strcmp(#name, "low") && ext_low > floats_) floats_ = ext_low; \
+            if (!strcmp(#name, "x") && ext_x > floats_) floats_ = ext_x; \
+            if (!strcmp(#name, "block") && ext_block > floats_) floats_ = ext_block; \
+            sum += ds41_grow_one(g->batch.name, floats_ * 4u, (uint64_t)(count) * cap * 4u, mode, ok); \
+        }
+        DS41_PREFILL_STORAGE(DS41_GROW_BATCH)
+        if (!g->prefill_alias) { DS41_PREFILL_ALIASES(DS41_GROW_BATCH) }
+#undef DS41_GROW_BATCH
+    }
+    if (g->carry_cap && (mode == DS41_GROW_ESTIMATE || g->carry.residual)) {
+        const uint64_t rk = T < g->carry_cap ? T : g->carry_cap;
+#define DS41_GROW_CARRY(name, count, format) { \
+            const uint64_t w_ = ds41_carry_words(count, format, g->compact_carry); \
+            sum += ds41_grow_one(g->carry.name, w_ * rk * 4u, w_ * g->carry_cap * 4u, mode, ok); }
+        DS41_CARRY_ROWS(DS41_GROW_CARRY)
+#undef DS41_GROW_CARRY
+    }
+    return sum;
+}
+
+/* Graph bytes with only the first step of context mapped. */
+static uint64_t ds41_graph_initial_bytes(uint32_t ctx) {
+    const uint64_t full = ds41_graph_bytes(ctx);
+    const uint32_t step = ds41_ctx_grow_step();
+    if (!step) return full;
+    const ds41_gpu_graph shape = {.ctx = ctx,
+        .prefill_cap = ds41_prefill_limit(ctx),
+        .carry_cap = ds41_carry_cap(ctx),
+        .prefill_alias = !getenv("DS4_METAL_DISABLE_V41_PREFILL_ALIAS"),
+        .compact_carry = !getenv("DS4_METAL_DISABLE_V41_COMPACT_CARRY")};
+    const uint64_t all = ds41_grow_visit(&shape, ctx, DS41_GROW_ESTIMATE, NULL);
+    const uint64_t first = ds41_grow_visit(&shape, ds41_grow_round(ctx, step, 1), DS41_GROW_ESTIMATE, NULL);
+    return full - all + first;
+}
+
+static uint64_t ds41_ctxgrow_ceiling(uint64_t unmapped) {
+    uint64_t c = g_ds41_ctxgrow.fixed_floor + unmapped;
+    return c > g_ds41_ctxgrow.expert_base ? g_ds41_ctxgrow.expert_base : c;
+}
+
+/* A graph's unmapped context counts as tier headroom while it lives. */
+static void ds41_ctxgrow_account(ds41_gpu_graph *g, bool add) {
+    if (!g->grow_step || !g->compressed[0] || g->grow_counted == add) return;
+    g->grow_counted = add;
+    const uint64_t full = ds41_grow_visit(g, g->ctx, DS41_GROW_COST, NULL);
+    const uint64_t now = ds41_grow_visit(g, g->grow_tokens, DS41_GROW_COST, NULL);
+    const uint64_t d = full > now ? full - now : 0;
+    if (add) g_ds41_ctxgrow.unmapped += d;
+    else g_ds41_ctxgrow.unmapped = g_ds41_ctxgrow.unmapped > d ? g_ds41_ctxgrow.unmapped - d : 0;
+}
+
+static void ds41_ctx_resize_log(const ds41_gpu_graph *g, uint32_t need, const char *reason) {
+#ifdef DS41_CTX_GROW_CUDA
+    fprintf(stderr, "DS4COMBO_CTX_RESIZE ctx_tokens=%u mapped_tokens=%u buffer_bytes=%llu "
+                    "expert_vram=%u host=%u reason=%s\n",
+            need, g->grow_tokens,
+            (unsigned long long)ds41_grow_visit(g, g->grow_tokens, DS41_GROW_COST, NULL),
+            ds4_gpu_stream_expert_cache_tier_count(),
+            ds4_gpu_stream_host_expert_cache_current_count(), reason);
+    fflush(stderr);
+#else
+    (void)g; (void)need; (void)reason;
+#endif
+}
+
+/* Make the context-dependent buffers cover `need` tokens. Growth first
+ * takes the bytes from the VRAM expert tier (coldest experts evicted,
+ * demoted to a free host-tier slot when possible), then maps the step.
+ * A shrink (only when allowed: new conversation, rewind, state load)
+ * unmaps first and hands the bytes back to the expert tier. Failure is
+ * loud and leaves the request failed; nothing is truncated. */
+static bool ds41_ctx_resize(ds41_gpu_graph *g, uint32_t need, bool allow_shrink) {
+    if (!g->grow_step) return true;
+    if (need > g->ctx) {
+        fprintf(stderr, "DS4COMBO_CTX_RESIZE_FAILED ctx_tokens=%u max_ctx=%u reason=exceeds the configured context\n",
+                need, g->ctx);
+        return false;
+    }
+#ifdef DS41_CTX_GROW_CUDA
+    const uint32_t T = ds41_grow_round(g->ctx, g->grow_step, need);
+    if (T == g->grow_tokens || (T < g->grow_tokens && !allow_shrink)) return true;
+    const uint64_t before = ds41_grow_visit(g, g->grow_tokens, DS41_GROW_COST, NULL);
+    const uint64_t after = ds41_grow_visit(g, T, DS41_GROW_COST, NULL);
+    uint32_t evicted = 0, demoted = 0;
+    const uint64_t unmapped_after = g_ds41_ctxgrow.unmapped + before > after ?
+        g_ds41_ctxgrow.unmapped + before - after : 0;
+    if (after > before && g_ds41_ctxgrow.streaming) {
+        /* Evict only what the tier holds above its new ceiling; the rest of
+         * the step comes from headroom the tier never took (e.g. the live
+         * free-VRAM reserve already kept it below the ceiling). */
+        const uint64_t c = ds41_ctxgrow_ceiling(unmapped_after);
+        if (c < g_ds41_ctxgrow.ceiling) {
+            g_ds41_ctxgrow.ceiling = c;
+            if (!ds4_gpu_stream_expert_cache_set_ceiling(c, &evicted, &demoted)) {
+                fprintf(stderr, "DS4COMBO_CTX_RESIZE_FAILED ctx_tokens=%u mapped_tokens=%u need_bytes=%llu "
+                                "reason=VRAM expert tier could not release memory\n",
+                        need, T, (unsigned long long)(after - before));
+                return false;
+            }
+        }
+    }
+    bool ok = true;
+    (void)ds41_grow_visit(g, T, DS41_GROW_APPLY, &ok);
+    if (!ok) {
+        fprintf(stderr, "DS4COMBO_CTX_RESIZE_FAILED ctx_tokens=%u mapped_tokens=%u need_bytes=%llu "
+                        "expert_vram=%u reason=out of device memory mapping the context step\n",
+                need, T, (unsigned long long)(after > before ? after - before : 0),
+                ds4_gpu_stream_expert_cache_tier_count());
+        /* Keep whatever is backed; the old range is still fully mapped. */
+        if (T > g->grow_tokens) (void)ds41_grow_visit(g, g->grow_tokens, DS41_GROW_APPLY, &ok);
+        return false;
+    }
+    g->grow_tokens = T;
+    g_ds41_ctxgrow.unmapped = unmapped_after;
+    if (after < before && g_ds41_ctxgrow.streaming) {
+        g_ds41_ctxgrow.ceiling = ds41_ctxgrow_ceiling(unmapped_after);
+        (void)ds4_gpu_stream_expert_cache_set_ceiling(g_ds41_ctxgrow.ceiling, NULL, NULL);
+    }
+    if (after > before)
+        fprintf(stderr, "ds4: context step mapped %llu bytes: %u VRAM experts evicted (%u demoted to host), "
+                        "tier ceiling %.2f GiB, fixed-plan floor %.2f GiB\n",
+                (unsigned long long)(after - before), evicted, demoted,
+                (double)g_ds41_ctxgrow.ceiling / 1073741824.0,
+                (double)g_ds41_ctxgrow.fixed_floor / 1073741824.0);
+    ds41_ctx_resize_log(g, need, after > before ? "grow" : "shrink");
+    return true;
+#else
+    (void)allow_shrink;
+    return true;
+#endif
+}
+
 static void ds41_graph_reset(ds41_gpu_graph *g) {
     ds41_engram_carry_drop(g);
     g->state_generation++;
@@ -43018,7 +43312,7 @@ static bool ds41_graph_ensure_prefill_workspace(ds41_gpu_graph *g) {
     if (g->batch.residual) return true;
 #define DS41_BATCH_ALLOC(name, count) \
     if (!(g->batch.name = (!strcmp(#name, "engram_rows") || !strcmp(#name, "selected_comp") ? \
-            ds4_gpu_tensor_alloc_managed : ds4_gpu_tensor_alloc)( \
+            ds4_gpu_tensor_alloc_managed : ds41_ctx_tensor_alloc(g))( \
                 (uint64_t)(count) * g->prefill_cap * 4u))) goto fail;
     DS41_PREFILL_STORAGE(DS41_BATCH_ALLOC)
     /* Engram projection ends before HC normalization. HC normalization
@@ -43051,13 +43345,19 @@ static bool ds41_graph_ensure_prefill_workspace(ds41_gpu_graph *g) {
                 (uint64_t)i * (count) * 4u, (uint64_t)(count) * 4u))) goto fail;
     DS41_PREFILL_ROWS(DS41_BATCH_VIEW)
 #undef DS41_BATCH_VIEW
-    if (!ds4_gpu_tensor_fill_f32(g->batch.block_mask, 0,
+    /* Growable buffers read zero wherever they are newly backed. */
+    if (!g->grow_step && !ds4_gpu_tensor_fill_f32(g->batch.block_mask, 0,
         (uint64_t)g->prefill_cap * ((g->ctx + 7u) / 8u))) goto fail;
 #define DS41_CARRY_ALLOC(name, count, format) \
-    if (g->carry_cap && !(g->carry.name = ds4_gpu_tensor_alloc( \
+    if (g->carry_cap && !(g->carry.name = ds41_ctx_tensor_alloc(g)( \
             (uint64_t)ds41_carry_words(count, format, g->compact_carry) * g->carry_cap * sizeof(float)))) goto fail;
     DS41_CARRY_ROWS(DS41_CARRY_ALLOC)
 #undef DS41_CARRY_ALLOC
+    if (g->grow_step) {
+        bool ok = true;
+        (void)ds41_grow_visit(g, g->grow_tokens, DS41_GROW_APPLY, &ok);
+        if (!ok) goto fail;
+    }
     return true;
 fail:
     ds41_graph_free_prefill_workspace(g);
@@ -43075,7 +43375,9 @@ static DS4_MAYBE_UNUSED bool ds41_graph_alloc(ds41_gpu_graph *g, const ds4_model
     g->carry_cap = ds41_carry_cap(ctx);
     g->compact_carry = !getenv("DS4_METAL_DISABLE_V41_COMPACT_CARRY");
     g->prefill_alias = !getenv("DS4_METAL_DISABLE_V41_PREFILL_ALIAS");
-    g->allocation_bytes = ds41_graph_bytes(ctx);
+    g->grow_step = ds41_ctx_grow_step();
+    g->grow_tokens = g->grow_step ? ds41_grow_round(ctx, g->grow_step, 1) : ctx;
+    g->allocation_bytes = ds41_graph_initial_bytes(ctx);
     g->streaming = streaming;
     g->tp_world = 1;
     g->token_map = malloc((size_t)DS4_N_VOCAB * sizeof(uint32_t));
@@ -43118,8 +43420,8 @@ static DS4_MAYBE_UNUSED bool ds41_graph_alloc(ds41_gpu_graph *g, const ds4_model
     }
     for (uint32_t i = 0; i < 4; i++) {
         const uint64_t cap = ctx / (i < 3 ? 2u : 1u) + 1u;
-        g->compressed[i] = ds4_gpu_tensor_alloc(cap * 512u * sizeof(float));
-        g->index_cache[i] = ds4_gpu_tensor_alloc(cap * 128u * sizeof(float));
+        g->compressed[i] = ds41_ctx_tensor_alloc(g)(cap * 512u * sizeof(float));
+        g->index_cache[i] = ds41_ctx_tensor_alloc(g)(cap * 128u * sizeof(float));
         g->previous_kv[i] = ds4_gpu_tensor_alloc(512u * sizeof(float));
         g->previous_score[i] = ds4_gpu_tensor_alloc(512u * sizeof(float));
         if (!g->compressed[i] || !g->index_cache[i] || !g->previous_kv[i] || !g->previous_score[i]) goto fail;
@@ -43142,9 +43444,23 @@ static DS4_MAYBE_UNUSED bool ds41_graph_alloc(ds41_gpu_graph *g, const ds4_model
     DS41_SCRATCH(DS41_ALLOC)
 #undef DS41_ALLOC
     if (!ds41_graph_ensure_prefill_workspace(g)) goto fail;
+    if (g->grow_step) {
+        bool ok = true;
+        (void)ds41_grow_visit(g, g->grow_tokens, DS41_GROW_APPLY, &ok);
+        if (!ok) goto fail;
+    }
     ds41_graph_reset(g);
     fprintf(stderr, "ds4: V4.1 static context buffers %.2f MiB (ctx=%u), Engram disk-only\n",
             (double)ds41_graph_bytes(ctx) / 1048576.0, ctx);
+    if (g->grow_step) {
+        ds41_ctxgrow_account(g, true);
+        fprintf(stderr, "ds4: V4.1 context VRAM grows in %u-token steps: %.2f MiB mapped of %.2f MiB "
+                        "(DS4_CTX_GROW=0 restores fixed buffers)\n",
+                g->grow_step,
+                (double)ds41_grow_visit(g, g->grow_tokens, DS41_GROW_COST, NULL) / 1048576.0,
+                (double)ds41_grow_visit(g, ctx, DS41_GROW_ESTIMATE, NULL) / 1048576.0);
+        ds41_ctx_resize_log(g, 0, "grow");
+    }
     return true;
 fail:
     ds41_graph_free(g);
@@ -43450,6 +43766,13 @@ static bool ds41_hc_mix(ds41_gpu_graph *g, const ds4_model *m,
 
 /* rope_il >= 0: the heads still carry their rope; that layer's inverse rope
  * folds into the projection (else it runs first). */
+/* DS4COMBO V4.1 per-layer dump (defined with ds41_graph_layer). */
+static bool ds41_dump_pos(uint32_t pos);
+static bool ds41_dump_put(const ds4_gpu_tensor *t, uint32_t row, uint32_t words,
+                          uint32_t il, uint32_t pos, uint32_t point);
+static bool ds41_dump_rows(const ds4_gpu_tensor *t, uint32_t start, uint32_t count,
+                           uint32_t words, uint32_t il, uint32_t point);
+
 static bool ds41_attention_low(ds41_gpu_graph *g, const ds4_model *m,
                                const ds4_layer_weights *l, int rope_il) {
     const uint32_t groups = DS4_N_OUT_GROUP / g->tp_world;
@@ -43492,6 +43815,17 @@ static bool ds41_attention_output(ds41_gpu_graph *g, const ds4_model *m,
 static bool ds41_attention_expand(ds41_gpu_graph *g, const ds4_model *m,
                                   const ds4_layer_weights *l, int rope_il) {
     if (!ds41_attention_low(g, m, l, rope_il)) return false;
+    const bool dump = g->tp_world == 1 && rope_il >= 0 && ds41_dump_pos(g->pos);
+    if (dump && !ds41_dump_put(g->heads, 0, DS4_N_HEAD * DS4_N_HEAD_DIM, (uint32_t)rope_il, g->pos, 9))
+        return false;
+    if (dump) {
+        /* CUDA has no fused matmul+expand: this is the same sequence as below,
+         * split only so the projection result can be read. */
+        return ds41_attention_b(g, m, l, g->block) &&
+            ds41_dump_put(g->block, 0, DS4_N_EMBD, (uint32_t)rope_il, g->pos, 10) &&
+            ds4_gpu_hc_expand_split_bf16_tensor(g->after_attn, g->block, g->residual, g->attn_split,
+                                                DS4_N_EMBD, DS4_N_HC);
+    }
     if (l->attn_output_b->type == DS4_TENSOR_Q8_0 && !ds41_expand_fusion_off() &&
         ds4_gpu_dsv41_matmul_expand(g->after_attn, m->map, m->size, l->attn_output_b->abs_offset,
             l->attn_output_b->dim[0], l->attn_output_b->dim[1], g->low, NULL, g->residual,
@@ -43641,8 +43975,11 @@ static bool ds41_attention(ds41_gpu_graph *g, const ds4_model *m,
     if (!projected && !ds41_attention_project(g, m, l, (int)il, &q_roped)) return false;
     if ((!q_roped && !ds41_rope(g->q, heads, DS4_N_HEAD_DIM, il, pos, false)) ||
         !ds41_rope_store(g->kv, g->window[il], (uint64_t)(pos % 128u) * 512u * 4u,
-                         DS4_N_HEAD_DIM, il, pos, DS4_V41_FP8_E8M0) ||
-        !ds41_attention_select(g, m, l, il)) return false;
+                         DS4_N_HEAD_DIM, il, pos, DS4_V41_FP8_E8M0)) return false;
+    if (g->tp_world == 1 && ds41_dump_pos(pos) &&
+        (!ds41_dump_put(g->q, 0, heads * DS4_N_HEAD_DIM, il, pos, 7) ||
+         !ds41_dump_put(g->window[il], pos % 128u, DS4_N_HEAD_DIM, il, pos, 8))) return false;
+    if (!ds41_attention_select(g, m, l, il)) return false;
     const uint32_t attended = n_comp < DS4_N_INDEXER_TOP_K ? n_comp : DS4_N_INDEXER_TOP_K;
     const uint32_t n_raw = pos + 1u < 128u ? pos + 1u : 128u;
     const uint64_t sinks = l->attn_sinks->abs_offset + (uint64_t)head0 * sizeof(float);
@@ -43797,6 +44134,8 @@ static bool ds41_moe_partial(ds41_gpu_graph *g, const ds4_model *m,
     bool routed_ok;
     const ds4_gpu_tensor *selected = g->selected, *weights = g->route_weights;
     uint32_t n_used = DS4_N_EXPERT_USED;
+    /* DS4COMBO_T1: step-0 routed-MoE wall time (TP world 2 path included). */
+    const double t1_moe = g_t1.state == 1 && g_t1.step0 ? now_sec() : 0.0;
 #ifndef __APPLE__
     if (g->tp_world == 2) {
         routed_ok = ds4_gpu_routed_moe_batch_owned_tensor(routed, g->gate, g->up, g->mid, g->experts,
@@ -43823,6 +44162,7 @@ static bool ds41_moe_partial(ds41_gpu_graph *g, const ds4_model *m,
             DS4_N_EMBD, DS4_N_FF_EXP, DS4_N_EMBD, selected, weights,
             DS4_N_EXPERT, n_used, DS4_SWIGLU_CLAMP_EXP, g->norm, NULL, il,
             !g->streaming);
+    if (t1_moe > 0.0) { g_t1.moe_s += now_sec() - t1_moe; g_t1.moe_layers++; }
 #ifdef __APPLE__
     if (balanced) ds4_gpu_tp_full_expert_bind(0);
 #endif
@@ -43868,6 +44208,7 @@ static bool ds41_moe(ds41_gpu_graph *g, const ds4_model *m,
                      const ds4_layer_weights *l, uint32_t il, uint32_t token) {
     if (!ds41_moe_partial(g, m, l, il, token, g->tp_world == 2)) return false;
 #if !defined(__APPLE__) && !defined(DS4_ROCM_BUILD)
+    if (g->streaming && !ds4_gpu_expert_restore_async_tick()) return false;
     if (g->streaming && g_cache_affinity_bias > 0.0f && !ds4_gpu_cache_affinity_background_tick()) return false;
 #endif
     return ds41_moe_finish(g, il);
@@ -44236,6 +44577,8 @@ static bool ds41_attention_batch(ds41_gpu_graph *g, const ds4_model *m,
     if (!ds4_gpu_dsv41_rope(b->q, DS4_N_HEAD_DIM, heads, count, start, ratio != 0, false) ||
         !ds4_gpu_dsv41_rope(b->kv, DS4_N_HEAD_DIM, 1, count, start, ratio != 0, false) ||
         !ds4_gpu_dsv41_quantize(b->kv, DS4_N_HEAD_DIM, count, DS4_V41_FP8_E8M0)) return false;
+    if (!ds41_dump_rows(b->q, start, count, heads * DS4_N_HEAD_DIM, il, 7) ||
+        !ds41_dump_rows(b->kv, start, count, DS4_N_HEAD_DIM, il, 8)) return false;
     /* Preserve chronological raw keys before publishing the final decode ring. */
     if (first && !ds4_gpu_tensor_copy(g->raw_prefill, 0, g->window[il],
                                      raw_start * row_bytes, first * row_bytes)) return false;
@@ -44348,6 +44691,7 @@ static bool ds41_attention_batch(ds41_gpu_graph *g, const ds4_model *m,
     if (!ds4_gpu_dsv41_quantize(b->heads, heads * DS4_N_HEAD_DIM, count, DS4_V41_BF16) ||
         !ds4_gpu_dsv41_rope(b->heads, DS4_N_HEAD_DIM, heads, count, start, ratio != 0, true))
         return false;
+    if (!ds41_dump_rows(b->heads, start, count, heads * DS4_N_HEAD_DIM, il, 9)) return false;
     const uint32_t kept = n_raw < 128u ? n_raw : 128u;
     const uint32_t slot = (start + count - kept) % 128u;
     const uint32_t part = kept < 128u - slot ? kept : 128u - slot;
@@ -44379,8 +44723,95 @@ static bool ds41_graph_after_moe(ds41_gpu_graph *g, const ds4_model *m,
     return !carry || ds4_gpu_tensor_copy(g->pre, 0, g->ffn_split, 0, DS4_N_HC * sizeof(float));
 }
 
+/* DS4COMBO V4.1 per-layer dump (diagnostic, off unless DS4COMBO_V41_DUMP names
+ * a file). For the positions in DS4COMBO_V41_DUMP_POS (default 0,128,275,549)
+ * both the token-major step and the layer-major sweep append, per layer:
+ *   0 attention input norm (EMBD)      1 after-attention streams (HC*EMBD)
+ *   2 FFN input norm (EMBD)            3 routed expert ids (top-k, int32)
+ *   4 routed expert weights (top-k)    5 routed experts' sum (EMBD)
+ *   6 residual streams after the layer (HC*EMBD)
+ * Record: u32 magic 0x52313444, layer, pos, point, n (4-byte words), data. */
+static FILE *g_ds41_dump_file;
+static int g_ds41_dump_state;          /* 0 unknown, 1 on, -1 off */
+static uint32_t g_ds41_dump_pos[16], g_ds41_dump_npos;
+
+static bool ds41_dump_on(void) {
+    if (!g_ds41_dump_state) {
+        const char *path = getenv("DS4COMBO_V41_DUMP");
+        g_ds41_dump_state = -1;
+        if (path && path[0] && (g_ds41_dump_file = fopen(path, "ab")) != NULL) {
+            const char *list = getenv("DS4COMBO_V41_DUMP_POS");
+            if (!list || !list[0]) list = "0,128,275,549";
+            for (const char *c = list; *c && g_ds41_dump_npos < 16u;) {
+                char *end = NULL;
+                const unsigned long v = strtoul(c, &end, 10);
+                if (end == c) break;
+                g_ds41_dump_pos[g_ds41_dump_npos++] = (uint32_t)v;
+                c = *end == ',' ? end + 1 : end;
+            }
+            g_ds41_dump_state = 1;
+            fprintf(stderr, "DS4COMBO_V41_DUMP on: %s (%u positions)\n", path, g_ds41_dump_npos);
+        }
+    }
+    return g_ds41_dump_state > 0;
+}
+
+static bool ds41_dump_pos(uint32_t pos) {
+    if (!ds41_dump_on()) return false;
+    for (uint32_t i = 0; i < g_ds41_dump_npos; i++) if (g_ds41_dump_pos[i] == pos) return true;
+    return false;
+}
+
+/* Read `words` 4-byte values at word offset `row * words` of `t`. */
+static bool ds41_dump_put(const ds4_gpu_tensor *t, uint32_t row, uint32_t words,
+                          uint32_t il, uint32_t pos, uint32_t point) {
+    if (!t || !g_ds41_dump_file) return true;
+    const bool active = ds4_gpu_commands_active() != 0;
+    if (active && !ds4_gpu_end_commands()) return false;
+    float *buf = xmalloc((size_t)words * sizeof(float));
+    const bool ok = ds4_gpu_tensor_read(t, (uint64_t)row * words * sizeof(float), buf,
+                                        (uint64_t)words * sizeof(float)) != 0;
+    if (ok) {
+        const uint32_t head[5] = {0x52313444u, il, pos, point, words};
+        fwrite(head, sizeof(head), 1, g_ds41_dump_file);
+        fwrite(buf, sizeof(float), words, g_ds41_dump_file);
+        fflush(g_ds41_dump_file);
+    } else {
+        fprintf(stderr, "DS4COMBO_V41_DUMP read failed layer=%u pos=%u point=%u\n", il, pos, point);
+    }
+    free(buf);
+    return !active || ds4_gpu_begin_commands() != 0;
+}
+
+/* The sweep's rows [start, start + count) that are dump positions. */
+static bool ds41_dump_rows(const ds4_gpu_tensor *t, uint32_t start, uint32_t count,
+                           uint32_t words, uint32_t il, uint32_t point) {
+    if (!ds41_dump_on()) return true;
+    bool ok = true;
+    for (uint32_t i = 0; ok && i < g_ds41_dump_npos; i++) {
+        const uint32_t p = g_ds41_dump_pos[i];
+        if (p >= start && p < start + count) ok = ds41_dump_put(t, p - start, words, il, p, point);
+    }
+    return ok;
+}
+
 static bool ds41_graph_layer(ds41_gpu_graph *g, const ds4_model *m,
                             const ds4_layer_weights *l, uint32_t il, int token) {
+    if (g->tp_world == 1 && ds41_dump_pos(g->pos)) {
+        const uint32_t p = g->pos, hc = DS4_N_HC * DS4_N_EMBD;
+        return ds41_graph_before_attention(g, m, l, il) &&
+            ds41_dump_put(g->norm, 0, DS4_N_EMBD, il, p, 0) &&
+            ds41_attention(g, m, l, il, false) &&
+            ds41_dump_put(g->after_attn, 0, hc, il, p, 1) &&
+            ds41_hc_mix(g, m, l, true, g->attn_split) &&
+            ds41_dump_put(g->norm, 0, DS4_N_EMBD, il, p, 2) &&
+            ds41_moe(g, m, l, il, (uint32_t)token) &&
+            ds41_dump_put(g->selected, 0, DS4_N_EXPERT_USED, il, p, 3) &&
+            ds41_dump_put(g->route_weights, 0, DS4_N_EXPERT_USED, il, p, 4) &&
+            ds41_dump_put(g->routed, 0, DS4_N_EMBD, il, p, 5) &&
+            ds41_graph_after_moe(g, m, l, il, il + 1u == DS4_N_LAYER) &&
+            ds41_dump_put(g->residual, 0, hc, il, p, 6);
+    }
     return ds41_graph_before_moe(g, m, l, il) && ds41_moe(g, m, l, il, (uint32_t)token) &&
         ds41_graph_after_moe(g, m, l, il, il + 1u == DS4_N_LAYER);
 }
@@ -44971,6 +45402,7 @@ static uint32_t ds41_decode_flush_layers(void) {
 static DS4_MAYBE_UNUSED bool ds41_graph_step(ds41_gpu_graph *g, const ds4_model *m,
                                              const ds4_weights *w, int token, float *logits) {
     if (!g || !g->valid || g->pos >= g->ctx || token < 0 || (uint32_t)token >= DS4_N_VOCAB) return false;
+    if (!ds41_ctx_resize(g, g->pos + 1u, false)) return false;
     if (g->draft) g->draft->rewind_valid = false;
     uint32_t ids[2][DS4_ENGRAM_COLS];
     ds4_engram_history next_history = g->history;
@@ -45152,7 +45584,16 @@ static uint32_t ds41_prefill_count(const ds41_gpu_graph *g, uint32_t remaining) 
         !getenv("DS4_METAL_DISABLE_V41_WIDE_PREFILL")) {
         const uint32_t count = remaining < g->carry_cap ? remaining : g->carry_cap;
         /* a short sweep keeps its final partial tile instead of a second decoder pass */
-        return remaining < 8192u && !ds41_short_sweep_off() ? count : count - count % 2048u;
+        if (remaining < 8192u && !ds41_short_sweep_off()) return count;
+#if !defined(__APPLE__) && !defined(DS4_ROCM_BUILD)
+        /* DS4COMBO: a CUDA SSD sweep that holds every remaining row keeps its
+         * last partial tile too. Rounding 14859 down to 14336 left a 523-row
+         * second sweep that re-reads every layer's experts (~13 s). Prompts
+         * longer than the carry still split on the 2048 grid. */
+        if (g->streaming && remaining <= g->carry_cap && !ds41_short_sweep_off() &&
+            !getenv("DS4COMBO_V41_DISABLE_ONE_SWEEP")) return remaining;
+#endif
+        return count - count % 2048u;
     }
     const uint32_t tail_cap = g->prefill_cap < 2048u ? g->prefill_cap : 2048u;
     return remaining < tail_cap ? remaining : tail_cap;
@@ -45476,6 +45917,18 @@ static uint32_t ds41_encoder_chunk_cap(const ds41_gpu_graph *g, uint32_t count) 
  * travel down the stack with their token, while only source layers append KV.
  * A failed partial chunk cannot be snapshotted: its layers have different
  * frontiers, so the caller must rebuild from its retained token history. */
+/* The sweep's model-span installs keep a Metal/ROCm mapping to the layer in
+ * flight. CUDA SSD streaming already holds every non-routed tensor in its
+ * device cache from startup (routed experts go through the selected cache),
+ * and a CUDA install releases that whole cache: each layer, and then the first
+ * decode token, reloaded the 9.37 GiB of resident weights through the slow
+ * staged reader. Decode never installs on CUDA; neither does the sweep. */
+#if !defined(__APPLE__) && !defined(DS4_ROCM_BUILD)
+#define DS41_SWEEP_INSTALLS 0
+#else
+#define DS41_SWEEP_INSTALLS 1
+#endif
+
 static bool ds41_graph_prefill_sweep(ds41_gpu_graph *g, const ds4_model *m,
                               const ds4_weights *w, const int *tokens, uint32_t total_count,
                               ds4_session_progress_fn progress, void *progress_ud,
@@ -45487,6 +45940,7 @@ static bool ds41_graph_prefill_sweep(ds41_gpu_graph *g, const ds4_model *m,
     if ((!g->valid && !resume_encoder) || !total_count || (wide && total_count > g->carry_cap) ||
         total_count > g->ctx - g->pos || g->imatrix || !ds41_tp_batch_enabled(g))
         return false;
+    if (!ds41_ctx_resize(g, g->pos + total_count, false)) return false;
     const bool profile = getenv("DS4_METAL_GRAPH_PREFILL_PROFILE") != NULL;
     const bool stage_profile = getenv("DS4_METAL_V41_STAGE_PROFILE") != NULL;
     const bool batch_moe = !getenv("DS4_METAL_DISABLE_V41_BATCH_MOE");
@@ -45547,14 +46001,14 @@ static bool ds41_graph_prefill_sweep(ds41_gpu_graph *g, const ds4_model *m,
         engram_prefetched = overlap_engram &&
             ds41_engram_prefetch_start(&engram_local, g, 0, total_count, ids, 0);
     }
-    bool ok = !g->streaming || metal_graph_stream_map_token(m, w);
+    bool ok = !g->streaming || !DS41_SWEEP_INSTALLS || metal_graph_stream_map_token(m, w);
     metal_graph_stream_prepare_slot prepare = {0};
     for (uint32_t il = 0; ok && il < DS4_N_LAYER; il++) {
         if (cancel && cancel(cancel_ud)) { ok = false; break; }
         if (encoder_only && il == 20u) {
             /* Publish every encoder key, but leave the decoder invalid until
              * the last sweep rebuilds its exact 2541-token dependency suffix. */
-            if (g->streaming) ok = metal_graph_stream_map_layer_decode(m, w, il);
+            if (g->streaming && DS41_SWEEP_INSTALLS) ok = metal_graph_stream_map_layer_decode(m, w, il);
             if (ok) ok = ds41_decoder_prepare(g, m, &w->layer[il], il, initial_start,
                 0, total_count, true, batch_hc, batch_attention, cancel, cancel_ud);
             break;
@@ -45580,10 +46034,11 @@ static bool ds41_graph_prefill_sweep(ds41_gpu_graph *g, const ds4_model *m,
                 ok = metal_graph_stream_prepare_join_layer(NULL, m, w, il, first_count,
                         false, true, false, false, &prepare, 1);
 #endif
-            if (ok) ok = metal_graph_stream_map_layer(m, w, il);
+            if (ok && DS41_SWEEP_INSTALLS) ok = metal_graph_stream_map_layer(m, w, il);
 #if !defined(__APPLE__) && !defined(DS4_ROCM_BUILD)
-            /* Below 2K, unused expert reads outweigh the overlap. */
-            if (ok && total_count >= 2048u) {
+            /* Below 2K, unused expert reads outweigh the overlap. A borrowed
+             * loader holding a single layer has no room for the next one. */
+            if (ok && total_count >= 2048u && g->prefill_borrow_layers != 1u) {
                 const ds4_gpu_stream_expert_table current = graph_stream_expert_table_make(m,
                     &w->layer[il], il,
                     routed_expert_row_bytes(w->layer[il].ffn_gate_exps) * DS4_N_FF_EXP,
@@ -45732,6 +46187,7 @@ static bool ds41_graph_prefill_sweep(ds41_gpu_graph *g, const ds4_model *m,
             if (ok && batch_hc)
                 ok = ds41_before_attention_batch(g, &active, m, &w->layer[il], il, count);
             DS41_STAGE("hc/engram");
+            if (ok && batch_hc) ok = ds41_dump_rows(g->batch.norm, start, count, DS4_N_EMBD, il, 0);
             for (uint32_t t = 0; ok && !batch_hc && t < count; t++) {
                 row.pos = start + t;
 #define DS41_USE_ROW(name, width) row.name = g->rows_view[t].name;
@@ -45776,8 +46232,13 @@ static bool ds41_graph_prefill_sweep(ds41_gpu_graph *g, const ds4_model *m,
                                                    g->batch.low, count, true);
                 }
                 DS41_STAGE("attention output");
+                if (ok && l->attn_output_b->type == DS4_TENSOR_Q8_0 && g->tp_world == 1)
+                    ok = ds41_dump_rows(g->batch.block, start, count, DS4_N_EMBD, il, 10);
                 if (ok && batch_hc) ok = ds41_after_attention_batch(&active, m, l, count, false);
                 DS41_STAGE("hc/ffn norm");
+                if (ok && batch_hc)
+                    ok = ds41_dump_rows(g->batch.after_attn, start, count, DS4_N_HC * DS4_N_EMBD, il, 1) &&
+                        ds41_dump_rows(g->batch.norm, start, count, DS4_N_EMBD, il, 2);
                 for (uint32_t t = 0; ok && !batch_hc && t < count; t++) {
                     row.pos = start + t;
 #define DS41_USE_FFN_ROW(name, width) row.name = g->rows_view[t].name;
@@ -45791,6 +46252,10 @@ static bool ds41_graph_prefill_sweep(ds41_gpu_graph *g, const ds4_model *m,
             if (ok && batch_moe) {
                 ok = ds41_moe_batch(g, m, &w->layer[il], il, count, false, true);
                 DS41_STAGE("shared/routed ffn");
+                if (ok && batch_hc)
+                    ok = ds41_dump_rows(g->batch.selected, start, count, DS4_N_EXPERT_USED, il, 3) &&
+                        ds41_dump_rows(g->batch.route_weights, start, count, DS4_N_EXPERT_USED, il, 4) &&
+                        ds41_dump_rows(g->batch.routed, start, count, DS4_N_EMBD, il, 5);
                 if (ok && batch_hc) {
                     ok = ds41_ffn_add_batch(active.block, active.routed, active.shared, count) &&
                         ds41_hc_expand_batch(active.residual, active.block, active.after_attn, active.ffn_split, count);
@@ -45804,6 +46269,8 @@ static bool ds41_graph_prefill_sweep(ds41_gpu_graph *g, const ds4_model *m,
                 }
             }
             DS41_STAGE("hc expand");
+            if (ok && batch_hc)
+                ok = ds41_dump_rows(g->batch.residual, start, count, DS4_N_HC * DS4_N_EMBD, il, 6);
 #undef DS41_STAGE
             if (ok && wide && il + 1u < DS4_N_LAYER) {
                 ok = ds41_carry_copy(g, off, count, true);
@@ -45852,7 +46319,7 @@ static bool ds41_graph_prefill_sweep(ds41_gpu_graph *g, const ds4_model *m,
     if (g->streaming) ds4_gpu_stream_expert_cache_prefetch_finish(true);
 #endif
     if (!metal_graph_stream_prepare_join_all(&prepare, 1)) ok = false;
-    if (g->streaming && !metal_graph_stream_map_decode_static_all(m, w)) ok = false;
+    if (g->streaming && DS41_SWEEP_INSTALLS && !metal_graph_stream_map_decode_static_all(m, w)) ok = false;
     if (ok && !encoder_only) {
         ok = ds4_gpu_begin_commands() &&
              ds4_gpu_tensor_copy(g->residual, 0, row.residual, 0, (uint64_t)DS4_N_HC * DS4_N_EMBD * 4u) &&
@@ -45930,6 +46397,11 @@ static DS4_MAYBE_UNUSED bool ds41_graph_step_batch(ds41_gpu_graph *const *graphs
      * Attention and Engram history remain private to each session. */
     ds41_gpu_graph *g = ds41_batch_workspace(graphs, count);
     if (!g) return false;
+    for (int i = 0; i < count; i++) {   /* each session's own rows in this pass */
+        uint32_t own = 0;
+        for (int j = 0; j < count; j++) own += graphs[j] == graphs[i];
+        if (!ds41_ctx_resize(graphs[i], graphs[i]->pos + own, false)) return false;
+    }
     const uint32_t rows = (uint32_t)count;
     const bool prefill_only = prefill_rows == rows;
     const bool shared_owner = g->tp_world == 2 &&
@@ -46110,6 +46582,7 @@ static bool ds41_draft_verify_impl(ds41_gpu_graph *g, const ds4_model *m, const 
     ds41_draft *d = g->draft;
     if (!d || !g->valid || n < 2u || n > d->block + 1u || n > DS4_TP_BATCH_MAX_ROWS ||
         n > g->ctx - g->pos) return false;
+    if (!ds41_ctx_resize(g, g->pos + n, false)) return false;
 #if !defined(__APPLE__) && !defined(DS4_ROCM_BUILD)
     if (g->streaming) {
         d->verify_affinity_count=ds4_gpu_cache_affinity_decode_count();
@@ -66957,30 +67430,7 @@ static void session_greedy_splitkv_reset(ds4_session *s) {
 #endif
 
 #ifdef DS4_HAS_DEEPSEEK41_GPU
-typedef struct {
-    ds4_gpu_tensor *tensor;
-    uint64_t bytes;
-} ds41_state_span;
-
-/* The selection masks are rebuilt by each index-source layer on the next
- * token. Only owner caches, windows and unfinished compression pairs persist. */
-static uint32_t ds41_state_spans(ds41_gpu_graph *g, uint32_t pos,
-                                 ds41_state_span spans[54]) {
-    uint32_t n = 0;
-    const uint32_t raw = pos < 128u ? pos : 128u;
-    for (uint32_t il = 0; il < 40; il++)
-        spans[n++] = (ds41_state_span){g->window[il], (uint64_t)raw * 512u * 4u};
-    for (uint32_t i = 0; i < 4; i++) {
-        const uint32_t live = pos / (i < 3 ? 2u : 1u);
-        spans[n++] = (ds41_state_span){g->compressed[i], (uint64_t)live * 512u * 4u};
-        spans[n++] = (ds41_state_span){g->index_cache[i], (uint64_t)live * 128u * 4u};
-        if (i < 3 && (pos & 1u)) {
-            spans[n++] = (ds41_state_span){g->previous_kv[i], 512u * 4u};
-            spans[n++] = (ds41_state_span){g->previous_score[i], 512u * 4u};
-        }
-    }
-    return n;
-}
+#include "ds4_native_spans.inc"
 
 static uint64_t ds41_payload_body_bytes(ds41_gpu_graph *g, uint32_t pos, uint32_t draft_rows) {
     ds41_draft *draft = g->tp_world == 1 ? g->draft : NULL;
@@ -67085,6 +67535,10 @@ static int ds41_load_payload(ds4_session *s, FILE *fp, const uint32_t *h,
         s->checkpoint_valid = false;
         g->valid = false;
         rc = payload_read_bytes(fp, s->logits, (uint64_t)DS4_N_VOCAB * 4u, &remaining, err, errlen);
+        if (!rc && !ds41_ctx_resize(g, pos, true)) {
+            payload_set_err(err, errlen, "context VRAM could not grow to the snapshot position");
+            rc = 1;
+        }
         ds41_state_span spans[54];
         const uint32_t n = ds41_state_spans(g, pos, spans);
         uint8_t *buf = xmalloc(DS4_SESSION_IO_CHUNK);
@@ -67119,6 +67573,7 @@ static int ds41_load_payload(ds4_session *s, FILE *fp, const uint32_t *h,
     return rc;
 }
 #endif
+#include "ds4_native_session.inc"
 #ifdef DS4_HAS_QWEN4_GPU
 static uint64_t qwen4_payload_tensor_bytes(uint32_t rows, uint32_t mtp_rows);
 #endif
@@ -75662,6 +76117,30 @@ static bool ds41_memory_admit_for_host(ds4_engine *e, uint64_t graph_bytes,
     return true;
 }
 
+/* The expert count ds41_memory_admit_for_host() fits for `graph_bytes`,
+ * without changing the engine: the fixed full-ctx plan for growable context. */
+static uint32_t ds41_fixed_plan_experts(ds4_engine *e, uint64_t graph_bytes) {
+    const uint64_t gib = UINT64_C(1073741824);
+    uint64_t host = glm_graph_host_memory_bytes();
+#ifdef __linux__
+    const long pages = sysconf(_SC_PHYS_PAGES), page_size = sysconf(_SC_PAGESIZE);
+    if (pages > 0 && page_size > 0 && (uint64_t)pages <= UINT64_MAX / (uint64_t)page_size)
+        host = (uint64_t)pages * (uint64_t)page_size;
+#endif
+    const uint64_t recommended = ds4_gpu_recommended_working_set_size();
+    uint64_t budget = host / 8u * 7u;
+    if (budget > recommended) budget = recommended;
+    uint64_t weights = g_tp_shard_model_bytes ? g_tp_shard_model_bytes : e->model.size, expert = 0;
+    if (!weights_streaming_non_routed_bytes(&e->weights, &weights) ||
+        !ds4_streaming_routed_expert_bytes(&e->weights, &expert) || !expert) return 0;
+    weights = ds4_add_sat_u64(weights, e->vision_model.size);
+    const uint64_t fixed = ds4_add_sat_u64(weights,
+        ds4_add_sat_u64(graph_bytes, 2u * gib + e->ssd_streaming_prefill_headroom_bytes));
+    if (fixed >= budget) return 0;
+    const uint64_t n = (budget - fixed) / expert;
+    return n > e->ssd_streaming_cache_experts ? e->ssd_streaming_cache_experts : (uint32_t)n;
+}
+
 static bool ds41_memory_admit(ds4_engine *e, uint64_t graph_bytes, bool fit_cache) {
     uint64_t host = glm_graph_host_memory_bytes();
 #ifdef __linux__
@@ -75733,6 +76212,22 @@ static int ds4_engine_open_internal(ds4_engine **out,
     }
 #if defined(DS4_ROCM_BUILD) || defined(DS4_NO_GPU)
     if (affinity > 0.0f) { fprintf(stderr, "ds4: cache affinity requires CUDA\n"); *out = NULL; return 1; }
+#endif
+#if defined(_WIN32) && !defined(DS4_ROCM_BUILD) && !defined(DS4_NO_GPU)
+    if(opt->backend==DS4_BACKEND_CUDA && opt->ssd_streaming) {
+        if(!ds4_ds_configure_read_parts(opt->ds_read_parts_set?opt->ds_read_parts:8u)) {
+            fprintf(stderr,"ds4: invalid DirectStorage startup controls; refusing engine open\n");
+            *out=NULL;return 1;
+        }
+    } else if(opt->ds_read_parts_set) {
+        fprintf(stderr,"ds4: --ds-read-parts requires Windows CUDA SSD streaming\n");
+        *out=NULL;return 1;
+    }
+#else
+    if(opt->ds_read_parts_set) {
+        fprintf(stderr,"ds4: --ds-read-parts requires Windows CUDA DirectStorage\n");
+        *out=NULL;return 1;
+    }
 #endif
     pthread_mutex_lock(&g_quality_mu);
     memset(&g_quality, 0, sizeof(g_quality));
@@ -76206,7 +76701,7 @@ static int ds4_engine_open_internal(ds4_engine **out,
         const uint32_t ctx = opt->context_size > 0 ? (uint32_t)opt->context_size : 4096;
         const uint32_t sessions = e->placement_session_count_hint > 0 ?
             (uint32_t)e->placement_session_count_hint : 1;
-        if (!ds41_memory_admit(e, ds4_mul_sat_u64(ds41_graph_bytes(ctx), sessions), true)) {
+        if (!ds41_memory_admit(e, ds4_mul_sat_u64(ds41_graph_initial_bytes(ctx), sessions), true)) {
             ds4_engine_close(e);
             *out = NULL;
             return 1;
@@ -76759,7 +77254,7 @@ static int ds4_engine_open_internal(ds4_engine **out,
             const uint32_t ctx = opt->context_size > 0 ? (uint32_t)opt->context_size : 4096;
             const uint32_t sessions = e->placement_session_count_hint > 0 ?
                 (uint32_t)e->placement_session_count_hint : 1;
-            if (!ds41_memory_admit(e, ds4_mul_sat_u64(ds41_graph_bytes(ctx), sessions), true)) {
+            if (!ds41_memory_admit(e, ds4_mul_sat_u64(ds41_graph_initial_bytes(ctx), sessions), true)) {
                 ds4_engine_close(e);
                 *out = NULL;
                 return 1;
@@ -76789,6 +77284,31 @@ static int ds4_engine_open_internal(ds4_engine **out,
             return 1;
         }
         ds4_gpu_set_streaming_expert_cache_budget(e->ssd_streaming_cache_experts);
+#if defined(DS4_HAS_DEEPSEEK41_GPU) && defined(DS41_CTX_GROW_CUDA)
+        if (DS4_MODEL_FAMILY == DS4_MODEL_FAMILY_DEEPSEEK41 && ds41_ctx_grow_step()) {
+            /* The tier was fitted with one context step mapped; growth is
+             * paid from it and a shrink returns up to this many bytes. */
+            uint64_t per = 0;
+            g_ds41_ctxgrow.streaming = e->ssd_streaming &&
+                ds4_streaming_routed_expert_bytes(&e->weights, &per) && per != 0;
+            g_ds41_ctxgrow.expert_base = (uint64_t)e->ssd_streaming_cache_experts * per;
+            g_ds41_ctxgrow.ceiling = g_ds41_ctxgrow.expert_base;
+            if (g_ds41_ctxgrow.streaming) {
+                const uint32_t ctx = opt->context_size > 0 ? (uint32_t)opt->context_size : 4096;
+                const uint32_t sessions = e->placement_session_count_hint > 0 ?
+                    (uint32_t)e->placement_session_count_hint : 1;
+                uint32_t floor_n = ds41_fixed_plan_experts(e,
+                    ds4_mul_sat_u64(ds41_graph_bytes(ctx), sessions));
+                if (floor_n > e->ssd_streaming_cache_experts) floor_n = e->ssd_streaming_cache_experts;
+                g_ds41_ctxgrow.fixed_floor = (uint64_t)floor_n * per;
+                ds4_gpu_stream_expert_cache_enable_ctx_resize();
+                ds4_gpu_stream_expert_cache_set_floor(g_ds41_ctxgrow.fixed_floor);
+                fprintf(stderr, "ds4: V4.1 growable context: VRAM expert tier %u experts with one step mapped, "
+                                "never below the fixed full-ctx plan of %u experts\n",
+                        e->ssd_streaming_cache_experts, floor_n);
+            }
+        }
+#endif
 #if defined(__APPLE__)
         /* Keep the weights used by every token from competing with streamed
          * experts in the file cache. These bytes are already in the model
@@ -78478,7 +78998,7 @@ int ds4_session_create(ds4_session **out, ds4_engine *e, int ctx_size) {
     if (DS4_MODEL_FAMILY == DS4_MODEL_FAMILY_DEEPSEEK41) {
         if (ctx_size > 1048576 ||
             !ds41_memory_admit(e, ds4_add_sat_u64(e->ds41_session_bytes,
-                ds41_graph_bytes((uint32_t)ctx_size)), false) ||
+                ds41_graph_initial_bytes((uint32_t)ctx_size)), false) ||
             !ds41_graph_alloc(&s->ds41_graph, &e->model, &e->weights,
                               e->model_path, (uint32_t)ctx_size, e->ssd_streaming)) {
             free(s);
@@ -80917,6 +81437,14 @@ int ds4_session_sync(ds4_session *s, const ds4_tokens *prompt, char *err, size_t
         ds4_gpu_stream_expert_cache_configured_count() != s->engine->ssd_streaming_cache_experts) {
         ds4_gpu_set_streaming_expert_cache_budget(s->engine->ssd_streaming_cache_experts);
     }
+    /* Size the context VRAM to this request's prompt: grow before prefill,
+     * or shrink for a new conversation / shorter prompt. */
+    if (!ds4_session_is_cpu(s) && ds4_session_is_ds41(s) && prompt && prompt->len > 0 &&
+        !ds41_ctx_resize(&s->ds41_graph, (uint32_t)prompt->len, true)) {
+        if (err && errlen) snprintf(err, errlen,
+            "context VRAM could not grow to %d tokens (see DS4COMBO_CTX_RESIZE_FAILED)", prompt->len);
+        return 1;
+    }
     if (!ds4_session_is_cpu(s) && ds4_session_is_ds41(s) &&
         !ds41_graph_ensure_prefill_workspace(&s->ds41_graph)) {
         if (err && errlen) snprintf(err, errlen, "failed to restore V4.1 prefill workspace");
@@ -81112,6 +81640,54 @@ int ds4_session_sync_multimodal(
     return rc;
 }
 
+#if defined(DS4_HAS_DEEPSEEK41_GPU) && !defined(DS4_NO_GPU) && !defined(__APPLE__) && !defined(DS4_ROCM_BUILD)
+/* DS4COMBO borrowed layer prefill: before a CUDA SSD-streaming layer sweep,
+ * hand the VRAM expert tier's memory to the selected-expert loader (one full
+ * layer; two when the sweep prefetches the next layer). Returns false when not
+ * even one layer fits: the caller runs these rows token-major, logged, and
+ * stays token-major for the rest of this sync (*refused). */
+static bool ds41_prefill_borrow(ds41_gpu_graph *g, const ds4_weights *w, uint32_t count,
+                                bool *refused) {
+    const uint32_t want = count >= 2048u && !getenv("DS4_CUDA_DISABLE_SSD_PREFETCH") ? 2u : 1u;
+    if (g->prefill_borrow_layers >= want) return true;
+    const ds4_layer_weights *l = &w->layer[0];
+    const uint64_t gate = routed_expert_row_bytes(l->ffn_gate_exps) * DS4_N_FF_EXP;
+    const uint64_t down = routed_expert_row_bytes(l->ffn_down_exps) * DS4_N_EMBD;
+    uint64_t free_b = 0, borrowed = 0, reserve = 0;
+    const uint32_t got = ds4_gpu_stream_prefill_borrow(want, DS4_N_EXPERT, gate, down,
+                                                       &free_b, &borrowed, &reserve);
+    const double gib = 1073741824.0;
+    const double layer = (double)DS4_N_EXPERT * (double)(2u * gate + down) / gib;
+    if (!got) {
+        if (g->prefill_borrow_layers) {
+            fprintf(stderr, "DS4COMBO_PREFILL_BORROW keeps %u layer(s) for rows=%u: %u do not fit "
+                            "(free %.2f GiB, reserve %.2f GiB); prefetch off\n",
+                    g->prefill_borrow_layers, count, want, (double)free_b / gib, (double)reserve / gib);
+            return true;
+        }
+        *refused = true;
+        fprintf(stderr, "DS4COMBO_PREFILL_FALLBACK token-major rows=%u reason=one layer of experts "
+                        "(%.2f GiB) does not fit: free %.2f GiB + decode tier/loader %.2f GiB - reserve %.2f GiB\n",
+                count, layer, (double)free_b / gib, (double)borrowed / gib, (double)reserve / gib);
+        return false;
+    }
+    g->prefill_borrow_layers = got;
+    fprintf(stderr, "DS4COMBO_PREFILL_BORROW rows=%u layers=%u loader=%.2f GiB borrowed_tier=%.2f GiB "
+                    "free_before=%.2f GiB reserve=%.2f GiB prefetch=%s\n",
+            count, got, layer * got, (double)borrowed / gib, (double)free_b / gib, (double)reserve / gib,
+            got >= 2u ? "on" : want >= 2u ? "off(one layer fits)" : "off(<2048 rows)");
+    return true;
+}
+
+static void ds41_prefill_borrow_end(ds41_gpu_graph *g, const char *why) {
+    if (!g->prefill_borrow_layers) return;
+    g->prefill_borrow_layers = 0;
+    ds4_gpu_stream_prefill_borrow_end();
+    fprintf(stderr, "DS4COMBO_PREFILL_BORROW_END reason=%s decode tier re-established lazily at %u experts\n",
+            why, ds4_gpu_stream_expert_cache_tier_count());
+}
+#endif
+
 static int ds4_session_sync_internal(ds4_session *s, const ds4_tokens *prompt, char *err, size_t errlen) {
     if (!s || !prompt) {
         snprintf(err, errlen, "missing session or prompt");
@@ -81280,6 +81856,8 @@ static int ds4_session_sync_internal(ds4_session *s, const ds4_tokens *prompt, c
             s->checkpoint_valid = false;
         }
         bool pending_logits = false, interrupted = false, decoder_pending = false;
+        bool borrow_refused = false;
+        (void)borrow_refused;
         ds41_encoder_residency encoder = {0};
         ds41_encoder_acquire(g, &e->model, &e->weights,
             (uint32_t)(prompt->len - s->checkpoint.len), &encoder, s->cancel, s->cancel_ud);
@@ -81293,9 +81871,17 @@ static int ds4_session_sync_internal(ds4_session *s, const ds4_tokens *prompt, c
                 ds41_encoder_release(g, &e->model, &encoder);
             const uint32_t short_count = decoder_pending ? 0u :
                 ds41_short_prefill_count(g, &e->weights, remaining);
-            const uint32_t count = short_count ? short_count : g->encoder_resident ?
+            uint32_t count = short_count ? short_count : g->encoder_resident ?
                 (remaining - 512u < g->prefill_cap ? remaining - 512u : g->prefill_cap) :
                 ds41_prefill_count(g, remaining);
+#if !defined(__APPLE__) && !defined(DS4_ROCM_BUILD)
+            if (borrow_refused && !short_count && count > 1u && !decoder_pending) count = 1u;
+            if (!short_count && count > 1u && g->streaming && g->tp_world == 1) {
+                if (!ds41_prefill_borrow(g, &e->weights, count, &borrow_refused)) count = 1u;
+            } else if (g->prefill_borrow_layers) {
+                ds41_prefill_borrow_end(g, "token-major rows follow");
+            }
+#endif
             const bool defer_decoder = !g->encoder_resident && count >= 16384u &&
                 remaining - count >= 8192u &&
                 !getenv("DS4_METAL_DISABLE_V41_DECODER_SUFFIX") &&
@@ -81321,6 +81907,9 @@ static int ds4_session_sync_internal(ds4_session *s, const ds4_tokens *prompt, c
                 ds41_graph_step(g, &e->model, &e->weights, prompt->v[i], NULL);
             if (!ok) {
                 ds41_encoder_release(g, &e->model, &encoder);
+#if !defined(__APPLE__) && !defined(DS4_ROCM_BUILD)
+                ds41_prefill_borrow_end(g, "prefill failed");
+#endif
                 s->checkpoint_valid = false;
                 if (ds4_session_cancelled(s)) {
                     snprintf(err, errlen, "interrupted");
@@ -81339,6 +81928,9 @@ static int ds4_session_sync_internal(ds4_session *s, const ds4_tokens *prompt, c
                 s->progress(s->progress_ud, "prefill_chunk", i, prompt->len);
         }
         ds41_encoder_release(g, &e->model, &encoder);
+#if !defined(__APPLE__) && !defined(DS4_ROCM_BUILD)
+        ds41_prefill_borrow_end(g, interrupted ? "interrupted" : "prefill done");
+#endif
         if (decoder_pending) {
             s->checkpoint_valid = false;
             g->valid = false;
@@ -83455,7 +84047,341 @@ static int ds4_session_eval_probe_tp(ds4_session *s, int token, bool probe_mtp,
     return rc;
 }
 
+/* DS4COMBO expert-cache restore (owner requirement 2026-10-23): a relaunched decoder must not
+ * start cold. The exporting process writes its resident VRAM/RAM expert set in LRU order
+ * (oldest first); the relaunched process loads that exact list at startup and seeds it through
+ * the existing hotlist seed path (ds4_gpu_stream_expert_cache_seed_experts / the RAM preload
+ * seed) at the decode edge, before the first decode token. It runs there, not at import,
+ * because every request's prefill edge (DS4_CUDA_PREFILL_EDGE_VRAM) evicts the VRAM cache, so
+ * anything loaded earlier would be discarded. A list that cannot be restored in full is an
+ * error, never a partial restore. */
+#if defined(_WIN32) && !defined(DS4_NO_GPU)
+typedef struct {
+    uint32_t n;
+    uint32_t *layer, *expert;
+    uint64_t *gate, *down;
+} ds4_expert_list;
+static struct {
+    bool pending;
+    uint64_t model_size;
+    ds4_expert_list v, h;
+} g_expert_restore;
+
+static void ds4_expert_list_free(ds4_expert_list *l) {
+    free(l->layer); free(l->expert); free(l->gate); free(l->down);
+    memset(l, 0, sizeof(*l));
+}
+static bool ds4_expert_list_reserve(ds4_expert_list *l, uint32_t n) {
+    const size_t c = n ? n : 1;
+    l->layer = calloc(c, sizeof(uint32_t)); l->expert = calloc(c, sizeof(uint32_t));
+    l->gate = calloc(c, sizeof(uint64_t)); l->down = calloc(c, sizeof(uint64_t));
+    return l->layer && l->expert && l->gate && l->down;
+}
+
+int ds4_expert_cache_restore_prepare(const char *path, char *err, size_t errlen) {
+    ds4_expert_list_free(&g_expert_restore.v); ds4_expert_list_free(&g_expert_restore.h);
+    g_expert_restore.pending = false;
+    if (!path || !path[0]) return 0;
+    FILE *fp = fopen(path, "rb");
+    if (!fp) { snprintf(err, errlen, "expert restore list %s unreadable: %s", path, strerror(errno)); return 1; }
+    char line[256]; unsigned long long model_size = 0; unsigned nv = 0, nh = 0;
+    if (!fgets(line, sizeof(line), fp) ||
+        sscanf(line, "# ds4-expert-cache-snapshot v1 model_size=%llu %*s vram=%u host=%u",
+               &model_size, &nv, &nh) != 3 ||
+        nv > (unsigned)(DS4_N_LAYER * DS4_N_EXPERT) || nh > (unsigned)(DS4_N_LAYER * DS4_N_EXPERT)) {
+        fclose(fp); snprintf(err, errlen, "expert restore list %s has no valid v1 header", path); return 1;
+    }
+    if (!ds4_expert_list_reserve(&g_expert_restore.v, nv) ||
+        !ds4_expert_list_reserve(&g_expert_restore.h, nh)) {
+        fclose(fp); snprintf(err, errlen, "expert restore list allocation failed"); return 1;
+    }
+    unsigned long long lineno = 1;
+    while (fgets(line, sizeof(line), fp)) {
+        lineno++;
+        char kind = 0; unsigned layer = 0, expert = 0; unsigned long long gate = 0, down = 0;
+        if (sscanf(line, " %c %u %u %llu %llu", &kind, &layer, &expert, &gate, &down) != 5 ||
+            (kind != 'v' && kind != 'h') || layer >= DS4_N_LAYER || expert >= DS4_N_EXPERT ||
+            !gate || !down) {
+            fclose(fp); snprintf(err, errlen, "expert restore list %s line %llu invalid", path, lineno); return 1;
+        }
+        ds4_expert_list *l = kind == 'v' ? &g_expert_restore.v : &g_expert_restore.h;
+        const uint32_t cap = kind == 'v' ? nv : nh;
+        if (l->n >= cap) {
+            fclose(fp); snprintf(err, errlen, "expert restore list %s exceeds its header count", path); return 1;
+        }
+        l->layer[l->n] = layer; l->expert[l->n] = expert; l->gate[l->n] = gate; l->down[l->n] = down; l->n++;
+    }
+    fclose(fp);
+    if (g_expert_restore.v.n != nv || g_expert_restore.h.n != nh) {
+        snprintf(err, errlen, "expert restore list %s truncated (vram %u/%u host %u/%u)", path,
+                 g_expert_restore.v.n, nv, g_expert_restore.h.n, nh);
+        return 1;
+    }
+    g_expert_restore.model_size = model_size;
+    g_expert_restore.pending = nv + nh != 0;
+    fprintf(stderr, "DS4COMBO_EXPERT_RESTORE_PENDING vram=%u host=%u file=%s\n", nv, nh, path);
+    return 0;
+}
+
+static bool ds4_expert_snapshot_take(int host, ds4_expert_list *l) {
+    memset(l, 0, sizeof(*l));
+    const uint32_t n = ds4_gpu_stream_expert_cache_snapshot(host, NULL, NULL, NULL, NULL, 0);
+    if (!ds4_expert_list_reserve(l, n)) return false;
+    l->n = ds4_gpu_stream_expert_cache_snapshot(host, l->layer, l->expert, l->gate, l->down, n);
+    return l->n == n;
+}
+
+/* Writes the resident set, or the still-unapplied inherited set when this process has not
+ * decoded yet (its live cache would otherwise read as cold). */
+int ds4_expert_cache_snapshot_write(ds4_session *s, const char *path, uint32_t *vram_out,
+                                    uint32_t *host_out, int *inherited_out, char *err, size_t errlen) {
+    if (!s || !s->engine || !path || !path[0]) { snprintf(err, errlen, "expert snapshot target missing"); return 1; }
+    /* An async restore still in progress completes first, so the live list includes it. */
+    if (!ds4_gpu_expert_restore_async_drain("snapshot")) {
+        char why[200] = {0}; (void)ds4_gpu_expert_restore_async_state(why, sizeof(why));
+        snprintf(err, errlen, "expert cache restore failed: %s", why); return 1;
+    }
+    const bool inherited = g_expert_restore.pending;
+    ds4_expert_list v = {0}, h = {0};
+    if (!inherited && (!ds4_expert_snapshot_take(0, &v) || !ds4_expert_snapshot_take(1, &h))) {
+        ds4_expert_list_free(&v); ds4_expert_list_free(&h);
+        snprintf(err, errlen, "expert snapshot enumeration failed"); return 1;
+    }
+    const ds4_expert_list *pv = inherited ? &g_expert_restore.v : &v;
+    const ds4_expert_list *ph = inherited ? &g_expert_restore.h : &h;
+    char tmp[1100]; snprintf(tmp, sizeof(tmp), "%s.tmp", path);
+    FILE *fp = fopen(tmp, "wb"); int rc = 1;
+    if (fp) {
+        bool ok = fprintf(fp, "# ds4-expert-cache-snapshot v1 model_size=%llu source=%s vram=%u host=%u\n",
+                          (unsigned long long)s->engine->model.size, inherited ? "inherited" : "live",
+                          pv->n, ph->n) > 0;
+        for (uint32_t i = 0; ok && i < ph->n; i++)
+            ok = fprintf(fp, "h %u %u %llu %llu\n", ph->layer[i], ph->expert[i],
+                         (unsigned long long)ph->gate[i], (unsigned long long)ph->down[i]) > 0;
+        for (uint32_t i = 0; ok && i < pv->n; i++)
+            ok = fprintf(fp, "v %u %u %llu %llu\n", pv->layer[i], pv->expert[i],
+                         (unsigned long long)pv->gate[i], (unsigned long long)pv->down[i]) > 0;
+        if (fclose(fp) != 0) ok = false;
+        if (ok && MoveFileExA(tmp, path, MOVEFILE_REPLACE_EXISTING | MOVEFILE_WRITE_THROUGH)) rc = 0;
+    }
+    if (rc) snprintf(err, errlen, "expert snapshot write to %s failed", path);
+    else {
+        if (vram_out) *vram_out = pv->n;
+        if (host_out) *host_out = ph->n;
+        if (inherited_out) *inherited_out = inherited;
+        fprintf(stderr, "DS4COMBO_EXPERT_SNAPSHOT vram=%u host=%u source=%s file=%s\n",
+                pv->n, ph->n, inherited ? "inherited" : "live", path);
+        /* Hotlist pre-seed: this process's routed-lookup counts per expert, with both tier
+         * capacities, so the owner can rank experts for the next decoder. Best effort. */
+        const uint32_t nf = inherited ? 0 : ds4_gpu_stream_expert_frequency(NULL, NULL, NULL, NULL, NULL, 0);
+        if (nf) {
+            uint32_t *fl = calloc(nf, sizeof(uint32_t)), *fe = calloc(nf, sizeof(uint32_t)), *fc = calloc(nf, sizeof(uint32_t));
+            uint64_t *fg = calloc(nf, sizeof(uint64_t)), *fd = calloc(nf, sizeof(uint64_t));
+            char fpath[1100], ftmp[1110]; snprintf(fpath, sizeof(fpath), "%s.freq", path); snprintf(ftmp, sizeof(ftmp), "%s.tmp", fpath);
+            FILE *ff = (fl && fe && fc && fg && fd) ? fopen(ftmp, "wb") : NULL;
+            if (ff) {
+                const uint32_t got = ds4_gpu_stream_expert_frequency(fl, fe, fc, fg, fd, nf);
+                bool ok = fprintf(ff, "# ds4-expert-frequency v1 model_size=%llu vram_configured=%u host_configured=%u experts=%u\n",
+                                  (unsigned long long)s->engine->model.size, ds4_gpu_stream_expert_cache_configured_count(),
+                                  (got && nf) ? ds4_gpu_stream_host_expert_cache_capacity_for(fg[0], fd[0]) : 0u, got < nf ? got : nf) > 0;
+                for (uint32_t i = 0; ok && i < got && i < nf; i++)
+                    ok = fprintf(ff, "f %u %u %u %llu %llu\n", fl[i], fe[i], fc[i],
+                                 (unsigned long long)fg[i], (unsigned long long)fd[i]) > 0;
+                if (fclose(ff) != 0) ok = false;
+                if (ok && MoveFileExA(ftmp, fpath, MOVEFILE_REPLACE_EXISTING | MOVEFILE_WRITE_THROUGH))
+                    fprintf(stderr, "DS4COMBO_EXPERT_FREQUENCY experts=%u file=%s\n", got < nf ? got : nf, fpath);
+            }
+            free(fl); free(fe); free(fc); free(fg); free(fd);
+        }
+    }
+    ds4_expert_list_free(&v); ds4_expert_list_free(&h);
+    return rc;
+}
+
+static bool ds4_expert_restore_seed_kind(ds4_session *s, int host, const ds4_expert_list *l,
+                                         char *err, size_t errlen) {
+    const ds4_model *model = &s->engine->model;
+    const ds4_weights *weights = &s->engine->weights;
+    int32_t ids[DS4_MAX_EXPERT]; uint32_t prio[DS4_MAX_EXPERT];
+    for (uint32_t il = 0; il < DS4_N_LAYER; il++) {
+        uint32_t n = 0; uint64_t gate = 0, down = 0;
+        for (uint32_t i = 0; i < l->n; i++) {
+            if (l->layer[i] != il) continue;
+            if (n && (l->gate[i] != gate || l->down[i] != down)) {
+                snprintf(err, errlen, "expert restore layer %u mixes expert sizes", il); return false;
+            }
+            gate = l->gate[i]; down = l->down[i];
+            if (n >= DS4_MAX_EXPERT) { snprintf(err, errlen, "expert restore layer %u overfull", il); return false; }
+            ids[n] = (int32_t)l->expert[i]; prio[n] = i + 1u; n++;  /* newer = higher priority */
+        }
+        if (!n) continue;
+        const ds4_layer_weights *layer = &weights->layer[il];
+        if (!layer->ffn_gate_exps || !layer->ffn_down_exps) {
+            snprintf(err, errlen, "expert restore layer %u has no routed experts", il); return false;
+        }
+        const ds4_gpu_stream_expert_table table =
+            graph_stream_expert_table_make(model, layer, il, gate, down);
+        /* The per-layer seed sizes a missing cache to THIS layer's count, and each larger layer then
+         * reallocates it (measured: 12/301 resident). Allocate the full configured cache first. */
+        if (!host && ds4_gpu_stream_expert_cache_prepare_full(gate, down) < n) {
+            snprintf(err, errlen, "expert restore VRAM cache unavailable at layer %u", il); return false;
+        }
+        const int ok = host ? ds4_gpu_stream_host_expert_cache_seed_experts(&table, ids, n)
+                            : ds4_gpu_stream_expert_cache_seed_experts(&table, ids, prio, n);
+        if (!ok) { snprintf(err, errlen, "expert restore seed failed at layer %u", il); return false; }
+    }
+    return true;
+}
+
+/* Async counterpart of ds4_expert_restore_seed_kind: same per-layer checks, queues instead of seeding. */
+static bool ds4_expert_restore_queue_kind(ds4_session *s, int host, const ds4_expert_list *l,
+                                          char *err, size_t errlen) {
+    const ds4_model *model = &s->engine->model;
+    const ds4_weights *weights = &s->engine->weights;
+    for (uint32_t il = 0; il < DS4_N_LAYER; il++) {
+        uint32_t n = 0; uint64_t gate = 0, down = 0;
+        for (uint32_t i = 0; i < l->n; i++) {
+            if (l->layer[i] != il) continue;
+            if (n && (l->gate[i] != gate || l->down[i] != down)) {
+                snprintf(err, errlen, "expert restore layer %u mixes expert sizes", il); return false;
+            }
+            gate = l->gate[i]; down = l->down[i];
+            if (n >= DS4_MAX_EXPERT) { snprintf(err, errlen, "expert restore layer %u overfull", il); return false; }
+            n++;
+        }
+        if (!n) continue;
+        const ds4_layer_weights *layer = &weights->layer[il];
+        if (!layer->ffn_gate_exps || !layer->ffn_down_exps) {
+            snprintf(err, errlen, "expert restore layer %u has no routed experts", il); return false;
+        }
+        const ds4_gpu_stream_expert_table table =
+            graph_stream_expert_table_make(model, layer, il, gate, down);
+        for (uint32_t i = 0; i < l->n; i++) {
+            if (l->layer[i] != il) continue;
+            if (!ds4_gpu_expert_restore_async_add(&table, l->expert[i], host, i + 1u)) {  /* newer = higher priority */
+                snprintf(err, errlen, "expert restore queue failed at layer %u", il); return false;
+            }
+        }
+    }
+    return true;
+}
+
+static int ds4_session_expert_restore_apply(ds4_session *s, char *err, size_t errlen) {
+    if (!g_expert_restore.pending) {
+        /* An async restore that failed after token 1 fails the next request loudly. */
+        char why[200] = {0};
+        if (ds4_gpu_expert_restore_async_state(why, sizeof(why)) < 0) {
+            snprintf(err, errlen, "expert cache restore failed: %s", why);
+            return 1;
+        }
+        return 0;
+    }
+    g_expert_restore.pending = false;  /* one shot: a failure fails this request loudly */
+    const double t0 = now_sec();
+    char why[256] = {0};
+    const ds4_expert_list *v = &g_expert_restore.v, *h = &g_expert_restore.h;
+    if (!s || !s->engine || !s->engine->ssd_streaming)
+        snprintf(why, sizeof(why), "decoder is not SSD-streaming");
+    else if (g_expert_restore.model_size != s->engine->model.size)
+        snprintf(why, sizeof(why), "list is for another model");
+    if (!why[0] && !g_cuda_stream_phase_decode) ds4_streaming_set_phase_decode(1);
+#if defined(DS4_HAS_DEEPSEEK41_GPU) && defined(DS41_CTX_GROW_CUDA)
+    /* The VRAM tier is sized to this conversation's context; a list saved
+     * at another context length keeps its newest (hottest) entries. */
+    ds4_expert_list vclip = *v;
+    if (!why[0] && g_ds41_ctxgrow.streaming && v->n > ds4_gpu_stream_expert_cache_tier_count()) {
+        const uint32_t tier = ds4_gpu_stream_expert_cache_tier_count(), skip = v->n - tier;
+        fprintf(stderr, "DS4COMBO_EXPERT_RESTORE_CLIPPED vram=%u kept=%u reason=context-sized VRAM tier\n",
+                v->n, tier);
+        vclip.n = tier;
+        vclip.layer += skip; vclip.expert += skip; vclip.gate += skip; vclip.down += skip;
+        v = &vclip;
+    }
+#endif
+    if (!why[0] && v->n > ds4_gpu_stream_expert_cache_configured_count())
+        snprintf(why, sizeof(why), "VRAM cache budget %u < %u listed experts",
+                 ds4_gpu_stream_expert_cache_configured_count(), v->n);
+    const uint32_t host_cap = h->n ? ds4_gpu_stream_host_expert_cache_capacity_for(h->gate[0], h->down[0]) : 0;
+    if (!why[0] && h->n > host_cap)
+        snprintf(why, sizeof(why), "RAM cache budget %u < %u listed experts", host_cap, h->n);
+    uint32_t cleared = 0;
+    /* VRAM first, host second: the host tier is inclusive, and seeding VRAM stages
+     * every expert through it, LRU-evicting whatever the host list put there first.
+     * Clear the prefill-era VRAM slots only when there is a VRAM list to seed in
+     * their place, and only after outstanding work on them has finished. */
+    /* DS4COMBO_RESTORE_ASYNC (default 1): issue the restore on the background DirectStorage
+     * queue and return; decode step 0 fetches on demand meanwhile. */
+    const char *async_env = getenv("DS4COMBO_RESTORE_ASYNC");
+    bool async = !async_env || strcmp(async_env, "0") != 0;
+    if (!why[0] && async) {
+        char unavailable[128] = {0};
+        if (!ds4_gpu_expert_restore_async_available(unavailable, sizeof(unavailable))) {
+            fprintf(stderr, "DS4COMBO_RESTORE_ASYNC_UNAVAILABLE reason=%s; running the synchronous restore\n", unavailable);
+            async = false;
+        }
+    }
+    if (!why[0] && v->n) {
+        if (!ds4_gpu_synchronize()) snprintf(why, sizeof(why), "GPU synchronize before slot clear failed");
+        else cleared = ds4_gpu_stream_expert_cache_clear_slots();
+    }
+    if (!why[0] && async) {
+        ds4_gpu_expert_restore_async_reset();
+        if (ds4_expert_restore_queue_kind(s, 0, v, why, sizeof(why)) &&
+            ds4_expert_restore_queue_kind(s, 1, h, why, sizeof(why)) &&
+            ds4_gpu_expert_restore_async_start(cleared, why, sizeof(why))) {
+            ds4_t1_mark("restore_issued");
+            return 0;
+        }
+        if (!why[0]) snprintf(why, sizeof(why), "async restore start failed");
+        ds4_gpu_expert_restore_async_reset();
+    }
+    if (!why[0]) ds4_t1_mark("restore_issued");
+    if (!why[0]) (void)ds4_expert_restore_seed_kind(s, 0, v, why, sizeof(why));
+    if (!why[0]) (void)ds4_expert_restore_seed_kind(s, 1, h, why, sizeof(why));
+    if (!why[0] && !ds4_gpu_synchronize()) snprintf(why, sizeof(why), "GPU synchronize failed");
+    if (!why[0]) {
+        const uint32_t mh = ds4_gpu_stream_expert_cache_apply_order(1, h->layer, h->expert, h->gate, h->down, h->n);
+        const uint32_t mv = ds4_gpu_stream_expert_cache_apply_order(0, v->layer, v->expert, v->gate, v->down, v->n);
+        if (mh || mv)
+            snprintf(why, sizeof(why), "only %u/%u VRAM and %u/%u RAM experts resident after seed",
+                     v->n - mv, v->n, h->n - mh, h->n);
+    }
+    const double seconds = now_sec() - t0;
+    if (why[0]) {
+        fprintf(stderr, "DS4COMBO_EXPERT_RESTORE_FAILED vram=%u host=%u seconds=%.3f async=%d reason=%s\n",
+                v->n, h->n, seconds, async ? 1 : 0, why);
+        snprintf(err, errlen, "expert cache restore failed: %s", why);
+        return 1;
+    }
+    fprintf(stderr, "DS4COMBO_EXPERT_RESTORE experts=%u vram=%u host=%u seconds=%.3f cleared_prefill_slots=%u async=0\n",
+            v->n + h->n, v->n, h->n, seconds, cleared);
+    ds4_t1_mark("restore_complete");
+    return 0;
+}
+#else
+int ds4_expert_cache_restore_prepare(const char *path, char *err, size_t errlen) {
+    if (path && path[0]) { snprintf(err, errlen, "expert restore requires Windows CUDA"); return 1; }
+    return 0;
+}
+int ds4_expert_cache_snapshot_write(ds4_session *s, const char *path, uint32_t *v, uint32_t *h,
+                                    int *inh, char *err, size_t errlen) {
+    (void)s; (void)path; (void)v; (void)h; (void)inh;
+    snprintf(err, errlen, "expert snapshot requires Windows CUDA"); return 1;
+}
+static int ds4_session_expert_restore_apply(ds4_session *s, char *err, size_t errlen) {
+    (void)s; (void)err; (void)errlen; return 0;
+}
+#endif
+
 int ds4_session_eval(ds4_session *s, int token, char *err, size_t errlen) {
+    if (ds4_session_expert_restore_apply(s, err, errlen)) return 1;
+    ds4_t1_step0_start();
+#if !defined(__APPLE__) && !defined(DS4_ROCM_BUILD) && !defined(DS4_NO_GPU)
+    if (!ds4_gpu_expert_restore_async_tick()) {
+        char why[200] = {0}; (void)ds4_gpu_expert_restore_async_state(why, sizeof(why));
+        snprintf(err, errlen, "expert cache restore failed: %s", why); return 1;
+    }
+#endif
     bool probe_mtp = true;
 #ifndef DS4_NO_GPU
     if (s && s->engine && s->engine->support_kind == DS4_SUPPORT_DSPARK) {
@@ -90419,6 +91345,14 @@ static int ds4_session_eval_speculative_argmax_impl(
         payload_set_err(err, errlen, "speculative decode requires a synchronized checkpoint");
         return -1;
     }
+    if (ds4_session_expert_restore_apply(s, err, errlen)) return -1;
+    ds4_t1_step0_start();
+#if !defined(__APPLE__) && !defined(DS4_ROCM_BUILD) && !defined(DS4_NO_GPU)
+    if (!ds4_gpu_expert_restore_async_tick()) {
+        char why[200] = {0}; (void)ds4_gpu_expert_restore_async_state(why, sizeof(why));
+        snprintf(err, errlen, "expert cache restore failed: %s", why); return -1;
+    }
+#endif
     if (accepted_cap > max_tokens) accepted_cap = max_tokens;
     if (s->distributed) {
         if (!accepted) return 0;

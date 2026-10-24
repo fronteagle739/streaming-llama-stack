@@ -140,6 +140,8 @@ static void cuda_affinity_background_note(const cuda_router_affinity_metrics &m,
 }
 extern "C" int ds4_gpu_cache_affinity_background_tick(void) {
     if(!g_affinity_cap || !g_affinity_current_biased || !g_stream_expert_cache_phase_decode || g_affinity_pending.ids.empty())return 1;
+    /* The async expert restore owns the single background DS slot until it completes. */
+    if(ds4_gpu_expert_restore_async_state(NULL,0)==1)return 1;
     if(g_affinity_copying) {
         cudaError_t ready=cudaEventQuery(g_affinity_copy_done);
         if(ready==cudaErrorNotReady)return 1;
