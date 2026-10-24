@@ -334,6 +334,16 @@ char *ds4_win32_realpath(const char *path, char *resolved);
 void ds4_win32_enable_utf8_console(void);
 bool ds4_win32_host_memory_begin(void);
 bool ds4_win32_host_memory_check(uint64_t requested_bytes, const char *reason);
+/* Owner rule: never force-kill this process while it may hold VRAM or DirectStorage
+ * resources. A host-memory breach requests a graceful abort instead: every later
+ * allocation is refused, every session cancel check returns true (the current request
+ * fails, new ones are refused) and the process stays up for a graceful shutdown. */
+void ds4_win32_request_graceful_abort(const char *why);
+bool ds4_win32_graceful_abort_requested(void);
+/* Set at the first successful GPU allocation: before it, refusing to open by exiting
+ * is fine (nothing is held); after it, failures take the graceful path. */
+void ds4_win32_mark_gpu_resources_live(void);
+bool ds4_win32_gpu_resources_live(void);
 /* Device backing consumes private/system commit; its size is not physical
  * host residency. Both checks still require the current physical reserve. */
 bool ds4_win32_host_memory_check_commit(uint64_t requested_bytes, const char *reason);

@@ -209,16 +209,23 @@ class ComboProducer:
     def close(self):
         if self.closed:return self.receipt
         if self.process:self.graceful_exit()
-        # KILL PATH: a still-live producer at this point is terminated by process.close().
+        # Still alive here: process.close() escalates (Ctrl-Break, long wait) and never kills;
+        # a producer still alive after that is left running and reported STUCK.
         job=getattr(self.process,'job',None) if self.process else None
-        kill_path=bool(job is not None and job.poll() is None)
-        if kill_path:print('DS4COMBO KILL PATH producer: terminating a live producer ('+str(self.shutdown_path)+')',flush=True)
-        proof=self.process.close() if self.process else getattr(self,'failure_cleanup',None) or dict(creation_attempted=False)
+        if job is not None and job.poll() is None:
+            print('DS4COMBO producer graceful retire did not finish ('+str(self.shutdown_path)+'); escalating, never killing',flush=True)
+        try:
+            proof=self.process.close() if self.process else getattr(self,'failure_cleanup',None) or dict(creation_attempted=False)
+        except RuntimeError as exc:
+            if 'STUCK PROCESS' in str(exc):
+                from .combo_native import record_stuck
+                record_stuck(self.cfg,self.directory,self.process,exc)
+            raise
         if self.process:
             self._graceful_verdict()
             if self.shutdown_path!='graceful':
                 print('DS4COMBO producer shutdown fell back: '+self.shutdown_path,flush=True)
-            proof=dict(proof,kill_path=kill_path,producer_shutdown_path=self.shutdown_path,producer_shutdown_seconds=self.shutdown_seconds,producer_shutdown_detail=self.shutdown_detail)
+            proof=dict(proof,producer_shutdown_path=self.shutdown_path,producer_shutdown_seconds=self.shutdown_seconds,producer_shutdown_detail=self.shutdown_detail)
         if self.creation_attempted and not certified(proof):
             raise RuntimeError('ULTRA owner retirement unconfirmed; decoder import refused')
         self.receipt=proof

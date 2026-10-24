@@ -40,19 +40,25 @@
  * Charge the requested bytes before entering CUDA, including pinned/managed
  * allocations. Refuse here, rather than letting CUDA OOM retries hide a host
  * admission failure. The process Job limit also covers allocator internals. */
-static void cuda_host_admit(size_t bytes, const char *kind, int line, bool host_physical = false) {
+/* Owner rule: never force-kill this process while it may hold VRAM/DirectStorage.
+ * Refusing by exit is kept only before the first GPU allocation (nothing held yet);
+ * after it a refusal requests the graceful abort and fails this allocation. */
+static bool cuda_host_admit(size_t bytes, const char *kind, int line, bool host_physical = false) {
     if (!(host_physical ? ds4_win32_host_memory_check(bytes, kind) :
                          ds4_win32_host_memory_check_commit(bytes, kind))) {
         fprintf(stderr, "ds4: HOST_MEMORY_ADMISSION_REFUSED CUDA source line=%d kind=%s bytes=%llu\n",
                 line, kind, (unsigned long long)bytes);
         fflush(stderr);
-        ExitProcess(72);
+        if (!ds4_win32_gpu_resources_live()) ExitProcess(72);
+        ds4_win32_request_graceful_abort("host-memory admission refused after GPU resources were live");
+        return false;
     }
     if (bytes >= 64u * 1048576u || getenv("DS4_HOST_ALLOCATION_TRACE")) {
         fprintf(stderr, "ds4: HOST_MEMORY_ALLOCATION line=%d kind=%s bytes=%llu\n",
                 line, kind, (unsigned long long)bytes);
         ds4_win32_host_memory_snapshot(kind);
     }
+    return true;
 }
 static cudaError_t cuda_host_allocation_result(cudaError_t result, size_t bytes,
         const char *kind, int line) {
@@ -65,28 +71,32 @@ static cudaError_t cuda_host_allocation_result(cudaError_t result, size_t bytes,
         fprintf(stderr, "ds4: HOST_MEMORY_POST_ALLOCATION_REFUSED line=%d kind=%s requested_bytes=%llu\n",
                 line, kind, (unsigned long long)bytes);
         fflush(stderr);
-        ExitProcess(72);
+        if (!ds4_win32_gpu_resources_live()) ExitProcess(72);
+        /* The allocation exists; keep it for the owner's normal release and fail the
+         * request gracefully instead of exiting with VRAM/DirectStorage live. */
+        ds4_win32_request_graceful_abort("host-memory budget exceeded after an allocation");
     }
+    if (result == cudaSuccess) ds4_win32_mark_gpu_resources_live();
     return result;
 }
 template<class T> static cudaError_t cuda_host_admitted_malloc(T **p, size_t n, int line) {
-    cuda_host_admit(n, "cudaMalloc backing store", line);
+    if (!cuda_host_admit(n, "cudaMalloc backing store", line)) return cudaErrorMemoryAllocation;
     return cuda_host_allocation_result(cudaMalloc(p, n), n, "cudaMalloc backing store", line);
 }
 template<class T> static cudaError_t cuda_host_admitted_malloc_host(T **p, size_t n, int line) {
-    cuda_host_admit(n, "cudaMallocHost pinned staging", line, true);
+    if (!cuda_host_admit(n, "cudaMallocHost pinned staging", line, true)) return cudaErrorMemoryAllocation;
     return cuda_host_allocation_result(cudaMallocHost(p, n), n, "cudaMallocHost pinned staging", line);
 }
 template<class T> static cudaError_t cuda_host_admitted_managed(T **p, size_t n, unsigned flags, int line) {
-    cuda_host_admit(n, "cudaMallocManaged host commit", line, true);
+    if (!cuda_host_admit(n, "cudaMallocManaged host commit", line, true)) return cudaErrorMemoryAllocation;
     return cuda_host_allocation_result(cudaMallocManaged(p, n, flags), n, "cudaMallocManaged host commit", line);
 }
 template<class T> static cudaError_t cuda_host_admitted_host_alloc(T **p, size_t n, unsigned flags, int line) {
-    cuda_host_admit(n, "cudaHostAlloc pinned staging", line, true);
+    if (!cuda_host_admit(n, "cudaHostAlloc pinned staging", line, true)) return cudaErrorMemoryAllocation;
     return cuda_host_allocation_result(cudaHostAlloc(p, n, flags), n, "cudaHostAlloc pinned staging", line);
 }
 static cudaError_t cuda_host_admitted_register(void *p, size_t n, unsigned flags, int line) {
-    cuda_host_admit(n, "cudaHostRegister locked pages", line, true);
+    if (!cuda_host_admit(n, "cudaHostRegister locked pages", line, true)) return cudaErrorMemoryAllocation;
     return cuda_host_allocation_result(cudaHostRegister(p, n, flags), n, "cudaHostRegister locked pages", line);
 }
 #define cudaMalloc(p, n) cuda_host_admitted_malloc(p, n, __LINE__)
@@ -714,7 +724,7 @@ static int cuda_vmm_resize(cuda_vmm_region *r, uint64_t bytes, int zero) {
     a.flags = CU_MEM_ACCESS_FLAGS_PROT_READWRITE;
     while (r->mapped < want) {
 #if defined(_WIN32)
-        cuda_host_admit((size_t)r->chunk, "cuMemCreate backing store", __LINE__);
+        if (!cuda_host_admit((size_t)r->chunk, "cuMemCreate backing store", __LINE__)) break;
 #endif
         CUmemGenericAllocationHandle h;
         if (cuMemCreate(&h, (size_t)r->chunk, &p, 0) != CUDA_SUCCESS) break;
@@ -2267,6 +2277,12 @@ static void cuda_q8_f16_cache_required_failure(const char *reason, uint64_t byte
             reason, (unsigned long long)bytes, (unsigned long long)g_q8_f16_bytes);
     fflush(stderr);
 #if defined(_WIN32)
+    /* After GPU resources are live: graceful abort (the request fails; the F16 path is
+     * never silently replaced, because every cancel check now fails the request). */
+    if (ds4_win32_gpu_resources_live()) {
+        ds4_win32_request_graceful_abort("required Q8 F16 cache cannot fit");
+        return;
+    }
     ExitProcess(72);
 #else
     exit(72);
