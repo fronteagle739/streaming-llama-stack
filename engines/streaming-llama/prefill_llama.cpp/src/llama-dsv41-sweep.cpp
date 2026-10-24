@@ -81,6 +81,8 @@ struct llama_dsv41_sweep::implementation {
     std::vector<int32_t>tokens;
     uint32_t position_offset=0;
     llama_dsv41::engram_history initial_engram,final_engram;
+    // Layer 0's ledger wall of the last run (the auto early-Engram append gap).
+    double layer0_wall_ms=0;
     std::vector<float>logits;
     run_timing measured;
     // DS4COMBO fast switch: a completed owner whose device memory, DS pipeline
@@ -534,17 +536,24 @@ bool llama_dsv41_sweep::start_next_engram(const std::vector<int32_t>&tokens,cons
     }catch(const std::exception&failure){p->poison();error=failure.what();return false;}
 }
 
+bool llama_dsv41_sweep::early_engram_queued()const{return p->provider.early_engram_queued();}
 bool llama_dsv41_sweep::start_append_engram(const std::vector<int32_t>&tokens,std::string&error){
     error.clear();
     if(!llama_dsv41_engram_early_enabled())return true;
     std::unique_lock<std::mutex>lock(p->mutex,std::try_to_lock);
     if(!lock.owns_lock()){error="V4.1 sweep is already active";return false;}
     try{
+        // Auto (the default) arms the early start only where =1 could run it.
+        if(llama_dsv41_engram_early_auto()&&!(p->options.stateful_chunks&&p->options.engram_tile_lookahead)){
+            llama_dsv41_layer_log("LLAMADECODE_ENGRAM_EARLY_DECISION at=append_tokens_arrived tokens=%zu early=0 reason=%s\n",tokens.size(),
+                p->options.stateful_chunks?"no_lookahead_worker":"not_stateful");return true;}
         require(p->state==implementation::completed&&p->published.load()&&!p->stop_requested.load()&&p->options.stateful_chunks&&
                 !p->device_suspended&&p->options.engram_tile_lookahead,"Append early Engram requires a completed stateful owner with the lookahead worker");
         require(!tokens.empty()&&std::all_of(tokens.begin(),tokens.end(),[](int32_t t){return t>=0&&uint32_t(t)<vocabulary;}),"Append early Engram requires text tokens");
         // Same history the append's open adopts (initial_engram=final_engram).
-        success(p->provider.start_engram_append(tokens,p->final_engram,error),error);
+        // Auto gap: the completed pass's layer-0 wall (the append's open and
+        // layer-0 fetch run before layer 1 needs table 0).
+        success(p->provider.start_engram_append(tokens,p->final_engram,p->layer0_wall_ms/1000.0,error),error);
         return true;
     }catch(const std::exception&failure){error=failure.what();return false;}
 }
@@ -725,6 +734,7 @@ bool llama_dsv41_sweep::run(const std::vector<int32_t>&tokens,const cancelled&st
             ledger_started=std::chrono::steady_clock::now();success(p->provider.release(error),error);
             const double provider_release_ms=elapsed(ledger_started);
             const double ledger_wall_ms=elapsed(layer_started);
+            if(layer==0)p->layer0_wall_ms=ledger_wall_ms;
             token_acquire_ms+=acquire_ms;token_executor_ms+=executor_wall_ms;token_compute_ms+=compute_ms;token_prepare_ms+=prepare_ms;
             const double scaffold_ms=ledger_wall_ms-acquire_ms-carry_begin_ms-executor_wall_ms-engram_ms-carry_read_ms-carry_write_ms-carry_commit_ms-provider_release_ms;
             llama_dsv41_layer_log("DS4PERF_LAYER_WALL_LEDGER layer=%u wall_ms=%.6f acquire_ms=%.6f carry_begin_ms=%.6f executor_wall_ms=%.6f executor_phase_gap_ms=%.6f engram_ms=%.6f carry_read_ms=%.6f carry_write_ms=%.6f carry_commit_ms=%.6f provider_release_ms=%.6f scaffold_ms=%.6f\n",layer,ledger_wall_ms,acquire_ms,carry_begin_ms,executor_wall_ms,executor_phase_gap_ms,engram_ms,carry_read_ms,carry_write_ms,carry_commit_ms,provider_release_ms,scaffold_ms);

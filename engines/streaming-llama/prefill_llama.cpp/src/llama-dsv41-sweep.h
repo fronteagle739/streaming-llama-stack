@@ -89,10 +89,13 @@ public:
     bool suspend_device(std::string &error);
     bool resume_device(std::string &error);
     bool start_next_engram(const std::vector<int32_t> &tokens,const std::vector<int32_t> &base_tail,std::string &error);
-    // LLAMADECODE_ENGRAM_EARLY=1: on a completed stateful owner, start the
+    // LLAMADECODE_ENGRAM_EARLY=1|auto: on a completed stateful owner, start the
     // next append's Engram rows (its own history tail) before that append's
-    // open; the append's run adopts them. Off: returns true and does nothing.
+    // open; the append's run adopts them. =0: returns true and does nothing.
+    // Auto: only when requests/IOPS fits this pass's layer-0 wall.
     bool start_append_engram(const std::vector<int32_t> &tokens,std::string &error);
+    // An early Engram cache is queued on this sweep's provider (cold: after open).
+    bool early_engram_queued() const;
     struct run_timing {double prompt_processing_ms=0,export_preparation_ms=0;};
     // Actual sequential clock boundaries, available only after successful run.
     run_timing timing() const;

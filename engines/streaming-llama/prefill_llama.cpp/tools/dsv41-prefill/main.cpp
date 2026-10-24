@@ -745,7 +745,8 @@ int wmain(int argc,wchar_t**argv){
             // DS4COMBO producer-warm: the prompt's tokens are known now, so its
             // Engram rows load on their own IoRing during this warmup pass.
             {const char*overlap=std::getenv("LLAMA_DSV41_ENGRAM_PROMPT_OVERLAP");
-             if(!engram_early&&weights.engram_prefetch_host_bytes&&options.engram_tile_lookahead&&overlap&&std::strcmp(overlap,"1")==0){
+             // Auto (or a skipped =1 start) that queued nothing: the ordinary producer-warm start.
+             if(!(engram_early&&warm_request->early_engram_queued())&&weights.engram_prefetch_host_bytes&&options.engram_tile_lookahead&&overlap&&std::strcmp(overlap,"1")==0){
                 const std::vector<int32_t> first(tokens.begin(),tokens.begin()+chunk_tokens);
                 std::vector<int32_t> tail;
                 if(restored){const auto&bt=restored->base.tokens;tail.assign(bt.end()-std::min<size_t>(bt.size(),3),bt.end());}
@@ -781,7 +782,7 @@ int wmain(int argc,wchar_t**argv){
         // load (7.9 s at 43K) left a 7.4 s join wait and prefill fell to 1,052 tok/s,
         // against 1,238 tok/s with the ordinary layer-0 overlapped load. Opt-in only.
         const char*early_direct=std::getenv("LLAMA_DSV41_ENGRAM_EARLY_DIRECT");
-        if(!engram_early_cold&&direct_open&&early_direct&&std::strcmp(early_direct,"1")==0){const char*overlap=std::getenv("LLAMA_DSV41_ENGRAM_PROMPT_OVERLAP");
+        if(!(engram_early_cold&&sweep->early_engram_queued())&&direct_open&&early_direct&&std::strcmp(early_direct,"1")==0){const char*overlap=std::getenv("LLAMA_DSV41_ENGRAM_PROMPT_OVERLAP");
             if(weights.engram_prefetch_host_bytes&&options.engram_tile_lookahead&&overlap&&std::strcmp(overlap,"1")==0){
                 const std::vector<int32_t> first(tokens.begin(),tokens.begin()+std::min<size_t>(chunk_tokens,tokens.size()));
                 success(sweep->start_next_engram(first,early_tail,error),error);

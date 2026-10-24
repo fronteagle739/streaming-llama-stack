@@ -98,14 +98,18 @@ public:
     // the provider lock, for its table (0: layer 1, 1: layer 14). The table-1
     // wait joins the early build. waited_ms is the time spent blocked.
     bool wait_engram_table(uint32_t index,const std::function<bool()> &cancelled,double &waited_ms,std::string &error);
-    // LLAMADECODE_ENGRAM_EARLY=1 only.
+    // LLAMADECODE_ENGRAM_EARLY=1 or auto (auto: started only when the planned
+    // requests / LLAMADECODE_ENGRAM_IOPS fit the gap; else the ordinary path).
     // Cold: after inspect/admission, before allocate's wf_start, for
     // config.engram_early_tokens. No-op when that list is empty.
     bool start_engram_cold(std::string &error);
+    // Whether an early cache is queued (not yet adopted/joined).
+    bool early_engram_queued() const;
     // Warm: on a completed released pass, the moment an append's tokens
     // arrive (before the next request's open/start_request/layer-0 fetch).
     // Charges the live previous cache; reuses its rows (copied, not read).
-    bool start_engram_append(const std::vector<int32_t> &tokens,llama_dsv41::engram_history initial,std::string &error);
+    // gap_s: the auto decision's gap (the previous pass's layer-0 wall).
+    bool start_engram_append(const std::vector<int32_t> &tokens,llama_dsv41::engram_history initial,double gap_s,std::string &error);
     bool engram_tile(uint32_t index,llama_dsv41::engram_history &history,
         const int32_t *tokens,const uint8_t *text_mask,size_t count,
         std::vector<float> &output,std::string &error);
