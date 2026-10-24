@@ -559,7 +559,9 @@ void llama_dsv41_weight_provider::implementation::create_pipeline(){
         // Owner gate: prefill must stream through BOTH banks again after decode repurposed them
         // (bank 0 expert cache, bank 1 resident dense). Fail loudly rather than run single-banked.
         require(p->buffers.size()==p->options.buffers,"Prefill layout lost a streaming bank");
-        if(p->options.compute_direct&&p->options.buffers==2)
+        // Single-banked prefill only as the plan's explicit long-context VRAM fallback (owner rule);
+        // the planner logs LLAMADECODE_PREFILL_SINGLE_BANK with its reason and numbers when it chooses it.
+        if(p->options.compute_direct)
             std::fprintf(stderr,"LLAMADECODE_PREFILL_LAYOUT banks=%zu streaming_banks=%u persistent_stages=0 expert_pool_bound=0\n",p->buffers.size(),p->options.buffers);
     }
     require(!wf_has_failed(p->fetcher),"Original layer registration failed");p->identity();if(p->options.ds_gpu_ring_slots)wf_set_layer_major_mode(p->fetcher,true);wf_start(p->fetcher);
@@ -758,7 +760,7 @@ bool llama_dsv41_weight_provider::decode_resident_tensors(const std::function<bo
 }
 bool llama_dsv41_weight_provider::external_expert_slots(uint32_t layer,const int32_t*ids,uint32_t n,int32_t*slots,
         const char**gate,const char**up,const char**down,uint32_t*slot_count,void*stream,std::string&error){return p->guard([&]{
-    require(layer<40&&p->decode_layout&&!p->leased&&p->next==p->stage_count()&&ids&&slots&&n&&n<=16,"External expert slots require an idle decode-layout provider");
+    require(layer<40&&p->decode_layout&&!p->leased&&p->next==p->stage_count()&&ids&&slots&&n&&n<=384,"External expert slots require an idle decode-layout provider");
     const auto slot_of=p->assign_expert_slots(layer,ids,n,stream);
     for(uint32_t i=0;i<n;++i)slots[i]=slot_of.at(ids[i]);
     *gate=static_cast<const char*>(p->pool[0]->data);*up=static_cast<const char*>(p->pool[1]->data);*down=static_cast<const char*>(p->pool[2]->data);

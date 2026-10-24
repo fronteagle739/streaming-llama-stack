@@ -173,6 +173,11 @@ uint64_t append_decode_max(){static const uint64_t n=[]{const char*e=std::getenv
 // while a decode op runs; the loop stops at the next token boundary exactly as at
 // max_tokens (the last sampled token is returned, not evaluated). Cleared at
 // every decode start and after a cancel.
+// LLAMADECODE multi-row append (opt-in, LLAMADECODE_APPEND_MULTIROW=1): an append of
+// 2..LLAMADECODE_APPEND_DECODE_MAX tokens runs as ONE ds4-win layer-major prefill
+// (ds4x_prefill, native ds41_graph_prefill on a small workspace) instead of one ds4
+// decode step per token; the routed experts of the rows are fetched as one union per layer.
+bool append_multirow_enabled(){static const bool on=[]{const char*e=std::getenv("LLAMADECODE_APPEND_MULTIROW");return e&&e[0]=='1'&&!e[1];}();return on;}
 const std::wstring&decode_cancel_file(){static const std::wstring p=[]{const char*e=std::getenv("LLAMADECODE_DECODE_CANCEL_FILE");
     return e&&*e?std::filesystem::u8path(e).wstring():std::wstring();}();return p;}
 bool decode_cancel_requested(){const auto&p=decode_cancel_file();return !p.empty()&&GetFileAttributesW(p.c_str())!=INVALID_FILE_ATTRIBUTES;}
@@ -185,6 +190,8 @@ struct ds4_external {
     void(*x_hook)(int(*)(void*,uint32_t,const int32_t*,uint32_t,int32_t*,const char**,const char**,const char**,uint32_t*),void*)=nullptr;
     int(*x_decode)(int,uint32_t,const int32_t*,uint32_t,float*)=nullptr;void(*x_close)()=nullptr;
     int(*x_affinity)(float,uint32_t,uint32_t,const char*,int(*)(void*,uint32_t,uint8_t*,uint32_t),void*)=nullptr;
+    int(*x_prefill_ws)(uint32_t,char*,size_t)=nullptr;int(*x_prefill)(const int32_t*,uint32_t,uint32_t,const int32_t*,uint32_t,float*)=nullptr;
+    uint32_t prefill_rows=0; // multi-row workspace rows (0 = per-token appends)
     llama_dsv41_weight_provider*provider=nullptr;uint64_t registered=0,registered_bytes=0;
     float quality=-1.f; // live quality-speed mean (session op); <0 = LLAMADECODE_DS4_BIAS / off
     static int residency_hook(void*user,uint32_t layer,uint8_t*tier,uint32_t experts){
@@ -203,6 +210,7 @@ struct ds4_external {
         require(module,"Cannot load ds4-decode.dll beside the producer");
         bind(x_open,"ds4x_open");bind(x_map,"ds4x_model_map");bind(x_register,"ds4x_register_weight");bind(x_bind,"ds4x_bind_state");
         bind(x_hook,"ds4x_set_expert_hook");bind(x_decode,"ds4x_decode");bind(x_close,"ds4x_close");bind(x_affinity,"ds4x_set_affinity");
+        if(append_multirow_enabled()){bind(x_prefill_ws,"ds4x_prefill_workspace");bind(x_prefill,"ds4x_prefill");}
     }
     // (Re)prepare on the current owner: decode layout, resident weights
     // registered at their device addresses, state views, expert hook.
@@ -220,7 +228,14 @@ struct ds4_external {
             ggml_backend_cuda_get_device_memory(0,&free_after,&total);
             std::fprintf(stderr,"LLAMADECODE_DS4X_DEVICE_DELTA bytes=%lld free_before=%llu free_after=%llu\n",(long long)free_before-(long long)free_after,
                 (unsigned long long)free_before,(unsigned long long)free_after);std::fflush(stderr);
-            registered=registered_bytes=0;
+            registered=registered_bytes=0;prefill_rows=0;
+            if(append_multirow_enabled()&&append_decode_max()>=2){
+                // The native prefill workspace, sized to the largest small append (allocated before the L2 offer).
+                char werr[512]{};const uint32_t rows=uint32_t(append_decode_max());
+                require(x_prefill_ws(rows,werr,sizeof(werr))==1,werr[0]?werr:"ds4x_prefill_workspace failed");prefill_rows=rows;
+                size_t free_ws=0;ggml_backend_cuda_get_device_memory(0,&free_ws,&total);
+                std::fprintf(stderr,"LLAMADECODE_DS4X_PREFILL_ROWS rows=%u workspace_bytes=%lld\n",rows,(long long)free_after-(long long)free_ws);std::fflush(stderr);
+            }
             success(provider->decode_resident_tensors([&](uint64_t offset,uint64_t bytes,void*device){
                 if(!x_register(offset,bytes,device))return false;++registered;registered_bytes+=bytes;return true;},error),error);
         }
@@ -255,6 +270,23 @@ struct ds4_external {
             (unsigned long long)(after.fetched_bytes-before.fetched_bytes),after.fetch_ms-before.fetch_ms,(unsigned long long)(after.hits-before.hits),
             (unsigned long long)(after.l2_hits-before.l2_hits),(unsigned long long)(after.misses-before.misses),after.slots,after.l2_slots,
             f1[0]-f0[0],f1[1]-f0[1],f1[2]-f0[2],f1[3]-f0[3],(unsigned long long)(r1-r0),(unsigned long long)(b1-b0));
+    }
+    // Multi-row append: `count` tokens at `position` in one ds4 prefill; the producer
+    // commits them with the frontier logits (the per-token path's final state).
+    void prefill_rows_step(llama_dsv41_sweep&sweep,ggml_backend_t backend,const std::vector<int32_t>&tokens,uint32_t position){
+        std::string error;std::array<int32_t,3>tail{};success(sweep.engram_tail(tail,error),error);
+        std::vector<float>logits(129280);
+        ggml_backend_synchronize(backend);check_decode_vram_reserve();
+        double f0[4]{};uint64_t r0=0,b0=0;wf_extent_fetch_stats(f0,&r0,&b0);
+        const auto before=provider->cache_stats();const auto started=std::chrono::steady_clock::now();
+        require(x_prefill(tokens.data(),uint32_t(tokens.size()),position,tail.data(),3,logits.data())==1,"ds4-win multi-row append failed");
+        const double prefill_ms=std::chrono::duration<double,std::milli>(std::chrono::steady_clock::now()-started).count();
+        success(sweep.commit_external_tokens(tokens.data(),tokens.size(),logits,error),error);
+        const auto after=provider->cache_stats();double f1[4]{};uint64_t r1=0,b1=0;wf_extent_fetch_stats(f1,&r1,&b1);
+        std::fprintf(stderr,"LLAMADECODE_DS4X_PREFILL rows=%zu position=%u prefill_ms=%.3f ds_bytes=%llu ds_ms=%.3f l1_hits=%llu l2_hits=%llu misses=%llu ds_requests=%llu ds_batches=%llu\n",
+            tokens.size(),position,prefill_ms,(unsigned long long)(after.fetched_bytes-before.fetched_bytes),after.fetch_ms-before.fetch_ms,
+            (unsigned long long)(after.hits-before.hits),(unsigned long long)(after.l2_hits-before.l2_hits),(unsigned long long)(after.misses-before.misses),
+            (unsigned long long)(r1-r0),(unsigned long long)(b1-b0));
     }
     // The DLL stays mapped until process exit (never FreeLibrary): no ds4 code may
     // be unmapped under a thread or CUDA callback it started.
@@ -511,11 +543,15 @@ void run_live_session(std::unique_ptr<llama_dsv41_sweep>&sweep,
                 // Small append: teacher-forced ds4 steps on the resident state (the
                 // decode/decode_forced step), every token evaluated; same reply and
                 // checkpoint as the sweep. The frontier logits come from ds4's decode kernels.
-                for(size_t index=0;index<tokens.size();++index){stop();ds4_step(tokens[index],index);}
+                if(append_multirow_enabled()&&tokens.size()>=2){
+                    ds4x.prepare(*sweep,weights,uint32_t(options.context));require(ds4x.prefill_rows>=tokens.size(),"Multi-row append exceeds the ds4 prefill workspace");
+                    stop();ds4x.prefill_rows_step(*sweep,weights.backend,tokens,current.frontier.position);
+                    grow_decode_l2(*sweep,options.fixed.get(),weights.backend);
+                }else for(size_t index=0;index<tokens.size();++index){stop();ds4_step(tokens[index],index);}
                 const double append_ms=ms(started);
                 const uint32_t before=current.frontier.position;current=inspect();require(current.frontier.position==before+tokens.size(),"Live append position did not advance exactly");
                 std::fprintf(stderr,"LLAMADECODE_APPEND_VIA_DECODE tokens=%zu ms=%.3f position=%u\n",tokens.size(),append_ms,current.frontier.position);std::fflush(stderr);
-                reply({{"peer_synchronized",false},{"prompt_tokens",tokens.size()},{"prompt_processing_ms",append_ms},{"export_preparation_ms",0.0},{"append_via_decode",true}});
+                reply({{"peer_synchronized",false},{"prompt_tokens",tokens.size()},{"prompt_processing_ms",append_ms},{"export_preparation_ms",0.0},{"append_via_decode",true},{"append_multirow",append_multirow_enabled()&&tokens.size()>=2}});
                 continue;
             }
             auto previous=std::move(sweep);sweep.reset(new llama_dsv41_sweep);auto next_options=options;auto next_weights=weights;

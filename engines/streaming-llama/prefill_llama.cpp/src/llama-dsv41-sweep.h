@@ -141,6 +141,8 @@ public:
     bool device_state_views(device_state &out,std::string &error) const;
     bool engram_tail(std::array<int32_t,3> &tail,std::string &error) const;
     bool commit_external_token(int32_t token,const std::vector<float> &logits,std::string &error);
+    // LLAMADECODE multi-row append: count (1..128) evaluated tokens, logits of the last one.
+    bool commit_external_tokens(const int32_t *tokens,size_t count,const std::vector<float> &logits,std::string &error);
     // The provider of this completed owner (resident decode weights, expert cache).
     llama_dsv41_weight_provider *provider_for_external_decode();
     // LLAMADECODE: decode-sized fixed plan for an external decoder (no executor runs).
