@@ -78215,5 +78215,19 @@
     "reads": [
       "engines/ds4-win/ds4.c"
     ]
+  },
+  {
+    "var": "DS4COMBO_RESTORE_ASYNC",
+    "flag": null,
+    "default": null,
+    "code_default": "unset = 1 (async on)",
+    "classification": "advanced",
+    "scopes": [
+      "ds4-win"
+    ],
+    "doc": "A/B switch for the combo expert-cache restore: 1 (default) issues the restore on the background DirectStorage queue so token 1 does not wait for it (DS4COMBO_EXPERT_RESTORE ... async=1 when it completes); 0 restores the old synchronous restore before token 1 (async=0).",
+    "reads": [
+      "engines/ds4-win/ds4.c"
+    ]
   }
 ]

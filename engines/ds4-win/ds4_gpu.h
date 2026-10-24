@@ -2742,6 +2742,14 @@ int ds4_gpu_cache_affinity_configure(float mean, uint32_t warmup, uint32_t ramp,
 int ds4_gpu_cache_affinity_prepare_model(const void *model, uint64_t size, uint32_t experts, uint32_t layers);
 void ds4_gpu_cache_affinity_finish(void);
 int ds4_gpu_cache_affinity_background_tick(void);
+/* DS4COMBO async expert restore (ds4_expert_restore_async.cuh). */
+int ds4_gpu_expert_restore_async_available(char *why, size_t n);
+void ds4_gpu_expert_restore_async_reset(void);
+int ds4_gpu_expert_restore_async_add(const ds4_gpu_stream_expert_table *t, uint32_t expert, int host, uint32_t age);
+int ds4_gpu_expert_restore_async_start(uint32_t cleared, char *err, size_t n);
+int ds4_gpu_expert_restore_async_tick(void);
+int ds4_gpu_expert_restore_async_drain(const char *why);
+int ds4_gpu_expert_restore_async_state(char *why, size_t n);
 int ds4_gpu_cache_affinity_router_tensor(
     ds4_gpu_tensor *selected, ds4_gpu_tensor *weights, const ds4_gpu_tensor *probs,
     const void *model_map, uint64_t model_size, uint64_t bias_offset, bool has_bias,

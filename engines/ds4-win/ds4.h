@@ -739,6 +739,11 @@ int ds4_session_stage_payload(ds4_session *s, ds4_session_payload_file *out,
 /* DS4COMBO expert-cache restore: load an LRU-ordered resident list (applied once before the
  * first decode token; fails loudly unless restored in full) / write the current one. */
 int ds4_expert_cache_restore_prepare(const char *path, char *err, size_t errlen);
+/* DS4COMBO first-request stamps: DS4COMBO_T1 point=<name> ms=<since the first combo
+ * request of this process>, from that request until token 1 of the first generation. */
+void ds4_t1_request(const char *what);
+void ds4_t1_mark(const char *point);
+void ds4_t1_token1(void);
 int ds4_expert_cache_snapshot_write(ds4_session *s, const char *path, uint32_t *vram_out,
                                     uint32_t *host_out, int *inherited_out, char *err, size_t errlen);
 uint64_t ds4_session_native_payload_bytes(ds4_session *s);

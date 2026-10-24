@@ -1610,6 +1610,36 @@ static double now_sec(void) {
     return (double)ts.tv_sec + (double)ts.tv_nsec * 1.0e-9;
 }
 
+/* DS4COMBO first-request stamps (ds4.h ds4_t1_*). */
+static struct {
+    int state;            /* 0 = armed, 1 = recording, 2 = done */
+    double t0;
+    bool step0;           /* step 0 (the eval that yields token 1) has started */
+    double moe_s;         /* step 0: wall time inside the routed-MoE call (demand expert fetch + launch) */
+    uint32_t moe_layers;
+} g_t1;
+void ds4_t1_mark(const char *point) {
+    if (g_t1.state != 1) return;
+    fprintf(stderr, "DS4COMBO_T1 point=%s ms=%.1f\n", point, (now_sec() - g_t1.t0) * 1e3);
+}
+void ds4_t1_request(const char *what) {
+    if (g_t1.state == 0) { g_t1.state = 1; g_t1.t0 = now_sec(); }
+    if (g_t1.state != 1) return;
+    fprintf(stderr, "DS4COMBO_T1 point=request_received request=%s ms=%.1f\n", what ? what : "",
+            (now_sec() - g_t1.t0) * 1e3);
+}
+void ds4_t1_token1(void) {
+    if (g_t1.state != 1) return;
+    fprintf(stderr, "DS4COMBO_T1 point=step0_moe_stall_total ms=%.1f layers=%u\n", g_t1.moe_s * 1e3, g_t1.moe_layers);
+    ds4_t1_mark("token1_emitted");
+    g_t1.state = 2;
+}
+static void ds4_t1_step0_start(void) {
+    if (g_t1.state != 1 || g_t1.step0) return;
+    g_t1.step0 = true;
+    ds4_t1_mark("step0_start");
+}
+
 /* =========================================================================
  * Metal Routed Expert Locality Profiler.
  * =========================================================================
@@ -44104,6 +44134,8 @@ static bool ds41_moe_partial(ds41_gpu_graph *g, const ds4_model *m,
     bool routed_ok;
     const ds4_gpu_tensor *selected = g->selected, *weights = g->route_weights;
     uint32_t n_used = DS4_N_EXPERT_USED;
+    /* DS4COMBO_T1: step-0 routed-MoE wall time (TP world 2 path included). */
+    const double t1_moe = g_t1.state == 1 && g_t1.step0 ? now_sec() : 0.0;
 #ifndef __APPLE__
     if (g->tp_world == 2) {
         routed_ok = ds4_gpu_routed_moe_batch_owned_tensor(routed, g->gate, g->up, g->mid, g->experts,
@@ -44130,6 +44162,7 @@ static bool ds41_moe_partial(ds41_gpu_graph *g, const ds4_model *m,
             DS4_N_EMBD, DS4_N_FF_EXP, DS4_N_EMBD, selected, weights,
             DS4_N_EXPERT, n_used, DS4_SWIGLU_CLAMP_EXP, g->norm, NULL, il,
             !g->streaming);
+    if (t1_moe > 0.0) { g_t1.moe_s += now_sec() - t1_moe; g_t1.moe_layers++; }
 #ifdef __APPLE__
     if (balanced) ds4_gpu_tp_full_expert_bind(0);
 #endif
@@ -44175,6 +44208,7 @@ static bool ds41_moe(ds41_gpu_graph *g, const ds4_model *m,
                      const ds4_layer_weights *l, uint32_t il, uint32_t token) {
     if (!ds41_moe_partial(g, m, l, il, token, g->tp_world == 2)) return false;
 #if !defined(__APPLE__) && !defined(DS4_ROCM_BUILD)
+    if (g->streaming && !ds4_gpu_expert_restore_async_tick()) return false;
     if (g->streaming && g_cache_affinity_bias > 0.0f && !ds4_gpu_cache_affinity_background_tick()) return false;
 #endif
     return ds41_moe_finish(g, il);
@@ -84102,6 +84136,11 @@ static bool ds4_expert_snapshot_take(int host, ds4_expert_list *l) {
 int ds4_expert_cache_snapshot_write(ds4_session *s, const char *path, uint32_t *vram_out,
                                     uint32_t *host_out, int *inherited_out, char *err, size_t errlen) {
     if (!s || !s->engine || !path || !path[0]) { snprintf(err, errlen, "expert snapshot target missing"); return 1; }
+    /* An async restore still in progress completes first, so the live list includes it. */
+    if (!ds4_gpu_expert_restore_async_drain("snapshot")) {
+        char why[200] = {0}; (void)ds4_gpu_expert_restore_async_state(why, sizeof(why));
+        snprintf(err, errlen, "expert cache restore failed: %s", why); return 1;
+    }
     const bool inherited = g_expert_restore.pending;
     ds4_expert_list v = {0}, h = {0};
     if (!inherited && (!ds4_expert_snapshot_take(0, &v) || !ds4_expert_snapshot_take(1, &h))) {
@@ -84194,8 +84233,49 @@ static bool ds4_expert_restore_seed_kind(ds4_session *s, int host, const ds4_exp
     return true;
 }
 
+/* Async counterpart of ds4_expert_restore_seed_kind: same per-layer checks, queues instead of seeding. */
+static bool ds4_expert_restore_queue_kind(ds4_session *s, int host, const ds4_expert_list *l,
+                                          char *err, size_t errlen) {
+    const ds4_model *model = &s->engine->model;
+    const ds4_weights *weights = &s->engine->weights;
+    for (uint32_t il = 0; il < DS4_N_LAYER; il++) {
+        uint32_t n = 0; uint64_t gate = 0, down = 0;
+        for (uint32_t i = 0; i < l->n; i++) {
+            if (l->layer[i] != il) continue;
+            if (n && (l->gate[i] != gate || l->down[i] != down)) {
+                snprintf(err, errlen, "expert restore layer %u mixes expert sizes", il); return false;
+            }
+            gate = l->gate[i]; down = l->down[i];
+            if (n >= DS4_MAX_EXPERT) { snprintf(err, errlen, "expert restore layer %u overfull", il); return false; }
+            n++;
+        }
+        if (!n) continue;
+        const ds4_layer_weights *layer = &weights->layer[il];
+        if (!layer->ffn_gate_exps || !layer->ffn_down_exps) {
+            snprintf(err, errlen, "expert restore layer %u has no routed experts", il); return false;
+        }
+        const ds4_gpu_stream_expert_table table =
+            graph_stream_expert_table_make(model, layer, il, gate, down);
+        for (uint32_t i = 0; i < l->n; i++) {
+            if (l->layer[i] != il) continue;
+            if (!ds4_gpu_expert_restore_async_add(&table, l->expert[i], host, i + 1u)) {  /* newer = higher priority */
+                snprintf(err, errlen, "expert restore queue failed at layer %u", il); return false;
+            }
+        }
+    }
+    return true;
+}
+
 static int ds4_session_expert_restore_apply(ds4_session *s, char *err, size_t errlen) {
-    if (!g_expert_restore.pending) return 0;
+    if (!g_expert_restore.pending) {
+        /* An async restore that failed after token 1 fails the next request loudly. */
+        char why[200] = {0};
+        if (ds4_gpu_expert_restore_async_state(why, sizeof(why)) < 0) {
+            snprintf(err, errlen, "expert cache restore failed: %s", why);
+            return 1;
+        }
+        return 0;
+    }
     g_expert_restore.pending = false;  /* one shot: a failure fails this request loudly */
     const double t0 = now_sec();
     char why[256] = {0};
@@ -84229,10 +84309,33 @@ static int ds4_session_expert_restore_apply(ds4_session *s, char *err, size_t er
      * every expert through it, LRU-evicting whatever the host list put there first.
      * Clear the prefill-era VRAM slots only when there is a VRAM list to seed in
      * their place, and only after outstanding work on them has finished. */
+    /* DS4COMBO_RESTORE_ASYNC (default 1): issue the restore on the background DirectStorage
+     * queue and return; decode step 0 fetches on demand meanwhile. */
+    const char *async_env = getenv("DS4COMBO_RESTORE_ASYNC");
+    bool async = !async_env || strcmp(async_env, "0") != 0;
+    if (!why[0] && async) {
+        char unavailable[128] = {0};
+        if (!ds4_gpu_expert_restore_async_available(unavailable, sizeof(unavailable))) {
+            fprintf(stderr, "DS4COMBO_RESTORE_ASYNC_UNAVAILABLE reason=%s; running the synchronous restore\n", unavailable);
+            async = false;
+        }
+    }
     if (!why[0] && v->n) {
         if (!ds4_gpu_synchronize()) snprintf(why, sizeof(why), "GPU synchronize before slot clear failed");
         else cleared = ds4_gpu_stream_expert_cache_clear_slots();
     }
+    if (!why[0] && async) {
+        ds4_gpu_expert_restore_async_reset();
+        if (ds4_expert_restore_queue_kind(s, 0, v, why, sizeof(why)) &&
+            ds4_expert_restore_queue_kind(s, 1, h, why, sizeof(why)) &&
+            ds4_gpu_expert_restore_async_start(cleared, why, sizeof(why))) {
+            ds4_t1_mark("restore_issued");
+            return 0;
+        }
+        if (!why[0]) snprintf(why, sizeof(why), "async restore start failed");
+        ds4_gpu_expert_restore_async_reset();
+    }
+    if (!why[0]) ds4_t1_mark("restore_issued");
     if (!why[0]) (void)ds4_expert_restore_seed_kind(s, 0, v, why, sizeof(why));
     if (!why[0]) (void)ds4_expert_restore_seed_kind(s, 1, h, why, sizeof(why));
     if (!why[0] && !ds4_gpu_synchronize()) snprintf(why, sizeof(why), "GPU synchronize failed");
@@ -84245,13 +84348,14 @@ static int ds4_session_expert_restore_apply(ds4_session *s, char *err, size_t er
     }
     const double seconds = now_sec() - t0;
     if (why[0]) {
-        fprintf(stderr, "DS4COMBO_EXPERT_RESTORE_FAILED vram=%u host=%u seconds=%.3f reason=%s\n",
-                v->n, h->n, seconds, why);
+        fprintf(stderr, "DS4COMBO_EXPERT_RESTORE_FAILED vram=%u host=%u seconds=%.3f async=%d reason=%s\n",
+                v->n, h->n, seconds, async ? 1 : 0, why);
         snprintf(err, errlen, "expert cache restore failed: %s", why);
         return 1;
     }
-    fprintf(stderr, "DS4COMBO_EXPERT_RESTORE experts=%u vram=%u host=%u seconds=%.3f cleared_prefill_slots=%u\n",
+    fprintf(stderr, "DS4COMBO_EXPERT_RESTORE experts=%u vram=%u host=%u seconds=%.3f cleared_prefill_slots=%u async=0\n",
             v->n + h->n, v->n, h->n, seconds, cleared);
+    ds4_t1_mark("restore_complete");
     return 0;
 }
 #else
@@ -84271,6 +84375,13 @@ static int ds4_session_expert_restore_apply(ds4_session *s, char *err, size_t er
 
 int ds4_session_eval(ds4_session *s, int token, char *err, size_t errlen) {
     if (ds4_session_expert_restore_apply(s, err, errlen)) return 1;
+    ds4_t1_step0_start();
+#if !defined(__APPLE__) && !defined(DS4_ROCM_BUILD) && !defined(DS4_NO_GPU)
+    if (!ds4_gpu_expert_restore_async_tick()) {
+        char why[200] = {0}; (void)ds4_gpu_expert_restore_async_state(why, sizeof(why));
+        snprintf(err, errlen, "expert cache restore failed: %s", why); return 1;
+    }
+#endif
     bool probe_mtp = true;
 #ifndef DS4_NO_GPU
     if (s && s->engine && s->engine->support_kind == DS4_SUPPORT_DSPARK) {
@@ -91235,6 +91346,13 @@ static int ds4_session_eval_speculative_argmax_impl(
         return -1;
     }
     if (ds4_session_expert_restore_apply(s, err, errlen)) return -1;
+    ds4_t1_step0_start();
+#if !defined(__APPLE__) && !defined(DS4_ROCM_BUILD) && !defined(DS4_NO_GPU)
+    if (!ds4_gpu_expert_restore_async_tick()) {
+        char why[200] = {0}; (void)ds4_gpu_expert_restore_async_state(why, sizeof(why));
+        snprintf(err, errlen, "expert cache restore failed: %s", why); return -1;
+    }
+#endif
     if (accepted_cap > max_tokens) accepted_cap = max_tokens;
     if (s->distributed) {
         if (!accepted) return 0;

@@ -958,6 +958,10 @@ static uint32_t g_affinity_displaced[128][384]={};
 #endif
 static void cuda_affinity_background_finish(void);
 static bool cuda_affinity_background_harvest(void);
+/* DS4COMBO async expert restore (ds4_expert_restore_async.cuh) and first-request stamps (ds4.c). */
+extern "C" int ds4_gpu_expert_restore_async_state(char *why, size_t n);
+extern "C" int ds4_gpu_expert_restore_async_drain(const char *why);
+extern "C" void ds4_t1_mark(const char *point);
 static bool cuda_affinity_token_biased(void) {
     return g_stream_expert_cache_phase_decode && g_affinity_mean>0.0f &&
            g_affinity_decoded>=g_affinity_warmup;
@@ -4480,6 +4484,7 @@ static cuda_stream_expert_cache *cuda_stream_expert_cache_prepare(
                     (unsigned long long)((uint64_t)cap * expert_bytes));
             ds4_win32_host_memory_snapshot("VRAM expert tier");
 #endif
+            ds4_t1_mark("vram_tier_allocated");
         }
         return cache;
     }
@@ -5717,6 +5722,7 @@ static cuda_stream_host_expert_cache *cuda_stream_host_expert_cache_prepare(
         char *gate_ptr = NULL;
         char *up_ptr = NULL;
         char *down_ptr = NULL;
+        ds4_t1_mark("host_tier_pinned_alloc_start");
         if (!cuda_stream_host_expert_cache_try_alloc(cap,
                                                      gate_expert_bytes,
                                                      down_expert_bytes,
@@ -5738,6 +5744,7 @@ static cuda_stream_host_expert_cache *cuda_stream_host_expert_cache_prepare(
             continue;
         }
 
+        ds4_t1_mark("host_tier_pinned_alloc_end");
         uint32_t preserved = 0;
         if (preserve_residency) {
             for (uint32_t i = 0; i < old_capacity; i++) {
@@ -10849,6 +10856,10 @@ extern "C" void ds4_gpu_stream_expert_cache_set_phase_decode(
 #if defined(_WIN32)
     const int entering_decode = decode && !g_stream_expert_cache_phase_decode;
 #endif
+    /* Leaving decode: the async expert restore completes before the next prefill
+     * (and before any borrow); a failure is reported by the next eval. */
+    if (!decode && g_stream_expert_cache_phase_decode)
+        (void)ds4_gpu_expert_restore_async_drain("decode-exit");
     if (!decode && (g_affinity_anchor>0.0f || g_affinity_cap)) {
         cuda_affinity_background_finish();g_affinity_decoded=0;g_affinity_current_biased=false;
     }
@@ -30391,6 +30402,7 @@ __global__ static void cache_affinity_hard_resident_kernel(
     hard_metrics[t]=decision;
 }
 #include "ds4_cache_affinity_background.cuh"
+#include "ds4_expert_restore_async.cuh"
 
 extern "C" int ds4_gpu_cache_affinity_router_tensor(
     ds4_gpu_tensor *selected, ds4_gpu_tensor *weights, const ds4_gpu_tensor *probs,
