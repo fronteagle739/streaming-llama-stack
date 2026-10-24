@@ -21,7 +21,7 @@
     "--ssd-streaming-cache-experts",
     "28GB",
     "--ctx",
-    "4096",
+    "262144",
     "--host",
     "127.0.0.1",
     "--port",
