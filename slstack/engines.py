@@ -149,8 +149,9 @@ class Engines:
         import secrets
         token = self.cfg.setdefault('_control_token', secrets.token_urlsafe(32))
         self.cfg.setdefault('env_overrides', {})['DS4_SERVER_AUTH_TOKEN'] = token
+        # DS4COMBO2 liveness: the server has no lifetime cap; the guard's memory/GPU limits stay.
         self.llm = OwnedProcess(self.cfg, command, 'ds4-server', gpu=not self.cfg.get('_gpu_lease_managed', False),
-                                cwd=Path(self.cfg['runtime_root']), timeout=self.cfg['lease_minutes'] * 60)
+                                cwd=Path(self.cfg['runtime_root']), unbounded=True)
         if self.attach_entry:
             self.journal.update(self.attach_entry, 'attaching', pid=self.llm.proc.pid,
                                 pid_created=psutil.Process(self.llm.proc.pid).create_time())
@@ -181,7 +182,9 @@ class Engines:
     def chat(self, body):
         self.select(body.get('model'))
         self.ready()
-        return http_json(self.cfg['ds4_url'] + '/v1/chat/completions', body, self.cfg['request_timeout_s'])
+        # A non-streaming request is silent for its whole prefill + decode, so a socket timeout
+        # would be a fixed request-length cap. The owned, guarded server process bounds it instead.
+        return http_json(self.cfg['ds4_url'] + '/v1/chat/completions', body, None)
 
     def media(self, kind, params):
         model = self.cfg[kind + '_model']
