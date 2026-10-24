@@ -12,7 +12,7 @@ from .guard import admit
 
 
 class OwnedProcess:
-    def __init__(self, cfg, command, name, *, cwd=ROOT, stdin=None, timeout=None, gpu=False, scope=None):
+    def __init__(self, cfg, command, name, *, cwd=ROOT, stdin=None, timeout=None, gpu=False, scope=None, unbounded=False):
         # A waiting guardian allocates no model. Full host admission is repeated
         # by the independent guardian immediately before it starts an engine.
         initial_budget = min(.25, cfg['host_budget_gib']) if gpu and cfg.get('gpu_wait_seconds', 0) else cfg['host_budget_gib']
@@ -28,7 +28,7 @@ class OwnedProcess:
                 'runtime_root': cfg['runtime_root'],
                 'host_budget_gib': cfg['host_budget_gib'], 'min_available_gib': cfg['min_available_gib'],
                 'paging_telemetry': bool(cfg.get('paging_telemetry') or gpu or scope in ('ds4-win', 'ds4-mac', 'rtx-producer', 'mlx-serve', 'image', 'video')),
-                'job_commit_gib': cfg['job_commit_gib'], 'timeout_s': timeout or cfg['request_timeout_s'],
+                'job_commit_gib': cfg['job_commit_gib'], 'timeout_s': None if unbounded else (timeout or cfg['request_timeout_s']),   # DS4COMBO2: a server has no lifetime cap
                 'owner_pid': os.getpid(), 'owner_created': psutil.Process().create_time(),
                 'stop': str(self.stop_path), 'receipt': str(self.receipt), 'log': str(self.log)}
         if stdin is not None:

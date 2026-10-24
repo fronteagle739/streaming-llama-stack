@@ -12,6 +12,7 @@ import threading
 import time
 import urllib.error
 import urllib.request
+from .combo_producer import stall_seconds
 from .config import path,environment
 from .native_broker import vendor,model_receipt
 from .journal import atomic_json,sha256
@@ -245,7 +246,7 @@ class Native:
                 self.restore_lease=restore[0].lease();self.restore_lease.__enter__()
             self.creation_attempted=True
             self.process=Producer(session,command,env,directory,host_bytes=int(cfg['host_budget_gib']*(1<<30)),
-                physical_floor=int(cfg['min_available_gib']*(1<<30)),operation_seconds=min(1140,cfg['request_timeout_s']),
+                physical_floor=int(cfg['min_available_gib']*(1<<30)),operation_seconds=min(1140,cfg['request_timeout_s']),stall_seconds=stall_seconds(cfg),
                 idle_seconds=min(1140,cfg['lease_minutes']*60),native=native,cancelled=cancelled,native_mode=1,startup=startup,owner_epoch=epoch,
                 after_resume=lambda job:protect_working_set(job,int(cfg['host_budget_gib']*(1<<30)),
                     int(cfg['min_available_gib']*(1<<30)),int(cfg['aggregate_host_budget_gib']*(1<<30)),
@@ -276,12 +277,15 @@ class Native:
                 exc.owned_runtime=self # Keep file/RAM leases until the outer Job closes.
             raise
 
-    def http(self,suffix,body=None,*,timeout=None,max_bytes=4<<20):
+    def http(self,suffix,body=None,*,timeout=False,max_bytes=4<<20):
+        # DS4COMBO2 liveness: timeout=False (default) uses request_timeout_s for short control
+        # calls; long operations pass timeout=None and are bounded by the Producer's no-progress
+        # watch (stall_seconds), never by a fixed request length.
         raw=json.dumps(body,allow_nan=False,separators=(',',':')).encode() if body is not None else None
         request=urllib.request.Request(self.url+suffix,data=raw,headers={
             'Content-Type':'application/json','Authorization':'Bearer '+self.token})
         try:
-            with urllib.request.urlopen(request,timeout=timeout or self.cfg['request_timeout_s']) as response:
+            with urllib.request.urlopen(request,timeout=self.cfg['request_timeout_s'] if timeout is False else timeout) as response:
                 data=response.read(max_bytes+1)
                 if len(data)>max_bytes:raise ValueError('Native control response exceeded its admitted metadata bound')
                 return json.loads(data)
@@ -294,7 +298,7 @@ class Native:
             if self.cancelled():raise RuntimeError('Native request cancelled in its owner epoch')
             row=dict(session=self.session,owner_epoch=self.epoch,sequence=self.sequence,**extra)
             if self.process:self.process.deadline=time.monotonic()+min(1140,self.cfg['request_timeout_s'])
-            reply=self.http('/decode/'+operation,row)
+            reply=self.http('/decode/'+operation,row,timeout=None)   # a prefill/decode op may be long; liveness is the Producer's
             if (reply.get('status'),reply.get('session'),reply.get('owner_epoch'),reply.get('next_sequence'))!=('complete',self.session,self.epoch,self.sequence+1):
                 raise ValueError('Native setup/control owner epoch or sequence differs')
             self.sequence+=1
