@@ -14,6 +14,7 @@ cd slstack
 - The first install from a fresh clone took 1611 s. Most of that was the CUDA build of the streaming llama targets (1061 s).
 - Updating an existing clone with `git pull` and rerunning `install --all` took 258 s.
 - The install leaves the checkout clean.
+- Toolchain on that machine: Python 3.12.10, CUDA 13.2 (nvcc 13.2.51), Node 24.14.0 with npm 11.9.0, Visual Studio 2026 Build Tools with its CMake/Ninja.
 
 ## 2. Point the stack at local models
 
@@ -68,6 +69,6 @@ Press Ctrl-C in the `start` window. The launcher asks the router to stop. The ro
 
 ## Notes found during the walkthrough
 
-- The default native context is 4096 tokens. One short chat plus the tool definitions already used 47% of it. For longer chats, raise `--ctx` in `ds4_command` in your local config. 16K and below has been exercised.
+- The default native context is 4096 tokens. One short chat plus the tool definitions already used 47% of it. For longer chats, copy the whole `ds4_command` list from `config.example.json` into your local config and raise `--ctx`; local keys replace, not merge. 16K and below has been exercised.
 - The web UI does not yet show the "saving / reloading" status during an image swap. The router log records it.
 - Not walked through yet: video, two-machine mode, LoRA.

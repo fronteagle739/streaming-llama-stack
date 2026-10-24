@@ -6,20 +6,23 @@ $env:TEMP = Join-Path $runtimeConfig 'build-temp'
 New-Item -ItemType Directory -Force -Path $env:TEMP | Out-Null
 $env:TMP = $env:TEMP
 $env:npm_config_cache = Join-Path $runtimeConfig 'npm-cache'
+# Use the isolated core runtime (it has the launcher's packages), not whatever python is on PATH.
+$py = Join-Path $runtimeConfig 'core-venv/Scripts/python.exe'
+if (!(Test-Path -LiteralPath $py)) { $py = 'python' }
 if ($Target -in @('webui','all')) {
     # Use the pinned UI's own build pipeline. Never invoke its destructive reset/cleanup scripts.
     $uiPath = Join-Path $PSScriptRoot 'engines/streaming-llama/prefill_llama.cpp/tools/server/webui'
-    & python -B -m slstack --config $Config guarded --cwd $uiPath -- npm.cmd ci --ignore-scripts
+    & $py -B -m slstack --config $Config guarded --cwd $uiPath -- npm.cmd ci --ignore-scripts
     if ($LASTEXITCODE) { throw 'webui dependency installation failed' }
-    & python -B -m slstack --config $Config guarded --cwd $uiPath -- npx.cmd svelte-kit sync
+    & $py -B -m slstack --config $Config guarded --cwd $uiPath -- npx.cmd svelte-kit sync
     if ($LASTEXITCODE) { throw 'webui sync failed' }
-    & python -B -m slstack --config $Config guarded --cwd $uiPath -- npx.cmd vite build
+    & $py -B -m slstack --config $Config guarded --cwd $uiPath -- npx.cmd vite build
     if ($LASTEXITCODE) { throw 'webui build failed' }
 }
 
 if ($Target -in @('ds4','all')) {
     $ds4Path = Join-Path $PSScriptRoot 'engines/ds4-win'
-    & python -B -m slstack --config $Config guarded --cwd $ds4Path -- powershell -NoProfile -ExecutionPolicy Bypass -File windows_build.ps1 -Target cuda -BuildTemp $env:TEMP
+    & $py -B -m slstack --config $Config guarded --cwd $ds4Path -- powershell -NoProfile -ExecutionPolicy Bypass -File windows_build.ps1 -Target cuda -BuildTemp $env:TEMP
     if ($LASTEXITCODE) { throw 'ds4 build failed' }
 }
 if ($Target -in @('llama','all')) {
@@ -45,11 +48,11 @@ if ($Target -in @('llama','all')) {
     $llamaPath = Join-Path $PSScriptRoot 'engines/streaming-llama/prefill_llama.cpp'
     # Same pinned CMake build as the engine's build.bat, narrowed to the used
     # targets with two compile jobs. Enable its existing offline ULTRA producer.
-    & python -B -m slstack --config $Config guarded -- cmake -G Ninja -S $llamaPath -B build/llama -DCMAKE_BUILD_TYPE=Release -DGGML_CUDA=ON -DLLAMA_CURL=OFF -DLLAMA_BUILD_TESTS=OFF -DLLAMA_BUILD_EXAMPLES=OFF -DLLAMA_OPENSSL=OFF -DCMAKE_CUDA_ARCHITECTURES=120a -DGGML_BACKEND_DL=OFF -DBUILD_SHARED_LIBS=OFF -DLLAMA_DSV41_OFFLINE_PRODUCER=ON -DLLAMA_DSV41_NATIVE_HALF_PROFILES=ON "-DLLAMA_DSV41_JSON_INCLUDE_DIR=$llamaPath/vendor" "-DLLAMA_DSV41_DSTORAGE_INCLUDE_DIR=$llamaPath/external/directstorage/native/include" "-DLLAMA_DSV41_DSTORAGE_LIBRARY=$llamaPath/external/directstorage/native/lib/x64/dstorage.lib"
+    & $py -B -m slstack --config $Config guarded -- cmake -G Ninja -S $llamaPath -B build/llama -DCMAKE_BUILD_TYPE=Release -DGGML_CUDA=ON -DLLAMA_CURL=OFF -DLLAMA_BUILD_TESTS=OFF -DLLAMA_BUILD_EXAMPLES=OFF -DLLAMA_OPENSSL=OFF -DCMAKE_CUDA_ARCHITECTURES=120a -DGGML_BACKEND_DL=OFF -DBUILD_SHARED_LIBS=OFF -DLLAMA_DSV41_OFFLINE_PRODUCER=ON -DLLAMA_DSV41_NATIVE_HALF_PROFILES=ON "-DLLAMA_DSV41_JSON_INCLUDE_DIR=$llamaPath/vendor" "-DLLAMA_DSV41_DSTORAGE_INCLUDE_DIR=$llamaPath/external/directstorage/native/include" "-DLLAMA_DSV41_DSTORAGE_LIBRARY=$llamaPath/external/directstorage/native/lib/x64/dstorage.lib"
     if ($LASTEXITCODE) { throw 'llama configure failed' }
-    & python -B -m slstack --config $Config guarded -- cmake --build build/llama --config Release --parallel 2 --target llama-server llama-dsv41-prefill llama-export-lora slstack-weight-fetcher
+    & $py -B -m slstack --config $Config guarded -- cmake --build build/llama --config Release --parallel 2 --target llama-server llama-dsv41-prefill llama-export-lora slstack-weight-fetcher
     if ($LASTEXITCODE) { throw 'llama build failed' }
     $profileCheck = Join-Path $PSScriptRoot 'build/llama/bin/llama-dsv41-prefill.exe'
-    & python -B -m slstack --config $Config guarded -- $profileCheck --check-native-profiles
+    & $py -B -m slstack --config $Config guarded -- $profileCheck --check-native-profiles
     if ($LASTEXITCODE) { throw 'producer profile preflight failed' }
 }
