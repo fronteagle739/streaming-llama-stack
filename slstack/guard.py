@@ -174,8 +174,15 @@ def _supervise_owned(spec,paging_watch,paging_warnings):
                         if len(raw)>16384:raise ValueError('GPU window metadata exceeded16KiB')
                         window=json.loads(raw)
                         if window.get('active'):
-                            if (window.get('run_id')!=spec['gpu_run_id'] or window.get('owner_pid')!=child.pid or
-                                abs(window.get('owner_created',0)-psutil.Process(child.pid).create_time())>.01):
+                            # The owner is the guarded child, or the interpreter a venv launcher stub
+                            # (Scripts/python.exe) re-spawned as its direct child.
+                            owner=window.get('owner_pid');target=None
+                            try:
+                                candidate=psutil.Process(owner) if owner else None
+                                if candidate is not None and (owner==child.pid or candidate.ppid()==child.pid):target=candidate
+                            except psutil.Error:target=None
+                            if (window.get('run_id')!=spec['gpu_run_id'] or target is None or
+                                abs(window.get('owner_created',0)-target.create_time())>.01):
                                 raise ValueError('GPU window process/run identity differs')
                             identity=window['lease_id'];hold_file=spec['gpu_hold_file']
                             if active_window!=identity:active_window=identity;window_started=time.monotonic()

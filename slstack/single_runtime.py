@@ -108,9 +108,6 @@ def stage(args):
     result = single_config(cfg, installed, revision);definition = preset(cfg, installed)
     result['studio_expected_args'] = normal_argv(args.studio_native, definition)
     (target / 'combo.json').write_text(json.dumps(result, indent=2), encoding='utf-8')
-    # A venv launcher stub re-spawns the base interpreter, so the guard's child pid would differ from the
-    # GPU-window owner pid ("GPU window process/run identity differs"): stage with a real interpreter.
-    if sys.prefix != sys.base_prefix:raise ValueError('Stage with a real interpreter, not a venv launcher stub')
     (target / 'python-path.txt').write_text(str(Path(sys.executable).resolve()) + '\n', encoding='utf-8')
     (target / 'preset.json').write_text(json.dumps(definition, indent=2, ensure_ascii=False), encoding='utf-8')
     manifest = dict(source_revision=revision, source_branch=branch, installed_root=str(installed),
