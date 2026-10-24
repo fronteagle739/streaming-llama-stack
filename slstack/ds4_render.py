@@ -782,3 +782,26 @@ def continue_live(live, text, canonical, tokenizer):
         suffix = data[len(prefix):].decode('utf-8', 'surrogateescape')
         return list(live) + tokenizer.rendered(suffix), 'memory-text'
     return None, 'canonical-miss'
+
+
+def continue_cut_turn(live, turn_start, text, message, tokenizer, *, think, reasoning, content):
+    """A resident turn cut short (client stop sequence or disconnect): the producer holds
+    every evaluated token of it, the client replays only the part it was sent, so neither
+    prefix rule matches. When the client's assistant message is exactly the head of what
+    was evaluated (reasoning/content as parsed from live[turn_start:]), the turn is
+    remembered as those exact token ids: the engine keeps live and appends only what the
+    template adds after the turn ('</think>' if the cut fell inside the reasoning, then
+    EOS and the new messages). Returns the full token list, or None."""
+    if message is None or message.get('calls'):return None
+    mr = message.get('reasoning') or '';mc = message.get('content') or ''
+    if not (reasoning.startswith(mr) and content.startswith(mc)):return None
+    if think and mc and mr != reasoning:return None
+    data = text.encode('utf-8', 'surrogateescape');head = tokenizer.detokenize(live[:turn_start])
+    if data[:len(head)] != head:return None
+    end = data.find(EOS.encode('utf-8'), len(head))
+    if end < 0:return None
+    client = ((mr + '</think>' + mc) if think else mc).encode('utf-8', 'surrogateescape')
+    if data[len(head):end] != client:return None   # the cut message is exactly the turn rendered after the live head
+    generated = tokenizer.detokenize(live[turn_start:])
+    closing = b'</think>' if think and b'</think>' not in generated else b''
+    return list(live) + tokenizer.rendered((closing + data[end:]).decode('utf-8', 'surrogateescape'))

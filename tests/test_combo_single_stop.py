@@ -125,6 +125,66 @@ class EngineStopTests(unittest.TestCase):
         self.assertEqual(final['parsed']['content'], 'ok')
 
 
+class CutTurnResumeTests(unittest.TestCase):
+    """After a stop sequence or a disconnect the next turn keeps the producer: the cut turn is
+    remembered as its evaluated ids and only the template's closing + the new turn is appended."""
+    def follow_up(self, h, first, assistant, *, think):
+        producer = h.launched[0];turn_end = len(h.engine.live);before = list(h.engine.live);prefills = len(producer.prefills)
+        h.scripts.append(ids(h.tok, ('</think>' if think else '') + 'ok') + [s.EOS_ID])
+        follow = dict(first, messages=first['messages'] + [assistant, dict(role='user', content='next')])
+        follow.pop('stop', None)
+        _, final, metrics = h.run(follow)
+        self.assertEqual(len(h.launched), 1);self.assertFalse(producer.closed);self.assertNotIn('fresh_reason', metrics)
+        self.assertEqual(metrics['prefix_source'], 'memory-cut-turn');self.assertEqual(metrics['reused_prefix_tokens'], turn_end)
+        self.assertEqual(h.engine.live[:turn_end], before)   # the evaluated turn is kept, never re-prefilled
+        appended = [t for chunk in producer.prefills[prefills:] for t in chunk][:metrics['new_tokens']]
+        tail = ('</think>' if think and b'</think>' not in h.tok.detokenize(before[len(r.render(first, h.tok)[1]):]) else '')
+        self.assertEqual(appended, h.tok.rendered(tail + r.EOS + r.USER + 'next' + r.ASSISTANT + ('<think>' if think else '</think>')))
+        self.assertEqual(final['parsed']['content'], 'ok')
+        return metrics
+
+    def test_disconnect_inside_reasoning_then_next_turn_appends_only(self):
+        h = stepping_harness([]);gone = threading.Event();seen = []
+        h.scripts.append(ids(h.tok, 'r' * 150 + '</think>never') + [s.EOS_ID])
+        first = dict(messages=[dict(role='user', content='q')], max_tokens=400)
+        def emit(kind, *values):
+            if kind == 'delta':
+                seen.append(values)
+                if len(seen) == 5:gone.set()
+        metrics = {};h.engine.run(first, emit, metrics, client_gone=gone.is_set)
+        self.assertEqual(metrics['decode_ended'], 'client disconnected')
+        shown = ''.join(t for f, t in seen if f == 'reasoning_content')
+        evaluated = len(h.engine.live) - metrics['prompt_tokens']
+        self.assertLess(len(shown), evaluated)   # the producer evaluated past what the client kept
+        self.follow_up(h, first, dict(role='assistant', content='', reasoning_content=shown), think=True)
+
+    def test_stop_sequence_then_next_turn_appends_only(self):
+        h = stepping_harness([])
+        h.scripts.append(ids(h.tok, 'Hello STOP world and a long tail that must never be decoded') + [s.EOS_ID])
+        first = dict(messages=[dict(role='user', content='q')], thinking=False, max_tokens=200, stop=['STOP'])
+        _, final, metrics = h.run(first)
+        self.assertEqual(metrics['decode_ended'], 'stop sequence')
+        self.follow_up(h, first, dict(role='assistant', content=final['parsed']['content']), think=False)
+
+    def test_stop_sequence_in_content_after_reasoning(self):
+        h = stepping_harness([])
+        h.scripts.append(ids(h.tok, 'plan</think>Answer: 42 END and more text here') + [s.EOS_ID])
+        first = dict(messages=[dict(role='user', content='q')], max_tokens=200, stop=['END'])
+        _, final, _ = h.run(first)
+        self.assertEqual(final['parsed']['reasoning'], 'plan')
+        self.follow_up(h, first, dict(role='assistant', content=final['parsed']['content'], reasoning_content='plan'), think=True)
+
+    def test_edited_cut_message_still_retires(self):
+        h = stepping_harness([])
+        h.scripts.append(ids(h.tok, 'Hello STOP world tail') + [s.EOS_ID])
+        first = dict(messages=[dict(role='user', content='q')], thinking=False, max_tokens=200, stop=['STOP'])
+        h.run(first)
+        h.scripts.append([s.EOS_ID])
+        follow = dict(messages=first['messages'] + [dict(role='assistant', content='Edited'), dict(role='user', content='n')], thinking=False)
+        _, _, metrics = h.run(follow)
+        self.assertEqual(len(h.launched), 2);self.assertIn('fresh_reason', metrics)
+
+
 class HttpDisconnectTests(unittest.TestCase):
     def test_closed_stream_cancels_the_decode(self):
         os.environ['DS4_SERVER_AUTH_TOKEN'] = 't' * 40
