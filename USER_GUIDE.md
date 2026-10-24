@@ -1364,7 +1364,7 @@ Source: `engines/mlx-serve/lib/mlx-src/mlx/backend/cuda/jit_module.cpp:93`. Unse
         path = path / "include";
 ```
 
-Source: `vendor/engines/cosmos_windows/weight_streaming/ds_backend.py:30`. Unset read: None.
+Source: `vendor/engines/cosmos_windows/weight_streaming/ds_backend.py:32`. Unset read: None.
 
 ```text
     dll_path = str(dll_path)
@@ -81430,7 +81430,7 @@ Source: `engines/streaming-llama/prefill_llama.cpp/src/llama-weight-fetcher.cpp:
     const bool async_drain = wf->required_dstorage ? wf->params.ds_async_drain : requested_async_drain;
 ```
 
-Source: `vendor/engines/cosmos_windows/weight_streaming/ds_backend.py:8`. Unset read: '1'.
+Source: `vendor/engines/cosmos_windows/weight_streaming/ds_backend.py:10`. Unset read: '1'.
 
 ```text
 from pathlib import Path
@@ -81604,7 +81604,7 @@ Source: `engines/streaming-llama/prefill_llama.cpp/src/llama-weight-fetcher.cpp:
     // read on a drain event (single-staging-safe — fixes the reuse race WITHOUT
 ```
 
-Source: `vendor/engines/cosmos_windows/weight_streaming/ds_backend.py:9`. Unset read: '1'.
+Source: `vendor/engines/cosmos_windows/weight_streaming/ds_backend.py:11`. Unset read: '1'.
 
 ```text
 if os.environ.get('STUDIO_WF_OVERLAP') == '1':
@@ -82210,7 +82210,7 @@ LLAMA_WF_RECORD_COMPUTE_DONE: advanced engine setting; built-in default retained
 
 Scope: image, video. Class: advanced.
 
-Source: `vendor/engines/cosmos_windows/weight_streaming/ds_backend.py:256`. Unset read: _rc_default.
+Source: `vendor/engines/cosmos_windows/weight_streaming/ds_backend.py:258`. Unset read: _rc_default.
 
 ```text
             else:
@@ -92181,6 +92181,18 @@ Source: `vendor/studio/studio/adapter.py:1951`. Unset read: _default_klein.
         _klein_single_file = bool(model_path and Path(model_path).is_file() and (Path(model_path) != Path(repo_dir)))
 ```
 
+Source: `vendor/studio/studio/generation_loras.py:78`. Unset read: None.
+
+```text
+                default = Path("")
+            root = Path((params.model_support_files or {}).get("components_repo")
+                        or os.environ.get("STUDIO_FLUX2_KLEIN_DIR") or default)
+        return preflight_model_loras(root, specs, transformer_class="Flux2Transformer2DModel")
+    from cosmos_windows import cosmos_cli
+    if str(params.model) in cosmos_cli.MODELS:
+        root = Path(cosmos_cli.MODELS_ROOT) / cosmos_cli.MODELS[str(params.model)]["dir"]
+```
+
 ### STUDIO_FOLEY_MIN_FREE_RAM_GB
 
 STUDIO_FOLEY_MIN_FREE_RAM_GB: advanced engine setting; built-in default retained
@@ -92533,6 +92545,18 @@ Source: `vendor/studio/studio/adapter.py:2221`. Unset read: None.
             model_dir = str(params.model)
         if not Path(model_dir).is_dir():
             raise RuntimeError(f'GLM-Image model dir not found ({model_dir!r}')
+```
+
+Source: `vendor/studio/studio/generation_loras.py:68`. Unset read: None.
+
+```text
+        import sys
+        if not root.is_dir():
+            root = Path(os.environ.get("STUDIO_GLM_MODEL") or
+                        "")
+        return preflight_model_loras(root, specs, transformer_class="GlmImageTransformer2DModel")
+    if kind in {"flux2", "flux-2", "klein"}:
+        import os
 ```
 
 ### STUDIO_GLM_OFFLOAD
@@ -94917,7 +94941,7 @@ Built weight-fetcher library used by streaming media.
 
 Scope: ds4-win, image, mac-ds4, mlx-serve, rtx-llama, studio, video. Class: preset.
 
-Source: `vendor/engines/cosmos_windows/weight_streaming/ds_backend.py:25`. Unset read: ''.
+Source: `vendor/engines/cosmos_windows/weight_streaming/ds_backend.py:27`. Unset read: ''.
 
 ```text
 class wf_weight_span(C.Structure):
@@ -94935,7 +94959,7 @@ STUDIO_WF_OVERLAP: advanced engine setting; built-in default retained
 
 Scope: image, video. Class: advanced.
 
-Source: `vendor/engines/cosmos_windows/weight_streaming/ds_backend.py:7`. Unset read: None.
+Source: `vendor/engines/cosmos_windows/weight_streaming/ds_backend.py:9`. Unset read: None.
 
 ```text
 import os
@@ -94947,7 +94971,7 @@ WF_MODE_MMAP, WF_MODE_DIRECT_IO, WF_MODE_GDS, WF_MODE_DSTORAGE, WF_MODE_AUTO = (
 WF_MOE_FETCH_ALL, WF_MOE_FETCH_ACTIVE = (0, 1)
 ```
 
-Source: `vendor/engines/cosmos_windows/weight_streaming/ds_backend.py:255`. Unset read: None.
+Source: `vendor/engines/cosmos_windows/weight_streaming/ds_backend.py:257`. Unset read: None.
 
 ```text
                 self._record_compute_done = bool(self._rc_override) and has_sym
@@ -95919,7 +95943,7 @@ WF_PASS_BOUNDARY: advanced engine setting; built-in default retained
 
 Scope: image, video. Class: advanced.
 
-Source: `vendor/engines/cosmos_windows/weight_streaming/ds_backend.py:194`. Unset read: 'cycle'.
+Source: `vendor/engines/cosmos_windows/weight_streaming/ds_backend.py:196`. Unset read: 'cycle'.
 
 ```text
                 s.alloc_offset = ao
@@ -95937,7 +95961,7 @@ WF_TRACE: advanced engine setting; built-in default retained
 
 Scope: image, video. Class: advanced.
 
-Source: `vendor/engines/cosmos_windows/weight_streaming/ds_backend.py:166`. Unset read: '0'.
+Source: `vendor/engines/cosmos_windows/weight_streaming/ds_backend.py:168`. Unset read: '0'.
 
 ```text
         p.post_mode = WF_POST_KEEP_FETCHER
@@ -101579,4 +101603,130 @@ Source: `engines/ds4-win/ds4.c:43085`. Unset read: NULL from getenv; the literal
         if (!step || step % 2048ul || step > 1048576ul) {
             fprintf(stderr, "ds4: DS4_CTX_GROW_STEP must be a positive multiple of 2048; using 2048\n");
             step = 2048ul;
+```
+
+### STUDIO_ALLOW_SLOW_MODEL_DRIVES
+
+STUDIO_ALLOW_SLOW_MODEL_DRIVES: advanced engine setting; built-in default retained
+
+Scope: studio. Class: advanced.
+
+Source: `vendor/studio/studio/settings_store.py:401`. Unset read: None.
+
+```text
+    if os.name != "nt":
+        return True
+    allow = (os.environ.get("STUDIO_ALLOW_SLOW_MODEL_DRIVES") or "").strip().lower()
+    if allow in ("1", "true", "on", "yes", "y"):
+        return True
+    try:
+        return Path(str(value)).expanduser().drive.upper() not in ("C:", "I:")
+```
+
+### STUDIO_AUDIO_DIR
+
+STUDIO_AUDIO_DIR: advanced engine setting; built-in default retained
+
+Scope: studio. Class: advanced.
+
+Source: `vendor/studio/studio/audio.py:120`. Unset read: None.
+
+```text
+def audio_dir() -> Path:
+    """App-data dir for voice profiles + temp blobs. Env override else under the output root."""
+    d = os.environ.get("STUDIO_AUDIO_DIR")
+    base = Path(d) if d else (settings.output_dir.parent / "audio")
+    base.mkdir(parents=True, exist_ok=True)
+    return base
+
+```
+
+### STUDIO_AUDIO_HF_HOME
+
+STUDIO_AUDIO_HF_HOME: advanced engine setting; built-in default retained
+
+Scope: studio. Class: advanced.
+
+Source: `vendor/studio/studio/audio.py:185`. Unset read: None.
+
+```text
+        env["STUDIO_AUDIO_RSS_LIMIT_GB"] = os.environ.get("STUDIO_AUDIO_HQ_RSS_LIMIT_GB", "24")
+    # carry the audio-specific knobs through; HF cache pin if configured
+    hf_home = os.environ.get("STUDIO_AUDIO_HF_HOME")
+    if hf_home:
+        env["HF_HOME"] = hf_home
+    # The worker runs with the Hugging Face hub offline, so a bare model size ("large-v3-turbo") can
+    # only load from a cache. Use the installed local faster-whisper folder, the same one world voice
+```
+
+### STUDIO_AUDIO_HQ_RSS_LIMIT_GB
+
+STUDIO_AUDIO_HQ_RSS_LIMIT_GB: advanced engine setting; built-in default retained
+
+Scope: studio. Class: advanced.
+
+Source: `vendor/studio/studio/audio.py:183`. Unset read: '24'.
+
+```text
+    # explicit user override.
+    if engine in _HQ_ENGINES and "STUDIO_AUDIO_RSS_LIMIT_GB" not in os.environ:
+        env["STUDIO_AUDIO_RSS_LIMIT_GB"] = os.environ.get("STUDIO_AUDIO_HQ_RSS_LIMIT_GB", "24")
+    # carry the audio-specific knobs through; HF cache pin if configured
+    hf_home = os.environ.get("STUDIO_AUDIO_HF_HOME")
+    if hf_home:
+        env["HF_HOME"] = hf_home
+```
+
+### STUDIO_AUDIO_SKIP_FIT_CHECK
+
+STUDIO_AUDIO_SKIP_FIT_CHECK: advanced engine setting; built-in default retained
+
+Scope: studio. Class: advanced.
+
+Source: `vendor/studio/studio/audio.py:95`. Unset read: None.
+
+```text
+    """Refuse to spawn an HQ TTS worker that won't fit in free host RAM (prevents OOMing the box). No-op
+    for the light engines, when psutil is unavailable, or when STUDIO_AUDIO_SKIP_FIT_CHECK=1."""
+    if engine not in _HQ_ENGINES or os.environ.get("STUDIO_AUDIO_SKIP_FIT_CHECK") == "1":
+        return
+    need = _HQ_HOST_RAM_GB.get(engine, 8.0)
+    try:
+        import psutil
+```
+
+### STUDIO_MODEL_ARCHIVE_ROOT
+
+STUDIO_MODEL_ARCHIVE_ROOT: advanced engine setting; built-in default retained
+
+Scope: studio. Class: advanced.
+
+Source: `vendor/studio/studio/settings_store.py:317`. Unset read: None.
+
+```text
+    model_archive_root = (
+        getattr(settings, "model_archive_root", None)
+        or os.environ.get("STUDIO_MODEL_ARCHIVE_ROOT")
+        or (r"models/models_archive" if os.name == "nt" and Path("runtime/").exists()
+            else str(settings.models_root.parent / "models_archive"))
+    )
+    return {
+```
+
+### STUDIO_STT_GEMMA_MODEL
+
+STUDIO_STT_GEMMA_MODEL: advanced engine setting; built-in default retained
+
+Scope: studio. Class: advanced.
+
+Source: `vendor/studio/studio/audio.py:231`. Unset read: None.
+
+```text
+    """Path to an audio-capable gemma model used for LLM-based ASR, from STUDIO_STT_GEMMA_MODEL.
+    Returns the path only if set AND it exists on disk."""
+    p = (os.environ.get("STUDIO_STT_GEMMA_MODEL") or "").strip()
+    return p if p and Path(os.path.expanduser(p)).is_file() else None
+
+
+def stt_engines() -> list[str]:
 ```

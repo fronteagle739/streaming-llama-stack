@@ -72,6 +72,42 @@
       "sha256": "4ab9430e66288319466a58e9a3c4722351584ed57a8b85baa6130f080ea4f203",
       "media_type": "image/png",
       "review": "Visually inspected: Anima 512x512 4-step image (red lighthouse on a rock, flat blue background) generated entirely from the stack during the native media-swap proof. Pixel data only, metadata stripped; no text, paths or credentials."
+    },
+    {
+      "path": "examples/walkthrough/chat-desktop.png",
+      "sha256": "6c223b9817f335946fb3792c83f5519c64f4acea2741627fed8cc1db4f2ce3be",
+      "media_type": "image/png",
+      "review": "Visually inspected walkthrough chat step, desktop width: unchanged llama.cpp web UI, synthetic lighthouse prompts, token statistics; no personal paths, addresses or credentials visible."
+    },
+    {
+      "path": "examples/walkthrough/chat-phone.png",
+      "sha256": "7163b59d0efb6d740528e37c31ee7e57a00ed189a03d819045644590ed733c23",
+      "media_type": "image/png",
+      "review": "Visually inspected walkthrough chat step, phone width: unchanged llama.cpp web UI, synthetic lighthouse prompts, token statistics; no personal paths, addresses or credentials visible."
+    },
+    {
+      "path": "examples/walkthrough/quality-desktop.png",
+      "sha256": "8690ed1549b83f169c044e437cce603083aa8a2717ae22261e9ce9a2dd4f6f31",
+      "media_type": "image/png",
+      "review": "Visually inspected walkthrough quality step, desktop width: unchanged llama.cpp web UI, synthetic lighthouse prompts, token statistics; no personal paths, addresses or credentials visible."
+    },
+    {
+      "path": "examples/walkthrough/quality-phone.png",
+      "sha256": "744b06b7011442a9056980bae6cc72f4b641ea0b709d27c13f94cbe62bc3d7e4",
+      "media_type": "image/png",
+      "review": "Visually inspected walkthrough quality step, phone width: unchanged llama.cpp web UI, synthetic lighthouse prompts, token statistics; no personal paths, addresses or credentials visible."
+    },
+    {
+      "path": "examples/walkthrough/image-desktop.png",
+      "sha256": "0eec2616af10c7c1dcfbdc94e20d187cf866f228c517490bd45294d5b6a9d052",
+      "media_type": "image/png",
+      "review": "Visually inspected walkthrough image step, desktop width: unchanged llama.cpp web UI, synthetic lighthouse prompts, token statistics; no personal paths, addresses or credentials visible."
+    },
+    {
+      "path": "examples/walkthrough/image-phone.png",
+      "sha256": "406f6b877cf7af76fe8bb9a5400cd864c305bd68c30956df4cbed8001bc1f693",
+      "media_type": "image/png",
+      "review": "Visually inspected walkthrough image step, phone width: unchanged llama.cpp web UI, synthetic lighthouse prompts, token statistics; no personal paths, addresses or credentials visible."
     }
   ]
 }

@@ -15,9 +15,9 @@ The intended six-step walkthrough is:
 5. On Windows, run `./slstack.ps1 rtx --model <model.gguf> --comfyui-models <models> --mac <mac-endpoint>` with the printed pairing information.
 6. Open the printed chat URL. Exercise chat, quality/speed, image/video, and a long prompt with a second turn.
 
-Without a Mac, `./slstack.ps1 start --model <model.gguf> --webui` runs the native Windows engine on the RTX alone; open the router URL it prints (default `http://127.0.0.1:8088`). The quality/speed evidence below was measured through this single-RTX native path, using the same router driven from a proof script rather than this exact command line.
+Without a Mac, `./slstack.ps1 start --config my.local.json --webui` (or `--model <model.gguf>`) runs the native Windows engine on the RTX alone; open the router URL it prints (default `http://127.0.0.1:8088`). Press Ctrl-C in that window to stop: the engine shuts down gracefully and frees GPU and host memory. The default native context is 4096 tokens; raise `--ctx` in `ds4_command` in your local config for longer chats. The [single-RTX walkthrough](examples/WALKTHROUGH.md) records a fresh-clone install, chat, model-made quality/speed change and image swap with screenshots.
 
-Steps 4-6 are not yet qualified for this revision. Do not treat this draft as a completed acceptance transcript.
+The two-machine steps 4-5 are not yet qualified for this revision; step 6 is qualified for the single-RTX path only (see the walkthrough).
 
 Commands currently implemented include `install`, `check`, `start` (local `rtx` alias), `mcp`, `train_lora`, `merge_lora`, `unmerge_lora`, and `run_prompts`. Native DSV4.1 dense-output LoRA attachment passed the real 1017 Jeff test, including held-out, rainbow, full-base-hash, clean-detach and deliberate-crash recovery checks; see [the recipe and card](examples/train_jeff_lora/README.md). The LoRA-off comparison was skipped per owner instruction. The one-GPU Windows state handoff remains refused until its parity gate passes.
 
