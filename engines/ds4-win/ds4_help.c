@@ -176,6 +176,7 @@ static void print_model_runtime(FILE *fp, const help_colors *c,
     opt(fp, c, "--power N", "GPU duty-cycle target, 1..100. Default: 100");
     opt(fp, c, "--ssd-streaming", "Metal/CUDA/ROCm: opt in to SSD-backed model streaming instead of full residency.");
     opt(fp, c, "--ssd-streaming-cold", "SSD streaming: skip default popularity-based expert-cache preload.");
+    opt(fp, c, "--ds-read-parts N", "Windows CUDA DirectStorage: 0/1=off, 2..64 parts, default8. DS4_DS_READ_PARTS overrides this option.");
     opt(fp, c, "--cache-affinity-bias FLOAT", "Selection-only nonresident penalty, 0=off (0..3). Trades accuracy for speed; DS4_CACHE_AFFINITY_BIAS.");
     opt(fp, c, "--cache-affinity-mode MODE", "spread (per-layer, default) or flat; decode only.");
     opt(fp, c, "--cache-affinity-adaptive", "Experimental, default off: previous-final-logit top2 margin controls bias; existing warm-up/ramp. DS4_CACHE_AFFINITY_ADAPTIVE=0|1.");

@@ -21,25 +21,17 @@
 
 namespace {
 
-/* Queue capacity, and what we do about it.
- *
- * `EnqueueRequest` silently stalls once the queue is full, so a batch larger than the queue would
- * have to be submitted in waves — that is why the weight-fetcher drains at half capacity. **We do
- * not implement a drain**, deliberately: `ds4_ds_batch_add()` refuses past `kQueueCapacity` and the
- * caller falls back to serial reads for the remainder, which cannot stall.
- *
- * That is safe at the sizes actually used. A whole layer's misses at the 1024 MiB arena default are
- * roughly 150 experts x 3 requests (gate/up/down) ~= 450 requests, against a queue of 8192 — an
- * order of magnitude of headroom.
- *
- * If the arena is ever raised far beyond a layer, or the batch starts spanning several layers (the
- * speculative-prefetch design would do exactly that), this becomes a real constraint and a wave loop
- * has to be added. Until then, extra machinery would be untested code guarding a case that cannot
- * arise. */
+/* Batch bookkeeping counts physical requests, after span splitting. Queue
+ * entries are submitted automatically at half capacity (or explicitly by Submit),
+ * and EnqueueRequest can block when full. Keep self-test waves below half of
+ * physical capacity; production planners use conservative logical capacity.
+ * https://learn.microsoft.com/windows/win32/dstorage/dstorage/nf-dstorage-idstoragequeue-enqueuerequest
+ */
 UINT16 kQueueCapacity = DSTORAGE_MAX_QUEUE_CAPACITY;
 DSTORAGE_PRIORITY g_demand_priority = DSTORAGE_PRIORITY_HIGH;
 uint32_t g_completion_spin_us = 0;
 uint32_t g_read_parts = 8;
+uint32_t g_requested_read_parts = 8;
 
 /* Qualified split-read default; 0/1 restore one request per expert span.
  * Parse before any queue is created; malformed opt-ins fail initialization. */
@@ -48,14 +40,14 @@ bool latency_controls_from_env(void) {
         {"DS4_DS_QUEUE_CAPACITY", DSTORAGE_MIN_QUEUE_CAPACITY, DSTORAGE_MAX_QUEUE_CAPACITY,
          DSTORAGE_MAX_QUEUE_CAPACITY},
         {"DS4_DS_COMPLETION_SPIN_US", 0, 10000, 0},
-        {"DS4_DS_READ_PARTS", 0, 64, 8}
+        {"DS4_DS_READ_PARTS", 0, 64, g_requested_read_parts}
     };
     for (auto &c : controls) {
         const char *s = getenv(c.name);
         if (!s || !*s) continue;
         char *end = NULL;
         const unsigned long v = strtoul(s, &end, 10);
-        if (*s == '-' || end == s || !end || *end || v < c.lo || v > c.hi) {
+        if (*s < '0' || *s > '9' || end == s || !end || *end || v < c.lo || v > c.hi) {
             fprintf(stderr, "ds4: invalid %s=%s (expected %u..%u)\n", c.name,s,c.lo,c.hi);
             return false;
         }
@@ -116,6 +108,7 @@ uint64_t               g_gpu_arena_size = 0;
 ID3D12Fence           *g_gpu_fence      = NULL;
 cudaExternalSemaphore_t g_gpu_semaphore = NULL;
 uint64_t               g_gpu_fence_next = 0;
+IDStorageQueue1       *g_last_sync_gpu_queue = NULL;   /* queue of the last GPU-destination submit_wait */
 #define DS4_DS_PREFILL_ARENAS 3
 ID3D12Resource        *g_prefill_arenas[DS4_DS_PREFILL_ARENAS] = {};
 cudaExternalMemory_t   g_prefill_extmem[DS4_DS_PREFILL_ARENAS] = {};
@@ -445,6 +438,14 @@ bool ensure_gpu_queue(void) {
 }  /* namespace */
 
 extern "C" int ds4_ds_available(void) { return g_init_ok; }
+extern "C" int ds4_ds_configure_read_parts(uint32_t parts) {
+    if(parts>64 || (g_init_attempted && parts!=g_requested_read_parts)) {
+        fprintf(stderr,"ds4: read parts must be 0..64; changing live transport settings is refused\n");return 0;
+    }
+    if(g_init_attempted)return 1;
+    g_requested_read_parts=parts;
+    return latency_controls_from_env()?1:0;
+}
 
 extern "C" uint32_t ds4_ds_batch_count(void) { return (uint32_t)g_batch.size(); }
 extern "C" uint64_t ds4_ds_batch_bytes(void) { return g_batch_bytes; }
@@ -648,6 +649,8 @@ extern "C" int ds4_ds_init_from_fd(int fd) {
 
 extern "C" int ds4_ds_batch_add(uint64_t file_offset, uint32_t bytes, void *dst_host) {
     if (!g_init_ok || !dst_host || bytes == 0) return 0;
+    if (file_offset > g_file_size || bytes > g_file_size-file_offset ||
+        (uintptr_t)dst_host > UINTPTR_MAX-bytes) return 0;
     const uint32_t parts = request_parts(file_offset,bytes);
     // Atomic admission: a refusal must not leave a partly appended slice.
     if (g_batch.size() + parts > (size_t)kQueueCapacity) return 0;
@@ -977,6 +980,18 @@ extern "C" int ds4_ds_prefill_wave_cuda_wait(
     return 1;
 }
 
+/* DS4COMBO diagnostic: order CUDA work on `cuda_stream` after every GPU write
+ * of the last GPU-destination submit_wait batch, through the shared D3D12
+ * fence and its CUDA external semaphore (the R4 prefill-wave mechanism). The
+ * signal is enqueued on that batch's own queue, so it follows its requests. */
+extern "C" int ds4_ds_gpu_fence_wait_last(void *cuda_stream) {
+    if (!g_init_ok || !g_gpu_fence || !g_gpu_semaphore || !g_last_sync_gpu_queue) return 0;
+    const uint64_t value = ++g_gpu_fence_next;
+    g_last_sync_gpu_queue->EnqueueSignal(g_gpu_fence, value);
+    g_last_sync_gpu_queue->Submit();
+    return ds4_ds_prefill_wave_cuda_wait(value, cuda_stream);
+}
+
 extern "C" int ds4_ds_prefill_waves_check_errors(void) {
     for (size_t i = 0; i < g_prefill_waves.size(); i++) {
         const ds4_ds_prefill_wave &wave = g_prefill_waves[i];
@@ -1002,6 +1017,8 @@ extern "C" int ds4_ds_batch_add_gpu(
     if (!g_gpu_arena)          { g_ds_gpu_add_fail_reason = 2; return 0; }
     if (bytes == 0)            { g_ds_gpu_add_fail_reason = 3; return 0; }
     if (g_gpu_queue_count == 0){ g_ds_gpu_add_fail_reason = 4; return 0; }
+    if (file_offset > g_file_size || bytes > g_file_size-file_offset) {
+                                 g_ds_gpu_add_fail_reason = 8; return 0; }
     if (arena_offset > g_gpu_arena_size || bytes > g_gpu_arena_size - arena_offset) {
                                  g_ds_gpu_add_fail_reason = 5; return 0; }
     const uint32_t parts = request_parts(file_offset,bytes);
@@ -1627,6 +1644,7 @@ extern "C" int ds4_ds_batch_submit_wait(
         queue->EnqueueRequest(&g_batch[i]);
     }
     queue->EnqueueSetEvent(g_event);
+    if (g_batch_gpu) g_last_sync_gpu_queue = queue;
     if(trace_submit)QueryPerformanceCounter(&submit_start);
     queue->Submit();
     if(trace_submit){QueryPerformanceCounter(&submit_end);ds4_ds_submit_trace("sync",g_batch_bytes,g_batch.size(),enqueue_start,submit_start,submit_end);}
@@ -1724,15 +1742,42 @@ extern "C" int ds4_ds_background_finish(void) {
     }
     return ds4_ds_background_poll(NULL,NULL)==1;
 }
+/* Submission counters are credited only after every physical request succeeds. */
+static int selftest_submit(uint64_t expected,uint64_t *completed,const char *leg,uint32_t index) {
+    uint64_t bytes=0;
+    if(!ds4_ds_batch_submit_wait(&bytes,NULL,NULL) || bytes!=expected) {
+        fprintf(stderr,"ds4: DirectStorage selftest: %s incomplete at %u (expected=%llu completed=%llu)\n",
+            leg,index,(unsigned long long)expected,(unsigned long long)bytes);return 0;
+    }
+    *completed+=bytes;return 1;
+}
 extern "C" int ds4_ds_selftest(int fd, uint64_t start_offset, uint64_t span_bytes,
                                uint32_t chunk_bytes, uint32_t batch) {
     if (!ds4_ds_init_from_fd(fd)) return 0;
-    if (chunk_bytes == 0 || span_bytes < chunk_bytes) return 0;
+    if (chunk_bytes == 0 || span_bytes < chunk_bytes ||
+        span_bytes/chunk_bytes > UINT32_MAX || start_offset > g_file_size ||
+        chunk_bytes > g_file_size-start_offset) {
+        fprintf(stderr,"ds4: DirectStorage selftest: invalid source span/chunk count\n");return 0;
+    }
     if (batch == 0) batch = 1;
-    if (batch > kQueueCapacity / 2) batch = kQueueCapacity / 2;
+    const uint32_t requested_batch=batch;
+    const uint32_t safe_batch=ds4_ds_batch_capacity()/2u;
+    if (!safe_batch) {fprintf(stderr,"ds4: DirectStorage selftest: no safe physical capacity\n");return 0;}
+    if (batch > safe_batch) batch=safe_batch;
+    fprintf(stderr,"ds4: selftest requested_batch=%u effective_batch=%u physical_capacity=%u parts=%u\n",
+        requested_batch,batch,(unsigned)kQueueCapacity,g_read_parts);
 
     const uint32_t chunks = (uint32_t)(span_bytes / chunk_bytes);
     const uint64_t total  = (uint64_t)chunks * chunk_bytes;
+    MEMORYSTATUSEX memory={};memory.dwLength=sizeof(memory);
+    const uint64_t reserve=2ull*1024*1024*1024;
+    if (total > SIZE_MAX/3u || !GlobalMemoryStatusEx(&memory) ||
+        memory.ullAvailPhys <= reserve || total > (memory.ullAvailPhys-reserve)/3u ||
+        (uint64_t)chunks*4u*sizeof(uint64_t) > memory.ullAvailPhys-reserve-3u*total) {
+        fprintf(stderr,"ds4: DirectStorage selftest: buffers/offsets exceed available physical RAM minus2GiB\n");return 0;
+    }
+    uint64_t qd1_completed=0,batch_completed=0,pread_completed=0;
+
 
     /* Offsets must SCATTER, not run contiguously.
      *
@@ -1754,11 +1799,7 @@ extern "C" int ds4_ds_selftest(int fd, uint64_t start_offset, uint64_t span_byte
     std::vector<uint64_t> offsets_g(chunks);     /* DS GPU destination */
     {
         const uint64_t file_span = g_file_size;
-        uint64_t usable = (file_span > (uint64_t)chunk_bytes * 2ull)
-                          ? file_span - (uint64_t)chunk_bytes - start_offset
-                          : span_bytes;
-        if (usable < (uint64_t)chunk_bytes) usable = (uint64_t)chunk_bytes;
-        const uint64_t slots = usable / chunk_bytes;
+        const uint64_t slots=(file_span-start_offset)/chunk_bytes;
         /* Vary the offsets on EVERY invocation. With a fixed seed the second selftest re-read the
          * first one's offsets straight out of the Windows page cache and reported 6.99 GB/s against
          * 2.35 for the same code -- a RAM measurement wearing a disk measurement's clothes. Each run
@@ -1797,9 +1838,11 @@ extern "C" int ds4_ds_selftest(int fd, uint64_t start_offset, uint64_t span_byte
     QueryPerformanceCounter(&a);
     for (uint32_t i = 0; i < chunks; i++) {
         ds4_ds_batch_reset();
-        ds4_ds_batch_add(offsets[i], chunk_bytes,
-                         buf_qd1 + (uint64_t)i * chunk_bytes);
-        if (!ds4_ds_batch_submit_wait(NULL, NULL, NULL)) {
+        if (!ds4_ds_batch_add(offsets[i],chunk_bytes,buf_qd1+(uint64_t)i*chunk_bytes)) {
+            fprintf(stderr,"ds4: DirectStorage selftest: QD1 add refused at chunk %u\n",i);
+            ds4_ds_batch_reset();free(buf_qd1);free(buf_batch);free(buf_pread);return 0;
+        }
+        if (!selftest_submit(chunk_bytes,&qd1_completed,"QD1",i)) {
             fprintf(stderr, "ds4: DirectStorage selftest: QD1 submit failed at chunk %u\n", i);
             free(buf_qd1); free(buf_batch); free(buf_pread);
             return 0;
@@ -1815,11 +1858,13 @@ extern "C" int ds4_ds_selftest(int fd, uint64_t start_offset, uint64_t span_byte
         ds4_ds_batch_reset();
         uint32_t n = 0;
         while (n < batch && i < chunks) {
-            ds4_ds_batch_add(offsets_b[i], chunk_bytes,
-                             buf_batch + (uint64_t)i * chunk_bytes);
+            if (!ds4_ds_batch_add(offsets_b[i],chunk_bytes,buf_batch+(uint64_t)i*chunk_bytes)) {
+                fprintf(stderr,"ds4: DirectStorage selftest: batch add refused at chunk %u (physical=%u)\n",i,ds4_ds_batch_count());
+                ds4_ds_batch_reset();free(buf_qd1);free(buf_batch);free(buf_pread);return 0;
+            }
             i++; n++;
         }
-        if (!ds4_ds_batch_submit_wait(NULL, NULL, NULL)) {
+        if (!selftest_submit((uint64_t)n*chunk_bytes,&batch_completed,"batch",i)) {
             fprintf(stderr, "ds4: DirectStorage selftest: batched submit failed near chunk %u\n", i);
             free(buf_qd1); free(buf_batch); free(buf_pread);
             return 0;
@@ -1840,12 +1885,13 @@ extern "C" int ds4_ds_selftest(int fd, uint64_t start_offset, uint64_t span_byte
         ov.OffsetHigh = (DWORD)((off >> 32) & 0xffffffffu);
         DWORD got = 0;
         if (!ReadFile((HANDLE)_get_osfhandle(fd), buf_pread + done, (DWORD)want, &got, &ov) ||
-            got == 0) {
+            got != chunk_bytes) {
             fprintf(stderr, "ds4: DirectStorage selftest: reference pread failed at %llu\n",
                     (unsigned long long)off);
             free(buf_qd1); free(buf_batch); free(buf_pread);
             return 0;
         }
+        pread_completed += got;
     }
     QueryPerformanceCounter(&b);
     const double pread_s = (double)(b.QuadPart - a.QuadPart) / (double)freq.QuadPart;
@@ -1856,14 +1902,19 @@ extern "C" int ds4_ds_selftest(int fd, uint64_t start_offset, uint64_t span_byte
     int match_qd1 = 1, match_batch = 1;
     {
         const uint32_t vchunks = chunks < 8u ? chunks : 8u;
-        ds4_ds_batch_reset();
-        for (uint32_t k = 0; k < vchunks; k++) {
-            ds4_ds_batch_add(offsets[k], chunk_bytes, buf_batch + (uint64_t)k * chunk_bytes);
-        }
-        if (!ds4_ds_batch_submit_wait(NULL, NULL, NULL)) {
-            fprintf(stderr, "ds4: DirectStorage selftest: verification batch failed\n");
-            free(buf_qd1); free(buf_batch); free(buf_pread);
-            return 0;
+        uint64_t verified=0;
+        for(uint32_t begin=0;begin<vchunks;) {
+            ds4_ds_batch_reset();const uint32_t n=(vchunks-begin<batch?vchunks-begin:batch);
+            for(uint32_t k=begin;k<begin+n;k++) {
+                if(!ds4_ds_batch_add(offsets[k],chunk_bytes,buf_batch+(uint64_t)k*chunk_bytes)) {
+                    fprintf(stderr,"ds4: DirectStorage selftest: correctness add refused at chunk %u\n",k);
+                    ds4_ds_batch_reset();free(buf_qd1);free(buf_batch);free(buf_pread);return 0;
+                }
+            }
+            if(!selftest_submit((uint64_t)n*chunk_bytes,&verified,"correctness",begin)) {
+                free(buf_qd1);free(buf_batch);free(buf_pread);return 0;
+            }
+            begin+=n;
         }
         for (uint32_t k = 0; k < vchunks; k++) {
             OVERLAPPED ov;
@@ -1879,8 +1930,15 @@ extern "C" int ds4_ds_selftest(int fd, uint64_t start_offset, uint64_t span_byte
             }
         }
         match_batch = memcmp(buf_batch, buf_pread, (size_t)vchunks * chunk_bytes) == 0;
-        match_qd1   = match_batch;   /* same transport, same code path as the QD1 submits */
+        match_qd1=memcmp(buf_qd1,buf_pread,(size_t)vchunks*chunk_bytes)==0;
     }
+    if(qd1_completed!=total || batch_completed!=total || pread_completed!=total) {
+        fprintf(stderr,"ds4: DirectStorage selftest: incomplete byte accounting\n");
+        free(buf_qd1);free(buf_batch);free(buf_pread);return 0;
+    }
+    fprintf(stderr,"ds4: [DS4_SELFTEST_BYTES_V2] requested=%llu qd1=%llu batch=%llu pread=%llu\n",
+        (unsigned long long)total,(unsigned long long)qd1_completed,
+        (unsigned long long)batch_completed,(unsigned long long)pread_completed);
     const double gib = (double)total / 1073741824.0;
 
     /* [2026-08-20] A rate above the hardware ceiling means the TRANSFER DID NOT HAPPEN.
@@ -1909,33 +1967,34 @@ extern "C" int ds4_ds_selftest(int fd, uint64_t start_offset, uint64_t span_byte
         }
     };
     const int rate_bad =
-        ds4_rate::implausible(total, pread_s, DS4_SELFTEST_IMPLAUSIBLE_GBS) ||
-        ds4_rate::implausible(total, qd1_s,   DS4_SELFTEST_IMPLAUSIBLE_GBS) ||
-        ds4_rate::implausible(total, batch_s, DS4_SELFTEST_IMPLAUSIBLE_GBS);
+        ds4_rate::implausible(pread_completed, pread_s, DS4_SELFTEST_IMPLAUSIBLE_GBS) ||
+        ds4_rate::implausible(qd1_completed, qd1_s,   DS4_SELFTEST_IMPLAUSIBLE_GBS) ||
+        ds4_rate::implausible(batch_completed, batch_s, DS4_SELFTEST_IMPLAUSIBLE_GBS);
     if (rate_bad) {
         fprintf(stderr,
                 "ds4: [DS4_SELFTEST_IMPLAUSIBLE_V1] a leg completed faster than the hardware allows "
                 "(pread=%.9f s qd1=%.9f s batch=%.9f s for %.2f GiB) — the transfer DID NOT HAPPEN. "
-                "DO NOT TREAT THE RATES BELOW AS DATA.\n",
+                "RATES SUPPRESSED; SELFTEST FAILED.\n",
                 pread_s, qd1_s, batch_s, gib);
     }
 
-    fprintf(stderr,
+    if(!rate_bad)fprintf(stderr,
             "ds4: === DirectStorage selftest: %.2f GiB in %u x %.2f MiB chunks ===\n"
             "ds4:   pread   (QD1, current path) %6.2f s = %5.2f GB/s\n"
             "ds4:   DS      (QD1)               %6.2f s = %5.2f GB/s\n"
             "ds4:   DS      (batch of %-4u)     %6.2f s = %5.2f GB/s   <-- %.2fx over DS QD1\n"
             "ds4:   byte-identical to pread: DS-QD1 %s, DS-batched %s\n",
             gib, chunks, (double)chunk_bytes / 1048576.0,
-            pread_s,  (double)total / pread_s  / 1e9,
-            qd1_s,    (double)total / qd1_s    / 1e9,
+            pread_s,  (double)pread_completed / pread_s  / 1e9,
+            qd1_s,    (double)qd1_completed / qd1_s    / 1e9,
             batch,
-            batch_s,  (double)total / batch_s  / 1e9,
+            batch_s,  (double)batch_completed / batch_s  / 1e9,
             qd1_s / (batch_s > 0.0 ? batch_s : 1.0),
-            match_batch ? "YES" : "NO",
-            match_qd1   ? "" : " (QD1 mismatch)");
+            match_qd1 ? "YES" : "NO",
+            match_batch ? "YES" : "NO");
 
-    int match_gpu = 1;
+    int match_gpu = 1,gpu_rate_bad=0;
+    uint64_t gpu_completed=0;
     const char *gpu_test = getenv("DS4_DS_GPU_SELFTEST");
     if (gpu_test && gpu_test[0]) {
         void *gpu_ptr = NULL;
@@ -1948,15 +2007,18 @@ extern "C" int ds4_ds_selftest(int fd, uint64_t start_offset, uint64_t span_byte
             while (n < batch && gi < chunks) {
                 if (!ds4_ds_batch_add_gpu(offsets_g[gi], chunk_bytes,
                                           (uint64_t)gi * chunk_bytes)) {
-                    match_gpu = 0;
-                    break;
+                    fprintf(stderr,"ds4: DirectStorage selftest: GPU add refused at chunk %u (physical=%u)\n",gi,ds4_ds_batch_count());
+                    ds4_ds_batch_reset();match_gpu=0;break;
                 }
                 gi++; n++;
             }
-            if (match_gpu && !ds4_ds_batch_submit_wait(NULL, NULL, NULL)) match_gpu = 0;
+            if (match_gpu && !selftest_submit((uint64_t)n*chunk_bytes,&gpu_completed,"GPU",gi)) match_gpu=0;
         }
         QueryPerformanceCounter(&b);
         const double gpu_s = (double)(b.QuadPart - a.QuadPart) / (double)freq.QuadPart;
+        if(match_gpu && (gi!=chunks || gpu_completed!=total))match_gpu=0;
+        fprintf(stderr,"ds4: [DS4_SELFTEST_GPU_BYTES_V2] requested=%llu completed=%llu\n",
+            (unsigned long long)total,(unsigned long long)gpu_completed);
         if (match_gpu) {
             const cudaError_t cerr = cudaMemcpy(buf_batch, gpu_ptr, (size_t)total,
                                                 cudaMemcpyDeviceToHost);
@@ -1983,7 +2045,10 @@ extern "C" int ds4_ds_selftest(int fd, uint64_t start_offset, uint64_t span_byte
          * i.e. ~1e-7 s for 1 GiB. Report it as a NON-EVENT rather than a number. Two separate
          * fprintf calls, not one with a conditional format string - the two formats take different
          * argument counts and a single varargs call would be undefined behaviour. */
-        if (ds4_rate::implausible(total, gpu_s, DS4_SELFTEST_IMPLAUSIBLE_GBS)) {
+        gpu_rate_bad=match_gpu && ds4_rate::implausible(gpu_completed,gpu_s,DS4_SELFTEST_IMPLAUSIBLE_GBS);
+        if(!match_gpu) {
+            fprintf(stderr,"ds4: DirectStorage GPU selftest FAILED; no throughput reported\n");
+        } else if (gpu_rate_bad) {
             fprintf(stderr,
                     "ds4:   DS GPU  (batch of %-4u)     %.9f s = TRANSFER DID NOT HAPPEN "
                     "(faster than hardware allows); byte-identical %s\n",
@@ -1991,19 +2056,30 @@ extern "C" int ds4_ds_selftest(int fd, uint64_t start_offset, uint64_t span_byte
         } else {
             fprintf(stderr,
                     "ds4:   DS GPU  (batch of %-4u)     %6.2f s = %5.2f GB/s; byte-identical %s\n",
-                    batch, gpu_s, ds4_rate::gbs(total, gpu_s), match_gpu ? "YES" : "NO");
+                    batch, gpu_s, ds4_rate::gbs(gpu_completed, gpu_s), match_gpu ? "YES" : "NO");
         }
         ds4_ds_gpu_arena_release();
     }
 
     free(buf_qd1); free(buf_batch); free(buf_pread);
-    return (match_qd1 && match_batch && match_gpu) ? 1 : 0;
+    return (match_qd1 && match_batch && match_gpu && !rate_bad && !gpu_rate_bad) ? 1 : 0;
 }
 
 extern "C" void ds4_ds_shutdown(void) {
     release_all();
+    /* Any surviving prefill arena holds a reference on the D3D12 device, so
+     * release waves and arenas before the decode arena and the device. */
+    ds4_ds_prefill_waves_release();
+    std::vector<ds4_ds_prefill_wave>().swap(g_prefill_waves);
+    prefill_arenas_release();
     gpu_arena_release();
-    if (g_d3d_device) { g_d3d_device->Release(); g_d3d_device = NULL; }
+    if (g_d3d_device) {
+        const ULONG refs = g_d3d_device->Release();
+        g_d3d_device = NULL;
+        fprintf(stderr, "DS4COMBO_DS_SHUTDOWN d3d12_device_refcount_after_release=%lu\n",
+                (unsigned long)refs);
+        fflush(stderr);
+    }
     if (g_dll) { FreeLibrary(g_dll); g_dll = NULL; }
     g_init_attempted = 0;
 }

@@ -1,4 +1,3 @@
-/* Reused from private provider e1e45374ddc307c75bd7fc0e4b8dccce6b0af6e2, tests/test_quality_request.c. */
 /* Production parser -> queued request -> real runtime publication.
  * The companion test fixture enables capability without loading a model. */
 #define DS4_SERVER_TEST
@@ -10,10 +9,10 @@ extern void quality_test_enable(void);
 static void queued(const char *body) {
     bool present=false;quality_setting setting;
     TEST_ASSERT(quality_config_body(body,false,&present,&setting));
-    request req={0};request_quality_store(&req,present,&setting);
+    request req={0};quality_request_store(&req,present,&setting);
     /* A live change after enqueue must not mutate the stored request. */
     memset(&setting,0,sizeof(setting));
-    TEST_ASSERT(request_quality_apply(&req)==0);
+    TEST_ASSERT(quality_request_apply(&req)==0);
     ds4_quality_speed_get(&published);
 }
 int main(void) {

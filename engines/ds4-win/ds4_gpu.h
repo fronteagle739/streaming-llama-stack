@@ -474,9 +474,29 @@ int ds4_gpu_qwen4_batch_mm_q8_tensor(
 void ds4_gpu_set_streaming_host_expert_cache_budget(uint32_t experts);
 void ds4_gpu_set_streaming_host_expert_cache_budget_bytes(uint64_t bytes);
 uint64_t ds4_gpu_recommended_working_set_size(void);
+/* DS4COMBO growable context VRAM (CUDA). */
+ds4_gpu_tensor *ds4_gpu_tensor_alloc_growable(uint64_t bytes);
+int ds4_gpu_tensor_set_mapped(ds4_gpu_tensor *t, uint64_t bytes);
+uint64_t ds4_gpu_tensor_map_cost(const ds4_gpu_tensor *t, uint64_t bytes);
+uint64_t ds4_gpu_tensor_mapped_bytes(const ds4_gpu_tensor *t);
+void ds4_gpu_stream_expert_cache_enable_ctx_resize(void);
+void ds4_gpu_stream_expert_cache_set_floor(uint64_t bytes);
+uint32_t ds4_gpu_stream_prefill_borrow(uint32_t want_layers, uint32_t n_total_expert,
+                                       uint64_t gate_expert_bytes, uint64_t down_expert_bytes,
+                                       uint64_t *free_out, uint64_t *borrowed_out, uint64_t *reserve_out);
+void ds4_gpu_stream_prefill_borrow_end(void);
+uint64_t ds4_gpu_stream_expert_cache_held_bytes(void);
+uint32_t ds4_gpu_stream_expert_cache_tier_count(void);
+int ds4_gpu_stream_expert_cache_set_ceiling(uint64_t bytes, uint32_t *evicted, uint32_t *demoted);
 uint32_t ds4_gpu_stream_expert_cache_configured_count(void);
 uint32_t ds4_gpu_stream_expert_cache_current_count(void);
+uint32_t ds4_gpu_stream_expert_cache_snapshot(int host, uint32_t *layers, uint32_t *experts, uint64_t *gate_bytes, uint64_t *down_bytes, uint32_t cap);
+uint32_t ds4_gpu_stream_expert_frequency(uint32_t *layers, uint32_t *experts, uint32_t *counts, uint64_t *gate_bytes, uint64_t *down_bytes, uint32_t cap);
+uint32_t ds4_gpu_stream_expert_cache_clear_slots(void);
+uint32_t ds4_gpu_stream_expert_cache_prepare_full(uint64_t gate_expert_bytes, uint64_t down_expert_bytes);
+uint32_t ds4_gpu_stream_expert_cache_apply_order(int host, const uint32_t *layers, const uint32_t *experts, const uint64_t *gate_bytes, const uint64_t *down_bytes, uint32_t n);
 uint32_t ds4_gpu_stream_host_expert_cache_configured_count(void);
+uint32_t ds4_gpu_stream_host_expert_cache_capacity_for(uint64_t gate_expert_bytes, uint64_t down_expert_bytes);
 uint32_t ds4_gpu_stream_host_expert_cache_current_count(void);
 enum {
     DS4_STREAM_EXPERT_TIER_ON_DEMAND = 0,
@@ -2722,6 +2742,14 @@ int ds4_gpu_cache_affinity_configure(float mean, uint32_t warmup, uint32_t ramp,
 int ds4_gpu_cache_affinity_prepare_model(const void *model, uint64_t size, uint32_t experts, uint32_t layers);
 void ds4_gpu_cache_affinity_finish(void);
 int ds4_gpu_cache_affinity_background_tick(void);
+/* DS4COMBO async expert restore (ds4_expert_restore_async.cuh). */
+int ds4_gpu_expert_restore_async_available(char *why, size_t n);
+void ds4_gpu_expert_restore_async_reset(void);
+int ds4_gpu_expert_restore_async_add(const ds4_gpu_stream_expert_table *t, uint32_t expert, int host, uint32_t age);
+int ds4_gpu_expert_restore_async_start(uint32_t cleared, char *err, size_t n);
+int ds4_gpu_expert_restore_async_tick(void);
+int ds4_gpu_expert_restore_async_drain(const char *why);
+int ds4_gpu_expert_restore_async_state(char *why, size_t n);
 int ds4_gpu_cache_affinity_router_tensor(
     ds4_gpu_tensor *selected, ds4_gpu_tensor *weights, const ds4_gpu_tensor *probs,
     const void *model_map, uint64_t model_size, uint64_t bias_offset, bool has_bias,

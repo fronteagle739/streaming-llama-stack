@@ -1,4 +1,5 @@
 #include "ds4.h"
+static bool ds4_combo_active; /* Explicit Windows target-only session only. */
 #include "ds4_tool_text.h"
 #include "ds4_distributed.h"
 #include "ds4_gpu_args.h"
@@ -833,6 +834,8 @@ static bool responses_live_has_call_id(server *s, const char *id);
 static bool anthropic_live_has_call_id(server *s, const char *id);
 static stop_list live_tool_call_order(server *s, api_style api, const stop_list *ids);
 
+typedef struct {bool per_phase;float value,phases[DS4_QUALITY_PHASE_COUNT];} quality_setting;
+
 typedef struct {
     req_kind kind;
     api_style api;
@@ -848,7 +851,7 @@ typedef struct {
     bool quality_speed_set;
     float quality_speed;
     bool quality_per_phase;
-    float quality_phases[4];
+    float quality_phases[DS4_QUALITY_PHASE_COUNT];
     char *prompt_text;
     tool_schema_orders tool_orders;
     int max_tokens;
@@ -902,12 +905,18 @@ typedef struct {
     tool_replay_stats tool_replay;
 } request;
 
-static int request_quality_apply(const request *req) {
+/* Keep queued settings independent of subsequent live updates. */
+static void quality_request_store(request *req, bool present, const quality_setting *setting) {
+    req->quality_speed_set=present;
+    req->quality_speed=setting->value;
+    req->quality_per_phase=setting->per_phase;
+    memcpy(req->quality_phases,setting->phases,sizeof(req->quality_phases));
+}
+static int quality_request_apply(const request *req) {
     if (!req->quality_speed_set) return 0;
     return req->quality_per_phase ? ds4_quality_speed_set_phase_map(req->quality_phases) :
-                                   ds4_quality_speed_set(req->quality_speed);
+        ds4_quality_speed_set(req->quality_speed);
 }
-
 
 static void tool_call_free(tool_call *tc) {
     free(tc->id);
@@ -3422,7 +3431,7 @@ static char *render_deepseek41_chat_ordered(const chat_msgs *msgs, int start,
     msgs = &views;
     const chat_msg **ordered = ds41_order_messages(msgs, initial_order);
     const bool think = ds4_think_mode_enabled(mode);
-    const bool keep_reasoning = live_tail || chat_history_uses_tool_context(msgs, tool_schemas);
+    const bool keep_reasoning = live_tail || chat_history_uses_tool_context(msgs, tool_schemas) || ds4_combo_active;
     const char *effort = ds4_deepseek41_reasoning_effort_text(mode);
     bool initial_system = false, pending = false, user_open = false;
     int last_user = -1;
@@ -14299,7 +14308,8 @@ static void *decode_worker_main(void *arg) {
 static void generate_job_inner(server *s, server_slot *slot, job *j) {
     char err[160];
     err[0] = '\0';
-    if (request_quality_apply(&j->req)) {
+    if (ds4_combo_active) ds4_t1_request("generate");
+    if (quality_request_apply(&j->req)) {
         http_error(j->fd,s->enable_cors,409,"quality vs speed unsupported");return;
     }
     const bool multimodal = j->req.image_count != 0;
@@ -14875,6 +14885,7 @@ decode_again:
     const double decode_t0 = now_sec();
     double quality_window_t = decode_t0;
     int quality_window_tokens = 0;
+    double combo_after500_t = 0;
     ds4_quality_speed quality_state;ds4_quality_speed_get(&quality_state);
     uint64_t quality_revision = quality_state.applied_revision;
     uint64_t quality_phase_revision=quality_state.phase_revision;
@@ -15033,6 +15044,13 @@ decode_again:
             size_t piece_len = 0;
             char *piece = ds4_token_text(s->engine, token, &piece_len);
             completion++;
+            if(ds4_combo_active && completion==1)ds4_t1_token1();
+            if(ds4_combo_active && (completion==1 || completion==100 || completion==500 || completion==1000)){
+                double elapsed=now_sec()-decode_t0;
+                if(completion==500)combo_after500_t=now_sec();
+                fprintf(stderr,"DS4COMBO_DECODE_PROGRESS tokens=%d decode_seconds=%.9f cumulative_tok_s=%.9f warm500_tok_s=%.9f\n",completion,elapsed,elapsed>0?completion/elapsed:0,
+                    completion==1000&&combo_after500_t>0?500/(now_sec()-combo_after500_t):0);fflush(stderr);
+            }
             ds4_quality_speed_get(&quality_state);
             if (quality_revision != quality_state.applied_revision || quality_phase_revision != quality_state.phase_revision) {
                 quality_revision=quality_state.applied_revision;quality_phase_revision=quality_state.phase_revision;quality_window_t=now_sec();quality_window_tokens=completion;
@@ -16024,17 +16042,7 @@ static long content_length(const char *h, size_t n) {
     return 0;
 }
 
-typedef struct {bool per_phase;float value,phases[4];} quality_setting;
-
-static void request_quality_store(request *req, bool present, const quality_setting *setting) {
-    req->quality_speed_set = present;
-    req->quality_speed = setting->value;
-    req->quality_per_phase = setting->per_phase;
-    memcpy(req->quality_phases, setting->phases, sizeof(req->quality_phases));
-}
-
-/* C-string comparisons must not accept a valid name followed by JSON NUL.
- * Reused from the provider at e1e45374ddc307c75bd7fc0e4b8dccce6b0af6e2. */
+/* C-string comparisons must not accept a valid name followed by JSON NUL. */
 static bool quality_name(const char **p, char **name) {
     size_t length=0;
     if (!json_string_length(p,name,&length)) return false;
@@ -16059,7 +16067,7 @@ static bool quality_phase_map(const char **p,quality_setting *setting) {
     unsigned seen=0;json_ws(p);
     if(**p!='}')for(;;){
         char *key=NULL;if(!quality_name(p,&key))return false;
-        int index=-1;for(int i=0;i<4;i++)if(!strcmp(key,ds4_quality_phase_names[i]))index=i;
+        int index=-1;for(int i=0;i<DS4_QUALITY_PHASE_COUNT;i++)if(!strcmp(key,ds4_quality_phase_names[i]))index=i;
         free(key);json_ws(p);if(*(*p)++!=':' || index<0 || (seen&(1u<<index)))return false;
         if(!quality_value(p,&setting->phases[index]))return false;
         seen|=1u<<index;json_ws(p);if(**p!=',')break;(*p)++;
@@ -16075,15 +16083,14 @@ static bool quality_setting_value(const char **p,quality_setting *setting) {
 static bool quality_config_body(const char *body,bool endpoint,bool *present,quality_setting *setting) {
     ds4_quality_speed current;ds4_quality_speed_get(&current);
     *setting=(quality_setting){.value=current.requested};
-    for(int i=0;i<3;i++)setting->phases[i]=current.per_phase?current.phase_values[i]:current.requested;
-    setting->phases[DS4_QUALITY_CODE]=current.per_phase?current.phase_values[DS4_QUALITY_CODE]:current.requested;
+    for(int i=0;i<DS4_QUALITY_PHASE_COUNT;i++)setting->phases[i]=current.per_phase?current.phase_values[i]:current.requested;
     const char *p=body;*present=false;json_ws(&p);
     if(*p++!='{')return false;
     unsigned phases_seen=0;json_ws(&p);
     if(*p!='}')for(;;){
         char *key=NULL;if(!quality_name(&p,&key))return false;
         bool match=!strcmp(key,endpoint?"value":"quality_speed");
-        int phase=-1;if(endpoint)for(int i=0;i<4;i++)if(!strcmp(key,ds4_quality_phase_names[i]))phase=i;
+        int phase=-1;if(endpoint)for(int i=0;i<DS4_QUALITY_PHASE_COUNT;i++)if(!strcmp(key,ds4_quality_phase_names[i]))phase=i;
         free(key);json_ws(&p);if(*p++!=':')return false;
         if(match){if(*present || phases_seen || !quality_setting_value(&p,setting))return false;*present=true;}
         else if(phase>=0){
@@ -16364,6 +16371,14 @@ static void wait_for_job_or_disconnect(server *s, job *j) {
 }
 
 #include "ds4_training_api.h"
+#include "ds4_combo_api.inc"
+#if defined(_WIN32) && !defined(DS4_NO_GPU)
+void ds4_ds_shutdown(void);
+#endif
+static double now_sec_for_combo_shutdown(void) {
+    struct timespec ts; timespec_get(&ts, TIME_UTC);
+    return (double)ts.tv_sec + (double)ts.tv_nsec * 1e-9;
+}
 
 static void *client_main(void *arg) {
     client_arg *ca = arg;
@@ -16399,6 +16414,13 @@ static void *client_main(void *arg) {
         goto done;
     }
 
+    if (ds4_combo_active && !hr.quality_authorized) {
+        http_error(fd,s->enable_cors,401,"combo decoder requires its owner Bearer token");http_request_free(&hr);goto done;
+    }
+    if (ds4_combo_active && !strncmp(hr.path,"/decode/",8)) {
+        ds4_t1_request(hr.path);
+        ds4_combo_http(s,fd,&hr);http_request_free(&hr);goto done;
+    }
     if (!strncmp(hr.path, "/v1/train/", 10)) {
         if (!hr.quality_authorized) http_error(fd,s->enable_cors,401,"authenticated frozen-prefix training required");
         else if (!strcmp(hr.method,"POST") && !strcmp(hr.path,"/v1/train/prompt")) ds4_training_prompt(s,fd,&hr);
@@ -16480,7 +16502,7 @@ static void *client_main(void *arg) {
         http_request_free(&hr);
         goto done;
     }
-    if (ok) {req.raw_body = xstrndup(hr.body, hr.body_len);request_quality_store(&req,quality_present,&quality);}
+    if (ok) {req.raw_body = xstrndup(hr.body, hr.body_len);quality_request_store(&req,quality_present,&quality);}
     http_request_free(&hr);
     if (!ok) {
         http_error(fd, s->enable_cors, 400, err);
@@ -16972,6 +16994,11 @@ static server_config parse_options(int argc, char **argv) {
         } else if (!strcmp(arg, "--cache-affinity-bias")) {
             c.engine.cache_affinity_bias = parse_float_arg(need_arg(&i, argc, argv, arg), arg, 0.0f, 3.0f);
             c.engine.cache_affinity_bias_set = true;
+        } else if (!strcmp(arg, "--ds-read-parts")) {
+            if (!ds4_parse_affinity_count(need_arg(&i,argc,argv,arg),64u,&c.engine.ds_read_parts)) {
+                fprintf(stderr,"ds4-server: --ds-read-parts requires an integer in 0..64\n");exit(2);
+            }
+            c.engine.ds_read_parts_set = true;
         } else if (!strcmp(arg, "--ssd-streaming-cache-experts")) {
             uint32_t experts = 0;
             uint64_t bytes = 0;
@@ -17376,6 +17403,10 @@ int main(int argc, char **argv) {
         }
     }
 
+    char combo_error[512]={0};
+    if(!ds4_combo_start(&s,&cfg.engine,combo_error,sizeof(combo_error))){
+        server_log(DS4_LOG_ERROR,"ds4-server: %s",combo_error);server_close_resources(&s);return 1;
+    }
     if (cfg.peer_listen) {
         ds4_peer_capabilities peer_caps;
         char peer_err[512] = {0};
@@ -17645,7 +17676,9 @@ int main(int argc, char **argv) {
     while (s.clients > 0) pthread_cond_wait(&s.clients_cv, &s.mu);
     pthread_mutex_unlock(&s.mu);
 
-    for (int i = 0; s.kv.enabled && !s.peer_decode_enabled && i < s.slot_count; i++) {
+    /* A combo graceful shutdown has already exported its state to the owner;
+     * it must not also write the KV disk cache on the way out. */
+    for (int i = 0; !ds4_combo_shutdown_requested && s.kv.enabled && !s.peer_decode_enabled && i < s.slot_count; i++) {
         server_slot *slot = &s.slots[i];
         const ds4_tokens *tokens = ds4_session_tokens(slot->session);
         if (!tokens || tokens->len < s.kv.opt.min_tokens) continue;
@@ -17654,7 +17687,21 @@ int main(int argc, char **argv) {
                    i, tokens->len);
         kv_cache_store_current(&s, slot, "shutdown");
     }
-    server_close_resources(&s);
+    {
+        const bool graceful = ds4_combo_shutdown_requested;
+        const double t0 = now_sec_for_combo_shutdown();
+        server_close_resources(&s);
+        const double t1 = now_sec_for_combo_shutdown();
+#if defined(_WIN32) && !defined(DS4_NO_GPU)
+        if (graceful) ds4_ds_shutdown();
+#endif
+        if (graceful) {
+            const double t2 = now_sec_for_combo_shutdown();
+            fprintf(stderr, "DS4COMBO_NATIVE_GRACEFUL_SHUTDOWN_COMPLETE engine_ms=%.1f ds_ms=%.1f engine_and_ds_ms=%.1f ds_shutdown=1\n",
+                    (t1 - t0) * 1000.0, (t2 - t1) * 1000.0, (t2 - t0) * 1000.0);
+            fflush(stderr);
+        }
+    }
     return 0;
 }
 #else

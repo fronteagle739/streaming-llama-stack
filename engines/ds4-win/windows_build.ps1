@@ -144,7 +144,7 @@ $benchObjects = $benchSources | ForEach-Object { [IO.Path]::ChangeExtension($_, 
 $serverObjects = $serverSources | ForEach-Object { [IO.Path]::ChangeExtension($_, ".obj") }
 $agentObjects = $agentSources | ForEach-Object { [IO.Path]::ChangeExtension($_, ".obj") }
 $backendObjects = @("ds4_lora.obj")
-$win32Link = " ws2_32.lib"
+$win32Link = " ws2_32.lib bcrypt.lib"
 
 $loraCommand = "cl " + ((@("/nologo", "/std:c++17", "/EHsc", "/O2", "/W3") + $defines + "/c" + "ds4_lora.cpp") -join " ")
 $cudaCommand = ""
@@ -235,7 +235,7 @@ if ($Target -eq "cuda") {
         $cudaCommand += "`n`"$nvcc`" -std=c++17 -Xcompiler /Zc:preprocessor -Icuda/mmq " + (($nvccArch + $nvccDefines + "-c" + "-o" + $obj + $m) -join " ") + $errCheck
         $backendObjects += $obj
     }
-    $cudaLink = " /LIBPATH:`"$cudaLib`" cudart.lib cublas.lib ole32.lib d3d12.lib dxgi.lib"
+    $cudaLink = " /LIBPATH:`"$cudaLib`" cudart.lib cublas.lib cuda.lib ole32.lib d3d12.lib dxgi.lib"
 
     # DirectStorage transport. Built by cl as C++17 rather than nvcc, because dstorage.h drags in
     # d3d12.h/unknwn.h which nvcc has no reason to parse. The default queue uses a NULL D3D12 device;

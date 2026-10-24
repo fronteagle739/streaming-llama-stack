@@ -42,6 +42,10 @@ extern "C" {
  * (with a detailed reason already printed to stderr, including the HRESULT). Safe to call again;
  * re-initialises if `fd` refers to a different file, which happens when the MTP model swaps in. */
 int ds4_ds_init_from_fd(int fd);
+/* Configure the normal engine option before transport initialization. 0/1
+ * disables splitting; 2..64 selects parts; default8. DS4_DS_READ_PARTS is an
+ * explicit compatibility override. Refuses changes to a live transport. */
+int ds4_ds_configure_read_parts(uint32_t parts);
 
 /* 1 once a queue is live. */
 int ds4_ds_available(void);
@@ -64,7 +68,7 @@ void ds4_ds_gpu_arena_release(void);
 int ds4_ds_batch_add_gpu(uint64_t file_offset, uint32_t bytes, uint64_t arena_offset);
 /* Which of ds4_ds_batch_add_gpu()'s seven refusal branches fired last; 0 = the last call succeeded.
  * 1 !init 2 !gpu_arena 3 bytes==0 4 !queue_count 5 offset/size out of arena 6 batch full
- * 7 GPU add into an already non-GPU batch. */
+ * 7 GPU add into an already non-GPU batch; 8 source outside the file. */
 int ds4_ds_gpu_add_fail_reason(void);
 
 /* R4 prefill pipeline. Requests are built once per model/layer, then replayed
@@ -87,6 +91,9 @@ int ds4_ds_prefill_wave_build(uint32_t index,
                               uint32_t count);
 int ds4_ds_prefill_wave_submit(uint32_t index, uint64_t *out_fence_value);
 int ds4_ds_prefill_wave_cuda_wait(uint64_t fence_value, void *cuda_stream);
+/* DS4COMBO diagnostic: CUDA waits (on cuda_stream) for the GPU writes of the
+ * last GPU-destination ds4_ds_batch_submit_wait() via the shared fence. */
+int ds4_ds_gpu_fence_wait_last(void *cuda_stream);
 int ds4_ds_prefill_waves_check_errors(void);
 void ds4_ds_prefill_waves_release(void);
 
