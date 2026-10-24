@@ -5,6 +5,7 @@
 #include "llama-dsv41-wire.h"
 #include "llama-dsv41-executor.h"
 
+#include <array>
 #include <functional>
 #include <memory>
 #include <string>
@@ -129,6 +130,19 @@ public:
     // vocabulary) for local greedy decode. Copies under the owner lock; fails
     // unless the sweep is completed and published.
     bool completed_logits(std::vector<float> &out,std::string &error) const;
+    // LLAMADECODE ds4-decode: device addresses of the canonical V4.1 state so
+    // ds4-win's own decode can advance it in place, and the host bookkeeping
+    // of one token that external decode evaluated (tokens, logits, Engram
+    // history; no cache write: the device state was advanced in place).
+    struct device_state {
+        std::array<void*,40> raw{};std::array<void*,4> compressed{},index{};std::array<uint32_t,4> rows{};
+        std::array<void*,3> pool_kv{},pool_score{};
+    };
+    bool device_state_views(device_state &out,std::string &error) const;
+    bool engram_tail(std::array<int32_t,3> &tail,std::string &error) const;
+    bool commit_external_token(int32_t token,const std::vector<float> &logits,std::string &error);
+    // The provider of this completed owner (resident decode weights, expert cache).
+    llama_dsv41_weight_provider *provider_for_external_decode();
 private:
     struct implementation;
     std::unique_ptr<implementation>p;

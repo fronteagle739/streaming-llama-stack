@@ -71,6 +71,36 @@ struct llama_dsv41_weight_provider::implementation {
     std::vector<int32_t>slot_key;std::unordered_map<int32_t,int32_t>key_slot;
     std::list<int32_t>lru;std::vector<std::list<int32_t>::iterator>lru_pos;
     uint64_t cache_hits=0,cache_misses=0,cache_bytes=0;double cache_ms=0;
+    // LLAMADECODE B2: LRU over (layer, expert). Hits move to the front first,
+    // so a miss never evicts an expert this same request needs. Only misses
+    // are fetched (explicit DirectStorage extents into bank 0).
+    std::unordered_map<int32_t,int32_t> assign_expert_slots(uint32_t layer,const int32_t*ids,size_t count,void*stream){
+        std::vector<int32_t>unique;for(size_t i=0;i<count;++i){const auto id=ids[i];require(id>=0&&id<384,"Routed expert id out of range");if(std::find(unique.begin(),unique.end(),id)==unique.end())unique.push_back(id);}
+        require(unique.size()<=pool_slots,"Routed experts exceed the cache pool");
+        std::vector<int32_t>missing;std::unordered_map<int32_t,int32_t>slot_of;
+        for(const auto e:unique){const int32_t key=int32_t(layer)*384+e;auto it=key_slot.find(key);
+            if(it!=key_slot.end()){slot_of[e]=it->second;lru.splice(lru.begin(),lru,lru_pos[size_t(it->second)]);++cache_hits;}
+            else missing.push_back(e);}
+        std::vector<wf_extent>extents;
+        for(const auto e:missing){
+            const int32_t slot=lru.back();lru.splice(lru.begin(),lru,lru_pos[size_t(slot)]);
+            if(slot_key[size_t(slot)]>=0)key_slot.erase(slot_key[size_t(slot)]);
+            const int32_t key=int32_t(layer)*384+e;slot_key[size_t(slot)]=key;key_slot[key]=slot;slot_of[e]=slot;++cache_misses;
+            for(uint32_t k=0;k<3;++k){
+                uint64_t file=0;for(const auto&entry:stages[layer+1].entries)if(entry.t==routed[layer*3+k])file=entry.file_offset;
+                require(file,"Routed expert file extent missing");
+                extents.push_back({add(file,uint64_t(e)*pool_stride[k]),add(pool_offset[k],uint64_t(slot)*pool_stride[k]),pool_stride[k],0});
+            }
+        }
+        if(!extents.empty()){
+            uint64_t bytes=0;double fetch_ms=0;
+            // A failed or partial fetch poisons the provider (guard); the slot table is then discarded with it.
+            require(wf_fetch_extents_direct(fetcher,0,extents.data(),int(extents.size()),stream,&bytes,&fetch_ms)&&!wf_has_failed(fetcher),
+                "Routed expert-cache fetch failed");
+            cache_bytes+=bytes;cache_ms+=fetch_ms;fetched_total+=bytes;fetch_ms_total+=fetch_ms;
+        }
+        return slot_of;
+    }
     void reset_cache(){slot_key.assign(pool_slots,-1);key_slot.clear();lru.clear();lru_pos.assign(pool_slots,lru.end());
         for(uint32_t s=0;s<pool_slots;++s){lru.push_back(int32_t(s));lru_pos[s]=std::prev(lru.end());}}
     uint32_t stage_count()const{return decode_layout?82u:42u;}
@@ -585,36 +615,45 @@ bool llama_dsv41_weight_provider::acquire_layer_dense(uint32_t layer,llama_dsv41
 bool llama_dsv41_weight_provider::acquire_layer_experts(uint32_t layer,const std::vector<int32_t>&ids,std::vector<int32_t>&slots,std::string&error){slots.clear();return p->guard([&]{
     require(layer<40&&p->decode_layout&&p->leased&&p->next==1+2*layer&&p->experts_prebound,"Routed experts require their leased dense stage");
     require(!ids.empty()&&ids.size()<=6*4096,"Routed expert set size invalid");
-    // LRU over (layer, expert). Hits move to the front first, so a miss never
-    // evicts an expert this same request needs.
-    std::vector<int32_t>unique;for(const auto id:ids){require(id>=0&&id<384,"Routed expert id out of range");if(std::find(unique.begin(),unique.end(),id)==unique.end())unique.push_back(id);}
-    require(unique.size()<=p->pool_slots,"Routed experts exceed the cache pool");
-    std::vector<int32_t>missing;std::unordered_map<int32_t,int32_t>slot_of;
-    for(const auto e:unique){const int32_t key=int32_t(layer)*384+e;auto it=p->key_slot.find(key);
-        if(it!=p->key_slot.end()){slot_of[e]=it->second;p->lru.splice(p->lru.begin(),p->lru,p->lru_pos[size_t(it->second)]);++p->cache_hits;}
-        else missing.push_back(e);}
-    std::vector<wf_extent>extents;
-    for(const auto e:missing){
-        const int32_t slot=p->lru.back();p->lru.splice(p->lru.begin(),p->lru,p->lru_pos[size_t(slot)]);
-        if(p->slot_key[size_t(slot)]>=0)p->key_slot.erase(p->slot_key[size_t(slot)]);
-        const int32_t key=int32_t(layer)*384+e;p->slot_key[size_t(slot)]=key;p->key_slot[key]=slot;slot_of[e]=slot;++p->cache_misses;
-        for(uint32_t k=0;k<3;++k){
-            uint64_t file=0;for(const auto&entry:p->stages[layer+1].entries)if(entry.t==p->routed[layer*3+k])file=entry.file_offset;
-            require(file,"Routed expert file extent missing");
-            extents.push_back({add(file,uint64_t(e)*p->pool_stride[k]),add(p->pool_offset[k],uint64_t(slot)*p->pool_stride[k]),p->pool_stride[k],0});
-        }
-    }
-    if(!extents.empty()){
-        uint64_t bytes=0;double fetch_ms=0;
-        // A failed or partial fetch poisons the provider (guard); the slot table is then discarded with it.
-        require(wf_fetch_extents_direct(p->fetcher,0,extents.data(),int(extents.size()),ggml_backend_cuda_get_stream(p->options.backend),&bytes,&fetch_ms)&&!wf_has_failed(p->fetcher),
-            "Routed expert-cache fetch failed");
-        p->cache_bytes+=bytes;p->cache_ms+=fetch_ms;p->fetched_total+=bytes;p->fetch_ms_total+=fetch_ms;
-    }
+    const auto slot_of=p->assign_expert_slots(layer,ids.data(),ids.size(),ggml_backend_cuda_get_stream(p->options.backend));
     // The shared-expert stage (resident) is held with the dense stage through the layer.
     p->dense_held=int(1+2*layer);++p->next;
     p->acquire(2+2*layer);
     slots.reserve(ids.size());for(const auto id:ids)slots.push_back(slot_of.at(id));
+},error);}
+bool llama_dsv41_weight_provider::prepare_external_decode(const config&options,std::string&error){
+    if(!restart_prompt(options,error))return false;   // switches to the decode layout (options.decode_layout)
+    return p->guard([&]{
+        require(p->decode_layout&&p->buffers.size()==2,"External decode requires the two-bank decode layout");
+        require(p->allocated&&!p->device_suspended&&!p->leased&&p->next==0,"External decode requires an idle provider");
+        wf_start(p->fetcher);require(!wf_has_failed(p->fetcher),"Resident pass start failed");p->fetched_total=0;p->fetch_ms_total=0;
+        const auto started=std::chrono::steady_clock::now();
+        // One pass over all stages: every non-routed stage becomes resident in its own bank region.
+        for(uint32_t id=0;id<p->stage_count();++id){
+            p->acquire(id);ggml_backend_synchronize(p->options.backend);
+            for(auto&e:p->stage_at(id).entries){e.t->data=nullptr;e.t->buffer=nullptr;}
+            wf_release_layer(p->fetcher,int(id));require(!wf_has_failed(p->fetcher),"Resident pass release failed");p->leased=false;++p->next;
+        }
+        std::fprintf(stderr,"LLAMADECODE_EXTERNAL_RESIDENT stages=%u bytes=%llu ms=%.3f\n",p->stage_count(),(unsigned long long)p->fetched_total,
+            std::chrono::duration<double,std::milli>(std::chrono::steady_clock::now()-started).count());
+    },error);
+}
+bool llama_dsv41_weight_provider::decode_resident_tensors(const std::function<bool(uint64_t,uint64_t,void*)>&visit,std::string&error)const{
+    std::lock_guard<std::mutex>lock(p->mutex);error.clear();
+    try{
+        require(p->decode_layout&&p->buffers.size()==2&&!p->leased&&p->next==p->stage_count(),"Resident tensors require a completed decode-layout pass");
+        for(uint32_t id=0;id<p->stage_count();++id){auto*base=static_cast<char*>(ggml_backend_buffer_get_base(p->buffers[id%2].get()));
+            for(const auto&e:p->decode_stages[id].entries)require(visit(e.file_offset,ggml_nbytes(e.t),base+e.gpu_offset),"External decoder refused a resident tensor");}
+        return true;
+    }catch(const std::exception&failure){error=failure.what();return false;}
+}
+bool llama_dsv41_weight_provider::external_expert_slots(uint32_t layer,const int32_t*ids,uint32_t n,int32_t*slots,
+        const char**gate,const char**up,const char**down,uint32_t*slot_count,void*stream,std::string&error){return p->guard([&]{
+    require(layer<40&&p->decode_layout&&!p->leased&&p->next==p->stage_count()&&ids&&slots&&n&&n<=16,"External expert slots require an idle decode-layout provider");
+    const auto slot_of=p->assign_expert_slots(layer,ids,n,stream);
+    for(uint32_t i=0;i<n;++i)slots[i]=slot_of.at(ids[i]);
+    *gate=static_cast<const char*>(p->pool[0]->data);*up=static_cast<const char*>(p->pool[1]->data);*down=static_cast<const char*>(p->pool[2]->data);
+    *slot_count=p->pool_slots;
 },error);}
 llama_dsv41_weight_provider::expert_cache_stats llama_dsv41_weight_provider::cache_stats()const{std::lock_guard<std::mutex>lock(p->mutex);
     expert_cache_stats s;s.slots=p->pool_slots;s.hits=p->cache_hits;s.misses=p->cache_misses;s.fetched_bytes=p->cache_bytes;s.fetch_ms=p->cache_ms;return s;}
