@@ -8,12 +8,14 @@ The stack's own code and owner-authored Studio exports use MIT. Engine and embed
 
 The intended six-step walkthrough is:
 
-1. Clone this repository with `git clone --recurse-submodules` on both computers.
-2. On Windows, run `./slstack.ps1 install --all` to create isolated media runtimes and build native engines and the chat UI. Python 3.12, Visual Studio C++ tools, CMake/Ninja, and CUDA are prerequisites; model weights are supplied locally.
-3. Edit example model/ComfyUI paths. Model weights are read in place and are never downloaded by the installer.
+1. Clone this repository with `git clone --recurse-submodules` on both computers. The repository is private, so Git needs credentials with access to it.
+2. On Windows, run `./slstack.ps1 install --all` to create isolated media runtimes and build native engines and the chat UI, then `./slstack.ps1 install --all --check` and `./slstack.ps1 check` to verify the result. Prerequisites: Python 3.12 on `PATH`, Visual Studio C++ Build Tools, CMake and Ninja (the Visual Studio CMake tools provide both), the CUDA toolkit (verified with 13.2), and Node.js with npm (verified with Node 24) for the chat UI build. The CUDA targets are built for `sm_120a`, so the native engines need an RTX 50-series GPU with at least 30 GB VRAM. The installer needs network access for PyPI, the npm registry and the pinned DirectStorage NuGet package; it never downloads model weights. A full install took about 27 minutes on the qualification machine.
+3. Set your model and ComfyUI paths, either with flags (`--model`, `--comfyui-models`) or in a local JSON file that overrides keys from `config.example.json` (for example `my.local.json`, which Git ignores), passed with `--config my.local.json`. Model weights are read in place and are never downloaded.
 4. On the Mac, run `./bin/slstack mac --model <model.gguf>`. The receiver prints its endpoint and pairing instructions.
 5. On Windows, run `./slstack.ps1 rtx --model <model.gguf> --comfyui-models <models> --mac <mac-endpoint>` with the printed pairing information.
 6. Open the printed chat URL. Exercise chat, quality/speed, image/video, and a long prompt with a second turn.
+
+Without a Mac, `./slstack.ps1 start --model <model.gguf> --webui` runs the native Windows engine on the RTX alone; open the router URL it prints (default `http://127.0.0.1:8088`). The quality/speed evidence below was measured through this single-RTX native path, using the same router driven from a proof script rather than this exact command line.
 
 Steps 4-6 are not yet qualified for this revision. Do not treat this draft as a completed acceptance transcript.
 

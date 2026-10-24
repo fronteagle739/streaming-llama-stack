@@ -91,8 +91,11 @@ def install(cfg, *, image=False, video=False, all_engines=False, check=False, sd
     if not check and all_engines:
         # The documented install step prepares the native engines and UI too.
         # Builds never need model state or a GPU reservation.
+        # Each guarded compiler step uses request_timeout_s; a cold CUDA build
+        # exceeds the 900 s chat-request default, so give steps the build bound.
         build_cfg = {**cfg, 'host_budget_gib': min(3, cfg['host_budget_gib']),
-                     'min_available_gib': max(4, cfg['min_available_gib'])}
+                     'min_available_gib': max(4, cfg['min_available_gib']),
+                     'request_timeout_s': 7200}
         build_config = Path(cfg['runtime_root']) / 'install-build.local.json'
         atomic_json(build_config, build_cfg)
         outer = {**build_cfg, 'host_budget_gib': build_cfg['host_budget_gib'] + .5}

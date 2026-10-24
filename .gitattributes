@@ -1,1 +1,13 @@
 docs/evidence/** -text
+# LF webui sources keep the tracked built index.html.gz reproducible on Windows.
+engines/streaming-llama/prefill_llama.cpp/tools/server/webui/**/*.svelte text eol=lf
+engines/streaming-llama/prefill_llama.cpp/tools/server/webui/**/*.svx text eol=lf
+engines/streaming-llama/prefill_llama.cpp/tools/server/webui/**/*.ts text eol=lf
+engines/streaming-llama/prefill_llama.cpp/tools/server/webui/**/*.js text eol=lf
+engines/streaming-llama/prefill_llama.cpp/tools/server/webui/**/*.cjs text eol=lf
+engines/streaming-llama/prefill_llama.cpp/tools/server/webui/**/*.mjs text eol=lf
+engines/streaming-llama/prefill_llama.cpp/tools/server/webui/**/*.css text eol=lf
+engines/streaming-llama/prefill_llama.cpp/tools/server/webui/**/*.scss text eol=lf
+engines/streaming-llama/prefill_llama.cpp/tools/server/webui/**/*.html text eol=lf
+engines/streaming-llama/prefill_llama.cpp/tools/server/webui/**/*.json text eol=lf
+engines/streaming-llama/prefill_llama.cpp/tools/server/webui/**/*.md text eol=lf
