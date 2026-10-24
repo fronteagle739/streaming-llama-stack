@@ -84,24 +84,58 @@ void local_video_memory(uint64_t&budget,uint64_t&usage){
         a->Release();}
     factory->Release();
 }
+// Physical device memory from NVML (the driver's own count; WDDM/CUDA free
+// double-counts the imported D3D12 banks). Selected by the job's GPU UUID.
+bool nvml_free_bytes(uint64_t&free_bytes,uint64_t&total_bytes){
+    free_bytes=total_bytes=0;
+    static HMODULE nvml=LoadLibraryExW(L"nvml.dll",nullptr,LOAD_LIBRARY_SEARCH_SYSTEM32);
+    if(!nvml)return false;
+    struct memory{unsigned long long total,free,used;};
+    using init_t=int(*)();using by_uuid_t=int(*)(const char*,void**);using info_t=int(*)(void*,memory*);
+    static auto init=reinterpret_cast<init_t>(GetProcAddress(nvml,"nvmlInit_v2"));
+    static auto by_uuid=reinterpret_cast<by_uuid_t>(GetProcAddress(nvml,"nvmlDeviceGetHandleByUUID"));
+    static auto info=reinterpret_cast<info_t>(GetProcAddress(nvml,"nvmlDeviceGetMemoryInfo"));
+    static const int ready=init?init():-1;
+    const char*uuid=std::getenv("CUDA_VISIBLE_DEVICES");
+    if(ready!=0||!by_uuid||!info||!uuid||std::strncmp(uuid,"GPU-",4))return false;
+    void*device=nullptr;memory m{};
+    if(by_uuid(uuid,&device)!=0||info(device,&m)!=0)return false;
+    free_bytes=m.free;total_bytes=m.total;return true;
+}
+uint64_t decode_vram_reserve(){return 2048ull<<20;}
+// Runtime guard: refuse loudly (graceful error) if physical free VRAM falls
+// below the reserve while the decode-sized plan holds the L2.
+void check_decode_vram_reserve(){
+    uint64_t f=0,t=0;if(!nvml_free_bytes(f,t))return;
+    if(f<decode_vram_reserve()){std::fprintf(stderr,"LLAMADECODE_VRAM_RESERVE_BREACH nvml_free=%llu reserve=%llu\n",(unsigned long long)f,(unsigned long long)decode_vram_reserve());std::fflush(stderr);
+        throw std::runtime_error("Physical free VRAM fell below the 2 GiB decode reserve");}
+}
 void grow_decode_l2(llama_dsv41_sweep&sweep,const llama_dsv41_fixed_storage*fixed,ggml_backend_t backend){
     static const bool on=[]{const char*e=std::getenv("LLAMADECODE_L2");return !(e&&e[0]=='0'&&!e[1]);}();
     if(!on||!fixed||!fixed->decode_compact)return;
     auto*provider=sweep.provider_for_external_decode();
     if(!provider->decode_layout()||provider->cache_stats().l2_slots)return;
-    const uint64_t margin=768ull<<20,floor=1536ull<<20;
+    // Owner rule: keep a 2 GiB physical reserve (NVML free already excludes
+    // Studio's idle context) plus a decode-graph growth margin.
+    const uint64_t margin=768ull<<20,floor=decode_vram_reserve();
     const uint64_t freed=fixed->full_graph_reserve+fixed->full_hidden_bytes;
     const uint64_t now=ggml_gallocr_get_buffer_size(fixed->graph.get(),0)+fixed->hidden_bytes;
-    uint64_t offer=freed>now+margin?freed-now-margin:0;
+    (void)freed;(void)now;uint64_t offer=~0ull;
     size_t free_bytes=0,total=0;ggml_backend_cuda_get_device_memory(0,&free_bytes,&total);(void)backend; // the job sees one device
     // WDDM: the authoritative no-demotion room is this process's local-segment
     // budget minus its current usage (DXGI), on the largest adapter (the 5090).
+    // WDDM's process budget and CUDA's free count the imported D3D12 banks
+    // twice (diagnostic only). The cap is NVML's physical free memory, and the
+    // offer never exceeds what the decode-sized plan freed from the job's own
+    // startup-admitted plan; no NVML reading means no L2.
     uint64_t budget=0,usage=0;local_video_memory(budget,usage);
-    const uint64_t room=budget>usage+floor?budget-usage-floor:0;
-    offer=std::min<uint64_t>(offer,room);
+    uint64_t nv_free=0,nv_total=0;const bool nv=nvml_free_bytes(nv_free,nv_total);
+    offer=nv?std::min<uint64_t>(offer,nv_free>floor+margin?nv_free-floor-margin:0):0;
     uint32_t slots=0;std::string error;success(provider->grow_decode_cache(offer,&slots,error),error);
-    std::fprintf(stderr,"LLAMADECODE_L2_OFFER freed=%llu decode_now=%llu cuda_free=%llu cuda_total=%llu dxgi_budget=%llu dxgi_usage=%llu offered=%llu slots=%u\n",(unsigned long long)freed,
-        (unsigned long long)now,(unsigned long long)free_bytes,(unsigned long long)total,(unsigned long long)budget,(unsigned long long)usage,(unsigned long long)offer,slots);std::fflush(stderr);
+    uint64_t nv_after=0,nv_total_after=0;(void)nvml_free_bytes(nv_after,nv_total_after);
+    std::fprintf(stderr,"LLAMADECODE_L2_OFFER freed=%llu decode_now=%llu cuda_free=%llu cuda_total=%llu dxgi_budget=%llu dxgi_usage=%llu nvml_free=%llu nvml_total=%llu nvml_free_after=%llu offered=%llu slots=%u\n",(unsigned long long)freed,
+        (unsigned long long)now,(unsigned long long)free_bytes,(unsigned long long)total,(unsigned long long)budget,(unsigned long long)usage,
+        (unsigned long long)nv_free,(unsigned long long)nv_total,(unsigned long long)nv_after,(unsigned long long)offer,slots);std::fflush(stderr);
 }
 bool ds4_decode_enabled(){static const bool on=[]{const char*e=std::getenv("LLAMADECODE_DS4_DECODE");return e&&e[0]=='1'&&!e[1];}();return on;}
 struct ds4_external {
@@ -157,6 +191,7 @@ struct ds4_external {
         std::string error;std::array<int32_t,3>tail{};success(sweep.engram_tail(tail,error),error);
         std::vector<float>logits(129280);
         ggml_backend_synchronize(backend);
+        if(position%16==0)check_decode_vram_reserve();
         const auto before=provider->cache_stats();const auto started=std::chrono::steady_clock::now();
         require(x_decode(token,position,tail.data(),3,logits.data())==1,"ds4-win decode step failed");
         const double decode_ms=std::chrono::duration<double,std::milli>(std::chrono::steady_clock::now()-started).count();
@@ -322,7 +357,7 @@ void run_live_session(std::unique_ptr<llama_dsv41_sweep>&sweep,
                 if(ds4_decode_enabled()){
                     if(index==0)ds4x.prepare(*sweep,weights,uint32_t(options.context));
                     ds4x.step(*sweep,weights.backend,best,current.frontier.position+uint32_t(index));
-                    if(index==0)grow_decode_l2(*sweep,options.fixed.get(),weights.backend);
+                    if(index==0)grow_decode_l2(*sweep,options.fixed.get(),weights.backend);else if(index%16==0)check_decode_vram_reserve();
                     step_ms.push_back(ms(step_started));
                     std::fprintf(stderr,"LLAMADECODE_STEP index=%llu token=%d position=%u step_ms=%.3f engine=ds4\n",(unsigned long long)index,best,
                         current.frontier.position+uint32_t(index)+1,step_ms.back());std::fflush(stderr);
@@ -334,7 +369,7 @@ void run_live_session(std::unique_ptr<llama_dsv41_sweep>&sweep,
                 {decode_quiet_scope quiet;
                 success(sweep->open(next_weights,next_options,error,nullptr,previous.get()),error);require(!previous->ready(),"Transferred prefix still publishes");previous.reset();
                 const std::vector<int32_t>one{best};success(sweep->run(one,[]{return should_stop();},error),error);}
-                if(index==0)grow_decode_l2(*sweep,options.fixed.get(),weights.backend);
+                if(index==0)grow_decode_l2(*sweep,options.fixed.get(),weights.backend);else if(index%16==0)check_decode_vram_reserve();
                 step_ms.push_back(ms(step_started));
                 std::fprintf(stderr,"LLAMADECODE_STEP index=%llu token=%d position=%u step_ms=%.3f prompt_ms=%.3f\n",(unsigned long long)index,best,
                     current.frontier.position+uint32_t(index)+1,step_ms.back(),sweep->timing().prompt_processing_ms);std::fflush(stderr);
@@ -373,7 +408,7 @@ void run_live_session(std::unique_ptr<llama_dsv41_sweep>&sweep,
                 if(ds4_decode_enabled()){
                     if(index==0)ds4x.prepare(*sweep,weights,uint32_t(options.context));
                     ds4x.step(*sweep,weights.backend,forced[index],current.frontier.position+uint32_t(index));
-                    if(index==0)grow_decode_l2(*sweep,options.fixed.get(),weights.backend);
+                    if(index==0)grow_decode_l2(*sweep,options.fixed.get(),weights.backend);else if(index%16==0)check_decode_vram_reserve();
                     step_ms.push_back(ms(step_started));
                     std::fprintf(stderr,"LLAMADECODE_FORCED_STEP index=%zu forced=%d argmax=%d step_ms=%.3f engine=ds4\n",index,forced[index],best,step_ms.back());std::fflush(stderr);
                     continue;
@@ -384,7 +419,7 @@ void run_live_session(std::unique_ptr<llama_dsv41_sweep>&sweep,
                 {decode_quiet_scope quiet;
                 success(sweep->open(next_weights,next_options,error,nullptr,previous.get()),error);require(!previous->ready(),"Transferred prefix still publishes");previous.reset();
                 const std::vector<int32_t>one{forced[index]};success(sweep->run(one,[]{return should_stop();},error),error);}
-                if(index==0)grow_decode_l2(*sweep,options.fixed.get(),weights.backend);
+                if(index==0)grow_decode_l2(*sweep,options.fixed.get(),weights.backend);else if(index%16==0)check_decode_vram_reserve();
                 step_ms.push_back(ms(step_started));
                 std::fprintf(stderr,"LLAMADECODE_FORCED_STEP index=%zu forced=%d argmax=%d step_ms=%.3f\n",index,forced[index],best,step_ms.back());std::fflush(stderr);
             }
