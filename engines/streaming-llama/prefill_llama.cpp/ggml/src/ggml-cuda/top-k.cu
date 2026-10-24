@@ -80,6 +80,16 @@ void ggml_cuda_op_top_k(ggml_backend_cuda_context & ctx, ggml_tensor * dst) {
         const char * env = std::getenv("LLAMA_DSV4_TOPK_FORCE_BITONIC");
         return env != nullptr && env[0] != '\0' && env[0] != '0';
     }();
+    // LLAMADECODE: a single row takes the SAME deterministic bitonic / bitonic-tiles
+    // network as multi-row (prefill), so a 1-row decode step selects the same ids
+    // in the same order on every run. CUB DeviceTopK (determinism::not_guaranteed,
+    // unsorted output) remains only as the explicit A/B control
+    // LLAMA_DSV4_TOPK_CUB_1ROW=1, and for k > TOP_K_TILE_SIZE.
+    static const bool cub_single_row = []() {
+        const char * env = std::getenv("LLAMA_DSV4_TOPK_CUB_1ROW");
+        return env != nullptr && env[0] == '1' && env[1] == '\0';
+    }();
+    const bool deterministic_rows = nrows > 1 || force_bitonic_single_row || !cub_single_row;
 
     // DeviceTopK has no segmented API yet. Use the one-kernel argsort path for multi-row calls when the
     // padded row fits in the default dynamic shared-memory limit. It writes only the first k descending
@@ -89,7 +99,7 @@ void ggml_cuda_op_top_k(ggml_backend_cuda_context & ctx, ggml_tensor * dst) {
     const size_t max_shared_mem = std::min<size_t>(
         ggml_cuda_info().devices[ggml_cuda_get_device()].smpb, 48 * 1024);
 
-    if ((nrows > 1 || (nrows == 1 && force_bitonic_single_row)) && shared_mem <= max_shared_mem) {
+    if (deterministic_rows && shared_mem <= max_shared_mem) {
         if (nrows == 1) {
             GGML_LOG_DEBUG("DSV4_TOPK_BITONIC_1ROW: ncols=%lld k=%lld shared_mem=%zu\n",
                     (long long) ncols, (long long) k, shared_mem);
@@ -98,7 +108,7 @@ void ggml_cuda_op_top_k(ggml_backend_cuda_context & ctx, ggml_tensor * dst) {
         return;
     }
 
-    if (nrows > 1 && k <= TOP_K_TILE_SIZE) {
+    if (deterministic_rows && k <= TOP_K_TILE_SIZE) {
         const int first_width = ((ncols + TOP_K_TILE_SIZE - 1) / TOP_K_TILE_SIZE) * k;
         ggml_cuda_pool_alloc<int> candidates_a_alloc(pool, (size_t) nrows * first_width);
         int * candidates_a = candidates_a_alloc.get();
