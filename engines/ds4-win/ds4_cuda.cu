@@ -38711,7 +38711,9 @@ static int cuda_stream_selected_ds_upload(const ds4_gpu_stream_expert_table *tab
                 const int h = ds4_ds_slot_pool_find(jobs[j].dst[part], bytes[part], &off);
                 int rc = h ? ds4_ds_batch_add_slot(jobs[j].src[part], (uint32_t)bytes[part], h, off) : 0;
                 if (rc == -1) {
-                    if (!g_ds_decode_bandwidth.batch_submit_wait(&got, &ms, &wait_ms)) rc = 0;
+                    /* Each submission may land on a different DS GPU queue: fence it before the next. */
+                    if (!g_ds_decode_bandwidth.batch_submit_wait(&got, &ms, &wait_ms) ||
+                        !ds4_ds_gpu_fence_wait_last(NULL)) rc = 0;
                     else { ds4_ds_batch_reset(); rc = ds4_ds_batch_add_slot(jobs[j].src[part], (uint32_t)bytes[part], h, off); }
                 }
                 if (rc != 1) {
@@ -38728,9 +38730,12 @@ static int cuda_stream_selected_ds_upload(const ds4_gpu_stream_expert_table *tab
             fprintf(stderr, "DS4COMBO_DS_SLOTS batch failed (%zu experts)\n", jobs.size());
             return 0;
         }
-        if (cuda_ds_fence_enabled() && !ds4_ds_gpu_fence_wait_last(NULL)) {
-            static int notice = 0;
-            if (!notice++) fprintf(stderr, "DS4COMBO_V41_DS_FENCE wait unavailable (no fence/semaphore)\n");
+        /* Mandatory: D3D12 writes into CUDA-visible slots need the cross-API fence before any
+         * kernel reads them (b23 C1 without it: 105/378 prefetched experts read all-zero).
+         * The wait goes on the legacy stream 0 that every prefill kernel runs on. */
+        if (!ds4_ds_gpu_fence_wait_last(NULL)) {
+            fprintf(stderr, "DS4COMBO_DS_SLOTS fence wait unavailable; refusing the load\n");
+            return 0;
         }
         return 1;
     }
