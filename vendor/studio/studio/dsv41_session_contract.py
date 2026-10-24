@@ -85,7 +85,9 @@ def command(row, session, sequence, mode=3):
     common = ['session', 'model_sha256', 'sequence', 'operation']
     extra = {'checkpoint': [], 'close': [], 'export_initial': ['base'], 'export_delta': ['base'], 'acknowledge': ['base'], 'save_rewind': ['base'], 'rewind': ['base', 'target'], 'prefill': ['base', 'tokens'], 'apply_decode_delta': ['base', 'target', 'bytes'],
              # DS4COMBO fast switch: keep-alive producer device suspend / resume onto a new native base.
-             'suspend': ['base'], 'resume': ['native_base_contract_sha256', 'tokens']}
+             'suspend': ['base'], 'resume': ['native_base_contract_sha256', 'tokens'],
+             # LLAMADECODE B0: in-process greedy RTX decode (no peer).
+             'decode': ['base', 'max_tokens', 'stop_tokens']}
     require(type(op) is str and op in extra, 'Unknown session operation')
     keys(row, common + extra[op])
     if 'base' in row:
@@ -107,6 +109,13 @@ def command(row, session, sequence, mode=3):
         require(type(tokens) is list and 0 < len(tokens) <= MAX_PREFILL, 'Resume prefill token extent')
         for token in tokens:
             integer(token, 0, 129279)
+    if op == 'decode':
+        integer(row['max_tokens'], 1, 4096)
+        stops = row['stop_tokens']
+        require(type(stops) is list and len(stops) <= 16, 'Decode stop token extent')
+        for token in stops:
+            integer(token, 0, 129279)
+        require(row['base']['position'] + row['max_tokens'] < row['base']['context'], 'Decode context exhausted')
     if op == 'apply_decode_delta':
         target = checkpoint(row['target'], mode)
         base = row['base']
