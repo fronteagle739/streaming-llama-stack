@@ -44662,8 +44662,95 @@ static bool ds41_graph_after_moe(ds41_gpu_graph *g, const ds4_model *m,
     return !carry || ds4_gpu_tensor_copy(g->pre, 0, g->ffn_split, 0, DS4_N_HC * sizeof(float));
 }
 
+/* DS4COMBO V4.1 per-layer dump (diagnostic, off unless DS4COMBO_V41_DUMP names
+ * a file). For the positions in DS4COMBO_V41_DUMP_POS (default 0,128,275,549)
+ * both the token-major step and the layer-major sweep append, per layer:
+ *   0 attention input norm (EMBD)      1 after-attention streams (HC*EMBD)
+ *   2 FFN input norm (EMBD)            3 routed expert ids (top-k, int32)
+ *   4 routed expert weights (top-k)    5 routed experts' sum (EMBD)
+ *   6 residual streams after the layer (HC*EMBD)
+ * Record: u32 magic 0x52313444, layer, pos, point, n (4-byte words), data. */
+static FILE *g_ds41_dump_file;
+static int g_ds41_dump_state;          /* 0 unknown, 1 on, -1 off */
+static uint32_t g_ds41_dump_pos[16], g_ds41_dump_npos;
+
+static bool ds41_dump_on(void) {
+    if (!g_ds41_dump_state) {
+        const char *path = getenv("DS4COMBO_V41_DUMP");
+        g_ds41_dump_state = -1;
+        if (path && path[0] && (g_ds41_dump_file = fopen(path, "ab")) != NULL) {
+            const char *list = getenv("DS4COMBO_V41_DUMP_POS");
+            if (!list || !list[0]) list = "0,128,275,549";
+            for (const char *c = list; *c && g_ds41_dump_npos < 16u;) {
+                char *end = NULL;
+                const unsigned long v = strtoul(c, &end, 10);
+                if (end == c) break;
+                g_ds41_dump_pos[g_ds41_dump_npos++] = (uint32_t)v;
+                c = *end == ',' ? end + 1 : end;
+            }
+            g_ds41_dump_state = 1;
+            fprintf(stderr, "DS4COMBO_V41_DUMP on: %s (%u positions)\n", path, g_ds41_dump_npos);
+        }
+    }
+    return g_ds41_dump_state > 0;
+}
+
+static bool ds41_dump_pos(uint32_t pos) {
+    if (!ds41_dump_on()) return false;
+    for (uint32_t i = 0; i < g_ds41_dump_npos; i++) if (g_ds41_dump_pos[i] == pos) return true;
+    return false;
+}
+
+/* Read `words` 4-byte values at word offset `row * words` of `t`. */
+static bool ds41_dump_put(const ds4_gpu_tensor *t, uint32_t row, uint32_t words,
+                          uint32_t il, uint32_t pos, uint32_t point) {
+    if (!t || !g_ds41_dump_file) return true;
+    const bool active = ds4_gpu_commands_active() != 0;
+    if (active && !ds4_gpu_end_commands()) return false;
+    float *buf = xmalloc((size_t)words * sizeof(float));
+    const bool ok = ds4_gpu_tensor_read(t, (uint64_t)row * words * sizeof(float), buf,
+                                        (uint64_t)words * sizeof(float)) != 0;
+    if (ok) {
+        const uint32_t head[5] = {0x52313444u, il, pos, point, words};
+        fwrite(head, sizeof(head), 1, g_ds41_dump_file);
+        fwrite(buf, sizeof(float), words, g_ds41_dump_file);
+        fflush(g_ds41_dump_file);
+    } else {
+        fprintf(stderr, "DS4COMBO_V41_DUMP read failed layer=%u pos=%u point=%u\n", il, pos, point);
+    }
+    free(buf);
+    return !active || ds4_gpu_begin_commands() != 0;
+}
+
+/* The sweep's rows [start, start + count) that are dump positions. */
+static bool ds41_dump_rows(const ds4_gpu_tensor *t, uint32_t start, uint32_t count,
+                           uint32_t words, uint32_t il, uint32_t point) {
+    if (!ds41_dump_on()) return true;
+    bool ok = true;
+    for (uint32_t i = 0; ok && i < g_ds41_dump_npos; i++) {
+        const uint32_t p = g_ds41_dump_pos[i];
+        if (p >= start && p < start + count) ok = ds41_dump_put(t, p - start, words, il, p, point);
+    }
+    return ok;
+}
+
 static bool ds41_graph_layer(ds41_gpu_graph *g, const ds4_model *m,
                             const ds4_layer_weights *l, uint32_t il, int token) {
+    if (g->tp_world == 1 && ds41_dump_pos(g->pos)) {
+        const uint32_t p = g->pos, hc = DS4_N_HC * DS4_N_EMBD;
+        return ds41_graph_before_attention(g, m, l, il) &&
+            ds41_dump_put(g->norm, 0, DS4_N_EMBD, il, p, 0) &&
+            ds41_attention(g, m, l, il, false) &&
+            ds41_dump_put(g->after_attn, 0, hc, il, p, 1) &&
+            ds41_hc_mix(g, m, l, true, g->attn_split) &&
+            ds41_dump_put(g->norm, 0, DS4_N_EMBD, il, p, 2) &&
+            ds41_moe(g, m, l, il, (uint32_t)token) &&
+            ds41_dump_put(g->selected, 0, DS4_N_EXPERT_USED, il, p, 3) &&
+            ds41_dump_put(g->route_weights, 0, DS4_N_EXPERT_USED, il, p, 4) &&
+            ds41_dump_put(g->routed, 0, DS4_N_EMBD, il, p, 5) &&
+            ds41_graph_after_moe(g, m, l, il, il + 1u == DS4_N_LAYER) &&
+            ds41_dump_put(g->residual, 0, hc, il, p, 6);
+    }
     return ds41_graph_before_moe(g, m, l, il) && ds41_moe(g, m, l, il, (uint32_t)token) &&
         ds41_graph_after_moe(g, m, l, il, il + 1u == DS4_N_LAYER);
 }
@@ -46030,6 +46117,7 @@ static bool ds41_graph_prefill_sweep(ds41_gpu_graph *g, const ds4_model *m,
             if (ok && batch_hc)
                 ok = ds41_before_attention_batch(g, &active, m, &w->layer[il], il, count);
             DS41_STAGE("hc/engram");
+            if (ok && batch_hc) ok = ds41_dump_rows(g->batch.norm, start, count, DS4_N_EMBD, il, 0);
             for (uint32_t t = 0; ok && !batch_hc && t < count; t++) {
                 row.pos = start + t;
 #define DS41_USE_ROW(name, width) row.name = g->rows_view[t].name;
@@ -46076,6 +46164,9 @@ static bool ds41_graph_prefill_sweep(ds41_gpu_graph *g, const ds4_model *m,
                 DS41_STAGE("attention output");
                 if (ok && batch_hc) ok = ds41_after_attention_batch(&active, m, l, count, false);
                 DS41_STAGE("hc/ffn norm");
+                if (ok && batch_hc)
+                    ok = ds41_dump_rows(g->batch.after_attn, start, count, DS4_N_HC * DS4_N_EMBD, il, 1) &&
+                        ds41_dump_rows(g->batch.norm, start, count, DS4_N_EMBD, il, 2);
                 for (uint32_t t = 0; ok && !batch_hc && t < count; t++) {
                     row.pos = start + t;
 #define DS41_USE_FFN_ROW(name, width) row.name = g->rows_view[t].name;
@@ -46089,6 +46180,10 @@ static bool ds41_graph_prefill_sweep(ds41_gpu_graph *g, const ds4_model *m,
             if (ok && batch_moe) {
                 ok = ds41_moe_batch(g, m, &w->layer[il], il, count, false, true);
                 DS41_STAGE("shared/routed ffn");
+                if (ok && batch_hc)
+                    ok = ds41_dump_rows(g->batch.selected, start, count, DS4_N_EXPERT_USED, il, 3) &&
+                        ds41_dump_rows(g->batch.route_weights, start, count, DS4_N_EXPERT_USED, il, 4) &&
+                        ds41_dump_rows(g->batch.routed, start, count, DS4_N_EMBD, il, 5);
                 if (ok && batch_hc) {
                     ok = ds41_ffn_add_batch(active.block, active.routed, active.shared, count) &&
                         ds41_hc_expand_batch(active.residual, active.block, active.after_attn, active.ffn_split, count);
@@ -46102,6 +46197,8 @@ static bool ds41_graph_prefill_sweep(ds41_gpu_graph *g, const ds4_model *m,
                 }
             }
             DS41_STAGE("hc expand");
+            if (ok && batch_hc)
+                ok = ds41_dump_rows(g->batch.residual, start, count, DS4_N_HC * DS4_N_EMBD, il, 6);
 #undef DS41_STAGE
             if (ok && wide && il + 1u < DS4_N_LAYER) {
                 ok = ds41_carry_copy(g, off, count, true);
