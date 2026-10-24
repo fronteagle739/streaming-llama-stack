@@ -40,6 +40,11 @@ def normal_argv(source,preset):
     return namespace['ds4_argv'](preset,port=18748)[1:]
 
 
+def profile_producer(name):
+    if not re.fullmatch('[a-z0-9]+',name):raise ValueError('Streaming profile names are lower-case words')
+    return 'combo-prefill-'+name+'.exe'
+
+
 def relocate_runtime(cfg,installed,revision):
     """The installed product must survive retirement of the task scratch."""
     installed=Path(installed);scratch=Path(cfg['runtime_root']).resolve()
@@ -56,6 +61,10 @@ def relocate_runtime(cfg,installed,revision):
         llama_producer=str(installed/'combo-prefill.exe'),source_revision=revision,
         studio_root=str(installed/'vendor/studio'))
     if cfg.get('combo_core_binding'):result['combo_core_binding']=str(installed/'qualification/native-core-binding.json')
+    # Per-preset streaming profiles that pin their own producer build run the
+    # installed copy staged as combo-prefill-<profile>.exe.
+    for name,row in (result.get('combo_crossover_profiles') or {}).items():
+        if 'llama_producer' in row:row['llama_producer']=str(installed/profile_producer(name))
     result['ds4_command'][0]=str(installed/'native/ds4-server.exe')
     result['producer_library_directories']=[str(installed/'native'),
         *[p for p in cfg['producer_library_directories'] if not Path(p).resolve().is_relative_to(scratch)]]
@@ -124,6 +133,10 @@ def stage(args):
             copy(SOURCE/relative,relative)
     copy(args.launcher,'ds4-server.exe');copy(cfg['ds4_command'][0],'native/ds4-server.exe')
     copy(cfg['llama_producer'],'combo-prefill.exe')
+    for name,row in (cfg.get('combo_crossover_profiles') or {}).items():
+        if 'llama_producer' in row:
+            if sha(row['llama_producer'])!=row.get('producer_sha256'):raise ValueError('Profile producer pin differs: '+name)
+            copy(row['llama_producer'],profile_producer(name))
     native=Path(cfg['ds4_command'][0]).parent
     for name in ('dstorage.dll','dstoragecore.dll'):
         copy(native/name,name);copy(native/name,'native/'+name)
