@@ -1159,11 +1159,13 @@ bool llama_dsv41_tile_executor::run(const request&in,const llama_dsv41_layer_gra
         for(auto*t:uploaded_inputs)ggml_build_forward_expand(graph,t);
         routed_split=-1;
         if(in.route_hook){
-            // LLAMADECODE B1: stable partition into nodes independent of the
-            // router's selected experts, then nodes that depend on them. Done
-            // before allocation; topological order holds within both parts.
+            // LLAMADECODE B1: the graph keeps its original node order (the same
+            // allocation plan and kernel sequence as the unrouted step); it is
+            // only cut after the router. Nothing before the cut may read experts.
             require(!workspace||!workspace->cache_layouts,"Routed decode split refuses cached layer graphs");
-            std::string why;routed_split=llama_dsv41_route_partition(graph,"dsv41_ffn_selected_experts",why);require(routed_split>0,why.c_str());
+            for(int i=0;i<ggml_graph_n_nodes(graph);++i)if(!std::strcmp(ggml_get_name(ggml_graph_node(graph,i)),"dsv41_ffn_selected_experts")){
+                require(routed_split<0,"Routed decode split found two routers");routed_split=i+1;}
+            require(routed_split>0&&routed_split<ggml_graph_n_nodes(graph),"Routed decode split found no router");
         }
         backend_buffers(backend,graph);
         if(llama_dsv41_expert_profile::natural_half(expert)){
@@ -1375,7 +1377,6 @@ bool llama_dsv41_tile_executor::run(const request&in,const llama_dsv41_layer_gra
                     if(src->buffer==bank||root->buffer==bank)return true;}
                 return false;};
             for(int i=0;i<=split;++i)require(!reads(ggml_graph_node(compute_graph,i),in.routed_bank),"A pre-router node reads the routed-expert bank");
-            for(int i=split+1;i<nodes;++i)require(!reads(ggml_graph_node(compute_graph,i),in.dense_bank),"A post-router node reads the released dense bank");
             require(selected->type==GGML_TYPE_I32&&selected->ne[0]==6&&ggml_nelements(selected)==6*int64_t(in.count),"Routed decode selected-expert geometry differs");
             auto before=ggml_graph_view(compute_graph,0,split+1);
             require(ggml_backend_graph_compute_async(backend,&before)==GGML_STATUS_SUCCESS,"V4.1 pre-router computation failed");

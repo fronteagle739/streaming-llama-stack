@@ -56,7 +56,7 @@ struct llama_dsv41_weight_provider::implementation {
     gguf_context_ptr gguf;
     ggml_context_ptr tensors;
     std::array<stage,42>stages;
-    std::array<stage,82>decode_stages;bool decode_layout=false;bool experts_prebound=false;
+    std::array<stage,82>decode_stages;bool decode_layout=false;bool experts_prebound=false;int dense_held=-1;
     std::array<ggml_tensor*,40*3>routed{};
     uint32_t stage_count()const{return decode_layout?82u:42u;}
     stage&stage_at(uint32_t id){return decode_layout?decode_stages[id]:stages[id];}
@@ -294,7 +294,7 @@ struct llama_dsv41_weight_provider::implementation {
         }else require(!options.engram_prefetch_tokens,"Engram token count requires cache host admission");
     }
     void acquire(uint32_t id){
-        require(allocated&&!device_suspended&&!leased&&next==id&&id<stage_count(),"V4.1 physical stage acquired out of order or while device-suspended");identity();
+        require(allocated&&!device_suspended&&(!leased||(dense_held>=0&&uint32_t(dense_held)+1==id))&&next==id&&id<stage_count(),"V4.1 physical stage acquired out of order or while device-suspended");identity();
         auto*base=wf_wait_layer_gpu(fetcher,int(id));require(base,"Required DirectStorage layer transfer failed");
         wf_cuda_wait_upload(fetcher,int(id));
         require(!wf_has_failed(fetcher),"Required DirectStorage upload synchronization failed");
@@ -438,7 +438,7 @@ bool llama_dsv41_weight_provider::restart_prompt(const config&options,std::strin
         const auto started=std::chrono::steady_clock::now();
         wf_destroy(p->fetcher);p->fetcher=nullptr;
         for(auto&s:p->stages)for(auto&e:s.entries){e.t->data=nullptr;e.t->buffer=nullptr;}
-        p->buffers.clear();p->decode_layout=options.decode_layout;p->experts_prebound=false;p->create_pipeline();
+        p->buffers.clear();p->decode_layout=options.decode_layout;p->experts_prebound=false;p->dense_held=-1;p->create_pipeline();
         wf_stop(p->fetcher);wf_quiesce(p->fetcher);require(!wf_has_failed(p->fetcher),"Switched provider could not quiesce before request start");
         std::fprintf(stderr,"LLAMADECODE_LAYOUT_SWITCH decode=%d switch_ms=%.3f same_admission=1\n",int(p->decode_layout),
             std::chrono::duration<double,std::milli>(std::chrono::steady_clock::now()-started).count());
@@ -538,14 +538,16 @@ bool llama_dsv41_weight_provider::acquire_layer_experts(uint32_t layer,const std
     require(!ids.empty()&&ids.size()<=6*4096,"Routed expert set size invalid");
     std::vector<int>unique;for(const auto id:ids){require(id>=0&&id<384,"Routed expert id out of range");if(std::find(unique.begin(),unique.end(),id)==unique.end())unique.push_back(id);}
     const uint32_t stage=2+2*layer;
-    // Publish the routing first so the DMA thread serves this stage before the next dense stage.
+    // Publish the routing; the routed stage lands in the other bank while the
+    // dense stage stays leased (post-router nodes may still read it).
     wf_set_active_experts(p->fetcher,int(stage),unique.data(),int(unique.size()));
-    ggml_backend_synchronize(p->options.backend);
-    for(auto&e:p->decode_stages[1+2*layer].entries){e.t->data=nullptr;e.t->buffer=nullptr;}
-    wf_release_layer(p->fetcher,int(1+2*layer));require(!wf_has_failed(p->fetcher),"Dense stage release failed");p->leased=false;++p->next;
+    p->dense_held=int(1+2*layer);++p->next;
     p->acquire(stage);
 },error);}
-bool llama_dsv41_weight_provider::release(std::string&error){return p->guard([&]{require(p->leased&&p->next<p->stage_count(),"No physical weight lease to release");ggml_backend_synchronize(p->options.backend);for(auto&e:p->stage_at(p->next).entries){e.t->data=nullptr;e.t->buffer=nullptr;}wf_release_layer(p->fetcher,int(p->next));require(!wf_has_failed(p->fetcher),"Required DirectStorage compute release failed");p->leased=false;++p->next;},error);}
+bool llama_dsv41_weight_provider::release(std::string&error){return p->guard([&]{require(p->leased&&p->next<p->stage_count(),"No physical weight lease to release");ggml_backend_synchronize(p->options.backend);
+    if(p->dense_held>=0){ // LLAMADECODE B1: release the held dense stage first (stage order)
+        for(auto&e:p->decode_stages[size_t(p->dense_held)].entries){e.t->data=nullptr;e.t->buffer=nullptr;}
+        wf_release_layer(p->fetcher,p->dense_held);require(!wf_has_failed(p->fetcher),"Dense stage release failed");p->dense_held=-1;}for(auto&e:p->stage_at(p->next).entries){e.t->data=nullptr;e.t->buffer=nullptr;}wf_release_layer(p->fetcher,int(p->next));require(!wf_has_failed(p->fetcher),"Required DirectStorage compute release failed");p->leased=false;++p->next;},error);}
 void llama_dsv41_weight_provider::invalidate(){if(!p)return;std::lock_guard<std::mutex>lock(p->mutex);p->invalidate();}
 bool llama_dsv41_weight_provider::advance_decoded_engram(llama_dsv41::engram_history&history,
         const int32_t*tokens,size_t count,std::string&error){return p->guard([&]{
