@@ -59,6 +59,10 @@ public:
 #include "combo-base.inc"
 namespace {
 
+// LLAMADECODE: decode steps use the routed-expert layout (B1). The explicit
+// diagnostic LLAMADECODE_DECODE_LAYOUT=0 runs them on the whole-layer B0 layout.
+bool routed_decode_layout(){static const bool on=[]{const char*e=std::getenv("LLAMADECODE_DECODE_LAYOUT");
+    if(e&&e[0]=='0'&&!e[1]){std::fprintf(stderr,"LLAMADECODE_DECODE_LAYOUT=0 whole-layer B0 decode (diagnostic)\n");return false;}return true;}();return on;}
 void run_live_session(std::unique_ptr<llama_dsv41_sweep>&sweep,
         const llama_dsv41_weight_provider::config&weights,const llama_dsv41_sweep::config&options,
         const std::string&session,uint64_t timeout_ms,uint32_t capacity,HANDLE output,uint64_t owner_epoch=0){
@@ -205,7 +209,7 @@ void run_live_session(std::unique_ptr<llama_dsv41_sweep>&sweep,
                 if(index+1==maximum)break;
                 auto previous=std::move(sweep);sweep.reset(new llama_dsv41_sweep);auto next_options=options;auto next_weights=weights;
                 next_options.carry.tokens=1;if(next_weights.engram_prefetch_host_bytes)next_weights.engram_prefetch_tokens=1;
-                next_weights.decode_layout=true; // LLAMADECODE B1: routed-expert fetch
+                next_weights.decode_layout=routed_decode_layout(); // LLAMADECODE B1: routed-expert fetch
                 success(sweep->open(next_weights,next_options,error,nullptr,previous.get()),error);require(!previous->ready(),"Transferred prefix still publishes");previous.reset();
                 const std::vector<int32_t>one{best};success(sweep->run(one,[]{return should_stop();},error),error);
                 step_ms.push_back(ms(step_started));
@@ -245,7 +249,7 @@ void run_live_session(std::unique_ptr<llama_dsv41_sweep>&sweep,
                 if(index+1==forced.size())break;
                 auto previous=std::move(sweep);sweep.reset(new llama_dsv41_sweep);auto next_options=options;auto next_weights=weights;
                 next_options.carry.tokens=1;if(next_weights.engram_prefetch_host_bytes)next_weights.engram_prefetch_tokens=1;
-                next_weights.decode_layout=true; // LLAMADECODE B1: routed-expert fetch
+                next_weights.decode_layout=routed_decode_layout(); // LLAMADECODE B1: routed-expert fetch
                 success(sweep->open(next_weights,next_options,error,nullptr,previous.get()),error);require(!previous->ready(),"Transferred prefix still publishes");previous.reset();
                 const std::vector<int32_t>one{forced[index]};success(sweep->run(one,[]{return should_stop();},error),error);
                 step_ms.push_back(ms(step_started));

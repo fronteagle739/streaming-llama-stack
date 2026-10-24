@@ -8,6 +8,7 @@
 #include "llama-dsv41-executor.h"
 #include "llama-dsv41-dense-half-admission.h"
 #include "llama-dsv41-route-split.h"
+#include "llama-dsv41-hash-dump.h"
 #include "ggml-dsv41-expert-routing.h"
 #include "ggml-dsv41-topk.h"
 #include "ggml-dsv41-stream-topk.h"
@@ -928,7 +929,8 @@ bool llama_dsv41_tile_executor::run(const request&in,const llama_dsv41_layer_gra
         std::unique_ptr<graph_storage::variant> fresh;
         graph_storage::variant *compiled=&transient;
         bool graph_cache_hit=false;
-        int routed_split=-1; // LLAMADECODE B1: first routed-dependent node after partition
+        int routed_split=-1; // LLAMADECODE B1: first node after the router cut
+        ggml_tensor*hash_experts=nullptr; // LLAMADECODE_HASH_DUMP only
         if(workspace&&workspace->cache_layouts){
             require(!boundary.active()&&!resident,"Cached layer graphs refuse capture and hidden-bank rebinding");
             if(workspace->layer!=in.layer){
@@ -1158,6 +1160,10 @@ bool llama_dsv41_tile_executor::run(const request&in,const llama_dsv41_layer_gra
         // gallocr may otherwise reuse its slot before the first consumer.
         for(auto*t:uploaded_inputs)ggml_build_forward_expand(graph,t);
         routed_split=-1;
+        hash_experts=nullptr;
+        if(llama_dsv41_hash_dump_enabled()){ // diagnostic: keep the routed ids readable after compute
+            for(int i=0;i<ggml_graph_n_nodes(graph);++i)if(!std::strcmp(ggml_get_name(ggml_graph_node(graph,i)),"dsv41_ffn_selected_experts")){hash_experts=ggml_graph_node(graph,i);ggml_set_output(hash_experts);}
+        }
         if(in.route_hook){
             // LLAMADECODE B1: the graph keeps its original node order (the same
             // allocation plan and kernel sequence as the unrouted step); it is
@@ -1318,6 +1324,8 @@ bool llama_dsv41_tile_executor::run(const request&in,const llama_dsv41_layer_gra
         pending.upload_ms=elapsed(upload_start);
         // An error after entering the graph can leave partial aliased writes.
         // Poison first, and certify this tile only after all bounded readbacks.
+        if(llama_dsv41_hash_dump_enabled()){ggml_backend_synchronize(backend);
+            llama_dsv41_hash_phase("in",in.layer,in.position_offset+in.start,in.count,graph,{},{},{});}
         cache.execution_poisoned=true;const auto compute_start=clock_type::now();
 #if defined(GGML_USE_CUDA)
         ggml_ds4_native_half_stats expert_before{},expert_after{};
@@ -1393,6 +1401,13 @@ bool llama_dsv41_tile_executor::run(const request&in,const llama_dsv41_layer_gra
         }else
         require(ggml_backend_graph_compute_async(backend,compute_graph)==GGML_STATUS_SUCCESS,"V4.1 tile backend computation failed");
         ggml_backend_synchronize(backend);pending.compute_ms=elapsed(compute_start);
+        if(llama_dsv41_hash_dump_enabled()){
+            std::vector<int32_t>experts;
+            if(hash_experts){experts.resize(size_t(ggml_nelements(hash_experts)));ggml_backend_tensor_get(hash_experts,experts.data(),0,experts.size()*4);}
+            llama_dsv41_hash_phase("out",in.layer,in.position_offset+in.start,in.count,graph,
+                {values.residual,values.next_pre,values.selected,values.selected_mask,values.candidates,values.next_pool_kv,values.next_pool_score,hash_experts},
+                {w.ffn.gate,w.ffn.up,w.ffn.down},experts);
+        }
         const auto post_started=clock_type::now();
         std::fprintf(stderr,"[dsv41-compute-timeline] layer=%u start=%u begin_epoch_ms=%.6f end_epoch_ms=%.6f\n",
             in.layer,in.start,std::chrono::duration<double,std::milli>(compute_start.time_since_epoch()).count(),
