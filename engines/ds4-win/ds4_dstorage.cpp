@@ -951,7 +951,8 @@ extern "C" int ds4_ds_batch_add_slot(uint64_t file_offset, uint32_t bytes, int h
     const int i = handle - 1;
     if (file_offset > g_file_size || bytes > g_file_size - file_offset) return 0;
     if (offset > g_slot_bytes[i] || bytes > g_slot_bytes[i] - offset) return 0;
-    const uint32_t w = (uint32_t)(offset / kSlotWindowStride);
+    /* The last window runs to the heap end (local offset < 3 GiB). */
+    const uint32_t w = (uint32_t)std::min<uint64_t>(offset / kSlotWindowStride, g_slot_nwin[i] ? g_slot_nwin[i] - 1 : 0);
     const uint64_t local = offset - (uint64_t)w * kSlotWindowStride;
     if (w >= g_slot_nwin[i] || !g_slot_win[i][w] ||
         local + bytes > g_slot_win[i][w]->GetDesc().Width) return 0;
