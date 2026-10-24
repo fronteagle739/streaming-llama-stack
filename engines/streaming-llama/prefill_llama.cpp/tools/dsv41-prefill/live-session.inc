@@ -80,7 +80,7 @@ void grow_decode_l2(llama_dsv41_sweep&sweep,const llama_dsv41_fixed_storage*fixe
     const uint64_t freed=fixed->full_graph_reserve+fixed->full_hidden_bytes;
     const uint64_t now=ggml_gallocr_get_buffer_size(fixed->graph.get(),0)+fixed->hidden_bytes;
     uint64_t offer=freed>now+margin?freed-now-margin:0;
-    size_t free_bytes=0,total=0;ggml_backend_dev_memory(ggml_backend_get_device(backend),&free_bytes,&total);
+    size_t free_bytes=0,total=0;ggml_backend_cuda_get_device_memory(0,&free_bytes,&total);(void)backend; // the job sees one device
     offer=std::min<uint64_t>(offer,free_bytes>floor?free_bytes-floor:0);
     uint32_t slots=0;std::string error;success(provider->grow_decode_cache(offer,&slots,error),error);
     std::fprintf(stderr,"LLAMADECODE_L2_OFFER freed=%llu decode_now=%llu device_free=%llu offered=%llu slots=%u\n",(unsigned long long)freed,
@@ -121,9 +121,9 @@ struct ds4_external {
             success(provider->prepare_external_decode(decode_weights,error),error);
         }
         if(!open){
-            size_t free_before=0,free_after=0,total=0;auto*dev=ggml_backend_get_device(weights.backend);ggml_backend_dev_memory(dev,&free_before,&total);
+            size_t free_before=0,free_after=0,total=0;ggml_backend_cuda_get_device_memory(0,&free_before,&total);
             char why[512]{};require(x_open(weights.model_path.c_str(),context,why,sizeof(why))==1,why[0]?why:"ds4x_open failed");open=true;
-            ggml_backend_dev_memory(dev,&free_after,&total);
+            ggml_backend_cuda_get_device_memory(0,&free_after,&total);
             std::fprintf(stderr,"LLAMADECODE_DS4X_DEVICE_DELTA bytes=%lld free_before=%llu free_after=%llu\n",(long long)free_before-(long long)free_after,
                 (unsigned long long)free_before,(unsigned long long)free_after);std::fflush(stderr);
             registered=registered_bytes=0;
