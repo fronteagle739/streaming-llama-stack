@@ -58,33 +58,44 @@ def control(data: bytes):
             pending.extend(((v, depth + 1) for v in (value.values() if isinstance(value, dict) else value)))
     return row
 
-def checkpoint(row):
+def checkpoint(row, mode=3):
     keys(row, ['context', 'position', 'mode', 'capture_end', 'capture_length', 'tokens_sha256', 'logits_sha256', 'owner_sha256'])
     ctx = integer(row['context'], 2, 1048576)
     pos = integer(row['position'], 1, ctx - 1)
-    require(integer(row['mode'], 3, 3) == 3 and integer(row['capture_end'], 1, ctx - 1) == pos and (integer(row['capture_length'], 1, 128) == min(pos, 128)), 'Incomplete native DSpark frontier')
+    require(type(mode) is int and mode in (1, 3), 'Unsupported native session mode')
+    require(integer(row['mode'], mode, mode) == mode, 'Native session mode mismatch')
+    if mode == 3:
+        require(integer(row['capture_end'], 1, ctx - 1) == pos and integer(row['capture_length'], 1, 128) == min(pos, 128), 'Incomplete native DSpark frontier')
+    else:
+        require(integer(row['capture_end'], 0, 0) == 0 and integer(row['capture_length'], 0, 0) == 0, 'Target-only state cannot contain a DSpark capture')
     hex_value(row['tokens_sha256'], 64)
     hex_value(row['logits_sha256'], 64)
     owners = row['owner_sha256']
-    require(type(owners) is list and len(owners) == (55 if pos % 2 else 49), 'Native owner geometry differs')
+    require(type(owners) is list and len(owners) == (55 if pos % 2 else 49) - (mode == 1), 'Native owner geometry differs')
     for value in owners:
         hex_value(value, 64)
     return row
 
-def command(row, session, sequence):
+def command(row, session, sequence, mode=3):
     require(type(row) is dict, 'Session command object required')
     session_identity(session)
     require(row.get('session') == session and row.get('model_sha256') == MODEL_SHA256, 'Session/model mismatch')
     require(integer(row.get('sequence'), 1, (1 << 64) - 1) == sequence, 'Replayed or skipped session sequence')
     op = row.get('operation')
     common = ['session', 'model_sha256', 'sequence', 'operation']
-    extra = {'checkpoint': [], 'close': [], 'export_initial': ['base'], 'export_delta': ['base'], 'acknowledge': ['base'], 'save_rewind': ['base'], 'rewind': ['base', 'target'], 'prefill': ['base', 'tokens'], 'apply_decode_delta': ['base', 'target', 'bytes']}
+    extra = {'checkpoint': [], 'close': [], 'export_initial': ['base'], 'export_delta': ['base'], 'acknowledge': ['base'], 'save_rewind': ['base'], 'rewind': ['base', 'target'], 'prefill': ['base', 'tokens'], 'apply_decode_delta': ['base', 'target', 'bytes'],
+             # DS4COMBO fast switch: keep-alive producer device suspend / resume onto a new native base.
+             'suspend': ['base'], 'resume': ['native_base_contract_sha256', 'tokens'],
+             # LLAMADECODE B0: in-process greedy RTX decode (no peer).
+             'decode': ['base', 'max_tokens', 'stop_tokens'], 'decode_forced': ['base', 'tokens', 'logits_path'],
+             # LLAMADECODE B5: live quality-speed control of the in-process decode bias.
+             'quality_speed': ['value']}
     require(type(op) is str and op in extra, 'Unknown session operation')
     keys(row, common + extra[op])
     if 'base' in row:
-        checkpoint(row['base'])
+        checkpoint(row['base'], mode)
     if op == 'rewind':
-        target = checkpoint(row['target'])
+        target = checkpoint(row['target'], mode)
         base = row['base']
         require(target['context'] == base['context'] and target['mode'] == base['mode'] and (0 < target['position'] < base['position']), 'Rewind target must be an earlier same-context checkpoint')
     if op == 'prefill':
@@ -93,11 +104,35 @@ def command(row, session, sequence):
         for token in tokens:
             integer(token, 0, 129279)
         require(row['base']['position'] + len(tokens) < row['base']['context'], 'Prefill context exhausted')
+    if op == 'resume':
+        tokens = row['tokens']
+        digest = row['native_base_contract_sha256']
+        require(type(digest) is str and len(digest) == 64 and all(ch in '0123456789abcdef' for ch in digest), 'Resume base contract SHA-256 required')
+        require(type(tokens) is list and 0 < len(tokens) <= MAX_PREFILL, 'Resume prefill token extent')
+        for token in tokens:
+            integer(token, 0, 129279)
+    if op == 'decode':
+        integer(row['max_tokens'], 1, 4096)
+        stops = row['stop_tokens']
+        require(type(stops) is list and len(stops) <= 16, 'Decode stop token extent')
+        for token in stops:
+            integer(token, 0, 129279)
+        require(row['base']['position'] + row['max_tokens'] < row['base']['context'], 'Decode context exhausted')
+    if op == 'quality_speed':
+        value = row['value']
+        require(type(value) in (int, float) and 0 <= value <= 1.36125, 'Quality-speed value outside 0..1.36125')
+    if op == 'decode_forced':
+        tokens = row['tokens']
+        require(type(tokens) is list and 0 < len(tokens) <= 4096, 'Forced decode token extent')
+        for token in tokens:
+            integer(token, 0, 129279)
+        require(type(row['logits_path']) is str and 0 < len(row['logits_path']) <= 1024, 'Forced decode logits path')
+        require(row['base']['position'] + len(tokens) < row['base']['context'], 'Forced decode context exhausted')
     if op == 'apply_decode_delta':
-        target = checkpoint(row['target'])
+        target = checkpoint(row['target'], mode)
         base = row['base']
         require(target['context'] == base['context'] and 0 < target['position'] - base['position'] <= MAX_DECODE, 'Decode delta direction/extent')
-        integer(row['bytes'], 264 + 4 + 129280 * 4, 64 << 20)
+        integer(row['bytes'], (264 if mode == 3 else 256) + 4 + 129280 * 4, 64 << 20)
     return row
 
 def initial_request(session, headers, body):

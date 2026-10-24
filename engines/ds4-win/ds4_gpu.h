@@ -3895,4 +3895,20 @@ int ds4_gpu_qwen4_mtp_combine_tensor(
 }
 #endif
 
+
+#ifdef DS4_EXTERNAL_DECODE
+/* LLAMADECODE (ds4-decode.dll only): run ds4-win's decode on another engine's
+ * resident weights and expert cache. */
+int ds4_gpu_register_external_range(const void *model_map, uint64_t offset, uint64_t bytes, void *device_ptr);
+void ds4_gpu_external_decode_mode(int on);   /* unregistered weights refuse */
+/* One-token routed experts: ids[n] (router selection) -> slots[n] into the
+ * caller's pool, whose gate/up/down bases use the original expert strides. */
+typedef int (*ds4_gpu_external_expert_hook)(void *user, uint32_t layer, const int32_t *ids, uint32_t n,
+    int32_t *slots, const char **gate_base, const char **up_base, const char **down_base, uint32_t *n_slots);
+void ds4_gpu_set_external_expert_hook(ds4_gpu_external_expert_hook hook, void *user);
+/* B5: residency of one layer's experts in the caller's cache (tier[e] = 1 resident). */
+typedef int (*ds4_gpu_external_residency_hook)(void *user, uint32_t layer, uint8_t *tier, uint32_t experts);
+void ds4_gpu_set_external_residency_hook(ds4_gpu_external_residency_hook hook, void *user);
+void ds4_gpu_external_affinity_phase(int decode);
+#endif
 #endif

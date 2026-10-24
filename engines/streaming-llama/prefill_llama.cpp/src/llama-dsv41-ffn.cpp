@@ -65,8 +65,13 @@ llama_dsv41_ffn_graph::result llama_dsv41_ffn_graph::routed_impl(
     dsv41_boundary::stage(selected,"route_ids");
     dsv41_boundary::stage(weights,"route_weights");
     auto * x=ggml_reshape_3d(ctx,input,width,1,count);
-    auto * gate=ggml_mul_mat_id(ctx,w.gate,x,selected);
-    auto * up=ggml_mul_mat_id(ctx,w.up,x,selected);
+    ggml_tensor * product_ids=selected;
+    if(w.expert_slots){
+        GGML_ASSERT(w.expert_slots->type==GGML_TYPE_I32&&w.expert_slots->ne[0]==used&&w.expert_slots->ne[1]==count);
+        product_ids=ggml_cpy(ctx,selected,w.expert_slots);ggml_set_name(product_ids,"dsv41_expert_slot_copy");
+    }
+    auto * gate=ggml_mul_mat_id(ctx,w.gate,x,product_ids);
+    auto * up=ggml_mul_mat_id(ctx,w.up,x,product_ids);
     if(native_half){
         GGML_ASSERT(ggml_ds4_native_half_tag(gate,GGML_DS4_NATIVE_HALF_GATE));
         GGML_ASSERT(ggml_ds4_native_half_tag(up,GGML_DS4_NATIVE_HALF_UP));
@@ -76,7 +81,7 @@ llama_dsv41_ffn_graph::result llama_dsv41_ffn_graph::routed_impl(
     // Round weighted mid to F16 storage, then expose F32 to the same down MMID.
     mid=ggml_mul(ctx,mid,ggml_reshape_3d(ctx,weights,1,used,count));
     mid=ggml_cast(ctx,ggml_cast(ctx,mid,GGML_TYPE_F16),GGML_TYPE_F32);
-    auto * all=ggml_mul_mat_id(ctx,w.down,mid,selected);
+    auto * all=ggml_mul_mat_id(ctx,w.down,mid,product_ids);
     if(native_half)GGML_ASSERT(ggml_ds4_native_half_tag(all,GGML_DS4_NATIVE_HALF_DOWN));
     ggml_tensor * routed=nullptr;
     for(int64_t i=0;i<used;++i){

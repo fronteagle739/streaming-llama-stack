@@ -43364,6 +43364,15 @@ fail:
     return false;
 }
 
+#ifdef DS4_EXTERNAL_DECODE
+/* LLAMADECODE: decode-only scratch; the caller binds the canonical state. */
+static bool g_ds4x_external_alloc;
+static bool g_ds4x_affinity;   /* B5: ds4x_set_affinity enabled the bias on the host's cache */
+static bool ds4x_affinity_external(void) { return g_ds4x_affinity; }
+#else
+#define g_ds4x_external_alloc false
+#define ds4x_affinity_external() false
+#endif
 static DS4_MAYBE_UNUSED bool ds41_graph_alloc(ds41_gpu_graph *g, const ds4_model *m,
                                               const ds4_weights *w, const char *path,
                                               uint32_t ctx, bool streaming) {
@@ -43378,6 +43387,12 @@ static DS4_MAYBE_UNUSED bool ds41_graph_alloc(ds41_gpu_graph *g, const ds4_model
     g->grow_step = ds41_ctx_grow_step();
     g->grow_tokens = g->grow_step ? ds41_grow_round(ctx, g->grow_step, 1) : ctx;
     g->allocation_bytes = ds41_graph_initial_bytes(ctx);
+    if (g_ds4x_external_alloc) {   /* one-token decode: no prefill, carry or growth buffers */
+        g->prefill_cap = ds41_prefill_limit(16u);
+        g->carry_cap = 0;
+        g->grow_step = 0;
+        g->grow_tokens = ctx;
+    }
     g->streaming = streaming;
     g->tp_world = 1;
     g->token_map = malloc((size_t)DS4_N_VOCAB * sizeof(uint32_t));
@@ -43414,11 +43429,11 @@ static DS4_MAYBE_UNUSED bool ds41_graph_alloc(ds41_gpu_graph *g, const ds4_model
             !ds4_gpu_tensor_write(g->engram_q_norm[i], 0, tensor_data(m, w->layer[il].engram_q_norm), bytes) ||
             !ds4_gpu_tensor_write(g->engram_k_norm[i], 0, tensor_data(m, w->layer[il].engram_k_norm), bytes)) goto fail;
     }
-    for (uint32_t i = 0; i < 40; i++) {
+    for (uint32_t i = 0; !g_ds4x_external_alloc && i < 40; i++) {
         g->window[i] = ds4_gpu_tensor_alloc(128u * 512u * sizeof(float));
         if (!g->window[i]) goto fail;
     }
-    for (uint32_t i = 0; i < 4; i++) {
+    for (uint32_t i = 0; !g_ds4x_external_alloc && i < 4; i++) {
         const uint64_t cap = ctx / (i < 3 ? 2u : 1u) + 1u;
         g->compressed[i] = ds41_ctx_tensor_alloc(g)(cap * 512u * sizeof(float));
         g->index_cache[i] = ds41_ctx_tensor_alloc(g)(cap * 128u * sizeof(float));
@@ -43443,7 +43458,7 @@ static DS4_MAYBE_UNUSED bool ds41_graph_alloc(ds41_gpu_graph *g, const ds4_model
 #endif
     DS41_SCRATCH(DS41_ALLOC)
 #undef DS41_ALLOC
-    if (!ds41_graph_ensure_prefill_workspace(g)) goto fail;
+    if (!g_ds4x_external_alloc && !ds41_graph_ensure_prefill_workspace(g)) goto fail;
     if (g->grow_step) {
         bool ok = true;
         (void)ds41_grow_visit(g, g->grow_tokens, DS41_GROW_APPLY, &ok);
@@ -44078,7 +44093,7 @@ static bool ds41_moe_partial(ds41_gpu_graph *g, const ds4_model *m,
             DS4_N_EXPERT, DS4_N_EXPERT_USED, DS4_EXPERT_WEIGHT_SCALE, 0, 0, true, false,
             g->route_logits)) return false;
 #if !defined(__APPLE__) && !defined(DS4_ROCM_BUILD)
-    if (g->streaming && (g_cache_affinity_bias > 0.0f || g_cache_affinity_observe) &&
+    if ((g->streaming || ds4x_affinity_external()) && (g_cache_affinity_bias > 0.0f || g_cache_affinity_observe) &&
         !ds4_gpu_cache_affinity_router_tensor(g->selected, g->route_weights, g->route_probs,
             m->map, m->size, bias->abs_offset, true, il, g->pos, DS4_N_LAYER,
             DS4_N_EXPERT, DS4_N_EXPERT_USED, 1, l->ffn_gate_exps->abs_offset,
@@ -46044,7 +46059,16 @@ static bool ds41_graph_prefill_sweep(ds41_gpu_graph *g, const ds4_model *m,
                     routed_expert_row_bytes(w->layer[il].ffn_gate_exps) * DS4_N_FF_EXP,
                     routed_expert_row_bytes(w->layer[il].ffn_down_exps) * DS4_N_EMBD);
                 ds4_gpu_stream_expert_table next = {0};
+#if defined(_WIN32)
+                /* The Windows DirectStorage next-layer read loads every expert of the
+                 * next layer: worth it for the encoder layers (0-19), which run every
+                 * row, not for the decoder suffix (20+), whose shrinking tail touches
+                 * only part of a layer. A plain (non-deferred) sweep has encoder_only
+                 * false yet still runs layers 0-19 on all rows, so test the layer. */
+                const bool more = il + 1u < 20u;
+#else
                 const bool more = il + 1u < (encoder_only ? 20u : DS4_N_LAYER);
+#endif
                 if (more) next = graph_stream_expert_table_make(m, &w->layer[il + 1u], il + 1u,
                     routed_expert_row_bytes(w->layer[il + 1u].ffn_gate_exps) * DS4_N_FF_EXP,
                     routed_expert_row_bytes(w->layer[il + 1u].ffn_down_exps) * DS4_N_EMBD);
@@ -79660,6 +79684,11 @@ void ds4_session_set_cancel(ds4_session *s, ds4_session_cancel_fn fn, void *ud) 
 }
 
 static bool ds4_session_cancelled(ds4_session *s) {
+#if defined(_WIN32)
+    /* A host-memory breach requested the graceful abort (never a self-kill while
+     * VRAM/DirectStorage may be held): fail the current request and refuse new ones. */
+    if (ds4_win32_graceful_abort_requested()) return true;
+#endif
     return s && s->cancel && s->cancel(s->cancel_ud);
 }
 
@@ -92562,4 +92591,8 @@ bool ds4_test_dspark_prefix_capture(ds4_engine *engine, const ds4_tokens *prompt
     ds4_session_free(ref);
     return ok;
 }
+#endif
+
+#ifdef DS4_EXTERNAL_DECODE
+#include "ds4_decode_adapter.inc"
 #endif

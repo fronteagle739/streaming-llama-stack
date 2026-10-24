@@ -15,7 +15,7 @@ class AdmissionRefused(RuntimeError):
     pass
 
 
-def recover_leases(runtime_root):
+def recover_leases(runtime_root, task='DS4STACK'):
     """Release only this stack's recorded dead guardians, after their kill-on-close Jobs have closed."""
     root = Path(runtime_root) / 'state' / 'leases'
     if not root.exists():
@@ -23,7 +23,7 @@ def recover_leases(runtime_root):
     released = []
     for file in root.glob('*.json'):
         row = json.loads(file.read_text())
-        if row.get('task') != 'DS4STACK' or row.get('released') or row.get('cleanup_uncertain'):
+        if row.get('task') != task or row.get('released') or row.get('cleanup_uncertain'):
             continue
         try:
             proc = psutil.Process(row['guardian_pid'])
@@ -34,7 +34,7 @@ def recover_leases(runtime_root):
         # On Windows the guardian handle closes its Job and terminates all GPU descendants.
         # Recovering an active hold never kills an unrelated process or guesses expiry.
         with Path(row['hold_file']).open('a', encoding='utf-8') as stream:
-            stream.write(f'\nRELEASED: DS4STACK {row["id"]}; recovered dead guardian {row["guardian_pid"]}; {datetime.now(timezone.utc).isoformat()}\n')
+            stream.write(f'\nRELEASED: {task} {row["id"]}; recovered dead guardian {row["guardian_pid"]}; {datetime.now(timezone.utc).isoformat()}\n')
             stream.flush()
             os.fsync(stream.fileno())
         atomic_json(file, {**row, 'released': True, 'recovered': True})
@@ -42,20 +42,56 @@ def recover_leases(runtime_root):
     return released
 
 
-def active_holds(text, *, mac=False):
-    active = {}
-    for line in text.splitlines():
-        if line.startswith('MAC ') != mac:
-            continue
-        match = re.match(r'^(?:MAC )?(ACTIVE|RELEASED|ENDED):\s+(\S+)\s+(\S+)', line)
-        if match:
-            state, task, identity = match.groups()
-            key = (task, identity.rstrip(';'))
-            if state == 'ACTIVE':
-                active[key] = line
-            else:
-                active.pop(key, None)
-    return list(active.values())
+def active_holds(text, *, mac=None):
+    """Unreleased ledger holds, parsed by the vendored Studio priority_holds.
+
+    mac=False: RTX holds only; mac=True: MAC holds only. The default (None) is the
+    RTX admission view: RTX holds plus MAC KIT11* holds, which also block the RTX.
+    """
+    from .native_broker import vendor
+    vendor()
+    from studio.job_guard import priority_holds
+    if mac:
+        return priority_holds(text, ('*',), resource='MAC')
+    rtx = priority_holds(text, ('*',), resource='RTX')
+    if mac is False:
+        return rtx
+    return rtx + [line for line in priority_holds(text, ('*',), resource='MAC')
+                  if re.match(r'^MAC ACTIVE:\s+KIT11[A-Z0-9]*\s', line)]
+
+
+def reservation_admission(lines, budget_gib, floor_gib, *, available=None, owned_rss=None):
+    """Owner-approved KIT11FIX CPU exception; other/new/larger holds preempt."""
+    blocking=[];reserved=0
+    for line in lines:
+        original_cpu=(line.startswith('ACTIVE: KIT11FIX Windows native plugin build;') and
+             'host budget 3 GiB; physical RAM reserve 6 GiB;' in line and
+             'no GPU or Studio restart requested.' in line and
+             not re.search(r'exclusive|GPU hold',line,re.I))
+        # The current qualification names the same CPU-only reservation with
+        # a smaller2GiB job cap. Keep the owner's full3+6GiB reservation rather
+        # than treating that CPU build as a GPU hold or reducing its allowance.
+        # An unrecognised, GPU, or larger reservation still preempts immediately.
+        current_cpu=re.fullmatch(
+            r'ACTIVE: KIT11FIX [a-z][a-z0-9-]*; expires [0-9T:.+Z-]+; '
+            r'Windows-only CPU build/test, host budget ([0-9]+(?:\.[0-9]+)?) GiB, reserve ([0-9]+(?:\.[0-9]+)?) GiB; '
+            r'yield RAM for bounded [A-Z][A-Z0-9]* window; no Studio restart',line)
+        current_cpu=(current_cpu is not None and
+                     0<float(current_cpu[1])<=3 and 0<float(current_cpu[2])<=6)
+        if original_cpu or current_cpu:reserved+=9*2**30
+        else:blocking.append(line)
+    available=psutil.virtual_memory().available if available is None else available
+    floor=max(floor_gib,2)*2**30 if reserved else floor_gib*2**30
+    # At admission reserve the full budget. During execution the extra
+    # outstanding-allocation rule applies to the owner's CPU reservation.
+    # With no reservation, the shared guard enforces actual RSS/commit/floor;
+    # each subsequent engine/locked-state allocation also has its own admission.
+    outstanding=max(0,budget_gib*2**30-(owned_rss or 0))
+    required=reserved+floor+(outstanding if reserved or owned_rss is None else 0)
+    if available<required:
+        blocking.append(f'RAM reservation: available={available}, required={required}, owned_rss={owned_rss}')
+    return blocking,dict(available=available,required=required,foreign_reserved_bytes=reserved,
+                         own_budget_bytes=budget_gib*2**30,owned_rss=owned_rss,floor_bytes=floor)
 
 
 def hold_admission(lines, *, budget_gib=0, floor_gib=2, available=None):
@@ -93,9 +129,9 @@ class HoldWatcher:
             if stat.st_size > 16 * 1024**2:
                 raise RuntimeError('Shared hold ledger exceeds its observation budget')
             blocking = []
-            for line in active_holds(self.path.read_text(encoding='utf-8-sig'), mac=self.mac):
-                match = re.match(r'^(?:MAC )?ACTIVE:\s+(\S+)\s+(\S+)', line)
-                if (match[1], match[2].rstrip(';')) != (self.task, self.identity):
+            for line in active_holds(self.path.read_text(encoding='utf-8-sig'), mac=bool(self.mac)):
+                match = re.match(r'^(?:MAC |RTX )?ACTIVE:\s+(\S+)\s+(\S+)', line.strip())
+                if not match or (match[1], match[2].rstrip(';')) != (self.task, self.identity):
                     blocking.append(line)
             self.foreign = blocking
             self.stamp = stamp
@@ -105,6 +141,9 @@ class HoldWatcher:
 
 @contextmanager
 def gpu_lease(cfg):
+    task = cfg.get('task', 'DS4STACK')
+    if not isinstance(task, str) or re.fullmatch('[A-Z][A-Z0-9]{0,31}', task) is None:
+        raise ValueError('GPU lease task must be a bounded coordination identifier')
     hold = Path(cfg['hold_file']) if cfg.get('hold_file') else Path(cfg['runtime_root']) / 'state' / 'gpu.holds'
     parent = cfg.get('_gpu_parent_lease')
     if parent:
@@ -114,7 +153,7 @@ def gpu_lease(cfg):
         row = json.loads(record.read_text(encoding='utf-8'))
         owner = next((p for p in [psutil.Process(), *psutil.Process().parents()]
                       if p.pid == row.get('guardian_pid')), None)
-        if (row.get('task') != 'DS4STACK' or row.get('released') is not False
+        if (row.get('task') != task or row.get('released') is not False
                 or row.get('cleanup_uncertain') or owner is None
                 or abs(owner.create_time() - row.get('guardian_created', 0)) >= .01
                 or Path(row.get('hold_file', '')).resolve() != hold.resolve()
@@ -125,7 +164,7 @@ def gpu_lease(cfg):
             raise AdmissionRefused('Inherited GPU reservation is not a live compatible ancestor lease')
         lines = active_holds(hold.read_text(encoding='utf-8-sig'))
         own = [line for line in lines if re.match(
-            r'^ACTIVE:\s+DS4STACK\s+' + re.escape(row['id']) + r'(?:;|\s|$)', line)]
+            r'^ACTIVE:\s+' + re.escape(task) + r'\s+' + re.escape(row['id']) + r'(?:;|\s|$)', line)]
         foreign = [line for line in lines if line not in own]
         if len(own) != 1 or hold_admission(foreign, budget_gib=cfg['host_budget_gib'],
                                          floor_gib=cfg['min_available_gib']):
@@ -160,13 +199,13 @@ def gpu_lease(cfg):
             identity = uuid.uuid4().hex
             expiry = datetime.now(timezone.utc) + timedelta(minutes=cfg['lease_minutes'])
             lease_path = Path(cfg['runtime_root']) / 'state' / 'leases' / (identity + '.json')
-            lease_row = {'task': 'DS4STACK', 'id': identity, 'hold_file': str(hold),
+            lease_row = {'task': task, 'id': identity, 'hold_file': str(hold),
                          'guardian_pid': os.getpid(), 'guardian_created': psutil.Process().create_time(),
                          'host_budget_gib': cfg['host_budget_gib'],
                          'min_available_gib': cfg['min_available_gib'], 'expires': expiry.isoformat(),
                          'released': False}
             atomic_json(lease_path, lease_row)
-            line = f"\nACTIVE: DS4STACK {identity}; exclusive RTX5090; expires {expiry.isoformat()}; host RSS {cfg['host_budget_gib']} GiB; floor {cfg['min_available_gib']} GiB\n"
+            line = f"\nACTIVE: {task} {identity}; exclusive RTX5090; expires {expiry.isoformat()}; host RSS {cfg['host_budget_gib']} GiB; floor {cfg['min_available_gib']} GiB\n"
             stream.seek(0, 2)
             stream.write(line)
             stream.flush()
@@ -175,18 +214,17 @@ def gpu_lease(cfg):
             if os.name == 'nt':
                 stream.seek(0)
                 msvcrt.locking(stream.fileno(), msvcrt.LK_UNLCK, 1)
-    uncertain = False
+    uncertain=False
     try:
         yield identity
     except BaseException as error:
-        uncertain = bool(getattr(error, 'owned_cleanup_uncertain', False))
-        if uncertain:
-            atomic_json(lease_path,{**lease_row,'cleanup_uncertain':True})
+        uncertain=bool(getattr(error,'owned_cleanup_uncertain',False))
+        if uncertain:atomic_json(lease_path,{**lease_row,'cleanup_uncertain':True})
         raise
     finally:
         if not uncertain:
             with hold.open('a', encoding='utf-8') as stream:
-                stream.write(f'\nRELEASED: DS4STACK {identity}; {datetime.now(timezone.utc).isoformat()}\n')
+                stream.write(f'\nRELEASED: {task} {identity}; {datetime.now(timezone.utc).isoformat()}\n')
                 stream.flush()
                 os.fsync(stream.fileno())
             atomic_json(lease_path, {**lease_row, 'released': True})

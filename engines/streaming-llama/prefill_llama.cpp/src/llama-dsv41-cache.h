@@ -50,6 +50,11 @@ public:
     bool restore_native_frontier(const llama_dsv41::wire_frontier & target,
         const std::vector<std::string> & target_hashes,
         const llama_dsv41::wire_read_span & read, std::string & error);
+    // Explicit replacement after the caller retires the previous executor.
+    // Synchronizes, invalidates and replaces every owner; no stale base reuse.
+    bool replace_native_frontier(const llama_dsv41::wire_frontier & target,
+        const std::vector<std::string> & target_hashes,
+        const llama_dsv41::wire_read_span & read, std::string & error);
     bool apply_native_delta(const llama_dsv41::wire_frontier & base,
         const llama_dsv41::wire_frontier & target,
         const std::vector<std::string> & base_hashes,
@@ -93,5 +98,5 @@ private:
         const llama_dsv41::wire_frontier & target,
         const std::vector<std::string> & base_hashes,
         const std::vector<std::string> & target_hashes,
-        const llama_dsv41::wire_read_span & read, std::string & error, bool rewind=false);
+        const llama_dsv41::wire_read_span & read, std::string & error, bool rewind=false, bool replace=false);
 };

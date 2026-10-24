@@ -16,7 +16,7 @@ def check(cfg, *, verify_journal=True):
         record('host_memory', True, f'available={available}; admitted RSS budget={cfg["host_budget_gib"]} GiB')
     except MemoryError as exc:
         record('host_memory', False, exc)
-    from .memory_counters import snapshot
+    from .memory_counters import diagnostic_snapshot as snapshot
     counters = snapshot()
     supported = 'error' not in counters and ('pages_output' in counters or 'vm_stat' in counters or 'swap_out_bytes' in counters)
     record('paging_counter_support', supported, 'OS paging counters are included in engine/GPU guard receipts; system activity is not per-process attribution', required=False)

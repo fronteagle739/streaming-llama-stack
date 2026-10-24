@@ -3,6 +3,10 @@
 #include "ggml-backend.h"
 #include <cstring>
 
+// The F16 dense path admits only RHS widths above this row count; narrower
+// products (decode steps, small tails) keep the original F32 product.
+constexpr int64_t ggml_dsv41_dense_half_max_untagged_rows=8;
+
 inline bool ggml_dsv41_dense_half_requested(const ggml_tensor *t){
     return t&&t->op==GGML_OP_MUL_MAT&&t->op_params[2]==0x44344846&&t->op_params[3]==1;
 }
@@ -11,7 +15,7 @@ inline bool ggml_dsv41_dense_half_shape(const ggml_tensor *t){
     const auto *w=t->src[0],*x=t->src[1];
     return w&&x&&w->type==GGML_TYPE_F16&&x->type==GGML_TYPE_F32&&
         w->ne[0]>0&&w->ne[0]<=16384&&w->ne[1]>0&&w->ne[1]<=32768&&
-        x->ne[0]==w->ne[0]&&x->ne[1]>8&&x->ne[1]<=4096&&
+        x->ne[0]==w->ne[0]&&x->ne[1]>ggml_dsv41_dense_half_max_untagged_rows&&x->ne[1]<=4096&&
         w->ne[2]==1&&w->ne[3]==1&&x->ne[2]==1&&x->ne[3]==1&&
         ggml_is_contiguous(w)&&ggml_is_contiguous(t)&&x->nb[0]==sizeof(float)&&
         x->nb[1]%sizeof(float)==0;

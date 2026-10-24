@@ -95,7 +95,13 @@ public:
     public:
         uint8_t *data()const{return storage.get();}
         uint64_t size()const{return bytes;}
+        // DS4COMBO fast switch: release/re-lock the physical pages in place.
+        void suspend_pages();
+        void resume_pages();
+        bool suspended()const{return paged_out;}
     private:
+        bool paged_out=false;
+        uint64_t aligned_bytes()const;
         ram_backing()=default;
         std::shared_ptr<uint8_t[]> storage;
         uint64_t bytes=0;

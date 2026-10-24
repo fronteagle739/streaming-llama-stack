@@ -1,3 +1,4 @@
+#include "llama-dsv41-layer-log.h"
 #include "llama-weight-fetcher.h"
 #include "llama-wf-bounded-policy.h"
 #include "llama-wf-zero-gaps.h"
@@ -211,6 +212,8 @@ struct wf_layer {
     // MoE: active expert mask (empty = fetch all)
     std::vector<int>              active_experts;
     bool                          expert_filter_set = false;
+    bool                          persistent = false;          // LLAMADECODE B1b
+    std::atomic<bool>             persistent_loaded{false};    // bytes resident in its bank region
     bool                          cache_inserted = false;
     std::vector<bool>             cache_hits;
     std::vector<int>              expert_prefetch_ids;
@@ -228,6 +231,7 @@ struct wf_layer {
         : spans(std::move(o.spans)), total_bytes(o.total_bytes),
           stage(o.stage.load()), gpu_buf_idx(o.gpu_buf_idx), ram_buf_idx(o.ram_buf_idx),
           active_experts(std::move(o.active_experts)), expert_filter_set(o.expert_filter_set),
+          persistent(o.persistent), persistent_loaded(o.persistent_loaded.load()),
           cache_inserted(o.cache_inserted), cache_hits(std::move(o.cache_hits)),
           expert_prefetch_ids(std::move(o.expert_prefetch_ids)),
           expert_prefetch_loaded_spans(std::move(o.expert_prefetch_loaded_spans)),
@@ -2218,6 +2222,34 @@ static void wf_persist_staging_evict(const char * why) {
     fflush(stderr);
 }
 
+// DS4COMBO graceful release (close and keep-alive suspend share it): drop the
+// process-global cache too — staging heap, DS files, DS factory, D3D12 device,
+// DXGI factory — so nothing DirectStorage/D3D12 stays alive. Only valid with no
+// live wf_context owning the cache. The next wf_create rebuilds it from scratch.
+static int wf_persist_shutdown_impl(const char * why) {
+    if (g_wf_persist.active_owner) {
+        fprintf(stderr, "*** WF_PERSIST_SHUTDOWN refused: cache still has an active owner (%s)\n", why);
+        fflush(stderr);
+        return 0;
+    }
+    wf_persist_staging_evict(why);
+    for (auto * file : g_wf_persist.files) if (file) file->Release();
+    g_wf_persist.files.clear();
+    g_wf_persist_file_ids.clear();
+    unsigned long factory_refs = 0, device_refs = 0, dxgi_refs = 0;
+    if (g_wf_persist.factory) factory_refs = g_wf_persist.factory->Release();
+    if (g_wf_persist.device)  device_refs  = g_wf_persist.device->Release();
+    if (g_wf_persist.dxgi)    dxgi_refs    = g_wf_persist.dxgi->Release();
+    g_wf_persist.factory = nullptr;
+    g_wf_persist.device  = nullptr;
+    g_wf_persist.dxgi    = nullptr;
+    g_wf_persist.valid   = false;
+    fprintf(stderr, "DS4COMBO_WF_PERSIST_SHUTDOWN why=%s ds_factory_refs=%lu d3d12_device_refs=%lu dxgi_refs=%lu\n",
+            why, factory_refs, device_refs, dxgi_refs);
+    fflush(stderr);
+    return 1;
+}
+
 static bool wf_persist_infra_matches(wf_context * wf, size_t buf_size) {
     // A live DiT streamer can coexist with a LoRA/VAE streamer. Its mapping
     // cannot be reused or evicted merely because the second asks for a heap.
@@ -3290,6 +3322,26 @@ static bool wf_dstorage_transfer_layer(wf_context * wf, int layer_idx, int gpu_i
         }
     } else if(wave_start<=0&&wf->params.ds_compute_direct){
         if(!wf_s||gpu_idx!=layer_idx%int(wf->gpu_bufs.size())||target_buf!=wf->gpu_bufs[gpu_idx].ptr)return false;
+        bool routed_stage=false;for(const auto&span:layer.spans)if(span.is_expert){routed_stage=true;break;}
+        if(routed_stage&&wf->params.moe_mode==WF_MOE_FETCH_ACTIVE){
+            if(!wf->required_dstorage||dest_buf||dest_offset||wave_start>=0||wave_end>=0||!layer.expert_filter_set){
+                WF_ERR("Required DirectStorage routed-stage zero refused: unrouted or partial transfer");wf->ds_failed.store(true);return false;}
+            // LLAMADECODE_POISON_UNROUTED=1 (debug only): every byte this transfer
+            // does not write (unrouted experts and padding) becomes 0xFF, i.e. NaN
+            // F16 block scales, so any read of unrouted data turns the logits NaN.
+            static const bool poison=[]{const char*e=std::getenv("LLAMADECODE_POISON_UNROUTED");return e&&e[0]=='1'&&!e[1];}();
+            std::vector<llama_wf_zero_gaps::interval>owned,gaps;owned.reserve(layer.spans.size());
+            for(const auto&span:layer.spans)if(!poison||!span.is_expert||wf_span_is_active_expert(wf,layer,span))owned.push_back({span.gpu_offset,span.nbytes});
+            std::string reason;
+            if(!llama_wf_zero_gaps::plan(layer.total_bytes,owned,gaps,reason)){WF_ERR("Required DirectStorage routed-stage zero refused: %s",reason.c_str());wf->ds_failed.store(true);return false;}
+            uint64_t zeroed=0;
+            for(const auto&gap:gaps){if(!cuda_ok(cudaMemsetAsync((char*)target_buf+gap.offset,poison?0xFF:0,size_t(gap.bytes),wf_s)))return false;zeroed+=gap.bytes;}
+            if(poison)WF_ERR("LLAMADECODE_POISON_UNROUTED stage=%d poisoned_bytes=%llu fill=0xFF",layer_idx,(unsigned long long)zeroed);
+            if(!cuda_ok(cudaStreamSynchronize(wf_s)))return false;
+            size_t active=0;for(const auto&span:layer.spans)active+=span.is_expert&&wf_span_is_active_expert(wf,layer,span)?1:0;
+            if(llama_dsv41_layer_log_on())WF_ERR("LLAMADECODE_ROUTED_STAGE stage=%d extent=%llu padding_zero_bytes=%llu routed_spans=%zu experts=%zu unrouted_extents_never_read=1",
+                layer_idx,(unsigned long long)layer.total_bytes,(unsigned long long)zeroed,active,layer.active_experts.size());
+        }else
         // These exact bytes are the DS destination, so complete the existing
         // copy stream's zero BEFORE D3D writes. Other bank's compute may run.
         if(wf->params.ds_zero_padding_only){
@@ -3330,9 +3382,13 @@ static bool wf_dstorage_transfer_layer(wf_context * wf, int layer_idx, int gpu_i
                 if(!cuda_ok(cudaMemsetAsync((char*)target_buf+gap.offset,0,size_t(gap.bytes),wf_s)))return false;
                 zeroed+=gap.bytes;
             }
-            WF_ERR("DS4PERF_DIRECT_ZERO_GAPS stage=%d extent=%llu zero_bytes=%llu gaps=%zu spans=%zu all_request_bytes_verified=1 before_DS_sync_retained=1",
+            if(llama_dsv41_layer_log_on())WF_ERR("DS4PERF_DIRECT_ZERO_GAPS stage=%d extent=%llu zero_bytes=%llu gaps=%zu spans=%zu all_request_bytes_verified=1 before_DS_sync_retained=1",
                 layer_idx,(unsigned long long)layer.total_bytes,(unsigned long long)zeroed,gaps.size(),writes.size());
-        }else if(!cuda_ok(cudaMemsetAsync(target_buf,0,layer.total_bytes,wf_s)))return false;
+        }else{
+            size_t begin=layer.total_bytes;for(const auto&span:layer.spans)begin=std::min(begin,span.gpu_offset);
+            if(begin&&!wf->required_dstorage)return false;
+            if(!cuda_ok(cudaMemsetAsync((char*)target_buf+begin,0,layer.total_bytes-begin,wf_s)))return false;
+        }
         if(!cuda_ok(cudaStreamSynchronize(wf_s)))return false;
     } else if (wave_start <= 0 && wf->ds_direct_mode) {
         // R3 DS-direct DEBUG: temporarily SKIP the prefetch zero — testing whether the CUDA memset was
@@ -3551,10 +3607,10 @@ static bool wf_dstorage_transfer_layer(wf_context * wf, int layer_idx, int gpu_i
     // wf_adapter_remap_tensors handles this by re-reading from GGUF and uploading
     // directly to the tensor's final data pointer.
 
-    if(wf->params.ds_compute_direct)WF_ERR("DS4PERF_DIRECT_FILLED stage=%d bank=%d waves=%d staging_D2D_bytes=0",layer_idx,gpu_idx,we-ws);
+    if(wf->params.ds_compute_direct)if(llama_dsv41_layer_log_on())WF_ERR("DS4PERF_DIRECT_FILLED stage=%d bank=%d waves=%d staging_D2D_bytes=0",layer_idx,gpu_idx,we-ws);
     auto t1 = std::chrono::high_resolution_clock::now();
     layer.nvme_read_ms = std::chrono::duration<float, std::milli>(t1 - t0).count();
-    if(wf->required_dstorage)WF_ERR("[dsv41-fetch-parts] stage=%d initialize_ms=%.6f staging_drain_ms=%.6f enqueue_ms=%.6f storage_fence_ms=%.6f cuda_handoff_api_ms=%.6f final_visibility_ms=%.6f total_ms=%.6f waves=%d",
+    if(wf->required_dstorage)if(llama_dsv41_layer_log_on())WF_ERR("[dsv41-fetch-parts] stage=%d initialize_ms=%.6f staging_drain_ms=%.6f enqueue_ms=%.6f storage_fence_ms=%.6f cuda_handoff_api_ms=%.6f final_visibility_ms=%.6f total_ms=%.6f waves=%d",
         layer_idx,initialize_ms,staging_drain_ms,enqueue_ms,storage_fence_ms,cuda_handoff_api_ms,interval_ms(visibility_started,t1),interval_ms(t0,t1),we-ws);
     wf->stat_bytes_read_nvme.fetch_add(layer.total_bytes - std::min(layer.total_bytes, cache_bytes));
     wf->ds_layer_fence_val[layer_idx] = wf->ds_fence_counter.load();
@@ -3931,8 +3987,33 @@ static void wf_dma_thread_fn(wf_context * wf) {
             }
 #endif
 
+            // LLAMADECODE B1: a routed-expert stage is fetched only after the caller
+            // publishes this layer's routing; it is never fetched unfiltered.
+            if (wf->params.moe_mode == WF_MOE_FETCH_ACTIVE) {
+                bool routed = false, ready = true;
+                for (const auto & span : wf->layers[layer_idx].spans) if (span.is_expert) { routed = true; break; }
+                if (routed) { std::lock_guard<std::mutex> lock(wf->expert_prefetch_mutex); ready = wf->layers[layer_idx].expert_filter_set; }
+                if (!ready) continue;
+            }
+
             // Compute done — submit DMA immediately
             wf->dma_buf_pending[bi].pending_layer.store(-1);
+            if (wf->layers[layer_idx].persistent && wf->layers[layer_idx].persistent_loaded.load(std::memory_order_acquire)) {
+                // LLAMADECODE B1b: resident in this bank's own region since its first
+                // transfer; nothing else writes it. Publish without a DMA.
+                wf->gpu_bufs[bi].in_use = true;
+                wf->gpu_bufs[bi].layer_idx = layer_idx;
+                wf->layers[layer_idx].gpu_buf_idx = bi;
+                {
+                    std::lock_guard<std::mutex> lk(wf->dma_timing_mutex);
+                    const auto now = std::chrono::high_resolution_clock::now();
+                    wf->dma_timing_log.push_back({layer_idx, bi, 0, now, now});
+                }
+                wf->layers[layer_idx].stage.store(WF_STAGE_GPU_READY);
+                wf->pipeline_cv.notify_one();
+                did_work = true;
+                break;
+            }
 
             // Skip empty sub-layers (dense layer's MoE slot)
             if (wf->layers[layer_idx].total_bytes == 0) {
@@ -3951,7 +4032,13 @@ static void wf_dma_thread_fn(wf_context * wf) {
             wf->gpu_bufs[bi].in_use = true;
             wf->gpu_bufs[bi].layer_idx = layer_idx;
             wf->layers[layer_idx].gpu_buf_idx = bi;
-            wf->dma_in_flight_buf.store(bi);
+            {   int expected = -1;  // LLAMADECODE B2: an extent fetch may hold the DS queue
+                if (!wf->dma_in_flight_buf.compare_exchange_strong(expected, bi)) {
+                    wf->dma_buf_pending[bi].pending_layer.store(layer_idx);
+                    wf->gpu_bufs[bi].in_use = false; wf->gpu_bufs[bi].layer_idx = -1; wf->layers[layer_idx].gpu_buf_idx = -1;
+                    break;
+                }
+            }
             // Lock-free mode: mark this buffer not-ready until the new layer's
             // compute callback fires (wf_cuda_record_compute_done -> wf_compute_ready_cb).
             wf->dma_buf_pending[bi].compute_ready.store(false, std::memory_order_release);
@@ -3973,6 +4060,7 @@ static void wf_dma_thread_fn(wf_context * wf) {
                 break;
             }
 
+            if (wf->layers[layer_idx].persistent) wf->layers[layer_idx].persistent_loaded.store(true, std::memory_order_release);
             // Transfer complete — mark GPU_READY immediately
             {
                 std::lock_guard<std::mutex> lk(wf->dma_timing_mutex);
@@ -3981,7 +4069,7 @@ static void wf_dma_thread_fn(wf_context * wf) {
                     if (last.layer_idx == layer_idx)
                         last.t_fence = std::chrono::high_resolution_clock::now();
                     if (wf->required_dstorage && last.layer_idx == layer_idx)
-                        WF_ERR("[dsv41-fetch-timeline] stage=%d submit_epoch_ms=%.6f fence_epoch_ms=%.6f",
+                        if(llama_dsv41_layer_log_on())WF_ERR("[dsv41-fetch-timeline] stage=%d submit_epoch_ms=%.6f fence_epoch_ms=%.6f",
                             layer_idx,
                             std::chrono::duration<double,std::milli>(last.t_submit.time_since_epoch()).count(),
                             std::chrono::duration<double,std::milli>(last.t_fence.time_since_epoch()).count());
@@ -4271,7 +4359,10 @@ static wf_context * wf_create_impl(const wf_params * params, bool required_dstor
                 !params->max_layer_bytes || params->max_layer_bytes > SIZE_MAX / 2 ||
                 params->n_gpu_buffers < 1 || params->n_gpu_buffers > 2 ||
                 !params->io_block_size || params->io_block_size > 256ull * 1024 * 1024 ||
-                params->n_layers > 128 || params->n_sublayers != 1 || params->moe_mode != WF_MOE_FETCH_ALL ||
+                params->n_layers > 128 || params->n_sublayers != 1 ||
+                (params->moe_mode != WF_MOE_FETCH_ALL && !(params->moe_mode == WF_MOE_FETCH_ACTIVE &&
+                    params->ds_compute_direct && params->n_gpu_buffers == 2 && !params->ds_gpu_ring_slots &&
+                    !params->ds_zero_padding_only)) ||
                 params->n_split_files < 0 || params->n_split_files > 64 ||
                 (params->n_split_files && !params->split_paths)) {
             WF_ERR("Required DirectStorage: invalid explicit backend/geometry");
@@ -4908,7 +4999,8 @@ void wf_register_layer(wf_context * wf, int layer_idx,
     if (!wf || layer_idx < 0 || layer_idx >= (int)wf->layers.size()) return;
 
     if (wf->required_dstorage) {
-        bool valid = !wf->pipeline_running.load() && n_spans > 0 && n_spans <= 128 && spans &&
+        const int span_limit = wf->params.moe_mode == WF_MOE_FETCH_ACTIVE ? 2048 : 128;
+        bool valid = !wf->pipeline_running.load() && n_spans > 0 && n_spans <= span_limit && spans &&
             total_bytes > 0 && total_bytes <= wf->params.max_layer_bytes;
         size_t previous = 0;
         for (int i = 0; valid && i < n_spans; ++i) {
@@ -5852,6 +5944,16 @@ void wf_quiesce(wf_context * wf) {
 #endif
 }
 
+bool wf_set_layer_persistent(wf_context * wf, int layer_idx, bool persistent) {
+    if (!wf || !wf->required_dstorage || layer_idx < 0 || layer_idx >= (int)wf->layers.size() || wf->pipeline_running.load()) return false;
+    auto & layer = wf->layers[layer_idx];
+    if (layer.spans.empty()) return false;
+    for (const auto & span : layer.spans) if (span.is_expert) return false;  // routed stages are rewritten every token
+    layer.persistent = persistent;
+    layer.persistent_loaded.store(false, std::memory_order_release);
+    return true;
+}
+
 void wf_set_active_experts(wf_context * wf, int layer_idx,
                            const int * expert_ids, int n_active) {
     if (!wf || layer_idx < 0 || layer_idx >= (int)wf->layers.size()) return;
@@ -5859,6 +5961,8 @@ void wf_set_active_experts(wf_context * wf, int layer_idx,
 
     auto & layer = wf->layers[layer_idx];
     if (!wf->expert_prefetch_enabled) {
+        // The required DMA thread reads this filter under the same lock.
+        std::lock_guard<std::mutex> lock(wf->expert_prefetch_mutex);
         if (n_active > 0) layer.active_experts.assign(expert_ids, expert_ids + n_active);
         else layer.active_experts.clear();
         layer.expert_filter_set = true;
@@ -6174,8 +6278,21 @@ bool wf_get_required_layer_fetch(wf_context * wf, int layer, uint64_t * bytes, d
 #ifdef WF_HAS_DSTORAGE
     if (!wf->required_dstorage || layer < 0 || layer >= int(wf->ds_waves.size())) return false;
     std::lock_guard<std::mutex> lock(wf->dma_timing_mutex);
+    for (auto it = wf->dma_timing_log.rbegin(); it != wf->dma_timing_log.rend(); ++it) {
+        if (it->layer_idx != layer) continue;
+        if (it->nbytes == 0 && wf->layers[layer].persistent) { *bytes = 0; *milliseconds = 0; return true; }
+        break;
+    }
     for (const auto & wave : wf->ds_waves[layer])
-        for (const auto & request : wave.reqs) *bytes += request.Source.File.Size;
+        for (size_t ri = 0; ri < wave.reqs.size(); ++ri) {
+            // Routed stages count only the experts actually fetched.
+            const int si = ri < wave.req_span_idx.size() ? wave.req_span_idx[ri] : -1;
+            if (si >= 0 && si < (int) wf->layers[layer].spans.size()) {
+                const auto & span = wf->layers[layer].spans[si];
+                if (span.is_expert && !wf_span_is_active_expert(wf, wf->layers[layer], span)) continue;
+            }
+            *bytes += wave.reqs[ri].Source.File.Size;
+        }
     for (auto it = wf->dma_timing_log.rbegin(); it != wf->dma_timing_log.rend(); ++it) {
         if (it->layer_idx != layer) continue;
         if (!it->t_fence.time_since_epoch().count()) return false;
@@ -6396,3 +6513,117 @@ bool wf_get_layer_major_mode(wf_context * wf) {
     return wf->layer_major_mode;
 }
 
+
+int wf_persist_shutdown(const char * why) {
+#ifdef WF_HAS_DSTORAGE
+    return wf_persist_shutdown_impl(why ? why : "unspecified");
+#else
+    (void) why;
+    return 1;
+#endif
+}
+
+// LLAMADECODE: expert-miss fetch timing split (one producer thread calls the extent fetch).
+static struct { double submit_ms, fence_ms, verify_ms, cuda_ms; uint64_t requests, batches; } g_wf_extent_stats = {};
+void wf_extent_fetch_stats(double * out4, uint64_t * requests, uint64_t * batches) {
+    if (out4) { out4[0] = g_wf_extent_stats.submit_ms; out4[1] = g_wf_extent_stats.fence_ms; out4[2] = g_wf_extent_stats.verify_ms; out4[3] = g_wf_extent_stats.cuda_ms; }
+    if (requests) *requests = g_wf_extent_stats.requests;
+    if (batches) *batches = g_wf_extent_stats.batches;
+}
+bool wf_fetch_extents_direct(wf_context * wf, int bank, const wf_extent * extents, int n,
+                             void * cuda_stream, uint64_t * bytes, double * milliseconds) {
+    if (bytes) *bytes = 0;
+    if (milliseconds) *milliseconds = 0;
+#if defined(WF_HAS_DSTORAGE) && defined(WF_HAS_CUDA)
+    if (!wf || !wf->required_dstorage || !wf->params.ds_compute_direct || !wf->ds_queue || !wf->ds_fence ||
+            bank < 0 || bank >= (int) wf->ds_compute_banks.size() || n < 0 || (n && !extents) ||
+            wf->ds_failed.load(std::memory_order_acquire)) return false;
+    if (n == 0) return true;
+    const auto & target = wf->ds_compute_banks[bank];
+    const uint64_t quarter = target.quarter_bytes, capacity = quarter * target.quarters.size();
+    // LLAMADECODE: expert-miss extents use ds4-win's split-read mechanism
+    // (ds4_dstorage.cpp request_parts, DS4_DS_READ_PARTS, default 8): each
+    // span (bounded by the stage request size and the placed quarter) is
+    // split into read_parts equal 4 KiB-unit subreads.
+    static const uint32_t read_parts = [] {
+        const char * e = std::getenv("DS4_DS_READ_PARTS");
+        const long v = e && *e ? std::strtol(e, nullptr, 10) : 8;
+        const uint32_t p = (uint32_t) (v <= 1 ? 1 : std::min<long>(v, 64));
+        fprintf(stderr, "LLAMADECODE_MISS_READ_PARTS read_parts=%u source=%s\n", p, e && *e ? "DS4_DS_READ_PARTS" : "ds4-default");
+        return p;
+    }();
+    const size_t block = wf->params.io_block_size;
+    if (!quarter || !block) return false;
+    auto started = std::chrono::high_resolution_clock::now();
+    // Claim the single DS submission slot (the DMA thread uses the same queue).
+    for (;;) {
+        int expected = -1;
+        if (wf->dma_in_flight_buf.compare_exchange_strong(expected, 1000 + bank)) break;
+        if (wf->ds_failed.load(std::memory_order_acquire)) return false;
+        std::this_thread::sleep_for(std::chrono::microseconds(20));
+    }
+    struct release_slot { wf_context * wf; ~release_slot() { wf->dma_in_flight_buf.store(-1); } } slot{wf};
+    uint64_t total = 0; int submitted = 0;
+    const int drain_threshold = std::max(1, wf->ds_queue_cap / 2);
+    for (int i = 0; i < n; ++i) {
+        const auto & e = extents[i];
+        if (!e.nbytes || e.file_idx < 0 || e.file_idx >= (int) wf->ds_files.size() ||
+                e.bank_offset > capacity || e.nbytes > capacity - e.bank_offset) {
+            WF_ERR("Required DirectStorage extent fetch refused: invalid extent %d", i);
+            wf->ds_failed.store(true, std::memory_order_release); return false;
+        }
+        uint64_t source = e.file_offset, destination = e.bank_offset, remaining = e.nbytes;
+        while (remaining) {
+            const uint64_t q = destination / quarter, within = destination % quarter;
+            const uint64_t chunk = std::min<uint64_t>({remaining, (uint64_t) block, quarter - within});
+            // ds4-win request_parts: split a 4 KiB-aligned span into read_parts equal 4 KiB-unit subreads.
+            const uint32_t parts = read_parts > 1 && (source & 4095u) == 0 && (chunk & 4095u) == 0 &&
+                chunk / 4096u >= read_parts ? read_parts : 1u;
+            const uint64_t units = chunk / 4096u;
+            uint64_t part_offset = 0;
+            for (uint32_t part = 0; part < parts; ++part) {
+            const uint64_t piece = parts == 1 ? chunk : (units / parts + (part < units % parts ? 1u : 0u)) * 4096u;
+            if (submitted >= drain_threshold) {
+                const uint64_t drain = ++wf->ds_fence_counter;
+                wf->ds_queue->EnqueueSignal(wf->ds_fence, drain); wf->ds_queue->Submit();
+                if (!wf_ds_fence_wait(wf, drain)) return false;
+                submitted = 0;
+            }
+            DSTORAGE_REQUEST req = {};
+            req.Options.SourceType = DSTORAGE_REQUEST_SOURCE_FILE;
+            req.Options.DestinationType = DSTORAGE_REQUEST_DESTINATION_BUFFER;
+            req.Options.CompressionFormat = DSTORAGE_COMPRESSION_FORMAT_NONE;
+            req.Source.File.Source = wf->ds_files[e.file_idx];
+            req.Source.File.Offset = source + part_offset;
+            req.Source.File.Size = (UINT32) piece;
+            req.Destination.Buffer.Resource = target.quarters[q];
+            req.Destination.Buffer.Offset = within + part_offset;
+            req.Destination.Buffer.Size = (UINT32) piece;
+            req.UncompressedSize = (UINT32) piece;
+            wf->ds_queue->EnqueueRequest(&req); ++submitted; ++g_wf_extent_stats.requests;
+            part_offset += piece;
+            }
+            source += chunk; destination += chunk; remaining -= chunk; total += chunk;
+        }
+    }
+    const uint64_t fence = ++wf->ds_fence_counter;
+    wf->ds_queue->EnqueueSignal(wf->ds_fence, fence);
+    wf->ds_queue->Submit();
+    using wf_clock = std::chrono::high_resolution_clock;
+    auto ms_since = [](wf_clock::time_point t) { return std::chrono::duration<double, std::milli>(wf_clock::now() - t).count(); };
+    const auto submitted_at = wf_clock::now(); g_wf_extent_stats.submit_ms += std::chrono::duration<double, std::milli>(submitted_at - started).count();
+    if (!wf_ds_fence_wait(wf, fence)) return false;
+    const auto fenced_at = wf_clock::now(); g_wf_extent_stats.fence_ms += std::chrono::duration<double, std::milli>(fenced_at - submitted_at).count();
+    if (!wf_dstorage_wave_succeeded(wf, wf->ds_queue, -1, -1)) return false;
+    const auto verified_at = wf_clock::now(); g_wf_extent_stats.verify_ms += std::chrono::duration<double, std::milli>(verified_at - fenced_at).count();
+    if (!wf_cuda_wait_ds_fence(wf, fence, (cudaStream_t) cuda_stream)) return false;
+    g_wf_extent_stats.cuda_ms += ms_since(verified_at); ++g_wf_extent_stats.batches;
+    wf->stat_bytes_read_nvme.fetch_add(total);
+    if (bytes) *bytes = total;
+    if (milliseconds) *milliseconds = std::chrono::duration<double, std::milli>(std::chrono::high_resolution_clock::now() - started).count();
+    return true;
+#else
+    (void) wf; (void) bank; (void) extents; (void) n; (void) cuda_stream;
+    return false;
+#endif
+}
