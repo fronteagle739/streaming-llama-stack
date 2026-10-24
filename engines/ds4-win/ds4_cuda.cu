@@ -523,8 +523,7 @@ static void cuda_selected_free(void *ptr) {
         if (free1 > free0 + (UINT64_C(1) << 30)) break;
         Sleep(50); waited += 0.05;
     }
-    fprintf(stderr, "DS4COMBO_DS_SLOTS pool %d released: free VRAM %.2f -> %.2f GiB after %.2f s
-", h,
+    fprintf(stderr, "DS4COMBO_DS_SLOTS pool %d released: free VRAM %.2f -> %.2f GiB after %.2f s\n", h,
             (double)free0 / 1073741824.0, (double)free1 / 1073741824.0, waited);
 }
 
