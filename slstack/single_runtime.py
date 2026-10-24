@@ -69,7 +69,7 @@ def preset(cfg, installed):
             ds4_cache_affinity_bias=0, ds4_cache_affinity_spread_file=str(installed / 'qualification/affinity-spreads.txt'),
             ds4_extra_flags='--cuda', ds4_env=dict(DECODE_ENV),
             ds4_host_memory_budget_mb=int((cfg['host_budget_gib'] + .25) * 1024),
-            ds4_host_memory_reserve_mb=int(cfg['min_available_gib'] * 1024)))
+            ds4_host_memory_reserve_mb=max(2048,int(cfg['min_available_gib'] * 1024))))  # Studio ds4_memory.admit minimum
 
 
 def normal_argv(studio_native, definition):
