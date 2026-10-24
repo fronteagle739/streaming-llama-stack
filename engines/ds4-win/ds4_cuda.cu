@@ -1483,6 +1483,9 @@ static int g_ds4x_external_mode;
 static ds4_gpu_external_expert_hook g_ds4x_expert_hook;
 static void *g_ds4x_expert_user;
 static ds4_gpu_tensor g_ds4x_slot_tensor;
+typedef int (*ds4_gpu_external_residency_hook)(void *user, uint32_t layer, uint8_t *tier, uint32_t experts);
+static ds4_gpu_external_residency_hook g_ds4x_residency_hook;
+static void *g_ds4x_residency_user;
 #endif
 static const char *cuda_model_range_ptr(const void *model_map, uint64_t offset, uint64_t bytes, const char *what, const char **kind_out = NULL) {
     if (kind_out) *kind_out = NULL;
@@ -30460,7 +30463,12 @@ extern "C" int ds4_gpu_cache_affinity_router_tensor(
     if (g_affinity_anchor == 0.0f && g_affinity_calibrate_path.empty() && !getenv("DS4_CACHE_AFFINITY_PROFILE")) return 1;
     lambda=g_affinity_verify_active && g_affinity_verify_mean>=0 ? g_affinity_verify_mean : g_affinity_mean;
     const bool hard_verify=g_affinity_verify_active && g_affinity_verify_hard && cuda_affinity_ramp_factor(g_affinity_decoded)>=1.0f;
-    if (!g_ssd_streaming_mode || !selected || !weights || !probs || !model_map ||
+#ifdef DS4_EXTERNAL_DECODE
+    const bool external = g_ds4x_external_mode != 0;
+#else
+    const bool external = false;
+#endif
+    if ((!g_ssd_streaming_mode && !external) || !selected || !weights || !probs || !model_map ||
         (experts != 256u && experts != 384u) || used != 6u || !rows || !layers || layer >= layers ||
         !isfinite(lambda) || lambda < 0.0f || lambda > 3.0f ||
         selected->bytes < (uint64_t)rows * used * 4u || weights->bytes < (uint64_t)rows * used * 4u ||
@@ -30473,18 +30481,25 @@ extern "C" int ds4_gpu_cache_affinity_router_tensor(
     g_affinity_current_biased=lambda>0.0f;
     const int tier = ds4_tensor_device_idx(selected);
     cuda_router_residency residency = {};
+#ifdef DS4_EXTERNAL_DECODE
+    if (external) {
+        if (!g_ds4x_residency_hook || !g_ds4x_residency_hook(g_ds4x_residency_user, layer, residency.tier, experts)) {
+            fprintf(stderr, "LLAMADECODE_DS4X_RESIDENCY_FAILED layer=%u\n", layer); return 0;
+        }
+    }
+#endif
     cuda_stream_expert_cache *v = &g_stream_expert_caches[
         cuda_stream_expert_cache_class_index(gate_bytes, down_bytes)];
     cuda_stream_host_expert_cache *h = &g_stream_host_expert_caches[
         cuda_stream_host_expert_cache_class_index(gate_bytes, down_bytes)];
     /* Snapshot existing slots once, using the point lookup's exact predicate. */
-    for (uint32_t i = 0; h->valid && i < h->capacity; i++) {
+    for (uint32_t i = 0; !external && h->valid && i < h->capacity; i++) {
         const auto &slot = h->slots[i];
         if (slot.expert < experts && cuda_stream_expert_slot_matches(slot, model_map,
                 model_size, layer, experts, slot.expert, gate_offset, up_offset,
                 down_offset, gate_bytes, down_bytes)) residency.tier[slot.expert] = 2;
     }
-    for (uint32_t i = 0; v->valid && i < v->capacity; i++) {
+    for (uint32_t i = 0; !external && v->valid && i < v->capacity; i++) {
         const auto &slot = v->slots[i];
         if (slot.expert < experts && cuda_stream_expert_slot_matches(slot, model_map,
                 model_size, layer, experts, slot.expert, gate_offset, up_offset,
@@ -30538,16 +30553,18 @@ extern "C" int ds4_gpu_cache_affinity_router_tensor(
         (hard_verify && !cuda_ok(cudaMemcpyAsync(hard_rows.data(),device_hard,rows*sizeof(*device_hard),
             cudaMemcpyDeviceToHost,cuda_decode_stream()),"verify hard resident metrics copy")) ||
         !cuda_ok(cudaStreamSynchronize(cuda_decode_stream()), "cache affinity metrics sync")) return 0;
-    if(!cuda_affinity_background_prepare(gate_bytes,down_bytes))return 0;
+    /* External: the host owns admission; ds4's own background promotion has no cache here. */
+    if(!external && !cuda_affinity_background_prepare(gate_bytes,down_bytes))return 0;
+    static const bool external_log = getenv("LLAMADECODE_DS4X_AFFINITY_LOG") != NULL;
     for (uint32_t t = 0; t < rows; t++) {
         const auto &m = metrics[t];
-        cuda_affinity_background_note(m,residency,model_map,model_size,layer,experts,
+        if(!external) cuda_affinity_background_note(m,residency,model_map,model_size,layer,experts,
             gate_offset,up_offset,down_offset,gate_bytes,down_bytes);
         if(!g_affinity_calibrate_path.empty() && g_affinity_calibration[layer].size()<64u) {
             if(!isfinite(m.spread) || m.spread<0.0f) {fprintf(stderr,"ds4: invalid calibration score readback\n");return 0;}
             g_affinity_calibration[layer].push_back(m.spread);
         }
-        fprintf(stderr, "ds4: cache-affinity token=%u decode_step=%llu layer=%u mean=%.6g delta=%.6g stage=%s vram_hits=%u ram_hits=%u selections=%u vram_hit_rate=%.6f changed=%u spread=%.9g\n",
+        if (!external || external_log) fprintf(stderr, "ds4: cache-affinity token=%u decode_step=%llu layer=%u mean=%.6g delta=%.6g stage=%s vram_hits=%u ram_hits=%u selections=%u vram_hit_rate=%.6f changed=%u spread=%.9g\n",
             position+t,(unsigned long long)decode_step,layer,g_affinity_mean,lambda,
             g_affinity_mean==0.0f?"off":decode_step<g_affinity_warmup?"warmup":cuda_affinity_ramp_factor(decode_step)<1.0f?"ramp":"biased",
             m.vram,m.ram,m.selections,(double)m.vram/m.selections,m.changed,m.spread);
@@ -30562,7 +30579,7 @@ extern "C" int ds4_gpu_cache_affinity_router_tensor(
     }
     /* Protect the current selected demand set before choosing any upload victim.
      * Observe old residency before publication, avoiding false same-step churn. */
-    if(!cuda_affinity_background_harvest())return 0;
+    if(!external && !cuda_affinity_background_harvest())return 0;
     if(layer+1u==layers) {
 #if defined(_WIN32)
         if(g_affinity_cap && (g_affinity_decoded+1u)%32u==0u)
@@ -45928,4 +45945,9 @@ extern "C" void ds4_gpu_external_decode_mode(int on) {
 extern "C" void ds4_gpu_set_external_expert_hook(ds4_gpu_external_expert_hook hook, void *user) {
     g_ds4x_expert_hook = hook; g_ds4x_expert_user = user;
 }
+extern "C" void ds4_gpu_set_external_residency_hook(ds4_gpu_external_residency_hook hook, void *user) {
+    g_ds4x_residency_hook = hook; g_ds4x_residency_user = user;
+}
+/* B5: the router bias is a decode-phase feature; the DLL only decodes. */
+extern "C" void ds4_gpu_external_affinity_phase(int decode) { g_stream_expert_cache_phase_decode = decode != 0; }
 #endif

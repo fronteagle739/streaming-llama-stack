@@ -130,6 +130,8 @@ public:
     // leaves the decode layout. Returns the slot count in *slots.
     bool grow_decode_cache(uint64_t bytes,uint32_t *slots,std::string &error);
     uint64_t decode_cache_slot_bytes() const;
+    // B5: tier[e]=1 for each of the layer's experts resident in L1 or L2.
+    bool decode_residency(uint32_t layer,uint8_t *tier,uint32_t experts) const;
     expert_cache_stats cache_stats() const;
     bool decode_layout() const;
     // DirectStorage bytes and transfer milliseconds of the stages acquired since start_request.

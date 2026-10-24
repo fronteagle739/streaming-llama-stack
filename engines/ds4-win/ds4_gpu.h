@@ -3906,5 +3906,9 @@ void ds4_gpu_external_decode_mode(int on);   /* unregistered weights refuse */
 typedef int (*ds4_gpu_external_expert_hook)(void *user, uint32_t layer, const int32_t *ids, uint32_t n,
     int32_t *slots, const char **gate_base, const char **up_base, const char **down_base, uint32_t *n_slots);
 void ds4_gpu_set_external_expert_hook(ds4_gpu_external_expert_hook hook, void *user);
+/* B5: residency of one layer's experts in the caller's cache (tier[e] = 1 resident). */
+typedef int (*ds4_gpu_external_residency_hook)(void *user, uint32_t layer, uint8_t *tier, uint32_t experts);
+void ds4_gpu_set_external_residency_hook(ds4_gpu_external_residency_hook hook, void *user);
+void ds4_gpu_external_affinity_phase(int decode);
 #endif
 #endif
