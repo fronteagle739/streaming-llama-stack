@@ -353,12 +353,21 @@ def _number(value):
     return value
 
 
+def parse_stop(value):
+    """ds4-win parse_stop: a string or an array whose string members are the stop
+    sequences (other members skipped); any other value is ignored; empty strings dropped."""
+    if isinstance(value, str):values = [value]
+    elif isinstance(value, list):values = [v for v in value if isinstance(v, str)]
+    else:return []
+    return [v for v in (cstr(v) for v in values) if v]
+
+
 def parse_request(body):
     """parse_chat_request for the DeepSeek-V4.1 syntax. Returns the fields that
     decide rendering and the reply protocol."""
     if not isinstance(body, dict):raise RenderRefused('invalid JSON request')
     messages = None;tools = '';tool_choice_none = False;model = None;max_tokens = None
-    got_thinking = False;thinking = True;effort = THINK_HIGH;stream = False;include_usage = False
+    got_thinking = False;thinking = True;effort = THINK_HIGH;stream = False;include_usage = False;stops = []
     for key, value in body.items():
         if key == 'messages':messages = parse_messages(value)
         elif key == 'tools':tools = parse_tools(value)
@@ -369,6 +378,7 @@ def parse_request(body):
         elif key in ('max_tokens', 'max_completion_tokens'):
             number = _number(value);max_tokens = 0 if not number >= 0 else int(min(number, 2**31 - 1))
         elif key in ('temperature', 'top_p', 'min_p', 'top_k', 'seed'):_number(value)
+        elif key == 'stop':stops = parse_stop(value)
         elif key == 'stream':
             if not isinstance(value, bool):raise RenderRefused('invalid JSON request')
             stream = value
@@ -399,7 +409,7 @@ def parse_request(body):
     think_mode = THINK_NONE if not thinking or effort == THINK_NONE else effort
     has_tools = bool(tools) and not tool_choice_none
     return dict(messages=messages, tool_schemas=tools if has_tools else '', has_tools=has_tools, think_mode=think_mode,
-                model=model, max_tokens=max_tokens, stream=stream, include_usage=include_usage)
+                model=model, max_tokens=max_tokens, stream=stream, include_usage=include_usage, stops=stops)
 
 
 # ---------------------------------------------------------------- DS4.1 render

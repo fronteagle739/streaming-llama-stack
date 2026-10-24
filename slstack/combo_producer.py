@@ -91,6 +91,8 @@ class ComboProducer:
         env=environment(cfg,'rtx-producer')
         if cfg.get('cache_affinity_spread_file') and not env.get('LLAMADECODE_DS4_SPREAD'):
             env['LLAMADECODE_DS4_SPREAD']=str(path(cfg['cache_affinity_spread_file']))   # B5 calibration (native's file)
+        self.cancel_path=self.directory/'decode.cancel'   # LLAMADECODE decode cancel (see cancel_decode)
+        env['LLAMADECODE_DECODE_CANCEL_FILE']=str(self.cancel_path)
         env['PATH']=os.pathsep.join([str(binary.parent),*[str(path(p)) for p in cfg.get('producer_library_directories',[])],env.get('PATH','')])
         self.started=time.monotonic()
         try:
@@ -172,6 +174,13 @@ class ComboProducer:
         returned last token (stop, or sampled at max_tokens) is not evaluated."""
         reply=self.process.request(self.command('decode',base=self.checkpoint,max_tokens=int(max_tokens),stop_tokens=[int(t) for t in stop_tokens]))
         self.checkpoint=reply['checkpoint'];return reply
+
+    def cancel_decode(self):
+        """From another thread while decode() runs: the producer stops at its next
+        token boundary, exactly as at max_tokens (reply cancelled=true; the last
+        returned token is not evaluated). It clears the file at every decode start."""
+        try:self.cancel_path.touch()
+        except OSError:pass
 
     def quality(self,value):
         """LLAMADECODE B5: the live quality-speed setting (0 = max quality, 1.36125 = max speed) for the
