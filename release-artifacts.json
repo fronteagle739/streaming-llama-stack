@@ -71,7 +71,7 @@
       "path": "examples/media_swap/swap-image.png",
       "sha256": "4ab9430e66288319466a58e9a3c4722351584ed57a8b85baa6130f080ea4f203",
       "media_type": "image/png",
-      "review": "Visually inspected: Anima 512x512 4-step image (red lighthouse on a rock, flat blue background) generated during the native media-swap proof. Pixel data only, metadata stripped; no text, paths or credentials."
+      "review": "Visually inspected: Anima 512x512 4-step image (red lighthouse on a rock, flat blue background) generated entirely from the stack during the native media-swap proof. Pixel data only, metadata stripped; no text, paths or credentials."
     }
   ]
 }

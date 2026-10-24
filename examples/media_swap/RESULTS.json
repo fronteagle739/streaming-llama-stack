@@ -1,9 +1,9 @@
 {
  "status": "PASS: second turn byte-identical after an image swap",
  "date": "2026-10-24",
- "stack_revision": "15bb1ed + DS4_METAL_DISABLE_V41_LAYER_PREFILL unset for ds4-win (78199fe)",
+ "stack_revision": "51d73ee",
  "method": "Native ds4-win only, ctx 8192, greedy (temperature 0, top_k 1, thinking disabled, 96-token cap). Control: turn 1 then turn 2 in one engine. Swap: turn 1, Engines.media(image) = /decode/checkpoint, /decode/export into parent-owned locked RAM, /decode/shutdown (graceful), Studio Anima image 512x512 4 steps, relaunch with the locked-RAM state and expert list restored, then turn 2.",
- "media_backend_note": "The image job used the real Studio checkout, its venv and its production weight-fetcher DLL: the stack's vendored Studio subset cannot import its media path yet.",
+ "media_backend_note": "Entirely from the stack: vendored Studio and cosmos_windows, the stack media venv and the stack-built slstack-weight-fetcher.dll. An earlier run that used the real Studio checkout also passed (save 1.8 s, image 28 s, restore 4.5 s).",
  "turn1_prompt_tokens": 2946,
  "control": {
   "turn1": {
@@ -60,9 +60,9 @@
    "timings": {
     "cache_n": 0,
     "prompt_n": 2946,
-    "prompt_ms": 17860.8352,
+    "prompt_ms": 18233.2387,
     "predicted_n": 21,
-    "predicted_ms": 4198.9406
+    "predicted_ms": 4049.8865
    }
   },
   "turn2": {
@@ -79,15 +79,15 @@
    "timings": {
     "cache_n": 2967,
     "prompt_n": 26,
-    "prompt_ms": 5870.4845,
+    "prompt_ms": 5724.6485,
     "predicted_n": 50,
-    "predicted_ms": 10751.2418
+    "predicted_ms": 10676.4778
    }
   },
   "swap_timing": {
-   "save_unload_s": 1.8439999999973224,
-   "media_s": 27.95300000000134,
-   "reload_restore_s": 4.5310000000026776
+   "save_unload_s": 2.7809999999954016,
+   "media_s": 13.296999999998661,
+   "reload_restore_s": 4.562000000005355
   },
   "media": {
    "arch": "anima-1.0",
@@ -96,19 +96,19 @@
  },
  "turn2_byte_identical": true,
  "restored_position": 2967,
- "expert_restore": "687 experts, 1.684 s, async",
+ "expert_restore": "687 experts, 1.709 s, async",
  "graceful_shutdowns": "every native exit logged DS4COMBO_NATIVE_GRACEFUL_SHUTDOWN_COMPLETE with exit 0",
  "leak_check": {
   "before": {
-   "available": 19207081984,
-   "commit": 21857071104,
-   "kernel_nonpaged": 1091284992,
+   "available": 19329318912,
+   "commit": 21645266944,
+   "kernel_nonpaged": 1020014592,
    "vram_used_mib": 592
   },
   "after": {
-   "available": 19261427712,
-   "commit": 21650608128,
-   "kernel_nonpaged": 1092472832,
+   "available": 19595505664,
+   "commit": 21417611264,
+   "kernel_nonpaged": 942567424,
    "vram_used_mib": 592
   }
  },
