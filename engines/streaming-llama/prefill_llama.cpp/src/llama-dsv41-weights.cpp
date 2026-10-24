@@ -549,7 +549,7 @@ bool llama_dsv41_weight_provider::release(std::string&error){return p->guard([&]
 void llama_dsv41_weight_provider::invalidate(){if(!p)return;std::lock_guard<std::mutex>lock(p->mutex);p->invalidate();}
 bool llama_dsv41_weight_provider::advance_decoded_engram(llama_dsv41::engram_history&history,
         const int32_t*tokens,size_t count,std::string&error){return p->guard([&]{
-    require(p->allocated&&!p->leased&&p->next==42&&count&&count<=128,
+    require(p->allocated&&!p->leased&&p->next==p->stage_count()&&count&&count<=128,
         "Decoded Engram history requires a released pass and1..128 evaluated tokens");p->identity();
     auto pending=history;std::array<llama_dsv41::engram_rows,128>rows{};std::string why;
     require(llama_dsv41::engram_hash(p->engram,pending,tokens,nullptr,count,rows.data(),why),
@@ -567,9 +567,11 @@ bool llama_dsv41_weight_provider::engram_tile(uint32_t index,llama_dsv41::engram
     // A prepared whole-prompt cache owns these immutable encoded rows already.
     // CPU decode may run during the preceding layer without leasing its weights.
     // The unbuffered file fallback retains the original exact layer lease.
+    // Engram layers 1 and 14: their (dense) stage id depends on the active layout.
+    const uint32_t engram_layer=index==0?1u:14u,engram_stage=p->decode_layout?1u+2u*engram_layer:engram_layer+1u;
     require(p->allocated&&index<2&&count&&count<=4096&&
-        ((p->engram_prompt&&p->next<=(index==0?2u:15u))||
-         (p->leased&&p->next==(index==0?2u:15u))),"Engram read has no prepared prompt cache or physical layer lease");p->identity();
+        ((p->engram_prompt&&p->next<=engram_stage)||
+         (p->leased&&p->next==engram_stage)),"Engram read has no prepared prompt cache or physical layer lease");p->identity();
     auto pending=history;std::vector<llama_dsv41::engram_rows>rows(count);std::string why;require(llama_dsv41::engram_hash(p->engram,pending,tokens,mask,count,rows.data(),why),"Native Engram hash failed");
     std::vector<uint32_t>ids(count*24);for(size_t t=0;t<count;++t)std::copy(rows[t][index].begin(),rows[t][index].end(),ids.begin()+t*24);
     std::vector<float>result(count*6144);
