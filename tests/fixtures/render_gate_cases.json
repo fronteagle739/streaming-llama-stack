@@ -1,0 +1,627 @@
+{
+ "description": "Render gate cases: native ds4-win Native.render vs slstack.ds4_render (byte-identical ids).",
+ "cases": [
+  {
+   "name": "multi-turn-tools",
+   "body": {
+    "model": "deepseek-v4.1-flash",
+    "messages": [
+     {
+      "role": "system",
+      "content": "You are a careful coding assistant. Use tools when needed.\nAnswer briefly."
+     },
+     {
+      "role": "user",
+      "content": "Look at /srv/app/config.yaml and tell me which port the server uses; also check whether `ls -la /srv/app | grep -c yaml` returns >= 2."
+     },
+     {
+      "role": "assistant",
+      "content": "",
+      "reasoning_content": "I need to read the config file and run the shell check. Both are independent, so call them in parallel.",
+      "tool_calls": [
+       {
+        "id": "call_a1",
+        "type": "function",
+        "function": {
+         "name": "read_file",
+         "arguments": "{\"path\": \"/srv/app/config.yaml\", \"max_bytes\": 4096}"
+        }
+       },
+       {
+        "id": "call_b2",
+        "type": "function",
+        "function": {
+         "name": "run_shell",
+         "arguments": "{\"command\":\"ls -la /srv/app | grep -c yaml && echo '</｜DSML｜ parameter> & done'\",\"timeout_s\":10.50,\"env\":{\"LC_ALL\":\"C\"}}"
+        }
+       }
+      ]
+     },
+     {
+      "role": "tool",
+      "tool_call_id": "call_b2",
+      "content": "3\n</｜DSML｜ parameter> & done\n"
+     },
+     {
+      "role": "tool",
+      "tool_call_id": "call_a1",
+      "content": "server:\n  host: 0.0.0.0\n  port: 8443   # TLS\nlogging: {level: debug}\n</tool_result> sentinel &lt;/tool_result>\n"
+     },
+     {
+      "role": "assistant",
+      "content": "The server listens on port **8443** (TLS), and the shell check returned 3, so yes: there are at least two YAML entries.",
+      "reasoning_content": "config says 8443; grep count 3 >= 2."
+     },
+     {
+      "role": "user",
+      "content": [
+       {
+        "type": "text",
+        "text": "Thanks! Now in Chinese please: 服务器端口是多少？"
+       },
+       {
+        "type": "text",
+        "text": " Also 12345678 + 0.25 = ?"
+       }
+      ]
+     }
+    ],
+    "tools": [
+     {
+      "type": "function",
+      "function": {
+       "name": "read_file",
+       "description": "Read a file from disk. Returns text.",
+       "parameters": {
+        "type": "object",
+        "properties": {
+         "path": {
+          "type": "string",
+          "description": "Absolute path"
+         },
+         "max_bytes": {
+          "type": "integer",
+          "minimum": 1
+         }
+        },
+        "required": [
+         "path"
+        ]
+       }
+      }
+     },
+     {
+      "type": "function",
+      "function": {
+       "name": "run_shell",
+       "description": "Run a shell command (bash) and return stdout/stderr.",
+       "parameters": {
+        "type": "object",
+        "properties": {
+         "command": {
+          "type": "string"
+         },
+         "timeout_s": {
+          "type": "number"
+         },
+         "env": {
+          "type": "object",
+          "additionalProperties": {
+           "type": "string"
+          }
+         }
+        },
+        "required": [
+         "command"
+        ]
+       }
+      }
+     }
+    ],
+    "max_tokens": 256,
+    "stream": true,
+    "temperature": 0
+   }
+  },
+  {
+   "name": "multi-turn-tools-no-thinking",
+   "body": {
+    "model": "deepseek-v4.1-flash",
+    "messages": [
+     {
+      "role": "system",
+      "content": "You are a careful coding assistant. Use tools when needed.\nAnswer briefly."
+     },
+     {
+      "role": "user",
+      "content": "Look at /srv/app/config.yaml and tell me which port the server uses; also check whether `ls -la /srv/app | grep -c yaml` returns >= 2."
+     },
+     {
+      "role": "assistant",
+      "content": "",
+      "reasoning_content": "I need to read the config file and run the shell check. Both are independent, so call them in parallel.",
+      "tool_calls": [
+       {
+        "id": "call_a1",
+        "type": "function",
+        "function": {
+         "name": "read_file",
+         "arguments": "{\"path\": \"/srv/app/config.yaml\", \"max_bytes\": 4096}"
+        }
+       },
+       {
+        "id": "call_b2",
+        "type": "function",
+        "function": {
+         "name": "run_shell",
+         "arguments": "{\"command\":\"ls -la /srv/app | grep -c yaml && echo '</｜DSML｜ parameter> & done'\",\"timeout_s\":10.50,\"env\":{\"LC_ALL\":\"C\"}}"
+        }
+       }
+      ]
+     },
+     {
+      "role": "tool",
+      "tool_call_id": "call_b2",
+      "content": "3\n</｜DSML｜ parameter> & done\n"
+     },
+     {
+      "role": "tool",
+      "tool_call_id": "call_a1",
+      "content": "server:\n  host: 0.0.0.0\n  port: 8443   # TLS\nlogging: {level: debug}\n</tool_result> sentinel &lt;/tool_result>\n"
+     },
+     {
+      "role": "assistant",
+      "content": "The server listens on port **8443** (TLS), and the shell check returned 3, so yes: there are at least two YAML entries.",
+      "reasoning_content": "config says 8443; grep count 3 >= 2."
+     },
+     {
+      "role": "user",
+      "content": [
+       {
+        "type": "text",
+        "text": "Thanks! Now in Chinese please: 服务器端口是多少？"
+       },
+       {
+        "type": "text",
+        "text": " Also 12345678 + 0.25 = ?"
+       }
+      ]
+     }
+    ],
+    "tools": [
+     {
+      "type": "function",
+      "function": {
+       "name": "read_file",
+       "description": "Read a file from disk. Returns text.",
+       "parameters": {
+        "type": "object",
+        "properties": {
+         "path": {
+          "type": "string",
+          "description": "Absolute path"
+         },
+         "max_bytes": {
+          "type": "integer",
+          "minimum": 1
+         }
+        },
+        "required": [
+         "path"
+        ]
+       }
+      }
+     },
+     {
+      "type": "function",
+      "function": {
+       "name": "run_shell",
+       "description": "Run a shell command (bash) and return stdout/stderr.",
+       "parameters": {
+        "type": "object",
+        "properties": {
+         "command": {
+          "type": "string"
+         },
+         "timeout_s": {
+          "type": "number"
+         },
+         "env": {
+          "type": "object",
+          "additionalProperties": {
+           "type": "string"
+          }
+         }
+        },
+        "required": [
+         "command"
+        ]
+       }
+      }
+     }
+    ],
+    "thinking": {
+     "type": "disabled"
+    },
+    "max_tokens": 64
+   }
+  },
+  {
+   "name": "tools-choice-none-effort-max",
+   "body": {
+    "model": "deepseek-v4.1-flash",
+    "messages": [
+     {
+      "role": "system",
+      "content": "You are a careful coding assistant. Use tools when needed.\nAnswer briefly."
+     },
+     {
+      "role": "user",
+      "content": "Look at /srv/app/config.yaml and tell me which port the server uses; also check whether `ls -la /srv/app | grep -c yaml` returns >= 2."
+     },
+     {
+      "role": "assistant",
+      "content": "",
+      "reasoning_content": "I need to read the config file and run the shell check. Both are independent, so call them in parallel.",
+      "tool_calls": [
+       {
+        "id": "call_a1",
+        "type": "function",
+        "function": {
+         "name": "read_file",
+         "arguments": "{\"path\": \"/srv/app/config.yaml\", \"max_bytes\": 4096}"
+        }
+       },
+       {
+        "id": "call_b2",
+        "type": "function",
+        "function": {
+         "name": "run_shell",
+         "arguments": "{\"command\":\"ls -la /srv/app | grep -c yaml && echo '</｜DSML｜ parameter> & done'\",\"timeout_s\":10.50,\"env\":{\"LC_ALL\":\"C\"}}"
+        }
+       }
+      ]
+     },
+     {
+      "role": "tool",
+      "tool_call_id": "call_b2",
+      "content": "3\n</｜DSML｜ parameter> & done\n"
+     },
+     {
+      "role": "tool",
+      "tool_call_id": "call_a1",
+      "content": "server:\n  host: 0.0.0.0\n  port: 8443   # TLS\nlogging: {level: debug}\n</tool_result> sentinel &lt;/tool_result>\n"
+     },
+     {
+      "role": "assistant",
+      "content": "The server listens on port **8443** (TLS), and the shell check returned 3, so yes: there are at least two YAML entries.",
+      "reasoning_content": "config says 8443; grep count 3 >= 2."
+     },
+     {
+      "role": "user",
+      "content": [
+       {
+        "type": "text",
+        "text": "Thanks! Now in Chinese please: 服务器端口是多少？"
+       },
+       {
+        "type": "text",
+        "text": " Also 12345678 + 0.25 = ?"
+       }
+      ]
+     }
+    ],
+    "tools": [
+     {
+      "type": "function",
+      "function": {
+       "name": "read_file",
+       "description": "Read a file from disk. Returns text.",
+       "parameters": {
+        "type": "object",
+        "properties": {
+         "path": {
+          "type": "string",
+          "description": "Absolute path"
+         },
+         "max_bytes": {
+          "type": "integer",
+          "minimum": 1
+         }
+        },
+        "required": [
+         "path"
+        ]
+       }
+      }
+     },
+     {
+      "type": "function",
+      "function": {
+       "name": "run_shell",
+       "description": "Run a shell command (bash) and return stdout/stderr.",
+       "parameters": {
+        "type": "object",
+        "properties": {
+         "command": {
+          "type": "string"
+         },
+         "timeout_s": {
+          "type": "number"
+         },
+         "env": {
+          "type": "object",
+          "additionalProperties": {
+           "type": "string"
+          }
+         }
+        },
+        "required": [
+         "command"
+        ]
+       }
+      }
+     }
+    ],
+    "tool_choice": "none",
+    "reasoning_effort": "max",
+    "max_tokens": 64
+   }
+  },
+  {
+   "name": "reasoning-history-off",
+   "body": {
+    "model": "deepseek-v4.1-flash",
+    "messages": [
+     {
+      "role": "system",
+      "content": "You are a careful coding assistant. Use tools when needed.\nAnswer briefly."
+     },
+     {
+      "role": "user",
+      "content": "Look at /srv/app/config.yaml and tell me which port the server uses; also check whether `ls -la /srv/app | grep -c yaml` returns >= 2."
+     },
+     {
+      "role": "assistant",
+      "content": "",
+      "reasoning_content": "I need to read the config file and run the shell check. Both are independent, so call them in parallel.",
+      "tool_calls": [
+       {
+        "id": "call_a1",
+        "type": "function",
+        "function": {
+         "name": "read_file",
+         "arguments": "{\"path\": \"/srv/app/config.yaml\", \"max_bytes\": 4096}"
+        }
+       },
+       {
+        "id": "call_b2",
+        "type": "function",
+        "function": {
+         "name": "run_shell",
+         "arguments": "{\"command\":\"ls -la /srv/app | grep -c yaml && echo '</｜DSML｜ parameter> & done'\",\"timeout_s\":10.50,\"env\":{\"LC_ALL\":\"C\"}}"
+        }
+       }
+      ]
+     },
+     {
+      "role": "tool",
+      "tool_call_id": "call_b2",
+      "content": "3\n</｜DSML｜ parameter> & done\n"
+     },
+     {
+      "role": "tool",
+      "tool_call_id": "call_a1",
+      "content": "server:\n  host: 0.0.0.0\n  port: 8443   # TLS\nlogging: {level: debug}\n</tool_result> sentinel &lt;/tool_result>\n"
+     },
+     {
+      "role": "assistant",
+      "content": "The server listens on port **8443** (TLS), and the shell check returned 3, so yes: there are at least two YAML entries.",
+      "reasoning_content": "config says 8443; grep count 3 >= 2."
+     },
+     {
+      "role": "user",
+      "content": [
+       {
+        "type": "text",
+        "text": "Thanks! Now in Chinese please: 服务器端口是多少？"
+       },
+       {
+        "type": "text",
+        "text": " Also 12345678 + 0.25 = ?"
+       }
+      ]
+     }
+    ],
+    "tools": [
+     {
+      "type": "function",
+      "function": {
+       "name": "read_file",
+       "description": "Read a file from disk. Returns text.",
+       "parameters": {
+        "type": "object",
+        "properties": {
+         "path": {
+          "type": "string",
+          "description": "Absolute path"
+         },
+         "max_bytes": {
+          "type": "integer",
+          "minimum": 1
+         }
+        },
+        "required": [
+         "path"
+        ]
+       }
+      }
+     },
+     {
+      "type": "function",
+      "function": {
+       "name": "run_shell",
+       "description": "Run a shell command (bash) and return stdout/stderr.",
+       "parameters": {
+        "type": "object",
+        "properties": {
+         "command": {
+          "type": "string"
+         },
+         "timeout_s": {
+          "type": "number"
+         },
+         "env": {
+          "type": "object",
+          "additionalProperties": {
+           "type": "string"
+          }
+         }
+        },
+        "required": [
+         "command"
+        ]
+       }
+      }
+     }
+    ],
+    "include_previous_reasoning": false,
+    "max_tokens": 64
+   }
+  },
+  {
+   "name": "tool-call-arguments-object-and-bad-json",
+   "body": {
+    "model": "deepseek-v4.1-flash",
+    "messages": [
+     {
+      "role": "developer",
+      "content": "dev rules"
+     },
+     {
+      "role": "user",
+      "content": "go"
+     },
+     {
+      "role": "assistant",
+      "content": "Calling.",
+      "tool_calls": [
+       {
+        "id": "x1",
+        "type": "function",
+        "function": {
+         "name": "run_shell",
+         "arguments": {
+          "command": "echo \"hi\"\tthere",
+          "timeout_s": 1000.0
+         }
+        }
+       },
+       {
+        "id": "x2",
+        "type": "function",
+        "function": {
+         "name": "read_file",
+         "arguments": "not json {"
+        }
+       }
+      ]
+     },
+     {
+      "role": "tool",
+      "tool_call_id": "x2",
+      "content": null
+     },
+     {
+      "role": "function",
+      "tool_call_id": "x1",
+      "content": "ok"
+     },
+     {
+      "role": "system",
+      "content": "late system note"
+     },
+     {
+      "role": "user",
+      "content": "   \n\n  indented\tcode:\n    def f(x):\n        return x**2  # ok\n\r\n"
+     }
+    ],
+    "tools": [
+     {
+      "type": "function",
+      "function": {
+       "name": "read_file",
+       "description": "Read a file from disk. Returns text.",
+       "parameters": {
+        "type": "object",
+        "properties": {
+         "path": {
+          "type": "string",
+          "description": "Absolute path"
+         },
+         "max_bytes": {
+          "type": "integer",
+          "minimum": 1
+         }
+        },
+        "required": [
+         "path"
+        ]
+       }
+      }
+     },
+     {
+      "type": "function",
+      "function": {
+       "name": "run_shell",
+       "description": "Run a shell command (bash) and return stdout/stderr.",
+       "parameters": {
+        "type": "object",
+        "properties": {
+         "command": {
+          "type": "string"
+         },
+         "timeout_s": {
+          "type": "number"
+         },
+         "env": {
+          "type": "object",
+          "additionalProperties": {
+           "type": "string"
+          }
+         }
+        },
+        "required": [
+         "command"
+        ]
+       }
+      }
+     }
+    ],
+    "max_tokens": 64
+   }
+  },
+  {
+   "name": "plain-chat-reasoner-alias",
+   "body": {
+    "model": "deepseek-reasoner",
+    "messages": [
+     {
+      "role": "user",
+      "content": "Ünïcödé — “quotes” … emoji 😀 and ｜fullwidth｜ bars, <think> literal </think>, <｜User｜> literal."
+     },
+     {
+      "role": "assistant",
+      "content": "Done.",
+      "reasoning_content": null
+     },
+     {
+      "role": "user",
+      "content": "again"
+     }
+    ],
+    "max_tokens": 64
+   }
+  }
+ ]
+}

@@ -1,8 +1,13 @@
 // Included by the Windows producer after its bounded native-file/hash helpers.
 #include "live-session-checkpoint.h"
 #include "llama-dsv41-artifact.h"
+#include "llama-dsv41-layer-log.h"
 #include <thread>
+#include <filesystem>
+#include <optional>
 #include <io.h>
+#include <fcntl.h>
+#include <sys/stat.h>
 
 namespace {
 class session_output_redirect {
@@ -52,34 +57,292 @@ public:
     }
     void send(const json&j){const auto text=j.dump()+"\n";require(text.size()<=65536,"Session reply metadata exceeds64KiB");write(text.data(),text.size());}
 };
+}
+// DS4COMBO fast switch: the base reader needs session_pipe and is used by resume.
+#include "combo-base.inc"
+namespace {
 
+using decode_quiet_scope=llama_dsv41_decode_quiet_scope; // per-layer logs opt-in during decode steps
+// LLAMADECODE ds4-decode: LLAMADECODE_DS4_DECODE=1 runs each decode step with
+// ds4-win's own single-token decode (ds4-decode.dll, built from the stack's
+// engines/ds4-win with DS4_EXTERNAL_DECODE) on this owner's canonical state,
+// resident weights and B2 expert cache. Prefill stays on the executor.
+// LLAMADECODE cache growth: once the first one-token step has sized the
+// decode graph, the VRAM freed by the decode-sized plan (minus the decode
+// graph, the 1-row hidden bank and a growth margin; capped by the device's
+// free memory less a floor) becomes the L2 expert tier. LLAMADECODE_L2=0 disables.
+void local_video_memory(uint64_t&budget,uint64_t&usage){
+    budget=usage=0;IDXGIFactory4*factory=nullptr;
+    if(FAILED(CreateDXGIFactory1(__uuidof(IDXGIFactory4),reinterpret_cast<void**>(&factory)))||!factory)return;
+    uint64_t best=0;
+    for(UINT i=0;;++i){IDXGIAdapter1*a=nullptr;if(factory->EnumAdapters1(i,&a)==DXGI_ERROR_NOT_FOUND)break;
+        DXGI_ADAPTER_DESC1 d{};a->GetDesc1(&d);IDXGIAdapter3*a3=nullptr;
+        if(d.DedicatedVideoMemory>best&&SUCCEEDED(a->QueryInterface(__uuidof(IDXGIAdapter3),reinterpret_cast<void**>(&a3)))){
+            DXGI_QUERY_VIDEO_MEMORY_INFO info{};
+            if(SUCCEEDED(a3->QueryVideoMemoryInfo(0,DXGI_MEMORY_SEGMENT_GROUP_LOCAL,&info))){best=d.DedicatedVideoMemory;budget=info.Budget;usage=info.CurrentUsage;}
+            a3->Release();}
+        a->Release();}
+    factory->Release();
+}
+// Physical device memory from NVML (the driver's own count; WDDM/CUDA free
+// double-counts the imported D3D12 banks). Selected by the job's GPU UUID.
+bool nvml_free_bytes(uint64_t&free_bytes,uint64_t&total_bytes){
+    free_bytes=total_bytes=0;
+    static HMODULE nvml=LoadLibraryExW(L"nvml.dll",nullptr,LOAD_LIBRARY_SEARCH_SYSTEM32);
+    if(!nvml)return false;
+    struct memory{unsigned long long total,free,used;};
+    using init_t=int(*)();using by_uuid_t=int(*)(const char*,void**);using info_t=int(*)(void*,memory*);
+    static auto init=reinterpret_cast<init_t>(GetProcAddress(nvml,"nvmlInit_v2"));
+    static auto by_uuid=reinterpret_cast<by_uuid_t>(GetProcAddress(nvml,"nvmlDeviceGetHandleByUUID"));
+    static auto info=reinterpret_cast<info_t>(GetProcAddress(nvml,"nvmlDeviceGetMemoryInfo"));
+    static const int ready=init?init():-1;
+    const char*uuid=std::getenv("CUDA_VISIBLE_DEVICES");
+    if(ready!=0||!by_uuid||!info||!uuid||std::strncmp(uuid,"GPU-",4))return false;
+    void*device=nullptr;memory m{};
+    if(by_uuid(uuid,&device)!=0||info(device,&m)!=0)return false;
+    free_bytes=m.free;total_bytes=m.total;return true;
+}
+// Physical VRAM reserve kept free beside the L2 (LLAMADECODE_VRAM_RESERVE_MIB, default 512 MiB).
+uint64_t decode_vram_reserve(){static const uint64_t r=[]{const char*e=std::getenv("LLAMADECODE_VRAM_RESERVE_MIB");
+    const long v=e&&*e?std::strtol(e,nullptr,10):512; /* measured: no transient dip below the post-L2 steady free (5 ms NVML, 43K run) */return uint64_t(std::max<long>(256,std::min<long>(v,8192)))<<20;}();return r;}
+// Headroom measurement: a 5 ms NVML sampler records the minimum free VRAM
+// (transient cuBLAS/graph/WDDM/other-process use) once the L2 is filled.
+struct vram_sampler{
+    std::atomic<bool>stop{false},started{false};std::atomic<uint64_t>min_free{~0ull},samples{0};std::thread worker;
+    void start(){bool no=false;if(!started.compare_exchange_strong(no,true))return;
+        worker=std::thread([this]{while(!stop.load()){uint64_t f=0,t=0;if(nvml_free_bytes(f,t)){uint64_t m=min_free.load();while(f<m&&!min_free.compare_exchange_weak(m,f)){}++samples;}
+            std::this_thread::sleep_for(std::chrono::milliseconds(5));}});}
+    ~vram_sampler(){stop.store(true);if(worker.joinable())worker.join();}
+};
+vram_sampler&decode_vram_sampler(){static vram_sampler s;return s;}
+// Runtime guard: refuse loudly (graceful error) if physical free VRAM falls
+// below the reserve while the decode-sized plan holds the L2.
+void check_decode_vram_reserve(){
+    uint64_t f=0,t=0;if(!nvml_free_bytes(f,t))return;
+    auto&s=decode_vram_sampler();
+    if(s.started.load()){
+        // WDDM demotion watch: DXGI local budget/usage, non-local (shared) usage, system RAM.
+        uint64_t budget=0,usage=0,shared=0;local_video_memory(budget,usage);
+        {IDXGIFactory4*fa=nullptr;if(SUCCEEDED(CreateDXGIFactory1(__uuidof(IDXGIFactory4),reinterpret_cast<void**>(&fa)))&&fa){uint64_t best=0;
+            for(UINT i=0;;++i){IDXGIAdapter1*a=nullptr;if(fa->EnumAdapters1(i,&a)==DXGI_ERROR_NOT_FOUND)break;DXGI_ADAPTER_DESC1 d{};a->GetDesc1(&d);IDXGIAdapter3*a3=nullptr;
+                if(d.DedicatedVideoMemory>best&&SUCCEEDED(a->QueryInterface(__uuidof(IDXGIAdapter3),reinterpret_cast<void**>(&a3)))){DXGI_QUERY_VIDEO_MEMORY_INFO nl{};
+                    if(SUCCEEDED(a3->QueryVideoMemoryInfo(0,DXGI_MEMORY_SEGMENT_GROUP_NON_LOCAL,&nl))){best=d.DedicatedVideoMemory;shared=nl.CurrentUsage;}a3->Release();}
+                a->Release();}fa->Release();}}
+        MEMORYSTATUSEX ms{};ms.dwLength=sizeof(ms);GlobalMemoryStatusEx(&ms);
+        std::fprintf(stderr,"LLAMADECODE_VRAM_HEADROOM nvml_free_now=%llu min_free_since_l2=%llu samples=%llu reserve=%llu dxgi_local_budget=%llu dxgi_local_usage=%llu dxgi_shared_usage=%llu ram_avail=%llu\n",
+            (unsigned long long)f,(unsigned long long)s.min_free.load(),(unsigned long long)s.samples.load(),(unsigned long long)decode_vram_reserve(),
+            (unsigned long long)budget,(unsigned long long)usage,(unsigned long long)shared,(unsigned long long)ms.ullAvailPhys);}
+    if(f<decode_vram_reserve()){std::fprintf(stderr,"LLAMADECODE_VRAM_RESERVE_BREACH nvml_free=%llu reserve=%llu\n",(unsigned long long)f,(unsigned long long)decode_vram_reserve());std::fflush(stderr);
+        throw std::runtime_error("Physical free VRAM fell below the decode VRAM reserve");}
+}
+void grow_decode_l2(llama_dsv41_sweep&sweep,const llama_dsv41_fixed_storage*fixed,ggml_backend_t backend){
+    static const bool on=[]{const char*e=std::getenv("LLAMADECODE_L2");return !(e&&e[0]=='0'&&!e[1]);}();
+    if(!on||!fixed||!fixed->decode_compact)return;
+    auto*provider=sweep.provider_for_external_decode();
+    if(!provider->decode_layout()||provider->cache_stats().l2_slots)return;
+    // Owner rule: keep a 2 GiB physical reserve (NVML free already excludes
+    // Studio's idle context) plus a decode-graph growth margin.
+    const uint64_t margin=768ull<<20,floor=decode_vram_reserve();
+    const uint64_t freed=fixed->full_graph_reserve+fixed->full_hidden_bytes;
+    const uint64_t now=ggml_gallocr_get_buffer_size(fixed->graph.get(),0)+fixed->hidden_bytes;
+    (void)freed;(void)now;uint64_t offer=~0ull;
+    size_t free_bytes=0,total=0;ggml_backend_cuda_get_device_memory(0,&free_bytes,&total);(void)backend; // the job sees one device
+    // WDDM: the authoritative no-demotion room is this process's local-segment
+    // budget minus its current usage (DXGI), on the largest adapter (the 5090).
+    // WDDM's process budget and CUDA's free count the imported D3D12 banks
+    // twice (diagnostic only). The cap is NVML's physical free memory, and the
+    // offer never exceeds what the decode-sized plan freed from the job's own
+    // startup-admitted plan; no NVML reading means no L2.
+    uint64_t budget=0,usage=0;local_video_memory(budget,usage);
+    uint64_t nv_free=0,nv_total=0;const bool nv=nvml_free_bytes(nv_free,nv_total);
+    offer=nv?std::min<uint64_t>(offer,nv_free>floor+margin?nv_free-floor-margin:0):0;
+    uint32_t slots=0;std::string error;success(provider->grow_decode_cache(offer,&slots,error),error);
+    if(slots)decode_vram_sampler().start();
+    uint64_t nv_after=0,nv_total_after=0;(void)nvml_free_bytes(nv_after,nv_total_after);
+    std::fprintf(stderr,"LLAMADECODE_L2_OFFER freed=%llu decode_now=%llu cuda_free=%llu cuda_total=%llu dxgi_budget=%llu dxgi_usage=%llu nvml_free=%llu nvml_total=%llu nvml_free_after=%llu offered=%llu slots=%u\n",(unsigned long long)freed,
+        (unsigned long long)now,(unsigned long long)free_bytes,(unsigned long long)total,(unsigned long long)budget,(unsigned long long)usage,
+        (unsigned long long)nv_free,(unsigned long long)nv_total,(unsigned long long)nv_after,(unsigned long long)offer,slots);std::fflush(stderr);
+}
+bool ds4_decode_enabled(){static const bool on=[]{const char*e=std::getenv("LLAMADECODE_DS4_DECODE");return e&&e[0]=='1'&&!e[1];}();return on;}
+// LLAMADECODE append-via-decode: with the ds4 decode on, a live prefill of at
+// most LLAMADECODE_APPEND_DECODE_MAX tokens (default 96 = measured crossover, 0 = off) is appended
+// one token at a time through the ds4 decode step instead of a full weight sweep.
+uint64_t append_decode_max(){static const uint64_t n=[]{const char*e=std::getenv("LLAMADECODE_APPEND_DECODE_MAX");
+    return e&&*e?uint64_t(std::max<long long>(0,std::min<long long>(std::strtoll(e,nullptr,10),4096))):uint64_t(96);}();return n;} /* measured crossover: 13-token sweep 17.4 s / ds4 step ~0.163 s = ~107 tokens; 96 keeps margin */
+// LLAMADECODE decode cancel: the client creates LLAMADECODE_DECODE_CANCEL_FILE
+// while a decode op runs; the loop stops at the next token boundary exactly as at
+// max_tokens (the last sampled token is returned, not evaluated). Cleared at
+// every decode start and after a cancel.
+const std::wstring&decode_cancel_file(){static const std::wstring p=[]{const char*e=std::getenv("LLAMADECODE_DECODE_CANCEL_FILE");
+    return e&&*e?std::filesystem::u8path(e).wstring():std::wstring();}();return p;}
+bool decode_cancel_requested(){const auto&p=decode_cancel_file();return !p.empty()&&GetFileAttributesW(p.c_str())!=INVALID_FILE_ATTRIBUTES;}
+void clear_decode_cancel(){const auto&p=decode_cancel_file();if(!p.empty())DeleteFileW(p.c_str());}
+struct ds4_external {
+    HMODULE module=nullptr;bool open=false;
+    int(*x_open)(const char*,uint32_t,char*,size_t)=nullptr;const void*(*x_map)()=nullptr;
+    int(*x_register)(uint64_t,uint64_t,void*)=nullptr;
+    int(*x_bind)(void*const*,void*const*,void*const*,const uint32_t*,void*const*,void*const*)=nullptr;
+    void(*x_hook)(int(*)(void*,uint32_t,const int32_t*,uint32_t,int32_t*,const char**,const char**,const char**,uint32_t*),void*)=nullptr;
+    int(*x_decode)(int,uint32_t,const int32_t*,uint32_t,float*)=nullptr;void(*x_close)()=nullptr;
+    int(*x_affinity)(float,uint32_t,uint32_t,const char*,int(*)(void*,uint32_t,uint8_t*,uint32_t),void*)=nullptr;
+    llama_dsv41_weight_provider*provider=nullptr;uint64_t registered=0,registered_bytes=0;
+    float quality=-1.f; // live quality-speed mean (session op); <0 = LLAMADECODE_DS4_BIAS / off
+    static int residency_hook(void*user,uint32_t layer,uint8_t*tier,uint32_t experts){
+        auto*self=static_cast<ds4_external*>(user);return self->provider&&self->provider->decode_residency(layer,tier,experts)?1:0;}
+    static int expert_hook(void*user,uint32_t layer,const int32_t*ids,uint32_t n,int32_t*slots,const char**g,const char**u,const char**d,uint32_t*count){
+        auto*self=static_cast<ds4_external*>(user);std::string why;
+        if(!self->provider||!self->provider->external_expert_slots(layer,ids,n,slots,g,u,d,count,nullptr,why)){
+            std::fprintf(stderr,"LLAMADECODE_DS4X_SLOTS_FAILED layer=%u reason=%s\n",layer,why.c_str());return 0;}
+        return 1;
+    }
+    template<class F>void bind(F&f,const char*name){f=reinterpret_cast<F>(GetProcAddress(module,name));require(f,"ds4-decode.dll export missing");}
+    void load(){
+        if(module)return;
+        auto dll=executable().parent_path()/L"ds4-decode.dll";
+        module=LoadLibraryExW(dll.c_str(),nullptr,LOAD_LIBRARY_SEARCH_DLL_LOAD_DIR|LOAD_LIBRARY_SEARCH_DEFAULT_DIRS);
+        require(module,"Cannot load ds4-decode.dll beside the producer");
+        bind(x_open,"ds4x_open");bind(x_map,"ds4x_model_map");bind(x_register,"ds4x_register_weight");bind(x_bind,"ds4x_bind_state");
+        bind(x_hook,"ds4x_set_expert_hook");bind(x_decode,"ds4x_decode");bind(x_close,"ds4x_close");bind(x_affinity,"ds4x_set_affinity");
+    }
+    // (Re)prepare on the current owner: decode layout, resident weights
+    // registered at their device addresses, state views, expert hook.
+    void prepare(llama_dsv41_sweep&sweep,const llama_dsv41_weight_provider::config&weights,uint32_t context){
+        load();std::string error;success(sweep.compact_for_external_decode(error),error);
+        provider=sweep.provider_for_external_decode();
+        if(!provider->decode_layout()){
+            if(open){x_close();open=false;}   // banks were rebuilt by a prefill pass: re-register everything
+            auto decode_weights=weights;decode_weights.decode_layout=true;
+            success(provider->prepare_external_decode(decode_weights,error),error);
+        }
+        if(!open){
+            size_t free_before=0,free_after=0,total=0;ggml_backend_cuda_get_device_memory(0,&free_before,&total);
+            char why[512]{};require(x_open(weights.model_path.c_str(),context,why,sizeof(why))==1,why[0]?why:"ds4x_open failed");open=true;
+            ggml_backend_cuda_get_device_memory(0,&free_after,&total);
+            std::fprintf(stderr,"LLAMADECODE_DS4X_DEVICE_DELTA bytes=%lld free_before=%llu free_after=%llu\n",(long long)free_before-(long long)free_after,
+                (unsigned long long)free_before,(unsigned long long)free_after);std::fflush(stderr);
+            registered=registered_bytes=0;
+            success(provider->decode_resident_tensors([&](uint64_t offset,uint64_t bytes,void*device){
+                if(!x_register(offset,bytes,device))return false;++registered;registered_bytes+=bytes;return true;},error),error);
+        }
+        llama_dsv41_sweep::device_state state;success(sweep.device_state_views(state,error),error);
+        require(x_bind(state.raw.data(),state.compressed.data(),state.index.data(),state.rows.data(),state.pool_kv.data(),state.pool_score.data())==1,
+            "ds4x_bind_state refused the canonical state");
+        x_hook(&expert_hook,this);
+        // B5: LLAMADECODE_DS4_BIAS=<quality-speed mean> enables ds4-win's own
+        // cache-affinity bias on this cache (selection only). Spread file and
+        // warmup/ramp follow the native engine (DS4_CACHE_AFFINITY_*).
+        const char*b=std::getenv("LLAMADECODE_DS4_BIAS");
+        if(quality>=0.f||b){
+            const float mean=quality>=0.f?quality:std::strtof(b,nullptr);const char*spread=std::getenv("LLAMADECODE_DS4_SPREAD");
+            const char*w=std::getenv("DS4_CACHE_AFFINITY_WARMUP_TOKENS");const char*r=std::getenv("DS4_CACHE_AFFINITY_RAMP_TOKENS");
+            require(x_affinity(mean,w?uint32_t(std::strtoul(w,nullptr,10)):100u,r?uint32_t(std::strtoul(r,nullptr,10)):8u,spread,&residency_hook,this)==1,
+                "ds4x_set_affinity refused the bias configuration");
+        }
+        std::fprintf(stderr,"LLAMADECODE_DS4X_READY registered_tensors=%llu registered_bytes=%llu\n",(unsigned long long)registered,(unsigned long long)registered_bytes);
+    }
+    void step(llama_dsv41_sweep&sweep,ggml_backend_t backend,int32_t token,uint32_t position){
+        std::string error;std::array<int32_t,3>tail{};success(sweep.engram_tail(tail,error),error);
+        std::vector<float>logits(129280);
+        ggml_backend_synchronize(backend);
+        if(position%16==0)check_decode_vram_reserve();
+        double f0[4]{};uint64_t r0=0,b0=0;wf_extent_fetch_stats(f0,&r0,&b0);
+        const auto before=provider->cache_stats();const auto started=std::chrono::steady_clock::now();
+        require(x_decode(token,position,tail.data(),3,logits.data())==1,"ds4-win decode step failed");
+        const double decode_ms=std::chrono::duration<double,std::milli>(std::chrono::steady_clock::now()-started).count();
+        success(sweep.commit_external_token(token,logits,error),error);
+        const auto after=provider->cache_stats();double f1[4]{};uint64_t r1=0,b1=0;wf_extent_fetch_stats(f1,&r1,&b1);
+        std::fprintf(stderr,"LLAMADECODE_DS4X_TOKEN position=%u decode_ms=%.3f ds_bytes=%llu ds_ms=%.3f l1_hits=%llu l2_hits=%llu misses=%llu l1_slots=%u l2_slots=%u ds_submit_ms=%.3f ds_fence_ms=%.3f ds_verify_ms=%.3f ds_cuda_ms=%.3f ds_requests=%llu ds_batches=%llu\n",position,decode_ms,
+            (unsigned long long)(after.fetched_bytes-before.fetched_bytes),after.fetch_ms-before.fetch_ms,(unsigned long long)(after.hits-before.hits),
+            (unsigned long long)(after.l2_hits-before.l2_hits),(unsigned long long)(after.misses-before.misses),after.slots,after.l2_slots,
+            f1[0]-f0[0],f1[1]-f0[1],f1[2]-f0[2],f1[3]-f0[3],(unsigned long long)(r1-r0),(unsigned long long)(b1-b0));
+    }
+    // The DLL stays mapped until process exit (never FreeLibrary): no ds4 code may
+    // be unmapped under a thread or CUDA callback it started.
+    ~ds4_external(){if(open&&x_close){x_hook(nullptr,nullptr);x_close();open=false;std::fprintf(stderr,"LLAMADECODE_DS4X_CLOSED\n");std::fflush(stderr);}}
+};
+// LLAMADECODE: decode steps use the routed-expert layout (B1). The explicit
+// diagnostic LLAMADECODE_DECODE_LAYOUT=0 runs them on the whole-layer B0 layout.
+bool routed_decode_layout(){static const bool on=[]{const char*e=std::getenv("LLAMADECODE_DECODE_LAYOUT");
+    if(e&&e[0]=='0'&&!e[1]){std::fprintf(stderr,"LLAMADECODE_DECODE_LAYOUT=0 whole-layer B0 decode (diagnostic)\n");return false;}return true;}();return on;}
 void run_live_session(std::unique_ptr<llama_dsv41_sweep>&sweep,
         const llama_dsv41_weight_provider::config&weights,const llama_dsv41_sweep::config&options,
-        const std::string&session,uint64_t timeout_ms,uint32_t capacity,HANDLE output){
+        const std::string&session,uint64_t timeout_ms,uint32_t capacity,HANDLE output,uint64_t owner_epoch=0){
     using namespace llama_dsv41;using dsv41_live::checkpoint;
-    require(sweep&&sweep->ready()&&options.fixed&&options.stateful_chunks&&options.capture_dspark,
-        "Persistent session requires completed fixed DSpark stateful owner");
+    require(sweep&&sweep->ready()&&options.fixed&&options.stateful_chunks,
+        "Persistent session requires a completed fixed mode1/3 stateful owner");
     require(capacity&&capacity<=49152&&options.fixed->tokens==capacity,"Session chunk reservation differs from fixed owner");
-    session_pipe io(timeout_ms,output);dsv41_live::sequence_guard guard(session,model_sha);
+    session_pipe io(timeout_ms,output);dsv41_live::sequence_guard guard(session,model_sha,owner_epoch);
+    auto send=[&](json value){if(owner_epoch)value["owner_epoch"]=owner_epoch;io.send(value);};
     const uint64_t session_route=std::stoull(session.substr(0,16),nullptr,16),model_route=std::stoull(std::string(model_sha).substr(0,16),nullptr,16);
     require(session_route&&model_route,"Session routing fingerprint must be nonzero");
-    checkpoint current,remote;bool have_remote=false,initial_sent=false,awaiting_ack=false;
+    checkpoint current,remote;bool have_remote=false,initial_sent=false,awaiting_ack=false,device_suspended=false;
+    ds4_external ds4x; // LLAMADECODE ds4-decode (LLAMADECODE_DS4_DECODE=1)
+    // One ds4 single-token step appending `token` at frontier+index (prepare at
+    // index 0); shared by decode, decode_forced and the small-append prefill.
+    auto ds4_step=[&](int32_t token,uint64_t index){
+        if(index==0)ds4x.prepare(*sweep,weights,uint32_t(options.context));
+        ds4x.step(*sweep,weights.backend,token,current.frontier.position+uint32_t(index));
+        if(index==0)grow_decode_l2(*sweep,options.fixed.get(),weights.backend);else if(index%16==0)check_decode_vram_reserve();
+    };
     std::unique_ptr<llama_dsv41_sweep::rewind_anchor> rewind_anchor;
     checkpoint rewind_identity;
     auto inspect=[&](){checkpoint c;std::string error;
         success(sweep->export_native([&](wire_payload_reader&r,std::string&why){try{c=dsv41_live::capture(r,[]{return should_stop();});return true;}catch(const std::exception&e){why=e.what();return false;}},error),error);return c;};
     current=inspect();
-    io.send({{"status","ready"},{"session",session},{"model_sha256",model_sha},{"next_sequence",guard.expected()},
+    send({{"status","ready"},{"session",session},{"model_sha256",model_sha},{"next_sequence",guard.expected()},
         {"checkpoint",current.describe()},{"maximum_prefill_tokens",capacity},{"maximum_decode_tokens",128},{"control_host_bytes",64*1024*1024},
         {"transport","private owned pipes; existing native payload and artifact v2.1 delta"}});
     for(;;){
-        io.renew();const auto command=dsv41_live::parse_control(io.line());guard.accept(command);
+        io.renew();auto command=dsv41_live::parse_control(io.line());guard.accept(command);if(owner_epoch)command.erase("owner_epoch");
         const auto operation=command.at("operation").get<std::string>();const auto sequence=dsv41_live::u64(command.at("sequence"));
         const auto started=clock_type::now();
-        auto reply=[&](json extra){extra["status"]="complete";extra["sequence"]=sequence;extra["session"]=session;extra["model_sha256"]=model_sha;extra["checkpoint"]=current.describe();io.send(extra);};
+        auto reply=[&](json extra){extra["status"]="complete";extra["sequence"]=sequence;extra["session"]=session;extra["model_sha256"]=model_sha;extra["checkpoint"]=current.describe();send(extra);};
         auto same_base=[&](){const auto base=checkpoint::from_json(command.at("base"));require(base.describe()==current.describe(),"Session base token/position/owner hashes differ");};
         if(operation=="close"){
             dsv41_live::keys(command,{"session","model_sha256","sequence","operation"});reply({{"closed",true}});return;
+        }else if(operation=="suspend"){
+            // DS4COMBO fast switch: give back VRAM, DS heaps and carry RAM; keep
+            // the process, CUDA context, model lease and plans. The frontier is
+            // dropped: only resume (with a new native base) or close may follow.
+            dsv41_live::keys(command,{"session","model_sha256","sequence","operation","base"});same_base();
+            require(!device_suspended&&have_remote&&!awaiting_ack&&remote.describe()==current.describe(),"Suspend requires the exported frontier to be acknowledged by the peer");
+            std::string error;success(sweep->suspend_device(error),error);device_suspended=true;
+            size_t free=0,total=0;ggml_backend_dev_memory(ggml_backend_get_device(weights.backend),&free,&total);
+            reply({{"suspended",true},{"device_free_bytes",free},{"device_total_bytes",total},{"suspend_ms",ms(started)}});
+            continue;
+        }else if(operation=="resume"){
+            dsv41_live::keys(command,{"session","model_sha256","sequence","operation","native_base_contract_sha256","tokens"});
+            require(device_suspended,"Resume requires a suspended session");
+            const auto&ids=command.at("tokens");require(ids.is_array()&&!ids.empty()&&ids.size()<=capacity,"Resume prefill token count exceeds reserved chunk");
+            std::vector<int32_t>tokens;tokens.reserve(ids.size());for(const auto&v:ids){const auto n=dsv41_live::u64(v);require(n<129280,"Resume token out of vocabulary");tokens.push_back(int32_t(n));}
+            std::string error;success(sweep->resume_device(error),error);const double resume_ms=ms(started);
+            // The new base follows this command on the same pipe: contract line + payload.
+            combo_base_input incoming(io,session,command.at("native_base_contract_sha256").get<std::string>(),owner_epoch,uint32_t(options.context));
+            require(tokens.size()<uint64_t(options.context)-incoming.base.frontier.position,"Resume prefill exceeds context capacity");
+            const double base_ms=ms(started)-resume_ms;
+            auto previous=std::move(sweep);sweep.reset(new llama_dsv41_sweep);auto next_options=options;auto next_weights=weights;
+            next_options.carry.tokens=uint32_t(tokens.size());if(next_weights.engram_prefetch_host_bytes)next_weights.engram_prefetch_tokens=uint32_t(tokens.size());
+            success(sweep->open(next_weights,next_options,error,previous.get(),nullptr,&incoming.base),error);incoming.finish();previous.reset();
+            const double admission_ms=ms(started)-resume_ms-base_ms;
+            success(sweep->run(tokens,[]{return should_stop();},error),error);const auto timing=sweep->timing();
+            current=inspect();require(current.frontier.position==incoming.base.frontier.position+tokens.size(),"Resume prefill position did not advance exactly");
+            have_remote=false;initial_sent=false;awaiting_ack=false;device_suspended=false;remote=checkpoint{};
+            std::fprintf(stderr,"DS4COMBO_RESUME_COMPLETE resume_ms=%.3f base_import_ms=%.3f admission_ms=%.3f prompt_ms=%.3f tokens=%zu\n",resume_ms,base_ms,admission_ms,timing.prompt_processing_ms,tokens.size());
+            reply({{"peer_synchronized",false},{"prompt_tokens",tokens.size()},{"resume_ms",resume_ms},{"base_import_ms",base_ms},{"admission_ms",admission_ms},
+                {"prompt_processing_ms",timing.prompt_processing_ms},{"export_preparation_ms",timing.export_preparation_ms}});
+            continue;
+        }else if(device_suspended){
+            require(false,"Suspended session accepts only resume or close");
+        }else if(operation=="quality_speed"){
+            // LLAMADECODE B5: the live quality-speed control (ds4-win /v1/quality-speed
+            // semantics: 0 = max quality, 1.36125 = max speed). Applies from the next
+            // decode request; the bias keeps ds4-win's warmup/ramp per request.
+            dsv41_live::keys(command,{"session","model_sha256","sequence","operation","value"});
+            const auto&v=command.at("value");require(v.is_number(),"Quality-speed value must be a number");
+            const double value=v.get<double>();require(value>=0.0&&value<=1.36125,"Quality-speed value outside 0..1.36125");
+            ds4x.quality=float(value);
+            std::fprintf(stderr,"LLAMADECODE_QUALITY_SPEED value=%.6g applies=next_decode\n",value);std::fflush(stderr);
+            reply({{"supported",ds4_decode_enabled()},{"value",value},{"applies","next decode request"},{"scope","session"}});
         }else if(operation=="checkpoint"){
             dsv41_live::keys(command,{"session","model_sha256","sequence","operation"});
             require(inspect().describe()==current.describe(),"Session idle owner changed");reply({{"peer_synchronized",have_remote&&!awaiting_ack&&remote.describe()==current.describe()}});
@@ -110,7 +373,7 @@ void run_live_session(std::unique_ptr<llama_dsv41_sweep>&sweep,
                 require(dsv41_live::capture(r,[]{return should_stop();}).describe()==current.describe(),"Export checkpoint changed");
                 delta_artifact_sender delta;if(!initial)success(delta.init(remote.frontier,current.frontier,session_route,model_route,r,why),why);
                 const uint64_t bytes=initial?r.bytes():delta.bytes();
-                io.send({{"status","payload"},{"sequence",sequence},{"session",session},{"model_sha256",model_sha},
+                send({{"status","payload"},{"sequence",sequence},{"session",session},{"model_sha256",model_sha},
                     {"kind",initial?"native_initial":"artifact_delta_v2_1"},{"bytes",bytes},{"base",initial?json(nullptr):remote.describe()},{"target",current.describe()}});
                 while(sent<bytes){const size_t n=size_t(std::min<uint64_t>(page.size(),bytes-sent));
                     success(initial?r.read(sent,page.data(),n,why):delta.read(sent,page.data(),n,why),why);io.write(page.data(),n);sent+=n;}
@@ -142,18 +405,124 @@ void run_live_session(std::unique_ptr<llama_dsv41_sweep>&sweep,
             success(sweep->apply_decode_delta(update,[&](const state_span&s,uint64_t off,void*dst,size_t n){return incoming.read_span(s,off,dst,n,error);},error),error);
             require(received==bytes,"Live decode artifact was not fully consumed");current=target;remote=target;
             reply({{"peer_synchronized",true},{"received_bytes",received},{"evaluated_tokens",plan.token_count},{"RTX_decode",false},{"apply_ms",ms(started)}});
+        }else if(operation=="decode"){
+            // LLAMADECODE B0: greedy decode on the RTX in this process. Each
+            // evaluated token is one stateful 1-row append through the same
+            // owner transfer as "prefill" (existing sweep/carry/cache path).
+            // A sampled stop token, or the token sampled at max_tokens, is
+            // returned but NOT evaluated: the caller's next prefill carries it.
+            dsv41_live::keys(command,{"session","model_sha256","sequence","operation","base","max_tokens","stop_tokens"});same_base();
+            require(!awaiting_ack,"Local decode while a state transfer awaits acknowledgement");
+            require(inspect().describe()==current.describe(),"Local decode actual token/owner state differs from checkpoint");
+            const auto maximum=dsv41_live::u64(command.at("max_tokens"));require(maximum&&maximum<=4096,"Local decode requires1..4096 max_tokens");
+            const auto&stops=command.at("stop_tokens");require(stops.is_array()&&stops.size()<=16,"Local decode accepts at most16 stop tokens");
+            std::vector<int32_t>stop_ids;for(const auto&v:stops){const auto n=dsv41_live::u64(v);require(n<129280,"Stop token out of vocabulary");stop_ids.push_back(int32_t(n));}
+            require(uint64_t(current.frontier.position)+maximum<uint64_t(options.context),"Local decode exceeds context capacity");
+            std::vector<int32_t>generated;std::vector<double>step_ms;std::string error;std::vector<float>logits;bool stopped=false,cancelled=false;
+            clear_decode_cancel();
+            for(uint64_t index=0;index<maximum;++index){
+                stop();const auto step_started=clock_type::now();
+                success(sweep->completed_logits(logits,error),error);
+                int32_t best=0;for(int32_t i=1;i<int32_t(logits.size());++i)if(logits[size_t(i)]>logits[size_t(best)])best=i;
+                generated.push_back(best);
+                if(std::find(stop_ids.begin(),stop_ids.end(),best)!=stop_ids.end()){stopped=true;break;}
+                if(index+1==maximum)break;
+                if(decode_cancel_requested()){cancelled=true;break;}   // same boundary as max_tokens
+                if(ds4_decode_enabled()){
+                    ds4_step(best,index);
+                    step_ms.push_back(ms(step_started));
+                    std::fprintf(stderr,"LLAMADECODE_STEP index=%llu token=%d position=%u step_ms=%.3f engine=ds4\n",(unsigned long long)index,best,
+                        current.frontier.position+uint32_t(index)+1,step_ms.back());std::fflush(stderr);
+                    continue;
+                }
+                auto previous=std::move(sweep);sweep.reset(new llama_dsv41_sweep);auto next_options=options;auto next_weights=weights;
+                next_options.carry.tokens=1;if(next_weights.engram_prefetch_host_bytes)next_weights.engram_prefetch_tokens=1;
+                next_weights.decode_layout=routed_decode_layout(); // LLAMADECODE B1: routed-expert fetch
+                {decode_quiet_scope quiet;
+                success(sweep->open(next_weights,next_options,error,nullptr,previous.get()),error);require(!previous->ready(),"Transferred prefix still publishes");previous.reset();
+                const std::vector<int32_t>one{best};success(sweep->run(one,[]{return should_stop();},error),error);}
+                if(index==0)grow_decode_l2(*sweep,options.fixed.get(),weights.backend);else if(index%16==0)check_decode_vram_reserve();
+                step_ms.push_back(ms(step_started));
+                std::fprintf(stderr,"LLAMADECODE_STEP index=%llu token=%d position=%u step_ms=%.3f prompt_ms=%.3f\n",(unsigned long long)index,best,
+                    current.frontier.position+uint32_t(index)+1,step_ms.back(),sweep->timing().prompt_processing_ms);std::fflush(stderr);
+            }
+            if(cancelled)clear_decode_cancel();
+            current=inspect();const uint32_t evaluated=uint32_t(step_ms.size());
+            double total_ms=0;for(const double v:step_ms)total_ms+=v;
+            std::fprintf(stderr,"LLAMADECODE_DECODE_COMPLETE generated=%zu evaluated=%u stopped=%d cancelled=%d position=%u decode_ms=%.3f tok_s=%.6f\n",generated.size(),evaluated,int(stopped),
+                int(cancelled),current.frontier.position,total_ms,total_ms>0?evaluated*1000.0/total_ms:0.0);std::fflush(stderr);
+            reply({{"peer_synchronized",have_remote&&remote.describe()==current.describe()},{"tokens",generated},{"evaluated_tokens",evaluated},{"stopped",stopped},
+                {"cancelled",cancelled},{"step_ms",step_ms},{"decode_ms",total_ms},{"RTX_decode",true}});
+        }else if(operation=="decode_forced"){
+            // LLAMADECODE B0/B1 gate: teacher-forced 1-row decode. For each i the
+            // frontier's full F32 logits are written to logits_path (raw rows of
+            // 129280 floats), then tokens[i] is appended; the last token is not
+            // evaluated. Same per-token path as "decode"; only the token choice differs.
+            dsv41_live::keys(command,{"session","model_sha256","sequence","operation","base","tokens","logits_path"});same_base();
+            require(!awaiting_ack,"Forced decode while a state transfer awaits acknowledgement");
+            require(inspect().describe()==current.describe(),"Forced decode actual token/owner state differs from checkpoint");
+            const auto&ids=command.at("tokens");require(ids.is_array()&&!ids.empty()&&ids.size()<=4096,"Forced decode requires1..4096 tokens");
+            std::vector<int32_t>forced;for(const auto&v:ids){const auto n=dsv41_live::u64(v);require(n<129280,"Forced token out of vocabulary");forced.push_back(int32_t(n));}
+            require(uint64_t(current.frontier.position)+forced.size()<uint64_t(options.context),"Forced decode exceeds context capacity");
+            const auto path=std::filesystem::u8path(command.at("logits_path").get<std::string>());
+            require(path.is_absolute()&&!std::filesystem::exists(path),"Forced decode logits path must be absolute and new");
+            HANDLE file=CreateFileW(path.c_str(),GENERIC_WRITE,0,nullptr,CREATE_NEW,FILE_ATTRIBUTE_NORMAL,nullptr);
+            require(file!=INVALID_HANDLE_VALUE,"Cannot create forced decode logits file");
+            struct closer{HANDLE h;~closer(){CloseHandle(h);}}close_file{file};
+            std::vector<int32_t>argmax;std::vector<double>step_ms;std::string error;std::vector<float>logits;
+            for(size_t index=0;index<forced.size();++index){
+                stop();const auto step_started=clock_type::now();
+                success(sweep->completed_logits(logits,error),error);
+                int32_t best=0;for(int32_t i=1;i<int32_t(logits.size());++i)if(logits[size_t(i)]>logits[size_t(best)])best=i;
+                argmax.push_back(best);
+                const auto*bytes=reinterpret_cast<const char*>(logits.data());size_t left=logits.size()*sizeof(float);
+                while(left){DWORD wrote=0;const DWORD n=DWORD(std::min<size_t>(left,1u<<24));require(WriteFile(file,bytes,n,&wrote,nullptr)&&wrote==n,"Forced decode logits write failed");bytes+=n;left-=n;}
+                if(index+1==forced.size())break;
+                if(ds4_decode_enabled()){
+                    ds4_step(forced[index],index);
+                    step_ms.push_back(ms(step_started));
+                    std::fprintf(stderr,"LLAMADECODE_FORCED_STEP index=%zu forced=%d argmax=%d step_ms=%.3f engine=ds4\n",index,forced[index],best,step_ms.back());std::fflush(stderr);
+                    continue;
+                }
+                auto previous=std::move(sweep);sweep.reset(new llama_dsv41_sweep);auto next_options=options;auto next_weights=weights;
+                next_options.carry.tokens=1;if(next_weights.engram_prefetch_host_bytes)next_weights.engram_prefetch_tokens=1;
+                next_weights.decode_layout=routed_decode_layout(); // LLAMADECODE B1: routed-expert fetch
+                {decode_quiet_scope quiet;
+                success(sweep->open(next_weights,next_options,error,nullptr,previous.get()),error);require(!previous->ready(),"Transferred prefix still publishes");previous.reset();
+                const std::vector<int32_t>one{forced[index]};success(sweep->run(one,[]{return should_stop();},error),error);}
+                if(index==0)grow_decode_l2(*sweep,options.fixed.get(),weights.backend);else if(index%16==0)check_decode_vram_reserve();
+                step_ms.push_back(ms(step_started));
+                std::fprintf(stderr,"LLAMADECODE_FORCED_STEP index=%zu forced=%d argmax=%d step_ms=%.3f\n",index,forced[index],best,step_ms.back());std::fflush(stderr);
+            }
+            current=inspect();double total_ms=0;for(const double v:step_ms)total_ms+=v;
+            reply({{"peer_synchronized",have_remote&&remote.describe()==current.describe()},{"argmax",argmax},{"vectors",argmax.size()},
+                {"evaluated_tokens",step_ms.size()},{"step_ms",step_ms},{"decode_ms",total_ms},{"RTX_decode",true}});
         }else if(operation=="prefill"){
             dsv41_live::keys(command,{"session","model_sha256","sequence","operation","base","tokens"});same_base();
-            require(have_remote&&!awaiting_ack&&remote.describe()==current.describe(),"Incremental prefill requires exact two-way synchronization");
+            // LLAMADECODE B0: a local-only session (never exported to a peer)
+            // may append without a peer; a peer-bound session keeps exact sync.
+            const bool local_only=!have_remote&&!initial_sent&&!awaiting_ack;
+            require(local_only||(have_remote&&!awaiting_ack&&remote.describe()==current.describe()),"Incremental prefill requires exact two-way synchronization");
             require(inspect().describe()==current.describe(),"Incremental prefill actual token/owner state differs from acknowledged checkpoint");
             const auto&ids=command.at("tokens");require(ids.is_array()&&!ids.empty()&&ids.size()<=capacity,"Live prefill token count exceeds reserved chunk");
             require(ids.size()<uint64_t(options.context)-current.frontier.position,"Live prefill exceeds context capacity");
             std::vector<int32_t>tokens;tokens.reserve(ids.size());for(const auto&v:ids){const auto n=dsv41_live::u64(v);require(n<129280,"Live token out of vocabulary");tokens.push_back(int32_t(n));}
+            if(ds4_decode_enabled()&&tokens.size()<=append_decode_max()){
+                // Small append: teacher-forced ds4 steps on the resident state (the
+                // decode/decode_forced step), every token evaluated; same reply and
+                // checkpoint as the sweep. The frontier logits come from ds4's decode kernels.
+                for(size_t index=0;index<tokens.size();++index){stop();ds4_step(tokens[index],index);}
+                const double append_ms=ms(started);
+                const uint32_t before=current.frontier.position;current=inspect();require(current.frontier.position==before+tokens.size(),"Live append position did not advance exactly");
+                std::fprintf(stderr,"LLAMADECODE_APPEND_VIA_DECODE tokens=%zu ms=%.3f position=%u\n",tokens.size(),append_ms,current.frontier.position);std::fflush(stderr);
+                reply({{"peer_synchronized",false},{"prompt_tokens",tokens.size()},{"prompt_processing_ms",append_ms},{"export_preparation_ms",0.0},{"append_via_decode",true}});
+                continue;
+            }
             auto previous=std::move(sweep);sweep.reset(new llama_dsv41_sweep);auto next_options=options;auto next_weights=weights;
             next_options.carry.tokens=uint32_t(tokens.size());if(next_weights.engram_prefetch_host_bytes)next_weights.engram_prefetch_tokens=uint32_t(tokens.size());
             std::string error;success(sweep->open(next_weights,next_options,error,nullptr,previous.get()),error);require(!previous->ready(),"Transferred prefix still publishes");previous.reset();
             const double admission_ms=ms(started);success(sweep->run(tokens,[]{return should_stop();},error),error);const auto timing=sweep->timing();
-            current=inspect();require(current.frontier.position==remote.frontier.position+tokens.size(),"Live prefill position did not advance exactly");
+            const uint32_t before=current.frontier.position;current=inspect();require(current.frontier.position==before+tokens.size(),"Live prefill position did not advance exactly");
             reply({{"peer_synchronized",false},{"prompt_tokens",tokens.size()},{"prompt_processing_ms",admission_ms+timing.prompt_processing_ms},{"export_preparation_ms",timing.export_preparation_ms}});
         }else require(false,"Unknown persistent session operation");
     }

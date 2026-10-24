@@ -4,6 +4,7 @@ extern "C" unsigned long long ggml_backend_cuda_dsv41_pv_strided_queued(void);
 #define NOMINMAX
 #include <windows.h>
 #include <bcrypt.h>
+#include <dxgi1_4.h>
 #include "ggml-cuda.h"
 #include "ggml-dsv41-gather-half.h"
 #include "ggml-dsv41-split-f32.h"
@@ -12,6 +13,7 @@ extern "C" uint64_t ggml_backend_cuda_dsv41_pv_view_queued(void);
 #include "ggml-ds4-native-half-stats.h"
 #include "llama-dsv41-sweep.h"
 #include "profile-check.h"
+#include "llama-weight-fetcher.h"
 #include "llama-dsv41-host-memory.h"
 #include "llama-dsv41-native-columns-resource-proof.h"
 #include "llama-dsv41-native-loader-resource-proof.h"
@@ -59,8 +61,18 @@ void require(bool value,const char*message){if(!value)throw std::runtime_error(m
 void success(bool value,const std::string&error){if(!value)throw std::runtime_error(error.empty()?"Offline producer operation failed":error);}
 uint64_t add(uint64_t a,uint64_t b){require(b<=UINT64_MAX-a,"Producer capacity overflow");return a+b;}
 double ms(clock_type::time_point start){return std::chrono::duration<double,std::milli>(clock_type::now()-start).count();}
+// LLAMADECODE: an external graceful abort. The caller's RAM watch creates this
+// file; the engine then stops at its next stage boundary and tears down normally.
+bool abort_file_present(){
+    static const wchar_t*name=_wgetenv(L"LLAMADECODE_ABORT_FILE");
+    if(!name||!*name)return false;
+    static std::atomic<int64_t>last{0};const int64_t now=std::chrono::duration_cast<std::chrono::milliseconds>(clock_type::now().time_since_epoch()).count();
+    if(now-last.load()<250)return false;last.store(now);
+    return GetFileAttributesW(name)!=INVALID_FILE_ATTRIBUTES;
+}
 bool should_stop(){
     if(!llama_dsv41_host_memory::live())memory_abort.store(true);
+    if(abort_file_present())interrupted.store(true);
     return interrupted.load()||memory_abort.load();
 }
 void stop(){require(!should_stop(),memory_abort.load()?"Producer stopped at the1GiB physicalRAM/OScommit floor; incomplete output retained":"Producer cancelled; incomplete output retained and not certified");}
@@ -234,6 +246,7 @@ const char*usage=
 "Optional --tile-host-registration 0|1 (default0; paired full-resident plan registers only its current RAM lease).\n"
 "Optional --pinned-device-bytes <bytes> (default0; native-expert direct pinned RAM copies/GPU validation; minimum67108864).\n"
 "Optional --reuse-graph 0|1|2 (default0;1 keeps allocator;2 also reuses layer graph variants).\n"
+"Optional --native-base-contract-sha256 <pin> --native-base-owner-epoch <epoch>: mode1 RAM/pipe bootstrap.\n"
 "Optional --cast-device-bytes <bytes> (default0; reuse existing half weight casts in allocator mode1); --cast-audit 0|1.\n"
 "Optional --engram-prefetch-bytes <bytes> (default0; whole-prompt raw row cache on its own IoRing).\n"
 "Optional --prefetch-device-bytes <bytes> (default0; bounded next-tile pinned H2D overlap).\n"
@@ -267,7 +280,7 @@ int wmain(int argc,wchar_t**argv){
             "--provider-device-bytes","--provider-host-bytes","--cache-bytes","--graph-bytes","--job-device-bytes","--job-host-bytes","--gpu-reserve-bytes",
             "--carry","--carry-file-bytes","--carry-host-bytes","--carry-outstanding-bytes","--output-outstanding-bytes","--payload","--receipt"};
         require(argc>=1+int(keys.size())*2&&argc<=125+int(keys.size())*2&&argc%2==1,"Expected every explicit required --key value pair; use --help");std::map<std::string,std::string>args;
-        for(int i=1;i<argc;i+=2){auto key=utf8(argv[i]);require((key=="--unaligned-append-step-tokens"||key=="--reuse-child-raw-metadata"||key=="--session-stdio"||key=="--session-id"||key=="--session-control-host-bytes"||key=="--session-idle-timeout-ms"||key=="--native-rhs-pack"||key=="--split-f32-tensor-core-qk"||key=="--split-f32-tensor-core-pv"||key=="--fuse-kv-gather-half"||key=="--ds-zero-padding-only"||key=="--pv-strided-probabilities"||key=="--pv-view-f32"||key=="--compact-kv-gather"||key=="--masked-half-inplace"||key=="--native-loader-unroll"||key=="--native-expert-columns"||key=="--fixed-resident-plan"||key=="--export-hash-only"||key=="--backend-temporary-reserve-bytes"||key=="--compute-step-tokens"||key=="--prefill-chunk-tokens"||key=="--attention-kv-f16-table"||key=="--index-key-windows"||key=="--capture-dspark"||key=="--compressed-cache-bf16"||key=="--dense-activation-q8-1"||key=="--expert-weights-activations-fp4"||key=="--resident-pageable-copies"||key=="--tile-host-registration"||key=="--hc-bf16-epilogue"||key=="--reuse-expert-routing-map"||key=="--sort-expert-routing"||key=="--pair-ffn-tiles"||key=="--engram-tile-lookahead"||key=="--warmup-one-token"||key=="--batch-seed-ram"||key=="--dense-mxfp4"||key=="--hc-projection-f16-gemm"||key=="--merge-attention-selected-rows"||key=="--resident-metadata"||key=="--resident-compact-ids"||key=="--async-input-uploads"||key=="--resident-hidden-bf16"||key=="--resident-hidden-final-readback"||key=="--coalesce-dense-projections"||key=="--direct-carry-budget"||key=="--expert-f16-cublas"||key=="--token-tile-attention-f16-probabilities"||key=="--index-f32-cublas"||key=="--index-bf16"||key=="--dense-inputs-f16"||key=="--shared-flash-attention"||key=="--shared-sparse-attention"||key=="--carry-ram-prefix-tokens"||key=="--carry-disk-reserve-bytes"||key=="--carry-storage"||key=="--fetch-profile"||key=="--compute-tile"||key=="--hidden-device-bytes"||key=="--pinned-device-bytes"||key=="--reuse-graph"||key=="--cast-device-bytes"||key=="--cast-audit"||key=="--engram-prefetch-bytes"||key=="--ds-submit-threads"||key=="--cuda-blocking-sync"||key=="--index-cublas-device-bytes"||key=="--ds-gpu-ring-slots"||key=="--prefetch-device-bytes"||key=="--expert-profile"||key=="--expert-workspace-bytes"||key=="--expert-runtime-bytes"||std::find(keys.begin(),keys.end(),key)!=keys.end())&&!args.count(key),"Unknown or repeated producer option");args[key]=utf8(argv[i+1]);}
+        for(int i=1;i<argc;i+=2){auto key=utf8(argv[i]);require((key=="--session-owner-epoch"||key=="--switch-arena"||key=="--native-base-contract-sha256"||key=="--native-base-owner-epoch"||key=="--unaligned-append-step-tokens"||key=="--reuse-child-raw-metadata"||key=="--session-stdio"||key=="--session-id"||key=="--session-control-host-bytes"||key=="--session-idle-timeout-ms"||key=="--native-rhs-pack"||key=="--split-f32-tensor-core-qk"||key=="--split-f32-tensor-core-pv"||key=="--fuse-kv-gather-half"||key=="--ds-zero-padding-only"||key=="--pv-strided-probabilities"||key=="--pv-view-f32"||key=="--compact-kv-gather"||key=="--masked-half-inplace"||key=="--native-loader-unroll"||key=="--native-expert-columns"||key=="--fixed-resident-plan"||key=="--export-hash-only"||key=="--backend-temporary-reserve-bytes"||key=="--compute-step-tokens"||key=="--prefill-chunk-tokens"||key=="--attention-kv-f16-table"||key=="--index-key-windows"||key=="--capture-dspark"||key=="--compressed-cache-bf16"||key=="--dense-activation-q8-1"||key=="--expert-weights-activations-fp4"||key=="--resident-pageable-copies"||key=="--tile-host-registration"||key=="--hc-bf16-epilogue"||key=="--reuse-expert-routing-map"||key=="--sort-expert-routing"||key=="--pair-ffn-tiles"||key=="--engram-tile-lookahead"||key=="--warmup-one-token"||key=="--fixed-direct-open"||key=="--batch-seed-ram"||key=="--dense-mxfp4"||key=="--hc-projection-f16-gemm"||key=="--merge-attention-selected-rows"||key=="--resident-metadata"||key=="--resident-compact-ids"||key=="--async-input-uploads"||key=="--resident-hidden-bf16"||key=="--resident-hidden-final-readback"||key=="--coalesce-dense-projections"||key=="--direct-carry-budget"||key=="--expert-f16-cublas"||key=="--token-tile-attention-f16-probabilities"||key=="--index-f32-cublas"||key=="--index-bf16"||key=="--dense-inputs-f16"||key=="--shared-flash-attention"||key=="--shared-sparse-attention"||key=="--carry-ram-prefix-tokens"||key=="--carry-disk-reserve-bytes"||key=="--carry-storage"||key=="--fetch-profile"||key=="--compute-tile"||key=="--hidden-device-bytes"||key=="--pinned-device-bytes"||key=="--reuse-graph"||key=="--cast-device-bytes"||key=="--cast-audit"||key=="--engram-prefetch-bytes"||key=="--ds-submit-threads"||key=="--cuda-blocking-sync"||key=="--index-cublas-device-bytes"||key=="--ds-gpu-ring-slots"||key=="--prefetch-device-bytes"||key=="--expert-profile"||key=="--expert-workspace-bytes"||key=="--expert-runtime-bytes"||std::find(keys.begin(),keys.end(),key)!=keys.end())&&!args.count(key),"Unknown or repeated producer option");args[key]=utf8(argv[i+1]);}
         for(const auto&key:keys)require(args.count(key),"Missing explicit producer option");
         const auto storage=args.count("--carry-storage")?args.at("--carry-storage"):"file";
         require(storage=="file"||storage=="ram"||storage=="hybrid","Expected explicit carry-storage file, ram or hybrid");
@@ -433,6 +446,7 @@ int wmain(int argc,wchar_t**argv){
         const uint64_t control_host=live?64ull*1024*1024:0;
         const std::string session=live?args.at("--session-id"):"";
         const uint64_t session_timeout=live?number("--session-idle-timeout-ms"):0;
+        const uint64_t session_owner_epoch=args.count("--session-owner-epoch")?number("--session-owner-epoch"):0;
         const uint32_t reserved_chunk=live?uint32_t(chunk_option):chunk_tokens;
         if(live){
             dsv41_live::sequence_guard identity(session,model_sha);
@@ -447,9 +461,20 @@ int wmain(int argc,wchar_t**argv){
         report["persistent_session"]={{"enabled",live},{"reserved_chunk_tokens",reserved_chunk},{"control_host_bytes",control_host}};
         require(!args.count("--capture-dspark")||args.at("--capture-dspark")=="0"||args.at("--capture-dspark")=="1","capture-dspark requires0/1");
         const bool capture_dspark=args.count("--capture-dspark")&&args.at("--capture-dspark")=="1";
-        require(!live||capture_dspark,"Live session requires DSpark mode3 capture");
+        require(!live||capture_dspark||session_owner_epoch,"Target-only session requires an explicit positive owner epoch");
+        require(!live||capture_dspark||(args.count("--capture-dspark")&&args.at("--capture-dspark")=="0"),"Live target-only mode1 requires explicit capture-dspark0");
+        std::unique_ptr<combo_base_input> restored;
+        require(args.count("--native-base-contract-sha256")==args.count("--native-base-owner-epoch"),"Native base requires both contract pin and owner epoch");
+        if(args.count("--native-base-contract-sha256")){
+            require(live&&!capture_dspark,"Native base input requires explicit live target-only mode1");
+            require(number("--native-base-owner-epoch")==session_owner_epoch,"Native base owner epoch differs from the session");
+            restored.reset(new combo_base_input(session_timeout,session_output.get(),session,args.at("--native-base-contract-sha256"),number("--native-base-owner-epoch"),uint32_t(context)));
+            report["native_base"]={{"position",restored->base.frontier.position},{"contract_sha256",args.at("--native-base-contract-sha256")},{"owner_epoch",number("--native-base-owner-epoch")},{"storage","parent-admitted RAM and bounded private pipe"}};
+        }
+        const uint32_t base_tokens=restored?restored->base.frontier.position:0;
+        require(tokens.size()<context-base_tokens,"Native base plus new prompt exhausts context");
         report["dspark_capture"]={{"enabled",capture_dspark},{"ring_bytes",capture_dspark?7864320ull:0ull},{"mode",capture_dspark?3:1},{"qualified",false}};
-        llama_dsv41::wire_plan plan;std::string error;success(llama_dsv41::make_wire_plan({uint32_t(context),uint32_t(tokens.size()),capture_dspark?3u:1u,
+        llama_dsv41::wire_plan plan;std::string error;success(llama_dsv41::make_wire_plan({uint32_t(context),base_tokens+uint32_t(tokens.size()),capture_dspark?3u:1u,
             capture_dspark?uint32_t(tokens.size()):0u,capture_dspark?uint32_t(std::min<size_t>(tokens.size(),128)):0u},plan,error),error);
         require(!args.count("--export-hash-only")||args.at("--export-hash-only")=="0"||args.at("--export-hash-only")=="1","export-hash-only requires0/1");
         const bool hash_only=args.count("--export-hash-only")&&args.at("--export-hash-only")=="1";
@@ -509,6 +534,12 @@ int wmain(int argc,wchar_t**argv){
         std::fprintf(stderr,"DS4PERF_GPU_JOB_ADMISSION free=%llu total=%llu job=%llu reserve=%llu\n",(unsigned long long)free,(unsigned long long)total,(unsigned long long)job_device,(unsigned long long)gpu_reserve);
         require(uint64_t(free)>=add(job_device,gpu_reserve),"Producer job exceeds actual selectedGPU free bytes plus explicit reserve");
         backend.reset(ggml_backend_cuda_init(int(ordinal)));require(bool(backend),"Cannot initialize the explicitly selected RTX5090 backend");
+        // DS4COMBO fast switch: every ggml device block lives in one switchable VMM
+        // span so a live session can suspend/resume device memory in place.
+        require(!args.count("--switch-arena")||args.at("--switch-arena")=="0"||args.at("--switch-arena")=="1","switch-arena requires0/1");
+        const bool switch_arena=args.count("--switch-arena")&&args.at("--switch-arena")=="1";
+        if(switch_arena)require(ggml_backend_cuda_switch_arena_enable(int(ordinal),size_t(total)*4),"Cannot enable the ggml CUDA switch arena before the first device allocation");
+        report["switch_arena"]=switch_arena;
         llama_dsv41_weight_provider::config weights;weights.model_path=args.at("--model");weights.verified_file_bytes=model_bytes;
         weights.verified_volume=model_volume;for(unsigned i=0;i<8;++i)weights.verified_file_id[i]=uint8_t(inode>>(i*8));
         weights.verified_mtime_ns=mtime_ns;weights.verified_sha256=model_sha;weights.backend=backend.get();
@@ -655,6 +686,10 @@ int wmain(int argc,wchar_t**argv){
         if(expert.expert_f16_cublas)require(ggml_backend_cuda_dsv41_expert_cublas_queued()==0,"Expert cuBLAS process witness must start zero");
         require(!args.count("--warmup-one-token")||args.at("--warmup-one-token")=="0"||args.at("--warmup-one-token")=="1","warmup-one-token requires0/1");
         const bool warm=args.count("--warmup-one-token")&&args.at("--warmup-one-token")=="1";
+        require(!args.count("--fixed-direct-open")||args.at("--fixed-direct-open")=="0"||args.at("--fixed-direct-open")=="1","fixed-direct-open requires0/1");
+        const bool direct_open=args.count("--fixed-direct-open")&&args.at("--fixed-direct-open")=="1";
+        require(!(warm&&direct_open),"fixed-direct-open replaces the one-token warmup; set --warmup-one-token 0");
+        report["fixed_direct_open"]=direct_open;weights.engram_early_is_next_request=direct_open;
         require(!args.count("--tile-host-registration")||args.at("--tile-host-registration")=="0"||args.at("--tile-host-registration")=="1","tile-host-registration requires0/1");
         const bool tile_registration=args.count("--tile-host-registration")&&args.at("--tile-host-registration")=="1";
         require(!args.count("--fixed-resident-plan")||args.at("--fixed-resident-plan")=="0"||args.at("--fixed-resident-plan")=="1","fixed-resident-plan requires0/1");
@@ -671,9 +706,9 @@ int wmain(int argc,wchar_t**argv){
         require(!pageable_copies||(!tile_registration&&pair_ffn&&options.resident_bf16&&options.resident_ids&&options.resident_metadata),"Pageable vector copies require exclusive full-resident pair plan");
         report["tile_host_registration"]=tile_registration;report["resident_pageable_copies"]=pageable_copies;
         if(pair_ffn||fixed_resident){
-            require(warm,"Fixed reservation requires the actual persistent warmup");
+            require(warm||direct_open,"Fixed reservation requires the one-token warmup or --fixed-direct-open 1");
             options.fixed.reset(new llama_dsv41_fixed_storage);
-            options.fixed->unpaired_resident=fixed_resident;
+            options.fixed->unpaired_resident=fixed_resident;options.fixed->direct_open=direct_open;
             options.fixed->backend_temporary_reserve_bytes=backend_reserve;report["backend_temporary_reserve_bytes"]=backend_reserve;
             options.fixed->tokens=reserved_chunk;options.fixed->tile=options.carry.max_tile_tokens;options.fixed->context=options.context;
             options.fixed->bf16=options.resident_bf16;options.fixed->ids=options.resident_ids;options.fixed->metadata=options.resident_metadata;options.fixed->tile_registration=tile_registration;options.fixed->pageable_copies=pageable_copies;
@@ -699,6 +734,15 @@ int wmain(int argc,wchar_t**argv){
             const auto warm_started=clock_type::now();
             warm_request.reset(new llama_dsv41_sweep);
             success(warm_request->open(warm_weights,warm_options,error),error);
+            // DS4COMBO producer-warm: the prompt's tokens are known now, so its
+            // Engram rows load on their own IoRing during this warmup pass.
+            {const char*overlap=std::getenv("LLAMA_DSV41_ENGRAM_PROMPT_OVERLAP");
+             if(weights.engram_prefetch_host_bytes&&options.engram_tile_lookahead&&overlap&&std::strcmp(overlap,"1")==0){
+                const std::vector<int32_t> first(tokens.begin(),tokens.begin()+chunk_tokens);
+                std::vector<int32_t> tail;
+                if(restored){const auto&bt=restored->base.tokens;tail.assign(bt.end()-std::min<size_t>(bt.size(),3),bt.end());}
+                success(warm_request->start_next_engram(first,tail,error),error);
+             }}
             success(warm_request->run(std::vector<int32_t>{tokens.front()},[]{return should_stop();},error),error);
             require(warm_request->ready(),"One-token warmup did not complete its actual40-layer prefill/head");
             ggml_backend_synchronize(backend.get());stop();
@@ -714,8 +758,21 @@ int wmain(int argc,wchar_t**argv){
         const uint64_t warm_gather_split=ggml_backend_cuda_dsv41_gather_half_split_queued();
         const uint64_t warm_split_f32=ggml_backend_cuda_dsv41_split_f32_queued();
         const uint64_t warm_rhs_pack=ggml_backend_cuda_dsv41_rhs_pack_queued();
-        auto started=clock_type::now();const bool opened=sweep->open(weights,options,error,warm_request.get());report["phase_ms"]["inspect_admit_allocate"]=ms(started);success(opened,error);warm_request.reset();stop();
+        std::vector<int32_t> early_tail;
+        if(restored){const auto&bt=restored->base.tokens;early_tail.assign(bt.end()-std::min<size_t>(bt.size(),3),bt.end());}
+        auto started=clock_type::now();const bool opened=sweep->open(weights,options,error,warm_request.get(),nullptr,restored?&restored->base:nullptr);report["phase_ms"]["inspect_admit_allocate"]=ms(started);success(opened,error);if(restored){restored->finish();restored.reset();}warm_request.reset();stop();
         require(!chunk_option||options.reuse_graph&&!options.reuse_layer_graph,"Stateful CLI requires allocator-only graph mode");
+        // No-warm-up start: the early Engram row load (otherwise hidden behind the
+        // warmup) begins as soon as the real request is opened.
+        // Measured (proof-c): with no warm-up to hide behind, the early whole-prompt
+        // load (7.9 s at 43K) left a 7.4 s join wait and prefill fell to 1,052 tok/s,
+        // against 1,238 tok/s with the ordinary layer-0 overlapped load. Opt-in only.
+        const char*early_direct=std::getenv("LLAMA_DSV41_ENGRAM_EARLY_DIRECT");
+        if(direct_open&&early_direct&&std::strcmp(early_direct,"1")==0){const char*overlap=std::getenv("LLAMA_DSV41_ENGRAM_PROMPT_OVERLAP");
+            if(weights.engram_prefetch_host_bytes&&options.engram_tile_lookahead&&overlap&&std::strcmp(overlap,"1")==0){
+                const std::vector<int32_t> first(tokens.begin(),tokens.begin()+std::min<size_t>(chunk_tokens,tokens.size()));
+                success(sweep->start_next_engram(first,early_tail,error),error);
+            }}
         report["stateful_chunks"]={{"enabled",chunk_option!=0},{"maximum_chunk_tokens",chunk_tokens},{"total_context_tokens",tokens.size()},{"chunks",json::array()},{"canonical_cache_preserved",chunk_option!=0},{"token_history_host_charge_bytes",chunk_option?context*8:tokens.size()*8}};
         if(warm){std::fprintf(stderr,"DS4PERF_WARM_PROMPT_BEGIN pid=%lu tokens=%zu\n",GetCurrentProcessId(),tokens.size());std::fflush(stderr);}
         started=clock_type::now();double total_prompt_ms=0,total_export_ms=0,append_open_ms=0,total_token_prepare_ms=0;
@@ -736,8 +793,8 @@ int wmain(int argc,wchar_t**argv){
             success(sweep->run(current,[]{return should_stop();},error),error);stop();
             const auto part=sweep->timing();require(part.prompt_processing_ms>0&&part.export_preparation_ms>=0,"Completed chunk omitted actual prompt/export timing boundaries");
             total_prompt_ms+=part.prompt_processing_ms;total_export_ms+=part.export_preparation_ms;
-            report["stateful_chunks"]["chunks"].push_back({{"first",first},{"tokens",count},{"completed_context_tokens",first+count},{"prompt_processing_ms",part.prompt_processing_ms},{"export_preparation_ms",part.export_preparation_ms}});
-            std::fprintf(stderr,"DS4PERF_STATEFUL_CHUNK_COMPLETE first=%u count=%u completed_context=%u processing_ms=%.6f canonical_cache_kept=%u\n",first,count,first+count,part.prompt_processing_ms,unsigned(first!=0));
+            report["stateful_chunks"]["chunks"].push_back({{"first",first},{"tokens",count},{"completed_context_tokens",base_tokens+first+count},{"prompt_processing_ms",part.prompt_processing_ms},{"export_preparation_ms",part.export_preparation_ms}});
+            std::fprintf(stderr,"DS4PERF_STATEFUL_CHUNK_COMPLETE first=%u count=%u completed_context=%u processing_ms=%.6f canonical_cache_kept=%u\n",first,count,base_tokens+first+count,part.prompt_processing_ms,unsigned(first!=0));
         }
         const auto enclosing_run_ms=ms(started);report["phase_ms"]["append_owner_admission"]=append_open_ms;report["phase_ms"]["chunk_token_preparation"]=total_token_prepare_ms;
         // Append ownership/admission is required prompt work; include it.
@@ -865,7 +922,14 @@ int wmain(int argc,wchar_t**argv){
         report["residency_limit"]="Free-memory admission and allocation ceilings do not independently prove physicalVRAM residency under WDDM";
         const auto text=report.dump(2)+"\n";require(text.size()<=receipt_limit,"Producer receipt exceeds its bounded admission");receipt->write(text.data(),text.size());receipt->flush();stop();
         receipt->publish(final_receipt);
-        if(live){run_live_session(sweep,weights,options,session,session_timeout,reserved_chunk,session_output.get());return 0;}
+        // DS4COMBO fast switch: release the published receipt handle (write+delete
+        // access) so readers can open it while a kept-alive session continues.
+        if(live){receipt.reset();run_live_session(sweep,weights,options,session,session_timeout,reserved_chunk,session_output.get(),session_owner_epoch);
+            // DS4COMBO graceful exit: the owner sent "close". Release the sweep (DS queues and heaps,
+            // imported D3D12 buffers, locked carry RAM, ggml device memory) explicitly and log it,
+            // instead of relying on Job termination and driver rundown.
+            const auto teardown=clock_type::now();sweep.reset();payload.reset();const int persist_released=wf_persist_shutdown("graceful close");
+            std::fprintf(stderr,"DS4COMBO_PRODUCER_GRACEFUL_SHUTDOWN_COMPLETE sweep_release_ms=%.1f wf_persist_released=%d\n",ms(teardown),persist_released);std::fflush(stderr);return persist_released==1?0:3;}
         std::fputs(hash_only?"Canonical native frontier hashed; receipt complete; no payload file created.\n":"Offline native payload and receipt completed; receiver/parity qualification remains pending.\n",stdout);return 0;
     }catch(const std::exception&failure){
         if(sweep)sweep->cancel();report["status"]=interrupted.load()?"cancelled":"failed";report["error"]=failure.what();report["memory_floor_abort"]=memory_abort.load();

@@ -47,16 +47,22 @@ bool llama_dsv41_cache_storage::apply_native_delta(
         const llama_dsv41::wire_read_span&read,std::string&error) {
     return apply_native_update(&base,target,before,after,read,error);
 }
+bool llama_dsv41_cache_storage::replace_native_frontier(
+        const llama_dsv41::wire_frontier &target,const std::vector<std::string>&hashes,
+        const llama_dsv41::wire_read_span&read,std::string&error) {
+    return apply_native_update(nullptr,target,{},hashes,read,error,false,true);
+}
 bool llama_dsv41_cache_storage::apply_native_update(
         const llama_dsv41::wire_frontier *base,const llama_dsv41::wire_frontier &target,
         const std::vector<std::string>&before,const std::vector<std::string>&after,
-        const llama_dsv41::wire_read_span&read,std::string&error,bool rewind) {
+        const llama_dsv41::wire_read_span&read,std::string&error,bool rewind,bool replace) {
     std::lock_guard<std::mutex>lock(execution_mutex);
     auto need=[](bool ok,const std::string&why){if(!ok)throw std::runtime_error(why);};
     try {
         need(!execution_poisoned,"Native cache import requires a healthy cache");
         need(bool(read)&&target.context==context&&(target.mode==3)==bool(dspark_ring),"Native cache import context/mode mismatch");
-        need(base||!execution_backend,"Full native restore is refused after compute binding");
+        need(base||!execution_backend||replace,"Full native restore is refused after compute binding");
+        need(!replace||!base,"Full replacement cannot assert a delta base");
         llama_dsv41::wire_plan target_plan,base_plan;
         need(llama_dsv41::make_wire_plan(target,target_plan,error),error);
         need(target.mode==1||(target.mode==3&&target.capture_length==std::min(target.position,128u)),"Native restore requires complete mode1/3 state");

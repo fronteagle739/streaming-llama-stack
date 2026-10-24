@@ -215,6 +215,10 @@ WF_API bool wf_has_failed(const wf_context * wf);
 // Destroy the pipeline, free all resources, join threads.
 WF_API void wf_destroy(wf_context * wf);
 
+// DS4COMBO: release the process-global DirectStorage/D3D12 cache (staging, files,
+// DS factory, D3D12 device). Call only after every wf_context is destroyed. 1 = released.
+WF_API int wf_persist_shutdown(const char * why);
+
 // ---------------------------------------------------------------------------
 // Layer registration
 // ---------------------------------------------------------------------------
@@ -287,6 +291,20 @@ WF_API void wf_stop(wf_context * wf);
 // Only relevant when moe_mode == WF_MOE_FETCH_ACTIVE.
 // Must be called BEFORE wf_wait_layer_gpu() for that layer.
 // expert_ids: array of active expert indices, n_active: count.
+// LLAMADECODE B1b: a persistent stage occupies its own bank region that no other
+// stage of this fetcher writes. After its first complete transfer it is served
+// from VRAM (no DMA) for the rest of this fetcher's lifetime. Required DS only.
+WF_API bool wf_set_layer_persistent(wf_context * wf, int layer_idx, bool persistent);
+// LLAMADECODE B2: synchronously fetch explicit file extents into a direct compute
+// bank (required DS, two-bank direct profile). Serialized with the pipeline's DMA
+// (one DS submission in flight); the caller's CUDA stream waits on the DS fence
+// before any consumer. The caller owns the bank region (it must not overlap any
+// pipeline stage written later in the same pass).
+typedef struct { uint64_t file_offset; uint64_t bank_offset; uint64_t nbytes; int file_idx; } wf_extent;
+WF_API // LLAMADECODE: cumulative expert-miss fetch split: submit, DS fence, verify, CUDA fence (ms).
+void wf_extent_fetch_stats(double * out4, uint64_t * requests, uint64_t * batches);
+bool wf_fetch_extents_direct(wf_context * wf, int bank, const wf_extent * extents, int n,
+                                    void * cuda_stream, uint64_t * bytes, double * milliseconds);
 WF_API void wf_set_active_experts(wf_context * wf,
                            int          layer_idx,
                            const int *  expert_ids,

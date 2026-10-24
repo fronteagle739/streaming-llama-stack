@@ -1,3 +1,4 @@
+#include "llama-dsv41-layer-log.h"
 #include "llama-dsv41-sweep.h"
 #include "llama-dsv41-append-schedule.h"
 #include <cstdlib>
@@ -81,6 +82,9 @@ struct llama_dsv41_sweep::implementation {
     llama_dsv41::engram_history initial_engram,final_engram;
     std::vector<float>logits;
     run_timing measured;
+    // DS4COMBO fast switch: a completed owner whose device memory, DS pipeline
+    // and carry RAM pages were released; only a rebase open may take it over.
+    bool device_suspended=false,rebase_ready=false;
 
     ~implementation(){if(backend)ggml_backend_synchronize(backend);provider.invalidate();}
     void poison(){
@@ -130,7 +134,7 @@ struct llama_dsv41_sweep::implementation {
             weight->type==GGML_TYPE_Q8_0&&weight->ne[0]==width&&weight->ne[1]==vocabulary&&weight->ne[2]==1&&weight->ne[3]==1,
             "V4.1 staged output head geometry changed");
         constexpr uint32_t head_rows=4096;
-        std::fprintf(stderr,"[dsv41-sweep] head begin rows=%u slice_rows=%u precision=F32\n",vocabulary,head_rows);
+        llama_dsv41_layer_log("[dsv41-sweep] head begin rows=%u slice_rows=%u precision=F32\n",vocabulary,head_rows);
         std::fflush(stderr);
         std::string error;llama_dsv41_carry_store::tile last;
         if(resident_last)last=*resident_last;
@@ -157,7 +161,7 @@ struct llama_dsv41_sweep::implementation {
             auto*graph=ggml_new_graph_custom(ctx.get(),8192,false);
             ggml_build_forward_expand(graph,out);
             auto buffer=allocate_graph(ctx.get(),graph,backend,options.admitted_graph_bytes-temporary_bytes);
-            std::fprintf(stderr,"[dsv41-sweep] head slice first=%u rows=%u graph_bytes=%llu temporary_bytes=%llu\n",
+            llama_dsv41_layer_log("[dsv41-sweep] head slice first=%u rows=%u graph_bytes=%llu temporary_bytes=%llu\n",
                 first,count,(unsigned long long)ggml_backend_buffer_get_size(buffer.get()),
                 (unsigned long long)temporary_bytes);
             std::fflush(stderr);
@@ -167,19 +171,65 @@ struct llama_dsv41_sweep::implementation {
             logits.insert(logits.end(),values.begin(),values.end());
         }
         require(logits.size()==vocabulary,"V4.1 sliced output head vocabulary order/size changed");
-        std::fprintf(stderr,"[dsv41-sweep] head complete logits=%zu\n",logits.size());std::fflush(stderr);
+        llama_dsv41_layer_log("[dsv41-sweep] head complete logits=%zu\n",logits.size());std::fflush(stderr);
     }
 };
 
 llama_dsv41_sweep::llama_dsv41_sweep():p(new implementation){}
 llama_dsv41_sweep::~llama_dsv41_sweep()=default;
 
-bool llama_dsv41_sweep::open(const llama_dsv41_weight_provider::config &weights,const config &options,std::string &error,llama_dsv41_sweep *warmup,llama_dsv41_sweep *prefix){
+// LLAMADECODE decode-sized fixed plan. One-token steps need a 1-row graph and
+// hidden bank; the prefill-sized reservations go back to the device (the
+// decode L2 expert cache uses them). LLAMADECODE_DECODE_COMPACT=0 disables.
+static bool decode_compact_enabled(){static const bool on=[]{const char*e=std::getenv("LLAMADECODE_DECODE_COMPACT");return !(e&&e[0]=='0'&&!e[1]);}();return on;}
+static void compact_fixed(llama_dsv41_fixed_storage&f,uint64_t admitted_hidden){
+    require(f.ready&&f.graph&&!f.decode_compact,"Decode compaction requires the ready prefill plan");
+    ggml_backend_synchronize(f.backend);
+    const uint64_t old_graph=ggml_gallocr_get_buffer_size(f.graph.get(),0),old_hidden=f.hidden?ggml_backend_buffer_get_size(f.hidden.get()):0;
+    f.full_graph_reserve=f.graph_bytes;f.full_hidden_bytes=f.hidden_bytes;
+    f.graph=std::shared_ptr<ggml_gallocr>(ggml_gallocr_new(ggml_backend_get_default_buffer_type(f.backend)),ggml_gallocr_free);
+    require(bool(f.graph),"Decode graph allocator creation failed");f.graph_bytes=0;
+    if(f.hidden){f.hidden.reset();f.hidden=llama_dsv41_tile_executor::reserve_hidden(f.backend,1,f.tile,f.bf16,f.ids,f.metadata,admitted_hidden);
+        f.hidden_bytes=ggml_backend_buffer_get_size(f.hidden.get());}
+    f.decode_compact=true;
+    std::fprintf(stderr,"LLAMADECODE_DECODE_COMPACT graph_bytes=%llu->dynamic hidden_bytes=%llu->%llu\n",(unsigned long long)old_graph,(unsigned long long)old_hidden,(unsigned long long)f.hidden_bytes);
+}
+static void restore_fixed(llama_dsv41_fixed_storage&f,uint64_t admitted_hidden){
+    require(f.ready&&f.decode_compact,"Prefill restore requires a compacted decode plan");
+    ggml_backend_synchronize(f.backend);
+    f.graph.reset();f.hidden.reset();
+    f.graph=std::shared_ptr<ggml_gallocr>(ggml_gallocr_new(ggml_backend_get_default_buffer_type(f.backend)),ggml_gallocr_free);
+    require(bool(f.graph),"Prefill graph allocator re-creation failed");
+    if(f.full_graph_reserve){
+        ggml_context_ptr metadata(ggml_init({65536,nullptr,true}));require(bool(metadata),"Prefill graph re-reservation metadata failed");
+        auto*space=ggml_new_tensor_1d(metadata.get(),GGML_TYPE_I8,int64_t(f.full_graph_reserve));ggml_set_output(space);
+        auto*graph=ggml_new_graph_custom(metadata.get(),16,false);ggml_build_forward_expand(graph,space);
+        require(ggml_gallocr_reserve(f.graph.get(),graph),"Prefill graph re-reservation failed");
+        require(ggml_gallocr_get_buffer_size(f.graph.get(),0)==f.full_graph_reserve,"Prefill graph re-reservation differs");
+    }
+    f.graph_bytes=f.full_graph_reserve;
+    if(f.full_hidden_bytes){f.hidden=llama_dsv41_tile_executor::reserve_hidden(f.backend,f.tokens,f.tile,f.bf16,f.ids,f.metadata,admitted_hidden);
+        f.hidden_bytes=ggml_backend_buffer_get_size(f.hidden.get());require(f.hidden_bytes==f.full_hidden_bytes,"Prefill hidden re-reservation differs");}
+    f.decode_compact=false;
+    std::fprintf(stderr,"LLAMADECODE_PREFILL_RESTORE graph_bytes=%llu hidden_bytes=%llu\n",(unsigned long long)f.graph_bytes,(unsigned long long)f.hidden_bytes);
+}
+bool llama_dsv41_sweep::open(const llama_dsv41_weight_provider::config &weights,const config &options,std::string &error,llama_dsv41_sweep *warmup,llama_dsv41_sweep *prefix,const native_base*restored){
     std::unique_lock<std::mutex>lock(p->mutex,std::try_to_lock);error.clear();
     if(!lock.owns_lock()){error="V4.1 sweep is already active";return false;}
     try{
         require(p->state==implementation::fresh,"V4.1 sweep cannot reopen or replace an existing request");
         require(!warmup||!prefix,"Warmup reset and stateful append are distinct operations");
+        require(!restored||(!prefix&&options.stateful_chunks&&!options.capture_dspark&&
+            restored->frontier.mode==1&&restored->frontier.context==options.context&&
+            restored->frontier.position==restored->tokens.size()&&restored->frontier.position&&
+            restored->frontier.position<options.context&&options.carry.tokens<options.context-restored->frontier.position&&
+            restored->logits.size()==vocabulary&&bool(restored->read)),"Restored base requires a complete same-context mode1 checkpoint");
+        if(restored){
+            require(std::all_of(restored->tokens.begin(),restored->tokens.end(),[](int32_t t){return t>=0&&uint32_t(t)<vocabulary;}),"Restored base token out of range");
+            finite(restored->logits);
+            require(dsv41_boundary::sha256(restored->tokens.data(),restored->tokens.size()*4)==restored->tokens_sha256&&
+                dsv41_boundary::sha256(restored->logits.data(),restored->logits.size()*4)==restored->logits_sha256,"Restored base token/logit identity mismatch");
+        }
         (void)llama_dsv41_plan_append(options.pair_ffn,options.carry.max_tile_tokens,options.compute_step_tokens,0,options.unaligned_append_step_tokens);
         require(!options.unaligned_append_step_tokens||(options.stateful_chunks&&options.fixed&&options.reuse_graph&&!options.reuse_layer_graph),"Unaligned append policy requires the existing stateful fixed owner");
         require(!options.compute_step_tokens||(options.compute_step_tokens<=options.carry.max_tile_tokens&&(!options.pair_ffn||options.compute_step_tokens==options.carry.max_tile_tokens)),"Logical compute step exceeds its admitted tile or changes paired group alignment");
@@ -257,7 +307,7 @@ bool llama_dsv41_sweep::open(const llama_dsv41_weight_provider::config &weights,
             require(!prefix->p->tokens.empty()&&prefix->p->tokens.size()<options.context&&options.carry.tokens<options.context-prefix->p->tokens.size(),"Appended context must retain the next native decode position");
             p->position_offset=uint32_t(prefix->p->tokens.size());
             const auto schedule=llama_dsv41_plan_append(options.pair_ffn,options.carry.max_tile_tokens,options.compute_step_tokens,p->position_offset,options.unaligned_append_step_tokens);
-            if(schedule.single_attention_append)std::fprintf(stderr,"DS4PERF_UNALIGNED_APPEND_PLAN prefix_tokens=%u step=%u fixed_group=%u unchanged_budget=1 single_attention_graph=1\n",p->position_offset,schedule.step,options.carry.max_tile_tokens);
+            if(schedule.single_attention_append)llama_dsv41_layer_log("DS4PERF_UNALIGNED_APPEND_PLAN prefix_tokens=%u step=%u fixed_group=%u unchanged_budget=1 single_attention_graph=1\n",p->position_offset,schedule.step,options.carry.max_tile_tokens);
             ggml_backend_synchronize(weights.backend);
             prefix->p->published.store(false);prefix->p->state=implementation::poisoned;
             prefix->p->executor.reset();
@@ -265,7 +315,19 @@ bool llama_dsv41_sweep::open(const llama_dsv41_weight_provider::config &weights,
             p->tokens=std::move(prefix->p->tokens);p->initial_engram=prefix->p->final_engram;
             p->cache=std::move(prefix->p->cache);p->provider=std::move(prefix->p->provider);prefix->p->backend=nullptr;
             success(p->provider.restart_prompt(weights,error),error);
-            std::fprintf(stderr,"DS4PERF_APPEND_OWNER_TRANSFER prefix_tokens=%u chunk_tokens=%u canonical_cache_preserved=1 raw_pool_tails_preserved=1 old_export_revoked=1 Engram_history=%d,%d,%d\n",p->position_offset,options.carry.tokens,p->initial_engram.tail[0],p->initial_engram.tail[1],p->initial_engram.tail[2]);
+            llama_dsv41_layer_log("DS4PERF_APPEND_OWNER_TRANSFER prefix_tokens=%u chunk_tokens=%u canonical_cache_preserved=1 raw_pool_tails_preserved=1 old_export_revoked=1 Engram_history=%d,%d,%d\n",p->position_offset,options.carry.tokens,p->initial_engram.tail[0],p->initial_engram.tail[1],p->initial_engram.tail[2]);
+        }else if(warmup&&warmup->p->rebase_ready){
+            // DS4COMBO fast switch: a resumed owner gives its provider, model
+            // lease and fixed storage to a fresh request that imports a new base.
+            require(warmup!=this&&restored&&options.fixed,"Rebase requires a distinct resumed fixed owner and a restored native base");
+            std::unique_lock<std::mutex> owner_lock(warmup->p->mutex,std::try_to_lock);
+            require(owner_lock.owns_lock()&&warmup->p->state==implementation::completed&&!warmup->p->device_suspended&&
+                warmup->p->backend==weights.backend&&warmup->p->options.fixed==options.fixed,"Rebase owner changed its backend or fixed storage");
+            p->provider=std::move(warmup->p->provider);
+            warmup->p->state=implementation::poisoned;warmup->p->rebase_ready=false;
+            warmup->p->cache.reset();warmup->p->backend=nullptr;
+            success(p->provider.restart_prompt(weights,error),error);
+            llama_dsv41_layer_log("DS4COMBO_REBASE_OWNER_TRANSFER fixed_storage_kept=1 provider_kept=1 restored_position=%u\n",restored->frontier.position);
         }else if(warmup){
             require(warmup!=this,"Warmup provider cannot transfer to itself");
             std::unique_lock<std::mutex> warm_lock(warmup->p->mutex,std::try_to_lock);
@@ -301,7 +363,7 @@ bool llama_dsv41_sweep::open(const llama_dsv41_weight_provider::config &weights,
         }
         const uint64_t host=add(options.compressed_cache_bf16?1024ull*1024:0,add(options.engram_tile_lookahead?uint64_t(options.carry.max_tile_tokens)*6144*4+8ull*1024*1024:0,add(provider.host_bytes,add(carry_host,
             add(tile_host+pair_host,add(metadata_bytes+pinned_metadata+allocator_metadata+long_metadata+2ull*vocabulary*4+1024*1024,uint64_t(options.stateful_chunks?options.context:options.carry.tokens)*8))))));
-        std::fprintf(stderr,"DS4PERF_COMBINED_ADMISSION planned_host=%llu admitted_host=%llu provider_host=%llu carry_host=%llu tile_host=%llu planned_device=%llu admitted_device=%llu\n",
+        llama_dsv41_layer_log("DS4PERF_COMBINED_ADMISSION planned_host=%llu admitted_host=%llu provider_host=%llu carry_host=%llu tile_host=%llu planned_device=%llu admitted_device=%llu\n",
             (unsigned long long)host,(unsigned long long)options.admitted_host_bytes,(unsigned long long)provider.host_bytes,
             (unsigned long long)carry_budget.bounded_host_bytes,(unsigned long long)tile_host,(unsigned long long)device,(unsigned long long)options.admitted_device_bytes);
         require(device<=options.admitted_device_bytes&&host<=options.admitted_host_bytes,
@@ -313,13 +375,14 @@ bool llama_dsv41_sweep::open(const llama_dsv41_weight_provider::config &weights,
         // writes only its owned header, without preallocating the extent.
         if(options.fixed&&!options.fixed->ready){
             auto&f=*options.fixed;
-            require(!warmup&&!options.pair_ffn&&options.carry.tokens==1&&!f.ram&&!f.ram_registration,"Fixed RAM must be allocated/registered once before imports");
+            const bool first_request=f.direct_open&&!warmup&&!prefix&&(options.carry.tokens==f.tokens||(options.stateful_chunks&&options.carry.tokens<=f.tokens));
+            require(!warmup&&(first_request||(!options.pair_ffn&&options.carry.tokens==1))&&!f.ram&&!f.ram_registration,"Fixed RAM must be allocated/registered once before imports");
             f.ram=llama_dsv41_carry_store::reserve_ram(f.tokens,options.carry.admitted_host_bytes,f.tile);
             if(f.tile_registration||f.pageable_copies){
                 const bool full_resident=f.bf16&&f.ids&&f.metadata&&!options.admitted_prefetch_device_bytes;
                 const bool ram_lookahead=!f.bf16&&!f.ids&&!f.metadata&&options.admitted_prefetch_device_bytes;
                 require(full_resident||(f.tile_registration&&!f.pageable_copies&&ram_lookahead),"Tile pinning requires its explicit resident or RAM-lookahead plan");
-                std::fprintf(stderr,f.pageable_copies?"DS4PERF_RAM_ALLOCATED_PAGEABLE_BEFORE_IMPORT bytes=%llu whole_bank_pinned=0\n":"DS4PERF_RAM_ALLOCATED_BEFORE_IMPORT bytes=%llu tile_registration=1 whole_bank_pinned=0\n",(unsigned long long)f.ram->size());
+                llama_dsv41_layer_log(f.pageable_copies?"DS4PERF_RAM_ALLOCATED_PAGEABLE_BEFORE_IMPORT bytes=%llu whole_bank_pinned=0\n":"DS4PERF_RAM_ALLOCATED_BEFORE_IMPORT bytes=%llu tile_registration=1 whole_bank_pinned=0\n",(unsigned long long)f.ram->size());
             }else f.ram_registration=llama_dsv41_tile_executor::register_fixed_ram(weights.backend,f.ram);
         }
         auto carry_options=options.carry;
@@ -339,7 +402,9 @@ bool llama_dsv41_sweep::open(const llama_dsv41_weight_provider::config &weights,
                 f.backend_temporary_reserve_bytes==1024ull*1024*1024),
                 "Unpaired fixed reservation requires its explicit full-resident tile-registration plan");
             if(!f.ready){
-                require(!warmup&&!options.pair_ffn&&options.carry.tokens==1&&!f.graph&&!f.hidden&&!f.cache&&f.tokens&&f.tile&&options.admitted_graph_bytes>1024ull*1024*1024,"Fixed allocation must follow provider heaps and precede first stage lease during one-token warmup");
+                const bool first_request=f.direct_open&&!warmup&&!prefix&&(options.carry.tokens==f.tokens||(options.stateful_chunks&&options.carry.tokens<=f.tokens));
+                if(first_request)llama_dsv41_layer_log("DS4COMBO_FIXED_DIRECT_OPEN tokens=%u tile=%u pair=%d warmup_pass=0\n",options.carry.tokens,f.tile,int(options.pair_ffn));
+                require(!warmup&&(first_request||(!options.pair_ffn&&options.carry.tokens==1))&&!f.graph&&!f.hidden&&!f.cache&&f.tokens&&f.tile&&options.admitted_graph_bytes>1024ull*1024*1024,"Fixed allocation must follow provider heaps and precede first stage lease during one-token warmup");
                 require((f.backend_temporary_reserve_bytes==1024ull*1024*1024||f.backend_temporary_reserve_bytes==768ull*1024*1024)&&f.backend_temporary_reserve_bytes<options.admitted_graph_bytes,"Unsupported fixed backend temporary reserve");
                 require(f.backend_temporary_reserve_bytes==1024ull*1024*1024||(options.expert.attention_kv_f16_table&&options.expert.index_key_windows&&options.expert.token_tile_attention&&f.tile<=8192),"Reduced backend reserve requires direct-F16/window profile and<=8K groups");
                 f.backend=weights.backend;
@@ -353,7 +418,7 @@ bool llama_dsv41_sweep::open(const llama_dsv41_weight_provider::config &weights,
                 require(ggml_gallocr_reserve(f.graph.get(),graph),"Fixed graph reservation after provider heaps and before first lease failed");
                 f.graph_bytes=ggml_gallocr_get_buffer_size(f.graph.get(),0);
                 require(f.graph_bytes==reserve,"Fixed graph physical capacity differs from exact reservation");
-                }else std::fprintf(stderr,"DS4PERF_GRAPH_CAPACITY_DYNAMIC group=16384 within_explicit_graph_and_job_cap=1 allocation_in_prompt_clock=1\n");
+                }else llama_dsv41_layer_log("DS4PERF_GRAPH_CAPACITY_DYNAMIC group=16384 within_explicit_graph_and_job_cap=1 allocation_in_prompt_clock=1\n");
                 if(options.admitted_hidden_bytes){
                     f.hidden=llama_dsv41_tile_executor::reserve_hidden(f.backend,f.tokens,f.tile,f.bf16,f.ids,f.metadata,options.admitted_hidden_bytes);
                     f.hidden_bytes=ggml_backend_buffer_get_size(f.hidden.get());
@@ -361,8 +426,13 @@ bool llama_dsv41_sweep::open(const llama_dsv41_weight_provider::config &weights,
                 f.cache.reset(new llama_dsv41_cache_storage(native_owners(),f.context,ggml_backend_get_default_buffer_type(f.backend),options.admitted_cache_bytes,options.compressed_cache_bf16,options.capture_dspark));
                 f.cache_bytes=f.cache->allocated_bytes();f.ready=true;
                 ggml_backend_synchronize(f.backend);
-                std::fprintf(stderr,"DS4PERF_FIXED_BEFORE_FIRST_LEASE tokens=%u tile=%u graph_bytes=%llu hidden_bytes=%llu cache_bytes=%llu existing_allocators=1 provider_heaps_created=1\n",f.tokens,f.tile,(unsigned long long)f.graph_bytes,(unsigned long long)f.hidden_bytes,(unsigned long long)f.cache_bytes);
-            }else require((warmup||prefix)&&f.backend==weights.backend&&f.graph&&(f.hidden||!options.admitted_hidden_bytes)&&f.cache,"Fixed GPU buffers lost their completed request owner");
+                llama_dsv41_layer_log("DS4PERF_FIXED_BEFORE_FIRST_LEASE tokens=%u tile=%u graph_bytes=%llu hidden_bytes=%llu cache_bytes=%llu existing_allocators=1 provider_heaps_created=1\n",f.tokens,f.tile,(unsigned long long)f.graph_bytes,(unsigned long long)f.hidden_bytes,(unsigned long long)f.cache_bytes);
+            }else{
+                require((warmup||prefix)&&f.backend==weights.backend&&f.graph&&(f.hidden||!options.admitted_hidden_bytes)&&f.cache,"Fixed GPU buffers lost their completed request owner");
+                // LLAMADECODE decode-sized plan (the previous owner's executor is already gone).
+                if(options.carry.tokens==1&&prefix&&!f.decode_compact&&decode_compact_enabled())compact_fixed(f,options.admitted_hidden_bytes);
+                else if(options.carry.tokens>1&&f.decode_compact)restore_fixed(f,options.admitted_hidden_bytes);
+            }
         }
         require(p->provider.backend()==p->backend,"V4.1 staged provider/backend identity changed");
         const auto actual=p->provider.budget();
@@ -377,6 +447,17 @@ bool llama_dsv41_sweep::open(const llama_dsv41_weight_provider::config &weights,
         require(p->cache->compact_compressed()==p->options.compressed_cache_bf16,"Fixed cache physical format differs from request admission");
         require(p->cache->captures_dspark()==p->options.capture_dspark,"Fixed cache DSpark capture admission changed");
         require(!p->options.capture_dspark||!p->options.reuse_layer_graph,"DSpark ring writes require allocator-only graph reuse");
+        if(restored){
+            // Cache replacement uses the same bounded writer and all-owner
+            // target verification as the existing native restore/delta path.
+            success(p->cache->replace_native_frontier(restored->frontier,restored->owner_sha256,
+                [&](const llama_dsv41::state_span&s,uint64_t off,void*dst,size_t n){p->check_stop();return restored->read(s,off,dst,n);},error),error);
+            p->tokens=restored->tokens;p->position_offset=uint32_t(p->tokens.size());
+            const size_t count=std::min<size_t>(p->tokens.size(),3);
+            success(p->provider.restored_engram_history(p->initial_engram,p->tokens.data()+p->tokens.size()-count,count,error),error);
+            (void)llama_dsv41_plan_append(options.pair_ffn,options.carry.max_tile_tokens,options.compute_step_tokens,p->position_offset,options.unaligned_append_step_tokens);
+            llama_dsv41_layer_log("DS4COMBO_NATIVE_BASE_IMPORTED position=%u mode=1 all_owner_hashes_verified=1 model_eval=0\n",p->position_offset);
+        }
         llama_dsv41_tile_executor::pinned_span direct_span;
         if(p->options.admitted_pinned_device_bytes){
             success(p->carry.ram_storage(direct_span.base,direct_span.bytes,error),error);
@@ -386,8 +467,66 @@ bool llama_dsv41_sweep::open(const llama_dsv41_weight_provider::config &weights,
             1e-20f,1e-6f,20,10.f,1.5f,p->options.carry.max_tile_tokens,
             p->options.admitted_hidden_bytes?p->options.carry.tokens:0,p->options.admitted_hidden_bytes,
             p->options.admitted_pinned_device_bytes?&direct_span:nullptr,p->options.reuse_graph,p->options.reuse_layer_graph,p->options.admitted_cast_device_bytes,p->options.audit_casts,p->options.admitted_index_device_bytes,p->options.admitted_prefetch_device_bytes,p->options.coalesce_dense,p->options.carry.defer_hidden_readback,p->options.merge_attention_selected_rows,p->options.hc_projection_f16_gemm,p->options.dense_mxfp4,p->options.resident_bf16,p->options.carry.export_hidden_after_head,p->options.async_inputs,p->options.resident_ids,p->options.resident_metadata,p->options.pair_ffn,p->options.fixed));
-        std::fprintf(stderr,prefix?"DS4PERF_APPEND_ALLOCATIONS_OPEN cache_preserved=1 required_owner_admission_counted=1\n":"DS4PERF_FIXED_ALLOCATIONS_OPEN cache=1 resident=1 pinned_owner=1 before_prompt_clock=1\n");
+        llama_dsv41_layer_log(prefix?"DS4PERF_APPEND_ALLOCATIONS_OPEN cache_preserved=1 required_owner_admission_counted=1\n":"DS4PERF_FIXED_ALLOCATIONS_OPEN cache=1 resident=1 pinned_owner=1 before_prompt_clock=1\n");
         p->check_stop();p->state=implementation::opened;return true;
+    }catch(const std::exception&failure){p->poison();error=failure.what();return false;}
+}
+
+bool llama_dsv41_sweep::suspend_device(std::string&error){
+    std::unique_lock<std::mutex>lock(p->mutex,std::try_to_lock);error.clear();
+    if(!lock.owns_lock()){error="V4.1 sweep is already active";return false;}
+    try{
+        require(p->state==implementation::completed&&!p->device_suspended&&p->options.fixed&&p->options.fixed->ram&&!p->options.fixed->ram_registration,
+            "Device suspend requires a completed fixed owner with tile-registered carry RAM");
+        auto&f=*p->options.fixed;
+        ggml_backend_synchronize(p->backend);
+        // The frontier is given up: nothing may export from this owner again.
+        p->published.store(false);p->executor.reset();
+        success(p->carry.retire_shared_ram(error),error);
+        f.ram->suspend_pages();
+        success(p->provider.suspend_device(error),error);
+#ifdef GGML_USE_CUDA
+        size_t released=0;int blocks=0;
+        require(ggml_backend_cuda_switch_arena_suspend(&released,&blocks),"ggml CUDA switch arena suspend failed or is not enabled");
+        size_t free=0,total=0;ggml_backend_dev_memory(ggml_backend_get_device(p->backend),&free,&total);
+        llama_dsv41_layer_log("DS4COMBO_SWEEP_SUSPENDED arena_released_bytes=%zu arena_blocks=%d carry_ram_bytes=%llu device_free=%zu device_total=%zu\n",
+            released,blocks,(unsigned long long)f.ram->size(),free,total);
+#else
+        throw std::runtime_error("Device suspend requires the CUDA switch arena");
+#endif
+        p->device_suspended=true;p->rebase_ready=false;return true;
+    }catch(const std::exception&failure){p->poison();error=failure.what();return false;}
+}
+
+bool llama_dsv41_sweep::resume_device(std::string&error){
+    std::unique_lock<std::mutex>lock(p->mutex,std::try_to_lock);error.clear();
+    if(!lock.owns_lock()){error="V4.1 sweep is already active";return false;}
+    try{
+        require(p->state==implementation::completed&&p->device_suspended,"Device resume requires a suspended completed owner");
+#ifdef GGML_USE_CUDA
+        size_t mapped=0;int blocks=0;
+        require(ggml_backend_cuda_switch_arena_resume(&mapped,&blocks),"ggml CUDA switch arena resume failed");
+#else
+        size_t mapped=0;int blocks=0;
+#endif
+        p->options.fixed->ram->resume_pages();
+        success(p->provider.resume_device(error),error);
+        llama_dsv41_layer_log("DS4COMBO_SWEEP_RESUMED arena_mapped_bytes=%zu arena_blocks=%d carry_ram_bytes=%llu contents=zeroed rebase_required=1\n",
+            mapped,blocks,(unsigned long long)p->options.fixed->ram->size());
+        p->device_suspended=false;p->rebase_ready=true;return true;
+    }catch(const std::exception&failure){p->poison();error=failure.what();return false;}
+}
+
+bool llama_dsv41_sweep::start_next_engram(const std::vector<int32_t>&tokens,const std::vector<int32_t>&base_tail,std::string&error){
+    std::unique_lock<std::mutex>lock(p->mutex,std::try_to_lock);error.clear();
+    if(!lock.owns_lock()){error="V4.1 sweep is already active";return false;}
+    try{
+        require(p->state==implementation::opened,"Early Engram start requires an opened sweep before its run");
+        require(base_tail.size()<=3,"Restored Engram history uses at most three tokens");
+        llama_dsv41::engram_history initial;
+        if(!base_tail.empty())success(p->provider.restored_engram_history(initial,base_tail.data(),base_tail.size(),error),error);
+        success(p->provider.start_engram_prompt_early(tokens,initial,error),error);
+        return true;
     }catch(const std::exception&failure){p->poison();error=failure.what();return false;}
 }
 
@@ -409,16 +548,22 @@ bool llama_dsv41_sweep::run(const std::vector<int32_t>&tokens,const cancelled&st
         const char*engram_overlap_env=std::getenv("LLAMA_DSV41_ENGRAM_PROMPT_OVERLAP");
         const bool engram_overlap=engram_overlap_env&&std::strcmp(engram_overlap_env,"1")==0;
         require(!engram_overlap||p->options.engram_tile_lookahead,"Engram prompt overlap requires the existing lookahead worker");
-        // Declared before engram_next: every reader/loader future is joined on
-        // all exits before the outer catch can poison the provider or carry.
-        std::shared_future<void>engram_preload;
         auto prepare_engram=[&]{
             const auto started=std::chrono::steady_clock::now();std::string reason;
             success(p->provider.prepare_engram_prompt(owned,[&]{p->check_stop(stop);return false;},reason,p->initial_engram),reason);
-            std::fprintf(stderr,"[dsv41-engram-prefetch-total] wall_ms=%.6f\n",
+            llama_dsv41_layer_log("[dsv41-engram-prefetch-total] wall_ms=%.6f\n",
                 std::chrono::duration<double,std::milli>(std::chrono::steady_clock::now()-started).count());std::fflush(stderr);
         };
-        if(!engram_overlap)prepare_engram();
+        // Overlap: the whole-prompt row cache builds on the provider's early
+        // IoRing thread from sweep start (seed and layer 0 run meanwhile);
+        // prepare adopts it unfinished. Layer 1's reader waits only for table
+        // 0, layer 14's for table 1 (wait_engram_table, outside the lock).
+        // The early thread is joined by the table-1 wait or by invalidate.
+        if(engram_overlap){
+            success(p->provider.start_engram_prompt_early(owned,p->initial_engram,error,true),error);
+            llama_dsv41_layer_log("DS4PERF_ENGRAM_PROMPT_QUEUED at=sweep_start consumers=1,14 per_table_ready=1 own_ioring=1\n");
+        }
+        prepare_engram();
         ggml_tensor*embedding=nullptr;success(p->provider.acquire_embeddings(embedding,error),error);
         const uint32_t seed_rows=p->options.batch_seed_ram?std::min(4096u,p->options.carry.max_tile_tokens):tile_limit;
         const auto seed_started=std::chrono::steady_clock::now();
@@ -435,22 +580,23 @@ bool llama_dsv41_sweep::run(const std::vector<int32_t>&tokens,const cancelled&st
             }
         }
         success(p->carry.finish_seed(error),error);success(p->provider.release(error),error);
-        std::fprintf(stderr,"DS4PERF_SEED_TOTAL rows=%u tokens=%zu batched=%u wall_ms=%.6f\n",seed_rows,owned.size(),unsigned(p->options.batch_seed_ram),
+        llama_dsv41_layer_log("DS4PERF_SEED_TOTAL rows=%u tokens=%zu batched=%u wall_ms=%.6f\n",seed_rows,owned.size(),unsigned(p->options.batch_seed_ram),
             std::chrono::duration<double,std::milli>(std::chrono::steady_clock::now()-seed_started).count());
         struct engram_ready {
             uint32_t layer=0,start=0,count=0;
             llama_dsv41::engram_history history;
             std::vector<float> rows;
-            double cpu_ms=0;
+            double cpu_ms=0,table_wait_ms=0;
         };
             std::future<engram_ready> engram_next;
         auto queue_engram=[&](uint32_t layer,uint32_t start,const llama_dsv41::engram_history &history){
             require(!engram_next.valid(),"Engram lookahead cannot overwrite unconsumed rows");
             engram_next=std::async(std::launch::async,[&,layer,start,history]{
                 const auto begun=std::chrono::steady_clock::now();engram_ready out;
-                // The first layer-one decoder waits for the same immutable
-                // cache; layer zero keeps computing without a provider call.
-                if(engram_overlap&&layer==1){require(engram_preload.valid(),"Missing overlapped Engram owner");engram_preload.get();}
+                // The first decoder of each Engram layer waits for its own
+                // table of the same immutable cache, outside the provider lock.
+                if(engram_overlap&&start==0){std::string reason;
+                    success(p->provider.wait_engram_table(layer==1?0:1,[&]{p->check_stop(stop);return false;},out.table_wait_ms,reason),reason);}
                 out.layer=layer;out.start=start;out.count=std::min(compute_step,uint32_t(owned.size())-start);out.history=history;
                 std::vector<uint8_t>mask(out.count,1);std::string reason;
                 p->check_stop(stop);out.rows.reserve(uint64_t(out.count)*6144);std::vector<float>part;
@@ -459,21 +605,22 @@ bool llama_dsv41_sweep::run(const std::vector<int32_t>&tokens,const cancelled&st
                 out.cpu_ms=std::chrono::duration<double,std::milli>(std::chrono::steady_clock::now()-begun).count();return out;
             });
         };
+        double token_acquire_ms=0,token_executor_ms=0,token_compute_ms=0,token_prepare_ms=0;
         for(uint32_t layer=0;layer<layers;++layer){
             const auto layer_started=std::chrono::steady_clock::now();
             auto elapsed=[](auto start){return std::chrono::duration<double,std::milli>(std::chrono::steady_clock::now()-start).count();};
             double upload_ms=0,compute_ms=0,readback_ms=0,engram_ms=0;
             double prepare_ms=0,cleanup_ms=0,carry_read_ms=0,carry_write_ms=0,weight_cache_ms=0;
             double executor_wall_ms=0,executor_phase_gap_ms=0;
-            std::fprintf(stderr,"[dsv41-sweep] layer=%u begin tokens=%zu\n",layer,owned.size());std::fflush(stderr);
+            llama_dsv41_layer_log("[dsv41-sweep] layer=%u begin tokens=%zu\n",layer,owned.size());std::fflush(stderr);
             p->check_stop(stop);llama_dsv41_layer_graph::weights weights{};
-            success(p->provider.acquire_layer(layer,weights,error),error);
+            // LLAMADECODE B1: the decode layout leases the dense stage here; the
+            // routed experts arrive through the executor's router hook.
+            const bool routed_decode=p->provider.decode_layout();
+            if(routed_decode){require(owned.size()==1,"Routed decode layout serves exactly one appended token");
+                success(p->provider.acquire_layer_dense(layer,weights,error),error);}
+            else success(p->provider.acquire_layer(layer,weights,error),error);
             const double acquire_ms=elapsed(layer_started);
-            if(engram_overlap&&layer==0){
-                require(!engram_preload.valid(),"Engram prompt preload was started twice");
-                engram_preload=std::async(std::launch::async,prepare_engram).share();
-                std::fprintf(stderr,"DS4PERF_ENGRAM_PROMPT_QUEUED layer=0 next_consumer_layer=1 existing_ioring=1 same_provider_lock=1\n");
-            }
             const uint32_t ratio=layer<2?0:layer<20?2:1;
             // Native ds41_index_batch/attention use floor((start+count)/ratio).
             // Use the complete prompt's fixed floor, not this tile's prefix.
@@ -500,6 +647,12 @@ bool llama_dsv41_sweep::run(const std::vector<int32_t>&tokens,const cancelled&st
                     success(p->carry.lookahead_ram_tile(direct,std::min(compute_step,uint32_t(owned.size())-start-count),next,error),error);
                     request.lookahead=next;
                 }
+                if(routed_decode){
+                    const void*dense_bank=nullptr,*routed_bank=nullptr;
+                    require(p->provider.decode_banks(layer,dense_bank,routed_bank),"Routed decode banks unavailable");
+                    request.dense_bank=dense_bank;request.routed_bank=routed_bank;
+                    request.route_hook=[this,layer](const std::vector<int32_t>&ids,std::vector<int32_t>&slots,std::string&why){return p->provider.acquire_layer_experts(layer,ids,slots,why);};
+                }
                 if(!query_source(layer))request.selected=std::move(input.selected);
                 if(layer>20)request.candidates=std::move(input.candidates);
                 request.token_kinds.assign(count,0);
@@ -512,7 +665,9 @@ bool llama_dsv41_sweep::run(const std::vector<int32_t>&tokens,const cancelled&st
                         require(prepared.layer==layer&&prepared.start==start&&prepared.count==count&&prepared.rows.size()==uint64_t(count)*6144,
                             "Engram lookahead belongs to a different layer/tile");
                         history=prepared.history;request.engram_rows=std::move(prepared.rows);
-                        std::fprintf(stderr,"DS4PERF_ENGRAM_LOOKAHEAD layer=%u start=%u count=%u cpu_ms=%.6f exposed_wait_ms=%.6f prepared_prompt_cache=1\n",layer,start,count,prepared.cpu_ms,elapsed(engram_started));
+                        llama_dsv41_layer_log("DS4PERF_ENGRAM_LOOKAHEAD layer=%u start=%u count=%u cpu_ms=%.6f exposed_wait_ms=%.6f prepared_prompt_cache=1\n",layer,start,count,prepared.cpu_ms,elapsed(engram_started));
+                        if(engram_overlap&&start==0)llama_dsv41_layer_log("DS4PERF_ENGRAM_TABLE_READY table=%u consumer_layer=%u exposed_wait_ms=%.6f worker_table_wait_ms=%.6f\n",
+                            layer==1?0u:1u,layer,elapsed(engram_started),prepared.table_wait_ms);
                         if(start+count<owned.size())queue_engram(layer,start+count,history);
                     }else if(count<=4096)success(p->provider.engram_tile(layer==1?0:1,history,owned.data()+start,mask.data(),count,request.engram_rows,error),error);
                     else{request.engram_rows.reserve(uint64_t(count)*6144);std::vector<float>part;
@@ -546,23 +701,18 @@ bool llama_dsv41_sweep::run(const std::vector<int32_t>&tokens,const cancelled&st
             }
             if(layer==1)p->final_engram=history;
             if(layer==14)require(history.tail==p->final_engram.tail,"Engram layers disagreed on the completed chunk history");
-            if(engram_overlap&&layer==0){
-                const auto waited=std::chrono::steady_clock::now();
-                require(engram_preload.valid(),"Lost overlapped Engram preload future");engram_preload.get();
-                const double exposed=elapsed(waited);engram_ms+=exposed;
-                std::fprintf(stderr,"DS4PERF_ENGRAM_PROMPT_READY layer=0 before_consumer_layer=1 exposed_wait_ms=%.6f joined=1 provider_lock_retained=1\n",exposed);
-            }
             ledger_started=std::chrono::steady_clock::now();success(p->carry.commit_layer(error),error);
             const double carry_commit_ms=elapsed(ledger_started);
             ledger_started=std::chrono::steady_clock::now();success(p->provider.release(error),error);
             const double provider_release_ms=elapsed(ledger_started);
             const double ledger_wall_ms=elapsed(layer_started);
+            token_acquire_ms+=acquire_ms;token_executor_ms+=executor_wall_ms;token_compute_ms+=compute_ms;token_prepare_ms+=prepare_ms;
             const double scaffold_ms=ledger_wall_ms-acquire_ms-carry_begin_ms-executor_wall_ms-engram_ms-carry_read_ms-carry_write_ms-carry_commit_ms-provider_release_ms;
-            std::fprintf(stderr,"DS4PERF_LAYER_WALL_LEDGER layer=%u wall_ms=%.6f acquire_ms=%.6f carry_begin_ms=%.6f executor_wall_ms=%.6f executor_phase_gap_ms=%.6f engram_ms=%.6f carry_read_ms=%.6f carry_write_ms=%.6f carry_commit_ms=%.6f provider_release_ms=%.6f scaffold_ms=%.6f\n",layer,ledger_wall_ms,acquire_ms,carry_begin_ms,executor_wall_ms,executor_phase_gap_ms,engram_ms,carry_read_ms,carry_write_ms,carry_commit_ms,provider_release_ms,scaffold_ms);
+            llama_dsv41_layer_log("DS4PERF_LAYER_WALL_LEDGER layer=%u wall_ms=%.6f acquire_ms=%.6f carry_begin_ms=%.6f executor_wall_ms=%.6f executor_phase_gap_ms=%.6f engram_ms=%.6f carry_read_ms=%.6f carry_write_ms=%.6f carry_commit_ms=%.6f provider_release_ms=%.6f scaffold_ms=%.6f\n",layer,ledger_wall_ms,acquire_ms,carry_begin_ms,executor_wall_ms,executor_phase_gap_ms,engram_ms,carry_read_ms,carry_write_ms,carry_commit_ms,provider_release_ms,scaffold_ms);
             require(!p->options.diagnostic_layers||layer+1<p->options.diagnostic_layers,"Intentional incomplete DS4PERF diagnostic stop; no frontier authority");
-            std::fprintf(stderr,"[dsv41-perf] layer=%u wall_ms=%.6f acquire_ms=%.6f upload_ms=%.6f compute_ms=%.6f readback_ms=%.6f engram_ms=%.6f prepare_ms=%.6f cleanup_ms=%.6f carry_read_ms=%.6f carry_write_ms=%.6f weight_cache_ms=%.6f\n",
+            llama_dsv41_layer_log("[dsv41-perf] layer=%u wall_ms=%.6f acquire_ms=%.6f upload_ms=%.6f compute_ms=%.6f readback_ms=%.6f engram_ms=%.6f prepare_ms=%.6f cleanup_ms=%.6f carry_read_ms=%.6f carry_write_ms=%.6f weight_cache_ms=%.6f\n",
                 layer,elapsed(layer_started),acquire_ms,upload_ms,compute_ms,readback_ms,engram_ms,prepare_ms,cleanup_ms,carry_read_ms,carry_write_ms,weight_cache_ms);std::fflush(stderr);
-            std::fprintf(stderr,"[dsv41-sweep] layer=%u complete\n",layer);std::fflush(stderr);
+            llama_dsv41_layer_log("[dsv41-sweep] layer=%u complete\n",layer);std::fflush(stderr);
         }
         require(!engram_next.valid(),"Unconsumed Engram lookahead at completed frontier");
         std::optional<llama_dsv41_carry_store::tile>resident_last;
@@ -574,7 +724,12 @@ bool llama_dsv41_sweep::run(const std::vector<int32_t>&tokens,const cancelled&st
         success(p->provider.release(error),error);p->check_stop(stop);ggml_backend_synchronize(p->backend);
         const auto head_complete=std::chrono::steady_clock::now();
         p->measured.prompt_processing_ms=std::chrono::duration<double,std::milli>(head_complete-run_started).count();
-        std::fprintf(stderr,"DS4PERF_PROMPT_HEAD_COMPLETE tokens=%zu processing_ms=%.6f bulk_hidden_export_pending=%u\n",owned.size(),p->measured.prompt_processing_ms,unsigned(p->options.carry.export_hidden_after_head));
+        if(!llama_dsv41_layer_log_on()){ // LLAMADECODE: one line per decode step instead of per-layer logs
+            uint64_t ds_bytes=0;double ds_ms=0;p->provider.fetch_totals(ds_bytes,ds_ms);const auto cache=p->provider.cache_stats();
+            std::fprintf(stderr,"LLAMADECODE_TOKEN position=%u wall_ms=%.3f ds_bytes=%llu ds_transfer_ms=%.3f stage_wait_ms=%.3f executor_ms=%.3f compute_ms=%.3f prepare_ms=%.3f cache_slots=%u cache_hits_total=%llu cache_misses_total=%llu l2_slots=%u l2_hits_total=%llu\n",
+                p->position_offset,p->measured.prompt_processing_ms,(unsigned long long)ds_bytes,ds_ms,token_acquire_ms,token_executor_ms,token_compute_ms,token_prepare_ms,cache.slots,(unsigned long long)cache.hits,(unsigned long long)cache.misses,cache.l2_slots,(unsigned long long)cache.l2_hits);
+        }
+        llama_dsv41_layer_log("DS4PERF_PROMPT_HEAD_COMPLETE tokens=%zu processing_ms=%.6f bulk_hidden_export_pending=%u\n",owned.size(),p->measured.prompt_processing_ms,unsigned(p->options.carry.export_hidden_after_head));
         if(p->options.carry.export_hidden_after_head){
             for(uint32_t first=0;first<owned.size();first+=p->options.carry.max_tile_tokens){
                 p->check_stop(stop);llama_dsv41_carry_store::ram_lease lease;
@@ -661,7 +816,7 @@ bool llama_dsv41_sweep::apply_decode_delta(const decode_delta&update,
         p->check_stop();
         p->tokens.insert(p->tokens.end(),update.evaluated_tokens.begin(),update.evaluated_tokens.end());
         std::copy(update.logits.begin(),update.logits.end(),p->logits.begin());p->final_engram=history;
-        std::fprintf(stderr,"DS4PERF_DECODE_DELTA_APPLIED base=%u target=%u tokens=%zu state_bytes=%llu base_and_target_owner_hashes_verified=1 evaluated_on_RTX=0\n",
+        llama_dsv41_layer_log("DS4PERF_DECODE_DELTA_APPLIED base=%u target=%u tokens=%zu state_bytes=%llu base_and_target_owner_hashes_verified=1 evaluated_on_RTX=0\n",
             position,update.target.position,count,(unsigned long long)plan.state_bytes);
         p->state=implementation::completed;p->published.store(true);return true;
     }catch(const std::exception&failure){p->poison();error=failure.what();return false;}
@@ -673,10 +828,11 @@ bool llama_dsv41_sweep::capture_rewind_anchor(rewind_anchor&out,std::string&erro
     if(!lock.owns_lock()){error="V4.1 sweep already owns the frontier";return false;}
     try{
         p->check_stop();require(p->state==implementation::completed&&p->published.load()&&
-            p->options.stateful_chunks&&p->options.capture_dspark&&p->cache&&!p->executor,
-            "Rewind anchor requires a complete idle mode3 owner");
+            p->options.stateful_chunks&&p->cache&&!p->executor,
+            "Rewind anchor requires a complete idle mode1/3 owner");
         out={};const uint32_t pos=uint32_t(p->tokens.size());
-        out.frontier={p->options.context,pos,3,pos,std::min(pos,128u)};
+        out.frontier={p->options.context,pos,p->options.capture_dspark?3u:1u,
+            p->options.capture_dspark?pos:0u,p->options.capture_dspark?std::min(pos,128u):0u};
         llama_dsv41::wire_plan plan;success(llama_dsv41::make_wire_plan(out.frontier,plan,error),error);
         uint64_t bytes=uint64_t(vocabulary)*4;
         for(const auto&s:plan.spans)if(s.kind!=llama_dsv41::state_kind::compressed&&s.kind!=llama_dsv41::state_kind::index)bytes+=s.bytes;
@@ -693,7 +849,7 @@ bool llama_dsv41_sweep::capture_rewind_anchor(rewind_anchor&out,std::string&erro
                 if(mutable_owner)std::memcpy(out.mutable_owners[i].data()+off,dst,n);return true;
             }));
         }
-        std::fprintf(stderr,"DS4PERF_REWIND_ANCHOR position=%u bytes=%llu full_cache_copy=0\n",pos,(unsigned long long)bytes);
+        llama_dsv41_layer_log("DS4PERF_REWIND_ANCHOR position=%u bytes=%llu full_cache_copy=0\n",pos,(unsigned long long)bytes);
         return true;
     }catch(const std::exception&e){out={};p->poison();error=e.what();return false;}
 }
@@ -706,12 +862,13 @@ bool llama_dsv41_sweep::restore_rewind_anchor(const rewind_anchor&anchor,
         p->check_stop();const uint32_t old=uint32_t(p->tokens.size()),target=anchor.frontier.position;
         require(p->state==implementation::completed&&p->published.load()&&p->options.stateful_chunks&&
             p->cache&&!p->executor&&target&&target<old&&anchor.frontier.context==p->options.context&&
-            anchor.frontier.mode==3&&anchor.logits.size()==vocabulary,
-            "Rewind requires a saved earlier mode3 frontier in the same owner");
+            anchor.frontier.mode==(p->options.capture_dspark?3u:1u)&&anchor.logits.size()==vocabulary,
+            "Rewind requires a saved earlier mode1/3 frontier in the same owner");
         require(dsv41_boundary::sha256(p->tokens.data(),size_t(target)*4)==anchor.tokens_sha256&&
             dsv41_boundary::sha256(anchor.logits.data(),anchor.logits.size()*4)==anchor.logits_sha256,
             "Rewind anchor token/logit identity differs");
-        const llama_dsv41::wire_frontier base{p->options.context,old,3,old,std::min(old,128u)};
+        const llama_dsv41::wire_frontier base{p->options.context,old,p->options.capture_dspark?3u:1u,
+            p->options.capture_dspark?old:0u,p->options.capture_dspark?std::min(old,128u):0u};
         llama_dsv41::wire_plan plan;success(llama_dsv41::make_wire_plan(anchor.frontier,plan,error),error);
         require(plan.spans.size()==anchor.mutable_owners.size(),"Rewind anchor owner extent differs");
         p->published.store(false);p->state=implementation::poisoned;
@@ -724,7 +881,7 @@ bool llama_dsv41_sweep::restore_rewind_anchor(const rewind_anchor&anchor,
             },error),error);
         p->tokens.resize(target);std::copy(anchor.logits.begin(),anchor.logits.end(),p->logits.begin());p->final_engram=anchor.history;
         p->state=implementation::completed;p->published.store(true);
-        std::fprintf(stderr,"DS4PERF_REWIND base=%u target=%u token_and_all_owner_hashes_verified=1 evaluated_on_RTX=0\n",old,target);
+        llama_dsv41_layer_log("DS4PERF_REWIND base=%u target=%u token_and_all_owner_hashes_verified=1 evaluated_on_RTX=0\n",old,target);
         return true;
     }catch(const std::exception&e){p->poison();error=e.what();return false;}
 }
@@ -734,3 +891,50 @@ llama_dsv41_sweep::run_timing llama_dsv41_sweep::timing()const{
     std::lock_guard<std::mutex>lock(p->mutex);return p->state==implementation::completed?p->measured:run_timing{};
 }
 bool llama_dsv41_sweep::ready()const{return p->published.load()&&!p->stop_requested.load();}
+bool llama_dsv41_sweep::device_state_views(device_state&out,std::string&error)const{
+    std::lock_guard<std::mutex>lock(p->mutex);out={};error.clear();
+    if(p->state!=implementation::completed||!p->published.load()||!p->cache||p->options.compressed_cache_bf16||p->options.capture_dspark){
+        error="External decode requires a completed canonical F32 mode1 owner";return false;}
+    for(uint32_t l=0;l<40;++l){auto*t=p->cache->raw(l);if(!t||!t->data||t->type!=GGML_TYPE_F32||ggml_nbytes(t)!=128ull*512*4){error="Raw ring geometry differs";return false;}out.raw[l]=t->data;}
+    const uint32_t owners[4]={2,8,14,20};
+    for(uint32_t i=0;i<4;++i){auto*c=p->cache->compressed(owners[i]);auto*x=p->cache->index(owners[i]);
+        if(!c||!x||!c->data||!x->data||c->type!=GGML_TYPE_F32||x->type!=GGML_TYPE_F32||c->ne[0]!=512||x->ne[0]!=128||c->ne[1]!=x->ne[1]){error="Compressed/index cache geometry differs";return false;}
+        out.compressed[i]=c->data;out.index[i]=x->data;out.rows[i]=uint32_t(c->ne[1]);
+        if(i<3){auto*k=p->cache->pool_kv(owners[i]);auto*s=p->cache->pool_score(owners[i]);
+            if(!k||!s||!k->data||!s->data||ggml_nbytes(k)!=512*4||ggml_nbytes(s)!=512*4){error="Pool tail geometry differs";return false;}
+            out.pool_kv[i]=k->data;out.pool_score[i]=s->data;}}
+    return true;
+}
+bool llama_dsv41_sweep::engram_tail(std::array<int32_t,3>&tail,std::string&error)const{
+    std::lock_guard<std::mutex>lock(p->mutex);error.clear();
+    if(p->state!=implementation::completed||!p->published.load()){error="Engram history requires a completed owner";return false;}
+    tail=p->final_engram.tail;return true;
+}
+bool llama_dsv41_sweep::commit_external_token(int32_t token,const std::vector<float>&logits,std::string&error){
+    std::lock_guard<std::mutex>lock(p->mutex);error.clear();
+    try{
+        require(p->state==implementation::completed&&p->published.load()&&p->options.stateful_chunks&&!p->executor,
+            "External decode commit requires a completed, idle stateful owner");
+        require(token>=0&&uint32_t(token)<vocabulary&&logits.size()==vocabulary&&p->tokens.size()+1<p->options.context,"External decode token/logits/context invalid");
+        finite(logits);
+        auto history=p->final_engram;
+        success(p->provider.advance_decoded_engram(history,&token,1,error),error);
+        p->tokens.push_back(token);std::copy(logits.begin(),logits.end(),p->logits.begin());p->final_engram=history;
+        return true;
+    }catch(const std::exception&failure){p->poison();error=failure.what();return false;}
+}
+llama_dsv41_weight_provider*llama_dsv41_sweep::provider_for_external_decode(){return &p->provider;}
+bool llama_dsv41_sweep::compact_for_external_decode(std::string&error){
+    std::lock_guard<std::mutex>lock(p->mutex);error.clear();
+    try{
+        require(p->state==implementation::completed&&!p->executor&&p->options.fixed,"External decode compaction requires a completed idle fixed owner");
+        if(!p->options.fixed->decode_compact&&decode_compact_enabled())compact_fixed(*p->options.fixed,p->options.admitted_hidden_bytes);
+        return true;
+    }catch(const std::exception&failure){error=failure.what();return false;}
+}
+bool llama_dsv41_sweep::completed_logits(std::vector<float>&out,std::string&error)const{
+    std::lock_guard<std::mutex>lock(p->mutex);out.clear();error.clear();
+    if(p->state!=implementation::completed||!p->published.load()||p->stop_requested.load()||p->logits.size()!=vocabulary){
+        error="Completed logits require a published completed V4.1 frontier";return false;}
+    out=p->logits;return true;
+}

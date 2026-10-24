@@ -253,6 +253,15 @@ int ds4_mmq_q2_K_moe_soa(
     int             n_expert_used,
     cudaStream_t    stream);
 
+/* Native-half Q4_K MMID (streaming-llama accurate/fast expert path, ds4_q4k_half.cu):
+ * Q4_K weights to natural-order F16 on the fly, F32 activations rounded to F16 per tile,
+ * F16 MMA with F32 accumulation. X [tokens][channels][K] (channels 1 or 6), ids [tokens][6],
+ * out [tokens][6][M]. Only K x M = 5120x2304 / 2304x5120, <= 384 experts, cc 1200;
+ * anything else returns nonzero (no fallback). */
+int ds4_q4k_half_moe(const void *W, const float *X, const int32_t *ids, float *out, int M, int K,
+                     int tokens, int experts, int channels, cudaStream_t stream);
+int ds4_q4k_half_loader_golden(const void *source, void *out_half, int64_t k, int64_t rows, cudaStream_t stream);
+
 int ds4_mmq_q4_K_moe(
     const void    * W,
     const float   * X_f32,

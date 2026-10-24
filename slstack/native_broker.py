@@ -73,7 +73,7 @@ class OwnedProducer:
                 raise ValueError('Trusted producer binary pin changed')
             receipt = model_receipt(cfg)
             identity = self.stack.enter_context(gpu_lease(cfg))
-            watcher = HoldWatcher(cfg.get('hold_file') or Path(cfg['runtime_root']) / 'state' / 'gpu.holds', identity)
+            watcher = HoldWatcher(cfg.get('hold_file') or Path(cfg['runtime_root']) / 'state' / 'gpu.holds', identity, task=cfg.get('task', 'DS4STACK'))
             def cancelled():
                 if cancel.is_set() or watcher.reason():
                     return True

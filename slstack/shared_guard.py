@@ -29,7 +29,7 @@ def supervise(spec):
         if hashlib.sha256(source).hexdigest() != pin:
             raise RuntimeError('Pinned shared guard source changed: ' + name)
     watch = spec.get('hold_watch')
-    holds = HoldWatcher(watch['path'],watch['identity'],mac=watch.get('mac',False)) if watch else None
+    holds = HoldWatcher(watch['path'],watch['identity'],mac=watch.get('mac',False),task=watch.get('task','DS4STACK')) if watch else None
     parent = psutil.Process(spec['owner_pid'])
     if abs(parent.create_time()-spec['owner_created']) > .01:
         raise RuntimeError('Owning process identity changed before launch')

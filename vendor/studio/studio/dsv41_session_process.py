@@ -1,5 +1,5 @@
 # Derived from Studio backend/studio/dsv41_session_process.py at 5b39c3abf34523c69fb761f7dd174c710d3a7eb1.
-# Minimal source export; optional post-resume admission hook added, with existing cleanup on failure.
+# Minimal source export; transport retained with optional mode1 startup and resource-admission hooks.
 from __future__ import annotations
 import json, os, threading, time
 from pathlib import Path
@@ -7,17 +7,45 @@ import psutil
 from .dsv41_session_contract import MODEL_SHA256, MAX_CONTROL, Refused, checkpoint, command, control, require, session_identity
 
 class Producer:
+    # Owner rule: never force-kill a producer that may hold VRAM. Stop = Ctrl-Break,
+    # graceful_seconds, a second Ctrl-Break, up to stuck_seconds; still alive = STUCK,
+    # left running, receipt/log marked, GPU work refused (the caller keeps its hold).
+    graceful_seconds = 30
+    stuck_seconds = 120
+    stuck = None
 
-    def __init__(self, session, argv, env, directory, *, host_bytes, physical_floor, operation_seconds=600, idle_seconds=3600, native=None, cancelled=None, runtime_check=None, after_resume=None):
+    def _stop_job(self):
+        from .dsv41_windows_runner import StuckProcess
+        with self.job_lock:
+            if self.job and not self.stuck:
+                try:
+                    self.job.stop(graceful_seconds=self.graceful_seconds, stuck_seconds=self.stuck_seconds)
+                except StuckProcess as exc:
+                    self.stuck = str(exc)
+                    with self.state_lock:
+                        self.failure = self.stuck if self.failure is None else self.failure + '; ' + self.stuck
+
+    def __init__(self, session, argv, env, directory, *, host_bytes, physical_floor, operation_seconds=600, idle_seconds=3600, native=None, cancelled=None, runtime_check=None, native_mode=3, bootstrap=None, startup=None, owner_epoch=0, after_resume=None):
         self.creation_attempted = False
         try:
-            self._initialize(session, argv, env, directory, host_bytes=host_bytes, physical_floor=physical_floor, operation_seconds=operation_seconds, idle_seconds=idle_seconds, native=native, cancelled=cancelled, runtime_check=runtime_check, after_resume=after_resume)
+            self.native_mode = native_mode
+            require(type(owner_epoch) is int and 0<=owner_epoch<(1<<64), 'Exact bounded owner epoch required')
+            self.owner_epoch = owner_epoch
+            require(type(native_mode) is int and native_mode in (1, 3), 'Explicit native session mode must be1 or3')
+            require(bootstrap is None or native_mode == 1, 'Native bootstrap requires explicit target-only mode1')
+            self.bootstrap = bootstrap
+            require(startup is None or callable(startup) and native_mode == 1 and bootstrap is None, 'HTTP-native startup requires explicit target-only mode1 and no pipe bootstrap')
+            self.startup = startup
+            require(after_resume is None or callable(after_resume), 'Pre-readiness admission must be callable')
+            self.after_resume = after_resume
+            self.resume_admission = None
+            self._initialize(session, argv, env, directory, host_bytes=host_bytes, physical_floor=physical_floor, operation_seconds=operation_seconds, idle_seconds=idle_seconds, native=native, cancelled=cancelled, runtime_check=runtime_check)
         except BaseException as exc:
             if not self.creation_attempted:
                 exc.owned_cleanup = dict(creation_attempted=False, owned_job_empty=True, owned_process_signaled=True, owned_pid_gone=True)
             raise
 
-    def _initialize(self, session, argv, env, directory, *, host_bytes, physical_floor, operation_seconds, idle_seconds, native, cancelled, runtime_check, after_resume):
+    def _initialize(self, session, argv, env, directory, *, host_bytes, physical_floor, operation_seconds, idle_seconds, native, cancelled, runtime_check):
         session_identity(session)
         require(type(host_bytes) is int and host_bytes > 0 and (type(physical_floor) is int) and (physical_floor >= 1 << 30), 'Explicit host budget/floor required')
         require(0 < operation_seconds <= 3600 and 0 < idle_seconds <= 3600, 'Bounded session deadlines required')
@@ -60,13 +88,23 @@ class Producer:
             child_out.close()
             child_err.close()
             self.threads = [threading.Thread(target=self._watch, name='dsv41-budget', daemon=True), threading.Thread(target=self._drain, name='dsv41-stderr', daemon=True)]
+            if self.startup is not None:
+                self.threads.append(threading.Thread(target=self._drain_stdout, name='dsv41-stdout', daemon=True))
             for thread in self.threads:
                 thread.start()
             self.job.resume()
-            self.resume_admission = after_resume(self.job) if after_resume else None
-            self.ready = self._receive()
-            require(self.ready.get('status') == 'ready' and type(self.ready.get('next_sequence')) is int and (self.ready.get('next_sequence') == 1) and (self.ready.get('maximum_prefill_tokens') == 49152) and (self.ready.get('maximum_decode_tokens') == 128) and (self.ready.get('control_host_bytes') == 64 << 20), 'Unexpected persistent producer admission')
-            checkpoint(self.ready.get('checkpoint'))
+            if self.after_resume is not None:
+                self.resume_admission = self.after_resume(self.job)
+            if self.bootstrap is not None:
+                self.bootstrap(self._write)
+            if self.startup is None:
+                self.ready = self._receive()
+                require(self.ready.get('status') == 'ready' and type(self.ready.get('next_sequence')) is int and (self.ready.get('next_sequence') == 1) and (self.ready.get('maximum_prefill_tokens') == 49152) and (self.ready.get('maximum_decode_tokens') == 128) and (self.ready.get('control_host_bytes') == 64 << 20), 'Unexpected persistent producer admission')
+                checkpoint(self.ready.get('checkpoint'), self.native_mode)
+            else:
+                self.ready = self.startup(self)
+                require(type(self.ready) is dict and self.ready.get('status') == 'ready', 'HTTP-native readiness was not certified')
+            require(not self.owner_epoch or type(self.ready.get('owner_epoch')) is int and self.ready['owner_epoch'] == self.owner_epoch, 'Native process readiness owner epoch differs')
             self.deadline = None
             self.activity = time.monotonic()
             if self.runtime_check:
@@ -78,8 +116,15 @@ class Producer:
                         file.close()
                 exc.owned_cleanup = dict(creation_attempted=True, owned_job_empty=False, owned_process_signaled=False, owned_pid_gone=False)
                 raise
-            self._poison(exc)
-            self.close()
+            try:
+                self._poison(exc)
+                self.close()
+            except BaseException as cleanup:
+                exc.owned_cleanup={'creation_attempted':self.creation_attempted,
+                    'owned_job_empty':False,'owned_process_signaled':False,'owned_pid_gone':False,**self.receipt}
+                exc.owned_process=self
+                exc.owned_cleanup_error=repr(cleanup)
+                raise exc from cleanup
             exc.owned_cleanup = dict(self.receipt)
             exc.owned_diagnostic = bytes(self.diagnostic)
             raise
@@ -88,9 +133,7 @@ class Producer:
         with self.state_lock:
             if self.failure is None:
                 self.failure = str(exc)
-        with self.job_lock:
-            if self.job:
-                self.job.stop()
+        self._stop_job()
 
     def _watch(self):
         try:
@@ -117,8 +160,18 @@ class Producer:
     def _drain(self):
         try:
             while (block := self.errors.read(65536)):
-                require(len(self.diagnostic) + len(block) <= 8 << 20, 'Persistent producer diagnostic RAM cap exceeded')
-                self.diagnostic.extend(block)
+                with self.state_lock:
+                    require(len(self.diagnostic) + len(block) <= 8 << 20, 'Persistent producer diagnostic RAM cap exceeded')
+                    self.diagnostic.extend(block)
+        except BaseException as exc:
+            self._poison(exc)
+
+    def _drain_stdout(self):
+        try:
+            while (block := self.output.read(65536)):
+                with self.state_lock:
+                    require(len(self.diagnostic) + len(block) <= 8 << 20, 'Native diagnostic RAM cap exceeded')
+                    self.diagnostic.extend(block)
         except BaseException as exc:
             self._poison(exc)
 
@@ -127,6 +180,7 @@ class Producer:
         require(raw.endswith(b'\n') and len(raw) <= 65536, 'Persistent producer reply truncated or too large')
         row = control(raw)
         require(row.get('session') == self.session and row.get('model_sha256') == MODEL_SHA256, 'Producer reply identity mismatch')
+        require(not self.owner_epoch or type(row.get('owner_epoch')) is int and row['owner_epoch'] == self.owner_epoch, 'Producer reply owner epoch mismatch')
         require(self.failure is None, self.failure or 'Producer failed')
         return row
 
@@ -144,8 +198,11 @@ class Producer:
         try:
             require(not self.closed and self.failure is None, 'Session unavailable: ' + str(self.failure))
             require(self.job.poll() is None, 'Persistent producer exited')
-            command(row, self.session, self.sequence)
-            data = (json.dumps(row, separators=(',', ':'), allow_nan=False) + '\n').encode()
+            command(row, self.session, self.sequence, self.native_mode)
+            wire = dict(row)
+            if self.owner_epoch:
+                wire['owner_epoch'] = self.owner_epoch
+            data = (json.dumps(wire, separators=(',', ':'), allow_nan=False) + '\n').encode()
             require(len(data) <= MAX_CONTROL, 'Session control line exceeds bound')
             self.deadline = time.monotonic() + self.operation_seconds
             writing = True
@@ -167,7 +224,7 @@ class Producer:
     def _reply(self):
         reply = self._receive()
         require(type(reply.get('sequence')) is int and reply.get('sequence') == self.sequence and (reply.get('status') == 'complete'), 'Producer reply sequence/status mismatch')
-        checkpoint(reply.get('checkpoint'))
+        checkpoint(reply.get('checkpoint'), self.native_mode)
         return reply
 
     def request(self, row):
@@ -181,20 +238,42 @@ class Producer:
         finally:
             self._leave()
 
+    # DS4COMBO fast switch: the producer process, CUDA context and model lease stay
+    # alive while its device memory and carry RAM are given back to the native engine.
+    def suspend(self, base):
+        reply = self.request(dict(session=self.session, model_sha256=MODEL_SHA256, sequence=self.sequence, operation='suspend', base=base))
+        require(reply.get('suspended') is True, 'Producer suspend was not certified')
+        return reply
+
+    def resume(self, contract_sha256, tokens, bootstrap):
+        require(callable(bootstrap), 'Resume requires the native base writer')
+        self._enter(dict(session=self.session, model_sha256=MODEL_SHA256, sequence=self.sequence, operation='resume',
+                         native_base_contract_sha256=contract_sha256, tokens=list(tokens)))
+        try:
+            bootstrap(self._write)
+            reply = self._reply()
+            require(reply.get('peer_synchronized') is False and reply.get('prompt_tokens') == len(tokens), 'Producer resume prefill was not certified')
+            return reply
+        except BaseException as exc:
+            self._poison(exc)
+            raise
+        finally:
+            self._leave()
+
     def begin_export(self, row):
         require(row.get('operation') in ['export_initial', 'export_delta'], 'Export command required')
         self._enter(row)
         try:
             meta = self._receive()
             require(meta.get('status') == 'payload' and type(meta.get('sequence')) is int and (meta.get('sequence') == self.sequence), 'Invalid export reply')
-            target = checkpoint(meta.get('target'))
+            target = checkpoint(meta.get('target'), self.native_mode)
             require(target == row['base'], 'Export target differs from requested checkpoint')
             n = meta.get('bytes')
             require(type(n) is int and 0 < n <= 8 << 30, 'Export length exceeds native context bound')
             if row['operation'] == 'export_initial':
                 require(meta.get('kind') == 'native_initial' and meta.get('base') is None, 'Initial export format')
             else:
-                base = checkpoint(meta.get('base'))
+                base = checkpoint(meta.get('base'), self.native_mode)
                 require(meta.get('kind') == 'artifact_delta_v2_1' and base['context'] == target['context'] and (0 < target['position'] - base['position'] <= 49152), 'Incremental export format')
             self.remaining = n
             self.transfer = 'out'
@@ -273,12 +352,25 @@ class Producer:
             return self.receipt
         self.closed = True
         self.stop_event.set()
-        with self.job_lock:
-            if self.job:
-                self.job.stop()
+        self._stop_job()
+        if self.stuck:
+            # Left running: reader threads stay blocked on its pipes and the pipes stay open.
+            # Only the Job handle closes (kill-on-close was cleared, so this cannot kill).
+            pid = self.job.pid if self.job else None
+            self.receipt = dict(session=self.session, host_budget=self.host_bytes, physical_floor=self.floor,
+                                peak_rss=self.peak_rss, minimum_available_ram=self.minimum_available, failure=self.failure,
+                                owned_pid=pid, owned_job_empty=False, owned_process_signaled=False, owned_pid_gone=False,
+                                stuck=self.stuck)
+            with self.job_lock:
+                if self.job:
+                    self.job.close()
+                    self.job = None
+            raise RuntimeError(self.stuck)
+        # A 30 GB VRAM teardown can take >10 s before the pipes close; wait up to 45 s in total.
+        deadline = time.monotonic() + 45
         for thread in self.threads:
             if thread is not threading.current_thread():
-                thread.join(10)
+                thread.join(max(0.0, deadline - time.monotonic()))
         require(not any((t.is_alive() for t in self.threads)), 'Persistent producer reader did not stop')
         pid = self.job.pid if self.job else None
         end = time.monotonic() + 5

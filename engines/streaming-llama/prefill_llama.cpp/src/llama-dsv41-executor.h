@@ -8,6 +8,7 @@
 #include <string>
 #include <memory>
 #include <optional>
+#include <functional>
 #include <vector>
 
 // A bounded production tile executor, not a model loader or an inference gate.
@@ -29,6 +30,17 @@ struct llama_dsv41_fixed_storage {
     // The same fixed owners can serve an explicitly selected unpaired graph.
     // This changes allocation lifetime only, never expert/attention arithmetic.
     bool unpaired_resident=false;
+    // DS4COMBO no-warm-up start: the first real request's open() allocates the
+    // fixed RAM bank and GPU reservation itself (same sizes, same order:
+    // provider heaps -> fixed reserve -> first stage lease) instead of a
+    // throwaway one-token pass that streams every weight once (~20 s).
+    bool direct_open=false;
+    // LLAMADECODE decode-sized plan: during one-token steps the prefill-sized
+    // graph reservation and resident hidden bank are replaced by 1-row sizes
+    // (the freed VRAM holds the L2 expert cache); the next multi-token append
+    // restores the exact prefill reservations first.
+    bool decode_compact=false;
+    uint64_t full_graph_reserve=0,full_hidden_bytes=0;
 };
 
 class llama_dsv41_tile_executor {
@@ -43,6 +55,15 @@ public:
         std::vector<int8_t> text_mask;
         std::optional<llama_dsv41_carry_store::ram_lease> direct;
         std::optional<llama_dsv41_carry_store::ram_lookahead> lookahead;
+        // LLAMADECODE B1: routed decode step. The graph runs up to the router's
+        // selected experts, the hook receives their ids (and must make exactly
+        // those experts' bytes resident in routed_bank), then the rest runs.
+        // Nodes before the split may not read routed_bank; nodes after it may
+        // not read dense_bank (released by the hook).
+        // ids: router-selected experts [6*tokens]; slots (out): the cache pool
+        // slot of each id, uploaded as the routed products' ids.
+        std::function<bool(const std::vector<int32_t>&,std::vector<int32_t>&,std::string&)> route_hook;
+        const void *dense_bank=nullptr,*routed_bank=nullptr;
     };
     struct result {
         std::vector<float> residual,next_pre,dspark_mean;

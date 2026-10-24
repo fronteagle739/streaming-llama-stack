@@ -5,6 +5,7 @@
 #include "llama-dsv41-wire.h"
 #include "llama-dsv41-executor.h"
 
+#include <array>
 #include <functional>
 #include <memory>
 #include <string>
@@ -57,14 +58,37 @@ public:
     llama_dsv41_sweep(const llama_dsv41_sweep&)=delete;
     llama_dsv41_sweep&operator=(const llama_dsv41_sweep&)=delete;
 
+    struct native_base {
+        llama_dsv41::wire_frontier frontier;
+        std::vector<int32_t> tokens;
+        std::vector<float> logits;
+        std::string tokens_sha256,logits_sha256;
+        std::vector<std::string> owner_sha256;
+        llama_dsv41::wire_read_span read;
+    };
+    // Optional base is an authenticated native mode1 snapshot, streamed into
+    // the existing cache before binding the new executor. Caller separately
+    // admits its token/logit metadata and holds the same request/owner epoch.
     bool open(const llama_dsv41_weight_provider::config &weights,const config &options,std::string &error,
               llama_dsv41_sweep *completed_one_token_warmup=nullptr,
-              llama_dsv41_sweep *completed_prefix=nullptr);
+              llama_dsv41_sweep *completed_prefix=nullptr,
+              const native_base *restored_base=nullptr);
     // Immutable token IDs and, only with explicit RAM carry admission, its
     // single bank scale with context. Graph readbacks obey the explicit RAM
     // compute tile bound; physical carry pages and embedding seeds stay32.
     // Failed/cancelled/opened objects cannot start a replacement request.
     bool run(const std::vector<int32_t> &tokens,const cancelled &stop,std::string &error);
+    // DS4COMBO producer-warm: on an opened, not yet run sweep, start the
+    // Engram row cache of the NEXT request (tokens known up front) while this
+    // pass runs. base_tail is the restored base's last <=3 tokens, if any.
+    // DS4COMBO fast switch: on a completed fixed owner, release all device
+    // memory (ggml switch arena, DS pipeline) and the carry RAM pages while the
+    // process keeps its CUDA context, model lease and plans; resume maps fresh
+    // zeroed memory at the same addresses. A resumed owner may only be passed
+    // as `warmup` to open() together with a restored native base (rebase).
+    bool suspend_device(std::string &error);
+    bool resume_device(std::string &error);
+    bool start_next_engram(const std::vector<int32_t> &tokens,const std::vector<int32_t> &base_tail,std::string &error);
     struct run_timing {double prompt_processing_ms=0,export_preparation_ms=0;};
     // Actual sequential clock boundaries, available only after successful run.
     run_timing timing() const;
@@ -102,6 +126,25 @@ public:
     // bounded pages/stages and every native cache readback.
     void cancel();
     bool ready() const;
+    // LLAMADECODE B0: the completed frontier's next-token logits (F32, full
+    // vocabulary) for local greedy decode. Copies under the owner lock; fails
+    // unless the sweep is completed and published.
+    bool completed_logits(std::vector<float> &out,std::string &error) const;
+    // LLAMADECODE ds4-decode: device addresses of the canonical V4.1 state so
+    // ds4-win's own decode can advance it in place, and the host bookkeeping
+    // of one token that external decode evaluated (tokens, logits, Engram
+    // history; no cache write: the device state was advanced in place).
+    struct device_state {
+        std::array<void*,40> raw{};std::array<void*,4> compressed{},index{};std::array<uint32_t,4> rows{};
+        std::array<void*,3> pool_kv{},pool_score{};
+    };
+    bool device_state_views(device_state &out,std::string &error) const;
+    bool engram_tail(std::array<int32_t,3> &tail,std::string &error) const;
+    bool commit_external_token(int32_t token,const std::vector<float> &logits,std::string &error);
+    // The provider of this completed owner (resident decode weights, expert cache).
+    llama_dsv41_weight_provider *provider_for_external_decode();
+    // LLAMADECODE: decode-sized fixed plan for an external decoder (no executor runs).
+    bool compact_for_external_decode(std::string &error);
 private:
     struct implementation;
     std::unique_ptr<implementation>p;
