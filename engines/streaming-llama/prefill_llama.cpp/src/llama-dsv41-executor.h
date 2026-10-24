@@ -54,7 +54,9 @@ public:
         // those experts' bytes resident in routed_bank), then the rest runs.
         // Nodes before the split may not read routed_bank; nodes after it may
         // not read dense_bank (released by the hook).
-        std::function<bool(const std::vector<int32_t>&,std::string&)> route_hook;
+        // ids: router-selected experts [6*tokens]; slots (out): the cache pool
+        // slot of each id, uploaded as the routed products' ids.
+        std::function<bool(const std::vector<int32_t>&,std::vector<int32_t>&,std::string&)> route_hook;
         const void *dense_bank=nullptr,*routed_bank=nullptr;
     };
     struct result {

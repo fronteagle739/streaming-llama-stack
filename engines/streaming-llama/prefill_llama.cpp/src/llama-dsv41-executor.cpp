@@ -931,6 +931,7 @@ bool llama_dsv41_tile_executor::run(const request&in,const llama_dsv41_layer_gra
         graph_storage::variant *compiled=&transient;
         bool graph_cache_hit=false;
         int routed_split=-1; // LLAMADECODE B1: first node after the router cut
+        ggml_tensor*expert_slot_input=nullptr; // LLAMADECODE B2
         ggml_tensor*hash_experts=nullptr; // LLAMADECODE_HASH_DUMP only
         if(workspace&&workspace->cache_layouts){
             require(!boundary.active()&&!resident,"Cached layer graphs refuse capture and hidden-bank rebinding");
@@ -1037,7 +1038,12 @@ bool llama_dsv41_tile_executor::run(const request&in,const llama_dsv41_layer_gra
         ops.use_hc_projection_f16_gemm(hc_projection_f16_gemm);ops.use_hc_bf16_epilogue(expert.hc_bf16_epilogue);
         require(!merge_attention_selected_rows||expert.token_tile_attention,"Selected-row union requires explicit token-tile attention");
         llama_dsv41_layer_graph factory(ctx.get(),graph,ops,swiglu_limit,expert_scale);
-        values=pair_ffn?factory.build_pair(in.layer,p,in.compressed_rows,w,input,state,expert):factory.build(in.layer,p,in.compressed_rows,w,input,state,expert);
+        // LLAMADECODE B2: a routed decode step reads its experts from the cache
+        // pool through a slot-id input filled after the router.
+        auto routed_weights=w;expert_slot_input=nullptr;
+        if(in.route_hook){expert_slot_input=ggml_new_tensor_2d(ctx.get(),GGML_TYPE_I32,6,in.count);ggml_set_name(expert_slot_input,"dsv41_expert_slots");
+            ggml_set_input(expert_slot_input);routed_weights.ffn.expert_slots=expert_slot_input;}
+        values=pair_ffn?factory.build_pair(in.layer,p,in.compressed_rows,routed_weights,input,state,expert):factory.build(in.layer,p,in.compressed_rows,routed_weights,input,state,expert);
         if(capture_dspark){
             capture_ticket=cache.dspark_completion.begin(in.layer-37,in.position_offset+in.start,in.count);
             llama_dsv41_dspark_capture::enqueue(ctx.get(),graph,cache.dspark_ring,values.dspark_mean,
@@ -1160,6 +1166,7 @@ bool llama_dsv41_tile_executor::run(const request&in,const llama_dsv41_layer_gra
         // Keep every uploaded leaf allocated and live before graph execution;
         // gallocr may otherwise reuse its slot before the first consumer.
         for(auto*t:uploaded_inputs)ggml_build_forward_expand(graph,t);
+        if(expert_slot_input)ggml_build_forward_expand(graph,expert_slot_input);
         routed_split=-1;
         hash_experts=nullptr;
         if(llama_dsv41_hash_dump_enabled()){ // diagnostic: keep the routed ids readable after compute
@@ -1393,8 +1400,10 @@ bool llama_dsv41_tile_executor::run(const request&in,const llama_dsv41_layer_gra
             std::vector<int32_t>ids(size_t(ggml_nelements(selected)));ggml_backend_tensor_get(selected,ids.data(),0,ids.size()*sizeof(int32_t));
             llama_dsv41_layer_log("LLAMADECODE_ROUTE_IDS layer=%u ids=%d,%d,%d,%d,%d,%d\n",in.layer,ids[0],ids[1],ids[2],ids[3],ids[4],ids[5]);std::fflush(stderr);
             const auto routed_started=clock_type::now();std::string why;
-            const bool fetched=in.route_hook(ids,why);if(!fetched)std::fprintf(stderr,"LLAMADECODE_ROUTED_FAILED layer=%u reason=%s\n",in.layer,why.c_str());
+            std::vector<int32_t>slots;const bool fetched=in.route_hook(ids,slots,why);if(!fetched)std::fprintf(stderr,"LLAMADECODE_ROUTED_FAILED layer=%u reason=%s\n",in.layer,why.c_str());
             require(fetched,"Routed expert fetch failed");
+            require(expert_slot_input&&slots.size()==ids.size()&&ggml_nbytes(expert_slot_input)==slots.size()*4,"Routed expert slot ids differ from the router");
+            ggml_backend_tensor_set(expert_slot_input,slots.data(),0,slots.size()*4);
             llama_dsv41_layer_log("LLAMADECODE_ROUTED layer=%u ids=%d,%d,%d,%d,%d,%d fetch_wait_ms=%.3f split_node=%d nodes=%d\n",in.layer,
                 ids[0],ids[1],ids[2],ids[3],ids[4],ids[5],elapsed(routed_started),split,nodes);
             auto after=ggml_graph_view(compute_graph,split+1,nodes);

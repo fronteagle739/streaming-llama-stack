@@ -10,6 +10,10 @@ public:
         ggml_tensor * router; ggml_tensor * text_bias; ggml_tensor * image_bias;
         ggml_tensor * up; ggml_tensor * gate; ggml_tensor * down;
         ggml_tensor * shared_up; ggml_tensor * shared_gate; ggml_tensor * shared_down;
+        // LLAMADECODE B2: when set, the routed expert products index the
+        // decode expert-cache pool (gate/up/down hold slots, not experts) with
+        // these slot ids [6, tokens]; the router ids still select route weights.
+        ggml_tensor * expert_slots = nullptr;
     };
     struct result { ggml_tensor * output; ggml_tensor * selected; ggml_tensor * route_weights; };
     llama_dsv41_ffn_graph(ggml_context * ctx,llama_dsv41_graph_ops & ops,float limit,float route_scale);

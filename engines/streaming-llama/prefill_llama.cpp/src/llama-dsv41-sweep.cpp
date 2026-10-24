@@ -609,7 +609,7 @@ bool llama_dsv41_sweep::run(const std::vector<int32_t>&tokens,const cancelled&st
                     const void*dense_bank=nullptr,*routed_bank=nullptr;
                     require(p->provider.decode_banks(layer,dense_bank,routed_bank),"Routed decode banks unavailable");
                     request.dense_bank=dense_bank;request.routed_bank=routed_bank;
-                    request.route_hook=[this,layer](const std::vector<int32_t>&ids,std::string&why){return p->provider.acquire_layer_experts(layer,ids,why);};
+                    request.route_hook=[this,layer](const std::vector<int32_t>&ids,std::vector<int32_t>&slots,std::string&why){return p->provider.acquire_layer_experts(layer,ids,slots,why);};
                 }
                 if(!query_source(layer))request.selected=std::move(input.selected);
                 if(layer>20)request.candidates=std::move(input.candidates);
@@ -687,9 +687,9 @@ bool llama_dsv41_sweep::run(const std::vector<int32_t>&tokens,const cancelled&st
         const auto head_complete=std::chrono::steady_clock::now();
         p->measured.prompt_processing_ms=std::chrono::duration<double,std::milli>(head_complete-run_started).count();
         if(!llama_dsv41_layer_log_on()){ // LLAMADECODE: one line per decode step instead of per-layer logs
-            uint64_t ds_bytes=0;double ds_ms=0;p->provider.fetch_totals(ds_bytes,ds_ms);
-            std::fprintf(stderr,"LLAMADECODE_TOKEN position=%u wall_ms=%.3f ds_bytes=%llu ds_transfer_ms=%.3f stage_wait_ms=%.3f executor_ms=%.3f compute_ms=%.3f prepare_ms=%.3f\n",
-                p->position_offset,p->measured.prompt_processing_ms,(unsigned long long)ds_bytes,ds_ms,token_acquire_ms,token_executor_ms,token_compute_ms,token_prepare_ms);
+            uint64_t ds_bytes=0;double ds_ms=0;p->provider.fetch_totals(ds_bytes,ds_ms);const auto cache=p->provider.cache_stats();
+            std::fprintf(stderr,"LLAMADECODE_TOKEN position=%u wall_ms=%.3f ds_bytes=%llu ds_transfer_ms=%.3f stage_wait_ms=%.3f executor_ms=%.3f compute_ms=%.3f prepare_ms=%.3f cache_slots=%u cache_hits_total=%llu cache_misses_total=%llu\n",
+                p->position_offset,p->measured.prompt_processing_ms,(unsigned long long)ds_bytes,ds_ms,token_acquire_ms,token_executor_ms,token_compute_ms,token_prepare_ms,cache.slots,(unsigned long long)cache.hits,(unsigned long long)cache.misses);
         }
         llama_dsv41_layer_log("DS4PERF_PROMPT_HEAD_COMPLETE tokens=%zu processing_ms=%.6f bulk_hidden_export_pending=%u\n",owned.size(),p->measured.prompt_processing_ms,unsigned(p->options.carry.export_hidden_after_head));
         if(p->options.carry.export_hidden_after_head){

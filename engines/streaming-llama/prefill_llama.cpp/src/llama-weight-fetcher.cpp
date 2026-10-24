@@ -4032,7 +4032,13 @@ static void wf_dma_thread_fn(wf_context * wf) {
             wf->gpu_bufs[bi].in_use = true;
             wf->gpu_bufs[bi].layer_idx = layer_idx;
             wf->layers[layer_idx].gpu_buf_idx = bi;
-            wf->dma_in_flight_buf.store(bi);
+            {   int expected = -1;  // LLAMADECODE B2: an extent fetch may hold the DS queue
+                if (!wf->dma_in_flight_buf.compare_exchange_strong(expected, bi)) {
+                    wf->dma_buf_pending[bi].pending_layer.store(layer_idx);
+                    wf->gpu_bufs[bi].in_use = false; wf->gpu_bufs[bi].layer_idx = -1; wf->layers[layer_idx].gpu_buf_idx = -1;
+                    break;
+                }
+            }
             // Lock-free mode: mark this buffer not-ready until the new layer's
             // compute callback fires (wf_cuda_record_compute_done -> wf_compute_ready_cb).
             wf->dma_buf_pending[bi].compute_ready.store(false, std::memory_order_release);
@@ -6514,5 +6520,77 @@ int wf_persist_shutdown(const char * why) {
 #else
     (void) why;
     return 1;
+#endif
+}
+
+bool wf_fetch_extents_direct(wf_context * wf, int bank, const wf_extent * extents, int n,
+                             void * cuda_stream, uint64_t * bytes, double * milliseconds) {
+    if (bytes) *bytes = 0;
+    if (milliseconds) *milliseconds = 0;
+#if defined(WF_HAS_DSTORAGE) && defined(WF_HAS_CUDA)
+    if (!wf || !wf->required_dstorage || !wf->params.ds_compute_direct || !wf->ds_queue || !wf->ds_fence ||
+            bank < 0 || bank >= (int) wf->ds_compute_banks.size() || n < 0 || (n && !extents) ||
+            wf->ds_failed.load(std::memory_order_acquire)) return false;
+    if (n == 0) return true;
+    const auto & target = wf->ds_compute_banks[bank];
+    const uint64_t quarter = target.quarter_bytes, capacity = quarter * target.quarters.size();
+    const size_t block = wf->params.io_block_size;
+    if (!quarter || !block) return false;
+    auto started = std::chrono::high_resolution_clock::now();
+    // Claim the single DS submission slot (the DMA thread uses the same queue).
+    for (;;) {
+        int expected = -1;
+        if (wf->dma_in_flight_buf.compare_exchange_strong(expected, 1000 + bank)) break;
+        if (wf->ds_failed.load(std::memory_order_acquire)) return false;
+        std::this_thread::sleep_for(std::chrono::microseconds(20));
+    }
+    struct release_slot { wf_context * wf; ~release_slot() { wf->dma_in_flight_buf.store(-1); } } slot{wf};
+    uint64_t total = 0; int submitted = 0;
+    const int drain_threshold = std::max(1, wf->ds_queue_cap / 2);
+    for (int i = 0; i < n; ++i) {
+        const auto & e = extents[i];
+        if (!e.nbytes || e.file_idx < 0 || e.file_idx >= (int) wf->ds_files.size() ||
+                e.bank_offset > capacity || e.nbytes > capacity - e.bank_offset) {
+            WF_ERR("Required DirectStorage extent fetch refused: invalid extent %d", i);
+            wf->ds_failed.store(true, std::memory_order_release); return false;
+        }
+        uint64_t source = e.file_offset, destination = e.bank_offset, remaining = e.nbytes;
+        while (remaining) {
+            const uint64_t q = destination / quarter, within = destination % quarter;
+            const uint64_t chunk = std::min<uint64_t>({remaining, (uint64_t) block, quarter - within});
+            if (submitted >= drain_threshold) {
+                const uint64_t drain = ++wf->ds_fence_counter;
+                wf->ds_queue->EnqueueSignal(wf->ds_fence, drain); wf->ds_queue->Submit();
+                if (!wf_ds_fence_wait(wf, drain)) return false;
+                submitted = 0;
+            }
+            DSTORAGE_REQUEST req = {};
+            req.Options.SourceType = DSTORAGE_REQUEST_SOURCE_FILE;
+            req.Options.DestinationType = DSTORAGE_REQUEST_DESTINATION_BUFFER;
+            req.Options.CompressionFormat = DSTORAGE_COMPRESSION_FORMAT_NONE;
+            req.Source.File.Source = wf->ds_files[e.file_idx];
+            req.Source.File.Offset = source;
+            req.Source.File.Size = (UINT32) chunk;
+            req.Destination.Buffer.Resource = target.quarters[q];
+            req.Destination.Buffer.Offset = within;
+            req.Destination.Buffer.Size = (UINT32) chunk;
+            req.UncompressedSize = (UINT32) chunk;
+            wf->ds_queue->EnqueueRequest(&req); ++submitted;
+            source += chunk; destination += chunk; remaining -= chunk; total += chunk;
+        }
+    }
+    const uint64_t fence = ++wf->ds_fence_counter;
+    wf->ds_queue->EnqueueSignal(wf->ds_fence, fence);
+    wf->ds_queue->Submit();
+    if (!wf_ds_fence_wait(wf, fence)) return false;
+    if (!wf_dstorage_wave_succeeded(wf, wf->ds_queue, -1, -1)) return false;
+    if (!wf_cuda_wait_ds_fence(wf, fence, (cudaStream_t) cuda_stream)) return false;
+    wf->stat_bytes_read_nvme.fetch_add(total);
+    if (bytes) *bytes = total;
+    if (milliseconds) *milliseconds = std::chrono::duration<double, std::milli>(std::chrono::high_resolution_clock::now() - started).count();
+    return true;
+#else
+    (void) wf; (void) bank; (void) extents; (void) n; (void) cuda_stream;
+    return false;
 #endif
 }

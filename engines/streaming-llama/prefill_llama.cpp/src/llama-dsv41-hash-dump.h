@@ -51,7 +51,7 @@ inline void llama_dsv41_hash_phase(const char *phase,uint32_t layer,uint32_t pos
         if(weight){
             bool is_routed=false;for(auto*r:routed)if(r==t)is_routed=true;
             if(is_routed){
-                if(count>8)continue; // prefill tiles: routed weights are not hashed (cost)
+                if(count>8||t->ne[2]!=384)continue; // prefill tiles (cost) and the decode slot pool (ids are not slots)
                 std::vector<int32_t>unique;for(const auto e:experts)if(std::find(unique.begin(),unique.end(),e)==unique.end())unique.push_back(e);
                 std::sort(unique.begin(),unique.end());
                 uint64_t h=1469598103934665603ull;
