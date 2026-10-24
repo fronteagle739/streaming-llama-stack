@@ -3,7 +3,10 @@
 One resident producer per conversation frontier. Each request is rendered and
 tokenized in process (ds4_render, an exact port of ds4-win's renderer), matched
 against the producer's live token ids with the native's own prefix rule, and
-only the new suffix is appended with ComboProducer.prefill. A diverged prefix
+only the new suffix is appended with ComboProducer.prefill. A turn cut by a stop
+sequence or a client disconnect is remembered as its evaluated ids (prefix_source
+'memory-cut-turn'), so the next turn appends only the template closing and the new
+messages instead of re-prefilling. A diverged prefix
 retires the producer and starts a fresh one on the whole prompt. Decode is the
 producer's in-process greedy decode with EOS (id 1) as the stop token; text is
 streamed from its per-token LLAMADECODE_STEP lines and the finished text is
@@ -143,7 +146,7 @@ class SingleEngine:
         self.producer = None;self.live = [];self.leases = None;self.lease_id = None
         self.tool_memory = {};self.lock = threading.Lock();self.stopping = threading.Event()
         self.quality_value = None;self.applied_quality = None;self.last_used = time.monotonic()
-        self.poison = None;self.decoding = False
+        self.poison = None;self.decoding = False;self.cut_turn = None
         self.producer_factory = producer_factory or self._launch_producer
         self.lease_factory = lease_factory or self._lease
         self.idle_seconds = float(cfg.get('single_engine_idle_seconds', max(60, cfg['lease_minutes'] * 60 - 60)))
@@ -166,7 +169,7 @@ class SingleEngine:
     def retire(self, why):
         """Gracefully close the producer, then release the GPU hold."""
         producer, self.producer = self.producer, None
-        self.live = [];self.applied_quality = None;self.tool_memory = {}
+        self.live = [];self.applied_quality = None;self.tool_memory = {};self.cut_turn = None
         receipt = None
         try:
             if producer is not None:
@@ -223,6 +226,12 @@ class SingleEngine:
         if len(canonical) >= self.cfg['context'] - 1:raise ValueError('Prompt exceeds the admitted context')
         metrics.update(prompt_tokens=len(canonical))
         tokens, source = ds4_render.continue_live(self.live if self.producer else [], text, canonical, tokenizer)
+        cut, self.cut_turn = self.cut_turn, None
+        if self.producer is not None and tokens is None and cut is not None and cut['end'] == len(self.live):
+            assistants = [m for m in request['messages'] if m['role'] == 'assistant']
+            tokens = ds4_render.continue_cut_turn(self.live, cut['start'], text, assistants[-1] if assistants else None, tokenizer,
+                                                  think=cut['think'], reasoning=cut['reasoning'], content=cut['content'])
+            if tokens is not None:source = 'memory-cut-turn'
         metrics['prefix_source'] = source
         if self.producer is not None and tokens is None:
             metrics['fresh_reason'] = 'rendered history diverges from the live frontier'
@@ -326,7 +335,7 @@ class SingleEngine:
             if matcher and matcher.hit is not None:ended[0] = 'stop sequence'
             elif client_gone is not None and client_gone():ended[0] = 'client disconnected'
             return ended[0] is not None
-        self.decoding = True
+        turn_start = len(self.live);self.cut_turn = None;self.decoding = True
         try:result = self.decode(max_tokens, on_token) if max_tokens > 0 else dict(tokens=[], text_tokens=[], stopped=False, step_ms=[], decode_ms=0.0)
         finally:self.decoding = False
         if ended[0] is not None:result['text_tokens'] = list(shown)
@@ -337,6 +346,12 @@ class SingleEngine:
             generated_text = tokenizer.detokenize(result['text_tokens']).decode('utf-8', 'replace')
         finish = 'stop' if result['stopped'] or ended[0] == 'stop sequence' else 'length'
         parsed = finish_message(generated_text, has_tools=request['has_tools'], think=think, finish=finish)
+        if ended[0] is not None and len(self.live) > turn_start:
+            # Remember the cut turn as the evaluated ids: the client replays only what it was sent.
+            evaluated = finish_message(tokenizer.detokenize(self.live[turn_start:]).decode('utf-8', 'replace'),
+                                       has_tools=request['has_tools'], think=think, finish=finish)
+            self.cut_turn = dict(start=turn_start, end=len(self.live), think=think,
+                                 reasoning=evaluated['reasoning'] or '', content=evaluated['content'] or '')
         if parsed['calls'] and parsed['raw_tool_text']:
             for call in parsed['calls']:self.tool_memory[call['id']] = parsed['raw_tool_text']
         metrics.update(completion_tokens=len(result['text_tokens']), decode_ms=result['decode_ms'],
