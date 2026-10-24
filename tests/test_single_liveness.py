@@ -91,6 +91,17 @@ class HeartbeatTest(unittest.TestCase):
         self.assertEqual(json.loads(self.window.read_text())['deadline'], first)
         self.assertEqual(beats, [])
 
+    def test_relaunch_inside_a_request_rewrites_the_window_with_the_new_lease(self):
+        # GUI run 5d: retire + relaunch in one request left the old lease id in the window and
+        # the guardian stopped the server for a 'foreign' hold that was our own new lease.
+        from slstack.combo_single import SingleEngine
+        engine = self.proxy.engine
+        self.proxy.request_active = True;self.proxy.window(True, 'old')
+        engine.lease_id = 'new';SingleEngine.lease_changed(engine)
+        self.assertEqual(json.loads(self.window.read_text())['lease_id'], 'new')
+        self.proxy.request_active = False;engine.lease_id = 'later';SingleEngine.lease_changed(engine)
+        self.assertEqual(json.loads(self.window.read_text())['lease_id'], 'new')   # idle: untouched
+
     def test_262k_prompt_body_fits_the_context_sized_bound(self):
         body = json.dumps({'messages': [{'role': 'user', 'content': 'word ' * CONTEXT}]}).encode()
         self.assertGreater(len(body), 1 << 20)
