@@ -1,3 +1,4 @@
+#include "llama-dsv41-layer-log.h"
 #include "llama-weight-fetcher.h"
 #include "llama-wf-bounded-policy.h"
 #include "llama-wf-zero-gaps.h"
@@ -3338,7 +3339,7 @@ static bool wf_dstorage_transfer_layer(wf_context * wf, int layer_idx, int gpu_i
             if(poison)WF_ERR("LLAMADECODE_POISON_UNROUTED stage=%d poisoned_bytes=%llu fill=0xFF",layer_idx,(unsigned long long)zeroed);
             if(!cuda_ok(cudaStreamSynchronize(wf_s)))return false;
             size_t active=0;for(const auto&span:layer.spans)active+=span.is_expert&&wf_span_is_active_expert(wf,layer,span)?1:0;
-            WF_ERR("LLAMADECODE_ROUTED_STAGE stage=%d extent=%llu padding_zero_bytes=%llu routed_spans=%zu experts=%zu unrouted_extents_never_read=1",
+            if(llama_dsv41_layer_log_on())WF_ERR("LLAMADECODE_ROUTED_STAGE stage=%d extent=%llu padding_zero_bytes=%llu routed_spans=%zu experts=%zu unrouted_extents_never_read=1",
                 layer_idx,(unsigned long long)layer.total_bytes,(unsigned long long)zeroed,active,layer.active_experts.size());
         }else
         // These exact bytes are the DS destination, so complete the existing
@@ -3381,7 +3382,7 @@ static bool wf_dstorage_transfer_layer(wf_context * wf, int layer_idx, int gpu_i
                 if(!cuda_ok(cudaMemsetAsync((char*)target_buf+gap.offset,0,size_t(gap.bytes),wf_s)))return false;
                 zeroed+=gap.bytes;
             }
-            WF_ERR("DS4PERF_DIRECT_ZERO_GAPS stage=%d extent=%llu zero_bytes=%llu gaps=%zu spans=%zu all_request_bytes_verified=1 before_DS_sync_retained=1",
+            if(llama_dsv41_layer_log_on())WF_ERR("DS4PERF_DIRECT_ZERO_GAPS stage=%d extent=%llu zero_bytes=%llu gaps=%zu spans=%zu all_request_bytes_verified=1 before_DS_sync_retained=1",
                 layer_idx,(unsigned long long)layer.total_bytes,(unsigned long long)zeroed,gaps.size(),writes.size());
         }else{
             size_t begin=layer.total_bytes;for(const auto&span:layer.spans)begin=std::min(begin,span.gpu_offset);
@@ -3606,10 +3607,10 @@ static bool wf_dstorage_transfer_layer(wf_context * wf, int layer_idx, int gpu_i
     // wf_adapter_remap_tensors handles this by re-reading from GGUF and uploading
     // directly to the tensor's final data pointer.
 
-    if(wf->params.ds_compute_direct)WF_ERR("DS4PERF_DIRECT_FILLED stage=%d bank=%d waves=%d staging_D2D_bytes=0",layer_idx,gpu_idx,we-ws);
+    if(wf->params.ds_compute_direct)if(llama_dsv41_layer_log_on())WF_ERR("DS4PERF_DIRECT_FILLED stage=%d bank=%d waves=%d staging_D2D_bytes=0",layer_idx,gpu_idx,we-ws);
     auto t1 = std::chrono::high_resolution_clock::now();
     layer.nvme_read_ms = std::chrono::duration<float, std::milli>(t1 - t0).count();
-    if(wf->required_dstorage)WF_ERR("[dsv41-fetch-parts] stage=%d initialize_ms=%.6f staging_drain_ms=%.6f enqueue_ms=%.6f storage_fence_ms=%.6f cuda_handoff_api_ms=%.6f final_visibility_ms=%.6f total_ms=%.6f waves=%d",
+    if(wf->required_dstorage)if(llama_dsv41_layer_log_on())WF_ERR("[dsv41-fetch-parts] stage=%d initialize_ms=%.6f staging_drain_ms=%.6f enqueue_ms=%.6f storage_fence_ms=%.6f cuda_handoff_api_ms=%.6f final_visibility_ms=%.6f total_ms=%.6f waves=%d",
         layer_idx,initialize_ms,staging_drain_ms,enqueue_ms,storage_fence_ms,cuda_handoff_api_ms,interval_ms(visibility_started,t1),interval_ms(t0,t1),we-ws);
     wf->stat_bytes_read_nvme.fetch_add(layer.total_bytes - std::min(layer.total_bytes, cache_bytes));
     wf->ds_layer_fence_val[layer_idx] = wf->ds_fence_counter.load();
@@ -4062,7 +4063,7 @@ static void wf_dma_thread_fn(wf_context * wf) {
                     if (last.layer_idx == layer_idx)
                         last.t_fence = std::chrono::high_resolution_clock::now();
                     if (wf->required_dstorage && last.layer_idx == layer_idx)
-                        WF_ERR("[dsv41-fetch-timeline] stage=%d submit_epoch_ms=%.6f fence_epoch_ms=%.6f",
+                        if(llama_dsv41_layer_log_on())WF_ERR("[dsv41-fetch-timeline] stage=%d submit_epoch_ms=%.6f fence_epoch_ms=%.6f",
                             layer_idx,
                             std::chrono::duration<double,std::milli>(last.t_submit.time_since_epoch()).count(),
                             std::chrono::duration<double,std::milli>(last.t_fence.time_since_epoch()).count());

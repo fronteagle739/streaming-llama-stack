@@ -110,6 +110,8 @@ public:
     bool acquire_layer_dense(uint32_t layer,llama_dsv41_layer_graph::weights &weights,std::string &error);
     bool acquire_layer_experts(uint32_t layer,const std::vector<int32_t> &ids,std::string &error);
     bool decode_layout() const;
+    // DirectStorage bytes and transfer milliseconds of the stages acquired since start_request.
+    void fetch_totals(uint64_t &bytes,double &milliseconds) const;
     // The ggml buffers holding a decode layer's dense and routed stages.
     bool decode_banks(uint32_t layer,const void *&dense,const void *&routed) const;
     bool release(std::string &error);
