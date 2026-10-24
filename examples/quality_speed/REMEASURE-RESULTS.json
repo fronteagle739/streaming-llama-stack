@@ -1,0 +1,40 @@
+{
+ "status": "PASS: five points re-measured on the merged native binary",
+ "date": "2026-10-24",
+ "native_binary_sha256": "8db2b8645121b3aacb06aef8248a81d860030da7d41c27e0efcb2cbd74996a8a",
+ "stack_revision": "038ad1d",
+ "method": "Native ds4-win only, ctx 4096, calibration presets/dsv41-affinity-spreads.txt. One warm-up request, then for each named point: set through /v1/quality-speed, one greedy 192-token request (integers and squares). endpoint_tok_s is the native latest 16-token throughput window read after the request; request_tok_s is predicted_n/predicted_ms for the whole request, including the slow first windows after each request starts. Sequential observations, not a controlled benchmark.",
+ "points": [
+  {
+   "name": "max_quality",
+   "endpoint_tok_s": 6.17733,
+   "request_tok_s": 6.246,
+   "previous_binary_endpoint_tok_s": 5.7726
+  },
+  {
+   "name": "balanced",
+   "endpoint_tok_s": 16.6614,
+   "request_tok_s": 8.685,
+   "previous_binary_endpoint_tok_s": 13.9171
+  },
+  {
+   "name": "fast",
+   "endpoint_tok_s": 18.838,
+   "request_tok_s": 8.98,
+   "previous_binary_endpoint_tok_s": 18.1871
+  },
+  {
+   "name": "faster",
+   "endpoint_tok_s": 19.5564,
+   "request_tok_s": 9.015,
+   "previous_binary_endpoint_tok_s": 20.2167
+  },
+  {
+   "name": "max_speed",
+   "endpoint_tok_s": 20.8408,
+   "request_tok_s": 9.189,
+   "previous_binary_endpoint_tok_s": 20.8504
+  }
+ ],
+ "note": "Endpoint windows reproduce the previous binary within about 20 percent at every point (6.18/16.66/18.84/19.56/20.84 vs 5.77/13.92/18.19/20.22/20.85). Engine exit was graceful."
+}
