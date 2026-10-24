@@ -25,6 +25,11 @@ const config = {
 		},
 		alias: {
 			$styles: 'src/styles'
+		},
+		// A fixed name keeps the tracked ../public/index.html.gz reproducible,
+		// so installing from a clean clone leaves the checkout unchanged.
+		version: {
+			name: 'slstack'
 		}
 	},
 
