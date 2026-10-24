@@ -53,6 +53,9 @@
 #include "ds4.h"
 #include "ds4_native_session.h"
 #include "ds4_lora.h"
+#if defined(_WIN32) && !defined(DS4_ROCM_BUILD) && !defined(DS4_NO_GPU)
+#include "ds4_dstorage.h"
+#endif
 #include "ds4_quality_phase.h"
 #include "ds4_spec_fetch_policy.h"
 static float g_cache_affinity_bias;
@@ -76175,6 +76178,22 @@ static int ds4_engine_open_internal(ds4_engine **out,
     }
 #if defined(DS4_ROCM_BUILD) || defined(DS4_NO_GPU)
     if (affinity > 0.0f) { fprintf(stderr, "ds4: cache affinity requires CUDA\n"); *out = NULL; return 1; }
+#endif
+#if defined(_WIN32) && !defined(DS4_ROCM_BUILD) && !defined(DS4_NO_GPU)
+    if(opt->backend==DS4_BACKEND_CUDA && opt->ssd_streaming) {
+        if(!ds4_ds_configure_read_parts(opt->ds_read_parts_set?opt->ds_read_parts:8u)) {
+            fprintf(stderr,"ds4: invalid DirectStorage startup controls; refusing engine open\n");
+            *out=NULL;return 1;
+        }
+    } else if(opt->ds_read_parts_set) {
+        fprintf(stderr,"ds4: --ds-read-parts requires Windows CUDA SSD streaming\n");
+        *out=NULL;return 1;
+    }
+#else
+    if(opt->ds_read_parts_set) {
+        fprintf(stderr,"ds4: --ds-read-parts requires Windows CUDA DirectStorage\n");
+        *out=NULL;return 1;
+    }
 #endif
     pthread_mutex_lock(&g_quality_mu);
     memset(&g_quality, 0, sizeof(g_quality));
