@@ -187,6 +187,7 @@ struct llama_dsv41_weight_provider::implementation {
         bool adopted=false;
     };
     std::shared_ptr<early_engram>early;
+    std::shared_ptr<llama_dsv41_engram_row_cache>row_cache;
     bool device_suspended=false;
     void create_pipeline();
     std::thread early_thread;
@@ -643,6 +644,7 @@ bool llama_dsv41_weight_provider::implementation::launch_early(const std::vector
     require(!early&&!early_thread.joinable()&&!tokens.empty()&&tokens.size()<=1048576,"Early Engram cache requires one pending request");
     identity();
     auto e=std::make_shared<early_engram>();e->tokens=tokens;e->initial=initial;e->cache.reset(new llama_dsv41_engram_prompt_cache);
+    if(row_cache)e->cache->set_row_cache(row_cache);
     const auto layout=engram;const auto offsets=engram_offsets;const auto model=path;const HANDLE handle=file;
     const uint64_t file_bytes=options.verified_file_bytes;
     const bool decided=llama_dsv41_engram_early_auto();
@@ -685,6 +687,13 @@ bool llama_dsv41_weight_provider::implementation::launch_early(const std::vector
 #endif
 }
 bool llama_dsv41_weight_provider::early_engram_queued()const{std::lock_guard<std::mutex>lock(p->mutex);return bool(p->early);}
+uint64_t llama_dsv41_weight_provider::engram_row_cache_bytes()const{std::lock_guard<std::mutex>lock(p->mutex);return p->row_cache?p->row_cache->charge():0;}
+bool llama_dsv41_weight_provider::create_engram_row_cache(uint64_t bytes,std::string&error){return p->guard([&]{
+    require(!p->row_cache&&bytes,"Engram row cache is created once with a nonzero admitted size");
+    p->row_cache=std::make_shared<llama_dsv41_engram_row_cache>(bytes);
+    llama_dsv41_layer_log("LLAMADECODE_ENGRAM_ROWCACHE_CREATED bytes=%llu capacity_rows=%u footprint_bytes=%llu\n",(unsigned long long)bytes,
+        p->row_cache->capacity_row_count(),(unsigned long long)p->row_cache->footprint());
+},error);}
 bool llama_dsv41_weight_provider::start_engram_cold(std::string&error){return p->guard([&]{
     if(!llama_dsv41_engram_early_enabled()||p->options.engram_early_tokens.empty())return;
     require(p->options.engram_prefetch_host_bytes&&p->inspected&&!p->allocated&&!p->early,"Cold early Engram start requires an inspected, admitted, unallocated provider");

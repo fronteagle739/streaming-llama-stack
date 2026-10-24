@@ -57,6 +57,8 @@ struct llama_dsv41_engram_prompt_cache::implementation {
     uint32_t early_rings=0,early_small=0,early_large=0,early_batch=0;
     uint64_t early_arena=0;
     std::shared_ptr<const llama_dsv41_engram_prompt_cache> prior;
+    // LLAMADECODE_ENGRAM_CACHE_MB (early loader only).
+    std::shared_ptr<llama_dsv41_engram_row_cache> row_cache;
     static void require(bool ok,const char* message){if(!ok)throw std::runtime_error(message);}
     static uint64_t add(uint64_t a,uint64_t b){require(a<=UINT64_MAX-b,"Engram cache plan overflow");return a+b;}
     struct api_table {
@@ -151,8 +153,13 @@ public:
         require(prepared,"Engram read requests need prepared rows");
         uint64_t n=0;
         for(size_t t=0;t<2;++t){
+            std::vector<uint8_t> held;
+            if(row_cache){
+                std::lock_guard<std::mutex> lock(row_cache->mutex);held.assign((tables[t].ids.size()+7)/8,0);
+                for(size_t i=0;i<tables[t].ids.size();++i)if(row_cache->contains(uint32_t(t),tables[t].ids[i]))held[i>>3]|=uint8_t(1u<<(i&7));
+            }
             size_t pos=0;llama_dsv41_engram_plan::extent e;
-            while(llama_dsv41_engram_plan::next_extent(tables[t].ids.data(),tables[t].ids.size(),nullptr,pos,bases[t],row_bytes,llama_dsv41_engram_plan::default_merge_cap,e))++n;
+            while(llama_dsv41_engram_plan::next_extent(tables[t].ids.data(),tables[t].ids.size(),held.empty()?nullptr:held.data(),pos,bases[t],row_bytes,llama_dsv41_engram_plan::default_merge_cap,e))++n;
         }
         return n;
     }
@@ -301,7 +308,7 @@ public:
         const uint64_t rows=uint64_t(tables[0].ids.size())+tables[1].ids.size();
         const uint64_t without=host_plan-4*1024*1024;
         // Slot tables, plan state and (with a prior cache) the hit bitmaps.
-        const uint64_t meta=add(256*1024,add(uint64_t(early_rings)*(depth+depth/16+1)*64,prior?rows/8+64:0));
+        const uint64_t meta=add(256*1024,add(uint64_t(early_rings)*(depth+depth/16+1)*64,prior||row_cache?rows/8+64:0));
         require(add(without,meta)<admitted,"Early Engram metadata exceeds explicit host admission");
         const uint64_t per=(admitted-without-meta)/early_rings;
         // Per ring: n small (8 KiB) slots and max(1,n/16) large (64 KiB) slots.
@@ -370,6 +377,20 @@ public:
                 }
             }
             prior.reset();
+        }
+        // LLAMADECODE_ENGRAM_CACHE_MB: rows the process-wide row cache holds are
+        // copied (and made most recent); only the rest are read below.
+        uint64_t cache_hits=0;double cache_lookup_ms=0;
+        if(row_cache){
+            const auto looked=clock::now();std::lock_guard<std::mutex> lock(row_cache->mutex);
+            for(size_t t=0;t<2;++t){
+                const auto& mine=tables[t].ids;if(hits[t].empty())hits[t].assign((mine.size()+7)/8,0);
+                for(size_t i=0;i<mine.size();++i){
+                    if((hits[t][i>>3]>>(i&7))&1u)continue;
+                    if(row_cache->lookup(uint32_t(t),mine[i],tables[t].data.data()+i*row_bytes)){hits[t][i>>3]|=uint8_t(1u<<(i&7));++hit_rows[t];++cache_hits;}
+                }
+            }
+            cache_lookup_ms=since(looked);
         }
         const std::array<uint64_t,2> need{tables[0].ids.size()-hit_rows[0],tables[1].ids.size()-hit_rows[1]};
         std::array<uint64_t,2> done{};
@@ -539,6 +560,20 @@ public:
         llama_dsv41_layer_log("[dsv41-engram-prefetch] table0_rows=%zu table1_rows=%zu host_plan_bytes=%llu read_bytes=%llu requests=%llu submits=%llu wall_ms=%llu early=1\n",
             tables[0].ids.size(),tables[1].ids.size(),(unsigned long long)host_plan,(unsigned long long)read_bytes,
             (unsigned long long)requests,(unsigned long long)submits,(unsigned long long)wall);
+        if(row_cache){
+            // Tables are published; insert every row (present keys are only touched).
+            const auto inserting=clock::now();uint64_t evicted=0,cached=0,capacity=0;
+            {   std::lock_guard<std::mutex> lock(row_cache->mutex);const uint64_t before=row_cache->evictions();
+                for(size_t t=0;t<2;++t)for(size_t i=0;i<tables[t].ids.size();++i)row_cache->insert(uint32_t(t),tables[t].ids[i],tables[t].data.data()+i*row_bytes);
+                evicted=row_cache->evictions()-before;cached=row_cache->rows();capacity=row_cache->capacity_row_count();}
+            const uint64_t misses=need[0]+need[1];
+            llama_dsv41_layer_log("LLAMADECODE_ENGRAM_ROWCACHE rows=%llu hits=%llu prior_hits=%llu misses=%llu hit_rate=%.4f read_bytes=%llu requests=%llu engram_wall_ms=%.3f "
+                "lookup_ms=%.3f insert_ms=%.3f cached_rows=%llu capacity_rows=%llu evicted=%llu cache_bytes=%llu\n",
+                (unsigned long long)rows,(unsigned long long)cache_hits,(unsigned long long)(hit_rows[0]+hit_rows[1]-cache_hits),(unsigned long long)misses,
+                rows?double(cache_hits)/double(rows):0.0,(unsigned long long)read_bytes,(unsigned long long)requests,wall,cache_lookup_ms,since(inserting),
+                (unsigned long long)cached,(unsigned long long)capacity,(unsigned long long)evicted,(unsigned long long)row_cache->charge());
+            row_cache.reset();
+        }
         std::fflush(stderr);
     }
     bool read(uint32_t table,uint64_t offset,void* destination,size_t bytes)const{
@@ -574,6 +609,13 @@ uint64_t llama_dsv41_engram_prompt_cache::budget()const{
  return p->budget();
 #else
  return 0;
+#endif
+}
+void llama_dsv41_engram_prompt_cache::set_row_cache(std::shared_ptr<llama_dsv41_engram_row_cache> c){
+#ifdef _WIN32
+ p->row_cache=std::move(c);
+#else
+ (void)c;
 #endif
 }
 uint64_t llama_dsv41_engram_prompt_cache::planned_requests()const{

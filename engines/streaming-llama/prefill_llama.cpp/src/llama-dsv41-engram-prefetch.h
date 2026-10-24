@@ -1,5 +1,6 @@
 #pragma once
 #include "llama-dsv41-engram.h"
+#include "llama-dsv41-engram-row-cache.h"
 #include <functional>
 #include <memory>
 // LLAMADECODE_ENGRAM_EARLY=1|auto (default auto, read once): the early paths
@@ -35,7 +36,11 @@ public:
     // prior: the provider's last completed cache; its rows are copied, not read.
     void prepare_early(const llama_dsv41::engram_layout&,const int32_t*,uint32_t,const std::array<uint64_t,2>&,uint64_t,
                        llama_dsv41::engram_history,std::shared_ptr<const llama_dsv41_engram_prompt_cache> prior);
-    // Requests the early loader would issue for the prepared rows (no hits).
+    // Requests the early loader would issue for the prepared rows (rows held by
+    // the row cache, when set, are excluded; prior-cache hits are not).
     uint64_t planned_requests()const;
+    // LLAMADECODE_ENGRAM_CACHE_MB: set before prepare_early; load_early copies
+    // the cached rows, reads only the missing ones, then inserts them.
+    void set_row_cache(std::shared_ptr<llama_dsv41_engram_row_cache>);
     void load_early(const wchar_t*,void *verified_file,uint64_t,const std::function<bool()>&);
 };
