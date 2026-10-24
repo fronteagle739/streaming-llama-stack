@@ -565,7 +565,12 @@ bool llama_dsv41_sweep::run(const std::vector<int32_t>&tokens,const cancelled&st
             double executor_wall_ms=0,executor_phase_gap_ms=0;
             std::fprintf(stderr,"[dsv41-sweep] layer=%u begin tokens=%zu\n",layer,owned.size());std::fflush(stderr);
             p->check_stop(stop);llama_dsv41_layer_graph::weights weights{};
-            success(p->provider.acquire_layer(layer,weights,error),error);
+            // LLAMADECODE B1: the decode layout leases the dense stage here; the
+            // routed experts arrive through the executor's router hook.
+            const bool routed_decode=p->provider.decode_layout();
+            if(routed_decode){require(owned.size()==1,"Routed decode layout serves exactly one appended token");
+                success(p->provider.acquire_layer_dense(layer,weights,error),error);}
+            else success(p->provider.acquire_layer(layer,weights,error),error);
             const double acquire_ms=elapsed(layer_started);
             if(engram_overlap&&layer==0){
                 require(!engram_preload.valid(),"Engram prompt preload was started twice");
@@ -597,6 +602,12 @@ bool llama_dsv41_sweep::run(const std::vector<int32_t>&tokens,const cancelled&st
                     llama_dsv41_carry_store::ram_lookahead next;
                     success(p->carry.lookahead_ram_tile(direct,std::min(compute_step,uint32_t(owned.size())-start-count),next,error),error);
                     request.lookahead=next;
+                }
+                if(routed_decode){
+                    const void*dense_bank=nullptr,*routed_bank=nullptr;
+                    require(p->provider.decode_banks(layer,dense_bank,routed_bank),"Routed decode banks unavailable");
+                    request.dense_bank=dense_bank;request.routed_bank=routed_bank;
+                    request.route_hook=[this,layer](const std::vector<int32_t>&ids,std::string&why){return p->provider.acquire_layer_experts(layer,ids,why);};
                 }
                 if(!query_source(layer))request.selected=std::move(input.selected);
                 if(layer>20)request.candidates=std::move(input.candidates);

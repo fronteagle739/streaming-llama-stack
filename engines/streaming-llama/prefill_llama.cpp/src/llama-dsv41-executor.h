@@ -8,6 +8,7 @@
 #include <string>
 #include <memory>
 #include <optional>
+#include <functional>
 #include <vector>
 
 // A bounded production tile executor, not a model loader or an inference gate.
@@ -48,6 +49,13 @@ public:
         std::vector<int8_t> text_mask;
         std::optional<llama_dsv41_carry_store::ram_lease> direct;
         std::optional<llama_dsv41_carry_store::ram_lookahead> lookahead;
+        // LLAMADECODE B1: routed decode step. The graph runs up to the router's
+        // selected experts, the hook receives their ids (and must make exactly
+        // those experts' bytes resident in routed_bank), then the rest runs.
+        // Nodes before the split may not read routed_bank; nodes after it may
+        // not read dense_bank (released by the hook).
+        std::function<bool(const std::vector<int32_t>&,std::string&)> route_hook;
+        const void *dense_bank=nullptr,*routed_bank=nullptr;
     };
     struct result {
         std::vector<float> residual,next_pre,dspark_mean;

@@ -7,6 +7,7 @@
 #include <array>
 #include "llama-dsv41-executor.h"
 #include "llama-dsv41-dense-half-admission.h"
+#include "llama-dsv41-route-split.h"
 #include "ggml-dsv41-expert-routing.h"
 #include "ggml-dsv41-topk.h"
 #include "ggml-dsv41-stream-topk.h"
@@ -40,6 +41,7 @@
 #include <cstring>
 #include <cstdio>
 #include <unordered_map>
+#include <unordered_set>
 #include <set>
 #include <mutex>
 #include <string>
@@ -926,6 +928,7 @@ bool llama_dsv41_tile_executor::run(const request&in,const llama_dsv41_layer_gra
         std::unique_ptr<graph_storage::variant> fresh;
         graph_storage::variant *compiled=&transient;
         bool graph_cache_hit=false;
+        int routed_split=-1; // LLAMADECODE B1: first routed-dependent node after partition
         if(workspace&&workspace->cache_layouts){
             require(!boundary.active()&&!resident,"Cached layer graphs refuse capture and hidden-bank rebinding");
             if(workspace->layer!=in.layer){
@@ -1154,6 +1157,14 @@ bool llama_dsv41_tile_executor::run(const request&in,const llama_dsv41_layer_gra
         // Keep every uploaded leaf allocated and live before graph execution;
         // gallocr may otherwise reuse its slot before the first consumer.
         for(auto*t:uploaded_inputs)ggml_build_forward_expand(graph,t);
+        routed_split=-1;
+        if(in.route_hook){
+            // LLAMADECODE B1: stable partition into nodes independent of the
+            // router's selected experts, then nodes that depend on them. Done
+            // before allocation; topological order holds within both parts.
+            require(!workspace||!workspace->cache_layouts,"Routed decode split refuses cached layer graphs");
+            std::string why;routed_split=llama_dsv41_route_partition(graph,"dsv41_ffn_selected_experts",why);require(routed_split>0,why.c_str());
+        }
         backend_buffers(backend,graph);
         if(llama_dsv41_expert_profile::natural_half(expert)){
             unsigned slots[3]={};
@@ -1351,6 +1362,32 @@ bool llama_dsv41_tile_executor::run(const request&in,const llama_dsv41_layer_gra
             pinned->prefetch_queue_next(*in.lookahead,in.layer);
         }else
 #endif
+        if(in.route_hook){
+            require(!prefetch_next&&in.dense_bank&&in.routed_bank&&in.dense_bank!=in.routed_bank,"Routed decode split requires its two banks and no lookahead");
+            const int nodes=ggml_graph_n_nodes(compute_graph);const int offset=compute_graph==graph?0:ggml_graph_n_nodes(graph)-nodes;
+            const int split=routed_split-1-offset;
+            require(routed_split>0&&split>=0&&split+1<nodes,"Routed decode split boundary lost");
+            ggml_tensor*selected=nullptr;for(int i=0;i<=split;++i){auto*n=ggml_graph_node(compute_graph,i);if(!std::strcmp(ggml_get_name(n),"dsv41_ffn_selected_experts"))selected=n;}
+            require(selected,"Routed decode router is not before the split");
+            auto reads=[&](const ggml_tensor*node,const void*bank){
+                if(node->buffer==bank)return true;
+                for(const auto*src:node->src){if(!src)continue;const ggml_tensor*root=src;for(unsigned d=0;d<32&&root->view_src;++d)root=root->view_src;
+                    if(src->buffer==bank||root->buffer==bank)return true;}
+                return false;};
+            for(int i=0;i<=split;++i)require(!reads(ggml_graph_node(compute_graph,i),in.routed_bank),"A pre-router node reads the routed-expert bank");
+            for(int i=split+1;i<nodes;++i)require(!reads(ggml_graph_node(compute_graph,i),in.dense_bank),"A post-router node reads the released dense bank");
+            require(selected->type==GGML_TYPE_I32&&selected->ne[0]==6&&ggml_nelements(selected)==6*int64_t(in.count),"Routed decode selected-expert geometry differs");
+            auto before=ggml_graph_view(compute_graph,0,split+1);
+            require(ggml_backend_graph_compute_async(backend,&before)==GGML_STATUS_SUCCESS,"V4.1 pre-router computation failed");
+            ggml_backend_synchronize(backend);
+            std::vector<int32_t>ids(size_t(ggml_nelements(selected)));ggml_backend_tensor_get(selected,ids.data(),0,ids.size()*sizeof(int32_t));
+            const auto routed_started=clock_type::now();std::string why;
+            require(in.route_hook(ids,why),why.empty()?"Routed expert fetch failed":why.c_str());
+            std::fprintf(stderr,"LLAMADECODE_ROUTED layer=%u ids=%d,%d,%d,%d,%d,%d fetch_wait_ms=%.3f split_node=%d nodes=%d\n",in.layer,
+                ids[0],ids[1],ids[2],ids[3],ids[4],ids[5],elapsed(routed_started),split,nodes);
+            auto after=ggml_graph_view(compute_graph,split+1,nodes);
+            require(ggml_backend_graph_compute_async(backend,&after)==GGML_STATUS_SUCCESS,"V4.1 post-router computation failed");
+        }else
         require(ggml_backend_graph_compute_async(backend,compute_graph)==GGML_STATUS_SUCCESS,"V4.1 tile backend computation failed");
         ggml_backend_synchronize(backend);pending.compute_ms=elapsed(compute_start);
         const auto post_started=clock_type::now();

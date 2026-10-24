@@ -56,6 +56,26 @@ struct llama_dsv41_weight_provider::implementation {
     gguf_context_ptr gguf;
     ggml_context_ptr tensors;
     std::array<stage,42>stages;
+    std::array<stage,82>decode_stages;bool decode_layout=false;bool experts_prebound=false;
+    std::array<ggml_tensor*,40*3>routed{};
+    uint32_t stage_count()const{return decode_layout?82u:42u;}
+    stage&stage_at(uint32_t id){return decode_layout?decode_stages[id]:stages[id];}
+    bool routed_tensor(const ggml_tensor*t)const{return std::find(routed.begin(),routed.end(),t)!=routed.end();}
+    static void place(stage&target,const entry&from,ggml_backend_buffer_type_t buft){
+        const auto where=align(target.bytes,ggml_backend_buft_get_alignment(buft));
+        target.entries.push_back({from.t,from.file_offset,where,from.allocation});target.bytes=add(where,from.allocation);
+    }
+    // Per-expert spans for a routed projection [ne0,ne1,384]; other tensors are one span.
+    void spans_for(const stage&s,std::vector<wf_weight_span>&spans)const{
+        for(const auto&e:s.entries){
+            if(decode_layout&&routed_tensor(e.t)){
+                const uint64_t total=ggml_nbytes(e.t),per=total/384;
+                require(e.t->ne[2]==384&&per*384==total&&e.t->nb[2]==per,"Routed expert tensor is not 384 contiguous experts");
+                for(int x=0;x<384;++x){wf_weight_span s{};s.tensor_name=e.t->name;s.file_offset=e.file_offset+uint64_t(x)*per;s.nbytes=size_t(per);
+                    s.alloc_size=size_t(x==383?e.allocation-383*per:per);s.alloc_offset=size_t(e.gpu_offset+uint64_t(x)*per);s.is_expert=true;s.expert_idx=x;spans.push_back(s);}
+            }else{wf_weight_span s{};s.tensor_name=e.t->name;s.file_offset=e.file_offset;s.nbytes=ggml_nbytes(e.t);s.alloc_size=e.allocation;s.alloc_offset=e.gpu_offset;s.expert_idx=-1;spans.push_back(s);}
+        }
+    }
     std::array<llama_dsv41_layer_graph::weights,40>layers{};
     ggml_tensor *embedding=nullptr,*head_norm=nullptr,*head_weight=nullptr;
     std::array<uint64_t,2>engram_offsets{};
@@ -213,12 +233,24 @@ struct llama_dsv41_weight_provider::implementation {
             f.router=get("ffn_gate_inp.weight",GGML_TYPE_F32,{5120,384});f.text_bias=get("exp_probs_b.bias",GGML_TYPE_F32,{384});f.image_bias=get("exp_probs_b_vl.bias",GGML_TYPE_F32,{384});
             f.gate=get("ffn_gate_exps.weight",GGML_TYPE_Q4_K,{5120,2304,384});f.up=get("ffn_up_exps.weight",GGML_TYPE_Q4_K,{5120,2304,384});f.down=get("ffn_down_exps.weight",GGML_TYPE_Q4_K,{2304,5120,384});
             f.shared_gate=get("ffn_gate_shexp.weight",GGML_TYPE_Q8_0,{5120,2304});f.shared_up=get("ffn_up_shexp.weight",GGML_TYPE_Q8_0,{5120,2304});f.shared_down=get("ffn_down_shexp.weight",GGML_TYPE_Q8_0,{2304,5120});
+            routed[l*3]=f.gate;routed[l*3+1]=f.up;routed[l*3+2]=f.down;
             if(l==1||l==14){w.engram_wkv=get("engram_kv.weight",GGML_TYPE_F16,{6144,25600});w.engram_q_norm=get("engram_q_norm.weight",GGML_TYPE_F32,{5120,4});w.engram_k_norm=get("engram_k_norm.weight",GGML_TYPE_F32,{5120,4});
                 const size_t e=l==1?0:1;auto*t=tensor(prefix+"engram_embd.weight",GGML_TYPE_I8,{264,engram.rows[e]});
                 const auto id=gguf_find_tensor(gguf.get(),t->name);engram_offsets[e]=add(gguf_get_data_offset(gguf.get()),gguf_get_tensor_offset(gguf.get(),id));
                 require(engram_offsets[e]<=options.verified_file_bytes&&ggml_nbytes(t)<=options.verified_file_bytes-engram_offsets[e],"Original Engram table extent is incomplete");}
         }
         for(const auto&s:stages)planned.maximum_stage_bytes=std::max(planned.maximum_stage_bytes,s.bytes);
+        {   // LLAMADECODE B1 decode layout: same tensors and file extents, re-packed.
+            const auto buft=ggml_backend_get_default_buffer_type(options.backend);
+            for(const auto&e:stages[0].entries)place(decode_stages[0],e,buft);
+            for(const auto&e:stages[41].entries)place(decode_stages[81],e,buft);
+            for(uint32_t l=0;l<40;++l){
+                // The shared expert does not depend on routing: it stays dense.
+                for(const auto&e:stages[l+1].entries)if(!routed_tensor(e.t))place(decode_stages[1+2*l],e,buft);
+                for(const auto&e:stages[l+1].entries)if(routed_tensor(e.t))place(decode_stages[2+2*l],e,buft);
+            }
+            for(const auto&s:decode_stages)require(s.bytes&&s.bytes<=planned.maximum_stage_bytes,"Decode stage exceeds the admitted prefill stage size");
+        }
         const auto policy=llama_wf_bounded::make(planned.maximum_stage_bytes,options.buffers,
             options.staging_limit_bytes?options.staging_limit_bytes:llama_wf_bounded::baseline_staging_bytes);
         planned.compute_buffer_bytes=policy.compute_buffer_bytes;
@@ -242,6 +274,12 @@ struct llama_dsv41_weight_provider::implementation {
             for(const auto&e:s.entries){const uint64_t bytes=ggml_nbytes(e.t);
                 const uint64_t cuts=(e.gpu_offset+bytes-1)/stride-e.gpu_offset/stride;
                 requests=add(requests,add((bytes+planned.request_bytes-1)/planned.request_bytes,cuts));}}
+        {   uint64_t decode_requests=0,decode_waves=0;const bool was=decode_layout;decode_layout=true;
+            for(const auto&s:decode_stages){decode_waves=add(decode_waves,(s.bytes+stride-1)/stride);std::vector<wf_weight_span>spans;spans_for(s,spans);
+                for(const auto&x:spans){const uint64_t cuts=(x.alloc_offset+x.nbytes-1)/stride-x.alloc_offset/stride;
+                    decode_requests=add(decode_requests,add((x.nbytes+planned.request_bytes-1)/planned.request_bytes,cuts));}}
+            decode_layout=was;requests=std::max(requests,decode_requests);waves=std::max(waves,decode_waves);
+        }
         require(requests<=UINT64_MAX/(4*512)&&waves<=UINT64_MAX/512,"V4.1 DS request metadata budget overflow");
         planned.host_bytes=add(metadata_allowance+factory_allowance,add(requests*(4*512),waves*512));
         if(options.ds_gpu_ring_slots)planned.host_bytes=add(planned.host_bytes,128*mib);
@@ -256,14 +294,19 @@ struct llama_dsv41_weight_provider::implementation {
         }else require(!options.engram_prefetch_tokens,"Engram token count requires cache host admission");
     }
     void acquire(uint32_t id){
-        require(allocated&&!device_suspended&&!leased&&next==id&&id<42,"V4.1 physical stage acquired out of order or while device-suspended");identity();
+        require(allocated&&!device_suspended&&!leased&&next==id&&id<stage_count(),"V4.1 physical stage acquired out of order or while device-suspended");identity();
         auto*base=wf_wait_layer_gpu(fetcher,int(id));require(base,"Required DirectStorage layer transfer failed");
         wf_cuda_wait_upload(fetcher,int(id));
         require(!wf_has_failed(fetcher),"Required DirectStorage upload synchronization failed");
         ggml_backend_buffer_t buffer=nullptr;
         for(auto&b:buffers)if(ggml_backend_buffer_get_base(b.get())==base)buffer=b.get();
         require(buffer,"DirectStorage returned an unowned compute allocation");
-        for(auto&e:stages[id].entries)require(ggml_backend_tensor_alloc(buffer,e.t,static_cast<char*>(base)+e.gpu_offset)==GGML_STATUS_SUCCESS,"Cannot bind staged native tensor");
+        const bool prebound_routed=decode_layout&&id>=2&&id<=80&&id%2==0&&experts_prebound;
+        for(auto&e:stage_at(id).entries){
+            if(prebound_routed){require(e.t->buffer==buffer&&e.t->data==static_cast<char*>(base)+e.gpu_offset,"Routed stage landed outside its pre-bound bank");continue;}
+            require(ggml_backend_tensor_alloc(buffer,e.t,static_cast<char*>(base)+e.gpu_offset)==GGML_STATUS_SUCCESS,"Cannot bind staged native tensor");
+        }
+        if(prebound_routed)experts_prebound=false;
         ggml_backend_synchronize(options.backend);leased=true;
         uint64_t fetched=0;double fetch_ms=0;
         require(wf_get_required_layer_fetch(fetcher,int(id),&fetched,&fetch_ms),"Completed strict DirectStorage timing unavailable");
@@ -336,7 +379,7 @@ bool llama_dsv41_weight_provider::allocate(std::string&error){return p->guard([&
 // pipeline while the provider keeps its model lease, metadata, stage plan and
 // Engram state; resume rebuilds the identical pipeline through the same path.
 bool llama_dsv41_weight_provider::suspend_device(std::string&error){return p->guard([&]{
-    require(p->allocated&&!p->leased&&!p->device_suspended&&(p->next==0||p->next==42),"Device suspend requires an allocated idle provider between passes");
+    require(p->allocated&&!p->leased&&!p->device_suspended&&(p->next==0||p->next==p->stage_count()),"Device suspend requires an allocated idle provider between passes");
     ggml_backend_synchronize(p->options.backend);
     wf_stop(p->fetcher);wf_quiesce(p->fetcher);require(!wf_has_failed(p->fetcher),"Provider could not quiesce before device suspend");
     wf_destroy(p->fetcher);p->fetcher=nullptr;
@@ -355,7 +398,7 @@ bool llama_dsv41_weight_provider::device_suspended()const{std::lock_guard<std::m
 void llama_dsv41_weight_provider::implementation::create_pipeline(){
     auto*p=this;
     wf_params params=wf_params_default();params.model_path=p->options.model_path.c_str();params.gpu_backend=p->options.backend;params.mode=WF_MODE_DSTORAGE;
-    params.n_layers=42;params.n_gpu_buffers=int(p->options.buffers);params.max_layer_bytes=p->planned.maximum_stage_bytes;params.n_ram_buffers=0;
+    params.n_layers=int(p->stage_count());if(p->decode_layout)params.moe_mode=WF_MOE_FETCH_ACTIVE;params.n_gpu_buffers=int(p->options.buffers);params.max_layer_bytes=p->planned.maximum_stage_bytes;params.n_ram_buffers=0;
     params.io_block_size=size_t(p->planned.request_bytes);params.ds_staging_limit_bytes=size_t(p->options.staging_limit_bytes);
     params.ds_async_drain=p->options.async_staging_drain;
     params.ds_submit_threads=p->options.ds_submit_threads;
@@ -372,13 +415,14 @@ void llama_dsv41_weight_provider::implementation::create_pipeline(){
         require(bool(b),"Admitted weight buffer allocation/wrapping failed");ggml_backend_buffer_set_usage(b.get(),GGML_BACKEND_BUFFER_USAGE_WEIGHTS);
         if(!p->options.compute_direct)wf_set_gpu_buf_ptr(p->fetcher,int(i),ggml_backend_buffer_get_base(b.get()));p->buffers.push_back(std::move(b));
     }
-    for(uint32_t i=0;i<42;++i){std::vector<wf_weight_span>spans;for(auto&e:p->stages[i].entries){wf_weight_span s{};s.tensor_name=e.t->name;s.file_offset=e.file_offset;s.nbytes=ggml_nbytes(e.t);s.alloc_size=e.allocation;s.alloc_offset=e.gpu_offset;s.expert_idx=-1;spans.push_back(s);}wf_register_layer(p->fetcher,int(i),spans.data(),int(spans.size()),p->stages[i].bytes);}
+    for(uint32_t i=0;i<p->stage_count();++i){std::vector<wf_weight_span>spans;p->spans_for(p->stage_at(i),spans);wf_register_layer(p->fetcher,int(i),spans.data(),int(spans.size()),p->stage_at(i).bytes);}
+    if(p->decode_layout)std::fprintf(stderr,"LLAMADECODE_DECODE_LAYOUT stages=82 routed_spans_per_layer=1152 moe=fetch_active banks=%u\n",p->options.buffers);
     require(!wf_has_failed(p->fetcher),"Original layer registration failed");p->identity();if(p->options.ds_gpu_ring_slots)wf_set_layer_major_mode(p->fetcher,true);wf_start(p->fetcher);
     require(!wf_has_failed(p->fetcher),"Original DirectStorage pipeline startup failed");
 }
 bool llama_dsv41_weight_provider::open(const config&options,std::string&error){return inspect(options,error)&&allocate(error);}
 bool llama_dsv41_weight_provider::restart_prompt(const config&options,std::string&error){return p->guard([&]{
-    require(p->allocated&&!p->device_suspended&&!p->leased&&p->next==42&&!p->options.ds_gpu_ring_slots,"Only a fully released non-ring resident provider pass can restart");
+    require(p->allocated&&!p->device_suspended&&!p->leased&&p->next==p->stage_count()&&!p->options.ds_gpu_ring_slots,"Only a fully released non-ring resident provider pass can restart");
     auto binding=[](const config&v){return std::tie(v.model_path,v.verified_file_bytes,v.verified_volume,v.verified_mtime_ns,v.verified_file_id,
         v.verified_sha256,v.backend,v.admitted_device_bytes,v.admitted_host_bytes,v.buffers,v.staging_limit_bytes,v.auto_request_size,
         v.async_staging_drain,v.compute_direct,v.zero_padding_only,v.engram_prefetch_host_bytes,v.ds_submit_threads,v.ds_gpu_ring_slots);};
@@ -386,6 +430,19 @@ bool llama_dsv41_weight_provider::restart_prompt(const config&options,std::strin
     require(!options.engram_prefetch_host_bytes||(options.engram_prefetch_tokens&&
         4ull*1024*1024+uint64_t(options.engram_prefetch_tokens)*48*(4+264)<=options.engram_prefetch_host_bytes),"Restarted prompt exceeds admitted immutable row-cache capacity");
     p->identity();wf_stop(p->fetcher);wf_quiesce(p->fetcher);require(!wf_has_failed(p->fetcher),"Completed provider could not quiesce before request reuse");
+    if(options.decode_layout!=p->decode_layout){
+        // LLAMADECODE B1: rebuild the same admitted pipeline with the other stage
+        // layout. Same banks/staging/admission; only stage registration differs.
+        require(!options.decode_layout||(p->options.compute_direct&&p->options.buffers==2&&!p->options.zero_padding_only),
+            "Decode layout requires the strict two-bank direct fetch profile");
+        const auto started=std::chrono::steady_clock::now();
+        wf_destroy(p->fetcher);p->fetcher=nullptr;
+        for(auto&s:p->stages)for(auto&e:s.entries){e.t->data=nullptr;e.t->buffer=nullptr;}
+        p->buffers.clear();p->decode_layout=options.decode_layout;p->experts_prebound=false;p->create_pipeline();
+        wf_stop(p->fetcher);wf_quiesce(p->fetcher);require(!wf_has_failed(p->fetcher),"Switched provider could not quiesce before request start");
+        std::fprintf(stderr,"LLAMADECODE_LAYOUT_SWITCH decode=%d switch_ms=%.3f same_admission=1\n",int(p->decode_layout),
+            std::chrono::duration<double,std::milli>(std::chrono::steady_clock::now()-started).count());
+    }
     p->engram_prompt.reset();p->options.engram_prefetch_tokens=options.engram_prefetch_tokens;p->next=0;
     for(const auto&s:p->stages)for(const auto&e:s.entries)require(!e.t->data&&!e.t->buffer,"Completed pass retained a stale staged tensor");
     std::fprintf(stderr,"DS4PERF_PROVIDER_REUSED buffers=%u compute_buffer_bytes=%llu model_lease=1 heaps=1 request_arrays=1 starts_in_timed_run=1\n",p->options.buffers,(unsigned long long)p->planned.compute_buffer_bytes);
@@ -457,9 +514,38 @@ bool llama_dsv41_weight_provider::start_engram_prompt_early(const std::vector<in
 #endif
 },error);}
 bool llama_dsv41_weight_provider::acquire_embeddings(ggml_tensor*&out,std::string&error){out=nullptr;return p->guard([&]{p->acquire(0);out=p->embedding;},error);}
-bool llama_dsv41_weight_provider::acquire_layer(uint32_t layer,llama_dsv41_layer_graph::weights&out,std::string&error){out={};return p->guard([&]{require(layer<40,"Invalid physical layer");p->acquire(layer+1);out=p->layers[layer];},error);}
-bool llama_dsv41_weight_provider::acquire_head(ggml_tensor*&norm,ggml_tensor*&out,std::string&error){norm=nullptr;out=nullptr;return p->guard([&]{p->acquire(41);norm=p->head_norm;out=p->head_weight;},error);}
-bool llama_dsv41_weight_provider::release(std::string&error){return p->guard([&]{require(p->leased&&p->next<42,"No physical weight lease to release");ggml_backend_synchronize(p->options.backend);for(auto&e:p->stages[p->next].entries){e.t->data=nullptr;e.t->buffer=nullptr;}wf_release_layer(p->fetcher,int(p->next));require(!wf_has_failed(p->fetcher),"Required DirectStorage compute release failed");p->leased=false;++p->next;},error);}
+bool llama_dsv41_weight_provider::acquire_layer(uint32_t layer,llama_dsv41_layer_graph::weights&out,std::string&error){out={};return p->guard([&]{require(layer<40&&!p->decode_layout,"Invalid physical layer");p->acquire(layer+1);out=p->layers[layer];},error);}
+bool llama_dsv41_weight_provider::acquire_head(ggml_tensor*&norm,ggml_tensor*&out,std::string&error){norm=nullptr;out=nullptr;return p->guard([&]{p->acquire(p->stage_count()-1);norm=p->head_norm;out=p->head_weight;},error);}
+bool llama_dsv41_weight_provider::decode_layout()const{std::lock_guard<std::mutex>lock(p->mutex);return p->decode_layout;}
+bool llama_dsv41_weight_provider::decode_banks(uint32_t layer,const void*&dense,const void*&routed)const{
+    std::lock_guard<std::mutex>lock(p->mutex);dense=routed=nullptr;
+    if(!p->decode_layout||layer>=40||p->buffers.size()!=2)return false;
+    dense=p->buffers[(1+2*layer)%2].get();routed=p->buffers[(2+2*layer)%2].get();return true;
+}
+bool llama_dsv41_weight_provider::acquire_layer_dense(uint32_t layer,llama_dsv41_layer_graph::weights&out,std::string&error){out={};return p->guard([&]{
+    require(layer<40&&p->decode_layout&&p->buffers.size()==2&&p->options.compute_direct,"Dense decode stage requires the two-bank decode layout");
+    p->acquire(1+2*layer);
+    // The routed stage's bank is fixed by stage parity (direct banks); bind its
+    // tensors now so the layer graph allocates once. Bytes arrive later.
+    const uint32_t id=2+2*layer;auto*bank=p->buffers[id%2].get();auto*base=static_cast<char*>(ggml_backend_buffer_get_base(bank));
+    require(base==wf_get_gpu_buf_ptr(p->fetcher,int(id%2)),"Routed bank pointer differs from its DirectStorage bank");
+    for(auto&e:p->decode_stages[id].entries){require(!e.t->buffer&&!e.t->data,"Routed tensor already bound");
+        require(ggml_backend_tensor_alloc(bank,e.t,base+e.gpu_offset)==GGML_STATUS_SUCCESS,"Cannot pre-bind routed tensor");}
+    p->experts_prebound=true;out=p->layers[layer];
+},error);}
+bool llama_dsv41_weight_provider::acquire_layer_experts(uint32_t layer,const std::vector<int32_t>&ids,std::string&error){return p->guard([&]{
+    require(layer<40&&p->decode_layout&&p->leased&&p->next==1+2*layer&&p->experts_prebound,"Routed stage requires its leased dense stage");
+    require(!ids.empty()&&ids.size()<=6*4096,"Routed expert set size invalid");
+    std::vector<int>unique;for(const auto id:ids){require(id>=0&&id<384,"Routed expert id out of range");if(std::find(unique.begin(),unique.end(),id)==unique.end())unique.push_back(id);}
+    const uint32_t stage=2+2*layer;
+    // Publish the routing first so the DMA thread serves this stage before the next dense stage.
+    wf_set_active_experts(p->fetcher,int(stage),unique.data(),int(unique.size()));
+    ggml_backend_synchronize(p->options.backend);
+    for(auto&e:p->decode_stages[1+2*layer].entries){e.t->data=nullptr;e.t->buffer=nullptr;}
+    wf_release_layer(p->fetcher,int(1+2*layer));require(!wf_has_failed(p->fetcher),"Dense stage release failed");p->leased=false;++p->next;
+    p->acquire(stage);
+},error);}
+bool llama_dsv41_weight_provider::release(std::string&error){return p->guard([&]{require(p->leased&&p->next<p->stage_count(),"No physical weight lease to release");ggml_backend_synchronize(p->options.backend);for(auto&e:p->stage_at(p->next).entries){e.t->data=nullptr;e.t->buffer=nullptr;}wf_release_layer(p->fetcher,int(p->next));require(!wf_has_failed(p->fetcher),"Required DirectStorage compute release failed");p->leased=false;++p->next;},error);}
 void llama_dsv41_weight_provider::invalidate(){if(!p)return;std::lock_guard<std::mutex>lock(p->mutex);p->invalidate();}
 bool llama_dsv41_weight_provider::advance_decoded_engram(llama_dsv41::engram_history&history,
         const int32_t*tokens,size_t count,std::string&error){return p->guard([&]{
