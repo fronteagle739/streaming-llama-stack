@@ -43733,6 +43733,13 @@ static bool ds41_hc_mix(ds41_gpu_graph *g, const ds4_model *m,
 
 /* rope_il >= 0: the heads still carry their rope; that layer's inverse rope
  * folds into the projection (else it runs first). */
+/* DS4COMBO V4.1 per-layer dump (defined with ds41_graph_layer). */
+static bool ds41_dump_pos(uint32_t pos);
+static bool ds41_dump_put(const ds4_gpu_tensor *t, uint32_t row, uint32_t words,
+                          uint32_t il, uint32_t pos, uint32_t point);
+static bool ds41_dump_rows(const ds4_gpu_tensor *t, uint32_t start, uint32_t count,
+                           uint32_t words, uint32_t il, uint32_t point);
+
 static bool ds41_attention_low(ds41_gpu_graph *g, const ds4_model *m,
                                const ds4_layer_weights *l, int rope_il) {
     const uint32_t groups = DS4_N_OUT_GROUP / g->tp_world;
@@ -43775,6 +43782,17 @@ static bool ds41_attention_output(ds41_gpu_graph *g, const ds4_model *m,
 static bool ds41_attention_expand(ds41_gpu_graph *g, const ds4_model *m,
                                   const ds4_layer_weights *l, int rope_il) {
     if (!ds41_attention_low(g, m, l, rope_il)) return false;
+    const bool dump = g->tp_world == 1 && rope_il >= 0 && ds41_dump_pos(g->pos);
+    if (dump && !ds41_dump_put(g->heads, 0, DS4_N_HEAD * DS4_N_HEAD_DIM, (uint32_t)rope_il, g->pos, 9))
+        return false;
+    if (dump) {
+        /* CUDA has no fused matmul+expand: this is the same sequence as below,
+         * split only so the projection result can be read. */
+        return ds41_attention_b(g, m, l, g->block) &&
+            ds41_dump_put(g->block, 0, DS4_N_EMBD, (uint32_t)rope_il, g->pos, 10) &&
+            ds4_gpu_hc_expand_split_bf16_tensor(g->after_attn, g->block, g->residual, g->attn_split,
+                                                DS4_N_EMBD, DS4_N_HC);
+    }
     if (l->attn_output_b->type == DS4_TENSOR_Q8_0 && !ds41_expand_fusion_off() &&
         ds4_gpu_dsv41_matmul_expand(g->after_attn, m->map, m->size, l->attn_output_b->abs_offset,
             l->attn_output_b->dim[0], l->attn_output_b->dim[1], g->low, NULL, g->residual,
@@ -43924,8 +43942,11 @@ static bool ds41_attention(ds41_gpu_graph *g, const ds4_model *m,
     if (!projected && !ds41_attention_project(g, m, l, (int)il, &q_roped)) return false;
     if ((!q_roped && !ds41_rope(g->q, heads, DS4_N_HEAD_DIM, il, pos, false)) ||
         !ds41_rope_store(g->kv, g->window[il], (uint64_t)(pos % 128u) * 512u * 4u,
-                         DS4_N_HEAD_DIM, il, pos, DS4_V41_FP8_E8M0) ||
-        !ds41_attention_select(g, m, l, il)) return false;
+                         DS4_N_HEAD_DIM, il, pos, DS4_V41_FP8_E8M0)) return false;
+    if (g->tp_world == 1 && ds41_dump_pos(pos) &&
+        (!ds41_dump_put(g->q, 0, heads * DS4_N_HEAD_DIM, il, pos, 7) ||
+         !ds41_dump_put(g->window[il], pos % 128u, DS4_N_HEAD_DIM, il, pos, 8))) return false;
+    if (!ds41_attention_select(g, m, l, il)) return false;
     const uint32_t attended = n_comp < DS4_N_INDEXER_TOP_K ? n_comp : DS4_N_INDEXER_TOP_K;
     const uint32_t n_raw = pos + 1u < 128u ? pos + 1u : 128u;
     const uint64_t sinks = l->attn_sinks->abs_offset + (uint64_t)head0 * sizeof(float);
@@ -44519,6 +44540,8 @@ static bool ds41_attention_batch(ds41_gpu_graph *g, const ds4_model *m,
     if (!ds4_gpu_dsv41_rope(b->q, DS4_N_HEAD_DIM, heads, count, start, ratio != 0, false) ||
         !ds4_gpu_dsv41_rope(b->kv, DS4_N_HEAD_DIM, 1, count, start, ratio != 0, false) ||
         !ds4_gpu_dsv41_quantize(b->kv, DS4_N_HEAD_DIM, count, DS4_V41_FP8_E8M0)) return false;
+    if (!ds41_dump_rows(b->q, start, count, heads * DS4_N_HEAD_DIM, il, 7) ||
+        !ds41_dump_rows(b->kv, start, count, DS4_N_HEAD_DIM, il, 8)) return false;
     /* Preserve chronological raw keys before publishing the final decode ring. */
     if (first && !ds4_gpu_tensor_copy(g->raw_prefill, 0, g->window[il],
                                      raw_start * row_bytes, first * row_bytes)) return false;
@@ -44631,6 +44654,7 @@ static bool ds41_attention_batch(ds41_gpu_graph *g, const ds4_model *m,
     if (!ds4_gpu_dsv41_quantize(b->heads, heads * DS4_N_HEAD_DIM, count, DS4_V41_BF16) ||
         !ds4_gpu_dsv41_rope(b->heads, DS4_N_HEAD_DIM, heads, count, start, ratio != 0, true))
         return false;
+    if (!ds41_dump_rows(b->heads, start, count, heads * DS4_N_HEAD_DIM, il, 9)) return false;
     const uint32_t kept = n_raw < 128u ? n_raw : 128u;
     const uint32_t slot = (start + count - kept) % 128u;
     const uint32_t part = kept < 128u - slot ? kept : 128u - slot;
@@ -44662,8 +44686,95 @@ static bool ds41_graph_after_moe(ds41_gpu_graph *g, const ds4_model *m,
     return !carry || ds4_gpu_tensor_copy(g->pre, 0, g->ffn_split, 0, DS4_N_HC * sizeof(float));
 }
 
+/* DS4COMBO V4.1 per-layer dump (diagnostic, off unless DS4COMBO_V41_DUMP names
+ * a file). For the positions in DS4COMBO_V41_DUMP_POS (default 0,128,275,549)
+ * both the token-major step and the layer-major sweep append, per layer:
+ *   0 attention input norm (EMBD)      1 after-attention streams (HC*EMBD)
+ *   2 FFN input norm (EMBD)            3 routed expert ids (top-k, int32)
+ *   4 routed expert weights (top-k)    5 routed experts' sum (EMBD)
+ *   6 residual streams after the layer (HC*EMBD)
+ * Record: u32 magic 0x52313444, layer, pos, point, n (4-byte words), data. */
+static FILE *g_ds41_dump_file;
+static int g_ds41_dump_state;          /* 0 unknown, 1 on, -1 off */
+static uint32_t g_ds41_dump_pos[16], g_ds41_dump_npos;
+
+static bool ds41_dump_on(void) {
+    if (!g_ds41_dump_state) {
+        const char *path = getenv("DS4COMBO_V41_DUMP");
+        g_ds41_dump_state = -1;
+        if (path && path[0] && (g_ds41_dump_file = fopen(path, "ab")) != NULL) {
+            const char *list = getenv("DS4COMBO_V41_DUMP_POS");
+            if (!list || !list[0]) list = "0,128,275,549";
+            for (const char *c = list; *c && g_ds41_dump_npos < 16u;) {
+                char *end = NULL;
+                const unsigned long v = strtoul(c, &end, 10);
+                if (end == c) break;
+                g_ds41_dump_pos[g_ds41_dump_npos++] = (uint32_t)v;
+                c = *end == ',' ? end + 1 : end;
+            }
+            g_ds41_dump_state = 1;
+            fprintf(stderr, "DS4COMBO_V41_DUMP on: %s (%u positions)\n", path, g_ds41_dump_npos);
+        }
+    }
+    return g_ds41_dump_state > 0;
+}
+
+static bool ds41_dump_pos(uint32_t pos) {
+    if (!ds41_dump_on()) return false;
+    for (uint32_t i = 0; i < g_ds41_dump_npos; i++) if (g_ds41_dump_pos[i] == pos) return true;
+    return false;
+}
+
+/* Read `words` 4-byte values at word offset `row * words` of `t`. */
+static bool ds41_dump_put(const ds4_gpu_tensor *t, uint32_t row, uint32_t words,
+                          uint32_t il, uint32_t pos, uint32_t point) {
+    if (!t || !g_ds41_dump_file) return true;
+    const bool active = ds4_gpu_commands_active() != 0;
+    if (active && !ds4_gpu_end_commands()) return false;
+    float *buf = xmalloc((size_t)words * sizeof(float));
+    const bool ok = ds4_gpu_tensor_read(t, (uint64_t)row * words * sizeof(float), buf,
+                                        (uint64_t)words * sizeof(float)) != 0;
+    if (ok) {
+        const uint32_t head[5] = {0x52313444u, il, pos, point, words};
+        fwrite(head, sizeof(head), 1, g_ds41_dump_file);
+        fwrite(buf, sizeof(float), words, g_ds41_dump_file);
+        fflush(g_ds41_dump_file);
+    } else {
+        fprintf(stderr, "DS4COMBO_V41_DUMP read failed layer=%u pos=%u point=%u\n", il, pos, point);
+    }
+    free(buf);
+    return !active || ds4_gpu_begin_commands() != 0;
+}
+
+/* The sweep's rows [start, start + count) that are dump positions. */
+static bool ds41_dump_rows(const ds4_gpu_tensor *t, uint32_t start, uint32_t count,
+                           uint32_t words, uint32_t il, uint32_t point) {
+    if (!ds41_dump_on()) return true;
+    bool ok = true;
+    for (uint32_t i = 0; ok && i < g_ds41_dump_npos; i++) {
+        const uint32_t p = g_ds41_dump_pos[i];
+        if (p >= start && p < start + count) ok = ds41_dump_put(t, p - start, words, il, p, point);
+    }
+    return ok;
+}
+
 static bool ds41_graph_layer(ds41_gpu_graph *g, const ds4_model *m,
                             const ds4_layer_weights *l, uint32_t il, int token) {
+    if (g->tp_world == 1 && ds41_dump_pos(g->pos)) {
+        const uint32_t p = g->pos, hc = DS4_N_HC * DS4_N_EMBD;
+        return ds41_graph_before_attention(g, m, l, il) &&
+            ds41_dump_put(g->norm, 0, DS4_N_EMBD, il, p, 0) &&
+            ds41_attention(g, m, l, il, false) &&
+            ds41_dump_put(g->after_attn, 0, hc, il, p, 1) &&
+            ds41_hc_mix(g, m, l, true, g->attn_split) &&
+            ds41_dump_put(g->norm, 0, DS4_N_EMBD, il, p, 2) &&
+            ds41_moe(g, m, l, il, (uint32_t)token) &&
+            ds41_dump_put(g->selected, 0, DS4_N_EXPERT_USED, il, p, 3) &&
+            ds41_dump_put(g->route_weights, 0, DS4_N_EXPERT_USED, il, p, 4) &&
+            ds41_dump_put(g->routed, 0, DS4_N_EMBD, il, p, 5) &&
+            ds41_graph_after_moe(g, m, l, il, il + 1u == DS4_N_LAYER) &&
+            ds41_dump_put(g->residual, 0, hc, il, p, 6);
+    }
     return ds41_graph_before_moe(g, m, l, il) && ds41_moe(g, m, l, il, (uint32_t)token) &&
         ds41_graph_after_moe(g, m, l, il, il + 1u == DS4_N_LAYER);
 }
@@ -45436,7 +45547,16 @@ static uint32_t ds41_prefill_count(const ds41_gpu_graph *g, uint32_t remaining) 
         !getenv("DS4_METAL_DISABLE_V41_WIDE_PREFILL")) {
         const uint32_t count = remaining < g->carry_cap ? remaining : g->carry_cap;
         /* a short sweep keeps its final partial tile instead of a second decoder pass */
-        return remaining < 8192u && !ds41_short_sweep_off() ? count : count - count % 2048u;
+        if (remaining < 8192u && !ds41_short_sweep_off()) return count;
+#if !defined(__APPLE__) && !defined(DS4_ROCM_BUILD)
+        /* DS4COMBO: a CUDA SSD sweep that holds every remaining row keeps its
+         * last partial tile too. Rounding 14859 down to 14336 left a 523-row
+         * second sweep that re-reads every layer's experts (~13 s). Prompts
+         * longer than the carry still split on the 2048 grid. */
+        if (g->streaming && remaining <= g->carry_cap && !ds41_short_sweep_off() &&
+            !getenv("DS4COMBO_V41_DISABLE_ONE_SWEEP")) return remaining;
+#endif
+        return count - count % 2048u;
     }
     const uint32_t tail_cap = g->prefill_cap < 2048u ? g->prefill_cap : 2048u;
     return remaining < tail_cap ? remaining : tail_cap;
@@ -45760,6 +45880,18 @@ static uint32_t ds41_encoder_chunk_cap(const ds41_gpu_graph *g, uint32_t count) 
  * travel down the stack with their token, while only source layers append KV.
  * A failed partial chunk cannot be snapshotted: its layers have different
  * frontiers, so the caller must rebuild from its retained token history. */
+/* The sweep's model-span installs keep a Metal/ROCm mapping to the layer in
+ * flight. CUDA SSD streaming already holds every non-routed tensor in its
+ * device cache from startup (routed experts go through the selected cache),
+ * and a CUDA install releases that whole cache: each layer, and then the first
+ * decode token, reloaded the 9.37 GiB of resident weights through the slow
+ * staged reader. Decode never installs on CUDA; neither does the sweep. */
+#if !defined(__APPLE__) && !defined(DS4_ROCM_BUILD)
+#define DS41_SWEEP_INSTALLS 0
+#else
+#define DS41_SWEEP_INSTALLS 1
+#endif
+
 static bool ds41_graph_prefill_sweep(ds41_gpu_graph *g, const ds4_model *m,
                               const ds4_weights *w, const int *tokens, uint32_t total_count,
                               ds4_session_progress_fn progress, void *progress_ud,
@@ -45832,14 +45964,14 @@ static bool ds41_graph_prefill_sweep(ds41_gpu_graph *g, const ds4_model *m,
         engram_prefetched = overlap_engram &&
             ds41_engram_prefetch_start(&engram_local, g, 0, total_count, ids, 0);
     }
-    bool ok = !g->streaming || metal_graph_stream_map_token(m, w);
+    bool ok = !g->streaming || !DS41_SWEEP_INSTALLS || metal_graph_stream_map_token(m, w);
     metal_graph_stream_prepare_slot prepare = {0};
     for (uint32_t il = 0; ok && il < DS4_N_LAYER; il++) {
         if (cancel && cancel(cancel_ud)) { ok = false; break; }
         if (encoder_only && il == 20u) {
             /* Publish every encoder key, but leave the decoder invalid until
              * the last sweep rebuilds its exact 2541-token dependency suffix. */
-            if (g->streaming) ok = metal_graph_stream_map_layer_decode(m, w, il);
+            if (g->streaming && DS41_SWEEP_INSTALLS) ok = metal_graph_stream_map_layer_decode(m, w, il);
             if (ok) ok = ds41_decoder_prepare(g, m, &w->layer[il], il, initial_start,
                 0, total_count, true, batch_hc, batch_attention, cancel, cancel_ud);
             break;
@@ -45865,7 +45997,7 @@ static bool ds41_graph_prefill_sweep(ds41_gpu_graph *g, const ds4_model *m,
                 ok = metal_graph_stream_prepare_join_layer(NULL, m, w, il, first_count,
                         false, true, false, false, &prepare, 1);
 #endif
-            if (ok) ok = metal_graph_stream_map_layer(m, w, il);
+            if (ok && DS41_SWEEP_INSTALLS) ok = metal_graph_stream_map_layer(m, w, il);
 #if !defined(__APPLE__) && !defined(DS4_ROCM_BUILD)
             /* Below 2K, unused expert reads outweigh the overlap. A borrowed
              * loader holding a single layer has no room for the next one. */
@@ -46018,6 +46150,7 @@ static bool ds41_graph_prefill_sweep(ds41_gpu_graph *g, const ds4_model *m,
             if (ok && batch_hc)
                 ok = ds41_before_attention_batch(g, &active, m, &w->layer[il], il, count);
             DS41_STAGE("hc/engram");
+            if (ok && batch_hc) ok = ds41_dump_rows(g->batch.norm, start, count, DS4_N_EMBD, il, 0);
             for (uint32_t t = 0; ok && !batch_hc && t < count; t++) {
                 row.pos = start + t;
 #define DS41_USE_ROW(name, width) row.name = g->rows_view[t].name;
@@ -46062,8 +46195,13 @@ static bool ds41_graph_prefill_sweep(ds41_gpu_graph *g, const ds4_model *m,
                                                    g->batch.low, count, true);
                 }
                 DS41_STAGE("attention output");
+                if (ok && l->attn_output_b->type == DS4_TENSOR_Q8_0 && g->tp_world == 1)
+                    ok = ds41_dump_rows(g->batch.block, start, count, DS4_N_EMBD, il, 10);
                 if (ok && batch_hc) ok = ds41_after_attention_batch(&active, m, l, count, false);
                 DS41_STAGE("hc/ffn norm");
+                if (ok && batch_hc)
+                    ok = ds41_dump_rows(g->batch.after_attn, start, count, DS4_N_HC * DS4_N_EMBD, il, 1) &&
+                        ds41_dump_rows(g->batch.norm, start, count, DS4_N_EMBD, il, 2);
                 for (uint32_t t = 0; ok && !batch_hc && t < count; t++) {
                     row.pos = start + t;
 #define DS41_USE_FFN_ROW(name, width) row.name = g->rows_view[t].name;
@@ -46077,6 +46215,10 @@ static bool ds41_graph_prefill_sweep(ds41_gpu_graph *g, const ds4_model *m,
             if (ok && batch_moe) {
                 ok = ds41_moe_batch(g, m, &w->layer[il], il, count, false, true);
                 DS41_STAGE("shared/routed ffn");
+                if (ok && batch_hc)
+                    ok = ds41_dump_rows(g->batch.selected, start, count, DS4_N_EXPERT_USED, il, 3) &&
+                        ds41_dump_rows(g->batch.route_weights, start, count, DS4_N_EXPERT_USED, il, 4) &&
+                        ds41_dump_rows(g->batch.routed, start, count, DS4_N_EMBD, il, 5);
                 if (ok && batch_hc) {
                     ok = ds41_ffn_add_batch(active.block, active.routed, active.shared, count) &&
                         ds41_hc_expand_batch(active.residual, active.block, active.after_attn, active.ffn_split, count);
@@ -46090,6 +46232,8 @@ static bool ds41_graph_prefill_sweep(ds41_gpu_graph *g, const ds4_model *m,
                 }
             }
             DS41_STAGE("hc expand");
+            if (ok && batch_hc)
+                ok = ds41_dump_rows(g->batch.residual, start, count, DS4_N_HC * DS4_N_EMBD, il, 6);
 #undef DS41_STAGE
             if (ok && wide && il + 1u < DS4_N_LAYER) {
                 ok = ds41_carry_copy(g, off, count, true);
@@ -46138,7 +46282,7 @@ static bool ds41_graph_prefill_sweep(ds41_gpu_graph *g, const ds4_model *m,
     if (g->streaming) ds4_gpu_stream_expert_cache_prefetch_finish(true);
 #endif
     if (!metal_graph_stream_prepare_join_all(&prepare, 1)) ok = false;
-    if (g->streaming && !metal_graph_stream_map_decode_static_all(m, w)) ok = false;
+    if (g->streaming && DS41_SWEEP_INSTALLS && !metal_graph_stream_map_decode_static_all(m, w)) ok = false;
     if (ok && !encoder_only) {
         ok = ds4_gpu_begin_commands() &&
              ds4_gpu_tensor_copy(g->residual, 0, row.residual, 0, (uint64_t)DS4_N_HC * DS4_N_EMBD * 4u) &&

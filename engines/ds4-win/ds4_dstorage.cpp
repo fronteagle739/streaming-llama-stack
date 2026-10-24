@@ -116,6 +116,7 @@ uint64_t               g_gpu_arena_size = 0;
 ID3D12Fence           *g_gpu_fence      = NULL;
 cudaExternalSemaphore_t g_gpu_semaphore = NULL;
 uint64_t               g_gpu_fence_next = 0;
+IDStorageQueue1       *g_last_sync_gpu_queue = NULL;   /* queue of the last GPU-destination submit_wait */
 #define DS4_DS_PREFILL_ARENAS 3
 ID3D12Resource        *g_prefill_arenas[DS4_DS_PREFILL_ARENAS] = {};
 cudaExternalMemory_t   g_prefill_extmem[DS4_DS_PREFILL_ARENAS] = {};
@@ -977,6 +978,18 @@ extern "C" int ds4_ds_prefill_wave_cuda_wait(
     return 1;
 }
 
+/* DS4COMBO diagnostic: order CUDA work on `cuda_stream` after every GPU write
+ * of the last GPU-destination submit_wait batch, through the shared D3D12
+ * fence and its CUDA external semaphore (the R4 prefill-wave mechanism). The
+ * signal is enqueued on that batch's own queue, so it follows its requests. */
+extern "C" int ds4_ds_gpu_fence_wait_last(void *cuda_stream) {
+    if (!g_init_ok || !g_gpu_fence || !g_gpu_semaphore || !g_last_sync_gpu_queue) return 0;
+    const uint64_t value = ++g_gpu_fence_next;
+    g_last_sync_gpu_queue->EnqueueSignal(g_gpu_fence, value);
+    g_last_sync_gpu_queue->Submit();
+    return ds4_ds_prefill_wave_cuda_wait(value, cuda_stream);
+}
+
 extern "C" int ds4_ds_prefill_waves_check_errors(void) {
     for (size_t i = 0; i < g_prefill_waves.size(); i++) {
         const ds4_ds_prefill_wave &wave = g_prefill_waves[i];
@@ -1627,6 +1640,7 @@ extern "C" int ds4_ds_batch_submit_wait(
         queue->EnqueueRequest(&g_batch[i]);
     }
     queue->EnqueueSetEvent(g_event);
+    if (g_batch_gpu) g_last_sync_gpu_queue = queue;
     if(trace_submit)QueryPerformanceCounter(&submit_start);
     queue->Submit();
     if(trace_submit){QueryPerformanceCounter(&submit_end);ds4_ds_submit_trace("sync",g_batch_bytes,g_batch.size(),enqueue_start,submit_start,submit_end);}
