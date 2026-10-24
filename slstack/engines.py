@@ -303,9 +303,12 @@ class Engines:
         atomic_json(config, single)
         token = self.cfg.setdefault('_control_token', secrets.token_urlsafe(32))
         self.cfg.setdefault('env_overrides', {})['DS4_SERVER_AUTH_TOKEN'] = token
-        # combo_proxy's own guardian owns the server and producer; each producer takes the GPU hold.
+        # combo_proxy's own guardian owns the server and producer and checks each request's
+        # GPU window; each producer takes the GPU hold. The outer job is the CPU-idle server's
+        # tree budget only (ds4-win scope for the native token), so no 19-minute engine deadline.
         self.llm = OwnedProcess(self.cfg, [sys.executable, '-B', '-m', 'slstack.combo_proxy', '--config', str(config)],
-                                'single-engine', scope='ds4-win', cwd=Path(__file__).resolve().parents[1], timeout=86400)
+                                'single-engine', scope='ds4-win', telemetry=False,
+                                cwd=Path(__file__).resolve().parents[1], timeout=86400)
         start = time.monotonic()
         while time.monotonic() - start < min(300, self.cfg['request_timeout_s']):
             if self.llm.proc.poll() is not None:
