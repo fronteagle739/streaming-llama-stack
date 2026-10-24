@@ -102,9 +102,9 @@ bool nvml_free_bytes(uint64_t&free_bytes,uint64_t&total_bytes){
     if(by_uuid(uuid,&device)!=0||info(device,&m)!=0)return false;
     free_bytes=m.free;total_bytes=m.total;return true;
 }
-// Physical VRAM reserve kept free beside the L2 (LLAMADECODE_VRAM_RESERVE_MIB, default 2048).
+// Physical VRAM reserve kept free beside the L2 (LLAMADECODE_VRAM_RESERVE_MIB, default 512 MiB).
 uint64_t decode_vram_reserve(){static const uint64_t r=[]{const char*e=std::getenv("LLAMADECODE_VRAM_RESERVE_MIB");
-    const long v=e&&*e?std::strtol(e,nullptr,10):2048;return uint64_t(std::max<long>(256,std::min<long>(v,8192)))<<20;}();return r;}
+    const long v=e&&*e?std::strtol(e,nullptr,10):512; // measured: no transient dip below the post-L2 steady free (5 ms NVML, 43K run)return uint64_t(std::max<long>(256,std::min<long>(v,8192)))<<20;}();return r;}
 // Headroom measurement: a 5 ms NVML sampler records the minimum free VRAM
 // (transient cuBLAS/graph/WDDM/other-process use) once the L2 is filled.
 struct vram_sampler{
@@ -120,8 +120,18 @@ vram_sampler&decode_vram_sampler(){static vram_sampler s;return s;}
 void check_decode_vram_reserve(){
     uint64_t f=0,t=0;if(!nvml_free_bytes(f,t))return;
     auto&s=decode_vram_sampler();
-    if(s.started.load())std::fprintf(stderr,"LLAMADECODE_VRAM_HEADROOM nvml_free_now=%llu min_free_since_l2=%llu samples=%llu reserve=%llu\n",
-        (unsigned long long)f,(unsigned long long)s.min_free.load(),(unsigned long long)s.samples.load(),(unsigned long long)decode_vram_reserve());
+    if(s.started.load()){
+        // WDDM demotion watch: DXGI local budget/usage, non-local (shared) usage, system RAM.
+        uint64_t budget=0,usage=0,shared=0;local_video_memory(budget,usage);
+        {IDXGIFactory4*fa=nullptr;if(SUCCEEDED(CreateDXGIFactory1(__uuidof(IDXGIFactory4),reinterpret_cast<void**>(&fa)))&&fa){uint64_t best=0;
+            for(UINT i=0;;++i){IDXGIAdapter1*a=nullptr;if(fa->EnumAdapters1(i,&a)==DXGI_ERROR_NOT_FOUND)break;DXGI_ADAPTER_DESC1 d{};a->GetDesc1(&d);IDXGIAdapter3*a3=nullptr;
+                if(d.DedicatedVideoMemory>best&&SUCCEEDED(a->QueryInterface(__uuidof(IDXGIAdapter3),reinterpret_cast<void**>(&a3)))){DXGI_QUERY_VIDEO_MEMORY_INFO nl{};
+                    if(SUCCEEDED(a3->QueryVideoMemoryInfo(0,DXGI_MEMORY_SEGMENT_GROUP_NON_LOCAL,&nl))){best=d.DedicatedVideoMemory;shared=nl.CurrentUsage;}a3->Release();}
+                a->Release();}fa->Release();}}
+        MEMORYSTATUSEX ms{};ms.dwLength=sizeof(ms);GlobalMemoryStatusEx(&ms);
+        std::fprintf(stderr,"LLAMADECODE_VRAM_HEADROOM nvml_free_now=%llu min_free_since_l2=%llu samples=%llu reserve=%llu dxgi_local_budget=%llu dxgi_local_usage=%llu dxgi_shared_usage=%llu ram_avail=%llu\n",
+            (unsigned long long)f,(unsigned long long)s.min_free.load(),(unsigned long long)s.samples.load(),(unsigned long long)decode_vram_reserve(),
+            (unsigned long long)budget,(unsigned long long)usage,(unsigned long long)shared,(unsigned long long)ms.ullAvailPhys);}
     if(f<decode_vram_reserve()){std::fprintf(stderr,"LLAMADECODE_VRAM_RESERVE_BREACH nvml_free=%llu reserve=%llu\n",(unsigned long long)f,(unsigned long long)decode_vram_reserve());std::fflush(stderr);
         throw std::runtime_error("Physical free VRAM fell below the decode VRAM reserve");}
 }
