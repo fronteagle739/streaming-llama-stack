@@ -19,6 +19,7 @@ No model weights are copied; the GGUF stays at cfg['model'].
 """
 from __future__ import annotations
 import argparse
+from urllib.parse import urlsplit
 from copy import deepcopy
 import hashlib
 import json
@@ -42,23 +43,69 @@ def sha(path):
     with Path(path).open('rb') as source:return hashlib.file_digest(source, 'sha256').hexdigest()
 
 
+def serving_config(cfg, *, runtime_root, studio_root, llama_producer, library_directories, revision,
+                   spread_file=None, model_receipt=None, host_budget_gib=None):
+    """The combo_proxy serving_mode=single_engine configuration (shared by Studio and the stack)."""
+    host = cfg['host_budget_gib'] if host_budget_gib is None else host_budget_gib
+    result = {k: deepcopy(cfg[k]) for k in KEPT if k in cfg}
+    result.update(serving_mode='single_engine', source_revision=revision,
+        runtime_root=str(runtime_root), studio_root=str(studio_root), llama_producer=str(llama_producer),
+        producer_library_directories=[str(p) for p in library_directories],
+        # The guardian reserves 0.25 GiB for the controller (combo_proxy.request_worker_config).
+        host_budget_gib=host + .25, combo_worker_host_budget_gib=host,
+        single_engine_stop_tokens=[1])
+    if spread_file:result['cache_affinity_spread_file'] = str(spread_file)
+    if model_receipt:result['model_receipt'] = str(model_receipt)
+    result['env_overrides'] = {**result.get('env_overrides', {}), **DECODE_ENV}
+    return result
+
+
 def single_config(cfg, installed, revision):
     """The installed single-engine configuration; nothing may point at task scratch."""
     installed = Path(installed)
-    result = {k: deepcopy(cfg[k]) for k in KEPT if k in cfg}
-    result.update(serving_mode='single_engine', source_revision=revision,
-        runtime_root=str(installed / 'runtime'), studio_root=str(installed / 'vendor/studio'),
-        llama_producer=str(installed / Path(cfg['llama_producer']).name),
-        producer_library_directories=[str(installed), *[p for p in cfg.get('producer_library_directories', [])
-                                      if 'scratch' not in str(p).replace('\\', '/').lower()]],
-        cache_affinity_spread_file=str(installed / 'qualification/affinity-spreads.txt'),
-        model_receipt=str(installed / 'qualification/original-model.json'),
-        # The guardian reserves 0.25 GiB for the controller (combo_proxy.request_worker_config).
-        host_budget_gib=cfg['host_budget_gib'] + .25, combo_worker_host_budget_gib=cfg['host_budget_gib'],
-        single_engine_stop_tokens=[1])
-    result['env_overrides'] = {**result.get('env_overrides', {}), **DECODE_ENV}
+    result = serving_config(cfg, runtime_root=installed / 'runtime', studio_root=installed / 'vendor/studio',
+        llama_producer=installed / Path(cfg['llama_producer']).name,
+        library_directories=[installed, *[p for p in cfg.get('producer_library_directories', [])
+                                          if 'scratch' not in str(p).replace('\\', '/').lower()]],
+        spread_file=installed / 'qualification/affinity-spreads.txt',
+        model_receipt=installed / 'qualification/original-model.json', revision=revision)
     if 'scratch' in json.dumps(result).replace('\\\\', '/').lower():
         raise ValueError('Installed configuration still depends on task scratch')
+    return result
+
+
+def context(cfg):
+    """The admitted context: an explicit context key, else the native --ctx value."""
+    if cfg.get('context'):return int(cfg['context'])
+    command = cfg['ds4_command']
+    return int(command[command.index('--ctx') + 1]) if '--ctx' in command[:-1] else 262144
+
+
+def stack_config(cfg):
+    """The stack's own single-RTX endpoint: the source-built producer, its ds4-decode.dll
+    beside it, and paths inside the stack runtime. The controller and producer share the
+    stack's admitted host budget; the producer pin is the built binary's hash."""
+    from .config import path, ROOT
+    from .journal import sha256
+    producer = path(cfg['llama_producer'])
+    missing = [str(f) for f in (producer, *[producer.parent / n for n in PRODUCER_FILES]) if not f.is_file()]
+    if missing:raise ValueError('Single-engine serving needs the built producer files: ' + ', '.join(missing) +
+                                '; run build.ps1 (or start --serving native)')
+    runtime = Path(cfg['runtime_root']).resolve()
+    port = urlsplit(cfg['ds4_url']).port
+    base = {**cfg, 'host': '127.0.0.1', 'port': port, 'producer_profile': cfg.get('producer_profile', 'ultra'),
+            'producer_host_budget_gib': cfg.get('producer_host_budget_gib', 6.25), 'context': context(cfg),
+            'hold_file': str(path(cfg['hold_file'])) if cfg.get('hold_file') else str(runtime / 'state' / 'gpu.holds')}
+    try:revision = subprocess.check_output(['git', 'rev-parse', 'HEAD'], cwd=ROOT, text=True).strip()
+    except (OSError, subprocess.CalledProcessError):revision = 'unknown'
+    result = serving_config(base, runtime_root=runtime / 'single-engine', studio_root=path(cfg['studio_root']),
+        llama_producer=producer, library_directories=[producer.parent, *[path(p) for p in cfg.get('producer_library_directories', [])]],
+        spread_file=path(cfg['cache_affinity_spread_file']) if cfg.get('cache_affinity_spread_file') else None,
+        model_receipt=path(cfg['model_receipt']) if cfg.get('model_receipt') else None, revision=revision,
+        host_budget_gib=cfg['host_budget_gib'] - .25)
+    result.update(producer_sha256=sha256(producer), producer_source_revision=revision)
+    if result['combo_worker_host_budget_gib'] < result['producer_host_budget_gib'] + .5:
+        raise ValueError('host_budget_gib must leave 0.75 GiB above producer_host_budget_gib for the controller')
     return result
 
 

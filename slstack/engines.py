@@ -72,9 +72,18 @@ class Engines:
                 self.status('Resident pair requested; using normal unload/load until dual residency is available')
         return row
 
+    def single_engine(self):
+        # Default single-RTX endpoint: combo_proxy serving_mode=single_engine (ULTRA producer
+        # prefill + in-process ds4 decode). --serving native keeps the ds4-win server.
+        return not self.cfg.get('mac') and self.cfg.get('serving', 'single_engine') == 'single_engine'
+
     def combo_enabled(self):
         # Single-RTX native engine: graceful shutdown and media swaps use the native session boundary.
-        return not self.cfg.get('mac') and not self.cfg['lora'] and os.name == 'nt'
+        return not self.cfg.get('mac') and not self.cfg['lora'] and os.name == 'nt' and not self.single_engine()
+
+    def single(self, operation):
+        return http_json(self.cfg['ds4_url'] + '/v1/stack/' + operation, {}, timeout=self.cfg['request_timeout_s'],
+                         headers={'Authorization': 'Bearer ' + self.cfg['_control_token']})
 
     def expert_list(self):
         return Path(self.cfg['runtime_root']) / ('expert-list-' + self.combo_session + '.txt')
@@ -132,6 +141,13 @@ class Engines:
         if self.llm:
             self.status('Unloading model')
             clean = self.llm.proc.poll() == 0
+            if self.llm.proc.poll() is None and self.single_engine():
+                # The producer exits gracefully (VRAM freed, GPU hold released), then the server ends.
+                try:
+                    self.single('shutdown')
+                    clean = self.llm.proc.wait(timeout=float(self.cfg.get('producer_graceful_shutdown_seconds', 120))) == 0
+                except (OSError, RuntimeError, TimeoutError, subprocess.TimeoutExpired):
+                    print('Single-engine graceful shutdown failed; stopping the owned job', flush=True)
             if self.llm.proc.poll() is None and self.combo_enabled() and self.combo_sequence > 1:
                 # Studio-style exit: the engine drains DirectStorage and frees GPU/host memory.
                 try:
@@ -139,7 +155,7 @@ class Engines:
                     clean = self.llm.proc.wait(timeout=float(self.cfg.get('native_graceful_shutdown_seconds', 60))) == 0
                 except (OSError, RuntimeError, TimeoutError, subprocess.TimeoutExpired):
                     print('Native graceful shutdown failed; stopping the owned job', flush=True)
-            if self.llm.proc.poll() is None:
+            if self.llm.proc.poll() is None and not self.single_engine():
                 try:
                     result = http_json(self.cfg['ds4_url'] + '/v1/train/close', {}, timeout=10,
                                        headers={'Authorization': 'Bearer ' + self.cfg['_control_token']})
@@ -192,7 +208,7 @@ class Engines:
             if reports:
                 print('Recovered stale LoRA journal: ' + json.dumps(reports), flush=True)
             self.journal_checked = True
-        if self.cfg['long_prompt']:
+        if self.cfg['long_prompt'] and not self.single_engine():
             raise RuntimeError('ULTRA handoff requires the Windows target-only adapter and parity gate')
         if not self.cfg['model'] or not path(self.cfg['model']).exists():
             raise ValueError('Configure an existing ds4 model path')
@@ -203,6 +219,8 @@ class Engines:
             probe.bind((address.hostname, address.port or 80))
         self.loading_model = self.selected_model
         self.status('Loading model')
+        if self.single_engine():
+            return self._ready_single()
         command = [x.replace('{model}', str(path(self.cfg['model']))) for x in self.cfg['ds4_command']]
         if self.cfg.get('cache_affinity_spread_file'):
             command += ['--cache-affinity-spread-file', str(path(self.cfg['cache_affinity_spread_file']))]
@@ -273,6 +291,36 @@ class Engines:
         self.close()
         raise TimeoutError('ds4 server readiness deadline exceeded')
 
+    def _ready_single(self):
+        if self.cfg['lora']:
+            raise ValueError('Single-engine serving has no LoRA path; use --serving native for an output-head adapter')
+        from .single_runtime import stack_config
+        from .journal import atomic_json
+        import secrets
+        single = stack_config(self.cfg)
+        single['env_overrides'].pop('DS4_SERVER_AUTH_TOKEN', None)  # secrets reach children by environment only
+        config = Path(self.cfg['runtime_root']) / 'single-engine.json'
+        atomic_json(config, single)
+        token = self.cfg.setdefault('_control_token', secrets.token_urlsafe(32))
+        self.cfg.setdefault('env_overrides', {})['DS4_SERVER_AUTH_TOKEN'] = token
+        # combo_proxy's own guardian owns the server and producer; each producer takes the GPU hold.
+        self.llm = OwnedProcess(self.cfg, [sys.executable, '-B', '-m', 'slstack.combo_proxy', '--config', str(config)],
+                                'single-engine', scope='ds4-win', cwd=Path(__file__).resolve().parents[1], timeout=86400)
+        start = time.monotonic()
+        while time.monotonic() - start < min(300, self.cfg['request_timeout_s']):
+            if self.llm.proc.poll() is not None:
+                self.llm.wait()
+                raise RuntimeError('Single-engine server exited before readiness')
+            try:
+                http_json(self.cfg['ds4_url'] + '/v1/models', timeout=2, headers={'Authorization': 'Bearer ' + token})
+                self.loading_model = None
+                self.status('Model ready (single engine; the producer loads with the first prompt)')
+                return
+            except (OSError, RuntimeError):
+                time.sleep(.2)
+        self.close()
+        raise TimeoutError('Single-engine server readiness deadline exceeded')
+
     def quality(self, value=None):
         if self.cfg.get('mac'):
             return {'supported': False, 'phases_supported': False,
@@ -307,6 +355,8 @@ class Engines:
             raise ValueError(f'No {kind} model selected. Set --{kind}-model and its architecture/support files.')
         # Studio ordering: save and release the LLM, run the media job, restore in finally.
         saved = None
+        if self.llm and self.llm.proc.poll() is None and self.single_engine():
+            return self._media_single(kind, params)
         if self.llm and self.llm.proc.poll() is None and self.combo_enabled():
             started = time.monotonic()
             self.status(f'Saving chat state and unloading model for {kind}')
@@ -333,6 +383,28 @@ class Engines:
                 self.swap_timing['reload_restore_s'] = time.monotonic() - started
                 self.status('Chat state restored')
                 print('Media swap timing: ' + json.dumps(self.swap_timing), flush=True)
+
+    def _media_single(self, kind, params):
+        """Single engine: the producer exits gracefully and gives back the GPU; after the
+        media job it is relaunched on the same conversation tokens (a full re-prefill;
+        the producer has no state export)."""
+        started = time.monotonic()
+        self.status(f'Releasing the producer for {kind}')
+        timing = {'release': self.single('release')}
+        timing['release_s'] = time.monotonic() - started
+        try:
+            started = time.monotonic()
+            result = self._media(kind, params)
+            timing['media_s'] = time.monotonic() - started
+            return result
+        finally:
+            started = time.monotonic()
+            self.status('Relaunching the producer and prefilling the conversation again')
+            timing['restore'] = self.single('restore')
+            timing['restore_s'] = time.monotonic() - started
+            self.swap_timing = timing
+            self.status('Conversation prefilled again')
+            print('Media swap timing: ' + json.dumps(timing), flush=True)
 
     def _media(self, kind, params):
         from .envvars import redact_cfg

@@ -222,18 +222,7 @@ class SingleEngine:
             self.retire('prefix diverged');tokens = canonical
         started = time.monotonic()
         if self.producer is None:
-            if self.leases is None:
-                stack = ExitStack();self.lease_id = stack.enter_context(self.lease_factory());self.leases = stack
-            self.live = []
-            try:self.producer = self.producer_factory(tokens)
-            except BaseException as exc:
-                self.producer = None
-                if hasattr(exc, 'owned_cleanup'):
-                    from .combo_release import certified
-                    if not certified(exc.owned_cleanup):self.poison = 'Unconfirmed GPU release: ' + repr(exc);raise
-                self.leases.close();self.leases = self.lease_id = None
-                raise
-            self.live = list(tokens);metrics['producer_launch_prefill_seconds'] = time.monotonic() - started
+            self.launch(tokens);metrics['producer_launch_prefill_seconds'] = time.monotonic() - started
             metrics['reused_prefix_tokens'] = 0;metrics['new_tokens'] = len(tokens)
         else:
             append = tokens[len(self.live):];metrics['reused_prefix_tokens'] = len(self.live);metrics['new_tokens'] = len(append)
@@ -243,6 +232,40 @@ class SingleEngine:
             metrics['append_prefill_seconds'] = time.monotonic() - started
         self._check_frontier()
         return text, request
+
+    def launch(self, tokens):
+        """Take the GPU hold and start a producer whose frontier is exactly tokens."""
+        if self.leases is None:
+            stack = ExitStack();self.lease_id = stack.enter_context(self.lease_factory());self.leases = stack
+        self.live = []
+        try:self.producer = self.producer_factory(tokens)
+        except BaseException as exc:
+            self.producer = None
+            if hasattr(exc, 'owned_cleanup'):
+                from .combo_release import certified
+                if not certified(exc.owned_cleanup):self.poison = 'Unconfirmed GPU release: ' + repr(exc);raise
+            self.leases.close();self.leases = self.lease_id = None
+            raise
+        self.live = list(tokens)
+
+    # --- GPU release for a media job (stack Engines.media) ----------------
+    def release(self):
+        """Gracefully retire the producer and give back the GPU hold, keeping the
+        conversation's token ids. There is no producer state export: restore()
+        prefills those tokens again on a fresh producer."""
+        saved = dict(tokens=list(self.live), tool_memory=dict(self.tool_memory))
+        if self.producer is not None or self.leases is not None:self.retire('media job')
+        self.saved = saved if saved['tokens'] else None
+        return dict(released=True, saved_tokens=len(saved['tokens']))
+
+    def restore(self):
+        """Relaunch the producer on the saved conversation (a full re-prefill)."""
+        saved, self.saved = getattr(self, 'saved', None), None
+        if not saved or self.producer is not None:return dict(restored_tokens=0, prefill_seconds=0.0)
+        started = time.monotonic()
+        self.launch(saved['tokens']);self.tool_memory = saved['tool_memory'];self._check_frontier()
+        self.last_used = time.monotonic()
+        return dict(restored_tokens=len(saved['tokens']), prefill_seconds=time.monotonic() - started)
 
     def _check_frontier(self):
         position = (getattr(self.producer, 'checkpoint', None) or {}).get('position')
@@ -337,7 +360,10 @@ class SingleEngine:
         emit('final', dict(parsed=parsed, splitter=splitter, request=request, usage=dict(
             prompt_tokens=metrics['prompt_tokens'], completion_tokens=len(result['text_tokens']),
             total_tokens=metrics['prompt_tokens'] + len(result['text_tokens']),
-            prompt_tokens_details=dict(cached_tokens=metrics.get('reused_prefix_tokens', 0), cache_write_tokens=metrics.get('new_tokens', 0)))))
+            prompt_tokens_details=dict(cached_tokens=metrics.get('reused_prefix_tokens', 0), cache_write_tokens=metrics.get('new_tokens', 0))),
+            timings=dict(cache_n=metrics.get('reused_prefix_tokens', 0), prompt_n=metrics.get('new_tokens', 0),
+                prompt_ms=1000.0 * (metrics.get('append_prefill_seconds') or metrics.get('producer_launch_prefill_seconds') or 0.0),
+                predicted_n=len(result['text_tokens']), predicted_ms=result['decode_ms'])))
         self._rotate_diagnostic();self.last_used = time.monotonic()
 
     def idle_check(self):
@@ -418,6 +444,28 @@ def handler(proxy):
             if len(data) != length:raise ValueError('Truncated request')
             vendor();from studio.dsv41_session_contract import control
             return control(data)
+        def control(self, route):
+            engine = proxy.engine
+            if not engine.lock.acquire(timeout=float(proxy.cfg['request_timeout_s'])):
+                return self.send(409, dict(error=dict(message='Another request owns this decoder')))
+            try:
+                if engine.poison:raise RuntimeError('Single-engine owner is poisoned: ' + engine.poison)
+                if route == '/v1/stack/release':return self.send(200, engine.release())
+                if route == '/v1/stack/restore':
+                    proxy.window(True, engine.lease_id)
+                    try:
+                        reply = engine.restore()
+                    finally:proxy.window(False)
+                    return self.send(200, reply)
+                # Graceful stop: retire the producer (VRAM freed, hold released), then end serving.
+                try:
+                    if engine.producer is not None or engine.leases is not None:engine.retire('shutdown')
+                finally:engine.stopping.set()
+                self.send(200, dict(closing=True))
+                threading.Thread(target=proxy.server.shutdown, daemon=True).start()
+            except Exception as exc:
+                self.send(503, dict(error=dict(message=str(exc), type='single_engine_refused')))
+            finally:engine.lock.release()
         def do_GET(self):
             if self.path in ('/health', '/healthz'):
                 return self.send(200, dict(status='ok', model_ready=True, context=proxy.cfg['context'], resident=proxy.engine.producer is not None))
@@ -434,6 +482,7 @@ def handler(proxy):
             if self.path == '/v1/quality-speed':
                 try:return self.send(200, proxy.quality(body))
                 except (ValueError, RuntimeError, OSError) as exc:return self.send(409, dict(error=dict(message=str(exc))))
+            if self.path in ('/v1/stack/release', '/v1/stack/restore', '/v1/stack/shutdown'):return self.control(self.path)
             if self.path != '/v1/chat/completions':return self.send(404, dict(error=dict(message='Unknown native endpoint')))
             engine = proxy.engine
             if not engine.lock.acquire(blocking=False):return self.send(409, dict(error=dict(message='Another request owns this decoder')))
@@ -476,7 +525,8 @@ def handler(proxy):
                     if parsed['reasoning']:message['reasoning_content'] = parsed['reasoning']
                     if calls:message['tool_calls'] = [{k: v for k, v in c.items() if k != 'index'} for c in calls]
                     self.send(200, dict(id=cid, object='chat.completion', created=created, model=model,
-                                        choices=[dict(index=0, message=message, finish_reason=parsed['finish'])], usage=final['usage']))
+                                        choices=[dict(index=0, message=message, finish_reason=parsed['finish'])], usage=final['usage'],
+                                        timings=final['timings']))
             except ds4_render.RenderRefused as exc:
                 metrics['failure'] = repr(exc);error = dict(error=dict(message=str(exc), type='invalid_request_error'))
                 if headers:
@@ -505,7 +555,7 @@ def serve(cfg, run_id, window):
     os.environ['CUDA_VISIBLE_DEVICES'] = cfg['gpu_uuid'];os.environ['CUDA_DEVICE_ORDER'] = 'PCI_BUS_ID'
     proxy = SingleProxy(cfg, run_id, window)
     class Server(ThreadingHTTPServer):daemon_threads = True
-    server = Server((cfg['host'], cfg['port']), handler(proxy))
+    server = Server((cfg['host'], cfg['port']), handler(proxy));proxy.server = server
     def idle():
         while not proxy.engine.stopping.wait(15):proxy.engine.idle_check()
     threading.Thread(target=idle, daemon=True).start()
