@@ -92,8 +92,9 @@ def run(request):
     before_s = time.monotonic() - started
     if settings.get('expected_base_sha256') and settings['expected_base_sha256'] != before:
         raise RuntimeError('Configured training base SHA-256 does not match the model bytes')
+    from .envvars import redact_cfg
     phase = OwnedProcess(cfg, [sys.executable, '-B', '-m', 'slstack.train_native_prefix'],
-        'native-prefix-gpu-phase', stdin=json.dumps({**request, 'phase': 'gpu', 'base_sha256_before': before}) + '\n',
+        'native-prefix-gpu-phase', stdin=json.dumps({**request, 'cfg': redact_cfg(cfg), 'phase': 'gpu', 'base_sha256_before': before}) + '\n',
         gpu=not cfg.get('_gpu_lease_managed', False), timeout=cfg['lease_minutes'] * 60)
     try:
         phase_receipt = phase.wait()

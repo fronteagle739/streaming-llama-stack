@@ -26,7 +26,10 @@ class OwnedProcess:
         scope = scope or ('ds4-win' if name == 'ds4-server' else name if name in ('image', 'video') else 'studio')
         from .envvars import argv_overrides
         command = argv_overrides(command, cfg, scope)
-        spec = {'command': command, 'cwd': str(cwd), 'env': environment(cfg, scope),
+        # Secret values never reach the spec file; the guard gets them through its own environment.
+        from .envvars import split_secrets
+        public_env, secrets = split_secrets(environment(cfg, scope))
+        spec = {'command': command, 'cwd': str(cwd), 'env': public_env, 'secret_env': sorted(secrets),
                 'runtime_root': cfg['runtime_root'],
                 'host_budget_gib': cfg['host_budget_gib'], 'min_available_gib': cfg['min_available_gib'],
                 'paging_telemetry': bool(cfg.get('paging_telemetry') or gpu or scope in ('ds4-win', 'ds4-mac', 'rtx-producer', 'mlx-serve', 'image', 'video')),
@@ -38,13 +41,14 @@ class OwnedProcess:
         if cfg.get('hold_watch'):
             spec['hold_watch'] = dict(cfg['hold_watch'])
         if gpu:
-            spec['gpu'] = cfg
+            from .envvars import redact_cfg
+            spec['gpu'] = redact_cfg(cfg)
         self.spec = self.prefix.with_suffix('.spec.json')
         spec['_spec_path'] = str(self.spec)
         self.spec.write_text(json.dumps(spec))
         self.guard_log = self.prefix.with_suffix('.guard.log').open('ab')
         self.proc = subprocess.Popen([sys.executable, '-B', '-m', 'slstack.guard', str(self.spec)],
-                                     cwd=ROOT, env=environment(cfg), stdout=self.guard_log, stderr=self.guard_log,
+                                     cwd=ROOT, env={**environment(cfg), **secrets}, stdout=self.guard_log, stderr=self.guard_log,
                                      creationflags=subprocess.CREATE_NO_WINDOW if os.name == 'nt' else 0)
 
     def wait(self):

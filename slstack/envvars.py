@@ -144,9 +144,42 @@ def apply(env, cfg, scope):
             identity = (var, inherited, value)
             if identity not in _WARNED:
                 _WARNED.add(identity)
-                displayed = '<redacted>' if any(word in var for word in ('TOKEN', 'SECRET', 'PASSWORD', 'KEY')) else value
+                displayed = '<redacted>' if is_secret(var) else value
                 print(f'Environment override: inherited {var} ignored; selected {displayed if value is not None else "engine default"}', file=sys.stderr)
     return env
+
+
+SECRET_WORDS = ('TOKEN', 'KEY', 'SECRET', 'PASSWORD')
+
+
+def is_secret(name):
+    return any(word in name.upper() for word in SECRET_WORDS)
+
+
+def split_secrets(env):
+    """(env with secret values redacted, {name: value} secrets) for anything written to disk."""
+    secrets = {k: v for k, v in env.items() if is_secret(k)}
+    return {k: ('<redacted>' if k in secrets else v) for k, v in env.items()}, secrets
+
+
+def redact_cfg(cfg):
+    """A config copy that is safe to write into a job spec or a worker request."""
+    def clean(value):
+        if isinstance(value, dict):
+            return {k: '<redacted>' if is_secret(str(k)) else clean(v) for k, v in value.items()}
+        if isinstance(value, list):
+            return [clean(v) for v in value]
+        return value
+    return clean(cfg)
+
+
+def restore_secrets(spec):
+    """Fill a job spec's redacted values from this process's own environment."""
+    for name in spec.get('secret_env', []):
+        if name not in os.environ:
+            raise RuntimeError('Secret ' + name + ' was not passed to the guarded job')
+        spec['env'][name] = os.environ[name]
+    return spec
 
 
 def argv_overrides(command, cfg, scope):
