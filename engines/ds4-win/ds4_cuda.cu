@@ -38525,6 +38525,15 @@ static int cuda_stream_selected_ds_upload(const ds4_gpu_stream_expert_table *tab
                 }
             }
         }
+        /* The next wave overwrites this staging buffer. A device-to-device
+         * cudaMemcpy returns before the GPU has read it, so wait for the
+         * copy-out first: decode gets the same ordering from the blocking
+         * D2H read of its routed ids before every layer's fetch. */
+        if (!cuda_ok(cudaStreamSynchronize(0), "prefill staging copy-out")) {
+            cuda_ds_prefetch_reset();
+            ds4_ds_batch_reset();
+            return 0;
+        }
         wave_index++;
     }
     cuda_ds_prefetch_reset();
