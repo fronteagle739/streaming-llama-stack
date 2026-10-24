@@ -206,14 +206,16 @@ struct ds4_external {
         std::vector<float>logits(129280);
         ggml_backend_synchronize(backend);
         if(position%16==0)check_decode_vram_reserve();
+        double f0[4]{};uint64_t r0=0,b0=0;wf_extent_fetch_stats(f0,&r0,&b0);
         const auto before=provider->cache_stats();const auto started=std::chrono::steady_clock::now();
         require(x_decode(token,position,tail.data(),3,logits.data())==1,"ds4-win decode step failed");
         const double decode_ms=std::chrono::duration<double,std::milli>(std::chrono::steady_clock::now()-started).count();
         success(sweep.commit_external_token(token,logits,error),error);
-        const auto after=provider->cache_stats();
-        std::fprintf(stderr,"LLAMADECODE_DS4X_TOKEN position=%u decode_ms=%.3f ds_bytes=%llu ds_ms=%.3f l1_hits=%llu l2_hits=%llu misses=%llu l1_slots=%u l2_slots=%u\n",position,decode_ms,
+        const auto after=provider->cache_stats();double f1[4]{};uint64_t r1=0,b1=0;wf_extent_fetch_stats(f1,&r1,&b1);
+        std::fprintf(stderr,"LLAMADECODE_DS4X_TOKEN position=%u decode_ms=%.3f ds_bytes=%llu ds_ms=%.3f l1_hits=%llu l2_hits=%llu misses=%llu l1_slots=%u l2_slots=%u ds_submit_ms=%.3f ds_fence_ms=%.3f ds_verify_ms=%.3f ds_cuda_ms=%.3f ds_requests=%llu ds_batches=%llu\n",position,decode_ms,
             (unsigned long long)(after.fetched_bytes-before.fetched_bytes),after.fetch_ms-before.fetch_ms,(unsigned long long)(after.hits-before.hits),
-            (unsigned long long)(after.l2_hits-before.l2_hits),(unsigned long long)(after.misses-before.misses),after.slots,after.l2_slots);
+            (unsigned long long)(after.l2_hits-before.l2_hits),(unsigned long long)(after.misses-before.misses),after.slots,after.l2_slots,
+            f1[0]-f0[0],f1[1]-f0[1],f1[2]-f0[2],f1[3]-f0[3],(unsigned long long)(r1-r0),(unsigned long long)(b1-b0));
     }
     // The DLL stays mapped until process exit (never FreeLibrary): no ds4 code may
     // be unmapped under a thread or CUDA callback it started.
