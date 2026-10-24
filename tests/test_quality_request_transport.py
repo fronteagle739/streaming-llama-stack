@@ -28,8 +28,8 @@ class QualityRequestTransportTests(unittest.TestCase):
         if not source_path:
             source_path = next(p for p in (root / 'ds4_server.c', root / 'engines/ds4-win/ds4_server.c') if p.is_file())
         source = Path(source_path).read_text(encoding='utf-8')
-        fields = re.search(r'bool quality_speed_set;\s*float quality_speed;\s*bool quality_per_phase;\s*float quality_phases\[\d+\];', source)
-        setting = re.search(r'typedef struct \{bool per_phase;float value,phases\[4\];\} quality_setting;', source)
+        fields = re.search(r'bool quality_speed_set;\s*float quality_speed;\s*bool quality_per_phase;\s*float quality_phases\[(?:\d+|DS4_QUALITY_PHASE_COUNT)\];', source)
+        setting = re.search(r'typedef struct \{bool per_phase;float value,phases\[(?:4|DS4_QUALITY_PHASE_COUNT)\];\} quality_setting;', source)
         self.assertIsNotNone(fields)
         self.assertIsNotNone(setting)
         compiler = os.environ.get('SLSTACK_CC') or shutil.which('cl') or shutil.which('cc')
@@ -43,6 +43,9 @@ class QualityRequestTransportTests(unittest.TestCase):
 #include <stdbool.h>
 #include <string.h>
 #include <stdio.h>
+#ifndef DS4_QUALITY_PHASE_COUNT
+#define DS4_QUALITY_PHASE_COUNT 4
+#endif
 typedef struct { __FIELDS__ } request;
 __SETTING__
 static float observed[4];
@@ -63,23 +66,23 @@ __APPLY__
 int main(void) {
     request queued={0};
     quality_setting chosen={true,.35f,{.65f,0,.35f,1.36125f}};
-    request_quality_store(&queued,true,&chosen);
-    if(request_quality_apply(&queued))return 2;
+    quality_request_store(&queued,true,&chosen);
+    if(quality_request_apply(&queued))return 2;
     for(int i=0;i<4;i++)if(observed[i]!=chosen.phases[i]) {
         fprintf(stderr,"phase %d lost: received %.9g expected %.9g\n",i,observed[i],chosen.phases[i]);return 1;
     }
     chosen.per_phase=false;chosen.value=.9f;
-    request_quality_store(&queued,true,&chosen);
-    if(request_quality_apply(&queued))return 3;
+    quality_request_store(&queued,true,&chosen);
+    if(quality_request_apply(&queued))return 3;
     for(int i=0;i<4;i++)if(observed[i]!=.9f)return 4;
-    calls=0;request_quality_store(&queued,false,&chosen);
-    if(request_quality_apply(&queued) || calls)return 5;
+    calls=0;quality_request_store(&queued,false,&chosen);
+    if(quality_request_apply(&queued) || calls)return 5;
     puts("queued four-phase, scalar and absent-setting request transport: PASS");return 0;
 }
 '''
         program = program.replace('__FIELDS__', fields[0]).replace('__SETTING__', setting[0])
-        program = program.replace('__STORE__', function(source, 'request_quality_store'))
-        program = program.replace('__APPLY__', function(source, 'request_quality_apply'))
+        program = program.replace('__STORE__', function(source, 'quality_request_store'))
+        program = program.replace('__APPLY__', function(source, 'quality_request_apply'))
         fixture.write_text(program, encoding='utf-8')
         try:
             if Path(compiler).stem.lower() == 'cl':
