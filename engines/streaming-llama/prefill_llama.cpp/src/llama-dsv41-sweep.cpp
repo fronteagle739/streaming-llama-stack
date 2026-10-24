@@ -834,3 +834,9 @@ llama_dsv41_sweep::run_timing llama_dsv41_sweep::timing()const{
     std::lock_guard<std::mutex>lock(p->mutex);return p->state==implementation::completed?p->measured:run_timing{};
 }
 bool llama_dsv41_sweep::ready()const{return p->published.load()&&!p->stop_requested.load();}
+bool llama_dsv41_sweep::completed_logits(std::vector<float>&out,std::string&error)const{
+    std::lock_guard<std::mutex>lock(p->mutex);out.clear();error.clear();
+    if(p->state!=implementation::completed||!p->published.load()||p->stop_requested.load()||p->logits.size()!=vocabulary){
+        error="Completed logits require a published completed V4.1 frontier";return false;}
+    out=p->logits;return true;
+}

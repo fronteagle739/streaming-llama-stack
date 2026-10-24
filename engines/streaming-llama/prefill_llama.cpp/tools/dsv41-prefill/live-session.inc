@@ -181,9 +181,47 @@ void run_live_session(std::unique_ptr<llama_dsv41_sweep>&sweep,
             success(sweep->apply_decode_delta(update,[&](const state_span&s,uint64_t off,void*dst,size_t n){return incoming.read_span(s,off,dst,n,error);},error),error);
             require(received==bytes,"Live decode artifact was not fully consumed");current=target;remote=target;
             reply({{"peer_synchronized",true},{"received_bytes",received},{"evaluated_tokens",plan.token_count},{"RTX_decode",false},{"apply_ms",ms(started)}});
+        }else if(operation=="decode"){
+            // LLAMADECODE B0: greedy decode on the RTX in this process. Each
+            // evaluated token is one stateful 1-row append through the same
+            // owner transfer as "prefill" (existing sweep/carry/cache path).
+            // A sampled stop token, or the token sampled at max_tokens, is
+            // returned but NOT evaluated: the caller's next prefill carries it.
+            dsv41_live::keys(command,{"session","model_sha256","sequence","operation","base","max_tokens","stop_tokens"});same_base();
+            require(!awaiting_ack,"Local decode while a state transfer awaits acknowledgement");
+            require(inspect().describe()==current.describe(),"Local decode actual token/owner state differs from checkpoint");
+            const auto maximum=dsv41_live::u64(command.at("max_tokens"));require(maximum&&maximum<=4096,"Local decode requires1..4096 max_tokens");
+            const auto&stops=command.at("stop_tokens");require(stops.is_array()&&stops.size()<=16,"Local decode accepts at most16 stop tokens");
+            std::vector<int32_t>stop_ids;for(const auto&v:stops){const auto n=dsv41_live::u64(v);require(n<129280,"Stop token out of vocabulary");stop_ids.push_back(int32_t(n));}
+            require(uint64_t(current.frontier.position)+maximum<uint64_t(options.context),"Local decode exceeds context capacity");
+            std::vector<int32_t>generated;std::vector<double>step_ms;std::string error;std::vector<float>logits;bool stopped=false;
+            for(uint64_t index=0;index<maximum;++index){
+                stop();const auto step_started=clock_type::now();
+                success(sweep->completed_logits(logits,error),error);
+                int32_t best=0;for(int32_t i=1;i<int32_t(logits.size());++i)if(logits[size_t(i)]>logits[size_t(best)])best=i;
+                generated.push_back(best);
+                if(std::find(stop_ids.begin(),stop_ids.end(),best)!=stop_ids.end()){stopped=true;break;}
+                if(index+1==maximum)break;
+                auto previous=std::move(sweep);sweep.reset(new llama_dsv41_sweep);auto next_options=options;auto next_weights=weights;
+                next_options.carry.tokens=1;if(next_weights.engram_prefetch_host_bytes)next_weights.engram_prefetch_tokens=1;
+                success(sweep->open(next_weights,next_options,error,nullptr,previous.get()),error);require(!previous->ready(),"Transferred prefix still publishes");previous.reset();
+                const std::vector<int32_t>one{best};success(sweep->run(one,[]{return should_stop();},error),error);
+                step_ms.push_back(ms(step_started));
+                std::fprintf(stderr,"LLAMADECODE_STEP index=%llu token=%d position=%u step_ms=%.3f prompt_ms=%.3f\n",(unsigned long long)index,best,
+                    current.frontier.position+uint32_t(index)+1,step_ms.back(),sweep->timing().prompt_processing_ms);std::fflush(stderr);
+            }
+            current=inspect();const uint32_t evaluated=uint32_t(step_ms.size());
+            double total_ms=0;for(const double v:step_ms)total_ms+=v;
+            std::fprintf(stderr,"LLAMADECODE_DECODE_COMPLETE generated=%zu evaluated=%u stopped=%d position=%u decode_ms=%.3f tok_s=%.6f\n",generated.size(),evaluated,int(stopped),
+                current.frontier.position,total_ms,total_ms>0?evaluated*1000.0/total_ms:0.0);std::fflush(stderr);
+            reply({{"peer_synchronized",have_remote&&remote.describe()==current.describe()},{"tokens",generated},{"evaluated_tokens",evaluated},{"stopped",stopped},
+                {"step_ms",step_ms},{"decode_ms",total_ms},{"RTX_decode",true}});
         }else if(operation=="prefill"){
             dsv41_live::keys(command,{"session","model_sha256","sequence","operation","base","tokens"});same_base();
-            require(have_remote&&!awaiting_ack&&remote.describe()==current.describe(),"Incremental prefill requires exact two-way synchronization");
+            // LLAMADECODE B0: a local-only session (never exported to a peer)
+            // may append without a peer; a peer-bound session keeps exact sync.
+            const bool local_only=!have_remote&&!initial_sent&&!awaiting_ack;
+            require(local_only||(have_remote&&!awaiting_ack&&remote.describe()==current.describe()),"Incremental prefill requires exact two-way synchronization");
             require(inspect().describe()==current.describe(),"Incremental prefill actual token/owner state differs from acknowledged checkpoint");
             const auto&ids=command.at("tokens");require(ids.is_array()&&!ids.empty()&&ids.size()<=capacity,"Live prefill token count exceeds reserved chunk");
             require(ids.size()<uint64_t(options.context)-current.frontier.position,"Live prefill exceeds context capacity");
@@ -192,7 +230,7 @@ void run_live_session(std::unique_ptr<llama_dsv41_sweep>&sweep,
             next_options.carry.tokens=uint32_t(tokens.size());if(next_weights.engram_prefetch_host_bytes)next_weights.engram_prefetch_tokens=uint32_t(tokens.size());
             std::string error;success(sweep->open(next_weights,next_options,error,nullptr,previous.get()),error);require(!previous->ready(),"Transferred prefix still publishes");previous.reset();
             const double admission_ms=ms(started);success(sweep->run(tokens,[]{return should_stop();},error),error);const auto timing=sweep->timing();
-            current=inspect();require(current.frontier.position==remote.frontier.position+tokens.size(),"Live prefill position did not advance exactly");
+            const uint32_t before=current.frontier.position;current=inspect();require(current.frontier.position==before+tokens.size(),"Live prefill position did not advance exactly");
             reply({{"peer_synchronized",false},{"prompt_tokens",tokens.size()},{"prompt_processing_ms",admission_ms+timing.prompt_processing_ms},{"export_preparation_ms",timing.export_preparation_ms}});
         }else require(false,"Unknown persistent session operation");
     }

@@ -125,6 +125,10 @@ public:
     // bounded pages/stages and every native cache readback.
     void cancel();
     bool ready() const;
+    // LLAMADECODE B0: the completed frontier's next-token logits (F32, full
+    // vocabulary) for local greedy decode. Copies under the owner lock; fails
+    // unless the sweep is completed and published.
+    bool completed_logits(std::vector<float> &out,std::string &error) const;
 private:
     struct implementation;
     std::unique_ptr<implementation>p;
