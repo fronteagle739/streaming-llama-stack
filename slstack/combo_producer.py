@@ -42,6 +42,14 @@ def startup_failure(error,directory):
 
 
 
+def ctx_cache(cfg):
+    """LLAMADECODE producer context cache: (precision f32|bf16, growable) from the launcher config."""
+    precision=cfg.get('ctx_cache_precision','f32');growable=cfg.get('ctx_cache_growable',False)
+    if precision not in ('f32','bf16'):raise ValueError('ctx_cache_precision must be f32 or bf16')
+    if type(growable) is not bool:raise ValueError('ctx_cache_growable must be true or false')
+    if growable and cfg.get('producer_keep_alive'):raise ValueError('ctx_cache_growable is not covered by the switch arena (producer_keep_alive)')
+    return precision,growable
+
 def stall_seconds(cfg):
     """No-progress window for a producer operation. A long operation (a 262K-token prefill, a long
     decode) lives while the producer shows progress; request_timeout_s only bounds silence."""
@@ -70,11 +78,14 @@ class ComboProducer:
         if tier not in ('accurate','fast','ultra'):raise ValueError('Combo producer profile must be accurate, fast or ultra (original weights; no HYPER)')
         args=dict(profile(tier)['arguments'])
         host_bytes=int(cfg.get('producer_host_budget_gib',8)*(1<<30))
-        args.update({'--context':str(cfg['context']),'--capture-dspark':'0','--compressed-cache-bf16':'0',
+        precision,growable=ctx_cache(cfg)
+        args.update({'--context':str(cfg['context']),'--capture-dspark':'0','--compressed-cache-bf16':'1' if precision=='bf16' else '0',
             '--model':str(path(cfg['model'])),'--copy-receipt':str(receipt),'--build-sha':cfg['producer_sha256'],
             '--session-id':session,'--session-owner-epoch':str(epoch),'--job-host-bytes':str(host_bytes),
             '--receipt':str(self.directory/'producer.json'),'--carry':str(self.directory/'carry-not-created'),
             '--payload':str(self.directory/'payload-not-created')})
+        if precision!='f32' or growable:   # LLAMADECODE context cache flags (absent = today's f32 fixed argv)
+            args['--ctx-cache-precision']=precision;args['--ctx-cache-growable']=str(int(growable))
         if cfg.get('producer_keep_alive'):args['--switch-arena']='1'   # DS4COMBO fast switch: suspendable device memory
         if cfg.get('producer_fixed_direct_open',True):   # default since proof-a-direct (byte-identical, -13 s S)
             # No-warm-up start: the real request allocates the fixed storage itself.
@@ -122,7 +133,8 @@ class ComboProducer:
             atomic_json(self.directory/'launch.json',dict(argv=argv,source_revision=cfg['producer_source_revision'],
                 producer_sha256=cfg['producer_sha256'],owner_epoch=epoch,host_bytes=host_bytes,
                 resident_admission=getattr(self.process,'resume_admission',None),
-                full_snapshot_bootstrap=base is None,weights_copied=False,profile=tier,compressed_cache_bf16=False))
+                full_snapshot_bootstrap=base is None,weights_copied=False,profile=tier,compressed_cache_bf16=precision=='bf16',
+                ctx_cache_precision=precision,ctx_cache_growable=growable))
         except BaseException as exc:
             self.failure_cleanup=getattr(exc,'owned_cleanup',None)
             if self.process is not None:
