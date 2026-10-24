@@ -4,13 +4,16 @@ usage: python -I ds41_dump_compare.py REF.bin TEST.bin
 
 Per layer and point: max |a-b| and max |a-b| / max |a| over the common positions;
 for the routed expert ids, how many positions select the same set of experts.
+Points 7-10 are inside attention: q after rope, the cached kv row, the heads as the
+output projection reads them (bf16, inverse rope), and the projection result.
 """
 import struct
 import sys
 
 import numpy as np
 
-POINTS = ['attn_in', 'after_attn', 'ffn_in', 'expert_ids', 'expert_w', 'routed', 'residual']
+POINTS = ['attn_in', 'after_attn', 'ffn_in', 'expert_ids', 'expert_w', 'routed', 'residual',
+          'q_rope', 'kv_cached', 'heads_in', 'attn_proj']
 MAGIC = 0x52313444
 
 
@@ -40,6 +43,7 @@ def main():
     positions = sorted({k[1] for k in keys})
     print(f'positions {positions}; layers {layers[0]}..{layers[-1]}')
     print('layer ' + ' '.join(f'{p:>21}' for p in POINTS if p != 'expert_ids') + '  ids_same')
+    print('      (each cell: max|a-b|  max|a-b|/max|a|)')
     first = None
     for layer in layers:
         cells, same, total = [], 0, 0
