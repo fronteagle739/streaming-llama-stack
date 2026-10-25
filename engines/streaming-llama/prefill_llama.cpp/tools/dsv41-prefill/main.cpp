@@ -18,6 +18,8 @@ extern "C" uint64_t ggml_backend_cuda_dsv41_pv_view_queued(void);
 #include "llama-dsv41-engram-prefetch.h"
 #include "llama-weight-fetcher.h"
 #include "llama-dsv41-host-memory.h"
+#include "llama-dsv41-test-fault.h"
+#include "producer-abort.h"
 #include "llama-dsv41-ds4x-keep.h"
 #include "llama-dsv41-native-columns-resource-proof.h"
 #include "llama-dsv41-native-loader-resource-proof.h"
@@ -288,10 +290,14 @@ int wmain(int argc,wchar_t**argv){
         if(buffered_stderr)require(std::setvbuf(stderr,stderr_storage.data(),_IOFBF,stderr_storage.size())==0,"Cannot configure existing CRT stderr buffer");
         report["stderr_buffer_bytes"]=buffered_stderr?stderr_storage.size():0;
         if(argc==2&&std::wstring(argv[1])==L"--help"){std::cout<<usage;return 0;}
+        // LLAMADECODE: every abort leaves a reason (stderr line + session error reply), including
+        // an exception escaping a thread (std::terminate) or an unhandled structured exception.
+        producer_abort::install();
+        llama_dsv41_test_fault::announce();
         const std::vector<std::string>keys={"--model","--copy-receipt","--tokens-le32","--cuda-device","--context","--build-sha",
             "--provider-device-bytes","--provider-host-bytes","--cache-bytes","--graph-bytes","--job-device-bytes","--job-host-bytes","--gpu-reserve-bytes",
             "--carry","--carry-file-bytes","--carry-host-bytes","--carry-outstanding-bytes","--output-outstanding-bytes","--payload","--receipt"};
-        require(argc>=1+int(keys.size())*2&&argc<=127+int(keys.size())*2&&argc%2==1,"Expected every explicit required --key value pair; use --help");std::map<std::string,std::string>args;
+        require(argc>=1+int(keys.size())*2&&argc<=131+int(keys.size())*2&&argc%2==1,"Expected every explicit required --key value pair; use --help");std::map<std::string,std::string>args;
         for(int i=1;i<argc;i+=2){auto key=utf8(argv[i]);require((key=="--session-owner-epoch"||key=="--switch-arena"||key=="--native-base-contract-sha256"||key=="--native-base-owner-epoch"||key=="--unaligned-append-step-tokens"||key=="--reuse-child-raw-metadata"||key=="--session-stdio"||key=="--session-id"||key=="--session-control-host-bytes"||key=="--session-idle-timeout-ms"||key=="--native-rhs-pack"||key=="--split-f32-tensor-core-qk"||key=="--split-f32-tensor-core-pv"||key=="--fuse-kv-gather-half"||key=="--ds-zero-padding-only"||key=="--pv-strided-probabilities"||key=="--pv-view-f32"||key=="--compact-kv-gather"||key=="--masked-half-inplace"||key=="--native-loader-unroll"||key=="--native-expert-columns"||key=="--fixed-resident-plan"||key=="--export-hash-only"||key=="--backend-temporary-reserve-bytes"||key=="--compute-step-tokens"||key=="--prefill-chunk-tokens"||key=="--prefill-sweep-tokens"||key=="--prefill-fold-cap-tokens"||key=="--attention-kv-f16-table"||key=="--index-key-windows"||key=="--capture-dspark"||key=="--compressed-cache-bf16"||key=="--ctx-cache-precision"||key=="--ctx-cache-growable"||key=="--dense-activation-q8-1"||key=="--expert-weights-activations-fp4"||key=="--resident-pageable-copies"||key=="--tile-host-registration"||key=="--hc-bf16-epilogue"||key=="--reuse-expert-routing-map"||key=="--sort-expert-routing"||key=="--pair-ffn-tiles"||key=="--engram-tile-lookahead"||key=="--warmup-one-token"||key=="--fixed-direct-open"||key=="--batch-seed-ram"||key=="--dense-mxfp4"||key=="--hc-projection-f16-gemm"||key=="--merge-attention-selected-rows"||key=="--resident-metadata"||key=="--resident-compact-ids"||key=="--async-input-uploads"||key=="--resident-hidden-bf16"||key=="--resident-hidden-final-readback"||key=="--coalesce-dense-projections"||key=="--direct-carry-budget"||key=="--expert-f16-cublas"||key=="--token-tile-attention-f16-probabilities"||key=="--index-f32-cublas"||key=="--index-bf16"||key=="--dense-inputs-f16"||key=="--shared-flash-attention"||key=="--shared-sparse-attention"||key=="--carry-ram-prefix-tokens"||key=="--carry-disk-reserve-bytes"||key=="--carry-storage"||key=="--fetch-profile"||key=="--compute-tile"||key=="--hidden-device-bytes"||key=="--pinned-device-bytes"||key=="--reuse-graph"||key=="--cast-device-bytes"||key=="--cast-audit"||key=="--engram-prefetch-bytes"||key=="--ds-submit-threads"||key=="--cuda-blocking-sync"||key=="--index-cublas-device-bytes"||key=="--ds-gpu-ring-slots"||key=="--prefetch-device-bytes"||key=="--expert-profile"||key=="--expert-workspace-bytes"||key=="--expert-runtime-bytes"||std::find(keys.begin(),keys.end(),key)!=keys.end())&&!args.count(key),"Unknown or repeated producer option");args[key]=utf8(argv[i+1]);}
         for(const auto&key:keys)require(args.count(key),"Missing explicit producer option");
         const auto storage=args.count("--carry-storage")?args.at("--carry-storage"):"file";
@@ -490,7 +496,7 @@ int wmain(int argc,wchar_t**argv){
             require(chunk_option&&chunk_option<=llama_dsv41_prefill::max_sweep_tokens&&chunk_option<context&&resident_ram&&direct_budget&&
                 (pair_ffn||(args.count("--fixed-resident-plan")&&args.at("--fixed-resident-plan")=="1")),
                 "Session requires a fixed RAM capacity (1..1048576 tokens, below context) and stateful chunks");
-            session_output.bind();
+            session_output.bind();producer_abort::arm(session_output.get(),session,model_sha,session_owner_epoch);
         }else require(!args.count("--session-id")&&!args.count("--session-control-host-bytes")&&!args.count("--session-idle-timeout-ms"),
             "Session options supplied with session disabled");
         report["persistent_session"]={{"enabled",live},{"reserved_chunk_tokens",reserved_chunk},{"control_host_bytes",control_host}};
@@ -1039,10 +1045,14 @@ int wmain(int argc,wchar_t**argv){
             std::fprintf(stderr,"DS4COMBO_PRODUCER_GRACEFUL_SHUTDOWN_COMPLETE sweep_release_ms=%.1f wf_persist_released=%d\n",ms(teardown),persist_released);std::fflush(stderr);return persist_released==1?0:3;}
         std::fputs(hash_only?"Canonical native frontier hashed; receipt complete; no payload file created.\n":"Offline native payload and receipt completed; receiver/parity qualification remains pending.\n",stdout);return 0;
     }catch(const std::exception&failure){
+        producer_abort::report_current(interrupted.load()?"cancelled":nullptr);   // first: no allocation, before anything below can fail
         if(sweep)sweep->cancel();report["status"]=interrupted.load()?"cancelled":"failed";report["error"]=failure.what();report["memory_floor_abort"]=memory_abort.load();report["host_memory_runtime"]=host_memory_runtime();
         if(payload){try{report["payload_actual_identity"]=describe(payload->current());}catch(...){}}
         if(receipt){try{const auto text=report.dump(2)+"\n";if(receipt->current().size==0&&text.size()<=receipt_limit){receipt->write(text.data(),text.size());receipt->flush();}}catch(...){}}
         std::cerr<<"Offline producer failed: "<<failure.what()<<". Existing/unfinished files were preserved.\n";return interrupted.load()?130:1;
+    }catch(...){
+        producer_abort::report_current();if(sweep)sweep->cancel();
+        std::cerr<<"Offline producer failed: non-standard C++ exception. Existing/unfinished files were preserved.\n";return 1;
     }
 }
 #else
