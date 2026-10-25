@@ -1,6 +1,7 @@
 #include "llama-dsv41-layer-log.h"
 #include "llama-dsv41-sweep.h"
 #include "llama-dsv41-append-schedule.h"
+#include "llama-dsv41-engram-prefetch.h"
 #include <cstdlib>
 
 #include "llama-dsv41-cache.h"
@@ -80,6 +81,8 @@ struct llama_dsv41_sweep::implementation {
     std::vector<int32_t>tokens;
     uint32_t position_offset=0;
     llama_dsv41::engram_history initial_engram,final_engram;
+    // Layer 0's ledger wall of the last run (the auto early-Engram append gap).
+    double layer0_wall_ms=0;
     std::vector<float>logits;
     run_timing measured;
     // DS4COMBO fast switch: a completed owner whose device memory, DS pipeline
@@ -208,7 +211,7 @@ static void restore_fixed(llama_dsv41_fixed_storage&f,uint64_t admitted_hidden){
         require(ggml_gallocr_get_buffer_size(f.graph.get(),0)==f.full_graph_reserve,"Prefill graph re-reservation differs");
     }
     f.graph_bytes=f.full_graph_reserve;
-    if(f.full_hidden_bytes){f.hidden=llama_dsv41_tile_executor::reserve_hidden(f.backend,f.tokens,f.tile,f.bf16,f.ids,f.metadata,admitted_hidden);
+    if(f.full_hidden_bytes){f.hidden=llama_dsv41_tile_executor::reserve_hidden(f.backend,f.bank_rows(),f.tile,f.bf16,f.ids,f.metadata,admitted_hidden);
         f.hidden_bytes=ggml_backend_buffer_get_size(f.hidden.get());require(f.hidden_bytes==f.full_hidden_bytes,"Prefill hidden re-reservation differs");}
     f.decode_compact=false;
     std::fprintf(stderr,"LLAMADECODE_PREFILL_RESTORE graph_bytes=%llu hidden_bytes=%llu\n",(unsigned long long)f.graph_bytes,(unsigned long long)f.hidden_bytes);
@@ -260,11 +263,16 @@ bool llama_dsv41_sweep::open(const llama_dsv41_weight_provider::config &weights,
         auto resident_required=[&](uint32_t n){return options.resident_bf16?
             llama_dsv41_tile_executor::resident_layout_bytes(weights.backend,n,options.carry.max_tile_tokens,options.resident_bf16,options.resident_ids,options.resident_metadata):
             llama_dsv41_tile_executor::resident_hidden_bytes(n);};
+        // LLAMADECODE single sweep: a fixed bank smaller than this sweep spills through its last tile.
+        const uint32_t bank_rows=options.fixed&&options.fixed->hidden_rows&&options.fixed->hidden_rows<options.carry.tokens?options.fixed->hidden_rows:options.carry.tokens;
+        require(bank_rows==options.carry.tokens||(options.resident_bf16&&options.resident_ids&&options.resident_metadata&&options.carry.defer_hidden_readback&&
+            options.carry.export_hidden_after_head&&bank_rows%options.carry.max_tile_tokens==0&&bank_rows>=2*options.carry.max_tile_tokens),
+            "Hidden-bank spill requires the full BF16/ID/metadata resident plan and a tile-aligned bank of >=2 tiles");
         const bool native_pair=options.pair_ffn&&llama_dsv41_expert_profile::natural_half(options.expert);
         require(!options.pair_ffn||((native_pair?options.carry.max_tile_tokens==4096:
             ((options.dense_mxfp4||options.expert.dense_activation_q8_1)&&llama_dsv41_expert_profile::activation_rounding_q8_1(options.expert)&&
              (options.carry.max_tile_tokens==4096||options.carry.max_tile_tokens==8192||options.carry.max_tile_tokens==16384)))&&
-            options.carry.direct_ram_tiles&&((options.carry.defer_hidden_readback&&options.admitted_hidden_bytes>=resident_required(options.carry.tokens))||
+            options.carry.direct_ram_tiles&&((options.carry.defer_hidden_readback&&options.admitted_hidden_bytes>=resident_required(bank_rows))||
             (!options.admitted_hidden_bytes&&options.admitted_prefetch_device_bytes&&!options.carry.defer_hidden_readback&&!options.resident_bf16&&!options.resident_ids&&!options.resident_metadata))&&
             !options.diagnostic_carry),"Fixed grouped FFN requires bounded native4K or explicit original-Q8/hyper-fast selection and admitted resident/RAM owner");
         require(options.carry.max_tile_tokens<=4096||options.pair_ffn,"8192 groups require paired attention/FFN construction");
@@ -273,7 +281,7 @@ bool llama_dsv41_sweep::open(const llama_dsv41_weight_provider::config &weights,
         require(!options.engram_tile_lookahead||weights.engram_prefetch_host_bytes,
             "Engram tile lookahead requires the existing immutable whole-prompt cache");
         require(!options.carry.export_hidden_after_head||options.carry.defer_hidden_readback,"Post-head hidden export requires full-device retention");
-        require(!options.carry.defer_hidden_readback||(options.carry.direct_ram_tiles&&options.admitted_pinned_device_bytes&&options.reuse_graph&&!options.reuse_layer_graph&&!options.admitted_prefetch_device_bytes&&!options.diagnostic_carry&&options.admitted_hidden_bytes>=resident_required(options.carry.tokens)),"Final-only hidden readback requires full admitted VRAM residency and forbids intermediate RAM captures");
+        require(!options.carry.defer_hidden_readback||(options.carry.direct_ram_tiles&&options.admitted_pinned_device_bytes&&options.reuse_graph&&!options.reuse_layer_graph&&!options.admitted_prefetch_device_bytes&&!options.diagnostic_carry&&options.admitted_hidden_bytes>=resident_required(bank_rows)),"Final-only hidden readback requires full admitted VRAM residency and forbids intermediate RAM captures");
         require(!options.merge_attention_selected_rows||options.expert.token_tile_attention,"Selected-row union requires explicit token-tile attention");
         require(!options.coalesce_dense||(options.admitted_cast_device_bytes&&options.expert.dense_inputs_f16),"Dense coalescing requires explicit F16 inputs and admitted cast cache");
         require(!options.admitted_index_device_bytes||(options.carry.resident_ram&&options.reuse_graph&&!options.reuse_layer_graph&&
@@ -302,7 +310,7 @@ bool llama_dsv41_sweep::open(const llama_dsv41_weight_provider::config &weights,
             require(previous_lock.owns_lock()&&prefix->p->state==implementation::completed&&prefix->p->published.load()&&!prefix->p->stop_requested.load()&&prefix->p->cache&&prefix->p->carry.frontier_ready(),"Append requires a completely certified uncancelled prefix");
             const auto&old=prefix->p->options;
             auto arithmetic=[](const llama_dsv41_expert_profile::policy&e){return std::tie(e.profile,e.dense_inputs_f16,e.index_bf16,e.token_tile_attention,e.expert_f16_cublas,e.admitted_pool_bytes,e.admitted_code_runtime_bytes,e.sorted_expert_routing,e.reuse_expert_routing_map,e.hc_bf16_epilogue,e.expert_mxfp4,e.dense_activation_q8_1,e.index_key_windows,e.attention_kv_f16_table);};
-            auto execution=[](const config&c){return std::tie(c.context,c.admitted_cache_bytes,c.admitted_graph_bytes,c.admitted_device_bytes,c.admitted_host_bytes,c.admitted_hidden_bytes,c.admitted_pinned_device_bytes,c.admitted_cast_device_bytes,c.admitted_index_device_bytes,c.admitted_prefetch_device_bytes,c.audit_casts,c.coalesce_dense,c.merge_attention_selected_rows,c.hc_projection_f16_gemm,c.dense_mxfp4,c.batch_seed_ram,c.pair_ffn,c.reuse_graph,c.reuse_layer_graph,c.engram_tile_lookahead,c.resident_bf16,c.async_inputs,c.resident_ids,c.resident_metadata,c.fixed,c.compressed_cache_bf16,c.capture_dspark,c.stateful_chunks,c.compute_step_tokens,c.unaligned_append_step_tokens,c.carry.max_tile_tokens,c.carry.resident_ram,c.carry.direct_ram_tiles,c.carry.defer_hidden_readback,c.carry.export_hidden_after_head);};
+            auto execution=[](const config&c){return std::tie(c.context,c.admitted_cache_bytes,c.admitted_graph_bytes,c.admitted_device_bytes,c.admitted_host_bytes,c.admitted_hidden_bytes,c.admitted_pinned_device_bytes,c.admitted_cast_device_bytes,c.admitted_index_device_bytes,c.admitted_prefetch_device_bytes,c.audit_casts,c.coalesce_dense,c.merge_attention_selected_rows,c.hc_projection_f16_gemm,c.dense_mxfp4,c.batch_seed_ram,c.pair_ffn,c.reuse_graph,c.reuse_layer_graph,c.engram_tile_lookahead,c.resident_bf16,c.async_inputs,c.resident_ids,c.resident_metadata,c.fixed,c.compressed_cache_bf16,c.ctx_cache_grow_step,c.capture_dspark,c.stateful_chunks,c.compute_step_tokens,c.unaligned_append_step_tokens,c.carry.max_tile_tokens,c.carry.resident_ram,c.carry.direct_ram_tiles,c.carry.defer_hidden_readback,c.carry.export_hidden_after_head);};
             require(old.stateful_chunks&&prefix->p->backend==weights.backend&&arithmetic(old.expert)==arithmetic(options.expert)&&execution(old)==execution(options),"Append changed its backend, fixed owner, arithmetic or execution admission");
             require(!prefix->p->tokens.empty()&&prefix->p->tokens.size()<options.context&&options.carry.tokens<options.context-prefix->p->tokens.size(),"Appended context must retain the next native decode position");
             p->position_offset=uint32_t(prefix->p->tokens.size());
@@ -361,13 +369,37 @@ bool llama_dsv41_sweep::open(const llama_dsv41_weight_provider::config &weights,
             require(llama_dsv41_carry_store::plan_resident_ram_direct(options.fixed->tokens,fixed_host,why,options.fixed->tile),"Fixed carry host plan failed");
             carry_host=std::max(carry_host,fixed_host.bounded_host_bytes);
         }
-        const uint64_t host=add(options.compressed_cache_bf16?1024ull*1024:0,add(options.engram_tile_lookahead?uint64_t(options.carry.max_tile_tokens)*6144*4+8ull*1024*1024:0,add(provider.host_bytes,add(carry_host,
+        const uint64_t base_host=add(options.compressed_cache_bf16?1024ull*1024:0,add(options.engram_tile_lookahead?uint64_t(options.carry.max_tile_tokens)*6144*4+8ull*1024*1024:0,add(provider.host_bytes,add(carry_host,
             add(tile_host+pair_host,add(metadata_bytes+pinned_metadata+allocator_metadata+long_metadata+2ull*vocabulary*4+1024*1024,uint64_t(options.stateful_chunks?options.context:options.carry.tokens)*8))))));
+        // LLAMADECODE_ENGRAM_CACHE_MB: the Engram row LRU (early loader) is charged
+        // here. Unset: min(4 GiB, this admission's headroom), whole MiB, none below
+        // 16 MiB. Explicit: exactly that size or a loud refusal. 0: no cache.
+        // Every LLAMADECODE_ENGRAM_EARLY arm (0 included) loads on the early loader.
+        const uint64_t row_cache_have=p->provider.engram_row_cache_bytes();uint64_t row_cache_new=0;
+        if(!row_cache_have&&weights.engram_prefetch_host_bytes&&options.engram_tile_lookahead){
+            const char*e=std::getenv("LLAMADECODE_ENGRAM_CACHE_MB");
+            const uint64_t headroom=options.admitted_host_bytes>base_host?options.admitted_host_bytes-base_host:0;
+            if(e&&*e){char*end=nullptr;const unsigned long long mb=std::strtoull(e,&end,10);
+                require(end&&!*end&&mb<=1048576,"LLAMADECODE_ENGRAM_CACHE_MB must be a whole number of MiB (0 disables)");
+                row_cache_new=uint64_t(mb)<<20;
+                if(row_cache_new&&row_cache_new>headroom){
+                    llama_dsv41_layer_log("LLAMADECODE_ENGRAM_ROWCACHE_REFUSED requested_bytes=%llu headroom_bytes=%llu admitted_host=%llu planned_host=%llu\n",
+                        (unsigned long long)row_cache_new,(unsigned long long)headroom,(unsigned long long)options.admitted_host_bytes,(unsigned long long)base_host);
+                    require(false,"LLAMADECODE_ENGRAM_CACHE_MB exceeds the producer host admission headroom (no silent shrink)");
+                }
+            }else{row_cache_new=std::min<uint64_t>(4ull<<30,headroom)&~((1ull<<20)-1);if(row_cache_new<(16ull<<20))row_cache_new=0;}
+            if(!e||*e)llama_dsv41_layer_log("LLAMADECODE_ENGRAM_ROWCACHE_ADMISSION bytes=%llu explicit=%d headroom_bytes=%llu\n",(unsigned long long)row_cache_new,int(e&&*e),(unsigned long long)headroom);
+        }
+        const uint64_t host=add(base_host,row_cache_have?row_cache_have:row_cache_new);
         llama_dsv41_layer_log("DS4PERF_COMBINED_ADMISSION planned_host=%llu admitted_host=%llu provider_host=%llu carry_host=%llu tile_host=%llu planned_device=%llu admitted_device=%llu\n",
             (unsigned long long)host,(unsigned long long)options.admitted_host_bytes,(unsigned long long)provider.host_bytes,
             (unsigned long long)carry_budget.bounded_host_bytes,(unsigned long long)tile_host,(unsigned long long)device,(unsigned long long)options.admitted_device_bytes);
         require(device<=options.admitted_device_bytes&&host<=options.admitted_host_bytes,
             "V4.1 provider/cache/graph/carry combined job exceeds total resource admission");
+        if(row_cache_new)success(p->provider.create_engram_row_cache(row_cache_new,error),error);
+        // LLAMADECODE_ENGRAM_EARLY: tokens known, file verified, job admitted:
+        // the request's Engram rows start now, before RAM/DS/weight-fetch setup.
+        if(!warmup&&!prefix)success(p->provider.start_engram_cold(error),error);
         p->check_stop();p->options=options;p->backend=weights.backend;
         if(options.stateful_chunks)p->tokens.reserve(options.context);
         // Before DS/GPU allocation, RAM mode allocates its fully admitted
@@ -420,10 +452,10 @@ bool llama_dsv41_sweep::open(const llama_dsv41_weight_provider::config &weights,
                 require(f.graph_bytes==reserve,"Fixed graph physical capacity differs from exact reservation");
                 }else llama_dsv41_layer_log("DS4PERF_GRAPH_CAPACITY_DYNAMIC group=16384 within_explicit_graph_and_job_cap=1 allocation_in_prompt_clock=1\n");
                 if(options.admitted_hidden_bytes){
-                    f.hidden=llama_dsv41_tile_executor::reserve_hidden(f.backend,f.tokens,f.tile,f.bf16,f.ids,f.metadata,options.admitted_hidden_bytes);
+                    f.hidden=llama_dsv41_tile_executor::reserve_hidden(f.backend,f.bank_rows(),f.tile,f.bf16,f.ids,f.metadata,options.admitted_hidden_bytes);
                     f.hidden_bytes=ggml_backend_buffer_get_size(f.hidden.get());
                 }else require(!f.bf16&&!f.ids&&!f.metadata,"Layerwise RAM path cannot claim full-device banks");
-                f.cache.reset(new llama_dsv41_cache_storage(native_owners(),f.context,ggml_backend_get_default_buffer_type(f.backend),options.admitted_cache_bytes,options.compressed_cache_bf16,options.capture_dspark));
+                f.cache.reset(new llama_dsv41_cache_storage(native_owners(),f.context,ggml_backend_get_default_buffer_type(f.backend),options.admitted_cache_bytes,options.compressed_cache_bf16,options.capture_dspark,options.ctx_cache_grow_step));
                 f.cache_bytes=f.cache->allocated_bytes();f.ready=true;
                 ggml_backend_synchronize(f.backend);
                 llama_dsv41_layer_log("DS4PERF_FIXED_BEFORE_FIRST_LEASE tokens=%u tile=%u graph_bytes=%llu hidden_bytes=%llu cache_bytes=%llu existing_allocators=1 provider_heaps_created=1\n",f.tokens,f.tile,(unsigned long long)f.graph_bytes,(unsigned long long)f.hidden_bytes,(unsigned long long)f.cache_bytes);
@@ -443,7 +475,7 @@ bool llama_dsv41_sweep::open(const llama_dsv41_weight_provider::config &weights,
         // input preparation, Engram IO and every required head stay in run().
         if(options.fixed){require(!prefix||p->cache==options.fixed->cache,"Append lost its exact fixed canonical cache");p->cache=options.fixed->cache;if(!prefix)p->cache->clear();}
         else if(!prefix)p->cache.reset(new llama_dsv41_cache_storage(native_owners(),p->options.context,
-            ggml_backend_get_default_buffer_type(p->backend),p->options.admitted_cache_bytes,p->options.compressed_cache_bf16,p->options.capture_dspark));
+            ggml_backend_get_default_buffer_type(p->backend),p->options.admitted_cache_bytes,p->options.compressed_cache_bf16,p->options.capture_dspark,p->options.ctx_cache_grow_step));
         require(p->cache->compact_compressed()==p->options.compressed_cache_bf16,"Fixed cache physical format differs from request admission");
         require(p->cache->captures_dspark()==p->options.capture_dspark,"Fixed cache DSpark capture admission changed");
         require(!p->options.capture_dspark||!p->options.reuse_layer_graph,"DSpark ring writes require allocator-only graph reuse");
@@ -478,6 +510,7 @@ bool llama_dsv41_sweep::suspend_device(std::string&error){
     try{
         require(p->state==implementation::completed&&!p->device_suspended&&p->options.fixed&&p->options.fixed->ram&&!p->options.fixed->ram_registration,
             "Device suspend requires a completed fixed owner with tile-registered carry RAM");
+        require(!p->options.ctx_cache_grow_step,"Device suspend (switch arena) does not cover the growable context cache");
         auto&f=*p->options.fixed;
         ggml_backend_synchronize(p->backend);
         // The frontier is given up: nothing may export from this owner again.
@@ -530,6 +563,28 @@ bool llama_dsv41_sweep::start_next_engram(const std::vector<int32_t>&tokens,cons
     }catch(const std::exception&failure){p->poison();error=failure.what();return false;}
 }
 
+bool llama_dsv41_sweep::early_engram_queued()const{return p->provider.early_engram_queued();}
+bool llama_dsv41_sweep::start_append_engram(const std::vector<int32_t>&tokens,std::string&error){
+    error.clear();
+    if(!llama_dsv41_engram_early_enabled())return true;
+    std::unique_lock<std::mutex>lock(p->mutex,std::try_to_lock);
+    if(!lock.owns_lock()){error="V4.1 sweep is already active";return false;}
+    try{
+        // Auto (the default) arms the early start only where =1 could run it.
+        if(llama_dsv41_engram_early_auto()&&!(p->options.stateful_chunks&&p->options.engram_tile_lookahead)){
+            llama_dsv41_layer_log("LLAMADECODE_ENGRAM_EARLY_DECISION at=append_tokens_arrived tokens=%zu early=0 reason=%s\n",tokens.size(),
+                p->options.stateful_chunks?"no_lookahead_worker":"not_stateful");return true;}
+        require(p->state==implementation::completed&&p->published.load()&&!p->stop_requested.load()&&p->options.stateful_chunks&&
+                !p->device_suspended&&p->options.engram_tile_lookahead,"Append early Engram requires a completed stateful owner with the lookahead worker");
+        require(!tokens.empty()&&std::all_of(tokens.begin(),tokens.end(),[](int32_t t){return t>=0&&uint32_t(t)<vocabulary;}),"Append early Engram requires text tokens");
+        // Same history the append's open adopts (initial_engram=final_engram).
+        // Auto gap: the completed pass's layer-0 wall (the append's open and
+        // layer-0 fetch run before layer 1 needs table 0).
+        success(p->provider.start_engram_append(tokens,p->final_engram,p->layer0_wall_ms/1000.0,error),error);
+        return true;
+    }catch(const std::exception&failure){error=failure.what();return false;}
+}
+
 bool llama_dsv41_sweep::run(const std::vector<int32_t>&tokens,const cancelled&stop,std::string&error){
     const auto run_started=std::chrono::steady_clock::now();
     std::unique_lock<std::mutex>lock(p->mutex,std::try_to_lock);error.clear();
@@ -541,6 +596,7 @@ bool llama_dsv41_sweep::run(const std::vector<int32_t>&tokens,const cancelled&st
         p->check_stop(stop);p->state=implementation::running;
         require(p->tokens.size()==p->position_offset&&tokens.size()<p->options.context-p->position_offset,"Stateful token prefix/extent changed");
         p->tokens.insert(p->tokens.end(),tokens.begin(),tokens.end());
+        success(p->cache->ensure_tokens(uint32_t(p->tokens.size()),"prefill",nullptr,error),error);   // growable cache: map before the sweep writes
         success(p->provider.start_request(error),error);
         const auto &owned=tokens;
         const auto schedule=llama_dsv41_plan_append(p->options.pair_ffn,p->options.carry.max_tile_tokens,p->options.compute_step_tokens,p->position_offset,p->options.unaligned_append_step_tokens);
@@ -706,6 +762,7 @@ bool llama_dsv41_sweep::run(const std::vector<int32_t>&tokens,const cancelled&st
             ledger_started=std::chrono::steady_clock::now();success(p->provider.release(error),error);
             const double provider_release_ms=elapsed(ledger_started);
             const double ledger_wall_ms=elapsed(layer_started);
+            if(layer==0)p->layer0_wall_ms=ledger_wall_ms;
             token_acquire_ms+=acquire_ms;token_executor_ms+=executor_wall_ms;token_compute_ms+=compute_ms;token_prepare_ms+=prepare_ms;
             const double scaffold_ms=ledger_wall_ms-acquire_ms-carry_begin_ms-executor_wall_ms-engram_ms-carry_read_ms-carry_write_ms-carry_commit_ms-provider_release_ms;
             llama_dsv41_layer_log("DS4PERF_LAYER_WALL_LEDGER layer=%u wall_ms=%.6f acquire_ms=%.6f carry_begin_ms=%.6f executor_wall_ms=%.6f executor_phase_gap_ms=%.6f engram_ms=%.6f carry_read_ms=%.6f carry_write_ms=%.6f carry_commit_ms=%.6f provider_release_ms=%.6f scaffold_ms=%.6f\n",layer,ledger_wall_ms,acquire_ms,carry_begin_ms,executor_wall_ms,executor_phase_gap_ms,engram_ms,carry_read_ms,carry_write_ms,carry_commit_ms,provider_release_ms,scaffold_ms);
@@ -777,8 +834,8 @@ bool llama_dsv41_sweep::apply_decode_delta(const decode_delta&update,
             p->options.stateful_chunks&&p->cache&&p->carry.frontier_ready()&&!p->executor,
             "Decode delta requires a completed, idle stateful sweep");
         const auto count=update.evaluated_tokens.size();
-        require(count&&count<=128&&update.logits.size()==vocabulary&&p->logits.size()==vocabulary&&bool(read),
-            "Decode delta requires1..128 evaluated tokens and complete logits");
+        require(count&&count<=llama_dsv41::decode_delta_max_tokens&&update.logits.size()==vocabulary&&p->logits.size()==vocabulary&&bool(read),
+            "Decode delta requires 1..maximum_decode_tokens evaluated tokens and complete logits");
         require(std::all_of(update.evaluated_tokens.begin(),update.evaluated_tokens.end(),
             [](int32_t t){return t>=0&&uint32_t(t)<vocabulary;}),"Decode delta token out of range");
         finite(update.logits);
@@ -893,12 +950,14 @@ llama_dsv41_sweep::run_timing llama_dsv41_sweep::timing()const{
 bool llama_dsv41_sweep::ready()const{return p->published.load()&&!p->stop_requested.load();}
 bool llama_dsv41_sweep::device_state_views(device_state&out,std::string&error)const{
     std::lock_guard<std::mutex>lock(p->mutex);out={};error.clear();
-    if(p->state!=implementation::completed||!p->published.load()||!p->cache||p->options.compressed_cache_bf16||p->options.capture_dspark){
-        error="External decode requires a completed canonical F32 mode1 owner";return false;}
+    if(p->state!=implementation::completed||!p->published.load()||!p->cache||p->options.capture_dspark){
+        error="External decode requires a completed canonical mode1 owner";return false;}
+    const bool bf16=p->options.compressed_cache_bf16;const ggml_type owner_type=bf16?GGML_TYPE_BF16:GGML_TYPE_F32;
+    if(p->cache->compact_compressed()!=bf16){error="External decode cache precision differs from admission";return false;}out.bf16=bf16;
     for(uint32_t l=0;l<40;++l){auto*t=p->cache->raw(l);if(!t||!t->data||t->type!=GGML_TYPE_F32||ggml_nbytes(t)!=128ull*512*4){error="Raw ring geometry differs";return false;}out.raw[l]=t->data;}
     const uint32_t owners[4]={2,8,14,20};
     for(uint32_t i=0;i<4;++i){auto*c=p->cache->compressed(owners[i]);auto*x=p->cache->index(owners[i]);
-        if(!c||!x||!c->data||!x->data||c->type!=GGML_TYPE_F32||x->type!=GGML_TYPE_F32||c->ne[0]!=512||x->ne[0]!=128||c->ne[1]!=x->ne[1]){error="Compressed/index cache geometry differs";return false;}
+        if(!c||!x||!c->data||!x->data||c->type!=owner_type||x->type!=owner_type||c->ne[0]!=512||x->ne[0]!=128||c->ne[1]!=x->ne[1]){error="Compressed/index cache geometry differs";return false;}
         out.compressed[i]=c->data;out.index[i]=x->data;out.rows[i]=uint32_t(c->ne[1]);
         if(i<3){auto*k=p->cache->pool_kv(owners[i]);auto*s=p->cache->pool_score(owners[i]);
             if(!k||!s||!k->data||!s->data||ggml_nbytes(k)!=512*4||ggml_nbytes(s)!=512*4){error="Pool tail geometry differs";return false;}
@@ -923,7 +982,27 @@ bool llama_dsv41_sweep::commit_external_token(int32_t token,const std::vector<fl
         return true;
     }catch(const std::exception&failure){p->poison();error=failure.what();return false;}
 }
+bool llama_dsv41_sweep::commit_external_tokens(const int32_t*tokens,size_t count,const std::vector<float>&logits,std::string&error){
+    std::lock_guard<std::mutex>lock(p->mutex);error.clear();
+    try{
+        require(p->state==implementation::completed&&p->published.load()&&p->options.stateful_chunks&&!p->executor,
+            "External append commit requires a completed, idle stateful owner");
+        require(tokens&&count&&count<=128&&logits.size()==vocabulary&&p->tokens.size()+count<p->options.context,"External append tokens/logits/context invalid");
+        for(size_t i=0;i<count;++i)require(tokens[i]>=0&&uint32_t(tokens[i])<vocabulary,"External append token out of vocabulary");
+        finite(logits);
+        auto history=p->final_engram;
+        success(p->provider.advance_decoded_engram(history,tokens,count,error),error);
+        p->tokens.insert(p->tokens.end(),tokens,tokens+count);std::copy(logits.begin(),logits.end(),p->logits.begin());p->final_engram=history;
+        return true;
+    }catch(const std::exception&failure){p->poison();error=failure.what();return false;}
+}
 llama_dsv41_weight_provider*llama_dsv41_sweep::provider_for_external_decode(){return &p->provider;}
+bool llama_dsv41_sweep::ensure_context(uint32_t tokens,const char*phase,bool*grew,std::string&error){
+    std::lock_guard<std::mutex>lock(p->mutex);if(grew)*grew=false;
+    if(!p->cache){error="Context cache growth requires an allocated owner";return false;}
+    return p->cache->ensure_tokens(tokens,phase,grew,error);
+}
+uint64_t llama_dsv41_sweep::context_next_step_bytes()const{std::lock_guard<std::mutex>lock(p->mutex);return p->cache?p->cache->next_step_bytes():0;}
 bool llama_dsv41_sweep::compact_for_external_decode(std::string&error){
     std::lock_guard<std::mutex>lock(p->mutex);error.clear();
     try{

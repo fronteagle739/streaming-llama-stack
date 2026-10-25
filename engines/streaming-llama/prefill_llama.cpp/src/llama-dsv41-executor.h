@@ -18,6 +18,11 @@
 // carry is a separately admitted RAM bank or an exclusive file.
 struct llama_dsv41_fixed_storage {
     uint32_t tokens=0,tile=0,context=0;
+    // LLAMADECODE single sweep: rows of the CUDA hidden bank (0 = tokens). When
+    // smaller than tokens (the RAM carry capacity), rows past bank-tile spill
+    // through the bank's last tile to their own RAM records between layers.
+    uint32_t hidden_rows=0;
+    uint32_t bank_rows()const{return hidden_rows?hidden_rows:tokens;}
     bool bf16=false,ids=false,metadata=false,ready=false,tile_registration=false,pageable_copies=false;
     ggml_backend_t backend=nullptr;
     std::shared_ptr<ggml_gallocr> graph;

@@ -155,13 +155,29 @@ void grow_decode_l2(llama_dsv41_sweep&sweep,const llama_dsv41_fixed_storage*fixe
     // startup-admitted plan; no NVML reading means no L2.
     uint64_t budget=0,usage=0;local_video_memory(budget,usage);
     uint64_t nv_free=0,nv_total=0;const bool nv=nvml_free_bytes(nv_free,nv_total);
-    offer=nv?std::min<uint64_t>(offer,nv_free>floor+margin?nv_free-floor-margin:0):0;
+    // LLAMADECODE growable context cache: the plan keeps the next growth step
+    // free beside the reserve (current size is already mapped, so not in nv_free).
+    const uint64_t next_step=sweep.context_next_step_bytes();
+    offer=nv?std::min<uint64_t>(offer,llama_dsv41_ctx_cache::l2_offer(nv_free,floor,margin,next_step)):0;
     uint32_t slots=0;std::string error;success(provider->grow_decode_cache(offer,&slots,error),error);
     if(slots)decode_vram_sampler().start();
     uint64_t nv_after=0,nv_total_after=0;(void)nvml_free_bytes(nv_after,nv_total_after);
-    std::fprintf(stderr,"LLAMADECODE_L2_OFFER freed=%llu decode_now=%llu cuda_free=%llu cuda_total=%llu dxgi_budget=%llu dxgi_usage=%llu nvml_free=%llu nvml_total=%llu nvml_free_after=%llu offered=%llu slots=%u\n",(unsigned long long)freed,
+    std::fprintf(stderr,"LLAMADECODE_L2_OFFER freed=%llu decode_now=%llu cuda_free=%llu cuda_total=%llu dxgi_budget=%llu dxgi_usage=%llu nvml_free=%llu nvml_total=%llu nvml_free_after=%llu offered=%llu slots=%u next_step_reserved=%llu\n",(unsigned long long)freed,
         (unsigned long long)now,(unsigned long long)free_bytes,(unsigned long long)total,(unsigned long long)budget,(unsigned long long)usage,
-        (unsigned long long)nv_free,(unsigned long long)nv_total,(unsigned long long)nv_after,(unsigned long long)offer,slots);std::fflush(stderr);
+        (unsigned long long)nv_free,(unsigned long long)nv_total,(unsigned long long)nv_after,(unsigned long long)offer,slots,(unsigned long long)next_step);std::fflush(stderr);
+}
+// LLAMADECODE growable context cache during decode: map the step that covers
+// `tokens` (it comes out of the reserved next step), then shrink the L2 so the
+// following step is reserved again (L2 rebuilt smaller; its contents restart).
+void ensure_decode_context(llama_dsv41_sweep&sweep,const llama_dsv41_fixed_storage*fixed,ggml_backend_t backend,uint32_t tokens){
+    bool grew=false;std::string error;success(sweep.ensure_context(tokens,"decode",&grew,error),error);
+    if(!grew)return;
+    auto*provider=sweep.provider_for_external_decode();
+    const uint32_t before=provider->cache_stats().l2_slots;if(!before)return;
+    success(provider->release_decode_cache(error),error);
+    grow_decode_l2(sweep,fixed,backend);
+    std::fprintf(stderr,"LLAMADECODE_CTX_CACHE_L2_SHRINK tokens=%u l2_slots=%u->%u next_step_reserved=%llu\n",tokens,before,
+        provider->cache_stats().l2_slots,(unsigned long long)sweep.context_next_step_bytes());std::fflush(stderr);
 }
 bool ds4_decode_enabled(){static const bool on=[]{const char*e=std::getenv("LLAMADECODE_DS4_DECODE");return e&&e[0]=='1'&&!e[1];}();return on;}
 // LLAMADECODE append-via-decode: with the ds4 decode on, a live prefill of at
@@ -173,6 +189,11 @@ uint64_t append_decode_max(){static const uint64_t n=[]{const char*e=std::getenv
 // while a decode op runs; the loop stops at the next token boundary exactly as at
 // max_tokens (the last sampled token is returned, not evaluated). Cleared at
 // every decode start and after a cancel.
+// LLAMADECODE multi-row append (opt-in, LLAMADECODE_APPEND_MULTIROW=1): an append of
+// 2..LLAMADECODE_APPEND_DECODE_MAX tokens runs as ONE ds4-win layer-major prefill
+// (ds4x_prefill, native ds41_graph_prefill on a small workspace) instead of one ds4
+// decode step per token; the routed experts of the rows are fetched as one union per layer.
+bool append_multirow_enabled(){static const bool on=[]{const char*e=std::getenv("LLAMADECODE_APPEND_MULTIROW");return e&&e[0]=='1'&&!e[1];}();return on;}
 const std::wstring&decode_cancel_file(){static const std::wstring p=[]{const char*e=std::getenv("LLAMADECODE_DECODE_CANCEL_FILE");
     return e&&*e?std::filesystem::u8path(e).wstring():std::wstring();}();return p;}
 bool decode_cancel_requested(){const auto&p=decode_cancel_file();return !p.empty()&&GetFileAttributesW(p.c_str())!=INVALID_FILE_ATTRIBUTES;}
@@ -182,9 +203,12 @@ struct ds4_external {
     int(*x_open)(const char*,uint32_t,char*,size_t)=nullptr;const void*(*x_map)()=nullptr;
     int(*x_register)(uint64_t,uint64_t,void*)=nullptr;
     int(*x_bind)(void*const*,void*const*,void*const*,const uint32_t*,void*const*,void*const*)=nullptr;
+    int(*x_bind_ex)(void*const*,void*const*,void*const*,const uint32_t*,void*const*,void*const*,uint32_t)=nullptr; // bf16 owners (optional export)
     void(*x_hook)(int(*)(void*,uint32_t,const int32_t*,uint32_t,int32_t*,const char**,const char**,const char**,uint32_t*),void*)=nullptr;
     int(*x_decode)(int,uint32_t,const int32_t*,uint32_t,float*)=nullptr;void(*x_close)()=nullptr;
     int(*x_affinity)(float,uint32_t,uint32_t,const char*,int(*)(void*,uint32_t,uint8_t*,uint32_t),void*)=nullptr;
+    int(*x_prefill_ws)(uint32_t,char*,size_t)=nullptr;int(*x_prefill)(const int32_t*,uint32_t,uint32_t,const int32_t*,uint32_t,float*)=nullptr;
+    uint32_t prefill_rows=0; // multi-row workspace rows (0 = per-token appends)
     llama_dsv41_weight_provider*provider=nullptr;uint64_t registered=0,registered_bytes=0;
     float quality=-1.f; // live quality-speed mean (session op); <0 = LLAMADECODE_DS4_BIAS / off
     static int residency_hook(void*user,uint32_t layer,uint8_t*tier,uint32_t experts){
@@ -203,6 +227,8 @@ struct ds4_external {
         require(module,"Cannot load ds4-decode.dll beside the producer");
         bind(x_open,"ds4x_open");bind(x_map,"ds4x_model_map");bind(x_register,"ds4x_register_weight");bind(x_bind,"ds4x_bind_state");
         bind(x_hook,"ds4x_set_expert_hook");bind(x_decode,"ds4x_decode");bind(x_close,"ds4x_close");bind(x_affinity,"ds4x_set_affinity");
+        if(append_multirow_enabled()){bind(x_prefill_ws,"ds4x_prefill_workspace");bind(x_prefill,"ds4x_prefill");}
+        x_bind_ex=reinterpret_cast<decltype(x_bind_ex)>(GetProcAddress(module,"ds4x_bind_state_ex"));
     }
     // (Re)prepare on the current owner: decode layout, resident weights
     // registered at their device addresses, state views, expert hook.
@@ -220,12 +246,24 @@ struct ds4_external {
             ggml_backend_cuda_get_device_memory(0,&free_after,&total);
             std::fprintf(stderr,"LLAMADECODE_DS4X_DEVICE_DELTA bytes=%lld free_before=%llu free_after=%llu\n",(long long)free_before-(long long)free_after,
                 (unsigned long long)free_before,(unsigned long long)free_after);std::fflush(stderr);
-            registered=registered_bytes=0;
+            registered=registered_bytes=0;prefill_rows=0;
+            if(append_multirow_enabled()&&append_decode_max()>=2){
+                // The native prefill workspace, sized to the largest small append (allocated before the L2 offer).
+                char werr[512]{};const uint32_t rows=uint32_t(append_decode_max());
+                require(x_prefill_ws(rows,werr,sizeof(werr))==1,werr[0]?werr:"ds4x_prefill_workspace failed");prefill_rows=rows;
+                size_t free_ws=0;ggml_backend_cuda_get_device_memory(0,&free_ws,&total);
+                std::fprintf(stderr,"LLAMADECODE_DS4X_PREFILL_ROWS rows=%u workspace_bytes=%lld\n",rows,(long long)free_after-(long long)free_ws);std::fflush(stderr);
+            }
             success(provider->decode_resident_tensors([&](uint64_t offset,uint64_t bytes,void*device){
                 if(!x_register(offset,bytes,device))return false;++registered;registered_bytes+=bytes;return true;},error),error);
         }
         llama_dsv41_sweep::device_state state;success(sweep.device_state_views(state,error),error);
-        require(x_bind(state.raw.data(),state.compressed.data(),state.index.data(),state.rows.data(),state.pool_kv.data(),state.pool_score.data())==1,
+        if(state.bf16){
+            require(x_bind_ex,"ctx-cache-precision bf16 needs a ds4-decode.dll with ds4x_bind_state_ex (BF16 owner caches)");
+            require(!append_multirow_enabled(),"ctx-cache-precision bf16 does not support LLAMADECODE_APPEND_MULTIROW=1 (ds4 multi-row prefill reads F32 owners)");
+            require(x_bind_ex(state.raw.data(),state.compressed.data(),state.index.data(),state.rows.data(),state.pool_kv.data(),state.pool_score.data(),1)==1,
+                "ds4x_bind_state_ex refused the canonical BF16 state");
+        }else require(x_bind(state.raw.data(),state.compressed.data(),state.index.data(),state.rows.data(),state.pool_kv.data(),state.pool_score.data())==1,
             "ds4x_bind_state refused the canonical state");
         x_hook(&expert_hook,this);
         // B5: LLAMADECODE_DS4_BIAS=<quality-speed mean> enables ds4-win's own
@@ -256,6 +294,23 @@ struct ds4_external {
             (unsigned long long)(after.l2_hits-before.l2_hits),(unsigned long long)(after.misses-before.misses),after.slots,after.l2_slots,
             f1[0]-f0[0],f1[1]-f0[1],f1[2]-f0[2],f1[3]-f0[3],(unsigned long long)(r1-r0),(unsigned long long)(b1-b0));
     }
+    // Multi-row append: `count` tokens at `position` in one ds4 prefill; the producer
+    // commits them with the frontier logits (the per-token path's final state).
+    void prefill_rows_step(llama_dsv41_sweep&sweep,ggml_backend_t backend,const std::vector<int32_t>&tokens,uint32_t position){
+        std::string error;std::array<int32_t,3>tail{};success(sweep.engram_tail(tail,error),error);
+        std::vector<float>logits(129280);
+        ggml_backend_synchronize(backend);check_decode_vram_reserve();
+        double f0[4]{};uint64_t r0=0,b0=0;wf_extent_fetch_stats(f0,&r0,&b0);
+        const auto before=provider->cache_stats();const auto started=std::chrono::steady_clock::now();
+        require(x_prefill(tokens.data(),uint32_t(tokens.size()),position,tail.data(),3,logits.data())==1,"ds4-win multi-row append failed");
+        const double prefill_ms=std::chrono::duration<double,std::milli>(std::chrono::steady_clock::now()-started).count();
+        success(sweep.commit_external_tokens(tokens.data(),tokens.size(),logits,error),error);
+        const auto after=provider->cache_stats();double f1[4]{};uint64_t r1=0,b1=0;wf_extent_fetch_stats(f1,&r1,&b1);
+        std::fprintf(stderr,"LLAMADECODE_DS4X_PREFILL rows=%zu position=%u prefill_ms=%.3f ds_bytes=%llu ds_ms=%.3f l1_hits=%llu l2_hits=%llu misses=%llu ds_requests=%llu ds_batches=%llu\n",
+            tokens.size(),position,prefill_ms,(unsigned long long)(after.fetched_bytes-before.fetched_bytes),after.fetch_ms-before.fetch_ms,
+            (unsigned long long)(after.hits-before.hits),(unsigned long long)(after.l2_hits-before.l2_hits),(unsigned long long)(after.misses-before.misses),
+            (unsigned long long)(r1-r0),(unsigned long long)(b1-b0));
+    }
     // The DLL stays mapped until process exit (never FreeLibrary): no ds4 code may
     // be unmapped under a thread or CUDA callback it started.
     ~ds4_external(){if(open&&x_close){x_hook(nullptr,nullptr);x_close();open=false;std::fprintf(stderr,"LLAMADECODE_DS4X_CLOSED\n");std::fflush(stderr);}}
@@ -270,7 +325,7 @@ void run_live_session(std::unique_ptr<llama_dsv41_sweep>&sweep,
     using namespace llama_dsv41;using dsv41_live::checkpoint;
     require(sweep&&sweep->ready()&&options.fixed&&options.stateful_chunks,
         "Persistent session requires a completed fixed mode1/3 stateful owner");
-    require(capacity&&capacity<=49152&&options.fixed->tokens==capacity,"Session chunk reservation differs from fixed owner");
+    require(capacity&&capacity<=llama_dsv41_prefill::max_sweep_tokens&&options.fixed->tokens==capacity,"Session chunk reservation differs from fixed owner");
     session_pipe io(timeout_ms,output);dsv41_live::sequence_guard guard(session,model_sha,owner_epoch);
     auto send=[&](json value){if(owner_epoch)value["owner_epoch"]=owner_epoch;io.send(value);};
     const uint64_t session_route=std::stoull(session.substr(0,16),nullptr,16),model_route=std::stoull(std::string(model_sha).substr(0,16),nullptr,16);
@@ -281,6 +336,7 @@ void run_live_session(std::unique_ptr<llama_dsv41_sweep>&sweep,
     // index 0); shared by decode, decode_forced and the small-append prefill.
     auto ds4_step=[&](int32_t token,uint64_t index){
         if(index==0)ds4x.prepare(*sweep,weights,uint32_t(options.context));
+        ensure_decode_context(*sweep,options.fixed.get(),weights.backend,current.frontier.position+uint32_t(index)+1);
         ds4x.step(*sweep,weights.backend,token,current.frontier.position+uint32_t(index));
         if(index==0)grow_decode_l2(*sweep,options.fixed.get(),weights.backend);else if(index%16==0)check_decode_vram_reserve();
     };
@@ -290,7 +346,7 @@ void run_live_session(std::unique_ptr<llama_dsv41_sweep>&sweep,
         success(sweep->export_native([&](wire_payload_reader&r,std::string&why){try{c=dsv41_live::capture(r,[]{return should_stop();});return true;}catch(const std::exception&e){why=e.what();return false;}},error),error);return c;};
     current=inspect();
     send({{"status","ready"},{"session",session},{"model_sha256",model_sha},{"next_sequence",guard.expected()},
-        {"checkpoint",current.describe()},{"maximum_prefill_tokens",capacity},{"maximum_decode_tokens",128},{"control_host_bytes",64*1024*1024},
+        {"checkpoint",current.describe()},{"maximum_prefill_tokens",std::min(capacity,llama_dsv41_prefill::legacy_sweep_tokens)},{"maximum_prefill_sweep_tokens",capacity},{"maximum_decode_tokens",llama_dsv41::decode_delta_chunk_tokens},{"maximum_decode_delta_tokens",llama_dsv41::decode_delta_max_tokens},{"control_host_bytes",64*1024*1024},
         {"transport","private owned pipes; existing native payload and artifact v2.1 delta"}});
     for(;;){
         io.renew();auto command=dsv41_live::parse_control(io.line());guard.accept(command);if(owner_epoch)command.erase("owner_epoch");
@@ -389,13 +445,13 @@ void run_live_session(std::unique_ptr<llama_dsv41_sweep>&sweep,
             dsv41_live::keys(command,{"session","model_sha256","sequence","operation","base","target","bytes"});same_base();
             require(have_remote&&!awaiting_ack&&remote.describe()==current.describe(),"Decode delta before peer synchronization");
             const auto target=checkpoint::from_json(command.at("target"));delta_plan plan;std::string error;
-            success(make_delta_plan(current.frontier,target.frontier,plan,error),error);require(plan.token_count<=128,"Live decode delta exceeds128 evaluated tokens");
-            const auto bytes=dsv41_live::u64(command.at("bytes"));require(bytes<=64ull*1024*1024,"Live decode artifact exceeds bounded native maximum");
+            success(make_delta_plan(current.frontier,target.frontier,plan,error),error);require(plan.token_count<=llama_dsv41::decode_delta_max_tokens,"Live decode delta exceeds the advertised maximum_decode_tokens");
+            const auto bytes=dsv41_live::u64(command.at("bytes"));require(bytes<=llama_dsv41::decode_delta_byte_cap(plan.token_count),"Live decode artifact exceeds bounded native maximum");
             uint64_t received=0;delta_artifact_receiver incoming;
             auto stream=[&](uint64_t off,void*dst,size_t n,std::string&why){try{
                 require(off==received&&n<=65536&&off<=bytes&&n<=bytes-off,"Live decode stream is not sequential/bounded");io.read(dst,n);received+=n;return true;
             }catch(const std::exception&e){why=e.what();return false;}};
-            success(incoming.init(bytes,stream,current.frontier,session_route,model_route,error),error);
+            success(incoming.init(bytes,stream,current.frontier,session_route,model_route,error,llama_dsv41::decode_delta_max_tokens),error);
             require(incoming.plan().target.position==target.frontier.position&&incoming.plan().target.context==target.frontier.context&&
                 incoming.plan().target.mode==target.frontier.mode&&incoming.plan().target.capture_end==target.frontier.capture_end&&incoming.plan().target.capture_length==target.frontier.capture_length,
                 "Live decode artifact target differs from authenticated metadata");
@@ -511,13 +567,21 @@ void run_live_session(std::unique_ptr<llama_dsv41_sweep>&sweep,
                 // Small append: teacher-forced ds4 steps on the resident state (the
                 // decode/decode_forced step), every token evaluated; same reply and
                 // checkpoint as the sweep. The frontier logits come from ds4's decode kernels.
-                for(size_t index=0;index<tokens.size();++index){stop();ds4_step(tokens[index],index);}
+                if(append_multirow_enabled()&&tokens.size()>=2){
+                    ds4x.prepare(*sweep,weights,uint32_t(options.context));require(ds4x.prefill_rows>=tokens.size(),"Multi-row append exceeds the ds4 prefill workspace");
+                    stop();ensure_decode_context(*sweep,options.fixed.get(),weights.backend,current.frontier.position+uint32_t(tokens.size()));
+                    ds4x.prefill_rows_step(*sweep,weights.backend,tokens,current.frontier.position);
+                    grow_decode_l2(*sweep,options.fixed.get(),weights.backend);
+                }else for(size_t index=0;index<tokens.size();++index){stop();ds4_step(tokens[index],index);}
                 const double append_ms=ms(started);
                 const uint32_t before=current.frontier.position;current=inspect();require(current.frontier.position==before+tokens.size(),"Live append position did not advance exactly");
                 std::fprintf(stderr,"LLAMADECODE_APPEND_VIA_DECODE tokens=%zu ms=%.3f position=%u\n",tokens.size(),append_ms,current.frontier.position);std::fflush(stderr);
-                reply({{"peer_synchronized",false},{"prompt_tokens",tokens.size()},{"prompt_processing_ms",append_ms},{"export_preparation_ms",0.0},{"append_via_decode",true}});
+                reply({{"peer_synchronized",false},{"prompt_tokens",tokens.size()},{"prompt_processing_ms",append_ms},{"export_preparation_ms",0.0},{"append_via_decode",true},{"append_multirow",append_multirow_enabled()&&tokens.size()>=2}});
                 continue;
             }
+            // LLAMADECODE_ENGRAM_EARLY: this append's Engram rows start now, before
+            // its open, start_request and layer-0 weight fetch (off: no-op).
+            {std::string early_error;success(sweep->start_append_engram(tokens,early_error),early_error);}
             auto previous=std::move(sweep);sweep.reset(new llama_dsv41_sweep);auto next_options=options;auto next_weights=weights;
             next_options.carry.tokens=uint32_t(tokens.size());if(next_weights.engram_prefetch_host_bytes)next_weights.engram_prefetch_tokens=uint32_t(tokens.size());
             std::string error;success(sweep->open(next_weights,next_options,error,nullptr,previous.get()),error);require(!previous->ready(),"Transferred prefix still publishes");previous.reset();

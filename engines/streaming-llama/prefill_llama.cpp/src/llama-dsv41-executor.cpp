@@ -320,6 +320,15 @@ struct llama_dsv41_tile_executor::resident_storage {
     uint32_t selected_source=UINT32_MAX,candidate_source=UINT32_MAX,selected_width=0,candidate_width=0;
     ggml_backend_t backend=nullptr;
     uint32_t tokens=0,total_tokens=0,layer=0,cursor=0,export_cursor=0;
+    // LLAMADECODE single sweep: tokens = physical bank rows. With spill, logical
+    // rows >= spill_start live in their RAM carry records between layers and
+    // pass through the bank's last tile (physical rows spill_start..tokens).
+    uint32_t spill_start=UINT32_MAX,slot_logical=UINT32_MAX;
+    uint64_t spill_h2d_bytes=0,spill_d2h_bytes=0;
+    bool spill()const{return spill_start!=UINT32_MAX;}
+    bool full()const{return tokens==total_tokens||spill();}
+    bool spilled(uint32_t start)const{return spill()&&start>=spill_start;}
+    uint32_t physical(uint32_t start)const{return spilled(start)?spill_start:start;}
     std::shared_ptr<ggml_backend_buffer> reserved_owner;
     void layout(uint32_t n,uint32_t tile,bool resident_bf16,bool resident_ids,bool resident_metadata){
         ctx.reset(ggml_init({65536,nullptr,true}));require(bool(ctx),"Resident hidden metadata allocation failed");
@@ -599,8 +608,11 @@ llama_dsv41_tile_executor::llama_dsv41_tile_executor(ggml_backend_t backend,llam
     require(!pair_ffn||((admitted_tile_tokens==4096||admitted_tile_tokens==8192||admitted_tile_tokens==16384)&&direct&&reuse_graph&&!reuse_layer_graph&&((defer_hidden_readback&&!admitted_prefetch_bytes)||(!resident_hidden_tokens&&!admitted_hidden_bytes&&admitted_prefetch_bytes&&!resident_bf16&&!resident_ids&&!resident_metadata))),
         "Paired FFN requires explicit4K/8K/16K group and existing admitted resident/RAM allocator path");
     require(!dense_mxfp4||(admitted_cast_bytes&&reuse_graph&&!reuse_layer_graph&&!audit_casts),"Dense FP4 requires the existing admitted cast bank and allocator-only mode");
+    // LLAMADECODE single sweep: a fixed bank smaller than the sweep spills its tail rows (exact bytes) to RAM.
+    const uint32_t spill_bank=fixed&&fixed->hidden_rows&&resident_hidden_tokens>fixed->hidden_rows&&defer_hidden_readback&&resident_bf16&&resident_ids&&resident_metadata&&
+        export_hidden_after_head&&fixed->hidden_rows%admitted_tile_tokens==0&&fixed->hidden_rows>=2*admitted_tile_tokens?fixed->hidden_rows:0;
     require(!defer_hidden_readback||(direct&&reuse_graph&&!reuse_layer_graph&&!admitted_prefetch_bytes&&resident_hidden_tokens&&
-        admitted_hidden_bytes>=resident_required(resident_hidden_tokens)),"Deferred hidden readback requires full admitted VRAM bank and direct allocator mode");
+        admitted_hidden_bytes>=resident_required(spill_bank?spill_bank:resident_hidden_tokens)),"Deferred hidden readback requires full admitted VRAM bank and direct allocator mode");
     require(backend&&admitted_graph_bytes>0,"V4.1 tile executor requires an admitted backend and scratch ceiling");
     require(!admitted_prefetch_bytes||(direct&&reuse_graph&&!reuse_layer_graph&&(!admitted_index_bytes||pair_ffn||fixed)),"Copy prefetch requires pinned native RAM and allocator-only mode1");
     require(!admitted_index_bytes||(admitted_index_bytes>=64ull*1024*1024&&reuse_graph&&!reuse_layer_graph),
@@ -668,9 +680,16 @@ llama_dsv41_tile_executor::llama_dsv41_tile_executor(ggml_backend_t backend,llam
         require(ggml_backend_is_cuda(backend),"Resident hidden bank requires the admitted CUDA backend");
         const uint64_t minimum=resident_required(std::min(resident_hidden_tokens,admitted_tile_tokens));
         require(minimum<=admitted_hidden_bytes,"Resident hidden bank cannot fit even one admitted tile");
-        const uint32_t bank_tokens=resident_required(resident_hidden_tokens)<=admitted_hidden_bytes?resident_hidden_tokens:
+        const uint32_t bank_tokens=spill_bank?spill_bank:resident_required(resident_hidden_tokens)<=admitted_hidden_bytes?resident_hidden_tokens:
             uint32_t((admitted_hidden_bytes-65536)/81936/admitted_tile_tokens)*admitted_tile_tokens;
         resident.reset(new resident_storage);resident->backend=backend;resident->tokens=bank_tokens;resident->total_tokens=resident_hidden_tokens;
+        if(spill_bank){
+            require(pinned&&!pinned->prefetch_buffer,"Hidden-bank spill requires the pinned RAM carry and no copy prefetch");
+            resident->spill_start=bank_tokens-admitted_tile_tokens;
+            llama_dsv41_layer_log("LLAMADECODE_PREFILL_SPILL bank_rows=%u resident_rows=%u slot_rows=%u total_rows=%u spilled_rows=%u bytes_per_spilled_tile_layer=%llu storage=own_RAM_carry_records\n",
+                bank_tokens,resident->spill_start,admitted_tile_tokens,resident_hidden_tokens,resident_hidden_tokens-resident->spill_start,
+                (unsigned long long)(uint64_t(admitted_tile_tokens)*(40960+16)));
+        }
         resident->layout(bank_tokens,admitted_tile_tokens,resident_bf16,resident_ids,resident_metadata);
         const auto buft=ggml_backend_get_default_buffer_type(backend);
         const uint64_t planned=ggml_backend_alloc_ctx_tensors_from_buft_size(resident->ctx.get(),buft);
@@ -718,17 +737,21 @@ bool llama_dsv41_tile_executor::resident_head_row(llama_dsv41_carry_store::tile 
     if(!lock.owns_lock()){error="Resident head is already computing";return false;}
     try{
         require(export_hidden_after_head&&resident&&pinned&&!cache.execution_poisoned&&resident->layer==40&&
-            !resident->cursor&&resident->tokens==resident->total_tokens,"Resident head requires every validated device layer");
+            !resident->cursor&&resident->full(),"Resident head requires every validated device layer");
         // Release only layer workspace/cast caches, retaining the real hidden
         // bank and pinned owner. The head reuses the existing graph ceiling.
         workspace.reset();ggml_backend_synchronize(backend);
-        out.start=resident->tokens-1;out.count=1;out.residual.resize(5120*4);out.previous_pre.resize(4);
+        out.start=resident->total_tokens-1;out.count=1;out.residual.resize(5120*4);out.previous_pre.resize(4);
+        // A spilled last row is still in the slot from layer 39 (its tile ran last).
+        const uint32_t tile_first=resident->spilled(out.start)?resident->spill_start+(out.start-resident->spill_start)/admitted_tile_tokens*admitted_tile_tokens:out.start;
+        require(!resident->spilled(out.start)||resident->slot_logical==tile_first,"Spilled last row left the staging slot before the head");
+        const uint32_t row_at=resident->spilled(out.start)?resident->spill_start+(out.start-tile_first):out.start;
         if(resident_bf16){
             std::vector<ggml_bf16_t>row(5120*4);
-            ggml_backend_tensor_get(resident->hidden,row.data(),uint64_t(out.start)*row.size()*sizeof(ggml_bf16_t),row.size()*sizeof(ggml_bf16_t));
+            ggml_backend_tensor_get(resident->hidden,row.data(),uint64_t(row_at)*row.size()*sizeof(ggml_bf16_t),row.size()*sizeof(ggml_bf16_t));
             ggml_bf16_to_fp32_row(row.data(),out.residual.data(),int64_t(row.size()));
-        }else ggml_backend_tensor_get(resident->hidden,out.residual.data(),uint64_t(out.start)*81920,81920);
-        ggml_backend_tensor_get(resident->pre,out.previous_pre.data(),uint64_t(out.start)*16,16);
+        }else ggml_backend_tensor_get(resident->hidden,out.residual.data(),uint64_t(row_at)*81920,81920);
+        ggml_backend_tensor_get(resident->pre,out.previous_pre.data(),uint64_t(row_at)*16,16);
         finite(out.residual);finite(out.previous_pre);
         llama_dsv41_layer_log("DS4PERF_RESIDENT_HEAD_ROW start=%u count=1 F32_values=20484 validated=1 bulk_export_deferred=1\n",out.start);
         return true;
@@ -742,9 +765,10 @@ bool llama_dsv41_tile_executor::export_hidden_tile(const llama_dsv41_carry_store
     try{
 #ifdef GGML_USE_CUDA
         require(export_hidden_after_head&&resident&&pinned&&!cache.execution_poisoned&&resident->layer==40&&!resident->cursor&&
-            resident->tokens==resident->total_tokens&&!lease.seeding&&lease.base==pinned->base&&lease.bytes==pinned->bytes&&
+            resident->full()&&!lease.seeding&&lease.base==pinned->base&&lease.bytes==pinned->bytes&&
             lease.store_id&&lease.generation&&lease.first==resident->export_cursor&&lease.rows&&lease.rows<=admitted_tile_tokens&&
-            lease.first<resident->tokens&&lease.rows<=resident->tokens-lease.first,
+            lease.first<resident->total_tokens&&lease.rows<=resident->total_tokens-lease.first&&
+            (resident->spilled(lease.first)?(lease.first-resident->spill_start)%admitted_tile_tokens==0:lease.rows<=resident->tokens-lease.first),
             "Final hidden export lost its full device bank or exact contiguous lease");
         (void)lease.row(0);(void)lease.row(lease.rows-1);
         pinned->bind_lease(lease);
@@ -757,11 +781,19 @@ bool llama_dsv41_tile_executor::export_hidden_tile(const llama_dsv41_carry_store
         } scope(backend,pinned.get());
         auto *hidden=ggml_new_tensor_3d(ctx.get(),resident->hidden->type,5120,4,lease.rows);
         auto *pre=ggml_new_tensor_2d(ctx.get(),GGML_TYPE_F32,4,lease.rows);
+        const uint32_t at=resident->physical(lease.first);
         require(ggml_backend_tensor_alloc(resident->buffer,hidden,(char*)resident->hidden->data+
-                uint64_t(lease.first)*5120*4*ggml_type_size(resident->hidden->type))==GGML_STATUS_SUCCESS&&
-            ggml_backend_tensor_alloc(resident->buffer,pre,(char*)resident->pre->data+uint64_t(lease.first)*16)==GGML_STATUS_SUCCESS,
+                uint64_t(at)*5120*4*ggml_type_size(resident->hidden->type))==GGML_STATUS_SUCCESS&&
+            ggml_backend_tensor_alloc(resident->buffer,pre,(char*)resident->pre->data+uint64_t(at)*16)==GGML_STATUS_SUCCESS,
             "Final hidden export source view escaped its resident allocation");
         cache.execution_poisoned=true;
+        if(resident->spilled(lease.first)){
+            // Bring the spilled rows' exact layer-39 BF16/pre bytes back into the slot;
+            // the unchanged cast/validate/F32 export below then overwrites the record.
+            require(resident_bf16,"Spilled export requires the BF16 bank");
+            pinned->queue(true,lease,0,40960,hidden);pinned->queue(true,lease,81920,16,pre);pinned->upload_ready();
+            resident->slot_logical=lease.first;resident->spill_h2d_bytes+=uint64_t(lease.rows)*40976;
+        }
         if(resident_bf16){
             hidden=ggml_cast(ctx.get(),hidden,GGML_TYPE_F32);ggml_set_output(hidden);
             auto *graph=ggml_new_graph_custom(ctx.get(),32,false);ggml_build_forward_expand(graph,hidden);backend_buffers(backend,graph);
@@ -855,7 +887,7 @@ bool llama_dsv41_tile_executor::run(const request&in,const llama_dsv41_layer_gra
 #ifdef GGML_USE_CUDA
             skip_tile_pin=std::getenv("LLAMA_DSV41_SKIP_UNUSED_TILE_PIN")&&std::string(std::getenv("LLAMA_DSV41_SKIP_UNUSED_TILE_PIN"))=="1"&&
                 pinned->tile_registration&&!pinned->prefetch_buffer&&!in.lookahead&&resident&&resident_bf16&&resident_ids&&resident_metadata&&
-                resident->tokens==resident->total_tokens&&defer_hidden_readback&&export_hidden_after_head&&
+                resident->full()&&!resident->spilled(in.start)&&defer_hidden_readback&&export_hidden_after_head&&
                 in.layer>0&&in.layer<40&&!query_source(in.layer)&&in.layer!=20;
             pinned->current_bank_copies_forbidden=skip_tile_pin;
             if(!skip_tile_pin)pinned->bind_lease(d,in.lookahead?&*in.lookahead:nullptr);
@@ -876,9 +908,14 @@ bool llama_dsv41_tile_executor::run(const request&in,const llama_dsv41_layer_gra
         if(resident)require(in.layer==resident->layer&&in.start==resident->cursor&&
             in.start<resident->total_tokens&&in.count<=resident->total_tokens-in.start,
             "Resident hidden layer/tile lifetime changed");
-        const bool device_hidden=resident&&in.start<resident->tokens;
-        require(!defer_hidden_readback||(device_hidden&&resident->tokens==resident->total_tokens),"Deferred hidden state lost full VRAM residency");
-        if(device_hidden)require(in.count<=resident->tokens-in.start,"Resident hidden tile crosses device/RAM split");
+        // LLAMADECODE single sweep: a spilled tile runs in the bank's last tile (the slot).
+        const bool spilled=resident&&resident->spilled(in.start);
+        const uint32_t bank_start=resident?resident->physical(in.start):in.start;
+        const bool device_hidden=resident&&(in.start<resident->tokens||spilled);
+        require(!defer_hidden_readback||(device_hidden&&resident->full()),"Deferred hidden state lost full VRAM residency");
+        if(device_hidden)require(spilled?in.count<=admitted_tile_tokens:in.count<=(resident->spill()?resident->spill_start:resident->tokens)-in.start,
+            "Resident hidden tile crosses device/RAM split");
+        require(!spilled||(direct_input&&!in.lookahead),"Spilled tile requires its direct RAM lease and no lookahead");
         const uint32_t ratio=in.layer<2?0:in.layer<20?2:1;
         const bool zero_kinds=resident_metadata&&std::all_of(in.token_kinds.begin(),in.token_kinds.end(),[](int32_t k){return k==0;});
         const bool all_text=resident_metadata&&engram_layer(in.layer)&&std::all_of(in.text_mask.begin(),in.text_mask.end(),[](int8_t k){return k==1;});
@@ -900,7 +937,7 @@ bool llama_dsv41_tile_executor::run(const request&in,const llama_dsv41_layer_gra
         // they constrain source24. Carry them even while their mask is unused.
         const bool reuse=in.compressed_rows&&!query_source(in.layer),candidates=in.layer>20&&in.compressed_rows;
         if(resident_ids){
-            require(resident&&resident->tokens==resident->total_tokens&&resident->selected&&resident->candidates,"Resident ID bank lost full request storage");
+            require(resident&&resident->full()&&resident->selected&&resident->candidates,"Resident ID bank lost full request storage");
             uint32_t previous_source=UINT32_MAX;
             for(uint32_t l=0;l<in.layer;++l)if(query_source(l))previous_source=l;
             require(!reuse||(resident->selected_source==previous_source&&resident->selected_width==selected_width),"Resident selected IDs missing exact completed source layer/width");
@@ -952,6 +989,7 @@ bool llama_dsv41_tile_executor::run(const request&in,const llama_dsv41_layer_gra
         auto &values=compiled->values;auto *&graph=compiled->graph;
         auto &backend_temporary=compiled->backend_temporary;
         auto &rounded_matrices=compiled->rounded_matrices;auto &split_matrices=compiled->split_matrices;
+        ggml_tensor *spill_slot=nullptr;   // LLAMADECODE single sweep: the slot's BF16 view (spilled tiles)
         if(graph_cache_hit)compiled->bindings.restore(in.start,in.count);
         else {
         const bool long_index=expert.index_key_windows&&query_source(in.layer)&&in.compressed_rows>131072;
@@ -969,16 +1007,17 @@ bool llama_dsv41_tile_executor::run(const request&in,const llama_dsv41_layer_gra
             if(resident_bf16){
                 bf16_destination=input_tensor(ggml_new_tensor_3d(ctx.get(),GGML_TYPE_BF16,5120,4,in.count));
                 require(ggml_backend_tensor_alloc(resident->buffer,bf16_destination,
-                    (char*)resident->hidden->data+uint64_t(in.start)*5120*4*sizeof(ggml_bf16_t))==GGML_STATUS_SUCCESS,
+                    (char*)resident->hidden->data+uint64_t(bank_start)*5120*4*sizeof(ggml_bf16_t))==GGML_STATUS_SUCCESS,
                     "Resident BF16 hidden tile binding failed");
                 // Embeddings are not assumed BF16. Layer0 uses the ordinary
                 // F32 graph input, uploaded unchanged from the seed RAM bank.
                 if(in.layer)input.residual=ggml_cast(ctx.get(),bf16_destination,GGML_TYPE_F32);
+                if(spilled)spill_slot=bf16_destination;
             }else require(ggml_backend_tensor_alloc(resident->buffer,input.residual,
-                (char*)resident->hidden->data+uint64_t(in.start)*5120*4*sizeof(float))==GGML_STATUS_SUCCESS,
+                (char*)resident->hidden->data+uint64_t(bank_start)*5120*4*sizeof(float))==GGML_STATUS_SUCCESS,
                 "Resident F32 hidden tile binding failed");
             require(ggml_backend_tensor_alloc(resident->buffer,input.previous_pre,
-                (char*)resident->pre->data+uint64_t(in.start)*4*sizeof(float))==GGML_STATUS_SUCCESS,
+                (char*)resident->pre->data+uint64_t(bank_start)*4*sizeof(float))==GGML_STATUS_SUCCESS,
                 "Resident previous-pre tile binding failed");
         }
         input.raw_frequencies=f32(32);input.compressed_frequencies=f32(32);
@@ -992,7 +1031,7 @@ bool llama_dsv41_tile_executor::run(const request&in,const llama_dsv41_layer_gra
         input.candidate_ids=candidates?ids(GGML_TYPE_I32,candidate_width,in.count):nullptr;
         auto id_slice=[&](ggml_tensor *tensor,ggml_tensor *bank,uint32_t width){
             require(tensor&&bank&&width&&width<=uint64_t(bank->ne[0]),"Resident ID tensor geometry changed");
-            const uint64_t offset=uint64_t(in.start)*width*sizeof(int32_t),bytes=uint64_t(in.count)*width*sizeof(int32_t);
+            const uint64_t offset=uint64_t(bank_start)*width*sizeof(int32_t),bytes=uint64_t(in.count)*width*sizeof(int32_t);
             require(offset<=ggml_nbytes(bank)&&bytes<=ggml_nbytes(bank)-offset&&ggml_nbytes(tensor)==bytes,
                 "Resident ID logical-width slice exceeds admitted capacity");
             require(ggml_backend_tensor_alloc(resident->buffer,tensor,(char*)bank->data+offset)==GGML_STATUS_SUCCESS,"Resident ID slice allocation failed");
@@ -1296,6 +1335,21 @@ bool llama_dsv41_tile_executor::run(const request&in,const llama_dsv41_layer_gra
             if(candidates&&!resident_ids)pinned->queue(true,*in.direct,83984,uint64_t(candidate_width)*4,input.candidate_ids);
 #endif
         }else{if(reuse)upload_input(input.previous_selected,in.selected);if(candidates)upload_input(input.candidate_ids,in.candidates);}
+#ifdef GGML_USE_CUDA
+        double spill_in_ms=0;
+        if(spilled&&in.layer){
+            // Exact bytes this tile left in its own RAM records after the previous
+            // layer (BF16 hidden at 0, pre at 81920) and the mirrored compact IDs.
+            const auto spill_started=clock_type::now();
+            require(spill_slot&&resident_ids,"Spilled tile requires the BF16 slot and resident IDs");
+            pinned->queue(true,*in.direct,0,40960,spill_slot);pinned->queue(true,*in.direct,81920,16,input.previous_pre);
+            uint64_t ids=0;
+            if(reuse){pinned->queue(true,*in.direct,81936,uint64_t(selected_width)*4,input.previous_selected);ids+=uint64_t(selected_width)*4;}
+            if(candidates){pinned->queue(true,*in.direct,83984,uint64_t(candidate_width)*4,input.candidate_ids);ids+=uint64_t(candidate_width)*4;}
+            pinned->upload_ready();   // the BF16 unpack below runs on the compute stream
+            resident->spill_h2d_bytes+=uint64_t(in.count)*(40976+ids);spill_in_ms=elapsed(spill_started);
+        }
+#endif
         if(engram){upload_input(input.engram_rows,in.engram_rows);if(!all_text)upload_input(input.text_mask,in.text_mask);}
         if(!zero_kinds)upload_input(input.token_kinds,in.token_kinds);
         boundary.upload_replacements();
@@ -1599,6 +1653,15 @@ bool llama_dsv41_tile_executor::run(const request&in,const llama_dsv41_layer_gra
             ggml_backend_cuda_memcpy_d2d_async(input.previous_pre->data,values.next_pre->data,
                 ggml_nbytes(input.previous_pre),stream);
             ggml_backend_synchronize(backend);
+            if(spilled){
+                // The slot's new BF16 hidden and pre go back to this tile's own RAM
+                // records (finished by pinned->finish below); IDs were mirrored above.
+                const auto spill_started=clock_type::now();
+                pinned->queue(false,*in.direct,0,40960,spill_slot);pinned->queue(false,*in.direct,81920,16,input.previous_pre);
+                resident->spill_d2h_bytes+=uint64_t(in.count)*40976;resident->slot_logical=in.start;
+                pinned->finish();
+                llama_dsv41_layer_log("LLAMADECODE_PREFILL_SPILL_TILE layer=%u start=%u count=%u slot_row=%u h2d_ms=%.3f d2h_ms=%.3f\n",in.layer,in.start,in.count,bank_start,spill_in_ms,elapsed(spill_started));
+            }
 #endif
         }
         if(direct_input){

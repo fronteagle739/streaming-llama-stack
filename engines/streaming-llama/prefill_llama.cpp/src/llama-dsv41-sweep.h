@@ -34,6 +34,9 @@ public:
         bool engram_tile_lookahead=false,resident_bf16=false,async_inputs=false,resident_ids=false,resident_metadata=false;
         std::shared_ptr<llama_dsv41_fixed_storage> fixed;
         bool compressed_cache_bf16=false;
+        // LLAMADECODE growable context cache: 0 = fixed full-context buffer;
+        // otherwise the VMM growth step in tokens (a multiple of 2048).
+        uint32_t ctx_cache_grow_step=0;
         bool capture_dspark=false;
         bool stateful_chunks=false;
         // Logical scheduling step within the unchanged admitted maximum tile.
@@ -89,6 +92,13 @@ public:
     bool suspend_device(std::string &error);
     bool resume_device(std::string &error);
     bool start_next_engram(const std::vector<int32_t> &tokens,const std::vector<int32_t> &base_tail,std::string &error);
+    // LLAMADECODE_ENGRAM_EARLY=1|auto: on a completed stateful owner, start the
+    // next append's Engram rows (its own history tail) before that append's
+    // open; the append's run adopts them. =0: returns true and does nothing.
+    // Auto: only when requests/IOPS fits this pass's layer-0 wall.
+    bool start_append_engram(const std::vector<int32_t> &tokens,std::string &error);
+    // An early Engram cache is queued on this sweep's provider (cold: after open).
+    bool early_engram_queued() const;
     struct run_timing {double prompt_processing_ms=0,export_preparation_ms=0;};
     // Actual sequential clock boundaries, available only after successful run.
     run_timing timing() const;
@@ -137,14 +147,22 @@ public:
     struct device_state {
         std::array<void*,40> raw{};std::array<void*,4> compressed{},index{};std::array<uint32_t,4> rows{};
         std::array<void*,3> pool_kv{},pool_score{};
+        bool bf16=false;   // compressed/index owners stored as BF16 (--ctx-cache-precision bf16)
     };
     bool device_state_views(device_state &out,std::string &error) const;
     bool engram_tail(std::array<int32_t,3> &tail,std::string &error) const;
     bool commit_external_token(int32_t token,const std::vector<float> &logits,std::string &error);
+    // LLAMADECODE multi-row append: count (1..128) evaluated tokens, logits of the last one.
+    bool commit_external_tokens(const int32_t *tokens,size_t count,const std::vector<float> &logits,std::string &error);
     // The provider of this completed owner (resident decode weights, expert cache).
     llama_dsv41_weight_provider *provider_for_external_decode();
     // LLAMADECODE: decode-sized fixed plan for an external decoder (no executor runs).
     bool compact_for_external_decode(std::string &error);
+    // LLAMADECODE growable context cache: map the owner caches to cover `tokens`
+    // positions before an external decoder writes there (no-op when fixed).
+    bool ensure_context(uint32_t tokens,const char *phase,bool *grew,std::string &error);
+    // Physical bytes of the next growth step (0 when fixed or at full context).
+    uint64_t context_next_step_bytes() const;
 private:
     struct implementation;
     std::unique_ptr<implementation>p;

@@ -35,7 +35,7 @@ DECODE_ENV = {'LLAMADECODE_DS4_DECODE': '1'}
 KEPT = ('gpu_uuid', 'gpu_idle_max_mib', 'hold_file', 'task', 'lease_minutes', 'request_timeout_s', 'host_budget_gib',
         'min_available_gib', 'job_commit_gib', 'context', 'model', 'model_name', 'producer_host_budget_gib',
         'producer_profile', 'producer_sha256', 'producer_source_revision', 'producer_fixed_direct_open', 'env_overrides',
-        'producer_graceful_shutdown_seconds', 'host', 'port',
+        'producer_graceful_shutdown_seconds', 'host', 'port', 'ctx_cache_precision', 'ctx_cache_growable',
         'comfyui_models', 'studio_python')  # envvars.json placeholders the proxy's studio/producer scopes expand
 
 
@@ -111,7 +111,7 @@ def stack_config(cfg):
 
 def preset(cfg, installed):
     installed = Path(installed)
-    return dict(name=PRESET_NAME, mode='local', mac={}, include_previous_reasoning=True, tool_call_format='native',
+    return dict(name=cfg.get('preset_name', PRESET_NAME), mode='local', mac={}, include_previous_reasoning=True, tool_call_format='native',
         rtx=dict(backend='ds4', model='deepseek-reasoner', model_path=cfg['model'], ctx=cfg['context'],
             ds4_binary=str(installed / 'ds4-server.exe'), ds4_chdir=str(installed), ds4_ssd_streaming='1',
             ds4_cache_affinity_bias=0, ds4_cache_affinity_spread_file=str(installed / 'qualification/affinity-spreads.txt'),

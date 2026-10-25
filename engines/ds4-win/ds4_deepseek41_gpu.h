@@ -278,6 +278,16 @@ int ds4_gpu_dsv41_norm_bf16_rows(ds4_gpu_tensor *out, const ds4_gpu_tensor *x,
         const void *map, uint64_t size, uint64_t offset, uint32_t width,
         uint32_t rows, float eps);
 
+#ifdef DS4_EXTERNAL_DECODE
+/* LLAMADECODE --ctx-cache-precision bf16: BF16 compressed/index owner caches
+ * (lossless for these QAT values); F32 operands and results unchanged. */
+int ds4_gpu_dsv41_gather_kv_bf16(ds4_gpu_tensor *out, const ds4_gpu_tensor *source,
+        const ds4_gpu_tensor *ids, uint32_t source_rows, uint32_t selected_rows);
+int ds4_gpu_dsv41_indexer_scores_batch_bf16(ds4_gpu_tensor *scores,
+        const ds4_gpu_tensor *q, const ds4_gpu_tensor *weights, const ds4_gpu_tensor *keys,
+        uint32_t source_rows, uint32_t rows, uint32_t start, uint32_t ratio);
+int ds4_gpu_dsv41_store_bf16(ds4_gpu_tensor *dst, uint64_t first, const ds4_gpu_tensor *src, uint32_t count);
+#endif
 
 #ifdef __cplusplus
 }

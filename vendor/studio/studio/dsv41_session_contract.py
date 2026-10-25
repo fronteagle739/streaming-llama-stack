@@ -7,6 +7,34 @@ MAX_CONTROL = 1 << 20
 CONTEXT = 1000001
 MAX_PREFILL = 49152
 MAX_DECODE = 128
+MAX_DECODE_DELTA = MAX_PREFILL
+# LLAMADECODE single sweep: one prefill op may carry a whole prompt up to the producer's
+# capacity, advertised as maximum_prefill_sweep_tokens (maximum_prefill_tokens stays 49152
+# for old clients). Clients use min(advertised, own); 49152 when not advertised.
+MAX_PREFILL_SWEEP = 1048576
+
+def negotiate_prefill(ready):
+    advertised = ready.get('maximum_prefill_sweep_tokens', ready.get('maximum_prefill_tokens', MAX_PREFILL))
+    require(type(advertised) is int and advertised >= 1, 'Peer prefill maximum below one token')
+    return min(advertised, MAX_PREFILL_SWEEP)
+
+def split_prefill(count, maximum, align=4096):
+    """Near-equal sweeps for `count` tokens under `maximum` (same rule as the producer's
+    llama_dsv41_prefill::split): one when it fits, else ceil(count/aligned) sweeps of an
+    align-rounded chunk, never a tiny tail. Returns the chunk size."""
+    require(type(count) is int and count > 0 and type(maximum) is int and maximum > 0, 'Prefill split extent')
+    if count <= maximum:
+        return count
+    aligned = maximum // align * align
+    if not aligned:   # a maximum below one aligned sweep (test doubles): fixed chunks as before
+        return maximum
+    k = -(-count // aligned)
+    return min(-(-(-(-count // k)) // align) * align, aligned)
+
+def negotiate_decode_delta(ready):
+    advertised = ready.get('maximum_decode_delta_tokens', ready.get('maximum_decode_tokens', MAX_DECODE))
+    require(type(advertised) is int and advertised >= MAX_DECODE, 'Peer decode-delta maximum below one chunk')
+    return min(advertised, MAX_DECODE_DELTA)
 
 class Refused(ValueError):
     pass
@@ -76,7 +104,7 @@ def checkpoint(row, mode=3):
         hex_value(value, 64)
     return row
 
-def command(row, session, sequence, mode=3):
+def command(row, session, sequence, mode=3, prefill_max=MAX_PREFILL):
     require(type(row) is dict, 'Session command object required')
     session_identity(session)
     require(row.get('session') == session and row.get('model_sha256') == MODEL_SHA256, 'Session/model mismatch')
@@ -100,7 +128,7 @@ def command(row, session, sequence, mode=3):
         require(target['context'] == base['context'] and target['mode'] == base['mode'] and (0 < target['position'] < base['position']), 'Rewind target must be an earlier same-context checkpoint')
     if op == 'prefill':
         tokens = row['tokens']
-        require(type(tokens) is list and 0 < len(tokens) <= MAX_PREFILL, 'Prefill token extent')
+        require(type(tokens) is list and 0 < len(tokens) <= prefill_max, 'Prefill token extent')
         for token in tokens:
             integer(token, 0, 129279)
         require(row['base']['position'] + len(tokens) < row['base']['context'], 'Prefill context exhausted')
@@ -131,8 +159,9 @@ def command(row, session, sequence, mode=3):
     if op == 'apply_decode_delta':
         target = checkpoint(row['target'], mode)
         base = row['base']
-        require(target['context'] == base['context'] and 0 < target['position'] - base['position'] <= MAX_DECODE, 'Decode delta direction/extent')
-        integer(row['bytes'], (264 if mode == 3 else 256) + 4 + 129280 * 4, 64 << 20)
+        extent = target['position'] - base['position']
+        require(target['context'] == base['context'] and 0 < extent <= MAX_DECODE_DELTA, 'Decode delta direction/extent')
+        integer(row['bytes'], (264 if mode == 3 else 256) + 4 + 129280 * 4, (64 << 20) + (extent * 6404 if extent > MAX_DECODE else 0))
     return row
 
 def initial_request(session, headers, body):

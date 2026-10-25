@@ -4,7 +4,24 @@ from __future__ import annotations
 import json, os, threading, time
 from pathlib import Path
 import psutil
-from .dsv41_session_contract import MODEL_SHA256, MAX_CONTROL, Refused, checkpoint, command, control, require, session_identity
+from .dsv41_session_contract import MODEL_SHA256, MAX_CONTROL, MAX_DECODE, MAX_PREFILL, Refused, checkpoint, command, control, negotiate_decode_delta, negotiate_prefill, require, session_identity
+
+def now_tick(owner, period=1.0):
+    """True at most once per period for owner (the tree scan is cheaper at 1 Hz than 10 Hz)."""
+    now = time.monotonic()
+    if now - getattr(owner, '_tick', 0.0) < period:return False
+    owner._tick = now;return True
+
+
+def operation_live(now, deadline, last_progress, stall_seconds):
+    """Progress-based liveness (owner: no fixed wall-clock limits that a 262K prompt or a long
+    generation would hit). An active operation lives while the producer shows progress (pipe
+    bytes, diagnostics, CPU time or I/O of its job tree) within stall_seconds; deadline is only
+    the silence bound for an operation that never showed any progress."""
+    if deadline is None:return True
+    if stall_seconds:return now < max(deadline, last_progress + stall_seconds)
+    return now < deadline
+
 
 class Producer:
     # Owner rule: never force-kill a producer that may hold VRAM. Stop = Ctrl-Break,
@@ -25,8 +42,10 @@ class Producer:
                     with self.state_lock:
                         self.failure = self.stuck if self.failure is None else self.failure + '; ' + self.stuck
 
-    def __init__(self, session, argv, env, directory, *, host_bytes, physical_floor, operation_seconds=600, idle_seconds=3600, native=None, cancelled=None, runtime_check=None, native_mode=3, bootstrap=None, startup=None, owner_epoch=0, after_resume=None):
+    def __init__(self, session, argv, env, directory, *, host_bytes, physical_floor, operation_seconds=600, idle_seconds=3600, native=None, cancelled=None, runtime_check=None, native_mode=3, bootstrap=None, startup=None, owner_epoch=0, after_resume=None, stall_seconds=None):
         self.creation_attempted = False
+        self.stall_seconds = stall_seconds
+        self.last_progress = time.monotonic();self._progress_mark = None
         try:
             self.native_mode = native_mode
             require(type(owner_epoch) is int and 0<=owner_epoch<(1<<64), 'Exact bounded owner epoch required')
@@ -55,6 +74,14 @@ class Producer:
             native = _Native()
         self.session, self.native = (session, native)
         self.host_bytes, self.floor = (host_bytes, physical_floor)
+        # Owner 2026-10-25: the rule is NO PAGING, not a free-RAM number. Admission still requires the
+        # budget to fit physical RAM; at runtime only real paging (global pagefile usage rising above
+        # Studio's GLOBAL_PAGING_LIMIT over the launch baseline) stops the producer. Low free RAM or RSS
+        # above the planned budget with zero paging is recorded, not fatal.
+        from .job_paging import paging_bytes, GLOBAL_PAGING_LIMIT
+        self._paging_bytes, self._paging_limit = paging_bytes, GLOBAL_PAGING_LIMIT
+        self._paging0 = paging_bytes(); self.paging_growth = 0; self._paging_tick = 0
+        self.budget_breaches = 0; self.first_budget_breach = None
         self.operation_seconds, self.idle_seconds = (operation_seconds, idle_seconds)
         self.cancelled = cancelled or (lambda: False)
         self.runtime_check = runtime_check
@@ -99,8 +126,12 @@ class Producer:
                 self.bootstrap(self._write)
             if self.startup is None:
                 self.ready = self._receive()
-                require(self.ready.get('status') == 'ready' and type(self.ready.get('next_sequence')) is int and (self.ready.get('next_sequence') == 1) and (self.ready.get('maximum_prefill_tokens') == 49152) and (self.ready.get('maximum_decode_tokens') == 128) and (self.ready.get('control_host_bytes') == 64 << 20), 'Unexpected persistent producer admission')
+                require(self.ready.get('status') == 'ready' and type(self.ready.get('next_sequence')) is int and (self.ready.get('next_sequence') == 1) and (self.ready.get('maximum_prefill_tokens') == 49152) and (type(self.ready.get('maximum_decode_tokens')) is int and self.ready['maximum_decode_tokens'] >= MAX_DECODE) and (self.ready.get('control_host_bytes') == 64 << 20), 'Unexpected persistent producer admission')
                 checkpoint(self.ready.get('checkpoint'), self.native_mode)
+                # Negotiated decode-delta maximum, published to the peer through the broker's metadata.
+                self.ready['maximum_decode_delta_tokens'] = self.decode_delta_max = negotiate_decode_delta(self.ready)
+                # LLAMADECODE single sweep: negotiated one-op prefill maximum (49152 for old producers).
+                self.ready['maximum_prefill_sweep_tokens'] = self.prefill_max = negotiate_prefill(self.ready)
             else:
                 self.ready = self.startup(self)
                 require(type(self.ready) is dict and self.ready.get('status') == 'ready', 'HTTP-native readiness was not certified')
@@ -147,11 +178,21 @@ class Producer:
                 except psutil.NoSuchProcess:
                     pass
                 self.peak_rss = max(self.peak_rss, rss)
+                if self.stall_seconds and now_tick(self):self._note_tree_progress()
                 self.minimum_available = min(self.minimum_available, available)
-                require(available >= self.floor and rss <= self.host_bytes, 'Persistent producer host/floor budget failed')
+                if available < self.floor or rss > self.host_bytes:
+                    self.budget_breaches += 1
+                    if self.first_budget_breach is None:
+                        self.first_budget_breach = dict(available=available, rss=rss, floor=self.floor, host_budget=self.host_bytes)
+                self._paging_tick += 1
+                if self._paging_tick % 10 == 0:   # ~1 Hz
+                    self.paging_growth = max(self.paging_growth, self._paging_bytes() - self._paging0)
+                    require(self.paging_growth <= self._paging_limit,
+                            'Persistent producer stopped: paging detected (pagefile usage rose %d bytes)' % self.paging_growth)
                 now = time.monotonic()
                 deadline = self.deadline
-                require(now < (deadline if deadline is not None else self.activity + self.idle_seconds), 'Persistent producer deadline expired')
+                if deadline is not None:require(operation_live(now, deadline, self.last_progress, self.stall_seconds), 'Persistent producer made no progress within its stall window')
+                else:require(now < self.activity + self.idle_seconds, 'Persistent producer idle deadline expired')
                 if self.ready is not None and self.runtime_check:
                     self.runtime_check(self)
         except BaseException as exc:
@@ -163,6 +204,7 @@ class Producer:
                 with self.state_lock:
                     require(len(self.diagnostic) + len(block) <= 8 << 20, 'Persistent producer diagnostic RAM cap exceeded')
                     self.diagnostic.extend(block)
+                self.last_progress = time.monotonic()
         except BaseException as exc:
             self._poison(exc)
 
@@ -172,11 +214,29 @@ class Producer:
                 with self.state_lock:
                     require(len(self.diagnostic) + len(block) <= 8 << 20, 'Native diagnostic RAM cap exceeded')
                     self.diagnostic.extend(block)
+                self.last_progress = time.monotonic()
         except BaseException as exc:
             self._poison(exc)
 
+    def _note_tree_progress(self):
+        """CPU time and I/O bytes of the producer's job tree; any growth is progress."""
+        mark = 0
+        try:
+            root = psutil.Process(self.job.pid)
+            for p in [root, *root.children(recursive=True)]:
+                try:
+                    t = p.cpu_times();io = p.io_counters()
+                    mark += int((t.user + t.system) * 1000) + io.read_bytes + io.write_bytes + io.other_bytes
+                except psutil.Error:
+                    pass
+        except psutil.Error:
+            return
+        if mark != self._progress_mark:
+            self._progress_mark = mark;self.last_progress = time.monotonic()
+
     def _receive(self):
         raw = self.output.readline(65537)
+        self.last_progress = time.monotonic()
         require(raw.endswith(b'\n') and len(raw) <= 65536, 'Persistent producer reply truncated or too large')
         row = control(raw)
         require(row.get('session') == self.session and row.get('model_sha256') == MODEL_SHA256, 'Producer reply identity mismatch')
@@ -191,6 +251,7 @@ class Producer:
                 n = self.input.write(page)
                 require(n is not None and n > 0, 'Producer input pipe closed')
                 page = page[n:]
+                self.last_progress = time.monotonic()
 
     def _enter(self, row):
         require(self.lock.acquire(blocking=False), 'Another session operation is active')
@@ -198,7 +259,7 @@ class Producer:
         try:
             require(not self.closed and self.failure is None, 'Session unavailable: ' + str(self.failure))
             require(self.job.poll() is None, 'Persistent producer exited')
-            command(row, self.session, self.sequence, self.native_mode)
+            command(row, self.session, self.sequence, self.native_mode, getattr(self, 'prefill_max', MAX_PREFILL))
             wire = dict(row)
             if self.owner_epoch:
                 wire['owner_epoch'] = self.owner_epoch
@@ -314,6 +375,7 @@ class Producer:
 
     def begin_decode(self, row):
         require(row.get('operation') == 'apply_decode_delta', 'Decode delta command required')
+        require(row['target']['position'] - row['base']['position'] <= getattr(self, 'decode_delta_max', MAX_DECODE), 'Decode delta exceeds the negotiated maximum')
         self._enter(row)
         self.remaining = row['bytes']
         self.transfer = 'in'
@@ -378,7 +440,7 @@ class Producer:
             time.sleep(0.01)
         exited = self.job is None or self.job.poll() is not None
         empty = self.job is None or self.job.active() == 0
-        self.receipt = dict(session=self.session, host_budget=self.host_bytes, physical_floor=self.floor, peak_rss=self.peak_rss, minimum_available_ram=self.minimum_available, failure=self.failure, owned_pid=pid, owned_job_empty=empty, owned_process_signaled=exited)
+        self.receipt = dict(session=self.session, host_budget=self.host_bytes, physical_floor=self.floor, peak_rss=self.peak_rss, minimum_available_ram=self.minimum_available, paging_growth=self.paging_growth, budget_breaches=self.budget_breaches, first_budget_breach=self.first_budget_breach, failure=self.failure, owned_pid=pid, owned_job_empty=empty, owned_process_signaled=exited)
         with self.job_lock:
             if self.job:
                 self.job.close()

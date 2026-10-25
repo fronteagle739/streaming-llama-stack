@@ -13,6 +13,9 @@ extern "C" uint64_t ggml_backend_cuda_dsv41_pv_view_queued(void);
 #include "ggml-ds4-native-half-stats.h"
 #include "llama-dsv41-sweep.h"
 #include "profile-check.h"
+#include "llama-dsv41-ctx-cache-plan.h"
+#include "llama-dsv41-prefill-plan.h"
+#include "llama-dsv41-engram-prefetch.h"
 #include "llama-weight-fetcher.h"
 #include "llama-dsv41-host-memory.h"
 #include "llama-dsv41-native-columns-resource-proof.h"
@@ -280,7 +283,7 @@ int wmain(int argc,wchar_t**argv){
             "--provider-device-bytes","--provider-host-bytes","--cache-bytes","--graph-bytes","--job-device-bytes","--job-host-bytes","--gpu-reserve-bytes",
             "--carry","--carry-file-bytes","--carry-host-bytes","--carry-outstanding-bytes","--output-outstanding-bytes","--payload","--receipt"};
         require(argc>=1+int(keys.size())*2&&argc<=125+int(keys.size())*2&&argc%2==1,"Expected every explicit required --key value pair; use --help");std::map<std::string,std::string>args;
-        for(int i=1;i<argc;i+=2){auto key=utf8(argv[i]);require((key=="--session-owner-epoch"||key=="--switch-arena"||key=="--native-base-contract-sha256"||key=="--native-base-owner-epoch"||key=="--unaligned-append-step-tokens"||key=="--reuse-child-raw-metadata"||key=="--session-stdio"||key=="--session-id"||key=="--session-control-host-bytes"||key=="--session-idle-timeout-ms"||key=="--native-rhs-pack"||key=="--split-f32-tensor-core-qk"||key=="--split-f32-tensor-core-pv"||key=="--fuse-kv-gather-half"||key=="--ds-zero-padding-only"||key=="--pv-strided-probabilities"||key=="--pv-view-f32"||key=="--compact-kv-gather"||key=="--masked-half-inplace"||key=="--native-loader-unroll"||key=="--native-expert-columns"||key=="--fixed-resident-plan"||key=="--export-hash-only"||key=="--backend-temporary-reserve-bytes"||key=="--compute-step-tokens"||key=="--prefill-chunk-tokens"||key=="--attention-kv-f16-table"||key=="--index-key-windows"||key=="--capture-dspark"||key=="--compressed-cache-bf16"||key=="--dense-activation-q8-1"||key=="--expert-weights-activations-fp4"||key=="--resident-pageable-copies"||key=="--tile-host-registration"||key=="--hc-bf16-epilogue"||key=="--reuse-expert-routing-map"||key=="--sort-expert-routing"||key=="--pair-ffn-tiles"||key=="--engram-tile-lookahead"||key=="--warmup-one-token"||key=="--fixed-direct-open"||key=="--batch-seed-ram"||key=="--dense-mxfp4"||key=="--hc-projection-f16-gemm"||key=="--merge-attention-selected-rows"||key=="--resident-metadata"||key=="--resident-compact-ids"||key=="--async-input-uploads"||key=="--resident-hidden-bf16"||key=="--resident-hidden-final-readback"||key=="--coalesce-dense-projections"||key=="--direct-carry-budget"||key=="--expert-f16-cublas"||key=="--token-tile-attention-f16-probabilities"||key=="--index-f32-cublas"||key=="--index-bf16"||key=="--dense-inputs-f16"||key=="--shared-flash-attention"||key=="--shared-sparse-attention"||key=="--carry-ram-prefix-tokens"||key=="--carry-disk-reserve-bytes"||key=="--carry-storage"||key=="--fetch-profile"||key=="--compute-tile"||key=="--hidden-device-bytes"||key=="--pinned-device-bytes"||key=="--reuse-graph"||key=="--cast-device-bytes"||key=="--cast-audit"||key=="--engram-prefetch-bytes"||key=="--ds-submit-threads"||key=="--cuda-blocking-sync"||key=="--index-cublas-device-bytes"||key=="--ds-gpu-ring-slots"||key=="--prefetch-device-bytes"||key=="--expert-profile"||key=="--expert-workspace-bytes"||key=="--expert-runtime-bytes"||std::find(keys.begin(),keys.end(),key)!=keys.end())&&!args.count(key),"Unknown or repeated producer option");args[key]=utf8(argv[i+1]);}
+        for(int i=1;i<argc;i+=2){auto key=utf8(argv[i]);require((key=="--session-owner-epoch"||key=="--switch-arena"||key=="--native-base-contract-sha256"||key=="--native-base-owner-epoch"||key=="--unaligned-append-step-tokens"||key=="--reuse-child-raw-metadata"||key=="--session-stdio"||key=="--session-id"||key=="--session-control-host-bytes"||key=="--session-idle-timeout-ms"||key=="--native-rhs-pack"||key=="--split-f32-tensor-core-qk"||key=="--split-f32-tensor-core-pv"||key=="--fuse-kv-gather-half"||key=="--ds-zero-padding-only"||key=="--pv-strided-probabilities"||key=="--pv-view-f32"||key=="--compact-kv-gather"||key=="--masked-half-inplace"||key=="--native-loader-unroll"||key=="--native-expert-columns"||key=="--fixed-resident-plan"||key=="--export-hash-only"||key=="--backend-temporary-reserve-bytes"||key=="--compute-step-tokens"||key=="--prefill-chunk-tokens"||key=="--attention-kv-f16-table"||key=="--index-key-windows"||key=="--capture-dspark"||key=="--compressed-cache-bf16"||key=="--ctx-cache-precision"||key=="--ctx-cache-growable"||key=="--dense-activation-q8-1"||key=="--expert-weights-activations-fp4"||key=="--resident-pageable-copies"||key=="--tile-host-registration"||key=="--hc-bf16-epilogue"||key=="--reuse-expert-routing-map"||key=="--sort-expert-routing"||key=="--pair-ffn-tiles"||key=="--engram-tile-lookahead"||key=="--warmup-one-token"||key=="--fixed-direct-open"||key=="--batch-seed-ram"||key=="--dense-mxfp4"||key=="--hc-projection-f16-gemm"||key=="--merge-attention-selected-rows"||key=="--resident-metadata"||key=="--resident-compact-ids"||key=="--async-input-uploads"||key=="--resident-hidden-bf16"||key=="--resident-hidden-final-readback"||key=="--coalesce-dense-projections"||key=="--direct-carry-budget"||key=="--expert-f16-cublas"||key=="--token-tile-attention-f16-probabilities"||key=="--index-f32-cublas"||key=="--index-bf16"||key=="--dense-inputs-f16"||key=="--shared-flash-attention"||key=="--shared-sparse-attention"||key=="--carry-ram-prefix-tokens"||key=="--carry-disk-reserve-bytes"||key=="--carry-storage"||key=="--fetch-profile"||key=="--compute-tile"||key=="--hidden-device-bytes"||key=="--pinned-device-bytes"||key=="--reuse-graph"||key=="--cast-device-bytes"||key=="--cast-audit"||key=="--engram-prefetch-bytes"||key=="--ds-submit-threads"||key=="--cuda-blocking-sync"||key=="--index-cublas-device-bytes"||key=="--ds-gpu-ring-slots"||key=="--prefetch-device-bytes"||key=="--expert-profile"||key=="--expert-workspace-bytes"||key=="--expert-runtime-bytes"||std::find(keys.begin(),keys.end(),key)!=keys.end())&&!args.count(key),"Unknown or repeated producer option");args[key]=utf8(argv[i+1]);}
         for(const auto&key:keys)require(args.count(key),"Missing explicit producer option");
         const auto storage=args.count("--carry-storage")?args.at("--carry-storage"):"file";
         require(storage=="file"||storage=="ram"||storage=="hybrid","Expected explicit carry-storage file, ram or hybrid");
@@ -437,7 +440,11 @@ int wmain(int argc,wchar_t**argv){
         std::vector<uint8_t>().swap(tokenfile.bytes);
         const uint64_t chunk_option=args.count("--prefill-chunk-tokens")?number("--prefill-chunk-tokens"):0;
         require(chunk_option<=1048576,"Chunk tokens exceed context bound");
-        const uint32_t chunk_tokens=uint32_t(chunk_option?std::min<uint64_t>(chunk_option,tokens.size()):tokens.size());
+        // LLAMADECODE single sweep: a prompt that fits the capacity is ONE sweep; a larger
+        // one is split into near-equal 4096-aligned sweeps (never a tiny tail).
+        const auto sweep_plan=llama_dsv41_prefill::split(uint32_t(tokens.size()),uint32_t(chunk_option?chunk_option:tokens.size()));
+        require(sweep_plan.count,"Prefill capacity is below one aligned 4096-token sweep");
+        const uint32_t chunk_tokens=sweep_plan.chunk;
         require(!chunk_option||(resident_ram&&!hybrid&&!std::getenv("DSV41_BOUNDARY_CAPTURE")),"Stateful chunks require explicit RAM carry and no boundary capture");
         require(!chunk_option||!pair_ffn||tokens.size()<=chunk_tokens||chunk_tokens%4096==0||unaligned_append_step==2048,"Paired chunk size must align absolute attention positions");
         const auto context=number("--context");require(context<=1048576&&tokens.size()<context,"Native payload requires context room for the next decode token");
@@ -452,9 +459,9 @@ int wmain(int argc,wchar_t**argv){
             dsv41_live::sequence_guard identity(session,model_sha);
             require(number("--session-control-host-bytes")==control_host&&session_timeout>=1000&&session_timeout<=3600000,
                 "Session requires explicit16MiB control admission and1s..1h timeout");
-            require(chunk_option&&chunk_option<=49152&&chunk_option<context&&resident_ram&&direct_budget&&
+            require(chunk_option&&chunk_option<=llama_dsv41_prefill::max_sweep_tokens&&chunk_option<context&&resident_ram&&direct_budget&&
                 (pair_ffn||(args.count("--fixed-resident-plan")&&args.at("--fixed-resident-plan")=="1")),
-                "Session requires fixed RAM capacity1..49152 and stateful chunks");
+                "Session requires a fixed RAM capacity (1..1048576 tokens, below context) and stateful chunks");
             session_output.bind();
         }else require(!args.count("--session-id")&&!args.count("--session-control-host-bytes")&&!args.count("--session-idle-timeout-ms"),
             "Session options supplied with session disabled");
@@ -566,10 +573,23 @@ int wmain(int argc,wchar_t**argv){
         report["ds_zero_padding_only"]=weights.zero_padding_only;
         weights.ds_submit_threads=uint32_t(submit_threads);report["ds_submit_threads"]=submit_threads;
         report["engram_prefetch_host_bytes"]=weights.engram_prefetch_host_bytes;
-        require(!args.count("--compressed-cache-bf16")||args.at("--compressed-cache-bf16")=="0"||args.at("--compressed-cache-bf16")=="1","compressed-cache-bf16 requires0/1");
-        llama_dsv41_sweep::config options;options.compressed_cache_bf16=args.count("--compressed-cache-bf16")&&args.at("--compressed-cache-bf16")=="1";options.capture_dspark=capture_dspark;
+        // LLAMADECODE --ctx-cache-precision f32|bf16 (default f32 = unchanged) and --ctx-cache-growable 0|1.
+        llama_dsv41_ctx_cache::options ctx_cache;
+        {auto arg=[&](const char*k)->const char*{return args.count(k)?args.at(k).c_str():nullptr;};
+         const auto why=llama_dsv41_ctx_cache::parse_options(arg("--ctx-cache-precision"),arg("--ctx-cache-growable"),arg("--compressed-cache-bf16"),ctx_cache);
+         require(why.empty(),why.c_str());}
+        llama_dsv41_sweep::config options;options.compressed_cache_bf16=ctx_cache.cache==llama_dsv41_ctx_cache::precision::bf16;options.capture_dspark=capture_dspark;
+        options.ctx_cache_grow_step=ctx_cache.growable?llama_dsv41_ctx_cache::default_step:0;
+        require(!ctx_cache.growable||!switch_arena,"ctx-cache-growable is not covered by the switch arena's suspend/resume");
         report["compressed_cache_bf16"]={{"enabled",options.compressed_cache_bf16},{"lossless_existing_QAT_BF16_values",true},{"canonical_wire_F32",true},{"raw_and_pool_tails_F32",true}};
         options.context=uint32_t(context);options.admitted_cache_bytes=number("--cache-bytes");options.admitted_graph_bytes=number("--graph-bytes");
+        {const auto why=llama_dsv41_ctx_cache::refusal(options.context,options.compressed_cache_bf16,ctx_cache.growable,llama_dsv41_ctx_cache::default_step,2ull<<20,options.admitted_cache_bytes);
+         require(why.empty(),why.c_str());}
+        report["ctx_cache"]={{"precision",llama_dsv41_ctx_cache::name(ctx_cache.cache)},{"context",options.context},{"growable",ctx_cache.growable},
+            {"step_tokens",options.ctx_cache_grow_step},{"full_bytes",llama_dsv41_ctx_cache::fixed_bytes()+llama_dsv41_ctx_cache::logical_bytes(options.context,options.compressed_cache_bf16)},
+            {"admitted_bytes",options.admitted_cache_bytes}};
+        std::fprintf(stderr,"LLAMADECODE_CTX_CACHE_FLAGS precision=%s context=%u growable=%d step=%u admitted_bytes=%llu\n",llama_dsv41_ctx_cache::name(ctx_cache.cache),
+            options.context,int(ctx_cache.growable),options.ctx_cache_grow_step,(unsigned long long)options.admitted_cache_bytes);std::fflush(stderr);
         options.admitted_hidden_bytes=args.count("--hidden-device-bytes")?number("--hidden-device-bytes"):0;
         require(!args.count("--reuse-graph")||args.at("--reuse-graph")=="0"||args.at("--reuse-graph")=="1"||args.at("--reuse-graph")=="2","reuse-graph requires explicit0/1/2");
         options.reuse_graph=args.count("--reuse-graph")&&args.at("--reuse-graph")!="0";
@@ -711,6 +731,20 @@ int wmain(int argc,wchar_t**argv){
             options.fixed->unpaired_resident=fixed_resident;options.fixed->direct_open=direct_open;
             options.fixed->backend_temporary_reserve_bytes=backend_reserve;report["backend_temporary_reserve_bytes"]=backend_reserve;
             options.fixed->tokens=reserved_chunk;options.fixed->tile=options.carry.max_tile_tokens;options.fixed->context=options.context;
+            // LLAMADECODE single sweep: the CUDA hidden bank keeps its admitted bytes; when it cannot
+            // hold the whole capacity, its last tile becomes the spill slot for the rows past it.
+            {const auto bank=llama_dsv41_prefill::plan_bank(reserved_chunk,options.carry.max_tile_tokens,options.admitted_hidden_bytes,[&](uint32_t n){
+                    return options.admitted_hidden_bytes?llama_dsv41_tile_executor::resident_layout_bytes(backend.get(),n,options.carry.max_tile_tokens,options.resident_bf16,options.resident_ids,options.resident_metadata):0;});
+             const bool spill_plan=options.resident_bf16&&options.resident_ids&&options.resident_metadata&&options.carry.defer_hidden_readback&&options.carry.export_hidden_after_head;
+             require(!options.admitted_hidden_bytes||(bank.fits&&(!bank.spill||spill_plan)),"Prefill capacity cannot fit the admitted hidden bank (and this plan cannot spill)");
+             if(options.admitted_hidden_bytes&&bank.spill)options.fixed->hidden_rows=bank.rows;
+             const uint64_t carry_bank=llama_dsv41_prefill::carry_bank_bytes(reserved_chunk);
+             const char*strategy=tokens.size()>reserved_chunk?"split":!options.admitted_hidden_bytes?"ram_tiles":bank.spill&&tokens.size()>bank.resident_rows?"spill":"resident";
+             std::fprintf(stderr,"LLAMADECODE_PREFILL_PLAN tokens=%zu capacity=%u sweeps=%u chunk=%u strategy=%s bank_rows=%u resident_rows=%u slot_rows=%u hidden_admitted_bytes=%llu carry_bank_bytes=%llu engram_prompt_bytes=%llu job_host_bytes=%llu legacy_sweep_tokens=%u\n",
+                 tokens.size(),reserved_chunk,sweep_plan.count,chunk_tokens,strategy,bank.rows,bank.resident_rows,bank.slot_rows,(unsigned long long)options.admitted_hidden_bytes,
+                 (unsigned long long)carry_bank,(unsigned long long)llama_dsv41_prefill::engram_prompt_bytes(reserved_chunk),(unsigned long long)job_host,llama_dsv41_prefill::legacy_sweep_tokens);std::fflush(stderr);
+             report["prefill_plan"]={{"tokens",tokens.size()},{"capacity",reserved_chunk},{"sweeps",sweep_plan.count},{"chunk",chunk_tokens},{"strategy",strategy},
+                 {"bank_rows",bank.rows},{"resident_rows",bank.resident_rows},{"slot_rows",bank.slot_rows},{"carry_bank_bytes",carry_bank}};}
             options.fixed->bf16=options.resident_bf16;options.fixed->ids=options.resident_ids;options.fixed->metadata=options.resident_metadata;options.fixed->tile_registration=tile_registration;options.fixed->pageable_copies=pageable_copies;
             report["large_GPU_buffers_reserved_before_first_stage_lease"]=tile_tokens!=16384;
             report["graph_capacity_strategy"]=tile_tokens==16384?"existing gallocr grows to actual planned live bytes inside prompt clock":"explicit maximum reserved before first lease";
@@ -733,11 +767,21 @@ int wmain(int argc,wchar_t**argv){
             std::fprintf(stderr,"DS4PERF_WARMUP_BEGIN pid=%lu tokens=1 export=0\n",GetCurrentProcessId());std::fflush(stderr);
             const auto warm_started=clock_type::now();
             warm_request.reset(new llama_dsv41_sweep);
+            // LLAMADECODE_ENGRAM_EARLY: the real prompt's rows start inside the
+            // warmup's open, right after admission and before its first weight fetch.
+            const bool engram_early=llama_dsv41_engram_early_enabled()&&weights.engram_prefetch_host_bytes&&options.engram_tile_lookahead;
+            if(engram_early){
+                // The warmup pass builds its own one-token cache first: charge it.
+                warm_weights.engram_early_is_next_request=false;
+                warm_weights.engram_early_tokens.assign(tokens.begin(),tokens.begin()+std::min<size_t>(chunk_tokens,tokens.size()));
+                if(restored){const auto&bt=restored->base.tokens;warm_weights.engram_early_tail.assign(bt.end()-std::min<size_t>(bt.size(),3),bt.end());}
+            }
             success(warm_request->open(warm_weights,warm_options,error),error);
             // DS4COMBO producer-warm: the prompt's tokens are known now, so its
             // Engram rows load on their own IoRing during this warmup pass.
             {const char*overlap=std::getenv("LLAMA_DSV41_ENGRAM_PROMPT_OVERLAP");
-             if(weights.engram_prefetch_host_bytes&&options.engram_tile_lookahead&&overlap&&std::strcmp(overlap,"1")==0){
+             // Auto (or a skipped =1 start) that queued nothing: the ordinary producer-warm start.
+             if(!(engram_early&&warm_request->early_engram_queued())&&weights.engram_prefetch_host_bytes&&options.engram_tile_lookahead&&overlap&&std::strcmp(overlap,"1")==0){
                 const std::vector<int32_t> first(tokens.begin(),tokens.begin()+chunk_tokens);
                 std::vector<int32_t> tail;
                 if(restored){const auto&bt=restored->base.tokens;tail.assign(bt.end()-std::min<size_t>(bt.size(),3),bt.end());}
@@ -760,7 +804,12 @@ int wmain(int argc,wchar_t**argv){
         const uint64_t warm_rhs_pack=ggml_backend_cuda_dsv41_rhs_pack_queued();
         std::vector<int32_t> early_tail;
         if(restored){const auto&bt=restored->base.tokens;early_tail.assign(bt.end()-std::min<size_t>(bt.size(),3),bt.end());}
-        auto started=clock_type::now();const bool opened=sweep->open(weights,options,error,warm_request.get(),nullptr,restored?&restored->base:nullptr);report["phase_ms"]["inspect_admit_allocate"]=ms(started);success(opened,error);if(restored){restored->finish();restored.reset();}warm_request.reset();stop();
+        // LLAMADECODE_ENGRAM_EARLY, no warm-up: the request's own open starts its
+        // rows after admission, before allocate's first weight fetch.
+        const bool engram_early_cold=!warm&&llama_dsv41_engram_early_enabled()&&weights.engram_prefetch_host_bytes&&options.engram_tile_lookahead;
+        auto open_weights=weights;
+        if(engram_early_cold){open_weights.engram_early_tokens.assign(tokens.begin(),tokens.begin()+std::min<size_t>(chunk_tokens,tokens.size()));open_weights.engram_early_tail=early_tail;}
+        auto started=clock_type::now();const bool opened=sweep->open(open_weights,options,error,warm_request.get(),nullptr,restored?&restored->base:nullptr);report["phase_ms"]["inspect_admit_allocate"]=ms(started);success(opened,error);if(restored){restored->finish();restored.reset();}warm_request.reset();stop();
         require(!chunk_option||options.reuse_graph&&!options.reuse_layer_graph,"Stateful CLI requires allocator-only graph mode");
         // No-warm-up start: the early Engram row load (otherwise hidden behind the
         // warmup) begins as soon as the real request is opened.
@@ -768,7 +817,7 @@ int wmain(int argc,wchar_t**argv){
         // load (7.9 s at 43K) left a 7.4 s join wait and prefill fell to 1,052 tok/s,
         // against 1,238 tok/s with the ordinary layer-0 overlapped load. Opt-in only.
         const char*early_direct=std::getenv("LLAMA_DSV41_ENGRAM_EARLY_DIRECT");
-        if(direct_open&&early_direct&&std::strcmp(early_direct,"1")==0){const char*overlap=std::getenv("LLAMA_DSV41_ENGRAM_PROMPT_OVERLAP");
+        if(!(engram_early_cold&&sweep->early_engram_queued())&&direct_open&&early_direct&&std::strcmp(early_direct,"1")==0){const char*overlap=std::getenv("LLAMA_DSV41_ENGRAM_PROMPT_OVERLAP");
             if(weights.engram_prefetch_host_bytes&&options.engram_tile_lookahead&&overlap&&std::strcmp(overlap,"1")==0){
                 const std::vector<int32_t> first(tokens.begin(),tokens.begin()+std::min<size_t>(chunk_tokens,tokens.size()));
                 success(sweep->start_next_engram(first,early_tail,error),error);
