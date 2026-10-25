@@ -1,5 +1,32 @@
 #include "llama-dsv41-carry.h"
 #include "llama-dsv41-locked-ram.h"
+#include "llama-dsv41-host-registration.h"
+
+namespace llama_dsv41_host_registration {
+static uint64_t raised_extra = 0;
+bool raise_working_set(uint64_t extra, uint64_t &min_before, uint64_t &min_after, unsigned long &error) {
+    error = 0; min_before = min_after = 0;
+#ifdef _WIN32
+    SIZE_T lo = 0, hi = 0; DWORD flags = 0;
+    if (!GetProcessWorkingSetSizeEx(GetCurrentProcess(), &lo, &hi, &flags)) { error = GetLastError(); return false; }
+    min_before = lo;
+    if (!SetProcessWorkingSetSizeEx(GetCurrentProcess(), SIZE_T(lo + extra), SIZE_T(hi + extra), flags)) { error = GetLastError(); return false; }
+    if (!GetProcessWorkingSetSizeEx(GetCurrentProcess(), &lo, &hi, &flags)) { error = GetLastError(); return false; }
+    min_after = lo; raised_extra += extra; return true;
+#else
+    (void)extra; return true;
+#endif
+}
+void restore_working_set() {
+#ifdef _WIN32
+    if (!raised_extra) return;
+    SIZE_T lo = 0, hi = 0; DWORD flags = 0;
+    if (GetProcessWorkingSetSizeEx(GetCurrentProcess(), &lo, &hi, &flags) && lo >= raised_extra && hi >= raised_extra)
+        SetProcessWorkingSetSizeEx(GetCurrentProcess(), lo - raised_extra, hi - raised_extra, flags);
+    raised_extra = 0;
+#endif
+}
+}  // namespace llama_dsv41_host_registration
 
 #include <algorithm>
 #include <atomic>
