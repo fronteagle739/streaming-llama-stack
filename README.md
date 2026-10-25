@@ -84,7 +84,7 @@ Opt-in **approximate YOCO** single-engine launches:
 `scripts/start-dsv41-single-262k-ultra-yoco.ps1 -WebUI` and
 `scripts/start-dsv41-single-1m-ultra-yoco.ps1 -WebUI` add `yoco_keep=140`
 (native `--yoco-keep 140`). Default `0` preserves the existing path. Layer 20
-runs in full; non-final sweeps omit layers 21?39's weight reads and compute,
+runs in full; non-final sweeps omit layers 21-39's weight reads and compute,
 and the final sweep evaluates their last 140 positions. This changes model
 outputs and is not yet GPU-qualified. Images, verify, all-position scoring,
 decode and append-via-decode use full evaluation. Remote session export,
