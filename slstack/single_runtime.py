@@ -5,7 +5,7 @@ normal ds4 backend launches as its ds4_binary.
   ds4-server.exe        the existing combo launcher (ds4_combo_launcher.c): runs
                         <python-path.txt> -B -m slstack.combo_proxy --config combo.json --native-argv <Studio argv>
   combo.json            serving_mode=single_engine; every path points inside the install root
-  python-path.txt       the interpreter that staged it (needs psutil)
+  python-path.txt       the interpreter that staged it (needs psutil); must be cfg['studio_python']
   slstack/ vendor/studio/ envvars.json   tracked source at the recorded revision
   llamadecode-r.exe ds4-decode.dll dstorage.dll dstoragecore.dll   the ULTRA producer (copied, ~120 MB)
   qualification/        affinity-spreads.txt (B5 calibration), original-model.json (model receipt)
@@ -13,7 +13,7 @@ normal ds4 backend launches as its ds4_binary.
   manifest.json         SHA-256 and size of every file
 No model weights are copied; the GGUF stays at cfg['model'].
 
-  python -B -m slstack.single_runtime stage --config CFG --stage NEW_DIR --install-root <Studio runtime root>/ds4/<rev>
+  <cfg studio_python> -B -m slstack.single_runtime stage --config CFG --stage NEW_DIR --install-root <Studio runtime root>/ds4/<rev>
       --launcher <combo-launcher.exe> --studio-native <front-eagle-stack>/backend/studio/ds4_native.py
   python -B -m slstack.single_runtime install --stage NEW_DIR      (copies to the install root named in its manifest)
 """
@@ -144,8 +144,21 @@ def normal_argv(studio_native, definition):
     return module.normal_argv(Path(studio_native), definition)
 
 
+def require_runtime_python(cfg, executable=None):
+    """python-path.txt records the staging interpreter and the launcher runs it. Staging with any
+    other Python mixes stdlibs at launch ("SRE module mismatch", ds4-server exit 1), so refuse."""
+    want = cfg.get('studio_python')
+    if not want:
+        raise ValueError('Config needs studio_python: the interpreter the staged runtime will launch')
+    have = Path(executable or sys.executable).resolve()
+    if str(have).lower() != str(Path(want).resolve()).lower():
+        raise ValueError(f'Stage with the runtime interpreter: run "{want} -B -m slstack.single_runtime stage ..." '
+                         f'(this is {have}); python-path.txt records the staging interpreter')
+
+
 def stage(args):
     cfg = json.loads(Path(args.config).read_text(encoding='utf-8-sig'))
+    require_runtime_python(cfg)
     branch = subprocess.check_output(['git', 'branch', '--show-current'], cwd=SOURCE, text=True).strip()
     if not branch.startswith('agent/'):raise ValueError('Owned task source branch required')
     if subprocess.check_output(['git', 'status', '--porcelain', '--', 'slstack', 'vendor/studio', 'envvars.json'], cwd=SOURCE, text=True).strip():
