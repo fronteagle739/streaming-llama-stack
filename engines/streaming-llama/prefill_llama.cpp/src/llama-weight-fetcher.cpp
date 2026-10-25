@@ -2039,12 +2039,18 @@ static void wf_selftest_dual_heaps(wf_context * wf) {
 // reusing the stateful queue/fence stale in-flight state is what wedges the GPU ("GPU is lost").
 static bool wf_dstorage_create_stateful(wf_context * wf) {
     HRESULT hr;
+    llama_dsv41_open_phases::scope ph_timed("stateful");
+    // LLAMADECODE open phases (log only): each step's ms since the previous mark.
+    auto ph_step = llama_dsv41_open_phases::clock::now();
+    auto ph_mark = [&](const char * key) { llama_dsv41_open_phases::note_ms(key, llama_dsv41_open_phases::ms_since(ph_step)); ph_step = llama_dsv41_open_phases::clock::now(); };
     hr = wf->d3d_device->CreateFence(0, D3D12_FENCE_FLAG_SHARED, IID_PPV_ARGS(&wf->ds_fence));
+    ph_mark("create_fence");
     if (FAILED(hr)) {
         WF_ERR("DirectStorage: CreateFence failed: 0x%08lx", (unsigned long)hr);
         return false;
     }
     hr = wf->d3d_device->CreateSharedHandle(wf->ds_fence, nullptr, GENERIC_ALL, nullptr, &wf->ds_fence_handle);
+    ph_mark("fence_shared_handle");
     if (FAILED(hr)) {
         WF_ERR("DirectStorage: CreateSharedHandle (fence) failed: 0x%08lx", (unsigned long)hr);
         wf->ds_fence->Release(); wf->ds_fence = nullptr;
@@ -2054,6 +2060,7 @@ static bool wf_dstorage_create_stateful(wf_context * wf) {
     semDesc.type                = cudaExternalSemaphoreHandleTypeD3D12Fence;
     semDesc.handle.win32.handle = wf->ds_fence_handle;
     cudaError_t cerr = cudaImportExternalSemaphore(&wf->ds_ext_sem, &semDesc);
+    ph_mark("cuda_import_semaphore");
     if (cerr != cudaSuccess) {
         WF_ERR("DirectStorage: cudaImportExternalSemaphore failed: %s", cudaGetErrorString(cerr));
         CloseHandle(wf->ds_fence_handle); wf->ds_fence_handle = NULL;
@@ -2068,7 +2075,10 @@ static bool wf_dstorage_create_stateful(wf_context * wf) {
     queueDesc.Priority   = DSTORAGE_PRIORITY_HIGH;
     queueDesc.SourceType = DSTORAGE_REQUEST_SOURCE_FILE;
     queueDesc.Device     = wf->d3d_device;
+    ph_mark("queue_setup");
     hr = wf->ds_factory->CreateQueue(&queueDesc, IID_PPV_ARGS(&wf->ds_queue));
+    ph_mark("create_queue");
+    llama_dsv41_open_phases::note("queues", 1);
     if (FAILED(hr)) {
         WF_ERR("DirectStorage: CreateQueue failed: 0x%08lx", (unsigned long)hr);
         cudaDestroyExternalSemaphore(wf->ds_ext_sem); wf->ds_ext_sem = {};
@@ -2405,11 +2415,16 @@ static bool wf_dstorage_init(wf_context * wf, size_t buf_size) {
     }
 
     // --- COM ---
+    // LLAMADECODE open phases (log only): each step's ms since the previous mark.
+    auto ph_step = llama_dsv41_open_phases::clock::now();
+    auto ph_mark = [&](const char * key) { llama_dsv41_open_phases::note_ms(key, llama_dsv41_open_phases::ms_since(ph_step)); ph_step = llama_dsv41_open_phases::clock::now(); };
     hr = CoInitializeEx(NULL, COINIT_MULTITHREADED);
     wf->ds_com_inited = SUCCEEDED(hr);
+    ph_mark("com_init");
 
     // --- DXGI factory → find GPU adapter ---
     hr = CreateDXGIFactory2(0, IID_PPV_ARGS(&wf->dxgi_factory));
+    ph_mark("dxgi_factory");
     if (FAILED(hr)) {
         WF_ERR("DirectStorage: CreateDXGIFactory2 failed: 0x%08lx", (unsigned long)hr);
         return false;
@@ -2437,6 +2452,7 @@ static bool wf_dstorage_init(wf_context * wf, size_t buf_size) {
     }
 #endif
 
+    ph_mark("cuda_luid");
     IDXGIAdapter1 * adapter = nullptr;
     IDXGIAdapter1 * fallback_adapter = nullptr;
     for (UINT i = 0;; i++) {
@@ -2483,7 +2499,10 @@ static bool wf_dstorage_init(wf_context * wf, size_t buf_size) {
         return false;
     }
 
+    ph_mark("adapter_d3d12_device");
     // --- DirectStorage factory ---
+    llama_dsv41_open_phases::note("dstorage_dll_loaded_before", GetModuleHandleW(L"dstorage.dll") != nullptr);
+    llama_dsv41_open_phases::note("dstoragecore_dll_loaded_before", GetModuleHandleW(L"dstoragecore.dll") != nullptr);
     if(wf->params.ds_submit_threads){
         if(!wf->required_dstorage||(wf->params.ds_submit_threads!=1&&wf->params.ds_submit_threads!=2&&wf->params.ds_submit_threads!=4)){
             WF_ERR("Explicit DirectStorage submit thread profile is outside strict TEST admission");return false;
@@ -2493,7 +2512,10 @@ static bool wf_dstorage_init(wf_context * wf, size_t buf_size) {
         if(FAILED(hr)){WF_ERR("Required DStorageSetConfiguration failed:0x%08lx",(unsigned long)hr);return false;}
         WF_ERR("[dsv41-dstorage-config] submit_threads=%u applied_before_factory=1",wf->params.ds_submit_threads);
     }
+    ph_mark("ds_set_configuration");
     hr = DStorageGetFactory(IID_PPV_ARGS(&wf->ds_factory));
+    ph_mark("ds_get_factory");   // includes the dstoragecore.dll load when it was not loaded yet
+    llama_dsv41_open_phases::note("dstoragecore_dll_loaded_after", GetModuleHandleW(L"dstoragecore.dll") != nullptr);
     if (FAILED(hr)) {
         WF_ERR("DirectStorage: DStorageGetFactory failed: 0x%08lx", (unsigned long)hr);
         wf->d3d_device->Release(); wf->d3d_device = nullptr;
@@ -2520,6 +2542,7 @@ static bool wf_dstorage_init(wf_context * wf, size_t buf_size) {
     }
 
     wf_selftest_dual_buffer(wf->d3d_device);
+    ph_mark("factory_keepalive_selftest");
 
     // Cap DirectStorage's internal staging buffer for machines with tighter RAM budgets.
     // Expose this as a tuning knob because small caps can throttle warm sequential reads.
@@ -2540,15 +2563,19 @@ static bool wf_dstorage_init(wf_context * wf, size_t buf_size) {
         WF_LOG("DirectStorage: factory staging buffer capped to %llu MB",
                (unsigned long long) factory_staging_mb);
     }
+    ph_mark("factory_staging_size");
 
     // --- Open DirectStorage file handles ---
     {
+        int ph_files = 0;
         auto open_ds_file = [&](const char * path) -> IDStorageFile * {
             int wlen = MultiByteToWideChar(CP_UTF8, 0, path, -1, NULL, 0);
             std::vector<wchar_t> wpath(wlen);
             MultiByteToWideChar(CP_UTF8, 0, path, -1, wpath.data(), wlen);
             IDStorageFile * f = nullptr;
+            const auto ph_open = llama_dsv41_open_phases::clock::now();
             hr = wf->ds_factory->OpenFile(wpath.data(), IID_PPV_ARGS(&f));
+            llama_dsv41_open_phases::note_ms(("open_file_" + std::to_string(ph_files++)).c_str(), llama_dsv41_open_phases::ms_since(ph_open));
             if (FAILED(hr)) {
                 WF_ERR("DirectStorage: OpenFile failed for %s: 0x%08lx", path, (unsigned long)hr);
                 return nullptr;
@@ -2594,7 +2621,9 @@ static bool wf_dstorage_init(wf_context * wf, size_t buf_size) {
                         opened, n_layers, layer_dir_env);
             }
         }
+        llama_dsv41_open_phases::note("files_opened", uint64_t(ph_files));
     }
+    ph_mark("open_files");
 
     // --- Compute CUDA buffers: defer allocation ---
     // The ggml compute buffers (gpu_buf_a/b) will be allocated separately by
@@ -2602,6 +2631,7 @@ static bool wf_dstorage_init(wf_context * wf, size_t buf_size) {
     // Don't cudaMalloc here — it wastes VRAM that gets immediately overridden.
     // Only create the CUDA events needed for DMA/compute synchronization.
     if (!wf_dstorage_init_gpu_slots(wf, buf_size)) return false;
+    ph_mark("gpu_slots");
 
     // Strict direct mode owns two imported compute heaps. The older env-mode
     // path below owns a prefetch heap and relays into its normal compute bank.
@@ -2640,6 +2670,7 @@ static bool wf_dstorage_init(wf_context * wf, size_t buf_size) {
     }
 #endif
 
+    ph_mark("compute_heaps");
     // --- Create single D3D12 staging resource (≤3.5 GB) ---  [DS-direct edit 7: skipped when ds_direct_mode]
     // DS silently produces zeros for Destination.Buffer.Offset > ~4 GB and
     // cannot write to a second D3D12 resource in the same submission.
@@ -2798,13 +2829,16 @@ static bool wf_dstorage_init(wf_context * wf, size_t buf_size) {
                 wf->ds_staging_size / (1024.0 * 1024.0 * 1024.0));
         fflush(stderr);
     }
+    ph_mark("staging_persist");
     if (!wf_dstorage_create_stateful(wf)) return false;
+    ph_step = llama_dsv41_open_phases::clock::now();   // the stateful step is its own scope
     wf->ds_initialized = true;
     // R3 BLOCKER B1 probe: validate DS writes into placed-in-heap resources at >4GB heap offsets
     // (the make-or-break question for the DS-direct ping-pong design). Runs once, gated env.
     wf_selftest_ds_placed(wf);
     // R3 edit-4 validation: exercise the dual-use heap allocator + teardown in isolation. Runs once, gated env.
     wf_selftest_dual_heaps(wf);
+    ph_mark("selftests");
     WF_LOG("DirectStorage initialized: %d GPU bufs (%.2f MB each), staging=%.2f GB, queue cap=%d",
            (int)wf->gpu_bufs.size(), buf_size / (1024.0 * 1024.0),
            wf->ds_staging_size / (1024.0 * 1024.0 * 1024.0), wf->ds_queue_cap);
@@ -4597,9 +4631,16 @@ static wf_context * wf_create_impl(const wf_params * params, bool required_dstor
     wf->gpu_bufs.resize(wf->ds_direct_mode&&!params->ds_compute_direct ? 1 : params->n_gpu_buffers);
 
     bool gpu_bufs_via_dstorage = false;
+    // LLAMADECODE open phases (log only): wf_create's steps around the DirectStorage init.
+    auto ph_step = llama_dsv41_open_phases::clock::now();
+    auto ph_mark = [&](const char * key) { llama_dsv41_open_phases::note_ms(key, llama_dsv41_open_phases::ms_since(ph_step)); ph_step = llama_dsv41_open_phases::clock::now(); };
+    ph_mark("create_prepare");
 #ifdef WF_HAS_DSTORAGE
     if (wf->effective_mode == WF_MODE_DSTORAGE) {
-        if (wf_dstorage_init(wf, buf_size)) {
+        bool ph_ds_ok = false;
+        { llama_dsv41_open_phases::scope ph_timed("ds_init"); ph_ds_ok = wf_dstorage_init(wf, buf_size); }
+        ph_step = llama_dsv41_open_phases::clock::now();
+        if (ph_ds_ok) {
             gpu_bufs_via_dstorage = true;
         } else {
             if (required_dstorage) {
@@ -4708,6 +4749,7 @@ static wf_context * wf_create_impl(const wf_params * params, bool required_dstor
         }
     }
 
+    ph_mark("host_gpu_buffers");
     // -- Create CUDA copy stream --
 #ifdef WF_HAS_CUDA
     const cudaError_t stream_created = cudaStreamCreateWithFlags(&wf->copy_stream,
@@ -4721,6 +4763,7 @@ static wf_context * wf_create_impl(const wf_params * params, bool required_dstor
     }
 #endif
 
+    ph_mark("copy_stream_events");
     // -- Initialize chunk pool (not needed for DirectStorage) --
     if (!is_dstorage) {
         size_t chunks_per_layer = (buf_size + params->io_block_size - 1) / params->io_block_size;
@@ -4844,8 +4887,10 @@ static wf_context * wf_create_impl(const wf_params * params, bool required_dstor
     // exist and MSVC is happy; on macOS the definition vanishes and the call does not, so the
     // Mac build fails with 'use of undeclared identifier'. Guard the call to match the
     // definition -- byte-identical on Windows, compilable everywhere else.
+    ph_mark("pools_threads_gds_stream");
 #ifdef WF_HAS_DSTORAGE
     wf_warm_ds_interop(wf);
+    ph_mark("warm_ds_interop");
     if (required_dstorage && wf->ds_failed.load(std::memory_order_acquire)) {
         WF_ERR("Required DirectStorage: interop qualification failed during initialization");
         wf_destroy(wf);
