@@ -9,6 +9,7 @@ import os
 import time
 import psutil
 from .journal import atomic_json
+from .combo_ram import wait_owned_initialization
 
 
 def kernel_api():
@@ -41,10 +42,7 @@ def protect_working_set(job,host_bytes,floor_bytes,aggregate_bytes,*,receipt=Non
     # Wait for the new process working set; its Job/RSS/floor budgets already
     # apply before resume. This admission precedes bootstrap and readiness.
     started=time.monotonic();process=psutil.Process(job.pid)
-    while process.memory_info().rss<8<<20:
-        if job.poll() is not None:raise RuntimeError('Owned process exited before resident admission')
-        if time.monotonic()-started>=2:raise TimeoutError('Owned working-set initialization deadline exceeded')
-        time.sleep(.001)
+    wait_owned_initialization(job,lambda:process.memory_info().rss)   # progress-based (no fixed deadline)
     k=kernel_api();handle=job.pi.process
     if k.GetProcessId(handle)!=job.pid:raise ValueError('Suspended process handle/owner PID differs')
     lo,hi,flags=ctypes.c_size_t(),ctypes.c_size_t(),w.DWORD()
