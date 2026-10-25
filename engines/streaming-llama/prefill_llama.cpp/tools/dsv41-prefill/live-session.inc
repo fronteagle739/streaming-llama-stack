@@ -318,8 +318,18 @@ void run_live_session(std::unique_ptr<llama_dsv41_sweep>&sweep,
     };
     std::unique_ptr<llama_dsv41_sweep::rewind_anchor> rewind_anchor;
     checkpoint rewind_identity;
-    auto inspect=[&](){checkpoint c;std::string error;
-        success(sweep->export_native([&](wire_payload_reader&r,std::string&why){try{c=dsv41_live::capture(r,[]{return should_stop();});return true;}catch(const std::exception&e){why=e.what();return false;}},error),error);return c;};
+    // Incremental owner verify (default): tokens/logits from the payload as
+    // before; owner SHA-256s from the sweep, reading only rows appended since
+    // the last verified digest. `expect` (the checkpoint the caller compares
+    // against) turns a mismatch into a full re-hash before it is reported.
+    // LLAMADECODE_OWNER_VERIFY=full: the previous full payload capture.
+    auto inspect=[&](const checkpoint*expect=nullptr){checkpoint c;std::string error;const bool incremental=owner_verify_incremental();
+        success(sweep->export_native([&](wire_payload_reader&r,std::string&why){try{c=dsv41_live::capture(r,[]{return should_stop();},!incremental);return true;}catch(const std::exception&e){why=e.what();return false;}},error),error);
+        if(incremental){
+            const bool same=expect&&expect->frontier.context==c.frontier.context&&expect->frontier.position==c.frontier.position&&expect->frontier.mode==c.frontier.mode;
+            success(sweep->owner_digests(c.owners,same?&expect->owners:nullptr,error),error);c=checkpoint::from_json(c.describe());
+        }
+        return c;};
     current=inspect();
     send({{"status","ready"},{"session",session},{"model_sha256",model_sha},{"next_sequence",guard.expected()},
         {"checkpoint",current.describe()},{"maximum_prefill_tokens",capacity},{"maximum_decode_tokens",llama_dsv41::decode_delta_chunk_tokens},{"maximum_decode_delta_tokens",llama_dsv41::decode_delta_max_tokens},{"control_host_bytes",64*1024*1024},
@@ -377,13 +387,13 @@ void run_live_session(std::unique_ptr<llama_dsv41_sweep>&sweep,
             reply({{"supported",ds4_decode_enabled()},{"value",value},{"applies","next decode request"},{"scope","session"}});
         }else if(operation=="checkpoint"){
             dsv41_live::keys(command,{"session","model_sha256","sequence","operation"});
-            require(inspect().describe()==current.describe(),"Session idle owner changed");reply({{"peer_synchronized",have_remote&&!awaiting_ack&&remote.describe()==current.describe()}});
+            require(inspect(&current).describe()==current.describe(),"Session idle owner changed");reply({{"peer_synchronized",have_remote&&!awaiting_ack&&remote.describe()==current.describe()}});
         }else if(operation=="save_rewind"||operation=="rewind"){
             dsv41_live::keys(command,operation=="save_rewind"?
                 std::initializer_list<const char*>{"session","model_sha256","sequence","operation","base"}:
                 std::initializer_list<const char*>{"session","model_sha256","sequence","operation","base","target"});same_base();
             require(have_remote&&!awaiting_ack&&remote.describe()==current.describe(),"Rewind operation before peer synchronization");
-            require(inspect().describe()==current.describe(),"Rewind current owner changed");std::string error;
+            require(inspect(&current).describe()==current.describe(),"Rewind current owner changed");std::string error;
             if(operation=="save_rewind"){
                 rewind_anchor.reset(new llama_dsv41_sweep::rewind_anchor);
                 success(sweep->capture_rewind_anchor(*rewind_anchor,error),error);rewind_identity=current;
@@ -445,7 +455,7 @@ void run_live_session(std::unique_ptr<llama_dsv41_sweep>&sweep,
             // returned but NOT evaluated: the caller's next prefill carries it.
             dsv41_live::keys(command,{"session","model_sha256","sequence","operation","base","max_tokens","stop_tokens"});same_base();
             require(!awaiting_ack,"Local decode while a state transfer awaits acknowledgement");
-            require(inspect().describe()==current.describe(),"Local decode actual token/owner state differs from checkpoint");
+            require(inspect(&current).describe()==current.describe(),"Local decode actual token/owner state differs from checkpoint");
             const auto maximum=dsv41_live::u64(command.at("max_tokens"));require(maximum&&maximum<=4096,"Local decode requires1..4096 max_tokens");
             const auto&stops=command.at("stop_tokens");require(stops.is_array()&&stops.size()<=16,"Local decode accepts at most16 stop tokens");
             std::vector<int32_t>stop_ids;for(const auto&v:stops){const auto n=dsv41_live::u64(v);require(n<129280,"Stop token out of vocabulary");stop_ids.push_back(int32_t(n));}
@@ -492,7 +502,7 @@ void run_live_session(std::unique_ptr<llama_dsv41_sweep>&sweep,
             // evaluated. Same per-token path as "decode"; only the token choice differs.
             dsv41_live::keys(command,{"session","model_sha256","sequence","operation","base","tokens","logits_path"});same_base();
             require(!awaiting_ack,"Forced decode while a state transfer awaits acknowledgement");
-            require(inspect().describe()==current.describe(),"Forced decode actual token/owner state differs from checkpoint");
+            require(inspect(&current).describe()==current.describe(),"Forced decode actual token/owner state differs from checkpoint");
             const auto&ids=command.at("tokens");require(ids.is_array()&&!ids.empty()&&ids.size()<=4096,"Forced decode requires1..4096 tokens");
             std::vector<int32_t>forced;for(const auto&v:ids){const auto n=dsv41_live::u64(v);require(n<129280,"Forced token out of vocabulary");forced.push_back(int32_t(n));}
             require(uint64_t(current.frontier.position)+forced.size()<uint64_t(options.context),"Forced decode exceeds context capacity");
@@ -535,7 +545,7 @@ void run_live_session(std::unique_ptr<llama_dsv41_sweep>&sweep,
             // may append without a peer; a peer-bound session keeps exact sync.
             const bool local_only=!have_remote&&!initial_sent&&!awaiting_ack;
             require(local_only||(have_remote&&!awaiting_ack&&remote.describe()==current.describe()),"Incremental prefill requires exact two-way synchronization");
-            require(inspect().describe()==current.describe(),"Incremental prefill actual token/owner state differs from acknowledged checkpoint");
+            require(inspect(&current).describe()==current.describe(),"Incremental prefill actual token/owner state differs from acknowledged checkpoint");
             const auto&ids=command.at("tokens");require(ids.is_array()&&!ids.empty()&&ids.size()<=capacity,"Live prefill token count exceeds reserved chunk");
             require(ids.size()<uint64_t(options.context)-current.frontier.position,"Live prefill exceeds context capacity");
             std::vector<int32_t>tokens;tokens.reserve(ids.size());for(const auto&v:ids){const auto n=dsv41_live::u64(v);require(n<129280,"Live token out of vocabulary");tokens.push_back(int32_t(n));}

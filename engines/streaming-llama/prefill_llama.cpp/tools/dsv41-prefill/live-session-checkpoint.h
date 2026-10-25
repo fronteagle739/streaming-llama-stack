@@ -1,6 +1,7 @@
 #pragma once
 #include "llama-dsv41-wire.h"
 #include "boundary-capture.h"
+#include "llama-dsv41-owner-digest.h"
 #include <nlohmann/json.hpp>
 #include <array>
 #include <algorithm>
@@ -52,7 +53,9 @@ struct checkpoint {
         return out;
     }
 };
-inline checkpoint capture(wire_payload_reader&reader,const std::function<bool()>&stop){
+// owners=false: frontier + token/logit digests only; the caller fills owners
+// (e.g. llama_dsv41_sweep::owner_digests) and validates with from_json.
+inline checkpoint capture(wire_payload_reader&reader,const std::function<bool()>&stop,bool owners=true){
     std::array<uint32_t,15>h{};std::string error;need(reader.read(0,h.data(),52,error),error);
     need(h[0]==0x34565344&&h[1]==2&&(h[3]==1||h[3]==3)&&h[4]==128&&h[5]==128&&h[6]==h[2]+1&&h[8]==40&&h[9]==512&&h[10]==128&&h[11]==129280&&h[12]==0x413431,"Session native header mismatch");
     if(h[3]==3)need(reader.read(52,h.data()+13,8,error),error);
@@ -64,6 +67,7 @@ inline checkpoint capture(wire_payload_reader&reader,const std::function<bool()>
     });};
     uint64_t offset=h[3]==3?60:52;out.tokens_sha256=digest(offset,uint64_t(h[7])*4);offset+=uint64_t(h[7])*4;
     out.logits_sha256=digest(offset,129280*4);offset+=129280*4;
+    if(!owners)return out;
     for(const auto&s:p.spans){out.owners.push_back(digest(offset,s.bytes));offset+=s.bytes;}
     need(offset==reader.bytes(),"Session checkpoint coverage");return checkpoint::from_json(out.describe());
 }
