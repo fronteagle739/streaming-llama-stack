@@ -16,7 +16,7 @@ from .native_profiles import profile
 from .combo_contract import validate
 from .combo_state import transport_checkpoint, payload_bytes
 from .combo_release import certified
-from .combo_ram import protect_working_set
+from .combo_ram import protect_working_set,runtime_min_free_gib
 from . import combo_abort
 
 
@@ -90,8 +90,7 @@ def prefill_plan(cfg,prompt_tokens,available=None):
     producer_host_budget_gib, i.e. no raise and today's 49152). A prompt over the largest C that fits
     is split by the producer into near-equal sweeps. Returns C, the raised budget and the deltas.
     `available` (physical RAM measured at launch) also caps the budget at available minus
-    producer_host_reserve_gib (default 1 GiB of headroom for Studio/daemon/OS growth; owner rule
-    2026-10-25: no fixed free-RAM stop, the rule is no paging), so the working set plus everything
+    producer_host_reserve_gib (default 1 GiB of headroom for Studio/daemon/OS growth), so the working set plus everything
     else fits physical RAM and stays resident (hard-minimum working set); the budget is
     page-rounded (Windows keeps a hard-minimum working set only in whole pages).
     producer_prefill_sweep_tokens S (absent = the above): the owner fold policy instead; S-token
@@ -106,7 +105,7 @@ def prefill_plan(cfg,prompt_tokens,available=None):
         # Owner 2026-10-25 ("every run makes you freeze like the computer's run out of RAM"): locked producer
         # pages cannot be paged out, so admission keeps a DESKTOP RESERVE free for Windows, Claude Code and the
         # desktop: the producer's raised budget is at most available - producer_desktop_reserve_gib (per
-        # machine, default 8 GiB). Admission budgeting only: no runtime free-RAM stop (the rule is no paging).
+        # machine, default 8 GiB). The separate runtime_min_free_gib stop defaults to 4 GiB.
         reserve=max(float(cfg.get('producer_host_reserve_gib',1)),float(cfg.get('producer_desktop_reserve_gib',8)))
         room=int(available)-int(reserve*(1<<30))
         if room<top:top=max(base,room);capped_by='desktop_reserve' if reserve>float(cfg.get('producer_host_reserve_gib',1)) else 'available_ram'
@@ -175,6 +174,7 @@ def stall_seconds(cfg):
 class ComboProducer:
     def __init__(self,cfg,session,epoch,tokens,cancelled,*,base=None,runner=None):
         combo_abort.check('producer launch')
+        runtime_floor=runtime_min_free_gib(cfg)
         vendor()
         from studio.dsv41_session_contract import MODEL_SHA256
         from studio.dsv41_session_process import Producer
@@ -209,6 +209,7 @@ class ComboProducer:
         args.update({'--context':str(cfg['context']),'--capture-dspark':'0','--compressed-cache-bf16':'1' if precision=='bf16' else '0',
             '--model':str(path(cfg['model'])),'--copy-receipt':str(receipt),'--build-sha':cfg['producer_sha256'],
             '--session-id':session,'--session-owner-epoch':str(epoch),'--job-host-bytes':str(host_bytes),
+            '--runtime-min-free-gib':str(runtime_floor),
             '--receipt':str(self.directory/'producer.json'),'--carry':str(self.directory/'carry-not-created'),
             '--payload':str(self.directory/'payload-not-created')})
         if precision!='f32' or growable:   # LLAMADECODE context cache flags (absent = today's f32 fixed argv)
@@ -248,6 +249,7 @@ class ComboProducer:
                 raise MemoryError('ULTRA GPU plan cannot fit; handoff refused')
             self.creation_attempted=True
             self.process=Producer(session,argv,env,self.directory,host_bytes=host_bytes,
+                runtime_min_free_gib=runtime_floor,
                 physical_floor=int(cfg['min_available_gib']*(1<<30)),operation_seconds=min(1140,cfg['request_timeout_s']),stall_seconds=stall_seconds(cfg),
                 idle_seconds=cfg['lease_minutes']*60,native=native,cancelled=cancelled,native_mode=1,bootstrap=bootstrap,owner_epoch=epoch,
                 after_resume=lambda job:protect_working_set(job,host_bytes,int(cfg['min_available_gib']*(1<<30)),

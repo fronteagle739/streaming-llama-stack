@@ -2,6 +2,7 @@
 import json
 import sys
 import unittest
+from unittest.mock import patch
 from pathlib import Path
 
 ROOT = Path(__file__).resolve().parents[1]
@@ -22,6 +23,16 @@ STUDIO_NATIVE = Path('X:/GitHub/front-eagle-stack/backend/studio/ds4_native.py')
 
 
 class RuntimeTests(unittest.TestCase):
+    def test_runtime_floor_config_default_and_cli_override(self):
+        from slstack.config import load
+        from slstack.__main__ import main
+        cfg=load(overrides={'gpu_uuid':'GPU-test'})
+        self.assertEqual(cfg['runtime_min_free_gib'],4.0)
+        for argv in (['slstack','--runtime-min-free-gib','0','check'],['slstack','check','--runtime-min-free-gib','6.5']):
+            with self.subTest(argv=argv),patch.object(sys,'argv',argv),patch('slstack.__main__.load',return_value=cfg) as loaded,patch('slstack.check.check',return_value=[]):
+                self.assertEqual(main(),0)
+                self.assertEqual(loaded.call_args.args[1]['runtime_min_free_gib'],float(argv[argv.index('--runtime-min-free-gib')+1]))
+
     def test_installed_config_is_self_contained(self):
         cfg = sr.single_config(BASE, INSTALLED, 'rev')
         self.assertEqual(cfg['serving_mode'], 'single_engine')
@@ -52,6 +63,13 @@ class RuntimeTests(unittest.TestCase):
         self.assertEqual((cfg['context'], cfg['ctx_cache_precision'], cfg['ctx_cache_growable']), (999424, 'bf16', True))
         preset = sr.preset(big, INSTALLED)
         self.assertEqual((preset['name'], preset['rtx']['ctx']), (big['preset_name'], 999424))
+
+    def test_runtime_floor_survives_managed_runtime_and_worker_config(self):
+        for floor in (0, 4.0, 6.5):
+            with self.subTest(floor=floor):
+                cfg = sr.single_config(dict(BASE, runtime_min_free_gib=floor), INSTALLED, 'rev')
+                self.assertEqual(cfg['runtime_min_free_gib'], floor)
+                self.assertEqual(request_worker_config(cfg)['runtime_min_free_gib'], floor)
 
     @unittest.skipUnless(STUDIO_NATIVE.exists(), 'needs the Studio checkout')
     def test_studio_argv_launches_the_single_mode(self):

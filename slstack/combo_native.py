@@ -17,7 +17,7 @@ from .config import path,environment
 from .native_broker import vendor,model_receipt
 from .journal import atomic_json,sha256
 from .combo_release import certified
-from .combo_ram import protect_working_set
+from .combo_ram import protect_working_set,runtime_min_free_gib
 from .progress import Window,activity,readiness_seconds
 from . import combo_abort
 
@@ -251,6 +251,7 @@ class Native:
                 self.restore_lease=restore[0].lease();self.restore_lease.__enter__()
             self.creation_attempted=True
             self.process=Producer(session,command,env,directory,host_bytes=int(cfg['host_budget_gib']*(1<<30)),
+                runtime_min_free_gib=runtime_min_free_gib(cfg),
                 physical_floor=int(cfg['min_available_gib']*(1<<30)),operation_seconds=min(1140,cfg['request_timeout_s']),stall_seconds=stall_seconds(cfg),
                 idle_seconds=min(1140,cfg['lease_minutes']*60),native=native,cancelled=cancelled,native_mode=1,startup=startup,owner_epoch=epoch,
                 after_resume=lambda job:protect_working_set(job,int(cfg['host_budget_gib']*(1<<30)),
