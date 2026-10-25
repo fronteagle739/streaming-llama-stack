@@ -1,4 +1,5 @@
 #include "llama-dsv41-layer-log.h"
+#include "llama-dsv41-test-fault.h"
 #include "llama-dsv41-sweep.h"
 #include "llama-dsv41-append-schedule.h"
 #include "llama-dsv41-engram-prefetch.h"
@@ -693,6 +694,7 @@ bool llama_dsv41_sweep::run(const std::vector<int32_t>&tokens,const cancelled&st
             double prepare_ms=0,cleanup_ms=0,carry_read_ms=0,carry_write_ms=0,weight_cache_ms=0;
             double executor_wall_ms=0,executor_phase_gap_ms=0;
             llama_dsv41_layer_log("[dsv41-sweep] layer=%u begin tokens=%zu\n",layer,owned.size());std::fflush(stderr);
+            llama_dsv41_test_fault::at_layer(layer,owned.size());   // test-only; off unless LLAMADECODE_TEST_FAULT is set
             p->check_stop(stop);llama_dsv41_layer_graph::weights weights{};
             // LLAMADECODE B1: the decode layout leases the dense stage here; the
             // routed experts arrive through the executor's router hook.
@@ -825,7 +827,8 @@ bool llama_dsv41_sweep::run(const std::vector<int32_t>&tokens,const cancelled&st
         success(p->carry.certify_frontier(error),error);p->check_stop(stop);
         p->measured.export_preparation_ms=std::chrono::duration<double,std::milli>(std::chrono::steady_clock::now()-head_complete).count();
         p->state=implementation::completed;p->published.store(true);return true;
-    }catch(const std::exception&failure){p->poison();error=failure.what();return false;}
+    }catch(const std::bad_alloc&){p->poison();error="std::bad_alloc: a host allocation failed during the V4.1 sweep run";return false;}
+    catch(const std::exception&failure){p->poison();error=failure.what();return false;}
 }
 
 bool llama_dsv41_sweep::export_native(const consumer&send,std::string&error){

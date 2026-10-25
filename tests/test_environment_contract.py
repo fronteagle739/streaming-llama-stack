@@ -61,5 +61,16 @@ class EnvironmentContractTests(unittest.TestCase):
                 apply({}, {**cfg, 'env_overrides': {var: value}}, scope)
 
 
+    def test_test_fault_is_documented_and_only_explicit(self):
+        from slstack.envvars import rows
+        row = next(r for r in rows() if r['var'] == 'LLAMADECODE_TEST_FAULT')
+        self.assertTrue(row['doc'] and 'TEST-ONLY' in row['doc'] and row['scopes'] == ['rtx-llama'] and not row.get('defaults_by_scope'))
+        with patch('slstack.envvars.rows', return_value=[row]):
+            with contextlib.redirect_stderr(io.StringIO()):
+                self.assertNotIn('LLAMADECODE_TEST_FAULT', apply({'LLAMADECODE_TEST_FAULT': 'main_throw@4'}, {}, 'rtx-producer'))
+            cfg = {'env_overrides': {'LLAMADECODE_TEST_FAULT': 'worker_throw@4'}}
+            self.assertEqual(apply({}, cfg, 'rtx-producer')['LLAMADECODE_TEST_FAULT'], 'worker_throw@4')
+            self.assertNotIn('LLAMADECODE_TEST_FAULT', apply({}, {}, 'rtx-producer'))
+
 if __name__ == '__main__':
     unittest.main()
