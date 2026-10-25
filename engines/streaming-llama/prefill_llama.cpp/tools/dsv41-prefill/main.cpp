@@ -18,6 +18,7 @@ extern "C" uint64_t ggml_backend_cuda_dsv41_pv_view_queued(void);
 #include "llama-dsv41-engram-prefetch.h"
 #include "llama-weight-fetcher.h"
 #include "llama-dsv41-host-memory.h"
+#include "llama-dsv41-ds4x-keep.h"
 #include "llama-dsv41-native-columns-resource-proof.h"
 #include "llama-dsv41-native-loader-resource-proof.h"
 #include "llama-dsv41-native-rhs-pack-proof.h"
@@ -78,7 +79,11 @@ bool should_stop(){
     if(abort_file_present())interrupted.store(true);
     return interrupted.load()||memory_abort.load();
 }
-void stop(){require(!should_stop(),memory_abort.load()?"Producer stopped at the1GiB physicalRAM/OScommit floor; incomplete output retained":"Producer cancelled; incomplete output retained and not certified");}
+void stop(){require(!should_stop(),memory_abort.load()?"Producer stopped: paging detected (pagefile usage rose above 256 MB over the launch baseline); incomplete output retained":"Producer cancelled; incomplete output retained and not certified");}
+// Owner paging-only rule: what the runtime watch recorded (low free RAM is not fatal).
+json host_memory_runtime(){namespace hm=llama_dsv41_host_memory;
+    return json{{"rule","paging only: stop when global pagefile usage rises above limit_bytes over the launch baseline; low free RAM recorded"},
+        {"limit_bytes",hm::paging_limit},{"pagefile_growth_peak_bytes",hm::paging_growth_peak.load()},{"low_memory_events",hm::low_memory_events.load()},{"paging_stop",hm::paging_stop.load()}};}
 std::string utf8(const std::wstring&s){
     const int n=WideCharToMultiByte(CP_UTF8,WC_ERR_INVALID_CHARS,s.data(),int(s.size()),nullptr,0,nullptr,nullptr);
     require(n>0,"Invalid Unicode command argument");std::string out(n,'\0');
@@ -969,6 +974,7 @@ int wmain(int argc,wchar_t**argv){
         report["payload"]["written_bytes"]=hash_only?0:written;report["payload"]["canonical_hashed_bytes"]=written;report["payload"]["identity"]=payload?describe(payload->current()):json(nullptr);
         report["status"]="complete";report["runtime_qualified"]=false;report["claim"]=hash_only?"Completed canonical frontier SHA; no payload file created or receiver parity claimed":"One measured offline producer artifact; independent receiver/output parity qualification is still required";
         report["residency_limit"]="Free-memory admission and allocation ceilings do not independently prove physicalVRAM residency under WDDM";
+        report["host_memory_runtime"]=host_memory_runtime();
         const auto text=report.dump(2)+"\n";require(text.size()<=receipt_limit,"Producer receipt exceeds its bounded admission");receipt->write(text.data(),text.size());receipt->flush();stop();
         receipt->publish(final_receipt);
         // DS4COMBO fast switch: release the published receipt handle (write+delete
@@ -981,7 +987,7 @@ int wmain(int argc,wchar_t**argv){
             std::fprintf(stderr,"DS4COMBO_PRODUCER_GRACEFUL_SHUTDOWN_COMPLETE sweep_release_ms=%.1f wf_persist_released=%d\n",ms(teardown),persist_released);std::fflush(stderr);return persist_released==1?0:3;}
         std::fputs(hash_only?"Canonical native frontier hashed; receipt complete; no payload file created.\n":"Offline native payload and receipt completed; receiver/parity qualification remains pending.\n",stdout);return 0;
     }catch(const std::exception&failure){
-        if(sweep)sweep->cancel();report["status"]=interrupted.load()?"cancelled":"failed";report["error"]=failure.what();report["memory_floor_abort"]=memory_abort.load();
+        if(sweep)sweep->cancel();report["status"]=interrupted.load()?"cancelled":"failed";report["error"]=failure.what();report["memory_floor_abort"]=memory_abort.load();report["host_memory_runtime"]=host_memory_runtime();
         if(payload){try{report["payload_actual_identity"]=describe(payload->current());}catch(...){}}
         if(receipt){try{const auto text=report.dump(2)+"\n";if(receipt->current().size==0&&text.size()<=receipt_limit){receipt->write(text.data(),text.size());receipt->flush();}}catch(...){}}
         std::cerr<<"Offline producer failed: "<<failure.what()<<". Existing/unfinished files were preserved.\n";return interrupted.load()?130:1;

@@ -3901,6 +3901,8 @@ int ds4_gpu_qwen4_mtp_combine_tensor(
  * resident weights and expert cache. */
 int ds4_gpu_register_external_range(const void *model_map, uint64_t offset, uint64_t bytes, void *device_ptr);
 void ds4_gpu_external_decode_mode(int on);   /* unregistered weights refuse */
+int ds4_gpu_replace_external_range(const void *model_map, uint64_t offset, uint64_t bytes, void *device_ptr);
+uint64_t ds4_gpu_drop_external_ranges(void);   /* LLAMADECODE keep-open: forget the caller's ranges */
 /* One-token routed experts: ids[n] (router selection) -> slots[n] into the
  * caller's pool, whose gate/up/down bases use the original expert strides. */
 typedef int (*ds4_gpu_external_expert_hook)(void *user, uint32_t layer, const int32_t *ids, uint32_t n,
