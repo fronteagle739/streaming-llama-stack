@@ -22,6 +22,10 @@ public:
         uint64_t admitted_cache_bytes=0,admitted_graph_bytes=0;
         // Total job ceilings, including the provider's separate actual budget.
         uint64_t admitted_device_bytes=0,admitted_host_bytes=0;
+        // LLAMADECODE measured device plan (llama-dsv41-device-admission.h): free VRAM
+        // measured after CUDA init + eager module load, and the explicit reserve.
+        // 0 = legacy check against admitted_device_bytes only.
+        uint64_t measured_device_free=0,device_reserve=0;
         // Explicit one-bank CUDA hidden residency; RAM mirror/readback guards stay.
         uint64_t admitted_hidden_bytes=0;
         // Explicit pinned, direct-page CUDA copies with GPU validation. The

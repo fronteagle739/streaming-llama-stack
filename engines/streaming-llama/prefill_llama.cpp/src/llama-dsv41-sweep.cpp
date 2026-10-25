@@ -5,6 +5,7 @@
 #include <cstdlib>
 
 #include "llama-dsv41-cache.h"
+#include "llama-dsv41-device-admission.h"
 #include "llama-dsv41-executor.h"
 #include "boundary-capture.h"
 #include "ggml-alloc.h"
@@ -352,7 +353,10 @@ bool llama_dsv41_sweep::open(const llama_dsv41_weight_provider::config &weights,
         require(!options.admitted_hidden_bytes||(options.carry.resident_ram&&
             resident_required(std::min(options.carry.tokens,options.carry.max_tile_tokens))<=options.admitted_hidden_bytes),
             "Resident hidden bank requires admitted RAM mirror and explicit device ceiling");
-        const uint64_t device=add(options.admitted_prefetch_device_bytes,add(add(add(add(add(provider.device_bytes,options.admitted_cache_bytes),options.admitted_graph_bytes),options.admitted_hidden_bytes),options.admitted_pinned_device_bytes),add(llama_dsv41_expert_profile::extra_device(options.expert),add(options.admitted_cast_device_bytes,options.admitted_index_device_bytes))));
+        // The context cache is charged at what it can hold for its context (<= --cache-bytes).
+        const uint64_t cache_charge=llama_dsv41_device_admission::cache_charge(options.admitted_cache_bytes,
+            llama_dsv41_cache_storage::required_bytes(options.context,options.compressed_cache_bf16,options.capture_dspark));
+        const uint64_t device=add(options.admitted_prefetch_device_bytes,add(add(add(add(add(provider.device_bytes,cache_charge),options.admitted_graph_bytes),options.admitted_hidden_bytes),options.admitted_pinned_device_bytes),add(llama_dsv41_expert_profile::extra_device(options.expert),add(options.admitted_cast_device_bytes,options.admitted_index_device_bytes))));
         // Deliberately conservative: includes both input/output tile vectors,
         // lease copy, graph metadata, bounded Engram and serialization scratch.
         const uint64_t tile_host=options.carry.direct_ram_tiles?
@@ -393,10 +397,16 @@ bool llama_dsv41_sweep::open(const llama_dsv41_weight_provider::config &weights,
             if(!e||*e)llama_dsv41_layer_log("LLAMADECODE_ENGRAM_ROWCACHE_ADMISSION bytes=%llu explicit=%d headroom_bytes=%llu\n",(unsigned long long)row_cache_new,int(e&&*e),(unsigned long long)headroom);
         }
         const uint64_t host=add(base_host,row_cache_have?row_cache_have:row_cache_new);
-        llama_dsv41_layer_log("DS4PERF_COMBINED_ADMISSION planned_host=%llu admitted_host=%llu provider_host=%llu carry_host=%llu tile_host=%llu owner_digest_staging=%llu planned_device=%llu admitted_device=%llu\n",
+        const auto measured=options.measured_device_free?llama_dsv41_device_admission::admit(options.measured_device_free,options.admitted_device_bytes,options.device_reserve,device)
+            :llama_dsv41_device_admission::result{device<=options.admitted_device_bytes,options.admitted_device_bytes,{}};
+        llama_dsv41_layer_log("DS4PERF_COMBINED_ADMISSION planned_host=%llu admitted_host=%llu provider_host=%llu carry_host=%llu tile_host=%llu owner_digest_staging=%llu planned_device=%llu admitted_device=%llu"
+            " job_device_bound=%llu measured_device_free=%llu device_reserve=%llu cache_charge=%llu cache_admitted=%llu\n",
             (unsigned long long)host,(unsigned long long)options.admitted_host_bytes,(unsigned long long)provider.host_bytes,
-            (unsigned long long)carry_budget.bounded_host_bytes,(unsigned long long)tile_host,(unsigned long long)owner_digest_staging,(unsigned long long)device,(unsigned long long)options.admitted_device_bytes);
-        require(device<=options.admitted_device_bytes&&host<=options.admitted_host_bytes,
+            (unsigned long long)carry_budget.bounded_host_bytes,(unsigned long long)tile_host,(unsigned long long)owner_digest_staging,(unsigned long long)device,(unsigned long long)measured.admitted,
+            (unsigned long long)options.admitted_device_bytes,(unsigned long long)options.measured_device_free,(unsigned long long)options.device_reserve,
+            (unsigned long long)cache_charge,(unsigned long long)options.admitted_cache_bytes);
+        if(!measured.ok&&options.measured_device_free)llama_dsv41_layer_log("DS4PERF_DEVICE_ADMISSION_REFUSED %s\n",measured.reason.c_str());
+        require(measured.ok&&host<=options.admitted_host_bytes,
             "V4.1 provider/cache/graph/carry combined job exceeds total resource admission");
         if(row_cache_new)success(p->provider.create_engram_row_cache(row_cache_new,error),error);
         // LLAMADECODE_ENGRAM_EARLY: tokens known, file verified, job admitted:
