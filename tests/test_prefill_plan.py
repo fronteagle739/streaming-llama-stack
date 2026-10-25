@@ -28,16 +28,29 @@ class PrefillPlan(unittest.TestCase):
         self.assertTrue(p['single_sweep'])
         self.assertEqual(p['carry_delta'], carry_bank_bytes(103319) - carry_bank_bytes(49152))
         self.assertEqual(p['engram_delta'], (103319 - 49152) * 12864)
-        self.assertEqual(p['host_bytes'], int(6.25 * 2**30) + p['carry_delta'] + p['engram_delta'])
+        self.assertEqual(p['host_bytes'], -(-(int(6.25 * 2**30) + p['carry_delta'] + p['engram_delta']) // 65536) * 65536)
         self.assertLessEqual(p['host_bytes'], 12 * 2**30)
 
     def test_cap_bounds_capacity(self):
         p = prefill_plan(SS, 224588)
         self.assertFalse(p['single_sweep'])
-        self.assertEqual(p['capacity'], 107840)
+        self.assertEqual(p['capacity'], 77824)   # cap 107,840 -> near-equal chunk reserved
+        self.assertIn('near-equal sweeps of 77824', p['reason'])
         self.assertLessEqual(p['host_bytes'], 12 * 2**30)
-        self.assertGreater(prefill_plan(dict(SS, producer_host_max_gib=12.001), 224588)['capacity'], 107840)
+        self.assertEqual(prefill_plan(dict(SS, producer_host_max_gib=12.7), 224588)['capacity'], 114688)   # two sweeps
         self.assertEqual(prefill_plan(dict(SS, context=60000), 103319)['capacity'], 59999)
+
+    def test_measured_available_caps_and_pages(self):
+        avail = 17324515328   # ss-91k launch
+        p = prefill_plan(SS, 93668, avail)
+        self.assertTrue(p['single_sweep']);self.assertEqual(p['capacity'], 93668);self.assertEqual(p['capped_by'], 'available_ram')
+        self.assertEqual(p['host_bytes'] % 65536, 0)
+        self.assertLessEqual(p['host_bytes'], avail - 5 * 2**30)
+        q = prefill_plan(SS, 224588, avail)
+        self.assertFalse(q['single_sweep']);self.assertEqual(q['capacity'], 77824);self.assertLessEqual(q['host_bytes'], avail - 5 * 2**30)
+        r = prefill_plan(SS, 93668, 10 * 2**30)   # too little RAM for any raise: today's 49152 budget
+        self.assertEqual((r['capacity'], r['host_bytes']), (49152, int(6.25 * 2**30)))
+        for n in (16000, 43327):self.assertEqual(prefill_plan(SS, n, avail)['host_bytes'], int(6.25 * 2**30))
 
     def test_byte_formulas_match_producer(self):
         self.assertEqual(carry_bank_bytes(49152), 4536143872)
