@@ -106,6 +106,11 @@ public:
     // Serial export pins the entire
     // completed frontier; failure or cancellation permanently revokes export.
     bool export_native(const consumer &send,std::string &error);
+    // The completed frontier's owner SHA-256s, equal to the owner digests of
+    // its export_native payload. Incremental by default (only rows appended
+    // since the last verified digest are read; `expected` mismatch re-hashes
+    // in full); LLAMADECODE_OWNER_VERIFY=full re-hashes every owner.
+    bool owner_digests(std::vector<std::string> &out,const std::vector<std::string> *expected,std::string &error);
     struct decode_delta {
         llama_dsv41::wire_frontier target;
         std::vector<int32_t> evaluated_tokens;

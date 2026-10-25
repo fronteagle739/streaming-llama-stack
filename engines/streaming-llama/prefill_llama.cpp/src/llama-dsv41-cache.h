@@ -3,6 +3,7 @@
 #include "llama-dsv41-wire.h"
 #include "llama-dsv41-delta.h"
 #include "llama-dsv41-dspark-capture.h"
+#include "llama-dsv41-owner-digest.h"
 #include "ggml-cpp.h"
 
 #include <array>
@@ -83,7 +84,21 @@ public:
         const std::vector<std::string> & target_hashes,
         const llama_dsv41::wire_read_span & read, std::string & error);
 
+    // The frontier's owner SHA-256s (the wire owner_sha256 values). With the
+    // default incremental verify (llama-dsv41-owner-digest.h) only rows added
+    // since the last verified digest are read; if `expected` is given and the
+    // incremental result differs, the owners are re-hashed in full.
+    // LLAMADECODE_OWNER_VERIFY=full always re-hashes every owner.
+    bool owner_digests(const llama_dsv41::wire_frontier & frontier, std::vector<std::string> & out,
+        const std::vector<std::string> * expected, std::string & error);
+    // Drop the incremental digest memo (any path that may rewrite old rows).
+    void forget_owner_digests();
+
 private:
+    llama_dsv41::owner_digest_memo digest_memo;
+    // Owner digests for verify/inspect under execution_mutex (synchronized).
+    std::vector<std::string> owner_digests_locked(const llama_dsv41::wire_plan & plan,
+        const std::vector<std::string> * expected, const char * phase, bool require_capture);
     friend class llama_dsv41_tile_executor;
     // Shared by ALL executors and bounded native readbacks. Once bound, the
     // compute backend must outlive this cache. Clear synchronizes that backend
