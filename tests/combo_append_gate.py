@@ -10,10 +10,10 @@ a turn ended by a client disconnect, each followed by a turn that must append on
 template closing + new message (prefix_source memory-cut-turn, no relaunch).
 
 usage (cwd = the stack repo; GPU must be free; the run takes the RTX hold unless --no-lease):
-  python -B tests/combo_append_gate.py --cfg runtime/cfg-mr.json \
-      --case runtime/case-rn-2000-qa.json --out runtime/append-mr1.json --multirow 1
-  python -B tests/combo_append_gate.py ... --out runtime/append-mr0.json --multirow 0
-  python -B tests/combo_append_gate.py --compare runtime/append-mr0.json runtime/append-mr1.json
+  python -B tests/combo_append_gate.py --cfg <single-engine cfg.json> \
+      --case <case.json> --out <runs>/append-mr1.json --multirow 1
+  python -B tests/combo_append_gate.py ... --out <runs>/append-mr0.json --multirow 0
+  python -B tests/combo_append_gate.py --compare <runs>/append-mr0.json <runs>/append-mr1.json
 """
 import argparse, contextlib, json, os, sys, time
 from pathlib import Path
