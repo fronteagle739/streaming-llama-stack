@@ -53,6 +53,25 @@ class RuntimeTests(unittest.TestCase):
         preset = sr.preset(big, INSTALLED)
         self.assertEqual((preset['name'], preset['rtx']['ctx']), (big['preset_name'], 999424))
 
+    def test_host_registration_config(self):
+        from slstack.combo_producer import host_registration, host_registration_args
+        from slstack.native_profiles import profile
+        today = dict(profile('ultra')['arguments'])
+        self.assertEqual(host_registration(BASE), 'tile')   # absent = today's per-tile registration
+        self.assertEqual(host_registration_args(BASE, dict(today)), today)   # argv unchanged
+        self.assertEqual(host_registration_args(dict(BASE, producer_host_registration='tile'), dict(today)), today)
+        for mode in ('whole', 'tile-async'):
+            args = host_registration_args(dict(BASE, producer_host_registration=mode), dict(today))
+            self.assertEqual(args.pop('--host-registration'), mode)
+            self.assertEqual(args, today)   # nothing else changes; tile registration stays forced on
+            self.assertEqual(args['--tile-host-registration'], '1')
+        for bad in ('async', 'Whole', 1, None):
+            with self.assertRaises(ValueError):host_registration(dict(BASE, producer_host_registration=bad))
+        with self.assertRaises(ValueError):
+            host_registration_args(dict(BASE, producer_host_registration='whole'), dict(today, **{'--tile-host-registration': '0'}))
+        cfg = sr.single_config(dict(BASE, producer_host_registration='whole'), INSTALLED, 'rev')
+        self.assertEqual(cfg['producer_host_registration'], 'whole')   # carried into the installed runtime config
+
     @unittest.skipUnless(STUDIO_NATIVE.exists(), 'needs the Studio checkout')
     def test_studio_argv_launches_the_single_mode(self):
         cfg = sr.single_config(BASE, INSTALLED, 'rev');preset = sr.preset(BASE, INSTALLED)

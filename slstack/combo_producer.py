@@ -50,6 +50,23 @@ def ctx_cache(cfg):
     if growable and cfg.get('producer_keep_alive'):raise ValueError('ctx_cache_growable is not covered by the switch arena (producer_keep_alive)')
     return precision,growable
 
+HOST_REGISTRATION=('tile','whole','tile-async')
+def host_registration(cfg):
+    """LLAMADECODE producer RAM-bank host registration (--host-registration): tile (default, today's
+    per-tile re-registration) | whole (bank registered once per sweep, <=2 GiB segments) | tile-async
+    (<=2 tile spans, next one registered on a helper thread). Arithmetic and payload bytes are unchanged."""
+    value=cfg.get('producer_host_registration','tile')
+    if value not in HOST_REGISTRATION:raise ValueError('producer_host_registration must be tile, whole or tile-async')
+    return value
+
+def host_registration_args(cfg,args):
+    """Producer argv for the mode on top of profile(): tile keeps today's argv exactly."""
+    mode=host_registration(cfg)
+    if mode!='tile':
+        if args.get('--tile-host-registration')!='1':raise ValueError('producer_host_registration '+mode+' needs the profile tile host registration')
+        args['--host-registration']=mode
+    return args
+
 LEGACY_SWEEP=49152
 def carry_bank_bytes(rows):
     """Locked RAM carry bank for `rows` (llama_dsv41_prefill::carry_bank_bytes): 4 KiB header + 32-row pages."""
@@ -125,7 +142,7 @@ class ComboProducer:
         native=runner or _Native();receipt=model_receipt(cfg)
         tier=cfg.get('producer_profile','ultra')
         if tier not in ('accurate','fast','ultra'):raise ValueError('Combo producer profile must be accurate, fast or ultra (original weights; no HYPER)')
-        args=dict(profile(tier)['arguments'])
+        args=host_registration_args(cfg,dict(profile(tier)['arguments']))
         import psutil
         plan=prefill_plan(cfg,len(tokens),psutil.virtual_memory().available);self.prefill_plan=plan;host_bytes=plan['host_bytes']
         if plan['capacity']!=LEGACY_SWEEP:   # absent a raise the argv stays today's exactly

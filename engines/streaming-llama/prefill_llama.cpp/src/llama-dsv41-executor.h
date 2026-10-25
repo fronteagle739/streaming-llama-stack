@@ -4,6 +4,7 @@
 #include "ggml-alloc.h"
 #include "llama-dsv41-layer.h"
 #include "llama-dsv41-carry.h"
+#include "llama-dsv41-host-registration.h"
 
 #include <string>
 #include <memory>
@@ -24,6 +25,8 @@ struct llama_dsv41_fixed_storage {
     uint32_t hidden_rows=0;
     uint32_t bank_rows()const{return hidden_rows?hidden_rows:tokens;}
     bool bf16=false,ids=false,metadata=false,ready=false,tile_registration=false,pageable_copies=false;
+    // LLAMADECODE --host-registration: how tile_registration pins the RAM bank (tile = per tile, today).
+    llama_dsv41_host_registration::mode host_registration=llama_dsv41_host_registration::mode::tile;
     ggml_backend_t backend=nullptr;
     std::shared_ptr<ggml_gallocr> graph;
     std::shared_ptr<ggml_backend_buffer> hidden;
