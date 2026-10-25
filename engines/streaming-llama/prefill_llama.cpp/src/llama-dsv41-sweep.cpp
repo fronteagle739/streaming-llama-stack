@@ -488,6 +488,7 @@ bool llama_dsv41_sweep::suspend_device(std::string&error){
         ggml_backend_synchronize(p->backend);
         // The frontier is given up: nothing may export from this owner again.
         p->published.store(false);p->executor.reset();
+        if(p->cache)p->cache->forget_owner_digests(); // device contents are dropped
         success(p->carry.retire_shared_ram(error),error);
         f.ram->suspend_pages();
         success(p->provider.suspend_device(error),error);
@@ -794,6 +795,21 @@ bool llama_dsv41_sweep::export_native(const consumer&send,std::string&error){
                 std::string read_error;return p->cache->read_native_span(span,offset,dst,bytes,read_error);
             },error),error);
         success(send(reader,error),error);p->check_stop();return true;
+    }catch(const std::exception&failure){p->poison();error=failure.what();return false;}
+}
+
+bool llama_dsv41_sweep::owner_digests(std::vector<std::string>&out,const std::vector<std::string>*expected,std::string&error){
+    std::unique_lock<std::mutex>lock(p->mutex,std::try_to_lock);error.clear();
+    if(!lock.owns_lock()){error="V4.1 sweep/export already owns the frontier";return false;}
+    try{
+        p->check_stop();require(p->state==implementation::completed&&p->published.load()&&p->carry.frontier_ready()&&p->cache,
+            "V4.1 owner digests require a completely certified private frontier");
+        ggml_backend_synchronize(p->backend);
+        const auto position=uint32_t(p->tokens.size());
+        require(!p->options.capture_dspark||p->cache->dspark_ready(position),"DSpark completed layer frontiers disagree with tokens");
+        const llama_dsv41::wire_frontier frontier{p->options.context,position,p->options.capture_dspark?3u:1u,
+            p->options.capture_dspark?position:0u,p->options.capture_dspark?std::min(position,128u):0u};
+        success(p->cache->owner_digests(frontier,out,expected,error),error);p->check_stop();return true;
     }catch(const std::exception&failure){p->poison();error=failure.what();return false;}
 }
 

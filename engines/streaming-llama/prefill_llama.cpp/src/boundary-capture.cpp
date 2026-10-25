@@ -151,6 +151,13 @@ struct file_owner {
 }
 
 std::string sha256(const void *data,size_t bytes){digest d;d.update(data,bytes);return d.finish();}
+namespace {
+digest load(const sha256_state &s){digest d;std::memcpy(d.h,s.h,sizeof d.h);d.block=s.block;d.total=s.total;d.pending=s.pending;return d;}
+void store(const digest &d,sha256_state &s){std::memcpy(s.h,d.h,sizeof s.h);s.block=d.block;s.total=d.total;s.pending=d.pending;}
+}
+sha256_state sha256_begin(){sha256_state s;store(digest{},s);return s;}
+void sha256_update(sha256_state &s,const void *data,size_t bytes){digest d=load(s);d.update(data,bytes);store(d,s);}
+std::string sha256_hex(const sha256_state &s){digest d=load(s);return d.finish();}
 std::string sha256_stream(uint64_t bytes,const std::function<bool(uint64_t,void *,size_t)>&read){
     require(bool(read),"SHA256 stream requires a reader");
     digest d;std::array<unsigned char,65536> page{};
