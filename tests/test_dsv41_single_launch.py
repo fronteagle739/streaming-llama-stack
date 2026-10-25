@@ -104,6 +104,20 @@ class KeptKeyTests(unittest.TestCase):
         self.assertEqual(row['env_overrides']['LLAMADECODE_ENGRAM_CACHE_MB'], '0')
         self.assertEqual(row['producer_host_reserve_gib'], 1)
 
+    def test_stack_single_engine_creates_its_hold_file_on_a_fresh_runtime(self):
+        from slstack.single_runtime import stack_config
+        with tempfile.TemporaryDirectory() as folder:
+            producer = Path(folder) / 'llama-dsv41-prefill.exe'
+            for name in (producer.name, 'ds4-decode.dll', 'dstorage.dll', 'dstoragecore.dll'):
+                (Path(folder) / name).write_bytes(b'x')
+            runtime = Path(folder) / 'runtime'
+            cfg = {**dsv41_single.overlay('262k'), 'llama_producer': str(producer), 'runtime_root': str(runtime),
+                   'ds4_url': 'http://127.0.0.1:8089', 'studio_root': 'vendor/studio', 'host_budget_gib': 8,
+                   'min_available_gib': 2, 'cache_affinity_spread_file': ''}
+            row = stack_config(cfg)
+            self.assertTrue(Path(row['hold_file']).is_file())
+            self.assertEqual(Path(row['hold_file']), runtime.resolve() / 'state' / 'gpu.holds')
+
 
 if __name__ == '__main__':
     unittest.main()

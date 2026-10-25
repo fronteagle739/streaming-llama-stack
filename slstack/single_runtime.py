@@ -93,6 +93,11 @@ def stack_config(cfg):
     if missing:raise ValueError('Single-engine serving needs the built producer files: ' + ', '.join(missing) +
                                 '; run build.ps1 (or start --serving native)')
     runtime = Path(cfg['runtime_root']).resolve()
+    if not cfg.get('hold_file'):
+        # The stack's own hold file: gpu_lease only creates it when no hold_file is named,
+        # and this config names it explicitly, so a fresh clone must create it here.
+        (runtime / 'state').mkdir(parents=True, exist_ok=True)
+        (runtime / 'state' / 'gpu.holds').touch(exist_ok=True)
     port = urlsplit(cfg['ds4_url']).port
     base = {**cfg, 'host': '127.0.0.1', 'port': port, 'producer_profile': cfg.get('producer_profile', 'ultra'),
             'producer_host_budget_gib': cfg.get('producer_host_budget_gib', 6.25), 'context': context(cfg),
