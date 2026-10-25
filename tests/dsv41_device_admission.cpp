@@ -47,6 +47,19 @@ int main() {
         (unsigned long long)plan1m, (unsigned long long)e1m.admitted, (long long)(plan1m - e1m.admitted));
     expect(e262.ok, "EAGER 262K f32: today's args fit the measured admission (cache charged exactly)");
     expect(!e1m.ok, "EAGER 1M bf16: today's args do not fit (no component freed; refused loudly, not shrunk)");
+    // Gate bug (2026-10-25): the second check before the sweep opens compared EAGER free with the fixed job.
+    // EAGER: first free 32252100608 (context + modules 895033344), second free the same.
+    const uint64_t plan262_today = plan262;
+    auto s1 = a::recheck(eager_free, eager_free, job, gib, plan262_today);
+    expect(s1.ok && s1.admitted == eager_free - gib, "EAGER: second check passes on the measured admission (not the fixed job)");
+    auto s2 = a::recheck(eager_free, eager_free - 2000000000ull, job, gib, plan262_today);
+    expect(!s2.ok && s2.admitted == eager_free - 2000000000ull - gib, "a real 2 GB drop between the two measurements is refused");
+    auto s3 = a::recheck(eager_free, eager_free + 100000000ull, job, gib, plan262_today);
+    expect(s3.ok && s3.admitted == eager_free - gib, "a rise between the measurements never admits more than the first");
+    auto s4 = a::recheck(eager_free, gib, job, gib, 1);
+    expect(!s4.ok, "second free not above the reserve is refused");
+    auto s5 = a::recheck(lazy_free, lazy_free, job, gib, 31376429820ull);
+    expect(s5.ok && s5.admitted == job, "LAZY (today): both checks admit the full job bound");
     std::printf("%s %d failures\n", failures ? "FAILED" : "ALL PASS", failures);
     return failures ? 1 : 0;
 }
