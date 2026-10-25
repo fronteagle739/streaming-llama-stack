@@ -76,31 +76,45 @@ def engram_prompt_bytes(rows):
     """Whole-prompt Engram row cache admission (llama_dsv41_prefill::engram_prompt_bytes)."""
     return (4<<20)+rows*48*268
 
-FOLD_CAP=61440   # owner, measured: fold wins at 54,037 and 60,176, loses at 93,668
+HIDE_TOKENS=32768   # owner, measured on the RTX: pass tok/s plateaus and the weight wait settles from ~33K
+HIDDEN_ROW_BYTES,HIDDEN_FIXED_BYTES=51216,65536   # BF16+ID+metadata resident bank layout per row + fixed part
 
-def fold_sweeps(prompt_tokens,sweep,capacity,fold_cap=None,align=4096):
-    """Owner fold rule (llama_dsv41_prefill::fold): primary sweeps of `sweep` tokens; the remainder
-    r = n - k*sweep is folded into the last one, last = sweep + r; n <= sweep is one sweep.
-    last > fold_cap: the remainder is its own sweep (tail). last > capacity but <= fold_cap
-    (RAM-limited): rebalance `last` into m near-equal passes (m from ceil(last / capacity floored to
-    align); every pass but the last is ceil(last/m) rounded up to align, the last takes the rest; m
-    grows while a pass exceeds capacity), never a tiny tail. Returns (sweep sizes, tail, rebalance)."""
-    n=int(prompt_tokens)
-    if n<=sweep:return [n],False,False
-    k,r=divmod(n,sweep)
-    if not r:return [sweep]*k,False,False
-    last=sweep+r
-    if fold_cap and last>fold_cap:return [sweep]*k+[r],True,False
-    if last<=capacity:return [sweep]*(k-1)+[last],False,False
-    grid=capacity//align*align
-    if not grid:raise ValueError('Fold capacity %d is below one %d-token pass'%(capacity,align))
-    m=-(-last//grid)
-    while True:
-        p=-(-(-(-last//m))//align)*align
-        if p<=capacity and p*(m-1)<last:return [sweep]*(k-1)+[p]*(m-1)+[last-p*(m-1)],False,True
-        m+=1
+def hidden_bank_rows(hidden_bytes,tile=4096):
+    """Resident hidden-bank rows the producer's --hidden-device-bytes holds (tile multiples; the
+    producer logs its exact layout count beside it: LLAMADECODE_PREFILL_HIDE_BANK). None/0: 49152."""
+    if not hidden_bytes:return LEGACY_SWEEP
+    return max(tile,(int(hidden_bytes)-HIDDEN_FIXED_BYTES)//HIDDEN_ROW_BYTES//tile*tile)
 
-def prefill_plan(cfg,prompt_tokens,available=None):
+def _hide_try(n,k,limit,h,need_h,align):
+    if k==1:return [n] if n<=limit else None
+    down=n//k//align*align;up=(-(-n//k)+align-1)//align*align
+    for a in (down,up):
+        if not a or a>limit or a*(k-1)>=n:continue
+        last=n-a*(k-1)
+        if last>limit or (need_h and (a<h or last<h)):continue
+        return [a]*(k-1)+[last]
+    return None
+
+def hide_passes(prompt_tokens,capacity,hide,bank,align=4096):
+    """Owner hide plan (llama_dsv41_prefill::plan_hide): "split into smaller ones larger than the
+    stream-behind-compute size". B' = min(bank, capacity); k = ceil(N/B') near-equal passes; if
+    k > 1 and N/k < hide, k-1 passes (folded, each <= capacity) when they fit, else keep k
+    (fold_refused). Non-last passes share one 4096-aligned size, floor(N/k) rounded down (the last
+    is the largest) unless the last would exceed the limit (B', or capacity when folded), then
+    rounded up; passes >= hide wherever N/k allows; k grows if neither fits.
+    Returns (passes, folded, fold_refused)."""
+    n=int(prompt_tokens);bp=min(bank,capacity);k0=-(-n//bp)
+    refused=False
+    if k0>1 and n<hide*k0:
+        p=_hide_try(n,k0-1,capacity,hide,n>=hide,align)
+        if p:return p,True,False
+        refused=True
+    for k in range(k0,max(k0,n//align+1)+1):
+        p=_hide_try(n,k,bp,hide,n>=hide*k,align)
+        if p:return p,False,refused
+    raise ValueError('Hide plan refused: no pass size fits capacity %d'%capacity)
+
+def prefill_plan(cfg,prompt_tokens,available=None,bank_rows=None):
     """LLAMADECODE single sweep (owner: one prompt = one weight sweep). The producer's capacity C
     (--prefill-chunk-tokens) is sized from the prompt: C = max(49152, prompt), raising the producer
     host budget by exactly the extra carry bank + Engram bytes, up to producer_host_max_gib (default:
@@ -111,10 +125,10 @@ def prefill_plan(cfg,prompt_tokens,available=None):
     2026-10-25: no fixed free-RAM stop, the rule is no paging), so the working set plus everything
     else fits physical RAM and stays resident (hard-minimum working set); the budget is
     page-rounded (Windows keeps a hard-minimum working set only in whole pages).
-    producer_prefill_sweep_tokens S (absent = the above): the owner fold policy instead; S-token
-    sweeps with the remainder folded into the last (fold_sweeps), C = the largest sweep (at least
-    49152), the same host raise for C; when the folded sweep cannot fit the cap, or exceeds the fold
-    cap producer_prefill_fold_cap_tokens (default 61440), the remainder is its own sweep."""
+    producer_prefill_hide_tokens H (or the superseded producer_prefill_sweep_tokens, whose S and fold
+    cap are now ignored): the owner hide plan instead (hide_passes) with the bank rows B (bank_rows,
+    from the profile's --hidden-device-bytes); C = max(49152, min(B, cap), the largest pass), the
+    same host raise for C."""
     base=int(cfg.get('producer_host_budget_gib',8)*(1<<30))
     top=int(cfg.get('producer_host_max_gib',cfg.get('producer_host_budget_gib',8))*(1<<30))
     if top<base:raise ValueError('producer_host_max_gib is below producer_host_budget_gib')
@@ -130,9 +144,8 @@ def prefill_plan(cfg,prompt_tokens,available=None):
     extra=lambda c:(carry_bank_bytes(c)-carry_bank_bytes(LEGACY_SWEEP),engram_prompt_bytes(c)-engram_prompt_bytes(LEGACY_SWEEP))
     limit=min(1<<20,int(cfg['context'])-1)
     want=min(max(LEGACY_SWEEP,int(prompt_tokens)),limit)
-    fold=cfg.get('producer_prefill_sweep_tokens')
-    if fold is not None:
-        return fold_plan(cfg,prompt_tokens,available,fold,base,top,capped_by,extra,limit)
+    if cfg.get('producer_prefill_hide_tokens') is not None or cfg.get('producer_prefill_sweep_tokens') is not None:
+        return hide_plan(cfg,prompt_tokens,available,base,top,capped_by,extra,limit,bank_rows)
     if base+sum(extra(want))>top:   # the largest whole-page capacity under the cap
         lo,hi=LEGACY_SWEEP,want
         while lo<hi:
@@ -152,10 +165,13 @@ def prefill_plan(cfg,prompt_tokens,available=None):
                 reason=None if single else 'one sweep of %d tokens needs %d host bytes; the cap is %d (%s); near-equal sweeps of %d'%(
                     int(prompt_tokens),base+sum(extra(min(max(LEGACY_SWEEP,int(prompt_tokens)),limit))),top,capped_by,want))
 
-def fold_plan(cfg,prompt_tokens,available,sweep,base,top,capped_by,extra,limit):
-    """prefill_plan under producer_prefill_sweep_tokens (the owner fold policy)."""
-    if type(sweep) is not int or sweep<=0 or sweep%4096 or sweep>limit:
-        raise ValueError('producer_prefill_sweep_tokens must be a positive multiple of 4096 within the context')
+def hide_plan(cfg,prompt_tokens,available,base,top,capped_by,extra,limit,bank_rows=None):
+    """prefill_plan under producer_prefill_hide_tokens (the owner hide plan)."""
+    hide=cfg.get('producer_prefill_hide_tokens',HIDE_TOKENS)
+    if type(hide) is not int or not 0<hide<=limit:raise ValueError('producer_prefill_hide_tokens must be a positive token count within the context')
+    bank=LEGACY_SWEEP if bank_rows is None else int(bank_rows)
+    if not 0<bank<=1<<20:raise ValueError('Hide plan bank rows must be positive')
+    ignored={k:cfg[k] for k in ('producer_prefill_sweep_tokens','producer_prefill_fold_cap_tokens') if k in cfg}
     cap=limit
     if base+sum(extra(cap))>top:   # the largest capacity under the host cap (same search as prefill_plan)
         lo,hi=LEGACY_SWEEP,cap
@@ -164,23 +180,18 @@ def fold_plan(cfg,prompt_tokens,available,sweep,base,top,capped_by,extra,limit):
             if base+sum(extra(mid))<=top:lo=mid
             else:hi=mid-1
         cap=lo
-    fold_cap=cfg.get('producer_prefill_fold_cap_tokens',FOLD_CAP)
-    if type(fold_cap) is not int or fold_cap<=0:raise ValueError('producer_prefill_fold_cap_tokens must be a positive token count')
     n=int(prompt_tokens)
-    if n>sweep and sweep>cap:
-        raise ValueError('producer_prefill_sweep_tokens %d exceeds the largest capacity %d under the cap (%s)'%(sweep,cap,capped_by))
-    sweeps,tail,rebalance=fold_sweeps(n,sweep,cap,fold_cap)
-    want=max(LEGACY_SWEEP,max(sweeps))
+    passes,folded,refused=hide_passes(n,cap,hide,bank)
+    # The producer re-plans with this C; min(B, cap) keeps its B' = min(B, C) equal to this plan's.
+    want=min(limit,max(LEGACY_SWEEP,min(bank,cap),max(passes)))
     carry,engram=extra(want)
     host=base+carry+engram
     if host!=base:host=-(-host//65536)*65536   # whole pages (64 KiB) for the hard-minimum working set
     return dict(capacity=want,host_bytes=host,carry_delta=carry,engram_delta=engram,base_host_bytes=base,max_host_bytes=top,
-                available_bytes=available,capped_by=capped_by,prompt_tokens=n,single_sweep=len(sweeps)==1,
-                policy='fold',sweep_tokens=sweep,sweeps=sweeps,fold_tail=tail,fold_cap=fold_cap,rebalance=rebalance,
-                reason='fold: last sweep %d + %d = %d exceeds the fold cap %d; the %d-token remainder is its own sweep'%(
-                    sweep,sweeps[-1],sweep+sweeps[-1],fold_cap,sweeps[-1]) if tail else
-                    'fold: last sweep %d exceeds the largest capacity %d (%s); rebalanced into %s'%(
-                    sum(sweeps[n//sweep-1:]),cap,capped_by,'+'.join(map(str,sweeps[n//sweep-1:]))) if rebalance else None)
+                available_bytes=available,capped_by=capped_by,prompt_tokens=n,single_sweep=len(passes)==1,
+                policy='hide',hide_tokens=hide,bank_rows=bank,sweeps=passes,folded=folded,fold_refused=refused,ram_capacity=cap,ignored=ignored,
+                reason='hide: %d passes of %d tokens are below hide %d but %d passes do not fit the capacity %d (%s)'%(
+                    len(passes),min(passes),hide,len(passes)-1,cap,capped_by) if refused else None)
 
 def stall_seconds(cfg):
     """No-progress window for a producer operation. A long operation (a 262K-token prefill, a long
@@ -210,16 +221,17 @@ class ComboProducer:
         if tier not in ('accurate','fast','ultra'):raise ValueError('Combo producer profile must be accurate, fast or ultra (original weights; no HYPER)')
         args=host_registration_args(cfg,dict(profile(tier)['arguments']))
         import psutil
-        plan=prefill_plan(cfg,len(tokens),psutil.virtual_memory().available);self.prefill_plan=plan;host_bytes=plan['host_bytes']
+        plan=prefill_plan(cfg,len(tokens),psutil.virtual_memory().available,hidden_bank_rows(int(args.get('--hidden-device-bytes',0))));self.prefill_plan=plan;host_bytes=plan['host_bytes']
         if plan['capacity']!=LEGACY_SWEEP:   # absent a raise the argv stays today's exactly
             args['--prefill-chunk-tokens']=str(plan['capacity']);args['--job-host-bytes']=str(host_bytes)
             for key,delta in (('--carry-host-bytes',plan['carry_delta']),('--provider-host-bytes',plan['engram_delta']),('--engram-prefetch-bytes',plan['engram_delta'])):
                 args[key]=str(int(args[key])+delta)
-        if plan.get('policy')=='fold':   # owner fold policy: S-token sweeps, remainder folded into the last
-            args['--prefill-sweep-tokens']=str(plan['sweep_tokens']);args['--prefill-fold-cap-tokens']=str(plan['fold_cap'])
-            print('LLAMADECODE_PREFILL_FOLD sweep_tokens=%s primary_sweep_tokens=%d capacity=%d fold_cap=%d rebalance=%d%s'%(','.join(map(str,plan['sweeps'])),plan['sweep_tokens'],plan['capacity'],plan['fold_cap'],int(plan['rebalance']),
-                ' reason='+plan['reason'] if plan['rebalance'] else ''),flush=True)
-            if plan['fold_tail']:print('LLAMADECODE_PREFILL_FOLD_TAIL '+plan['reason'],flush=True)
+        if plan.get('policy')=='hide':   # owner hide plan: near-equal passes in [hide, min(bank, C)]
+            args['--prefill-hide-tokens']=str(plan['hide_tokens']);args['--prefill-bank-tokens']=str(plan['bank_rows'])
+            print('LLAMADECODE_PREFILL_HIDE policy=hide hide_tokens=%d bank_rows=%d passes=%d sweep_tokens=%s folded=%d fold_refused=%d capacity=%d ram_capacity=%d%s'%(
+                plan['hide_tokens'],plan['bank_rows'],len(plan['sweeps']),','.join(map(str,plan['sweeps'])),int(plan['folded']),int(plan['fold_refused']),plan['capacity'],plan['ram_capacity'],
+                ' ignored='+','.join('%s=%s'%kv for kv in plan['ignored'].items()) if plan['ignored'] else ''),flush=True)
+            if plan['fold_refused']:print('LLAMADECODE_PREFILL_HIDE_FOLD_REFUSED '+plan['reason'],flush=True)
         elif not plan['single_sweep']:print('LLAMADECODE_PREFILL_SINGLE_SWEEP_REFUSED '+plan['reason'],flush=True)
         print('LLAMADECODE_PREFILL_BUDGET '+json.dumps(plan),flush=True)
         precision,growable=ctx_cache(cfg)
