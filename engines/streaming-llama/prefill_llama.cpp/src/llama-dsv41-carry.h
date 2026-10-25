@@ -112,6 +112,7 @@ public:
         // Absolute, exclusive-new file in an existing physical directory.
         std::string path;
         uint32_t tokens = 0;
+        uint32_t yoco_first=0; // decoder output coverage [first,tokens)
         uint64_t admitted_file_bytes = 0;
         uint64_t admitted_host_bytes = 0;
         // Other not-yet-allocated payloads admitted on THIS actual volume.
@@ -164,6 +165,7 @@ public:
     // Retire a completed one-token view before reusing its pre-registered bank.
     // Invalidate it first; live/seeding/incomplete leases cannot release credit.
     bool retire_shared_ram(std::string &error);
+    bool retire_yoco_encoder(std::string &error);
 
     // Seed contiguous pages once; ID widths must initially be zero. All four
     // hidden copies and all four previous-pre values are supplied explicitly.
@@ -193,8 +195,8 @@ public:
     bool acquire_ram_export(uint32_t start,uint32_t count,ram_lease &lease,std::string &error);
     bool complete_ram_export(const ram_lease &lease,const ram_completion &completion,std::string &error);
 
-    // Available only after all 40 layers. Head computation may read any
-    // bounded final range; it need not compute unused per-prompt logits.
+    // Available only after all 40 layers in their admitted coverage. Head
+    // computation may read a bounded range within the computed suffix.
     bool read_final_tile(uint32_t start, uint32_t count, tile & output,
                          std::string & error);
     // Caller MUST synchronize the actual head/native-cache frontier first.

@@ -47,6 +47,12 @@ struct completion {
         (void)plan(start,count);
         pending=true;active={slot,start,count,++serial};return active;
     }
+    ticket begin_replay(uint32_t slot,uint32_t start,uint32_t count){
+        if(pending||slot>=slots||ends[slot]>start||count<capacity)
+            throw std::runtime_error("YOCO capture requires a complete replacement ring");
+        (void)plan(start,count);
+        pending=true;active={slot,start,count,++serial};return active;
+    }
     void commit(const ticket&t){
         if(!pending||t.serial!=active.serial||t.slot!=active.slot||
            t.start!=active.start||t.count!=active.count)

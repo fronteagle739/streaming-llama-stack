@@ -399,7 +399,7 @@ void run_live_session(std::unique_ptr<llama_dsv41_sweep>&sweep,
     // against) turns a mismatch into a full re-hash before it is reported.
     // LLAMADECODE_OWNER_VERIFY=full: the previous full payload capture.
     auto inspect=[&](const checkpoint*expect=nullptr){checkpoint c;std::string error;const bool incremental=owner_verify_incremental();
-        success(sweep->export_native([&](wire_payload_reader&r,std::string&why){try{c=dsv41_live::capture(r,[]{return should_stop();},!incremental);return true;}catch(const std::exception&e){why=e.what();return false;}},error),error);
+        success(sweep->inspect_local([&](wire_payload_reader&r,std::string&why){try{c=dsv41_live::capture(r,[]{return should_stop();},!incremental);return true;}catch(const std::exception&e){why=e.what();return false;}},error),error);
         if(incremental){
             const bool same=expect&&expect->frontier.context==c.frontier.context&&expect->frontier.position==c.frontier.position&&expect->frontier.mode==c.frontier.mode;
             success(sweep->owner_digests(c.owners,same?&expect->owners:nullptr,error),error);c=checkpoint::from_json(c.describe());
@@ -408,7 +408,7 @@ void run_live_session(std::unique_ptr<llama_dsv41_sweep>&sweep,
     current=inspect();
     send({{"status","ready"},{"session",session},{"model_sha256",model_sha},{"next_sequence",guard.expected()},
         {"checkpoint",current.describe()},{"maximum_prefill_tokens",std::min(capacity,llama_dsv41_prefill::legacy_sweep_tokens)},{"maximum_prefill_sweep_tokens",capacity},{"maximum_decode_tokens",llama_dsv41::decode_delta_chunk_tokens},{"maximum_decode_delta_tokens",llama_dsv41::decode_delta_max_tokens},{"control_host_bytes",64*1024*1024},
-        {"transport","private owned pipes; existing native payload and artifact v2.1 delta"}});
+        {"yoco_keep",options.yoco_keep},{"transport",options.yoco_keep?"local approximate state; remote export disabled":"private owned pipes; existing native payload and artifact v2.1 delta"}});
     for(;;){
         io.renew();auto command=dsv41_live::parse_control(io.line());guard.accept(command);if(owner_epoch)command.erase("owner_epoch");
         const auto operation=command.at("operation").get<std::string>();const auto sequence=dsv41_live::u64(command.at("sequence"));
@@ -439,7 +439,7 @@ void run_live_session(std::unique_ptr<llama_dsv41_sweep>&sweep,
             require(tokens.size()<uint64_t(options.context)-incoming.base.frontier.position,"Resume prefill exceeds context capacity");
             const double base_ms=ms(started)-resume_ms;
             auto previous=std::move(sweep);sweep.reset(new llama_dsv41_sweep);auto next_options=options;auto next_weights=weights;
-            next_options.carry.tokens=uint32_t(tokens.size());if(next_weights.engram_prefetch_host_bytes)next_weights.engram_prefetch_tokens=uint32_t(tokens.size());
+            next_options.yoco_logical_begin=next_options.yoco_logical_end=0;next_options.carry.tokens=uint32_t(tokens.size());if(next_weights.engram_prefetch_host_bytes)next_weights.engram_prefetch_tokens=uint32_t(tokens.size());
             success(sweep->open(next_weights,next_options,error,previous.get(),nullptr,&incoming.base),error);incoming.finish();previous.reset();
             const double admission_ms=ms(started)-resume_ms-base_ms;
             success(sweep->run(tokens,[]{return should_stop();},error),error);const auto timing=sweep->timing();
@@ -483,6 +483,7 @@ void run_live_session(std::unique_ptr<llama_dsv41_sweep>&sweep,
             reply({{"peer_synchronized",!awaiting_ack}});
         }else if(operation=="export_initial"||operation=="export_delta"){
             dsv41_live::keys(command,{"session","model_sha256","sequence","operation","base"});same_base();
+            require(!options.yoco_keep,"YOCO refuses RTX/Mac session export; re-prefill with YOCO off");
             const bool initial=operation=="export_initial";
             require(!awaiting_ack,"Previous state transfer awaits an exact acknowledgement");
             require(initial?(!initial_sent&&!have_remote):(have_remote&&remote.frontier.position<current.frontier.position),"Full resend or delta without an acknowledged base refused");
@@ -554,7 +555,7 @@ void run_live_session(std::unique_ptr<llama_dsv41_sweep>&sweep,
                     continue;
                 }
                 auto previous=std::move(sweep);sweep.reset(new llama_dsv41_sweep);auto next_options=options;auto next_weights=weights;
-                next_options.carry.tokens=1;if(next_weights.engram_prefetch_host_bytes)next_weights.engram_prefetch_tokens=1;
+                next_options.yoco_logical_begin=next_options.yoco_logical_end=0;next_options.operation=llama_dsv41_yoco::operation::decode;next_options.carry.tokens=1;if(next_weights.engram_prefetch_host_bytes)next_weights.engram_prefetch_tokens=1;
                 next_weights.decode_layout=routed_decode_layout(); // LLAMADECODE B1: routed-expert fetch
                 {decode_quiet_scope quiet;
                 success(sweep->open(next_weights,next_options,error,nullptr,previous.get()),error);require(!previous->ready(),"Transferred prefix still publishes");previous.reset();
@@ -604,7 +605,7 @@ void run_live_session(std::unique_ptr<llama_dsv41_sweep>&sweep,
                     continue;
                 }
                 auto previous=std::move(sweep);sweep.reset(new llama_dsv41_sweep);auto next_options=options;auto next_weights=weights;
-                next_options.carry.tokens=1;if(next_weights.engram_prefetch_host_bytes)next_weights.engram_prefetch_tokens=1;
+                next_options.yoco_logical_begin=next_options.yoco_logical_end=0;next_options.operation=llama_dsv41_yoco::operation::decode;next_options.carry.tokens=1;if(next_weights.engram_prefetch_host_bytes)next_weights.engram_prefetch_tokens=1;
                 next_weights.decode_layout=routed_decode_layout(); // LLAMADECODE B1: routed-expert fetch
                 {decode_quiet_scope quiet;
                 success(sweep->open(next_weights,next_options,error,nullptr,previous.get()),error);require(!previous->ready(),"Transferred prefix still publishes");previous.reset();
@@ -646,7 +647,7 @@ void run_live_session(std::unique_ptr<llama_dsv41_sweep>&sweep,
             // its open, start_request and layer-0 weight fetch (off: no-op).
             {std::string early_error;success(sweep->start_append_engram(tokens,early_error),early_error);}
             auto previous=std::move(sweep);sweep.reset(new llama_dsv41_sweep);auto next_options=options;auto next_weights=weights;
-            next_options.carry.tokens=uint32_t(tokens.size());if(next_weights.engram_prefetch_host_bytes)next_weights.engram_prefetch_tokens=uint32_t(tokens.size());
+            next_options.yoco_logical_begin=next_options.yoco_logical_end=0;next_options.carry.tokens=uint32_t(tokens.size());if(next_weights.engram_prefetch_host_bytes)next_weights.engram_prefetch_tokens=uint32_t(tokens.size());
             std::string error;success(sweep->open(next_weights,next_options,error,nullptr,previous.get()),error);require(!previous->ready(),"Transferred prefix still publishes");previous.reset();
             const double admission_ms=ms(started);success(sweep->run(tokens,[]{return should_stop();},error),error);const auto timing=sweep->timing();
             const uint32_t before=current.frontier.position;current=inspect();require(current.frontier.position==before+tokens.size(),"Live prefill position did not advance exactly");

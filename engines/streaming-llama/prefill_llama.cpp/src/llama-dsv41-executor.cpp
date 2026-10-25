@@ -322,7 +322,7 @@ struct llama_dsv41_tile_executor::resident_storage {
     uint32_t metadata_rows=0;
     uint32_t selected_source=UINT32_MAX,candidate_source=UINT32_MAX,selected_width=0,candidate_width=0;
     ggml_backend_t backend=nullptr;
-    uint32_t tokens=0,total_tokens=0,layer=0,cursor=0,export_cursor=0;
+    uint32_t tokens=0,total_tokens=0,layer=0,cursor=0,export_cursor=0,yoco_first=0;
     // LLAMADECODE single sweep: tokens = physical bank rows. With spill, logical
     // rows >= spill_start live in their RAM carry records between layers and
     // pass through the bank's last tile (physical rows spill_start..tokens).
@@ -749,7 +749,7 @@ bool llama_dsv41_tile_executor::resident_head_row(llama_dsv41_carry_store::tile 
         workspace.reset();ggml_backend_synchronize(backend);
         out.start=resident->total_tokens-1;out.count=1;out.residual.resize(5120*4);out.previous_pre.resize(4);
         // A spilled last row is still in the slot from layer 39 (its tile ran last).
-        const uint32_t tile_first=resident->spilled(out.start)?resident->spill_start+(out.start-resident->spill_start)/admitted_tile_tokens*admitted_tile_tokens:out.start;
+        const uint32_t tile_first=resident->spilled(out.start)?(resident->yoco_first?resident->slot_logical:resident->spill_start+(out.start-resident->spill_start)/admitted_tile_tokens*admitted_tile_tokens):out.start;
         require(!resident->spilled(out.start)||resident->slot_logical==tile_first,"Spilled last row left the staging slot before the head");
         const uint32_t row_at=resident->spilled(out.start)?resident->spill_start+(out.start-tile_first):out.start;
         if(resident_bf16){
@@ -774,7 +774,7 @@ bool llama_dsv41_tile_executor::export_hidden_tile(const llama_dsv41_carry_store
             resident->full()&&!lease.seeding&&lease.base==pinned->base&&lease.bytes==pinned->bytes&&
             lease.store_id&&lease.generation&&lease.first==resident->export_cursor&&lease.rows&&lease.rows<=admitted_tile_tokens&&
             lease.first<resident->total_tokens&&lease.rows<=resident->total_tokens-lease.first&&
-            (resident->spilled(lease.first)?(lease.first-resident->spill_start)%admitted_tile_tokens==0:lease.rows<=resident->tokens-lease.first),
+            (resident->spilled(lease.first)?((lease.first-resident->spill_start)%admitted_tile_tokens==0||lease.first==resident->yoco_first):lease.rows<=resident->tokens-lease.first),
             "Final hidden export lost its full device bank or exact contiguous lease");
         (void)lease.row(0);(void)lease.row(lease.rows-1);
         pinned->bind_lease(lease);
@@ -847,7 +847,9 @@ bool llama_dsv41_tile_executor::run(const request&in,const llama_dsv41_layer_gra
     try{
         collect_layer=in.layer;collect_rows=in.count;
         const auto prepare_started=clock_type::now();
+        const bool merge_rows=merge_attention_selected_rows&&!in.yoco_raw_begin;
         const bool capture_dspark=cache.dspark_ring&&in.layer>=37;
+        require(!in.yoco_first || (in.layer>20&&in.start>=in.yoco_first&&in.count<=140),"Invalid YOCO decoder coverage");
         llama_dsv41_dspark_capture::completion::ticket capture_ticket;
         require(!capture_dspark||!workspace||!workspace->cache_layouts,"DSpark ring writes require fresh graph bindings");
 
@@ -870,7 +872,7 @@ bool llama_dsv41_tile_executor::run(const request&in,const llama_dsv41_layer_gra
         require(!in.position_offset||!workspace||!workspace->cache_layouts,"Offset chunks require allocator-only graph mode");
         require(!in.single_attention_append||(pair_ffn&&in.position_offset%4096&&in.start%2048==0&&in.count<=2048&&admitted_tile_tokens>=4096&&workspace&&!workspace->cache_layouts),
             "Unaligned paired continuation requires explicit bounded single-attention tiles");
-        require(!pair_ffn||absolute_start%4096==0||in.single_attention_append,"Paired FFN requires original aligned absolute attention tiles");
+        require(!pair_ffn||absolute_start%4096==0||in.single_attention_append||in.yoco_raw_begin,"Paired FFN requires original aligned absolute attention tiles");
         const bool native_pair=pair_ffn&&llama_dsv41_expert_profile::natural_half(expert);
         const uint32_t attention_rows=native_pair?2048u:4096u;
         require(!pair_ffn||(native_pair?(admitted_tile_tokens==4096&&in.count<=4096):
@@ -914,6 +916,10 @@ bool llama_dsv41_tile_executor::run(const request&in,const llama_dsv41_layer_gra
 #else
         require(!in.lookahead,"RAM lookahead requires CUDA prefetch");
 #endif
+        if(resident&&in.yoco_first&&in.layer==resident->layer&&resident->cursor==0){
+            require(in.layer>=21&&in.start==in.yoco_first&&in.yoco_first<resident->total_tokens,"YOCO resident layer coverage changed");
+            resident->cursor=in.yoco_first;resident->yoco_first=in.yoco_first;
+        }
         if(resident)require(in.layer==resident->layer&&in.start==resident->cursor&&
             in.start<resident->total_tokens&&in.count<=resident->total_tokens-in.start,
             "Resident hidden layer/tile lifetime changed");
@@ -928,9 +934,16 @@ bool llama_dsv41_tile_executor::run(const request&in,const llama_dsv41_layer_gra
         const uint32_t ratio=in.layer<2?0:in.layer<20?2:1;
         const bool zero_kinds=resident_metadata&&std::all_of(in.token_kinds.begin(),in.token_kinds.end(),[](int32_t k){return k==0;});
         const bool all_text=resident_metadata&&engram_layer(in.layer)&&std::all_of(in.text_mask.begin(),in.text_mask.end(),[](int8_t k){return k==1;});
-        const bool raw_template=resident_metadata&&absolute_start>=128&&absolute_start%128==0;
+        const bool raw_template=!in.yoco_raw_begin&&resident_metadata&&absolute_start>=128&&absolute_start%128==0;
         require(!resident_metadata||(resident&&in.count<=resident->metadata_rows),"Resident metadata tile exceeds initialized capacity");
-        const llama_dsv41_tile_plan p(absolute_start,in.count,cache.capacity(),ratio,admitted_tile_tokens,raw_template);
+        llama_dsv41_tile_plan p(absolute_start,in.count,cache.capacity(),ratio,admitted_tile_tokens,raw_template);
+        if(in.yoco_raw_begin){
+            require(in.layer>20&&in.yoco_raw_begin<=absolute_start,"YOCO raw coverage is invalid");
+            // Build a chronological raw table containing only valid replay
+            // rows. The token-tile kernel uses relative raw positions; RoPE,
+            // publication and compressed visibility remain absolute.
+            p.restrict_raw(in.yoco_raw_begin,admitted_tile_tokens);
+        }
         weights_present(w,in.layer);
         require(direct_input?(in.residual.empty()&&in.previous_pre.empty()):
                 (in.residual.size()==size_t(5120)*4*in.count&&in.previous_pre.size()==size_t(4)*in.count),
@@ -1082,7 +1095,7 @@ bool llama_dsv41_tile_executor::run(const request&in,const llama_dsv41_layer_gra
         }
 
         llama_dsv41_graph_ops ops(ctx.get(),norm_eps,hc_eps,sinkhorn_iters,boundary_observer);
-        ops.merge_attention_selected_rows(merge_attention_selected_rows,ratio);
+        ops.merge_attention_selected_rows(merge_rows,ratio);
         ops.use_hc_projection_f16_gemm(hc_projection_f16_gemm);ops.use_hc_bf16_epilogue(expert.hc_bf16_epilogue);
         require(!merge_attention_selected_rows||expert.token_tile_attention,"Selected-row union requires explicit token-tile attention");
         llama_dsv41_layer_graph factory(ctx.get(),graph,ops,swiglu_limit,expert_scale);
@@ -1091,7 +1104,7 @@ bool llama_dsv41_tile_executor::run(const request&in,const llama_dsv41_layer_gra
             ggml_set_input(expert_slot_input);routed_weights.ffn.expert_slots=expert_slot_input;}
         values=pair_ffn?factory.build_pair(in.layer,p,in.compressed_rows,routed_weights,input,state,expert):factory.build(in.layer,p,in.compressed_rows,routed_weights,input,state,expert);
         if(capture_dspark){
-            capture_ticket=cache.dspark_completion.begin(in.layer-37,in.position_offset+in.start,in.count);
+            capture_ticket=in.yoco_raw_begin?cache.dspark_completion.begin_replay(in.layer-37,in.position_offset+in.start,in.count):cache.dspark_completion.begin(in.layer-37,in.position_offset+in.start,in.count);
             llama_dsv41_dspark_capture::enqueue(ctx.get(),graph,cache.dspark_ring,values.dspark_mean,
                 capture_ticket.slot,capture_ticket.start,capture_ticket.count);
         }
@@ -1421,7 +1434,7 @@ bool llama_dsv41_tile_executor::run(const request&in,const llama_dsv41_layer_gra
         const auto f16_table_before=expert.attention_kv_f16_table?ggml_backend_cuda_dsv41_token_f16_table_queued():0;
         const bool attention_g16=std::getenv("LLAMA_DSV41_ATTN_G16")&&std::string(std::getenv("LLAMA_DSV41_ATTN_G16"))=="1";
         const auto attention_g16_before=attention_g16?ggml_backend_cuda_dsv41_token_tile_g16_queued():0;
-        const auto union_before=merge_attention_selected_rows?ggml_backend_cuda_dsv41_token_union_queued():0;
+        const auto union_before=merge_rows?ggml_backend_cuda_dsv41_token_union_queued():0;
         const auto expert_cublas_before=expert.expert_f16_cublas?ggml_backend_cuda_dsv41_expert_cublas_queued():0;
         const auto expert_fp4_before=expert.expert_mxfp4?ggml_backend_cuda_native_mxfp4_routed_queued():0;
         const auto hc_expand_before=ggml_backend_cuda_dsv41_hc_expand_queued();
@@ -1586,7 +1599,7 @@ bool llama_dsv41_tile_executor::run(const request&in,const llama_dsv41_layer_gra
                 require(ggml_backend_cuda_dsv41_token_tile_g16_queued()==attention_g16_before+attention_tiles,"Actual G16 attention dispatch coverage differs");
                 llama_dsv41_layer_log("DS4PERF_ATTN_G16_COMPLETE layer=%u start=%u count=%u actual=%u R32=1 inactive_KV_score_alias=1 smem_bytes=77824 original_weights=1\n",in.layer,in.start,in.count,attention_tiles);
             }
-            if(merge_attention_selected_rows){require(ggml_backend_cuda_dsv41_token_union_queued()==union_before+(selected_width?attention_tiles:0),"Actual shared selected-row union dispatch witness differs");
+            if(merge_rows){require(ggml_backend_cuda_dsv41_token_union_queued()==union_before+(selected_width?attention_tiles:0),"Actual shared selected-row union dispatch witness differs");
                 llama_dsv41_layer_log("DS4PERF_TOKEN_UNION_COMPLETE layer=%u start=%u count=%u actual=%u packed_mask_bits=4\n",in.layer,in.start,in.count,unsigned(selected_width?attention_tiles:0));}
             llama_dsv41_layer_log("DS4PERF_TOKEN_TILE_COMPLETE layer=%u start=%u count=%u actual=%u half_probabilities=1 original_F32_sinks=1 canonical_caches_unchanged=1\n",in.layer,in.start,in.count,attention_tiles);
         }
@@ -1716,6 +1729,7 @@ bool llama_dsv41_tile_executor::run(const request&in,const llama_dsv41_layer_gra
                     if(in.layer==20){resident->candidate_source=20;resident->candidate_width=candidate_width;}
                 }
                 resident->cursor=0;++resident->layer;
+                if(resident->layer==40)resident->export_cursor=resident->yoco_first;
             }
         }
         if(resident_ids)llama_dsv41_layer_log("DS4PERF_RESIDENT_IDS_COMPLETE layer=%u start=%u count=%u selected_width=%u candidate_width=%u avoided_H2D_bytes=%llu source_copy_bytes=%llu validated=1 RAM_mirror=1 existing_buffer=1\n",

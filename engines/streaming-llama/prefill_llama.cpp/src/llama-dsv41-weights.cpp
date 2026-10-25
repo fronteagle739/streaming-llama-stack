@@ -583,6 +583,10 @@ void llama_dsv41_weight_provider::implementation::create_pipeline(){
         if(!p->options.compute_direct)wf_set_gpu_buf_ptr(p->fetcher,int(i),ggml_backend_buffer_get_base(b.get()));p->buffers.push_back(std::move(b));
     }
     for(uint32_t i=0;i<p->stage_count();++i){std::vector<wf_weight_span>spans;p->spans_for(p->stage_at(i),spans);wf_register_layer(p->fetcher,int(i),spans.data(),int(spans.size()),p->stage_at(i).bytes);}
+    if(p->options.yoco_encoder_only){
+        require(!p->decode_layout&&!p->options.ds_gpu_ring_slots,"YOCO requires non-ring prefill streaming");
+        for(uint32_t i=22;i<42;++i)require(wf_set_layer_skipped(p->fetcher,int(i),true),"YOCO fetch omission refused");
+    }
     if(p->decode_layout){
         for(uint32_t i=0;i<82;++i)require(wf_set_layer_persistent(p->fetcher,int(i),true),"Resident decode stage refused by the fetcher");
         require(p->buffers.size()==2,"Decode expert cache requires the two direct banks");
@@ -615,6 +619,10 @@ bool llama_dsv41_weight_provider::restart_prompt(const config&options,std::strin
     require(!options.engram_prefetch_host_bytes||(options.engram_prefetch_tokens&&
         4ull*1024*1024+uint64_t(options.engram_prefetch_tokens)*48*(4+264)<=options.engram_prefetch_host_bytes),"Restarted prompt exceeds admitted immutable row-cache capacity");
     p->identity();wf_stop(p->fetcher);wf_quiesce(p->fetcher);p->mark_weight_stream(false);require(!wf_has_failed(p->fetcher),"Completed provider could not quiesce before request reuse");
+    require(!options.yoco_encoder_only||(!options.decode_layout&&!options.ds_gpu_ring_slots),"YOCO encoder cannot use decode/ring fetch layout");
+    if(!p->decode_layout && options.decode_layout==p->decode_layout && options.yoco_encoder_only!=p->options.yoco_encoder_only)
+        for(uint32_t i=22;i<42;++i)require(wf_set_layer_skipped(p->fetcher,int(i),options.yoco_encoder_only),"YOCO pass fetch mask change refused");
+    p->options.yoco_encoder_only=options.yoco_encoder_only;
     if(options.decode_layout!=p->decode_layout){
         // LLAMADECODE B1: rebuild the same admitted pipeline with the other stage
         // layout. Same banks/staging/admission; only stage registration differs.
@@ -633,6 +641,14 @@ bool llama_dsv41_weight_provider::restart_prompt(const config&options,std::strin
     p->engram_prompt.reset();p->options.engram_prefetch_tokens=options.engram_prefetch_tokens;p->next=0;
     for(const auto&s:p->stages)for(const auto&e:s.entries)require(!e.t->data&&!e.t->buffer,"Completed pass retained a stale staged tensor");
     llama_dsv41_layer_log("DS4PERF_PROVIDER_REUSED buffers=%u compute_buffer_bytes=%llu model_lease=1 heaps=1 request_arrays=1 starts_in_timed_run=1\n",p->options.buffers,(unsigned long long)p->planned.compute_buffer_bytes);
+},error);}
+bool llama_dsv41_weight_provider::finish_yoco_encoder(std::string&error){return p->guard([&]{
+    require(p->options.yoco_encoder_only&&!p->decode_layout&&!p->leased&&p->next==22,
+        "YOCO encoder completion requires exactly released layers 0..20");
+    // The DMA thread skips these stages without submitting their requests.
+    wf_stop(p->fetcher);wf_quiesce(p->fetcher);
+    require(!wf_has_failed(p->fetcher),"YOCO encoder fetch quiescence failed");
+    p->next=p->stage_count();p->mark_weight_stream(false);
 },error);}
 bool llama_dsv41_weight_provider::start_request(std::string&error){return p->guard([&]{
     require(p->allocated&&!p->device_suspended&&!p->leased&&p->next==0,"Request start requires an admitted resident unleased first stage");p->identity();

@@ -32,7 +32,7 @@ SOURCE = Path(__file__).resolve().parents[1]
 PRESET_NAME = 'DSV4.1 1017 (RTX: streaming-llama ULTRA prefill + ds4 decode, single engine)'
 PRODUCER_FILES = ('ds4-decode.dll', 'dstorage.dll', 'dstoragecore.dll')
 DECODE_ENV = {'LLAMADECODE_DS4_DECODE': '1'}
-KEPT = ('gpu_uuid', 'gpu_idle_max_mib', 'hold_file', 'task', 'lease_minutes', 'request_timeout_s', 'host_budget_gib',
+KEPT = ('yoco_keep', 'gpu_uuid', 'gpu_idle_max_mib', 'hold_file', 'task', 'lease_minutes', 'request_timeout_s', 'host_budget_gib',
         'min_available_gib', 'job_commit_gib', 'context', 'model', 'model_name', 'producer_host_budget_gib',
         'producer_profile', 'producer_sha256', 'producer_source_revision', 'producer_fixed_direct_open', 'env_overrides',
         'producer_graceful_shutdown_seconds', 'host', 'port', 'ctx_cache_precision', 'ctx_cache_growable',

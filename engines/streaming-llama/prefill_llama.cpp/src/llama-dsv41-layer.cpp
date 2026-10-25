@@ -100,7 +100,7 @@ llama_dsv41_layer_graph::attention_part llama_dsv41_layer_graph::build_attention
     auto * heads=ops.attention_heads(projected.q,raw,in.raw_ids,in.raw_mask,
         compressed_rows?prefix(compressed,compressed_rows,expert.attention_kv_f16_table||preserve_gather_storage):nullptr,selected,selected_mask,w.attention.attn_sinks,
         llama_dsv41_expert_profile::shared_sparse(expert),llama_dsv41_expert_profile::shared_flash_attention(expert),
-        expert.token_tile_attention,p.start,expert.attention_kv_f16_table);
+        expert.token_tile_attention,p.raw_start,expert.attention_kv_f16_table);
     // This exact head result is the dependency protecting the old raw ring.
     auto *committed=ops.raw_commit(state.raw,projected.raw,heads,p.start);
     ggml_build_forward_expand(graph,committed);
