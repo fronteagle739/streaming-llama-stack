@@ -608,7 +608,9 @@ def handler(proxy):
                     rest = splitter.remainder('content', parsed['content'])
                     if rest:write(_chunk(cid, model, created, dict(content=rest)))
                     if calls:write(_chunk(cid, model, created, dict(tool_calls=calls)))
-                    write(_chunk(cid, model, created, {}, parsed['finish']))
+                    done = _chunk(cid, model, created, {}, parsed['finish'])
+                    if final.get('timings'):done['timings'] = final['timings']   # tok/s for the chat statistics, as in the non-stream reply
+                    write(done)
                     if include_usage:write(dict(id=cid, object='chat.completion.chunk', created=created, model=model, choices=[], usage=final['usage']))
                     if alive[0]:self.wfile.write(b'data: [DONE]\n\n');self.wfile.flush()
                 else:

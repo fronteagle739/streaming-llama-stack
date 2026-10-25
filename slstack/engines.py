@@ -351,9 +351,17 @@ class Engines:
     def chat_events(self, body):
         self.select(body.get('model'))
         self.ready()
-        if not self.remote:
-            raise ValueError('Native streaming proxy requires the paired Mac receiver')
-        yield from self.remote.events(body)
+        if self.remote:
+            yield from self.remote.events(body)
+            return
+        if not self.single_engine():
+            raise ValueError('Streaming requires the paired Mac receiver or the single engine')
+        # The single engine streams its own SSE: content deltas, 1 Hz prefill_progress chunks
+        # and timings on the finish chunk. Its beats keep each read inside request_timeout_s.
+        from .streaming import events
+        yield from events(self.cfg['ds4_url'] + '/v1/chat/completions', {**body, 'stream': True},
+                          timeout=self.cfg['request_timeout_s'],
+                          headers={'Authorization': 'Bearer ' + self.cfg['_control_token']})
 
     def media(self, kind, params):
         model = self.cfg[kind + '_model']

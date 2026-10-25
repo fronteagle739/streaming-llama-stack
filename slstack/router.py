@@ -121,8 +121,19 @@ class Stack:
                    'choices':[{'index':0,'delta':delta,'finish_reason':finish}]}
             if finish:
                 row.update(metadata)
-                row['slstack'] = {'route':'rtx-prefill-mac-decode','tool_media':media,
+                row['slstack'] = {'route':'rtx-prefill-mac-decode' if self.cfg.get('mac') else 'single-engine','tool_media':media,
                                    'buffered_stream':False,'ultra_handoff':self.cfg.get('native_tier')=='ultra'}
+            return row
+        def progress_chunk(progress):
+            # The web UI draws its prompt-processing bar from llama-server's prompt_progress.
+            row = {'id':identity, 'object':'chat.completion.chunk','created':int(time.time()),
+                   'model':body.get('model') or self.models.default, 'choices':[], 'prefill_progress':progress}
+            try:
+                row['prompt_progress'] = {'total':int(progress['tokens_total']), 'cache':0,
+                                          'processed':int(progress['tokens_done']),
+                                          'time_ms':int(float(progress.get('elapsed_s') or 0) * 1000)}
+            except (KeyError, TypeError, ValueError):
+                pass
             return row
         for _ in range(8):
             message = {'role':'assistant','content':''}
@@ -131,6 +142,9 @@ class Stack:
                 metadata.update({k:event[k] for k in ('usage','timings') if k in event})
                 choices = event.get('choices',[])
                 if not choices:
+                    progress = event.get('prefill_progress')
+                    if isinstance(progress, dict):
+                        yield progress_chunk(progress)
                     continue
                 if len(choices) != 1:
                     raise RuntimeError('Stack tools require exactly one upstream choice')
@@ -234,8 +248,13 @@ def handler(stack):
                 return self.send(200, {'events': getattr(stack.engines, 'events', []), 'dual_resident_active': False})
             if route == '/props':
                 command = stack.cfg['ds4_command']
-                n_ctx = (1000001 if stack.cfg.get('mac') else
-                         next((int(command[i + 1]) for i, x in enumerate(command[:-1]) if x in ('--ctx', '-c')), 4096))
+                if stack.cfg.get('mac'):
+                    n_ctx = 1000001
+                elif getattr(stack.engines, 'single_engine', lambda: False)():
+                    from .single_runtime import context
+                    n_ctx = context(stack.cfg)
+                else:
+                    n_ctx = next((int(command[i + 1]) for i, x in enumerate(command[:-1]) if x in ('--ctx', '-c')), 4096)
                 selected = parse_qs(urlsplit(self.path).query).get('model', [None])[0]
                 if selected is not None:
                     try:
@@ -299,7 +318,7 @@ def handler(stack):
                     return self.send(200, {'success': True})
                 if route == '/v1/chat/completions':
                     with stack.engines.lock:
-                        if body.get('stream') and stack.cfg.get('mac'):
+                        if body.get('stream') and (stack.cfg.get('mac') or getattr(stack.engines, 'single_engine', lambda: False)()):
                             from .streaming import send
                             return send(self,stack.chat_events(body))
                         result = stack.chat(body)
