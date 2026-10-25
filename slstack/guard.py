@@ -18,6 +18,36 @@ from studio.job_paging import PagingWatch, paging_bytes
 GiB = 1024 ** 3
 
 
+class GPUWindowReader:
+    """Bound a transient permission failure during atomic window replacement.
+
+    Keep validating the last complete window (including its deadline and lease)
+    while the rest of the guard continues polling RAM, ownership and paging.
+    Missing, malformed and persistently unreadable metadata still fail closed.
+    """
+    def __init__(self, path):
+        self.path = Path(path)
+        self.window = None
+        self.blocked_since = None
+        self.permission_errors = 0
+
+    def read(self):
+        try:
+            raw = self.path.read_bytes()
+        except PermissionError:
+            now = time.monotonic()
+            self.permission_errors += 1
+            if self.blocked_since is None:self.blocked_since = now
+            if now - self.blocked_since >= 1.0:raise
+            return self.window
+        if len(raw) > 16384:raise ValueError('GPU window metadata exceeded16KiB')
+        window = json.loads(raw)
+        if not isinstance(window, dict):raise ValueError('GPU window metadata must be an object')
+        self.window = window
+        self.blocked_since = None
+        return window
+
+
 def admit(budget_gib, floor_gib):
     ram = psutil.virtual_memory()
     if not 0 < budget_gib * GiB <= ram.available - floor_gib * GiB:
@@ -234,6 +264,7 @@ def _supervise_owned(spec,paging_watch,paging_warnings):
     ledger_blocked_since = None
     active_window = None
     window_started = None
+    window_reader = GPUWindowReader(spec['gpu_window_file']) if spec.get('gpu_window_file') else None
     progress = None if spec['timeout_s'] is None else Window(spec['timeout_s'])
     next_progress_check = start
     with open(spec['log'], 'ab', buffering=0) as log:
@@ -299,12 +330,10 @@ def _supervise_owned(spec,paging_watch,paging_warnings):
                         reason = 'Shared hold observation failed: ' + str(exc)
                 identity=spec.get('gpu_lease_identity')
                 hold_file=(spec.get('gpu') or {}).get('hold_file')
-                if spec.get('gpu_window_file'):
+                if window_reader is not None:
                     try:
-                        raw=Path(spec['gpu_window_file']).read_bytes()
-                        if len(raw)>16384:raise ValueError('GPU window metadata exceeded16KiB')
-                        window=json.loads(raw)
-                        if window.get('active'):
+                        window=window_reader.read()
+                        if window is not None and window.get('active'):
                             # The owner is the guarded child, or the interpreter a venv launcher stub
                             # (Scripts/python.exe) re-spawned as its direct child.
                             owner=window.get('owner_pid');target=None
@@ -319,7 +348,7 @@ def _supervise_owned(spec,paging_watch,paging_warnings):
                             if active_window!=identity or window_started is None:active_window=identity;window_started=time.monotonic()   # lease_id is null until the producer's lease is taken
                             if time.time()>=window['deadline']:   # the owner renews it while the request progresses (no fixed request length)
                                 reason='GPU request window made no progress before its renewed deadline'
-                        else:active_window=None;window_started=None
+                        elif window is not None:active_window=None;window_started=None
                     except FileNotFoundError:
                         if active_window:reason='Active GPU window metadata disappeared'
                     except (ValueError,KeyError,TypeError,OSError) as exc:
@@ -363,6 +392,7 @@ def _supervise_owned(spec,paging_watch,paging_warnings):
     receipt = {'exit_code': code, 'reason': reason, 'peak_tree_rss': peak,
                'min_available': minimum, 'elapsed_s': time.monotonic() - start,
                'started_monotonic': start, 'no_progress_window_s': spec['timeout_s'],
+               'gpu_window_permission_errors': window_reader.permission_errors if window_reader else 0,
                'host_budget_gib': budget, 'floor_gib': floor,
                'job_commit_gib': spec['job_commit_gib'], 'child_pid': child.pid}
     receipt.update(paging_before=paging_before, paging_after=snapshot() if spec.get('paging_telemetry') else None,
