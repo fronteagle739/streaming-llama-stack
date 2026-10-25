@@ -25,6 +25,8 @@
 #include "ggml-alloc.h"
 #include "../ggml/src/ggml-impl.h"
 #include "llama-dsv41-direct.h"
+#include "llama-dsv41-host-registration.h"
+#include <future>
 #ifdef GGML_USE_CUDA
 #include "ggml-cuda.h"
 #include <cuda_runtime_api.h>
@@ -360,6 +362,17 @@ struct llama_dsv41_tile_executor::pinned_storage {
     bool registered=false,tile_registration=false,pageable_copies=false;
     std::vector<std::vector<uint8_t>> pending_host_uploads;
     void *registered_tile=nullptr;uint64_t registered_tile_bytes=0;
+    // LLAMADECODE --host-registration (whole / tile-async); tile keeps the fields above.
+    using host_span=llama_dsv41_host_registration::span;
+    llama_dsv41_host_registration::mode host_mode=llama_dsv41_host_registration::mode::tile;
+    std::vector<host_span> host_whole;                 // whole: registered bank segments
+    host_span host_active{},host_spare{};              // tile-async: current tile, retiring/predicted
+    struct host_job_result{cudaError_t unregister=cudaSuccess,reg=cudaSuccess;bool retired=false,registered=false;host_span next{};};
+    std::future<host_job_result> host_job;
+    cudaEvent_t host_retire=nullptr;int host_device=0;
+    std::vector<std::pair<uint32_t,std::pair<uint32_t,uint32_t>>> host_successor;uint32_t host_last_start=UINT32_MAX;
+    uint64_t host_registrations=0,host_registered_bytes=0,host_sync=0,host_hits=0,host_misses=0,host_failed_predictions=0;
+    double host_sync_ms=0;
     cudaStream_t copies=nullptr;
     cudaEvent_t ready=nullptr;
     uint32_t *flags_device=nullptr,*flags_host=nullptr;
@@ -370,6 +383,7 @@ struct llama_dsv41_tile_executor::pinned_storage {
         if(copies)cleanup(cudaStreamSynchronize(copies));
         if(backend)ggml_backend_synchronize(backend);
         if(registered_tile)cleanup(cudaHostUnregister(registered_tile));
+        host_release();
         if(registered)cleanup(cudaHostUnregister(base));
         prefetch_destroy_events();
         if(flags_device)cleanup(cudaFree(flags_device));
@@ -406,6 +420,15 @@ struct llama_dsv41_tile_executor::pinned_storage {
     void bind_lease(const llama_dsv41_carry_store::ram_lease &lease,const llama_dsv41_carry_store::ram_lookahead *lookahead=nullptr){
         if(!tile_registration)return;
         require(!registered&&lease.base==base&&lease.bytes==bytes&&lease.count(),"Tile pin requires its exact existing RAM lease");
+        if(host_mode==llama_dsv41_host_registration::mode::whole){
+            (void)lease.row(0);(void)lease.row(lease.count()-1);
+            if(lookahead){(void)lookahead->row(0);(void)lookahead->row(lookahead->lease.rows-1);}
+            host_register_whole();return;
+        }
+        if(host_mode==llama_dsv41_host_registration::mode::tile_async){
+            require(!lookahead,"tile-async host registration supports the full-resident plan only (no RAM lookahead)");
+            host_bind_async(lease);return;
+        }
         (void)lease.row(0);(void)lease.row(lease.count()-1);
         uint32_t next_rows=0;const uint8_t*last=lease.row(lease.count()-1);
         if(lookahead){const auto&next=lookahead->lease;
@@ -435,6 +458,89 @@ struct llama_dsv41_tile_executor::pinned_storage {
         llama_dsv41_layer_log("DS4PERF_TILE_HOST_REGISTRATION first=%u count=%u bytes=%llu previous_copy_stream_complete=1 existing_RAM_bank=1\n",lease.start(),lease.count()+next_rows,(unsigned long long)size);
         llama_dsv41_layer_log("DS4PERF_TILE_PIN_WINDOW first=%u current_rows=%u next_rows=%u bytes=%llu cuda_free_before=%llu cuda_free_after=%llu exact_parent_generation=1\n",lease.start(),lease.count(),next_rows,(unsigned long long)size,(unsigned long long)free_before,(unsigned long long)free_after);
     }
+    void *host_ptr(const host_span&s)const{return static_cast<uint8_t*>(base)+s.offset;}
+    void host_register_whole(){
+        if(!host_whole.empty())return;
+        require((reinterpret_cast<uintptr_t>(base)&4095)==0,"Whole host registration requires a page-aligned RAM bank");
+        const auto segments=llama_dsv41_host_registration::whole_segments(bytes);
+        require(!segments.empty()&&segments.back().end()==bytes,"Whole host registration segments do not cover the RAM bank");
+        size_t free_before=0,free_after=0,total=0;ok(cudaMemGetInfo(&free_before,&total),"Cannot inspect GPU memory before whole host registration");
+        const auto started=clock_type::now();
+        for(const auto&s:segments){
+            const auto e=cudaHostRegister(host_ptr(s),size_t(s.bytes),cudaHostRegisterDefault);
+            if(e!=cudaSuccess){
+                llama_dsv41_layer_log("LLAMADECODE_HOST_REGISTRATION_FAILED mode=whole segment=%zu offset=%llu bytes=%llu error=%s\n",
+                    host_whole.size(),(unsigned long long)s.offset,(unsigned long long)s.bytes,cudaGetErrorString(e));std::fflush(stderr);
+                ok(e,"Whole RAM bank segment registration failed");
+            }
+            host_whole.push_back(s);++host_registrations;host_registered_bytes+=s.bytes;
+            llama_dsv41_layer_log("LLAMADECODE_HOST_REGISTRATION_SEGMENT mode=whole index=%zu offset=%llu bytes=%llu\n",host_whole.size()-1,(unsigned long long)s.offset,(unsigned long long)s.bytes);
+        }
+        ok(cudaMemGetInfo(&free_after,&total),"Cannot inspect GPU memory after whole host registration");
+        llama_dsv41_layer_log("LLAMADECODE_HOST_REGISTRATION mode=whole segments=%zu bytes=%llu bank_bytes=%llu ms=%.3f cuda_free_before=%llu cuda_free_after=%llu persistent=sweep\n",
+            host_whole.size(),(unsigned long long)host_registered_bytes,(unsigned long long)bytes,elapsed(started),(unsigned long long)free_before,(unsigned long long)free_after);
+        std::fflush(stderr);
+    }
+    host_job_result host_join(){
+        host_job_result r;if(!host_job.valid())return r;r=host_job.get();
+        if(r.retired)host_spare={};
+        if(r.registered){host_spare=r.next;++host_registrations;host_registered_bytes+=r.next.bytes;
+            llama_dsv41_layer_log("DS4PERF_TILE_HOST_REGISTRATION mode=tile-async async=1 offset=%llu bytes=%llu\n",(unsigned long long)r.next.offset,(unsigned long long)r.next.bytes);}
+        if(r.reg!=cudaSuccess){++host_failed_predictions;llama_dsv41_layer_log("LLAMADECODE_HOST_REGISTRATION_ASYNC_FAILED offset=%llu bytes=%llu error=%s\n",(unsigned long long)r.next.offset,(unsigned long long)r.next.bytes,cudaGetErrorString(r.reg));}
+        return r;
+    }
+    void host_unregister(host_span&s){if(s.bytes){ok(cudaHostUnregister(host_ptr(s)),"Host span unregister failed");s={};}}
+    void host_bind_async(const llama_dsv41_carry_store::ram_lease &lease){
+        const uint32_t start=lease.start(),count=lease.count();(void)lease.row(0);(void)lease.row(count-1);
+        require((reinterpret_cast<uintptr_t>(base)&4095)==0,"tile-async host registration requires a page-aligned RAM bank");
+        const host_span need=llama_dsv41_host_registration::rows_span(bytes,start,count);
+        require(need.bytes&&need.bytes<=llama_dsv41_host_registration::segment_limit,"Tile span escaped the RAM bank or 2 GiB bound");
+        const auto r=host_join();
+        ok(r.unregister,"Retired tile RAM unregister failed");
+        if(host_last_start!=UINT32_MAX&&host_last_start!=start){bool found=false;
+            for(auto&e:host_successor)if(e.first==host_last_start){e.second={start,count};found=true;break;}
+            if(!found)host_successor.push_back({host_last_start,{start,count}});}
+        host_last_start=start;
+        if(host_active==need)return;
+        if(host_spare==need){std::swap(host_active,host_spare);++host_hits;}
+        else{
+            ++host_misses;const auto started=clock_type::now();
+            ok(cudaStreamSynchronize(copies),"Previous tile copies did not complete before host rebinding");
+            host_unregister(host_spare);
+            if(llama_dsv41_host_registration::overlaps(host_active,need))host_unregister(host_active);
+            ok(cudaHostRegister(host_ptr(need),size_t(need.bytes),cudaHostRegisterDefault),"Active tile RAM registration failed");
+            host_spare=host_active;host_active=need;++host_registrations;++host_sync;host_registered_bytes+=need.bytes;host_sync_ms+=elapsed(started);
+            llama_dsv41_layer_log("DS4PERF_TILE_HOST_REGISTRATION mode=tile-async async=0 first=%u count=%u offset=%llu bytes=%llu\n",start,count,(unsigned long long)need.offset,(unsigned long long)need.bytes);
+        }
+        // host_spare is now the previous tile's span (or empty). Retire it after an event on its
+        // copies and register the predicted next span on a helper thread while this tile computes.
+        std::pair<uint32_t,uint32_t> guess{start+count,count};
+        for(const auto&e:host_successor)if(e.first==start){guess=e.second;break;}
+        host_span next=llama_dsv41_host_registration::rows_span(bytes,guess.first,guess.second);
+        if(next==host_active||llama_dsv41_host_registration::overlaps(next,host_active)||next.bytes>llama_dsv41_host_registration::segment_limit)next={};
+        if(!host_spare.bytes&&!next.bytes)return;
+        if(!host_retire){ok(cudaEventCreateWithFlags(&host_retire,cudaEventDisableTiming),"Host retire event creation failed");ok(cudaGetDevice(&host_device),"Cannot read the CUDA device for host registration");}
+        ok(cudaEventRecord(host_retire,copies),"Host retire event record failed");
+        void*retire_ptr=host_spare.bytes?host_ptr(host_spare):nullptr;void*next_ptr=next.bytes?host_ptr(next):nullptr;
+        const cudaEvent_t event=host_retire;const int device=host_device;
+        host_job=std::async(std::launch::async,[=]{host_job_result out;out.next=next;
+            if(cudaSetDevice(device)!=cudaSuccess){out.unregister=cudaErrorInvalidDevice;return out;}
+            if(retire_ptr){out.unregister=cudaEventSynchronize(event);if(out.unregister==cudaSuccess)out.unregister=cudaHostUnregister(retire_ptr);out.retired=out.unregister==cudaSuccess;}
+            if(next_ptr&&out.unregister==cudaSuccess){out.reg=cudaHostRegister(next_ptr,size_t(next.bytes),cudaHostRegisterDefault);out.registered=out.reg==cudaSuccess;}
+            return out;});
+    }
+    void host_release(){
+        if(host_job.valid()){auto r=host_job.get();if(r.retired)host_spare={};if(r.registered)host_spare=r.next;cleanup(r.unregister);}
+        if(host_active.bytes)cleanup(cudaHostUnregister(host_ptr(host_active)));
+        if(host_spare.bytes)cleanup(cudaHostUnregister(host_ptr(host_spare)));
+        for(const auto&s:host_whole)cleanup(cudaHostUnregister(host_ptr(s)));
+        if(host_retire)cleanup(cudaEventDestroy(host_retire));
+        if(host_mode!=llama_dsv41_host_registration::mode::tile)
+            llama_dsv41_layer_log("LLAMADECODE_HOST_REGISTRATION_SUMMARY mode=%s registrations=%llu registered_bytes=%llu sync_registrations=%llu sync_ms=%.3f async_hits=%llu async_misses=%llu failed_predictions=%llu whole_segments=%zu\n",
+                llama_dsv41_host_registration::name(host_mode),(unsigned long long)host_registrations,(unsigned long long)host_registered_bytes,(unsigned long long)host_sync,host_sync_ms,
+                (unsigned long long)host_hits,(unsigned long long)host_misses,(unsigned long long)host_failed_predictions,host_whole.size());
+        host_active={};host_spare={};host_whole.clear();host_retire=nullptr;
+    }
     void queue(bool to_device,const llama_dsv41_carry_store::ram_lease &lease,uint64_t offset,uint64_t width,ggml_tensor *tensor){
         require(!current_bank_copies_forbidden,"A resident-only reader attempted an unregistered RAM bank copy");
         if(pageable_copies){
@@ -456,7 +562,11 @@ struct llama_dsv41_tile_executor::pinned_storage {
             llama_dsv41_layer_log("DS4PERF_RESIDENT_PAGEABLE_COPY to_device=%u first=%u count=%u offset=%llu width=%llu bytes=%llu existing_backend_vector_API=1\n",unsigned(to_device),lease.start(),lease.count(),(unsigned long long)offset,(unsigned long long)width,(unsigned long long)(width*lease.count()));
             return;
         }
-        if(tile_registration){
+        if(tile_registration&&host_mode!=llama_dsv41_host_registration::mode::tile){
+            const std::vector<host_span> live=host_mode==llama_dsv41_host_registration::mode::whole?host_whole:std::vector<host_span>{host_active};
+            require(lease.base==base&&lease.bytes==bytes&&llama_dsv41_host_registration::copies_covered(live,bytes,lease.start(),lease.count()),
+                "Copy uses a RAM span outside every registered host segment");
+        }else if(tile_registration){
             const uintptr_t begin=reinterpret_cast<uintptr_t>(registered_tile),at=reinterpret_cast<uintptr_t>(lease.row(0));
             const uint64_t extent=uint64_t(lease.row(lease.count()-1)-lease.row(0))+llama_dsv41_carry_store::ram_record_bytes;
             require(lease.base==base&&lease.bytes==bytes&&registered_tile&&at>=begin&&at-begin<=registered_tile_bytes&&extent<=registered_tile_bytes-(at-begin),"Copy uses an unregistered/foreign current or lookahead span");
@@ -637,7 +747,9 @@ llama_dsv41_tile_executor::llama_dsv41_tile_executor(ggml_backend_t backend,llam
                 const bool full_resident=fixed->bf16&&fixed->ids&&fixed->metadata&&defer_hidden_readback&&!admitted_prefetch_bytes;
                 const bool ram_lookahead=!fixed->bf16&&!fixed->ids&&!fixed->metadata&&!defer_hidden_readback&&admitted_prefetch_bytes;
                 require(!fixed->ram_registration&&(full_resident||(fixed->tile_registration&&!fixed->pageable_copies&&ram_lookahead)),"Tile registration requires its explicit resident or RAM-lookahead plan");
-                pinned->tile_registration=fixed->tile_registration;pinned->pageable_copies=fixed->pageable_copies;
+                pinned->tile_registration=fixed->tile_registration;pinned->pageable_copies=fixed->pageable_copies;pinned->host_mode=fixed->host_registration;
+                require(pinned->host_mode==llama_dsv41_host_registration::mode::tile||(fixed->tile_registration&&(pinned->host_mode!=llama_dsv41_host_registration::mode::tile_async||full_resident)),
+                    "Host registration mode requires tile registration (tile-async: the full-resident plan)");
                 llama_dsv41_layer_log(fixed->pageable_copies?"DS4PERF_FIXED_RAM_PAGEABLE_VECTORS view_bytes=%llu whole_bank_pinned=0 existing_backend_API=1\n":"DS4PERF_FIXED_RAM_TILE_REGISTRATION view_bytes=%llu whole_bank_pinned=0 no_new_staging=1\n",(unsigned long long)direct->bytes);
             }else{
                 unsigned flags=0;pinned_storage::ok(cudaHostGetFlags(&flags,direct->base),"Fixed carry RAM is no longer registered");
