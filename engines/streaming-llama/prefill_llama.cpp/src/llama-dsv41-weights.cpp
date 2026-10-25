@@ -700,6 +700,19 @@ bool llama_dsv41_weight_provider::create_engram_row_cache(uint64_t bytes,std::st
     llama_dsv41_layer_log("LLAMADECODE_ENGRAM_ROWCACHE_CREATED bytes=%llu capacity_rows=%u footprint_bytes=%llu\n",(unsigned long long)bytes,
         p->row_cache->capacity_row_count(),(unsigned long long)p->row_cache->footprint());
 },error);}
+bool llama_dsv41_weight_provider::resize_engram_row_cache(uint64_t bytes,std::string&error){return p->guard([&]{
+    const uint64_t old=p->row_cache?p->row_cache->charge():0;
+    if(old==bytes)return;
+    // The early loader may still own the old LRU. Finish it without cancelling
+    // or discarding its immutable prompt rows, then release before allocating.
+    if(p->early_thread.joinable())p->early_thread.join();
+    if(p->early&&p->early->failure)std::rethrow_exception(p->early->failure);
+    require(!p->row_cache||p->row_cache.use_count()==1,"Engram LRU replan retained an active loader reference");
+    p->row_cache.reset();
+    if(bytes)p->row_cache=std::make_shared<llama_dsv41_engram_row_cache>(bytes);
+    llama_dsv41_layer_log("LLAMADECODE_ENGRAM_ROWCACHE_RESIZED previous_bytes=%llu bytes=%llu release_before_allocate=1\n",
+        (unsigned long long)old,(unsigned long long)bytes);
+},error);}
 bool llama_dsv41_weight_provider::start_engram_cold(std::string&error){return p->guard([&]{
     if(!llama_dsv41_engram_early_enabled()||p->options.engram_early_tokens.empty())return;
     require(p->options.engram_prefetch_host_bytes&&p->inspected&&!p->allocated&&!p->early,"Cold early Engram start requires an inspected, admitted, unallocated provider");

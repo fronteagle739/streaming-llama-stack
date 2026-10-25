@@ -8,6 +8,7 @@
 #include "llama-dsv41-cache.h"
 #include "llama-dsv41-device-admission.h"
 #include "llama-dsv41-host-plan-log.h"
+#include "llama-dsv41-host-plan.h"
 #include "llama-dsv41-executor.h"
 #include "boundary-capture.h"
 #include "ggml-alloc.h"
@@ -379,26 +380,27 @@ bool llama_dsv41_sweep::open(const llama_dsv41_weight_provider::config &weights,
         const uint64_t owner_digest_staging=llama_dsv41::owner_digest_memo::staging_bytes();
         const uint64_t base_host=add(owner_digest_staging,add(options.compressed_cache_bf16?1024ull*1024:0,add(options.engram_tile_lookahead?uint64_t(options.carry.max_tile_tokens)*6144*4+8ull*1024*1024:0,add(provider.host_bytes,add(carry_host,
             add(tile_host+pair_host,add(metadata_bytes+pinned_metadata+allocator_metadata+long_metadata+2ull*vocabulary*4+1024*1024,uint64_t(options.stateful_chunks?options.context:options.carry.tokens)*8)))))));
-        // LLAMADECODE_ENGRAM_CACHE_MB: the Engram row LRU (early loader) is charged
-        // here. Unset: min(4 GiB, this admission's headroom), whole MiB, none below
-        // 16 MiB. Explicit: exactly that size or a loud refusal. 0: no cache.
-        // Every LLAMADECODE_ENGRAM_EARLY arm (0 included) loads on the early loader.
-        const uint64_t row_cache_have=p->provider.engram_row_cache_bytes();uint64_t row_cache_new=0;
-        if(!row_cache_have&&weights.engram_prefetch_host_bytes&&options.engram_tile_lookahead){
+        // Replan even a reused warmup cache: paired FFN, staging and carry
+        // charges can differ on the next sweep. Explicit cache MiB is a cap.
+        const uint64_t row_cache_have=p->provider.engram_row_cache_bytes();
+        uint64_t desired_cache=0;
+        if(weights.engram_prefetch_host_bytes&&options.engram_tile_lookahead){
             const char*e=std::getenv("LLAMADECODE_ENGRAM_CACHE_MB");
-            const uint64_t headroom=options.admitted_host_bytes>base_host?options.admitted_host_bytes-base_host:0;
             if(e&&*e){char*end=nullptr;const unsigned long long mb=std::strtoull(e,&end,10);
-                require(end&&!*end&&mb<=1048576,"LLAMADECODE_ENGRAM_CACHE_MB must be a whole number of MiB (0 disables)");
-                row_cache_new=uint64_t(mb)<<20;
-                if(row_cache_new&&row_cache_new>headroom){
-                    llama_dsv41_layer_log("LLAMADECODE_ENGRAM_ROWCACHE_REFUSED requested_bytes=%llu headroom_bytes=%llu admitted_host=%llu planned_host=%llu\n",
-                        (unsigned long long)row_cache_new,(unsigned long long)headroom,(unsigned long long)options.admitted_host_bytes,(unsigned long long)base_host);
-                    require(false,"LLAMADECODE_ENGRAM_CACHE_MB exceeds the producer host admission headroom (no silent shrink)");
-                }
-            }else{row_cache_new=std::min<uint64_t>(4ull<<30,headroom)&~((1ull<<20)-1);if(row_cache_new<(16ull<<20))row_cache_new=0;}
-            if(!e||*e)llama_dsv41_layer_log("LLAMADECODE_ENGRAM_ROWCACHE_ADMISSION bytes=%llu explicit=%d headroom_bytes=%llu\n",(unsigned long long)row_cache_new,int(e&&*e),(unsigned long long)headroom);
+                require(e[0]!='-'&&end&&!*end&&mb<=1048576,"LLAMADECODE_ENGRAM_CACHE_MB must be a whole number of MiB (0 disables)");
+                desired_cache=uint64_t(mb)<<20;
+            }else desired_cache=row_cache_have?row_cache_have:4ull<<30;
         }
-        const uint64_t host=add(base_host,row_cache_have?row_cache_have:row_cache_new);
+        const auto host_plan=llama_dsv41_host_plan::plan(options.admitted_host_bytes,base_host,desired_cache);
+        if(!host_plan.ok)throw std::runtime_error(host_plan.reason);
+        const uint64_t row_cache_new=host_plan.row_cache_bytes;
+        const uint64_t host=host_plan.planned_host;
+        if(row_cache_have!=row_cache_new){
+            llama_dsv41_layer_log("LLAMADECODE_ENGRAM_ROWCACHE_REPLAN previous_bytes=%llu bytes=%llu admitted_host=%llu non_elastic_host=%llu planned_host=%llu\n",
+                (unsigned long long)row_cache_have,(unsigned long long)row_cache_new,
+                (unsigned long long)options.admitted_host_bytes,(unsigned long long)base_host,(unsigned long long)host);
+            success(p->provider.resize_engram_row_cache(row_cache_new,error),error);
+        }
         {   // log only: each planned host component and the row-cache headroom without it
             const uint64_t lookahead=options.engram_tile_lookahead?uint64_t(options.carry.max_tile_tokens)*6144*4+8ull*1024*1024:0;
             const uint64_t metadata=metadata_bytes+pinned_metadata+allocator_metadata+long_metadata+2ull*vocabulary*4+1024*1024;
@@ -406,7 +408,7 @@ bool llama_dsv41_sweep::open(const llama_dsv41_weight_provider::config &weights,
             llama_dsv41_layer_log("%s\n",llama_dsv41_host_plan_log::line(options.admitted_host_bytes,base_host,{
                 {"provider",provider.host_bytes},{"carry",carry_host},{"tile",tile_host},{"pair_ffn",pair_host},
                 {"owner_digest_staging",owner_digest_staging},{"engram_lookahead",lookahead},{"bf16_cache_scratch",options.compressed_cache_bf16?1024ull*1024:0},
-                {"metadata",metadata},{"token_ids",token_ids}},row_cache_have?row_cache_have:row_cache_new).c_str());
+                {"metadata",metadata},{"token_ids",token_ids}},row_cache_new).c_str());
         }
         const auto measured=options.measured_device_free?llama_dsv41_device_admission::admit(options.measured_device_free,options.admitted_device_bytes,options.device_reserve,device)
             :llama_dsv41_device_admission::result{device<=options.admitted_device_bytes,options.admitted_device_bytes,{}};
@@ -419,7 +421,6 @@ bool llama_dsv41_sweep::open(const llama_dsv41_weight_provider::config &weights,
         if(!measured.ok&&options.measured_device_free)llama_dsv41_layer_log("DS4PERF_DEVICE_ADMISSION_REFUSED %s\n",measured.reason.c_str());
         require(measured.ok&&host<=options.admitted_host_bytes,
             "V4.1 provider/cache/graph/carry combined job exceeds total resource admission");
-        if(row_cache_new)success(p->provider.create_engram_row_cache(row_cache_new,error),error);
         // LLAMADECODE_ENGRAM_EARLY: tokens known, file verified, job admitted:
         // the request's Engram rows start now, before RAM/DS/weight-fetch setup.
         if(!warmup&&!prefix)success(p->provider.start_engram_cold(error),error);
