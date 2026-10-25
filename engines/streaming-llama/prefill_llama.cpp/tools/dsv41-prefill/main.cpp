@@ -275,11 +275,11 @@ int wmain(int argc,wchar_t**argv){
     std::unique_ptr<native_file>payload,receipt;std::unique_ptr<llama_dsv41_sweep>sweep;
     json report={{"schema","dsv41-offline-producer-v1"},{"status","failed"},{"runtime_qualified",false}};
     const auto process_started=clock_type::now();
-    // LLAMADECODE: load every CUDA module at context creation (before admission), so
-    // no module code lands in VRAM mid-sweep. An explicit CUDA_MODULE_LOADING wins.
+    // CUDA module loading: the driver default (LAZY) unless CUDA_MODULE_LOADING is set.
+    // Forced EAGER was measured slower (43K ABAB, 2026-10-25: L0 first-tile stall +26.8/+7.8 s)
+    // and dropped; the effective mode is still logged (module_loading=).
     const wchar_t*module_loading_env=_wgetenv(L"CUDA_MODULE_LOADING");
     const bool module_loading_default=!module_loading_env||!*module_loading_env;
-    if(module_loading_default){_wputenv_s(L"CUDA_MODULE_LOADING",L"EAGER");SetEnvironmentVariableW(L"CUDA_MODULE_LOADING",L"EAGER");}
     try{
         static std::array<char,1024*1024> stderr_storage;
         const char *buffer_env=std::getenv("DS4PERF_STDERR_BUFFER_BYTES");
@@ -555,9 +555,9 @@ int wmain(int argc,wchar_t**argv){
         const uint64_t context_and_modules=nvml_before&&nvml_free_before_cuda>uint64_t(free)?nvml_free_before_cuda-uint64_t(free):0;
         std::fprintf(stderr,"DS4PERF_GPU_JOB_ADMISSION free=%llu total=%llu job=%llu reserve=%llu measured_admission=%llu module_loading=%s module_loading_source=%s nvml_free_before_cuda=%llu cuda_context_and_module_bytes=%llu\n",
             (unsigned long long)free,(unsigned long long)total,(unsigned long long)job_device,(unsigned long long)gpu_reserve,
-            (unsigned long long)(uint64_t(free)>gpu_reserve?std::min<uint64_t>(job_device,uint64_t(free)-gpu_reserve):0),loading_name,module_loading_default?"producer_default":"environment",
+            (unsigned long long)(uint64_t(free)>gpu_reserve?std::min<uint64_t>(job_device,uint64_t(free)-gpu_reserve):0),loading_name,module_loading_default?"driver_default":"environment",
             (unsigned long long)nvml_free_before_cuda,(unsigned long long)context_and_modules);
-        report["telemetry"]["module_loading"]=loading_name;report["telemetry"]["module_loading_source"]=module_loading_default?"producer_default":"environment";
+        report["telemetry"]["module_loading"]=loading_name;report["telemetry"]["module_loading_source"]=module_loading_default?"driver_default":"environment";
         report["telemetry"]["nvml_free_before_cuda"]=nvml_free_before_cuda;report["telemetry"]["cuda_context_and_module_bytes"]=context_and_modules;
         // Measured device plan: the sweep admits min(job, free - reserve) against its combined plan.
         require(uint64_t(free)>gpu_reserve,"Selected GPU free bytes do not exceed the explicit reserve");
