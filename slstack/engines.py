@@ -247,6 +247,7 @@ class Engines:
         token = self.cfg.setdefault('_control_token', secrets.token_urlsafe(32))
         overrides = self.cfg.setdefault('env_overrides', {})
         overrides['DS4_SERVER_AUTH_TOKEN'] = token
+        # DS4COMBO2 liveness: the server has no lifetime cap; the guard's memory/GPU limits stay.
         for key in [k for k in overrides if k.startswith('DS4_COMBO_')]:
             del overrides[key]
         if self.combo_enabled():
@@ -263,7 +264,7 @@ class Engines:
                 if self.expert_list().is_file():
                     overrides['DS4_COMBO_EXPERT_RESTORE_FILE'] = str(self.expert_list())
         self.llm = OwnedProcess(self.cfg, command, 'ds4-server', gpu=not self.cfg.get('_gpu_lease_managed', False),
-                                cwd=Path(self.cfg['runtime_root']), timeout=self.cfg['lease_minutes'] * 60)
+                                cwd=Path(self.cfg['runtime_root']), unbounded=True)
         if self.attach_entry:
             self.journal.update(self.attach_entry, 'attaching', pid=self.llm.proc.pid,
                                 pid_created=psutil.Process(self.llm.proc.pid).create_time())
@@ -342,7 +343,9 @@ class Engines:
         self.ready()
         if self.remote:
             return self.remote.chat(body)
-        return http_json(self.cfg['ds4_url'] + '/v1/chat/completions', body, self.cfg['request_timeout_s'],
+        # A non-streaming request is silent for its whole prefill + decode, so a socket timeout
+        # would be a fixed request-length cap. The owned, guarded server process bounds it instead.
+        return http_json(self.cfg['ds4_url'] + '/v1/chat/completions', body, None,
                          headers={'Authorization': 'Bearer ' + self.cfg['_control_token']})
 
     def chat_events(self, body):

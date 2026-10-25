@@ -40,6 +40,19 @@ class RuntimeTests(unittest.TestCase):
         self.assertEqual(rtx['ds4_env'], {'LLAMADECODE_DS4_DECODE': '1'})
         self.assertTrue(rtx['ds4_cache_affinity_spread_file'])   # Studio offers the quality-speed tool only then
 
+    def test_ctx_cache_config(self):
+        from slstack.combo_producer import ctx_cache
+        self.assertEqual(ctx_cache(BASE), ('f32', False))   # absent = today's fixed f32 argv
+        self.assertEqual(ctx_cache(dict(BASE, ctx_cache_precision='bf16', ctx_cache_growable=True)), ('bf16', True))
+        for bad in (dict(ctx_cache_precision='f16'), dict(ctx_cache_growable=1), dict(ctx_cache_growable=True, producer_keep_alive=True)):
+            with self.assertRaises(ValueError):ctx_cache(dict(BASE, **bad))
+        big = dict(BASE, context=999424, ctx_cache_precision='bf16', ctx_cache_growable=True,
+                   preset_name='DSV4.1 1017 (RTX: streaming-llama ULTRA prefill + ds4 decode, single engine, 1M)')
+        cfg = sr.single_config(big, INSTALLED, 'rev')
+        self.assertEqual((cfg['context'], cfg['ctx_cache_precision'], cfg['ctx_cache_growable']), (999424, 'bf16', True))
+        preset = sr.preset(big, INSTALLED)
+        self.assertEqual((preset['name'], preset['rtx']['ctx']), (big['preset_name'], 999424))
+
     @unittest.skipUnless(STUDIO_NATIVE.exists(), 'needs the Studio checkout')
     def test_studio_argv_launches_the_single_mode(self):
         cfg = sr.single_config(BASE, INSTALLED, 'rev');preset = sr.preset(BASE, INSTALLED)

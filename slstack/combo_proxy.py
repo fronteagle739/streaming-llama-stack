@@ -196,11 +196,23 @@ def handler(proxy):
                             if readable and not self.connection.recv(1,socket.MSG_PEEK):session.cancel.set();return
                         except OSError:session.cancel.set();return
                 watcher=threading.Thread(target=disconnect_watch,daemon=True);watcher.start()
-                timer=threading.Timer(proxy.cfg['lease_minutes']*60,session.cancel.set);timer.daemon=True;timer.start()
+                # DS4COMBO2 liveness: no fixed lease_minutes cap on a request. The native producer's
+                # own no-progress watch poisons a stalled run; this watchdog also cancels the request
+                # when the producer shows no progress for the stall window, and renews the GPU window
+                # while it progresses.
+                from .combo_producer import stall_seconds
+                stall=stall_seconds(proxy.cfg);watched=[None]
+                def progress_watch():
+                    while not done.wait(min(30.0,stall/10)):
+                        process=getattr(watched[0],'process',None)
+                        last=getattr(process,'last_progress',None)
+                        if last is not None and time.monotonic()-last>=stall:session.cancel.set();return
+                timer=threading.Thread(target=progress_watch,name='native-progress-watch',daemon=True);timer.start()
                 with gpu_lease(proxy.cfg) as lease:
                     proxy.window(True,lease)
                     try:
                         with session.prepare(body) as (native,rendered,metrics):
+                            watched[0]=native
                             api_started=time.monotonic()
                             def observed(row):
                                 meaningful=any(any((choice.get('delta') or {}).get(field) for field in ('content','reasoning_content','tool_calls'))
@@ -212,7 +224,8 @@ def handler(proxy):
                             request=urllib.request.Request(native.url+'/v1/chat/completions',
                                 data=json.dumps(rendered,separators=(',',':'),allow_nan=False).encode(),
                                 headers={'Content-Type':'application/json','Authorization':'Bearer '+native.token})
-                            with urllib.request.urlopen(request,timeout=proxy.cfg['request_timeout_s']) as response:
+                            # No fixed socket timeout: a long silent prefill is bounded by progress_watch.
+                            with urllib.request.urlopen(request,timeout=None) as response:
                                 if streaming:
                                     def write(block):self.wfile.write(block);self.wfile.flush()
                                     terminal=relay_stream(response,write,done,observed)
@@ -238,7 +251,7 @@ def handler(proxy):
                 else:self.send(503,error)
             finally:
                 done.set()
-                if timer:timer.cancel()
+                done.set()   # ends progress_watch
                 if metrics is not None:atomic_json(Path(proxy.cfg['runtime_root'])/('request-'+secrets.token_hex(8)+'.json'),metrics)
                 proxy.lock.release()
     return Handler
@@ -340,7 +353,8 @@ def guarded(cfg,config):
     run_config=root/('server-'+run_id+'.config.json');atomic_json(run_config,cfg)
     command=[sys.executable,'-B','-m','slstack.combo_proxy','--config',str(run_config),'--serve','--run-id',run_id,'--window',str(window)]
     spec=dict(command=command,cwd=str(Path(__file__).resolve().parents[1]),env=env,runtime_root=str(root),task='DS4COMBO',
-        host_budget_gib=cfg['combo_worker_host_budget_gib'],min_available_gib=cfg['min_available_gib'],job_commit_gib=cfg['job_commit_gib'],timeout_s=86400,
+        host_budget_gib=cfg['combo_worker_host_budget_gib'],min_available_gib=cfg['min_available_gib'],job_commit_gib=cfg['job_commit_gib'],timeout_s=None,   # a server has no lifetime cap; requests use the progress-renewed window
+        
         owner_pid=owner.pid,owner_created=owner.create_time(),stop=str(root/('server-'+run_id+'.stop')),
         log=str(root/('server-'+run_id+'.log')),receipt=str(root/('server-'+run_id+'.json')),paging_telemetry=True,
         gpu_window_file=str(window),gpu_run_id=run_id,gpu_hold_file=cfg['hold_file'])

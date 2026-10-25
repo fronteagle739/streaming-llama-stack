@@ -3,7 +3,10 @@
 One resident producer per conversation frontier. Each request is rendered and
 tokenized in process (ds4_render, an exact port of ds4-win's renderer), matched
 against the producer's live token ids with the native's own prefix rule, and
-only the new suffix is appended with ComboProducer.prefill. A diverged prefix
+only the new suffix is appended with ComboProducer.prefill. A turn cut by a stop
+sequence or a client disconnect is remembered as its evaluated ids (prefix_source
+'memory-cut-turn'), so the next turn appends only the template closing and the new
+messages instead of re-prefilling. A diverged prefix
 retires the producer and starts a fresh one on the whole prompt. Decode is the
 producer's in-process greedy decode with EOS (id 1) as the stop token; text is
 streamed from its per-token LLAMADECODE_STEP lines and the finished text is
@@ -15,7 +18,7 @@ The GPU hold is taken when a producer launches and released when it retires
 only while a request runs.
 """
 from __future__ import annotations
-from contextlib import ExitStack
+from contextlib import ExitStack, contextmanager
 import codecs
 from copy import deepcopy
 from http.server import BaseHTTPRequestHandler, ThreadingHTTPServer
@@ -143,7 +146,7 @@ class SingleEngine:
         self.producer = None;self.live = [];self.leases = None;self.lease_id = None
         self.tool_memory = {};self.lock = threading.Lock();self.stopping = threading.Event()
         self.quality_value = None;self.applied_quality = None;self.last_used = time.monotonic()
-        self.poison = None;self.decoding = False
+        self.poison = None;self.decoding = False;self.cut_turn = None
         self.producer_factory = producer_factory or self._launch_producer
         self.lease_factory = lease_factory or self._lease
         self.idle_seconds = float(cfg.get('single_engine_idle_seconds', max(60, cfg['lease_minutes'] * 60 - 60)))
@@ -166,7 +169,7 @@ class SingleEngine:
     def retire(self, why):
         """Gracefully close the producer, then release the GPU hold."""
         producer, self.producer = self.producer, None
-        self.live = [];self.applied_quality = None;self.tool_memory = {}
+        self.live = [];self.applied_quality = None;self.tool_memory = {};self.cut_turn = None
         receipt = None
         try:
             if producer is not None:
@@ -178,8 +181,15 @@ class SingleEngine:
         finally:
             if self.leases is not None and self.poison is None:
                 leases, self.leases, self.lease_id = self.leases, None, None
-                leases.close()
+                leases.close();self.lease_changed()
         return receipt
+
+    def lease_changed(self):
+        """Set by SingleProxy: rewrite an active request window with the current lease id. A
+        retire + relaunch inside one request (prefix diverged) otherwise leaves the old id there
+        and the guardian stops the server for a 'foreign' hold that is our own new lease."""
+        listener = getattr(self, 'lease_listener', None)
+        if listener:listener()
 
     def _rotate_diagnostic(self):
         """Keep the producer's stderr below its RAM cap across a long-lived session."""
@@ -216,17 +226,26 @@ class SingleEngine:
         if len(canonical) >= self.cfg['context'] - 1:raise ValueError('Prompt exceeds the admitted context')
         metrics.update(prompt_tokens=len(canonical))
         tokens, source = ds4_render.continue_live(self.live if self.producer else [], text, canonical, tokenizer)
+        cut, self.cut_turn = self.cut_turn, None
+        if self.producer is not None and tokens is None and cut is not None and cut['end'] == len(self.live):
+            assistants = [m for m in request['messages'] if m['role'] == 'assistant']
+            tokens = ds4_render.continue_cut_turn(self.live, cut['start'], text, assistants[-1] if assistants else None, tokenizer,
+                                                  think=cut['think'], reasoning=cut['reasoning'], content=cut['content'])
+            if tokens is not None:source = 'memory-cut-turn'
         metrics['prefix_source'] = source
         if self.producer is not None and tokens is None:
             metrics['fresh_reason'] = 'rendered history diverges from the live frontier'
             self.retire('prefix diverged');tokens = canonical
-        started = time.monotonic()
+        started = time.monotonic();metrics["prefill_started"] = started
         if self.producer is None:
             self.launch(tokens);metrics['producer_launch_prefill_seconds'] = time.monotonic() - started
             metrics['reused_prefix_tokens'] = 0;metrics['new_tokens'] = len(tokens)
         else:
             append = tokens[len(self.live):];metrics['reused_prefix_tokens'] = len(self.live);metrics['new_tokens'] = len(append)
-            chunk = int((getattr(self.producer.process, 'ready', None) or {}).get('maximum_prefill_tokens') or 49152)
+            # LLAMADECODE single sweep: negotiated one-op maximum (49152 from old producers), and a
+            # longer append in near-equal sweeps (same rule as the producer), never a tiny tail.
+            from studio.dsv41_session_contract import negotiate_prefill, split_prefill
+            chunk = split_prefill(len(append), negotiate_prefill(getattr(self.producer.process, 'ready', None) or {})) if append else 1
             for offset in range(0, len(append), chunk):
                 self.producer.prefill(append[offset:offset + chunk]);self.live.extend(append[offset:offset + chunk])
             metrics['append_prefill_seconds'] = time.monotonic() - started
@@ -237,6 +256,7 @@ class SingleEngine:
         """Take the GPU hold and start a producer whose frontier is exactly tokens."""
         if self.leases is None:
             stack = ExitStack();self.lease_id = stack.enter_context(self.lease_factory());self.leases = stack
+            self.lease_changed()   # the guardian's window must name the new lease before it next samples the holds
         self.live = []
         try:self.producer = self.producer_factory(tokens)
         except BaseException as exc:
@@ -341,7 +361,7 @@ class SingleEngine:
             if matcher and matcher.hit is not None:ended[0] = 'stop sequence'
             elif client_gone is not None and client_gone():ended[0] = 'client disconnected'
             return ended[0] is not None
-        self.decoding = True
+        turn_start = len(self.live);self.cut_turn = None;self.decoding = True
         try:result = self.decode(max_tokens, on_token) if max_tokens > 0 else dict(tokens=[], text_tokens=[], stopped=False, step_ms=[], decode_ms=0.0)
         finally:self.decoding = False
         if ended[0] is not None:result['text_tokens'] = list(shown)
@@ -352,6 +372,12 @@ class SingleEngine:
             generated_text = tokenizer.detokenize(result['text_tokens']).decode('utf-8', 'replace')
         finish = 'stop' if result['stopped'] or ended[0] == 'stop sequence' else 'length'
         parsed = finish_message(generated_text, has_tools=request['has_tools'], think=think, finish=finish)
+        if ended[0] is not None and len(self.live) > turn_start:
+            # Remember the cut turn as the evaluated ids: the client replays only what it was sent.
+            evaluated = finish_message(tokenizer.detokenize(self.live[turn_start:]).decode('utf-8', 'replace'),
+                                       has_tools=request['has_tools'], think=think, finish=finish)
+            self.cut_turn = dict(start=turn_start, end=len(self.live), think=think,
+                                 reasoning=evaluated['reasoning'] or '', content=evaluated['content'] or '')
         if parsed['calls'] and parsed['raw_tool_text']:
             for call in parsed['calls']:self.tool_memory[call['id']] = parsed['raw_tool_text']
         metrics.update(completion_tokens=len(result['text_tokens']), decode_ms=result['decode_ms'],
@@ -383,7 +409,10 @@ class SingleProxy:
     """HTTP state for the single-engine mode (window file, token, models)."""
     def __init__(self, cfg, run_id, window_file, *, engine=None):
         from .combo_proxy import request_worker_config
+        from .combo_producer import stall_seconds
         self.cfg = cfg;self.run_id = run_id;self.window_file = Path(window_file) if window_file else None
+        self.window_lock = threading.Lock();self.stall = stall_seconds(cfg);self.beat_seconds = 1.0   # >= 1 Hz prefill_progress for streaming clients
+        self.request_active = False
         self.token = os.environ.get('DS4_SERVER_AUTH_TOKEN', '')
         if len(self.token) < 32:raise ValueError('Normal Studio native Bearer token is required')
         self.engine = engine or SingleEngine(request_worker_config(cfg))
@@ -392,18 +421,44 @@ class SingleProxy:
             name=cfg.get('model_name', 'DeepSeek-V4.1-Flash'), context_length=cfg['context'],
             top_provider=dict(context_length=cfg['context'], max_completion_tokens=cfg['context'], is_moderated=False),
             supported_parameters=['tools', 'tool_choice', 'max_tokens', 'stream', 'reasoning_effort'])]}
+        self.engine.lease_listener = lambda: self.window(True, self.engine.lease_id) if self.request_active else None
         self.window(False)
 
     def window(self, active, lease_id=None):
+        """The guardian's request window. Its deadline is a no-progress bound renewed by heartbeat()
+        while the request makes progress, never a fixed request length."""
         if self.window_file is None:return
         row = dict(active=active, run_id=self.run_id, owner_pid=os.getpid(), owner_created=psutil.Process().create_time(),
-                   lease_id=lease_id, deadline=time.time() + self.cfg['lease_minutes'] * 60)
+                   lease_id=lease_id, deadline=time.time() + self.stall)
         started = time.monotonic()
-        while True:
-            try:atomic_json(self.window_file, row);return
-            except PermissionError:
-                if time.monotonic() - started >= 1:raise
-                time.sleep(.01)
+        with self.window_lock:
+            while True:
+                try:atomic_json(self.window_file, row);return
+                except PermissionError:
+                    if time.monotonic() - started >= 1:raise
+                    time.sleep(.01)
+
+    def progressing(self):
+        """The producer showed progress within the stall window (or is still being launched,
+        where its own pipe watchdog applies the same window)."""
+        process = getattr(self.engine.producer, 'process', None)
+        last = getattr(process, 'last_progress', None)
+        return not self.engine.poison and (last is None or time.monotonic() - last < self.stall)
+
+    @contextmanager
+    def heartbeat(self, on_beat=None):
+        """Renew the request window while the request progresses; a stalled request lets it lapse.
+        on_beat (a streaming client's SSE keepalive) keeps downstream inactivity timeouts fed during
+        a long silent prefill, so they too measure progress rather than prompt length."""
+        stop = threading.Event()
+        def beat():
+            while not stop.wait(self.beat_seconds):
+                if self.progressing():
+                    self.window(True, self.engine.lease_id)
+                    if on_beat:on_beat()
+        thread = threading.Thread(target=beat, name='single-window-heartbeat', daemon=True);thread.start()
+        try:yield
+        finally:stop.set();thread.join()
 
     def quality(self, args=None):
         vendor();from studio.quality_speed_contract import NAMED, setting_arguments
@@ -439,7 +494,8 @@ def handler(proxy):
         def authorized(self):return hmac.compare_digest(self.headers.get('Authorization', ''), 'Bearer ' + proxy.token)
         def read_body(self):
             length = int(self.headers.get('Content-Length', '0'))
-            if not 0 < length <= 1 << 20:raise ValueError('Native request body must fit1MiB')
+            # Sized from the context (a 262144-token prompt is several MiB of JSON), not a fixed 1 MiB.
+            if not 0 < length <= max(1 << 20, proxy.cfg['context'] * 32):raise ValueError('Native request body exceeds the context-sized bound')
             self.connection.settimeout(30);data = self.rfile.read(length)
             if len(data) != length:raise ValueError('Truncated request')
             vendor();from studio.dsv41_session_contract import control
@@ -457,15 +513,28 @@ def handler(proxy):
                         reply = engine.restore()
                     finally:proxy.window(False)
                     return self.send(200, reply)
-                # Graceful stop: retire the producer (VRAM freed, hold released), then end serving.
-                try:
-                    if engine.producer is not None or engine.leases is not None:engine.retire('shutdown')
-                finally:engine.stopping.set()
-                self.send(200, dict(closing=True))
-                threading.Thread(target=proxy.server.shutdown, daemon=True).start()
+                return self.send(404, dict(error=dict(message='Unknown stack control route')))
             except Exception as exc:
                 self.send(503, dict(error=dict(message=str(exc), type='single_engine_refused')))
             finally:engine.lock.release()
+        def shutdown(self):
+            """Graceful stop (Studio eject / switch-away): retire the producer so its VRAM and GPU hold
+            are released, then end serving so the process exits 0 and its guardian writes the receipt."""
+            engine = proxy.engine
+            if not engine.lock.acquire(timeout=float(proxy.cfg.get('request_timeout_s', 600))):
+                return self.send(409, dict(error=dict(message='Another request owns this decoder')))
+            try:
+                if engine.poison:raise RuntimeError('Single-engine owner is poisoned: ' + engine.poison)
+                if engine.producer is not None or engine.leases is not None:engine.retire('shutdown')
+            except Exception as exc:
+                # An unconfirmed release keeps serving: exiting would let the kill-on-close Job
+                # end a producer that may still hold VRAM. The caller reports it as stuck.
+                return self.send(503, dict(error=dict(message=str(exc), type='single_engine_refused')))
+            finally:engine.lock.release()
+            engine.stopping.set()
+            threading.Thread(target=proxy.server.shutdown, daemon=True).start()
+            try:self.send(200, dict(closing=True))
+            except OSError:pass   # the stop proceeds even when the caller has gone
         def do_GET(self):
             if self.path in ('/health', '/healthz'):
                 return self.send(200, dict(status='ok', model_ready=True, context=proxy.cfg['context'], resident=proxy.engine.producer is not None))
@@ -482,7 +551,8 @@ def handler(proxy):
             if self.path == '/v1/quality-speed':
                 try:return self.send(200, proxy.quality(body))
                 except (ValueError, RuntimeError, OSError) as exc:return self.send(409, dict(error=dict(message=str(exc))))
-            if self.path in ('/v1/stack/release', '/v1/stack/restore', '/v1/stack/shutdown'):return self.control(self.path)
+            if self.path == '/v1/stack/shutdown':return self.shutdown()
+            if self.path in ('/v1/stack/release', '/v1/stack/restore'):return self.control(self.path)
             if self.path != '/v1/chat/completions':return self.send(404, dict(error=dict(message='Unknown native endpoint')))
             engine = proxy.engine
             if not engine.lock.acquire(blocking=False):return self.send(409, dict(error=dict(message='Another request owns this decoder')))
@@ -490,10 +560,30 @@ def handler(proxy):
             cid = 'chatcmpl-' + secrets.token_hex(12);created = int(time.time())
             model = body.get('model') if isinstance(body.get('model'), str) else proxy.model_id
             include_usage = isinstance(body.get('stream_options'), dict) and body['stream_options'].get('include_usage') is True
-            def write(row):
+            wlock = threading.Lock()
+            def send_raw(data):
                 if not alive[0]:return
-                try:self.wfile.write(b'data: ' + json.dumps(row, separators=(',', ':'), ensure_ascii=False).encode() + b'\n\n');self.wfile.flush()
-                except OSError:alive[0] = False   # client gone: the decode stops at its next token boundary
+                with wlock:
+                    try:self.wfile.write(data);self.wfile.flush()
+                    except OSError:alive[0] = False   # client gone: the decode stops at its next token boundary
+            def write(row):send_raw(b'data: ' + json.dumps(row, separators=(',', ':'), ensure_ascii=False).encode() + b'\n\n')
+            progress = dict(tracker=None, offset=0)
+            def progress_beat():
+                # Owner: streaming clients get prefill percent. Parsed from the resident producer's
+                # per-layer sweep lines; a cold launch (producer still opening) gets a keepalive.
+                from .prefill_progress import PrefillProgress, chunk as progress_chunk
+                process = getattr(engine.producer, 'process', None);total = metrics.get('new_tokens')
+                if process is None or not total or 'first_token_seconds' in metrics:
+                    send_raw(b': progress\n\n');return
+                diagnostic = process.diagnostic
+                if progress['tracker'] is None:
+                    from studio.dsv41_session_contract import negotiate_prefill, split_prefill
+                    size = split_prefill(int(total), negotiate_prefill(getattr(process, 'ready', None) or {}))
+                    progress['tracker'] = PrefillProgress(total, size, started=metrics.get('prefill_started', time.monotonic()))
+                    progress['offset'] = len(diagnostic)
+                if len(diagnostic) < progress['offset']:progress['offset'] = 0   # rotated
+                progress['tracker'].feed(bytes(diagnostic[progress['offset']:]));progress['offset'] = len(diagnostic)
+                write(progress_chunk(cid, model, created, progress['tracker'].snapshot(time.monotonic())))
             final = {}
             def emit(kind, *values):
                 if kind == 'delta' and streaming:write(_chunk(cid, model, created, {values[0]: values[1]}))
@@ -506,9 +596,10 @@ def handler(proxy):
                     self.close_connection = True;headers = True;self.wfile.write(b': accepted\n\n');self.wfile.flush()
                     write(_chunk(cid, model, created, dict(role='assistant')))
                 try:
-                    proxy.window(True, engine.lease_id)
-                    engine.run(body, emit, metrics, ready=lambda: proxy.window(True, engine.lease_id), client_gone=lambda: not alive[0])
-                finally:proxy.window(False)
+                    proxy.request_active = True;proxy.window(True, engine.lease_id)
+                    with proxy.heartbeat(progress_beat if streaming else None):
+                        engine.run(body, emit, metrics, ready=lambda: proxy.window(True, engine.lease_id), client_gone=lambda: not alive[0])
+                finally:proxy.request_active = False;proxy.window(False)
                 parsed, splitter = final['parsed'], final['splitter']
                 calls = tool_call_deltas(parsed['calls'])
                 if streaming:

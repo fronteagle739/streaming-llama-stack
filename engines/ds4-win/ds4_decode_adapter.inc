@@ -78,10 +78,17 @@ static void ds4x_view(ds4_gpu_tensor *t, void *ptr, uint64_t bytes) {
 }
 
 /* raw[40]: [128][512] F32 rings; compressed/index[4] with their row counts;
- * pool_kv/pool_score[3] for the ratio-2 owners. */
-DS4X_EXPORT int ds4x_bind_state(void *const *raw, void *const *compressed, void *const *index,
-                                const uint32_t *rows, void *const *pool_kv, void *const *pool_score) {
-    if (!g_ds4x.open || !raw || !compressed || !index || !rows || !pool_kv || !pool_score) return 0;
+ * pool_kv/pool_score[3] for the ratio-2 owners. cache_bf16: the compressed/
+ * index owners are BF16 (LLAMADECODE --ctx-cache-precision bf16). */
+DS4X_EXPORT int ds4x_bind_state_ex(void *const *raw, void *const *compressed, void *const *index,
+                                   const uint32_t *rows, void *const *pool_kv, void *const *pool_score,
+                                   uint32_t cache_bf16) {
+    if (!g_ds4x.open || !raw || !compressed || !index || !rows || !pool_kv || !pool_score || cache_bf16 > 1u) return 0;
+    if (cache_bf16 && g_ds4x.graph.batch.residual) {
+        fprintf(stderr, "LLAMADECODE_DS4X_BIND_REFUSED reason=bf16 owner caches with the multi-row prefill workspace\n");
+        return 0;
+    }
+    const uint64_t element = cache_bf16 ? sizeof(uint16_t) : sizeof(float);
     ds41_gpu_graph *g = &g_ds4x.graph;
     for (uint32_t i = 0; i < 40; i++) {
         if (!raw[i]) return 0;
@@ -90,8 +97,8 @@ DS4X_EXPORT int ds4x_bind_state(void *const *raw, void *const *compressed, void 
     }
     for (uint32_t i = 0; i < 4; i++) {
         if (!compressed[i] || !index[i] || !rows[i]) return 0;
-        ds4x_view(&g_ds4x.compressed[i], compressed[i], (uint64_t)rows[i] * 512u * sizeof(float));
-        ds4x_view(&g_ds4x.index_cache[i], index[i], (uint64_t)rows[i] * 128u * sizeof(float));
+        ds4x_view(&g_ds4x.compressed[i], compressed[i], (uint64_t)rows[i] * 512u * element);
+        ds4x_view(&g_ds4x.index_cache[i], index[i], (uint64_t)rows[i] * 128u * element);
         g->compressed[i] = &g_ds4x.compressed[i];
         g->index_cache[i] = &g_ds4x.index_cache[i];
         if (i < 3) {
@@ -105,7 +112,15 @@ DS4X_EXPORT int ds4x_bind_state(void *const *raw, void *const *compressed, void 
             g->previous_score[i] = g_ds4x.spare_score;
         }
     }
+    if (g_ds41_cache_bf16 != (cache_bf16 != 0u))
+        fprintf(stderr, "LLAMADECODE_DS4X_CACHE_PRECISION owners=%s\n", cache_bf16 ? "bf16" : "f32");
+    g_ds41_cache_bf16 = cache_bf16 != 0u;
     return 1;
+}
+
+DS4X_EXPORT int ds4x_bind_state(void *const *raw, void *const *compressed, void *const *index,
+                                const uint32_t *rows, void *const *pool_kv, void *const *pool_score) {
+    return ds4x_bind_state_ex(raw, compressed, index, rows, pool_kv, pool_score, 0u);
 }
 
 DS4X_EXPORT void ds4x_set_expert_hook(ds4_gpu_external_expert_hook hook, void *user) {
@@ -140,6 +155,52 @@ DS4X_EXPORT int ds4x_decode(int token, uint32_t position, const int32_t *history
     g->valid = true;
     for (uint32_t i = 0; i < DS4_ENGRAM_NGRAM - 1; i++) g->history.tail[i] = history_tail[i];
     return ds41_graph_step(g, &g_ds4x.model, &g_ds4x.weights, token, logits) ? 1 : 0;
+}
+
+/* LLAMADECODE multi-row append: ds4-win's own layer-major prefill
+ * (ds41_graph_prefill, the resident path native ds4-win uses for >= 8-row
+ * appends) on the bound state. The workspace holds `rows` rows; it is the
+ * native prefill workspace (ds41_graph_ensure_prefill_workspace) sized small
+ * instead of the 2048+-row default. Routed experts still come from the
+ * caller's cache through the expert hook, one union per row group. */
+DS4X_EXPORT int ds4x_prefill_workspace(uint32_t rows, char *error, size_t cap) {
+    if (!g_ds4x.open) { ds4x_set_error(error, cap, "ds4x not open"); return 0; }
+    if (rows < 2u || rows > 2048u) { ds4x_set_error(error, cap, "ds4x prefill workspace rows must be 2..2048"); return 0; }
+    if (g_ds41_cache_bf16) { ds4x_set_error(error, cap, "ds4x multi-row prefill reads F32 owner caches; refused with bf16 owners"); return 0; }
+    ds41_gpu_graph *g = &g_ds4x.graph;
+    if (g->batch.residual && g->prefill_cap == rows) return 1;
+    ds41_graph_free_prefill_workspace(g);
+    free(g->prefill_ids); free(g->rows_view); ds4_gpu_tensor_free(g->prefill_tokens);
+    g->prefill_ids = NULL; g->rows_view = NULL; g->prefill_tokens = NULL;
+    g->prefill_cap = rows;
+    g->prefill_ids = malloc((size_t)rows * sizeof(*g->prefill_ids));
+    g->rows_view = calloc(rows, sizeof(*g->rows_view));
+    g->prefill_tokens = ds4_gpu_tensor_alloc((uint64_t)rows * sizeof(int32_t));
+    if (!g->prefill_ids || !g->rows_view || !g->prefill_tokens || !ds41_graph_ensure_prefill_workspace(g)) {
+        ds4x_set_error(error, cap, "ds4x prefill workspace allocation failed");
+        return 0;
+    }
+    fprintf(stderr, "LLAMADECODE_DS4X_PREFILL_WORKSPACE rows=%u\n", rows);
+    return 1;
+}
+
+/* `count` (2..workspace rows) teacher-forced tokens at `position` with the
+ * caller's Engram history (newest first); writes the frontier logits only.
+ * The device state advances in place exactly as `count` ds4x_decode calls. */
+DS4X_EXPORT int ds4x_prefill(const int32_t *tokens, uint32_t count, uint32_t position,
+                             const int32_t *history_tail, uint32_t history_count, float *logits) {
+    ds41_gpu_graph *g = &g_ds4x.graph;
+    if (!g_ds4x.open || !tokens || !logits || !history_tail || history_count != DS4_ENGRAM_NGRAM - 1 ||
+        count < 2u || !g->batch.residual || count > g->prefill_cap || position > g->ctx || count > g->ctx - position) return 0;
+    if (g_ds41_cache_bf16) { fprintf(stderr, "LLAMADECODE_DS4X_PREFILL_FAILED reason=bf16 owner caches\n"); return 0; }
+    g->pos = position;
+    g->valid = true;
+    for (uint32_t i = 0; i < DS4_ENGRAM_NGRAM - 1; i++) g->history.tail[i] = history_tail[i];
+    if (!ds41_graph_prefill(g, &g_ds4x.model, &g_ds4x.weights, tokens, count, NULL, NULL, 0, NULL, NULL, NULL, 0)) {
+        fprintf(stderr, "LLAMADECODE_DS4X_PREFILL_FAILED count=%u position=%u\n", count, position);
+        return 0;
+    }
+    return ds41_graph_logits(g, &g_ds4x.model, &g_ds4x.weights, logits) ? 1 : 0;
 }
 
 DS4X_EXPORT void ds4x_close(void) {

@@ -30,4 +30,21 @@ struct delta_plan {
 bool make_delta_plan(const wire_frontier & base, const wire_frontier & target,
                      delta_plan & result, std::string & error);
 
+// apply_decode_delta: peers stream decoded rows as <=128-token deltas (the
+// normal chunk, still advertised as maximum_decode_tokens=128 so old clients
+// handshake unchanged). The accepted maximum, advertised separately as
+// maximum_decode_delta_tokens, is one whole local append (the 49152-token
+// prefill chunk). Clients negotiate effective = min(advertised, own maximum),
+// 128 when the peer does not advertise it. Same plan, same artifact and the
+// same base/target owner, token and logit SHA checks.
+constexpr uint32_t decode_delta_chunk_tokens = 128;
+constexpr uint32_t decode_delta_max_tokens = 49152;
+// Sanity cap on a decode artifact's declared bytes before streaming (the
+// receiver then requires the exact extent): 64 MiB covers any <=128-token
+// delta; a larger one adds at most 6404 bytes per token (3x2048/2 + 2048
+// compressed, 3x512/2 + 512 index, 4 token) over that.
+constexpr uint64_t decode_delta_byte_cap(uint32_t tokens) {
+    return (64ull << 20) + (tokens > decode_delta_chunk_tokens ? uint64_t(tokens) * 6404u : 0u);
+}
+
 } // namespace llama_dsv41

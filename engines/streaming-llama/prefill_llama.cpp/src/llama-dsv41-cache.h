@@ -7,6 +7,8 @@
 
 #include <array>
 #include <mutex>
+#include <string>
+#include <vector>
 
 // Canonical native V4.1 storage. Each physical compressor/index cache exists
 // once, irrespective of the number of reader layers. Values remain F32 so
@@ -16,13 +18,26 @@
 // Allocation requires an explicit byte ceiling from resource admission.
 class llama_dsv41_cache_storage {
 public:
+    // grow_step 0: one fixed full-context buffer (unchanged). Otherwise the
+    // compressed/index owners are CUDA VMM ranges mapped in grow_step-token
+    // steps (LLAMADECODE growable context cache; plain CUDA VMM, no D3D12).
     llama_dsv41_cache_storage(const std::array<int32_t, 40> & kv_owners, uint32_t context,
-                             ggml_backend_buffer_type_t buft, uint64_t admitted_bytes,bool compressed_bf16=false,bool capture_dspark=false);
+                             ggml_backend_buffer_type_t buft, uint64_t admitted_bytes,bool compressed_bf16=false,bool capture_dspark=false,
+                             uint32_t grow_step=0);
+    ~llama_dsv41_cache_storage();
 
     static uint64_t required_bytes(uint32_t context,bool compressed_bf16=false,bool capture_dspark=false);
     uint64_t allocated_bytes() const;
     uint32_t capacity() const { return context; }
     bool compact_compressed() const { return compressed_bf16; }
+    // Growable cache (grow_step != 0): mapped positions, mapped physical bytes,
+    // and the physical bytes of the next step (0 at full context).
+    uint32_t growth_step() const { return grow_step; }
+    uint32_t mapped_tokens() const;
+    uint64_t next_step_bytes() const;
+    // Map the owners to cover `tokens` positions (rounded up to the step).
+    // No-op for a fixed cache or when already covered; logs each grow event.
+    bool ensure_tokens(uint32_t tokens, const char * phase, bool * grew, std::string & error);
     void clear();
     bool captures_dspark() const { return dspark_ring!=nullptr; }
     bool dspark_ready(uint32_t position) const;
@@ -88,6 +103,20 @@ private:
     llama_dsv41_dspark_capture::completion dspark_completion;
     ggml_context_ptr tensors;
     ggml_backend_buffer_ptr buffer;
+    // Growable owners: one VA reservation, eight granularity-aligned ranges.
+    const uint32_t grow_step;
+    uint32_t grow_tokens=0;
+    uint64_t grow_granularity=0,grow_reserved=0,admitted=0;
+    int grow_device=0;
+    void * grow_base=nullptr;
+    std::array<ggml_tensor *, 8> grow_tensor {};
+    std::array<uint64_t, 8> grow_offset {}, grow_full {}, grow_mapped {};
+    struct grow_mapping { uint64_t offset, bytes, handle; };
+    std::vector<grow_mapping> grow_maps;
+    ggml_context_ptr grow_tensors;
+    ggml_backend_buffer_ptr grow_buffer;
+    bool ensure_tokens_locked(uint32_t tokens, const char * phase, bool * grew, std::string & error);
+    void clear_grown_locked();
 
     static int source_index(uint32_t source_layer);
     bool read_native_span_locked(const llama_dsv41::state_span &, uint64_t,

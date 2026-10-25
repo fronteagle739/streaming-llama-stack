@@ -272,8 +272,9 @@ class Receiver:
                 for name, value in dynamic.items():
                     env.setdefault(name, value)
         cfg['env_overrides'] = env
+        # DS4COMBO2 liveness: the Mac engine has no lifetime cap; the guard's memory limits stay.
         self.engine = OwnedProcess(cfg, command, 'mac-' + self.backend, cwd=Path(cfg['runtime_root']),
-                                   timeout=cfg['lease_minutes'] * 60, scope='ds4-mac' if self.backend == 'ds4' else 'mlx-serve')
+                                   unbounded=True, scope='ds4-mac' if self.backend == 'ds4' else 'mlx-serve')
         self.engine_mode = native
         self.engine_budget = cfg['host_budget_gib']
         deadline = time.monotonic() + 300
@@ -298,7 +299,7 @@ class Receiver:
         body['prompt_cache_key'] = conversation_key(body)
         body.setdefault('include_previous_reasoning', True)
         response = http_json(f'http://127.0.0.1:{self.cfg.get("mac_engine_port", 8181)}/v1/chat/completions',
-                             body, timeout=self.cfg['request_timeout_s'])
+                             body, timeout=None)   # silent until done (stream=False); the owned engine bounds it
         if qualification:
             message = response['choices'][0]['message']
             logprobs = response['choices'][0].get('logprobs') or {}

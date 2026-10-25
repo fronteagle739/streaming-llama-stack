@@ -36118,25 +36118,60 @@ static int routed_moe_launch(
     const char *external_gate = nullptr, *external_up = nullptr, *external_down = nullptr;
 #ifdef DS4_EXTERNAL_DECODE
     if (g_ds4x_expert_hook) {
-        /* The caller's expert cache supplies the routed experts' bytes: one
-         * token's ids become slots in its pool, read with the original strides. */
-        int32_t ids[16], slots[16];uint32_t n_slots = 0;
-        if (n_tokens != 1u || n_expert > 16u ||
-            !ds4_gpu_tensor_read(selected, 0, ids, (uint64_t)n_expert * sizeof(int32_t)) ||
-            !g_ds4x_expert_hook(g_ds4x_expert_user, layer_index, ids, n_expert, slots,
+        /* The caller's expert cache supplies the routed experts' bytes: the
+         * rows' ids become slots in its pool, read with the original strides.
+         * A multi-row call (ds4x_prefill) asks for the union of its rows' experts
+         * at once; a union above the group cap is split into row halves, each a
+         * call of its own (the id read below orders it after the previous half). */
+        const uint32_t assignments = n_tokens * n_expert;
+        std::vector<int32_t> ids(assignments), unique, slots;
+        if (!ds4_gpu_tensor_read(selected, 0, ids.data(), (uint64_t)assignments * sizeof(int32_t))) return 0;
+        for (const int32_t id : ids) {
+            if (id < 0 || (uint32_t)id >= n_total_expert) return 0;
+            if (std::find(unique.begin(), unique.end(), id) == unique.end()) unique.push_back(id);
+        }
+        static const uint32_t group_cap = [] {
+            const char *v = getenv("LLAMADECODE_DS4X_MOE_GROUP_EXPERTS");
+            const long n = v && *v ? strtol(v, nullptr, 10) : 192;
+            return (uint32_t)(n < 16 ? 16 : n > 384 ? 384 : n);
+        }();
+        if (n_tokens > 1u && unique.size() > group_cap) {
+            const uint32_t first = n_tokens / 2u, rest = n_tokens - first;
+            ds4_gpu_tensor *v[8] = {};
+            auto view = [](const ds4_gpu_tensor *t, uint64_t row, uint64_t width, uint64_t rows) {
+                return ds4_gpu_tensor_view(t, row * width * 4u, rows * width * 4u); };
+            v[0] = view(out, 0, out_dim, first); v[1] = view(out, first, out_dim, rest);
+            v[2] = view(x, 0, expert_in_dim, first); v[3] = view(x, first, expert_in_dim, rest);
+            v[4] = view(selected, 0, n_expert, first); v[5] = view(selected, first, n_expert, rest);
+            v[6] = view(weights, 0, n_expert, first); v[7] = view(weights, first, n_expert, rest);
+            int ok = 1;
+            for (auto *t : v) ok &= t != nullptr;
+            for (uint32_t h = 0; ok && h < 2u; h++)
+                ok = routed_moe_launch(v[h], gate, up, mid, down, model_map, model_size, gate_offset, up_offset,
+                    down_offset, gate_type, down_type, gate_expert_bytes, gate_row_bytes, down_expert_bytes,
+                    down_row_bytes, expert_in_dim, expert_mid_dim, out_dim, v[4 + h], v[6 + h], n_total_expert,
+                    n_expert, clamp, v[2 + h], layer_index, h ? rest : first, allow_streaming, owned_filtered);
+            for (auto *t : v) ds4_gpu_tensor_free(t);
+            return ok;
+        }
+        slots.assign(unique.size(), -1);uint32_t n_slots = 0;
+        if (!g_ds4x_expert_hook(g_ds4x_expert_user, layer_index, unique.data(), (uint32_t)unique.size(), slots.data(),
                                 &external_gate, &external_up, &external_down, &n_slots) ||
             !external_gate || !external_up || !external_down || !n_slots) {
-            fprintf(stderr, "LLAMADECODE_DS4X_EXPERT_HOOK_FAILED layer=%u\n", layer_index);
+            fprintf(stderr, "LLAMADECODE_DS4X_EXPERT_HOOK_FAILED layer=%u rows=%u experts=%zu\n", layer_index, n_tokens, unique.size());
             return 0;
         }
-        for (uint32_t i = 0; i < n_expert; i++) if (slots[i] < 0 || (uint32_t)slots[i] >= n_slots) return 0;
-        if (!g_ds4x_slot_tensor.ptr) {
+        for (const int32_t slot : slots) if (slot < 0 || (uint32_t)slot >= n_slots) return 0;
+        for (int32_t &id : ids) id = slots[(size_t)(std::find(unique.begin(), unique.end(), id) - unique.begin())];
+        if (g_ds4x_slot_tensor.bytes < (uint64_t)assignments * sizeof(int32_t)) {
+            if (g_ds4x_slot_tensor.ptr) { (void)cudaFree(g_ds4x_slot_tensor.ptr); g_ds4x_slot_tensor = {}; }
+            const uint64_t bytes = (uint64_t)(assignments > 64u ? assignments : 64u) * sizeof(int32_t);
             void *ptr = nullptr;
-            if (cudaMalloc(&ptr, 64u * sizeof(int32_t)) != cudaSuccess) return 0;
-            g_ds4x_slot_tensor.ptr = ptr; g_ds4x_slot_tensor.bytes = 64u * sizeof(int32_t);
+            if (cudaMalloc(&ptr, bytes) != cudaSuccess) return 0;
+            g_ds4x_slot_tensor.ptr = ptr; g_ds4x_slot_tensor.bytes = bytes;
             g_ds4x_slot_tensor.owner = 0; g_ds4x_slot_tensor.device_id = -1;
         }
-        if (!ds4_gpu_tensor_write(&g_ds4x_slot_tensor, 0, slots, (uint64_t)n_expert * sizeof(int32_t))) return 0;
+        if (!ds4_gpu_tensor_write(&g_ds4x_slot_tensor, 0, ids.data(), (uint64_t)assignments * sizeof(int32_t))) return 0;
         selected = &g_ds4x_slot_tensor;
         n_total_expert = n_slots;
         allow_streaming = 0;

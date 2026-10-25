@@ -107,9 +107,10 @@ class OwnedProducer:
             env = environment(cfg, 'rtx-producer')
             libraries = [str(path(p)) for p in cfg.get('producer_library_directories', [])]
             env['PATH'] = os.pathsep.join([str(binary.parent), *libraries, env.get('PATH', '')])
-            self.timer = threading.Timer(cfg['lease_minutes'] * 60, cancel.set)
-            self.timer.daemon = True
-            self.timer.start()
+            from .combo_producer import stall_seconds   # local: combo_producer imports this module
+            # DS4COMBO2 liveness: no fixed lease_minutes cap; the Producer's no-progress window
+            # (stall_seconds) ends a stalled session, and idle_seconds still retires an idle one.
+            self.timer = None
             # Leave 256 MiB within the aggregate for broker/metadata. The native
             # engine retains its full allocation/RSS cap; this is a hard minimum,
             # never a hard maximum that could force pages out.
@@ -120,7 +121,7 @@ class OwnedProducer:
                                            receipt=directory / 'working-set.json')
             self.attempted = True
             self.producer = Producer(request['session'], argv, env, directory, host_bytes=host_bytes,
-                                     physical_floor=floor, operation_seconds=min(600, cfg['request_timeout_s']),
+                                     physical_floor=floor, operation_seconds=min(600, cfg['request_timeout_s']), stall_seconds=stall_seconds(cfg),
                                      idle_seconds=cfg['lease_minutes'] * 60, native=native,
                                      cancelled=cancelled, after_resume=protect)
             cp = self.producer.ready['checkpoint']

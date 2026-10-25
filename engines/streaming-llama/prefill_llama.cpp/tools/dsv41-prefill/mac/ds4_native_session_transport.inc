@@ -2,6 +2,7 @@
  * Socket/auth/HTTP framing and artifact v2.1 are reused unchanged. All state
  * callbacks run synchronously under the server's existing generation owner. */
 #include "ds4_native_session_json.h"
+#include "ds4_native_session_negotiate.h"
 typedef struct {ds4_nf_config http;char tier[9],techniques[4097];} ds4_ns_config;
 typedef struct {
     ds4_native_checkpoint identity;
@@ -10,6 +11,8 @@ typedef struct {
 typedef struct {
     ds4_ns_config*config;char id[33];uint64_t sequence;
     ds4_native_checkpoint synced;bool started,poisoned;
+    /* Negotiated at start: min(peer's advertised maximum, DS4_NS_DECODE_DELTA_MAX); 128 for a peer that does not advertise one. */
+    uint32_t decode_delta_max;
     bool include_history_reasoning;
     ds4_ns_anchor anchor;
     uint64_t sent_delta_bytes,received_delta_bytes,initial_bytes,decode_batches,prefill_batches;
@@ -47,6 +50,11 @@ static void ds4_ns_disconnect(ds4_nf_io*io){if(io->fd>=0)close(io->fd);io->fd=-1
 static bool ds4_ns_identity(ds4_ns_session*s,const ds4_ns_reply*r){
     return !strcmp(s->id,r->session)&&!strcmp(DS4_NF_MODEL_SHA,r->model_sha256);
 }
+/* See ds4_native_session_negotiate.h (bits 20 / 11: the reply carried the field). */
+static bool ds4_ns_negotiate_decode(const ds4_ns_reply*r,uint32_t*effective){
+    return ds4_ns_negotiate_decode_values((r->seen&(UINT64_C(1)<<20))!=0,r->maximum_decode_delta_tokens,
+        (r->seen&(UINT64_C(1)<<11))!=0,r->maximum_decode_tokens,effective);
+}
 static bool ds4_ns_poll(ds4_ns_session*s,ds4_nf_io*io,const char*suffix,bool starting,ds4_ns_reply*r){
     for(;;){
         ds4_ns_disconnect(io);
@@ -55,7 +63,7 @@ static bool ds4_ns_poll(ds4_ns_session*s,ds4_nf_io*io,const char*suffix,bool sta
         if(starting){
             if(strcmp(s->id,r->session))return false;
             if(!strcmp(r->state,"ready"))return ds4_ns_identity(s,r)&&r->have_checkpoint&&r->next_sequence==1&&
-                r->maximum_prefill_tokens==49152&&r->maximum_decode_tokens==128&&r->control_host_bytes==(64u<<20);
+                r->maximum_prefill_tokens==49152&&ds4_ns_negotiate_decode(r,&s->decode_delta_max)&&r->control_host_bytes==(64u<<20);
             if(strcmp(r->state,"starting"))return false;
         }else{
             if(r->sequence!=s->sequence)return false;
@@ -254,7 +262,7 @@ typedef struct {ds4_ns_session*s;ds4_nf_io*io;ds4_ns_reply reply;} ds4_ns_decode
 static int ds4_ns_decode_visit(void*ud,const ds4_native_view*v,char*err,size_t cap){
     const double started=ds4_nf_now();
     ds4_ns_decode_write*w=ud;ds4_ns_session*s=w->s;ds4_native_checkpoint target;dsv41_c_plan plan;
-    if(v->context!=s->synced.context||v->position<=s->synced.position||v->position-s->synced.position>128||
+    if(v->context!=s->synced.context||v->position<=s->synced.position||v->position-s->synced.position>(s->decode_delta_max?s->decode_delta_max:DS4_NS_DECODE_DELTA_CHUNK)||
        !dsv41_c_delta(v->context,s->synced.position,v->position,&plan)||!ds4_native_capture(&target,v,err,cap))return 0;
     char prefix_hash[65];ds4_native_hash(v->tokens,(size_t)s->synced.position*4,prefix_hash);
     if(strcmp(prefix_hash,s->synced.tokens_sha256))return 0;
@@ -276,7 +284,7 @@ static int ds4_ns_decode_sync(ds4_ns_session*s,ds4_session*session,uint32_t posi
                                ds4_nf_cancel_fn cancel,void*ud,char*err,size_t cap){
     if(!s||!s->started||s->poisoned)return ds4_nf_error(err,cap,"native decode session unavailable");
     if(position==s->synced.position)return 0;
-    if(position<s->synced.position||position-s->synced.position>128)goto bad;
+    if(position<s->synced.position||position-s->synced.position>(s->decode_delta_max?s->decode_delta_max:DS4_NS_DECODE_DELTA_CHUNK))goto bad;
     if(!force&&position-s->synced.position<32)return 0;
     ds4_nf_io io={.fd=-1,.deadline=ds4_nf_now()+s->config->http.deadline_seconds,.cancelled=cancel,.cancel_ud=ud};
     ds4_ns_decode_write w={s,&io,{0}};

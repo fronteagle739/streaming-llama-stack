@@ -462,6 +462,93 @@ extern "C" int ds4_gpu_dsv41_indexer_scores_batch(ds4_gpu_tensor *scores,
     return cuda_ok(cudaGetLastError(), "V4.1 index scores");
 }
 
+#ifdef DS4_EXTERNAL_DECODE
+/* LLAMADECODE --ctx-cache-precision bf16: the caller's compressed/index owner
+ * caches hold BF16. Their values are the existing QAT output (FP4 x E8M0/E4M3
+ * scales), exactly representable in BF16, so loading them back as F32 gives
+ * the same operands the F32 owners give. Same kernels otherwise. */
+__device__ static float dsv41_load_bf16(const uint16_t *p, uint64_t i) {
+    return __uint_as_float((uint32_t)p[i] << 16u);
+}
+
+static bool dsv41_has_halves(const ds4_gpu_tensor *t, uint64_t count) {
+    return t && t->ptr && count <= t->bytes / sizeof(uint16_t);
+}
+
+__global__ static void dsv41_gather_bf16_kernel(float *out, const uint16_t *source,
+                                               const int32_t *ids, uint32_t source_rows) {
+    const int32_t id = ids[blockIdx.x];
+    for (uint32_t col = threadIdx.x; col < 512u; col += blockDim.x)
+        out[(uint64_t)blockIdx.x * 512u + col] = id >= 0 && (uint32_t)id < source_rows ?
+            dsv41_load_bf16(source, (uint64_t)id * 512u + col) : NAN;
+}
+
+extern "C" int ds4_gpu_dsv41_gather_kv_bf16(ds4_gpu_tensor *out, const ds4_gpu_tensor *source,
+                                            const ds4_gpu_tensor *ids, uint32_t source_rows, uint32_t selected_rows) {
+    if (!source_rows || !selected_rows || selected_rows > 512u || selected_rows > source_rows ||
+        !dsv41_has_halves(source, (uint64_t)source_rows * 512u) ||
+        !dsv41_has_floats(out, (uint64_t)selected_rows * 512u) || !dsv41_has_floats(ids, selected_rows)) return 0;
+    dsv41_gather_bf16_kernel<<<selected_rows, 256, 0, cuda_decode_stream()>>>((float *)out->ptr,
+        (const uint16_t *)source->ptr, (const int32_t *)ids->ptr, source_rows);
+    return cuda_ok(cudaGetLastError(), "V4.1 sparse KV gather (bf16 owners)");
+}
+
+__global__ static void dsv41_index_scores_bf16_kernel(float *scores, const float *q,
+        const float *weights, const uint16_t *keys, uint32_t width,
+        uint32_t start, uint32_t ratio) {
+    const uint32_t key = blockIdx.x * 8u + threadIdx.x / 32u;
+    const uint32_t row = blockIdx.y, lane = threadIdx.x & 31u;
+    if (key >= width) return;
+    if (key >= (start + row + 1u) / ratio) {
+        if (!lane) scores[(uint64_t)row * width + key] = -INFINITY;
+        return;
+    }
+    const uint64_t k = (uint64_t)key * 128u + lane;
+    const float k0 = dsv41_load_bf16(keys, k), k1 = dsv41_load_bf16(keys, k + 32u),
+                k2 = dsv41_load_bf16(keys, k + 64u), k3 = dsv41_load_bf16(keys, k + 96u);
+    float total = 0;
+    for (uint32_t h = 0; h < 32u; h++) {
+        const float *x = q + ((uint64_t)row * 32u + h) * 128u + lane;
+        const float a = __fadd_rn(__fmul_rn(x[0], k0), __fmul_rn(x[64], k2));
+        const float b = __fadd_rn(__fmul_rn(x[32], k1), __fmul_rn(x[96], k3));
+        float dot = __fadd_rn(a, b);
+        for (uint32_t stride = 16u; stride; stride >>= 1u)
+            dot += __shfl_down_sync(0xffffffffu, dot, stride);
+        total += fmaxf(dot, 0.0f) * weights[(uint64_t)row * 32u + h];
+    }
+    if (!lane) scores[(uint64_t)row * width + key] = total * (1.0f / 64.0f);
+}
+
+extern "C" int ds4_gpu_dsv41_indexer_scores_batch_bf16(ds4_gpu_tensor *scores,
+                                                        const ds4_gpu_tensor *q, const ds4_gpu_tensor *weights,
+                                                        const ds4_gpu_tensor *keys, uint32_t source_rows,
+                                                        uint32_t rows, uint32_t start, uint32_t ratio) {
+    if ((ratio != 1u && ratio != 2u) || !source_rows || source_rows > INT32_MAX || !rows ||
+        rows > 65535u || rows > UINT32_MAX - start || (start + rows) / ratio > source_rows ||
+        !dsv41_has_floats(scores, (uint64_t)source_rows * rows) ||
+        !dsv41_has_floats(q, (uint64_t)rows * 32u * 128u) ||
+        !dsv41_has_floats(weights, (uint64_t)rows * 32u) ||
+        !dsv41_has_halves(keys, (uint64_t)source_rows * 128u)) return 0;
+    dsv41_index_scores_bf16_kernel<<<dim3((source_rows + 7u) / 8u, rows), 256, 0, cuda_decode_stream()>>>(
+        (float *)scores->ptr, (const float *)q->ptr, (const float *)weights->ptr,
+        (const uint16_t *)keys->ptr, source_rows, start, ratio);
+    return cuda_ok(cudaGetLastError(), "V4.1 index scores (bf16 owners)");
+}
+
+__global__ static void dsv41_store_bf16_kernel(uint16_t *dst, const float *src, uint32_t count) {
+    const uint32_t i = blockIdx.x * blockDim.x + threadIdx.x;
+    if (i < count) dst[i] = (uint16_t)(__float_as_uint(dsv41_bf16(src[i])) >> 16u);
+}
+
+/* One already roped and quantized F32 row stored as BF16 at element offset `first`. */
+extern "C" int ds4_gpu_dsv41_store_bf16(ds4_gpu_tensor *dst, uint64_t first, const ds4_gpu_tensor *src, uint32_t count) {
+    if (!count || !dsv41_has_floats(src, count) || first > UINT64_MAX - count || !dsv41_has_halves(dst, first + count)) return 0;
+    dsv41_store_bf16_kernel<<<(count + 255u) / 256u, 256, 0, cuda_decode_stream()>>>(
+        (uint16_t *)dst->ptr + first, (const float *)src->ptr, count);
+    return cuda_ok(cudaGetLastError(), "V4.1 owner row store (bf16)");
+}
+#endif
+
 extern "C" int ds4_gpu_dsv41_tensor_ops_available(void) { return 0; }
 extern "C" uint64_t ds4_gpu_dsv41_indexer_packed_bytes(uint32_t, uint32_t) { return 0; }
 extern "C" int ds4_gpu_dsv41_indexer_pack(ds4_gpu_tensor *, const ds4_gpu_tensor *,
