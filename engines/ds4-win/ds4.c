@@ -43465,6 +43465,16 @@ static DS4_MAYBE_UNUSED bool ds41_graph_alloc(ds41_gpu_graph *g, const ds4_model
         if (!ok) goto fail;
     }
     ds41_graph_reset(g);
+    if (g_ds4x_external_alloc) {
+        /* LLAMADECODE: ds4x allocates no owner caches, prefill or carry rows (the
+         * caller owns the state). Only these scratch tensors scale with ctx. */
+        const uint64_t blocks = (ctx + 7u) / 8u;
+        const uint64_t ctx_scaled = ((uint64_t)DS41_INDEX_BATCH * ctx + (uint64_t)DS41_INDEX_BATCH * blocks + blocks) * sizeof(float) +
+                                    ds4_gpu_dsv41_indexer_packed_bytes(ctx, g->prefill_cap);
+        fprintf(stderr, "ds4: V4.1 ds4x decode scratch ctx=%u ctx_scaled=%.2f MiB (index scores, block scores/mask); "
+                        "owner caches, prefill and carry buffers are the caller's (native full-engine estimate %.2f MiB, not allocated)\n",
+                ctx, (double)ctx_scaled / 1048576.0, (double)ds41_graph_bytes(ctx) / 1048576.0);
+    } else
     fprintf(stderr, "ds4: V4.1 static context buffers %.2f MiB (ctx=%u), Engram disk-only\n",
             (double)ds41_graph_bytes(ctx) / 1048576.0, ctx);
     if (g->grow_step) {
