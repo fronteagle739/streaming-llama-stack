@@ -22,6 +22,13 @@ GiB=1024**3
 PAGE=65536
 
 
+def runtime_min_free_gib(cfg):
+    value=cfg.get('runtime_min_free_gib',4.0)
+    if type(value) not in (int,float) or not math.isfinite(value) or not 0<=value<2**34:
+        raise ValueError('runtime_min_free_gib must be finite and nonnegative (<2**34); 0 disables it')
+    return float(value)
+
+
 def wait_for_host_capacity(host_bytes,floor_bytes,cancelled,*,timeout_s=30,available=None,clock=time.monotonic,sleep=time.sleep):
     """Allow OS RAM reclamation after certified engine retirement. Owner rule (no fixed
     timeouts): the wait lives while available RAM keeps rising (reclamation is progressing);

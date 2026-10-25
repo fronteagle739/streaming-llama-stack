@@ -1,10 +1,8 @@
-// Owner paging-only rule for the producer's runtime host-memory watch
-// (llama-dsv41-host-memory.h): admission may check fit; at runtime only real
-// paging (global pagefile usage > 256,000,000 bytes over the launch baseline,
-// studio.job_paging.GLOBAL_PAGING_LIMIT) stops the producer; low free RAM is
-// recorded, not fatal.
+// CPU-only verdicts for both runtime guards. No engine or GPU is launched.
 #include "llama-dsv41-host-memory.h"
 #include <cstdio>
+#include <cstring>
+#include <initializer_list>
 
 namespace hm = llama_dsv41_host_memory;
 static int failures = 0;
@@ -15,6 +13,11 @@ static void expect(bool ok, const char *what) {
 
 int main() {
     const uint64_t G = 1ull << 30, base = 3 * G;
+    expect(hm::runtime_min_free_bytes == 4 * G, "runtime floor defaults to 4 GiB");
+    for (const char *bad : {"", "-1", "nan", "inf", "4oops", "17179869184"})
+        expect(!hm::configure_runtime_min_free_gib(bad), "invalid floor rejected before admission");
+    expect(hm::configure_runtime_min_free_gib("6.5") && hm::runtime_min_free_bytes == 6 * G + G / 2, "fractional GiB supported");
+    expect(hm::configure_runtime_min_free_gib("4.0"), "explicit 4 GiB supported");
     expect(hm::paging_limit == 256000000ull, "limit = studio GLOBAL_PAGING_LIMIT (256 MB)");
     expect(!hm::paging_exceeded(base, base), "no growth: run");
     expect(!hm::paging_exceeded(base, base - G), "pagefile shrank below baseline: run (growth 0)");
@@ -23,7 +26,7 @@ int main() {
     expect(hm::paging_exceeded(base, base + 256000001ull), "growth one byte over the limit: stop");
     expect(hm::paging_exceeded(0, 300000000ull), "zero baseline, 300 MB paged: stop");
 
-    // Low free RAM / commit near its limit with zero paging is recorded, not fatal.
+    // The admission reserve remains independent of the runtime floor.
     hm::state low{};
     low.available = 512ull << 20; low.total = 32 * G; low.commit = 40 * G; low.commit_limit = 128 * G;
     expect(hm::low_memory(low), "512 MiB free is below the 1 GiB reserve (recorded)");
@@ -37,7 +40,7 @@ int main() {
     expect(!hm::fits(ok, 13 * G, 0), "admission: 13 GiB host plan does not fit 12 GiB free");
     expect(hm::fits(ok, 10 * G, 0), "admission: 10 GiB host plan fits");
 
-    // live() on this machine (read-only queries): low RAM never stops it, paging below the limit runs.
+    // live() on this machine (read-only queries): paging below the limit runs.
     uint64_t now = 0;
     expect(hm::pagefile_in_use(now), "EnumPageFilesW pagefile usage readable");
     hm::paging_baseline.store(now);
@@ -51,6 +54,19 @@ int main() {
     } else {
         std::printf("SKIP live stop sample (pagefile in use %llu bytes < 300 MB)\n", (unsigned long long)now);
     }
+    hm::paging_stop.store(false);
+    hm::state fake{}; fake.available = 4 * G;
+    expect(hm::check_runtime_floor(fake), "exactly at floor: run");
+    fake.available = 3 * G;
+    expect(hm::floor_exceeded(fake), "fake available reader below floor: stop verdict");
+    expect(hm::configure_runtime_min_free_gib("0"), "0 disables floor");
+    expect(hm::check_runtime_floor(fake) && !hm::floor_stop.load(), "disabled floor allows low available RAM");
+    expect(hm::paging_exceeded(base, base + 256000001ull), "paging still stops with floor disabled");
+    expect(hm::configure_runtime_min_free_gib("4"), "restore 4 GiB");
+    expect(!hm::check_runtime_floor(fake) && hm::floor_stop.load(), "low RAM latches existing graceful stop flag");
+    char reason[384]; hm::stop_reason(reason, sizeof(reason));
+    expect(std::strstr(reason, "available physical RAM") && std::strstr(reason, "--runtime-min-free-gib=4"), "RAM stop names its reason and startup setting");
+    expect(!hm::live(), "latched floor stop reaches should_stop via live()");
     std::printf("%s %d failures\n", failures ? "FAILED" : "ALL PASS", failures);
     return failures ? 1 : 0;
 }

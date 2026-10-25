@@ -13,6 +13,7 @@ def main():
     parser.add_argument('--config')
     parser.add_argument('--host-budget-gib', type=float)
     parser.add_argument('--min-available-gib', type=float)
+    parser.add_argument('--runtime-min-free-gib', type=float, help='Runtime available physical RAM floor (default 4 GiB; 0 disables it)')
     sub = parser.add_subparsers(dest='command', required=True)
     sub.add_parser('check')
     installer = sub.add_parser('install')
@@ -80,9 +81,10 @@ def main():
         child.add_argument('--config', default=argparse.SUPPRESS)
         child.add_argument('--host-budget-gib', type=float, default=argparse.SUPPRESS)
         child.add_argument('--min-available-gib', type=float, default=argparse.SUPPRESS)
+        child.add_argument('--runtime-min-free-gib', type=float, default=argparse.SUPPRESS)
         add_flags(child, suppress=True)
     args = parser.parse_args()
-    config_keys = {'host_budget_gib', 'min_available_gib', 'model', 'webui', 'image_model', 'video_model',
+    config_keys = {'host_budget_gib', 'min_available_gib', 'runtime_min_free_gib', 'model', 'webui', 'image_model', 'video_model',
                    'image_arch', 'video_arch', 'comfyui_models', 'image_mode', 'video_mode',
                    'mtp_model', 'mac_port', 'mac_engine_port', 'backend', 'zig', 'models', 'resident', 'native_tier',
                    'mac', 'pair_token'}

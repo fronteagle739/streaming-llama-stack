@@ -8,7 +8,19 @@ import json
 from pathlib import Path
 import uuid
 import unittest
-from slstack.combo_ram import LockedRam, kernel_api, protect_working_set,wait_for_host_capacity,wait_owned_initialization
+from slstack.combo_ram import LockedRam, kernel_api, protect_working_set,wait_for_host_capacity,wait_owned_initialization,runtime_min_free_gib
+
+
+class RuntimeFloorTest(unittest.TestCase):
+    def test_default_is_four_and_zero_disables(self):
+        self.assertEqual(runtime_min_free_gib({}),4.0)
+        self.assertEqual(runtime_min_free_gib(dict(runtime_min_free_gib=0)),0.0)
+        self.assertEqual(runtime_min_free_gib(dict(runtime_min_free_gib=6.5)),6.5)
+
+    def test_invalid_floors_fail_before_launch(self):
+        for value in (-1,float('nan'),float('inf'),True,'4',None,2**34):
+            with self.subTest(value=value),self.assertRaisesRegex(ValueError,'runtime_min_free_gib'):
+                runtime_min_free_gib(dict(runtime_min_free_gib=value))
 
 
 class CapacityTest(unittest.TestCase):

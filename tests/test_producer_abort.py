@@ -4,6 +4,9 @@ import io
 import json
 import threading
 import unittest
+from unittest.mock import Mock, patch
+from types import SimpleNamespace
+import psutil
 from slstack.native_broker import vendor
 
 vendor()
@@ -72,6 +75,46 @@ class ProducerAbort(unittest.TestCase):
     def test_complete_reply_unchanged(self):
         row = dict(status='complete', session=SESSION, model_sha256=MODEL_SHA256, owner_epoch=7, sequence=1)
         self.assertEqual(producer((json.dumps(row) + '\n').encode(), b'', None)._receive(), row)
+
+    def watch(self, floor=4.0, available=3<<30, paged=0):
+        p=producer(b'{"status":"rea',b'',None)
+        p.job_lock=threading.Lock();p.stuck=None
+        p.job.pid=123
+        stops=[]
+        p.job.stop=lambda **kwargs:stops.append(kwargs)
+        p.runtime_min_free_gib=floor;p.runtime_floor=int(floor*(1<<30))
+        p.stop_event=SimpleNamespace(wait=Mock(side_effect=[False,True]))
+        p.cancelled=lambda:False;p.stall_seconds=None
+        p.peak_rss=0;p.minimum_available=10<<30
+        p.floor=1<<30;p.host_bytes=8<<30;p.budget_breaches=0;p.first_budget_breach=None
+        p._paging_tick=9;p.paging_growth=0;p._paging0=0;p._paging_limit=256000000;p._paging_bytes=lambda:paged
+        p.deadline=None;p.activity=float('inf');p.idle_seconds=1;p.ready=None
+        with patch('studio.dsv41_session_process.psutil.virtual_memory',return_value=SimpleNamespace(available=available)),patch('studio.dsv41_session_process.psutil.Process',side_effect=psutil.NoSuchProcess(123)):
+            p._watch()
+        return p,stops
+
+    def test_low_available_ram_stops_gracefully_and_client_gets_reason(self):
+        with self.assertLogs('studio.dsv41_session_process',level='CRITICAL') as logs:
+            p,stops=self.watch()
+        self.assertIn('available physical RAM',logs.output[0])
+        self.assertEqual(stops,[dict(graceful_seconds=30,stuck_seconds=120)])
+        text=self.receive(p)
+        self.assertIn('runtime_min_free_gib=4',text)
+        self.assertIn(str(3<<30),text)
+        self.assertNotIn('truncated',text)
+
+    def test_zero_disables_free_ram_stop(self):
+        p,stops=self.watch(floor=0,available=1)
+        self.assertIsNone(p.failure);self.assertEqual(stops,[])
+
+    def test_exact_floor_is_allowed(self):
+        p,stops=self.watch(available=4<<30)
+        self.assertIsNone(p.failure);self.assertEqual(stops,[])
+
+    def test_paging_stop_stays_enabled_when_ram_floor_disabled(self):
+        p,stops=self.watch(floor=0,paged=256000001)
+        self.assertIn('paging detected',p.failure)
+        self.assertEqual(stops,[dict(graceful_seconds=30,stuck_seconds=120)])
 
 
 if __name__ == '__main__':

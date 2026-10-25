@@ -1,10 +1,12 @@
 # Derived from Studio backend/studio/dsv41_session_process.py at 5b39c3abf34523c69fb761f7dd174c710d3a7eb1.
 # Minimal source export; transport retained with optional mode1 startup and resource-admission hooks.
 from __future__ import annotations
-import json, os, threading, time
+import json, logging, math, os, threading, time
 from pathlib import Path
 import psutil
 from .dsv41_session_contract import MODEL_SHA256, MAX_CONTROL, MAX_DECODE, MAX_PREFILL, Refused, checkpoint, command, control, negotiate_decode_delta, negotiate_prefill, require, session_identity
+
+log = logging.getLogger(__name__)
 
 def now_tick(owner, period=1.0):
     """True at most once per period for owner (the tree scan is cheaper at 1 Hz than 10 Hz)."""
@@ -42,11 +44,15 @@ class Producer:
                     with self.state_lock:
                         self.failure = self.stuck if self.failure is None else self.failure + '; ' + self.stuck
 
-    def __init__(self, session, argv, env, directory, *, host_bytes, physical_floor, operation_seconds=600, idle_seconds=3600, native=None, cancelled=None, runtime_check=None, native_mode=3, bootstrap=None, startup=None, owner_epoch=0, after_resume=None, stall_seconds=None):
+    def __init__(self, session, argv, env, directory, *, host_bytes, physical_floor, operation_seconds=600, idle_seconds=3600, native=None, cancelled=None, runtime_check=None, native_mode=3, bootstrap=None, startup=None, owner_epoch=0, after_resume=None, stall_seconds=None, runtime_min_free_gib=4.0):
         self.creation_attempted = False
         self.stall_seconds = stall_seconds
         self.last_progress = time.monotonic();self._progress_mark = None
         try:
+            require(type(runtime_min_free_gib) in (int, float) and math.isfinite(runtime_min_free_gib) and 0 <= runtime_min_free_gib < 2**34,
+                    'runtime_min_free_gib must be finite and nonnegative (<2**34); 0 disables it')
+            self.runtime_min_free_gib = float(runtime_min_free_gib)
+            self.runtime_floor = int(runtime_min_free_gib * (1 << 30))
             self.native_mode = native_mode
             require(type(owner_epoch) is int and 0<=owner_epoch<(1<<64), 'Exact bounded owner epoch required')
             self.owner_epoch = owner_epoch
@@ -74,10 +80,8 @@ class Producer:
             native = _Native()
         self.session, self.native = (session, native)
         self.host_bytes, self.floor = (host_bytes, physical_floor)
-        # Owner 2026-10-25: the rule is NO PAGING, not a free-RAM number. Admission still requires the
-        # budget to fit physical RAM; at runtime only real paging (global pagefile usage rising above
-        # Studio's GLOBAL_PAGING_LIMIT over the launch baseline) stops the producer. Low free RAM or RSS
-        # above the planned budget with zero paging is recorded, not fatal.
+        # Admission and runtime floors are independent. The runtime available-RAM stop defaults to
+        # the known safe 4 GiB; 0 opts into paging-only. Keep the existing paging stop as well.
         from .job_paging import paging_bytes, GLOBAL_PAGING_LIMIT
         self._paging_bytes, self._paging_limit = paging_bytes, GLOBAL_PAGING_LIMIT
         self._paging0 = paging_bytes(); self.paging_growth = 0; self._paging_tick = 0
@@ -180,6 +184,10 @@ class Producer:
                 self.peak_rss = max(self.peak_rss, rss)
                 if self.stall_seconds and now_tick(self):self._note_tree_progress()
                 self.minimum_available = min(self.minimum_available, available)
+                if self.runtime_floor and available < self.runtime_floor:
+                    reason = 'Persistent producer stopped: available physical RAM %d bytes below runtime_min_free_gib=%g (%d bytes)' % (available, self.runtime_min_free_gib, self.runtime_floor)
+                    log.critical(reason)
+                    raise Refused(reason)
                 if available < self.floor or rss > self.host_bytes:
                     self.budget_breaches += 1
                     if self.first_budget_breach is None:
@@ -257,6 +265,7 @@ class Producer:
         self.exit_code = code
         with self.state_lock:
             text = bytes(self.diagnostic).decode('utf-8', errors='replace')
+            message = self.failure or message
         aborts = [line for line in text.splitlines() if line.startswith('LLAMADECODE_PRODUCER_ABORT ')]
         if code is None:
             parts = [message, 'producer still running (no exit code yet)']
@@ -272,6 +281,7 @@ class Producer:
     def _receive(self):
         raw = self.output.readline(65537)
         self.last_progress = time.monotonic()
+        require(self.failure is None, self.failure or 'Producer failed')
         if not (raw.endswith(b'\n') and len(raw) <= 65536):
             raise Refused(self._death('Persistent producer reply truncated or too large' if len(raw) > 65536 or raw
                                       else 'Persistent producer closed its reply pipe'))
@@ -479,7 +489,7 @@ class Producer:
             time.sleep(0.01)
         exited = self.job is None or self.job.poll() is not None
         empty = self.job is None or self.job.active() == 0
-        self.receipt = dict(session=self.session, host_budget=self.host_bytes, physical_floor=self.floor, peak_rss=self.peak_rss, minimum_available_ram=self.minimum_available, paging_growth=self.paging_growth, budget_breaches=self.budget_breaches, first_budget_breach=self.first_budget_breach, failure=self.failure, owned_pid=pid, owned_job_empty=empty, owned_process_signaled=exited, exit_code=self.job.poll() if self.job is not None else getattr(self, 'exit_code', None))
+        self.receipt = dict(session=self.session, host_budget=self.host_bytes, physical_floor=self.floor, runtime_min_free_gib=self.runtime_min_free_gib, peak_rss=self.peak_rss, minimum_available_ram=self.minimum_available, paging_growth=self.paging_growth, budget_breaches=self.budget_breaches, first_budget_breach=self.first_budget_breach, failure=self.failure, owned_pid=pid, owned_job_empty=empty, owned_process_signaled=exited, exit_code=self.job.poll() if self.job is not None else getattr(self, 'exit_code', None))
         with self.job_lock:
             if self.job:
                 self.job.close()

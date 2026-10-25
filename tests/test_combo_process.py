@@ -123,9 +123,51 @@ class ProcessTest(unittest.TestCase):
             process=Producer('1'*32,['unused'],dict(os.environ),Path('.'),host_bytes=512<<20,
                 physical_floor=4<<30,native=native,native_mode=1,startup=lambda owned:dict(status='ready'))
             self.assertTrue(process.creation_attempted)
+            self.assertEqual(process.runtime_min_free_gib,4.0)
+            self.assertEqual(process.runtime_floor,4<<30)
             proof=process.close()
         self.assertTrue(all(proof[k] for k in ('owned_job_empty','owned_process_signaled','owned_pid_gone')))
         self.assertFalse(native.job.running)
+
+    def test_runtime_floor_is_configurable_and_invalid_values_refuse_before_creation(self):
+        for floor in (0,6.5):
+            native=FakeNative()
+            with self.subTest(floor=floor),patch('studio.dsv41_session_process.psutil.pid_exists',return_value=False):
+                process=Producer('1'*32,['unused'],dict(os.environ),Path('.'),host_bytes=512<<20,
+                    physical_floor=1<<30,runtime_min_free_gib=floor,native=native,native_mode=1,startup=lambda owned:dict(status='ready'))
+                self.assertEqual(process.runtime_floor,int(floor*(1<<30)))
+                self.assertEqual(process.close()['runtime_min_free_gib'],floor)
+        for floor in (-1,float('nan'),float('inf'),True,'4',None,2**34):
+            native=FakeNative()
+            with self.subTest(floor=floor),self.assertRaisesRegex(ValueError,'runtime_min_free_gib') as caught:
+                Producer('1'*32,['unused'],{},Path('.'),host_bytes=512<<20,physical_floor=1<<30,native=native,runtime_min_free_gib=floor)
+            self.assertFalse(hasattr(native,'job'))
+            self.assertFalse(caught.exception.owned_cleanup['creation_attempted'])
+
+    def test_runtime_floor_reaches_producer_argv_and_session_watcher(self):
+        from slstack.combo_producer import ComboProducer
+        seen=[]
+        class Files:
+            @contextmanager
+            def directory(self,path):yield
+            @contextmanager
+            def read_lease(self,path):yield
+            def gpu(self,*args):return 1<<40
+        class Process:
+            def __init__(self,session,argv,env,directory,**kwargs):
+                seen.append((argv,kwargs))
+                self.ready=dict(checkpoint=dict(context=262144,position=1))
+        cfg=dict(runtime_root=os.environ['STUDIO_RUNTIME_ROOT'],llama_producer=sys.executable,model=sys.executable,
+            producer_sha256=hashlib.sha256(Path(sys.executable).read_bytes()).hexdigest(),producer_source_revision='r',
+            context=262144,gpu_uuid='TEST',min_available_gib=1,host_budget_gib=8,request_timeout_s=10,lease_minutes=1)
+        for floor in (None,0,6.5):
+            chosen=cfg if floor is None else dict(cfg,runtime_min_free_gib=floor)
+            with patch('studio.dsv41_session_process.Producer',Process),patch('slstack.combo_producer.environment',return_value={}),patch('slstack.combo_producer.model_receipt',return_value=Path(sys.executable)):
+                p=ComboProducer(chosen,'1'*32,42,[1],lambda:False,runner=Files())
+            p.leases.close()
+            argv,kwargs=seen[-1];expected=4.0 if floor is None else floor
+            self.assertEqual(float(argv[argv.index('--runtime-min-free-gib')+1]),expected)
+            self.assertEqual(kwargs['runtime_min_free_gib'],expected)
 
     def test_startup_failure_stops_the_same_owned_job(self):
         native=FakeNative()
