@@ -48,14 +48,23 @@ inline sweeps split(uint32_t n, uint32_t cap, uint32_t align = sweep_align) {
     return out;
 }
 
-// Owner fold policy (--prefill-sweep-tokens S): every sweep is S tokens and the
-// remainder r = n - k*S is folded into the last one (S + r). No near-equal sweeps,
-// no small tail. n <= S is one sweep. When S + r would exceed the capacity, the
-// remainder becomes its own last sweep instead (tail = true); so it does when a
-// fold cap F is set (--prefill-fold-cap-tokens) and S + r > F. S must be a nonzero
-// multiple of align, and <= cap unless the whole prompt (n <= cap) is one sweep
-// (count 0 = refused). Sweep i starts at i*S; all but the last are S tokens.
-struct fold_plan { uint32_t count = 0, sweep = 0, last = 0; bool tail = false; };
+// Owner fold policy (--prefill-sweep-tokens S): primary sweeps of S tokens; the
+// remainder r = n - k*S is folded into the last one, last = S + r. No tiny tail.
+//   n <= S (and <= cap): one sweep [n].
+//   last <= min(F, cap): fold -> [S]*(k-1) + [last].
+//   last > F (fold cap, --prefill-fold-cap-tokens; 0 = none): the remainder is its
+//     own sweep -> [S]*k + [r] (tail = true).
+//   last <= F but last > cap (RAM-limited): rebalance `last` into m near-equal passes,
+//     m from ceil(last / cap floored to align): every pass but the last is
+//     ceil(last / m) rounded up to align, the last takes the rest; m grows while a
+//     pass would exceed cap -> [S]*(k-1) + [pass]*(m-1) + [rest] (rebalance = true).
+// Every sweep start is align-aligned. S must be a nonzero multiple of align, and
+// <= cap unless the whole prompt (n <= cap) is one sweep (count 0 = refused).
+struct fold_plan {
+    uint32_t count = 0, sweep = 0, last = 0;   // count sweeps: [sweep]*(count-1-(passes-1)) ... [last]
+    bool tail = false, rebalance = false;
+    uint32_t pass = 0, passes = 0;             // rebalance: (passes-1) sweeps of pass before last
+};
 inline fold_plan fold(uint32_t n, uint32_t s, uint32_t cap, uint32_t fold_cap = 0, uint32_t align = sweep_align) {
     fold_plan out;
     if (!n || !s || !align || s % align) return out;
@@ -64,9 +73,19 @@ inline fold_plan fold(uint32_t n, uint32_t s, uint32_t cap, uint32_t fold_cap = 
     out.sweep = s;
     const uint32_t k = n / s, r = n % s;
     if (!r) { out.count = k; out.last = s; return out; }
-    if (uint64_t(s) + r <= cap && (!fold_cap || uint64_t(s) + r <= fold_cap)) { out.count = k; out.last = s + r; return out; }
-    out.count = k + 1; out.last = r; out.tail = true;
-    return out;
+    const uint64_t last = uint64_t(s) + r;
+    if (fold_cap && last > fold_cap) { out.count = k + 1; out.last = r; out.tail = true; return out; }
+    if (last <= cap) { out.count = k; out.last = uint32_t(last); return out; }
+    const uint64_t grid = cap / align * align;
+    if (!grid) return fold_plan{};
+    for (uint64_t m = (last + grid - 1) / grid; m <= last; ++m) {
+        const uint64_t even = (last + m - 1) / m, pass = (even + align - 1) / align * align;
+        if (pass > cap || pass * (m - 1) >= last) continue;
+        out.count = k - 1 + uint32_t(m); out.pass = uint32_t(pass); out.passes = uint32_t(m);
+        out.last = uint32_t(last - pass * (m - 1)); out.rebalance = true;
+        return out;
+    }
+    return fold_plan{};
 }
 
 // The (first, count) sweep list the producer runs: fold(n, s, cap, fold_cap) when
@@ -76,7 +95,13 @@ inline std::vector<extent> plan_sweeps(uint32_t n, uint32_t cap, uint32_t s = 0,
     std::vector<extent> out;
     if (s) {
         const auto f = fold(n, s, cap, fold_cap);
-        for (uint32_t i = 0; i < f.count; ++i) out.push_back({i * f.sweep, i + 1 < f.count ? f.sweep : f.last});
+        const uint32_t primary = f.rebalance ? f.count - f.passes : f.count - 1;   // S sweeps before the final part
+        uint32_t first = 0;
+        for (uint32_t i = 0; i < f.count; ++i) {
+            const uint32_t count = i + 1 == f.count ? f.last : i < primary ? f.sweep : f.pass;
+            out.push_back({first, count});
+            first += count;
+        }
     } else {
         const auto t = split(n, cap);
         if (t.count) for (uint32_t first = 0; first < n; first += t.chunk) out.push_back({first, std::min(t.chunk, n - first)});
