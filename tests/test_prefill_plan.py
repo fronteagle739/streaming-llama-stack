@@ -43,11 +43,11 @@ class PrefillPlan(unittest.TestCase):
     def test_measured_available_caps_and_pages(self):
         avail = 17324515328   # ss-91k launch
         p = prefill_plan(SS, 93668, avail)
-        self.assertTrue(p['single_sweep']);self.assertEqual(p['capacity'], 93668);self.assertEqual(p['capped_by'], 'available_ram')
+        self.assertTrue(p['single_sweep']);self.assertEqual(p['capacity'], 93668);self.assertEqual(p['capped_by'], 'producer_host_max_gib')   # 1 GiB reserve: 12 GiB max binds first
         self.assertEqual(p['host_bytes'] % 65536, 0)
-        self.assertLessEqual(p['host_bytes'], avail - 5 * 2**30)
+        self.assertLessEqual(p['host_bytes'], avail - 1 * 2**30)
         q = prefill_plan(SS, 224588, avail)
-        self.assertFalse(q['single_sweep']);self.assertEqual(q['capacity'], 77824);self.assertLessEqual(q['host_bytes'], avail - 5 * 2**30)
+        self.assertFalse(q['single_sweep']);self.assertEqual(q['capacity'], 77824);self.assertLessEqual(q['host_bytes'], avail - 1 * 2**30)
         r = prefill_plan(SS, 93668, 10 * 2**30)   # too little RAM for any raise: today's 49152 budget
         self.assertEqual((r['capacity'], r['host_bytes']), (49152, int(6.25 * 2**30)))
         for n in (16000, 43327):self.assertEqual(prefill_plan(SS, n, avail)['host_bytes'], int(6.25 * 2**30))
