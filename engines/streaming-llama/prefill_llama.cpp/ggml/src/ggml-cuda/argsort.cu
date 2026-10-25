@@ -251,9 +251,11 @@ static __device__ __forceinline__ bool top_k_cached_before(
 template<bool implicit_iota, bool cached_keys = false>
 static __global__ void k_top_k_f32_i32_tiles(
         const float * x, const int * src_candidates, int * dst,
-        const int ncols, const int width, const int tile_size, const int ntop, const bool reject_nan) {
+        const int ncols, const int width, const int tile_size, const int ntop, const bool reject_nan,
+        const unsigned * only_rows) {
     const int tile = blockIdx.x;
     const int row  = blockIdx.y;
+    if (only_rows && !only_rows[row]) return;  // LLAMADECODE fast select: row already exact
     const int tile_begin = tile * tile_size;
     const int tile_width = min(tile_size, width - tile_begin);
     const int tile_width_pad = 1 << (32 - __clz(tile_width - 1));
@@ -329,9 +331,11 @@ static __device__ __forceinline__ uint64_t dsv41_topk_pack_key(float v, const in
 template<bool implicit_iota>
 static __global__ void __launch_bounds__(512, 1) k_dsv41_topk_radix_tiles(
         const float *x, const int *src_candidates, int *dst,
-        const int ncols, const int width, const int ntop, const bool reject_nan) {
+        const int ncols, const int width, const int ntop, const bool reject_nan,
+        const unsigned *only_rows) {
     constexpr int tile_size = 8192, items = 16;
     const int tile = blockIdx.x, row = blockIdx.y, tid = threadIdx.x;
+    if (only_rows && !only_rows[row]) return;  // LLAMADECODE fast select: row already exact
     const int begin = tile * tile_size, tile_width = min(tile_size, width - begin);
     const int padded = 1 << (32 - __clz(tile_width - 1));
     const int ntiles = (width + tile_size - 1) / tile_size;
@@ -692,6 +696,16 @@ void top_k_f32_i32_cuda_bitonic_tiles_guarded(const float * x,
                                       const int     tile_size,
                                       const int     k,
                                       cudaStream_t  stream,const bool reject_nan) {
+    top_k_f32_i32_cuda_bitonic_tiles_filtered(x,dst,ncols,nrows,tile_size,k,stream,reject_nan,nullptr);
+}
+
+void top_k_f32_i32_cuda_bitonic_tiles_filtered(const float * x,
+                                      int *         dst,
+                                      const int     ncols,
+                                      const int     nrows,
+                                      const int     tile_size,
+                                      const int     k,
+                                      cudaStream_t  stream,const bool reject_nan,const unsigned * only_rows) {
     const int ntiles = (ncols + tile_size - 1) / tile_size;
     const int block_size = std::min(tile_size, 1024);
     const size_t shared_mem = tile_size * sizeof(int);
@@ -699,7 +713,7 @@ void top_k_f32_i32_cuda_bitonic_tiles_guarded(const float * x,
 #ifdef GGML_CUDA_USE_CUB
     if (dsv41_topk_radix_enabled(tile_size, k)) {
         CUDA_SET_SHARED_MEMORY_LIMIT(k_dsv41_topk_radix_tiles<true>, dsv41_topk_radix_smem);
-        k_dsv41_topk_radix_tiles<true><<<dim3(ntiles, nrows), 512, dsv41_topk_radix_smem, stream>>>(x, nullptr, dst, ncols, ncols, k,reject_nan);
+        k_dsv41_topk_radix_tiles<true><<<dim3(ntiles, nrows), 512, dsv41_topk_radix_smem, stream>>>(x, nullptr, dst, ncols, ncols, k,reject_nan,only_rows);
         dsv41_topk_radix_queued.fetch_add(1, std::memory_order_release);return;
     }
 #endif
@@ -707,12 +721,12 @@ void top_k_f32_i32_cuda_bitonic_tiles_guarded(const float * x,
         const auto kernel = k_top_k_f32_i32_tiles<true, true>;
         CUDA_SET_SHARED_MEMORY_LIMIT(kernel, ggml_cuda_info().devices[ggml_cuda_get_device()].smpbo);
         k_top_k_f32_i32_tiles<true, true><<<dim3(ntiles, nrows), block_size, 2 * shared_mem, stream>>>(
-                x, nullptr, dst, ncols, ncols, tile_size, k,reject_nan);
+                x, nullptr, dst, ncols, ncols, tile_size, k,reject_nan,only_rows);
         return;
     }
 
     k_top_k_f32_i32_tiles<true><<<dim3(ntiles, nrows), block_size, shared_mem, stream>>>(
-            x, nullptr, dst, ncols, ncols, tile_size, k,reject_nan);
+            x, nullptr, dst, ncols, ncols, tile_size, k,reject_nan,only_rows);
 }
 
 void top_k_f32_i32_cuda_bitonic_tiles(const float*x,int*dst,int ncols,int nrows,int tile_size,int k,cudaStream_t stream){
@@ -728,6 +742,18 @@ void top_k_f32_i32_cuda_bitonic_candidates(const float * x,
                                            const int     tile_size,
                                            const int     k,
                                            cudaStream_t  stream) {
+    top_k_f32_i32_cuda_bitonic_candidates_filtered(x,candidates,dst,ncols,nrows,width,tile_size,k,stream,nullptr);
+}
+
+void top_k_f32_i32_cuda_bitonic_candidates_filtered(const float * x,
+                                           const int *   candidates,
+                                           int *         dst,
+                                           const int     ncols,
+                                           const int     nrows,
+                                           const int     width,
+                                           const int     tile_size,
+                                           const int     k,
+                                           cudaStream_t  stream,const unsigned * only_rows) {
     const int ntiles = (width + tile_size - 1) / tile_size;
     const int block_size = std::min(tile_size, 1024);
     const size_t shared_mem = tile_size * sizeof(int);
@@ -735,7 +761,7 @@ void top_k_f32_i32_cuda_bitonic_candidates(const float * x,
 #ifdef GGML_CUDA_USE_CUB
     if (dsv41_topk_radix_enabled(tile_size, k)) {
         CUDA_SET_SHARED_MEMORY_LIMIT(k_dsv41_topk_radix_tiles<false>, dsv41_topk_radix_smem);
-        k_dsv41_topk_radix_tiles<false><<<dim3(ntiles, nrows), 512, dsv41_topk_radix_smem, stream>>>(x, candidates, dst, ncols, width, k,false);
+        k_dsv41_topk_radix_tiles<false><<<dim3(ntiles, nrows), 512, dsv41_topk_radix_smem, stream>>>(x, candidates, dst, ncols, width, k,false,only_rows);
         dsv41_topk_radix_queued.fetch_add(1, std::memory_order_release);return;
     }
 #endif
@@ -743,12 +769,12 @@ void top_k_f32_i32_cuda_bitonic_candidates(const float * x,
         const auto kernel = k_top_k_f32_i32_tiles<false, true>;
         CUDA_SET_SHARED_MEMORY_LIMIT(kernel, ggml_cuda_info().devices[ggml_cuda_get_device()].smpbo);
         k_top_k_f32_i32_tiles<false, true><<<dim3(ntiles, nrows), block_size, 2 * shared_mem, stream>>>(
-                x, candidates, dst, ncols, width, tile_size, k,false);
+                x, candidates, dst, ncols, width, tile_size, k,false,only_rows);
         return;
     }
 
     k_top_k_f32_i32_tiles<false><<<dim3(ntiles, nrows), block_size, shared_mem, stream>>>(
-            x, candidates, dst, ncols, width, tile_size, k,false);
+            x, candidates, dst, ncols, width, tile_size, k,false,only_rows);
 }
 
 static void argsort_f32_u8_cuda(const float * x, uint8_t * dst, const int ncols, const int nrows, int ntop,
@@ -999,4 +1025,147 @@ void cuda_openai_experts(ggml_backend_cuda_context & ctx, ggml_tensor * topk, gg
 
     argsort_openai_f32_f32_i32_cuda((const float *) probs->data, (float *) softmax->data, (int *) topk->data,
             ne00, nrows, ne0, topk->nb[1], GGML_SORT_ORDER_DESC, ctx.stream());
+}
+
+// ---------------------------------------------------------------------------
+// LLAMADECODE fast exact top-512 select (dsv41-topk-select.cuh). Default OFF.
+#include "dsv41-topk-select.cuh"
+static std::atomic<int> dsv41_topk_fast_on{0};
+static std::atomic<uint64_t> dsv41_topk_fast_queued{0};
+static __device__ unsigned long long dsv41_topk_fast_dirty_rows;  // rows sent to the current pipeline
+extern "C" void ggml_backend_cuda_dsv41_topk_fast_set(int on) { dsv41_topk_fast_on.store(on ? 1 : 0, std::memory_order_release); }
+extern "C" int ggml_backend_cuda_dsv41_topk_fast_enabled(void) { return dsv41_topk_fast_on.load(std::memory_order_acquire); }
+extern "C" uint64_t ggml_backend_cuda_dsv41_topk_fast_queued(void) { return dsv41_topk_fast_queued.load(std::memory_order_acquire); }
+extern "C" uint64_t ggml_backend_cuda_dsv41_topk_fast_dirty_rows(void) {
+    // Caller has synchronized the compute stream (executor: after the tile graph).
+    unsigned long long v = 0;
+    CUDA_CHECK(cudaMemcpyFromSymbol(&v, dsv41_topk_fast_dirty_rows, sizeof(v)));
+    return uint64_t(v);
+}
+
+bool top_k_f32_i32_cuda_dsv41_select_eligible(const int ncols, const int nrows, const int k) {
+#ifdef GGML_CUDA_USE_CUB
+    return dsv41_topk_fast_on.load(std::memory_order_acquire) && nrows > 1 &&
+        k == dsv41_topk_select::k && ncols >= dsv41_topk_select::min_cols;
+#else
+    GGML_UNUSED(ncols); GGML_UNUSED(nrows); GGML_UNUSED(k);
+    return false;
+#endif
+}
+
+#ifdef GGML_CUDA_USE_CUB
+using dsv41_SelectSort = cub::BlockRadixSort<uint64_t, 512, 1>;
+// One 512-thread block per row. Pass 0 also classifies the row; a NaN/subnormal
+// row sets dirty[row]=1 and writes nothing (the current pipeline then runs it).
+static __global__ void __launch_bounds__(512) k_dsv41_topk_select512(
+        const float * x, int * dst, unsigned * dirty, const int ncols) {
+    namespace S = dsv41_topk_select;
+    const int row = blockIdx.x, tid = threadIdx.x, lane = tid & 31, warp = tid >> 5;
+    const uint32_t * xr = reinterpret_cast<const uint32_t *>(x) + size_t(row) * ncols;
+    __shared__ unsigned hist[256];
+    __shared__ unsigned s_flag, s_bin, s_above, s_inbin;
+    __shared__ unsigned warp_a[16], warp_r[16];
+    __shared__ union {
+        dsv41_SelectSort::TempStorage sort;
+        uint64_t sel[512];
+    } u;
+    S::state st{0u, 0u, uint32_t(S::k)};
+    for (int shift = 24;; shift -= 8) {
+        if (tid < 256) hist[tid] = 0;
+        if (tid == 0) s_flag = 0;
+        __syncthreads();
+        unsigned flag = 0;
+        for (int base = 0; base < ncols; base += 512) {
+            const int col = base + tid;
+            const bool valid = col < ncols;
+            const uint32_t bits = valid ? __ldg(xr + col) : 0u;
+            if (shift == 24 && valid) flag |= S::classify(bits);
+            const uint32_t o = S::ordered(bits);
+            const bool in = valid && S::in_region(st, o);
+            const unsigned digit = (o >> shift) & 0xffu;
+            const unsigned active = __ballot_sync(0xffffffffu, in);
+            if (in) {
+                const unsigned peers = __match_any_sync(active, digit);
+                if (lane == __ffs(peers) - 1) atomicAdd(&hist[digit], unsigned(__popc(peers)));
+            }
+        }
+        if (shift == 24 && flag) atomicOr(&s_flag, flag);
+        __syncthreads();
+        if (shift == 24) {
+            if (s_flag) {
+                if (tid == 0) { dirty[row] = 1u; atomicAdd(&dsv41_topk_fast_dirty_rows, 1ull); }
+                return;
+            }
+            if (tid == 0) dirty[row] = 0u;
+        }
+        // Bins in descending order: thread t holds bin 255-t; inclusive scan.
+        unsigned h = 0, incl = 0;
+        if (tid < 256) {
+            h = hist[255 - tid];
+            incl = h;
+#pragma unroll
+            for (int d = 1; d < 32; d <<= 1) {
+                const unsigned v = __shfl_up_sync(0xffffffffu, incl, d);
+                if (lane >= d) incl += v;
+            }
+            if (lane == 31) warp_a[warp] = incl;
+        }
+        __syncthreads();
+        if (tid < 256) {
+            for (int w = 0; w < warp; ++w) incl += warp_a[w];
+            const unsigned excl = incl - h;
+            if (excl < st.need && st.need <= incl) { s_bin = 255u - unsigned(tid); s_above = excl; s_inbin = h; }
+        }
+        __syncthreads();
+        const bool done = S::advance(st, shift, s_bin, s_above, s_inbin);
+        __syncthreads();  // s_* and hist are rewritten by the next pass
+        if (done) break;
+    }
+    // Index-ordered collection: every value above the region, then the region's
+    // lowest-index elements until `need` are taken.
+    const unsigned c_above = unsigned(S::k) - st.need;
+    unsigned run_a = 0, run_r = 0;
+    const unsigned below = (1u << lane) - 1u;
+    for (int base = 0; base < ncols; base += 512) {
+        const int col = base + tid;
+        const bool valid = col < ncols;
+        const uint32_t o = S::ordered(valid ? __ldg(xr + col) : 0u);
+        const bool a = valid && S::above(st, o), r = valid && S::in_region(st, o);
+        const unsigned ba = __ballot_sync(0xffffffffu, a), br = __ballot_sync(0xffffffffu, r);
+        if (lane == 0) { warp_a[warp] = __popc(ba); warp_r[warp] = __popc(br); }
+        __syncthreads();
+        unsigned pa = run_a, pr = run_r, ta = 0, tr = 0;
+#pragma unroll
+        for (int w = 0; w < 16; ++w) {
+            if (w < warp) { pa += warp_a[w]; pr += warp_r[w]; }
+            ta += warp_a[w]; tr += warp_r[w];
+        }
+        pa += __popc(ba & below); pr += __popc(br & below);
+        if (a) u.sel[pa] = S::pack(o, col);
+        if (r && pr < st.need) u.sel[c_above + pr] = S::pack(o, col);
+        run_a += ta; run_r += tr;
+        __syncthreads();
+    }
+    if (run_a != c_above || run_r < st.need) {  // impossible unless the select is wrong: fail loudly
+        if (tid == 0) printf("DSV41_TOPK_FAST_INVARIANT row=%d above=%u expected=%u region=%u need=%u\n", row, run_a, c_above, run_r, st.need);
+        __syncthreads();
+        __trap();
+    }
+    uint64_t key[1] = { u.sel[tid] };
+    __syncthreads();  // sel aliases the sort storage
+    dsv41_SelectSort(u.sort).SortDescending(key);
+    dst[size_t(row) * S::k + tid] = S::unpack_id(key[0]);
+}
+#endif  // GGML_CUDA_USE_CUB
+
+void top_k_f32_i32_cuda_dsv41_select512(const float * x, int * dst, unsigned * dirty,
+        const int ncols, const int nrows, cudaStream_t stream) {
+#ifdef GGML_CUDA_USE_CUB
+    k_dsv41_topk_select512<<<nrows, 512, 0, stream>>>(x, dst, dirty, ncols);
+    CUDA_CHECK(cudaGetLastError());
+    dsv41_topk_fast_queued.fetch_add(1, std::memory_order_release);
+#else
+    GGML_UNUSED(x); GGML_UNUSED(dst); GGML_UNUSED(dirty); GGML_UNUSED(ncols); GGML_UNUSED(nrows); GGML_UNUSED(stream);
+    GGML_ABORT("dsv41 fast top-k needs CUB");
+#endif
 }

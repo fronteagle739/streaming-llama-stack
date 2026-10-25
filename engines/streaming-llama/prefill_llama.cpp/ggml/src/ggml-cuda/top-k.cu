@@ -2,6 +2,9 @@
 #include "top-k.cuh"
 #include "ggml-dsv41-stream-topk.h"
 #include <atomic>
+#include <cstdio>
+#include <cstdlib>
+#include <vector>
 static std::atomic<uint64_t>dsv41_stream_topk_queued{0};
 extern "C" uint64_t ggml_backend_cuda_dsv41_stream_topk_queued(void){return dsv41_stream_topk_queued.load(std::memory_order_acquire);}
 
@@ -54,6 +57,37 @@ static void top_k_cub(ggml_cuda_pool & pool,
 }
 
 #endif  // CUB_TOP_K_AVAILABLE
+
+// LLAMADECODE diagnostic (env LLAMADECODE_TOPK_DUMP=<dir>, default off): after a
+// large multi-row top-k, synchronously copy every STRIDE-th row's scores and the
+// selected ids to <dir>/topk-<seq>.bin, for the CPU exactness test and the
+// draft-threshold hit-rate analysis. Stride: LLAMADECODE_TOPK_DUMP_STRIDE (64).
+// Layout: u32 magic 'TKD1', u32 seq, u32 nrows, u32 ncols, u32 k, u32 stride,
+// u32 sampled, then per sampled row: u32 row, f32 scores[ncols], i32 ids[k].
+static void dsv41_topk_dump(const float * x, const int * y, int64_t ncols, int64_t nrows, int64_t k, cudaStream_t stream) {
+    static const char * dir = std::getenv("LLAMADECODE_TOPK_DUMP");
+    if (!dir || !dir[0] || nrows <= 1 || ncols <= 8192) return;
+    static const int64_t stride = [] { const char * e = std::getenv("LLAMADECODE_TOPK_DUMP_STRIDE"); const long v = e ? std::atol(e) : 64; return int64_t(v > 0 ? v : 64); }();
+    static std::atomic<uint32_t> seq{0};
+    const uint32_t id = seq.fetch_add(1);
+    CUDA_CHECK(cudaStreamSynchronize(stream));
+    char path[1024]; std::snprintf(path, sizeof path, "%s/topk-%06u.bin", dir, id);
+    FILE * f = std::fopen(path, "wb");
+    if (!f) { std::fprintf(stderr, "LLAMADECODE_TOPK_DUMP_FAILED seq=%u path=%s\n", id, path); return; }
+    const uint32_t sampled = uint32_t((nrows + stride - 1) / stride);
+    const uint32_t head[7] = {0x31444b54u, id, uint32_t(nrows), uint32_t(ncols), uint32_t(k), uint32_t(stride), sampled};
+    std::fwrite(head, sizeof head, 1, f);
+    std::vector<float> scores((size_t) ncols); std::vector<int> ids((size_t) k);
+    for (int64_t r = 0; r < nrows; r += stride) {
+        CUDA_CHECK(cudaMemcpy(scores.data(), x + r * ncols, size_t(ncols) * 4, cudaMemcpyDeviceToHost));
+        CUDA_CHECK(cudaMemcpy(ids.data(), y + r * k, size_t(k) * 4, cudaMemcpyDeviceToHost));
+        const uint32_t row = uint32_t(r);
+        std::fwrite(&row, 4, 1, f); std::fwrite(scores.data(), 4, scores.size(), f); std::fwrite(ids.data(), 4, ids.size(), f);
+    }
+    std::fclose(f);
+    std::fprintf(stderr, "LLAMADECODE_TOPK_DUMP seq=%u rows=%lld cols=%lld k=%lld stride=%lld sampled=%u file=%s\n", id,
+        (long long) nrows, (long long) ncols, (long long) k, (long long) stride, sampled, path);
+}
 
 void ggml_cuda_op_top_k(ggml_backend_cuda_context & ctx, ggml_tensor * dst) {
     const ggml_tensor * src0   = dst->src[0];
@@ -109,12 +143,24 @@ void ggml_cuda_op_top_k(ggml_backend_cuda_context & ctx, ggml_tensor * dst) {
     }
 
     if (deterministic_rows && k <= TOP_K_TILE_SIZE) {
+        // LLAMADECODE fast exact select (default off): clean rows are final after
+        // one kernel; NaN/subnormal rows are flagged and only they run the
+        // unchanged pipeline below (row-filtered launches; clean rows exit).
+        ggml_cuda_pool_alloc<unsigned> dirty_alloc(pool);
+        const unsigned * only_rows = nullptr;
+        if (top_k_f32_i32_cuda_dsv41_select_eligible(int(ncols), int(nrows), int(k))) {
+            unsigned * dirty = dirty_alloc.alloc((size_t) nrows);
+            top_k_f32_i32_cuda_dsv41_select512(src0_d, dst_d, dirty, int(ncols), int(nrows), stream);
+            only_rows = dirty;
+        }
+        struct topk_dump_on_exit { const float * x; const int * y; int64_t ncols, nrows, k; cudaStream_t stream;
+            ~topk_dump_on_exit() { dsv41_topk_dump(x, y, ncols, nrows, k, stream); } } dump_on_exit{src0_d, dst_d, ncols, nrows, k, stream};
         const int first_width = ((ncols + TOP_K_TILE_SIZE - 1) / TOP_K_TILE_SIZE) * k;
         ggml_cuda_pool_alloc<int> candidates_a_alloc(pool, (size_t) nrows * first_width);
         int * candidates_a = candidates_a_alloc.get();
 
-        top_k_f32_i32_cuda_bitonic_tiles(
-                src0_d, candidates_a, ncols, nrows, TOP_K_TILE_SIZE, k, stream);
+        top_k_f32_i32_cuda_bitonic_tiles_filtered(
+                src0_d, candidates_a, ncols, nrows, TOP_K_TILE_SIZE, k, stream, false, only_rows);
 
         int width = first_width;
         int * candidates = candidates_a;
@@ -126,19 +172,19 @@ void ggml_cuda_op_top_k(ggml_backend_cuda_context & ctx, ggml_tensor * dst) {
             while (width > TOP_K_TILE_SIZE) {
                 const int next_width = ((width + TOP_K_TILE_SIZE - 1) / TOP_K_TILE_SIZE) * k;
                 int * next_candidates = candidates == candidates_a ? candidates_b : candidates_a;
-                top_k_f32_i32_cuda_bitonic_candidates(src0_d, candidates, next_candidates,
-                        ncols, nrows, width, TOP_K_TILE_SIZE, k, stream);
+                top_k_f32_i32_cuda_bitonic_candidates_filtered(src0_d, candidates, next_candidates,
+                        ncols, nrows, width, TOP_K_TILE_SIZE, k, stream, only_rows);
                 candidates = next_candidates;
                 width = next_width;
             }
 
-            top_k_f32_i32_cuda_bitonic_candidates(
-                    src0_d, candidates, dst_d, ncols, nrows, width, TOP_K_TILE_SIZE, k, stream);
+            top_k_f32_i32_cuda_bitonic_candidates_filtered(
+                    src0_d, candidates, dst_d, ncols, nrows, width, TOP_K_TILE_SIZE, k, stream, only_rows);
             return;
         }
 
-        top_k_f32_i32_cuda_bitonic_candidates(
-                src0_d, candidates, dst_d, ncols, nrows, width, TOP_K_TILE_SIZE, k, stream);
+        top_k_f32_i32_cuda_bitonic_candidates_filtered(
+                src0_d, candidates, dst_d, ncols, nrows, width, TOP_K_TILE_SIZE, k, stream, only_rows);
         return;
     }
 
