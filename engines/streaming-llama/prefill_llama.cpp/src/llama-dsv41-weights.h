@@ -110,6 +110,7 @@ public:
     // every request's combined host admission.
     uint64_t engram_row_cache_bytes() const;
     bool create_engram_row_cache(uint64_t bytes,std::string &error);
+    bool resize_engram_row_cache(uint64_t bytes,std::string &error);
     // Warm: on a completed released pass, the moment an append's tokens
     // arrive (before the next request's open/start_request/layer-0 fetch).
     // Charges the live previous cache; reuses its rows (copied, not read).
