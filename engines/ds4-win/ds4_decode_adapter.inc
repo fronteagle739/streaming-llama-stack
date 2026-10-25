@@ -73,6 +73,25 @@ DS4X_EXPORT int ds4x_register_weight(uint64_t file_offset, uint64_t bytes, void 
     return ds4_gpu_register_external_range(g_ds4x.model.map, file_offset, bytes, device_ptr);
 }
 
+/* LLAMADECODE keep-open (LLAMADECODE_DS4X_KEEP_OPEN): the decoder stays open
+ * across a caller bank rebuild (prefill weight sweep). The caller then moves
+ * only the weights whose device copy moved (same file range), or drops all of
+ * its ranges and registers the new set. Scratch, model map, Engram tables and
+ * bound-state views are kept; the caller rebinds its state before decoding.
+ * Callers invoke these only between decode steps (no ds4 work in flight). */
+DS4X_EXPORT int ds4x_replace_weight(uint64_t file_offset, uint64_t bytes, void *device_ptr) {
+    if (!g_ds4x.open || !device_ptr || !bytes) return 0;
+    return ds4_gpu_replace_external_range(g_ds4x.model.map, file_offset, bytes, device_ptr);
+}
+
+DS4X_EXPORT uint64_t ds4x_drop_weights(void) {
+    if (!g_ds4x.open) return 0;
+#if !defined(__APPLE__) && !defined(DS4_ROCM_BUILD)
+    ds4_gpu_decode_graphs_invalidate();   /* captured islands hold weight pointers (unused at tp_world 1) */
+#endif
+    return ds4_gpu_drop_external_ranges();
+}
+
 static void ds4x_view(ds4_gpu_tensor *t, void *ptr, uint64_t bytes) {
     t->ptr = ptr; t->bytes = bytes; t->owner = 0; t->device_id = -1;
 }

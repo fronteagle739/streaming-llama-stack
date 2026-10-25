@@ -45968,12 +45968,30 @@ extern "C" int ds4_gpu_register_external_range(const void *model_map, uint64_t o
     g_model_range_by_offset[offset] = g_model_ranges.size() - 1u;
     return 1;
 }
+/* LLAMADECODE keep-open: a caller weight that moved (same file range, new device
+ * copy) is updated in place; the range keeps its lookup order. */
+extern "C" int ds4_gpu_replace_external_range(const void *model_map, uint64_t offset, uint64_t bytes, void *device_ptr) {
+    if (!model_map || !bytes || !device_ptr) return 0;
+    auto it = g_model_range_by_offset.find(offset);
+    if (it == g_model_range_by_offset.end() || it->second >= g_model_ranges.size()) return 0;
+    cuda_model_range &r = g_model_ranges[it->second];
+    if (!r.borrowed || r.host_base != model_map || r.offset != offset || r.bytes != bytes) return 0;
+    r.device_ptr = (char *)device_ptr;
+    return 1;
+}
+/* Forget every caller-registered range (the caller then registers a new set). */
+extern "C" uint64_t ds4_gpu_drop_external_ranges(void) {
+    uint64_t dropped = 0;
+    for (size_t i = g_model_ranges.size(); i-- > 0;)
+        if (g_model_ranges[i].borrowed) { g_model_ranges.erase(g_model_ranges.begin() + (ptrdiff_t)i); ++dropped; }
+    g_model_range_by_offset.clear();
+    for (size_t i = 0; i < g_model_ranges.size(); i++) g_model_range_by_offset[g_model_ranges[i].offset] = i;
+    return dropped;
+}
 extern "C" void ds4_gpu_external_decode_mode(int on) {
     g_ds4x_external_mode = on;
     if (!on) {
-        for (size_t i = g_model_ranges.size(); i-- > 0;) if (g_model_ranges[i].borrowed) g_model_ranges.erase(g_model_ranges.begin() + (ptrdiff_t)i);
-        g_model_range_by_offset.clear();
-        for (size_t i = 0; i < g_model_ranges.size(); i++) g_model_range_by_offset[g_model_ranges[i].offset] = i;
+        (void)ds4_gpu_drop_external_ranges();
         if (g_ds4x_slot_tensor.ptr) { (void)cudaFree(g_ds4x_slot_tensor.ptr); g_ds4x_slot_tensor = {}; }
     }
 }

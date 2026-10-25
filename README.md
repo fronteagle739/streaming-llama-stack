@@ -33,6 +33,8 @@ Two scripts start the single engine through `slstack start` with the gated confi
 
 Both use DirectStorage read parts 8, a 512 MiB VRAM reserve beside the L2 expert tier, the default quality/speed setting, single-sweep prefill off (49,152-token sweeps; `producer_host_max_gib` is removed if your config sets it), `producer_host_reserve_gib` 1, and Engram early load `auto` with no Engram row cache (`LLAMADECODE_ENGRAM_CACHE_MB=0`). The settings live in `scripts/dsv41_single.py`.
 
+- **Turn after an append (keep-open, default on):** after the prefill sweep of an appended turn the producer keeps its ds4 decoder open and re-registers only the resident weights that moved, instead of closing and reopening the decoder. With the 1M script the decode of the turn after a long append starts in about 4 s instead of about 14 s; at 262K the gain is small. The output is byte-identical to the close/reopen path. `LLAMADECODE_DS4X_KEEP_OPEN=0` restores close/reopen. The producer also verifies the conversation's owner state incrementally (only the appended rows are re-hashed); the digests on the wire are unchanged.
+
 ```powershell
 ./slstack.ps1 install --all                 # build once (producer, ds4-decode.dll, chat UI)
 ./slstack.ps1 install --all --check
