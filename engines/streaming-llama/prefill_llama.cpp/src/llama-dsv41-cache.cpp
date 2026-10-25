@@ -261,6 +261,7 @@ void llama_dsv41_cache_storage::clear() {
     if(grow_step)clear_grown_locked();
     if(execution_backend)ggml_backend_synchronize(execution_backend);
     dspark_completion.clear();
+    digest_memo.invalidate();
     execution_poisoned=false;
 }
 
