@@ -46203,6 +46203,20 @@
     "defaults_by_scope": {}
   },
   {
+    "var": "LLAMADECODE_TEST_FAULT",
+    "flag": null,
+    "default": null,
+    "code_default": "Unset: no fault (production)",
+    "classification": "advanced",
+    "scopes": [
+      "rtx-llama"
+    ],
+    "doc": "Producer TEST-ONLY fault injection to prove every abort reaches the client as a reason: <kind>@<layer> with kind main_throw (std::runtime_error on the sweep/session thread), worker_throw (thrown on a std::async worker and marshalled to the sweep thread) or bad_alloc (std::bad_alloc on the sweep thread). Fires once, at the start of that layer in the first multi-token sweep; logs LLAMADECODE_TEST_FAULT_ARMED at startup. Never set in a preset.",
+    "reads": [
+      "engines/streaming-llama/prefill_llama.cpp/src/llama-dsv41-test-fault.h:45"
+    ]
+  },
+  {
     "var": "LLAMA_ALLOC_OUTPUT_GUARD",
     "flag": null,
     "default": null,

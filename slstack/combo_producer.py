@@ -76,6 +76,8 @@ def engram_prompt_bytes(rows):
     """Whole-prompt Engram row cache admission (llama_dsv41_prefill::engram_prompt_bytes)."""
     return (4<<20)+rows*48*268
 
+FOLD_CAP=61440   # owner, measured: fold wins at 54,037 and 60,176, loses at 93,668
+
 def fold_sweeps(prompt_tokens,sweep,capacity):
     """Owner fold rule (llama_dsv41_prefill::fold): every sweep is `sweep` tokens and the remainder
     r = n - k*sweep is folded into the last one (sweep + r); n <= sweep is one sweep. When sweep + r
@@ -100,8 +102,8 @@ def prefill_plan(cfg,prompt_tokens,available=None):
     page-rounded (Windows keeps a hard-minimum working set only in whole pages).
     producer_prefill_sweep_tokens S (absent = the above): the owner fold policy instead; S-token
     sweeps with the remainder folded into the last (fold_sweeps), C = the largest sweep (at least
-    49152), the same host raise for C; when the folded sweep cannot fit the cap the remainder is its
-    own sweep."""
+    49152), the same host raise for C; when the folded sweep cannot fit the cap, or exceeds the fold
+    cap producer_prefill_fold_cap_tokens (default 61440), the remainder is its own sweep."""
     base=int(cfg.get('producer_host_budget_gib',8)*(1<<30))
     top=int(cfg.get('producer_host_max_gib',cfg.get('producer_host_budget_gib',8))*(1<<30))
     if top<base:raise ValueError('producer_host_max_gib is below producer_host_budget_gib')
@@ -146,19 +148,21 @@ def fold_plan(cfg,prompt_tokens,available,sweep,base,top,capped_by,extra,limit):
             if base+sum(extra(mid))<=top:lo=mid
             else:hi=mid-1
         cap=lo
+    fold_cap=cfg.get('producer_prefill_fold_cap_tokens',FOLD_CAP)
+    if type(fold_cap) is not int or fold_cap<=0:raise ValueError('producer_prefill_fold_cap_tokens must be a positive token count')
     n=int(prompt_tokens)
     if n>sweep and sweep>cap:
         raise ValueError('producer_prefill_sweep_tokens %d exceeds the largest capacity %d under the cap (%s)'%(sweep,cap,capped_by))
-    sweeps,tail=fold_sweeps(n,sweep,cap)
+    sweeps,tail=fold_sweeps(n,sweep,min(cap,fold_cap))
     want=max(LEGACY_SWEEP,max(sweeps))
     carry,engram=extra(want)
     host=base+carry+engram
     if host!=base:host=-(-host//65536)*65536   # whole pages (64 KiB) for the hard-minimum working set
     return dict(capacity=want,host_bytes=host,carry_delta=carry,engram_delta=engram,base_host_bytes=base,max_host_bytes=top,
                 available_bytes=available,capped_by=capped_by,prompt_tokens=n,single_sweep=len(sweeps)==1,
-                policy='fold',sweep_tokens=sweep,sweeps=sweeps,fold_tail=tail,
-                reason=None if not tail else 'fold: last sweep %d + %d = %d exceeds the largest capacity %d (%s); the %d-token remainder is its own sweep'%(
-                    sweep,sweeps[-1],sweep+sweeps[-1],cap,capped_by,sweeps[-1]))
+                policy='fold',sweep_tokens=sweep,sweeps=sweeps,fold_tail=tail,fold_cap=fold_cap,
+                reason=None if not tail else 'fold: last sweep %d + %d = %d exceeds %s; the %d-token remainder is its own sweep'%(
+                    sweep,sweeps[-1],sweep+sweeps[-1],'the fold cap %d'%fold_cap if sweep+sweeps[-1]>fold_cap else 'the largest capacity %d (%s)'%(cap,capped_by),sweeps[-1]))
 
 def stall_seconds(cfg):
     """No-progress window for a producer operation. A long operation (a 262K-token prefill, a long
@@ -194,8 +198,8 @@ class ComboProducer:
             for key,delta in (('--carry-host-bytes',plan['carry_delta']),('--provider-host-bytes',plan['engram_delta']),('--engram-prefetch-bytes',plan['engram_delta'])):
                 args[key]=str(int(args[key])+delta)
         if plan.get('policy')=='fold':   # owner fold policy: S-token sweeps, remainder folded into the last
-            args['--prefill-sweep-tokens']=str(plan['sweep_tokens'])
-            print('LLAMADECODE_PREFILL_FOLD sweep_tokens=%s primary_sweep_tokens=%d capacity=%d'%(','.join(map(str,plan['sweeps'])),plan['sweep_tokens'],plan['capacity']),flush=True)
+            args['--prefill-sweep-tokens']=str(plan['sweep_tokens']);args['--prefill-fold-cap-tokens']=str(plan['fold_cap'])
+            print('LLAMADECODE_PREFILL_FOLD sweep_tokens=%s primary_sweep_tokens=%d capacity=%d fold_cap=%d'%(','.join(map(str,plan['sweeps'])),plan['sweep_tokens'],plan['capacity'],plan['fold_cap']),flush=True)
             if plan['fold_tail']:print('LLAMADECODE_PREFILL_FOLD_TAIL '+plan['reason'],flush=True)
         elif not plan['single_sweep']:print('LLAMADECODE_PREFILL_SINGLE_SWEEP_REFUSED '+plan['reason'],flush=True)
         print('LLAMADECODE_PREFILL_BUDGET '+json.dumps(plan),flush=True)
