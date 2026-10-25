@@ -168,7 +168,7 @@ class _Native:
         cuda('cuDeviceGet', [C.POINTER(C.c_int), C.c_int], C.byref(device), ordinal)
         identifier = (C.c_ubyte * 16)()
         cuda('cuDeviceGetUuid_v2', [C.c_void_p, C.c_int], identifier, device)
-        require('GPU-' + str(uuid.UUID(bytes=bytes(identifier))) == expected_uuid, 'CUDA ordinal is not the pinned RTX5090 UUID')
+        require('GPU-' + str(uuid.UUID(bytes=bytes(identifier))) == expected_uuid, 'CUDA ordinal is not the configured GPU UUID')
         nvml = C.WinDLL('nvml.dll', winmode=2048)
 
         def call(name, args, *values):
@@ -181,7 +181,11 @@ class _Native:
             call('nvmlDeviceGetHandleByUUID', [C.c_char_p, C.POINTER(C.c_void_p)], expected_uuid.encode('ascii'), C.byref(handle))
             name = C.create_string_buffer(128)
             call('nvmlDeviceGetName', [C.c_void_p, C.c_char_p, C.c_uint], handle, name, len(name))
-            require(b'RTX 5090' in name.value, 'Pinned UUID is not an RTX5090')
+            major, minor = C.c_int(), C.c_int()
+            call('nvmlDeviceGetCudaComputeCapability', [C.c_void_p, C.POINTER(C.c_int), C.POINTER(C.c_int)],
+                 handle, C.byref(major), C.byref(minor))
+            require(major.value * 10 + minor.value >= 120,
+                    'Selected CUDA device lacks the compute capability required by this backend')
             memory = (C.c_ulonglong * 3)()
             call('nvmlDeviceGetMemoryInfo', [C.c_void_p, C.c_void_p], handle, memory)
             return int(memory[1])

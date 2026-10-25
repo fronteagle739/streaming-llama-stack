@@ -132,7 +132,7 @@ def main():
     ap.add_argument('--example-file', default=None, help='file of example captions (one per line)')
     ap.add_argument('--captioner', choices=['openai', 'gemma', 'cosmos', 'local'], default='openai')
     ap.add_argument('--vlm-dir', default='', help='(--captioner local) path to a local Qwen2.5-VL dir')
-    ap.add_argument('--vlm-device', default='cuda', help='(--captioner local) cuda / cuda:0 (3070) / cuda:1 (5090)')
+    ap.add_argument('--vlm-device', default='cuda', help='(--captioner local) cuda or an explicit cuda:<ordinal> device')
     ap.add_argument('--vlm-4bit', action='store_true', help='(--captioner local) bnb NF4 load (fits the 3070)')
     ap.add_argument('--openai-base-url', default='')
     ap.add_argument('--openai-model', default='kimi-k2.6')

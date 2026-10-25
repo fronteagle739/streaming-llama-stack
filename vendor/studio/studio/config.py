@@ -96,27 +96,30 @@ def _default_output_dir() -> Path:
     root = Path(base) / 'StreamingStudio' if base else Path.home() / '.front-eagle-stack'
     return root / 'outputs'
 
-def _windows_slow_model_drive(path: str | Path | None) -> bool:
+def _windows_slow_model_drive(path: str | Path | None, env: Optional[dict[str, str]]=None) -> bool:
     if not path or not _paths.is_windows():
         return False
     try:
         drive = Path(str(path)).expanduser().drive.upper()
     except Exception:
         return False
-    return drive in ('C:', 'I:')
+    environ = os.environ if env is None else env
+    slow = {item.strip().upper().rstrip('\\/') for item in
+            environ.get('STUDIO_SLOW_MODEL_VOLUMES', '').split(';') if item.strip()}
+    return drive in slow
 
 def configure_model_storage_env(models_root: str | Path, env: Optional[dict[str, str]]=None) -> dict[str, str]:
     target = os.environ if env is None else env
     root = Path(str(models_root)).expanduser()
     cache = Path(str(target.get('STUDIO_HF_CACHE') or root / 'hf_cache')).expanduser()
-    if _windows_slow_model_drive(cache) and str(target.get('STUDIO_ALLOW_SLOW_MODEL_DRIVES') or '').lower() not in ('1', 'true', 'on', 'yes', 'y'):
+    if _windows_slow_model_drive(cache, target) and str(target.get('STUDIO_ALLOW_SLOW_MODEL_DRIVES') or '').lower() not in ('1', 'true', 'on', 'yes', 'y'):
         cache = root / 'hf_cache'
     hub = cache / 'hub'
     allow_slow = str(target.get('STUDIO_ALLOW_SLOW_MODEL_DRIVES') or '').strip().lower() in ('1', 'true', 'on', 'yes', 'y')
 
     def put_default(name: str, value: Path) -> None:
         current = target.get(name)
-        if not current or (_windows_slow_model_drive(current) and (not allow_slow)):
+        if not current or (_windows_slow_model_drive(current, target) and (not allow_slow)):
             target[name] = str(value)
     put_default('STUDIO_HF_CACHE', cache)
     put_default('HF_HOME', cache)
@@ -137,7 +140,7 @@ class Settings:
     port: int = field(default_factory=lambda: int(_env('STUDIO_PORT', '8765')))
     cosmos_windows_path: Optional[Path] = field(default_factory=lambda: _env_path_opt('STUDIO_COSMOS_WINDOWS_PATH'))
     force_mock: bool = field(default_factory=lambda: _env_bool('STUDIO_FORCE_MOCK'))
-    gpu_index: str = field(default_factory=lambda: _env('STUDIO_GPU_INDEX', '1'))
+    gpu_index: str = field(default_factory=lambda: _env('STUDIO_GPU_INDEX', '0'))
     pair_token: Optional[str] = field(default_factory=_default_pair_token)
     chat_base_url: Optional[str] = field(default_factory=lambda: os.environ.get('STUDIO_CHAT_BASE_URL') or None)
     chat_model: str = field(default_factory=lambda: _env('STUDIO_CHAT_MODEL', 'default'))
@@ -160,7 +163,7 @@ class Settings:
     joyai_python: str = field(default_factory=lambda: _resolved('STUDIO_JOYAI_PYTHON', 'JoyAI-Echo\\.venv\\Scripts\\python.exe', '', want='file'))
     joyai_repo: str = field(default_factory=lambda: _resolved('STUDIO_JOYAI_REPO', 'JoyAI-Echo', '', want='dir'))
     joyai_config: str = field(default_factory=lambda: _resolved('STUDIO_JOYAI_CONFIG', 'JoyAI-Echo\\configs\\inference.yaml', '', want='file'))
-    fdanyone_python: str = field(default_factory=lambda: _resolved('STUDIO_4DANYONE_PYTHON', 'cosmos-venv\\Scripts\\python.exe', '', want='file'))
+    fdanyone_python: str = field(default_factory=lambda: _resolved('STUDIO_4DANYONE_PYTHON', 'media-venv\\Scripts\\python.exe', '', want='file'))
     fdanyone_repo: str = field(default_factory=lambda: _resolved('STUDIO_4DANYONE_REPO', '4DAnyone', '', want='dir'))
     fdanyone_model: str = field(default_factory=lambda: _resolved_model('STUDIO_4DANYONE_MODEL', '4danyone', ''))
     data_root: Path = field(default_factory=_paths.app_data_root)

@@ -2,6 +2,8 @@ param(
     [ValidateSet("cuda", "cpu")]
     [string]$Target = "cuda",
     [string]$BuildTemp = $PSScriptRoot,
+    [ValidatePattern('^[0-9]+[a-z]?$')]
+    [string]$CudaArchitecture = $(if ($env:SLSTACK_CUDA_ARCHITECTURES) { $env:SLSTACK_CUDA_ARCHITECTURES } else { '120a' }),
     [switch]$Draft3070,
     [switch]$TestsOnly,
     # ds4-decode.dll: the core + CUDA objects with DS4_EXTERNAL_DECODE=1, loaded by the
@@ -214,8 +216,8 @@ if ($Target -eq "cuda") {
     # must report EIGHT sm_120a and ZERO sm_75. Seven-of-eight is the signature of a masked compile
     # failure leaving a stale object behind - which is exactly what happened on the first attempt.
     $nvccArch = @(
-        "-gencode", "arch=compute_120a,code=sm_120a",
-        "-gencode", "arch=compute_120a,code=compute_120a"
+        "-gencode", "arch=compute_${CudaArchitecture},code=sm_${CudaArchitecture}",
+        "-gencode", "arch=compute_${CudaArchitecture},code=compute_${CudaArchitecture}"
     )
     # ⚠️ EVERY nvcc invocation gets its OWN errorlevel check. $cudaCommand is emitted into the .cmd as a
     # single multi-line block with one "if errorlevel 1" AFTER it, so without these per-line checks only

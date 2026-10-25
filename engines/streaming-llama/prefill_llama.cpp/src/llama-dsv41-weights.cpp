@@ -510,7 +510,7 @@ bool llama_dsv41_weight_provider::inspect(const config&options,std::string&error
     require(ggml_backend_is_cuda(options.backend),"V4.1 physical provider requires an actual CUDA backend");
     require(options.verified_sha256==original_sha&&options.verified_file_bytes==518596067328ull,"Original 1017 SHA receipt required");
     const char*device=ggml_backend_dev_description(ggml_backend_get_device(options.backend));
-    require(device&&std::strstr(device,"RTX 5090"),"V4.1 streaming producer requires the admitted RTX 5090 backend");
+    require(device&&*device,"V4.1 streaming producer requires the explicitly admitted CUDA backend");
     p->options=options;p->path=std::filesystem::u8path(options.model_path);
     require(p->path.is_absolute()&&p->path==p->path.lexically_normal()&&p->path.has_filename()&&p->path.filename().wstring().find(L':')==std::wstring::npos,"Model path must be a physical absolute file");
     require(GetDriveTypeW(p->path.root_path().c_str())==DRIVE_FIXED,"Model must reside on a fixed local volume");

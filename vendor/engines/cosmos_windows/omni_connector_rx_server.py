@@ -5,7 +5,7 @@ import argparse
 import os
 from pathlib import Path
 os.environ.setdefault('CUDA_DEVICE_ORDER', 'PCI_BUS_ID')
-os.environ.setdefault('CUDA_VISIBLE_DEVICES', '1')
+os.environ.setdefault('CUDA_VISIBLE_DEVICES', os.environ.get('STUDIO_GPU_INDEX', '0'))
 from cosmos_windows.omni_connector_receiver import OmniConnectorReceiver, decode_generation_request, generate_from_request
 
 class DiffusersCudaImagePipeline:
@@ -38,7 +38,7 @@ def main() -> int:
     ap.add_argument('--put-key', default='ar_conditioning')
     ap.add_argument('--out', default='')
     ap.add_argument('--flow-shift', type=float, default=10.0)
-    ap.add_argument('--no-offload', action='store_true', help='keep the model resident on the 5090 (faster, more VRAM)')
+    ap.add_argument('--no-offload', action='store_true', help='keep the model resident on the selected device (faster, more VRAM)')
     ap.add_argument('--once', action='store_true', help='exit after one generation (single live test)')
     args = ap.parse_args()
     out = Path(args.out)

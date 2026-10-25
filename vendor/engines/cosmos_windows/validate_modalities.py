@@ -2,7 +2,7 @@
 # Machine fallback paths cleared; no model data included.
 import os, sys, time, traceback
 os.environ.setdefault('CUDA_DEVICE_ORDER', 'PCI_BUS_ID')
-os.environ.setdefault('CUDA_VISIBLE_DEVICES', '1')
+os.environ.setdefault('CUDA_VISIBLE_DEVICES', os.environ.get('STUDIO_GPU_INDEX', '0'))
 import numpy as np
 import torch
 from PIL import Image
@@ -57,7 +57,7 @@ def run(pipe, name, **kw):
         return (None, False)
 
 def main():
-    print(f'[load] {MODEL} (bf16, model-cpu-offload) on RTX 5090...', flush=True)
+    print(f'[load] {MODEL} (bf16, model-cpu-offload) on the configured CUDA device...', flush=True)
     pipe = Cosmos3OmniPipeline.from_pretrained(MODEL, torch_dtype=torch.bfloat16, enable_safety_checker=False)
     pipe.scheduler = UniPCMultistepScheduler.from_config(pipe.scheduler.config, flow_shift=10.0)
     pipe.enable_model_cpu_offload()

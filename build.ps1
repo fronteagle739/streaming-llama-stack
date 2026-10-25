@@ -1,4 +1,4 @@
-param([string]$Config = 'config.example.json', [ValidateSet('ds4','llama','webui','all')][string]$Target='all')
+param([string]$Config = 'config.example.json', [ValidateSet('ds4','llama','webui','all')][string]$Target='all', [string]$CudaArchitectures = $(if ($env:SLSTACK_CUDA_ARCHITECTURES) { $env:SLSTACK_CUDA_ARCHITECTURES } else { '120a' }))
 $ErrorActionPreference = 'Stop'
 Set-Location -LiteralPath $PSScriptRoot
 $runtimeConfig = & python -B -c "import sys; from slstack.config import load; print(load(sys.argv[1])['runtime_root'])" $Config
@@ -64,7 +64,7 @@ if ($Target -in @('llama','all')) {
     if ($cutlassHead -ne $cutlassCommit) { throw "CUTLASS checkout is $cutlassHead, expected pinned $cutlassCommit" }
     # Same pinned CMake build as the engine's build.bat, narrowed to the used
     # targets with two compile jobs. Enable its existing offline ULTRA producer.
-    & $py -B -m slstack --config $Config guarded -- cmake -G Ninja -S $llamaPath -B build/llama -DCMAKE_BUILD_TYPE=Release -DGGML_CUDA=ON -DLLAMA_CURL=OFF -DLLAMA_BUILD_TESTS=OFF -DLLAMA_BUILD_EXAMPLES=OFF -DLLAMA_OPENSSL=OFF -DCMAKE_CUDA_ARCHITECTURES=120a -DGGML_BACKEND_DL=OFF -DBUILD_SHARED_LIBS=OFF -DLLAMA_DSV41_OFFLINE_PRODUCER=ON -DLLAMA_DSV41_NATIVE_HALF_PROFILES=ON "-DLLAMA_DSV41_JSON_INCLUDE_DIR=$llamaPath/vendor" "-DLLAMA_DSV41_DSTORAGE_INCLUDE_DIR=$llamaPath/external/directstorage/native/include" "-DLLAMA_DSV41_DSTORAGE_LIBRARY=$llamaPath/external/directstorage/native/lib/x64/dstorage.lib" -DGGML_CUDA_DSV41_SPLIT_F32=ON "-DGGML_CUDA_CUTLASS_PATH=$cutlassPath"
+    & $py -B -m slstack --config $Config guarded -- cmake -G Ninja -S $llamaPath -B build/llama -DCMAKE_BUILD_TYPE=Release -DGGML_CUDA=ON -DLLAMA_CURL=OFF -DLLAMA_BUILD_TESTS=OFF -DLLAMA_BUILD_EXAMPLES=OFF -DLLAMA_OPENSSL=OFF "-DCMAKE_CUDA_ARCHITECTURES=$CudaArchitectures" -DGGML_BACKEND_DL=OFF -DBUILD_SHARED_LIBS=OFF -DLLAMA_DSV41_OFFLINE_PRODUCER=ON -DLLAMA_DSV41_NATIVE_HALF_PROFILES=ON "-DLLAMA_DSV41_JSON_INCLUDE_DIR=$llamaPath/vendor" "-DLLAMA_DSV41_DSTORAGE_INCLUDE_DIR=$llamaPath/external/directstorage/native/include" "-DLLAMA_DSV41_DSTORAGE_LIBRARY=$llamaPath/external/directstorage/native/lib/x64/dstorage.lib" -DGGML_CUDA_DSV41_SPLIT_F32=ON "-DGGML_CUDA_CUTLASS_PATH=$cutlassPath"
     if ($LASTEXITCODE) { throw 'llama configure failed' }
     & $py -B -m slstack --config $Config guarded -- cmake --build build/llama --config Release --parallel 2 --target llama-server llama-dsv41-prefill llama-export-lora slstack-weight-fetcher
     if ($LASTEXITCODE) { throw 'llama build failed' }

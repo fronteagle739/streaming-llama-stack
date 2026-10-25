@@ -24,6 +24,8 @@ def load(path=None, overrides=None):
     for key in ('host_budget_gib', 'min_available_gib', 'job_commit_gib', 'request_timeout_s', 'lease_minutes'):
         if not isinstance(cfg[key], (int, float)) or not math.isfinite(cfg[key]) or cfg[key] <= 0:
             raise ValueError(f'{key} must be finite and positive')
+    if type(cfg.get('gpu_min_free_mib', 0)) is not int or cfg.get('gpu_min_free_mib', 0) < 0:
+        raise ValueError('gpu_min_free_mib must be a nonnegative integer')
     wait = cfg.get('gpu_wait_seconds', 0)
     if type(wait) not in (int, float) or not math.isfinite(wait) or not 0 <= wait <= 7200:
         raise ValueError('gpu_wait_seconds must be finite and in [0,7200]')

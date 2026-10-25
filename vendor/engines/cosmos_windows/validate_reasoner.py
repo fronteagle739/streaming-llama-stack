@@ -21,7 +21,7 @@ def main() -> int:
     ap = argparse.ArgumentParser(description=__doc__)
     ap.add_argument('--model', default='')
     ap.add_argument('--device', default='cuda', choices=['cuda', 'mps', 'cpu'])
-    ap.add_argument('--gpu-index', default='1', help='RTX 5090 = index 1 under PCI_BUS_ID on this box')
+    ap.add_argument('--gpu-index', default=os.environ.get('STUDIO_GPU_INDEX', '0'), help='Explicit CUDA device index in PCI bus order')
     ap.add_argument('--max-new-tokens', type=int, default=160)
     ap.add_argument('--skip-vqa', action='store_true')
     args = ap.parse_args()

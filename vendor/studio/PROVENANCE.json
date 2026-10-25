@@ -14,7 +14,7 @@
       "export": "complete unchanged module"
     }
   ],
-  "license": "MIT, per stack owner instruction",
+  "license": "MIT for Front Eagle code; third-party licenses remain authoritative",
   "local_patches": [
     {
       "path": "dsv41_session_process.py",
@@ -27,6 +27,10 @@
     {
       "path": "dsv41_session_contract.py, dsv41_session_process.py",
       "purpose": "rtxmac-producer-2b: negotiate instead of lockstep. Readiness accepts any maximum_decode_tokens >= 128; negotiate_decode_delta = min(peer maximum_decode_delta_tokens, else maximum_decode_tokens, else 128; MAX_DECODE_DELTA). The effective value is published to the peer in the broker metadata and enforced in begin_decode. No engine arithmetic changes."
+    },
+    {
+      "path": "config.py, settings_store.py, dsv41_windows_runner.py",
+      "purpose": "Portable storage/GPU defaults and capability-based device admission; exported code differs from source digests recorded for provenance."
     }
   ],
   "modules": [
@@ -194,5 +198,6 @@
       "setting_arguments"
     ],
     "export_sha256": "75bb37a0775b25f9c377493b1c85cf912191e23054cefa082fe66bfcb0a6a152"
-  }
+  },
+  "redistribution_review": "Retain all third-party license and copyright notices. Repository access or owner instructions alone do not establish additional third-party redistribution rights."
 }

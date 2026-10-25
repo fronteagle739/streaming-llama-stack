@@ -19,7 +19,7 @@ def main() -> int:
     ap.add_argument('--height', type=int, default=704)
     ap.add_argument('--fps', type=int, default=24)
     ap.add_argument('--seed', type=int, default=42)
-    ap.add_argument('--gpu', default='1')
+    ap.add_argument('--gpu', default=os.environ.get('STUDIO_GPU_INDEX', '0'))
     ap.add_argument('--guidance', type=float, default=4.0)
     ap.add_argument('--audio-guidance', type=float, default=4.0)
     ap.add_argument('--negative', default='worst quality, blurry, jittery, distorted, watermark, text')

@@ -72,7 +72,7 @@ def check(cfg, *, verify_journal=True):
                               '--query-gpu=name,memory.total,memory.free', '--format=csv,noheader,nounits'],
                              text=True, capture_output=True, timeout=10)
         values = gpu.stdout.strip().split(',')
-        fits = gpu.returncode == 0 and len(values) == 3 and int(values[1].strip()) >= 30000
+        fits = gpu.returncode == 0 and len(values) == 3 and int(values[1].strip()) >= int(cfg.get('gpu_min_free_mib', 0))
         record('vram', fits, gpu.stdout.strip() or gpu.stderr.strip())
     except (OSError, subprocess.TimeoutExpired) as exc:
         record('vram', False, exc)

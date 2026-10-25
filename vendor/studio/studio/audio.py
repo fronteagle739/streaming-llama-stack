@@ -196,7 +196,7 @@ def _worker_env(engine: Optional[str] = None) -> dict:
     # Per-service GPU assignment (user 2026-06-09): pin the audio worker to the user's chosen card.
     # The worker reads STUDIO_AUDIO_GPU_INDEX and applies CUDA_DEVICE_ORDER=PCI_BUS_ID +
     # CUDA_VISIBLE_DEVICES before importing torch/CTranslate2, so the index is an nvidia-smi PCI-bus
-    # index (0=3070, 1=5090 on the dev box). An explicit env override wins; default stays the 3070.
+    # index. An explicit environment override wins over the saved assignment.
     if "STUDIO_AUDIO_GPU_INDEX" not in os.environ:
         idx = _assigned_gpu_index()
         if idx is not None:

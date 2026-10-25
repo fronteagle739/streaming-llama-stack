@@ -40,7 +40,7 @@ PRESETS = {
 }
 # Keys that would change the gated configuration; a local config may not set them for these presets.
 REMOVED = ('producer_host_max_gib', 'producer_keep_alive', 'producer_prefill_sweep_tokens', 'producer_prefill_fold_cap_tokens')
-# The gated fold sweep plan (measured on the RTX 5090 box, 2026-10-25): primary sweep S* tokens, the
+# The gated fold sweep plan (a qualified reference measurement, 2026-10-25): primary sweep S* tokens, the
 # remainder folded into the last sweep while it stays <= the fold cap, else its own sweep. The host max
 # is only the ceiling for the largest sweep's bank (capacity <= the fold cap).
 FOLD = dict(producer_prefill_sweep_tokens=49152, producer_prefill_fold_cap_tokens=61440, producer_host_max_gib=7.75)
