@@ -3,6 +3,7 @@
 // Unbuilt owner-review candidate: explicit HC/expert seed injection, no qualification.
 #include "ggml.h"
 #include "ggml-backend.h"
+#include <array>
 #include <cstdint>
 #include <functional>
 #include <memory>
@@ -16,6 +17,19 @@ std::string sha256(const void *data, size_t bytes);
 // configuration or environment is consulted; each read is at most64KiB.
 std::string sha256_stream(uint64_t bytes,
     const std::function<bool(uint64_t,void *,size_t)> & read);
+// Resumable SHA-256 (same digest): a running state can be copied, extended
+// with more bytes and finalized any number of times. sha256_hex() finalizes a
+// copy; the state itself keeps accepting bytes. For a byte string A||B,
+// sha256_hex(update(update(begin(),A),B)) == sha256(A||B) exactly.
+struct sha256_state {
+    uint32_t h[8] = {};
+    std::array<unsigned char,64> block{};
+    uint64_t total = 0;
+    size_t pending = 0;
+};
+sha256_state sha256_begin();
+void sha256_update(sha256_state &state, const void *data, size_t bytes);
+std::string sha256_hex(const sha256_state &state);
 struct config {
     std::string nonce, source_base_revision, binary_sha256, variant_manifest_sha256;
     std::string residual_sha256, previous_pre_sha256;

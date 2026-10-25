@@ -2,6 +2,8 @@
 #include "boundary-capture.h"
 #include <algorithm>
 #include <array>
+#include <chrono>
+#include <cstdio>
 #include <cstring>
 #include <stdexcept>
 #include <utility>
@@ -58,6 +60,8 @@ bool llama_dsv41_cache_storage::apply_native_update(
         const llama_dsv41::wire_read_span&read,std::string&error,bool rewind,bool replace) {
     std::lock_guard<std::mutex>lock(execution_mutex);
     auto need=[](bool ok,const std::string&why){if(!ok)throw std::runtime_error(why);};
+    // Restore/replace/rewind may rewrite rows the incremental memo covers.
+    if(!base||rewind)digest_memo.invalidate();
     try {
         need(!execution_poisoned,"Native cache import requires a healthy cache");
         need(bool(read)&&target.context==context&&(target.mode==3)==bool(dspark_ring),"Native cache import context/mode mismatch");
@@ -89,6 +93,13 @@ bool llama_dsv41_cache_storage::apply_native_update(
         } else for(const auto&s:target_plan.spans)slices.push_back({s,0,s.bytes});
         if(execution_backend)ggml_backend_synchronize(execution_backend);
         auto verify=[&](const llama_dsv41::wire_plan&plan,const std::vector<std::string>&hashes){
+            if(llama_dsv41::owner_verify_incremental()){
+                // Same SHA-256 values; only rows added since the last verified
+                // digest are read. A mismatch re-hashes every owner before failing.
+                const auto actual=owner_digests_locked(plan,&hashes,&plan==&target_plan?"apply_target":"apply_base",false);
+                for(size_t i=0;i<plan.spans.size();++i)need(actual[i]==hashes[i],"Native cache owner SHA256 mismatch at span"+std::to_string(i));
+                return;
+            }
             for(size_t i=0;i<plan.spans.size();++i){const auto&s=plan.spans[i];
                 const auto actual=dsv41_boundary::sha256_stream(s.bytes,[&](uint64_t off,void*dst,size_t count){
                     return read_native_span_locked(s,off,dst,count,error,false);
@@ -110,10 +121,52 @@ bool llama_dsv41_cache_storage::apply_native_update(
         if(dspark_ring){dspark_completion.clear();dspark_completion.ends.fill(target.position);}
         execution_poisoned=false;error.clear();return true;
     }catch(const std::exception&failure){
-        execution_poisoned=true;dspark_completion.clear();error=failure.what();return false;
+        execution_poisoned=true;dspark_completion.clear();digest_memo.invalidate();error=failure.what();return false;
     }catch(...){
-        execution_poisoned=true;dspark_completion.clear();error="Unknown native cache import failure";return false;
+        execution_poisoned=true;dspark_completion.clear();digest_memo.invalidate();error="Unknown native cache import failure";return false;
     }
+}
+
+std::vector<std::string> llama_dsv41_cache_storage::owner_digests_locked(const llama_dsv41::wire_plan&plan,
+        const std::vector<std::string>*expected,const char*phase,bool require_capture){
+    std::string why;
+    auto read=[&](const llama_dsv41::state_span&s,uint64_t off,void*dst,size_t n){
+        return read_native_span_locked(s,off,dst,n,why,require_capture);
+    };
+    const auto started=std::chrono::steady_clock::now();
+    const bool incremental=llama_dsv41::owner_verify_incremental(),memo=digest_memo.ready();
+    uint64_t hashed=0,total=0;bool fallback=false;std::vector<std::string> out;
+    for(const auto&s:plan.spans)total+=s.bytes;
+    try{
+        out=digest_memo.digests(plan,read,incremental,&hashed);
+        if(incremental&&expected&&out!=*expected){
+            fallback=true;uint64_t again=0;out=digest_memo.digests(plan,read,false,&again);hashed+=again;
+        }
+    }catch(const std::exception&e){digest_memo.invalidate();throw std::runtime_error(std::string(e.what())+(why.empty()?"":": "+why));}
+    const double ms=std::chrono::duration<double,std::milli>(std::chrono::steady_clock::now()-started).count();
+    std::fprintf(stderr,"LLAMADECODE_OWNER_DIGEST phase=%s mode=%s position=%u memo=%d hashed_bytes=%llu owner_bytes=%llu full_rehash_fallback=%d ms=%.3f\n",
+        phase,incremental?"incremental":"full",plan.frontier.position,int(memo),(unsigned long long)hashed,(unsigned long long)total,int(fallback),ms);
+    if(fallback&&out==*expected)std::fprintf(stderr,"LLAMADECODE_OWNER_DIGEST_MEMO_STALE phase=%s position=%u full_rehash_matched=1\n",phase,plan.frontier.position);
+    std::fflush(stderr);
+    return out;
+}
+
+bool llama_dsv41_cache_storage::owner_digests(const llama_dsv41::wire_frontier&frontier,std::vector<std::string>&out,
+        const std::vector<std::string>*expected,std::string&error){
+    std::lock_guard<std::mutex>lock(execution_mutex);
+    try{
+        if(execution_poisoned)throw std::runtime_error("V4.1 cache requires clear after an incomplete computation");
+        llama_dsv41::wire_plan plan;
+        if(!llama_dsv41::make_wire_plan(frontier,plan,error))throw std::runtime_error(error);
+        if(frontier.context!=context||(frontier.mode==3)!=bool(dspark_ring))throw std::runtime_error("Owner digest context/mode mismatch");
+        if(expected&&expected->size()!=plan.spans.size())throw std::runtime_error("Owner digest expected hash count mismatch");
+        if(execution_backend)ggml_backend_synchronize(execution_backend);
+        out=owner_digests_locked(plan,expected,"inspect",true);error.clear();return true;
+    }catch(const std::exception&e){digest_memo.invalidate();out.clear();error=e.what();return false;}
+}
+
+void llama_dsv41_cache_storage::forget_owner_digests(){
+    std::lock_guard<std::mutex>lock(execution_mutex);digest_memo.invalidate();
 }
 
 bool llama_dsv41_cache_storage::rewind_native_frontier(
