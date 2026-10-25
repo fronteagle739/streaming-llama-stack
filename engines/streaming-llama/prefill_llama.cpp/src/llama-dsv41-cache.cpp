@@ -307,7 +307,7 @@ bool llama_dsv41_cache_storage::read_native_span(
 
 bool llama_dsv41_cache_storage::read_native_span_locked(
         const llama_dsv41::state_span & span, uint64_t offset, void * dst,
-        size_t bytes, std::string & error, bool require_capture) const {
+        size_t bytes, std::string & error, bool require_capture, size_t limit) const {
     using llama_dsv41::state_kind;
     ggml_tensor * tensor = nullptr;
     switch (span.kind) {
@@ -333,13 +333,19 @@ bool llama_dsv41_cache_storage::read_native_span_locked(
             }
             tensor=dspark_ring;break;
     }
-    if (!tensor || (!dst && bytes) || bytes > 1024*1024 ||
+    if (!tensor || (!dst && bytes) || bytes > limit ||
         span.bytes > uint64_t(ggml_nelements(tensor))*4 || offset > span.bytes || bytes > span.bytes-offset) {
         error = "invalid or unbounded canonical V4.1 cache export span";
         return false;
     }
     if (bytes) {
-        if(tensor->type==GGML_TYPE_BF16){
+        if(tensor->type==GGML_TYPE_BF16&&limit>1024*1024&&offset%4==0&&bytes%4==0){
+            // Owner digests: packed BF16 into the front of dst, widened in place
+            // from the back (element i's F32 bytes never overlap unread BF16).
+            const size_t first=size_t(offset/4),count=bytes/4;auto*p=static_cast<unsigned char*>(dst);
+            ggml_backend_tensor_get(tensor,p,first*2,count*2);
+            for(size_t i=count;i-->0;){uint16_t b;std::memcpy(&b,p+2*i,2);const uint32_t v=uint32_t(b)<<16;std::memcpy(p+4*i,&v,4);}
+        }else if(tensor->type==GGML_TYPE_BF16){
             // Canonical wire remains F32, including arbitrary byte slices.
             // At most 262145 elements: <1.51MiB combined bounded host scratch.
             const size_t first=size_t(offset/4),skip=size_t(offset%4),count=(skip+bytes+3)/4;

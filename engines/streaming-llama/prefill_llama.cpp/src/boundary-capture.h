@@ -30,6 +30,24 @@ struct sha256_state {
 sha256_state sha256_begin();
 void sha256_update(sha256_state &state, const void *data, size_t bytes);
 std::string sha256_hex(const sha256_state &state);
+// Native SHA-256, the same digest as sha256_state: Windows CNG (BCrypt; it uses
+// the CPU's SHA extensions where present), the portable state elsewhere.
+// Resumable: hex() finalizes a duplicate (BCryptDuplicateHash + BCryptFinishHash)
+// and the hash keeps accepting bytes. One object per thread at a time.
+class sha256_native {
+public:
+    sha256_native();
+    ~sha256_native();
+    sha256_native(sha256_native &&other) noexcept;
+    sha256_native &operator=(sha256_native &&other) noexcept;
+    sha256_native(const sha256_native &) = delete;
+    sha256_native &operator=(const sha256_native &) = delete;
+    void update(const void *data, size_t bytes);
+    std::string hex() const;
+private:
+    void *handle = nullptr;   // BCRYPT_HASH_HANDLE (Windows)
+    sha256_state portable{};  // non-Windows builds
+};
 struct config {
     std::string nonce, source_base_revision, binary_sha256, variant_manifest_sha256;
     std::string residual_sha256, previous_pre_sha256;

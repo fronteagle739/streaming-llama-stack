@@ -129,10 +129,30 @@ bool llama_dsv41_cache_storage::apply_native_update(
 
 std::vector<std::string> llama_dsv41_cache_storage::owner_digests_locked(const llama_dsv41::wire_plan&plan,
         const std::vector<std::string>*expected,const char*phase,bool require_capture){
-    std::string why;
+    std::string why;std::mutex why_lock;   // the memo reads from several threads
     auto read=[&](const llama_dsv41::state_span&s,uint64_t off,void*dst,size_t n){
-        return read_native_span_locked(s,off,dst,n,why,require_capture);
+        std::string e;if(read_native_span_locked(s,off,dst,n,e,require_capture,llama_dsv41::owner_digest_memo::chunk))return true;
+        std::lock_guard<std::mutex>l(why_lock);if(why.empty())why=e;return false;
     };
+    using memo_t=llama_dsv41::owner_digest_memo;
+    const uint64_t admitted_staging=std::min<uint64_t>(digest_staging_admitted,memo_t::staging_bytes())/(2*memo_t::chunk)*(2*memo_t::chunk);
+    digest_memo.set_fallback_limit(admitted_staging?size_t(admitted_staging):2*1024*1024);
+    if(!digest_staging_tried&&admitted_staging){
+        digest_staging_tried=true;
+        ggml_backend_dev_t dev=buffer?ggml_backend_buft_get_device(ggml_backend_buffer_get_type(buffer.get())):nullptr;
+        ggml_backend_buffer_type_t host=dev?ggml_backend_dev_host_buffer_type(dev):nullptr;
+        if(host)digest_staging.reset(ggml_backend_buft_alloc_buffer(host,size_t(admitted_staging)));
+        if(digest_staging)digest_memo.set_staging(static_cast<unsigned char*>(ggml_backend_buffer_get_base(digest_staging.get())),ggml_backend_buffer_get_size(digest_staging.get()));
+        std::fprintf(stderr,"LLAMADECODE_OWNER_DIGEST_STAGING pinned=%d bytes=%llu admitted_bytes=%llu chunk=%llu max_workers=%u sha=%s\n",int(bool(digest_staging)),
+            (unsigned long long)(digest_staging?ggml_backend_buffer_get_size(digest_staging.get()):0),(unsigned long long)admitted_staging,(unsigned long long)llama_dsv41::owner_digest_memo::chunk,
+            llama_dsv41::owner_digest_memo::max_workers,
+#if defined(_WIN32)
+            "cng"
+#else
+            "portable"
+#endif
+            );
+    }
     const auto started=std::chrono::steady_clock::now();
     const bool incremental=llama_dsv41::owner_verify_incremental(),memo=digest_memo.ready();
     uint64_t hashed=0,total=0;bool fallback=false;std::vector<std::string> out;
@@ -144,8 +164,8 @@ std::vector<std::string> llama_dsv41_cache_storage::owner_digests_locked(const l
         }
     }catch(const std::exception&e){digest_memo.invalidate();throw std::runtime_error(std::string(e.what())+(why.empty()?"":": "+why));}
     const double ms=std::chrono::duration<double,std::milli>(std::chrono::steady_clock::now()-started).count();
-    std::fprintf(stderr,"LLAMADECODE_OWNER_DIGEST phase=%s mode=%s position=%u memo=%d hashed_bytes=%llu owner_bytes=%llu full_rehash_fallback=%d ms=%.3f\n",
-        phase,incremental?"incremental":"full",plan.frontier.position,int(memo),(unsigned long long)hashed,(unsigned long long)total,int(fallback),ms);
+    std::fprintf(stderr,"LLAMADECODE_OWNER_DIGEST phase=%s mode=%s position=%u memo=%d hashed_bytes=%llu owner_bytes=%llu full_rehash_fallback=%d workers=%u ms=%.3f\n",
+        phase,incremental?"incremental":"full",plan.frontier.position,int(memo),(unsigned long long)hashed,(unsigned long long)total,int(fallback),digest_memo.workers_used(),ms);
     if(fallback&&out==*expected)std::fprintf(stderr,"LLAMADECODE_OWNER_DIGEST_MEMO_STALE phase=%s position=%u full_rehash_matched=1\n",phase,plan.frontier.position);
     std::fflush(stderr);
     return out;
@@ -167,6 +187,14 @@ bool llama_dsv41_cache_storage::owner_digests(const llama_dsv41::wire_frontier&f
 
 void llama_dsv41_cache_storage::forget_owner_digests(){
     std::lock_guard<std::mutex>lock(execution_mutex);digest_memo.invalidate();
+}
+
+void llama_dsv41_cache_storage::admit_owner_digest_staging(uint64_t bytes){
+    std::lock_guard<std::mutex>lock(execution_mutex);
+    if(bytes==digest_staging_admitted)return;
+    digest_staging_admitted=bytes;
+    if(digest_staging&&ggml_backend_buffer_get_size(digest_staging.get())>bytes){digest_memo.set_staging(nullptr,0);digest_staging.reset();}
+    digest_staging_tried=false;   // (re)allocate on the next digest pass, within the new admission
 }
 
 bool llama_dsv41_cache_storage::rewind_native_frontier(
