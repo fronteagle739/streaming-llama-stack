@@ -171,9 +171,20 @@ def stall_seconds(cfg):
     if not 30<=value<=3600:raise ValueError('single_engine_stall_seconds must be 30-3600')
     return value
 
+def yoco_keep(cfg):
+    keep=cfg.get('yoco_keep',0)
+    if type(keep) is not int or keep not in (0,140):
+        raise ValueError('yoco_keep must be 0 or 140')
+    if keep and cfg.get('serving_mode',cfg.get('serving'))!='single_engine':
+        raise ValueError('YOCO is approximate and supports only local single_engine; RTX/Mac export is disabled')
+    return keep
+
+
 class ComboProducer:
     def __init__(self,cfg,session,epoch,tokens,cancelled,*,base=None,runner=None):
         combo_abort.check('producer launch')
+        keep=yoco_keep(cfg)
+        if keep and base is not None:raise ValueError('YOCO refuses imported native state; re-prefill locally')
         runtime_floor=runtime_min_free_gib(cfg)
         vendor()
         from studio.dsv41_session_contract import MODEL_SHA256
@@ -192,6 +203,7 @@ class ComboProducer:
         tier=cfg.get('producer_profile','ultra')
         if tier not in ('accurate','fast','ultra'):raise ValueError('Combo producer profile must be accurate, fast or ultra (original weights; no HYPER)')
         args=dict(profile(tier)['arguments'])
+        if keep:args['--yoco-keep']=str(keep)
         import psutil
         plan=prefill_plan(cfg,len(tokens),psutil.virtual_memory().available);self.prefill_plan=plan;host_bytes=plan['host_bytes']
         if plan['capacity']!=LEGACY_SWEEP:   # absent a raise the argv stays today's exactly
@@ -254,6 +266,7 @@ class ComboProducer:
                 idle_seconds=cfg['lease_minutes']*60,native=native,cancelled=cancelled,native_mode=1,bootstrap=bootstrap,owner_epoch=epoch,
                 after_resume=lambda job:protect_working_set(job,host_bytes,int(cfg['min_available_gib']*(1<<30)),
                     int(cfg['host_budget_gib']*(1<<30)),receipt=self.directory/'resident-admission.json'))
+            if keep and self.process.ready.get('yoco_keep')!=keep:raise ValueError('Producer YOCO mode identity differs')
             self.checkpoint=self.process.ready['checkpoint']
             expected_position=(base[1]['position'] if base else 0)+len(tokens)
             if self.checkpoint['context']!=cfg['context'] or self.checkpoint['position']!=expected_position:
@@ -263,7 +276,7 @@ class ComboProducer:
                 producer_sha256=cfg['producer_sha256'],owner_epoch=epoch,host_bytes=host_bytes,
                 resident_admission=getattr(self.process,'resume_admission',None),
                 full_snapshot_bootstrap=base is None,weights_copied=False,profile=tier,compressed_cache_bf16=precision=='bf16',
-                ctx_cache_precision=precision,ctx_cache_growable=growable,prefill_plan=plan))
+                ctx_cache_precision=precision,ctx_cache_growable=growable,prefill_plan=plan,yoco_keep=keep))
         except BaseException as exc:
             self.failure_cleanup=getattr(exc,'owned_cleanup',None)
             if self.process is not None:

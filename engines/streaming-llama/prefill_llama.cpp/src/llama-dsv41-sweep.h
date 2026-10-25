@@ -1,5 +1,6 @@
 #pragma once
 
+#include "llama-dsv41-yoco.h"
 #include "llama-dsv41-carry.h"
 #include "llama-dsv41-weights.h"
 #include "llama-dsv41-wire.h"
@@ -19,6 +20,10 @@ class llama_dsv41_sweep {
 public:
     struct config {
         uint32_t context=0;
+        uint32_t yoco_keep=0;
+        uint32_t yoco_logical_begin=0,yoco_logical_end=0;
+        llama_dsv41_yoco::operation operation=llama_dsv41_yoco::operation::prefill;
+        bool images=false;
         uint64_t admitted_cache_bytes=0,admitted_graph_bytes=0;
         // Total job ceilings, including the provider's separate actual budget.
         uint64_t admitted_device_bytes=0,admitted_host_bytes=0;
@@ -110,6 +115,8 @@ public:
     // Serial export pins the entire
     // completed frontier; failure or cancellation permanently revokes export.
     bool export_native(const consumer &send,std::string &error);
+    // Private local identity/diagnostic hashing only; never a transport API.
+    bool inspect_local(const consumer &send,std::string &error);
     // The completed frontier's owner SHA-256s, equal to the owner digests of
     // its export_native payload. Incremental by default (only rows appended
     // since the last verified digest are read; `expected` mismatch re-hashes

@@ -50,7 +50,7 @@ def read(path):
     return json.loads(Path(path).read_text(encoding='utf-8-sig')) if path else {}
 
 
-def overlay(preset, local=None, model=None):
+def overlay(preset, local=None, model=None, yoco_keep=None):
     """The config file for `slstack start --config`: the local keys, then the preset."""
     if preset not in PRESETS:
         raise ValueError('preset must be one of ' + ', '.join(PRESETS))
@@ -60,6 +60,9 @@ def overlay(preset, local=None, model=None):
     env = dict(result.get('env_overrides') or {})
     env.update(COMMON_ENV)
     result.update(PRESETS[preset], serving='single_engine', producer_host_reserve_gib=1, env_overrides=env, **FOLD)
+    if yoco_keep is not None:
+        if type(yoco_keep) is not int or yoco_keep not in (0,140):raise ValueError('yoco_keep must be 0 or 140')
+        result['yoco_keep']=yoco_keep
     return result
 
 
@@ -88,6 +91,9 @@ def resolved(cfg):
     if single.get('producer_prefill_sweep_tokens'):   # the fold sweep plan's producer flags
         flags.update({'--prefill-sweep-tokens': str(single['producer_prefill_sweep_tokens']),
                       '--prefill-fold-cap-tokens': str(single['producer_prefill_fold_cap_tokens'])})
+    from slstack.combo_producer import yoco_keep
+    keep_yoco=yoco_keep(single)
+    if keep_yoco:flags['--yoco-keep']=str(keep_yoco)
     env = apply({}, single, 'rtx-producer')
     keep = ('LLAMADECODE_', 'DS4_DS_READ_PARTS', 'LLAMA_DSV41_')
     return dict(
@@ -108,11 +114,12 @@ def main(argv=None):
     parser = argparse.ArgumentParser(description=__doc__, formatter_class=argparse.RawDescriptionHelpFormatter)
     parser.add_argument('--preset', required=True, choices=sorted(PRESETS))
     parser.add_argument('--config', help='Your local config (paths, ports, budgets); optional')
+    parser.add_argument('--yoco-keep', type=int, choices=(0,140), default=None, help='Approximate bounded replay (0 off, 140 on)')
     parser.add_argument('--model', help='DSV4.1 GGUF path (overrides "model" in --config)')
     parser.add_argument('--write', help='Write the start config here')
     parser.add_argument('--dry-run', action='store_true', help='Print the resolved settings')
     args = parser.parse_args(argv)
-    cfg = overlay(args.preset, read(args.config), args.model)
+    cfg = overlay(args.preset, read(args.config), args.model, args.yoco_keep)
     if args.write:
         target = Path(args.write)
         target.parent.mkdir(parents=True, exist_ok=True)

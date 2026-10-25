@@ -256,6 +256,7 @@ const char*usage=
 "Optional --native-rhs-pack 0|1 (default0; qualified native half RHS packing,384MiB expert workspace).\n"
 "Optional --pv-strided-probabilities 0|1 (default0; native F32 PV without probability copy).\n"
 "Optional --reuse-child-raw-metadata 0|1 (default0; omit unused grouped child arrays).\n"
+"Optional --yoco-keep 0|140 (default0; approximate local-only prefill; remote export refused).\n"
 "Optional --unaligned-append-step-tokens 0|2048 (default0; explicit bounded continuation after Mac decode, unchanged fixed owners).\n"
 "Optional --resident-pageable-copies 0|1 (default0; resident paired RAM mirrors use existing bounded backend vector copies).\n"
 "Optional --tile-host-registration 0|1 (default0; paired full-resident plan registers only its current RAM lease).\n"
@@ -303,11 +304,14 @@ int wmain(int argc,wchar_t**argv){
         const std::vector<std::string>keys={"--model","--copy-receipt","--tokens-le32","--cuda-device","--context","--build-sha",
             "--provider-device-bytes","--provider-host-bytes","--cache-bytes","--graph-bytes","--job-device-bytes","--job-host-bytes","--gpu-reserve-bytes",
             "--carry","--carry-file-bytes","--carry-host-bytes","--carry-outstanding-bytes","--output-outstanding-bytes","--payload","--receipt"};
-        require(argc>=1+int(keys.size())*2&&argc<=133+int(keys.size())*2&&argc%2==1,"Expected every explicit required --key value pair; use --help");std::map<std::string,std::string>args;
-        for(int i=1;i<argc;i+=2){auto key=utf8(argv[i]);require((key=="--session-owner-epoch"||key=="--switch-arena"||key=="--native-base-contract-sha256"||key=="--native-base-owner-epoch"||key=="--unaligned-append-step-tokens"||key=="--reuse-child-raw-metadata"||key=="--session-stdio"||key=="--session-id"||key=="--session-control-host-bytes"||key=="--session-idle-timeout-ms"||key=="--native-rhs-pack"||key=="--split-f32-tensor-core-qk"||key=="--split-f32-tensor-core-pv"||key=="--fuse-kv-gather-half"||key=="--ds-zero-padding-only"||key=="--pv-strided-probabilities"||key=="--pv-view-f32"||key=="--compact-kv-gather"||key=="--masked-half-inplace"||key=="--native-loader-unroll"||key=="--native-expert-columns"||key=="--fixed-resident-plan"||key=="--export-hash-only"||key=="--backend-temporary-reserve-bytes"||key=="--compute-step-tokens"||key=="--prefill-chunk-tokens"||key=="--prefill-sweep-tokens"||key=="--prefill-fold-cap-tokens"||key=="--attention-kv-f16-table"||key=="--index-key-windows"||key=="--capture-dspark"||key=="--compressed-cache-bf16"||key=="--ctx-cache-precision"||key=="--ctx-cache-growable"||key=="--dense-activation-q8-1"||key=="--expert-weights-activations-fp4"||key=="--resident-pageable-copies"||key=="--tile-host-registration"||key=="--hc-bf16-epilogue"||key=="--reuse-expert-routing-map"||key=="--sort-expert-routing"||key=="--pair-ffn-tiles"||key=="--engram-tile-lookahead"||key=="--warmup-one-token"||key=="--fixed-direct-open"||key=="--batch-seed-ram"||key=="--dense-mxfp4"||key=="--hc-projection-f16-gemm"||key=="--merge-attention-selected-rows"||key=="--resident-metadata"||key=="--resident-compact-ids"||key=="--async-input-uploads"||key=="--resident-hidden-bf16"||key=="--resident-hidden-final-readback"||key=="--coalesce-dense-projections"||key=="--direct-carry-budget"||key=="--expert-f16-cublas"||key=="--token-tile-attention-f16-probabilities"||key=="--index-f32-cublas"||key=="--index-bf16"||key=="--dense-inputs-f16"||key=="--shared-flash-attention"||key=="--shared-sparse-attention"||key=="--carry-ram-prefix-tokens"||key=="--carry-disk-reserve-bytes"||key=="--carry-storage"||key=="--fetch-profile"||key=="--compute-tile"||key=="--hidden-device-bytes"||key=="--pinned-device-bytes"||key=="--reuse-graph"||key=="--cast-device-bytes"||key=="--cast-audit"||key=="--engram-prefetch-bytes"||key=="--ds-submit-threads"||key=="--cuda-blocking-sync"||key=="--index-cublas-device-bytes"||key=="--ds-gpu-ring-slots"||key=="--prefetch-device-bytes"||key=="--expert-profile"||key=="--expert-workspace-bytes"||key=="--expert-runtime-bytes"||key=="--runtime-min-free-gib"||std::find(keys.begin(),keys.end(),key)!=keys.end())&&!args.count(key),"Unknown or repeated producer option");args[key]=utf8(argv[i+1]);}
+        require(argc>=1+int(keys.size())*2&&argc<=135+int(keys.size())*2&&argc%2==1,"Expected every explicit required --key value pair; use --help");std::map<std::string,std::string>args;
+        for(int i=1;i<argc;i+=2){auto key=utf8(argv[i]);require((key=="--yoco-keep"||key=="--session-owner-epoch"||key=="--switch-arena"||key=="--native-base-contract-sha256"||key=="--native-base-owner-epoch"||key=="--unaligned-append-step-tokens"||key=="--reuse-child-raw-metadata"||key=="--session-stdio"||key=="--session-id"||key=="--session-control-host-bytes"||key=="--session-idle-timeout-ms"||key=="--native-rhs-pack"||key=="--split-f32-tensor-core-qk"||key=="--split-f32-tensor-core-pv"||key=="--fuse-kv-gather-half"||key=="--ds-zero-padding-only"||key=="--pv-strided-probabilities"||key=="--pv-view-f32"||key=="--compact-kv-gather"||key=="--masked-half-inplace"||key=="--native-loader-unroll"||key=="--native-expert-columns"||key=="--fixed-resident-plan"||key=="--export-hash-only"||key=="--backend-temporary-reserve-bytes"||key=="--compute-step-tokens"||key=="--prefill-chunk-tokens"||key=="--prefill-sweep-tokens"||key=="--prefill-fold-cap-tokens"||key=="--attention-kv-f16-table"||key=="--index-key-windows"||key=="--capture-dspark"||key=="--compressed-cache-bf16"||key=="--ctx-cache-precision"||key=="--ctx-cache-growable"||key=="--dense-activation-q8-1"||key=="--expert-weights-activations-fp4"||key=="--resident-pageable-copies"||key=="--tile-host-registration"||key=="--hc-bf16-epilogue"||key=="--reuse-expert-routing-map"||key=="--sort-expert-routing"||key=="--pair-ffn-tiles"||key=="--engram-tile-lookahead"||key=="--warmup-one-token"||key=="--fixed-direct-open"||key=="--batch-seed-ram"||key=="--dense-mxfp4"||key=="--hc-projection-f16-gemm"||key=="--merge-attention-selected-rows"||key=="--resident-metadata"||key=="--resident-compact-ids"||key=="--async-input-uploads"||key=="--resident-hidden-bf16"||key=="--resident-hidden-final-readback"||key=="--coalesce-dense-projections"||key=="--direct-carry-budget"||key=="--expert-f16-cublas"||key=="--token-tile-attention-f16-probabilities"||key=="--index-f32-cublas"||key=="--index-bf16"||key=="--dense-inputs-f16"||key=="--shared-flash-attention"||key=="--shared-sparse-attention"||key=="--carry-ram-prefix-tokens"||key=="--carry-disk-reserve-bytes"||key=="--carry-storage"||key=="--fetch-profile"||key=="--compute-tile"||key=="--hidden-device-bytes"||key=="--pinned-device-bytes"||key=="--reuse-graph"||key=="--cast-device-bytes"||key=="--cast-audit"||key=="--engram-prefetch-bytes"||key=="--ds-submit-threads"||key=="--cuda-blocking-sync"||key=="--index-cublas-device-bytes"||key=="--ds-gpu-ring-slots"||key=="--prefetch-device-bytes"||key=="--expert-profile"||key=="--expert-workspace-bytes"||key=="--expert-runtime-bytes"||key=="--runtime-min-free-gib"||std::find(keys.begin(),keys.end(),key)!=keys.end())&&!args.count(key),"Unknown or repeated producer option");args[key]=utf8(argv[i+1]);}
         for(const auto&key:keys)require(args.count(key),"Missing explicit producer option");
         require(llama_dsv41_host_memory::configure_runtime_min_free_gib(args.count("--runtime-min-free-gib")?args.at("--runtime-min-free-gib").c_str():"4.0"),
             "--runtime-min-free-gib must be finite and nonnegative (<2**34); 0 disables it");
+        const auto yoco_keep=args.count("--yoco-keep")?integer(args.at("--yoco-keep")):0;
+        require(yoco_keep==0||yoco_keep==140,"--yoco-keep must be 0 or 140");
+        report["yoco_keep"]=yoco_keep;report["yoco_approximate"]=yoco_keep!=0;
         const auto storage=args.count("--carry-storage")?args.at("--carry-storage"):"file";
         require(storage=="file"||storage=="ram"||storage=="hybrid","Expected explicit carry-storage file, ram or hybrid");
         const bool resident_ram=storage=="ram";
@@ -483,6 +487,15 @@ int wmain(int argc,wchar_t**argv){
         require(!sweep_extents.empty(),"Prefill sweep list refused");
         const uint32_t chunk_tokens=[&]{uint32_t m=0;for(const auto&e:sweep_extents)m=std::max(m,e.count);return m;}();   // the largest sweep
         const uint32_t first_sweep_tokens=sweep_extents.front().count;
+        if(yoco_keep){
+            report["yoco_plan"]=json::array();
+            for(const auto&e:sweep_extents){
+                const auto replay=llama_dsv41_yoco::schedule(uint32_t(yoco_keep),llama_dsv41_yoco::operation::prefill,false,
+                    0,uint32_t(tokens.size()),e.first,e.first+e.count);
+                report["yoco_plan"].push_back({{"first",e.first},{"count",e.count},{"layers",replay.layers},
+                    {"encoder_only",replay.encoder_only},{"decoder_first",replay.first},{"decoder_rows",replay.encoder_only?0u:e.count-replay.first}});
+            }
+        }
         const uint32_t sweep_step=fold_option?fold_plan.sweep:sweep_plan.chunk;   // every non-last sweep start is a multiple
         const std::string sweep_list=[&]{std::string out;for(const auto&e:sweep_extents)out+=(out.empty()?"":",")+std::to_string(e.count);return out;}();
         if(fold_plan.tail){std::fprintf(stderr,"LLAMADECODE_PREFILL_FOLD_TAIL tokens=%zu primary_sweep_tokens=%u remainder=%u capacity=%u fold_cap=%u folded_last=%u sweep_tokens=%s\n",
@@ -527,6 +540,7 @@ int wmain(int argc,wchar_t**argv){
             capture_dspark?uint32_t(tokens.size()):0u,capture_dspark?uint32_t(std::min<size_t>(tokens.size(),128)):0u},plan,error),error);
         require(!args.count("--export-hash-only")||args.at("--export-hash-only")=="0"||args.at("--export-hash-only")=="1","export-hash-only requires0/1");
         const bool hash_only=args.count("--export-hash-only")&&args.at("--export-hash-only")=="1";
+        require(!yoco_keep||hash_only,"YOCO refuses native payload files; use local hash-only diagnostics");
         require(!live||hash_only,"Live initial payload must stream without a disk copy");
         const uint64_t backend_reserve=args.count("--backend-temporary-reserve-bytes")?number("--backend-temporary-reserve-bytes"):gib;
         require(backend_reserve==gib||(backend_reserve==768ull*1024*1024&&pair_ffn),"Backend reserve must be1GiB or explicit768MiB fixed grouped plan");
@@ -637,7 +651,9 @@ int wmain(int argc,wchar_t**argv){
         options.ctx_cache_grow_step=ctx_cache.growable?llama_dsv41_ctx_cache::default_step:0;
         require(!ctx_cache.growable||!switch_arena,"ctx-cache-growable is not covered by the switch arena's suspend/resume");
         report["compressed_cache_bf16"]={{"enabled",options.compressed_cache_bf16},{"lossless_existing_QAT_BF16_values",true},{"canonical_wire_F32",true},{"raw_and_pool_tails_F32",true}};
-        options.context=uint32_t(context);options.admitted_cache_bytes=number("--cache-bytes");options.admitted_graph_bytes=number("--graph-bytes");
+        options.context=uint32_t(context);options.yoco_keep=uint32_t(yoco_keep);
+        if(yoco_keep)options.yoco_logical_end=uint32_t(tokens.size());
+        options.admitted_cache_bytes=number("--cache-bytes");options.admitted_graph_bytes=number("--graph-bytes");
         {const auto why=llama_dsv41_ctx_cache::refusal(options.context,options.compressed_cache_bf16,ctx_cache.growable,llama_dsv41_ctx_cache::default_step,2ull<<20,options.admitted_cache_bytes);
          require(why.empty(),why.c_str());}
         report["ctx_cache"]={{"precision",llama_dsv41_ctx_cache::name(ctx_cache.cache)},{"context",options.context},{"growable",ctx_cache.growable},
@@ -826,7 +842,7 @@ int wmain(int argc,wchar_t**argv){
         if(warm){
             require(resident_ram&&!options.diagnostic_layers&&!std::getenv("DSV41_BOUNDARY_CAPTURE"),"One-token warmup requires RAM carry and no boundary/incomplete diagnostics");
             auto warm_options=options;auto warm_weights=weights;
-            warm_options.carry.tokens=1;warm_options.pair_ffn=false;
+            warm_options.yoco_keep=0;warm_options.yoco_logical_end=0;warm_options.carry.tokens=1;warm_options.pair_ffn=false;
             warm_options.carry.max_tile_tokens=std::min(4096u,warm_options.carry.max_tile_tokens);
             warm_options.compute_step_tokens=std::min(warm_options.compute_step_tokens,warm_options.carry.max_tile_tokens);
             // Dense tensor-core tagging requires more than eight columns.
@@ -924,9 +940,18 @@ int wmain(int argc,wchar_t**argv){
         report["phase_ms"]["run_dispatch_bookkeeping"]=std::max(0.0,enclosing_run_ms-run_timing.prompt_processing_ms-run_timing.export_preparation_ms);
         report["run_timing_scope"]="Actual sequential clock boundary after required head/sync; bulk hidden export readback and certification measured separately; no subtraction of aggregate GPU counters";
         if(warm){report["warm_measurement"]["prompt_processing_ms"]=report["phase_ms"]["embedding_40_layers_head"];std::fprintf(stderr,"DS4PERF_WARM_PROMPT_END pid=%lu tokens=%zu processing_ms=%.6f export_excluded=1\n",GetCurrentProcessId(),tokens.size(),report["phase_ms"]["embedding_40_layers_head"].get<double>());}
+        auto scheduled_graphs=[&](uint32_t step,bool compressed_only=false){
+            uint64_t n=0;
+            for(const auto&e:sweep_extents){
+                const auto q=llama_dsv41_yoco::schedule(uint32_t(yoco_keep),llama_dsv41_yoco::operation::prefill,false,0,uint32_t(tokens.size()),e.first,e.first+e.count);
+                n+=uint64_t(compressed_only?19:21)*((uint64_t(e.count)+step-1)/step);
+                if(!q.encoder_only)n+=19*((uint64_t(e.count-q.first)+step-1)/step);
+            }
+            return n;
+        };
         if(llama_dsv41_expert_profile::natural_half(expert)){
             ggml_ds4_native_half_stats actual{};ggml_backend_cuda_ds4_native_half_snapshot(&actual);
-            const uint64_t expected=40ull*([&]{uint64_t n=0;for(const auto&e:sweep_extents)n+=(uint64_t(e.count)+compute_step-1)/compute_step;return n;}());
+            const uint64_t expected=scheduled_graphs(uint32_t(compute_step));
             require(actual.graph_active==0&&actual.completed_graphs-warm_native.completed_graphs==expected,"Native-half completed graph count differs from actual prefix/tiles");
             for(int i=0;i<3;++i)require(actual.queued[i]-warm_native.queued[i]==expected&&actual.completed[i]-warm_native.completed[i]==expected,"Native-half aggregate actual slot witness incomplete");
             report["expert_profile"]["actual_queued_per_slot"]={actual.queued[0]-warm_native.queued[0],actual.queued[1]-warm_native.queued[1],actual.queued[2]-warm_native.queued[2]};
@@ -990,12 +1015,12 @@ int wmain(int argc,wchar_t**argv){
         {
             const uint64_t pv_actual=ggml_backend_cuda_dsv41_pv_view_queued()-warm_pv_view;
             const uint64_t pv_step=pair_ffn&&llama_dsv41_expert_profile::natural_half(expert)?2048:compute_step;
-            const uint64_t pv_expected=pv_view?40ull*([&]{uint64_t n=0;for(const auto&e:sweep_extents)n+=(uint64_t(e.count)+pv_step-1)/pv_step;return n;}()):0;
+            const uint64_t pv_expected=pv_view?scheduled_graphs(uint32_t(pv_step)):0;
             require(pv_actual==pv_expected,"PV view actual dispatch count differs from completed graphs");
             report["attention_layout"]["prompt_pv_calls_after_completed_sweep"]=pv_actual;
             report["attention_layout"]["warmup_pv_calls"]=warm_pv_view;
             const uint64_t gather_actual=ggml_backend_cuda_dsv41_gather_half_queued()-warm_gather_half;
-            const uint64_t gather_expected=fused_gather?40ull*([&]{uint64_t n=0;for(const auto&e:sweep_extents)n+=(uint64_t(e.count)+pv_step-1)/pv_step;return n;}()):0;
+            const uint64_t gather_expected=fused_gather?scheduled_graphs(uint32_t(pv_step)):0;
             require(gather_actual==gather_expected,"Fused gather dispatch count differs from completed graphs");
             report["attention_layout"]["prompt_gather_half_calls_after_completed_sweep"]=gather_actual;
             const uint64_t actual_split_f32=ggml_backend_cuda_dsv41_split_f32_queued()-warm_split_f32;
@@ -1003,7 +1028,7 @@ int wmain(int argc,wchar_t**argv){
             report["split_f32_tensor_core_attention"]={{"enabled",split_f32},{"qk_enabled",split_f32_qk},{"pv_enabled",split_f32_pv},{"algorithm","CUTLASS fused three TF32 products; F32 accumulate"},{"tile","64x64x32"},{"prompt_completed_calls",actual_split_f32},{"warmup_calls",warm_split_f32},{"eligibility","native QK/PV F32 contiguous,64 heads,aligned4 key count<=640; other shapes retain SGEMM"},{"native_envelope_qualified",false}};
             report["attention_layout"]["warmup_gather_half_calls"]=warm_gather_half;
             const uint64_t split_actual=ggml_backend_cuda_dsv41_gather_half_split_queued()-warm_gather_split;
-            const uint64_t split_expected=fused_gather?38ull*([&]{uint64_t n=0;for(const auto&e:sweep_extents)n+=(uint64_t(e.count)+pv_step-1)/pv_step;return n;}()):0;
+            const uint64_t split_expected=fused_gather?scheduled_graphs(uint32_t(pv_step),true):0;
             require(tokens.size()<2||split_actual==split_expected,"Split-table gather count differs from compressed layers");
             report["attention_layout"]["prompt_split_table_calls_after_completed_sweep"]=split_actual;
             report["attention_layout"]["warmup_split_table_calls"]=warm_gather_split;
@@ -1015,7 +1040,7 @@ int wmain(int argc,wchar_t**argv){
             report["expert_profile"]["kernel_selection_note"]="Existing untagged MUL_MAT_ID dispatch; Q8_1 activation rounding enabled explicitly; no native-half numerical qualification";
         }
         if(expert.expert_f16_cublas){
-            const uint64_t expected=120ull*([&]{uint64_t n=0;for(const auto&e:sweep_extents)n+=(uint64_t(e.count)+compute_step-1)/compute_step;return n;}());
+            const uint64_t expected=3*scheduled_graphs(uint32_t(compute_step));
             require(ggml_backend_cuda_dsv41_expert_cublas_queued()-warm_cublas==expected,"F16 expert cuBLAS aggregate witness incomplete");
             report["expert_profile"]["name"]="f16_operands_f32_accumulation_cublas";
             report["expert_profile"]["dispatch_family"]="shared_sort_gather_cublas_F16_F16_F32_scatter";
@@ -1027,7 +1052,8 @@ int wmain(int argc,wchar_t**argv){
         // reserves disk bytes. Neither remains a future output-volume payload.
         if(payload)payload->outstanding(add(output_other,receipt_overlap?receipt_limit:0));receipt->outstanding(receipt_overlap?output_other:0);
         hash payload_hash;uint64_t written=0;std::vector<uint8_t>buffer(chunk);started=clock_type::now();
-        const bool exported=sweep->export_native([&](llama_dsv41::wire_payload_reader&reader,std::string&reason){
+        const auto export_snapshot=[&](const llama_dsv41_sweep::consumer&send,std::string&why){return yoco_keep?sweep->inspect_local(send,why):sweep->export_native(send,why);};
+        const bool exported=export_snapshot([&](llama_dsv41::wire_payload_reader&reader,std::string&reason){
             try{require(reader.bytes()==plan.bytes,"Native export plan changed after admission");
                 while(written<reader.bytes()){stop();const size_t count=size_t(std::min<uint64_t>(chunk,reader.bytes()-written));
                     success(reader.read(written,buffer.data(),count,reason),reason);if(payload)payload->write(buffer.data(),count);payload_hash.update(buffer.data(),count);written+=count;}
@@ -1038,7 +1064,7 @@ int wmain(int argc,wchar_t**argv){
         const auto payload_sha=payload_hash.finish();started=clock_type::now();if(payload)payload->finalize_read_only(payload_sha);
         report["phase_ms"]["payload_close_readonly_rehash"]=ms(started);report["payload"]["sha256"]=payload_sha;
         report["payload"]["written_bytes"]=hash_only?0:written;report["payload"]["canonical_hashed_bytes"]=written;report["payload"]["identity"]=payload?describe(payload->current()):json(nullptr);
-        report["status"]="complete";report["runtime_qualified"]=false;report["claim"]=hash_only?"Completed canonical frontier SHA; no payload file created or receiver parity claimed":"One measured offline producer artifact; independent receiver/output parity qualification is still required";
+        report["status"]="complete";report["runtime_qualified"]=false;report["claim"]=yoco_keep?"Approximate YOCO local state hash; not a native-equivalence or receiver-parity claim":hash_only?"Completed canonical frontier SHA; no payload file created or receiver parity claimed":"One measured offline producer artifact; independent receiver/output parity qualification is still required";
         report["residency_limit"]="Free-memory admission and allocation ceilings do not independently prove physicalVRAM residency under WDDM";
         report["host_memory_runtime"]=host_memory_runtime();
         const auto text=report.dump(2)+"\n";require(text.size()<=receipt_limit,"Producer receipt exceeds its bounded admission");receipt->write(text.data(),text.size());receipt->flush();stop();

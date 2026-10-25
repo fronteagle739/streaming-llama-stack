@@ -71,11 +71,12 @@ ggml_backend_buffer_ptr allocate_graph(ggml_context*ctx,ggml_cgraph*graph,ggml_b
 }
 
 struct llama_dsv41_sweep::implementation {
-    enum phase {fresh,opened,running,completed,poisoned};
+    enum phase {fresh,opened,running,encoder_complete,completed,poisoned};
     mutable std::mutex mutex;
     std::atomic<bool> stop_requested{false},published{false};
     phase state=fresh;
     config options{};
+    llama_dsv41_yoco::plan yoco;
     ggml_backend_t backend=nullptr;
     llama_dsv41_weight_provider provider;
     llama_dsv41_carry_store carry;
@@ -219,10 +220,29 @@ static void restore_fixed(llama_dsv41_fixed_storage&f,uint64_t admitted_hidden){
     f.decode_compact=false;
     std::fprintf(stderr,"LLAMADECODE_PREFILL_RESTORE graph_bytes=%llu hidden_bytes=%llu\n",(unsigned long long)f.graph_bytes,(unsigned long long)f.hidden_bytes);
 }
-bool llama_dsv41_sweep::open(const llama_dsv41_weight_provider::config &weights,const config &options,std::string &error,llama_dsv41_sweep *warmup,llama_dsv41_sweep *prefix,const native_base*restored){
+bool llama_dsv41_sweep::open(const llama_dsv41_weight_provider::config &input_weights,const config &input_options,std::string &error,llama_dsv41_sweep *warmup,llama_dsv41_sweep *prefix,const native_base*restored){
+    auto options=input_options;auto weights=input_weights;uint32_t yoco_begin=0;
     std::unique_lock<std::mutex>lock(p->mutex,std::try_to_lock);error.clear();
     if(!lock.owns_lock()){error="V4.1 sweep is already active";return false;}
     try{
+        llama_dsv41_yoco::validate(options.yoco_keep);
+        if(options.yoco_keep){
+            require(!restored,"YOCO refuses RTX/Mac session restore; re-prefill locally");
+            require(options.fixed&&options.carry.resident_ram&&options.carry.direct_ram_tiles&&options.admitted_hidden_bytes&&options.carry.export_hidden_after_head&&options.carry.max_tile_tokens>=140&&(!options.compute_step_tokens||options.compute_step_tokens>=140)&&!options.diagnostic_layers&&!options.diagnostic_carry&&
+                !std::getenv("DSV41_BOUNDARY_CAPTURE"),"YOCO requires the single-engine fixed RAM owner without full-row diagnostics");
+            if(prefix){
+                require(prefix!=this,"YOCO prefix cannot be its own destination");
+                std::unique_lock<std::mutex> previous_lock(prefix->p->mutex,std::try_to_lock);
+                require(previous_lock.owns_lock(),"YOCO prefix is active");
+                yoco_begin=uint32_t(prefix->p->tokens.size());
+            }
+            const uint32_t begin=yoco_begin;
+            const uint32_t end=options.yoco_logical_end?options.yoco_logical_end:begin+options.carry.tokens;
+            p->yoco=llama_dsv41_yoco::schedule(options.yoco_keep,options.operation,options.images,
+                options.yoco_logical_end?options.yoco_logical_begin:begin,end,begin,begin+options.carry.tokens);
+            options.carry.yoco_first=p->yoco.first;
+            weights.yoco_encoder_only=p->yoco.encoder_only;
+        }
         require(p->state==implementation::fresh,"V4.1 sweep cannot reopen or replace an existing request");
         require(!warmup||!prefix,"Warmup reset and stateful append are distinct operations");
         require(!restored||(!prefix&&options.stateful_chunks&&!options.capture_dspark&&
@@ -310,19 +330,24 @@ bool llama_dsv41_sweep::open(const llama_dsv41_weight_provider::config &weights,
         if(prefix){
             require(prefix!=this&&options.stateful_chunks,"Append requires an explicit distinct stateful completed owner");
             std::unique_lock<std::mutex> previous_lock(prefix->p->mutex,std::try_to_lock);
-            require(previous_lock.owns_lock()&&prefix->p->state==implementation::completed&&prefix->p->published.load()&&!prefix->p->stop_requested.load()&&prefix->p->cache&&prefix->p->carry.frontier_ready(),"Append requires a completely certified uncancelled prefix");
+            require(previous_lock.owns_lock(),"Append prefix is active");
+            const bool encoder=prefix->p->state==implementation::encoder_complete;
+            require(!encoder||(options.yoco_keep&&prefix->p->options.yoco_keep==options.yoco_keep&&
+                options.yoco_logical_end==prefix->p->options.yoco_logical_end&&options.yoco_logical_begin==prefix->p->options.yoco_logical_begin),"YOCO encoder continuation changed logical call");
+            require(previous_lock.owns_lock()&&((prefix->p->state==implementation::completed&&prefix->p->published.load()&&prefix->p->carry.frontier_ready())||encoder)&&!prefix->p->stop_requested.load()&&prefix->p->cache,"Append requires a completely certified uncancelled prefix");
             const auto&old=prefix->p->options;
             auto arithmetic=[](const llama_dsv41_expert_profile::policy&e){return std::tie(e.profile,e.dense_inputs_f16,e.index_bf16,e.token_tile_attention,e.expert_f16_cublas,e.admitted_pool_bytes,e.admitted_code_runtime_bytes,e.sorted_expert_routing,e.reuse_expert_routing_map,e.hc_bf16_epilogue,e.expert_mxfp4,e.dense_activation_q8_1,e.index_key_windows,e.attention_kv_f16_table);};
-            auto execution=[](const config&c){return std::tie(c.context,c.admitted_cache_bytes,c.admitted_graph_bytes,c.admitted_device_bytes,c.admitted_host_bytes,c.admitted_hidden_bytes,c.admitted_pinned_device_bytes,c.admitted_cast_device_bytes,c.admitted_index_device_bytes,c.admitted_prefetch_device_bytes,c.audit_casts,c.coalesce_dense,c.merge_attention_selected_rows,c.hc_projection_f16_gemm,c.dense_mxfp4,c.batch_seed_ram,c.pair_ffn,c.reuse_graph,c.reuse_layer_graph,c.engram_tile_lookahead,c.resident_bf16,c.async_inputs,c.resident_ids,c.resident_metadata,c.fixed,c.compressed_cache_bf16,c.ctx_cache_grow_step,c.capture_dspark,c.stateful_chunks,c.compute_step_tokens,c.unaligned_append_step_tokens,c.carry.max_tile_tokens,c.carry.resident_ram,c.carry.direct_ram_tiles,c.carry.defer_hidden_readback,c.carry.export_hidden_after_head);};
+            auto execution=[](const config&c){return std::tie(c.yoco_keep,c.context,c.admitted_cache_bytes,c.admitted_graph_bytes,c.admitted_device_bytes,c.admitted_host_bytes,c.admitted_hidden_bytes,c.admitted_pinned_device_bytes,c.admitted_cast_device_bytes,c.admitted_index_device_bytes,c.admitted_prefetch_device_bytes,c.audit_casts,c.coalesce_dense,c.merge_attention_selected_rows,c.hc_projection_f16_gemm,c.dense_mxfp4,c.batch_seed_ram,c.pair_ffn,c.reuse_graph,c.reuse_layer_graph,c.engram_tile_lookahead,c.resident_bf16,c.async_inputs,c.resident_ids,c.resident_metadata,c.fixed,c.compressed_cache_bf16,c.ctx_cache_grow_step,c.capture_dspark,c.stateful_chunks,c.compute_step_tokens,c.unaligned_append_step_tokens,c.carry.max_tile_tokens,c.carry.resident_ram,c.carry.direct_ram_tiles,c.carry.defer_hidden_readback,c.carry.export_hidden_after_head);};
             require(old.stateful_chunks&&prefix->p->backend==weights.backend&&arithmetic(old.expert)==arithmetic(options.expert)&&execution(old)==execution(options),"Append changed its backend, fixed owner, arithmetic or execution admission");
             require(!prefix->p->tokens.empty()&&prefix->p->tokens.size()<options.context&&options.carry.tokens<options.context-prefix->p->tokens.size(),"Appended context must retain the next native decode position");
             p->position_offset=uint32_t(prefix->p->tokens.size());
+            require(!options.yoco_keep||p->position_offset==yoco_begin,"YOCO prefix changed during admission");
             const auto schedule=llama_dsv41_plan_append(options.pair_ffn,options.carry.max_tile_tokens,options.compute_step_tokens,p->position_offset,options.unaligned_append_step_tokens);
             if(schedule.single_attention_append)llama_dsv41_layer_log("DS4PERF_UNALIGNED_APPEND_PLAN prefix_tokens=%u step=%u fixed_group=%u unchanged_budget=1 single_attention_graph=1\n",p->position_offset,schedule.step,options.carry.max_tile_tokens);
             ggml_backend_synchronize(weights.backend);
             prefix->p->published.store(false);prefix->p->state=implementation::poisoned;
             prefix->p->executor.reset();
-            if(options.fixed)success(prefix->p->carry.retire_shared_ram(error),error);
+            if(options.fixed)success(encoder?prefix->p->carry.retire_yoco_encoder(error):prefix->p->carry.retire_shared_ram(error),error);
             p->tokens=std::move(prefix->p->tokens);p->initial_engram=prefix->p->final_engram;
             p->cache=std::move(prefix->p->cache);p->provider=std::move(prefix->p->provider);prefix->p->backend=nullptr;
             success(p->provider.restart_prompt(weights,error),error);
@@ -531,6 +556,7 @@ bool llama_dsv41_sweep::open(const llama_dsv41_weight_provider::config &weights,
 bool llama_dsv41_sweep::suspend_device(std::string&error){
     std::unique_lock<std::mutex>lock(p->mutex,std::try_to_lock);error.clear();
     if(!lock.owns_lock()){error="V4.1 sweep is already active";return false;}
+    if(p->options.yoco_keep){error="YOCO state requires local re-prefill for transport, persistence or rewind";return false;}
     try{
         require(p->state==implementation::completed&&!p->device_suspended&&p->options.fixed&&p->options.fixed->ram&&!p->options.fixed->ram_registration,
             "Device suspend requires a completed fixed owner with tile-registered carry RAM");
@@ -687,7 +713,7 @@ bool llama_dsv41_sweep::run(const std::vector<int32_t>&tokens,const cancelled&st
             });
         };
         double token_acquire_ms=0,token_executor_ms=0,token_compute_ms=0,token_prepare_ms=0;
-        for(uint32_t layer=0;layer<layers;++layer){
+        for(uint32_t layer=0;layer<p->yoco.layers;++layer){
             const auto layer_started=std::chrono::steady_clock::now();
             auto elapsed=[](auto start){return std::chrono::duration<double,std::milli>(std::chrono::steady_clock::now()-start).count();};
             double upload_ms=0,compute_ms=0,readback_ms=0,engram_ms=0;
@@ -713,7 +739,7 @@ bool llama_dsv41_sweep::run(const std::vector<int32_t>&tokens,const cancelled&st
             const double carry_begin_ms=elapsed(ledger_started);
             llama_dsv41::engram_history history=p->initial_engram;
             if(p->options.engram_tile_lookahead&&(layer==0||layer==13))queue_engram(layer+1,0,p->initial_engram);
-            for(uint32_t start=0;start<owned.size();start+=compute_step){
+            for(uint32_t start=llama_dsv41_yoco::first_row(p->yoco,layer);start<owned.size();start+=compute_step){
                 p->check_stop(stop);const uint32_t count=std::min(compute_step,uint32_t(owned.size())-start);
                 const auto carry_read_started=std::chrono::steady_clock::now();
                 llama_dsv41_carry_store::tile input;llama_dsv41_carry_store::ram_lease direct;
@@ -722,6 +748,7 @@ bool llama_dsv41_sweep::run(const std::vector<int32_t>&tokens,const cancelled&st
                 carry_read_ms+=elapsed(carry_read_started);
                 llama_dsv41_tile_executor::request request;request.layer=layer;request.start=start;request.count=count;request.compressed_rows=compressed;
                 request.position_offset=p->position_offset;request.single_attention_append=schedule.single_attention_append;
+                if(layer>20&&p->yoco.approximate){request.single_attention_append=false;request.yoco_first=p->yoco.first;request.yoco_raw_begin=p->position_offset+p->yoco.first;}
                 request.residual=std::move(input.residual);request.previous_pre=std::move(input.previous_pre);
                 if(p->options.admitted_pinned_device_bytes)request.direct=direct;
                 if(p->options.admitted_prefetch_device_bytes&&uint64_t(start)+count<owned.size()){
@@ -798,6 +825,14 @@ bool llama_dsv41_sweep::run(const std::vector<int32_t>&tokens,const cancelled&st
             llama_dsv41_layer_log("[dsv41-sweep] layer=%u complete\n",layer);std::fflush(stderr);
         }
         require(!engram_next.valid(),"Unconsumed Engram lookahead at completed frontier");
+        if(p->yoco.encoder_only){
+            success(p->provider.finish_yoco_encoder(error),error);p->check_stop(stop);
+            ggml_backend_synchronize(p->backend);
+            p->measured.prompt_processing_ms=std::chrono::duration<double,std::milli>(std::chrono::steady_clock::now()-run_started).count();
+            p->state=implementation::encoder_complete;
+            llama_dsv41_layer_log("ULTRAYOCO_ENCODER_COMPLETE position=%zu streamed_layers=21 decoder_fetches=0 frontier_valid=0\n",p->tokens.size());
+            return true;
+        }
         std::optional<llama_dsv41_carry_store::tile>resident_last;
         if(p->options.carry.export_hidden_after_head){
             resident_last.emplace();success(p->executor->resident_head_row(*resident_last,error),error);
@@ -814,7 +849,7 @@ bool llama_dsv41_sweep::run(const std::vector<int32_t>&tokens,const cancelled&st
         }
         llama_dsv41_layer_log("DS4PERF_PROMPT_HEAD_COMPLETE tokens=%zu processing_ms=%.6f bulk_hidden_export_pending=%u\n",owned.size(),p->measured.prompt_processing_ms,unsigned(p->options.carry.export_hidden_after_head));
         if(p->options.carry.export_hidden_after_head){
-            for(uint32_t first=0;first<owned.size();first+=p->options.carry.max_tile_tokens){
+            for(uint32_t first=p->yoco.first;first<owned.size();first+=p->options.carry.max_tile_tokens){
                 p->check_stop(stop);llama_dsv41_carry_store::ram_lease lease;
                 success(p->carry.acquire_ram_export(first,std::min(p->options.carry.max_tile_tokens,uint32_t(owned.size())-first),lease,error),error);
                 std::optional<llama_dsv41_carry_store::ram_completion>completion;
@@ -832,6 +867,14 @@ bool llama_dsv41_sweep::run(const std::vector<int32_t>&tokens,const cancelled&st
 }
 
 bool llama_dsv41_sweep::export_native(const consumer&send,std::string&error){
+    {
+        std::unique_lock<std::mutex>lock(p->mutex,std::try_to_lock);
+        if(!lock.owns_lock()){error="V4.1 sweep is already active";return false;}
+        if(p->options.yoco_keep){error="YOCO approximate state cannot be exported to RTX/Mac; re-prefill with YOCO off";return false;}
+    }
+    return inspect_local(send,error);
+}
+bool llama_dsv41_sweep::inspect_local(const consumer&send,std::string&error){
     std::unique_lock<std::mutex>lock(p->mutex,std::try_to_lock);error.clear();
     if(!lock.owns_lock()){error="V4.1 sweep/export already owns the frontier";return false;}
     try{
@@ -871,6 +914,7 @@ bool llama_dsv41_sweep::apply_decode_delta(const decode_delta&update,
         const llama_dsv41::wire_read_span&read,std::string&error){
     std::unique_lock<std::mutex>lock(p->mutex,std::try_to_lock);error.clear();
     if(!lock.owns_lock()){error="V4.1 sweep already owns the frontier";return false;}
+    if(p->options.yoco_keep){error="YOCO state requires local re-prefill for transport, persistence or rewind";return false;}
     try{
         p->check_stop();require(p->state==implementation::completed&&p->published.load()&&
             p->options.stateful_chunks&&p->cache&&p->carry.frontier_ready()&&!p->executor,
@@ -925,6 +969,7 @@ bool llama_dsv41_sweep::apply_decode_delta(const decode_delta&update,
 bool llama_dsv41_sweep::capture_rewind_anchor(rewind_anchor&out,std::string&error){
     std::unique_lock<std::mutex>lock(p->mutex,std::try_to_lock);error.clear();
     if(!lock.owns_lock()){error="V4.1 sweep already owns the frontier";return false;}
+    if(p->options.yoco_keep){error="YOCO state requires local re-prefill for transport, persistence or rewind";return false;}
     try{
         p->check_stop();require(p->state==implementation::completed&&p->published.load()&&
             p->options.stateful_chunks&&p->cache&&!p->executor,
@@ -957,6 +1002,7 @@ bool llama_dsv41_sweep::restore_rewind_anchor(const rewind_anchor&anchor,
         const std::vector<std::string>&current_hashes,std::string&error){
     std::unique_lock<std::mutex>lock(p->mutex,std::try_to_lock);error.clear();
     if(!lock.owns_lock()){error="V4.1 sweep already owns the frontier";return false;}
+    if(p->options.yoco_keep){error="YOCO state requires local re-prefill for transport, persistence or rewind";return false;}
     try{
         p->check_stop();const uint32_t old=uint32_t(p->tokens.size()),target=anchor.frontier.position;
         require(p->state==implementation::completed&&p->published.load()&&p->options.stateful_chunks&&
@@ -987,7 +1033,7 @@ bool llama_dsv41_sweep::restore_rewind_anchor(const rewind_anchor&anchor,
 
 void llama_dsv41_sweep::cancel(){p->stop_requested.store(true);p->published.store(false);}
 llama_dsv41_sweep::run_timing llama_dsv41_sweep::timing()const{
-    std::lock_guard<std::mutex>lock(p->mutex);return p->state==implementation::completed?p->measured:run_timing{};
+    std::lock_guard<std::mutex>lock(p->mutex);return (p->state==implementation::completed||p->state==implementation::encoder_complete)?p->measured:run_timing{};
 }
 bool llama_dsv41_sweep::ready()const{return p->published.load()&&!p->stop_requested.load();}
 bool llama_dsv41_sweep::device_state_views(device_state&out,std::string&error)const{

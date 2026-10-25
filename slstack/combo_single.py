@@ -246,6 +246,13 @@ class SingleEngine:
             # longer append in near-equal sweeps (same rule as the producer), never a tiny tail.
             from studio.dsv41_session_contract import negotiate_prefill, split_prefill
             chunk = split_prefill(len(append), negotiate_prefill(getattr(self.producer.process, 'ready', None) or {})) if append else 1
+            # A long append is one logical replay span. Re-prefill through the
+            # producer's native multi-sweep planner rather than replay each RPC
+            # chunk independently (which would fetch all decoder weights again).
+            if self.cfg.get('yoco_keep',0) and len(append)>chunk:
+                self.retire('YOCO long logical append requires re-prefill')
+                self.launch(tokens);metrics['reused_prefix_tokens']=0;metrics['new_tokens']=len(tokens)
+                append=[]
             for offset in range(0, len(append), chunk):
                 self.producer.prefill(append[offset:offset + chunk]);self.live.extend(append[offset:offset + chunk])
             metrics['append_prefill_seconds'] = time.monotonic() - started

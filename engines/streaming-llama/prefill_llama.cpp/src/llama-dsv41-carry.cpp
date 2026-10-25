@@ -456,6 +456,15 @@ bool llama_dsv41_carry_store::retire_shared_ram(std::string &error){
     },error);
 }
 
+bool llama_dsv41_carry_store::retire_yoco_encoder(std::string &error){
+    return p->guarded([&]{
+        require(p->state==implementation::between_layers&&p->layers==21&&!p->lease&&
+            p->options.shared_ram&&p->shared_bank_claim.owns_lock(),"YOCO encoder retirement requires layer20, no frontier credit");
+        p->state=implementation::poisoned;++p->ram_generation;p->resident.reset();p->resident_bytes=0;
+        p->shared_bank_claim.unlock();p->options.shared_ram.reset();
+    },error);
+}
+
 bool llama_dsv41_carry_store::create(const config & options, std::string & error) {
     return p->guarded([&] {
         require(p->state == implementation::fresh, "Carry store cannot be reopened or reused");
@@ -611,7 +620,9 @@ bool llama_dsv41_carry_store::begin_layer(uint32_t layer, uint32_t selected, uin
         require(selected_source(layer) || selected == p->selected_width, "Reader layer changed selected width");
         require(layer == 20 || candidates == p->candidate_width, "Candidate width can change only at source layer 20");
         p->next_selected = selected; p->next_candidates = candidates;
-        p->cursor = 0; p->state = implementation::running_layer; p->header();
+        require(!p->options.yoco_first || (p->options.resident_ram&&p->options.yoco_first<p->options.tokens),"Invalid YOCO carry coverage");
+        p->cursor = layer>20?p->options.yoco_first:0;
+        p->state = implementation::running_layer; p->header();
     }, error);
 }
 bool llama_dsv41_carry_store::read_tile(uint32_t start, uint32_t count, tile & input, std::string & error) {
@@ -775,6 +786,7 @@ bool llama_dsv41_carry_store::commit_layer(std::string & error) {
                 "Cannot commit an incomplete/leased carry layer");
         p->flush(); ++p->layers; p->selected_width = p->next_selected; p->candidate_width = p->next_candidates;
         p->state = p->layers == 40 ? implementation::awaiting_head : implementation::between_layers;
+        if(p->layers==40)p->export_cursor=p->options.yoco_first;
         p->header();
     }, error);
 }
@@ -785,6 +797,7 @@ bool llama_dsv41_carry_store::read_final_tile(uint32_t start, uint32_t count, ti
         require(!p->options.export_hidden_after_head||p->export_cursor==p->options.tokens,
             "Final host hidden rows are stale until export readback completes");
         require(!p->options.direct_ram_tiles||count<=page_tokens,"Direct RAM mode refuses head vectors larger than one page before allocation");
+        require(start>=p->options.yoco_first,"Head requested skipped YOCO rows");
         p->range(start, count);p->direct_rows=p->options.resident_ram&&count>page_tokens;p->buffer_offset=p->page_offset(start);
         if(!p->direct_rows)p->io(false,p->buffer_offset,size_t((start%page_tokens+count+page_tokens-1)/page_tokens)*page_bytes);
         p->unpack(start,count,output);p->direct_rows=false;

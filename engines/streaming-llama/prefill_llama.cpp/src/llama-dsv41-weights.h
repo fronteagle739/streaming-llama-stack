@@ -54,6 +54,7 @@ public:
         // dense stage and a routed-expert stage, then the head). Only the
         // routed experts' bytes are fetched. Switched at a pass boundary.
         bool decode_layout=false;
+        bool yoco_encoder_only=false; // omit stages 22..41 before any prefetch
     };
     struct capacity {
         uint64_t maximum_stage_bytes=0,compute_buffer_bytes=0;
@@ -78,6 +79,7 @@ public:
     // heaps, requests and imported pointers. Start is deferred to the timed run.
     bool restart_prompt(const config &options,std::string &error);
     bool start_request(std::string &error);
+    bool finish_yoco_encoder(std::string &error);
     // DS4COMBO fast switch: release / rebuild the DS heaps and imported compute
     // buffers between passes; model lease, plan and Engram state are kept.
     bool suspend_device(std::string &error);

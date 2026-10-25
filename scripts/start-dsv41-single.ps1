@@ -11,6 +11,7 @@ param(
     [Parameter(Mandatory = $true)][ValidateSet('262k', '1m')][string]$Preset,
     [string]$Config = '',
     [string]$Model = '',
+    [ValidateSet(0,140)][int]$YocoKeep = 0,
     [switch]$WebUI,
     [switch]$DryRun,
     [switch]$Stop
@@ -24,8 +25,10 @@ if (-not $Config) {
 }
 if ($Config) { $Config = (Resolve-Path -LiteralPath $Config).Path }
 
-$StartConfig = Join-Path $Root "runtime\dsv41-single-$Preset.local.json"
+$ModeSuffix = if ($YocoKeep) { "-ultra-yoco" } else { "" }
+$StartConfig = Join-Path $Root "runtime\dsv41-single-$Preset$ModeSuffix.local.json"
 $genArgs = @('-B', (Join-Path $Root 'scripts\dsv41_single.py'), '--preset', $Preset, '--write', $StartConfig)
+if ($YocoKeep) { $genArgs += @('--yoco-keep', [string]$YocoKeep) }
 if ($Config) { $genArgs += @('--config', $Config) }
 if ($Model) { $genArgs += @('--model', $Model) }
 if ($DryRun) { $genArgs += '--dry-run' }

@@ -212,6 +212,7 @@ struct wf_layer {
     // MoE: active expert mask (empty = fetch all)
     std::vector<int>              active_experts;
     bool                          expert_filter_set = false;
+    bool                          skipped = false; // immutable while this pass runs
     bool                          persistent = false;          // LLAMADECODE B1b
     std::atomic<bool>             persistent_loaded{false};    // bytes resident in its bank region
     bool                          cache_inserted = false;
@@ -231,7 +232,7 @@ struct wf_layer {
         : spans(std::move(o.spans)), total_bytes(o.total_bytes),
           stage(o.stage.load()), gpu_buf_idx(o.gpu_buf_idx), ram_buf_idx(o.ram_buf_idx),
           active_experts(std::move(o.active_experts)), expert_filter_set(o.expert_filter_set),
-          persistent(o.persistent), persistent_loaded(o.persistent_loaded.load()),
+          skipped(o.skipped), persistent(o.persistent), persistent_loaded(o.persistent_loaded.load()),
           cache_inserted(o.cache_inserted), cache_hits(std::move(o.cache_hits)),
           expert_prefetch_ids(std::move(o.expert_prefetch_ids)),
           expert_prefetch_loaded_spans(std::move(o.expert_prefetch_loaded_spans)),
@@ -4066,7 +4067,7 @@ static void wf_dma_thread_fn(wf_context * wf) {
             }
 
             // Skip empty sub-layers (dense layer's MoE slot)
-            if (wf->layers[layer_idx].total_bytes == 0) {
+            if (wf->layers[layer_idx].skipped || wf->layers[layer_idx].total_bytes == 0) {
                 wf->layers[layer_idx].stage.store(WF_STAGE_DONE);
                 // Schedule next layer on this buffer
                 int next = wf->dma_next_layer.fetch_add(wf->dir);   // +dir: forward +1 (unchanged), reverse -1
@@ -5293,6 +5294,8 @@ void * wf_wait_layer_gpu(wf_context * wf, int layer_idx) {
 
     auto & layer = wf->layers[layer_idx];
 
+    if(layer.skipped) return nullptr; // omitted weights must never be acquired
+
     // Skip empty sub-layers (e.g., dense layer's MoE slot)
     if (layer.total_bytes == 0 && layer.spans.empty()) {
         layer.stage.store(WF_STAGE_DONE);
@@ -5801,7 +5804,7 @@ void wf_release_layer(wf_context * wf, int layer_idx) {
     auto & layer = wf->layers[layer_idx];
 
     // Skip empty sub-layers — nothing to release
-    if (layer.total_bytes == 0 && layer.spans.empty()) {
+    if (layer.skipped || (layer.total_bytes == 0 && layer.spans.empty())) {
         layer.stage.store(WF_STAGE_DONE);
         // Don't advance dma_next_layer — the DMA thread handles empty layers
         // via its own skip logic when it encounters them in pending_layer.
@@ -6004,6 +6007,14 @@ void wf_quiesce(wf_context * wf) {
     if (wf->cuda_compute_stream) cudaStreamSynchronize(wf->cuda_compute_stream);
     cudaDeviceSynchronize();
 #endif
+}
+
+bool wf_set_layer_skipped(wf_context * wf, int layer_idx, bool skipped) {
+    if(!wf || !wf->required_dstorage || wf->params.ds_gpu_ring_slots ||
+       wf->pipeline_running.load() || layer_idx<0 || layer_idx>=int(wf->layers.size()) ||
+       wf->layers[layer_idx].persistent) return false;
+    wf->layers[layer_idx].skipped=skipped;
+    return true;
 }
 
 bool wf_set_layer_persistent(wf_context * wf, int layer_idx, bool persistent) {

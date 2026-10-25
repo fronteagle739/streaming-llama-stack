@@ -79,3 +79,14 @@ The current development branch starts at a new root commit with neutral authorsh
 
 
 Register native models with `--models first.gguf,second.gguf`, or set `models` to objects with `id`, `path` and optional `lora` in your local config. `/v1/models` exposes those ids; the existing web UI picker and each request's `model` field select them per chat. An unloaded selection uses the normal owned unload/load path, with status in the UI. `--resident first,second` records a requested pair; it currently performs normal switching and does not claim simultaneous residency or fast switching. The pinned llama-server has its own `--models-preset`/`--models-dir` router, but it cannot directly host the native ds4 adapter, so this bridge reuses its UI API shape.
+
+Opt-in **approximate YOCO** single-engine launches:
+`scripts/start-dsv41-single-262k-ultra-yoco.ps1 -WebUI` and
+`scripts/start-dsv41-single-1m-ultra-yoco.ps1 -WebUI` add `yoco_keep=140`
+(native `--yoco-keep 140`). Default `0` preserves the existing path. Layer 20
+runs in full; non-final sweeps omit layers 21?39's weight reads and compute,
+and the final sweep evaluates their last 140 positions. This changes model
+outputs and is not yet GPU-qualified. Images, verify, all-position scoring,
+decode and append-via-decode use full evaluation. Remote session export,
+persistence and rewind are refused while enabled; edits re-prefill locally.
+Long live appends re-prefill as one logical call. Shipping RAM budgets remain.

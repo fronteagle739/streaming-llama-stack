@@ -297,6 +297,8 @@ WF_API void wf_stop(wf_context * wf);
 // LLAMADECODE B1b: a persistent stage occupies its own bank region that no other
 // stage of this fetcher writes. After its first complete transfer it is served
 // from VRAM (no DMA) for the rest of this fetcher's lifetime. Required DS only.
+// Per-pass omission, set only while stopped. No IO, lease or compute credit.
+WF_API bool wf_set_layer_skipped(wf_context * wf, int layer_idx, bool skipped);
 WF_API bool wf_set_layer_persistent(wf_context * wf, int layer_idx, bool persistent);
 // LLAMADECODE B2: synchronously fetch explicit file extents into a direct compute
 // bank (required DS, two-bank direct profile). Serialized with the pipeline's DMA

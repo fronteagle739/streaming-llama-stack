@@ -55,6 +55,8 @@ public:
         // Carry leases/device banks use start; cache/RoPE positions add this.
         uint32_t position_offset=0;
         bool single_attention_append=false;
+        uint32_t yoco_first=0; // local decoder coverage, explicit at every tile
+        uint32_t yoco_raw_begin=0; // absolute lower bound for raw attention
         std::vector<float> residual,previous_pre,engram_rows;
         std::vector<int32_t> selected,candidates,token_kinds;
         std::vector<int8_t> text_mask;
