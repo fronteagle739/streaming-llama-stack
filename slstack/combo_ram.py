@@ -23,28 +23,56 @@ PAGE=65536
 
 
 def wait_for_host_capacity(host_bytes,floor_bytes,cancelled,*,timeout_s=30,available=None,clock=time.monotonic,sleep=time.sleep):
-    """Allow bounded OS RAM reclamation after certified engine retirement."""
+    """Allow OS RAM reclamation after certified engine retirement. Owner rule (no fixed
+    timeouts): the wait lives while available RAM keeps rising (reclamation is progressing);
+    timeout_s is the NO-PROGRESS window, renewed by every new maximum, not a total cap."""
     if any(type(n) is not int or n<=0 for n in (host_bytes,floor_bytes)):
         raise ValueError('Explicit integer host/floor budgets required')
-    if type(timeout_s) not in (int,float) or not math.isfinite(timeout_s) or not 0<timeout_s<=30:
-        raise ValueError('Host admission settling must be bounded to30seconds')
+    if type(timeout_s) not in (int,float) or not math.isfinite(timeout_s) or not 0<timeout_s<=600:
+        raise ValueError('Host admission no-progress window must be 0-600 seconds')
     available=available or (lambda:psutil.virtual_memory().available)
-    started=clock();minimum=None;polls=0;announced=False
+    started=progress=clock();minimum=maximum=None;polls=0;announced=False
     while True:
-        free=available();polls+=1
+        free=available();polls+=1;now=clock()
         if type(free) is not int or free<0:raise ValueError('Host admission physical telemetry is invalid')
         minimum=free if minimum is None else min(minimum,free)
+        if maximum is None or free>maximum:maximum=free;progress=now
         row=dict(host_budget_bytes=host_bytes,physical_floor_bytes=floor_bytes,required_bytes=host_bytes+floor_bytes,
-            available_bytes=free,minimum_available_bytes=minimum,seconds=clock()-started,polls=polls,timeout_seconds=timeout_s)
+            available_bytes=free,minimum_available_bytes=minimum,maximum_available_bytes=maximum,seconds=now-started,
+            seconds_without_progress=now-progress,polls=polls,timeout_seconds=timeout_s)
         if cancelled():
             error=RuntimeError('Host admission cancelled before producer launch');error.admission_receipt=row;raise error
         if free>=host_bytes+floor_bytes:return row
-        if row['seconds']>=timeout_s:
-            error=MemoryError(f"Producer host admission refused after RAM settling: available={free}, required={host_bytes+floor_bytes}")
+        if now-progress>=timeout_s:
+            error=MemoryError(f"Producer host admission refused: available RAM stopped rising for {now-progress:.1f}s "
+                f"(available={free}, required={host_bytes+floor_bytes}, waited {now-started:.1f}s)")
             error.admission_receipt=row;raise error
         if not announced:
             print('DS4COMBO_HOST_ADMISSION_WAIT '+json.dumps(row),flush=True);announced=True
-        sleep(min(.1,timeout_s-row['seconds']))
+        sleep(min(.1,timeout_s-(now-progress)))
+
+
+OWNED_INIT_RSS=8<<20
+def wait_owned_initialization(job,rss,*,threshold=OWNED_INIT_RSS,stall_s=30.0,clock=time.monotonic,sleep=time.sleep):
+    """Wait for a new owned process's working set to reach `threshold` before protecting it.
+    Owner rule (no fixed timeouts): it lives while the process is alive and its RSS grows; it
+    fails only when the process exits or its RSS makes no progress for stall_s, with the reason.
+    (A fixed 2 s deadline failed right after a large producer freed ~11 GB: page zeroing is slow.)"""
+    started=progress=clock();best=-1;polls=0;announced=False
+    while True:
+        current=rss();polls+=1;now=clock()
+        if current>=threshold:return dict(seconds=now-started,polls=polls,rss_bytes=current)
+        code=job.poll()
+        if code is not None:
+            raise RuntimeError(f'Owned process exited (code {code}) before resident admission: rss={current} of {threshold} after {now-started:.2f}s')
+        if current>best:best=current;progress=now
+        elif now-progress>=stall_s:
+            raise TimeoutError(f'Owned working-set initialization made no progress for {now-progress:.1f}s: '
+                f'rss={current} of {threshold}, process alive, {now-started:.1f}s since launch')
+        if not announced and now-started>=2:
+            print('DS4COMBO_OWNED_WS_INIT_WAIT '+json.dumps(dict(pid=job.pid,rss_bytes=current,threshold_bytes=threshold,seconds=now-started)),flush=True)
+            announced=True
+        sleep(.001 if now-started<2 else .05)
 
 
 def kernel_api():
@@ -89,10 +117,7 @@ def protect_working_set(job,host_bytes,floor_bytes,aggregate_bytes,*,receipt=Non
     # Wait for the new process working set; its Job/RSS/floor budgets already
     # apply before resume. This admission precedes bootstrap and readiness.
     started=time.monotonic();process=psutil.Process(job.pid)
-    while process.memory_info().rss<8<<20:
-        if job.poll() is not None:raise RuntimeError('Owned process exited before resident admission')
-        if time.monotonic()-started>=2:raise TimeoutError('Owned working-set initialization deadline exceeded')
-        time.sleep(.001)
+    wait_owned_initialization(job,lambda:process.memory_info().rss)
     k=kernel_api();handle=job.pi.process
     if k.GetProcessId(handle)!=job.pid:raise ValueError('Suspended process handle/owner PID differs')
     lo,hi,flags=ctypes.c_size_t(),ctypes.c_size_t(),w.DWORD()

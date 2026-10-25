@@ -8,7 +8,7 @@ import json
 from pathlib import Path
 import uuid
 import unittest
-from slstack.combo_ram import LockedRam, kernel_api, protect_working_set,wait_for_host_capacity
+from slstack.combo_ram import LockedRam, kernel_api, protect_working_set,wait_for_host_capacity,wait_owned_initialization
 
 
 class CapacityTest(unittest.TestCase):
@@ -29,6 +29,50 @@ class CapacityTest(unittest.TestCase):
     def test_cancel_does_not_wait_or_admit(self):
         with self.assertRaisesRegex(RuntimeError,'cancelled'):
             wait_for_host_capacity(3,2,lambda:True,available=lambda:5)
+
+    def test_slow_but_rising_reclamation_waits_past_the_window(self):
+        # Available RAM rises by 1 byte every 0.5 s for 60 s (> the 30 s window): progress renews it.
+        now=[0.]
+        def sleep(seconds):now[0]+=seconds
+        result=wait_for_host_capacity(100,20,lambda:False,available=lambda:min(120,int(now[0]/.5)),clock=lambda:now[0],sleep=sleep)
+        self.assertEqual(result['available_bytes'],120);self.assertGreater(result['seconds'],59)
+
+
+class _Job:
+    def __init__(self,code=None):self.code=code;self.pid=4242
+    def poll(self):return self.code
+
+
+class OwnedInitializationTest(unittest.TestCase):
+    """Owner rule: no fixed deadline. Alive + growing RSS keeps waiting; only exit or a
+    no-progress window fails, with the real reason."""
+    def clock(self):
+        now=[0.]
+        def sleep(seconds):now[0]+=seconds
+        return now,sleep
+
+    def test_slow_growth_past_the_old_two_second_deadline(self):
+        now,sleep=self.clock()   # 8 MiB reached only after ~12 s of slow, steady growth
+        row=wait_owned_initialization(_Job(),lambda:int(now[0]*700_000),clock=lambda:now[0],sleep=sleep)
+        self.assertGreaterEqual(row['rss_bytes'],8<<20);self.assertGreater(row['seconds'],11)
+
+    def test_no_progress_window_fails_with_the_reason(self):
+        now,sleep=self.clock()
+        with self.assertRaisesRegex(TimeoutError,r'no progress for 30\.\d+s: rss=1000 of 8388608, process alive'):
+            wait_owned_initialization(_Job(),lambda:1000,clock=lambda:now[0],sleep=sleep)
+        self.assertLess(now[0],31)
+
+    def test_stall_after_growth_is_measured_from_the_last_growth(self):
+        now,sleep=self.clock()   # grows for 20 s, then flat: fails ~30 s after the last growth
+        with self.assertRaises(TimeoutError):
+            wait_owned_initialization(_Job(),lambda:int(min(now[0],20)*1000),clock=lambda:now[0],sleep=sleep)
+        self.assertGreater(now[0],49);self.assertLess(now[0],51)
+
+    def test_exit_fails_at_once_with_the_code(self):
+        now,sleep=self.clock()
+        with self.assertRaisesRegex(RuntimeError,r'exited \(code 3\)'):
+            wait_owned_initialization(_Job(3),lambda:0,clock=lambda:now[0],sleep=sleep)
+        self.assertEqual(now[0],0)
 
 
 @unittest.skipUnless(sys.platform=='win32','Windows shared RAM contract')
