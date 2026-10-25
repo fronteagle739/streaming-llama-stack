@@ -4,6 +4,8 @@ A private, portable launcher and OpenAI-compatible chat endpoint with the llama.
 
 Development status: the expanded two-machine and release acceptance tests are in progress. The earlier checkpoint's media proofs do not qualify the new clean vendored tree. See docs/STATUS.md for actual verification.
 
+See [Status and plan](docs/STATUS_AND_PLAN.md) for the current deployments, measurements, open decisions and remaining work.
+
 The stack's own code and owner-authored Studio exports use MIT. Engine and embedded library licenses remain in their source directories; see NOTICE and each PROVENANCE file.
 
 The intended six-step walkthrough is:
