@@ -54,6 +54,9 @@
 namespace {
 using clock_type=std::chrono::steady_clock;
 double elapsed(clock_type::time_point start){return std::chrono::duration<double,std::milli>(clock_type::now()-start).count();}
+// LLAMADECODE_TILE_TIMING=1: one diagnostic line per tile (host phase walls plus GPU
+// event time around the tile graph). Off = no events, no extra calls, no output.
+bool tile_timing_enabled(){static const bool on=[]{const char*v=std::getenv("LLAMADECODE_TILE_TIMING");return v&&std::string(v)=="1";}();return on;}
 // LLAMADECODE: LLAMADECODE_COLLECT_ADMISSION=1 is a diagnostic-only mode. Admission,
 // tag-count, reserve-estimate and dispatch-witness checks that do not guard memory
 // safety log their violation once per (check, layer, rows) and continue; every other
@@ -363,6 +366,7 @@ struct llama_dsv41_tile_executor::pinned_storage {
     cudaStream_t copies=nullptr;
     cudaEvent_t ready=nullptr;
     uint32_t *flags_device=nullptr,*flags_host=nullptr;
+    double last_register_ms=0; // LLAMADECODE_TILE_TIMING: host wall of the last bind_lease unregister+register
 #include "llama-dsv41-copy-prefetch.inl"
     static void ok(cudaError_t e,const char *message){if(e!=cudaSuccess)throw std::runtime_error(std::string(message)+": "+cudaGetErrorString(e));}
     static void cleanup(cudaError_t e){if(e!=cudaSuccess){llama_dsv41_layer_log("DSV41_PINNED_COPY_CLEANUP_FAILED %s\n",cudaGetErrorString(e));std::fflush(stderr);std::abort();}}
@@ -427,10 +431,12 @@ struct llama_dsv41_tile_executor::pinned_storage {
         // Original copy stream completion protects the old registration. No
         // new host buffer or stream; the bank/lease ownership stays unchanged.
         ok(cudaStreamSynchronize(copies),"Previous tile copies did not complete before pin rebinding");
+        const auto register_started=clock_type::now();
         if(registered_tile){ok(cudaHostUnregister(registered_tile),"Previous tile RAM unregister failed");registered_tile=nullptr;registered_tile_bytes=0;}
         size_t free_before=0,total=0,free_after=0;ok(cudaMemGetInfo(&free_before,&total),"Cannot inspect GPU memory before tile registration");
         ok(cudaHostRegister(ptr,size_t(size),cudaHostRegisterDefault),"Active tile RAM registration failed");
         registered_tile=ptr;registered_tile_bytes=size;
+        last_register_ms=elapsed(register_started); // includes the cudaMemGetInfo between unregister and register
         ok(cudaMemGetInfo(&free_after,&total),"Cannot inspect GPU memory after tile registration");
         llama_dsv41_layer_log("DS4PERF_TILE_HOST_REGISTRATION first=%u count=%u bytes=%llu previous_copy_stream_complete=1 existing_RAM_bank=1\n",lease.start(),lease.count()+next_rows,(unsigned long long)size);
         llama_dsv41_layer_log("DS4PERF_TILE_PIN_WINDOW first=%u current_rows=%u next_rows=%u bytes=%llu cuda_free_before=%llu cuda_free_after=%llu exact_parent_generation=1\n",lease.start(),lease.count(),next_rows,(unsigned long long)size,(unsigned long long)free_before,(unsigned long long)free_after);
@@ -875,6 +881,7 @@ bool llama_dsv41_tile_executor::run(const request&in,const llama_dsv41_layer_gra
         const bool direct_input=bool(in.direct);
         require(direct_input==bool(pinned),"Pinned carry request/configuration mode changed");
         bool skip_tile_pin=false;
+        double tile_bind_ms=0,tile_register_ms=0,tile_launch_ms=0,tile_sync_ms=0;float tile_gpu_ms=-1;
 #ifdef GGML_USE_CUDA
         struct bank_copy_scope {pinned_storage*p;~bank_copy_scope(){if(p)p->current_bank_copies_forbidden=false;}} bank_scope{pinned.get()};
 #endif
@@ -890,7 +897,9 @@ bool llama_dsv41_tile_executor::run(const request&in,const llama_dsv41_layer_gra
                 resident->full()&&!resident->spilled(in.start)&&defer_hidden_readback&&export_hidden_after_head&&
                 in.layer>0&&in.layer<40&&!query_source(in.layer)&&in.layer!=20;
             pinned->current_bank_copies_forbidden=skip_tile_pin;
+            pinned->last_register_ms=0;const auto bind_started=clock_type::now();
             if(!skip_tile_pin)pinned->bind_lease(d,in.lookahead?&*in.lookahead:nullptr);
+            tile_bind_ms=elapsed(bind_started);tile_register_ms=pinned->last_register_ms;
 #endif
         }
         require(in.layer<40,"V4.1 tile layer is outside 0..39");
@@ -1422,6 +1431,20 @@ bool llama_dsv41_tile_executor::run(const request&in,const llama_dsv41_layer_gra
 #endif
         bool prefetch_next=false;
 #ifdef GGML_USE_CUDA
+        // LLAMADECODE_TILE_TIMING: two timing events, created once per process, recorded on the
+        // ggml CUDA backend's compute stream immediately before the tile graph launch and
+        // immediately after the last launch (before the existing synchronize).
+        static cudaEvent_t tile_events[2]={nullptr,nullptr};
+        cudaStream_t tile_stream=nullptr;
+        if(tile_timing_enabled()&&ggml_backend_is_cuda(backend)){
+            if(!tile_events[0]){pinned_storage::ok(cudaEventCreate(&tile_events[0]),"Tile timing event creation failed");
+                pinned_storage::ok(cudaEventCreate(&tile_events[1]),"Tile timing event creation failed");}
+            tile_stream=static_cast<cudaStream_t>(ggml_backend_cuda_get_stream(backend));
+            pinned_storage::ok(cudaEventRecord(tile_events[0],tile_stream),"Tile timing start event record failed");
+        }
+#endif
+        const auto launch_start=clock_type::now();
+#ifdef GGML_USE_CUDA
         // This guard is newer than the local graph/context owners, so any
         // exception after async launch drains readers/compute BEFORE those
         // owners unwind. The parent RAM lease remains live until run returns.
@@ -1466,7 +1489,16 @@ bool llama_dsv41_tile_executor::run(const request&in,const llama_dsv41_layer_gra
             require(ggml_backend_graph_compute_async(backend,&after)==GGML_STATUS_SUCCESS,"V4.1 post-router computation failed");
         }else
         require(ggml_backend_graph_compute_async(backend,compute_graph)==GGML_STATUS_SUCCESS,"V4.1 tile backend computation failed");
-        ggml_backend_synchronize(backend);pending.compute_ms=elapsed(compute_start);
+        tile_launch_ms=elapsed(launch_start);
+#ifdef GGML_USE_CUDA
+        if(tile_stream)pinned_storage::ok(cudaEventRecord(tile_events[1],tile_stream),"Tile timing end event record failed");
+#endif
+        const auto sync_start=clock_type::now();
+        ggml_backend_synchronize(backend);pending.compute_ms=elapsed(compute_start);tile_sync_ms=elapsed(sync_start);
+#ifdef GGML_USE_CUDA
+        // Both events precede the synchronize on the same stream, so they are complete here.
+        if(tile_stream)pinned_storage::ok(cudaEventElapsedTime(&tile_gpu_ms,tile_events[0],tile_events[1]),"Tile timing elapsed read failed");
+#endif
         if(llama_dsv41_hash_dump_enabled()){
             std::vector<int32_t>experts;
             if(hash_experts){experts.resize(size_t(ggml_nelements(hash_experts)));ggml_backend_tensor_get(hash_experts,experts.data(),0,experts.size()*4);}
@@ -1695,6 +1727,8 @@ bool llama_dsv41_tile_executor::run(const request&in,const llama_dsv41_layer_gra
         pending.readback_ms=elapsed(readback_start);
         const auto cleanup_started=clock_type::now();allocation.release();pending.cleanup_ms=elapsed(cleanup_started);
         if(capture_dspark)cache.dspark_completion.commit(capture_ticket);
+        if(tile_timing_enabled())llama_dsv41_layer_log("LLAMADECODE_TILE_TIMING layer=%u tile=%u rows=%u host_prepare_ms=%.3f host_bind_ms=%.3f host_register_ms=%.3f host_upload_ms=%.3f host_launch_ms=%.3f host_sync_ms=%.3f gpu_ms=%.3f compute_ms=%.3f host_readback_ms=%.3f host_cleanup_ms=%.3f skip_pin=%u prefetch=%u\n",
+            in.layer,in.start,in.count,pending.prepare_ms,tile_bind_ms,tile_register_ms,pending.upload_ms,tile_launch_ms,tile_sync_ms,double(tile_gpu_ms),pending.compute_ms,pending.readback_ms,pending.cleanup_ms,unsigned(skip_tile_pin),unsigned(prefetch_next));
         out=std::move(pending);cache.execution_poisoned=false;probe.pre_return_ms=elapsed(prepare_started);probe.complete=true;return true;
     }catch(const std::exception&failure){error=failure.what();return false;}
 }

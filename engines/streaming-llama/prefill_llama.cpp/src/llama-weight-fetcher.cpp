@@ -1916,6 +1916,51 @@ static bool wf_make_dual_use_heap(ID3D12Device * dev, uint64_t buf_size,
     return true;
 }
 
+// LLAMADECODE_DS_HEAP_RESIDENT=1 (default off): residency discriminator for the prefill
+// tile stalls. Make the strict-direct compute heaps resident (ID3D12Device3::EnqueueMakeResident
+// + fence wait; ID3D12Device::MakeResident without Device3) and give them maximum residency
+// priority (ID3D12Device1::SetResidencyPriority). Failures are logged with their HRESULT and
+// the producer continues (diagnostic, not a requirement).
+static void wf_make_compute_heaps_resident(wf_context * wf, const std::vector<ID3D12Heap*> & heaps) {
+    std::vector<ID3D12Pageable*> pageable(heaps.begin(), heaps.end());
+    size_t free_before = 0, free_after = 0, total = 0; cudaMemGetInfo(&free_before, &total);
+    const auto started = std::chrono::steady_clock::now();
+    HRESULT hr = E_NOINTERFACE; const char * method = "none";
+    ID3D12Device3 * device3 = nullptr;
+    if (SUCCEEDED(wf->d3d_device->QueryInterface(IID_PPV_ARGS(&device3)))) {
+        method = "enqueue_make_resident";
+        ID3D12Fence * fence = nullptr;
+        hr = wf->d3d_device->CreateFence(0, D3D12_FENCE_FLAG_NONE, IID_PPV_ARGS(&fence));
+        if (SUCCEEDED(hr)) {
+            hr = device3->EnqueueMakeResident(D3D12_RESIDENCY_FLAG_NONE, UINT(pageable.size()), pageable.data(), fence, 1);
+            if (SUCCEEDED(hr) && fence->GetCompletedValue() < 1) {
+                HANDLE done = CreateEventW(nullptr, FALSE, FALSE, nullptr);
+                if (done && SUCCEEDED(hr = fence->SetEventOnCompletion(1, done))) WaitForSingleObject(done, INFINITE);
+                if (done) CloseHandle(done);
+            }
+            fence->Release();
+        }
+        device3->Release();
+    } else {
+        method = "make_resident";
+        hr = wf->d3d_device->MakeResident(UINT(pageable.size()), pageable.data());
+    }
+    const double resident_ms = std::chrono::duration<double, std::milli>(std::chrono::steady_clock::now() - started).count();
+    HRESULT priority_hr = E_NOINTERFACE;
+    ID3D12Device1 * device1 = nullptr;
+    if (SUCCEEDED(wf->d3d_device->QueryInterface(IID_PPV_ARGS(&device1)))) {
+        std::vector<D3D12_RESIDENCY_PRIORITY> priority(pageable.size(), D3D12_RESIDENCY_PRIORITY_MAXIMUM);
+        priority_hr = device1->SetResidencyPriority(UINT(pageable.size()), pageable.data(), priority.data());
+        device1->Release();
+    }
+    cudaMemGetInfo(&free_after, &total);
+    fprintf(stderr, "LLAMADECODE_DS_HEAP_RESIDENCY heaps=%zu method=%s make_resident_ms=%.3f hr=0x%08lx priority_set=%d priority_hr=0x%08lx"
+                    " cuda_free_before=%zu cuda_free_after=%zu status=%s\n",
+            pageable.size(), method, resident_ms, (unsigned long)hr, int(SUCCEEDED(priority_hr)), (unsigned long)priority_hr,
+            free_before, free_after, SUCCEEDED(hr) && SUCCEEDED(priority_hr) ? "ok" : "error_continuing");
+    fflush(stderr);
+}
+
 // R3 DS-direct: free a dual-use heap. Order per the CUDA external-memory contract (validated by
 // the working staging cleanup): mapped buffer -> external memory -> placed quarters -> heap.
 static void wf_free_dual_use_heap(void * ptr, cudaExternalMemory_t em, ID3D12Heap * heap, std::vector<ID3D12Resource*> & quarters) {
@@ -2568,6 +2613,9 @@ static bool wf_dstorage_init(wf_context * wf, size_t buf_size) {
             if(cudaMemset(bank.ptr,0,buf_size)!=cudaSuccess||cudaDeviceSynchronize()!=cudaSuccess)return false;
         }
         WF_ERR("DS4PERF_DIRECT_HEAPS buffers=%zu compute_capacity=%zu staging_bytes=0 persistent_provider_owned=1",wf->ds_compute_banks.size(),buf_size);
+        {const char*resident=std::getenv("LLAMADECODE_DS_HEAP_RESIDENT");
+         if(resident&&resident[0]=='1'&&!resident[1]){std::vector<ID3D12Heap*>heaps;for(auto&bank:wf->ds_compute_banks)if(bank.heap)heaps.push_back(bank.heap);
+             wf_make_compute_heaps_resident(wf,heaps);}}
     }else if (wf->ds_direct_mode) {
         // Prefetch heap sized to the full layer (single D2D). If VRAM-tight, LLAMA_WF_DS_PREFETCH_PCT can shrink it.
         uint64_t pf_bytes = buf_size;

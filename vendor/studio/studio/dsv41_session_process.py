@@ -234,13 +234,52 @@ class Producer:
         if mark != self._progress_mark:
             self._progress_mark = mark;self.last_progress = time.monotonic()
 
+    death_wait_seconds = 5.0
+
+    def _death(self, message):
+        """LLAMADECODE: why the producer stopped answering: its exit code, its final
+        LLAMADECODE_PRODUCER_ABORT line (else the stderr tail), so a dead producer
+        never surfaces as a bare 'truncated' reply."""
+        code = None
+        end = time.monotonic() + self.death_wait_seconds
+        while True:
+            try:
+                code = self.job.poll() if self.job is not None else None
+            except Exception:
+                code = None
+            if code is not None or time.monotonic() >= end:
+                break
+            time.sleep(0.05)
+        if code is not None:   # the stderr reader ends at the pipe's EOF: let it collect the last lines
+            for thread in getattr(self, 'threads', []):
+                if thread.name == 'dsv41-stderr' and thread is not threading.current_thread():
+                    thread.join(max(0.0, end - time.monotonic()) + 1.0)
+        self.exit_code = code
+        with self.state_lock:
+            text = bytes(self.diagnostic).decode('utf-8', errors='replace')
+        aborts = [line for line in text.splitlines() if line.startswith('LLAMADECODE_PRODUCER_ABORT ')]
+        if code is None:
+            parts = [message, 'producer still running (no exit code yet)']
+        else:
+            parts = [message, 'producer exit code %d (0x%08X)' % (code, code & 0xFFFFFFFF)]
+        if aborts:
+            parts.append(aborts[-1])
+        else:
+            tail = [line for line in text.splitlines() if line.strip()][-3:]
+            parts.append('no LLAMADECODE_PRODUCER_ABORT line; stderr tail: ' + (' | '.join(tail)[-1200:] if tail else '(empty)'))
+        return '; '.join(parts)
+
     def _receive(self):
         raw = self.output.readline(65537)
         self.last_progress = time.monotonic()
-        require(raw.endswith(b'\n') and len(raw) <= 65536, 'Persistent producer reply truncated or too large')
+        if not (raw.endswith(b'\n') and len(raw) <= 65536):
+            raise Refused(self._death('Persistent producer reply truncated or too large' if len(raw) > 65536 or raw
+                                      else 'Persistent producer closed its reply pipe'))
         row = control(raw)
         require(row.get('session') == self.session and row.get('model_sha256') == MODEL_SHA256, 'Producer reply identity mismatch')
         require(not self.owner_epoch or type(row.get('owner_epoch')) is int and row['owner_epoch'] == self.owner_epoch, 'Producer reply owner epoch mismatch')
+        if row.get('status') == 'error':   # LLAMADECODE: the producer's abort reply carries its reason
+            raise Refused(self._death('Persistent producer aborted (%s, sequence %s): %s' % (row.get('error_kind'), row.get('sequence'), row.get('reason'))))
         require(self.failure is None, self.failure or 'Producer failed')
         return row
 
@@ -440,7 +479,7 @@ class Producer:
             time.sleep(0.01)
         exited = self.job is None or self.job.poll() is not None
         empty = self.job is None or self.job.active() == 0
-        self.receipt = dict(session=self.session, host_budget=self.host_bytes, physical_floor=self.floor, peak_rss=self.peak_rss, minimum_available_ram=self.minimum_available, paging_growth=self.paging_growth, budget_breaches=self.budget_breaches, first_budget_breach=self.first_budget_breach, failure=self.failure, owned_pid=pid, owned_job_empty=empty, owned_process_signaled=exited)
+        self.receipt = dict(session=self.session, host_budget=self.host_bytes, physical_floor=self.floor, peak_rss=self.peak_rss, minimum_available_ram=self.minimum_available, paging_growth=self.paging_growth, budget_breaches=self.budget_breaches, first_budget_breach=self.first_budget_breach, failure=self.failure, owned_pid=pid, owned_job_empty=empty, owned_process_signaled=exited, exit_code=self.job.poll() if self.job is not None else getattr(self, 'exit_code', None))
         with self.job_lock:
             if self.job:
                 self.job.close()

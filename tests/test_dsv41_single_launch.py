@@ -24,7 +24,8 @@ class LaunchConfigTests(unittest.TestCase):
         self.assertEqual(cfg['serving'], 'single_engine')
         self.assertEqual(cfg['producer_host_reserve_gib'], 1)
         self.assertEqual(cfg['env_overrides'], GATED_ENV)
-        self.assertNotIn('producer_host_max_gib', cfg)
+        self.assertEqual((cfg['producer_prefill_sweep_tokens'], cfg['producer_prefill_fold_cap_tokens'], cfg['producer_host_max_gib']),
+                         (49152, 61440, 7.75))   # the gated fold sweep plan
 
     def test_1m_is_bf16_growable_at_999424(self):
         cfg = dsv41_single.overlay('1m')
@@ -32,18 +33,19 @@ class LaunchConfigTests(unittest.TestCase):
 
     def test_local_keys_survive_and_gated_keys_win(self):
         local = {'model': 'M.gguf', 'port': 9000, 'env_overrides': {'FOO': '1', 'LLAMADECODE_ENGRAM_CACHE_MB': '2048'},
-                 'producer_host_max_gib': 12, 'context': 4096}
+                 'producer_host_max_gib': 12, 'producer_prefill_sweep_tokens': 98304, 'context': 4096}
         cfg = dsv41_single.overlay('262k', local, model='N.gguf')
         self.assertEqual((cfg['model'], cfg['port'], cfg['context']), ('N.gguf', 9000, 262144))
         self.assertEqual(cfg['env_overrides'], {'FOO': '1', **GATED_ENV})
-        self.assertNotIn('producer_host_max_gib', cfg)   # single-sweep stays off
+        self.assertEqual((cfg['producer_host_max_gib'], cfg['producer_prefill_sweep_tokens']), (7.75, 49152))   # gated fold plan wins
         self.assertEqual(local['env_overrides']['LLAMADECODE_ENGRAM_CACHE_MB'], '2048')   # input untouched
 
     def test_resolved_producer_flags_env_and_sweep(self):
+        fold = {'--prefill-sweep-tokens': '49152', '--prefill-fold-cap-tokens': '61440'}
         for preset, flags in (('262k', {'--context': '262144', '--compressed-cache-bf16': '0',
-                                        '--ctx-cache-precision': 'f32', '--ctx-cache-growable': '1'}),
+                                        '--ctx-cache-precision': 'f32', '--ctx-cache-growable': '1', **fold}),
                               ('1m', {'--context': '999424', '--compressed-cache-bf16': '1',
-                                      '--ctx-cache-precision': 'bf16', '--ctx-cache-growable': '1'})):
+                                      '--ctx-cache-precision': 'bf16', '--ctx-cache-growable': '1', **fold})):
             with self.subTest(preset=preset):
                 with tempfile.TemporaryDirectory() as runtime:
                     row = dsv41_single.resolved({**dsv41_single.overlay(preset), 'runtime_root': runtime})
@@ -51,9 +53,10 @@ class LaunchConfigTests(unittest.TestCase):
                 for key, value in GATED_ENV.items():
                     self.assertEqual(row['producer_env'][key], value)
                 self.assertEqual(row['producer_env']['LLAMADECODE_DS4_DECODE'], '1')
-                self.assertFalse(row['single_sweep']['enabled'])
-                self.assertEqual(row['single_sweep']['capacity_tokens'], 49152)
-                self.assertEqual(row['single_sweep']['max_host_bytes'], row['single_sweep']['base_host_bytes'])
+                self.assertEqual((row['sweep_plan']['policy'], row['sweep_plan']['primary_sweep_tokens'],
+                                  row['sweep_plan']['fold_cap_tokens']), ('fold', 49152, 61440))
+                self.assertEqual(row['sweep_plan']['capacity_tokens'], 49152)   # a short prompt keeps the base bank
+                self.assertGreater(row['sweep_plan']['max_host_bytes'], row['sweep_plan']['base_host_bytes'])
                 self.assertEqual(row['single_engine']['producer_host_reserve_gib'], 1)
 
     def test_write_and_dry_run_cli(self):
