@@ -126,6 +126,8 @@ static void fill(ggml_tensor *t, std::mt19937_64 &rng) {
 static void test_cache(bool bf16) {
     const uint32_t ctx = 8192;
     llama_dsv41_cache_storage cache(native_owners(), ctx, ggml_backend_cpu_buffer_type(), 2 * llama_dsv41_cache_storage::required_bytes(ctx), bf16);
+    // BF16 arm: staging admitted (8 workers, pageable on CPU); F32 arm: not admitted (2 MiB, 1 worker).
+    if (bf16) cache.admit_owner_digest_staging(ld::owner_digest_memo::staging_bytes());
     std::mt19937_64 rng(bf16 ? 3 : 4);
     for (uint32_t l = 0; l < 40; ++l) {
         fill(cache.raw(l), rng);
@@ -151,7 +153,8 @@ static void test_cache(bool bf16) {
         std::vector<std::string> got;
         ok = ok && cache.owner_digests(f, got, nullptr, error) && got == old;
     }
-    expect(ok, (std::string(bf16 ? "BF16" : "F32") + " cache owner digests (new path) == portable SHA of the old bounded reads, position ladder: " + error).c_str());
+    std::printf("cache arm %s admitted=%d\n", bf16 ? "bf16" : "f32", int(bf16));
+    expect(ok, (std::string(bf16 ? "BF16" : "F32") + (bf16 ? " (staging admitted)" : " (not admitted: 2 MiB fallback)") + " cache owner digests (new path) == portable SHA of the old bounded reads, position ladder: " + error).c_str());
 }
 
 int main() {

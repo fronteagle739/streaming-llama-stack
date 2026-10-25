@@ -66,6 +66,9 @@ public:
     // Caller-owned staging (e.g. pinned host memory); the worker count is capped
     // to staging/(2*chunk). Without it each pass uses its own pageable buffer.
     void set_staging(unsigned char*p,size_t bytes){staging=p;staging_size=bytes;}
+    // Upper bound of the pageable fallback buffer (no staging). Default: the
+    // full staging_bytes(); the cache lowers it to 2 MiB until admission.
+    void set_fallback_limit(size_t bytes){fallback_limit=bytes;}
     std::vector<std::string> digests(const wire_plan&plan,const reader&read,bool incremental,uint64_t*hashed_bytes=nullptr){
         const auto&f=plan.frontier;
         const bool use=incremental&&valid&&f.context==memo_context&&f.mode==memo_mode&&f.position>=memo_position;
@@ -92,6 +95,8 @@ public:
         size_t slot_bytes=chunk;std::vector<unsigned char> own;unsigned char*base=staging;
         if(base&&staging_size>=2*chunk)workers=unsigned(std::min<size_t>(workers,staging_size/(2*chunk)));
         else{slot_bytes=size_t(std::min<uint64_t>(chunk,std::max<uint64_t>(64,(biggest+63)/64*64)));
+            slot_bytes=std::max<size_t>(64,std::min(slot_bytes,fallback_limit/2/64*64));
+            workers=unsigned(std::max<size_t>(1,std::min<size_t>(workers,fallback_limit/(2*slot_bytes))));
             own.resize(size_t(workers)*2*slot_bytes);base=own.data();}
         struct pipe{std::mutex m;std::condition_variable cv;struct item{bool full=false,last=false;size_t task=0,bytes=0;}slot[2];};
         std::vector<pipe> pipes(workers);
@@ -150,7 +155,7 @@ public:
     }
     unsigned workers_used()const{return last_workers;}
 private:
-    unsigned char*staging=nullptr;size_t staging_size=0;unsigned last_workers=0;
+    unsigned char*staging=nullptr;size_t staging_size=0,fallback_limit=staging_bytes();unsigned last_workers=0;
     static int slot(const state_span&s){
         if(s.index>=4)return -1;
         if(s.kind==state_kind::compressed)return int(s.index);

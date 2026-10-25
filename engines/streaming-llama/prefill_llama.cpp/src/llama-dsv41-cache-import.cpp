@@ -134,14 +134,17 @@ std::vector<std::string> llama_dsv41_cache_storage::owner_digests_locked(const l
         std::string e;if(read_native_span_locked(s,off,dst,n,e,require_capture,llama_dsv41::owner_digest_memo::chunk))return true;
         std::lock_guard<std::mutex>l(why_lock);if(why.empty())why=e;return false;
     };
-    if(!digest_staging_tried){
+    using memo_t=llama_dsv41::owner_digest_memo;
+    const uint64_t admitted_staging=std::min<uint64_t>(digest_staging_admitted,memo_t::staging_bytes())/(2*memo_t::chunk)*(2*memo_t::chunk);
+    digest_memo.set_fallback_limit(admitted_staging?size_t(admitted_staging):2*1024*1024);
+    if(!digest_staging_tried&&admitted_staging){
         digest_staging_tried=true;
         ggml_backend_dev_t dev=buffer?ggml_backend_buft_get_device(ggml_backend_buffer_get_type(buffer.get())):nullptr;
         ggml_backend_buffer_type_t host=dev?ggml_backend_dev_host_buffer_type(dev):nullptr;
-        if(host)digest_staging.reset(ggml_backend_buft_alloc_buffer(host,llama_dsv41::owner_digest_memo::staging_bytes()));
+        if(host)digest_staging.reset(ggml_backend_buft_alloc_buffer(host,size_t(admitted_staging)));
         if(digest_staging)digest_memo.set_staging(static_cast<unsigned char*>(ggml_backend_buffer_get_base(digest_staging.get())),ggml_backend_buffer_get_size(digest_staging.get()));
-        std::fprintf(stderr,"LLAMADECODE_OWNER_DIGEST_STAGING pinned=%d bytes=%llu chunk=%llu max_workers=%u sha=%s\n",int(bool(digest_staging)),
-            (unsigned long long)(digest_staging?ggml_backend_buffer_get_size(digest_staging.get()):0),(unsigned long long)llama_dsv41::owner_digest_memo::chunk,
+        std::fprintf(stderr,"LLAMADECODE_OWNER_DIGEST_STAGING pinned=%d bytes=%llu admitted_bytes=%llu chunk=%llu max_workers=%u sha=%s\n",int(bool(digest_staging)),
+            (unsigned long long)(digest_staging?ggml_backend_buffer_get_size(digest_staging.get()):0),(unsigned long long)admitted_staging,(unsigned long long)llama_dsv41::owner_digest_memo::chunk,
             llama_dsv41::owner_digest_memo::max_workers,
 #if defined(_WIN32)
             "cng"
@@ -184,6 +187,14 @@ bool llama_dsv41_cache_storage::owner_digests(const llama_dsv41::wire_frontier&f
 
 void llama_dsv41_cache_storage::forget_owner_digests(){
     std::lock_guard<std::mutex>lock(execution_mutex);digest_memo.invalidate();
+}
+
+void llama_dsv41_cache_storage::admit_owner_digest_staging(uint64_t bytes){
+    std::lock_guard<std::mutex>lock(execution_mutex);
+    if(bytes==digest_staging_admitted)return;
+    digest_staging_admitted=bytes;
+    if(digest_staging&&ggml_backend_buffer_get_size(digest_staging.get())>bytes){digest_memo.set_staging(nullptr,0);digest_staging.reset();}
+    digest_staging_tried=false;   // (re)allocate on the next digest pass, within the new admission
 }
 
 bool llama_dsv41_cache_storage::rewind_native_frontier(
