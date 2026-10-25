@@ -6,6 +6,7 @@ extern "C" unsigned long long ggml_backend_cuda_dsv41_pv_strided_queued(void);
 #include <bcrypt.h>
 #include <dxgi1_4.h>
 #include "ggml-cuda.h"
+#include <cuda.h>
 #include "ggml-dsv41-gather-half.h"
 #include "ggml-dsv41-split-f32.h"
 extern "C" uint64_t ggml_backend_cuda_dsv41_pv_view_queued(void);
@@ -274,6 +275,11 @@ int wmain(int argc,wchar_t**argv){
     std::unique_ptr<native_file>payload,receipt;std::unique_ptr<llama_dsv41_sweep>sweep;
     json report={{"schema","dsv41-offline-producer-v1"},{"status","failed"},{"runtime_qualified",false}};
     const auto process_started=clock_type::now();
+    // LLAMADECODE: load every CUDA module at context creation (before admission), so
+    // no module code lands in VRAM mid-sweep. An explicit CUDA_MODULE_LOADING wins.
+    const wchar_t*module_loading_env=_wgetenv(L"CUDA_MODULE_LOADING");
+    const bool module_loading_default=!module_loading_env||!*module_loading_env;
+    if(module_loading_default){_wputenv_s(L"CUDA_MODULE_LOADING",L"EAGER");SetEnvironmentVariableW(L"CUDA_MODULE_LOADING",L"EAGER");}
     try{
         static std::array<char,1024*1024> stderr_storage;
         const char *buffer_env=std::getenv("DS4PERF_STDERR_BUFFER_BYTES");
@@ -529,6 +535,7 @@ int wmain(int argc,wchar_t**argv){
         require(llama_dsv41_host_memory::begin(job_host,job_device),
             "Producer physicalRAM/WDDMcommit/Job admission refused before CUDA initialization");
         report["telemetry"]["before_cuda_available_ram"]=ram_admission(job_host);
+        uint64_t nvml_free_before_cuda=0,nvml_total=0;const bool nvml_before=nvml_free_bytes(nvml_free_before_cuda,nvml_total);
         const auto ordinal=number("--cuda-device");const int devices=ggml_backend_cuda_get_device_count();
         require(devices>0&&ordinal<16&&ordinal<uint64_t(devices),"Explicit CUDA device ordinal is unavailable");
         char description[256]{};ggml_backend_cuda_get_device_description(int(ordinal),description,sizeof(description));std::string gpu=description;
@@ -541,8 +548,20 @@ int wmain(int argc,wchar_t**argv){
         }
         size_t free=0,total=0;ggml_backend_cuda_get_device_memory(int(ordinal),&free,&total);
         report["telemetry"]["before_cuda_device_free"]=free;report["telemetry"]["device_total"]=total;
-        std::fprintf(stderr,"DS4PERF_GPU_JOB_ADMISSION free=%llu total=%llu job=%llu reserve=%llu\n",(unsigned long long)free,(unsigned long long)total,(unsigned long long)job_device,(unsigned long long)gpu_reserve);
-        require(uint64_t(free)>=add(job_device,gpu_reserve),"Producer job exceeds actual selectedGPU free bytes plus explicit reserve");
+        CUmoduleLoadingMode loading_mode{};const bool loading_known=cuModuleGetLoadingMode(&loading_mode)==CUDA_SUCCESS;
+        const char*loading_name=!loading_known?"unknown":loading_mode==CU_MODULE_EAGER_LOADING?"EAGER":loading_mode==CU_MODULE_LAZY_LOADING?"LAZY":"other";
+        // NVML free before any CUDA call minus the CUDA free after context creation:
+        // the context plus (with EAGER) every module's code, now inside the measured free.
+        const uint64_t context_and_modules=nvml_before&&nvml_free_before_cuda>uint64_t(free)?nvml_free_before_cuda-uint64_t(free):0;
+        std::fprintf(stderr,"DS4PERF_GPU_JOB_ADMISSION free=%llu total=%llu job=%llu reserve=%llu measured_admission=%llu module_loading=%s module_loading_source=%s nvml_free_before_cuda=%llu cuda_context_and_module_bytes=%llu\n",
+            (unsigned long long)free,(unsigned long long)total,(unsigned long long)job_device,(unsigned long long)gpu_reserve,
+            (unsigned long long)(uint64_t(free)>gpu_reserve?std::min<uint64_t>(job_device,uint64_t(free)-gpu_reserve):0),loading_name,module_loading_default?"producer_default":"environment",
+            (unsigned long long)nvml_free_before_cuda,(unsigned long long)context_and_modules);
+        report["telemetry"]["module_loading"]=loading_name;report["telemetry"]["module_loading_source"]=module_loading_default?"producer_default":"environment";
+        report["telemetry"]["nvml_free_before_cuda"]=nvml_free_before_cuda;report["telemetry"]["cuda_context_and_module_bytes"]=context_and_modules;
+        // Measured device plan: the sweep admits min(job, free - reserve) against its combined plan.
+        require(uint64_t(free)>gpu_reserve,"Selected GPU free bytes do not exceed the explicit reserve");
+        const uint64_t measured_device_free=uint64_t(free);
         backend.reset(ggml_backend_cuda_init(int(ordinal)));require(bool(backend),"Cannot initialize the explicitly selected RTX5090 backend");
         // DS4COMBO fast switch: every ggml device block lives in one switchable VMM
         // span so a live session can suspend/resume device memory in place.
@@ -627,7 +646,10 @@ int wmain(int argc,wchar_t**argv){
         options.admitted_pinned_device_bytes=args.count("--pinned-device-bytes")?number("--pinned-device-bytes"):0;
         options.admitted_prefetch_device_bytes=args.count("--prefetch-device-bytes")?number("--prefetch-device-bytes"):0;
         report["copy_prefetch_device_bytes"]=options.admitted_prefetch_device_bytes;
-        options.admitted_device_bytes=job_device;options.admitted_host_bytes=job_host-cli_host_bytes-control_host;options.carry.path=args.at("--carry");options.carry.tokens=chunk_tokens;options.stateful_chunks=chunk_option!=0;
+        options.admitted_device_bytes=job_device;options.measured_device_free=measured_device_free;options.device_reserve=gpu_reserve;
+        report["budgets_measured_device"]={{"job_device_bound",job_device},{"measured_device_free",measured_device_free},{"device_reserve",gpu_reserve},
+            {"admitted_device",std::min<uint64_t>(job_device,measured_device_free-gpu_reserve)}};
+        options.admitted_host_bytes=job_host-cli_host_bytes-control_host;options.carry.path=args.at("--carry");options.carry.tokens=chunk_tokens;options.stateful_chunks=chunk_option!=0;
         options.carry.resident_ram=resident_ram;
         require(!args.count("--resident-hidden-final-readback")||args.at("--resident-hidden-final-readback")=="0"||args.at("--resident-hidden-final-readback")=="1","resident-hidden-final-readback requires0/1");
         options.carry.defer_hidden_readback=args.count("--resident-hidden-final-readback")&&args.at("--resident-hidden-final-readback")=="1";
