@@ -466,6 +466,11 @@ struct llama_dsv41_tile_executor::pinned_storage {
         require(!segments.empty()&&segments.back().end()==bytes,"Whole host registration segments do not cover the RAM bank");
         size_t free_before=0,free_after=0,total=0;ok(cudaMemGetInfo(&free_before,&total),"Cannot inspect GPU memory before whole host registration");
         const auto started=clock_type::now();
+        // Test (owner-approved): give page locking working-set quota for the whole bank. The bank's
+        // pages are already resident and VirtualLock'ed, so this consumes no new physical RAM.
+        {uint64_t lo0=0,lo1=0;unsigned long werr=0;const bool raised=llama_dsv41_host_registration::raise_working_set(bytes,lo0,lo1,werr);
+         llama_dsv41_layer_log("LLAMADECODE_HOST_REGISTRATION_WS mode=whole raised=%d extra_bytes=%llu ws_min_before=%llu ws_min_after=%llu win32_error=%lu\n",
+             int(raised),(unsigned long long)bytes,(unsigned long long)lo0,(unsigned long long)lo1,werr);std::fflush(stderr);}
         for(const auto&s:segments){
             const auto e=cudaHostRegister(host_ptr(s),size_t(s.bytes),cudaHostRegisterDefault);
             if(e!=cudaSuccess){
@@ -539,6 +544,7 @@ struct llama_dsv41_tile_executor::pinned_storage {
             llama_dsv41_layer_log("LLAMADECODE_HOST_REGISTRATION_SUMMARY mode=%s registrations=%llu registered_bytes=%llu sync_registrations=%llu sync_ms=%.3f async_hits=%llu async_misses=%llu failed_predictions=%llu whole_segments=%zu\n",
                 llama_dsv41_host_registration::name(host_mode),(unsigned long long)host_registrations,(unsigned long long)host_registered_bytes,(unsigned long long)host_sync,host_sync_ms,
                 (unsigned long long)host_hits,(unsigned long long)host_misses,(unsigned long long)host_failed_predictions,host_whole.size());
+        if(!host_whole.empty())llama_dsv41_host_registration::restore_working_set();
         host_active={};host_spare={};host_whole.clear();host_retire=nullptr;
     }
     void queue(bool to_device,const llama_dsv41_carry_store::ram_lease &lease,uint64_t offset,uint64_t width,ggml_tensor *tensor){

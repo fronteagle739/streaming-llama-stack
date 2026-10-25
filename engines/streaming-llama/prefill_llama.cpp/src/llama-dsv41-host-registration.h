@@ -10,6 +10,12 @@
 #include <vector>
 
 namespace llama_dsv41_host_registration {
+// Whole mode only (Windows): raise the process working-set minimum/maximum by `extra` bytes before
+// registering, so CUDA's page locking of the (already resident, VirtualLock'ed) carry bank has quota.
+// No new physical RAM is consumed: the same pages stay resident. Returns false (and the Win32 error)
+// when Windows refuses; restore_working_set() undoes the raise. Implemented in llama-dsv41-carry.cpp.
+bool raise_working_set(uint64_t extra, uint64_t &min_before, uint64_t &min_after, unsigned long &error);
+void restore_working_set();
 enum class mode : uint8_t { tile = 0, whole = 1, tile_async = 2 };
 inline bool parse(const std::string &s, mode &m) {
     if (s == "tile") { m = mode::tile; return true; }
