@@ -59,15 +59,23 @@ def engram_prompt_bytes(rows):
     """Whole-prompt Engram row cache admission (llama_dsv41_prefill::engram_prompt_bytes)."""
     return (4<<20)+rows*48*268
 
-def prefill_plan(cfg,prompt_tokens):
+def prefill_plan(cfg,prompt_tokens,available=None):
     """LLAMADECODE single sweep (owner: one prompt = one weight sweep). The producer's capacity C
     (--prefill-chunk-tokens) is sized from the prompt: C = max(49152, prompt), raising the producer
     host budget by exactly the extra carry bank + Engram bytes, up to producer_host_max_gib (default:
     producer_host_budget_gib, i.e. no raise and today's 49152). A prompt over the largest C that fits
-    is split by the producer into near-equal sweeps. Returns C, the raised budget and the deltas."""
+    is split by the producer into near-equal sweeps. Returns C, the raised budget and the deltas.
+    `available` (physical RAM measured at launch) also caps the budget at available minus
+    producer_host_reserve_gib (default 5 GiB: the 4 GiB low-RAM abort floor plus 1 GiB of
+    Studio/daemon headroom), so a raise can never run the box into that floor; the budget is
+    page-rounded (Windows keeps a hard-minimum working set only in whole pages)."""
     base=int(cfg.get('producer_host_budget_gib',8)*(1<<30))
     top=int(cfg.get('producer_host_max_gib',cfg.get('producer_host_budget_gib',8))*(1<<30))
     if top<base:raise ValueError('producer_host_max_gib is below producer_host_budget_gib')
+    capped_by='producer_host_max_gib'
+    if available is not None:
+        room=int(available)-int(cfg.get('producer_host_reserve_gib',5)*(1<<30))
+        if room<top:top=max(base,room);capped_by='available_ram'
     extra=lambda c:(carry_bank_bytes(c)-carry_bank_bytes(LEGACY_SWEEP),engram_prompt_bytes(c)-engram_prompt_bytes(LEGACY_SWEEP))
     limit=min(1<<20,int(cfg['context'])-1)
     want=min(max(LEGACY_SWEEP,int(prompt_tokens)),limit)
@@ -78,9 +86,17 @@ def prefill_plan(cfg,prompt_tokens):
             if base+sum(extra(mid))<=top:lo=mid
             else:hi=mid-1
         want=lo
+        # Splitting anyway: reserve only the near-equal chunk (less locked RAM, more margin).
+        from studio.dsv41_session_contract import split_prefill
+        want=max(LEGACY_SWEEP,split_prefill(int(prompt_tokens),want))
     carry,engram=extra(want)
-    return dict(capacity=want,host_bytes=base+carry+engram,carry_delta=carry,engram_delta=engram,base_host_bytes=base,max_host_bytes=top,
-                prompt_tokens=int(prompt_tokens),single_sweep=int(prompt_tokens)<=want)
+    host=base+carry+engram
+    if host!=base:host=-(-host//65536)*65536   # whole pages (64 KiB) for the hard-minimum working set
+    single=int(prompt_tokens)<=want
+    return dict(capacity=want,host_bytes=host,carry_delta=carry,engram_delta=engram,base_host_bytes=base,max_host_bytes=top,
+                available_bytes=available,capped_by=capped_by,prompt_tokens=int(prompt_tokens),single_sweep=single,
+                reason=None if single else 'one sweep of %d tokens needs %d host bytes; the cap is %d (%s); near-equal sweeps of %d'%(
+                    int(prompt_tokens),base+sum(extra(min(max(LEGACY_SWEEP,int(prompt_tokens)),limit))),top,capped_by,want))
 
 def stall_seconds(cfg):
     """No-progress window for a producer operation. A long operation (a 262K-token prefill, a long
@@ -109,11 +125,13 @@ class ComboProducer:
         tier=cfg.get('producer_profile','ultra')
         if tier not in ('accurate','fast','ultra'):raise ValueError('Combo producer profile must be accurate, fast or ultra (original weights; no HYPER)')
         args=dict(profile(tier)['arguments'])
-        plan=prefill_plan(cfg,len(tokens));self.prefill_plan=plan;host_bytes=plan['host_bytes']
+        import psutil
+        plan=prefill_plan(cfg,len(tokens),psutil.virtual_memory().available);self.prefill_plan=plan;host_bytes=plan['host_bytes']
         if plan['capacity']!=LEGACY_SWEEP:   # absent a raise the argv stays today's exactly
             args['--prefill-chunk-tokens']=str(plan['capacity']);args['--job-host-bytes']=str(host_bytes)
             for key,delta in (('--carry-host-bytes',plan['carry_delta']),('--provider-host-bytes',plan['engram_delta']),('--engram-prefetch-bytes',plan['engram_delta'])):
                 args[key]=str(int(args[key])+delta)
+        if not plan['single_sweep']:print('LLAMADECODE_PREFILL_SINGLE_SWEEP_REFUSED '+plan['reason'],flush=True)
         print('LLAMADECODE_PREFILL_BUDGET '+json.dumps(plan),flush=True)
         precision,growable=ctx_cache(cfg)
         args.update({'--context':str(cfg['context']),'--capture-dspark':'0','--compressed-cache-bf16':'1' if precision=='bf16' else '0',
