@@ -8,6 +8,8 @@
 #define PSAPI_VERSION 2
 #endif
 #include <psapi.h>
+#include <atomic>
+#include <chrono>
 #include <cstdint>
 #include <cstdio>
 #include <limits>
@@ -55,16 +57,66 @@ inline void report(const char *event, const state &s, uint64_t host = 0, uint64_
     if (n > 0) { DWORD done; WriteFile(GetStdHandle(STD_ERROR_HANDLE), text,
         DWORD(size_t(n) < sizeof(text) ? size_t(n) : sizeof(text) - 1), &done, nullptr); }
 }
+// Owner 2026-10-25 runtime rule: NO PAGING, not a free-RAM number ("I dont want a
+// 4gb safety stop i just dont want it paging"). Admission (begin) still requires the
+// plan to fit physical RAM and commit. At runtime only real paging stops the
+// producer: global pagefile usage rising more than paging_limit over the launch
+// baseline (studio.job_paging.GLOBAL_PAGING_LIMIT, as the vendor session watch
+// does since 2ba9337). Free RAM below the reserve, commit near its limit or private
+// bytes over the Job plan with zero paging are recorded, never fatal.
+constexpr uint64_t paging_limit = UINT64_C(256000000);   // studio.job_paging.GLOBAL_PAGING_LIMIT
+inline std::atomic<bool> paging_stop{false};
+inline std::atomic<uint64_t> paging_baseline{UINT64_MAX}, paging_growth_peak{0}, low_memory_events{0};
+// Pure verdicts (tests/dsv41_host_memory_paging.cpp).
+inline uint64_t paging_growth(uint64_t baseline, uint64_t now) { return now > baseline ? now - baseline : 0; }
+inline bool paging_exceeded(uint64_t baseline, uint64_t now, uint64_t limit = paging_limit) {
+    return paging_growth(baseline, now) > limit;
+}
+inline bool low_memory(const state &s) { return !fits(s, 0, 0); }
+// Global pagefile bytes in use (EnumPageFilesW TotalInUse pages; same source as
+// studio.job_paging.paging_bytes). Private commitment is not paging.
+inline BOOL CALLBACK pagefile_visit(LPVOID context, PENUM_PAGE_FILE_INFORMATION info, LPCWSTR) {
+    *static_cast<uint64_t *>(context) += uint64_t(info->TotalInUse); return TRUE;
+}
+inline bool pagefile_in_use(uint64_t &bytes) {
+    uint64_t pages = 0; SYSTEM_INFO si{}; GetSystemInfo(&si);
+    if (!EnumPageFilesW(pagefile_visit, &pages)) return false;
+    bytes = pages * uint64_t(si.dwPageSize); return true;
+}
+inline void report_paging(const char *event, uint64_t baseline, uint64_t now) {
+    std::fprintf(stderr, "DSV41_HOST_MEMORY_%s pagefile_in_use_bytes=%llu baseline_bytes=%llu growth_bytes=%llu limit_bytes=%llu low_memory_events=%llu\n",
+        event, (unsigned long long)now, (unsigned long long)baseline, (unsigned long long)paging_growth(baseline, now),
+        (unsigned long long)paging_limit, (unsigned long long)low_memory_events.load());
+    std::fflush(stderr);
+}
+inline bool set_paging_baseline() {
+    uint64_t now = 0; if (!pagefile_in_use(now)) return false;
+    paging_baseline.store(now); report_paging("PAGING_BASELINE", now, now); return true;
+}
+// false only when paging was detected (or cannot be measured); sampled at most every 250 ms.
 inline bool live() {
+    if (paging_stop.load()) return false;
+    static std::atomic<int64_t> last{0};
+    const int64_t t = std::chrono::duration_cast<std::chrono::milliseconds>(std::chrono::steady_clock::now().time_since_epoch()).count();
+    if (t - last.load() < 250) return true;
+    last.store(t);
     state s;
-    if (!read(s)) { report("QUERY_FAILED", s); return false; }
-    if (!fits(s, 0, 0)) { report("REFUSED_LIVE_RESERVE", s); return false; }
+    if (read(s) && low_memory(s) && low_memory_events.fetch_add(1) == 0) report("LOW_MEMORY_RECORDED", s);
+    uint64_t now = 0;
+    if (!pagefile_in_use(now)) { report("PAGING_QUERY_FAILED", s); paging_stop.store(true); return false; }
+    uint64_t base = paging_baseline.load();
+    if (base == UINT64_MAX) { paging_baseline.store(now); base = now; }
+    const uint64_t growth = paging_growth(base, now);
+    if (growth > paging_growth_peak.load()) paging_growth_peak.store(growth);
+    if (paging_exceeded(base, now)) { report_paging("PAGING_STOP", base, now); paging_stop.store(true); return false; }
     return true;
 }
+// Samples paging at 4 Hz. On paging it only flags the stop: the producer stops
+// gracefully at its next boundary (should_stop); never a TerminateProcess.
 inline DWORD WINAPI watch(void *) {
     for (;;) {
         Sleep(250);
-        if (!live()) { TerminateProcess(GetCurrentProcess(), 78); return 78; }
+        if (!live()) return 78;
     }
 }
 inline bool begin(uint64_t host, uint64_t device) {
@@ -73,6 +125,7 @@ inline bool begin(uint64_t host, uint64_t device) {
     state s;
     if (!read(s)) { report("QUERY_FAILED", s); return false; }
     if (!fits(s, host, device)) { report("REFUSED_PLAN", s, host, device); return false; }
+    if (!set_paging_baseline()) { report("PAGING_QUERY_FAILED", s, host, device); return false; }
     const uint64_t increment = s.commit_limit - reserve - s.commit;
     if (increment > UINT64_MAX - s.private_bytes) return false;
     private_limit = s.private_bytes + increment;
