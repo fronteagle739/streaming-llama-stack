@@ -69,31 +69,38 @@ int main() {
     expect(counts(v) == std::vector<uint32_t>{49153}, "N = S + 1: one folded sweep of 49,153");
     v = p::plan_sweeps(98304, 49152, 49152);
     expect(counts(v) == std::vector<uint32_t>{49152, 49152}, "N = 2S: two S sweeps, nothing to fold");
+    // RAM-limited (S + r > C, no fold cap hit): rebalance the final passes, never a tiny tail.
     f = p::fold(230000, 49152, 81000);
-    expect(f.count == 5 && f.last == 33392 && f.tail, "230,000 at S 49,152, C 81,000: fold 82,544 over cap -> 4 x 49,152 + 33,392 tail");
-    v = p::plan_sweeps(230000, 81000, 49152);
-    expect(counts(v) == std::vector<uint32_t>{49152, 49152, 49152, 49152, 33392} && starts_ok(v, 49152), "fold over the cap: the tail is its own sweep");
-    f = p::fold(110000, 49152, 60847);
-    expect(f.tail && f.count == 3 && f.last == 11696, "110,000 one row over the cap: 49,152 + 49,152 + 11,696 tail");
+    expect(f.rebalance && !f.tail && f.count == 5 && f.pass == 45056 && f.last == 37488, "230,000 at S 49,152, C 81,000: 82,544 over C -> 3 x 49,152 + 45,056 + 37,488");
+    v = p::plan_sweeps(110000, 60847, 49152);
+    expect(counts(v) == std::vector<uint32_t>{49152, 32768, 28080}, "110,000 one row over the capacity: 49,152 + 32,768 + 28,080 (was + 11,696 tail)");
     expect(!p::fold(110000, 49000, 1048576).count, "S not a 4096 multiple: refused");
     expect(!p::fold(110000, 65536, 49152).count && p::plan_sweeps(110000, 49152, 65536).empty(), "S above the capacity: refused");
     expect(!p::fold(110000, 0, 1048576).count, "S = 0 is not fold");
     v = p::plan_sweeps(30000, 49152, 65536);
     expect(counts(v) == std::vector<uint32_t>{30000}, "N < S with S above the capacity: one sweep of N");
     expect(p::plan_sweeps(60000, 49152, 65536).empty(), "N <= S but above the capacity: refused");
+    // Invariants: cover N contiguously, no pass > C, every start 4096-aligned, no pass < 4096
+    // unless N is, the primary sweeps first; over N x C x (S, F).
+    uint64_t checked = 0;
     for (uint32_t n = 1; n < 400000; n += 977) {
-        for (uint32_t sw : {4096u, 49152u, 65536u}) {
-            for (uint32_t cap : {sw, sw + 20000u, 2 * sw}) {
-                const auto w = p::plan_sweeps(n, cap, sw);
-                uint64_t total = 0; for (const auto &e : w) total += e.count;
-                bool ok = !w.empty() && total == n && starts_ok(w, sw);
-                for (size_t i = 0; ok && i + 1 < w.size(); ++i) ok = w[i].count == sw;
-                ok = ok && w.back().count <= cap && (w.size() == 1 || w.back().count > 0);
-                if (!ok) { expect(false, "fold invariants"); return 1; }
+        for (const auto sf : {std::pair<uint32_t, uint32_t>{49152, 0}, {49152, 61440}, {65536, 0}}) {
+            for (uint32_t cap = sf.first; cap <= 2 * sf.first + 4096; cap += 1517) {
+                const auto w = p::plan_sweeps(n, cap, sf.first, sf.second);
+                uint64_t next = 0; bool ok = !w.empty();
+                for (size_t i = 0; ok && i < w.size(); ++i) {
+                    ok = w[i].first == next && w[i].first % 4096 == 0 && w[i].count <= cap && (w[i].count >= 4096 || n < 4096 || w.size() == 1);
+                    next += w[i].count;
+                }
+                ok = ok && next == n;
+                for (size_t i = 0; ok && i + 2 < w.size(); ++i) ok = w[i].count == sf.first || w[i + 1].count != sf.first;   // S sweeps lead
+                if (!ok) { std::printf("n=%u cap=%u S=%u F=%u\n", n, cap, sf.first, sf.second); expect(false, "fold invariants"); return 1; }
+                ++checked;
             }
         }
     }
-    expect(true, "fold invariants over 410 x 3 x 3 prompts (cover, S sweeps at i*S, last <= cap)");
+    std::printf("fold invariant cases: %llu\n", (unsigned long long)checked);
+    expect(true, "fold invariants (cover, <= C, aligned starts, no pass < 4096, S first) over N x C x (S, F)");
     // Fold cap F = 61,440 (owner, measured): fold only while S + r <= F.
     auto capped = [&](uint32_t n) { return counts(p::plan_sweeps(n, 1048576, 49152, 61440)); };
     expect(capped(103189) == std::vector<uint32_t>{49152, 54037}, "fold cap: 103,189 -> 49,152 + 54,037");
@@ -104,7 +111,15 @@ int main() {
     expect(capped(120000) == std::vector<uint32_t>{49152, 49152, 21696}, "fold cap: 120,000 -> 49,152 + 49,152 + 21,696");
     expect(capped(30000) == std::vector<uint32_t>{30000} && capped(98304) == std::vector<uint32_t>{49152, 49152}, "fold cap: N < S and N = 2S unchanged");
     expect(p::fold(93668, 49152, 1048576, 61440).tail && !p::fold(93668, 49152, 1048576).tail, "fold cap absent (0): today's fold");
-    expect(counts(p::plan_sweeps(110000, 60000, 49152, 61440)) == std::vector<uint32_t>{49152, 49152, 11696}, "capacity below the fold cap still bounds the fold");
+    expect(counts(p::plan_sweeps(110000, 60000, 49152, 61440)) == std::vector<uint32_t>{49152, 32768, 28080}, "capacity below the fold cap: rebalanced, no tiny tail");
+    // Owner examples (fold cap 61,440).
+    expect(counts(p::plan_sweeps(103189, 53000, 49152, 61440)) == std::vector<uint32_t>{49152, 28672, 25365}, "103,189 at C 53,000 -> 49,152 + 28,672 + 25,365 (was 49,152 + 49,152 + 4,885)");
+    expect(counts(p::plan_sweeps(103189, 54037, 49152, 61440)) == std::vector<uint32_t>{49152, 54037} && counts(p::plan_sweeps(103189, 70000, 49152, 61440)) == std::vector<uint32_t>{49152, 54037},
+           "103,189 at C >= 54,037 -> 49,152 + 54,037");
+    expect(counts(p::plan_sweeps(93668, 53000, 49152, 61440)) == std::vector<uint32_t>{49152, 44516}, "93,668 -> 49,152 + 44,516 (fold cap)");
+    expect(counts(p::plan_sweeps(150000, 50000, 49152, 61440)) == std::vector<uint32_t>{49152, 49152, 28672, 23024}, "150,000 at C 50,000 -> 2 x 49,152 + 28,672 + 23,024");
+    f = p::fold(103189, 49152, 53000, 61440);
+    expect(f.rebalance && !f.tail && f.passes == 2, "rebalance flagged, not a tail");
     // Absent option: the sweep list is exactly today's split().
     for (uint32_t n = 1; n < 400000; n += 977) {
         for (uint32_t cap : {49152u, 61440u, 107868u, 127000u}) {
