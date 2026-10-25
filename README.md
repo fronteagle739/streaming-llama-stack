@@ -86,7 +86,9 @@ Opt-in **approximate YOCO** single-engine launches:
 (native `--yoco-keep 140`). Default `0` preserves the existing path. Layer 20
 runs in full; non-final sweeps omit layers 21-39's weight reads and compute,
 and the final sweep evaluates their last 140 positions. This changes model
-outputs and is not yet GPU-qualified. Images, verify, all-position scoring,
+outputs. The [RTX qualification](docs/ULTRAYOCO_QUALIFICATION.md) passed flag-off
+payload identity, 43K/103K timing, G-b quality, recall and a short 1M-context
+WebUI two-turn check. Images, verify, all-position scoring,
 decode and append-via-decode use full evaluation. Remote session export,
 persistence and rewind are refused while enabled; edits re-prefill locally.
 Long live appends re-prefill as one logical call. Shipping RAM budgets remain.
