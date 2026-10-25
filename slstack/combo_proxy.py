@@ -357,7 +357,8 @@ def guarded(cfg,config):
         
         owner_pid=owner.pid,owner_created=owner.create_time(),stop=str(root/('server-'+run_id+'.stop')),
         log=str(root/('server-'+run_id+'.log')),receipt=str(root/('server-'+run_id+'.json')),paging_telemetry=True,
-        gpu_window_file=str(window),gpu_run_id=run_id,gpu_hold_file=cfg['hold_file'])
+        gpu_window_file=str(window),gpu_run_id=run_id,gpu_hold_file=cfg['hold_file'],
+        gpu_window_stall_seconds=cfg.get('gpu_window_stall_seconds',30))
     from .envvars import split_secrets
     atomic_json(root/('server-'+run_id+'.spec.json'),dict(spec,env=split_secrets(env)[0]))   # the token stays in memory
     return supervise(spec)

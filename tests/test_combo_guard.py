@@ -47,7 +47,7 @@ class GuardTest(unittest.TestCase):
                         line.replace('; no Studio restart','')):
             self.assertTrue(reservation_admission([changed],7,2,available=32*2**30)[0])
 
-    def run_cpu(self,foreign=False,pages=0,dynamic=None,owned_pages=0,window_denials=0,duration=.3):
+    def run_cpu(self,foreign=False,pages=0,dynamic=None,owned_pages=0,window_denials=0,duration=.3,window_stall=30):
         root=Path(os.environ['STUDIO_RUNTIME_ROOT']);nonce=uuid.uuid4().hex
         prefix=root/('guard-cpu-'+nonce)
         holds=prefix.with_suffix('.holds')
@@ -60,6 +60,7 @@ class GuardTest(unittest.TestCase):
         if dynamic is not None:
             spec.pop('gpu_lease_identity');spec.pop('gpu')
             window=prefix.with_suffix('.window.json')
+            spec['gpu_window_stall_seconds']=window_stall
             spec.update(gpu_window_file=str(window),gpu_run_id=nonce,gpu_hold_file=str(holds))
             spec['env']['PYTHONPATH']=str(Path(__file__).resolve().parents[1])
             source=('import os,time,psutil; from slstack.journal import atomic_json; '
@@ -123,7 +124,7 @@ class GuardTest(unittest.TestCase):
         self.assertIn('preempted by foreign ACTIVE hold',proof['reason'])
         self.assertGreater(proof['gpu_window_permission_errors'],0)
 
-    def test_cached_expired_window_still_stops_during_denial(self):
+    def test_cached_expired_heartbeat_waits_for_read_progress_during_denial(self):
         original_read=GPUWindowReader.read
         def cached_then_denied(reader):
             if reader.window is None:
@@ -132,16 +133,24 @@ class GuardTest(unittest.TestCase):
                 return original_read(reader)
         with patch('slstack.guard.GPUWindowReader.read',cached_then_denied):
             code,proof=self.run_cpu(dynamic='expired')
-        self.assertEqual(code,1)
-        self.assertIn('GPU request window made no progress',proof['reason'])
+        self.assertEqual(code,0)
+        self.assertIsNone(proof['reason'])
         self.assertGreater(proof['gpu_window_permission_errors'],0)
 
     def test_persistent_window_denial_still_stops_owned_job(self):
-        code,proof=self.run_cpu(dynamic='active',window_denials=100,duration=3)
+        code,proof=self.run_cpu(dynamic='active',window_denials=100,duration=3,window_stall=.3)
         self.assertEqual(code,1)
         self.assertIn('GPU request window metadata refused: [Errno 13]',proof['reason'])
         self.assertGreater(proof['gpu_window_permission_errors'],1)
         self.assertLess(proof['elapsed_s'],3)
+        self.assertTrue(proof['release_allowed'])
+
+    def test_denial_longer_than_one_second_retries_until_owned_child_exits(self):
+        code,proof=self.run_cpu(dynamic='active',window_denials=1000,duration=2.5)
+        self.assertEqual(code,0);self.assertIsNone(proof['reason'])
+        self.assertGreater(proof['gpu_window_permission_errors'],15)
+        self.assertGreater(proof['elapsed_s'],2.4)
+        self.assertEqual(proof['gpu_window_stall_seconds'],30)
         self.assertTrue(proof['release_allowed'])
 
     def test_foreign_hold_stops_only_the_owned_cpu_job(self):
