@@ -1,7 +1,7 @@
 """LLAMADECODE single sweep: capacity/budget plan, negotiated prefill maximum, near-equal split."""
 import unittest
 from slstack.native_broker import vendor
-from slstack.combo_producer import prefill_plan, carry_bank_bytes, engram_prompt_bytes
+from slstack.combo_producer import prefill_plan, fold_sweeps, carry_bank_bytes, engram_prompt_bytes
 
 vendor()
 from studio.dsv41_session_contract import command, negotiate_prefill, split_prefill, MODEL_SHA256, Refused
@@ -58,6 +58,49 @@ class PrefillPlan(unittest.TestCase):
 
     def test_cap_below_base_refused(self):
         with self.assertRaises(ValueError):prefill_plan(dict(CFG, producer_host_max_gib=6), 1000)
+
+
+FOLD = dict(CFG, producer_host_max_gib=13.0, producer_prefill_sweep_tokens=49152)
+
+
+class Fold(unittest.TestCase):
+    def test_rule(self):
+        self.assertEqual(fold_sweeps(110000, 49152, 1 << 20), ([49152, 60848], False))
+        self.assertEqual(fold_sweeps(93668, 65536, 1 << 20), ([93668], False))
+        self.assertEqual(fold_sweeps(30000, 49152, 49152), ([30000], False))
+        self.assertEqual(fold_sweeps(49152, 49152, 49152), ([49152], False))
+        self.assertEqual(fold_sweeps(49153, 49152, 1 << 20), ([49153], False))
+        self.assertEqual(fold_sweeps(98304, 49152, 49152), ([49152, 49152], False))
+        self.assertEqual(fold_sweeps(230000, 49152, 81000), ([49152] * 4 + [33392], True))
+
+    def test_plan_examples(self):
+        p = prefill_plan(FOLD, 109000)
+        self.assertEqual((p['policy'], p['sweeps'], p['capacity'], p['fold_tail']), ('fold', [49152, 59848], 59848, False))
+        self.assertEqual(p['carry_delta'], carry_bank_bytes(59848) - carry_bank_bytes(49152))
+        self.assertEqual(p['engram_delta'], (59848 - 49152) * 12864)
+        self.assertEqual(p['host_bytes'], -(-(int(6.25 * 2**30) + p['carry_delta'] + p['engram_delta']) // 65536) * 65536)
+        p = prefill_plan(FOLD, 60000)
+        self.assertEqual((p['sweeps'], p['capacity'], p['single_sweep']), ([60000], 60000, True))
+        p = prefill_plan(FOLD, 110000)
+        self.assertEqual((p['sweeps'], p['capacity']), ([49152, 60848], 60848))
+        p = prefill_plan(FOLD, 16000)
+        self.assertEqual((p['sweeps'], p['capacity'], p['host_bytes']), ([16000], 49152, int(6.25 * 2**30)))
+
+    def test_fold_over_cap_is_a_tail(self):
+        p = prefill_plan(dict(FOLD, producer_host_max_gib=7.0), 110000)   # cap below 60,848 rows
+        self.assertTrue(p['fold_tail'])
+        self.assertEqual((p['sweeps'], p['capacity']), ([49152, 49152, 11696], 49152))
+        self.assertIn('remainder is its own sweep', p['reason'])
+
+    def test_bad_sweep_refused(self):
+        for bad in (0, 49000, -4096, 1 << 21, 49152.0):
+            with self.assertRaises(ValueError):prefill_plan(dict(FOLD, producer_prefill_sweep_tokens=bad), 100000)
+        with self.assertRaises(ValueError):prefill_plan(dict(FOLD, producer_host_max_gib=6.25, producer_prefill_sweep_tokens=65536), 100000)
+
+    def test_absent_is_today(self):
+        for n in (1, 14859, 49152, 60000, 103319, 109000, 224588):
+            for cfg in (CFG, SS):
+                self.assertNotIn('policy', prefill_plan(cfg, n))
 
 
 class Negotiation(unittest.TestCase):
