@@ -66,15 +66,16 @@ def prefill_plan(cfg,prompt_tokens,available=None):
     producer_host_budget_gib, i.e. no raise and today's 49152). A prompt over the largest C that fits
     is split by the producer into near-equal sweeps. Returns C, the raised budget and the deltas.
     `available` (physical RAM measured at launch) also caps the budget at available minus
-    producer_host_reserve_gib (default 5 GiB: the 4 GiB low-RAM abort floor plus 1 GiB of
-    Studio/daemon headroom), so a raise can never run the box into that floor; the budget is
+    producer_host_reserve_gib (default 1 GiB of headroom for Studio/daemon/OS growth; owner rule
+    2026-10-25: no fixed free-RAM stop, the rule is no paging), so the working set plus everything
+    else fits physical RAM and stays resident (hard-minimum working set); the budget is
     page-rounded (Windows keeps a hard-minimum working set only in whole pages)."""
     base=int(cfg.get('producer_host_budget_gib',8)*(1<<30))
     top=int(cfg.get('producer_host_max_gib',cfg.get('producer_host_budget_gib',8))*(1<<30))
     if top<base:raise ValueError('producer_host_max_gib is below producer_host_budget_gib')
     capped_by='producer_host_max_gib'
     if available is not None:
-        room=int(available)-int(cfg.get('producer_host_reserve_gib',5)*(1<<30))
+        room=int(available)-int(cfg.get('producer_host_reserve_gib',1)*(1<<30))
         if room<top:top=max(base,room);capped_by='available_ram'
     extra=lambda c:(carry_bank_bytes(c)-carry_bank_bytes(LEGACY_SWEEP),engram_prompt_bytes(c)-engram_prompt_bytes(LEGACY_SWEEP))
     limit=min(1<<20,int(cfg['context'])-1)

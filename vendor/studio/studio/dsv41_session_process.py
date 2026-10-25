@@ -74,6 +74,14 @@ class Producer:
             native = _Native()
         self.session, self.native = (session, native)
         self.host_bytes, self.floor = (host_bytes, physical_floor)
+        # Owner 2026-10-25: the rule is NO PAGING, not a free-RAM number. Admission still requires the
+        # budget to fit physical RAM; at runtime only real paging (global pagefile usage rising above
+        # Studio's GLOBAL_PAGING_LIMIT over the launch baseline) stops the producer. Low free RAM or RSS
+        # above the planned budget with zero paging is recorded, not fatal.
+        from .job_paging import paging_bytes, GLOBAL_PAGING_LIMIT
+        self._paging_bytes, self._paging_limit = paging_bytes, GLOBAL_PAGING_LIMIT
+        self._paging0 = paging_bytes(); self.paging_growth = 0; self._paging_tick = 0
+        self.budget_breaches = 0; self.first_budget_breach = None
         self.operation_seconds, self.idle_seconds = (operation_seconds, idle_seconds)
         self.cancelled = cancelled or (lambda: False)
         self.runtime_check = runtime_check
@@ -172,7 +180,15 @@ class Producer:
                 self.peak_rss = max(self.peak_rss, rss)
                 if self.stall_seconds and now_tick(self):self._note_tree_progress()
                 self.minimum_available = min(self.minimum_available, available)
-                require(available >= self.floor and rss <= self.host_bytes, 'Persistent producer host/floor budget failed')
+                if available < self.floor or rss > self.host_bytes:
+                    self.budget_breaches += 1
+                    if self.first_budget_breach is None:
+                        self.first_budget_breach = dict(available=available, rss=rss, floor=self.floor, host_budget=self.host_bytes)
+                self._paging_tick += 1
+                if self._paging_tick % 10 == 0:   # ~1 Hz
+                    self.paging_growth = max(self.paging_growth, self._paging_bytes() - self._paging0)
+                    require(self.paging_growth <= self._paging_limit,
+                            'Persistent producer stopped: paging detected (pagefile usage rose %d bytes)' % self.paging_growth)
                 now = time.monotonic()
                 deadline = self.deadline
                 if deadline is not None:require(operation_live(now, deadline, self.last_progress, self.stall_seconds), 'Persistent producer made no progress within its stall window')
@@ -424,7 +440,7 @@ class Producer:
             time.sleep(0.01)
         exited = self.job is None or self.job.poll() is not None
         empty = self.job is None or self.job.active() == 0
-        self.receipt = dict(session=self.session, host_budget=self.host_bytes, physical_floor=self.floor, peak_rss=self.peak_rss, minimum_available_ram=self.minimum_available, failure=self.failure, owned_pid=pid, owned_job_empty=empty, owned_process_signaled=exited)
+        self.receipt = dict(session=self.session, host_budget=self.host_bytes, physical_floor=self.floor, peak_rss=self.peak_rss, minimum_available_ram=self.minimum_available, paging_growth=self.paging_growth, budget_breaches=self.budget_breaches, first_budget_breach=self.first_budget_breach, failure=self.failure, owned_pid=pid, owned_job_empty=empty, owned_process_signaled=exited)
         with self.job_lock:
             if self.job:
                 self.job.close()
