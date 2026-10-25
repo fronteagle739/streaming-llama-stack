@@ -36,6 +36,7 @@ KEPT = ('gpu_uuid', 'gpu_idle_max_mib', 'hold_file', 'task', 'lease_minutes', 'r
         'min_available_gib', 'job_commit_gib', 'context', 'model', 'model_name', 'producer_host_budget_gib',
         'producer_profile', 'producer_sha256', 'producer_source_revision', 'producer_fixed_direct_open', 'env_overrides',
         'producer_graceful_shutdown_seconds', 'host', 'port', 'ctx_cache_precision', 'ctx_cache_growable',
+        'producer_host_reserve_gib',
         'comfyui_models', 'studio_python')  # envvars.json placeholders the proxy's studio/producer scopes expand
 
 
@@ -100,7 +101,8 @@ def stack_config(cfg):
     except (OSError, subprocess.CalledProcessError):revision = 'unknown'
     result = serving_config(base, runtime_root=runtime / 'single-engine', studio_root=path(cfg['studio_root']),
         llama_producer=producer, library_directories=[producer.parent, *[path(p) for p in cfg.get('producer_library_directories', [])]],
-        spread_file=path(cfg['cache_affinity_spread_file']) if cfg.get('cache_affinity_spread_file') else None,
+        # The packaged 1017 routing calibration, as on the native path: quality/speed needs it.
+        spread_file=path(cfg.get('cache_affinity_spread_file') or 'presets/dsv41-affinity-spreads.txt'),
         model_receipt=path(cfg['model_receipt']) if cfg.get('model_receipt') else None, revision=revision,
         host_budget_gib=cfg['host_budget_gib'] - .25)
     result.update(producer_sha256=sha256(producer), producer_source_revision=revision)

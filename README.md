@@ -22,7 +22,35 @@ Without a Mac, `./slstack.ps1 start --config my.local.json --webui` (or `--model
 - **Images and video with the single engine:** before a media job the producer exits gracefully and frees the GPU. Afterwards it is relaunched on the same conversation tokens, which means **a full prefill of the conversation again** (the producer has no state export yet). The next turn then appends only its new tokens. The native path instead saves and restores its exact chat state without a prefill.
 - **Stop:** press Ctrl-C in the `start` window. The router asks the engine to shut down gracefully: the producer (or the native server) exits, drains DirectStorage and frees GPU and host memory.
 
-The [single-RTX walkthrough](examples/WALKTHROUGH.md) records a fresh-clone install, chat, model-made quality/speed change and image swap with screenshots; those receipts are from the native path, and the single-engine rerun is pending.
+### DSV4.1 single engine: 262K and 1M launch scripts
+
+Two scripts start the single engine through `slstack start` with the gated configurations. Each one writes `runtime/dsv41-single-<preset>.local.json` (your local config plus the settings below), starts the stack detached, waits until the router answers and prints the URL, log, health check and shutdown command.
+
+| | `scripts/start-dsv41-single-262k.ps1` | `scripts/start-dsv41-single-1m.ps1` |
+|---|---|---|
+| Context | 262,144 tokens | 999,424 tokens (the largest growable bf16 context the producer admits) |
+| Context cache | f32, growable (full L2 expert tier) | bf16, growable |
+
+Both use DirectStorage read parts 8, a 512 MiB VRAM reserve beside the L2 expert tier, the default quality/speed setting, single-sweep prefill off (49,152-token sweeps; `producer_host_max_gib` is removed if your config sets it), `producer_host_reserve_gib` 1, and Engram early load `auto` with no Engram row cache (`LLAMADECODE_ENGRAM_CACHE_MB=0`). The settings live in `scripts/dsv41_single.py`.
+
+```powershell
+./slstack.ps1 install --all                 # build once (producer, ds4-decode.dll, chat UI)
+./slstack.ps1 install --all --check
+# my.local.json holds at least {"model": "<path>/DeepSeek-V4.1-Flash-1017-Q4-v41.gguf"} (see step 3)
+powershell -File scripts/start-dsv41-single-262k.ps1 -WebUI          # endpoint and web UI
+powershell -File scripts/start-dsv41-single-1m.ps1                   # endpoint only, 1M context
+powershell -File scripts/start-dsv41-single-262k.ps1 -DryRun         # print the resolved settings; start nothing
+powershell -File scripts/start-dsv41-single-262k.ps1 -Stop           # graceful shutdown
+```
+
+- `-Config <file>` picks a local config (default: `my.local.json` in the clone, if present); `-Model <gguf>` overrides its `model`. Start one preset at a time: both use the same router port.
+- **Web UI** (`-WebUI`): open the printed router URL (default `http://127.0.0.1:8088`). The stack adds its own tools to every chat, so the model can call `set_quality_speed` / `get_quality_speed` itself (ask it, for example, to switch to max speed). MCP clients reach the same tools at `http://127.0.0.1:8088/mcp`. Without `-WebUI` the same router serves the OpenAI-compatible endpoint `/v1/chat/completions`.
+- **Prefill progress:** streamed chats show the web UI's prompt-processing bar while the producer prefills an appended turn (`prompt_progress`, from the producer's per-layer sweep lines; OpenAI clients also get the `prefill_progress` chunk). The first prompt of a conversation also loads the producer; that prefill shows the waiting indicator only. Tokens per second appear in the chat statistics when the reply finishes.
+- **Health:** `Invoke-RestMethod http://127.0.0.1:8088/health` (router) and `/v1/models`.
+- **Shutdown:** `-Stop` posts `{}` to `/v1/stack/shutdown`. The router closes the single engine, whose producer exits through its own graceful shutdown (DirectStorage drained, VRAM and the GPU hold released); nothing is killed. The detached `start` process then exits.
+- The log is `runtime/logs/dsv41-single-<preset>-<time>.log`.
+
+The [single-RTX walkthrough](examples/WALKTHROUGH.md) records a fresh-clone install, chat, model-made quality/speed change and image swap with screenshots; those receipts are from the native path. Its single-engine section lists the launch-script steps; the GPU run of those steps is pending.
 
 The two-machine steps 4-5 are not yet qualified for this revision; step 6 is qualified on the single-RTX native path for chat, the model-made quality/speed change and an image with state swap (see the walkthrough), and the same walkthrough on the single-engine default is pending; video and the long prompt with a second turn are not yet walked through.
 
