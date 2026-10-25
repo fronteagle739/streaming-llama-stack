@@ -92,8 +92,13 @@ def prefill_plan(cfg,prompt_tokens,available=None):
     if top<base:raise ValueError('producer_host_max_gib is below producer_host_budget_gib')
     capped_by='producer_host_max_gib'
     if available is not None:
-        room=int(available)-int(cfg.get('producer_host_reserve_gib',1)*(1<<30))
-        if room<top:top=max(base,room);capped_by='available_ram'
+        # Owner 2026-10-25 ("every run makes you freeze like the computer's run out of RAM"): locked producer
+        # pages cannot be paged out, so admission keeps a DESKTOP RESERVE free for Windows, Claude Code and the
+        # desktop: the producer's raised budget is at most available - producer_desktop_reserve_gib (per
+        # machine, default 8 GiB). Admission budgeting only: no runtime free-RAM stop (the rule is no paging).
+        reserve=max(float(cfg.get('producer_host_reserve_gib',1)),float(cfg.get('producer_desktop_reserve_gib',8)))
+        room=int(available)-int(reserve*(1<<30))
+        if room<top:top=max(base,room);capped_by='desktop_reserve' if reserve>float(cfg.get('producer_host_reserve_gib',1)) else 'available_ram'
     extra=lambda c:(carry_bank_bytes(c)-carry_bank_bytes(LEGACY_SWEEP),engram_prompt_bytes(c)-engram_prompt_bytes(LEGACY_SWEEP))
     limit=min(1<<20,int(cfg['context'])-1)
     want=min(max(LEGACY_SWEEP,int(prompt_tokens)),limit)
