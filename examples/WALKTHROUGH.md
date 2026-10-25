@@ -69,6 +69,31 @@ Screenshots: [chat](walkthrough/chat-desktop.png) ([phone](walkthrough/chat-phon
 
 Press Ctrl-C in the `start` window. The launcher asks the router to stop. The router closes the native engine through its graceful shutdown, which drains DirectStorage and frees GPU and host memory. Both engine processes in this run logged a graceful shutdown, and GPU memory returned to its idle level.
 
+## 6. Single engine with the DSV4.1 launch scripts (steps; GPU receipt pending)
+
+These are the steps for the default single engine (streaming-llama ULTRA prefill + `ds4-decode.dll` decode in one producer). They have not been run on the GPU from a fresh clone yet, so nothing in this section is a receipt.
+
+1. Build as in section 1 (`./slstack.ps1 install --all`, then `--check`). The build puts `llama-dsv41-prefill.exe` and `ds4-decode.dll` in `build/llama/bin/`.
+2. Write `my.local.json` as in section 2; only `model` is required for chat.
+3. Check what will run, without starting anything:
+   ```powershell
+   powershell -File scripts/start-dsv41-single-262k.ps1 -DryRun
+   ```
+   It prints the start config and the resolved producer settings: `--context 262144`, `--ctx-cache-precision f32 --ctx-cache-growable 1`, single sweep off (capacity 49152), and the producer environment (`DS4_DS_READ_PARTS=8`, `LLAMADECODE_VRAM_RESERVE_MIB=512`, `LLAMADECODE_ENGRAM_EARLY=auto`, `LLAMADECODE_ENGRAM_CACHE_MB=0`, `LLAMADECODE_DS4_DECODE=1`). The 1M script prints `--context 999424` with `bf16`.
+4. Start the 262K configuration with the web UI:
+   ```powershell
+   powershell -File scripts/start-dsv41-single-262k.ps1 -WebUI
+   ```
+   The script returns once the router answers and prints `Router ready: http://127.0.0.1:8088`, the log path, the health command and the shutdown command. Without `-WebUI` only the API is served. For the 1M context use `scripts/start-dsv41-single-1m.ps1` instead (one preset at a time).
+5. Open `http://127.0.0.1:8088`. Send a short prompt. The first prompt of a conversation also loads the producer and hashes the model once for its receipt, so it takes longer and shows only the waiting indicator. Send a second, longer turn: the web UI shows the prompt-processing bar while the producer prefills the appended tokens, then streams the answer; the chat statistics show tokens per second.
+6. Quality/speed: ask the model to switch itself to max speed with its quality/speed tool and to say which setting is active. The tool reply reports the requested and applied values.
+7. Health: `Invoke-RestMethod http://127.0.0.1:8088/health`.
+8. Stop gracefully:
+   ```powershell
+   powershell -File scripts/start-dsv41-single-262k.ps1 -Stop
+   ```
+   The router asks the single engine to shut down; the producer leaves through its own graceful shutdown and frees VRAM and the GPU hold. The log (`runtime/logs/dsv41-single-262k-*.log`) and the producer's `stderr.log` under `runtime/single-engine/ultra-*` record it.
+
 ## Notes found during the walkthrough
 
 - The walkthrough above ran with the earlier 4096-token default context, and one short chat plus the tool definitions used 47% of it. The default is now 262144 tokens. A follow-up short chat from the same clone (2e536c1) logged `context=262144`, context VRAM growing in 2048-token steps (1972 MiB mapped of 8859 MiB), an expert tier of 666 experts against the fixed full-context plan of 301, and a graceful shutdown.
