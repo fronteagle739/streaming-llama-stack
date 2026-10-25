@@ -48,60 +48,61 @@ inline sweeps split(uint32_t n, uint32_t cap, uint32_t align = sweep_align) {
     return out;
 }
 
-// Owner fold policy (--prefill-sweep-tokens S): primary sweeps of S tokens; the
-// remainder r = n - k*S is folded into the last one, last = S + r. No tiny tail.
-//   n <= S (and <= cap): one sweep [n].
-//   last <= min(F, cap): fold -> [S]*(k-1) + [last].
-//   last > F (fold cap, --prefill-fold-cap-tokens; 0 = none): the remainder is its
-//     own sweep -> [S]*k + [r] (tail = true).
-//   last <= F but last > cap (RAM-limited): rebalance `last` into m near-equal passes,
-//     m from ceil(last / cap floored to align): every pass but the last is
-//     ceil(last / m) rounded up to align, the last takes the rest; m grows while a
-//     pass would exceed cap -> [S]*(k-1) + [pass]*(m-1) + [rest] (rebalance = true).
-// Every sweep start is align-aligned. S must be a nonzero multiple of align, and
-// <= cap unless the whole prompt (n <= cap) is one sweep (count 0 = refused).
-struct fold_plan {
-    uint32_t count = 0, sweep = 0, last = 0;   // count sweeps: [sweep]*(count-1-(passes-1)) ... [last]
-    bool tail = false, rebalance = false;
-    uint32_t pass = 0, passes = 0;             // rebalance: (passes-1) sweeps of pass before last
+// Owner hide plan (--prefill-hide-tokens H, --prefill-bank-tokens B): "to avoid the
+// RAM issue we split into smaller ones larger than the stream-behind-compute size".
+// H = the smallest pass whose compute hides the weight stream (measured 32768 here);
+// B = the resident hidden-bank rows; C = the RAM-limited capacity; B' = min(B, C).
+//   k = ceil(N / B') near-equal passes. If k > 1 and N/k < H: k-1 passes (folded,
+//   each <= C) when they fit, else keep k (fold_refused). A pass is never < H
+//   unless N < H or the fold did not fit.
+//   Every non-last pass is one 4096-aligned size a: a = floor4096(N/k) (the last
+//   pass is the largest) unless the last would exceed the limit (B', or C when
+//   folded), then a = ceil4096(N/k); passes must be <= the limit and, where N/k
+//   allows, >= H. If neither fits, k grows.
+struct hide_plan {
+    std::vector<uint32_t> passes;
+    uint32_t k = 0, bank = 0;
+    bool folded = false, fold_refused = false;
 };
-inline fold_plan fold(uint32_t n, uint32_t s, uint32_t cap, uint32_t fold_cap = 0, uint32_t align = sweep_align) {
-    fold_plan out;
-    if (!n || !s || !align || s % align) return out;
-    if (n <= s) { if (n <= cap) { out.sweep = s; out.count = 1; out.last = n; } return out; }
-    if (s > cap) return out;
-    out.sweep = s;
-    const uint32_t k = n / s, r = n % s;
-    if (!r) { out.count = k; out.last = s; return out; }
-    const uint64_t last = uint64_t(s) + r;
-    if (fold_cap && last > fold_cap) { out.count = k + 1; out.last = r; out.tail = true; return out; }
-    if (last <= cap) { out.count = k; out.last = uint32_t(last); return out; }
-    const uint64_t grid = cap / align * align;
-    if (!grid) return fold_plan{};
-    for (uint64_t m = (last + grid - 1) / grid; m <= last; ++m) {
-        const uint64_t even = (last + m - 1) / m, pass = (even + align - 1) / align * align;
-        if (pass > cap || pass * (m - 1) >= last) continue;
-        out.count = k - 1 + uint32_t(m); out.pass = uint32_t(pass); out.passes = uint32_t(m);
-        out.last = uint32_t(last - pass * (m - 1)); out.rebalance = true;
-        return out;
+inline bool hide_try(uint32_t n, uint32_t k, uint64_t limit, uint32_t h, bool need_h, std::vector<uint32_t> &out, uint32_t align = sweep_align) {
+    if (!k) return false;
+    if (k == 1) { if (n > limit) return false; out.assign(1, n); return true; }
+    const uint64_t down = uint64_t(n) / k / align * align, up = ((uint64_t(n) + k - 1) / k + align - 1) / align * align;
+    for (const uint64_t a : {down, up}) {
+        if (!a || a > limit || a * (k - 1) >= n) continue;
+        const uint64_t last = n - a * (k - 1);
+        if (last > limit || (need_h && (a < h || last < h))) continue;
+        out.assign(k - 1, uint32_t(a)); out.push_back(uint32_t(last));
+        return true;
     }
-    return fold_plan{};
+    return false;
+}
+inline hide_plan plan_hide(uint32_t n, uint32_t cap, uint32_t h, uint32_t bank, uint32_t align = sweep_align) {
+    hide_plan out;
+    if (!n || !cap || !h || !bank || !align) return out;
+    out.bank = bank;
+    const uint32_t bp = std::min(bank, cap);
+    const uint32_t k0 = uint32_t((uint64_t(n) + bp - 1) / bp);
+    if (k0 > 1 && uint64_t(n) < uint64_t(h) * k0) {   // N/k < H: fold to k-1 passes if each fits C
+        if (hide_try(n, k0 - 1, cap, h, n >= h, out.passes, align)) { out.k = k0 - 1; out.folded = true; return out; }
+        out.fold_refused = true;
+    }
+    for (uint32_t k = k0; k <= std::max<uint32_t>(k0, n / align + 1); ++k) {
+        const bool need_h = uint64_t(n) >= uint64_t(h) * k;   // passes >= H wherever N/k allows
+        if (hide_try(n, k, bp, h, need_h, out.passes, align)) { out.k = k; return out; }
+    }
+    out.passes.clear();
+    return out;
 }
 
-// The (first, count) sweep list the producer runs: fold(n, s, cap, fold_cap) when
-// s is set, else today's split(n, cap). Empty = refused.
+// The (first, count) sweep list the producer runs: plan_hide(n, cap, hide, bank)
+// when hide is set, else today's split(n, cap). Empty = refused.
 struct extent { uint32_t first = 0, count = 0; };
-inline std::vector<extent> plan_sweeps(uint32_t n, uint32_t cap, uint32_t s = 0, uint32_t fold_cap = 0) {
+inline std::vector<extent> plan_sweeps(uint32_t n, uint32_t cap, uint32_t hide = 0, uint32_t bank = 0) {
     std::vector<extent> out;
-    if (s) {
-        const auto f = fold(n, s, cap, fold_cap);
-        const uint32_t primary = f.rebalance ? f.count - f.passes : f.count - 1;   // S sweeps before the final part
+    if (hide) {
         uint32_t first = 0;
-        for (uint32_t i = 0; i < f.count; ++i) {
-            const uint32_t count = i + 1 == f.count ? f.last : i < primary ? f.sweep : f.pass;
-            out.push_back({first, count});
-            first += count;
-        }
+        for (const uint32_t count : plan_hide(n, cap, hide, bank ? bank : legacy_sweep_tokens).passes) { out.push_back({first, count}); first += count; }
     } else {
         const auto t = split(n, cap);
         if (t.count) for (uint32_t first = 0; first < n; first += t.chunk) out.push_back({first, std::min(t.chunk, n - first)});
