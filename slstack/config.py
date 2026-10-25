@@ -12,6 +12,8 @@ def load(path=None, overrides=None):
     if path:
         cfg.update(json.loads(Path(path).read_text(encoding='utf-8-sig')))
     cfg.update({k: v for k, v in (overrides or {}).items() if v is not None})
+    from .combo_ram import runtime_min_free_gib
+    cfg['runtime_min_free_gib'] = runtime_min_free_gib(cfg)
     if cfg.get('mac'):
         from .pairing import endpoint
         cfg['mac'] = endpoint(cfg['mac'])

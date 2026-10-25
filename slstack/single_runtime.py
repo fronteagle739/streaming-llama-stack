@@ -41,6 +41,7 @@ KEPT = ('gpu_uuid', 'gpu_idle_max_mib', 'hold_file', 'task', 'lease_minutes', 'r
         # to the fold cap; the host max is the ceiling for that largest sweep's bank.
         'producer_prefill_sweep_tokens', 'producer_prefill_fold_cap_tokens', 'producer_host_max_gib',
         'producer_desktop_reserve_gib',   # per-machine desktop RAM reserve kept free by admission (default 8 GiB)
+        'runtime_min_free_gib',          # runtime available physical RAM floor (default 4 GiB; 0 disables it)
         'comfyui_models', 'studio_python')  # envvars.json placeholders the proxy's studio/producer scopes expand
 
 

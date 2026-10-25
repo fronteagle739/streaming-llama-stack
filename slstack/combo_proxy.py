@@ -366,8 +366,12 @@ def guarded(cfg,config):
 if __name__=='__main__':
     parser=argparse.ArgumentParser();parser.add_argument('--config',required=True);parser.add_argument('--serve',action='store_true')
     parser.add_argument('--run-id');parser.add_argument('--window')
+    parser.add_argument('--runtime-min-free-gib',type=float,help='Runtime available physical RAM floor (default 4 GiB; 0 disables it)')
     parser.add_argument('--native-argv',nargs=argparse.REMAINDER)
     args=parser.parse_args();config=Path(args.config).resolve();cfg=json.loads(config.read_text())
+    if args.runtime_min_free_gib is not None:cfg['runtime_min_free_gib']=args.runtime_min_free_gib
+    from .combo_ram import runtime_min_free_gib
+    cfg['runtime_min_free_gib']=runtime_min_free_gib(cfg)
     if args.serve:serve(cfg,args.run_id,args.window)
     else:
         if args.native_argv is not None:cfg=native_launch_config(cfg,args.native_argv)

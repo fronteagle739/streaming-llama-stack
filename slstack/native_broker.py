@@ -115,6 +115,8 @@ class OwnedProducer:
                 raise ValueError('Initial native token identity differs')
             settings = profile(request['tier'], request.get('techniques'))
             args = dict(settings['arguments'])
+            from .combo_ram import runtime_min_free_gib
+            runtime_floor = runtime_min_free_gib(cfg)
             host_bytes = min(8 << 30, int(cfg['host_budget_gib'] * (1 << 30)))
             floor = int(cfg['min_available_gib'] * (1 << 30))
             if native.memory() < host_bytes + floor:
@@ -124,6 +126,7 @@ class OwnedProducer:
             args.update({'--model': str(path(cfg['model'])), '--copy-receipt': str(receipt),
                          '--tokens-le32': str(tokens), '--build-sha': pin, '--session-id': request['session'],
                          '--receipt': str(directory / 'producer.json'), '--job-host-bytes': str(host_bytes),
+                         '--runtime-min-free-gib': str(runtime_floor),
                          '--carry': str(directory / 'carry-not-created'), '--payload': str(directory / 'payload-not-created')})
             argv = [str(binary), *[str(v) for item in args.items() for v in item]]
             env = environment(cfg, 'rtx-producer')
@@ -143,6 +146,7 @@ class OwnedProducer:
                                            receipt=directory / 'working-set.json')
             self.attempted = True
             self.producer = Producer(request['session'], argv, env, directory, host_bytes=host_bytes,
+                                     runtime_min_free_gib=runtime_floor,
                                      physical_floor=floor, operation_seconds=min(600, cfg['request_timeout_s']), stall_seconds=stall_seconds(cfg),
                                      idle_seconds=cfg['lease_minutes'] * 60, native=native,
                                      cancelled=cancelled, after_resume=protect)
