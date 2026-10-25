@@ -9,6 +9,7 @@ import subprocess
 import sys
 import time
 import psutil
+from .progress import Window, activity
 from .native_broker import vendor
 vendor()
 from studio.job_guard import OwnedProcesses, OwnedView
@@ -130,6 +131,7 @@ def _supervise_plain(spec):
     pressure = PagefilePressure() if spec.get('paging_telemetry') else None
     next_pressure_check = start
     process_counters = {}
+    progress, next_progress_check = Window(spec['timeout_s']), start
     with open(spec['log'], 'ab', buffering=0) as log:
         child = subprocess.Popen(spec['command'], cwd=spec['cwd'], env=spec['env'],
                                  stdin=subprocess.PIPE if 'stdin' in spec else subprocess.DEVNULL,
@@ -175,8 +177,10 @@ def _supervise_plain(spec):
                 if pressure and time.monotonic() >= next_pressure_check:
                     reason = reason or pressure.check()
                     next_pressure_check = time.monotonic() + .5
-                if time.monotonic() - start > spec['timeout_s']:
-                    reason = 'deadline exceeded'
+                if time.monotonic() >= next_progress_check:   # owner rule: timeout_s is a NO-PROGRESS window
+                    progress.observe(activity(child.pid, spec['log']));next_progress_check = time.monotonic() + min(1, progress.seconds / 4)
+                if progress.expired():
+                    reason = 'deadline exceeded: no progress for %.1fs (log, I/O, CPU and members unchanged; %.0fs since start)' % (progress.idle(), progress.elapsed())
                 if Path(spec['stop']).exists():
                     reason = 'stop requested'
                 if watcher:
@@ -230,6 +234,8 @@ def _supervise_owned(spec,paging_watch,paging_warnings):
     ledger_blocked_since = None
     active_window = None
     window_started = None
+    progress = None if spec['timeout_s'] is None else Window(spec['timeout_s'])
+    next_progress_check = start
     with open(spec['log'], 'ab', buffering=0) as log:
         child = subprocess.Popen(spec['command'], cwd=spec['cwd'], env=spec['env'],
                                  stdin=subprocess.PIPE if 'stdin' in spec else subprocess.DEVNULL,
@@ -278,8 +284,10 @@ def _supervise_owned(spec,paging_watch,paging_warnings):
                 if pressure and time.monotonic() >= next_pressure_check:
                     reason = reason or pressure.check()
                     next_pressure_check = time.monotonic() + .5
-                if spec['timeout_s'] is not None and time.monotonic() - start > spec['timeout_s']:
-                    reason = 'deadline exceeded'
+                if progress is not None and time.monotonic() >= next_progress_check:   # owner rule: timeout_s is a NO-PROGRESS window
+                    progress.observe(activity(child.pid, spec['log']));next_progress_check = time.monotonic() + min(1, progress.seconds / 4)
+                if progress is not None and progress.expired():
+                    reason = 'deadline exceeded: no progress for %.1fs (log, I/O, CPU and members unchanged; %.0fs since start)' % (progress.idle(), progress.elapsed())
                 if Path(spec['stop']).exists():
                     reason = 'stop requested'
                 if watcher:
@@ -354,7 +362,7 @@ def _supervise_owned(spec,paging_watch,paging_warnings):
             cleanup=owned.stop()
     receipt = {'exit_code': code, 'reason': reason, 'peak_tree_rss': peak,
                'min_available': minimum, 'elapsed_s': time.monotonic() - start,
-               'started_monotonic': start, 'deadline_monotonic': None if spec['timeout_s'] is None else start+spec['timeout_s'],
+               'started_monotonic': start, 'no_progress_window_s': spec['timeout_s'],
                'host_budget_gib': budget, 'floor_gib': floor,
                'job_commit_gib': spec['job_commit_gib'], 'child_pid': child.pid}
     receipt.update(paging_before=paging_before, paging_after=snapshot() if spec.get('paging_telemetry') else None,
