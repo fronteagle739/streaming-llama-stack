@@ -7,7 +7,7 @@ import unittest
 from unittest.mock import patch
 import uuid
 import psutil
-from slstack.guard import _supervise
+from slstack.guard import GPUWindowReader, _supervise
 from slstack.lease import active_holds, reservation_admission
 
 
@@ -47,7 +47,7 @@ class GuardTest(unittest.TestCase):
                         line.replace('; no Studio restart','')):
             self.assertTrue(reservation_admission([changed],7,2,available=32*2**30)[0])
 
-    def run_cpu(self,foreign=False,pages=0,dynamic=None,owned_pages=0):
+    def run_cpu(self,foreign=False,pages=0,dynamic=None,owned_pages=0,window_denials=0,duration=.3):
         root=Path(os.environ['STUDIO_RUNTIME_ROOT']);nonce=uuid.uuid4().hex
         prefix=root/('guard-cpu-'+nonce)
         holds=prefix.with_suffix('.holds')
@@ -65,7 +65,7 @@ class GuardTest(unittest.TestCase):
             source=('import os,time,psutil; from slstack.journal import atomic_json; '
                     'atomic_json('+repr(str(window))+',dict(active='+str(dynamic!='idle')+',run_id='+repr(nonce)+
                     ',owner_pid=os.getpid(),owner_created=psutil.Process().create_time(),lease_id='+repr(nonce)+
-                    ',deadline=time.time()'+('-1' if dynamic=='expired' else '+60')+')); time.sleep(.3)')
+                    ',deadline=time.time()'+('-1' if dynamic=='expired' else '+60')+')); time.sleep('+str(duration)+')')
             spec['command']=[sys.executable,'-B','-c',source]
         calls=0
         def paging():
@@ -75,7 +75,18 @@ class GuardTest(unittest.TestCase):
         def attributed(observer,process):
             observer.last_processes=[dict(pid=process.pid,paged_bytes=owned_pages)] if owned_pages else []
             return owned_pages
-        with patch('slstack.guard.paging_bytes',side_effect=paging), patch('studio.job_paging.JobPaging.sample',autospec=True,side_effect=attributed):
+        original_read=Path.read_bytes;window_reads=0
+        def window_read(path):
+            nonlocal window_reads
+            if dynamic is not None and path==window:
+                # Fail only after reading an active complete window. The cached
+                # lease/deadline must still be checked on each denied poll.
+                if window_reads and window_reads<=window_denials:
+                    window_reads+=1
+                    raise PermissionError(13,'Permission denied',str(path))
+                raw=original_read(path);window_reads+=1;return raw
+            return original_read(path)
+        with patch('slstack.guard.paging_bytes',side_effect=paging), patch('studio.job_paging.JobPaging.sample',autospec=True,side_effect=attributed), patch.object(Path,'read_bytes',window_read):
             code=_supervise(spec)
         return code,json.loads(Path(spec['receipt']).read_text())
 
@@ -92,6 +103,46 @@ class GuardTest(unittest.TestCase):
     def test_dynamic_server_window_has_independent_deadline(self):
         code,proof=self.run_cpu(dynamic='expired');self.assertEqual(code,1)
         self.assertIn('GPU request window made no progress before its renewed deadline',proof['reason'])
+
+    def test_transient_window_denial_does_not_stop_healthy_owned_job(self):
+        code,proof=self.run_cpu(dynamic='active',window_denials=1)
+        self.assertEqual(code,0);self.assertIsNone(proof['reason'])
+        self.assertEqual(proof['gpu_window_permission_errors'],1)
+        self.assertTrue(proof['release_allowed'])
+
+    def test_cached_window_does_not_bypass_foreign_hold_during_denial(self):
+        original_read=GPUWindowReader.read
+        def cached_then_denied(reader):
+            if reader.window is None:
+                original_read(reader)
+            with patch.object(Path,'read_bytes',side_effect=PermissionError(13,'Permission denied')):
+                return original_read(reader)
+        with patch('slstack.guard.GPUWindowReader.read',cached_then_denied):
+            code,proof=self.run_cpu(foreign=True,dynamic='active')
+        self.assertEqual(code,1)
+        self.assertIn('preempted by foreign ACTIVE hold',proof['reason'])
+        self.assertGreater(proof['gpu_window_permission_errors'],0)
+
+    def test_cached_expired_window_still_stops_during_denial(self):
+        original_read=GPUWindowReader.read
+        def cached_then_denied(reader):
+            if reader.window is None:
+                original_read(reader)
+            with patch.object(Path,'read_bytes',side_effect=PermissionError(13,'Permission denied')):
+                return original_read(reader)
+        with patch('slstack.guard.GPUWindowReader.read',cached_then_denied):
+            code,proof=self.run_cpu(dynamic='expired')
+        self.assertEqual(code,1)
+        self.assertIn('GPU request window made no progress',proof['reason'])
+        self.assertGreater(proof['gpu_window_permission_errors'],0)
+
+    def test_persistent_window_denial_still_stops_owned_job(self):
+        code,proof=self.run_cpu(dynamic='active',window_denials=100,duration=3)
+        self.assertEqual(code,1)
+        self.assertIn('GPU request window metadata refused: [Errno 13]',proof['reason'])
+        self.assertGreater(proof['gpu_window_permission_errors'],1)
+        self.assertLess(proof['elapsed_s'],3)
+        self.assertTrue(proof['release_allowed'])
 
     def test_foreign_hold_stops_only_the_owned_cpu_job(self):
         code,proof=self.run_cpu(foreign=True);self.assertEqual(code,1)
