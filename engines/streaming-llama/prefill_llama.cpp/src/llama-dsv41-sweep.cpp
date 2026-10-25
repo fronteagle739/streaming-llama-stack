@@ -6,6 +6,7 @@
 
 #include "llama-dsv41-cache.h"
 #include "llama-dsv41-device-admission.h"
+#include "llama-dsv41-host-plan-log.h"
 #include "llama-dsv41-executor.h"
 #include "boundary-capture.h"
 #include "ggml-alloc.h"
@@ -397,6 +398,15 @@ bool llama_dsv41_sweep::open(const llama_dsv41_weight_provider::config &weights,
             if(!e||*e)llama_dsv41_layer_log("LLAMADECODE_ENGRAM_ROWCACHE_ADMISSION bytes=%llu explicit=%d headroom_bytes=%llu\n",(unsigned long long)row_cache_new,int(e&&*e),(unsigned long long)headroom);
         }
         const uint64_t host=add(base_host,row_cache_have?row_cache_have:row_cache_new);
+        {   // log only: each planned host component and the row-cache headroom without it
+            const uint64_t lookahead=options.engram_tile_lookahead?uint64_t(options.carry.max_tile_tokens)*6144*4+8ull*1024*1024:0;
+            const uint64_t metadata=metadata_bytes+pinned_metadata+allocator_metadata+long_metadata+2ull*vocabulary*4+1024*1024;
+            const uint64_t token_ids=uint64_t(options.stateful_chunks?options.context:options.carry.tokens)*8;
+            llama_dsv41_layer_log("%s\n",llama_dsv41_host_plan_log::line(options.admitted_host_bytes,base_host,{
+                {"provider",provider.host_bytes},{"carry",carry_host},{"tile",tile_host},{"pair_ffn",pair_host},
+                {"owner_digest_staging",owner_digest_staging},{"engram_lookahead",lookahead},{"bf16_cache_scratch",options.compressed_cache_bf16?1024ull*1024:0},
+                {"metadata",metadata},{"token_ids",token_ids}},row_cache_have?row_cache_have:row_cache_new).c_str());
+        }
         const auto measured=options.measured_device_free?llama_dsv41_device_admission::admit(options.measured_device_free,options.admitted_device_bytes,options.device_reserve,device)
             :llama_dsv41_device_admission::result{device<=options.admitted_device_bytes,options.admitted_device_bytes,{}};
         llama_dsv41_layer_log("DS4PERF_COMBINED_ADMISSION planned_host=%llu admitted_host=%llu provider_host=%llu carry_host=%llu tile_host=%llu owner_digest_staging=%llu planned_device=%llu admitted_device=%llu"
