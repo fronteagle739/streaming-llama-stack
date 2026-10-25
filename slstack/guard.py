@@ -19,15 +19,17 @@ GiB = 1024 ** 3
 
 
 class GPUWindowReader:
-    """Bound a transient permission failure during atomic window replacement.
+    """Retry atomic-publication permission races until a whole progress window is idle.
 
     Keep validating the last complete window (including its deadline and lease)
     while the rest of the guard continues polling RAM, ownership and paging.
     Missing, malformed and persistently unreadable metadata still fail closed.
     """
-    def __init__(self, path):
+    def __init__(self, path, seconds=30, *, clock=None):
         self.path = Path(path)
         self.window = None
+        self.progress = Window(seconds, clock=clock)
+        self.reads = 0
         self.blocked_since = None
         self.permission_errors = 0
 
@@ -35,16 +37,19 @@ class GPUWindowReader:
         try:
             raw = self.path.read_bytes()
         except PermissionError:
-            now = time.monotonic()
             self.permission_errors += 1
-            if self.blocked_since is None:self.blocked_since = now
-            if now - self.blocked_since >= 1.0:raise
+            if self.blocked_since is None:self.blocked_since = self.progress.clock()
+            if self.progress.expired():raise
             return self.window
         if len(raw) > 16384:raise ValueError('GPU window metadata exceeded16KiB')
         window = json.loads(raw)
         if not isinstance(window, dict):raise ValueError('GPU window metadata must be an object')
         self.window = window
         self.blocked_since = None
+        self.reads += 1
+        self.progress.observe(self.reads)  # even an unchanged complete object is a successful read
+        if isinstance(window.get('deadline'), (int, float)):
+            self.progress.rising(window['deadline'])  # the publisher's advancing heartbeat
         return window
 
 
@@ -264,7 +269,7 @@ def _supervise_owned(spec,paging_watch,paging_warnings):
     ledger_blocked_since = None
     active_window = None
     window_started = None
-    window_reader = GPUWindowReader(spec['gpu_window_file']) if spec.get('gpu_window_file') else None
+    window_reader = GPUWindowReader(spec['gpu_window_file'], spec.get('gpu_window_stall_seconds', 30)) if spec.get('gpu_window_file') else None
     progress = None if spec['timeout_s'] is None else Window(spec['timeout_s'])
     next_progress_check = start
     with open(spec['log'], 'ab', buffering=0) as log:
@@ -341,12 +346,17 @@ def _supervise_owned(spec,paging_watch,paging_warnings):
                                 candidate=psutil.Process(owner) if owner else None
                                 if candidate is not None and (owner==child.pid or candidate.ppid()==child.pid):target=candidate
                             except psutil.Error:target=None
+                            if target is None and child.poll() is not None:
+                                break  # normal owned exit can race the final cached-window poll
                             if (window.get('run_id')!=spec['gpu_run_id'] or target is None or
                                 abs(window.get('owner_created',0)-target.create_time())>.01):
                                 raise ValueError('GPU window process/run identity differs')
                             identity=window['lease_id'];hold_file=spec['gpu_hold_file']
                             if active_window!=identity or window_started is None:active_window=identity;window_started=time.monotonic()   # lease_id is null until the producer's lease is taken
-                            if time.time()>=window['deadline']:   # the owner renews it while the request progresses (no fixed request length)
+                            # During a read denial the old heartbeat cannot prove a stall.
+                            # The reader's independent no-progress window bounds that wait;
+                            # fresh metadata still enforces the publisher's own deadline.
+                            if window_reader.blocked_since is None and time.time()>=window['deadline']:
                                 reason='GPU request window made no progress before its renewed deadline'
                         elif window is not None:active_window=None;window_started=None
                     except FileNotFoundError:
@@ -393,6 +403,7 @@ def _supervise_owned(spec,paging_watch,paging_warnings):
                'min_available': minimum, 'elapsed_s': time.monotonic() - start,
                'started_monotonic': start, 'no_progress_window_s': spec['timeout_s'],
                'gpu_window_permission_errors': window_reader.permission_errors if window_reader else 0,
+               'gpu_window_stall_seconds': window_reader.progress.seconds if window_reader else None,
                'host_budget_gib': budget, 'floor_gib': floor,
                'job_commit_gib': spec['job_commit_gib'], 'child_pid': child.pid}
     receipt.update(paging_before=paging_before, paging_after=snapshot() if spec.get('paging_telemetry') else None,
