@@ -96,6 +96,10 @@ public:
 
 private:
     llama_dsv41::owner_digest_memo digest_memo;
+    // Owner-digest read slots: pinned host memory of the cache's device
+    // (owner_digest_memo::staging_bytes(), 32 MiB), allocated on first use.
+    ggml_backend_buffer_ptr digest_staging;
+    bool digest_staging_tried=false;
     // Owner digests for verify/inspect under execution_mutex (synchronized).
     std::vector<std::string> owner_digests_locked(const llama_dsv41::wire_plan & plan,
         const std::vector<std::string> * expected, const char * phase, bool require_capture);
@@ -134,8 +138,10 @@ private:
     void clear_grown_locked();
 
     static int source_index(uint32_t source_layer);
+    // limit > 1 MiB (owner digests): BF16 owners are read packed into dst and
+    // widened to F32 in place (same bytes as the bounded scratch path).
     bool read_native_span_locked(const llama_dsv41::state_span &, uint64_t,
-        void *, size_t, std::string &, bool require_capture) const;
+        void *, size_t, std::string &, bool require_capture, size_t limit = 1024*1024) const;
     bool write_native_span_locked(const llama_dsv41::state_span &, uint64_t,
         const void *, size_t, std::string &);
     bool apply_native_update(const llama_dsv41::wire_frontier * base,
