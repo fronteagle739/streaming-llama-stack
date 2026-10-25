@@ -93,6 +93,10 @@ public:
         const std::vector<std::string> * expected, std::string & error);
     // Drop the incremental digest memo (any path that may rewrite old rows).
     void forget_owner_digests();
+    // Owner-digest read staging admitted by the job's host plan (sweep
+    // admission, owner_digest_staging). Pinned staging is allocated only up to
+    // this; before admission the digests use at most 2 MiB of pageable slots.
+    void admit_owner_digest_staging(uint64_t bytes);
 
 private:
     llama_dsv41::owner_digest_memo digest_memo;
@@ -100,6 +104,7 @@ private:
     // (owner_digest_memo::staging_bytes(), 32 MiB), allocated on first use.
     ggml_backend_buffer_ptr digest_staging;
     bool digest_staging_tried=false;
+    uint64_t digest_staging_admitted=0;
     // Owner digests for verify/inspect under execution_mutex (synchronized).
     std::vector<std::string> owner_digests_locked(const llama_dsv41::wire_plan & plan,
         const std::vector<std::string> * expected, const char * phase, bool require_capture);

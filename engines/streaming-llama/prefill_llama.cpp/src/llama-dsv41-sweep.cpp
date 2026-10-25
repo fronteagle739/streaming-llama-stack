@@ -369,8 +369,10 @@ bool llama_dsv41_sweep::open(const llama_dsv41_weight_provider::config &weights,
             require(llama_dsv41_carry_store::plan_resident_ram_direct(options.fixed->tokens,fixed_host,why,options.fixed->tile),"Fixed carry host plan failed");
             carry_host=std::max(carry_host,fixed_host.bounded_host_bytes);
         }
-        const uint64_t base_host=add(options.compressed_cache_bf16?1024ull*1024:0,add(options.engram_tile_lookahead?uint64_t(options.carry.max_tile_tokens)*6144*4+8ull*1024*1024:0,add(provider.host_bytes,add(carry_host,
-            add(tile_host+pair_host,add(metadata_bytes+pinned_metadata+allocator_metadata+long_metadata+2ull*vocabulary*4+1024*1024,uint64_t(options.stateful_chunks?options.context:options.carry.tokens)*8))))));
+        // Owner-digest read staging (pinned, llama-dsv41-owner-digest.h): 8 workers x 2 slots x 2 MiB.
+        const uint64_t owner_digest_staging=llama_dsv41::owner_digest_memo::staging_bytes();
+        const uint64_t base_host=add(owner_digest_staging,add(options.compressed_cache_bf16?1024ull*1024:0,add(options.engram_tile_lookahead?uint64_t(options.carry.max_tile_tokens)*6144*4+8ull*1024*1024:0,add(provider.host_bytes,add(carry_host,
+            add(tile_host+pair_host,add(metadata_bytes+pinned_metadata+allocator_metadata+long_metadata+2ull*vocabulary*4+1024*1024,uint64_t(options.stateful_chunks?options.context:options.carry.tokens)*8)))))));
         // LLAMADECODE_ENGRAM_CACHE_MB: the Engram row LRU (early loader) is charged
         // here. Unset: min(4 GiB, this admission's headroom), whole MiB, none below
         // 16 MiB. Explicit: exactly that size or a loud refusal. 0: no cache.
@@ -391,9 +393,9 @@ bool llama_dsv41_sweep::open(const llama_dsv41_weight_provider::config &weights,
             if(!e||*e)llama_dsv41_layer_log("LLAMADECODE_ENGRAM_ROWCACHE_ADMISSION bytes=%llu explicit=%d headroom_bytes=%llu\n",(unsigned long long)row_cache_new,int(e&&*e),(unsigned long long)headroom);
         }
         const uint64_t host=add(base_host,row_cache_have?row_cache_have:row_cache_new);
-        llama_dsv41_layer_log("DS4PERF_COMBINED_ADMISSION planned_host=%llu admitted_host=%llu provider_host=%llu carry_host=%llu tile_host=%llu planned_device=%llu admitted_device=%llu\n",
+        llama_dsv41_layer_log("DS4PERF_COMBINED_ADMISSION planned_host=%llu admitted_host=%llu provider_host=%llu carry_host=%llu tile_host=%llu owner_digest_staging=%llu planned_device=%llu admitted_device=%llu\n",
             (unsigned long long)host,(unsigned long long)options.admitted_host_bytes,(unsigned long long)provider.host_bytes,
-            (unsigned long long)carry_budget.bounded_host_bytes,(unsigned long long)tile_host,(unsigned long long)device,(unsigned long long)options.admitted_device_bytes);
+            (unsigned long long)carry_budget.bounded_host_bytes,(unsigned long long)tile_host,(unsigned long long)owner_digest_staging,(unsigned long long)device,(unsigned long long)options.admitted_device_bytes);
         require(device<=options.admitted_device_bytes&&host<=options.admitted_host_bytes,
             "V4.1 provider/cache/graph/carry combined job exceeds total resource admission");
         if(row_cache_new)success(p->provider.create_engram_row_cache(row_cache_new,error),error);
@@ -478,6 +480,7 @@ bool llama_dsv41_sweep::open(const llama_dsv41_weight_provider::config &weights,
             ggml_backend_get_default_buffer_type(p->backend),p->options.admitted_cache_bytes,p->options.compressed_cache_bf16,p->options.capture_dspark,p->options.ctx_cache_grow_step));
         require(p->cache->compact_compressed()==p->options.compressed_cache_bf16,"Fixed cache physical format differs from request admission");
         require(p->cache->captures_dspark()==p->options.capture_dspark,"Fixed cache DSpark capture admission changed");
+        p->cache->admit_owner_digest_staging(llama_dsv41::owner_digest_memo::staging_bytes());   // counted in the combined host plan above
         require(!p->options.capture_dspark||!p->options.reuse_layer_graph,"DSpark ring writes require allocator-only graph reuse");
         if(restored){
             // Cache replacement uses the same bounded writer and all-owner
