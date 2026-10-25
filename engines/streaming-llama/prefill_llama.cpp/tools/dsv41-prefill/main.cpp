@@ -6,6 +6,7 @@ extern "C" unsigned long long ggml_backend_cuda_dsv41_pv_strided_queued(void);
 #include <bcrypt.h>
 #include <dxgi1_4.h>
 #include "ggml-cuda.h"
+#include <cuda.h>
 #include "ggml-dsv41-gather-half.h"
 #include "ggml-dsv41-split-f32.h"
 extern "C" uint64_t ggml_backend_cuda_dsv41_pv_view_queued(void);
@@ -18,6 +19,8 @@ extern "C" uint64_t ggml_backend_cuda_dsv41_pv_view_queued(void);
 #include "llama-dsv41-engram-prefetch.h"
 #include "llama-weight-fetcher.h"
 #include "llama-dsv41-host-memory.h"
+#include "llama-dsv41-test-fault.h"
+#include "producer-abort.h"
 #include "llama-dsv41-ds4x-keep.h"
 #include "llama-dsv41-native-columns-resource-proof.h"
 #include "llama-dsv41-native-loader-resource-proof.h"
@@ -275,6 +278,11 @@ int wmain(int argc,wchar_t**argv){
     std::unique_ptr<native_file>payload,receipt;std::unique_ptr<llama_dsv41_sweep>sweep;
     json report={{"schema","dsv41-offline-producer-v1"},{"status","failed"},{"runtime_qualified",false}};
     const auto process_started=clock_type::now();
+    // CUDA module loading: the driver default (LAZY) unless CUDA_MODULE_LOADING is set.
+    // Forced EAGER was measured slower (43K ABAB, 2026-10-25: L0 first-tile stall +26.8/+7.8 s)
+    // and dropped; the effective mode is still logged (module_loading=).
+    const wchar_t*module_loading_env=_wgetenv(L"CUDA_MODULE_LOADING");
+    const bool module_loading_default=!module_loading_env||!*module_loading_env;
     try{
         static std::array<char,1024*1024> stderr_storage;
         const char *buffer_env=std::getenv("DS4PERF_STDERR_BUFFER_BYTES");
@@ -283,12 +291,16 @@ int wmain(int argc,wchar_t**argv){
         if(buffered_stderr)require(std::setvbuf(stderr,stderr_storage.data(),_IOFBF,stderr_storage.size())==0,"Cannot configure existing CRT stderr buffer");
         report["stderr_buffer_bytes"]=buffered_stderr?stderr_storage.size():0;
         if(argc==2&&std::wstring(argv[1])==L"--help"){std::cout<<usage;return 0;}
+        // LLAMADECODE: every abort leaves a reason (stderr line + session error reply), including
+        // an exception escaping a thread (std::terminate) or an unhandled structured exception.
+        producer_abort::install();
+        llama_dsv41_test_fault::announce();
         if(argc==2&&std::wstring(argv[1])==L"--check-native-profiles"){slstack_native_profile_check();return 0;}
         const std::vector<std::string>keys={"--model","--copy-receipt","--tokens-le32","--cuda-device","--context","--build-sha",
             "--provider-device-bytes","--provider-host-bytes","--cache-bytes","--graph-bytes","--job-device-bytes","--job-host-bytes","--gpu-reserve-bytes",
             "--carry","--carry-file-bytes","--carry-host-bytes","--carry-outstanding-bytes","--output-outstanding-bytes","--payload","--receipt"};
-        require(argc>=1+int(keys.size())*2&&argc<=125+int(keys.size())*2&&argc%2==1,"Expected every explicit required --key value pair; use --help");std::map<std::string,std::string>args;
-        for(int i=1;i<argc;i+=2){auto key=utf8(argv[i]);require((key=="--session-owner-epoch"||key=="--switch-arena"||key=="--native-base-contract-sha256"||key=="--native-base-owner-epoch"||key=="--unaligned-append-step-tokens"||key=="--reuse-child-raw-metadata"||key=="--session-stdio"||key=="--session-id"||key=="--session-control-host-bytes"||key=="--session-idle-timeout-ms"||key=="--native-rhs-pack"||key=="--split-f32-tensor-core-qk"||key=="--split-f32-tensor-core-pv"||key=="--fuse-kv-gather-half"||key=="--ds-zero-padding-only"||key=="--pv-strided-probabilities"||key=="--pv-view-f32"||key=="--compact-kv-gather"||key=="--masked-half-inplace"||key=="--native-loader-unroll"||key=="--native-expert-columns"||key=="--fixed-resident-plan"||key=="--export-hash-only"||key=="--backend-temporary-reserve-bytes"||key=="--compute-step-tokens"||key=="--prefill-chunk-tokens"||key=="--attention-kv-f16-table"||key=="--index-key-windows"||key=="--capture-dspark"||key=="--compressed-cache-bf16"||key=="--ctx-cache-precision"||key=="--ctx-cache-growable"||key=="--dense-activation-q8-1"||key=="--expert-weights-activations-fp4"||key=="--resident-pageable-copies"||key=="--tile-host-registration"||key=="--hc-bf16-epilogue"||key=="--reuse-expert-routing-map"||key=="--sort-expert-routing"||key=="--pair-ffn-tiles"||key=="--engram-tile-lookahead"||key=="--warmup-one-token"||key=="--fixed-direct-open"||key=="--batch-seed-ram"||key=="--dense-mxfp4"||key=="--hc-projection-f16-gemm"||key=="--merge-attention-selected-rows"||key=="--resident-metadata"||key=="--resident-compact-ids"||key=="--async-input-uploads"||key=="--resident-hidden-bf16"||key=="--resident-hidden-final-readback"||key=="--coalesce-dense-projections"||key=="--direct-carry-budget"||key=="--expert-f16-cublas"||key=="--token-tile-attention-f16-probabilities"||key=="--index-f32-cublas"||key=="--index-bf16"||key=="--dense-inputs-f16"||key=="--shared-flash-attention"||key=="--shared-sparse-attention"||key=="--carry-ram-prefix-tokens"||key=="--carry-disk-reserve-bytes"||key=="--carry-storage"||key=="--fetch-profile"||key=="--compute-tile"||key=="--hidden-device-bytes"||key=="--pinned-device-bytes"||key=="--reuse-graph"||key=="--cast-device-bytes"||key=="--cast-audit"||key=="--engram-prefetch-bytes"||key=="--ds-submit-threads"||key=="--cuda-blocking-sync"||key=="--index-cublas-device-bytes"||key=="--ds-gpu-ring-slots"||key=="--prefetch-device-bytes"||key=="--expert-profile"||key=="--expert-workspace-bytes"||key=="--expert-runtime-bytes"||std::find(keys.begin(),keys.end(),key)!=keys.end())&&!args.count(key),"Unknown or repeated producer option");args[key]=utf8(argv[i+1]);}
+        require(argc>=1+int(keys.size())*2&&argc<=131+int(keys.size())*2&&argc%2==1,"Expected every explicit required --key value pair; use --help");std::map<std::string,std::string>args;
+        for(int i=1;i<argc;i+=2){auto key=utf8(argv[i]);require((key=="--session-owner-epoch"||key=="--switch-arena"||key=="--native-base-contract-sha256"||key=="--native-base-owner-epoch"||key=="--unaligned-append-step-tokens"||key=="--reuse-child-raw-metadata"||key=="--session-stdio"||key=="--session-id"||key=="--session-control-host-bytes"||key=="--session-idle-timeout-ms"||key=="--native-rhs-pack"||key=="--split-f32-tensor-core-qk"||key=="--split-f32-tensor-core-pv"||key=="--fuse-kv-gather-half"||key=="--ds-zero-padding-only"||key=="--pv-strided-probabilities"||key=="--pv-view-f32"||key=="--compact-kv-gather"||key=="--masked-half-inplace"||key=="--native-loader-unroll"||key=="--native-expert-columns"||key=="--fixed-resident-plan"||key=="--export-hash-only"||key=="--backend-temporary-reserve-bytes"||key=="--compute-step-tokens"||key=="--prefill-chunk-tokens"||key=="--prefill-sweep-tokens"||key=="--prefill-fold-cap-tokens"||key=="--attention-kv-f16-table"||key=="--index-key-windows"||key=="--capture-dspark"||key=="--compressed-cache-bf16"||key=="--ctx-cache-precision"||key=="--ctx-cache-growable"||key=="--dense-activation-q8-1"||key=="--expert-weights-activations-fp4"||key=="--resident-pageable-copies"||key=="--tile-host-registration"||key=="--hc-bf16-epilogue"||key=="--reuse-expert-routing-map"||key=="--sort-expert-routing"||key=="--pair-ffn-tiles"||key=="--engram-tile-lookahead"||key=="--warmup-one-token"||key=="--fixed-direct-open"||key=="--batch-seed-ram"||key=="--dense-mxfp4"||key=="--hc-projection-f16-gemm"||key=="--merge-attention-selected-rows"||key=="--resident-metadata"||key=="--resident-compact-ids"||key=="--async-input-uploads"||key=="--resident-hidden-bf16"||key=="--resident-hidden-final-readback"||key=="--coalesce-dense-projections"||key=="--direct-carry-budget"||key=="--expert-f16-cublas"||key=="--token-tile-attention-f16-probabilities"||key=="--index-f32-cublas"||key=="--index-bf16"||key=="--dense-inputs-f16"||key=="--shared-flash-attention"||key=="--shared-sparse-attention"||key=="--carry-ram-prefix-tokens"||key=="--carry-disk-reserve-bytes"||key=="--carry-storage"||key=="--fetch-profile"||key=="--compute-tile"||key=="--hidden-device-bytes"||key=="--pinned-device-bytes"||key=="--reuse-graph"||key=="--cast-device-bytes"||key=="--cast-audit"||key=="--engram-prefetch-bytes"||key=="--ds-submit-threads"||key=="--cuda-blocking-sync"||key=="--index-cublas-device-bytes"||key=="--ds-gpu-ring-slots"||key=="--prefetch-device-bytes"||key=="--expert-profile"||key=="--expert-workspace-bytes"||key=="--expert-runtime-bytes"||std::find(keys.begin(),keys.end(),key)!=keys.end())&&!args.count(key),"Unknown or repeated producer option");args[key]=utf8(argv[i+1]);}
         for(const auto&key:keys)require(args.count(key),"Missing explicit producer option");
         const auto storage=args.count("--carry-storage")?args.at("--carry-storage"):"file";
         require(storage=="file"||storage=="ram"||storage=="hybrid","Expected explicit carry-storage file, ram or hybrid");
@@ -449,9 +461,28 @@ int wmain(int argc,wchar_t**argv){
         // one is split into near-equal 4096-aligned sweeps (never a tiny tail).
         const auto sweep_plan=llama_dsv41_prefill::split(uint32_t(tokens.size()),uint32_t(chunk_option?chunk_option:tokens.size()));
         require(sweep_plan.count,"Prefill capacity is below one aligned 4096-token sweep");
-        const uint32_t chunk_tokens=sweep_plan.chunk;
+        // LLAMADECODE fold (owner): --prefill-sweep-tokens S makes every sweep S tokens and folds the
+        // remainder into the last (S + r); when S + r exceeds the capacity the remainder is its own sweep.
+        // Absent: today's near-equal split. The sweeps are an explicit (first, count) list either way.
+        const uint64_t fold_option=args.count("--prefill-sweep-tokens")?number("--prefill-sweep-tokens"):0;
+        require(!args.count("--prefill-sweep-tokens")||(fold_option&&chunk_option&&fold_option%llama_dsv41_prefill::sweep_align==0&&fold_option<=llama_dsv41_prefill::max_sweep_tokens),
+            "Fold sweep tokens require --prefill-chunk-tokens and a nonzero 4096 multiple");
+        // Fold cap F (--prefill-fold-cap-tokens): fold only while S + r <= F; otherwise the remainder is its own sweep.
+        const uint64_t fold_cap=args.count("--prefill-fold-cap-tokens")?number("--prefill-fold-cap-tokens"):0;
+        require(!args.count("--prefill-fold-cap-tokens")||(fold_option&&fold_cap&&fold_cap<=llama_dsv41_prefill::max_sweep_tokens),
+            "Fold cap tokens require --prefill-sweep-tokens and a nonzero bound");
+        const auto fold_plan=fold_option?llama_dsv41_prefill::fold(uint32_t(tokens.size()),uint32_t(fold_option),uint32_t(chunk_option),uint32_t(fold_cap)):llama_dsv41_prefill::fold_plan{};
+        require(!fold_option||fold_plan.count,"Fold sweep plan refused: a sweep larger than one prompt sweep needs the capacity to hold it");
+        const auto sweep_extents=llama_dsv41_prefill::plan_sweeps(uint32_t(tokens.size()),uint32_t(chunk_option?chunk_option:tokens.size()),uint32_t(fold_option),uint32_t(fold_cap));
+        require(!sweep_extents.empty(),"Prefill sweep list refused");
+        const uint32_t chunk_tokens=[&]{uint32_t m=0;for(const auto&e:sweep_extents)m=std::max(m,e.count);return m;}();   // the largest sweep
+        const uint32_t first_sweep_tokens=sweep_extents.front().count;
+        const uint32_t sweep_step=fold_option?fold_plan.sweep:sweep_plan.chunk;   // every non-last sweep start is a multiple
+        const std::string sweep_list=[&]{std::string out;for(const auto&e:sweep_extents)out+=(out.empty()?"":",")+std::to_string(e.count);return out;}();
+        if(fold_plan.tail){std::fprintf(stderr,"LLAMADECODE_PREFILL_FOLD_TAIL tokens=%zu primary_sweep_tokens=%u remainder=%u capacity=%u fold_cap=%u folded_last=%u sweep_tokens=%s\n",
+            tokens.size(),fold_plan.sweep,fold_plan.last,uint32_t(chunk_option),uint32_t(fold_cap),fold_plan.sweep+fold_plan.last,sweep_list.c_str());std::fflush(stderr);}
         require(!chunk_option||(resident_ram&&!hybrid&&!std::getenv("DSV41_BOUNDARY_CAPTURE")),"Stateful chunks require explicit RAM carry and no boundary capture");
-        require(!chunk_option||!pair_ffn||tokens.size()<=chunk_tokens||chunk_tokens%4096==0||unaligned_append_step==2048,"Paired chunk size must align absolute attention positions");
+        require(!chunk_option||!pair_ffn||tokens.size()<=chunk_tokens||sweep_step%4096==0||unaligned_append_step==2048,"Paired chunk size must align absolute attention positions");
         const auto context=number("--context");require(context<=1048576&&tokens.size()<context,"Native payload requires context room for the next decode token");
         require(!args.count("--session-stdio")||args.at("--session-stdio")=="0"||args.at("--session-stdio")=="1","session-stdio requires0/1");
         const bool live=args.count("--session-stdio")&&args.at("--session-stdio")=="1";
@@ -467,7 +498,7 @@ int wmain(int argc,wchar_t**argv){
             require(chunk_option&&chunk_option<=llama_dsv41_prefill::max_sweep_tokens&&chunk_option<context&&resident_ram&&direct_budget&&
                 (pair_ffn||(args.count("--fixed-resident-plan")&&args.at("--fixed-resident-plan")=="1")),
                 "Session requires a fixed RAM capacity (1..1048576 tokens, below context) and stateful chunks");
-            session_output.bind();
+            session_output.bind();producer_abort::arm(session_output.get(),session,model_sha,session_owner_epoch);
         }else require(!args.count("--session-id")&&!args.count("--session-control-host-bytes")&&!args.count("--session-idle-timeout-ms"),
             "Session options supplied with session disabled");
         report["persistent_session"]={{"enabled",live},{"reserved_chunk_tokens",reserved_chunk},{"control_host_bytes",control_host}};
@@ -531,6 +562,7 @@ int wmain(int argc,wchar_t**argv){
         require(llama_dsv41_host_memory::begin(job_host,job_device),
             "Producer physicalRAM/WDDMcommit/Job admission refused before CUDA initialization");
         report["telemetry"]["before_cuda_available_ram"]=ram_admission(job_host);
+        uint64_t nvml_free_before_cuda=0,nvml_total=0;const bool nvml_before=nvml_free_bytes(nvml_free_before_cuda,nvml_total);
         const auto ordinal=number("--cuda-device");const int devices=ggml_backend_cuda_get_device_count();
         require(devices>0&&ordinal<16&&ordinal<uint64_t(devices),"Explicit CUDA device ordinal is unavailable");
         char description[256]{};ggml_backend_cuda_get_device_description(int(ordinal),description,sizeof(description));std::string gpu=description;
@@ -543,8 +575,20 @@ int wmain(int argc,wchar_t**argv){
         }
         size_t free=0,total=0;ggml_backend_cuda_get_device_memory(int(ordinal),&free,&total);
         report["telemetry"]["before_cuda_device_free"]=free;report["telemetry"]["device_total"]=total;
-        std::fprintf(stderr,"DS4PERF_GPU_JOB_ADMISSION free=%llu total=%llu job=%llu reserve=%llu\n",(unsigned long long)free,(unsigned long long)total,(unsigned long long)job_device,(unsigned long long)gpu_reserve);
-        require(uint64_t(free)>=add(job_device,gpu_reserve),"Producer job exceeds actual selectedGPU free bytes plus explicit reserve");
+        CUmoduleLoadingMode loading_mode{};const bool loading_known=cuModuleGetLoadingMode(&loading_mode)==CUDA_SUCCESS;
+        const char*loading_name=!loading_known?"unknown":loading_mode==CU_MODULE_EAGER_LOADING?"EAGER":loading_mode==CU_MODULE_LAZY_LOADING?"LAZY":"other";
+        // NVML free before any CUDA call minus the CUDA free after context creation:
+        // the context plus (with EAGER) every module's code, now inside the measured free.
+        const uint64_t context_and_modules=nvml_before&&nvml_free_before_cuda>uint64_t(free)?nvml_free_before_cuda-uint64_t(free):0;
+        std::fprintf(stderr,"DS4PERF_GPU_JOB_ADMISSION free=%llu total=%llu job=%llu reserve=%llu measured_admission=%llu module_loading=%s module_loading_source=%s nvml_free_before_cuda=%llu cuda_context_and_module_bytes=%llu\n",
+            (unsigned long long)free,(unsigned long long)total,(unsigned long long)job_device,(unsigned long long)gpu_reserve,
+            (unsigned long long)(uint64_t(free)>gpu_reserve?std::min<uint64_t>(job_device,uint64_t(free)-gpu_reserve):0),loading_name,module_loading_default?"driver_default":"environment",
+            (unsigned long long)nvml_free_before_cuda,(unsigned long long)context_and_modules);
+        report["telemetry"]["module_loading"]=loading_name;report["telemetry"]["module_loading_source"]=module_loading_default?"driver_default":"environment";
+        report["telemetry"]["nvml_free_before_cuda"]=nvml_free_before_cuda;report["telemetry"]["cuda_context_and_module_bytes"]=context_and_modules;
+        // Measured device plan: the sweep admits min(job, free - reserve) against its combined plan.
+        require(uint64_t(free)>gpu_reserve,"Selected GPU free bytes do not exceed the explicit reserve");
+        const uint64_t measured_device_free=uint64_t(free);
         backend.reset(ggml_backend_cuda_init(int(ordinal)));require(bool(backend),"Cannot initialize the explicitly selected RTX5090 backend");
         // DS4COMBO fast switch: every ggml device block lives in one switchable VMM
         // span so a live session can suspend/resume device memory in place.
@@ -570,7 +614,7 @@ int wmain(int argc,wchar_t**argv){
         weights.ds_gpu_ring_slots=uint32_t(ring_slots);if(ring_slots)weights.async_staging_drain=true;
         report["ds_gpu_ring_slots"]=ring_slots;
         weights.engram_prefetch_host_bytes=args.count("--engram-prefetch-bytes")?number("--engram-prefetch-bytes"):0;
-        weights.engram_prefetch_tokens=weights.engram_prefetch_host_bytes?chunk_tokens:0;
+        weights.engram_prefetch_tokens=weights.engram_prefetch_host_bytes?first_sweep_tokens:0;
         const uint64_t submit_threads=args.count("--ds-submit-threads")?number("--ds-submit-threads"):0;
         require(submit_threads==0||submit_threads==1||submit_threads==2||submit_threads==4,"ds-submit-threads requires0/1/2/4");
         require(!args.count("--ds-zero-padding-only")||args.at("--ds-zero-padding-only")=="0"||args.at("--ds-zero-padding-only")=="1","Padding-only zero requires0/1");
@@ -629,7 +673,10 @@ int wmain(int argc,wchar_t**argv){
         options.admitted_pinned_device_bytes=args.count("--pinned-device-bytes")?number("--pinned-device-bytes"):0;
         options.admitted_prefetch_device_bytes=args.count("--prefetch-device-bytes")?number("--prefetch-device-bytes"):0;
         report["copy_prefetch_device_bytes"]=options.admitted_prefetch_device_bytes;
-        options.admitted_device_bytes=job_device;options.admitted_host_bytes=job_host-cli_host_bytes-control_host;options.carry.path=args.at("--carry");options.carry.tokens=chunk_tokens;options.stateful_chunks=chunk_option!=0;
+        options.admitted_device_bytes=job_device;options.measured_device_free=measured_device_free;options.device_reserve=gpu_reserve;
+        report["budgets_measured_device"]={{"job_device_bound",job_device},{"measured_device_free",measured_device_free},{"device_reserve",gpu_reserve},
+            {"admitted_device",std::min<uint64_t>(job_device,measured_device_free-gpu_reserve)}};
+        options.admitted_host_bytes=job_host-cli_host_bytes-control_host;options.carry.path=args.at("--carry");options.carry.tokens=first_sweep_tokens;options.stateful_chunks=chunk_option!=0;
         options.carry.resident_ram=resident_ram;
         require(!args.count("--resident-hidden-final-readback")||args.at("--resident-hidden-final-readback")=="0"||args.at("--resident-hidden-final-readback")=="1","resident-hidden-final-readback requires0/1");
         options.carry.defer_hidden_readback=args.count("--resident-hidden-final-readback")&&args.at("--resident-hidden-final-readback")=="1";
@@ -702,7 +749,18 @@ int wmain(int argc,wchar_t**argv){
         }
         stop();report["telemetry"]["before_open_available_ram"]=ram_admission(job_host);
         ggml_backend_dev_memory(ggml_backend_get_device(backend.get()),&free,&total);report["telemetry"]["before_open_device_free"]=free;
-        require(uint64_t(free)>=add(job_device,gpu_reserve),"CUDA context changed available device admission");sweep.reset(new llama_dsv41_sweep);
+        // Measured plan: re-measure before the sweep opens. The sweep admits min(job, min(first, second) free - reserve)
+        // against its combined plan (llama_dsv41_device_admission::recheck), so a real drop since the first
+        // measurement is refused there, with the numbers; the fixed --job-device-bytes is only the upper bound.
+        require(uint64_t(free)>gpu_reserve,"CUDA context changed available device admission: free bytes no longer exceed the reserve");
+        options.measured_device_free=std::min<uint64_t>(measured_device_free,uint64_t(free));
+        report["budgets_measured_device"]["before_open_device_free"]=uint64_t(free);
+        report["budgets_measured_device"]["measured_device_free"]=options.measured_device_free;
+        report["budgets_measured_device"]["admitted_device"]=std::min<uint64_t>(job_device,options.measured_device_free-gpu_reserve);
+        std::fprintf(stderr,"DS4PERF_GPU_JOB_RECHECK first_free=%llu before_open_free=%llu measured_free=%llu measured_admission=%llu job=%llu reserve=%llu\n",
+            (unsigned long long)measured_device_free,(unsigned long long)free,(unsigned long long)options.measured_device_free,
+            (unsigned long long)std::min<uint64_t>(job_device,options.measured_device_free-gpu_reserve),(unsigned long long)job_device,(unsigned long long)gpu_reserve);
+        sweep.reset(new llama_dsv41_sweep);
         report["phase_ms"]["input_identity_hash_budget_preflight"]=ms(process_started);
         if(llama_dsv41_expert_profile::natural_half(expert)){
             ggml_ds4_native_half_stats initial{};ggml_backend_cuda_ds4_native_half_snapshot(&initial);
@@ -745,11 +803,13 @@ int wmain(int argc,wchar_t**argv){
              if(options.admitted_hidden_bytes&&bank.spill)options.fixed->hidden_rows=bank.rows;
              const uint64_t carry_bank=llama_dsv41_prefill::carry_bank_bytes(reserved_chunk);
              const char*strategy=tokens.size()>reserved_chunk?"split":!options.admitted_hidden_bytes?"ram_tiles":bank.spill&&tokens.size()>bank.resident_rows?"spill":"resident";
-             std::fprintf(stderr,"LLAMADECODE_PREFILL_PLAN tokens=%zu capacity=%u sweeps=%u chunk=%u strategy=%s bank_rows=%u resident_rows=%u slot_rows=%u hidden_admitted_bytes=%llu carry_bank_bytes=%llu engram_prompt_bytes=%llu job_host_bytes=%llu legacy_sweep_tokens=%u\n",
-                 tokens.size(),reserved_chunk,sweep_plan.count,chunk_tokens,strategy,bank.rows,bank.resident_rows,bank.slot_rows,(unsigned long long)options.admitted_hidden_bytes,
-                 (unsigned long long)carry_bank,(unsigned long long)llama_dsv41_prefill::engram_prompt_bytes(reserved_chunk),(unsigned long long)job_host,llama_dsv41_prefill::legacy_sweep_tokens);std::fflush(stderr);
-             report["prefill_plan"]={{"tokens",tokens.size()},{"capacity",reserved_chunk},{"sweeps",sweep_plan.count},{"chunk",chunk_tokens},{"strategy",strategy},
-                 {"bank_rows",bank.rows},{"resident_rows",bank.resident_rows},{"slot_rows",bank.slot_rows},{"carry_bank_bytes",carry_bank}};}
+             std::fprintf(stderr,"LLAMADECODE_PREFILL_PLAN tokens=%zu capacity=%u sweeps=%u chunk=%u strategy=%s bank_rows=%u resident_rows=%u slot_rows=%u hidden_admitted_bytes=%llu carry_bank_bytes=%llu engram_prompt_bytes=%llu job_host_bytes=%llu legacy_sweep_tokens=%u policy=%s primary_sweep_tokens=%u sweep_tokens=%s fold_tail=%u fold_cap=%u\n",
+                 tokens.size(),reserved_chunk,uint32_t(sweep_extents.size()),chunk_tokens,strategy,bank.rows,bank.resident_rows,bank.slot_rows,(unsigned long long)options.admitted_hidden_bytes,
+                 (unsigned long long)carry_bank,(unsigned long long)llama_dsv41_prefill::engram_prompt_bytes(reserved_chunk),(unsigned long long)job_host,llama_dsv41_prefill::legacy_sweep_tokens,fold_option?"fold":"split",sweep_step,sweep_list.c_str(),unsigned(fold_plan.tail),uint32_t(fold_cap));std::fflush(stderr);
+             report["prefill_plan"]={{"tokens",tokens.size()},{"capacity",reserved_chunk},{"sweeps",uint32_t(sweep_extents.size())},{"chunk",chunk_tokens},{"strategy",strategy},
+                 {"bank_rows",bank.rows},{"resident_rows",bank.resident_rows},{"slot_rows",bank.slot_rows},{"carry_bank_bytes",carry_bank}};
+             if(fold_option){report["prefill_plan"]["policy"]="fold";report["prefill_plan"]["primary_sweep_tokens"]=fold_plan.sweep;report["prefill_plan"]["fold_tail"]=fold_plan.tail;report["prefill_plan"]["fold_cap"]=fold_cap;
+                 report["prefill_plan"]["sweep_tokens"]=json::array();for(const auto&e:sweep_extents)report["prefill_plan"]["sweep_tokens"].push_back(e.count);}}
             options.fixed->bf16=options.resident_bf16;options.fixed->ids=options.resident_ids;options.fixed->metadata=options.resident_metadata;options.fixed->tile_registration=tile_registration;options.fixed->pageable_copies=pageable_copies;
             report["large_GPU_buffers_reserved_before_first_stage_lease"]=tile_tokens!=16384;
             report["graph_capacity_strategy"]=tile_tokens==16384?"existing gallocr grows to actual planned live bytes inside prompt clock":"explicit maximum reserved before first lease";
@@ -778,7 +838,7 @@ int wmain(int argc,wchar_t**argv){
             if(engram_early){
                 // The warmup pass builds its own one-token cache first: charge it.
                 warm_weights.engram_early_is_next_request=false;
-                warm_weights.engram_early_tokens.assign(tokens.begin(),tokens.begin()+std::min<size_t>(chunk_tokens,tokens.size()));
+                warm_weights.engram_early_tokens.assign(tokens.begin(),tokens.begin()+first_sweep_tokens);
                 if(restored){const auto&bt=restored->base.tokens;warm_weights.engram_early_tail.assign(bt.end()-std::min<size_t>(bt.size(),3),bt.end());}
             }
             success(warm_request->open(warm_weights,warm_options,error),error);
@@ -787,7 +847,7 @@ int wmain(int argc,wchar_t**argv){
             {const char*overlap=std::getenv("LLAMA_DSV41_ENGRAM_PROMPT_OVERLAP");
              // Auto (or a skipped =1 start) that queued nothing: the ordinary producer-warm start.
              if(!(engram_early&&warm_request->early_engram_queued())&&weights.engram_prefetch_host_bytes&&options.engram_tile_lookahead&&overlap&&std::strcmp(overlap,"1")==0){
-                const std::vector<int32_t> first(tokens.begin(),tokens.begin()+chunk_tokens);
+                const std::vector<int32_t> first(tokens.begin(),tokens.begin()+first_sweep_tokens);
                 std::vector<int32_t> tail;
                 if(restored){const auto&bt=restored->base.tokens;tail.assign(bt.end()-std::min<size_t>(bt.size(),3),bt.end());}
                 success(warm_request->start_next_engram(first,tail,error),error);
@@ -813,7 +873,7 @@ int wmain(int argc,wchar_t**argv){
         // rows after admission, before allocate's first weight fetch.
         const bool engram_early_cold=!warm&&llama_dsv41_engram_early_enabled()&&weights.engram_prefetch_host_bytes&&options.engram_tile_lookahead;
         auto open_weights=weights;
-        if(engram_early_cold){open_weights.engram_early_tokens.assign(tokens.begin(),tokens.begin()+std::min<size_t>(chunk_tokens,tokens.size()));open_weights.engram_early_tail=early_tail;}
+        if(engram_early_cold){open_weights.engram_early_tokens.assign(tokens.begin(),tokens.begin()+first_sweep_tokens);open_weights.engram_early_tail=early_tail;}
         auto started=clock_type::now();const bool opened=sweep->open(open_weights,options,error,warm_request.get(),nullptr,restored?&restored->base:nullptr);report["phase_ms"]["inspect_admit_allocate"]=ms(started);success(opened,error);if(restored){restored->finish();restored.reset();}warm_request.reset();stop();
         require(!chunk_option||options.reuse_graph&&!options.reuse_layer_graph,"Stateful CLI requires allocator-only graph mode");
         // No-warm-up start: the early Engram row load (otherwise hidden behind the
@@ -824,14 +884,14 @@ int wmain(int argc,wchar_t**argv){
         const char*early_direct=std::getenv("LLAMA_DSV41_ENGRAM_EARLY_DIRECT");
         if(!(engram_early_cold&&sweep->early_engram_queued())&&direct_open&&early_direct&&std::strcmp(early_direct,"1")==0){const char*overlap=std::getenv("LLAMA_DSV41_ENGRAM_PROMPT_OVERLAP");
             if(weights.engram_prefetch_host_bytes&&options.engram_tile_lookahead&&overlap&&std::strcmp(overlap,"1")==0){
-                const std::vector<int32_t> first(tokens.begin(),tokens.begin()+std::min<size_t>(chunk_tokens,tokens.size()));
+                const std::vector<int32_t> first(tokens.begin(),tokens.begin()+first_sweep_tokens);
                 success(sweep->start_next_engram(first,early_tail,error),error);
             }}
         report["stateful_chunks"]={{"enabled",chunk_option!=0},{"maximum_chunk_tokens",chunk_tokens},{"total_context_tokens",tokens.size()},{"chunks",json::array()},{"canonical_cache_preserved",chunk_option!=0},{"token_history_host_charge_bytes",chunk_option?context*8:tokens.size()*8}};
         if(warm){std::fprintf(stderr,"DS4PERF_WARM_PROMPT_BEGIN pid=%lu tokens=%zu\n",GetCurrentProcessId(),tokens.size());std::fflush(stderr);}
         started=clock_type::now();double total_prompt_ms=0,total_export_ms=0,append_open_ms=0,total_token_prepare_ms=0;
-        for(uint32_t first=0;first<tokens.size();first+=chunk_tokens){
-            const uint32_t count=std::min(chunk_tokens,uint32_t(tokens.size())-first);
+        for(const auto&extent:sweep_extents){
+            const uint32_t first=extent.first,count=extent.count;
             if(first){
                 auto previous=std::move(sweep);sweep.reset(new llama_dsv41_sweep);
                 auto next_options=options;auto next_weights=weights;next_options.carry.tokens=count;
@@ -860,7 +920,7 @@ int wmain(int argc,wchar_t**argv){
         if(warm){report["warm_measurement"]["prompt_processing_ms"]=report["phase_ms"]["embedding_40_layers_head"];std::fprintf(stderr,"DS4PERF_WARM_PROMPT_END pid=%lu tokens=%zu processing_ms=%.6f export_excluded=1\n",GetCurrentProcessId(),tokens.size(),report["phase_ms"]["embedding_40_layers_head"].get<double>());}
         if(llama_dsv41_expert_profile::natural_half(expert)){
             ggml_ds4_native_half_stats actual{};ggml_backend_cuda_ds4_native_half_snapshot(&actual);
-            const uint64_t expected=40ull*([&]{uint64_t n=0;for(uint64_t first=0;first<tokens.size();first+=chunk_tokens)n+=(std::min<uint64_t>(chunk_tokens,tokens.size()-first)+compute_step-1)/compute_step;return n;}());
+            const uint64_t expected=40ull*([&]{uint64_t n=0;for(const auto&e:sweep_extents)n+=(uint64_t(e.count)+compute_step-1)/compute_step;return n;}());
             require(actual.graph_active==0&&actual.completed_graphs-warm_native.completed_graphs==expected,"Native-half completed graph count differs from actual prefix/tiles");
             for(int i=0;i<3;++i)require(actual.queued[i]-warm_native.queued[i]==expected&&actual.completed[i]-warm_native.completed[i]==expected,"Native-half aggregate actual slot witness incomplete");
             report["expert_profile"]["actual_queued_per_slot"]={actual.queued[0]-warm_native.queued[0],actual.queued[1]-warm_native.queued[1],actual.queued[2]-warm_native.queued[2]};
@@ -924,12 +984,12 @@ int wmain(int argc,wchar_t**argv){
         {
             const uint64_t pv_actual=ggml_backend_cuda_dsv41_pv_view_queued()-warm_pv_view;
             const uint64_t pv_step=pair_ffn&&llama_dsv41_expert_profile::natural_half(expert)?2048:compute_step;
-            const uint64_t pv_expected=pv_view?40ull*([&]{uint64_t n=0;for(uint64_t first=0;first<tokens.size();first+=chunk_tokens)n+=(std::min<uint64_t>(chunk_tokens,tokens.size()-first)+pv_step-1)/pv_step;return n;}()):0;
+            const uint64_t pv_expected=pv_view?40ull*([&]{uint64_t n=0;for(const auto&e:sweep_extents)n+=(uint64_t(e.count)+pv_step-1)/pv_step;return n;}()):0;
             require(pv_actual==pv_expected,"PV view actual dispatch count differs from completed graphs");
             report["attention_layout"]["prompt_pv_calls_after_completed_sweep"]=pv_actual;
             report["attention_layout"]["warmup_pv_calls"]=warm_pv_view;
             const uint64_t gather_actual=ggml_backend_cuda_dsv41_gather_half_queued()-warm_gather_half;
-            const uint64_t gather_expected=fused_gather?40ull*([&]{uint64_t n=0;for(uint64_t first=0;first<tokens.size();first+=chunk_tokens)n+=(std::min<uint64_t>(chunk_tokens,tokens.size()-first)+pv_step-1)/pv_step;return n;}()):0;
+            const uint64_t gather_expected=fused_gather?40ull*([&]{uint64_t n=0;for(const auto&e:sweep_extents)n+=(uint64_t(e.count)+pv_step-1)/pv_step;return n;}()):0;
             require(gather_actual==gather_expected,"Fused gather dispatch count differs from completed graphs");
             report["attention_layout"]["prompt_gather_half_calls_after_completed_sweep"]=gather_actual;
             const uint64_t actual_split_f32=ggml_backend_cuda_dsv41_split_f32_queued()-warm_split_f32;
@@ -937,7 +997,7 @@ int wmain(int argc,wchar_t**argv){
             report["split_f32_tensor_core_attention"]={{"enabled",split_f32},{"qk_enabled",split_f32_qk},{"pv_enabled",split_f32_pv},{"algorithm","CUTLASS fused three TF32 products; F32 accumulate"},{"tile","64x64x32"},{"prompt_completed_calls",actual_split_f32},{"warmup_calls",warm_split_f32},{"eligibility","native QK/PV F32 contiguous,64 heads,aligned4 key count<=640; other shapes retain SGEMM"},{"native_envelope_qualified",false}};
             report["attention_layout"]["warmup_gather_half_calls"]=warm_gather_half;
             const uint64_t split_actual=ggml_backend_cuda_dsv41_gather_half_split_queued()-warm_gather_split;
-            const uint64_t split_expected=fused_gather?38ull*([&]{uint64_t n=0;for(uint64_t first=0;first<tokens.size();first+=chunk_tokens)n+=(std::min<uint64_t>(chunk_tokens,tokens.size()-first)+pv_step-1)/pv_step;return n;}()):0;
+            const uint64_t split_expected=fused_gather?38ull*([&]{uint64_t n=0;for(const auto&e:sweep_extents)n+=(uint64_t(e.count)+pv_step-1)/pv_step;return n;}()):0;
             require(tokens.size()<2||split_actual==split_expected,"Split-table gather count differs from compressed layers");
             report["attention_layout"]["prompt_split_table_calls_after_completed_sweep"]=split_actual;
             report["attention_layout"]["warmup_split_table_calls"]=warm_gather_split;
@@ -949,7 +1009,7 @@ int wmain(int argc,wchar_t**argv){
             report["expert_profile"]["kernel_selection_note"]="Existing untagged MUL_MAT_ID dispatch; Q8_1 activation rounding enabled explicitly; no native-half numerical qualification";
         }
         if(expert.expert_f16_cublas){
-            const uint64_t expected=120ull*([&]{uint64_t n=0;for(uint64_t first=0;first<tokens.size();first+=chunk_tokens)n+=(std::min<uint64_t>(chunk_tokens,tokens.size()-first)+compute_step-1)/compute_step;return n;}());
+            const uint64_t expected=120ull*([&]{uint64_t n=0;for(const auto&e:sweep_extents)n+=(uint64_t(e.count)+compute_step-1)/compute_step;return n;}());
             require(ggml_backend_cuda_dsv41_expert_cublas_queued()-warm_cublas==expected,"F16 expert cuBLAS aggregate witness incomplete");
             report["expert_profile"]["name"]="f16_operands_f32_accumulation_cublas";
             report["expert_profile"]["dispatch_family"]="shared_sort_gather_cublas_F16_F16_F32_scatter";
@@ -987,10 +1047,14 @@ int wmain(int argc,wchar_t**argv){
             std::fprintf(stderr,"DS4COMBO_PRODUCER_GRACEFUL_SHUTDOWN_COMPLETE sweep_release_ms=%.1f wf_persist_released=%d\n",ms(teardown),persist_released);std::fflush(stderr);return persist_released==1?0:3;}
         std::fputs(hash_only?"Canonical native frontier hashed; receipt complete; no payload file created.\n":"Offline native payload and receipt completed; receiver/parity qualification remains pending.\n",stdout);return 0;
     }catch(const std::exception&failure){
+        producer_abort::report_current(interrupted.load()?"cancelled":nullptr);   // first: no allocation, before anything below can fail
         if(sweep)sweep->cancel();report["status"]=interrupted.load()?"cancelled":"failed";report["error"]=failure.what();report["memory_floor_abort"]=memory_abort.load();report["host_memory_runtime"]=host_memory_runtime();
         if(payload){try{report["payload_actual_identity"]=describe(payload->current());}catch(...){}}
         if(receipt){try{const auto text=report.dump(2)+"\n";if(receipt->current().size==0&&text.size()<=receipt_limit){receipt->write(text.data(),text.size());receipt->flush();}}catch(...){}}
         std::cerr<<"Offline producer failed: "<<failure.what()<<". Existing/unfinished files were preserved.\n";return interrupted.load()?130:1;
+    }catch(...){
+        producer_abort::report_current();if(sweep)sweep->cancel();
+        std::cerr<<"Offline producer failed: non-standard C++ exception. Existing/unfinished files were preserved.\n";return 1;
     }
 }
 #else

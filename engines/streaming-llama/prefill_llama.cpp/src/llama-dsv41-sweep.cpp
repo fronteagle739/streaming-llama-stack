@@ -1,10 +1,13 @@
 #include "llama-dsv41-layer-log.h"
+#include "llama-dsv41-test-fault.h"
 #include "llama-dsv41-sweep.h"
 #include "llama-dsv41-append-schedule.h"
 #include "llama-dsv41-engram-prefetch.h"
 #include <cstdlib>
 
 #include "llama-dsv41-cache.h"
+#include "llama-dsv41-device-admission.h"
+#include "llama-dsv41-host-plan-log.h"
 #include "llama-dsv41-executor.h"
 #include "boundary-capture.h"
 #include "ggml-alloc.h"
@@ -352,7 +355,10 @@ bool llama_dsv41_sweep::open(const llama_dsv41_weight_provider::config &weights,
         require(!options.admitted_hidden_bytes||(options.carry.resident_ram&&
             resident_required(std::min(options.carry.tokens,options.carry.max_tile_tokens))<=options.admitted_hidden_bytes),
             "Resident hidden bank requires admitted RAM mirror and explicit device ceiling");
-        const uint64_t device=add(options.admitted_prefetch_device_bytes,add(add(add(add(add(provider.device_bytes,options.admitted_cache_bytes),options.admitted_graph_bytes),options.admitted_hidden_bytes),options.admitted_pinned_device_bytes),add(llama_dsv41_expert_profile::extra_device(options.expert),add(options.admitted_cast_device_bytes,options.admitted_index_device_bytes))));
+        // The context cache is charged at what it can hold for its context (<= --cache-bytes).
+        const uint64_t cache_charge=llama_dsv41_device_admission::cache_charge(options.admitted_cache_bytes,
+            llama_dsv41_cache_storage::required_bytes(options.context,options.compressed_cache_bf16,options.capture_dspark));
+        const uint64_t device=add(options.admitted_prefetch_device_bytes,add(add(add(add(add(provider.device_bytes,cache_charge),options.admitted_graph_bytes),options.admitted_hidden_bytes),options.admitted_pinned_device_bytes),add(llama_dsv41_expert_profile::extra_device(options.expert),add(options.admitted_cast_device_bytes,options.admitted_index_device_bytes))));
         // Deliberately conservative: includes both input/output tile vectors,
         // lease copy, graph metadata, bounded Engram and serialization scratch.
         const uint64_t tile_host=options.carry.direct_ram_tiles?
@@ -393,10 +399,25 @@ bool llama_dsv41_sweep::open(const llama_dsv41_weight_provider::config &weights,
             if(!e||*e)llama_dsv41_layer_log("LLAMADECODE_ENGRAM_ROWCACHE_ADMISSION bytes=%llu explicit=%d headroom_bytes=%llu\n",(unsigned long long)row_cache_new,int(e&&*e),(unsigned long long)headroom);
         }
         const uint64_t host=add(base_host,row_cache_have?row_cache_have:row_cache_new);
-        llama_dsv41_layer_log("DS4PERF_COMBINED_ADMISSION planned_host=%llu admitted_host=%llu provider_host=%llu carry_host=%llu tile_host=%llu owner_digest_staging=%llu planned_device=%llu admitted_device=%llu\n",
+        {   // log only: each planned host component and the row-cache headroom without it
+            const uint64_t lookahead=options.engram_tile_lookahead?uint64_t(options.carry.max_tile_tokens)*6144*4+8ull*1024*1024:0;
+            const uint64_t metadata=metadata_bytes+pinned_metadata+allocator_metadata+long_metadata+2ull*vocabulary*4+1024*1024;
+            const uint64_t token_ids=uint64_t(options.stateful_chunks?options.context:options.carry.tokens)*8;
+            llama_dsv41_layer_log("%s\n",llama_dsv41_host_plan_log::line(options.admitted_host_bytes,base_host,{
+                {"provider",provider.host_bytes},{"carry",carry_host},{"tile",tile_host},{"pair_ffn",pair_host},
+                {"owner_digest_staging",owner_digest_staging},{"engram_lookahead",lookahead},{"bf16_cache_scratch",options.compressed_cache_bf16?1024ull*1024:0},
+                {"metadata",metadata},{"token_ids",token_ids}},row_cache_have?row_cache_have:row_cache_new).c_str());
+        }
+        const auto measured=options.measured_device_free?llama_dsv41_device_admission::admit(options.measured_device_free,options.admitted_device_bytes,options.device_reserve,device)
+            :llama_dsv41_device_admission::result{device<=options.admitted_device_bytes,options.admitted_device_bytes,{}};
+        llama_dsv41_layer_log("DS4PERF_COMBINED_ADMISSION planned_host=%llu admitted_host=%llu provider_host=%llu carry_host=%llu tile_host=%llu owner_digest_staging=%llu planned_device=%llu admitted_device=%llu"
+            " job_device_bound=%llu measured_device_free=%llu device_reserve=%llu cache_charge=%llu cache_admitted=%llu\n",
             (unsigned long long)host,(unsigned long long)options.admitted_host_bytes,(unsigned long long)provider.host_bytes,
-            (unsigned long long)carry_budget.bounded_host_bytes,(unsigned long long)tile_host,(unsigned long long)owner_digest_staging,(unsigned long long)device,(unsigned long long)options.admitted_device_bytes);
-        require(device<=options.admitted_device_bytes&&host<=options.admitted_host_bytes,
+            (unsigned long long)carry_budget.bounded_host_bytes,(unsigned long long)tile_host,(unsigned long long)owner_digest_staging,(unsigned long long)device,(unsigned long long)measured.admitted,
+            (unsigned long long)options.admitted_device_bytes,(unsigned long long)options.measured_device_free,(unsigned long long)options.device_reserve,
+            (unsigned long long)cache_charge,(unsigned long long)options.admitted_cache_bytes);
+        if(!measured.ok&&options.measured_device_free)llama_dsv41_layer_log("DS4PERF_DEVICE_ADMISSION_REFUSED %s\n",measured.reason.c_str());
+        require(measured.ok&&host<=options.admitted_host_bytes,
             "V4.1 provider/cache/graph/carry combined job exceeds total resource admission");
         if(row_cache_new)success(p->provider.create_engram_row_cache(row_cache_new,error),error);
         // LLAMADECODE_ENGRAM_EARLY: tokens known, file verified, job admitted:
@@ -673,6 +694,7 @@ bool llama_dsv41_sweep::run(const std::vector<int32_t>&tokens,const cancelled&st
             double prepare_ms=0,cleanup_ms=0,carry_read_ms=0,carry_write_ms=0,weight_cache_ms=0;
             double executor_wall_ms=0,executor_phase_gap_ms=0;
             llama_dsv41_layer_log("[dsv41-sweep] layer=%u begin tokens=%zu\n",layer,owned.size());std::fflush(stderr);
+            llama_dsv41_test_fault::at_layer(layer,owned.size());   // test-only; off unless LLAMADECODE_TEST_FAULT is set
             p->check_stop(stop);llama_dsv41_layer_graph::weights weights{};
             // LLAMADECODE B1: the decode layout leases the dense stage here; the
             // routed experts arrive through the executor's router hook.
@@ -805,7 +827,8 @@ bool llama_dsv41_sweep::run(const std::vector<int32_t>&tokens,const cancelled&st
         success(p->carry.certify_frontier(error),error);p->check_stop(stop);
         p->measured.export_preparation_ms=std::chrono::duration<double,std::milli>(std::chrono::steady_clock::now()-head_complete).count();
         p->state=implementation::completed;p->published.store(true);return true;
-    }catch(const std::exception&failure){p->poison();error=failure.what();return false;}
+    }catch(const std::bad_alloc&){p->poison();error="std::bad_alloc: a host allocation failed during the V4.1 sweep run";return false;}
+    catch(const std::exception&failure){p->poison();error=failure.what();return false;}
 }
 
 bool llama_dsv41_sweep::export_native(const consumer&send,std::string&error){

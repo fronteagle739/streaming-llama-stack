@@ -37,6 +37,9 @@ KEPT = ('gpu_uuid', 'gpu_idle_max_mib', 'hold_file', 'task', 'lease_minutes', 'r
         'producer_profile', 'producer_sha256', 'producer_source_revision', 'producer_fixed_direct_open', 'env_overrides',
         'producer_graceful_shutdown_seconds', 'host', 'port', 'ctx_cache_precision', 'ctx_cache_growable',
         'producer_host_reserve_gib',
+        # LLAMADECODE fold sweep plan (owner): primary sweep S*, the remainder folded into the last sweep up
+        # to the fold cap; the host max is the ceiling for that largest sweep's bank.
+        'producer_prefill_sweep_tokens', 'producer_prefill_fold_cap_tokens', 'producer_host_max_gib',
         'comfyui_models', 'studio_python')  # envvars.json placeholders the proxy's studio/producer scopes expand
 
 

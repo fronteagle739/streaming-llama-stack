@@ -10,7 +10,8 @@ rather than merging, so env_overrides is merged here.
 
 Both presets: serving single_engine (streaming-llama ULTRA prefill + ds4-decode.dll decode in one
 producer), DirectStorage read parts 8, 512 MiB VRAM reserve beside the L2 expert tier, the default
-quality/speed setting, single-sweep prefill off (no producer_host_max_gib: 49152-token sweeps),
+quality/speed setting, the fold sweep plan (49152-token primary sweeps, the remainder folded into the
+last sweep up to 61,440 tokens, else its own sweep),
 producer_host_reserve_gib 1, Engram early load auto with no Engram row cache.
   262k: context 262144, f32 context cache, growable; the L2 tier takes its full NVML offer.
   1m:   context 999424, bf16 context cache, growable (the largest growable bf16 context that fits
@@ -38,7 +39,11 @@ PRESETS = {
                preset_name='DSV4.1 1017 (RTX: streaming-llama ULTRA prefill + ds4 decode, single engine, 1M)'),
 }
 # Keys that would change the gated configuration; a local config may not set them for these presets.
-REMOVED = ('producer_host_max_gib', 'producer_keep_alive')
+REMOVED = ('producer_host_max_gib', 'producer_keep_alive', 'producer_prefill_sweep_tokens', 'producer_prefill_fold_cap_tokens')
+# The gated fold sweep plan (measured on the RTX 5090 box, 2026-10-25): primary sweep S* tokens, the
+# remainder folded into the last sweep while it stays <= the fold cap, else its own sweep. The host max
+# is only the ceiling for the largest sweep's bank (capacity <= the fold cap).
+FOLD = dict(producer_prefill_sweep_tokens=49152, producer_prefill_fold_cap_tokens=61440, producer_host_max_gib=7.75)
 
 
 def read(path):
@@ -54,7 +59,7 @@ def overlay(preset, local=None, model=None):
         result['model'] = model
     env = dict(result.get('env_overrides') or {})
     env.update(COMMON_ENV)
-    result.update(PRESETS[preset], serving='single_engine', producer_host_reserve_gib=1, env_overrides=env)
+    result.update(PRESETS[preset], serving='single_engine', producer_host_reserve_gib=1, env_overrides=env, **FOLD)
     return result
 
 
@@ -80,6 +85,9 @@ def resolved(cfg):
     flags = {'--context': str(single['context']), '--compressed-cache-bf16': '1' if precision == 'bf16' else '0'}
     if precision != 'f32' or growable:
         flags.update({'--ctx-cache-precision': precision, '--ctx-cache-growable': str(int(growable))})
+    if single.get('producer_prefill_sweep_tokens'):   # the fold sweep plan's producer flags
+        flags.update({'--prefill-sweep-tokens': str(single['producer_prefill_sweep_tokens']),
+                      '--prefill-fold-cap-tokens': str(single['producer_prefill_fold_cap_tokens'])})
     env = apply({}, single, 'rtx-producer')
     keep = ('LLAMADECODE_', 'DS4_DS_READ_PARTS', 'LLAMA_DSV41_')
     return dict(
@@ -89,8 +97,9 @@ def resolved(cfg):
         single_engine={k: single.get(k) for k in ('context', 'ctx_cache_precision', 'ctx_cache_growable',
                        'producer_profile', 'producer_host_budget_gib', 'producer_host_reserve_gib',
                        'host_budget_gib', 'combo_worker_host_budget_gib', 'cache_affinity_spread_file')},
-        single_sweep=dict(enabled='producer_host_max_gib' in single, capacity_tokens=plan['capacity'],
-                          max_host_bytes=plan['max_host_bytes'], base_host_bytes=plan['base_host_bytes']),
+        sweep_plan=dict(policy=plan.get('policy') or 'split', primary_sweep_tokens=single.get('producer_prefill_sweep_tokens'),
+                        fold_cap_tokens=single.get('producer_prefill_fold_cap_tokens'), capacity_tokens=plan['capacity'],
+                        max_host_bytes=plan['max_host_bytes'], base_host_bytes=plan['base_host_bytes']),
         producer_flags=flags,
         producer_env={k: v for k, v in sorted(env.items()) if k.startswith(keep)})
 

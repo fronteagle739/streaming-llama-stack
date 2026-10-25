@@ -412,6 +412,7 @@ void run_live_session(std::unique_ptr<llama_dsv41_sweep>&sweep,
     for(;;){
         io.renew();auto command=dsv41_live::parse_control(io.line());guard.accept(command);if(owner_epoch)command.erase("owner_epoch");
         const auto operation=command.at("operation").get<std::string>();const auto sequence=dsv41_live::u64(command.at("sequence"));
+        producer_abort::sequence.store(sequence);   // an abort during this operation names its sequence
         const auto started=clock_type::now();
         auto reply=[&](json extra){extra["status"]="complete";extra["sequence"]=sequence;extra["session"]=session;extra["model_sha256"]=model_sha;extra["checkpoint"]=current.describe();send(extra);};
         auto same_base=[&](){const auto base=checkpoint::from_json(command.at("base"));require(base.describe()==current.describe(),"Session base token/position/owner hashes differ");};
