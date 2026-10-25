@@ -694,7 +694,7 @@ int wmain(int argc,wchar_t**argv){
         options.carry.admitted_file_bytes=number("--carry-file-bytes");options.carry.admitted_host_bytes=number("--carry-host-bytes");
         options.carry.outstanding_bytes=add(carry_other,overlap?add(plan.bytes,receipt_limit):0);
         report["budgets"]={{"provider_device",weights.admitted_device_bytes},{"provider_host",weights.admitted_host_bytes},{"cache",options.admitted_cache_bytes},
-            {"graph",options.admitted_graph_bytes},{"hidden_device",options.admitted_hidden_bytes},{"pinned_device",options.admitted_pinned_device_bytes},{"weight_cast_device",options.admitted_cast_device_bytes},{"audit_casts",options.audit_casts},{"job_device",job_device},{"job_host",job_host},{"cli_host_overhead",cli_host_bytes},{"gpu_reserve",gpu_reserve},{"carry_file",options.carry.admitted_file_bytes},
+            {"graph",options.admitted_graph_bytes},{"hidden_device",options.admitted_hidden_bytes},{"pinned_device",options.admitted_pinned_device_bytes},{"weight_cast_device",options.admitted_cast_device_bytes},{"audit_casts",options.audit_casts},{"job_device",job_device},{"job_host",job_host},{"cli_host_overhead",cli_host_bytes},{"owner_digest_staging",llama_dsv41::owner_digest_memo::staging_bytes()},{"gpu_reserve",gpu_reserve},{"carry_file",options.carry.admitted_file_bytes},
             {"carry_host",options.carry.admitted_host_bytes},{"carry_other_pending",carry_other},{"output_other_pending",output_other},{"actual_volume_overlap",overlap},{"receipt_output_volume_overlap",receipt_overlap},{"disk_reserve",output_floor}};
         if(llama_dsv41_expert_profile::native(expert)){
             report["budgets"]["expert_pool"]=expert.admitted_pool_bytes;

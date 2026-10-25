@@ -20,7 +20,11 @@
 #define WIN32_LEAN_AND_MEAN
 #endif
 #include <windows.h>
+#include <bcrypt.h>
 #include <io.h>
+#ifdef _MSC_VER
+#pragma comment(lib, "bcrypt.lib")
+#endif
 #include <fcntl.h>
 #endif
 #ifndef DSV41_BOUNDARY_SOURCE_BASE_REVISION
@@ -158,6 +162,39 @@ void store(const digest &d,sha256_state &s){std::memcpy(s.h,d.h,sizeof s.h);s.bl
 sha256_state sha256_begin(){sha256_state s;store(digest{},s);return s;}
 void sha256_update(sha256_state &s,const void *data,size_t bytes){digest d=load(s);d.update(data,bytes);store(d,s);}
 std::string sha256_hex(const sha256_state &s){digest d=load(s);return d.finish();}
+#if defined(_WIN32)
+namespace {
+void cng(NTSTATUS status,const char *what){if(!BCRYPT_SUCCESS(status))throw std::runtime_error(std::string("Native SHA256 ")+what+" failed");}
+BCRYPT_ALG_HANDLE sha256_algorithm(){
+    static const BCRYPT_ALG_HANDLE algorithm=[]{BCRYPT_ALG_HANDLE a=nullptr;cng(BCryptOpenAlgorithmProvider(&a,BCRYPT_SHA256_ALGORITHM,nullptr,0),"open");return a;}();
+    return algorithm;
+}
+}
+sha256_native::sha256_native(){BCRYPT_HASH_HANDLE h=nullptr;cng(BCryptCreateHash(sha256_algorithm(),&h,nullptr,0,nullptr,0,0),"create");handle=h;}
+sha256_native::~sha256_native(){if(handle)BCryptDestroyHash(BCRYPT_HASH_HANDLE(handle));}
+void sha256_native::update(const void *data,size_t bytes){
+    const auto *p=static_cast<const unsigned char *>(data);
+    while(bytes){const ULONG n=ULONG(std::min<size_t>(bytes,size_t(1)<<30));
+        cng(BCryptHashData(BCRYPT_HASH_HANDLE(handle),const_cast<PUCHAR>(p),n,0),"update");p+=n;bytes-=n;}
+}
+std::string sha256_native::hex() const{
+    BCRYPT_HASH_HANDLE copy=nullptr;cng(BCryptDuplicateHash(BCRYPT_HASH_HANDLE(handle),&copy,nullptr,0,0),"duplicate");
+    unsigned char out[32];const NTSTATUS status=BCryptFinishHash(copy,out,32,0);BCryptDestroyHash(copy);cng(status,"finish");
+    static const char digits[]="0123456789abcdef";std::string text(64,'0');
+    for(size_t i=0;i<32;++i){text[2*i]=digits[out[i]>>4];text[2*i+1]=digits[out[i]&15];}
+    return text;
+}
+#else
+sha256_native::sha256_native():portable(sha256_begin()){}
+sha256_native::~sha256_native()=default;
+void sha256_native::update(const void *data,size_t bytes){sha256_update(portable,data,bytes);}
+std::string sha256_native::hex() const{return sha256_hex(portable);}
+#endif
+sha256_native::sha256_native(sha256_native &&o) noexcept:handle(o.handle),portable(o.portable){o.handle=nullptr;}
+sha256_native &sha256_native::operator=(sha256_native &&o) noexcept{
+    if(this!=&o){std::swap(handle,o.handle);std::swap(portable,o.portable);}
+    return *this;
+}
 std::string sha256_stream(uint64_t bytes,const std::function<bool(uint64_t,void *,size_t)>&read){
     require(bool(read),"SHA256 stream requires a reader");
     digest d;std::array<unsigned char,65536> page{};
