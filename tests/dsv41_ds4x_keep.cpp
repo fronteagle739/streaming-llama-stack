@@ -34,6 +34,10 @@ int main() {
     expect(!first.delta && first.moved.size() == 3, "nothing held (after an x_close): register all");
     auto empty = k::reregister_plan({}, {});
     expect(empty.delta && empty.moved.empty() && empty.unchanged == 0, "empty");
+    expect(k::keep_open_from_env(nullptr), "env unset: keep-open ON (default)");
+    expect(!k::keep_open_from_env("0"), "env =0: old x_close + x_open path");
+    expect(k::keep_open_from_env("1"), "env =1: keep-open ON");
+    expect(k::keep_open_from_env(""), "env empty: keep-open ON (default)");
     std::printf("%s %d failures\n", failures ? "FAILED" : "ALL PASS", failures);
     return failures ? 1 : 0;
 }
