@@ -43,6 +43,14 @@ inline result admit(uint64_t measured_free, uint64_t bound, uint64_t reserve, ui
     return r;
 }
 
+// Second measurement just before the sweep opens (after backend init): the
+// admission uses the lower of the two free values, so a real drop in free memory
+// between them shrinks the measured admission and the sweep refuses a plan that
+// no longer fits. Refused outright when the second free is not above the reserve.
+inline result recheck(uint64_t first_free, uint64_t second_free, uint64_t bound, uint64_t reserve, uint64_t planned) {
+    return admit(std::min(first_free, second_free), bound, reserve, planned);
+}
+
 // Device bytes the context cache can occupy: `required` = its full-context
 // logical bytes (llama_dsv41_cache_storage::required_bytes), plus per-owner VMM
 // rounding (8 owner tensors x granularity) and 1 MiB tensor-alignment slack.

@@ -722,7 +722,18 @@ int wmain(int argc,wchar_t**argv){
         }
         stop();report["telemetry"]["before_open_available_ram"]=ram_admission(job_host);
         ggml_backend_dev_memory(ggml_backend_get_device(backend.get()),&free,&total);report["telemetry"]["before_open_device_free"]=free;
-        require(uint64_t(free)>=add(job_device,gpu_reserve),"CUDA context changed available device admission");sweep.reset(new llama_dsv41_sweep);
+        // Measured plan: re-measure before the sweep opens. The sweep admits min(job, min(first, second) free - reserve)
+        // against its combined plan (llama_dsv41_device_admission::recheck), so a real drop since the first
+        // measurement is refused there, with the numbers; the fixed --job-device-bytes is only the upper bound.
+        require(uint64_t(free)>gpu_reserve,"CUDA context changed available device admission: free bytes no longer exceed the reserve");
+        options.measured_device_free=std::min<uint64_t>(measured_device_free,uint64_t(free));
+        report["budgets_measured_device"]["before_open_device_free"]=uint64_t(free);
+        report["budgets_measured_device"]["measured_device_free"]=options.measured_device_free;
+        report["budgets_measured_device"]["admitted_device"]=std::min<uint64_t>(job_device,options.measured_device_free-gpu_reserve);
+        std::fprintf(stderr,"DS4PERF_GPU_JOB_RECHECK first_free=%llu before_open_free=%llu measured_free=%llu measured_admission=%llu job=%llu reserve=%llu\n",
+            (unsigned long long)measured_device_free,(unsigned long long)free,(unsigned long long)options.measured_device_free,
+            (unsigned long long)std::min<uint64_t>(job_device,options.measured_device_free-gpu_reserve),(unsigned long long)job_device,(unsigned long long)gpu_reserve);
+        sweep.reset(new llama_dsv41_sweep);
         report["phase_ms"]["input_identity_hash_budget_preflight"]=ms(process_started);
         if(llama_dsv41_expert_profile::natural_half(expert)){
             ggml_ds4_native_half_stats initial{};ggml_backend_cuda_ds4_native_half_snapshot(&initial);
