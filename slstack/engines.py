@@ -12,6 +12,7 @@ import urllib.request
 from urllib.parse import urlsplit
 from .config import path
 from .process import OwnedProcess
+from .progress import Window, activity, readiness_seconds
 
 
 def http_json(url, body=None, timeout=30, headers=None):
@@ -269,8 +270,11 @@ class Engines:
             self.journal.update(self.attach_entry, 'attaching', pid=self.llm.proc.pid,
                                 pid_created=psutil.Process(self.llm.proc.pid).create_time())
             self.attach_guard_recorded = True
-        start = time.monotonic()
-        while time.monotonic() - start < min(300, self.cfg['request_timeout_s']) + self.cfg.get('gpu_wait_seconds', 0):
+        # Owner rule (no fixed timeouts): readiness lives while the server tree shows progress (job
+        # log, I/O, CPU, members); it fails on exit or a no-progress window. A guardian waiting for
+        # the GPU hold is idle by design, so gpu_wait_seconds widens the window, not a total cap.
+        window = Window(readiness_seconds(self.cfg) + self.cfg.get('gpu_wait_seconds', 0))
+        while not window.expired():
             if self.llm.proc.poll() is not None:
                 self.llm.wait()
                 raise RuntimeError('ds4 server exited before readiness')
@@ -288,9 +292,11 @@ class Engines:
                 self.status('Model ready')
                 return
             except (OSError, RuntimeError):
+                window.observe(activity(self.llm.proc.pid, self.llm.log))
                 time.sleep(.2)
         self.close()
-        raise TimeoutError('ds4 server readiness deadline exceeded')
+        raise TimeoutError('ds4 server readiness made no progress for %.0fs (log, I/O and CPU unchanged; %.0fs since launch)'
+                           % (window.idle(), window.elapsed()))
 
     def _ready_single(self):
         if self.cfg['lora']:
@@ -315,8 +321,8 @@ class Engines:
         self.llm = OwnedProcess(self.cfg, [sys.executable, '-B', '-m', 'slstack.combo_proxy', '--config', str(config)],
                                 'single-engine', scope='ds4-win', telemetry=False,
                                 cwd=Path(__file__).resolve().parents[1], timeout=86400)
-        start = time.monotonic()
-        while time.monotonic() - start < min(300, self.cfg['request_timeout_s']):
+        window = Window(readiness_seconds(self.cfg))   # no-progress window (owner rule), as above
+        while not window.expired():
             if self.llm.proc.poll() is not None:
                 self.llm.wait()
                 raise RuntimeError('Single-engine server exited before readiness')
@@ -326,9 +332,11 @@ class Engines:
                 self.status('Model ready (single engine; the producer loads with the first prompt)')
                 return
             except (OSError, RuntimeError):
+                window.observe(activity(self.llm.proc.pid, self.llm.log))
                 time.sleep(.2)
         self.close()
-        raise TimeoutError('Single-engine server readiness deadline exceeded')
+        raise TimeoutError('Single-engine server readiness made no progress for %.0fs (log, I/O and CPU unchanged; %.0fs since launch)'
+                           % (window.idle(), window.elapsed()))
 
     def quality(self, value=None):
         if self.cfg.get('mac'):

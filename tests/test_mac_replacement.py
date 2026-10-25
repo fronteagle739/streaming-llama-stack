@@ -34,7 +34,8 @@ class MacReplacementTests(unittest.TestCase):
         check_backend_port(port)
 
     def test_retired_memory_must_recover_without_shrinking_the_cap(self):
-        memory = [SimpleNamespace(available=n*2**30) for n in (80, 200, 450)]
+        # Each failed attempt reads RAM twice: budget() and the no-progress window's signal.
+        memory = [SimpleNamespace(available=n*2**30) for n in (80, 80, 200, 200, 450)]
         cfg = {'min_available_gib':32}
         with patch('psutil.virtual_memory',side_effect=memory), \
              patch('slstack.mac.time.sleep') as sleep, redirect_stdout(io.StringIO()):
@@ -44,13 +45,24 @@ class MacReplacementTests(unittest.TestCase):
         self.assertEqual(sleep.call_count,2)
         self.assertNotIn('mac_host_budget_gib',cfg)
 
-    def test_replacement_wait_is_bounded(self):
+    def test_replacement_wait_stops_when_memory_stops_recovering(self):
+        # Owner rule: 60 s is a NO-PROGRESS window (renewed while available RAM rises), not a cap.
         with patch('psutil.virtual_memory',return_value=SimpleNamespace(available=80*2**30)), \
-             patch('slstack.mac.time.monotonic',side_effect=[10,71]), \
+             patch('slstack.mac.time.monotonic',side_effect=[10,10,71,71,71]), \
              patch('slstack.mac.time.sleep') as sleep:
-            with self.assertRaisesRegex(MemoryError,'did not recover'):
+            with self.assertRaisesRegex(MemoryError,'stopped recovering for 61s'):
                 replacement_budget({'min_available_gib':32},400,384)
         sleep.assert_not_called()
+
+    def test_replacement_wait_lives_while_memory_keeps_recovering(self):
+        now = [0.]
+        readings = iter([SimpleNamespace(available=(80+n//2)*2**30) for n in range(1000)])   # +1 GiB every 2 reads
+        def sleep(seconds): now[0] += 30   # 30 s between attempts: 300 s total, far past 60 s
+        with patch('psutil.virtual_memory',side_effect=lambda: next(readings)), \
+             patch('slstack.mac.time.monotonic',side_effect=lambda: now[0]), \
+             patch('slstack.mac.time.sleep',side_effect=sleep), redirect_stdout(io.StringIO()):
+            result = replacement_budget({'min_available_gib':32},400,90-32)
+        self.assertEqual(result['host_budget_gib'],58);self.assertGreater(now[0],60)
 
     def test_uncertain_cleanup_preserves_ownership_and_blocks_replacement(self):
         receiver = Receiver.__new__(Receiver)

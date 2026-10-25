@@ -21,6 +21,7 @@ from .config import ROOT, path
 from .engines import http_json
 from .journal import atomic_json, sha256
 from .process import OwnedProcess
+from .progress import Window, activity, readiness_seconds
 
 
 def budget(cfg, maximum=400):
@@ -38,14 +39,19 @@ def replacement_budget(cfg, maximum, previous_budget, timeout=60):
     if previous_budget is None:
         return budget(cfg, maximum)
     requested = {**cfg, 'mac_host_budget_gib': cfg.get('mac_host_budget_gib') or previous_budget}
-    deadline = time.monotonic() + timeout
+    # Owner rule (no fixed timeouts): `timeout` is the no-progress window; it is renewed while
+    # available memory keeps rising (the retired buffers are still draining).
+    import psutil
+    window = Window(timeout)
     announced = False
     while True:
         try:
             return budget(requested, maximum)
         except MemoryError:
-            if time.monotonic() >= deadline:
-                raise MemoryError('Mac physical memory did not recover after certified backend cleanup') from None
+            window.rising(psutil.virtual_memory().available)
+            if window.expired():
+                raise MemoryError('Mac physical memory stopped recovering for %.0fs after certified backend cleanup (%.0fs since retire)'
+                                  % (window.idle(), window.elapsed())) from None
             if not announced:
                 print('Waiting for retired Mac buffers to release physical memory', flush=True)
                 announced = True
@@ -277,17 +283,20 @@ class Receiver:
                                    unbounded=True, scope='ds4-mac' if self.backend == 'ds4' else 'mlx-serve')
         self.engine_mode = native
         self.engine_budget = cfg['host_budget_gib']
-        deadline = time.monotonic() + 300
-        while time.monotonic() < deadline:
+        # Owner rule (no fixed timeouts): readiness lives while the backend tree shows progress.
+        window = Window(readiness_seconds(cfg))
+        while not window.expired():
             if self.engine.proc.poll() is not None:
                 self.engine.wait()
             try:
                 http_json(f'http://127.0.0.1:{port}/v1/models', timeout=2)
                 return
             except (OSError, RuntimeError):
+                window.observe(activity(self.engine.proc.pid, self.engine.log))
                 time.sleep(.25)
         self.close()
-        raise TimeoutError('Mac backend readiness deadline exceeded')
+        raise TimeoutError('Mac backend readiness made no progress for %.0fs (log, I/O and CPU unchanged; %.0fs since launch)'
+                           % (window.idle(), window.elapsed()))
 
     def chat(self, body, *, qualification=None):
         if qualification is None and self.backend == 'ds4' and (not self.peer or self.peer.get('status') != 'qualified'):
@@ -335,10 +344,10 @@ class Receiver:
 
 def wait_for_receiver(cfg, job):
     """Relay only the owned receiver's user-facing startup lines to its terminal."""
-    deadline = time.monotonic() + 60
+    window = Window(readiness_seconds(cfg))   # no-progress window (owner rule), not a 60 s cap
     bind = cfg.get('mac_bind','0.0.0.0')
     host = '127.0.0.1' if bind == '0.0.0.0' else bind
-    while time.monotonic() < deadline:
+    while not window.expired():
         if job.proc.poll() is not None:
             job.wait()
             raise RuntimeError('Receiver exited before startup')
@@ -354,8 +363,10 @@ def wait_for_receiver(cfg, job):
                     return
         except (OSError,RuntimeError):
             pass
+        window.observe(activity(job.proc.pid, job.log))
         time.sleep(.25)
-    raise TimeoutError('Receiver startup/address announcement exceeded 60 seconds')
+    raise TimeoutError('Receiver startup/address announcement made no progress for %.0fs (%.0fs since launch)'
+                       % (window.idle(), window.elapsed()))
 
 
 def serve(cfg, backend, build):

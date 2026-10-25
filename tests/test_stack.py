@@ -231,6 +231,14 @@ class GuardianTests(Base):
         with self.assertRaisesRegex(RuntimeError, 'deadline exceeded'):
             child.wait()
 
+    def test_progressing_child_outlives_its_window(self):
+        # Owner rule: timeout_s is a no-progress window. A child that keeps logging for 4 s with a
+        # 1 s window must finish normally (the old total cap would have killed it at 1 s).
+        child = OwnedProcess(self.cfg, [sys.executable, '-B', '-u', '-c',
+                                        'import time\nfor i in range(20):print("tick",i,flush=True);time.sleep(.2)'],
+                             'TEST-progress', timeout=1)
+        self.assertEqual(child.wait()['exit_code'], 0)
+
     def test_rss_budget_failure_is_loud(self):
         cfg = {**self.cfg, 'host_budget_gib': .08, 'job_commit_gib': .5}
         child = OwnedProcess(cfg, [sys.executable, '-B', '-c', 'import time;a=bytearray(128*1024**2);time.sleep(3)'], 'TEST-memory')

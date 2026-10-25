@@ -18,6 +18,7 @@ from .native_broker import vendor,model_receipt
 from .journal import atomic_json,sha256
 from .combo_release import certified
 from .combo_ram import protect_working_set
+from .progress import Window,activity,readiness_seconds
 from . import combo_abort
 
 
@@ -217,7 +218,9 @@ class Native:
 
         def startup(process):
             self.process=process
-            deadline=time.monotonic()+min(300,cfg['request_timeout_s'])
+            # Owner rule (no fixed timeouts): readiness lives while the native process shows
+            # progress (its stderr log, I/O or CPU change); it fails only on exit or a no-progress window.
+            window=Window(readiness_seconds(cfg))
             while True:
                 if cancelled():raise RuntimeError('Native startup cancelled in its owner epoch')
                 if process.job.poll() is not None:raise RuntimeError('Native process exited before setup: '+process.diagnostic[-2000:].decode(errors='replace'))
@@ -225,7 +228,9 @@ class Native:
                     self.http('/v1/models',timeout=2)
                     break
                 except (OSError,RuntimeError):
-                    if time.monotonic()>deadline:raise TimeoutError('Native readiness deadline exceeded')
+                    window.observe(activity(process.job.pid,directory/'stderr.log'))
+                    if window.expired():
+                        raise TimeoutError('Native readiness made no progress for %.0fs (log, I/O and CPU unchanged; %.0fs since launch)'%(window.idle(),window.elapsed()))
                     time.sleep(.1)
             reply=self.control('setup')
             if restore is not None:
