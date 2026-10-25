@@ -12,6 +12,8 @@
 #include <chrono>
 #include <cstdint>
 #include <cstdio>
+#include <cmath>
+#include <cstdlib>
 #include <limits>
 
 // Physical host residency and WDDM backing commitment are independent budgets.
@@ -23,6 +25,7 @@ struct state {
     uint64_t private_bytes = 0, private_peak = 0;
 };
 inline uint64_t private_limit = 0;
+inline uint64_t runtime_min_free_bytes = UINT64_C(4) << 30;
 inline HANDLE job = nullptr;
 inline bool read(state &s) {
     MEMORYSTATUSEX m{}; m.dwLength = sizeof(m);
@@ -48,25 +51,48 @@ inline void report(const char *event, const state &s, uint64_t host = 0, uint64_
     const int n = snprintf(text, sizeof(text),
         "DSV41_HOST_MEMORY_%s host_plan_bytes=%llu device_plan_bytes=%llu available_physical_bytes=%llu "
         "physical_total_bytes=%llu system_commit_bytes=%llu system_commit_limit_bytes=%llu "
-        "private_bytes=%llu private_peak_bytes=%llu private_limit_bytes=%llu reserve_bytes=%llu\n",
+        "private_bytes=%llu private_peak_bytes=%llu private_limit_bytes=%llu reserve_bytes=%llu runtime_min_free_bytes=%llu\n",
         event, (unsigned long long)host, (unsigned long long)device,
         (unsigned long long)s.available, (unsigned long long)s.total,
         (unsigned long long)s.commit, (unsigned long long)s.commit_limit,
         (unsigned long long)s.private_bytes, (unsigned long long)s.private_peak,
-        (unsigned long long)private_limit, (unsigned long long)reserve);
+        (unsigned long long)private_limit, (unsigned long long)reserve, (unsigned long long)runtime_min_free_bytes);
     if (n > 0) { DWORD done; WriteFile(GetStdHandle(STD_ERROR_HANDLE), text,
         DWORD(size_t(n) < sizeof(text) ? size_t(n) : sizeof(text) - 1), &done, nullptr); }
 }
-// Owner 2026-10-25 runtime rule: NO PAGING, not a free-RAM number ("I dont want a
-// 4gb safety stop i just dont want it paging"). Admission (begin) still requires the
-// plan to fit physical RAM and commit. At runtime only real paging stops the
-// producer: global pagefile usage rising more than paging_limit over the launch
-// baseline (studio.job_paging.GLOBAL_PAGING_LIMIT, as the vendor session watch
-// does since 2ba9337). Free RAM below the reserve, commit near its limit or private
-// bytes over the Job plan with zero paging are recorded, never fatal.
+// Runtime available physical RAM floor, independent of admission's reserve.
+// Owner 2026-10-25: restore the known safe 4 GiB stop as a startup flag. 0 disables
+// it; the existing paging stop remains enabled in either case.
+inline std::atomic<bool> floor_stop{false}, memory_query_failed{false};
+inline std::atomic<uint64_t> stopped_available{0};
+inline bool configure_runtime_min_free_gib(const char *text) {
+    if (!text || !*text || job) return false;
+    char *end = nullptr;
+    const double value = std::strtod(text, &end);
+    if (end == text || *end || !std::isfinite(value) || value < 0 || value >= 17179869184.0) return false;
+    runtime_min_free_bytes = uint64_t(value * double(UINT64_C(1) << 30));
+    return true;
+}
+inline bool floor_exceeded(const state &s) { return runtime_min_free_bytes && s.available < runtime_min_free_bytes; }
+inline bool check_runtime_floor(const state &s) {
+    if (floor_stop.load()) return false;
+    if (!floor_exceeded(s)) return true;
+    stopped_available.store(s.available); floor_stop.store(true);
+    report("MIN_FREE_STOP", s);
+    return false;
+}
 constexpr uint64_t paging_limit = UINT64_C(256000000);   // studio.job_paging.GLOBAL_PAGING_LIMIT
 inline std::atomic<bool> paging_stop{false};
 inline std::atomic<uint64_t> paging_baseline{UINT64_MAX}, paging_growth_peak{0}, low_memory_events{0};
+inline bool stopped() { return floor_stop.load() || memory_query_failed.load() || paging_stop.load(); }
+inline void stop_reason(char *text, size_t capacity) {
+    if (floor_stop.load()) std::snprintf(text, capacity,
+        "Producer stopped: available physical RAM %llu bytes below --runtime-min-free-gib=%g (%llu bytes)",
+        (unsigned long long)stopped_available.load(), double(runtime_min_free_bytes) / double(UINT64_C(1) << 30),
+        (unsigned long long)runtime_min_free_bytes);
+    else if (memory_query_failed.load()) std::snprintf(text, capacity, "Producer stopped: physical RAM query failed while runtime floor enabled");
+    else std::snprintf(text, capacity, "Producer stopped: paging detected or paging query failed (pagefile growth limit 256 MB)");
+}
 // Pure verdicts (tests/dsv41_host_memory_paging.cpp).
 inline uint64_t paging_growth(uint64_t baseline, uint64_t now) { return now > baseline ? now - baseline : 0; }
 inline bool paging_exceeded(uint64_t baseline, uint64_t now, uint64_t limit = paging_limit) {
@@ -93,15 +119,20 @@ inline bool set_paging_baseline() {
     uint64_t now = 0; if (!pagefile_in_use(now)) return false;
     paging_baseline.store(now); report_paging("PAGING_BASELINE", now, now); return true;
 }
-// false only when paging was detected (or cannot be measured); sampled at most every 250 ms.
+// Latch the graceful stop on either guard; sampled at most every 250 ms.
 inline bool live() {
-    if (paging_stop.load()) return false;
+    if (stopped()) return false;
     static std::atomic<int64_t> last{0};
     const int64_t t = std::chrono::duration_cast<std::chrono::milliseconds>(std::chrono::steady_clock::now().time_since_epoch()).count();
     if (t - last.load() < 250) return true;
     last.store(t);
     state s;
-    if (read(s) && low_memory(s) && low_memory_events.fetch_add(1) == 0) report("LOW_MEMORY_RECORDED", s);
+    const bool readable = read(s);
+    if (!readable && runtime_min_free_bytes) {
+        report("QUERY_FAILED", s); memory_query_failed.store(true); return false;
+    }
+    if (readable && !check_runtime_floor(s)) return false;
+    if (readable && low_memory(s) && low_memory_events.fetch_add(1) == 0) report("LOW_MEMORY_RECORDED", s);
     uint64_t now = 0;
     if (!pagefile_in_use(now)) { report("PAGING_QUERY_FAILED", s); paging_stop.store(true); return false; }
     uint64_t base = paging_baseline.load();
@@ -111,7 +142,7 @@ inline bool live() {
     if (paging_exceeded(base, now)) { report_paging("PAGING_STOP", base, now); paging_stop.store(true); return false; }
     return true;
 }
-// Samples paging at 4 Hz. On paging it only flags the stop: the producer stops
+// Samples RAM and paging at 4 Hz. It only flags the stop: the producer stops
 // gracefully at its next boundary (should_stop); never a TerminateProcess.
 inline DWORD WINAPI watch(void *) {
     for (;;) {

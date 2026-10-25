@@ -4,6 +4,7 @@
   "port": 8088,
   "host_budget_gib": 8,
   "min_available_gib": 2,
+  "runtime_min_free_gib": 4.0,
   "job_commit_gib": 48,
   "request_timeout_s": 900,
   "lease_minutes": 19,

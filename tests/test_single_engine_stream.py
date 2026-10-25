@@ -74,6 +74,26 @@ class SingleEngineStreamTests(unittest.TestCase):
         self.assertFalse(rows[-1]['slstack']['buffered_stream'])
         self.assertTrue(text.rstrip().endswith('data: [DONE]'))
 
+    def test_runtime_ram_abort_reaches_streamed_client_as_an_error(self):
+        from studio.dsv41_session_contract import Refused
+        reason='Persistent producer stopped: available physical RAM below runtime_min_free_gib=4'
+        def failed():
+            yield event({'content':'Partial reply'})
+            raise Refused(reason)
+        engine=single_engine(self.cfg);engine.chat_events.return_value=failed()
+        server=serve(Stack(self.cfg,engine))
+        try:
+            body=json.dumps({'messages':[{'role':'user','content':'Hi'}],'stream':True}).encode()
+            request=urllib.request.Request(f'http://127.0.0.1:{server.server_port}/v1/chat/completions',data=body,headers={'Content-Type':'application/json'})
+            with urllib.request.urlopen(request,timeout=10) as response:text=response.read().decode()
+        finally:
+            server.shutdown();server.server_close()
+        rows=[json.loads(line[6:]) for line in text.splitlines() if line.startswith('data: {')]
+        self.assertIn(reason,next(row['error']['message'] for row in rows if 'error' in row))
+        self.assertTrue(any(reason in choice.get('delta',{}).get('content','') for row in rows for choice in row.get('choices',[])))
+        self.assertFalse(any(choice.get('finish_reason')=='stop' for row in rows for choice in row.get('choices',[])))
+        self.assertTrue(text.rstrip().endswith('data: [DONE]'))
+
     def test_props_report_the_single_engine_context(self):
         engine = single_engine(self.cfg)
         server = serve(Stack({**self.cfg, 'context': 999424}, engine))
