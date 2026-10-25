@@ -51,11 +51,12 @@ inline sweeps split(uint32_t n, uint32_t cap, uint32_t align = sweep_align) {
 // Owner fold policy (--prefill-sweep-tokens S): every sweep is S tokens and the
 // remainder r = n - k*S is folded into the last one (S + r). No near-equal sweeps,
 // no small tail. n <= S is one sweep. When S + r would exceed the capacity, the
-// remainder becomes its own last sweep instead (tail = true). S must be a nonzero
+// remainder becomes its own last sweep instead (tail = true); so it does when a
+// fold cap F is set (--prefill-fold-cap-tokens) and S + r > F. S must be a nonzero
 // multiple of align, and <= cap unless the whole prompt (n <= cap) is one sweep
 // (count 0 = refused). Sweep i starts at i*S; all but the last are S tokens.
 struct fold_plan { uint32_t count = 0, sweep = 0, last = 0; bool tail = false; };
-inline fold_plan fold(uint32_t n, uint32_t s, uint32_t cap, uint32_t align = sweep_align) {
+inline fold_plan fold(uint32_t n, uint32_t s, uint32_t cap, uint32_t fold_cap = 0, uint32_t align = sweep_align) {
     fold_plan out;
     if (!n || !s || !align || s % align) return out;
     if (n <= s) { if (n <= cap) { out.sweep = s; out.count = 1; out.last = n; } return out; }
@@ -63,18 +64,18 @@ inline fold_plan fold(uint32_t n, uint32_t s, uint32_t cap, uint32_t align = swe
     out.sweep = s;
     const uint32_t k = n / s, r = n % s;
     if (!r) { out.count = k; out.last = s; return out; }
-    if (uint64_t(s) + r <= cap) { out.count = k; out.last = s + r; return out; }
+    if (uint64_t(s) + r <= cap && (!fold_cap || uint64_t(s) + r <= fold_cap)) { out.count = k; out.last = s + r; return out; }
     out.count = k + 1; out.last = r; out.tail = true;
     return out;
 }
 
-// The (first, count) sweep list the producer runs: fold(n, s, cap) when s is set,
-// else today's split(n, cap). Empty = refused.
+// The (first, count) sweep list the producer runs: fold(n, s, cap, fold_cap) when
+// s is set, else today's split(n, cap). Empty = refused.
 struct extent { uint32_t first = 0, count = 0; };
-inline std::vector<extent> plan_sweeps(uint32_t n, uint32_t cap, uint32_t s = 0) {
+inline std::vector<extent> plan_sweeps(uint32_t n, uint32_t cap, uint32_t s = 0, uint32_t fold_cap = 0) {
     std::vector<extent> out;
     if (s) {
-        const auto f = fold(n, s, cap);
+        const auto f = fold(n, s, cap, fold_cap);
         for (uint32_t i = 0; i < f.count; ++i) out.push_back({i * f.sweep, i + 1 < f.count ? f.sweep : f.last});
     } else {
         const auto t = split(n, cap);
