@@ -67,6 +67,20 @@ def host_registration_args(cfg,args):
         args['--host-registration']=mode
     return args
 
+TOPK_KERNEL=('current','fast')
+def topk_kernel(cfg):
+    """LLAMADECODE producer indexer top-512 selector (--topk-kernel): current (default, today's tile
+    sorts + merge) | fast (exact radix select; identical ids and order, NaN/subnormal rows keep the
+    current pipeline)."""
+    value=cfg.get('producer_topk_kernel','current')
+    if value not in TOPK_KERNEL:raise ValueError('producer_topk_kernel must be current or fast')
+    return value
+
+def topk_kernel_args(cfg,args):
+    """Producer argv on top of profile(): current keeps today's argv exactly."""
+    if topk_kernel(cfg)=='fast':args['--topk-kernel']='fast'
+    return args
+
 LEGACY_SWEEP=49152
 def carry_bank_bytes(rows):
     """Locked RAM carry bank for `rows` (llama_dsv41_prefill::carry_bank_bytes): 4 KiB header + 32-row pages."""
@@ -142,7 +156,7 @@ class ComboProducer:
         native=runner or _Native();receipt=model_receipt(cfg)
         tier=cfg.get('producer_profile','ultra')
         if tier not in ('accurate','fast','ultra'):raise ValueError('Combo producer profile must be accurate, fast or ultra (original weights; no HYPER)')
-        args=host_registration_args(cfg,dict(profile(tier)['arguments']))
+        args=topk_kernel_args(cfg,host_registration_args(cfg,dict(profile(tier)['arguments'])))
         import psutil
         plan=prefill_plan(cfg,len(tokens),psutil.virtual_memory().available);self.prefill_plan=plan;host_bytes=plan['host_bytes']
         if plan['capacity']!=LEGACY_SWEEP:   # absent a raise the argv stays today's exactly

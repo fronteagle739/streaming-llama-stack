@@ -72,6 +72,21 @@ class RuntimeTests(unittest.TestCase):
         cfg = sr.single_config(dict(BASE, producer_host_registration='whole'), INSTALLED, 'rev')
         self.assertEqual(cfg['producer_host_registration'], 'whole')   # carried into the installed runtime config
 
+    def test_topk_kernel_config(self):
+        from slstack.combo_producer import topk_kernel, topk_kernel_args
+        from slstack.native_profiles import profile
+        today = dict(profile('ultra')['arguments'])
+        self.assertEqual(topk_kernel(BASE), 'current')   # absent = today's selector
+        self.assertEqual(topk_kernel_args(BASE, dict(today)), today)   # argv unchanged
+        self.assertEqual(topk_kernel_args(dict(BASE, producer_topk_kernel='current'), dict(today)), today)
+        args = topk_kernel_args(dict(BASE, producer_topk_kernel='fast'), dict(today))
+        self.assertEqual(args.pop('--topk-kernel'), 'fast')
+        self.assertEqual(args, today)   # nothing else changes
+        for bad in ('Fast', 'draft', 1, None):
+            with self.assertRaises(ValueError):topk_kernel(dict(BASE, producer_topk_kernel=bad))
+        cfg = sr.single_config(dict(BASE, producer_topk_kernel='fast'), INSTALLED, 'rev')
+        self.assertEqual(cfg['producer_topk_kernel'], 'fast')   # carried into the installed runtime config
+
     @unittest.skipUnless(STUDIO_NATIVE.exists(), 'needs the Studio checkout')
     def test_studio_argv_launches_the_single_mode(self):
         cfg = sr.single_config(BASE, INSTALLED, 'rev');preset = sr.preset(BASE, INSTALLED)

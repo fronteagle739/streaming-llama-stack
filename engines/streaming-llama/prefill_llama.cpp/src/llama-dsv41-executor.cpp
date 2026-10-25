@@ -1510,6 +1510,9 @@ bool llama_dsv41_tile_executor::run(const request&in,const llama_dsv41_layer_gra
         const auto dense_fp4_before=dense_mxfp4?ggml_backend_cuda_native_mxfp4_dense_queued():0;
         const bool topk_radix=std::getenv("LLAMA_DSV41_TOPK_RADIX")&&std::string(std::getenv("LLAMA_DSV41_TOPK_RADIX"))=="1";
         const auto topk_radix_before=topk_radix?ggml_backend_cuda_dsv41_topk_radix_queued():0;
+        const bool topk_fast=ggml_backend_cuda_dsv41_topk_fast_enabled()!=0;
+        const auto topk_fast_before=topk_fast?ggml_backend_cuda_dsv41_topk_fast_queued():0;
+        const auto topk_fast_dirty_before=topk_fast?ggml_backend_cuda_dsv41_topk_fast_dirty_rows():0;
         const auto rope_inplace_before=rope_inplace?ggml_backend_cuda_dsv41_rope_inplace_queued():0;
         const auto dense_bf16_store_before=dense_bf16_store?ggml_backend_cuda_dsv41_dense_bf16_store_queued():0;
         const auto mul_f16_store_before=mul_f16_store?ggml_backend_cuda_dsv41_mul_f16_store_queued():0;
@@ -1602,6 +1605,18 @@ bool llama_dsv41_tile_executor::run(const request&in,const llama_dsv41_layer_gra
             const auto actual=ggml_backend_cuda_dsv41_topk_radix_queued()-topk_radix_before;
             require(actual==expected,"Actual exact radix top-k first/merge dispatch coverage differs");
             llama_dsv41_layer_log("DS4PERF_TOPK_RADIX_COMPLETE layer=%u start=%u count=%u actual=%llu packed_score_index=1 original_NaN_subnormal_network=1 weight_formats_unchanged=1\n",in.layer,in.start,in.count,(unsigned long long)actual);
+        }
+        if(topk_fast){
+            // The fast exact select replaces exactly the untagged multi-row k=512 >8192-column selector.
+            uint64_t expected=0;
+            for(int i=0;i<ggml_graph_n_nodes(compute_graph);++i){const auto *node=ggml_graph_node(compute_graph,i);
+                if(node->op!=GGML_OP_TOP_K||ggml_dsv41_stream_topk_requested(node)||node->ne[0]!=512||!node->src[0]||node->src[0]->ne[0]<=8192||ggml_nrows(node->src[0])<=1)continue;
+                ++expected;}
+            const auto actual=ggml_backend_cuda_dsv41_topk_fast_queued()-topk_fast_before;
+            require(actual==expected,"Actual fast exact top-k dispatch coverage differs");
+            const auto dirty=ggml_backend_cuda_dsv41_topk_fast_dirty_rows()-topk_fast_dirty_before;
+            if(expected)llama_dsv41_layer_log("DS4PERF_TOPK_FAST_COMPLETE layer=%u start=%u count=%u actual=%llu fallback_rows=%llu exact_radix_select=1 current_pipeline_for_NaN_subnormal_rows=1\n",
+                in.layer,in.start,in.count,(unsigned long long)actual,(unsigned long long)dirty);
         }
         if(expert.index_key_windows){
             uint64_t expected=0;for(int i=0;i<ggml_graph_n_nodes(compute_graph);++i)expected+=ggml_dsv41_stream_topk_requested(ggml_graph_node(compute_graph,i))?1:0;
