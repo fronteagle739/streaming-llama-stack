@@ -1,7 +1,7 @@
 """LLAMADECODE single sweep: capacity/budget plan, negotiated prefill maximum, near-equal split."""
 import unittest
 from slstack.native_broker import vendor
-from slstack.combo_producer import prefill_plan, fold_sweeps, carry_bank_bytes, engram_prompt_bytes
+from slstack.combo_producer import prefill_plan, hide_passes, hidden_bank_rows, carry_bank_bytes, engram_prompt_bytes
 
 vendor()
 from studio.dsv41_session_contract import command, negotiate_prefill, split_prefill, MODEL_SHA256, Refused
@@ -60,77 +60,67 @@ class PrefillPlan(unittest.TestCase):
         with self.assertRaises(ValueError):prefill_plan(dict(CFG, producer_host_max_gib=6), 1000)
 
 
-FOLD = dict(CFG, producer_host_max_gib=13.0, producer_prefill_sweep_tokens=49152)
+HIDE = dict(CFG, producer_host_max_gib=13.0, producer_prefill_hide_tokens=32768)
+BIG = 1 << 20
 
 
-class Fold(unittest.TestCase):
-    def test_rule(self):
-        self.assertEqual(fold_sweeps(110000, 49152, 1 << 20), ([49152, 60848], False, False))
-        self.assertEqual(fold_sweeps(93668, 65536, 1 << 20), ([93668], False, False))
-        self.assertEqual(fold_sweeps(30000, 49152, 49152), ([30000], False, False))
-        self.assertEqual(fold_sweeps(49152, 49152, 49152), ([49152], False, False))
-        self.assertEqual(fold_sweeps(49153, 49152, 1 << 20), ([49153], False, False))
-        self.assertEqual(fold_sweeps(98304, 49152, 49152), ([49152, 49152], False, False))
-        self.assertEqual(fold_sweeps(230000, 49152, 81000), ([49152] * 3 + [45056, 37488], False, True))
+class Hide(unittest.TestCase):
+    def test_examples(self):
+        h = lambda n, c=BIG: hide_passes(n, c, 32768, 49152)
+        self.assertEqual(h(103189), ([32768, 32768, 37653], False, False))
+        self.assertEqual(h(100000), ([32768, 32768, 34464], False, False))
+        self.assertEqual(h(60176), ([60176], True, False))
+        self.assertEqual(h(60176, 55000), ([28672, 31504], False, True))
+        self.assertEqual(h(146770), ([49152, 49152, 48466], False, False))
+        self.assertEqual(h(70000), ([32768, 37232], False, False))
+        self.assertEqual(h(93668), ([45056, 48612], False, False))
+        self.assertEqual(h(40000), ([40000], False, False))
+        self.assertEqual(h(20000), ([20000], False, False))
+        self.assertEqual(hide_passes(103189, BIG, 32768, 65536)[0], [49152, 54037])
 
-    def test_rebalance_examples(self):
-        self.assertEqual(fold_sweeps(103189, 49152, 53000, 61440), ([49152, 28672, 25365], False, True))
-        for cap in (54037, 70000, 1 << 20):
-            self.assertEqual(fold_sweeps(103189, 49152, cap, 61440), ([49152, 54037], False, False))
-        self.assertEqual(fold_sweeps(93668, 49152, 53000, 61440), ([49152, 44516], True, False))
-        self.assertEqual(fold_sweeps(150000, 49152, 50000, 61440), ([49152, 49152, 28672, 23024], False, True))
+    def test_bank_rows_from_hidden_bytes(self):
+        self.assertEqual(hidden_bank_rows(2521649916), 49152)   # the profile's --hidden-device-bytes
+        self.assertEqual(hidden_bank_rows(0), 49152)
+        self.assertEqual(hidden_bank_rows(2 * 2521649916), 98304)
 
-    def test_rebalance_invariants(self):
-        for n in range(1, 400000, 977):
-            for s, f in ((49152, None), (49152, 61440), (65536, None)):
-                for cap in range(s, 2 * s + 4097, 1517):
-                    sweeps, tail, rebalance = fold_sweeps(n, s, cap, f)
-                    self.assertEqual(sum(sweeps), n)
-                    self.assertTrue(all(x <= cap for x in sweeps), (n, s, f, cap, sweeps))
-                    starts = [sum(sweeps[:i]) for i in range(len(sweeps))]
-                    self.assertTrue(all(x % 4096 == 0 for x in starts))
-                    self.assertTrue(len(sweeps) == 1 or min(sweeps) >= 4096, (n, s, f, cap, sweeps))
-                    self.assertFalse(tail and rebalance)
+    def test_plan(self):
+        p = prefill_plan(HIDE, 103189, None, 49152)
+        self.assertEqual((p['policy'], p['sweeps'], p['capacity'], p['hide_tokens'], p['bank_rows']), ('hide', [32768, 32768, 37653], 49152, 32768, 49152))
+        p = prefill_plan(HIDE, 60176, None, 49152)
+        self.assertEqual((p['sweeps'], p['capacity'], p['folded']), ([60176], 60176, True))
+        self.assertEqual(p['carry_delta'], carry_bank_bytes(60176) - carry_bank_bytes(49152))
+        p = prefill_plan(dict(HIDE, producer_host_max_gib=6.25), 60176, None, 49152)   # no RAM raise: C = 49,152
+        self.assertEqual((p['sweeps'], p['capacity'], p['fold_refused']), ([28672, 31504], 49152, True))
+        self.assertIn('do not fit the capacity', p['reason'])
 
-    def test_plan_examples(self):
-        p = prefill_plan(FOLD, 109000)
-        self.assertEqual((p['policy'], p['sweeps'], p['capacity'], p['fold_tail']), ('fold', [49152, 59848], 59848, False))
-        self.assertEqual(p['carry_delta'], carry_bank_bytes(59848) - carry_bank_bytes(49152))
-        self.assertEqual(p['engram_delta'], (59848 - 49152) * 12864)
-        self.assertEqual(p['host_bytes'], -(-(int(6.25 * 2**30) + p['carry_delta'] + p['engram_delta']) // 65536) * 65536)
-        p = prefill_plan(FOLD, 60000)
-        self.assertEqual((p['sweeps'], p['capacity'], p['single_sweep']), ([60000], 60000, True))
-        p = prefill_plan(FOLD, 110000)
-        self.assertEqual((p['sweeps'], p['capacity']), ([49152, 60848], 60848))
-        p = prefill_plan(FOLD, 16000)
-        self.assertEqual((p['sweeps'], p['capacity'], p['host_bytes']), ([16000], 49152, int(6.25 * 2**30)))
+    def test_superseded_fold_keys_select_hide_and_are_ignored(self):
+        p = prefill_plan(dict(CFG, producer_host_max_gib=13.0, producer_prefill_sweep_tokens=49152, producer_prefill_fold_cap_tokens=61440), 103189)
+        self.assertEqual((p['policy'], p['hide_tokens'], p['sweeps']), ('hide', 32768, [32768, 32768, 37653]))
+        self.assertEqual(p['ignored'], dict(producer_prefill_sweep_tokens=49152, producer_prefill_fold_cap_tokens=61440))
 
-    def test_fold_over_ram_cap_rebalances(self):
-        p = prefill_plan(dict(FOLD, producer_host_max_gib=7.0), 110000)   # cap below 60,848 rows
-        self.assertTrue(p['rebalance'] and not p['fold_tail'])
-        self.assertEqual((p['sweeps'], p['capacity']), ([49152, 32768, 28080], 49152))
-        self.assertIn('rebalanced into 32768+28080', p['reason'])
-
-    def test_fold_cap(self):
-        expect = {103189: [49152, 54037], 93668: [49152, 44516], 60000: [60000], 70000: [49152, 20848],
-                  110000: [49152, 60848], 120000: [49152, 49152, 21696]}
-        for n, sweeps in expect.items():
-            p = prefill_plan(FOLD, n)
-            self.assertEqual((p['sweeps'], p['capacity'], p['fold_cap']), (sweeps, max(49152, max(sweeps)), 61440), n)
-        p = prefill_plan(FOLD, 93668)
-        self.assertTrue(p['fold_tail']);self.assertIn('the fold cap 61440', p['reason'])
-        self.assertEqual(prefill_plan(dict(FOLD, producer_prefill_fold_cap_tokens=100000), 93668)['sweeps'], [93668])
-        with self.assertRaises(ValueError):prefill_plan(dict(FOLD, producer_prefill_fold_cap_tokens=0), 93668)
-
-    def test_bad_sweep_refused(self):
-        for bad in (0, 49000, -4096, 1 << 21, 49152.0):
-            with self.assertRaises(ValueError):prefill_plan(dict(FOLD, producer_prefill_sweep_tokens=bad), 100000)
-        with self.assertRaises(ValueError):prefill_plan(dict(FOLD, producer_host_max_gib=6.25, producer_prefill_sweep_tokens=65536), 100000)
+    def test_bad_hide_refused(self):
+        for bad in (0, -1, 32768.0, 1 << 21):
+            with self.assertRaises(ValueError):prefill_plan(dict(HIDE, producer_prefill_hide_tokens=bad), 100000)
 
     def test_absent_is_today(self):
         for n in (1, 14859, 49152, 60000, 103319, 109000, 224588):
             for cfg in (CFG, SS):
                 self.assertNotIn('policy', prefill_plan(cfg, n))
+
+    def test_invariants(self):
+        for n in range(1, 400000, 977):
+            for c in (49152, 53000, 55000, 60176, 65536, 80000, 120000, BIG):
+                for h in (28672, 32768, 36000, 40960):
+                    for bank in (32768, 49152, 65536):
+                        passes, folded, refused = hide_passes(n, c, h, bank)
+                        bp = min(bank, c); k0 = -(-n // bp); k = len(passes)
+                        self.assertEqual(sum(passes), n)
+                        starts = [sum(passes[:i]) for i in range(k)]
+                        self.assertTrue(all(x % 4096 == 0 for x in starts))
+                        self.assertTrue(all(x <= c and (folded or x <= bp) for x in passes))
+                        self.assertTrue(all(x >= h or n < h * k for x in passes), (n, c, h, bank, passes))
+                        self.assertTrue(len(set(passes[:-1])) <= 1)
+                        self.assertTrue(k + 1 == k0 and n < h * k0 if folded else k >= k0)
 
 
 class Negotiation(unittest.TestCase):
