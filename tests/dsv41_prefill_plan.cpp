@@ -3,6 +3,7 @@
 #include <cstdio>
 #include <cstdlib>
 #include <initializer_list>
+#include <vector>
 
 namespace p = llama_dsv41_prefill;
 static int passed = 0, failed = 0;
@@ -46,6 +47,66 @@ int main() {
         }
     }
     expect(true, "split invariants over 410 x 4 prompts (cover, <= cap, aligned, no slack sweep)");
+    // Owner fold policy (--prefill-sweep-tokens S): S-token sweeps, remainder folded into the last.
+    auto counts = [](const std::vector<p::extent> &v) { std::vector<uint32_t> c; for (const auto &e : v) c.push_back(e.count); return c; };
+    auto starts_ok = [](const std::vector<p::extent> &v, uint32_t s) {
+        for (size_t i = 0; i < v.size(); ++i) if (v[i].first != uint32_t(i) * s) return false;
+        return true;
+    };
+    auto f = p::fold(110000, 49152, 1048576);
+    expect(f.count == 2 && f.sweep == 49152 && f.last == 60848 && !f.tail, "110,000 at S 49,152: 49,152 + 60,848 (folded)");
+    auto v = p::plan_sweeps(110000, 60848, 49152);
+    expect(counts(v) == std::vector<uint32_t>{49152, 60848} && starts_ok(v, 49152), "110,000, S 49,152, C 60,848: sweeps [0:49,152] [49,152:60,848]");
+    v = p::plan_sweeps(93668, 93668, 65536);
+    expect(counts(v) == std::vector<uint32_t>{93668}, "93,668 at S 65,536: one sweep of 93,668");
+    v = p::plan_sweeps(109000, 59848, 49152);
+    expect(counts(v) == std::vector<uint32_t>{49152, 59848}, "109,000 at S 49,152, C 59,848: 49,152 + 59,848");
+    v = p::plan_sweeps(30000, 49152, 49152);
+    expect(counts(v) == std::vector<uint32_t>{30000}, "N < S: one sweep");
+    v = p::plan_sweeps(49152, 49152, 49152);
+    expect(counts(v) == std::vector<uint32_t>{49152}, "N = S: one sweep");
+    v = p::plan_sweeps(49153, 49153, 49152);
+    expect(counts(v) == std::vector<uint32_t>{49153}, "N = S + 1: one folded sweep of 49,153");
+    v = p::plan_sweeps(98304, 49152, 49152);
+    expect(counts(v) == std::vector<uint32_t>{49152, 49152}, "N = 2S: two S sweeps, nothing to fold");
+    f = p::fold(230000, 49152, 81000);
+    expect(f.count == 5 && f.last == 33392 && f.tail, "230,000 at S 49,152, C 81,000: fold 82,544 over cap -> 4 x 49,152 + 33,392 tail");
+    v = p::plan_sweeps(230000, 81000, 49152);
+    expect(counts(v) == std::vector<uint32_t>{49152, 49152, 49152, 49152, 33392} && starts_ok(v, 49152), "fold over the cap: the tail is its own sweep");
+    f = p::fold(110000, 49152, 60847);
+    expect(f.tail && f.count == 3 && f.last == 11696, "110,000 one row over the cap: 49,152 + 49,152 + 11,696 tail");
+    expect(!p::fold(110000, 49000, 1048576).count, "S not a 4096 multiple: refused");
+    expect(!p::fold(110000, 65536, 49152).count && p::plan_sweeps(110000, 49152, 65536).empty(), "S above the capacity: refused");
+    expect(!p::fold(110000, 0, 1048576).count, "S = 0 is not fold");
+    v = p::plan_sweeps(30000, 49152, 65536);
+    expect(counts(v) == std::vector<uint32_t>{30000}, "N < S with S above the capacity: one sweep of N");
+    expect(p::plan_sweeps(60000, 49152, 65536).empty(), "N <= S but above the capacity: refused");
+    for (uint32_t n = 1; n < 400000; n += 977) {
+        for (uint32_t sw : {4096u, 49152u, 65536u}) {
+            for (uint32_t cap : {sw, sw + 20000u, 2 * sw}) {
+                const auto w = p::plan_sweeps(n, cap, sw);
+                uint64_t total = 0; for (const auto &e : w) total += e.count;
+                bool ok = !w.empty() && total == n && starts_ok(w, sw);
+                for (size_t i = 0; ok && i + 1 < w.size(); ++i) ok = w[i].count == sw;
+                ok = ok && w.back().count <= cap && (w.size() == 1 || w.back().count > 0);
+                if (!ok) { expect(false, "fold invariants"); return 1; }
+            }
+        }
+    }
+    expect(true, "fold invariants over 410 x 3 x 3 prompts (cover, S sweeps at i*S, last <= cap)");
+    // Absent option: the sweep list is exactly today's split().
+    for (uint32_t n = 1; n < 400000; n += 977) {
+        for (uint32_t cap : {49152u, 61440u, 107868u, 127000u}) {
+            const auto t = p::split(n, cap);
+            const auto w = p::plan_sweeps(n, cap);
+            bool ok = w.size() == t.count;
+            for (size_t i = 0; ok && i < w.size(); ++i)
+                ok = w[i].first == uint32_t(i) * t.chunk && w[i].count == std::min(t.chunk, n - uint32_t(i) * t.chunk);
+            if (!ok) { expect(false, "absent fold == split"); return 1; }
+        }
+    }
+    expect(p::plan_sweeps(5000, 4095).empty(), "absent fold: split refusal is an empty list");
+    expect(true, "absent fold == split() over 410 x 4 prompts");
     // Host bytes that scale with capacity (match the producer's admissions).
     expect(p::carry_bank_bytes(49152) == 4536143872ull, "carry bank at 49,152 = 4,536,143,872 B (DS4PERF_RAM_ALLOCATED_BEFORE_IMPORT)");
     expect(p::engram_prompt_bytes(49152) == 636485632ull, "Engram prompt cache at 49,152 = 636,485,632 B (--engram-prefetch-bytes)");

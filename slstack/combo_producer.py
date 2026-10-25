@@ -59,6 +59,17 @@ def engram_prompt_bytes(rows):
     """Whole-prompt Engram row cache admission (llama_dsv41_prefill::engram_prompt_bytes)."""
     return (4<<20)+rows*48*268
 
+def fold_sweeps(prompt_tokens,sweep,capacity):
+    """Owner fold rule (llama_dsv41_prefill::fold): every sweep is `sweep` tokens and the remainder
+    r = n - k*sweep is folded into the last one (sweep + r); n <= sweep is one sweep. When sweep + r
+    exceeds `capacity` the remainder is its own last sweep. Returns (sweep sizes, tail)."""
+    n=int(prompt_tokens)
+    if n<=sweep:return [n],False
+    k,r=divmod(n,sweep)
+    if not r:return [sweep]*k,False
+    if sweep+r<=capacity:return [sweep]*(k-1)+[sweep+r],False
+    return [sweep]*k+[r],True
+
 def prefill_plan(cfg,prompt_tokens,available=None):
     """LLAMADECODE single sweep (owner: one prompt = one weight sweep). The producer's capacity C
     (--prefill-chunk-tokens) is sized from the prompt: C = max(49152, prompt), raising the producer
@@ -69,7 +80,11 @@ def prefill_plan(cfg,prompt_tokens,available=None):
     producer_host_reserve_gib (default 1 GiB of headroom for Studio/daemon/OS growth; owner rule
     2026-10-25: no fixed free-RAM stop, the rule is no paging), so the working set plus everything
     else fits physical RAM and stays resident (hard-minimum working set); the budget is
-    page-rounded (Windows keeps a hard-minimum working set only in whole pages)."""
+    page-rounded (Windows keeps a hard-minimum working set only in whole pages).
+    producer_prefill_sweep_tokens S (absent = the above): the owner fold policy instead; S-token
+    sweeps with the remainder folded into the last (fold_sweeps), C = the largest sweep (at least
+    49152), the same host raise for C; when the folded sweep cannot fit the cap the remainder is its
+    own sweep."""
     base=int(cfg.get('producer_host_budget_gib',8)*(1<<30))
     top=int(cfg.get('producer_host_max_gib',cfg.get('producer_host_budget_gib',8))*(1<<30))
     if top<base:raise ValueError('producer_host_max_gib is below producer_host_budget_gib')
@@ -80,6 +95,9 @@ def prefill_plan(cfg,prompt_tokens,available=None):
     extra=lambda c:(carry_bank_bytes(c)-carry_bank_bytes(LEGACY_SWEEP),engram_prompt_bytes(c)-engram_prompt_bytes(LEGACY_SWEEP))
     limit=min(1<<20,int(cfg['context'])-1)
     want=min(max(LEGACY_SWEEP,int(prompt_tokens)),limit)
+    fold=cfg.get('producer_prefill_sweep_tokens')
+    if fold is not None:
+        return fold_plan(cfg,prompt_tokens,available,fold,base,top,capped_by,extra,limit)
     if base+sum(extra(want))>top:   # the largest whole-page capacity under the cap
         lo,hi=LEGACY_SWEEP,want
         while lo<hi:
@@ -98,6 +116,32 @@ def prefill_plan(cfg,prompt_tokens,available=None):
                 available_bytes=available,capped_by=capped_by,prompt_tokens=int(prompt_tokens),single_sweep=single,
                 reason=None if single else 'one sweep of %d tokens needs %d host bytes; the cap is %d (%s); near-equal sweeps of %d'%(
                     int(prompt_tokens),base+sum(extra(min(max(LEGACY_SWEEP,int(prompt_tokens)),limit))),top,capped_by,want))
+
+def fold_plan(cfg,prompt_tokens,available,sweep,base,top,capped_by,extra,limit):
+    """prefill_plan under producer_prefill_sweep_tokens (the owner fold policy)."""
+    if type(sweep) is not int or sweep<=0 or sweep%4096 or sweep>limit:
+        raise ValueError('producer_prefill_sweep_tokens must be a positive multiple of 4096 within the context')
+    cap=limit
+    if base+sum(extra(cap))>top:   # the largest capacity under the host cap (same search as prefill_plan)
+        lo,hi=LEGACY_SWEEP,cap
+        while lo<hi:
+            mid=(lo+hi+1)//2
+            if base+sum(extra(mid))<=top:lo=mid
+            else:hi=mid-1
+        cap=lo
+    n=int(prompt_tokens)
+    if n>sweep and sweep>cap:
+        raise ValueError('producer_prefill_sweep_tokens %d exceeds the largest capacity %d under the cap (%s)'%(sweep,cap,capped_by))
+    sweeps,tail=fold_sweeps(n,sweep,cap)
+    want=max(LEGACY_SWEEP,max(sweeps))
+    carry,engram=extra(want)
+    host=base+carry+engram
+    if host!=base:host=-(-host//65536)*65536   # whole pages (64 KiB) for the hard-minimum working set
+    return dict(capacity=want,host_bytes=host,carry_delta=carry,engram_delta=engram,base_host_bytes=base,max_host_bytes=top,
+                available_bytes=available,capped_by=capped_by,prompt_tokens=n,single_sweep=len(sweeps)==1,
+                policy='fold',sweep_tokens=sweep,sweeps=sweeps,fold_tail=tail,
+                reason=None if not tail else 'fold: last sweep %d + %d = %d exceeds the largest capacity %d (%s); the %d-token remainder is its own sweep'%(
+                    sweep,sweeps[-1],sweep+sweeps[-1],cap,capped_by,sweeps[-1]))
 
 def stall_seconds(cfg):
     """No-progress window for a producer operation. A long operation (a 262K-token prefill, a long
@@ -132,7 +176,11 @@ class ComboProducer:
             args['--prefill-chunk-tokens']=str(plan['capacity']);args['--job-host-bytes']=str(host_bytes)
             for key,delta in (('--carry-host-bytes',plan['carry_delta']),('--provider-host-bytes',plan['engram_delta']),('--engram-prefetch-bytes',plan['engram_delta'])):
                 args[key]=str(int(args[key])+delta)
-        if not plan['single_sweep']:print('LLAMADECODE_PREFILL_SINGLE_SWEEP_REFUSED '+plan['reason'],flush=True)
+        if plan.get('policy')=='fold':   # owner fold policy: S-token sweeps, remainder folded into the last
+            args['--prefill-sweep-tokens']=str(plan['sweep_tokens'])
+            print('LLAMADECODE_PREFILL_FOLD sweep_tokens=%s primary_sweep_tokens=%d capacity=%d'%(','.join(map(str,plan['sweeps'])),plan['sweep_tokens'],plan['capacity']),flush=True)
+            if plan['fold_tail']:print('LLAMADECODE_PREFILL_FOLD_TAIL '+plan['reason'],flush=True)
+        elif not plan['single_sweep']:print('LLAMADECODE_PREFILL_SINGLE_SWEEP_REFUSED '+plan['reason'],flush=True)
         print('LLAMADECODE_PREFILL_BUDGET '+json.dumps(plan),flush=True)
         precision,growable=ctx_cache(cfg)
         args.update({'--context':str(cfg['context']),'--capture-dspark':'0','--compressed-cache-bf16':'1' if precision=='bf16' else '0',
