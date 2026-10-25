@@ -648,6 +648,9 @@ bool llama_dsv41_weight_provider::implementation::launch_early(const std::vector
     identity();
     auto e=std::make_shared<early_engram>();e->tokens=tokens;e->initial=initial;e->cache.reset(new llama_dsv41_engram_prompt_cache);
     if(row_cache)e->cache->set_row_cache(row_cache);
+    // Sweep start / producer-warm overlap the weight stream: paced misses.
+    // An early start (cold before wf_start, append between turns) runs alone.
+    e->cache->set_weight_overlap(started_at_sweep);
     const auto layout=engram;const auto offsets=engram_offsets;const auto model=path;const HANDLE handle=file;
     const uint64_t file_bytes=options.verified_file_bytes;
     const bool decided=!started_at_sweep&&llama_dsv41_engram_early_auto();
@@ -685,8 +688,8 @@ bool llama_dsv41_weight_provider::implementation::launch_early(const std::vector
             release_pause(std::chrono::duration<double,std::milli>(std::chrono::steady_clock::now()-loading).count(),requests,failed);}
         (void)queued;
     });
-    llama_dsv41_layer_log("LLAMADECODE_ENGRAM_EARLY_QUEUED at=%s tokens=%zu admitted_bytes=%llu prior=%d own_iorings=1 row_cache=%d arm=%s\n",at,tokens.size(),(unsigned long long)admitted,int(bool(prior)),
-        int(bool(row_cache)),pause?"pause":started_at_sweep?"sweep_start":"early");
+    llama_dsv41_layer_log("LLAMADECODE_ENGRAM_EARLY_QUEUED at=%s tokens=%zu admitted_bytes=%llu prior=%d own_iorings=1 row_cache=%d arm=%s pacing=%s\n",at,tokens.size(),(unsigned long long)admitted,int(bool(prior)),
+        int(bool(row_cache)),pause?"pause":started_at_sweep?"sweep_start":"early",llama_dsv41_engram_early::pacing_name(started_at_sweep));
     return true;
 #else
     (void)tokens;(void)initial;(void)admitted;(void)prior;(void)at;(void)gap_s;throw std::runtime_error("Early Engram IoRing requires Windows");
@@ -778,9 +781,10 @@ bool llama_dsv41_weight_provider::prepare_engram_prompt(const std::vector<int32_
     // Every Engram load runs on the early loader (planner extents, row cache).
     p->engram_prompt.reset(new llama_dsv41_engram_prompt_cache);
     if(p->row_cache)p->engram_prompt->set_row_cache(p->row_cache);
+    p->engram_prompt->set_weight_overlap(true); // layer-zero lease: overlaps the weight stream
     p->engram_prompt->prepare_early(p->engram,tokens.data(),uint32_t(tokens.size()),p->engram_offsets,p->options.engram_prefetch_host_bytes,initial,nullptr);
     require(p->engram_prompt->budget()<=p->options.engram_prefetch_host_bytes,"Prepared Engram cache exceeds provider admission");
-    llama_dsv41_layer_log("LLAMADECODE_ENGRAM_LOADER at=prepare_sync tokens=%zu loader=early row_cache=%d\n",tokens.size(),int(bool(p->row_cache)));
+    llama_dsv41_layer_log("LLAMADECODE_ENGRAM_LOADER at=prepare_sync tokens=%zu loader=early row_cache=%d pacing=%s\n",tokens.size(),int(bool(p->row_cache)),llama_dsv41_engram_early::pacing_name(true));
     p->engram_prompt->load_early(p->path.c_str(),p->file,p->options.verified_file_bytes,stop);p->identity();
 #else
     (void)stop;throw std::runtime_error("Whole-prompt Engram IoRing requires Windows");

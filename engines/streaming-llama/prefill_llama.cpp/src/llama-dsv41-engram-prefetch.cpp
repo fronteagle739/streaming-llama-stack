@@ -55,6 +55,7 @@ struct llama_dsv41_engram_prompt_cache::implementation {
     // LLAMADECODE_ENGRAM_EARLY only.
     bool early_mode=false;
     uint32_t early_rings=0,early_small=0,early_large=0,early_batch=0;
+    bool weight_overlap=false; // paced misses (choose_pacing); set before prepare_early
     uint64_t early_arena=0;
     std::shared_ptr<const llama_dsv41_engram_prompt_cache> prior;
     // LLAMADECODE_ENGRAM_CACHE_MB (early loader only).
@@ -303,8 +304,10 @@ public:
                        std::shared_ptr<const llama_dsv41_engram_prompt_cache> prior_cache){
         prepare(layout,tokens,count,offsets,admitted,initial); // host_plan holds the fixed 4 MiB IO reserve
         early_mode=true;prior=std::move(prior_cache);
-        early_rings=env_u32("LLAMADECODE_ENGRAM_RINGS",4,1,8);
-        const uint32_t depth=env_u32("LLAMADECODE_ENGRAM_DEPTH",1024,32,4096);
+        const auto pace=llama_dsv41_engram_early::choose_pacing(weight_overlap,env_u32("LLAMADECODE_ENGRAM_RINGS",4,1,8),
+            env_u32("LLAMADECODE_ENGRAM_DEPTH",1024,32,4096),env_u32("LLAMADECODE_ENGRAM_BATCH",256,1,4096));
+        early_rings=pace.rings;
+        const uint32_t depth=pace.depth;
         const uint64_t rows=uint64_t(tables[0].ids.size())+tables[1].ids.size();
         const uint64_t without=host_plan-4*1024*1024;
         // Slot tables, plan state and (with a prior cache) the hit bitmaps.
@@ -315,7 +318,7 @@ public:
         require(per>uint64_t(large_slot)+16*(small_slot+large_slot/16),"Early Engram IO arena below its admitted minimum");
         early_small=uint32_t(std::min<uint64_t>(depth,(per-large_slot)/(small_slot+large_slot/16)));
         early_large=std::max(1u,early_small/16);
-        early_batch=std::min(env_u32("LLAMADECODE_ENGRAM_BATCH",256,1,4096),std::max(1u,early_small/2));
+        early_batch=std::min(pace.batch,std::max(1u,early_small/2));
         early_arena=uint64_t(early_rings)*(uint64_t(early_small)*small_slot+uint64_t(early_large)*large_slot);
         host_plan=add(without,add(meta,early_arena));
         require(host_plan<=admitted,"Early Engram rows and IO arena exceed explicit host admission");
@@ -552,11 +555,12 @@ public:
         const uint64_t rows=tables[0].ids.size()+tables[1].ids.size();
         llama_dsv41_layer_log("LLAMADECODE_ENGRAM_EARLY_LOAD table0_rows=%zu table1_rows=%zu hit_rows=%llu reuse=%d extents=%llu merged_rows=%llu requests=%llu submits=%llu "
             "read_bytes=%llu useful_bytes=%llu rings=%u slots=%u large_slots=%u batch=%u replanned=%llu arena_bytes=%llu host_plan_bytes=%llu max_inflight=%llu "
-            "setup_ms=%.3f table0_ms=%.3f wall_ms=%.3f weight_pass_at_start=%d weight_pass_overlap_ms=%.3f overlap_frac=%.3f\n",
+            "setup_ms=%.3f table0_ms=%.3f wall_ms=%.3f weight_pass_at_start=%d weight_pass_overlap_ms=%.3f overlap_frac=%.3f paced=%d pacing=%s\n",
             tables[0].ids.size(),tables[1].ids.size(),(unsigned long long)(hit_rows[0]+hit_rows[1]),reuse,(unsigned long long)requests,
             (unsigned long long)(useful_rows-requests),(unsigned long long)requests,(unsigned long long)submits,(unsigned long long)read_bytes,
             (unsigned long long)(rows*row_bytes),early_rings,early_small,early_large,early_batch,(unsigned long long)replanned,(unsigned long long)early_arena,(unsigned long long)host_plan,
-            (unsigned long long)max_inflight,setup_ms,table0_ms,wall,int(weight_at_start),overlap_ms,wall>0?overlap_ms/wall:0.0);
+            (unsigned long long)max_inflight,setup_ms,table0_ms,wall,int(weight_at_start),overlap_ms,wall>0?overlap_ms/wall:0.0,
+            int(weight_overlap),llama_dsv41_engram_early::pacing_name(weight_overlap));
         llama_dsv41_layer_log("[dsv41-engram-prefetch] table0_rows=%zu table1_rows=%zu host_plan_bytes=%llu read_bytes=%llu requests=%llu submits=%llu wall_ms=%llu early=1\n",
             tables[0].ids.size(),tables[1].ids.size(),(unsigned long long)host_plan,(unsigned long long)read_bytes,
             (unsigned long long)requests,(unsigned long long)submits,(unsigned long long)wall);
@@ -616,6 +620,13 @@ void llama_dsv41_engram_prompt_cache::set_row_cache(std::shared_ptr<llama_dsv41_
  p->row_cache=std::move(c);
 #else
  (void)c;
+#endif
+}
+void llama_dsv41_engram_prompt_cache::set_weight_overlap(bool overlap){
+#ifdef _WIN32
+ p->weight_overlap=overlap;
+#else
+ (void)overlap;
 #endif
 }
 uint64_t llama_dsv41_engram_prompt_cache::planned_requests()const{
