@@ -110,4 +110,10 @@ def install(cfg, *, image=False, video=False, all_engines=False, check=False, sd
         if enabled:
             result['engines'].append({'engine': kind, 'ready': ready, 'runtime': str(runtime),
                                       'note': 'Native weight-fetcher shared build is also required; flash-attn is an explicit optional prerequisite for H3 flash_attn2'})
+    if not check:
+        # The one-time full model SHA-256 runs here, not on the first prompt.
+        from .check import verify_model_receipt
+        receipt = verify_model_receipt(cfg)
+        if receipt is not None:
+            result['model_receipt'] = receipt
     return result
