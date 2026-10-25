@@ -119,5 +119,19 @@ class KeptKeyTests(unittest.TestCase):
             self.assertEqual(Path(row['hold_file']), runtime.resolve() / 'state' / 'gpu.holds')
 
 
+class RuntimePythonTests(unittest.TestCase):
+    def test_stage_refuses_an_interpreter_other_than_the_runtime_python(self):
+        from slstack.single_runtime import require_runtime_python
+        with tempfile.TemporaryDirectory() as folder:
+            runtime, other = Path(folder) / 'venv-python.exe', Path(folder) / 'system-python.exe'
+            for p in (runtime, other):
+                p.write_bytes(b'x')
+            require_runtime_python({'studio_python': str(runtime)}, executable=str(runtime))
+            with self.assertRaisesRegex(ValueError, 'Stage with the runtime interpreter'):
+                require_runtime_python({'studio_python': str(runtime)}, executable=str(other))
+            with self.assertRaisesRegex(ValueError, 'needs studio_python'):
+                require_runtime_python({}, executable=str(runtime))
+
+
 if __name__ == '__main__':
     unittest.main()
