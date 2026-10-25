@@ -92,6 +92,17 @@ class Fold(unittest.TestCase):
         self.assertEqual((p['sweeps'], p['capacity']), ([49152, 49152, 11696], 49152))
         self.assertIn('remainder is its own sweep', p['reason'])
 
+    def test_fold_cap(self):
+        expect = {103189: [49152, 54037], 93668: [49152, 44516], 60000: [60000], 70000: [49152, 20848],
+                  110000: [49152, 60848], 120000: [49152, 49152, 21696]}
+        for n, sweeps in expect.items():
+            p = prefill_plan(FOLD, n)
+            self.assertEqual((p['sweeps'], p['capacity'], p['fold_cap']), (sweeps, max(49152, max(sweeps)), 61440), n)
+        p = prefill_plan(FOLD, 93668)
+        self.assertTrue(p['fold_tail']);self.assertIn('the fold cap 61440', p['reason'])
+        self.assertEqual(prefill_plan(dict(FOLD, producer_prefill_fold_cap_tokens=100000), 93668)['sweeps'], [93668])
+        with self.assertRaises(ValueError):prefill_plan(dict(FOLD, producer_prefill_fold_cap_tokens=0), 93668)
+
     def test_bad_sweep_refused(self):
         for bad in (0, 49000, -4096, 1 << 21, 49152.0):
             with self.assertRaises(ValueError):prefill_plan(dict(FOLD, producer_prefill_sweep_tokens=bad), 100000)
