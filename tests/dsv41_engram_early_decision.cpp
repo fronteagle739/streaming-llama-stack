@@ -58,6 +58,19 @@ int main() {
     expect(ed::decide(1419303, 300000, ed::cold_gap_s).early, "a faster measured rate admits 43K");
     expect(throws([] { ed::decide(1, 0, 1); }), "zero rate rejected");
 
+    // Miss pacing: overlapping the weight stream -> old single-ring loader pacing.
+    const auto paced = ed::choose_pacing(true, 4, 1024, 256);
+    expect(paced.paced && paced.rings == 1 && paced.depth == 256 && paced.batch == 1,
+           "weight overlap (sweep start/producer-warm/sync): 1 ring, depth 256, unbatched");
+    const auto big = ed::choose_pacing(true, 8, 4096, 4096);
+    expect(big.rings == 1 && big.depth == 256 && big.batch == 1, "paced ignores the full-IOPS env");
+    const auto full = ed::choose_pacing(false, 4, 1024, 256);
+    expect(!full.paced && full.rings == 4 && full.depth == 1024 && full.batch == 256,
+           "alone (early start that fits, before wf_start): full IOPS 4 x 1024 x 256");
+    const auto env = ed::choose_pacing(false, 3, 100, 7);
+    expect(env.rings == 3 && env.depth == 100 && env.batch == 7, "alone: env geometry kept");
+    expect(std::string(ed::pacing_name(true)) == "weight_overlap" && std::string(ed::pacing_name(false)) == "full", "pacing names");
+
     std::printf("%s (%d failures)\n", failures ? "FAILED" : "ALL PASS", failures);
     return failures ? 1 : 0;
 }

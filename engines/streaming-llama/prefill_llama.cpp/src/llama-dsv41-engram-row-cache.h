@@ -24,6 +24,26 @@ public:
         const uint64_t n = (bytes - fixed_bytes) / bytes_per_row;
         return n > 0x7fffffffull ? 0x7fffffffull : n;
     }
+    // LLAMADECODE_ENGRAM_CACHE_MB unset: the default size leaves a margin of
+    // the admission headroom for RSS the producer plan does not count
+    // (CUDA/driver/DirectStorage growth). Measured peak RSS above planned_host
+    // (2026-10-24/25 runs): <= 85 MB at 43K, 159-172 MiB in 49,152-token
+    // multi-sweep runs; the G3 224K run died with the cache taking all but
+    // 0.5 MB of the headroom (peak 6,742,732,800 > cap 6,710,886,400).
+    // Margin 256 MiB = 1.5x the worst measured overshoot. Default =
+    // min(4 GiB, headroom - margin), whole MiB; below 16 MiB the default is
+    // off (no cache). An explicit size is not shrunk (checked against the
+    // headroom by the caller, refused loudly when it does not fit).
+    static constexpr uint64_t default_margin_bytes = 256ull << 20;
+    static constexpr uint64_t default_max_bytes = 4ull << 30;
+    static constexpr uint64_t default_min_bytes = 16ull << 20;
+    static uint64_t default_bytes(uint64_t headroom) {
+        if (headroom <= default_margin_bytes) return 0;
+        uint64_t b = headroom - default_margin_bytes;
+        if (b > default_max_bytes) b = default_max_bytes;
+        b &= ~((1ull << 20) - 1);
+        return b < default_min_bytes ? 0 : b;
+    }
     std::mutex mutex;
 
     explicit llama_dsv41_engram_row_cache(uint64_t bytes) {

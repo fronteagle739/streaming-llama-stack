@@ -372,8 +372,9 @@ bool llama_dsv41_sweep::open(const llama_dsv41_weight_provider::config &weights,
         const uint64_t base_host=add(options.compressed_cache_bf16?1024ull*1024:0,add(options.engram_tile_lookahead?uint64_t(options.carry.max_tile_tokens)*6144*4+8ull*1024*1024:0,add(provider.host_bytes,add(carry_host,
             add(tile_host+pair_host,add(metadata_bytes+pinned_metadata+allocator_metadata+long_metadata+2ull*vocabulary*4+1024*1024,uint64_t(options.stateful_chunks?options.context:options.carry.tokens)*8))))));
         // LLAMADECODE_ENGRAM_CACHE_MB: the Engram row LRU (early loader) is charged
-        // here. Unset: min(4 GiB, this admission's headroom), whole MiB, none below
-        // 16 MiB. Explicit: exactly that size or a loud refusal. 0: no cache.
+        // here. Unset: llama_dsv41_engram_row_cache::default_bytes (min(4 GiB,
+        // headroom - 256 MiB margin), whole MiB, off below 16 MiB). Explicit:
+        // exactly that size or a loud refusal. 0: no cache.
         // Every LLAMADECODE_ENGRAM_EARLY arm (0 included) loads on the early loader.
         const uint64_t row_cache_have=p->provider.engram_row_cache_bytes();uint64_t row_cache_new=0;
         if(!row_cache_have&&weights.engram_prefetch_host_bytes&&options.engram_tile_lookahead){
@@ -387,8 +388,10 @@ bool llama_dsv41_sweep::open(const llama_dsv41_weight_provider::config &weights,
                         (unsigned long long)row_cache_new,(unsigned long long)headroom,(unsigned long long)options.admitted_host_bytes,(unsigned long long)base_host);
                     require(false,"LLAMADECODE_ENGRAM_CACHE_MB exceeds the producer host admission headroom (no silent shrink)");
                 }
-            }else{row_cache_new=std::min<uint64_t>(4ull<<30,headroom)&~((1ull<<20)-1);if(row_cache_new<(16ull<<20))row_cache_new=0;}
-            if(!e||*e)llama_dsv41_layer_log("LLAMADECODE_ENGRAM_ROWCACHE_ADMISSION bytes=%llu explicit=%d headroom_bytes=%llu\n",(unsigned long long)row_cache_new,int(e&&*e),(unsigned long long)headroom);
+            }else row_cache_new=llama_dsv41_engram_row_cache::default_bytes(headroom);
+            if(!e||*e)llama_dsv41_layer_log("LLAMADECODE_ENGRAM_ROWCACHE_ADMISSION bytes=%llu explicit=%d headroom_bytes=%llu margin_bytes=%llu slack_bytes=%llu default_off=%d\n",
+                (unsigned long long)row_cache_new,int(e&&*e),(unsigned long long)headroom,(unsigned long long)llama_dsv41_engram_row_cache::default_margin_bytes,
+                (unsigned long long)(headroom>row_cache_new?headroom-row_cache_new:0),int(!(e&&*e)&&!row_cache_new));
         }
         const uint64_t host=add(base_host,row_cache_have?row_cache_have:row_cache_new);
         llama_dsv41_layer_log("DS4PERF_COMBINED_ADMISSION planned_host=%llu admitted_host=%llu provider_host=%llu carry_host=%llu tile_host=%llu planned_device=%llu admitted_device=%llu\n",

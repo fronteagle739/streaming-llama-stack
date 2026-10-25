@@ -45,5 +45,9 @@ public:
     // LLAMADECODE_ENGRAM_CACHE_MB: set before prepare_early; load_early copies
     // the cached rows, reads only the missing ones, then inserts them.
     void set_row_cache(std::shared_ptr<llama_dsv41_engram_row_cache>);
+    // Set before prepare_early: true when the load overlaps the weight stream
+    // (sweep start, producer-warm, synchronous fallback); its misses then use
+    // the paced 1-ring/depth-256 geometry (llama_dsv41_engram_early::choose_pacing).
+    void set_weight_overlap(bool);
     void load_early(const wchar_t*,void *verified_file,uint64_t,const std::function<bool()>&);
 };

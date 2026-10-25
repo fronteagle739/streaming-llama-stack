@@ -66,6 +66,27 @@ int main() {
     bool threw = false;
     try { cache c(cache::fixed_bytes); } catch (const std::invalid_argument &) { threw = true; }
     expect(threw, "a cache below one row is refused");
+
+    // Default size (CACHE_MB unset): headroom - 256 MiB margin, <= 4 GiB, whole MiB, off below 16 MiB.
+    constexpr uint64_t MiB = 1ull << 20;
+    expect(cache::default_margin_bytes == 256 * MiB, "default margin is 256 MiB");
+    // G3 v1 death (cfg-cp-1m, 6.25 GiB): headroom 221,756,416 took 221,249,536 (0.5 MB slack).
+    expect(cache::default_bytes(221756416) == 0, "6.25 GiB producer (headroom 221.8 MB < margin): default cache off");
+    // cfg-eg4c (+2 GiB): headroom 2,376,186,880 -> 2,107,751,424 -> 2010 MiB.
+    expect(cache::default_bytes(2376186880ull) == 2010 * MiB, "8.25 GiB producer (headroom 2.38 GB): 2010 MiB, 256 MiB left");
+    expect(2376186880ull - cache::default_bytes(2376186880ull) >= cache::default_margin_bytes, "slack >= margin");
+    // Measured peak RSS over planned_host: max 180,603,904 (91K multi-sweep) < margin.
+    expect(180603904ull < cache::default_margin_bytes, "margin covers the worst measured unplanned RSS (180.6 MB)");
+    expect(cache::default_bytes(0) == 0 && cache::default_bytes(256 * MiB) == 0, "no headroom / headroom == margin: off");
+    expect(cache::default_bytes(256 * MiB + 16 * MiB - 1) == 0, "below 16 MiB after the margin: off");
+    expect(cache::default_bytes(256 * MiB + 16 * MiB) == 16 * MiB, "exactly 16 MiB after the margin: 16 MiB");
+    expect(cache::default_bytes(256 * MiB + 100 * MiB + 12345) == 100 * MiB, "rounded down to whole MiB");
+    expect(cache::default_bytes(64ull << 30) == 4ull << 30, "capped at 4 GiB");
+    for (uint64_t h : {0ull, 1ull, 300 * MiB, 777777777ull, 5ull << 30, 100ull << 30}) {
+        const uint64_t b = cache::default_bytes(h);
+        char what[128]; std::snprintf(what, sizeof what, "headroom %llu: default %llu leaves >= margin, whole MiB", (unsigned long long)h, (unsigned long long)b);
+        expect(b == 0 || (b <= h - cache::default_margin_bytes && b % MiB == 0 && b >= 16 * MiB && b <= (4ull << 30)), what);
+    }
     std::printf("%s (%d failures)\n", failures ? "FAILED" : "ALL PASS", failures);
     return failures ? 1 : 0;
 }

@@ -67,4 +67,29 @@ inline decision decide(uint64_t requests, double iops, double gap_s) {
     return d;
 }
 
+// Miss pacing. A load that overlaps the weight DirectStorage stream (sweep
+// start, producer-warm, the synchronous layer-zero fallback) issues its row
+// cache misses at the pre-171e31f single-ring loader's pacing: 1 IoRing,
+// depth 256, submitted as completions free slots (no batching). Measured
+// (eg4 vs eg3, 43K cold arm 0): 4 rings x depth 1024 batched at sweep start
+// cost +4 s (36.05 -> 40.08 s; weight wait 0.79 -> 3.48 s), +2.9 s warm.
+// Full IOPS (LLAMADECODE_ENGRAM_RINGS/DEPTH/BATCH, default 4 x 1024 x 256)
+// only when the load runs alone: an early start that fits its gap, before
+// wf_start (or the pause arm, which holds the weight stream). The planner,
+// rows and their order are the same either way. Pure; unit-tested.
+constexpr uint32_t paced_rings = 1, paced_depth = 256, paced_batch = 1;
+struct pacing {
+    uint32_t rings = 0, depth = 0, batch = 0;
+    bool paced = false;
+};
+inline pacing choose_pacing(bool overlaps_weight_stream, uint32_t full_rings, uint32_t full_depth, uint32_t full_batch) {
+    pacing p;
+    p.paced = overlaps_weight_stream;
+    p.rings = p.paced ? paced_rings : full_rings;
+    p.depth = p.paced ? paced_depth : full_depth;
+    p.batch = p.paced ? paced_batch : full_batch;
+    return p;
+}
+inline const char *pacing_name(bool paced) { return paced ? "weight_overlap" : "full"; }
+
 } // namespace llama_dsv41_engram_early

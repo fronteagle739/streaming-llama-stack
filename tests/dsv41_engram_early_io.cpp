@@ -106,6 +106,18 @@ int main(int argc, char **argv) {
                       s.rings, s.depth, s.batch);
         expect(t0 && t1 && check(c, reference.get(), tokens, {}) && c.budget() <= admitted, what);
     }
+    {   // Paced (overlaps the weight stream): 1 ring x depth 256, unbatched, whatever
+        // the full-IOPS env says; same rows as the reference loader.
+        llama_dsv41_engram_prompt_cache c;
+        c.set_weight_overlap(true);
+        c.prepare_early(layout, tokens.data(), uint32_t(tokens.size()), offsets, admitted, {}, nullptr);
+        bool t0 = false, t1 = false;
+        std::thread loader([&] { c.load_early(path.c_str(), verified, file_bytes, [] { return false; }); });
+        try { c.wait_table(0, [] { return false; }); t0 = true; c.wait_table(1, [] { return false; }); t1 = true; } catch (...) {}
+        loader.join();
+        expect(t0 && t1 && check(c, reference.get(), tokens, {}) && c.budget() <= admitted,
+               "paced loader (weight overlap, env 3x100x7 ignored): every row equals file and reference (see rings=1 slots=256 paced=1 in log)");
+    }
     _putenv_s("LLAMADECODE_ENGRAM_RINGS", ""); _putenv_s("LLAMADECODE_ENGRAM_DEPTH", ""); _putenv_s("LLAMADECODE_ENGRAM_BATCH", "");
     {   // Sparse prompt (~0.9% density, mostly unmerged 4/8 KiB extents).
         const auto sparse = make_tokens(150);
