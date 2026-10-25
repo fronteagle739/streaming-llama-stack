@@ -1,10 +1,25 @@
 from pathlib import Path
 import shutil
 import os
+import sys
 import subprocess
 from .config import ROOT, path
 from .guard import admit
 from .journal import Journal
+
+
+def verify_model_receipt(cfg):
+    """Single-engine serving: hash the model once here (install/check/start), with progress on
+    the console, so the first prompt finds the receipt cached. None when not applicable."""
+    if cfg.get('mac') or cfg.get('serving', 'single_engine') != 'single_engine' or not cfg.get('model')             or not path(cfg['model']).is_file():
+        return None
+    from .native_broker import model_receipt
+    from .single_runtime import receipt_config
+    try:
+        receipt = model_receipt(receipt_config(cfg), report=lambda message: print(message, file=sys.stderr, flush=True))
+        return {'ready': True, 'receipt': str(receipt)}
+    except (OSError, ValueError) as exc:
+        return {'ready': False, 'error': str(exc)}
 
 
 def check(cfg, *, verify_journal=True):
@@ -27,6 +42,9 @@ def check(cfg, *, verify_journal=True):
     for key in ('model', 'image_model', 'video_model', 'comfyui_models'):
         if cfg[key] or key == 'model':
             record(key, bool(cfg[key]) and path(cfg[key]).exists(), cfg[key] or 'required model path missing')
+    receipt = verify_model_receipt(cfg)
+    if receipt is not None:
+        record('model_receipt', receipt['ready'], receipt.get('receipt') or receipt.get('error'))
     command = cfg['ds4_command']
     record('ds4_executable', bool(command) and (path(command[0]).is_file() or shutil.which(command[0])), command[0] if command else 'missing')
     if os.name == 'nt' and command and 'ds4' in Path(command[0]).name.lower():

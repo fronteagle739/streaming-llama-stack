@@ -18,8 +18,26 @@ def vendor():
         sys.path.insert(0, location)
 
 
-def model_receipt(cfg):
-    """Reuse a verified original receipt only while all physical identities match."""
+def hash_progress(report, interval=5.0):
+    """A sha256() progress callback that reports percent, GB and rate at most every interval s."""
+    started, last = time.monotonic(), [None]
+    def update(done, total):
+        now = time.monotonic()
+        if done < total and last[0] is not None and now - last[0] < interval:
+            return
+        last[0] = now
+        rate = done / 1e9 / max(now - started, 1e-6)
+        report(f'Verifying original model SHA-256: {100 * done / max(total, 1):.1f}% '
+               f'({done / 1e9:.1f} of {total / 1e9:.1f} GB, {rate:.2f} GB/s)')
+    return update
+
+
+def model_receipt(cfg, report=None):
+    """Reuse a verified original receipt only while all physical identities match.
+
+    The receipt is a correctness gate: the producer (dsv41-prefill --copy-receipt) refuses
+    to start without a completed full-SHA receipt for the main weights. A missing receipt is
+    therefore hashed here, blocking; report(message), when given, receives the progress."""
     vendor()
     from studio.dsv41_session_contract import MODEL_SHA256
     model = path(cfg['model'])
@@ -42,8 +60,12 @@ def model_receipt(cfg):
                                      'source_receipt_sha256': sha256(candidate)})
             return target
     # A fresh install hashes the model once; weights are never copied.
-    print('Verifying original model SHA-256 (read only; this can take several minutes)', flush=True)
-    digest = sha256(model)
+    message = 'Verifying original model SHA-256 (read only, once per model file; this can take several minutes)'
+    if report is None:
+        print(message, flush=True)
+    else:
+        report(message)
+    digest = sha256(model, hash_progress(report) if report else None)
     after = model.stat()
     if digest != MODEL_SHA256 or (after.st_size, after.st_dev, after.st_ino, after.st_mtime_ns) != tuple(identity.values()):
         raise ValueError('Original 1017 model hash/identity differs; native handoff refused')

@@ -299,6 +299,11 @@ class Engines:
         from .journal import atomic_json
         import secrets
         single = stack_config(self.cfg)
+        # Correctness gate, not a cache: the producer refuses to start without a completed
+        # full-SHA receipt (dsv41-prefill --copy-receipt). install/check normally wrote it; a
+        # missing one is hashed here, blocking, with progress in the model status.
+        from .native_broker import model_receipt
+        model_receipt(single, report=self.status)
         single['env_overrides'].pop('DS4_SERVER_AUTH_TOKEN', None)  # secrets reach children by environment only
         config = Path(self.cfg['runtime_root']) / 'single-engine.json'
         atomic_json(config, single)

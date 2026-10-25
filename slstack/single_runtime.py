@@ -82,6 +82,15 @@ def context(cfg):
     return int(command[command.index('--ctx') + 1]) if '--ctx' in command[:-1] else 262144
 
 
+def receipt_config(cfg):
+    """The model/receipt fields of stack_config(): the single engine's receipt lives at
+    <runtime_root>/single-engine/state/original-model.json (native_broker.model_receipt)."""
+    from .config import path
+    result = {'model': cfg.get('model'), 'runtime_root': str(Path(cfg['runtime_root']).resolve() / 'single-engine')}
+    if cfg.get('model_receipt'):result['model_receipt'] = str(path(cfg['model_receipt']))
+    return result
+
+
 def stack_config(cfg):
     """The stack's own single-RTX endpoint: the source-built producer, its ds4-decode.dll
     beside it, and paths inside the stack runtime. The controller and producer share the
@@ -104,7 +113,7 @@ def stack_config(cfg):
             'hold_file': str(path(cfg['hold_file'])) if cfg.get('hold_file') else str(runtime / 'state' / 'gpu.holds')}
     try:revision = subprocess.check_output(['git', 'rev-parse', 'HEAD'], cwd=ROOT, text=True).strip()
     except (OSError, subprocess.CalledProcessError):revision = 'unknown'
-    result = serving_config(base, runtime_root=runtime / 'single-engine', studio_root=path(cfg['studio_root']),
+    result = serving_config(base, runtime_root=receipt_config(cfg)['runtime_root'], studio_root=path(cfg['studio_root']),
         llama_producer=producer, library_directories=[producer.parent, *[path(p) for p in cfg.get('producer_library_directories', [])]],
         # The packaged 1017 routing calibration, as on the native path: quality/speed needs it.
         spread_file=path(cfg.get('cache_affinity_spread_file') or 'presets/dsv41-affinity-spreads.txt'),

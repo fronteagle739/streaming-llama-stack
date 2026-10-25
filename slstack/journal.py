@@ -10,8 +10,9 @@ import uuid
 import psutil
 
 
-def sha256(path):
-    """A folder hash is a sorted manifest of relative paths and file hashes; no weights copied."""
+def sha256(path, progress=None):
+    """A folder hash is a sorted manifest of relative paths and file hashes; no weights copied.
+    progress(done_bytes, total_bytes), when given, is called after each block of a file."""
     p = Path(path).resolve(strict=True)
     h = hashlib.sha256()
     if p.is_dir():
@@ -22,9 +23,13 @@ def sha256(path):
                 h.update(f.relative_to(p).as_posix().encode() + b'\0')
                 h.update(bytes.fromhex(sha256(f)))
     else:
+        total, done = p.stat().st_size, 0
         with p.open('rb') as stream:
             for block in iter(lambda: stream.read(1024 * 1024), b''):
                 h.update(block)
+                if progress:
+                    done += len(block)
+                    progress(done, total)
     return h.hexdigest()
 
 

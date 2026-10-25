@@ -240,7 +240,9 @@ def handler(stack):
                 ready = bool(stack.engines.llm and stack.engines.llm.proc.poll() is None)
                 remote = getattr(stack.engines, 'remote', None)
                 ready = ready or bool(remote and remote.connected)
+                events = getattr(stack.engines, 'events', None) or []
                 return self.send(200, {'status': 'router-ready', 'model_ready': ready,
+                                       'model_status': events[-1]['message'] if events else None,
                                        'live_bias_configured': bool(stack.cfg['bias_mcp_url']), 'ultra': False})
             if route == '/v1/models':
                 return self.send(200, stack.engines.catalog() if hasattr(stack.engines, 'catalog') else stack.models.catalog())
