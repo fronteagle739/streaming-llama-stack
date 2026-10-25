@@ -1,6 +1,6 @@
 # Single-RTX walkthrough
 
-What a new user did on 2026-10-24, on the Windows RTX 5090 machine, from a fresh clone of this repository. It covers the single-RTX native path only. The two-machine steps (README steps 4 and 5) have not been walked through yet.
+What a new user did on 2026-10-24, on a configured Windows CUDA system, from a fresh clone of this repository. It covers the single-RTX native path only. The two-machine steps (README steps 4 and 5) have not been walked through yet.
 
 **Which path these receipts are from.** Every timing, log line and screenshot below was recorded on the native ds4-win path, which was then the default. `start` now serves the single engine by default (README, single-RTX section); the native path is `start --serving native`. The single-engine rerun of this walkthrough on the GPU is pending; until it is done, nothing below is a single-engine receipt. Expected differences: the first prompt also loads the producer, and the image swap re-prefills the conversation instead of restoring saved state.
 

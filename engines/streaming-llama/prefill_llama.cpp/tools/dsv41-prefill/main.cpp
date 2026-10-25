@@ -238,7 +238,7 @@ std::filesystem::path executable(){wchar_t name[32768]{};const auto n=GetModuleF
 uint64_t ram_admission(uint64_t admitted){MEMORYSTATUSEX memory{};memory.dwLength=sizeof(memory);require(GlobalMemoryStatusEx(&memory),"Cannot inspect available physical RAM");
     require(memory.ullAvailPhys>=add(admitted,gib),"Producer job host plan exceeds available physicalRAM minus1GiB");return memory.ullAvailPhys;}
 const char*usage=
-"Offline original-1017 native producer (Windows CUDA, explicit RTX5090 only)\n"
+"Offline original-1017 native producer (Windows CUDA, explicit compatible CUDA device)\n"
 "Required --key value pairs:\n"
 " --model --copy-receipt --tokens-le32 --cuda-device --context --build-sha\n"
 " --provider-device-bytes --provider-host-bytes --cache-bytes --graph-bytes\n"
@@ -586,7 +586,11 @@ int wmain(int argc,wchar_t**argv){
         const auto ordinal=number("--cuda-device");const int devices=ggml_backend_cuda_get_device_count();
         require(devices>0&&ordinal<16&&ordinal<uint64_t(devices),"Explicit CUDA device ordinal is unavailable");
         char description[256]{};ggml_backend_cuda_get_device_description(int(ordinal),description,sizeof(description));std::string gpu=description;
-        require(gpu.find("RTX 5090")!=std::string::npos,"Selected explicit CUDA device is not RTX5090; no other GPU is substituted");
+        CUdevice selected_device;int cc_major=0,cc_minor=0;
+        require(cuDeviceGet(&selected_device,int(ordinal))==CUDA_SUCCESS&&
+            cuDeviceGetAttribute(&cc_major,CU_DEVICE_ATTRIBUTE_COMPUTE_CAPABILITY_MAJOR,selected_device)==CUDA_SUCCESS&&
+            cuDeviceGetAttribute(&cc_minor,CU_DEVICE_ATTRIBUTE_COMPUTE_CAPABILITY_MINOR,selected_device)==CUDA_SUCCESS&&
+            cc_major*10+cc_minor>=120,"Selected CUDA device lacks required compute capability; no other GPU is substituted");
         report["gpu"]={{"cuda_ordinal",ordinal},{"description",gpu}};
         require(!args.count("--cuda-blocking-sync")||args.at("--cuda-blocking-sync")=="0"||args.at("--cuda-blocking-sync")=="1","cuda-blocking-sync requires0/1");
         if(args.count("--cuda-blocking-sync")&&args.at("--cuda-blocking-sync")=="1"){
@@ -609,7 +613,7 @@ int wmain(int argc,wchar_t**argv){
         // Measured device plan: the sweep admits min(job, free - reserve) against its combined plan.
         require(uint64_t(free)>gpu_reserve,"Selected GPU free bytes do not exceed the explicit reserve");
         const uint64_t measured_device_free=uint64_t(free);
-        backend.reset(ggml_backend_cuda_init(int(ordinal)));require(bool(backend),"Cannot initialize the explicitly selected RTX5090 backend");
+        backend.reset(ggml_backend_cuda_init(int(ordinal)));require(bool(backend),"Cannot initialize the explicitly selected CUDA backend");
         // DS4COMBO fast switch: every ggml device block lives in one switchable VMM
         // span so a live session can suspend/resume device memory in place.
         require(!args.count("--switch-arena")||args.at("--switch-arena")=="0"||args.at("--switch-arena")=="1","switch-arena requires0/1");

@@ -9,7 +9,7 @@ sys.path.insert(0, os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
 import time
 
 def main():
-    ap = argparse.ArgumentParser(description='Blockwise streaming Cosmos3 video (RTX 5090).')
+    ap = argparse.ArgumentParser(description='Blockwise streaming Cosmos3 video (configured CUDA device).')
     ap.add_argument('--model', default='')
     ap.add_argument('--prompt', default='a cinematic drone shot over a coastal road at sunset')
     ap.add_argument('--negative-prompt', default='')
@@ -27,7 +27,7 @@ def main():
     ap.add_argument('--stream-weights', action='store_true', help="WS1+P3 combo: stream the transformer's layers NVMe->GPU on demand (meta-init), so a big model fits AND long video streams in bounded blocks. The full streaming-diffusion target.")
     ap.add_argument('--window', type=int, default=2, help='weight-stream prefetch window (with --stream-weights)')
     ap.add_argument('--weight-backend', choices=['portable', 'directstorage'], default='portable', help="with --stream-weights: 'directstorage' = NVMe->GPU DMA via the wf_* C ABI (~12-15x faster, lower VRAM; Windows). 'portable' = mmap+pinned (cross-platform floor).")
-    ap.add_argument('--gpu-index', default='1')
+    ap.add_argument('--gpu-index', default=os.environ.get('STUDIO_GPU_INDEX', '0'))
     args = ap.parse_args()
     os.environ.setdefault('CUDA_DEVICE_ORDER', 'PCI_BUS_ID')
     os.environ.setdefault('CUDA_VISIBLE_DEVICES', args.gpu_index)

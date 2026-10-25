@@ -2,7 +2,7 @@
 # Machine fallback paths cleared; no model data included.
 import os, sys, time
 os.environ.setdefault('CUDA_DEVICE_ORDER', 'PCI_BUS_ID')
-os.environ.setdefault('CUDA_VISIBLE_DEVICES', '1')
+os.environ.setdefault('CUDA_VISIBLE_DEVICES', os.environ.get('STUDIO_GPU_INDEX', '0'))
 import torch
 from diffusers import Cosmos3OmniPipeline
 from diffusers.schedulers.scheduling_unipc_multistep import UniPCMultistepScheduler

@@ -5,7 +5,7 @@ import os
 import pathlib
 
 def main():
-    ap = argparse.ArgumentParser(description='Native-Windows Cosmos3 generation (RTX 5090 / diffusers).')
+    ap = argparse.ArgumentParser(description='Native-Windows Cosmos3 generation (CUDA / diffusers).')
     ap.add_argument('--model', default='', help='Local Cosmos3 model dir (Nano or Super).')
     ap.add_argument('--mode', choices=['t2i', 't2v'], default='t2i')
     ap.add_argument('--prompt', default='a red cube on a wooden table, studio lighting')
@@ -20,7 +20,7 @@ def main():
     ap.add_argument('--flow-shift', type=float, default=10.0)
     ap.add_argument('--seed', type=int, default=42)
     ap.add_argument('--offload', choices=['model', 'sequential', 'none'], default='model', help='model=cpu_offload (proven for 720p T2I); sequential=lowest VRAM (video/Super); none=full GPU.')
-    ap.add_argument('--gpu-index', default='1', help='CUDA device index AFTER PCI_BUS_ID ordering (5090=1 on this box).')
+    ap.add_argument('--gpu-index', default=os.environ.get('STUDIO_GPU_INDEX', '0'), help='Explicit CUDA device index in PCI bus order.')
     args = ap.parse_args()
     os.environ.setdefault('CUDA_DEVICE_ORDER', 'PCI_BUS_ID')
     os.environ.setdefault('CUDA_VISIBLE_DEVICES', args.gpu_index)

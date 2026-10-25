@@ -208,7 +208,7 @@ def main() -> int:
     ap.add_argument('--image', default='', help='optional init image for latent image-to-image/edit generation')
     ap.add_argument('--denoise', type=float, default=1.0, help='img2img strength: 0 keeps the source image, 1 is full regeneration')
     ap.add_argument('--mask', default='', help='optional mask for img2img/edit; white=regenerate, black=preserve')
-    ap.add_argument('--gpu', default='1')
+    ap.add_argument('--gpu', default=os.environ.get('STUDIO_GPU_INDEX', '0'))
     a = ap.parse_args()
     os.environ.setdefault('CUDA_DEVICE_ORDER', 'PCI_BUS_ID')
     os.environ.setdefault('CUDA_VISIBLE_DEVICES', str(a.gpu))

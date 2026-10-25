@@ -194,7 +194,7 @@ def gpu_lease(cfg):
             if result.returncode:
                 raise RuntimeError('Cannot certify GPU ownership: ' + result.stderr)
             used, free, busy = [int(x.strip()) for x in result.stdout.strip().split(',')]
-            if used > cfg['gpu_idle_max_mib'] or free < 30000 or busy > 5:
+            if used > cfg['gpu_idle_max_mib'] or free < int(cfg.get('gpu_min_free_mib', 0)) or busy > 5:
                 raise AdmissionRefused('RTX is not idle enough for exclusive admission; no other process was ejected: ' + result.stdout)
             identity = uuid.uuid4().hex
             expiry = datetime.now(timezone.utc) + timedelta(minutes=cfg['lease_minutes'])
@@ -205,7 +205,7 @@ def gpu_lease(cfg):
                          'min_available_gib': cfg['min_available_gib'], 'expires': expiry.isoformat(),
                          'released': False}
             atomic_json(lease_path, lease_row)
-            line = f"\nACTIVE: {task} {identity}; exclusive RTX5090; expires {expiry.isoformat()}; host RSS {cfg['host_budget_gib']} GiB; floor {cfg['min_available_gib']} GiB\n"
+            line = f"\nACTIVE: {task} {identity}; exclusive configured GPU; expires {expiry.isoformat()}; host RSS {cfg['host_budget_gib']} GiB; floor {cfg['min_available_gib']} GiB\n"
             stream.seek(0, 2)
             stream.write(line)
             stream.flush()

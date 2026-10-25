@@ -11,7 +11,7 @@ The stack's own code and owner-authored Studio exports use MIT. Engine and embed
 The intended six-step walkthrough is:
 
 1. Clone this repository with `git clone --recurse-submodules` on both computers. The repository is private, so Git needs credentials with access to it.
-2. On Windows, run `./slstack.ps1 install --all` to create isolated media runtimes and build native engines and the chat UI, then `./slstack.ps1 install --all --check` to verify the build. Prerequisites: Python 3.12 on `PATH`, Visual Studio C++ Build Tools, CMake and Ninja (the Visual Studio CMake tools provide both), the CUDA toolkit (verified with 13.2), and Node.js with npm (verified with Node 24) for the chat UI build. The CUDA targets are built for `sm_120a`, so the native engines need an RTX 50-series GPU with at least 30 GB VRAM. The installer needs network access for PyPI, the npm registry and the pinned DirectStorage NuGet package; it never downloads model weights. A full install took about 27 minutes on the qualification machine.
+2. On Windows, run `./slstack.ps1 install --all` to create isolated media runtimes and build native engines and the chat UI, then `./slstack.ps1 install --all --check` to verify the build. Prerequisites: Python 3.12 on `PATH`, Visual Studio C++ Build Tools, CMake and Ninja (the Visual Studio CMake tools provide both), the CUDA toolkit (verified with 13.2), and Node.js with npm (verified with Node 24) for the chat UI build. The specialized native backend defaults to CUDA architecture `120a` and requires compute capability 12.0 or newer. Select a build target with `SLSTACK_CUDA_ARCHITECTURES`; device UUID, optional `gpu_min_free_mib`, model paths and host/device memory budgets belong in local configuration. Backend allocation admission still determines whether the selected model fits. The installer needs network access for PyPI, the npm registry and the pinned DirectStorage NuGet package; it never downloads model weights. A full install took about 27 minutes on the qualification machine.
 3. Set your model and ComfyUI paths, either with flags (`--model`, `--comfyui-models`) or in a local JSON file that overrides keys from `config.example.json` (for example `my.local.json`, which Git ignores), passed with `--config my.local.json`; then run `./slstack.ps1 --config my.local.json check`, which needs the model path. Model weights are read in place and are never downloaded. The default Anima image model also needs its component files in `image_support_files`: `anima_dir` (the Anima diffusers folder with transformer config, VAE and tokenizers) and `text_encoder` (the Qwen3 0.6B base text encoder).
 4. On the Mac, run `./bin/slstack mac --model <model.gguf>`. The receiver prints its endpoint and pairing instructions.
 5. On Windows, run `./slstack.ps1 rtx --model <model.gguf> --comfyui-models <models> --mac <mac-endpoint>` with the printed pairing information.
@@ -75,7 +75,7 @@ Permanent LoRA export always writes a new model. Unmerge selects the original ve
 
 Enable the local pre-commit gate with `git config core.hooksPath .githooks`, and run `python -B scripts/release_check.py` before committing or pushing. Audit-specific forbidden literals belong only in the ignored `release-secrets.local.json`; the scanner never prints their values. There are no stack GitHub workflows. The only submodule is the public upstream mlx-serve tag; private engine histories are excluded from the vendored source tree.
 
-The current development branch starts at a new root commit with neutral authorship. An earlier published development branch remains private and untouched. Public release requires owner approval and will put the clean tree into a new public repository; this private repository is not certified for publication with all of its refs.
+This private repository contains rewritten stack history under the Front Eagle commit identity. Publication and repository migration remain owner decisions. Third-party licenses and upstream contributor attribution are retained.
 
 
 Register native models with `--models first.gguf,second.gguf`, or set `models` to objects with `id`, `path` and optional `lora` in your local config. `/v1/models` exposes those ids; the existing web UI picker and each request's `model` field select them per chat. An unloaded selection uses the normal owned unload/load path, with status in the UI. `--resident first,second` records a requested pair; it currently performs normal switching and does not claim simultaneous residency or fast switching. The pinned llama-server has its own `--models-preset`/`--models-dir` router, but it cannot directly host the native ds4 adapter, so this bridge reuses its UI API shape.
@@ -92,3 +92,15 @@ WebUI two-turn check. Images, verify, all-position scoring,
 decode and append-via-decode use full evaluation. Remote session export,
 persistence and rewind are refused while enabled; edits re-prefill locally.
 Long live appends re-prefill as one logical call. Shipping RAM budgets remain.
+
+## Portable configuration
+
+Select the physical GPU by `gpu_uuid`; Studio defaults to ordinal 0 unless
+`STUDIO_GPU_INDEX` is set. `STUDIO_SLOW_MODEL_VOLUMES` in local `env_overrides` is an optional semicolon
+separated list of Windows volume names to exclude from model/cache placement.
+The archive root comes from `STUDIO_MODEL_ARCHIVE_ROOT` or the configured model
+root's sibling `models_archive` directory. No installation drive is assumed.
+Examples use `<model_dir>` and `<checkout>` placeholders: substitute local paths.
+Memory sizes are configurable resource ceilings, not a required host RAM size.
+The native backend retains its specialized kernel requirements; this export
+does not qualify additional hardware. See docs/STATUS.md for validation scope.

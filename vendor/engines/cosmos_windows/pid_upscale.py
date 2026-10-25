@@ -47,7 +47,7 @@ def main() -> int:
     ap.add_argument('--ckpt-type', default='2kto4k', choices=['2k', '2kto4k'])
     ap.add_argument('--steps', type=int, default=4, help='PiD inference steps (checkpoints are 4-step distilled)')
     ap.add_argument('--prompt', default='', help='optional caption (PiD conditions on it; blank = model default)')
-    ap.add_argument('--gpu', default='1')
+    ap.add_argument('--gpu', default=os.environ.get('STUDIO_GPU_INDEX', '0'))
     ap.add_argument('--pid-repo', default='')
     ap.add_argument('--pid-model-dir', default='')
     a = ap.parse_args()

@@ -52,7 +52,7 @@ def main() -> int:
     ap.add_argument('--seed', type=int, default=0)
     ap.add_argument('--chunk', type=int, default=16, help='action_chunk_size')
     ap.add_argument('--out', default='')
-    ap.add_argument('--gpu-index', default='1')
+    ap.add_argument('--gpu-index', default=os.environ.get('STUDIO_GPU_INDEX', '0'))
     ap.add_argument('--dry-run', action='store_true', help="write the input JSON + print the command, don't run")
     args = ap.parse_args()
     ckpt = args.checkpoint or ('' if args.mode == 'policy' else '')

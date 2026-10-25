@@ -12,7 +12,7 @@ ROOT = Path(__file__).resolve().parents[1]
 RULES = {
     'private network': r'\b(?:192\.168\.\d{1,3}\.\d{1,3}|10\.\d{1,3}\.\d{1,3}\.\d{1,3})\b',
     'credential': r'(?<![A-Za-z0-9_])(?:gh[pousr]_[A-Za-z0-9_]{20,}|github_pat_[A-Za-z0-9_]{20,}|hf_[A-Za-z0-9]{20,}|sk-[A-Za-z0-9_-]{20,}|AKIA[0-9A-Z]{16}|AIza[A-Za-z0-9_-]{30,}|xox[baprs]-[A-Za-z0-9-]{15,}|-----BEGIN (?:RSA |EC |OPENSSH )?PRIVATE KEY-----)',
-    'machine path': r'(?i)(?<![%\w])[a-z]:[\\/]',
+    'machine path': r'''(?i:(?<![%\w])[dlm]:[\\/])|/(?:Users|home)/[^/\s"']+/|/Volumes/[^/\s"']+/''',
     'coordination file': r'DEPLOY_HOLD\.md',
     'old product name': r'\bds4stack\b|ds4-stack',
 }

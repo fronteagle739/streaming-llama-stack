@@ -691,7 +691,7 @@ def main() -> int:
     ap.add_argument('--reference-image', action='append', default=[], help='Additional native identity reference (repeatable)')
     ap.add_argument('--denoise', type=float, default=1.0, help='img2img strength: 0 keeps the source image, 1 is full regeneration')
     ap.add_argument('--mask', default='', help='optional mask for img2img/edit; white=regenerate, black=preserve')
-    ap.add_argument('--gpu', default='1', help='nvidia-smi GPU index (the 5090); pinned via PCI_BUS_ID')
+    ap.add_argument('--gpu', default=os.environ.get('STUDIO_GPU_INDEX', '0'), help='Explicit nvidia-smi GPU index in PCI bus order')
     ap.add_argument('--ar-mode', default='fetch-all', choices=['fetch-all', 'fetch-active', 'skip', 'mac'], help='how the 80B autoregressive reasoning pass runs (user 2026-06-04): fetch-all=stream every expert (works today); fetch-active=stream only topk-active experts (full precision, needs the per-layer gate-hook); skip=straight to diffusion; mac=run AR on the Mac peer (--mac-host).')
     ap.add_argument('--mac-host', default='', help='Mac peer host for --ar-mode mac (AR->Mac, diffusion->RTX)')
     ap.add_argument('--selftest-rope', action='store_true', help=argparse.SUPPRESS)

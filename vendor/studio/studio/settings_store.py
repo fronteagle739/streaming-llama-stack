@@ -26,7 +26,7 @@ DEFAULT_ENGINE_SETTINGS: dict = {
     "cfg_batch": False,
     "memeff_attn": True,
     "vae_tile": "auto",
-    "gpu_index": "1",  # the 5090 (32 GB) on the dual-GPU box; the 3070 is index 0
+    "gpu_index": os.environ.get("STUDIO_GPU_INDEX", "0"),  # explicit PCI-bus ordinal
 }
 
 _lock = threading.Lock()
@@ -315,8 +315,7 @@ def paths() -> dict:
     model_archive_root = (
         getattr(settings, "model_archive_root", None)
         or os.environ.get("STUDIO_MODEL_ARCHIVE_ROOT")
-        or (r"models/models_archive" if os.name == "nt" and Path("runtime/").exists()
-            else str(settings.models_root.parent / "models_archive"))
+        or str(settings.models_root.parent / "models_archive")
     )
     return {
         "output_dir": str(settings.output_dir),
@@ -402,7 +401,8 @@ def _slow_model_root_allowed(value: str) -> bool:
     if allow in ("1", "true", "on", "yes", "y"):
         return True
     try:
-        return Path(str(value)).expanduser().drive.upper() not in ("C:", "I:")
+        from .config import _windows_slow_model_drive
+        return not _windows_slow_model_drive(value)
     except Exception:
         return True
 
@@ -412,8 +412,8 @@ def _slow_model_root_allowed(value: str) -> bool:
 # they are started they go to the same place").
 #
 # THE GPU-INDEX CONVENTION (adopted app-wide): indices are stored in NVIDIA-SMI PCI-BUS ORDER, i.e.
-# what `nvidia-smi --query-gpu=index` reports with CUDA_DEVICE_ORDER=PCI_BUS_ID. On this dual-GPU box
-# that means 0 = RTX 3070 (8 GB), 1 = RTX 5090 (32 GB). This is the SAME index space the audio worker
+# what `nvidia-smi --query-gpu=index` reports with CUDA_DEVICE_ORDER=PCI_BUS_ID.
+# Device assignments are installation-specific. This is the same index space the audio worker
 # already uses (it sets CUDA_DEVICE_ORDER=PCI_BUS_ID then CUDA_VISIBLE_DEVICES=<index>), so a single
 # index means the same physical card everywhere. Subprocess backends select the card BEFORE importing
 # torch by exporting CUDA_DEVICE_ORDER=PCI_BUS_ID + CUDA_VISIBLE_DEVICES=<index> (so the child sees it

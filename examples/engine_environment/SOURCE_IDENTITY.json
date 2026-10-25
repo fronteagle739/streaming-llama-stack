@@ -1,6 +1,6 @@
 {
   "date": "2026-10-22",
-  "machine": "Windows x64,RTX5090 available; these cases use CPU only",
+  "machine": "Windows x64; these cases use CPU only",
   "stack_parent_revision": "8d6dd1bb3b3e361402e9a558a37c3d0879697932",
   "note": "Receipts were measured on the stated parent plus evolving working changes. Support-file hashes describe publication state, not an assertion that the full files were identical at every measurement; documentation validation and budget metadata were strengthened afterward. The actual native binary and media memory-guard module remained unchanged.",
   "published_support_source_sha256": {

@@ -1,6 +1,6 @@
 {
   "family": "hf_streamed",
-  "model": "models/Qwen2.5-0.5B-Instruct",
+  "model": "<model_dir>/Qwen2.5-0.5B-Instruct",
   "steps": 3,
   "rank": 2,
   "seq": 32,

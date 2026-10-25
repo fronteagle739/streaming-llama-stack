@@ -1,6 +1,6 @@
 DSV4.1 FLASH 1017 JEFF TEST LoRA
 Date: 2026-10-22T17:46:24.428492+00:00
-Machine: RTX 5090, 32 GB RAM
+Environment: configured CUDA backend; synthetic public Jeff-identity training fixture.
 Stack tested: 2ba0d3e5936ae7e6528935f9c4925112ea82c016
 
 BASE AND ADAPTER

@@ -352,7 +352,7 @@ def main():
     ap.add_argument('--out', default='kv_demo', help='export: output prefix')
     ap.add_argument('--in', dest='in_prefix', default='kv_demo', help='decode: input prefix')
     ap.add_argument('--max-new-tokens', type=int, default=40)
-    ap.add_argument('--gpu-index', default='1')
+    ap.add_argument('--gpu-index', default=os.environ.get('STUDIO_GPU_INDEX', '0'))
     ap.add_argument('--image', action='append', default=[], help='optional image/frame context; repeat for multiple sampled video frames')
     ap.add_argument('--temperature', type=float, default=0.0, help='local/quant: >0 samples (nucleus top-p); 0 (default) = greedy, unchanged')
     ap.add_argument('--top-p', dest='top_p', type=float, default=1.0, help='local/quant: nucleus top-p when sampling')
