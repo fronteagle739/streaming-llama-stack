@@ -77,13 +77,32 @@ FOLD = dict(CFG, producer_host_max_gib=13.0, producer_prefill_sweep_tokens=49152
 
 class Fold(unittest.TestCase):
     def test_rule(self):
-        self.assertEqual(fold_sweeps(110000, 49152, 1 << 20), ([49152, 60848], False))
-        self.assertEqual(fold_sweeps(93668, 65536, 1 << 20), ([93668], False))
-        self.assertEqual(fold_sweeps(30000, 49152, 49152), ([30000], False))
-        self.assertEqual(fold_sweeps(49152, 49152, 49152), ([49152], False))
-        self.assertEqual(fold_sweeps(49153, 49152, 1 << 20), ([49153], False))
-        self.assertEqual(fold_sweeps(98304, 49152, 49152), ([49152, 49152], False))
-        self.assertEqual(fold_sweeps(230000, 49152, 81000), ([49152] * 4 + [33392], True))
+        self.assertEqual(fold_sweeps(110000, 49152, 1 << 20), ([49152, 60848], False, False))
+        self.assertEqual(fold_sweeps(93668, 65536, 1 << 20), ([93668], False, False))
+        self.assertEqual(fold_sweeps(30000, 49152, 49152), ([30000], False, False))
+        self.assertEqual(fold_sweeps(49152, 49152, 49152), ([49152], False, False))
+        self.assertEqual(fold_sweeps(49153, 49152, 1 << 20), ([49153], False, False))
+        self.assertEqual(fold_sweeps(98304, 49152, 49152), ([49152, 49152], False, False))
+        self.assertEqual(fold_sweeps(230000, 49152, 81000), ([49152] * 3 + [45056, 37488], False, True))
+
+    def test_rebalance_examples(self):
+        self.assertEqual(fold_sweeps(103189, 49152, 53000, 61440), ([49152, 28672, 25365], False, True))
+        for cap in (54037, 70000, 1 << 20):
+            self.assertEqual(fold_sweeps(103189, 49152, cap, 61440), ([49152, 54037], False, False))
+        self.assertEqual(fold_sweeps(93668, 49152, 53000, 61440), ([49152, 44516], True, False))
+        self.assertEqual(fold_sweeps(150000, 49152, 50000, 61440), ([49152, 49152, 28672, 23024], False, True))
+
+    def test_rebalance_invariants(self):
+        for n in range(1, 400000, 977):
+            for s, f in ((49152, None), (49152, 61440), (65536, None)):
+                for cap in range(s, 2 * s + 4097, 1517):
+                    sweeps, tail, rebalance = fold_sweeps(n, s, cap, f)
+                    self.assertEqual(sum(sweeps), n)
+                    self.assertTrue(all(x <= cap for x in sweeps), (n, s, f, cap, sweeps))
+                    starts = [sum(sweeps[:i]) for i in range(len(sweeps))]
+                    self.assertTrue(all(x % 4096 == 0 for x in starts))
+                    self.assertTrue(len(sweeps) == 1 or min(sweeps) >= 4096, (n, s, f, cap, sweeps))
+                    self.assertFalse(tail and rebalance)
 
     def test_plan_examples(self):
         p = prefill_plan(FOLD, 109000)
@@ -98,11 +117,11 @@ class Fold(unittest.TestCase):
         p = prefill_plan(FOLD, 16000)
         self.assertEqual((p['sweeps'], p['capacity'], p['host_bytes']), ([16000], 49152, int(6.25 * 2**30)))
 
-    def test_fold_over_cap_is_a_tail(self):
+    def test_fold_over_ram_cap_rebalances(self):
         p = prefill_plan(dict(FOLD, producer_host_max_gib=7.0), 110000)   # cap below 60,848 rows
-        self.assertTrue(p['fold_tail'])
-        self.assertEqual((p['sweeps'], p['capacity']), ([49152, 49152, 11696], 49152))
-        self.assertIn('remainder is its own sweep', p['reason'])
+        self.assertTrue(p['rebalance'] and not p['fold_tail'])
+        self.assertEqual((p['sweeps'], p['capacity']), ([49152, 32768, 28080], 49152))
+        self.assertIn('rebalanced into 32768+28080', p['reason'])
 
     def test_fold_cap(self):
         expect = {103189: [49152, 54037], 93668: [49152, 44516], 60000: [60000], 70000: [49152, 20848],
