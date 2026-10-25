@@ -195,10 +195,10 @@ uint64_t append_decode_max(){static const uint64_t n=[]{const char*e=std::getenv
 // decode step per token; the routed experts of the rows are fetched as one union per layer.
 bool append_multirow_enabled(){static const bool on=[]{const char*e=std::getenv("LLAMADECODE_APPEND_MULTIROW");return e&&e[0]=='1'&&!e[1];}();return on;}
 // LLAMADECODE keep-open: after a prefill weight sweep rebuilt the banks, the ds4
-// decoder stays open and only the moved resident weights are re-registered.
-// Opt-in: LLAMADECODE_DS4X_KEEP_OPEN=1; default (unset/other) is x_close + x_open.
-bool ds4x_keep_open(){static const bool on=[]{const char*e=std::getenv("LLAMADECODE_DS4X_KEEP_OPEN");const bool v=e&&e[0]=='1'&&!e[1];
-    std::fprintf(stderr,"LLAMADECODE_DS4X_KEEP_OPEN enabled=%d\n",int(v));std::fflush(stderr);return v;}();return on;}
+// decoder stays open and only the moved resident weights are re-registered
+// (default ON). LLAMADECODE_DS4X_KEEP_OPEN=0 restores x_close + x_open.
+bool ds4x_keep_open(){static const bool on=[]{const char*e=std::getenv("LLAMADECODE_DS4X_KEEP_OPEN");const bool v=llama_dsv41_ds4x_keep::keep_open_from_env(e);
+    std::fprintf(stderr,"LLAMADECODE_DS4X_KEEP_OPEN enabled=%d default=on (=0 disables)\n",int(v));std::fflush(stderr);return v;}();return on;}
 const std::wstring&decode_cancel_file(){static const std::wstring p=[]{const char*e=std::getenv("LLAMADECODE_DECODE_CANCEL_FILE");
     return e&&*e?std::filesystem::u8path(e).wstring():std::wstring();}();return p;}
 bool decode_cancel_requested(){const auto&p=decode_cancel_file();return !p.empty()&&GetFileAttributesW(p.c_str())!=INVALID_FILE_ATTRIBUTES;}

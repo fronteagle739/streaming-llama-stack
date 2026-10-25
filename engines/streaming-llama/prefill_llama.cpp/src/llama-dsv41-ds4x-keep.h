@@ -8,6 +8,9 @@
 #include <vector>
 
 namespace llama_dsv41_ds4x_keep {
+// LLAMADECODE_DS4X_KEEP_OPEN: default ON (unset or any value but "0");
+// exactly "0" restores the old x_close + x_open path.
+inline bool keep_open_from_env(const char *e) { return !(e && e[0] == '0' && !e[1]); }
 struct resident {
     uint64_t offset = 0, bytes = 0;
     void *device = nullptr;
