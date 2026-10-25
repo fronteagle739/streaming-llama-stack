@@ -82,6 +82,12 @@ the 1M configuration and follow-up path, not a million-token prefill.
 
 All gate producers retire gracefully with exit code 0 and an empty owned
 job. No runtime memory-floor breach or timing contamination is reported.
+One 103K YOCO arm records a **20,627,456-byte (19.67 MiB)** rise in global
+pagefile usage while retaining at least **10,200,412,160 bytes (9.50 GiB)**
+available RAM. Other standalone gate arms record zero growth. This global
+counter does not attribute paging to the producer; neither its 4 GiB floor
+nor the unchanged 256,000,000-byte global paging guard tripped. The evidence
+does not establish machine-wide zero paging.
 After this check, the plain 1M WebUI is relaunched for the owner.
 
 Images, verify, all-position scoring, decode and append-via-decode retain
