@@ -24,13 +24,50 @@ def sha256(path, progress=None):
                 h.update(bytes.fromhex(sha256(f)))
     else:
         total, done = p.stat().st_size, 0
-        with p.open('rb') as stream:
-            for block in iter(lambda: stream.read(1024 * 1024), b''):
-                h.update(block)
-                if progress:
-                    done += len(block)
-                    progress(done, total)
+        for block in _blocks(p):
+            h.update(block)  # hashlib releases the GIL here, so the reader keeps the disk busy
+            if progress:
+                done += len(block)
+                progress(done, total)
     return h.hexdigest()
+
+
+def _blocks(path, block_bytes=8 * 1024 * 1024, depth=4):
+    """The file's bytes in order, read on a separate thread so reading overlaps hashing
+    (serial read+hash ran at ~1.25 GB/s; the disk and SHA-256 each manage ~2.2-3 GB/s)."""
+    import queue
+    blocks, stop, failure = queue.Queue(maxsize=depth), threading.Event(), []
+
+    def reader():
+        try:
+            with open(path, 'rb', buffering=0) as stream:
+                while not stop.is_set():
+                    block = stream.read(block_bytes)
+                    blocks.put(block)
+                    if not block:
+                        return
+        except BaseException as error:
+            failure.append(error)
+            blocks.put(b'')
+
+    thread = threading.Thread(target=reader, name='sha256-reader', daemon=True)
+    thread.start()
+    try:
+        while True:
+            block = blocks.get()
+            if not block:
+                break
+            yield block
+    finally:
+        stop.set()
+        while thread.is_alive():  # unblock a reader waiting on a full queue
+            try:
+                blocks.get_nowait()
+            except queue.Empty:
+                thread.join(0.05)
+        thread.join()
+    if failure:
+        raise failure[0]
 
 
 def atomic_json(path, data):
