@@ -1,5 +1,6 @@
 #include "llama-dsv41-layer-log.h"
 #include "llama-dsv41-weights.h"
+#include "llama-dsv41-open-phases.h"
 #include <tuple>
 #include "llama-dsv41-engram-prefetch.h"
 #include "llama-dsv41-engram-early-decision.h"
@@ -572,7 +573,9 @@ void llama_dsv41_weight_provider::implementation::create_pipeline(){
     params.ds_gpu_ring_slots=p->options.ds_gpu_ring_slots;
     params.ds_compute_direct=p->options.compute_direct;
     params.ds_zero_padding_only=p->options.zero_padding_only;
+    std::optional<llama_dsv41_open_phases::scope> timed;timed.emplace("wf_create_dstorage");   // log only: DS heaps + CUDA import (DSD_VRAM)
     p->fetcher=wf_create_required_dstorage(&params);require(p->fetcher,"Required original weight DirectStorage initialization failed");
+    timed.reset();timed.emplace("bank_buffers");
     p->allocated=true; // All subsequent failures must synchronize before free.
     for(uint32_t i=0;i<p->options.buffers;++i){
         if(p->options.compute_direct)require(wf_is_ds_direct(p->fetcher)&&wf_get_n_gpu_bufs(p->fetcher)==int(p->options.buffers)&&wf_get_gpu_buf_ptr(p->fetcher,int(i)),"Required direct bank was not allocated; no relay fallback");
@@ -582,7 +585,9 @@ void llama_dsv41_weight_provider::implementation::create_pipeline(){
         require(bool(b),"Admitted weight buffer allocation/wrapping failed");ggml_backend_buffer_set_usage(b.get(),GGML_BACKEND_BUFFER_USAGE_WEIGHTS);
         if(!p->options.compute_direct)wf_set_gpu_buf_ptr(p->fetcher,int(i),ggml_backend_buffer_get_base(b.get()));p->buffers.push_back(std::move(b));
     }
+    timed.reset();timed.emplace("register_layers");
     for(uint32_t i=0;i<p->stage_count();++i){std::vector<wf_weight_span>spans;p->spans_for(p->stage_at(i),spans);wf_register_layer(p->fetcher,int(i),spans.data(),int(spans.size()),p->stage_at(i).bytes);}
+    timed.reset();timed.emplace("layout");
     if(p->decode_layout){
         for(uint32_t i=0;i<82;++i)require(wf_set_layer_persistent(p->fetcher,int(i),true),"Resident decode stage refused by the fetcher");
         require(p->buffers.size()==2,"Decode expert cache requires the two direct banks");
@@ -602,6 +607,7 @@ void llama_dsv41_weight_provider::implementation::create_pipeline(){
         if(p->options.compute_direct)
             std::fprintf(stderr,"LLAMADECODE_PREFILL_LAYOUT banks=%zu streaming_banks=%u persistent_stages=0 expert_pool_bound=0\n",p->buffers.size(),p->options.buffers);
     }
+    timed.reset();timed.emplace("wf_start");
     require(!wf_has_failed(p->fetcher),"Original layer registration failed");p->identity();if(p->options.ds_gpu_ring_slots)wf_set_layer_major_mode(p->fetcher,true);p->apply_pause("cold_wf_start");wf_start(p->fetcher);
     require(!wf_has_failed(p->fetcher),"Original DirectStorage pipeline startup failed");p->mark_weight_stream(true);
 }

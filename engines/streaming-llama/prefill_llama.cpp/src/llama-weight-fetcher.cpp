@@ -2,6 +2,7 @@
 #include "llama-weight-fetcher.h"
 #include "llama-wf-bounded-policy.h"
 #include "llama-wf-zero-gaps.h"
+#include "llama-dsv41-open-phases.h"
 
 #include <algorithm>
 #include <array>
@@ -1875,8 +1876,15 @@ static bool wf_make_dual_use_heap(ID3D12Device * dev, uint64_t buf_size,
     hd.Alignment = D3D12_DEFAULT_RESOURCE_PLACEMENT_ALIGNMENT;
     hd.Flags = D3D12_HEAP_FLAG_SHARED | D3D12_HEAP_FLAG_ALLOW_ONLY_BUFFERS;
     ID3D12Heap * heap = nullptr;
+    // LLAMADECODE open phases (log only): this heap's create / placed / share / CUDA import / map.
+    const std::string phase_name = std::string("ds_heap_") + tag;
+    llama_dsv41_open_phases::scope phase_timed(phase_name.c_str());
+    auto phase_step = llama_dsv41_open_phases::clock::now();
+    auto phase_mark = [&](const char * key) { llama_dsv41_open_phases::note_ms(key, llama_dsv41_open_phases::ms_since(phase_step)); phase_step = llama_dsv41_open_phases::clock::now(); };
     { size_t fb=0,tb=0; cudaMemGetInfo(&fb,&tb); fprintf(stderr,"*** DSD_VRAM(%s): before CreateHeap free=%.0fMB\n",tag,fb/1048576.0); fflush(stderr); }
+    phase_mark("meminfo");
     HRESULT hr = dev->CreateHeap(&hd, IID_PPV_ARGS(&heap));
+    phase_mark("create_heap");
     if (FAILED(hr)) { WF_ERR("DS-direct(%s): CreateHeap(%.2fGB) 0x%08lx", tag, HEAP/1e9, (unsigned long)hr); return false; }
     { size_t fb=0,tb=0; cudaMemGetInfo(&fb,&tb); fprintf(stderr,"*** DSD_VRAM(%s): after CreateHeap(%.2fGB) free=%.0fMB\n",tag,HEAP/1e9,fb/1048576.0); fflush(stderr); }
 
@@ -1893,19 +1901,23 @@ static bool wf_make_dual_use_heap(ID3D12Device * dev, uint64_t buf_size,
         if (FAILED(hr)) { WF_ERR("DS-direct(%s): CreatePlacedResource q%d 0x%08lx", tag, i, (unsigned long)hr); for (auto*r:q)r->Release(); heap->Release(); return false; }
         q.push_back(res);
     }
+    phase_mark("placed_resources");
 
     HANDLE sh = NULL;
     hr = dev->CreateSharedHandle(heap, nullptr, GENERIC_ALL, nullptr, &sh);
+    phase_mark("shared_handle");
     if (FAILED(hr)) { WF_ERR("DS-direct(%s): CreateSharedHandle 0x%08lx", tag, (unsigned long)hr); for (auto*r:q)r->Release(); heap->Release(); return false; }
     cudaExternalMemoryHandleDesc md = {}; md.type = cudaExternalMemoryHandleTypeD3D12Heap; md.handle.win32.handle = sh; md.size = HEAP;
     cudaExternalMemory_t em = {};
     cudaError_t ce = cudaImportExternalMemory(&em, &md);
+    phase_mark("cuda_import");
     CloseHandle(sh);   // CUDA holds its own reference to the heap; the NT handle is not needed after import
     if (ce != cudaSuccess) { WF_ERR("DS-direct(%s): cudaImportExternalMemory %s", tag, cudaGetErrorString(ce)); for (auto*r:q)r->Release(); heap->Release(); return false; }
     { size_t fb=0,tb=0; cudaMemGetInfo(&fb,&tb); fprintf(stderr,"*** DSD_VRAM(%s): after cudaImportExternalMemory free=%.0fMB\n",tag,fb/1048576.0); fflush(stderr); }
     void * ptr = nullptr;
     cudaExternalMemoryBufferDesc bd = {}; bd.offset = 0; bd.size = HEAP; bd.flags = 0;
     ce = cudaExternalMemoryGetMappedBuffer(&ptr, em, &bd);
+    phase_mark("mapped_buffer");
     if (ce != cudaSuccess) { WF_ERR("DS-direct(%s): GetMappedBuffer %s", tag, cudaGetErrorString(ce)); cudaDestroyExternalMemory(em); for (auto*r:q)r->Release(); heap->Release(); return false; }
 
     *out_ptr = ptr; *out_em = em; *out_heap = heap; *out_quarters = std::move(q); if (out_qsz) *out_qsz = QSZ;
@@ -2644,6 +2656,8 @@ static bool wf_dstorage_init(wf_context * wf, size_t buf_size) {
 
         auto & stg = wf->ds_stage;
         stg.size = stg_size;
+        llama_dsv41_open_phases::scope phase_timed("ds_staging");   // log only: staging resource + CUDA import
+        llama_dsv41_open_phases::note("bytes", stg_size);
 
         D3D12_HEAP_PROPERTIES heapProps = {};
         heapProps.Type = D3D12_HEAP_TYPE_DEFAULT;

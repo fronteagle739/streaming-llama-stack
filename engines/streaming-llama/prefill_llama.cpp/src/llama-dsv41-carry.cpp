@@ -491,6 +491,8 @@ bool llama_dsv41_carry_store::create(const config & options, std::string & error
                 p->shared_bank_claim=std::unique_lock<std::mutex>(options.shared_ram->owner,std::try_to_lock);
                 require(p->shared_bank_claim.owns_lock(),"Shared RAM backing already has a live carry-store owner");
                 p->resident=options.shared_ram->storage;
+                llama_dsv41_open_phases::scope timed("shared_bank_zero");   // log only
+                llama_dsv41_open_phases::note("bytes",p->capacity.resident_bytes);
                 std::memset(p->resident.get(),0,size_t(p->capacity.resident_bytes));
             }else p->resident=llama_dsv41_locked_ram::allocate(p->capacity.resident_bytes,options.admitted_host_bytes);
             p->resident_bytes = p->capacity.resident_bytes;

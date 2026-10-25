@@ -557,8 +557,11 @@ int wmain(int argc,wchar_t**argv){
         report["carry_disk_bytes"]=carry_budget.disk_bytes;report["carry_ram_prefix_tokens"]=ram_prefix;
         const auto job_host=number("--job-host-bytes"),job_device=number("--job-device-bytes"),gpu_reserve=number("--gpu-reserve-bytes");
         require(job_host>cli_host_bytes+control_host&&gpu_reserve>=gib,"Producer requires its64MiB host overhead and explicitGPU reserve>=1GiB");
+        const auto host_admission_started=clock_type::now();
         require(llama_dsv41_host_memory::begin(job_host,job_device),
             "Producer physicalRAM/WDDMcommit/Job admission refused before CUDA initialization");
+        // Log only: the host-memory admission runs before CUDA, outside sweep->open (LLAMADECODE_OPEN_PHASES).
+        std::fprintf(stderr,"LLAMADECODE_HOST_ADMISSION_TIMING host_memory_begin_ms=%.1f\n",ms(host_admission_started));std::fflush(stderr);
         report["telemetry"]["before_cuda_available_ram"]=ram_admission(job_host);
         uint64_t nvml_free_before_cuda=0,nvml_total=0;const bool nvml_before=nvml_free_bytes(nvml_free_before_cuda,nvml_total);
         const auto ordinal=number("--cuda-device");const int devices=ggml_backend_cuda_get_device_count();

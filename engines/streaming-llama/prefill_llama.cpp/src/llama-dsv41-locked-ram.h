@@ -6,6 +6,8 @@
 #include <stdexcept>
 #include <limits>
 #include <string>
+#include <chrono>
+#include "llama-dsv41-open-phases.h"
 #ifdef _WIN32
 #ifndef NOMINMAX
 #define NOMINMAX
@@ -70,13 +72,21 @@ inline std::shared_ptr<uint8_t[]> allocate(uint64_t bytes,uint64_t admission) {
         throw std::runtime_error("Carry RAM alignment overflow");
     const size_t size=size_t((bytes+page-1)/page*page);
     if(size>admission)throw std::runtime_error("Aligned carry RAM exceeds admission");
+    // LLAMADECODE open phases (log only): each locked allocation's steps and free RAM around it.
+    namespace phases=llama_dsv41_open_phases;
+    phases::scope timed("locked_ram");
+    const auto lock_wait_started=phases::clock::now();
     auto &record=state();std::unique_lock<std::mutex> guard(record.mutex);
+    const double mutex_ms=phases::ms_since(lock_wait_started);
     if(record.bytes>std::numeric_limits<uint64_t>::max()-size)
         throw std::runtime_error("Locked carry byte counter overflow");
+    double virtualalloc_ms=0,setws_ms=0,virtuallock_ms=0;
+    uint64_t avail_before=0,avail_after=0;
 #ifdef _WIN32
     MEMORYSTATUSEX available{};available.dwLength=sizeof(available);
     if(!GlobalMemoryStatusEx(&available)||size>available.ullAvailPhys)
         throw std::runtime_error("Locked carry RAM exceeds available physical memory");
+    avail_before=available.ullAvailPhys;
     SIZE_T minimum=0,maximum=0;
     if(!GetProcessWorkingSetSize(GetCurrentProcess(),&minimum,&maximum))
         throw std::runtime_error("Cannot inspect carry working-set lock allowance");
@@ -85,11 +95,18 @@ inline std::shared_ptr<uint8_t[]> allocate(uint64_t bytes,uint64_t admission) {
     if(record.bytes+size>std::numeric_limits<SIZE_T>::max()-margin)
         throw std::runtime_error("Carry working-set allowance overflow");
     const SIZE_T wanted=SIZE_T(record.bytes+size+margin);
+    auto step=phases::clock::now();
     void *memory=VirtualAlloc(nullptr,size,MEM_RESERVE|MEM_COMMIT,PAGE_READWRITE);
+    virtualalloc_ms=phases::ms_since(step);
     if(!memory)throw std::runtime_error("Anonymous carry RAM allocation failed");
-    if(!SetProcessWorkingSetSize(GetCurrentProcess(),minimum>wanted?minimum:wanted,
-        maximum>wanted?maximum:wanted)||!VirtualLock(memory,size)) {
-        const DWORD error=GetLastError();VirtualFree(memory,0,MEM_RELEASE);
+    // Same order and short-circuit as before; each call timed on its own.
+    DWORD lock_error=0;step=phases::clock::now();
+    bool locked=SetProcessWorkingSetSize(GetCurrentProcess(),minimum>wanted?minimum:wanted,maximum>wanted?maximum:wanted)!=0;
+    if(!locked)lock_error=GetLastError();
+    setws_ms=phases::ms_since(step);
+    if(locked){step=phases::clock::now();locked=VirtualLock(memory,size)!=0;if(!locked)lock_error=GetLastError();virtuallock_ms=phases::ms_since(step);}
+    if(!locked) {
+        const DWORD error=lock_error;VirtualFree(memory,0,MEM_RELEASE);
         if(!record.bytes)SetProcessWorkingSetSize(GetCurrentProcess(),record.original_min,record.original_max);
         throw std::runtime_error("Carry RAM cannot be locked: Windows error "+std::to_string(error));
     }
@@ -118,8 +135,13 @@ inline std::shared_ptr<uint8_t[]> allocate(uint64_t bytes,uint64_t admission) {
         }
 #endif
     });
-    std::fprintf(stderr,"CARRY_RAM_LOCKED bytes=%llu active_bytes=%llu anonymous=1\n",
-        (unsigned long long)size,(unsigned long long)active_bytes);
+#ifdef _WIN32
+    {MEMORYSTATUSEX after{};after.dwLength=sizeof(after);if(GlobalMemoryStatusEx(&after))avail_after=after.ullAvailPhys;}
+#endif
+    phases::note("bytes",size);phases::note("avail_before",avail_before);phases::note_ms("mutex",mutex_ms);phases::note_ms("virtualalloc",virtualalloc_ms);
+    phases::note_ms("setws",setws_ms);phases::note_ms("virtuallock",virtuallock_ms);phases::note("avail_after",avail_after);
+    std::fprintf(stderr,"CARRY_RAM_LOCKED bytes=%llu active_bytes=%llu anonymous=1 virtualalloc_ms=%.1f setws_ms=%.1f virtuallock_ms=%.1f avail_before=%llu avail_after=%llu\n",
+        (unsigned long long)size,(unsigned long long)active_bytes,virtualalloc_ms,setws_ms,virtuallock_ms,(unsigned long long)avail_before,(unsigned long long)avail_after);
     return result;
 }
 }
