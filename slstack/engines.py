@@ -36,6 +36,7 @@ class Engines:
         self.cfg.update(model=selected['path'], model_name=selected['id'], lora=selected.get('lora', []))
         self.loading_model = None
         self.events = []
+        self.media_progress = None
         self.llm = None
         self.remote = None
         self.lock = threading.RLock()
@@ -377,6 +378,17 @@ class Engines:
                           headers={'Authorization': 'Bearer ' + self.cfg['_control_token']})
 
     def media(self, kind, params):
+        from .media_progress import MediaProgress
+        self.media_progress = MediaProgress(self.cfg['runtime_root'], kind, params.get('steps', 20))
+        try:
+            result = self._media_job(kind, params)
+        except BaseException:
+            self.media_progress.phase('failed', active=False)
+            raise
+        self.media_progress.phase('complete', active=False)
+        return result
+
+    def _media_job(self, kind, params):
         if hasattr(self, 'preferences'):self.preferences.reload()
         model = self.cfg[kind + '_model']
         if not model and not self.cfg['comfyui_models']:
@@ -402,6 +414,7 @@ class Engines:
             if saved:
                 started = time.monotonic()
                 self.status('Reloading model and restoring chat state')
+                self.media_progress.phase('restoring')
                 self.combo_restore = saved
                 try:
                     self.ready()
@@ -426,6 +439,7 @@ class Engines:
         finally:
             started = time.monotonic()
             self.status('Restoring the conversation checkpoint')
+            self.media_progress.phase('restoring')
             timing['restore'] = self.single('restore')
             timing['restore_s'] = time.monotonic() - started
             self.swap_timing = timing
@@ -446,6 +460,8 @@ class Engines:
         if params.get('loras'):
             params['lora_files']=self.preferences.resolve_loras(kind,model_id,params['loras'])
         request = {'kind': kind, 'cfg': redact_cfg(cfg), 'params': params}
+        progress = getattr(self, 'media_progress', None)
+        if progress:request['progress_file'] = str(progress.path)
         proc = OwnedProcess(cfg, [cfg['studio_python'], '-B', '-m', 'slstack.studio_worker'],
                             kind, stdin=json.dumps(request) + '\n', gpu=True)
         try:

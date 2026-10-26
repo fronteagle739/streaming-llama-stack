@@ -174,10 +174,6 @@ class Stack:
                     finish = choice['finish_reason']
             calls = [calls[index] for index in sorted(calls)]
             if not calls:
-                markdown = ''.join('\n\n![Generated media](' + item['url'] + ')'
-                                   for result in media for item in result.get('data',[]))
-                if markdown:
-                    yield chunk({'content':markdown})
                 yield chunk({},finish)
                 return
             owned = [call['function']['name'] in names for call in calls]
@@ -190,7 +186,13 @@ class Stack:
             message['tool_calls'] = calls
             body['messages'].append(message)
             for call in calls:
+                before = len(media)
                 body['messages'].append(self.tool_result(call,media))
+                markdown = ''.join('\n\n![Generated media](' + item['url'] + ')\n\n'
+                                   for result in media[before:] for item in result.get('data',[]))
+                if markdown:
+                    # Flush artifacts before the next vision prefill or model reply.
+                    yield chunk({'content':markdown})
         raise RuntimeError('Stack tool iteration limit (8) exceeded')
 
     def mcp(self, body):
@@ -253,7 +255,10 @@ def handler(stack):
             if route == '/v1/models':
                 return self.send(200, stack.engines.catalog() if hasattr(stack.engines, 'catalog') else stack.models.catalog())
             if route == '/slstack/status':
-                return self.send(200, {'events': getattr(stack.engines, 'events', []), 'dual_resident_active': False})
+                progress = getattr(stack.engines, 'media_progress', None)
+                return self.send(200, {'events': getattr(stack.engines, 'events', []), 'dual_resident_active': False,
+                                       'media_progress': progress.snapshot() if progress else None},
+                                 extra={'Cache-Control':'no-store'})
             if route == '/slstack/generation':
                 return self.send(200, dict(stack.generation.state(), supported=not bool(stack.cfg.get('mac'))))
             if route == '/slstack/settings':
@@ -284,7 +289,8 @@ def handler(stack):
             if route == '/mcp':
                 return self.send(405, {'error': {'message': 'Stateless MCP endpoint; POST JSON-RPC'}})
             if route == '/slstack-media.js' and stack.cfg['webui']:
-                return self.send(200, (ROOT / 'slstack' / 'media.js').read_bytes(), 'text/javascript; charset=utf-8')
+                return self.send(200, (ROOT / 'slstack' / 'media.js').read_bytes(), 'text/javascript; charset=utf-8',
+                                 {'Cache-Control':'no-store'})
             if route == '/slstack-generation.js' and stack.cfg['webui']:
                 return self.send(200, (ROOT / 'slstack' / 'generation.js').read_bytes(), 'text/javascript; charset=utf-8',
                                  {'Cache-Control': 'no-store'})

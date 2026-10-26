@@ -14,10 +14,13 @@ import sys
 from .journal import sha256
 from .generation import publish
 
+GENERATED_IMAGE = re.compile(r'!\[Generated media\]\((/outputs/[^)\r\n]+\.(?:png|jpe?g|webp|gif|bmp))\)', re.I)
+
 
 def has_images(body):
-    return any(isinstance(m.get('content'),list) and any(isinstance(p,dict) and p.get('type') in ('image_url','input_image')
-        for p in m['content']) for m in body.get('messages',[]))
+    return any((isinstance(m.get('content'),list) and any(isinstance(p,dict) and p.get('type') in ('image_url','input_image')
+        for p in m['content'])) or (m.get('role')=='assistant' and isinstance(m.get('content'),str)
+        and GENERATED_IMAGE.search(m['content'])) for m in body.get('messages',[]))
 
 
 def image_bytes(url,cfg):
@@ -84,12 +87,22 @@ class Images:
     def prepare(self,body,before_encode):
         result=deepcopy(body);blocks=[]
         for message in result.get('messages',[]):
+            generated = message.get('role')=='assistant' and isinstance(message.get('content'),str)
+            if generated:
+                # The WebUI persists the streamed artifact in assistant Markdown.
+                # Rehydrate only stack-local generated images on subsequent turns.
+                text=message['content'];parts=[];cursor=0
+                for match in GENERATED_IMAGE.finditer(text):
+                    parts.extend([dict(type='text',text=text[cursor:match.start()]),
+                                  dict(type='image_url',image_url=dict(url=match[1]))])
+                    cursor=match.end()
+                if parts:message['content']=[*parts,dict(type='text',text=text[cursor:])]
             if not isinstance(message.get('content'),list):continue
             content=[]
             for part in message['content']:
                 kind=part.get('type') if isinstance(part,dict) else None
                 if kind in ('image_url','input_image'):
-                    if message.get('role') not in ('user','tool','function'):raise ValueError('Images belong in user or tool messages')
+                    if message.get('role') not in ('user','tool','function') and not generated:raise ValueError('Images belong in user or tool messages')
                     url=part.get('image_url');url=url.get('url') if isinstance(url,dict) else url
                     row=self.encode(image_bytes(url,self.cfg),before_encode)
                     marker='[slstack-image-'+row['key']+'-'+str(len(blocks))+']'
