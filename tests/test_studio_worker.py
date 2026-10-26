@@ -58,8 +58,10 @@ class StudioWorkerSchemaTests(unittest.TestCase):
         args = dict(prompt='A red cube', negative_prompt='', width=512, height=512,
                     steps=4, guidance=1.0, seed=1)
         adapter = dict(path=str(root / 'adapter.safetensors'), weight=0.7)
-        cases = [('image', 'anima-1.0', [adapter]), ('image', 'z-image', []),
-                 ('image', 'moss-image', []), ('video', 'ltx-2.3', [])]
+        cases = [('image', 'anima-1.0', [adapter], 'streaming'), ('image', 'z-image', [], 'streaming'),
+                 ('image', 'moss-image', [], 'streaming'), ('video', 'ltx-2.3', [], 'streaming'),
+                 ('image', 'anima-1.0', [], 'resident'), ('image', 'minimax-h3', [], 'resident'),
+                 ('video', 'minimax-h3', [], 'streaming')]
         env = dict(STUDIO_DATA_ROOT=str(root / 'studio'), STUDIO_COSMOS_WINDOWS_PATH=str(ROOT / 'vendor/engines'))
         with patch.dict(os.environ, env):
             backend = Mock()
@@ -71,15 +73,17 @@ class StudioWorkerSchemaTests(unittest.TestCase):
             backend.generate.side_effect = generate
             with (patch('studio.adapter.load_backend', return_value=(backend, False, 'schema boundary')),
                   patch('studio.custom_models.comfy_support_defaults', return_value={})):
-                for kind, arch, loras in cases:
+                for kind, arch, loras, mode in cases:
                     with self.subTest(kind=kind, arch=arch, loras=bool(loras)):
-                        config = dict(cfg, **{kind + '_arch': arch})
+                        config = dict(cfg, **{kind + '_arch': arch, kind + '_mode': mode})
                         from slstack.media_progress import MediaProgress
                         progress = MediaProgress(root, kind, args['steps'])
                         result = run(dict(cfg=config, kind=kind, params=dict(args, lora_files=loras), progress_file=str(progress.path)))
                         self.assertEqual(progress.snapshot()['step'], 2)
                         params = backend.generate.call_args.args[0]
                         self.assertIsInstance(params, GenerationParams)
+                        self.assertEqual(params.weight_stream, mode == 'streaming')
+                        self.assertEqual(params.load_mode, 'streaming_lazy' if mode == 'streaming' else 'resident_cached')
                         self.assertEqual(params.model_support_files['_stack_explicit_loras_only'], '1')
                         self.assertEqual([(x.path, x.weight) for x in params.loras], [(x['path'], x['weight']) for x in loras])
                         self.assertTrue(result['ok'])

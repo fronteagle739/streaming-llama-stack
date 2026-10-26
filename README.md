@@ -69,6 +69,8 @@ Image/video tool activity appears in collapsible chat cards with arguments, resu
 
 The [media setup verification](docs/MEDIA_SETUP_VERIFICATION.md) records the isolated installation checks and the image families exercised through the real backend.
 
+In WebUI Settings → Stack, each media model has one loading toggle: **Streamed** reads weights from storage; **Resident** loads them into GPU memory during generation. The choice is saved per model and applies to both image and video uses of that model. Changes affect the next generation, so Anima can use resident loading while H3 stays streamed.
+
 The [user guide](USER_GUIDE.md) documents the environment-to-flag table and literal engine defaults. `--mode accurate|fast|ultra|hyper` selects the delivered prefill arithmetic profile; media uses `--image-mode streaming|resident` and `--video-mode streaming|resident`. The launcher supplies offline caches and memory budgets automatically, and refuses overrides that conflict with its GPU identity or residency requirements. Profile definitions are implemented; the two-machine runtime qualification remains pending.
 
 See the measured [native/producer parity](examples/engine_parity/README.md) and [environment behaviour samples](examples/engine_environment/README.md) for the checks completed so far.

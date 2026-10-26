@@ -128,10 +128,12 @@ class RouterTests(Base):
         self.assertEqual(result['choices'][0]['finish_reason'], 'tool_calls')
         self.assertEqual(engine.media_calls, [])
 
-    def test_tool_loop_bounded(self):
-        engine = FixtureEngines([tool_reply('get_quality_speed', {}) for _ in range(8)])
-        with self.assertRaisesRegex(RuntimeError, 'iteration limit'):
-            Stack(self.cfg, engine).chat({'messages': [{'role': 'user', 'content': 'TEST'}]})
+    def test_tool_loop_has_no_fixed_round_limit(self):
+        engine = FixtureEngines([tool_reply('get_quality_speed', {}) for _ in range(12)] +
+                               [reply({'role':'assistant','content':'Finished'})])
+        result=Stack(self.cfg, engine).chat({'messages': [{'role': 'user', 'content': 'TEST'}]})
+        self.assertIn('Finished',result['choices'][0]['message']['content'])
+        self.assertEqual(len(engine.requests),13)
 
     def test_mcp_protocol_errors(self):
         stack = Stack(self.cfg, FixtureEngines())
