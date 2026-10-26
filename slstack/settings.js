@@ -15,6 +15,7 @@
     .sl-stack-models{max-height:180px;overflow:auto;margin:10px 0;border:1px solid var(--border);border-radius:var(--radius-md,6px)}
     .sl-stack-model{padding:9px 12px;border-bottom:1px solid var(--border);overflow-wrap:anywhere;display:flex;align-items:center;gap:8px}.sl-stack-model>span{flex:1;min-width:0}.sl-stack-model:last-child{border-bottom:0}
     .sl-stack-model button[aria-pressed=true]{background:var(--accent)}
+    .sl-stack-load{display:flex;align-items:center;gap:6px;flex-shrink:0;font-size:12px;cursor:pointer}.sl-stack-load input{margin:0}
     .sl-stack-files{display:grid;gap:4px;max-height:280px;overflow:auto;margin:12px 0}.sl-stack-files button{text-align:left;overflow-wrap:anywhere;border:0;padding:8px}
     .sl-stack-error{color:var(--destructive);font-size:12px;margin:12px 0}.sl-stack-status{font-size:12px;color:var(--muted-foreground);margin-top:16px}
     @media(max-width:767px){.sl-stack-section{padding:16px}.sl-stack-section h3{font-size:16px}.sl-stack-path{flex-wrap:wrap}.sl-stack-path input{flex-basis:200px}}
@@ -42,19 +43,23 @@
       for(const native of host.querySelectorAll('button:not([data-sl-stack-nav])'))native.addEventListener('click',()=>show(false));
     }
     function status(message,failed=false){let e=section.querySelector('[data-status]');if(!e){e=document.createElement('div');e.dataset.status='';section.append(e);}e.className=failed?'sl-stack-error':'sl-stack-status';e.setAttribute('role',failed?'alert':'status');e.textContent=message;}
-    async function save(patch){if(busy)return;busy=true;status('Saving…');try{state=await api('settings',patch);render();status('Saved · changes apply to the next tool call');}catch(e){status(e.message,true);}finally{busy=false;}}
+    async function save(patch){if(busy)return;busy=true;const scroll=section.scrollTop,modelsScroll=section.querySelector('[data-model-list]')?.scrollTop||0;status('Saving…');try{state=await api('settings',patch);render();section.scrollTop=scroll;const list=section.querySelector('[data-model-list]');if(list)list.scrollTop=modelsScroll;status('Saved · changes apply to the next tool call');}catch(e){status(e.message,true);}finally{busy=false;}}
     function pathField(key,label,kind){const box=document.createElement('div');const title=document.createElement('label');title.textContent=label;const row=document.createElement('div');row.className='sl-stack-path';const input=document.createElement('input');input.type='text';input.readOnly=true;input.value=state.settings[key]||'';input.placeholder='Not selected';input.setAttribute('aria-label',label);const button=document.createElement('button');button.type='button';button.textContent='Browse…';button.setAttribute('aria-label','Browse '+label);button.onclick=()=>browseFor(key,label,kind,input.value);row.append(input,button);box.append(title,row);return box;}
     function toggle(label,description,value,change){const row=document.createElement('label');row.className='sl-stack-setting';const span=document.createElement('span');span.textContent=label;const hint=document.createElement('small');hint.textContent=description;span.append(hint);const input=document.createElement('input');input.type='checkbox';input.checked=value;input.setAttribute('aria-label',label);input.onchange=()=>change(input.checked);row.append(span,input);return row;}
     function heading(text){const h=document.createElement('h4');h.textContent=text;section.append(h);}
     function renderModels(){
       const list=section.querySelector('[data-model-list]'),progress=section.querySelector('[data-scan-progress]');if(!list)return;
-      const catalog=state.catalog,stamp=JSON.stringify([catalog.models,catalog.loras,state.settings.image_model,state.settings.video_model]);
+      const catalog=state.catalog,stamp=JSON.stringify([catalog.models,catalog.loras,state.settings.image_model,state.settings.video_model,state.media_load_modes]);
       if(progress)progress.textContent=catalog.error||`${catalog.scanning?'Scanning… · ':''}${catalog.models.length} supported models · ${(catalog.loras||[]).length} LoRAs · ${(catalog.files_seen||0).toLocaleString()} files checked${catalog.unreadable_directories?' · '+catalog.unreadable_directories+' folders unavailable':''}`;
       if(stamp===modelStamp)return;modelStamp=stamp;const scroll=list.scrollTop;list.replaceChildren();
       for(const model of catalog.models){
         const row=document.createElement('div');row.className='sl-stack-model';const name=document.createElement('span');name.textContent=model.name;
         const detail=document.createElement('small');detail.textContent=model.arch;detail.title=model.path;name.append(detail);row.append(name);
         for(const kind of model.kinds){const button=document.createElement('button');button.type='button';button.textContent=kind==='image'?'Image':'Video';button.setAttribute('aria-label','Use '+model.name+' for '+kind);button.setAttribute('aria-pressed',String(state.settings[kind+'_model']===model.path));button.onclick=()=>save({[kind+'_model']:model.path,[kind+'_arch']:model.arch});row.append(button);}list.append(row);
+        const loading=document.createElement('label');loading.className='sl-stack-load';loading.title='Stream weights from storage. Turn off to load them into GPU memory.';
+        const stream=document.createElement('input');stream.type='checkbox';stream.checked=(state.media_load_modes?.[model.id]||'streaming')==='streaming';stream.setAttribute('aria-label','Stream weights for '+model.name);
+        const mode=document.createElement('span');mode.textContent=stream.checked?'Streamed':'Resident';loading.append(stream,mode);row.append(loading);
+        stream.onchange=()=>save({media_load_modes:{[model.path]:stream.checked?'streaming':'resident'}});
       }
       if(!catalog.models.length){const e=document.createElement('small');e.style.padding='12px';e.textContent=catalog.scanning?'Looking for supported models…':'No supported media models found yet.';list.append(e);}list.scrollTop=scroll;
     }
@@ -63,7 +68,7 @@
       heading('Model tools');const help=document.createElement('small');help.textContent='Choose which tools the chat model and MCP clients can use. Disabled tools are removed from the tool list.';section.append(help);
       for(const name of state.tools)section.append(toggle(titles[name]||name,name,state.settings.enabled_tools[name],value=>save({enabled_tools:{[name]:value}})));
       heading('Media models');section.append(pathField('comfyui_models','ComfyUI models folder','folder'));
-      const note=document.createElement('small');note.textContent='Choose a ComfyUI folder, any models folder, or an entire drive. Scanning runs in the background. Click Image or Video beside a model to use it.';section.append(note);
+      const note=document.createElement('small');note.textContent='Choose a ComfyUI folder, any models folder, or an entire drive. Click Image or Video beside a model to use it. Each model remembers its Streamed / Resident setting for future generations.';section.append(note);
       for(const root of state.settings.model_search_roots||[]){const row=document.createElement('div');row.className='sl-stack-path';const input=document.createElement('input');input.readOnly=true;input.value=root;input.setAttribute('aria-label','Additional search folder');const remove=document.createElement('button');remove.type='button';remove.textContent='Remove';remove.setAttribute('aria-label','Remove search folder '+root);remove.onclick=()=>save({model_search_roots:state.settings.model_search_roots.filter(p=>p!==root)});row.append(input,remove);section.append(row);}
       const add=document.createElement('button');add.type='button';add.textContent='Add drive or folder…';add.onclick=()=>browseFor('model_search_roots','additional search folder','folder','');section.append(add);
       section.append(pathField('image_model','Default image model','model'),pathField('video_model','Default video model','model'));

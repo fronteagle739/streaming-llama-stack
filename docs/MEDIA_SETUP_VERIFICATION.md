@@ -24,6 +24,9 @@ Verification on 2026-10-26:
   checks tensor coverage and makes owned copies before releasing stream buffers.
 - Browser checks passed for collapsed tool cards, expanding results/errors,
   streaming updates without duplicate cards, and persistence after reload.
+- Model loading preferences are saved per model. One Streamed / Resident toggle
+  controls both image and video uses; unrelated models keep their choices.
+  Anima with an explicit turbo LoRA also passed a real resident-mode generation.
 - Tool loops passed more than eight rounds in streaming and nonstreaming tests;
   there is no fixed tool-round limit. Malformed tool syntax is contained in an
   error card and is never executed as a guessed call.

@@ -12,7 +12,7 @@ from .discovery import model_info, scan_models, Scanner, architectures
 
 TOOL_NAMES = ('set_quality_speed', 'get_quality_speed', 'list_media_models', 'list_loras', 'generate_image', 'generate_video')
 FIELDS = ('comfyui_models', 'image_model', 'video_model', 'image_arch', 'video_arch', 'vision_encoder',
-          'enabled_tools', 'cache_media', 'cache_conversations', 'cache_budget_gib', 'model_arch_overrides', 'model_search_roots')
+          'enabled_tools', 'cache_media', 'cache_conversations', 'cache_budget_gib', 'model_arch_overrides', 'model_search_roots', 'media_load_modes')
 
 
 
@@ -44,8 +44,8 @@ class Preferences:
         self.cfg=cfg;self.path=Path(cfg.get('stack_preferences_file') or Path(cfg['runtime_root'])/'settings'/'stack.local.json')
         self.path.parent.mkdir(parents=True,exist_ok=True);self.lock=threading.RLock()
         self.base={k:deepcopy(cfg.get(k,'')) for k in FIELDS[:6]}
-        self.base.update(enabled_tools={name:True for name in TOOL_NAMES},cache_media=True,cache_conversations=True,cache_budget_gib=16,model_arch_overrides={},model_search_roots=deepcopy(cfg.get('model_search_roots',[])))
-        self.scanner=None;self.stamp=None
+        self.base.update(enabled_tools={name:True for name in TOOL_NAMES},cache_media=True,cache_conversations=True,cache_budget_gib=16,model_arch_overrides={},model_search_roots=deepcopy(cfg.get('model_search_roots',[])),media_load_modes=deepcopy(cfg.get('media_load_modes',{})))
+        self.scanner=None;self.stamp=None;self.scan_spec=None
         self.reload()
 
     def reload(self):
@@ -58,8 +58,10 @@ class Preferences:
                 row['enabled_tools']={**self.base['enabled_tools'],**saved.get('enabled_tools',{})}
             if not row['vision_encoder'] and self.cfg.get('vision_bridge_version')==1:row['vision_encoder']=self.base['vision_encoder']
             self.row=row;self.cfg.update(deepcopy(row));self.stamp=stamp
-            if self.scanner:self.scanner.cancelled.set()
-            self.scanner=Scanner([row['comfyui_models'],*row['model_search_roots']],[row['image_model'],row['video_model']],row['model_arch_overrides'])
+            spec=([row['comfyui_models'],*row['model_search_roots']],[row['image_model'],row['video_model']],row['model_arch_overrides'])
+            if spec!=self.scan_spec:
+                if self.scanner:self.scanner.cancelled.set()
+                self.scan_spec=deepcopy(spec);self.scanner=Scanner(*spec)
 
     @property
     def catalog(self):return self.scanner.state()
@@ -80,6 +82,12 @@ class Preferences:
                 elif key=='model_arch_overrides':
                     if not isinstance(value,dict) or len(value)>4096 or any(not isinstance(k,str) or v not in architectures() for k,v in value.items()):raise ValueError('Invalid model architecture selection')
                     row[key].update(value)
+                elif key=='media_load_modes':
+                    if not isinstance(value,dict) or any(not isinstance(k,str) or not k or len(k)>4096 or v not in ('streaming','resident') for k,v in value.items()):
+                        raise ValueError('Choose streamed or resident media loading')
+                    merged={**row[key],**value}
+                    if len(merged)>4096:raise ValueError('Too many model loading preferences')
+                    row[key]=merged
                 elif key.startswith('cache_'):
                     if key=='cache_budget_gib':
                         if type(value) is not int or not 1<=value<=128:raise ValueError('Cache budget must be 1..128 GiB')
@@ -105,15 +113,24 @@ class Preferences:
                 encoder=Path(row['vision_encoder']).expanduser().resolve(strict=True)
                 if not encoder.is_file() or encoder.suffix.lower()!='.gguf':raise ValueError('Choose a compatible vision encoder GGUF')
                 row['vision_encoder']=str(encoder)
+            if not changes:self.scan_spec=None  # The explicit Rescan action.
             publish(self.path,row);self.stamp=None;self.reload()
             return self.state()
 
     def state(self):
         self.reload()
-        return dict(settings=deepcopy(self.row),catalog=self.catalog,tools=list(TOOL_NAMES),architectures=architectures())
+        return dict(settings=deepcopy(self.row),catalog=self.catalog,tools=list(TOOL_NAMES),architectures=architectures(),media_load_modes=self.media_modes())
 
     def enabled(self,name):
         self.reload();return self.row['enabled_tools'].get(name,False)
+
+    def media_mode(self,path,kind):
+        self.reload()
+        return self.row['media_load_modes'].get(str(path),self.cfg.get(kind+'_mode','streaming'))
+
+    def media_modes(self):
+        self.reload()
+        return {model['id']:self.row['media_load_modes'].get(model['path'],self.cfg.get(model['kinds'][0]+'_mode','streaming')) for model in self.catalog['models']}
 
     def select(self,kind,ident=None):
         self.reload();rows=[r for r in self.catalog['models'] if kind in r['kinds']]

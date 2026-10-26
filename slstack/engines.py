@@ -454,6 +454,7 @@ class Engines:
             selected = self.preferences.select(kind, model_id)
             if not selected:raise ValueError('No supported '+kind+' model found; choose a model in Stack settings')
             cfg[kind+'_model'] = selected['path'];cfg[kind+'_arch'] = selected['arch']
+            cfg[kind+'_mode'] = self.preferences.media_mode(selected['path'],kind)
             discovered = self.preferences.catalog.get('support_files', {}).get(selected['arch'], {})
             cfg[kind+'_support_files'] = {**discovered, **cfg[kind+'_support_files']}
         elif model_id:raise ValueError('Model selection needs Stack settings')
@@ -491,7 +492,7 @@ class Engines:
             if not artifacts:
                 raise RuntimeError('Studio returned no media files')
             return {'created': int(time.time()), 'data': artifacts, 'settings': {k:v for k,v in params.items() if k!='lora_files'},
-                    'mode': self.cfg[kind + '_mode'], 'engine': 'studio', 'receipt': str(proc.receipt),
+                    'mode': cfg[kind + '_mode'], 'engine': 'studio', 'receipt': str(proc.receipt),
                     'selected_model': result.get('selected_model'), 'selected_arch': result.get('selected_arch')}
         finally:
             proc.stop()
