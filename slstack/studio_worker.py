@@ -65,7 +65,8 @@ def run(request):
         if not arch and Path(model).suffix.lower() == '.safetensors':
             arch = checkpoint_metadata(model).get('arch_hint')
         support = {**defaults.get(arch, {}), **cfg[kind + '_support_files']}
-        support['_stack_explicit_loras_only']=True
+        # Studio's support-file schema accepts strings, including policy markers.
+        support['_stack_explicit_loras_only']='1'
         if arch and arch.startswith('krea2') and Path(model).is_file():support['dit']=model
         mode = cfg[kind + '_mode']
         if arch and arch.startswith('wan') and mode == 'resident':
