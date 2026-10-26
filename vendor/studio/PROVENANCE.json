@@ -31,6 +31,18 @@
     {
       "path": "config.py, settings_store.py, dsv41_windows_runner.py",
       "purpose": "Portable storage/GPU defaults and capability-based device admission; exported code differs from source digests recorded for provenance."
+    },
+    {
+      "path": "settings_store.py",
+      "purpose": "Derive the default archive folder from the configured models folder rather than probing a developer drive; explicit settings and environment overrides retain precedence."
+    },
+    {
+      "path": "dsv41_session_contract.py, dsv41_session_process.py, custom_models.py",
+      "purpose": "Stack live sampling, streamed local KV/YOCO checkpoints, explicit version1 YOCO remote negotiation, and configurable Comfy model-root discovery. Original native state geometry and all-owner hash verification retained."
+    },
+    {
+      "path": "adapter.py",
+      "purpose": "Stack-owned media calls mark external adapters explicit-only: suppress automatic Krea, H3 profile and Bernini distillation LoRAs. Each invocation passes only requested adapter paths/weights and unloads its owned worker afterward."
     }
   ],
   "modules": [
@@ -199,5 +211,206 @@
     ],
     "export_sha256": "75bb37a0775b25f9c377493b1c85cf912191e23054cefa082fe66bfcb0a6a152"
   },
-  "redistribution_review": "Retain all third-party license and copyright notices. Repository access or owner instructions alone do not establish additional third-party redistribution rights."
+  "redistribution_review": "Retain all third-party license and copyright notices. Repository access or owner instructions alone do not establish additional third-party redistribution rights.",
+  "media_support_export": {
+    "source_commit": "167e764e6b19dfe4c30cc8ed6fb0938fa7663fd4",
+    "files": [
+      {
+        "path": "vendor/studio/studio/krea2_diffusion.py",
+        "source_path": "backend/studio/krea2_diffusion.py",
+        "source_sha256": "6431857c1e3392ac17795a2142e0cb0e6033086782b49393d4dad18e42aa9e16",
+        "export_sha256": "fed02f4ef9a6479f14c4128852fb8f96bda7cc18042a619a833cc2235cfcfc8b",
+        "selected": null
+      },
+      {
+        "path": "vendor/studio/studio/krea_hf_stream.py",
+        "source_path": "backend/studio/krea_hf_stream.py",
+        "source_sha256": "edc2b3315fe7921e22e3ef91d797715856aeba1d5dea80d64e61f10466d45ad5",
+        "export_sha256": "e77b6a430ecc575ad040c2b4bf1123e3d360c8f7328733f57fbabeb4411f3ff4",
+        "selected": null
+      },
+      {
+        "path": "vendor/studio/studio/boogu_krea.py",
+        "source_path": "backend/studio/boogu_krea.py",
+        "source_sha256": "0ff19623db0cc9e04ead63cd7d95709bf4271444da86016ce3007d656a3b8be9",
+        "export_sha256": "65f9ff373bf224629fe5ca3db75e9ca3aeef4e57cfa9fa76f7e58f8db9c3a321",
+        "selected": null
+      },
+      {
+        "path": "vendor/studio/studio/krea2_lokr.py",
+        "source_path": "backend/studio/krea2_lokr.py",
+        "source_sha256": "36b79f9910df0aa96f7c2e88b00a46999c7b76eb12535b226561b4410d43561d",
+        "export_sha256": "229338a1e8c2dab5588ede79adf6a1c50137af25712be9b06bf20a249a9dbc6f",
+        "selected": null
+      },
+      {
+        "path": "vendor/studio/studio/krea_tiled.py",
+        "source_path": "backend/studio/krea_tiled.py",
+        "source_sha256": "6134cf6a24b06c9a3e75ce18b12b51871d712956d296e8012317f98d23ae8acb",
+        "export_sha256": "3b855d52e362259a7b45bd039aaabd1ca8c11a4324ded0b42344a461ec161212",
+        "selected": null
+      },
+      {
+        "path": "vendor/studio/studio/moss_image.py",
+        "source_path": "backend/studio/moss_image.py",
+        "source_sha256": "5ed70e1fe09d2b96246f3c54d8b891bd2c82839c862cbb8a4fb1584c222b5a26",
+        "export_sha256": "262b5af5445241f706ad8683f84fbd60d62b483f8b2e978165c3c8b7519a6631",
+        "selected": null
+      },
+      {
+        "path": "vendor/studio/studio/qwen_image21.py",
+        "source_path": "backend/studio/qwen_image21.py",
+        "source_sha256": "15d4ec5aeb86ad3745b5b2a4ff2416793ac4854f6497987bacfaa065a7579e09",
+        "export_sha256": "f55fe5c1b59749fc34a41d63ef1cc93248a21ce172df2ee057c287c78458aeab",
+        "selected": null
+      },
+      {
+        "path": "vendor/studio/studio/qwen_worker_client.py",
+        "source_path": "backend/studio/qwen_worker_client.py",
+        "source_sha256": "75dfafa9ba0d04653009988b67d9c2bc9e879a6c9b69e10c441536320267547b",
+        "export_sha256": "376160d2b207d267126dac87606817a2a2d543f962c8efbfc4702cf6483613ee",
+        "selected": null
+      },
+      {
+        "path": "vendor/studio/studio/qwen_comfy_load.py",
+        "source_path": "backend/studio/qwen_comfy_load.py",
+        "source_sha256": "b35822193d1892522b23a4b8bd3c7fb4f140c36ad4168cc1d69cce4257293caf",
+        "export_sha256": "55fe25d16e19da6a5cfcabb317b3ab3a0a6a99aa64869476d7262b6d062ab0b3",
+        "selected": null
+      },
+      {
+        "path": "vendor/studio/studio/ram_preflight.py",
+        "source_path": "backend/studio/ram_preflight.py",
+        "source_sha256": "021f302bf82acdfcdd2d6cfa2e3962bc2771c1a07d7a23f123e78bf7ba2c68c0",
+        "export_sha256": "04178a9e1fe86073eef87799099c04180cec6e059bf38e8a51b2142ce4d796e0",
+        "selected": null
+      },
+      {
+        "path": "vendor/studio/studio/direct_vram.py",
+        "source_path": "backend/studio/direct_vram.py",
+        "source_sha256": "4afd844f3e2991ad234be80072fa2e79fc30877f6149e249030c722fd276748a",
+        "export_sha256": "3a915e04b04de42d9d9b705e7f422793e81114cb1be400e540f176a4fbe23496",
+        "selected": null
+      },
+      {
+        "path": "vendor/studio/studio/res4lyf_registry.py",
+        "source_path": "backend/studio/res4lyf_registry.py",
+        "source_sha256": "061189cd7c61e58846a810332784f970b4af4900c6bd5f8788878777902952ed",
+        "export_sha256": "767c06fd2044294b8e7c77d09272df4d95941b841f0f17e914cf1fe1acc954dd",
+        "selected": null
+      },
+      {
+        "path": "vendor/studio/studio/qwen_direct_load.py",
+        "source_path": "backend/studio/qwen_direct_load.py",
+        "source_sha256": "02737187bcc0f90b9e0e1bc502fa04fdfe8acc1de20ee8afd1d95081300ab266",
+        "export_sha256": "406369222efe749b4462d59252be21423373a6d64bacc6b5766167aa94bc6456",
+        "selected": null
+      },
+      {
+        "path": "vendor/studio/studio/qwen_block_weights.py",
+        "source_path": "backend/studio/qwen_block_weights.py",
+        "source_sha256": "9f2f783e80b129d583c82bbb4a4f774fa369a2af32769190bfe7ceee1931b2b3",
+        "export_sha256": "cb405a668b34177004efbc89b459b884db5308650f9bf69feead5f678512d64d",
+        "selected": null
+      },
+      {
+        "path": "vendor/studio/studio/qwen_lora.py",
+        "source_path": "backend/studio/qwen_lora.py",
+        "source_sha256": "d55e088d2b2ce9cda58c4dd762b8213b1164507513bc03b7f5816aac8fc42c13",
+        "export_sha256": "c54dae6b4bf5b1922735b77d296a76b414b8a8a1a408d7f02a7c328f227b0203",
+        "selected": null
+      },
+      {
+        "path": "vendor/studio/studio/h3_weight_io.py",
+        "source_path": "backend/studio/h3_weight_io.py",
+        "source_sha256": "8653476f8b50de669f31e9f678309b8731574017fa673f395cf07dbfab964064",
+        "export_sha256": "9ca3bfd1a9a43b66b56a28728e43da7423adde0e972a5357411437cb80f43426",
+        "selected": null
+      },
+      {
+        "path": "vendor/studio/studio/qwen_attention.py",
+        "source_path": "backend/studio/qwen_attention.py",
+        "source_sha256": "073551c8fa4d77d1384581a8de00cfa99be97320527319909740fe72692cf0da",
+        "export_sha256": "f6791d1a45a3ecb6b93b4bd2ec066c1a62d8c412b026d88cfe5d1bf62ee0b291",
+        "selected": null
+      },
+      {
+        "path": "vendor/studio/studio/progress.py",
+        "source_path": "backend/studio/progress.py",
+        "source_sha256": "77a35928c08359223df583f27d0a90a31dd05f609804b4c58d527490cc9b3478",
+        "export_sha256": "ea321495994581e44b5285ae760c28a6e07a9515cec15b6a0ab94bf13f78c530",
+        "selected": null
+      },
+      {
+        "path": "vendor/studio/studio/cuda_device_identity.py",
+        "source_path": "backend/studio/cuda_device_identity.py",
+        "source_sha256": "8e52a6cabcab487dca2e71e72adbc56ab5be1cfbdc6cbbe0a4f592a79cf077c3",
+        "export_sha256": "00d69e0dc35df085a4f14aa63b87a310cfce92bc65611d4641a668b9edc2ac92",
+        "selected": null
+      },
+      {
+        "path": "vendor/studio/studio/safety.py",
+        "source_path": "backend/studio/safety.py",
+        "source_sha256": "387330c66192a8fb6356faf7fc9ed863a73f3d7dccc0b07bdd7a7e64d491aa47",
+        "export_sha256": "cfcc5b63a105959fd93f4fb58a0d02c1b507c2e6b2968b904b271f59437f16b1",
+        "selected": null
+      },
+      {
+        "path": "vendor/studio/studio/h3_live.py",
+        "source_path": "backend/studio/h3_live.py",
+        "source_sha256": "399b63489f8d51c8d453b48d5b027a1223cc2814600a50468ed182fb50ab8f28",
+        "export_sha256": "9b644f858022ea6263c0c28769aba4f62708b52d5a832cac182578907fd49154",
+        "selected": null
+      },
+      {
+        "path": "vendor/studio/studio/h3_single_file.py",
+        "source_path": "backend/studio/h3_single_file.py",
+        "source_sha256": "cf8a7c27082b5df110903aa7424c0cd47cc5cdf5c51b63061ecfd109f686e09e",
+        "export_sha256": "f66a07085d9d7edce90453def01bb0213dcd071395a5efbd40fd288baa20597a",
+        "selected": null
+      },
+      {
+        "path": "vendor/studio/studio/h3_image_mode.py",
+        "source_path": "backend/studio/h3_image_mode.py",
+        "source_sha256": "4223ea9666b670d9a20d1afd4e2a7cb0cedaeed5c95052fb646ddd86fb09845d",
+        "export_sha256": "68df051387435c34a64a5b199ff4df2e80ac8beae1e60fd90cfea0c20d2a22ed",
+        "selected": null
+      },
+      {
+        "path": "vendor/studio/studio/h3_model_profiles.py",
+        "source_path": "backend/studio/h3_model_profiles.py",
+        "source_sha256": "59159eb3fe6830d897e8e4727f0be42f88df6d6adec54833a4ae6cb0728d991e",
+        "export_sha256": "7b533c2957ba3bae999e646b0dad95e0569e4fde56cd64e131d788f97087918d",
+        "selected": null
+      },
+      {
+        "path": "vendor/studio/studio/jobs.py",
+        "source_path": "backend/studio/jobs.py",
+        "source_sha256": "48757f893cd7015b197d480dea5d480f241018c2c57ab0a380aecc2865e4d14b",
+        "export_sha256": "ca80dfcaa42dfa3aa2ff96bdcc72f3fdd51b33be6caa662da5baab246de03cc9",
+        "selected": [
+          "_cosmos_windows_roots",
+          "_unbuffered_env",
+          "_popen_group_kwargs",
+          "kill_process_tree",
+          "managed_popen"
+        ]
+      },
+      {
+        "path": "vendor/studio/studio/vendored/krea2/transformer_krea2.py",
+        "source_path": "backend/studio/vendored/krea2/transformer_krea2.py",
+        "source_sha256": "557de19374be322bf1fe974314b859286105dc6592b26a99d7544c068d9cba6b",
+        "export_sha256": "557de19374be322bf1fe974314b859286105dc6592b26a99d7544c068d9cba6b",
+        "selected": null
+      },
+      {
+        "path": "vendor/studio/studio/vendored/krea2/_shim.txt",
+        "source_path": "backend/studio/vendored/krea2/_shim.txt",
+        "source_sha256": "a8c927dd2807ee99aca7cef7f2aec663584af6ababfe8ccd111076b79e2859c2",
+        "export_sha256": "a8c927dd2807ee99aca7cef7f2aec663584af6ababfe8ccd111076b79e2859c2",
+        "selected": null
+      }
+    ],
+    "transformation": "AST source export; absolute machine fallback paths cleared; jobs exports only owned-worker launch/cleanup helpers; docstrings omitted"
+  }
 }

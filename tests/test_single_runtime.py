@@ -2,6 +2,7 @@
 import json
 import sys
 import unittest
+import tempfile
 from unittest.mock import patch
 from pathlib import Path
 
@@ -10,16 +11,17 @@ sys.path.insert(0, str(ROOT))
 from slstack import single_runtime as sr
 from slstack.combo_proxy import native_launch_config, request_worker_config
 
-BASE = dict(gpu_uuid='GPU-1', gpu_idle_max_mib=1024, hold_file='X:/tmp/delegate/GPU_HOLDS.md', task='LLAMADECODE',
+FIXTURE = Path(tempfile.gettempdir()) / 'slstack-runtime-fixture'
+BASE = dict(gpu_uuid='GPU-1', gpu_idle_max_mib=1024, hold_file=str(FIXTURE / 'gpu.holds'), task='LLAMADECODE',
             lease_minutes=19, request_timeout_s=1140, host_budget_gib=9.25, min_available_gib=1, job_commit_gib=48,
-            context=262144, model='X:/models/x.gguf', model_name='DSV4.1-1017', producer_host_budget_gib=6.25,
+            context=262144, model=str(FIXTURE / 'models/x.gguf'), model_name='DSV4.1-1017', producer_host_budget_gib=6.25,
             producer_profile='ultra', producer_sha256='a' * 64, producer_source_revision='r',
-            llama_producer='Y:\\scratch\\llamadecode\\bin-r\\llamadecode-r.exe', runtime_root='Y:\\scratch\\llamadecode\\runs',
-            producer_library_directories=['Y:\\scratch\\ds4combo\\worktree\\engines\\ds4-win', 'C:/CUDA/v13.2/bin/x64'],
-            cache_affinity_spread_file='X:/s.txt', model_receipt='Y:/scratch/m.json', ds4_command=['native.exe'],
+            llama_producer=str(FIXTURE / 'scratch/bin/llamadecode-r.exe'), runtime_root=str(FIXTURE / 'scratch/runs'),
+            producer_library_directories=[str(FIXTURE / 'scratch/engines/ds4-win'), str(FIXTURE / 'cuda/bin')],
+            cache_affinity_spread_file=str(FIXTURE / 's.txt'), model_receipt=str(FIXTURE / 'scratch/m.json'), ds4_command=['native.exe'],
             env_overrides={'CUDA_CACHE_DISABLE': '1'}, host='127.0.0.1', port=18748)
-INSTALLED = Path('X:/StreamingStudio/runtime/ds4/0123abcd')
-STUDIO_NATIVE = Path('X:/GitHub/front-eagle-stack/backend/studio/ds4_native.py')
+INSTALLED = FIXTURE / 'installed/0123abcd'
+STUDIO_NATIVE = ROOT.parent / 'front-eagle-stack/backend/studio/ds4_native.py'
 
 
 class RuntimeTests(unittest.TestCase):
@@ -38,10 +40,10 @@ class RuntimeTests(unittest.TestCase):
         self.assertEqual(cfg['serving_mode'], 'single_engine')
         self.assertEqual(cfg['env_overrides'], {'CUDA_CACHE_DISABLE': '1', 'LLAMADECODE_DS4_DECODE': '1'})
         self.assertEqual(Path(cfg['llama_producer']), INSTALLED / 'llamadecode-r.exe')
-        self.assertEqual([Path(p) for p in cfg['producer_library_directories']], [INSTALLED, Path('C:/CUDA/v13.2/bin/x64')])
+        self.assertEqual([Path(p) for p in cfg['producer_library_directories']], [INSTALLED, FIXTURE / 'cuda/bin'])
         self.assertNotIn('ds4_command', cfg);self.assertEqual(cfg['single_engine_stop_tokens'], [1])
         self.assertEqual(request_worker_config(cfg)['host_budget_gib'], BASE['host_budget_gib'])
-        with self.assertRaises(ValueError):sr.single_config(dict(BASE, model='Y:/scratch/model.gguf'), INSTALLED, 'rev')
+        with self.assertRaises(ValueError):sr.single_config(dict(BASE, model=str(FIXTURE / 'scratch/model.gguf')), INSTALLED, 'rev')
 
     def test_preset_points_at_the_runtime(self):
         preset = sr.preset(BASE, INSTALLED)

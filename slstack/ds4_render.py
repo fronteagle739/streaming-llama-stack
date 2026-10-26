@@ -367,7 +367,7 @@ def parse_request(body):
     decide rendering and the reply protocol."""
     if not isinstance(body, dict):raise RenderRefused('invalid JSON request')
     messages = None;tools = '';tool_choice_none = False;model = None;max_tokens = None
-    got_thinking = False;thinking = True;effort = THINK_HIGH;stream = False;include_usage = False;stops = []
+    got_thinking = False;thinking = True;effort = THINK_HIGH;stream = False;include_usage = False;stops = [];sampling = {}
     for key, value in body.items():
         if key == 'messages':messages = parse_messages(value)
         elif key == 'tools':tools = parse_tools(value)
@@ -377,7 +377,8 @@ def parse_request(body):
             model = cstr(value)
         elif key in ('max_tokens', 'max_completion_tokens'):
             number = _number(value);max_tokens = 0 if not number >= 0 else int(min(number, 2**31 - 1))
-        elif key in ('temperature', 'top_p', 'min_p', 'top_k', 'seed'):_number(value)
+        elif key in ('temperature', 'top_p', 'min_p', 'top_k', 'seed'):
+            _number(value);sampling[key] = value
         elif key == 'stop':stops = parse_stop(value)
         elif key == 'stream':
             if not isinstance(value, bool):raise RenderRefused('invalid JSON request')
@@ -409,7 +410,7 @@ def parse_request(body):
     think_mode = THINK_NONE if not thinking or effort == THINK_NONE else effort
     has_tools = bool(tools) and not tool_choice_none
     return dict(messages=messages, tool_schemas=tools if has_tools else '', has_tools=has_tools, think_mode=think_mode,
-                model=model, max_tokens=max_tokens, stream=stream, include_usage=include_usage, stops=stops)
+                model=model, max_tokens=max_tokens, stream=stream, include_usage=include_usage, stops=stops, sampling=sampling)
 
 
 # ---------------------------------------------------------------- DS4.1 render

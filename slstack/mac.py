@@ -194,6 +194,10 @@ class Receiver:
 
     def pair(self, row, client_ip):
         allowed = {'producer_sha256', 'producer_source_revision', 'producer_ipv4', 'broker_port', 'tier'}
+        keep=row.get('yoco_keep',0);version=row.get('yoco_state_version',0)
+        if type(keep) is not int or type(version) is not int or (keep,version) not in ((0,0),(140,1)):
+            raise ValueError('Unsupported paired YOCO state provenance')
+        if keep:allowed|={'yoco_keep','yoco_state_version'}
         if set(row) != allowed or not re.fullmatch('[0-9a-f]{64}', row['producer_sha256']) or not re.fullmatch('[0-9a-f]{40}', row['producer_source_revision']):
             raise ValueError('Invalid producer identity')
         if str(ipaddress.IPv4Address(row['producer_ipv4'])) != client_ip:
@@ -277,6 +281,7 @@ class Receiver:
                     DS4_NATIVE_SESSION_HOST_FLOOR_BYTES=str(int(cfg['min_available_gib'] * (1 << 30))))
                 for name, value in dynamic.items():
                     env.setdefault(name, value)
+                env['DS4_NATIVE_SESSION_YOCO_KEEP']=str(self.peer.get('yoco_keep',0))
         cfg['env_overrides'] = env
         # DS4COMBO2 liveness: the Mac engine has no lifetime cap; the guard's memory limits stay.
         self.engine = OwnedProcess(cfg, command, 'mac-' + self.backend, cwd=Path(cfg['runtime_root']),
@@ -393,7 +398,8 @@ def serve(cfg, backend, build):
                 peer = receiver.peer if receiver.peer and receiver.peer.get('status') == 'qualified' else {}
                 self.reply(200, {'ready': True, 'backend': backend, 'receiver_sha256': build['binary_sha256'],
                                  'paired_producer_sha256': peer.get('producer_sha256'),
-                                 'paired_tier': peer.get('tier')})
+                                 'paired_tier': peer.get('tier'), 'yoco_state_version':1,
+                                 'paired_yoco_keep':peer.get('yoco_keep',0)})
             elif self.path == '/v1/models' and self.authorized():
                 self.reply(200, {'object': 'list', 'data': [{'id': cfg['model_name'], 'object': 'model'}]})
             else:

@@ -1,0 +1,3 @@
+def maybe_adjust_dtype_for_device(dtype: "torch.dtype", device: "torch.device") -> "torch.dtype":
+    unsupported = _DTYPE_UNSUPPORTED_DEVICES.get(dtype)
+    return _DTYPE_DOWNCAST[dtype] if unsupported and device.type in unsupported else dtype

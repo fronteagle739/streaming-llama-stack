@@ -128,7 +128,7 @@ public:
     // Before the first stage lease, map a restored checkpoint's last three
     // IDs using the existing original model token map. No table/model eval.
     bool restored_engram_history(llama_dsv41::engram_history &history,
-        const int32_t *tokens,size_t count,std::string &error);
+        const int32_t *tokens,size_t count,std::string &error,const uint8_t*mask=nullptr);
     // Strict order: embedding stage, layers0..39, output head. One lease at a
     // time; release synchronizes the actual backend before any buffer reuse.
     bool acquire_embeddings(ggml_tensor *&embedding,std::string &error);

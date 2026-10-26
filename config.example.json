@@ -38,6 +38,7 @@
   "image_mode": "streaming",
   "video_mode": "streaming",
   "comfyui_models": "",
+  "model_search_roots": [],
   "image_support_files": {},
   "video_support_files": {},
   "studio_python": "",

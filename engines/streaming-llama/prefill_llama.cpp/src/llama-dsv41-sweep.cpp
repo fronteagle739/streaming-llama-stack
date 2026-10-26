@@ -113,12 +113,15 @@ struct llama_dsv41_sweep::implementation {
         require(embedding&&embedding->data&&embedding->buffer&&embedding->ne[0]==width&&embedding->ne[1]==vocabulary&&
             embedding->ne[2]==1&&embedding->ne[3]==1,"V4.1 staged text embedding geometry changed");
         auto ctx=context();auto*ids=ggml_new_tensor_1d(ctx.get(),GGML_TYPE_I32,count);
-        auto*rows=ggml_get_rows(ctx.get(),embedding,ids);
+        const auto token_ids=std::vector<int32_t>(tokens.begin()+position_offset+start,tokens.begin()+position_offset+start+count);
+        auto projected=options.images?llama_dsv41_seed_rows(embedding,token_ids,position_offset+start,options.image_spans):std::vector<float>{};
+        auto*rows=options.images?ggml_new_tensor_2d(ctx.get(),GGML_TYPE_F32,width,count):ggml_get_rows(ctx.get(),embedding,ids);
         llama_dsv41_graph_ops ops(ctx.get(),1e-20f,1e-6f,20);
         auto values=ops.seed_embeddings(rows);auto*graph=ggml_new_graph_custom(ctx.get(),8192,false);
         ggml_build_forward_expand(graph,values.residual);ggml_build_forward_expand(graph,values.pre);
         auto buffer=allocate_graph(ctx.get(),graph,backend,options.admitted_graph_bytes);
-        upload(ids,std::vector<int32_t>(tokens.begin()+position_offset+start,tokens.begin()+position_offset+start+count));
+        if(options.images)ggml_backend_tensor_set(rows,projected.data(),0,projected.size()*4);
+        else upload(ids,token_ids);
         require(ggml_backend_graph_compute(backend,graph)==GGML_STATUS_SUCCESS,"V4.1 actual embedding graph failed");
         llama_dsv41_carry_store::tile out;out.start=start;out.count=count;
         out.residual=read_f32(values.residual,size_t(width)*copies*count);
@@ -226,8 +229,14 @@ bool llama_dsv41_sweep::open(const llama_dsv41_weight_provider::config &input_we
     if(!lock.owns_lock()){error="V4.1 sweep is already active";return false;}
     try{
         llama_dsv41_yoco::validate(options.yoco_keep);
+        require(options.yoco_remote_state_version==0||(options.yoco_remote_state_version==1&&options.yoco_keep==140&&options.capture_dspark),
+            "YOCO remote state requires version1 and complete mode3 DSpark capture");
+        if(restored&&restored->local_snapshot){
+            require(restored->yoco_keep==options.yoco_keep,"Local snapshot YOCO preset differs");
+            require(restored->cache_precision==(options.compressed_cache_bf16?"bf16":"f32"),"Local snapshot cache precision differs");
+        }
         if(options.yoco_keep){
-            require(!restored,"YOCO refuses RTX/Mac session restore; re-prefill locally");
+            require(!restored||restored->local_snapshot,"YOCO requires a local snapshot with explicit YOCO provenance");
             require(options.fixed&&options.carry.resident_ram&&options.carry.direct_ram_tiles&&options.admitted_hidden_bytes&&options.carry.export_hidden_after_head&&options.carry.max_tile_tokens>=140&&(!options.compute_step_tokens||options.compute_step_tokens>=140)&&!options.diagnostic_layers&&!options.diagnostic_carry&&
                 !std::getenv("DSV41_BOUNDARY_CAPTURE"),"YOCO requires the single-engine fixed RAM owner without full-row diagnostics");
             if(prefix){
@@ -236,6 +245,7 @@ bool llama_dsv41_sweep::open(const llama_dsv41_weight_provider::config &input_we
                 require(previous_lock.owns_lock(),"YOCO prefix is active");
                 yoco_begin=uint32_t(prefix->p->tokens.size());
             }
+            if(restored)yoco_begin=restored->frontier.position;
             const uint32_t begin=yoco_begin;
             const uint32_t end=options.yoco_logical_end?options.yoco_logical_end:begin+options.carry.tokens;
             p->yoco=llama_dsv41_yoco::schedule(options.yoco_keep,options.operation,options.images,
@@ -337,7 +347,7 @@ bool llama_dsv41_sweep::open(const llama_dsv41_weight_provider::config &input_we
             require(previous_lock.owns_lock()&&((prefix->p->state==implementation::completed&&prefix->p->published.load()&&prefix->p->carry.frontier_ready())||encoder)&&!prefix->p->stop_requested.load()&&prefix->p->cache,"Append requires a completely certified uncancelled prefix");
             const auto&old=prefix->p->options;
             auto arithmetic=[](const llama_dsv41_expert_profile::policy&e){return std::tie(e.profile,e.dense_inputs_f16,e.index_bf16,e.token_tile_attention,e.expert_f16_cublas,e.admitted_pool_bytes,e.admitted_code_runtime_bytes,e.sorted_expert_routing,e.reuse_expert_routing_map,e.hc_bf16_epilogue,e.expert_mxfp4,e.dense_activation_q8_1,e.index_key_windows,e.attention_kv_f16_table);};
-            auto execution=[](const config&c){return std::tie(c.yoco_keep,c.context,c.admitted_cache_bytes,c.admitted_graph_bytes,c.admitted_device_bytes,c.admitted_host_bytes,c.admitted_hidden_bytes,c.admitted_pinned_device_bytes,c.admitted_cast_device_bytes,c.admitted_index_device_bytes,c.admitted_prefetch_device_bytes,c.audit_casts,c.coalesce_dense,c.merge_attention_selected_rows,c.hc_projection_f16_gemm,c.dense_mxfp4,c.batch_seed_ram,c.pair_ffn,c.reuse_graph,c.reuse_layer_graph,c.engram_tile_lookahead,c.resident_bf16,c.async_inputs,c.resident_ids,c.resident_metadata,c.fixed,c.compressed_cache_bf16,c.ctx_cache_grow_step,c.capture_dspark,c.stateful_chunks,c.compute_step_tokens,c.unaligned_append_step_tokens,c.carry.max_tile_tokens,c.carry.resident_ram,c.carry.direct_ram_tiles,c.carry.defer_hidden_readback,c.carry.export_hidden_after_head);};
+            auto execution=[](const config&c){return std::tie(c.yoco_keep,c.yoco_remote_state_version,c.context,c.admitted_cache_bytes,c.admitted_graph_bytes,c.admitted_device_bytes,c.admitted_host_bytes,c.admitted_hidden_bytes,c.admitted_pinned_device_bytes,c.admitted_cast_device_bytes,c.admitted_index_device_bytes,c.admitted_prefetch_device_bytes,c.audit_casts,c.coalesce_dense,c.merge_attention_selected_rows,c.hc_projection_f16_gemm,c.dense_mxfp4,c.batch_seed_ram,c.pair_ffn,c.reuse_graph,c.reuse_layer_graph,c.engram_tile_lookahead,c.resident_bf16,c.async_inputs,c.resident_ids,c.resident_metadata,c.fixed,c.compressed_cache_bf16,c.ctx_cache_grow_step,c.capture_dspark,c.stateful_chunks,c.compute_step_tokens,c.unaligned_append_step_tokens,c.carry.max_tile_tokens,c.carry.resident_ram,c.carry.direct_ram_tiles,c.carry.defer_hidden_readback,c.carry.export_hidden_after_head);};
             require(old.stateful_chunks&&prefix->p->backend==weights.backend&&arithmetic(old.expert)==arithmetic(options.expert)&&execution(old)==execution(options),"Append changed its backend, fixed owner, arithmetic or execution admission");
             require(!prefix->p->tokens.empty()&&prefix->p->tokens.size()<options.context&&options.carry.tokens<options.context-prefix->p->tokens.size(),"Appended context must retain the next native decode position");
             p->position_offset=uint32_t(prefix->p->tokens.size());
@@ -535,7 +545,9 @@ bool llama_dsv41_sweep::open(const llama_dsv41_weight_provider::config &input_we
                 [&](const llama_dsv41::state_span&s,uint64_t off,void*dst,size_t n){p->check_stop();return restored->read(s,off,dst,n);},error),error);
             p->tokens=restored->tokens;p->position_offset=uint32_t(p->tokens.size());
             const size_t count=std::min<size_t>(p->tokens.size(),3);
-            success(p->provider.restored_engram_history(p->initial_engram,p->tokens.data()+p->tokens.size()-count,count,error),error);
+            std::array<uint8_t,3>mask{{1,1,1}};
+            for(size_t i=0;i<count;++i)if(llama_dsv41_image_row(options.image_spans,uint32_t(p->tokens.size()-count+i)))mask[i]=0;
+            success(p->provider.restored_engram_history(p->initial_engram,p->tokens.data()+p->tokens.size()-count,count,error,mask.data()),error);
             (void)llama_dsv41_plan_append(options.pair_ffn,options.carry.max_tile_tokens,options.compute_step_tokens,p->position_offset,options.unaligned_append_step_tokens);
             llama_dsv41_layer_log("DS4COMBO_NATIVE_BASE_IMPORTED position=%u mode=1 all_owner_hashes_verified=1 model_eval=0\n",p->position_offset);
         }
@@ -556,7 +568,7 @@ bool llama_dsv41_sweep::open(const llama_dsv41_weight_provider::config &input_we
 bool llama_dsv41_sweep::suspend_device(std::string&error){
     std::unique_lock<std::mutex>lock(p->mutex,std::try_to_lock);error.clear();
     if(!lock.owns_lock()){error="V4.1 sweep is already active";return false;}
-    if(p->options.yoco_keep){error="YOCO state requires local re-prefill for transport, persistence or rewind";return false;}
+    if(p->options.yoco_keep&&p->options.yoco_remote_state_version!=1){error="YOCO state requires local snapshot or negotiated remote version1";return false;}
     try{
         require(p->state==implementation::completed&&!p->device_suspended&&p->options.fixed&&p->options.fixed->ram&&!p->options.fixed->ram_registration,
             "Device suspend requires a completed fixed owner with tile-registered carry RAM");
@@ -653,7 +665,7 @@ bool llama_dsv41_sweep::run(const std::vector<int32_t>&tokens,const cancelled&st
         const auto schedule=llama_dsv41_plan_append(p->options.pair_ffn,p->options.carry.max_tile_tokens,p->options.compute_step_tokens,p->position_offset,p->options.unaligned_append_step_tokens);
         const uint32_t compute_step=schedule.step;
         const char*engram_overlap_env=std::getenv("LLAMA_DSV41_ENGRAM_PROMPT_OVERLAP");
-        const bool engram_overlap=engram_overlap_env&&std::strcmp(engram_overlap_env,"1")==0;
+        const bool engram_overlap=!p->options.images&&engram_overlap_env&&std::strcmp(engram_overlap_env,"1")==0;
         require(!engram_overlap||p->options.engram_tile_lookahead,"Engram prompt overlap requires the existing lookahead worker");
         auto prepare_engram=[&]{
             const auto started=std::chrono::steady_clock::now();std::string reason;
@@ -672,14 +684,16 @@ bool llama_dsv41_sweep::run(const std::vector<int32_t>&tokens,const cancelled&st
         }
         prepare_engram();
         ggml_tensor*embedding=nullptr;success(p->provider.acquire_embeddings(embedding,error),error);
-        const uint32_t seed_rows=p->options.batch_seed_ram?std::min(4096u,p->options.carry.max_tile_tokens):tile_limit;
+        const uint32_t seed_rows=p->options.images?128u:p->options.batch_seed_ram?std::min(4096u,p->options.carry.max_tile_tokens):tile_limit;
         const auto seed_started=std::chrono::steady_clock::now();
         for(uint32_t start=0;start<owned.size();start+=seed_rows){
             p->check_stop(stop);const auto count=std::min(seed_rows,uint32_t(owned.size())-start);
             if(p->options.batch_seed_ram){
                 llama_dsv41_carry_store::ram_lease lease;success(p->carry.acquire_ram_seed(start,count,lease,error),error);
                 std::optional<llama_dsv41_carry_store::ram_completion> done;
-                success(p->executor->seed_ram(embedding,std::vector<int32_t>(owned.begin()+start,owned.begin()+start+count),lease,done,error),error);
+                const auto seed_ids=std::vector<int32_t>(owned.begin()+start,owned.begin()+start+count);
+                auto projected=p->options.images?llama_dsv41_seed_rows(embedding,seed_ids,p->position_offset+start,p->options.image_spans):std::vector<float>{};
+                success(p->executor->seed_ram(embedding,seed_ids,lease,done,error,p->options.images?&projected:nullptr),error);
                 p->check_stop(stop);require(bool(done),"Direct seed omitted completed copy proof");
                 success(p->carry.complete_ram_seed(lease,*done,error),error);
             }else{
@@ -765,9 +779,13 @@ bool llama_dsv41_sweep::run(const std::vector<int32_t>&tokens,const cancelled&st
                 if(!query_source(layer))request.selected=std::move(input.selected);
                 if(layer>20)request.candidates=std::move(input.candidates);
                 request.token_kinds.assign(count,0);
+                if(p->options.images)for(uint32_t row=0;row<count;++row)
+                    request.token_kinds[row]=llama_dsv41_image_row(p->options.image_spans,p->position_offset+start+row)?1:0;
                 if(layer==1||layer==14){
                     const auto engram_started=std::chrono::steady_clock::now();
                     std::vector<uint8_t>mask(count,1);request.text_mask.assign(count,1);
+                    if(p->options.images)for(uint32_t row=0;row<count;++row)
+                        mask[row]=uint8_t(request.text_mask[row]=request.token_kinds[row]?0:1);
                     if(p->options.engram_tile_lookahead){
                         require(engram_next.valid(),"Engram lookahead omitted the required tile");
                         auto prepared=engram_next.get();
@@ -870,7 +888,7 @@ bool llama_dsv41_sweep::export_native(const consumer&send,std::string&error){
     {
         std::unique_lock<std::mutex>lock(p->mutex,std::try_to_lock);
         if(!lock.owns_lock()){error="V4.1 sweep is already active";return false;}
-        if(p->options.yoco_keep){error="YOCO approximate state cannot be exported to RTX/Mac; re-prefill with YOCO off";return false;}
+        if(p->options.yoco_keep&&p->options.yoco_remote_state_version!=1){error="YOCO remote state requires explicit version1 peer negotiation";return false;}
     }
     return inspect_local(send,error);
 }
@@ -914,7 +932,7 @@ bool llama_dsv41_sweep::apply_decode_delta(const decode_delta&update,
         const llama_dsv41::wire_read_span&read,std::string&error){
     std::unique_lock<std::mutex>lock(p->mutex,std::try_to_lock);error.clear();
     if(!lock.owns_lock()){error="V4.1 sweep already owns the frontier";return false;}
-    if(p->options.yoco_keep){error="YOCO state requires local re-prefill for transport, persistence or rewind";return false;}
+    if(p->options.yoco_keep&&p->options.yoco_remote_state_version!=1){error="YOCO state requires local snapshot or negotiated remote version1";return false;}
     try{
         p->check_stop();require(p->state==implementation::completed&&p->published.load()&&
             p->options.stateful_chunks&&p->cache&&p->carry.frontier_ready()&&!p->executor,
@@ -969,7 +987,7 @@ bool llama_dsv41_sweep::apply_decode_delta(const decode_delta&update,
 bool llama_dsv41_sweep::capture_rewind_anchor(rewind_anchor&out,std::string&error){
     std::unique_lock<std::mutex>lock(p->mutex,std::try_to_lock);error.clear();
     if(!lock.owns_lock()){error="V4.1 sweep already owns the frontier";return false;}
-    if(p->options.yoco_keep){error="YOCO state requires local re-prefill for transport, persistence or rewind";return false;}
+    if(p->options.yoco_keep&&p->options.yoco_remote_state_version!=1){error="YOCO state requires local snapshot or negotiated remote version1";return false;}
     try{
         p->check_stop();require(p->state==implementation::completed&&p->published.load()&&
             p->options.stateful_chunks&&p->cache&&!p->executor,
@@ -1002,7 +1020,7 @@ bool llama_dsv41_sweep::restore_rewind_anchor(const rewind_anchor&anchor,
         const std::vector<std::string>&current_hashes,std::string&error){
     std::unique_lock<std::mutex>lock(p->mutex,std::try_to_lock);error.clear();
     if(!lock.owns_lock()){error="V4.1 sweep already owns the frontier";return false;}
-    if(p->options.yoco_keep){error="YOCO state requires local re-prefill for transport, persistence or rewind";return false;}
+    if(p->options.yoco_keep&&p->options.yoco_remote_state_version!=1){error="YOCO state requires local snapshot or negotiated remote version1";return false;}
     try{
         p->check_stop();const uint32_t old=uint32_t(p->tokens.size()),target=anchor.frontier.position;
         require(p->state==implementation::completed&&p->published.load()&&p->options.stateful_chunks&&

@@ -25,7 +25,16 @@ private:
         const auto line=io.line();
         need(sha_valid(contract_sha)&&dsv41_boundary::sha256(line.data(),line.size())==contract_sha,"Native base contract pin mismatch");
         const auto j=parse_control(line);
-        keys(j,{"version","mode","model_sha256","tokenizer_sha256","template_sha256","rope_sha256","kv_dtype","context","position","request_id","owner_epoch","generation","tokens_sha256","logits_sha256","owners","decode_provenance"});
+        auto standard=j;
+        if(j.contains("local_state")){
+            const auto&local=j.at("local_state");keys(local,{"version","yoco_keep","cache_precision","producer_sha256"});
+            need(local.at("version")=="slstack-local-state/1","Unknown local snapshot version");
+            const auto keep=u64(local.at("yoco_keep"));need(keep==0||keep==140,"Local YOCO mode invalid");
+            const auto precision=local.at("cache_precision").get<std::string>();need(precision=="f32"||precision=="bf16","Local cache precision invalid");
+            need(sha_valid(local.at("producer_sha256").get<std::string>()),"Local producer digest invalid");
+            base.local_snapshot=true;base.yoco_keep=uint32_t(keep);base.cache_precision=precision;standard.erase("local_state");
+        }
+        keys(standard,{"version","mode","model_sha256","tokenizer_sha256","template_sha256","rope_sha256","kv_dtype","context","position","request_id","owner_epoch","generation","tokens_sha256","logits_sha256","owners","decode_provenance"});
         need(j.at("version")=="dsv41-cuda-target-state/1"&&u64(j.at("mode"))==1&&j.at("model_sha256")==model_sha&&
             j.at("request_id")==session&&u64(j.at("owner_epoch"))==epoch&&epoch&&u64(j.at("generation")),"Native base version/model/request/epoch mismatch");
         for(const auto*key:{"tokenizer_sha256","template_sha256","rope_sha256","tokens_sha256","logits_sha256"})
@@ -33,7 +42,7 @@ private:
         need(j.at("kv_dtype")=="f32","Native base requires the qualified canonical F32 KV representation");
         need(j.at("decode_provenance")=="unbiased"||j.at("decode_provenance")=="manual-bias"||j.at("decode_provenance")=="phase-bias","Native base decode provenance missing");
         const uint64_t position=u64(j.at("position"));
-        need(u64(j.at("context"))==context&&context<=262144&&position&&position<context,"Native base context/position mismatch");
+        need(u64(j.at("context"))==context&&context<=(base.local_snapshot?1048576u:262144u)&&position&&position<context,"Native base context/position mismatch");
         base.frontier={context,uint32_t(position),1,0,0};std::string error;
         need(llama_dsv41::make_wire_plan(base.frontier,plan,error),error);
         need(j.at("owners").is_array()&&j.at("owners").size()==plan.spans.size(),"Native base owner count mismatch");

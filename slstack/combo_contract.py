@@ -33,7 +33,7 @@ def owner_layout(position):
     return result
 
 
-def validate(row, expected=None):
+def validate(row, expected=None, *, local=False):
     keys(row, FIELDS)
     require(row['version'] == VERSION and type(row['mode']) is int and row['mode'] == 1,
             'Target-only state contract version/mode mismatch')
@@ -42,7 +42,7 @@ def validate(row, expected=None):
         hex_value(row[name], 64)
     require(type(row['kv_dtype']) is str and row['kv_dtype'] in DTYPE_BITS,
             'KV dtype must be explicitly qualified at 8 bit or higher')
-    context = integer(row['context'], 2, 262144)
+    context = integer(row['context'], 2, 1048576 if local else 262144)
     position = integer(row['position'], 1, context - 1)
     session_identity(row['request_id'])
     integer(row['owner_epoch'], 1, (1 << 64) - 1)

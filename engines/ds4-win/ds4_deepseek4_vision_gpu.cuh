@@ -33,6 +33,7 @@ typedef struct {
     uint64_t mtp_visual_router_bias[DS4_DEEPSEEK4_MTP_LAYERS];
     uint64_t hash_router_bias[3];
     ds4_deepseek4_vision_layer_weights layer[DS4_DEEPSEEK4_VISION_LAYERS];
+    uint32_t projection_dim;
 } ds4_deepseek4_vision_weights;
 #endif
 
@@ -195,6 +196,8 @@ extern "C" int ds4_gpu_deepseek4_vision_encode(
         const ds4_deepseek4_vision_weights *weights) {
     if (!out || !patches || !model_map || !weights || grid_h == 0u ||
         grid_w == 0u || grid_h > UINT32_MAX / grid_w) return 0;
+    const uint32_t projection=weights->projection_dim;
+    if(projection!=4096u&&projection!=5120u)return 0;
     const uint32_t rows = grid_h * grid_w;
     const uint32_t aligned_rows =
         ((grid_h + 2u) / 3u) * ((grid_w + 2u) / 3u);
@@ -202,7 +205,7 @@ extern "C" int ds4_gpu_deepseek4_vision_encode(
     const uint64_t row2816 = (uint64_t)rows * 2816u;
     const uint64_t row3072 = (uint64_t)rows * 3072u;
     const uint64_t row5632 = (uint64_t)rows * 5632u;
-    const uint64_t aligned4096 = (uint64_t)aligned_rows * 4096u;
+    const uint64_t aligned_projection = (uint64_t)aligned_rows * projection;
     const uint64_t aligned9216 = (uint64_t)aligned_rows * 9216u;
     if (row5632 > SIZE_MAX / sizeof(float) ||
         aligned9216 > SIZE_MAX / sizeof(float)) return 0;
@@ -229,8 +232,8 @@ extern "C" int ds4_gpu_deepseek4_vision_encode(
     DSV4_VISION_ALLOC(mlp_w1, row5632);
     DSV4_VISION_ALLOC(mlp_mid, row2816);
     DSV4_VISION_ALLOC(align_in, aligned9216);
-    DSV4_VISION_ALLOC(align_a, aligned4096);
-    DSV4_VISION_ALLOC(align_b, aligned4096);
+    DSV4_VISION_ALLOC(align_a, aligned_projection);
+    DSV4_VISION_ALLOC(align_b, aligned_projection);
 #undef DSV4_VISION_ALLOC
     if (!ds4_gpu_tensor_write(
             patch, 0, patches,
@@ -386,43 +389,43 @@ extern "C" int ds4_gpu_deepseek4_vision_encode(
     }
     if (ok) ok = ds4_gpu_glm53_matmul_bf16(
             align_a, model_map, model_size, weights->aligner_w1,
-            9216u, 4096u, align_in, aligned_rows);
+            9216u, projection, align_in, aligned_rows);
     if (ok) {
         bias = glm53_vision_weight(
-                model_map, model_size, weights->aligner_w1_bias, 4096u,
+                model_map, model_size, weights->aligner_w1_bias, projection,
                 "DeepSeek vision aligner hidden bias");
         if (!bias) ok = 0;
     }
     if (ok) {
         deepseek4_vision_gelu_bias_kernel<<<
-            (unsigned)((aligned4096 + 255u) / 256u), 256u, 0,
+            (unsigned)((aligned_projection + 255u) / 256u), 256u, 0,
             DS4_DEEPSEEK4_VISION_STREAM>>>(
                 (float *)align_b->ptr, (const float *)align_a->ptr,
-                bias, aligned4096, 4096u);
+                bias, aligned_projection, projection);
         ok = glm53_vision_launch_ok("DeepSeek vision aligner GELU");
     }
     if (ok) ok = ds4_gpu_glm53_matmul_bf16(
             align_a, model_map, model_size, weights->aligner_w2,
-            4096u, 4096u, align_b, aligned_rows);
+            projection, projection, align_b, aligned_rows);
     if (ok) {
         bias = glm53_vision_weight(
-                model_map, model_size, weights->aligner_w2_bias, 4096u,
+                model_map, model_size, weights->aligner_w2_bias, projection,
                 "DeepSeek vision aligner output bias");
         if (!bias) ok = 0;
     }
     if (ok) {
         glm53_vision_bias_kernel<<<
-            (unsigned)((aligned4096 + 255u) / 256u), 256u, 0,
+            (unsigned)((aligned_projection + 255u) / 256u), 256u, 0,
             DS4_DEEPSEEK4_VISION_STREAM>>>(
-                (float *)align_a->ptr, bias, NULL, aligned4096, 4096u);
+                (float *)align_a->ptr, bias, NULL, aligned_projection, projection);
         ok = glm53_vision_launch_ok(
                 "DeepSeek vision aligner output bias");
     }
     if (ok) ok = deepseek4_vision_round_tensor(
-            align_a, aligned4096, "DeepSeek vision aligner output round");
+            align_a, aligned_projection, "DeepSeek vision aligner output round");
     if (ds4_gpu_end_commands() == 0) ok = 0;
     if (ok) ok = ds4_gpu_tensor_read(
-            align_a, 0, out, aligned4096 * sizeof(float));
+            align_a, 0, out, aligned_projection * sizeof(float));
 
 cleanup:
     ds4_gpu_tensor_free(align_b);

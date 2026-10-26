@@ -50,7 +50,7 @@ def read(path):
     return json.loads(Path(path).read_text(encoding='utf-8-sig')) if path else {}
 
 
-def overlay(preset, local=None, model=None, yoco_keep=None):
+def overlay(preset, local=None, model=None, yoco_keep=None, vision=None):
     """The config file for `slstack start --config`: the local keys, then the preset."""
     if preset not in PRESETS:
         raise ValueError('preset must be one of ' + ', '.join(PRESETS))
@@ -63,6 +63,7 @@ def overlay(preset, local=None, model=None, yoco_keep=None):
     if yoco_keep is not None:
         if type(yoco_keep) is not int or yoco_keep not in (0,140):raise ValueError('yoco_keep must be 0 or 140')
         result['yoco_keep']=yoco_keep
+    if vision:result['vision_bridge_version']=1
     return result
 
 
@@ -115,11 +116,12 @@ def main(argv=None):
     parser.add_argument('--preset', required=True, choices=sorted(PRESETS))
     parser.add_argument('--config', help='Your local config (paths, ports, budgets); optional')
     parser.add_argument('--yoco-keep', type=int, choices=(0,140), default=None, help='Approximate bounded replay (0 off, 140 on)')
+    parser.add_argument('--vision',action='store_true',default=None,help='Enable native image prefill and auto-detect the matching vision GGUF (requires the vision-capable producer)')
     parser.add_argument('--model', help='DSV4.1 GGUF path (overrides "model" in --config)')
     parser.add_argument('--write', help='Write the start config here')
     parser.add_argument('--dry-run', action='store_true', help='Print the resolved settings')
     args = parser.parse_args(argv)
-    cfg = overlay(args.preset, read(args.config), args.model, args.yoco_keep)
+    cfg = overlay(args.preset, read(args.config), args.model, args.yoco_keep, args.vision)
     if args.write:
         target = Path(args.write)
         target.parent.mkdir(parents=True, exist_ok=True)

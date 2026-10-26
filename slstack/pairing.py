@@ -169,11 +169,17 @@ class Pair:
             identity = {'producer_sha256': pin, 'producer_source_revision': revision,
                         'producer_ipv4': local_ip, 'broker_port': cfg['broker_port'],
                         'tier': cfg.get('native_tier', 'accurate')}
+            keep=cfg.get('yoco_keep',0)
+            if type(keep) is not int or keep not in (0,140):raise ValueError('Unsupported paired YOCO window')
+            if keep:
+                if health.get('yoco_state_version')!=1:raise ValueError('Mac receiver needs YOCO state version1 support')
+                identity.update(yoco_keep=keep,yoco_state_version=1)
             saved = json.loads(self.record_path.read_text()) if self.record_path.is_file() else {}
             same = (saved.get('identity') == identity and saved.get('endpoint') == self.url
                     and saved.get('receiver_sha256') == health.get('receiver_sha256')
                     and health.get('paired_producer_sha256') == pin
-                    and health.get('paired_tier') == identity['tier'])
+                    and health.get('paired_tier') == identity['tier']
+                    and health.get('paired_yoco_keep',0)==keep)
             if not same:
                 self.status('Pairing native receiver and pinned producer')
                 self.request('/pair', identity)

@@ -377,6 +377,7 @@ class Engines:
                           headers={'Authorization': 'Bearer ' + self.cfg['_control_token']})
 
     def media(self, kind, params):
+        if hasattr(self, 'preferences'):self.preferences.reload()
         model = self.cfg[kind + '_model']
         if not model and not self.cfg['comfyui_models']:
             raise ValueError(f'No {kind} model selected. Set --{kind}-model and its architecture/support files.')
@@ -412,9 +413,7 @@ class Engines:
                 print('Media swap timing: ' + json.dumps(self.swap_timing), flush=True)
 
     def _media_single(self, kind, params):
-        """Single engine: the producer exits gracefully and gives back the GPU; after the
-        media job it is relaunched on the same conversation tokens (a full re-prefill;
-        the producer has no state export)."""
+        """Save the native frontier, lend the GPU to Studio, then arm restore."""
         started = time.monotonic()
         self.status(f'Releasing the producer for {kind}')
         timing = {'release': self.single('release')}
@@ -426,17 +425,28 @@ class Engines:
             return result
         finally:
             started = time.monotonic()
-            self.status('Relaunching the producer and prefilling the conversation again')
+            self.status('Restoring the conversation checkpoint')
             timing['restore'] = self.single('restore')
             timing['restore_s'] = time.monotonic() - started
             self.swap_timing = timing
-            self.status('Conversation prefilled again')
+            self.status('Conversation checkpoint ready' if timing['restore'].get('deferred') else 'Conversation restored')
             print('Media swap timing: ' + json.dumps(timing), flush=True)
 
     def _media(self, kind, params):
         from .envvars import redact_cfg
-        request = {'kind': kind, 'cfg': redact_cfg(self.cfg), 'params': params}
-        proc = OwnedProcess(self.cfg, [self.cfg['studio_python'], '-B', '-m', 'slstack.studio_worker'],
+        params = dict(params);model_id = params.pop('model', None)
+        cfg = dict(self.cfg)
+        if hasattr(self, 'preferences'):
+            selected = self.preferences.select(kind, model_id)
+            if not selected:raise ValueError('No supported '+kind+' model found; choose a model in Stack settings')
+            cfg[kind+'_model'] = selected['path'];cfg[kind+'_arch'] = selected['arch']
+            discovered = self.preferences.catalog.get('support_files', {}).get(selected['arch'], {})
+            cfg[kind+'_support_files'] = {**discovered, **cfg[kind+'_support_files']}
+        elif model_id:raise ValueError('Model selection needs Stack settings')
+        if params.get('loras'):
+            params['lora_files']=self.preferences.resolve_loras(kind,model_id,params['loras'])
+        request = {'kind': kind, 'cfg': redact_cfg(cfg), 'params': params}
+        proc = OwnedProcess(cfg, [cfg['studio_python'], '-B', '-m', 'slstack.studio_worker'],
                             kind, stdin=json.dumps(request) + '\n', gpu=True)
         try:
             proc.wait()
@@ -456,7 +466,7 @@ class Engines:
                 artifacts.append({'url': '/outputs/' + source.relative_to(root).as_posix(), 'path': str(source)})
             if not artifacts:
                 raise RuntimeError('Studio returned no media files')
-            return {'created': int(time.time()), 'data': artifacts, 'settings': params,
+            return {'created': int(time.time()), 'data': artifacts, 'settings': {k:v for k,v in params.items() if k!='lora_files'},
                     'mode': self.cfg[kind + '_mode'], 'engine': 'studio', 'receipt': str(proc.receipt),
                     'selected_model': result.get('selected_model'), 'selected_arch': result.get('selected_arch')}
         finally:

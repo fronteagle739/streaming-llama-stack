@@ -94,7 +94,8 @@ public:
     static std::shared_ptr<ggml_backend_buffer> reserve_hidden(ggml_backend_t,uint32_t tokens,uint32_t tile,bool bf16,bool ids,bool metadata,uint64_t admission);
     bool seed_ram(ggml_tensor *embedding,const std::vector<int32_t> &ids,
         const llama_dsv41_carry_store::ram_lease &lease,
-        std::optional<llama_dsv41_carry_store::ram_completion> &completion,std::string &error);
+        std::optional<llama_dsv41_carry_store::ram_completion> &completion,std::string &error,
+        const std::vector<float>*projected=nullptr);
 
     bool resident_head_row(llama_dsv41_carry_store::tile &out,std::string &error);
     bool export_hidden_tile(const llama_dsv41_carry_store::ram_lease &lease,

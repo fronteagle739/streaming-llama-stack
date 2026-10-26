@@ -15,8 +15,7 @@ def _comfy_models_root() -> Optional[Path]:
     env = os.environ.get('STUDIO_COMFYUI_PATH') or os.environ.get('COMFYUI_PATH')
     if env:
         p = Path(env)
-        candidates.append(p if p.name.lower() == 'models' else p / 'models')
-    candidates += [Path(''), Path(''), Path('')]
+        candidates.append(p if p.name.lower() == 'models' or (p/'diffusion_models').is_dir() or (p/'checkpoints').is_dir() else p / 'models')
     for p in candidates:
         try:
             if p.is_dir():

@@ -554,7 +554,7 @@ llama_dsv41_tile_executor::~llama_dsv41_tile_executor()=default;
 
 bool llama_dsv41_tile_executor::seed_ram(ggml_tensor *embedding,const std::vector<int32_t> &ids,
         const llama_dsv41_carry_store::ram_lease &lease,
-        std::optional<llama_dsv41_carry_store::ram_completion> &completion,std::string &error){
+        std::optional<llama_dsv41_carry_store::ram_completion> &completion,std::string &error,const std::vector<float>*projected){
     completion.reset();error.clear();std::lock_guard<std::mutex>lock(cache.execution_mutex);
     try{
 #ifdef GGML_USE_CUDA
@@ -572,12 +572,15 @@ bool llama_dsv41_tile_executor::seed_ram(ggml_tensor *embedding,const std::vecto
         ggml_context_ptr ctx(ggml_init({8*1024*1024,nullptr,true}));require(bool(ctx),"Direct seed metadata allocation failed");
         auto *tokens=ggml_new_tensor_1d(ctx.get(),GGML_TYPE_I32,lease.rows);
         llama_dsv41_graph_ops ops(ctx.get(),norm_eps,hc_eps,sinkhorn_iters);
-        auto values=ops.seed_embeddings(ggml_get_rows(ctx.get(),embedding,tokens));
+        require(!projected||(lease.rows<=128&&projected->size()==size_t(5120)*lease.rows),"Projected image seed exceeds bounded input rows");
+        auto*rows=projected?ggml_new_tensor_2d(ctx.get(),GGML_TYPE_F32,5120,lease.rows):ggml_get_rows(ctx.get(),embedding,tokens);
+        auto values=ops.seed_embeddings(rows);
         auto *graph=ggml_new_graph_custom(ctx.get(),8192,false);
         ggml_build_forward_expand(graph,values.residual);ggml_build_forward_expand(graph,values.pre);
         backend_buffers(backend,graph);
         const auto scratch=llama_dsv41_allocate_native_graph(workspace->value,graph,0,admitted_graph_bytes);
-        upload(tokens,ids);
+        if(projected)ggml_backend_tensor_set(rows,projected->data(),0,projected->size()*4);
+        else upload(tokens,ids);
         // The existing GPU validator below synchronizes this same stream
         // before publishing initialization credit or queuing the RAM mirror.
         require(ggml_backend_graph_compute_async(backend,graph)==GGML_STATUS_SUCCESS,"Direct seed graph failed");

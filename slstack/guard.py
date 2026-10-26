@@ -437,6 +437,11 @@ def supervise(spec):
                 try:
                     with gpu_lease(spec['gpu']) as identity:
                         entered = True
+                        # Admission creates the default ledger when needed.
+                        # Resolve that same file before every child-side check;
+                        # an empty value must never become Path('') == '.'.
+                        spec['gpu']['hold_file']=str(Path(spec['gpu'].get('hold_file') or
+                            Path(spec['runtime_root'])/'state'/'gpu.holds').resolve())
                         spec['hold_watch'] = {'path': spec['gpu'].get('hold_file') or
                             str(Path(spec['runtime_root']) / 'state' / 'gpu.holds'), 'identity': identity,
                             'task': spec['gpu'].get('task', 'DS4STACK')}
