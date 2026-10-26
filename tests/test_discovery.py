@@ -69,5 +69,16 @@ class DiscoveryTests(unittest.TestCase):
         self.assertEqual(row['support_files']['z-image']['config_dir'],str(self.root/'configs/zimage'))
         self.assertEqual(Path(row['support_files']['z-image']['vae']).name,'ae.safetensors')
 
+    def test_pipeline_shards_and_config_bundles_are_not_separate_models(self):
+        qwen=self.pipeline('qwen','QwenImage21Pipeline')
+        self.checkpoint('qwen/transformer/diffusion_pytorch_model-00001-of-00002.safetensors',['transformer_blocks.0.img_mlp.proj.weight'])
+        flux=self.pipeline('klein','Flux2KleinKVPipeline')
+        configs=self.pipeline('z-configs','ZImagePipeline')
+        row=scan_models(self.root)
+        self.assertEqual({m['path'] for m in row['models']},{str(qwen),str(flux)})
+        self.assertEqual(row['support_files']['qwen-image-2.1']['components_repo'],str(qwen))
+        self.assertEqual(row['support_files']['flux2-klein']['components_repo'],str(flux))
+        self.assertEqual(row['support_files']['z-image']['config_dir'],str(configs))
+
 
 if __name__=='__main__':unittest.main()

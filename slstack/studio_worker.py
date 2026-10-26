@@ -8,6 +8,10 @@ import sys
 def resolve_checkpoint(model, arch, support):
     """Adapt a local Z-Image bundle to Studio's single-checkpoint streaming input."""
     root=Path(model)
+    if (arch or '').startswith('krea2') and root.is_dir():
+        files=sorted(root.glob('*.safetensors'))
+        if len(files)==1:
+            model=str(files[0]);support.setdefault('dit',model)
     if arch=='z-image' and root.is_dir():
         files=sorted((root/'transformer').glob('*.safetensors'))
         if not files:
@@ -33,10 +37,12 @@ def run(request):
         os.environ['STUDIO_COMFYUI_MODELS']=cfg['comfyui_models']
     selected_arch=cfg.get(kind+'_arch','');support=cfg.get(kind+'_support_files',{})
     if selected_arch.startswith('krea2'):
-        if Path(cfg[kind+'_model']).is_file():os.environ['STUDIO_KREA2_DIT']=cfg[kind+'_model']
+        selected=resolve_checkpoint(cfg[kind+'_model'],selected_arch,support)
+        if Path(selected).is_file():os.environ['STUDIO_KREA2_DIT']=selected
         for key,env in [('text_encoder','STUDIO_KREA2_TEXT_ENCODER'),('vae','STUDIO_KREA2_VAE')]:
             if support.get(key):os.environ[env]=support[key]
-        os.environ['STUDIO_QWEN3VL_CACHE']=str(Path(cfg['runtime_root'])/'cache'/'krea-tokenizer')
+        from .media_assets import directory
+        os.environ['STUDIO_QWEN3VL_CACHE']=str(directory(cfg['runtime_root'],'qwen3vl4b'))
     if selected_arch=='qwen-image-2.1' and support.get('components_repo'):
         os.environ['STUDIO_QWEN_IMAGE21_BASE']=support['components_repo']
     # Parent sets these BEFORE Python/Studio/torch imports.

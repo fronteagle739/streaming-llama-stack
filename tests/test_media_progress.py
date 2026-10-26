@@ -62,6 +62,10 @@ class MediaProgressTests(unittest.TestCase):
         stack.tools.call = Mock(return_value=dict(data=[dict(url='/outputs/image.png')], settings={}))
         source = stack.chat_events(dict(messages=[dict(role='user', content='Make a cup')]))
         first = next(source)
+        self.assertIn('stack-tool',first['choices'][0]['delta']['content'])
+        self.assertFalse(stack.tools.call.called)
+        next(source)  # completed tool activity
+        first = next(source)
         self.assertIn('![Generated media](/outputs/image.png)', first['choices'][0]['delta']['content'])
         self.assertEqual(engine.chat_events.call_count, 1)
         tool = engine.chat_events.call_args.args[0]['messages'][-1]

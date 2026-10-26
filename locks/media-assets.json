@@ -1,0 +1,43 @@
+{
+  "qwen3vl4b": {
+    "repository": "Qwen/Qwen3-VL-4B-Instruct",
+    "revision": "ebb281ec70b05090aa6165b016eac8ec08e71b17",
+    "files": [
+      {
+        "name": "config.json",
+        "sha256": "edac7703329133edfc53e46ac0081835144c99d7eebf28b71c732694d435224d",
+        "bytes": 1505
+      },
+      {
+        "name": "tokenizer.json",
+        "sha256": "a5d85b6dcc535e6b93115a9ef287e6132fdbf30270da6218194ba742261173c7",
+        "bytes": 7032403
+      },
+      {
+        "name": "tokenizer_config.json",
+        "sha256": "c2da771801886ad9ae98181793ffd3dfb7f1af30f6f7c6a4e15d7dbba52e2399",
+        "bytes": 10868
+      },
+      {
+        "name": "chat_template.json",
+        "sha256": "6f8a6a55027e3da5160105556cda5dd69f6423f1c32645f6730d32de7773d0c4",
+        "bytes": 5502
+      },
+      {
+        "name": "merges.txt",
+        "sha256": "599bab54075088774b1733fde865d5bd747cbcc7a547c5bc12610e874e26f5e3",
+        "bytes": 1671839
+      },
+      {
+        "name": "vocab.json",
+        "sha256": "ca10d7e9fb3ed18575dd1e277a2579c16d108e32f27439684afa0e10b1440910",
+        "bytes": 2776833
+      },
+      {
+        "name": "README.md",
+        "sha256": "a884e5e78f7d6f7bfe237f909dbc41a126542e259dc79d8ab33cc8980580ff79",
+        "bytes": 7133
+      }
+    ]
+  }
+}

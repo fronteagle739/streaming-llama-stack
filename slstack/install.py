@@ -5,6 +5,7 @@ import os
 from pathlib import Path
 import subprocess
 import sys
+import shutil
 import urllib.request
 import zipfile
 from .config import ROOT, path
@@ -60,31 +61,60 @@ def sdk(cfg, *, check=False):
     return {'sdk': SDK_VERSION, 'ready': True, 'package_sha256': digest}
 
 
+def media_profile(cfg, profile, *, check=False):
+    from .media_profiles import PROFILES
+    spec=PROFILES[profile]
+    runtime = Path(cfg['runtime_root']) / spec['directory']
+    binary = python_path(runtime)
+    lock = ROOT / 'locks' / spec['lock']
+    lock_sha = hashlib.sha256(lock.read_bytes()).hexdigest()
+    marker = runtime / 'slstack-installed.json'
+    install_cfg={**cfg,'host_budget_gib':min(3,cfg['host_budget_gib'])}
+    ready = binary.is_file() and marker.is_file() and json.loads(marker.read_text())['lock_sha256'] == lock_sha
+    if not check and not ready:
+        destination=runtime
+        while not destination.exists():destination=destination.parent
+        if shutil.disk_usage(destination).free < 24 * 1024**3:
+            raise RuntimeError('Media setup needs 24 GiB free for packages, download/build staging and headroom; choose a runtime on a larger volume')
+        if not binary.exists():
+            OwnedProcess(install_cfg, [sys.executable, '-B', '-m', 'venv', str(runtime)], 'install-venv', timeout=180).wait()
+        OwnedProcess(install_cfg, [str(binary), '-B', '-m', 'pip', 'install', '--disable-pip-version-check', '-r', str(lock)],
+                     'install-media', timeout=7200).wait()
+        OwnedProcess(install_cfg, [str(binary), '-B', '-m', 'pip', 'check'], 'install-verify', timeout=120).wait()
+        ready = True
+    if binary.is_file():
+        probe_cfg={**cfg,'host_budget_gib':min(3,cfg['host_budget_gib'])}
+        probe=OwnedProcess(probe_cfg,[str(binary),'-B','-m','slstack.media_runtime',profile],'install-media-capabilities',timeout=180)
+        try:
+            failure=None
+            try:probe.wait()
+            except RuntimeError as exc:failure=exc
+            rows=[json.loads(line.removeprefix('SLSTACK_MEDIA_RUNTIME ')) for line in probe.log.read_text(errors='replace').splitlines() if line.startswith('SLSTACK_MEDIA_RUNTIME ')]
+            capabilities=rows[-1] if rows else dict(ready=False,missing=[dict(error='Media import verification did not finish; see '+str(probe.log))])
+            ready=ready and capabilities['ready'] and failure is None
+            if not ready and not check:raise RuntimeError('Media runtime verification failed: '+json.dumps(capabilities)) from failure
+        finally:probe.stop()
+    if not check and ready:
+        atomic_json(marker, {'lock_sha256': lock_sha, 'python': str(binary), 'profile':profile,
+                             'weights_downloaded': False,'capabilities_verified':True})
+    return dict(profile=profile,ready=ready,python=str(binary),lock=spec['lock'],
+                capabilities=capabilities if binary.is_file() else None)
+
+
 def install(cfg, *, image=False, video=False, all_engines=False, check=False, sdk_only=False):
     if os.name != 'nt':
         raise ValueError('RTX media installer requires native Windows and Python 3.12; Mac backends use mac-setup')
     if sys.version_info[:2] != (3, 12):
         raise ValueError('Install Python 3.12, then run the launcher with that interpreter')
     result = {'sdk': sdk(cfg, check=check), 'engines': []}
-    if sdk_only:
-        return result
-    if not (image or video or all_engines):
-        all_engines = True
-    runtime = Path(cfg['runtime_root']) / 'media-venv'
-    binary = python_path(runtime)
-    lock = ROOT / 'locks/media-win-py312.txt'
-    lock_sha = hashlib.sha256(lock.read_bytes()).hexdigest()
-    marker = runtime / 'slstack-installed.json'
-    ready = binary.is_file() and marker.is_file() and json.loads(marker.read_text())['lock_sha256'] == lock_sha
-    if not check and not ready:
-        if not binary.exists():
-            OwnedProcess(cfg, [sys.executable, '-B', '-m', 'venv', str(runtime)], 'install-venv', timeout=180).wait()
-        OwnedProcess(cfg, [str(binary), '-B', '-m', 'pip', 'install', '--disable-pip-version-check', '-r', str(lock)],
-                     'install-media', timeout=7200).wait()
-        OwnedProcess(cfg, [str(binary), '-B', '-m', 'pip', 'check'], 'install-verify', timeout=120).wait()
-        atomic_json(marker, {'lock_sha256': lock_sha, 'python': str(binary), 'kind': 'shared image/video venv',
-                             'weights_downloaded': False})
-        ready = True
+    if sdk_only:return result
+    if not (image or video or all_engines):all_engines=True
+    from .media_assets import install as install_assets
+    result['media_assets']=install_assets(cfg['runtime_root'],check=check)
+    profiles=['studio','qwen21'] if image or all_engines else ['studio']
+    result['media_runtimes']=[media_profile(cfg,p,check=check) for p in profiles]
+    ready=all(row['ready'] for row in result['media_runtimes']) and result['media_assets']['ready']
+    runtime=Path(cfg['runtime_root'])
     binaries = [path(cfg['ds4_command'][0]), path(cfg['llama_producer']),
                 path(cfg.get('weight_fetcher', 'build/llama/bin/slstack-weight-fetcher.dll')), ROOT / 'build/llama/bin/llama-server.exe',
                 ROOT / 'build/llama/bin/llama-export-lora.exe', path(cfg['llama_producer']).parent / 'ds4-decode.dll']

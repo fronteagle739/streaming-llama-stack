@@ -67,22 +67,28 @@ def _prepare_kernel_runtime() -> None:
     _fg._STUDIO_WINDOWS_DEEPGEMM_DISABLED = True
 
 def _ensure_krea2_installed() -> None:
+    # Studio's Krea modules run with its pinned general-media revision. Register
+    # the bundled source in memory; never rewrite the installed Diffusers files.
     import diffusers
-    diff = Path(diffusers.__file__).parent
-    tdst = diff / 'models' / 'transformers' / 'transformer_krea2.py'
-    if not tdst.exists():
-        shutil.copy(_VENDORED / 'krea2' / 'transformer_krea2.py', tdst)
-    pdst = diff / 'pipelines' / 'krea2'
-    if not pdst.exists():
-        pdst.mkdir(parents=True, exist_ok=True)
-        for f in (_VENDORED / 'krea2' / 'pipeline').glob('*.py'):
-            shutil.copy(f, pdst / f.name)
-    tu = diff / 'utils' / 'torch_utils.py'
-    src = tu.read_text(encoding='utf-8')
-    if 'KREA2_DTYPE_SHIM' not in src:
-        tu.write_text(src + '\n\n# KREA2_DTYPE_SHIM (override the broken/slow upstream maybe_adjust_dtype_for_device)\ndef maybe_adjust_dtype_for_device(dtype, device):\n    import torch as _t\n    return _t.float32 if dtype == _t.float64 else dtype\n', encoding='utf-8')
-    import diffusers.utils.torch_utils as _tu_mod
-    _tu_mod.maybe_adjust_dtype_for_device = lambda dtype, device: torch.float32 if dtype == torch.float64 else dtype
+    try:
+        from diffusers import Krea2Pipeline, Krea2Transformer2DModel
+        return
+    except ImportError:
+        pass
+    import diffusers.utils.torch_utils as torch_utils
+    # The bundled Studio transformer imports this newer helper. Studio's same
+    # float64-to-float32 compatibility rule stays local to this worker process.
+    torch_utils.maybe_adjust_dtype_for_device = lambda dtype, device: torch.float32 if dtype == torch.float64 else dtype
+    import types
+    transformer = lora_transformer_class('krea2')
+    diffusers.models.Krea2Transformer2DModel = transformer
+    diffusers.Krea2Transformer2DModel = transformer
+    sys.modules['diffusers.models.transformers.transformer_krea2'] = sys.modules[transformer.__module__]
+    package = types.ModuleType('diffusers.pipelines.krea2')
+    package.__path__ = [str(_VENDORED / 'krea2/pipeline')]
+    sys.modules[package.__name__] = package
+    from diffusers.pipelines.krea2.pipeline_krea2 import Krea2Pipeline
+    diffusers.Krea2Pipeline = Krea2Pipeline
 KREA2_COMPONENTS = ('text_encoder', 'transformer', 'vae')
 
 def _krea2_build_empty(name: str, folder: Path):
@@ -156,6 +162,7 @@ def _load_krea2(ckpt: str, dtype: torch.dtype, *, arch='krea2', device='cpu', st
     from .krea_hf_stream import variant_config
     variant_config(arch, ckpt)
     if stream_transformer:
+        _ensure_krea2_installed()
         from .krea_hf_stream import KreaHFStreamer
         _, config = variant_config(arch, ckpt)
         transformer_class = lora_transformer_class(arch)
@@ -164,15 +171,9 @@ def _load_krea2(ckpt: str, dtype: torch.dtype, *, arch='krea2', device='cpu', st
         streamer = KreaHFStreamer(transformer, Path(ckpt) / 'transformer', dtype=dtype, device=device)
         try:
             import diffusers
-            import types
             diffusers.models.Krea2Transformer2DModel = transformer_class
             diffusers.Krea2Transformer2DModel = transformer_class
-            package = 'diffusers.pipelines.krea2'
-            if package not in sys.modules:
-                module = types.ModuleType(package)
-                module.__path__ = [str(_VENDORED / 'krea2/pipeline')]
-                sys.modules[package] = module
-            from diffusers.pipelines.krea2.pipeline_krea2 import Krea2Pipeline
+            from diffusers import Krea2Pipeline
             streamer.register()
             pipe = Krea2Pipeline.from_pretrained(ckpt, torch_dtype=dtype, transformer=transformer, text_encoder=None, local_files_only=True)
             pipe._studio_krea_hf_streamed = True

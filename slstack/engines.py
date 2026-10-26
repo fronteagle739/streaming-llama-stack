@@ -459,6 +459,10 @@ class Engines:
         elif model_id:raise ValueError('Model selection needs Stack settings')
         if params.get('loras'):
             params['lora_files']=self.preferences.resolve_loras(kind,model_id,params['loras'])
+        from .media_profiles import python_for
+        cfg['studio_python']=python_for(cfg,cfg.get(kind+'_arch'))
+        if not Path(cfg['studio_python']).is_file():
+            raise RuntimeError('The selected model worker is not installed; run slstack install --image')
         request = {'kind': kind, 'cfg': redact_cfg(cfg), 'params': params}
         progress = getattr(self, 'media_progress', None)
         if progress:request['progress_file'] = str(progress.path)

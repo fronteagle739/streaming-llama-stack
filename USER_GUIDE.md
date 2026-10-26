@@ -68564,7 +68564,7 @@ Vendored streaming engine source directory.
 
 Scope: ds4-win, image, mac-ds4, mlx-serve, rtx-llama, studio, video. Class: preset.
 
-Source: `vendor/studio/studio/boogu_krea.py:404`. Unset read: ''.
+Source: `vendor/studio/studio/boogu_krea.py:405`. Unset read: ''.
 
 ```text
     import os as _os
@@ -72878,7 +72878,7 @@ BOOGU_ALLOW_NON_DIRECTSTORAGE: explicit engine setting; inherited values are cle
 
 Scope: image, video. Class: advanced.
 
-Source: `vendor/studio/studio/boogu_krea.py:414`. Unset read: None.
+Source: `vendor/studio/studio/boogu_krea.py:415`. Unset read: None.
 
 ```text
     sd_keys = set(transformer.state_dict().keys())

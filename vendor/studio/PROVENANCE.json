@@ -47,6 +47,14 @@
     {
       "path": "worker_registry.py",
       "purpose": "Standalone media workers inherit the stack owned process tree and GPU lease. Consult Studio WebXR admission only when a Studio daemon owner has activated its registry; avoid importing unavailable daemon modules in the isolated stack."
+    },
+    {
+      "path": "boogu_krea.py; vendored/krea2/pipeline",
+      "purpose": "Reuse the bundled Studio Krea pipeline under the pinned general-media environment. Register vendored classes and the Studio dtype helper only in the isolated worker process; never modify installed Diffusers package files. Dedicated Qwen 2.1 worker pins retain its separate dependency revisions."
+    },
+    {
+      "path": "adapter.py; vram_residency.py",
+      "purpose": "Include the shared Studio VRAM component manager required by Flux2 Klein. Model discovery associates complete pipeline folders and companion component files without exposing individual shards as models."
     }
   ],
   "modules": [
@@ -237,7 +245,7 @@
         "path": "vendor/studio/studio/boogu_krea.py",
         "source_path": "backend/studio/boogu_krea.py",
         "source_sha256": "0ff19623db0cc9e04ead63cd7d95709bf4271444da86016ce3007d656a3b8be9",
-        "export_sha256": "65f9ff373bf224629fe5ca3db75e9ca3aeef4e57cfa9fa76f7e58f8db9c3a321",
+        "export_sha256": "61da7a4cc7b68d5f1a2f0d0e8721904972a9671d5bb037489b4909ac989edf23",
         "selected": null
       },
       {
@@ -413,6 +421,37 @@
         "source_sha256": "a8c927dd2807ee99aca7cef7f2aec663584af6ababfe8ccd111076b79e2859c2",
         "export_sha256": "a8c927dd2807ee99aca7cef7f2aec663584af6ababfe8ccd111076b79e2859c2",
         "selected": null
+      },
+      {
+        "path": "vendor/studio/studio/vram_residency.py",
+        "source_path": "backend/studio/vram_residency.py",
+        "source_sha256": "895c5a7cc0a3c803f49d3c1b27f6b89d05ca0adb43ebef30503b566a838b58db",
+        "export_sha256": "f66917983061f6246369a9703f90a7b93c6d7cbb19d7253e5b19f7d83e1778e6",
+        "selected": null
+      },
+      {
+        "path": "vendor/studio/studio/vendored/krea2/pipeline/__init__.py",
+        "source_path": "backend/studio/vendored/krea2/pipeline/__init__.py",
+        "source_sha256": "78ff15b0a3f7b0657d7c892119cacf8028e8b6a8cf03107e3b9b755f47c8e8bd",
+        "export_sha256": "78ff15b0a3f7b0657d7c892119cacf8028e8b6a8cf03107e3b9b755f47c8e8bd",
+        "selected": null,
+        "transformation": "Unchanged upstream module, including docstrings required by Diffusers decorators"
+      },
+      {
+        "path": "vendor/studio/studio/vendored/krea2/pipeline/pipeline_krea2.py",
+        "source_path": "backend/studio/vendored/krea2/pipeline/pipeline_krea2.py",
+        "source_sha256": "dc70483ada6458c4002fbc5c12e6941cf193f4f5b62907a0d7a2c4164a191fd6",
+        "export_sha256": "dc70483ada6458c4002fbc5c12e6941cf193f4f5b62907a0d7a2c4164a191fd6",
+        "selected": null,
+        "transformation": "Unchanged upstream module, including docstrings required by Diffusers decorators"
+      },
+      {
+        "path": "vendor/studio/studio/vendored/krea2/pipeline/pipeline_output.py",
+        "source_path": "backend/studio/vendored/krea2/pipeline/pipeline_output.py",
+        "source_sha256": "7eb052dcb404198e678928682306b76f128189a3f451efa9730b4deea655438a",
+        "export_sha256": "7eb052dcb404198e678928682306b76f128189a3f451efa9730b4deea655438a",
+        "selected": null,
+        "transformation": "Unchanged upstream module, including docstrings required by Diffusers decorators"
       }
     ],
     "transformation": "AST source export; absolute machine fallback paths cleared; jobs exports only owned-worker launch/cleanup helpers; docstrings omitted"
