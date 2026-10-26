@@ -75,7 +75,7 @@ class Stack:
                 outcome = {'data': [{'url': x['url']} for x in outcome.get('data', [])],
                            'settings': outcome.get('settings', {}), 'mode': outcome.get('mode'),
                            'display': 'The client displays this media inline. Reply with a brief confirmation.'}
-        except (ValueError, RuntimeError, OSError) as exc:
+        except (ValueError, RuntimeError, OSError, MemoryError) as exc:
             outcome = {'error': str(exc)}
         content=json.dumps(outcome)
         if call['function']['name']=='generate_image' and self.cfg.get('vision_bridge_version')==1 and self.cfg.get('vision_encoder') and outcome.get('data'):
@@ -216,7 +216,7 @@ class Stack:
             else:
                 return {'jsonrpc': '2.0', 'id': identity, 'error': {'code': -32601, 'message': 'Method not found'}}
             return {'jsonrpc': '2.0', 'id': identity, 'result': result}
-        except (ValueError, RuntimeError, OSError, KeyError) as exc:
+        except (ValueError, RuntimeError, OSError, MemoryError, KeyError) as exc:
             return {'jsonrpc': '2.0', 'id': identity, 'result': {'isError': True,
                     'content': [{'type': 'text', 'text': str(exc)}]}}
 
