@@ -12,12 +12,12 @@ def transport_checkpoint(row):
     return checkpoint({key:row[key] for key in TRANSPORT_FIELDS},1)
 
 
-def payload_bytes(position):
-    if type(position) is not int or not 0<position<262144:raise ValueError('Mode1 checkpoint position is outside the qualified262K scope')
+def payload_bytes(position, *, local=False):
+    if type(position) is not int or not 0<position<(1048576 if local else 262144):raise ValueError('Mode1 checkpoint position is outside the admitted scope')
     return 52+position*4+129280*4+sum(owner_layout(position).values())
 
 
-def contract_from_checkpoint(checkpoint,identity,session,epoch,generation,provenance):
+def contract_from_checkpoint(checkpoint,identity,session,epoch,generation,provenance, *, local=False):
     cp=transport_checkpoint(checkpoint)
     layout=owner_layout(cp['position'])
     owners=[dict(kind=key[0],index=key[1],bytes=n,sha256=digest)
@@ -26,7 +26,7 @@ def contract_from_checkpoint(checkpoint,identity,session,epoch,generation,proven
          'position':cp['position'],'request_id':session,'owner_epoch':epoch,'generation':generation,
          'tokens_sha256':cp['tokens_sha256'],'logits_sha256':cp['logits_sha256'],
          'owners':owners,'decode_provenance':provenance}
-    validate(row)
+    validate(row, local=local)
     if 'owners' in checkpoint:
         actual={(x['kind'],x['index']):(x['bytes'],x['sha256']) for x in checkpoint['owners']}
         expected={(x['kind'],x['index']):(x['bytes'],x['sha256']) for x in owners}
@@ -34,9 +34,9 @@ def contract_from_checkpoint(checkpoint,identity,session,epoch,generation,proven
     return row
 
 
-def verify_payload(ram,row,expected_payload_sha256=None):
-    validate(row)
-    size=payload_bytes(row['position'])
+def verify_payload(ram,row,expected_payload_sha256=None, *, local=False):
+    validate(row, local=local)
+    size=payload_bytes(row['position'], local=local)
     if size>ram.capacity:raise MemoryError('Validated native payload exceeds its admitted RAM owner')
     expected=(0x34565344,2,row['context'],1,128,128,row['context']+1,row['position'],40,512,128,129280,0x413431)
     header=ram.read(0,52)

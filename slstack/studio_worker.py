@@ -7,6 +7,24 @@ import sys
 
 def run(request):
     cfg, kind, args = request['cfg'], request['kind'], request['params']
+    # Source builds put the media streaming DLL beside the producer. Resolve
+    # it before importing any Studio module that captures STUDIO_WF_DLL.
+    media_library=cfg.get('weight_fetcher')
+    if not media_library and cfg.get('llama_producer'):
+        candidate=Path(cfg['llama_producer']).parent/'slstack-weight-fetcher.dll'
+        if candidate.is_file():media_library=str(candidate.resolve())
+    if media_library:os.environ['STUDIO_WF_DLL']=str(Path(media_library).resolve(strict=True))
+    if cfg.get('comfyui_models'):
+        os.environ['STUDIO_COMFYUI_PATH']=cfg['comfyui_models']
+        os.environ['STUDIO_COMFYUI_MODELS']=cfg['comfyui_models']
+    selected_arch=cfg.get(kind+'_arch','');support=cfg.get(kind+'_support_files',{})
+    if selected_arch.startswith('krea2'):
+        if Path(cfg[kind+'_model']).is_file():os.environ['STUDIO_KREA2_DIT']=cfg[kind+'_model']
+        for key,env in [('text_encoder','STUDIO_KREA2_TEXT_ENCODER'),('vae','STUDIO_KREA2_VAE')]:
+            if support.get(key):os.environ[env]=support[key]
+        os.environ['STUDIO_QWEN3VL_CACHE']=str(Path(cfg['runtime_root'])/'cache'/'krea-tokenizer')
+    if selected_arch=='qwen-image-2.1' and support.get('components_repo'):
+        os.environ['STUDIO_QWEN_IMAGE21_BASE']=support['components_repo']
     # Parent sets these BEFORE Python/Studio/torch imports.
     root = Path(cfg['runtime_root']).resolve()
     if Path(os.environ['STUDIO_DATA_ROOT']).resolve() != root / 'studio':
@@ -18,7 +36,9 @@ def run(request):
     isolated = replace(settings, data_root=root / 'studio', output_dir=root / 'outputs',
                        datasets_dir=root / 'datasets', loras_dir=root / 'loras',
                        models_root=Path(cfg['comfyui_models'] or cfg[kind + '_model']).resolve(),
-                       cosmos_windows_path=Path(os.environ['STUDIO_COSMOS_WINDOWS_PATH']))
+                       cosmos_windows_path=Path(os.environ['STUDIO_COSMOS_WINDOWS_PATH']),
+                       qwen_image21_python=cfg['studio_python'],
+                       qwen_image21_base=support.get('components_repo') or settings.qwen_image21_base)
     for directory in (isolated.data_root, isolated.output_dir, isolated.datasets_dir, isolated.loras_dir):
         directory.mkdir(parents=True, exist_ok=True)
     backend, mock, detail = load_backend(isolated)
@@ -45,6 +65,8 @@ def run(request):
         if not arch and Path(model).suffix.lower() == '.safetensors':
             arch = checkpoint_metadata(model).get('arch_hint')
         support = {**defaults.get(arch, {}), **cfg[kind + '_support_files']}
+        support['_stack_explicit_loras_only']=True
+        if arch and arch.startswith('krea2') and Path(model).is_file():support['dit']=model
         mode = cfg[kind + '_mode']
         if arch and arch.startswith('wan') and mode == 'resident':
             raise ValueError('Pinned Studio Wan adapter exposes its streamed path only; resident mode is unsupported')
@@ -55,6 +77,7 @@ def run(request):
                                   guidance=args['guidance'], seed=args['seed'],
                                   model=model, model_arch=arch or None,
                                   model_support_files=support,
+                                  loras=args.get('lora_files',[]),
                                   weight_stream=cfg[kind + '_mode'] == 'streaming',
                                   load_mode='streaming_lazy' if cfg[kind + '_mode'] == 'streaming' else 'resident_cached',
                                   modality='t2i' if kind == 'image' else 't2v',

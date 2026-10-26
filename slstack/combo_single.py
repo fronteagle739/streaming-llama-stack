@@ -8,10 +8,10 @@ sequence or a client disconnect is remembered as its evaluated ids (prefix_sourc
 'memory-cut-turn'), so the next turn appends only the template closing and the new
 messages instead of re-prefilling. A diverged prefix
 retires the producer and starts a fresh one on the whole prompt. Decode is the
-producer's in-process greedy decode with EOS (id 1) as the stop token; text is
+producer's in-process sampled decode with EOS (id 1) as the stop token; text is
 streamed from its per-token LLAMADECODE_STEP lines and the finished text is
 parsed with ds4-win's tool-call parser (ds4_tool_parse). /v1/quality-speed
-drives ComboProducer.quality.
+shares the token-boundary control publication with the WebUI.
 
 The GPU hold is taken when a producer launches and released when it retires
 (idle timeout, divergence, shutdown); the guardian's request window is active
@@ -146,6 +146,11 @@ class SingleEngine:
         self.producer = None;self.live = [];self.leases = None;self.lease_id = None
         self.tool_memory = {};self.lock = threading.Lock();self.stopping = threading.Event()
         self.quality_value = None;self.applied_quality = None;self.last_used = time.monotonic()
+        from .generation import Store
+        self.generation = Store(cfg)
+        from .local_cache import Cache
+        self.cache = Cache(self.cfg);self.pending_snapshot = None;self.restore_base = None;self.cache_error = None
+        self.images = None
         self.poison = None;self.decoding = False;self.cut_turn = None
         self.producer_factory = producer_factory or self._launch_producer
         self.lease_factory = lease_factory or self._lease
@@ -160,7 +165,34 @@ class SingleEngine:
 
     def _launch_producer(self, tokens):
         from .combo_producer import ComboProducer
-        return ComboProducer(self.cfg, secrets.token_hex(16), secrets.randbits(63) or 1, tokens, self.stopping.is_set)
+        session, epoch = secrets.token_hex(16), secrets.randbits(63) or 1
+        base = self.restore_base
+        if base:
+            reader, contract = base;contract = deepcopy(contract)
+            contract.update(request_id=session, owner_epoch=epoch);base = reader, contract
+        return ComboProducer(self.cfg, session, epoch, tokens, self.stopping.is_set, base=base)
+
+    def save_snapshot(self, reason):
+        from .local_cache import options
+        _, prefs = options(self.cfg)
+        if not prefs['cache_media' if reason == 'media' else 'cache_conversations'] or self.producer is None:return None
+        if not (getattr(self.producer.process, 'ready', None) or {}).get('local_snapshot_version'):return None
+        try:
+            saved = self.cache.save(self.producer, self.live, self.tool_memory, self.cut_turn)
+            self.cache_error = None;return saved
+        except (OSError, ValueError, MemoryError) as exc:
+            self.cache_error = str(exc)
+            print('DS4SINGLE checkpoint unavailable: '+str(exc), flush=True)
+            return None
+
+    def vision_admit(self):
+        """Lend the GPU to the isolated vision encoder under our existing guardian."""
+        if self.producer is not None:
+            saved=self.save_snapshot('media');self.retire('encode chat image')
+            if saved:self.pending_snapshot=saved
+        if self.leases is None:
+            stack=ExitStack();self.lease_id=stack.enter_context(self.lease_factory());self.leases=stack
+            self.lease_changed()
 
     def tokenize(self):
         if self.tokenizer is None:self.tokenizer = ds4_render.Tokenizer.from_gguf(self.cfg['model'])
@@ -204,6 +236,7 @@ class SingleEngine:
     def set_quality(self, value):
         vendor();from studio.quality_speed_contract import validate
         self.quality_value = validate(value)
+        self.generation.bias(self.quality_value)
 
     def quality_scalar(self, think):
         value = self.quality_value
@@ -220,9 +253,23 @@ class SingleEngine:
     def prepare(self, body, metrics):
         """Render, then make the producer's frontier equal the full prompt."""
         from .combo_session import render_body
+        from .vision import has_images, Images, render_tokens
+        blocks=[];media_identity=''
+        if has_images(body):
+            if not self.cfg.get('vision_bridge_version'):raise ValueError('This launcher needs the native vision-prefill build')
+            if self.images is None:self.images=Images(self.cfg)
+            body,blocks,media_identity=self.images.prepare(body,self.vision_admit)
+        if media_identity!=self.cfg.get('_vision_context_identity','') and self.producer is not None:
+            self.save_snapshot('conversation');self.retire('chat image identity changed')
+        self.cfg['_vision_context_identity']=media_identity
         tokenizer = self.tokenize()
         rendered = render_body(body)
-        text, canonical, request = ds4_render.render(rendered, tokenizer, tool_memory=self.tool_memory)
+        def render(memory):
+            text,canonical,request=ds4_render.render(rendered,tokenizer,tool_memory=memory)
+            if blocks:canonical,self.cfg['_vision_spans']=render_tokens(text,tokenizer,blocks)
+            else:self.cfg.pop('_vision_spans',None)
+            return text,canonical,request
+        text, canonical, request = render(self.tool_memory)
         if len(canonical) >= self.cfg['context'] - 1:raise ValueError('Prompt exceeds the admitted context')
         metrics.update(prompt_tokens=len(canonical))
         tokens, source = ds4_render.continue_live(self.live if self.producer else [], text, canonical, tokenizer)
@@ -235,11 +282,36 @@ class SingleEngine:
         metrics['prefix_source'] = source
         if self.producer is not None and tokens is None:
             metrics['fresh_reason'] = 'rendered history diverges from the live frontier'
+            self.save_snapshot('conversation')
             self.retire('prefix diverged');tokens = canonical
         started = time.monotonic();metrics["prefill_started"] = started
         if self.producer is None:
-            self.launch(tokens);metrics['producer_launch_prefill_seconds'] = time.monotonic() - started
-            metrics['reused_prefix_tokens'] = 0;metrics['new_tokens'] = len(tokens)
+            from .local_cache import options
+            root, prefs = options(self.cfg)
+            candidates = []
+            if self.pending_snapshot:
+                saved, self.pending_snapshot = self.pending_snapshot, None
+                candidates.append((saved, root / saved['payload']))
+            if prefs['cache_conversations']:candidates.extend(self.cache.candidates())
+            base = None
+            for saved, payload in candidates:
+                if not self.cache.compatible(saved):continue
+                candidate_text, candidate_canonical, candidate_request = render(saved['tool_memory'])
+                matched, candidate_source = ds4_render.continue_live(saved['tokens'], candidate_text, candidate_canonical, tokenizer)
+                cut = saved.get('cut_turn')
+                if matched is None and cut and cut['end'] == len(saved['tokens']):
+                    assistants = [m for m in candidate_request['messages'] if m['role'] == 'assistant']
+                    matched = ds4_render.continue_cut_turn(saved['tokens'], cut['start'], candidate_text, assistants[-1] if assistants else None,
+                        tokenizer, think=cut['think'], reasoning=cut['reasoning'], content=cut['content'])
+                if matched is None or len(matched) <= len(saved['tokens']):continue
+                reader = self.cache.verify(saved, payload)
+                base = reader, saved['contract'];tokens = matched
+                text, request = candidate_text, candidate_request;self.tool_memory = dict(saved['tool_memory'])
+                metrics.update(prefix_source='checkpoint', restored_yoco_keep=saved['contract']['local_state']['yoco_keep'])
+                break
+            reused = base[1]['position'] if base else 0
+            self.launch(tokens, base=base);metrics['producer_launch_prefill_seconds'] = time.monotonic() - started
+            metrics['reused_prefix_tokens'] = reused;metrics['new_tokens'] = len(tokens)-reused
         else:
             append = tokens[len(self.live):];metrics['reused_prefix_tokens'] = len(self.live);metrics['new_tokens'] = len(append)
             # LLAMADECODE single sweep: negotiated one-op maximum (49152 from old producers), and a
@@ -259,13 +331,14 @@ class SingleEngine:
         self._check_frontier()
         return text, request
 
-    def launch(self, tokens):
+    def launch(self, tokens, *, base=None):
         """Take the GPU hold and start a producer whose frontier is exactly tokens."""
         if self.leases is None:
             stack = ExitStack();self.lease_id = stack.enter_context(self.lease_factory());self.leases = stack
             self.lease_changed()   # the guardian's window must name the new lease before it next samples the holds
         self.live = []
-        try:self.producer = self.producer_factory(tokens)
+        self.restore_base = base
+        try:self.producer = self.producer_factory(tokens[base[1]['position']:] if base else tokens)
         except BaseException as exc:
             self.producer = None
             if hasattr(exc, 'owned_cleanup'):
@@ -273,22 +346,30 @@ class SingleEngine:
                 if not certified(exc.owned_cleanup):self.poison = 'Unconfirmed GPU release: ' + repr(exc);raise
             self.leases.close();self.leases = self.lease_id = None
             raise
+        finally:self.restore_base = None
         self.live = list(tokens)
 
     # --- GPU release for a media job (stack Engines.media) ----------------
     def release(self):
-        """Gracefully retire the producer and give back the GPU hold, keeping the
-        conversation's token ids. There is no producer state export: restore()
-        prefills those tokens again on a fresh producer."""
+        """Checkpoint KV plus YOCO state when enabled, then release GPU ownership."""
         saved = dict(tokens=list(self.live), tool_memory=dict(self.tool_memory))
+        snapshot = self.save_snapshot('media')
+        if snapshot:saved['snapshot'] = snapshot
         if self.producer is not None or self.leases is not None:self.retire('media job')
         self.saved = saved if saved['tokens'] else None
-        return dict(released=True, saved_tokens=len(saved['tokens']))
+        reply = dict(released=True, saved_tokens=len(saved['tokens']))
+        if snapshot:reply.update(kv_saved=True, yoco_keep=snapshot['contract']['local_state']['yoco_keep'], bytes=snapshot['bytes'])
+        if self.cache_error:reply['cache_error'] = self.cache_error
+        return reply
 
     def restore(self):
-        """Relaunch the producer on the saved conversation (a full re-prefill)."""
+        """Arm an exact checkpoint for the next appended tool result/request."""
         saved, self.saved = getattr(self, 'saved', None), None
         if not saved or self.producer is not None:return dict(restored_tokens=0, prefill_seconds=0.0)
+        if saved.get('snapshot'):
+            self.pending_snapshot = saved['snapshot'];self.last_used = time.monotonic()
+            return dict(restored_tokens=0, checkpoint_tokens=len(saved['tokens']), deferred=True,
+                        yoco_keep=saved['snapshot']['contract']['local_state']['yoco_keep'], prefill_seconds=0.0)
         started = time.monotonic()
         self.launch(saved['tokens']);self.tool_memory = saved['tool_memory'];self._check_frontier()
         self.last_used = time.monotonic()
@@ -350,7 +431,18 @@ class SingleEngine:
         text, request = self.prepare(body, metrics)
         if ready:ready()
         think = request['think_mode'] != ds4_render.THINK_NONE
-        metrics['quality_reply'] = self.apply_quality(think)
+        if hasattr(self.producer, 'generation'):
+            from .generation import vocabulary, SAMPLERS, number
+            overrides = dict(request.get('sampling') or {})
+            seed = overrides.pop('seed', secrets.randbits(53))
+            if type(seed) is not int or not 0 <= seed < 2**53:raise ValueError('seed must be an integer in [0,2^53)')
+            for key, value in overrides.items():
+                lo, hi = SAMPLERS[key];overrides[key] = number(value, lo, hi, key == 'top_k')
+            tok = self.tokenize()
+            metrics['generation_reply'] = self.producer.generation(dict(control_file=str(self.generation.path),
+                vocabulary_file=vocabulary(tok, self.producer.directory), think_open=tok.think_start,
+                think_close=tok.think_end, dsml=tok.dsml, reasoning=think, seed=seed, overrides=overrides))
+        else:metrics['quality_reply'] = self.apply_quality(think)
         max_tokens = request['max_tokens'] if request['max_tokens'] else int(self.cfg.get('single_engine_default_max_tokens', 32768))
         max_tokens = min(max_tokens, self.cfg['context'] - len(self.live) - 1)
         splitter = Splitter(think);decoder = codecs.getincrementaldecoder('utf-8')('replace')
@@ -402,12 +494,14 @@ class SingleEngine:
     def idle_check(self):
         if self.producer is None or not self.lock.acquire(blocking=False):return
         try:
-            if self.producer is not None and time.monotonic() - self.last_used >= self.idle_seconds:self.retire('idle')
+            if self.producer is not None and time.monotonic() - self.last_used >= self.idle_seconds:
+                self.save_snapshot('conversation');self.retire('idle')
         finally:self.lock.release()
 
     def close(self):
         with self.lock:
             try:
+                if self.producer is not None:self.save_snapshot('conversation')
                 if self.producer is not None or self.leases is not None:self.retire('shutdown')
             finally:self.stopping.set()
 
@@ -472,18 +566,17 @@ class SingleProxy:
         engine = self.engine;deferred = False
         if args is not None:
             engine.set_quality(setting_arguments(args, engine.quality_value if engine.quality_value is not None else 0.0))
-            # A running decode owns the session pipe: the value applies from the next decode.
-            if engine.producer is not None and not engine.decoding and engine.lock.acquire(blocking=False):
-                try:engine.apply_quality(False)
-                finally:engine.lock.release()
-            else:deferred = True
-        value = engine.quality_value
+            # The atomically published configuration is read inside the native
+            # token loop. Never wait on its occupied session pipe or decode lock.
+        live = engine.generation.state();profile = live['settings'];observed = live['applied'] or {}
+        value = {p:v['bias'] for p,v in profile['phases'].items()} if profile['per_phase'] else profile['value']
         phases = deepcopy(value) if isinstance(value, dict) else None
         return dict(supported=True, engine='combo-producer', value=phases['answer'] if phases else (value if value is not None else 0.0),
-                    phases=phases, per_phase=phases is not None, applied_value=engine.applied_quality,
-                    requested_value=value, deferred=deferred, applied=not deferred and engine.applied_quality is not None,
+                    phases=phases, per_phase=phases is not None, applied_value=observed.get('bias'),
+                    requested_value=value, deferred=engine.producer is None, applied=observed.get('revision')==profile['revision'],
                     decoder_running=engine.decoding, named_points=NAMED,
-                    scope='resident producer; a running decode takes it from its next decode call')
+                    phases_supported=True, phase=observed.get('phase'), revision=profile['revision'],
+                    scope='session; applies at the next native token boundary')
 
 
 def _chunk(cid, model, created, delta, finish=None):

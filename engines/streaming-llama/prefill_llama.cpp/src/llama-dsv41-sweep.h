@@ -1,4 +1,5 @@
 #pragma once
+#include "llama-dsv41-vision.h"
 
 #include "llama-dsv41-yoco.h"
 #include "llama-dsv41-carry.h"
@@ -21,9 +22,11 @@ public:
     struct config {
         uint32_t context=0;
         uint32_t yoco_keep=0;
+        uint32_t yoco_remote_state_version=0; // explicit peer negotiation, not exact prefill provenance
         uint32_t yoco_logical_begin=0,yoco_logical_end=0;
         llama_dsv41_yoco::operation operation=llama_dsv41_yoco::operation::prefill;
         bool images=false;
+        std::vector<llama_dsv41_image_span> image_spans;
         uint64_t admitted_cache_bytes=0,admitted_graph_bytes=0;
         // Total job ceilings, including the provider's separate actual budget.
         uint64_t admitted_device_bytes=0,admitted_host_bytes=0;
@@ -71,6 +74,9 @@ public:
     llama_dsv41_sweep&operator=(const llama_dsv41_sweep&)=delete;
 
     struct native_base {
+        bool local_snapshot=false;
+        uint32_t yoco_keep=0;
+        std::string cache_precision;
         llama_dsv41::wire_frontier frontier;
         std::vector<int32_t> tokens;
         std::vector<float> logits;

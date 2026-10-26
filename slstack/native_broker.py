@@ -115,6 +115,14 @@ class OwnedProducer:
                 raise ValueError('Initial native token identity differs')
             settings = profile(request['tier'], request.get('techniques'))
             args = dict(settings['arguments'])
+            keep=cfg.get('yoco_keep',0)
+            require(type(keep) is int and keep in (0,140), 'Unsupported paired YOCO window')
+            require(request.get('yoco_keep',0)==keep and request.get('yoco_state_version',0)==(1 if keep else 0),
+                    'Peer YOCO provenance differs from the paired preset')
+            if keep:
+                require(args['--capture-dspark']=='1' and (args['--fixed-resident-plan']=='1' or args['--pair-ffn-tiles']=='1'),
+                        'YOCO transfer requires a fixed mode3 producer')
+                args.update({'--yoco-keep':str(keep),'--yoco-remote-state-version':'1'})
             from .combo_ram import runtime_min_free_gib
             runtime_floor = runtime_min_free_gib(cfg)
             host_bytes = min(8 << 30, int(cfg['host_budget_gib'] * (1 << 30)))
@@ -151,6 +159,8 @@ class OwnedProducer:
                                      idle_seconds=cfg['lease_minutes'] * 60, native=native,
                                      cancelled=cancelled, after_resume=protect)
             cp = self.producer.ready['checkpoint']
+            require(self.producer.ready.get('yoco_keep',0)==keep and self.producer.ready.get('yoco_state_version',0)==(1 if keep else 0),
+                    'Producer did not negotiate the requested YOCO state version')
             require(cp['context'] == CONTEXT and cp['position'] == len(request['tokens']) // 4
                     and cp['tokens_sha256'] == request['tokens_sha256'], 'Initial producer checkpoint differs')
             self.producer.ready['profile'] = settings

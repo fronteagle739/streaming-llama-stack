@@ -48,6 +48,9 @@ class Stack:
         from .models import Models
         self.models = getattr(self.engines, 'models', None) or Models(cfg)
         self.tools = Tools(cfg, self.engines)
+        self.preferences = self.tools.preferences
+        from .generation import Store
+        self.generation = Store(cfg)
 
     def prepare_chat(self, body, *, stream=False):
         if not isinstance(body.get('messages'), list) or not body['messages']:
@@ -74,7 +77,10 @@ class Stack:
                            'display': 'The client displays this media inline. Reply with a brief confirmation.'}
         except (ValueError, RuntimeError, OSError) as exc:
             outcome = {'error': str(exc)}
-        return {'role': 'tool', 'tool_call_id': call['id'], 'content': json.dumps(outcome)}
+        content=json.dumps(outcome)
+        if call['function']['name']=='generate_image' and self.cfg.get('vision_bridge_version')==1 and self.cfg.get('vision_encoder') and outcome.get('data'):
+            content=[{'type':'text','text':content},*[{'type':'image_url','image_url':{'url':item['url']}} for item in outcome['data']]]
+        return {'role': 'tool', 'tool_call_id': call['id'], 'content': content}
 
     def chat(self, body):
         body = self.prepare_chat(body)
@@ -248,6 +254,14 @@ def handler(stack):
                 return self.send(200, stack.engines.catalog() if hasattr(stack.engines, 'catalog') else stack.models.catalog())
             if route == '/slstack/status':
                 return self.send(200, {'events': getattr(stack.engines, 'events', []), 'dual_resident_active': False})
+            if route == '/slstack/generation':
+                return self.send(200, dict(stack.generation.state(), supported=not bool(stack.cfg.get('mac'))))
+            if route == '/slstack/settings':
+                return self.send(200,stack.preferences.state())
+            if route == '/slstack/browse':
+                from .preferences import browse
+                try:return self.send(200,browse(parse_qs(urlsplit(self.path).query).get('path',[''])[0]))
+                except (OSError,ValueError) as exc:return self.send(400,{'error':{'message':str(exc)}})
             if route == '/props':
                 command = stack.cfg['ds4_command']
                 if stack.cfg.get('mac'):
@@ -266,11 +280,16 @@ def handler(stack):
                 return self.send(200, {'role': 'router' if len(stack.models.rows) > 1 and selected is None else 'model',
                                       'max_instances': 1, 'model_alias': selected or stack.models.default, 'model_path': '',
                                       'default_generation_settings': {'n_ctx': n_ctx, 'params': {}},
-                                      'total_slots': 1, 'chat_template': '', 'modalities': {'vision': False, 'audio': False}})
+                                      'total_slots': 1, 'chat_template': '', 'modalities': {'vision': stack.cfg.get('vision_bridge_version')==1 and bool(stack.cfg.get('vision_encoder')), 'audio': False}})
             if route == '/mcp':
                 return self.send(405, {'error': {'message': 'Stateless MCP endpoint; POST JSON-RPC'}})
             if route == '/slstack-media.js' and stack.cfg['webui']:
                 return self.send(200, (ROOT / 'slstack' / 'media.js').read_bytes(), 'text/javascript; charset=utf-8')
+            if route == '/slstack-generation.js' and stack.cfg['webui']:
+                return self.send(200, (ROOT / 'slstack' / 'generation.js').read_bytes(), 'text/javascript; charset=utf-8',
+                                 {'Cache-Control': 'no-store'})
+            if route == '/slstack-settings.js' and stack.cfg['webui']:
+                return self.send(200,(ROOT/'slstack'/'settings.js').read_bytes(),'text/javascript; charset=utf-8',{'Cache-Control':'no-store'})
             if route.startswith('/outputs/'):
                 root = Path(stack.cfg['runtime_root']).resolve() / 'outputs'
                 target = (root / route.removeprefix('/outputs/')).resolve()
@@ -286,7 +305,7 @@ def handler(stack):
                     return self.send(404, {'error': {'message': 'Artifact not found'}})
             if route == '/':
                 html = gzip.decompress(target.read_bytes()) if target.suffix == '.gz' else target.read_bytes()
-                html = html.replace(b'</body>', b'<script defer src="/slstack-media.js"></script></body>')
+                html = html.replace(b'</body>', b'<script defer src="/slstack-media.js"></script><script defer src="/slstack-generation.js"></script><script defer src="/slstack-settings.js"></script></body>')
                 return self.send(200, html, 'text/html; charset=utf-8')
             mime = mimetypes.guess_type(str(target))[0] or 'application/octet-stream'
             return self.send(200, target.read_bytes(), mime)
@@ -300,6 +319,12 @@ def handler(stack):
                 if not isinstance(body, dict):
                     raise ValueError('JSON body must be an object')
                 route = urlsplit(self.path).path
+                if route == '/slstack/settings':
+                    return self.send(200,stack.preferences.update(body))
+                if route == '/slstack/generation':
+                    if stack.cfg.get('mac'):raise ValueError('This decoder has no live generation controls')
+                    return self.send(200, dict(settings=stack.generation.update(body), supported=True,
+                        scope='session', applies='next token boundary'))
                 if route == '/v1/stack/shutdown':
                     # Loopback-only router; the launcher asks for a graceful stop before any forced one.
                     threading.Thread(target=server_ref[0].shutdown, daemon=True).start()

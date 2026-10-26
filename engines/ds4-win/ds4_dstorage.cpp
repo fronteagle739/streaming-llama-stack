@@ -93,6 +93,7 @@ typedef HRESULT(WINAPI *PFN_DStorageSetConfiguration1)(
     DSTORAGE_CONFIGURATION1 const *configuration);
 
 HMODULE                g_dll            = NULL;
+HMODULE                g_core_dll       = NULL; /* retained with the transport */
 IDStorageFactory      *g_factory        = NULL;
 IDStorageFile         *g_file           = NULL;
 IDStorageQueue1       *g_queue          = NULL;   /* Queue1: EnqueueSetEvent lives here */
@@ -487,9 +488,13 @@ extern "C" int ds4_ds_init_from_fd(int fd) {
     if (!latency_controls_from_env()) return 0;
 
     if (!g_dll) {
-        /* App-local load: dstorage.dll sits beside the exe and pulls dstoragecore.dll from there. */
+        /* Module-local load also supports the isolated ds4-decode vision DLL.
+         * Never search PATH or change another process's loader directory. */
         wchar_t exe[MAX_PATH];
-        DWORD n = GetModuleFileNameW(NULL, exe, MAX_PATH);
+        HMODULE transport_module=NULL;
+        if(!GetModuleHandleExW(GET_MODULE_HANDLE_EX_FLAG_FROM_ADDRESS|GET_MODULE_HANDLE_EX_FLAG_UNCHANGED_REFCOUNT,
+                reinterpret_cast<LPCWSTR>(&ds4_ds_init_from_fd),&transport_module))return 0;
+        DWORD n = GetModuleFileNameW(transport_module, exe, MAX_PATH);
         if (n == 0 || n >= MAX_PATH) {
             fprintf(stderr, "ds4: DirectStorage init: GetModuleFileNameW failed (%lu)\n",
                     (unsigned long)GetLastError());
@@ -497,8 +502,16 @@ extern "C" int ds4_ds_init_from_fd(int fd) {
         }
         wchar_t *slash = wcsrchr(exe, L'\\');
         if (slash) *(slash + 1) = L'\0';
+        /* dstorage.dll loads its core dynamically. In a Python host, the
+         * executable directory differs from this DLL's directory. Resolve
+         * both from this module so the factory cannot silently become the
+         * E_NOTIMPL stub after failing to find its adjacent core. */
+        const DWORD loader_flags=LOAD_LIBRARY_SEARCH_DLL_LOAD_DIR|LOAD_LIBRARY_SEARCH_DEFAULT_DIRS;
+        std::wstring core = std::wstring(exe) + L"dstoragecore.dll";
+        if(!g_core_dll)g_core_dll=LoadLibraryExW(core.c_str(),NULL,loader_flags);
+        if(!g_core_dll){fprintf(stderr,"ds4: DirectStorage init: module-local core load failed (%lu)\n",GetLastError());return 0;}
         std::wstring dll = std::wstring(exe) + L"dstorage.dll";
-        g_dll = LoadLibraryW(dll.c_str());
+        g_dll = LoadLibraryExW(dll.c_str(),NULL,loader_flags);
         if (!g_dll) {
             fprintf(stderr,
                     "ds4: DirectStorage init: cannot load dstorage.dll from the executable "

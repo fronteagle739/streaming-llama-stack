@@ -22,6 +22,8 @@ static int ds4_ns_setup(ds4_engine*engine,const ds4_engine_options*opt,int conte
         return ds4_nf_error(err,cap,"missing pinned native session configuration");
     ds4_ns_config*c=calloc(1,sizeof(*c));if(!c)return ds4_nf_error(err,cap,"session configuration allocation failed");
     c->http.dirfd=-1;uint32_t port;
+    const char*yoco=ds4_nf_env("DS4_NATIVE_SESSION_YOCO_KEEP");
+    if(yoco&&strcmp(yoco,"0")){if(strcmp(yoco,"140"))goto bad;c->yoco_keep=140;}
     if(!ds4_nf_pair_token(token,c->http.token)||!ds4_nf_env_uint("DS4_NATIVE_SESSION_PORT",&port,1,65535)||
        !ds4_nf_env_uint("DS4_NATIVE_SESSION_DEADLINE_SECONDS",&c->http.deadline_seconds,60,7200)||
        inet_pton(AF_INET,host,&c->http.broker.sin_addr)!=1||!ds4_engine_native_frontier_identity(engine,&c->http.model))goto bad;

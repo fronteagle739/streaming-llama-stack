@@ -496,8 +496,8 @@ def _comfy_models_root() -> Optional[Path]:
     env = os.environ.get('STUDIO_COMFYUI_PATH') or os.environ.get('COMFYUI_PATH')
     if env:
         p = Path(env)
-        candidates.append(p if p.name.lower() == 'models' else p / 'models')
-    candidates += [Path(''), Path(''), Path('')]
+        candidates.append(p if p.name.lower() == 'models' or (p/'diffusion_models').is_dir() or (p/'checkpoints').is_dir() else p / 'models')
+    for p in candidates:
 ```
 
 ### COSMOS_DIFFUSION_FORCING
@@ -756,9 +756,9 @@ Scope: mlx-serve. Class: advanced.
 
 CUDA module loading policy; backend admission accounts for the selected policy.
 
-Scope: rtx-llama. Class: advanced.
+Scope: rtx-llama, ds4-win. Class: advanced.
 
-Source: `engines/streaming-llama/prefill_llama.cpp/tools/dsv41-prefill/main.cpp:289`. Unset read: Wrapper/conditional default: see the literal call and consumer below.
+Source: `engines/streaming-llama/prefill_llama.cpp/tools/dsv41-prefill/main.cpp:291`. Unset read: Wrapper/conditional default: see the literal call and consumer below.
 
 ```text
     // Forced EAGER was measured slower (43K ABAB, 2026-10-25: L0 first-tile stall +26.8/+7.8 s)
@@ -1196,7 +1196,7 @@ DS4PERF_DIAGNOSTIC_LAYERS: advanced engine setting; built-in default retained
 
 Scope: rtx-llama. Class: advanced.
 
-Source: `engines/streaming-llama/prefill_llama.cpp/src/llama-dsv41-executor.cpp:1263`. Unset read: NULL from getenv; the literal consumer below supplies any fallback.
+Source: `engines/streaming-llama/prefill_llama.cpp/src/llama-dsv41-executor.cpp:1266`. Unset read: NULL from getenv; the literal consumer below supplies any fallback.
 
 ```text
         }
@@ -1208,7 +1208,7 @@ Source: `engines/streaming-llama/prefill_llama.cpp/src/llama-dsv41-executor.cpp:
         const auto buft=ggml_backend_get_default_buffer_type(backend);
 ```
 
-Source: `engines/streaming-llama/prefill_llama.cpp/src/llama-dsv41-executor.cpp:1301`. Unset read: NULL from getenv; the literal consumer below supplies any fallback.
+Source: `engines/streaming-llama/prefill_llama.cpp/src/llama-dsv41-executor.cpp:1304`. Unset read: NULL from getenv; the literal consumer below supplies any fallback.
 
 ```text
             llama_dsv41_layer_log("DS4PERF_BF16_INPLACE_LAYOUT layer=%u start=%u count=%u tagged=%llu actual_aliases=%llu alias_bytes=%llu original_lifetime_checks=1\n",in.layer,in.start,in.count,(unsigned long long)tagged,(unsigned long long)aliases,(unsigned long long)bytes);
@@ -1220,7 +1220,7 @@ Source: `engines/streaming-llama/prefill_llama.cpp/src/llama-dsv41-executor.cpp:
         require(boundary.bytes()<=actual,"Boundary outputs escaped actual graph admission");
 ```
 
-Source: `engines/streaming-llama/prefill_llama.cpp/tools/dsv41-prefill/main.cpp:725`. Unset read: NULL from getenv; the literal consumer below supplies any fallback.
+Source: `engines/streaming-llama/prefill_llama.cpp/tools/dsv41-prefill/main.cpp:736`. Unset read: NULL from getenv; the literal consumer below supplies any fallback.
 
 ```text
         report["resident_hidden_storage"]=options.resident_bf16?"BF16 after validated existing BF16 boundary; layer0 input unchanged F32":"F32";
@@ -1238,7 +1238,7 @@ DS4PERF_EXECUTOR_WALL_PROBE: advanced engine setting; built-in default retained
 
 Scope: rtx-llama. Class: advanced.
 
-Source: `engines/streaming-llama/prefill_llama.cpp/src/llama-dsv41-executor.cpp:863`. Unset read: NULL from getenv; the literal consumer below supplies any fallback.
+Source: `engines/streaming-llama/prefill_llama.cpp/src/llama-dsv41-executor.cpp:866`. Unset read: NULL from getenv; the literal consumer below supplies any fallback.
 
 ```text
                 llama_dsv41_layer_log("DS4PERF_EXECUTOR_WALL_PROBE layer=%u start=%u count=%u wall_ms=%.6f pre_return_ms=%.6f teardown_ms=%.6f prepare_flush_ms=%.6f post_checks_ms=%.6f boundary_ms=%.6f unexplained_ms=%.6f\n",in.layer,in.start,in.count,wall,pre_return_ms,wall-pre_return_ms,prepare_flush_ms,post_checks_ms,boundary_ms,pre_return_ms-phases-prepare_flush_ms-post_checks_ms-boundary_ms);}}
@@ -1298,7 +1298,7 @@ DS4PERF_STDERR_BUFFER_BYTES: advanced engine setting; built-in default retained
 
 Scope: rtx-llama. Class: advanced.
 
-Source: `engines/streaming-llama/prefill_llama.cpp/tools/dsv41-prefill/main.cpp:293`. Unset read: NULL from getenv; the literal consumer below supplies any fallback.
+Source: `engines/streaming-llama/prefill_llama.cpp/tools/dsv41-prefill/main.cpp:295`. Unset read: NULL from getenv; the literal consumer below supplies any fallback.
 
 ```text
     try{
@@ -3954,7 +3954,7 @@ DS4_CUDA_DS_SUBMIT_TRACE: advanced engine setting; built-in default retained
 
 Scope: ds4-win. Class: advanced.
 
-Source: `engines/ds4-win/ds4_dstorage.cpp:1520`. Unset read: NULL from getenv; the literal consumer below supplies any fallback.
+Source: `engines/ds4-win/ds4_dstorage.cpp:1533`. Unset read: NULL from getenv; the literal consumer below supplies any fallback.
 
 ```text
  * Does not label asynchronous submit-to-completion time as CPU work. */
@@ -19038,7 +19038,7 @@ DS4_DS_GPU_QUEUES: advanced engine setting; built-in default retained
 
 Scope: ds4-win. Class: advanced.
 
-Source: `engines/ds4-win/ds4_dstorage.cpp:380`. Unset read: NULL from getenv; the literal consumer below supplies any fallback.
+Source: `engines/ds4-win/ds4_dstorage.cpp:381`. Unset read: NULL from getenv; the literal consumer below supplies any fallback.
 
 ```text
 uint32_t gpu_queue_count_from_env(void) {
@@ -19056,7 +19056,7 @@ DS4_DS_GPU_SELFTEST: advanced engine setting; built-in default retained
 
 Scope: ds4-win. Class: advanced.
 
-Source: `engines/ds4-win/ds4_dstorage.cpp:2019`. Unset read: NULL from getenv; the literal consumer below supplies any fallback.
+Source: `engines/ds4-win/ds4_dstorage.cpp:2032`. Unset read: NULL from getenv; the literal consumer below supplies any fallback.
 
 ```text
     int match_gpu = 1,gpu_rate_bad=0;
@@ -19074,7 +19074,7 @@ Native engine setting; retains its built-in default. The exact source consumer b
 
 Scope: ds4-win. Class: advanced.
 
-Source: `engines/ds4-win/ds4_dstorage.cpp:1120`. Unset read: NULL from getenv; the literal consumer below supplies any fallback.
+Source: `engines/ds4-win/ds4_dstorage.cpp:1133`. Unset read: NULL from getenv; the literal consumer below supplies any fallback.
 
 ```text
 static uint32_t g_layer_epoch = 0;
@@ -19092,7 +19092,7 @@ DS4_DS_PIPELINE_DEPTH: advanced engine setting; built-in default retained
 
 Scope: ds4-win. Class: advanced.
 
-Source: `engines/ds4-win/ds4_dstorage.cpp:1161`. Unset read: NULL from getenv; the literal consumer below supplies any fallback.
+Source: `engines/ds4-win/ds4_dstorage.cpp:1174`. Unset read: NULL from getenv; the literal consumer below supplies any fallback.
 
 ```text
     if (cached == 0) {
@@ -19218,7 +19218,7 @@ DS4_DS_STAGING_MB: advanced engine setting; built-in default retained
 
 Scope: ds4-win. Class: advanced.
 
-Source: `engines/ds4-win/ds4_dstorage.cpp:171`. Unset read: NULL from getenv; the literal consumer below supplies any fallback.
+Source: `engines/ds4-win/ds4_dstorage.cpp:172`. Unset read: NULL from getenv; the literal consumer below supplies any fallback.
 
 ```text
 uint32_t staging_mb_from_env(void) {
@@ -19236,7 +19236,7 @@ DS4_DS_SUBMIT_THREADS: advanced engine setting; built-in default retained
 
 Scope: ds4-win. Class: advanced.
 
-Source: `engines/ds4-win/ds4_dstorage.cpp:538`. Unset read: NULL from getenv; the literal consumer below supplies any fallback.
+Source: `engines/ds4-win/ds4_dstorage.cpp:551`. Unset read: NULL from getenv; the literal consumer below supplies any fallback.
 
 ```text
         unsigned long threads = 0;            /* documented default: runtime heuristic */
@@ -37506,10 +37506,10 @@ DS4_NATIVE_SESSION_DEADLINE_SECONDS: qualified Mac native preset setting; overri
 
 Scope: mac-ds4. Class: preset.
 
-Source: `engines/ds4-mac/ds4_native_session_setup.inc:26`. Unset read: Wrapper/conditional default: see the literal call and consumer below.
+Source: `engines/ds4-mac/ds4_native_session_setup.inc:28`. Unset read: Wrapper/conditional default: see the literal call and consumer below.
 
 ```text
-    c->http.dirfd=-1;uint32_t port;
+    if(yoco&&strcmp(yoco,"0")){if(strcmp(yoco,"140"))goto bad;c->yoco_keep=140;}
     if(!ds4_nf_pair_token(token,c->http.token)||!ds4_nf_env_uint("DS4_NATIVE_SESSION_PORT",&port,1,65535)||
        !ds4_nf_env_uint("DS4_NATIVE_SESSION_DEADLINE_SECONDS",&c->http.deadline_seconds,60,7200)||
        inet_pton(AF_INET,host,&c->http.broker.sin_addr)!=1||!ds4_engine_native_frontier_identity(engine,&c->http.model))goto bad;
@@ -37596,11 +37596,11 @@ DS4_NATIVE_SESSION_PORT: qualified Mac native preset setting; override explicitl
 
 Scope: mac-ds4. Class: preset.
 
-Source: `engines/ds4-mac/ds4_native_session_setup.inc:25`. Unset read: Wrapper/conditional default: see the literal call and consumer below.
+Source: `engines/ds4-mac/ds4_native_session_setup.inc:27`. Unset read: Wrapper/conditional default: see the literal call and consumer below.
 
 ```text
-    ds4_ns_config*c=calloc(1,sizeof(*c));if(!c)return ds4_nf_error(err,cap,"session configuration allocation failed");
-    c->http.dirfd=-1;uint32_t port;
+    const char*yoco=ds4_nf_env("DS4_NATIVE_SESSION_YOCO_KEEP");
+    if(yoco&&strcmp(yoco,"0")){if(strcmp(yoco,"140"))goto bad;c->yoco_keep=140;}
     if(!ds4_nf_pair_token(token,c->http.token)||!ds4_nf_env_uint("DS4_NATIVE_SESSION_PORT",&port,1,65535)||
        !ds4_nf_env_uint("DS4_NATIVE_SESSION_DEADLINE_SECONDS",&c->http.deadline_seconds,60,7200)||
        inet_pton(AF_INET,host,&c->http.broker.sin_addr)!=1||!ds4_engine_native_frontier_identity(engine,&c->http.model))goto bad;
@@ -44676,7 +44676,7 @@ capture::capture(uint32_t layer,uint32_t start,uint32_t count,const std::vector<
     p=std::make_unique<implementation>();
 ```
 
-Source: `engines/streaming-llama/prefill_llama.cpp/src/llama-dsv41-executor.cpp:869`. Unset read: NULL from getenv; the literal consumer below supplies any fallback.
+Source: `engines/streaming-llama/prefill_llama.cpp/src/llama-dsv41-executor.cpp:872`. Unset read: NULL from getenv; the literal consumer below supplies any fallback.
 
 ```text
         unsigned mul_f16_fused=0;
@@ -44700,10 +44700,10 @@ Source: `engines/streaming-llama/prefill_llama.cpp/src/llama-dsv41-layer.cpp:48`
     GGML_ASSERT(p.ratio!=0 || compressed_rows==0);
 ```
 
-Source: `engines/streaming-llama/prefill_llama.cpp/src/llama-dsv41-sweep.cpp:232`. Unset read: NULL from getenv; the literal consumer below supplies any fallback.
+Source: `engines/streaming-llama/prefill_llama.cpp/src/llama-dsv41-sweep.cpp:241`. Unset read: NULL from getenv; the literal consumer below supplies any fallback.
 
 ```text
-            require(!restored,"YOCO refuses RTX/Mac session restore; re-prefill locally");
+            require(!restored||restored->local_snapshot,"YOCO requires a local snapshot with explicit YOCO provenance");
             require(options.fixed&&options.carry.resident_ram&&options.carry.direct_ram_tiles&&options.admitted_hidden_bytes&&options.carry.export_hidden_after_head&&options.carry.max_tile_tokens>=140&&(!options.compute_step_tokens||options.compute_step_tokens>=140)&&!options.diagnostic_layers&&!options.diagnostic_carry&&
                 !std::getenv("DSV41_BOUNDARY_CAPTURE"),"YOCO requires the single-engine fixed RAM owner without full-row diagnostics");
             if(prefix){
@@ -44712,7 +44712,7 @@ Source: `engines/streaming-llama/prefill_llama.cpp/src/llama-dsv41-sweep.cpp:232
                 require(previous_lock.owns_lock(),"YOCO prefix is active");
 ```
 
-Source: `engines/streaming-llama/prefill_llama.cpp/src/llama-dsv41-sweep.cpp:262`. Unset read: NULL from getenv; the literal consumer below supplies any fallback.
+Source: `engines/streaming-llama/prefill_llama.cpp/src/llama-dsv41-sweep.cpp:272`. Unset read: NULL from getenv; the literal consumer below supplies any fallback.
 
 ```text
         require(!options.unaligned_append_step_tokens||(options.stateful_chunks&&options.fixed&&options.reuse_graph&&!options.reuse_layer_graph),"Unaligned append policy requires the existing stateful fixed owner");
@@ -44724,7 +44724,7 @@ Source: `engines/streaming-llama/prefill_llama.cpp/src/llama-dsv41-sweep.cpp:262
             "Direct pinned RAM requires native experts, admitted RAM bank and separate64MiB device ceiling");
 ```
 
-Source: `engines/streaming-llama/prefill_llama.cpp/src/llama-dsv41-sweep.cpp:263`. Unset read: NULL from getenv; the literal consumer below supplies any fallback.
+Source: `engines/streaming-llama/prefill_llama.cpp/src/llama-dsv41-sweep.cpp:273`. Unset read: NULL from getenv; the literal consumer below supplies any fallback.
 
 ```text
         require(!options.compute_step_tokens||(options.compute_step_tokens<=options.carry.max_tile_tokens&&(!options.pair_ffn||options.compute_step_tokens==options.carry.max_tile_tokens)),"Logical compute step exceeds its admitted tile or changes paired group alignment");
@@ -44736,7 +44736,7 @@ Source: `engines/streaming-llama/prefill_llama.cpp/src/llama-dsv41-sweep.cpp:263
         require(!options.admitted_prefetch_device_bytes||(options.admitted_pinned_device_bytes&&options.reuse_graph&&!options.reuse_layer_graph&&
 ```
 
-Source: `engines/streaming-llama/prefill_llama.cpp/tools/dsv41-prefill/main.cpp:390`. Unset read: NULL from getenv; the literal consumer below supplies any fallback.
+Source: `engines/streaming-llama/prefill_llama.cpp/tools/dsv41-prefill/main.cpp:392`. Unset read: NULL from getenv; the literal consumer below supplies any fallback.
 
 ```text
         expert.admitted_pool_bytes=expert_options?number("--expert-workspace-bytes"):0;
@@ -44748,7 +44748,7 @@ Source: `engines/streaming-llama/prefill_llama.cpp/tools/dsv41-prefill/main.cpp:
             using namespace llama_dsv41_native_columns_resource_proof;
 ```
 
-Source: `engines/streaming-llama/prefill_llama.cpp/tools/dsv41-prefill/main.cpp:503`. Unset read: NULL from getenv; the literal consumer below supplies any fallback.
+Source: `engines/streaming-llama/prefill_llama.cpp/tools/dsv41-prefill/main.cpp:505`. Unset read: NULL from getenv; the literal consumer below supplies any fallback.
 
 ```text
         if(fold_plan.tail){std::fprintf(stderr,"LLAMADECODE_PREFILL_FOLD_TAIL tokens=%zu primary_sweep_tokens=%u remainder=%u capacity=%u fold_cap=%u folded_last=%u sweep_tokens=%s\n",
@@ -44760,14 +44760,14 @@ Source: `engines/streaming-llama/prefill_llama.cpp/tools/dsv41-prefill/main.cpp:
         const bool live=args.count("--session-stdio")&&args.at("--session-stdio")=="1";
 ```
 
-Source: `engines/streaming-llama/prefill_llama.cpp/tools/dsv41-prefill/main.cpp:847`. Unset read: NULL from getenv; the literal consumer below supplies any fallback.
+Source: `engines/streaming-llama/prefill_llama.cpp/tools/dsv41-prefill/main.cpp:859`. Unset read: NULL from getenv; the literal consumer below supplies any fallback.
 
 ```text
         uint64_t warm_cublas=0;
         if(warm){
             require(resident_ram&&!options.diagnostic_layers&&!std::getenv("DSV41_BOUNDARY_CAPTURE"),"One-token warmup requires RAM carry and no boundary/incomplete diagnostics");
             auto warm_options=options;auto warm_weights=weights;
-            warm_options.yoco_keep=0;warm_options.yoco_logical_end=0;warm_options.carry.tokens=1;warm_options.pair_ffn=false;
+            warm_options.yoco_keep=0;warm_options.yoco_remote_state_version=0;warm_options.yoco_logical_end=0;warm_options.carry.tokens=1;warm_options.pair_ffn=false;
             warm_options.carry.max_tile_tokens=std::min(4096u,warm_options.carry.max_tile_tokens);
             warm_options.compute_step_tokens=std::min(warm_options.compute_step_tokens,warm_options.carry.max_tile_tokens);
 ```
@@ -45222,7 +45222,7 @@ Source: `engines/streaming-llama/prefill_llama.cpp/src/llama-context.cpp:25212`.
                         "off. Otherwise cudaStreamBeginCapture collides.\n",
 ```
 
-Source: `engines/streaming-llama/prefill_llama.cpp/src/llama-dsv41-executor.cpp:604`. Unset read: NULL from getenv; the literal consumer below supplies any fallback.
+Source: `engines/streaming-llama/prefill_llama.cpp/src/llama-dsv41-executor.cpp:607`. Unset read: NULL from getenv; the literal consumer below supplies any fallback.
 
 ```text
     swiglu_limit(swiglu_limit),expert_scale(expert_scale),sinkhorn_iters(sinkhorn_iters),admitted_tile_tokens(admitted_tile_tokens),resident_bf16(resident_bf16),export_hidden_after_head(export_hidden_after_head),async_inputs(async_inputs),resident_ids(resident_ids),resident_metadata(resident_metadata),defer_hidden_readback(defer_hidden_readback),merge_attention_selected_rows(merge_attention_selected_rows),hc_projection_f16_gemm(hc_projection_f16_gemm),dense_mxfp4(dense_mxfp4),pair_ffn(pair_ffn),fixed(fixed){
@@ -45234,7 +45234,7 @@ Source: `engines/streaming-llama/prefill_llama.cpp/src/llama-dsv41-executor.cpp:
     require(!export_hidden_after_head||defer_hidden_readback,"Post-head export requires full-device hidden retention");
 ```
 
-Source: `engines/streaming-llama/prefill_llama.cpp/src/llama-dsv41-executor.cpp:1180`. Unset read: NULL from getenv; the literal consumer below supplies any fallback.
+Source: `engines/streaming-llama/prefill_llama.cpp/src/llama-dsv41-executor.cpp:1183`. Unset read: NULL from getenv; the literal consumer below supplies any fallback.
 
 ```text
         if(workspace&&workspace->casts)graph=workspace->casts->prepare(ctx.get(),graph,in.layer,&backend_temporary);
@@ -45246,7 +45246,7 @@ Source: `engines/streaming-llama/prefill_llama.cpp/src/llama-dsv41-executor.cpp:
         }
 ```
 
-Source: `engines/streaming-llama/prefill_llama.cpp/src/llama-dsv41-executor.cpp:1185`. Unset read: NULL from getenv; the literal consumer below supplies any fallback.
+Source: `engines/streaming-llama/prefill_llama.cpp/src/llama-dsv41-executor.cpp:1188`. Unset read: NULL from getenv; the literal consumer below supplies any fallback.
 
 ```text
             else llama_dsv41_layer_log("DS4PERF_EXPERT_MXFP4_SMALL_BATCH layer=%u count=%u unchanged_original_weights=1 native_MMA_minimum_rows=5\n",in.layer,in.count);
@@ -45258,7 +45258,7 @@ Source: `engines/streaming-llama/prefill_llama.cpp/src/llama-dsv41-executor.cpp:
         }
 ```
 
-Source: `engines/streaming-llama/prefill_llama.cpp/tools/dsv41-prefill/main.cpp:722`. Unset read: NULL from getenv; the literal consumer below supplies any fallback.
+Source: `engines/streaming-llama/prefill_llama.cpp/tools/dsv41-prefill/main.cpp:733`. Unset read: NULL from getenv; the literal consumer below supplies any fallback.
 
 ```text
         require(!args.count("--resident-hidden-bf16")||args.at("--resident-hidden-bf16")=="0"||args.at("--resident-hidden-bf16")=="1","resident-hidden-bf16 requires0/1");
@@ -48633,7 +48633,7 @@ Producer live session: path of a file whose appearance cancels the current reque
 
 Scope: rtx-llama. Class: advanced.
 
-Source: `engines/streaming-llama/prefill_llama.cpp/tools/dsv41-prefill/main.cpp:75`. Unset read: Wrapper/conditional default: see the literal call and consumer below.
+Source: `engines/streaming-llama/prefill_llama.cpp/tools/dsv41-prefill/main.cpp:77`. Unset read: Wrapper/conditional default: see the literal call and consumer below.
 
 ```text
 // file; the engine then stops at its next stage boundary and tears down normally.
@@ -48741,7 +48741,7 @@ Producer decode: release prefill-only graph and hidden buffers before decode so 
 
 Scope: rtx-llama. Class: advanced.
 
-Source: `engines/streaming-llama/prefill_llama.cpp/src/llama-dsv41-sweep.cpp:191`. Unset read: NULL from getenv; the literal consumer below supplies any fallback.
+Source: `engines/streaming-llama/prefill_llama.cpp/src/llama-dsv41-sweep.cpp:194`. Unset read: NULL from getenv; the literal consumer below supplies any fallback.
 
 ```text
 // hidden bank; the prefill-sized reservations go back to the device (the
@@ -48793,7 +48793,7 @@ Source: `engines/ds4-win/ds4_cuda.cu:30558`. Unset read: NULL from getenv; the l
 
 Keep the decoder open across appended turns; 0 restores close/reopen.
 
-Scope: rtx-llama. Class: advanced.
+Scope: rtx-llama, ds4-win. Class: advanced.
 
 Source: `engines/streaming-llama/prefill_llama.cpp/tools/dsv41-prefill/live-session.inc:200`. Unset read: NULL from getenv; the literal consumer below supplies any fallback.
 
@@ -48879,11 +48879,23 @@ Source: `engines/streaming-llama/prefill_llama.cpp/tools/dsv41-prefill/live-sess
         }
 ```
 
+Source: `engines/streaming-llama/prefill_llama.cpp/tools/dsv41-prefill/live-session.inc:393`. Unset read: NULL from getenv; the literal consumer below supplies any fallback.
+
+```text
+            // token. No restarted warmup/ramp may defer a live slider update.
+            if(index==0||bias!=ds4x.quality){
+                const char*spread=std::getenv("LLAMADECODE_DS4_SPREAD");
+                require(ds4x.x_affinity(bias,0,0,spread,&ds4_external::residency_hook,&ds4x)==1,"Live bias refused");
+                ds4x.quality=bias;
+                std::fprintf(stderr,"LLAMADECODE_LIVE_BIAS value=%.6g position=%u\n",bias,current.frontier.position+uint32_t(index));std::fflush(stderr);
+            }
+```
+
 ### LLAMADECODE_DS_HEAP_RESIDENT
 
 DirectStorage heap residency control; preserve backend admission requirements.
 
-Scope: rtx-llama. Class: advanced.
+Scope: rtx-llama, ds4-win. Class: advanced.
 
 Source: `engines/streaming-llama/prefill_llama.cpp/src/llama-weight-fetcher.cpp:2617`. Unset read: NULL from getenv; the literal consumer below supplies any fallback.
 
@@ -48921,7 +48933,7 @@ Producer Engram row cache kept in host RAM across turns, in MiB; 0 disables it. 
 
 Scope: rtx-llama. Class: advanced.
 
-Source: `engines/streaming-llama/prefill_llama.cpp/src/llama-dsv41-sweep.cpp:413`. Unset read: NULL from getenv; the literal consumer below supplies any fallback.
+Source: `engines/streaming-llama/prefill_llama.cpp/src/llama-dsv41-sweep.cpp:423`. Unset read: NULL from getenv; the literal consumer below supplies any fallback.
 
 ```text
         const uint64_t row_cache_have=p->provider.engram_row_cache_bytes();uint64_t row_cache_new=0;
@@ -49093,7 +49105,7 @@ inline void llama_dsv41_layer_log(const char *format,...){
 
 Owner digest verification mode; full rehashes complete owner state.
 
-Scope: rtx-llama. Class: advanced.
+Scope: rtx-llama, ds4-win. Class: advanced.
 
 Source: `engines/streaming-llama/prefill_llama.cpp/src/llama-dsv41-owner-digest.h:50`. Unset read: NULL from getenv; the literal consumer below supplies any fallback.
 
@@ -49147,7 +49159,7 @@ inline void announce() {
 
 Optional native tile timing diagnostics.
 
-Scope: rtx-llama. Class: advanced.
+Scope: rtx-llama, ds4-win. Class: advanced.
 
 Source: `engines/streaming-llama/prefill_llama.cpp/src/llama-dsv41-executor.cpp:59`. Unset read: NULL from getenv; the literal consumer below supplies any fallback.
 
@@ -53325,7 +53337,7 @@ Source: `engines/streaming-llama/prefill_llama.cpp/ggml/src/ggml-cuda/dsv41-ds4-
     attention_tokentile_hmma_kernel<16u><<<dim3(tiles,4),512,tt_TokentileSmemBudget<kTTStageRows,16u>::total,stream>>>(
 ```
 
-Source: `engines/streaming-llama/prefill_llama.cpp/src/llama-dsv41-executor.cpp:1435`. Unset read: NULL from getenv; the literal consumer below supplies any fallback.
+Source: `engines/streaming-llama/prefill_llama.cpp/src/llama-dsv41-executor.cpp:1438`. Unset read: NULL from getenv; the literal consumer below supplies any fallback.
 
 ```text
         const auto stream_topk_before=expert.index_key_windows?ggml_backend_cuda_dsv41_stream_topk_queued():0;
@@ -53355,7 +53367,7 @@ Source: `engines/streaming-llama/prefill_llama.cpp/ggml/src/ggml-cuda/dsv4-act-q
                     (const float4*)src_d,(float4*)dst_d,vectors);
 ```
 
-Source: `engines/streaming-llama/prefill_llama.cpp/src/llama-dsv41-executor.cpp:1430`. Unset read: NULL from getenv; the literal consumer below supplies any fallback.
+Source: `engines/streaming-llama/prefill_llama.cpp/src/llama-dsv41-executor.cpp:1433`. Unset read: NULL from getenv; the literal consumer below supplies any fallback.
 
 ```text
         const auto cast_elements_before=cast_vector?ggml_backend_cuda_dsv41_cast_vector_elements():0;
@@ -53385,7 +53397,7 @@ Source: `engines/streaming-llama/prefill_llama.cpp/ggml/src/ggml-cuda/dsv41-cast
         const int64_t total=n0*n1*n2*n3;
 ```
 
-Source: `engines/streaming-llama/prefill_llama.cpp/src/llama-dsv41-executor.cpp:1426`. Unset read: NULL from getenv; the literal consumer below supplies any fallback.
+Source: `engines/streaming-llama/prefill_llama.cpp/src/llama-dsv41-executor.cpp:1429`. Unset read: NULL from getenv; the literal consumer below supplies any fallback.
 
 ```text
         const auto dense_bf16_store_before=dense_bf16_store?ggml_backend_cuda_dsv41_dense_bf16_store_queued():0;
@@ -53403,7 +53415,7 @@ LLAMA_DSV41_DENSE_BF16_STORE: advanced engine setting; built-in default retained
 
 Scope: rtx-llama. Class: advanced.
 
-Source: `engines/streaming-llama/prefill_llama.cpp/src/llama-dsv41-executor.cpp:865`. Unset read: NULL from getenv; the literal consumer below supplies any fallback.
+Source: `engines/streaming-llama/prefill_llama.cpp/src/llama-dsv41-executor.cpp:868`. Unset read: NULL from getenv; the literal consumer below supplies any fallback.
 
 ```text
         probe.enabled=std::getenv("DS4PERF_EXECUTOR_WALL_PROBE")&&std::string(std::getenv("DS4PERF_EXECUTOR_WALL_PROBE"))=="1";
@@ -53421,7 +53433,7 @@ Producer prefill: Engram table read start policy; built-in default retained.
 
 Scope: rtx-llama, rtx-producer. Class: advanced.
 
-Source: `engines/streaming-llama/prefill_llama.cpp/tools/dsv41-prefill/main.cpp:910`. Unset read: NULL from getenv; the literal consumer below supplies any fallback.
+Source: `engines/streaming-llama/prefill_llama.cpp/tools/dsv41-prefill/main.cpp:922`. Unset read: NULL from getenv; the literal consumer below supplies any fallback.
 
 ```text
         // load (7.9 s at 43K) left a 7.4 s join wait and prefill fell to 1,052 tok/s,
@@ -53439,13 +53451,13 @@ LLAMA_DSV41_ENGRAM_PROMPT_OVERLAP: qualified preset/runtime setting; override fo
 
 Scope: rtx-llama. Class: preset.
 
-Source: `engines/streaming-llama/prefill_llama.cpp/src/llama-dsv41-sweep.cpp:655`. Unset read: NULL from getenv; the literal consumer below supplies any fallback.
+Source: `engines/streaming-llama/prefill_llama.cpp/src/llama-dsv41-sweep.cpp:667`. Unset read: NULL from getenv; the literal consumer below supplies any fallback.
 
 ```text
         const auto schedule=llama_dsv41_plan_append(p->options.pair_ffn,p->options.carry.max_tile_tokens,p->options.compute_step_tokens,p->position_offset,p->options.unaligned_append_step_tokens);
         const uint32_t compute_step=schedule.step;
         const char*engram_overlap_env=std::getenv("LLAMA_DSV41_ENGRAM_PROMPT_OVERLAP");
-        const bool engram_overlap=engram_overlap_env&&std::strcmp(engram_overlap_env,"1")==0;
+        const bool engram_overlap=!p->options.images&&engram_overlap_env&&std::strcmp(engram_overlap_env,"1")==0;
         require(!engram_overlap||p->options.engram_tile_lookahead,"Engram prompt overlap requires the existing lookahead worker");
         auto prepare_engram=[&]{
             const auto started=std::chrono::steady_clock::now();std::string reason;
@@ -53487,7 +53499,7 @@ bool llama_dsv41_weight_provider::prepare_engram_prompt(const std::vector<int32_
     if(p->early&&p->early->tokens==tokens){
 ```
 
-Source: `engines/streaming-llama/prefill_llama.cpp/tools/dsv41-prefill/main.cpp:873`. Unset read: NULL from getenv; the literal consumer below supplies any fallback.
+Source: `engines/streaming-llama/prefill_llama.cpp/tools/dsv41-prefill/main.cpp:885`. Unset read: NULL from getenv; the literal consumer below supplies any fallback.
 
 ```text
             // DS4COMBO producer-warm: the prompt's tokens are known now, so its
@@ -53499,7 +53511,7 @@ Source: `engines/streaming-llama/prefill_llama.cpp/tools/dsv41-prefill/main.cpp:
                 std::vector<int32_t> tail;
 ```
 
-Source: `engines/streaming-llama/prefill_llama.cpp/tools/dsv41-prefill/main.cpp:911`. Unset read: NULL from getenv; the literal consumer below supplies any fallback.
+Source: `engines/streaming-llama/prefill_llama.cpp/tools/dsv41-prefill/main.cpp:923`. Unset read: NULL from getenv; the literal consumer below supplies any fallback.
 
 ```text
         // against 1,238 tok/s with the ordinary layer-0 overlapped load. Opt-in only.
@@ -53583,7 +53595,7 @@ bool index_f32_cublas_enabled(){
 bool query_source(uint32_t layer){return layer==2||layer==8||layer==14||layer==20||layer==24||layer==28||layer==32||layer==36;}
 ```
 
-Source: `engines/streaming-llama/prefill_llama.cpp/tools/dsv41-prefill/main.cpp:371`. Unset read: Wrapper/conditional default: see the literal call and consumer below.
+Source: `engines/streaming-llama/prefill_llama.cpp/tools/dsv41-prefill/main.cpp:373`. Unset read: Wrapper/conditional default: see the literal call and consumer below.
 
 ```text
             args.count("--index-cublas-device-bytes")&&integer(args.at("--index-cublas-device-bytes"))>=64ull*1024*1024),
@@ -53601,7 +53613,7 @@ LLAMA_DSV41_MUL_F16_STORE: qualified preset/runtime setting; override for a diff
 
 Scope: rtx-llama. Class: preset.
 
-Source: `engines/streaming-llama/prefill_llama.cpp/src/llama-dsv41-executor.cpp:866`. Unset read: NULL from getenv; the literal consumer below supplies any fallback.
+Source: `engines/streaming-llama/prefill_llama.cpp/src/llama-dsv41-executor.cpp:869`. Unset read: NULL from getenv; the literal consumer below supplies any fallback.
 
 ```text
         const bool rope_inplace=std::getenv("LLAMA_DSV41_ROPE_INPLACE")&&std::string(std::getenv("LLAMA_DSV41_ROPE_INPLACE"))=="1";
@@ -53673,7 +53685,7 @@ LLAMA_DSV41_ROPE_INPLACE: qualified preset/runtime setting; override for a diffe
 
 Scope: rtx-llama. Class: preset.
 
-Source: `engines/streaming-llama/prefill_llama.cpp/src/llama-dsv41-executor.cpp:864`. Unset read: NULL from getenv; the literal consumer below supplies any fallback.
+Source: `engines/streaming-llama/prefill_llama.cpp/src/llama-dsv41-executor.cpp:867`. Unset read: NULL from getenv; the literal consumer below supplies any fallback.
 
 ```text
         } probe{in,out,prepare_started};
@@ -53691,7 +53703,7 @@ LLAMA_DSV41_SKIP_UNUSED_TILE_PIN: qualified preset/runtime setting; override for
 
 Scope: rtx-llama. Class: preset.
 
-Source: `engines/streaming-llama/prefill_llama.cpp/src/llama-dsv41-executor.cpp:897`. Unset read: NULL from getenv; the literal consumer below supplies any fallback.
+Source: `engines/streaming-llama/prefill_llama.cpp/src/llama-dsv41-executor.cpp:900`. Unset read: NULL from getenv; the literal consumer below supplies any fallback.
 
 ```text
             (void)d.row(0);(void)d.row(in.count-1);
@@ -53721,7 +53733,7 @@ static bool dsv41_topk_radix_enabled(const int tile_size, const int k) {
 #endif
 ```
 
-Source: `engines/streaming-llama/prefill_llama.cpp/src/llama-dsv41-executor.cpp:1421`. Unset read: NULL from getenv; the literal consumer below supplies any fallback.
+Source: `engines/streaming-llama/prefill_llama.cpp/src/llama-dsv41-executor.cpp:1424`. Unset read: NULL from getenv; the literal consumer below supplies any fallback.
 
 ```text
         const auto dense_before=expert.dense_inputs_f16?ggml_backend_cuda_dsv41_dense_half_queued():0;
@@ -55161,6 +55173,18 @@ Source: `engines/streaming-llama/prefill_llama.cpp/src/llama-weight-fetcher.cpp:
                 factory_staging_mb = (uint64_t) mb;
 ```
 
+Source: `vendor/studio/studio/moss_image.py:192`. Unset read: Assigned by the runtime; see literal consumer.
+
+```text
+def generate_one(root, request, *, streaming, precision='bf16', cache=None, eager_components=False, pack_dir=None):
+    ram_admission = host_ram_admission()
+    os.environ['LLAMA_DS_FACTORY_STAGING_MB'] = '256'
+    import psutil
+    import torch
+    from transformers import Qwen3_5Config, Qwen3_5Model, AutoTokenizer
+    from diffusers import AutoencoderKLFlux2
+```
+
 ### LLAMA_DS_STAGING_MB
 
 LLAMA_DS_STAGING_MB: advanced engine setting; built-in default retained
@@ -55201,6 +55225,18 @@ Source: `vendor/engines/cosmos_windows/weight_streaming/minimax_h3_backend.py:39
             _frac = h3_torch_memory_fraction(_total, _free, _stage, float(_requested) if _requested is not None else None)
             _torch.cuda.set_per_process_memory_fraction(_frac, 0)
             _emit_json_event(json_events, 'vram_reserve', fraction=_frac, torch_cap_gb=round(_torch.cuda.get_device_properties(0).total_memory / 1000000000.0 * _frac, 2), free_bytes=_free, total_bytes=_total, staging_reserve_bytes=_stage, cuda_free_bytes=_cuda_free, dedicated_free_bytes=_dedicated_free, message='bounded torch VRAM by CUDA and dedicated headroom, with DirectStorage staging and slack reserved')
+```
+
+Source: `vendor/studio/studio/h3_weight_io.py:14`. Unset read: '1300'.
+
+```text
+        torch.cuda.set_per_process_memory_fraction(0.98, ordinal)
+    import os
+    staging_gb = float(os.environ.get('LLAMA_DS_STAGING_MB', '1300')) / 1024
+    free_bytes, total_bytes = torch.cuda.mem_get_info(ordinal)
+    if sys.platform == 'win32':
+        from .cuda_device_identity import dedicated_free_bytes
+        identity = getattr(torch.cuda.get_device_properties(ordinal), 'uuid', None)
 ```
 
 ### LLAMA_DUMP_LAYER
@@ -67598,7 +67634,7 @@ _PIPELINE_CACHE: dict = {}
 _SCAIL_BLOCK_RE = re.compile('^blocks\\.(\\d+)\\.')
 ```
 
-Source: `vendor/studio/studio/adapter.py:2921`. Unset read: ''.
+Source: `vendor/studio/studio/adapter.py:2922`. Unset read: ''.
 
 ```text
         try:
@@ -67682,7 +67718,7 @@ _SCAIL_BLOCK_RE = re.compile('^blocks\\.(\\d+)\\.')
 _ATTN_BACKEND_CHECKED = False
 ```
 
-Source: `vendor/studio/studio/adapter.py:2921`. Unset read: ''.
+Source: `vendor/studio/studio/adapter.py:2922`. Unset read: ''.
 
 ```text
         try:
@@ -68306,13 +68342,13 @@ STUDIO_BERNINI_DISTILL_LORA: advanced engine setting; built-in default retained
 
 Scope: studio. Class: advanced.
 
-Source: `vendor/studio/studio/adapter.py:2859`. Unset read: ''.
+Source: `vendor/studio/studio/adapter.py:2860`. Unset read: ''.
 
 ```text
                         on_step(int(step), int(total), None)
                 user_loras = [l.model_dump() for l in params.loras] or None if params.loras else None
                 distill = os.environ.get('STUDIO_BERNINI_DISTILL_LORA', '')
-                use_distill = user_loras is None and Path(distill).is_file()
+                use_distill = user_loras is None and Path(distill).is_file() and not sf.get('_stack_explicit_loras_only')
                 loras = user_loras if user_loras is not None else [{'path': distill, 'weight': 3.0, 'expert': 'high'}, {'path': distill, 'weight': 1.5, 'expert': 'low'}] if use_distill else None
                 has_distill = bool(user_loras) or use_distill
                 frames = wan.streamed_wan_generate(high_file=str(tf_dir), prompt=params.prompt or '', height=params.height, width=params.width, num_frames=nf, steps=params.steps or (20 if has_distill else 40), low_file=sf.get('low_denoiser') or None, vae_path=vae, umt5_file=umt5, umt5_config_dir=sf.get('text_encoder_config') or None, umt5_tokenizer_dir=sf.get('tokenizer') or None, negative_prompt=params.negative or '', guidance_scale=params.guidance if params.guidance is not None else 1.0 if has_distill else 5.0, scheduler_name=params.sampler or ('lcm' if has_distill else 'unipc'), sigmas_name=params.sigmas if getattr(params, 'sigmas', None) not in (None, '', 'karras') else 'simple' if has_distill else None, seed=params.seed, crossover_step=params.wan_crossover_step if params.wan_crossover_step is not None else 3 if has_distill else None, shift=params.wan_shift if params.wan_shift is not None else 8.0, bernini_reference_images=refs or None, bernini_source_video=source_video, bernini_reference_video=reference_video, bernini_task=task, loras=loras, progress=_progress, should_cancel=should_cancel)
@@ -68324,7 +68360,7 @@ STUDIO_BERNINI_SNAPSHOT: advanced engine setting; built-in default retained
 
 Scope: studio. Class: advanced.
 
-Source: `vendor/studio/studio/custom_models.py:133`. Unset read: None.
+Source: `vendor/studio/studio/custom_models.py:132`. Unset read: None.
 
 ```text
     add('wan-2.2', low_denoiser=wan_low, text_encoder=umt5, vae=wan_vae, tokenizer=scail_tokenizer, image_encoder=image_encoder, clip_vision=image_encoder)
@@ -68360,7 +68396,7 @@ STUDIO_BOOGU_KREA_OFFLOAD: advanced engine setting; built-in default retained
 
 Scope: studio. Class: advanced.
 
-Source: `vendor/studio/studio/adapter.py:2653`. Unset read: 'streaming'.
+Source: `vendor/studio/studio/adapter.py:2654`. Unset read: 'streaming'.
 
 ```text
             mode = 'staged' if is_resident else 'staged_disposable'
@@ -68440,8 +68476,8 @@ def _comfy_models_root() -> Optional[Path]:
     env = os.environ.get('STUDIO_COMFYUI_PATH') or os.environ.get('COMFYUI_PATH')
     if env:
         p = Path(env)
-        candidates.append(p if p.name.lower() == 'models' else p / 'models')
-    candidates += [Path(''), Path(''), Path('')]
+        candidates.append(p if p.name.lower() == 'models' or (p/'diffusion_models').is_dir() or (p/'checkpoints').is_dir() else p / 'models')
+    for p in candidates:
 ```
 
 ### STUDIO_COSMOS_PYTHON
@@ -68528,6 +68564,18 @@ Vendored streaming engine source directory.
 
 Scope: ds4-win, image, mac-ds4, mlx-serve, rtx-llama, studio, video. Class: preset.
 
+Source: `vendor/studio/studio/boogu_krea.py:404`. Unset read: ''.
+
+```text
+    import os as _os
+    from accelerate.utils import set_module_tensor_to_device
+    repo = _os.environ.get('STUDIO_COSMOS_WINDOWS_PATH', '')
+    if repo and repo not in _sys.path:
+        _sys.path.insert(0, repo)
+    from cosmos_windows.weight_streaming.ds_backend import DirectStorageStreamer
+    from cosmos_windows.weight_streaming.safetensors_index import build_index
+```
+
 Source: `vendor/studio/studio/config.py:141`. Unset read: Wrapper/conditional default: see the literal call and consumer below.
 
 ```text
@@ -68538,6 +68586,54 @@ Source: `vendor/studio/studio/config.py:141`. Unset read: Wrapper/conditional de
     gpu_index: str = field(default_factory=lambda: _env('STUDIO_GPU_INDEX', '0'))
     pair_token: Optional[str] = field(default_factory=_default_pair_token)
     chat_base_url: Optional[str] = field(default_factory=lambda: os.environ.get('STUDIO_CHAT_BASE_URL') or None)
+```
+
+Source: `vendor/studio/studio/direct_vram.py:20`. Unset read: ''.
+
+```text
+        if not str(device).startswith('cuda'):
+            raise RuntimeError(f'DIRECT_VRAM_UNAVAILABLE: Windows loads go straight to a CUDA device, not {device!r}')
+        repo = os.environ.get('STUDIO_COSMOS_WINDOWS_PATH', '')
+        if repo not in sys.path:
+            sys.path.insert(0, repo)
+        from cosmos_windows.weight_streaming.safetensors_index import SafetensorsIndex, _index_one_file
+        from .h3_weight_io import stream_tensors
+```
+
+Source: `vendor/studio/studio/krea2_diffusion.py:800`. Unset read: ''.
+
+```text
+    import os as _os
+    from accelerate.utils import set_module_tensor_to_device
+    repo = _os.environ.get('STUDIO_COSMOS_WINDOWS_PATH', '')
+    if repo and repo not in sys.path:
+        sys.path.insert(0, repo)
+    from cosmos_windows.weight_streaming.ds_backend import DirectStorageStreamer
+    from cosmos_windows.weight_streaming.safetensors_index import build_index
+```
+
+Source: `vendor/studio/studio/krea2_diffusion.py:1055`. Unset read: ''.
+
+```text
+def _load_krea2_component_ds(te, te_path: str, dtype, device: str, expected: set[str], *, label: str):
+    import torch
+    repo = os.environ.get('STUDIO_COSMOS_WINDOWS_PATH', '')
+    if repo not in sys.path:
+        sys.path.insert(0, repo)
+    from cosmos_windows.weight_streaming.ds_backend import DirectStorageStreamer
+    from cosmos_windows.weight_streaming.safetensors_index import build_index
+```
+
+Source: `vendor/studio/studio/ram_preflight.py:11`. Unset read: ''.
+
+```text
+def _candidate_repo_paths() -> list[str]:
+    cands: list[str] = []
+    env = os.environ.get('STUDIO_COSMOS_WINDOWS_PATH', '').strip()
+    if env:
+        cands.append(env)
+    try:
+        from .config import settings
 ```
 
 ### STUDIO_DATASETS_DIR
@@ -68624,7 +68720,7 @@ STUDIO_DOMAINSHUTTLE_BASE_ROOT: advanced engine setting; built-in default retain
 
 Scope: studio. Class: advanced.
 
-Source: `vendor/studio/studio/custom_models.py:118`. Unset read: None.
+Source: `vendor/studio/studio/custom_models.py:117`. Unset read: None.
 
 ```text
     sdxl_vae = _first_file(root, 'vae', ['sdxl_vae', 'sdxl-vae', 'sdxl_fp16', 'sdxlvae'])
@@ -68636,7 +68732,7 @@ Source: `vendor/studio/studio/custom_models.py:118`. Unset read: None.
     def add(arch: str, **paths: Optional[str]) -> None:
 ```
 
-Source: `vendor/studio/studio/custom_models.py:135`. Unset read: None.
+Source: `vendor/studio/studio/custom_models.py:134`. Unset read: None.
 
 ```text
     _bernini_snap = next((str(p) for p in (Path(os.environ.get('STUDIO_BERNINI_SNAPSHOT', '')) if os.environ.get('STUDIO_BERNINI_SNAPSHOT') else None, Path('')) if p and p.is_dir()), None)
@@ -68672,7 +68768,7 @@ STUDIO_DOMAINSHUTTLE_MEMORY_MODE: advanced engine setting; built-in default reta
 
 Scope: studio. Class: advanced.
 
-Source: `vendor/studio/studio/adapter.py:2977`. Unset read: 'streaming'.
+Source: `vendor/studio/studio/adapter.py:2978`. Unset read: 'streaming'.
 
 ```text
         frames = None
@@ -68708,7 +68804,7 @@ STUDIO_DOMAINSHUTTLE_MIN_FREE_RAM_GB_GATE: advanced engine setting; built-in def
 
 Scope: studio. Class: advanced.
 
-Source: `vendor/studio/studio/adapter.py:2953`. Unset read: '6'.
+Source: `vendor/studio/studio/adapter.py:2954`. Unset read: '6'.
 
 ```text
         self._cleanup_torch()
@@ -68864,7 +68960,7 @@ STUDIO_FOLEY_MIN_FREE_RAM_GB: advanced engine setting; built-in default retained
 
 Scope: studio. Class: advanced.
 
-Source: `vendor/studio/studio/adapter.py:3136`. Unset read: '12'.
+Source: `vendor/studio/studio/adapter.py:3137`. Unset read: '12'.
 
 ```text
         self._cleanup_torch()
@@ -69146,7 +69242,7 @@ Source: `vendor/studio/studio/adapter.py:2233`. Unset read: ''.
         from . import glm_pipeline
 ```
 
-Source: `vendor/studio/studio/custom_models.py:117`. Unset read: None.
+Source: `vendor/studio/studio/custom_models.py:116`. Unset read: None.
 
 ```text
     anima_base = _first_file(root, 'diffusion_models', ['anima-base', 'anima-preview3-base', 'anima'])
@@ -71012,7 +71108,7 @@ STUDIO_KREA2_DISABLE_STAGED: advanced engine setting; built-in default retained
 
 Scope: studio. Class: advanced.
 
-Source: `vendor/studio/studio/adapter.py:2650`. Unset read: '0'.
+Source: `vendor/studio/studio/adapter.py:2651`. Unset read: '0'.
 
 ```text
         elif arch == 'boogu-turbo' and (not is_resident):
@@ -71498,7 +71594,7 @@ STUDIO_SCAIL_DEVICE_ID: advanced engine setting; built-in default retained
 
 Scope: studio. Class: advanced.
 
-Source: `vendor/studio/studio/adapter.py:2921`. Unset read: '0'.
+Source: `vendor/studio/studio/adapter.py:2922`. Unset read: '0'.
 
 ```text
         try:
@@ -71516,7 +71612,7 @@ STUDIO_SCAIL_GPU_BUFFERS: advanced engine setting; built-in default retained
 
 Scope: studio. Class: advanced.
 
-Source: `vendor/studio/studio/adapter.py:2921`. Unset read: '3'.
+Source: `vendor/studio/studio/adapter.py:2922`. Unset read: '3'.
 
 ```text
         try:
@@ -71768,7 +71864,7 @@ STUDIO_WAN_MIN_FREE_RAM_GB: advanced engine setting; built-in default retained
 
 Scope: studio. Class: advanced.
 
-Source: `vendor/studio/studio/adapter.py:2763`. Unset read: '6'.
+Source: `vendor/studio/studio/adapter.py:2764`. Unset read: '6'.
 
 ```text
         self._cleanup_torch()
@@ -71780,7 +71876,7 @@ Source: `vendor/studio/studio/adapter.py:2763`. Unset read: '6'.
         repo = str(getattr(self.settings, 'cosmos_windows_path', '') or '')
 ```
 
-Source: `vendor/studio/studio/adapter.py:2829`. Unset read: '6'.
+Source: `vendor/studio/studio/adapter.py:2830`. Unset read: '6'.
 
 ```text
         self._cleanup_torch()
@@ -71792,7 +71888,7 @@ Source: `vendor/studio/studio/adapter.py:2829`. Unset read: '6'.
         if repo and repo not in sys.path:
 ```
 
-Source: `vendor/studio/studio/adapter.py:2904`. Unset read: '6'.
+Source: `vendor/studio/studio/adapter.py:2905`. Unset read: '6'.
 
 ```text
         self._cleanup_torch()
@@ -71810,7 +71906,7 @@ STUDIO_WAN_OFFICIAL_ROOT: advanced engine setting; built-in default retained
 
 Scope: studio. Class: advanced.
 
-Source: `vendor/studio/studio/custom_models.py:64`. Unset read: None.
+Source: `vendor/studio/studio/custom_models.py:63`. Unset read: None.
 
 ```text
         return env
@@ -71876,7 +71972,7 @@ STUDIO_ZIMAGE_CONFIG_DIR: advanced engine setting; built-in default retained
 
 Scope: studio. Class: advanced.
 
-Source: `vendor/studio/studio/custom_models.py:96`. Unset read: None.
+Source: `vendor/studio/studio/custom_models.py:95`. Unset read: None.
 
 ```text
     wan_low = _official_wan_denoiser('low') or _first_file_any(root, ['checkpoints', 'diffusion_models', 'models'], ['wan2.2_t2v_low_noise_14b_fp16', 't2vlow', 'lowv', 'low'])
@@ -72774,4 +72870,508 @@ Source: `vendor/engines/cosmos_windows/weight_streaming/zimage_backend.py:43`. U
         from cosmos_windows import mem_guard
     except Exception:
         mem_guard = None
+```
+
+### BOOGU_ALLOW_NON_DIRECTSTORAGE
+
+BOOGU_ALLOW_NON_DIRECTSTORAGE: explicit engine setting; inherited values are cleared and the native default is retained.
+
+Scope: image, video. Class: advanced.
+
+Source: `vendor/studio/studio/boogu_krea.py:414`. Unset read: None.
+
+```text
+    sd_keys = set(transformer.state_dict().keys())
+    streamer = DirectStorageStreamer(_BooguMainBlockIndex(idx, num_double), component='', n_gpu_buffers=n_gpu_buffers, device=device)
+    if getattr(streamer, 'mode', None) != 3 and _os.environ.get('BOOGU_ALLOW_NON_DIRECTSTORAGE') != '1':
+        try:
+            streamer.close()
+        finally:
+            raise RuntimeError(f"Boogu DS streamer mode={getattr(streamer, 'mode', '?')} is not DirectStorage(3) â€” R1 requires the optimised NVMe->GPU path. Set BOOGU_ALLOW_NON_DIRECTSTORAGE=1 for diagnostics.")
+```
+
+### DS4_NATIVE_SESSION_YOCO_KEEP
+
+Negotiated YOCO replay window: 0 or 140; set by the paired preset.
+
+Scope: mac-ds4. Class: advanced.
+
+Source: `engines/ds4-mac/ds4_native_session_setup.inc:25`. Unset read: Wrapper/conditional default: see the literal call and consumer below.
+
+```text
+    ds4_ns_config*c=calloc(1,sizeof(*c));if(!c)return ds4_nf_error(err,cap,"session configuration allocation failed");
+    c->http.dirfd=-1;uint32_t port;
+    const char*yoco=ds4_nf_env("DS4_NATIVE_SESSION_YOCO_KEEP");
+    if(yoco&&strcmp(yoco,"0")){if(strcmp(yoco,"140"))goto bad;c->yoco_keep=140;}
+    if(!ds4_nf_pair_token(token,c->http.token)||!ds4_nf_env_uint("DS4_NATIVE_SESSION_PORT",&port,1,65535)||
+       !ds4_nf_env_uint("DS4_NATIVE_SESSION_DEADLINE_SECONDS",&c->http.deadline_seconds,60,7200)||
+       inet_pton(AF_INET,host,&c->http.broker.sin_addr)!=1||!ds4_engine_native_frontier_identity(engine,&c->http.model))goto bad;
+```
+
+### KREA2_ALLOW_NON_DIRECTSTORAGE
+
+KREA2_ALLOW_NON_DIRECTSTORAGE: explicit engine setting; inherited values are cleared and the native default is retained.
+
+Scope: image, video. Class: advanced.
+
+Source: `vendor/studio/studio/krea2_diffusion.py:809`. Unset read: None.
+
+```text
+    sd_keys = set(tr.state_dict().keys())
+    streamer = DirectStorageStreamer(_Krea2TBlockIndex(idx), component='', n_gpu_buffers=n_gpu_buffers, device=device, record_compute_done=True)
+    if getattr(streamer, 'mode', None) != 3 and _os.environ.get('KREA2_ALLOW_NON_DIRECTSTORAGE') != '1':
+        try:
+            streamer.close()
+        finally:
+            raise RuntimeError(f"Krea2 DS streamer mode={getattr(streamer, 'mode', '?')} is not DirectStorage(3) â€” R1 requires the optimised NVMe->GPU path. Set KREA2_ALLOW_NON_DIRECTSTORAGE=1 for diagnostics.")
+```
+
+### STUDIO_COMFYUI_MODELS
+
+STUDIO_COMFYUI_MODELS: explicit engine setting; inherited values are cleared and the native default is retained.
+
+Scope: image, video. Class: advanced.
+
+Source: `vendor/studio/studio/krea2_diffusion.py:16`. Unset read: None.
+
+```text
+
+def _comfy_models_base() -> Path:
+    env = os.environ.get('STUDIO_COMFYUI_MODELS')
+    if env and Path(env).is_dir():
+        return Path(env)
+    if sys.platform == 'win32':
+        win_mirror = Path(os.environ.get('STUDIO_KREA2_WIN_MIRROR', ''))
+```
+
+### STUDIO_H3_CONTINUITY_PROJECTION
+
+STUDIO_H3_CONTINUITY_PROJECTION: explicit engine setting; inherited values are cleared and the native default is retained.
+
+Scope: image, video. Class: advanced.
+
+Source: `vendor/studio/studio/h3_live.py:196`. Unset read: ''.
+
+```text
+        if o.get('reference_native_res'):
+            argv.append('--reference-native-res')
+        projection = '' if o.get('seamless') or choice in ('projection', 'blend', 'latent') else str(os.environ.get('STUDIO_H3_CONTINUITY_PROJECTION', '')).strip().lower()
+        if projection in ('float', 'uint8', 'video'):
+            argv += ['--continuity-projection', projection]
+            alpha = float(os.environ.get('STUDIO_H3_CONTINUITY_PROJECTION_ALPHA', '1'))
+            if not 0 < alpha <= 1:
+```
+
+### STUDIO_H3_CONTINUITY_PROJECTION_ALPHA
+
+STUDIO_H3_CONTINUITY_PROJECTION_ALPHA: explicit engine setting; inherited values are cleared and the native default is retained.
+
+Scope: image, video. Class: advanced.
+
+Source: `vendor/studio/studio/h3_live.py:199`. Unset read: '1'.
+
+```text
+        if projection in ('float', 'uint8', 'video'):
+            argv += ['--continuity-projection', projection]
+            alpha = float(os.environ.get('STUDIO_H3_CONTINUITY_PROJECTION_ALPHA', '1'))
+            if not 0 < alpha <= 1:
+                raise ValueError('H3 projection alpha must be in (0, 1]')
+            argv += ['--continuity-projection-alpha', str(alpha)]
+        if o['resident']:
+```
+
+### STUDIO_H3_STEP_ADAPTERS
+
+STUDIO_H3_STEP_ADAPTERS: explicit engine setting; inherited values are cleared and the native default is retained.
+
+Scope: image, video. Class: advanced.
+
+Source: `vendor/studio/studio/h3_model_profiles.py:50`. Unset read: ''.
+
+```text
+def is_base_distill_adapter(path) -> bool:
+    name = Path(str(path).replace('\\', '/')).name.lower()
+    extra = {n.strip().lower() for n in os.environ.get('STUDIO_H3_STEP_ADAPTERS', '').split(';') if n.strip()}
+    return name in BASE_H3_STEP_ADAPTERS or name in extra
+
+def profile_adapters(profile: H3ModelProfile, requested) -> tuple:
+    kept, removed = ([], [])
+```
+
+### STUDIO_KREA2_DIRECT_MIN_FREE_GB
+
+STUDIO_KREA2_DIRECT_MIN_FREE_GB: explicit engine setting; inherited values are cleared and the native default is retained.
+
+Scope: image, video. Class: advanced.
+
+Source: `vendor/studio/studio/krea2_diffusion.py:1203`. Unset read: raw_need.
+
+```text
+    raw_need = 4.0
+    try:
+        raw_need = float(os.environ.get('STUDIO_KREA2_DIRECT_MIN_FREE_GB', raw_need))
+    except (TypeError, ValueError):
+        pass
+    _require_free_memory(raw_need)
+    stream_layers = offload in ('model', 'stream', 'streaming', 'stream_layers', 'streaming_lazy')
+```
+
+### STUDIO_KREA2_DIT
+
+STUDIO_KREA2_DIT: explicit engine setting; inherited values are cleared and the native default is retained.
+
+Scope: image, video. Class: advanced.
+
+Source: `vendor/studio/studio/krea2_diffusion.py:34`. Unset read: None.
+
+```text
+def krea2_files() -> dict:
+    base = _comfy_models_base()
+    return {'dit': os.environ.get('STUDIO_KREA2_DIT') or str(base / 'checkpoints' / 'Krea2_Turbo_int8mixed.safetensors'), 'text_encoder': os.environ.get('STUDIO_KREA2_TEXT_ENCODER') or str(base / 'text_encoders' / 'qwen3vl_4b_int8.safetensors'), 'vae': os.environ.get('STUDIO_KREA2_VAE') or str(base / 'vae' / 'qwen_image_vae.safetensors')}
+
+def krea2_available() -> bool:
+    f = krea2_files()
+    return Path(f['dit']).is_file() and Path(f['text_encoder']).is_file()
+```
+
+### STUDIO_KREA2_DTYPE
+
+STUDIO_KREA2_DTYPE: explicit engine setting; inherited values are cleared and the native default is retained.
+
+Scope: image, video. Class: advanced.
+
+Source: `vendor/studio/studio/krea2_diffusion.py:427`. Unset read: 'float16'.
+
+```text
+def _krea2_resident_dtype():
+    import torch
+    raw = str(os.environ.get('STUDIO_KREA2_DTYPE', 'float16')).strip().lower()
+    if raw in {'bfloat16', 'bf16'}:
+        return torch.bfloat16
+    if raw in {'float16', 'fp16', 'half'}:
+        return torch.float16
+```
+
+### STUDIO_KREA2_EDIT_LORA
+
+STUDIO_KREA2_EDIT_LORA: explicit engine setting; inherited values are cleared and the native default is retained.
+
+Scope: image, video. Class: advanced.
+
+Source: `vendor/studio/studio/krea2_diffusion.py:81`. Unset read: None.
+
+```text
+    configured = str(explicit_path or '').strip()
+    if not configured:
+        configured = str(os.environ.get('STUDIO_KREA2_EDIT_LORA') or '').strip()
+    if configured:
+        path = Path(configured).expanduser().resolve(strict=False)
+        if not path.is_file():
+            raise RuntimeError(f'Krea 2 Edit LoRA not found: {str(path)!r}')
+```
+
+### STUDIO_KREA2_MIN_FREE_GB
+
+STUDIO_KREA2_MIN_FREE_GB: explicit engine setting; inherited values are cleared and the native default is retained.
+
+Scope: image, video. Class: advanced.
+
+Source: `vendor/studio/studio/krea2_diffusion.py:706`. Unset read: need_gb.
+
+```text
+def _require_free_memory(need_gb: float=55.0) -> None:
+    try:
+        need_gb = float(os.environ.get('STUDIO_KREA2_MIN_FREE_GB', need_gb))
+    except (TypeError, ValueError):
+        pass
+    if need_gb <= 0:
+        return
+```
+
+### STUDIO_KREA2_MPS_COMPILE
+
+STUDIO_KREA2_MPS_COMPILE: explicit engine setting; inherited values are cleared and the native default is retained.
+
+Scope: image, video. Class: advanced.
+
+Source: `vendor/studio/studio/krea2_diffusion.py:1166`. Unset read: '1'.
+
+```text
+
+def _configure_krea2_regional_compile(transformer, device: str) -> bool:
+    enabled = str(os.environ.get('STUDIO_KREA2_MPS_COMPILE', '1')).strip().lower() in {'1', 'true', 'yes', 'on'}
+    if not enabled or str(device).split(':', 1)[0].lower() != 'mps':
+        return False
+    compile_repeated = getattr(transformer, 'compile_repeated_blocks', None)
+    if not callable(compile_repeated):
+```
+
+### STUDIO_KREA2_TEXT_ENCODER
+
+STUDIO_KREA2_TEXT_ENCODER: explicit engine setting; inherited values are cleared and the native default is retained.
+
+Scope: image, video. Class: advanced.
+
+Source: `vendor/studio/studio/krea2_diffusion.py:34`. Unset read: None.
+
+```text
+def krea2_files() -> dict:
+    base = _comfy_models_base()
+    return {'dit': os.environ.get('STUDIO_KREA2_DIT') or str(base / 'checkpoints' / 'Krea2_Turbo_int8mixed.safetensors'), 'text_encoder': os.environ.get('STUDIO_KREA2_TEXT_ENCODER') or str(base / 'text_encoders' / 'qwen3vl_4b_int8.safetensors'), 'vae': os.environ.get('STUDIO_KREA2_VAE') or str(base / 'vae' / 'qwen_image_vae.safetensors')}
+
+def krea2_available() -> bool:
+    f = krea2_files()
+    return Path(f['dit']).is_file() and Path(f['text_encoder']).is_file()
+```
+
+### STUDIO_KREA2_VAE
+
+STUDIO_KREA2_VAE: explicit engine setting; inherited values are cleared and the native default is retained.
+
+Scope: image, video. Class: advanced.
+
+Source: `vendor/studio/studio/krea2_diffusion.py:34`. Unset read: None.
+
+```text
+def krea2_files() -> dict:
+    base = _comfy_models_base()
+    return {'dit': os.environ.get('STUDIO_KREA2_DIT') or str(base / 'checkpoints' / 'Krea2_Turbo_int8mixed.safetensors'), 'text_encoder': os.environ.get('STUDIO_KREA2_TEXT_ENCODER') or str(base / 'text_encoders' / 'qwen3vl_4b_int8.safetensors'), 'vae': os.environ.get('STUDIO_KREA2_VAE') or str(base / 'vae' / 'qwen_image_vae.safetensors')}
+
+def krea2_available() -> bool:
+    f = krea2_files()
+    return Path(f['dit']).is_file() and Path(f['text_encoder']).is_file()
+```
+
+### STUDIO_KREA2_WIN_MIRROR
+
+STUDIO_KREA2_WIN_MIRROR: explicit engine setting; inherited values are cleared and the native default is retained.
+
+Scope: image, video. Class: advanced.
+
+Source: `vendor/studio/studio/krea2_diffusion.py:20`. Unset read: ''.
+
+```text
+        return Path(env)
+    if sys.platform == 'win32':
+        win_mirror = Path(os.environ.get('STUDIO_KREA2_WIN_MIRROR', ''))
+        if win_mirror.is_dir():
+            return win_mirror
+    cfg = Path.home() / 'Library' / 'Application Support' / 'Comfy Desktop' / 'settings.json'
+    try:
+```
+
+### STUDIO_QWEN3VL_CACHE
+
+STUDIO_QWEN3VL_CACHE: explicit engine setting; inherited values are cleared and the native default is retained.
+
+Scope: image, video. Class: advanced.
+
+Source: `vendor/studio/studio/krea2_diffusion.py:12`. Unset read: None.
+
+```text
+QWEN_IMAGE_REPO = os.environ.get('STUDIO_QWEN_IMAGE_REPO', 'Qwen/Qwen-Image')
+QWEN3VL_REPO = os.environ.get('STUDIO_QWEN3VL_REPO', 'Qwen/Qwen3-VL-4B-Instruct')
+_QWEN3VL_CACHE = os.environ.get('STUDIO_QWEN3VL_CACHE') or str(Path.home() / '.cache' / 'studio_qwen3vl_4b')
+KREA2_TAP_LAYERS = (2, 5, 8, 11, 14, 17, 20, 23, 26, 29, 32, 35)
+
+def _comfy_models_base() -> Path:
+    env = os.environ.get('STUDIO_COMFYUI_MODELS')
+```
+
+### STUDIO_QWEN3VL_REPO
+
+STUDIO_QWEN3VL_REPO: explicit engine setting; inherited values are cleared and the native default is retained.
+
+Scope: image, video. Class: advanced.
+
+Source: `vendor/studio/studio/krea2_diffusion.py:11`. Unset read: 'Qwen/Qwen3-VL-4B-Instruct'.
+
+```text
+from pathlib import Path
+QWEN_IMAGE_REPO = os.environ.get('STUDIO_QWEN_IMAGE_REPO', 'Qwen/Qwen-Image')
+QWEN3VL_REPO = os.environ.get('STUDIO_QWEN3VL_REPO', 'Qwen/Qwen3-VL-4B-Instruct')
+_QWEN3VL_CACHE = os.environ.get('STUDIO_QWEN3VL_CACHE') or str(Path.home() / '.cache' / 'studio_qwen3vl_4b')
+KREA2_TAP_LAYERS = (2, 5, 8, 11, 14, 17, 20, 23, 26, 29, 32, 35)
+
+def _comfy_models_base() -> Path:
+```
+
+### STUDIO_QWEN_IMAGE21_BASE
+
+STUDIO_QWEN_IMAGE21_BASE: explicit engine setting; inherited values are cleared and the native default is retained.
+
+Scope: image, video. Class: advanced.
+
+Source: `vendor/studio/studio/qwen_comfy_load.py:6`. Unset read: ''.
+
+```text
+import re
+from pathlib import Path
+DEFAULT_BASE_REPO = os.environ.get('STUDIO_QWEN_IMAGE21_BASE', '')
+_BLOCK = re.compile('^transformer_blocks\\.(\\d+)\\.')
+
+def _block_index(target_key: str) -> int | None:
+    match = _BLOCK.match(target_key)
+```
+
+### STUDIO_QWEN_IMAGE21_MODEL
+
+STUDIO_QWEN_IMAGE21_MODEL: explicit engine setting; inherited values are cleared and the native default is retained.
+
+Scope: image, video. Class: advanced.
+
+Source: `vendor/studio/studio/qwen_image21.py:544`. Unset read: DEFAULT_MODEL_DIR.
+
+```text
+    parser.add_argument('--serve', action='store_true', help='Keep weights resident and read JSON requests on stdin')
+    parser.add_argument('--request', help='JSON request manifest')
+    parser.add_argument('--model-dir', default=os.environ.get('STUDIO_QWEN_IMAGE21_MODEL', DEFAULT_MODEL_DIR))
+    parser.add_argument('--offload-dir', default=os.environ.get('STUDIO_QWEN_IMAGE21_OFFLOAD', ''))
+    args = parser.parse_args(argv)
+    if args.serve:
+        pipe = None
+```
+
+### STUDIO_QWEN_IMAGE21_OFFLOAD
+
+STUDIO_QWEN_IMAGE21_OFFLOAD: explicit engine setting; inherited values are cleared and the native default is retained.
+
+Scope: image, video. Class: advanced.
+
+Source: `vendor/studio/studio/qwen_image21.py:545`. Unset read: ''.
+
+```text
+    parser.add_argument('--request', help='JSON request manifest')
+    parser.add_argument('--model-dir', default=os.environ.get('STUDIO_QWEN_IMAGE21_MODEL', DEFAULT_MODEL_DIR))
+    parser.add_argument('--offload-dir', default=os.environ.get('STUDIO_QWEN_IMAGE21_OFFLOAD', ''))
+    args = parser.parse_args(argv)
+    if args.serve:
+        pipe = None
+        for line in sys.stdin:
+```
+
+### STUDIO_QWEN_IMAGE21_PACK_DIR
+
+STUDIO_QWEN_IMAGE21_PACK_DIR: explicit engine setting; inherited values are cleared and the native default is retained.
+
+Scope: image, video. Class: advanced.
+
+Source: `vendor/studio/studio/qwen_block_weights.py:57`. Unset read: ''.
+
+```text
+    identity = [(f, Path(f).stat().st_size, Path(f).stat().st_mtime_ns) for f in files]
+    fingerprint = hashlib.sha256(json.dumps(['qwen-row-int8-v1', identity]).encode()).hexdigest()[:20]
+    root = Path(pack_dir or os.environ.get('STUDIO_QWEN_IMAGE21_PACK_DIR', '')) / fingerprint
+    root.mkdir(parents=True, exist_ok=True)
+    groups = block_groups(index, block_prefix=block_prefix)
+    complete = root / 'complete.json'
+    if complete.is_file() and all(((root / f'block-{i:03}.safetensors').is_file() for i in groups)):
+```
+
+### STUDIO_QWEN_IMAGE21_TEXT_ENCODER_8BIT
+
+STUDIO_QWEN_IMAGE21_TEXT_ENCODER_8BIT: explicit engine setting; inherited values are cleared and the native default is retained.
+
+Scope: image, video. Class: advanced.
+
+Source: `vendor/studio/studio/qwen_image21.py:392`. Unset read: '1'.
+
+```text
+    comp_root = components_root(root)
+    started = time.perf_counter()
+    use_int8 = os.environ.get('STUDIO_QWEN_IMAGE21_TEXT_ENCODER_8BIT', '1') != '0'
+    print(f"[status] Qwen mode: transformer={precision}, streaming={streaming}, text_encoder={('int8' if use_int8 else 'bf16')}", flush=True)
+    if single_file:
+        print(f'[status] Qwen ComfyUI single-file checkpoint {root.name!r}: transformer from the file, other components from {comp_root}', flush=True)
+    print('[status] DirectStorage: loading Qwen text encoder to VRAM', flush=True)
+```
+
+### STUDIO_QWEN_IMAGE21_VRAM_FRACTION
+
+STUDIO_QWEN_IMAGE21_VRAM_FRACTION: explicit engine setting; inherited values are cleared and the native default is retained.
+
+Scope: image, video. Class: advanced.
+
+Source: `vendor/studio/studio/qwen_image21.py:386`. Unset read: '0.92'.
+
+```text
+    from transformers import Qwen3VLProcessor
+    from .qwen_direct_load import bind_component
+    torch.cuda.set_per_process_memory_fraction(float(os.environ.get('STUDIO_QWEN_IMAGE21_VRAM_FRACTION', '0.92')), 0)
+    from .qwen_comfy_load import bind_qwen21_transformer, components_root, is_single_file_checkpoint
+    root = Path(model_dir)
+    single_file = is_single_file_checkpoint(root)
+    comp_root = components_root(root)
+```
+
+### STUDIO_QWEN_IMAGE_REPO
+
+STUDIO_QWEN_IMAGE_REPO: explicit engine setting; inherited values are cleared and the native default is retained.
+
+Scope: image, video. Class: advanced.
+
+Source: `vendor/studio/studio/krea2_diffusion.py:10`. Unset read: 'Qwen/Qwen-Image'.
+
+```text
+from contextlib import contextmanager
+from pathlib import Path
+QWEN_IMAGE_REPO = os.environ.get('STUDIO_QWEN_IMAGE_REPO', 'Qwen/Qwen-Image')
+QWEN3VL_REPO = os.environ.get('STUDIO_QWEN3VL_REPO', 'Qwen/Qwen3-VL-4B-Instruct')
+_QWEN3VL_CACHE = os.environ.get('STUDIO_QWEN3VL_CACHE') or str(Path.home() / '.cache' / 'studio_qwen3vl_4b')
+KREA2_TAP_LAYERS = (2, 5, 8, 11, 14, 17, 20, 23, 26, 29, 32, 35)
+
+```
+
+### STUDIO_RAM_ABORT_FLOOR_GB
+
+STUDIO_RAM_ABORT_FLOOR_GB: explicit engine setting; inherited values are cleared and the native default is retained.
+
+Scope: image, video. Class: advanced.
+
+Source: `vendor/studio/studio/safety.py:11`. Unset read: '1.0'.
+
+```text
+def ram_abort_floor_gb() -> float:
+    try:
+        return max(0.25, float(os.environ.get('STUDIO_RAM_ABORT_FLOOR_GB', '1.0')))
+    except (TypeError, ValueError):
+        return 1.0
+
+def free_ram_gb() -> float:
+```
+
+### STUDIO_RAM_PREFLIGHT_FORCE
+
+STUDIO_RAM_PREFLIGHT_FORCE: explicit engine setting; inherited values are cleared and the native default is retained.
+
+Scope: image, video. Class: advanced.
+
+Source: `vendor/studio/studio/ram_preflight.py:71`. Unset read: ''.
+
+```text
+
+def wait_for_host_ram(min_free_gb: float, *, label: str='launch', timeout_s: float=90.0, poll_s: float=1.0, settle_s: float=4.0, emit=None) -> float:
+    if os.environ.get('STUDIO_SKIP_RAM_PREFLIGHT', '').strip().lower() in _TRUTHY or os.environ.get('STUDIO_RAM_PREFLIGHT_FORCE', '').strip().lower() in _TRUTHY:
+        return free_host_ram_gb()
+    import time as _t
+    deadline = _t.monotonic() + max(0.0, float(timeout_s))
+    last = best = free_host_ram_gb()
+```
+
+### STUDIO_SKIP_RAM_PREFLIGHT
+
+STUDIO_SKIP_RAM_PREFLIGHT: explicit engine setting; inherited values are cleared and the native default is retained.
+
+Scope: image, video. Class: advanced.
+
+Source: `vendor/studio/studio/ram_preflight.py:71`. Unset read: ''.
+
+```text
+
+def wait_for_host_ram(min_free_gb: float, *, label: str='launch', timeout_s: float=90.0, poll_s: float=1.0, settle_s: float=4.0, emit=None) -> float:
+    if os.environ.get('STUDIO_SKIP_RAM_PREFLIGHT', '').strip().lower() in _TRUTHY or os.environ.get('STUDIO_RAM_PREFLIGHT_FORCE', '').strip().lower() in _TRUTHY:
+        return free_host_ram_gb()
+    import time as _t
+    deadline = _t.monotonic() + max(0.0, float(timeout_s))
+    last = best = free_host_ram_gb()
 ```

@@ -638,7 +638,7 @@
         "source": "vendor/studio/studio/custom_models.py:15",
         "unset": "None",
         "read": "os.environ.get('COMFYUI_PATH')",
-        "consumer": "def _comfy_models_root() -> Optional[Path]:\n    candidates: list[Path] = []\n    env = os.environ.get('STUDIO_COMFYUI_PATH') or os.environ.get('COMFYUI_PATH')\n    if env:\n        p = Path(env)\n        candidates.append(p if p.name.lower() == 'models' else p / 'models')\n    candidates += [Path(''), Path(''), Path('')]"
+        "consumer": "def _comfy_models_root() -> Optional[Path]:\n    candidates: list[Path] = []\n    env = os.environ.get('STUDIO_COMFYUI_PATH') or os.environ.get('COMFYUI_PATH')\n    if env:\n        p = Path(env)\n        candidates.append(p if p.name.lower() == 'models' or (p/'diffusion_models').is_dir() or (p/'checkpoints').is_dir() else p / 'models')\n    for p in candidates:"
       }
     ]
   },
@@ -899,15 +899,16 @@
     "code_default": "Wrapper/conditional default: see the literal call and consumer below",
     "classification": "advanced",
     "scopes": [
-      "rtx-llama"
+      "rtx-llama",
+      "ds4-win"
     ],
     "doc": "CUDA module loading policy; backend admission accounts for the selected policy.",
     "reads": [
-      "engines/streaming-llama/prefill_llama.cpp/tools/dsv41-prefill/main.cpp:289"
+      "engines/streaming-llama/prefill_llama.cpp/tools/dsv41-prefill/main.cpp:291"
     ],
     "code_defaults": [
       {
-        "source": "engines/streaming-llama/prefill_llama.cpp/tools/dsv41-prefill/main.cpp:289",
+        "source": "engines/streaming-llama/prefill_llama.cpp/tools/dsv41-prefill/main.cpp:291",
         "unset": "Wrapper/conditional default: see the literal call and consumer below",
         "read": "const wchar_t*module_loading_env=_wgetenv(L\"CUDA_MODULE_LOADING\");",
         "consumer": "    // Forced EAGER was measured slower (43K ABAB, 2026-10-25: L0 first-tile stall +26.8/+7.8 s)\n    // and dropped; the effective mode is still logged (module_loading=).\n    const wchar_t*module_loading_env=_wgetenv(L\"CUDA_MODULE_LOADING\");\n    const bool module_loading_default=!module_loading_env||!*module_loading_env;\n    try{\n        static std::array<char,1024*1024> stderr_storage;\n        const char *buffer_env=std::getenv(\"DS4PERF_STDERR_BUFFER_BYTES\");"
@@ -1424,25 +1425,25 @@
     ],
     "doc": "DS4PERF_DIAGNOSTIC_LAYERS: advanced engine setting; built-in default retained",
     "reads": [
-      "engines/streaming-llama/prefill_llama.cpp/src/llama-dsv41-executor.cpp:1263",
-      "engines/streaming-llama/prefill_llama.cpp/src/llama-dsv41-executor.cpp:1301",
-      "engines/streaming-llama/prefill_llama.cpp/tools/dsv41-prefill/main.cpp:725"
+      "engines/streaming-llama/prefill_llama.cpp/src/llama-dsv41-executor.cpp:1266",
+      "engines/streaming-llama/prefill_llama.cpp/src/llama-dsv41-executor.cpp:1304",
+      "engines/streaming-llama/prefill_llama.cpp/tools/dsv41-prefill/main.cpp:736"
     ],
     "code_defaults": [
       {
-        "source": "engines/streaming-llama/prefill_llama.cpp/src/llama-dsv41-executor.cpp:1263",
+        "source": "engines/streaming-llama/prefill_llama.cpp/src/llama-dsv41-executor.cpp:1266",
         "unset": "NULL from getenv; the literal consumer below supplies any fallback",
         "read": "if(const char *diag=std::getenv(\"DS4PERF_DIAGNOSTIC_LAYERS\")){if(*diag){",
         "consumer": "        }\n        }\n        if(const char *diag=std::getenv(\"DS4PERF_DIAGNOSTIC_LAYERS\")){if(*diag){\n            llama_dsv41_layer_log(\"DS4PERF_GRAPH_TRACE layer=%u start=%u count=%u hit=%u semantic_fnv64=%016llx\",in.layer,in.start,in.count,unsigned(graph_cache_hit),\n                (unsigned long long)llama_dsv41_graph_digest(ctx.get(),graph));std::fputc(10,stderr);std::fflush(stderr);\n        }}\n        const auto buft=ggml_backend_get_default_buffer_type(backend);"
       },
       {
-        "source": "engines/streaming-llama/prefill_llama.cpp/src/llama-dsv41-executor.cpp:1301",
+        "source": "engines/streaming-llama/prefill_llama.cpp/src/llama-dsv41-executor.cpp:1304",
         "unset": "NULL from getenv; the literal consumer below supplies any fallback",
         "read": "if(const char *diag=std::getenv(\"DS4PERF_DIAGNOSTIC_LAYERS\")){if(*diag){",
         "consumer": "            llama_dsv41_layer_log(\"DS4PERF_BF16_INPLACE_LAYOUT layer=%u start=%u count=%u tagged=%llu actual_aliases=%llu alias_bytes=%llu original_lifetime_checks=1\\n\",in.layer,in.start,in.count,(unsigned long long)tagged,(unsigned long long)aliases,(unsigned long long)bytes);\n        }\n        if(const char *diag=std::getenv(\"DS4PERF_DIAGNOSTIC_LAYERS\")){if(*diag){\n            llama_dsv41_layer_log(\"DS4PERF_LAYOUT_TRACE layer=%u start=%u count=%u hit=%u layout_fnv64=%016llx\",in.layer,in.start,in.count,unsigned(graph_cache_hit),\n                (unsigned long long)llama_dsv41_graph_digest(ctx.get(),graph,true));std::fputc(10,stderr);std::fflush(stderr);\n        }}\n        require(boundary.bytes()<=actual,\"Boundary outputs escaped actual graph admission\");"
       },
       {
-        "source": "engines/streaming-llama/prefill_llama.cpp/tools/dsv41-prefill/main.cpp:725",
+        "source": "engines/streaming-llama/prefill_llama.cpp/tools/dsv41-prefill/main.cpp:736",
         "unset": "NULL from getenv; the literal consumer below supplies any fallback",
         "read": "if(const char *diag=std::getenv(\"DS4PERF_DIAGNOSTIC_LAYERS\")){if(*diag){",
         "consumer": "        report[\"resident_hidden_storage\"]=options.resident_bf16?\"BF16 after validated existing BF16 boundary; layer0 input unchanged F32\":\"F32\";\n        options.carry.ram_prefix_tokens=uint32_t(ram_prefix);options.carry.disk_reserve_bytes=disk_reserve;\n        if(const char *diag=std::getenv(\"DS4PERF_DIAGNOSTIC_LAYERS\")){if(*diag){\n            const auto layers=integer(diag);require(layers>0&&layers<40&&resident_ram&&llama_dsv41_expert_profile::native(expert),\n                \"Incomplete diagnostics require native RAM TEST and1..39 layers\");\n            options.diagnostic_layers=uint32_t(layers);report[\"intentional_incomplete_diagnostic_layers\"]=layers;\n            options.diagnostic_carry=[](uint32_t layer,uint32_t first,uint32_t count,const void *bank,uint64_t bytes,const ggml_tensor *raw){"
@@ -1460,11 +1461,11 @@
     ],
     "doc": "DS4PERF_EXECUTOR_WALL_PROBE: advanced engine setting; built-in default retained",
     "reads": [
-      "engines/streaming-llama/prefill_llama.cpp/src/llama-dsv41-executor.cpp:863"
+      "engines/streaming-llama/prefill_llama.cpp/src/llama-dsv41-executor.cpp:866"
     ],
     "code_defaults": [
       {
-        "source": "engines/streaming-llama/prefill_llama.cpp/src/llama-dsv41-executor.cpp:863",
+        "source": "engines/streaming-llama/prefill_llama.cpp/src/llama-dsv41-executor.cpp:866",
         "unset": "NULL from getenv; the literal consumer below supplies any fallback",
         "read": "probe.enabled=std::getenv(\"DS4PERF_EXECUTOR_WALL_PROBE\")&&std::string(std::getenv(\"DS4PERF_EXECUTOR_WALL_PROBE\"))==\"1\";",
         "consumer": "                llama_dsv41_layer_log(\"DS4PERF_EXECUTOR_WALL_PROBE layer=%u start=%u count=%u wall_ms=%.6f pre_return_ms=%.6f teardown_ms=%.6f prepare_flush_ms=%.6f post_checks_ms=%.6f boundary_ms=%.6f unexplained_ms=%.6f\\n\",in.layer,in.start,in.count,wall,pre_return_ms,wall-pre_return_ms,prepare_flush_ms,post_checks_ms,boundary_ms,pre_return_ms-phases-prepare_flush_ms-post_checks_ms-boundary_ms);}}\n        } probe{in,out,prepare_started};\n        probe.enabled=std::getenv(\"DS4PERF_EXECUTOR_WALL_PROBE\")&&std::string(std::getenv(\"DS4PERF_EXECUTOR_WALL_PROBE\"))==\"1\";\n        const bool rope_inplace=std::getenv(\"LLAMA_DSV41_ROPE_INPLACE\")&&std::string(std::getenv(\"LLAMA_DSV41_ROPE_INPLACE\"))==\"1\";\n        const bool dense_bf16_store=expert.dense_activation_q8_1&&std::getenv(\"LLAMA_DSV41_DENSE_BF16_STORE\")&&std::string(std::getenv(\"LLAMA_DSV41_DENSE_BF16_STORE\"))==\"1\";\n        const bool mul_f16_store=std::getenv(\"LLAMA_DSV41_MUL_F16_STORE\")&&std::string(std::getenv(\"LLAMA_DSV41_MUL_F16_STORE\"))==\"1\";\n        unsigned mul_f16_fused=0;"
@@ -1518,11 +1519,11 @@
     ],
     "doc": "DS4PERF_STDERR_BUFFER_BYTES: advanced engine setting; built-in default retained",
     "reads": [
-      "engines/streaming-llama/prefill_llama.cpp/tools/dsv41-prefill/main.cpp:293"
+      "engines/streaming-llama/prefill_llama.cpp/tools/dsv41-prefill/main.cpp:295"
     ],
     "code_defaults": [
       {
-        "source": "engines/streaming-llama/prefill_llama.cpp/tools/dsv41-prefill/main.cpp:293",
+        "source": "engines/streaming-llama/prefill_llama.cpp/tools/dsv41-prefill/main.cpp:295",
         "unset": "NULL from getenv; the literal consumer below supplies any fallback",
         "read": "const char *buffer_env=std::getenv(\"DS4PERF_STDERR_BUFFER_BYTES\");",
         "consumer": "    try{\n        static std::array<char,1024*1024> stderr_storage;\n        const char *buffer_env=std::getenv(\"DS4PERF_STDERR_BUFFER_BYTES\");\n        const bool buffered_stderr=buffer_env&&std::string(buffer_env)==\"1048576\";\n        require(!buffer_env||buffered_stderr,\"Diagnostic stderr buffer requires exactly1048576bytes\");\n        if(buffered_stderr)require(std::setvbuf(stderr,stderr_storage.data(),_IOFBF,stderr_storage.size())==0,\"Cannot configure existing CRT stderr buffer\");\n        report[\"stderr_buffer_bytes\"]=buffered_stderr?stderr_storage.size():0;"
@@ -4167,11 +4168,11 @@
     ],
     "doc": "DS4_CUDA_DS_SUBMIT_TRACE: advanced engine setting; built-in default retained",
     "reads": [
-      "engines/ds4-win/ds4_dstorage.cpp:1520"
+      "engines/ds4-win/ds4_dstorage.cpp:1533"
     ],
     "code_defaults": [
       {
-        "source": "engines/ds4-win/ds4_dstorage.cpp:1520",
+        "source": "engines/ds4-win/ds4_dstorage.cpp:1533",
         "unset": "NULL from getenv; the literal consumer below supplies any fallback",
         "read": "static const bool enabled=[](){const char *s=getenv(\"DS4_CUDA_DS_SUBMIT_TRACE\");return s && !strcmp(s,\"1\");}();",
         "consumer": " * Does not label asynchronous submit-to-completion time as CPU work. */\nstatic bool ds4_ds_submit_trace_enabled(void) {\n    static const bool enabled=[](){const char *s=getenv(\"DS4_CUDA_DS_SUBMIT_TRACE\");return s && !strcmp(s,\"1\");}();\n    return enabled;\n}\nstatic void ds4_ds_submit_trace(const char *path, uint64_t bytes, size_t requests,\n        const LARGE_INTEGER &enqueue_start, const LARGE_INTEGER &submit_start,"
@@ -18376,11 +18377,11 @@
     ],
     "doc": "DS4_DS_GPU_QUEUES: advanced engine setting; built-in default retained",
     "reads": [
-      "engines/ds4-win/ds4_dstorage.cpp:380"
+      "engines/ds4-win/ds4_dstorage.cpp:381"
     ],
     "code_defaults": [
       {
-        "source": "engines/ds4-win/ds4_dstorage.cpp:380",
+        "source": "engines/ds4-win/ds4_dstorage.cpp:381",
         "unset": "NULL from getenv; the literal consumer below supplies any fallback",
         "read": "const char *env = getenv(\"DS4_DS_GPU_QUEUES\");",
         "consumer": "uint32_t gpu_queue_count_from_env(void) {\n    uint32_t n = 1;\n    const char *env = getenv(\"DS4_DS_GPU_QUEUES\");\n    if (env && env[0]) {\n        char *end = NULL;\n        unsigned long v = strtoul(env, &end, 10);\n        if (end != env && end && *end == 0 && v >= 1) {"
@@ -18398,11 +18399,11 @@
     ],
     "doc": "DS4_DS_GPU_SELFTEST: advanced engine setting; built-in default retained",
     "reads": [
-      "engines/ds4-win/ds4_dstorage.cpp:2019"
+      "engines/ds4-win/ds4_dstorage.cpp:2032"
     ],
     "code_defaults": [
       {
-        "source": "engines/ds4-win/ds4_dstorage.cpp:2019",
+        "source": "engines/ds4-win/ds4_dstorage.cpp:2032",
         "unset": "NULL from getenv; the literal consumer below supplies any fallback",
         "read": "const char *gpu_test = getenv(\"DS4_DS_GPU_SELFTEST\");",
         "consumer": "    int match_gpu = 1,gpu_rate_bad=0;\n    uint64_t gpu_completed=0;\n    const char *gpu_test = getenv(\"DS4_DS_GPU_SELFTEST\");\n    if (gpu_test && gpu_test[0]) {\n        void *gpu_ptr = NULL;\n        match_gpu = ds4_ds_gpu_arena_create(total, &gpu_ptr);\n        QueryPerformanceCounter(&a);"
@@ -18418,11 +18419,11 @@
     "classification": "advanced",
     "doc": "Native engine setting; retains its built-in default. The exact source consumer below records its conditional behavior.",
     "reads": [
-      "engines/ds4-win/ds4_dstorage.cpp:1120"
+      "engines/ds4-win/ds4_dstorage.cpp:1133"
     ],
     "code_defaults": [
       {
-        "source": "engines/ds4-win/ds4_dstorage.cpp:1120",
+        "source": "engines/ds4-win/ds4_dstorage.cpp:1133",
         "unset": "NULL from getenv; the literal consumer below supplies any fallback",
         "read": "static const bool enabled=[](){const char *s=getenv(\"DS4_DS_LAYER_TRACE\");return s&&!strcmp(s,\"1\");}();",
         "consumer": "static uint32_t g_layer_epoch = 0;\nstatic bool layer_trace_enabled(void) {\n    static const bool enabled=[](){const char *s=getenv(\"DS4_DS_LAYER_TRACE\");return s&&!strcmp(s,\"1\");}();\n    return enabled;\n}\nextern \"C\" int ds4_ds_layer_trace_enabled(void) { return layer_trace_enabled() ? 1 : 0; }\nstatic void layer_trace_dump(void) {"
@@ -18441,11 +18442,11 @@
     ],
     "doc": "DS4_DS_PIPELINE_DEPTH: advanced engine setting; built-in default retained",
     "reads": [
-      "engines/ds4-win/ds4_dstorage.cpp:1161"
+      "engines/ds4-win/ds4_dstorage.cpp:1174"
     ],
     "code_defaults": [
       {
-        "source": "engines/ds4-win/ds4_dstorage.cpp:1161",
+        "source": "engines/ds4-win/ds4_dstorage.cpp:1174",
         "unset": "NULL from getenv; the literal consumer below supplies any fallback",
         "read": "const char *env = getenv(\"DS4_DS_PIPELINE_DEPTH\");",
         "consumer": "    if (cached == 0) {\n        cached = 2;\n        const char *env = getenv(\"DS4_DS_PIPELINE_DEPTH\");\n        if (env && env[0]) {\n            char *end = NULL;\n            unsigned long v = strtoul(env, &end, 10);\n            if (end != env && end && *end == 0 && v >= 1) {"
@@ -18595,11 +18596,11 @@
     ],
     "doc": "DS4_DS_STAGING_MB: advanced engine setting; built-in default retained",
     "reads": [
-      "engines/ds4-win/ds4_dstorage.cpp:171"
+      "engines/ds4-win/ds4_dstorage.cpp:172"
     ],
     "code_defaults": [
       {
-        "source": "engines/ds4-win/ds4_dstorage.cpp:171",
+        "source": "engines/ds4-win/ds4_dstorage.cpp:172",
         "unset": "NULL from getenv; the literal consumer below supplies any fallback",
         "read": "const char *env = getenv(\"DS4_DS_STAGING_MB\");",
         "consumer": "uint32_t staging_mb_from_env(void) {\n    uint32_t mb = 256;                       /* documented default; see ds4_dstorage.h */\n    const char *env = getenv(\"DS4_DS_STAGING_MB\");\n    if (env && env[0]) {\n        char *end = NULL;\n        unsigned long v = strtoul(env, &end, 10);\n        if (end != env && end && *end == '\\0' && v >= 8 && v <= 4096) mb = (uint32_t)v;"
@@ -18617,11 +18618,11 @@
     ],
     "doc": "DS4_DS_SUBMIT_THREADS: advanced engine setting; built-in default retained",
     "reads": [
-      "engines/ds4-win/ds4_dstorage.cpp:538"
+      "engines/ds4-win/ds4_dstorage.cpp:551"
     ],
     "code_defaults": [
       {
-        "source": "engines/ds4-win/ds4_dstorage.cpp:538",
+        "source": "engines/ds4-win/ds4_dstorage.cpp:551",
         "unset": "NULL from getenv; the literal consumer below supplies any fallback",
         "read": "const char *threads_env = getenv(\"DS4_DS_SUBMIT_THREADS\");",
         "consumer": "        unsigned long threads = 0;            /* documented default: runtime heuristic */\n        int threads_from_env = 0;\n        const char *threads_env = getenv(\"DS4_DS_SUBMIT_THREADS\");\n        if (threads_env && threads_env[0]) {\n            char *end = NULL;\n            const unsigned long v = strtoul(threads_env, &end, 10);\n            if (end != threads_env && end && *end == '\\0' && v <= 64) {"
@@ -34723,17 +34724,17 @@
     ],
     "doc": "DS4_NATIVE_SESSION_DEADLINE_SECONDS: qualified Mac native preset setting; override explicitly for another plan",
     "reads": [
-      "engines/ds4-mac/ds4_native_session_setup.inc:26"
+      "engines/ds4-mac/ds4_native_session_setup.inc:28"
     ],
     "defaults_by_scope": {
       "mac-ds4": "600"
     },
     "code_defaults": [
       {
-        "source": "engines/ds4-mac/ds4_native_session_setup.inc:26",
+        "source": "engines/ds4-mac/ds4_native_session_setup.inc:28",
         "unset": "Wrapper/conditional default: see the literal call and consumer below",
         "read": "!ds4_nf_env_uint(\"DS4_NATIVE_SESSION_DEADLINE_SECONDS\",&c->http.deadline_seconds,60,7200)||",
-        "consumer": "    c->http.dirfd=-1;uint32_t port;\n    if(!ds4_nf_pair_token(token,c->http.token)||!ds4_nf_env_uint(\"DS4_NATIVE_SESSION_PORT\",&port,1,65535)||\n       !ds4_nf_env_uint(\"DS4_NATIVE_SESSION_DEADLINE_SECONDS\",&c->http.deadline_seconds,60,7200)||\n       inet_pton(AF_INET,host,&c->http.broker.sin_addr)!=1||!ds4_engine_native_frontier_identity(engine,&c->http.model))goto bad;\n    strcpy(c->http.host,host);strcpy(c->tier,tier);c->http.broker.sin_family=AF_INET;c->http.broker.sin_port=htons((uint16_t)port);\n    if(techniques){size_t n=strlen(techniques);if(n>=sizeof(c->techniques)||!ds4_ns_json_depth(techniques,n))goto bad;\n        for(size_t i=0;i<n;i++)if((unsigned char)techniques[i]<32||(unsigned char)techniques[i]>126)goto bad;"
+        "consumer": "    if(yoco&&strcmp(yoco,\"0\")){if(strcmp(yoco,\"140\"))goto bad;c->yoco_keep=140;}\n    if(!ds4_nf_pair_token(token,c->http.token)||!ds4_nf_env_uint(\"DS4_NATIVE_SESSION_PORT\",&port,1,65535)||\n       !ds4_nf_env_uint(\"DS4_NATIVE_SESSION_DEADLINE_SECONDS\",&c->http.deadline_seconds,60,7200)||\n       inet_pton(AF_INET,host,&c->http.broker.sin_addr)!=1||!ds4_engine_native_frontier_identity(engine,&c->http.model))goto bad;\n    strcpy(c->http.host,host);strcpy(c->tier,tier);c->http.broker.sin_family=AF_INET;c->http.broker.sin_port=htons((uint16_t)port);\n    if(techniques){size_t n=strlen(techniques);if(n>=sizeof(c->techniques)||!ds4_ns_json_depth(techniques,n))goto bad;\n        for(size_t i=0;i<n;i++)if((unsigned char)techniques[i]<32||(unsigned char)techniques[i]>126)goto bad;"
       }
     ]
   },
@@ -34845,17 +34846,17 @@
     ],
     "doc": "DS4_NATIVE_SESSION_PORT: qualified Mac native preset setting; override explicitly for another plan",
     "reads": [
-      "engines/ds4-mac/ds4_native_session_setup.inc:25"
+      "engines/ds4-mac/ds4_native_session_setup.inc:27"
     ],
     "defaults_by_scope": {
       "mac-ds4": "8765"
     },
     "code_defaults": [
       {
-        "source": "engines/ds4-mac/ds4_native_session_setup.inc:25",
+        "source": "engines/ds4-mac/ds4_native_session_setup.inc:27",
         "unset": "Wrapper/conditional default: see the literal call and consumer below",
         "read": "if(!ds4_nf_pair_token(token,c->http.token)||!ds4_nf_env_uint(\"DS4_NATIVE_SESSION_PORT\",&port,1,65535)||",
-        "consumer": "    ds4_ns_config*c=calloc(1,sizeof(*c));if(!c)return ds4_nf_error(err,cap,\"session configuration allocation failed\");\n    c->http.dirfd=-1;uint32_t port;\n    if(!ds4_nf_pair_token(token,c->http.token)||!ds4_nf_env_uint(\"DS4_NATIVE_SESSION_PORT\",&port,1,65535)||\n       !ds4_nf_env_uint(\"DS4_NATIVE_SESSION_DEADLINE_SECONDS\",&c->http.deadline_seconds,60,7200)||\n       inet_pton(AF_INET,host,&c->http.broker.sin_addr)!=1||!ds4_engine_native_frontier_identity(engine,&c->http.model))goto bad;\n    strcpy(c->http.host,host);strcpy(c->tier,tier);c->http.broker.sin_family=AF_INET;c->http.broker.sin_port=htons((uint16_t)port);\n    if(techniques){size_t n=strlen(techniques);if(n>=sizeof(c->techniques)||!ds4_ns_json_depth(techniques,n))goto bad;"
+        "consumer": "    const char*yoco=ds4_nf_env(\"DS4_NATIVE_SESSION_YOCO_KEEP\");\n    if(yoco&&strcmp(yoco,\"0\")){if(strcmp(yoco,\"140\"))goto bad;c->yoco_keep=140;}\n    if(!ds4_nf_pair_token(token,c->http.token)||!ds4_nf_env_uint(\"DS4_NATIVE_SESSION_PORT\",&port,1,65535)||\n       !ds4_nf_env_uint(\"DS4_NATIVE_SESSION_DEADLINE_SECONDS\",&c->http.deadline_seconds,60,7200)||\n       inet_pton(AF_INET,host,&c->http.broker.sin_addr)!=1||!ds4_engine_native_frontier_identity(engine,&c->http.model))goto bad;\n    strcpy(c->http.host,host);strcpy(c->tier,tier);c->http.broker.sin_family=AF_INET;c->http.broker.sin_port=htons((uint16_t)port);\n    if(techniques){size_t n=strlen(techniques);if(n>=sizeof(c->techniques)||!ds4_ns_json_depth(techniques,n))goto bad;"
       }
     ]
   },
@@ -42249,14 +42250,14 @@
       "engines/streaming-llama/prefill_llama.cpp/ggml/src/ggml-cuda/ds4split-expert-projection.cuh:339",
       "engines/streaming-llama/prefill_llama.cpp/ggml/src/ggml-cuda/ds4split-mmid-observer.cuh:186",
       "engines/streaming-llama/prefill_llama.cpp/src/boundary-capture.cpp:308",
-      "engines/streaming-llama/prefill_llama.cpp/src/llama-dsv41-executor.cpp:869",
+      "engines/streaming-llama/prefill_llama.cpp/src/llama-dsv41-executor.cpp:872",
       "engines/streaming-llama/prefill_llama.cpp/src/llama-dsv41-layer.cpp:48",
-      "engines/streaming-llama/prefill_llama.cpp/src/llama-dsv41-sweep.cpp:232",
-      "engines/streaming-llama/prefill_llama.cpp/src/llama-dsv41-sweep.cpp:262",
-      "engines/streaming-llama/prefill_llama.cpp/src/llama-dsv41-sweep.cpp:263",
-      "engines/streaming-llama/prefill_llama.cpp/tools/dsv41-prefill/main.cpp:390",
-      "engines/streaming-llama/prefill_llama.cpp/tools/dsv41-prefill/main.cpp:503",
-      "engines/streaming-llama/prefill_llama.cpp/tools/dsv41-prefill/main.cpp:847"
+      "engines/streaming-llama/prefill_llama.cpp/src/llama-dsv41-sweep.cpp:241",
+      "engines/streaming-llama/prefill_llama.cpp/src/llama-dsv41-sweep.cpp:272",
+      "engines/streaming-llama/prefill_llama.cpp/src/llama-dsv41-sweep.cpp:273",
+      "engines/streaming-llama/prefill_llama.cpp/tools/dsv41-prefill/main.cpp:392",
+      "engines/streaming-llama/prefill_llama.cpp/tools/dsv41-prefill/main.cpp:505",
+      "engines/streaming-llama/prefill_llama.cpp/tools/dsv41-prefill/main.cpp:859"
     ],
     "code_defaults": [
       {
@@ -42284,7 +42285,7 @@
         "consumer": "capture::capture(uint32_t layer,uint32_t start,uint32_t count,const std::vector<float>&residual,\n                 const std::vector<float>&pre):p(nullptr) {\n    const char *flag=std::getenv(\"DSV41_BOUNDARY_CAPTURE\");if(!flag||!*flag)return;\n    require(std::strcmp(flag,\"1\")==0,\"DSV41_BOUNDARY_CAPTURE must be exactly 1 or absent\");\n    if(layer!=0)return; // Other layers retain the original execution path.\n    require(start==0&&count==32,\"capture requires exact layer0/start0/32-row pilot\");\n    p=std::make_unique<implementation>();"
       },
       {
-        "source": "engines/streaming-llama/prefill_llama.cpp/src/llama-dsv41-executor.cpp:869",
+        "source": "engines/streaming-llama/prefill_llama.cpp/src/llama-dsv41-executor.cpp:872",
         "unset": "NULL from getenv; the literal consumer below supplies any fallback",
         "read": "llama_dsv41_expert_profile::validate(expert,in.count,std::getenv(\"DSV41_BOUNDARY_CAPTURE\"));",
         "consumer": "        unsigned mul_f16_fused=0;\n        require(!mul_f16_store||!workspace||!workspace->cache_layouts,\"F16 route-weight store fusion requires allocator-only graph mode\");\n        llama_dsv41_expert_profile::validate(expert,in.count,std::getenv(\"DSV41_BOUNDARY_CAPTURE\"));\n        require(in.position_offset<=cache.capacity()&&in.start<=cache.capacity()-in.position_offset,\"Absolute tile offset exceeds cache capacity\");\n        const uint32_t absolute_start=in.position_offset+in.start;\n        require(!in.position_offset||!workspace||!workspace->cache_layouts,\"Offset chunks require allocator-only graph mode\");\n        require(!in.single_attention_append||(pair_ffn&&in.position_offset%4096&&in.start%2048==0&&in.count<=2048&&admitted_tile_tokens>=4096&&workspace&&!workspace->cache_layouts),"
@@ -42296,40 +42297,40 @@
         "consumer": "        uint32_t compressed_rows,const weights & w,const inputs & in,const cache & state,\n        const llama_dsv41_expert_profile::policy & expert) const {\n    llama_dsv41_expert_profile::validate(expert,p.count,std::getenv(\"DSV41_BOUNDARY_CAPTURE\"));\n    GGML_ASSERT(layer<40 && p.ratio==(layer<2?0u:layer<20?2u:1u));\n    GGML_ASSERT(in.residual->ne[0]==5120 && in.residual->ne[1]==4 && in.residual->ne[2]==p.count);\n    GGML_ASSERT(in.previous_pre && in.previous_pre->ne[0]==4 && in.previous_pre->ne[1]==p.count);\n    GGML_ASSERT(p.ratio!=0 || compressed_rows==0);"
       },
       {
-        "source": "engines/streaming-llama/prefill_llama.cpp/src/llama-dsv41-sweep.cpp:232",
+        "source": "engines/streaming-llama/prefill_llama.cpp/src/llama-dsv41-sweep.cpp:241",
         "unset": "NULL from getenv; the literal consumer below supplies any fallback",
         "read": "!std::getenv(\"DSV41_BOUNDARY_CAPTURE\"),\"YOCO requires the single-engine fixed RAM owner without full-row diagnostics\");",
-        "consumer": "            require(!restored,\"YOCO refuses RTX/Mac session restore; re-prefill locally\");\n            require(options.fixed&&options.carry.resident_ram&&options.carry.direct_ram_tiles&&options.admitted_hidden_bytes&&options.carry.export_hidden_after_head&&options.carry.max_tile_tokens>=140&&(!options.compute_step_tokens||options.compute_step_tokens>=140)&&!options.diagnostic_layers&&!options.diagnostic_carry&&\n                !std::getenv(\"DSV41_BOUNDARY_CAPTURE\"),\"YOCO requires the single-engine fixed RAM owner without full-row diagnostics\");\n            if(prefix){\n                require(prefix!=this,\"YOCO prefix cannot be its own destination\");\n                std::unique_lock<std::mutex> previous_lock(prefix->p->mutex,std::try_to_lock);\n                require(previous_lock.owns_lock(),\"YOCO prefix is active\");"
+        "consumer": "            require(!restored||restored->local_snapshot,\"YOCO requires a local snapshot with explicit YOCO provenance\");\n            require(options.fixed&&options.carry.resident_ram&&options.carry.direct_ram_tiles&&options.admitted_hidden_bytes&&options.carry.export_hidden_after_head&&options.carry.max_tile_tokens>=140&&(!options.compute_step_tokens||options.compute_step_tokens>=140)&&!options.diagnostic_layers&&!options.diagnostic_carry&&\n                !std::getenv(\"DSV41_BOUNDARY_CAPTURE\"),\"YOCO requires the single-engine fixed RAM owner without full-row diagnostics\");\n            if(prefix){\n                require(prefix!=this,\"YOCO prefix cannot be its own destination\");\n                std::unique_lock<std::mutex> previous_lock(prefix->p->mutex,std::try_to_lock);\n                require(previous_lock.owns_lock(),\"YOCO prefix is active\");"
       },
       {
-        "source": "engines/streaming-llama/prefill_llama.cpp/src/llama-dsv41-sweep.cpp:262",
+        "source": "engines/streaming-llama/prefill_llama.cpp/src/llama-dsv41-sweep.cpp:272",
         "unset": "NULL from getenv; the literal consumer below supplies any fallback",
         "read": "require(!options.stateful_chunks||(options.carry.resident_ram&&options.reuse_graph&&!options.reuse_layer_graph&&!options.diagnostic_layers&&!std::getenv(\"DSV41_BOUNDARY_CAPTURE\")),\"Stateful chunks require explicit RAM and allocator-only graph mode without incomplete diagnostics\");",
         "consumer": "        require(!options.unaligned_append_step_tokens||(options.stateful_chunks&&options.fixed&&options.reuse_graph&&!options.reuse_layer_graph),\"Unaligned append policy requires the existing stateful fixed owner\");\n        require(!options.compute_step_tokens||(options.compute_step_tokens<=options.carry.max_tile_tokens&&(!options.pair_ffn||options.compute_step_tokens==options.carry.max_tile_tokens)),\"Logical compute step exceeds its admitted tile or changes paired group alignment\");\n        require(!options.stateful_chunks||(options.carry.resident_ram&&options.reuse_graph&&!options.reuse_layer_graph&&!options.diagnostic_layers&&!std::getenv(\"DSV41_BOUNDARY_CAPTURE\")),\"Stateful chunks require explicit RAM and allocator-only graph mode without incomplete diagnostics\");\n        llama_dsv41_expert_profile::validate(options.expert,options.carry.max_tile_tokens,std::getenv(\"DSV41_BOUNDARY_CAPTURE\"));\n        require(!options.admitted_pinned_device_bytes||(options.carry.resident_ram&&\n            llama_dsv41_expert_profile::native(options.expert)&&options.admitted_pinned_device_bytes>=64ull*1024*1024),\n            \"Direct pinned RAM requires native experts, admitted RAM bank and separate64MiB device ceiling\");"
       },
       {
-        "source": "engines/streaming-llama/prefill_llama.cpp/src/llama-dsv41-sweep.cpp:263",
+        "source": "engines/streaming-llama/prefill_llama.cpp/src/llama-dsv41-sweep.cpp:273",
         "unset": "NULL from getenv; the literal consumer below supplies any fallback",
         "read": "llama_dsv41_expert_profile::validate(options.expert,options.carry.max_tile_tokens,std::getenv(\"DSV41_BOUNDARY_CAPTURE\"));",
         "consumer": "        require(!options.compute_step_tokens||(options.compute_step_tokens<=options.carry.max_tile_tokens&&(!options.pair_ffn||options.compute_step_tokens==options.carry.max_tile_tokens)),\"Logical compute step exceeds its admitted tile or changes paired group alignment\");\n        require(!options.stateful_chunks||(options.carry.resident_ram&&options.reuse_graph&&!options.reuse_layer_graph&&!options.diagnostic_layers&&!std::getenv(\"DSV41_BOUNDARY_CAPTURE\")),\"Stateful chunks require explicit RAM and allocator-only graph mode without incomplete diagnostics\");\n        llama_dsv41_expert_profile::validate(options.expert,options.carry.max_tile_tokens,std::getenv(\"DSV41_BOUNDARY_CAPTURE\"));\n        require(!options.admitted_pinned_device_bytes||(options.carry.resident_ram&&\n            llama_dsv41_expert_profile::native(options.expert)&&options.admitted_pinned_device_bytes>=64ull*1024*1024),\n            \"Direct pinned RAM requires native experts, admitted RAM bank and separate64MiB device ceiling\");\n        require(!options.admitted_prefetch_device_bytes||(options.admitted_pinned_device_bytes&&options.reuse_graph&&!options.reuse_layer_graph&&"
       },
       {
-        "source": "engines/streaming-llama/prefill_llama.cpp/tools/dsv41-prefill/main.cpp:390",
+        "source": "engines/streaming-llama/prefill_llama.cpp/tools/dsv41-prefill/main.cpp:392",
         "unset": "NULL from getenv; the literal consumer below supplies any fallback",
         "read": "llama_dsv41_expert_profile::validate(expert,uint32_t(tile_tokens),std::getenv(\"DSV41_BOUNDARY_CAPTURE\"));",
         "consumer": "        expert.admitted_pool_bytes=expert_options?number(\"--expert-workspace-bytes\"):0;\n        expert.admitted_code_runtime_bytes=expert_options?number(\"--expert-runtime-bytes\"):0;\n        llama_dsv41_expert_profile::validate(expert,uint32_t(tile_tokens),std::getenv(\"DSV41_BOUNDARY_CAPTURE\"));\n        const auto native_columns=args.count(\"--native-expert-columns\")?integer(args.at(\"--native-expert-columns\")):16;\n        require(native_columns==DS4PERF_NATIVE_COLUMNS,\"Requested native expert columns do not match this explicitly built engine\");\n        if(native_columns!=16){\n            using namespace llama_dsv41_native_columns_resource_proof;"
       },
       {
-        "source": "engines/streaming-llama/prefill_llama.cpp/tools/dsv41-prefill/main.cpp:503",
+        "source": "engines/streaming-llama/prefill_llama.cpp/tools/dsv41-prefill/main.cpp:505",
         "unset": "NULL from getenv; the literal consumer below supplies any fallback",
         "read": "require(!chunk_option||(resident_ram&&!hybrid&&!std::getenv(\"DSV41_BOUNDARY_CAPTURE\")),\"Stateful chunks require explicit RAM carry and no boundary capture\");",
         "consumer": "        if(fold_plan.tail){std::fprintf(stderr,\"LLAMADECODE_PREFILL_FOLD_TAIL tokens=%zu primary_sweep_tokens=%u remainder=%u capacity=%u fold_cap=%u folded_last=%u sweep_tokens=%s\\n\",\n            tokens.size(),fold_plan.sweep,fold_plan.last,uint32_t(chunk_option),uint32_t(fold_cap),fold_plan.sweep+fold_plan.last,sweep_list.c_str());std::fflush(stderr);}\n        require(!chunk_option||(resident_ram&&!hybrid&&!std::getenv(\"DSV41_BOUNDARY_CAPTURE\")),\"Stateful chunks require explicit RAM carry and no boundary capture\");\n        require(!chunk_option||!pair_ffn||tokens.size()<=chunk_tokens||sweep_step%4096==0||unaligned_append_step==2048,\"Paired chunk size must align absolute attention positions\");\n        const auto context=number(\"--context\");require(context<=1048576&&tokens.size()<context,\"Native payload requires context room for the next decode token\");\n        require(!args.count(\"--session-stdio\")||args.at(\"--session-stdio\")==\"0\"||args.at(\"--session-stdio\")==\"1\",\"session-stdio requires0/1\");\n        const bool live=args.count(\"--session-stdio\")&&args.at(\"--session-stdio\")==\"1\";"
       },
       {
-        "source": "engines/streaming-llama/prefill_llama.cpp/tools/dsv41-prefill/main.cpp:847",
+        "source": "engines/streaming-llama/prefill_llama.cpp/tools/dsv41-prefill/main.cpp:859",
         "unset": "NULL from getenv; the literal consumer below supplies any fallback",
         "read": "require(resident_ram&&!options.diagnostic_layers&&!std::getenv(\"DSV41_BOUNDARY_CAPTURE\"),\"One-token warmup requires RAM carry and no boundary/incomplete diagnostics\");",
-        "consumer": "        uint64_t warm_cublas=0;\n        if(warm){\n            require(resident_ram&&!options.diagnostic_layers&&!std::getenv(\"DSV41_BOUNDARY_CAPTURE\"),\"One-token warmup requires RAM carry and no boundary/incomplete diagnostics\");\n            auto warm_options=options;auto warm_weights=weights;\n            warm_options.yoco_keep=0;warm_options.yoco_logical_end=0;warm_options.carry.tokens=1;warm_options.pair_ffn=false;\n            warm_options.carry.max_tile_tokens=std::min(4096u,warm_options.carry.max_tile_tokens);\n            warm_options.compute_step_tokens=std::min(warm_options.compute_step_tokens,warm_options.carry.max_tile_tokens);"
+        "consumer": "        uint64_t warm_cublas=0;\n        if(warm){\n            require(resident_ram&&!options.diagnostic_layers&&!std::getenv(\"DSV41_BOUNDARY_CAPTURE\"),\"One-token warmup requires RAM carry and no boundary/incomplete diagnostics\");\n            auto warm_options=options;auto warm_weights=weights;\n            warm_options.yoco_keep=0;warm_options.yoco_remote_state_version=0;warm_options.yoco_logical_end=0;warm_options.carry.tokens=1;warm_options.pair_ffn=false;\n            warm_options.carry.max_tile_tokens=std::min(4096u,warm_options.carry.max_tile_tokens);\n            warm_options.compute_step_tokens=std::min(warm_options.compute_step_tokens,warm_options.carry.max_tile_tokens);"
       }
     ]
   },
@@ -42869,10 +42870,10 @@
       "engines/streaming-llama/prefill_llama.cpp/ggml/src/ggml-cuda/common.cuh:1243",
       "engines/streaming-llama/prefill_llama.cpp/ggml/src/ggml-cuda/ggml-cuda.cu:6249",
       "engines/streaming-llama/prefill_llama.cpp/src/llama-context.cpp:25212",
-      "engines/streaming-llama/prefill_llama.cpp/src/llama-dsv41-executor.cpp:604",
-      "engines/streaming-llama/prefill_llama.cpp/src/llama-dsv41-executor.cpp:1180",
-      "engines/streaming-llama/prefill_llama.cpp/src/llama-dsv41-executor.cpp:1185",
-      "engines/streaming-llama/prefill_llama.cpp/tools/dsv41-prefill/main.cpp:722"
+      "engines/streaming-llama/prefill_llama.cpp/src/llama-dsv41-executor.cpp:607",
+      "engines/streaming-llama/prefill_llama.cpp/src/llama-dsv41-executor.cpp:1183",
+      "engines/streaming-llama/prefill_llama.cpp/src/llama-dsv41-executor.cpp:1188",
+      "engines/streaming-llama/prefill_llama.cpp/tools/dsv41-prefill/main.cpp:733"
     ],
     "defaults_by_scope": {
       "rtx-llama": "1"
@@ -42909,25 +42910,25 @@
         "consumer": "    // inside ggml_cuda_graph::is_enabled() at first compute \u2014 so it must\n    // be set before the first ggml-cuda compute in this process.\n    const char * disable_env = std::getenv(\"GGML_CUDA_DISABLE_GRAPHS\");\n    if (disable_env == nullptr || disable_env[0] == '\\0') {\n        LLAMA_LOG_ERROR(\"%s: GGML_CUDA_DISABLE_GRAPHS env var must be set before \"\n                        \"context creation so ggml-cuda's own graph capture is \"\n                        \"off. Otherwise cudaStreamBeginCapture collides.\\n\","
       },
       {
-        "source": "engines/streaming-llama/prefill_llama.cpp/src/llama-dsv41-executor.cpp:604",
+        "source": "engines/streaming-llama/prefill_llama.cpp/src/llama-dsv41-executor.cpp:607",
         "unset": "NULL from getenv; the literal consumer below supplies any fallback",
         "read": "require(!async_inputs||(direct&&ggml_backend_is_cuda(backend)&&std::getenv(\"GGML_CUDA_DISABLE_GRAPHS\")&&std::string(std::getenv(\"GGML_CUDA_DISABLE_GRAPHS\"))==\"1\"),\"Async inputs require actual pinned CUDA and disabled capture\");",
         "consumer": "    swiglu_limit(swiglu_limit),expert_scale(expert_scale),sinkhorn_iters(sinkhorn_iters),admitted_tile_tokens(admitted_tile_tokens),resident_bf16(resident_bf16),export_hidden_after_head(export_hidden_after_head),async_inputs(async_inputs),resident_ids(resident_ids),resident_metadata(resident_metadata),defer_hidden_readback(defer_hidden_readback),merge_attention_selected_rows(merge_attention_selected_rows),hc_projection_f16_gemm(hc_projection_f16_gemm),dense_mxfp4(dense_mxfp4),pair_ffn(pair_ffn),fixed(fixed){\n#ifdef GGML_USE_CUDA\n    require(!async_inputs||(direct&&ggml_backend_is_cuda(backend)&&std::getenv(\"GGML_CUDA_DISABLE_GRAPHS\")&&std::string(std::getenv(\"GGML_CUDA_DISABLE_GRAPHS\"))==\"1\"),\"Async inputs require actual pinned CUDA and disabled capture\");\n#else\n    require(!async_inputs,\"Async inputs require the CUDA backend\");\n#endif\n    require(!export_hidden_after_head||defer_hidden_readback,\"Post-head export requires full-device hidden retention\");"
       },
       {
-        "source": "engines/streaming-llama/prefill_llama.cpp/src/llama-dsv41-executor.cpp:1180",
+        "source": "engines/streaming-llama/prefill_llama.cpp/src/llama-dsv41-executor.cpp:1183",
         "unset": "NULL from getenv; the literal consumer below supplies any fallback",
         "read": "require(std::getenv(\"GGML_CUDA_DISABLE_GRAPHS\")&&std::string(std::getenv(\"GGML_CUDA_DISABLE_GRAPHS\"))==\"1\",\"Expert FP4 packing requires the explicit uncaptured producer path\");",
         "consumer": "        if(workspace&&workspace->casts)graph=workspace->casts->prepare(ctx.get(),graph,in.layer,&backend_temporary);\n        if(expert.expert_mxfp4){\n            require(std::getenv(\"GGML_CUDA_DISABLE_GRAPHS\")&&std::string(std::getenv(\"GGML_CUDA_DISABLE_GRAPHS\"))==\"1\",\"Expert FP4 packing requires the explicit uncaptured producer path\");\n            require(dense_mxfp4&&workspace&&workspace->casts&&!workspace->cache_layouts&&!pair_ffn,\"Expert FP4 requires the existing dense FP4 cast bank, allocator-only graph and<=4K lane\");\n            if(in.count>4)workspace->casts->prepare_expert_fp4(graph,in.layer,in.count);\n            else llama_dsv41_layer_log(\"DS4PERF_EXPERT_MXFP4_SMALL_BATCH layer=%u count=%u unchanged_original_weights=1 native_MMA_minimum_rows=5\\n\",in.layer,in.count);\n        }"
       },
       {
-        "source": "engines/streaming-llama/prefill_llama.cpp/src/llama-dsv41-executor.cpp:1185",
+        "source": "engines/streaming-llama/prefill_llama.cpp/src/llama-dsv41-executor.cpp:1188",
         "unset": "NULL from getenv; the literal consumer below supplies any fallback",
         "read": "require(!expert.reuse_expert_routing_map||(std::getenv(\"GGML_CUDA_DISABLE_GRAPHS\")&&std::string(std::getenv(\"GGML_CUDA_DISABLE_GRAPHS\"))==\"1\"),\"Routing-map reuse requires the explicit uncaptured producer path\");",
         "consumer": "            else llama_dsv41_layer_log(\"DS4PERF_EXPERT_MXFP4_SMALL_BATCH layer=%u count=%u unchanged_original_weights=1 native_MMA_minimum_rows=5\\n\",in.layer,in.count);\n        }\n        require(!expert.reuse_expert_routing_map||(std::getenv(\"GGML_CUDA_DISABLE_GRAPHS\")&&std::string(std::getenv(\"GGML_CUDA_DISABLE_GRAPHS\"))==\"1\"),\"Routing-map reuse requires the explicit uncaptured producer path\");\n        if(expert.sorted_expert_routing){\n            unsigned tagged=0;for(int i=0;i<ggml_graph_n_nodes(graph);++i)tagged+=ggml_dsv41_sorted_routing_tag(ggml_graph_node(graph,i),expert.reuse_expert_routing_map)?1:0;\n            require(tagged==3,\"Explicit count/prefix/scatter routing did not match exactly gate/up/down\");\n        }"
       },
       {
-        "source": "engines/streaming-llama/prefill_llama.cpp/tools/dsv41-prefill/main.cpp:722",
+        "source": "engines/streaming-llama/prefill_llama.cpp/tools/dsv41-prefill/main.cpp:733",
         "unset": "NULL from getenv; the literal consumer below supplies any fallback",
         "read": "require(!options.resident_bf16||(options.carry.defer_hidden_readback&&std::getenv(\"GGML_CUDA_DISABLE_GRAPHS\")&&std::string(std::getenv(\"GGML_CUDA_DISABLE_GRAPHS\"))==\"1\"),\"Resident BF16 test requires explicit full resident readback and disabled CUDA capture\");",
         "consumer": "        require(!args.count(\"--resident-hidden-bf16\")||args.at(\"--resident-hidden-bf16\")==\"0\"||args.at(\"--resident-hidden-bf16\")==\"1\",\"resident-hidden-bf16 requires0/1\");\n        options.resident_bf16=args.count(\"--resident-hidden-bf16\")&&args.at(\"--resident-hidden-bf16\")==\"1\";\n        require(!options.resident_bf16||(options.carry.defer_hidden_readback&&std::getenv(\"GGML_CUDA_DISABLE_GRAPHS\")&&std::string(std::getenv(\"GGML_CUDA_DISABLE_GRAPHS\"))==\"1\"),\"Resident BF16 test requires explicit full resident readback and disabled CUDA capture\");\n        report[\"resident_hidden_storage\"]=options.resident_bf16?\"BF16 after validated existing BF16 boundary; layer0 input unchanged F32\":\"F32\";\n        options.carry.ram_prefix_tokens=uint32_t(ram_prefix);options.carry.disk_reserve_bytes=disk_reserve;\n        if(const char *diag=std::getenv(\"DS4PERF_DIAGNOSTIC_LAYERS\")){if(*diag){\n            const auto layers=integer(diag);require(layers>0&&layers<40&&resident_ram&&llama_dsv41_expert_profile::native(expert),"
@@ -47010,11 +47011,11 @@
     ],
     "doc": "Producer live session: path of a file whose appearance cancels the current request at the next step boundary (set by the single-engine controller).",
     "reads": [
-      "engines/streaming-llama/prefill_llama.cpp/tools/dsv41-prefill/main.cpp:75"
+      "engines/streaming-llama/prefill_llama.cpp/tools/dsv41-prefill/main.cpp:77"
     ],
     "code_defaults": [
       {
-        "source": "engines/streaming-llama/prefill_llama.cpp/tools/dsv41-prefill/main.cpp:75",
+        "source": "engines/streaming-llama/prefill_llama.cpp/tools/dsv41-prefill/main.cpp:77",
         "unset": "Wrapper/conditional default: see the literal call and consumer below",
         "read": "static const wchar_t*name=_wgetenv(L\"LLAMADECODE_ABORT_FILE\");",
         "consumer": "// file; the engine then stops at its next stage boundary and tears down normally.\nbool abort_file_present(){\n    static const wchar_t*name=_wgetenv(L\"LLAMADECODE_ABORT_FILE\");\n    if(!name||!*name)return false;\n    static std::atomic<int64_t>last{0};const int64_t now=std::chrono::duration_cast<std::chrono::milliseconds>(clock_type::now().time_since_epoch()).count();\n    if(now-last.load()<250)return false;last.store(now);\n    return GetFileAttributesW(name)!=INVALID_FILE_ATTRIBUTES;"
@@ -47146,11 +47147,11 @@
     ],
     "doc": "Producer decode: release prefill-only graph and hidden buffers before decode so the L2 expert cache can use them (default on); 0 disables.",
     "reads": [
-      "engines/streaming-llama/prefill_llama.cpp/src/llama-dsv41-sweep.cpp:191"
+      "engines/streaming-llama/prefill_llama.cpp/src/llama-dsv41-sweep.cpp:194"
     ],
     "code_defaults": [
       {
-        "source": "engines/streaming-llama/prefill_llama.cpp/src/llama-dsv41-sweep.cpp:191",
+        "source": "engines/streaming-llama/prefill_llama.cpp/src/llama-dsv41-sweep.cpp:194",
         "unset": "NULL from getenv; the literal consumer below supplies any fallback",
         "read": "static bool decode_compact_enabled(){static const bool on=[]{const char*e=std::getenv(\"LLAMADECODE_DECODE_COMPACT\");return !(e&&e[0]=='0'&&!e[1]);}();return on;}",
         "consumer": "// hidden bank; the prefill-sized reservations go back to the device (the\n// decode L2 expert cache uses them). LLAMADECODE_DECODE_COMPACT=0 disables.\nstatic bool decode_compact_enabled(){static const bool on=[]{const char*e=std::getenv(\"LLAMADECODE_DECODE_COMPACT\");return !(e&&e[0]=='0'&&!e[1]);}();return on;}\nstatic void compact_fixed(llama_dsv41_fixed_storage&f,uint64_t admitted_hidden){\n    require(f.ready&&f.graph&&!f.decode_compact,\"Decode compaction requires the ready prefill plan\");\n    ggml_backend_synchronize(f.backend);\n    const uint64_t old_graph=ggml_gallocr_get_buffer_size(f.graph.get(),0),old_hidden=f.hidden?ggml_backend_buffer_get_size(f.hidden.get()):0;"
@@ -47209,7 +47210,8 @@
     "code_default": "NULL from getenv; the literal consumer below supplies any fallback",
     "classification": "advanced",
     "scopes": [
-      "rtx-llama"
+      "rtx-llama",
+      "ds4-win"
     ],
     "doc": "Keep the decoder open across appended turns; 0 restores close/reopen.",
     "reads": [
@@ -47303,7 +47305,8 @@
     ],
     "doc": "Producer decode: path of the per-model routing calibration (affinity spreads) used with LLAMADECODE_DS4_BIAS; the controller supplies cache_affinity_spread_file.",
     "reads": [
-      "engines/streaming-llama/prefill_llama.cpp/tools/dsv41-prefill/live-session.inc:321"
+      "engines/streaming-llama/prefill_llama.cpp/tools/dsv41-prefill/live-session.inc:321",
+      "engines/streaming-llama/prefill_llama.cpp/tools/dsv41-prefill/live-session.inc:393"
     ],
     "code_defaults": [
       {
@@ -47311,6 +47314,12 @@
         "unset": "NULL from getenv; the literal consumer below supplies any fallback",
         "read": "const float mean=quality>=0.f?quality:std::strtof(b,nullptr);const char*spread=std::getenv(\"LLAMADECODE_DS4_SPREAD\");",
         "consumer": "        const char*b=std::getenv(\"LLAMADECODE_DS4_BIAS\");\n        if(quality>=0.f||b){\n            const float mean=quality>=0.f?quality:std::strtof(b,nullptr);const char*spread=std::getenv(\"LLAMADECODE_DS4_SPREAD\");\n            const char*w=std::getenv(\"DS4_CACHE_AFFINITY_WARMUP_TOKENS\");const char*r=std::getenv(\"DS4_CACHE_AFFINITY_RAMP_TOKENS\");\n            require(x_affinity(mean,w?uint32_t(std::strtoul(w,nullptr,10)):100u,r?uint32_t(std::strtoul(r,nullptr,10)):8u,spread,&residency_hook,this)==1,\n                \"ds4x_set_affinity refused the bias configuration\");\n        }"
+      },
+      {
+        "source": "engines/streaming-llama/prefill_llama.cpp/tools/dsv41-prefill/live-session.inc:393",
+        "unset": "NULL from getenv; the literal consumer below supplies any fallback",
+        "read": "const char*spread=std::getenv(\"LLAMADECODE_DS4_SPREAD\");",
+        "consumer": "            // token. No restarted warmup/ramp may defer a live slider update.\n            if(index==0||bias!=ds4x.quality){\n                const char*spread=std::getenv(\"LLAMADECODE_DS4_SPREAD\");\n                require(ds4x.x_affinity(bias,0,0,spread,&ds4_external::residency_hook,&ds4x)==1,\"Live bias refused\");\n                ds4x.quality=bias;\n                std::fprintf(stderr,\"LLAMADECODE_LIVE_BIAS value=%.6g position=%u\\n\",bias,current.frontier.position+uint32_t(index));std::fflush(stderr);\n            }"
       }
     ],
     "code_default": "NULL from getenv; the literal consumer below supplies any fallback"
@@ -47322,7 +47331,8 @@
     "code_default": "NULL from getenv; the literal consumer below supplies any fallback",
     "classification": "advanced",
     "scopes": [
-      "rtx-llama"
+      "rtx-llama",
+      "ds4-win"
     ],
     "doc": "DirectStorage heap residency control; preserve backend admission requirements.",
     "reads": [
@@ -47369,11 +47379,11 @@
     ],
     "doc": "Producer Engram row cache kept in host RAM across turns, in MiB; 0 disables it. Unset: min(4 GiB, the producer admission headroom) on this revision, with no safety margin; the DSV4.1 single-engine launch scripts set 0. An explicit size above the headroom is refused.",
     "reads": [
-      "engines/streaming-llama/prefill_llama.cpp/src/llama-dsv41-sweep.cpp:413"
+      "engines/streaming-llama/prefill_llama.cpp/src/llama-dsv41-sweep.cpp:423"
     ],
     "code_defaults": [
       {
-        "source": "engines/streaming-llama/prefill_llama.cpp/src/llama-dsv41-sweep.cpp:413",
+        "source": "engines/streaming-llama/prefill_llama.cpp/src/llama-dsv41-sweep.cpp:423",
         "unset": "NULL from getenv; the literal consumer below supplies any fallback",
         "read": "const char*e=std::getenv(\"LLAMADECODE_ENGRAM_CACHE_MB\");",
         "consumer": "        const uint64_t row_cache_have=p->provider.engram_row_cache_bytes();uint64_t row_cache_new=0;\n        if(!row_cache_have&&weights.engram_prefetch_host_bytes&&options.engram_tile_lookahead){\n            const char*e=std::getenv(\"LLAMADECODE_ENGRAM_CACHE_MB\");\n            const uint64_t headroom=options.admitted_host_bytes>base_host?options.admitted_host_bytes-base_host:0;\n            if(e&&*e){char*end=nullptr;const unsigned long long mb=std::strtoull(e,&end,10);\n                require(end&&!*end&&mb<=1048576,\"LLAMADECODE_ENGRAM_CACHE_MB must be a whole number of MiB (0 disables)\");\n                row_cache_new=uint64_t(mb)<<20;"
@@ -47571,7 +47581,8 @@
     "code_default": "NULL from getenv; the literal consumer below supplies any fallback",
     "classification": "advanced",
     "scopes": [
-      "rtx-llama"
+      "rtx-llama",
+      "ds4-win"
     ],
     "doc": "Owner digest verification mode; full rehashes complete owner state.",
     "reads": [
@@ -47637,7 +47648,8 @@
     "code_default": "NULL from getenv; the literal consumer below supplies any fallback",
     "classification": "advanced",
     "scopes": [
-      "rtx-llama"
+      "rtx-llama",
+      "ds4-win"
     ],
     "doc": "Optional native tile timing diagnostics.",
     "reads": [
@@ -52644,7 +52656,7 @@
     "doc": "LLAMA_DSV41_ATTN_G16: advanced engine setting; built-in default retained",
     "reads": [
       "engines/streaming-llama/prefill_llama.cpp/ggml/src/ggml-cuda/dsv41-ds4-token-tile.cu:1024",
-      "engines/streaming-llama/prefill_llama.cpp/src/llama-dsv41-executor.cpp:1435"
+      "engines/streaming-llama/prefill_llama.cpp/src/llama-dsv41-executor.cpp:1438"
     ],
     "code_defaults": [
       {
@@ -52654,7 +52666,7 @@
         "consumer": "        CUDA_CHECK(cudaGetLastError());ds4_token_union_queued.fetch_add(1,std::memory_order_release);\n    }\n    const char *g16_env=std::getenv(\"LLAMA_DSV41_ATTN_G16\");\n    const bool g16=g16_env&&g16_env[0]=='1'&&g16_env[1]=='\\0';\n    if(g16){\n    CUDA_SET_SHARED_MEMORY_LIMIT(attention_tokentile_hmma_kernel<16u>, (tt_TokentileSmemBudget<kTTStageRows,16u>::total));\n    attention_tokentile_hmma_kernel<16u><<<dim3(tiles,4),512,tt_TokentileSmemBudget<kTTStageRows,16u>::total,stream>>>("
       },
       {
-        "source": "engines/streaming-llama/prefill_llama.cpp/src/llama-dsv41-executor.cpp:1435",
+        "source": "engines/streaming-llama/prefill_llama.cpp/src/llama-dsv41-executor.cpp:1438",
         "unset": "NULL from getenv; the literal consumer below supplies any fallback",
         "read": "const bool attention_g16=std::getenv(\"LLAMA_DSV41_ATTN_G16\")&&std::string(std::getenv(\"LLAMA_DSV41_ATTN_G16\"))==\"1\";",
         "consumer": "        const auto stream_topk_before=expert.index_key_windows?ggml_backend_cuda_dsv41_stream_topk_queued():0;\n        const auto f16_table_before=expert.attention_kv_f16_table?ggml_backend_cuda_dsv41_token_f16_table_queued():0;\n        const bool attention_g16=std::getenv(\"LLAMA_DSV41_ATTN_G16\")&&std::string(std::getenv(\"LLAMA_DSV41_ATTN_G16\"))==\"1\";\n        const auto attention_g16_before=attention_g16?ggml_backend_cuda_dsv41_token_tile_g16_queued():0;\n        const auto union_before=merge_rows?ggml_backend_cuda_dsv41_token_union_queued():0;\n        const auto expert_cublas_before=expert.expert_f16_cublas?ggml_backend_cuda_dsv41_expert_cublas_queued():0;\n        const auto expert_fp4_before=expert.expert_mxfp4?ggml_backend_cuda_native_mxfp4_routed_queued():0;"
@@ -52673,7 +52685,7 @@
     "doc": "LLAMA_DSV41_BF16_VECTOR: advanced engine setting; built-in default retained",
     "reads": [
       "engines/streaming-llama/prefill_llama.cpp/ggml/src/ggml-cuda/dsv4-act-qat.cu:36",
-      "engines/streaming-llama/prefill_llama.cpp/src/llama-dsv41-executor.cpp:1430"
+      "engines/streaming-llama/prefill_llama.cpp/src/llama-dsv41-executor.cpp:1433"
     ],
     "code_defaults": [
       {
@@ -52683,7 +52695,7 @@
         "consumer": "        GGML_ASSERT(mode <= GGML_DSV41_QAT_FP8_E8M0 && n_rot == 0);\n        if (mode == GGML_DSV41_QAT_BF16) {\n            const char *vector_env=std::getenv(\"LLAMA_DSV41_BF16_VECTOR\");\n            if(vector_env&&vector_env[0]=='1'&&vector_env[1]=='\\0'&&ggml_dsv41_bf16_vector_eligible(dst)){\n                const int64_t vectors=ggml_nelements(dst)/4;\n                dsv41_bf16_vector4_kernel<<<unsigned((vectors+255)/256),256,0,stream>>>(\n                    (const float4*)src_d,(float4*)dst_d,vectors);"
       },
       {
-        "source": "engines/streaming-llama/prefill_llama.cpp/src/llama-dsv41-executor.cpp:1430",
+        "source": "engines/streaming-llama/prefill_llama.cpp/src/llama-dsv41-executor.cpp:1433",
         "unset": "NULL from getenv; the literal consumer below supplies any fallback",
         "read": "const bool bf16_vector=std::getenv(\"LLAMA_DSV41_BF16_VECTOR\")&&std::string(std::getenv(\"LLAMA_DSV41_BF16_VECTOR\"))==\"1\";",
         "consumer": "        const auto cast_elements_before=cast_vector?ggml_backend_cuda_dsv41_cast_vector_elements():0;\n        const auto cast_nc_before=cast_vector?ggml_backend_cuda_dsv41_cast_vector_nc_queued():0;\n        const bool bf16_vector=std::getenv(\"LLAMA_DSV41_BF16_VECTOR\")&&std::string(std::getenv(\"LLAMA_DSV41_BF16_VECTOR\"))==\"1\";\n        const auto bf16_vector_before=bf16_vector?ggml_backend_cuda_dsv41_bf16_vector_queued():0;\n        const auto token_tile_before=expert.token_tile_attention?ggml_backend_cuda_dsv41_token_tile_queued():0;\n        const auto stream_topk_before=expert.index_key_windows?ggml_backend_cuda_dsv41_stream_topk_queued():0;\n        const auto f16_table_before=expert.attention_kv_f16_table?ggml_backend_cuda_dsv41_token_f16_table_queued():0;"
@@ -52702,7 +52714,7 @@
     "doc": "LLAMA_DSV41_CAST_VECTOR: qualified preset/runtime setting; override for a different memory or arithmetic plan",
     "reads": [
       "engines/streaming-llama/prefill_llama.cpp/ggml/src/ggml-cuda/dsv41-cast-vector.cuh:32",
-      "engines/streaming-llama/prefill_llama.cpp/src/llama-dsv41-executor.cpp:1426"
+      "engines/streaming-llama/prefill_llama.cpp/src/llama-dsv41-executor.cpp:1429"
     ],
     "defaults_by_scope": {
       "rtx-llama": "1"
@@ -52715,7 +52727,7 @@
         "consumer": "    constexpr bool dh=std::is_same<D,half>::value,db=std::is_same<D,nv_bfloat16>::value;\n    if constexpr((sf&&(dh||db))||(df&&(sh||sb))){\n        const char*e=std::getenv(\"LLAMA_DSV41_CAST_VECTOR\");if(!(e&&e[0]=='1'&&e[1]=='\\0'))return false;\n        constexpr ggml_type st=sf?GGML_TYPE_F32:sh?GGML_TYPE_F16:GGML_TYPE_BF16;\n        constexpr ggml_type dt=df?GGML_TYPE_F32:dh?GGML_TYPE_F16:GGML_TYPE_BF16;\n        if(!ggml_dsv41_cast_vector_geometry(st,dt,x,y,n0,n1,n2,n3,s1,s2,s3))return false;\n        const int64_t total=n0*n1*n2*n3;"
       },
       {
-        "source": "engines/streaming-llama/prefill_llama.cpp/src/llama-dsv41-executor.cpp:1426",
+        "source": "engines/streaming-llama/prefill_llama.cpp/src/llama-dsv41-executor.cpp:1429",
         "unset": "NULL from getenv; the literal consumer below supplies any fallback",
         "read": "const bool cast_vector=std::getenv(\"LLAMA_DSV41_CAST_VECTOR\")&&std::string(std::getenv(\"LLAMA_DSV41_CAST_VECTOR\"))==\"1\";",
         "consumer": "        const auto dense_bf16_store_before=dense_bf16_store?ggml_backend_cuda_dsv41_dense_bf16_store_queued():0;\n        const auto mul_f16_store_before=mul_f16_store?ggml_backend_cuda_dsv41_mul_f16_store_queued():0;\n        const bool cast_vector=std::getenv(\"LLAMA_DSV41_CAST_VECTOR\")&&std::string(std::getenv(\"LLAMA_DSV41_CAST_VECTOR\"))==\"1\";\n        const auto cast_vector_before=cast_vector?ggml_backend_cuda_dsv41_cast_vector_queued():0;\n        const auto cast_elements_before=cast_vector?ggml_backend_cuda_dsv41_cast_vector_elements():0;\n        const auto cast_nc_before=cast_vector?ggml_backend_cuda_dsv41_cast_vector_nc_queued():0;\n        const bool bf16_vector=std::getenv(\"LLAMA_DSV41_BF16_VECTOR\")&&std::string(std::getenv(\"LLAMA_DSV41_BF16_VECTOR\"))==\"1\";"
@@ -52733,11 +52745,11 @@
     ],
     "doc": "LLAMA_DSV41_DENSE_BF16_STORE: advanced engine setting; built-in default retained",
     "reads": [
-      "engines/streaming-llama/prefill_llama.cpp/src/llama-dsv41-executor.cpp:865"
+      "engines/streaming-llama/prefill_llama.cpp/src/llama-dsv41-executor.cpp:868"
     ],
     "code_defaults": [
       {
-        "source": "engines/streaming-llama/prefill_llama.cpp/src/llama-dsv41-executor.cpp:865",
+        "source": "engines/streaming-llama/prefill_llama.cpp/src/llama-dsv41-executor.cpp:868",
         "unset": "NULL from getenv; the literal consumer below supplies any fallback",
         "read": "const bool dense_bf16_store=expert.dense_activation_q8_1&&std::getenv(\"LLAMA_DSV41_DENSE_BF16_STORE\")&&std::string(std::getenv(\"LLAMA_DSV41_DENSE_BF16_STORE\"))==\"1\";",
         "consumer": "        probe.enabled=std::getenv(\"DS4PERF_EXECUTOR_WALL_PROBE\")&&std::string(std::getenv(\"DS4PERF_EXECUTOR_WALL_PROBE\"))==\"1\";\n        const bool rope_inplace=std::getenv(\"LLAMA_DSV41_ROPE_INPLACE\")&&std::string(std::getenv(\"LLAMA_DSV41_ROPE_INPLACE\"))==\"1\";\n        const bool dense_bf16_store=expert.dense_activation_q8_1&&std::getenv(\"LLAMA_DSV41_DENSE_BF16_STORE\")&&std::string(std::getenv(\"LLAMA_DSV41_DENSE_BF16_STORE\"))==\"1\";\n        const bool mul_f16_store=std::getenv(\"LLAMA_DSV41_MUL_F16_STORE\")&&std::string(std::getenv(\"LLAMA_DSV41_MUL_F16_STORE\"))==\"1\";\n        unsigned mul_f16_fused=0;\n        require(!mul_f16_store||!workspace||!workspace->cache_layouts,\"F16 route-weight store fusion requires allocator-only graph mode\");\n        llama_dsv41_expert_profile::validate(expert,in.count,std::getenv(\"DSV41_BOUNDARY_CAPTURE\"));"
@@ -52755,11 +52767,11 @@
     ],
     "doc": "Producer prefill: Engram table read start policy; built-in default retained.",
     "reads": [
-      "engines/streaming-llama/prefill_llama.cpp/tools/dsv41-prefill/main.cpp:910"
+      "engines/streaming-llama/prefill_llama.cpp/tools/dsv41-prefill/main.cpp:922"
     ],
     "code_defaults": [
       {
-        "source": "engines/streaming-llama/prefill_llama.cpp/tools/dsv41-prefill/main.cpp:910",
+        "source": "engines/streaming-llama/prefill_llama.cpp/tools/dsv41-prefill/main.cpp:922",
         "unset": "NULL from getenv; the literal consumer below supplies any fallback",
         "read": "const char*early_direct=std::getenv(\"LLAMA_DSV41_ENGRAM_EARLY_DIRECT\");",
         "consumer": "        // load (7.9 s at 43K) left a 7.4 s join wait and prefill fell to 1,052 tok/s,\n        // against 1,238 tok/s with the ordinary layer-0 overlapped load. Opt-in only.\n        const char*early_direct=std::getenv(\"LLAMA_DSV41_ENGRAM_EARLY_DIRECT\");\n        if(!(engram_early_cold&&sweep->early_engram_queued())&&direct_open&&early_direct&&std::strcmp(early_direct,\"1\")==0){const char*overlap=std::getenv(\"LLAMA_DSV41_ENGRAM_PROMPT_OVERLAP\");\n            if(weights.engram_prefetch_host_bytes&&options.engram_tile_lookahead&&overlap&&std::strcmp(overlap,\"1\")==0){\n                const std::vector<int32_t> first(tokens.begin(),tokens.begin()+first_sweep_tokens);\n                success(sweep->start_next_engram(first,early_tail,error),error);"
@@ -52778,22 +52790,22 @@
     ],
     "doc": "LLAMA_DSV41_ENGRAM_PROMPT_OVERLAP: qualified preset/runtime setting; override for a different memory or arithmetic plan",
     "reads": [
-      "engines/streaming-llama/prefill_llama.cpp/src/llama-dsv41-sweep.cpp:655",
+      "engines/streaming-llama/prefill_llama.cpp/src/llama-dsv41-sweep.cpp:667",
       "engines/streaming-llama/prefill_llama.cpp/src/llama-dsv41-weights.cpp:722",
       "engines/streaming-llama/prefill_llama.cpp/src/llama-dsv41-weights.cpp:747",
       "engines/streaming-llama/prefill_llama.cpp/src/llama-dsv41-weights.cpp:768",
-      "engines/streaming-llama/prefill_llama.cpp/tools/dsv41-prefill/main.cpp:873",
-      "engines/streaming-llama/prefill_llama.cpp/tools/dsv41-prefill/main.cpp:911"
+      "engines/streaming-llama/prefill_llama.cpp/tools/dsv41-prefill/main.cpp:885",
+      "engines/streaming-llama/prefill_llama.cpp/tools/dsv41-prefill/main.cpp:923"
     ],
     "defaults_by_scope": {
       "rtx-llama": "1"
     },
     "code_defaults": [
       {
-        "source": "engines/streaming-llama/prefill_llama.cpp/src/llama-dsv41-sweep.cpp:655",
+        "source": "engines/streaming-llama/prefill_llama.cpp/src/llama-dsv41-sweep.cpp:667",
         "unset": "NULL from getenv; the literal consumer below supplies any fallback",
         "read": "const char*engram_overlap_env=std::getenv(\"LLAMA_DSV41_ENGRAM_PROMPT_OVERLAP\");",
-        "consumer": "        const auto schedule=llama_dsv41_plan_append(p->options.pair_ffn,p->options.carry.max_tile_tokens,p->options.compute_step_tokens,p->position_offset,p->options.unaligned_append_step_tokens);\n        const uint32_t compute_step=schedule.step;\n        const char*engram_overlap_env=std::getenv(\"LLAMA_DSV41_ENGRAM_PROMPT_OVERLAP\");\n        const bool engram_overlap=engram_overlap_env&&std::strcmp(engram_overlap_env,\"1\")==0;\n        require(!engram_overlap||p->options.engram_tile_lookahead,\"Engram prompt overlap requires the existing lookahead worker\");\n        auto prepare_engram=[&]{\n            const auto started=std::chrono::steady_clock::now();std::string reason;"
+        "consumer": "        const auto schedule=llama_dsv41_plan_append(p->options.pair_ffn,p->options.carry.max_tile_tokens,p->options.compute_step_tokens,p->position_offset,p->options.unaligned_append_step_tokens);\n        const uint32_t compute_step=schedule.step;\n        const char*engram_overlap_env=std::getenv(\"LLAMA_DSV41_ENGRAM_PROMPT_OVERLAP\");\n        const bool engram_overlap=!p->options.images&&engram_overlap_env&&std::strcmp(engram_overlap_env,\"1\")==0;\n        require(!engram_overlap||p->options.engram_tile_lookahead,\"Engram prompt overlap requires the existing lookahead worker\");\n        auto prepare_engram=[&]{\n            const auto started=std::chrono::steady_clock::now();std::string reason;"
       },
       {
         "source": "engines/streaming-llama/prefill_llama.cpp/src/llama-dsv41-weights.cpp:722",
@@ -52814,13 +52826,13 @@
         "consumer": "bool llama_dsv41_weight_provider::prepare_engram_prompt(const std::vector<int32_t>&tokens,const std::function<bool()>&stop,std::string&error,llama_dsv41::engram_history initial){return p->guard([&]{\n    if(!p->options.engram_prefetch_host_bytes)return;\n    const char*overlap=std::getenv(\"LLAMA_DSV41_ENGRAM_PROMPT_OVERLAP\");\n    const bool during_layer_zero=overlap&&std::strcmp(overlap,\"1\")==0&&p->leased&&p->next==1;\n    require(p->allocated&&((!p->leased&&p->next==0)||during_layer_zero)&&!p->engram_prompt&&tokens.size()==p->options.engram_prefetch_tokens,\n        \"Engram whole-prompt cache requires its initial or explicitly overlapped layer-zero lease\");p->identity();\n    if(p->early&&p->early->tokens==tokens){"
       },
       {
-        "source": "engines/streaming-llama/prefill_llama.cpp/tools/dsv41-prefill/main.cpp:873",
+        "source": "engines/streaming-llama/prefill_llama.cpp/tools/dsv41-prefill/main.cpp:885",
         "unset": "NULL from getenv; the literal consumer below supplies any fallback",
         "read": "{const char*overlap=std::getenv(\"LLAMA_DSV41_ENGRAM_PROMPT_OVERLAP\");",
         "consumer": "            // DS4COMBO producer-warm: the prompt's tokens are known now, so its\n            // Engram rows load on their own IoRing during this warmup pass.\n            {const char*overlap=std::getenv(\"LLAMA_DSV41_ENGRAM_PROMPT_OVERLAP\");\n             // Auto (or a skipped =1 start) that queued nothing: the ordinary producer-warm start.\n             if(!(engram_early&&warm_request->early_engram_queued())&&weights.engram_prefetch_host_bytes&&options.engram_tile_lookahead&&overlap&&std::strcmp(overlap,\"1\")==0){\n                const std::vector<int32_t> first(tokens.begin(),tokens.begin()+first_sweep_tokens);\n                std::vector<int32_t> tail;"
       },
       {
-        "source": "engines/streaming-llama/prefill_llama.cpp/tools/dsv41-prefill/main.cpp:911",
+        "source": "engines/streaming-llama/prefill_llama.cpp/tools/dsv41-prefill/main.cpp:923",
         "unset": "NULL from getenv; the literal consumer below supplies any fallback",
         "read": "if(!(engram_early_cold&&sweep->early_engram_queued())&&direct_open&&early_direct&&std::strcmp(early_direct,\"1\")==0){const char*overlap=std::getenv(\"LLAMA_DSV41_ENGRAM_PROMPT_OVERLAP\");",
         "consumer": "        // against 1,238 tok/s with the ordinary layer-0 overlapped load. Opt-in only.\n        const char*early_direct=std::getenv(\"LLAMA_DSV41_ENGRAM_EARLY_DIRECT\");\n        if(!(engram_early_cold&&sweep->early_engram_queued())&&direct_open&&early_direct&&std::strcmp(early_direct,\"1\")==0){const char*overlap=std::getenv(\"LLAMA_DSV41_ENGRAM_PROMPT_OVERLAP\");\n            if(weights.engram_prefetch_host_bytes&&options.engram_tile_lookahead&&overlap&&std::strcmp(overlap,\"1\")==0){\n                const std::vector<int32_t> first(tokens.begin(),tokens.begin()+first_sweep_tokens);\n                success(sweep->start_next_engram(first,early_tail,error),error);\n            }}"
@@ -52905,7 +52917,7 @@
     "doc": "LLAMA_DSV41_INDEX_F32_CUBLAS: advanced engine setting; built-in default retained",
     "reads": [
       "engines/streaming-llama/prefill_llama.cpp/src/llama-dsv41-executor.cpp:91",
-      "engines/streaming-llama/prefill_llama.cpp/tools/dsv41-prefill/main.cpp:371"
+      "engines/streaming-llama/prefill_llama.cpp/tools/dsv41-prefill/main.cpp:373"
     ],
     "code_defaults": [
       {
@@ -52915,7 +52927,7 @@
         "consumer": "}\nbool index_f32_cublas_enabled(){\n    const char*v=std::getenv(\"LLAMA_DSV41_INDEX_F32_CUBLAS\");\n    require(!v||!std::strcmp(v,\"0\")||!std::strcmp(v,\"1\"),\"Invalid explicit F32 indexer environment\");\n    return v&&!std::strcmp(v,\"1\");\n}\nbool query_source(uint32_t layer){return layer==2||layer==8||layer==14||layer==20||layer==24||layer==28||layer==32||layer==36;}"
       },
       {
-        "source": "engines/streaming-llama/prefill_llama.cpp/tools/dsv41-prefill/main.cpp:371",
+        "source": "engines/streaming-llama/prefill_llama.cpp/tools/dsv41-prefill/main.cpp:373",
         "unset": "Wrapper/conditional default: see the literal call and consumer below",
         "read": "require(_putenv_s(\"LLAMA_DSV41_INDEX_F32_CUBLAS\",index_f32?\"1\":\"0\")==0,\"Cannot bind explicit F32 index selection\");",
         "consumer": "            args.count(\"--index-cublas-device-bytes\")&&integer(args.at(\"--index-cublas-device-bytes\"))>=64ull*1024*1024),\n            \"F32 cuBLAS indexer requires exclusive F32 operands, native expert profile, <=4K tile and explicit 64MiB workspace\");\n        require(_putenv_s(\"LLAMA_DSV41_INDEX_F32_CUBLAS\",index_f32?\"1\":\"0\")==0,\"Cannot bind explicit F32 index selection\");\n        report[\"indexer_f32_cublas\"]={{\"enabled\",index_f32},{\"operands\",\"unconverted F32\"},{\"accumulation\",\"pedantic F32 GEMM; original ordered F32 head reduction\"},{\"changed_dot_reduction\",index_f32},{\"numerically_qualified\",false}};\n\n        require(!expert.index_bf16||(args.count(\"--index-cublas-device-bytes\")&&integer(args.at(\"--index-cublas-device-bytes\"))>=64ull*1024*1024),\"BF16 indexer requires its explicit existing64MiB device admission\");\n        require(!args.count(\"--token-tile-attention-f16-probabilities\")||args.at(\"--token-tile-attention-f16-probabilities\")==\"0\"||args.at(\"--token-tile-attention-f16-probabilities\")==\"1\",\"token-tile-attention-f16-probabilities requires0/1\");"
@@ -52933,14 +52945,14 @@
     ],
     "doc": "LLAMA_DSV41_MUL_F16_STORE: qualified preset/runtime setting; override for a different memory or arithmetic plan",
     "reads": [
-      "engines/streaming-llama/prefill_llama.cpp/src/llama-dsv41-executor.cpp:866"
+      "engines/streaming-llama/prefill_llama.cpp/src/llama-dsv41-executor.cpp:869"
     ],
     "defaults_by_scope": {
       "rtx-llama": "1"
     },
     "code_defaults": [
       {
-        "source": "engines/streaming-llama/prefill_llama.cpp/src/llama-dsv41-executor.cpp:866",
+        "source": "engines/streaming-llama/prefill_llama.cpp/src/llama-dsv41-executor.cpp:869",
         "unset": "NULL from getenv; the literal consumer below supplies any fallback",
         "read": "const bool mul_f16_store=std::getenv(\"LLAMA_DSV41_MUL_F16_STORE\")&&std::string(std::getenv(\"LLAMA_DSV41_MUL_F16_STORE\"))==\"1\";",
         "consumer": "        const bool rope_inplace=std::getenv(\"LLAMA_DSV41_ROPE_INPLACE\")&&std::string(std::getenv(\"LLAMA_DSV41_ROPE_INPLACE\"))==\"1\";\n        const bool dense_bf16_store=expert.dense_activation_q8_1&&std::getenv(\"LLAMA_DSV41_DENSE_BF16_STORE\")&&std::string(std::getenv(\"LLAMA_DSV41_DENSE_BF16_STORE\"))==\"1\";\n        const bool mul_f16_store=std::getenv(\"LLAMA_DSV41_MUL_F16_STORE\")&&std::string(std::getenv(\"LLAMA_DSV41_MUL_F16_STORE\"))==\"1\";\n        unsigned mul_f16_fused=0;\n        require(!mul_f16_store||!workspace||!workspace->cache_layouts,\"F16 route-weight store fusion requires allocator-only graph mode\");\n        llama_dsv41_expert_profile::validate(expert,in.count,std::getenv(\"DSV41_BOUNDARY_CAPTURE\"));\n        require(in.position_offset<=cache.capacity()&&in.start<=cache.capacity()-in.position_offset,\"Absolute tile offset exceeds cache capacity\");"
@@ -53024,14 +53036,14 @@
     ],
     "doc": "LLAMA_DSV41_ROPE_INPLACE: qualified preset/runtime setting; override for a different memory or arithmetic plan",
     "reads": [
-      "engines/streaming-llama/prefill_llama.cpp/src/llama-dsv41-executor.cpp:864"
+      "engines/streaming-llama/prefill_llama.cpp/src/llama-dsv41-executor.cpp:867"
     ],
     "defaults_by_scope": {
       "rtx-llama": "1"
     },
     "code_defaults": [
       {
-        "source": "engines/streaming-llama/prefill_llama.cpp/src/llama-dsv41-executor.cpp:864",
+        "source": "engines/streaming-llama/prefill_llama.cpp/src/llama-dsv41-executor.cpp:867",
         "unset": "NULL from getenv; the literal consumer below supplies any fallback",
         "read": "const bool rope_inplace=std::getenv(\"LLAMA_DSV41_ROPE_INPLACE\")&&std::string(std::getenv(\"LLAMA_DSV41_ROPE_INPLACE\"))==\"1\";",
         "consumer": "        } probe{in,out,prepare_started};\n        probe.enabled=std::getenv(\"DS4PERF_EXECUTOR_WALL_PROBE\")&&std::string(std::getenv(\"DS4PERF_EXECUTOR_WALL_PROBE\"))==\"1\";\n        const bool rope_inplace=std::getenv(\"LLAMA_DSV41_ROPE_INPLACE\")&&std::string(std::getenv(\"LLAMA_DSV41_ROPE_INPLACE\"))==\"1\";\n        const bool dense_bf16_store=expert.dense_activation_q8_1&&std::getenv(\"LLAMA_DSV41_DENSE_BF16_STORE\")&&std::string(std::getenv(\"LLAMA_DSV41_DENSE_BF16_STORE\"))==\"1\";\n        const bool mul_f16_store=std::getenv(\"LLAMA_DSV41_MUL_F16_STORE\")&&std::string(std::getenv(\"LLAMA_DSV41_MUL_F16_STORE\"))==\"1\";\n        unsigned mul_f16_fused=0;\n        require(!mul_f16_store||!workspace||!workspace->cache_layouts,\"F16 route-weight store fusion requires allocator-only graph mode\");"
@@ -53049,14 +53061,14 @@
     ],
     "doc": "LLAMA_DSV41_SKIP_UNUSED_TILE_PIN: qualified preset/runtime setting; override for a different memory or arithmetic plan",
     "reads": [
-      "engines/streaming-llama/prefill_llama.cpp/src/llama-dsv41-executor.cpp:897"
+      "engines/streaming-llama/prefill_llama.cpp/src/llama-dsv41-executor.cpp:900"
     ],
     "defaults_by_scope": {
       "rtx-llama": "1"
     },
     "code_defaults": [
       {
-        "source": "engines/streaming-llama/prefill_llama.cpp/src/llama-dsv41-executor.cpp:897",
+        "source": "engines/streaming-llama/prefill_llama.cpp/src/llama-dsv41-executor.cpp:900",
         "unset": "NULL from getenv; the literal consumer below supplies any fallback",
         "read": "skip_tile_pin=std::getenv(\"LLAMA_DSV41_SKIP_UNUSED_TILE_PIN\")&&std::string(std::getenv(\"LLAMA_DSV41_SKIP_UNUSED_TILE_PIN\"))==\"1\"&&",
         "consumer": "            (void)d.row(0);(void)d.row(in.count-1);\n#ifdef GGML_USE_CUDA\n            skip_tile_pin=std::getenv(\"LLAMA_DSV41_SKIP_UNUSED_TILE_PIN\")&&std::string(std::getenv(\"LLAMA_DSV41_SKIP_UNUSED_TILE_PIN\"))==\"1\"&&\n                pinned->tile_registration&&!pinned->prefetch_buffer&&!in.lookahead&&resident&&resident_bf16&&resident_ids&&resident_metadata&&\n                resident->full()&&!resident->spilled(in.start)&&defer_hidden_readback&&export_hidden_after_head&&\n                in.layer>0&&in.layer<40&&!query_source(in.layer)&&in.layer!=20;\n            pinned->current_bank_copies_forbidden=skip_tile_pin;"
@@ -53075,7 +53087,7 @@
     "doc": "LLAMA_DSV41_TOPK_RADIX: qualified preset/runtime setting; override for a different memory or arithmetic plan",
     "reads": [
       "engines/streaming-llama/prefill_llama.cpp/ggml/src/ggml-cuda/argsort.cu:395",
-      "engines/streaming-llama/prefill_llama.cpp/src/llama-dsv41-executor.cpp:1421"
+      "engines/streaming-llama/prefill_llama.cpp/src/llama-dsv41-executor.cpp:1424"
     ],
     "defaults_by_scope": {
       "rtx-llama": "1"
@@ -53088,7 +53100,7 @@
         "consumer": "    sizeof(dsv41_TopKBlockSort::TempStorage) : 8192 * sizeof(int);\nstatic bool dsv41_topk_radix_enabled(const int tile_size, const int k) {\n    const char *env = std::getenv(\"LLAMA_DSV41_TOPK_RADIX\");\n    return env && env[0] == '1' && tile_size == 8192 && k == 512 &&\n        dsv41_topk_radix_smem + sizeof(unsigned) <= ggml_cuda_info().devices[ggml_cuda_get_device()].smpbo;\n}\n#endif"
       },
       {
-        "source": "engines/streaming-llama/prefill_llama.cpp/src/llama-dsv41-executor.cpp:1421",
+        "source": "engines/streaming-llama/prefill_llama.cpp/src/llama-dsv41-executor.cpp:1424",
         "unset": "NULL from getenv; the literal consumer below supplies any fallback",
         "read": "const bool topk_radix=std::getenv(\"LLAMA_DSV41_TOPK_RADIX\")&&std::string(std::getenv(\"LLAMA_DSV41_TOPK_RADIX\"))==\"1\";",
         "consumer": "        const auto dense_before=expert.dense_inputs_f16?ggml_backend_cuda_dsv41_dense_half_queued():0;\n        const auto dense_fp4_before=dense_mxfp4?ggml_backend_cuda_native_mxfp4_dense_queued():0;\n        const bool topk_radix=std::getenv(\"LLAMA_DSV41_TOPK_RADIX\")&&std::string(std::getenv(\"LLAMA_DSV41_TOPK_RADIX\"))==\"1\";\n        const auto topk_radix_before=topk_radix?ggml_backend_cuda_dsv41_topk_radix_queued():0;\n        const auto rope_inplace_before=rope_inplace?ggml_backend_cuda_dsv41_rope_inplace_queued():0;\n        const auto dense_bf16_store_before=dense_bf16_store?ggml_backend_cuda_dsv41_dense_bf16_store_queued():0;\n        const auto mul_f16_store_before=mul_f16_store?ggml_backend_cuda_dsv41_mul_f16_store_queued():0;"
@@ -54487,14 +54499,15 @@
     "var": "LLAMA_DS_FACTORY_STAGING_MB",
     "flag": null,
     "default": null,
-    "code_default": "NULL from getenv; the literal consumer below supplies any fallback",
+    "code_default": "NULL from getenv; the literal consumer below supplies any fallback; Assigned by the runtime; see literal consumer",
     "classification": "advanced",
     "scopes": [
       "rtx-llama"
     ],
     "doc": "LLAMA_DS_FACTORY_STAGING_MB: advanced engine setting; built-in default retained",
     "reads": [
-      "engines/streaming-llama/prefill_llama.cpp/src/llama-weight-fetcher.cpp:2517"
+      "engines/streaming-llama/prefill_llama.cpp/src/llama-weight-fetcher.cpp:2517",
+      "vendor/studio/studio/moss_image.py:192"
     ],
     "code_defaults": [
       {
@@ -54502,6 +54515,12 @@
         "unset": "NULL from getenv; the literal consumer below supplies any fallback",
         "read": "const char * factory_stg_env = std::getenv(\"LLAMA_DS_FACTORY_STAGING_MB\");",
         "consumer": "    {\n        uint64_t factory_staging_mb = 256;\n        const char * factory_stg_env = std::getenv(\"LLAMA_DS_FACTORY_STAGING_MB\");\n        if (factory_stg_env && factory_stg_env[0]) {\n            int mb = std::atoi(factory_stg_env);\n            if (mb > 0) {\n                factory_staging_mb = (uint64_t) mb;"
+      },
+      {
+        "source": "vendor/studio/studio/moss_image.py:192",
+        "unset": "Assigned by the runtime; see literal consumer",
+        "read": "os.environ['LLAMA_DS_FACTORY_STAGING_MB']",
+        "consumer": "def generate_one(root, request, *, streaming, precision='bf16', cache=None, eager_components=False, pack_dir=None):\n    ram_admission = host_ram_admission()\n    os.environ['LLAMA_DS_FACTORY_STAGING_MB'] = '256'\n    import psutil\n    import torch\n    from transformers import Qwen3_5Config, Qwen3_5Model, AutoTokenizer\n    from diffusers import AutoencoderKLFlux2"
       }
     ]
   },
@@ -54520,7 +54539,8 @@
     "reads": [
       "engines/streaming-llama/prefill_llama.cpp/src/llama-weight-fetcher.cpp:2232",
       "engines/streaming-llama/prefill_llama.cpp/src/llama-weight-fetcher.cpp:2640",
-      "vendor/engines/cosmos_windows/weight_streaming/minimax_h3_backend.py:396"
+      "vendor/engines/cosmos_windows/weight_streaming/minimax_h3_backend.py:396",
+      "vendor/studio/studio/h3_weight_io.py:14"
     ],
     "code_defaults": [
       {
@@ -54540,6 +54560,12 @@
         "unset": "'1300'",
         "read": "_os.environ.get('LLAMA_DS_STAGING_MB', '1300')",
         "consumer": "            if _dedicated_free is not None:\n                _free = min(_free, _dedicated_free)\n            _stage = int(float(_os.environ.get('LLAMA_DS_STAGING_MB', '1300')) * 1024 ** 2) + 1024 ** 3\n            _requested = _os.environ.get('H3_TORCH_MEM_FRACTION')\n            _frac = h3_torch_memory_fraction(_total, _free, _stage, float(_requested) if _requested is not None else None)\n            _torch.cuda.set_per_process_memory_fraction(_frac, 0)\n            _emit_json_event(json_events, 'vram_reserve', fraction=_frac, torch_cap_gb=round(_torch.cuda.get_device_properties(0).total_memory / 1000000000.0 * _frac, 2), free_bytes=_free, total_bytes=_total, staging_reserve_bytes=_stage, cuda_free_bytes=_cuda_free, dedicated_free_bytes=_dedicated_free, message='bounded torch VRAM by CUDA and dedicated headroom, with DirectStorage staging and slack reserved')"
+      },
+      {
+        "source": "vendor/studio/studio/h3_weight_io.py:14",
+        "unset": "'1300'",
+        "read": "os.environ.get('LLAMA_DS_STAGING_MB', '1300')",
+        "consumer": "        torch.cuda.set_per_process_memory_fraction(0.98, ordinal)\n    import os\n    staging_gb = float(os.environ.get('LLAMA_DS_STAGING_MB', '1300')) / 1024\n    free_bytes, total_bytes = torch.cuda.mem_get_info(ordinal)\n    if sys.platform == 'win32':\n        from .cuda_device_identity import dedicated_free_bytes\n        identity = getattr(torch.cuda.get_device_properties(ordinal), 'uuid', None)"
       }
     ]
   },
@@ -70209,7 +70235,7 @@
     "doc": "SCAIL2_CKPT_DIR: advanced engine setting; built-in default retained",
     "reads": [
       "vendor/engines/cosmos_windows/weight_streaming/scail_backend.py:12",
-      "vendor/studio/studio/adapter.py:2921"
+      "vendor/studio/studio/adapter.py:2922"
     ],
     "code_defaults": [
       {
@@ -70219,7 +70245,7 @@
         "consumer": "from pathlib import Path\nSCAIL2_REPO_DIR = os.environ.get('SCAIL2_REPO_DIR', '')\nSCAIL2_CKPT_DIR = os.environ.get('SCAIL2_CKPT_DIR', '')\nSCAIL2_SAFETENSORS = os.environ.get('SCAIL2_SAFETENSORS', '')\nSCAIL2_STREAM_DTYPE = os.environ.get('SCAIL2_STREAM_DTYPE', 'bf16')\n_PIPELINE_CACHE: dict = {}\n_SCAIL_BLOCK_RE = re.compile('^blocks\\\\.(\\\\d+)\\\\.')"
       },
       {
-        "source": "vendor/studio/studio/adapter.py:2921",
+        "source": "vendor/studio/studio/adapter.py:2922",
         "unset": "''",
         "read": "os.environ.get('SCAIL2_CKPT_DIR', '')",
         "consumer": "        try:\n            _auto_shift = 3.0 if params.height and params.width and (max(params.height, params.width) <= 720) else 5.0\n            frames = sb.scail2_animate(prompt=params.prompt or '', image_path=ref_image, pose_video_path=driving_video, replace_flag=replace_flag, target_h=params.height, target_w=params.width, segment_len=81, shift=params.wan_shift if getattr(params, 'wan_shift', None) is not None else _auto_shift, sample_solver=params.sampler or 'unipc', sampling_steps=params.steps or 40, guide_scale=params.guidance if params.guidance is not None else 5.0, negative_prompt=params.negative or None, seed=params.seed if params.seed is not None else -1, ckpt_dir=os.environ.get('SCAIL2_CKPT_DIR', ''), scail_safetensors=os.environ.get('SCAIL2_SAFETENSORS', ''), lora_path=scail_lora_path, lora_alpha=scail_lora_alpha, stream_weights=True, n_gpu_buffers=int(os.environ.get('STUDIO_SCAIL_GPU_BUFFERS', '3')), device_id=int(os.environ.get('STUDIO_SCAIL_DEVICE_ID', '0')), progress=_progress)\n            seconds = round(time.time() - t0, 2)\n            out_dir = output_dir_for_params(params)\n            stem = 'scail_' + (re.sub('[^A-Za-z0-9]+', '_', (params.prompt or 'gen').strip())[:40].strip('_') or 'gen')\n            out = out_dir / f'{stem}_{params.seed}.mp4'"
@@ -70309,7 +70335,7 @@
     "doc": "SCAIL2_SAFETENSORS: advanced engine setting; built-in default retained",
     "reads": [
       "vendor/engines/cosmos_windows/weight_streaming/scail_backend.py:13",
-      "vendor/studio/studio/adapter.py:2921"
+      "vendor/studio/studio/adapter.py:2922"
     ],
     "code_defaults": [
       {
@@ -70319,7 +70345,7 @@
         "consumer": "SCAIL2_REPO_DIR = os.environ.get('SCAIL2_REPO_DIR', '')\nSCAIL2_CKPT_DIR = os.environ.get('SCAIL2_CKPT_DIR', '')\nSCAIL2_SAFETENSORS = os.environ.get('SCAIL2_SAFETENSORS', '')\nSCAIL2_STREAM_DTYPE = os.environ.get('SCAIL2_STREAM_DTYPE', 'bf16')\n_PIPELINE_CACHE: dict = {}\n_SCAIL_BLOCK_RE = re.compile('^blocks\\\\.(\\\\d+)\\\\.')\n_ATTN_BACKEND_CHECKED = False"
       },
       {
-        "source": "vendor/studio/studio/adapter.py:2921",
+        "source": "vendor/studio/studio/adapter.py:2922",
         "unset": "''",
         "read": "os.environ.get('SCAIL2_SAFETENSORS', '')",
         "consumer": "        try:\n            _auto_shift = 3.0 if params.height and params.width and (max(params.height, params.width) <= 720) else 5.0\n            frames = sb.scail2_animate(prompt=params.prompt or '', image_path=ref_image, pose_video_path=driving_video, replace_flag=replace_flag, target_h=params.height, target_w=params.width, segment_len=81, shift=params.wan_shift if getattr(params, 'wan_shift', None) is not None else _auto_shift, sample_solver=params.sampler or 'unipc', sampling_steps=params.steps or 40, guide_scale=params.guidance if params.guidance is not None else 5.0, negative_prompt=params.negative or None, seed=params.seed if params.seed is not None else -1, ckpt_dir=os.environ.get('SCAIL2_CKPT_DIR', ''), scail_safetensors=os.environ.get('SCAIL2_SAFETENSORS', ''), lora_path=scail_lora_path, lora_alpha=scail_lora_alpha, stream_weights=True, n_gpu_buffers=int(os.environ.get('STUDIO_SCAIL_GPU_BUFFERS', '3')), device_id=int(os.environ.get('STUDIO_SCAIL_DEVICE_ID', '0')), progress=_progress)\n            seconds = round(time.time() - t0, 2)\n            out_dir = output_dir_for_params(params)\n            stem = 'scail_' + (re.sub('[^A-Za-z0-9]+', '_', (params.prompt or 'gen').strip())[:40].strip('_') or 'gen')\n            out = out_dir / f'{stem}_{params.seed}.mp4'"
@@ -71047,14 +71073,14 @@
     ],
     "doc": "STUDIO_BERNINI_DISTILL_LORA: advanced engine setting; built-in default retained",
     "reads": [
-      "vendor/studio/studio/adapter.py:2859"
+      "vendor/studio/studio/adapter.py:2860"
     ],
     "code_defaults": [
       {
-        "source": "vendor/studio/studio/adapter.py:2859",
+        "source": "vendor/studio/studio/adapter.py:2860",
         "unset": "''",
         "read": "os.environ.get('STUDIO_BERNINI_DISTILL_LORA', '')",
-        "consumer": "                        on_step(int(step), int(total), None)\n                user_loras = [l.model_dump() for l in params.loras] or None if params.loras else None\n                distill = os.environ.get('STUDIO_BERNINI_DISTILL_LORA', '')\n                use_distill = user_loras is None and Path(distill).is_file()\n                loras = user_loras if user_loras is not None else [{'path': distill, 'weight': 3.0, 'expert': 'high'}, {'path': distill, 'weight': 1.5, 'expert': 'low'}] if use_distill else None\n                has_distill = bool(user_loras) or use_distill\n                frames = wan.streamed_wan_generate(high_file=str(tf_dir), prompt=params.prompt or '', height=params.height, width=params.width, num_frames=nf, steps=params.steps or (20 if has_distill else 40), low_file=sf.get('low_denoiser') or None, vae_path=vae, umt5_file=umt5, umt5_config_dir=sf.get('text_encoder_config') or None, umt5_tokenizer_dir=sf.get('tokenizer') or None, negative_prompt=params.negative or '', guidance_scale=params.guidance if params.guidance is not None else 1.0 if has_distill else 5.0, scheduler_name=params.sampler or ('lcm' if has_distill else 'unipc'), sigmas_name=params.sigmas if getattr(params, 'sigmas', None) not in (None, '', 'karras') else 'simple' if has_distill else None, seed=params.seed, crossover_step=params.wan_crossover_step if params.wan_crossover_step is not None else 3 if has_distill else None, shift=params.wan_shift if params.wan_shift is not None else 8.0, bernini_reference_images=refs or None, bernini_source_video=source_video, bernini_reference_video=reference_video, bernini_task=task, loras=loras, progress=_progress, should_cancel=should_cancel)"
+        "consumer": "                        on_step(int(step), int(total), None)\n                user_loras = [l.model_dump() for l in params.loras] or None if params.loras else None\n                distill = os.environ.get('STUDIO_BERNINI_DISTILL_LORA', '')\n                use_distill = user_loras is None and Path(distill).is_file() and not sf.get('_stack_explicit_loras_only')\n                loras = user_loras if user_loras is not None else [{'path': distill, 'weight': 3.0, 'expert': 'high'}, {'path': distill, 'weight': 1.5, 'expert': 'low'}] if use_distill else None\n                has_distill = bool(user_loras) or use_distill\n                frames = wan.streamed_wan_generate(high_file=str(tf_dir), prompt=params.prompt or '', height=params.height, width=params.width, num_frames=nf, steps=params.steps or (20 if has_distill else 40), low_file=sf.get('low_denoiser') or None, vae_path=vae, umt5_file=umt5, umt5_config_dir=sf.get('text_encoder_config') or None, umt5_tokenizer_dir=sf.get('tokenizer') or None, negative_prompt=params.negative or '', guidance_scale=params.guidance if params.guidance is not None else 1.0 if has_distill else 5.0, scheduler_name=params.sampler or ('lcm' if has_distill else 'unipc'), sigmas_name=params.sigmas if getattr(params, 'sigmas', None) not in (None, '', 'karras') else 'simple' if has_distill else None, seed=params.seed, crossover_step=params.wan_crossover_step if params.wan_crossover_step is not None else 3 if has_distill else None, shift=params.wan_shift if params.wan_shift is not None else 8.0, bernini_reference_images=refs or None, bernini_source_video=source_video, bernini_reference_video=reference_video, bernini_task=task, loras=loras, progress=_progress, should_cancel=should_cancel)"
       }
     ]
   },
@@ -71069,11 +71095,11 @@
     ],
     "doc": "STUDIO_BERNINI_SNAPSHOT: advanced engine setting; built-in default retained",
     "reads": [
-      "vendor/studio/studio/custom_models.py:133"
+      "vendor/studio/studio/custom_models.py:132"
     ],
     "code_defaults": [
       {
-        "source": "vendor/studio/studio/custom_models.py:133",
+        "source": "vendor/studio/studio/custom_models.py:132",
         "unset": "None",
         "read": "os.environ.get('STUDIO_BERNINI_SNAPSHOT')",
         "consumer": "    add('wan-2.2', low_denoiser=wan_low, text_encoder=umt5, vae=wan_vae, tokenizer=scail_tokenizer, image_encoder=image_encoder, clip_vision=image_encoder)\n    _bernini_low = _first_file_any(root, ['checkpoints', 'diffusion_models'], ['wan22_bernini_low', 'bernini_low'])\n    _bernini_snap = next((str(p) for p in (Path(os.environ.get('STUDIO_BERNINI_SNAPSHOT', '')) if os.environ.get('STUDIO_BERNINI_SNAPSHOT') else None, Path('')) if p and p.is_dir()), None)\n    add('bernini', text_encoder=umt5, vae=wan_vae, low_denoiser=_bernini_low, text_encoder_config=str(Path(_bernini_snap) / 'text_encoder') if _bernini_snap else None, tokenizer=str(Path(_bernini_snap) / 'tokenizer') if _bernini_snap else None)\n    _ds_root = next((p for p in (Path(os.environ.get('STUDIO_DOMAINSHUTTLE_BASE_ROOT', '')) if os.environ.get('STUDIO_DOMAINSHUTTLE_BASE_ROOT') else None, scail_root) if p and p.is_dir()), None)\n    if _ds_root is not None:\n        _ds_vae = _ds_root / 'Wan2.1_VAE.pth'"
@@ -71114,11 +71140,11 @@
     ],
     "doc": "STUDIO_BOOGU_KREA_OFFLOAD: advanced engine setting; built-in default retained",
     "reads": [
-      "vendor/studio/studio/adapter.py:2653"
+      "vendor/studio/studio/adapter.py:2654"
     ],
     "code_defaults": [
       {
-        "source": "vendor/studio/studio/adapter.py:2653",
+        "source": "vendor/studio/studio/adapter.py:2654",
         "unset": "'streaming'",
         "read": "os.environ.get('STUDIO_BOOGU_KREA_OFFLOAD', 'streaming')",
         "consumer": "            mode = 'staged' if is_resident else 'staged_disposable'\n        else:\n            mode = 'resident' if is_resident else os.environ.get('STUDIO_BOOGU_KREA_OFFLOAD', 'streaming')\n        cacheable = is_resident or (mode in ('streaming', 'stream', 'streamed', 'native_streaming') and self._stream_pipeline_cache_enabled() and (not (arch.startswith('boogu') or arch.startswith('krea'))))\n        pipe_key = ('boogu_krea', arch, ckpt, device, mode)\n        if cacheable and self._resident_aux_key == pipe_key and (self._resident_aux_pipe is not None):\n            pipe = self._resident_aux_pipe"
@@ -71215,7 +71241,7 @@
         "source": "vendor/studio/studio/custom_models.py:15",
         "unset": "None",
         "read": "os.environ.get('STUDIO_COMFYUI_PATH')",
-        "consumer": "def _comfy_models_root() -> Optional[Path]:\n    candidates: list[Path] = []\n    env = os.environ.get('STUDIO_COMFYUI_PATH') or os.environ.get('COMFYUI_PATH')\n    if env:\n        p = Path(env)\n        candidates.append(p if p.name.lower() == 'models' else p / 'models')\n    candidates += [Path(''), Path(''), Path('')]"
+        "consumer": "def _comfy_models_root() -> Optional[Path]:\n    candidates: list[Path] = []\n    env = os.environ.get('STUDIO_COMFYUI_PATH') or os.environ.get('COMFYUI_PATH')\n    if env:\n        p = Path(env)\n        candidates.append(p if p.name.lower() == 'models' or (p/'diffusion_models').is_dir() or (p/'checkpoints').is_dir() else p / 'models')\n    for p in candidates:"
       }
     ],
     "defaults_by_scope": {
@@ -71348,7 +71374,7 @@
     "var": "STUDIO_COSMOS_WINDOWS_PATH",
     "flag": "--studio-cosmos-windows-path",
     "default": "{streaming_root}",
-    "code_default": "Wrapper/conditional default: see the literal call and consumer below",
+    "code_default": "''; Wrapper/conditional default: see the literal call and consumer below",
     "classification": "preset",
     "scopes": [
       "ds4-win",
@@ -71361,14 +71387,49 @@
     ],
     "doc": "Vendored streaming engine source directory.",
     "reads": [
-      "vendor/studio/studio/config.py:141"
+      "vendor/studio/studio/boogu_krea.py:404",
+      "vendor/studio/studio/config.py:141",
+      "vendor/studio/studio/direct_vram.py:20",
+      "vendor/studio/studio/krea2_diffusion.py:800",
+      "vendor/studio/studio/krea2_diffusion.py:1055",
+      "vendor/studio/studio/ram_preflight.py:11"
     ],
     "code_defaults": [
+      {
+        "source": "vendor/studio/studio/boogu_krea.py:404",
+        "unset": "''",
+        "read": "_os.environ.get('STUDIO_COSMOS_WINDOWS_PATH', '')",
+        "consumer": "    import os as _os\n    from accelerate.utils import set_module_tensor_to_device\n    repo = _os.environ.get('STUDIO_COSMOS_WINDOWS_PATH', '')\n    if repo and repo not in _sys.path:\n        _sys.path.insert(0, repo)\n    from cosmos_windows.weight_streaming.ds_backend import DirectStorageStreamer\n    from cosmos_windows.weight_streaming.safetensors_index import build_index"
+      },
       {
         "source": "vendor/studio/studio/config.py:141",
         "unset": "Wrapper/conditional default: see the literal call and consumer below",
         "read": "_env_path_opt('STUDIO_COSMOS_WINDOWS_PATH')",
         "consumer": "    host: str = field(default_factory=lambda: _env('STUDIO_HOST', '0.0.0.0'))\n    port: int = field(default_factory=lambda: int(_env('STUDIO_PORT', '8765')))\n    cosmos_windows_path: Optional[Path] = field(default_factory=lambda: _env_path_opt('STUDIO_COSMOS_WINDOWS_PATH'))\n    force_mock: bool = field(default_factory=lambda: _env_bool('STUDIO_FORCE_MOCK'))\n    gpu_index: str = field(default_factory=lambda: _env('STUDIO_GPU_INDEX', '0'))\n    pair_token: Optional[str] = field(default_factory=_default_pair_token)\n    chat_base_url: Optional[str] = field(default_factory=lambda: os.environ.get('STUDIO_CHAT_BASE_URL') or None)"
+      },
+      {
+        "source": "vendor/studio/studio/direct_vram.py:20",
+        "unset": "''",
+        "read": "os.environ.get('STUDIO_COSMOS_WINDOWS_PATH', '')",
+        "consumer": "        if not str(device).startswith('cuda'):\n            raise RuntimeError(f'DIRECT_VRAM_UNAVAILABLE: Windows loads go straight to a CUDA device, not {device!r}')\n        repo = os.environ.get('STUDIO_COSMOS_WINDOWS_PATH', '')\n        if repo not in sys.path:\n            sys.path.insert(0, repo)\n        from cosmos_windows.weight_streaming.safetensors_index import SafetensorsIndex, _index_one_file\n        from .h3_weight_io import stream_tensors"
+      },
+      {
+        "source": "vendor/studio/studio/krea2_diffusion.py:800",
+        "unset": "''",
+        "read": "_os.environ.get('STUDIO_COSMOS_WINDOWS_PATH', '')",
+        "consumer": "    import os as _os\n    from accelerate.utils import set_module_tensor_to_device\n    repo = _os.environ.get('STUDIO_COSMOS_WINDOWS_PATH', '')\n    if repo and repo not in sys.path:\n        sys.path.insert(0, repo)\n    from cosmos_windows.weight_streaming.ds_backend import DirectStorageStreamer\n    from cosmos_windows.weight_streaming.safetensors_index import build_index"
+      },
+      {
+        "source": "vendor/studio/studio/krea2_diffusion.py:1055",
+        "unset": "''",
+        "read": "os.environ.get('STUDIO_COSMOS_WINDOWS_PATH', '')",
+        "consumer": "def _load_krea2_component_ds(te, te_path: str, dtype, device: str, expected: set[str], *, label: str):\n    import torch\n    repo = os.environ.get('STUDIO_COSMOS_WINDOWS_PATH', '')\n    if repo not in sys.path:\n        sys.path.insert(0, repo)\n    from cosmos_windows.weight_streaming.ds_backend import DirectStorageStreamer\n    from cosmos_windows.weight_streaming.safetensors_index import build_index"
+      },
+      {
+        "source": "vendor/studio/studio/ram_preflight.py:11",
+        "unset": "''",
+        "read": "os.environ.get('STUDIO_COSMOS_WINDOWS_PATH', '')",
+        "consumer": "def _candidate_repo_paths() -> list[str]:\n    cands: list[str] = []\n    env = os.environ.get('STUDIO_COSMOS_WINDOWS_PATH', '').strip()\n    if env:\n        cands.append(env)\n    try:\n        from .config import settings"
       }
     ],
     "defaults_by_scope": {
@@ -71503,18 +71564,18 @@
     ],
     "doc": "STUDIO_DOMAINSHUTTLE_BASE_ROOT: advanced engine setting; built-in default retained",
     "reads": [
-      "vendor/studio/studio/custom_models.py:118",
-      "vendor/studio/studio/custom_models.py:135"
+      "vendor/studio/studio/custom_models.py:117",
+      "vendor/studio/studio/custom_models.py:134"
     ],
     "code_defaults": [
       {
-        "source": "vendor/studio/studio/custom_models.py:118",
+        "source": "vendor/studio/studio/custom_models.py:117",
         "unset": "None",
         "read": "os.environ.get('STUDIO_DOMAINSHUTTLE_BASE_ROOT')",
         "consumer": "    sdxl_vae = _first_file(root, 'vae', ['sdxl_vae', 'sdxl-vae', 'sdxl_fp16', 'sdxlvae'])\n    glm_ar = next((str(p) for p in (Path(os.environ.get('STUDIO_GLM_AR_GGUF', '')) if os.environ.get('STUDIO_GLM_AR_GGUF') else None, Path(''), Path('')) if p and p.is_file()), None)\n    scail_root = next((p for p in (Path(os.environ.get('STUDIO_DOMAINSHUTTLE_BASE_ROOT', '')) if os.environ.get('STUDIO_DOMAINSHUTTLE_BASE_ROOT') else None, Path('')) if p and p.is_dir()), None)\n    scail_tokenizer = str(scail_root / 'umt5-xxl') if scail_root and (scail_root / 'umt5-xxl').is_dir() else None\n    defaults: dict[str, dict[str, str]] = {}\n\n    def add(arch: str, **paths: Optional[str]) -> None:"
       },
       {
-        "source": "vendor/studio/studio/custom_models.py:135",
+        "source": "vendor/studio/studio/custom_models.py:134",
         "unset": "None",
         "read": "os.environ.get('STUDIO_DOMAINSHUTTLE_BASE_ROOT')",
         "consumer": "    _bernini_snap = next((str(p) for p in (Path(os.environ.get('STUDIO_BERNINI_SNAPSHOT', '')) if os.environ.get('STUDIO_BERNINI_SNAPSHOT') else None, Path('')) if p and p.is_dir()), None)\n    add('bernini', text_encoder=umt5, vae=wan_vae, low_denoiser=_bernini_low, text_encoder_config=str(Path(_bernini_snap) / 'text_encoder') if _bernini_snap else None, tokenizer=str(Path(_bernini_snap) / 'tokenizer') if _bernini_snap else None)\n    _ds_root = next((p for p in (Path(os.environ.get('STUDIO_DOMAINSHUTTLE_BASE_ROOT', '')) if os.environ.get('STUDIO_DOMAINSHUTTLE_BASE_ROOT') else None, scail_root) if p and p.is_dir()), None)\n    if _ds_root is not None:\n        _ds_vae = _ds_root / 'Wan2.1_VAE.pth'\n        _ds_t5 = _ds_root / 'umt5-xxl' / 'models_t5_umt5-xxl-enc-bf16.pth'\n        _ds_tok = _ds_root / 'umt5-xxl'"
@@ -71555,11 +71616,11 @@
     ],
     "doc": "STUDIO_DOMAINSHUTTLE_MEMORY_MODE: advanced engine setting; built-in default retained",
     "reads": [
-      "vendor/studio/studio/adapter.py:2977"
+      "vendor/studio/studio/adapter.py:2978"
     ],
     "code_defaults": [
       {
-        "source": "vendor/studio/studio/adapter.py:2977",
+        "source": "vendor/studio/studio/adapter.py:2978",
         "unset": "'streaming'",
         "read": "os.environ.get('STUDIO_DOMAINSHUTTLE_MEMORY_MODE', 'streaming')",
         "consumer": "        frames = None\n        try:\n            frames = db.domainshuttle_r2v_generate(domain_model_dir=str(model_dir), reference_image_paths=refs, domain_codes=domain_codes or None, prompt=params.prompt or '', negative_prompt=params.negative or None, height=int(params.height or 480), width=int(params.width or 832), num_frames=num_frames, steps=int(params.steps or 40), guidance_scale=guidance, shift=params.wan_shift if getattr(params, 'wan_shift', None) is not None else _auto_shift, boundary=0.875, seed=params.seed if params.seed is not None else 42, vae_path=vae, umt5_path=umt5, tokenizer_dir=tokenizer, memory_mode=os.environ.get('STUDIO_DOMAINSHUTTLE_MEMORY_MODE', 'streaming'), device_id=0, progress=_progress, should_cancel=should_cancel)\n            seconds = round(time.time() - t0, 2)\n            out_dir = output_dir_for_params(params)\n            stem = 'domainshuttle_' + (re.sub('[^A-Za-z0-9]+', '_', (params.prompt or 'gen').strip())[:40].strip('_') or 'gen')\n            stem = f'{stem}_{params.seed}'"
@@ -71600,11 +71661,11 @@
     ],
     "doc": "STUDIO_DOMAINSHUTTLE_MIN_FREE_RAM_GB_GATE: advanced engine setting; built-in default retained",
     "reads": [
-      "vendor/studio/studio/adapter.py:2953"
+      "vendor/studio/studio/adapter.py:2954"
     ],
     "code_defaults": [
       {
-        "source": "vendor/studio/studio/adapter.py:2953",
+        "source": "vendor/studio/studio/adapter.py:2954",
         "unset": "'6'",
         "read": "os.environ.get('STUDIO_DOMAINSHUTTLE_MIN_FREE_RAM_GB_GATE', '6')",
         "consumer": "        self._cleanup_torch()\n        from . import safety\n        min_free = float(os.environ.get('STUDIO_DOMAINSHUTTLE_MIN_FREE_RAM_GB_GATE', '6'))\n        ok, free = safety.enough_ram(min_free)\n        if not ok:\n            raise RuntimeError(f'Not enough system RAM for DomainShuttle: {free:.1f} GB free.')\n        repo = str(getattr(self.settings, 'cosmos_windows_path', '') or '')"
@@ -71786,11 +71847,11 @@
     ],
     "doc": "STUDIO_FOLEY_MIN_FREE_RAM_GB: advanced engine setting; built-in default retained",
     "reads": [
-      "vendor/studio/studio/adapter.py:3136"
+      "vendor/studio/studio/adapter.py:3137"
     ],
     "code_defaults": [
       {
-        "source": "vendor/studio/studio/adapter.py:3136",
+        "source": "vendor/studio/studio/adapter.py:3137",
         "unset": "'12'",
         "read": "os.environ.get('STUDIO_FOLEY_MIN_FREE_RAM_GB', '12')",
         "consumer": "        self._cleanup_torch()\n        from . import safety\n        min_free = float(os.environ.get('STUDIO_FOLEY_MIN_FREE_RAM_GB', '12'))\n        ok, free = safety.enough_ram(min_free)\n        if not ok:\n            raise RuntimeError(f'Not enough free RAM for LTX foley: {free:.1f} GB free, need >= {min_free:.0f} GB. Close other apps and retry.')\n        repo = str(getattr(self.settings, 'cosmos_windows_path', '') or '')"
@@ -72117,7 +72178,7 @@
     "doc": "STUDIO_GLM_AR_GGUF: advanced engine setting; built-in default retained",
     "reads": [
       "vendor/studio/studio/adapter.py:2233",
-      "vendor/studio/studio/custom_models.py:117"
+      "vendor/studio/studio/custom_models.py:116"
     ],
     "code_defaults": [
       {
@@ -72127,7 +72188,7 @@
         "consumer": "        is_i2i = bool(getattr(params, 'image_path', None))\n        emit_bin = _resolve_glm_emit_bin(str(getattr(self.settings, 'cosmos_windows_path', '') or ''))\n        ar_gguf = os.environ.get('STUDIO_GLM_AR_GGUF', '')\n        fast_ar = not is_i2i and os.environ.get('STUDIO_GLM_FAST_AR', '1').strip().lower() not in ('0', 'false', 'off', 'no') and Path(emit_bin).is_file() and Path(ar_gguf).is_file()\n        if os.environ.get('STUDIO_GLM_SUBPROCESS', '').strip().lower() in ('1', 'true', 'on', 'yes'):\n            return self._generate_glm_subprocess(params, model_dir, w, h, steps, guidance, seed, out, fast_ar, emit_bin, ar_gguf, should_cancel=should_cancel, on_step=on_step)\n        from . import glm_pipeline"
       },
       {
-        "source": "vendor/studio/studio/custom_models.py:117",
+        "source": "vendor/studio/studio/custom_models.py:116",
         "unset": "None",
         "read": "os.environ.get('STUDIO_GLM_AR_GGUF')",
         "consumer": "    anima_base = _first_file(root, 'diffusion_models', ['anima-base', 'anima-preview3-base', 'anima'])\n    sdxl_vae = _first_file(root, 'vae', ['sdxl_vae', 'sdxl-vae', 'sdxl_fp16', 'sdxlvae'])\n    glm_ar = next((str(p) for p in (Path(os.environ.get('STUDIO_GLM_AR_GGUF', '')) if os.environ.get('STUDIO_GLM_AR_GGUF') else None, Path(''), Path('')) if p and p.is_file()), None)\n    scail_root = next((p for p in (Path(os.environ.get('STUDIO_DOMAINSHUTTLE_BASE_ROOT', '')) if os.environ.get('STUDIO_DOMAINSHUTTLE_BASE_ROOT') else None, Path('')) if p and p.is_dir()), None)\n    scail_tokenizer = str(scail_root / 'umt5-xxl') if scail_root and (scail_root / 'umt5-xxl').is_dir() else None\n    defaults: dict[str, dict[str, str]] = {}\n"
@@ -74170,11 +74231,11 @@
     ],
     "doc": "STUDIO_KREA2_DISABLE_STAGED: advanced engine setting; built-in default retained",
     "reads": [
-      "vendor/studio/studio/adapter.py:2650"
+      "vendor/studio/studio/adapter.py:2651"
     ],
     "code_defaults": [
       {
-        "source": "vendor/studio/studio/adapter.py:2650",
+        "source": "vendor/studio/studio/adapter.py:2651",
         "unset": "'0'",
         "read": "os.environ.get('STUDIO_KREA2_DISABLE_STAGED', '0')",
         "consumer": "        elif arch == 'boogu-turbo' and (not is_resident):\n            mode = 'native_streaming'\n        elif not arch.startswith('boogu') and os.environ.get('STUDIO_KREA2_DISABLE_STAGED', '0') not in ('1', 'true', 'True'):\n            mode = 'staged' if is_resident else 'staged_disposable'\n        else:\n            mode = 'resident' if is_resident else os.environ.get('STUDIO_BOOGU_KREA_OFFLOAD', 'streaming')\n        cacheable = is_resident or (mode in ('streaming', 'stream', 'streamed', 'native_streaming') and self._stream_pipeline_cache_enabled() and (not (arch.startswith('boogu') or arch.startswith('krea'))))"
@@ -74787,11 +74848,11 @@
     ],
     "doc": "STUDIO_SCAIL_DEVICE_ID: advanced engine setting; built-in default retained",
     "reads": [
-      "vendor/studio/studio/adapter.py:2921"
+      "vendor/studio/studio/adapter.py:2922"
     ],
     "code_defaults": [
       {
-        "source": "vendor/studio/studio/adapter.py:2921",
+        "source": "vendor/studio/studio/adapter.py:2922",
         "unset": "'0'",
         "read": "os.environ.get('STUDIO_SCAIL_DEVICE_ID', '0')",
         "consumer": "        try:\n            _auto_shift = 3.0 if params.height and params.width and (max(params.height, params.width) <= 720) else 5.0\n            frames = sb.scail2_animate(prompt=params.prompt or '', image_path=ref_image, pose_video_path=driving_video, replace_flag=replace_flag, target_h=params.height, target_w=params.width, segment_len=81, shift=params.wan_shift if getattr(params, 'wan_shift', None) is not None else _auto_shift, sample_solver=params.sampler or 'unipc', sampling_steps=params.steps or 40, guide_scale=params.guidance if params.guidance is not None else 5.0, negative_prompt=params.negative or None, seed=params.seed if params.seed is not None else -1, ckpt_dir=os.environ.get('SCAIL2_CKPT_DIR', ''), scail_safetensors=os.environ.get('SCAIL2_SAFETENSORS', ''), lora_path=scail_lora_path, lora_alpha=scail_lora_alpha, stream_weights=True, n_gpu_buffers=int(os.environ.get('STUDIO_SCAIL_GPU_BUFFERS', '3')), device_id=int(os.environ.get('STUDIO_SCAIL_DEVICE_ID', '0')), progress=_progress)\n            seconds = round(time.time() - t0, 2)\n            out_dir = output_dir_for_params(params)\n            stem = 'scail_' + (re.sub('[^A-Za-z0-9]+', '_', (params.prompt or 'gen').strip())[:40].strip('_') or 'gen')\n            out = out_dir / f'{stem}_{params.seed}.mp4'"
@@ -74809,11 +74870,11 @@
     ],
     "doc": "STUDIO_SCAIL_GPU_BUFFERS: advanced engine setting; built-in default retained",
     "reads": [
-      "vendor/studio/studio/adapter.py:2921"
+      "vendor/studio/studio/adapter.py:2922"
     ],
     "code_defaults": [
       {
-        "source": "vendor/studio/studio/adapter.py:2921",
+        "source": "vendor/studio/studio/adapter.py:2922",
         "unset": "'3'",
         "read": "os.environ.get('STUDIO_SCAIL_GPU_BUFFERS', '3')",
         "consumer": "        try:\n            _auto_shift = 3.0 if params.height and params.width and (max(params.height, params.width) <= 720) else 5.0\n            frames = sb.scail2_animate(prompt=params.prompt or '', image_path=ref_image, pose_video_path=driving_video, replace_flag=replace_flag, target_h=params.height, target_w=params.width, segment_len=81, shift=params.wan_shift if getattr(params, 'wan_shift', None) is not None else _auto_shift, sample_solver=params.sampler or 'unipc', sampling_steps=params.steps or 40, guide_scale=params.guidance if params.guidance is not None else 5.0, negative_prompt=params.negative or None, seed=params.seed if params.seed is not None else -1, ckpt_dir=os.environ.get('SCAIL2_CKPT_DIR', ''), scail_safetensors=os.environ.get('SCAIL2_SAFETENSORS', ''), lora_path=scail_lora_path, lora_alpha=scail_lora_alpha, stream_weights=True, n_gpu_buffers=int(os.environ.get('STUDIO_SCAIL_GPU_BUFFERS', '3')), device_id=int(os.environ.get('STUDIO_SCAIL_DEVICE_ID', '0')), progress=_progress)\n            seconds = round(time.time() - t0, 2)\n            out_dir = output_dir_for_params(params)\n            stem = 'scail_' + (re.sub('[^A-Za-z0-9]+', '_', (params.prompt or 'gen').strip())[:40].strip('_') or 'gen')\n            out = out_dir / f'{stem}_{params.seed}.mp4'"
@@ -75127,25 +75188,25 @@
     ],
     "doc": "STUDIO_WAN_MIN_FREE_RAM_GB: advanced engine setting; built-in default retained",
     "reads": [
-      "vendor/studio/studio/adapter.py:2763",
-      "vendor/studio/studio/adapter.py:2829",
-      "vendor/studio/studio/adapter.py:2904"
+      "vendor/studio/studio/adapter.py:2764",
+      "vendor/studio/studio/adapter.py:2830",
+      "vendor/studio/studio/adapter.py:2905"
     ],
     "code_defaults": [
       {
-        "source": "vendor/studio/studio/adapter.py:2763",
+        "source": "vendor/studio/studio/adapter.py:2764",
         "unset": "'6'",
         "read": "os.environ.get('STUDIO_WAN_MIN_FREE_RAM_GB', '6')",
         "consumer": "        self._cleanup_torch()\n        from . import safety\n        min_free = float(os.environ.get('STUDIO_WAN_MIN_FREE_RAM_GB', '6'))\n        ok, free = safety.enough_ram(min_free)\n        if not ok:\n            raise RuntimeError(f'Not enough system RAM for streamed Wan: {free:.1f} GB free, need >= {min_free:.0f} GB. The streamed path does not need a large host-RAM staging buffer, but it still refuses to start below this safety floor.')\n        repo = str(getattr(self.settings, 'cosmos_windows_path', '') or '')"
       },
       {
-        "source": "vendor/studio/studio/adapter.py:2829",
+        "source": "vendor/studio/studio/adapter.py:2830",
         "unset": "'6'",
         "read": "os.environ.get('STUDIO_WAN_MIN_FREE_RAM_GB', '6')",
         "consumer": "        self._cleanup_torch()\n        from . import safety\n        ok, free = safety.enough_ram(float(os.environ.get('STUDIO_WAN_MIN_FREE_RAM_GB', '6')))\n        if not ok:\n            raise RuntimeError(f'Not enough system RAM for Bernini: {free:.1f} GB free.')\n        repo = str(getattr(self.settings, 'cosmos_windows_path', '') or '')\n        if repo and repo not in sys.path:"
       },
       {
-        "source": "vendor/studio/studio/adapter.py:2904",
+        "source": "vendor/studio/studio/adapter.py:2905",
         "unset": "'6'",
         "read": "os.environ.get('STUDIO_WAN_MIN_FREE_RAM_GB', '6')",
         "consumer": "        self._cleanup_torch()\n        from . import safety\n        ok, free = safety.enough_ram(float(os.environ.get('STUDIO_WAN_MIN_FREE_RAM_GB', '6')))\n        if not ok:\n            raise RuntimeError(f'Not enough system RAM for SCAIL-2: {free:.1f} GB free.')\n        repo = str(getattr(self.settings, 'cosmos_windows_path', '') or '')\n        if repo and repo not in sys.path:"
@@ -75163,11 +75224,11 @@
     ],
     "doc": "STUDIO_WAN_OFFICIAL_ROOT: advanced engine setting; built-in default retained",
     "reads": [
-      "vendor/studio/studio/custom_models.py:64"
+      "vendor/studio/studio/custom_models.py:63"
     ],
     "code_defaults": [
       {
-        "source": "vendor/studio/studio/custom_models.py:64",
+        "source": "vendor/studio/studio/custom_models.py:63",
         "unset": "None",
         "read": "os.environ.get('STUDIO_WAN_OFFICIAL_ROOT')",
         "consumer": "        return env\n    filename = f'wan2.2_t2v_{role}_noise_14B_fp16.safetensors'\n    roots = [os.environ.get('STUDIO_WAN_OFFICIAL_ROOT'), '']\n    for raw in roots:\n        if not raw:\n            continue\n        p = Path(raw) / filename"
@@ -75252,11 +75313,11 @@
     ],
     "doc": "STUDIO_ZIMAGE_CONFIG_DIR: advanced engine setting; built-in default retained",
     "reads": [
-      "vendor/studio/studio/custom_models.py:96"
+      "vendor/studio/studio/custom_models.py:95"
     ],
     "code_defaults": [
       {
-        "source": "vendor/studio/studio/custom_models.py:96",
+        "source": "vendor/studio/studio/custom_models.py:95",
         "unset": "None",
         "read": "os.environ.get('STUDIO_ZIMAGE_CONFIG_DIR')",
         "consumer": "    wan_low = _official_wan_denoiser('low') or _first_file_any(root, ['checkpoints', 'diffusion_models', 'models'], ['wan2.2_t2v_low_noise_14b_fp16', 't2vlow', 'lowv', 'low'])\n    qwen_vae = _first_file(root, 'vae', ['qwen_image_vae', 'qwen'])\n    zimage_config = next((str(p) for p in (Path(os.environ.get('STUDIO_ZIMAGE_CONFIG_DIR', '')) if os.environ.get('STUDIO_ZIMAGE_CONFIG_DIR') else None, Path(''), Path('')) if p and p.is_dir()), None)\n    zimage_vae = None\n    if zimage_config:\n        for candidate in (Path(zimage_config) / 'vae' / 'diffusion_pytorch_model.safetensors', Path(zimage_config) / 'vae'):\n            if candidate.exists():"
@@ -76614,6 +76675,659 @@
         "unset": "4.0",
         "read": "os.environ.get('ZIMAGE_WATCHDOG_MIN_FREE_GB', 4.0)",
         "consumer": "    ram_guard.preflight_host_ram(floor, label, skip_env='ZIMAGE_SKIP_RAM_PREFLIGHT', force_env='ZIMAGE_FORCE_RESIDENT', advice='Use the Z-Image per-block streamer (stream_weights=True) on a RAM-constrained box.')\n    max_proc = float(os.environ.get('ZIMAGE_MAX_PROC_RAM_GB', 14.0))\n    min_free = float(os.environ.get('ZIMAGE_WATCHDOG_MIN_FREE_GB', 4.0))\n    try:\n        from cosmos_windows import mem_guard\n    except Exception:\n        mem_guard = None"
+      }
+    ]
+  },
+  {
+    "var": "BOOGU_ALLOW_NON_DIRECTSTORAGE",
+    "flag": null,
+    "default": null,
+    "code_default": "None",
+    "classification": "advanced",
+    "scopes": [
+      "image",
+      "video"
+    ],
+    "doc": "BOOGU_ALLOW_NON_DIRECTSTORAGE: explicit engine setting; inherited values are cleared and the native default is retained.",
+    "reads": [
+      "vendor/studio/studio/boogu_krea.py:414"
+    ],
+    "allowed_values": [
+      "0"
+    ],
+    "code_defaults": [
+      {
+        "source": "vendor/studio/studio/boogu_krea.py:414",
+        "unset": "None",
+        "read": "_os.environ.get('BOOGU_ALLOW_NON_DIRECTSTORAGE')",
+        "consumer": "    sd_keys = set(transformer.state_dict().keys())\n    streamer = DirectStorageStreamer(_BooguMainBlockIndex(idx, num_double), component='', n_gpu_buffers=n_gpu_buffers, device=device)\n    if getattr(streamer, 'mode', None) != 3 and _os.environ.get('BOOGU_ALLOW_NON_DIRECTSTORAGE') != '1':\n        try:\n            streamer.close()\n        finally:\n            raise RuntimeError(f\"Boogu DS streamer mode={getattr(streamer, 'mode', '?')} is not DirectStorage(3) \u00e2\u20ac\u201d R1 requires the optimised NVMe->GPU path. Set BOOGU_ALLOW_NON_DIRECTSTORAGE=1 for diagnostics.\")"
+      }
+    ]
+  },
+  {
+    "var": "DS4_NATIVE_SESSION_YOCO_KEEP",
+    "flag": null,
+    "default": null,
+    "code_default": "Wrapper/conditional default: see the literal call and consumer below",
+    "classification": "advanced",
+    "scopes": [
+      "mac-ds4"
+    ],
+    "doc": "Negotiated YOCO replay window: 0 or 140; set by the paired preset.",
+    "reads": [
+      "engines/ds4-mac/ds4_native_session_setup.inc:25"
+    ],
+    "allowed_values": [
+      "0",
+      "140"
+    ],
+    "code_defaults": [
+      {
+        "source": "engines/ds4-mac/ds4_native_session_setup.inc:25",
+        "unset": "Wrapper/conditional default: see the literal call and consumer below",
+        "read": "const char*yoco=ds4_nf_env(\"DS4_NATIVE_SESSION_YOCO_KEEP\");",
+        "consumer": "    ds4_ns_config*c=calloc(1,sizeof(*c));if(!c)return ds4_nf_error(err,cap,\"session configuration allocation failed\");\n    c->http.dirfd=-1;uint32_t port;\n    const char*yoco=ds4_nf_env(\"DS4_NATIVE_SESSION_YOCO_KEEP\");\n    if(yoco&&strcmp(yoco,\"0\")){if(strcmp(yoco,\"140\"))goto bad;c->yoco_keep=140;}\n    if(!ds4_nf_pair_token(token,c->http.token)||!ds4_nf_env_uint(\"DS4_NATIVE_SESSION_PORT\",&port,1,65535)||\n       !ds4_nf_env_uint(\"DS4_NATIVE_SESSION_DEADLINE_SECONDS\",&c->http.deadline_seconds,60,7200)||\n       inet_pton(AF_INET,host,&c->http.broker.sin_addr)!=1||!ds4_engine_native_frontier_identity(engine,&c->http.model))goto bad;"
+      }
+    ]
+  },
+  {
+    "var": "KREA2_ALLOW_NON_DIRECTSTORAGE",
+    "flag": null,
+    "default": null,
+    "code_default": "None",
+    "classification": "advanced",
+    "scopes": [
+      "image",
+      "video"
+    ],
+    "doc": "KREA2_ALLOW_NON_DIRECTSTORAGE: explicit engine setting; inherited values are cleared and the native default is retained.",
+    "reads": [
+      "vendor/studio/studio/krea2_diffusion.py:809"
+    ],
+    "allowed_values": [
+      "0"
+    ],
+    "code_defaults": [
+      {
+        "source": "vendor/studio/studio/krea2_diffusion.py:809",
+        "unset": "None",
+        "read": "_os.environ.get('KREA2_ALLOW_NON_DIRECTSTORAGE')",
+        "consumer": "    sd_keys = set(tr.state_dict().keys())\n    streamer = DirectStorageStreamer(_Krea2TBlockIndex(idx), component='', n_gpu_buffers=n_gpu_buffers, device=device, record_compute_done=True)\n    if getattr(streamer, 'mode', None) != 3 and _os.environ.get('KREA2_ALLOW_NON_DIRECTSTORAGE') != '1':\n        try:\n            streamer.close()\n        finally:\n            raise RuntimeError(f\"Krea2 DS streamer mode={getattr(streamer, 'mode', '?')} is not DirectStorage(3) \u00e2\u20ac\u201d R1 requires the optimised NVMe->GPU path. Set KREA2_ALLOW_NON_DIRECTSTORAGE=1 for diagnostics.\")"
+      }
+    ]
+  },
+  {
+    "var": "STUDIO_COMFYUI_MODELS",
+    "flag": null,
+    "default": null,
+    "code_default": "None",
+    "classification": "advanced",
+    "scopes": [
+      "image",
+      "video"
+    ],
+    "doc": "STUDIO_COMFYUI_MODELS: explicit engine setting; inherited values are cleared and the native default is retained.",
+    "reads": [
+      "vendor/studio/studio/krea2_diffusion.py:16"
+    ],
+    "code_defaults": [
+      {
+        "source": "vendor/studio/studio/krea2_diffusion.py:16",
+        "unset": "None",
+        "read": "os.environ.get('STUDIO_COMFYUI_MODELS')",
+        "consumer": "\ndef _comfy_models_base() -> Path:\n    env = os.environ.get('STUDIO_COMFYUI_MODELS')\n    if env and Path(env).is_dir():\n        return Path(env)\n    if sys.platform == 'win32':\n        win_mirror = Path(os.environ.get('STUDIO_KREA2_WIN_MIRROR', ''))"
+      }
+    ]
+  },
+  {
+    "var": "STUDIO_H3_CONTINUITY_PROJECTION",
+    "flag": null,
+    "default": null,
+    "code_default": "''",
+    "classification": "advanced",
+    "scopes": [
+      "image",
+      "video"
+    ],
+    "doc": "STUDIO_H3_CONTINUITY_PROJECTION: explicit engine setting; inherited values are cleared and the native default is retained.",
+    "reads": [
+      "vendor/studio/studio/h3_live.py:196"
+    ],
+    "code_defaults": [
+      {
+        "source": "vendor/studio/studio/h3_live.py:196",
+        "unset": "''",
+        "read": "os.environ.get('STUDIO_H3_CONTINUITY_PROJECTION', '')",
+        "consumer": "        if o.get('reference_native_res'):\n            argv.append('--reference-native-res')\n        projection = '' if o.get('seamless') or choice in ('projection', 'blend', 'latent') else str(os.environ.get('STUDIO_H3_CONTINUITY_PROJECTION', '')).strip().lower()\n        if projection in ('float', 'uint8', 'video'):\n            argv += ['--continuity-projection', projection]\n            alpha = float(os.environ.get('STUDIO_H3_CONTINUITY_PROJECTION_ALPHA', '1'))\n            if not 0 < alpha <= 1:"
+      }
+    ]
+  },
+  {
+    "var": "STUDIO_H3_CONTINUITY_PROJECTION_ALPHA",
+    "flag": null,
+    "default": null,
+    "code_default": "'1'",
+    "classification": "advanced",
+    "scopes": [
+      "image",
+      "video"
+    ],
+    "doc": "STUDIO_H3_CONTINUITY_PROJECTION_ALPHA: explicit engine setting; inherited values are cleared and the native default is retained.",
+    "reads": [
+      "vendor/studio/studio/h3_live.py:199"
+    ],
+    "code_defaults": [
+      {
+        "source": "vendor/studio/studio/h3_live.py:199",
+        "unset": "'1'",
+        "read": "os.environ.get('STUDIO_H3_CONTINUITY_PROJECTION_ALPHA', '1')",
+        "consumer": "        if projection in ('float', 'uint8', 'video'):\n            argv += ['--continuity-projection', projection]\n            alpha = float(os.environ.get('STUDIO_H3_CONTINUITY_PROJECTION_ALPHA', '1'))\n            if not 0 < alpha <= 1:\n                raise ValueError('H3 projection alpha must be in (0, 1]')\n            argv += ['--continuity-projection-alpha', str(alpha)]\n        if o['resident']:"
+      }
+    ]
+  },
+  {
+    "var": "STUDIO_H3_STEP_ADAPTERS",
+    "flag": null,
+    "default": null,
+    "code_default": "''",
+    "classification": "advanced",
+    "scopes": [
+      "image",
+      "video"
+    ],
+    "doc": "STUDIO_H3_STEP_ADAPTERS: explicit engine setting; inherited values are cleared and the native default is retained.",
+    "reads": [
+      "vendor/studio/studio/h3_model_profiles.py:50"
+    ],
+    "code_defaults": [
+      {
+        "source": "vendor/studio/studio/h3_model_profiles.py:50",
+        "unset": "''",
+        "read": "os.environ.get('STUDIO_H3_STEP_ADAPTERS', '')",
+        "consumer": "def is_base_distill_adapter(path) -> bool:\n    name = Path(str(path).replace('\\\\', '/')).name.lower()\n    extra = {n.strip().lower() for n in os.environ.get('STUDIO_H3_STEP_ADAPTERS', '').split(';') if n.strip()}\n    return name in BASE_H3_STEP_ADAPTERS or name in extra\n\ndef profile_adapters(profile: H3ModelProfile, requested) -> tuple:\n    kept, removed = ([], [])"
+      }
+    ]
+  },
+  {
+    "var": "STUDIO_KREA2_DIRECT_MIN_FREE_GB",
+    "flag": null,
+    "default": null,
+    "code_default": "raw_need",
+    "classification": "advanced",
+    "scopes": [
+      "image",
+      "video"
+    ],
+    "doc": "STUDIO_KREA2_DIRECT_MIN_FREE_GB: explicit engine setting; inherited values are cleared and the native default is retained.",
+    "reads": [
+      "vendor/studio/studio/krea2_diffusion.py:1203"
+    ],
+    "code_defaults": [
+      {
+        "source": "vendor/studio/studio/krea2_diffusion.py:1203",
+        "unset": "raw_need",
+        "read": "os.environ.get('STUDIO_KREA2_DIRECT_MIN_FREE_GB', raw_need)",
+        "consumer": "    raw_need = 4.0\n    try:\n        raw_need = float(os.environ.get('STUDIO_KREA2_DIRECT_MIN_FREE_GB', raw_need))\n    except (TypeError, ValueError):\n        pass\n    _require_free_memory(raw_need)\n    stream_layers = offload in ('model', 'stream', 'streaming', 'stream_layers', 'streaming_lazy')"
+      }
+    ]
+  },
+  {
+    "var": "STUDIO_KREA2_DIT",
+    "flag": null,
+    "default": null,
+    "code_default": "None",
+    "classification": "advanced",
+    "scopes": [
+      "image",
+      "video"
+    ],
+    "doc": "STUDIO_KREA2_DIT: explicit engine setting; inherited values are cleared and the native default is retained.",
+    "reads": [
+      "vendor/studio/studio/krea2_diffusion.py:34"
+    ],
+    "code_defaults": [
+      {
+        "source": "vendor/studio/studio/krea2_diffusion.py:34",
+        "unset": "None",
+        "read": "os.environ.get('STUDIO_KREA2_DIT')",
+        "consumer": "def krea2_files() -> dict:\n    base = _comfy_models_base()\n    return {'dit': os.environ.get('STUDIO_KREA2_DIT') or str(base / 'checkpoints' / 'Krea2_Turbo_int8mixed.safetensors'), 'text_encoder': os.environ.get('STUDIO_KREA2_TEXT_ENCODER') or str(base / 'text_encoders' / 'qwen3vl_4b_int8.safetensors'), 'vae': os.environ.get('STUDIO_KREA2_VAE') or str(base / 'vae' / 'qwen_image_vae.safetensors')}\n\ndef krea2_available() -> bool:\n    f = krea2_files()\n    return Path(f['dit']).is_file() and Path(f['text_encoder']).is_file()"
+      }
+    ]
+  },
+  {
+    "var": "STUDIO_KREA2_DTYPE",
+    "flag": null,
+    "default": null,
+    "code_default": "'float16'",
+    "classification": "advanced",
+    "scopes": [
+      "image",
+      "video"
+    ],
+    "doc": "STUDIO_KREA2_DTYPE: explicit engine setting; inherited values are cleared and the native default is retained.",
+    "reads": [
+      "vendor/studio/studio/krea2_diffusion.py:427"
+    ],
+    "code_defaults": [
+      {
+        "source": "vendor/studio/studio/krea2_diffusion.py:427",
+        "unset": "'float16'",
+        "read": "os.environ.get('STUDIO_KREA2_DTYPE', 'float16')",
+        "consumer": "def _krea2_resident_dtype():\n    import torch\n    raw = str(os.environ.get('STUDIO_KREA2_DTYPE', 'float16')).strip().lower()\n    if raw in {'bfloat16', 'bf16'}:\n        return torch.bfloat16\n    if raw in {'float16', 'fp16', 'half'}:\n        return torch.float16"
+      }
+    ]
+  },
+  {
+    "var": "STUDIO_KREA2_EDIT_LORA",
+    "flag": null,
+    "default": null,
+    "code_default": "None",
+    "classification": "advanced",
+    "scopes": [
+      "image",
+      "video"
+    ],
+    "doc": "STUDIO_KREA2_EDIT_LORA: explicit engine setting; inherited values are cleared and the native default is retained.",
+    "reads": [
+      "vendor/studio/studio/krea2_diffusion.py:81"
+    ],
+    "code_defaults": [
+      {
+        "source": "vendor/studio/studio/krea2_diffusion.py:81",
+        "unset": "None",
+        "read": "os.environ.get('STUDIO_KREA2_EDIT_LORA')",
+        "consumer": "    configured = str(explicit_path or '').strip()\n    if not configured:\n        configured = str(os.environ.get('STUDIO_KREA2_EDIT_LORA') or '').strip()\n    if configured:\n        path = Path(configured).expanduser().resolve(strict=False)\n        if not path.is_file():\n            raise RuntimeError(f'Krea 2 Edit LoRA not found: {str(path)!r}')"
+      }
+    ]
+  },
+  {
+    "var": "STUDIO_KREA2_MIN_FREE_GB",
+    "flag": null,
+    "default": null,
+    "code_default": "need_gb",
+    "classification": "advanced",
+    "scopes": [
+      "image",
+      "video"
+    ],
+    "doc": "STUDIO_KREA2_MIN_FREE_GB: explicit engine setting; inherited values are cleared and the native default is retained.",
+    "reads": [
+      "vendor/studio/studio/krea2_diffusion.py:706"
+    ],
+    "code_defaults": [
+      {
+        "source": "vendor/studio/studio/krea2_diffusion.py:706",
+        "unset": "need_gb",
+        "read": "os.environ.get('STUDIO_KREA2_MIN_FREE_GB', need_gb)",
+        "consumer": "def _require_free_memory(need_gb: float=55.0) -> None:\n    try:\n        need_gb = float(os.environ.get('STUDIO_KREA2_MIN_FREE_GB', need_gb))\n    except (TypeError, ValueError):\n        pass\n    if need_gb <= 0:\n        return"
+      }
+    ]
+  },
+  {
+    "var": "STUDIO_KREA2_MPS_COMPILE",
+    "flag": null,
+    "default": null,
+    "code_default": "'1'",
+    "classification": "advanced",
+    "scopes": [
+      "image",
+      "video"
+    ],
+    "doc": "STUDIO_KREA2_MPS_COMPILE: explicit engine setting; inherited values are cleared and the native default is retained.",
+    "reads": [
+      "vendor/studio/studio/krea2_diffusion.py:1166"
+    ],
+    "code_defaults": [
+      {
+        "source": "vendor/studio/studio/krea2_diffusion.py:1166",
+        "unset": "'1'",
+        "read": "os.environ.get('STUDIO_KREA2_MPS_COMPILE', '1')",
+        "consumer": "\ndef _configure_krea2_regional_compile(transformer, device: str) -> bool:\n    enabled = str(os.environ.get('STUDIO_KREA2_MPS_COMPILE', '1')).strip().lower() in {'1', 'true', 'yes', 'on'}\n    if not enabled or str(device).split(':', 1)[0].lower() != 'mps':\n        return False\n    compile_repeated = getattr(transformer, 'compile_repeated_blocks', None)\n    if not callable(compile_repeated):"
+      }
+    ]
+  },
+  {
+    "var": "STUDIO_KREA2_TEXT_ENCODER",
+    "flag": null,
+    "default": null,
+    "code_default": "None",
+    "classification": "advanced",
+    "scopes": [
+      "image",
+      "video"
+    ],
+    "doc": "STUDIO_KREA2_TEXT_ENCODER: explicit engine setting; inherited values are cleared and the native default is retained.",
+    "reads": [
+      "vendor/studio/studio/krea2_diffusion.py:34"
+    ],
+    "code_defaults": [
+      {
+        "source": "vendor/studio/studio/krea2_diffusion.py:34",
+        "unset": "None",
+        "read": "os.environ.get('STUDIO_KREA2_TEXT_ENCODER')",
+        "consumer": "def krea2_files() -> dict:\n    base = _comfy_models_base()\n    return {'dit': os.environ.get('STUDIO_KREA2_DIT') or str(base / 'checkpoints' / 'Krea2_Turbo_int8mixed.safetensors'), 'text_encoder': os.environ.get('STUDIO_KREA2_TEXT_ENCODER') or str(base / 'text_encoders' / 'qwen3vl_4b_int8.safetensors'), 'vae': os.environ.get('STUDIO_KREA2_VAE') or str(base / 'vae' / 'qwen_image_vae.safetensors')}\n\ndef krea2_available() -> bool:\n    f = krea2_files()\n    return Path(f['dit']).is_file() and Path(f['text_encoder']).is_file()"
+      }
+    ]
+  },
+  {
+    "var": "STUDIO_KREA2_VAE",
+    "flag": null,
+    "default": null,
+    "code_default": "None",
+    "classification": "advanced",
+    "scopes": [
+      "image",
+      "video"
+    ],
+    "doc": "STUDIO_KREA2_VAE: explicit engine setting; inherited values are cleared and the native default is retained.",
+    "reads": [
+      "vendor/studio/studio/krea2_diffusion.py:34"
+    ],
+    "code_defaults": [
+      {
+        "source": "vendor/studio/studio/krea2_diffusion.py:34",
+        "unset": "None",
+        "read": "os.environ.get('STUDIO_KREA2_VAE')",
+        "consumer": "def krea2_files() -> dict:\n    base = _comfy_models_base()\n    return {'dit': os.environ.get('STUDIO_KREA2_DIT') or str(base / 'checkpoints' / 'Krea2_Turbo_int8mixed.safetensors'), 'text_encoder': os.environ.get('STUDIO_KREA2_TEXT_ENCODER') or str(base / 'text_encoders' / 'qwen3vl_4b_int8.safetensors'), 'vae': os.environ.get('STUDIO_KREA2_VAE') or str(base / 'vae' / 'qwen_image_vae.safetensors')}\n\ndef krea2_available() -> bool:\n    f = krea2_files()\n    return Path(f['dit']).is_file() and Path(f['text_encoder']).is_file()"
+      }
+    ]
+  },
+  {
+    "var": "STUDIO_KREA2_WIN_MIRROR",
+    "flag": null,
+    "default": null,
+    "code_default": "''",
+    "classification": "advanced",
+    "scopes": [
+      "image",
+      "video"
+    ],
+    "doc": "STUDIO_KREA2_WIN_MIRROR: explicit engine setting; inherited values are cleared and the native default is retained.",
+    "reads": [
+      "vendor/studio/studio/krea2_diffusion.py:20"
+    ],
+    "code_defaults": [
+      {
+        "source": "vendor/studio/studio/krea2_diffusion.py:20",
+        "unset": "''",
+        "read": "os.environ.get('STUDIO_KREA2_WIN_MIRROR', '')",
+        "consumer": "        return Path(env)\n    if sys.platform == 'win32':\n        win_mirror = Path(os.environ.get('STUDIO_KREA2_WIN_MIRROR', ''))\n        if win_mirror.is_dir():\n            return win_mirror\n    cfg = Path.home() / 'Library' / 'Application Support' / 'Comfy Desktop' / 'settings.json'\n    try:"
+      }
+    ]
+  },
+  {
+    "var": "STUDIO_QWEN3VL_CACHE",
+    "flag": null,
+    "default": null,
+    "code_default": "None",
+    "classification": "advanced",
+    "scopes": [
+      "image",
+      "video"
+    ],
+    "doc": "STUDIO_QWEN3VL_CACHE: explicit engine setting; inherited values are cleared and the native default is retained.",
+    "reads": [
+      "vendor/studio/studio/krea2_diffusion.py:12"
+    ],
+    "code_defaults": [
+      {
+        "source": "vendor/studio/studio/krea2_diffusion.py:12",
+        "unset": "None",
+        "read": "os.environ.get('STUDIO_QWEN3VL_CACHE')",
+        "consumer": "QWEN_IMAGE_REPO = os.environ.get('STUDIO_QWEN_IMAGE_REPO', 'Qwen/Qwen-Image')\nQWEN3VL_REPO = os.environ.get('STUDIO_QWEN3VL_REPO', 'Qwen/Qwen3-VL-4B-Instruct')\n_QWEN3VL_CACHE = os.environ.get('STUDIO_QWEN3VL_CACHE') or str(Path.home() / '.cache' / 'studio_qwen3vl_4b')\nKREA2_TAP_LAYERS = (2, 5, 8, 11, 14, 17, 20, 23, 26, 29, 32, 35)\n\ndef _comfy_models_base() -> Path:\n    env = os.environ.get('STUDIO_COMFYUI_MODELS')"
+      }
+    ]
+  },
+  {
+    "var": "STUDIO_QWEN3VL_REPO",
+    "flag": null,
+    "default": null,
+    "code_default": "'Qwen/Qwen3-VL-4B-Instruct'",
+    "classification": "advanced",
+    "scopes": [
+      "image",
+      "video"
+    ],
+    "doc": "STUDIO_QWEN3VL_REPO: explicit engine setting; inherited values are cleared and the native default is retained.",
+    "reads": [
+      "vendor/studio/studio/krea2_diffusion.py:11"
+    ],
+    "code_defaults": [
+      {
+        "source": "vendor/studio/studio/krea2_diffusion.py:11",
+        "unset": "'Qwen/Qwen3-VL-4B-Instruct'",
+        "read": "os.environ.get('STUDIO_QWEN3VL_REPO', 'Qwen/Qwen3-VL-4B-Instruct')",
+        "consumer": "from pathlib import Path\nQWEN_IMAGE_REPO = os.environ.get('STUDIO_QWEN_IMAGE_REPO', 'Qwen/Qwen-Image')\nQWEN3VL_REPO = os.environ.get('STUDIO_QWEN3VL_REPO', 'Qwen/Qwen3-VL-4B-Instruct')\n_QWEN3VL_CACHE = os.environ.get('STUDIO_QWEN3VL_CACHE') or str(Path.home() / '.cache' / 'studio_qwen3vl_4b')\nKREA2_TAP_LAYERS = (2, 5, 8, 11, 14, 17, 20, 23, 26, 29, 32, 35)\n\ndef _comfy_models_base() -> Path:"
+      }
+    ]
+  },
+  {
+    "var": "STUDIO_QWEN_IMAGE21_BASE",
+    "flag": null,
+    "default": null,
+    "code_default": "''",
+    "classification": "advanced",
+    "scopes": [
+      "image",
+      "video"
+    ],
+    "doc": "STUDIO_QWEN_IMAGE21_BASE: explicit engine setting; inherited values are cleared and the native default is retained.",
+    "reads": [
+      "vendor/studio/studio/qwen_comfy_load.py:6"
+    ],
+    "code_defaults": [
+      {
+        "source": "vendor/studio/studio/qwen_comfy_load.py:6",
+        "unset": "''",
+        "read": "os.environ.get('STUDIO_QWEN_IMAGE21_BASE', '')",
+        "consumer": "import re\nfrom pathlib import Path\nDEFAULT_BASE_REPO = os.environ.get('STUDIO_QWEN_IMAGE21_BASE', '')\n_BLOCK = re.compile('^transformer_blocks\\\\.(\\\\d+)\\\\.')\n\ndef _block_index(target_key: str) -> int | None:\n    match = _BLOCK.match(target_key)"
+      }
+    ]
+  },
+  {
+    "var": "STUDIO_QWEN_IMAGE21_MODEL",
+    "flag": null,
+    "default": null,
+    "code_default": "DEFAULT_MODEL_DIR",
+    "classification": "advanced",
+    "scopes": [
+      "image",
+      "video"
+    ],
+    "doc": "STUDIO_QWEN_IMAGE21_MODEL: explicit engine setting; inherited values are cleared and the native default is retained.",
+    "reads": [
+      "vendor/studio/studio/qwen_image21.py:544"
+    ],
+    "code_defaults": [
+      {
+        "source": "vendor/studio/studio/qwen_image21.py:544",
+        "unset": "DEFAULT_MODEL_DIR",
+        "read": "os.environ.get('STUDIO_QWEN_IMAGE21_MODEL', DEFAULT_MODEL_DIR)",
+        "consumer": "    parser.add_argument('--serve', action='store_true', help='Keep weights resident and read JSON requests on stdin')\n    parser.add_argument('--request', help='JSON request manifest')\n    parser.add_argument('--model-dir', default=os.environ.get('STUDIO_QWEN_IMAGE21_MODEL', DEFAULT_MODEL_DIR))\n    parser.add_argument('--offload-dir', default=os.environ.get('STUDIO_QWEN_IMAGE21_OFFLOAD', ''))\n    args = parser.parse_args(argv)\n    if args.serve:\n        pipe = None"
+      }
+    ]
+  },
+  {
+    "var": "STUDIO_QWEN_IMAGE21_OFFLOAD",
+    "flag": null,
+    "default": null,
+    "code_default": "''",
+    "classification": "advanced",
+    "scopes": [
+      "image",
+      "video"
+    ],
+    "doc": "STUDIO_QWEN_IMAGE21_OFFLOAD: explicit engine setting; inherited values are cleared and the native default is retained.",
+    "reads": [
+      "vendor/studio/studio/qwen_image21.py:545"
+    ],
+    "code_defaults": [
+      {
+        "source": "vendor/studio/studio/qwen_image21.py:545",
+        "unset": "''",
+        "read": "os.environ.get('STUDIO_QWEN_IMAGE21_OFFLOAD', '')",
+        "consumer": "    parser.add_argument('--request', help='JSON request manifest')\n    parser.add_argument('--model-dir', default=os.environ.get('STUDIO_QWEN_IMAGE21_MODEL', DEFAULT_MODEL_DIR))\n    parser.add_argument('--offload-dir', default=os.environ.get('STUDIO_QWEN_IMAGE21_OFFLOAD', ''))\n    args = parser.parse_args(argv)\n    if args.serve:\n        pipe = None\n        for line in sys.stdin:"
+      }
+    ]
+  },
+  {
+    "var": "STUDIO_QWEN_IMAGE21_PACK_DIR",
+    "flag": null,
+    "default": null,
+    "code_default": "''",
+    "classification": "advanced",
+    "scopes": [
+      "image",
+      "video"
+    ],
+    "doc": "STUDIO_QWEN_IMAGE21_PACK_DIR: explicit engine setting; inherited values are cleared and the native default is retained.",
+    "reads": [
+      "vendor/studio/studio/qwen_block_weights.py:57"
+    ],
+    "code_defaults": [
+      {
+        "source": "vendor/studio/studio/qwen_block_weights.py:57",
+        "unset": "''",
+        "read": "os.environ.get('STUDIO_QWEN_IMAGE21_PACK_DIR', '')",
+        "consumer": "    identity = [(f, Path(f).stat().st_size, Path(f).stat().st_mtime_ns) for f in files]\n    fingerprint = hashlib.sha256(json.dumps(['qwen-row-int8-v1', identity]).encode()).hexdigest()[:20]\n    root = Path(pack_dir or os.environ.get('STUDIO_QWEN_IMAGE21_PACK_DIR', '')) / fingerprint\n    root.mkdir(parents=True, exist_ok=True)\n    groups = block_groups(index, block_prefix=block_prefix)\n    complete = root / 'complete.json'\n    if complete.is_file() and all(((root / f'block-{i:03}.safetensors').is_file() for i in groups)):"
+      }
+    ]
+  },
+  {
+    "var": "STUDIO_QWEN_IMAGE21_TEXT_ENCODER_8BIT",
+    "flag": null,
+    "default": null,
+    "code_default": "'1'",
+    "classification": "advanced",
+    "scopes": [
+      "image",
+      "video"
+    ],
+    "doc": "STUDIO_QWEN_IMAGE21_TEXT_ENCODER_8BIT: explicit engine setting; inherited values are cleared and the native default is retained.",
+    "reads": [
+      "vendor/studio/studio/qwen_image21.py:392"
+    ],
+    "code_defaults": [
+      {
+        "source": "vendor/studio/studio/qwen_image21.py:392",
+        "unset": "'1'",
+        "read": "os.environ.get('STUDIO_QWEN_IMAGE21_TEXT_ENCODER_8BIT', '1')",
+        "consumer": "    comp_root = components_root(root)\n    started = time.perf_counter()\n    use_int8 = os.environ.get('STUDIO_QWEN_IMAGE21_TEXT_ENCODER_8BIT', '1') != '0'\n    print(f\"[status] Qwen mode: transformer={precision}, streaming={streaming}, text_encoder={('int8' if use_int8 else 'bf16')}\", flush=True)\n    if single_file:\n        print(f'[status] Qwen ComfyUI single-file checkpoint {root.name!r}: transformer from the file, other components from {comp_root}', flush=True)\n    print('[status] DirectStorage: loading Qwen text encoder to VRAM', flush=True)"
+      }
+    ]
+  },
+  {
+    "var": "STUDIO_QWEN_IMAGE21_VRAM_FRACTION",
+    "flag": null,
+    "default": null,
+    "code_default": "'0.92'",
+    "classification": "advanced",
+    "scopes": [
+      "image",
+      "video"
+    ],
+    "doc": "STUDIO_QWEN_IMAGE21_VRAM_FRACTION: explicit engine setting; inherited values are cleared and the native default is retained.",
+    "reads": [
+      "vendor/studio/studio/qwen_image21.py:386"
+    ],
+    "code_defaults": [
+      {
+        "source": "vendor/studio/studio/qwen_image21.py:386",
+        "unset": "'0.92'",
+        "read": "os.environ.get('STUDIO_QWEN_IMAGE21_VRAM_FRACTION', '0.92')",
+        "consumer": "    from transformers import Qwen3VLProcessor\n    from .qwen_direct_load import bind_component\n    torch.cuda.set_per_process_memory_fraction(float(os.environ.get('STUDIO_QWEN_IMAGE21_VRAM_FRACTION', '0.92')), 0)\n    from .qwen_comfy_load import bind_qwen21_transformer, components_root, is_single_file_checkpoint\n    root = Path(model_dir)\n    single_file = is_single_file_checkpoint(root)\n    comp_root = components_root(root)"
+      }
+    ]
+  },
+  {
+    "var": "STUDIO_QWEN_IMAGE_REPO",
+    "flag": null,
+    "default": null,
+    "code_default": "'Qwen/Qwen-Image'",
+    "classification": "advanced",
+    "scopes": [
+      "image",
+      "video"
+    ],
+    "doc": "STUDIO_QWEN_IMAGE_REPO: explicit engine setting; inherited values are cleared and the native default is retained.",
+    "reads": [
+      "vendor/studio/studio/krea2_diffusion.py:10"
+    ],
+    "code_defaults": [
+      {
+        "source": "vendor/studio/studio/krea2_diffusion.py:10",
+        "unset": "'Qwen/Qwen-Image'",
+        "read": "os.environ.get('STUDIO_QWEN_IMAGE_REPO', 'Qwen/Qwen-Image')",
+        "consumer": "from contextlib import contextmanager\nfrom pathlib import Path\nQWEN_IMAGE_REPO = os.environ.get('STUDIO_QWEN_IMAGE_REPO', 'Qwen/Qwen-Image')\nQWEN3VL_REPO = os.environ.get('STUDIO_QWEN3VL_REPO', 'Qwen/Qwen3-VL-4B-Instruct')\n_QWEN3VL_CACHE = os.environ.get('STUDIO_QWEN3VL_CACHE') or str(Path.home() / '.cache' / 'studio_qwen3vl_4b')\nKREA2_TAP_LAYERS = (2, 5, 8, 11, 14, 17, 20, 23, 26, 29, 32, 35)\n"
+      }
+    ]
+  },
+  {
+    "var": "STUDIO_RAM_ABORT_FLOOR_GB",
+    "flag": null,
+    "default": null,
+    "code_default": "'1.0'",
+    "classification": "advanced",
+    "scopes": [
+      "image",
+      "video"
+    ],
+    "doc": "STUDIO_RAM_ABORT_FLOOR_GB: explicit engine setting; inherited values are cleared and the native default is retained.",
+    "reads": [
+      "vendor/studio/studio/safety.py:11"
+    ],
+    "code_defaults": [
+      {
+        "source": "vendor/studio/studio/safety.py:11",
+        "unset": "'1.0'",
+        "read": "os.environ.get('STUDIO_RAM_ABORT_FLOOR_GB', '1.0')",
+        "consumer": "def ram_abort_floor_gb() -> float:\n    try:\n        return max(0.25, float(os.environ.get('STUDIO_RAM_ABORT_FLOOR_GB', '1.0')))\n    except (TypeError, ValueError):\n        return 1.0\n\ndef free_ram_gb() -> float:"
+      }
+    ]
+  },
+  {
+    "var": "STUDIO_RAM_PREFLIGHT_FORCE",
+    "flag": null,
+    "default": null,
+    "code_default": "''",
+    "classification": "advanced",
+    "scopes": [
+      "image",
+      "video"
+    ],
+    "doc": "STUDIO_RAM_PREFLIGHT_FORCE: explicit engine setting; inherited values are cleared and the native default is retained.",
+    "reads": [
+      "vendor/studio/studio/ram_preflight.py:71"
+    ],
+    "code_defaults": [
+      {
+        "source": "vendor/studio/studio/ram_preflight.py:71",
+        "unset": "''",
+        "read": "os.environ.get('STUDIO_RAM_PREFLIGHT_FORCE', '')",
+        "consumer": "\ndef wait_for_host_ram(min_free_gb: float, *, label: str='launch', timeout_s: float=90.0, poll_s: float=1.0, settle_s: float=4.0, emit=None) -> float:\n    if os.environ.get('STUDIO_SKIP_RAM_PREFLIGHT', '').strip().lower() in _TRUTHY or os.environ.get('STUDIO_RAM_PREFLIGHT_FORCE', '').strip().lower() in _TRUTHY:\n        return free_host_ram_gb()\n    import time as _t\n    deadline = _t.monotonic() + max(0.0, float(timeout_s))\n    last = best = free_host_ram_gb()"
+      }
+    ]
+  },
+  {
+    "var": "STUDIO_SKIP_RAM_PREFLIGHT",
+    "flag": null,
+    "default": null,
+    "code_default": "''",
+    "classification": "advanced",
+    "scopes": [
+      "image",
+      "video"
+    ],
+    "doc": "STUDIO_SKIP_RAM_PREFLIGHT: explicit engine setting; inherited values are cleared and the native default is retained.",
+    "reads": [
+      "vendor/studio/studio/ram_preflight.py:71"
+    ],
+    "code_defaults": [
+      {
+        "source": "vendor/studio/studio/ram_preflight.py:71",
+        "unset": "''",
+        "read": "os.environ.get('STUDIO_SKIP_RAM_PREFLIGHT', '')",
+        "consumer": "\ndef wait_for_host_ram(min_free_gb: float, *, label: str='launch', timeout_s: float=90.0, poll_s: float=1.0, settle_s: float=4.0, emit=None) -> float:\n    if os.environ.get('STUDIO_SKIP_RAM_PREFLIGHT', '').strip().lower() in _TRUTHY or os.environ.get('STUDIO_RAM_PREFLIGHT_FORCE', '').strip().lower() in _TRUTHY:\n        return free_host_ram_gb()\n    import time as _t\n    deadline = _t.monotonic() + max(0.0, float(timeout_s))\n    last = best = free_host_ram_gb()"
       }
     ]
   }

@@ -32,6 +32,62 @@ static void ds4x_set_error(char *error, size_t cap, const char *message) {
     if (error && cap) snprintf(error, cap, "%s", message);
 }
 
+/* Isolated vision worker: reuse Studio's original encoder, preprocessing,
+ * sentinel embeddings and V4.1 image layout, without loading an LLM session. */
+DS4X_EXPORT int ds4x_vision_file(const char *model_path, const char *vision_path,
+        const char *image_path, const char *output_path, char *error, size_t cap) {
+    if (g_ds4x.open || !model_path || !vision_path || !image_path || !output_path) {
+        ds4x_set_error(error,cap,"Vision encoding requires an isolated worker");return 0;
+    }
+    ds4_engine *e=calloc(1,sizeof(*e));if(!e){ds4x_set_error(error,cap,"Vision metadata allocation failed");return 0;}ds4_vision_embedding embedding={0};ds4_vision_span span={0};ds4_tokens tokens={0};
+    model_open(&e->model,model_path,false,false);config_validate_model(&e->model);
+    if (DS4_MODEL_FAMILY!=DS4_MODEL_FAMILY_DEEPSEEK41) {
+        model_close(&e->model);free(e);ds4x_set_error(error,cap,"V4.1 vision model required");return 0;
+    }
+    model_open(&e->vision_model,vision_path,true,false);
+    deepseek4_vision_weights_bind(&e->deepseek4_vision_weights,&e->model,&e->vision_model);
+    e->backend=DS4_BACKEND_CUDA;e->vision_kind=DS4_VISION_DEEPSEEK4;e->vision_ready=true;
+    e->vision_image_token=e->vision_start_token=e->vision_end_token=129264;
+    const uint64_t map_offset=e->vision_model.tensor_data_pos,map_size=e->vision_model.size-map_offset;
+    void *device=NULL;uint64_t fetched=0;double fetch_ms=0,wait_ms=0;
+    int ok=ds4_gpu_init()&&ds4_ds_init_from_fd(e->vision_model.fd)&&ds4_ds_gpu_arena_create(map_size,&device);
+    if(ok){
+        ds4_ds_batch_reset();
+        for(uint64_t off=0;ok&&off<map_size;off+=8u*1024u*1024u){
+            const uint32_t count=(uint32_t)((map_size-off)<8u*1024u*1024u?map_size-off:8u*1024u*1024u);
+            ok=ds4_ds_batch_add_gpu(map_offset+off,count,off);
+        }
+        if(ok)ok=ds4_ds_batch_submit_wait(&fetched,&fetch_ms,&wait_ms)&&fetched==map_size&&
+            ds4_ds_gpu_fence_wait_last(NULL)&&ds4_gpu_synchronize();
+        if(ok)ok=ds4_gpu_register_external_range(e->vision_model.map,map_offset,map_size,device);
+    }
+    if(ok){
+        ds4_gpu_external_decode_mode(1);e->metal_ready=true;e->vision_map_ready=true;
+        fprintf(stderr,"LLAMADECODE_VISION_FETCH backend=directstorage destination=gpu bytes=%llu milliseconds=%.3f host_weight_staging=0\n",(unsigned long long)fetched,fetch_ms);
+        ok=ds4_engine_vision_encode_file(e,image_path,&embedding,error,cap);
+    }else ds4x_set_error(error,cap,"DirectStorage GPU vision fetch failed; host-copy fallback refused");
+    if(ok)ok=ds4_prompt_append_vision(e,&tokens,&span,&embedding,error,cap);
+    FILE *out=NULL;
+    if(ok){
+        if(!span.embedding.token_count || span.embedding.token_count>32768 || span.token_start ||
+           tokens.len!=(int)span.embedding.token_count){ds4x_set_error(error,cap,"Invalid V4.1 projected image block");ok=0;}
+        else out=fopen(output_path,"wbx");
+        if(ok&&!out){ds4x_set_error(error,cap,"Cannot create fresh vision embedding file");ok=0;}
+    }
+    if(ok){
+        const uint32_t header[4]={0x49564c53,1,span.embedding.token_count,5120};
+        const size_t values=(size_t)span.embedding.token_count*5120;
+        ok=fwrite(header,sizeof(header),1,out)==1&&fwrite(span.embedding.fingerprint,32,1,out)==1&&
+            fwrite(span.embedding.data,sizeof(float),values,out)==values;
+        if(!ok)ds4x_set_error(error,cap,"Vision embedding write failed");
+    }
+    if(out&&fclose(out))ok=0;
+    ds4_vision_embedding_free(&embedding);ds4_vision_embedding_free(&span.embedding);free(tokens.v);
+    ds4_gpu_synchronize();ds4_gpu_external_decode_mode(0);ds4_ds_gpu_arena_release();ds4_ds_shutdown();
+    fprintf(stderr,"LLAMADECODE_VISION_RELEASE encoder_weights_released=1 next=llm_prefill\n");
+    model_close(&e->vision_model);model_close(&e->model);free(e);return ok;
+}
+
 DS4X_EXPORT int ds4x_open(const char *model_path, uint32_t ctx, char *error, size_t cap) {
     if (g_ds4x.open) { ds4x_set_error(error, cap, "ds4x already open"); return 0; }
     if (!model_path || !ctx) { ds4x_set_error(error, cap, "ds4x_open requires a model and context"); return 0; }

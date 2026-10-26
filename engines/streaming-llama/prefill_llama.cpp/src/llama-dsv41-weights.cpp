@@ -966,11 +966,11 @@ bool llama_dsv41_weight_provider::advance_decoded_engram(llama_dsv41::engram_his
         "Decoded Engram token/history validation failed");history=pending;
 },error);}
 bool llama_dsv41_weight_provider::restored_engram_history(llama_dsv41::engram_history&history,
-        const int32_t*tokens,size_t count,std::string&error){return p->guard([&]{
+        const int32_t*tokens,size_t count,std::string&error,const uint8_t*mask){return p->guard([&]{
     require(p->allocated&&!p->leased&&p->next==0&&tokens&&count&&count<=3,
         "Restored Engram history requires an idle initial provider and1..3 checkpoint tokens");p->identity();
     llama_dsv41::engram_history pending;std::array<llama_dsv41::engram_rows,3>rows{};std::string why;
-    require(llama_dsv41::engram_hash(p->engram,pending,tokens,nullptr,count,rows.data(),why),
+    require(llama_dsv41::engram_hash(p->engram,pending,tokens,mask,count,rows.data(),why),
         "Restored Engram token/history validation failed");history=pending;
 },error);}
 bool llama_dsv41_weight_provider::engram_tile(uint32_t index,llama_dsv41::engram_history&history,const int32_t*tokens,const uint8_t*mask,size_t count,std::vector<float>&out,std::string&error){out.clear();return p->guard([&]{

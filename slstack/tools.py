@@ -18,6 +18,10 @@ def media_schema(kind):
              'steps': {'type': 'integer', 'minimum': 1, 'maximum': 100, 'default': 20},
              'guidance': {'type': 'number', 'minimum': 0, 'maximum': 30, 'default': 4},
              'seed': {'type': 'integer', 'minimum': 0, 'maximum': 2147483647, 'default': 42}}
+    props['loras']={'type':'array','maxItems':8,'default':[],
+        'description':'Apply only to this generation. Use names or IDs from list_loras; omit for no LoRAs.',
+        'items':{'type':'object','properties':{'name':{'type':'string','minLength':1,'maxLength':256},
+                   'strength':{'type':'number','minimum':-4,'maximum':4,'default':1}},'required':['name'],'additionalProperties':False}}
     if kind == 'video':
         props.update(num_frames={'type': 'integer', 'minimum': 5, 'maximum': 129, 'default': 17,
                                  'description': 'Must equal 4*k+1; default 17'},
@@ -26,6 +30,7 @@ def media_schema(kind):
 
 
 def validate(schema, args):
+    if schema is QUALITY:return {'value': quality_speed.setting_arguments(args, 0)}
     if not isinstance(args, dict):
         raise ValueError('Tool arguments must be an object')
     if set(args) - set(schema['properties']):
@@ -39,6 +44,9 @@ def validate(schema, args):
                 continue
         value = args.get(key, prop.get('default'))
         typ = prop['type']
+        if typ=='array':
+            if not isinstance(value,list) or len(value)>prop.get('maxItems',8):raise ValueError(key+' must be a list of at most8 adapters')
+            result[key]=[validate(prop['items'],item) for item in value];continue
         valid = ((typ == 'integer' and type(value) is int) or
                  (typ == 'number' and type(value) in (int, float) and math.isfinite(value)) or
                  (typ == 'string' and isinstance(value, str)))
@@ -47,6 +55,7 @@ def validate(schema, args):
         if typ == 'string':
             if not prop.get('minLength', 0) <= len(value) <= prop.get('maxLength', 65536):
                 raise ValueError(f'{key} length outside valid range')
+            if 'enum' in prop and value not in prop['enum']:raise ValueError(f'Invalid {key}')
         elif not prop.get('minimum', -math.inf) <= value <= prop.get('maximum', math.inf):
             raise ValueError(f'{key} outside valid range')
         if 'multipleOf' in prop and value % prop['multipleOf']:
@@ -60,18 +69,30 @@ def validate(schema, args):
 class Tools:
     def __init__(self, cfg, engines):
         self.cfg, self.engines = cfg, engines
+        from .preferences import Preferences
+        self.preferences = Preferences(cfg)
+        engines.preferences = self.preferences
         empty = {'type': 'object', 'properties': {}, 'additionalProperties': False}
         self.schemas = {'set_quality_speed': QUALITY, 'get_quality_speed': empty,
-                        'generate_image': media_schema('image'), 'generate_video': media_schema('video')}
+                        'generate_image': media_schema('image'), 'generate_video': media_schema('video'),
+                        'list_media_models': {'type':'object','properties':{'kind':{'type':'string','enum':['image','video']}},'additionalProperties':False},
+                        'list_loras':{'type':'object','properties':{'model':{'type':'string','maxLength':4096},
+                                     'kind':{'type':'string','enum':['image','video'],'default':'image'}},'additionalProperties':False}}
+        for kind in ('image','video'):
+            self.schemas['generate_'+kind]['properties']['model']={'type':'string','maxLength':4096,
+                'description':'Optional supported model ID from list_media_models. Omit for the selected default.'}
 
     def catalog(self):
         descriptions = {row['name']: row['description'] for row in quality_speed.SPECS}
         rows = []
         for name, schema in self.schemas.items():
+            if not self.preferences.enabled(name):continue
             description = descriptions.get(name)
+            if name == 'list_media_models':description = 'List the supported image/video models discovered in the selected ComfyUI folder. Choose a returned model ID when generating media.'
+            if name == 'list_loras':description = 'List discovered LoRA names/IDs and the compatible model IDs/names for each. Optional model filters for one image/video model; use kind=video for a video model. Unmatched adapters include an explanation. Attach only deliberately requested LoRAs to an individual generation, with a strength for each.'
             if description is None:
                 kind = name.removeprefix('generate_')
-                description = f'Generate {kind} with the startup-selected Studio model in {self.cfg[kind + "_mode"]} mode. Media is displayed inline automatically; confirm briefly without file paths or job receipts. Only one GPU job runs at a time. Backend may reject unsupported model settings. Settings: '
+                description = f'Generate {kind} with a supported Studio model in {self.cfg[kind + "_mode"]} mode. Call list_media_models to select a model or omit model for the default. Media is displayed inline automatically; confirm briefly without file paths or job receipts. Only one GPU job runs at a time. Backend may reject unsupported model settings. Settings: '
                 description += '; '.join(f'{key}: {json.dumps(value)}' for key, value in schema['properties'].items())
             rows.append({'name': name, 'description': description, 'inputSchema': schema})
         return rows
@@ -81,16 +102,27 @@ class Tools:
         # MCP still publishes the fixed interface and returns explicit capability errors.
         rows = [row for row in self.catalog() if
                 (row['name'] in ('set_quality_speed', 'get_quality_speed')) or
-                (row['name'] == 'generate_image' and (self.cfg['image_model'] or self.cfg['comfyui_models'])) or
-                (row['name'] == 'generate_video' and (self.cfg['video_model'] or self.cfg['comfyui_models']))]
+                (row['name'] == 'list_media_models' and bool(self.preferences.catalog['models'])) or
+                (row['name'] == 'list_loras' and bool(self.preferences.catalog['models'])) or
+                (row['name'] == 'generate_image' and any('image' in r['kinds'] for r in self.preferences.catalog['models'])) or
+                (row['name'] == 'generate_video' and any('video' in r['kinds'] for r in self.preferences.catalog['models']))]
         return [{'type': 'function', 'function': {'name': row['name'], 'description': row['description'],
                                                 'parameters': row['inputSchema']}} for row in rows]
 
     def call(self, name, args):
         if name not in self.schemas:
             raise ValueError('Unknown stack tool: ' + name)
+        if not self.preferences.enabled(name):raise ValueError('This tool is disabled in Stack settings')
         if not isinstance(args, dict):
             raise ValueError('Tool arguments must be an object')
+        if name == 'list_media_models':
+            checked=validate(self.schemas[name],args);kind=checked.get('kind')
+            return {'models':[{k:v for k,v in row.items() if k!='path'} for row in self.preferences.catalog['models'] if not kind or kind in row['kinds']],
+                    'truncated':self.preferences.catalog['truncated']}
+        if name == 'list_loras':
+            checked=validate(self.schemas[name],args)
+            return {'loras':self.preferences.list_loras(checked.get('model'),checked['kind']),
+                    'scanning':self.preferences.catalog['scanning'],'applies':'Explicit per-generation attachments only'}
         quality = name in ('set_quality_speed', 'get_quality_speed')
         if quality and name == 'get_quality_speed' and args:
             raise ValueError('get_quality_speed takes no arguments')
@@ -110,6 +142,7 @@ class Tools:
         if not quality:
             args = validate(self.schemas[name], args)
         if name.startswith('generate_'):
+            if args.get('loras'):self.preferences.resolve_loras(name.removeprefix('generate_'),args.get('model'),args['loras'])
             return self.engines.media(name.removeprefix('generate_'), args)
         url = self.cfg['bias_mcp_url']
         if not url:

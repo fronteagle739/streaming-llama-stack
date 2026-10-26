@@ -21,7 +21,10 @@ from . import combo_abort
 
 
 def canonical_contract(row):
-    validate(row)
+    if 'local_state' in row:
+        from .local_cache import validate_contract
+        validate_contract(row)
+    else:validate(row)
     return json.dumps(row, sort_keys=True, separators=(',', ':'), allow_nan=False).encode()
 
 
@@ -184,7 +187,13 @@ class ComboProducer:
     def __init__(self,cfg,session,epoch,tokens,cancelled,*,base=None,runner=None):
         combo_abort.check('producer launch')
         keep=yoco_keep(cfg)
-        if keep and base is not None:raise ValueError('YOCO refuses imported native state; re-prefill locally')
+        if base is not None and 'local_state' in base[1]:
+            from .local_cache import validate_contract
+            validate_contract(base[1])
+            local=base[1]['local_state']
+            if (local['yoco_keep'],local['cache_precision'],local['producer_sha256'])!=(keep,cfg.get('ctx_cache_precision','f32'),cfg['producer_sha256']):
+                raise ValueError('Local snapshot producer/YOCO/cache preset differs')
+        elif keep and base is not None:raise ValueError('YOCO requires a local snapshot with YOCO provenance')
         runtime_floor=runtime_min_free_gib(cfg)
         vendor()
         from studio.dsv41_session_contract import MODEL_SHA256
@@ -234,6 +243,9 @@ class ComboProducer:
         with token_path.open('xb') as output:
             for offset in range(0,len(tokens),8192):output.write(struct.pack('<'+'I'*len(tokens[offset:offset+8192]),*tokens[offset:offset+8192]))
         args['--tokens-le32']=str(token_path)
+        if cfg.get('_vision_spans'):
+            descriptor=self.directory/'vision-spans.json';atomic_json(descriptor,cfg['_vision_spans'])
+            args['--vision-spans-file']=str(descriptor)
         bootstrap=None
         if base is not None:
             ram,contract=base;wire=canonical_contract(contract)
@@ -244,8 +256,9 @@ class ComboProducer:
             def bootstrap(write):
                 with ram.lease():
                     write(wire+b'\n')
-                    for offset in range(0,payload_bytes(contract['position']),65536):
-                        write(ram.read(offset,min(65536,payload_bytes(contract['position'])-offset)))
+                    size=payload_bytes(contract['position'],local='local_state' in contract)
+                    for offset in range(0,size,65536):
+                        write(ram.read(offset,min(65536,size-offset)))
         argv=[str(binary),*[str(v) for item in args.items() for v in item]]
         env=environment(cfg,'rtx-producer')
         if cfg.get('cache_affinity_spread_file') and not env.get('LLAMADECODE_DS4_SPREAD'):
@@ -257,6 +270,9 @@ class ComboProducer:
         try:
             self.leases.enter_context(native.directory(self.directory))
             for file in (binary,path(cfg['model']),receipt,token_path):self.leases.enter_context(native.read_lease(file))
+            if cfg.get('_vision_spans'):
+                self.leases.enter_context(native.read_lease(descriptor))
+                for span in cfg['_vision_spans']:self.leases.enter_context(native.read_lease(Path(span['file'])))
             if native.gpu(0,cfg['gpu_uuid'])<int(args['--job-device-bytes'])+int(args['--gpu-reserve-bytes']):
                 raise MemoryError('ULTRA GPU plan cannot fit; handoff refused')
             self.creation_attempted=True
@@ -332,7 +348,7 @@ class ComboProducer:
         self.checkpoint=reply['checkpoint'];return reply
 
     def decode(self,max_tokens,stop_tokens=()):
-        """LLAMADECODE B0: greedy decode inside this producer (no handoff). The
+        """Native decode inside this producer using its configured sampler. The
         returned last token (stop, or sampled at max_tokens) is not evaluated."""
         reply=self.process.request(self.command('decode',base=self.checkpoint,max_tokens=int(max_tokens),stop_tokens=[int(t) for t in stop_tokens]))
         self.checkpoint=reply['checkpoint'];return reply
@@ -348,6 +364,11 @@ class ComboProducer:
         """LLAMADECODE B5: the live quality-speed setting (0 = max quality, 1.36125 = max speed) for the
         in-process ds4 decode; same scale as ds4-win /v1/quality-speed. Applies from the next decode."""
         return self.process.request(self.command('quality_speed',value=float(value)))
+
+    def generation(self, settings):
+        if self.process.ready.get('generation_control_version') != 1:
+            raise ValueError('This producer needs the live generation-control build; greedy fallback is refused')
+        return self.process.request(self.command('generation_start', settings=settings))
 
     def decode_forced(self,tokens,logits_path):
         """LLAMADECODE gate: teacher-forced 1-row decode; writes one full F32 logits row per token."""

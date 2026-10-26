@@ -1350,7 +1350,7 @@ class RealCosmosBackend:
         h3_profile = h3_model_profile(params.model) if upscale is None else None
         h3_profile_loras = None
         if h3_profile is not None:
-            _adapters, _removed = profile_adapters(h3_profile, list(params.loras or []))
+            _adapters, _removed = (list(params.loras or []),[]) if (params.model_support_files or {}).get('_stack_explicit_loras_only') else profile_adapters(h3_profile, list(params.loras or []))
             if _adapters and _adapters[0] is None:
                 if h3_profile.lora is None:
                     raise RuntimeError(f"{Path(str(params.model)).name} is a Viggle-Animate checkpoint and needs its own DMD adapter (viggle_animate_dmd_lora_r64.safetensors); it was not found under {', '.join(h3_profile.searched)}. The base H3 turbo adapter is not a substitute.")
@@ -2445,6 +2445,7 @@ class RealCosmosBackend:
     @staticmethod
     def _krea2_native_loras(params, sf: dict, dit_override: str | None) -> list[dict]:
         loras = [l.model_dump() if hasattr(l, 'model_dump') else l for l in params.loras or []]
+        if sf.get('_stack_explicit_loras_only'):return loras
         default_lora = str(sf.get('lora') or '').strip()
         variant = str(sf.get('variant') or '').strip().lower()
         if default_lora and (not dit_override or variant in ('turbo', 'oss_turbo')):
@@ -2857,7 +2858,7 @@ class RealCosmosBackend:
                         on_step(int(step), int(total), None)
                 user_loras = [l.model_dump() for l in params.loras] or None if params.loras else None
                 distill = os.environ.get('STUDIO_BERNINI_DISTILL_LORA', '')
-                use_distill = user_loras is None and Path(distill).is_file()
+                use_distill = user_loras is None and Path(distill).is_file() and not sf.get('_stack_explicit_loras_only')
                 loras = user_loras if user_loras is not None else [{'path': distill, 'weight': 3.0, 'expert': 'high'}, {'path': distill, 'weight': 1.5, 'expert': 'low'}] if use_distill else None
                 has_distill = bool(user_loras) or use_distill
                 frames = wan.streamed_wan_generate(high_file=str(tf_dir), prompt=params.prompt or '', height=params.height, width=params.width, num_frames=nf, steps=params.steps or (20 if has_distill else 40), low_file=sf.get('low_denoiser') or None, vae_path=vae, umt5_file=umt5, umt5_config_dir=sf.get('text_encoder_config') or None, umt5_tokenizer_dir=sf.get('tokenizer') or None, negative_prompt=params.negative or '', guidance_scale=params.guidance if params.guidance is not None else 1.0 if has_distill else 5.0, scheduler_name=params.sampler or ('lcm' if has_distill else 'unipc'), sigmas_name=params.sigmas if getattr(params, 'sigmas', None) not in (None, '', 'karras') else 'simple' if has_distill else None, seed=params.seed, crossover_step=params.wan_crossover_step if params.wan_crossover_step is not None else 3 if has_distill else None, shift=params.wan_shift if params.wan_shift is not None else 8.0, bernini_reference_images=refs or None, bernini_source_video=source_video, bernini_reference_video=reference_video, bernini_task=task, loras=loras, progress=_progress, should_cancel=should_cancel)

@@ -77,6 +77,10 @@ Enable the local pre-commit gate with `git config core.hooksPath .githooks`, and
 
 This private repository contains rewritten stack history under the Front Eagle commit identity. Publication and repository migration remain owner decisions. Third-party licenses and upstream contributor attribution are retained.
 
+New commits use Front Eagle <fronteagle739@users.noreply.github.com> for both author
+and committer. Run `python -B scripts/release_check.py --history HEAD` to audit the
+source tree and reachable release history before pushing.
+
 
 Register native models with `--models first.gguf,second.gguf`, or set `models` to objects with `id`, `path` and optional `lora` in your local config. `/v1/models` exposes those ids; the existing web UI picker and each request's `model` field select them per chat. An unloaded selection uses the normal owned unload/load path, with status in the UI. `--resident first,second` records a requested pair; it currently performs normal switching and does not claim simultaneous residency or fast switching. The pinned llama-server has its own `--models-preset`/`--models-dir` router, but it cannot directly host the native ds4 adapter, so this bridge reuses its UI API shape.
 

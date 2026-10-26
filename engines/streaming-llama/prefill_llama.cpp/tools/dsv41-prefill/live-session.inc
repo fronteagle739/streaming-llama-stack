@@ -380,10 +380,22 @@ void run_live_session(std::unique_ptr<llama_dsv41_sweep>&sweep,
     require(session_route&&model_route,"Session routing fingerprint must be nonzero");
     checkpoint current,remote;bool have_remote=false,initial_sent=false,awaiting_ack=false,device_suspended=false;
     ds4_external ds4x; // LLAMADECODE ds4-decode (LLAMADECODE_DS4_DECODE=1)
+    studio_generation generation;
     // One ds4 single-token step appending `token` at frontier+index (prepare at
     // index 0); shared by decode, decode_forced and the small-append prefill.
     auto ds4_step=[&](int32_t token,uint64_t index){
         if(index==0)ds4x.prepare(*sweep,weights,uint32_t(options.context));
+        if(generation.active){
+            generation.refresh();const float bias=generation.bias();
+            // Manual changes and phase transitions take effect at this forward
+            // token. No restarted warmup/ramp may defer a live slider update.
+            if(index==0||bias!=ds4x.quality){
+                const char*spread=std::getenv("LLAMADECODE_DS4_SPREAD");
+                require(ds4x.x_affinity(bias,0,0,spread,&ds4_external::residency_hook,&ds4x)==1,"Live bias refused");
+                ds4x.quality=bias;
+                std::fprintf(stderr,"LLAMADECODE_LIVE_BIAS value=%.6g position=%u\n",bias,current.frontier.position+uint32_t(index));std::fflush(stderr);
+            }
+        }
         ensure_decode_context(*sweep,options.fixed.get(),weights.backend,current.frontier.position+uint32_t(index)+1);
         const auto t_token=clock_type::now();
         ds4x.step(*sweep,weights.backend,token,current.frontier.position+uint32_t(index));
@@ -408,7 +420,7 @@ void run_live_session(std::unique_ptr<llama_dsv41_sweep>&sweep,
     current=inspect();
     send({{"status","ready"},{"session",session},{"model_sha256",model_sha},{"next_sequence",guard.expected()},
         {"checkpoint",current.describe()},{"maximum_prefill_tokens",std::min(capacity,llama_dsv41_prefill::legacy_sweep_tokens)},{"maximum_prefill_sweep_tokens",capacity},{"maximum_decode_tokens",llama_dsv41::decode_delta_chunk_tokens},{"maximum_decode_delta_tokens",llama_dsv41::decode_delta_max_tokens},{"control_host_bytes",64*1024*1024},
-        {"yoco_keep",options.yoco_keep},{"transport",options.yoco_keep?"local approximate state; remote export disabled":"private owned pipes; existing native payload and artifact v2.1 delta"}});
+        {"generation_control_version",1},{"local_snapshot_version",1},{"vision_prefill_version",1},{"yoco_keep",options.yoco_keep},{"yoco_state_version",options.yoco_remote_state_version},{"transport",options.yoco_keep&&options.yoco_remote_state_version!=1?"local approximate state; remote export disabled":"private owned pipes; existing native payload and artifact v2.1 delta"}});
     for(;;){
         io.renew();auto command=dsv41_live::parse_control(io.line());guard.accept(command);if(owner_epoch)command.erase("owner_epoch");
         const auto operation=command.at("operation").get<std::string>();const auto sequence=dsv41_live::u64(command.at("sequence"));
@@ -451,6 +463,10 @@ void run_live_session(std::unique_ptr<llama_dsv41_sweep>&sweep,
             continue;
         }else if(device_suspended){
             require(false,"Suspended session accepts only resume or close");
+        }else if(operation=="generation_start"){
+            dsv41_live::keys(command,{"session","model_sha256","sequence","operation","settings"});
+            generation.begin(command.at("settings"));
+            reply({{"generation_control_version",1},{"revision",generation.settings.at("revision")},{"applies","next token boundary"}});
         }else if(operation=="quality_speed"){
             // LLAMADECODE B5: the live quality-speed control (ds4-win /v1/quality-speed
             // semantics: 0 = max quality, 1.36125 = max speed). Applies from the next
@@ -481,9 +497,23 @@ void run_live_session(std::unique_ptr<llama_dsv41_sweep>&sweep,
                 awaiting_ack=true;
             }
             reply({{"peer_synchronized",!awaiting_ack}});
+        }else if(operation=="export_local"){
+            dsv41_live::keys(command,{"session","model_sha256","sequence","operation","base"});same_base();
+            require(!awaiting_ack,"Local snapshot while a peer transfer awaits acknowledgement");
+            std::string error;uint64_t sent=0;std::array<unsigned char,65536>page{};
+            success(sweep->inspect_local([&](wire_payload_reader&r,std::string&why){try{
+                require(dsv41_live::capture(r,[]{return should_stop();}).describe()==current.describe(),"Local snapshot checkpoint changed");
+                send({{"status","payload"},{"sequence",sequence},{"session",session},{"model_sha256",model_sha},
+                    {"kind","local_snapshot_v1"},{"bytes",r.bytes()},{"base",nullptr},{"target",current.describe()},
+                    {"yoco_keep",options.yoco_keep},{"cache_precision",options.compressed_cache_bf16?"bf16":"f32"}});
+                while(sent<r.bytes()){const size_t n=size_t(std::min<uint64_t>(page.size(),r.bytes()-sent));
+                    success(r.read(sent,page.data(),n,why),why);io.write(page.data(),n);sent+=n;}
+                return true;
+            }catch(const std::exception&e){why=e.what();return false;}},error),error);
+            std::fprintf(stderr,"LLAMADECODE_LOCAL_SNAPSHOT yoco_keep=%u bytes=%llu milliseconds=%.3f\n",options.yoco_keep,(unsigned long long)sent,ms(started));
         }else if(operation=="export_initial"||operation=="export_delta"){
             dsv41_live::keys(command,{"session","model_sha256","sequence","operation","base"});same_base();
-            require(!options.yoco_keep,"YOCO refuses RTX/Mac session export; re-prefill with YOCO off");
+            require(!options.yoco_keep||options.yoco_remote_state_version==1,"YOCO remote export requires version1 peer negotiation");
             const bool initial=operation=="export_initial";
             require(!awaiting_ack,"Previous state transfer awaits an exact acknowledgement");
             require(initial?(!initial_sent&&!have_remote):(have_remote&&remote.frontier.position<current.frontier.position),"Full resend or delta without an acknowledged base refused");
@@ -539,11 +569,15 @@ void run_live_session(std::unique_ptr<llama_dsv41_sweep>&sweep,
             require(uint64_t(current.frontier.position)+maximum<uint64_t(options.context),"Local decode exceeds context capacity");
             std::vector<int32_t>generated;std::vector<double>step_ms;std::string error;std::vector<float>logits;bool stopped=false,cancelled=false;
             clear_decode_cancel();
+            generation.active=generation.configured;
             for(uint64_t index=0;index<maximum;++index){
                 stop();const auto step_started=clock_type::now();
                 success(sweep->completed_logits(logits,error),error);
-                int32_t best=0;for(int32_t i=1;i<int32_t(logits.size());++i)if(logits[size_t(i)]>logits[size_t(best)])best=i;
+                int32_t best=0;
+                if(generation.active)best=generation.sample(logits,current.frontier.position+uint32_t(index));
+                else for(int32_t i=1;i<int32_t(logits.size());++i)if(logits[size_t(i)]>logits[size_t(best)])best=i;
                 generated.push_back(best);
+                if(generation.active)generation.feed(best);
                 if(std::find(stop_ids.begin(),stop_ids.end(),best)!=stop_ids.end()){stopped=true;break;}
                 if(index+1==maximum)break;
                 if(decode_cancel_requested()){cancelled=true;break;}   // same boundary as max_tokens
@@ -565,6 +599,7 @@ void run_live_session(std::unique_ptr<llama_dsv41_sweep>&sweep,
                 std::fprintf(stderr,"LLAMADECODE_STEP index=%llu token=%d position=%u step_ms=%.3f prompt_ms=%.3f\n",(unsigned long long)index,best,
                     current.frontier.position+uint32_t(index)+1,step_ms.back(),sweep->timing().prompt_processing_ms);std::fflush(stderr);
             }
+            generation.active=false;
             if(cancelled)clear_decode_cancel();
             const auto t_end=clock_type::now();current=inspect();const double inspect_end_ms=ms(t_end);const uint32_t evaluated=uint32_t(step_ms.size());
             double total_ms=0;for(const double v:step_ms)total_ms+=v;
@@ -627,7 +662,9 @@ void run_live_session(std::unique_ptr<llama_dsv41_sweep>&sweep,
             const auto&ids=command.at("tokens");require(ids.is_array()&&!ids.empty()&&ids.size()<=capacity,"Live prefill token count exceeds reserved chunk");
             require(ids.size()<uint64_t(options.context)-current.frontier.position,"Live prefill exceeds context capacity");
             std::vector<int32_t>tokens;tokens.reserve(ids.size());for(const auto&v:ids){const auto n=dsv41_live::u64(v);require(n<129280,"Live token out of vocabulary");tokens.push_back(int32_t(n));}
-            if(ds4_decode_enabled()&&tokens.size()<=append_decode_max()){
+            // The borrowed decode bridge binds target-only owners. Mode3
+            // needs the streaming path to maintain its complete DSpark ring.
+            if(ds4_decode_enabled()&&!options.capture_dspark&&tokens.size()<=append_decode_max()){
                 // Small append: teacher-forced ds4 steps on the resident state (the
                 // decode/decode_forced step), every token evaluated; same reply and
                 // checkpoint as the sweep. The frontier logits come from ds4's decode kernels.

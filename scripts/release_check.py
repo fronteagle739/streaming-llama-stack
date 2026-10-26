@@ -12,7 +12,9 @@ ROOT = Path(__file__).resolve().parents[1]
 RULES = {
     'private network': r'\b(?:192\.168\.\d{1,3}\.\d{1,3}|10\.\d{1,3}\.\d{1,3}\.\d{1,3})\b',
     'credential': r'(?<![A-Za-z0-9_])(?:gh[pousr]_[A-Za-z0-9_]{20,}|github_pat_[A-Za-z0-9_]{20,}|hf_[A-Za-z0-9]{20,}|sk-[A-Za-z0-9_-]{20,}|AKIA[0-9A-Z]{16}|AIza[A-Za-z0-9_-]{30,}|xox[baprs]-[A-Za-z0-9-]{15,}|-----BEGIN (?:RSA |EC |OPENSSH )?PRIVATE KEY-----)',
-    'machine path': r'''(?i:(?<![%\w])[dlm]:[\\/])|/(?:Users|home)/[^/\s"']+/|/Volumes/[^/\s"']+/''',
+    'machine path': r'''(?i:(?<![%\w])[dlm]:[\\/]|(?<![%\w])[a-z]:[\\/]{1,2}(?:Users|scratch|GitHub|models_archive)(?:[\\/]|["']))|/(?:Users|home)/[^/\s"']+/|/Volumes/[^/\s"']+/''',
+    'private identity': r'(?i)\bedw+a{1,2}rd[\s._-]*h[o]lmes(?:[\s._-]*c[r]anborne)?\b|\bh[o]lmes[\s._-]*c[r]anborne\b',
+    'excluded project': r'(?i)\bmc[-_]?4(?:\b|_)',
     'coordination file': r'DEPLOY_HOLD\.md',
     'old product name': r'\bds4stack\b|ds4-stack',
 }
@@ -69,7 +71,12 @@ def reviewed_images(root):
 def reviewed_png(path, expected):
     if not expected or path.stat().st_size > 5 * 1024**2:
         return False
-    raw = path.read_bytes()
+    return reviewed_png_data(path.read_bytes(), expected)
+
+
+def reviewed_png_data(raw, expected):
+    if not expected or len(raw) > 5 * 1024**2:
+        return False
     if hashlib.sha256(raw).hexdigest() != expected or not raw.startswith(bytes.fromhex('89504e470d0a1a0a')):
         return False
     # Screenshots carry pixels only. Text/EXIF/custom chunks and trailing bytes
@@ -90,14 +97,61 @@ def reviewed_png(path, expected):
     return False
 
 
+def compiled_rules(root):
+    compiled = {name: re.compile(pattern) for name, pattern in RULES.items()}
+    names = private_names(root)
+    if names:
+        compiled['private identity'] = re.compile(RULES['private identity'] + r'|(?<![A-Za-z0-9])(?:' + '|'.join(re.escape(n) for n in names) + r')(?![A-Za-z0-9])')
+    return compiled
+
+
+def scan_blob(relative, raw, compiled, forbidden, images):
+    rel = Path(relative)
+    findings = []
+    for rule in ('private identity', 'excluded project'):
+        if compiled[rule].search(rel.as_posix()):
+            findings.append((str(rel), 0, rule + ' in path'))
+    if '.local.' in rel.name or rel.name.endswith('.local.json'):
+        return findings + [(str(rel), 0, 'local configuration must be untracked')]
+    attribution = rel.name in {'LICENSE', 'AUTHORS', 'NOTICE', 'NOTICES.txt'} or 'licenses' in rel.parts
+    if rel.suffix.lower() in {'.exe', '.dll', '.pdb', '.gguf', '.safetensors', '.pt', '.bin', '.npy', '.npz'}:
+        return findings + [(str(rel), 0, 'binary/weight artifact')]
+    try:
+        if rel.suffix == '.gz':
+            import gzip
+            text = gzip.decompress(raw).decode('utf-8')
+        else:
+            text = raw.decode('utf-8')
+    except (UnicodeError, OSError, EOFError):
+        if rel.suffix == '.png' and reviewed_png_data(raw, images.get(rel.as_posix())):
+            return findings
+        if attribution:
+            text = raw.decode('utf-8', errors='replace')
+        else:
+            return findings + [(str(rel), 0, 'unreviewed non-text artifact')]
+    for literal in forbidden:
+        offset = text.lower().find(literal.lower())
+        if offset >= 0:
+            findings.append((str(rel), text.count('\n', 0, offset) + 1, 'forbidden audit literal'))
+    candidates = {name: pattern for name, pattern in compiled.items()
+                  if (not attribution or name in {'credential', 'private identity', 'excluded project'}) and pattern.search(text)}
+    for number, line in enumerate(text.splitlines(), 1):
+        for name, pattern in candidates.items():
+            if relative.replace('\\', '/') == 'scripts/release_check.py' and line.strip().startswith(repr(name) + ':'):
+                if name != 'credential':continue
+            example = (rel.parts[0] == 'examples' or '.example.' in rel.name) and rel.suffix in {'.py', '.ps1', '.sh', '.json', '.cmd', '.bat'}
+            if name == 'machine path' and example:
+                continue
+            if pattern.search(line):
+                findings.append((str(rel), number, name))
+    return findings
+
+
 def scan(root=ROOT):
     findings = []
     forbidden = forbidden_literals(root)
     images = reviewed_images(root)
-    compiled = {name: re.compile(pattern) for name, pattern in RULES.items()}
-    names = private_names(root)
-    if names:
-        compiled['private identity'] = re.compile(r'(?i)(?<![A-Za-z0-9])(?:' + '|'.join(re.escape(n) for n in names) + r')(?![A-Za-z0-9])')
+    compiled = compiled_rules(root)
     tracked = set(subprocess.check_output(['git', '-C', str(root), 'ls-files', '--cached', '-z']).decode('utf-8').split('\0'))
     candidates = subprocess.check_output(['git', '-C', str(root), 'ls-files', '--cached', '--others', '--exclude-standard', '-z'])
     paths = sorted(set(candidates.decode('utf-8').split('\0')) - {''})
@@ -106,58 +160,69 @@ def scan(root=ROOT):
         rel = p.relative_to(root)
         if rel.parts[:2] == ('engines', 'mlx-serve'):
             continue  # Public upstream is independently pinned/audited; its gitlink is not vendored code.
-        if any(x in {'.git', 'runtime', 'build', '__pycache__', 'node_modules', '.venv'} for x in rel.parts):
+        if relative not in tracked and any(x in {'.git', 'runtime', 'build', '__pycache__', 'node_modules', '.venv'} for x in rel.parts):
             continue
         if not p.is_file():
             continue
-        if '.local.' in p.name or p.name.endswith('.local.json'):
-            if relative in tracked:
-                findings.append((str(rel), 0, 'local configuration must be untracked'))
+        if relative not in tracked and ('.local.' in p.name or p.name.endswith('.local.json')):
             continue
-        if 'private identity' in compiled and compiled['private identity'].search(rel.as_posix()):
-            findings.append((str(rel), 0, 'private identity in path'))
-        attribution = p.name in {'LICENSE', 'AUTHORS', 'NOTICE', 'NOTICES.txt'} or 'licenses' in rel.parts
-        if p.suffix.lower() in {'.exe', '.dll', '.pdb', '.gguf', '.safetensors', '.pt', '.bin', '.npy', '.npz'}:
-            findings.append((str(rel), 0, 'binary/weight artifact'))
-            continue
-        try:
-            if p.suffix == '.gz':
-                import gzip
-                text = gzip.decompress(p.read_bytes()).decode('utf-8')
-            else:
-                text = p.read_text(encoding='utf-8')
-        except UnicodeError:
-            if p.suffix == '.png' and reviewed_png(p, images.get(rel.as_posix())):
-                continue
-            if attribution:
-                text = p.read_bytes().decode('utf-8', errors='replace')
-            else:
-                findings.append((str(rel), 0, 'unreviewed non-text artifact'))
-                continue
-        for literal in forbidden:
-            offset = text.find(literal)
-            if offset >= 0:
-                findings.append((str(rel), text.count('\n', 0, offset) + 1, 'forbidden audit literal'))
-        candidates = {name: pattern for name, pattern in compiled.items()
-                      if (not attribution or name == 'credential') and pattern.search(text)}
-        if not candidates:
-            continue
-        for number, line in enumerate(text.splitlines(), 1):
-            for name, pattern in candidates.items():
-                if name != 'credential' and p.resolve() == Path(__file__).resolve() and any(line.strip().startswith(repr(key) + ':') for key in RULES):
-                    continue  # Only that rule's literal pattern; credentials elsewhere still fail.
-                if name == 'machine path' and (rel.parts[0] == 'examples' or p.name.endswith('.example.json')):
-                    continue  # Owner allows only model/Comfy paths here; review separately.
-                if pattern.search(line):
-                    findings.append((str(rel), number, name))
+        findings.extend(scan_blob(relative, p.read_bytes(), compiled, forbidden, images))
+    return findings
+
+
+def scan_history(root=ROOT, revision='HEAD'):
+    """Audit reachable commit metadata and every historical tree/blob, not other refs."""
+    def git(*args):
+        return subprocess.check_output(['git', '-C', str(root), *args])
+    tip = git('rev-parse', '--verify', '--end-of-options', revision + '^{commit}').decode().strip()
+    commits = git('rev-list', tip).decode().splitlines()
+    compiled, forbidden, images = compiled_rules(root), forbidden_literals(root), reviewed_images(root)
+    findings, seen = [], set()
+    for commit in commits:
+        raw = git('cat-file', 'commit', commit)
+        headers, _, message = raw.partition(b'\n\n')
+        identities = [line for line in headers.decode().splitlines() if line.startswith(('author ', 'committer '))]
+        expected = r'(?:author|committer) Front Eagle <fronteagle739@users\.noreply\.github\.com> \d+ [+-]\d{4}'
+        if len(identities) != 2 or not all(re.fullmatch(expected, line) for line in identities):
+            findings.append((commit[:12], 0, 'history requires Front Eagle author and committer'))
+        findings.extend(scan_blob(commit[:12] + '/commit-message', message, compiled, forbidden, {}))
+    if findings:
+        return findings  # Reject metadata before reading a potentially large private history.
+    batch = subprocess.Popen(['git', '-C', str(root), 'cat-file', '--batch'], stdin=subprocess.PIPE, stdout=subprocess.PIPE)
+    try:
+        for commit in commits:
+            for row in git('ls-tree', '-rz', '--full-tree', commit).split(b'\0'):
+                if not row:continue
+                metadata, name = row.split(b'\t', 1)
+                mode, kind, oid = metadata.split()
+                relative = name.decode('utf-8')
+                if kind == b'commit':
+                    if relative != 'engines/mlx-serve' or oid != b'6991ba3ad3d356891d43211dec941cc6f9ff6dd6':
+                        findings.append((relative, 0, 'unreviewed submodule'))
+                    continue
+                key = (oid, relative)
+                if key in seen:continue
+                seen.add(key)
+                batch.stdin.write(oid + b'\n');batch.stdin.flush()
+                header = batch.stdout.readline().split()
+                if len(header) != 3 or header[1] != b'blob':raise ValueError('Invalid historical blob')
+                size = int(header[2])
+                raw = batch.stdout.read(size)
+                if len(raw) != size or batch.stdout.read(1) != b'\n':raise ValueError('Incomplete historical blob')
+                findings.extend((commit[:12] + ':' + path, line, rule) for path, line, rule in scan_blob(relative, raw, compiled, forbidden, images))
+    finally:
+        batch.stdin.close();batch.stdout.close();batch.wait()
     return findings
 
 
 def main():
     parser = argparse.ArgumentParser()
     parser.add_argument('--summary', action='store_true')
+    parser.add_argument('--history', metavar='REF', help='also audit all source and commit metadata reachable from this release ref')
     args = parser.parse_args()
     found = scan()
+    if args.history:
+        found.extend(scan_history(revision=args.history))
     if args.summary:
         from collections import Counter
         for name, count in Counter(row[2] for row in found).items():

@@ -44,6 +44,8 @@ def load(path=None, overrides=None):
     root = Path(cfg['runtime_root']).expanduser()
     root = (root if root.is_absolute() else ROOT / root).resolve()
     cfg['runtime_root'] = str(root)
+    cfg.setdefault('generation_control_file', str(root / 'generation' / 'live.json'))
+    cfg.setdefault('stack_preferences_file', str(root / 'settings' / 'stack.local.json'))
     if not cfg.get('studio_python'):
         cfg['studio_python'] = str(root / 'media-venv' /
                                    ('Scripts/python.exe' if os.name == 'nt' else 'bin/python'))
@@ -65,6 +67,23 @@ def load(path=None, overrides=None):
     from .models import Models
     selected = Models(cfg).resolve()
     cfg.update(model=selected['path'], model_name=selected['id'])
+    configure_vision(cfg)
+    return cfg
+
+
+def configure_vision(cfg):
+    """Resolve the encoder for a vision-capable launch after model selection."""
+    if cfg.get('vision_bridge_version') != 1:return cfg
+    encoder=cfg.get('vision_encoder') or cfg.get('ds4_vision')
+    argv=cfg.get('ds4_command') or []
+    if not encoder and '--vision' in argv:
+        index=argv.index('--vision')
+        if index+1>=len(argv):raise ValueError('--vision needs an encoder GGUF path')
+        encoder=argv[index+1]
+    if encoder:cfg['vision_encoder']=str(path(encoder))
+    elif cfg.get('model'):
+        candidates=list(Path(cfg['model']).parent.glob('*-Vision.gguf'))
+        if len(candidates)==1:cfg['vision_encoder']=str(candidates[0].resolve())
     return cfg
 
 

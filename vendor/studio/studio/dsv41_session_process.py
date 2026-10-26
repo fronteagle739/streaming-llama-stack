@@ -338,7 +338,7 @@ class Producer:
         return reply
 
     def request(self, row):
-        require(row.get('operation') not in ['apply_decode_delta', 'export_initial', 'export_delta'], 'Binary operation requires a stream lease')
+        require(row.get('operation') not in ['apply_decode_delta', 'export_initial', 'export_delta', 'export_local'], 'Binary operation requires a stream lease')
         self._enter(row)
         try:
             return self._reply()
@@ -371,7 +371,7 @@ class Producer:
             self._leave()
 
     def begin_export(self, row):
-        require(row.get('operation') in ['export_initial', 'export_delta'], 'Export command required')
+        require(row.get('operation') in ['export_initial', 'export_delta', 'export_local'], 'Export command required')
         self._enter(row)
         try:
             meta = self._receive()
@@ -380,7 +380,10 @@ class Producer:
             require(target == row['base'], 'Export target differs from requested checkpoint')
             n = meta.get('bytes')
             require(type(n) is int and 0 < n <= 8 << 30, 'Export length exceeds native context bound')
-            if row['operation'] == 'export_initial':
+            if row['operation'] == 'export_local':
+                require(self.ready.get('local_snapshot_version') == 1 and meta.get('kind') == 'local_snapshot_v1' and meta.get('base') is None, 'Local snapshot format')
+                require(meta.get('yoco_keep') == self.ready.get('yoco_keep') and meta.get('cache_precision') in ('f32', 'bf16'), 'Local snapshot preset differs')
+            elif row['operation'] == 'export_initial':
                 require(meta.get('kind') == 'native_initial' and meta.get('base') is None, 'Initial export format')
             else:
                 base = checkpoint(meta.get('base'), self.native_mode)

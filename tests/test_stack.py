@@ -64,7 +64,7 @@ class SchemaTests(Base):
     def test_bias_edges_and_rejections(self):
         for value in (0, .35, .9):
             self.assertEqual(validate(QUALITY, {'value': value})['value'], value)
-        for value in (-.01, 1, float('nan'), float('inf'), True, '0.3'):
+        for value in (-.01, 1.36126, float('nan'), float('inf'), True, '0.3'):
             with self.assertRaises(ValueError):
                 validate(QUALITY, {'value': value})
 
@@ -135,7 +135,7 @@ class RouterTests(Base):
 
     def test_mcp_protocol_errors(self):
         stack = Stack(self.cfg, FixtureEngines())
-        self.assertEqual(len(stack.mcp({'id': 1, 'method': 'tools/list'})['result']['tools']), 4)
+        self.assertEqual(len(stack.mcp({'id': 1, 'method': 'tools/list'})['result']['tools']), 6)
         result = stack.mcp({'id': 2, 'method': 'tools/call', 'params': {'name': 'generate_video', 'arguments': {'prompt': 'TEST', 'fps': 0}}})
         self.assertTrue(result['result']['isError'])
         self.assertIsNone(stack.mcp({'method': 'notifications/initialized'}))
@@ -164,7 +164,7 @@ class RouterTests(Base):
             self.assertIn(b'data: [DONE]', data)
             self.assertIn(b'TEST SSE', data)
             mcp = json.loads(post('/mcp', {'jsonrpc': '2.0', 'id': 1, 'method': 'tools/list'}))
-            self.assertEqual(len(mcp['result']['tools']), 4)
+            self.assertEqual(len(mcp['result']['tools']), 6)
             with self.assertRaises(urllib.error.HTTPError) as exc:
                 get('/outputs/%2e%2e/secret.txt')
             self.assertEqual(exc.exception.code, 404)

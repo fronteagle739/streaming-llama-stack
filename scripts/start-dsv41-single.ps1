@@ -13,6 +13,7 @@ param(
     [string]$Model = '',
     [ValidateSet(0,140)][int]$YocoKeep = 0,
     [switch]$WebUI,
+    [switch]$Vision,
     [switch]$DryRun,
     [switch]$Stop
 )
@@ -29,6 +30,7 @@ $ModeSuffix = if ($YocoKeep) { "-ultra-yoco" } else { "" }
 $StartConfig = Join-Path $Root "runtime\dsv41-single-$Preset$ModeSuffix.local.json"
 $genArgs = @('-B', (Join-Path $Root 'scripts\dsv41_single.py'), '--preset', $Preset, '--write', $StartConfig)
 if ($YocoKeep) { $genArgs += @('--yoco-keep', [string]$YocoKeep) }
+if ($Vision) { $genArgs += '--vision' }
 if ($Config) { $genArgs += @('--config', $Config) }
 if ($Model) { $genArgs += @('--model', $Model) }
 if ($DryRun) { $genArgs += '--dry-run' }

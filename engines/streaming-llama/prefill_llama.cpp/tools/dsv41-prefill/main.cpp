@@ -53,6 +53,8 @@ static_assert(DS4PERF_NATIVE_COLUMNS==16||DS4PERF_NATIVE_COLUMNS==32,"Unqualifie
 #include <sstream>
 #include <stdexcept>
 #include <vector>
+#include "studio-generation.h"
+#include "studio-vision.h"
 
 namespace {
 using json=nlohmann::json;
@@ -304,8 +306,8 @@ int wmain(int argc,wchar_t**argv){
         const std::vector<std::string>keys={"--model","--copy-receipt","--tokens-le32","--cuda-device","--context","--build-sha",
             "--provider-device-bytes","--provider-host-bytes","--cache-bytes","--graph-bytes","--job-device-bytes","--job-host-bytes","--gpu-reserve-bytes",
             "--carry","--carry-file-bytes","--carry-host-bytes","--carry-outstanding-bytes","--output-outstanding-bytes","--payload","--receipt"};
-        require(argc>=1+int(keys.size())*2&&argc<=135+int(keys.size())*2&&argc%2==1,"Expected every explicit required --key value pair; use --help");std::map<std::string,std::string>args;
-        for(int i=1;i<argc;i+=2){auto key=utf8(argv[i]);require((key=="--yoco-keep"||key=="--session-owner-epoch"||key=="--switch-arena"||key=="--native-base-contract-sha256"||key=="--native-base-owner-epoch"||key=="--unaligned-append-step-tokens"||key=="--reuse-child-raw-metadata"||key=="--session-stdio"||key=="--session-id"||key=="--session-control-host-bytes"||key=="--session-idle-timeout-ms"||key=="--native-rhs-pack"||key=="--split-f32-tensor-core-qk"||key=="--split-f32-tensor-core-pv"||key=="--fuse-kv-gather-half"||key=="--ds-zero-padding-only"||key=="--pv-strided-probabilities"||key=="--pv-view-f32"||key=="--compact-kv-gather"||key=="--masked-half-inplace"||key=="--native-loader-unroll"||key=="--native-expert-columns"||key=="--fixed-resident-plan"||key=="--export-hash-only"||key=="--backend-temporary-reserve-bytes"||key=="--compute-step-tokens"||key=="--prefill-chunk-tokens"||key=="--prefill-sweep-tokens"||key=="--prefill-fold-cap-tokens"||key=="--attention-kv-f16-table"||key=="--index-key-windows"||key=="--capture-dspark"||key=="--compressed-cache-bf16"||key=="--ctx-cache-precision"||key=="--ctx-cache-growable"||key=="--dense-activation-q8-1"||key=="--expert-weights-activations-fp4"||key=="--resident-pageable-copies"||key=="--tile-host-registration"||key=="--hc-bf16-epilogue"||key=="--reuse-expert-routing-map"||key=="--sort-expert-routing"||key=="--pair-ffn-tiles"||key=="--engram-tile-lookahead"||key=="--warmup-one-token"||key=="--fixed-direct-open"||key=="--batch-seed-ram"||key=="--dense-mxfp4"||key=="--hc-projection-f16-gemm"||key=="--merge-attention-selected-rows"||key=="--resident-metadata"||key=="--resident-compact-ids"||key=="--async-input-uploads"||key=="--resident-hidden-bf16"||key=="--resident-hidden-final-readback"||key=="--coalesce-dense-projections"||key=="--direct-carry-budget"||key=="--expert-f16-cublas"||key=="--token-tile-attention-f16-probabilities"||key=="--index-f32-cublas"||key=="--index-bf16"||key=="--dense-inputs-f16"||key=="--shared-flash-attention"||key=="--shared-sparse-attention"||key=="--carry-ram-prefix-tokens"||key=="--carry-disk-reserve-bytes"||key=="--carry-storage"||key=="--fetch-profile"||key=="--compute-tile"||key=="--hidden-device-bytes"||key=="--pinned-device-bytes"||key=="--reuse-graph"||key=="--cast-device-bytes"||key=="--cast-audit"||key=="--engram-prefetch-bytes"||key=="--ds-submit-threads"||key=="--cuda-blocking-sync"||key=="--index-cublas-device-bytes"||key=="--ds-gpu-ring-slots"||key=="--prefetch-device-bytes"||key=="--expert-profile"||key=="--expert-workspace-bytes"||key=="--expert-runtime-bytes"||key=="--runtime-min-free-gib"||std::find(keys.begin(),keys.end(),key)!=keys.end())&&!args.count(key),"Unknown or repeated producer option");args[key]=utf8(argv[i+1]);}
+        require(argc>=1+int(keys.size())*2&&argc<=1+int(keys.size())*2+128*2&&argc%2==1,"Expected every explicit required --key value pair; use --help");std::map<std::string,std::string>args;
+        for(int i=1;i<argc;i+=2){auto key=utf8(argv[i]);require((key=="--yoco-remote-state-version"||key=="--vision-spans-file"||key=="--yoco-keep"||key=="--session-owner-epoch"||key=="--switch-arena"||key=="--native-base-contract-sha256"||key=="--native-base-owner-epoch"||key=="--unaligned-append-step-tokens"||key=="--reuse-child-raw-metadata"||key=="--session-stdio"||key=="--session-id"||key=="--session-control-host-bytes"||key=="--session-idle-timeout-ms"||key=="--native-rhs-pack"||key=="--split-f32-tensor-core-qk"||key=="--split-f32-tensor-core-pv"||key=="--fuse-kv-gather-half"||key=="--ds-zero-padding-only"||key=="--pv-strided-probabilities"||key=="--pv-view-f32"||key=="--compact-kv-gather"||key=="--masked-half-inplace"||key=="--native-loader-unroll"||key=="--native-expert-columns"||key=="--fixed-resident-plan"||key=="--export-hash-only"||key=="--backend-temporary-reserve-bytes"||key=="--compute-step-tokens"||key=="--prefill-chunk-tokens"||key=="--prefill-sweep-tokens"||key=="--prefill-fold-cap-tokens"||key=="--attention-kv-f16-table"||key=="--index-key-windows"||key=="--capture-dspark"||key=="--compressed-cache-bf16"||key=="--ctx-cache-precision"||key=="--ctx-cache-growable"||key=="--dense-activation-q8-1"||key=="--expert-weights-activations-fp4"||key=="--resident-pageable-copies"||key=="--tile-host-registration"||key=="--hc-bf16-epilogue"||key=="--reuse-expert-routing-map"||key=="--sort-expert-routing"||key=="--pair-ffn-tiles"||key=="--engram-tile-lookahead"||key=="--warmup-one-token"||key=="--fixed-direct-open"||key=="--batch-seed-ram"||key=="--dense-mxfp4"||key=="--hc-projection-f16-gemm"||key=="--merge-attention-selected-rows"||key=="--resident-metadata"||key=="--resident-compact-ids"||key=="--async-input-uploads"||key=="--resident-hidden-bf16"||key=="--resident-hidden-final-readback"||key=="--coalesce-dense-projections"||key=="--direct-carry-budget"||key=="--expert-f16-cublas"||key=="--token-tile-attention-f16-probabilities"||key=="--index-f32-cublas"||key=="--index-bf16"||key=="--dense-inputs-f16"||key=="--shared-flash-attention"||key=="--shared-sparse-attention"||key=="--carry-ram-prefix-tokens"||key=="--carry-disk-reserve-bytes"||key=="--carry-storage"||key=="--fetch-profile"||key=="--compute-tile"||key=="--hidden-device-bytes"||key=="--pinned-device-bytes"||key=="--reuse-graph"||key=="--cast-device-bytes"||key=="--cast-audit"||key=="--engram-prefetch-bytes"||key=="--ds-submit-threads"||key=="--cuda-blocking-sync"||key=="--index-cublas-device-bytes"||key=="--ds-gpu-ring-slots"||key=="--prefetch-device-bytes"||key=="--expert-profile"||key=="--expert-workspace-bytes"||key=="--expert-runtime-bytes"||key=="--runtime-min-free-gib"||std::find(keys.begin(),keys.end(),key)!=keys.end())&&!args.count(key),"Unknown or repeated producer option");args[key]=utf8(argv[i+1]);}
         for(const auto&key:keys)require(args.count(key),"Missing explicit producer option");
         require(llama_dsv41_host_memory::configure_runtime_min_free_gib(args.count("--runtime-min-free-gib")?args.at("--runtime-min-free-gib").c_str():"4.0"),
             "--runtime-min-free-gib must be finite and nonnegative (<2**34); 0 disables it");
@@ -656,7 +658,16 @@ int wmain(int argc,wchar_t**argv){
         require(!ctx_cache.growable||!switch_arena,"ctx-cache-growable is not covered by the switch arena's suspend/resume");
         report["compressed_cache_bf16"]={{"enabled",options.compressed_cache_bf16},{"lossless_existing_QAT_BF16_values",true},{"canonical_wire_F32",true},{"raw_and_pool_tails_F32",true}};
         options.context=uint32_t(context);options.yoco_keep=uint32_t(yoco_keep);
-        if(yoco_keep)options.yoco_logical_end=uint32_t(tokens.size());
+        options.yoco_remote_state_version=args.count("--yoco-remote-state-version")?uint32_t(integer(args.at("--yoco-remote-state-version"))):0;
+        require(options.yoco_remote_state_version<=1,"Unsupported YOCO remote state version");
+        if(args.count("--vision-spans-file")){
+            options.image_spans=studio_vision_spans(args.at("--vision-spans-file"),options.context);options.images=true;
+            report["vision"]={{"images",options.image_spans.size()},{"embedding_width",5120},{"native_image_token",129264},{"image_router_bias",true},{"seed_host_tile_rows",128}};
+            // Image rows reset Engram history; its bounded masked reader is
+            // used instead of the text-only speculative prompt-row cache.
+            weights.engram_prefetch_host_bytes=0;weights.engram_prefetch_tokens=0;
+        }
+        if(yoco_keep){options.yoco_logical_begin=base_tokens;options.yoco_logical_end=base_tokens+uint32_t(tokens.size());}
         options.admitted_cache_bytes=number("--cache-bytes");options.admitted_graph_bytes=number("--graph-bytes");
         {const auto why=llama_dsv41_ctx_cache::refusal(options.context,options.compressed_cache_bf16,ctx_cache.growable,llama_dsv41_ctx_cache::default_step,2ull<<20,options.admitted_cache_bytes);
          require(why.empty(),why.c_str());}
@@ -743,6 +754,7 @@ int wmain(int argc,wchar_t**argv){
         }}
         require(!args.count("--engram-tile-lookahead")||args.at("--engram-tile-lookahead")=="0"||args.at("--engram-tile-lookahead")=="1","engram-tile-lookahead requires0/1");
         options.engram_tile_lookahead=args.count("--engram-tile-lookahead")&&args.at("--engram-tile-lookahead")=="1";
+        if(options.images)options.engram_tile_lookahead=false;
         report["engram_tile_lookahead"]=options.engram_tile_lookahead;
         options.carry.max_tile_tokens=uint32_t(tile_tokens);options.carry.direct_ram_tiles=direct_budget;
         require(!args.count("--sort-expert-routing")||args.at("--sort-expert-routing")=="0"||args.at("--sort-expert-routing")=="1","sort-expert-routing requires0/1");
@@ -846,7 +858,7 @@ int wmain(int argc,wchar_t**argv){
         if(warm){
             require(resident_ram&&!options.diagnostic_layers&&!std::getenv("DSV41_BOUNDARY_CAPTURE"),"One-token warmup requires RAM carry and no boundary/incomplete diagnostics");
             auto warm_options=options;auto warm_weights=weights;
-            warm_options.yoco_keep=0;warm_options.yoco_logical_end=0;warm_options.carry.tokens=1;warm_options.pair_ffn=false;
+            warm_options.yoco_keep=0;warm_options.yoco_remote_state_version=0;warm_options.yoco_logical_end=0;warm_options.carry.tokens=1;warm_options.pair_ffn=false;
             warm_options.carry.max_tile_tokens=std::min(4096u,warm_options.carry.max_tile_tokens);
             warm_options.compute_step_tokens=std::min(warm_options.compute_step_tokens,warm_options.carry.max_tile_tokens);
             // Dense tensor-core tagging requires more than eight columns.
@@ -947,7 +959,7 @@ int wmain(int argc,wchar_t**argv){
         auto scheduled_graphs=[&](uint32_t step,bool compressed_only=false){
             uint64_t n=0;
             for(const auto&e:sweep_extents){
-                const auto q=llama_dsv41_yoco::schedule(uint32_t(yoco_keep),llama_dsv41_yoco::operation::prefill,false,0,uint32_t(tokens.size()),e.first,e.first+e.count);
+                const auto q=llama_dsv41_yoco::schedule(uint32_t(yoco_keep),llama_dsv41_yoco::operation::prefill,options.images,base_tokens,base_tokens+uint32_t(tokens.size()),base_tokens+e.first,base_tokens+e.first+e.count);
                 n+=uint64_t(compressed_only?19:21)*((uint64_t(e.count)+step-1)/step);
                 if(!q.encoder_only)n+=19*((uint64_t(e.count-q.first)+step-1)/step);
             }
