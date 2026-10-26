@@ -64,12 +64,20 @@ class StudioWorkerSchemaTests(unittest.TestCase):
         with patch.dict(os.environ, env):
             backend = Mock()
             backend.generate.return_value = SimpleNamespace(model_dump=lambda **kw: {'path': str(root / 'outputs/fixture.png')})
+            def generate(params, on_step=None):
+                on_step(1, params.steps)
+                on_step(2, params.steps)
+                return backend.generate.return_value
+            backend.generate.side_effect = generate
             with (patch('studio.adapter.load_backend', return_value=(backend, False, 'schema boundary')),
                   patch('studio.custom_models.comfy_support_defaults', return_value={})):
                 for kind, arch, loras in cases:
                     with self.subTest(kind=kind, arch=arch, loras=bool(loras)):
                         config = dict(cfg, **{kind + '_arch': arch})
-                        result = run(dict(cfg=config, kind=kind, params=dict(args, lora_files=loras)))
+                        from slstack.media_progress import MediaProgress
+                        progress = MediaProgress(root, kind, args['steps'])
+                        result = run(dict(cfg=config, kind=kind, params=dict(args, lora_files=loras), progress_file=str(progress.path)))
+                        self.assertEqual(progress.snapshot()['step'], 2)
                         params = backend.generate.call_args.args[0]
                         self.assertIsInstance(params, GenerationParams)
                         self.assertEqual(params.model_support_files['_stack_explicit_loras_only'], '1')

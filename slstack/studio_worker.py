@@ -99,7 +99,8 @@ def run(request):
                                   modality='t2i' if kind == 'image' else 't2v',
                                   num_frames=args.get('num_frames', 1), fps=args.get('fps', 24),
                                   output_dir=str(root / 'outputs'))
-        result = backend.generate(params)
+        from .media_progress import callback
+        result = backend.generate(params, on_step=callback(request.get('progress_file')))
         data = result.model_dump(mode='json')
         # The pinned Studio GenResult has one primary path (plus optional metadata).
         files = [data['path']] if data.get('path') else []
