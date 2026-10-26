@@ -75098,11 +75098,11 @@
     ],
     "doc": "STUDIO_USS_TRACE: advanced engine setting; built-in default retained",
     "reads": [
-      "vendor/engines/cosmos_windows/weight_streaming/anima_backend.py:342"
+      "vendor/engines/cosmos_windows/weight_streaming/anima_backend.py:351"
     ],
     "code_defaults": [
       {
-        "source": "vendor/engines/cosmos_windows/weight_streaming/anima_backend.py:342",
+        "source": "vendor/engines/cosmos_windows/weight_streaming/anima_backend.py:351",
         "unset": "None",
         "read": "os.environ.get('STUDIO_USS_TRACE')",
         "consumer": "\n    def _uss(tag):\n        if os.environ.get('STUDIO_USS_TRACE'):\n            try:\n                import psutil\n                print(f'[USS] anima {tag}: {psutil.Process().memory_full_info().uss / 1024 ** 3:.2f}GB', flush=True)\n            except Exception:"

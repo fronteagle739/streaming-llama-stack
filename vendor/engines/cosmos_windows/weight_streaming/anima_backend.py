@@ -237,13 +237,14 @@ def _attach_ds_anima_blocks(transformer, transformer_file, dtype, device, source
                 if target in expected:
                     if t.is_floating_point():
                         t = t.to(dtype)
-                    set_module_tensor_to_device(transformer, target, device, value=t, dtype=dtype if t.is_floating_point() else None)
+                    set_module_tensor_to_device(transformer, _anima_binding_target(transformer, target), device, value=t, dtype=dtype if t.is_floating_point() else None)
         return hook
 
     def make_post(il):
 
         def hook(_mod, _args, output):
             for target in block_paths[il]:
+                target = _anima_binding_target(transformer, target)
                 if not _set_module_tensor_to_meta(transformer, target):
                     set_module_tensor_to_device(transformer, target, 'meta')
             streamer.release_layer(il)
@@ -255,6 +256,14 @@ def _attach_ds_anima_blocks(transformer, transformer_file, dtype, device, source
         block.register_forward_hook(make_post(il))
     transformer._anima_ds_streamer = streamer
     return streamer
+
+def _anima_binding_target(transformer, target):
+    """Stream only the base weight; keep explicitly attached adapters resident."""
+    parent, _, leaf = target.rpartition('.')
+    module = transformer.get_submodule(parent)
+    if hasattr(module, 'get_base_layer'):
+        return parent + '.base_layer.' + leaf
+    return target
 
 def _load_anima_streamed_transformer(transformer_file: str, anima_dir: str, dtype, device: str='cuda'):
     from accelerate import init_empty_weights
@@ -351,9 +360,6 @@ def build_anima_pipeline(transformer_file: str=DEFAULT_TF, qwen_file: str=DEFAUL
         _preflight_resident_vram(device, [transformer_file, qwen_file] + [os.path.join(anima_dir, sub, fn) for sub in ('vae', 'text_conditioner') if os.path.isdir(os.path.join(anima_dir, sub)) for fn in os.listdir(os.path.join(anima_dir, sub)) if fn.endswith('.safetensors')])
     transformer = _load_anima_transformer(transformer_file, anima_dir, dtype, device=device, stream_weights=stream_weights)
     _uss('after transformer')
-    if loras:
-        from .lora_stack import apply_lora_stack
-        apply_lora_stack(transformer, loras)
     text_encoder = _load_qwen3_text_encoder(qwen_file, anima_dir, dtype, device=device)
     _uss('after qwen text_encoder')
     vae = AutoencoderKLQwenImage.from_pretrained(anima_dir, subfolder='vae', torch_dtype=dtype, device_map=str(device))
@@ -365,6 +371,17 @@ def build_anima_pipeline(transformer_file: str=DEFAULT_TF, qwen_file: str=DEFAUL
     t5_tokenizer = T5Tokenizer.from_pretrained(anima_dir, subfolder='t5_tokenizer')
     pipe = AnimaAutoBlocks().init_pipeline(anima_dir)
     pipe.update_components(transformer=transformer, text_encoder=text_encoder, vae=vae, text_conditioner=text_conditioner, scheduler=scheduler, tokenizer=tokenizer, t5_tokenizer=t5_tokenizer)
+    if loras:
+        # Anima adapters can target both the denoiser and its text conditioner.
+        # The pipeline loader converts native names and dispatches both sets.
+        from .lora_stack import apply_lora_stack
+        names, _ = apply_lora_stack(pipe, loras, low_cpu_mem_usage=True)
+        _materialize_anima_adapters(pipe, loras, names, device)
+        for label, component in (('denoiser', transformer), ('conditioner', text_conditioner)):
+            for name, parameter in component.named_parameters():
+                if 'lora_' in name:
+                    if parameter.is_meta or not torch.isfinite(parameter).all():
+                        raise ValueError('Invalid Anima adapter weights: ' + label + '.' + name + ' device=' + str(parameter.device))
     streamed_transformer = getattr(transformer, '_anima_streamer', None) is not None
     for comp in (text_encoder,) if streamed_transformer else (transformer, text_encoder):
         try:
@@ -372,6 +389,29 @@ def build_anima_pipeline(transformer_file: str=DEFAULT_TF, qwen_file: str=DEFAUL
         except Exception:
             pass
     return pipe
+
+def _materialize_anima_adapters(pipe, specs, names, device):
+    """Load adapter tensors explicitly when the streamed base lives on meta."""
+    import torch
+    from pathlib import Path
+    from accelerate.utils import set_module_tensor_to_device
+    from cosmos_windows.gen_with_lora import _retarget_adapter_key
+    from .lora_stack import _spec
+    for spec, name in zip(specs, names):
+        path = Path(_spec(spec)[0])
+        state = pipe.lora_state_dict(str(path.parent), weight_name=path.name, local_files_only=True)
+        for key, value in state.items():
+            component, _, key = key.partition('.')
+            if component not in ('transformer', 'text_conditioner'):
+                raise ValueError('Unsupported Anima adapter component: ' + component)
+            model = getattr(pipe, component)
+            target = _retarget_adapter_key(key, name)
+            parameters = dict(model.named_parameters())
+            if target not in parameters or tuple(parameters[target].shape) != tuple(value.shape):
+                raise ValueError('Anima adapter tensor was not attached: ' + target)
+            if not torch.isfinite(value).all():
+                raise ValueError('Non-finite Anima adapter tensor: ' + target)
+            set_module_tensor_to_device(model, target, device, value=value, dtype=value.dtype)
 
 def configure_anima_sampling(pipe, *, sampler: str | None=None, sigmas: str | None=None, num_inference_steps: int=24) -> list[float] | None:
     from cosmos_windows.res4lyf_sampling import configure_diffusers_flow_scheduler

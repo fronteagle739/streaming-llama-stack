@@ -43,6 +43,10 @@
     {
       "path": "adapter.py",
       "purpose": "Stack-owned media calls mark external adapters explicit-only: suppress automatic Krea, H3 profile and Bernini distillation LoRAs. Each invocation passes only requested adapter paths/weights and unloads its owned worker afterward."
+    },
+    {
+      "path": "worker_registry.py",
+      "purpose": "Standalone media workers inherit the stack owned process tree and GPU lease. Consult Studio WebXR admission only when a Studio daemon owner has activated its registry; avoid importing unavailable daemon modules in the isolated stack."
     }
   ],
   "modules": [
