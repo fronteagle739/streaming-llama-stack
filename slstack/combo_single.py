@@ -34,13 +34,13 @@ import psutil
 from .journal import atomic_json
 from .native_broker import vendor
 from . import ds4_render
-from .ds4_tool_parse import finish_message, find_any_tool_start, tool_call_deltas
+from .ds4_tool_parse import finish_message, find_any_tool_start, find_tool_markup_start, TOOL_MARKUP, tool_call_deltas
 
 EOS_ID = 1
 MAX_DECODE_CALL = 4096
 STEP = re.compile(rb'LLAMADECODE_STEP index=(\d+) token=(\d+) ')
 TOOL_STARTS = ('\n\n' + ds4_render.DS41_TOOL_CALLS_START, ds4_render.DS41_TOOL_CALLS_START, '<｜DSML｜tool_calls>',
-               '<DSML｜tool_calls>', '<tool_calls>', '<tool_call>')
+               '<DSML｜tool_calls>', '<tool_calls>', '<tool_call>') + TOOL_MARKUP
 
 
 def _partial_hold(text, markers):
@@ -116,7 +116,7 @@ class Splitter:
         if self.think:
             end = self.text.find('</think>')
             region = self.text if end < 0 else self.text[:end]
-            tool = find_any_tool_start(region)
+            tool = find_tool_markup_start(region)
             if tool is not None:region = region[:tool];self.frozen = end < 0 or tool < end
             ready = region if (end >= 0 and tool is None) else region[:len(region) - _partial_hold(region, ('</think>',) + TOOL_STARTS)]
             if len(ready) > len(self.sent['reasoning']):
@@ -124,7 +124,7 @@ class Splitter:
             if end < 0 or self.frozen:return out
             body = self.text[end + 8:]
         else:body = self.text
-        tool = find_any_tool_start(body)
+        tool = find_tool_markup_start(body)
         if tool is not None:body = body[:tool];self.frozen = True
         if not self.frozen:body = body[:len(body) - _partial_hold(body, TOOL_STARTS)]
         ready = body.rstrip(' \t\n\r\v\f')
@@ -708,6 +708,7 @@ def handler(proxy):
                     rest = splitter.remainder('content', parsed['content'])
                     if rest:write(_chunk(cid, model, created, dict(content=rest)))
                     if calls:write(_chunk(cid, model, created, dict(tool_calls=calls)))
+                    if parsed.get('tool_error'):write(_chunk(cid, model, created, dict(tool_error=parsed['tool_error'])))
                     done = _chunk(cid, model, created, {}, parsed['finish'])
                     if final.get('timings'):done['timings'] = final['timings']   # tok/s for the chat statistics, as in the non-stream reply
                     write(done)
@@ -717,6 +718,7 @@ def handler(proxy):
                     message = dict(role='assistant', content=parsed['content'] or '')
                     if parsed['reasoning']:message['reasoning_content'] = parsed['reasoning']
                     if calls:message['tool_calls'] = [{k: v for k, v in c.items() if k != 'index'} for c in calls]
+                    if parsed.get('tool_error'):message['tool_error'] = parsed['tool_error']
                     self.send(200, dict(id=cid, object='chat.completion', created=created, model=model,
                                         choices=[dict(index=0, message=message, finish_reason=parsed['finish'])], usage=final['usage'],
                                         timings=final['timings']))

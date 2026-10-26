@@ -15,10 +15,11 @@ FOLDER_CLASSES = {
     'WanPipeline':'wan-2.2', 'WanImageToVideoPipeline':'wan-2.2',
     'ZImagePipeline':'z-image', 'StableDiffusionXLPipeline':'sdxl',
     'QwenImagePipeline':'qwen-image-2.1', 'QwenImageEditPipeline':'qwen-image-2.1',
+    'QwenImage21Pipeline':'qwen-image-2.1', 'QwenImage21Transformer2DModel':'qwen-image-2.1',
     'MOSSImagePipeline':'moss-image', 'MOSSImageTransformer':'moss-image',
     'Krea2Pipeline':'krea2-turbo', 'Krea2Transformer2DModel':'krea2-turbo',
     'MiniMaxH3Pipeline':'minimax-h3', 'MiniMaxH3DiTModel':'minimax-h3',
-    'Flux2KleinPipeline':'flux2-klein', 'HunyuanImage3Pipeline':'hunyuan-3',
+    'Flux2KleinPipeline':'flux2-klein', 'Flux2KleinKVPipeline':'flux2-klein', 'HunyuanImage3Pipeline':'hunyuan-3',
     'HunyuanImagePipeline':'hunyuan-3', 'Cosmos3Pipeline':'cosmos3-t2v',
 }
 
@@ -92,6 +93,8 @@ def model_info(value, arch_hint=None):
             declared=data.get('_class_name') or data.get('model_type')
             arch=FOLDER_CLASSES.get(declared)
             if arch:break
+        if arch=='z-image' and not any((path/'transformer').glob('*.safetensors')):
+            return None  # Component/config bundle is support data, not a selectable model.
     else:return None
     if arch_hint:
         if arch_hint not in supported:raise ValueError('Unsupported model architecture')
@@ -143,12 +146,14 @@ def scan_models(root, explicit=(), *, overrides=None, cancelled=None, progress=N
                 pipeline=add(directory)
                 if pipeline:
                     if pipeline['arch']=='qwen-image-2.1':support.setdefault('qwen-image-2.1',{})['components_repo']=pipeline['path']
+                    if pipeline['arch']=='flux2-klein':support.setdefault('flux2-klein',{})['components_repo']=pipeline['path']
                     dirs[:]=[d for d in dirs if d not in {'transformer','text_encoder','text_encoder_2','text_encoder_3','vae','video_vae','audio_vae'}]
             for name in files:
                 files_seen+=1
                 if name.lower() in ('qwen3vl_4b_int8.safetensors','qwen_image_vae.safetensors'):
                     key='text_encoder' if name.lower().startswith('qwen3vl') else 'vae'
-                    support.setdefault('krea2-native',{}).setdefault(key,str(Path(directory,name)))
+                    for arch in ('krea2-native','krea2-turbo','krea2-raw','krea2'):
+                        support.setdefault(arch,{}).setdefault(key,str(Path(directory,name)))
                 if name.lower().endswith('.safetensors'):
                     file=Path(directory)/name
                     support_file(file,support)

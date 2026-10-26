@@ -13,6 +13,7 @@ ds4_tool_text.h ds4_tool_text_unescape.
 """
 from __future__ import annotations
 import secrets
+import json
 from .ds4_render import (DS41_TOOL_CALLS_START, DS41_TOOL_CALLS_END, DS41_INVOKE_START, DS41_INVOKE_END,
                          DS41_PARAM_START, DS41_PARAM_END, json_escape, json_minify_raw_value, json_args_parse, skip_value)
 
@@ -24,6 +25,7 @@ TOOL_CALLS_START_SHORT = '<' + DSML_SHORT + 'tool_calls>';TOOL_CALLS_END_SHORT =
 INVOKE_START_SHORT = '<' + DSML_SHORT + 'invoke';INVOKE_END_SHORT = '</' + DSML_SHORT + 'invoke>'
 PARAM_START_SHORT = '<' + DSML_SHORT + 'parameter';PARAM_END_SHORT = '</' + DSML_SHORT + 'parameter>'
 SPACE = ' \t\n\r\v\f'
+TOOL_MARKUP = ('<｜DSML｜', '</｜DSML｜', '<DSML｜', '</DSML｜', '<tool_calls', '<tool_call>', '<invoke ')
 STYLES = {0: (TOOL_CALLS_START, TOOL_CALLS_END, INVOKE_START, INVOKE_END, PARAM_START, PARAM_END),
           1: ('<tool_calls>', '</tool_calls>', '<invoke', '</invoke>', '<parameter', '</parameter>'),
           2: (TOOL_CALLS_START_SHORT, TOOL_CALLS_END_SHORT, INVOKE_START_SHORT, INVOKE_END_SHORT, PARAM_START_SHORT, PARAM_END_SHORT),
@@ -38,6 +40,11 @@ def _find(s, needle, start=0):
 def find_any_tool_start(s, start=0):
     hits = [_find(s, n, start) for n in (DS41_TOOL_CALLS_START, TOOL_CALLS_START, TOOL_CALLS_START_SHORT, '<tool_calls>', '<tool_call>')]
     hits = [h for h in hits if h is not None]
+    return min(hits) if hits else None
+
+
+def find_tool_markup_start(s):
+    hits=[s.find(marker) for marker in TOOL_MARKUP if marker in s]
     return min(hits) if hits else None
 
 
@@ -281,8 +288,22 @@ def finish_message(text, *, has_tools, think, finish):
             if ok and calls:text = repaired
     result = parse_for_response(text, has_tools=has_tools, saw_tool_start=saw_start, require_thinking_closed=think, finish=finish)
     if result['calls']:
+        try:
+            if not all(isinstance(json.loads(call['arguments']),dict) for call in result['calls']):
+                raise ValueError('Tool arguments must be JSON objects')
+        except (ValueError,TypeError):
+            result['calls']=[]
+    if result['calls']:
         for call in result['calls']:call['id'] = random_tool_id()
         result['finish'] = 'tool_calls'
+    elif has_tools:
+        content, reasoning = split_reasoning_content(text)
+        start = find_tool_markup_start(content)
+        if start is not None:
+            # Invalid arguments are never guessed or executed. Keep diagnostics
+            # separate from answer text, including malformed/repeated DSML tags.
+            result.update(content=content[:start].rstrip(),reasoning=reasoning,
+                          tool_error=dict(error='Malformed tool call was not executed',raw=content[start:]))
     return result
 
 

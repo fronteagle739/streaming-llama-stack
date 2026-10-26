@@ -1,7 +1,41 @@
 // Small adapter for the pinned llama.cpp Markdown renderer: local generated video
 // references use the same Markdown image syntax, then become native video elements.
 (() => {
+  const toolExpansion = new Map();
+  function upgradeTools() {
+    const groups = new Map();
+    for (const code of document.querySelectorAll('code.language-stack-tool')) {
+      let row;try {row = JSON.parse(code.textContent);} catch {continue;}
+      if (!row.id || !row.name || !row.status) continue;
+      const host = code.closest('.code-block-wrapper') || code.closest('pre');
+      if (!host) continue;
+      host.classList.add('sl-tool-card');
+      const group = groups.get(row.id);
+      if (group) {group.row = row;host.hidden = true;}
+      else groups.set(row.id, {host, row});
+    }
+    for (const [id, {host, row}] of groups) {
+      host.hidden = false;host.classList.add('sl-tool-card');
+      let details = host.querySelector('details.sl-tool-details');
+      if (!details) {
+        details = document.createElement('details');details.className = 'sl-tool-details';
+        const summary = document.createElement('summary');
+        summary.innerHTML = '<span class="sl-tool-name"></span><span class="sl-tool-state"></span>';
+        const pre = document.createElement('pre');pre.className = 'sl-tool-payload';
+        details.append(summary,pre);host.append(details);
+        details.open = toolExpansion.get(id) || false;
+        details.addEventListener('toggle', () => toolExpansion.set(id,details.open));
+      }
+      const payload = JSON.stringify(row);
+      if (details.dataset.payload === payload) continue;
+      details.dataset.payload = payload;
+      details.querySelector('.sl-tool-name').textContent = row.name.replaceAll('_',' ');
+      details.querySelector('.sl-tool-state').textContent = ({running:'Running…',complete:'Complete',failed:'Failed'})[row.status] || row.status;
+      details.querySelector('.sl-tool-payload').textContent = JSON.stringify({arguments:row.arguments,...(row.result === undefined ? {} : {result:row.result})},null,2);
+    }
+  }
   const upgrade = () => {
+    upgradeTools();
     for (const img of document.querySelectorAll('img[src]')) {
       let url;
       try { url = new URL(img.getAttribute('src'), location.href); } catch { continue; }
@@ -28,6 +62,14 @@
   document.body.appendChild(status);
   const style = document.createElement('style');
   style.textContent = `
+    .sl-tool-card{margin:10px 0!important;padding:0!important;border:1px solid var(--border)!important;border-radius:var(--radius-lg,10px)!important;background:var(--background)!important;color:var(--foreground)!important;overflow:hidden}
+    .sl-tool-card[hidden]{display:none!important}
+    .sl-tool-card>.code-block-header,.sl-tool-card>pre:not(.sl-tool-payload),pre.sl-tool-card>code{display:none!important}
+    .sl-tool-details summary{display:flex;align-items:center;gap:10px;cursor:pointer;padding:10px 12px;font:inherit;font-size:12px;list-style:none}
+    .sl-tool-details summary::before{content:'›';font-size:16px;line-height:1;transition:transform .15s}
+    .sl-tool-details[open] summary::before{transform:rotate(90deg)}
+    .sl-tool-state{margin-left:auto;color:var(--muted-foreground);font-size:11px}
+    .sl-tool-payload{margin:0!important;padding:12px!important;max-height:320px;overflow:auto;white-space:pre-wrap;overflow-wrap:anywhere;border-top:1px solid var(--border);background:var(--muted)!important;color:var(--foreground)!important;font:11px/1.5 ui-monospace,monospace}
     #sl-media-progress{box-sizing:border-box;margin:0 0 10px;padding:12px 14px;border:1px solid var(--border);border-radius:var(--radius-lg,10px);background:var(--background);color:var(--foreground);font:inherit;font-size:12px}
     #sl-media-progress[hidden]{display:none}
     #sl-media-progress.sl-media-floating{position:fixed;bottom:24px;left:50%;transform:translateX(-50%);width:min(460px,calc(100vw - 32px));z-index:90;box-shadow:0 4px 20px #0001}

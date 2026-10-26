@@ -13,6 +13,7 @@ import uuid
 from .config import path, ROOT
 from .engines import Engines
 from .tools import Tools
+from .tool_activity import activity, outcome, without_activity
 
 
 def media_request(kind, body, cfg):
@@ -56,6 +57,9 @@ class Stack:
         if not isinstance(body.get('messages'), list) or not body['messages']:
             raise ValueError('messages must be a nonempty array')
         body = deepcopy(body)
+        for message in body['messages']:
+            if message.get('role')=='assistant' and isinstance(message.get('content'),str):
+                message['content']=without_activity(message['content'])
         # Client-owned tools remain client-owned. Stack tool names cannot be overridden.
         stack_names = set(self.tools.schemas)
         client_tools = body.get('tools', [])
@@ -86,8 +90,8 @@ class Stack:
         body = self.prepare_chat(body)
         messages = body['messages']
         stack_names = set(self.tools.schemas)
-        media = []
-        for _ in range(8):
+        media, activity_log = [], []
+        while True:
             result = self.engines.chat(body)
             choices = result.get('choices', [])
             if len(choices) != 1:
@@ -95,7 +99,10 @@ class Stack:
             message = choices[0]['message']
             calls = message.get('tool_calls') or []
             if not calls:
-                content = message.get('content') or ''
+                content = ''.join(activity_log) + (message.get('content') or '')
+                if message.get('tool_error'):
+                    content += activity(dict(id='invalid-'+uuid.uuid4().hex,function=dict(name='Malformed tool call',arguments='{}')),
+                                        'failed',message.pop('tool_error'))
                 for item in media:
                     for artifact in item.get('data', []):
                         content += '\n\n' + f'![Generated media]({artifact["url"]})'
@@ -113,8 +120,10 @@ class Stack:
                 return result
             messages.append(message)
             for call in calls:
-                messages.append(self.tool_result(call, media))
-        raise RuntimeError('Stack tool iteration limit (8) exceeded')
+                result = self.tool_result(call, media)
+                messages.append(result)
+                reply = outcome(result)
+                activity_log.append(activity(call,'failed' if 'error' in reply else 'complete',reply))
 
     def chat_events(self, body):
         body = self.prepare_chat(body, stream=True)
@@ -141,7 +150,7 @@ class Stack:
             except (KeyError, TypeError, ValueError):
                 pass
             return row
-        for _ in range(8):
+        while True:
             message = {'role':'assistant','content':''}
             calls, finish = {}, 'stop'
             for event in self.engines.chat_events(body):
@@ -156,6 +165,10 @@ class Stack:
                     raise RuntimeError('Stack tools require exactly one upstream choice')
                 choice = choices[0]
                 delta = dict(choice.get('delta') or {})
+                diagnostic = delta.pop('tool_error', None)
+                if diagnostic:
+                    call=dict(id='invalid-'+uuid.uuid4().hex,function=dict(name='Malformed tool call',arguments='{}'))
+                    yield chunk({'content':activity(call,'failed',diagnostic)})
                 for part in delta.pop('tool_calls',[]) or []:
                     index = part.get('index',0)
                     call = calls.setdefault(index, {'id':'','type':'function','function':{'name':'','arguments':''}})
@@ -186,14 +199,17 @@ class Stack:
             message['tool_calls'] = calls
             body['messages'].append(message)
             for call in calls:
+                yield chunk({'content':activity(call,'running')})
                 before = len(media)
-                body['messages'].append(self.tool_result(call,media))
+                result = self.tool_result(call,media)
+                body['messages'].append(result)
+                reply = outcome(result)
+                yield chunk({'content':activity(call,'failed' if 'error' in reply else 'complete',reply)})
                 markdown = ''.join('\n\n![Generated media](' + item['url'] + ')\n\n'
                                    for result in media[before:] for item in result.get('data',[]))
                 if markdown:
                     # Flush artifacts before the next vision prefill or model reply.
                     yield chunk({'content':markdown})
-        raise RuntimeError('Stack tool iteration limit (8) exceeded')
 
     def mcp(self, body):
         identity, method = body.get('id'), body.get('method')
