@@ -42,7 +42,7 @@ def activate_transformer_adapters(transformer, names, weights=None):
         raise ValueError(f'Adapters are not attached: {sorted(missing)}')
     set_weights_and_activate_adapters(transformer, names, weights)
 
-def apply_lora_stack(target, specs):
+def apply_lora_stack(target, specs, *, low_cpu_mem_usage=None):
     specs = [s for s in specs or [] if s is not None]
     if not specs:
         return ([], [])
@@ -57,6 +57,8 @@ def apply_lora_stack(target, specs):
         if not local.is_file():
             raise FileNotFoundError(f'Local LoRA file not found: {local}')
         loader_args = dict(adapter_name=name, weight_name=local.name, local_files_only=True)
+        if low_cpu_mem_usage is not None:
+            loader_args['low_cpu_mem_usage'] = low_cpu_mem_usage
         if has_pipe_loader:
             target.load_lora_weights(str(local.parent), **loader_args)
         elif hasattr(target, 'load_lora_adapter'):

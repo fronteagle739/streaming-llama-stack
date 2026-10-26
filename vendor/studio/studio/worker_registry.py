@@ -68,8 +68,11 @@ def write_receipt(process, directory: Path, *, owner: int, token: str, preserve_
         return False
 
 def _spawn(*args, **kwargs):
-    from .vr_session_guard import wait_for_gpu
-    wait_for_gpu()
+    # Standalone stack workers inherit the outer owned Job and GPU lease.
+    # Studio's WebXR session arbiter exists only in its activated daemon.
+    if _owner is not None:
+        from .vr_session_guard import wait_for_gpu
+        wait_for_gpu()
     audio = sys.modules.get('studio.audio')
     arbitrate = getattr(audio, 'spawn_gpu_worker', None)
     if arbitrate is None:
