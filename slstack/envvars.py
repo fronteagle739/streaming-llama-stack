@@ -166,7 +166,8 @@ def redact_cfg(cfg):
     """A config copy that is safe to write into a job spec or a worker request."""
     def clean(value):
         if isinstance(value, dict):
-            return {k: '<redacted>' if is_secret(str(k)) else clean(v) for k, v in value.items()}
+            # The model's tokenizer is a local asset path, not an access token.
+            return {k: '<redacted>' if str(k) != 'tokenizer' and is_secret(str(k)) else clean(v) for k, v in value.items()}
         if isinstance(value, list):
             return [clean(v) for v in value]
         return value

@@ -67,6 +67,8 @@ Media uses the existing Studio implementations in isolated model-family environm
 
 Image/video tool activity appears in collapsible chat cards with arguments, results and failures. Media generation has a step counter and seconds per iteration; completed images appear before the model continues and remain in vision context on later turns. Tool conversations have no fixed limit on the number of tool rounds.
 
+The [media setup verification](docs/MEDIA_SETUP_VERIFICATION.md) records the isolated installation checks and the image families exercised through the real backend.
+
 The [user guide](USER_GUIDE.md) documents the environment-to-flag table and literal engine defaults. `--mode accurate|fast|ultra|hyper` selects the delivered prefill arithmetic profile; media uses `--image-mode streaming|resident` and `--video-mode streaming|resident`. The launcher supplies offline caches and memory budgets automatically, and refuses overrides that conflict with its GPU identity or residency requirements. Profile definitions are implemented; the two-machine runtime qualification remains pending.
 
 See the measured [native/producer parity](examples/engine_parity/README.md) and [environment behaviour samples](examples/engine_environment/README.md) for the checks completed so far.

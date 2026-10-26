@@ -29,6 +29,12 @@ class JobSpecSecretTests(unittest.TestCase):
         self.assertNotIn(SECRET, json.dumps(cfg))
         self.assertEqual(cfg['env_overrides']['A'], '1')
 
+    def test_media_tokenizer_path_survives_worker_redaction(self):
+        cfg = redact_cfg({'image_support_files': {'tokenizer': 'models/z/tokenizer',
+                          'access_token': SECRET}, 'HF_TOKEN': SECRET})
+        self.assertEqual(cfg['image_support_files']['tokenizer'], 'models/z/tokenizer')
+        self.assertNotIn(SECRET, json.dumps(cfg))
+
     def run_job(self, paging):
         # The token is a ds4-win scoped setting; ds4-win jobs use the shared paging guard.
         with tempfile.TemporaryDirectory() as root:

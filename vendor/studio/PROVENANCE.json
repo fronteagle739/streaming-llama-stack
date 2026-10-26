@@ -55,6 +55,10 @@
     {
       "path": "adapter.py; vram_residency.py",
       "purpose": "Include the shared Studio VRAM component manager required by Flux2 Klein. Model discovery associates complete pipeline folders and companion component files without exposing individual shards as models."
+    },
+    {
+      "path": "krea2_diffusion.py",
+      "purpose": "Use setup-pinned local VAE config with the selected VAE weights and the existing Diffusers Wan/Qwen conversion. DirectStorage fetches resident Windows CUDA tensors in groups, avoiding whole-checkpoint CPU storage slicing; clone and synchronize before releasing the ring. Preserve other platform loading and strict tensor coverage."
     }
   ],
   "modules": [
@@ -231,8 +235,9 @@
         "path": "vendor/studio/studio/krea2_diffusion.py",
         "source_path": "backend/studio/krea2_diffusion.py",
         "source_sha256": "6431857c1e3392ac17795a2142e0cb0e6033086782b49393d4dad18e42aa9e16",
-        "export_sha256": "fed02f4ef9a6479f14c4128852fb8f96bda7cc18042a619a833cc2235cfcfc8b",
-        "selected": null
+        "export_sha256": "a63bb9c7acddf3974f785064c1b8653a4dde0841ed968ee5f0242a6b805cbb6c",
+        "selected": null,
+        "changes": "Use selected local VAE with strict Diffusers key conversion; load resident CUDA tensors through DirectStorage groups with owned copies before ring release."
       },
       {
         "path": "vendor/studio/studio/krea_hf_stream.py",
@@ -452,6 +457,15 @@
         "export_sha256": "7eb052dcb404198e678928682306b76f128189a3f451efa9730b4deea655438a",
         "selected": null,
         "transformation": "Unchanged upstream module, including docstrings required by Diffusers decorators"
+      },
+      {
+        "path": "vendor/studio/studio/sim.py",
+        "source_path": "backend/studio/sim.py",
+        "source_sha256": "591b39284f4c6700c35e1d55e012820e3bcd902863d53e9bad2e11ffe59405bb",
+        "export_sha256": "87da10800e5357d1b9bf8025a8ca4febaee3b319a12d1344debeb20b1b9c794e",
+        "selected": [
+          "_safe"
+        ]
       }
     ],
     "transformation": "AST source export; absolute machine fallback paths cleared; jobs exports only owned-worker launch/cleanup helpers; docstrings omitted"

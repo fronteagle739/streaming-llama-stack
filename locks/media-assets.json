@@ -39,5 +39,16 @@
         "bytes": 7133
       }
     ]
+  },
+  "qwenimage_vae": {
+    "repository": "Qwen/Qwen-Image",
+    "revision": "75e0b4be04f60ec59a75f475837eced720f823b6",
+    "files": [
+      {
+        "name": "vae/config.json",
+        "sha256": "e4e61b7553f930e9eabf8935f0a77e6d004cc3ee67a601a56ef03cc41ccada68",
+        "bytes": 730
+      }
+    ]
   }
 }

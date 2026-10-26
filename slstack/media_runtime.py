@@ -14,6 +14,7 @@ REQUIRED = {
     'transformers': ('Qwen3VLForConditionalGeneration','Qwen3VLProcessor','Qwen3Model'),
     'studio.vram_residency': ('VramResidencyManager',),
     'studio.adapter': ('load_backend',),
+    'studio.sim': ('_safe',),
 }
 
 
