@@ -449,14 +449,18 @@ class Engines:
         proc = OwnedProcess(cfg, [cfg['studio_python'], '-B', '-m', 'slstack.studio_worker'],
                             kind, stdin=json.dumps(request) + '\n', gpu=True)
         try:
-            proc.wait()
+            failure = None
+            try:proc.wait()
+            except RuntimeError as exc:failure = exc
             rows = [x[len('DS4STACK_RESULT '):] for x in proc.log.read_text(errors='replace').splitlines()
                     if x.startswith('DS4STACK_RESULT ')]
             if len(rows) != 1:
+                if failure:raise failure
                 raise RuntimeError(f'Studio did not return exactly one result; see {proc.log}')
             result = json.loads(rows[0])
             if not result.get('ok'):
-                raise RuntimeError(result.get('error', 'Studio generation failed'))
+                raise RuntimeError(result.get('error', 'Studio generation failed')) from failure
+            if failure:raise failure
             root = Path(self.cfg['runtime_root']).resolve() / 'outputs'
             artifacts = []
             for raw in result.get('files', []):

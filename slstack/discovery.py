@@ -38,6 +38,32 @@ def json_config(path):
     return {}
 
 
+def support_folder(path, support):
+    """Find local config bundles independently of standalone checkpoint discovery."""
+    path=Path(path)
+    conditioner=json_config(path/'text_conditioner'/'config.json')
+    if conditioner.get('_class_name')=='AnimaTextConditioner':
+        support.setdefault('anima-1.0',{}).setdefault('components_repo',str(path))
+    index=json_config(path/'model_index.json')
+    if index.get('_class_name')=='ZImagePipeline':
+        values=support.setdefault('z-image',{});values.setdefault('config_dir',str(path))
+        for component in ('text_encoder','vae'):
+            folder=path/component
+            if folder.is_dir() and any(folder.glob('*.safetensors')):
+                values.setdefault(component,str(folder))
+        for component in ('tokenizer','scheduler'):
+            if (path/component).is_dir():values.setdefault(component,str(path/component))
+
+
+def support_file(path, support):
+    path=Path(path);name=path.name.casefold()
+    if name in {'qwen_3_06b_base.safetensors','qwen3_0.6b.safetensors','qwen_3_0.6b.safetensors'}:
+        support.setdefault('anima-1.0',{}).setdefault('text_encoder',str(path))
+    if name in {'qwen_3_4b.safetensors','qwen3_4b.safetensors'}:
+        support.setdefault('z-image',{}).setdefault('text_encoder',str(path))
+    if name=='ae.safetensors':support.setdefault('z-image',{}).setdefault('vae',str(path))
+
+
 def model_info(value, arch_hint=None):
     vendor();from studio.custom_models import checkpoint_metadata, _modalities_for_model, _safetensors_header
     path=Path(value).expanduser().resolve(strict=True);arch=None
@@ -112,7 +138,8 @@ def scan_models(root, explicit=(), *, overrides=None, cancelled=None, progress=N
             dirs[:]=sorted(d for d in dirs if d.casefold() not in SKIP and not Path(directory,d).is_symlink() and
                            not (hasattr(Path(directory,d),'is_junction') and Path(directory,d).is_junction()))
             # Shards and component weights belong to the detected pipeline.
-            if 'model_index.json' in files or 'config.json' in files or 'transformer' in dirs:
+            if 'model_index.json' in files or 'config.json' in files or 'transformer' in dirs or 'text_conditioner' in dirs:
+                support_folder(directory,support)
                 pipeline=add(directory)
                 if pipeline:
                     if pipeline['arch']=='qwen-image-2.1':support.setdefault('qwen-image-2.1',{})['components_repo']=pipeline['path']
@@ -124,6 +151,7 @@ def scan_models(root, explicit=(), *, overrides=None, cancelled=None, progress=N
                     support.setdefault('krea2-native',{}).setdefault(key,str(Path(directory,name)))
                 if name.lower().endswith('.safetensors'):
                     file=Path(directory)/name
+                    support_file(file,support)
                     try:adapter=lora_info(file)
                     except (OSError,ValueError,TypeError):adapter=None
                     if adapter:loras[adapter['path']]=adapter

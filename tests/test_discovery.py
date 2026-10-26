@@ -56,5 +56,18 @@ class DiscoveryTests(unittest.TestCase):
         state=prefs.update({'comfyui_models':str(self.root)})
         self.assertEqual(state['settings']['comfyui_models'],str(self.root.resolve()))
 
+    def test_support_components_are_joined_across_search_roots(self):
+        bundle=self.root/'configs'/'anima';(bundle/'text_conditioner').mkdir(parents=True)
+        (bundle/'text_conditioner/config.json').write_text(json.dumps({'_class_name':'AnimaTextConditioner'}))
+        self.checkpoint('weights/text_encoders/qwen_3_06b_base.safetensors',['embed_tokens.weight'])
+        self.pipeline('configs/zimage','ZImagePipeline')
+        self.checkpoint('weights/text_encoders/qwen_3_4b.safetensors',['embed_tokens.weight'])
+        self.checkpoint('weights/vae/ae.safetensors',['decoder.conv_out.weight'])
+        row=scan_models([self.root/'configs',self.root/'weights'])
+        self.assertEqual(row['support_files']['anima-1.0']['components_repo'],str(bundle))
+        self.assertEqual(Path(row['support_files']['anima-1.0']['text_encoder']).name,'qwen_3_06b_base.safetensors')
+        self.assertEqual(row['support_files']['z-image']['config_dir'],str(self.root/'configs/zimage'))
+        self.assertEqual(Path(row['support_files']['z-image']['vae']).name,'ae.safetensors')
+
 
 if __name__=='__main__':unittest.main()

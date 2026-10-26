@@ -5,6 +5,20 @@ from pathlib import Path
 import sys
 
 
+def resolve_checkpoint(model, arch, support):
+    """Adapt a local Z-Image bundle to Studio's single-checkpoint streaming input."""
+    root=Path(model)
+    if arch=='z-image' and root.is_dir():
+        files=sorted((root/'transformer').glob('*.safetensors'))
+        if not files:
+            raise ValueError(root.name+' contains configuration files but no transformer weights; select a model checkpoint')
+        if len(files)!=1:
+            raise ValueError('The Z-Image streaming backend needs a single transformer checkpoint; select its single-file model')
+        support.setdefault('config_dir',str(root))
+        model=str(files[0])
+    return model
+
+
 def run(request):
     cfg, kind, args = request['cfg'], request['kind'], request['params']
     # Source builds put the media streaming DLL beside the producer. Resolve
@@ -65,6 +79,7 @@ def run(request):
         if not arch and Path(model).suffix.lower() == '.safetensors':
             arch = checkpoint_metadata(model).get('arch_hint')
         support = {**defaults.get(arch, {}), **cfg[kind + '_support_files']}
+        model=resolve_checkpoint(model,arch,support)
         # Studio's support-file schema accepts strings, including policy markers.
         support['_stack_explicit_loras_only']='1'
         if arch and arch.startswith('krea2') and Path(model).is_file():support['dit']=model
