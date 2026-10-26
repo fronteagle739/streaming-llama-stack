@@ -68600,7 +68600,7 @@ Source: `vendor/studio/studio/direct_vram.py:20`. Unset read: ''.
         from .h3_weight_io import stream_tensors
 ```
 
-Source: `vendor/studio/studio/krea2_diffusion.py:800`. Unset read: ''.
+Source: `vendor/studio/studio/krea2_diffusion.py:851`. Unset read: ''.
 
 ```text
     import os as _os
@@ -68612,10 +68612,10 @@ Source: `vendor/studio/studio/krea2_diffusion.py:800`. Unset read: ''.
     from cosmos_windows.weight_streaming.safetensors_index import build_index
 ```
 
-Source: `vendor/studio/studio/krea2_diffusion.py:1055`. Unset read: ''.
+Source: `vendor/studio/studio/krea2_diffusion.py:1106`. Unset read: ''.
 
 ```text
-def _load_krea2_component_ds(te, te_path: str, dtype, device: str, expected: set[str], *, label: str):
+def _load_krea2_component_ds(te, te_path: str, dtype, device: str, expected: set[str], *, label: str, rename=None):
     import torch
     repo = os.environ.get('STUDIO_COSMOS_WINDOWS_PATH', '')
     if repo not in sys.path:
@@ -72914,7 +72914,7 @@ KREA2_ALLOW_NON_DIRECTSTORAGE: explicit engine setting; inherited values are cle
 
 Scope: image, video. Class: advanced.
 
-Source: `vendor/studio/studio/krea2_diffusion.py:809`. Unset read: None.
+Source: `vendor/studio/studio/krea2_diffusion.py:860`. Unset read: None.
 
 ```text
     sd_keys = set(tr.state_dict().keys())
@@ -73004,7 +73004,7 @@ STUDIO_KREA2_DIRECT_MIN_FREE_GB: explicit engine setting; inherited values are c
 
 Scope: image, video. Class: advanced.
 
-Source: `vendor/studio/studio/krea2_diffusion.py:1203`. Unset read: raw_need.
+Source: `vendor/studio/studio/krea2_diffusion.py:1272`. Unset read: raw_need.
 
 ```text
     raw_need = 4.0
@@ -73076,7 +73076,7 @@ STUDIO_KREA2_MIN_FREE_GB: explicit engine setting; inherited values are cleared 
 
 Scope: image, video. Class: advanced.
 
-Source: `vendor/studio/studio/krea2_diffusion.py:706`. Unset read: need_gb.
+Source: `vendor/studio/studio/krea2_diffusion.py:757`. Unset read: need_gb.
 
 ```text
 def _require_free_memory(need_gb: float=55.0) -> None:
@@ -73094,7 +73094,7 @@ STUDIO_KREA2_MPS_COMPILE: explicit engine setting; inherited values are cleared 
 
 Scope: image, video. Class: advanced.
 
-Source: `vendor/studio/studio/krea2_diffusion.py:1166`. Unset read: '1'.
+Source: `vendor/studio/studio/krea2_diffusion.py:1235`. Unset read: '1'.
 
 ```text
 

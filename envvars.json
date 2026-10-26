@@ -71390,8 +71390,8 @@
       "vendor/studio/studio/boogu_krea.py:405",
       "vendor/studio/studio/config.py:141",
       "vendor/studio/studio/direct_vram.py:20",
-      "vendor/studio/studio/krea2_diffusion.py:800",
-      "vendor/studio/studio/krea2_diffusion.py:1055",
+      "vendor/studio/studio/krea2_diffusion.py:851",
+      "vendor/studio/studio/krea2_diffusion.py:1106",
       "vendor/studio/studio/ram_preflight.py:11"
     ],
     "code_defaults": [
@@ -71414,16 +71414,16 @@
         "consumer": "        if not str(device).startswith('cuda'):\n            raise RuntimeError(f'DIRECT_VRAM_UNAVAILABLE: Windows loads go straight to a CUDA device, not {device!r}')\n        repo = os.environ.get('STUDIO_COSMOS_WINDOWS_PATH', '')\n        if repo not in sys.path:\n            sys.path.insert(0, repo)\n        from cosmos_windows.weight_streaming.safetensors_index import SafetensorsIndex, _index_one_file\n        from .h3_weight_io import stream_tensors"
       },
       {
-        "source": "vendor/studio/studio/krea2_diffusion.py:800",
+        "source": "vendor/studio/studio/krea2_diffusion.py:851",
         "unset": "''",
         "read": "_os.environ.get('STUDIO_COSMOS_WINDOWS_PATH', '')",
         "consumer": "    import os as _os\n    from accelerate.utils import set_module_tensor_to_device\n    repo = _os.environ.get('STUDIO_COSMOS_WINDOWS_PATH', '')\n    if repo and repo not in sys.path:\n        sys.path.insert(0, repo)\n    from cosmos_windows.weight_streaming.ds_backend import DirectStorageStreamer\n    from cosmos_windows.weight_streaming.safetensors_index import build_index"
       },
       {
-        "source": "vendor/studio/studio/krea2_diffusion.py:1055",
+        "source": "vendor/studio/studio/krea2_diffusion.py:1106",
         "unset": "''",
         "read": "os.environ.get('STUDIO_COSMOS_WINDOWS_PATH', '')",
-        "consumer": "def _load_krea2_component_ds(te, te_path: str, dtype, device: str, expected: set[str], *, label: str):\n    import torch\n    repo = os.environ.get('STUDIO_COSMOS_WINDOWS_PATH', '')\n    if repo not in sys.path:\n        sys.path.insert(0, repo)\n    from cosmos_windows.weight_streaming.ds_backend import DirectStorageStreamer\n    from cosmos_windows.weight_streaming.safetensors_index import build_index"
+        "consumer": "def _load_krea2_component_ds(te, te_path: str, dtype, device: str, expected: set[str], *, label: str, rename=None):\n    import torch\n    repo = os.environ.get('STUDIO_COSMOS_WINDOWS_PATH', '')\n    if repo not in sys.path:\n        sys.path.insert(0, repo)\n    from cosmos_windows.weight_streaming.ds_backend import DirectStorageStreamer\n    from cosmos_windows.weight_streaming.safetensors_index import build_index"
       },
       {
         "source": "vendor/studio/studio/ram_preflight.py:11",
@@ -76742,14 +76742,14 @@
     ],
     "doc": "KREA2_ALLOW_NON_DIRECTSTORAGE: explicit engine setting; inherited values are cleared and the native default is retained.",
     "reads": [
-      "vendor/studio/studio/krea2_diffusion.py:809"
+      "vendor/studio/studio/krea2_diffusion.py:860"
     ],
     "allowed_values": [
       "0"
     ],
     "code_defaults": [
       {
-        "source": "vendor/studio/studio/krea2_diffusion.py:809",
+        "source": "vendor/studio/studio/krea2_diffusion.py:860",
         "unset": "None",
         "read": "_os.environ.get('KREA2_ALLOW_NON_DIRECTSTORAGE')",
         "consumer": "    sd_keys = set(tr.state_dict().keys())\n    streamer = DirectStorageStreamer(_Krea2TBlockIndex(idx), component='', n_gpu_buffers=n_gpu_buffers, device=device, record_compute_done=True)\n    if getattr(streamer, 'mode', None) != 3 and _os.environ.get('KREA2_ALLOW_NON_DIRECTSTORAGE') != '1':\n        try:\n            streamer.close()\n        finally:\n            raise RuntimeError(f\"Krea2 DS streamer mode={getattr(streamer, 'mode', '?')} is not DirectStorage(3) \u00e2\u20ac\u201d R1 requires the optimised NVMe->GPU path. Set KREA2_ALLOW_NON_DIRECTSTORAGE=1 for diagnostics.\")"
@@ -76860,11 +76860,11 @@
     ],
     "doc": "STUDIO_KREA2_DIRECT_MIN_FREE_GB: explicit engine setting; inherited values are cleared and the native default is retained.",
     "reads": [
-      "vendor/studio/studio/krea2_diffusion.py:1203"
+      "vendor/studio/studio/krea2_diffusion.py:1272"
     ],
     "code_defaults": [
       {
-        "source": "vendor/studio/studio/krea2_diffusion.py:1203",
+        "source": "vendor/studio/studio/krea2_diffusion.py:1272",
         "unset": "raw_need",
         "read": "os.environ.get('STUDIO_KREA2_DIRECT_MIN_FREE_GB', raw_need)",
         "consumer": "    raw_need = 4.0\n    try:\n        raw_need = float(os.environ.get('STUDIO_KREA2_DIRECT_MIN_FREE_GB', raw_need))\n    except (TypeError, ValueError):\n        pass\n    _require_free_memory(raw_need)\n    stream_layers = offload in ('model', 'stream', 'streaming', 'stream_layers', 'streaming_lazy')"
@@ -76952,11 +76952,11 @@
     ],
     "doc": "STUDIO_KREA2_MIN_FREE_GB: explicit engine setting; inherited values are cleared and the native default is retained.",
     "reads": [
-      "vendor/studio/studio/krea2_diffusion.py:706"
+      "vendor/studio/studio/krea2_diffusion.py:757"
     ],
     "code_defaults": [
       {
-        "source": "vendor/studio/studio/krea2_diffusion.py:706",
+        "source": "vendor/studio/studio/krea2_diffusion.py:757",
         "unset": "need_gb",
         "read": "os.environ.get('STUDIO_KREA2_MIN_FREE_GB', need_gb)",
         "consumer": "def _require_free_memory(need_gb: float=55.0) -> None:\n    try:\n        need_gb = float(os.environ.get('STUDIO_KREA2_MIN_FREE_GB', need_gb))\n    except (TypeError, ValueError):\n        pass\n    if need_gb <= 0:\n        return"
@@ -76975,11 +76975,11 @@
     ],
     "doc": "STUDIO_KREA2_MPS_COMPILE: explicit engine setting; inherited values are cleared and the native default is retained.",
     "reads": [
-      "vendor/studio/studio/krea2_diffusion.py:1166"
+      "vendor/studio/studio/krea2_diffusion.py:1235"
     ],
     "code_defaults": [
       {
-        "source": "vendor/studio/studio/krea2_diffusion.py:1166",
+        "source": "vendor/studio/studio/krea2_diffusion.py:1235",
         "unset": "'1'",
         "read": "os.environ.get('STUDIO_KREA2_MPS_COMPILE', '1')",
         "consumer": "\ndef _configure_krea2_regional_compile(transformer, device: str) -> bool:\n    enabled = str(os.environ.get('STUDIO_KREA2_MPS_COMPILE', '1')).strip().lower() in {'1', 'true', 'yes', 'on'}\n    if not enabled or str(device).split(':', 1)[0].lower() != 'mps':\n        return False\n    compile_repeated = getattr(transformer, 'compile_repeated_blocks', None)\n    if not callable(compile_repeated):"

@@ -24,6 +24,8 @@ def resolve_checkpoint(model, arch, support):
 
 
 def run(request):
+    import faulthandler
+    faulthandler.enable()
     cfg, kind, args = request['cfg'], request['kind'], request['params']
     # Source builds put the media streaming DLL beside the producer. Resolve
     # it before importing any Studio module that captures STUDIO_WF_DLL.
@@ -43,6 +45,7 @@ def run(request):
             if support.get(key):os.environ[env]=support[key]
         from .media_assets import directory
         os.environ['STUDIO_QWEN3VL_CACHE']=str(directory(cfg['runtime_root'],'qwen3vl4b'))
+        os.environ['STUDIO_QWEN_IMAGE_REPO']=str(directory(cfg['runtime_root'],'qwenimage_vae'))
     if selected_arch=='qwen-image-2.1' and support.get('components_repo'):
         os.environ['STUDIO_QWEN_IMAGE21_BASE']=support['components_repo']
     # Parent sets these BEFORE Python/Studio/torch imports.

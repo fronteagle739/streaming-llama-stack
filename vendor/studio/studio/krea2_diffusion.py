@@ -546,8 +546,59 @@ class _Krea2TransformerStreamer:
         set_module_tensor_to_device(self.model, target, self.device, value=value, dtype=assign_dtype)
 
     def _bind_targets(self, targets: list[str]) -> None:
+        if sys.platform == 'win32' and self.device.split(':', 1)[0] == 'cuda':
+            return self._bind_targets_ds(targets)
         for target in targets:
             self._set_target(target, self._read_target(target))
+
+    def _bind_targets_ds(self, targets: list[str]) -> None:
+        """Load resident globals through the same DirectStorage path as blocks.
+
+        Large checkpoints must not create a torch CPU storage spanning the whole
+        mapped file: Windows storage slicing can fault before a tensor is read.
+        Only each bounded group is fetched, and bound tensors own their storage.
+        """
+        import torch
+        from cosmos_windows.weight_streaming.ds_backend import DirectStorageStreamer
+        from cosmos_windows.weight_streaming.safetensors_index import build_index
+        index = build_index(Path(self.source_path))
+        groups, target_groups, refs, pending, size = {}, {}, [], [], 0
+        for target in targets:
+            key = self.entries[target][0]
+            names = [key] + [k for k in (key + '_scale', key.removesuffix('.weight') + '.comfy_quant')
+                             if key.endswith('.weight') and k in self.keys]
+            bundle = [index.refs[k] for k in names]
+            need = sum(ref.nbytes for ref in bundle)
+            if refs and size + need > 512 << 20:
+                groups[len(groups)] = refs; target_groups[len(target_groups)] = pending
+                refs, pending, size = [], [], 0
+            refs.extend(bundle); pending.append(target); size += need
+        if refs:
+            groups[len(groups)] = refs; target_groups[len(target_groups)] = pending
+        if not groups:
+            return
+        streamer = DirectStorageStreamer(index, component='', layer_groups=groups,
+            n_gpu_buffers=1, host_staging_buffers=1, device=self.device, record_compute_done=True)
+        original = self._sf
+        try:
+            if streamer.mode != 3:
+                raise RuntimeError('Krea2 resident tensors require DirectStorage mode 3')
+            streamer.new_pass()
+            for group, selected in target_groups.items():
+                views = streamer.wait_layer(group)
+                if set(views) != {ref.name for ref in groups[group]}:
+                    raise RuntimeError('Krea2 resident DirectStorage coverage mismatch')
+                class Reader:
+                    def get_tensor(self, name):
+                        return views[name]
+                self._sf = Reader()
+                for target in selected:
+                    self._set_target(target, self._read_target(target).clone())
+                torch.cuda.synchronize(self.device)
+                streamer.release_layer(group)
+        finally:
+            self._sf = original
+            streamer.close()
 
     def _evict_targets(self, targets: list[str]) -> None:
         from accelerate.utils import set_module_tensor_to_device
@@ -1050,7 +1101,7 @@ def _bind_krea2_te_views(te, views, keys: set[str], dtype, device: str):
         del value
     return loaded
 
-def _load_krea2_component_ds(te, te_path: str, dtype, device: str, expected: set[str], *, label: str):
+def _load_krea2_component_ds(te, te_path: str, dtype, device: str, expected: set[str], *, label: str, rename=None):
     import torch
     repo = os.environ.get('STUDIO_COSMOS_WINDOWS_PATH', '')
     if repo not in sys.path:
@@ -1058,6 +1109,13 @@ def _load_krea2_component_ds(te, te_path: str, dtype, device: str, expected: set
     from cosmos_windows.weight_streaming.ds_backend import DirectStorageStreamer
     from cosmos_windows.weight_streaming.safetensors_index import build_index
     index = build_index(Path(te_path))
+    if rename:
+        from dataclasses import replace
+        from cosmos_windows.weight_streaming.safetensors_index import SafetensorsIndex
+        mapping = rename({key: key for key in index.refs})
+        if len(mapping) != len(index.refs):
+            raise RuntimeError(label + ' key conversion lost or duplicated tensors')
+        index = SafetensorsIndex({dst: replace(index.refs[src], name=dst) for dst, src in mapping.items()})
     groups, keys, unexpected = _krea2_te_ds_groups(index, expected)
     selected = {name[len('model.'):] if name.startswith('model.') else name for name in keys if not name.endswith(('.comfy_quant', '.weight_scale'))}
     missing = sorted(expected - selected)
@@ -1136,12 +1194,14 @@ def _load_text_encoder(te_path: str, dtype, *, device: str='cpu'):
 
 def _load_vae(dtype, *, device: str='cpu'):
     from diffusers import AutoencoderKLQwenImage
-    if sys.platform != 'win32' or str(device).split(':', 1)[0].lower() != 'cuda':
-        return AutoencoderKLQwenImage.from_pretrained(QWEN_IMAGE_REPO, subfolder='vae', torch_dtype=dtype).eval()
     from accelerate import init_empty_weights
+    from diffusers.loaders.single_file_utils import convert_wan_vae_to_diffusers
     config = AutoencoderKLQwenImage.load_config(QWEN_IMAGE_REPO, subfolder='vae')
     local = Path(QWEN_IMAGE_REPO)
-    if local.is_dir():
+    selected = Path(krea2_files()['vae'])
+    if selected.is_file():
+        checkpoint = selected
+    elif local.is_dir():
         checkpoint = local / 'vae' / 'diffusion_pytorch_model.safetensors'
     else:
         from huggingface_hub import hf_hub_download
@@ -1151,7 +1211,16 @@ def _load_vae(dtype, *, device: str='cpu'):
     with init_empty_weights():
         vae = AutoencoderKLQwenImage.from_config(config).to(dtype=dtype)
     expected = set(vae.state_dict())
-    loaded = _load_krea2_component_ds(vae, str(checkpoint), dtype, device, expected, label='Qwen-Image VAE')
+    if sys.platform == 'win32' and str(device).split(':', 1)[0].lower() == 'cuda':
+        loaded = _load_krea2_component_ds(vae, str(checkpoint), dtype, device, expected,
+            label='Qwen-Image VAE', rename=convert_wan_vae_to_diffusers)
+    else:
+        from safetensors.torch import load_file
+        state = convert_wan_vae_to_diffusers(load_file(str(checkpoint), device='cpu'))
+        vae.load_state_dict(state, strict=True, assign=True)
+        vae.to(device=device, dtype=dtype)
+        loaded = set(state)
+        del state
     if loaded != expected:
         raise RuntimeError(f'Krea2 VAE load mismatch: missing={sorted(expected - loaded)[:4]}')
     for name, buffer in list(vae.named_buffers()):

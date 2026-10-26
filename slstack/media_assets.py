@@ -28,6 +28,7 @@ def install(runtime, *, check=False):
                     raise ValueError('Preserving a changed media asset for review: '+str(target))
             elif check:missing.append(name+'/'+row['name']);continue
             else:
+                target.parent.mkdir(parents=True,exist_ok=True)
                 url=f'https://huggingface.co/{spec["repository"]}/resolve/{spec["revision"]}/{row["name"]}'
                 temporary=target.with_name(target.name+'.'+uuid.uuid4().hex+'.pending')
                 size=0;digest=hashlib.sha256()

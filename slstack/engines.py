@@ -466,7 +466,7 @@ class Engines:
         request = {'kind': kind, 'cfg': redact_cfg(cfg), 'params': params}
         progress = getattr(self, 'media_progress', None)
         if progress:request['progress_file'] = str(progress.path)
-        proc = OwnedProcess(cfg, [cfg['studio_python'], '-B', '-m', 'slstack.studio_worker'],
+        proc = OwnedProcess(cfg, [cfg['studio_python'], '-X', 'faulthandler', '-B', '-m', 'slstack.studio_worker'],
                             kind, stdin=json.dumps(request) + '\n', gpu=True)
         try:
             failure = None
