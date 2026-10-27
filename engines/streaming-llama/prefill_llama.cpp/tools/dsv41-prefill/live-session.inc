@@ -374,6 +374,7 @@ void run_live_session(std::unique_ptr<llama_dsv41_sweep>&sweep,
     require(sweep&&sweep->ready()&&options.fixed&&options.stateful_chunks,
         "Persistent session requires a completed fixed mode1/3 stateful owner");
     require(capacity&&capacity<=llama_dsv41_prefill::max_sweep_tokens&&options.fixed->tokens==capacity,"Session chunk reservation differs from fixed owner");
+    const auto*model_sha=weights.verified_sha256.c_str();
     session_pipe io(timeout_ms,output);dsv41_live::sequence_guard guard(session,model_sha,owner_epoch);
     auto send=[&](json value){if(owner_epoch)value["owner_epoch"]=owner_epoch;io.send(value);};
     const uint64_t session_route=std::stoull(session.substr(0,16),nullptr,16),model_route=std::stoull(std::string(model_sha).substr(0,16),nullptr,16);
@@ -447,7 +448,7 @@ void run_live_session(std::unique_ptr<llama_dsv41_sweep>&sweep,
             std::vector<int32_t>tokens;tokens.reserve(ids.size());for(const auto&v:ids){const auto n=dsv41_live::u64(v);require(n<129280,"Resume token out of vocabulary");tokens.push_back(int32_t(n));}
             std::string error;success(sweep->resume_device(error),error);const double resume_ms=ms(started);
             // The new base follows this command on the same pipe: contract line + payload.
-            combo_base_input incoming(io,session,command.at("native_base_contract_sha256").get<std::string>(),owner_epoch,uint32_t(options.context));
+            combo_base_input incoming(io,session,command.at("native_base_contract_sha256").get<std::string>(),owner_epoch,uint32_t(options.context),weights.verified_sha256);
             require(tokens.size()<uint64_t(options.context)-incoming.base.frontier.position,"Resume prefill exceeds context capacity");
             const double base_ms=ms(started)-resume_ms;
             auto previous=std::move(sweep);sweep.reset(new llama_dsv41_sweep);auto next_options=options;auto next_weights=weights;

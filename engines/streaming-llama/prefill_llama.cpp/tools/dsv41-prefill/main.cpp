@@ -60,8 +60,7 @@ namespace {
 using json=nlohmann::json;
 using clock_type=std::chrono::steady_clock;
 constexpr uint64_t reserve=30ull*1024*1024*1024,receipt_limit=64*1024,chunk=1024*1024;
-constexpr const char*model_name="DeepSeek-V4.1-Flash-1017-Q4-v41.gguf";
-constexpr const char*model_sha="2cc6bc254f22a0238020e61e931c0cac865218aada1eed9c0036d9f4031c6e5f";
+
 constexpr uint64_t epoch_ticks=116444736000000000ull;
 constexpr uint64_t gib=1024ull*1024*1024,cli_host_bytes=64*1024*1024;
 std::atomic<bool>interrupted{false},memory_abort{false};
@@ -459,7 +458,11 @@ int wmain(int argc,wchar_t**argv){
         report["producer_binary_sha256"]=built.sha;report["caller_expected_build_sha256"]=args.at("--build-sha");
         report["build_binding_limit"]="Executable SHA only; sharedDLL contents are not independently bound by this receipt";
         const auto copy=read_small(path("--copy-receipt"),chunk);const auto parsed=json::parse(copy.bytes.begin(),copy.bytes.end());
-        const auto&entry=parsed.at("receipts").at(model_name);require(entry.at("sha256").is_string()&&entry.at("sha256").get<std::string>()==model_sha,"No completed original-1017 SHA receipt for main weights");
+        const auto model_name=path("--model").filename().u8string();
+        const auto&entry=parsed.at("receipts").at(model_name);
+        const auto model_digest=entry.at("sha256").get<std::string>();
+        require(hex_sha(model_digest),"No completed lowercase SHA256 receipt for selected weights");
+        const auto*model_sha=model_digest.c_str();
         const auto&id=entry.at("final_identity");const auto model_bytes=exact_u64(id.at("size")),model_volume=exact_u64(id.at("dev"));
         const auto inode=exact_u64(id.at("ino")),mtime_ns=exact_u64(id.at("mtime_ns"));
         require(mtime_ns/100<=UINT64_MAX-epoch_ticks,"Receipt FILETIME conversion overflow");
@@ -532,7 +535,7 @@ int wmain(int argc,wchar_t**argv){
         if(args.count("--native-base-contract-sha256")){
             require(live&&!capture_dspark,"Native base input requires explicit live target-only mode1");
             require(number("--native-base-owner-epoch")==session_owner_epoch,"Native base owner epoch differs from the session");
-            restored.reset(new combo_base_input(session_timeout,session_output.get(),session,args.at("--native-base-contract-sha256"),number("--native-base-owner-epoch"),uint32_t(context)));
+            restored.reset(new combo_base_input(session_timeout,session_output.get(),session,args.at("--native-base-contract-sha256"),number("--native-base-owner-epoch"),uint32_t(context),model_digest));
             report["native_base"]={{"position",restored->base.frontier.position},{"contract_sha256",args.at("--native-base-contract-sha256")},{"owner_epoch",number("--native-base-owner-epoch")},{"storage","parent-admitted RAM and bounded private pipe"}};
         }
         const uint32_t base_tokens=restored?restored->base.frontier.position:0;

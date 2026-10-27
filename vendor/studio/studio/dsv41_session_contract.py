@@ -104,10 +104,11 @@ def checkpoint(row, mode=3):
         hex_value(value, 64)
     return row
 
-def command(row, session, sequence, mode=3, prefill_max=MAX_PREFILL):
+def command(row, session, sequence, mode=3, prefill_max=MAX_PREFILL, model_sha256=None):
     require(type(row) is dict, 'Session command object required')
     session_identity(session)
-    require(row.get('session') == session and row.get('model_sha256') == MODEL_SHA256, 'Session/model mismatch')
+    expected = MODEL_SHA256 if model_sha256 is None else hex_value(model_sha256,64)
+    require(row.get('session') == session and row.get('model_sha256') == expected, 'Session/model mismatch')
     require(integer(row.get('sequence'), 1, (1 << 64) - 1) == sequence, 'Replayed or skipped session sequence')
     op = row.get('operation')
     common = ['session', 'model_sha256', 'sequence', 'operation']

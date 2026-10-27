@@ -1,0 +1,17 @@
+{
+  "commit": "ee7e8405232c8971000cc7ba2b945b00bf6d20d3",
+  "url": "https://github.com/antirez/ds4",
+  "files": {
+    "deepseek41_quantize.py": "7d86b54bfd2d73d69c52a89c2276df82c7b450f2ce1de91664b964b64c1b040d",
+    "deepseek41_metadata.py": "39300bbd504165b97de017edd72563377f50b8a5511ca7478252a86f31a0009b",
+    "deepseek41_dspark.py": "74303be69e83c68cb9fc9e2114a21f5dfa59cf6db9f0851c3358edefb75508f5",
+    "deepseek41_vision.py": "abf103d476aab41f1373382d587080d8f18121ffbdfe94a0957f054aa8e9eaf0",
+    "glm53_quantize.py": "330e465a465246f76b653a4844cfe1f182a1767db2fd283208d19a8ca1e6e9a6",
+    "glm53_manifest.py": "7f52207c309c50b71c7c34bbe7489efe388bc8e4de686135386d622c9d5218eb",
+    "deepseek4_vision.py": "84f9f1f6184e58aec7660a76311b157e05a0b9a7a9f2be9590f0280468209cc6",
+    "merge_deepseek41_shards.py": "c86cd4213afaf48cc2b7f4d26528cce221bacd812c5a3e4e05d97abf886756d2",
+    "Makefile": "6b5c3a71b218eb5eaff0fd99138bb143dca223f40183d56e1da1735ab2ee755f",
+    "quants.c": "aea6df4c6a6d8fc1c41ddfccd49531fb1f3d2bd347fed7b233f4174101183abf",
+    "quants.h": "4dfcb9889c95ba3c8f4946d92a7d75a91620a6905e30a66f65bad2c5b3c1d2e6"
+  }
+}

@@ -1,5 +1,6 @@
 #include "llama-dsv41-layer-log.h"
 #include "llama-dsv41-weights.h"
+#include "llama-dsv41-quant-types.h"
 #include <tuple>
 #include "llama-dsv41-engram-prefetch.h"
 #include "llama-dsv41-engram-early-decision.h"
@@ -51,7 +52,7 @@ bool source(uint32_t l){return l==2||l==8||l==14||l==20;}
 constexpr uint64_t mib=1024ull*1024;
 constexpr uint64_t metadata_allowance=32*mib;
 constexpr uint64_t factory_allowance=512*mib; // each system/upload tier, not a total factory cap
-constexpr const char *original_sha="2cc6bc254f22a0238020e61e931c0cac865218aada1eed9c0036d9f4031c6e5f";
+
 }
 
 struct llama_dsv41_weight_provider::implementation {
@@ -73,6 +74,7 @@ struct llama_dsv41_weight_provider::implementation {
     // LLAMADECODE B2: decode expert cache. Bank 0 = [embedding | shared experts |
     // gate pool | up pool | down pool]; a slot holds one (layer, expert) triple.
     ggml_context_ptr pool_ctx;std::array<ggml_tensor*,3>pool{};std::array<uint64_t,3>pool_offset{},pool_stride{};
+    std::array<uint64_t,3>pool_max_stride{};
     uint32_t pool_slots=0;
     std::vector<int32_t>slot_key;std::unordered_map<int32_t,int32_t>key_slot;
     std::list<int32_t>lru;std::vector<std::list<int32_t>::iterator>lru_pos;
@@ -86,12 +88,12 @@ struct llama_dsv41_weight_provider::implementation {
     std::vector<int32_t>l2_key;std::unordered_map<int32_t,int32_t>l2_of;
     std::list<int32_t>l2_lru;std::vector<std::list<int32_t>::iterator>l2_pos;
     uint64_t l2_hits=0,l2_stored=0;
-    void copy_slot(char*const dst[3],uint64_t dst_slot,const char*const src[3],uint64_t src_slot,void*stream){
+    void copy_slot(char*const dst[3],uint64_t dst_slot,const char*const src[3],uint64_t src_slot,void*stream,bool to_l2){
 #ifdef GGML_USE_CUDA
-        for(uint32_t k=0;k<3;++k)require(cudaMemcpyAsync(dst[k]+dst_slot*pool_stride[k],src[k]+src_slot*pool_stride[k],pool_stride[k],
+        for(uint32_t k=0;k<3;++k)require(cudaMemcpyAsync(dst[k]+dst_slot*(to_l2?pool_max_stride[k]:pool_stride[k]),src[k]+src_slot*(to_l2?pool_stride[k]:pool_max_stride[k]),pool_stride[k],
             cudaMemcpyDeviceToDevice,static_cast<cudaStream_t>(stream))==cudaSuccess,"Expert L2 slot copy failed");
 #else
-        (void)dst;(void)dst_slot;(void)src;(void)src_slot;(void)stream;throw std::runtime_error("Expert L2 requires CUDA");
+        (void)dst;(void)dst_slot;(void)src;(void)src_slot;(void)stream;(void)to_l2;throw std::runtime_error("Expert L2 requires CUDA");
 #endif
     }
     void release_l2(){
@@ -105,6 +107,7 @@ struct llama_dsv41_weight_provider::implementation {
     // so a miss never evicts an expert this same request needs. Only misses
     // are fetched (explicit DirectStorage extents into bank 0).
     std::unordered_map<int32_t,int32_t> assign_expert_slots(uint32_t layer,const int32_t*ids,size_t count,void*stream){
+        select_pool(layer);
         std::vector<int32_t>unique;for(size_t i=0;i<count;++i){const auto id=ids[i];require(id>=0&&id<384,"Routed expert id out of range");if(std::find(unique.begin(),unique.end(),id)==unique.end())unique.push_back(id);}
         require(unique.size()<=pool_slots,"Routed experts exceed the cache pool");
         std::vector<int32_t>missing;std::unordered_map<int32_t,int32_t>slot_of;
@@ -124,11 +127,11 @@ struct llama_dsv41_weight_provider::implementation {
                     const int32_t t=l2_lru.back();require(t!=from_l2,"Expert L2 victim slot collides with its source");
                     l2_lru.splice(l2_lru.begin(),l2_lru,l2_pos[size_t(t)]);
                     if(l2_key[size_t(t)]>=0)l2_of.erase(l2_key[size_t(t)]);
-                    copy_slot(l2_base.data(),uint64_t(t),l1,uint64_t(slot),stream);copied=true;l2_key[size_t(t)]=victim;l2_of[victim]=t;++l2_stored;
+                    copy_slot(l2_base.data(),uint64_t(t),l1,uint64_t(slot),stream,true);copied=true;l2_key[size_t(t)]=victim;l2_of[victim]=t;++l2_stored;
                 }}
             slot_key[size_t(slot)]=key;key_slot[key]=slot;slot_of[e]=slot;
             if(from_l2>=0){
-                copy_slot(l1,uint64_t(slot),l2_base.data(),uint64_t(from_l2),stream);copied=true;
+                copy_slot(l1,uint64_t(slot),l2_base.data(),uint64_t(from_l2),stream,false);copied=true;
                 l2_of.erase(key);l2_key[size_t(from_l2)]=-1;l2_lru.splice(l2_lru.end(),l2_lru,l2_pos[size_t(from_l2)]);++l2_hits;
                 continue;
             }
@@ -152,6 +155,17 @@ struct llama_dsv41_weight_provider::implementation {
             cache_bytes+=bytes;cache_ms+=fetch_ms;fetched_total+=bytes;fetch_ms_total+=fetch_ms;
         }
         return slot_of;
+    }
+    void select_pool(uint32_t layer){
+        bool changed=false;for(uint32_t k=0;k<3;++k)changed=changed||pool[k]->type!=routed[layer*3+k]->type;
+        if(!changed)return;
+        require(options.backend,"Expert format switch requires backend");ggml_backend_synchronize(options.backend);
+        reset_cache();l2_of.clear();std::fill(l2_key.begin(),l2_key.end(),-1);
+        for(uint32_t k=0;k<3;++k){
+            auto*t=pool[k];auto*source=routed[layer*3+k];t->type=source->type;
+            t->nb[0]=source->nb[0];t->nb[1]=source->nb[1];t->nb[2]=source->nb[2];t->nb[3]=source->nb[2]*pool_slots;
+            pool_stride[k]=source->nb[2];
+        }
     }
     void reset_cache(){slot_key.assign(pool_slots,-1);key_slot.clear();lru.clear();lru_pos.assign(pool_slots,lru.end());
         for(uint32_t s=0;s<pool_slots;++s){lru.push_back(int32_t(s));lru_pos[s]=std::prev(lru.end());}}
@@ -338,7 +352,10 @@ struct llama_dsv41_weight_provider::implementation {
         std::string why;require(engram.validate(why),"Invalid original Engram hashing layout");
     }
     ggml_tensor *tensor(const std::string&name,ggml_type type,std::initializer_list<int64_t>shape){
-        auto*t=ggml_get_tensor(tensors.get(),name.c_str());require(t&&t->type==type&&!t->data&&!t->buffer,"Missing or converted native weight");
+        auto*t=ggml_get_tensor(tensors.get(),name.c_str());
+        if(!t)throw std::runtime_error("Missing DSV4.1 tensor "+name);
+        llama_dsv41_quant::check(name,t->type,type);
+        require(!t->data&&!t->buffer,"Native weight already allocated");
         size_t d=0;for(auto n:shape)require(t->ne[d++]==n,"Native weight shape differs");for(;d<4;++d)require(t->ne[d]==1,"Unexpected native tensor dimension");return t;
     }
     void add_tensor(uint32_t stage_id,ggml_tensor*t){
@@ -366,6 +383,8 @@ struct llama_dsv41_weight_provider::implementation {
             f.router=get("ffn_gate_inp.weight",GGML_TYPE_F32,{5120,384});f.text_bias=get("exp_probs_b.bias",GGML_TYPE_F32,{384});f.image_bias=get("exp_probs_b_vl.bias",GGML_TYPE_F32,{384});
             f.gate=get("ffn_gate_exps.weight",GGML_TYPE_Q4_K,{5120,2304,384});f.up=get("ffn_up_exps.weight",GGML_TYPE_Q4_K,{5120,2304,384});f.down=get("ffn_down_exps.weight",GGML_TYPE_Q4_K,{2304,5120,384});
             f.shared_gate=get("ffn_gate_shexp.weight",GGML_TYPE_Q8_0,{5120,2304});f.shared_up=get("ffn_up_shexp.weight",GGML_TYPE_Q8_0,{5120,2304});f.shared_down=get("ffn_down_shexp.weight",GGML_TYPE_Q8_0,{2304,5120});
+            if(!llama_dsv41_quant::triplet(f.gate->type,f.up->type,f.down->type))
+                throw std::runtime_error("Unsupported DSV4.1 tensor triplet "+prefix+"ffn_gate_exps.weight="+ggml_type_name(f.gate->type)+", ffn_up_exps.weight="+ggml_type_name(f.up->type)+", ffn_down_exps.weight="+ggml_type_name(f.down->type));
             routed[l*3]=f.gate;routed[l*3+1]=f.up;routed[l*3+2]=f.down;shared[l*3]=f.shared_gate;shared[l*3+1]=f.shared_up;shared[l*3+2]=f.shared_down;
             if(l==1||l==14){w.engram_wkv=get("engram_kv.weight",GGML_TYPE_F16,{6144,25600});w.engram_q_norm=get("engram_q_norm.weight",GGML_TYPE_F32,{5120,4});w.engram_k_norm=get("engram_k_norm.weight",GGML_TYPE_F32,{5120,4});
                 const size_t e=l==1?0:1;auto*t=tensor(prefix+"engram_embd.weight",GGML_TYPE_I8,{264,engram.rows[e]});
@@ -390,7 +409,14 @@ struct llama_dsv41_weight_provider::implementation {
             }
             decode_stages[81].bytes=bank1;for(const auto&e:stages[41].entries)place(decode_stages[81],e,buft);bank1=decode_stages[81].bytes;
             resident_dense_bytes=bank1;decode_bank0_resident=bank0;
-            for(const auto&s:decode_stages)require(s.bytes&&s.bytes<=planned.maximum_stage_bytes,"Decode stage exceeds the admitted prefill bank size");
+            // Low-bit routed layers can be smaller than the complete resident
+            // dense bank. Admit both layouts, including twelve expert slots.
+            std::array<uint64_t,3>max_stride{};
+            for(uint32_t l=0;l<40;++l)for(uint32_t k=0;k<3;++k)
+                max_stride[k]=std::max(max_stride[k],uint64_t(routed[l*3+k]->nb[2]));
+            planned.maximum_stage_bytes=std::max(planned.maximum_stage_bytes,std::max(bank1,
+                add(align(bank0,ggml_backend_buft_get_alignment(buft)),12*(max_stride[0]+max_stride[1]+max_stride[2]))));
+            for(const auto&s:decode_stages)require(s.bytes&&s.bytes<=planned.maximum_stage_bytes,"Decode stage exceeds admitted bank size");
         }
         const auto policy=llama_wf_bounded::make(planned.maximum_stage_bytes,options.buffers,
             options.staging_limit_bytes?options.staging_limit_bytes:llama_wf_bounded::baseline_staging_bytes);
@@ -398,14 +424,15 @@ struct llama_dsv41_weight_provider::implementation {
         {   // LLAMADECODE B2: expert-cache pool geometry (one slot = gate+up+down).
             const auto buft=ggml_backend_get_default_buffer_type(options.backend);const uint64_t a=ggml_backend_buft_get_alignment(buft);
             for(uint32_t l=0;l<40;++l)for(uint32_t k=0;k<3;++k){const auto*t=routed[l*3+k],*t0=routed[k];
-                require(t->type==t0->type&&t->ne[0]==t0->ne[0]&&t->ne[1]==t0->ne[1]&&t->ne[2]==384&&t->nb[2]==t0->nb[2]&&ggml_nbytes(t)==t->nb[2]*384,"Routed expert tensors differ in geometry across layers");}
+                require(t->ne[0]==t0->ne[0]&&t->ne[1]==t0->ne[1]&&t->ne[2]==384&&ggml_nbytes(t)==t->nb[2]*384,"Routed expert tensors differ in geometry across layers");
+                pool_max_stride[k]=std::max(pool_max_stride[k],uint64_t(t->nb[2]));}
             for(uint32_t k=0;k<3;++k)pool_stride[k]=routed[k]->nb[2];
-            const uint64_t slot_bytes=pool_stride[0]+pool_stride[1]+pool_stride[2];
+            const uint64_t slot_bytes=pool_max_stride[0]+pool_max_stride[1]+pool_max_stride[2];
             const uint64_t base=align(decode_bank0_resident,a),room=planned.compute_buffer_bytes>base?planned.compute_buffer_bytes-base:0;
             pool_slots=uint32_t(std::min<uint64_t>(room/slot_bytes,40ull*384));
             require(pool_slots>=12,"Decode expert-cache pool has fewer than two layers of slots");
-            pool_offset[0]=base;pool_offset[1]=add(base,uint64_t(pool_slots)*pool_stride[0]);pool_offset[2]=add(pool_offset[1],uint64_t(pool_slots)*pool_stride[1]);
-            require(add(pool_offset[2],uint64_t(pool_slots)*pool_stride[2])<=planned.compute_buffer_bytes,"Decode expert-cache pool exceeds bank 0");
+            pool_offset[0]=base;pool_offset[1]=add(base,uint64_t(pool_slots)*pool_max_stride[0]);pool_offset[2]=add(pool_offset[1],uint64_t(pool_slots)*pool_max_stride[1]);
+            require(add(pool_offset[2],uint64_t(pool_slots)*pool_max_stride[2])<=planned.compute_buffer_bytes,"Decode expert-cache pool exceeds bank 0");
             ggml_context*raw=ggml_init({4*ggml_tensor_overhead(),nullptr,true});require(raw,"Expert pool metadata allocation failed");pool_ctx.reset(raw);
             const char*names[3]={"dsv41_expert_pool_gate","dsv41_expert_pool_up","dsv41_expert_pool_down"};
             for(uint32_t k=0;k<3;++k){pool[k]=ggml_new_tensor_3d(raw,routed[k]->type,routed[k]->ne[0],routed[k]->ne[1],pool_slots);ggml_set_name(pool[k],names[k]);
@@ -509,7 +536,7 @@ bool llama_dsv41_weight_provider::inspect(const config&options,std::string&error
         "Direct compute requires two typed async banks without a ring");
     require(!std::getenv("GGML_CUDA_ENABLE_UNIFIED_MEMORY"),"Unified CUDA memory is outside strict physical weight admission (including env value zero)");
     require(ggml_backend_is_cuda(options.backend),"V4.1 physical provider requires an actual CUDA backend");
-    require(options.verified_sha256==original_sha&&options.verified_file_bytes==518596067328ull,"Original 1017 SHA receipt required");
+    require(options.verified_sha256.size()==64&&options.verified_sha256.find_first_not_of("0123456789abcdef")==std::string::npos&&options.verified_file_bytes>0,"Completed file SHA256/identity receipt required");
     const char*device=ggml_backend_dev_description(ggml_backend_get_device(options.backend));
     require(device&&*device,"V4.1 streaming producer requires the explicitly admitted CUDA backend");
     p->options=options;p->path=std::filesystem::u8path(options.model_path);
@@ -599,7 +626,7 @@ void llama_dsv41_weight_provider::implementation::create_pipeline(){
         p->reset_cache();
         std::fprintf(stderr,"LLAMADECODE_DECODE_LAYOUT stages=82 all_resident=1 bank0_resident_bytes=%llu bank1_resident_bytes=%llu expert_cache_slots=%u slot_bytes=%llu pool_bytes=%llu\n",
             (unsigned long long)p->decode_bank0_resident,(unsigned long long)p->resident_dense_bytes,p->pool_slots,
-            (unsigned long long)(p->pool_stride[0]+p->pool_stride[1]+p->pool_stride[2]),(unsigned long long)(uint64_t(p->pool_slots)*(p->pool_stride[0]+p->pool_stride[1]+p->pool_stride[2])));
+            (unsigned long long)(p->pool_max_stride[0]+p->pool_max_stride[1]+p->pool_max_stride[2]),(unsigned long long)(uint64_t(p->pool_slots)*(p->pool_max_stride[0]+p->pool_max_stride[1]+p->pool_max_stride[2])));
     }else{
         for(auto*t:p->pool)if(t){t->data=nullptr;t->buffer=nullptr;}
         // Owner gate: prefill must stream through BOTH banks again after decode repurposed them
@@ -891,7 +918,7 @@ bool llama_dsv41_weight_provider::acquire_layer_dense(uint32_t layer,llama_dsv41
     require(base==wf_get_gpu_buf_ptr(p->fetcher,int(id%2)),"Shared-expert bank pointer differs from its DirectStorage bank");
     for(auto&e:p->decode_stages[id].entries){require(!e.t->buffer&&!e.t->data,"Shared-expert tensor already bound");
         require(ggml_backend_tensor_alloc(bank,e.t,base+e.gpu_offset)==GGML_STATUS_SUCCESS,"Cannot pre-bind shared-expert tensor");}
-    p->experts_prebound=true;out=p->layers[layer];
+    p->select_pool(layer);p->experts_prebound=true;out=p->layers[layer];
     out.ffn.gate=p->pool[0];out.ffn.up=p->pool[1];out.ffn.down=p->pool[2];
 },error);}
 bool llama_dsv41_weight_provider::acquire_layer_experts(uint32_t layer,const std::vector<int32_t>&ids,std::vector<int32_t>&slots,std::string&error){slots.clear();return p->guard([&]{
@@ -954,17 +981,17 @@ bool llama_dsv41_weight_provider::decode_residency(uint32_t layer,uint8_t*tier,u
     for(const auto key:p->l2_key)if(key>=0&&uint32_t(key)/384==layer)tier[key%384]=1;
     return true;
 }
-uint64_t llama_dsv41_weight_provider::decode_cache_slot_bytes()const{return p->pool_stride[0]+p->pool_stride[1]+p->pool_stride[2];}
+uint64_t llama_dsv41_weight_provider::decode_cache_slot_bytes()const{return p->pool_max_stride[0]+p->pool_max_stride[1]+p->pool_max_stride[2];}
 bool llama_dsv41_weight_provider::grow_decode_cache(uint64_t bytes,uint32_t*slots,std::string&error){return p->guard([&]{
     require(slots&&p->decode_layout&&p->pool[0]&&p->pool[0]->data&&!p->l2_buffer&&!p->leased,"Expert L2 requires an idle decode-layout provider without an L2");
-    const uint64_t slot_bytes=p->pool_stride[0]+p->pool_stride[1]+p->pool_stride[2];
+    const uint64_t slot_bytes=p->pool_max_stride[0]+p->pool_max_stride[1]+p->pool_max_stride[2];
     const uint32_t n=uint32_t(std::min<uint64_t>(bytes/slot_bytes,40ull*384-p->pool_slots));*slots=0;
     if(n<2){std::fprintf(stderr,"LLAMADECODE_L2 slots=0 offered_bytes=%llu\n",(unsigned long long)bytes);return;}
     const auto buft=ggml_backend_get_default_buffer_type(p->options.backend);
     auto*buffer=ggml_backend_buft_alloc_buffer(buft,size_t(uint64_t(n)*slot_bytes));
     require(buffer,"Expert L2 VRAM allocation failed");p->l2_buffer.reset(buffer);
     auto*base=static_cast<char*>(ggml_backend_buffer_get_base(buffer));
-    p->l2_base={base,base+uint64_t(n)*p->pool_stride[0],base+uint64_t(n)*(p->pool_stride[0]+p->pool_stride[1])};
+    p->l2_base={base,base+uint64_t(n)*p->pool_max_stride[0],base+uint64_t(n)*(p->pool_max_stride[0]+p->pool_max_stride[1])};
     p->l2_slots=n;p->l2_key.assign(n,-1);p->l2_of.clear();p->l2_lru.clear();p->l2_pos.assign(n,p->l2_lru.end());
     for(uint32_t s=0;s<n;++s){p->l2_lru.push_back(int32_t(s));p->l2_pos[s]=std::prev(p->l2_lru.end());}
     *slots=n;

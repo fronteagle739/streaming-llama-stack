@@ -34,7 +34,7 @@ class Abort(unittest.TestCase):
 
     def test_producer_close_command_allowed(self):
         p = ComboProducer.__new__(ComboProducer)
-        p.session = 'a' * 32; p.process = mock.MagicMock(sequence=3)
+        p.session = 'a' * 32; p.model_sha256 = 'b' * 64; p.process = mock.MagicMock(sequence=3)
         with tempfile.TemporaryDirectory() as t:
             f = Path(t) / 'run.abort'; f.write_text('{}')
             with mock.patch.dict(os.environ, {'DS4COMBO_ABORT_FILE': str(f)}), \

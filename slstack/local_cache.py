@@ -72,10 +72,10 @@ class Cache:
 
     def identity(self):
         if self._identity is None:
-            from .native_broker import model_receipt, vendor
+            from .native_broker import model_receipt, model_digest, vendor
             from . import ds4_render
             model_receipt(self.cfg);vendor()
-            from studio.dsv41_session_contract import MODEL_SHA256
+            MODEL_SHA256 = model_digest(self.cfg)
             def digest(text):return hashlib.sha256(text.encode()).hexdigest()
             # The receipt binds all GGUF bytes, including tokenizer and RoPE.
             # Distinct domains prevent treating these as an exact-remote identity.

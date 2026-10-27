@@ -16,7 +16,7 @@ enum class kind:uint32_t { existing=0,native_half_q4k_v1=1,q8_1_activation_round
  ,native_half_q4k_perf_v1=2
 #endif
  };
-struct policy { kind profile=kind::existing;bool dense_inputs_f16=false,index_bf16=false,token_tile_attention=false,expert_f16_cublas=false;uint64_t admitted_pool_bytes=0,admitted_code_runtime_bytes=0;bool sorted_expert_routing=false,reuse_expert_routing_map=false,hc_bf16_epilogue=false,expert_mxfp4=false,dense_activation_q8_1=false,index_key_windows=false,attention_kv_f16_table=false; };
+struct policy { bool generic_weights=false; kind profile=kind::existing;bool dense_inputs_f16=false,index_bf16=false,token_tile_attention=false,expert_f16_cublas=false;uint64_t admitted_pool_bytes=0,admitted_code_runtime_bytes=0;bool sorted_expert_routing=false,reuse_expert_routing_map=false,hc_bf16_epilogue=false,expert_mxfp4=false,dense_activation_q8_1=false,index_key_windows=false,attention_kv_f16_table=false; };
 inline uint64_t add(uint64_t a,uint64_t b){if(b>std::numeric_limits<uint64_t>::max()-a)throw std::runtime_error("native-half resource sum overflow");return a+b;}
 inline bool performance(const policy &p){
 #if defined(DSV41_NATIVE_HALF_PERF_TEST) && DSV41_NATIVE_HALF_PERF_TEST == 1
@@ -45,7 +45,8 @@ inline kind parse(const char * name){
  if(name&&std::strcmp(name,"native_half_q4k_v1")==0)return kind::native_half_q4k_v1;
  throw std::runtime_error("unknown explicit DS4.1 expert profile name");
 }
-inline bool natural_half(const policy &p){return native(p)&&!activation_rounding_q8_1(p)&&!p.expert_f16_cublas;}
+inline bool native_attention(const policy &p){return native(p)&&!activation_rounding_q8_1(p)&&!p.expert_f16_cublas;}
+inline bool natural_half(const policy &p){return native(p)&&!activation_rounding_q8_1(p)&&!p.expert_f16_cublas&&!p.generic_weights;}
 inline void validate(const policy & p,uint32_t tokens,const char * boundary_capture_flag){
  // Original-Q8 MMQ products and remaining F16 products are disjoint after the
  // native graph rewrite. Their explicit activation toggles may be combined.

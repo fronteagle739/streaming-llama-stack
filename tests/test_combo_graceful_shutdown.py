@@ -39,6 +39,7 @@ def producer(tmp, code, diagnostic, *, graceful=True, busy=False):
     p.cfg = dict(producer_graceful_shutdown=graceful, producer_graceful_shutdown_seconds=1)
     p.shutdown_path, p.shutdown_seconds, p.shutdown_detail, p._exit_code = 'terminate', 0.0, None, None
     p.session = 'a' * 32
+    p.model_sha256 = 'b' * 64
     job = Job(code)
     lock = threading.Lock()
     if busy: lock.acquire()

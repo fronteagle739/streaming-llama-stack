@@ -162,7 +162,7 @@ class ProcessTest(unittest.TestCase):
             context=262144,gpu_uuid='TEST',min_available_gib=1,host_budget_gib=8,request_timeout_s=10,lease_minutes=1)
         for floor in (None,0,6.5):
             chosen=cfg if floor is None else dict(cfg,runtime_min_free_gib=floor)
-            with patch('studio.dsv41_session_process.Producer',Process),patch('slstack.combo_producer.environment',return_value={}),patch('slstack.combo_producer.model_receipt',return_value=Path(sys.executable)):
+            with patch('studio.dsv41_session_process.Producer',Process),patch('slstack.combo_producer.environment',return_value={}),patch('slstack.combo_producer.model_receipt',return_value=Path(sys.executable)),patch('slstack.combo_producer.model_digest',return_value=MODEL_SHA256):
                 p=ComboProducer(chosen,'1'*32,42,[1],lambda:False,runner=Files())
             p.leases.close()
             argv,kwargs=seen[-1];expected=4.0 if floor is None else floor

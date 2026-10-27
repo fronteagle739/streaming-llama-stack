@@ -9,7 +9,7 @@ from pathlib import Path
 import struct
 import sys
 from .config import ROOT, path
-from .native_broker import model_receipt, vendor
+from .native_broker import model_receipt, model_digest, vendor
 from .journal import sha256
 
 
@@ -27,7 +27,7 @@ def _fields_digest(fields,names):
 def identity(cfg):
     receipt=model_receipt(cfg)
     vendor()
-    from studio.dsv41_session_contract import MODEL_SHA256
+    MODEL_SHA256 = model_digest(cfg, receipt)
     location=str(ROOT/'vendor'/'engines')
     if location not in sys.path:sys.path.insert(0,location)
     from gguf import GGUFReader

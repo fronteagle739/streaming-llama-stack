@@ -842,12 +842,18 @@ bool llama_dsv41_tile_executor::run(const request&in,const llama_dsv41_layer_gra
     return run(in,w,out,error,{});
 }
 bool llama_dsv41_tile_executor::run(const request&in,const llama_dsv41_layer_graph::weights&w,
-        result&out,std::string&error,const llama_dsv41_expert_profile::policy & expert){
+        result&out,std::string&error,const llama_dsv41_expert_profile::policy & requested_expert){
     std::unique_lock<std::mutex>lock(cache.execution_mutex,std::try_to_lock);
     out={};error.clear();
     if(!lock.owns_lock()){error="V4.1 tile executor is already computing";return false;}
     if(cache.execution_poisoned){error="V4.1 tile cache requires clear after an incomplete computation";return false;}
     try{
+        auto expert=requested_expert;
+        expert.generic_weights=w.ffn.gate->type!=GGML_TYPE_Q4_K||w.ffn.up->type!=GGML_TYPE_Q4_K||w.ffn.down->type!=GGML_TYPE_Q4_K;
+        if(w.attention.q_a->type!=GGML_TYPE_Q8_0||w.attention.q_b->type!=GGML_TYPE_Q8_0||w.attention.kv->type!=GGML_TYPE_Q8_0||
+           w.attention.out_a->type!=GGML_TYPE_Q8_0||w.attention.out_b->type!=GGML_TYPE_Q8_0||
+           w.ffn.shared_gate->type!=GGML_TYPE_Q8_0||w.ffn.shared_up->type!=GGML_TYPE_Q8_0||w.ffn.shared_down->type!=GGML_TYPE_Q8_0)
+            expert.dense_inputs_f16=false;
         collect_layer=in.layer;collect_rows=in.count;
         const auto prepare_started=clock_type::now();
         const bool merge_rows=merge_attention_selected_rows&&!in.yoco_raw_begin;
@@ -876,7 +882,7 @@ bool llama_dsv41_tile_executor::run(const request&in,const llama_dsv41_layer_gra
         require(!in.single_attention_append||(pair_ffn&&in.position_offset%4096&&in.start%2048==0&&in.count<=2048&&admitted_tile_tokens>=4096&&workspace&&!workspace->cache_layouts),
             "Unaligned paired continuation requires explicit bounded single-attention tiles");
         require(!pair_ffn||absolute_start%4096==0||in.single_attention_append||in.yoco_raw_begin,"Paired FFN requires original aligned absolute attention tiles");
-        const bool native_pair=pair_ffn&&llama_dsv41_expert_profile::natural_half(expert);
+        const bool native_pair=pair_ffn&&llama_dsv41_expert_profile::native_attention(expert);
         const uint32_t attention_rows=native_pair?2048u:4096u;
         require(!pair_ffn||(native_pair?(admitted_tile_tokens==4096&&in.count<=4096):
             (llama_dsv41_expert_profile::activation_rounding_q8_1(expert)&&!expert.expert_f16_cublas&&in.count<=16384)),"Paired FFN requires bounded native4K or existing shared Q8_1 experts");
@@ -1145,7 +1151,8 @@ bool llama_dsv41_tile_executor::run(const request&in,const llama_dsv41_layer_gra
             require(!dense_mxfp4,"Original Q8 MMQ excludes weight requantization");
             for(int i=0;i<ggml_graph_n_nodes(graph);++i){auto *node=ggml_graph_node(graph,i);
                 if(dsv41_original_q8_dense(node)){node->op_params[0]=GGML_PREC_DEFAULT;node->op_params[6]=0x51384131;++original_q8_products;}}
-            require(original_q8_products>0,"Dense Q8_1 activation toggle matched no original Q8 projection");
+            // Other admitted GGUFs may contain only Q4 dense projections.
+            // The Q8 activation option applies to Q8 weights when present.
         }
         graph=llama_dsv41_native_batch_graph(ctx.get(),graph,in.count,96ull*1024*1024,
             &backend_temporary,&rounded_matrices,&split_matrices);

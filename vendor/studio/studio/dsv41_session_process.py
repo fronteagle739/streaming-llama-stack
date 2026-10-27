@@ -44,7 +44,10 @@ class Producer:
                     with self.state_lock:
                         self.failure = self.stuck if self.failure is None else self.failure + '; ' + self.stuck
 
-    def __init__(self, session, argv, env, directory, *, host_bytes, physical_floor, operation_seconds=600, idle_seconds=3600, native=None, cancelled=None, runtime_check=None, native_mode=3, bootstrap=None, startup=None, owner_epoch=0, after_resume=None, stall_seconds=None, runtime_min_free_gib=4.0):
+    def __init__(self, session, argv, env, directory, *, host_bytes, physical_floor, operation_seconds=600, idle_seconds=3600, native=None, cancelled=None, runtime_check=None, native_mode=3, bootstrap=None, startup=None, owner_epoch=0, after_resume=None, stall_seconds=None, runtime_min_free_gib=4.0, model_sha256=None):
+        self.model_sha256 = MODEL_SHA256 if model_sha256 is None else model_sha256
+        from .dsv41_session_contract import hex_value
+        hex_value(self.model_sha256,64)
         self.creation_attempted = False
         self.stall_seconds = stall_seconds
         self.last_progress = time.monotonic();self._progress_mark = None
@@ -286,7 +289,7 @@ class Producer:
             raise Refused(self._death('Persistent producer reply truncated or too large' if len(raw) > 65536 or raw
                                       else 'Persistent producer closed its reply pipe'))
         row = control(raw)
-        require(row.get('session') == self.session and row.get('model_sha256') == MODEL_SHA256, 'Producer reply identity mismatch')
+        require(row.get('session') == self.session and row.get('model_sha256') == getattr(self,'model_sha256',MODEL_SHA256), 'Producer reply identity mismatch')
         require(not self.owner_epoch or type(row.get('owner_epoch')) is int and row['owner_epoch'] == self.owner_epoch, 'Producer reply owner epoch mismatch')
         if row.get('status') == 'error':   # LLAMADECODE: the producer's abort reply carries its reason
             raise Refused(self._death('Persistent producer aborted (%s, sequence %s): %s' % (row.get('error_kind'), row.get('sequence'), row.get('reason'))))
@@ -308,7 +311,7 @@ class Producer:
         try:
             require(not self.closed and self.failure is None, 'Session unavailable: ' + str(self.failure))
             require(self.job.poll() is None, 'Persistent producer exited')
-            command(row, self.session, self.sequence, self.native_mode, getattr(self, 'prefill_max', MAX_PREFILL))
+            command(row, self.session, self.sequence, self.native_mode, getattr(self, 'prefill_max', MAX_PREFILL),getattr(self,'model_sha256',MODEL_SHA256))
             wire = dict(row)
             if self.owner_epoch:
                 wire['owner_epoch'] = self.owner_epoch
@@ -351,13 +354,13 @@ class Producer:
     # DS4COMBO fast switch: the producer process, CUDA context and model lease stay
     # alive while its device memory and carry RAM are given back to the native engine.
     def suspend(self, base):
-        reply = self.request(dict(session=self.session, model_sha256=MODEL_SHA256, sequence=self.sequence, operation='suspend', base=base))
+        reply = self.request(dict(session=self.session, model_sha256=getattr(self,"model_sha256",MODEL_SHA256), sequence=self.sequence, operation='suspend', base=base))
         require(reply.get('suspended') is True, 'Producer suspend was not certified')
         return reply
 
     def resume(self, contract_sha256, tokens, bootstrap):
         require(callable(bootstrap), 'Resume requires the native base writer')
-        self._enter(dict(session=self.session, model_sha256=MODEL_SHA256, sequence=self.sequence, operation='resume',
+        self._enter(dict(session=self.session, model_sha256=getattr(self,"model_sha256",MODEL_SHA256), sequence=self.sequence, operation='resume',
                          native_base_contract_sha256=contract_sha256, tokens=list(tokens)))
         try:
             bootstrap(self._write)
