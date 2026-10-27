@@ -1,0 +1,1032 @@
+{
+  "source_revision": "9e4306f34b75ae75f0bbf43c57ce42b09b560e6b",
+  "edits": "Server-only Swift package manifest; desktop app assets are excluded.",
+  "files": [
+    {
+      "path": "LICENSE",
+      "source_sha256": "5c9744126f17d82401eb7e8d238d811f801a4781cd840743367bc840b27c520e",
+      "export_sha256": "50a26ab233fd04bb7ce0467c2ac0e334d15cfe60e2971f4a9a47e094d3ecf412"
+    },
+    {
+      "path": "LICENSE-APACHE",
+      "source_sha256": "1eb85fc97224598dad1852b5d6483bbcf0aa8608790dcc657a5a2a761ae9c8c6",
+      "export_sha256": "c71d239df91726fc519c6eb72d318ec65820627232b2f796219e87dcf35d0ab4"
+    },
+    {
+      "path": "Package.resolved",
+      "source_sha256": "eb7986edddc7ef06e10e7d2f50528db0e28933425f5a5b480a573702e7368cba",
+      "export_sha256": "df7adc7f3f41e829c6bc4236ca1b232c4e55c8294423aa09948a5d6daef7f3c7"
+    },
+    {
+      "path": "Package.swift",
+      "source_sha256": "67ee6a89428da981434de15f52c5dcea192484ec0fa0f6b1c2fa779684889dd9",
+      "export_sha256": "d4f28f6842b17b5a4462048f07aa954070205dda20953d5680efa8a790e0793a"
+    },
+    {
+      "path": "Sources/Mference/Infrastructure/Metal/MetalContext.swift",
+      "source_sha256": "11edfb2a545f62e4d7a1c4739f2004518feb7baf5ec02a444395ba38bbb4e1da",
+      "export_sha256": "dc6c3121fed34dc49c1e1e9fba83f04c7510b070dfaa3fd09e050c0868610f1d"
+    },
+    {
+      "path": "Sources/Mference/Infrastructure/Metal/MetalSDKCompatibility.swift",
+      "source_sha256": "45e5da7f8d844ce95a6bc9620b7a1186f5551181ab02acffcffbbddedd63898f",
+      "export_sha256": "58fcd20ce2179594f6828a65e0453372574025251d66aea545b71c01d60488fe"
+    },
+    {
+      "path": "Sources/Mference/Infrastructure/ModelIO/ManifestReader.swift",
+      "source_sha256": "8c1c30068892f1ca08399425db52947f2f019485b5b8000a2377af776c627ab7",
+      "export_sha256": "71b44417b901a195470b008dff724d15bf20f431a6775e08e931d68866dc6db6"
+    },
+    {
+      "path": "Sources/Mference/Infrastructure/ModelIO/ModelTypes.swift",
+      "source_sha256": "c4aa5e80877e4c8372d0d0c15fe0b6c138ee97c39a414cf0cfdbc0d0f8f4cd15",
+      "export_sha256": "c99ed89cb9a407a070397ce31bbcb946725ef363630621e60cfd884653bc17df"
+    },
+    {
+      "path": "Sources/Mference/Infrastructure/ModelIO/PackedExpertsLayout.swift",
+      "source_sha256": "b556298990cffd5c6d04a8490b8cf142d02ef49a1f30d57122ee56c4ce2c7f9b",
+      "export_sha256": "1862c606341471cf1f0413d75203c3c3673b3e95784789988c85d0ba84d5d508"
+    },
+    {
+      "path": "Sources/Mference/Infrastructure/ModelIO/Quantization.swift",
+      "source_sha256": "c26893fcc2d63fff363251845e48e67ce1be5e795e6e92d5532e3876d5752336",
+      "export_sha256": "d716f6d9bb4607e6d68ee2ca3810f548bb0077f4828161f6d3a9d48d3859b279"
+    },
+    {
+      "path": "Sources/Mference/Infrastructure/ModelIO/ResidentBuffer.swift",
+      "source_sha256": "f18e91daa3e3c0df573a696f8d5ff14507590fa34bf2b5dfde20c168e81f5e28",
+      "export_sha256": "9c128493e1881c3c9f93346ac9b5e38af2b2522136b1d102be311fc28918d449"
+    },
+    {
+      "path": "Sources/Mference/Infrastructure/ModelIO/ResidentIndex.swift",
+      "source_sha256": "988c1562f09117ec6a0382145efe0e39b935c918ceceadfd445e55feaa048431",
+      "export_sha256": "a39a714b7ae6278c75c9dd86604e32543c60decc8d5596496b77d884972ecac5"
+    },
+    {
+      "path": "Sources/Mference/Infrastructure/ModelIO/Sha256Verifier.swift",
+      "source_sha256": "4ee331a66ba950ab30b019b58374cb799ca2a7c665d34ee1fba9d97ca9aec2d7",
+      "export_sha256": "f0d0c296c34df62f43a1193811ec1abbd480afdd0f86f48fdb653d76eb8c6005"
+    },
+    {
+      "path": "Sources/Mference/Infrastructure/ModelIO/VerifiedInstallReceipt.swift",
+      "source_sha256": "b35936b1bf0795a9cf10459716dd4d1ab39b7cc8057bde768b1d40a013e0db4f",
+      "export_sha256": "bfb66b592efad87232b5a31d733d646014dbefc6d9dd80375adad185579081d0"
+    },
+    {
+      "path": "Sources/Mference/Infrastructure/Streaming/ExpertCacheLease.swift",
+      "source_sha256": "f7b921a7f904f7f80464f5d8995bc0bc16c8e5ca466656e47e72f9127ba1b8dc",
+      "export_sha256": "f7b921a7f904f7f80464f5d8995bc0bc16c8e5ca466656e47e72f9127ba1b8dc"
+    },
+    {
+      "path": "Sources/Mference/Infrastructure/Streaming/ExpertStreamer.swift",
+      "source_sha256": "bd08c785bcaf730cd2cd5a508b2c2205effd509a77b162a13aaa0eb62bbab6ae",
+      "export_sha256": "e034d5500f0c9120426e2b9aa4f9056baf1e85764ee621f69ec019bf40b08557"
+    },
+    {
+      "path": "Sources/Mference/Infrastructure/Streaming/GlobalExpertBufferPool.swift",
+      "source_sha256": "8672dbbf1075e88d048139166d45695913296b64f49f50fc16e1407891245a77",
+      "export_sha256": "8672dbbf1075e88d048139166d45695913296b64f49f50fc16e1407891245a77"
+    },
+    {
+      "path": "Sources/Mference/Infrastructure/Streaming/GlobalExpertHeatmap.swift",
+      "source_sha256": "8b3781b46fb4d6d881e510e5024f58a4e5e31b8a7b2f03eb59cafd17af5f33d4",
+      "export_sha256": "8b3781b46fb4d6d881e510e5024f58a4e5e31b8a7b2f03eb59cafd17af5f33d4"
+    },
+    {
+      "path": "Sources/Mference/Infrastructure/Streaming/PreadExpertStreamer.swift",
+      "source_sha256": "bea7c22d5d61ef3007b93190ef8beb8cc4b664346076978b8fc9b2ab6182770e",
+      "export_sha256": "a5ff3c63a334581d98a8dc3ff5e16c7115169712164a9785d1343dc373680f38"
+    },
+    {
+      "path": "Sources/Mference/Infrastructure/Streaming/RDAdvice.swift",
+      "source_sha256": "aa67f6ed34fc7d703d287957368b8c99b0b8db5d01d62382784767f9dc2d42e1",
+      "export_sha256": "84d96118248d7699757e6e4d50f153d728e4b5575179cb4f97bb6f709011d2a4"
+    },
+    {
+      "path": "Sources/Mference/Kernels/Attention/Attention.swift",
+      "source_sha256": "26746178458cb8efd2b1efbd6b1c17f85f9aa459d6a111b423b30ab80ade49a5",
+      "export_sha256": "86e661c3d2a87bb470d3ee84d218691ecd7fb9bac10f01f993e2647ff8e4a058"
+    },
+    {
+      "path": "Sources/Mference/Kernels/Attention/PrefillAttention.swift",
+      "source_sha256": "d738b4e308f01c693e27c683c40666f30cc3d103ea242f9d217804a93e8985d5",
+      "export_sha256": "7abbcd920b234fb2de2e259e931628cf3dd7862103c59c0242b5326beb8c797b"
+    },
+    {
+      "path": "Sources/Mference/Kernels/DSV4/DSV4Kernels.swift",
+      "source_sha256": "37b24016f0771c7e52b70042b93d482c2e14c0a4cbc5067bab91621d7f65f198",
+      "export_sha256": "cd69baa7fc07778b871442931bc63ae168e2a727ed87fddf1266a54cad9c204e"
+    },
+    {
+      "path": "Sources/Mference/Kernels/DSV4/DSV4RopeTables.swift",
+      "source_sha256": "619de0b534d1fde237990e1156fa46eaa0135048364edb02c6c088fb895b696c",
+      "export_sha256": "b888c51490d6e55191c0576fec0e2cc2aa91768f5ba2827a3adef0d0c01e99ca"
+    },
+    {
+      "path": "Sources/Mference/Kernels/Fusions/FusedLayerTail.swift",
+      "source_sha256": "853bf2e3ecad5912b87f097f624d2f0c6d9ec0d915dccf3f892effede40ae447",
+      "export_sha256": "a78100f5891032281d09a066522642eaa41a4c61649db3d75091d4cecb046ae0"
+    },
+    {
+      "path": "Sources/Mference/Kernels/Fusions/FusedPostAttentionSetup.swift",
+      "source_sha256": "0c7d62d2bf83ce8f97c28e0180a1473f38761539d7fafa797c12764316ba11cf",
+      "export_sha256": "7d65423ab869df0a6f665f7f90b23774e0ffa0dbd0c291e1c0e88f8317f5b30f"
+    },
+    {
+      "path": "Sources/Mference/Kernels/Fusions/FusedQKVEpilogue.swift",
+      "source_sha256": "ee87d8b35988a337cea0122cded729803259e121d25fea7ab9c8b182dd858a27",
+      "export_sha256": "54140c250a873730d6f8d1da8df41c8be9ca51de49497679b5850e76031e9b1f"
+    },
+    {
+      "path": "Sources/Mference/Kernels/Fusions/FusedQKVGEMV.swift",
+      "source_sha256": "0fb70af6a36469791f1dc18c42c699a249411d8c404b5af3c16f8fd51e1839e2",
+      "export_sha256": "2dd01c3587f07c7d8da2c0ee1c463ad9005ff1c2fe7a65033df2126832a0f85b"
+    },
+    {
+      "path": "Sources/Mference/Kernels/Fusions/LMHeadChainInt4.swift",
+      "source_sha256": "c4729af45d96d0f5fdaadeddd6ba0fa691fa25b6eafd799348005c2e5cd4aff9",
+      "export_sha256": "10924bc097799d89c6b3e1f74f52b20447b22018e09ca6cbfc4e6d906ecfb231"
+    },
+    {
+      "path": "Sources/Mference/Kernels/GDN/GDN.swift",
+      "source_sha256": "e769ad3eb79bf966aa89ae2bd4225b692fd3aeaeb6638280eef20772e6e73571",
+      "export_sha256": "d124872cdb2249e35a77355701cc03d90039842847bfb9b929af0755855d3a1d"
+    },
+    {
+      "path": "Sources/Mference/Kernels/MoE/MoE.swift",
+      "source_sha256": "b4e47c756814bc56d6a4f53b36889d27ad8c2498d363417bad5873ca8a19bf27",
+      "export_sha256": "b163a126d02f4e29a2fbbe9f8bc7c6c5590e6d023ab794c5c9e49f26b3f74c79"
+    },
+    {
+      "path": "Sources/Mference/Kernels/MoE/MoEDeepseekV4.swift",
+      "source_sha256": "5dcaef581fa3e045316fd18c67d0c944c38febce328798f0ed88dcc4d2cdbcc2",
+      "export_sha256": "e70b79a3fb720384a343eb3316edcb287933b69f9273ab575d8a87dc17101ffc"
+    },
+    {
+      "path": "Sources/Mference/Kernels/MoE/SharedExpertInt4.swift",
+      "source_sha256": "c76dd7e5769f74a9147d749a574c700c2a97382fa08419ad1c94358bc3ed56e2",
+      "export_sha256": "6d56971a0562709556231912a4aec7661f746048e9f6db505ef0dde7e64022b0"
+    },
+    {
+      "path": "Sources/Mference/Kernels/MoE/SharedExpertInt8.swift",
+      "source_sha256": "6947577bfc383d66eb7570baa3cac79255c4c33081c66073a94fd50825018a3c",
+      "export_sha256": "47eb6fcf5232c26902f4cf6adff019cfbe4f7c18dc5dcbf0d113ed54d3830f78"
+    },
+    {
+      "path": "Sources/Mference/Kernels/Prefill/Epilogues/PrefillFinalRowHead.swift",
+      "source_sha256": "7a3b1e32d301a6046770adff57c868623e3cc9d909a5613a2194b5bb91112e2c",
+      "export_sha256": "83bd02a3f3660570c749245760f67bb28fd41547e62028759ff694291ebff573"
+    },
+    {
+      "path": "Sources/Mference/Kernels/Prefill/Epilogues/PrefillLayerTail.swift",
+      "source_sha256": "287a897e45e3def57f5d8bd3086db02e9d53f29300eea09b71fcdc2b3b4fdf4c",
+      "export_sha256": "cd6b0c6a090088371dbafb29d2771aa12ba3f7a01c8a0e1da397ae341732d97d"
+    },
+    {
+      "path": "Sources/Mference/Kernels/Prefill/Epilogues/PrefillPostAttentionSetup.swift",
+      "source_sha256": "ef9412184d183ea15ed34397ad0d74c4900214cd40902ff2e8225511a385790b",
+      "export_sha256": "45d7246f5239ac02b71bf6f5a902113d33324ba9a5d2f8a7db078a0b7676bd37"
+    },
+    {
+      "path": "Sources/Mference/Kernels/Prefill/Epilogues/PrefillQKVEpilogue.swift",
+      "source_sha256": "cc0840924f71523876896a778d7bd8e9d29bfc65517fceeb82bbcdf9bacc2290",
+      "export_sha256": "1966540fb3cecd2f988e7471246a5d0cbd65b8843600ec48ea0171c59a1f308a"
+    },
+    {
+      "path": "Sources/Mference/Kernels/Prefill/MoE/PrefillGroupedRoutedMoE.swift",
+      "source_sha256": "7f68ff41acb1b639aa56e0249e43584ad98ead2caab52739c5a439134cf7cdbb",
+      "export_sha256": "806d3e469c589f5afc87d84ef0f8a0473d95c29134538a9ff0d6475ecb30134a"
+    },
+    {
+      "path": "Sources/Mference/Kernels/Prefill/MoE/PrefillMoE.swift",
+      "source_sha256": "04321535c4f7b724ab4cb52d03896d7f763386bce2cb8dd9c5f987455a3d7706",
+      "export_sha256": "b10d4cf6beda3c067a79b6d13a87e4abf145d69c3825d63e5ffcb39021f565fa"
+    },
+    {
+      "path": "Sources/Mference/Kernels/Prefill/MoE/PrefillMoEGrouping.swift",
+      "source_sha256": "c298d743dd3df3eea026d26f00ab16a4972d934dc573f39c93f65346ab8ef0f6",
+      "export_sha256": "814d2c40f0de2491e44aeef93627eb1d7fa3ded568592c8f7eb3ad1c8355101a"
+    },
+    {
+      "path": "Sources/Mference/Kernels/Prefill/MoE/PrefillRoutedTileScheduler.swift",
+      "source_sha256": "2148d4c3c76ed74c2dc60446948ab0a09a06ae5a7e81ece83cc3548c439c6486",
+      "export_sha256": "9ca73374525bf2bd7b1ea93878a220e5c85896f1a7df94ec9f64fdd0ce9c413b"
+    },
+    {
+      "path": "Sources/Mference/Kernels/Prefill/MoE/PrefillRouter.swift",
+      "source_sha256": "e6669b8f270eeed2cf2092ecf40dd2f92465e9422a7c27d38daaa4ed5497a740",
+      "export_sha256": "894344d015efff8f1b476afea45aacffc6fdb61648233b7f6dcdfd441900c903"
+    },
+    {
+      "path": "Sources/Mference/Kernels/Prefill/MoE/PrefillSharedExpert.swift",
+      "source_sha256": "856f567554005e5afced3bdbe07912f7e8744a1c75655d3ee532c3da7d0bb464",
+      "export_sha256": "9d279ef80e25545ae488e178da996735af3c4f3c20767d375873eecad809b62b"
+    },
+    {
+      "path": "Sources/Mference/Kernels/Prefill/Primitives/PrefillPerHeadNorm.swift",
+      "source_sha256": "5327237f9693ef670be72221af9f293dfd24e8ffd6a3838490e2e9e9fd090489",
+      "export_sha256": "c6ec237278f7c9cd4aa069038ff954cf17cb705f4cd2a8d13f3fadf9438a241d"
+    },
+    {
+      "path": "Sources/Mference/Kernels/Prefill/Primitives/PrefillPrimitives.swift",
+      "source_sha256": "a2b036bab586a5238041e41dc48e3dcf37a1ee4fd1a199768fc2537a0e424381",
+      "export_sha256": "9a08674d28d4b55b4a6fb6723436e1d5a560d77d6a3357c184f20835c9ca4bee"
+    },
+    {
+      "path": "Sources/Mference/Kernels/Prefill/Primitives/PrefillRoPE.swift",
+      "source_sha256": "2762cc33b5cd8fce687a0f012d9dc1d125221c35f4efc274e0ffc30a27eceb48",
+      "export_sha256": "25dc4e5559b72486c5b7b3a787ace5173d48216755a583a814c059eec488101c"
+    },
+    {
+      "path": "Sources/Mference/Kernels/Primitives/Elementwise.swift",
+      "source_sha256": "6232a3f29c70cf6065f63eaa595fd38170c716f1481af1047be3aa954d0a1f42",
+      "export_sha256": "439127417bab23fbe1326960631418ffb1f71e8638d86911af81892bcd788bc1"
+    },
+    {
+      "path": "Sources/Mference/Kernels/Primitives/RMSNorm.swift",
+      "source_sha256": "1aebea43aecf32aa4f978d71ae05062f435974d338e179700b23d1bf625116c5",
+      "export_sha256": "4fd36dfb0c34d521154b3d4c4d12cce13be9c3c0e5749f489f878f2e11d57096"
+    },
+    {
+      "path": "Sources/Mference/Kernels/Primitives/RoPE.swift",
+      "source_sha256": "d2e019f32e3efa206f2ed81967ffb444c70eb3230f42474ef1c5e9ba69e9964b",
+      "export_sha256": "1c8907da16d6b1da41ad3923b1a4673e5e0c27385b1db400bfc4b870fd9e7993"
+    },
+    {
+      "path": "Sources/Mference/Kernels/Quant/DequantInt4GEMV.swift",
+      "source_sha256": "9054ec06d83b76277d9f4d34444df6021a7444e3497a83de67a41b8ed33f49d2",
+      "export_sha256": "171e08460dd1c60bb5617b7ca7e9a25d3a0215332ca387669e3d3c034ef82f75"
+    },
+    {
+      "path": "Sources/Mference/Kernels/Quant/DequantInt8GEMV.swift",
+      "source_sha256": "87c8f3f41fb5487dfb64f46f4fdd929bddd768ad2908fc4db6b3f6a2e3e058ff",
+      "export_sha256": "9213433ccf90b891e1f019d978c44733344fb7ccbd56daadb5defa2738aa1217"
+    },
+    {
+      "path": "Sources/Mference/Kernels/Quant/EmbedLookupInt4.swift",
+      "source_sha256": "f5efe35964776ffdbdb4988da99d5b87402f64fa7eed7e3d77d8ab36226d7284",
+      "export_sha256": "b570148c6ff5cc71aaea426b95c03475b0419828bb3b303f409526709a14c3d8"
+    },
+    {
+      "path": "Sources/Mference/Kernels/Sampling/LogitOutput.swift",
+      "source_sha256": "4f0134872eb6973f5df1516de36a5f66e929078a2b86dd761b20d84e75c93e9f",
+      "export_sha256": "6b49368c69247da3f407b09b93f848739762c710f8826e38d6c529145811119c"
+    },
+    {
+      "path": "Sources/Mference/Kernels/TensorCore/MPPPrefillInt4QMM.swift",
+      "source_sha256": "8c452fc4821e466e99a848ea1ecc9fd46d0281b8e44507b4d45b483afa8f6ab4",
+      "export_sha256": "d0785de472f69e94daea8155caab5fc461a5b2a565a59d8d1bb12abfd16d8b90"
+    },
+    {
+      "path": "Sources/Mference/Metal/Attention/attention.metal",
+      "source_sha256": "d602d6520dcf15d1629e43dc3ab13bf15271300a2c37d1d575ca8c833bbc3e98",
+      "export_sha256": "02f8e0cb3e649d2de962c398106000ca7739492ecbc627a360342db9525073a4"
+    },
+    {
+      "path": "Sources/Mference/Metal/DSV4/dsv4.metal",
+      "source_sha256": "d90adffd51efe2fd868be29d8663e823e0cdeae4132083dcf8fb8d12ea2edafb",
+      "export_sha256": "d75e29b8a9ffcbd17d1c76e535d250df42a9d588b1f566c1d74d238381dfc8d4"
+    },
+    {
+      "path": "Sources/Mference/Metal/Fusions/fused.metal",
+      "source_sha256": "c98906a8b904b335868e2f0becec114c7b4ec0abd3e17c367c8b9bd02293ccf4",
+      "export_sha256": "b698333ac5e8a1d3fc124ce9905a5312861063dc2f3e3f862af267c6c345a68f"
+    },
+    {
+      "path": "Sources/Mference/Metal/GDN/gdn.metal",
+      "source_sha256": "c425991063a798b4c0675847a5f420e6a048e2d36dbc0b9c1f1f8c4575c89509",
+      "export_sha256": "72dffe5003873bb181cb66fb06aa6ae1146e1a3cdb90abf3594a4a5a171f33d5"
+    },
+    {
+      "path": "Sources/Mference/Metal/MoE/moe.metal",
+      "source_sha256": "e4f886b95efa28fa73cc7a1828f9aeff6830144e56b14e675d63fd1f3e8575e4",
+      "export_sha256": "178ed6792c74ffbd682f59f8124cf6e3738b76ebe5a871de099fc1f879231d35"
+    },
+    {
+      "path": "Sources/Mference/Metal/Prefill/prefill.metal",
+      "source_sha256": "b8e0f6af7f7d18aa207f68c71089b425a2cb570c19817d208ec4fd8b4065a1b2",
+      "export_sha256": "e63ebada4dedd713aafbbb45142934e939f7dbe075356ede9f8e2c07409b559c"
+    },
+    {
+      "path": "Sources/Mference/Metal/Primitives/rmsnorm.metal",
+      "source_sha256": "dae37d85e1ab95891c990cb42504349cd7fb01cfbf2c44e8721540ae8e45cdc2",
+      "export_sha256": "72ad62dc40d1a90c8edbc24c5a06f36d8cf56ebbe9ad65ef2ca39bdbfd3ac699"
+    },
+    {
+      "path": "Sources/Mference/Metal/Primitives/rope.metal",
+      "source_sha256": "458cf32a162067b868c91495f58c75b1cb049ac612c0680e79742378031368e5",
+      "export_sha256": "b674325b96ebd7fa933dfe3af94505441509c3b6427382ec0d9388ab2b1893e1"
+    },
+    {
+      "path": "Sources/Mference/Metal/Primitives/utility.metal",
+      "source_sha256": "0eea30cf5136f88ce76c43aa53c2268f892a56a11d9f169452245797b66b6899",
+      "export_sha256": "7c0cdc8088f6047d02cc587fbdeca52f1fbd5b63b16e63badae3a0fb72caa79e"
+    },
+    {
+      "path": "Sources/Mference/Metal/Quant/dequant_int4.metal",
+      "source_sha256": "52e2cc91cbacb0a52fadeb0bb6d218f6696d68a163513cc685191ab74967915f",
+      "export_sha256": "c2855e13bc8a4847659c772b8081d6e28f059917aca03d2d7a15bb2948a35776"
+    },
+    {
+      "path": "Sources/Mference/Metal/Quant/dequant_int8.metal",
+      "source_sha256": "d5a26d96d027f6ad53474ca263968a5cae18d5c5b99336156537609dfc8fe7ee",
+      "export_sha256": "fafdb1f4a2b3e12e7a7aa1d98468d820f009c3f8d52ee068d12b524c612fae02"
+    },
+    {
+      "path": "Sources/Mference/Metal/Sampling/logit.metal",
+      "source_sha256": "1029c4aa84d296eea14e13032adaf4264a47dd9029f9f2d2940116f931ce71aa",
+      "export_sha256": "e80e389fb8621fc8535b84149354a08dfeb2c2da5e0ac82c79c2a5ca3aadbd38"
+    },
+    {
+      "path": "Sources/Mference/Metal/TensorCore/tensorops.metal",
+      "source_sha256": "a14ed532f725164089a11ee660bcc5c7df8562ba7da90e2268d06d3979971093",
+      "export_sha256": "0c0002e18de5f4d81f2d11089ae55b3871b15e1e251299bcc80096c5df427ece"
+    },
+    {
+      "path": "Sources/Mference/Runtime/Configuration/RuntimeConfiguration.swift",
+      "source_sha256": "e7d6d368401d70c64ff53b9cd9bf13d772aa5ecd02c2bc6e88f416f755dff44e",
+      "export_sha256": "ddaa92c68a5c636e9c0fdcd8e1e386a688d10f15c9349da02e5e1a166f7d7afd"
+    },
+    {
+      "path": "Sources/Mference/Runtime/Generation/Generator.swift",
+      "source_sha256": "f81a10b1b349516feae85f58c733efb16fb8db637108ce45f01b12bbed6ac5bf",
+      "export_sha256": "183c0405363543c2d01d255dfd788194efd1c6cccd141077505cd580143971f2"
+    },
+    {
+      "path": "Sources/Mference/Runtime/Generation/LogitProducer.swift",
+      "source_sha256": "9cedbd38debacf478099423c9306ed492f217d057d0cd32c0f0287cc46b3e082",
+      "export_sha256": "987b2359bec35077b51daaf9665d332c30079d9baefb5726037f6ef534679752"
+    },
+    {
+      "path": "Sources/Mference/Runtime/Generation/RawCompletion.swift",
+      "source_sha256": "ce6ced082440b967302d9172914de03f486b174c20def96ff3405f18f6b4223c",
+      "export_sha256": "2d1c67b0fc080c743b17eb1971e51913a63c7c42c76fc742e1990a6d7277cdc3"
+    },
+    {
+      "path": "Sources/Mference/Runtime/Generation/Sampler.swift",
+      "source_sha256": "50b9efa586465e0130ef60e9f160d14eb01eaffc27ba117a7e93be00f884ff0b",
+      "export_sha256": "4403425a9a33ea79bcf54220e20f62f2c721f8e4285fcf27571aee795490c40b"
+    },
+    {
+      "path": "Sources/Mference/Runtime/Generation/StreamingStopMatcher.swift",
+      "source_sha256": "17e94a3b3ef82a83cad6f12a5330401b6d5af58caa273439e8ae1426ae39c66c",
+      "export_sha256": "1d4e0b3605e26f765191548e96a93420cb9992b450ef5adbc5176e37a3d99b3c"
+    },
+    {
+      "path": "Sources/Mference/Runtime/Inference/HotPathInstrumentation.swift",
+      "source_sha256": "a4b91bfa9134256107d6ca8bd401f4ca880becd2e2bc9a5c9cc72907f44ad9c5",
+      "export_sha256": "a4b91bfa9134256107d6ca8bd401f4ca880becd2e2bc9a5c9cc72907f44ad9c5"
+    },
+    {
+      "path": "Sources/Mference/Runtime/Inference/Model.swift",
+      "source_sha256": "3adc8f2eb46353e50fa5a6d1e9e382ce8fe9b4393b085a23a7c2895c03c56236",
+      "export_sha256": "e42f9d98118c5f3e98ed3fdf408a73039f653281662780f24b81aba4386bbf36"
+    },
+    {
+      "path": "Sources/Mference/Runtime/Inference/ModelExpertIO.swift",
+      "source_sha256": "3701739a862d9bf19f9d5618dcf2c092a596488377ffe6f71c315154d78d240a",
+      "export_sha256": "2faea9ada80f37bf33477ece4fed3081d9f9797f7f5a4ce1c54fe8322653a8b2"
+    },
+    {
+      "path": "Sources/Mference/Runtime/Inference/RealForwardRunner.swift",
+      "source_sha256": "c3a8cb32964b9bfa288fbd6d9b741fde54f26e15f90fd3d8b9ffaf54a950034e",
+      "export_sha256": "c554e406202b1170d79715a672d34dafe9307793e1a3435ce3c47c20ac4dafd4"
+    },
+    {
+      "path": "Sources/Mference/Runtime/KVCache/DSV4StateManager.swift",
+      "source_sha256": "f456c15c10405b8dd73fa6d427c598025d33b6ea03b44f96f2278c9e1cbf6203",
+      "export_sha256": "995305b30f0d3e67caafcbe4d263012216b0ddb2b079d5ec53632660cbdd5f7d"
+    },
+    {
+      "path": "Sources/Mference/Runtime/KVCache/GDNStateManager.swift",
+      "source_sha256": "20b4a64dcbd3f44286db7699c1cd9d183a6cbb26c8f1278836058cd232a17335",
+      "export_sha256": "869b8ffb422aa295c4fe6cbca75990d4e2d0e4f5a7a86128ac8747520b5bd7b9"
+    },
+    {
+      "path": "Sources/Mference/Runtime/KVCache/KVCacheManager.swift",
+      "source_sha256": "53d9a1cf1933667b607b991a9e218a84573e4af265c995f52af491a2d38cff97",
+      "export_sha256": "a718cf8c7c5c4e4f961db3a3f359e1a59fd404230bc1ed237ae9b793f323a416"
+    },
+    {
+      "path": "Sources/Mference/Runtime/Prefill/PrefillChunkScratch.swift",
+      "source_sha256": "0eaa766444bef1c457d6992aade9569817e5a3492ef0c356dce7ababe8fd2ed3",
+      "export_sha256": "afd37b1e1bd68be701ad647f08a0a3ee4111b617f2250bd84e59c08f81c87812"
+    },
+    {
+      "path": "Sources/Mference/Runtime/Prefill/PrefillRuntimeConfig.swift",
+      "source_sha256": "bc0cf5fb1c7f8dbc03af5d117cff841341027a0e5277a6de736d557a256cd587",
+      "export_sha256": "9e09c1e5b9d831c290b1400a445a8d087979eeee2dd1ea7a60634ecea8299111"
+    },
+    {
+      "path": "Sources/Mference/Tokenization/DeepseekToolCallParser.swift",
+      "source_sha256": "30394a5369236c75afe26a5016315eeb2ccc9f8bccac28298f4141c70b98bd21",
+      "export_sha256": "b75368f61799fff851810cf32d241065f2ecec6eee19ac306bd7c497b44cb786"
+    },
+    {
+      "path": "Sources/Mference/Tokenization/Detokenizer.swift",
+      "source_sha256": "666939c736951a3a0196fc736a09f8520272b8b63280252bd4d67865b0ef5fc4",
+      "export_sha256": "d160c066ee51d79ee55418c4441b22434f89b86dff4f51134dca5e210d86b420"
+    },
+    {
+      "path": "Sources/Mference/Tokenization/GemmaToolCallParser.swift",
+      "source_sha256": "2397d5613074211a549c2649953f964885c7145f88345807c27af1244af4bcfa",
+      "export_sha256": "bf751698bdb8721ac8c92f0f783c58a4e5ea0edf70615bd8d897f215c2903405"
+    },
+    {
+      "path": "Sources/Mference/Tokenization/JSONValue.swift",
+      "source_sha256": "d616434219eaf943b713ae8ac6a52ffb73501e92b519cd767ed22b92b1d48ea9",
+      "export_sha256": "e66ac6c4f0bb24c751ca53dd5db63647d92595832feb8107d75eb41d3ae02444"
+    },
+    {
+      "path": "Sources/Mference/Tokenization/QwenToolCallParser.swift",
+      "source_sha256": "0c7614fd77952b3373732c966e153076a046bb2a1655431611d751d10be06a99",
+      "export_sha256": "00339bc0b18b3d7adc59fa833e2f9685378888df5ff9ce05c2919071e1696ce5"
+    },
+    {
+      "path": "Sources/Mference/Tokenization/StructuredAssistantDecoder.swift",
+      "source_sha256": "d9a45c2f37a502d50fb5bf28b9b28065fd1a1a707920ac0ae853a14b23867bdb",
+      "export_sha256": "c663c87b9dd8f6607fc1b218c95b64bc097c950c700ba2051ddbe4e3ed6846f1"
+    },
+    {
+      "path": "Sources/Mference/Tokenization/Tokenizer.swift",
+      "source_sha256": "60a796f7d52f17f4e88411acdd1dcc43fc8974d293a600c97345ee6f17d847e9",
+      "export_sha256": "bbaabfcdc48f2dd114f9cffb8ad0de1162b32f978b659f1dc6747d399000a8b8"
+    },
+    {
+      "path": "Sources/MferenceApp/Core/Configuration/AppContextLengthOption.swift",
+      "source_sha256": "2392d4962fb7963151886ecb78708144d01572049f87f84c3a7f5eaca748668d",
+      "export_sha256": "0324dd313384fe9381f7568a23a71a3d4fbf86dc0ea1fd496cb32e6276c6e42a"
+    },
+    {
+      "path": "Sources/MferenceApp/Core/Configuration/AppPromptPreset.swift",
+      "source_sha256": "b8c10d98ca26f065eccc0dd7d181a7fcc12c3c94e3fc78c43e4bfd5e264e6974",
+      "export_sha256": "f2e087612060ae70a99a0c4e84de272484966bf3691bf7e409be7accd5bbaa5d"
+    },
+    {
+      "path": "Sources/MferenceApp/Core/Configuration/AppRuntimeOptions.swift",
+      "source_sha256": "a79f774d26d7d9da21cc4245f68c5e4a34a666e3f65491ca0bf071156938ec0c",
+      "export_sha256": "f07bdba980362a69ac458af5fcf33b47504bb5c64f412b3515b1b12580d0813e"
+    },
+    {
+      "path": "Sources/MferenceApp/Core/Configuration/MacAppSettings.swift",
+      "source_sha256": "ebf25627185d03e90166a2717f355b41536ab668b05f4ee4c425e3a5ebb7a57a",
+      "export_sha256": "955e377d3dd73a5380a54fdb29745dae79b228c5ea49acb34ea8e7f16ee049c1"
+    },
+    {
+      "path": "Sources/MferenceApp/Core/Diagnostics/AppDiagnostics.swift",
+      "source_sha256": "534ee6812abdcfdea5648986711dc2aca7b425615407f0332c07591afd535447",
+      "export_sha256": "1dbcb1309ec01b7eaea32a04c633b7a6c2b803add20199ebce160e1d2f0b5d03"
+    },
+    {
+      "path": "Sources/MferenceApp/Core/Diagnostics/AppMemorySampler.swift",
+      "source_sha256": "6d75f384a58b5fbb56e73ff1d5239f9f384524f414857178879a62c0822f21c8",
+      "export_sha256": "83dcd4696a6450ef80a7b1e274d75ffb5147af41f46989ad34a67893ead630df"
+    },
+    {
+      "path": "Sources/MferenceApp/Core/Inference/AppGenerationContextWindow.swift",
+      "source_sha256": "5def9a790f88fc2d41c94a10b083f56e2d394f7f5dc0e24f0fd0dca66eed86f6",
+      "export_sha256": "4b9bc4d5983a334751a39ebafa75750cdecad31dc27b2740baf1e4a2bb33ac22"
+    },
+    {
+      "path": "Sources/MferenceApp/Core/Inference/AppGenerationRequest.swift",
+      "source_sha256": "31bd5bbea60cfe4f522b7076ef6b3f114bbb512ee4d6dc4325beed7b86f28a5a",
+      "export_sha256": "9508b6b70103edb84119048440c7ac41470f40421362954f2c27d93b1acfc438"
+    },
+    {
+      "path": "Sources/MferenceApp/Core/Inference/AppInferenceClient.swift",
+      "source_sha256": "185399f50df3d3901c7c8d82ebddc0ff0736fccfeb40f9549ff4cfdff927d9cc",
+      "export_sha256": "440d2fa443e471257d82851d31dd80b79c0fe3aab1c50897bbff0c5974a19c2c"
+    },
+    {
+      "path": "Sources/MferenceApp/Core/Inference/AppInferenceError.swift",
+      "source_sha256": "434c2e130726aa727ba2c5999c2a8c865fd5344a5f02ab67ca5373c33aca98f7",
+      "export_sha256": "423de32122044619606037a851245f209caf68e90ab1ec252f1a7142876cf98b"
+    },
+    {
+      "path": "Sources/MferenceApp/Core/Inference/AppPromptAttachment.swift",
+      "source_sha256": "a570bd9f2fa26fd7769eab1080e173682076ebbcdedbaae5ddfb60bd84f66517",
+      "export_sha256": "bcc7b15fbbc4721a12c9cdbb63fde48364f23c367d56b65fc5d27ec942a9a11c"
+    },
+    {
+      "path": "Sources/MferenceApp/Core/Inference/DecodeServiceInferenceClient.swift",
+      "source_sha256": "9ce6da98d2b407be4cd04d055e220f826273a2c6921329efc86853d6738ea41a",
+      "export_sha256": "5b22cd798a4fde8c45b4cc70e6a6d0f549acc8b536f46e84d090012134d9005b"
+    },
+    {
+      "path": "Sources/MferenceApp/Core/Inference/GenerationTranscriptMailbox.swift",
+      "source_sha256": "26f47bc528ffed83c4420cedffb2b659445c110df9451c201be614b4db69c9b5",
+      "export_sha256": "ec91933c1e4c690ee60010ac6a54a2340463d4e08e24f542a1c578acffb225c7"
+    },
+    {
+      "path": "Sources/MferenceApp/Core/Inference/RealInferenceClient.swift",
+      "source_sha256": "76954fe9af7c56cef595a1b1630012ea18339f9c63335b2e147623c10b5379a9",
+      "export_sha256": "af93d58df149611299f8577bc9d568e88a8ec4fbabd79a35750af63d14408d4f"
+    },
+    {
+      "path": "Sources/MferenceApp/Core/Installation/AppModelInstallationProbe.swift",
+      "source_sha256": "4fb0020264c25ca8ba055100315dd614a8b7e1b4a5bae6c88f7ec8b402c0dac1",
+      "export_sha256": "18232b61a37bdfee53a075eac4d4c93b95bfb5ba90532434c2c1a1e18fc094c9"
+    },
+    {
+      "path": "Sources/MferenceApp/Core/Installation/AppModelInstallDescriptor.swift",
+      "source_sha256": "14418b54ccf08a18e1617ca3c895fb08f7804f82c2b4958f167b069f379aa11a",
+      "export_sha256": "894b90e4730e2c6b48aaa70445dddf1e9cdbd2de6022cb9339068a624610ab60"
+    },
+    {
+      "path": "Sources/MferenceApp/Core/Installation/AppModelInstallerClient.swift",
+      "source_sha256": "20a54349514f62391de65a53ba7cbe2f944012500a7860163f66f4d0f345f96c",
+      "export_sha256": "670bd850ee660525afc85817b3ec23f2835928480139d59386f356e8e7148205"
+    },
+    {
+      "path": "Sources/MferenceApp/Core/Installation/AppModelInstallState.swift",
+      "source_sha256": "5cb36767bf4ed51ce47ae53684549f6a36b8faa67c1fff3e27e170738f386225",
+      "export_sha256": "eb27e7e0fbbbaccb32006a0f5b72a05369ba07e39c0902d584cf7126d55ac6a1"
+    },
+    {
+      "path": "Sources/MferenceApp/Core/Installation/AppModelLocation.swift",
+      "source_sha256": "a3a028a1a7555cd3bf431b19494f5f2fdfdcc83ff842d9203364dd9ec1658768",
+      "export_sha256": "8e1f7b95ad5b4fff059326a083fa9e10af9ecd276ab572247b7a3ba6429b2e78"
+    },
+    {
+      "path": "Sources/MferenceApp/Core/Installation/DownloadETAEstimator.swift",
+      "source_sha256": "1220593645ce0effae818af71096b1e525cd7a8aa0e4e1080fa1f9bcc5ded7dc",
+      "export_sha256": "f6d980abfe15ede610eceade250dd053ba15ef5fc0a6df3780a1ee1e39fe4cc1"
+    },
+    {
+      "path": "Sources/MferenceApp/Core/Installation/RepackModelInstallerClient.swift",
+      "source_sha256": "fe12db7621bf62927d1adfd3d630417a454d207d432a49311517ff880cbd95eb",
+      "export_sha256": "511079c505bd7853d179a391a2b20b73bf6a4f46cda6c55fad83484c8f92055c"
+    },
+    {
+      "path": "Sources/MferenceApp/Core/Resources/app-prompts.json",
+      "source_sha256": "94495e0a2cba2a87a5e99302386643a9533f00d9c72c5b4032a6f2d0bd5e9de2",
+      "export_sha256": "33a165bb470d642d072c5e2050bdcacaa095196e6d09f43fc9e8da7239b29079"
+    },
+    {
+      "path": "Sources/MferenceApp/Core/State/AppChat.swift",
+      "source_sha256": "f3a89fe466671d85ad86ef8f90599a8619d87cec02e0549887736b063828c147",
+      "export_sha256": "1253a379350c315b2933c264f6375af66f6843e1287dab3b827431d40c925d80"
+    },
+    {
+      "path": "Sources/MferenceApp/Core/State/AppModel.swift",
+      "source_sha256": "0dcef2969d7316f7ba3958b317339c7b1647e3e76c24f69b213636f906a77611",
+      "export_sha256": "270575fb12ec913ba4aa5fef4d23f3a8f757634b02f26b8fe3da3e01d6f1dbdb"
+    },
+    {
+      "path": "Sources/MferenceApp/Core/State/AppModelLoadState.swift",
+      "source_sha256": "c61ffeb444c807cf836d626d3b5aefc64527f38128bb71624bc0ee54b91e16d0",
+      "export_sha256": "80f16ab2e2418fc4435d7c4ad850f33b4e3b6a27f6488424c77960acd731b249"
+    },
+    {
+      "path": "Sources/MferenceApp/Core/State/AppPresentationState.swift",
+      "source_sha256": "9a134c1e3972fb0a922f8a3c93eb490e31d49b05db5bf6dcab8a70654c0afb2c",
+      "export_sha256": "d4ddec514ea9f6d28039198fdc73dbb25e9c6853e693fb274b6e4e86edebb659"
+    },
+    {
+      "path": "Sources/MferenceApp/Mac/App/MferenceMacApp.swift",
+      "source_sha256": "20d98571a616ad099400888f5c5accc38123e5ed66629eac2be110f5cc03c70e",
+      "export_sha256": "8641d1d36ab9833e6513e14514601ec4880dc33603e11b5f3b6fd511b92cf1d4"
+    },
+    {
+      "path": "Sources/MferenceApp/Mac/App/RootView.swift",
+      "source_sha256": "5edc142d230ab8b1b369b5ed2a481f0d0d2bba127e5c14402339cc5cb5c32aea",
+      "export_sha256": "ebc69b9c298548812e8d396971824d8e0e64bd45d3f2569e94eb66ac5ac3fe45"
+    },
+    {
+      "path": "Sources/MferenceApp/Mac/Components/ErrorBanner.swift",
+      "source_sha256": "6cea44a2aaa4943303454b2aef865dc1806db27839df92849ae4a49dcfe18ec8",
+      "export_sha256": "772e2903332b262f2093791810180189362f3df012afcfd50accf04ad9e00cc2"
+    },
+    {
+      "path": "Sources/MferenceApp/Mac/Components/GenerateControl.swift",
+      "source_sha256": "e08d73804724733e920316ab5f21bae1d761a3ae13050a0a4a13d0948980b86d",
+      "export_sha256": "7393492f75af029631b6b7ad34f69e15fb643c3a774ab69ab81e1413d977f2e9"
+    },
+    {
+      "path": "Sources/MferenceApp/Mac/Components/HUDMetricView.swift",
+      "source_sha256": "223b4a06ef269f073dbd005b6279940fc1bc37d7702cfca5e5e36fe89b3a7f37",
+      "export_sha256": "f1edb1d483c9975acb0eb19ad555f6bd99446b654dba947ebf8c6ef545e79eb9"
+    },
+    {
+      "path": "Sources/MferenceApp/Mac/Components/ModelStatusBadge.swift",
+      "source_sha256": "9daaca16f5cc800a455d66838be022775a8f62fc6fc37b252ccba4e39934492a",
+      "export_sha256": "38b193cd6a44e9877de27a7e875a7a539c9e4a16a92616d0d7b21e5d413a1e0e"
+    },
+    {
+      "path": "Sources/MferenceApp/Mac/Diagnostics/InspectorView.swift",
+      "source_sha256": "726df895a09e05aa5344f116e6f264a79cfcf05c9dc0fb9c90c63ea1dd463cf9",
+      "export_sha256": "a2dc87fccf6a261be9ba82fca514b57988832489e6481229a7aa8131a05f8ea4"
+    },
+    {
+      "path": "Sources/MferenceApp/Mac/Diagnostics/MetricFormat.swift",
+      "source_sha256": "e36f3db03f0e446397e70f2873f0f25f4ea904420f67b12e0b2a4ebc53989dfd",
+      "export_sha256": "71147b1a8b346b65a0f4aefe5c800613c492ab5852e1dc712638a8c818c0559f"
+    },
+    {
+      "path": "Sources/MferenceApp/Mac/Diagnostics/RunnerDiagnosticsSection.swift",
+      "source_sha256": "c65fa39f6ef9005bf0bea90f8c9790446ba2a25dda77b62658e4376bfc392f7b",
+      "export_sha256": "6f803dd78e618a8f2bbb59e8e5980f99bd50be6961d4351f41b986dcd43233e0"
+    },
+    {
+      "path": "Sources/MferenceApp/Mac/Diagnostics/StatusHUDView.swift",
+      "source_sha256": "119bb5d7f775e7416a32bb72d6ec5cd318ca99a35e2d56196677f780267cb04c",
+      "export_sha256": "2188be7118ca32e00a4160d55a2bb848294946f925050760eba840ce92f56b73"
+    },
+    {
+      "path": "Sources/MferenceApp/Mac/Generation/ChatSidebarView.swift",
+      "source_sha256": "09ae23a1bfa1343e5168c0755c934730f5b100b80e7da6ed448601c1bc22259b",
+      "export_sha256": "6ab75e269de51b43e2742e52bb91ebd3c7b5cc79d74e25237be701bf55f68746"
+    },
+    {
+      "path": "Sources/MferenceApp/Mac/Generation/OutputPaneView.swift",
+      "source_sha256": "f7eb9b646b61f0597f4ac8bd1a126db7c242197ab1397d0f6358102d18fa0792",
+      "export_sha256": "a058426d484b11b376d1c360d55593b4e9148ab5e6b1d65242882608c01518cb"
+    },
+    {
+      "path": "Sources/MferenceApp/Mac/Generation/PromptComposerView.swift",
+      "source_sha256": "3c3526193ac23e3629b07cc281a580876a5b4840ef117acf8c835a2e3d2fd538",
+      "export_sha256": "b4d768036ce2ca3f6548abc9b12b0b8df5b98bf4c16a322078860ae1e9986ab9"
+    },
+    {
+      "path": "Sources/MferenceApp/Mac/Generation/PromptExamplesView.swift",
+      "source_sha256": "2c663eab84d9294460a9ddf83bdc651df88e0603badce844656d2eca8c513d81",
+      "export_sha256": "71b23ef24fe19454bf47a484690829e2da6ef7f578fff3bcbe066effa8d19313"
+    },
+    {
+      "path": "Sources/MferenceApp/Mac/Installation/ModelInstallView.swift",
+      "source_sha256": "682a9e4402bdc2307cdf6cc5bcf4bd4a514c59adc5bed76ea189cd740b4af3c7",
+      "export_sha256": "db5bcd9676d90500e371ca6a5a122195c5e7a6377b5d12243ea1a5614bb9d189"
+    },
+    {
+      "path": "Sources/MferenceApp/Mac/Installation/ModelLocationPicker.swift",
+      "source_sha256": "742601f996a9a10202d683c5a349bb53447fdb0e7ed34be8c21a4fc930f57813",
+      "export_sha256": "07b9fc302d2e3d60ac66b11a8c30d0249d38adc10464daf9629e62d45d920c02"
+    },
+    {
+      "path": "Sources/MferenceApp/MacPresentation/AppChromePresentation.swift",
+      "source_sha256": "65aaf835ef8c6c8f5e8341797a4ef931a5fcf1cb2d9fd96431212e429b530e55",
+      "export_sha256": "6f561956230afb6dfc42d7d747a02565c811629dc1082fde5d49970259d76ba3"
+    },
+    {
+      "path": "Sources/MferenceApp/MacPresentation/DocumentTextExtractor.swift",
+      "source_sha256": "695fee41704bce158c19bcff615e055491be32502c462a72d7d07909ec326476",
+      "export_sha256": "ae392ae4de4e2e178a6364e88d14a2c356362f0606eb8991ea7dbb678a931049"
+    },
+    {
+      "path": "Sources/MferenceApp/MacPresentation/InstructionTranscriptDocumentController.swift",
+      "source_sha256": "0be21ced3e2737becdb3f28f60dcd1ebe594d035bfd75333d505c329e38967b8",
+      "export_sha256": "b946f0f6e1c5dba68742e597eb9438e18a423afb31aafb6940ef65ec994a984d"
+    },
+    {
+      "path": "Sources/MferenceApp/MacPresentation/MferenceMacTheme.swift",
+      "source_sha256": "2eb77e696fa3499bd731862d2a4b86d55e701273673e387c5ddfe83fd5ea8043",
+      "export_sha256": "681d05364caef1e5a8d11202ea9cee34d4928afbd405783caf46570d0cd73b73"
+    },
+    {
+      "path": "Sources/MferenceApp/MacPresentation/ResponseMarkdownRenderer.swift",
+      "source_sha256": "6f071423274cecb1c01504fa352eaebb90becbe71f311ab652d83d02755e5756",
+      "export_sha256": "ef95c337a78c1f9692c87e6fed9a3365ede8cd66aa3821cd2c1be6a21cdae7f2"
+    },
+    {
+      "path": "Sources/MferenceCLI/Args.swift",
+      "source_sha256": "3c4d861ab0f9c556b29f21dc4a10d2bfc7648a9884a4cc0f2c49ea1d5e47d2a9",
+      "export_sha256": "dbb20c3ced0459b43eeea85a41ae424c26c3f16dcff6da1bf1902db604578bd7"
+    },
+    {
+      "path": "Sources/MferenceCLI/ChatHistory.swift",
+      "source_sha256": "ce5548d6b44dc619e1fd1fc880797f504b70a8100350dd72045d4fd5bc3211a8",
+      "export_sha256": "620147e45802eec0aa2e5ed4d94248af0871dabb3e2ccb4a3d756d5c68901ea6"
+    },
+    {
+      "path": "Sources/MferenceCLI/Command/main.swift",
+      "source_sha256": "2565c2a9539f03d12b56ce2497a97e86e19cba7cba6befe195c41a197f92d2ce",
+      "export_sha256": "3672d8c1102b8eef8762767b0856c7d30cee8683b37572c0f115d97f1bff3508"
+    },
+    {
+      "path": "Sources/MferenceCLI/Run.swift",
+      "source_sha256": "f53fe9a32863e5e6e714493859836f60ca0978ebbba9273be2abec52e885ea36",
+      "export_sha256": "765eb334e1a8b968af21fb7595d17a05b5f637681dfd13c1be13bedb9e22fdfd"
+    },
+    {
+      "path": "Sources/MferenceDecodeProtocol/DecodeProtocol.swift",
+      "source_sha256": "19103fab39d62df630ac0d8e56c0bc599ed46a035e1da8add5b4e88a42913c8d",
+      "export_sha256": "3fd32fe6548f4ed0fa1b5b5cd47d7d09879bcd0e0186b0841ab7aa04eb9093e1"
+    },
+    {
+      "path": "Sources/MferenceDecodeProtocol/DecodeUnixSocket.swift",
+      "source_sha256": "da1865b657ce6273ad9b2bd25aab83ddd7eece3ae5c3d2ae496a3d2e48b523c0",
+      "export_sha256": "b74f4683e6c52e996c756055372e121328c79503133dcdbd5839936d0e0decd5"
+    },
+    {
+      "path": "Sources/MferenceDecodeService/DecodeCommandQueue.swift",
+      "source_sha256": "ac438ff40ee3ad60ae6d235a405ebf1f9d422f62840ec655462328b37f6adf58",
+      "export_sha256": "f2ef0fa4c29073748366a243c55fcf8d3620183aa0bbaabcf0de81b7334c1986"
+    },
+    {
+      "path": "Sources/MferenceDecodeService/DecodeServiceOutbox.swift",
+      "source_sha256": "9f0319c6642e9795c61753536218964cf362595addb190ac3723e3088f3ec6a8",
+      "export_sha256": "cc68be0f96b5bb7463b69e5f113d22efcf609cce71ef4c03aac90a0479886220"
+    },
+    {
+      "path": "Sources/MferenceDecodeService/Entry.swift",
+      "source_sha256": "73d0c94ca798d3e411481d24dab73497c3918b18e5b0c8fd0164e22d5a69e35b",
+      "export_sha256": "33bc6fe11e9d3526d58437cd52a9eebe85da0702f95aa1962953c09d2e35bafe"
+    },
+    {
+      "path": "Sources/MferenceRepack/Command/main.swift",
+      "source_sha256": "9c766e74520295c5f637ca5e5d730bb228b152ae5f86b3783d22dccdbb73f357",
+      "export_sha256": "79b10e0ba6d77fc95ea3bb6b852a542bd37ae369e1188c9b3c43dfdbb7c19d67"
+    },
+    {
+      "path": "Sources/MferenceRepack/Core/Format/ArchInfo.swift",
+      "source_sha256": "3075db71b8784bf1deb5e89f3b4560b493d8abb130b337fc3c3d1693ba6729f1",
+      "export_sha256": "a1a909c99000df45d6c332059c4f2b688008d79a3234f69ff74d0aead27db2f4"
+    },
+    {
+      "path": "Sources/MferenceRepack/Core/Format/GTurboEncoders.swift",
+      "source_sha256": "5adf3bfee9103c11bfc30dec3f43702d806f05b5455b3350ae3b101b75944df4",
+      "export_sha256": "319bd83793ed58ee7703257050f733495c0e109297295802f8499e4d3a4f63f4"
+    },
+    {
+      "path": "Sources/MferenceRepack/Core/Format/GTurboJSON.swift",
+      "source_sha256": "38945611ab81af9f628355f9af0dede8692f5d1bc57d329506455dc53630242d",
+      "export_sha256": "0531f8ed0db4fc0466abdbb55b06a529e42139628e1e4653c2f3c38ed7baa432"
+    },
+    {
+      "path": "Sources/MferenceRepack/Core/Format/GTurboLayoutValidator.swift",
+      "source_sha256": "a56099811dcb6dae0ac20ec6741add204467b4a85391e876ed0650f8fd887426",
+      "export_sha256": "15a10ddf4d88f9b776348575ddfb747cfb83bc51a345b9a5b5a57231d72698e5"
+    },
+    {
+      "path": "Sources/MferenceRepack/Core/Format/IndexLoader.swift",
+      "source_sha256": "962f18234950736925da9f24b841090f3af5a69f3616ab2d20b69b9b3a6bd974",
+      "export_sha256": "a5c97bb97d49ecc4f735a9f81f166902665ef5d1334c83d7521f79684d823b56"
+    },
+    {
+      "path": "Sources/MferenceRepack/Core/Format/Safetensors.swift",
+      "source_sha256": "8ee61b0f3dc1e2c39982f01548da8ec5ce036c3d03028071405af7ced28f4c63",
+      "export_sha256": "7b379e85ad4fcadb9f2df732c40442862266dbe2ccf7f7f8f8d03cc3c24736b8"
+    },
+    {
+      "path": "Sources/MferenceRepack/Core/Format/TensorMetadata.swift",
+      "source_sha256": "de324ebc56a025ac2aa3bbfcb9fd811b7cee3df9b4e7a9f46b735940c0018ac3",
+      "export_sha256": "344b7debc2bb4ef9f931f10c638ec72c616b6212d0aea5795809131693fd0184"
+    },
+    {
+      "path": "Sources/MferenceRepack/Core/Planning/RangeCopyPlanner.swift",
+      "source_sha256": "51693026f8c0f602a84cca9434caec276aff726ad86b82f4b69832f87f0504d9",
+      "export_sha256": "95e30ee43d240c16b4e50750d552320bd8dd437293efad41d9a859c18175f3ab"
+    },
+    {
+      "path": "Sources/MferenceRepack/Core/Planning/RepackPlanner.swift",
+      "source_sha256": "ee25c4b3e3f3dd59b12fb23d29b5c548208409ec79ba3f88ce8985059f5dd3bb",
+      "export_sha256": "7fc9ee7b7f3be50062dc0462e9bb45f8b69d63f2860ca1283be51e98d3ad4448"
+    },
+    {
+      "path": "Sources/MferenceRepack/Core/Remote/HuggingFaceRemote.swift",
+      "source_sha256": "5c1cbb875694721a11503c101fcbc5e29c1b22fd17109c2d3331b0fd65d778c9",
+      "export_sha256": "cbfa18e9232c79383a5bdec8f88747c8441e596c4fbcb117329842a7a7479435"
+    },
+    {
+      "path": "Sources/MferenceRepack/Core/Remote/RemoteChunkPolicy.swift",
+      "source_sha256": "b2099759a1a2e13a445766cb00d8f708527afa8f58a56a8826220307904507f1",
+      "export_sha256": "bee439211576a4e17050ae11d553d56db55ded47392f02e2a5bb7d3aa39cdade"
+    },
+    {
+      "path": "Sources/MferenceRepack/Core/Remote/RemoteDownloadSession.swift",
+      "source_sha256": "ae0b6ac39a801b83425ef951683e3724a8cb5148a1b01b5a7d55d16b8d7b7271",
+      "export_sha256": "8b1bf27abf3a6940851e4f185ff97c5dd8a3552125ae6d459113ca61d7041576"
+    },
+    {
+      "path": "Sources/MferenceRepack/Core/Remote/RemoteInstallCheckpoint.swift",
+      "source_sha256": "450f99b84de2def903ddd62730747db673cf08d7afe2e4500295c0ad83e38250",
+      "export_sha256": "461614fade1bb0d14c9cfa58b498cccbea58e6ad4b446095845645130e2cc8ac"
+    },
+    {
+      "path": "Sources/MferenceRepack/Core/Remote/RemoteRangeTransfer.swift",
+      "source_sha256": "bc49229f5278ded43ce86ffe96ce89b0a2386d7f54a0dc744e49677cee437968",
+      "export_sha256": "f0eae403e51e009a596a5ab4101d20f25d756244b639c099a3ac61cd09cf7f7e"
+    },
+    {
+      "path": "Sources/MferenceRepack/Core/Remote/RemoteRetry.swift",
+      "source_sha256": "64184f1fd78db9b5a2838e93d0c2e769fc4cd36158520a16c50175239f52a4b2",
+      "export_sha256": "fbd71df9715b3218c6231aa959e9b9f1c97eaba17de3a8d7b7a04d3abffa0bd8"
+    },
+    {
+      "path": "Sources/MferenceRepack/Core/Remote/RemoteSnapshotLoader.swift",
+      "source_sha256": "ddca7523e3fc257c93695210f0652f959da72f593c0500f90a9fe19bcd6b83d3",
+      "export_sha256": "2753bfcb2620509d9e2e316548e019f0b3b74af49a213f493cf4bd42923f3a34"
+    },
+    {
+      "path": "Sources/MferenceRepack/Core/Remote/RemoteStreamingRepacker.swift",
+      "source_sha256": "9096d6c600176e8132781a7c07197cfe601b9e057565ba192859c949504601b7",
+      "export_sha256": "742ba994dd99afc8a0e93567830975b8400c82b48e255b45abfe3608b53f2271"
+    },
+    {
+      "path": "Sources/MferenceRepack/Core/Remote/SourceByteProvider.swift",
+      "source_sha256": "de9484bffb40561cd028034952b0d4dbf0d014b415e73074eeab048ee3ada485",
+      "export_sha256": "2d3bc8535bbf4af9dffa026284ea8aea52d7d3ea75ecfaa97fe3dafaf751e980"
+    },
+    {
+      "path": "Sources/MferenceRepack/Core/Remote/SupportedModelSource.swift",
+      "source_sha256": "d4ac47b6864abbb20a7997f72b92244c37fc9f10347d182ba7487bf0a79e4002",
+      "export_sha256": "15ab3228da073e73389dbe8bd296551c465e301b1721944c2e709ecb7a16ed38"
+    },
+    {
+      "path": "Sources/MferenceRepack/Core/System/DiskSpaceChecker.swift",
+      "source_sha256": "c8c953fe1d1e5cd588914b847bf4ad5b825e7eeb223533b721037296ed625f68",
+      "export_sha256": "4278c3c53542b9a3b63e75d2253f9e831cea6ef274ee68174ccad1e212058783"
+    },
+    {
+      "path": "Sources/MferenceRepack/Core/System/InstallLock.swift",
+      "source_sha256": "856dd5c0b30f6f435654849aa856ffeddc50c690a0d2f4f4e7fb70a4df171c80",
+      "export_sha256": "51ddeddbf1c0e5e83709ad984fa256a27c8332fa09e60b43f2e624594e2eef89"
+    },
+    {
+      "path": "Sources/MferenceRepack/Core/System/Posix.swift",
+      "source_sha256": "2861205bac7100155b3672d22ccc8dea6268597ed52ade6309cfce3a36446eba",
+      "export_sha256": "2747451088b6330e754c00b8591bbd199483904d8afec821f561c7a07ddcd443"
+    },
+    {
+      "path": "Sources/MferenceRepack/Core/Verification/RepackAudit.swift",
+      "source_sha256": "80039d7f25ef4834aa89305251ef96ef32dc6ad246e022a82f7caaad67d485a7",
+      "export_sha256": "cfb18ce15cb3ca9c688033f54b2b9644bdfd0e356b11d1eff87813f873087376"
+    },
+    {
+      "path": "Sources/MferenceRepack/Core/Verification/Sha256Stream.swift",
+      "source_sha256": "16b81905284a8b606dcf4bed4fa96fd9d3c2e60ef83181f2aada489b0407bc40",
+      "export_sha256": "157050f34a7c91591f0a435d172ab426b74c11cf4b783523ab863eebbe213d76"
+    },
+    {
+      "path": "Sources/MferenceRepack/Core/Verification/SourceFingerprint.swift",
+      "source_sha256": "a597f07d2572e42b7ac717a872357f5a6c0111ff160ed51458c35fdf9b15fd2d",
+      "export_sha256": "01a509627a1849a443d82235ec8dd3bef9b9fcec0ea5816e22a9d0d69dc5d32a"
+    },
+    {
+      "path": "Sources/MferenceRepack/Core/Verification/VerifiedInstallReceiptWriter.swift",
+      "source_sha256": "484e3280ca2d9cfbbb65e1a3d0f6238e24a3c65e5b31a305cbb1f809e35f1814",
+      "export_sha256": "7a8b334c29970f21e8e62ccd3607fb19d0c58fc27ab93d9bb6353204e7540847"
+    },
+    {
+      "path": "Sources/MferenceRepack/Core/Verification/VerifiedInstallTool.swift",
+      "source_sha256": "f82b6f5c0aa56d3b4e79ebc38fed47e248bb958a257a38168b927e5252d93a8c",
+      "export_sha256": "c19842d026d4d1d6c0ffe47d73c353e3253b946bffe82eeaa04e3fd4bdf4ec08"
+    },
+    {
+      "path": "Sources/MferenceRepack/Core/Workflow/Errors.swift",
+      "source_sha256": "d74eeec31265a5e2d9cf1fbdf5f4aa468a2d237459b80ab66143e70066f39a8b",
+      "export_sha256": "ca5229d77c0acdebfb4cc2bee5975a6a9b40305684fc8b55617afa3e16125b81"
+    },
+    {
+      "path": "Sources/MferenceRepack/Core/Workflow/ModelInstallProgress.swift",
+      "source_sha256": "b398df4f217a65fd608e0c1b6089d8f29a0aecd5eb4e4783ea3d87108c5ea975",
+      "export_sha256": "5e748a859c1f37954563dd5464dcdc0596648362415e06959f7d3d720ef50608"
+    },
+    {
+      "path": "Sources/MferenceRepack/Core/Writing/BoundedScratch.swift",
+      "source_sha256": "d1c6e295b726b781b101b9383360bf4a137e21419a077e73488a1ab51735d1cb",
+      "export_sha256": "08d08e10a500e55bfc0cd7c0c0ae6b80276238360bd14cab4780b4445b207f4f"
+    },
+    {
+      "path": "Sources/MferenceRepack/Core/Writing/ResidentWriter.swift",
+      "source_sha256": "d6873b1138f5b02dedc5a2e8ff5354f3bda86c18538d3fb315bd66634e29b260",
+      "export_sha256": "28df49f1539e0c56cb1ea385ddc731e4467d2c7979dae3c9d27ba42f304c4787"
+    },
+    {
+      "path": "Sources/MferenceRepack/Core/Writing/WriterCore.swift",
+      "source_sha256": "7fa6c24742c7a08ae31b31ce5012582a42cf33042b8a5ea132695a78ba39c3f9",
+      "export_sha256": "fe7e65614c993629c9895c12fd840265b074fed999ef8b84451c8f9c7ca6c14e"
+    },
+    {
+      "path": "Sources/MferenceServer/Command/main.swift",
+      "source_sha256": "a60ba002ae1ea666dcb8722648c377b8ae94ba878b3261bb30b03f79f12010dc",
+      "export_sha256": "e935bbb53b94dd8a87b9abe910d1eda0ff1c7664e64fa3c42d7e7a75a90ca989"
+    },
+    {
+      "path": "Sources/MferenceServer/Core/HTTPServer.swift",
+      "source_sha256": "3df0e9ae244f4e5d4a979726a30b9396a096e9d15934dbfa1194b273c3408c5b",
+      "export_sha256": "9d627589eadaf177067b92d947e15b5a85cc272f48157e8ac168e306efd502f7"
+    },
+    {
+      "path": "Sources/MferenceServer/Core/OpenAIModels.swift",
+      "source_sha256": "d197e958ced2116ed92bff7fdec1593561d007aaf15ed54304e93f1a9f1b7f0f",
+      "export_sha256": "9bb4aeba1fb26310b9e1e3fc6b3267b8c3f4a2dd86d5e176ee3948d064f9a818"
+    },
+    {
+      "path": "Sources/MferenceServer/Core/ServerArguments.swift",
+      "source_sha256": "2448d056fb05651a1e1e4f9b947301eaa5084c8a89524d57e001c83e2e995074",
+      "export_sha256": "adb4922119c3d087cf96fe8d045764bcd1442fceb893b818ead30879642c2037"
+    },
+    {
+      "path": "Sources/MferenceServer/Core/ServerExpertCacheConfiguration.swift",
+      "source_sha256": "0223257348a052da384fb33a4e8cd62afce2efbe26b61cc1482b117826f337d7",
+      "export_sha256": "0223257348a052da384fb33a4e8cd62afce2efbe26b61cc1482b117826f337d7"
+    },
+    {
+      "path": "Sources/MferenceServer/Core/ServerInference.swift",
+      "source_sha256": "5c45924fc2a9dba03f46ca8fd5a32da05b2d84af0b63b46a4b94db298e10b916",
+      "export_sha256": "c88568f1fff174a34207ff2f4b6b39aa0a9fed3ff7914d31c6c7780438397c41"
+    },
+    {
+      "path": "Sources/MferenceServer/Core/ServerLog.swift",
+      "source_sha256": "c89bc18e5a14ec730aca6f542c23767dc5b904f51642cb9cb541080786a394a5",
+      "export_sha256": "d8a0bff6f9fc0cf8db3e847c3c0a5a386a04044e7b4285e1536df83c130b17b2"
+    },
+    {
+      "path": "Sources/MferenceServer/Core/ServerPromptCache.swift",
+      "source_sha256": "a3ed28204b7bc9fd7ccc5f79e1803204b4855192b16c3f594a44a18787afe560",
+      "export_sha256": "0f07ebf866ca36acb98ce24eb4e0478e71d689a62f0390f53d0669cb5ed51267"
+    },
+    {
+      "path": "Sources/MferenceServer/Core/ServerTerminationSignals.swift",
+      "source_sha256": "0ab298c8ba54fb897ee54ee4d25a84eb3cc1751b38c16eaaf309b5f0f13ce355",
+      "export_sha256": "669733e25836e172c3fc5852fb00cf2cad334e4865573ae5555f110ece15da1d"
+    },
+    {
+      "path": "Sources/MferenceValidation/Support/Buffers/Fp16Buffer.swift",
+      "source_sha256": "00de1b6a73ba8e065ce6d0e19cca6c9c8d7ca54cde9738349f477bc21d203de5",
+      "export_sha256": "1d60923f8e358bf5cca84798583b2619c08866a6af2cb3b0adbfd77bf36a7014"
+    },
+    {
+      "path": "Sources/MferenceValidation/Support/Fixtures/OffByMultiples.swift",
+      "source_sha256": "0f910e106bef12cffc32aff790ebecb9b82eba69ead4cb53ce67c1090bc7a0d3",
+      "export_sha256": "55526209dbf1a795a6333eca2df588d85290231bc282ac3686a260afbee7bf88"
+    },
+    {
+      "path": "Sources/MferenceValidation/Support/Fixtures/ScriptedLogitProducer.swift",
+      "source_sha256": "6bc4e4a85da9fcbce2e7ad9098960c69be44ee40becae06157961e58ad88c44a",
+      "export_sha256": "ed2abfac25cb8fe55d949a878597ccf1c6893cd8bd78a62918d1dda0a41c06ad"
+    },
+    {
+      "path": "Sources/MferenceValidation/Support/PRNG/SeedTree.swift",
+      "source_sha256": "d0c084c3af39f1af4d031168815cf7799e63df46b9ad023359d475c743e8f148",
+      "export_sha256": "a9156f0d1d52ea23e36c9b6de4dd1327d5cd84f8fd37f7d2f710bd66ec1ee64b"
+    },
+    {
+      "path": "Sources/MferenceValidation/Support/PRNG/SplitMix64.swift",
+      "source_sha256": "d1f08e3b1e5fae2c1e5fac83b42d678a12a015800729b64ae90ecf8401958d51",
+      "export_sha256": "199319d04ca15fbf7ee06626d231e0430c35bc24f50c0d12d434235a3a04a7bc"
+    },
+    {
+      "path": "Sources/MferenceValidation/Support/Reference/Attention/Attention.swift",
+      "source_sha256": "72ea53bc626547b6be6a99e797bc939b8b77b5579b09d17158490845b065f747",
+      "export_sha256": "3cddcbe2a70748020f33ac6144feda1c91af3ea4d870b976ed2da4df505fb92d"
+    },
+    {
+      "path": "Sources/MferenceValidation/Support/Reference/Attention/RoPE.swift",
+      "source_sha256": "b01ec35e38124b3dac46ace7edab7cc7fca068005a3188e058bd4663c9a25d92",
+      "export_sha256": "b21c371e7131693fb7c80e171fccbeba6d5ffd0611d1acf075ce2241cc8d2597"
+    },
+    {
+      "path": "Sources/MferenceValidation/Support/Reference/MoE/Moe.swift",
+      "source_sha256": "ca6ebb9bb18ce7b477f908fa2e8738fd97b437092531ec38f5b73e8a4af9fc0a",
+      "export_sha256": "7dc60515e2a58cbfe147c593ee459499e295ee36a1a0ce010f9340fbfd0a8aee"
+    },
+    {
+      "path": "Sources/MferenceValidation/Support/Reference/Primitives/RmsNorm.swift",
+      "source_sha256": "a0c5bb847e18d00ff952f61feaecb4d3d05f3249a1621afff95a5009c694f5b5",
+      "export_sha256": "2a36f7e73e9b90667ff62a0b4cd4fa66badf46d5d1b74dc725fa13bd86bf973a"
+    },
+    {
+      "path": "Sources/MferenceValidation/Support/Reference/Primitives/Wht.swift",
+      "source_sha256": "f6366119563cd81905520ba1698acc63607b4b35d77cc3c8096c70005d6e6a83",
+      "export_sha256": "62e96dc076a2744873c367c9dc9b33dc9c66bce07cb6977fd5b39607c8821bca"
+    },
+    {
+      "path": "Sources/MferenceValidation/Support/Reference/Quant/DequantInt4Gemv.swift",
+      "source_sha256": "2dd5ec87735f12d703dc09507a169ef50b4bf7fe1f4ce8844c2cc5b209b94bfc",
+      "export_sha256": "4ac41e858629802065a5d18e1a1d4a068e9846bfef34690a84d5e7b111dff188"
+    },
+    {
+      "path": "Sources/MferenceValidation/Support/Reference/Quant/DequantInt8Gemv.swift",
+      "source_sha256": "9f0b33789412ea3c21ea784da9bec8fbfb87d2c2816dd24a71a558ea255ba367",
+      "export_sha256": "53e1acf20955b81ebeaeb410143def4ccef82ce3cf02c96ea0dca8752dbb4116"
+    },
+    {
+      "path": "Sources/MferenceValidation/Support/Reference/Quant/EmbedLookup.swift",
+      "source_sha256": "ed75760487f07db6e7fc20bdcb719ed4ccd5009b460ef7bd8b3777f1a607a673",
+      "export_sha256": "c2cc76bf0e25de67aa77e5a2b6addaa93d8fcada26f44db39bec61efda5b9699"
+    },
+    {
+      "path": "Sources/MferenceValidation/Support/Reference/Sampling/LogitSoftcapSoftmax.swift",
+      "source_sha256": "4dd33e884ee249956a95dc39bdde2b608ee79e4b09590e7cb4e2505a3e22a27a",
+      "export_sha256": "06c3bab53cef2a33a7ead3379a4c02a74cdbfbd7d15d918d31e50de5197e403f"
+    },
+    {
+      "path": "Sources/MferenceValidation/Support/Tolerance/RelError.swift",
+      "source_sha256": "cc8b11546f6a72fff018135f67c341f422b0651ad23253a3a7e1e5cfb1735d02",
+      "export_sha256": "329580cfe1021a8a19dea7330ce7445273b4837ad8a150e26e459cb16f38c310"
+    },
+    {
+      "path": "Sources/MferenceValidation/Support/Tolerance/Tolerances.swift",
+      "source_sha256": "740dfdda3f76e6887a69dd248a0b1a84ad916765d85388907cde07ea89e4b78f",
+      "export_sha256": "15b1b15606c4d26ecf0be9f9540cf834f5e2ddc1579d4ed0670c3a3cdbe70765"
+    },
+    {
+      "path": "THIRD_PARTY_NOTICES.md",
+      "source_sha256": "f9e5429215952f7f0929c9ab36a7fe60d2b13f2e71f1e765768a560301fa8852",
+      "export_sha256": "42f6106385e9a70b7e15b72b73ff9afd58f09b70bb211e3dfd4279d1fa72927f"
+    }
+  ],
+  "export_hash_format": "SHA-256 of source text after CRLF to LF normalization"
+}

@@ -56,10 +56,10 @@ def _require_model_path(cfg: dict, cfg_name: str, preset: dict) -> str:
     mode = str((preset or {}).get('mode') or 'local').strip().lower() or 'local'
     raise ValueError(f'mlx-serve: the {cfg_name!r} block has no model_path (preset mode={mode!r}; keys present: {sorted(cfg or {})}). A {mode!r} preset keeps its mlx-serve config in {cfg_name!r}, so set model_path there. NOT falling back to the other block -- that would launch a different checkpoint than the preset names.')
 
-def mlx_serve_argv(preset: dict, *, port: int=8080, config: Optional[dict]=None, config_name: str='', bind_address: Optional[str]=None) -> Optional[list[str]]:
+def mlx_serve_argv(preset: dict, *, port: int=8080, config: Optional[dict]=None, config_name: str='', bind_address: Optional[str]=None, binary: Optional[str]=None) -> Optional[list[str]]:
     cfg, cfg_name = _resolve_config(preset, config, config_name)
     model = _require_model_path(cfg, cfg_name, preset)
-    binary = find_mlx_serve()
+    binary = binary or find_mlx_serve()
     if binary is None:
         return None
     bind = str(cfg.get('mlx_serve_bind_address') or '').strip() or str(bind_address or '').strip() or DEFAULT_MLX_SERVE_BIND

@@ -11,7 +11,7 @@ from .journal import Journal
 def verify_model_receipt(cfg):
     """Single-engine serving: hash the model once here (install/check/start), with progress on
     the console, so the first prompt finds the receipt cached. None when not applicable."""
-    if cfg.get('mac') or cfg.get('serving', 'single_engine') != 'single_engine' or not cfg.get('model')             or not path(cfg['model']).is_file():
+    if cfg.get('general') or cfg.get('mac') or cfg.get('serving', 'single_engine') != 'single_engine' or not cfg.get('model')             or not path(cfg['model']).is_file():
         return None
     from .native_broker import model_receipt
     from .single_runtime import receipt_config
@@ -31,6 +31,17 @@ def check(cfg, *, verify_journal=True):
         record('host_memory', True, f'available={available}; admitted RSS budget={cfg["host_budget_gib"]} GiB')
     except MemoryError as exc:
         record('host_memory', False, exc)
+    if cfg.get('general'):
+        from .backends import backend
+        general=cfg['general'];spec=backend(general.get('mac',{}).get('backend','mlx-receiver'))
+        record('decode_backend',True,spec.name+' / '+spec.transport)
+        if general.get('mode','streaming')=='streaming':
+            from .general_engine import launch_spec
+            argv,env,url=launch_spec(cfg)
+            record('general_producer',Path(argv[0]).is_file(),argv[0])
+            record('model',path(cfg['model']).is_file(),'Existing RTX GGUF (first shard for split models)')
+        else:record('remote_endpoint',bool(general.get('endpoint')),'OpenAI endpoint configured')
+        return rows
     from .memory_counters import diagnostic_snapshot as snapshot
     counters = snapshot()
     supported = 'error' not in counters and ('pages_output' in counters or 'vm_stat' in counters or 'swap_out_bytes' in counters)
