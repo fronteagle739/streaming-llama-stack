@@ -119,24 +119,24 @@ struct llama_dsv41_engram_prompt_cache::implementation {
     };
 public:
     void prepare(const llama_dsv41::engram_layout& layout,const int32_t* tokens,uint32_t count,
-                 const std::array<uint64_t,2>& offsets,uint64_t admitted_host_bytes,llama_dsv41::engram_history initial){
+                 const std::array<uint64_t,2>& offsets,uint64_t admitted_host_bytes,llama_dsv41::engram_history initial,const uint8_t* text_mask){
         require(!attempted&&tokens&&count&&count<=1048576,"Invalid or repeated whole-prompt Engram preparation");attempted=true;
         // Charge both full-capacity ID vectors before allocating them. Dedup
         // does not reduce their capacity, so the final plan retains that charge.
         const uint64_t id_limit=uint64_t(count)*48*sizeof(uint32_t);
-        require(add(id_limit,4*1024*1024)<=admitted_host_bytes,"Engram prompt IDs exceed explicit provider host admission");
+        const uint64_t mask_bytes=text_mask?count:0;
+        require(add(id_limit,4*1024*1024+mask_bytes)<=admitted_host_bytes,"Engram prompt IDs exceed explicit provider host admission");
         for(auto& t:tables)t.ids.reserve(size_t(count)*24);
         llama_dsv41::engram_history history=initial;
         std::vector<llama_dsv41::engram_rows> rows(1024);
-        std::array<uint8_t,1024> mask;mask.fill(1);
         std::string why;
         for(uint32_t start=0;start<count;start+=1024){
             const auto n=std::min(1024u,count-start);
-            require(llama_dsv41::engram_hash(layout,history,tokens+start,mask.data(),n,rows.data(),why),"Whole-prompt native Engram hash failed");
+            require(llama_dsv41::engram_hash(layout,history,tokens+start,text_mask?text_mask+start:nullptr,n,rows.data(),why),"Whole-prompt native Engram hash failed");
             for(uint32_t i=0;i<n;++i)for(size_t table=0;table<2;++table)
                 tables[table].ids.insert(tables[table].ids.end(),rows[i][table].begin(),rows[i][table].end());
         }
-        host_plan=4*1024*1024; // bounded aligned slots, ring queues and metadata
+        host_plan=4*1024*1024+mask_bytes; // IO reserve plus caller's borrowed mask
         for(size_t i=0;i<2;++i){
             auto& t=tables[i];std::sort(t.ids.begin(),t.ids.end());
             t.ids.erase(std::unique(t.ids.begin(),t.ids.end()),t.ids.end());
@@ -300,8 +300,8 @@ public:
     static constexpr uint32_t small_slot=8192,large_slot=llama_dsv41_engram_plan::default_merge_cap;
     void prepare_early(const llama_dsv41::engram_layout& layout,const int32_t* tokens,uint32_t count,
                        const std::array<uint64_t,2>& offsets,uint64_t admitted,llama_dsv41::engram_history initial,
-                       std::shared_ptr<const llama_dsv41_engram_prompt_cache> prior_cache){
-        prepare(layout,tokens,count,offsets,admitted,initial); // host_plan holds the fixed 4 MiB IO reserve
+                       std::shared_ptr<const llama_dsv41_engram_prompt_cache> prior_cache,const uint8_t* text_mask){
+        prepare(layout,tokens,count,offsets,admitted,initial,text_mask); // host_plan holds the fixed 4 MiB IO reserve
         early_mode=true;prior=std::move(prior_cache);
         early_rings=env_u32("LLAMADECODE_ENGRAM_RINGS",4,1,8);
         const uint32_t depth=env_u32("LLAMADECODE_ENGRAM_DEPTH",1024,32,4096);
@@ -597,11 +597,11 @@ struct llama_dsv41_engram_prompt_cache::implementation {};
 #endif
 llama_dsv41_engram_prompt_cache::llama_dsv41_engram_prompt_cache():p(new implementation){}
 llama_dsv41_engram_prompt_cache::~llama_dsv41_engram_prompt_cache()=default;
-void llama_dsv41_engram_prompt_cache::prepare(const llama_dsv41::engram_layout &l,const int32_t*t,uint32_t n,const std::array<uint64_t,2>&o,uint64_t b,llama_dsv41::engram_history initial){
+void llama_dsv41_engram_prompt_cache::prepare(const llama_dsv41::engram_layout &l,const int32_t*t,uint32_t n,const std::array<uint64_t,2>&o,uint64_t b,llama_dsv41::engram_history initial,const uint8_t* text_mask){
 #ifdef _WIN32
- p->prepare(l,t,n,o,b,initial);
+ p->prepare(l,t,n,o,b,initial,text_mask);
 #else
- (void)l;(void)t;(void)n;(void)o;(void)b;throw std::runtime_error("Engram IoRing requires Windows");
+ (void)l;(void)t;(void)n;(void)o;(void)b;(void)initial;(void)text_mask;throw std::runtime_error("Engram IoRing requires Windows");
 #endif
 }
 uint64_t llama_dsv41_engram_prompt_cache::budget()const{
@@ -626,11 +626,11 @@ uint64_t llama_dsv41_engram_prompt_cache::planned_requests()const{
 #endif
 }
 void llama_dsv41_engram_prompt_cache::prepare_early(const llama_dsv41::engram_layout &l,const int32_t*t,uint32_t n,const std::array<uint64_t,2>&o,uint64_t b,llama_dsv41::engram_history initial,
-        std::shared_ptr<const llama_dsv41_engram_prompt_cache> prior){
+        std::shared_ptr<const llama_dsv41_engram_prompt_cache> prior,const uint8_t* text_mask){
 #ifdef _WIN32
- p->prepare_early(l,t,n,o,b,initial,std::move(prior));
+ p->prepare_early(l,t,n,o,b,initial,std::move(prior),text_mask);
 #else
- (void)l;(void)t;(void)n;(void)o;(void)b;(void)initial;(void)prior;throw std::runtime_error("Engram IoRing requires Windows");
+ (void)l;(void)t;(void)n;(void)o;(void)b;(void)initial;(void)prior;(void)text_mask;throw std::runtime_error("Engram IoRing requires Windows");
 #endif
 }
 void llama_dsv41_engram_prompt_cache::load_early(const wchar_t*path,void*file,uint64_t n,const std::function<bool()>&stop){

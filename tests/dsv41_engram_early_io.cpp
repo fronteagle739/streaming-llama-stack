@@ -70,9 +70,9 @@ int main(int argc, char **argv) {
     auto make_tokens = [&](size_t n) { std::vector<int32_t> t(n); for (auto &x : t) x = int32_t(rng() % 129280); return t; };
     // Every prompt row: compare early cache vs file bytes and vs a reference cache.
     auto check = [&](const llama_dsv41_engram_prompt_cache &c, const llama_dsv41_engram_prompt_cache *ref,
-                     const std::vector<int32_t> &tokens, llama_dsv41::engram_history h) {
+                     const std::vector<int32_t> &tokens, llama_dsv41::engram_history h, const uint8_t *mask = nullptr) {
         std::vector<llama_dsv41::engram_rows> rows(tokens.size());
-        if (!llama_dsv41::engram_hash(layout, h, tokens.data(), nullptr, tokens.size(), rows.data(), why)) return false;
+        if (!llama_dsv41::engram_hash(layout, h, tokens.data(), mask, tokens.size(), rows.data(), why)) return false;
         uint8_t got[264], want[264], other[264];
         for (const auto &r : rows) for (uint32_t t = 0; t < 2; ++t) for (uint32_t id : r[t]) {
             const uint64_t off = offsets[t] + uint64_t(id) * 264;
@@ -91,6 +91,21 @@ int main(int argc, char **argv) {
     reference->prepare(layout, tokens.data(), uint32_t(tokens.size()), offsets, admitted);
     reference->load(path.c_str(), verified, file_bytes, [] { return false; });
     expect(check(*reference, nullptr, tokens, {}), "reference loader rows equal file bytes");
+
+    {   // Image masks cross planner blocks and reset all three history slots.
+        // Read every required row against the exact masked hash and file bytes;
+        // an unmasked cache misses some of these rows even with identical IDs.
+        std::vector<uint8_t> mask(tokens.size(), 1);
+        for (size_t i : {size_t(0), size_t(1023), size_t(1024), tokens.size() - 1}) mask[i] = 0;
+        llama_dsv41::engram_history h; h.tail = {{11, 22, 33}};
+        llama_dsv41_engram_prompt_cache ref, cached;
+        ref.prepare(layout, tokens.data(), uint32_t(tokens.size()), offsets, admitted, h, mask.data());
+        ref.load(path.c_str(), verified, file_bytes, [] { return false; });
+        cached.prepare_early(layout, tokens.data(), uint32_t(tokens.size()), offsets, admitted, h, nullptr, mask.data());
+        cached.load_early(path.c_str(), verified, file_bytes, [] { return false; });
+        expect(cached.budget() <= admitted && check(cached, &ref, tokens, h, mask.data()),
+               "image mask: batched rows match exact masked reader across block boundaries and restored history");
+    }
 
     struct setting { const char *rings, *depth, *batch; };
     for (const setting s : {setting{"4", "1024", "256"}, setting{"1", "32", "1"}, setting{"8", "4096", "4096"}, setting{"3", "100", "7"}}) {

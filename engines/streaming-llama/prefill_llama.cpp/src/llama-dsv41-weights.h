@@ -88,7 +88,7 @@ public:
     capacity budget() const;
     ggml_backend_t backend() const;
     bool prepare_engram_prompt(const std::vector<int32_t> &tokens,
-         const std::function<bool()> &cancelled,std::string &error,llama_dsv41::engram_history initial={});
+         const std::function<bool()> &cancelled,std::string &error,llama_dsv41::engram_history initial={},const uint8_t* text_mask=nullptr);
     // DS4COMBO producer-warm: start the whole-prompt Engram row cache for a
     // known later request on its own IoRing; prepare_engram_prompt adopts it
     // for exactly these tokens/history. Both caches are charged to admission.
