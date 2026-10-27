@@ -16,7 +16,7 @@ def unpack(data,*,base=0):
     require(isinstance(data,bytes) and 12<=len(data)<=MAX_BODY,'body extent')
     require(data[:4]==b'SLVP','version')
     nt,nm=struct.unpack_from('<II',data,4)
-    require(0<nt<=49152*4 and nt%4==0 and 0<nm<=65536 and 12+nt+nm<=len(data),'header extent')
+    require(0<nt<=1000000*4 and nt%4==0 and 0<nm<=65536 and 12+nt+nm<=len(data),'header extent')
     tokens=data[12:12+nt];ids=struct.unpack('<%dI'%(nt//4),tokens)
     require(all(t<129280 for t in ids),'token range')
     def pairs(items):

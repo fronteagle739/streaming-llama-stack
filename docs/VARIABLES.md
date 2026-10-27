@@ -121,9 +121,9 @@ Native controls take effect at token boundaries. The response reports requested 
 | `--zig-global-cache-dir` | ds4-win: `{runtime_root}/cache/zig_global_cache_dir`; mac-ds4: `{runtime_root}/cache/zig_global_cache_dir`; rtx-llama: `{runtime_root}/cache/zig_global_cache_dir`; image: `{runtime_root}/cache/zig_global_cache_dir`; video: `{runtime_root}/cache/zig_global_cache_dir`; studio: `{runtime_root}/cache/zig_global_cache_dir`; mlx-serve: `{runtime_root}/cache/zig_global_cache_dir`; mac-mlx: `{runtime_root}/cache/zig_global_cache_dir`; mac-llama: `{runtime_root}/cache/zig_global_cache_dir`; mac-mference: `{runtime_root}/cache/zig_global_cache_dir` | Runtime-local cache/temp directory; no model download is performed. |
 | `--zig-local-cache-dir` | ds4-win: `{runtime_root}/cache/zig_local_cache_dir`; mac-ds4: `{runtime_root}/cache/zig_local_cache_dir`; rtx-llama: `{runtime_root}/cache/zig_local_cache_dir`; image: `{runtime_root}/cache/zig_local_cache_dir`; video: `{runtime_root}/cache/zig_local_cache_dir`; studio: `{runtime_root}/cache/zig_local_cache_dir`; mlx-serve: `{runtime_root}/cache/zig_local_cache_dir`; mac-mlx: `{runtime_root}/cache/zig_local_cache_dir`; mac-llama: `{runtime_root}/cache/zig_local_cache_dir`; mac-mference: `{runtime_root}/cache/zig_local_cache_dir` | Runtime-local cache/temp directory; no model download is performed. |
 
-Budget placeholders use the admitted child budget: `{host_budget_bytes}`, `{host_budget_mb}` and `{physical_floor_bytes}`. `{host_budget_gib}` and `{min_available_gib}` use GiB. User overrides are literal strings, including JSON and braces.
+Budget placeholders use the admitted child budget: `{host_budget_bytes}`, `{host_budget_mb}`, `{physical_floor_bytes}` (admission) and `{runtime_floor_bytes}` (runtime). `{host_budget_gib}` and `{min_available_gib}` use GiB. User overrides are literal strings, including JSON and braces.
 
-Hardware commands use the pinned shared ownership/paging guard and have an active-command limit of 19 minutes. It enforces the physical budget/floor and a separate Windows device-backing commit allowance. Windows owned-page observations are bounded and incremental; Darwin disk-only process attribution is unavailable. Zero observed pages does not establish exhaustive zero pagefile I/O. Resource leases remain held if owned cleanup cannot be confirmed.
+Hardware commands use the pinned shared ownership/paging guard. Model operations wait while progress advances; only stalled work expires. It enforces the physical budget/floor and a separate Windows device-backing commit allowance. Windows owned-page observations are bounded and incremental; Darwin disk-only process attribution is unavailable. Zero observed pages does not establish exhaustive zero pagefile I/O. Resource leases remain held if owned cleanup cannot be confirmed.
 
 Examples (edit paths in the config first):
 
@@ -46902,7 +46902,7 @@ DS4_NATIVE_FRONTIER: advanced engine setting; built-in default retained
 
 Scope: mac-ds4. Class: advanced.
 
-Source: `engines/ds4-mac/ds4_native_frontier.inc:502`. Unset read: Wrapper/conditional default: see the literal call and consumer below.
+Source: `engines/ds4-mac/ds4_native_frontier.inc:513`. Unset read: Wrapper/conditional default: see the literal call and consumer below.
 
 ```text
                         ds4_nf_config **out, char *err, size_t cap) {
@@ -46914,7 +46914,7 @@ Source: `engines/ds4-mac/ds4_native_frontier.inc:502`. Unset read: Wrapper/condi
         ds4_engine_has_mtp(engine) || opt->directional_steering_file || opt->load_slice ||
 ```
 
-Source: `engines/ds4-mac/ds4_native_frontier.inc:679`. Unset read: NULL from getenv; the literal consumer below supplies any fallback.
+Source: `engines/ds4-mac/ds4_native_frontier.inc:690`. Unset read: NULL from getenv; the literal consumer below supplies any fallback.
 
 ```text
                         ds4_nf_config **out,char *err,size_t cap) {
@@ -46944,7 +46944,7 @@ DS4_NATIVE_FRONTIER_DEADLINE_SECONDS: advanced engine setting; built-in default 
 
 Scope: mac-ds4. Class: advanced.
 
-Source: `engines/ds4-mac/ds4_native_frontier.inc:527`. Unset read: Wrapper/conditional default: see the literal call and consumer below.
+Source: `engines/ds4-mac/ds4_native_frontier.inc:538`. Unset read: Wrapper/conditional default: see the literal call and consumer below.
 
 ```text
         !ds4_nf_env_uint("DS4_NATIVE_FRONTIER_MIN_TOKENS",&c->minimum_tokens,1,1048575) ||
@@ -46962,7 +46962,7 @@ DS4_NATIVE_FRONTIER_DIRECTORY: advanced engine setting; built-in default retaine
 
 Scope: mac-ds4. Class: advanced.
 
-Source: `engines/ds4-mac/ds4_native_frontier.inc:513`. Unset read: Wrapper/conditional default: see the literal call and consumer below.
+Source: `engines/ds4-mac/ds4_native_frontier.inc:524`. Unset read: Wrapper/conditional default: see the literal call and consumer below.
 
 ```text
      * file; never infer that this Mac's local install token is accepted there. */
@@ -46980,7 +46980,7 @@ DS4_NATIVE_FRONTIER_IPV4: advanced engine setting; built-in default retained
 
 Scope: mac-ds4. Class: advanced.
 
-Source: `engines/ds4-mac/ds4_native_frontier.inc:509`. Unset read: Wrapper/conditional default: see the literal call and consumer below.
+Source: `engines/ds4-mac/ds4_native_frontier.inc:520`. Unset read: Wrapper/conditional default: see the literal call and consumer below.
 
 ```text
         opt->tp.role != DS4_TP_NONE || opt->distributed.role != DS4_DISTRIBUTED_NONE)
@@ -46998,7 +46998,7 @@ DS4_NATIVE_FRONTIER_MAX_TOKENS: advanced engine setting; built-in default retain
 
 Scope: mac-ds4. Class: advanced.
 
-Source: `engines/ds4-mac/ds4_native_frontier.inc:526`. Unset read: Wrapper/conditional default: see the literal call and consumer below.
+Source: `engines/ds4-mac/ds4_native_frontier.inc:537`. Unset read: Wrapper/conditional default: see the literal call and consumer below.
 
 ```text
         !ds4_nf_env_uint("DS4_NATIVE_FRONTIER_PORT",&port,1,65535) ||
@@ -47016,7 +47016,7 @@ DS4_NATIVE_FRONTIER_MIN_TOKENS: advanced engine setting; built-in default retain
 
 Scope: mac-ds4. Class: advanced.
 
-Source: `engines/ds4-mac/ds4_native_frontier.inc:525`. Unset read: Wrapper/conditional default: see the literal call and consumer below.
+Source: `engines/ds4-mac/ds4_native_frontier.inc:536`. Unset read: Wrapper/conditional default: see the literal call and consumer below.
 
 ```text
     if (!ds4_nf_pair_token(token_file,c->token) ||
@@ -47034,7 +47034,7 @@ DS4_NATIVE_FRONTIER_PAIR_TOKEN_FILE: advanced engine setting; built-in default r
 
 Scope: mac-ds4. Class: advanced.
 
-Source: `engines/ds4-mac/ds4_native_frontier.inc:512`. Unset read: Wrapper/conditional default: see the literal call and consumer below.
+Source: `engines/ds4-mac/ds4_native_frontier.inc:523`. Unset read: Wrapper/conditional default: see the literal call and consumer below.
 
 ```text
     /* Activation may provision the already paired RTX credential in a private
@@ -47052,7 +47052,7 @@ DS4_NATIVE_FRONTIER_PORT: advanced engine setting; built-in default retained
 
 Scope: mac-ds4. Class: advanced.
 
-Source: `engines/ds4-mac/ds4_native_frontier.inc:524`. Unset read: Wrapper/conditional default: see the literal call and consumer below.
+Source: `engines/ds4-mac/ds4_native_frontier.inc:535`. Unset read: Wrapper/conditional default: see the literal call and consumer below.
 
 ```text
     c->dirfd=-1; uint32_t port;
@@ -47070,7 +47070,7 @@ DS4_NATIVE_FRONTIER_QUALIFICATION: advanced engine setting; built-in default ret
 
 Scope: mac-ds4. Class: advanced.
 
-Source: `engines/ds4-mac/ds4_native_frontier.inc:514`. Unset read: Wrapper/conditional default: see the literal call and consumer below.
+Source: `engines/ds4-mac/ds4_native_frontier.inc:525`. Unset read: Wrapper/conditional default: see the literal call and consumer below.
 
 ```text
     const char *token_file=ds4_nf_env("DS4_NATIVE_FRONTIER_PAIR_TOKEN_FILE");
@@ -47088,7 +47088,7 @@ DS4_NATIVE_FRONTIER_QUALIFICATION_SHA256: advanced engine setting; built-in defa
 
 Scope: mac-ds4. Class: advanced.
 
-Source: `engines/ds4-mac/ds4_native_frontier.inc:515`. Unset read: Wrapper/conditional default: see the literal call and consumer below.
+Source: `engines/ds4-mac/ds4_native_frontier.inc:526`. Unset read: Wrapper/conditional default: see the literal call and consumer below.
 
 ```text
     const char *directory=ds4_nf_env("DS4_NATIVE_FRONTIER_DIRECTORY");
@@ -47106,7 +47106,7 @@ DS4_NATIVE_FRONTIER_RENDERER_SHA256: advanced engine setting; built-in default r
 
 Scope: mac-ds4. Class: advanced.
 
-Source: `engines/ds4-mac/ds4_native_frontier.inc:516`. Unset read: Wrapper/conditional default: see the literal call and consumer below.
+Source: `engines/ds4-mac/ds4_native_frontier.inc:527`. Unset read: Wrapper/conditional default: see the literal call and consumer below.
 
 ```text
     const char *qualification=ds4_nf_env("DS4_NATIVE_FRONTIER_QUALIFICATION");

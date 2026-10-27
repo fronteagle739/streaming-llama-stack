@@ -10,6 +10,7 @@ from .journal import atomic_json
 from .lease import HoldWatcher
 from .native_broker import vendor
 from .config import ROOT
+from .progress import Window, activity
 
 vendor()
 from studio.job_guard import GuardedJob
@@ -42,10 +43,20 @@ def supervise(spec):
                 raise RuntimeError('owning process exited')
             if holds and (reason := holds.reason()):
                 raise RuntimeError('Yielding to shared hold: ' + reason)
+            if spec.get('runtime_min_free_gib',0):
+                from .memory_counters import available_physical_bytes
+                if available_physical_bytes()<spec['runtime_min_free_gib']*GiB:
+                    raise MemoryError('Runtime physical RAM floor crossed')
+            if self.child is not None:
+                progress.observe(activity(self.child.pid, spec['log']))
+                if progress.expired():
+                    raise TimeoutError('Owned operation made no progress within its stall window')
+                self.deadline = progress.last + progress.seconds
     receipt = Path(spec['receipt'])
     certificate = receipt.with_suffix('.shared.json')
     host = spec['host_budget_gib'] * GiB
     commitment = spec['job_commit_gib'] * GiB if os.name == 'nt' else host
+    progress = Window(spec['timeout_s'])
     job = Adapter(rss_limit=host,commit_limit=host,floor=spec['min_available_gib']*GiB,
                   device_commit_allowance=max(0,commitment-host) if os.name=='nt' else 0,
                   seconds=spec['timeout_s'],receipt=certificate)
@@ -65,6 +76,7 @@ def supervise(spec):
         record = {'exit_code':code,'reason':reason,'peak_tree_rss':job.record['peak_rss'],
                   'min_available':job.record['minimum_available'],'elapsed_s':time.monotonic()-started,
                   'host_budget_gib':spec['host_budget_gib'],'floor_gib':spec['min_available_gib'],
+                  'no_progress_window_s':spec['timeout_s'],
                   'job_commit_gib':commitment/GiB,
                   'child_pid':job.child.pid if job.child else None,
                   'shared_guard_commit':'2774636281ab32bf871497f0a8caae23c6b6cdc7',

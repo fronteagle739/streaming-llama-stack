@@ -1,5 +1,33 @@
 /* CPU-only independent owner bytes: immutable compressed prefixes and mutable
  * ring/tail owners. Compare an incremental catch-up snapshot with a full hash. */
+typedef struct {int listener,reply;bool failed;} reply_fixture;
+static void*reply_fixture_worker(void*ud){
+    reply_fixture*f=ud;
+    for(int i=0;i<(f->failed?1:5);i++){
+        int fd=accept(f->listener,NULL,NULL);assert(fd>=0);char request[4096];size_t n=0;
+        while(n<sizeof(request)-1){assert(read(fd,request+n,1)==1);n++;request[n]=0;if(strstr(request,"\r\n\r\n"))break;}
+        char body[512],response[1024];int bytes=snprintf(body,sizeof(body),"{\"session\":\"0123456789abcdef0123456789abcdef\",\"model_sha256\":\"%s\",\"state\":\"%s\"}",DS4_NF_MODEL_SHA,f->failed?"failed":"ready");
+        int len=snprintf(response,sizeof(response),"HTTP/1.1 200 OK\r\nContent-Length: %d\r\nConnection: close\r\n\r\n%s",bytes,body);
+        assert(write(fd,response,(size_t)len)==len);close(fd);
+    }
+    if(!f->failed)assert(write(f->reply,"X",1)==1);
+    close(f->listener);return NULL;
+}
+static void test_progressing_hash_reply(void){
+    for(int failed=0;failed<2;failed++){
+        int pair[2];assert(!socketpair(AF_UNIX,SOCK_STREAM,0,pair));
+        int listener=socket(AF_INET,SOCK_STREAM,0);assert(listener>=0);
+        struct sockaddr_in addr={.sin_family=AF_INET,.sin_addr.s_addr=htonl(INADDR_LOOPBACK)};
+        assert(!bind(listener,(void*)&addr,sizeof(addr))&&!listen(listener,8));socklen_t size=sizeof(addr);assert(!getsockname(listener,(void*)&addr,&size));
+        ds4_ns_config cfg={0};cfg.http.broker=addr;strcpy(cfg.http.host,"localhost");strcpy(cfg.http.token,"cpu-fixture");
+        ds4_ns_session s={.config=&cfg};strcpy(s.id,"0123456789abcdef0123456789abcdef");
+        reply_fixture f={listener,pair[1],failed};pthread_t worker;assert(!pthread_create(&worker,NULL,reply_fixture_worker,&f));
+        double start=ds4_nf_now();ds4_nf_io io={.fd=pair[0],.deadline=start+.25,.last_activity=start,.progress_window=.25};
+        assert(ds4_ns_await_reply(&s,&io,.25)==!failed);
+        if(!failed)assert(ds4_nf_now()-start>.25);
+        pthread_join(worker,NULL);close(pair[0]);close(pair[1]);
+    }
+}
 typedef struct {dsv41_c_span spans[55];uint32_t count,position;bool corrupt;} async_fixture;
 static int async_fixture_read(void*ud,uint32_t index,uint64_t off,void*dst,size_t n){
     async_fixture*f=ud;if(index>=f->count||off+n>f->spans[index].bytes)return 0;

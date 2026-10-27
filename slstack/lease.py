@@ -156,6 +156,9 @@ def gpu_lease(cfg):
     if parent:
         # Only a live process ancestor may delegate its existing reservation.
         # Children never release it or claim another GPU window inside it.
+        # The timestamp is a reservation estimate, not a wall-clock kill switch.
+        # Live ancestor identity, the unreleased hold and the independent
+        # progress/RAM/paging guards remain authoritative during long work.
         record = Path(parent)
         row = json.loads(record.read_text(encoding='utf-8'))
         owner = next((p for p in [psutil.Process(), *psutil.Process().parents()]
@@ -166,8 +169,7 @@ def gpu_lease(cfg):
                 or Path(row.get('hold_file', '')).resolve() != hold.resolve()
                 or record.name != str(row.get('id')) + '.json'
                 or cfg['host_budget_gib'] > row.get('host_budget_gib', 0)
-                or cfg['min_available_gib'] < row.get('min_available_gib', float('inf'))
-                or datetime.now(timezone.utc) >= datetime.fromisoformat(row['expires'])):
+                or cfg['min_available_gib'] < row.get('min_available_gib', float('inf'))):
             raise AdmissionRefused('Inherited GPU reservation is not a live compatible ancestor lease')
         lines = active_holds(hold.read_text(encoding='utf-8-sig'))
         own = [line for line in lines if re.match(

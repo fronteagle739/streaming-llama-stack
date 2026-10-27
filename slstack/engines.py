@@ -84,7 +84,7 @@ class Engines:
         return not self.cfg.get('mac') and not self.cfg['lora'] and os.name == 'nt' and not self.single_engine()
 
     def single(self, operation):
-        return http_json(self.cfg['ds4_url'] + '/v1/stack/' + operation, {}, timeout=self.cfg['request_timeout_s'],
+        return http_json(self.cfg['ds4_url'] + '/v1/stack/' + operation, {}, timeout=None,
                          headers={'Authorization': 'Bearer ' + self.cfg['_control_token']})
 
     def expert_list(self):
@@ -92,7 +92,7 @@ class Engines:
 
     def combo(self, operation, **extra):
         row = dict(session=self.combo_session, owner_epoch=self.combo_epoch, sequence=self.combo_sequence, **extra)
-        reply = http_json(self.cfg['ds4_url'] + '/decode/' + operation, row, timeout=self.cfg['request_timeout_s'],
+        reply = http_json(self.cfg['ds4_url'] + '/decode/' + operation, row, timeout=None,
                           headers={'Authorization': 'Bearer ' + self.cfg['_control_token']})
         if (reply.get('status'), reply.get('session'), reply.get('owner_epoch'), reply.get('next_sequence')) != \
                 ('complete', self.combo_session, self.combo_epoch, self.combo_sequence + 1):
@@ -376,10 +376,10 @@ class Engines:
         if not self.single_engine():
             raise ValueError('Streaming requires the paired Mac receiver or the single engine')
         # The single engine streams its own SSE: content deltas, 1 Hz prefill_progress chunks
-        # and timings on the finish chunk. Its beats keep each read inside request_timeout_s.
+        # and timings on the finish chunk. Its independent progress guard owns liveness.
         from .streaming import events
         yield from events(self.cfg['ds4_url'] + '/v1/chat/completions', {**body, 'stream': True},
-                          timeout=self.cfg['request_timeout_s'],
+                          timeout=None,
                           headers={'Authorization': 'Bearer ' + self.cfg['_control_token']})
 
     def media(self, kind, params):

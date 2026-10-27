@@ -199,7 +199,10 @@ struct ds4_nf_config {
 typedef bool (*ds4_nf_cancel_fn)(void *);
 typedef struct {
     int fd;
-    double deadline, last_activity;
+    double deadline, last_activity, progress_window;
+    ds4_session *progress_session;
+    uint64_t progress_total, progress_done;
+    bool progress_reported;
     ds4_nf_cancel_fn cancelled;
     void *cancel_ud;
 } ds4_nf_io;
@@ -208,6 +211,12 @@ static double ds4_nf_now(void) {
     struct timespec t;
     if (clock_gettime(CLOCK_MONOTONIC,&t)) return 1e30;
     return (double)t.tv_sec+(double)t.tv_nsec/1e9;
+}
+
+static void ds4_nf_progress_at(ds4_nf_io *io, double now) {
+    io->last_activity = now;
+    if (io->progress_window > 0 && io->deadline < now + io->progress_window)
+        io->deadline = now + io->progress_window;
 }
 
 static int ds4_nf_error(char *err, size_t cap, const char *message) {
@@ -247,6 +256,7 @@ static bool ds4_nf_hash_file(int fd, uint64_t cap, char out[65], ds4_nf_io *guar
         if (got < 0 && errno == EINTR) continue;
         if (got <= 0) { ok = false; break; }
         CC_SHA256_Update(&hash, page, (CC_LONG)got); off += (uint64_t)got;
+        if (guard) ds4_nf_progress_at(guard, ds4_nf_now());
     }
     unsigned char digest[32]; CC_SHA256_Final(digest, &hash);
     free(page);
@@ -342,7 +352,8 @@ static bool ds4_nf_pair_token(const char *path,char token[513]) {
 
 static bool ds4_nf_wait(ds4_nf_io *io, short events) {
     for (;;) {
-        if (ds4_nf_now() >= io->deadline || ds4_nf_now() - io->last_activity >= 10 ||
+        if (ds4_nf_now() >= io->deadline ||
+            (io->progress_window <= 0 && ds4_nf_now() - io->last_activity >= 10) ||
             (io->cancelled && io->cancelled(io->cancel_ud))) return false;
         struct pollfd p = {.fd = io->fd, .events = events};
         int r = poll(&p, 1, 100);
@@ -359,7 +370,7 @@ static bool ds4_nf_send(ds4_nf_io *io, const void *ptr, size_t n) {
         ssize_t r = send(io->fd, p, n, 0);
         if (r < 0 && (errno == EINTR || errno == EAGAIN)) continue;
         if (r <= 0) return false;
-        io->last_activity = ds4_nf_now();
+        ds4_nf_progress_at(io, ds4_nf_now());
         p += r; n -= (size_t)r;
     }
     return true;
@@ -372,7 +383,7 @@ static bool ds4_nf_read(ds4_nf_io *io, void *ptr, size_t n) {
         ssize_t r = recv(io->fd, p, n, 0);
         if (r < 0 && (errno == EINTR || errno == EAGAIN)) continue;
         if (r <= 0) return false;
-        io->last_activity = ds4_nf_now();
+        ds4_nf_progress_at(io, ds4_nf_now());
         p += r; n -= (size_t)r;
     }
     return true;

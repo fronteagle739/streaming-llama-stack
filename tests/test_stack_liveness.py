@@ -30,6 +30,38 @@ class Liveness(unittest.TestCase):
         self.assertIn("self.http('/decode/'+operation,row,timeout=None)", text)
         self.assertIn('stall_seconds=stall_seconds(cfg)', text)
 
+    def test_paired_silent_operations_rely_on_engine_progress_guard(self):
+        from slstack.pairing import Pair
+        fake = type('F', (), dict(url='http://x', token='t', cfg={'request_timeout_s': 300}))()
+        seen = []
+        with mock.patch('slstack.pairing.http_json', side_effect=lambda url, body, timeout, **kw: seen.append(timeout)):
+            for route in ('/pair/qualification', '/decode/setup', '/v1/chat/completions'):
+                Pair.request(fake, route, {})
+            Pair.request(fake, '/health', timeout=2)
+        self.assertEqual(seen, [None, None, None, 2])
+
+    def test_streams_wait_for_the_guarded_engine_across_silent_prefill(self):
+        from types import SimpleNamespace
+        from slstack.pairing import Pair
+        from slstack.mac import Receiver
+        from slstack.engines import Engines
+        body = {'messages': [{'role': 'user', 'content': 'hello'}]}
+        cfg = dict(request_timeout_s=300, ds4_url='http://x', _control_token='t')
+        pair = SimpleNamespace(cfg=cfg, url='http://x', token='t',
+                               start=lambda: None, decode_request=lambda b: b)
+        receiver = SimpleNamespace(cfg=cfg, backend='ds4', peer={'status': 'qualified'}, ready=lambda *a: None)
+        engine = SimpleNamespace(cfg=cfg, remote=None, select=lambda *a: None,
+                                 ready=lambda: None, single_engine=lambda: True)
+        seen = []
+        def stream(url, data, *, timeout, **kw):
+            seen.append(timeout)
+            return iter([{'choices': []}])
+        with mock.patch('slstack.streaming.events', stream), mock.patch('slstack.paired_generation.decode_request', lambda b: b):
+            list(Pair.events(pair, body))
+            list(Receiver.events(receiver, body))
+            list(Engines.chat_events(engine, body))
+        self.assertEqual(seen, [None, None, None])
+
     def test_servers_have_no_lifetime_cap(self):
         for name in ('engines.py', 'mac.py'):
             text = (SL / name).read_text()

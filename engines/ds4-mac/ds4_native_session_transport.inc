@@ -29,7 +29,7 @@ typedef struct {
     ds4_ns_config*config;char id[33];uint64_t sequence;
     ds4_native_checkpoint synced;bool started,poisoned;
     /* Negotiated at start: min(peer's advertised maximum, DS4_NS_DECODE_DELTA_MAX); 128 for a peer that does not advertise one. */
-    uint32_t decode_delta_max;
+    uint32_t decode_delta_max,prefill_sweep_max;
     bool include_history_reasoning,force_remote;
     ds4_ns_anchor anchor;
     uint64_t sent_delta_bytes,received_delta_bytes,initial_bytes,decode_batches,prefill_batches;
@@ -67,7 +67,7 @@ static bool ds4_ns_open(ds4_ns_session*s,ds4_nf_io*io,const char*method,const ch
 }
 static bool ds4_ns_body(ds4_nf_io*io,int expected,ds4_ns_reply*r){
     int status;uint64_t n;
-    if(!ds4_nf_response(io,&status,&n)){fprintf(stderr,"native session HTTP response framing failed\n");return false;}
+    if(!ds4_nf_response(io,&status,&n)){fprintf(stderr,"native session HTTP response framing failed idle=%.3f remaining=%.3f errno=%d\n",ds4_nf_now()-io->last_activity,io->deadline-ds4_nf_now(),errno);return false;}
     if(status!=expected||!n||n>DS4_NS_JSON_CAP){fprintf(stderr,"native session HTTP status=%d expected=%d bytes=%llu\n",status,expected,(unsigned long long)n);return false;}
     char*text=malloc((size_t)n+1);if(!text)return false;
     bool ok=ds4_nf_read(io,text,(size_t)n);text[n]=0;
@@ -89,6 +89,13 @@ static bool ds4_ns_poll(ds4_ns_session*s,ds4_nf_io*io,const char*suffix,bool sta
         ds4_ns_disconnect(io);
         if(!ds4_ns_open(s,io,"GET",suffix,NULL,NULL,0)||!ds4_ns_body(io,200,r))return false;
         ds4_ns_disconnect(io);
+        if(io->progress_session&&r->prefill_total){
+            if(strcmp(s->id,r->session)||r->prefill_total!=io->progress_total||r->prefill_processed>r->prefill_total)return false;
+            if(!io->progress_reported||r->prefill_processed>io->progress_done){
+                ds4_session_report_progress(io->progress_session,"prefill_chunk",(int)r->prefill_processed,(int)r->prefill_total);
+                io->progress_done=r->prefill_processed;io->progress_reported=true;
+            }
+        }
         if(starting){
             if(strcmp(s->id,r->session))return false;
             if(!strcmp(r->state,"ready"))return ds4_ns_identity(s,r)&&r->have_checkpoint&&r->next_sequence==1&&
@@ -100,6 +107,10 @@ static bool ds4_ns_poll(ds4_ns_session*s,ds4_nf_io*io,const char*suffix,bool sta
             if(!strcmp(r->state,"complete"))return ds4_ns_identity(s,r);
             if(strcmp(r->state,"running"))return false;
         }
+        /* The broker's independent producer watchdog certifies work progress
+         * and changes this state to failure on a stall. A healthy pending
+         * response renews transport liveness, never a total-operation cap. */
+        ds4_nf_progress_at(io,ds4_nf_now());
         if(ds4_nf_now()>=io->deadline||(io->cancelled&&io->cancelled(io->cancel_ud)))return false;
         (void)poll(NULL,0,50);
     }
@@ -383,7 +394,8 @@ static int ds4_ns_prefill(ds4_ns_session*s,ds4_session*session,const ds4_tokens*
                            const ds4_vision_span*images,size_t image_count,
                            ds4_nf_cancel_fn cancel,void*ud,char*err,size_t cap){
     if(!s||s->poisoned||!tokens||tokens->len<1||tokens->len>=1000001)return ds4_nf_error(err,cap,"invalid persistent prefill request");
-    ds4_nf_io io={.fd=-1,.deadline=ds4_nf_now()+s->config->http.deadline_seconds,.cancelled=cancel,.cancel_ud=ud};
+    ds4_nf_io io={.fd=-1,.deadline=ds4_nf_now()+s->config->http.deadline_seconds,.progress_window=s->config->http.deadline_seconds,.cancelled=cancel,.cancel_ud=ud,
+        .progress_session=session,.progress_total=(uint64_t)tokens->len};
     ds4_ns_reply r,meta;bool ok=false;const char*phase="initial identity";
     ds4_session_report_progress(session,"prefill_chunk",s->started?ds4_session_pos(session):0,tokens->len);
     if(s->started){
@@ -396,13 +408,25 @@ static int ds4_ns_prefill(ds4_ns_session*s,ds4_session*session,const ds4_tokens*
             ok=true;goto done;
         }
         fprintf(stderr,"NATIVE_SESSION_PREFILL_ROUTE route=rtx base=%u target=%d threshold=%u extends=%u\n",live,tokens->len,s->config->local_prefill_max,(unsigned)extends);
+        /* A long logical append goes through the same complete fold planner as
+         * a cold request. Retire the synchronized owner before opening its
+         * replacement; never acknowledge intermediate RTX checkpoints as if
+         * the Mac had imported them. Short appends keep the existing reuse path. */
+        const uint32_t added=extends?(uint32_t)tokens->len-live:(uint32_t)tokens->len;
+        if(added>(s->prefill_sweep_max?s->prefill_sweep_max:49152)){
+            phase="retire before full logical replay";
+            if(!ds4_ns_shutdown(s)||s->poisoned)goto done;
+            memset(&s->synced,0,sizeof(s->synced));s->chain_valid=false;
+            fprintf(stderr,"NATIVE_SESSION_PREFILL_REPLAY tokens=%d new_rows=%u final_handoff_only=1\n",tokens->len,added);
+        }
     }
     if(!s->started){
         unsigned char nonce[16];if(!random_bytes(nonce,sizeof(nonce)))goto done;
         for(unsigned i=0;i<16;i++)snprintf(s->id+i*2,3,"%02x",nonce[i]);if(!ds4_ns_fingerprint(s->id))goto done;
-        s->sequence=1;s->started=true;
-        ds4_tokens first=*tokens;if(first.len>49152)first.len=49152;
+        s->sequence=1;s->started=true;s->remote_accepted=false;
+        ds4_tokens first=*tokens; /* one logical prefill, then one final handoff */
         phase="initial HTTP startup";if(!ds4_ns_start_remote(s,&io,&first,images,image_count,&r))goto done;
+        s->prefill_sweep_max=(uint32_t)r.maximum_prefill_sweep_tokens;
         phase="initial export/import";
         if(!ds4_ns_simple(s,&io,"export_initial",&r.checkpoint,&meta)||!ds4_ns_checkpoint_same(&meta.target,&r.checkpoint)||
            !ds4_ns_import(s,session,&io,&meta,true,err,cap))goto done;
@@ -443,12 +467,9 @@ done:
     ds4_ns_disconnect(&io);if(!ok){fprintf(stderr,"native session failure phase=%s detail=%s\n",phase,err);ds4_ns_abort(s);ds4_session_invalidate(session);return ds4_nf_error(err,cap,"persistent prefill/hash/transport failed; no refill fallback");}return 0;
 }
 static void ds4_ns_renew(ds4_nf_io*io,double window){double d=ds4_nf_now()+window;if(io->deadline<d)io->deadline=d;}
-/* The producer verifies every base and target owner hash before it replies
- * to apply_decode_delta, so the silent gap before the reply grows with the
- * context (2 x all owner bytes). The runtime transport closes after 10 s
- * without bytes; the reply wait is instead sized from that work at the
- * producer's measured verify rate (x4 margin, 30 s floor for the network).
- * The rate starts at a conservative 20 MB/s and is re-measured each delta. */
+/* Hash verification can be silent while the independently guarded producer
+ * advances. The work estimate selects a no-progress window, never a total
+ * operation deadline; authenticated session status renews that window. */
 static uint64_t ds4_ns_owner_bytes(uint32_t position){
     dsv41_c_span sp[55];uint32_t n=0;uint64_t b=0;if(!dsv41_c_layout(1000001,position,sp,&n))return 0;
     for(uint32_t i=0;i<n;i++)b+=sp[i].bytes;return b;
@@ -457,13 +478,23 @@ static double ds4_ns_reply_window(const ds4_ns_session*s,uint32_t target){
     const double rate=s->verify_rate>0?s->verify_rate:20e6,work=2.0*(double)ds4_ns_owner_bytes(target)/rate;
     return work*4>30?work*4:30;
 }
-static bool ds4_ns_await_reply(ds4_nf_io*io,double window){
-    const double start=ds4_nf_now();
+static bool ds4_ns_await_reply(ds4_ns_session*s,ds4_nf_io*io,double window){
+    double last=ds4_nf_now(),probe=last;
     for(;;){const double now=ds4_nf_now();
-        if(now-start>=window||(io->cancelled&&io->cancelled(io->cancel_ud)))return false;
+        if(now-last>=window||(io->cancelled&&io->cancelled(io->cancel_ud)))return false;
         struct pollfd p={.fd=io->fd,.events=POLLIN};int r=poll(&p,1,100);
         if(r<0&&errno==EINTR)continue;if(r<0||(r>0&&(p.revents&(POLLERR|POLLNVAL))))return false;
-        if(r>0){io->last_activity=ds4_nf_now();ds4_ns_renew(io,window);return true;}}
+        if(r>0){ds4_nf_progress_at(io,ds4_nf_now());ds4_ns_renew(io,window);return true;}
+        if(now>=probe){
+            ds4_nf_io status={.fd=-1,.deadline=ds4_nf_now()+3,.cancelled=io->cancelled,.cancel_ud=io->cancel_ud};ds4_ns_reply reply={0};
+            bool parsed=ds4_ns_open(s,&status,"GET","",NULL,NULL,0)&&ds4_ns_body(&status,200,&reply);
+            bool healthy=parsed&&ds4_ns_identity(s,&reply)&&!strcmp(reply.state,"ready");
+            ds4_ns_disconnect(&status);
+            if(healthy){last=ds4_nf_now();ds4_ns_renew(io,window);}
+            else if(parsed)return false;
+            probe=ds4_nf_now()+(window<2?window/4:.5);
+        }
+    }
 }
 static void ds4_ns_note_verify(ds4_ns_session*s,uint32_t target,double waited_s){
     if(waited_s>0.05){const double rate=2.0*(double)ds4_ns_owner_bytes(target)/waited_s;
@@ -591,7 +622,7 @@ static bool ds4_ns_send_batch(ds4_ns_session*s,ds4_ns_batch*b,char*err,size_t ca
     for(uint32_t i=0;i<plan.span_count;i++)if(plan.spans[i].kind!=b->spans[i].kind||plan.spans[i].index!=b->spans[i].index||plan.spans[i].bytes!=b->spans[i].bytes){
         snprintf(err,cap,"catch-up owner geometry differs");return false;}
     ds4_ns_batch_checkpoint(b,&target);
-    ds4_nf_io io={.fd=-1,.deadline=started+s->config->http.deadline_seconds,.cancelled=ds4_ns_q_cancelled,.cancel_ud=s};
+    ds4_nf_io io={.fd=-1,.deadline=started+s->config->http.deadline_seconds,.progress_window=s->config->http.deadline_seconds,.cancelled=ds4_ns_q_cancelled,.cancel_ud=s};
     char extra[16384];ds4_ns_text t={extra,sizeof(extra),true};ds4_ns_put(&t,"X-DSV41-Control: ");
     ds4_ns_command_prefix(&t,s,"apply_decode_delta");ds4_ns_put(&t,",\"base\":");ds4_ns_checkpoint_text(&t,&s->synced);
     ds4_ns_put(&t,",\"target\":");ds4_ns_checkpoint_text(&t,&target);ds4_ns_put(&t,",\"bytes\":%llu}\r\n",(unsigned long long)plan.artifact_bytes);
@@ -599,7 +630,7 @@ static bool ds4_ns_send_batch(ds4_ns_session*s,ds4_ns_batch*b,char*err,size_t ca
     bool ok=t.ok&&ds4_ns_open(s,&io,"POST","/delta","application/octet-stream",extra,plan.artifact_bytes)&&
         dsv41_c_write_delta(&plan,ds4_ns_fingerprint(s->id),ds4_ns_fingerprint(DS4_NF_MODEL_SHA),b->tokens,b->logits,
             ds4_ns_batch_span,b,ds4_ns_write,&stream)&&!stream.remaining;
-    if(ok){const double sent=ds4_nf_now();ok=ds4_ns_await_reply(&io,ds4_ns_reply_window(s,b->target));
+    if(ok){const double sent=ds4_nf_now();ok=ds4_ns_await_reply(s,&io,ds4_ns_reply_window(s,b->target));
         if(ok)ds4_ns_note_verify(s,b->target,ds4_nf_now()-sent);
         else fprintf(stderr,"native session apply_decode_delta reply: no producer progress within %.1f s (work-sized)\n",ds4_ns_reply_window(s,b->target));}
     ok=ok&&ds4_ns_body(&io,200,&r);
@@ -637,7 +668,7 @@ static int ds4_ns_decode_blocking(ds4_ns_session*s,ds4_session*session,uint32_t 
     if(position<old||position-old>(s->decode_delta_max?s->decode_delta_max:DS4_NS_DECODE_DELTA_CHUNK))goto bad;
     if(!force&&position-old<32)return 0;
     const double t0=ds4_nf_now();
-    ds4_nf_io io={.fd=-1,.deadline=t0+s->config->http.deadline_seconds,.cancelled=cancel,.cancel_ud=ud};
+    ds4_nf_io io={.fd=-1,.deadline=t0+s->config->http.deadline_seconds,.progress_window=s->config->http.deadline_seconds,.cancelled=cancel,.cancel_ud=ud};
     ds4_ns_decode_write w={s,&io,{0},0};
     int rc=ds4_session_native_visit(session,ds4_ns_decode_visit,&w,err,cap);ds4_ns_disconnect(&io);
     if(!rc){const double t1=ds4_nf_now();

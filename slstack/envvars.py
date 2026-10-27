@@ -81,7 +81,8 @@ def apply(env, cfg, scope):
     scope = SCOPE_ALIASES.get(scope, scope)
     context = {**cfg, 'host_budget_bytes': int(cfg.get('host_budget_gib', 8) * (1 << 30)),
                'host_budget_mb': int(cfg.get('host_budget_gib', 8) * 1024),
-               'physical_floor_bytes': int(cfg.get('min_available_gib', 4) * (1 << 30)),
+               'physical_floor_bytes': int(cfg.get('min_available_gib', .5) * (1 << 30)),
+               'runtime_floor_bytes': int(cfg.get('runtime_min_free_gib', 4) * (1 << 30)),
                'host_budget_decimal_gb': cfg.get('host_budget_gib', 8) * (1 << 30) / 1e9,
                'physical_floor_decimal_gb': cfg.get('min_available_gib', 4) * (1 << 30) / 1e9,
                'job_commit_mb': int(cfg.get('job_commit_gib', 48) * 1024),

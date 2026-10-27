@@ -22,7 +22,7 @@ class LaunchConfigTests(unittest.TestCase):
         cfg = dsv41_single.overlay('262k')
         self.assertEqual((cfg['context'], cfg['ctx_cache_precision'], cfg['ctx_cache_growable']), (262144, 'f32', True))
         self.assertEqual(cfg['serving'], 'single_engine')
-        self.assertEqual(cfg['producer_host_reserve_gib'], 1)
+        self.assertEqual(cfg['producer_host_reserve_gib'], .5)
         self.assertEqual(cfg['env_overrides'], GATED_ENV)
         self.assertEqual((cfg['producer_prefill_sweep_tokens'], cfg['producer_prefill_fold_cap_tokens'], cfg['producer_host_max_gib']),
                          (49152, 61440, 7.75))   # the gated fold sweep plan
@@ -57,7 +57,7 @@ class LaunchConfigTests(unittest.TestCase):
                                   row['sweep_plan']['fold_cap_tokens']), ('fold', 49152, 61440))
                 self.assertEqual(row['sweep_plan']['capacity_tokens'], 49152)   # a short prompt keeps the base bank
                 self.assertGreater(row['sweep_plan']['max_host_bytes'], row['sweep_plan']['base_host_bytes'])
-                self.assertEqual(row['single_engine']['producer_host_reserve_gib'], 1)
+                self.assertEqual(row['single_engine']['producer_host_reserve_gib'], .5)
 
     def test_write_and_dry_run_cli(self):
         with tempfile.TemporaryDirectory() as folder:
@@ -105,7 +105,7 @@ class KeptKeyTests(unittest.TestCase):
         self.assertEqual(Path(row['cache_affinity_spread_file']), ROOT / 'presets' / 'dsv41-affinity-spreads.txt')
         self.assertEqual((row['context'], row['ctx_cache_precision'], row['ctx_cache_growable']), (262144, 'f32', True))
         self.assertEqual(row['env_overrides']['LLAMADECODE_ENGRAM_CACHE_MB'], '0')
-        self.assertEqual(row['producer_host_reserve_gib'], 1)
+        self.assertEqual(row['producer_host_reserve_gib'], .5)
 
     def test_stack_single_engine_creates_its_hold_file_on_a_fresh_runtime(self):
         from slstack.single_runtime import stack_config

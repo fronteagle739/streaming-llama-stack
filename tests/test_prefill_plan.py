@@ -40,14 +40,14 @@ class PrefillPlan(unittest.TestCase):
         self.assertEqual(prefill_plan(dict(SS, producer_host_max_gib=12.7), 224588)['capacity'], 114688)   # two sweeps
         self.assertEqual(prefill_plan(dict(SS, context=60000), 103319)['capacity'], 59999)
 
-    def test_desktop_reserve_keeps_2_gib_free(self):
-        # Owner 2026-10-27: default admission reserve is 2 GiB; runtime floor remains 4.
+    def test_desktop_reserve_keeps_512mib_free(self):
+        # Owner: 512MiB admission reserve; the separate runtime floor stays4GiB.
         avail = 10 * 2**30
         p = prefill_plan(SS, 93668, avail)
-        self.assertLessEqual(p['host_bytes'], avail - 2 * 2**30);self.assertEqual(p['capped_by'], 'desktop_reserve')
-        self.assertFalse(p['single_sweep'])   # 8 GiB left for the producer: no 93K single sweep
+        self.assertLessEqual(p['host_bytes'], avail - .5 * 2**30);self.assertEqual(p['capped_by'], 'available_ram')
+        self.assertFalse(p['single_sweep'])
         f = prefill_plan(dict(FOLD, producer_host_max_gib=7.75), 103189, avail)
-        self.assertLessEqual(f['host_bytes'], avail - 2 * 2**30)
+        self.assertLessEqual(f['host_bytes'], avail - .5 * 2**30)
         self.assertEqual(prefill_plan(dict(SS, producer_desktop_reserve_gib=12), 93668, avail)['host_bytes'], int(6.25 * 2**30))   # never below base
         self.assertEqual(prefill_plan(dict(SS, producer_desktop_reserve_gib=2), 93668, 32 * 2**30)['capped_by'], 'producer_host_max_gib')
 

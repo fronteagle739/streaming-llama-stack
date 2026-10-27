@@ -30,6 +30,26 @@ static bool requested_sampling(const request *r) {
 }
 
 int main(int argc,char **argv) {
+    {
+        ds4_ns_reply r;const char*text="{\"prefill_processed\":49152,\"prefill_total\":198287,\"prefill_elapsed_ms\":1234}";
+        assert(ds4_ns_reply_parse(text,strlen(text),&r));
+        assert(r.prefill_processed==49152&&r.prefill_total==198287&&r.prefill_elapsed_ms==1234);
+        int*ids=calloc(198287,sizeof(int));float embedding[5120]={0};assert(ids);
+        ids[198045]=129264;ds4_tokens tokens={ids,198287,198287};ds4_vision_span image={.token_start=198045,.embedding={.data=embedding,.token_count=1}};
+        ds4_ns_vision_body body={0};assert(ds4_ns_vision_pack(&tokens,&image,1,&body));
+        uint32_t bytes;memcpy(&bytes,body.data+4,4);assert(bytes==198287*4);
+        free(body.data);free(ids);
+    }
+    test_progressing_hash_reply();
+    {
+        ds4_nf_io io={.deadline=60,.progress_window=60};
+        for(int second=5;second<=20000;second+=5){
+            assert(second<io.deadline);
+            ds4_nf_progress_at(&io,second);
+        }
+        assert(io.deadline==20060); /* slow progressing operation survives */
+        assert(20061>=io.deadline); /* unchanged signal eventually expires */
+    }
     test_async_snapshots();
     {
         int pair[2];assert(!socketpair(AF_UNIX,SOCK_STREAM,0,pair));
