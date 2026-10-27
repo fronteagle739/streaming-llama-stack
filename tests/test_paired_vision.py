@@ -7,6 +7,15 @@ vendor()
 from studio.dsv41_session_contract import initial_request,MODEL_SHA256,command
 
 class PairedVisionTests(unittest.TestCase):
+    def test_whole_long_initial_prompt_can_carry_projected_image(self):
+        ids = [11] * 198287;ids[198045] = 129264
+        wire = self.wire(position=198045, ids=ids)
+        tokens, images = unpack(wire)
+        self.assertEqual(len(tokens)//4, 198287)
+        self.assertEqual(images[0]['position'],198045)
+        row = initial_request('1'*32, self.headers(wire), wire)
+        self.assertEqual(len(row['tokens'])//4,198287)
+
     def wire(self,position=1,ids=(11,129264,12),fingerprint=b'a'*32):
         image=struct.pack('<4I',0x49564c53,1,1,5120)+fingerprint+struct.pack('<5120f',*([.25]*5120))
         rows=[dict(position=position,count=1,sha256=hashlib.sha256(image).hexdigest())]

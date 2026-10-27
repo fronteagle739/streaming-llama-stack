@@ -93,7 +93,7 @@ def prefill_plan(cfg,prompt_tokens,available=None):
     producer_host_budget_gib, i.e. no raise and today's 49152). A prompt over the largest C that fits
     is split by the producer into near-equal sweeps. Returns C, the raised budget and the deltas.
     `available` (physical RAM measured at launch) also caps the budget at available minus
-    producer_host_reserve_gib (default 1 GiB of headroom for Studio/daemon/OS growth), so the working set plus everything
+    producer_host_reserve_gib (default 0.5 GiB of headroom for Studio/daemon/OS growth), so the working set plus everything
     else fits physical RAM and stays resident (hard-minimum working set); the budget is
     page-rounded (Windows keeps a hard-minimum working set only in whole pages).
     producer_prefill_sweep_tokens S (absent = the above): the owner fold policy instead; S-token
@@ -108,10 +108,10 @@ def prefill_plan(cfg,prompt_tokens,available=None):
         # Owner 2026-10-25 ("every run makes you freeze like the computer's run out of RAM"): locked producer
         # pages cannot be paged out, so admission keeps a DESKTOP RESERVE free for Windows, Claude Code and the
         # desktop: the producer's raised budget is at most available - producer_desktop_reserve_gib (per
-        # machine, default 2 GiB). The separate runtime_min_free_gib stop defaults to 4 GiB.
-        reserve=max(float(cfg.get('producer_host_reserve_gib',1)),float(cfg.get('producer_desktop_reserve_gib',2)))
+        # machine, default 0.5 GiB). The separate runtime_min_free_gib stop defaults to 4 GiB.
+        reserve=max(float(cfg.get('producer_host_reserve_gib',.5)),float(cfg.get('producer_desktop_reserve_gib',.5)))
         room=int(available)-int(reserve*(1<<30))
-        if room<top:top=max(base,room);capped_by='desktop_reserve' if reserve>float(cfg.get('producer_host_reserve_gib',1)) else 'available_ram'
+        if room<top:top=max(base,room);capped_by='desktop_reserve' if reserve>float(cfg.get('producer_host_reserve_gib',.5)) else 'available_ram'
     extra=lambda c:(carry_bank_bytes(c)-carry_bank_bytes(LEGACY_SWEEP),engram_prompt_bytes(c)-engram_prompt_bytes(LEGACY_SWEEP))
     limit=min(1<<20,int(cfg['context'])-1)
     want=min(max(LEGACY_SWEEP,int(prompt_tokens)),limit)
@@ -185,8 +185,45 @@ def yoco_keep(cfg):
     return keep
 
 
+def prefill_arguments(cfg, count, available, *, export_state=False):
+    """One arithmetic/storage/fold plan for single-engine and paired prefill.
+
+    Mode3 export additionally captures the 7.5MiB DSpark ring required by the
+    Mac importer. It does not select another arithmetic or storage profile.
+    """
+    selected = dict(cfg)
+    for key, value in dict(producer_host_budget_gib=6.25, producer_host_max_gib=7.75,
+                           producer_prefill_sweep_tokens=49152,
+                           producer_prefill_fold_cap_tokens=61440).items():
+        selected.setdefault(key, value)
+    arguments = dict(profile(cfg.get('producer_profile', 'ultra'))['arguments'])
+    plan = prefill_plan(selected, count, available)
+    arguments['--prefill-chunk-tokens'] = str(plan['capacity'])
+    arguments['--job-host-bytes'] = str(plan['host_bytes'])
+    for key, delta in (('--carry-host-bytes', plan['carry_delta']),
+                       ('--provider-host-bytes', plan['engram_delta']),
+                       ('--engram-prefetch-bytes', plan['engram_delta'])):
+        arguments[key] = str(int(arguments[key]) + delta)
+    arguments['--prefill-sweep-tokens'] = str(plan['sweep_tokens'])
+    arguments['--prefill-fold-cap-tokens'] = str(plan['fold_cap'])
+    precision, growable = ctx_cache(cfg)
+    arguments.update({'--context': str(cfg['context']),
+                      '--capture-dspark': '1' if export_state else '0',
+                      '--compressed-cache-bf16': '1' if precision == 'bf16' else '0'})
+    if precision != 'f32' or growable:
+        arguments.update({'--ctx-cache-precision': precision, '--ctx-cache-growable': str(int(growable))})
+    if cfg.get('producer_fixed_direct_open', True) and arguments.get('--fixed-resident-plan') != '1':
+        arguments.update({'--warmup-one-token': '0', '--fixed-direct-open': '1'})
+    keep = cfg.get('yoco_keep', 0)
+    if type(keep) is not int or keep not in (0, 140):raise ValueError('yoco_keep must be 0 or 140')
+    if keep:
+        arguments['--yoco-keep'] = str(keep)
+        if export_state:arguments['--yoco-remote-state-version'] = '1'
+    return arguments, plan
+
+
 class ComboProducer:
-    def __init__(self,cfg,session,epoch,tokens,cancelled,*,base=None,runner=None):
+    def __init__(self,cfg,session,epoch,tokens,cancelled,*,base=None,runner=None,on_start=None):
         combo_abort.check('producer launch')
         keep=yoco_keep(cfg)
         if base is not None and 'local_state' in base[1]:
@@ -202,6 +239,8 @@ class ComboProducer:
         from studio.dsv41_session_process import Producer
         from studio.dsv41_windows_runner import _Native
         self.session=session;self.epoch=epoch;self.process=None;self.closed=False;self.leases=ExitStack()
+        self.loading_process=None
+        if on_start:on_start(self)
         self.cfg=cfg;self.shutdown_path='terminate';self.shutdown_seconds=0.0;self.shutdown_detail=None;self._exit_code=None
         self.creation_attempted=False
         if type(epoch) is not int or not 0<epoch<(1<<64):raise ValueError('Exact positive owner epoch required')
@@ -213,14 +252,9 @@ class ComboProducer:
         native=runner or _Native();receipt=model_receipt(cfg)
         tier=cfg.get('producer_profile','ultra')
         if tier not in ('accurate','fast','ultra'):raise ValueError('Combo producer profile must be accurate, fast or ultra (original weights; no HYPER)')
-        args=dict(profile(tier)['arguments'])
-        if keep:args['--yoco-keep']=str(keep)
         import psutil
-        plan=prefill_plan(cfg,len(tokens),psutil.virtual_memory().available);self.prefill_plan=plan;host_bytes=plan['host_bytes']
-        if plan['capacity']!=LEGACY_SWEEP:   # absent a raise the argv stays today's exactly
-            args['--prefill-chunk-tokens']=str(plan['capacity']);args['--job-host-bytes']=str(host_bytes)
-            for key,delta in (('--carry-host-bytes',plan['carry_delta']),('--provider-host-bytes',plan['engram_delta']),('--engram-prefetch-bytes',plan['engram_delta'])):
-                args[key]=str(int(args[key])+delta)
+        args,plan=prefill_arguments(cfg,len(tokens),psutil.virtual_memory().available)
+        self.prefill_plan=plan;host_bytes=plan['host_bytes']
         if plan.get('policy')=='fold':   # owner fold policy: S-token sweeps, remainder folded into the last
             args['--prefill-sweep-tokens']=str(plan['sweep_tokens']);args['--prefill-fold-cap-tokens']=str(plan['fold_cap'])
             print('LLAMADECODE_PREFILL_FOLD sweep_tokens=%s primary_sweep_tokens=%d capacity=%d fold_cap=%d rebalance=%d%s'%(','.join(map(str,plan['sweeps'])),plan['sweep_tokens'],plan['capacity'],plan['fold_cap'],int(plan['rebalance']),
@@ -238,9 +272,6 @@ class ComboProducer:
         if precision!='f32' or growable:   # LLAMADECODE context cache flags (absent = today's f32 fixed argv)
             args['--ctx-cache-precision']=precision;args['--ctx-cache-growable']=str(int(growable))
         if cfg.get('producer_keep_alive'):args['--switch-arena']='1'   # DS4COMBO fast switch: suspendable device memory
-        if cfg.get('producer_fixed_direct_open',True):   # default since proof-a-direct (byte-identical, -13 s S)
-            # No-warm-up start: the real request allocates the fixed storage itself.
-            args['--warmup-one-token']='0';args['--fixed-direct-open']='1'
         token_path=self.directory/'append.tokens.le32'
         with token_path.open('xb') as output:
             for offset in range(0,len(tokens),8192):output.write(struct.pack('<'+'I'*len(tokens[offset:offset+8192]),*tokens[offset:offset+8192]))
@@ -278,7 +309,13 @@ class ComboProducer:
             if native.gpu(0,cfg['gpu_uuid'])<int(args['--job-device-bytes'])+int(args['--gpu-reserve-bytes']):
                 raise MemoryError('ULTRA GPU plan cannot fit; handoff refused')
             self.creation_attempted=True
-            self.process=Producer(session,argv,env,self.directory,host_bytes=host_bytes,
+            owner=self
+            class PublishingProducer(Producer):
+                def _initialize(process,*args,**kwargs):
+                    owner.loading_process=process
+                    try:return super()._initialize(*args,**kwargs)
+                    finally:owner.loading_process=None
+            self.process=PublishingProducer(session,argv,env,self.directory,host_bytes=host_bytes,
                 runtime_min_free_gib=runtime_floor,
                 physical_floor=int(cfg['min_available_gib']*(1<<30)),operation_seconds=min(1140,cfg['request_timeout_s']),stall_seconds=stall_seconds(cfg),
                 idle_seconds=cfg['lease_minutes']*60,native=native,cancelled=cancelled,native_mode=1,bootstrap=bootstrap,owner_epoch=epoch,

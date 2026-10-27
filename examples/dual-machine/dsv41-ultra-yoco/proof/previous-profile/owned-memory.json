@@ -1,0 +1,19 @@
+{
+  "peak_tree_rss": 6335737856,
+  "min_available": 10545766400,
+  "host_budget_gib": 13.5,
+  "floor_gib": 2,
+  "owned_paging": {
+    "attribution": "bounded process pagefile observation",
+    "observed_paged_bytes": 0,
+    "observed_processes": [],
+    "scanned_pages": 43960327,
+    "completed_scans": 2679
+  },
+  "system_pagefile_pressure": {
+    "maximum_growth_bytes": 1728512,
+    "kill_above_bytes": 256000000,
+    "scope": "global; not process attribution"
+  },
+  "cleanup_confirmed": true
+}

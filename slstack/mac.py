@@ -28,12 +28,14 @@ def budget(cfg, maximum=400):
     import psutil
     from .memory_counters import available_physical_bytes
     free = available_physical_bytes() / (1 << 30)
-    floor = max(4, cfg.get('min_available_gib', 4))
-    reserve = max(cfg.get('producer_desktop_reserve_gib', 2), floor)
+    floor = cfg.get('min_available_gib', .5)
+    reserve = max(cfg.get('producer_desktop_reserve_gib', .5), floor)
     requested = cfg.get('mac_host_budget_gib') or min(maximum, (free - reserve) * .9)
     if requested <= 0 or requested + reserve > free:
         raise MemoryError('Mac physical memory budget cannot be admitted')
-    return {**cfg, 'host_budget_gib': requested, 'min_available_gib': floor}
+    from .combo_ram import runtime_min_free_gib
+    return {**cfg, 'host_budget_gib': requested, 'min_available_gib': floor,
+            'runtime_min_free_gib':runtime_min_free_gib(cfg)}
 
 
 def replacement_budget(cfg, maximum, previous_budget, timeout=60):
@@ -273,7 +275,8 @@ class Receiver:
                 vision=native_vision_path(cfg))
             env['DS4_NATIVE_SESSION'] = '1' if native else '0'
             env['DS4_NATIVE_SESSION_HOST_BYTES'] = str(int(cfg['host_budget_gib'] * (1 << 30)))
-            env['DS4_NATIVE_SESSION_HOST_FLOOR_BYTES'] = str(int(cfg['min_available_gib'] * (1 << 30)))
+            from .combo_ram import runtime_min_free_gib
+            env['DS4_NATIVE_SESSION_HOST_FLOOR_BYTES'] = str(int(runtime_min_free_gib(cfg) * (1 << 30)))
             if native:
                 if not self.peer:
                     raise ValueError('Pair the RTX producer first')
@@ -296,7 +299,7 @@ class Receiver:
                     DS4_NATIVE_SESSION_RENDERER_SHA256=self.build['renderer_sha256'],
                     DS4_NATIVE_SESSION_PRODUCER_SHA256=self.peer['producer_sha256'], DS4_NATIVE_SESSION_DEADLINE_SECONDS='600',
                     DS4_NATIVE_SESSION_HOST_BYTES=str(int(cfg['host_budget_gib'] * (1 << 30))),
-                    DS4_NATIVE_SESSION_HOST_FLOOR_BYTES=str(int(cfg['min_available_gib'] * (1 << 30))))
+                    DS4_NATIVE_SESSION_HOST_FLOOR_BYTES=str(int(runtime_min_free_gib(cfg) * (1 << 30))))
                 for name, value in dynamic.items():
                     env.setdefault(name, value)
                 env['DS4_NATIVE_SESSION_YOCO_KEEP']=str(self.peer.get('yoco_keep',0))
@@ -369,7 +372,7 @@ class Receiver:
         body = {**body,'stream':True,'prompt_cache_key':conversation_key(body)}
         body.setdefault('include_previous_reasoning',True)
         yield from events(f'http://127.0.0.1:{self.cfg.get("mac_engine_port",8181)}/v1/chat/completions',
-                          body, timeout=self.cfg['request_timeout_s'])
+                          body, timeout=None)  # native/producer progress guards own liveness
 
 
 def wait_for_receiver(cfg, job):

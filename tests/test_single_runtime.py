@@ -2,7 +2,6 @@
 import json
 import sys
 import unittest
-import tempfile
 from unittest.mock import patch
 from pathlib import Path
 
@@ -11,7 +10,9 @@ sys.path.insert(0, str(ROOT))
 from slstack import single_runtime as sr
 from slstack.combo_proxy import native_launch_config, request_worker_config
 
-FIXTURE = Path(tempfile.gettempdir()) / 'slstack-runtime-fixture'
+# Pure configuration paths: these tests never create files. A real temporary
+# root may itself contain "scratch", which the installed-config guard rejects.
+FIXTURE = Path('managed-runtime-fixture')
 BASE = dict(gpu_uuid='GPU-1', gpu_idle_max_mib=1024, hold_file=str(FIXTURE / 'gpu.holds'), task='LLAMADECODE',
             lease_minutes=19, request_timeout_s=1140, host_budget_gib=9.25, min_available_gib=1, job_commit_gib=48,
             context=262144, model=str(FIXTURE / 'models/x.gguf'), model_name='DSV4.1-1017', producer_host_budget_gib=6.25,

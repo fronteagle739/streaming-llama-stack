@@ -40149,19 +40149,19 @@
     ],
     "doc": "DS4_NATIVE_FRONTIER: advanced engine setting; built-in default retained",
     "reads": [
-      "engines/ds4-mac/ds4_native_frontier.inc:502",
-      "engines/ds4-mac/ds4_native_frontier.inc:679",
+      "engines/ds4-mac/ds4_native_frontier.inc:513",
+      "engines/ds4-mac/ds4_native_frontier.inc:690",
       "engines/ds4-mac/ds4_native_session_setup.inc:12"
     ],
     "code_defaults": [
       {
-        "source": "engines/ds4-mac/ds4_native_frontier.inc:502",
+        "source": "engines/ds4-mac/ds4_native_frontier.inc:513",
         "unset": "Wrapper/conditional default: see the literal call and consumer below",
         "read": "const char *enable = ds4_nf_env(\"DS4_NATIVE_FRONTIER\");",
         "consumer": "                        ds4_nf_config **out, char *err, size_t cap) {\n    *out = NULL;\n    const char *enable = ds4_nf_env(\"DS4_NATIVE_FRONTIER\");\n    if (!enable || !strcmp(enable,\"0\")) return 0;\n    if (strcmp(enable,\"1\") || !ds4_engine_is_deepseek41(engine) ||\n        opt->backend != DS4_BACKEND_METAL || opt->dspark || opt->mtp_path ||\n        ds4_engine_has_mtp(engine) || opt->directional_steering_file || opt->load_slice ||"
       },
       {
-        "source": "engines/ds4-mac/ds4_native_frontier.inc:679",
+        "source": "engines/ds4-mac/ds4_native_frontier.inc:690",
         "unset": "NULL from getenv; the literal consumer below supplies any fallback",
         "read": "const char *enable=getenv(\"DS4_NATIVE_FRONTIER\");",
         "consumer": "                        ds4_nf_config **out,char *err,size_t cap) {\n    (void)engine;(void)opt;*out=NULL;\n    const char *enable=getenv(\"DS4_NATIVE_FRONTIER\");\n    if(enable && strcmp(enable,\"0\")) {\n        snprintf(err,cap,\"native frontier: disabled in this build (requires qualified Apple mode-1 build)\");\n        return -1;\n    }"
@@ -40185,11 +40185,11 @@
     ],
     "doc": "DS4_NATIVE_FRONTIER_DEADLINE_SECONDS: advanced engine setting; built-in default retained",
     "reads": [
-      "engines/ds4-mac/ds4_native_frontier.inc:527"
+      "engines/ds4-mac/ds4_native_frontier.inc:538"
     ],
     "code_defaults": [
       {
-        "source": "engines/ds4-mac/ds4_native_frontier.inc:527",
+        "source": "engines/ds4-mac/ds4_native_frontier.inc:538",
         "unset": "Wrapper/conditional default: see the literal call and consumer below",
         "read": "!ds4_nf_env_uint(\"DS4_NATIVE_FRONTIER_DEADLINE_SECONDS\",&c->deadline_seconds,1,7200) ||",
         "consumer": "        !ds4_nf_env_uint(\"DS4_NATIVE_FRONTIER_MIN_TOKENS\",&c->minimum_tokens,1,1048575) ||\n        !ds4_nf_env_uint(\"DS4_NATIVE_FRONTIER_MAX_TOKENS\",&c->maximum_tokens,c->minimum_tokens,1048575) ||\n        !ds4_nf_env_uint(\"DS4_NATIVE_FRONTIER_DEADLINE_SECONDS\",&c->deadline_seconds,1,7200) ||\n        inet_pton(AF_INET,host,&c->broker.sin_addr)!=1 || strlen(directory)>=sizeof(c->directory)) goto bad;\n    c->broker.sin_family=AF_INET; c->broker.sin_port=htons((uint16_t)port);\n    snprintf(c->host,sizeof(c->host),\"%s\",host);\n    snprintf(c->directory,sizeof(c->directory),\"%s\",directory);"
@@ -40207,11 +40207,11 @@
     ],
     "doc": "DS4_NATIVE_FRONTIER_DIRECTORY: advanced engine setting; built-in default retained",
     "reads": [
-      "engines/ds4-mac/ds4_native_frontier.inc:513"
+      "engines/ds4-mac/ds4_native_frontier.inc:524"
     ],
     "code_defaults": [
       {
-        "source": "engines/ds4-mac/ds4_native_frontier.inc:513",
+        "source": "engines/ds4-mac/ds4_native_frontier.inc:524",
         "unset": "Wrapper/conditional default: see the literal call and consumer below",
         "read": "const char *directory=ds4_nf_env(\"DS4_NATIVE_FRONTIER_DIRECTORY\");",
         "consumer": "     * file; never infer that this Mac's local install token is accepted there. */\n    const char *token_file=ds4_nf_env(\"DS4_NATIVE_FRONTIER_PAIR_TOKEN_FILE\");\n    const char *directory=ds4_nf_env(\"DS4_NATIVE_FRONTIER_DIRECTORY\");\n    const char *qualification=ds4_nf_env(\"DS4_NATIVE_FRONTIER_QUALIFICATION\");\n    const char *pin=ds4_nf_env(\"DS4_NATIVE_FRONTIER_QUALIFICATION_SHA256\");\n    const char *renderer=ds4_nf_env(\"DS4_NATIVE_FRONTIER_RENDERER_SHA256\");\n    if (!host || !token_file || !directory || !qualification || !pin ||"
@@ -40229,11 +40229,11 @@
     ],
     "doc": "DS4_NATIVE_FRONTIER_IPV4: advanced engine setting; built-in default retained",
     "reads": [
-      "engines/ds4-mac/ds4_native_frontier.inc:509"
+      "engines/ds4-mac/ds4_native_frontier.inc:520"
     ],
     "code_defaults": [
       {
-        "source": "engines/ds4-mac/ds4_native_frontier.inc:509",
+        "source": "engines/ds4-mac/ds4_native_frontier.inc:520",
         "unset": "Wrapper/conditional default: see the literal call and consumer below",
         "read": "const char *host=ds4_nf_env(\"DS4_NATIVE_FRONTIER_IPV4\");",
         "consumer": "        opt->tp.role != DS4_TP_NONE || opt->distributed.role != DS4_DISTRIBUTED_NONE)\n        return ds4_nf_error(err,cap,\"enabled hook requires original serial Metal mode 1\");\n    const char *host=ds4_nf_env(\"DS4_NATIVE_FRONTIER_IPV4\");\n    /* Activation may provision the already paired RTX credential in a private\n     * file; never infer that this Mac's local install token is accepted there. */\n    const char *token_file=ds4_nf_env(\"DS4_NATIVE_FRONTIER_PAIR_TOKEN_FILE\");\n    const char *directory=ds4_nf_env(\"DS4_NATIVE_FRONTIER_DIRECTORY\");"
@@ -40251,11 +40251,11 @@
     ],
     "doc": "DS4_NATIVE_FRONTIER_MAX_TOKENS: advanced engine setting; built-in default retained",
     "reads": [
-      "engines/ds4-mac/ds4_native_frontier.inc:526"
+      "engines/ds4-mac/ds4_native_frontier.inc:537"
     ],
     "code_defaults": [
       {
-        "source": "engines/ds4-mac/ds4_native_frontier.inc:526",
+        "source": "engines/ds4-mac/ds4_native_frontier.inc:537",
         "unset": "Wrapper/conditional default: see the literal call and consumer below",
         "read": "!ds4_nf_env_uint(\"DS4_NATIVE_FRONTIER_MAX_TOKENS\",&c->maximum_tokens,c->minimum_tokens,1048575) ||",
         "consumer": "        !ds4_nf_env_uint(\"DS4_NATIVE_FRONTIER_PORT\",&port,1,65535) ||\n        !ds4_nf_env_uint(\"DS4_NATIVE_FRONTIER_MIN_TOKENS\",&c->minimum_tokens,1,1048575) ||\n        !ds4_nf_env_uint(\"DS4_NATIVE_FRONTIER_MAX_TOKENS\",&c->maximum_tokens,c->minimum_tokens,1048575) ||\n        !ds4_nf_env_uint(\"DS4_NATIVE_FRONTIER_DEADLINE_SECONDS\",&c->deadline_seconds,1,7200) ||\n        inet_pton(AF_INET,host,&c->broker.sin_addr)!=1 || strlen(directory)>=sizeof(c->directory)) goto bad;\n    c->broker.sin_family=AF_INET; c->broker.sin_port=htons((uint16_t)port);\n    snprintf(c->host,sizeof(c->host),\"%s\",host);"
@@ -40273,11 +40273,11 @@
     ],
     "doc": "DS4_NATIVE_FRONTIER_MIN_TOKENS: advanced engine setting; built-in default retained",
     "reads": [
-      "engines/ds4-mac/ds4_native_frontier.inc:525"
+      "engines/ds4-mac/ds4_native_frontier.inc:536"
     ],
     "code_defaults": [
       {
-        "source": "engines/ds4-mac/ds4_native_frontier.inc:525",
+        "source": "engines/ds4-mac/ds4_native_frontier.inc:536",
         "unset": "Wrapper/conditional default: see the literal call and consumer below",
         "read": "!ds4_nf_env_uint(\"DS4_NATIVE_FRONTIER_MIN_TOKENS\",&c->minimum_tokens,1,1048575) ||",
         "consumer": "    if (!ds4_nf_pair_token(token_file,c->token) ||\n        !ds4_nf_env_uint(\"DS4_NATIVE_FRONTIER_PORT\",&port,1,65535) ||\n        !ds4_nf_env_uint(\"DS4_NATIVE_FRONTIER_MIN_TOKENS\",&c->minimum_tokens,1,1048575) ||\n        !ds4_nf_env_uint(\"DS4_NATIVE_FRONTIER_MAX_TOKENS\",&c->maximum_tokens,c->minimum_tokens,1048575) ||\n        !ds4_nf_env_uint(\"DS4_NATIVE_FRONTIER_DEADLINE_SECONDS\",&c->deadline_seconds,1,7200) ||\n        inet_pton(AF_INET,host,&c->broker.sin_addr)!=1 || strlen(directory)>=sizeof(c->directory)) goto bad;\n    c->broker.sin_family=AF_INET; c->broker.sin_port=htons((uint16_t)port);"
@@ -40295,11 +40295,11 @@
     ],
     "doc": "DS4_NATIVE_FRONTIER_PAIR_TOKEN_FILE: advanced engine setting; built-in default retained",
     "reads": [
-      "engines/ds4-mac/ds4_native_frontier.inc:512"
+      "engines/ds4-mac/ds4_native_frontier.inc:523"
     ],
     "code_defaults": [
       {
-        "source": "engines/ds4-mac/ds4_native_frontier.inc:512",
+        "source": "engines/ds4-mac/ds4_native_frontier.inc:523",
         "unset": "Wrapper/conditional default: see the literal call and consumer below",
         "read": "const char *token_file=ds4_nf_env(\"DS4_NATIVE_FRONTIER_PAIR_TOKEN_FILE\");",
         "consumer": "    /* Activation may provision the already paired RTX credential in a private\n     * file; never infer that this Mac's local install token is accepted there. */\n    const char *token_file=ds4_nf_env(\"DS4_NATIVE_FRONTIER_PAIR_TOKEN_FILE\");\n    const char *directory=ds4_nf_env(\"DS4_NATIVE_FRONTIER_DIRECTORY\");\n    const char *qualification=ds4_nf_env(\"DS4_NATIVE_FRONTIER_QUALIFICATION\");\n    const char *pin=ds4_nf_env(\"DS4_NATIVE_FRONTIER_QUALIFICATION_SHA256\");\n    const char *renderer=ds4_nf_env(\"DS4_NATIVE_FRONTIER_RENDERER_SHA256\");"
@@ -40317,11 +40317,11 @@
     ],
     "doc": "DS4_NATIVE_FRONTIER_PORT: advanced engine setting; built-in default retained",
     "reads": [
-      "engines/ds4-mac/ds4_native_frontier.inc:524"
+      "engines/ds4-mac/ds4_native_frontier.inc:535"
     ],
     "code_defaults": [
       {
-        "source": "engines/ds4-mac/ds4_native_frontier.inc:524",
+        "source": "engines/ds4-mac/ds4_native_frontier.inc:535",
         "unset": "Wrapper/conditional default: see the literal call and consumer below",
         "read": "!ds4_nf_env_uint(\"DS4_NATIVE_FRONTIER_PORT\",&port,1,65535) ||",
         "consumer": "    c->dirfd=-1; uint32_t port;\n    if (!ds4_nf_pair_token(token_file,c->token) ||\n        !ds4_nf_env_uint(\"DS4_NATIVE_FRONTIER_PORT\",&port,1,65535) ||\n        !ds4_nf_env_uint(\"DS4_NATIVE_FRONTIER_MIN_TOKENS\",&c->minimum_tokens,1,1048575) ||\n        !ds4_nf_env_uint(\"DS4_NATIVE_FRONTIER_MAX_TOKENS\",&c->maximum_tokens,c->minimum_tokens,1048575) ||\n        !ds4_nf_env_uint(\"DS4_NATIVE_FRONTIER_DEADLINE_SECONDS\",&c->deadline_seconds,1,7200) ||\n        inet_pton(AF_INET,host,&c->broker.sin_addr)!=1 || strlen(directory)>=sizeof(c->directory)) goto bad;"
@@ -40339,11 +40339,11 @@
     ],
     "doc": "DS4_NATIVE_FRONTIER_QUALIFICATION: advanced engine setting; built-in default retained",
     "reads": [
-      "engines/ds4-mac/ds4_native_frontier.inc:514"
+      "engines/ds4-mac/ds4_native_frontier.inc:525"
     ],
     "code_defaults": [
       {
-        "source": "engines/ds4-mac/ds4_native_frontier.inc:514",
+        "source": "engines/ds4-mac/ds4_native_frontier.inc:525",
         "unset": "Wrapper/conditional default: see the literal call and consumer below",
         "read": "const char *qualification=ds4_nf_env(\"DS4_NATIVE_FRONTIER_QUALIFICATION\");",
         "consumer": "    const char *token_file=ds4_nf_env(\"DS4_NATIVE_FRONTIER_PAIR_TOKEN_FILE\");\n    const char *directory=ds4_nf_env(\"DS4_NATIVE_FRONTIER_DIRECTORY\");\n    const char *qualification=ds4_nf_env(\"DS4_NATIVE_FRONTIER_QUALIFICATION\");\n    const char *pin=ds4_nf_env(\"DS4_NATIVE_FRONTIER_QUALIFICATION_SHA256\");\n    const char *renderer=ds4_nf_env(\"DS4_NATIVE_FRONTIER_RENDERER_SHA256\");\n    if (!host || !token_file || !directory || !qualification || !pin ||\n        !renderer || !ds4_nf_hex(renderer,64) ||"
@@ -40361,11 +40361,11 @@
     ],
     "doc": "DS4_NATIVE_FRONTIER_QUALIFICATION_SHA256: advanced engine setting; built-in default retained",
     "reads": [
-      "engines/ds4-mac/ds4_native_frontier.inc:515"
+      "engines/ds4-mac/ds4_native_frontier.inc:526"
     ],
     "code_defaults": [
       {
-        "source": "engines/ds4-mac/ds4_native_frontier.inc:515",
+        "source": "engines/ds4-mac/ds4_native_frontier.inc:526",
         "unset": "Wrapper/conditional default: see the literal call and consumer below",
         "read": "const char *pin=ds4_nf_env(\"DS4_NATIVE_FRONTIER_QUALIFICATION_SHA256\");",
         "consumer": "    const char *directory=ds4_nf_env(\"DS4_NATIVE_FRONTIER_DIRECTORY\");\n    const char *qualification=ds4_nf_env(\"DS4_NATIVE_FRONTIER_QUALIFICATION\");\n    const char *pin=ds4_nf_env(\"DS4_NATIVE_FRONTIER_QUALIFICATION_SHA256\");\n    const char *renderer=ds4_nf_env(\"DS4_NATIVE_FRONTIER_RENDERER_SHA256\");\n    if (!host || !token_file || !directory || !qualification || !pin ||\n        !renderer || !ds4_nf_hex(renderer,64) ||\n        strlen(host)>15 || !ds4_nf_hex(pin,64))"
@@ -40383,11 +40383,11 @@
     ],
     "doc": "DS4_NATIVE_FRONTIER_RENDERER_SHA256: advanced engine setting; built-in default retained",
     "reads": [
-      "engines/ds4-mac/ds4_native_frontier.inc:516"
+      "engines/ds4-mac/ds4_native_frontier.inc:527"
     ],
     "code_defaults": [
       {
-        "source": "engines/ds4-mac/ds4_native_frontier.inc:516",
+        "source": "engines/ds4-mac/ds4_native_frontier.inc:527",
         "unset": "Wrapper/conditional default: see the literal call and consumer below",
         "read": "const char *renderer=ds4_nf_env(\"DS4_NATIVE_FRONTIER_RENDERER_SHA256\");",
         "consumer": "    const char *qualification=ds4_nf_env(\"DS4_NATIVE_FRONTIER_QUALIFICATION\");\n    const char *pin=ds4_nf_env(\"DS4_NATIVE_FRONTIER_QUALIFICATION_SHA256\");\n    const char *renderer=ds4_nf_env(\"DS4_NATIVE_FRONTIER_RENDERER_SHA256\");\n    if (!host || !token_file || !directory || !qualification || !pin ||\n        !renderer || !ds4_nf_hex(renderer,64) ||\n        strlen(host)>15 || !ds4_nf_hex(pin,64))\n        return ds4_nf_error(err,cap,\"missing fixed broker/auth/qualification configuration\");"
@@ -40477,7 +40477,7 @@
   {
     "var": "DS4_NATIVE_SESSION_HOST_FLOOR_BYTES",
     "flag": "--ds4-native-session-host-floor-bytes",
-    "default": "{physical_floor_bytes}",
+    "default": "{runtime_floor_bytes}",
     "code_default": "Wrapper/conditional default: see the literal call and consumer below",
     "classification": "preset",
     "scopes": [

@@ -14,6 +14,8 @@ from .engines import http_json
 from .journal import atomic_json, sha256
 from .process import OwnedProcess
 
+_DEFAULT_TIMEOUT = object()
+
 
 def endpoint(value):
     value = value if '://' in value else 'http://' + value
@@ -71,8 +73,12 @@ class Pair:
         from .generation import Store
         self.generation = Store(cfg)
 
-    def request(self, route, body=None, timeout=None):
-        return http_json(self.url + route, body, timeout or self.cfg['request_timeout_s'],
+    def request(self, route, body=None, timeout=_DEFAULT_TIMEOUT):
+        # These operations may stay silent on HTTP while the independently
+        # guarded engine advances its load, hash, prefill or decode work.
+        if timeout is _DEFAULT_TIMEOUT:
+            timeout = None if route in ('/pair/qualification', '/decode/setup', '/v1/chat/completions') else self.cfg['request_timeout_s']
+        return http_json(self.url + route, body, timeout,
                          headers={'Authorization': 'Bearer ' + self.token})
 
     def start(self):
@@ -183,7 +189,7 @@ class Pair:
                     and health.get('paired_tier') == identity['tier']
                     and health.get('paired_yoco_keep',0)==keep)
             if not same:
-                self.status('Pairing native receiver and pinned producer')
+                self.status('Pairing streaming-llama prefill and Mac decoder')
                 self.request('/pair', identity)
                 self.request('/pair/qualification', {'mode': 'native'})
                 self.request('/pair/qualification', {'mode': 'paired'})
@@ -215,7 +221,7 @@ class Pair:
         from .streaming import events
         yield from events(self.url + '/v1/chat/completions',
                           {**self.decode_request(body),'stream':True},
-                          timeout=self.cfg['request_timeout_s'],
+                          timeout=None,  # the owned engine fails on stalled work
                           headers={'Authorization':'Bearer ' + self.token})
 
     def close(self):

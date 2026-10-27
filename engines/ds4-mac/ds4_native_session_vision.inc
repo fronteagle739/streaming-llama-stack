@@ -3,7 +3,7 @@
 typedef struct {unsigned char *data;size_t bytes;char sha256[65];} ds4_ns_vision_body;
 static bool ds4_ns_vision_pack(const ds4_tokens*tokens,const ds4_vision_span*images,
                              size_t count,ds4_ns_vision_body*out){
-    memset(out,0,sizeof(*out));if(!tokens||tokens->len<1||tokens->len>49152||!images||!count||count>16)return false;
+    memset(out,0,sizeof(*out));if(!tokens||tokens->len<1||tokens->len>1000000||!images||!count||count>16)return false;
     uint64_t payload=0,previous=0;size_t nt=(size_t)tokens->len*4;
     for(size_t i=0;i<count;i++){
         uint64_t start=images[i].token_start,n=images[i].embedding.token_count;

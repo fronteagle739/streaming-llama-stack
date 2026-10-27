@@ -1,0 +1,545 @@
+{
+  "status": "PASS",
+  "date": "2026-10-27",
+  "native": {
+    "native_sha256": "3a31e1a5b17ff7382b8baeb00aca1b3c57e2f5bfcc6cb1556bacfb68e2111aed",
+    "log_bytes": 66770
+  },
+  "source_archive_sha256": "8fdae5de83518133060587ebf5aa87f61fd75d5d8e10b06c69cf65a3643df184",
+  "cases": {
+    "short": {
+      "answer": "The code is ORBIT 914.\n\n1, 2, 3, 4, 5, 6, 7, 8, 9, 10, 11, 12, 13, 14, 15, 16, 17, 18, 19, 20.",
+      "timings": {
+        "cache_n": 0,
+        "prompt_n": 23,
+        "prompt_ms": 680.288,
+        "prompt_per_token_ms": 29.577739,
+        "prompt_per_second": 33.80921,
+        "predicted_n": 67,
+        "predicted_ms": 2068.205,
+        "predicted_per_token_ms": 30.868731,
+        "predicted_per_second": 32.395241
+      },
+      "stats": "Context: 90/1000001 (<0.01%)\nOutput: 67/128 (52%)\n32.4 tokens/sec",
+      "incremental_events": 67,
+      "stream_span_ms": 1999
+    },
+    "short-followup": {
+      "answer": "ORBIT 914",
+      "timings": {
+        "cache_n": 90,
+        "prompt_n": 14,
+        "prompt_ms": 414.151,
+        "prompt_per_token_ms": 29.582214,
+        "prompt_per_second": 33.804096,
+        "predicted_n": 4,
+        "predicted_ms": 126.173,
+        "predicted_per_token_ms": 31.54325,
+        "predicted_per_second": 31.702504
+      },
+      "stats": "Context: 108/1000001 (0.01%)\nOutput: 4/128 (3%)\n31.7 tokens/sec",
+      "incremental_events": 4,
+      "stream_span_ms": 87.40000000596046
+    },
+    "image-200k": {
+      "answer": "The image contains a **red** **square**.\n\nHere are five short facts about the square:\n1. It is a regular quadrilateral, meaning it has four equal sides and four equal angles.\n2. Each of its four interior angles measures exactly 90 degrees.\n3. Its diagonals intersect at 90 degrees, bisecting each other.\n4. The area of a square is calculated by squaring the length of one of its sides.\n5. It is a special type of both a rectangle and a rhombus.",
+      "timings": {
+        "cache_n": 0,
+        "prompt_n": 198287,
+        "prompt_ms": 187401.158,
+        "prompt_per_token_ms": 0.945101,
+        "prompt_per_second": 1058.088446,
+        "predicted_n": 104,
+        "predicted_ms": 3381.513,
+        "predicted_per_token_ms": 32.514548,
+        "predicted_per_second": 30.755464
+      },
+      "stats": "Context: 198391/1000001 (19.84%)\nOutput: 104/128 (81%)\n30.8 tokens/sec",
+      "incremental_events": 104,
+      "stream_span_ms": 3318.0999999940395
+    },
+    "image-followup": {
+      "answer": "Red square.",
+      "timings": {
+        "cache_n": 198391,
+        "prompt_n": 23,
+        "prompt_ms": 704.358,
+        "prompt_per_token_ms": 30.624261,
+        "prompt_per_second": 32.653849,
+        "predicted_n": 3,
+        "predicted_ms": 103.34,
+        "predicted_per_token_ms": 34.446667,
+        "predicted_per_second": 29.030385
+      },
+      "stats": "Context: 198417/1000001 (19.84%)\nOutput: 3/128 (2%)\n29.0 tokens/sec",
+      "incremental_events": 3,
+      "stream_span_ms": 44.099999994039536
+    },
+    "recall": [
+      {
+        "answer": "AMBER OTTER 731",
+        "timings": {
+          "cache_n": 0,
+          "prompt_n": 105054,
+          "prompt_ms": 98304.721,
+          "prompt_per_token_ms": 0.935754,
+          "prompt_per_second": 1068.656713,
+          "predicted_n": 6,
+          "predicted_ms": 215.444,
+          "predicted_per_token_ms": 35.907333,
+          "predicted_per_second": 27.849464
+        }
+      },
+      {
+        "answer": "AMBER OTTER 731",
+        "timings": {
+          "cache_n": 105060,
+          "prompt_n": 20,
+          "prompt_ms": 611.481,
+          "prompt_per_token_ms": 30.57405,
+          "prompt_per_second": 32.707476,
+          "predicted_n": 6,
+          "predicted_ms": 195.591,
+          "predicted_per_token_ms": 32.5985,
+          "predicted_per_second": 30.676258
+        }
+      },
+      {
+        "answer": "731",
+        "timings": {
+          "cache_n": 105086,
+          "prompt_n": 19,
+          "prompt_ms": 582.855,
+          "prompt_per_token_ms": 30.676579,
+          "prompt_per_second": 32.598159,
+          "predicted_n": 1,
+          "predicted_ms": 36.65,
+          "predicted_per_token_ms": 36.65,
+          "predicted_per_second": 27.28513
+        }
+      }
+    ]
+  },
+  "image50": {
+    "paired-yoco": {
+      "answer": "The image contains a **red** **square**.\n\nHere are five short facts about a square:\n1. It is a regular quadrilateral, meaning it has four equal sides and four equal angles.\n2. Each of its four interior angles measures exactly 90 degrees.\n3. Its opposite sides are parallel to each other.\n4. The diagonals of a square bisect each other at right angles and are equal in length.\n5. It is a special type of both a rectangle and a rhombus.",
+      "input_sha256": "9ccb0c7b068baff15dc599634ee590358d0d1f1bba779d0cab97fd9fdd5ff6fc",
+      "timings": {
+        "cache_n": 0,
+        "prompt_n": 49787,
+        "prompt_ms": 67969.895,
+        "prompt_per_token_ms": 1.365214,
+        "prompt_per_second": 732.486051,
+        "predicted_n": 100,
+        "predicted_ms": 3161.996,
+        "predicted_per_token_ms": 31.61996,
+        "predicted_per_second": 31.625593
+      },
+      "stats": "Context: 49887/1000001 (4.99%)\nOutput: 100/128 (78%)\n31.6 tokens/sec",
+      "incremental_events": 100,
+      "stream_span_ms": 3104,
+      "native_yoco_keep": 140
+    },
+    "paired-full": {
+      "answer": "The image contains a **red** **square**.\n\nHere are five short facts about a square:\n1. It is a regular quadrilateral, meaning it has four equal sides and four equal angles.\n2. Each of its four interior angles measures exactly 90 degrees.\n3. Its opposite sides are parallel to each other.\n4. The diagonals of a square bisect each other at right angles.\n5. It is a special type of both a rectangle and a rhombus.",
+      "input_sha256": "9ccb0c7b068baff15dc599634ee590358d0d1f1bba779d0cab97fd9fdd5ff6fc",
+      "timings": {
+        "cache_n": 0,
+        "prompt_n": 49787,
+        "prompt_ms": 74647.85,
+        "prompt_per_token_ms": 1.499344,
+        "prompt_per_second": 666.958258,
+        "predicted_n": 95,
+        "predicted_ms": 3016.769,
+        "predicted_per_token_ms": 31.755463,
+        "predicted_per_second": 31.490644
+      },
+      "stats": "Context: 49882/1000001 (4.99%)\nOutput: 95/128 (74%)\n31.5 tokens/sec",
+      "incremental_events": 95,
+      "stream_span_ms": 2957.100000023842,
+      "native_yoco_keep": 0
+    },
+    "single-yoco": {
+      "answer": "The image contains a **red** **square**.\n\nHere are five short facts about a square:\n1. It is a regular quadrilateral, meaning it has four equal sides and four equal angles.\n2. All four interior angles of a square are right angles (90 degrees).\n3. The diagonals of a square are equal in length and bisect each other at right angles.\n4. A square is a special type of rectangle and also a special type of rhombus.\n5. The area of a square is calculated by multiplying the length of one side by itself (side squared).",
+      "input_sha256": "9ccb0c7b068baff15dc599634ee590358d0d1f1bba779d0cab97fd9fdd5ff6fc",
+      "timings": {
+        "cache_n": 0,
+        "prompt_n": 49787,
+        "prompt_ms": 29500,
+        "predicted_n": 116,
+        "predicted_ms": 12389.508800000003,
+        "predicted_per_second": 9.362760208863161,
+        "prompt_per_second": 1687.6949152542372
+      },
+      "stats": "Context: 49903/262144 (19.04%)\nOutput: 116/128 (91%)\n9.4 tokens/sec",
+      "incremental_events": 116,
+      "stream_span_ms": 10571.199999988079,
+      "native_yoco_keep": 140,
+      "native_prefill_sweeps": 1
+    },
+    "single-full": {
+      "answer": "The image contains a **red** **square**.\n\nHere are five short facts about a square:\n1. It is a regular quadrilateral, meaning it has four equal sides and four equal angles.\n2. All four interior angles of a square are right angles (90 degrees).\n3. The diagonals of a square are equal in length and bisect each other at right angles.\n4. A square is a special type of rectangle (with equal sides) and a special type of rhombus (with right angles).\n5. The area of a square is calculated by multiplying the length of one side by itself (side\u00b2).",
+      "input_sha256": "9ccb0c7b068baff15dc599634ee590358d0d1f1bba779d0cab97fd9fdd5ff6fc",
+      "timings": {
+        "cache_n": 0,
+        "prompt_n": 49787,
+        "prompt_ms": 37796.99999996228,
+        "predicted_n": 124,
+        "predicted_ms": 13379.49720000001,
+        "predicted_per_second": 9.267911801648264,
+        "prompt_per_second": 1317.2209434624358
+      },
+      "stats": "Context: 49911/262144 (19.04%)\nOutput: 124/128 (97%)\n9.3 tokens/sec",
+      "incremental_events": 124,
+      "stream_span_ms": 11650.300000011921,
+      "native_yoco_keep": 0,
+      "native_prefill_sweeps": 1
+    }
+  },
+  "rtx_components": {
+    "198287": {
+      "calls": [
+        {
+          "tokens": 1,
+          "processing_s": 16.3022556,
+          "layer_count": 40,
+          "engram_exposed_s": 2.73e-05,
+          "weight_acquire_s": 15.844520000000001
+        },
+        {
+          "tokens": 49152,
+          "processing_s": 26.012938600000002,
+          "layer_count": 40,
+          "engram_exposed_s": 0.0010184999999999999,
+          "weight_acquire_s": 7.007319000000001
+        },
+        {
+          "tokens": 49152,
+          "processing_s": 27.7905829,
+          "layer_count": 40,
+          "engram_exposed_s": 0.0010554,
+          "weight_acquire_s": 7.2983728
+        },
+        {
+          "tokens": 49152,
+          "processing_s": 32.056803800000004,
+          "layer_count": 40,
+          "engram_exposed_s": 0.0153469,
+          "weight_acquire_s": 7.099080799999999
+        },
+        {
+          "tokens": 49152,
+          "processing_s": 34.4899467,
+          "layer_count": 40,
+          "engram_exposed_s": 0.0010220000000000001,
+          "weight_acquire_s": 7.0698404
+        },
+        {
+          "tokens": 1679,
+          "processing_s": 17.3846672,
+          "layer_count": 40,
+          "engram_exposed_s": 3.17e-05,
+          "weight_acquire_s": 15.3103338
+        }
+      ],
+      "rtx_operation_times": [
+        {
+          "operation": "startup_and_initial_prefill",
+          "tokens": 49152,
+          "seconds": 44.64000000001397
+        },
+        {
+          "operation": "incremental_prefill",
+          "tokens": 49152,
+          "seconds": 27.95400000002701
+        },
+        {
+          "operation": "incremental_prefill",
+          "tokens": 49152,
+          "seconds": 32.28100000001723
+        },
+        {
+          "operation": "incremental_prefill",
+          "tokens": 49152,
+          "seconds": 34.70299999997951
+        },
+        {
+          "operation": "incremental_prefill",
+          "tokens": 1679,
+          "seconds": 17.43699999997625
+        }
+      ],
+      "initial_phase_ms": {
+        "append_owner_admission": 0.0,
+        "chunk_token_preparation": 0.0246,
+        "embedding_40_layers_head": 26012.963200000002,
+        "final_hidden_export_preparation": 1.1076,
+        "input_identity_hash_budget_preflight": 274.5412,
+        "inspect_admit_allocate": 185.961,
+        "native_payload_export_flush": 231.4409,
+        "one_token_warmup_and_retirement": 17787.7721,
+        "payload_close_readonly_rehash": 0.0002,
+        "run_dispatch_bookkeeping": 0.02529999999688015
+      },
+      "prefill_tokens": 198287,
+      "producer_sha256": "e95af084559456750a50c8e75e03e2fa34d37311e08c218c689df33e972de9ce",
+      "yoco_keep": 140,
+      "rtx_compute_excluding_warmup_s": 137.7349392,
+      "transfer_import_hash_ack": [
+        {
+          "initial": 1.0,
+          "position": 49152.0,
+          "bytes": 333636668.0,
+          "milliseconds": 1549.773
+        },
+        {
+          "initial": 0.0,
+          "position": 98304.0,
+          "bytes": 333636872.0,
+          "milliseconds": 2070.053
+        },
+        {
+          "initial": 0.0,
+          "position": 147456.0,
+          "bytes": 333636872.0,
+          "milliseconds": 2440.631
+        },
+        {
+          "initial": 0.0,
+          "position": 196608.0,
+          "bytes": 333636872.0,
+          "milliseconds": 2848.409
+        },
+        {
+          "initial": 0.0,
+          "position": 198287.0,
+          "bytes": 29628228.0,
+          "milliseconds": 1940.886
+        }
+      ],
+      "transfer_import_hash_ack_s": 10.849752,
+      "rtx_operations_including_startup_s": 157.01500000001397,
+      "exposed_layer_engram_s": 0.0184745,
+      "image_spans": [
+        {
+          "position": 198045,
+          "count": 184,
+          "decoder_tail_intersection": 82
+        }
+      ],
+      "memory": {
+        "host_budget": 8589934592,
+        "runtime_min_free_gib": 4.0,
+        "peak_rss": 6174674944,
+        "minimum_available_ram": 10527019008,
+        "paging_growth": 1728512,
+        "budget_breaches": 0,
+        "owned_pid_gone": true,
+        "owned_job_empty": true
+      }
+    },
+    "105054": {
+      "calls": [
+        {
+          "tokens": 1,
+          "processing_s": 16.467744600000003,
+          "layer_count": 40,
+          "engram_exposed_s": 2.91e-05,
+          "weight_acquire_s": 15.924753899999999
+        },
+        {
+          "tokens": 49152,
+          "processing_s": 24.0803969,
+          "layer_count": 40,
+          "engram_exposed_s": 0.0010007000000000002,
+          "weight_acquire_s": 7.0322496
+        },
+        {
+          "tokens": 49152,
+          "processing_s": 25.0306358,
+          "layer_count": 40,
+          "engram_exposed_s": 0.0009615,
+          "weight_acquire_s": 7.0852616
+        },
+        {
+          "tokens": 6750,
+          "processing_s": 17.059818,
+          "layer_count": 40,
+          "engram_exposed_s": 0.00013729999999999998,
+          "weight_acquire_s": 13.871573399999999
+        }
+      ],
+      "rtx_operation_times": [
+        {
+          "operation": "startup_and_initial_prefill",
+          "tokens": 49152,
+          "seconds": 42.85899999999674
+        },
+        {
+          "operation": "incremental_prefill",
+          "tokens": 49152,
+          "seconds": 25.18700000003446
+        },
+        {
+          "operation": "incremental_prefill",
+          "tokens": 6750,
+          "seconds": 17.10899999999674
+        }
+      ],
+      "initial_phase_ms": {
+        "append_owner_admission": 0.0,
+        "chunk_token_preparation": 0.0232,
+        "embedding_40_layers_head": 24080.4201,
+        "final_hidden_export_preparation": 1.0481,
+        "input_identity_hash_budget_preflight": 264.5407,
+        "inspect_admit_allocate": 185.8891,
+        "native_payload_export_flush": 237.7462,
+        "one_token_warmup_and_retirement": 17956.1096,
+        "payload_close_readonly_rehash": 0.0001,
+        "run_dispatch_bookkeeping": 0.026000000001635604
+      },
+      "prefill_tokens": 105054,
+      "producer_sha256": "e95af084559456750a50c8e75e03e2fa34d37311e08c218c689df33e972de9ce",
+      "yoco_keep": 140,
+      "rtx_compute_excluding_warmup_s": 66.1708507,
+      "transfer_import_hash_ack": [
+        {
+          "initial": 1.0,
+          "position": 49152.0,
+          "bytes": 333636668.0,
+          "milliseconds": 1505.706
+        },
+        {
+          "initial": 0.0,
+          "position": 98304.0,
+          "bytes": 333636872.0,
+          "milliseconds": 1996.531
+        },
+        {
+          "initial": 0.0,
+          "position": 105054.0,
+          "bytes": 62094464.0,
+          "milliseconds": 1267.883
+        }
+      ],
+      "transfer_import_hash_ack_s": 4.7701199999999995,
+      "rtx_operations_including_startup_s": 85.15500000002794,
+      "exposed_layer_engram_s": 0.0020995000000000002,
+      "image_spans": [],
+      "memory": {
+        "host_budget": 8589934592,
+        "runtime_min_free_gib": 4.0,
+        "peak_rss": 6121037824,
+        "minimum_available_ram": 11480309760,
+        "paging_growth": 0,
+        "budget_breaches": 0,
+        "owned_pid_gone": true,
+        "owned_job_empty": true
+      }
+    },
+    "49787": {
+      "calls": [
+        {
+          "tokens": 1,
+          "processing_s": 16.411146199999997,
+          "layer_count": 40,
+          "engram_exposed_s": 2.7400000000000002e-05,
+          "weight_acquire_s": 15.9420825
+        },
+        {
+          "tokens": 49152,
+          "processing_s": 26.2049026,
+          "layer_count": 40,
+          "engram_exposed_s": 0.0011053,
+          "weight_acquire_s": 7.1483679
+        },
+        {
+          "tokens": 635,
+          "processing_s": 16.7723256,
+          "layer_count": 40,
+          "engram_exposed_s": 3.15e-05,
+          "weight_acquire_s": 15.890538000000001
+        }
+      ],
+      "rtx_operation_times": [
+        {
+          "operation": "startup_and_initial_prefill",
+          "tokens": 49152,
+          "seconds": 44.96900000004098
+        },
+        {
+          "operation": "incremental_prefill",
+          "tokens": 635,
+          "seconds": 16.81300000002375
+        }
+      ],
+      "initial_phase_ms": {
+        "append_owner_admission": 0.0,
+        "chunk_token_preparation": 0.0119,
+        "embedding_40_layers_head": 26204.914500000003,
+        "final_hidden_export_preparation": 1.0255,
+        "input_identity_hash_budget_preflight": 298.3974,
+        "inspect_admit_allocate": 187.2886,
+        "native_payload_export_flush": 235.7613,
+        "one_token_warmup_and_retirement": 17898.0581,
+        "payload_close_readonly_rehash": 0.0001,
+        "run_dispatch_bookkeeping": 0.03379999999716521
+      },
+      "prefill_tokens": 49787,
+      "producer_sha256": "e95af084559456750a50c8e75e03e2fa34d37311e08c218c689df33e972de9ce",
+      "yoco_keep": 140,
+      "rtx_compute_excluding_warmup_s": 42.9772282,
+      "transfer_import_hash_ack": [
+        {
+          "initial": 1.0,
+          "position": 49152.0,
+          "bytes": 333636668.0,
+          "milliseconds": 1567.118
+        },
+        {
+          "initial": 0.0,
+          "position": 49787.0,
+          "bytes": 22942452.0,
+          "milliseconds": 661.848
+        }
+      ],
+      "transfer_import_hash_ack_s": 2.228966,
+      "rtx_operations_including_startup_s": 61.78200000006473,
+      "exposed_layer_engram_s": 0.0011368,
+      "image_spans": [
+        {
+          "position": 49545,
+          "count": 184,
+          "decoder_tail_intersection": 82
+        }
+      ],
+      "memory": {
+        "host_budget": 8589934592,
+        "runtime_min_free_gib": 4.0,
+        "peak_rss": 6104244224,
+        "minimum_available_ram": 11477327872,
+        "paging_growth": 0,
+        "budget_breaches": 0,
+        "owned_pid_gone": true,
+        "owned_job_empty": true
+      }
+    }
+  },
+  "image_png_sha256": "188123436e3f1d008885b4e54083e3a98d08f59ee256a573e02bd4da680fa093",
+  "browser": "actual stack WebUI, headless Chromium on Mac",
+  "samplers": {
+    "temperature": 0.83,
+    "top_p": 0.87,
+    "top_k": 37,
+    "min_p": 0.06,
+    "bias": 0.22,
+    "seed": 123456,
+    "max_tokens": 128
+  },
+  "cpu": {
+    "passed": 166,
+    "skipped": 2,
+    "subtests": 70
+  },
+  "interpretation": "WebUI prompt intervals include route setup; native compute excludes one-token warmup. Transfer intervals include network, import, hashing and acknowledgment. Engram exposed layer time overlaps prefetch and is not a full Engram cost allocation."
+}

@@ -32,9 +32,23 @@ The last row returned the correct long-document marker. Native embedding/layers/
 
 An older 224,588-token recall reported 2.15 tok/s for a six-token reply, including one-time context/open/inspection overhead. Its token steps ran at 131–179 ms once warm (5.6–7.6 tok/s). It is not a comparable sustained-rate regression against the longer decode above.
 
-## RTX prefill → Mac decode (measured before YOCO, plain ULTRA prefill)
+## RTX prefill → Mac decode
 
-Paired YOCO has no measured row yet. Its [release gate remains incomplete](YOCO_PAIRED_QUALIFICATION.md): candidate projected-image transport and native sampler support pass CPU checks, while numerical image quality and the live browser/decode gate remain unproven. CPU checks and a Mac build are not performance measurements.
+The real YOCO140 image and long-recall WebUI gate passes. [Qualification and raw metrics](YOCO_PAIRED_QUALIFICATION.md).
+
+| Prefill / workload | Tokens | RTX compute (s) | Transfer/import/hash/ACK (s) | Mac decode tok/s | WebUI prompt (s) |
+|---|---:|---:|---:|---:|---:|
+| Plain ULTRA, historical text | 184,432 | 173.252 | 7.662 | 31.494 | 229.128 |
+| YOCO140, uploaded image | 198,287 | 137.735 | 10.850 | 30.755 | 187.401 |
+
+RTX compute excludes the one-token warmup. The YOCO WebUI prompt rate was 1,058.088 tok/s, above the supplied 985.74 image reference. These historical workloads differ; the controlled image comparison below measures the same prompt and sampler settings with YOCO on/off.
+
+| Route | YOCO140 seconds | YOCO tok/s | Full-evaluation seconds | Full tok/s | Speedup |
+|---|---:|---:|---:|---:|---:|
+| Single RTX | 29.500 | 1,687.695 | 37.797 | 1,317.221 | 1.281× |
+| RTX → Mac | 67.970 | 732.486 | 74.648 | 666.958 | 1.098× |
+
+All four controls used 49,787 prompt tokens and the same uploaded image. Paired mode makes two exportable chunks, including a 635-token tail; single mode folds the prompt into one logical prefill. Five chunk boundaries, repeated suffix weight reads, warmup and transfer limit the 198K speedup. [Per-chunk timings, image coverage and Engram accounting](YOCO_PAIRED_QUALIFICATION.md).
 
 The 184,432-token document used four RTX chunks. Native RTX compute totaled **173.2521194 s**, excluding the 16.1972473 s one-token warmup and other serialization/startup work. Four transfer/import/hash/ACK intervals totaled **7.662391 s**. Mac decode evaluated **97 tokens in 3.080 s = 31.4935 tok/s**, including reasoning. The Mac server reported **229.128 s** through prompt processing and **232.208 s** through generation.
 

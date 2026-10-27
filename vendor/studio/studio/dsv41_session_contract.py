@@ -193,7 +193,9 @@ def initial_request(session, headers, body):
         result['vision']=images
         return result
     session_identity(session)
-    require(type(body) is bytes and 0 < len(body) <= MAX_PREFILL * 4 and (len(body) % 4 == 0), 'Initial token extent')
+    # The initial logical prompt is internally swept by the same producer fold
+    # planner as single-engine mode; it is not one incremental RPC chunk.
+    require(type(body) is bytes and 0 < len(body) <= (CONTEXT - 1) * 4 and (len(body) % 4 == 0), 'Initial token extent')
     require(type(headers) is dict and all((type(k) is str and type(v) is str for k, v in headers.items())), 'Invalid request headers')
     h = {k.lower(): v for k, v in headers.items()}
     require(len(h) == len(headers), 'Duplicate request header')
