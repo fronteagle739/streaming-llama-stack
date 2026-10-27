@@ -1,30 +1,13 @@
-# Opt-in approximate YOCO: RTX qualification, 2026-10-25
+# Approximate YOCO: measurements and limits
 
-`yoco_keep=140` is approximate and local to the single engine. Default `0`
-preserves the existing execution path. The measured candidate is
-`853246578bdd2cbdc73d6fdce97fbdb0c140a1a8`; executable SHA-256
-`2b8fbf1d7b0fb3a80121b83710ec54b0ed56ecf331d904b74eae1ab72ef5d2d6`.
-This document and its README link do not change native code or the binary.
-
-## Flag-off identity
-
-The reference is release `57af75e11016d9c5a2fe9adfa9b13aa7903e9c1c`.
-Its native engine source is unchanged from the installed producer revision
-`233a242d10c6b5a6e7e1a04c2fbe36f63a3b6dc9`, executable SHA-256
-`71b2dbba39d3b8a0c3dae1426ecae4be4577583565d638b968673d07ab4682c1`.
-
-At 43,327 tokens, the complete release and flag-off candidate exports both
-contain **288,477,488 bytes**, SHA-256
-`2e28505f7b2da2a54212facc7d57d2c06fb5aa7422303cb35df38a5a50a58eb9`.
-Exports were streamed through a bounded RAM hash, without a disk KV payload.
+`yoco_keep=140` is opt-in. Default `0` retains full prefill. With the flag off, the compared 43,327-token exports were byte-identical (288,477,488 bytes).
 
 ## Timing and weight fetches
 
 RTX 5090; original Q4 model; shipping ULTRA arithmetic and fold planner;
 262,144 context with growable f32 cache. Host budget 9.25 GiB, producer base
 6.25 GiB, maximum 7.75 GiB, desktop reserve 8 GiB, physical-RAM floor 4 GiB.
-Every engine run had independent memory enforcement and build/test
-contamination monitoring. No measured engine run was repeated.
+The timing runs used explicit memory budgets and available-RAM monitoring.
 
 Times include producer startup and prefill, excluding subsequent export or
 decode. Each row ran in **exact / YOCO / exact / YOCO** order.
@@ -80,20 +63,9 @@ confirms `yoco_keep=140`, context **999,424**, growable bf16 cache and the
 4 GiB native runtime floor. Prompts are 593 and 611 tokens: this validates
 the 1M configuration and follow-up path, not a million-token prefill.
 
-All gate producers retire gracefully with exit code 0 and an empty owned
-job. No runtime memory-floor breach or timing contamination is reported.
-One 103K YOCO arm records a **20,627,456-byte (19.67 MiB)** rise in global
-pagefile usage while retaining at least **10,200,412,160 bytes (9.50 GiB)**
-available RAM. Other standalone gate arms record zero growth. This global
-counter does not attribute paging to the producer; neither its 4 GiB floor
-nor the unchanged 256,000,000-byte global paging guard tripped. The evidence
-does not establish machine-wide zero paging.
-After this check, the plain 1M WebUI is relaunched for the owner.
+One 103K YOCO run recorded 19.67 MiB growth in a global pagefile counter while retaining at least 9.50 GiB available RAM. That counter does not attribute paging to the producer, so these measurements do not establish machine-wide zero paging.
 
-Images, verify, all-position scoring, decode and append-via-decode retain
-full evaluation. Transport/export, persistence and rewind remain refused
-while YOCO is enabled; edits re-prefill. No RTX-to-Mac or million-token
-quality qualification is claimed.
+Images, verify, all-position scoring, decode and append-via-decode retain full evaluation. Image-containing conversations do not receive text-only YOCO speedups. The measurements above used local YOCO; negotiated transport and persistence support are described in [media and state](STACK_MEDIA_AND_STATE.md). These short checks do not establish million-token quality.
 
 ## Image-prompt Engram read correction (2026-10-27)
 

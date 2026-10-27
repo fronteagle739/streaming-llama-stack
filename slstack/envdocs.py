@@ -1,10 +1,10 @@
-"""Generate the user guide and literal default evidence from the environment table."""
+"""Generate the variable reference and literal default evidence from the environment table."""
 import argparse
 import ast
 import json
 from pathlib import Path
 import re
-from .envvars import ROOT, TABLE, inventory, rows, validate_table
+from .envvars import ROOT, TABLE, inventory, rows
 
 
 def source_defaults(table):
@@ -57,12 +57,12 @@ def render(table):
     from .native_broker import vendor
     vendor()
     from studio.quality_speed import NAMED, PHASES
-    out = ['# User guide', '',
+    out = ['# Environment variables', '',
            'The launcher constructs each child environment. No exports are needed. '
            'Precedence is `--flag` > `env_overrides` in the config > the DSV4.1 table default > the engine default. '
            'Inherited engine settings are removed with a warning. OS identity, locale and toolchain paths keep their normal meaning.', '',
            'Each row below comes from `envvars.json`, which also supplies the CLI flags and child defaults. '
-           'Use `python -m slstack.envdocs --check` to verify this guide and the source inventory.', '',
+           'Use `python -m slstack.envdocs --check` to verify this reference and the source inventory.', '',
            '`slstack install --all` installs the pinned isolated media runtime and builds the native engines and chat UI. '
            'The UI builds before the server embeds its generated assets. Media workers use the isolated runtime automatically; '
            'an explicit `studio_python` setting still overrides that choice. `install --all --check` checks packages and build outputs without rebuilding.', '',
@@ -126,25 +126,35 @@ def render(table):
     return '\n'.join(out).rstrip() + '\n'
 
 
+def reference_table():
+    """Resolve source evidence without changing runtime flags or defaults."""
+    table = rows()
+    references = inventory()
+    declared = {row['var'] for row in table}
+    missing = set(references) - declared
+    if missing or len(declared) != len(table) or any(not row['doc'] for row in table):
+        raise ValueError(f'Environment reference has missing or invalid rows: {sorted(missing)}')
+    # Source locations and literal consumers are documentation metadata. Derive
+    # them from this checkout without rewriting the runtime environment table.
+    for row in table:
+        row['reads'] = references.get(row['var'], [])
+    return source_defaults(table)
+
+
 def main():
     parser = argparse.ArgumentParser()
     parser.add_argument('--refresh-defaults', action='store_true')
     parser.add_argument('--check', action='store_true')
     args = parser.parse_args()
-    table = rows()
+    table = reference_table()
     if args.refresh_defaults:
-        references = inventory()
-        for row in table:
-            row['reads'] = references.get(row['var'], [])
-        table = source_defaults(table)
         TABLE.write_text(json.dumps(table, indent=2) + '\n', encoding='utf-8')
-    validate_table()
     expected = render(table)
-    guide = ROOT / 'USER_GUIDE.md'
+    guide = ROOT / 'docs' / 'VARIABLES.md'
     if args.check:
         if not guide.is_file() or guide.read_text(encoding='utf-8') != expected:
-            raise ValueError('USER_GUIDE.md differs from envvars.json; regenerate it')
-        print(f'Environment table/guide: {len(table)} documented variables')
+            raise ValueError('docs/VARIABLES.md differs from envvars.json; regenerate it')
+        print(f'Environment table/reference: {len(table)} documented variables')
     else:
         guide.write_text(expected, encoding='utf-8')
 

@@ -1,23 +1,14 @@
-# Environment behaviour samples
+# Environment behavior examples
 
-The Windows CPU samples ran on2026-10-22. Stack parent:8d6dd1bb3b3e361402e9a558a37c3d0879697932 plus the evolving working changes published with this example. Runtime identities and publication source hashes are recorded in SOURCE_IDENTITY.json. Their historical binary/source pins identify the actual measured executables; later build receipts are separate.
+Launcher flags and local `env_overrides` control child processes; inherited engine variables do not silently override them. [Variables](../../docs/VARIABLES.md) records scopes, defaults and source consumers.
 
-The reused image runtime's real memory watchdog received floor5 and stayed alive (0.578s,27,881,472B peak RSS). It received floor64 and exited137 with MEM_GUARD_TRIP (0.344s,25,669,632B). The outer guardian enforced1GiB RSS and4GiB available RAM in both cases. This tests the engine's memory guard, not image generation.
+The image-worker sample admits a 5 GB free-memory floor and refuses an impossible 64 GB floor under an independent 1 GiB RSS budget and 4 GiB physical reserve. The native CPU sample accepts zero routing bias and reaches its missing-model error; nonzero bias requires CUDA. These are startup examples rather than model-throughput measurements.
 
-The actual native executable received bias0 and reached a deliberate missing-model error. Bias0.35 instead triggered its CUDA-only routing refusal on CPU. The launcher flag also removed a conflicting configured engine argument. These are startup behaviour checks, not inference or speed measurements.
-
-Edit the configuration path, using a1GiB host budget and4GiB available floor. Set job_commit_gib to4 for the native CPU control. Commands actually used, with the local paths replaced:
+Use local paths and explicit budgets when running the example scripts:
 
 ```text
-python -B tests/prove_image_environment.py --config <edit-this-config.json> --expect admitted --receipt <edit-this-admitted.json> --mem-guard-min-free-gb 5
-python -B tests/prove_image_environment.py --config <edit-this-config.json> --expect refused --receipt <edit-this-refused.json> --mem-guard-min-free-gb 64
-python -B tests/prove_native_environment.py --config <edit-this-config.json> --expect model-open --receipt <edit-this-model-open.json> --ds4-cache-affinity-bias 0
-python -B tests/prove_native_environment.py --config <edit-this-config.json> --expect cuda-required --receipt <edit-this-cuda-required.json> --ds4-cache-affinity-bias 0.35
+python -B tests/prove_image_environment.py --config <config.json> --expect admitted --receipt <output.json> --mem-guard-min-free-gb 5
+python -B tests/prove_native_environment.py --config <config.json> --expect model-open --receipt <output.json> --ds4-cache-affinity-bias 0
 ```
 
-The JSON receipts preserve each child's output. The other two engine scopes also have actual runtime samples:
-
-- [RTX vector casts](rtx-vector-cast.json): the launcher flag disables native vector dispatch while preserving the complete67-token canonical payload hash. The accepted default-on control is reused.
-- [Mac Metal budget](mac-metal-budget.json): the actual owned/wired buffer factory admits a1MiB buffer under a64MiB process allowance and refuses a512KiB allowance. Both run under an independent256MiB host cap and4GiB physical floor.
-
-These samples establish specific flag behaviour, not a speed campaign or full inference qualification for every environment variable.
+[RTX vector casts](rtx-vector-cast.json) compare the complete 67-token state with vector dispatch on/off. [Mac Metal budget](mac-metal-budget.json) exercises the owned wired-buffer factory with explicit allowance/refusal cases. These bounded samples do not establish inference behavior for every variable.
