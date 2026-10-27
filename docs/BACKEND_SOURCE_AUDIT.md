@@ -82,6 +82,71 @@ M3 Ultra with 512 GB unified memory. The historical storage record describes a
 25 GB/s RAID-0 NVMe array. These measurements must not be described as a
 single-RTX decode result or as a validated 400/18 tok/s pair for every GLM version.
 
+## DSV4.1 measurement context
+
+For the DSV4.1 README performance section, keep prefill and decode measurements
+separate. The original model is `DeepSeek-V4.1-Flash-1017-Q4-v41.gguf`,
+518,596,067,328 bytes, SHA-256
+`2cc6bc254f22a0238020e61e931c0cac865218aada1eed9c0036d9f4031c6e5f`.
+The RTX hardware is one 32 GB RTX 5090 and the recorded 25 GB/s
+RAID-0 NVMe array; the stack uses explicit host-memory budgets. This single-machine result does not need the Mac to decode.
+
+The existing `docs/ULTRAYOCO_QUALIFICATION.md` receipt reports startup plus
+prefill, with ULTRA arithmetic and the fold planner:
+
+| Actual prompt tokens | YOCO off | YOCO keep 140 |
+| --- | ---: | ---: |
+| 43,327 | 1,063.7 tok/s | 1,373.4 tok/s |
+| 103,189 | 1,127.2 tok/s | 1,634.5 tok/s |
+
+These long-prompt rates do not describe short prompts or image prompts. The
+384-row teacher-forced comparison gives native-to-exact KL 0.05494348 and
+361/384 top-1 matches; native-to-YOCO KL 0.05668419 and 360/384 matches;
+exact-to-YOCO KL 0.00185296 and 381/384 matches. It is not a corpus-wide quality
+evaluation, and the configured 999,424-token context is not a measured 1M-token
+prefill speed. Here the receipt's "exact" label means YOCO off with ULTRA
+arithmetic, rather than a claim of zero KL versus native reference arithmetic.
+
+The historical decode bias calibration used frozen engine `812f2bd`, the same
+rainbow prompt, cold 128 / warm 384, greedy decoding, warm-up 100 / ramp 8,
+speculation off and no synchronisation profiler. Quality excludes the initial
+prefill prediction and covers 383 decode positions. Retain that engine identity;
+these are not new measurements of the current binary.
+
+| Bias | Overall decode tok/s | After first 100 tok/s | KL versus bias 0 | Top-1 agreement |
+| --- | ---: | ---: | ---: | ---: |
+| 0 | 7.48 | 7.318 | 0 | 100% |
+| 0.35 | 9.75 | 10.817 | 0.10418 | 92.689% |
+| 0.65 | 11.01 | 13.073 | 0.25796 | 90.078% |
+| 0.9 | 11.94 | 14.896 | 0.35941 | 87.206% |
+| 1.36125 | 12.71 | 16.600 | 0.47866 | 84.073% |
+
+The WebUI slider changes decode bias during generation, with the native warm-up
+and ramp preserved. Its themed phase editor can choose bias, temperature and
+sampler settings separately for reasoning, tool calls, answers and fenced code.
+This lets a user favour speed during reasoning and quality during final output
+or tool arguments. Code inherits Answer when omitted. A live change is read at
+the next supported token boundary; bias transitions still follow the native ramp.
+Prefill arithmetic settings in the example scripts are a separate choice.
+
+The new labelled launchers are under `examples/single-machine` and
+`examples/dual-machine`. Their configuration and no-start checks passed; no new
+model benchmark or end-to-end distributed qualification was run for those examples.
+
+## Publication checks
+
+Vendored engine snapshots share the clean stack's Git history; development
+repository histories are not imported with the files. Front Eagle remains the
+required author, committer and tagger for the stack's commits. Original third-party
+copyright/licence attribution remains intact.
+
+The audit checks all reachable stack refs, including retained older branches,
+commit messages, tags, filenames, source blobs and decompressed WebUI assets.
+The pinned external mlx-serve ancestor history was checked separately. Its public
+website contains Firebase browser configuration; that website is not the stack's
+runtime. Known credential patterns are checked without printing matched values.
+Pattern scans cannot prove an arbitrary unknown string is not a password.
+
 ## MLX core compatibility
 
 The historical MLX core ring change is retained separately in
