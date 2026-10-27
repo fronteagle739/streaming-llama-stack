@@ -34,7 +34,7 @@ An older 224,588-token recall reported 2.15 tok/s for a six-token reply, includi
 
 ## RTX prefill → Mac decode (measured before YOCO, plain ULTRA prefill)
 
-Paired YOCO has no measured row yet. Its [release gate remains incomplete](YOCO_PAIRED_QUALIFICATION.md), including image transport, native sampler support and the live browser gate. CPU checks and a Mac build are not performance measurements.
+Paired YOCO has no measured row yet. Its [release gate remains incomplete](YOCO_PAIRED_QUALIFICATION.md): candidate projected-image transport and native sampler support pass CPU checks, while numerical image quality and the live browser/decode gate remain unproven. CPU checks and a Mac build are not performance measurements.
 
 The 184,432-token document used four RTX chunks. Native RTX compute totaled **173.2521194 s**, excluding the 16.1972473 s one-token warmup and other serialization/startup work. Four transfer/import/hash/ACK intervals totaled **7.662391 s**. Mac decode evaluated **97 tokens in 3.080 s = 31.4935 tok/s**, including reasoning. The Mac server reported **229.128 s** through prompt processing and **232.208 s** through generation.
 

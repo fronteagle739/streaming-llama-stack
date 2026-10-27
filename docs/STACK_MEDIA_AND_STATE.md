@@ -114,3 +114,12 @@ artifact geometry, including a complete DSpark ring, with all-region hashes.
 The provenance remains YOCO-derived. Ordinary exact mode is unchanged.
 
 Compatible YOCO transport carries initial and appended mode3 state, including the complete DSpark ring and incremental updates. Rewind checks the restored state hashes. Both peers must negotiate the same format before transfer. A successful compile or state import alone does not establish equal model outputs across different arithmetic paths.
+
+The paired image candidate uses a bounded SLVP v1 envelope containing final
+token IDs, absolute image spans and the original SLVI projected embeddings.
+SHA-256 binds the complete body and each projection. The authenticated broker
+creates immutable owned files; network callers cannot supply filesystem paths.
+Historical image identities must match on continuation. The Mac restores image
+fingerprints after native state import. CPU checks cover initial/incremental
+transport and images before, across and inside the YOCO replay tail. Numerical
+KL/recall and live image conversation qualification remain pending.

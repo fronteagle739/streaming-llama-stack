@@ -29,17 +29,37 @@ A CPU test includes the actual Mac server parser, with tokenization stubbed so
 that no model is opened. A separate single-engine regression checks its native
 generation command still receives explicit sampler overrides.
 
+The continuation candidate accepts the default phase profile and scalar bias.
+Native decode selects phase-specific sampler values at token boundaries;
+explicit request values win. Presence/frequency/repetition penalties and logit
+bias change the actual sampled logits. WebUI sampler order, typical sampling,
+dynamic temperature, XTC and DRY reuse the retained llama.cpp implementations.
+Seeded final selection uses ds4's64-bit RNG. `-1` token/history limits preserve
+their sentinel meaning instead of being clamped to zero by the old parser.
+
+Quality/speed is stored in the decoding session and logged from that session.
+The Mac MiMo policy penalizes uncached expert selections without changing their
+combine probabilities. This DSV4.1 lane admits fully resident Metal experts, so
+its uncached set is empty and a nonzero bias leaves routing unchanged. This is
+not qualification of streaming-expert bias or a Mac bias speedup.
+
+Paired multimodal prefill now carries SLVP v1 projected spans and SHA-256-bound
+SLVI embeddings. The broker materializes immutable owned files, rejects remote
+filesystem paths and checks historical image identities. Initial and appended
+prefill use the projections, original image routing and Engram masks. Native
+import restores image fingerprints. A compatible existing Mac vision encoder
+is selected automatically beside the language model.
+
+A real headless browser CPU fixture exercises the shipped WebUI and paired
+relay with temperature .83, top-p .87, top-k37, min-p .06 and bias .22. It also
+checks Send during a pending toolbar save. The old fractional-step validation
+dropped visible temperature/top-p edits; arbitrary valid fractions now persist.
+These responses are synthetic and no model is opened. They do not satisfy the
+live decode gate. Toolbar changes on the paired path apply on the next turn.
+
 The following work remains:
 
-- Mac ds4 has no quality/speed bias control, phase-specific sampler profile or
-  repetition/presence/frequency penalty implementation. The receiver now refuses
-  unsupported active settings before loading the decoder. This is fail-closed
-  admission, not implementation of those controls. The default WebUI phase
-  profile is consequently refused; this branch must not ship as a working paired
-  WebUI release.
-- Paired Mac multimodal prefill explicitly rejects images. The mode3 protocol
-  currently carries token IDs rather than projected image spans. Implement and
-  authenticate image-span transport and preserve image identity on continuation.
+- Qualify the candidate transport and samplers with real Mac decode and images.
 - Run image KL/recall comparisons against full evaluation, including images
   before and within the replay tail.
 - Run a real headless browser gate with at least 100K prompt tokens, two further

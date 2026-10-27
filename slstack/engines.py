@@ -341,8 +341,13 @@ class Engines:
 
     def quality(self, value=None):
         if self.cfg.get('mac'):
-            return {'supported': False, 'phases_supported': False,
-                    'reason': 'This Mac decoder has no quality/speed control'}
+            from .generation import Store
+            store=Store(self.cfg)
+            row=store.bias(value) if value is not None else store.get()
+            return {'supported': True, 'phases_supported': True,'settings':row,
+                    'per_phase':row['per_phase'],'phases':{p:v['bias'] for p,v in row['phases'].items()},
+                    'value': {p:v['bias'] for p,v in row['phases'].items()} if row['per_phase'] else row['value'],
+                    'scope':'session','applies':'next request'}
         # Control must remain available while another thread is decoding.
         # Cold start still shares the normal lifecycle lock with media/model swaps.
         if not self.llm or self.llm.proc.poll() is not None:

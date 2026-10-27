@@ -801,7 +801,10 @@ static bool responses_live_has_call_id(server *s, const char *id);
 static bool anthropic_live_has_call_id(server *s, const char *id);
 static stop_list live_tool_call_order(server *s, api_style api, const stop_list *ids);
 
+#include "ds4_paired_sampling.h"
+
 typedef struct {
+    ds4_paired_sampling paired;
     req_kind kind;
     api_style api;
     server_model_syntax model_syntax;
@@ -1000,6 +1003,9 @@ static float g_default_min_p = DS4_DEFAULT_MIN_P;
 
 static void request_init(request *r, req_kind kind, int max_tokens) {
     memset(r, 0, sizeof(*r));
+    r->paired.repeat=1; r->paired.last_n=64;
+    r->paired.chain.typical=1;r->paired.chain.dyn_exponent=1;r->paired.chain.xtc_threshold=.1f;
+    r->paired.chain.dry_base=1.75f;r->paired.chain.dry_allowed_length=2;r->paired.chain.dry_last_n=-1;r->paired.chain.top_n_sigma=-1;
     r->kind = kind;
     r->api = API_OPENAI;
     r->model_syntax = SERVER_MODEL_SYNTAX_DEEPSEEK;
@@ -3868,10 +3874,12 @@ static bool parse_chat_request(ds4_engine *e, server *s, const char *body, int d
             }
             r->model_from_request = true;
         } else if (!strcmp(key, "max_tokens") || !strcmp(key, "max_completion_tokens")) {
-            if (!json_int(&p, &r->max_tokens)) {
+            if (!ds4_paired_int(&p, &r->max_tokens,-1,INT_MAX)) {
                 free(key);
                 goto bad;
             }
+        } else if (ds4_paired_field(key)) {
+            if (!ds4_paired_parse(key,&p,&r->paired)) {free(key);goto bad;}
         } else if (!strcmp(key, "temperature")) {
             double v = 0.0;
             if (!json_number(&p, &v)) {
@@ -3897,7 +3905,7 @@ static bool parse_chat_request(ds4_engine *e, server *s, const char *body, int d
             r->min_p = (float)v;
             r->min_p_set = true;
         } else if (!strcmp(key, "top_k")) {
-            if (!json_int(&p, &r->top_k)) {
+            if (!ds4_paired_int(&p, &r->top_k,0,1024)) {
                 free(key);
                 goto bad;
             }
@@ -4102,10 +4110,12 @@ static bool parse_anthropic_request(ds4_engine *e, server *s, const char *body, 
             }
             r->model_from_request = true;
         } else if (!strcmp(key, "max_tokens")) {
-            if (!json_int(&p, &r->max_tokens)) {
+            if (!ds4_paired_int(&p, &r->max_tokens,-1,INT_MAX)) {
                 free(key);
                 goto bad;
             }
+        } else if (ds4_paired_field(key)) {
+            if (!ds4_paired_parse(key,&p,&r->paired)) {free(key);goto bad;}
         } else if (!strcmp(key, "temperature")) {
             double v = 0.0;
             if (!json_number(&p, &v)) {
@@ -4123,7 +4133,7 @@ static bool parse_anthropic_request(ds4_engine *e, server *s, const char *body, 
             r->top_p = (float)v;
             r->top_p_set = true;
         } else if (!strcmp(key, "top_k")) {
-            if (!json_int(&p, &r->top_k)) {
+            if (!ds4_paired_int(&p, &r->top_k,0,1024)) {
                 free(key);
                 goto bad;
             }
@@ -5101,10 +5111,12 @@ static bool parse_responses_request(ds4_engine *e, server *s, const char *body, 
             }
             r->model_from_request = true;
         } else if (!strcmp(key, "max_output_tokens") || !strcmp(key, "max_tokens")) {
-            if (!json_int(&p, &r->max_tokens)) {
+            if (!ds4_paired_int(&p, &r->max_tokens,-1,INT_MAX)) {
                 free(key);
                 goto bad;
             }
+        } else if (ds4_paired_field(key)) {
+            if (!ds4_paired_parse(key,&p,&r->paired)) {free(key);goto bad;}
         } else if (!strcmp(key, "temperature")) {
             double v = 0.0;
             if (!json_number(&p, &v)) {
@@ -5333,10 +5345,12 @@ static bool parse_completion_request(ds4_engine *e, const char *body, int def_to
             }
             r->model_from_request = true;
         } else if (!strcmp(key, "max_tokens")) {
-            if (!json_int(&p, &r->max_tokens)) {
+            if (!ds4_paired_int(&p, &r->max_tokens,-1,INT_MAX)) {
                 free(key);
                 goto bad;
             }
+        } else if (ds4_paired_field(key)) {
+            if (!ds4_paired_parse(key,&p,&r->paired)) {free(key);goto bad;}
         } else if (!strcmp(key, "temperature")) {
             double v = 0.0;
             if (!json_number(&p, &v)) {
@@ -5362,7 +5376,7 @@ static bool parse_completion_request(ds4_engine *e, const char *body, int def_to
             r->min_p = (float)v;
             r->min_p_set = true;
         } else if (!strcmp(key, "top_k")) {
-            if (!json_int(&p, &r->top_k)) {
+            if (!ds4_paired_int(&p, &r->top_k,0,1024)) {
                 free(key);
                 goto bad;
             }
@@ -12892,7 +12906,7 @@ static int server_session_sync(server *s, server_slot *slot,
 #if DS4_NATIVE_FRONTIER_ENABLE && defined(__APPLE__)
     if (s->native_session) {
         if (!server_prefill_enter(s,slot)) return DS4_SESSION_SYNC_INTERRUPTED;
-        int rc=ds4_ns_prefill(&slot->native_session,slot->session,prompt,
+        int rc=ds4_ns_prefill(&slot->native_session,slot->session,prompt,NULL,0,
             server_native_frontier_cancelled,slot,err,errlen);
         server_prefill_leave(s);return rc;
     }
@@ -12963,8 +12977,12 @@ static int server_session_sync_multimodal(server *s, server_slot *slot,
     if (!image_count)
         return server_session_sync(s, slot, prompt, err, errlen);
 #if DS4_NATIVE_FRONTIER_ENABLE && defined(__APPLE__)
-    if (s && s->native_session)
-        return ds4_nf_error(err,errlen,"native streaming prefill requires text token input");
+    if (s && s->native_session) {
+        if(!server_prefill_enter(s,slot))return DS4_SESSION_SYNC_INTERRUPTED;
+        int rc=ds4_ns_prefill(&slot->native_session,slot->session,prompt,images,image_count,
+            server_native_frontier_cancelled,slot,err,errlen);
+        server_prefill_leave(s);return rc;
+    }
 #endif
     if (!s || !slot || !prompt || !images) return 1;
     if (!s->batched_mode) {
@@ -13082,6 +13100,7 @@ static bool continue_after_invalid_dsml(server *s, server_slot *slot,
 }
 
 static int server_decode_budget(int requested, int generated, int room) {
+    if(requested<0)return room;
     if (requested <= generated || room <= 0) return 0;
     int remaining = requested - generated;
     return remaining < room ? remaining : room;
@@ -13766,10 +13785,17 @@ static void generate_job_inner(server *s, server_slot *slot, job *j) {
     char err[160];
     err[0] = '\0';
     const bool multimodal = j->req.image_count != 0;
+    /* MiMo's bias penalizes missing experts only. This lane is admitted only
+     * when ds4 certifies its complete expert residency; never ignore bias on a
+     * streaming engine. Phase values are still applied and logged per token. */
+    if ((j->req.paired.bias_set || j->req.paired.per_phase) &&
+        !ds4_engine_quality_speed_resident(s->engine)) {
+        http_error(j->fd,s->enable_cors,409,"Quality/speed requires the resident Metal expert policy on this decoder");return;
+    }
 #if DS4_NATIVE_FRONTIER_ENABLE && defined(__APPLE__)
     if(s->native_session) {
-        if(multimodal || !j->req.native_conversation[0]) {
-            http_error(j->fd,s->enable_cors,409,"Native streaming requires text and an explicit prompt_cache_key");return;
+        if(!j->req.native_conversation[0]) {
+            http_error(j->fd,s->enable_cors,409,"Native streaming requires an explicit prompt_cache_key");return;
         }
         if(strcmp(slot->native_conversation,j->req.native_conversation)) {
             if(!ds4_ns_shutdown(&slot->native_session)) {
@@ -14324,8 +14350,21 @@ decode_again:
     dsml_decode_tracker_init(&dsml_tracker);
     dsml_tracker.model_syntax = j->req.model_syntax;
 
+    ds4_quality_phase_tracker paired_phase={0};
+    int paired_previous_phase=-1,paired_previous_base=-1;
+    const bool paired_logits=ds4_paired_logits_active(&j->req.paired) || j->req.paired.chain.enabled;
+    const bool paired_serial=paired_logits || j->req.paired.per_phase;
+    const int paired_vocab=ds4_engine_vocab_size(s->engine);
+    float *paired_scores=paired_logits?xmalloc((size_t)paired_vocab*sizeof(float)):NULL;
+    unsigned *paired_counts=paired_logits?xmalloc((size_t)paired_vocab*sizeof(unsigned)):NULL;
+    void *paired_chain=NULL;
+    if(j->req.paired.chain.enabled){
+        const ds4_tokens *history=ds4_session_tokens(slot->session);
+        paired_chain=ds4_chain_create(&j->req.paired.chain,s->engine,history->v,history->len,j->req.seed,err,sizeof(err));
+        if(!paired_chain){free(paired_scores);free(paired_counts);finish="error";}
+    }
     server_generation_enter(s);
-    while (!g_stop_requested && !job_cancelled(j) && completion < max_tokens &&
+    while (strcmp(finish,"error") && !g_stop_requested && !job_cancelled(j) && completion < max_tokens &&
            ds4_session_pos(slot->session) < ds4_session_ctx(slot->session)) {
         dsml_decode_state dsml_state = j->req.kind == REQ_CHAT && j->req.has_tools ?
             dsml_tracker.decode : DSML_DECODE_OUTSIDE;
@@ -14347,18 +14386,55 @@ decode_again:
             if (!j->req.top_p_set) top_p = g_default_top_p;
             if (!j->req.min_p_set) min_p = g_default_min_p;
         }
+        paired_phase.reasoning=thinking.inside;paired_phase.tool=in_tool_call;
+        const int paired_base=ds4_quality_phase_base(&paired_phase);
+        if(paired_previous_base>=0 && paired_previous_base!=paired_base)memset(&paired_phase.code,0,sizeof(paired_phase.code));
+        paired_previous_base=paired_base;
+        const int paired_current=ds4_quality_phase_current(&paired_phase);
+        if(j->req.paired.per_phase) {
+            const ds4_paired_phase *knobs=&j->req.paired.phases[paired_current];
+            if(!j->req.temperature_set)temperature=knobs->temperature;
+            if(!j->req.top_p_set)top_p=knobs->top_p;
+            if(!j->req.top_k_set)top_k=knobs->top_k;
+            if(!j->req.min_p_set)min_p=knobs->min_p;
+        }
+        const float paired_bias=j->req.paired.bias_set?j->req.paired.bias[paired_current]:
+            j->req.paired.per_phase?j->req.paired.phases[paired_current].bias:0;
+        if((j->req.paired.bias_set || j->req.paired.per_phase) && ds4_session_quality_speed_set(slot->session,paired_bias)) {
+            finish="error";snprintf(err,sizeof(err),"native session quality/speed policy refused");break;
+        }
         const bool greedy_tool_syntax = !thinking.inside && in_tool_call &&
             !dsml_decode_state_uses_payload_sampling(dsml_state);
         const float payload_temperature = temperature;
         if (greedy_tool_syntax) {
             temperature = 0.0f;
         }
+        if(paired_previous_phase!=paired_current) {
+            fprintf(stderr,"PAIRED_SAMPLER_APPLIED phase=%s temperature=%.9g top_p=%.9g top_k=%d min_p=%.9g quality_speed=%.9g presence_penalty=%.9g frequency_penalty=%.9g repeat_penalty=%.9g repeat_last_n=%d logit_bias_count=%u seed=%llu max_tokens=%d policy=mac-mimo-selection-only all_experts_resident=%d typ_p=%.9g dynatemp_range=%.9g dynatemp_exponent=%.9g xtc_probability=%.9g xtc_threshold=%.9g dry_multiplier=%.9g dry_base=%.9g dry_allowed_length=%d dry_penalty_last_n=%d sampler_order_count=%u\n",
+                ds4_quality_phase_names[paired_current],temperature,top_p,top_k,min_p,ds4_session_quality_speed_get(slot->session),
+                j->req.paired.presence,j->req.paired.frequency,j->req.paired.repeat,j->req.paired.last_n,j->req.paired.bias_count,
+                (unsigned long long)j->req.seed,j->req.max_tokens,ds4_engine_quality_speed_resident(s->engine),
+                j->req.paired.chain.typical,j->req.paired.chain.dyn_range,j->req.paired.chain.dyn_exponent,
+                j->req.paired.chain.xtc_probability,j->req.paired.chain.xtc_threshold,j->req.paired.chain.dry_multiplier,
+                j->req.paired.chain.dry_base,j->req.paired.chain.dry_allowed_length,j->req.paired.chain.dry_last_n,j->req.paired.chain.order_count);
+            paired_previous_phase=paired_current;
+        }
         const int eos_token = ds4_token_eos(s->engine);
-        int token = j->req.ignore_eos ?
+        int token = paired_logits ? 0 : j->req.ignore_eos ?
             ds4_session_argmax_ignoring_eos(slot->session,
                                             j->req.think_mode) :
             ds4_session_sample(slot->session, temperature, top_k,
                                top_p, min_p, &rng);
+        if(paired_logits) {
+            const ds4_tokens *history=ds4_session_tokens(slot->session);
+            if(!history || ds4_session_copy_logits(slot->session,paired_scores,paired_vocab)!=paired_vocab)token=-1;
+            else {
+                ds4_paired_logits(&j->req.paired,paired_scores,paired_vocab,history->v,history->len,paired_counts);
+                if(j->req.ignore_eos)paired_scores[eos_token]=-INFINITY;
+                token=paired_chain?ds4_chain_sample(paired_chain,paired_scores,paired_vocab,temperature,top_k,top_p,min_p,&rng):
+                    ds4_sample_logits(paired_scores,paired_vocab,temperature,top_k,top_p,min_p,&rng);
+            }
+        }
         if (token < 0) {
             finish = "error";
             snprintf(err, sizeof(err), "failed to select a non-EOS token");
@@ -14376,7 +14452,7 @@ decode_again:
         int toks[17];
         int ntok = 0;
         const int block_start = ds4_session_pos(slot->session);
-        if (!s->batched_mode &&
+        if (!paired_serial && !s->batched_mode &&
             ds4_engine_mtp_draft_tokens(s->engine) > 1 &&
             getenv("DS4_MTP_SPEC_DISABLE") == NULL)
         {
@@ -14433,6 +14509,8 @@ decode_again:
 
             size_t piece_len = 0;
             char *piece = ds4_token_text(s->engine, token, &piece_len);
+            ds4_quality_code_feed(&paired_phase.code,piece,piece_len);
+            ds4_chain_accept(paired_chain,token);
             completion++;
             kept++;
 
@@ -14670,6 +14748,7 @@ decode_again:
     }
 #endif
     server_generation_leave(s);
+    ds4_chain_free(paired_chain);free(paired_scores);free(paired_counts);
 
     if (job_cancelled(j)) {
         request_live_state_clear(s, slot);

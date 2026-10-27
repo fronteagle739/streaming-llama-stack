@@ -65,10 +65,8 @@ class PairedGenerationTests(unittest.TestCase):
         receiver.peer = dict(status='qualified')
         receiver.cfg = dict(mac_engine_port=8181)
         receiver.ready = Mock()
-        body = {k:v for k,v in self.body().items() if k in
-                {'messages','temperature','top_p','top_k','min_p','seed','max_tokens','stop'}}
+        body = self.body()
         body['slstack_generation'] = self.pair().generation.get()
-        body['slstack_generation']['value'] = 0
         with patch('slstack.mac.http_json', return_value={}) as http:
             receiver.chat(body)
         self.assert_samplers(body, http.call_args.args[1])
@@ -89,21 +87,32 @@ class PairedGenerationTests(unittest.TestCase):
         receiver.backend = 'ds4'
         receiver.peer = dict(status='qualified')
         receiver.ready = Mock()
-        knobs = dict(presence_penalty=.14, frequency_penalty=.27, repeat_penalty=1.12,
-                     typical_p=.8, logit_bias={'42': -.3}, samplers=['top_k','temperature'],
-                     quality_speed=.22, dynatemp_range=.1, mirostat=2, dry_multiplier=.5)
+        knobs = dict(samplers=['unknown'], mirostat=2)
         for key, value in knobs.items():
             with self.subTest(key=key), self.assertRaisesRegex(ValueError, key):
                 receiver.chat(dict(messages=[dict(role='user',content='q')], **{key:value}))
         receiver.ready.assert_not_called()
 
-    def test_phase_and_bias_profiles_cannot_silently_fall_back(self):
+    def test_actual_webui_default_and_nondefault_extra_samplers(self):
         from slstack.paired_generation import decode_request
-        with self.assertRaisesRegex(ValueError, 'phase-specific'):
-            decode_request(dict(slstack_generation=defaults()))
-        profile = self.pair().generation.get()
-        with self.assertRaisesRegex(ValueError, 'quality/speed bias'):
-            decode_request(dict(slstack_generation=profile))
+        body=dict(self.body(),slstack_generation=defaults(),max_tokens=-1,
+                  samplers=['top_k','typ_p','top_p','min_p','temperature'],
+                  typ_p=.86,dynatemp_range=.12,dynatemp_exponent=1.4,
+                  xtc_probability=.2,xtc_threshold=.12,dry_multiplier=.7,
+                  dry_base=1.75,dry_allowed_length=2,dry_penalty_last_n=-1)
+        sent=decode_request(body)
+        self.assert_samplers(body,sent)
+
+    def test_default_profile_and_explicit_bias_reach_native_decoder(self):
+        from slstack.paired_generation import decode_request
+        profile = defaults()
+        sent = decode_request(dict(slstack_generation=profile))
+        self.assertEqual(sent['slstack_phase_samplers'], profile['phases'])
+        self.assertEqual(sent['quality_speed'], {p:v['bias'] for p,v in profile['phases'].items()})
+        self.assertNotIn('temperature',sent) # Phase temperature remains dynamic.
+        sent = decode_request(dict(slstack_generation=profile,quality_speed=.22,temperature=.83))
+        self.assertEqual(sent['quality_speed'],.22)
+        self.assertEqual(sent['temperature'],.83)
 
     def test_single_engine_still_sends_nondefault_samplers_to_native_generation(self):
         from test_combo_single import FakeProducer, Harness, ids

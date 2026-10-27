@@ -210,17 +210,26 @@ static bool ds4_ns_rewind(ds4_ns_session*s,ds4_session*session,const ds4_tokens*
     fprintf(stderr,"NATIVE_SESSION_REWIND base=%u target=%u changed_suffix=%u token_and_all_owner_hashes_verified=1 full_refill=0\n",old,target,(uint32_t)tokens->len-target);
     return true;
 }
-static bool ds4_ns_start_remote(ds4_ns_session*s,ds4_nf_io*io,const ds4_tokens*first,ds4_ns_reply*r){
+#include "ds4_native_session_vision.inc"
+static bool ds4_ns_start_remote(ds4_ns_session*s,ds4_nf_io*io,const ds4_tokens*first,const ds4_vision_span*images,size_t image_count,ds4_ns_reply*r){
     char hash[65],extra[4608];if(!ds4_nf_token_hash(first,hash)){fprintf(stderr,"native session initial token hash refused count=%d\n",first->len);return false;}
     ds4_ns_text b={extra,sizeof(extra),true};
     ds4_ns_put(&b,"X-DSV41-Model-SHA256: %s\r\nX-DSV41-Tokens-SHA256: %s\r\nX-DSV41-Context: 1000001\r\nX-DSV41-Mode: 3\r\nX-DSV41-Tokens: %d\r\nX-DSV41-Tier: %s\r\n",DS4_NF_MODEL_SHA,hash,first->len,s->config->tier);
     if(*s->config->techniques)ds4_ns_put(&b,"X-DSV41-Techniques: %s\r\n",s->config->techniques);
     if(s->config->yoco_keep)ds4_ns_put(&b,"X-DSV41-Yoco-Keep: %u\r\nX-DSV41-Yoco-State-Version: 1\r\n",s->config->yoco_keep);
-    if(!b.ok||!ds4_ns_open(s,io,"POST","","application/vnd.studio.dsv41.tokens-le32",extra,(uint64_t)first->len*4)||
-       !dsv41_c_transfer(ds4_ns_send_page,io,first->v,(size_t)first->len*4)||!ds4_ns_body(io,202,r)||strcmp(r->session,s->id))return false;
+    ds4_ns_vision_body wire={0};
+    if(image_count){
+        if(!ds4_ns_vision_pack(first,images,image_count,&wire))return false;
+        ds4_ns_put(&b,"X-DSV41-Body-SHA256: %s\r\n",wire.sha256);
+    }
+    bool sent=b.ok&&ds4_ns_open(s,io,"POST","",image_count?"application/vnd.studio.dsv41.projected-v1":"application/vnd.studio.dsv41.tokens-le32",extra,image_count?wire.bytes:(uint64_t)first->len*4)&&
+        dsv41_c_transfer(ds4_ns_send_page,io,image_count?(void*)wire.data:(void*)first->v,image_count?wire.bytes:(size_t)first->len*4)&&
+        ds4_ns_body(io,202,r)&&!strcmp(r->session,s->id);
+    free(wire.data);if(!sent)return false;
     return ds4_ns_poll(s,io,"",true,r)&&r->checkpoint.context==1000001&&r->checkpoint.position==(uint32_t)first->len&&!strcmp(r->checkpoint.tokens_sha256,hash);
 }
 static int ds4_ns_prefill(ds4_ns_session*s,ds4_session*session,const ds4_tokens*tokens,
+                           const ds4_vision_span*images,size_t image_count,
                            ds4_nf_cancel_fn cancel,void*ud,char*err,size_t cap){
     if(!s||s->poisoned||!tokens||tokens->len<1||tokens->len>=1000001)return ds4_nf_error(err,cap,"invalid persistent prefill request");
     ds4_nf_io io={.fd=-1,.deadline=ds4_nf_now()+s->config->http.deadline_seconds,.cancelled=cancel,.cancel_ud=ud};
@@ -230,7 +239,7 @@ static int ds4_ns_prefill(ds4_ns_session*s,ds4_session*session,const ds4_tokens*
         for(unsigned i=0;i<16;i++)snprintf(s->id+i*2,3,"%02x",nonce[i]);if(!ds4_ns_fingerprint(s->id))goto done;
         s->sequence=1;s->started=true;
         ds4_tokens first=*tokens;if(first.len>49152)first.len=49152;
-        phase="initial HTTP startup";if(!ds4_ns_start_remote(s,&io,&first,&r))goto done;
+        phase="initial HTTP startup";if(!ds4_ns_start_remote(s,&io,&first,images,image_count,&r))goto done;
         phase="initial export/import";
         if(!ds4_ns_simple(s,&io,"export_initial",&r.checkpoint,&meta)||!ds4_ns_checkpoint_same(&meta.target,&r.checkpoint)||
            !ds4_ns_import(s,session,&io,&meta,true,err,cap))goto done;
@@ -249,11 +258,15 @@ static int ds4_ns_prefill(ds4_ns_session*s,ds4_session*session,const ds4_tokens*
         char*text=malloc(1u<<20);if(!text)goto done;ds4_ns_text b={text,1u<<20,true};
         ds4_ns_command_prefix(&b,s,"prefill");ds4_ns_put(&b,",\"base\":");ds4_ns_checkpoint_text(&b,&s->synced);ds4_ns_put(&b,",\"tokens\":[");
         for(uint32_t i=0;i<count;i++)ds4_ns_put(&b,"%s%d",i?",":"",tokens->v[s->synced.position+i]);ds4_ns_put(&b,"]}");
-        phase="incremental prefill";bool sent=b.ok&&ds4_ns_command(s,&io,text,(size_t)(b.p-text),&r);free(text);
+        ds4_tokens chunk={(int32_t*)tokens->v+s->synced.position,(int)count,(int)count};
+        phase="incremental prefill";bool sent=image_count?ds4_ns_vision_command(s,&io,&chunk,images,image_count,&r):
+            b.ok&&ds4_ns_command(s,&io,text,(size_t)(b.p-text),&r);free(text);
         if(!sent||!r.have_checkpoint||r.peer_synchronized||r.checkpoint.position!=s->synced.position+count)goto done;s->sequence++;
         phase="incremental export/import";if(!ds4_ns_simple(s,&io,"export_delta",&r.checkpoint,&meta)||!ds4_ns_checkpoint_same(&meta.target,&r.checkpoint)||
            !ds4_ns_import(s,session,&io,&meta,false,err,cap))goto done;s->prefill_batches++;
     }
+    phase="projected image identities";
+    if(image_count && !ds4_session_restore_vision_identities(session,images,image_count))goto done;
     phase="saved pre-reasoning frontier";
     if((!s->include_history_reasoning||!s->anchor.state)&&!ds4_ns_save_rewind(s,session,&io,err,cap))goto done;
     ok=true;

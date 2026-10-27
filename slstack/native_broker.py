@@ -81,7 +81,7 @@ class OwnedProducer:
         from studio.dsv41_session_process import Producer
         from .native_profiles import profile
         from studio.dsv41_windows_runner import _Native
-        self.cfg, self.request, self.cancel = cfg, request, cancel
+        self.cfg, self.request, self.cancel = cfg, {k:v for k,v in request.items() if k!='vision'}, cancel
         self.stack = ExitStack()
         self.producer = None
         self.closed = False
@@ -115,6 +115,21 @@ class OwnedProducer:
                 raise ValueError('Initial native token identity differs')
             settings = profile(request['tier'], request.get('techniques'))
             args = dict(settings['arguments'])
+            self.vision=[]
+            self.vision_leases=set()
+            def stage_vision(images,base):
+                from .paired_vision import materialize
+                descriptor=materialize(directory/'vision',images,previous=self.vision,base=base)
+                rows=json.loads(descriptor.read_text())
+                for row in rows:
+                    if row['file'] not in self.vision_leases:
+                        self.stack.enter_context(native.read_lease(Path(row['file'])))
+                        self.vision_leases.add(row['file'])
+                self.stack.enter_context(native.read_lease(descriptor))
+                self.vision=[{k:v for k,v in row.items() if k!='data'} for row in images]
+                return str(descriptor)
+            if request.get('vision'):
+                args['--vision-spans-file']=stage_vision(request['vision'],0)
             keep=cfg.get('yoco_keep',0)
             require(type(keep) is int and keep in (0,140), 'Unsupported paired YOCO window')
             require(request.get('yoco_keep',0)==keep and request.get('yoco_state_version',0)==(1 if keep else 0),
@@ -160,6 +175,7 @@ class OwnedProducer:
                                      idle_seconds=cfg['lease_minutes'] * 60, native=native,
                                      cancelled=cancelled, after_resume=protect)
             cp = self.producer.ready['checkpoint']
+            self.producer.stage_vision=stage_vision
             require(self.producer.ready.get('yoco_keep',0)==keep and self.producer.ready.get('yoco_state_version',0)==(1 if keep else 0),
                     'Producer did not negotiate the requested YOCO state version')
             require(cp['context'] == CONTEXT and cp['position'] == len(request['tokens']) // 4
