@@ -93,5 +93,17 @@ class BackendSetup(unittest.TestCase):
         self.assertEqual(env['CUDA_VISIBLE_DEVICES'],'GPU-selected')
         self.assertEqual(env['DS4_CUDA_ATTN_COMP_CACHE_Q8'],'0')
 
+    def test_swift_traits_do_not_leave_unpinned_network_dependencies(self):
+        from slstack.backend_setup import swift_manifest
+        original='''dependencies: [
+ .package(url: "https://example.com/known.git", from: "1.0", traits: [.trait(name: "Xet", condition: .when(traits: ["Xet"]))]),
+ .package(url: "https://github.com/huggingface/swift-xet.git", from: "0.2.0"),
+], targets: [.product(name: "Xet", package: "swift-xet", condition: .when(traits: ["Xet"]))],'''
+        result=swift_manifest(original,{'https://example.com/known':'known'})
+        self.assertIn('.package(path: "../known")',result)
+        self.assertNotIn('swift-xet',result)
+        self.assertNotIn('url:',result)
+        with self.assertRaisesRegex(ValueError,'Unpinned'):swift_manifest(original,{})
+
 
 if __name__=='__main__':unittest.main()

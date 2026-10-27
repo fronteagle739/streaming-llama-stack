@@ -30,8 +30,8 @@ def audit(root=ROOT):
         'mlx-serve':['engines/mlx-serve/build.zig','engines/mlx-serve/build.zig.zon',
                      'engines/mlx-serve/scripts/build-mlx.sh','engines/mlx-serve/scripts/fetch-llama.sh'],
         'omlx':['vendor/studio/studio/backend_argv.py'],
-        'ds4-peer':['vendor/studio/studio/peer_launch.py','engines/ds4-win/ds4_peer.c',
-                    'engines/ds4-win/ds4_peer.h','engines/ds4-win/Makefile','engines/ds4-win/ds4_metal.m'],
+        'ds4-peer':['vendor/studio/studio/peer_launch.py','engines/ds4-peer/ds4_peer.c',
+                    'engines/ds4-peer/ds4_peer.h','engines/ds4-peer/Makefile','engines/ds4-peer/ds4_metal.m'],
     }
     rows=[]
     for name,spec in BACKENDS.items():
@@ -49,6 +49,11 @@ def audit(root=ROOT):
     for row in manifest['files']:
         file=root/'vendor/mac-mlx'/row['path']
         if not file.is_file() or hashlib.sha256(file.read_bytes().replace(b'\r\n',b'\n')).hexdigest()!=row['export_sha256']:hashes.append(row['path'])
+    peer_manifest=json.loads((root/'engines/ds4-peer/PROVENANCE.json').read_text())
+    peer_hashes=[]
+    for row in peer_manifest['files']:
+        file=root/'engines/ds4-peer'/row['path']
+        if not file.is_file() or hashlib.sha256(file.read_bytes().replace(b'\r\n',b'\n')).hexdigest()!=row['export_sha256']:peer_hashes.append(row['path'])
     # Resolve local receiver imports against the retained implementation modules.
     receiver=root/'engines/mlx-receiver';modules={p.stem for p in receiver.glob('*.py')}
     needed={'kv_handoff','kv_converter','glm52_mtp','glm52_mtp_drafter','kimi_vision','mlx_adapters',
@@ -61,7 +66,8 @@ def audit(root=ROOT):
     unpackaged=['csrc/'+p for p in required if 'csrc/'+p not in packaged]
     return dict(backends=rows,mlx_native_missing=native_missing,mlx_unpacked_build_inputs=unpackaged,
                 mlx_source_files=len(manifest['files']),mlx_hash_mismatches=hashes,receiver_missing_modules=missing_modules,
-                all_retained_components_complete=not(native_missing or unpackaged or hashes or missing_modules or any(row['missing'] for row in rows)),
+                peer_hash_mismatches=peer_hashes,
+                all_retained_components_complete=not(native_missing or unpackaged or hashes or peer_hashes or missing_modules or any(row['missing'] for row in rows)),
                 external_requirements={'mlx-serve':'Initialize the pinned source and stage its MLX/MLX-C, libllama, Jinja and webp build dependencies.',
                                        'omlx':'An isolated pinned oMLX installation with compiled native kernels is required; an argv builder alone is not an installed engine.'})
 
