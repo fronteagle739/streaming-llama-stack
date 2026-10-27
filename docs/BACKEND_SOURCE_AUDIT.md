@@ -1,8 +1,4 @@
-# Backend source and measurement handoff
-
-This note supplies technical facts for the main README. It does not qualify a
-fresh installation or replace an end-to-end model test. No performance benchmark
-was rerun for this audit.
+# Additional decoder backends
 
 The stack retains its customised MLX-VLM package, including GLM DSA, INF tensor
 name/mixed-quant loading, legacy indexer RoPE selection, DeepSeek V4/V4.1, Kimi
@@ -10,15 +6,14 @@ vision, cache handling and optional MTP support. Installing stock MLX-VLM would
 lose these changes. `setup-mlx` installs the retained package into a separate
 decode environment using `locks/mac-mlx-py312.txt`.
 
-The resource review restored native C++ sources, CMake inputs, Metal headers and
-licence notices omitted by the original export's extension filter. Package data
+The package includes native C++ sources, CMake inputs, Metal headers and licence notices. Package data
 now includes the GLM native build inputs. The GLM builder chooses nanobind headers
 for the installed MLX ABI and evaluates real scoring/top-k operations before
-accepting a build. Compiled outputs belong in the private decode environment.
+accepting a build. Compiled outputs belong in the isolated decode environment.
 
 ## Backend boundaries
 
-| Backend | Interface | Source/setup status |
+| Backend | Interface | Source and setup |
 | --- | --- | --- |
 | `mlx-receiver` | RTX KV handoff and token stream | Receiver, converters, cache/vision/adapters and GLM MTP modules retained; customised MLX setup added. |
 | `llama-decode` | RTX KV handoff and token stream | Receiver target retained in the streaming-llama build. |
@@ -39,7 +34,7 @@ requirements. It does not claim every backend has been built or run.
 
 `slstack decode --config local.json --check` checks the selected decoder's local
 model and executable paths. Set `decode.backend`, `decode.model_path`, its bind
-address and backend-specific options in that private file; omit `--check` to run.
+address and backend-specific options in that local file; omit `--check` to run.
 Both receiver and shim children are launched for `mtp-shim`, within one shared
 host-memory guardian. A successful path check is not a model-load qualification.
 
@@ -75,23 +70,11 @@ These are separate historical observations, not one combined speed guarantee:
 | GLM-5.3 sustained decode, August 30 | 14.0738 tok/s short; 4.89483 tok/s at 11,550 prompt tokens | Synchronized native fork, UD-Q4_K_XL, F16 KV, M3 Ultra; first-to-last emitted-token timing excludes prefill, transfer, load and teardown. Coherence/recall gates passed. |
 
 The distributed hardware record identifies an RTX 5090 32 GB and a Mac Studio
-M3 Ultra with 512 GB unified memory. The RTX host has 32 GB DDR5 and the owner's
+M3 Ultra with 512 GB unified memory. The RTX host has 32 GB DDR5 and a
 25 GB/s RAID-0 NVMe array. These measurements must not be described as a
 single-RTX decode result or as a validated 400/18 tok/s pair for every GLM version.
 
-## Publication checks
-
-Vendored engine snapshots share the clean stack's Git history; development
-repository histories are not imported with the files. Front Eagle remains the
-required author, committer and tagger for the stack's commits. Original third-party
-copyright/licence attribution remains intact.
-
-The audit checks all reachable stack refs, including retained older branches,
-commit messages, tags, filenames, source blobs and decompressed WebUI assets.
-The pinned external mlx-serve ancestor history was checked separately. Its public
-website contains Firebase browser configuration; that website is not the stack's
-runtime. Known credential patterns are checked without printing matched values.
-Pattern scans cannot prove an arbitrary unknown string is not a password.
+## MLX core compatibility
 
 The historical MLX core ring change is retained separately in
 `patches/mlx-core-ring-listeners.patch`, with its original base and source

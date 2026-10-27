@@ -106,6 +106,7 @@ Keep the pairing token in local runtime configuration. Stop foreground launchers
 - **Web UI and media tools (experimental):** chat can generate images/video using Anima, Qwen-Image, Krea and H3, with explicit per-generation adapters, progress cards, uploads and inline results. Select existing model/component folders in Settings → Stack. Streamed/Resident preferences are saved per model. [Media setup](docs/MEDIA_SETUP_VERIFICATION.md) · [Media and state](docs/STACK_MEDIA_AND_STATE.md)
 - **LoRA (experimental):** native ds4 supports dense-output adapters and frozen-prefix training. Use `start --serving native` for language-model adapters. Permanent export writes a new model; unmerge selects the verified original. [Adapter example](examples/train_jeff_lora/README.md)
 - **MCP:** the local `/mcp` endpoint exposes quality/speed controls and enabled media tools. The chat model can use the same tools itself.
+- **Additional decoders:** retained MLX, llama and HTTP backend integrations cover other supported models; an HTTP backend performs its own prefill unless it explicitly supports RTX state injection. [Backend interfaces and measurements](docs/BACKEND_SOURCE_AUDIT.md)
 - **Configuration:** [Variables](docs/VARIABLES.md) lists environment variables, launcher flags, defaults and source consumers. [Walkthrough](examples/WALKTHROUGH.md) covers setup and use; [Roadmap](docs/ROADMAP.md) lists limitations and planned work.
 
 ## Credits and licence
