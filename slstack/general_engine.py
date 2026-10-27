@@ -73,6 +73,10 @@ def launch_spec(cfg):
 class GeneralEngines(Engines):
     def single_engine(self):return False
     def combo_enabled(self):return False
+    def context_size(self):
+        general=self.cfg['general'];mode=general.get('mode','streaming')
+        section=general.get('mac' if mode=='remote' else 'rtx') or {}
+        return int(section.get('ctx',8192 if mode=='streaming' else 262144))
     def quality(self,value=None):
         if value is not None:raise ValueError('This decoder does not expose the DSV4.1 live affinity control')
         return dict(supported=False,phases_supported=False,reason='Sampling is passed to the selected backend on each request')
