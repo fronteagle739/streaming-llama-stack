@@ -2029,6 +2029,18 @@ static void ggml_compute_forward(struct ggml_compute_params * params, struct ggm
             {
                 ggml_compute_forward_dsv4_hc_pre(params, tensor);
             } break;
+        case GGML_OP_GATED_DELTA_NET:
+            {
+                ggml_compute_forward_gated_delta_net(params, tensor);
+            } break;
+        case GGML_OP_DSV4_HC_COMB:
+            {
+                ggml_compute_forward_dsv4_hc_comb(params, tensor);
+            } break;
+        case GGML_OP_DSV4_HC_POST:
+            {
+                ggml_compute_forward_dsv4_hc_post(params, tensor);
+            } break;
         case GGML_OP_DSV4_ACT_QAT:
             {
                 ggml_compute_forward_dsv4_act_qat(params, tensor);
@@ -2410,6 +2422,9 @@ static int ggml_get_n_tasks(struct ggml_tensor * node, int n_threads) {
         case GGML_OP_DSV41_CANDIDATE_BLOCKS:
         case GGML_OP_DSV41_SELECTED_MASK:
         case GGML_OP_DSV41_MASKED_HALF:
+        case GGML_OP_GATED_DELTA_NET:
+        case GGML_OP_DSV4_HC_COMB:
+        case GGML_OP_DSV4_HC_POST:
             {
                 n_tasks = n_threads;
             } break;

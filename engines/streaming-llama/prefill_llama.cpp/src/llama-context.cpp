@@ -40,6 +40,7 @@ static inline void   ggml_cuda_dlm_remainder_profile_dump_now(void) {}
 #include "llama-kv-cache-dsv4.h"
 #include "llama-kv-cache-iswa.h"
 #include "llama-memory-hybrid.h"
+#include "llama-memory-hybrid-idx.h"
 #include "llama-memory-hybrid-iswa.h"
 #include "llama-memory.h"
 #include "llama-mmap.h"
@@ -8092,7 +8093,7 @@ void llama_context::output_reorder() {
 //
 
 uint32_t llama_context::graph_max_nodes(uint32_t n_tokens) const {
-    if (model.arch == LLM_ARCH_KIMI_K3) {
+    if (model.arch == LLM_ARCH_KIMI_K3 || model.arch == LLM_ARCH_GLM5_NEXT) {
         return std::max<uint32_t>(n_tokens * 160, 64u * model.n_tensors());
     }
     if (model.arch == LLM_ARCH_QWEN3NEXT ||
@@ -9839,6 +9840,9 @@ int llama_context::decode_layer_major(llama_batch & batch, llama_hidden_mode hid
         } else if (auto * iswa_ctx = dynamic_cast<llama_kv_cache_iswa_context *>(mctx.get())) {
             update(iswa_ctx->get_base());
             update(iswa_ctx->get_swa());
+        } else if (auto * indexed = dynamic_cast<llama_memory_hybrid_idx_context *>(mctx.get())) {
+            update(indexed->get_attn());
+            update(indexed->get_idx());
         } else if (auto * hybrid_ctx = dynamic_cast<llama_memory_hybrid_context *>(mctx.get())) {
             update(hybrid_ctx->get_attn());
         } else if (auto * hybrid_iswa_ctx = dynamic_cast<llama_memory_hybrid_iswa_context *>(mctx.get())) {
@@ -9892,6 +9896,11 @@ int llama_context::decode_layer_major(llama_batch & batch, llama_hidden_mode hid
                 set_build_nkv(const_cast<llama_kv_cache_context *>(attn_ctx->get_base()), "hybrid_iswa.base", false);
                 set_build_nkv(const_cast<llama_kv_cache_context *>(attn_ctx->get_swa()),  "hybrid_iswa.swa",  true);
             }
+        } else if (auto * indexed = dynamic_cast<llama_memory_hybrid_idx_context *>(mctx.get())) {
+            // Both caches address the same cells; their padding/sentinel must
+            // agree while the layer-major executor reserves its largest graph.
+            set_build_nkv(const_cast<llama_kv_cache_context *>(indexed->get_attn()), "hybrid.attn", false);
+            set_build_nkv(const_cast<llama_kv_cache_context *>(indexed->get_idx()), "hybrid.indexer", false);
         } else if (auto * hybrid_ctx = dynamic_cast<llama_memory_hybrid_context *>(mctx.get())) {
             set_build_nkv(const_cast<llama_kv_cache_context *>(hybrid_ctx->get_attn()), "hybrid.attn", false);
         } else {

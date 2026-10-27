@@ -1552,3 +1552,24 @@ struct ggml_cuda_mm_fusion_args_device {
     const void * gate_bias = nullptr;
     ggml_glu_op glu_op;
 };
+
+// STREAMLLAMA (2026-10-12): compatibility shim for kernels ported verbatim from upstream ggml-org
+// (dsv4-hc.cu, gated_delta_net.cu). Upstream launches through ggml_cuda_kernel_launch with
+// programmatic dependent launch (PDL); this fork has no PDL plumbing, so the PDL hooks are no-ops and
+// the launch is a plain <<<>>> on the given stream. Results are identical; only launch overlap differs.
+#ifndef GGML_CUDA_STREAMLLAMA_LAUNCH_SHIM
+#define GGML_CUDA_STREAMLLAMA_LAUNCH_SHIM
+static __device__ __forceinline__ void ggml_cuda_pdl_lc() {}
+static __device__ __forceinline__ void ggml_cuda_pdl_sync() {}
+struct ggml_cuda_kernel_launch_params {
+    dim3 grid;
+    dim3 block;
+    size_t smem;
+    cudaStream_t stream;
+    ggml_cuda_kernel_launch_params(dim3 g, dim3 b, size_t s, cudaStream_t st) : grid(g), block(b), smem(s), stream(st) {}
+};
+template <typename Kernel, typename... Args>
+static void ggml_cuda_kernel_launch(Kernel kernel, const ggml_cuda_kernel_launch_params & p, Args... args) {
+    kernel<<<p.grid, p.block, p.smem, p.stream>>>(args...);
+}
+#endif

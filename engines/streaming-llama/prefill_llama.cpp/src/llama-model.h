@@ -481,6 +481,8 @@ struct llama_layer {
     struct ggml_tensor * indexer_proj     = nullptr;
     struct ggml_tensor * indexer_attn_k   = nullptr;
     struct ggml_tensor * indexer_attn_q_b = nullptr;
+    struct ggml_tensor * indexer_kpool_gate = nullptr; // glm5-next k-pool indexer
+    struct ggml_tensor * indexer_kpool_ape  = nullptr;
 
     // minimax-m3 MSA (block-sparse) index branch (score-only: q/k proj + per-head norms)
     struct ggml_tensor * attn_index_q      = nullptr;

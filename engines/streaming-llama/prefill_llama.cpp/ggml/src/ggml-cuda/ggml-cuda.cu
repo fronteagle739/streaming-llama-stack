@@ -38,6 +38,7 @@
 #include "ggml-cuda/diffusion-sampling.cuh"
 #include "ggml-cuda/dsa-indexer-score.cuh"
 #include "ggml-cuda/dsv4-hc.cuh"
+#include "ggml-cuda/gated_delta_net.cuh"
 #include "ggml-cuda/dsv4-act-qat.cuh"
 #include "ggml-cuda/dsv41-ops.cuh"
 #include "ggml-cuda/flash-attn-sparse.cuh"
@@ -3995,6 +3996,15 @@ static bool ggml_cuda_compute_forward(ggml_backend_cuda_context & ctx, struct gg
             if(!ggml_dsv41_hc_expand_requested(dst))return false;
             ggml_cuda_op_dsv41_ds4_hc_expand(ctx,dst);
             break;
+        case GGML_OP_GATED_DELTA_NET:
+            ggml_cuda_op_gated_delta_net(ctx, dst);
+            break;
+        case GGML_OP_DSV4_HC_COMB:
+            ggml_cuda_op_dsv4_hc_comb(ctx, dst);
+            break;
+        case GGML_OP_DSV4_HC_POST:
+            ggml_cuda_op_dsv4_hc_post(ctx, dst);
+            break;
         case GGML_OP_DSV4_ACT_QAT:
             ggml_cuda_op_dsv4_act_qat(ctx, dst);
             break;
@@ -7614,6 +7624,15 @@ static bool ggml_backend_cuda_device_supports_op(ggml_backend_dev_t dev, const g
             return op->src[0]->type == GGML_TYPE_F32 && op->src[1]->type == GGML_TYPE_F32;
         case GGML_OP_MAP_CUSTOM3:
             return ggml_dsv41_hc_expand_valid(op);
+        case GGML_OP_GATED_DELTA_NET:
+            return true;
+        case GGML_OP_DSV4_HC_COMB:
+            return op->src[0]->type == GGML_TYPE_F32 && op->src[1]->type == GGML_TYPE_F32 &&
+                op->src[2]->type == GGML_TYPE_F32 && op->type == GGML_TYPE_F32;
+        case GGML_OP_DSV4_HC_POST:
+            return op->src[0]->type == GGML_TYPE_F32 && op->src[1]->type == GGML_TYPE_F32 &&
+                op->src[2]->type == GGML_TYPE_F32 && (op->src[3] == nullptr || op->src[3]->type == GGML_TYPE_F32) &&
+                op->type == GGML_TYPE_F32;
         case GGML_OP_DSV4_ACT_QAT:
             return op->src[0]->type == GGML_TYPE_F32 && ggml_is_contiguous(op->src[0]);
         case GGML_OP_DSV41_ENGRAM_ADD:

@@ -210,6 +210,14 @@ bool llama_hparams::is_mla() const {
     return n_embd_head_k_mla_impl != 0 && n_embd_head_v_mla_impl != 0;
 }
 
+bool llama_hparams::is_indexer_full(uint32_t il) const {
+    if (il < n_layer) {
+        return is_indexer_full_impl[il] != 0;
+    }
+
+    GGML_ABORT("fatal error");
+}
+
 uint32_t llama_hparams::n_embd_head_k_mla() const {
     return is_mla() ? n_embd_head_k_mla_impl : n_embd_head_k;
 }
