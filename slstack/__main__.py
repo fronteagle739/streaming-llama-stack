@@ -156,8 +156,8 @@ def main():
         command = args.argv[1:] if args.argv and args.argv[0] == '--' else args.argv
         print(json.dumps(OwnedProcess(cfg, command, 'guarded', cwd=args.cwd).wait(), indent=2))
         return 0
-    from .lease import recover_leases
-    for identity in recover_leases(cfg['runtime_root']):
+    from .lease import recover_runtime_leases
+    for identity in recover_runtime_leases(cfg['runtime_root'], cfg.get('task', 'DS4STACK')):
         print('Released dead GPU guardian hold: ' + identity, file=sys.stderr)
     reports = Journal(cfg['runtime_root']).recover() if args.command not in ('check', 'start', 'rtx', 'serve-internal') else []
     for report in reports:
