@@ -185,10 +185,13 @@ def mference(build):
                '--product','MferenceServer','-j',build.jobs],'mference-compile')
     build.run(['swift','build','--package-path',source,'--scratch-path',output,'-c','release',
                '--product','MferenceDecodeService','-j',build.jobs],'mference-receiver-compile')
+    build.run(['swift','build','--package-path',source,'--scratch-path',output,'-c','release',
+               '--product','MferenceRepack','-j',build.jobs],'mference-repacker-compile')
     binary=output/'release/MferenceServer'
     receiver=output/'release/MferenceDecodeService'
+    repacker=output/'release/MferenceRepack'
     resources=[p for bundle in (output/'release').glob('*.bundle') for p in bundle.rglob('*') if p.is_file()]
-    return build.report('mference',revision,[binary,receiver,*resources],binary=str(binary),decode_service=str(receiver))
+    return build.report('mference',revision,[binary,receiver,repacker,*resources],binary=str(binary),decode_service=str(receiver),repacker=str(repacker))
 
 
 def inputs_for(name):

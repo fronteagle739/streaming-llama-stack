@@ -7,6 +7,7 @@ let package = Package(
         .library(name: "Mference", targets: ["Mference"]),
         .executable(name: "MferenceServer", targets: ["MferenceServer"]),
         .executable(name: "MferenceDecodeService", targets: ["MferenceDecodeService"]),
+        .executable(name: "MferenceRepack", targets: ["MferenceRepack"]),
     ],
     dependencies: [
         .package(url: "https://github.com/huggingface/swift-transformers", from: "1.3.0"),
@@ -16,6 +17,8 @@ let package = Package(
         .target(name: "Mference", dependencies: [.product(name: "Tokenizers", package: "swift-transformers")],
                 path: "Sources/Mference", resources: [.copy("Metal")]),
         .target(name: "MferenceDecodeProtocol", path: "Sources/MferenceDecodeProtocol"),
+        .target(name: "MferenceRepackCore", path: "Sources/MferenceRepack/Core"),
+        .executableTarget(name: "MferenceRepack", dependencies: ["MferenceRepackCore"], path: "Sources/MferenceRepack/Command"),
         .target(name: "MferenceAppCore", dependencies: ["Mference", "MferenceDecodeProtocol"],
                 path: "Sources/MferenceApp/Core",
                 exclude: ["Installation", "State/AppModel.swift", "State/AppChat.swift", "State/AppPresentationState.swift", "Resources", "Configuration/AppPromptPreset.swift", "Configuration/MacAppSettings.swift"],
