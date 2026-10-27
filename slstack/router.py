@@ -380,8 +380,10 @@ def handler(stack):
         def do_POST(self):
             try:
                 length = int(self.headers.get('Content-Length', '0'))
-                if not 0 < length <= 4 * 1024 * 1024:
-                    return self.send(413, {'error': {'message': 'Request limit is 4 MiB'}})
+                from .request_limits import chat_body_limit
+                limit=chat_body_limit(stack.cfg) if urlsplit(self.path).path=='/v1/chat/completions' else 4<<20
+                if not 0 < length <= limit:
+                    return self.send(413, {'error': {'message': f'Request limit is {limit//(1<<20)} MiB'}})
                 body = json.loads(self.rfile.read(length))
                 if not isinstance(body, dict):
                     raise ValueError('JSON body must be an object')

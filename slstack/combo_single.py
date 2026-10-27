@@ -609,12 +609,13 @@ def handler(proxy):
         def authorized(self):return hmac.compare_digest(self.headers.get('Authorization', ''), 'Bearer ' + proxy.token)
         def read_body(self):
             length = int(self.headers.get('Content-Length', '0'))
-            # Sized from the context (a 262144-token prompt is several MiB of JSON), not a fixed 1 MiB.
-            if not 0 < length <= max(1 << 20, proxy.cfg['context'] * 32):raise ValueError('Native request body exceeds the context-sized bound')
+            from .request_limits import chat_body_limit
+            limit=chat_body_limit(proxy.cfg) if self.path.split('?',1)[0]=='/v1/chat/completions' else 1<<20
+            if not 0 < length <= limit:raise ValueError('Request body exceeds its admitted bound')
             self.connection.settimeout(30);data = self.rfile.read(length)
             if len(data) != length:raise ValueError('Truncated request')
             vendor();from studio.dsv41_session_contract import control
-            return control(data)
+            return control(data,max_bytes=limit)
         def control(self, route):
             engine = proxy.engine
             if not engine.lock.acquire(timeout=float(proxy.cfg['request_timeout_s'])):

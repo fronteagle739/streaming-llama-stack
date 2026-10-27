@@ -59,8 +59,8 @@ def session_identity(value):
 def keys(row, expected):
     require(type(row) is dict and set(row) == set(expected), 'Unknown or missing session metadata')
 
-def control(data: bytes):
-    require(type(data) is bytes and 0 < len(data) <= MAX_CONTROL, 'Session control body limit')
+def control(data: bytes, *, max_bytes=MAX_CONTROL):
+    require(type(data) is bytes and 0 < len(data) <= max_bytes, 'Session control body limit')
 
     def pairs(items):
         out = {}
