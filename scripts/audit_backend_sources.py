@@ -3,6 +3,7 @@ from pathlib import Path
 import ast
 import hashlib
 import json
+import subprocess
 import sys
 import tomllib
 
@@ -54,6 +55,16 @@ def audit(root=ROOT):
     for row in peer_manifest['files']:
         file=root/'engines/ds4-peer'/row['path']
         if not file.is_file() or hashlib.sha256(file.read_bytes().replace(b'\r\n',b'\n')).hexdigest()!=row['export_sha256']:peer_hashes.append(row['path'])
+    mference_manifest=json.loads((root/'engines/mference/PROVENANCE.json').read_text())
+    mference_hashes=[]
+    for row in mference_manifest['files']:
+        file=root/'engines/mference'/row['path']
+        if not file.is_file() or hashlib.sha256(file.read_bytes().replace(b'\r\n',b'\n')).hexdigest()!=row['export_sha256']:mference_hashes.append(row['path'])
+    untracked=[]
+    if (root/'.git').exists():
+        tracked=set(subprocess.check_output(['git','-C',str(root),'ls-files','--cached','-z']).decode().split('\0'))
+        for directory,records in (('vendor/mac-mlx',manifest['files']),('engines/ds4-peer',peer_manifest['files']),('engines/mference',mference_manifest['files'])):
+            untracked.extend(directory+'/'+r['path'] for r in records if directory+'/'+r['path'] not in tracked)
     # Resolve local receiver imports against the retained implementation modules.
     receiver=root/'engines/mlx-receiver';modules={p.stem for p in receiver.glob('*.py')}
     needed={'kv_handoff','kv_converter','glm52_mtp','glm52_mtp_drafter','kimi_vision','mlx_adapters',
@@ -67,7 +78,8 @@ def audit(root=ROOT):
     return dict(backends=rows,mlx_native_missing=native_missing,mlx_unpacked_build_inputs=unpackaged,
                 mlx_source_files=len(manifest['files']),mlx_hash_mismatches=hashes,receiver_missing_modules=missing_modules,
                 peer_hash_mismatches=peer_hashes,
-                all_retained_components_complete=not(native_missing or unpackaged or hashes or peer_hashes or missing_modules or any(row['missing'] for row in rows)),
+                mference_hash_mismatches=mference_hashes,untracked_retained_files=untracked,
+                all_retained_components_complete=not(native_missing or unpackaged or hashes or peer_hashes or mference_hashes or untracked or missing_modules or any(row['missing'] for row in rows)),
                 external_requirements={'mlx-serve':'Initialize the pinned source and stage its MLX/MLX-C, libllama, Jinja and webp build dependencies.',
                                        'omlx':'An isolated pinned oMLX installation with compiled native kernels is required; an argv builder alone is not an installed engine.'})
 

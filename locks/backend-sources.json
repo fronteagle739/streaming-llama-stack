@@ -250,6 +250,13 @@
       "filename": "metal-cpp-26.zip",
       "bytes": 260405,
       "sha256": "4df3c078b9aadcb516212e9cb03004cbc5ce9a3e9c068fa3144d021db585a3a4"
+    },
+    {
+      "id": "mlx-gguflib",
+      "repository": "https://github.com/antirez/gguf-tools",
+      "revision": "8fa6eb65236618e28fd7710a0fba565f7faa1848",
+      "format": "git",
+      "filename": "mlx-gguflib-8fa6eb652366.tar.gz"
     }
   ]
 }
