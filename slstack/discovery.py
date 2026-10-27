@@ -26,8 +26,8 @@ FOLDER_CLASSES = {
 
 def architectures():
     vendor();from studio.custom_models import ARCHITECTURES
-    return {arch:[kind for kind,mode in [('image','t2i'),('video','t2v')] if mode in modes]
-            for arch,modes in ARCHITECTURES.items() if 't2i' in modes or 't2v' in modes}
+    return {arch:[kind for kind,matches in [('image',{'t2i','i2i'}),('video',{'t2v','i2v','r2v','ref2v'})] if matches.intersection(modes)]
+            for arch,modes in ARCHITECTURES.items() if set(modes).intersection({'t2i','i2i','t2v','i2v','r2v','ref2v'})}
 
 
 def json_config(path):
@@ -101,9 +101,10 @@ def model_info(value, arch_hint=None):
         arch=arch_hint
     if arch not in supported:return None
     modalities=_modalities_for_model(arch,str(path))
-    kinds=[kind for kind,mode in [('image','t2i'),('video','t2v')] if mode in modalities]
+    kinds=[kind for kind,matches in [('image',{'t2i','i2i'}),('video',{'t2v','i2v','r2v','ref2v'})] if matches.intersection(modalities)]
     if not kinds:return None
-    return dict(id=hashlib.sha256(str(path).encode()).hexdigest()[:16],name=path.name,path=str(path),arch=arch,kinds=kinds)
+    return dict(id=hashlib.sha256(str(path).encode()).hexdigest()[:16],name=path.name,path=str(path),arch=arch,kinds=kinds,
+                modalities=[*modalities,*(['ref2v'] if 'r2v' in modalities and 'ref2v' not in modalities else [])])
 
 
 SKIP={'$recycle.bin','system volume information','windows','node_modules','.git','.hg','.svn',

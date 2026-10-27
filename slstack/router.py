@@ -53,7 +53,7 @@ class Stack:
         from .generation import Store
         self.generation = Store(cfg)
 
-    def prepare_chat(self, body, *, stream=False):
+    def prepare_chat(self, body, *, stream=False, references=None):
         if not isinstance(body.get('messages'), list) or not body['messages']:
             raise ValueError('messages must be a nonempty array')
         body = deepcopy(body)
@@ -69,6 +69,7 @@ class Stack:
             # A fixed original turn keeps subsequent prompt prefixes stable;
             # a deliberate refresh replaces the facts at that same anchor.
             body['messages'][anchor]['content'] += '\n\nKnown media discovery result (reuse until refreshed):\n' + json.dumps(result)
+        if references is not None:references.annotate(body['messages'])
         # Client-owned tools remain client-owned. Stack tool names cannot be overridden.
         stack_names = set(self.tools.schemas)
         client_tools = body.get('tools', [])
@@ -79,15 +80,17 @@ class Stack:
         body['tools'] = client_tools + self.tools.openai()
         return body
 
-    def tool_result(self, call, media):
+    def tool_result(self, call, media, references=None):
         try:
             args = json.loads(call['function']['arguments'])
-            outcome = self.tools.call(call['function']['name'], args)
+            if references is not None and (args.get('source_image') or args.get('reference_images')):
+                outcome = self.tools.call(call['function']['name'], args, references=references)
+            else:outcome = self.tools.call(call['function']['name'], args)
             if call['function']['name'].startswith('generate_'):
                 media.append(outcome)
                 outcome = {'data': [{'url': x['url']} for x in outcome.get('data', [])],
                            'settings': outcome.get('settings', {}), 'mode': outcome.get('mode'),
-                           'display': 'The client displays this media inline. Reply with a brief confirmation.'}
+                           'display': 'The client displays this media inline. Generated image URLs may be used as source_image or in reference_images for a subsequent requested generation. Reply with a brief confirmation.'}
         except (ValueError, RuntimeError, OSError, MemoryError) as exc:
             outcome = {'error': str(exc)}
         content=json.dumps(outcome)
@@ -96,7 +99,9 @@ class Stack:
         return {'role': 'tool', 'tool_call_id': call['id'], 'content': content}
 
     def chat(self, body):
-        body = self.prepare_chat(body)
+        from .media_references import References
+        references=References(self.cfg,scoped=True)
+        body = self.prepare_chat(body,references=references)
         messages = body['messages']
         stack_names = set(self.tools.schemas)
         media, activity_log = [], []
@@ -129,13 +134,15 @@ class Stack:
                 return result
             messages.append(message)
             for call in calls:
-                result = self.tool_result(call, media)
+                result = self.tool_result(call, media,references)
                 messages.append(result)
                 reply = outcome(result)
                 activity_log.append(activity(call,'failed' if 'error' in reply else 'complete',reply))
 
     def chat_events(self, body):
-        body = self.prepare_chat(body, stream=True)
+        from .media_references import References
+        references=References(self.cfg,scoped=True)
+        body = self.prepare_chat(body, stream=True,references=references)
         media, metadata = [], {}
         names = set(self.tools.schemas)
         identity = 'chatcmpl-' + uuid.uuid4().hex
@@ -214,7 +221,7 @@ class Stack:
             for call in calls:
                 yield chunk({'content':activity(call,'running')})
                 before = len(media)
-                result = self.tool_result(call,media)
+                result = self.tool_result(call,media,references)
                 body['messages'].append(result)
                 reply = outcome(result)
                 yield chunk({'content':activity(call,'failed' if 'error' in reply else 'complete',reply)})

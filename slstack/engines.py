@@ -492,7 +492,7 @@ class Engines:
                 artifacts.append({'url': '/outputs/' + source.relative_to(root).as_posix(), 'path': str(source)})
             if not artifacts:
                 raise RuntimeError('Studio returned no media files')
-            return {'created': int(time.time()), 'data': artifacts, 'settings': {k:v for k,v in params.items() if k!='lora_files'},
+            return {'created': int(time.time()), 'data': artifacts, 'settings': {k:v for k,v in params.items() if k!='lora_files' and not k.startswith('_')},
                     'mode': cfg[kind + '_mode'], 'engine': 'studio', 'receipt': str(proc.receipt),
                     'selected_model': result.get('selected_model'), 'selected_arch': result.get('selected_arch')}
         finally:

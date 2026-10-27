@@ -136,3 +136,15 @@ class H3AdapterTests(unittest.TestCase):
         self.assertFalse((model/'transformer/model.safetensors.index.json').exists())
         argv=backend._run_guarded_subprocess.call_args.args[0]
         self.assertEqual(argv[argv.index('--attention-backend')+1],'sdpa')
+
+        # Exercise the actual adapter's command builder for both reference paths.
+        source=root/'conditioning.png';source.write_bytes(bytes.fromhex('89504e470d0a1a0a'))
+        for modality,extra,flag in [('i2v',dict(image_path=str(source)),'--image'),
+                                    ('ref2v',dict(reference_images=[str(source)]),'--reference-image')]:
+            request=params.model_copy(update=dict(modality=modality,**extra))
+            with patch.dict(sys.modules,{'cosmos_windows.weight_streaming.minimax_h3_backend':module}),patch('studio.chat_artifacts.settings',SimpleNamespace(output_dir=root)),patch('studio.safety.guard_argv',side_effect=lambda argv,**kw:argv):
+                backend._generate_minimax_h3(request)
+            argv=backend._run_guarded_subprocess.call_args.args[0]
+            self.assertEqual(argv[argv.index('--mode')+1],modality)
+            self.assertEqual(argv[argv.index(flag)+1],str(source))
+            if modality=='i2v':self.assertEqual(argv[argv.index('--frame-index')+1],'0')
