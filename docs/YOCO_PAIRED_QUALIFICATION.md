@@ -71,12 +71,37 @@ dropped visible temperature/top-p edits; arbitrary valid fractions now persist.
 These responses are synthetic and no model is opened. They do not satisfy the
 live decode gate. Toolbar changes on the paired path apply on the next turn.
 
-The following work remains:
+Round 4 subsequently completed the real headless WebUI conversation checks
+with the blocking catch-up implementation: a 105K-token recall prompt and two
+follow-ups, and an actual uploaded image in a 198,931-token prompt followed by
+a referring turn. All answers were correct. Browser evidence shows incremental
+content, advancing prefill progress, numeric live/final rates and updated
+context usage. Mac-native logs retain temperature .83, top-p .87, top-k 37,
+min-p .06, bias .22 and seed 123456. The short prompt and short follow-up use
+Mac-local prefill at Studio's 11,776-new-token threshold.
 
-- Qualify the candidate transport and samplers with real Mac decode and images.
-- Run a real headless browser gate with at least 100K prompt tokens, two further
+The image prompt's startup-through-prefill interval was 194.248 s, or
+1,024.109 tok/s, above the supplied 985.74 tok/s image baseline. Its blocking
+Mac decode rate was only 11.003 tok/s. Logs identify serialized full-owner
+hashing and RTX acknowledgment on the decode thread as the cause; the ordinary
+Mac-local WebUI turns measured about 32 tok/s. These are diagnostic measurements
+of the blocking implementation, not qualification of the current candidate.
+
+The current candidate ports Studio's ordered catch-up worker and incremental
+hash chains. It preserves the existing YOCO negotiation, projected images,
+full checkpoint verification, and strict joins before RTX reuse or shutdown.
+CPU checks compare incremental snapshots with independent full-state hashes at
+even and odd positions, reject a changed compressed prefix, and verify that a
+corrupt queued base fails and its worker shuts down. The sampler parser,
+penalty/order checks and greedy negative control still pass.
+
+The following work remains for this asynchronous candidate:
+
+- Requalify the candidate transport and samplers with real Mac decode and images.
+- Repeat the real headless browser gate with at least 100K prompt tokens, two further
   Mac-decoded turns, an uploaded image and a referring follow-up. Verify applied
-  sampler settings in native decode evidence and check single-engine behavior.
+  sampler settings in native decode evidence, confirm the improved decode rate,
+  and check single-engine behavior.
 - Only then add measured timings, remove the unbenchmarked wording, and qualify
   the candidate for release.
 

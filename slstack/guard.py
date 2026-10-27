@@ -2,6 +2,7 @@
 from __future__ import annotations
 import argparse
 import ctypes
+import dataclasses
 import json
 import os
 from pathlib import Path
@@ -10,12 +11,30 @@ import sys
 import time
 import psutil
 from .progress import Window, activity
+from .memory_counters import available_physical_bytes
 from .native_broker import vendor
 vendor()
 from studio.job_guard import OwnedProcesses, OwnedView
 from studio.job_paging import PagingWatch, paging_bytes
 
 GiB = 1024 ** 3
+
+
+class GracefulOwnedProcesses(OwnedProcesses):
+    """POSIX model cleanup has no SIGKILL fallback; retain failed ownership."""
+    def stop(self, grace=60, timeout=3):
+        self.refresh()
+        errors=[]
+        for process in reversed(self.live()):
+            try:process.terminate()
+            except psutil.NoSuchProcess:pass
+            except Exception as error:errors.append(repr(error))
+        deadline=time.monotonic()+grace
+        while self.live() and time.monotonic()<deadline:time.sleep(.05)
+        survivors=[p.pid for p in self.live()]
+        return dict(confirmed=not survivors and not errors,surviving_owned_pids=survivors,
+                    errors=errors,identities=[dataclasses.asdict(x) for x in self.identities.values()],
+                    retired_identities=[dataclasses.asdict(x) for x in self.retired_identities],forced_kill=False)
 
 
 class GPUWindowReader:
@@ -55,9 +74,10 @@ class GPUWindowReader:
 
 def admit(budget_gib, floor_gib):
     ram = psutil.virtual_memory()
-    if not 0 < budget_gib * GiB <= ram.available - floor_gib * GiB:
-        raise MemoryError(f'Host budget {budget_gib:.2f} GiB cannot fit: available={ram.available / GiB:.2f}, floor={floor_gib:.2f}')
-    return ram.available
+    available=available_physical_bytes()
+    if not 0 < budget_gib * GiB <= available - floor_gib * GiB:
+        raise MemoryError(f'Host budget {budget_gib:.2f} GiB cannot fit: available={available / GiB:.2f}, floor={floor_gib:.2f}')
+    return available
 
 
 def kill_tree(proc):
@@ -120,7 +140,9 @@ def _supervise(spec):
     # Engine/GPU jobs use the pinned shared Studio guard. A server that opens its own
     # per-request GPU windows (combo_proxy) or a job bound to a named lease stays on
     # the owned loop below, which checks the window and ledger identity every poll.
-    if spec.get('paging_telemetry') and not (spec.get('gpu_window_file') or spec.get('gpu_lease_identity')):
+    # Persistent servers retain the owned loop's RAM/paging checks. The pinned
+    # shared adapter requires a finite operation deadline (at most 1140 s).
+    if spec.get('timeout_s') is not None and spec.get('paging_telemetry') and not (spec.get('gpu_window_file') or spec.get('gpu_lease_identity')):
         from .shared_guard import supervise as shared_supervise
         return shared_supervise({**spec,'timeout_s':min(spec['timeout_s'],1140)})
     if not (spec.get('paging_telemetry') or spec.get('gpu_window_file') or spec.get('gpu_lease_identity')):
@@ -278,7 +300,7 @@ def _supervise_owned(spec,paging_watch,paging_warnings):
                                  stdout=log, stderr=log, creationflags=flags,
                                  start_new_session=os.name != 'nt')
         job = None
-        owned = OwnedProcesses(child)
+        owned = OwnedProcesses(child) if os.name=='nt' else GracefulOwnedProcesses(child)
         cleanup = None
         try:
             if os.name == 'nt':
@@ -390,15 +412,17 @@ def _supervise_owned(spec,paging_watch,paging_warnings):
                     cleanup=owned.stop()
                     break
                 time.sleep(.05)
-            code = child.wait()
+            code = child.poll() if cleanup and not cleanup['confirmed'] else child.wait()
+            if code is None:code=1
         except BaseException as exc:
-            reason=repr(exc);cleanup=owned.stop();code=child.wait(timeout=10)
+            reason=repr(exc);cleanup=owned.stop();code=child.poll()
+            if code is None:code=1
         finally:
-            if child.poll() is None:
+            if child.poll() is None and cleanup is None:
                 cleanup=owned.stop();child.wait(timeout=10)
             if job:
                 job[0].CloseHandle(job[1])
-            cleanup=owned.stop()
+            if cleanup is None:cleanup=owned.stop()
     receipt = {'exit_code': code, 'reason': reason, 'peak_tree_rss': peak,
                'min_available': minimum, 'elapsed_s': time.monotonic() - start,
                'started_monotonic': start, 'no_progress_window_s': spec['timeout_s'],
@@ -415,7 +439,7 @@ def _supervise_owned(spec,paging_watch,paging_warnings):
                    paging_scanned_pages=paging_watch.observer.scanned_pages,
                    paging_completed_scans=paging_watch.observer.completed_scans,
                    paging_attribution=paging_watch.observer.attribution,paging_policy=paging_watch.details(),cleanup=cleanup,
-                   release_allowed=cleanup['confirmed'],reservation_samples=reservation_samples,
+                   release_allowed=cleanup['confirmed'],cleanup_confirmed=cleanup['confirmed'],reservation_samples=reservation_samples,
                    paging_interpretation='Process faults include soft and hard faults. Private commit/pagefile usage is not disk I/O. System counters include other processes; these counters alone do not prove core/KV residency.')
     Path(spec['receipt']).write_text(json.dumps(receipt, indent=2))
     if not cleanup['confirmed']:

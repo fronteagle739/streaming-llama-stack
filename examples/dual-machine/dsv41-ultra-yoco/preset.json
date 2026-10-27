@@ -16,6 +16,7 @@
     "mtp_model": "SET_MAC_DSPARK_GGUF_PATH",
     "runtime_root": "runtime/dsv41-dual-ultra-yoco",
     "backend": "ds4",
+    "paired_local_prefill_max_tokens": 11776,
     "mac_host_budget_gib": 400,
     "min_available_gib": 4,
     "producer_desktop_reserve_gib": 2,

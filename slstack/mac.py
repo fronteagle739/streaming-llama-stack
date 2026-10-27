@@ -26,7 +26,8 @@ from .progress import Window, activity, readiness_seconds
 
 def budget(cfg, maximum=400):
     import psutil
-    free = psutil.virtual_memory().available / (1 << 30)
+    from .memory_counters import available_physical_bytes
+    free = available_physical_bytes() / (1 << 30)
     floor = max(4, cfg.get('min_available_gib', 4))
     reserve = max(cfg.get('producer_desktop_reserve_gib', 2), floor)
     requested = cfg.get('mac_host_budget_gib') or min(maximum, (free - reserve) * .9)
@@ -299,6 +300,8 @@ class Receiver:
                 for name, value in dynamic.items():
                     env.setdefault(name, value)
                 env['DS4_NATIVE_SESSION_YOCO_KEEP']=str(self.peer.get('yoco_keep',0))
+                from .combo_crossover import paired_threshold
+                env['DS4_NATIVE_SESSION_LOCAL_PREFILL_MAX_TOKENS']=str(paired_threshold(cfg))
         cfg['env_overrides'] = env
         # DS4COMBO2 liveness: the Mac engine has no lifetime cap; the guard's memory limits stay.
         self.engine = OwnedProcess(cfg, command, 'mac-' + self.backend, cwd=Path(cfg['runtime_root']),

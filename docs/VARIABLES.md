@@ -2324,7 +2324,7 @@ DS4_BENCH_REQUIRE_CACHED_API: advanced engine setting; built-in default retained
 
 Scope: mac-ds4. Class: advanced.
 
-Source: `engines/ds4-mac/ds4_server.c:14014`. Unset read: NULL from getenv; the literal consumer below supplies any fallback.
+Source: `engines/ds4-mac/ds4_server.c:14036`. Unset read: NULL from getenv; the literal consumer below supplies any fallback.
 
 ```text
      * Small ordinary API prompts still exercise the real serving path. This is
@@ -17790,7 +17790,7 @@ DS4_DEBUG_LEVERS: advanced engine setting; built-in default retained
 
 Scope: mac-ds4. Class: advanced.
 
-Source: `engines/ds4-mac/ds4_server.c:16721`. Unset read: NULL from getenv; the literal consumer below supplies any fallback.
+Source: `engines/ds4-mac/ds4_server.c:16753`. Unset read: NULL from getenv; the literal consumer below supplies any fallback.
 
 ```text
     g_bench_snap_dir = cfg.kv_disk_dir;
@@ -17808,7 +17808,7 @@ DS4_DEBUG_LEVERS_FILE: advanced engine setting; built-in default retained
 
 Scope: mac-ds4. Class: advanced.
 
-Source: `engines/ds4-mac/ds4_server.c:15718`. Unset read: NULL from getenv; the literal consumer below supplies any fallback.
+Source: `engines/ds4-mac/ds4_server.c:15750`. Unset read: NULL from getenv; the literal consumer below supplies any fallback.
 
 ```text
 static bool server_debug_levers_enabled(const server *s) {
@@ -26616,7 +26616,7 @@ static bool kv_cache_reason_is_chain_waypoint(uint8_t reason) {
     return reason == DS4_KVSTORE_REASON_CONTINUED ||
 ```
 
-Source: `engines/ds4-mac/ds4_server.c:21560`. Unset read: NULL from getenv; the literal consumer below supplies any fallback.
+Source: `engines/ds4-mac/ds4_server.c:21592`. Unset read: NULL from getenv; the literal consumer below supplies any fallback.
 
 ```text
      * without the guard and fails it under its own default (V4.1 port,
@@ -26628,7 +26628,7 @@ Source: `engines/ds4-mac/ds4_server.c:21560`. Unset read: NULL from getenv; the 
     TEST_ASSERT(dir != NULL);
 ```
 
-Source: `engines/ds4-mac/ds4_server.c:21561`. Unset read: Wrapper/conditional default: see the literal call and consumer below.
+Source: `engines/ds4-mac/ds4_server.c:21593`. Unset read: Wrapper/conditional default: see the literal call and consumer below.
 
 ```text
      * 2026-09-14). */
@@ -26640,7 +26640,7 @@ Source: `engines/ds4-mac/ds4_server.c:21561`. Unset read: Wrapper/conditional de
     if (!dir) { if (ladder_prev) setenv("DS4_KV_LADDER", ladder_prev, 1); else unsetenv("DS4_KV_LADDER"); return; }
 ```
 
-Source: `engines/ds4-mac/ds4_server.c:21565`. Unset read: Wrapper/conditional default: see the literal call and consumer below.
+Source: `engines/ds4-mac/ds4_server.c:21597`. Unset read: Wrapper/conditional default: see the literal call and consumer below.
 
 ```text
     char *dir = mkdtemp(tmpl);
@@ -26652,7 +26652,7 @@ Source: `engines/ds4-mac/ds4_server.c:21565`. Unset read: Wrapper/conditional de
     const char *incoming_text = "system: hello world\nuser: prompt";
 ```
 
-Source: `engines/ds4-mac/ds4_server.c:21609`. Unset read: Wrapper/conditional default: see the literal call and consumer below.
+Source: `engines/ds4-mac/ds4_server.c:21641`. Unset read: Wrapper/conditional default: see the literal call and consumer below.
 
 ```text
     free(cold_path);
@@ -26664,7 +26664,7 @@ Source: `engines/ds4-mac/ds4_server.c:21609`. Unset read: Wrapper/conditional de
 static void test_kv_cache_eviction_keeps_smaller_context_prefix(void) {
 ```
 
-Source: `engines/ds4-mac/ds4_server.c:21610`. Unset read: Wrapper/conditional default: see the literal call and consumer below.
+Source: `engines/ds4-mac/ds4_server.c:21642`. Unset read: Wrapper/conditional default: see the literal call and consumer below.
 
 ```text
     rmdir(dir);
@@ -46458,7 +46458,7 @@ Source: `engines/ds4-mac/ds4_cli.c:1630`. Unset read: NULL from getenv; the lite
                 ds4_token_eos(engine), cfg->gen.temperature, 0,
 ```
 
-Source: `engines/ds4-mac/ds4_server.c:14458`. Unset read: NULL from getenv; the literal consumer below supplies any fallback.
+Source: `engines/ds4-mac/ds4_server.c:14482`. Unset read: NULL from getenv; the literal consumer below supplies any fallback.
 
 ```text
         if (!paired_serial && !s->batched_mode &&
@@ -47154,7 +47154,7 @@ DS4_NATIVE_SESSION_DEADLINE_SECONDS: qualified Mac native preset setting; overri
 
 Scope: mac-ds4. Class: preset.
 
-Source: `engines/ds4-mac/ds4_native_session_setup.inc:28`. Unset read: Wrapper/conditional default: see the literal call and consumer below.
+Source: `engines/ds4-mac/ds4_native_session_setup.inc:36`. Unset read: Wrapper/conditional default: see the literal call and consumer below.
 
 ```text
     if(yoco&&strcmp(yoco,"0")){if(strcmp(yoco,"140"))goto bad;c->yoco_keep=140;}
@@ -47244,7 +47244,7 @@ DS4_NATIVE_SESSION_PORT: qualified Mac native preset setting; override explicitl
 
 Scope: mac-ds4. Class: preset.
 
-Source: `engines/ds4-mac/ds4_native_session_setup.inc:27`. Unset read: Wrapper/conditional default: see the literal call and consumer below.
+Source: `engines/ds4-mac/ds4_native_session_setup.inc:35`. Unset read: Wrapper/conditional default: see the literal call and consumer below.
 
 ```text
     const char*yoco=ds4_nf_env("DS4_NATIVE_SESSION_YOCO_KEEP");
@@ -54288,7 +54288,7 @@ DS4_SERVER_BATCH_LOG: advanced engine setting; built-in default retained
 
 Scope: ds4-win, mac-ds4. Class: advanced.
 
-Source: `engines/ds4-mac/ds4_server.c:13695`. Unset read: NULL from getenv; the literal consumer below supplies any fallback.
+Source: `engines/ds4-mac/ds4_server.c:13714`. Unset read: NULL from getenv; the literal consumer below supplies any fallback.
 
 ```text
     server_slot **members = xmalloc((size_t)s->slot_count * sizeof(*members));
@@ -54330,7 +54330,7 @@ DS4_SERVER_DECODE_COALESCE_US: advanced engine setting; built-in default retaine
 
 Scope: ds4-win, mac-ds4. Class: advanced.
 
-Source: `engines/ds4-mac/ds4_server.c:13674`. Unset read: NULL from getenv; the literal consumer below supplies any fallback.
+Source: `engines/ds4-mac/ds4_server.c:13693`. Unset read: NULL from getenv; the literal consumer below supplies any fallback.
 
 ```text
 static long server_decode_coalesce_us(void) {
@@ -91928,11 +91928,11 @@ Negotiated YOCO replay window: 0 or 140; set by the paired preset.
 
 Scope: mac-ds4. Class: advanced.
 
-Source: `engines/ds4-mac/ds4_native_session_setup.inc:25`. Unset read: Wrapper/conditional default: see the literal call and consumer below.
+Source: `engines/ds4-mac/ds4_native_session_setup.inc:33`. Unset read: Wrapper/conditional default: see the literal call and consumer below.
 
 ```text
-    ds4_ns_config*c=calloc(1,sizeof(*c));if(!c)return ds4_nf_error(err,cap,"session configuration allocation failed");
-    c->http.dirfd=-1;uint32_t port;
+    if(ds4_nf_env("DS4_NATIVE_SESSION_LOCAL_PREFILL_MAX_TOKENS")&&
+       !ds4_nf_env_uint("DS4_NATIVE_SESSION_LOCAL_PREFILL_MAX_TOKENS",&c->local_prefill_max,0,49152))goto bad;
     const char*yoco=ds4_nf_env("DS4_NATIVE_SESSION_YOCO_KEEP");
     if(yoco&&strcmp(yoco,"0")){if(strcmp(yoco,"140"))goto bad;c->yoco_keep=140;}
     if(!ds4_nf_pair_token(token,c->http.token)||!ds4_nf_env_uint("DS4_NATIVE_SESSION_PORT",&port,1,65535)||
@@ -100372,4 +100372,70 @@ Source: `engines/ds4-peer/ds4.c:29639`. Unset read: NULL from getenv; the litera
     }
     return cached != 0;
 }
+```
+
+### DS4_NATIVE_SESSION_LOCAL_PREFILL_MAX_TOKENS
+
+Paired Mac-local prefill threshold in new tokens. Studio paired preset default 11776; strict less-than; 0 disables. Launcher sets the validated crossover.
+
+Scope: mac-ds4. Class: advanced.
+
+Source: `engines/ds4-mac/ds4_native_session_setup.inc:31`. Unset read: Wrapper/conditional default: see the literal call and consumer below.
+
+```text
+     if(policy){if(!strcmp(policy,"defer"))c->catchup_defer=true;else if(strcmp(policy,"stream"))goto bad;}}
+    c->local_prefill_max=11776;
+    if(ds4_nf_env("DS4_NATIVE_SESSION_LOCAL_PREFILL_MAX_TOKENS")&&
+       !ds4_nf_env_uint("DS4_NATIVE_SESSION_LOCAL_PREFILL_MAX_TOKENS",&c->local_prefill_max,0,49152))goto bad;
+    const char*yoco=ds4_nf_env("DS4_NATIVE_SESSION_YOCO_KEEP");
+    if(yoco&&strcmp(yoco,"0")){if(strcmp(yoco,"140"))goto bad;c->yoco_keep=140;}
+    if(!ds4_nf_pair_token(token,c->http.token)||!ds4_nf_env_uint("DS4_NATIVE_SESSION_PORT",&port,1,65535)||
+```
+
+Source: `engines/ds4-mac/ds4_native_session_setup.inc:32`. Unset read: Wrapper/conditional default: see the literal call and consumer below.
+
+```text
+    c->local_prefill_max=11776;
+    if(ds4_nf_env("DS4_NATIVE_SESSION_LOCAL_PREFILL_MAX_TOKENS")&&
+       !ds4_nf_env_uint("DS4_NATIVE_SESSION_LOCAL_PREFILL_MAX_TOKENS",&c->local_prefill_max,0,49152))goto bad;
+    const char*yoco=ds4_nf_env("DS4_NATIVE_SESSION_YOCO_KEEP");
+    if(yoco&&strcmp(yoco,"0")){if(strcmp(yoco,"140"))goto bad;c->yoco_keep=140;}
+    if(!ds4_nf_pair_token(token,c->http.token)||!ds4_nf_env_uint("DS4_NATIVE_SESSION_PORT",&port,1,65535)||
+       !ds4_nf_env_uint("DS4_NATIVE_SESSION_DEADLINE_SECONDS",&c->http.deadline_seconds,60,7200)||
+```
+
+### DS4_NATIVE_SESSION_ASYNC_DECODE_SYNC
+
+Ordered Mac catch-up worker with verified incremental owner hashes. Native default on; 0 selects blocking diagnosis.
+
+Scope: mac-ds4. Class: advanced.
+
+Source: `engines/ds4-mac/ds4_native_session_setup.inc:26`. Unset read: Wrapper/conditional default: see the literal call and consumer below.
+
+```text
+    c->http.dirfd=-1;uint32_t port;
+    c->async_decode=true;
+    {const char*policy=ds4_nf_env("DS4_NATIVE_SESSION_ASYNC_DECODE_SYNC");
+     if(policy){if(!strcmp(policy,"0"))c->async_decode=false;else if(strcmp(policy,"1"))goto bad;}}
+    {const char*policy=ds4_nf_env("DS4_NATIVE_SESSION_CATCHUP");
+     if(policy){if(!strcmp(policy,"defer"))c->catchup_defer=true;else if(strcmp(policy,"stream"))goto bad;}}
+    c->local_prefill_max=11776;
+```
+
+### DS4_NATIVE_SESSION_CATCHUP
+
+Mac catch-up policy: stream snapshots during decode (default), or defer their transmission until the reply ends. Strict join precedes every RTX operation.
+
+Scope: mac-ds4. Class: advanced.
+
+Source: `engines/ds4-mac/ds4_native_session_setup.inc:28`. Unset read: Wrapper/conditional default: see the literal call and consumer below.
+
+```text
+    {const char*policy=ds4_nf_env("DS4_NATIVE_SESSION_ASYNC_DECODE_SYNC");
+     if(policy){if(!strcmp(policy,"0"))c->async_decode=false;else if(strcmp(policy,"1"))goto bad;}}
+    {const char*policy=ds4_nf_env("DS4_NATIVE_SESSION_CATCHUP");
+     if(policy){if(!strcmp(policy,"defer"))c->catchup_defer=true;else if(strcmp(policy,"stream"))goto bad;}}
+    c->local_prefill_max=11776;
+    if(ds4_nf_env("DS4_NATIVE_SESSION_LOCAL_PREFILL_MAX_TOKENS")&&
+       !ds4_nf_env_uint("DS4_NATIVE_SESSION_LOCAL_PREFILL_MAX_TOKENS",&c->local_prefill_max,0,49152))goto bad;
 ```

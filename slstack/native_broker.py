@@ -169,11 +169,27 @@ class OwnedProducer:
                 return protect_working_set(job, working_minimum, floor, host_bytes,
                                            receipt=directory / 'working-set.json')
             self.attempted = True
+            prefill_started=time.monotonic()
             self.producer = Producer(request['session'], argv, env, directory, host_bytes=host_bytes,
                                      runtime_min_free_gib=runtime_floor,
                                      physical_floor=floor, operation_seconds=min(600, cfg['request_timeout_s']), stall_seconds=stall_seconds(cfg),
                                      idle_seconds=cfg['lease_minutes'] * 60, native=native,
                                      cancelled=cancelled, after_resume=protect)
+            # Actual RTX operation clocks, separate from the Mac's transfer /
+            # import / acknowledgment intervals. Initial time includes startup.
+            self.prefill_timings=[dict(operation='startup_and_initial_prefill',
+                tokens=len(request['tokens'])//4,seconds=time.monotonic()-prefill_started)]
+            timing_file=directory/'prefill-timings.json'
+            atomic_json(timing_file,self.prefill_timings)
+            native_request=self.producer.request
+            def timed_request(row):
+                started=time.monotonic();result=native_request(row)
+                if row.get('operation')=='prefill':
+                    self.prefill_timings.append(dict(operation='incremental_prefill',
+                        tokens=len(row['tokens']),seconds=time.monotonic()-started))
+                    atomic_json(timing_file,self.prefill_timings)
+                return result
+            self.producer.request=timed_request
             cp = self.producer.ready['checkpoint']
             self.producer.stage_vision=stage_vision
             require(self.producer.ready.get('yoco_keep',0)==keep and self.producer.ready.get('yoco_state_version',0)==(1 if keep else 0),
@@ -219,7 +235,14 @@ def serve(cfg):
     token = Path(cfg['pair_token_file']).read_text(encoding='utf-8').strip()
     if len(token) < 16:
         raise ValueError('Explicit pairing token required')
-    broker = Broker(lambda request, cancel: OwnedProducer(cfg, request, cancel))
+    def factory(request,cancel):
+        try:
+            return OwnedProducer(cfg,request,cancel)
+        except BaseException as error:
+            print('NATIVE_SESSION_START_FAILED '+json.dumps({'session':request.get('session'),
+                  'error':str(error)}),flush=True)
+            raise
+    broker = Broker(factory)
 
     @asynccontextmanager
     async def lifespan(app):
@@ -227,6 +250,12 @@ def serve(cfg):
         broker.close()
 
     app = FastAPI(lifespan=lifespan, docs_url=None, redoc_url=None)
+    @app.exception_handler(HTTPException)
+    async def rejected_request(request,error):
+        from fastapi.responses import JSONResponse
+        print('NATIVE_SESSION_HTTP_REFUSED '+json.dumps({'path':request.url.path,
+              'status':error.status_code,'detail':error.detail}),flush=True)
+        return JSONResponse({'detail':error.detail},status_code=error.status_code)
 
     def authorize(x_studio_token: str = Header(default='')):
         if not hmac.compare_digest(token, x_studio_token):
