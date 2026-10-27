@@ -34,12 +34,18 @@ can stop the linker before it finishes.
 | `llama-decode-upstream` | Pinned upstream source plus the retained KV/token receiver overlay. WIR is unavailable in this overlay. |
 | `ds4` | DSV4.1 native state receiver. Existing `mac-setup` also performs its model and wired memory checks. |
 | `ds4-peer` | Earlier DS4P protocol, built from the consistent retained peer receiver sources. This is a distinct protocol from the DSV4.1 state broker. |
-| `mference` | Server-only Swift package with pinned local package dependencies and Foundation networking; Swift 6.1 or newer. Optional Xet and AsyncHTTPClient transports are disabled in this local-model build. |
+| `mference` | Swift HTTP server, native decode service and model repacker with pinned local dependencies and Foundation networking; Swift 6.1 or newer. Optional Xet and AsyncHTTPClient transports are disabled in this local-model build. |
 | `mlx-serve` | Pinned server, DS4, OpenCode, MLX, MLX-C, llama, Jinja and webp inputs, private dependency prefixes and Zig 0.17.0. Requires macOS/Metal 26.2 or newer. |
 | `omlx` | Separate `omlx-venv`, MLX 0.32.4, nanobind 3.1.0, pinned model libraries and compiled native kernels. It does not replace the custom MLX environment. |
 
 An OpenAI HTTP backend performs its own prefill. Select a KV/token receiver or
 the matching DS4 protocol for RTX prefill and Mac decode.
+
+Mference loads a completed `.gturbo` directory. Its setup receipt at
+`runtime_root/state/backends/mference.json` records the installed `repacker`
+executable. Run that executable with `--help` for supported model sources and
+conversion options, then explicitly select its output directory as
+`decode.model_path`. Setup builds the repacker without downloading model weights.
 
 For an offline Mac, fetch source archives on a connected machine:
 
