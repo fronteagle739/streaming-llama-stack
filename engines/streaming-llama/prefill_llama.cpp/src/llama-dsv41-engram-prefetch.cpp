@@ -124,7 +124,8 @@ public:
         // Charge both full-capacity ID vectors before allocating them. Dedup
         // does not reduce their capacity, so the final plan retains that charge.
         const uint64_t id_limit=uint64_t(count)*48*sizeof(uint32_t);
-        const uint64_t mask_bytes=text_mask?count:0;
+        // Async planning retains a copy beside the sweep's borrowed mask.
+        const uint64_t mask_bytes=text_mask?uint64_t(count)*2:0;
         require(add(id_limit,4*1024*1024+mask_bytes)<=admitted_host_bytes,"Engram prompt IDs exceed explicit provider host admission");
         for(auto& t:tables)t.ids.reserve(size_t(count)*24);
         llama_dsv41::engram_history history=initial;

@@ -94,7 +94,7 @@ public:
     // for exactly these tokens/history. Both caches are charged to admission.
     // current_request: the cache is for the request about to run (sweep start),
     // so no second cache is alive and an already-queued early cache is kept.
-    bool start_engram_prompt_early(const std::vector<int32_t> &tokens,llama_dsv41::engram_history initial,std::string &error,bool current_request=false);
+    bool start_engram_prompt_early(const std::vector<int32_t> &tokens,llama_dsv41::engram_history initial,std::string &error,bool current_request=false,const uint8_t* text_mask=nullptr);
     // Under LLAMA_DSV41_ENGRAM_PROMPT_OVERLAP=1 prepare_engram_prompt adopts a
     // still-loading early cache; every Engram reader first waits here, outside
     // the provider lock, for its table (0: layer 1, 1: layer 14). The table-1

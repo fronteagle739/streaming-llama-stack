@@ -492,7 +492,7 @@ int wmain(int argc,wchar_t**argv){
         if(yoco_keep){
             report["yoco_plan"]=json::array();
             for(const auto&e:sweep_extents){
-                const auto replay=llama_dsv41_yoco::schedule(uint32_t(yoco_keep),llama_dsv41_yoco::operation::prefill,false,
+                const auto replay=llama_dsv41_yoco::schedule(uint32_t(yoco_keep),llama_dsv41_yoco::operation::prefill,args.count("--vision-spans-file")!=0,
                     0,uint32_t(tokens.size()),e.first,e.first+e.count);
                 report["yoco_plan"].push_back({{"first",e.first},{"count",e.count},{"layers",replay.layers},
                     {"encoder_only",replay.encoder_only},{"decoder_first",replay.first},{"decoder_rows",replay.encoder_only?0u:e.count-replay.first}});
@@ -664,8 +664,7 @@ int wmain(int argc,wchar_t**argv){
             options.image_spans=studio_vision_spans(args.at("--vision-spans-file"),options.context);options.images=true;
             report["vision"]={{"images",options.image_spans.size()},{"embedding_width",5120},{"native_image_token",129264},{"image_router_bias",true},{"seed_host_tile_rows",128}};
             // Image rows reset Engram history. The prompt cache plans with
-            // the same mask as the exact reader; text-only speculation stays
-            // disabled below, but batched row IO and parallel decode remain.
+            // the same mask as the exact reader, including overlap/lookahead.
         }
         if(yoco_keep){options.yoco_logical_begin=base_tokens;options.yoco_logical_end=base_tokens+uint32_t(tokens.size());}
         options.admitted_cache_bytes=number("--cache-bytes");options.admitted_graph_bytes=number("--graph-bytes");
@@ -754,7 +753,6 @@ int wmain(int argc,wchar_t**argv){
         }}
         require(!args.count("--engram-tile-lookahead")||args.at("--engram-tile-lookahead")=="0"||args.at("--engram-tile-lookahead")=="1","engram-tile-lookahead requires0/1");
         options.engram_tile_lookahead=args.count("--engram-tile-lookahead")&&args.at("--engram-tile-lookahead")=="1";
-        if(options.images)options.engram_tile_lookahead=false;
         report["engram_tile_lookahead"]=options.engram_tile_lookahead;
         options.carry.max_tile_tokens=uint32_t(tile_tokens);options.carry.direct_ram_tiles=direct_budget;
         require(!args.count("--sort-expert-routing")||args.at("--sort-expert-routing")=="0"||args.at("--sort-expert-routing")=="1","sort-expert-routing requires0/1");
@@ -872,7 +870,7 @@ int wmain(int argc,wchar_t**argv){
             warm_request.reset(new llama_dsv41_sweep);
             // LLAMADECODE_ENGRAM_EARLY: the real prompt's rows start inside the
             // warmup's open, right after admission and before its first weight fetch.
-            const bool engram_early=llama_dsv41_engram_early_enabled()&&weights.engram_prefetch_host_bytes&&options.engram_tile_lookahead;
+            const bool engram_early=!options.images&&llama_dsv41_engram_early_enabled()&&weights.engram_prefetch_host_bytes&&options.engram_tile_lookahead;
             if(engram_early){
                 // The warmup pass builds its own one-token cache first: charge it.
                 warm_weights.engram_early_is_next_request=false;
@@ -909,7 +907,7 @@ int wmain(int argc,wchar_t**argv){
         if(restored){const auto&bt=restored->base.tokens;early_tail.assign(bt.end()-std::min<size_t>(bt.size(),3),bt.end());}
         // LLAMADECODE_ENGRAM_EARLY, no warm-up: the request's own open starts its
         // rows after admission, before allocate's first weight fetch.
-        const bool engram_early_cold=!warm&&llama_dsv41_engram_early_enabled()&&weights.engram_prefetch_host_bytes&&options.engram_tile_lookahead;
+        const bool engram_early_cold=!options.images&&!warm&&llama_dsv41_engram_early_enabled()&&weights.engram_prefetch_host_bytes&&options.engram_tile_lookahead;
         auto open_weights=weights;
         if(engram_early_cold){open_weights.engram_early_tokens.assign(tokens.begin(),tokens.begin()+first_sweep_tokens);open_weights.engram_early_tail=early_tail;}
         auto started=clock_type::now();const bool opened=sweep->open(open_weights,options,error,warm_request.get(),nullptr,restored?&restored->base:nullptr);report["phase_ms"]["inspect_admit_allocate"]=ms(started);success(opened,error);if(restored){restored->finish();restored.reset();}warm_request.reset();stop();

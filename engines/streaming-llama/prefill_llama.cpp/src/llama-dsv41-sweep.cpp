@@ -618,6 +618,9 @@ bool llama_dsv41_sweep::start_next_engram(const std::vector<int32_t>&tokens,cons
     if(!lock.owns_lock()){error="V4.1 sweep is already active";return false;}
     try{
         require(p->state==implementation::opened,"Early Engram start requires an opened sweep before its run");
+        // Image row masks are known by the sweep; queue their cache at run
+        // start rather than creating an unmasked speculative cache here.
+        if(p->options.images)return true;
         require(base_tail.size()<=3,"Restored Engram history uses at most three tokens");
         llama_dsv41::engram_history initial;
         if(!base_tail.empty())success(p->provider.restored_engram_history(initial,base_tail.data(),base_tail.size(),error),error);
@@ -634,6 +637,7 @@ bool llama_dsv41_sweep::start_append_engram(const std::vector<int32_t>&tokens,st
     if(!lock.owns_lock()){error="V4.1 sweep is already active";return false;}
     try{
         // Auto (the default) arms the early start only where =1 could run it.
+        if(p->options.images)return true;
         if(llama_dsv41_engram_early_auto()&&!(p->options.stateful_chunks&&p->options.engram_tile_lookahead)){
             llama_dsv41_layer_log("LLAMADECODE_ENGRAM_EARLY_DECISION at=append_tokens_arrived tokens=%zu early=0 reason=%s\n",tokens.size(),
                 p->options.stateful_chunks?"no_lookahead_worker":"not_stateful");return true;}
@@ -665,18 +669,18 @@ bool llama_dsv41_sweep::run(const std::vector<int32_t>&tokens,const cancelled&st
         const auto schedule=llama_dsv41_plan_append(p->options.pair_ffn,p->options.carry.max_tile_tokens,p->options.compute_step_tokens,p->position_offset,p->options.unaligned_append_step_tokens);
         const uint32_t compute_step=schedule.step;
         const char*engram_overlap_env=std::getenv("LLAMA_DSV41_ENGRAM_PROMPT_OVERLAP");
-        const bool engram_overlap=!p->options.images&&engram_overlap_env&&std::strcmp(engram_overlap_env,"1")==0;
+        const bool engram_overlap=(!p->options.images||p->options.engram_tile_lookahead)&&engram_overlap_env&&std::strcmp(engram_overlap_env,"1")==0;
         require(!engram_overlap||p->options.engram_tile_lookahead,"Engram prompt overlap requires the existing lookahead worker");
+        std::vector<uint8_t>text_mask;
+        if(p->options.images){
+            // The cache charges this mask and the async worker's copy before
+            // sizing its IO arena within the unchanged host admission.
+            text_mask.resize(owned.size(),1);
+            for(size_t row=0;row<owned.size();++row)
+                text_mask[row]=llama_dsv41_image_row(p->options.image_spans,p->position_offset+row)?0:1;
+        }
         auto prepare_engram=[&]{
             const auto started=std::chrono::steady_clock::now();std::string reason;
-            std::vector<uint8_t>text_mask;
-            if(p->options.images){
-                // Borrow this mask during planning/loading. The cache charges
-                // its bytes before sizing the IO arena within its admission.
-                text_mask.resize(owned.size(),1);
-                for(size_t row=0;row<owned.size();++row)
-                    text_mask[row]=llama_dsv41_image_row(p->options.image_spans,p->position_offset+row)?0:1;
-            }
             success(p->provider.prepare_engram_prompt(owned,[&]{p->check_stop(stop);return false;},reason,p->initial_engram,text_mask.empty()?nullptr:text_mask.data()),reason);
             llama_dsv41_layer_log("[dsv41-engram-prefetch-total] wall_ms=%.6f\n",
                 std::chrono::duration<double,std::milli>(std::chrono::steady_clock::now()-started).count());std::fflush(stderr);
@@ -687,7 +691,7 @@ bool llama_dsv41_sweep::run(const std::vector<int32_t>&tokens,const cancelled&st
         // 0, layer 14's for table 1 (wait_engram_table, outside the lock).
         // The early thread is joined by the table-1 wait or by invalidate.
         if(engram_overlap){
-            success(p->provider.start_engram_prompt_early(owned,p->initial_engram,error,true),error);
+            success(p->provider.start_engram_prompt_early(owned,p->initial_engram,error,true,text_mask.empty()?nullptr:text_mask.data()),error);
             llama_dsv41_layer_log("DS4PERF_ENGRAM_PROMPT_QUEUED at=sweep_start consumers=1,14 per_table_ready=1 own_ioring=1\n");
         }
         prepare_engram();
@@ -728,6 +732,7 @@ bool llama_dsv41_sweep::run(const std::vector<int32_t>&tokens,const cancelled&st
                     success(p->provider.wait_engram_table(layer==1?0:1,[&]{p->check_stop(stop);return false;},out.table_wait_ms,reason),reason);}
                 out.layer=layer;out.start=start;out.count=std::min(compute_step,uint32_t(owned.size())-start);out.history=history;
                 std::vector<uint8_t>mask(out.count,1);std::string reason;
+                if(!text_mask.empty())std::copy_n(text_mask.data()+start,out.count,mask.data());
                 p->check_stop(stop);out.rows.reserve(uint64_t(out.count)*6144);std::vector<float>part;
                 for(uint32_t offset=0;offset<out.count;offset+=4096){const auto rows=std::min(4096u,out.count-offset);
                     p->check_stop(stop);success(p->provider.engram_tile(layer==1?0:1,out.history,owned.data()+start+offset,mask.data()+offset,rows,part,reason),reason);out.rows.insert(out.rows.end(),part.begin(),part.end());}

@@ -105,12 +105,27 @@ slowdown independently of the image exclusion from YOCO shortening.
 
 The batched prompt cache now plans its row set with the exact image text
 mask, including history resets and the following three text positions.
-Image prompts retain synchronous masked planning; text-only speculative
-lookahead remains disabled for them. Cached reads use the existing parallel
-row decoder and unchanged memory admission. Text-only cache behavior and
-the image exclusion from YOCO shortening remain unchanged.
+Image prompts now use the same asynchronous loader and per-table readiness
+as text prompts. The worker retains the mask, checks it when adopting a cache,
+and applies it to tile lookahead. Both live mask copies are charged before
+sizing the IO arena. Masked loading starts at the sweep, when its exact image
+positions and restored history are known. Cached reads use the existing
+parallel row decoder and unchanged memory admission. Text-only speculative
+loading and the image exclusion from YOCO shortening remain unchanged.
 
 The native synthetic-file regression checks every masked cached row against
-the original reader's hash and file bytes, including planner block boundaries
-and restored history. A real image-prompt performance measurement is required
-before claiming that this correction restores the expected throughput.
+the original reader's hash and file bytes, including planner block boundaries,
+asynchronous table publication and restored history.
+
+Replaying the original 23,717 token IDs and six image embedding spans on the
+RTX 5090 completes native prefill in **22.501 s** and **23.276 s** across the
+overlap candidate and final build (**1,054.0** and **1,018.9 tokens/s**), versus
+**89.450 s (265.1 tokens/s)** before the correction. Engram layer waits/decode
+total **0.583 s** and **0.900 s**, versus **67.831 s**. This is native prefill timing; WebUI
+request latency also includes producer startup and other request work. The
+configured 6.25 GiB producer host budget, 4 GiB runtime floor and native
+arithmetic settings are unchanged. The receipt reports full image evaluation;
+YOCO shortening remains excluded. This measurement qualifies this replay,
+not every image or context length.
+The full **162,895,048-byte canonical state** hashes identically before and
+after this correction, including the overlap variant, for this replay.
