@@ -68,6 +68,8 @@ class Pair:
         self.connected = False
         self.token_path = Path(cfg['runtime_root']) / 'state' / 'pair.token'
         self.record_path = self.token_path.with_name('rtx-peer.json')
+        from .generation import Store
+        self.generation = Store(cfg)
 
     def request(self, route, body=None, timeout=None):
         return http_json(self.url + route, body, timeout or self.cfg['request_timeout_s'],
@@ -195,15 +197,24 @@ class Pair:
             self.close()
             raise
 
+    def decode_request(self, body):
+        """Keep every client knob and attach the WebUI's separate toolbar state.
+
+        The receiver must validate this profile; it must never interpret an
+        unsupported knob as permission to substitute greedy decoding.
+        """
+        return {**body, 'prompt_cache_key': conversation_key(body),
+                'slstack_generation': self.generation.get()}
+
     def chat(self, body):
         self.start()
-        return self.request('/v1/chat/completions', {**body, 'prompt_cache_key': conversation_key(body)})
+        return self.request('/v1/chat/completions', self.decode_request(body))
 
     def events(self, body):
         self.start()
         from .streaming import events
         yield from events(self.url + '/v1/chat/completions',
-                          {**body,'stream':True,'prompt_cache_key':conversation_key(body)},
+                          {**self.decode_request(body),'stream':True},
                           timeout=self.cfg['request_timeout_s'],
                           headers={'Authorization':'Bearer ' + self.token})
 

@@ -179,7 +179,9 @@ def yoco_keep(cfg):
     if type(keep) is not int or keep not in (0,140):
         raise ValueError('yoco_keep must be 0 or 140')
     if keep and cfg.get('serving_mode',cfg.get('serving'))!='single_engine':
-        raise ValueError('YOCO is approximate and supports only local single_engine; RTX/Mac export is disabled')
+        # The paired route uses native_broker and negotiates mode3 state v1.
+        # ComboProducer's local snapshot/restore contract is a different route.
+        raise ValueError('ComboProducer YOCO requires local single_engine; paired YOCO uses the negotiated native broker')
     return keep
 
 

@@ -4,6 +4,8 @@
     "runtime_root": "runtime/dsv41-dual-ultra-yoco",
     "host_budget_gib": 13.5,
     "min_available_gib": 4,
+    "runtime_min_free_gib": 4,
+    "producer_desktop_reserve_gib": 8,
     "native_tier": "ultra",
     "yoco_keep": 140,
     "mac": "http://MAC_HOST:8180",
@@ -15,6 +17,7 @@
     "runtime_root": "runtime/dsv41-dual-ultra-yoco",
     "backend": "ds4",
     "mac_host_budget_gib": 400,
+    "min_available_gib": 8,
     "pair_token": "SET_SHARED_PAIRING_TOKEN"
   }
 }
