@@ -2,7 +2,7 @@
 
 Stream model weights from NVMe through DirectStorage for RTX prefill, then decode locally or hand the session to a Mac. The streaming-llama engine (a llama.cpp fork), session handoff and Mac decoder integrations serve multiple model families. The combined streaming-prefill/ds4-kernel decode producer is specific to DeepSeek-V4.1 Flash. An OpenAI-compatible API and the llama.cpp web UI sit above these engines.
 
-The measurements below use a roughly 483 GiB DeepSeek-V4.1 Flash GGUF on an RTX 5090, with an optional M3 Ultra for decode. This path admits approximately 1M tokens with bounded host RAM; the two-machine session handoff has been used through Studio for months.
+The measurements below use a roughly 483 GiB DeepSeek-V4.1 Flash GGUF on an RTX 5090 in a desktop with 32 GB of system RAM, with an optional M3 Ultra for decode. This path admits approximately 1M tokens within a 9.25 GiB host-RAM budget; the two-machine session handoff has been used through Studio for months.
 
 ## Supported models
 
@@ -55,7 +55,7 @@ The 1M preset admits **999,424 tokens** with a growable bf16 context cache. The 
 
 - **Windows RTX:** RTX 50-series, compute capability 12.0; the measured configuration uses a 32 GB RTX 5090. Native builds target CUDA `120a` by default.
 - **Fast local NVMe and DirectStorage:** room for the roughly 483 GiB GGUF plus build/runtime files. Storage throughput affects inference speed.
-- **Host RAM:** enough for the 9.25 GiB stack budget, desktop reserve and other applications. Admission refuses insufficient available memory.
+- **Host RAM:** all measurements ran on a desktop with 32 GB of system RAM. The stack needs its 9.25 GiB budget plus the 8 GiB desktop reserve available; admission refuses to start otherwise.
 - **Build tools:** Python 3.12, Visual Studio C++ Build Tools, CMake, Ninja, CUDA Toolkit (tested with 13.2), and Node.js/npm (tested with Node 24). Installation needs package-network access; inference uses locally supplied weights.
 - **Optional Mac:** M3 Ultra with 512 GB unified memory, the same language-model GGUF, and network connectivity to the RTX.
 
