@@ -35,6 +35,9 @@ tensor layout, quantisation and state format must also match the selected backen
 `scripts/audit_backend_sources.py` checks source inputs, export hashes and Git's
 tracked inventory. Build instructions are in [backend setup](BACKEND_SETUP.md).
 A source audit does not establish a native build or a successful model run.
+The [October 27 offline build receipt](evidence/backend-builds-20261027.json)
+now establishes successful compilation of all 12 registered backend profiles.
+GPU correctness and model qualification remain separate from those build results.
 
 `slstack decode --config local.json --check` checks the selected decoder's local
 model and executable paths. Set `decode.backend`, `decode.model_path`, its bind
@@ -47,6 +50,10 @@ each response or cancellation, keeping the reservation lifetime separate from
 the WebUI server lifetime. Subsequent requests currently restart that producer;
 do not interpret historical warm-producer or prefix-reuse timings as measurements
 of this lifecycle. The established DSV4.1 WebUI serving path is separate.
+General decoder recipes use the stock WebUI's request-level sampler settings;
+the native live-control interceptor is not injected into those recipes. Their
+WebUI context limit comes from the selected general preset, and response metadata
+distinguishes RTX prefill/Mac decode from a Mac backend doing its own prefill.
 
 ## GLM family
 

@@ -1,0 +1,251 @@
+{
+  "schema": "backend-build-verification-v1",
+  "date": "2026-10-27",
+  "source_revision": "4fbaaa8878b341480f651f09e001e4207c5cdc08",
+  "machine": {
+    "hardware": "Mac Studio M3 Ultra",
+    "memory_gb": 512,
+    "os": "macOS 26.2",
+    "architecture": "arm64",
+    "python": "3.12.12",
+    "swift": "6.3.3",
+    "cmake": "4.4.4",
+    "zig": "0.17.0"
+  },
+  "command": "bin/slstack --config PRIVATE_CONFIG setup-backend --backend all --build-only --offline --cache-dir SOURCE_CACHE --wheelhouse WHEELS --jobs 2",
+  "scope": {
+    "isolated_backend_runtime": true,
+    "studio_checkout_used": false,
+    "model_weights_downloaded": false,
+    "model_generation_run": false,
+    "gpu_correctness_smokes_run": false,
+    "new_inference_performance_measurements": false
+  },
+  "build_command_exit_code": 0,
+  "backend_count": 12,
+  "backend_builds": [
+    {
+      "backend": "mlx-receiver",
+      "built": true,
+      "ready": false,
+      "verification_pending": true,
+      "source_snapshot_sha256": "89f9b11bd89d016bf9c3ed8cc9fb7ff52d84c7bcdd35e52c485c5ea7011a5387",
+      "artifact_count": 0,
+      "binaries": []
+    },
+    {
+      "backend": "llama-decode",
+      "built": true,
+      "ready": false,
+      "verification_pending": true,
+      "source_snapshot_sha256": "28db9c467d9e0cc60f2037eb59635f2a7535c3123810ce86d17dc0400cadfc89",
+      "artifact_count": 1,
+      "binaries": [
+        {
+          "role": "binary",
+          "file": "llama-decode-receiver",
+          "sha256": "b7e0ba65aeea8ab6066bbf6b1782b34a760123009f3caf66712ba10d4481a885"
+        }
+      ]
+    },
+    {
+      "backend": "llama-decode-upstream",
+      "built": true,
+      "ready": false,
+      "verification_pending": true,
+      "source_snapshot_sha256": "efcd742c240e6720ff7397a518e79ddb44cfaf55b33c657f585593ea13a659c6",
+      "artifact_count": 1,
+      "binaries": [
+        {
+          "role": "binary",
+          "file": "llama-upstream-decode-receiver",
+          "sha256": "78d3a86b09ce29f4f2d46f25ef8f9071bab0adb71749f6046ba093b6fe6704ae"
+        }
+      ]
+    },
+    {
+      "backend": "ds4",
+      "built": true,
+      "ready": false,
+      "verification_pending": true,
+      "source_snapshot_sha256": "de2f4e3ad3126fb63689c782bcc88a41cb12fe656908cda101426407e053a38b",
+      "artifact_count": 1,
+      "binaries": [
+        {
+          "role": "binary",
+          "file": "ds4-server",
+          "sha256": "5818a2e395ff008c43b3285ba7d9501feacb7f4d3ad5d78733645c6aff36b692"
+        }
+      ]
+    },
+    {
+      "backend": "ds4-peer",
+      "built": true,
+      "ready": false,
+      "verification_pending": true,
+      "source_snapshot_sha256": "5ef1098362c1761275e18731a34461dedc0ebb0d5806c78280ea3d15184534b9",
+      "artifact_count": 1,
+      "binaries": [
+        {
+          "role": "binary",
+          "file": "ds4-server",
+          "sha256": "13960a451532aa04e4fb4549e5707e48c333595516411a5b12448f3a5dfcf0b0"
+        }
+      ]
+    },
+    {
+      "backend": "mlx-serve",
+      "built": true,
+      "ready": false,
+      "verification_pending": true,
+      "source_snapshot_sha256": "a2c8283333fd605c68b113364f1363c5003f7fa9c364e319c1a642b7ecdf9a06",
+      "artifact_count": 23,
+      "binaries": [
+        {
+          "role": "binary",
+          "file": "mlx-serve",
+          "sha256": "42521af6cd25fd2d1f60c81736487cdbe0b0f4f7ab2696e1dc65843de96c7a95"
+        }
+      ]
+    },
+    {
+      "backend": "omlx",
+      "built": true,
+      "ready": false,
+      "verification_pending": true,
+      "source_snapshot_sha256": "c0858bc004aed19c5bd883aba3b97123431525b58da25c6b14059797e0d79a1b",
+      "artifact_count": 10,
+      "binaries": [
+        {
+          "role": "binary",
+          "file": "omlx",
+          "sha256": "1e165f8a1f6e0ac42a3e4d388b0cc0c55c9dec55b8d95d98b28cfc6c23a2e130"
+        }
+      ]
+    },
+    {
+      "backend": "mlx-lm",
+      "built": true,
+      "ready": false,
+      "verification_pending": true,
+      "source_snapshot_sha256": "89f9b11bd89d016bf9c3ed8cc9fb7ff52d84c7bcdd35e52c485c5ea7011a5387",
+      "artifact_count": 0,
+      "binaries": []
+    },
+    {
+      "backend": "mlx-vlm",
+      "built": true,
+      "ready": false,
+      "verification_pending": true,
+      "source_snapshot_sha256": "89f9b11bd89d016bf9c3ed8cc9fb7ff52d84c7bcdd35e52c485c5ea7011a5387",
+      "artifact_count": 0,
+      "binaries": []
+    },
+    {
+      "backend": "mtp-shim",
+      "built": true,
+      "ready": false,
+      "verification_pending": true,
+      "source_snapshot_sha256": "89f9b11bd89d016bf9c3ed8cc9fb7ff52d84c7bcdd35e52c485c5ea7011a5387",
+      "artifact_count": 0,
+      "binaries": []
+    },
+    {
+      "backend": "llama-server",
+      "built": true,
+      "ready": false,
+      "verification_pending": true,
+      "source_snapshot_sha256": "28db9c467d9e0cc60f2037eb59635f2a7535c3123810ce86d17dc0400cadfc89",
+      "artifact_count": 1,
+      "binaries": [
+        {
+          "role": "binary",
+          "file": "llama-server",
+          "sha256": "50619e0676aa690b550e3022c06137b634afc0c22ee69e0dc4434693c4225680"
+        }
+      ]
+    },
+    {
+      "backend": "mference",
+      "built": true,
+      "ready": false,
+      "verification_pending": true,
+      "source_snapshot_sha256": "2f55c19cf8b76d44e16a7c2250b5c6518c15afa9280fc762bae9823fdb264a6c",
+      "artifact_count": 20,
+      "binaries": [
+        {
+          "role": "binary",
+          "file": "MferenceServer",
+          "sha256": "2b7509957df68012f70108c48a50d837fb32e304fb1518bf0cac1206eaa8d75c"
+        },
+        {
+          "role": "decode_service",
+          "file": "MferenceDecodeService",
+          "sha256": "6db3078ff069d5858c63bea3f6d2bc8a04fd1195166511018466f890ea369e31"
+        },
+        {
+          "role": "repacker",
+          "file": "MferenceRepack",
+          "sha256": "40534fce1ee6e70658afcae8935153c182b3f3e7a5618b4269f726a11dc2c59d"
+        }
+      ]
+    }
+  ],
+  "read_only_checks": {
+    "all_build_hashes_match": true,
+    "ready": false
+  },
+  "native_abi_checks": [
+    {
+      "profile": "decode-venv",
+      "core_abi": [
+        "v21_system_libcpp_abi1"
+      ],
+      "extensions": [
+        {
+          "module": "mlx_vlm/custom_kernels/glm_moe_dsa/_ext.cpython-312-darwin.so",
+          "abi": [
+            "v21_system_libcpp_abi1"
+          ],
+          "matches_core": true
+        }
+      ]
+    },
+    {
+      "profile": "omlx-venv",
+      "core_abi": [
+        "nanobind_system_libcpp_abi1_a1_v22"
+      ],
+      "extensions": [
+        {
+          "module": "omlx/custom_kernels/attention/_ext.cpython-312-darwin.so",
+          "abi": [
+            "nanobind_system_libcpp_abi1_a1_v22"
+          ],
+          "matches_core": true
+        },
+        {
+          "module": "omlx/custom_kernels/sparse_index/_ext.cpython-312-darwin.so",
+          "abi": [
+            "nanobind_system_libcpp_abi1_a1_v22"
+          ],
+          "matches_core": true
+        },
+        {
+          "module": "omlx/custom_kernels/quant_matmul/_ext.cpython-312-darwin.so",
+          "abi": [
+            "nanobind_system_libcpp_abi1_a1_v22"
+          ],
+          "matches_core": true
+        },
+        {
+          "module": "omlx/custom_kernels/lowbit/_ext.cpython-312-darwin.so",
+          "abi": [
+            "nanobind_system_libcpp_abi1_a1_v22"
+          ],
+          "matches_core": true
+        }
+      ]
+    }
+  ]
+}
