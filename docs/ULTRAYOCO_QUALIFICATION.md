@@ -94,3 +94,23 @@ Images, verify, all-position scoring, decode and append-via-decode retain
 full evaluation. Transport/export, persistence and rewind remain refused
 while YOCO is enabled; edits re-prefill. No RTX-to-Mac or million-token
 quality qualification is claimed.
+
+## Image-prompt Engram read correction (2026-10-27)
+
+A 23,717-token prompt containing six image spans spent 67.831 seconds in
+Engram reads at layers 1 and 14, out of 89.450 seconds of native prefill.
+The image path disabled the admitted whole-prompt cache and consequently
+issued individual unbuffered row reads. This accounts for most of the
+slowdown independently of the image exclusion from YOCO shortening.
+
+The batched prompt cache now plans its row set with the exact image text
+mask, including history resets and the following three text positions.
+Image prompts retain synchronous masked planning; text-only speculative
+lookahead remains disabled for them. Cached reads use the existing parallel
+row decoder and unchanged memory admission. Text-only cache behavior and
+the image exclusion from YOCO shortening remain unchanged.
+
+The native synthetic-file regression checks every masked cached row against
+the original reader's hash and file bytes, including planner block boundaries
+and restored history. A real image-prompt performance measurement is required
+before claiming that this correction restores the expected throughput.

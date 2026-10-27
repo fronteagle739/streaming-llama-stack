@@ -25,7 +25,9 @@ public:
     ~llama_dsv41_engram_prompt_cache();
     llama_dsv41_engram_prompt_cache(const llama_dsv41_engram_prompt_cache&)=delete;
     llama_dsv41_engram_prompt_cache&operator=(const llama_dsv41_engram_prompt_cache&)=delete;
-    void prepare(const llama_dsv41::engram_layout&,const int32_t*,uint32_t,const std::array<uint64_t,2>&,uint64_t,llama_dsv41::engram_history initial={});
+    // Optional borrowed text mask: image positions reset the hash history exactly
+    // as in the synchronous reader. No mask retains the text-only row set.
+    void prepare(const llama_dsv41::engram_layout&,const int32_t*,uint32_t,const std::array<uint64_t,2>&,uint64_t,llama_dsv41::engram_history initial={},const uint8_t* text_mask=nullptr);
     uint64_t budget()const;
     void load(const wchar_t*,void *verified_file,uint64_t,const std::function<bool()>&);
     bool read(uint32_t,uint64_t,void*,size_t)const;
@@ -38,7 +40,7 @@ public:
     // (planner extents, batched submits, table 0 published before table 1).
     // prior: the provider's last completed cache; its rows are copied, not read.
     void prepare_early(const llama_dsv41::engram_layout&,const int32_t*,uint32_t,const std::array<uint64_t,2>&,uint64_t,
-                       llama_dsv41::engram_history,std::shared_ptr<const llama_dsv41_engram_prompt_cache> prior);
+                       llama_dsv41::engram_history,std::shared_ptr<const llama_dsv41_engram_prompt_cache> prior,const uint8_t* text_mask=nullptr);
     // Requests the early loader would issue for the prepared rows (rows held by
     // the row cache, when set, are excluded; prior-cache hits are not).
     uint64_t planned_requests()const;

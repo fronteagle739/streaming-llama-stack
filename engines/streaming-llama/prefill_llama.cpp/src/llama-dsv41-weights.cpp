@@ -763,12 +763,15 @@ bool llama_dsv41_weight_provider::start_engram_append(const std::vector<int32_t>
     }
     p->launch_early(tokens,initial,p->options.engram_prefetch_host_bytes-current,p->engram_prompt,"append_tokens_arrived",gap_s);
 },error);}
-bool llama_dsv41_weight_provider::prepare_engram_prompt(const std::vector<int32_t>&tokens,const std::function<bool()>&stop,std::string&error,llama_dsv41::engram_history initial){return p->guard([&]{
+bool llama_dsv41_weight_provider::prepare_engram_prompt(const std::vector<int32_t>&tokens,const std::function<bool()>&stop,std::string&error,llama_dsv41::engram_history initial,const uint8_t* text_mask){return p->guard([&]{
     if(!p->options.engram_prefetch_host_bytes)return;
     const char*overlap=std::getenv("LLAMA_DSV41_ENGRAM_PROMPT_OVERLAP");
     const bool during_layer_zero=overlap&&std::strcmp(overlap,"1")==0&&p->leased&&p->next==1;
     require(p->allocated&&((!p->leased&&p->next==0)||during_layer_zero)&&!p->engram_prompt&&tokens.size()==p->options.engram_prefetch_tokens,
         "Engram whole-prompt cache requires its initial or explicitly overlapped layer-zero lease");p->identity();
+    // Speculative caches are text-only. A masked prompt must build its own
+    // exact row set, including the three text positions after each image.
+    require(!text_mask||!p->early,"Masked Engram prompt cannot adopt a text-only speculative cache");
     if(p->early&&p->early->tokens==tokens){
         require(!p->early->adopted,"Early Engram prompt cache was adopted twice");
         if(overlap&&std::strcmp(overlap,"1")==0){
@@ -794,7 +797,7 @@ bool llama_dsv41_weight_provider::prepare_engram_prompt(const std::vector<int32_
     // Every Engram load runs on the early loader (planner extents, row cache).
     p->engram_prompt.reset(new llama_dsv41_engram_prompt_cache);
     if(p->row_cache)p->engram_prompt->set_row_cache(p->row_cache);
-    p->engram_prompt->prepare_early(p->engram,tokens.data(),uint32_t(tokens.size()),p->engram_offsets,p->options.engram_prefetch_host_bytes,initial,nullptr);
+    p->engram_prompt->prepare_early(p->engram,tokens.data(),uint32_t(tokens.size()),p->engram_offsets,p->options.engram_prefetch_host_bytes,initial,nullptr,text_mask);
     require(p->engram_prompt->budget()<=p->options.engram_prefetch_host_bytes,"Prepared Engram cache exceeds provider admission");
     llama_dsv41_layer_log("LLAMADECODE_ENGRAM_LOADER at=prepare_sync tokens=%zu loader=early row_cache=%d\n",tokens.size(),int(bool(p->row_cache)));
     p->engram_prompt->load_early(p->path.c_str(),p->file,p->options.verified_file_bytes,stop);p->identity();

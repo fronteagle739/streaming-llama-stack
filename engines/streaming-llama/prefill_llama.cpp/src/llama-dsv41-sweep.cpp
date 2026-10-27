@@ -669,7 +669,15 @@ bool llama_dsv41_sweep::run(const std::vector<int32_t>&tokens,const cancelled&st
         require(!engram_overlap||p->options.engram_tile_lookahead,"Engram prompt overlap requires the existing lookahead worker");
         auto prepare_engram=[&]{
             const auto started=std::chrono::steady_clock::now();std::string reason;
-            success(p->provider.prepare_engram_prompt(owned,[&]{p->check_stop(stop);return false;},reason,p->initial_engram),reason);
+            std::vector<uint8_t>text_mask;
+            if(p->options.images){
+                // Borrow this mask during planning/loading. The cache charges
+                // its bytes before sizing the IO arena within its admission.
+                text_mask.resize(owned.size(),1);
+                for(size_t row=0;row<owned.size();++row)
+                    text_mask[row]=llama_dsv41_image_row(p->options.image_spans,p->position_offset+row)?0:1;
+            }
+            success(p->provider.prepare_engram_prompt(owned,[&]{p->check_stop(stop);return false;},reason,p->initial_engram,text_mask.empty()?nullptr:text_mask.data()),reason);
             llama_dsv41_layer_log("[dsv41-engram-prefetch-total] wall_ms=%.6f\n",
                 std::chrono::duration<double,std::milli>(std::chrono::steady_clock::now()-started).count());std::fflush(stderr);
         };

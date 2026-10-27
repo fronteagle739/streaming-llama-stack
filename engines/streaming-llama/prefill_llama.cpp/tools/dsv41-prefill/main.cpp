@@ -663,9 +663,9 @@ int wmain(int argc,wchar_t**argv){
         if(args.count("--vision-spans-file")){
             options.image_spans=studio_vision_spans(args.at("--vision-spans-file"),options.context);options.images=true;
             report["vision"]={{"images",options.image_spans.size()},{"embedding_width",5120},{"native_image_token",129264},{"image_router_bias",true},{"seed_host_tile_rows",128}};
-            // Image rows reset Engram history; its bounded masked reader is
-            // used instead of the text-only speculative prompt-row cache.
-            weights.engram_prefetch_host_bytes=0;weights.engram_prefetch_tokens=0;
+            // Image rows reset Engram history. The prompt cache plans with
+            // the same mask as the exact reader; text-only speculation stays
+            // disabled below, but batched row IO and parallel decode remain.
         }
         if(yoco_keep){options.yoco_logical_begin=base_tokens;options.yoco_logical_end=base_tokens+uint32_t(tokens.size());}
         options.admitted_cache_bytes=number("--cache-bytes");options.admitted_graph_bytes=number("--graph-bytes");
