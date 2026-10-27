@@ -6,6 +6,7 @@ packages; matching nanobind headers live in a unique build directory.
 import argparse
 import hashlib
 import importlib.util
+from importlib import metadata
 import json
 from pathlib import Path
 import platform
@@ -23,6 +24,16 @@ def abi_tag(path):
     return tags.pop().decode()
 
 
+def installed_mlx():
+    distribution=metadata.distribution('mlx')
+    cores=[Path(distribution.locate_file(f)) for f in distribution.files or []
+           if str(f).startswith('mlx/core.') and str(f).endswith('.so')]
+    if len(cores)!=1:raise RuntimeError('Cannot identify the installed MLX core binary')
+    cmake=cores[0].parent/'share/cmake/MLX'
+    if not (cmake/'MLXConfig.cmake').is_file():raise RuntimeError('Installed MLX Metal build inputs are missing')
+    return cores[0],cmake
+
+
 def main():
     parser = argparse.ArgumentParser(description=__doc__)
     parser.add_argument('--build-dir', type=Path)
@@ -34,12 +45,12 @@ def main():
     args = parser.parse_args()
     if platform.system() != 'Darwin':
         raise RuntimeError('Build requires macOS and the Metal compiler toolchain')
-    import mlx.core as mx
+    mlx_binary,mlx_cmake=installed_mlx()
     src = Path(__file__).resolve().parent
     build = (args.build_dir or Path(tempfile.mkdtemp(prefix='glm-native-'))).resolve()
     build.mkdir(parents=True, exist_ok=True)
     stage = build/'stage'; stage.mkdir(exist_ok=True)
-    tag = abi_tag(mx.__file__)
+    tag = abi_tag(mlx_binary)
     version = {'19':'2.12.0', '20':'2.13.0', '21':'2.15.0'}.get(tag.split('_')[0][1:])
     if version is None:
         raise RuntimeError(f'Unknown MLX nanobind ABI {tag}; select matching headers explicitly')
@@ -62,6 +73,7 @@ def main():
     subprocess.run([cmake,'-S',str(src/'csrc'),'-B',str(build/'cmake'),
                     f'-DPython_EXECUTABLE={sys.executable}',f'-Dnanobind_ROOT={nb_root}',
                     f'-Dnanobind_DIR={nb_root}',
+                    f'-DMLX_ROOT={mlx_cmake}',
                     '-DCMAKE_BUILD_TYPE=Release',f'-DCMAKE_LIBRARY_OUTPUT_DIRECTORY={stage}'],check=True)
     subprocess.run([cmake,'--build',str(build/'cmake'),'-j',str(args.jobs)],check=True)
     ext=next(stage.glob('_ext*.so'))
@@ -70,7 +82,7 @@ def main():
     if not args.skip_smoke:subprocess.run([sys.executable,str(src/'smoke.py'),str(stage)],check=True)
     artifacts=[ext,stage/'libomlx_glm_kernel_ops.dylib',stage/'omlx_glm_kernels.metallib',
                src/'fast.py',src/'smoke.py']
-    manifest=dict(python=sys.executable,mlx_binary=mx.__file__,mlx_abi=tag,nanobind=version,smoke_verified=not args.skip_smoke,
+    manifest=dict(python=sys.executable,mlx_binary=str(mlx_binary),mlx_abi=tag,nanobind=version,smoke_verified=not args.skip_smoke,
                   artifacts={p.name:hashlib.sha256(p.read_bytes()).hexdigest() for p in artifacts})
     (stage/'native-build.json').write_text(json.dumps(manifest,indent=2))
     if args.install_dir:

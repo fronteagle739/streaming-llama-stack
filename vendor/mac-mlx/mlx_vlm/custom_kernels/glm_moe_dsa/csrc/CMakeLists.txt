@@ -34,10 +34,12 @@ if(NOT nanobind_ROOT)
 endif()
 find_package(nanobind CONFIG REQUIRED)
 
-execute_process(
-  COMMAND "${Python_EXECUTABLE}" -m mlx --cmake-dir
-  OUTPUT_STRIP_TRAILING_WHITESPACE
-  OUTPUT_VARIABLE MLX_ROOT)
+if(NOT MLX_ROOT)
+  execute_process(
+    COMMAND "${Python_EXECUTABLE}" -m mlx --cmake-dir
+    OUTPUT_STRIP_TRAILING_WHITESPACE
+    OUTPUT_VARIABLE MLX_ROOT)
+endif()
 find_package(MLX CONFIG REQUIRED)
 list(GET MLX_INCLUDE_DIRS 0 OMLX_GLM_MLX_INCLUDE_DIR)
 
