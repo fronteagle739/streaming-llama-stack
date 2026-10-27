@@ -27,9 +27,10 @@ from .progress import Window, activity, readiness_seconds
 def budget(cfg, maximum=400):
     import psutil
     free = psutil.virtual_memory().available / (1 << 30)
-    floor = max(2, cfg.get('min_available_gib', 2))
-    requested = cfg.get('mac_host_budget_gib') or min(maximum, (free - floor) * .9)
-    if requested <= 0 or requested + floor > free:
+    floor = max(4, cfg.get('min_available_gib', 4))
+    reserve = max(8, floor)
+    requested = cfg.get('mac_host_budget_gib') or min(maximum, (free - reserve) * .9)
+    if requested <= 0 or requested + reserve > free:
         raise MemoryError('Mac physical memory budget cannot be admitted')
     return {**cfg, 'host_budget_gib': requested, 'min_available_gib': floor}
 
@@ -299,6 +300,9 @@ class Receiver:
     def chat(self, body, *, qualification=None):
         if qualification is None and self.backend == 'ds4' and (not self.peer or self.peer.get('status') != 'qualified'):
             raise ValueError('Complete the real native/pair parity handshake first')
+        if self.backend == 'ds4':
+            from .paired_generation import decode_request
+            body = decode_request(body)
         native = self.backend == 'ds4' and qualification != 'native'
         self.ready(native)
         body = dict(body, stream=False)
@@ -331,6 +335,8 @@ class Receiver:
     def events(self, body):
         if self.backend != 'ds4' or not self.peer or self.peer.get('status') != 'qualified':
             raise ValueError('Complete native pairing before streaming')
+        from .paired_generation import decode_request
+        body = decode_request(body)
         self.ready(True)
         from .pairing import conversation_key
         from .streaming import events

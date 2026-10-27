@@ -17,6 +17,11 @@ def load(path=None, overrides=None):
     if cfg.get('mac'):
         from .pairing import endpoint
         cfg['mac'] = endpoint(cfg['mac'])
+    keep=cfg.get('yoco_keep',0)
+    if type(keep) is not int or keep not in (0,140):
+        raise ValueError('yoco_keep must be 0 or 140')
+    if keep and not cfg.get('mac') and cfg.get('serving','single_engine')!='single_engine':
+        raise ValueError('YOCO needs single_engine or an explicitly paired Mac receiver')
     if cfg.get('native_tier', 'accurate') not in ('accurate', 'fast', 'ultra', 'hyper'):
         raise ValueError('mode must be accurate, fast, ultra or hyper')
     if cfg.get('serving', 'single_engine') not in ('single_engine', 'native'):

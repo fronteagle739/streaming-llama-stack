@@ -17,6 +17,25 @@ class YocoTests(unittest.TestCase):
         self.assertEqual(yoco_keep(cfg),0)
         self.assertNotIn('--yoco-keep',launch.resolved(cfg)['producer_flags'])
 
+    def test_config_accepts_explicit_mac_route_and_refuses_unpaired_native(self):
+        from slstack.config import load
+        cfg=load(overrides=dict(gpu_uuid='GPU-test',mac='http://example.test:8180',yoco_keep=140,serving='native'))
+        self.assertEqual(cfg['yoco_keep'],140)
+        with self.assertRaisesRegex(ValueError,'explicitly paired'):
+            load(overrides=dict(gpu_uuid='GPU-test',yoco_keep=140,serving='native'))
+
+    def test_config_rejects_malformed_keep_before_launch(self):
+        from slstack.config import load
+        for keep in (True,'140',139,141):
+            with self.subTest(keep=keep),self.assertRaisesRegex(ValueError,'0 or 140'):
+                load(overrides=dict(gpu_uuid='GPU-test',yoco_keep=keep))
+        # CLI None means "no override"; explicit JSON null is malformed.
+        import tempfile
+        config=Path(tempfile.mkdtemp())/'null.local.json'
+        config.write_text('{"yoco_keep":null}')
+        with self.assertRaisesRegex(ValueError,'0 or 140'):
+            load(config,overrides=dict(gpu_uuid='GPU-test'))
+
     def test_both_launch_modes_keep_the_flag_and_budgets(self):
         for preset in ('262k','1m'):
             cfg=launch.overlay(preset,yoco_keep=140)
