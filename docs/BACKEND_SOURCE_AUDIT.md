@@ -51,7 +51,7 @@ the WebUI server lifetime. Subsequent requests currently restart that producer;
 do not interpret historical warm-producer or prefix-reuse timings as measurements
 of this lifecycle. The established DSV4.1 WebUI serving path is separate.
 General decoder recipes use the stock WebUI's request-level sampler settings;
-the native live-control interceptor is not injected into those recipes. Their
+native live-control overrides are disabled for those recipes. Their
 WebUI context limit comes from the selected general preset, and response metadata
 distinguishes RTX prefill/Mac decode from a Mac backend doing its own prefill.
 
