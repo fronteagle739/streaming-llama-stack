@@ -19,7 +19,7 @@ def media_schema(kind):
              'guidance': {'type': 'number', 'minimum': 0, 'maximum': 30, 'default': 4},
              'seed': {'type': 'integer', 'minimum': 0, 'maximum': 2147483647, 'default': 42}}
     props['loras']={'type':'array','maxItems':8,'default':[],
-        'description':'Apply only to this generation. Use names or IDs from list_loras; omit for no LoRAs.',
+        'description':'Apply only to this generation. Reuse known compatible LoRA names/IDs; list_loras only when discovering an unknown adapter. Omit for no LoRAs.',
         'items':{'type':'object','properties':{'name':{'type':'string','minLength':1,'maxLength':256},
                    'strength':{'type':'number','minimum':-4,'maximum':4,'default':1}},'required':['name'],'additionalProperties':False}}
     if kind == 'video':
@@ -89,12 +89,11 @@ class Tools:
         for name, schema in self.schemas.items():
             if not self.preferences.enabled(name):continue
             description = descriptions.get(name)
-            if name == 'list_media_models':description = 'List the supported image/video models discovered in the selected ComfyUI folder. Choose a returned model ID when generating media.'
-            if name == 'list_loras':description = 'List discovered LoRA names/IDs and the compatible model IDs/names for each. Optional model filters for one image/video model; use kind=video for a video model. Unmatched adapters include an explanation. Attach only deliberately requested LoRAs to an individual generation, with a strength for each.'
+            if name == 'list_media_models':description = 'Discover supported image/video models when their IDs are not already known. List once per conversation and reuse returned IDs for later generations. Refresh only after model folders/settings change, a model becomes unavailable, or the user requests a refresh. Listing is not required to generate with the selected default.'
+            if name == 'list_loras':description = 'Discover LoRA names/IDs and compatible model IDs/names only when choosing an unknown adapter. Reuse previously listed names and compatibility throughout this conversation; do not relist before each generation. Refresh only after adapter folders/settings change, a requested adapter is unavailable, or the user requests a refresh. Filter by model to avoid unrelated adapters; use kind=video for video models. Attach only deliberately requested LoRAs to an individual generation, with a strength for each.'
             if description is None:
                 kind = name.removeprefix('generate_')
-                description = f'Generate {kind} with a supported Studio model in {self.cfg[kind + "_mode"]} mode. Call list_media_models to select a model or omit model for the default. Media is displayed inline automatically; confirm briefly without file paths or job receipts. Only one GPU job runs at a time. Backend may reject unsupported model settings. Settings: '
-                description += '; '.join(f'{key}: {json.dumps(value)}' for key, value in schema['properties'].items())
+                description = f'Generate {kind} with a supported Studio model in {self.cfg[kind + "_mode"]} mode. Reuse known model/LoRA IDs from this conversation; do not list models or LoRAs before every generation. Omit model for the selected default. Discover only unknown choices and refresh only after relevant settings change, an unavailable-model/adapter error, or an explicit refresh request. Media is displayed inline automatically; confirm briefly without file paths or job receipts. Only one GPU job runs at a time. Backend may reject unsupported model settings.'
                 if kind=='video':description += ' For H3, supply its labelled audiovisual caption: integrated_multimodal_description with [Shot 1], overall_soundscape, and non_diegetic_music (N/A if none). Preserve requested dialogue and sounds. Omit num_frames for the selected model default; H3 uses 121 frames at 24 fps.'
             rows.append({'name': name, 'description': description, 'inputSchema': schema})
         return rows

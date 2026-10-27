@@ -189,6 +189,12 @@ class HttpTests(unittest.TestCase):
         self.assertEqual(''.join(c['choices'][0]['delta'].get('content', '') for c in rows if c['choices']), 'Hey')
         self.assertEqual([c['choices'][0]['finish_reason'] for c in rows if c['choices']][-1], 'stop')
         self.assertEqual(rows[-1]['usage']['completion_tokens'], 3)
+        live = [row['timings'] for row in rows if 'timings' in row and
+                not any(choice.get('finish_reason') for choice in row['choices'])]
+        self.assertTrue(live)
+        self.assertGreater(live[0]['prompt_n'] + live[0]['cache_n'], 0)
+        self.assertEqual(live[0]['predicted_n'], 0)
+        self.assertEqual(max(row['predicted_n'] for row in live), 3)
         self.assertEqual(self.h.launched[0].qualities, [0.35])
         with self.assertRaises(urllib.error.HTTPError) as refused:self.call('/v1/chat/completions', dict(model='m'))
         self.assertEqual(refused.exception.code, 400)

@@ -34,6 +34,7 @@ export interface ApiErrorResponse {
 export interface ApiChatMessageData {
 	role: ChatRole;
 	content: string | ApiChatMessageContentPart[];
+	reasoning_content?: string;
 	timestamp?: number;
 }
 

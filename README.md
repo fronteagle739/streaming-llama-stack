@@ -67,6 +67,13 @@ Media uses the existing Studio implementations in isolated model-family environm
 
 Image/video tool activity appears in collapsible chat cards with arguments, results and failures. Media generation has a step counter and seconds per iteration; completed images appear before the model continues and remain in vision context on later turns. Tool conversations have no fixed limit on the number of tool rounds.
 
+Tool guidance asks the model to discover models and LoRAs once per conversation,
+reuse known compatible choices, and refresh after relevant settings changes,
+unavailable choices or an explicit refresh request. The WebUI retains assistant
+reasoning in follow-up requests so the single engine can reuse its live prefix.
+Context statistics update while decoding and show fractional percentages for
+large context windows.
+
 The [media setup verification](docs/MEDIA_SETUP_VERIFICATION.md) records the isolated installation checks and the image families exercised through the real backend.
 
 In WebUI Settings → Stack, each media model has one loading toggle: **Streamed** reads weights from storage; **Resident** loads them into GPU memory during generation. The choice is saved per model and applies to both image and video uses of that model. Changes affect the next generation, so Anima can use resident loading while H3 stays streamed.
@@ -104,6 +111,10 @@ WebUI two-turn check. Images, verify, all-position scoring,
 decode and append-via-decode use full evaluation. Remote session export,
 persistence and rewind are refused while enabled; edits re-prefill locally.
 Long live appends re-prefill as one logical call. Shipping RAM budgets remain.
+
+An image-containing conversation uses full evaluation for its entire prefill,
+even with `yoco_keep=140`; it does not receive the text-only YOCO timing gains.
+This includes later requests while those images remain in the conversation.
 
 ## Portable configuration
 

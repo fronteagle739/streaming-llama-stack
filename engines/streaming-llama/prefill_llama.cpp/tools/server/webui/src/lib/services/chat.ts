@@ -116,7 +116,10 @@ export class ChatService {
 		const requestBody: ApiChatCompletionRequest = {
 			messages: normalizedMessages.map((msg: ApiChatMessageData) => ({
 				role: msg.role,
-				content: msg.content
+				content: msg.content,
+				...(msg.role === 'assistant' && msg.reasoning_content !== undefined
+					? { reasoning_content: msg.reasoning_content }
+					: {})
 			})),
 			stream,
 			return_progress: stream ? true : undefined
@@ -585,7 +588,10 @@ export class ChatService {
 		if (!message.extra || message.extra.length === 0) {
 			return {
 				role: message.role as 'user' | 'assistant' | 'system',
-				content: message.content
+				content: message.content,
+				...(message.role === 'assistant' && message.thinking
+					? { reasoning_content: message.thinking }
+					: {})
 			};
 		}
 
@@ -673,7 +679,10 @@ export class ChatService {
 
 		return {
 			role: message.role as 'user' | 'assistant' | 'system',
-			content: contentParts
+			content: contentParts,
+			...(message.role === 'assistant' && message.thinking
+				? { reasoning_content: message.thinking }
+				: {})
 		};
 	}
 
