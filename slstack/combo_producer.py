@@ -185,7 +185,7 @@ def yoco_keep(cfg):
     return keep
 
 
-def prefill_arguments(cfg, count, available, *, export_state=False):
+def prefill_arguments(cfg, count, available, *, export_state=False, techniques=None):
     """One arithmetic/storage/fold plan for single-engine and paired prefill.
 
     Mode3 export additionally captures the 7.5MiB DSpark ring required by the
@@ -196,7 +196,7 @@ def prefill_arguments(cfg, count, available, *, export_state=False):
                            producer_prefill_sweep_tokens=49152,
                            producer_prefill_fold_cap_tokens=61440).items():
         selected.setdefault(key, value)
-    arguments = dict(profile(cfg.get('producer_profile', 'ultra'))['arguments'])
+    arguments = dict(profile(cfg.get('producer_profile', 'ultra'), techniques if techniques is not None else cfg.get('native_techniques'))['arguments'])
     plan = prefill_plan(selected, count, available)
     arguments['--prefill-chunk-tokens'] = str(plan['capacity'])
     arguments['--job-host-bytes'] = str(plan['host_bytes'])
@@ -212,6 +212,19 @@ def prefill_arguments(cfg, count, available, *, export_state=False):
                       '--compressed-cache-bf16': '1' if precision == 'bf16' else '0'})
     if precision != 'f32' or growable:
         arguments.update({'--ctx-cache-precision': precision, '--ctx-cache-growable': str(int(growable))})
+    if growable:
+        # Same eight owner tensors as llama-dsv41-ctx-cache-plan.h. The
+        # qualified RTX VMM granularity is 2 MiB. Its padding makes the exact
+        # mode3 1,000,001-position window need 12 KiB more than the old bill.
+        # Reassign that padding from graph headroom; keep the device cap fixed.
+        granularity=2<<20;context=int(cfg['context']);element=2 if precision=='bf16' else 4
+        fixed=40*128*512*4+3*2*512*4
+        mapped=sum(-(-(((context+1)//2 if owner<3 else context)*width*element)//granularity)*granularity
+                   for owner in range(4) for width in (512,128))
+        extra=max(0,fixed+mapped-int(arguments['--cache-bytes']))
+        arguments['--cache-bytes']=str(int(arguments['--cache-bytes'])+extra)
+        arguments['--graph-bytes']=str(int(arguments['--graph-bytes'])-extra)
+        if int(arguments['--graph-bytes'])<=0:raise MemoryError('Context cache leaves no admitted graph budget')
     if cfg.get('producer_fixed_direct_open', True) and arguments.get('--fixed-resident-plan') != '1':
         arguments.update({'--warmup-one-token': '0', '--fixed-direct-open': '1'})
     keep = cfg.get('yoco_keep', 0)

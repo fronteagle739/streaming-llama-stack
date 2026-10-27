@@ -31,14 +31,14 @@ Existing measurements on the Flash 1017 Q4 model; no new benchmark runs. Prefill
 | Single engine, bias off / Max speed | 43,327 | 5.97 / 12.65 decode tok/s overall | RTX 5090, NVMe |
 | Single engine, bias off, 999,424-token window | 237,703 | Correct long-document recall; 254.326 s native prefill; 5.184 decode tok/s over 52 tokens | RTX 5090, NVMe |
 | RTX prefill → Mac decode, measured before YOCO (plain ULTRA prefill) | 184,432 | **173.252 s** RTX compute + **7.662 s** transfer/import; **31.494 decode tok/s** | RTX 5090 → M3 Ultra, 512 GB |
-| RTX prefill → Mac decode, YOCO140 + uploaded image | 198,287 | **137.735 s** RTX compute + **10.850 s** transfer/import; **30.755 decode tok/s**; **1,058.1 WebUI prefill tok/s** | RTX 5090 → M3 Ultra, 512 GB |
+| RTX prefill → Mac decode, YOCO140 + uploaded image | 198,287 | **98.771 s** RTX compute + **5.657 s** transfer/import; **30.982 decode tok/s**; **1,669.6 WebUI prefill tok/s** | RTX 5090 → M3 Ultra, 512 GB |
 | Mac-only ds4, first 100 decoded tokens | ≈9K / ≈24K | 30.7–31.2 / 31.26–31.47 decode tok/s | M3 Ultra, 512 GB |
 | Native quality/speed dial, 3K-token story / C++ runs | Five routing settings | 5.8→14.2 / 5.0→13.3 decode tok/s | RTX 5090, NVMe |
 | Single-engine host budget | 262,144 / 999,424 configured | Producer maximum **7.75 GiB**; controller + producer **9.25 GiB** | RTX 5090, bounded host RAM |
 
 The 1M preset admits **999,424 tokens** with a growable bf16 context cache. The long recall above used 237,703 prompt tokens; it is not a full million-token prompt measurement. The paired long request took 229.128 s through prefill and 232.208 s through decode; RTX compute and transfer omit other startup and request work. Faster routing changes expert selection and can reduce answer quality.
 
-The controlled 49,787-token image comparison measured **1,687.7 vs 1,317.2 prefill tok/s** on the single RTX, and **732.5 vs 667.0** paired, with YOCO140 vs full evaluation. [Phase breakdown and browser evidence](docs/YOCO_PAIRED_QUALIFICATION.md).
+The controlled 49,787-token image comparison measured **1,639.9 vs 1,304.3 prefill tok/s** on the single RTX, and **1,476.7 vs 1,196.6** paired, with YOCO140 vs full evaluation. [Phase breakdown and browser evidence](docs/YOCO_PAIRED_QUALIFICATION.md).
 
 ## How it works
 
@@ -48,7 +48,7 @@ The controlled 49,787-token image comparison measured **1,687.7 vs 1,317.2 prefi
 
 **YOCO is approximate and opt-in.** It follows DeepSeek’s [DeepInfer YOCO prefill truncation](https://github.com/deepseek-ai/DeepInfer/blob/553741557a57df44a46fb3ab72b6aafeaf945337/README.md), with keep=140; TensorSharp is a secondary reference. Our streaming variant skips the weight reads and evaluation of layers 21–39 on non-final sweeps. Layer 20 runs in full; the final sweep evaluates the decoder suffix’s last 140 positions. It changes outputs. Image scheduling, numerical KL/recall, and the real paired image/long-recall WebUI gate pass. See [paired qualification](docs/YOCO_PAIRED_QUALIFICATION.md), [YOCO measurements and quality](docs/ULTRAYOCO_QUALIFICATION.md) and [state transfer](docs/STACK_MEDIA_AND_STATE.md).
 
-**Two machines share a live session.** The RTX sends initial or incremental KV/native state to the Mac, which decodes and sends state updates back. Short follow-ups can stay on the Mac; longer additions use RTX prefill. Pairing validates model, renderer and engine identities. Negotiated YOCO state v1 passes the live 105K recall and 198K image gate, with about 30.8 Mac decode tok/s. Short initial prompts and small appends use Studio’s 11,776-token Mac-local crossover. See [paired operation](docs/TWO_MACHINE.md).
+**Two machines share a live session.** The RTX sends initial or incremental KV/native state to the Mac, which decodes and sends state updates back. Short follow-ups can stay on the Mac; longer additions use RTX prefill. Pairing validates model, renderer and engine identities. Negotiated YOCO state v1 passes the live 105K recall and 198K image gate, with about 31.0 Mac decode tok/s. Short initial prompts and small appends use Studio’s 11,776-token Mac-local crossover. See [paired operation](docs/TWO_MACHINE.md).
 
 **The model can choose its quality/speed setting.** Cache-affinity routing favors resident experts at faster settings. The UI slider, API and MCP tools expose Max quality, Balanced, Fast, Faster and Max speed, independently for reasoning, tool calls, answers and code. Use the lower settings for precise code; the fastest measured settings introduced code errors. [Live controls](docs/LIVE_GENERATION.md)
 

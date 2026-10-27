@@ -60,3 +60,22 @@ def test_broker_reads_actual_progress_before_cold_producer_ready():
     assert p['elapsed_s']>=5
     owner.loading_process.diagnostic+=b'[dsv41-sweep] layer=39 complete\n[dsv41-sweep] layer=0 begin tokens=49152\n[dsv41-sweep] layer=20 complete\n'
     assert owner.prefill_progress()['tokens_done']>p['tokens_done']
+
+
+def test_exact_mode3_bf16_window_includes_vmm_padding_without_raising_device_cap():
+    from slstack.native_profiles import profile
+    cfg={**CFG,'ctx_cache_precision':'bf16'}
+    args,_=prefill_arguments(cfg,49787,24<<30,export_state=True)
+    old=profile('ultra')['arguments']
+    assert int(args['--cache-bytes'])==3225432064
+    assert int(args['--cache-bytes'])-int(old['--cache-bytes'])==12288
+    assert int(old['--graph-bytes'])-int(args['--graph-bytes'])==12288
+    assert args['--job-device-bytes']==old['--job-device-bytes']
+
+
+def test_custom_prefill_techniques_survive_shared_builder():
+    overrides={'dense_f16':False}
+    single,_=prefill_arguments({**CFG,'native_techniques':overrides},49787,24<<30)
+    paired,_=prefill_arguments(CFG,49787,24<<30,export_state=True,techniques=overrides)
+    assert single['--dense-inputs-f16']==paired['--dense-inputs-f16']=='0'
+    assert single['--expert-workspace-bytes']==paired['--expert-workspace-bytes']

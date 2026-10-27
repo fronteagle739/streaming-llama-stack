@@ -147,7 +147,7 @@ class OwnedProducer:
             prefill_cfg.setdefault('ctx_cache_precision','bf16')
             prefill_cfg.setdefault('ctx_cache_growable',True)
             args, self.prefill_plan = prefill_arguments(prefill_cfg, self.logical_tokens,
-                                                       available_physical_bytes(), export_state=True)
+                                                       available_physical_bytes(), export_state=True, techniques=request.get('techniques'))
             self.vision=[]
             self.vision_leases=set()
             def stage_vision(images,base):
