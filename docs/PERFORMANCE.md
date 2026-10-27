@@ -1,6 +1,6 @@
 # Measured performance
 
-These are existing Flash 1017 Q4 measurements from October 24–27, 2026. Windows runs used an RTX 5090 with local NVMe and explicit host-memory budgets; Mac runs used an M3 Ultra with 512 GB unified memory. Rates depend on content, routing, cache warmth and context. ULTRA changes arithmetic relative to Accurate; YOCO additionally approximates prefill.
+These are existing Flash 1017 Q4 measurements from October 24–27, 2026. Windows runs used an RTX 5090, 32 GB of system RAM, local NVMe and explicit host-memory budgets; Mac runs used an M3 Ultra with 512 GB unified memory. Rates depend on content, routing, cache warmth and context. ULTRA changes arithmetic relative to Accurate; YOCO additionally approximates prefill.
 
 ## ULTRA prefill
 

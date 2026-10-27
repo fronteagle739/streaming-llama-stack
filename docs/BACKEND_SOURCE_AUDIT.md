@@ -88,7 +88,7 @@ For the DSV4.1 README performance section, keep prefill and decode measurements
 separate. The original model is `DeepSeek-V4.1-Flash-1017-Q4-v41.gguf`,
 518,596,067,328 bytes, SHA-256
 `2cc6bc254f22a0238020e61e931c0cac865218aada1eed9c0036d9f4031c6e5f`.
-The RTX hardware is one 32 GB RTX 5090 and the recorded 25 GB/s
+The RTX hardware is one 32 GB RTX 5090, 32 GB DDR5 host RAM and the recorded 25 GB/s
 RAID-0 NVMe array; the stack uses explicit host-memory budgets. This single-machine result does not need the Mac to decode.
 
 The existing `docs/ULTRAYOCO_QUALIFICATION.md` receipt reports startup plus
