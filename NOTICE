@@ -1,8 +1,25 @@
 Streaming Llama Stack
 
-Stack glue and owner-authored vendored Studio modules: MIT (owner-selected default).
-llama.cpp / ggml: MIT, see engines/streaming-llama/prefill_llama.cpp/LICENSE and AUTHORS.
-ds4: MIT, see engine LICENSE files. rax: BSD-3-Clause, embedded source attribution retained.
-DirectStorage: Microsoft redistributable terms; see retained SDK notices. SDK binaries are not source and must be installed separately.
-mlx-serve: MIT and third-party Apache-2.0/NOTICE, see its upstream submodule.
-Other embedded libraries retain their individual source licenses.
+Stack glue and original Studio integration modules: MIT; see LICENSE.
+
+llama.cpp / ggml: MIT. Import base b83111815e9a79949257e9d4b087206b320a3063:
+https://github.com/ggml-org/llama.cpp/commit/b83111815e9a79949257e9d4b087206b320a3063
+See engines/streaming-llama/prefill_llama.cpp/LICENSE and AUTHORS.
+
+Windows ds4: MIT. Verified antirez ancestry base a0510c2ac2bec2cbffe730fa728fb7d3880f93ec:
+https://github.com/antirez/ds4/commit/a0510c2ac2bec2cbffe730fa728fb7d3880f93ec
+Original NovaStar fork base 8e3cfa00e60c9ba45acaf0c09e47054ca236521c:
+https://github.com/mishal-harbi/ds4-win-NovaStar/commit/8e3cfa00e60c9ba45acaf0c09e47054ca236521c
+Also incorporates IngeniousIdiocy ports; unresolved exact branch points are explained in engines/ds4-win/PROVENANCE.md.
+
+Mac ds4: MIT. V4.1 base b10cb40c1786d93aa2b4c819635a7b9e84b2b635:
+https://github.com/IngeniousIdiocy/ds4-v41-m3ultra/commit/b10cb40c1786d93aa2b4c819635a7b9e84b2b635
+See engine LICENSE files. Embedded rax: BSD-3-Clause; source attribution retained.
+
+mlx-serve: upstream submodule, unmodified at 6991ba3ad3d356891d43211dec941cc6f9ff6dd6:
+https://github.com/ddalcu/mlx-serve/commit/6991ba3ad3d356891d43211dec941cc6f9ff6dd6
+MIT and third-party Apache-2.0/NOTICE; see submodule notices.
+
+Changes to native engines provide streaming, session transport, controls, adapters and resource guards; see their PROVENANCE.md files.
+DirectStorage: Microsoft redistributable terms; retain SDK notices. SDK binaries must be installed separately.
+Other embedded libraries retain their individual source licences and attribution.

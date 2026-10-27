@@ -257,6 +257,16 @@ def scan_history(root=ROOT, revision='HEAD'):
     return findings
 
 
+def scan_generated_reference():
+    """Keep the variable reference at its published documentation path."""
+    sys.path.insert(0, str(ROOT))
+    from slstack.envdocs import render, reference_table
+    reference = ROOT / 'docs' / 'VARIABLES.md'
+    if not reference.is_file() or reference.read_text(encoding='utf-8') != render(reference_table()):
+        return [('docs/VARIABLES.md', 0, 'regenerate with python -B -m slstack.envdocs')]
+    return []
+
+
 def main():
     parser = argparse.ArgumentParser()
     parser.add_argument('--summary', action='store_true')
@@ -266,6 +276,8 @@ def main():
     parser.add_argument('--commit-message', type=Path, help='audit a pending commit message')
     args = parser.parse_args()
     found = scan_index() if args.staged else scan()
+    if not args.staged:
+        found.extend(scan_generated_reference())
     if args.identities:
         found.extend(scan_identities())
     if args.commit_message:

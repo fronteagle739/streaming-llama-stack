@@ -1,64 +1,25 @@
-# Media setup verification
+# Experimental media setup
 
-`./slstack.ps1 install --all` installs both pinned media environments, verifies
-pipeline imports, installs hash-verified configuration/tokenizer assets, and
-builds the native engines and WebUI. Follow the prerequisites in the README.
-Use `install --all --check` to verify readiness. Setup does not download model
-weights: select their folders in Stack settings, including any required text
-encoder and VAE weights. Complete pipeline folders are recognized as models;
-their individual shards are not separate model choices.
+`./slstack.ps1 install --all` installs pinned media environments, checks pipeline imports, supplies hash-verified configuration/tokenizer assets and FFmpeg/FFprobe, and builds the native engines and WebUI. `install --all --check` checks readiness. Model weights and any required text encoders/VAEs are supplied locally.
 
-The general media worker and Qwen-Image 2.1 worker have separate virtual
-environments and dependency locks. No Studio checkout, modified site-packages
-or inherited model cache is needed. Setup supplies Krea's tokenizer, model
-configuration and VAE configuration; discovered local files supply the weights.
-Windows setup also installs hash-verified FFmpeg and FFprobe. H3 defaults to
-built-in SDPA and uses Studio's labelled audiovisual caption format, with 121
-frames at 24 fps when the frame count is omitted. It never starts an extra
-Studio LLM for prompt enhancement.
+## Model families
 
-Verification on 2026-10-26:
+The general media worker and Qwen-Image 2.1 worker use separate environments and dependency locks. Krea's bundled pipeline uses supplied tokenizer/config assets and discovered local weights. Complete pipeline folders are model choices; individual shards are not.
 
-- Both environments installed into an empty runtime and passed import checks.
-- Production environments passed the same setup checks.
-- Actual image generation passed for Kroma with an explicitly selected turbo
-  LoRA, Krea turbo, Qwen-Image 2.1, a Z-Image checkpoint, and a complete Flux2
-  Klein pipeline.
-- Krea resident tensors and VAE use DirectStorage on Windows CUDA. The loader
-  checks tensor coverage and makes owned copies before releasing stream buffers.
-- Browser checks passed for collapsed tool cards, expanding results/errors,
-  streaming updates without duplicate cards, and persistence after reload.
-- Model loading preferences are saved per model. One Streamed / Resident toggle
-  controls both image and video uses; unrelated models keep their choices.
-  Anima with an explicit turbo LoRA also passed a real resident-mode generation.
-- Tool loops passed more than eight rounds in streaming and nonstreaming tests;
-  there is no fixed tool-round limit. Malformed tool syntax is contained in an
-  error card and is never executed as a guessed call.
+Existing Windows examples include Anima, Krea turbo, Qwen-Image 2.1, Z-Image, Flux2 Klein and Kroma with explicit compatible adapters. A matching family name does not guarantee matching tensor shapes or components. [Model discovery and adapters](STACK_MEDIA_AND_STATE.md)
 
-These checks qualify the tested Windows setup and model files. They do not
-qualify every checkpoint, GPU, video family, or native Mac build. A standalone
-checkpoint still needs matching model components; a similarly named pipeline
-with a different parameter size cannot substitute for them.
+Krea resident tensors and VAE use DirectStorage on Windows CUDA, with tensor-coverage checks and owned copies before stream-buffer release. Select Streamed or Resident per model in Settings → Stack. An adapter is applied only when explicitly selected for that generation.
 
-Additional H3 verification on 2026-10-27:
+## H3 video
 
-- Native streaming H3 generation produced H.264/AAC MP4 output. Correct QKV
-  layout profiles are applied to known fused Comfy exports; a model config can
-  explicitly declare `qkv_layout` as `sectioned` or `interleaved`.
-- H3 reads only immediate transformer shards, excluding nested composition
-  caches. Complete single-file transformers need no synthetic shard manifest.
-- A real model-driven WebUI chat called the video tool once, showed a completed
-  collapsible tool card, played and sought the inline video, and continued with
-  its final response. Browser console checks were clean.
-- A 121-frame request produced a 5.175-second clip depicting the requested cup
-  scene, both at eight steps and with an explicitly attached three-step TaoMate
-  LoRA. MP4 inspection confirmed H.264 video and AAC audio.
-- The previously failed owl request was replayed with the same fused INT8
-  ConvRot checkpoint, seed, dimensions and three-step adapter. Frame inspection
-  confirmed a recognizable owl in the requested courtyard, replacing grey noise.
-- Worker import paths were checked against the bundled Studio and engine
-  sources. No separate Studio checkout was imported. A launch refused before
-  worker creation preserves its admission error even when no worker log exists.
-- Output video routes support byte ranges and stream bounded chunks. When a
-  conversation checkpoint is unavailable, completed media is published before
-  replaying its conversation on the next model request.
+H3 defaults to PyTorch SDPA and a labelled audiovisual caption. If omitted, frame count is 121 at 24 fps. The tool uses the chat model's generation prompt without starting a separate prompt-enhancement model. Optional attention packages can be selected through `h3_attention_backend` when installed.
+
+Known fused Comfy exports receive their corresponding QKV layout; model configuration can declare `qkv_layout` as `sectioned` or `interleaved`. The loader indexes immediate transformer shards and excludes nested composition caches. Complete single-file transformers need no synthetic manifest.
+
+Recorded 121-frame examples produced 5.175-second H.264/AAC MP4 clips, including explicit three-step adapters and an eight-step request. This is model-specific behavior, rather than coverage of every checkpoint or platform.
+
+## Chat interaction
+
+Tool cards show arguments, progress, errors and results. Completed images enter vision context, and video plays inline. There is no fixed tool-round limit; malformed tool syntax is reported instead of executed as a guessed call. Chat preserves the conversation across media GPU handoffs using its configured state/checkpoint behavior.
+
+See the [walkthrough](../examples/WALKTHROUGH.md) and [media/state reference](STACK_MEDIA_AND_STATE.md).

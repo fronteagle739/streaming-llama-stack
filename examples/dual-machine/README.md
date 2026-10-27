@@ -14,6 +14,11 @@ and start nothing. Normal launches refuse unresolved placeholders.
 | `kimi-k2.7-standard-streaming` | Standard Kimi K2.7 settings, using the same weights and receiver with a 512-token RTX microbatch. Replaces the retired Kimi K2.6 weight selection. |
 | `glm-5.1-streaming`, `glm-5.2-streaming`, `glm-5.3-streaming` | Full GLM DSA route: RTX GGUF prefill and Mac MLX receiver, 262,144 configured context, full sparse DSA, 512 microbatch, F16 KV, MTP off. |
 
+Negotiated YOCO state v1 export exists; Mac decode with YOCO has not been
+benchmarked. The `dsv41-ultra-yoco` directory records a configuration recipe;
+its controller integration still needs separate completion. The published
+two-machine measurement predates YOCO and uses plain ULTRA prefill.
+
 The GLM recipes share the retained full-DSA route and current Studio streaming
 defaults; they are not separate new benchmark qualifications. GLM 5.3 Flash uses
 a different architecture and is not represented by the full GLM 5.3 recipe.
