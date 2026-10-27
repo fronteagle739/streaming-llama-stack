@@ -144,7 +144,10 @@ class Preferences:
     def list_loras(self,model=None,kind='image'):
         from .lora_discovery import public_loras
         self.reload();selected=self.select(kind,model) if model else None
-        return public_loras(self.catalog,selected)
+        catalog=self.catalog;models=[m for m in catalog['models'] if kind in m['kinds']]
+        families={m['arch'] for m in models}
+        loras=[row for row in catalog.get('loras',[]) if not row['arches'] or families.intersection(row['arches'])]
+        return public_loras({**catalog,'models':models,'loras':loras},selected)
 
     def resolve_loras(self,kind,model,specs):
         from .lora_discovery import compatibility

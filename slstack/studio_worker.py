@@ -27,6 +27,9 @@ def run(request):
     import faulthandler
     faulthandler.enable()
     cfg, kind, args = request['cfg'], request['kind'], request['params']
+    from .media_tools import directory as tools_directory
+    tools=tools_directory(cfg['runtime_root'])
+    if tools.is_dir():os.environ['PATH']=str(tools)+os.pathsep+os.environ.get('PATH','')
     # Source builds put the media streaming DLL beside the producer. Resolve
     # it before importing any Studio module that captures STUDIO_WF_DLL.
     media_library=cfg.get('weight_fetcher')
@@ -97,13 +100,19 @@ def run(request):
             raise ValueError('Pinned Studio Wan adapter exposes its streamed path only; resident mode is unsupported')
         if arch and arch.startswith('bernini') and ((Path(model).is_dir()) != (mode == 'resident')):
             raise ValueError('Pinned Bernini uses resident mode for a diffusers folder and streaming for a single-file checkpoint')
-        params = GenerationParams(prompt=args['prompt'], negative=args['negative_prompt'],
+        prompt=args['prompt']
+        if arch=='minimax-h3' and kind=='video':
+            from studio.h3_image_mode import build_video_prompt
+            prompt=build_video_prompt(prompt)
+        params = GenerationParams(prompt=prompt, negative=args['negative_prompt'],
                                   width=args['width'], height=args['height'], steps=args['steps'],
                                   guidance=args['guidance'], seed=args['seed'],
                                   model=model, model_arch=arch or None,
                                   model_support_files=support,
                                   loras=args.get('lora_files',[]),
                                   weight_stream=cfg[kind + '_mode'] == 'streaming',
+                                  h3_prompt_enhance=False,
+                                  h3_attention_backend=cfg.get('h3_attention_backend','sdpa'),
                                   load_mode='streaming_lazy' if cfg[kind + '_mode'] == 'streaming' else 'resident_cached',
                                   modality='t2i' if kind == 'image' else 't2v',
                                   num_frames=args.get('num_frames', 1), fps=args.get('fps', 24),

@@ -83,6 +83,8 @@ class StudioWorkerSchemaTests(unittest.TestCase):
                         params = backend.generate.call_args.args[0]
                         self.assertIsInstance(params, GenerationParams)
                         self.assertEqual(params.weight_stream, mode == 'streaming')
+                        self.assertFalse(params.h3_prompt_enhance)
+                        self.assertEqual(params.h3_attention_backend,'sdpa')
                         self.assertEqual(params.load_mode, 'streaming_lazy' if mode == 'streaming' else 'resident_cached')
                         self.assertEqual(params.model_support_files['_stack_explicit_loras_only'], '1')
                         self.assertEqual([(x.path, x.weight) for x in params.loras], [(x['path'], x['weight']) for x in loras])

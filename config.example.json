@@ -37,6 +37,7 @@
   "video_arch": "",
   "image_mode": "streaming",
   "video_mode": "streaming",
+  "h3_attention_backend": "sdpa",
   "comfyui_models": "",
   "model_search_roots": [],
   "image_support_files": {},

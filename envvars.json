@@ -69797,25 +69797,25 @@
     ],
     "doc": "The stack and its vendored engine module paths.",
     "reads": [
-      "vendor/studio/studio/adapter.py:1464",
       "vendor/studio/studio/adapter.py:1469",
-      "vendor/studio/studio/adapter.py:1644"
+      "vendor/studio/studio/adapter.py:1474",
+      "vendor/studio/studio/adapter.py:1649"
     ],
     "code_defaults": [
       {
-        "source": "vendor/studio/studio/adapter.py:1464",
+        "source": "vendor/studio/studio/adapter.py:1469",
         "unset": "''",
         "read": "os.environ.get('PYTHONPATH', '')",
         "consumer": "            argv[2:4] = ['studio.h3_upscale_runner']\n            argv += ['--upscale-json', upscale.model_dump_json()]\n            extra['env_extra'] = {'PYTHONPATH': os.pathsep.join([str(Path(__file__).resolve().parents[1]), str(repo), os.environ.get('PYTHONPATH', '')])}\n        elif h3_profile is not None or ROTATION_RECEIPT.get():\n            argv[2] = 'studio.h3_generate_runner'\n            if ROTATION_RECEIPT.get():\n                argv += ['--rotation-receipt']"
       },
       {
-        "source": "vendor/studio/studio/adapter.py:1469",
+        "source": "vendor/studio/studio/adapter.py:1474",
         "unset": "''",
         "read": "os.environ.get('PYTHONPATH', '')",
         "consumer": "            if ROTATION_RECEIPT.get():\n                argv += ['--rotation-receipt']\n            extra['env_extra'] = {'PYTHONPATH': os.pathsep.join([str(Path(__file__).resolve().parents[1]), str(repo), os.environ.get('PYTHONPATH', '')])}\n        if h3_layout_env:\n            extra['env_extra'] = {**extra.get('env_extra', {}), **h3_layout_env}\n        guarded = safety.guard_argv(argv, min_gb=6.0, repo=str(repo), python=runner)\n        rc, lines = self._run_guarded_subprocess(guarded, 'minimax_h3', on_step=on_step, should_cancel=should_cancel, **extra)"
       },
       {
-        "source": "vendor/studio/studio/adapter.py:1644",
+        "source": "vendor/studio/studio/adapter.py:1649",
         "unset": "''",
         "read": "os.environ.get('PYTHONPATH', '')",
         "consumer": "            raise RuntimeError(f'ideogram_worker.py not found at {script}')\n        ideo_src = os.environ.get('STUDIO_IDEOGRAM4_SRC', '')\n        env = {**os.environ, 'PYTHONPATH': os.pathsep.join([p for p in (repo_dir, ideo_src, os.environ.get('PYTHONPATH', '')) if p])}\n        argv = [self.settings.ideogram_python, '-u', script, '--quant', quant]\n        if weights_repo:\n            argv += ['--weights-repo', weights_repo]\n        print(f'[ideo] spawning persistent worker (ideogram-venv): {self.settings.ideogram_python}', flush=True)"
@@ -69845,7 +69845,7 @@
     "doc": "PYTORCH_CUDA_ALLOC_CONF: advanced engine setting; built-in default retained",
     "reads": [
       "vendor/engines/cosmos_windows/weight_streaming/magi2_backend.py:13",
-      "vendor/studio/studio/adapter.py:1595"
+      "vendor/studio/studio/adapter.py:1600"
     ],
     "code_defaults": [
       {
@@ -69855,7 +69855,7 @@
         "consumer": "import sys\nimport time\nos.environ.setdefault('PYTORCH_CUDA_ALLOC_CONF', 'max_split_size_mb:512,garbage_collection_threshold:0.7')\nfrom dataclasses import asdict, dataclass, field\nfrom pathlib import Path\nfrom typing import List, Optional, Tuple\nfrom cosmos_windows.weight_streaming.magi2_prompt import DEFAULT_NEGATIVE_PROMPT, MAGI2_CLIP_SECONDS, MAGI2_MODES, load_prompt_text, magi2_enhance_presets, mode_config_defaults"
       },
       {
-        "source": "vendor/studio/studio/adapter.py:1595",
+        "source": "vendor/studio/studio/adapter.py:1600",
         "unset": "'max_split_size_mb:512,garbage_collection_threshold:0.7'",
         "read": "os.environ.get('PYTORCH_CUDA_ALLOC_CONF', 'max_split_size_mb:512,garbage_collection_threshold:0.7')",
         "consumer": "        if refiner_steps:\n            argv += ['--refiner-steps', refiner_steps]\n        magi_env = {'MAGI2_ATTN_TIER': str(sf.get('attn_tier') or 'fa2'), 'MAGI2_CFG_MODE': str(sf.get('cfg_mode') or ('batched' if resolution in ('272p', '640sq', '800x448') else 'auto')), 'MAGI2_RING_DEPTH': str(sf.get('ring_depth') or '1'), 'MAGI2_DS_GPU_BUFFERS': str(sf.get('ds_gpu_buffers') or '1'), 'MAGI2_TORCH_MEM_FRACTION': str(sf.get('torch_mem_fraction') or '0.90'), 'PYTORCH_CUDA_ALLOC_CONF': os.environ.get('PYTORCH_CUDA_ALLOC_CONF', 'max_split_size_mb:512,garbage_collection_threshold:0.7')}\n        if sf.get('mlp_chunk_tokens'):\n            magi_env['MAGI2_MLP_CHUNK_TOKENS'] = str(sf['mlp_chunk_tokens'])\n        if on_step:\n            on_step({'event': 'stage_log', 'stage': 'magi2_runtime', 'message': f'MAGI-2 dials (child env only): resolution={resolution}', **{k: v for k, v in magi_env.items() if k.startswith('MAGI2_')}})"
@@ -70235,7 +70235,7 @@
     "doc": "SCAIL2_CKPT_DIR: advanced engine setting; built-in default retained",
     "reads": [
       "vendor/engines/cosmos_windows/weight_streaming/scail_backend.py:12",
-      "vendor/studio/studio/adapter.py:2922"
+      "vendor/studio/studio/adapter.py:2927"
     ],
     "code_defaults": [
       {
@@ -70245,7 +70245,7 @@
         "consumer": "from pathlib import Path\nSCAIL2_REPO_DIR = os.environ.get('SCAIL2_REPO_DIR', '')\nSCAIL2_CKPT_DIR = os.environ.get('SCAIL2_CKPT_DIR', '')\nSCAIL2_SAFETENSORS = os.environ.get('SCAIL2_SAFETENSORS', '')\nSCAIL2_STREAM_DTYPE = os.environ.get('SCAIL2_STREAM_DTYPE', 'bf16')\n_PIPELINE_CACHE: dict = {}\n_SCAIL_BLOCK_RE = re.compile('^blocks\\\\.(\\\\d+)\\\\.')"
       },
       {
-        "source": "vendor/studio/studio/adapter.py:2922",
+        "source": "vendor/studio/studio/adapter.py:2927",
         "unset": "''",
         "read": "os.environ.get('SCAIL2_CKPT_DIR', '')",
         "consumer": "        try:\n            _auto_shift = 3.0 if params.height and params.width and (max(params.height, params.width) <= 720) else 5.0\n            frames = sb.scail2_animate(prompt=params.prompt or '', image_path=ref_image, pose_video_path=driving_video, replace_flag=replace_flag, target_h=params.height, target_w=params.width, segment_len=81, shift=params.wan_shift if getattr(params, 'wan_shift', None) is not None else _auto_shift, sample_solver=params.sampler or 'unipc', sampling_steps=params.steps or 40, guide_scale=params.guidance if params.guidance is not None else 5.0, negative_prompt=params.negative or None, seed=params.seed if params.seed is not None else -1, ckpt_dir=os.environ.get('SCAIL2_CKPT_DIR', ''), scail_safetensors=os.environ.get('SCAIL2_SAFETENSORS', ''), lora_path=scail_lora_path, lora_alpha=scail_lora_alpha, stream_weights=True, n_gpu_buffers=int(os.environ.get('STUDIO_SCAIL_GPU_BUFFERS', '3')), device_id=int(os.environ.get('STUDIO_SCAIL_DEVICE_ID', '0')), progress=_progress)\n            seconds = round(time.time() - t0, 2)\n            out_dir = output_dir_for_params(params)\n            stem = 'scail_' + (re.sub('[^A-Za-z0-9]+', '_', (params.prompt or 'gen').strip())[:40].strip('_') or 'gen')\n            out = out_dir / f'{stem}_{params.seed}.mp4'"
@@ -70335,7 +70335,7 @@
     "doc": "SCAIL2_SAFETENSORS: advanced engine setting; built-in default retained",
     "reads": [
       "vendor/engines/cosmos_windows/weight_streaming/scail_backend.py:13",
-      "vendor/studio/studio/adapter.py:2922"
+      "vendor/studio/studio/adapter.py:2927"
     ],
     "code_defaults": [
       {
@@ -70345,7 +70345,7 @@
         "consumer": "SCAIL2_REPO_DIR = os.environ.get('SCAIL2_REPO_DIR', '')\nSCAIL2_CKPT_DIR = os.environ.get('SCAIL2_CKPT_DIR', '')\nSCAIL2_SAFETENSORS = os.environ.get('SCAIL2_SAFETENSORS', '')\nSCAIL2_STREAM_DTYPE = os.environ.get('SCAIL2_STREAM_DTYPE', 'bf16')\n_PIPELINE_CACHE: dict = {}\n_SCAIL_BLOCK_RE = re.compile('^blocks\\\\.(\\\\d+)\\\\.')\n_ATTN_BACKEND_CHECKED = False"
       },
       {
-        "source": "vendor/studio/studio/adapter.py:2922",
+        "source": "vendor/studio/studio/adapter.py:2927",
         "unset": "''",
         "read": "os.environ.get('SCAIL2_SAFETENSORS', '')",
         "consumer": "        try:\n            _auto_shift = 3.0 if params.height and params.width and (max(params.height, params.width) <= 720) else 5.0\n            frames = sb.scail2_animate(prompt=params.prompt or '', image_path=ref_image, pose_video_path=driving_video, replace_flag=replace_flag, target_h=params.height, target_w=params.width, segment_len=81, shift=params.wan_shift if getattr(params, 'wan_shift', None) is not None else _auto_shift, sample_solver=params.sampler or 'unipc', sampling_steps=params.steps or 40, guide_scale=params.guidance if params.guidance is not None else 5.0, negative_prompt=params.negative or None, seed=params.seed if params.seed is not None else -1, ckpt_dir=os.environ.get('SCAIL2_CKPT_DIR', ''), scail_safetensors=os.environ.get('SCAIL2_SAFETENSORS', ''), lora_path=scail_lora_path, lora_alpha=scail_lora_alpha, stream_weights=True, n_gpu_buffers=int(os.environ.get('STUDIO_SCAIL_GPU_BUFFERS', '3')), device_id=int(os.environ.get('STUDIO_SCAIL_DEVICE_ID', '0')), progress=_progress)\n            seconds = round(time.time() - t0, 2)\n            out_dir = output_dir_for_params(params)\n            stem = 'scail_' + (re.sub('[^A-Za-z0-9]+', '_', (params.prompt or 'gen').strip())[:40].strip('_') or 'gen')\n            out = out_dir / f'{stem}_{params.seed}.mp4'"
@@ -70941,11 +70941,11 @@
     ],
     "doc": "STUDIO_ANIMA_ONESHOT: advanced engine setting; built-in default retained",
     "reads": [
-      "vendor/studio/studio/adapter.py:2090"
+      "vendor/studio/studio/adapter.py:2095"
     ],
     "code_defaults": [
       {
-        "source": "vendor/studio/studio/adapter.py:2090",
+        "source": "vendor/studio/studio/adapter.py:2095",
         "unset": "''",
         "read": "os.environ.get('STUDIO_ANIMA_ONESHOT', '')",
         "consumer": "        t0 = time.time()\n        from .models import resolve_load_mode\n        force_oneshot = os.environ.get('STUDIO_ANIMA_ONESHOT', '').strip().lower() in ('1', 'true', 'on', 'yes')\n        _load_mode, _anima_is_resident, _is_lazy = resolve_load_mode(params)\n        resident_mode = _anima_is_resident and (not force_oneshot)\n        stream_weights = not resident_mode\n        device = self._cuda_device()"
@@ -71073,11 +71073,11 @@
     ],
     "doc": "STUDIO_BERNINI_DISTILL_LORA: advanced engine setting; built-in default retained",
     "reads": [
-      "vendor/studio/studio/adapter.py:2860"
+      "vendor/studio/studio/adapter.py:2865"
     ],
     "code_defaults": [
       {
-        "source": "vendor/studio/studio/adapter.py:2860",
+        "source": "vendor/studio/studio/adapter.py:2865",
         "unset": "''",
         "read": "os.environ.get('STUDIO_BERNINI_DISTILL_LORA', '')",
         "consumer": "                        on_step(int(step), int(total), None)\n                user_loras = [l.model_dump() for l in params.loras] or None if params.loras else None\n                distill = os.environ.get('STUDIO_BERNINI_DISTILL_LORA', '')\n                use_distill = user_loras is None and Path(distill).is_file() and not sf.get('_stack_explicit_loras_only')\n                loras = user_loras if user_loras is not None else [{'path': distill, 'weight': 3.0, 'expert': 'high'}, {'path': distill, 'weight': 1.5, 'expert': 'low'}] if use_distill else None\n                has_distill = bool(user_loras) or use_distill\n                frames = wan.streamed_wan_generate(high_file=str(tf_dir), prompt=params.prompt or '', height=params.height, width=params.width, num_frames=nf, steps=params.steps or (20 if has_distill else 40), low_file=sf.get('low_denoiser') or None, vae_path=vae, umt5_file=umt5, umt5_config_dir=sf.get('text_encoder_config') or None, umt5_tokenizer_dir=sf.get('tokenizer') or None, negative_prompt=params.negative or '', guidance_scale=params.guidance if params.guidance is not None else 1.0 if has_distill else 5.0, scheduler_name=params.sampler or ('lcm' if has_distill else 'unipc'), sigmas_name=params.sigmas if getattr(params, 'sigmas', None) not in (None, '', 'karras') else 'simple' if has_distill else None, seed=params.seed, crossover_step=params.wan_crossover_step if params.wan_crossover_step is not None else 3 if has_distill else None, shift=params.wan_shift if params.wan_shift is not None else 8.0, bernini_reference_images=refs or None, bernini_source_video=source_video, bernini_reference_video=reference_video, bernini_task=task, loras=loras, progress=_progress, should_cancel=should_cancel)"
@@ -71140,11 +71140,11 @@
     ],
     "doc": "STUDIO_BOOGU_KREA_OFFLOAD: advanced engine setting; built-in default retained",
     "reads": [
-      "vendor/studio/studio/adapter.py:2654"
+      "vendor/studio/studio/adapter.py:2659"
     ],
     "code_defaults": [
       {
-        "source": "vendor/studio/studio/adapter.py:2654",
+        "source": "vendor/studio/studio/adapter.py:2659",
         "unset": "'streaming'",
         "read": "os.environ.get('STUDIO_BOOGU_KREA_OFFLOAD', 'streaming')",
         "consumer": "            mode = 'staged' if is_resident else 'staged_disposable'\n        else:\n            mode = 'resident' if is_resident else os.environ.get('STUDIO_BOOGU_KREA_OFFLOAD', 'streaming')\n        cacheable = is_resident or (mode in ('streaming', 'stream', 'streamed', 'native_streaming') and self._stream_pipeline_cache_enabled() and (not (arch.startswith('boogu') or arch.startswith('krea'))))\n        pipe_key = ('boogu_krea', arch, ckpt, device, mode)\n        if cacheable and self._resident_aux_key == pipe_key and (self._resident_aux_pipe is not None):\n            pipe = self._resident_aux_pipe"
@@ -71616,11 +71616,11 @@
     ],
     "doc": "STUDIO_DOMAINSHUTTLE_MEMORY_MODE: advanced engine setting; built-in default retained",
     "reads": [
-      "vendor/studio/studio/adapter.py:2978"
+      "vendor/studio/studio/adapter.py:2983"
     ],
     "code_defaults": [
       {
-        "source": "vendor/studio/studio/adapter.py:2978",
+        "source": "vendor/studio/studio/adapter.py:2983",
         "unset": "'streaming'",
         "read": "os.environ.get('STUDIO_DOMAINSHUTTLE_MEMORY_MODE', 'streaming')",
         "consumer": "        frames = None\n        try:\n            frames = db.domainshuttle_r2v_generate(domain_model_dir=str(model_dir), reference_image_paths=refs, domain_codes=domain_codes or None, prompt=params.prompt or '', negative_prompt=params.negative or None, height=int(params.height or 480), width=int(params.width or 832), num_frames=num_frames, steps=int(params.steps or 40), guidance_scale=guidance, shift=params.wan_shift if getattr(params, 'wan_shift', None) is not None else _auto_shift, boundary=0.875, seed=params.seed if params.seed is not None else 42, vae_path=vae, umt5_path=umt5, tokenizer_dir=tokenizer, memory_mode=os.environ.get('STUDIO_DOMAINSHUTTLE_MEMORY_MODE', 'streaming'), device_id=0, progress=_progress, should_cancel=should_cancel)\n            seconds = round(time.time() - t0, 2)\n            out_dir = output_dir_for_params(params)\n            stem = 'domainshuttle_' + (re.sub('[^A-Za-z0-9]+', '_', (params.prompt or 'gen').strip())[:40].strip('_') or 'gen')\n            stem = f'{stem}_{params.seed}'"
@@ -71661,11 +71661,11 @@
     ],
     "doc": "STUDIO_DOMAINSHUTTLE_MIN_FREE_RAM_GB_GATE: advanced engine setting; built-in default retained",
     "reads": [
-      "vendor/studio/studio/adapter.py:2954"
+      "vendor/studio/studio/adapter.py:2959"
     ],
     "code_defaults": [
       {
-        "source": "vendor/studio/studio/adapter.py:2954",
+        "source": "vendor/studio/studio/adapter.py:2959",
         "unset": "'6'",
         "read": "os.environ.get('STUDIO_DOMAINSHUTTLE_MIN_FREE_RAM_GB_GATE', '6')",
         "consumer": "        self._cleanup_torch()\n        from . import safety\n        min_free = float(os.environ.get('STUDIO_DOMAINSHUTTLE_MIN_FREE_RAM_GB_GATE', '6'))\n        ok, free = safety.enough_ram(min_free)\n        if not ok:\n            raise RuntimeError(f'Not enough system RAM for DomainShuttle: {free:.1f} GB free.')\n        repo = str(getattr(self.settings, 'cosmos_windows_path', '') or '')"
@@ -71818,12 +71818,12 @@
     ],
     "doc": "STUDIO_FLUX2_KLEIN_DIR: advanced engine setting; built-in default retained",
     "reads": [
-      "vendor/studio/studio/adapter.py:1951",
+      "vendor/studio/studio/adapter.py:1956",
       "vendor/studio/studio/generation_loras.py:78"
     ],
     "code_defaults": [
       {
-        "source": "vendor/studio/studio/adapter.py:1951",
+        "source": "vendor/studio/studio/adapter.py:1956",
         "unset": "_default_klein",
         "read": "os.environ.get('STUDIO_FLUX2_KLEIN_DIR', _default_klein)",
         "consumer": "        if not os.path.isdir(_default_klein):\n            _default_klein = ''\n        repo_dir = model_path if Path(model_path).is_dir() else sf.get('components_repo') or os.environ.get('STUDIO_FLUX2_KLEIN_DIR', _default_klein)\n        _load_mode, is_resident, _is_lazy = resolve_load_mode(params)\n        keep_resident = is_resident\n        from diffusers import Flux2KleinKVPipeline, Flux2Transformer2DModel\n        _klein_single_file = bool(model_path and Path(model_path).is_file() and (Path(model_path) != Path(repo_dir)))"
@@ -71847,11 +71847,11 @@
     ],
     "doc": "STUDIO_FOLEY_MIN_FREE_RAM_GB: advanced engine setting; built-in default retained",
     "reads": [
-      "vendor/studio/studio/adapter.py:3137"
+      "vendor/studio/studio/adapter.py:3142"
     ],
     "code_defaults": [
       {
-        "source": "vendor/studio/studio/adapter.py:3137",
+        "source": "vendor/studio/studio/adapter.py:3142",
         "unset": "'12'",
         "read": "os.environ.get('STUDIO_FOLEY_MIN_FREE_RAM_GB', '12')",
         "consumer": "        self._cleanup_torch()\n        from . import safety\n        min_free = float(os.environ.get('STUDIO_FOLEY_MIN_FREE_RAM_GB', '12'))\n        ok, free = safety.enough_ram(min_free)\n        if not ok:\n            raise RuntimeError(f'Not enough free RAM for LTX foley: {free:.1f} GB free, need >= {min_free:.0f} GB. Close other apps and retry.')\n        repo = str(getattr(self.settings, 'cosmos_windows_path', '') or '')"
@@ -72177,12 +72177,12 @@
     ],
     "doc": "STUDIO_GLM_AR_GGUF: advanced engine setting; built-in default retained",
     "reads": [
-      "vendor/studio/studio/adapter.py:2233",
+      "vendor/studio/studio/adapter.py:2238",
       "vendor/studio/studio/custom_models.py:116"
     ],
     "code_defaults": [
       {
-        "source": "vendor/studio/studio/adapter.py:2233",
+        "source": "vendor/studio/studio/adapter.py:2238",
         "unset": "''",
         "read": "os.environ.get('STUDIO_GLM_AR_GGUF', '')",
         "consumer": "        is_i2i = bool(getattr(params, 'image_path', None))\n        emit_bin = _resolve_glm_emit_bin(str(getattr(self.settings, 'cosmos_windows_path', '') or ''))\n        ar_gguf = os.environ.get('STUDIO_GLM_AR_GGUF', '')\n        fast_ar = not is_i2i and os.environ.get('STUDIO_GLM_FAST_AR', '1').strip().lower() not in ('0', 'false', 'off', 'no') and Path(emit_bin).is_file() and Path(ar_gguf).is_file()\n        if os.environ.get('STUDIO_GLM_SUBPROCESS', '').strip().lower() in ('1', 'true', 'on', 'yes'):\n            return self._generate_glm_subprocess(params, model_dir, w, h, steps, guidance, seed, out, fast_ar, emit_bin, ar_gguf, should_cancel=should_cancel, on_step=on_step)\n        from . import glm_pipeline"
@@ -72228,11 +72228,11 @@
     ],
     "doc": "STUDIO_GLM_FAST_AR: advanced engine setting; built-in default retained",
     "reads": [
-      "vendor/studio/studio/adapter.py:2234"
+      "vendor/studio/studio/adapter.py:2239"
     ],
     "code_defaults": [
       {
-        "source": "vendor/studio/studio/adapter.py:2234",
+        "source": "vendor/studio/studio/adapter.py:2239",
         "unset": "'1'",
         "read": "os.environ.get('STUDIO_GLM_FAST_AR', '1')",
         "consumer": "        emit_bin = _resolve_glm_emit_bin(str(getattr(self.settings, 'cosmos_windows_path', '') or ''))\n        ar_gguf = os.environ.get('STUDIO_GLM_AR_GGUF', '')\n        fast_ar = not is_i2i and os.environ.get('STUDIO_GLM_FAST_AR', '1').strip().lower() not in ('0', 'false', 'off', 'no') and Path(emit_bin).is_file() and Path(ar_gguf).is_file()\n        if os.environ.get('STUDIO_GLM_SUBPROCESS', '').strip().lower() in ('1', 'true', 'on', 'yes'):\n            return self._generate_glm_subprocess(params, model_dir, w, h, steps, guidance, seed, out, fast_ar, emit_bin, ar_gguf, should_cancel=should_cancel, on_step=on_step)\n        from . import glm_pipeline\n        device = self._cuda_device()"
@@ -72250,12 +72250,12 @@
     ],
     "doc": "STUDIO_GLM_MODEL: advanced engine setting; built-in default retained",
     "reads": [
-      "vendor/studio/studio/adapter.py:2221",
+      "vendor/studio/studio/adapter.py:2226",
       "vendor/studio/studio/generation_loras.py:68"
     ],
     "code_defaults": [
       {
-        "source": "vendor/studio/studio/adapter.py:2221",
+        "source": "vendor/studio/studio/adapter.py:2226",
         "unset": "None",
         "read": "os.environ.get('STUDIO_GLM_MODEL')",
         "consumer": "    def _generate_glm(self, params, on_step=None, should_cancel=None) -> GenResult:\n        import torch\n        model_dir = os.environ.get('STUDIO_GLM_MODEL') or str(getattr(self.settings, 'glm_model', '') or '')\n        if getattr(params, 'model', None) and Path(str(params.model)).is_dir():\n            model_dir = str(params.model)\n        if not Path(model_dir).is_dir():\n            raise RuntimeError(f'GLM-Image model dir not found ({model_dir!r}')"
@@ -72279,11 +72279,11 @@
     ],
     "doc": "STUDIO_GLM_OFFLOAD: advanced engine setting; built-in default retained",
     "reads": [
-      "vendor/studio/studio/adapter.py:2242"
+      "vendor/studio/studio/adapter.py:2247"
     ],
     "code_defaults": [
       {
-        "source": "vendor/studio/studio/adapter.py:2242",
+        "source": "vendor/studio/studio/adapter.py:2247",
         "unset": "'stream'",
         "read": "os.environ.get('STUDIO_GLM_OFFLOAD', 'stream')",
         "consumer": "        load_mode, is_resident, _is_lazy = resolve_load_mode(params)\n        resident_mode = is_resident\n        offload = 'none' if is_resident else os.environ.get('STUDIO_GLM_OFFLOAD', 'stream')\n        skip_ar = fast_ar\n        pipe_key = ('glm', model_dir, device, offload, skip_ar, load_mode)\n        t0 = time.time()\n        cache_hit = resident_mode and self._resident_aux_key == pipe_key and (self._resident_aux_pipe is not None)"
@@ -72301,11 +72301,11 @@
     ],
     "doc": "STUDIO_GLM_PYTHON: advanced engine setting; built-in default retained",
     "reads": [
-      "vendor/studio/studio/adapter.py:2372"
+      "vendor/studio/studio/adapter.py:2377"
     ],
     "code_defaults": [
       {
-        "source": "vendor/studio/studio/adapter.py:2372",
+        "source": "vendor/studio/studio/adapter.py:2377",
         "unset": "None",
         "read": "os.environ.get('STUDIO_GLM_PYTHON')",
         "consumer": "    def _generate_glm_subprocess(self, params, model_dir, w, h, steps, guidance, seed, out, fast_ar, emit_bin, ar_gguf, should_cancel=None, on_step=None) -> GenResult:\n        import subprocess\n        glm_py = os.environ.get('STUDIO_GLM_PYTHON') or ''\n        if not Path(glm_py).is_file():\n            raise RuntimeError(f'GLM python not found ({glm_py!r}')\n        from .models import resolve_load_mode\n        from .glm_worker_client import GlmWorker"
@@ -72323,11 +72323,11 @@
     ],
     "doc": "STUDIO_GLM_SUBPROCESS: advanced engine setting; built-in default retained",
     "reads": [
-      "vendor/studio/studio/adapter.py:2235"
+      "vendor/studio/studio/adapter.py:2240"
     ],
     "code_defaults": [
       {
-        "source": "vendor/studio/studio/adapter.py:2235",
+        "source": "vendor/studio/studio/adapter.py:2240",
         "unset": "''",
         "read": "os.environ.get('STUDIO_GLM_SUBPROCESS', '')",
         "consumer": "        ar_gguf = os.environ.get('STUDIO_GLM_AR_GGUF', '')\n        fast_ar = not is_i2i and os.environ.get('STUDIO_GLM_FAST_AR', '1').strip().lower() not in ('0', 'false', 'off', 'no') and Path(emit_bin).is_file() and Path(ar_gguf).is_file()\n        if os.environ.get('STUDIO_GLM_SUBPROCESS', '').strip().lower() in ('1', 'true', 'on', 'yes'):\n            return self._generate_glm_subprocess(params, model_dir, w, h, steps, guidance, seed, out, fast_ar, emit_bin, ar_gguf, should_cancel=should_cancel, on_step=on_step)\n        from . import glm_pipeline\n        device = self._cuda_device()\n        from .models import resolve_load_mode"
@@ -72345,11 +72345,11 @@
     ],
     "doc": "STUDIO_GLM_TIMEOUT: advanced engine setting; built-in default retained",
     "reads": [
-      "vendor/studio/studio/adapter.py:2389"
+      "vendor/studio/studio/adapter.py:2394"
     ],
     "code_defaults": [
       {
-        "source": "vendor/studio/studio/adapter.py:2389",
+        "source": "vendor/studio/studio/adapter.py:2394",
         "unset": "'1800'",
         "read": "os.environ.get('STUDIO_GLM_TIMEOUT', '1800')",
         "consumer": "            worker = self._glm_worker = GlmWorker(glm_py, runtime)\n        try:\n            receipt = worker.generate(request, timeout=int(os.environ.get('STUDIO_GLM_TIMEOUT', '1800')), on_step=on_step, should_cancel=should_cancel)\n        except BaseException:\n            self._glm_worker = None\n            raise\n        return GenResult(path=str(out), seconds=round(time.time() - t0, 2), modality='i2i' if request['image'] else 't2i', width=w, height=h, kind='image', seed=seed, engine=self.name, timings={'worker_pid': receipt['pid'], 'platform': sys.platform, 'load_mode': load_mode, 'cache_hit': receipt['cache_hit']})"
@@ -72639,7 +72639,7 @@
     "reads": [
       "vendor/studio/studio/adapter.py:728",
       "vendor/studio/studio/adapter.py:773",
-      "vendor/studio/studio/adapter.py:1515"
+      "vendor/studio/studio/adapter.py:1520"
     ],
     "code_defaults": [
       {
@@ -72655,7 +72655,7 @@
         "consumer": "            return (out, 'gguf-fallback')\n        if selection == 'auto':\n            if (os.environ.get('STUDIO_H3_ENHANCER_ENDPOINT') or '').strip():\n                enhanced, route = _run_endpoint()\n            if not enhanced and (not has_visual) and (llm_launch.active_server() is not None):\n                try:\n                    enhanced, route = _run_live_preset()"
       },
       {
-        "source": "vendor/studio/studio/adapter.py:1515",
+        "source": "vendor/studio/studio/adapter.py:1520",
         "unset": "None",
         "read": "os.environ.get('STUDIO_H3_ENHANCER_ENDPOINT')",
         "consumer": "        mode = 'i2v' if getattr(params, 'image_paths', None) else 't2v'\n        system, source = m2.system_prompt(mode)\n        endpoint = (os.environ.get('STUDIO_H3_ENHANCER_ENDPOINT') or '').strip()\n        try:\n            if endpoint:\n                r = llm_launch.enhance_via_endpoint(endpoint, prompt, system=system, temperature=0.3, max_new_tokens=8000)\n                raw, route = (r.get('answer') or '', f'endpoint:{endpoint}')"
@@ -73898,11 +73898,11 @@
     ],
     "doc": "STUDIO_IDEOGRAM4_SRC: advanced engine setting; built-in default retained",
     "reads": [
-      "vendor/studio/studio/adapter.py:1643"
+      "vendor/studio/studio/adapter.py:1648"
     ],
     "code_defaults": [
       {
-        "source": "vendor/studio/studio/adapter.py:1643",
+        "source": "vendor/studio/studio/adapter.py:1648",
         "unset": "''",
         "read": "os.environ.get('STUDIO_IDEOGRAM4_SRC', '')",
         "consumer": "        if not Path(script).is_file():\n            raise RuntimeError(f'ideogram_worker.py not found at {script}')\n        ideo_src = os.environ.get('STUDIO_IDEOGRAM4_SRC', '')\n        env = {**os.environ, 'PYTHONPATH': os.pathsep.join([p for p in (repo_dir, ideo_src, os.environ.get('PYTHONPATH', '')) if p])}\n        argv = [self.settings.ideogram_python, '-u', script, '--quant', quant]\n        if weights_repo:\n            argv += ['--weights-repo', weights_repo]"
@@ -73966,11 +73966,11 @@
     ],
     "doc": "STUDIO_IDEOGRAM_INPROC: advanced engine setting; built-in default retained",
     "reads": [
-      "vendor/studio/studio/adapter.py:1620"
+      "vendor/studio/studio/adapter.py:1625"
     ],
     "code_defaults": [
       {
-        "source": "vendor/studio/studio/adapter.py:1620",
+        "source": "vendor/studio/studio/adapter.py:1625",
         "unset": "''",
         "read": "os.environ.get('STUDIO_IDEOGRAM_INPROC', '')",
         "consumer": "\n    def _generate_ideogram(self, params, on_step=None, should_cancel=None) -> GenResult:\n        if os.environ.get('STUDIO_IDEOGRAM_INPROC', '').strip().lower() in ('1', 'true', 'on', 'yes'):\n            try:\n                return self._generate_ideogram_inproc(params, on_step=on_step, should_cancel=should_cancel)\n            except Exception as exc:\n                print(f'[ideo] in-process path failed ({type(exc).__name__}: {exc})', flush=True)"
@@ -74011,11 +74011,11 @@
     ],
     "doc": "STUDIO_IDEOGRAM_WORKER: advanced engine setting; built-in default retained",
     "reads": [
-      "vendor/studio/studio/adapter.py:1625"
+      "vendor/studio/studio/adapter.py:1630"
     ],
     "code_defaults": [
       {
-        "source": "vendor/studio/studio/adapter.py:1625",
+        "source": "vendor/studio/studio/adapter.py:1630",
         "unset": "''",
         "read": "os.environ.get('STUDIO_IDEOGRAM_WORKER', '')",
         "consumer": "            except Exception as exc:\n                print(f'[ideo] in-process path failed ({type(exc).__name__}: {exc})', flush=True)\n        if os.environ.get('STUDIO_IDEOGRAM_WORKER', '').strip().lower() in ('1', 'true', 'on', 'yes'):\n            try:\n                return self._generate_ideogram_worker(params, on_step=on_step, should_cancel=should_cancel)\n            except Exception as exc:\n                print(f'[ideo] persistent worker failed ({type(exc).__name__}: {exc}); falling back to the per-gen subprocess', flush=True)"
@@ -74209,11 +74209,11 @@
     ],
     "doc": "STUDIO_KLEIN_COMPONENT_RESIDENT: advanced engine setting; built-in default retained",
     "reads": [
-      "vendor/studio/studio/adapter.py:1972"
+      "vendor/studio/studio/adapter.py:1977"
     ],
     "code_defaults": [
       {
-        "source": "vendor/studio/studio/adapter.py:1972",
+        "source": "vendor/studio/studio/adapter.py:1977",
         "unset": "''",
         "read": "os.environ.get('STUDIO_KLEIN_COMPONENT_RESIDENT', '')",
         "consumer": "        mgr = self._get_vram_mgr()\n        klein_key = f'flux2-klein::{repo_dir}::{model_path}'\n        component_resident = keep_resident and (not _klein_single_file) and (str(os.environ.get('STUDIO_KLEIN_COMPONENT_RESIDENT', '')).strip() not in ('', '0'))\n        _release_keys = []\n        if component_resident:\n            from transformers import Qwen3ForCausalLM, AutoTokenizer\n            from diffusers import AutoencoderKLFlux2, FlowMatchEulerDiscreteScheduler"
@@ -74231,11 +74231,11 @@
     ],
     "doc": "STUDIO_KREA2_DISABLE_STAGED: advanced engine setting; built-in default retained",
     "reads": [
-      "vendor/studio/studio/adapter.py:2651"
+      "vendor/studio/studio/adapter.py:2656"
     ],
     "code_defaults": [
       {
-        "source": "vendor/studio/studio/adapter.py:2651",
+        "source": "vendor/studio/studio/adapter.py:2656",
         "unset": "'0'",
         "read": "os.environ.get('STUDIO_KREA2_DISABLE_STAGED', '0')",
         "consumer": "        elif arch == 'boogu-turbo' and (not is_resident):\n            mode = 'native_streaming'\n        elif not arch.startswith('boogu') and os.environ.get('STUDIO_KREA2_DISABLE_STAGED', '0') not in ('1', 'true', 'True'):\n            mode = 'staged' if is_resident else 'staged_disposable'\n        else:\n            mode = 'resident' if is_resident else os.environ.get('STUDIO_BOOGU_KREA_OFFLOAD', 'streaming')\n        cacheable = is_resident or (mode in ('streaming', 'stream', 'streamed', 'native_streaming') and self._stream_pipeline_cache_enabled() and (not (arch.startswith('boogu') or arch.startswith('krea'))))"
@@ -74848,11 +74848,11 @@
     ],
     "doc": "STUDIO_SCAIL_DEVICE_ID: advanced engine setting; built-in default retained",
     "reads": [
-      "vendor/studio/studio/adapter.py:2922"
+      "vendor/studio/studio/adapter.py:2927"
     ],
     "code_defaults": [
       {
-        "source": "vendor/studio/studio/adapter.py:2922",
+        "source": "vendor/studio/studio/adapter.py:2927",
         "unset": "'0'",
         "read": "os.environ.get('STUDIO_SCAIL_DEVICE_ID', '0')",
         "consumer": "        try:\n            _auto_shift = 3.0 if params.height and params.width and (max(params.height, params.width) <= 720) else 5.0\n            frames = sb.scail2_animate(prompt=params.prompt or '', image_path=ref_image, pose_video_path=driving_video, replace_flag=replace_flag, target_h=params.height, target_w=params.width, segment_len=81, shift=params.wan_shift if getattr(params, 'wan_shift', None) is not None else _auto_shift, sample_solver=params.sampler or 'unipc', sampling_steps=params.steps or 40, guide_scale=params.guidance if params.guidance is not None else 5.0, negative_prompt=params.negative or None, seed=params.seed if params.seed is not None else -1, ckpt_dir=os.environ.get('SCAIL2_CKPT_DIR', ''), scail_safetensors=os.environ.get('SCAIL2_SAFETENSORS', ''), lora_path=scail_lora_path, lora_alpha=scail_lora_alpha, stream_weights=True, n_gpu_buffers=int(os.environ.get('STUDIO_SCAIL_GPU_BUFFERS', '3')), device_id=int(os.environ.get('STUDIO_SCAIL_DEVICE_ID', '0')), progress=_progress)\n            seconds = round(time.time() - t0, 2)\n            out_dir = output_dir_for_params(params)\n            stem = 'scail_' + (re.sub('[^A-Za-z0-9]+', '_', (params.prompt or 'gen').strip())[:40].strip('_') or 'gen')\n            out = out_dir / f'{stem}_{params.seed}.mp4'"
@@ -74870,11 +74870,11 @@
     ],
     "doc": "STUDIO_SCAIL_GPU_BUFFERS: advanced engine setting; built-in default retained",
     "reads": [
-      "vendor/studio/studio/adapter.py:2922"
+      "vendor/studio/studio/adapter.py:2927"
     ],
     "code_defaults": [
       {
-        "source": "vendor/studio/studio/adapter.py:2922",
+        "source": "vendor/studio/studio/adapter.py:2927",
         "unset": "'3'",
         "read": "os.environ.get('STUDIO_SCAIL_GPU_BUFFERS', '3')",
         "consumer": "        try:\n            _auto_shift = 3.0 if params.height and params.width and (max(params.height, params.width) <= 720) else 5.0\n            frames = sb.scail2_animate(prompt=params.prompt or '', image_path=ref_image, pose_video_path=driving_video, replace_flag=replace_flag, target_h=params.height, target_w=params.width, segment_len=81, shift=params.wan_shift if getattr(params, 'wan_shift', None) is not None else _auto_shift, sample_solver=params.sampler or 'unipc', sampling_steps=params.steps or 40, guide_scale=params.guidance if params.guidance is not None else 5.0, negative_prompt=params.negative or None, seed=params.seed if params.seed is not None else -1, ckpt_dir=os.environ.get('SCAIL2_CKPT_DIR', ''), scail_safetensors=os.environ.get('SCAIL2_SAFETENSORS', ''), lora_path=scail_lora_path, lora_alpha=scail_lora_alpha, stream_weights=True, n_gpu_buffers=int(os.environ.get('STUDIO_SCAIL_GPU_BUFFERS', '3')), device_id=int(os.environ.get('STUDIO_SCAIL_DEVICE_ID', '0')), progress=_progress)\n            seconds = round(time.time() - t0, 2)\n            out_dir = output_dir_for_params(params)\n            stem = 'scail_' + (re.sub('[^A-Za-z0-9]+', '_', (params.prompt or 'gen').strip())[:40].strip('_') or 'gen')\n            out = out_dir / f'{stem}_{params.seed}.mp4'"
@@ -75188,25 +75188,25 @@
     ],
     "doc": "STUDIO_WAN_MIN_FREE_RAM_GB: advanced engine setting; built-in default retained",
     "reads": [
-      "vendor/studio/studio/adapter.py:2764",
-      "vendor/studio/studio/adapter.py:2830",
-      "vendor/studio/studio/adapter.py:2905"
+      "vendor/studio/studio/adapter.py:2769",
+      "vendor/studio/studio/adapter.py:2835",
+      "vendor/studio/studio/adapter.py:2910"
     ],
     "code_defaults": [
       {
-        "source": "vendor/studio/studio/adapter.py:2764",
+        "source": "vendor/studio/studio/adapter.py:2769",
         "unset": "'6'",
         "read": "os.environ.get('STUDIO_WAN_MIN_FREE_RAM_GB', '6')",
         "consumer": "        self._cleanup_torch()\n        from . import safety\n        min_free = float(os.environ.get('STUDIO_WAN_MIN_FREE_RAM_GB', '6'))\n        ok, free = safety.enough_ram(min_free)\n        if not ok:\n            raise RuntimeError(f'Not enough system RAM for streamed Wan: {free:.1f} GB free, need >= {min_free:.0f} GB. The streamed path does not need a large host-RAM staging buffer, but it still refuses to start below this safety floor.')\n        repo = str(getattr(self.settings, 'cosmos_windows_path', '') or '')"
       },
       {
-        "source": "vendor/studio/studio/adapter.py:2830",
+        "source": "vendor/studio/studio/adapter.py:2835",
         "unset": "'6'",
         "read": "os.environ.get('STUDIO_WAN_MIN_FREE_RAM_GB', '6')",
         "consumer": "        self._cleanup_torch()\n        from . import safety\n        ok, free = safety.enough_ram(float(os.environ.get('STUDIO_WAN_MIN_FREE_RAM_GB', '6')))\n        if not ok:\n            raise RuntimeError(f'Not enough system RAM for Bernini: {free:.1f} GB free.')\n        repo = str(getattr(self.settings, 'cosmos_windows_path', '') or '')\n        if repo and repo not in sys.path:"
       },
       {
-        "source": "vendor/studio/studio/adapter.py:2905",
+        "source": "vendor/studio/studio/adapter.py:2910",
         "unset": "'6'",
         "read": "os.environ.get('STUDIO_WAN_MIN_FREE_RAM_GB', '6')",
         "consumer": "        self._cleanup_torch()\n        from . import safety\n        ok, free = safety.enough_ram(float(os.environ.get('STUDIO_WAN_MIN_FREE_RAM_GB', '6')))\n        if not ok:\n            raise RuntimeError(f'Not enough system RAM for SCAIL-2: {free:.1f} GB free.')\n        repo = str(getattr(self.settings, 'cosmos_windows_path', '') or '')\n        if repo and repo not in sys.path:"
@@ -75335,11 +75335,11 @@
     ],
     "doc": "STUDIO_ZIMAGE_GPU_BUFFERS: advanced engine setting; built-in default retained",
     "reads": [
-      "vendor/studio/studio/adapter.py:1866"
+      "vendor/studio/studio/adapter.py:1871"
     ],
     "code_defaults": [
       {
-        "source": "vendor/studio/studio/adapter.py:1866",
+        "source": "vendor/studio/studio/adapter.py:1871",
         "unset": "'1'",
         "read": "os.environ.get('STUDIO_ZIMAGE_GPU_BUFFERS', '1')",
         "consumer": "            self.unload()\n            self._cleanup_torch()\n            pipe = zimage.build_zimage_pipeline(transformer_file=transformer_file, config_dir=sf.get('config_dir'), text_encoder=sf.get('text_encoder'), vae=sf.get('vae'), tokenizer_dir=sf.get('tokenizer'), scheduler_dir=sf.get('scheduler'), device=device, offload=False, stream_weights=stream_weights, n_gpu_buffers=int(os.environ.get('STUDIO_ZIMAGE_GPU_BUFFERS', '1')), loras=[l.model_dump() for l in params.loras or []] or None, i2i=is_i2i)\n            if resident_mode:\n                self._resident_aux_pipe = pipe\n                self._resident_aux_key = pipe_key\n                self._resident_aux_label = 'z-image'"
@@ -75357,11 +75357,11 @@
     ],
     "doc": "STUDIO_ZIMAGE_MIN_FREE_RAM_GB: advanced engine setting; built-in default retained",
     "reads": [
-      "vendor/studio/studio/adapter.py:1859"
+      "vendor/studio/studio/adapter.py:1864"
     ],
     "code_defaults": [
       {
-        "source": "vendor/studio/studio/adapter.py:1859",
+        "source": "vendor/studio/studio/adapter.py:1864",
         "unset": "'6'",
         "read": "os.environ.get('STUDIO_ZIMAGE_MIN_FREE_RAM_GB', '6')",
         "consumer": "            pipe = self._resident_aux_pipe\n        else:\n            min_free = float(os.environ.get('STUDIO_ZIMAGE_MIN_FREE_RAM_GB', '6'))\n            ok, free = safety.enough_ram(min_free)\n            if not ok:\n                mode = 'resident' if resident_mode else 'streamed'\n                raise RuntimeError(f'Not enough system RAM to build {mode} Z-Image: {free:.1f} GB free, need >= {min_free:.0f} GB. Close other apps and retry.')"
@@ -76837,11 +76837,11 @@
     ],
     "doc": "STUDIO_H3_STEP_ADAPTERS: explicit engine setting; inherited values are cleared and the native default is retained.",
     "reads": [
-      "vendor/studio/studio/h3_model_profiles.py:50"
+      "vendor/studio/studio/h3_model_profiles.py:51"
     ],
     "code_defaults": [
       {
-        "source": "vendor/studio/studio/h3_model_profiles.py:50",
+        "source": "vendor/studio/studio/h3_model_profiles.py:51",
         "unset": "''",
         "read": "os.environ.get('STUDIO_H3_STEP_ADAPTERS', '')",
         "consumer": "def is_base_distill_adapter(path) -> bool:\n    name = Path(str(path).replace('\\\\', '/')).name.lower()\n    extra = {n.strip().lower() for n in os.environ.get('STUDIO_H3_STEP_ADAPTERS', '').split(';') if n.strip()}\n    return name in BASE_H3_STEP_ADAPTERS or name in extra\n\ndef profile_adapters(profile: H3ModelProfile, requested) -> tuple:\n    kept, removed = ([], [])"

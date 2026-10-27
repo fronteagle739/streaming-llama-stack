@@ -509,7 +509,7 @@ def inspect_h3_transformer(model_dir: str | Path) -> H3StreamingLayout:
     from .safetensors_index import build_index
     path = Path(model_dir)
     transformer_dir = path / 'transformer'
-    index = build_index(transformer_dir if transformer_dir.is_dir() else path)
+    index = build_index(transformer_dir if transformer_dir.is_dir() else path,recursive=False)
     return inspect_h3_transformer_index(index, component='transformer')
 
 def plan_h3_host_cache(index, cache_gb: float, component: str='transformer', hot_block_ids: Iterable[int]=()) -> H3HostCachePlan:
@@ -776,7 +776,7 @@ def smoke_available_h3_blocks(model_dir: str | Path, *, max_blocks: int=1, token
     from .safetensors_index import build_index
     root = Path(model_dir)
     transformer_dir = root / 'transformer' if (root / 'transformer').is_dir() else root
-    index = build_index(transformer_dir)
+    index = build_index(transformer_dir,recursive=False)
     blocks, _, naming = group_h3_transformer_blocks(index)
     layout = inspect_h3_transformer_index(index)
     if naming != 'source':
@@ -912,7 +912,7 @@ def _main(argv: list[str] | None=None) -> int:
     from .safetensors_index import build_index
     root = Path(args.model_dir)
     transformer_dir = root / 'transformer'
-    index = build_index(transformer_dir if transformer_dir.is_dir() else root)
+    index = build_index(transformer_dir if transformer_dir.is_dir() else root,recursive=False)
     layout = inspect_h3_transformer_index(index)
     result = {'layout': asdict(layout)}
     if args.host_cache_gb:

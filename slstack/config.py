@@ -41,6 +41,8 @@ def load(path=None, overrides=None):
     for kind in ('image', 'video'):
         if cfg[f'{kind}_mode'] not in ('streaming', 'resident'):
             raise ValueError(f'{kind}_mode must be streaming or resident')
+    if cfg.get('h3_attention_backend','sdpa') not in ('sdpa','sageattention','flash_attn2'):
+        raise ValueError('h3_attention_backend must be sdpa, sageattention or flash_attn2')
     root = Path(cfg['runtime_root']).expanduser()
     root = (root if root.is_absolute() else ROOT / root).resolve()
     cfg['runtime_root'] = str(root)

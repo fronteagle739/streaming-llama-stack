@@ -1380,10 +1380,16 @@ class RealCosmosBackend:
             model_dir = registered / component
         if not model_dir.is_dir():
             raise RuntimeError(f'MiniMax H3 {component} checkpoint is not installed at {model_dir} (registered path: {registered}). Download it, or select the other H3 model -- FL2VA and Ref2VA can both serve every modality.')
-        transformer_index = model_dir / 'transformer' / 'model.safetensors.index.json'
         partial_weight = next(model_dir.rglob('*.part'), None)
-        if (upscale is None or upscale.mode != 'video') and (not transformer_index.is_file() or partial_weight is not None):
-            raise RuntimeError(f'MiniMax H3 {component} checkpoint is incomplete at {model_dir}; finish its transformer manifest and partial weight files before generation.')
+        if upscale is None or upscale.mode != 'video':
+            # The native loader indexes safetensors headers directly. A complete
+            # single-file transformer does not need a diffusers shard manifest.
+            from cosmos_windows.weight_streaming.minimax_h3_backend import inspect_h3_transformer
+            layout = inspect_h3_transformer(model_dir)
+            if not layout.complete or partial_weight is not None:
+                raise RuntimeError(f'MiniMax H3 {component} checkpoint is incomplete at {model_dir}; '
+                    f'{layout.block_count}/50 blocks, missing={list(layout.missing_block_ids)}, '
+                    f'partial={list(layout.incomplete_block_ids)}, unfinished_file={partial_weight is not None}.')
         if upscale is not None:
             from .h3_upscale_runner import preflight
             from .h3_upscale import turbo_path
@@ -1407,9 +1413,8 @@ class RealCosmosBackend:
                 except Exception:
                     pass
             params.width, params.height = (_cw, _ch)
-        out = out_dir / f'minimax_h3_{stem}_{params.width}x{params.height}_s{steps}_seed{params.seed}.mp4'
+        out = out_dir / f'minimax_h3_{stem}_{params.width}x{params.height}_s{steps}_seed{params.seed}_{uuid.uuid4().hex[:12]}.mp4'
         if upscale is not None:
-            import uuid
             out = out.with_stem(out.stem + '_' + upscale.mode + '_' + uuid.uuid4().hex[:8])
         runner = str(getattr(self.settings, 'cosmos_python', '') or sys.executable)
         cuda_device = self._cuda_device()

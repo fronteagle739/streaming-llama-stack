@@ -11,6 +11,16 @@ AUDIO_MODALITIES: dict[str, str] = {'t2a': 't2v', 'audio': 't2v', 'ref2a': 'ref2
 DEFAULT_AUDIO_SIZE = 32
 DEFAULT_AUDIO_STEPS = 50
 
+def build_video_prompt(prompt: str) -> str:
+    """Keep Studio's labelled H3 captions; format a plain chat prompt in that IR."""
+    text=(prompt or '').strip()
+    markers=('integrated_multimodal_description','overall_soundscape','non_diegetic_music',
+             'subject_definitions','retention_analysis','detailed_description')
+    if any(marker in text.lower() for marker in markers):return prompt
+    return (f'integrated_multimodal_description: [Shot 1] {text}\n'
+            'overall_soundscape: Natural ambience and action sounds matching the described scene.\n'
+            'non_diegetic_music: N/A')
+
 def build_image_prompt(prompt: str) -> str:
     subject = (prompt or '').strip().rstrip('.')
     return f'integrated_multimodal_description: [Shot 1] The scene immediately cuts to a single still photograph of {subject}. The photograph fills the entire frame and is completely static: the camera does not move, pan, zoom or shake, and nothing within the image moves. Sharp focus, even exposure, natural colour, high detail throughout, held unchanged for the whole duration like a photograph on screen.\noverall_soundscape: Silence, with no ambience, no action sound and no human sound.\nnon_diegetic_music: N/A'

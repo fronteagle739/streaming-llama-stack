@@ -4,7 +4,7 @@ from pathlib import Path
 import struct
 import tempfile
 import unittest
-from unittest.mock import Mock
+from unittest.mock import Mock, PropertyMock
 from slstack.discovery import scan_models, Scanner
 from slstack.lora_discovery import lora_info, compatibility, public_loras
 from slstack.preferences import Preferences
@@ -77,6 +77,17 @@ class AdapterDiscoveryTests(unittest.TestCase):
         h3=self.file('h3-step.safetensors',{'__metadata__':{'model':'MiniMax-H3'},'diffusion_model.blocks.0.attn.qkv_proj.lora_A.weight':[128,5376]})
         self.assertEqual(lora_info(moss)['arches'],['moss-image'])
         self.assertEqual(lora_info(h3)['arches'],['minimax-h3'])
+
+    def test_video_listing_excludes_image_families_and_image_only_models(self):
+        from unittest.mock import patch
+        models=[dict(id='image',arch='moss-image',kinds=['image']),dict(id='video',arch='minimax-h3',kinds=['video'])]
+        rows=[dict(id='image-lora',arches=['moss-image']),dict(id='video-lora',arches=['minimax-h3']),dict(id='unknown',arches=[])]
+        prefs=Preferences(dict(runtime_root=str(self.root/'runtime')))
+        with patch.object(Preferences,'catalog',new_callable=PropertyMock,return_value=dict(models=models,loras=rows)),patch('slstack.lora_discovery.public_loras',return_value=[]) as listing:
+            prefs.list_loras(kind='video')
+        filtered=listing.call_args.args[0]
+        self.assertEqual([m['id'] for m in filtered['models']],['video'])
+        self.assertEqual([r['id'] for r in filtered['loras']],['video-lora','unknown'])
 
 
 if __name__=='__main__':unittest.main()

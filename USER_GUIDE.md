@@ -67352,7 +67352,7 @@ The stack and its vendored engine module paths.
 
 Scope: ds4-win, image, mac-ds4, mlx-serve, rtx-llama, studio, video. Class: preset.
 
-Source: `vendor/studio/studio/adapter.py:1464`. Unset read: ''.
+Source: `vendor/studio/studio/adapter.py:1469`. Unset read: ''.
 
 ```text
             argv[2:4] = ['studio.h3_upscale_runner']
@@ -67364,7 +67364,7 @@ Source: `vendor/studio/studio/adapter.py:1464`. Unset read: ''.
                 argv += ['--rotation-receipt']
 ```
 
-Source: `vendor/studio/studio/adapter.py:1469`. Unset read: ''.
+Source: `vendor/studio/studio/adapter.py:1474`. Unset read: ''.
 
 ```text
             if ROTATION_RECEIPT.get():
@@ -67376,7 +67376,7 @@ Source: `vendor/studio/studio/adapter.py:1469`. Unset read: ''.
         rc, lines = self._run_guarded_subprocess(guarded, 'minimax_h3', on_step=on_step, should_cancel=should_cancel, **extra)
 ```
 
-Source: `vendor/studio/studio/adapter.py:1644`. Unset read: ''.
+Source: `vendor/studio/studio/adapter.py:1649`. Unset read: ''.
 
 ```text
             raise RuntimeError(f'ideogram_worker.py not found at {script}')
@@ -67406,7 +67406,7 @@ from typing import List, Optional, Tuple
 from cosmos_windows.weight_streaming.magi2_prompt import DEFAULT_NEGATIVE_PROMPT, MAGI2_CLIP_SECONDS, MAGI2_MODES, load_prompt_text, magi2_enhance_presets, mode_config_defaults
 ```
 
-Source: `vendor/studio/studio/adapter.py:1595`. Unset read: 'max_split_size_mb:512,garbage_collection_threshold:0.7'.
+Source: `vendor/studio/studio/adapter.py:1600`. Unset read: 'max_split_size_mb:512,garbage_collection_threshold:0.7'.
 
 ```text
         if refiner_steps:
@@ -67634,7 +67634,7 @@ _PIPELINE_CACHE: dict = {}
 _SCAIL_BLOCK_RE = re.compile('^blocks\\.(\\d+)\\.')
 ```
 
-Source: `vendor/studio/studio/adapter.py:2922`. Unset read: ''.
+Source: `vendor/studio/studio/adapter.py:2927`. Unset read: ''.
 
 ```text
         try:
@@ -67718,7 +67718,7 @@ _SCAIL_BLOCK_RE = re.compile('^blocks\\.(\\d+)\\.')
 _ATTN_BACKEND_CHECKED = False
 ```
 
-Source: `vendor/studio/studio/adapter.py:2922`. Unset read: ''.
+Source: `vendor/studio/studio/adapter.py:2927`. Unset read: ''.
 
 ```text
         try:
@@ -68234,7 +68234,7 @@ STUDIO_ANIMA_ONESHOT: advanced engine setting; built-in default retained
 
 Scope: studio. Class: advanced.
 
-Source: `vendor/studio/studio/adapter.py:2090`. Unset read: ''.
+Source: `vendor/studio/studio/adapter.py:2095`. Unset read: ''.
 
 ```text
         t0 = time.time()
@@ -68342,7 +68342,7 @@ STUDIO_BERNINI_DISTILL_LORA: advanced engine setting; built-in default retained
 
 Scope: studio. Class: advanced.
 
-Source: `vendor/studio/studio/adapter.py:2860`. Unset read: ''.
+Source: `vendor/studio/studio/adapter.py:2865`. Unset read: ''.
 
 ```text
                         on_step(int(step), int(total), None)
@@ -68396,7 +68396,7 @@ STUDIO_BOOGU_KREA_OFFLOAD: advanced engine setting; built-in default retained
 
 Scope: studio. Class: advanced.
 
-Source: `vendor/studio/studio/adapter.py:2654`. Unset read: 'streaming'.
+Source: `vendor/studio/studio/adapter.py:2659`. Unset read: 'streaming'.
 
 ```text
             mode = 'staged' if is_resident else 'staged_disposable'
@@ -68768,7 +68768,7 @@ STUDIO_DOMAINSHUTTLE_MEMORY_MODE: advanced engine setting; built-in default reta
 
 Scope: studio. Class: advanced.
 
-Source: `vendor/studio/studio/adapter.py:2978`. Unset read: 'streaming'.
+Source: `vendor/studio/studio/adapter.py:2983`. Unset read: 'streaming'.
 
 ```text
         frames = None
@@ -68804,7 +68804,7 @@ STUDIO_DOMAINSHUTTLE_MIN_FREE_RAM_GB_GATE: advanced engine setting; built-in def
 
 Scope: studio. Class: advanced.
 
-Source: `vendor/studio/studio/adapter.py:2954`. Unset read: '6'.
+Source: `vendor/studio/studio/adapter.py:2959`. Unset read: '6'.
 
 ```text
         self._cleanup_torch()
@@ -68930,7 +68930,7 @@ STUDIO_FLUX2_KLEIN_DIR: advanced engine setting; built-in default retained
 
 Scope: studio. Class: advanced.
 
-Source: `vendor/studio/studio/adapter.py:1951`. Unset read: _default_klein.
+Source: `vendor/studio/studio/adapter.py:1956`. Unset read: _default_klein.
 
 ```text
         if not os.path.isdir(_default_klein):
@@ -68960,7 +68960,7 @@ STUDIO_FOLEY_MIN_FREE_RAM_GB: advanced engine setting; built-in default retained
 
 Scope: studio. Class: advanced.
 
-Source: `vendor/studio/studio/adapter.py:3137`. Unset read: '12'.
+Source: `vendor/studio/studio/adapter.py:3142`. Unset read: '12'.
 
 ```text
         self._cleanup_torch()
@@ -69230,7 +69230,7 @@ STUDIO_GLM_AR_GGUF: advanced engine setting; built-in default retained
 
 Scope: studio. Class: advanced.
 
-Source: `vendor/studio/studio/adapter.py:2233`. Unset read: ''.
+Source: `vendor/studio/studio/adapter.py:2238`. Unset read: ''.
 
 ```text
         is_i2i = bool(getattr(params, 'image_path', None))
@@ -69278,7 +69278,7 @@ STUDIO_GLM_FAST_AR: advanced engine setting; built-in default retained
 
 Scope: studio. Class: advanced.
 
-Source: `vendor/studio/studio/adapter.py:2234`. Unset read: '1'.
+Source: `vendor/studio/studio/adapter.py:2239`. Unset read: '1'.
 
 ```text
         emit_bin = _resolve_glm_emit_bin(str(getattr(self.settings, 'cosmos_windows_path', '') or ''))
@@ -69296,7 +69296,7 @@ STUDIO_GLM_MODEL: advanced engine setting; built-in default retained
 
 Scope: studio. Class: advanced.
 
-Source: `vendor/studio/studio/adapter.py:2221`. Unset read: None.
+Source: `vendor/studio/studio/adapter.py:2226`. Unset read: None.
 
 ```text
     def _generate_glm(self, params, on_step=None, should_cancel=None) -> GenResult:
@@ -69326,7 +69326,7 @@ STUDIO_GLM_OFFLOAD: advanced engine setting; built-in default retained
 
 Scope: studio. Class: advanced.
 
-Source: `vendor/studio/studio/adapter.py:2242`. Unset read: 'stream'.
+Source: `vendor/studio/studio/adapter.py:2247`. Unset read: 'stream'.
 
 ```text
         load_mode, is_resident, _is_lazy = resolve_load_mode(params)
@@ -69344,7 +69344,7 @@ STUDIO_GLM_PYTHON: advanced engine setting; built-in default retained
 
 Scope: studio. Class: advanced.
 
-Source: `vendor/studio/studio/adapter.py:2372`. Unset read: None.
+Source: `vendor/studio/studio/adapter.py:2377`. Unset read: None.
 
 ```text
     def _generate_glm_subprocess(self, params, model_dir, w, h, steps, guidance, seed, out, fast_ar, emit_bin, ar_gguf, should_cancel=None, on_step=None) -> GenResult:
@@ -69362,7 +69362,7 @@ STUDIO_GLM_SUBPROCESS: advanced engine setting; built-in default retained
 
 Scope: studio. Class: advanced.
 
-Source: `vendor/studio/studio/adapter.py:2235`. Unset read: ''.
+Source: `vendor/studio/studio/adapter.py:2240`. Unset read: ''.
 
 ```text
         ar_gguf = os.environ.get('STUDIO_GLM_AR_GGUF', '')
@@ -69380,7 +69380,7 @@ STUDIO_GLM_TIMEOUT: advanced engine setting; built-in default retained
 
 Scope: studio. Class: advanced.
 
-Source: `vendor/studio/studio/adapter.py:2389`. Unset read: '1800'.
+Source: `vendor/studio/studio/adapter.py:2394`. Unset read: '1800'.
 
 ```text
             worker = self._glm_worker = GlmWorker(glm_py, runtime)
@@ -69734,7 +69734,7 @@ Source: `vendor/studio/studio/adapter.py:773`. Unset read: None.
                     enhanced, route = _run_live_preset()
 ```
 
-Source: `vendor/studio/studio/adapter.py:1515`. Unset read: None.
+Source: `vendor/studio/studio/adapter.py:1520`. Unset read: None.
 
 ```text
         mode = 'i2v' if getattr(params, 'image_paths', None) else 't2v'
@@ -70838,7 +70838,7 @@ STUDIO_IDEOGRAM4_SRC: advanced engine setting; built-in default retained
 
 Scope: studio. Class: advanced.
 
-Source: `vendor/studio/studio/adapter.py:1643`. Unset read: ''.
+Source: `vendor/studio/studio/adapter.py:1648`. Unset read: ''.
 
 ```text
         if not Path(script).is_file():
@@ -70892,7 +70892,7 @@ STUDIO_IDEOGRAM_INPROC: advanced engine setting; built-in default retained
 
 Scope: studio. Class: advanced.
 
-Source: `vendor/studio/studio/adapter.py:1620`. Unset read: ''.
+Source: `vendor/studio/studio/adapter.py:1625`. Unset read: ''.
 
 ```text
 
@@ -70928,7 +70928,7 @@ STUDIO_IDEOGRAM_WORKER: advanced engine setting; built-in default retained
 
 Scope: studio. Class: advanced.
 
-Source: `vendor/studio/studio/adapter.py:1625`. Unset read: ''.
+Source: `vendor/studio/studio/adapter.py:1630`. Unset read: ''.
 
 ```text
             except Exception as exc:
@@ -71090,7 +71090,7 @@ STUDIO_KLEIN_COMPONENT_RESIDENT: advanced engine setting; built-in default retai
 
 Scope: studio. Class: advanced.
 
-Source: `vendor/studio/studio/adapter.py:1972`. Unset read: ''.
+Source: `vendor/studio/studio/adapter.py:1977`. Unset read: ''.
 
 ```text
         mgr = self._get_vram_mgr()
@@ -71108,7 +71108,7 @@ STUDIO_KREA2_DISABLE_STAGED: advanced engine setting; built-in default retained
 
 Scope: studio. Class: advanced.
 
-Source: `vendor/studio/studio/adapter.py:2651`. Unset read: '0'.
+Source: `vendor/studio/studio/adapter.py:2656`. Unset read: '0'.
 
 ```text
         elif arch == 'boogu-turbo' and (not is_resident):
@@ -71594,7 +71594,7 @@ STUDIO_SCAIL_DEVICE_ID: advanced engine setting; built-in default retained
 
 Scope: studio. Class: advanced.
 
-Source: `vendor/studio/studio/adapter.py:2922`. Unset read: '0'.
+Source: `vendor/studio/studio/adapter.py:2927`. Unset read: '0'.
 
 ```text
         try:
@@ -71612,7 +71612,7 @@ STUDIO_SCAIL_GPU_BUFFERS: advanced engine setting; built-in default retained
 
 Scope: studio. Class: advanced.
 
-Source: `vendor/studio/studio/adapter.py:2922`. Unset read: '3'.
+Source: `vendor/studio/studio/adapter.py:2927`. Unset read: '3'.
 
 ```text
         try:
@@ -71864,7 +71864,7 @@ STUDIO_WAN_MIN_FREE_RAM_GB: advanced engine setting; built-in default retained
 
 Scope: studio. Class: advanced.
 
-Source: `vendor/studio/studio/adapter.py:2764`. Unset read: '6'.
+Source: `vendor/studio/studio/adapter.py:2769`. Unset read: '6'.
 
 ```text
         self._cleanup_torch()
@@ -71876,7 +71876,7 @@ Source: `vendor/studio/studio/adapter.py:2764`. Unset read: '6'.
         repo = str(getattr(self.settings, 'cosmos_windows_path', '') or '')
 ```
 
-Source: `vendor/studio/studio/adapter.py:2830`. Unset read: '6'.
+Source: `vendor/studio/studio/adapter.py:2835`. Unset read: '6'.
 
 ```text
         self._cleanup_torch()
@@ -71888,7 +71888,7 @@ Source: `vendor/studio/studio/adapter.py:2830`. Unset read: '6'.
         if repo and repo not in sys.path:
 ```
 
-Source: `vendor/studio/studio/adapter.py:2905`. Unset read: '6'.
+Source: `vendor/studio/studio/adapter.py:2910`. Unset read: '6'.
 
 ```text
         self._cleanup_torch()
@@ -71990,7 +71990,7 @@ STUDIO_ZIMAGE_GPU_BUFFERS: advanced engine setting; built-in default retained
 
 Scope: studio. Class: advanced.
 
-Source: `vendor/studio/studio/adapter.py:1866`. Unset read: '1'.
+Source: `vendor/studio/studio/adapter.py:1871`. Unset read: '1'.
 
 ```text
             self.unload()
@@ -72008,7 +72008,7 @@ STUDIO_ZIMAGE_MIN_FREE_RAM_GB: advanced engine setting; built-in default retaine
 
 Scope: studio. Class: advanced.
 
-Source: `vendor/studio/studio/adapter.py:1859`. Unset read: '6'.
+Source: `vendor/studio/studio/adapter.py:1864`. Unset read: '6'.
 
 ```text
             pipe = self._resident_aux_pipe
@@ -72986,7 +72986,7 @@ STUDIO_H3_STEP_ADAPTERS: explicit engine setting; inherited values are cleared a
 
 Scope: image, video. Class: advanced.
 
-Source: `vendor/studio/studio/h3_model_profiles.py:50`. Unset read: ''.
+Source: `vendor/studio/studio/h3_model_profiles.py:51`. Unset read: ''.
 
 ```text
 def is_base_distill_adapter(path) -> bool:
