@@ -94,7 +94,7 @@ class Exports(unittest.TestCase):
         spec=importlib.util.spec_from_file_location('backend_audit',ROOT/'scripts/audit_backend_sources.py')
         module=importlib.util.module_from_spec(spec);spec.loader.exec_module(module)
         result=module.audit()
-        self.assertEqual(len(result['backends']),11)
+        self.assertEqual(len(result['backends']),len(BACKENDS))
         self.assertTrue(result['all_retained_components_complete'],result)
         self.assertEqual(result['mlx_unpacked_build_inputs'],[])
         self.assertTrue((ROOT/'vendor/mac-mlx/mlx_vlm/models/mimo_v2/_arch_v26.LICENSE').is_file())

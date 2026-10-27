@@ -28,7 +28,7 @@ def source_digest():
     return digest.hexdigest()
 
 
-def setup(cfg, *, check=False, native_glm=True, wheelhouse=None):
+def setup(cfg, *, check=False, native_glm=True, wheelhouse=None, build_only=False):
     if sys.platform!='darwin' or platform.machine()!='arm64':
         raise ValueError('MLX decode setup requires Apple Silicon macOS')
     if sys.version_info<(3,12):raise ValueError('Run setup with Python 3.12 or newer')
@@ -75,11 +75,17 @@ sys.argv=[str(p/'build.py'),'--build-dir',sys.argv[1],'--jobs','2','--fetch-buil
 if wheelhouse:sys.argv.extend(['--wheelhouse',wheelhouse[0]])
 runpy.run_path(str(p/'build.py'),run_name='__main__')
 '''
+            if build_only:builder=builder.replace("runpy.run_path(","sys.argv.append('--skip-smoke')\nrunpy.run_path(")
             run([str(python),'-B','-c',builder,str(runtime/'build/mlx-glm-native'),*([str(wheelhouse)] if wheelhouse else [])],'setup-mlx-glm-native')
         run([str(python),'-B','-m','pip','check'],'setup-mlx-dependency-check')
         current=True
     result=dict(ready=False,python=str(python),source_current=bool(current),source_sha256=revision,native_glm=False)
     if not python.is_file():return result
+    if build_only:
+        if not check:atomic_json(marker,dict(source_sha256=revision,native_glm=already_native,built=True))
+        result.update(built=bool(current),verification_pending=True)
+        atomic_json(runtime/'state/mlx-backend-check.json',result)
+        return result
     # The loader path and native availability are verified by the serving Python,
     # rather than an unrelated system environment or source-tree import.
     probe='''import importlib.metadata as m,json
@@ -95,7 +101,7 @@ print('SLSTACK_MLX_PROBE='+json.dumps(dict(version=m.version('mlx-vlm'),legacy_i
     actual=json.loads(lines[-1]);package=Path(actual['package'])
     result['native_glm']=actual['native'];result['probe']=actual
     inside=package.is_relative_to(python.parent.parent)
-    result['ready']=bool(current and inside and actual['legacy_indexer'] and actual['current_indexer'] and (not native_glm or actual['native']))
+    result['ready']=bool(current and inside and actual['legacy_indexer'] and actual['current_indexer'] and (not native_glm or (actual['native'] and (not check or already_native))))
     if not check and result['ready']:
         atomic_json(marker,dict(source_sha256=revision,native_glm=bool(actual['native']) or already_native))
     atomic_json(runtime/'state/mlx-backend-check.json',result)

@@ -1,6 +1,7 @@
 """Portable Studio decoder commands and explicit transport capabilities."""
 from __future__ import annotations
 from dataclasses import dataclass
+import json
 import ipaddress
 import os
 from pathlib import Path
@@ -21,6 +22,7 @@ BACKENDS = {name: Backend(name, transport, setup) for name, transport, setup in 
     ('llama-decode', 'kv-token', 'llama'),
     ('llama-decode-upstream', 'kv-token', 'llama-upstream'),
     ('ds4', 'ds4-native', 'ds4'),
+    ('ds4-peer', 'ds4-peer', 'ds4-peer'),
     ('mlx-serve', 'openai', 'mlx-serve'),
     ('omlx', 'openai', 'omlx'),
     ('mlx-lm', 'openai', 'mlx'),
@@ -56,6 +58,18 @@ def bind_address(value):
 
 def python_for(runtime, profile='decode'):
     return str(Path(runtime)/(profile+'-venv')/('Scripts/python.exe' if os.name=='nt' else 'bin/python'))
+
+
+def installed_binary(runtime,name,fallback):
+    receipt=Path(runtime)/'state/backends'/(name+'.json')
+    if receipt.is_file():
+        from .backend_setup import check
+        result=check({'runtime_root':str(runtime)},name)
+        if not result.get('ready'):
+            raise ValueError('Backend installation is unverified or changed; run setup-backend --backend '+name)
+        value=result.get('binary')
+        if value:return value
+    return str(fallback)
 
 
 def capabilities(value):
@@ -98,7 +112,7 @@ def command(config, *, runtime, python=None, write_settings=True):
             kv_bits=config.get('kv_bits'),draft_model=config.get('draft_model'),draft_kind=config.get('draft_kind'),draft_block_size=config.get('draft_block_size'))
     if spec.name=='mlx-serve':
         from studio.mlx_serve import mlx_serve_argv
-        binary=str(config.get('binary') or ROOT/'engines/mlx-serve/zig-out/bin/mlx-serve')
+        binary=str(config.get('binary') or installed_binary(runtime,spec.name,ROOT/'engines/mlx-serve/zig-out/bin/mlx-serve'))
         argv=mlx_serve_argv({'mode':'remote'},config=config,config_name='mac',port=port,bind_address=host,binary=binary)
         if argv is None:raise FileNotFoundError('Build mlx-serve with slstack mac-setup --backend mlx-serve after staging its pinned native dependencies')
         return argv
@@ -111,18 +125,24 @@ def command(config, *, runtime, python=None, write_settings=True):
             memory_guard=config.get('memory_guard'),max_concurrent_requests=config.get('max_concurrent_requests',1),
             deepseek_v41_engram_ssd_offload=config.get('deepseek_v41_engram_ssd_offload'))
     if spec.name=='mference':
-        binary=str(config.get('binary') or ROOT/'engines/mference/.build/release/MferenceServer')
+        binary=str(config.get('binary') or installed_binary(runtime,spec.name,ROOT/'engines/mference/.build/release/MferenceServer'))
         return studio.mference_server_argv(model,port=port,binary=binary,bind_address=host,max_context=context,
             model_id=config.get('model_id'),queue_limit=config.get('queue_limit'),prompt_cache_mode=config.get('prompt_cache_mode','single-prefix'),
             expert_cache_slots=config.get('expert_cache_slots'),expert_cache_gb=config.get('expert_cache_gb'),expert_cache_headroom_gb=config.get('expert_cache_headroom_gb'))
     if spec.name=='ds4':
         from studio.mac_argv import ds4_server_argv
-        return ds4_server_argv(model,binary=str(config.get('binary') or ROOT/'engines/ds4-mac/ds4-server'),
+        return ds4_server_argv(model,binary=str(config.get('binary') or installed_binary(runtime,spec.name,ROOT/'engines/ds4-mac/ds4-server')),
             chdir=str(ROOT/'engines/ds4-mac'),port=port,ctx=context,dspark=bool(config.get('dspark',False)),
             mtp_model=config.get('mtp_model'),mtp_draft=config.get('mtp_draft'),batched_session=1)
+    if spec.name=='ds4-peer':
+        from studio.peer_launch import ds4p_peer_argv
+        binary=str(config.get('binary') or installed_binary(runtime,spec.name,ROOT/'engines/ds4-win/ds4-server'))
+        mac={**config,'host':host,'server':binary,'http_port':port}
+        rtx={'ctx':context,'tokens':maximum,'model_path':model}
+        return ds4p_peer_argv(rtx,mac,'unused-rtx-binary')[0]
     if spec.name in ('llama-decode','llama-decode-upstream'):
         name='llama-upstream-decode-receiver' if spec.name.endswith('upstream') else 'llama-decode-receiver'
-        binary=str(config.get('binary') or ROOT/'build/mac-llama/bin'/name)
+        binary=str(config.get('binary') or installed_binary(runtime,spec.name,ROOT/'build/mac-llama/bin'/name))
         argv=[binary,'-m',model,'-ngl',str(config.get('ngl',99)),'-c',str(context),'-n',str(maximum),
               '--kv-host',host,'--token-stream-host',host,
               '--kv-port',str(int(config.get('kv_port',9100))),'--token-stream-port',str(int(config.get('token_port',9101)))]
@@ -131,7 +151,7 @@ def command(config, *, runtime, python=None, write_settings=True):
         if config.get('fa')=='off':argv.append('--no-fa')
         elif config.get('fa')=='on':argv.append('--flash-attn')
         return argv
-    binary=str(config.get('binary') or ROOT/'build/mac-llama/bin/llama-server')
+    binary=str(config.get('binary') or installed_binary(runtime,spec.name,ROOT/'build/mac-llama/bin/llama-server'))
     argv=[binary,'-m',model,'--host',host,'--port',str(port),'-c',str(context),'-ngl',str(config.get('ngl',99)),'--jinja']
     from studio.preset_samplers import launch_args
     argv+=launch_args(config)

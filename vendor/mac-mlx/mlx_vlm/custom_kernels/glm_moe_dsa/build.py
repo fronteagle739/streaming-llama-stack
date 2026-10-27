@@ -30,6 +30,7 @@ def main():
     parser.add_argument('--fetch-build-deps', action='store_true')
     parser.add_argument('--jobs', type=int, default=3)
     parser.add_argument('--wheelhouse', type=Path)
+    parser.add_argument('--skip-smoke', action='store_true',help='Compile only; mark GPU correctness verification pending')
     args = parser.parse_args()
     if platform.system() != 'Darwin':
         raise RuntimeError('Build requires macOS and the Metal compiler toolchain')
@@ -66,10 +67,10 @@ def main():
     ext=next(stage.glob('_ext*.so'))
     if abi_tag(ext) != tag:
         raise RuntimeError(f'Built ABI {abi_tag(ext)} differs from MLX {tag}')
-    subprocess.run([sys.executable,str(src/'smoke.py'),str(stage)],check=True)
+    if not args.skip_smoke:subprocess.run([sys.executable,str(src/'smoke.py'),str(stage)],check=True)
     artifacts=[ext,stage/'libomlx_glm_kernel_ops.dylib',stage/'omlx_glm_kernels.metallib',
                src/'fast.py',src/'smoke.py']
-    manifest=dict(python=sys.executable,mlx_binary=mx.__file__,mlx_abi=tag,nanobind=version,
+    manifest=dict(python=sys.executable,mlx_binary=mx.__file__,mlx_abi=tag,nanobind=version,smoke_verified=not args.skip_smoke,
                   artifacts={p.name:hashlib.sha256(p.read_bytes()).hexdigest() for p in artifacts})
     (stage/'native-build.json').write_text(json.dumps(manifest,indent=2))
     if args.install_dir:
@@ -85,7 +86,7 @@ def main():
             temporary=dest/(p.name+'.new')
             shutil.copy2(p,temporary)
             temporary.replace(target)
-        subprocess.run([sys.executable,str(src/'smoke.py'),str(dest)],check=True)
+        if not args.skip_smoke:subprocess.run([sys.executable,str(src/'smoke.py'),str(dest)],check=True)
         manifest['installed_to']=str(dest)
         manifest['previous_install']=str(backup)
     print(json.dumps(manifest,indent=2))

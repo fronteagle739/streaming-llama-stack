@@ -10,6 +10,7 @@ and start nothing. Normal launches refuse unresolved placeholders.
 | --- | --- |
 | `dsv41-accurate`, `dsv41-fast`, `dsv41-ultra`, `dsv41-ultra-yoco` | Original DSV4.1 GGUF: RTX streaming producer and native Mac ds4 state receiver. The selected directory fixes the RTX prefill tier and YOCO choice. |
 | `kimi-k2.7-streaming` | Studio's optimised Kimi K2.7 streaming settings: RTX GGUF prefill and Mac MLX receiver, 65,536 RTX / 262,144 Mac configured context, 24,576 batch, 2,048 microbatch, F16 KV, MTP off. |
+| `kimi-k2.7-standard-streaming` | Standard Kimi K2.7 settings, using the same weights and receiver with a 512-token RTX microbatch. Replaces the retired Kimi K2.6 weight selection. |
 | `glm-5.1-streaming`, `glm-5.2-streaming`, `glm-5.3-streaming` | Full GLM DSA route: RTX GGUF prefill and Mac MLX receiver, 262,144 configured context, full sparse DSA, 512 microbatch, F16 KV, MTP off. |
 
 The GLM recipes share the retained full-DSA route and current Studio streaming
