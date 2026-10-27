@@ -16,13 +16,15 @@
     let chat = false;
     let url; try { url = new URL(typeof input === 'string' ? input : input.url, location.href); } catch {}
     if (url?.origin === location.origin && /\/chat\/completions$/.test(url.pathname) && typeof init?.body === 'string') {
-      chat = true;
+      chat = nativeControls;
       // A Send immediately after typing must carry the committed toolbar
       // revision. Await the pending35ms debounce and any in-flight save.
-      clearTimeout(timer);
-      await flush();
-      while (saving || dirty) {if (!saving) await flush();else await new Promise(resolve => setTimeout(resolve, 5));}
-      if (error) throw new Error(error);
+      if (nativeControls) {
+        clearTimeout(timer);
+        await flush();
+        while (saving || dirty) {if (!saving) await flush();else await new Promise(resolve => setTimeout(resolve, 5));}
+        if (error) throw new Error(error);
+      }
       try {
         const body = JSON.parse(init.body);
         if (nativeControls) for (const key of ['temperature', 'top_p', 'top_k', 'min_p']) delete body[key];
