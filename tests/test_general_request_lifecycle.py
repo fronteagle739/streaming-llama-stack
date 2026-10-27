@@ -49,7 +49,7 @@ class GeneralRequests(unittest.TestCase):
         from slstack.router import handler
         engine=GeneralEngines.__new__(GeneralEngines)
         engine.cfg={'general':{'mode':'streaming','rtx':{'ctx':65536}}}
-        stack=SimpleNamespace(engines=engine,cfg={**engine.cfg,'ds4_command':['server','--ctx','262144']},
+        stack=SimpleNamespace(engines=engine,cfg={**engine.cfg,'ds4_command':['server','--ctx','262144'],'webui':True},
                               models=SimpleNamespace(rows=[{}],default='model'))
         server=ThreadingHTTPServer(('127.0.0.1',0),handler(stack))
         thread=threading.Thread(target=server.serve_forever,daemon=True);thread.start()
@@ -57,6 +57,8 @@ class GeneralRequests(unittest.TestCase):
             with urllib.request.urlopen('http://127.0.0.1:'+str(server.server_port)+'/props') as response:
                 props=json.load(response)
             self.assertEqual(props['default_generation_settings']['n_ctx'],65536)
+            with urllib.request.urlopen('http://127.0.0.1:'+str(server.server_port)+'/slstack-generation.js') as response:
+                self.assertEqual(response.read(),b'')
         finally:server.shutdown();server.server_close();thread.join()
 
 
