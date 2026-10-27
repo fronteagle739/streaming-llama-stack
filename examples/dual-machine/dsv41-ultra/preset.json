@@ -1,0 +1,20 @@
+{
+  "rtx": {
+    "model": "SET_RTX_GGUF_PATH",
+    "runtime_root": "runtime/dsv41-dual-ultra",
+    "host_budget_gib": 13.5,
+    "min_available_gib": 4,
+    "native_tier": "ultra",
+    "yoco_keep": 0,
+    "mac": "http://MAC_HOST:8180",
+    "pair_token": "SET_SHARED_PAIRING_TOKEN"
+  },
+  "mac": {
+    "model": "SET_MAC_GGUF_PATH",
+    "mtp_model": "SET_MAC_DSPARK_GGUF_PATH",
+    "runtime_root": "runtime/dsv41-dual-ultra",
+    "backend": "ds4",
+    "mac_host_budget_gib": 400,
+    "pair_token": "SET_SHARED_PAIRING_TOKEN"
+  }
+}
