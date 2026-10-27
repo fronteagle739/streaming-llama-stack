@@ -299,7 +299,7 @@ def handler(stack):
                                        'media_progress': progress.snapshot() if progress else None},
                                  extra={'Cache-Control':'no-store'})
             if route == '/slstack/generation':
-                return self.send(200, dict(stack.generation.state(), supported=not bool(stack.cfg.get('mac'))))
+                return self.send(200, dict(stack.generation.state(), supported=not bool(stack.cfg.get('mac') or stack.cfg.get('general'))))
             if route == '/slstack/settings':
                 return self.send(200,stack.preferences.state())
             if route == '/slstack/browse':
@@ -333,6 +333,11 @@ def handler(stack):
                 return self.send(200, (ROOT / 'slstack' / 'media.js').read_bytes(), 'text/javascript; charset=utf-8',
                                  {'Cache-Control':'no-store'})
             if route == '/slstack-generation.js' and stack.cfg['webui']:
+                # General backends use the stock UI's OpenAI sampler fields.
+                # The native toolbar interceptor removes those fields in favor
+                # of its live control file, which general decoders do not read.
+                if stack.cfg.get('general'):
+                    return self.send(200,b'','text/javascript; charset=utf-8',{'Cache-Control':'no-store'})
                 return self.send(200, (ROOT / 'slstack' / 'generation.js').read_bytes(), 'text/javascript; charset=utf-8',
                                  {'Cache-Control': 'no-store'})
             if route == '/slstack-settings.js' and stack.cfg['webui']:
@@ -403,6 +408,7 @@ def handler(stack):
                 if route == '/slstack/settings':
                     return self.send(200,stack.preferences.update(body))
                 if route == '/slstack/generation':
+                    if stack.cfg.get('general'):raise ValueError('Use the WebUI or OpenAI request sampler settings for this backend')
                     if stack.cfg.get('mac'):raise ValueError('This decoder has no live generation controls')
                     return self.send(200, dict(settings=stack.generation.update(body), supported=True,
                         scope='session', applies='next token boundary'))
