@@ -61,5 +61,16 @@ class GeneralRequests(unittest.TestCase):
                 self.assertEqual(response.read(),b'')
         finally:server.shutdown();server.server_close();thread.join()
 
+    def test_general_route_annotations_distinguish_remote_prefill(self):
+        from slstack.router import Stack
+        stack=Stack.__new__(Stack)
+        stack.cfg={'general':{'mode':'streaming','mac':{'backend':'mlx-receiver'}}}
+        result=stack.route_metadata({'route':'single-engine','ultra_handoff':True})
+        self.assertEqual((result['route'],result['decode_backend'],result['transport']),
+                         ('rtx-prefill-mac-decode','mlx-receiver','kv-token'))
+        self.assertFalse(result['ultra_handoff'])
+        stack.cfg={'general':{'mode':'remote','mac':{'backend':'omlx'}}}
+        self.assertEqual(stack.route_metadata({})['route'],'mac-http')
+
 
 if __name__=='__main__':unittest.main()

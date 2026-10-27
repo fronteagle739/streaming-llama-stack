@@ -56,6 +56,16 @@ class Stack:
         from .generation import Store
         self.generation = Store(cfg)
 
+    def route_metadata(self,row):
+        general=self.cfg.get('general')
+        if general:
+            from .backends import backend
+            remote=general.get('mode','streaming')=='remote'
+            spec=backend((general.get('mac') or {}).get('backend','mlx-serve' if remote else 'mlx-receiver'))
+            row.update(route='mac-http' if remote else 'rtx-prefill-mac-decode',
+                       decode_backend=spec.name,transport=spec.transport,ultra_handoff=False)
+        return row
+
     def prepare_chat(self, body, *, stream=False, references=None):
         if not isinstance(body.get('messages'), list) or not body['messages']:
             raise ValueError('messages must be a nonempty array')
@@ -125,10 +135,10 @@ class Stack:
                         content += '\n\n' + f'![Generated media]({artifact["url"]})'
                 message['content'] = content
                 paired = bool(self.cfg.get('mac'))
-                result['slstack'] = {'route': 'rtx-prefill-mac-decode' if paired else
+                result['slstack'] = self.route_metadata({'route': 'rtx-prefill-mac-decode' if paired else
                                       ('single-engine' if getattr(self.engines, 'single_engine', lambda: False)() else 'ds4-native'), 'tool_media': media,
                                       'buffered_stream': True,
-                                      'ultra_handoff': paired and self.cfg.get('native_tier') == 'ultra'}
+                                      'ultra_handoff': paired and self.cfg.get('native_tier') == 'ultra'})
                 return result
             names = [call['function']['name'] for call in calls]
             if not all(name in stack_names for name in names):
@@ -155,8 +165,8 @@ class Stack:
                    'choices':[{'index':0,'delta':delta,'finish_reason':finish}]}
             if finish:
                 row.update(metadata)
-                row['slstack'] = {'route':'rtx-prefill-mac-decode' if self.cfg.get('mac') else 'single-engine','tool_media':media,
-                                   'buffered_stream':False,'ultra_handoff':self.cfg.get('native_tier')=='ultra'}
+                row['slstack'] = self.route_metadata({'route':'rtx-prefill-mac-decode' if self.cfg.get('mac') else 'single-engine','tool_media':media,
+                                   'buffered_stream':False,'ultra_handoff':self.cfg.get('native_tier')=='ultra'})
             return row
         def progress_chunk(progress):
             # The web UI draws its prompt-processing bar from llama-server's prompt_progress.
