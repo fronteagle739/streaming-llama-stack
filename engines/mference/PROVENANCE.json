@@ -1,6 +1,6 @@
 {
   "source_revision": "9e4306f34b75ae75f0bbf43c57ce42b09b560e6b",
-  "edits": "Server-only Swift package manifest; desktop app assets are excluded.",
+  "edits": "Server and native decode service package manifest; decode client dependencies retained without desktop presentation or installer targets.",
   "files": [
     {
       "path": "LICENSE",
@@ -20,7 +20,7 @@
     {
       "path": "Package.swift",
       "source_sha256": "67ee6a89428da981434de15f52c5dcea192484ec0fa0f6b1c2fa779684889dd9",
-      "export_sha256": "d4f28f6842b17b5a4462048f07aa954070205dda20953d5680efa8a790e0793a"
+      "export_sha256": "60e4eafad7513b66432310866ba97179352adb4ad057e15a0d17fe4643dd5b1a"
     },
     {
       "path": "Sources/Mference/Infrastructure/Metal/MetalContext.swift",

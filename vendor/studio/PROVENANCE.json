@@ -12,6 +12,12 @@
       "source_commit": "84e278aba1a59d0b5f422a6781b7546c0c43ef82",
       "source_sha256": "0005b51a56da8bedf99f51327a362bd86f2f7c6e97bbdf6ec0ca962cd6650f5a",
       "export": "complete unchanged module"
+    },
+    {
+      "path": "peer_launch.py",
+      "source_commit": "167e764e6b19dfe4c30cc8ed6fb0938fa7663fd4",
+      "source_sha256": "1d00963dc920d1dc135b46831919cae3955b0bcc3fdf974b504afbeb609c19e3",
+      "export": "AST export of ds4p_peer_argv and _ds4_kv_disk_args; explicit interface binding; no app settings, SSH launcher or private host defaults"
     }
   ],
   "license": "MIT for Front Eagle code; third-party licenses remain authoritative",
