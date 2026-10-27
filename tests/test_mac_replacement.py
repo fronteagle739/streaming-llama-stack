@@ -13,12 +13,13 @@ from slstack.mac import Receiver, budget, check_backend_port, replacement_budget
 
 
 class MacReplacementTests(unittest.TestCase):
-    def test_shipping_admission_reserves_eight_and_runtime_floor_four(self):
+    def test_shipping_admission_reserves_two_and_runtime_floor_four(self):
         with patch('psutil.virtual_memory',return_value=SimpleNamespace(available=16*2**30)):
-            self.assertEqual(budget(dict(mac_host_budget_gib=8))['min_available_gib'],4)
-            with self.assertRaises(MemoryError):budget(dict(mac_host_budget_gib=8.01))
+            self.assertEqual(budget(dict(mac_host_budget_gib=12))['min_available_gib'],4)
+            with self.assertRaises(MemoryError):budget(dict(mac_host_budget_gib=12.01))
+            with self.assertRaises(MemoryError):budget(dict(mac_host_budget_gib=9,producer_desktop_reserve_gib=8))
             result=budget({})
-            self.assertLessEqual(result['host_budget_gib'],8)
+            self.assertLessEqual(result['host_budget_gib'],12)
             self.assertEqual(result['min_available_gib'],4)
 
     @unittest.skipUnless(sys.platform == 'darwin', 'Mac socket reuse semantics')

@@ -49,13 +49,13 @@ The 1M preset admits **999,424 tokens** with a growable bf16 context cache. The 
 
 **The model can choose its quality/speed setting.** Cache-affinity routing favors resident experts at faster settings. The UI slider, API and MCP tools expose Max quality, Balanced, Fast, Faster and Max speed, independently for reasoning, tool calls, answers and code. Use the lower settings for precise code; the fastest measured settings introduced code errors. [Live controls](docs/LIVE_GENERATION.md)
 
-**Memory admission and runtime guards bound host use.** The launch presets cap producer RAM at 7.75 GiB, retain an 8 GiB desktop admission reserve, and stop gracefully below 4 GiB available physical RAM. GPU backing commitment has a separate allowance. Available-RAM and paging checks run during inference; these budgets do not require loading the GGUF into host RAM.
+**Memory admission and runtime guards bound host use.** The launch presets cap producer RAM at 7.75 GiB, retain an 2 GiB desktop admission reserve, and stop gracefully below 4 GiB available physical RAM. GPU backing commitment has a separate allowance. Available-RAM and paging checks run during inference; these budgets do not require loading the GGUF into host RAM.
 
 ## Requirements
 
 - **Windows RTX:** RTX 50-series, compute capability 12.0; the measured configuration uses a 32 GB RTX 5090. Native builds target CUDA `120a` by default.
 - **Fast local NVMe and DirectStorage:** room for the roughly 483 GiB GGUF plus build/runtime files. Storage throughput affects inference speed.
-- **Host RAM:** all measurements ran on a desktop with 32 GB of system RAM. The stack needs its 9.25 GiB budget plus the 8 GiB desktop reserve available; admission refuses to start otherwise.
+- **Host RAM:** all measurements ran on a desktop with 32 GB of system RAM. The stack needs its 9.25 GiB budget plus the 2 GiB desktop reserve available; admission refuses to start otherwise.
 - **Build tools:** Python 3.12, Visual Studio C++ Build Tools, CMake, Ninja, CUDA Toolkit (tested with 13.2), and Node.js/npm (tested with Node 24). Installation needs package-network access; inference uses locally supplied weights.
 - **Optional Mac:** M3 Ultra with 512 GB unified memory, the same language-model GGUF, and network connectivity to the RTX.
 

@@ -28,7 +28,7 @@ def budget(cfg, maximum=400):
     import psutil
     free = psutil.virtual_memory().available / (1 << 30)
     floor = max(4, cfg.get('min_available_gib', 4))
-    reserve = max(8, floor)
+    reserve = max(cfg.get('producer_desktop_reserve_gib', 2), floor)
     requested = cfg.get('mac_host_budget_gib') or min(maximum, (free - reserve) * .9)
     if requested <= 0 or requested + reserve > free:
         raise MemoryError('Mac physical memory budget cannot be admitted')

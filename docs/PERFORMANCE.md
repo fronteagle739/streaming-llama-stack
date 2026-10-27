@@ -58,6 +58,6 @@ Faster introduced a code typo; Max speed introduced C++ syntax errors. These are
 
 ## Memory
 
-Single-engine launch presets use a 6.25 GiB producer base plan, 7.75 GiB producer maximum and 9.25 GiB controller-plus-producer budget, an 8 GiB desktop admission reserve and a 4 GiB runtime physical-RAM floor. The paired 184K run used a separate 8 GiB producer host budget. GPU private-commit backing has its own ceiling; it does not authorize that amount of physical host RAM.
+Single-engine launch presets use a 6.25 GiB producer base plan, 7.75 GiB producer maximum and 9.25 GiB controller-plus-producer budget, a 2 GiB desktop admission reserve and a 4 GiB runtime physical-RAM floor. The reserve is configurable with `producer_desktop_reserve_gib`; larger configured admission floors still apply. Historical timings used the then-current 8 GiB desktop reserve. The paired 184K run used a separate 8 GiB producer host budget. GPU private-commit backing has its own ceiling; it does not authorize that amount of physical host RAM.
 
 Global pagefile counters in some historical runs rose slightly despite ample free RAM. Those counters cannot attribute paging to the producer. No machine-wide zero-paging claim follows from these measurements.

@@ -9,7 +9,7 @@ negotiates keep=140/state version 1; the native Mac importer checks both against
 its configured peer before accepting the existing mode3 payload. The local
 `ComboProducer` restriction protects a separate snapshot contract and is retained.
 Launcher configuration now validates keep=0/140 and permits the explicit Mac
-route. The labelled YOCO example retains the 4 GiB runtime floor and 8 GiB
+route. The labelled YOCO example retains the 4 GiB runtime floor and 2 GiB
 desktop reserve, including native broker and Mac admission.
 
 The existing image fixes handle projected embeddings, Engram masks and image
