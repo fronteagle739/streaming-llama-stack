@@ -39,16 +39,16 @@ The real YOCO140 image and long-recall WebUI gate passes. [Qualification and raw
 | Prefill / workload | Tokens | RTX compute (s) | Transfer/import/hash/ACK (s) | Mac decode tok/s | WebUI prompt (s) |
 |---|---:|---:|---:|---:|---:|
 | Plain ULTRA, historical text | 184,432 | 173.252 | 7.662 | 31.494 | 229.128 |
-| YOCO140, uploaded image | 198,287 | 137.735 | 10.850 | 30.755 | 187.401 |
+| YOCO140, uploaded image, shared streaming-llama plan | 198,287 | 98.771 | 5.657 | 30.982 | 118.766 |
 
-RTX compute excludes the one-token warmup. The YOCO WebUI prompt rate was 1,058.088 tok/s, above the supplied 985.74 image reference. These historical workloads differ; the controlled image comparison below measures the same prompt and sampler settings with YOCO on/off.
+The YOCO run uses four internal sweeps and one final handoff, with no one-token warmup. Its WebUI prompt rate is **1,669.559 tok/s**, versus the supplied 985.74 historical image reference. These workloads differ; the controlled matrix uses identical 49,787-token image prompts, zero reused tokens, the same 1M BF16 growable cache, and matching producer profiles/budgets.
 
-| Route | YOCO140 seconds | YOCO tok/s | Full-evaluation seconds | Full tok/s | Speedup |
+| Route | YOCO140 seconds | YOCO tok/s | Full seconds | Full tok/s | YOCO speedup |
 |---|---:|---:|---:|---:|---:|
-| Single RTX | 29.500 | 1,687.695 | 37.797 | 1,317.221 | 1.281× |
-| RTX → Mac | 67.970 | 732.486 | 74.648 | 666.958 | 1.098× |
+| Single RTX | 30.359 | 1,639.942 | 38.172 | 1,304.281 | 1.257× |
+| RTX → Mac | 33.716 | 1,476.679 | 41.607 | 1,196.596 | 1.234× |
 
-All four controls used 49,787 prompt tokens and the same uploaded image. Paired mode makes two exportable chunks, including a 635-token tail; single mode folds the prompt into one logical prefill. Five chunk boundaries, repeated suffix weight reads, warmup and transfer limit the 198K speedup. [Per-chunk timings, image coverage and Engram accounting](YOCO_PAIRED_QUALIFICATION.md).
+Paired adds 3.357 / 3.435 seconds to the single-engine prompt intervals. Native prefill compute also matches: paired 26.815 / 34.685 s versus single 27.833 / 35.229 s. The former twofold paired gap came mainly from warmup and repeated tiny-tail prefill/export boundaries. [Sweep, export, transfer, Engram and memory accounting](YOCO_PAIRED_QUALIFICATION.md).
 
 The 184,432-token document used four RTX chunks. Native RTX compute totaled **173.2521194 s**, excluding the 16.1972473 s one-token warmup and other serialization/startup work. Four transfer/import/hash/ACK intervals totaled **7.662391 s**. Mac decode evaluated **97 tokens in 3.080 s = 31.4935 tok/s**, including reasoning. The Mac server reported **229.128 s** through prompt processing and **232.208 s** through generation.
 

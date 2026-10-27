@@ -1,56 +1,70 @@
-# Paired YOCO functional evidence; producer-alignment gate pending
+# Paired streaming-llama YOCO qualification
 
-The functional gate passed on October 27, 2026, with the actual stack WebUI in headless Mac Chromium. The 105,054-token recall and two follow-ups returned `AMBER OTTER 731`, the same phrase, and `731`. The uploaded-image conversation correctly identified a red square at 198,287 prompt tokens and remembered it on the next turn. Short initial and follow-up turns used Mac-local prefill at Studio's existing 11,776-new-token crossover.
+The complete October 27, 2026 gate passes in the actual stack WebUI in headless Mac Chromium: 105,054-token recall plus two follow-ups, uploaded image at 198,287 tokens plus a referring turn, Mac-local short initial/follow-up turns, and all four matched 49,787-token image controls. The recall answers were `AMBER OTTER 731`, the same phrase, and `731`; every image answer identified the red square. Replies stream incrementally, the visible prefill bar advances, live/final rates are numerical and context usage updates. [Metrics and receipts](../examples/dual-machine/dsv41-ultra-yoco/proof/shared-profile/summary.json), [SSE progress](../examples/dual-machine/dsv41-ultra-yoco/proof/shared-profile/image-200k-sse.json), [progress screenshot](../examples/dual-machine/dsv41-ultra-yoco/proof/shared-profile/image-200k-progress-2.png), [streaming screenshot](../examples/dual-machine/dsv41-ultra-yoco/proof/shared-profile/image-200k-streaming.png), [final screenshot](../examples/dual-machine/dsv41-ultra-yoco/proof/shared-profile/image-200k-final.png).
 
-The owner subsequently required a shared single-engine prefill plan, final-state-only handoff, a smaller measured host budget and 512 MiB admission reserve. Those changes and their new paired 50K/200K gates remain release blockers. The measurements below describe the earlier per-chunk mode3 profile.
+The large image run used **118.766 seconds**, **1,669.559 prefill tok/s**, and **30.982 Mac decode tok/s** (104 answer tokens in 3.357 seconds). It is 1.694× the supplied historical image reference of 985.74 tok/s. That historical prompt differs slightly; the matched controls below compare identical inputs.
 
-The image run measured **1,058.088 prefill tok/s** over the WebUI's 187.401 s prompt interval, versus the supplied historical image reference of 985.74 tok/s. Its 104 answer tokens took 3.382 s, **30.755 Mac decode tok/s**. Native RTX prompt compute, excluding its one-token warmup, totaled **137.735 s**; five transfer/import/hash/acknowledgment intervals totaled **10.850 s**. These are different timing boundaries and must not be added to the historical compute row without their startup costs.
+## Same producer, finished state, one handoff
 
-[Sanitized metrics and SSE](../examples/dual-machine/dsv41-ultra-yoco/proof/previous-profile/summary.json), [native sampler/routing evidence](../examples/dual-machine/dsv41-ultra-yoco/proof/previous-profile/native-applied-and-routing.log), and screenshots in that directory preserve the actual browser and engine observations. The sustained replies stream incrementally, live/final rates are numeric, and context usage updates. The visible accessible progress bar follows actual SSE counts. The single-engine cold-start diagnostic view now publishes before constructor completion; it no longer loses the entire initial prefill.
+Both routes execute the same streaming-llama producer, SHA-256 `e95af084559456750a50c8e75e03e2fa34d37311e08c218c689df33e972de9ce`. The earlier slow run also used this binary. `native_broker` and mode3 name the authenticated state format; they did not select ds4-win prefill. The Mac ds4 binary decodes the transferred state.
 
-## Controlled image comparison near 50K
+The shared `prefill_arguments` builder now selects the same ULTRA arithmetic, fold planner, sweep capacity, YOCO window, growable BF16 cache, DirectStorage settings and producer budgets. Both matched arms use context 1,000,001; direct-open enabled; one-token warmup disabled; primary sweep 49,152; fold cap 61,440; host base 6.25 GiB and maximum 7.75 GiB. Both have pair-FFN tiles enabled and fixed-resident-plan disabled. Their actual executed prefill arguments differ only in `capture-dspark` and negotiated `yoco-remote-state-version`. [Actual argument comparison](../examples/dual-machine/dsv41-ultra-yoco/proof/shared-profile/actual-argv-parity.json).
 
-All four runs uploaded the same PNG and used the same text, SHA-256 `9ccb0c7b068baff15dc599634ee590358d0d1f1bba779d0cab97fd9fdd5ff6fc`, yielding **49,787 prompt tokens**, with no reused prompt tokens. Every answer correctly identified the image. The paired controls also passed their referring turns. Reported prompt intervals use each route's existing WebUI timing boundary.
+Mode3 export requires the **7,864,320-byte DSpark ring** and YOCO v1 provenance. The ring is captured within the same admission caps. Local snapshots use mode1 and omit that transfer-only ring. The growable exact mode3 window additionally needs 12 KiB of VMM padding; both paths reassign it from graph headroom without increasing the device cap.
 
-| Route | YOCO140 seconds | YOCO tok/s | Full-evaluation seconds | Full tok/s | Speedup |
+The Mac sends the whole logical initial prompt, rather than truncating it into exportable 49,152-token requests. The producer completes its internal sweeps before one export/import/verified acknowledgment. Long remote appends retire the synchronized producer and replay the complete logical prompt through the same planner, preserving a single final handoff. Cleanup must be certified before replacement; no intermediate acknowledgment is fabricated. Small appends retain session reuse.
+
+## Matched image comparison near 50K
+
+All four runs uploaded the same PNG and text, SHA-256 `9ccb0c7b068baff15dc599634ee590358d0d1f1bba779d0cab97fd9fdd5ff6fc`, yielding **49,787 prompt tokens and zero reused tokens**. They use the same 1M BF16 growable cache and profile. Every image answer is correct; the paired controls also pass their referring turns. Timing uses each route's existing WebUI prompt interval.
+
+| Route | YOCO140 seconds | YOCO tok/s | Full seconds | Full tok/s | YOCO speedup |
 |---|---:|---:|---:|---:|---:|
-| Single RTX | 29.500 | 1,687.695 | 37.797 | 1,317.221 | 1.281× |
-| RTX → Mac | 67.970 | 732.486 | 74.648 | 666.958 | 1.098× |
+| Single RTX | 30.359 | 1,639.942 | 38.172 | 1,304.281 | 1.257× |
+| RTX → Mac | 33.716 | 1,476.679 | 41.607 | 1,196.596 | 1.234× |
 
-The single-engine result is consistent with the owner's roughly 1,600 tok/s expectation near this size. Paired throughput is lower because the current authenticated transport exports a decoder-ready checkpoint after each chunk. Even this 49,787-token prompt uses two paired chunks, 49,152 + 635; the single engine folds it into one logical prefill and skips the separate warmup through its existing fixed direct-open path.
+Paired adds **3.357 s** with YOCO and **3.435 s** without it. Its native prompt compute is 26.815 / 34.685 s, versus single-engine 27.833 / 35.229 s. This is consistent with the same prefill work plus export/handoff overhead; the old roughly twofold paired slowdown is removed. These are individual controlled observations, not repeated statistical estimates.
 
-## Why the earlier image result was only 1.04×
+| Paired mode | Startup + prefill | Compute within that | Export preparation | Transfer/import/hash/ACK | Save rewind | Other control | WebUI total |
+|---|---:|---:|---:|---:|---:|---:|---:|
+| YOCO140 | 29.234 | 26.815 | 0.937 | 1.581 | 1.000 | 0.963 | 33.716 |
+| Full | 37.344 | 34.685 | 0.937 | 1.461 | 0.937 | 0.928 | 41.607 |
 
-The earlier blocking transport reported 198,931 tokens in 194.248 s, or 1,024.109 tok/s. Serialized Mac owner hashing and catch-up acknowledgments also reduced decode to 11.003 tok/s. The candidate ports Studio's existing ordered catch-up worker and incremental hash chains; the qualified image decode is now about 30.8 tok/s.
+Times are seconds. Compute is a subset of startup-plus-prefill, so those two columns must not be added. Transfer contains network, Mac import/hash and acknowledgment. Other control is the measured residual, not an independently timed phase. [YOCO SSE/bar samples](../examples/dual-machine/dsv41-ultra-yoco/proof/shared-profile/paired-yoco-sse.json), [full-evaluation SSE/bar samples](../examples/dual-machine/dsv41-ultra-yoco/proof/shared-profile/paired-full-sse.json), [single YOCO SSE/bar samples](../examples/dual-machine/dsv41-ultra-yoco/proof/shared-profile/single-yoco-sse.json).
 
-The large-prompt prefill speedup is limited by the paired boundaries. Every exported chunk is a complete logical prefill: all its rows pass through layer 20, then its last 140 rows pass through layers 21–39. Decoder suffix weights are fetched again at each exportable boundary. The single-engine scheduler can instead use encoder-only internal sweeps before its one final suffix. At 198,287 tokens the paired route also pays for a small fifth chunk whose weight acquisition alone took 15.310 s.
+## Large image phases and the earlier slowdown
 
-| Paired chunk | Tokens | RTX prompt compute (s) | Exposed layer Engram (s) | Transfer/import/hash/ACK (s) |
-|---|---:|---:|---:|---:|
-| 1 | 49,152 | 26.013 | 0.001018 | 1.550 |
-| 2 | 49,152 | 27.791 | 0.001055 | 2.070 |
-| 3 | 49,152 | 32.057 | 0.015347 | 2.441 |
-| 4 | 49,152 | 34.490 | 0.001022 | 2.848 |
-| 5 | 1,679 | 17.385 | 0.000032 | 1.941 |
+The new 198,287-token request uses these four internal sweeps, then **one** final handoff:
 
-The initial RTX operation additionally includes a **17.788 s one-token warmup**. All RTX operation clocks, including startup, sum to 157.015 s. The WebUI prompt interval leaves 19.536 s beyond those clocks and the transfer intervals for export preparation, checkpoint/hash and receiver/control work; those remaining components are not independently timed. Exposed layer Engram sums to 0.018475 s. Prefetch overlaps other work, so this is not a complete Engram cost allocation and must not be added as another serial phase.
+| Sweep | Tokens | Layers evaluated | Prompt compute (s) |
+|---|---:|---|---:|
+| 1 | 49,152 | 0–20 | 18.810 |
+| 2 | 49,152 | 0–20 | 19.590 |
+| 3 | 49,152 | 0–20 | 24.085 |
+| 4 | 50,831 | 0–39, last-140 decoder tail | 36.285 |
 
-The real uploaded image occupies 184 projected rows at positions 198,045–198,228. All 184 receive full layer-20 publication, and 82 intersect the final 140-row decoder tail. The image does not force full evaluation of the whole 198K prompt. Repeated background text makes this a controlled synthetic workload; rates are content-dependent.
+Compute totals **98.771 s**. Startup plus prefill is **102.344 s**; final export preparation **3.782 s**; transfer/import/hash/ACK **5.657 s**; saved rewind **4.422 s**; remaining control **2.561 s**. These sum to the 118.766 s WebUI prompt interval. Exposed layer Engram time sums to **0.003965 s**; its prefetch overlaps other work, so this is not a complete Engram cost allocation.
 
-## Existing implementations and added integration
+The image occupies 184 projected rows at positions 198,045–198,228. Every row receives layer-20 publication; 82 intersect the final 140-row decoder tail. The image does not force full evaluation of the whole document.
 
-Negotiated YOCO v1 export, the mode3 state geometry, full checkpoint verification, projected-image transport and `combo_crossover.py` already existed. The paired route uses `native_broker`; the separate local `ComboProducer` snapshot restriction is retained. The integration connects the labelled launcher, explicit keep=140 negotiation, Mac native import, image identities/Engram masks and Studio's 11,776-row local crossover. Image YOCO needed the scheduler exclusion removed while retaining every layer-20 vision row and decoder-tail intersections.
+The previous profile measured 1,058.088 tok/s at this size: 137.735 s prompt compute, 17.788 s one-token warmup, five transfer/import/hash/ACK intervals totaling 10.850 s, and repeated export/checkpoint/control costs. Its tiny final 1,679-token chunk spent 15.310 s acquiring weights. The corrected run removes the warmup, folds that tail, skips decoder weight fetches on the first three sweeps, and reduces five handoffs to one. Its WebUI interval falls from **187.401 to 118.766 s**.
 
-Mac samplers and bias are ported from the existing Studio/Mac implementation. All GUI runs applied temperature .83, top-p .87, top-k 37, min-p .06 and bias .22; seed 123456 and max tokens 128 were requested. [Single-engine native evidence](../examples/dual-machine/dsv41-ultra-yoco/proof/previous-profile/single-applied-samplers.log) confirms the same core settings. CPU checks cover penalties, logit bias, sampler ordering, phase profiles and advanced settings, plus a greedy negative control. Model tool calls were disabled for this controlled gate.
+At 49,787 tokens the previous paired YOCO interval was 67.970 s versus single-engine 29.500 s. Logged extra work included a 16.411 s warmup and a separate 635-token prefill costing 16.772 s, of which 15.891 s was weight acquisition; two transfer intervals cost 2.229 s. The old paired 8 GiB host cap was above its measured 5.685 GiB native peak, so it was not the main 50K limit. The old single arm also used a different cache/context; the new matrix fixes that mismatch. [Previous-profile diagnostics](../examples/dual-machine/dsv41-ultra-yoco/proof/previous-profile/summary.json).
 
-The existing Studio asynchronous transport source was verified as SHA-256 `c21d89edb2390c89cc1304ccc2ed1559fc137572520bc6fad4f1df67528d1d1b`. Its ordered queue and incremental hash algorithm were ported while retaining negotiated YOCO, image transport and strict joins before RTX reuse or shutdown. Independent CPU owner hashes agree at even and odd positions; corruption fails and workers join cleanly.
+## Existing implementations, samplers and crossover
 
-## Quality, liveness and memory
+Negotiated YOCO v1 export, mode3 geometry and checkpoint verification, projected-image transport and `combo_crossover.py` already existed. Integration connects the labelled launcher, explicit YOCO negotiation, Mac import, image identities/Engram masks and Studio's existing **11,776-new-token strict-less-than crossover**. Short initial/follow-up requests prefill on the Mac without an RTX round trip; the long requests use RTX streaming prefill. [Native applied sampler and routing evidence](../examples/dual-machine/dsv41-ultra-yoco/proof/shared-profile/native-applied-and-routing.txt).
 
-The real-image numerical gate compares full evaluation with YOCO140. When the image intersects the replay tail, KL(full || YOCO) is 0.05814 nats and top-10 recall is 90%; before the tail, KL is 0.00733 and top-10 recall is 90%. Both retain the same leading color token. [Numerical receipts](YOCO_IMAGE_NUMERICAL.json). YOCO remains approximate and opt-in.
+Image YOCO needed the scheduler exclusion removed while preserving every layer-20 vision row and every decoder-tail intersection. The real-image numerical gate reports KL(full || YOCO) **0.05814 nats** with the image intersecting the tail, and **0.00733** with it entirely before the tail; both have **90% top-10 recall** and the same leading color token. [Numerical receipts](YOCO_IMAGE_NUMERICAL.json). YOCO remains approximate and opt-in.
 
-Long load, hash, prefill, handoff and decode operations use progress-based waits. The HTTP transfer view retains the producer's independent stall guard without a total-operation timer; native byte progress and authenticated producer status renew transport liveness. Live ancestor leases remain valid during progressing work beyond their reservation estimate. CPU fake engines and real HTTP/native CPU fixtures verify both slow progress and stalled failure.
+Mac sampler and bias support, plus ordered asynchronous catch-up and incremental owner hashes, were ported from existing Studio/Mac implementations. All GUI controls applied temperature **.83**, top-p **.87**, top-k **37**, min-p **.06**, bias **.22**, seed **123456** and max tokens **128**. [Single-engine applied values](../examples/dual-machine/dsv41-ultra-yoco/proof/shared-profile/single-yoco-applied-samplers.txt). CPU checks cover penalties, logit bias, advanced settings and phase profiles, including a greedy negative control. Model tool calls were disabled for this controlled gate. Strict joins precede RTX reuse and shutdown.
 
-The final focused/expanded CPU run passed **166 tests and 70 subtests**, with 2 environment/platform skips. Mac parser, sampler, image scheduling, incremental owner/hash and queue fixtures passed without opening a model. The Mac build used SHA-256-verified RTX source; 153 native-source entries remained unchanged after the final Python/UI synchronization.
+## Memory and liveness
 
-Native RTX host cap remains 8 GiB, Mac cap 400 GiB, desktop admission reserve 2 GiB and runtime physical-RAM floor 4 GiB. No qualified native run breached a budget. The bounded owned-page scanner observed zero pagefile bytes; the system-wide counter grew 1,728,512 bytes in the image window, which is not process attribution and remained below the unchanged paging stop. [Memory receipt](../examples/dual-machine/dsv41-ultra-yoco/proof/previous-profile/owned-memory.json). This is not an exhaustive machine-wide zero-paging claim.
+The outer paired budget is **8.5 GiB**, reduced from 13.5; both comparison arms use it. The shared producer retains its **6.25 GiB base / 7.75 GiB maximum** and the outer budget allows **0.75 GiB** for controller, broker, guards and export metadata at the maximum plan. The measured paired tree peaked at **6,808,735,744 bytes (6.341 GiB)**. Component sampling observed producer working set up to **6,667,272,192 bytes**, broker **136,880,128 bytes**, controller **49,651,712 bytes**. Peaks are independent observations and need not be simultaneous. [Component RSS/private commitment and guard receipt](../examples/dual-machine/dsv41-ultra-yoco/proof/shared-profile/owned-memory.json).
+
+There was no extra 4 GiB resident controller/export allocation. The previous large outer allowance was unused admission headroom. The 198K finished state is **1,288,705,656 bytes** and streams through pages of at most **64 KiB**, rather than being staged as a whole broker buffer. Raw producer private commitment reaches about **18.1 GB**, including GPU/driver backing; it is not physical host RAM or evidence of paging.
+
+Desktop admission reserve is **512 MiB** on both hosts and in shipping defaults. The separate runtime free-physical-RAM floor remains **4 GiB**, the Mac cap **400 GiB**, and paging stops remain enabled. Qualified native receipts show zero budget breaches. The bounded owned-page scanner observed zero pagefile bytes and the paired guard's global pagefile growth was zero. Kernel ETW disk attribution was unavailable; these observations are not an exhaustive zero-I/O claim.
+
+Long load, prefill, hash, handoff and decode operations wait while actual work progresses. Independent producer stall guards, native byte/hash progress and authenticated producer status enforce no-progress failure, rather than a total-operation deadline. CPU fake engines and actual HTTP/native fixtures cover slow progressing work beyond old caps and stalled failure. Final Python validation passed **183 tests and 61 subtests**, with **2 environment/platform skips**. Mac parser, sampler, image packing, owner/hash and queue fixtures passed without opening a model. Native Mac source was SHA-256 verified against RTX before building; the qualified binary is `bc5170e5f774c1e8f1c102d16b75cbd457ddf962cce596dbdc438400465498a3`.

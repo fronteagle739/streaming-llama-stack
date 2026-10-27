@@ -1,0 +1,4 @@
+single-yoco yoco_keep=140
+LLAMADECODE_GENERATION revision=5 phase=answer bias=0.22 temperature=0.83 top_p=0.87 top_k=37 min_p=0.06 position=49787
+single-full yoco_keep=0
+LLAMADECODE_GENERATION revision=6 phase=answer bias=0.22 temperature=0.83 top_p=0.87 top_k=37 min_p=0.06 position=49787

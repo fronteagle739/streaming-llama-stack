@@ -76,6 +76,7 @@ def supervise(spec):
         record = {'exit_code':code,'reason':reason,'peak_tree_rss':job.record['peak_rss'],
                   'min_available':job.record['minimum_available'],'elapsed_s':time.monotonic()-started,
                   'host_budget_gib':spec['host_budget_gib'],'floor_gib':spec['min_available_gib'],
+                  'runtime_min_free_gib':spec.get('runtime_min_free_gib',0),
                   'no_progress_window_s':spec['timeout_s'],
                   'job_commit_gib':commitment/GiB,
                   'child_pid':job.child.pid if job.child else None,
