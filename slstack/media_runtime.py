@@ -26,6 +26,10 @@ def verify(profile='studio'):
         required['diffusers']=('QwenImage21Pipeline','QwenImage21Transformer2DModel','AutoencoderKLQwenImage21')
         required['bitsandbytes']=('nn',)
     else:
+        from .config import ROOT
+        sys.path.insert(0,str(ROOT/'vendor/engines'))
+        required['cosmos_windows.weight_streaming.minimax_h3_backend']=('inspect_h3_transformer',)
+        required['studio.character_rotation_native']=('ROTATION_RECEIPT',)
         required['diffusers']=tuple(n for n in required['diffusers'] if 'QwenImage21' not in n and n!='AutoencoderKLQwenImage21')
         try:
             from studio.boogu_krea import _ensure_krea2_installed

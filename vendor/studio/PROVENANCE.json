@@ -59,6 +59,14 @@
     {
       "path": "krea2_diffusion.py",
       "purpose": "Use setup-pinned local VAE config with the selected VAE weights and the existing Diffusers Wan/Qwen conversion. DirectStorage fetches resident Windows CUDA tensors in groups, avoiding whole-checkpoint CPU storage slicing; clone and synchronize before releasing the ring. Preserve other platform loading and strict tensor coverage."
+    },
+    {
+      "path": "adapter.py; safety.py; h3_model_profiles.py; character_rotation_native.py",
+      "purpose": "H3 accepts complete native single-file transformers without a shard manifest, uses unique output names, and includes the shared receipt context. Nested launches verify and inherit the stack guardian process tree and Windows owned Job instead of executing the paging-policy library as a CLI. Known fused Comfy exports retain their sectioned QKV profile even inside renamed folders; explicit qkv_layout model config overrides the profile."
+    },
+    {
+      "path": "h3_image_mode.py",
+      "purpose": "Apply Studio audiovisual caption fields to plain chat video prompts without launching an extra LLM. Preserve supplied shot structure, dialogue and audio fields."
     }
   ],
   "modules": [
@@ -390,15 +398,17 @@
         "path": "vendor/studio/studio/h3_image_mode.py",
         "source_path": "backend/studio/h3_image_mode.py",
         "source_sha256": "4223ea9666b670d9a20d1afd4e2a7cb0cedaeed5c95052fb646ddd86fb09845d",
-        "export_sha256": "68df051387435c34a64a5b199ff4df2e80ac8beae1e60fd90cfea0c20d2a22ed",
-        "selected": null
+        "export_sha256": "8e635498eb0ea3960f594f68504985546012c4b79ed02ffa77d9fbb39cf9bf9d",
+        "selected": null,
+        "changes": "Wrap plain video prompts in the same labelled audiovisual caption format used by Studio; preserve explicitly formatted captions unchanged."
       },
       {
         "path": "vendor/studio/studio/h3_model_profiles.py",
         "source_path": "backend/studio/h3_model_profiles.py",
         "source_sha256": "59159eb3fe6830d897e8e4727f0be42f88df6d6adec54833a4ae6cb0728d991e",
-        "export_sha256": "7b533c2957ba3bae999e646b0dad95e0569e4fde56cd64e131d788f97087918d",
-        "selected": null
+        "export_sha256": "7ff2943bb3f5c59be23404bb25c291ab59c46b4a0d48eec600a2307904409ac5",
+        "selected": null,
+        "changes": "Recognize known fused sectioned-QKV exports in selected transformer folders; respect an explicit qkv_layout in model config."
       },
       {
         "path": "vendor/studio/studio/jobs.py",
@@ -466,6 +476,15 @@
         "selected": [
           "_safe"
         ]
+      },
+      {
+        "path": "vendor/studio/studio/character_rotation_native.py",
+        "source_path": "backend/studio/character_rotation_native.py",
+        "source_sha256": "eb488b2b021fb804f8bb0a42682372ea540dba415d4823e2e0270b5f4cfb7ae2",
+        "selected": [
+          "ROTATION_RECEIPT"
+        ],
+        "export_sha256": "7a72450e2384b724972edce6268ab389df4f2d4c48a44fd0662f5c3b7f26e1cd"
       }
     ],
     "transformation": "AST source export; absolute machine fallback paths cleared; jobs exports only owned-worker launch/cleanup helpers; docstrings omitted"

@@ -1,6 +1,7 @@
 # Exported from Studio 167e764e6b19dfe4c30cc8ed6fb0938fa7663fd4; machine-specific fallback paths cleared.
 from __future__ import annotations
 import os
+import json
 import re
 from dataclasses import dataclass
 from pathlib import Path
@@ -63,16 +64,25 @@ def profile_adapters(profile: H3ModelProfile, requested) -> tuple:
 
 def clip_reference_scale(width: int, height: int) -> float:
     return min(1.0, min(int(width), int(height)) / float(H3_REFERENCE_SHORT_EDGE))
-_SECTIONED_QKV = re.compile('viggle|(?<![a-z])(?:h3)?eros|minimax_h3_(?:ref2va|fl2va)_pruned_int8_convrot', re.I)
+_SECTIONED_QKV = re.compile('viggle|(?<![a-z])(?:h3)?eros|minimax_h3_(?:ref2va|fl2va)_pruned_int8_convrot|minimax_h3_(?:fused_refdelta|turbo_adalnfix)', re.I)
 QKV_SECTIONED_ENV = 'STUDIO_H3_COMFY_QKV_SECTIONED'
 
 def qkv_sectioned_without_prefix(model_dir) -> bool:
     if not model_dir:
         return False
-    name = Path(str(model_dir).replace('\\', '/')).name
-    return bool(_SECTIONED_QKV.search(name)) or is_viggle_animate(model_dir)
+    root = Path(str(model_dir).replace('\\', '/'))
+    names = [root.name]
+    if root.is_dir():
+        names.extend(p.name for p in (root/'transformer').glob('*.safetensors'))
+    return any(_SECTIONED_QKV.search(name) for name in names) or is_viggle_animate(model_dir)
 
 def h3_checkpoint_worker_env(model_dir) -> tuple:
+    root=Path(str(model_dir))
+    config=root/'transformer'/'config.json' if root.is_dir() else root.parent/'config.json'
+    if config.is_file() and config.stat().st_size<=1024**2:
+        layout=json.loads(config.read_text()).get('qkv_layout')
+        if layout in ('sectioned','interleaved'):
+            return ((QKV_SECTIONED_ENV,'1' if layout=='sectioned' else '0'),)
     return ((QKV_SECTIONED_ENV, '1'),) if qkv_sectioned_without_prefix(model_dir) else ()
 
 def apply_h3_worker_env(env: dict, model_dir) -> dict:

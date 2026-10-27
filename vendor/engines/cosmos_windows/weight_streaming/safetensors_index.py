@@ -85,14 +85,14 @@ class SafetensorsIndex:
                 globs.append(ref)
         return (layers, globs)
 
-def build_index(path: str | Path) -> SafetensorsIndex:
+def build_index(path: str | Path, *, recursive: bool=True) -> SafetensorsIndex:
     path = Path(path)
     refs: Dict[str, TensorRef] = {}
     if path.is_file() and path.suffix == '.safetensors':
         return SafetensorsIndex(_index_one_file(path))
     if not path.is_dir():
         raise FileNotFoundError(f'not a safetensors file or directory: {path}')
-    shards = sorted(path.rglob('*.safetensors'))
+    shards = sorted(path.rglob('*.safetensors') if recursive else path.glob('*.safetensors'))
     if not shards:
         raise FileNotFoundError(f'no .safetensors under {path}')
     for shard in shards:

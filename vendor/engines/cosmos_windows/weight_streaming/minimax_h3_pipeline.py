@@ -538,7 +538,7 @@ def denoise_h3_t2v(model_dir, prompt_embeddings: torch.Tensor, *, duration: floa
         transformer_dir = Path(model_dir)
         if (transformer_dir / 'transformer').is_dir():
             transformer_dir = transformer_dir / 'transformer'
-        index = build_index(transformer_dir)
+        index = build_index(transformer_dir,recursive=False)
         from .minimax_h3_fused import index_looks_fused
         _fused = index_looks_fused(index.refs)
         model = build_meta_h3_native_model(transformer_dir / 'config.json', attention_backend=attention_backend, fused_adaln=_fused)

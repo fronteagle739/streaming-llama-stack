@@ -370,10 +370,13 @@ class SingleEngine:
             self.pending_snapshot = saved['snapshot'];self.last_used = time.monotonic()
             return dict(restored_tokens=0, checkpoint_tokens=len(saved['tokens']), deferred=True,
                         yoco_keep=saved['snapshot']['contract']['local_state']['yoco_keep'], prefill_seconds=0.0)
-        started = time.monotonic()
-        self.launch(saved['tokens']);self.tool_memory = saved['tool_memory'];self._check_frontier()
+        # Publish completed media before any expensive replay. The next prepare
+        # renders the full conversation plus its new tool result and prefills
+        # it once, rather than replaying here and then appending/replaying again.
+        self.tool_memory = dict(saved['tool_memory'])
         self.last_used = time.monotonic()
-        return dict(restored_tokens=len(saved['tokens']), prefill_seconds=time.monotonic() - started)
+        return dict(restored_tokens=0,checkpoint_tokens=len(saved['tokens']),deferred=True,
+                    replay_required=True,prefill_seconds=0.0)
 
     def _check_frontier(self):
         position = (getattr(self.producer, 'checkpoint', None) or {}).get('position')

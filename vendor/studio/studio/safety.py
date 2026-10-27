@@ -62,7 +62,28 @@ def mem_guard_script(repo: Optional[str | Path]=None) -> Optional[Path]:
     return cand if cand.is_file() else None
 
 def guard_argv(real_argv: list[str], *, min_gb: float=4.0, repo: Optional[str | Path]=None, python: Optional[str]=None) -> list[str]:
-    if not mem_guard_script(repo) or not real_argv:
+    # The pinned job_paging module is a policy library, not a CLI launcher.
+    # Stack media already runs in the shared guard's owned process tree. Check
+    # that ownership before letting its subprocess inherit the same limits.
+    import json
+    import psutil
+    jobs=(Path(settings.data_root).parent/'jobs').resolve()
+    for ancestor in psutil.Process().parents():
+        args=ancestor.cmdline()
+        module=next((name for name in ('slstack.guard_child','slstack.guard') if name in args),None)
+        if not module:continue
+        position=args.index(module)
+        if position+1>=len(args):continue
+        spec_path=Path(args[position+1]).resolve(strict=True)
+        if spec_path.parent!=jobs:continue
+        spec=json.loads(spec_path.read_text())
+        owner=psutil.Process(spec['owner_pid'])
+        if abs(owner.create_time()-spec['owner_created'])>.01 or not spec.get('paging_telemetry'):
+            raise RuntimeError('Media guard ownership or paging policy differs')
+        if sys.platform=='win32':
+            import ctypes
+            assigned=ctypes.c_int()
+            if not ctypes.windll.kernel32.IsProcessInJob(ctypes.c_void_p(-1),None,ctypes.byref(assigned)) or not assigned.value:
+                raise RuntimeError('Media worker is outside its Windows owned Job')
         return real_argv
-    guard = Path(__file__).resolve().parent / 'job_paging.py'
-    return [sys.executable, '-I', str(guard), '--log-floor-gb', str(ram_abort_floor_gb()), '--', *real_argv]
+    raise RuntimeError('Launch media through the stack owned process guard')

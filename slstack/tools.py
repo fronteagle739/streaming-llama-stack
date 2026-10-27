@@ -24,7 +24,7 @@ def media_schema(kind):
                    'strength':{'type':'number','minimum':-4,'maximum':4,'default':1}},'required':['name'],'additionalProperties':False}}
     if kind == 'video':
         props.update(num_frames={'type': 'integer', 'minimum': 5, 'maximum': 129, 'default': 17,
-                                 'description': 'Must equal 4*k+1; default 17'},
+                                 'description': 'Must equal 4*k+1; omit for the selected model default'},
                      fps={'type': 'integer', 'minimum': 1, 'maximum': 60, 'default': 24})
     return {'type': 'object', 'properties': props, 'required': ['prompt'], 'additionalProperties': False}
 
@@ -81,6 +81,7 @@ class Tools:
         for kind in ('image','video'):
             self.schemas['generate_'+kind]['properties']['model']={'type':'string','maxLength':4096,
                 'description':'Optional supported model ID from list_media_models. Omit for the selected default.'}
+        if cfg.get('video_arch')=='minimax-h3':self.schemas['generate_video']['properties']['num_frames']['default']=121
 
     def catalog(self):
         descriptions = {row['name']: row['description'] for row in quality_speed.SPECS}
@@ -94,6 +95,7 @@ class Tools:
                 kind = name.removeprefix('generate_')
                 description = f'Generate {kind} with a supported Studio model in {self.cfg[kind + "_mode"]} mode. Call list_media_models to select a model or omit model for the default. Media is displayed inline automatically; confirm briefly without file paths or job receipts. Only one GPU job runs at a time. Backend may reject unsupported model settings. Settings: '
                 description += '; '.join(f'{key}: {json.dumps(value)}' for key, value in schema['properties'].items())
+                if kind=='video':description += ' For H3, supply its labelled audiovisual caption: integrated_multimodal_description with [Shot 1], overall_soundscape, and non_diegetic_music (N/A if none). Preserve requested dialogue and sounds. Omit num_frames for the selected model default; H3 uses 121 frames at 24 fps.'
             rows.append({'name': name, 'description': description, 'inputSchema': schema})
         return rows
 
@@ -139,6 +141,9 @@ class Tools:
                 current = state.get('phases') if state.get('per_phase') else state.get('value', 0)
                 value = quality_speed.setting_arguments(args, current)
             return self.engines.quality(value)
+        if name=='generate_video' and 'num_frames' not in args:
+            model=self.preferences.select('video',args.get('model'))
+            if model and model['arch']=='minimax-h3':args={**args,'num_frames':121}
         if not quality:
             args = validate(self.schemas[name], args)
         if name.startswith('generate_'):

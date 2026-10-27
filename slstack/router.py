@@ -330,7 +330,39 @@ def handler(stack):
                 html = html.replace(b'</body>', b'<script defer src="/slstack-media.js"></script><script defer src="/slstack-generation.js"></script><script defer src="/slstack-settings.js"></script></body>')
                 return self.send(200, html, 'text/html; charset=utf-8')
             mime = mimetypes.guess_type(str(target))[0] or 'application/octet-stream'
+            if route.startswith('/outputs/') and target.suffix.lower() in ('.mp4','.webm'):
+                return self.video_file(target,mime)
             return self.send(200, target.read_bytes(), mime)
+
+        def video_file(self,target,mime):
+            """Stream bounded chunks and honor browser seeks without buffering the clip."""
+            import re
+            size=target.stat().st_size;first,last=0,size-1
+            requested=self.headers.get('Range')
+            if requested:
+                match=re.fullmatch(r'bytes=(\d*)-(\d*)',requested)
+                valid=bool(match and any(match.groups()))
+                if valid:
+                    a,b=match.groups()
+                    if a:first,last=int(a),min(int(b) if b else size-1,size-1)
+                    else:first,last=max(0,size-int(b)),size-1
+                    valid=0<=first<=last<size
+                if not valid:
+                    self.send_response(416);self.send_header('Content-Range',f'bytes */{size}')
+                    self.send_header('Content-Length','0');self.end_headers();return
+            self.send_response(206 if requested else 200)
+            self.send_header('Content-Type',mime);self.send_header('Accept-Ranges','bytes')
+            self.send_header('Content-Length',str(max(0,last-first+1)))
+            if requested:self.send_header('Content-Range',f'bytes {first}-{last}/{size}')
+            self.end_headers()
+            try:
+                with target.open('rb') as source:
+                    source.seek(first);remaining=last-first+1
+                    while remaining>0:
+                        block=source.read(min(65536,remaining))
+                        if not block:break
+                        self.wfile.write(block);remaining-=len(block)
+            except (BrokenPipeError,ConnectionResetError):pass
 
         def do_POST(self):
             try:
