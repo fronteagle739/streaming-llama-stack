@@ -28,11 +28,16 @@ def source_digest():
     return digest.hexdigest()
 
 
-def setup(cfg, *, check=False, native_glm=True):
+def setup(cfg, *, check=False, native_glm=True, wheelhouse=None):
     if sys.platform!='darwin' or platform.machine()!='arm64':
         raise ValueError('MLX decode setup requires Apple Silicon macOS')
     if sys.version_info<(3,12):raise ValueError('Run setup with Python 3.12 or newer')
     runtime=Path(cfg['runtime_root']).resolve();runtime.mkdir(parents=True,exist_ok=True)
+    offline=[]
+    if wheelhouse:
+        wheelhouse=Path(wheelhouse).expanduser().resolve()
+        if not wheelhouse.is_dir():raise ValueError('wheelhouse must be an existing directory')
+        offline=['--no-index','--find-links',str(wheelhouse)]
     python=runtime/'decode-venv/bin/python';revision=source_digest()
     marker=runtime/'decode-venv/slstack-source.json'
     previous=json.loads(marker.read_text()) if marker.is_file() else {}
@@ -57,18 +62,21 @@ def setup(cfg, *, check=False, native_glm=True):
                     if target.read_bytes()!=data:raise ValueError('Runtime source snapshot diverged: '+name)
                 else:
                     with target.open('xb') as stream:stream.write(data)
-            run([str(python),'-B','-m','pip','install','--disable-pip-version-check','-r',str(LOCK)],'setup-mlx-dependencies')
-            run([str(python),'-B','-m','pip','install','--disable-pip-version-check','--no-deps',str(snapshot)],'setup-mlx-fork')
+            run([str(python),'-B','-m','pip','install','--disable-pip-version-check',*offline,'-r',str(LOCK),'setuptools>=61','wheel'],'setup-mlx-dependencies')
+            run([str(python),'-B','-m','pip','install','--disable-pip-version-check',*offline,'--no-build-isolation','--no-deps',str(snapshot)],'setup-mlx-fork')
         if native_glm and (not current or not previous.get('native_glm')):
-            run([str(python),'-B','-m','pip','install','cmake>=3.27,<5'],'setup-mlx-build-tools')
+            run([str(python),'-B','-m','pip','install',*offline,'cmake>=3.27,<5'],'setup-mlx-build-tools')
             # Installed package data includes every C++/Metal/header/CMake input.
             # No compiled artifact is installed into the tracked source tree.
             builder='''import importlib.metadata as m,runpy,sys
 p=m.distribution('mlx-vlm').locate_file('mlx_vlm/custom_kernels/glm_moe_dsa')
+wheelhouse=sys.argv[2:]
 sys.argv=[str(p/'build.py'),'--build-dir',sys.argv[1],'--jobs','2','--fetch-build-deps','--install-dir',str(p)]
+if wheelhouse:sys.argv.extend(['--wheelhouse',wheelhouse[0]])
 runpy.run_path(str(p/'build.py'),run_name='__main__')
 '''
-            run([str(python),'-B','-c',builder,str(runtime/'build/mlx-glm-native')],'setup-mlx-glm-native')
+            run([str(python),'-B','-c',builder,str(runtime/'build/mlx-glm-native'),*([str(wheelhouse)] if wheelhouse else [])],'setup-mlx-glm-native')
+        run([str(python),'-B','-m','pip','check'],'setup-mlx-dependency-check')
         current=True
     result=dict(ready=False,python=str(python),source_current=bool(current),source_sha256=revision,native_glm=False)
     if not python.is_file():return result
