@@ -22,6 +22,14 @@ def media_schema(kind):
         'description':'Apply only to this generation. Reuse known compatible LoRA names/IDs; list_loras only when discovering an unknown adapter. Omit for no LoRAs.',
         'items':{'type':'object','properties':{'name':{'type':'string','minLength':1,'maxLength':256},
                    'strength':{'type':'number','minimum':-4,'maximum':4,'default':1}},'required':['name'],'additionalProperties':False}}
+    props.update(source_image={'type':'string','minLength':1,'maxLength':4096,
+                     'description':'Chat image reference ID for an uploaded image, or /outputs/... URL of a generated image. Use for i2i or the first frame of i2v.'},
+                 reference_images={'type':'array','maxItems':8,'default':[],
+                     'items':{'type':'string','minLength':1,'maxLength':4096},
+                     'description':'Explicit image reference IDs or generated image URLs for this generation only. Use multiple images only with a compatible model.'},
+                 modality={'type':'string','enum':['t2i','i2i'] if kind=='image' else ['t2v','i2v','ref2v'],
+                     'description':'Omit to infer from supplied images. i2v animates source_image as its first frame; ref2v uses reference_images for appearance/identity.'})
+    if kind=='image':props['denoise']={'type':'number','minimum':0,'maximum':1,'description':'i2i change strength: 0 preserves the source, 1 allows full regeneration; backend/model support varies.'}
     if kind == 'video':
         props.update(num_frames={'type': 'integer', 'minimum': 5, 'maximum': 129, 'default': 17,
                                  'description': 'Must equal 4*k+1; omit for the selected model default'},
@@ -45,8 +53,14 @@ def validate(schema, args):
         value = args.get(key, prop.get('default'))
         typ = prop['type']
         if typ=='array':
-            if not isinstance(value,list) or len(value)>prop.get('maxItems',8):raise ValueError(key+' must be a list of at most8 adapters')
-            result[key]=[validate(prop['items'],item) for item in value];continue
+            if not isinstance(value,list) or len(value)>prop.get('maxItems',8):raise ValueError(key+' has too many items or is not a list')
+            item_schema=prop['items']
+            if item_schema['type']=='string':
+                for item in value:
+                    if not isinstance(item,str) or not item_schema.get('minLength',0)<=len(item)<=item_schema.get('maxLength',65536):raise ValueError(key+' must contain valid image reference strings')
+                result[key]=list(value)
+            else:result[key]=[validate(item_schema,item) for item in value]
+            continue
         valid = ((typ == 'integer' and type(value) is int) or
                  (typ == 'number' and type(value) in (int, float) and math.isfinite(value)) or
                  (typ == 'string' and isinstance(value, str)))
@@ -94,6 +108,7 @@ class Tools:
             if description is None:
                 kind = name.removeprefix('generate_')
                 description = f'Generate {kind} with a supported Studio model in {self.cfg[kind + "_mode"]} mode. Reuse known model/LoRA IDs from this conversation; do not list models or LoRAs before every generation. Omit model for the selected default. Discover only unknown choices and refresh only after relevant settings change, an unavailable-model/adapter error, or an explicit refresh request. Media is displayed inline automatically; confirm briefly without file paths or job receipts. Only one GPU job runs at a time. Backend may reject unsupported model settings.'
+                description += ' Use source_image or reference_images only when requested: uploaded images have Chat image reference IDs beside them; generated images can be reused by their /outputs/... URLs. Reuse those exact identifiers, never invent paths. Check the selected model modalities when choosing i2i, i2v or ref2v; do not silently substitute a text-only generation.'
                 if kind=='video':description += ' For H3, supply its labelled audiovisual caption: integrated_multimodal_description with [Shot 1], overall_soundscape, and non_diegetic_music (N/A if none). Preserve requested dialogue and sounds. Omit num_frames for the selected model default; H3 uses 121 frames at 24 fps.'
             rows.append({'name': name, 'description': description, 'inputSchema': schema})
         return rows
@@ -110,7 +125,7 @@ class Tools:
         return [{'type': 'function', 'function': {'name': row['name'], 'description': row['description'],
                                                 'parameters': row['inputSchema']}} for row in rows]
 
-    def call(self, name, args):
+    def call(self, name, args, *, references=None):
         if name not in self.schemas:
             raise ValueError('Unknown stack tool: ' + name)
         if not self.preferences.enabled(name):raise ValueError('This tool is disabled in Stack settings')
@@ -147,6 +162,14 @@ class Tools:
             args = validate(self.schemas[name], args)
         if name.startswith('generate_'):
             if args.get('loras'):self.preferences.resolve_loras(name.removeprefix('generate_'),args.get('model'),args['loras'])
+            if args.get('source_image') or args.get('reference_images') or args.get('modality'):
+                from .media_references import References,conditioning
+                bank=references or References(self.cfg)
+                args={**args,'_source_image_path':bank.resolve(args['source_image']) if args.get('source_image') else None,
+                      '_reference_image_paths':[bank.resolve(value) for value in args.get('reference_images',[])]}
+                kind=name.removeprefix('generate_');model=self.preferences.select(kind,args.get('model'))
+                if not model:raise ValueError('Choose a supported '+kind+' model in Stack settings')
+                args['_conditioning']=conditioning(kind,args,model['arch'],model['path'])
             return self.engines.media(name.removeprefix('generate_'), args)
         url = self.cfg['bias_mcp_url']
         if not url:

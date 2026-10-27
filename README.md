@@ -133,3 +133,14 @@ Examples use `<model_dir>` and `<checkout>` placeholders: substitute local paths
 Memory sizes are configurable resource ceilings, not a required host RAM size.
 The native backend retains its specialized kernel requirements; this export
 does not qualify additional hardware. See docs/STATUS.md for validation scope.
+
+Chat uploads and generated images can condition later media generations. Ask
+the model to edit an uploaded image, animate it, or use it as a character/scene
+reference. The tools accept `source_image` (an uploaded image ID or generated
+`/outputs/...` URL), `reference_images`, and `modality`: `i2i` for image edits,
+`i2v` for first-frame animation, or `ref2v` for reference-guided video. Image
+edits also accept `denoise` between 0 and 1. Inputs apply only to the requested
+generation. `list_media_models` reports each checkpoint's supported modalities;
+an incompatible request fails before unloading the language model. Source pixels
+are saved in the private runtime and passed to Studio's conditioning fields.
+The chat vision encoder remains separate from the media model's image encoder.

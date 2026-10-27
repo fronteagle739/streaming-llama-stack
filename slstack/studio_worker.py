@@ -104,6 +104,8 @@ def run(request):
         if arch=='minimax-h3' and kind=='video':
             from studio.h3_image_mode import build_video_prompt
             prompt=build_video_prompt(prompt)
+        from .media_references import conditioning
+        inputs=conditioning(kind,args,arch,model)
         params = GenerationParams(prompt=prompt, negative=args['negative_prompt'],
                                   width=args['width'], height=args['height'], steps=args['steps'],
                                   guidance=args['guidance'], seed=args['seed'],
@@ -114,7 +116,7 @@ def run(request):
                                   h3_prompt_enhance=False,
                                   h3_attention_backend=cfg.get('h3_attention_backend','sdpa'),
                                   load_mode='streaming_lazy' if cfg[kind + '_mode'] == 'streaming' else 'resident_cached',
-                                  modality='t2i' if kind == 'image' else 't2v',
+                                  **inputs,
                                   num_frames=args.get('num_frames', 1), fps=args.get('fps', 24),
                                   output_dir=str(root / 'outputs'))
         from .media_progress import callback
