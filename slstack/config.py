@@ -17,6 +17,9 @@ def load(path=None, overrides=None):
     if cfg.get('mac'):
         from .pairing import endpoint
         cfg['mac'] = endpoint(cfg['mac'])
+    if 'paired_local_prefill_max_tokens' in cfg:
+        from .combo_crossover import paired_threshold
+        paired_threshold(cfg)
     keep=cfg.get('yoco_keep',0)
     if type(keep) is not int or keep not in (0,140):
         raise ValueError('yoco_keep must be 0 or 140')

@@ -1,4 +1,5 @@
 /* CPU-only check of the actual Mac request parser. Never opens a model. */
+#include <assert.h>
 #define DS4_SERVER_TEST 1
 #define DS4_SERVER_TEST_NO_MAIN 1
 /* Only tokenization is stubbed: exercising the native JSON parser must not
@@ -6,6 +7,7 @@
 #define ds4_tokenize_rendered_chat paired_test_tokenize
 #include "../engines/ds4-mac/ds4_server.c"
 #undef ds4_tokenize_rendered_chat
+#include "paired_async_fixture.inc"
 void paired_test_tokenize(ds4_engine *e, const char *text, ds4_tokens *out) {
     (void)e;(void)text;memset(out,0,sizeof(*out));
 }
@@ -28,6 +30,15 @@ static bool requested_sampling(const request *r) {
 }
 
 int main(int argc,char **argv) {
+    test_async_snapshots();
+    {
+        int pair[2];assert(!socketpair(AF_UNIX,SOCK_STREAM,0,pair));
+        assert(sse_native_timings(pair[0],"test-native-timing",105000,5000,100.,62,2.));
+        char wire[2048]={0};assert(read(pair[1],wire,sizeof(wire)-1)>0);
+        assert(strstr(wire,"\"prompt_n\":100000")&&strstr(wire,"\"predicted_n\":62"));
+        assert(strstr(wire,"\"predicted_per_second\":31.000000"));
+        assert(!strstr(wire,"nan")&&!strstr(wire,"inf"));close(pair[0]);close(pair[1]);
+    }
     request r;
     char err[256]={0};
     const char *body="{\"messages\":[{\"role\":\"user\",\"content\":\"q\"}],"

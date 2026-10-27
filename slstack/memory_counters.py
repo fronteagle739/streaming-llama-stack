@@ -8,6 +8,30 @@ import time
 import psutil
 
 
+def darwin_reclaimable_bytes(text):
+    """Match native ds4_ns_memory_sample: free + max(file, inactive+speculative).
+
+    File-backed pages may be active; overlapping queues must not be added.
+    """
+    page=re.search(r'page size of (\d+) bytes',text)
+    values={k.strip():int(v) for k,v in re.findall(r'^([^:\n]+):\s+(\d+)\.',text,re.M)}
+    if page is None or not {'Pages free','Pages inactive','Pages speculative','File-backed pages'}<=values.keys():
+        raise RuntimeError('Darwin available-memory counters incomplete')
+    return int(page[1])*(values['Pages free']+max(values['Pages inactive']+values['Pages speculative'],values['File-backed pages']))
+
+
+_darwin_available_sample=(0.,0)
+def available_physical_bytes():
+    global _darwin_available_sample
+    if sys.platform!='darwin':return psutil.virtual_memory().available
+    now=time.monotonic()
+    if now-_darwin_available_sample[0]>=.25:
+        text=subprocess.check_output(['vm_stat'],text=True,timeout=3)
+        ram=psutil.virtual_memory()
+        _darwin_available_sample=(now,min(ram.total-ram.wired,darwin_reclaimable_bytes(text)))
+    return _darwin_available_sample[1]
+
+
 def pagefile_used_bytes():
     """Actual system pagefile slots, rather than the system commit charge.
 

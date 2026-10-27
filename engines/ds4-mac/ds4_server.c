@@ -7227,6 +7227,17 @@ static bool sse_headers(int fd, bool enable_cors) {
     return ok;
 }
 
+/* llama-server timing schema consumed by the stack WebUI. Counts are native
+ * evaluated tokens and durations use the same monotonic request clock. */
+static bool sse_native_timings(int fd,const char*id,int prompt,int cached,
+                                double prefill_s,int generated,double decode_s) {
+    char row[768];double prompt_n=prompt-cached;if(prompt_n<0)prompt_n=0;
+    if(prefill_s<0)prefill_s=0;if(decode_s<0)decode_s=0;
+    int n=snprintf(row,sizeof(row),"data: {\"id\":\"%s\",\"object\":\"chat.completion.chunk\",\"choices\":[],\"timings\":{\"cache_n\":%d,\"prompt_n\":%.0f,\"prompt_ms\":%.3f,\"prompt_per_token_ms\":%.6f,\"prompt_per_second\":%.6f,\"predicted_n\":%d,\"predicted_ms\":%.3f,\"predicted_per_token_ms\":%.6f,\"predicted_per_second\":%.6f}}\n\n",
+        id,cached,prompt_n,prefill_s*1000,prompt_n?prefill_s*1000/prompt_n:0,prefill_s?prompt_n/prefill_s:0,
+        generated,decode_s*1000,generated?decode_s*1000/generated:0,decode_s?generated/decode_s:0);
+    return n>0&&(size_t)n<sizeof(row)&&send_all(fd,row,(size_t)n);
+}
 static bool sse_error_event(int fd, const request *r, const char *msg) {
     const char *message = msg && msg[0] ? msg : "internal server error";
     buf b = {0};
@@ -12905,7 +12916,7 @@ static int server_session_sync(server *s, server_slot *slot,
                                char *err, size_t errlen) {
     if (!s || !slot || !prompt) return 1;
 #if DS4_NATIVE_FRONTIER_ENABLE && defined(__APPLE__)
-    if (s->native_session) {
+    if (s->native_session && !ds4_ns_local_first(&slot->native_session,slot->session,prompt)) {
         if (!server_prefill_enter(s,slot)) return DS4_SESSION_SYNC_INTERRUPTED;
         int rc=ds4_ns_prefill(&slot->native_session,slot->session,prompt,NULL,0,
             server_native_frontier_cancelled,slot,err,errlen);
@@ -12978,7 +12989,7 @@ static int server_session_sync_multimodal(server *s, server_slot *slot,
     if (!image_count)
         return server_session_sync(s, slot, prompt, err, errlen);
 #if DS4_NATIVE_FRONTIER_ENABLE && defined(__APPLE__)
-    if (s && s->native_session) {
+    if (s && s->native_session && !ds4_ns_local_first(&slot->native_session,slot->session,prompt)) {
         if(!server_prefill_enter(s,slot))return DS4_SESSION_SYNC_INTERRUPTED;
         int rc=ds4_ns_prefill(&slot->native_session,slot->session,prompt,images,image_count,
             server_native_frontier_cancelled,slot,err,errlen);
@@ -13198,6 +13209,14 @@ static void server_progress_cb(void *ud, const char *event, int current, int tot
     if (display_current > display_total) display_current = display_total;
     double pct = display_total > 0 ? 100.0 * (double)display_current / (double)display_total : 100.0;
     double avg_tps = elapsed > 0.0 ? (double)display_current / elapsed : 0.0;
+    if (p->stream && p->fd>=0 && p->request_job && p->request_job->req.api==API_OPENAI) {
+        char row[512];
+        int n=snprintf(row,sizeof(row),"data: {\"object\":\"chat.completion.chunk\",\"choices\":[],\"prefill_progress\":{\"tokens_total\":%d,\"tokens_done\":%d,\"elapsed_s\":%.3f},\"prompt_progress\":{\"total\":%d,\"cache\":%d,\"processed\":%d,\"time_ms\":%.3f}}\n\n",
+            p->prompt_tokens,current,elapsed,p->prompt_tokens,p->cached_tokens,current,elapsed*1000);
+        if(n<=0||(size_t)n>=sizeof(row)||!send_all(p->fd,row,(size_t)n)) {
+            p->stream_failed=true;job_mark_cancelled(p->request_job);return;
+        }
+    }
     int interval_tokens = p->seen ? current - p->last_current : 0;
     if (interval_tokens < 0) interval_tokens = 0;
     double interval_s = p->seen ? now - p->last_t : 0.0;
@@ -13812,6 +13831,9 @@ static void generate_job_inner(server *s, server_slot *slot, job *j) {
             server_log(DS4_LOG_PREFILL,"native streaming starts explicit conversation %s",slot->native_conversation);
         }
         slot->native_session.include_history_reasoning=j->req.native_include_previous_reasoning;
+        /* The tiny pairing parity request must exercise the RTX import even
+         * though ordinary prompts of this size use Mac-local prefill. */
+        slot->native_session.force_remote=!strncmp(j->req.native_conversation,"slstack-qualification-",21);
         if(slot->native_session.poisoned) {
             http_error(j->fd,s->enable_cors,409,"Native conversation state invalid; no automatic refill");return;
         }
@@ -14307,6 +14329,7 @@ static void generate_job_inner(server *s, server_slot *slot, job *j) {
     }
 
     bool dsml_recovery_attempted = false;
+    const double measured_prefill_s=now_sec()-t0;
     int recovery_completion = 0;
     uint64_t rng = j->req.seed;
     if (!j->req.seed_set && !random_bytes(&rng, sizeof(rng))) {
@@ -14315,6 +14338,7 @@ static void generate_job_inner(server *s, server_slot *slot, job *j) {
     if (!rng) rng = UINT64_C(0x9e3779b97f4a7c15);
 decode_again:
     ;
+    const double measured_decode_start=now_sec();
     buf text = {0};
     size_t plain_stream_pos = 0;
     size_t stop_scan_from = 0;
@@ -14735,6 +14759,11 @@ decode_again:
             if(sync_rc) {finish="error";stop_decode=true;}
         }
 #endif
+        if(j->req.stream && j->req.api==API_OPENAI && !job_cancelled(j) &&
+           !sse_native_timings(j->fd,id,prompt_tokens,progress.cached_tokens,measured_prefill_s,
+                               completion,now_sec()-measured_decode_start)) {
+            job_mark_cancelled(j);finish="error";stop_decode=true;
+        }
         if (stop_decode) break;
     }
 #if DS4_NATIVE_FRONTIER_ENABLE && defined(__APPLE__)
@@ -15104,6 +15133,9 @@ decode_again:
     }
 
     bool response_ok = !job_cancelled(j);
+    if(response_ok && j->req.stream && j->req.api==API_OPENAI)
+        response_ok=sse_native_timings(j->fd,id,prompt_tokens,progress.cached_tokens,measured_prefill_s,
+                                       completion,now_sec()-measured_decode_start);
     if (response_ok && j->req.stream) {
         if (j->req.api == API_ANTHROPIC) {
             response_ok = anthropic_sse_finish_live(j->fd, s, &j->req, id, &anthropic_live,
