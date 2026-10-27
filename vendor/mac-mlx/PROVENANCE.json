@@ -839,7 +839,7 @@
     {
       "path": "mlx_vlm/custom_kernels/glm_moe_dsa/build.py",
       "source_sha256": "605308ac33c19850ec23ff3e0d6967df9a3335a0227335f6eebd813bd0807bb4",
-      "export_sha256": "25a2dc05a650549fea9c04669f537e4355a1403904999ba28862b4dc28e044e4",
+      "export_sha256": "0082b4e0c4403dab87a2373f4e325b1e445913f562933440d8068bd7f36ffd52",
       "bytes": 4548
     },
     {

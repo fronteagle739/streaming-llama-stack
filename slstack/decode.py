@@ -21,7 +21,7 @@ def settings(cfg, model=None, selected=None):
 
 def scope_for(name):
     if name in ('mlx-receiver','mlx-lm','mlx-vlm','mtp-shim','omlx'):return 'mac-mlx'
-    return {'mlx-serve':'mlx-serve','mference':'mac-mference','ds4':'ds4-mac'}.get(name,'mac-llama')
+    return {'mlx-serve':'mlx-serve','mference':'mac-mference','ds4':'ds4-mac','ds4-peer':'ds4-mac'}.get(name,'mac-llama')
 
 
 def inspect(cfg, model=None, selected=None):

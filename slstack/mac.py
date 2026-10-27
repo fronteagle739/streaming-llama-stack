@@ -79,6 +79,11 @@ def source_digest(directory):
 def setup(cfg, backend='ds4', *, check=False, zig=None):
     if sys.platform != 'darwin' or platform.machine() != 'arm64':
         raise ValueError('Mac setup requires macOS on Apple Silicon')
+    if backend == 'mlx-serve':
+        from .backend_setup import setup as install_backend
+        result=install_backend(cfg,backend,check_only=check)
+        result['binary_sha256']=result.get('binaries',{}).get(result.get('binary'))
+        return result
     model = path(cfg['model'])
     if not model.exists():
         raise ValueError('Set an existing Mac model path')

@@ -30,6 +30,8 @@ def audit(root=ROOT):
         'mlx-serve':['engines/mlx-serve/build.zig','engines/mlx-serve/build.zig.zon',
                      'engines/mlx-serve/scripts/build-mlx.sh','engines/mlx-serve/scripts/fetch-llama.sh'],
         'omlx':['vendor/studio/studio/backend_argv.py'],
+        'ds4-peer':['vendor/studio/studio/peer_launch.py','engines/ds4-win/ds4_peer.c',
+                    'engines/ds4-win/ds4_peer.h','engines/ds4-win/Makefile','engines/ds4-win/ds4_metal.m'],
     }
     rows=[]
     for name,spec in BACKENDS.items():
