@@ -118,6 +118,11 @@ checked against the plan before success is reported.
 
 ## Validation scope
 
+The Q4_K-routed/Q8_0-dense build is GPU-tested, including a
+[49.6K-token recall and decode smoke](ANYGGUF_GPU_SMOKE.md). The IQ2_XXS/Q2_K
+and MXFP4 builds are CPU-tested only; their large-model GPU execution and
+performance remain untested.
+
 The retained [CPU/header receipt](DSV41_GGUF_VALIDATION.json) records the exact
 header hashes, tensor counts, numerical errors and validation limits.
 

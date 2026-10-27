@@ -17,7 +17,8 @@ RTX 5090 desktop with 32 GB of RAM:
 |---|---|
 | Prefill, 48,520-token prompt | **1,163 tok/s** |
 | Prefill with YOCO, 103,189-token prompt | **1,635 tok/s** |
-| Prefill, one million tokens in one session | **1,000,000 tokens in 30 min 8 s** (553 tok/s) |
+| Prefill time, 1,000,000 tokens in one session | **30 min 8 s** |
+| Prefill rate, same session | **553 tok/s** |
 | Decode at Max speed, warm, 14,859-token prompt | **19–21 tok/s** |
 | Decode at Max speed, warm, 43,327-token prompt | **18–20 tok/s** |
 | Decode at Max quality (full model), warm | **6.0 tok/s** |
@@ -32,7 +33,8 @@ Add a Mac Studio M3 Ultra (512 GB) for decode:
 
 | What | Result |
 |---|---|
-| 198,287-token prompt with an image, prefill | **118.8 s** (1,670 tok/s) |
+| Prefill time, 198,287-token image prompt, YOCO | **118.8 s** |
+| Prefill rate, same prompt | **1,670 tok/s** |
 | Mac decode after that prompt | **31.0 tok/s** |
 
 Other models on the same streaming engine and RTX 5090:
@@ -78,6 +80,14 @@ Streaming prefill, the RTX-to-Mac handoff and Mac decode are general and work
 with several model families. The single-engine ds4-kernel decode on the RTX is the
 one DeepSeek V4.1-specific part.
 
+## Who can run this
+
+| Mode | Hardware needed |
+|---|---|
+| Single RTX | Windows RTX 50-series desktop, 32 GB VRAM, 32 GB system RAM and fast DirectStorage NVMe; measured on an RTX 5090. |
+| RTX + Mac | The same RTX machine plus an Apple Silicon Mac with enough unified memory for the model; measured on an M3 Ultra with 512 GB. |
+| RTX + large-RAM box | The same RTX machine plus a Windows/Linux RAM-rich decode host sized for the whole GGUF and session; **untested example**, receiver gap documented [here](examples/dual-machine/dsv41-large-ram-untested/README.md). |
+
 ## Requirements
 
 - **GPU:** RTX 50-series (compute capability 12.0). Measured on an RTX 5090, 32 GB.
@@ -89,12 +99,18 @@ one DeepSeek V4.1-specific part.
   CUDA 13.2 and Node.js 24.
 - **Optional Mac:** M3 Ultra with 512 GB, on the same network, with the same model file.
 
-**Model.** A native DeepSeek V4.1 Flash GGUF using supported tensor types:
+## Any-GGUF single engine
+
+A native DeepSeek V4.1 Flash GGUF using supported tensor types:
 Q4_K, IQ2_XXS/Q2_K or MXFP4 routed experts, with Q8_0, Q4_K or Q4_0 dense
 matrices. The measured file uses Q4_K experts and Q8_0 dense matrices (483 GiB).
-[Supported layouts and conversion from existing safetensors](docs/DSV41_GGUF.md)
-include a pinned wrapper around antirez's ds4 converter and a header-only dry run.
-The installer never downloads weights.
+Our Q4_K/Q8_0 build is GPU-tested. IQ2_XXS/Q2_K and MXFP4 builds are
+CPU-tested only. Public MXFP4 shards must first be merged with antirez's
+`merge_deepseek41_shards.py` tool. “Any-GGUF” covers these supported V4.1 Flash
+layouts and geometry, rather than arbitrary GGUF architectures.
+[Layouts and assembly instructions](docs/DSV41_GGUF.md) and the
+[conversion script](scripts/convert_dsv41_gguf.py) cover existing safetensors,
+with a header-only dry run. The installer never downloads weights.
 
 ## Quickstart
 
@@ -167,7 +183,17 @@ It prints an endpoint, a pairing token and the Windows command:
 ./slstack.ps1 rtx --config my.local.json --mac <mac-endpoint> --pair-token <printed-token> --webui
 ```
 
+With YOCO, the 198,287-token image prompt prefills at **1,670 tok/s**
+and Mac decode reaches **31.0 tok/s**. The matched 49,787-token image prompt
+prefills at **1,477 tok/s** with YOCO and **1,197 tok/s** without it.
 [Pairing, routing and measured speeds](docs/TWO_MACHINE.md).
+Use the [ULTRA + YOCO paired preset](examples/dual-machine/dsv41-ultra-yoco/preset.json)
+with the [example launchers](examples/dual-machine/README.md) to enable YOCO.
+
+For a Windows/Linux second machine with enough RAM to hold the model, see the
+[large-RAM ds4-win untested example](examples/dual-machine/dsv41-large-ram-untested/README.md).
+It documents the missing mode3/YOCO CPU receiver; its launcher only previews the
+configuration.
 
 ## Features
 
@@ -187,7 +213,8 @@ It prints an endpoint, a pairing token and the Windows command:
 ## Limitations
 
 - Windows kernels target compute capability 12.0 (RTX 50-series).
-- The single-engine DeepSeek V4.1 path expects Q4_K routed experts and Q8_0 for the rest.
+- The RTX path is Windows-only today because it uses DirectStorage.
+- The single-engine DeepSeek V4.1 path accepts the [supported GGUF layouts](docs/DSV41_GGUF.md); split files require assembly first.
 - The faster dial settings cost quality. Max speed introduced syntax errors in C++
   tests; use Max quality or Balanced for code.
 - YOCO is approximate and opt-in.

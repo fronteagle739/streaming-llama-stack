@@ -2,7 +2,7 @@
 
 ## Limitations
 
-- Windows kernels target compute capability 12.0 (RTX 50-series). Other GPUs are untested.
+- The RTX path is Windows-only today (DirectStorage), targeting compute capability 12.0 (RTX 50-series). Other GPUs are untested.
 - The single-engine DeepSeek V4.1 path supports the [listed tensor layouts](DSV41_GGUF.md); split GGUFs require lossless assembly first.
 - The faster quality/speed settings cost quality. Max speed introduced syntax
   errors in C++ tests; use Max quality or Balanced for code.
@@ -14,8 +14,8 @@
 
 ## Planned
 
-- An example two-machine configuration with a large-RAM second machine (for
-  example a DDR4 server) running ds4-win decode.
+- Complete the CPU mode3/YOCO receiver for the delivered
+  [large-RAM ds4-win untested example](../examples/dual-machine/dsv41-large-ram-untested/README.md).
 - Faster cold start and DirectStorage setup; better VRAM use within the same RAM budget.
 - Wider quality and long-context testing across prompt types and hardware.
 - More media models and adapters.

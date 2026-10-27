@@ -63,7 +63,11 @@ The handoff is general. Kimi K2.7 and GLM-5.1/5.2/5.3 use RTX prefill with an ML
 receiver on the Mac. Presets are in
 [examples/dual-machine](../examples/dual-machine/README.md).
 
-## Planned: a large-RAM decode box
+## A large-RAM decode box — untested example
 
-An example configuration for an RTX prefill machine paired with a large-RAM
-second machine (for example a DDR4 server) running ds4-win decode is planned.
+The [large-RAM ds4-win example](../examples/dual-machine/dsv41-large-ram-untested/README.md)
+pairs the existing ULTRA + YOCO export plan with a Windows/Linux RAM-rich host,
+such as a DDR4 server. **Untested example:** ds4-win imports native GPU session
+snapshots, but its CPU RAM-resident backend lacks the mode3/DSpark and YOCO v1
+receiver used by the Mac. The example launcher prints config/argv and refuses
+to start. No speed or residency measurement is claimed for this route.

@@ -4,6 +4,8 @@ All RTX numbers come from one desktop: RTX 5090 (32 GB VRAM), 32 GB of system
 RAM, Windows, NVMe RAID-0 at about 25 GB/s. The Mac is an M3 Ultra with 512 GB.
 Every figure below was measured; each says what was timed.
 
+[Any-GGUF Q4_K/Q8_0 smoke](ANYGGUF_GPU_SMOKE.md): 49.6K-token recall at **1,592 tok/s**; warm decode **6.8 tok/s** (Max quality) / **18.2 tok/s** (Max speed).
+
 ## DeepSeek V4.1 Flash on one RTX 5090
 
 Model: DeepSeek V4.1 Flash GGUF, Q4_K routed experts and Q8_0 for the rest
