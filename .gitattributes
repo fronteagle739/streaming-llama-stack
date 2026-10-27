@@ -1,4 +1,5 @@
 docs/evidence/** -text
+examples/**/*.sh text eol=lf
 # LF webui sources keep the tracked built index.html.gz reproducible on Windows.
 engines/streaming-llama/prefill_llama.cpp/tools/server/webui/**/*.svelte text eol=lf
 engines/streaming-llama/prefill_llama.cpp/tools/server/webui/**/*.svx text eol=lf
