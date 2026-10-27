@@ -4,7 +4,7 @@
     "model_name": "DeepSeek-V4-Flash-153G",
     "runtime_root": "runtime/dsv4-flash-153g-peer-streaming",
     "host_budget_gib": 14,
-    "min_available_gib": 4,
+    "min_available_gib": 0.5,
     "general": {
       "mode": "peer",
       "rtx": {
@@ -19,7 +19,8 @@
         "model_path": "SET_MAC_GGUF_PATH",
         "peer_port": 49173
       }
-    }
+    },
+    "producer_desktop_reserve_gib": 0.5
   },
   "mac": {
     "runtime_root": "runtime/dsv4-flash-153g-peer-streaming",
@@ -34,6 +35,7 @@
       "peer_session_max": 4,
       "max_tokens": 2048
     },
-    "mac_host_budget_gib": 200
+    "mac_host_budget_gib": 200,
+    "producer_desktop_reserve_gib": 0.5
   }
 }

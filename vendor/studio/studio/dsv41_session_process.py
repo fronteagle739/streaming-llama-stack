@@ -72,7 +72,7 @@ class Producer:
 
     def _initialize(self, session, argv, env, directory, *, host_bytes, physical_floor, operation_seconds, idle_seconds, native, cancelled, runtime_check):
         session_identity(session)
-        require(type(host_bytes) is int and host_bytes > 0 and (type(physical_floor) is int) and (physical_floor >= 1 << 30), 'Explicit host budget/floor required')
+        require(type(host_bytes) is int and host_bytes > 0 and (type(physical_floor) is int) and (physical_floor >= 512 << 20), 'Explicit host budget/floor required')
         require(0 < operation_seconds <= 3600 and 0 < idle_seconds <= 3600, 'Bounded session deadlines required')
         require(psutil.virtual_memory().available >= host_bytes + physical_floor, 'Persistent producer host admission refused')
         if native is None:

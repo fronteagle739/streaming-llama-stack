@@ -1,0 +1,155 @@
+{
+  "status": "PASS",
+  "scope": "RTX full evaluation vs YOCO image frontier",
+  "cases": {
+    "intersects_tail": {
+      "tokens": 204,
+      "image_start": 2,
+      "image_end": 186,
+      "full": {
+        "position": 204,
+        "logits_sha256": "c94458cf94ce7e2b6b6d14e8de30fa774d76bec8016140cdae5984344873cc3f",
+        "export_bytes": 20173676
+      },
+      "yoco": {
+        "position": 204,
+        "logits_sha256": "0c9543638831c056fb3b1df6dbc1392120a32cd115a9940279ecd70f3145c275",
+        "export_bytes": 20173676
+      },
+      "kl_full_to_yoco": 0.058138595253578305,
+      "top10_recall": 0.9,
+      "full_argmax": 18013,
+      "yoco_argmax": 18013,
+      "full_argmax_in_yoco_top10": true,
+      "full_top10": [
+        18013,
+        32111,
+        29140,
+        43,
+        671,
+        23856,
+        24911,
+        1157,
+        27602,
+        29689
+      ],
+      "yoco_top10": [
+        18013,
+        29140,
+        32111,
+        671,
+        43,
+        23856,
+        1157,
+        24911,
+        27602,
+        1882
+      ],
+      "pass": true,
+      "full_argmax_text": "white",
+      "yoco_argmax_text": "white"
+    },
+    "before_tail": {
+      "tokens": 804,
+      "image_start": 2,
+      "image_end": 186,
+      "full": {
+        "position": 804,
+        "logits_sha256": "e8b4c7229b47a400b0bc76757b000be36341e7f229b46b20b31cf3b41cf2bfd5",
+        "export_bytes": 24016076
+      },
+      "yoco": {
+        "position": 804,
+        "logits_sha256": "59f409c471ad37b2a0c424e0f63a39ab0ae461cb174940c0acdc5c82c2bece4a",
+        "export_bytes": 24016076
+      },
+      "kl_full_to_yoco": 0.007327481176557427,
+      "top10_recall": 0.9,
+      "full_argmax": 18013,
+      "yoco_argmax": 18013,
+      "full_argmax_in_yoco_top10": true,
+      "full_top10": [
+        18013,
+        23856,
+        32111,
+        43,
+        671,
+        29140,
+        27602,
+        1157,
+        24911,
+        104180
+      ],
+      "yoco_top10": [
+        18013,
+        23856,
+        32111,
+        43,
+        671,
+        29140,
+        27602,
+        1157,
+        24911,
+        5403
+      ],
+      "pass": true,
+      "full_argmax_text": "white",
+      "yoco_argmax_text": "white"
+    }
+  },
+  "producer_sha256": "e95af084559456750a50c8e75e03e2fa34d37311e08c218c689df33e972de9ce",
+  "producer_source_revision": "cb4315eba79493042e62cd794a98760f69dfeba4",
+  "fixture_projection_sha256": "88b5528061958d63af4deda8fe1388e576459a6ab12cd56a0bf6fe8ebdeb4154",
+  "criteria": {
+    "maximum_kl_nats": 0.1,
+    "full_argmax_in_yoco_top10": true
+  },
+  "native_host_budget_bytes": 8589934592,
+  "outer_host_budget_gib": 8.5,
+  "desktop_reserve_gib": 2,
+  "runtime_min_free_gib": 4,
+  "full_response_decoded": false,
+  "paired_mac_decode": false,
+  "memory_receipts": [
+    {
+      "host_budget": 8589934592,
+      "runtime_min_free_gib": 4.0,
+      "peak_rss": 5842821120,
+      "minimum_available_ram": 9667833856,
+      "paging_growth": 0,
+      "budget_breaches": 0,
+      "owned_job_empty": true,
+      "owned_pid_gone": true
+    },
+    {
+      "host_budget": 8589934592,
+      "runtime_min_free_gib": 4.0,
+      "peak_rss": 5842575360,
+      "minimum_available_ram": 9596788736,
+      "paging_growth": 0,
+      "budget_breaches": 0,
+      "owned_job_empty": true,
+      "owned_pid_gone": true
+    },
+    {
+      "host_budget": 8589934592,
+      "runtime_min_free_gib": 4.0,
+      "peak_rss": 5843488768,
+      "minimum_available_ram": 9759215616,
+      "paging_growth": 0,
+      "budget_breaches": 0,
+      "owned_job_empty": true,
+      "owned_pid_gone": true
+    },
+    {
+      "host_budget": 8589934592,
+      "runtime_min_free_gib": 4.0,
+      "peak_rss": 5842939904,
+      "minimum_available_ram": 9721655296,
+      "paging_growth": 0,
+      "budget_breaches": 0,
+      "owned_job_empty": true,
+      "owned_pid_gone": true
+    }
+  ]
+}

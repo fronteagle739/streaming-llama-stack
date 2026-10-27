@@ -6,6 +6,19 @@ ceil/clamp semantics. A production route requires matching measured receipts.
 import math
 
 
+def paired_threshold(cfg):
+    """Studio's paired DSV4.1 presets use 11776 Mac-local new tokens.
+
+    An explicitly qualified measured crossover uses the existing validator.
+    Source: Studio studio_llm_presets.json, ULTRA f637bbc2ecf1,
+    DS4_NATIVE_SESSION_LOCAL_PREFILL_MAX_TOKENS (2026-10-27).
+    """
+    n = qualified_threshold(cfg) if ('combo_crossover_tokens' in cfg or 'combo_crossover_receipt' in cfg) else cfg.get('paired_local_prefill_max_tokens', 11776)
+    if type(n) is not int or not 0 <= n <= 49152:
+        raise ValueError('Paired local prefill threshold must be 0..49152')
+    return n
+
+
 def crossover(stream_floor_ms,stream_tok_s,native_tok_s,minimum=100):
     if any(not math.isfinite(v) or v<=0 for v in (stream_floor_ms,stream_tok_s,native_tok_s)) or native_tok_s>=stream_tok_s:
         raise ValueError('Measured crossover unavailable; handoff admission refused')

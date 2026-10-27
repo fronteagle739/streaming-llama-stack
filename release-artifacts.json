@@ -108,6 +108,300 @@
       "sha256": "406f6b877cf7af76fe8bb9a5400cd864c305bd68c30956df4cbed8001bc1f693",
       "media_type": "image/png",
       "review": "Visually inspected walkthrough image step, phone width: unchanged llama.cpp web UI, synthetic lighthouse prompts, token statistics; no personal paths, addresses or credentials visible."
+    },
+    {
+      "path": "examples/dual-machine/dsv41-ultra-yoco/proof/previous-profile/generation-settings.png",
+      "sha256": "b54d3c4d17952f9f63bba427ad836c487ac71910f0dcbbc31579d0b2fe83c5a1",
+      "media_type": "image/png",
+      "review": "Visually inspected real headless stack WebUI evidence. Synthetic recall/weather and red-square prompts only; sampler settings, live progress and numerical/context stats visible. No personal paths, credentials or network addresses visible. Previous producer profile is labelled in the qualification."
+    },
+    {
+      "path": "examples/dual-machine/dsv41-ultra-yoco/proof/previous-profile/image-200k-final.png",
+      "sha256": "66016827f59d464bd85f32efd30f47b019529892b38492138669642f146d1b77",
+      "media_type": "image/png",
+      "review": "Visually inspected real headless stack WebUI evidence. Synthetic recall/weather and red-square prompts only; sampler settings, live progress and numerical/context stats visible. No personal paths, credentials or network addresses visible. Previous producer profile is labelled in the qualification."
+    },
+    {
+      "path": "examples/dual-machine/dsv41-ultra-yoco/proof/previous-profile/image-200k-progress-2.png",
+      "sha256": "932f34c25934c285c3c420d59e697d3e470152edde33481546d1b5d76d7e4194",
+      "media_type": "image/png",
+      "review": "Visually inspected real headless stack WebUI evidence. Synthetic recall/weather and red-square prompts only; sampler settings, live progress and numerical/context stats visible. No personal paths, credentials or network addresses visible. Previous producer profile is labelled in the qualification."
+    },
+    {
+      "path": "examples/dual-machine/dsv41-ultra-yoco/proof/previous-profile/image-200k-streaming.png",
+      "sha256": "a0305165e766299ed2cbccb1775ccf821621a5c57687defac22ae920b1825bec",
+      "media_type": "image/png",
+      "review": "Visually inspected real headless stack WebUI evidence. Synthetic recall/weather and red-square prompts only; sampler settings, live progress and numerical/context stats visible. No personal paths, credentials or network addresses visible. Previous producer profile is labelled in the qualification."
+    },
+    {
+      "path": "examples/dual-machine/dsv41-ultra-yoco/proof/previous-profile/image-followup-final.png",
+      "sha256": "901fbdbd4e64d1f239112c59001e94b038c4799bb4894c14fdba55d4272e71e9",
+      "media_type": "image/png",
+      "review": "Visually inspected real headless stack WebUI evidence. Synthetic recall/weather and red-square prompts only; sampler settings, live progress and numerical/context stats visible. No personal paths, credentials or network addresses visible. Previous producer profile is labelled in the qualification."
+    },
+    {
+      "path": "examples/dual-machine/dsv41-ultra-yoco/proof/previous-profile/paired-full-final.png",
+      "sha256": "eb91147e62b7bb32990ec6a4f29b7c1c865888b5b542f0539003430003fd7499",
+      "media_type": "image/png",
+      "review": "Visually inspected real headless stack WebUI evidence. Synthetic recall/weather and red-square prompts only; sampler settings, live progress and numerical/context stats visible. No personal paths, credentials or network addresses visible. Previous producer profile is labelled in the qualification."
+    },
+    {
+      "path": "examples/dual-machine/dsv41-ultra-yoco/proof/previous-profile/paired-full-progress-3.png",
+      "sha256": "fd7e59f78e7872def1919ae4c17bf45e2f97a4e835414120c7ee323bcc231a05",
+      "media_type": "image/png",
+      "review": "Visually inspected real headless stack WebUI evidence. Synthetic recall/weather and red-square prompts only; sampler settings, live progress and numerical/context stats visible. No personal paths, credentials or network addresses visible. Previous producer profile is labelled in the qualification."
+    },
+    {
+      "path": "examples/dual-machine/dsv41-ultra-yoco/proof/previous-profile/paired-full-samplers.png",
+      "sha256": "d08c261d3787ec30c31b7cb391707e53a90e190f64cdfb90742427ee1b0d75eb",
+      "media_type": "image/png",
+      "review": "Visually inspected real headless stack WebUI evidence. Synthetic recall/weather and red-square prompts only; sampler settings, live progress and numerical/context stats visible. No personal paths, credentials or network addresses visible. Previous producer profile is labelled in the qualification."
+    },
+    {
+      "path": "examples/dual-machine/dsv41-ultra-yoco/proof/previous-profile/paired-full-streaming.png",
+      "sha256": "ed352bd9f3c23715211703842de85296a2f6157659f55575cc0c117999b44d8d",
+      "media_type": "image/png",
+      "review": "Visually inspected real headless stack WebUI evidence. Synthetic recall/weather and red-square prompts only; sampler settings, live progress and numerical/context stats visible. No personal paths, credentials or network addresses visible. Previous producer profile is labelled in the qualification."
+    },
+    {
+      "path": "examples/dual-machine/dsv41-ultra-yoco/proof/previous-profile/paired-yoco-final.png",
+      "sha256": "04dcd9191a6202913e52f624749ff29c18fe2e9a9e4082d67c0d11a3e96925a1",
+      "media_type": "image/png",
+      "review": "Visually inspected real headless stack WebUI evidence. Synthetic recall/weather and red-square prompts only; sampler settings, live progress and numerical/context stats visible. No personal paths, credentials or network addresses visible. Previous producer profile is labelled in the qualification."
+    },
+    {
+      "path": "examples/dual-machine/dsv41-ultra-yoco/proof/previous-profile/paired-yoco-progress-3.png",
+      "sha256": "99c751817f08b2d905fbedd5074ca44e6f74c2da4bb071670f09651915904f43",
+      "media_type": "image/png",
+      "review": "Visually inspected real headless stack WebUI evidence. Synthetic recall/weather and red-square prompts only; sampler settings, live progress and numerical/context stats visible. No personal paths, credentials or network addresses visible. Previous producer profile is labelled in the qualification."
+    },
+    {
+      "path": "examples/dual-machine/dsv41-ultra-yoco/proof/previous-profile/paired-yoco-samplers.png",
+      "sha256": "2de731d5c6b07347f5dedfc15b8b49ab2718102f6016bdf128ab833fd55898a2",
+      "media_type": "image/png",
+      "review": "Visually inspected real headless stack WebUI evidence. Synthetic recall/weather and red-square prompts only; sampler settings, live progress and numerical/context stats visible. No personal paths, credentials or network addresses visible. Previous producer profile is labelled in the qualification."
+    },
+    {
+      "path": "examples/dual-machine/dsv41-ultra-yoco/proof/previous-profile/paired-yoco-streaming.png",
+      "sha256": "df7a48b4b7452dcf5d40f70123a08fc01f1c534f7e76d1f9c2880452ef64e1fe",
+      "media_type": "image/png",
+      "review": "Visually inspected real headless stack WebUI evidence. Synthetic recall/weather and red-square prompts only; sampler settings, live progress and numerical/context stats visible. No personal paths, credentials or network addresses visible. Previous producer profile is labelled in the qualification."
+    },
+    {
+      "path": "examples/dual-machine/dsv41-ultra-yoco/proof/previous-profile/recall-turn-1.png",
+      "sha256": "f3011ff9bea85668f4fcd092da8439dd03d9ee2698e9f34aeef01ccc30bf143b",
+      "media_type": "image/png",
+      "review": "Visually inspected real headless stack WebUI evidence. Synthetic recall/weather and red-square prompts only; sampler settings, live progress and numerical/context stats visible. No personal paths, credentials or network addresses visible. Previous producer profile is labelled in the qualification."
+    },
+    {
+      "path": "examples/dual-machine/dsv41-ultra-yoco/proof/previous-profile/recall-turn-3.png",
+      "sha256": "f42f33a4b55ee101a1764c164465c42c0412546ffb5ffa10e248f5a289293b04",
+      "media_type": "image/png",
+      "review": "Visually inspected real headless stack WebUI evidence. Synthetic recall/weather and red-square prompts only; sampler settings, live progress and numerical/context stats visible. No personal paths, credentials or network addresses visible. Previous producer profile is labelled in the qualification."
+    },
+    {
+      "path": "examples/dual-machine/dsv41-ultra-yoco/proof/previous-profile/short-final.png",
+      "sha256": "81f0c403cea80167c4eb6fdad69d21c35b658f589632e584a0b4ce5664cdd7e0",
+      "media_type": "image/png",
+      "review": "Visually inspected real headless stack WebUI evidence. Synthetic recall/weather and red-square prompts only; sampler settings, live progress and numerical/context stats visible. No personal paths, credentials or network addresses visible. Previous producer profile is labelled in the qualification."
+    },
+    {
+      "path": "examples/dual-machine/dsv41-ultra-yoco/proof/previous-profile/single-full-final.png",
+      "sha256": "32768f2c2ef4c8064b16a47bec287a2e4e218e5ab5d372b3cec259e2979f8644",
+      "media_type": "image/png",
+      "review": "Visually inspected real headless stack WebUI evidence. Synthetic recall/weather and red-square prompts only; sampler settings, live progress and numerical/context stats visible. No personal paths, credentials or network addresses visible. Previous producer profile is labelled in the qualification."
+    },
+    {
+      "path": "examples/dual-machine/dsv41-ultra-yoco/proof/previous-profile/single-full-progress-3.png",
+      "sha256": "fb11d69c2c50f4163d8d8609d8483f6189a7a0dbc3326def9d8a6e0aed803535",
+      "media_type": "image/png",
+      "review": "Visually inspected real headless stack WebUI evidence. Synthetic recall/weather and red-square prompts only; sampler settings, live progress and numerical/context stats visible. No personal paths, credentials or network addresses visible. Previous producer profile is labelled in the qualification."
+    },
+    {
+      "path": "examples/dual-machine/dsv41-ultra-yoco/proof/previous-profile/single-full-samplers.png",
+      "sha256": "29052f8bddfa5703b4a7296052b4ff8b054608727ce4ff021dff86c21648b8a8",
+      "media_type": "image/png",
+      "review": "Visually inspected real headless stack WebUI evidence. Synthetic recall/weather and red-square prompts only; sampler settings, live progress and numerical/context stats visible. No personal paths, credentials or network addresses visible. Previous producer profile is labelled in the qualification."
+    },
+    {
+      "path": "examples/dual-machine/dsv41-ultra-yoco/proof/previous-profile/single-full-streaming.png",
+      "sha256": "9ee7e2ea7da7955fd5a35ac66c312c01d29bca44aae7fb0d592c6f978427f908",
+      "media_type": "image/png",
+      "review": "Visually inspected real headless stack WebUI evidence. Synthetic recall/weather and red-square prompts only; sampler settings, live progress and numerical/context stats visible. No personal paths, credentials or network addresses visible. Previous producer profile is labelled in the qualification."
+    },
+    {
+      "path": "examples/dual-machine/dsv41-ultra-yoco/proof/previous-profile/single-yoco-final.png",
+      "sha256": "2be190d3fa54d9763d13db15b45ea052c86c1d4e265cd71ce98a9cb5a9af6dbc",
+      "media_type": "image/png",
+      "review": "Visually inspected real headless stack WebUI evidence. Synthetic recall/weather and red-square prompts only; sampler settings, live progress and numerical/context stats visible. No personal paths, credentials or network addresses visible. Previous producer profile is labelled in the qualification."
+    },
+    {
+      "path": "examples/dual-machine/dsv41-ultra-yoco/proof/previous-profile/single-yoco-progress-3.png",
+      "sha256": "94f825ca81fd826ef8a704c10fb78d2d1d0d20c516501d03e894c783a869891b",
+      "media_type": "image/png",
+      "review": "Visually inspected real headless stack WebUI evidence. Synthetic recall/weather and red-square prompts only; sampler settings, live progress and numerical/context stats visible. No personal paths, credentials or network addresses visible. Previous producer profile is labelled in the qualification."
+    },
+    {
+      "path": "examples/dual-machine/dsv41-ultra-yoco/proof/previous-profile/single-yoco-samplers.png",
+      "sha256": "3abe6d634538aeaf31d90310d5da1f68b4d35f78000c669468d4b7db5b98240d",
+      "media_type": "image/png",
+      "review": "Visually inspected real headless stack WebUI evidence. Synthetic recall/weather and red-square prompts only; sampler settings, live progress and numerical/context stats visible. No personal paths, credentials or network addresses visible. Previous producer profile is labelled in the qualification."
+    },
+    {
+      "path": "examples/dual-machine/dsv41-ultra-yoco/proof/previous-profile/single-yoco-streaming.png",
+      "sha256": "1ba50e3cecd6ba7d37cbcb7476bea429a3dddd73102292e41c60a0b1b89efdd0",
+      "media_type": "image/png",
+      "review": "Visually inspected real headless stack WebUI evidence. Synthetic recall/weather and red-square prompts only; sampler settings, live progress and numerical/context stats visible. No personal paths, credentials or network addresses visible. Previous producer profile is labelled in the qualification."
+    },
+    {
+      "path": "examples/dual-machine/dsv41-ultra-yoco/proof/shared-profile/generation-settings.png",
+      "sha256": "b54d3c4d17952f9f63bba427ad836c487ac71910f0dcbbc31579d0b2fe83c5a1",
+      "media_type": "image/png",
+      "review": "Visually inspected actual headless stack WebUI. Synthetic red-square, weather and recall prompts only; actual sampler controls, advancing progress and numerical context/rate statistics visible. No addresses, credentials or personal paths visible. Shared single-engine producer profile."
+    },
+    {
+      "path": "examples/dual-machine/dsv41-ultra-yoco/proof/shared-profile/image-200k-final.png",
+      "sha256": "cbab05456a327e30cce2458f21b933a0d0ca8e50b717ebb262172215f3bd458b",
+      "media_type": "image/png",
+      "review": "Visually inspected actual headless stack WebUI. Synthetic red-square, weather and recall prompts only; actual sampler controls, advancing progress and numerical context/rate statistics visible. No addresses, credentials or personal paths visible. Shared single-engine producer profile."
+    },
+    {
+      "path": "examples/dual-machine/dsv41-ultra-yoco/proof/shared-profile/image-200k-progress-2.png",
+      "sha256": "64fb7e134f3cbd2c3b1a2d27322022f2e72529a6da85208e647a6f54791e2ed0",
+      "media_type": "image/png",
+      "review": "Visually inspected actual headless stack WebUI. Synthetic red-square, weather and recall prompts only; actual sampler controls, advancing progress and numerical context/rate statistics visible. No addresses, credentials or personal paths visible. Shared single-engine producer profile."
+    },
+    {
+      "path": "examples/dual-machine/dsv41-ultra-yoco/proof/shared-profile/image-200k-progress-3.png",
+      "sha256": "83fe71c68cc21d08316490dd3698bed8683511803091135fbf752ed3afe02b06",
+      "media_type": "image/png",
+      "review": "Visually inspected actual headless stack WebUI. Synthetic red-square, weather and recall prompts only; actual sampler controls, advancing progress and numerical context/rate statistics visible. No addresses, credentials or personal paths visible. Shared single-engine producer profile."
+    },
+    {
+      "path": "examples/dual-machine/dsv41-ultra-yoco/proof/shared-profile/image-200k-streaming.png",
+      "sha256": "ef35b964a357ed5796b29ff19adbd592b858461ff9efb7462a5b40fbf25f4b99",
+      "media_type": "image/png",
+      "review": "Visually inspected actual headless stack WebUI. Synthetic red-square, weather and recall prompts only; actual sampler controls, advancing progress and numerical context/rate statistics visible. No addresses, credentials or personal paths visible. Shared single-engine producer profile."
+    },
+    {
+      "path": "examples/dual-machine/dsv41-ultra-yoco/proof/shared-profile/image-followup-final.png",
+      "sha256": "33375a82806e34838e5429aa141ca5750f104a898642ed9141781c9865657597",
+      "media_type": "image/png",
+      "review": "Visually inspected actual headless stack WebUI. Synthetic red-square, weather and recall prompts only; actual sampler controls, advancing progress and numerical context/rate statistics visible. No addresses, credentials or personal paths visible. Shared single-engine producer profile."
+    },
+    {
+      "path": "examples/dual-machine/dsv41-ultra-yoco/proof/shared-profile/paired-full-final.png",
+      "sha256": "8662173b9f82d900ad0e3101afaad85a8bcbabe43da2f3f03a3fc89734997840",
+      "media_type": "image/png",
+      "review": "Visually inspected actual headless stack WebUI. Synthetic red-square, weather and recall prompts only; actual sampler controls, advancing progress and numerical context/rate statistics visible. No addresses, credentials or personal paths visible. Shared single-engine producer profile."
+    },
+    {
+      "path": "examples/dual-machine/dsv41-ultra-yoco/proof/shared-profile/paired-full-progress-3.png",
+      "sha256": "b2dedb618c9e4c25450c98523f2f14e9c6b056fc30a060164ce3ee5bd2394759",
+      "media_type": "image/png",
+      "review": "Visually inspected actual headless stack WebUI. Synthetic red-square, weather and recall prompts only; actual sampler controls, advancing progress and numerical context/rate statistics visible. No addresses, credentials or personal paths visible. Shared single-engine producer profile."
+    },
+    {
+      "path": "examples/dual-machine/dsv41-ultra-yoco/proof/shared-profile/paired-full-samplers.png",
+      "sha256": "2de731d5c6b07347f5dedfc15b8b49ab2718102f6016bdf128ab833fd55898a2",
+      "media_type": "image/png",
+      "review": "Visually inspected actual headless stack WebUI. Synthetic red-square, weather and recall prompts only; actual sampler controls, advancing progress and numerical context/rate statistics visible. No addresses, credentials or personal paths visible. Shared single-engine producer profile."
+    },
+    {
+      "path": "examples/dual-machine/dsv41-ultra-yoco/proof/shared-profile/paired-full-streaming.png",
+      "sha256": "031008106720e491868e784a6172035574d16ec2b78f602e61ac67b560a870b1",
+      "media_type": "image/png",
+      "review": "Visually inspected actual headless stack WebUI. Synthetic red-square, weather and recall prompts only; actual sampler controls, advancing progress and numerical context/rate statistics visible. No addresses, credentials or personal paths visible. Shared single-engine producer profile."
+    },
+    {
+      "path": "examples/dual-machine/dsv41-ultra-yoco/proof/shared-profile/paired-yoco-final.png",
+      "sha256": "8c7394648dd38e9fdf75e30824c13dfb065ee1e0f9b62ff9982ed4f0c6ceb653",
+      "media_type": "image/png",
+      "review": "Visually inspected actual headless stack WebUI. Synthetic red-square, weather and recall prompts only; actual sampler controls, advancing progress and numerical context/rate statistics visible. No addresses, credentials or personal paths visible. Shared single-engine producer profile."
+    },
+    {
+      "path": "examples/dual-machine/dsv41-ultra-yoco/proof/shared-profile/paired-yoco-progress-3.png",
+      "sha256": "bb16650580df5db3a784f6662d1be3b39445d67283aa25473f21ca5ebec7e156",
+      "media_type": "image/png",
+      "review": "Visually inspected actual headless stack WebUI. Synthetic red-square, weather and recall prompts only; actual sampler controls, advancing progress and numerical context/rate statistics visible. No addresses, credentials or personal paths visible. Shared single-engine producer profile."
+    },
+    {
+      "path": "examples/dual-machine/dsv41-ultra-yoco/proof/shared-profile/paired-yoco-samplers.png",
+      "sha256": "b01efa332f6f4ed9a4e61f0941c5cd5193bb900de25986a4401521800143539e",
+      "media_type": "image/png",
+      "review": "Visually inspected actual headless stack WebUI. Synthetic red-square, weather and recall prompts only; actual sampler controls, advancing progress and numerical context/rate statistics visible. No addresses, credentials or personal paths visible. Shared single-engine producer profile."
+    },
+    {
+      "path": "examples/dual-machine/dsv41-ultra-yoco/proof/shared-profile/paired-yoco-streaming.png",
+      "sha256": "269d3af6558006075b325dec68a43f98c860dd383f7d336436bf1aa7fed6daee",
+      "media_type": "image/png",
+      "review": "Visually inspected actual headless stack WebUI. Synthetic red-square, weather and recall prompts only; actual sampler controls, advancing progress and numerical context/rate statistics visible. No addresses, credentials or personal paths visible. Shared single-engine producer profile."
+    },
+    {
+      "path": "examples/dual-machine/dsv41-ultra-yoco/proof/shared-profile/recall-turn-1.png",
+      "sha256": "cbefdef4aea14bb7e28df7dc64ba4bd7306b573a6f5858bf2be160aad888bf49",
+      "media_type": "image/png",
+      "review": "Visually inspected actual headless stack WebUI. Synthetic red-square, weather and recall prompts only; actual sampler controls, advancing progress and numerical context/rate statistics visible. No addresses, credentials or personal paths visible. Shared single-engine producer profile."
+    },
+    {
+      "path": "examples/dual-machine/dsv41-ultra-yoco/proof/shared-profile/recall-turn-3.png",
+      "sha256": "9ecd7bfc5cafbe0c2ecb1ffa44b1e12f965c4ead0716e80f9698b849c18c5be5",
+      "media_type": "image/png",
+      "review": "Visually inspected actual headless stack WebUI. Synthetic red-square, weather and recall prompts only; actual sampler controls, advancing progress and numerical context/rate statistics visible. No addresses, credentials or personal paths visible. Shared single-engine producer profile."
+    },
+    {
+      "path": "examples/dual-machine/dsv41-ultra-yoco/proof/shared-profile/short-final.png",
+      "sha256": "d0b4feb21f21198a7f55fd4d7fec921c1f342086aa7c9c7c2bfb76680e14f4d3",
+      "media_type": "image/png",
+      "review": "Visually inspected actual headless stack WebUI. Synthetic red-square, weather and recall prompts only; actual sampler controls, advancing progress and numerical context/rate statistics visible. No addresses, credentials or personal paths visible. Shared single-engine producer profile."
+    },
+    {
+      "path": "examples/dual-machine/dsv41-ultra-yoco/proof/shared-profile/single-full-final.png",
+      "sha256": "cff73b62f967c8d633c855966f3954ad1e2c62a8a35ad6de8650992ecff7380d",
+      "media_type": "image/png",
+      "review": "Visually inspected actual headless stack WebUI. Synthetic red-square, weather and recall prompts only; actual sampler controls, advancing progress and numerical context/rate statistics visible. No addresses, credentials or personal paths visible. Shared single-engine producer profile."
+    },
+    {
+      "path": "examples/dual-machine/dsv41-ultra-yoco/proof/shared-profile/single-full-progress-3.png",
+      "sha256": "052eeb9651a704c15c9cf869e265dd4698458f92b4a81ef091481046371690ea",
+      "media_type": "image/png",
+      "review": "Visually inspected actual headless stack WebUI. Synthetic red-square, weather and recall prompts only; actual sampler controls, advancing progress and numerical context/rate statistics visible. No addresses, credentials or personal paths visible. Shared single-engine producer profile."
+    },
+    {
+      "path": "examples/dual-machine/dsv41-ultra-yoco/proof/shared-profile/single-full-samplers.png",
+      "sha256": "0d3088c8ca8295855d01d4740a7a9349e2cecf8c40646c1e6a055096bfdba0b8",
+      "media_type": "image/png",
+      "review": "Visually inspected actual headless stack WebUI. Synthetic red-square, weather and recall prompts only; actual sampler controls, advancing progress and numerical context/rate statistics visible. No addresses, credentials or personal paths visible. Shared single-engine producer profile."
+    },
+    {
+      "path": "examples/dual-machine/dsv41-ultra-yoco/proof/shared-profile/single-full-streaming.png",
+      "sha256": "7d2bb1dcd438204e5ea900d7da738aff67012877342698d0da90aaa786c91285",
+      "media_type": "image/png",
+      "review": "Visually inspected actual headless stack WebUI. Synthetic red-square, weather and recall prompts only; actual sampler controls, advancing progress and numerical context/rate statistics visible. No addresses, credentials or personal paths visible. Shared single-engine producer profile."
+    },
+    {
+      "path": "examples/dual-machine/dsv41-ultra-yoco/proof/shared-profile/single-yoco-final.png",
+      "sha256": "21afc8c840e445cbf03cff574e35885684bbcfb9303c9f6a6a3fedb2678bf8f4",
+      "media_type": "image/png",
+      "review": "Visually inspected actual headless stack WebUI. Synthetic red-square, weather and recall prompts only; actual sampler controls, advancing progress and numerical context/rate statistics visible. No addresses, credentials or personal paths visible. Shared single-engine producer profile."
+    },
+    {
+      "path": "examples/dual-machine/dsv41-ultra-yoco/proof/shared-profile/single-yoco-progress-3.png",
+      "sha256": "ad04b7b2883785840de14c48914db1935bd79f48f539f369130be32a6cd9735e",
+      "media_type": "image/png",
+      "review": "Visually inspected actual headless stack WebUI. Synthetic red-square, weather and recall prompts only; actual sampler controls, advancing progress and numerical context/rate statistics visible. No addresses, credentials or personal paths visible. Shared single-engine producer profile."
+    },
+    {
+      "path": "examples/dual-machine/dsv41-ultra-yoco/proof/shared-profile/single-yoco-samplers.png",
+      "sha256": "3112aec3d40398c508336fc68e91399aea083a1a7d70cbad9132fca2dd3beea7",
+      "media_type": "image/png",
+      "review": "Visually inspected actual headless stack WebUI. Synthetic red-square, weather and recall prompts only; actual sampler controls, advancing progress and numerical context/rate statistics visible. No addresses, credentials or personal paths visible. Shared single-engine producer profile."
+    },
+    {
+      "path": "examples/dual-machine/dsv41-ultra-yoco/proof/shared-profile/single-yoco-streaming.png",
+      "sha256": "036246682a11aec57bc4da565f7e4d268a5760eca5f20f167aafc4d5cdbb28f2",
+      "media_type": "image/png",
+      "review": "Visually inspected actual headless stack WebUI. Synthetic red-square, weather and recall prompts only; actual sampler controls, advancing progress and numerical context/rate statistics visible. No addresses, credentials or personal paths visible. Shared single-engine producer profile."
     }
   ]
 }

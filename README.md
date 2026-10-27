@@ -158,7 +158,7 @@ Install on both. On the Mac:
 
 ```sh
 ./bin/slstack install --all
-./bin/slstack mac --model '<model_dir>/<deepseek-v4.1-flash>.gguf' --host-budget-gib 400 --min-available-gib 8
+./bin/slstack mac --model '<model_dir>/<deepseek-v4.1-flash>.gguf' --host-budget-gib 400 --min-available-gib 0.5
 ```
 
 It prints an endpoint, a pairing token and the Windows command:

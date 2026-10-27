@@ -6,7 +6,7 @@
 
 YOCO prefill truncation comes from DeepSeek’s [DeepInfer inference release](https://github.com/deepseek-ai/DeepInfer/blob/553741557a57df44a46fb3ab72b6aafeaf945337/README.md), whose compact truncation settings retain 140 tokens. TensorSharp is a secondary reference. The stack’s contribution is the streaming variant: non-final sweeps skip the weight reads and evaluation of layers 21–39; layer 20 still runs in full, and the final sweep evaluates the retained decoder suffix.
 
-Negotiated YOCO state v1 export exists; Mac decode with YOCO has not been benchmarked. The published two-machine result was measured before YOCO (plain ULTRA prefill). See [state transport](STACK_MEDIA_AND_STATE.md).
+Negotiated YOCO state v1 passes the live Mac decode, long recall and uploaded-image conversation gate. [Paired measurements and qualification](YOCO_PAIRED_QUALIFICATION.md) retain the historical pre-YOCO result and document the shared-producer performance gate. See [state transport](STACK_MEDIA_AND_STATE.md).
 
 ## Timing and weight fetches
 
@@ -14,6 +14,8 @@ RTX 5090; original Q4 model; shipping ULTRA arithmetic and fold planner;
 262,144 context with growable f32 cache. Host budget 9.25 GiB, producer base
 6.25 GiB, maximum 7.75 GiB, desktop reserve 8 GiB, physical-RAM floor 4 GiB.
 The timing runs used explicit memory budgets and available-RAM monitoring.
+The current default desktop admission reserve is 512 MiB (owner, 2026-10-27);
+the runtime floor remains 4 GiB. The historical timings above used 8 GiB.
 
 Times include producer startup and prefill, excluding subsequent export or
 decode. Each row ran in **exact / YOCO / exact / YOCO** order.

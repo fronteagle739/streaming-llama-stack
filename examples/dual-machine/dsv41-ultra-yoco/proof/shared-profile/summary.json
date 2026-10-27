@@ -1,0 +1,1011 @@
+{
+  "status": "PASS",
+  "date": "2026-10-27",
+  "cases": {
+    "short": {
+      "answer": "The code is ORBIT 914.\n\n1, 2, 3, 4, 5, 6, 7, 8, 9, 10, 11, 12, 13, 14, 15, 16, 17, 18, 19, 20.",
+      "timings": {
+        "cache_n": 0,
+        "prompt_n": 23,
+        "prompt_ms": 727.246,
+        "prompt_per_token_ms": 31.619391,
+        "prompt_per_second": 31.626162,
+        "predicted_n": 67,
+        "predicted_ms": 2056.635,
+        "predicted_per_token_ms": 30.696045,
+        "predicted_per_second": 32.577487
+      },
+      "stats": "Context: 90/1000001 (<0.01%)\nOutput: 67/128 (52%)\n32.6 tokens/sec",
+      "incremental_events": 67,
+      "stream_span_ms": 2007.0999999940395
+    },
+    "short-followup": {
+      "answer": "ORBIT 914",
+      "timings": {
+        "cache_n": 90,
+        "prompt_n": 14,
+        "prompt_ms": 410.109,
+        "prompt_per_token_ms": 29.2935,
+        "prompt_per_second": 34.137266,
+        "predicted_n": 4,
+        "predicted_ms": 122.245,
+        "predicted_per_token_ms": 30.56125,
+        "predicted_per_second": 32.721175
+      },
+      "stats": "Context: 108/1000001 (0.01%)\nOutput: 4/128 (3%)\n32.7 tokens/sec",
+      "incremental_events": 4,
+      "stream_span_ms": 82.80000001192093
+    },
+    "image-200k": {
+      "answer": "The image contains a **red** **square**.\n\nHere are five short facts about the square:\n1. It is a regular quadrilateral, meaning it has four equal sides and four equal angles.\n2. Each of its four interior angles measures exactly 90 degrees.\n3. Its diagonals intersect at 90 degrees, bisecting each other.\n4. The area of a square is calculated by squaring the length of one of its sides.\n5. It is a special type of both a rectangle and a rhombus.",
+      "timings": {
+        "cache_n": 0,
+        "prompt_n": 198287,
+        "prompt_ms": 118766.079,
+        "prompt_per_token_ms": 0.59896,
+        "prompt_per_second": 1669.559201,
+        "predicted_n": 104,
+        "predicted_ms": 3356.813,
+        "predicted_per_token_ms": 32.277048,
+        "predicted_per_second": 30.981768
+      },
+      "stats": "Context: 198391/1000001 (19.84%)\nOutput: 104/128 (81%)\n31.0 tokens/sec",
+      "incremental_events": 104,
+      "stream_span_ms": 3296.9000000059605
+    },
+    "image-followup": {
+      "answer": "Red square.",
+      "timings": {
+        "cache_n": 198391,
+        "prompt_n": 23,
+        "prompt_ms": 709.143,
+        "prompt_per_token_ms": 30.832304,
+        "prompt_per_second": 32.433515,
+        "predicted_n": 3,
+        "predicted_ms": 105.552,
+        "predicted_per_token_ms": 35.184,
+        "predicted_per_second": 28.42201
+      },
+      "stats": "Context: 198417/1000001 (19.84%)\nOutput: 3/128 (2%)\n28.4 tokens/sec",
+      "incremental_events": 3,
+      "stream_span_ms": 57.79999998211861
+    },
+    "recall": [
+      {
+        "answer": "AMBER OTTER 731",
+        "timings": {
+          "cache_n": 0,
+          "prompt_n": 105054,
+          "prompt_ms": 57394.624,
+          "prompt_per_token_ms": 0.546334,
+          "prompt_per_second": 1830.38049,
+          "predicted_n": 6,
+          "predicted_ms": 214.672,
+          "predicted_per_token_ms": 35.778667,
+          "predicted_per_second": 27.949616
+        }
+      },
+      {
+        "answer": "AMBER OTTER 731",
+        "timings": {
+          "cache_n": 105060,
+          "prompt_n": 20,
+          "prompt_ms": 612.562,
+          "prompt_per_token_ms": 30.6281,
+          "prompt_per_second": 32.649756,
+          "predicted_n": 6,
+          "predicted_ms": 195.127,
+          "predicted_per_token_ms": 32.521167,
+          "predicted_per_second": 30.749204
+        }
+      },
+      {
+        "answer": "731",
+        "timings": {
+          "cache_n": 105086,
+          "prompt_n": 19,
+          "prompt_ms": 580.044,
+          "prompt_per_token_ms": 30.528632,
+          "prompt_per_second": 32.756136,
+          "predicted_n": 1,
+          "predicted_ms": 37.243,
+          "predicted_per_token_ms": 37.243,
+          "predicted_per_second": 26.850683
+        }
+      }
+    ]
+  },
+  "image50": {
+    "paired-yoco": {
+      "answer": "The image contains a **red** **square**.\n\nHere are five short facts about a square:\n1. It is a regular quadrilateral, meaning it has four equal sides and four equal angles.\n2. Each of its four interior angles measures exactly 90 degrees.\n3. Its opposite sides are parallel to each other.\n4. The diagonals of a square bisect each other at right angles and are equal in length.\n5. It is a special type of both a rectangle and a rhombus.",
+      "input_sha256": "9ccb0c7b068baff15dc599634ee590358d0d1f1bba779d0cab97fd9fdd5ff6fc",
+      "timings": {
+        "cache_n": 0,
+        "prompt_n": 49787,
+        "prompt_ms": 33715.531,
+        "prompt_per_token_ms": 0.677195,
+        "prompt_per_second": 1476.678508,
+        "predicted_n": 100,
+        "predicted_ms": 3146.676,
+        "predicted_per_token_ms": 31.46676,
+        "predicted_per_second": 31.779567
+      },
+      "stats": "Context: 49887/1000001 (4.99%)\nOutput: 100/128 (78%)\n31.8 tokens/sec",
+      "incremental_events": 100,
+      "stream_span_ms": 3088.2999999821186
+    },
+    "paired-full": {
+      "answer": "The image contains a **red** **square**.\n\nHere are five short facts about a square:\n1. It is a regular quadrilateral, meaning it has four equal sides and four equal angles.\n2. Each of its four interior angles measures exactly 90 degrees.\n3. Its opposite sides are parallel to each other.\n4. The diagonals of a square bisect each other at right angles.\n5. It is a special type of both a rectangle and a rhombus.",
+      "input_sha256": "9ccb0c7b068baff15dc599634ee590358d0d1f1bba779d0cab97fd9fdd5ff6fc",
+      "timings": {
+        "cache_n": 0,
+        "prompt_n": 49787,
+        "prompt_ms": 41607.178,
+        "prompt_per_token_ms": 0.835704,
+        "prompt_per_second": 1196.596414,
+        "predicted_n": 95,
+        "predicted_ms": 3007.363,
+        "predicted_per_token_ms": 31.656453,
+        "predicted_per_second": 31.589136
+      },
+      "stats": "Context: 49882/1000001 (4.99%)\nOutput: 95/128 (74%)\n31.6 tokens/sec",
+      "incremental_events": 95,
+      "stream_span_ms": 2946.199999988079
+    },
+    "single-yoco": {
+      "answer": "The image contains a **red** **square**.\n\nHere are five short facts about a square:\n1. It is a regular quadrilateral, meaning it has four equal sides and four equal angles.\n2. All four interior angles of a square are right angles (90 degrees).\n3. The diagonals of a square are equal in length and bisect each other at right angles.\n4. A square is a special type of rectangle (with equal sides) and a special type of rhombus (with right angles).\n5. The area of a square is calculated by multiplying the length of one side by itself (side\u00b2).",
+      "input_sha256": "9ccb0c7b068baff15dc599634ee590358d0d1f1bba779d0cab97fd9fdd5ff6fc",
+      "timings": {
+        "cache_n": 0,
+        "prompt_n": 49787,
+        "prompt_ms": 30358.99999999674,
+        "predicted_n": 124,
+        "predicted_ms": 14515.481899999995,
+        "predicted_per_second": 8.5426030533647,
+        "prompt_per_second": 1639.9420270761668
+      },
+      "stats": "Context: 49911/1000001 (4.99%)\nOutput: 124/128 (97%)\n8.5 tokens/sec",
+      "incremental_events": 124,
+      "stream_span_ms": 11444.90000000596
+    },
+    "single-full": {
+      "answer": "The image contains a **red** **square**.\n\nHere are five short facts about a square:\n1. It is a regular quadrilateral, meaning it has four equal sides and four equal angles.\n2. All four interior angles of a square are right angles (90 degrees).\n3. The diagonals of a square are equal in length and bisect each other at right angles.\n4. A square is a special type of rectangle (with equal sides) and a special type of rhombus (with right angles).\n5. The area of a square is calculated by multiplying the length of one side by itself (side\u00b2).",
+      "input_sha256": "9ccb0c7b068baff15dc599634ee590358d0d1f1bba779d0cab97fd9fdd5ff6fc",
+      "timings": {
+        "cache_n": 0,
+        "prompt_n": 49787,
+        "prompt_ms": 38172.00000002049,
+        "predicted_n": 124,
+        "predicted_ms": 13450.941199999996,
+        "predicted_per_second": 9.21868575263715,
+        "prompt_per_second": 1304.2806245408487
+      },
+      "stats": "Context: 49911/1000001 (4.99%)\nOutput: 124/128 (97%)\n9.2 tokens/sec",
+      "incremental_events": 124,
+      "stream_span_ms": 11771.799999982119
+    }
+  },
+  "rtx_components": {
+    "198287-yoco140": {
+      "calls": [
+        {
+          "tokens": 49152,
+          "encoder_only": true,
+          "processing_s": 18.8100873,
+          "layer_count": 21,
+          "engram_exposed_s": 0.0010681,
+          "weight_acquire_s": 0.0022478
+        },
+        {
+          "tokens": 49152,
+          "encoder_only": true,
+          "processing_s": 19.590362000000002,
+          "layer_count": 21,
+          "engram_exposed_s": 0.0009513000000000001,
+          "weight_acquire_s": 0.0022034
+        },
+        {
+          "tokens": 49152,
+          "encoder_only": true,
+          "processing_s": 24.0853061,
+          "layer_count": 21,
+          "engram_exposed_s": 0.0009192,
+          "weight_acquire_s": 0.0022518000000000004
+        },
+        {
+          "tokens": 50831,
+          "encoder_only": false,
+          "processing_s": 36.2850723,
+          "layer_count": 40,
+          "engram_exposed_s": 0.0010259,
+          "weight_acquire_s": 6.965985300000001
+        }
+      ],
+      "logical_prefill_compute_s": 98.7708277,
+      "rtx_operation_times": [
+        {
+          "operation": "startup_and_initial_prefill",
+          "tokens": 198287,
+          "seconds": 102.34400000004098
+        },
+        {
+          "operation": "export_prepare",
+          "tokens": 0,
+          "bytes": 1288705656,
+          "seconds": 3.7820000000065193
+        },
+        {
+          "operation": "acknowledge",
+          "tokens": 0,
+          "seconds": 0.0
+        },
+        {
+          "operation": "save_rewind",
+          "tokens": 0,
+          "seconds": 4.422000000020489
+        },
+        {
+          "operation": "close",
+          "tokens": 0,
+          "seconds": 0.01600000000325963
+        }
+      ],
+      "initial_phase_ms": {
+        "append_owner_admission": 270.8088,
+        "chunk_token_preparation": 0.14450000000000002,
+        "embedding_40_layers_head": 99041.781,
+        "final_hidden_export_preparation": 1.1097,
+        "input_identity_hash_budget_preflight": 401.2129,
+        "inspect_admit_allocate": 1689.9456,
+        "native_payload_export_flush": 913.8427,
+        "payload_close_readonly_rehash": 0.0002,
+        "run_dispatch_bookkeeping": 0.14599999999424917
+      },
+      "prefill_tokens": 198287,
+      "producer_sha256": "e95af084559456750a50c8e75e03e2fa34d37311e08c218c689df33e972de9ce",
+      "yoco_keep": 140,
+      "prefill_plan": {
+        "capacity": 50831,
+        "host_bytes": 6889013248,
+        "carry_delta": 156520448,
+        "engram_delta": 21598656,
+        "base_host_bytes": 6710886400,
+        "max_host_bytes": 8321499136,
+        "capped_by": "producer_host_max_gib",
+        "prompt_tokens": 198287,
+        "single_sweep": false,
+        "policy": "fold",
+        "sweep_tokens": 49152,
+        "sweeps": [
+          49152,
+          49152,
+          49152,
+          50831
+        ],
+        "fold_tail": false,
+        "fold_cap": 61440,
+        "rebalance": false,
+        "reason": null
+      },
+      "arguments": {
+        "--context": "1000001",
+        "--cuda-device": "0",
+        "--provider-device-bytes": "17180917760",
+        "--provider-host-bytes": "2805567936",
+        "--cache-bytes": "3225432064",
+        "--graph-bytes": "7507791872",
+        "--job-device-bytes": "31377412860",
+        "--job-host-bytes": "6889013248",
+        "--gpu-reserve-bytes": "1073741824",
+        "--output-outstanding-bytes": "0",
+        "--hidden-device-bytes": "2521649916",
+        "--compressed-cache-bf16": "1",
+        "--resident-hidden-final-readback": "1",
+        "--engram-prefetch-bytes": "658084288",
+        "--batch-seed-ram": "1",
+        "--pair-ffn-tiles": "1",
+        "--fixed-resident-plan": "0",
+        "--tile-host-registration": "1",
+        "--resident-pageable-copies": "0",
+        "--native-rhs-pack": "0",
+        "--reuse-child-raw-metadata": "1",
+        "--pv-strided-probabilities": "0",
+        "--fuse-kv-gather-half": "0",
+        "--pv-view-f32": "0",
+        "--compact-kv-gather": "0",
+        "--masked-half-inplace": "0",
+        "--index-cublas-device-bytes": "67108864",
+        "--index-f32-cublas": "0",
+        "--expert-profile": "q8_1_activation_rounding",
+        "--expert-workspace-bytes": "335544320",
+        "--expert-runtime-bytes": "2097152",
+        "--pinned-device-bytes": "67108864",
+        "--cast-device-bytes": "469762048",
+        "--cast-audit": "0",
+        "--reuse-graph": "1",
+        "--fetch-profile": "two-buffer-direct-auto-async",
+        "--compute-tile": "4096",
+        "--compute-step-tokens": "0",
+        "--warmup-one-token": "0",
+        "--engram-tile-lookahead": "1",
+        "--resident-hidden-bf16": "1",
+        "--async-input-uploads": "1",
+        "--resident-compact-ids": "1",
+        "--resident-metadata": "1",
+        "--prefill-chunk-tokens": "50831",
+        "--backend-temporary-reserve-bytes": "805306368",
+        "--capture-dspark": "1",
+        "--unaligned-append-step-tokens": "2048",
+        "--export-hash-only": "1",
+        "--index-key-windows": "1",
+        "--merge-attention-selected-rows": "0",
+        "--hc-bf16-epilogue": "1",
+        "--dense-inputs-f16": "1",
+        "--dense-activation-q8-1": "1",
+        "--hc-projection-f16-gemm": "1",
+        "--token-tile-attention-f16-probabilities": "1",
+        "--index-bf16": "1",
+        "--split-f32-tensor-core-qk": "0",
+        "--attention-kv-f16-table": "1",
+        "--dense-mxfp4": "0",
+        "--expert-weights-activations-fp4": "0",
+        "--prefill-sweep-tokens": "49152",
+        "--prefill-fold-cap-tokens": "61440",
+        "--ctx-cache-precision": "bf16",
+        "--ctx-cache-growable": "1",
+        "--fixed-direct-open": "1",
+        "--yoco-keep": "140",
+        "--yoco-remote-state-version": "1",
+        "--build-sha": "e95af084559456750a50c8e75e03e2fa34d37311e08c218c689df33e972de9ce",
+        "--runtime-min-free-gib": "4.0"
+      },
+      "rtx_compute_s": 98.77082770000001,
+      "exposed_layer_engram_s": 0.0039645,
+      "memory": {
+        "host_budget": 6889013248,
+        "runtime_min_free_gib": 4.0,
+        "peak_rss": 6222352384,
+        "minimum_available_ram": 10893205504,
+        "paging_growth": 0,
+        "budget_breaches": 0,
+        "owned_pid_gone": true,
+        "owned_job_empty": true
+      },
+      "image_spans": [
+        {
+          "position": 198045,
+          "count": 184,
+          "decoder_tail_intersection": 82
+        }
+      ],
+      "transfer_import_hash_ack": [
+        {
+          "initial": 1.0,
+          "position": 198287.0,
+          "bytes": 1288705656.0,
+          "milliseconds": 5656.956
+        }
+      ],
+      "transfer_import_hash_ack_s": 5.656956,
+      "webui_prompt_s": 118.766079,
+      "other_control_s": 2.5611229999320244
+    },
+    "105054-yoco140": {
+      "calls": [
+        {
+          "tokens": 49152,
+          "encoder_only": true,
+          "processing_s": 16.884395100000003,
+          "layer_count": 21,
+          "engram_exposed_s": 0.0008952,
+          "weight_acquire_s": 0.002128
+        },
+        {
+          "tokens": 55902,
+          "encoder_only": false,
+          "processing_s": 28.884344000000002,
+          "layer_count": 40,
+          "engram_exposed_s": 0.0010258,
+          "weight_acquire_s": 7.0404154
+        }
+      ],
+      "logical_prefill_compute_s": 45.768739100000005,
+      "rtx_operation_times": [
+        {
+          "operation": "startup_and_initial_prefill",
+          "tokens": 105054,
+          "seconds": 48.67200000002049
+        },
+        {
+          "operation": "export_prepare",
+          "tokens": 0,
+          "bytes": 691633076,
+          "seconds": 1.9369999999762513
+        },
+        {
+          "operation": "acknowledge",
+          "tokens": 0,
+          "seconds": 0.01600000000325963
+        },
+        {
+          "operation": "save_rewind",
+          "tokens": 0,
+          "seconds": 2.26500000001397
+        },
+        {
+          "operation": "close",
+          "tokens": 0,
+          "seconds": 0.014999999955762178
+        }
+      ],
+      "initial_phase_ms": {
+        "append_owner_admission": 109.2006,
+        "chunk_token_preparation": 0.0393,
+        "embedding_40_layers_head": 45877.979,
+        "final_hidden_export_preparation": 1.3446,
+        "input_identity_hash_budget_preflight": 261.8136,
+        "inspect_admit_allocate": 1827.0922,
+        "native_payload_export_flush": 500.9232,
+        "payload_close_readonly_rehash": 0.0001,
+        "run_dispatch_bookkeeping": 0.07780000000310827
+      },
+      "prefill_tokens": 105054,
+      "producer_sha256": "e95af084559456750a50c8e75e03e2fa34d37311e08c218c689df33e972de9ce",
+      "yoco_keep": 140,
+      "prefill_plan": {
+        "capacity": 55902,
+        "host_bytes": 7420903424,
+        "carry_delta": 623128576,
+        "engram_delta": 86832000,
+        "base_host_bytes": 6710886400,
+        "max_host_bytes": 8321499136,
+        "capped_by": "producer_host_max_gib",
+        "prompt_tokens": 105054,
+        "single_sweep": false,
+        "policy": "fold",
+        "sweep_tokens": 49152,
+        "sweeps": [
+          49152,
+          55902
+        ],
+        "fold_tail": false,
+        "fold_cap": 61440,
+        "rebalance": false,
+        "reason": null
+      },
+      "arguments": {
+        "--context": "1000001",
+        "--cuda-device": "0",
+        "--provider-device-bytes": "17180917760",
+        "--provider-host-bytes": "2870801280",
+        "--cache-bytes": "3225432064",
+        "--graph-bytes": "7507791872",
+        "--job-device-bytes": "31377412860",
+        "--job-host-bytes": "7420903424",
+        "--gpu-reserve-bytes": "1073741824",
+        "--output-outstanding-bytes": "0",
+        "--hidden-device-bytes": "2521649916",
+        "--compressed-cache-bf16": "1",
+        "--resident-hidden-final-readback": "1",
+        "--engram-prefetch-bytes": "723317632",
+        "--batch-seed-ram": "1",
+        "--pair-ffn-tiles": "1",
+        "--fixed-resident-plan": "0",
+        "--tile-host-registration": "1",
+        "--resident-pageable-copies": "0",
+        "--native-rhs-pack": "0",
+        "--reuse-child-raw-metadata": "1",
+        "--pv-strided-probabilities": "0",
+        "--fuse-kv-gather-half": "0",
+        "--pv-view-f32": "0",
+        "--compact-kv-gather": "0",
+        "--masked-half-inplace": "0",
+        "--index-cublas-device-bytes": "67108864",
+        "--index-f32-cublas": "0",
+        "--expert-profile": "q8_1_activation_rounding",
+        "--expert-workspace-bytes": "335544320",
+        "--expert-runtime-bytes": "2097152",
+        "--pinned-device-bytes": "67108864",
+        "--cast-device-bytes": "469762048",
+        "--cast-audit": "0",
+        "--reuse-graph": "1",
+        "--fetch-profile": "two-buffer-direct-auto-async",
+        "--compute-tile": "4096",
+        "--compute-step-tokens": "0",
+        "--warmup-one-token": "0",
+        "--engram-tile-lookahead": "1",
+        "--resident-hidden-bf16": "1",
+        "--async-input-uploads": "1",
+        "--resident-compact-ids": "1",
+        "--resident-metadata": "1",
+        "--prefill-chunk-tokens": "55902",
+        "--backend-temporary-reserve-bytes": "805306368",
+        "--capture-dspark": "1",
+        "--unaligned-append-step-tokens": "2048",
+        "--export-hash-only": "1",
+        "--index-key-windows": "1",
+        "--merge-attention-selected-rows": "0",
+        "--hc-bf16-epilogue": "1",
+        "--dense-inputs-f16": "1",
+        "--dense-activation-q8-1": "1",
+        "--hc-projection-f16-gemm": "1",
+        "--token-tile-attention-f16-probabilities": "1",
+        "--index-bf16": "1",
+        "--split-f32-tensor-core-qk": "0",
+        "--attention-kv-f16-table": "1",
+        "--dense-mxfp4": "0",
+        "--expert-weights-activations-fp4": "0",
+        "--prefill-sweep-tokens": "49152",
+        "--prefill-fold-cap-tokens": "61440",
+        "--ctx-cache-precision": "bf16",
+        "--ctx-cache-growable": "1",
+        "--fixed-direct-open": "1",
+        "--yoco-keep": "140",
+        "--yoco-remote-state-version": "1",
+        "--build-sha": "e95af084559456750a50c8e75e03e2fa34d37311e08c218c689df33e972de9ce",
+        "--runtime-min-free-gib": "4.0"
+      },
+      "rtx_compute_s": 45.768739100000005,
+      "exposed_layer_engram_s": 0.001921,
+      "memory": {
+        "host_budget": 7420903424,
+        "runtime_min_free_gib": 4.0,
+        "peak_rss": 6677008384,
+        "minimum_available_ram": 10439348224,
+        "paging_growth": 0,
+        "budget_breaches": 0,
+        "owned_pid_gone": true,
+        "owned_job_empty": true
+      },
+      "image_spans": [],
+      "transfer_import_hash_ack": [
+        {
+          "initial": 1.0,
+          "position": 105054.0,
+          "bytes": 691633076.0,
+          "milliseconds": 3068.944
+        }
+      ],
+      "transfer_import_hash_ack_s": 3.068944,
+      "webui_prompt_s": 57.394624,
+      "other_control_s": 1.4356799999860286
+    },
+    "49787-yoco140": {
+      "calls": [
+        {
+          "tokens": 49787,
+          "encoder_only": false,
+          "processing_s": 26.815068500000002,
+          "layer_count": 40,
+          "engram_exposed_s": 0.0012076,
+          "weight_acquire_s": 6.9651343
+        }
+      ],
+      "logical_prefill_compute_s": 26.815068500000002,
+      "rtx_operation_times": [
+        {
+          "operation": "startup_and_initial_prefill",
+          "tokens": 49787,
+          "seconds": 29.23399999999674
+        },
+        {
+          "operation": "export_prepare",
+          "tokens": 0,
+          "bytes": 337711656,
+          "seconds": 0.9370000000344589
+        },
+        {
+          "operation": "acknowledge",
+          "tokens": 0,
+          "seconds": 0.0
+        },
+        {
+          "operation": "save_rewind",
+          "tokens": 0,
+          "seconds": 1.0
+        }
+      ],
+      "initial_phase_ms": {
+        "append_owner_admission": 0.0,
+        "chunk_token_preparation": 0.0648,
+        "embedding_40_layers_head": 26815.1333,
+        "final_hidden_export_preparation": 1.2269,
+        "input_identity_hash_budget_preflight": 270.8116,
+        "inspect_admit_allocate": 1666.4524,
+        "native_payload_export_flush": 236.9452,
+        "payload_close_readonly_rehash": 0.0001,
+        "run_dispatch_bookkeeping": 0.04179999999689743
+      },
+      "prefill_tokens": 49787,
+      "producer_sha256": "e95af084559456750a50c8e75e03e2fa34d37311e08c218c689df33e972de9ce",
+      "yoco_keep": 140,
+      "prefill_plan": {
+        "capacity": 49787,
+        "host_bytes": 6778126336,
+        "carry_delta": 59064320,
+        "engram_delta": 8168640,
+        "base_host_bytes": 6710886400,
+        "max_host_bytes": 8321499136,
+        "capped_by": "producer_host_max_gib",
+        "prompt_tokens": 49787,
+        "single_sweep": true,
+        "policy": "fold",
+        "sweep_tokens": 49152,
+        "sweeps": [
+          49787
+        ],
+        "fold_tail": false,
+        "fold_cap": 61440,
+        "rebalance": false,
+        "reason": null
+      },
+      "arguments": {
+        "--context": "1000001",
+        "--cuda-device": "0",
+        "--provider-device-bytes": "17180917760",
+        "--provider-host-bytes": "2792137920",
+        "--cache-bytes": "3225432064",
+        "--graph-bytes": "7507791872",
+        "--job-device-bytes": "31377412860",
+        "--job-host-bytes": "6778126336",
+        "--gpu-reserve-bytes": "1073741824",
+        "--output-outstanding-bytes": "0",
+        "--hidden-device-bytes": "2521649916",
+        "--compressed-cache-bf16": "1",
+        "--resident-hidden-final-readback": "1",
+        "--engram-prefetch-bytes": "644654272",
+        "--batch-seed-ram": "1",
+        "--pair-ffn-tiles": "1",
+        "--fixed-resident-plan": "0",
+        "--tile-host-registration": "1",
+        "--resident-pageable-copies": "0",
+        "--native-rhs-pack": "0",
+        "--reuse-child-raw-metadata": "1",
+        "--pv-strided-probabilities": "0",
+        "--fuse-kv-gather-half": "0",
+        "--pv-view-f32": "0",
+        "--compact-kv-gather": "0",
+        "--masked-half-inplace": "0",
+        "--index-cublas-device-bytes": "67108864",
+        "--index-f32-cublas": "0",
+        "--expert-profile": "q8_1_activation_rounding",
+        "--expert-workspace-bytes": "335544320",
+        "--expert-runtime-bytes": "2097152",
+        "--pinned-device-bytes": "67108864",
+        "--cast-device-bytes": "469762048",
+        "--cast-audit": "0",
+        "--reuse-graph": "1",
+        "--fetch-profile": "two-buffer-direct-auto-async",
+        "--compute-tile": "4096",
+        "--compute-step-tokens": "0",
+        "--warmup-one-token": "0",
+        "--engram-tile-lookahead": "1",
+        "--resident-hidden-bf16": "1",
+        "--async-input-uploads": "1",
+        "--resident-compact-ids": "1",
+        "--resident-metadata": "1",
+        "--prefill-chunk-tokens": "49787",
+        "--backend-temporary-reserve-bytes": "805306368",
+        "--capture-dspark": "1",
+        "--unaligned-append-step-tokens": "2048",
+        "--export-hash-only": "1",
+        "--index-key-windows": "1",
+        "--merge-attention-selected-rows": "0",
+        "--hc-bf16-epilogue": "1",
+        "--dense-inputs-f16": "1",
+        "--dense-activation-q8-1": "1",
+        "--hc-projection-f16-gemm": "1",
+        "--token-tile-attention-f16-probabilities": "1",
+        "--index-bf16": "1",
+        "--split-f32-tensor-core-qk": "0",
+        "--attention-kv-f16-table": "1",
+        "--dense-mxfp4": "0",
+        "--expert-weights-activations-fp4": "0",
+        "--prefill-sweep-tokens": "49152",
+        "--prefill-fold-cap-tokens": "61440",
+        "--ctx-cache-precision": "bf16",
+        "--ctx-cache-growable": "1",
+        "--fixed-direct-open": "1",
+        "--yoco-keep": "140",
+        "--yoco-remote-state-version": "1",
+        "--build-sha": "e95af084559456750a50c8e75e03e2fa34d37311e08c218c689df33e972de9ce",
+        "--runtime-min-free-gib": "4.0"
+      },
+      "rtx_compute_s": 26.815068500000002,
+      "exposed_layer_engram_s": 0.0012076,
+      "memory": {
+        "host_budget": 6778126336,
+        "runtime_min_free_gib": 4.0,
+        "peak_rss": 6027755520,
+        "minimum_available_ram": 10971766784,
+        "paging_growth": 0,
+        "budget_breaches": 0,
+        "owned_pid_gone": true,
+        "owned_job_empty": true
+      },
+      "image_spans": [
+        {
+          "position": 49545,
+          "count": 184,
+          "decoder_tail_intersection": 82
+        }
+      ],
+      "transfer_import_hash_ack": [
+        {
+          "initial": 1.0,
+          "position": 49787.0,
+          "bytes": 337711656.0,
+          "milliseconds": 1581.206
+        }
+      ],
+      "transfer_import_hash_ack_s": 1.581206,
+      "webui_prompt_s": 33.715531000000006,
+      "other_control_s": 0.9633249999688047
+    },
+    "49787-yoco0": {
+      "calls": [
+        {
+          "tokens": 49787,
+          "encoder_only": false,
+          "processing_s": 34.6852193,
+          "layer_count": 40,
+          "engram_exposed_s": 0.001123,
+          "weight_acquire_s": 0.0091078
+        }
+      ],
+      "logical_prefill_compute_s": 34.6852193,
+      "rtx_operation_times": [
+        {
+          "operation": "startup_and_initial_prefill",
+          "tokens": 49787,
+          "seconds": 37.34400000004098
+        },
+        {
+          "operation": "export_prepare",
+          "tokens": 0,
+          "bytes": 337711656,
+          "seconds": 0.9369999999762513
+        },
+        {
+          "operation": "acknowledge",
+          "tokens": 0,
+          "seconds": 0.0
+        },
+        {
+          "operation": "save_rewind",
+          "tokens": 0,
+          "seconds": 0.9369999999762513
+        }
+      ],
+      "initial_phase_ms": {
+        "append_owner_admission": 0.0,
+        "chunk_token_preparation": 0.045,
+        "embedding_40_layers_head": 34685.264299999995,
+        "final_hidden_export_preparation": 383.6135,
+        "input_identity_hash_budget_preflight": 242.8334,
+        "inspect_admit_allocate": 1646.3855,
+        "native_payload_export_flush": 239.8536,
+        "payload_close_readonly_rehash": 0.0001,
+        "run_dispatch_bookkeeping": 0.038100000004703816
+      },
+      "prefill_tokens": 49787,
+      "producer_sha256": "e95af084559456750a50c8e75e03e2fa34d37311e08c218c689df33e972de9ce",
+      "yoco_keep": 0,
+      "prefill_plan": {
+        "capacity": 49787,
+        "host_bytes": 6778126336,
+        "carry_delta": 59064320,
+        "engram_delta": 8168640,
+        "base_host_bytes": 6710886400,
+        "max_host_bytes": 8321499136,
+        "capped_by": "producer_host_max_gib",
+        "prompt_tokens": 49787,
+        "single_sweep": true,
+        "policy": "fold",
+        "sweep_tokens": 49152,
+        "sweeps": [
+          49787
+        ],
+        "fold_tail": false,
+        "fold_cap": 61440,
+        "rebalance": false,
+        "reason": null
+      },
+      "arguments": {
+        "--context": "1000001",
+        "--cuda-device": "0",
+        "--provider-device-bytes": "17180917760",
+        "--provider-host-bytes": "2792137920",
+        "--cache-bytes": "3225432064",
+        "--graph-bytes": "7507791872",
+        "--job-device-bytes": "31377412860",
+        "--job-host-bytes": "6778126336",
+        "--gpu-reserve-bytes": "1073741824",
+        "--output-outstanding-bytes": "0",
+        "--hidden-device-bytes": "2521649916",
+        "--compressed-cache-bf16": "1",
+        "--resident-hidden-final-readback": "1",
+        "--engram-prefetch-bytes": "644654272",
+        "--batch-seed-ram": "1",
+        "--pair-ffn-tiles": "1",
+        "--fixed-resident-plan": "0",
+        "--tile-host-registration": "1",
+        "--resident-pageable-copies": "0",
+        "--native-rhs-pack": "0",
+        "--reuse-child-raw-metadata": "1",
+        "--pv-strided-probabilities": "0",
+        "--fuse-kv-gather-half": "0",
+        "--pv-view-f32": "0",
+        "--compact-kv-gather": "0",
+        "--masked-half-inplace": "0",
+        "--index-cublas-device-bytes": "67108864",
+        "--index-f32-cublas": "0",
+        "--expert-profile": "q8_1_activation_rounding",
+        "--expert-workspace-bytes": "335544320",
+        "--expert-runtime-bytes": "2097152",
+        "--pinned-device-bytes": "67108864",
+        "--cast-device-bytes": "469762048",
+        "--cast-audit": "0",
+        "--reuse-graph": "1",
+        "--fetch-profile": "two-buffer-direct-auto-async",
+        "--compute-tile": "4096",
+        "--compute-step-tokens": "0",
+        "--warmup-one-token": "0",
+        "--engram-tile-lookahead": "1",
+        "--resident-hidden-bf16": "1",
+        "--async-input-uploads": "1",
+        "--resident-compact-ids": "1",
+        "--resident-metadata": "1",
+        "--prefill-chunk-tokens": "49787",
+        "--backend-temporary-reserve-bytes": "805306368",
+        "--capture-dspark": "1",
+        "--unaligned-append-step-tokens": "2048",
+        "--export-hash-only": "1",
+        "--index-key-windows": "1",
+        "--merge-attention-selected-rows": "0",
+        "--hc-bf16-epilogue": "1",
+        "--dense-inputs-f16": "1",
+        "--dense-activation-q8-1": "1",
+        "--hc-projection-f16-gemm": "1",
+        "--token-tile-attention-f16-probabilities": "1",
+        "--index-bf16": "1",
+        "--split-f32-tensor-core-qk": "0",
+        "--attention-kv-f16-table": "1",
+        "--dense-mxfp4": "0",
+        "--expert-weights-activations-fp4": "0",
+        "--prefill-sweep-tokens": "49152",
+        "--prefill-fold-cap-tokens": "61440",
+        "--ctx-cache-precision": "bf16",
+        "--ctx-cache-growable": "1",
+        "--fixed-direct-open": "1",
+        "--build-sha": "e95af084559456750a50c8e75e03e2fa34d37311e08c218c689df33e972de9ce",
+        "--runtime-min-free-gib": "4.0"
+      },
+      "rtx_compute_s": 34.6852193,
+      "exposed_layer_engram_s": 0.001123,
+      "memory": {
+        "host_budget": 6778126336,
+        "runtime_min_free_gib": 4.0,
+        "peak_rss": 6080892928,
+        "minimum_available_ram": 11070246912,
+        "paging_growth": 0,
+        "budget_breaches": 0,
+        "owned_pid_gone": true,
+        "owned_job_empty": true
+      },
+      "image_spans": [
+        {
+          "position": 49545,
+          "count": 184,
+          "decoder_tail_intersection": 82
+        }
+      ],
+      "transfer_import_hash_ack": [
+        {
+          "initial": 1.0,
+          "position": 49787.0,
+          "bytes": 337711656.0,
+          "milliseconds": 1461.487
+        }
+      ],
+      "transfer_import_hash_ack_s": 1.461487,
+      "webui_prompt_s": 41.607178,
+      "other_control_s": 0.9276910000065186
+    }
+  },
+  "browser": "actual stack WebUI in headless Mac Chromium",
+  "samplers": {
+    "temperature": 0.83,
+    "top_p": 0.87,
+    "top_k": 37,
+    "min_p": 0.06,
+    "bias": 0.22,
+    "seed": 123456,
+    "max_tokens": 128
+  },
+  "producer": "streaming-llama",
+  "producer_sha256": "e95af084559456750a50c8e75e03e2fa34d37311e08c218c689df33e972de9ce",
+  "source_archive_sha256": "8b38102a01ab5a6d3fb5dffd965f07c7c9dd034de0334565a5d696611d1b7480",
+  "desktop_reserve_gib": 0.5,
+  "runtime_min_free_gib": 4,
+  "outer_host_budget_gib": 8.5,
+  "producer_host_max_gib": 7.75,
+  "image_png_sha256": "188123436e3f1d008885b4e54083e3a98d08f59ee256a573e02bd4da680fa093",
+  "cpu": {
+    "passed": 183,
+    "skipped": 2,
+    "subtests": 61
+  },
+  "native": {
+    "native_sha256": "bc5170e5f774c1e8f1c102d16b75cbd457ddf962cce596dbdc438400465498a3",
+    "source_manifest_sha256": "80e068037b89e8b87b845896e09313615efd513832473b45710ef1b62353abad"
+  },
+  "single_components": {
+    "single-yoco": {
+      "phase_ms": {
+        "append_owner_admission": 0.0,
+        "chunk_token_preparation": 0.0558,
+        "embedding_40_layers_head": 27832.9123,
+        "final_hidden_export_preparation": 1.1521,
+        "input_identity_hash_budget_preflight": 272.6843,
+        "inspect_admit_allocate": 1656.6529,
+        "native_payload_export_flush": 244.8941,
+        "payload_close_readonly_rehash": 0.0001,
+        "run_dispatch_bookkeeping": 0.025000000000791722
+      },
+      "stateful_chunks": {
+        "canonical_cache_preserved": true,
+        "chunks": [
+          {
+            "completed_context_tokens": 49787,
+            "export_preparation_ms": 1.1521,
+            "first": 0,
+            "prompt_processing_ms": 27832.8565,
+            "tokens": 49787
+          }
+        ],
+        "enabled": true,
+        "maximum_chunk_tokens": 49787,
+        "token_history_host_charge_bytes": 8000008,
+        "total_context_tokens": 49787
+      },
+      "producer_sha256": "e95af084559456750a50c8e75e03e2fa34d37311e08c218c689df33e972de9ce"
+    },
+    "single-full": {
+      "phase_ms": {
+        "append_owner_admission": 0.0,
+        "chunk_token_preparation": 0.0545,
+        "embedding_40_layers_head": 35228.6633,
+        "final_hidden_export_preparation": 389.3793,
+        "input_identity_hash_budget_preflight": 279.1502,
+        "inspect_admit_allocate": 1659.6587,
+        "native_payload_export_flush": 239.3354,
+        "payload_close_readonly_rehash": 0.0001,
+        "run_dispatch_bookkeeping": 0.0507000000002904
+      },
+      "stateful_chunks": {
+        "canonical_cache_preserved": true,
+        "chunks": [
+          {
+            "completed_context_tokens": 49787,
+            "export_preparation_ms": 389.3793,
+            "first": 0,
+            "prompt_processing_ms": 35228.6088,
+            "tokens": 49787
+          }
+        ],
+        "enabled": true,
+        "maximum_chunk_tokens": 49787,
+        "token_history_host_charge_bytes": 8000008,
+        "total_context_tokens": 49787
+      },
+      "producer_sha256": "e95af084559456750a50c8e75e03e2fa34d37311e08c218c689df33e972de9ce"
+    }
+  },
+  "final_source_sync": {
+    "files": 823,
+    "archive_sha256": "ea90050b83be6679422dc1c096afdc48e2fad01f77e28177220c8237adbf8136",
+    "compiled_native_sources_unchanged": 153,
+    "per_file_sha256_verified": true
+  }
+}

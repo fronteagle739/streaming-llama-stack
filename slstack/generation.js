@@ -6,14 +6,25 @@
   const phases = {reasoning: 'Reasoning', answer: 'Answer', tool_call: 'Tools', code: 'Code'};
   const points = [['Max quality', 0], ['Balanced', .35], ['Fast', .65], ['Faster', .9], ['Max speed', 1.36125]];
   let settings, applied, selected = 'reasoning', dirty = false, saving = false, editing = false, request = 0;
-  let revision = 0, pending = {}, timer, error = '';
+  let revision = 0, pending = {}, timer, error = '', appliesAt = 'the next token';
   const originalFetch = window.fetch.bind(window);
+  let progressRequest = 0;
   // The toolbar owns sampling for WebUI turns. Remove the stock UI's always-
   // present defaults, which otherwise override explicit per-phase settings.
   // Direct API callers retain the OpenAI request-level override semantics.
-  window.fetch = function(input, init) {
+  window.fetch = async function(input, init) {
+    let chat = false;
     let url; try { url = new URL(typeof input === 'string' ? input : input.url, location.href); } catch {}
     if (url?.origin === location.origin && /\/chat\/completions$/.test(url.pathname) && typeof init?.body === 'string') {
+      chat = nativeControls;
+      // A Send immediately after typing must carry the committed toolbar
+      // revision. Await the pending35ms debounce and any in-flight save.
+      if (nativeControls) {
+        clearTimeout(timer);
+        await flush();
+        while (saving || dirty) {if (!saving) await flush();else await new Promise(resolve => setTimeout(resolve, 5));}
+        if (error) throw new Error(error);
+      }
       try {
         const body = JSON.parse(init.body);
         if (nativeControls) for (const key of ['temperature', 'top_p', 'top_k', 'min_p']) delete body[key];
@@ -21,7 +32,12 @@
         init = {...init, body: JSON.stringify(body)};
       } catch {}
     }
-    return originalFetch(input, init);
+    const turn = chat ? ++progressRequest : 0;
+    if (chat) progressBar.hidden = true;
+    const response = await originalFetch(input, init);
+    if (chat && response.ok && response.headers.get('Content-Type')?.includes('text/event-stream'))
+      void showProgress(response.clone(), turn);
+    return response;
   };
   if (!nativeControls) return;
   const style = document.createElement('style');
@@ -49,9 +65,44 @@
     .sl-generation-field input[type=range]{padding:0;border:0;accent-color:var(--foreground)}
     #sl-generation-status{font-size:11px;min-height:16px;margin-top:12px;color:var(--muted-foreground)}
     #sl-generation-status[role=alert]{color:var(--destructive)}
+    #sl-prefill-progress{position:fixed;top:56px;left:0;width:100%;height:4px;z-index:999;border:0;appearance:none;background:var(--muted);color:var(--foreground)}
+    #sl-prefill-progress[hidden]{display:none}
+    #sl-prefill-progress::-webkit-progress-bar{background:var(--muted)}
+    #sl-prefill-progress::-webkit-progress-value{background:var(--foreground)}
+    #sl-prefill-progress::-moz-progress-bar{background:var(--foreground)}
     @media(max-width:600px){#sl-generation-toolbar{gap:4px}#sl-generation-toolbar input[type=range]{width:76px}#sl-generation-mode{display:none}.sl-generation-button{padding:6px}#sl-generation-panel{top:60px;right:12px}}
   `;
   document.head.append(style);
+  const progressBar = document.createElement('progress');
+  progressBar.id = 'sl-prefill-progress'; progressBar.hidden = true;
+  progressBar.setAttribute('aria-label', 'Prompt processing');
+  document.body.append(progressBar);
+  async function showProgress(response, turn) {
+    const reader = response.body.getReader(), decoder = new TextDecoder();
+    let pending = '';
+    try {
+      for (;;) {
+        const {done, value} = await reader.read(); if (done) break;
+        pending += decoder.decode(value, {stream:true});
+        if (pending.length > 1 << 20) break;
+        const lines = pending.split('\n'); pending = lines.pop();
+        for (const line of lines) {
+          if (turn !== progressRequest || !line.startsWith('data: ')) continue;
+          let event; try {event = JSON.parse(line.slice(6));} catch {continue;}
+          const p = event.prompt_progress;
+          if (p && Number.isFinite(p.total) && p.total > 0 && Number.isFinite(p.processed)) {
+            progressBar.max = p.total; progressBar.value = Math.max(0, Math.min(p.total, p.processed));
+            progressBar.setAttribute('aria-valuetext', `${Math.round(100 * progressBar.value / p.total)}%`);
+            progressBar.hidden = false;
+          }
+          if (event.error || event.choices?.some(c => c.delta?.content || c.finish_reason)) progressBar.hidden = true;
+        }
+      }
+    } catch {} finally {
+      if (turn === progressRequest) progressBar.hidden = true;
+      await reader.cancel().catch(() => {});
+    }
+  }
   const toolbar = document.createElement('div'); toolbar.id = 'sl-generation-toolbar'; toolbar.hidden = true;
   toolbar.innerHTML = `<label title="Quality vs speed. Changing this slider sets every phase; applies at the next token."><span id="sl-generation-mode">Balanced</span><input aria-label="Quality vs speed" type="range" min="0" max="1.36125" step="0.00125" value="0.35"></label><button class="sl-generation-button" type="button" aria-label="Generation phase settings" aria-haspopup="dialog" aria-expanded="false" aria-controls="sl-generation-panel" title="Bias and sampling by response phase"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M21 4h-7M10 4H3M21 12h-9M8 12H3M21 20h-5M12 20H3M14 2v4M8 10v4M16 18v4"/></svg><span>Phases</span></button>`;
   const range = toolbar.querySelector('input'), trigger = toolbar.querySelector('button');
@@ -82,17 +133,19 @@
     const label = settings.per_phase ? 'Per phase' : modeName(Number(range.value));
     toolbar.querySelector('#sl-generation-mode').textContent = label;
     range.setAttribute('aria-valuetext', `${label}, bias ${range.value}`);
-    range.title = `Bias ${Number(range.value).toFixed(3)} · next token`;
+    range.title = `Bias ${Number(range.value).toFixed(3)} · ${appliesAt}`;
+    toolbar.querySelector('label').title = `Quality vs speed. Changing this slider sets every phase; applies at ${appliesAt}.`;
+    panel.querySelector('small').textContent = `Quality and sampling for this session. Changes apply at ${appliesAt}.`;
     panel.querySelector('#sl-generation-enabled').checked = settings.per_phase;
     panel.querySelectorAll('[role=tab]').forEach(b => {b.setAttribute('aria-selected', String(b.dataset.phase === selected));b.title = applied?.phase === b.dataset.phase ? 'Current phase' : phases[b.dataset.phase];});
     const status = panel.querySelector('#sl-generation-status');
     status.setAttribute('role', error ? 'alert' : 'status');
-    status.textContent = error || (saving ? 'Saving…' : applied?.revision === settings.revision ? `Applied · ${phases[applied.phase]} · token ${applied.position}` : 'Saved · applies at the next token');
+    status.textContent = error || (saving ? 'Saving…' : applied?.revision === settings.revision ? `Applied · ${phases[applied.phase]} · token ${applied.position}` : `Saved · applies at ${appliesAt}`);
   }
   function renderFields() {
     if (!settings) return;
     const phase = settings.per_phase, knobs = phase ? settings.phases[selected] : {...settings.sampler, bias: settings.value};
-    const fields = [['bias', 'Speed bias', 0, 1.36125, .00125], ['temperature', 'Temperature', 0, 2, .05], ['top_p', 'Top p', .001, 1, .01], ['top_k', 'Top k', 0, 1024, 1], ['min_p', 'Min p', 0, 1, .01]];
+    const fields = [['bias', 'Speed bias', 0, 1.36125, 'any'], ['temperature', 'Temperature', 0, 2, 'any'], ['top_p', 'Top p', .001, 1, 'any'], ['top_k', 'Top k', 0, 1024, 1], ['min_p', 'Min p', 0, 1, 'any']];
     panel.querySelector('#sl-generation-fields').innerHTML = fields.map(([key, title, min, max, step]) => `<label class="sl-generation-field"><span>${title}</span><input aria-label="${phase ? phases[selected] : 'All phases'} ${title}" data-knob="${key}" type="number" min="${min}" max="${max}" step="${step}" value="${knobs[key]}"></label>`).join('');
     panel.querySelector('.sl-generation-tabs').style.opacity = phase ? '1' : '.5';
     panel.querySelectorAll('[data-knob]').forEach(input => input.addEventListener('input', () => {
@@ -112,6 +165,7 @@
     try {
       const response = await originalFetch('/slstack/generation', {method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify(patch)});
       const data = await response.json();if (!response.ok) throw new Error(data.error?.message || 'Settings refused');
+      appliesAt = data.applies === 'next request' ? 'the next turn' : 'the next token';
       revision = data.settings.revision;
       settings = merge(data.settings, pending);
     } catch (e) {error = `Couldn’t apply settings: ${e.message}`;}
@@ -131,6 +185,7 @@
     try {
       const response=await originalFetch('/slstack/generation',{cache:'no-store'});if(!response.ok)throw new Error('Generation controls unavailable');
       const data=await response.json();if(!data.supported){toolbar.hidden=true;return;}
+      appliesAt = data.applies === 'next request' ? 'the next turn' : 'the next token';
       applied=data.applied;
       if(!saving&&!dirty&&!editing&&data.settings.revision>=revision){const first=!settings;settings=data.settings;revision=settings.revision;if(first||panel.open&&!panel.contains(document.activeElement))renderFields();}
       paint();

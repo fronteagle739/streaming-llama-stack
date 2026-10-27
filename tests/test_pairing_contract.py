@@ -32,11 +32,14 @@ class PairingContractTests(unittest.TestCase):
             with self.subTest(key=key), self.assertRaises(ValueError):
                 conversation_key({**body, 'prompt_cache_key':key})
 
-    def test_mac_quality_is_unsupported_without_loading_either_engine(self):
+    def test_mac_quality_updates_the_next_request_without_loading_either_engine(self):
         engine = Engines(load(overrides={'gpu_uuid':'GPU-test','mac':'http://example.test:8180'}))
         with patch.object(engine, 'ready', side_effect=AssertionError('engine loaded')):
-            self.assertFalse(engine.quality()['supported'])
-            self.assertFalse(engine.quality(.35)['phases_supported'])
+            self.assertTrue(engine.quality()['supported'])
+            result=engine.quality(.35)
+            self.assertTrue(result['phases_supported'])
+            self.assertEqual(result['value'],.35)
+            self.assertEqual(result['applies'],'next request')
         self.assertIsNone(engine.llm)
         self.assertIsNone(engine.remote)
 

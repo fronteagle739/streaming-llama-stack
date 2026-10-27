@@ -1,4 +1,5 @@
 import unittest
+from types import SimpleNamespace
 from slstack.prefill_progress import PrefillProgress, chunk
 
 
@@ -10,6 +11,36 @@ def sweep_lines(tokens, layers=40, upto=None):
 
 
 class PrefillProgressTest(unittest.TestCase):
+    def test_cold_constructor_publishes_before_it_returns(self):
+        from slstack.native_broker import vendor
+        vendor()
+        from slstack.combo_single import prefill_snapshot
+        process = SimpleNamespace(diagnostic=bytearray(sweep_lines(49787, upto=8)), ready=None)
+        active = SimpleNamespace(process=None, loading_process=process, prefill_plan={'sweeps': [49787]})
+        engine = SimpleNamespace(producer=None, starting_producer=active)
+        metrics = dict(new_tokens=49787, prefill_started=0)
+        state = {}
+        first = prefill_snapshot(engine, metrics, state, 2)
+        self.assertGreater(first['tokens_done'], 0)
+        self.assertEqual(first['sweeps'], 1)
+        process.diagnostic.extend(b'[dsv41-sweep] layer=20 complete\n')
+        self.assertGreater(prefill_snapshot(engine, metrics, state, 3)['tokens_done'], first['tokens_done'])
+        self.assertIsNone(active.process)  # constructor still owns startup
+
+    def test_append_progress_skips_the_previous_completed_prompt(self):
+        from slstack.native_broker import vendor
+        vendor()
+        from slstack.combo_single import prefill_snapshot
+        process = SimpleNamespace(diagnostic=bytearray(sweep_lines(1000)), ready=None)
+        active = SimpleNamespace(process=process, prefill_plan={'sweeps': [1000]})
+        engine = SimpleNamespace(producer=active)
+        state = dict(process=process, offset=len(process.diagnostic), tracker=None)
+        metrics = dict(new_tokens=1000, prefill_started=0)
+        self.assertEqual(prefill_snapshot(engine, metrics, state, 1)['tokens_done'], 0)
+        process.diagnostic.extend(sweep_lines(1000, upto=4))
+        done = prefill_snapshot(engine, metrics, state, 2)['tokens_done']
+        self.assertGreater(done, 0);self.assertLess(done, 1000)
+
     def test_single_sweep_percent_and_eta(self):
         p = PrefillProgress(40354, 49152, started=0.0)
         p.feed(sweep_lines(40354, upto=20))

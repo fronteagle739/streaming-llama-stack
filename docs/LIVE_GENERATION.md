@@ -29,3 +29,16 @@ updates for `value`, `per_phase`, `sampler`, and `phases`.
 
 
 Bias and sampler changes are observed at token boundaries within an uninterrupted decode. Explicit API sampler parameters apply for that request; partial publications preserve the previous valid revision until the new one is complete.
+
+The paired Mac candidate uses the same toolbar, with changes applied on the
+next turn. It forwards the complete profile, retains explicit request overrides,
+and applies phase changes inside native decode. WebUI sampler order, typical
+sampling, dynamic temperature, XTC and DRY use the retained llama.cpp sampler
+implementations; penalties/logit bias and the64-bit seed are retained. The
+toolbar accepts arbitrary valid fractional values and Send waits for a pending
+save. Its native log reports the applied values at each phase transition.
+
+Quality/speed uses the Mac selection-only cache policy. The native-session
+decoder keeps every expert resident, so there are no uncached experts to
+penalize and the bias does not change routing or promise a speedup here.
+The candidate still requires the paired live release gate.

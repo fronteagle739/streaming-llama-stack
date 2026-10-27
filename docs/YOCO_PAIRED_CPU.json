@@ -1,0 +1,37 @@
+{
+  "status": "PASS",
+  "scope": "headless CPU WebUI fixture",
+  "model_opened": false,
+  "native_decode": false,
+  "sampler_values": {
+    "temperature": 0.83,
+    "top_p": 0.87,
+    "top_k": 37,
+    "min_p": 0.06,
+    "quality_speed": 0.22
+  },
+  "max_tokens": -1,
+  "samplers": [
+    "top_k",
+    "typ_p",
+    "top_p",
+    "min_p",
+    "temperature"
+  ],
+  "pending_save_before_send": true,
+  "errors": [],
+  "mac_native_parser_actual_browser_request": true,
+  "python_tests": {
+    "run": 68,
+    "passed": 67,
+    "skipped": 1
+  },
+  "yoco_cpu_checks_per_platform": 42170,
+  "platforms": [
+    "Windows x64",
+    "Apple Silicon"
+  ],
+  "live_release_gate": "INCOMPLETE",
+  "image_kl_recall": "NOT RUN",
+  "mac_yoco_decode": "NOT RUN"
+}

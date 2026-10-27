@@ -1,0 +1,1 @@
+LLAMADECODE_GENERATION revision=7 phase=answer bias=0.22 temperature=0.83 top_p=0.87 top_k=37 min_p=0.06 position=49787
