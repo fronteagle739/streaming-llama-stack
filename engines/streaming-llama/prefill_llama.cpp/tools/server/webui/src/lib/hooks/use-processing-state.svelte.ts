@@ -140,7 +140,8 @@ export function useProcessingState(): UseProcessingStateReturn {
 
 		// Always show context info when we have valid data
 		if (stateToUse.contextUsed >= 0 && stateToUse.contextTotal > 0) {
-			const contextPercent = Math.round((stateToUse.contextUsed / stateToUse.contextTotal) * 100);
+			const percent = (stateToUse.contextUsed / stateToUse.contextTotal) * 100;
+			const contextPercent = percent > 0 && percent < 0.01 ? '<0.01' : percent.toFixed(2);
 
 			details.push(
 				`Context: ${stateToUse.contextUsed}/${stateToUse.contextTotal} (${contextPercent}%)`

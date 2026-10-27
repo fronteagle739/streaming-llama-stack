@@ -46,6 +46,19 @@ class ToolActivityTests(unittest.TestCase):
         self.assertEqual(stack.tools.call.call_count,12)
         self.assertIn('Done.',result['choices'][0]['message']['content'])
 
+    def test_stream_forwards_prompt_and_decode_counts_before_completion(self):
+        stack,engine=self.stack()
+        prompt=dict(prompt_n=2000,cache_n=1200,predicted_n=0)
+        token=dict(prompt_n=2000,cache_n=1200,predicted_n=1)
+        engine.chat_events.return_value=iter([
+            dict(choices=[],timings=prompt),
+            dict(event(dict(content='Hi')),timings=token),event({},'stop')])
+        rows=list(stack.chat_events(dict(messages=[dict(role='user',content='Hello')])))
+        self.assertEqual(rows[0]['choices'],[])
+        self.assertEqual(rows[0]['timings'],prompt)
+        self.assertEqual(rows[1]['timings'],token)
+        self.assertEqual(rows[-1]['timings'],token)
+
     def test_malformed_dsml_is_a_diagnostic_not_answer_text_or_an_execution(self):
         raw='<｜DSML｜｜DSML｜ calls [generate_image] <｜DSML｜ parameter="prom">broken'
         splitter=Splitter(True);pieces=[]

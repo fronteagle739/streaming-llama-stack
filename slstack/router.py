@@ -160,6 +160,8 @@ class Stack:
                     progress = event.get('prefill_progress')
                     if isinstance(progress, dict):
                         yield progress_chunk(progress)
+                    if 'timings' in event:
+                        row = chunk({});row['choices'] = [];row['timings'] = event['timings'];yield row
                     continue
                 if len(choices) != 1:
                     raise RuntimeError('Stack tools require exactly one upstream choice')
@@ -182,7 +184,9 @@ class Stack:
                     if isinstance(delta.get(key),str):
                         message[key] = message.get(key,'') + delta[key]
                 if delta:
-                    yield chunk(delta)
+                    row = chunk(delta)
+                    if 'timings' in event:row['timings'] = event['timings']
+                    yield row
                 if choice.get('finish_reason'):
                     finish = choice['finish_reason']
             calls = [calls[index] for index in sorted(calls)]

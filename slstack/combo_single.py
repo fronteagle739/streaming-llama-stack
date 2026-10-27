@@ -449,7 +449,7 @@ class SingleEngine:
         max_tokens = request['max_tokens'] if request['max_tokens'] else int(self.cfg.get('single_engine_default_max_tokens', 32768))
         max_tokens = min(max_tokens, self.cfg['context'] - len(self.live) - 1)
         splitter = Splitter(think);decoder = codecs.getincrementaldecoder('utf-8')('replace')
-        tokenizer = self.tokenize();started = time.monotonic()
+        tokenizer = self.tokenize();started = time.monotonic();metrics['decode_started'] = started
         matcher = StopMatcher(request['stops']) if request.get('stops') else None
         shown = [];ended = [None]   # tokens fed to the text; why the text ended early
         def on_token(token):
@@ -457,7 +457,7 @@ class SingleEngine:
             if client_gone is not None and client_gone():ended[0] = 'client disconnected';return True
             if token in self.stop_tokens:return False
             if 'first_token_seconds' not in metrics:metrics['first_token_seconds'] = time.monotonic() - started
-            shown.append(token)
+            shown.append(token);metrics['live_completion_tokens'] = len(shown)
             piece = matcher.feed(tokenizer.token_bytes(token)) if matcher else decoder.decode(tokenizer.token_bytes(token))
             for field, delta in splitter.feed(piece):emit('delta', field, delta)
             if matcher and matcher.hit is not None:ended[0] = 'stop sequence'
@@ -689,8 +689,21 @@ def handler(proxy):
                 write(progress_chunk(cid, model, created, progress['tracker'].snapshot(time.monotonic())))
             final = {}
             def emit(kind, *values):
-                if kind == 'delta' and streaming:write(_chunk(cid, model, created, {values[0]: values[1]}))
+                if kind == 'delta' and streaming:
+                    row = _chunk(cid, model, created, {values[0]: values[1]})
+                    row['timings'] = live_timings()
+                    write(row)
                 elif kind == 'final':final.update(values[0])
+            def live_timings():
+                return dict(cache_n=metrics.get('reused_prefix_tokens', 0), prompt_n=metrics.get('new_tokens', 0),
+                    prompt_ms=1000.0 * (metrics.get('append_prefill_seconds') or metrics.get('producer_launch_prefill_seconds') or 0.0),
+                    predicted_n=metrics.get('live_completion_tokens', 0),
+                    predicted_ms=1000.0 * max(0.0, time.monotonic()-metrics.get('decode_started', time.monotonic())))
+            def prepared():
+                proxy.window(True, engine.lease_id)
+                if streaming:
+                    row = _chunk(cid, model, created, {})
+                    row['choices'] = [];row['timings'] = live_timings();write(row)
             try:
                 if engine.poison:raise RuntimeError('Single-engine owner is poisoned: ' + engine.poison)
                 if 'quality_speed' in body:engine.set_quality(body['quality_speed'])
@@ -701,7 +714,7 @@ def handler(proxy):
                 try:
                     proxy.request_active = True;proxy.window(True, engine.lease_id)
                     with proxy.heartbeat(progress_beat if streaming else None):
-                        engine.run(body, emit, metrics, ready=lambda: proxy.window(True, engine.lease_id), client_gone=lambda: not alive[0])
+                        engine.run(body, emit, metrics, ready=prepared, client_gone=lambda: not alive[0])
                 finally:proxy.request_active = False;proxy.window(False)
                 parsed, splitter = final['parsed'], final['splitter']
                 calls = tool_call_deltas(parsed['calls'])
