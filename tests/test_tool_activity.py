@@ -85,5 +85,23 @@ class ToolActivityTests(unittest.TestCase):
         self.assertIn('media-qwen21-venv',python_for(cfg,'qwen-image-2.1'))
         self.assertNotIn('existing-general-python',python_for(cfg,'qwen-image-2.1'))
 
+    def test_discovery_results_survive_card_cleanup_once_at_a_stable_turn(self):
+        stack,_=self.stack()
+        listing=dict(id='models',function=dict(name='list_media_models',arguments='{"kind":"image"}'))
+        trace=activity(listing,'complete',dict(models=[dict(id='fixture-model',name='Fixture')]))
+        messages=[dict(role='user',content='Discover models'),dict(role='assistant',content=trace+'Ready.')]
+        prepared=stack.prepare_chat(dict(messages=messages))
+        self.assertIn('fixture-model',prepared['messages'][1]['content'])
+        self.assertNotIn('stack-tool',prepared['messages'][1]['content'])
+        follow=stack.prepare_chat(dict(messages=messages+[
+            dict(role='user',content='Again'),dict(role='assistant',content=trace+'Ready again.')]))
+        self.assertEqual(prepared['messages'][1],follow['messages'][1])
+        self.assertNotIn('fixture-model',follow['messages'][3]['content'])
+        refreshed=activity(listing,'complete',dict(models=[dict(id='replacement-model',name='Replacement')]))
+        updated=stack.prepare_chat(dict(messages=messages+[
+            dict(role='user',content='Refresh'),dict(role='assistant',content=refreshed+'Updated.')]))
+        self.assertIn('replacement-model',updated['messages'][1]['content'])
+        self.assertNotIn('fixture-model',updated['messages'][1]['content'])
+
 
 if __name__=='__main__':unittest.main()
