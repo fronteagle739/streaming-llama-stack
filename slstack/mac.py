@@ -225,15 +225,8 @@ class Receiver:
             from studio.mlx_serve import mlx_serve_argv
             preset = dict(cfg.get('mlx_preset') or {})
             preset['model_path'] = str(path(cfg['model']))
-            previous = os.environ.get('STUDIO_MLX_SERVE_BIN')
-            os.environ['STUDIO_MLX_SERVE_BIN'] = binary
-            try:
-                command = mlx_serve_argv({'mode': 'local', 'rtx': preset}, port=port, bind_address='127.0.0.1')
-            finally:
-                if previous is None:
-                    os.environ.pop('STUDIO_MLX_SERVE_BIN', None)
-                else:
-                    os.environ['STUDIO_MLX_SERVE_BIN'] = previous
+            command = mlx_serve_argv({'mode': 'local', 'rtx': preset}, port=port,
+                                     bind_address='127.0.0.1', binary=binary)
             if not command:
                 raise ValueError('Fresh mlx-serve binary not found')
         else:
