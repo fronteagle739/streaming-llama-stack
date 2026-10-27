@@ -100,12 +100,13 @@ def run(request):
             raise ValueError('Pinned Studio Wan adapter exposes its streamed path only; resident mode is unsupported')
         if arch and arch.startswith('bernini') and ((Path(model).is_dir()) != (mode == 'resident')):
             raise ValueError('Pinned Bernini uses resident mode for a diffusers folder and streaming for a single-file checkpoint')
+        from .media_references import conditioning,h3_reference_prompt
+        inputs=conditioning(kind,args,arch,model)
         prompt=args['prompt']
         if arch=='minimax-h3' and kind=='video':
             from studio.h3_image_mode import build_video_prompt
             prompt=build_video_prompt(prompt)
-        from .media_references import conditioning
-        inputs=conditioning(kind,args,arch,model)
+            prompt=h3_reference_prompt(prompt,len(inputs['reference_images']))
         params = GenerationParams(prompt=prompt, negative=args['negative_prompt'],
                                   width=args['width'], height=args['height'], steps=args['steps'],
                                   guidance=args['guidance'], seed=args['seed'],
