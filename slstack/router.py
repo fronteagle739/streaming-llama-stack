@@ -346,9 +346,9 @@ def handler(stack):
                 # General backends use the stock UI's OpenAI sampler fields.
                 # The native toolbar interceptor removes those fields in favor
                 # of its live control file, which general decoders do not read.
-                if stack.cfg.get('general'):
-                    return self.send(200,b'','text/javascript; charset=utf-8',{'Cache-Control':'no-store'})
-                return self.send(200, (ROOT / 'slstack' / 'generation.js').read_bytes(), 'text/javascript; charset=utf-8',
+                script=(ROOT/'slstack/generation.js').read_bytes()
+                if stack.cfg.get('general'):script=b'window.slstackNativeGeneration=false;\n'+script
+                return self.send(200, script, 'text/javascript; charset=utf-8',
                                  {'Cache-Control': 'no-store'})
             if route == '/slstack-settings.js' and stack.cfg['webui']:
                 return self.send(200,(ROOT/'slstack'/'settings.js').read_bytes(),'text/javascript; charset=utf-8',{'Cache-Control':'no-store'})

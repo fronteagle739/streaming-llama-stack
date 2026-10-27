@@ -2,6 +2,9 @@
 import threading
 from http.server import ThreadingHTTPServer
 import json
+from pathlib import Path
+import shutil
+import subprocess
 from types import SimpleNamespace
 import unittest
 from unittest.mock import Mock
@@ -58,7 +61,7 @@ class GeneralRequests(unittest.TestCase):
                 props=json.load(response)
             self.assertEqual(props['default_generation_settings']['n_ctx'],65536)
             with urllib.request.urlopen('http://127.0.0.1:'+str(server.server_port)+'/slstack-generation.js') as response:
-                self.assertEqual(response.read(),b'')
+                self.assertTrue(response.read().startswith(b'window.slstackNativeGeneration=false;'))
         finally:server.shutdown();server.server_close();thread.join()
 
     def test_general_route_annotations_distinguish_remote_prefill(self):
@@ -71,6 +74,28 @@ class GeneralRequests(unittest.TestCase):
         self.assertFalse(result['ultra_handoff'])
         stack.cfg={'general':{'mode':'remote','mac':{'backend':'omlx'}}}
         self.assertEqual(stack.route_metadata({})['route'],'mac-http')
+
+    @unittest.skipUnless(shutil.which('node'),'Node is needed for the browser request interceptor test')
+    def test_browser_preserves_general_samplers_and_normalizes_random_seed(self):
+        source=(Path(__file__).resolve().parents[1]/'slstack/generation.js').read_text(encoding='utf-8')
+        script='''const fs=require('fs'),vm=require('vm');
+const data=JSON.parse(fs.readFileSync(0,'utf8'));let received;
+const context={URL,location:{href:'http://127.0.0.1/'},
+ window:{slstackNativeGeneration:data.native,fetch:(url,init)=>{received=JSON.parse(init.body);return Promise.resolve({});}},
+ document:{createElement:()=>{throw new Error('interceptor installed');}}};
+try{vm.runInNewContext(data.source,context);}catch(e){if(e.message!=='interceptor installed')throw e;}
+context.window.fetch('/v1/chat/completions',{body:JSON.stringify(data.body)});
+process.stdout.write(JSON.stringify(received));'''
+        body=dict(temperature=.8,top_p=.9,top_k=37,min_p=.02,seed=-1,max_tokens=256)
+        for native in (False,True):
+            run=subprocess.run(['node','-e',script],input=json.dumps(dict(source=source,native=native,body=body)),
+                               text=True,capture_output=True,check=True,timeout=15)
+            actual=json.loads(run.stdout)
+            self.assertNotIn('seed',actual)
+            self.assertEqual(actual['max_tokens'],256)
+            for key in ('temperature','top_p','top_k','min_p'):
+                if native:self.assertNotIn(key,actual)
+                else:self.assertEqual(actual[key],body[key])
 
 
 if __name__=='__main__':unittest.main()
