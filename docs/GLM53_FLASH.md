@@ -7,7 +7,9 @@ GLM file through its DSV4.1 single-engine runtime.
 
 The expected original model is `GLM-5.3-Flash-Q4_K.gguf`, 190,875,526,464 bytes,
 SHA-256 `c7a0d950363238dd7804782c88340d737775aba53a15f8d4fdcc34e984f25221`.
-This identifies the historical receipt; it does not certify a current model file.
+Round two independently verified an existing LAN copy against this SHA and byte
+count, checking file holders and unchanged physical identity. That copy is still
+on the peer; there is no verified RTX copy or trained-model qualification.
 No weights, SDK libraries, generated GGUFs or binaries are committed.
 
 ## Reused source
@@ -83,3 +85,53 @@ not replace that independent comparison or real-model acceptance.
 Two-machine serving is outside this change. No presets are installed, no
 production services are restarted, and no benchmark numbers are inferred from
 the synthetic models.
+
+## Round two: scalar KDA and CUDA bring-up
+
+The CPU planner previously omitted `GATED_DELTA_NET` workspace. The operation
+uses a per-thread delta vector and, with multiple snapshot slots, a working
+state matrix. Larger graphs could accidentally provide enough workspace for a
+different operation. A standalone KDA graph instead crashed with an access
+violation. The planner now reserves the delta and optional matrix explicitly;
+the existing cache-line allowance covers the operation's prefix padding.
+
+`glm53-kda-check` checks output and every carried-state element against a
+separate scalar recurrence. Ten cases per backend cover dimensions 16/128,
+1/4/17/65 tokens, multiple sequences, grouped/broadcast queries, nonzero
+asymmetric initial state, the actual 64-head by 128-dimension Flash shape,
+and three snapshot slots. CPU and CUDA both pass; maximum absolute output or
+state error is below 3e-8. The original 18-case CPU graph matrix also passes
+after recompiling the planner. CUDA same-layout clear/restore checks pass
+exactly at 64 and 65 prompt tokens plus eight continuation tokens.
+
+Build the optional `glm53-kda-check` target with the other graph tools. A CUDA
+build accepts `--cuda`; requesting CUDA in a CPU-only build fails explicitly.
+Use the existing guarded runner, with a config setting equal host/commit caps
+at or below 3 GiB, at least 4 GiB available RAM, a selected GPU UUID and the
+shared hold ledger:
+
+```sh
+python -B tests/streamllama/run_glm53_kda.py --config "$CONFIG" \
+  --cpu-binary "$CPU_KDA_CHECK" --cuda-binary "$CUDA_KDA_CHECK" \
+  --output "$RESULTS"
+```
+
+The result directory must be new and inside the configured runtime. On Windows,
+`--cuda-library-directory` can point at the installed CUDA runtime DLL directory.
+The runner checks holds and acquires/releases a GPU lease for the CUDA run;
+both children run under the existing RSS/commit/available-RAM guards.
+
+**Full graph numerical acceptance still fails.** With the existing random
+ds4-layout fixture, a 65-token prompt, 16-token microbatches, restored state and
+eight continuation tokens, only 67/73 CPU/CUDA top tokens agree; maximum logit
+difference is 3.6379032. CUDA 64-versus-16 microbatch comparison at a 64-token
+prompt agrees on 71/72 top tokens, with maximum difference 1.393062. These are
+failure measurements, not tolerances chosen to pass. Scalar KDA correctness
+and same-layout restore do not establish full-model correctness or explain
+the remaining graph/precision differences.
+
+Sanitized measurements are in `examples/glm53_flash/round2.json`. No trained
+model chat, 16K/50K prefill rate, warm decode rate, ULTRA producer, external GLM
+ds4 state binding, or context preset is qualified by this round. Fast storage
+capacity remains insufficient for the full model under the authorized move
+destinations. Model discovery alone does not remove that blocker.

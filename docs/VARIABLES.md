@@ -61263,7 +61263,7 @@ KMP_BLOCKTIME: advanced engine setting; built-in default retained
 
 Scope: rtx-llama. Class: advanced.
 
-Source: `engines/streaming-llama/prefill_llama.cpp/ggml/src/ggml-cpu/ggml-cpu.c:3802`. Unset read: NULL from getenv; the literal consumer below supplies any fallback.
+Source: `engines/streaming-llama/prefill_llama.cpp/ggml/src/ggml-cpu/ggml-cpu.c:3811`. Unset read: NULL from getenv; the literal consumer below supplies any fallback.
 
 ```text
             //}
@@ -61275,7 +61275,7 @@ Source: `engines/streaming-llama/prefill_llama.cpp/ggml/src/ggml-cpu/ggml-cpu.c:
                 _putenv_s("KMP_BLOCKTIME", "200"); // 200ms
 ```
 
-Source: `engines/streaming-llama/prefill_llama.cpp/ggml/src/ggml-cpu/ggml-cpu.c:3806`. Unset read: Wrapper/conditional default: see the literal call and consumer below.
+Source: `engines/streaming-llama/prefill_llama.cpp/ggml/src/ggml-cpu/ggml-cpu.c:3815`. Unset read: Wrapper/conditional default: see the literal call and consumer below.
 
 ```text
                 // this is less aggressive than setting the wait policy to active, but should achieve similar results in most cases
@@ -61287,7 +61287,7 @@ Source: `engines/streaming-llama/prefill_llama.cpp/ggml/src/ggml-cpu/ggml-cpu.c:
             }
 ```
 
-Source: `engines/streaming-llama/prefill_llama.cpp/ggml/src/ggml-cpu/ggml-cpu.c:3808`. Unset read: Wrapper/conditional default: see the literal call and consumer below.
+Source: `engines/streaming-llama/prefill_llama.cpp/ggml/src/ggml-cpu/ggml-cpu.c:3817`. Unset read: Wrapper/conditional default: see the literal call and consumer below.
 
 ```text
                 _putenv_s("KMP_BLOCKTIME", "200"); // 200ms
@@ -85274,7 +85274,7 @@ OMP_WAIT_POLICY: advanced engine setting; built-in default retained
 
 Scope: rtx-llama. Class: advanced.
 
-Source: `engines/streaming-llama/prefill_llama.cpp/ggml/src/ggml-cpu/ggml-cpu.c:3797`. Unset read: NULL from getenv; the literal consumer below supplies any fallback.
+Source: `engines/streaming-llama/prefill_llama.cpp/ggml/src/ggml-cpu/ggml-cpu.c:3806`. Unset read: NULL from getenv; the literal consumer below supplies any fallback.
 
 ```text
 
@@ -85286,7 +85286,7 @@ Source: `engines/streaming-llama/prefill_llama.cpp/ggml/src/ggml-cpu/ggml-cpu.c:
 
 ```
 
-Source: `engines/streaming-llama/prefill_llama.cpp/ggml/src/ggml-cpu/ggml-cpu.c:3799`. Unset read: Wrapper/conditional default: see the literal call and consumer below.
+Source: `engines/streaming-llama/prefill_llama.cpp/ggml/src/ggml-cpu/ggml-cpu.c:3808`. Unset read: Wrapper/conditional default: see the literal call and consumer below.
 
 ```text
             //if (!getenv("OMP_WAIT_POLICY")) {
@@ -85380,6 +85380,18 @@ Source: `engines/ds4-win/ds4_web.c:1040`. Unset read: NULL from getenv; the lite
         char *path = web_xstrdup(pathenv);
         char *save = NULL;
         for (char *dir = strtok_r(path, ":", &save); dir; dir = strtok_r(NULL, ":", &save)) {
+```
+
+Source: `engines/streaming-llama/prefill_llama.cpp/tests/streamllama/run_glm53_kda.py:35`. Unset read: ''.
+
+```text
+        if not library.is_dir():
+            raise ValueError('CUDA library directory does not exist')
+        os.environ['PATH'] = str(library) + os.pathsep + os.environ.get('PATH', '')
+    output.mkdir(parents=True, exist_ok=False)
+    results = []
+    for kind, binary in (('cpu', args.cpu_binary), ('cuda', args.cuda_binary)):
+        holds = active_holds(Path(cfg['hold_file']).read_text(encoding='utf-8-sig'))
 ```
 
 Source: `vendor/engines/cosmos_windows/weight_streaming/hunyuan3d_backend.py:332`. Unset read: ''.

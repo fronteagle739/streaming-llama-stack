@@ -1,0 +1,148 @@
+{
+  "status": "PARTIAL: engine unimplemented; trained-model acceptance blocked",
+  "model": {
+    "filename": "GLM-5.3-Flash-Q4_K.gguf",
+    "sha256": "c7a0d950363238dd7804782c88340d737775aba53a15f8d4fdcc34e984f25221",
+    "size_bytes": 190875526464,
+    "verified_existing_lan_copy": true,
+    "unchanged_identity": true,
+    "verified_rtx_copy": false,
+    "hash_helper_peak_rss_bytes": 46825472,
+    "hash_seconds": 82.48914062499999,
+    "architecture": "glm5-next",
+    "trunk_layers": 45,
+    "mtp_layers": 1,
+    "context_metadata": 1048576,
+    "tensors": 1412,
+    "tokenizer_eos": 154820,
+    "tokenizer_eot": 154827,
+    "tokenizer_eom": 154829
+  },
+  "guards": {
+    "host_rss_gib": 3,
+    "windows_job_commit_gib": 3,
+    "available_ram_floor_gib": 4,
+    "cuda_runs_use_exclusive_short_leases": true,
+    "kv_type": "F32",
+    "weights": "synthetic F32 for graph/kernel checks",
+    "paging_claim": "Bounded process observation; kernel ETW unavailable, no system-wide zero-paging proof"
+  },
+  "kda_scalar": {
+    "status": "PASS",
+    "cases": [
+      {
+        "backend": "cpu",
+        "cases": [
+          "KDA backend=CPU dim=16 heads=4 tokens=1 seqs=2 broadcast=1 snapshots=1 output_max_abs=7.45058e-09 state_max_abs=1.49012e-08 PASS",
+          "KDA backend=CPU dim=16 heads=4 tokens=4 seqs=2 broadcast=1 snapshots=1 output_max_abs=1.49012e-08 state_max_abs=1.49012e-08 PASS",
+          "KDA backend=CPU dim=16 heads=4 tokens=17 seqs=2 broadcast=1 snapshots=1 output_max_abs=2.98023e-08 state_max_abs=2.98023e-08 PASS",
+          "KDA backend=CPU dim=16 heads=4 tokens=65 seqs=2 broadcast=1 snapshots=1 output_max_abs=2.98023e-08 state_max_abs=2.23517e-08 PASS",
+          "KDA backend=CPU dim=128 heads=4 tokens=1 seqs=2 broadcast=1 snapshots=1 output_max_abs=1.39698e-09 state_max_abs=1.49012e-08 PASS",
+          "KDA backend=CPU dim=128 heads=4 tokens=4 seqs=2 broadcast=1 snapshots=1 output_max_abs=1.39698e-09 state_max_abs=1.49012e-08 PASS",
+          "KDA backend=CPU dim=128 heads=4 tokens=17 seqs=2 broadcast=1 snapshots=1 output_max_abs=1.86265e-09 state_max_abs=1.49012e-08 PASS",
+          "KDA backend=CPU dim=128 heads=4 tokens=65 seqs=2 broadcast=1 snapshots=1 output_max_abs=1.86265e-09 state_max_abs=1.49012e-08 PASS",
+          "KDA backend=CPU dim=128 heads=64 tokens=4 seqs=1 broadcast=0 snapshots=1 output_max_abs=1.86265e-09 state_max_abs=1.49012e-08 PASS",
+          "KDA backend=CPU dim=128 heads=4 tokens=4 seqs=2 broadcast=1 snapshots=3 output_max_abs=1.39698e-09 state_max_abs=1.49012e-08 PASS"
+        ],
+        "peak_rss_bytes": 18472960,
+        "min_available_bytes": 13306449920
+      },
+      {
+        "backend": "cuda",
+        "cases": [
+          "KDA backend=CUDA0 dim=16 heads=4 tokens=1 seqs=2 broadcast=1 snapshots=1 output_max_abs=7.45058e-09 state_max_abs=1.49012e-08 PASS",
+          "KDA backend=CUDA0 dim=16 heads=4 tokens=4 seqs=2 broadcast=1 snapshots=1 output_max_abs=7.45058e-09 state_max_abs=2.98023e-08 PASS",
+          "KDA backend=CUDA0 dim=16 heads=4 tokens=17 seqs=2 broadcast=1 snapshots=1 output_max_abs=1.49012e-08 state_max_abs=2.98023e-08 PASS",
+          "KDA backend=CUDA0 dim=16 heads=4 tokens=65 seqs=2 broadcast=1 snapshots=1 output_max_abs=1.49012e-08 state_max_abs=2.98023e-08 PASS",
+          "KDA backend=CUDA0 dim=128 heads=4 tokens=1 seqs=2 broadcast=1 snapshots=1 output_max_abs=1.16415e-09 state_max_abs=1.49012e-08 PASS",
+          "KDA backend=CUDA0 dim=128 heads=4 tokens=4 seqs=2 broadcast=1 snapshots=1 output_max_abs=1.86265e-09 state_max_abs=2.23517e-08 PASS",
+          "KDA backend=CUDA0 dim=128 heads=4 tokens=17 seqs=2 broadcast=1 snapshots=1 output_max_abs=2.79397e-09 state_max_abs=1.49012e-08 PASS",
+          "KDA backend=CUDA0 dim=128 heads=4 tokens=65 seqs=2 broadcast=1 snapshots=1 output_max_abs=2.79397e-09 state_max_abs=2.23517e-08 PASS",
+          "KDA backend=CUDA0 dim=128 heads=64 tokens=4 seqs=1 broadcast=0 snapshots=1 output_max_abs=2.32831e-09 state_max_abs=2.23517e-08 PASS",
+          "KDA backend=CUDA0 dim=128 heads=4 tokens=4 seqs=2 broadcast=1 snapshots=3 output_max_abs=1.86265e-09 state_max_abs=2.23517e-08 PASS"
+        ],
+        "peak_rss_bytes": 304295936,
+        "min_available_bytes": 13000851456
+      }
+    ],
+    "regression_before_fix": "Standalone CPU KDA graph access violation (0xc0000005); missing planner workspace"
+  },
+  "cpu_graph": {
+    "status": "PASS",
+    "cases": 18,
+    "max_layout_difference": 1.9729137420654297e-05,
+    "peak_rss_bytes": 33116160,
+    "min_available_bytes": 13172875264
+  },
+  "cuda_state_restore": {
+    "status": "PASS",
+    "cases": [
+      {
+        "prompt": 64,
+        "restore": false,
+        "exact": true,
+        "max_abs": 0.0,
+        "peak_rss": 523993088,
+        "min_available": 12790525952
+      },
+      {
+        "prompt": 64,
+        "restore": true,
+        "exact": true,
+        "max_abs": 0.0,
+        "peak_rss": 524206080,
+        "min_available": 12803297280
+      },
+      {
+        "prompt": 65,
+        "restore": false,
+        "exact": true,
+        "max_abs": 0.0,
+        "peak_rss": 477417472,
+        "min_available": 12843855872
+      },
+      {
+        "prompt": 65,
+        "restore": true,
+        "exact": true,
+        "max_abs": 0.0,
+        "peak_rss": 484290560,
+        "min_available": 12841193472
+      }
+    ]
+  },
+  "cuda_graph_cpu_comparison": {
+    "status": "FAIL",
+    "model": "ds4-full synthetic fixture",
+    "prompt": 65,
+    "microbatch": 16,
+    "continuation_tokens": 8,
+    "restore": true,
+    "rows": 73,
+    "top_tokens_equal": 67,
+    "max_absolute_logit_difference": 3.6379032135009766,
+    "note": "Unresolved integration/precision difference; scalar KDA checks do not qualify the full graph"
+  },
+  "cuda_microbatch_comparison": {
+    "status": "FAIL",
+    "prompt": 64,
+    "baseline_microbatch": 64,
+    "other_microbatch": 16,
+    "continuation_tokens": 8,
+    "rows": 72,
+    "top_tokens_equal": 71,
+    "max_absolute_logit_difference": 1.3930619955062866
+  },
+  "python_regression": {
+    "run": 8,
+    "passed": 7,
+    "skipped": 1
+  },
+  "real_model": {
+    "webui_multiturn": "not run",
+    "prefill_16k_tps": null,
+    "prefill_50k_tps": null,
+    "warm_decode_tps": null
+  },
+  "source_reuse": "Round-one CPU/CUDA static libraries; changed CPU planner recompiled and graph/check tools relinked; no CUDA kernel changes"
+}

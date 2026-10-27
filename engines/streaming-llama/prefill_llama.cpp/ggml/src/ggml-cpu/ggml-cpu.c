@@ -3005,6 +3005,15 @@ struct ggml_cplan ggml_graph_plan(
                         const int64_t ne10 = node->src[1]->ne[0];
                         cur += sizeof(float)*(ne10 + CACHE_LINE_SIZE_F32)*n_tasks;
                     } break;
+                case GGML_OP_GATED_DELTA_NET:
+                    {
+                        // KDA uses a D-float delta per thread, and snapshot mode
+                        // also needs a D*D working state. Reserve this even when
+                        // no matmul/softmax in the graph happens to provide scratch.
+                        const size_t d = node->src[2]->ne[0];
+                        const int32_t snapshots = ggml_get_op_params_i32(node, 0);
+                        cur = sizeof(float)*(d + (snapshots > 1 ? d*d : 0))*n_tasks;
+                    } break;
                 case GGML_OP_COUNT:
                     {
                         GGML_ABORT("fatal error");
