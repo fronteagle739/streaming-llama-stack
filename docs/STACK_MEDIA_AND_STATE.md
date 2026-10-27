@@ -105,6 +105,8 @@ physical allocation across their processes is not implemented.
 
 ## RTX/Mac YOCO transfer
 
+Negotiated YOCO state v1 export exists. Mac decode with YOCO has not been benchmarked. The published two-machine timing was measured before YOCO (plain ULTRA prefill).
+
 Paired presets negotiate YOCO140 and state version1 explicitly in pairing,
 startup headers and native readiness. Unrecognized/mismatched peers cannot
 enable YOCO export. Version1 uses the original mode3 payload and incremental

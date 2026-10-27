@@ -21,6 +21,6 @@ Pairing checks model, tokenizer/renderer, engine identity, state format and memo
 
 Initial or incremental state moves from the RTX to the Mac. Decode and small local appends update the live session; changes flow back to the RTX before another offloaded append. A strict join prevents a new RTX turn from using stale state. Short follow-ups can remain local instead of replaying a long document. Edits, reasoning-history changes and incompatible checkpoints can require rewind or fresh prefill. [Prefix reuse](PREFIX_REUSE.md)
 
-The recorded 184,432-token case used 173.252 s RTX compute, 7.662 s transfer/import and 31.494 Mac decode tok/s; the full prompt interval was 229.128 s. [Timing details](PERFORMANCE.md)
+The recorded case was measured before YOCO (plain ULTRA prefill). The 184,432-token case used 173.252 s RTX compute, 7.662 s transfer/import and 31.494 Mac decode tok/s; the full prompt interval was 229.128 s. [Timing details](PERFORMANCE.md)
 
-Approximate YOCO transport requires explicit negotiation of compatible state support on both peers. Use the exact path when either peer lacks it. See [media/state behavior](STACK_MEDIA_AND_STATE.md) for the YOCO format and checkpoint requirements.
+Negotiated YOCO state v1 export exists. Mac decode with YOCO has not been benchmarked. Approximate YOCO transport requires explicit negotiation of compatible state support on both peers. See [media/state behavior](STACK_MEDIA_AND_STATE.md) for the YOCO format and checkpoint requirements.
