@@ -28,7 +28,7 @@ static void ggml_gen_hadamard(ggml_tensor * tensor) {
 
     const int n = tensor->ne[0];
 
-    assert(ggml_is_power_of_2(n));
+    assert(n > 0 && (n & (n - 1)) == 0);
     assert(tensor->ne[1] == n);
     assert(tensor->ne[2] == 1);
     assert(tensor->ne[3] == 1);
@@ -1190,7 +1190,7 @@ llama_kv_cache::slot_info llama_kv_cache::find_slot(const llama_ubatch & ubatch,
                 // somewhere in the cache. Relax to also consider multi-seq cells
                 // for SWA eviction when n_stream==1; the SWA check still
                 // ensures only safe-to-recycle cells are reused.
-                const bool relax_multi_seq = (n_stream == 1) && (cells.seq_count(idx) > 1);
+                const bool relax_multi_seq = !can_use && (n_stream == 1) && (cells.seq_count(idx) > 1);
                 if (!can_use && (cells.seq_count(idx) == 1 || relax_multi_seq)) {
                     const llama_pos pos_cell = cells.pos_get(idx);
 

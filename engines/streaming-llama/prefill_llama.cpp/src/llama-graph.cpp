@@ -1624,14 +1624,14 @@ ggml_tensor * llm_graph_context::build_ffn(
             if (gate && type_gate == LLM_FFN_PAR) {
                 // Step35: HF clamps gate (after SiLU) and up before multiplication
                 // DeepSeek-V4 also clamps but uses swiglu_split gate ordering.
-                if ((arch == LLM_ARCH_STEP35 || arch == LLM_ARCH_DEEPSEEK4) && il >= 0) {
+                if ((arch == LLM_ARCH_STEP35 || arch == LLM_ARCH_DEEPSEEK4 || arch == LLM_ARCH_GLM5_NEXT) && il >= 0) {
                     const float limit = hparams.swiglu_clamp_shexp[il];
                     constexpr float eps = 1e-6f;
                     if (limit > eps) {
                         tmp = ggml_clamp(ctx0, tmp, -limit, limit);
                         cb(tmp, "ffn_up_clamped", il);
 
-                        if (arch == LLM_ARCH_DEEPSEEK4) {
+                        if (arch == LLM_ARCH_DEEPSEEK4 || arch == LLM_ARCH_GLM5_NEXT) {
                             cur = ggml_clamp(ctx0, cur, -INFINITY, limit);
                             cb(cur, "ffn_gate_clamped", il);
                             cur = ggml_swiglu_split(ctx0, cur, tmp);
@@ -2205,14 +2205,14 @@ ggml_tensor * llm_graph_context::build_moe_ffn(
             if (gate_exps) {
                 // Step35: per-layer clamp for routed experts
                 // DeepSeek-V4 also clamps but uses swiglu_split gate ordering.
-                if ((arch == LLM_ARCH_STEP35 || arch == LLM_ARCH_DEEPSEEK4) && il >= 0) {
+                if ((arch == LLM_ARCH_STEP35 || arch == LLM_ARCH_DEEPSEEK4 || arch == LLM_ARCH_GLM5_NEXT) && il >= 0) {
                     const float limit = hparams.swiglu_clamp_exp[il];
                     constexpr float eps = 1e-6f;
                     if (limit > eps) {
                         up = ggml_clamp(ctx0, up, -limit, limit);
                         cb(up, "ffn_moe_up_clamped", il);
 
-                        if (arch == LLM_ARCH_DEEPSEEK4) {
+                        if (arch == LLM_ARCH_DEEPSEEK4 || arch == LLM_ARCH_GLM5_NEXT) {
                             cur = ggml_clamp(ctx0, cur, -INFINITY, limit);
                             cb(cur, "ffn_moe_gate_clamped", il);
                             cur = ggml_swiglu_split(ctx0, cur, up);
@@ -2589,7 +2589,9 @@ ggml_tensor * llm_graph_context::build_attn_mha(
     // split the batch into streams if needed
     const auto n_stream = k->ne[3];
 
-    q = ggml_view_4d(ctx0, q, q->ne[0], q->ne[1], q->ne[2]/n_stream, n_stream, q->nb[1], q->nb[2], q->nb[3]/n_stream, 0);
+    // the stream dim steps over one stream's worth of dim-2 (tokens); q->nb[3]/n_stream only equals that for a
+    // contiguous q, nope-only MLA (glm5-next) passes a permuted q_absorbed (upstream fix)
+    q = ggml_view_4d(ctx0, q, q->ne[0], q->ne[1], q->ne[2]/n_stream, n_stream, q->nb[1], q->nb[2], q->nb[2]*(q->ne[2]/n_stream), 0);
 
     q = ggml_permute(ctx0, q, 0, 2, 1, 3);
     k = ggml_permute(ctx0, k, 0, 2, 1, 3);

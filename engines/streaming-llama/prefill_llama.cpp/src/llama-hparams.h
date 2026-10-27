@@ -92,6 +92,16 @@ struct llama_hparams {
     uint32_t indexer_n_head    = 0;
     uint32_t indexer_head_size = 0;
     uint32_t indexer_top_k     = 0;
+
+    // k-pool DSA indexer (glm5-next, qwen4exp): pools of indexer_kpool tokens are scored as one key
+    uint32_t indexer_kpool             = 0;
+    uint32_t indexer_kpool_row         = 3;     // indexer cache row width in heads (glm5-next: key | gate | pooled)
+    bool     indexer_kpool_select_tail = false; // also attend the incomplete tail pool
+    bool     indexer_kpool_by_order    = false; // pools are consecutive cells in sequence order (qwen4exp)
+    std::array<uint32_t, LLAMA_MAX_LAYERS> is_indexer_full_impl; // 0: layer reuses the previous selection
+
+    // ds4 (antirez) GLM-5.3-Flash GGUF: ssm_a holds A_log, not -exp(A_log)
+    bool     kda_a_is_log              = false;
     // minimax-m3 MSA (block-sparse) attention block params (0 = dense / not sparse)
     uint32_t sparse_block_size   = 0;
     uint32_t sparse_init_blocks  = 0;
@@ -332,6 +342,8 @@ struct llama_hparams {
 
     // note: currently only support if either all or none of the layers are MLA
     bool is_mla() const;
+
+    bool is_indexer_full(uint32_t il) const;
 
     uint32_t n_embd_head_k_mla() const;
     uint32_t n_embd_head_v_mla() const;

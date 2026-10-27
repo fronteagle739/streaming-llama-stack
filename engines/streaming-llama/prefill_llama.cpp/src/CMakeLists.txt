@@ -56,6 +56,7 @@ add_library(llama
             llama-memory.cpp
             llama-memory-hybrid.cpp
             llama-memory-hybrid-iswa.cpp
+            llama-memory-hybrid-idx.cpp
             llama-memory-recurrent.cpp
             llama-mmap.cpp
             llama-model-loader.cpp
@@ -129,6 +130,7 @@ add_library(llama
             models/jamba.cpp
             models/kimi-linear.cpp
             models/kimi-k3.cpp
+            models/glm5-next.cpp
             models/lfm2.cpp
             models/llada-moe.cpp
             models/llada.cpp

@@ -173,6 +173,11 @@ public:
     uint32_t get_size()     const;
     uint32_t get_n_stream() const;
 
+    // llama_memory_hybrid_idx (k-pool layout)
+    const llama_kv_cells & get_cells(uint32_t strm) const { return v_cells[strm]; }
+    uint32_t get_stream(llama_seq_id seq_id) const { return seq_to_stream[seq_id]; }
+    uint32_t get_n_seq_max() const { return n_seq_max; }
+
     // Update k_stream/v_stream view data pointers from their parent tensors.
     // Call after alloc_graph which may re-point the parent tensor's data.
     void sync_view_pointers();

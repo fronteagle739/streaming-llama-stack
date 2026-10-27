@@ -304,3 +304,14 @@ if(WIN32 AND GGML_CUDA AND NOT BUILD_SHARED_LIBS)
             "${PROJECT_SOURCE_DIR}/external/directstorage/native/bin/x64/dstoragecore.dll"
             "$<TARGET_FILE_DIR:slstack-weight-fetcher>")
 endif()
+
+# Small deterministic graph checks, independent of the full upstream test suite.
+option(LLAMA_BUILD_GLM53_TESTS "Build GLM-5.3 Flash graph acceptance tools" OFF)
+if (LLAMA_BUILD_GLM53_TESTS)
+    add_executable(glm53-logits tests/streamllama/logits_dump.cpp)
+    target_link_libraries(glm53-logits PRIVATE llama)
+    add_executable(glm53-load-check tests/streamllama/load_check.cpp)
+    target_link_libraries(glm53-load-check PRIVATE llama)
+    add_executable(glm53-hc-check tests/streamllama/hc_check.cpp)
+    target_link_libraries(glm53-hc-check PRIVATE ggml)
+endif()

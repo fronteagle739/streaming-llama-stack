@@ -11,6 +11,7 @@
 #include "llama-kv-cache-dsv4.h"
 #include "llama-memory-hybrid.h"
 #include "llama-memory-hybrid-iswa.h"
+#include "llama-memory-hybrid-idx.h"
 #include "llama-memory-recurrent.h"
 
 #include "ggml-cpp.h"
@@ -537,7 +538,18 @@ void llama_model::load_hparams(llama_model_loader & ml) {
         return;
     }
 
-    ml.get_key(LLM_KV_CONTEXT_LENGTH,          hparams.n_ctx_train);
+    {
+        // ds4's GLM-5.3-Flash GGUF stores context_length as u64
+        const std::string key = LLM_KV(ml.get_arch())(LLM_KV_CONTEXT_LENGTH);
+        const int kid = gguf_find_key(ml.meta.get(), key.c_str());
+        if (kid >= 0 && gguf_get_kv_type(ml.meta.get(), kid) == GGUF_TYPE_UINT64) {
+            const uint64_t v = gguf_get_val_u64(ml.meta.get(), kid);
+            GGML_ASSERT(v <= UINT32_MAX);
+            hparams.n_ctx_train = (uint32_t) v;
+        } else {
+            ml.get_key(LLM_KV_CONTEXT_LENGTH, hparams.n_ctx_train);
+        }
+    }
     ml.get_key(LLM_KV_EMBEDDING_LENGTH,        hparams.n_embd);
     ml.get_key(LLM_KV_EMBEDDING_LENGTH_OUT,    hparams.n_embd_out_impl, false);
     ml.get_key(LLM_KV_BLOCK_COUNT,             hparams.n_layer);
@@ -588,6 +600,7 @@ void llama_model::load_hparams(llama_model_loader & ml) {
     std::fill(hparams.xielu_eps.begin(), hparams.xielu_eps.end(), 0.0f);
     std::fill(hparams.swiglu_clamp_exp.begin(),   hparams.swiglu_clamp_exp.end(),   0.0f);
     std::fill(hparams.swiglu_clamp_shexp.begin(), hparams.swiglu_clamp_shexp.end(), 0.0f);
+    std::fill(hparams.is_indexer_full_impl.begin(), hparams.is_indexer_full_impl.end(), 1);
 
     ml.get_key_or_arr(LLM_KV_FEED_FORWARD_LENGTH,  hparams.n_ff_arr,   hparams.n_layer, false);
     ml.get_key_or_arr(LLM_KV_ATTENTION_HEAD_COUNT, hparams.n_head_arr, hparams.n_layer, false);
@@ -2950,6 +2963,92 @@ void llama_model::load_hparams(llama_model_loader & ml) {
                     case 93: type = LLM_TYPE_2_8T_A50B; break;
                     default: type = LLM_TYPE_UNKNOWN;
                 }
+            } break;
+        case LLM_ARCH_GLM5_NEXT:
+            {
+                // GLM-5.3-Flash: hybrid KDA + nope MLA with a k-pool DSA indexer, mHC, DeepSeek-style MoE.
+                // Ported from upstream llama.cpp llama_model_glm5_next::load_arch_hparams (0f701c882).
+                // Two GGUF layouts load: upstream's converter (primary) and ds4's (antirez GLM-5.3-Flash GGUF),
+                // detected by ds4's glm5-next.layer_types key.
+                const std::string pfx = "glm5-next.";
+                std::array<uint32_t, LLAMA_MAX_LAYERS> layer_types;
+                const bool ds4 = ml.get_arr(pfx + "layer_types", layer_types, false);
+                hparams.kda_a_is_log = ds4;
+
+                ml.get_key(LLM_KV_ATTENTION_LAYERNORM_RMS_EPS, hparams.f_norm_rms_eps);
+                ml.get_key(LLM_KV_ATTENTION_Q_LORA_RANK,       hparams.n_lora_q);
+                ml.get_key(LLM_KV_ATTENTION_KV_LORA_RANK,      hparams.n_lora_kv);
+                ml.get_key(LLM_KV_NEXTN_PREDICT_LAYERS,        hparams.nextn_predict_layers, false);
+                GGML_ASSERT(hparams.nextn_predict_layers < hparams.n_layer);
+                const uint32_t n_trunk = hparams.n_layer - hparams.nextn_predict_layers;
+
+                if (!ds4) {
+                    ml.get_key(LLM_KV_ATTENTION_KEY_LENGTH_MLA,   hparams.n_embd_head_k_mla_impl);
+                    ml.get_key(LLM_KV_ATTENTION_VALUE_LENGTH_MLA, hparams.n_embd_head_v_mla_impl);
+                    ml.get_key(LLM_KV_SSM_CONV_KERNEL,            hparams.ssm_d_conv);
+                    ml.get_key(LLM_KV_KDA_HEAD_DIM,               hparams.n_embd_head_kda);
+                    ml.get_key(LLM_KV_KDA_GATE_LOWER_BOUND,       hparams.kda_gate_lower_bound, false);
+                    ml.get_key(LLM_KV_ATTENTION_INDEXER_KPOOL,    hparams.indexer_kpool);
+                    ml.get_key(LLM_KV_ATTENTION_INDEXER_KPOOL_SELECT_TAIL, hparams.indexer_kpool_select_tail, false);
+                    ml.get_key_or_arr(LLM_KV_SWIGLU_CLAMP_EXP, hparams.swiglu_clamp_exp, hparams.n_layer, false);
+                    if (!ml.get_key_or_arr(LLM_KV_SWIGLU_CLAMP_SHEXP, hparams.swiglu_clamp_shexp, hparams.n_layer, false)) {
+                        hparams.swiglu_clamp_shexp = hparams.swiglu_clamp_exp;
+                    }
+                    ml.get_key_or_arr(LLM_KV_ATTENTION_INDEXER_TYPES, hparams.is_indexer_full_impl, n_trunk, false);
+                } else {
+                    // ds4: key/value_length are the per-head MLA sizes, there is no head_count_kv (layer_types
+                    // marks the MLA layers), the KDA keys live under linear_attention.*
+                    ml.get_key(LLM_KV_ATTENTION_KEY_LENGTH,   hparams.n_embd_head_k_mla_impl);
+                    ml.get_key(LLM_KV_ATTENTION_VALUE_LENGTH, hparams.n_embd_head_v_mla_impl);
+                    ml.get_key(pfx + "linear_attention.conv_kernel",    hparams.ssm_d_conv);
+                    ml.get_key(pfx + "linear_attention.head_dimension", hparams.n_embd_head_kda);
+                    ml.get_key(pfx + "linear_attention.gate_lower_bound", hparams.kda_gate_lower_bound, false);
+                    uint32_t n_head_kda = hparams.n_head();
+                    ml.get_key(pfx + "linear_attention.head_count", n_head_kda, false);
+                    GGML_ASSERT(n_head_kda == hparams.n_head() && "glm5-next: KDA and MLA head counts must match");
+                    ml.get_key(pfx + "attention.indexer.pool_size", hparams.indexer_kpool);
+                    // ds4 always attends the incomplete tail pool (HF index_kpool_always_select_tail default)
+                    hparams.indexer_kpool_select_tail = true;
+                    float swiglu_limit = 0.0f;
+                    ml.get_key(pfx + "swiglu_limit", swiglu_limit, false);
+                    std::fill(hparams.swiglu_clamp_exp.begin(),   hparams.swiglu_clamp_exp.end(),   swiglu_limit);
+                    std::fill(hparams.swiglu_clamp_shexp.begin(), hparams.swiglu_clamp_shexp.end(), swiglu_limit);
+                    for (uint32_t i = 0; i < hparams.n_layer; ++i) {
+                        hparams.n_head_kv_arr[i] = layer_types[i] != 0 ? 1 : 0;
+                    }
+                }
+
+                // nope-only MLA: the cache row is the compressed latent alone (K-only)
+                hparams.n_rot         = 0;
+                hparams.n_embd_head_k = hparams.n_lora_kv;
+                hparams.n_embd_head_v = hparams.n_lora_kv;
+
+                for (uint32_t i = 0; i < hparams.n_layer; ++i) {
+                    hparams.recurrent_layer_arr[i] = hparams.n_head_kv(i) == 0;
+                }
+
+                ml.get_key(LLM_KV_EXPERT_FEED_FORWARD_LENGTH, hparams.n_ff_exp);
+                ml.get_key(LLM_KV_EXPERT_SHARED_COUNT,        hparams.n_expert_shared);
+                ml.get_key(LLM_KV_LEADING_DENSE_BLOCK_COUNT,  hparams.n_layer_dense_lead, false);
+                ml.get_key(LLM_KV_EXPERT_WEIGHTS_SCALE,       hparams.expert_weights_scale, false);
+                ml.get_key(LLM_KV_EXPERT_WEIGHTS_NORM,        hparams.expert_weights_norm, false);
+                ml.get_key(LLM_KV_EXPERT_GATING_FUNC,         hparams.expert_gating_func, false);
+                if (hparams.expert_gating_func == LLAMA_EXPERT_GATING_FUNC_TYPE_NONE) {
+                    hparams.expert_gating_func = LLAMA_EXPERT_GATING_FUNC_TYPE_SIGMOID;
+                }
+
+                ml.get_key(LLM_KV_ATTENTION_INDEXER_HEAD_COUNT, hparams.indexer_n_head);
+                ml.get_key(LLM_KV_ATTENTION_INDEXER_KEY_LENGTH, hparams.indexer_head_size);
+                ml.get_key(LLM_KV_ATTENTION_INDEXER_TOP_K,      hparams.indexer_top_k);
+                hparams.indexer_kpool_row = 3; // key | gate | pooled
+                GGML_ASSERT(hparams.indexer_kpool > 1 && hparams.indexer_top_k % hparams.indexer_kpool == 0);
+
+                ml.get_key(LLM_KV_HYPER_CONNECTION_COUNT,               hparams.dsv4_hc_mult);
+                ml.get_key(LLM_KV_HYPER_CONNECTION_SINKHORN_ITERATIONS, hparams.dsv4_hc_sinkhorn_iters);
+                ml.get_key(LLM_KV_HYPER_CONNECTION_EPSILON,             hparams.dsv4_hc_eps);
+                GGML_ASSERT(hparams.dsv4_hc_mult == 4 && "mHC with hc_mult != 4 is not supported");
+
+                type = LLM_TYPE_UNKNOWN; // GLM-5.3-Flash: 45 trunk layers
             } break;
         case LLM_ARCH_QWEN35:
             {
@@ -8107,6 +8206,163 @@ bool llama_model::load_tensors(llama_model_loader & ml) {
                         }
                     }
                 } break;
+            case LLM_ARCH_GLM5_NEXT:
+                {
+                    // ds4 layout (antirez GLM-5.3-Flash GGUF): rename its tensors to the upstream names first
+                    if (hparams.kda_a_is_log) {
+                        auto alias = [&](const std::string & from, const std::string & to) {
+                            auto it = ml.weights_map.find(from);
+                            if (it == ml.weights_map.end()) {
+                                return;
+                            }
+                            GGML_ASSERT(ml.weights_map.find(to) == ml.weights_map.end());
+                            auto w = it->second;
+                            ml.weights_map.erase(it);
+                            // the model tensor takes its name from the meta tensor
+                            ggml_set_name(w.tensor, to.c_str());
+                            ml.weights_map.emplace(to, w);
+                        };
+                        for (int i = 0; i < n_layer; ++i) {
+                            const std::string b = "blk." + std::to_string(i) + ".";
+                            alias(b + "kda_q.weight",       tn(LLM_TENSOR_ATTN_Q,         "weight", i).str());
+                            alias(b + "kda_k.weight",       tn(LLM_TENSOR_ATTN_K,         "weight", i).str());
+                            alias(b + "kda_v.weight",       tn(LLM_TENSOR_ATTN_V,         "weight", i).str());
+                            alias(b + "kda_output.weight",  tn(LLM_TENSOR_ATTN_OUT,       "weight", i).str());
+                            alias(b + "kda_q_conv.weight",  tn(LLM_TENSOR_SSM_CONV1D_Q,   "weight", i).str());
+                            alias(b + "kda_k_conv.weight",  tn(LLM_TENSOR_SSM_CONV1D_K,   "weight", i).str());
+                            alias(b + "kda_v_conv.weight",  tn(LLM_TENSOR_SSM_CONV1D_V,   "weight", i).str());
+                            alias(b + "kda_f_a.weight",     tn(LLM_TENSOR_SSM_F_A,        "weight", i).str());
+                            alias(b + "kda_f_b.weight",     tn(LLM_TENSOR_SSM_F_B,        "weight", i).str());
+                            alias(b + "kda_beta.weight",    tn(LLM_TENSOR_SSM_BETA,       "weight", i).str());
+                            alias(b + "kda_g_a.weight",     tn(LLM_TENSOR_SSM_G_A,        "weight", i).str());
+                            alias(b + "kda_g_b.weight",     tn(LLM_TENSOR_SSM_G_B,        "weight", i).str());
+                            alias(b + "kda_o_norm.weight",  tn(LLM_TENSOR_SSM_NORM,       "weight", i).str());
+                            alias(b + "kda_dt_bias.weight", tn(LLM_TENSOR_SSM_DT,         "bias",   i).str());
+                            alias(b + "kda_a_log.weight",   tn(LLM_TENSOR_SSM_A_NOSCAN,             i).str());
+                            alias(b + "indexer.pool_ape.weight",  tn(LLM_TENSOR_INDEXER_KPOOL_APE,  "weight", i).str());
+                            alias(b + "indexer.pool_gate.weight", tn(LLM_TENSOR_INDEXER_KPOOL_GATE, "weight", i).str());
+                        }
+                    }
+
+                    const int64_t hc         = hparams.dsv4_hc_mult;
+                    const int64_t hc_mix_dim = (2 + hc)*hc;
+                    const int     n_trunk    = n_layer - (int) hparams.nextn_predict_layers;
+
+                    tok_embd    = create_tensor(tn(LLM_TENSOR_TOKEN_EMBD,  "weight"), {n_embd, n_vocab}, 0);
+                    output_norm = create_tensor(tn(LLM_TENSOR_OUTPUT_NORM, "weight"), {n_embd}, 0);
+                    output      = create_tensor(tn(LLM_TENSOR_OUTPUT,      "weight"), {n_embd, n_vocab}, 0);
+
+                    for (int i = 0; i < n_layer; ++i) {
+                        auto & layer = layers[i];
+
+                        // the NextN (MTP) block is not built by the trunk graph
+                        const bool is_nextn = i >= n_trunk;
+                        const int  flags    = is_nextn ? TENSOR_SKIP : 0;
+
+                        layer.attn_norm = create_tensor(tn(LLM_TENSOR_ATTN_NORM, "weight", i), {n_embd}, flags);
+                        layer.ffn_norm  = create_tensor(tn(LLM_TENSOR_FFN_NORM,  "weight", i), {n_embd}, flags);
+
+                        if (!is_nextn) {
+                            layer.hc_attn_fn    = create_tensor(tn(LLM_TENSOR_HC_ATTN_FN,    "weight", i), {hc*n_embd, hc_mix_dim}, 0);
+                            layer.hc_attn_base  = create_tensor(tn(LLM_TENSOR_HC_ATTN_BASE,  "weight", i), {hc_mix_dim}, 0);
+                            layer.hc_attn_scale = create_tensor(tn(LLM_TENSOR_HC_ATTN_SCALE, "weight", i), {3}, 0);
+                            layer.hc_ffn_fn     = create_tensor(tn(LLM_TENSOR_HC_FFN_FN,     "weight", i), {hc*n_embd, hc_mix_dim}, 0);
+                            layer.hc_ffn_base   = create_tensor(tn(LLM_TENSOR_HC_FFN_BASE,   "weight", i), {hc_mix_dim}, 0);
+                            layer.hc_ffn_scale  = create_tensor(tn(LLM_TENSOR_HC_FFN_SCALE,  "weight", i), {3}, 0);
+                        }
+
+                        const int64_t head_dim = hparams.n_embd_head_kda;
+                        const int64_t d_conv   = hparams.ssm_d_conv;
+                        const int64_t d_inner  = head_dim * n_head;
+
+                        if (hparams.is_recurrent(i)) {
+                            auto conv = [&](llm_tensor tid) {
+                                ggml_tensor * t = create_tensor(tn(tid, "weight", i), {d_conv, 1, d_inner, 1}, TENSOR_NOT_REQUIRED | flags);
+                                return t ? t : create_tensor(tn(tid, "weight", i), {d_conv, 1, d_inner}, flags);
+                            };
+                            layer.ssm_q_conv = conv(LLM_TENSOR_SSM_CONV1D_Q);
+                            layer.ssm_k_conv = conv(LLM_TENSOR_SSM_CONV1D_K);
+                            layer.ssm_v_conv = conv(LLM_TENSOR_SSM_CONV1D_V);
+
+                            layer.wq = create_tensor(tn(LLM_TENSOR_ATTN_Q, "weight", i), {n_embd, d_inner}, flags);
+                            layer.wk = create_tensor(tn(LLM_TENSOR_ATTN_K, "weight", i), {n_embd, d_inner}, flags);
+                            layer.wv = create_tensor(tn(LLM_TENSOR_ATTN_V, "weight", i), {n_embd, d_inner}, flags);
+
+                            layer.ssm_f_a  = create_tensor(tn(LLM_TENSOR_SSM_F_A,  "weight", i), {n_embd, head_dim}, flags);
+                            layer.ssm_f_b  = create_tensor(tn(LLM_TENSOR_SSM_F_B,  "weight", i), {head_dim, d_inner}, flags);
+                            layer.ssm_beta = create_tensor(tn(LLM_TENSOR_SSM_BETA, "weight", i), {n_embd, n_head}, flags);
+
+                            layer.ssm_a    = create_tensor(tn(LLM_TENSOR_SSM_A_NOSCAN, i), {n_head}, flags);
+                            layer.ssm_dt_b = create_tensor(tn(LLM_TENSOR_SSM_DT, "bias", i), {d_inner}, flags);
+
+                            layer.ssm_g_a    = create_tensor(tn(LLM_TENSOR_SSM_G_A,    "weight", i), {n_embd, head_dim}, flags);
+                            layer.ssm_g_b    = create_tensor(tn(LLM_TENSOR_SSM_G_B,    "weight", i), {head_dim, d_inner}, flags);
+                            layer.ssm_o_norm = create_tensor(tn(LLM_TENSOR_SSM_NORM,   "weight", i), {head_dim}, flags);
+                            layer.wo         = create_tensor(tn(LLM_TENSOR_ATTN_OUT,   "weight", i), {d_inner, n_embd}, flags);
+                        } else {
+                            const int64_t q_lora_rank      = hparams.n_lora_q;
+                            const int64_t kv_lora_rank     = hparams.n_lora_kv;
+                            const int64_t n_embd_head_k    = hparams.n_embd_head_k_mla();
+                            const int64_t n_embd_head_v    = hparams.n_embd_head_v_mla();
+                            const int64_t qk_nope_head_dim = n_embd_head_k; // nope only
+
+                            layer.attn_q_a_norm  = create_tensor(tn(LLM_TENSOR_ATTN_Q_A_NORM,  "weight", i), {q_lora_rank}, flags);
+                            layer.attn_kv_a_norm = create_tensor(tn(LLM_TENSOR_ATTN_KV_A_NORM, "weight", i), {kv_lora_rank}, flags);
+
+                            layer.wq_a = create_tensor(tn(LLM_TENSOR_ATTN_Q_A, "weight", i), {n_embd, q_lora_rank}, flags);
+                            layer.wq_b = create_tensor(tn(LLM_TENSOR_ATTN_Q_B, "weight", i), {q_lora_rank, n_head * n_embd_head_k}, flags);
+
+                            layer.wkv_a_mqa = create_tensor(tn(LLM_TENSOR_ATTN_KV_A_MQA, "weight", i), {n_embd, kv_lora_rank}, flags);
+                            layer.wk_b      = create_tensor(tn(LLM_TENSOR_ATTN_K_B, "weight", i), {qk_nope_head_dim, kv_lora_rank, n_head}, flags);
+                            layer.wv_b      = create_tensor(tn(LLM_TENSOR_ATTN_V_B, "weight", i), {kv_lora_rank, n_embd_head_v, n_head}, flags);
+                            layer.wo        = create_tensor(tn(LLM_TENSOR_ATTN_OUT, "weight", i), {n_head * n_embd_head_v, n_embd}, flags);
+
+                            const int64_t n_indexer_head = hparams.indexer_n_head;
+                            const int64_t n_embd_indexer = hparams.indexer_head_size;
+                            const int64_t kpool          = hparams.indexer_kpool;
+
+                            const bool full   = is_nextn || hparams.is_indexer_full(i);
+                            const int  iflags = flags | (full ? 0 : TENSOR_NOT_REQUIRED);
+
+                            layer.indexer_k_norm     = create_tensor(tn(LLM_TENSOR_INDEXER_K_NORM,     "weight", i), {n_embd_indexer}, iflags);
+                            layer.indexer_k_norm_b   = create_tensor(tn(LLM_TENSOR_INDEXER_K_NORM,     "bias",   i), {n_embd_indexer}, iflags);
+                            layer.indexer_proj       = create_tensor(tn(LLM_TENSOR_INDEXER_PROJ,       "weight", i), {n_embd, n_indexer_head}, iflags);
+                            layer.indexer_attn_k     = create_tensor(tn(LLM_TENSOR_INDEXER_ATTN_K,     "weight", i), {n_embd, n_embd_indexer}, iflags);
+                            layer.indexer_attn_q_b   = create_tensor(tn(LLM_TENSOR_INDEXER_ATTN_Q_B,   "weight", i), {q_lora_rank, n_indexer_head * n_embd_indexer}, iflags);
+                            layer.indexer_kpool_gate = create_tensor(tn(LLM_TENSOR_INDEXER_KPOOL_GATE, "weight", i), {n_embd, n_embd_indexer}, iflags);
+                            layer.indexer_kpool_ape  = create_tensor(tn(LLM_TENSOR_INDEXER_KPOOL_APE,  "weight", i), {n_embd_indexer, kpool}, iflags);
+                        }
+
+                        if (i < (int) hparams.n_layer_dense_lead) {
+                            layer.ffn_gate = create_tensor(tn(LLM_TENSOR_FFN_GATE, "weight", i), {n_embd, n_ff}, flags);
+                            layer.ffn_down = create_tensor(tn(LLM_TENSOR_FFN_DOWN, "weight", i), {n_ff, n_embd}, flags);
+                            layer.ffn_up   = create_tensor(tn(LLM_TENSOR_FFN_UP,   "weight", i), {n_embd, n_ff}, flags);
+                        } else {
+                            const int64_t n_ff_exp        = hparams.n_ff_exp;
+                            const int64_t n_expert_shared = hparams.n_expert_shared;
+
+                            layer.ffn_gate_inp    = create_tensor(tn(LLM_TENSOR_FFN_GATE_INP,    "weight", i), {n_embd, n_expert}, flags);
+                            layer.ffn_exp_probs_b = create_tensor(tn(LLM_TENSOR_FFN_EXP_PROBS_B, "bias",   i), {n_expert}, flags);
+
+                            layer.ffn_gate_exps = create_tensor(tn(LLM_TENSOR_FFN_GATE_EXPS, "weight", i), {  n_embd, n_ff_exp, n_expert}, flags);
+                            layer.ffn_down_exps = create_tensor(tn(LLM_TENSOR_FFN_DOWN_EXPS, "weight", i), {n_ff_exp,   n_embd, n_expert}, flags);
+                            layer.ffn_up_exps   = create_tensor(tn(LLM_TENSOR_FFN_UP_EXPS,   "weight", i), {  n_embd, n_ff_exp, n_expert}, flags);
+
+                            layer.ffn_gate_shexp = create_tensor(tn(LLM_TENSOR_FFN_GATE_SHEXP, "weight", i), {n_embd, n_ff_exp * n_expert_shared}, flags);
+                            layer.ffn_down_shexp = create_tensor(tn(LLM_TENSOR_FFN_DOWN_SHEXP, "weight", i), {        n_ff_exp * n_expert_shared, n_embd}, flags);
+                            layer.ffn_up_shexp   = create_tensor(tn(LLM_TENSOR_FFN_UP_SHEXP,   "weight", i), {n_embd, n_ff_exp * n_expert_shared}, flags);
+                        }
+
+                        if (is_nextn) {
+                            layer.nextn.eh_proj          = create_tensor(tn(LLM_TENSOR_NEXTN_EH_PROJ,          "weight", i), {2 * n_embd, n_embd}, flags);
+                            layer.nextn.enorm            = create_tensor(tn(LLM_TENSOR_NEXTN_ENORM,            "weight", i), {n_embd}, flags);
+                            layer.nextn.hnorm            = create_tensor(tn(LLM_TENSOR_NEXTN_HNORM,            "weight", i), {n_embd}, flags);
+                            layer.nextn.embed_tokens     = create_tensor(tn(LLM_TENSOR_NEXTN_EMBED_TOKENS,     "weight", i), {n_embd, n_vocab}, flags | TENSOR_NOT_REQUIRED);
+                            layer.nextn.shared_head_head = create_tensor(tn(LLM_TENSOR_NEXTN_SHARED_HEAD_HEAD, "weight", i), {n_embd, n_vocab}, flags | TENSOR_NOT_REQUIRED);
+                            layer.nextn.shared_head_norm = create_tensor(tn(LLM_TENSOR_NEXTN_SHARED_HEAD_NORM, "weight", i), {n_embd}, flags | TENSOR_NOT_REQUIRED);
+                        }
+                    }
+                } break;
             case LLM_ARCH_QWEN35:
                 {
                     tok_embd = create_tensor(tn(LLM_TENSOR_TOKEN_EMBD, "weight"), { n_embd, n_vocab }, 0);
@@ -9178,6 +9434,40 @@ llama_memory_i * llama_model::create_memory(const llama_memory_params & params, 
             {
                 res = nullptr;
             } break;
+        case LLM_ARCH_GLM5_NEXT:
+            {
+                // KDA layers are recurrent, the DSA layers use a K-only MLA cache plus an indexer cache.
+                // The NextN block is never attended by the trunk graph.
+                const uint32_t n_trunk = hparams.n_layer - hparams.nextn_predict_layers;
+                llama_memory_hybrid::layer_filter_cb filter_attn = [&, n_trunk](int32_t il) {
+                    return (uint32_t) il < n_trunk && !hparams.is_recurrent(il);
+                };
+                llama_memory_hybrid::layer_filter_cb filter_idx = [&, n_trunk](int32_t il) {
+                    return (uint32_t) il < n_trunk && !hparams.is_recurrent(il) && hparams.is_indexer_full(il);
+                };
+                llama_memory_hybrid::layer_filter_cb filter_recr = [&, n_trunk](int32_t il) {
+                    return (uint32_t) il < n_trunk && hparams.is_recurrent(il);
+                };
+
+                res = new llama_memory_hybrid_idx(
+                    /* model             */ *this,
+                    /* attn_type_k       */ params.type_k,
+                    /* attn_type_v       */ params.type_v,
+                    /* attn_v_trans      */ !cparams.flash_attn,
+                    /* attn_kv_size      */ cparams.n_ctx_seq,
+                    /* attn_n_pad        */ 1,
+                    /* attn_n_swa        */ hparams.n_swa,
+                    /* attn_swa_type     */ hparams.swa_type,
+                    /* recurrent_type_r  */ GGML_TYPE_F32,
+                    /* recurrent_type_s  */ GGML_TYPE_F32,
+                    /* recurrent_rs_size */ std::max((uint32_t) 1, cparams.n_seq_max),
+                    /* n_seq_max         */ cparams.n_seq_max,
+                    /* offload           */ cparams.offload_kqv,
+                    /* unified           */ cparams.kv_unified,
+                    /* filter_attn       */ std::move(filter_attn),
+                    /* filter_recr       */ std::move(filter_recr),
+                    /* filter_idx        */ std::move(filter_idx));
+            } break;
         // Models that need standard caching should rely on recurrent/hybrid
         // checks
         default:
@@ -9828,6 +10118,10 @@ ggml_cgraph * llama_model::build_graph(const llm_graph_params & params) const {
             {
                 llm = std::make_unique<llm_build_kimi_k3>(*this, params);
             } break;
+        case LLM_ARCH_GLM5_NEXT:
+            {
+                llm = std::make_unique<llm_build_glm5_next>(*this, params);
+            } break;
         case LLM_ARCH_STEP35:
             {
                 llm = std::make_unique<llm_build_step35_iswa>(*this, params);
@@ -9988,6 +10282,7 @@ llama_rope_type llama_model_rope_type(const llama_model * model) {
         case LLM_ARCH_NEMOTRON_H_MOE:
         case LLM_ARCH_KIMI_LINEAR:
         case LLM_ARCH_KIMI_K3:
+        case LLM_ARCH_GLM5_NEXT:
             return LLAMA_ROPE_TYPE_NONE;
 
         // use what we call a normal RoPE, operating on pairs of consecutive head values

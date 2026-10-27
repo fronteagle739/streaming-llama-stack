@@ -45,6 +45,22 @@ KEPT = ('generation_control_file', 'stack_preferences_file', 'vision_encoder', '
         'comfyui_models', 'studio_python')  # envvars.json placeholders the proxy's studio/producer scopes expand
 
 
+def require_supported_model(cfg):
+    """A recovered graph alone does not qualify the V4.1 single-engine ABI."""
+    from .config import path
+    model = cfg.get('model')
+    if not model or not path(model).is_file():
+        return
+    from .native_broker import vendor
+    vendor()
+    from studio.gguf_meta import _read_kv_header
+    metadata = _read_kv_header(path(model)) or {}
+    if metadata.get('general.architecture') == 'glm5-next':
+        raise ValueError('GLM-5.3 Flash graph support is experimental. Single-engine serving still needs '
+                         'the GLM KDA/MLA/indexer state bridge, GLM chat rendering and ds4 decode adapter; '
+                         'the DSV4.1 producer, receipt, stop tokens and YOCO contract cannot be reused unchanged.')
+
+
 def sha(path):
     with Path(path).open('rb') as source:return hashlib.file_digest(source, 'sha256').hexdigest()
 
@@ -52,6 +68,7 @@ def sha(path):
 def serving_config(cfg, *, runtime_root, studio_root, llama_producer, library_directories, revision,
                    spread_file=None, model_receipt=None, host_budget_gib=None):
     """The combo_proxy serving_mode=single_engine configuration (shared by Studio and the stack)."""
+    require_supported_model(cfg)
     host = cfg['host_budget_gib'] if host_budget_gib is None else host_budget_gib
     result = {k: deepcopy(cfg[k]) for k in KEPT if k in cfg}
     result.update(serving_mode='single_engine', source_revision=revision,
@@ -90,6 +107,7 @@ def context(cfg):
 def receipt_config(cfg):
     """The model/receipt fields of stack_config(): the single engine's receipt lives at
     <runtime_root>/single-engine/state/original-model.json (native_broker.model_receipt)."""
+    require_supported_model(cfg)
     from .config import path
     result = {'model': cfg.get('model'), 'runtime_root': str(Path(cfg['runtime_root']).resolve() / 'single-engine')}
     if cfg.get('model_receipt'):result['model_receipt'] = str(path(cfg['model_receipt']))
@@ -100,6 +118,7 @@ def stack_config(cfg):
     """The stack's own single-RTX endpoint: the source-built producer, its ds4-decode.dll
     beside it, and paths inside the stack runtime. The controller and producer share the
     stack's admitted host budget; the producer pin is the built binary's hash."""
+    require_supported_model(cfg)
     from .config import path, ROOT
     from .journal import sha256
     producer = path(cfg['llama_producer'])
@@ -136,6 +155,7 @@ def stack_config(cfg):
 
 
 def preset(cfg, installed):
+    require_supported_model(cfg)
     installed = Path(installed)
     return dict(name=cfg.get('preset_name', PRESET_NAME), mode='local', mac={}, include_previous_reasoning=True, tool_call_format='native',
         rtx=dict(backend='ds4', model='deepseek-reasoner', model_path=cfg['model'], ctx=cfg['context'],
@@ -168,6 +188,7 @@ def require_runtime_python(cfg, executable=None):
 
 def stage(args):
     cfg = json.loads(Path(args.config).read_text(encoding='utf-8-sig'))
+    require_supported_model(cfg)
     require_runtime_python(cfg)
     branch = subprocess.check_output(['git', 'branch', '--show-current'], cwd=SOURCE, text=True).strip()
     if not branch.startswith('agent/'):raise ValueError('Owned task source branch required')
