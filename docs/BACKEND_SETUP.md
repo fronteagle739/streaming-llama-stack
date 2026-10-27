@@ -29,8 +29,8 @@ limited to one or two and run under the stack's host memory guardian.
 | `llama-decode`, `llama-server` | Retained streaming llama source, Metal and Accelerate. |
 | `llama-decode-upstream` | Pinned upstream source plus the retained KV/token receiver overlay. WIR is unavailable in this overlay. |
 | `ds4` | DSV4.1 native state receiver. Existing `mac-setup` also performs its model and wired memory checks. |
-| `ds4-peer` | Earlier DS4P protocol, built from the retained Windows fork's portable Metal sources. This is a distinct protocol from the DSV4.1 state broker. |
-| `mference` | Server-only Swift package with pinned package dependencies; Swift 6.1 or newer. |
+| `ds4-peer` | Earlier DS4P protocol, built from the consistent retained peer receiver sources. This is a distinct protocol from the DSV4.1 state broker. |
+| `mference` | Server-only Swift package with pinned local package dependencies and Foundation networking; Swift 6.1 or newer. Optional Xet and AsyncHTTPClient transports are disabled in this local-model build. |
 | `mlx-serve` | Pinned server, DS4, OpenCode, MLX, MLX-C, llama, Jinja and webp inputs, private dependency prefixes and Zig 0.17.0. Requires macOS/Metal 26.2 or newer. |
 | `omlx` | Separate `omlx-venv`, MLX 0.32.4, nanobind 3.1.0, pinned model libraries and compiled native kernels. It does not replace the custom MLX environment. |
 

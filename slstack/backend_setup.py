@@ -109,7 +109,7 @@ def native_llama(build,name):
 
 
 def native_ds4(build,name='ds4'):
-    directory='ds4-win' if name=='ds4-peer' else 'ds4-mac'
+    directory='ds4-peer' if name=='ds4-peer' else 'ds4-mac'
     source,revision=build.stage(ROOT/'engines'/directory,name+'-mac')
     flags='-O3 -ffast-math -g -mcpu=native -Wall -Wextra -std=c99 -DDS4_NATIVE_FRONTIER_ENABLE=1'
     build.run(['make','-j'+str(build.jobs),'ds4-server','CFLAGS='+flags],'ds4-compile',cwd=source)
@@ -117,20 +117,56 @@ def native_ds4(build,name='ds4'):
     return build.report(name,revision,[binary],binary=str(binary),renderer_sha256=digest(ROOT/'engines'/directory/'ds4_server.c'))
 
 
+def swift_manifest(text,urls):
+    """Use pinned local packages and Foundation networking for local models."""
+    optional={'swift-xet','async-http-client'}
+    pattern=re.compile(r'\.(package|product)\(')
+    result=[];start=0
+    for match in pattern.finditer(text):
+        if match.start()<start:continue
+        pos=match.end();depth=1;quoted=False;escaped=False
+        while pos<len(text) and depth:
+            char=text[pos]
+            if quoted:
+                if escaped:escaped=False
+                elif char=='\\':escaped=True
+                elif char=='"':quoted=False
+            elif char=='"':quoted=True
+            elif char=='(':depth+=1
+            elif char==')':depth-=1
+            pos+=1
+        if depth:raise ValueError('Unbalanced Swift package declaration')
+        call=text[match.start():pos]
+        url=re.search(r'url:\s*"([^"]+)"',call)
+        package=re.search(r'package:\s*"([^"]+)"',call)
+        replacement=call
+        if match[1]=='package' and url:
+            address=url[1].removesuffix('.git')
+            identity=urls.get(address)
+            if address.rsplit('/',1)[-1] in optional:replacement=''
+            elif identity:replacement='.package(path: "../'+identity+'")'
+            else:raise ValueError('Unpinned Swift dependency: '+address)
+        elif match[1]=='product' and package and package[1] in optional:replacement=''
+        if not replacement:
+            while pos<len(text) and text[pos] in ' \t':pos+=1
+            if pos<len(text) and text[pos]==',':pos+=1
+        result.extend((text[start:match.start()],replacement));start=pos
+    result.append(text[start:]);return ''.join(result)
+
+
 def swift_dependencies(build):
     pins=json.loads((ROOT/'engines/mference/Package.resolved').read_text())['pins']
     roots={r['identity']:build.source('swift-'+r['identity']) for r in pins}
     urls={r['location'].removesuffix('.git'):r['identity'] for r in pins}
-    pattern=re.compile(r'\.package\(\s*url:\s*"([^"]+)"\s*,\s*(?:from:\s*"[^"]+"|exact:\s*"[^"]+"|revision:\s*"[^"]+"|branch:\s*"[^"]+"|"[^\"]+"\s*\.\.<\s*"[^\"]+")\s*\)',re.S)
     def rewrite(files):
+        # Select the pinned Swift 6.1 manifest where upstream provides one.
+        # Older manifests enable optional binary transports unconditionally.
+        versioned={n:d for n,d in files if n=='Package@swift-6.1.swift'}
         result=[]
         for name,data in files:
-            if name.startswith('Package') and name.endswith('.swift'):
-                def replacement(match):
-                    identity=urls.get(match[1].removesuffix('.git'))
-                    if identity:return '.package(path: "../'+identity+'")'
-                    raise ValueError('Unpinned Swift dependency: '+match[1])
-                data=pattern.sub(replacement,data.decode()).encode()
+            if name.startswith('Package@swift-') and name.endswith('.swift'):continue
+            if name=='Package.swift':
+                data=swift_manifest(versioned.get('Package@swift-6.1.swift',data).decode(),urls).encode()
             result.append((name,data))
         return result
     # All packages are siblings so path dependencies resolve without network or

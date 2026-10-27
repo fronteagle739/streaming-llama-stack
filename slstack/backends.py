@@ -136,7 +136,7 @@ def command(config, *, runtime, python=None, write_settings=True):
             mtp_model=config.get('mtp_model'),mtp_draft=config.get('mtp_draft'),batched_session=1)
     if spec.name=='ds4-peer':
         from studio.peer_launch import ds4p_peer_argv
-        binary=str(config.get('binary') or installed_binary(runtime,spec.name,ROOT/'engines/ds4-win/ds4-server'))
+        binary=str(config.get('binary') or installed_binary(runtime,spec.name,ROOT/'engines/ds4-peer/ds4-server'))
         mac={**config,'host':host,'server':binary,'http_port':port}
         rtx={'ctx':context,'tokens':maximum,'model_path':model}
         return ds4p_peer_argv(rtx,mac,'unused-rtx-binary')[0]
