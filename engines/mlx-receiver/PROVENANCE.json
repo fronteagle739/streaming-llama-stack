@@ -1,0 +1,86 @@
+{
+  "launch_source_revision": "167e764e6b19dfe4c30cc8ed6fb0938fa7663fd4",
+  "receiver_source_revision": "dad33e2a0f3d2d44b129f26b38d9db292cf3c8bc",
+  "mlx_vlm_source_revision": "3b6aa5a892d40688f9d041b6d5e028cb3d365a62",
+  "exports": [
+    {
+      "path": "vendor/studio/studio/general_launch.py",
+      "source_sha256": "1d00963dc920d1dc135b46831919cae3955b0bcc3fdf974b504afbeb609c19e3",
+      "export_sha256": "1473ff591f9c2b71e50250dd314301ff0ce165f3498a64ab5fd1f6c202c266a8"
+    },
+    {
+      "path": "vendor/studio/studio/preset_samplers.py",
+      "source_sha256": "2e99121cacc4eaef9a655e17b4d488ac886cd063b356deb0afe27ca5331ce8bc",
+      "export_sha256": "d6464452d82b8178b52936acf699c3024bca2771347837f4514d58775cef56be"
+    },
+    {
+      "path": "engines/mlx-receiver/mlx_token_stream_server.py",
+      "source_sha256": "2186926bfc852521c3ea0336b2c78db8bc654048bb6341dc443d544985e4a2a4",
+      "export_sha256": "1d98c27099d3c489549b4b62ebaf6d49b02c82e319f76c4b3240e61390a8512e"
+    },
+    {
+      "path": "engines/mlx-receiver/kv_handoff.py",
+      "source_sha256": "901c67e4684dcb9330dc63678d53d21e3cdd4db493931d4e4dbd3f56fff29404",
+      "export_sha256": "f40012ebf57216cce939efcc1903571038490e87c14d2a19b9cd79100f51f24c"
+    },
+    {
+      "path": "engines/mlx-receiver/kv_converter.py",
+      "source_sha256": "8d893137f64434ead67c48bb2179927fca35d2eed8c954b26702827979add974",
+      "export_sha256": "ffcae7ee438604c3eb21f7fec8ee4211b3c9272e5fef1b4e4d82d2b156eba434"
+    },
+    {
+      "path": "engines/mlx-receiver/glm52_mtp.py",
+      "source_sha256": "3c4fa9150291267203c8bf1079878b23cf25d003bf27c22f27af7347288b61b1",
+      "export_sha256": "92b15a9a394b0c3a41c79d78210da358761a855782741a319e54eaa0a7c5d22f"
+    },
+    {
+      "path": "engines/mlx-receiver/glm52_mtp_drafter.py",
+      "source_sha256": "89cfaef8600a36de8f25b6881806ff16aaf8f4f53cb43abaa1162f80a04c6720",
+      "export_sha256": "563b944946c411ee107b390db8fbf511e6ba12dde907ae3d1db7bb0c77b5fb9d"
+    },
+    {
+      "path": "engines/mlx-receiver/mtp_adaptive_depth.py",
+      "source_sha256": "1668e5942bdca31bde714736d54d76a6e428aa903063f0ccdadc5b51774cf84c",
+      "export_sha256": "a6cea2f3eb896dbf08e8a7a39778b098a3f8c1f4c90714cfac150e036f16bb9d"
+    },
+    {
+      "path": "engines/mlx-receiver/mlx_adapters.py",
+      "source_sha256": "7fc34a3552807055376bbc7a3aa90b51bbea60dade2bf7015896d84acd4fcd3a",
+      "export_sha256": "847cd38bbee343d0daf037afb64b39cbb2bb28ea811463b89686a47cb8852b23"
+    },
+    {
+      "path": "engines/mlx-receiver/swi_reasoning.py",
+      "source_sha256": "527cb0596ba1d6fba2d0443d86f3e3f998f9e23ba6c6a153fe144add8a935c46",
+      "export_sha256": "567c6b17748932f1f55b588f180bd7f0945536f5eba4f2ea5d7820036ebb8010"
+    },
+    {
+      "path": "engines/mlx-receiver/kimi_vision.py",
+      "source_sha256": "aeb4d2c5c6d9d4f83012448c5cffa0033669f5306eb19aca3dad5b08ab7f33a7",
+      "export_sha256": "6f97e51933d440e303496826f8e329768ff69194a8215a4123ef9131dd9b1810"
+    },
+    {
+      "path": "engines/mlx-receiver/prompt_cache_store.py",
+      "source_sha256": "1c5c4c098e6c60c763f92179f8c9ad1a22c3df44f0aefd3f7833cfc0aba8588f",
+      "export_sha256": "06fc2807dcc6fcb9fcbd33e637d0055b7fe81897bc0292d0e6ad191fa60d666e"
+    },
+    {
+      "path": "engines/mlx-receiver/make_prompt_direct_kva.py",
+      "source_sha256": "88927636bdf00afde85af24d8814442d31082fca862cf00a5ebd5862f5581c5d",
+      "export_sha256": "420e08a9c0ac2208c9b842a26de172de988905caf9c7523e5075a146b96fe4d0"
+    },
+    {
+      "path": "vendor/studio/studio/backend_argv.py",
+      "source_sha256": "1d00963dc920d1dc135b46831919cae3955b0bcc3fdf974b504afbeb609c19e3",
+      "export_sha256": "b075e8fce78f321545fc501f2aa80beb6e345bd2e14b98116cff94f8cc715baf"
+    },
+    {
+      "path": "vendor/studio/studio/gguf_meta.py",
+      "source_sha256": "e87802279adab460b1dd74d6f78bd89f6f650a86ede3169bdf8599333591fdb1",
+      "export_sha256": "e1c66fc76072ddd50999378437a8a224fab3a9ac263e50157b708dec9aab89e7"
+    }
+  ],
+  "mlx_vlm_package_files": 867,
+  "mlx_vlm_package_bytes": 8911610,
+  "edits": "Launch helpers exported without app settings; receiver comments/docstrings removed; personal fallback home paths made relative. Runtime source is contained in this stack.",
+  "export_hash_format": "SHA-256 of source text after CRLF to LF normalization"
+}

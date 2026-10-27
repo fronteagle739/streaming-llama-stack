@@ -1,0 +1,103 @@
+diff --git a/mlx/distributed/ring/ring.cpp b/mlx/distributed/ring/ring.cpp
+index ea4004284..23126079f 100644
+--- a/mlx/distributed/ring/ring.cpp
++++ b/mlx/distributed/ring/ring.cpp
+@@ -325,17 +325,29 @@ std::vector<std::vector<detail::address_t>> load_nodes(const char* hostfile) {
+ }
+ 
+ /**
+- * Create a socket and accept one connection for each of the provided
+- * addresses.
++ * Create and listen on one socket for each of the provided addresses.
+  */
+-std::vector<int> accept_connections(
++std::vector<detail::TCPSocket> listen_connections(
+     const std::vector<detail::address_t>& addresses) {
+-  std::vector<int> sockets;
+-  int success;
++  std::vector<detail::TCPSocket> sockets;
+ 
+   for (auto& address : addresses) {
+     detail::TCPSocket socket(RING_TAG);
+     socket.listen(RING_TAG, address);
++    sockets.push_back(std::move(socket));
++  }
++
++  return sockets;
++}
++
++/**
++ * Accept one connection from each of the provided listener sockets.
++ */
++std::vector<int> accept_connections(
++    std::vector<detail::TCPSocket>& listeners) {
++  std::vector<int> sockets;
++
++  for (auto& socket : listeners) {
+     sockets.push_back(socket.accept(RING_TAG).detach());
+   }
+ 
+@@ -350,7 +362,6 @@ std::vector<int> make_connections(
+     const std::vector<detail::address_t>& addresses,
+     bool verbose) {
+   std::vector<int> sockets;
+-  int success;
+ 
+   for (auto& address : addresses) {
+     sockets.push_back(
+@@ -392,19 +403,20 @@ class RingGroup : public GroupImpl {
+ 
+     size_ = nodes.size();
+     int connect_to = (rank_ + 1) % size_;
++    auto listeners = listen_connections(nodes[rank_]);
+ 
+     // We define the connection order by having the rank_ == size_ - 1 connect
+     // first and accept after.
+     if (rank_ < connect_to) {
+       log_info(verbose_, "Rank", rank_, "accepting");
+-      sockets_left_ = accept_connections(nodes[rank_]);
++      sockets_left_ = accept_connections(listeners);
+       log_info(verbose_, "Rank", rank_, "connecting to", connect_to);
+       sockets_right_ = make_connections(nodes[connect_to], verbose);
+     } else {
+       log_info(verbose_, "Rank", rank_, "connecting to", connect_to);
+       sockets_right_ = make_connections(nodes[connect_to], verbose);
+       log_info(verbose_, "Rank", rank_, "accepting");
+-      sockets_left_ = accept_connections(nodes[rank_]);
++      sockets_left_ = accept_connections(listeners);
+     }
+ 
+     // Failure if we couldn't make right or left sockets
+diff --git a/mlx/distributed/utils.cpp b/mlx/distributed/utils.cpp
+index 2de994cf4..b02656ccb 100644
+--- a/mlx/distributed/utils.cpp
++++ b/mlx/distributed/utils.cpp
+@@ -167,6 +167,7 @@ TCPSocket TCPSocket::connect(
+     int wait,
+     std::function<void(int, int)> cb) {
+   int sock, success;
++  int last_error = 0;
+ 
+   // Attempt to connect `num_retries` times with exponential backoff.
+   for (int attempt = 0; attempt < num_retries; attempt++) {
+@@ -184,7 +185,11 @@ TCPSocket TCPSocket::connect(
+       break;
+     }
+ 
++    last_error = errno;
++    close(sock);
++
+     if (cb != nullptr) {
++      errno = last_error;
+       cb(attempt, wait);
+     }
+     if (wait > 0) {
+@@ -196,7 +201,7 @@ TCPSocket TCPSocket::connect(
+ 
+   if (success < 0) {
+     std::ostringstream msg;
+-    msg << tag << " Couldn't connect (error: " << errno << ")";
++    msg << tag << " Couldn't connect (error: " << last_error << ")";
+     throw std::runtime_error(msg.str());
+   }
+ 

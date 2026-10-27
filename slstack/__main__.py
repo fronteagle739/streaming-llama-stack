@@ -16,6 +16,15 @@ def main():
     parser.add_argument('--runtime-min-free-gib', type=float, help='Runtime available physical RAM floor (default 4 GiB; 0 disables it)')
     sub = parser.add_subparsers(dest='command', required=True)
     sub.add_parser('check')
+    mlx_setup = sub.add_parser('setup-mlx', help='Install the retained MLX-VLM fork and native GLM kernels')
+    mlx_setup.add_argument('--check', action='store_true')
+    mlx_setup.add_argument('--no-native-glm', action='store_true')
+    from .backends import BACKENDS
+    decoder = sub.add_parser('decode', help='Start a configured decoder on its serving host')
+    decoder.add_argument('--model')
+    decoder.add_argument('--backend', choices=list(BACKENDS))
+    decoder.add_argument('--check', action='store_true')
+    sub.add_parser('decode-internal', help=argparse.SUPPRESS)
     installer = sub.add_parser('install')
     for option in ('image', 'video', 'all', 'check', 'sdk'):
         installer.add_argument('--' + option, action='store_true')
@@ -96,6 +105,20 @@ def main():
         cfg['webui'] = True
     cfg.setdefault('env_overrides', {}).update({k[4:]: v for k, v in vars(args).items()
                                               if k.startswith('env_') and v is not None})
+    if args.command == 'decode':
+        from .decode import run
+        result = run(cfg, model=args.model, selected=args.backend, check=args.check)
+        print(json.dumps(result, indent=2))
+        return 0 if result['ready'] else 1
+    if args.command == 'decode-internal':
+        from .decode import serve
+        serve(cfg)
+        return 0
+    if args.command == 'setup-mlx':
+        from .mlx_setup import setup
+        result = setup(cfg, check=args.check, native_glm=not args.no_native_glm)
+        print(json.dumps(result, indent=2))
+        return 0 if result['ready'] else 1
     if args.command == 'install':
         from .install import install
         result = install(cfg, image=args.image, video=args.video, all_engines=args.all,

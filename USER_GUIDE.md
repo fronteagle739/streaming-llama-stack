@@ -40,12 +40,12 @@ Native controls take effect at token boundaries. The response reports requested 
 
 | Flag | Scope and DSV4.1 default | Purpose |
 |---|---|---|
-| `--clang-module-cache-path` | ds4-win: `{runtime_root}/cache/clang_module_cache_path`; mac-ds4: `{runtime_root}/cache/clang_module_cache_path`; rtx-llama: `{runtime_root}/cache/clang_module_cache_path`; image: `{runtime_root}/cache/clang_module_cache_path`; video: `{runtime_root}/cache/clang_module_cache_path`; studio: `{runtime_root}/cache/clang_module_cache_path`; mlx-serve: `{runtime_root}/cache/clang_module_cache_path` | Runtime-local cache/temp directory; no model download is performed. |
+| `--clang-module-cache-path` | ds4-win: `{runtime_root}/cache/clang_module_cache_path`; mac-ds4: `{runtime_root}/cache/clang_module_cache_path`; rtx-llama: `{runtime_root}/cache/clang_module_cache_path`; image: `{runtime_root}/cache/clang_module_cache_path`; video: `{runtime_root}/cache/clang_module_cache_path`; studio: `{runtime_root}/cache/clang_module_cache_path`; mlx-serve: `{runtime_root}/cache/clang_module_cache_path`; mac-mlx: `{runtime_root}/cache/clang_module_cache_path`; mac-llama: `{runtime_root}/cache/clang_module_cache_path`; mac-mference: `{runtime_root}/cache/clang_module_cache_path` | Runtime-local cache/temp directory; no model download is performed. |
 | `--cuda-cache-disable` | ds4-win: `1`; mac-ds4: `1`; rtx-llama: `1`; image: `1`; video: `1`; studio: `1`; mlx-serve: `1` | Keep inference offline and avoid global cache/bytecode writes. |
-| `--cuda-cache-path` | ds4-win: `{runtime_root}/cache/cuda_cache_path`; mac-ds4: `{runtime_root}/cache/cuda_cache_path`; rtx-llama: `{runtime_root}/cache/cuda_cache_path`; image: `{runtime_root}/cache/cuda_cache_path`; video: `{runtime_root}/cache/cuda_cache_path`; studio: `{runtime_root}/cache/cuda_cache_path`; mlx-serve: `{runtime_root}/cache/cuda_cache_path` | Runtime-local cache/temp directory; no model download is performed. |
+| `--cuda-cache-path` | ds4-win: `{runtime_root}/cache/cuda_cache_path`; mac-ds4: `{runtime_root}/cache/cuda_cache_path`; rtx-llama: `{runtime_root}/cache/cuda_cache_path`; image: `{runtime_root}/cache/cuda_cache_path`; video: `{runtime_root}/cache/cuda_cache_path`; studio: `{runtime_root}/cache/cuda_cache_path`; mlx-serve: `{runtime_root}/cache/cuda_cache_path`; mac-mlx: `{runtime_root}/cache/cuda_cache_path`; mac-llama: `{runtime_root}/cache/cuda_cache_path`; mac-mference: `{runtime_root}/cache/cuda_cache_path` | Runtime-local cache/temp directory; no model download is performed. |
 | `--cuda-device-order` | image: `PCI_BUS_ID`; video: `PCI_BUS_ID` | CUDA_DEVICE_ORDER: qualified preset/runtime setting; override for a different memory or arithmetic plan |
 | `--cuda-visible-devices` | ds4-win: `{gpu_uuid}`; mac-ds4: `{gpu_uuid}`; rtx-llama: `{gpu_uuid}`; image: `{gpu_uuid}`; video: `{gpu_uuid}`; studio: `{gpu_uuid}`; mlx-serve: `{gpu_uuid}` | Explicit selected GPU UUID, never an inherited GPU selection. |
-| `--diffusers-cache` | ds4-win: `{runtime_root}/cache/diffusers_cache`; mac-ds4: `{runtime_root}/cache/diffusers_cache`; rtx-llama: `{runtime_root}/cache/diffusers_cache`; image: `{runtime_root}/cache/diffusers_cache`; video: `{runtime_root}/cache/diffusers_cache`; studio: `{runtime_root}/cache/diffusers_cache`; mlx-serve: `{runtime_root}/cache/diffusers_cache` | Runtime-local cache/temp directory; no model download is performed. |
+| `--diffusers-cache` | ds4-win: `{runtime_root}/cache/diffusers_cache`; mac-ds4: `{runtime_root}/cache/diffusers_cache`; rtx-llama: `{runtime_root}/cache/diffusers_cache`; image: `{runtime_root}/cache/diffusers_cache`; video: `{runtime_root}/cache/diffusers_cache`; studio: `{runtime_root}/cache/diffusers_cache`; mlx-serve: `{runtime_root}/cache/diffusers_cache`; mac-mlx: `{runtime_root}/cache/diffusers_cache`; mac-llama: `{runtime_root}/cache/diffusers_cache`; mac-mference: `{runtime_root}/cache/diffusers_cache` | Runtime-local cache/temp directory; no model download is performed. |
 | `--diffusers-offline` | ds4-win: `1`; mac-ds4: `1`; rtx-llama: `1`; image: `1`; video: `1`; studio: `1`; mlx-serve: `1` | Keep inference offline and avoid global cache/bytecode writes. |
 | `--ds4-cache-affinity-bias` | ds4-win: `0` | CUDA expert-cache routing bias,0..1.36125.0 preserves baseline selection; live changes use the quality/speed tool. |
 | `--ds4-cache-affinity-calibrate` | Explicit runtime value | Record unbiased per-layer routing spreads and write their calibration when the engine closes. Use bias0 with at least16 decoded samples per layer. Restart with the resulting spread file for live quality controls. |
@@ -74,12 +74,12 @@ Native controls take effect at token boundaries. The response reports requested 
 | `--ds4-native-session-tier` | Explicit runtime value | ds4 native session tier: supplied by authenticated native pairing; an inconsistent override refuses the handshake. |
 | `--ds4-v41-dspark-decode-ready` | mac-ds4: `1` | DS4_V41_DSPARK_DECODE_READY: qualified Mac native preset setting; override explicitly for another plan |
 | `--ggml-cuda-disable-graphs` | rtx-llama: `1` | GGML_CUDA_DISABLE_GRAPHS: qualified preset/runtime setting; override for a different memory or arithmetic plan |
-| `--hf-home` | ds4-win: `{runtime_root}/cache/hf_home`; mac-ds4: `{runtime_root}/cache/hf_home`; rtx-llama: `{runtime_root}/cache/hf_home`; image: `{runtime_root}/cache/hf_home`; video: `{runtime_root}/cache/hf_home`; studio: `{runtime_root}/cache/hf_home`; mlx-serve: `{runtime_root}/cache/hf_home` | Runtime-local cache/temp directory; no model download is performed. |
-| `--hf-hub-cache` | ds4-win: `{runtime_root}/cache/hf_hub_cache`; mac-ds4: `{runtime_root}/cache/hf_hub_cache`; rtx-llama: `{runtime_root}/cache/hf_hub_cache`; image: `{runtime_root}/cache/hf_hub_cache`; video: `{runtime_root}/cache/hf_hub_cache`; studio: `{runtime_root}/cache/hf_hub_cache`; mlx-serve: `{runtime_root}/cache/hf_hub_cache` | Runtime-local cache/temp directory; no model download is performed. |
+| `--hf-home` | ds4-win: `{runtime_root}/cache/hf_home`; mac-ds4: `{runtime_root}/cache/hf_home`; rtx-llama: `{runtime_root}/cache/hf_home`; image: `{runtime_root}/cache/hf_home`; video: `{runtime_root}/cache/hf_home`; studio: `{runtime_root}/cache/hf_home`; mlx-serve: `{runtime_root}/cache/hf_home`; mac-mlx: `{runtime_root}/cache/hf_home`; mac-llama: `{runtime_root}/cache/hf_home`; mac-mference: `{runtime_root}/cache/hf_home` | Runtime-local cache/temp directory; no model download is performed. |
+| `--hf-hub-cache` | ds4-win: `{runtime_root}/cache/hf_hub_cache`; mac-ds4: `{runtime_root}/cache/hf_hub_cache`; rtx-llama: `{runtime_root}/cache/hf_hub_cache`; image: `{runtime_root}/cache/hf_hub_cache`; video: `{runtime_root}/cache/hf_hub_cache`; studio: `{runtime_root}/cache/hf_hub_cache`; mlx-serve: `{runtime_root}/cache/hf_hub_cache`; mac-mlx: `{runtime_root}/cache/hf_hub_cache`; mac-llama: `{runtime_root}/cache/hf_hub_cache`; mac-mference: `{runtime_root}/cache/hf_hub_cache` | Runtime-local cache/temp directory; no model download is performed. |
 | `--hf-hub-offline` | ds4-win: `1`; mac-ds4: `1`; rtx-llama: `1`; image: `1`; video: `1`; studio: `1`; mlx-serve: `1` | Keep inference offline and avoid global cache/bytecode writes. |
-| `--hf-kernels-cache` | ds4-win: `{runtime_root}/cache/hf_kernels_cache`; mac-ds4: `{runtime_root}/cache/hf_kernels_cache`; rtx-llama: `{runtime_root}/cache/hf_kernels_cache`; image: `{runtime_root}/cache/hf_kernels_cache`; video: `{runtime_root}/cache/hf_kernels_cache`; studio: `{runtime_root}/cache/hf_kernels_cache`; mlx-serve: `{runtime_root}/cache/hf_kernels_cache` | Runtime-local cache/temp directory; no model download is performed. |
-| `--huggingface-hub-cache` | ds4-win: `{runtime_root}/cache/huggingface_hub_cache`; mac-ds4: `{runtime_root}/cache/huggingface_hub_cache`; rtx-llama: `{runtime_root}/cache/huggingface_hub_cache`; image: `{runtime_root}/cache/huggingface_hub_cache`; video: `{runtime_root}/cache/huggingface_hub_cache`; studio: `{runtime_root}/cache/huggingface_hub_cache`; mlx-serve: `{runtime_root}/cache/huggingface_hub_cache` | Runtime-local cache/temp directory; no model download is performed. |
-| `--kernels-cache` | ds4-win: `{runtime_root}/cache/kernels_cache`; mac-ds4: `{runtime_root}/cache/kernels_cache`; rtx-llama: `{runtime_root}/cache/kernels_cache`; image: `{runtime_root}/cache/kernels_cache`; video: `{runtime_root}/cache/kernels_cache`; studio: `{runtime_root}/cache/kernels_cache`; mlx-serve: `{runtime_root}/cache/kernels_cache` | Runtime-local cache/temp directory; no model download is performed. |
+| `--hf-kernels-cache` | ds4-win: `{runtime_root}/cache/hf_kernels_cache`; mac-ds4: `{runtime_root}/cache/hf_kernels_cache`; rtx-llama: `{runtime_root}/cache/hf_kernels_cache`; image: `{runtime_root}/cache/hf_kernels_cache`; video: `{runtime_root}/cache/hf_kernels_cache`; studio: `{runtime_root}/cache/hf_kernels_cache`; mlx-serve: `{runtime_root}/cache/hf_kernels_cache`; mac-mlx: `{runtime_root}/cache/hf_kernels_cache`; mac-llama: `{runtime_root}/cache/hf_kernels_cache`; mac-mference: `{runtime_root}/cache/hf_kernels_cache` | Runtime-local cache/temp directory; no model download is performed. |
+| `--huggingface-hub-cache` | ds4-win: `{runtime_root}/cache/huggingface_hub_cache`; mac-ds4: `{runtime_root}/cache/huggingface_hub_cache`; rtx-llama: `{runtime_root}/cache/huggingface_hub_cache`; image: `{runtime_root}/cache/huggingface_hub_cache`; video: `{runtime_root}/cache/huggingface_hub_cache`; studio: `{runtime_root}/cache/huggingface_hub_cache`; mlx-serve: `{runtime_root}/cache/huggingface_hub_cache`; mac-mlx: `{runtime_root}/cache/huggingface_hub_cache`; mac-llama: `{runtime_root}/cache/huggingface_hub_cache`; mac-mference: `{runtime_root}/cache/huggingface_hub_cache` | Runtime-local cache/temp directory; no model download is performed. |
+| `--kernels-cache` | ds4-win: `{runtime_root}/cache/kernels_cache`; mac-ds4: `{runtime_root}/cache/kernels_cache`; rtx-llama: `{runtime_root}/cache/kernels_cache`; image: `{runtime_root}/cache/kernels_cache`; video: `{runtime_root}/cache/kernels_cache`; studio: `{runtime_root}/cache/kernels_cache`; mlx-serve: `{runtime_root}/cache/kernels_cache`; mac-mlx: `{runtime_root}/cache/kernels_cache`; mac-llama: `{runtime_root}/cache/kernels_cache`; mac-mference: `{runtime_root}/cache/kernels_cache` | Runtime-local cache/temp directory; no model download is performed. |
 | `--llama-dsv41-cast-vector` | rtx-llama: `1` | LLAMA_DSV41_CAST_VECTOR: qualified preset/runtime setting; override for a different memory or arithmetic plan |
 | `--llama-dsv41-engram-prompt-overlap` | rtx-llama: `1` | LLAMA_DSV41_ENGRAM_PROMPT_OVERLAP: qualified preset/runtime setting; override for a different memory or arithmetic plan |
 | `--llama-dsv41-mul-f16-store` | rtx-llama: `1` | LLAMA_DSV41_MUL_F16_STORE: qualified preset/runtime setting; override for a different memory or arithmetic plan |
@@ -90,11 +90,11 @@ Native controls take effect at token boundaries. The response reports requested 
 | `--mem-guard-enforce-proc-cap` | image: `1`; video: `1` | MEM_GUARD_ENFORCE_PROC_CAP: qualified preset/runtime setting; override for a different memory or arithmetic plan |
 | `--mem-guard-max-proc-gb` | image: `{host_budget_decimal_gb}`; video: `{host_budget_decimal_gb}` | In-process image/video memory guard RSS cap in decimal GB; derived from the admitted GiB budget. Overrides cannot weaken the outer guard. |
 | `--mem-guard-min-free-gb` | image: `{physical_floor_decimal_gb}`; video: `{physical_floor_decimal_gb}` | In-process image/video memory guard available-memory floor in decimal GB; derived from the admitted GiB budget. Overrides cannot weaken the outer guard. |
-| `--mplconfigdir` | ds4-win: `{runtime_root}/cache/mplconfigdir`; mac-ds4: `{runtime_root}/cache/mplconfigdir`; rtx-llama: `{runtime_root}/cache/mplconfigdir`; image: `{runtime_root}/cache/mplconfigdir`; video: `{runtime_root}/cache/mplconfigdir`; studio: `{runtime_root}/cache/mplconfigdir`; mlx-serve: `{runtime_root}/cache/mplconfigdir` | Runtime-local cache/temp directory; no model download is performed. |
-| `--numba-cache-dir` | ds4-win: `{runtime_root}/cache/numba_cache_dir`; mac-ds4: `{runtime_root}/cache/numba_cache_dir`; rtx-llama: `{runtime_root}/cache/numba_cache_dir`; image: `{runtime_root}/cache/numba_cache_dir`; video: `{runtime_root}/cache/numba_cache_dir`; studio: `{runtime_root}/cache/numba_cache_dir`; mlx-serve: `{runtime_root}/cache/numba_cache_dir` | Runtime-local cache/temp directory; no model download is performed. |
-| `--pip-cache-dir` | ds4-win: `{runtime_root}/cache/pip_cache_dir`; mac-ds4: `{runtime_root}/cache/pip_cache_dir`; rtx-llama: `{runtime_root}/cache/pip_cache_dir`; image: `{runtime_root}/cache/pip_cache_dir`; video: `{runtime_root}/cache/pip_cache_dir`; studio: `{runtime_root}/cache/pip_cache_dir`; mlx-serve: `{runtime_root}/cache/pip_cache_dir` | Runtime-local cache/temp directory; no model download is performed. |
-| `--pythondontwritebytecode` | ds4-win: `1`; mac-ds4: `1`; rtx-llama: `1`; image: `1`; video: `1`; studio: `1`; mlx-serve: `1` | Keep inference offline and avoid global cache/bytecode writes. |
-| `--pythonpath` | ds4-win: `{library_pythonpath}`; mac-ds4: `{library_pythonpath}`; rtx-llama: `{library_pythonpath}`; image: `{library_pythonpath}`; video: `{library_pythonpath}`; studio: `{library_pythonpath}`; mlx-serve: `{library_pythonpath}` | The stack and its vendored engine module paths. |
+| `--mplconfigdir` | ds4-win: `{runtime_root}/cache/mplconfigdir`; mac-ds4: `{runtime_root}/cache/mplconfigdir`; rtx-llama: `{runtime_root}/cache/mplconfigdir`; image: `{runtime_root}/cache/mplconfigdir`; video: `{runtime_root}/cache/mplconfigdir`; studio: `{runtime_root}/cache/mplconfigdir`; mlx-serve: `{runtime_root}/cache/mplconfigdir`; mac-mlx: `{runtime_root}/cache/mplconfigdir`; mac-llama: `{runtime_root}/cache/mplconfigdir`; mac-mference: `{runtime_root}/cache/mplconfigdir` | Runtime-local cache/temp directory; no model download is performed. |
+| `--numba-cache-dir` | ds4-win: `{runtime_root}/cache/numba_cache_dir`; mac-ds4: `{runtime_root}/cache/numba_cache_dir`; rtx-llama: `{runtime_root}/cache/numba_cache_dir`; image: `{runtime_root}/cache/numba_cache_dir`; video: `{runtime_root}/cache/numba_cache_dir`; studio: `{runtime_root}/cache/numba_cache_dir`; mlx-serve: `{runtime_root}/cache/numba_cache_dir`; mac-mlx: `{runtime_root}/cache/numba_cache_dir`; mac-llama: `{runtime_root}/cache/numba_cache_dir`; mac-mference: `{runtime_root}/cache/numba_cache_dir` | Runtime-local cache/temp directory; no model download is performed. |
+| `--pip-cache-dir` | ds4-win: `{runtime_root}/cache/pip_cache_dir`; mac-ds4: `{runtime_root}/cache/pip_cache_dir`; rtx-llama: `{runtime_root}/cache/pip_cache_dir`; image: `{runtime_root}/cache/pip_cache_dir`; video: `{runtime_root}/cache/pip_cache_dir`; studio: `{runtime_root}/cache/pip_cache_dir`; mlx-serve: `{runtime_root}/cache/pip_cache_dir`; mac-mlx: `{runtime_root}/cache/pip_cache_dir`; mac-llama: `{runtime_root}/cache/pip_cache_dir`; mac-mference: `{runtime_root}/cache/pip_cache_dir` | Runtime-local cache/temp directory; no model download is performed. |
+| `--pythondontwritebytecode` | ds4-win: `1`; mac-ds4: `1`; rtx-llama: `1`; image: `1`; video: `1`; studio: `1`; mlx-serve: `1`; mac-mlx: `1`; mac-llama: `1`; mac-mference: `1` | Keep inference offline and avoid global cache/bytecode writes. |
+| `--pythonpath` | ds4-win: `{library_pythonpath}`; mac-ds4: `{library_pythonpath}`; rtx-llama: `{library_pythonpath}`; image: `{library_pythonpath}`; video: `{library_pythonpath}`; studio: `{library_pythonpath}`; mlx-serve: `{library_pythonpath}`; mac-mlx: `{library_pythonpath}`; mac-llama: `{library_pythonpath}`; mac-mference: `{library_pythonpath}` | The stack and its vendored engine module paths. |
 | `--studio-comfyui-path` | ds4-win: `{comfyui_models}`; mac-ds4: `{comfyui_models}`; rtx-llama: `{comfyui_models}`; image: `{comfyui_models}`; video: `{comfyui_models}`; studio: `{comfyui_models}`; mlx-serve: `{comfyui_models}` | User-selected existing ComfyUI model folder; checkpoints and LoRAs remain in place. |
 | `--studio-cosmos-python` | ds4-win: `{studio_python}`; mac-ds4: `{studio_python}`; rtx-llama: `{studio_python}`; image: `{studio_python}`; video: `{studio_python}`; studio: `{studio_python}`; mlx-serve: `{studio_python}` | Pinned media runtime Python. |
 | `--studio-cosmos-windows-path` | ds4-win: `{streaming_root}`; mac-ds4: `{streaming_root}`; rtx-llama: `{streaming_root}`; image: `{streaming_root}`; video: `{streaming_root}`; studio: `{streaming_root}`; mlx-serve: `{streaming_root}` | Vendored streaming engine source directory. |
@@ -106,20 +106,20 @@ Native controls take effect at token boundaries. The response reports requested 
 | `--studio-output-dir` | ds4-win: `{runtime_root}/outputs`; mac-ds4: `{runtime_root}/outputs`; rtx-llama: `{runtime_root}/outputs`; image: `{runtime_root}/outputs`; video: `{runtime_root}/outputs`; studio: `{runtime_root}/outputs`; mlx-serve: `{runtime_root}/outputs` | Runtime-local outputs directory. |
 | `--studio-runtime-root` | ds4-win: `{runtime_root}`; mac-ds4: `{runtime_root}`; rtx-llama: `{runtime_root}`; image: `{runtime_root}`; video: `{runtime_root}`; studio: `{runtime_root}`; mlx-serve: `{runtime_root}` | Private runtime directory. |
 | `--studio-wf-dll` | ds4-win: `{weight_fetcher}`; mac-ds4: `{weight_fetcher}`; rtx-llama: `{weight_fetcher}`; image: `{weight_fetcher}`; video: `{weight_fetcher}`; studio: `{weight_fetcher}`; mlx-serve: `{weight_fetcher}` | Built weight-fetcher library used by streaming media. |
-| `--swift-modulecache-path` | ds4-win: `{runtime_root}/cache/swift_modulecache_path`; mac-ds4: `{runtime_root}/cache/swift_modulecache_path`; rtx-llama: `{runtime_root}/cache/swift_modulecache_path`; image: `{runtime_root}/cache/swift_modulecache_path`; video: `{runtime_root}/cache/swift_modulecache_path`; studio: `{runtime_root}/cache/swift_modulecache_path`; mlx-serve: `{runtime_root}/cache/swift_modulecache_path` | Runtime-local cache/temp directory; no model download is performed. |
-| `--temp` | ds4-win: `{runtime_root}/cache/temp`; mac-ds4: `{runtime_root}/cache/temp`; rtx-llama: `{runtime_root}/cache/temp`; image: `{runtime_root}/cache/temp`; video: `{runtime_root}/cache/temp`; studio: `{runtime_root}/cache/temp`; mlx-serve: `{runtime_root}/cache/temp` | Runtime-local cache/temp directory; no model download is performed. |
-| `--tmp` | ds4-win: `{runtime_root}/cache/tmp`; mac-ds4: `{runtime_root}/cache/tmp`; rtx-llama: `{runtime_root}/cache/tmp`; image: `{runtime_root}/cache/tmp`; video: `{runtime_root}/cache/tmp`; studio: `{runtime_root}/cache/tmp`; mlx-serve: `{runtime_root}/cache/tmp` | Runtime-local cache/temp directory; no model download is performed. |
-| `--tmpdir` | ds4-win: `{runtime_root}/cache/tmpdir`; mac-ds4: `{runtime_root}/cache/tmpdir`; rtx-llama: `{runtime_root}/cache/tmpdir`; image: `{runtime_root}/cache/tmpdir`; video: `{runtime_root}/cache/tmpdir`; studio: `{runtime_root}/cache/tmpdir`; mlx-serve: `{runtime_root}/cache/tmpdir` | Runtime-local cache/temp directory; no model download is performed. |
-| `--torchinductor-cache-dir` | ds4-win: `{runtime_root}/cache/torchinductor_cache_dir`; mac-ds4: `{runtime_root}/cache/torchinductor_cache_dir`; rtx-llama: `{runtime_root}/cache/torchinductor_cache_dir`; image: `{runtime_root}/cache/torchinductor_cache_dir`; video: `{runtime_root}/cache/torchinductor_cache_dir`; studio: `{runtime_root}/cache/torchinductor_cache_dir`; mlx-serve: `{runtime_root}/cache/torchinductor_cache_dir` | Runtime-local cache/temp directory; no model download is performed. |
-| `--torch-extensions-dir` | ds4-win: `{runtime_root}/cache/torch_extensions_dir`; mac-ds4: `{runtime_root}/cache/torch_extensions_dir`; rtx-llama: `{runtime_root}/cache/torch_extensions_dir`; image: `{runtime_root}/cache/torch_extensions_dir`; video: `{runtime_root}/cache/torch_extensions_dir`; studio: `{runtime_root}/cache/torch_extensions_dir`; mlx-serve: `{runtime_root}/cache/torch_extensions_dir` | Runtime-local cache/temp directory; no model download is performed. |
-| `--torch-home` | ds4-win: `{runtime_root}/cache/torch_home`; mac-ds4: `{runtime_root}/cache/torch_home`; rtx-llama: `{runtime_root}/cache/torch_home`; image: `{runtime_root}/cache/torch_home`; video: `{runtime_root}/cache/torch_home`; studio: `{runtime_root}/cache/torch_home`; mlx-serve: `{runtime_root}/cache/torch_home` | Runtime-local cache/temp directory; no model download is performed. |
-| `--transformers-cache` | ds4-win: `{runtime_root}/cache/transformers_cache`; mac-ds4: `{runtime_root}/cache/transformers_cache`; rtx-llama: `{runtime_root}/cache/transformers_cache`; image: `{runtime_root}/cache/transformers_cache`; video: `{runtime_root}/cache/transformers_cache`; studio: `{runtime_root}/cache/transformers_cache`; mlx-serve: `{runtime_root}/cache/transformers_cache` | Runtime-local cache/temp directory; no model download is performed. |
+| `--swift-modulecache-path` | ds4-win: `{runtime_root}/cache/swift_modulecache_path`; mac-ds4: `{runtime_root}/cache/swift_modulecache_path`; rtx-llama: `{runtime_root}/cache/swift_modulecache_path`; image: `{runtime_root}/cache/swift_modulecache_path`; video: `{runtime_root}/cache/swift_modulecache_path`; studio: `{runtime_root}/cache/swift_modulecache_path`; mlx-serve: `{runtime_root}/cache/swift_modulecache_path`; mac-mlx: `{runtime_root}/cache/swift_modulecache_path`; mac-llama: `{runtime_root}/cache/swift_modulecache_path`; mac-mference: `{runtime_root}/cache/swift_modulecache_path` | Runtime-local cache/temp directory; no model download is performed. |
+| `--temp` | ds4-win: `{runtime_root}/cache/temp`; mac-ds4: `{runtime_root}/cache/temp`; rtx-llama: `{runtime_root}/cache/temp`; image: `{runtime_root}/cache/temp`; video: `{runtime_root}/cache/temp`; studio: `{runtime_root}/cache/temp`; mlx-serve: `{runtime_root}/cache/temp`; mac-mlx: `{runtime_root}/cache/temp`; mac-llama: `{runtime_root}/cache/temp`; mac-mference: `{runtime_root}/cache/temp` | Runtime-local cache/temp directory; no model download is performed. |
+| `--tmp` | ds4-win: `{runtime_root}/cache/tmp`; mac-ds4: `{runtime_root}/cache/tmp`; rtx-llama: `{runtime_root}/cache/tmp`; image: `{runtime_root}/cache/tmp`; video: `{runtime_root}/cache/tmp`; studio: `{runtime_root}/cache/tmp`; mlx-serve: `{runtime_root}/cache/tmp`; mac-mlx: `{runtime_root}/cache/tmp`; mac-llama: `{runtime_root}/cache/tmp`; mac-mference: `{runtime_root}/cache/tmp` | Runtime-local cache/temp directory; no model download is performed. |
+| `--tmpdir` | ds4-win: `{runtime_root}/cache/tmpdir`; mac-ds4: `{runtime_root}/cache/tmpdir`; rtx-llama: `{runtime_root}/cache/tmpdir`; image: `{runtime_root}/cache/tmpdir`; video: `{runtime_root}/cache/tmpdir`; studio: `{runtime_root}/cache/tmpdir`; mlx-serve: `{runtime_root}/cache/tmpdir`; mac-mlx: `{runtime_root}/cache/tmpdir`; mac-llama: `{runtime_root}/cache/tmpdir`; mac-mference: `{runtime_root}/cache/tmpdir` | Runtime-local cache/temp directory; no model download is performed. |
+| `--torchinductor-cache-dir` | ds4-win: `{runtime_root}/cache/torchinductor_cache_dir`; mac-ds4: `{runtime_root}/cache/torchinductor_cache_dir`; rtx-llama: `{runtime_root}/cache/torchinductor_cache_dir`; image: `{runtime_root}/cache/torchinductor_cache_dir`; video: `{runtime_root}/cache/torchinductor_cache_dir`; studio: `{runtime_root}/cache/torchinductor_cache_dir`; mlx-serve: `{runtime_root}/cache/torchinductor_cache_dir`; mac-mlx: `{runtime_root}/cache/torchinductor_cache_dir`; mac-llama: `{runtime_root}/cache/torchinductor_cache_dir`; mac-mference: `{runtime_root}/cache/torchinductor_cache_dir` | Runtime-local cache/temp directory; no model download is performed. |
+| `--torch-extensions-dir` | ds4-win: `{runtime_root}/cache/torch_extensions_dir`; mac-ds4: `{runtime_root}/cache/torch_extensions_dir`; rtx-llama: `{runtime_root}/cache/torch_extensions_dir`; image: `{runtime_root}/cache/torch_extensions_dir`; video: `{runtime_root}/cache/torch_extensions_dir`; studio: `{runtime_root}/cache/torch_extensions_dir`; mlx-serve: `{runtime_root}/cache/torch_extensions_dir`; mac-mlx: `{runtime_root}/cache/torch_extensions_dir`; mac-llama: `{runtime_root}/cache/torch_extensions_dir`; mac-mference: `{runtime_root}/cache/torch_extensions_dir` | Runtime-local cache/temp directory; no model download is performed. |
+| `--torch-home` | ds4-win: `{runtime_root}/cache/torch_home`; mac-ds4: `{runtime_root}/cache/torch_home`; rtx-llama: `{runtime_root}/cache/torch_home`; image: `{runtime_root}/cache/torch_home`; video: `{runtime_root}/cache/torch_home`; studio: `{runtime_root}/cache/torch_home`; mlx-serve: `{runtime_root}/cache/torch_home`; mac-mlx: `{runtime_root}/cache/torch_home`; mac-llama: `{runtime_root}/cache/torch_home`; mac-mference: `{runtime_root}/cache/torch_home` | Runtime-local cache/temp directory; no model download is performed. |
+| `--transformers-cache` | ds4-win: `{runtime_root}/cache/transformers_cache`; mac-ds4: `{runtime_root}/cache/transformers_cache`; rtx-llama: `{runtime_root}/cache/transformers_cache`; image: `{runtime_root}/cache/transformers_cache`; video: `{runtime_root}/cache/transformers_cache`; studio: `{runtime_root}/cache/transformers_cache`; mlx-serve: `{runtime_root}/cache/transformers_cache`; mac-mlx: `{runtime_root}/cache/transformers_cache`; mac-llama: `{runtime_root}/cache/transformers_cache`; mac-mference: `{runtime_root}/cache/transformers_cache` | Runtime-local cache/temp directory; no model download is performed. |
 | `--transformers-offline` | ds4-win: `1`; mac-ds4: `1`; rtx-llama: `1`; image: `1`; video: `1`; studio: `1`; mlx-serve: `1` | Keep inference offline and avoid global cache/bytecode writes. |
-| `--triton-cache-dir` | ds4-win: `{runtime_root}/cache/triton_cache_dir`; mac-ds4: `{runtime_root}/cache/triton_cache_dir`; rtx-llama: `{runtime_root}/cache/triton_cache_dir`; image: `{runtime_root}/cache/triton_cache_dir`; video: `{runtime_root}/cache/triton_cache_dir`; studio: `{runtime_root}/cache/triton_cache_dir`; mlx-serve: `{runtime_root}/cache/triton_cache_dir` | Runtime-local cache/temp directory; no model download is performed. |
-| `--uv-cache-dir` | ds4-win: `{runtime_root}/cache/uv_cache_dir`; mac-ds4: `{runtime_root}/cache/uv_cache_dir`; rtx-llama: `{runtime_root}/cache/uv_cache_dir`; image: `{runtime_root}/cache/uv_cache_dir`; video: `{runtime_root}/cache/uv_cache_dir`; studio: `{runtime_root}/cache/uv_cache_dir`; mlx-serve: `{runtime_root}/cache/uv_cache_dir` | Runtime-local cache/temp directory; no model download is performed. |
-| `--xdg-cache-home` | ds4-win: `{runtime_root}/cache/xdg_cache_home`; mac-ds4: `{runtime_root}/cache/xdg_cache_home`; rtx-llama: `{runtime_root}/cache/xdg_cache_home`; image: `{runtime_root}/cache/xdg_cache_home`; video: `{runtime_root}/cache/xdg_cache_home`; studio: `{runtime_root}/cache/xdg_cache_home`; mlx-serve: `{runtime_root}/cache/xdg_cache_home` | Runtime-local cache/temp directory; no model download is performed. |
-| `--zig-global-cache-dir` | ds4-win: `{runtime_root}/cache/zig_global_cache_dir`; mac-ds4: `{runtime_root}/cache/zig_global_cache_dir`; rtx-llama: `{runtime_root}/cache/zig_global_cache_dir`; image: `{runtime_root}/cache/zig_global_cache_dir`; video: `{runtime_root}/cache/zig_global_cache_dir`; studio: `{runtime_root}/cache/zig_global_cache_dir`; mlx-serve: `{runtime_root}/cache/zig_global_cache_dir` | Runtime-local cache/temp directory; no model download is performed. |
-| `--zig-local-cache-dir` | ds4-win: `{runtime_root}/cache/zig_local_cache_dir`; mac-ds4: `{runtime_root}/cache/zig_local_cache_dir`; rtx-llama: `{runtime_root}/cache/zig_local_cache_dir`; image: `{runtime_root}/cache/zig_local_cache_dir`; video: `{runtime_root}/cache/zig_local_cache_dir`; studio: `{runtime_root}/cache/zig_local_cache_dir`; mlx-serve: `{runtime_root}/cache/zig_local_cache_dir` | Runtime-local cache/temp directory; no model download is performed. |
+| `--triton-cache-dir` | ds4-win: `{runtime_root}/cache/triton_cache_dir`; mac-ds4: `{runtime_root}/cache/triton_cache_dir`; rtx-llama: `{runtime_root}/cache/triton_cache_dir`; image: `{runtime_root}/cache/triton_cache_dir`; video: `{runtime_root}/cache/triton_cache_dir`; studio: `{runtime_root}/cache/triton_cache_dir`; mlx-serve: `{runtime_root}/cache/triton_cache_dir`; mac-mlx: `{runtime_root}/cache/triton_cache_dir`; mac-llama: `{runtime_root}/cache/triton_cache_dir`; mac-mference: `{runtime_root}/cache/triton_cache_dir` | Runtime-local cache/temp directory; no model download is performed. |
+| `--uv-cache-dir` | ds4-win: `{runtime_root}/cache/uv_cache_dir`; mac-ds4: `{runtime_root}/cache/uv_cache_dir`; rtx-llama: `{runtime_root}/cache/uv_cache_dir`; image: `{runtime_root}/cache/uv_cache_dir`; video: `{runtime_root}/cache/uv_cache_dir`; studio: `{runtime_root}/cache/uv_cache_dir`; mlx-serve: `{runtime_root}/cache/uv_cache_dir`; mac-mlx: `{runtime_root}/cache/uv_cache_dir`; mac-llama: `{runtime_root}/cache/uv_cache_dir`; mac-mference: `{runtime_root}/cache/uv_cache_dir` | Runtime-local cache/temp directory; no model download is performed. |
+| `--xdg-cache-home` | ds4-win: `{runtime_root}/cache/xdg_cache_home`; mac-ds4: `{runtime_root}/cache/xdg_cache_home`; rtx-llama: `{runtime_root}/cache/xdg_cache_home`; image: `{runtime_root}/cache/xdg_cache_home`; video: `{runtime_root}/cache/xdg_cache_home`; studio: `{runtime_root}/cache/xdg_cache_home`; mlx-serve: `{runtime_root}/cache/xdg_cache_home`; mac-mlx: `{runtime_root}/cache/xdg_cache_home`; mac-llama: `{runtime_root}/cache/xdg_cache_home`; mac-mference: `{runtime_root}/cache/xdg_cache_home` | Runtime-local cache/temp directory; no model download is performed. |
+| `--zig-global-cache-dir` | ds4-win: `{runtime_root}/cache/zig_global_cache_dir`; mac-ds4: `{runtime_root}/cache/zig_global_cache_dir`; rtx-llama: `{runtime_root}/cache/zig_global_cache_dir`; image: `{runtime_root}/cache/zig_global_cache_dir`; video: `{runtime_root}/cache/zig_global_cache_dir`; studio: `{runtime_root}/cache/zig_global_cache_dir`; mlx-serve: `{runtime_root}/cache/zig_global_cache_dir`; mac-mlx: `{runtime_root}/cache/zig_global_cache_dir`; mac-llama: `{runtime_root}/cache/zig_global_cache_dir`; mac-mference: `{runtime_root}/cache/zig_global_cache_dir` | Runtime-local cache/temp directory; no model download is performed. |
+| `--zig-local-cache-dir` | ds4-win: `{runtime_root}/cache/zig_local_cache_dir`; mac-ds4: `{runtime_root}/cache/zig_local_cache_dir`; rtx-llama: `{runtime_root}/cache/zig_local_cache_dir`; image: `{runtime_root}/cache/zig_local_cache_dir`; video: `{runtime_root}/cache/zig_local_cache_dir`; studio: `{runtime_root}/cache/zig_local_cache_dir`; mlx-serve: `{runtime_root}/cache/zig_local_cache_dir`; mac-mlx: `{runtime_root}/cache/zig_local_cache_dir`; mac-llama: `{runtime_root}/cache/zig_local_cache_dir`; mac-mference: `{runtime_root}/cache/zig_local_cache_dir` | Runtime-local cache/temp directory; no model download is performed. |
 
 Budget placeholders use the admitted child budget: `{host_budget_bytes}`, `{host_budget_mb}` and `{physical_floor_bytes}`. `{host_budget_gib}` and `{min_available_gib}` use GiB. User overrides are literal strings, including JSON and braces.
 
@@ -164,11 +164,59 @@ acestep cond: engine setting; built-in default retained
 
 Scope: mlx-serve. Class: advanced.
 
+Source: `engines/mlx-serve/src/acestep.zig:2715`. Unset read: NULL from getenv; the literal consumer below supplies any fallback.
+
+```text
+    const le_p = std.mem.span(std.c.getenv("ACESTEP_LYRIC_EMBEDS") orelse return error.SkipZigTest);
+    const ll_s = std.mem.span(std.c.getenv("ACESTEP_LYRIC_LEN") orelse return error.SkipZigTest);
+    const cond_p = std.mem.span(std.c.getenv("ACESTEP_COND") orelse return error.SkipZigTest);
+    const a = testing.allocator;
+    const io = std.Io.Threaded.global_single_threaded.io();
+    const text_len = try std.fmt.parseInt(c_int, tl_s, 10);
+    const lyric_len = try std.fmt.parseInt(c_int, ll_s, 10);
+```
+
+Source: `engines/mlx-serve/src/acestep.zig:2811`. Unset read: NULL from getenv; the literal consumer below supplies any fallback.
+
+```text
+test "acestep oracle: DiT velocity matches reference" {
+    _ = std.c.getenv("ACESTEP_TEST_MODEL") orelse return error.SkipZigTest;
+    const cond_p = std.mem.span(std.c.getenv("ACESTEP_COND") orelse return error.SkipZigTest);
+    const noise_p = std.mem.span(std.c.getenv("ACESTEP_DIT_NOISE") orelse return error.SkipZigTest);
+    const v1_p = std.mem.span(std.c.getenv("ACESTEP_DIT_V1") orelse return error.SkipZigTest);
+    const a = testing.allocator;
+    const io = std.Io.Threaded.global_single_threaded.io();
+```
+
+Source: `engines/mlx-serve/src/acestep.zig:2863`. Unset read: NULL from getenv; the literal consumer below supplies any fallback.
+
+```text
+test "acestep oracle: e2e denoise matches reference" {
+    _ = std.c.getenv("ACESTEP_TEST_MODEL") orelse return error.SkipZigTest;
+    const cond_p = std.mem.span(std.c.getenv("ACESTEP_COND") orelse return error.SkipZigTest);
+    const noise_p = std.mem.span(std.c.getenv("ACESTEP_DIT_NOISE") orelse return error.SkipZigTest);
+    const out_p = std.mem.span(std.c.getenv("ACESTEP_E2E_LATENTS") orelse return error.SkipZigTest);
+    const a = testing.allocator;
+    const io = std.Io.Threaded.global_single_threaded.io();
+```
+
 ### ACESTEP_COVER_COND
 
 acestep cover cond: engine setting; built-in default retained
 
 Scope: mlx-serve. Class: advanced.
+
+Source: `engines/mlx-serve/src/acestep.zig:3176`. Unset read: NULL from getenv; the literal consumer below supplies any fallback.
+
+```text
+test "acestep oracle: cover DiT velocity matches reference" {
+    _ = std.c.getenv("ACESTEP_TEST_MODEL") orelse return error.SkipZigTest;
+    const cond_p = std.mem.span(std.c.getenv("ACESTEP_COVER_COND") orelse return error.SkipZigTest);
+    const det_p = std.mem.span(std.c.getenv("ACESTEP_DETOK") orelse return error.SkipZigTest);
+    const noise_p = std.mem.span(std.c.getenv("ACESTEP_COVER_NOISE") orelse return error.SkipZigTest);
+    const v1_p = std.mem.span(std.c.getenv("ACESTEP_COVER_V1") orelse return error.SkipZigTest);
+    const a = testing.allocator;
+```
 
 ### ACESTEP_COVER_E2E_LATENTS
 
@@ -176,11 +224,35 @@ acestep cover e2e latents: engine setting; built-in default retained
 
 Scope: mlx-serve. Class: advanced.
 
+Source: `engines/mlx-serve/src/acestep.zig:3226`. Unset read: NULL from getenv; the literal consumer below supplies any fallback.
+
+```text
+    const le_p = std.mem.span(std.c.getenv("ACESTEP_LYRIC_EMBEDS") orelse return error.SkipZigTest);
+    const noise_p = std.mem.span(std.c.getenv("ACESTEP_COVER_E2E_NOISE") orelse return error.SkipZigTest);
+    const out_p = std.mem.span(std.c.getenv("ACESTEP_COVER_E2E_LATENTS") orelse return error.SkipZigTest);
+    const a = testing.allocator;
+    const io = std.Io.Threaded.global_single_threaded.io();
+    const src_d = try readF32(io, a, src_p); // [1,T,64]
+    defer a.free(src_d);
+```
+
 ### ACESTEP_COVER_E2E_NOISE
 
 acestep cover e2e noise: engine setting; built-in default retained
 
 Scope: mlx-serve. Class: advanced.
+
+Source: `engines/mlx-serve/src/acestep.zig:3225`. Unset read: NULL from getenv; the literal consumer below supplies any fallback.
+
+```text
+    const th_p = std.mem.span(std.c.getenv("ACESTEP_COVER_E2E_TEXT_HIDDEN") orelse return error.SkipZigTest);
+    const le_p = std.mem.span(std.c.getenv("ACESTEP_LYRIC_EMBEDS") orelse return error.SkipZigTest);
+    const noise_p = std.mem.span(std.c.getenv("ACESTEP_COVER_E2E_NOISE") orelse return error.SkipZigTest);
+    const out_p = std.mem.span(std.c.getenv("ACESTEP_COVER_E2E_LATENTS") orelse return error.SkipZigTest);
+    const a = testing.allocator;
+    const io = std.Io.Threaded.global_single_threaded.io();
+    const src_d = try readF32(io, a, src_p); // [1,T,64]
+```
 
 ### ACESTEP_COVER_E2E_TEXT_HIDDEN
 
@@ -188,11 +260,35 @@ acestep cover e2e text hidden: engine setting; built-in default retained
 
 Scope: mlx-serve. Class: advanced.
 
+Source: `engines/mlx-serve/src/acestep.zig:3223`. Unset read: NULL from getenv; the literal consumer below supplies any fallback.
+
+```text
+    _ = std.c.getenv("ACESTEP_TEST_MODEL") orelse return error.SkipZigTest;
+    const src_p = std.mem.span(std.c.getenv("ACESTEP_COVER_SRC") orelse return error.SkipZigTest);
+    const th_p = std.mem.span(std.c.getenv("ACESTEP_COVER_E2E_TEXT_HIDDEN") orelse return error.SkipZigTest);
+    const le_p = std.mem.span(std.c.getenv("ACESTEP_LYRIC_EMBEDS") orelse return error.SkipZigTest);
+    const noise_p = std.mem.span(std.c.getenv("ACESTEP_COVER_E2E_NOISE") orelse return error.SkipZigTest);
+    const out_p = std.mem.span(std.c.getenv("ACESTEP_COVER_E2E_LATENTS") orelse return error.SkipZigTest);
+    const a = testing.allocator;
+```
+
 ### ACESTEP_COVER_NOISE
 
 acestep cover noise: engine setting; built-in default retained
 
 Scope: mlx-serve. Class: advanced.
+
+Source: `engines/mlx-serve/src/acestep.zig:3178`. Unset read: NULL from getenv; the literal consumer below supplies any fallback.
+
+```text
+    const cond_p = std.mem.span(std.c.getenv("ACESTEP_COVER_COND") orelse return error.SkipZigTest);
+    const det_p = std.mem.span(std.c.getenv("ACESTEP_DETOK") orelse return error.SkipZigTest);
+    const noise_p = std.mem.span(std.c.getenv("ACESTEP_COVER_NOISE") orelse return error.SkipZigTest);
+    const v1_p = std.mem.span(std.c.getenv("ACESTEP_COVER_V1") orelse return error.SkipZigTest);
+    const a = testing.allocator;
+    const io = std.Io.Threaded.global_single_threaded.io();
+    const cond_d = try readF32(io, a, cond_p);
+```
 
 ### ACESTEP_COVER_SRC
 
@@ -200,11 +296,35 @@ acestep cover src: engine setting; built-in default retained
 
 Scope: mlx-serve. Class: advanced.
 
+Source: `engines/mlx-serve/src/acestep.zig:3222`. Unset read: NULL from getenv; the literal consumer below supplies any fallback.
+
+```text
+test "acestep oracle: cover e2e denoise matches reference" {
+    _ = std.c.getenv("ACESTEP_TEST_MODEL") orelse return error.SkipZigTest;
+    const src_p = std.mem.span(std.c.getenv("ACESTEP_COVER_SRC") orelse return error.SkipZigTest);
+    const th_p = std.mem.span(std.c.getenv("ACESTEP_COVER_E2E_TEXT_HIDDEN") orelse return error.SkipZigTest);
+    const le_p = std.mem.span(std.c.getenv("ACESTEP_LYRIC_EMBEDS") orelse return error.SkipZigTest);
+    const noise_p = std.mem.span(std.c.getenv("ACESTEP_COVER_E2E_NOISE") orelse return error.SkipZigTest);
+    const out_p = std.mem.span(std.c.getenv("ACESTEP_COVER_E2E_LATENTS") orelse return error.SkipZigTest);
+```
+
 ### ACESTEP_COVER_V1
 
 acestep cover v1: engine setting; built-in default retained
 
 Scope: mlx-serve. Class: advanced.
+
+Source: `engines/mlx-serve/src/acestep.zig:3179`. Unset read: NULL from getenv; the literal consumer below supplies any fallback.
+
+```text
+    const det_p = std.mem.span(std.c.getenv("ACESTEP_DETOK") orelse return error.SkipZigTest);
+    const noise_p = std.mem.span(std.c.getenv("ACESTEP_COVER_NOISE") orelse return error.SkipZigTest);
+    const v1_p = std.mem.span(std.c.getenv("ACESTEP_COVER_V1") orelse return error.SkipZigTest);
+    const a = testing.allocator;
+    const io = std.Io.Threaded.global_single_threaded.io();
+    const cond_d = try readF32(io, a, cond_p);
+    defer a.free(cond_d);
+```
 
 ### ACESTEP_DETOK
 
@@ -212,11 +332,59 @@ acestep detok: engine setting; built-in default retained
 
 Scope: mlx-serve. Class: advanced.
 
+Source: `engines/mlx-serve/src/acestep.zig:3138`. Unset read: NULL from getenv; the literal consumer below supplies any fallback.
+
+```text
+    _ = std.c.getenv("ACESTEP_TEST_MODEL") orelse return error.SkipZigTest;
+    const hints_p = std.mem.span(std.c.getenv("ACESTEP_TOK_HINTS") orelse return error.SkipZigTest);
+    const det_p = std.mem.span(std.c.getenv("ACESTEP_DETOK") orelse return error.SkipZigTest);
+    const a = testing.allocator;
+    const io = std.Io.Threaded.global_single_threaded.io();
+    const hints_d = try readF32(io, a, hints_p);
+    defer a.free(hints_d);
+```
+
+Source: `engines/mlx-serve/src/acestep.zig:3177`. Unset read: NULL from getenv; the literal consumer below supplies any fallback.
+
+```text
+    _ = std.c.getenv("ACESTEP_TEST_MODEL") orelse return error.SkipZigTest;
+    const cond_p = std.mem.span(std.c.getenv("ACESTEP_COVER_COND") orelse return error.SkipZigTest);
+    const det_p = std.mem.span(std.c.getenv("ACESTEP_DETOK") orelse return error.SkipZigTest);
+    const noise_p = std.mem.span(std.c.getenv("ACESTEP_COVER_NOISE") orelse return error.SkipZigTest);
+    const v1_p = std.mem.span(std.c.getenv("ACESTEP_COVER_V1") orelse return error.SkipZigTest);
+    const a = testing.allocator;
+    const io = std.Io.Threaded.global_single_threaded.io();
+```
+
 ### ACESTEP_DIT_NOISE
 
 acestep dit noise: engine setting; built-in default retained
 
 Scope: mlx-serve. Class: advanced.
+
+Source: `engines/mlx-serve/src/acestep.zig:2812`. Unset read: NULL from getenv; the literal consumer below supplies any fallback.
+
+```text
+    _ = std.c.getenv("ACESTEP_TEST_MODEL") orelse return error.SkipZigTest;
+    const cond_p = std.mem.span(std.c.getenv("ACESTEP_COND") orelse return error.SkipZigTest);
+    const noise_p = std.mem.span(std.c.getenv("ACESTEP_DIT_NOISE") orelse return error.SkipZigTest);
+    const v1_p = std.mem.span(std.c.getenv("ACESTEP_DIT_V1") orelse return error.SkipZigTest);
+    const a = testing.allocator;
+    const io = std.Io.Threaded.global_single_threaded.io();
+    const cond_d = try readF32(io, a, cond_p);
+```
+
+Source: `engines/mlx-serve/src/acestep.zig:2864`. Unset read: NULL from getenv; the literal consumer below supplies any fallback.
+
+```text
+    _ = std.c.getenv("ACESTEP_TEST_MODEL") orelse return error.SkipZigTest;
+    const cond_p = std.mem.span(std.c.getenv("ACESTEP_COND") orelse return error.SkipZigTest);
+    const noise_p = std.mem.span(std.c.getenv("ACESTEP_DIT_NOISE") orelse return error.SkipZigTest);
+    const out_p = std.mem.span(std.c.getenv("ACESTEP_E2E_LATENTS") orelse return error.SkipZigTest);
+    const a = testing.allocator;
+    const io = std.Io.Threaded.global_single_threaded.io();
+    const cond_d = try readF32(io, a, cond_p);
+```
 
 ### ACESTEP_DIT_V1
 
@@ -224,11 +392,35 @@ acestep dit v1: engine setting; built-in default retained
 
 Scope: mlx-serve. Class: advanced.
 
+Source: `engines/mlx-serve/src/acestep.zig:2813`. Unset read: NULL from getenv; the literal consumer below supplies any fallback.
+
+```text
+    const cond_p = std.mem.span(std.c.getenv("ACESTEP_COND") orelse return error.SkipZigTest);
+    const noise_p = std.mem.span(std.c.getenv("ACESTEP_DIT_NOISE") orelse return error.SkipZigTest);
+    const v1_p = std.mem.span(std.c.getenv("ACESTEP_DIT_V1") orelse return error.SkipZigTest);
+    const a = testing.allocator;
+    const io = std.Io.Threaded.global_single_threaded.io();
+    const cond_d = try readF32(io, a, cond_p);
+    defer a.free(cond_d);
+```
+
 ### ACESTEP_E2E_LATENTS
 
 acestep e2e latents: engine setting; built-in default retained
 
 Scope: mlx-serve. Class: advanced.
+
+Source: `engines/mlx-serve/src/acestep.zig:2865`. Unset read: NULL from getenv; the literal consumer below supplies any fallback.
+
+```text
+    const cond_p = std.mem.span(std.c.getenv("ACESTEP_COND") orelse return error.SkipZigTest);
+    const noise_p = std.mem.span(std.c.getenv("ACESTEP_DIT_NOISE") orelse return error.SkipZigTest);
+    const out_p = std.mem.span(std.c.getenv("ACESTEP_E2E_LATENTS") orelse return error.SkipZigTest);
+    const a = testing.allocator;
+    const io = std.Io.Threaded.global_single_threaded.io();
+    const cond_d = try readF32(io, a, cond_p);
+    defer a.free(cond_d);
+```
 
 ### ACESTEP_LYRIC_EMBEDS
 
@@ -236,11 +428,71 @@ acestep lyric embeds: engine setting; built-in default retained
 
 Scope: mlx-serve. Class: advanced.
 
+Source: `engines/mlx-serve/src/acestep.zig:2713`. Unset read: NULL from getenv; the literal consumer below supplies any fallback.
+
+```text
+    const th_p = std.mem.span(std.c.getenv("ACESTEP_TEXT_HIDDEN") orelse return error.SkipZigTest);
+    const tl_s = std.mem.span(std.c.getenv("ACESTEP_TEXT_LEN") orelse return error.SkipZigTest);
+    const le_p = std.mem.span(std.c.getenv("ACESTEP_LYRIC_EMBEDS") orelse return error.SkipZigTest);
+    const ll_s = std.mem.span(std.c.getenv("ACESTEP_LYRIC_LEN") orelse return error.SkipZigTest);
+    const cond_p = std.mem.span(std.c.getenv("ACESTEP_COND") orelse return error.SkipZigTest);
+    const a = testing.allocator;
+    const io = std.Io.Threaded.global_single_threaded.io();
+```
+
+Source: `engines/mlx-serve/src/acestep.zig:2755`. Unset read: NULL from getenv; the literal consumer below supplies any fallback.
+
+```text
+    const th_p = std.mem.span(std.c.getenv("ACESTEP_TEXT_HIDDEN") orelse return error.SkipZigTest);
+    const tl_s = std.mem.span(std.c.getenv("ACESTEP_TEXT_LEN") orelse return error.SkipZigTest);
+    const le_p = std.mem.span(std.c.getenv("ACESTEP_LYRIC_EMBEDS") orelse return error.SkipZigTest);
+    const ll_s = std.mem.span(std.c.getenv("ACESTEP_LYRIC_LEN") orelse return error.SkipZigTest);
+    const audio_p = std.mem.span(std.c.getenv("ACESTEP_VAEENC_AUDIO") orelse return error.SkipZigTest);
+    const cond_p = std.mem.span(std.c.getenv("ACESTEP_REFCOND") orelse return error.SkipZigTest);
+    const a = testing.allocator;
+```
+
+Source: `engines/mlx-serve/src/acestep.zig:3224`. Unset read: NULL from getenv; the literal consumer below supplies any fallback.
+
+```text
+    const src_p = std.mem.span(std.c.getenv("ACESTEP_COVER_SRC") orelse return error.SkipZigTest);
+    const th_p = std.mem.span(std.c.getenv("ACESTEP_COVER_E2E_TEXT_HIDDEN") orelse return error.SkipZigTest);
+    const le_p = std.mem.span(std.c.getenv("ACESTEP_LYRIC_EMBEDS") orelse return error.SkipZigTest);
+    const noise_p = std.mem.span(std.c.getenv("ACESTEP_COVER_E2E_NOISE") orelse return error.SkipZigTest);
+    const out_p = std.mem.span(std.c.getenv("ACESTEP_COVER_E2E_LATENTS") orelse return error.SkipZigTest);
+    const a = testing.allocator;
+    const io = std.Io.Threaded.global_single_threaded.io();
+```
+
 ### ACESTEP_LYRIC_LEN
 
 acestep lyric len: engine setting; built-in default retained
 
 Scope: mlx-serve. Class: advanced.
+
+Source: `engines/mlx-serve/src/acestep.zig:2714`. Unset read: NULL from getenv; the literal consumer below supplies any fallback.
+
+```text
+    const tl_s = std.mem.span(std.c.getenv("ACESTEP_TEXT_LEN") orelse return error.SkipZigTest);
+    const le_p = std.mem.span(std.c.getenv("ACESTEP_LYRIC_EMBEDS") orelse return error.SkipZigTest);
+    const ll_s = std.mem.span(std.c.getenv("ACESTEP_LYRIC_LEN") orelse return error.SkipZigTest);
+    const cond_p = std.mem.span(std.c.getenv("ACESTEP_COND") orelse return error.SkipZigTest);
+    const a = testing.allocator;
+    const io = std.Io.Threaded.global_single_threaded.io();
+    const text_len = try std.fmt.parseInt(c_int, tl_s, 10);
+```
+
+Source: `engines/mlx-serve/src/acestep.zig:2756`. Unset read: NULL from getenv; the literal consumer below supplies any fallback.
+
+```text
+    const tl_s = std.mem.span(std.c.getenv("ACESTEP_TEXT_LEN") orelse return error.SkipZigTest);
+    const le_p = std.mem.span(std.c.getenv("ACESTEP_LYRIC_EMBEDS") orelse return error.SkipZigTest);
+    const ll_s = std.mem.span(std.c.getenv("ACESTEP_LYRIC_LEN") orelse return error.SkipZigTest);
+    const audio_p = std.mem.span(std.c.getenv("ACESTEP_VAEENC_AUDIO") orelse return error.SkipZigTest);
+    const cond_p = std.mem.span(std.c.getenv("ACESTEP_REFCOND") orelse return error.SkipZigTest);
+    const a = testing.allocator;
+    const io = std.Io.Threaded.global_single_threaded.io();
+```
 
 ### ACESTEP_REFCOND
 
@@ -248,11 +500,191 @@ acestep refcond: engine setting; built-in default retained
 
 Scope: mlx-serve. Class: advanced.
 
+Source: `engines/mlx-serve/src/acestep.zig:2758`. Unset read: NULL from getenv; the literal consumer below supplies any fallback.
+
+```text
+    const ll_s = std.mem.span(std.c.getenv("ACESTEP_LYRIC_LEN") orelse return error.SkipZigTest);
+    const audio_p = std.mem.span(std.c.getenv("ACESTEP_VAEENC_AUDIO") orelse return error.SkipZigTest);
+    const cond_p = std.mem.span(std.c.getenv("ACESTEP_REFCOND") orelse return error.SkipZigTest);
+    const a = testing.allocator;
+    const io = std.Io.Threaded.global_single_threaded.io();
+    const text_len = try std.fmt.parseInt(c_int, tl_s, 10);
+    const lyric_len = try std.fmt.parseInt(c_int, ll_s, 10);
+```
+
 ### ACESTEP_TEST_MODEL
 
 acestep test model: engine setting; built-in default retained
 
 Scope: mlx-serve. Class: advanced.
+
+Source: `engines/mlx-serve/src/acestep.zig:2662`. Unset read: NULL from getenv; the literal consumer below supplies any fallback.
+
+```text
+
+fn testEngine(io: std.Io, a: std.mem.Allocator) !*Engine {
+    const model_dir = std.mem.span(std.c.getenv("ACESTEP_TEST_MODEL") orelse return error.SkipZigTest);
+    return Engine.load(io, a, model_dir, false);
+}
+
+// Oracle 1a: tokenizer + prompt formatting. The dump script writes the token
+```
+
+Source: `engines/mlx-serve/src/acestep.zig:2670`. Unset read: NULL from getenv; the literal consumer below supplies any fallback.
+
+```text
+// formatter + tokenizer must reproduce them (byte-level conditioning parity).
+test "acestep oracle: prompt tokenization matches reference ids" {
+    _ = std.c.getenv("ACESTEP_TEST_MODEL") orelse return error.SkipZigTest;
+    const ids_p = std.mem.span(std.c.getenv("ACESTEP_TEXT_IDS") orelse return error.SkipZigTest);
+    const a = testing.allocator;
+    const io = std.Io.Threaded.global_single_threaded.io();
+    const ref_ids = try readI32(io, a, ids_p);
+```
+
+Source: `engines/mlx-serve/src/acestep.zig:2690`. Unset read: NULL from getenv; the literal consumer below supplies any fallback.
+
+```text
+// Oracle 1b: Qwen3-Embedding full forward → last_hidden_state.
+test "acestep oracle: text encoder hidden states match reference" {
+    _ = std.c.getenv("ACESTEP_TEST_MODEL") orelse return error.SkipZigTest;
+    const ids_p = std.mem.span(std.c.getenv("ACESTEP_TEXT_IDS") orelse return error.SkipZigTest);
+    const hid_p = std.mem.span(std.c.getenv("ACESTEP_TEXT_HIDDEN") orelse return error.SkipZigTest);
+    const a = testing.allocator;
+    const io = std.Io.Threaded.global_single_threaded.io();
+```
+
+Source: `engines/mlx-serve/src/acestep.zig:2710`. Unset read: NULL from getenv; the literal consumer below supplies any fallback.
+
+```text
+// Oracle 2: condition encoder → packed [lyric|timbre|text] states.
+test "acestep oracle: condition encoder matches reference" {
+    _ = std.c.getenv("ACESTEP_TEST_MODEL") orelse return error.SkipZigTest;
+    const th_p = std.mem.span(std.c.getenv("ACESTEP_TEXT_HIDDEN") orelse return error.SkipZigTest);
+    const tl_s = std.mem.span(std.c.getenv("ACESTEP_TEXT_LEN") orelse return error.SkipZigTest);
+    const le_p = std.mem.span(std.c.getenv("ACESTEP_LYRIC_EMBEDS") orelse return error.SkipZigTest);
+    const ll_s = std.mem.span(std.c.getenv("ACESTEP_LYRIC_LEN") orelse return error.SkipZigTest);
+```
+
+Source: `engines/mlx-serve/src/acestep.zig:2752`. Unset read: NULL from getenv; the literal consumer below supplies any fallback.
+
+```text
+// (the #259 path). Reuses the oracle-6 audio: VAE mean → timbre → packed states.
+test "acestep oracle: condition encoder with reference audio matches reference" {
+    _ = std.c.getenv("ACESTEP_TEST_MODEL") orelse return error.SkipZigTest;
+    const th_p = std.mem.span(std.c.getenv("ACESTEP_TEXT_HIDDEN") orelse return error.SkipZigTest);
+    const tl_s = std.mem.span(std.c.getenv("ACESTEP_TEXT_LEN") orelse return error.SkipZigTest);
+    const le_p = std.mem.span(std.c.getenv("ACESTEP_LYRIC_EMBEDS") orelse return error.SkipZigTest);
+    const ll_s = std.mem.span(std.c.getenv("ACESTEP_LYRIC_LEN") orelse return error.SkipZigTest);
+```
+
+Source: `engines/mlx-serve/src/acestep.zig:2810`. Unset read: NULL from getenv; the literal consumer below supplies any fallback.
+
+```text
+// Oracle 3: one DiT velocity at t=1.0 from injected noise + reference cond.
+test "acestep oracle: DiT velocity matches reference" {
+    _ = std.c.getenv("ACESTEP_TEST_MODEL") orelse return error.SkipZigTest;
+    const cond_p = std.mem.span(std.c.getenv("ACESTEP_COND") orelse return error.SkipZigTest);
+    const noise_p = std.mem.span(std.c.getenv("ACESTEP_DIT_NOISE") orelse return error.SkipZigTest);
+    const v1_p = std.mem.span(std.c.getenv("ACESTEP_DIT_V1") orelse return error.SkipZigTest);
+    const a = testing.allocator;
+```
+
+Source: `engines/mlx-serve/src/acestep.zig:2862`. Unset read: NULL from getenv; the literal consumer below supplies any fallback.
+
+```text
+// Oracle 4: full 8-step euler + DCW from oracle 3's noise → final latents.
+test "acestep oracle: e2e denoise matches reference" {
+    _ = std.c.getenv("ACESTEP_TEST_MODEL") orelse return error.SkipZigTest;
+    const cond_p = std.mem.span(std.c.getenv("ACESTEP_COND") orelse return error.SkipZigTest);
+    const noise_p = std.mem.span(std.c.getenv("ACESTEP_DIT_NOISE") orelse return error.SkipZigTest);
+    const out_p = std.mem.span(std.c.getenv("ACESTEP_E2E_LATENTS") orelse return error.SkipZigTest);
+    const a = testing.allocator;
+```
+
+Source: `engines/mlx-serve/src/acestep.zig:2933`. Unset read: NULL from getenv; the literal consumer below supplies any fallback.
+
+```text
+// transpose to our NLC layout before decoding.
+test "acestep oracle: VAE decode matches reference" {
+    _ = std.c.getenv("ACESTEP_TEST_MODEL") orelse return error.SkipZigTest;
+    const lat_p = std.mem.span(std.c.getenv("ACESTEP_VAEDEC_LAT") orelse return error.SkipZigTest);
+    const wav_p = std.mem.span(std.c.getenv("ACESTEP_VAEDEC_WAV") orelse return error.SkipZigTest);
+    const a = testing.allocator;
+    const io = std.Io.Threaded.global_single_threaded.io();
+```
+
+Source: `engines/mlx-serve/src/acestep.zig:2967`. Unset read: NULL from getenv; the literal consumer below supplies any fallback.
+
+```text
+// [1,2,N] channel-first, latent mean [1,64,T].
+test "acestep oracle: VAE encode mean matches reference" {
+    _ = std.c.getenv("ACESTEP_TEST_MODEL") orelse return error.SkipZigTest;
+    const audio_p = std.mem.span(std.c.getenv("ACESTEP_VAEENC_AUDIO") orelse return error.SkipZigTest);
+    const mean_p = std.mem.span(std.c.getenv("ACESTEP_VAEENC_MEAN") orelse return error.SkipZigTest);
+    const a = testing.allocator;
+    const io = std.Io.Threaded.global_single_threaded.io();
+```
+
+Source: `engines/mlx-serve/src/acestep.zig:3026`. Unset read: NULL from getenv; the literal consumer below supplies any fallback.
+
+```text
+// clip fits one window and never exercises the halo/offset arithmetic.
+test "acestep chunked VAE encode matches the untiled pass on a multi-window clip" {
+    _ = std.c.getenv("ACESTEP_TEST_MODEL") orelse return error.SkipZigTest;
+    const a = testing.allocator;
+    const io = std.Io.Threaded.global_single_threaded.io();
+    var e = try testEngine(io, a);
+    defer e.deinit();
+```
+
+Source: `engines/mlx-serve/src/acestep.zig:3069`. Unset read: NULL from getenv; the literal consumer below supplies any fallback.
+
+```text
+// flips dims sitting 0.07–0.5 cells deep, which is how the soft clamp was found.
+test "acestep oracle: FSQ tokenizer hints + indices match reference" {
+    _ = std.c.getenv("ACESTEP_TEST_MODEL") orelse return error.SkipZigTest;
+    const mean_p = std.mem.span(std.c.getenv("ACESTEP_VAEENC_MEAN") orelse return error.SkipZigTest);
+    const hints_p = std.mem.span(std.c.getenv("ACESTEP_TOK_HINTS") orelse return error.SkipZigTest);
+    const idx_p = std.mem.span(std.c.getenv("ACESTEP_TOK_INDICES") orelse return error.SkipZigTest);
+    const z_p = std.mem.span(std.c.getenv("ACESTEP_TOK_Z") orelse return error.SkipZigTest);
+```
+
+Source: `engines/mlx-serve/src/acestep.zig:3136`. Unset read: NULL from getenv; the literal consumer below supplies any fallback.
+
+```text
+// cosine-cannot-see-scale rule).
+test "acestep oracle: FSQ detokenizer matches reference (cos + scale)" {
+    _ = std.c.getenv("ACESTEP_TEST_MODEL") orelse return error.SkipZigTest;
+    const hints_p = std.mem.span(std.c.getenv("ACESTEP_TOK_HINTS") orelse return error.SkipZigTest);
+    const det_p = std.mem.span(std.c.getenv("ACESTEP_DETOK") orelse return error.SkipZigTest);
+    const a = testing.allocator;
+    const io = std.Io.Threaded.global_single_threaded.io();
+```
+
+Source: `engines/mlx-serve/src/acestep.zig:3175`. Unset read: NULL from getenv; the literal consumer below supplies any fallback.
+
+```text
+// instruction's conditioning, one forward at t=1.0 from injected noise.
+test "acestep oracle: cover DiT velocity matches reference" {
+    _ = std.c.getenv("ACESTEP_TEST_MODEL") orelse return error.SkipZigTest;
+    const cond_p = std.mem.span(std.c.getenv("ACESTEP_COVER_COND") orelse return error.SkipZigTest);
+    const det_p = std.mem.span(std.c.getenv("ACESTEP_DETOK") orelse return error.SkipZigTest);
+    const noise_p = std.mem.span(std.c.getenv("ACESTEP_COVER_NOISE") orelse return error.SkipZigTest);
+    const v1_p = std.mem.span(std.c.getenv("ACESTEP_COVER_V1") orelse return error.SkipZigTest);
+```
+
+Source: `engines/mlx-serve/src/acestep.zig:3221`. Unset read: NULL from getenv; the literal consumer below supplies any fallback.
+
+```text
+// cover sits to the SOURCE latent — the "does a cover follow the song" number.
+test "acestep oracle: cover e2e denoise matches reference" {
+    _ = std.c.getenv("ACESTEP_TEST_MODEL") orelse return error.SkipZigTest;
+    const src_p = std.mem.span(std.c.getenv("ACESTEP_COVER_SRC") orelse return error.SkipZigTest);
+    const th_p = std.mem.span(std.c.getenv("ACESTEP_COVER_E2E_TEXT_HIDDEN") orelse return error.SkipZigTest);
+    const le_p = std.mem.span(std.c.getenv("ACESTEP_LYRIC_EMBEDS") orelse return error.SkipZigTest);
+    const noise_p = std.mem.span(std.c.getenv("ACESTEP_COVER_E2E_NOISE") orelse return error.SkipZigTest);
+```
 
 ### ACESTEP_TEXT_HIDDEN
 
@@ -260,11 +692,71 @@ acestep text hidden: engine setting; built-in default retained
 
 Scope: mlx-serve. Class: advanced.
 
+Source: `engines/mlx-serve/src/acestep.zig:2692`. Unset read: NULL from getenv; the literal consumer below supplies any fallback.
+
+```text
+    _ = std.c.getenv("ACESTEP_TEST_MODEL") orelse return error.SkipZigTest;
+    const ids_p = std.mem.span(std.c.getenv("ACESTEP_TEXT_IDS") orelse return error.SkipZigTest);
+    const hid_p = std.mem.span(std.c.getenv("ACESTEP_TEXT_HIDDEN") orelse return error.SkipZigTest);
+    const a = testing.allocator;
+    const io = std.Io.Threaded.global_single_threaded.io();
+    const ids = try readI32(io, a, ids_p);
+    defer a.free(ids);
+```
+
+Source: `engines/mlx-serve/src/acestep.zig:2711`. Unset read: NULL from getenv; the literal consumer below supplies any fallback.
+
+```text
+test "acestep oracle: condition encoder matches reference" {
+    _ = std.c.getenv("ACESTEP_TEST_MODEL") orelse return error.SkipZigTest;
+    const th_p = std.mem.span(std.c.getenv("ACESTEP_TEXT_HIDDEN") orelse return error.SkipZigTest);
+    const tl_s = std.mem.span(std.c.getenv("ACESTEP_TEXT_LEN") orelse return error.SkipZigTest);
+    const le_p = std.mem.span(std.c.getenv("ACESTEP_LYRIC_EMBEDS") orelse return error.SkipZigTest);
+    const ll_s = std.mem.span(std.c.getenv("ACESTEP_LYRIC_LEN") orelse return error.SkipZigTest);
+    const cond_p = std.mem.span(std.c.getenv("ACESTEP_COND") orelse return error.SkipZigTest);
+```
+
+Source: `engines/mlx-serve/src/acestep.zig:2753`. Unset read: NULL from getenv; the literal consumer below supplies any fallback.
+
+```text
+test "acestep oracle: condition encoder with reference audio matches reference" {
+    _ = std.c.getenv("ACESTEP_TEST_MODEL") orelse return error.SkipZigTest;
+    const th_p = std.mem.span(std.c.getenv("ACESTEP_TEXT_HIDDEN") orelse return error.SkipZigTest);
+    const tl_s = std.mem.span(std.c.getenv("ACESTEP_TEXT_LEN") orelse return error.SkipZigTest);
+    const le_p = std.mem.span(std.c.getenv("ACESTEP_LYRIC_EMBEDS") orelse return error.SkipZigTest);
+    const ll_s = std.mem.span(std.c.getenv("ACESTEP_LYRIC_LEN") orelse return error.SkipZigTest);
+    const audio_p = std.mem.span(std.c.getenv("ACESTEP_VAEENC_AUDIO") orelse return error.SkipZigTest);
+```
+
 ### ACESTEP_TEXT_IDS
 
 acestep text ids: engine setting; built-in default retained
 
 Scope: mlx-serve. Class: advanced.
+
+Source: `engines/mlx-serve/src/acestep.zig:2671`. Unset read: NULL from getenv; the literal consumer below supplies any fallback.
+
+```text
+test "acestep oracle: prompt tokenization matches reference ids" {
+    _ = std.c.getenv("ACESTEP_TEST_MODEL") orelse return error.SkipZigTest;
+    const ids_p = std.mem.span(std.c.getenv("ACESTEP_TEXT_IDS") orelse return error.SkipZigTest);
+    const a = testing.allocator;
+    const io = std.Io.Threaded.global_single_threaded.io();
+    const ref_ids = try readI32(io, a, ids_p);
+    defer a.free(ref_ids);
+```
+
+Source: `engines/mlx-serve/src/acestep.zig:2691`. Unset read: NULL from getenv; the literal consumer below supplies any fallback.
+
+```text
+test "acestep oracle: text encoder hidden states match reference" {
+    _ = std.c.getenv("ACESTEP_TEST_MODEL") orelse return error.SkipZigTest;
+    const ids_p = std.mem.span(std.c.getenv("ACESTEP_TEXT_IDS") orelse return error.SkipZigTest);
+    const hid_p = std.mem.span(std.c.getenv("ACESTEP_TEXT_HIDDEN") orelse return error.SkipZigTest);
+    const a = testing.allocator;
+    const io = std.Io.Threaded.global_single_threaded.io();
+    const ids = try readI32(io, a, ids_p);
+```
 
 ### ACESTEP_TEXT_LEN
 
@@ -272,11 +764,59 @@ acestep text len: engine setting; built-in default retained
 
 Scope: mlx-serve. Class: advanced.
 
+Source: `engines/mlx-serve/src/acestep.zig:2712`. Unset read: NULL from getenv; the literal consumer below supplies any fallback.
+
+```text
+    _ = std.c.getenv("ACESTEP_TEST_MODEL") orelse return error.SkipZigTest;
+    const th_p = std.mem.span(std.c.getenv("ACESTEP_TEXT_HIDDEN") orelse return error.SkipZigTest);
+    const tl_s = std.mem.span(std.c.getenv("ACESTEP_TEXT_LEN") orelse return error.SkipZigTest);
+    const le_p = std.mem.span(std.c.getenv("ACESTEP_LYRIC_EMBEDS") orelse return error.SkipZigTest);
+    const ll_s = std.mem.span(std.c.getenv("ACESTEP_LYRIC_LEN") orelse return error.SkipZigTest);
+    const cond_p = std.mem.span(std.c.getenv("ACESTEP_COND") orelse return error.SkipZigTest);
+    const a = testing.allocator;
+```
+
+Source: `engines/mlx-serve/src/acestep.zig:2754`. Unset read: NULL from getenv; the literal consumer below supplies any fallback.
+
+```text
+    _ = std.c.getenv("ACESTEP_TEST_MODEL") orelse return error.SkipZigTest;
+    const th_p = std.mem.span(std.c.getenv("ACESTEP_TEXT_HIDDEN") orelse return error.SkipZigTest);
+    const tl_s = std.mem.span(std.c.getenv("ACESTEP_TEXT_LEN") orelse return error.SkipZigTest);
+    const le_p = std.mem.span(std.c.getenv("ACESTEP_LYRIC_EMBEDS") orelse return error.SkipZigTest);
+    const ll_s = std.mem.span(std.c.getenv("ACESTEP_LYRIC_LEN") orelse return error.SkipZigTest);
+    const audio_p = std.mem.span(std.c.getenv("ACESTEP_VAEENC_AUDIO") orelse return error.SkipZigTest);
+    const cond_p = std.mem.span(std.c.getenv("ACESTEP_REFCOND") orelse return error.SkipZigTest);
+```
+
 ### ACESTEP_TOK_HINTS
 
 acestep tok hints: engine setting; built-in default retained
 
 Scope: mlx-serve. Class: advanced.
+
+Source: `engines/mlx-serve/src/acestep.zig:3071`. Unset read: NULL from getenv; the literal consumer below supplies any fallback.
+
+```text
+    _ = std.c.getenv("ACESTEP_TEST_MODEL") orelse return error.SkipZigTest;
+    const mean_p = std.mem.span(std.c.getenv("ACESTEP_VAEENC_MEAN") orelse return error.SkipZigTest);
+    const hints_p = std.mem.span(std.c.getenv("ACESTEP_TOK_HINTS") orelse return error.SkipZigTest);
+    const idx_p = std.mem.span(std.c.getenv("ACESTEP_TOK_INDICES") orelse return error.SkipZigTest);
+    const z_p = std.mem.span(std.c.getenv("ACESTEP_TOK_Z") orelse return error.SkipZigTest);
+    const a = testing.allocator;
+    const io = std.Io.Threaded.global_single_threaded.io();
+```
+
+Source: `engines/mlx-serve/src/acestep.zig:3137`. Unset read: NULL from getenv; the literal consumer below supplies any fallback.
+
+```text
+test "acestep oracle: FSQ detokenizer matches reference (cos + scale)" {
+    _ = std.c.getenv("ACESTEP_TEST_MODEL") orelse return error.SkipZigTest;
+    const hints_p = std.mem.span(std.c.getenv("ACESTEP_TOK_HINTS") orelse return error.SkipZigTest);
+    const det_p = std.mem.span(std.c.getenv("ACESTEP_DETOK") orelse return error.SkipZigTest);
+    const a = testing.allocator;
+    const io = std.Io.Threaded.global_single_threaded.io();
+    const hints_d = try readF32(io, a, hints_p);
+```
 
 ### ACESTEP_TOK_INDICES
 
@@ -284,11 +824,35 @@ acestep tok indices: engine setting; built-in default retained
 
 Scope: mlx-serve. Class: advanced.
 
+Source: `engines/mlx-serve/src/acestep.zig:3072`. Unset read: NULL from getenv; the literal consumer below supplies any fallback.
+
+```text
+    const mean_p = std.mem.span(std.c.getenv("ACESTEP_VAEENC_MEAN") orelse return error.SkipZigTest);
+    const hints_p = std.mem.span(std.c.getenv("ACESTEP_TOK_HINTS") orelse return error.SkipZigTest);
+    const idx_p = std.mem.span(std.c.getenv("ACESTEP_TOK_INDICES") orelse return error.SkipZigTest);
+    const z_p = std.mem.span(std.c.getenv("ACESTEP_TOK_Z") orelse return error.SkipZigTest);
+    const a = testing.allocator;
+    const io = std.Io.Threaded.global_single_threaded.io();
+    const mean_d = try readF32(io, a, mean_p); // [1,64,T] channel-first
+```
+
 ### ACESTEP_TOK_Z
 
 acestep tok z: engine setting; built-in default retained
 
 Scope: mlx-serve. Class: advanced.
+
+Source: `engines/mlx-serve/src/acestep.zig:3073`. Unset read: NULL from getenv; the literal consumer below supplies any fallback.
+
+```text
+    const hints_p = std.mem.span(std.c.getenv("ACESTEP_TOK_HINTS") orelse return error.SkipZigTest);
+    const idx_p = std.mem.span(std.c.getenv("ACESTEP_TOK_INDICES") orelse return error.SkipZigTest);
+    const z_p = std.mem.span(std.c.getenv("ACESTEP_TOK_Z") orelse return error.SkipZigTest);
+    const a = testing.allocator;
+    const io = std.Io.Threaded.global_single_threaded.io();
+    const mean_d = try readF32(io, a, mean_p); // [1,64,T] channel-first
+    defer a.free(mean_d);
+```
 
 ### ACESTEP_VAEDEC_LAT
 
@@ -296,11 +860,35 @@ acestep vaedec lat: engine setting; built-in default retained
 
 Scope: mlx-serve. Class: advanced.
 
+Source: `engines/mlx-serve/src/acestep.zig:2934`. Unset read: NULL from getenv; the literal consumer below supplies any fallback.
+
+```text
+test "acestep oracle: VAE decode matches reference" {
+    _ = std.c.getenv("ACESTEP_TEST_MODEL") orelse return error.SkipZigTest;
+    const lat_p = std.mem.span(std.c.getenv("ACESTEP_VAEDEC_LAT") orelse return error.SkipZigTest);
+    const wav_p = std.mem.span(std.c.getenv("ACESTEP_VAEDEC_WAV") orelse return error.SkipZigTest);
+    const a = testing.allocator;
+    const io = std.Io.Threaded.global_single_threaded.io();
+    const lat_d = try readF32(io, a, lat_p);
+```
+
 ### ACESTEP_VAEDEC_WAV
 
 acestep vaedec wav: engine setting; built-in default retained
 
 Scope: mlx-serve. Class: advanced.
+
+Source: `engines/mlx-serve/src/acestep.zig:2935`. Unset read: NULL from getenv; the literal consumer below supplies any fallback.
+
+```text
+    _ = std.c.getenv("ACESTEP_TEST_MODEL") orelse return error.SkipZigTest;
+    const lat_p = std.mem.span(std.c.getenv("ACESTEP_VAEDEC_LAT") orelse return error.SkipZigTest);
+    const wav_p = std.mem.span(std.c.getenv("ACESTEP_VAEDEC_WAV") orelse return error.SkipZigTest);
+    const a = testing.allocator;
+    const io = std.Io.Threaded.global_single_threaded.io();
+    const lat_d = try readF32(io, a, lat_p);
+    defer a.free(lat_d);
+```
 
 ### ACESTEP_VAEENC_AUDIO
 
@@ -308,11 +896,59 @@ acestep vaeenc audio: engine setting; built-in default retained
 
 Scope: mlx-serve. Class: advanced.
 
+Source: `engines/mlx-serve/src/acestep.zig:2757`. Unset read: NULL from getenv; the literal consumer below supplies any fallback.
+
+```text
+    const le_p = std.mem.span(std.c.getenv("ACESTEP_LYRIC_EMBEDS") orelse return error.SkipZigTest);
+    const ll_s = std.mem.span(std.c.getenv("ACESTEP_LYRIC_LEN") orelse return error.SkipZigTest);
+    const audio_p = std.mem.span(std.c.getenv("ACESTEP_VAEENC_AUDIO") orelse return error.SkipZigTest);
+    const cond_p = std.mem.span(std.c.getenv("ACESTEP_REFCOND") orelse return error.SkipZigTest);
+    const a = testing.allocator;
+    const io = std.Io.Threaded.global_single_threaded.io();
+    const text_len = try std.fmt.parseInt(c_int, tl_s, 10);
+```
+
+Source: `engines/mlx-serve/src/acestep.zig:2968`. Unset read: NULL from getenv; the literal consumer below supplies any fallback.
+
+```text
+test "acestep oracle: VAE encode mean matches reference" {
+    _ = std.c.getenv("ACESTEP_TEST_MODEL") orelse return error.SkipZigTest;
+    const audio_p = std.mem.span(std.c.getenv("ACESTEP_VAEENC_AUDIO") orelse return error.SkipZigTest);
+    const mean_p = std.mem.span(std.c.getenv("ACESTEP_VAEENC_MEAN") orelse return error.SkipZigTest);
+    const a = testing.allocator;
+    const io = std.Io.Threaded.global_single_threaded.io();
+    const audio_d = try readF32(io, a, audio_p);
+```
+
 ### ACESTEP_VAEENC_MEAN
 
 acestep vaeenc mean: engine setting; built-in default retained
 
 Scope: mlx-serve. Class: advanced.
+
+Source: `engines/mlx-serve/src/acestep.zig:2969`. Unset read: NULL from getenv; the literal consumer below supplies any fallback.
+
+```text
+    _ = std.c.getenv("ACESTEP_TEST_MODEL") orelse return error.SkipZigTest;
+    const audio_p = std.mem.span(std.c.getenv("ACESTEP_VAEENC_AUDIO") orelse return error.SkipZigTest);
+    const mean_p = std.mem.span(std.c.getenv("ACESTEP_VAEENC_MEAN") orelse return error.SkipZigTest);
+    const a = testing.allocator;
+    const io = std.Io.Threaded.global_single_threaded.io();
+    const audio_d = try readF32(io, a, audio_p);
+    defer a.free(audio_d);
+```
+
+Source: `engines/mlx-serve/src/acestep.zig:3070`. Unset read: NULL from getenv; the literal consumer below supplies any fallback.
+
+```text
+test "acestep oracle: FSQ tokenizer hints + indices match reference" {
+    _ = std.c.getenv("ACESTEP_TEST_MODEL") orelse return error.SkipZigTest;
+    const mean_p = std.mem.span(std.c.getenv("ACESTEP_VAEENC_MEAN") orelse return error.SkipZigTest);
+    const hints_p = std.mem.span(std.c.getenv("ACESTEP_TOK_HINTS") orelse return error.SkipZigTest);
+    const idx_p = std.mem.span(std.c.getenv("ACESTEP_TOK_INDICES") orelse return error.SkipZigTest);
+    const z_p = std.mem.span(std.c.getenv("ACESTEP_TOK_Z") orelse return error.SkipZigTest);
+    const a = testing.allocator;
+```
 
 ### ANIMA_ALLOW_NON_DIRECTSTORAGE
 
@@ -474,7 +1110,7 @@ Scope: mlx-serve. Class: advanced.
 
 Runtime-local cache/temp directory; no model download is performed.
 
-Scope: ds4-win, image, mac-ds4, mlx-serve, rtx-llama, studio, video. Class: preset.
+Scope: ds4-win, image, mac-ds4, mlx-serve, rtx-llama, studio, video, mac-mlx, mac-llama, mac-mference. Class: preset.
 
 ### CMAKE_ARGS
 
@@ -570,7 +1206,7 @@ Scope: ds4-win, image, mac-ds4, mlx-serve, rtx-llama, studio, video. Class: pres
 
 Runtime-local cache/temp directory; no model download is performed.
 
-Scope: ds4-win, image, mac-ds4, mlx-serve, rtx-llama, studio, video. Class: preset.
+Scope: ds4-win, image, mac-ds4, mlx-serve, rtx-llama, studio, video, mac-mlx, mac-llama, mac-mference. Class: preset.
 
 ### CUDA_DEVICE_ORDER
 
@@ -756,7 +1392,7 @@ Scope: mlx-serve. Class: advanced.
 
 CUDA module loading policy; backend admission accounts for the selected policy.
 
-Scope: rtx-llama, ds4-win. Class: advanced.
+Scope: ds4-win, rtx-llama. Class: advanced.
 
 Source: `engines/streaming-llama/prefill_llama.cpp/tools/dsv41-prefill/main.cpp:291`. Unset read: Wrapper/conditional default: see the literal call and consumer below.
 
@@ -1016,11 +1652,35 @@ dflash2 assistant dir: engine setting; built-in default retained
 
 Scope: mlx-serve. Class: advanced.
 
+Source: `engines/mlx-serve/src/dflash.zig:3584`. Unset read: NULL from getenv; the literal consumer below supplies any fallback.
+
+```text
+    // a pure-math question.
+    const fixtures_path = std.c.getenv("DFLASH2_FIXTURES") orelse return;
+    const assistant_dir = std.c.getenv("DFLASH2_ASSISTANT_DIR") orelse return;
+    if (mlx.noGpuBackend()) return;
+    const allocator = testing.allocator;
+    const s = mlx.gpuStream();
+    const io = std.Io.Threaded.global_single_threaded.io();
+```
+
 ### DFLASH2_FIXTURES
 
 dflash2 fixtures: engine setting; built-in default retained
 
 Scope: mlx-serve. Class: advanced.
+
+Source: `engines/mlx-serve/src/dflash.zig:3583`. Unset read: NULL from getenv; the literal consumer below supplies any fallback.
+
+```text
+    // identical sparse logits and the identical bf16 hidden, so the trace is
+    // a pure-math question.
+    const fixtures_path = std.c.getenv("DFLASH2_FIXTURES") orelse return;
+    const assistant_dir = std.c.getenv("DFLASH2_ASSISTANT_DIR") orelse return;
+    if (mlx.noGpuBackend()) return;
+    const allocator = testing.allocator;
+    const s = mlx.gpuStream();
+```
 
 ### DFLASH_ASSISTANT_DIR
 
@@ -1028,11 +1688,35 @@ dflash assistant dir: engine setting; built-in default retained
 
 Scope: mlx-serve. Class: advanced.
 
+Source: `engines/mlx-serve/src/dflash.zig:3483`. Unset read: NULL from getenv; the literal consumer below supplies any fallback.
+
+```text
+test "dflash fixture parity: encoder + two draft rounds vs transformers reference" {
+    const fixtures_path = std.c.getenv("DFLASH_FIXTURES") orelse return;
+    const assistant_dir = std.c.getenv("DFLASH_ASSISTANT_DIR") orelse return;
+    if (mlx.noGpuBackend()) return;
+    const allocator = testing.allocator;
+    const s = mlx.gpuStream();
+    const io = std.Io.Threaded.global_single_threaded.io();
+```
+
 ### DFLASH_FIXTURES
 
 dflash fixtures: engine setting; built-in default retained
 
 Scope: mlx-serve. Class: advanced.
+
+Source: `engines/mlx-serve/src/dflash.zig:3482`. Unset read: NULL from getenv; the literal consumer below supplies any fallback.
+
+```text
+
+test "dflash fixture parity: encoder + two draft rounds vs transformers reference" {
+    const fixtures_path = std.c.getenv("DFLASH_FIXTURES") orelse return;
+    const assistant_dir = std.c.getenv("DFLASH_ASSISTANT_DIR") orelse return;
+    if (mlx.noGpuBackend()) return;
+    const allocator = testing.allocator;
+    const s = mlx.gpuStream();
+```
 
 ### DG_SC_CHECK
 
@@ -1056,7 +1740,7 @@ Source: `engines/streaming-llama/prefill_llama.cpp/src/models/diffusion-gemma.cp
 
 Runtime-local cache/temp directory; no model download is performed.
 
-Scope: ds4-win, image, mac-ds4, mlx-serve, rtx-llama, studio, video. Class: preset.
+Scope: ds4-win, image, mac-ds4, mlx-serve, rtx-llama, studio, video, mac-mlx, mac-llama, mac-mference. Class: preset.
 
 ### DIFFUSERS_OFFLINE
 
@@ -1069,6 +1753,42 @@ Scope: ds4-win, image, mac-ds4, mlx-serve, rtx-llama, studio, video. Class: pres
 diffusion test model: engine setting; built-in default retained
 
 Scope: mlx-serve. Class: advanced.
+
+Source: `engines/mlx-serve/src/diffusion.zig:666`. Unset read: NULL from getenv; the literal consumer below supplies any fallback.
+
+```text
+    // Gated on DIFFUSION_TEST_MODEL (path to the checkpoint); skips when
+    // unset so CI stays green.
+    const raw = std.c.getenv("DIFFUSION_TEST_MODEL") orelse return error.SkipZigTest;
+    const dir = std.mem.sliceTo(raw, 0);
+    if (dir.len == 0) return error.SkipZigTest;
+    const alloc = std.testing.allocator;
+    const io = std.Io.Threaded.global_single_threaded.io();
+```
+
+Source: `engines/mlx-serve/src/diffusion.zig:777`. Unset read: NULL from getenv; the literal consumer below supplies any fallback.
+
+```text
+    //
+    // Gated on DIFFUSION_TEST_MODEL; skips when unset so CI stays green.
+    const raw = std.c.getenv("DIFFUSION_TEST_MODEL") orelse return error.SkipZigTest;
+    const dir = std.mem.sliceTo(raw, 0);
+    if (dir.len == 0) return error.SkipZigTest;
+    const alloc = std.testing.allocator;
+    const io = std.Io.Threaded.global_single_threaded.io();
+```
+
+Source: `engines/mlx-serve/src/diffusion.zig:839`. Unset read: NULL from getenv; the literal consumer below supplies any fallback.
+
+```text
+    // clear leaves the cache empty at the end either way, so this pins the
+    // per-chunk release count.
+    const raw = std.c.getenv("DIFFUSION_TEST_MODEL") orelse return error.SkipZigTest;
+    const dir = std.mem.sliceTo(raw, 0);
+    if (dir.len == 0) return error.SkipZigTest;
+    const alloc = std.testing.allocator;
+    const io = std.Io.Threaded.global_single_threaded.io();
+```
 
 ### DS4COMBO_RESTORE_ASYNC
 
@@ -1220,7 +1940,7 @@ Source: `engines/streaming-llama/prefill_llama.cpp/src/llama-dsv41-executor.cpp:
         require(boundary.bytes()<=actual,"Boundary outputs escaped actual graph admission");
 ```
 
-Source: `engines/streaming-llama/prefill_llama.cpp/tools/dsv41-prefill/main.cpp:736`. Unset read: NULL from getenv; the literal consumer below supplies any fallback.
+Source: `engines/streaming-llama/prefill_llama.cpp/tools/dsv41-prefill/main.cpp:735`. Unset read: NULL from getenv; the literal consumer below supplies any fallback.
 
 ```text
         report["resident_hidden_storage"]=options.resident_bf16?"BF16 after validated existing BF16 boundary; layer0 input unchanged F32":"F32";
@@ -1818,7 +2538,7 @@ Source: `engines/ds4-win/ds4.c:76322`. Unset read: NULL from getenv; the literal
 
 DS4_CACHE_AFFINITY_RAMP_TOKENS: advanced engine setting; built-in default retained
 
-Scope: ds4-win. Class: advanced.
+Scope: ds4-win, rtx-llama. Class: advanced.
 
 Source: `engines/ds4-win/ds4.c:76322`. Unset read: NULL from getenv; the literal consumer below supplies any fallback.
 
@@ -1884,7 +2604,7 @@ Source: `engines/ds4-win/ds4.c:76317`. Unset read: NULL from getenv; the literal
 
 DS4_CACHE_AFFINITY_WARMUP_TOKENS: advanced engine setting; built-in default retained
 
-Scope: ds4-win. Class: advanced.
+Scope: ds4-win, rtx-llama. Class: advanced.
 
 Source: `engines/ds4-win/ds4.c:76322`. Unset read: NULL from getenv; the literal consumer below supplies any fallback.
 
@@ -44760,7 +45480,7 @@ Source: `engines/streaming-llama/prefill_llama.cpp/tools/dsv41-prefill/main.cpp:
         const bool live=args.count("--session-stdio")&&args.at("--session-stdio")=="1";
 ```
 
-Source: `engines/streaming-llama/prefill_llama.cpp/tools/dsv41-prefill/main.cpp:859`. Unset read: NULL from getenv; the literal consumer below supplies any fallback.
+Source: `engines/streaming-llama/prefill_llama.cpp/tools/dsv41-prefill/main.cpp:857`. Unset read: NULL from getenv; the literal consumer below supplies any fallback.
 
 ```text
         uint64_t warm_cublas=0;
@@ -44778,11 +45498,251 @@ dsv4 mini: engine setting; built-in default retained
 
 Scope: mlx-serve. Class: advanced.
 
+Source: `engines/mlx-serve/src/deepseek_v4.zig:2461`. Unset read: NULL from getenv; the literal consumer below supplies any fallback.
+
+```text
+    //   python3 tests/dsv4_mlx_ref.py --fabricate /tmp/dsv4-mini
+    //   DSV4_MINI=/tmp/dsv4-mini zig build test -Dtest-filter=DSV4_MINI
+    const path_z = std.c.getenv("DSV4_MINI") orelse return;
+    const path = std.mem.span(path_z);
+    const allocator = testing.allocator;
+
+    const cfg_path = try std.fmt.allocPrint(allocator, "{s}/config.json", .{path});
+```
+
+Source: `engines/mlx-serve/src/deepseek_v4.zig:2553`. Unset read: NULL from getenv; the literal consumer below supplies any fallback.
+
+```text
+    // one number downstream of EVERY component (attention incl. window +
+    // compression + indexer + sims, Sinkhorn hc, hash + scored MoE, head).
+    const path_z = std.c.getenv("DSV4_MINI") orelse return;
+    const path = std.mem.span(path_z);
+    const allocator = testing.allocator;
+
+    const io = std.Io.Threaded.global_single_threaded.io();
+```
+
+Source: `engines/mlx-serve/src/deepseek_v4.zig:2743`. Unset read: NULL from getenv; the literal consumer below supplies any fallback.
+
+```text
+    // matmul kernels by batch shape — the qmv-vs-qmm class), across lengths
+    // that cross the window (8), ratio-4 and ratio-16 boundaries.
+    const path_z = std.c.getenv("DSV4_MINI") orelse return;
+    const path = std.mem.span(path_z);
+    const allocator = testing.allocator;
+
+    const io = std.Io.Threaded.global_single_threaded.io();
+```
+
+Source: `engines/mlx-serve/src/deepseek_v4.zig:2997`. Unset read: NULL from getenv; the literal consumer below supplies any fallback.
+
+```text
+    // the drain-before-emission path runs. GPU stream only — the lazy path
+    // requires it by contract.
+    const path_z = std.c.getenv("DSV4_MINI") orelse return;
+    if (mlx.noGpuBackend()) return;
+    const path = std.mem.span(path_z);
+    const allocator = testing.allocator;
+
+```
+
+Source: `engines/mlx-serve/src/deepseek_v4.zig:3123`. Unset read: NULL from getenv; the literal consumer below supplies any fallback.
+
+```text
+    // Default serve must not pay the ~11 GB stage footprint: no env/--dspark
+    // → n_mtp 0, no dspark decode state, serial-only. Explicit opt-in arms it.
+    const path_z = std.c.getenv("DSV4_MINI") orelse return;
+    const path = std.mem.span(path_z);
+    const allocator = testing.allocator;
+
+    const io = std.Io.Threaded.global_single_threaded.io();
+```
+
+Source: `engines/mlx-serve/src/deepseek_v4.zig:3205`. Unset read: NULL from getenv; the literal consumer below supplies any fallback.
+
+```text
+    // same tail decoded straight through — restoring TWICE also proves
+    // restore never consumes the snapshot.
+    const path_z = std.c.getenv("DSV4_MINI") orelse return;
+    const path = std.mem.span(path_z);
+    const allocator = testing.allocator;
+
+    const io = std.Io.Threaded.global_single_threaded.io();
+```
+
+Source: `engines/mlx-serve/src/deepseek_v4.zig:3306`. Unset read: NULL from getenv; the literal consumer below supplies any fallback.
+
+```text
+    // a chunk that closes a window on the ratio-4 layers while closing none
+    // on the ratio-16 ones, so both arms of the predicate fire in one chunk.
+    const path_z = std.c.getenv("DSV4_MINI") orelse return;
+    const path = std.mem.span(path_z);
+    const allocator = testing.allocator;
+
+    const io = std.Io.Threaded.global_single_threaded.io();
+```
+
+Source: `engines/mlx-serve/src/deepseek_v4.zig:3442`. Unset read: NULL from getenv; the literal consumer below supplies any fallback.
+
+```text
+    // asserted alongside: each stage's main_kv ring holds one row per
+    // position seen.
+    const path_z = std.c.getenv("DSV4_MINI") orelse return;
+    const path = std.mem.span(path_z);
+    const allocator = testing.allocator;
+
+    const io = std.Io.Threaded.global_single_threaded.io();
+```
+
+Source: `engines/mlx-serve/src/deepseek_v4.zig:3595`. Unset read: NULL from getenv; the literal consumer below supplies any fallback.
+
+```text
+    // unconditionally, so a truncated block would be comparing against a
+    // different computation (the gate's own contract is pinned separately).
+    const path_z = std.c.getenv("DSV4_MINI") orelse return;
+    const path = std.mem.span(path_z);
+    const allocator = testing.allocator;
+
+    const io = std.Io.Threaded.global_single_threaded.io();
+```
+
+Source: `engines/mlx-serve/src/deepseek_v4.zig:3736`. Unset read: NULL from getenv; the literal consumer below supplies any fallback.
+
+```text
+    // cascade). Feeds the SERIAL continuation as the verify block so every
+    // row is on-distribution.
+    const path_z = std.c.getenv("DSV4_MINI") orelse return;
+    const path = std.mem.span(path_z);
+    const allocator = testing.allocator;
+
+    const io = std.Io.Threaded.global_single_threaded.io();
+```
+
+Source: `engines/mlx-serve/src/deepseek_v4.zig:3826`. Unset read: NULL from getenv; the literal consumer below supplies any fallback.
+
+```text
+    // graph, same kernels, only who owns the sync differs. Runs both arms
+    // from one snapshot so state bytes are identical by construction.
+    const path_z = std.c.getenv("DSV4_MINI") orelse return;
+    const path = std.mem.span(path_z);
+    const allocator = testing.allocator;
+
+    const io = std.Io.Threaded.global_single_threaded.io();
+```
+
+Source: `engines/mlx-serve/src/deepseek_v4.zig:3889`. Unset read: NULL from getenv; the literal consumer below supplies any fallback.
+
+```text
+    // floor). Per-round invariants hold on both streams: st.n advances by
+    // exactly tokens.len, accepted ≤ block, tokens[0] == the round's t1.
+    const path_z = std.c.getenv("DSV4_MINI") orelse return;
+    const path = std.mem.span(path_z);
+    const allocator = testing.allocator;
+
+    const io = std.Io.Threaded.global_single_threaded.io();
+```
+
+Source: `engines/mlx-serve/src/deepseek_v4.zig:4003`. Unset read: NULL from getenv; the literal consumer below supplies any fallback.
+
+```text
+    // change how many drafts are SUBMITTED: every committed token still comes
+    // from the trunk's own argmax, so the emitted sequence is invariant.
+    const path_z = std.c.getenv("DSV4_MINI") orelse return;
+    const path = std.mem.span(path_z);
+    const allocator = testing.allocator;
+
+    const io = std.Io.Threaded.global_single_threaded.io();
+```
+
+Source: `engines/mlx-serve/src/deepseek_v4.zig:4109`. Unset read: NULL from getenv; the literal consumer below supplies any fallback.
+
+```text
+    // truncate. Reference arm = the old strategy; candidate = the anchors;
+    // both then decode a tail that must agree BIT-for-bit.
+    const path_z = std.c.getenv("DSV4_MINI") orelse return;
+    const path = std.mem.span(path_z);
+    const allocator = testing.allocator;
+
+    const io = std.Io.Threaded.global_single_threaded.io();
+```
+
+Source: `engines/mlx-serve/src/deepseek_v4.zig:4205`. Unset read: NULL from getenv; the literal consumer below supplies any fallback.
+
+```text
+    // a pure-serial run bit-for-bit (CPU strict; the branch is stream-
+    // independent Zig, and CPU is where batched==serial argmax is pinned).
+    const path_z = std.c.getenv("DSV4_MINI") orelse return;
+    const path = std.mem.span(path_z);
+    const allocator = testing.allocator;
+
+    const io = std.Io.Threaded.global_single_threaded.io();
+```
+
+Source: `engines/mlx-serve/src/deepseek_v4.zig:10040`. Unset read: NULL from getenv; the literal consumer below supplies any fallback.
+
+```text
+    // compressor rows (async-scheduled ≥1 token ago) must drain so the
+    // boundary token's blocking drain shrinks to the latest token's rows.
+    const path_z = std.c.getenv("DSV4_MINI") orelse return;
+    if (mlx.noGpuBackend()) return;
+    if (!drainPrefetchEnabled()) return; // fallback-arm runs assert nothing here
+    const path = std.mem.span(path_z);
+    const allocator = testing.allocator;
+```
+
+Source: `engines/mlx-serve/src/deepseek_v4.zig:10179`. Unset read: NULL from getenv; the literal consumer below supplies any fallback.
+
+```text
+    // engagement + closeness, the real-checkpoint characterization decides
+    // the shipped default.
+    const path_z = std.c.getenv("DSV4_MINI") orelse return;
+    if (mlx.noGpuBackend()) return;
+    const path = std.mem.span(path_z);
+    const allocator = testing.allocator;
+
+```
+
+Source: `engines/mlx-serve/src/generate.zig:16798`. Unset read: NULL from getenv; the literal consumer below supplies any fallback.
+
+```text
+    //   python3 tests/dsv4_mlx_ref.py --fabricate /tmp/dsv4-mini
+    //   DSV4_MINI=/tmp/dsv4-mini zig build test -Dtest-filter=DSV4_MINI
+    const path_z = std.c.getenv("DSV4_MINI") orelse return;
+    if (mlx.noGpuBackend()) return;
+    const path = std.mem.span(path_z);
+    const allocator = testing.allocator;
+    const io = std.Io.Threaded.global_single_threaded.io();
+```
+
+Source: `engines/mlx-serve/src/generate.zig:16970`. Unset read: NULL from getenv; the literal consumer below supplies any fallback.
+
+```text
+    // plausible tokens.
+    _ = setenv("MLX_SERVE_DSV4_DSPARK", "1", 1);
+    const path_z = std.c.getenv("DSV4_MINI") orelse return;
+    if (mlx.noGpuBackend()) return;
+    const path = std.mem.span(path_z);
+    const allocator = testing.allocator;
+    const io = std.Io.Threaded.global_single_threaded.io();
+```
+
 ### DSV4_REAL
 
 dsv4 real: engine setting; built-in default retained
 
 Scope: mlx-serve. Class: advanced.
+
+Source: `engines/mlx-serve/src/deepseek_v4.zig:2663`. Unset read: NULL from getenv; the literal consumer below supplies any fallback.
+
+```text
+    // forward must agree. Host-centric v1 is slow (~tens of seconds/token at
+    // 43 real layers) — 2 tokens is the sanity bar, not a benchmark.
+    const path_z = std.c.getenv("DSV4_REAL") orelse return;
+    const path = std.mem.span(path_z);
+    const allocator = testing.allocator;
+
+    const io = std.Io.Threaded.global_single_threaded.io();
+```
 
 ### EXCEL_FILE
 
@@ -44814,11 +45774,59 @@ flux decoded: engine setting; built-in default retained
 
 Scope: mlx-serve. Class: advanced.
 
+Source: `engines/mlx-serve/src/flux.zig:1695`. Unset read: NULL from getenv; the literal consumer below supplies any fallback.
+
+```text
+    const model_dir = std.mem.span(std.c.getenv("FLUX_TEST_MODEL") orelse return error.SkipZigTest);
+    const pk_p = std.mem.span(std.c.getenv("FLUX_PACKED") orelse return error.SkipZigTest);
+    const dec_p = std.mem.span(std.c.getenv("FLUX_DECODED") orelse return error.SkipZigTest);
+    const a = testing.allocator;
+    const io = std.Io.Threaded.global_single_threaded.io();
+    const pk = try readF32(io, a, pk_p); defer a.free(pk);
+    const ref = try readF32(io, a, dec_p); defer a.free(ref);
+```
+
+Source: `engines/mlx-serve/src/flux.zig:2356`. Unset read: NULL from getenv; the literal consumer below supplies any fallback.
+
+```text
+    const ids_p = std.mem.span(std.c.getenv("FLUX_IDS") orelse return error.SkipZigTest);
+    const mask_p = std.mem.span(std.c.getenv("FLUX_MASK") orelse return error.SkipZigTest);
+    const dec_p = std.mem.span(std.c.getenv("FLUX_DECODED") orelse return error.SkipZigTest);
+    const a = testing.allocator;
+    const io = std.Io.Threaded.global_single_threaded.io();
+    const ids = try readI32(io, a, ids_p); defer a.free(ids);
+    const mask = try readI32(io, a, mask_p); defer a.free(mask);
+```
+
 ### FLUX_IDS
 
 flux ids: engine setting; built-in default retained
 
 Scope: mlx-serve. Class: advanced.
+
+Source: `engines/mlx-serve/src/flux.zig:2354`. Unset read: NULL from getenv; the literal consumer below supplies any fallback.
+
+```text
+test "flux end-to-end pipeline matches reference image" {
+    const model_dir = std.mem.span(std.c.getenv("FLUX_TEST_MODEL") orelse return error.SkipZigTest);
+    const ids_p = std.mem.span(std.c.getenv("FLUX_IDS") orelse return error.SkipZigTest);
+    const mask_p = std.mem.span(std.c.getenv("FLUX_MASK") orelse return error.SkipZigTest);
+    const dec_p = std.mem.span(std.c.getenv("FLUX_DECODED") orelse return error.SkipZigTest);
+    const a = testing.allocator;
+    const io = std.Io.Threaded.global_single_threaded.io();
+```
+
+Source: `engines/mlx-serve/src/flux.zig:2449`. Unset read: NULL from getenv; the literal consumer below supplies any fallback.
+
+```text
+test "flux text encoder reproduces prompt_embeds" {
+    const model_dir = std.mem.span(std.c.getenv("FLUX_TEST_MODEL") orelse return error.SkipZigTest);
+    const ids_p = std.mem.span(std.c.getenv("FLUX_IDS") orelse return error.SkipZigTest);
+    const mask_p = std.mem.span(std.c.getenv("FLUX_MASK") orelse return error.SkipZigTest);
+    const pe_p = std.mem.span(std.c.getenv("FLUX_PE") orelse return error.SkipZigTest);
+    const a = testing.allocator;
+    const io = std.Io.Threaded.global_single_threaded.io();
+```
 
 ### FLUX_IMGIDS
 
@@ -44826,11 +45834,35 @@ flux imgids: engine setting; built-in default retained
 
 Scope: mlx-serve. Class: advanced.
 
+Source: `engines/mlx-serve/src/flux.zig:1123`. Unset read: NULL from getenv; the literal consumer below supplies any fallback.
+
+```text
+    const lat_p = std.mem.span(std.c.getenv("FLUX_LATENTS") orelse return error.SkipZigTest);
+    const pe_p = std.mem.span(std.c.getenv("FLUX_PE") orelse return error.SkipZigTest);
+    const ii_p = std.mem.span(std.c.getenv("FLUX_IMGIDS") orelse return error.SkipZigTest);
+    const ti_p = std.mem.span(std.c.getenv("FLUX_TXTIDS") orelse return error.SkipZigTest);
+    const n0_p = std.mem.span(std.c.getenv("FLUX_NOISE0") orelse return error.SkipZigTest);
+    const a = testing.allocator;
+    const io = std.Io.Threaded.global_single_threaded.io();
+```
+
 ### FLUX_LATENTS
 
 flux latents: engine setting; built-in default retained
 
 Scope: mlx-serve. Class: advanced.
+
+Source: `engines/mlx-serve/src/flux.zig:1121`. Unset read: NULL from getenv; the literal consumer below supplies any fallback.
+
+```text
+test "flux DiT reproduces noise_step0" {
+    const model_dir = std.mem.span(std.c.getenv("FLUX_TEST_MODEL") orelse return error.SkipZigTest);
+    const lat_p = std.mem.span(std.c.getenv("FLUX_LATENTS") orelse return error.SkipZigTest);
+    const pe_p = std.mem.span(std.c.getenv("FLUX_PE") orelse return error.SkipZigTest);
+    const ii_p = std.mem.span(std.c.getenv("FLUX_IMGIDS") orelse return error.SkipZigTest);
+    const ti_p = std.mem.span(std.c.getenv("FLUX_TXTIDS") orelse return error.SkipZigTest);
+    const n0_p = std.mem.span(std.c.getenv("FLUX_NOISE0") orelse return error.SkipZigTest);
+```
 
 ### FLUX_MASK
 
@@ -44838,11 +45870,47 @@ flux mask: engine setting; built-in default retained
 
 Scope: mlx-serve. Class: advanced.
 
+Source: `engines/mlx-serve/src/flux.zig:2355`. Unset read: NULL from getenv; the literal consumer below supplies any fallback.
+
+```text
+    const model_dir = std.mem.span(std.c.getenv("FLUX_TEST_MODEL") orelse return error.SkipZigTest);
+    const ids_p = std.mem.span(std.c.getenv("FLUX_IDS") orelse return error.SkipZigTest);
+    const mask_p = std.mem.span(std.c.getenv("FLUX_MASK") orelse return error.SkipZigTest);
+    const dec_p = std.mem.span(std.c.getenv("FLUX_DECODED") orelse return error.SkipZigTest);
+    const a = testing.allocator;
+    const io = std.Io.Threaded.global_single_threaded.io();
+    const ids = try readI32(io, a, ids_p); defer a.free(ids);
+```
+
+Source: `engines/mlx-serve/src/flux.zig:2450`. Unset read: NULL from getenv; the literal consumer below supplies any fallback.
+
+```text
+    const model_dir = std.mem.span(std.c.getenv("FLUX_TEST_MODEL") orelse return error.SkipZigTest);
+    const ids_p = std.mem.span(std.c.getenv("FLUX_IDS") orelse return error.SkipZigTest);
+    const mask_p = std.mem.span(std.c.getenv("FLUX_MASK") orelse return error.SkipZigTest);
+    const pe_p = std.mem.span(std.c.getenv("FLUX_PE") orelse return error.SkipZigTest);
+    const a = testing.allocator;
+    const io = std.Io.Threaded.global_single_threaded.io();
+    const ids = try readI32(io, a, ids_p);
+```
+
 ### FLUX_NOISE0
 
 flux noise0: engine setting; built-in default retained
 
 Scope: mlx-serve. Class: advanced.
+
+Source: `engines/mlx-serve/src/flux.zig:1125`. Unset read: NULL from getenv; the literal consumer below supplies any fallback.
+
+```text
+    const ii_p = std.mem.span(std.c.getenv("FLUX_IMGIDS") orelse return error.SkipZigTest);
+    const ti_p = std.mem.span(std.c.getenv("FLUX_TXTIDS") orelse return error.SkipZigTest);
+    const n0_p = std.mem.span(std.c.getenv("FLUX_NOISE0") orelse return error.SkipZigTest);
+    const a = testing.allocator;
+    const io = std.Io.Threaded.global_single_threaded.io();
+    const lat = try readF32(io, a, lat_p); defer a.free(lat);
+    const pe = try readF32(io, a, pe_p); defer a.free(pe);
+```
 
 ### FLUX_PACKED
 
@@ -44850,11 +45918,47 @@ flux packed: engine setting; built-in default retained
 
 Scope: mlx-serve. Class: advanced.
 
+Source: `engines/mlx-serve/src/flux.zig:1694`. Unset read: NULL from getenv; the literal consumer below supplies any fallback.
+
+```text
+test "flux VAE reproduces decoded image" {
+    const model_dir = std.mem.span(std.c.getenv("FLUX_TEST_MODEL") orelse return error.SkipZigTest);
+    const pk_p = std.mem.span(std.c.getenv("FLUX_PACKED") orelse return error.SkipZigTest);
+    const dec_p = std.mem.span(std.c.getenv("FLUX_DECODED") orelse return error.SkipZigTest);
+    const a = testing.allocator;
+    const io = std.Io.Threaded.global_single_threaded.io();
+    const pk = try readF32(io, a, pk_p); defer a.free(pk);
+```
+
 ### FLUX_PE
 
 flux pe: engine setting; built-in default retained
 
 Scope: mlx-serve. Class: advanced.
+
+Source: `engines/mlx-serve/src/flux.zig:1122`. Unset read: NULL from getenv; the literal consumer below supplies any fallback.
+
+```text
+    const model_dir = std.mem.span(std.c.getenv("FLUX_TEST_MODEL") orelse return error.SkipZigTest);
+    const lat_p = std.mem.span(std.c.getenv("FLUX_LATENTS") orelse return error.SkipZigTest);
+    const pe_p = std.mem.span(std.c.getenv("FLUX_PE") orelse return error.SkipZigTest);
+    const ii_p = std.mem.span(std.c.getenv("FLUX_IMGIDS") orelse return error.SkipZigTest);
+    const ti_p = std.mem.span(std.c.getenv("FLUX_TXTIDS") orelse return error.SkipZigTest);
+    const n0_p = std.mem.span(std.c.getenv("FLUX_NOISE0") orelse return error.SkipZigTest);
+    const a = testing.allocator;
+```
+
+Source: `engines/mlx-serve/src/flux.zig:2451`. Unset read: NULL from getenv; the literal consumer below supplies any fallback.
+
+```text
+    const ids_p = std.mem.span(std.c.getenv("FLUX_IDS") orelse return error.SkipZigTest);
+    const mask_p = std.mem.span(std.c.getenv("FLUX_MASK") orelse return error.SkipZigTest);
+    const pe_p = std.mem.span(std.c.getenv("FLUX_PE") orelse return error.SkipZigTest);
+    const a = testing.allocator;
+    const io = std.Io.Threaded.global_single_threaded.io();
+    const ids = try readI32(io, a, ids_p);
+    defer a.free(ids);
+```
 
 ### FLUX_PPM
 
@@ -44862,17 +45966,125 @@ flux ppm: engine setting; built-in default retained
 
 Scope: mlx-serve. Class: advanced.
 
+Source: `engines/mlx-serve/src/flux.zig:2382`. Unset read: NULL from getenv; the literal consumer below supplies any fallback.
+
+```text
+    const corr = dot / (std.math.sqrt(na) * std.math.sqrt(nb));
+    std.debug.print("[flux-e2e] n={d} corr={d:.5}\n", .{ n, corr });
+    if (std.c.getenv("FLUX_PPM")) |pp| try writePpm(io, a, img, std.mem.span(pp), s);
+    try testing.expect(corr > 0.95);
+}
+
+// ── Tests ──
+```
+
 ### FLUX_TEST_MODEL
 
 flux test model: engine setting; built-in default retained
 
 Scope: mlx-serve. Class: advanced.
 
+Source: `engines/mlx-serve/src/flux.zig:1120`. Unset read: NULL from getenv; the literal consumer below supplies any fallback.
+
+```text
+//   FLUX_TEST_MODEL, FLUX_LATENTS (latents_init f32), FLUX_PE, FLUX_IMGIDS, FLUX_TXTIDS, FLUX_NOISE0
+test "flux DiT reproduces noise_step0" {
+    const model_dir = std.mem.span(std.c.getenv("FLUX_TEST_MODEL") orelse return error.SkipZigTest);
+    const lat_p = std.mem.span(std.c.getenv("FLUX_LATENTS") orelse return error.SkipZigTest);
+    const pe_p = std.mem.span(std.c.getenv("FLUX_PE") orelse return error.SkipZigTest);
+    const ii_p = std.mem.span(std.c.getenv("FLUX_IMGIDS") orelse return error.SkipZigTest);
+    const ti_p = std.mem.span(std.c.getenv("FLUX_TXTIDS") orelse return error.SkipZigTest);
+```
+
+Source: `engines/mlx-serve/src/flux.zig:1693`. Unset read: NULL from getenv; the literal consumer below supplies any fallback.
+
+```text
+//   FLUX_TEST_MODEL, FLUX_PACKED (packed_pre_vae f32 [1,128,64,64]), FLUX_DECODED
+test "flux VAE reproduces decoded image" {
+    const model_dir = std.mem.span(std.c.getenv("FLUX_TEST_MODEL") orelse return error.SkipZigTest);
+    const pk_p = std.mem.span(std.c.getenv("FLUX_PACKED") orelse return error.SkipZigTest);
+    const dec_p = std.mem.span(std.c.getenv("FLUX_DECODED") orelse return error.SkipZigTest);
+    const a = testing.allocator;
+    const io = std.Io.Threaded.global_single_threaded.io();
+```
+
+Source: `engines/mlx-serve/src/flux.zig:1723`. Unset read: NULL from getenv; the literal consumer below supplies any fallback.
+
+```text
+// encoder without needing a Python fixture).  FLUX_TEST_MODEL
+test "flux VAE encoder round-trips through the decoder" {
+    const model_dir = std.mem.span(std.c.getenv("FLUX_TEST_MODEL") orelse return error.SkipZigTest);
+    const a = testing.allocator;
+    const io = std.Io.Threaded.global_single_threaded.io();
+    const s = mlx.mlx_default_gpu_stream_new();
+    defer _ = mlx.mlx_stream_free(s);
+```
+
+Source: `engines/mlx-serve/src/flux.zig:1781`. Unset read: NULL from getenv; the literal consumer below supplies any fallback.
+
+```text
+//   FLUX_TEST_MODEL
+test "flux VAE encoder round-trips at a non-square size" {
+    const model_dir = std.mem.span(std.c.getenv("FLUX_TEST_MODEL") orelse return error.SkipZigTest);
+    const a = testing.allocator;
+    const io = std.Io.Threaded.global_single_threaded.io();
+    const s = mlx.mlx_default_gpu_stream_new();
+    defer _ = mlx.mlx_stream_free(s);
+```
+
+Source: `engines/mlx-serve/src/flux.zig:1895`. Unset read: NULL from getenv; the literal consumer below supplies any fallback.
+
+```text
+// full-size image).  FLUX_TEST_MODEL (steps=2 keeps it quick)
+test "flux reference-image conditioning engages and changes the output" {
+    const model_dir = std.mem.span(std.c.getenv("FLUX_TEST_MODEL") orelse return error.SkipZigTest);
+    const a = testing.allocator;
+    const io = std.Io.Threaded.global_single_threaded.io();
+    const s = mlx.mlx_default_gpu_stream_new();
+    defer _ = mlx.mlx_stream_free(s);
+```
+
+Source: `engines/mlx-serve/src/flux.zig:2353`. Unset read: NULL from getenv; the literal consumer below supplies any fallback.
+
+```text
+//   FLUX_TEST_MODEL, FLUX_IDS, FLUX_MASK, FLUX_DECODED(decoded.raw), FLUX_PPM(out, optional)
+test "flux end-to-end pipeline matches reference image" {
+    const model_dir = std.mem.span(std.c.getenv("FLUX_TEST_MODEL") orelse return error.SkipZigTest);
+    const ids_p = std.mem.span(std.c.getenv("FLUX_IDS") orelse return error.SkipZigTest);
+    const mask_p = std.mem.span(std.c.getenv("FLUX_MASK") orelse return error.SkipZigTest);
+    const dec_p = std.mem.span(std.c.getenv("FLUX_DECODED") orelse return error.SkipZigTest);
+    const a = testing.allocator;
+```
+
+Source: `engines/mlx-serve/src/flux.zig:2448`. Unset read: NULL from getenv; the literal consumer below supplies any fallback.
+
+```text
+//   FLUX_TEST_MODEL, FLUX_IDS (int32 .raw), FLUX_MASK, FLUX_PE (f32 .raw of [1,seq,7680])
+test "flux text encoder reproduces prompt_embeds" {
+    const model_dir = std.mem.span(std.c.getenv("FLUX_TEST_MODEL") orelse return error.SkipZigTest);
+    const ids_p = std.mem.span(std.c.getenv("FLUX_IDS") orelse return error.SkipZigTest);
+    const mask_p = std.mem.span(std.c.getenv("FLUX_MASK") orelse return error.SkipZigTest);
+    const pe_p = std.mem.span(std.c.getenv("FLUX_PE") orelse return error.SkipZigTest);
+    const a = testing.allocator;
+```
+
 ### FLUX_TXTIDS
 
 flux txtids: engine setting; built-in default retained
 
 Scope: mlx-serve. Class: advanced.
+
+Source: `engines/mlx-serve/src/flux.zig:1124`. Unset read: NULL from getenv; the literal consumer below supplies any fallback.
+
+```text
+    const pe_p = std.mem.span(std.c.getenv("FLUX_PE") orelse return error.SkipZigTest);
+    const ii_p = std.mem.span(std.c.getenv("FLUX_IMGIDS") orelse return error.SkipZigTest);
+    const ti_p = std.mem.span(std.c.getenv("FLUX_TXTIDS") orelse return error.SkipZigTest);
+    const n0_p = std.mem.span(std.c.getenv("FLUX_NOISE0") orelse return error.SkipZigTest);
+    const a = testing.allocator;
+    const io = std.Io.Threaded.global_single_threaded.io();
+    const lat = try readF32(io, a, lat_p); defer a.free(lat);
+```
 
 ### GGML_ALLOC_NO_FREE_REUSE
 
@@ -45258,7 +46470,7 @@ Source: `engines/streaming-llama/prefill_llama.cpp/src/llama-dsv41-executor.cpp:
         }
 ```
 
-Source: `engines/streaming-llama/prefill_llama.cpp/tools/dsv41-prefill/main.cpp:733`. Unset read: NULL from getenv; the literal consumer below supplies any fallback.
+Source: `engines/streaming-llama/prefill_llama.cpp/tools/dsv41-prefill/main.cpp:732`. Unset read: NULL from getenv; the literal consumer below supplies any fallback.
 
 ```text
         require(!args.count("--resident-hidden-bf16")||args.at("--resident-hidden-bf16")=="0"||args.at("--resident-hidden-bf16")=="1","resident-hidden-bf16 requires0/1");
@@ -45300,7 +46512,7 @@ Source: `engines/streaming-llama/prefill_llama.cpp/ggml/src/ggml-cuda/ggml-cuda.
         // For UMA systems (like DGX Spark), use system memory info
 ```
 
-Source: `engines/streaming-llama/prefill_llama.cpp/src/llama-dsv41-weights.cpp:509`. Unset read: NULL from getenv; the literal consumer below supplies any fallback.
+Source: `engines/streaming-llama/prefill_llama.cpp/src/llama-dsv41-weights.cpp:510`. Unset read: NULL from getenv; the literal consumer below supplies any fallback.
 
 ```text
     require(!options.compute_direct||(options.buffers==2&&options.async_staging_drain&&options.auto_request_size&&!options.ds_gpu_ring_slots),
@@ -47052,11 +48264,35 @@ glb fixture out: engine setting; built-in default retained
 
 Scope: mlx-serve. Class: advanced.
 
+Source: `engines/mlx-serve/src/glb.zig:531`. Unset read: NULL from getenv; the literal consumer below supplies any fallback.
+
+```text
+
+test "glb: write swift fixture" {
+    const out_path = std.mem.span(std.c.getenv("GLB_FIXTURE_OUT") orelse return error.SkipZigTest);
+    const a = testing.allocator;
+    const np: usize = 64;
+    const grid = try a.alloc(f32, np * np * np);
+    defer a.free(grid);
+```
+
 ### GLB_TEXTURED_FIXTURE_OUT
 
 glb textured fixture out: engine setting; built-in default retained
 
 Scope: mlx-serve. Class: advanced.
+
+Source: `engines/mlx-serve/src/glb.zig:492`. Unset read: NULL from getenv; the literal consumer below supplies any fallback.
+
+```text
+    //   GLB_TEXTURED_FIXTURE_OUT=app/Tests/MLXCoreTests/Fixtures/hy3d_textured_quad.glb \
+    //     zig build test -Doptimize=ReleaseFast -Dtest-filter="textured swift fixture"
+    const out_path = std.mem.span(std.c.getenv("GLB_TEXTURED_FIXTURE_OUT") orelse return error.SkipZigTest);
+    const a = testing.allocator;
+    const png = @import("png.zig");
+    var rgb: [8 * 8 * 3]u8 = undefined;
+    for (0..8) |y| for (0..8) |x| {
+```
 
 ### GLM_ALLOW_NON_DIRECTSTORAGE
 
@@ -47170,7 +48406,7 @@ Source: `engines/streaming-llama/prefill_llama.cpp/common/common.cpp:1438`. Unse
 
 Runtime-local cache/temp directory; no model download is performed.
 
-Scope: ds4-win, image, mac-ds4, mlx-serve, rtx-llama, studio, video. Class: preset.
+Scope: ds4-win, image, mac-ds4, mlx-serve, rtx-llama, studio, video, mac-mlx, mac-llama, mac-mference. Class: preset.
 
 Source: `vendor/engines/cosmos_windows/ideogram_gen.py:218`. Unset read: ''.
 
@@ -47223,7 +48459,7 @@ configure_model_storage_env(settings.models_root)
 
 Runtime-local cache/temp directory; no model download is performed.
 
-Scope: ds4-win, image, mac-ds4, mlx-serve, rtx-llama, studio, video. Class: preset.
+Scope: ds4-win, image, mac-ds4, mlx-serve, rtx-llama, studio, video, mac-mlx, mac-llama, mac-mference. Class: preset.
 
 Source: `vendor/engines/cosmos_windows/weight_streaming/backends.py:29`. Unset read: None.
 
@@ -47372,13 +48608,49 @@ Source: `vendor/engines/cosmos_windows/hunyuan_gen.py:749`. Unset read: '1'.
 
 Runtime-local cache/temp directory; no model download is performed.
 
-Scope: ds4-win, image, mac-ds4, mlx-serve, rtx-llama, studio, video. Class: preset.
+Scope: ds4-win, image, mac-ds4, mlx-serve, rtx-llama, studio, video, mac-mlx, mac-llama, mac-mference. Class: preset.
 
 ### HF_TOKEN
 
 HF_TOKEN: advanced engine setting; built-in default retained
 
-Scope: image, video. Class: advanced.
+Scope: image, mac-mference, mac-mlx, mlx-serve, rtx-llama, video. Class: advanced.
+
+Source: `engines/mference/Sources/MferenceApp/Core/Installation/RepackModelInstallerClient.swift:35`. Unset read: Wrapper/conditional default: see the literal call and consumer below.
+
+```text
+                revision: descriptor.revision ?? "main",
+                outputDir: outputDirectory.path,
+                token: ProcessInfo.processInfo.environment["HF_TOKEN"],
+                requireKnownSource: true,
+                minFreeReserveBytes: descriptor.reserveBytes,
+                overwrite: true,
+                resume: resume)
+```
+
+Source: `engines/mference/Sources/MferenceRepack/Command/main.swift:179`. Unset read: Wrapper/conditional default: see the literal call and consumer below.
+
+```text
+        outputDirectory: URL(fileURLWithPath: output),
+        overwrite: arguments.overwrite,
+        token: ProcessInfo.processInfo.environment["HF_TOKEN"],
+        resume: arguments.resume,
+        baseURL: arguments.baseURL)
+    do {
+        let result = try await RemoteStreamingRepacker(options: options).run()
+```
+
+Source: `engines/mlx-serve/src/cli.zig:304`. Unset read: NULL from getenv; the literal consumer below supplies any fallback.
+
+```text
+fn curlBaseArgs(list: *std.ArrayList([]const u8), allocator: std.mem.Allocator) !?[]u8 {
+    try list.appendSlice(allocator, &.{ "curl", "-fL", "--retry", "3", "--retry-delay", "2" });
+    if (std.c.getenv("HF_TOKEN")) |tok| {
+        const header = try std.fmt.allocPrint(allocator, "Authorization: Bearer {s}", .{std.mem.span(tok)});
+        try list.appendSlice(allocator, &.{ "-H", header });
+        return header;
+    }
+```
 
 Source: `engines/streaming-llama/prefill_llama.cpp/common/arg.cpp:3087`. Unset read: Wrapper/conditional default: see the literal call and consumer below.
 
@@ -47428,11 +48700,35 @@ Source: `vendor/engines/gguf/utility.py:269`. Unset read: KeyError unless an ear
 @dataclass
 ```
 
+Source: `vendor/mac-mlx/mlx_vlm/models/flux2/download.py:43`. Unset read: None.
+
+```text
+        "revision": revision,
+        "allow_patterns": list(DOWNLOAD_PATTERNS),
+        "token": token or os.environ.get("HF_TOKEN") or None,
+        "force_download": force_download,
+        "max_workers": max_workers,
+    }
+    if local_dir is not None:
+```
+
+Source: `vendor/mac-mlx/mlx_vlm/models/ideogram4/download.py:53`. Unset read: None.
+
+```text
+        "revision": revision,
+        "allow_patterns": list(DOWNLOAD_PATTERNS),
+        "token": token or os.environ.get("HF_TOKEN") or None,
+        "force_download": force_download,
+        "max_workers": max_workers,
+    }
+    if local_dir is not None:
+```
+
 ### HOME
 
 HOME: advanced engine setting; built-in default retained
 
-Scope: ds4-win, mac-ds4, rtx-llama. Class: advanced.
+Scope: ds4-win, mac-ds4, mlx-serve, rtx-llama. Class: advanced.
 
 Source: `engines/ds4-mac/ds4_agent.c:4475`. Unset read: NULL from getenv; the literal consumer below supplies any fallback.
 
@@ -47554,6 +48850,150 @@ Source: `engines/ds4-win/ds4_web.c:1445`. Unset read: NULL from getenv; the lite
     web->port = cfg && cfg->port > 0 ? cfg->port : DS4_WEB_DEFAULT_PORT;
 ```
 
+Source: `engines/mlx-serve/src/cli.zig:199`. Unset read: NULL from getenv; the literal consumer below supplies any fallback.
+
+```text
+
+fn homeDir() []const u8 {
+    return std.mem.span(std.c.getenv("HOME") orelse return "/tmp");
+}
+
+// ── HF tree listing ─────────────────────────────────────────────────────
+
+```
+
+Source: `engines/mlx-serve/src/gen.zig:1747`. Unset read: NULL from getenv; the literal consumer below supplies any fallback.
+
+```text
+        return error.NoGemmaDir;
+    }
+    const home = std.mem.span(std.c.getenv("HOME") orelse return error.NoGemmaDir);
+    if (!std.fs.path.isAbsolute(home)) return error.NoGemmaDir;
+    // 2-level `<author>/<name>` layout (what DownloadManager writes), then a
+    // flat `<name>` layout (legacy / manual placement).
+    const candidates = [_][]const u8{ LTX_GEMMA_REPO_DIR, "gemma-3-12b-it-4bit" };
+```
+
+Source: `engines/mlx-serve/src/gen.zig:3996`. Unset read: NULL from getenv; the literal consumer below supplies any fallback.
+
+```text
+        if (std.fs.path.isAbsolute(e)) return sumSafetensorsAt(io, e);
+    }
+    const home = std.mem.span(std.c.getenv("HOME") orelse return 0);
+    for ([_][]const u8{ LTX_GEMMA_REPO_DIR, "gemma-3-12b-it-4bit" }) |rel| {
+        const p = std.fmt.bufPrint(&buf, "{s}/.mlx-serve/models/{s}", .{ home, rel }) catch continue;
+        const n = sumSafetensorsAt(io, p);
+        if (n > 0) return n;
+```
+
+Source: `engines/mlx-serve/src/kv_disk_cache.zig:3301`. Unset read: NULL from getenv; the literal consumer below supplies any fallback.
+
+```text
+/// Default persistence root: `~/.mlx-serve/kv-cache`.
+pub fn defaultBaseDir(allocator: std.mem.Allocator) ![]u8 {
+    const home = std.mem.span(std.c.getenv("HOME") orelse return error.NoHome);
+    return std.fmt.allocPrint(allocator, "{s}/.mlx-serve/kv-cache", .{home});
+}
+
+// ── Small fs helpers ──
+```
+
+Source: `engines/mlx-serve/src/launch.zig:538`. Unset read: NULL from getenv; the literal consumer below supplies any fallback.
+
+```text
+
+fn homeDir() []const u8 {
+    return std.mem.span(std.c.getenv("HOME") orelse return "/tmp");
+}
+
+fn curlGet(allocator: std.mem.Allocator, io: std.Io, url: []const u8) ![]u8 {
+    // Plain fetch, no HF token header — this talks to OUR server, never HF.
+```
+
+Source: `engines/mlx-serve/src/main.zig:992`. Unset read: NULL from getenv; the literal consumer below supplies any fallback.
+
+```text
+        .has_explicit_model = model_dir.len > 0,
+    })) {
+        const home = std.mem.span(std.c.getenv("HOME") orelse "/tmp");
+        default_models_root_storage = try cli_mod.modelsRootPath(allocator, home);
+        models_root = default_models_root_storage;
+    }
+
+```
+
+Source: `engines/mlx-serve/src/main.zig:1014`. Unset read: NULL from getenv; the literal consumer below supplies any fallback.
+
+```text
+        const chosen: ?[]const u8 = if (log_file_arg) |a|
+            (if (std.mem.eql(u8, a, "off") or std.mem.eql(u8, a, "none")) null else a)
+        else if (std.c.getenv("HOME")) |h|
+            log.defaultLogPath(&log_path_buf, std.mem.span(h), port) catch null
+        else
+            null;
+        if (chosen) |p| {
+```
+
+Source: `engines/mlx-serve/src/model_settings.zig:94`. Unset read: NULL from getenv; the literal consumer below supplies any fallback.
+
+```text
+
+pub fn defaultPath(buf: []u8) []const u8 {
+    const home = std.mem.span(std.c.getenv("HOME") orelse "/tmp");
+    return std.fmt.bufPrint(buf, "{s}/.mlx-serve/model-settings.json", .{home}) catch "";
+}
+
+/// The one call load sites make: read the default file, look the model up, log a hit.
+```
+
+Source: `engines/mlx-serve/src/round_cost.zig:1026`. Unset read: NULL from getenv; the literal consumer below supplies any fallback.
+
+```text
+
+fn homeDir() []const u8 {
+    return std.mem.span(std.c.getenv("HOME") orelse return "/tmp");
+}
+
+fn cachePath(buf: []u8, key: []const u8) ?[]const u8 {
+    return std.fmt.bufPrint(buf, "{s}/.mlx-serve/round-cost/{s}.txt", .{ homeDir(), key }) catch null;
+```
+
+Source: `engines/mlx-serve/src/server.zig:1798`. Unset read: NULL from getenv; the literal consumer below supplies any fallback.
+
+```text
+    if (!build_options.mas) {
+        var path_buf: [std.fs.max_path_bytes]u8 = undefined;
+        const home = std.mem.span(std.c.getenv("HOME") orelse "/tmp");
+        const path = std.fmt.bufPrint(&path_buf, "{s}/.mlx-serve/providers.json", .{home}) catch "";
+        g_providers = providers_mod.Providers.start(allocator, io, path, port) catch |err| blk: {
+            log.warn("[providers] failed to start ({s}); providers disabled\n", .{@errorName(err)});
+            break :blk null;
+```
+
+Source: `engines/mlx-serve/src/server.zig:2903`. Unset read: NULL from getenv; the literal consumer below supplies any fallback.
+
+```text
+        return;
+    };
+    const home = std.mem.span(std.c.getenv("HOME") orelse "/tmp");
+    const dest = try cli_mod.modelDestPath(allocator, home, resolved.repo);
+    defer allocator.free(dest);
+
+    log.info("POST /api/pull {s} -> {s}\n", .{ requested, dest });
+```
+
+Source: `engines/mlx-serve/src/arch/ds4.zig:139`. Unset read: NULL from getenv; the literal consumer below supplies any fallback.
+
+```text
+    if (kernels_extracted.load(.acquire)) return;
+
+    const home_z = std.c.getenv("HOME");
+    if (home_z == null) {
+        log.err("[ds4] HOME not set; cannot stage Metal kernels\n", .{});
+        return Error.KernelExtractionFailed;
+    }
+```
+
 Source: `engines/streaming-llama/prefill_llama.cpp/common/common.cpp:945`. Unset read: NULL from getenv; the literal consumer below supplies any fallback.
 
 ```text
@@ -47594,7 +49034,7 @@ Source: `engines/streaming-llama/prefill_llama.cpp/common/common.cpp:961`. Unset
 
 Runtime-local cache/temp directory; no model download is performed.
 
-Scope: ds4-win, image, mac-ds4, mlx-serve, rtx-llama, studio, video. Class: preset.
+Scope: ds4-win, image, mac-ds4, mlx-serve, rtx-llama, studio, video, mac-mlx, mac-llama, mac-mference. Class: preset.
 
 Source: `vendor/engines/cosmos_windows/weight_streaming/hunyuan3d_backend.py:58`. Unset read: ''.
 
@@ -47650,11 +49090,35 @@ hy3dp dino in: engine setting; built-in default retained
 
 Scope: mlx-serve. Class: advanced.
 
+Source: `engines/mlx-serve/src/hunyuan3d_paint.zig:1859`. Unset read: NULL from getenv; the literal consumer below supplies any fallback.
+
+```text
+test "hy3d-paint oracle: DINO features + ImageProjModel context match reference" {
+    const model_dir = std.mem.span(std.c.getenv("HY3DP_TEST_MODEL") orelse return error.SkipZigTest);
+    const in_p = std.mem.span(std.c.getenv("HY3DP_DINO_IN") orelse return error.SkipZigTest);
+    const out_p = std.mem.span(std.c.getenv("HY3DP_DINO_OUT") orelse return error.SkipZigTest);
+    const proj_p = std.mem.span(std.c.getenv("HY3DP_DINO_PROJ") orelse return error.SkipZigTest);
+    const a = testing.allocator;
+    const io = std.Io.Threaded.global_single_threaded.io();
+```
+
 ### HY3DP_DINO_OUT
 
 hy3dp dino out: engine setting; built-in default retained
 
 Scope: mlx-serve. Class: advanced.
+
+Source: `engines/mlx-serve/src/hunyuan3d_paint.zig:1860`. Unset read: NULL from getenv; the literal consumer below supplies any fallback.
+
+```text
+    const model_dir = std.mem.span(std.c.getenv("HY3DP_TEST_MODEL") orelse return error.SkipZigTest);
+    const in_p = std.mem.span(std.c.getenv("HY3DP_DINO_IN") orelse return error.SkipZigTest);
+    const out_p = std.mem.span(std.c.getenv("HY3DP_DINO_OUT") orelse return error.SkipZigTest);
+    const proj_p = std.mem.span(std.c.getenv("HY3DP_DINO_PROJ") orelse return error.SkipZigTest);
+    const a = testing.allocator;
+    const io = std.Io.Threaded.global_single_threaded.io();
+    const in_d = try readF32(io, a, in_p);
+```
 
 ### HY3DP_DINO_PROJ
 
@@ -47662,11 +49126,47 @@ hy3dp dino proj: engine setting; built-in default retained
 
 Scope: mlx-serve. Class: advanced.
 
+Source: `engines/mlx-serve/src/hunyuan3d_paint.zig:1861`. Unset read: NULL from getenv; the literal consumer below supplies any fallback.
+
+```text
+    const in_p = std.mem.span(std.c.getenv("HY3DP_DINO_IN") orelse return error.SkipZigTest);
+    const out_p = std.mem.span(std.c.getenv("HY3DP_DINO_OUT") orelse return error.SkipZigTest);
+    const proj_p = std.mem.span(std.c.getenv("HY3DP_DINO_PROJ") orelse return error.SkipZigTest);
+    const a = testing.allocator;
+    const io = std.Io.Threaded.global_single_threaded.io();
+    const in_d = try readF32(io, a, in_p);
+    defer a.free(in_d);
+```
+
+Source: `engines/mlx-serve/src/hunyuan3d_paint_unet.zig:1877`. Unset read: NULL from getenv; the literal consumer below supplies any fallback.
+
+```text
+    const pos_p = std.mem.span(std.c.getenv("HY3DP_UNET_POSITION") orelse return error.SkipZigTest);
+    const pmap_p = std.mem.span(std.c.getenv("HY3DP_UNET_POSMAPS") orelse return error.SkipZigTest);
+    const dino_p = std.mem.span(std.c.getenv("HY3DP_DINO_PROJ") orelse return error.SkipZigTest);
+    const v_p = std.mem.span(std.c.getenv("HY3DP_UNET_V") orelse return error.SkipZigTest);
+    const a = testing.allocator;
+    const io = oracleIo();
+    const s = mlx.mlx_default_gpu_stream_new();
+```
+
 ### HY3DP_FWD_SMOKE
 
 hy3dp fwd smoke: engine setting; built-in default retained
 
 Scope: mlx-serve. Class: advanced.
+
+Source: `engines/mlx-serve/src/hunyuan3d_paint_unet.zig:1930`. Unset read: NULL from getenv; the literal consumer below supplies any fallback.
+
+```text
+test "hy3d-paint-unet: full forward runs end-to-end (shape + finite)" {
+    const model_dir = std.mem.span(std.c.getenv("HY3DP_TEST_MODEL") orelse return error.SkipZigTest);
+    if (std.c.getenv("HY3DP_FWD_SMOKE") == null) return error.SkipZigTest;
+    const a = testing.allocator;
+    const s = mlx.mlx_default_gpu_stream_new();
+    var pu = try PaintUnet.load(a, model_dir, s);
+    defer pu.deinit();
+```
 
 ### HY3DP_REF_DOWN
 
@@ -47674,11 +49174,47 @@ hy3dp ref down: engine setting; built-in default retained
 
 Scope: mlx-serve. Class: advanced.
 
+Source: `engines/mlx-serve/src/hunyuan3d_paint_unet.zig:1838`. Unset read: NULL from getenv; the literal consumer below supplies any fallback.
+
+```text
+    const model_dir = std.mem.span(std.c.getenv("HY3DP_TEST_MODEL") orelse return error.SkipZigTest);
+    const in_p = std.mem.span(std.c.getenv("HY3DP_REF_IN") orelse return error.SkipZigTest);
+    const down_p = std.mem.span(std.c.getenv("HY3DP_REF_DOWN") orelse return error.SkipZigTest);
+    const mid_p = std.mem.span(std.c.getenv("HY3DP_REF_MID") orelse return error.SkipZigTest);
+    const up_p = std.mem.span(std.c.getenv("HY3DP_REF_UP") orelse return error.SkipZigTest);
+    const a = testing.allocator;
+    const io = oracleIo();
+```
+
 ### HY3DP_REF_IN
 
 hy3dp ref in: engine setting; built-in default retained
 
 Scope: mlx-serve. Class: advanced.
+
+Source: `engines/mlx-serve/src/hunyuan3d_paint_unet.zig:1837`. Unset read: NULL from getenv; the literal consumer below supplies any fallback.
+
+```text
+test "hy3d-paint-unet oracle: dual-UNet ref cache matches reference" {
+    const model_dir = std.mem.span(std.c.getenv("HY3DP_TEST_MODEL") orelse return error.SkipZigTest);
+    const in_p = std.mem.span(std.c.getenv("HY3DP_REF_IN") orelse return error.SkipZigTest);
+    const down_p = std.mem.span(std.c.getenv("HY3DP_REF_DOWN") orelse return error.SkipZigTest);
+    const mid_p = std.mem.span(std.c.getenv("HY3DP_REF_MID") orelse return error.SkipZigTest);
+    const up_p = std.mem.span(std.c.getenv("HY3DP_REF_UP") orelse return error.SkipZigTest);
+    const a = testing.allocator;
+```
+
+Source: `engines/mlx-serve/src/hunyuan3d_paint_unet.zig:1872`. Unset read: NULL from getenv; the literal consumer below supplies any fallback.
+
+```text
+test "hy3d-paint-unet oracle: full 2.5D step matches reference" {
+    const model_dir = std.mem.span(std.c.getenv("HY3DP_TEST_MODEL") orelse return error.SkipZigTest);
+    const in_p = std.mem.span(std.c.getenv("HY3DP_REF_IN") orelse return error.SkipZigTest);
+    const lat_p = std.mem.span(std.c.getenv("HY3DP_UNET_LATENTS") orelse return error.SkipZigTest);
+    const nrm_p = std.mem.span(std.c.getenv("HY3DP_UNET_NORMAL") orelse return error.SkipZigTest);
+    const pos_p = std.mem.span(std.c.getenv("HY3DP_UNET_POSITION") orelse return error.SkipZigTest);
+    const pmap_p = std.mem.span(std.c.getenv("HY3DP_UNET_POSMAPS") orelse return error.SkipZigTest);
+```
 
 ### HY3DP_REF_MID
 
@@ -47686,11 +49222,35 @@ hy3dp ref mid: engine setting; built-in default retained
 
 Scope: mlx-serve. Class: advanced.
 
+Source: `engines/mlx-serve/src/hunyuan3d_paint_unet.zig:1839`. Unset read: NULL from getenv; the literal consumer below supplies any fallback.
+
+```text
+    const in_p = std.mem.span(std.c.getenv("HY3DP_REF_IN") orelse return error.SkipZigTest);
+    const down_p = std.mem.span(std.c.getenv("HY3DP_REF_DOWN") orelse return error.SkipZigTest);
+    const mid_p = std.mem.span(std.c.getenv("HY3DP_REF_MID") orelse return error.SkipZigTest);
+    const up_p = std.mem.span(std.c.getenv("HY3DP_REF_UP") orelse return error.SkipZigTest);
+    const a = testing.allocator;
+    const io = oracleIo();
+    const s = mlx.mlx_default_gpu_stream_new();
+```
+
 ### HY3DP_REF_UP
 
 hy3dp ref up: engine setting; built-in default retained
 
 Scope: mlx-serve. Class: advanced.
+
+Source: `engines/mlx-serve/src/hunyuan3d_paint_unet.zig:1840`. Unset read: NULL from getenv; the literal consumer below supplies any fallback.
+
+```text
+    const down_p = std.mem.span(std.c.getenv("HY3DP_REF_DOWN") orelse return error.SkipZigTest);
+    const mid_p = std.mem.span(std.c.getenv("HY3DP_REF_MID") orelse return error.SkipZigTest);
+    const up_p = std.mem.span(std.c.getenv("HY3DP_REF_UP") orelse return error.SkipZigTest);
+    const a = testing.allocator;
+    const io = oracleIo();
+    const s = mlx.mlx_default_gpu_stream_new();
+    var pu = try PaintUnet.load(a, model_dir, s);
+```
 
 ### HY3DP_TEST_MODEL
 
@@ -47698,11 +49258,107 @@ hy3dp test model: engine setting; built-in default retained
 
 Scope: mlx-serve. Class: advanced.
 
+Source: `engines/mlx-serve/src/hunyuan3d_paint.zig:1803`. Unset read: NULL from getenv; the literal consumer below supplies any fallback.
+
+```text
+// post-preprocess (x-0.5)*2 pixels), HY3DP_VAE_ENC_OUT ([1,4,64,64] mean·0.18215).
+test "hy3d-paint oracle: VAE encode matches reference" {
+    const model_dir = std.mem.span(std.c.getenv("HY3DP_TEST_MODEL") orelse return error.SkipZigTest);
+    const in_p = std.mem.span(std.c.getenv("HY3DP_VAE_ENC_IN") orelse return error.SkipZigTest);
+    const out_p = std.mem.span(std.c.getenv("HY3DP_VAE_ENC_OUT") orelse return error.SkipZigTest);
+    const a = testing.allocator;
+    const io = std.Io.Threaded.global_single_threaded.io();
+```
+
+Source: `engines/mlx-serve/src/hunyuan3d_paint.zig:1830`. Unset read: NULL from getenv; the literal consumer below supplies any fallback.
+
+```text
+// HY3DP_VAE_DEC_OUT ([1,3,512,512]).
+test "hy3d-paint oracle: VAE decode matches reference" {
+    const model_dir = std.mem.span(std.c.getenv("HY3DP_TEST_MODEL") orelse return error.SkipZigTest);
+    const in_p = std.mem.span(std.c.getenv("HY3DP_VAE_DEC_IN") orelse return error.SkipZigTest);
+    const out_p = std.mem.span(std.c.getenv("HY3DP_VAE_DEC_OUT") orelse return error.SkipZigTest);
+    const a = testing.allocator;
+    const io = std.Io.Threaded.global_single_threaded.io();
+```
+
+Source: `engines/mlx-serve/src/hunyuan3d_paint.zig:1858`. Unset read: NULL from getenv; the literal consumer below supplies any fallback.
+
+```text
+// HY3DP_DINO_PROJ ([1,1028,1024]).
+test "hy3d-paint oracle: DINO features + ImageProjModel context match reference" {
+    const model_dir = std.mem.span(std.c.getenv("HY3DP_TEST_MODEL") orelse return error.SkipZigTest);
+    const in_p = std.mem.span(std.c.getenv("HY3DP_DINO_IN") orelse return error.SkipZigTest);
+    const out_p = std.mem.span(std.c.getenv("HY3DP_DINO_OUT") orelse return error.SkipZigTest);
+    const proj_p = std.mem.span(std.c.getenv("HY3DP_DINO_PROJ") orelse return error.SkipZigTest);
+    const a = testing.allocator;
+```
+
+Source: `engines/mlx-serve/src/hunyuan3d_paint_unet.zig:1820`. Unset read: NULL from getenv; the literal consumer below supplies any fallback.
+
+```text
+
+test "hy3d-paint-unet: smoke-load both UNets (fp16 shapes)" {
+    const model_dir = std.mem.span(std.c.getenv("HY3DP_TEST_MODEL") orelse return error.SkipZigTest);
+    const a = testing.allocator;
+    const s = mlx.mlx_default_gpu_stream_new();
+    var pu = try PaintUnet.load(a, model_dir, s);
+    defer pu.deinit();
+```
+
+Source: `engines/mlx-serve/src/hunyuan3d_paint_unet.zig:1836`. Unset read: NULL from getenv; the literal consumer below supplies any fallback.
+
+```text
+
+test "hy3d-paint-unet oracle: dual-UNet ref cache matches reference" {
+    const model_dir = std.mem.span(std.c.getenv("HY3DP_TEST_MODEL") orelse return error.SkipZigTest);
+    const in_p = std.mem.span(std.c.getenv("HY3DP_REF_IN") orelse return error.SkipZigTest);
+    const down_p = std.mem.span(std.c.getenv("HY3DP_REF_DOWN") orelse return error.SkipZigTest);
+    const mid_p = std.mem.span(std.c.getenv("HY3DP_REF_MID") orelse return error.SkipZigTest);
+    const up_p = std.mem.span(std.c.getenv("HY3DP_REF_UP") orelse return error.SkipZigTest);
+```
+
+Source: `engines/mlx-serve/src/hunyuan3d_paint_unet.zig:1871`. Unset read: NULL from getenv; the literal consumer below supplies any fallback.
+
+```text
+
+test "hy3d-paint-unet oracle: full 2.5D step matches reference" {
+    const model_dir = std.mem.span(std.c.getenv("HY3DP_TEST_MODEL") orelse return error.SkipZigTest);
+    const in_p = std.mem.span(std.c.getenv("HY3DP_REF_IN") orelse return error.SkipZigTest);
+    const lat_p = std.mem.span(std.c.getenv("HY3DP_UNET_LATENTS") orelse return error.SkipZigTest);
+    const nrm_p = std.mem.span(std.c.getenv("HY3DP_UNET_NORMAL") orelse return error.SkipZigTest);
+    const pos_p = std.mem.span(std.c.getenv("HY3DP_UNET_POSITION") orelse return error.SkipZigTest);
+```
+
+Source: `engines/mlx-serve/src/hunyuan3d_paint_unet.zig:1929`. Unset read: NULL from getenv; the literal consumer below supplies any fallback.
+
+```text
+// tests can't (they never touch the GPU forward). Opt-in via HY3DP_FWD_SMOKE.
+test "hy3d-paint-unet: full forward runs end-to-end (shape + finite)" {
+    const model_dir = std.mem.span(std.c.getenv("HY3DP_TEST_MODEL") orelse return error.SkipZigTest);
+    if (std.c.getenv("HY3DP_FWD_SMOKE") == null) return error.SkipZigTest;
+    const a = testing.allocator;
+    const s = mlx.mlx_default_gpu_stream_new();
+    var pu = try PaintUnet.load(a, model_dir, s);
+```
+
 ### HY3DP_UNET_LATENTS
 
 hy3dp unet latents: engine setting; built-in default retained
 
 Scope: mlx-serve. Class: advanced.
+
+Source: `engines/mlx-serve/src/hunyuan3d_paint_unet.zig:1873`. Unset read: NULL from getenv; the literal consumer below supplies any fallback.
+
+```text
+    const model_dir = std.mem.span(std.c.getenv("HY3DP_TEST_MODEL") orelse return error.SkipZigTest);
+    const in_p = std.mem.span(std.c.getenv("HY3DP_REF_IN") orelse return error.SkipZigTest);
+    const lat_p = std.mem.span(std.c.getenv("HY3DP_UNET_LATENTS") orelse return error.SkipZigTest);
+    const nrm_p = std.mem.span(std.c.getenv("HY3DP_UNET_NORMAL") orelse return error.SkipZigTest);
+    const pos_p = std.mem.span(std.c.getenv("HY3DP_UNET_POSITION") orelse return error.SkipZigTest);
+    const pmap_p = std.mem.span(std.c.getenv("HY3DP_UNET_POSMAPS") orelse return error.SkipZigTest);
+    const dino_p = std.mem.span(std.c.getenv("HY3DP_DINO_PROJ") orelse return error.SkipZigTest);
+```
 
 ### HY3DP_UNET_NORMAL
 
@@ -47710,11 +49366,35 @@ hy3dp unet normal: engine setting; built-in default retained
 
 Scope: mlx-serve. Class: advanced.
 
+Source: `engines/mlx-serve/src/hunyuan3d_paint_unet.zig:1874`. Unset read: NULL from getenv; the literal consumer below supplies any fallback.
+
+```text
+    const in_p = std.mem.span(std.c.getenv("HY3DP_REF_IN") orelse return error.SkipZigTest);
+    const lat_p = std.mem.span(std.c.getenv("HY3DP_UNET_LATENTS") orelse return error.SkipZigTest);
+    const nrm_p = std.mem.span(std.c.getenv("HY3DP_UNET_NORMAL") orelse return error.SkipZigTest);
+    const pos_p = std.mem.span(std.c.getenv("HY3DP_UNET_POSITION") orelse return error.SkipZigTest);
+    const pmap_p = std.mem.span(std.c.getenv("HY3DP_UNET_POSMAPS") orelse return error.SkipZigTest);
+    const dino_p = std.mem.span(std.c.getenv("HY3DP_DINO_PROJ") orelse return error.SkipZigTest);
+    const v_p = std.mem.span(std.c.getenv("HY3DP_UNET_V") orelse return error.SkipZigTest);
+```
+
 ### HY3DP_UNET_POSITION
 
 hy3dp unet position: engine setting; built-in default retained
 
 Scope: mlx-serve. Class: advanced.
+
+Source: `engines/mlx-serve/src/hunyuan3d_paint_unet.zig:1875`. Unset read: NULL from getenv; the literal consumer below supplies any fallback.
+
+```text
+    const lat_p = std.mem.span(std.c.getenv("HY3DP_UNET_LATENTS") orelse return error.SkipZigTest);
+    const nrm_p = std.mem.span(std.c.getenv("HY3DP_UNET_NORMAL") orelse return error.SkipZigTest);
+    const pos_p = std.mem.span(std.c.getenv("HY3DP_UNET_POSITION") orelse return error.SkipZigTest);
+    const pmap_p = std.mem.span(std.c.getenv("HY3DP_UNET_POSMAPS") orelse return error.SkipZigTest);
+    const dino_p = std.mem.span(std.c.getenv("HY3DP_DINO_PROJ") orelse return error.SkipZigTest);
+    const v_p = std.mem.span(std.c.getenv("HY3DP_UNET_V") orelse return error.SkipZigTest);
+    const a = testing.allocator;
+```
 
 ### HY3DP_UNET_POSMAPS
 
@@ -47722,11 +49402,35 @@ hy3dp unet posmaps: engine setting; built-in default retained
 
 Scope: mlx-serve. Class: advanced.
 
+Source: `engines/mlx-serve/src/hunyuan3d_paint_unet.zig:1876`. Unset read: NULL from getenv; the literal consumer below supplies any fallback.
+
+```text
+    const nrm_p = std.mem.span(std.c.getenv("HY3DP_UNET_NORMAL") orelse return error.SkipZigTest);
+    const pos_p = std.mem.span(std.c.getenv("HY3DP_UNET_POSITION") orelse return error.SkipZigTest);
+    const pmap_p = std.mem.span(std.c.getenv("HY3DP_UNET_POSMAPS") orelse return error.SkipZigTest);
+    const dino_p = std.mem.span(std.c.getenv("HY3DP_DINO_PROJ") orelse return error.SkipZigTest);
+    const v_p = std.mem.span(std.c.getenv("HY3DP_UNET_V") orelse return error.SkipZigTest);
+    const a = testing.allocator;
+    const io = oracleIo();
+```
+
 ### HY3DP_UNET_V
 
 hy3dp unet v: engine setting; built-in default retained
 
 Scope: mlx-serve. Class: advanced.
+
+Source: `engines/mlx-serve/src/hunyuan3d_paint_unet.zig:1878`. Unset read: NULL from getenv; the literal consumer below supplies any fallback.
+
+```text
+    const pmap_p = std.mem.span(std.c.getenv("HY3DP_UNET_POSMAPS") orelse return error.SkipZigTest);
+    const dino_p = std.mem.span(std.c.getenv("HY3DP_DINO_PROJ") orelse return error.SkipZigTest);
+    const v_p = std.mem.span(std.c.getenv("HY3DP_UNET_V") orelse return error.SkipZigTest);
+    const a = testing.allocator;
+    const io = oracleIo();
+    const s = mlx.mlx_default_gpu_stream_new();
+    var pu = try PaintUnet.load(a, model_dir, s);
+```
 
 ### HY3DP_VAE_DEC_IN
 
@@ -47734,11 +49438,35 @@ hy3dp vae dec in: engine setting; built-in default retained
 
 Scope: mlx-serve. Class: advanced.
 
+Source: `engines/mlx-serve/src/hunyuan3d_paint.zig:1831`. Unset read: NULL from getenv; the literal consumer below supplies any fallback.
+
+```text
+test "hy3d-paint oracle: VAE decode matches reference" {
+    const model_dir = std.mem.span(std.c.getenv("HY3DP_TEST_MODEL") orelse return error.SkipZigTest);
+    const in_p = std.mem.span(std.c.getenv("HY3DP_VAE_DEC_IN") orelse return error.SkipZigTest);
+    const out_p = std.mem.span(std.c.getenv("HY3DP_VAE_DEC_OUT") orelse return error.SkipZigTest);
+    const a = testing.allocator;
+    const io = std.Io.Threaded.global_single_threaded.io();
+    const in_d = try readF32(io, a, in_p);
+```
+
 ### HY3DP_VAE_DEC_OUT
 
 hy3dp vae dec out: engine setting; built-in default retained
 
 Scope: mlx-serve. Class: advanced.
+
+Source: `engines/mlx-serve/src/hunyuan3d_paint.zig:1832`. Unset read: NULL from getenv; the literal consumer below supplies any fallback.
+
+```text
+    const model_dir = std.mem.span(std.c.getenv("HY3DP_TEST_MODEL") orelse return error.SkipZigTest);
+    const in_p = std.mem.span(std.c.getenv("HY3DP_VAE_DEC_IN") orelse return error.SkipZigTest);
+    const out_p = std.mem.span(std.c.getenv("HY3DP_VAE_DEC_OUT") orelse return error.SkipZigTest);
+    const a = testing.allocator;
+    const io = std.Io.Threaded.global_single_threaded.io();
+    const in_d = try readF32(io, a, in_p);
+    defer a.free(in_d);
+```
 
 ### HY3DP_VAE_ENC_IN
 
@@ -47746,11 +49474,35 @@ hy3dp vae enc in: engine setting; built-in default retained
 
 Scope: mlx-serve. Class: advanced.
 
+Source: `engines/mlx-serve/src/hunyuan3d_paint.zig:1804`. Unset read: NULL from getenv; the literal consumer below supplies any fallback.
+
+```text
+test "hy3d-paint oracle: VAE encode matches reference" {
+    const model_dir = std.mem.span(std.c.getenv("HY3DP_TEST_MODEL") orelse return error.SkipZigTest);
+    const in_p = std.mem.span(std.c.getenv("HY3DP_VAE_ENC_IN") orelse return error.SkipZigTest);
+    const out_p = std.mem.span(std.c.getenv("HY3DP_VAE_ENC_OUT") orelse return error.SkipZigTest);
+    const a = testing.allocator;
+    const io = std.Io.Threaded.global_single_threaded.io();
+    const in_d = try readF32(io, a, in_p);
+```
+
 ### HY3DP_VAE_ENC_OUT
 
 hy3dp vae enc out: engine setting; built-in default retained
 
 Scope: mlx-serve. Class: advanced.
+
+Source: `engines/mlx-serve/src/hunyuan3d_paint.zig:1805`. Unset read: NULL from getenv; the literal consumer below supplies any fallback.
+
+```text
+    const model_dir = std.mem.span(std.c.getenv("HY3DP_TEST_MODEL") orelse return error.SkipZigTest);
+    const in_p = std.mem.span(std.c.getenv("HY3DP_VAE_ENC_IN") orelse return error.SkipZigTest);
+    const out_p = std.mem.span(std.c.getenv("HY3DP_VAE_ENC_OUT") orelse return error.SkipZigTest);
+    const a = testing.allocator;
+    const io = std.Io.Threaded.global_single_threaded.io();
+    const in_d = try readF32(io, a, in_p);
+    defer a.free(in_d);
+```
 
 ### HY3D_DENOISE_CTX
 
@@ -47758,11 +49510,59 @@ hy3d denoise ctx: engine setting; built-in default retained
 
 Scope: mlx-serve. Class: advanced.
 
+Source: `engines/mlx-serve/src/hunyuan3d.zig:2671`. Unset read: NULL from getenv; the literal consumer below supplies any fallback.
+
+```text
+    const model_dir = std.mem.span(std.c.getenv("HY3D_TEST_MODEL") orelse return error.SkipZigTest);
+    const init_p = std.mem.span(std.c.getenv("HY3D_DENOISE_INIT") orelse return error.SkipZigTest);
+    const ctx_p = std.mem.span(std.c.getenv("HY3D_DENOISE_CTX") orelse return error.SkipZigTest);
+    const steps_s = std.mem.span(std.c.getenv("HY3D_DENOISE_STEPS") orelse return error.SkipZigTest);
+    const out_p = std.mem.span(std.c.getenv("HY3D_DENOISE_OUT") orelse return error.SkipZigTest);
+    const a = testing.allocator;
+    const io = std.Io.Threaded.global_single_threaded.io();
+```
+
+Source: `engines/mlx-serve/src/hunyuan3d.zig:2709`. Unset read: NULL from getenv; the literal consumer below supplies any fallback.
+
+```text
+    const model_dir = std.mem.span(std.c.getenv("HY3D_TEST_MODEL") orelse return error.SkipZigTest);
+    const init_p = std.mem.span(std.c.getenv("HY3D_DENOISE_INIT") orelse return error.SkipZigTest);
+    const ctx_p = std.mem.span(std.c.getenv("HY3D_DENOISE_CTX") orelse return error.SkipZigTest);
+    const steps_s = std.mem.span(std.c.getenv("HY3D_DENOISE_STEPS") orelse return error.SkipZigTest);
+    const grid_p = std.mem.span(std.c.getenv("HY3D_E2E_GRID") orelse return error.SkipZigTest);
+    const res_s = std.mem.span(std.c.getenv("HY3D_E2E_RES") orelse return error.SkipZigTest);
+    const a = testing.allocator;
+```
+
 ### HY3D_DENOISE_GUIDANCE
 
 hy3d denoise guidance: engine setting; built-in default retained
 
 Scope: mlx-serve. Class: advanced.
+
+Source: `engines/mlx-serve/src/hunyuan3d.zig:2683`. Unset read: NULL from getenv; the literal consumer below supplies any fallback.
+
+```text
+    defer a.free(ref);
+    const steps = try std.fmt.parseInt(u32, steps_s, 10);
+    const guidance: f32 = if (std.c.getenv("HY3D_DENOISE_GUIDANCE")) |v| try std.fmt.parseFloat(f32, std.mem.span(v)) else 5.0;
+    const s = mlx.mlx_default_gpu_stream_new();
+    const cfg = try readConfigFile(io, a, model_dir);
+    var dit = try loadDit(a, cfg, model_dir, s);
+    defer dit.deinit();
+```
+
+Source: `engines/mlx-serve/src/hunyuan3d.zig:2723`. Unset read: NULL from getenv; the literal consumer below supplies any fallback.
+
+```text
+    const steps = try std.fmt.parseInt(u32, steps_s, 10);
+    const res = try std.fmt.parseInt(u32, res_s, 10);
+    const guidance: f32 = if (std.c.getenv("HY3D_DENOISE_GUIDANCE")) |v| try std.fmt.parseFloat(f32, std.mem.span(v)) else 5.0;
+    const min_corr: f64 = if (std.c.getenv("HY3D_E2E_MIN")) |v| try std.fmt.parseFloat(f64, std.mem.span(v)) else 0.98;
+
+    const s = mlx.mlx_default_gpu_stream_new();
+    const cfg = try readConfigFile(io, a, model_dir);
+```
 
 ### HY3D_DENOISE_INIT
 
@@ -47770,11 +49570,47 @@ hy3d denoise init: engine setting; built-in default retained
 
 Scope: mlx-serve. Class: advanced.
 
+Source: `engines/mlx-serve/src/hunyuan3d.zig:2670`. Unset read: NULL from getenv; the literal consumer below supplies any fallback.
+
+```text
+test "hy3d oracle: denoise loop matches reference" {
+    const model_dir = std.mem.span(std.c.getenv("HY3D_TEST_MODEL") orelse return error.SkipZigTest);
+    const init_p = std.mem.span(std.c.getenv("HY3D_DENOISE_INIT") orelse return error.SkipZigTest);
+    const ctx_p = std.mem.span(std.c.getenv("HY3D_DENOISE_CTX") orelse return error.SkipZigTest);
+    const steps_s = std.mem.span(std.c.getenv("HY3D_DENOISE_STEPS") orelse return error.SkipZigTest);
+    const out_p = std.mem.span(std.c.getenv("HY3D_DENOISE_OUT") orelse return error.SkipZigTest);
+    const a = testing.allocator;
+```
+
+Source: `engines/mlx-serve/src/hunyuan3d.zig:2708`. Unset read: NULL from getenv; the literal consumer below supplies any fallback.
+
+```text
+test "hy3d oracle: e2e SDF grid matches reference" {
+    const model_dir = std.mem.span(std.c.getenv("HY3D_TEST_MODEL") orelse return error.SkipZigTest);
+    const init_p = std.mem.span(std.c.getenv("HY3D_DENOISE_INIT") orelse return error.SkipZigTest);
+    const ctx_p = std.mem.span(std.c.getenv("HY3D_DENOISE_CTX") orelse return error.SkipZigTest);
+    const steps_s = std.mem.span(std.c.getenv("HY3D_DENOISE_STEPS") orelse return error.SkipZigTest);
+    const grid_p = std.mem.span(std.c.getenv("HY3D_E2E_GRID") orelse return error.SkipZigTest);
+    const res_s = std.mem.span(std.c.getenv("HY3D_E2E_RES") orelse return error.SkipZigTest);
+```
+
 ### HY3D_DENOISE_OUT
 
 hy3d denoise out: engine setting; built-in default retained
 
 Scope: mlx-serve. Class: advanced.
+
+Source: `engines/mlx-serve/src/hunyuan3d.zig:2673`. Unset read: NULL from getenv; the literal consumer below supplies any fallback.
+
+```text
+    const ctx_p = std.mem.span(std.c.getenv("HY3D_DENOISE_CTX") orelse return error.SkipZigTest);
+    const steps_s = std.mem.span(std.c.getenv("HY3D_DENOISE_STEPS") orelse return error.SkipZigTest);
+    const out_p = std.mem.span(std.c.getenv("HY3D_DENOISE_OUT") orelse return error.SkipZigTest);
+    const a = testing.allocator;
+    const io = std.Io.Threaded.global_single_threaded.io();
+    const init_d = try readF32(io, a, init_p);
+    defer a.free(init_d);
+```
 
 ### HY3D_DENOISE_STEPS
 
@@ -47782,11 +49618,47 @@ hy3d denoise steps: engine setting; built-in default retained
 
 Scope: mlx-serve. Class: advanced.
 
+Source: `engines/mlx-serve/src/hunyuan3d.zig:2672`. Unset read: NULL from getenv; the literal consumer below supplies any fallback.
+
+```text
+    const init_p = std.mem.span(std.c.getenv("HY3D_DENOISE_INIT") orelse return error.SkipZigTest);
+    const ctx_p = std.mem.span(std.c.getenv("HY3D_DENOISE_CTX") orelse return error.SkipZigTest);
+    const steps_s = std.mem.span(std.c.getenv("HY3D_DENOISE_STEPS") orelse return error.SkipZigTest);
+    const out_p = std.mem.span(std.c.getenv("HY3D_DENOISE_OUT") orelse return error.SkipZigTest);
+    const a = testing.allocator;
+    const io = std.Io.Threaded.global_single_threaded.io();
+    const init_d = try readF32(io, a, init_p);
+```
+
+Source: `engines/mlx-serve/src/hunyuan3d.zig:2710`. Unset read: NULL from getenv; the literal consumer below supplies any fallback.
+
+```text
+    const init_p = std.mem.span(std.c.getenv("HY3D_DENOISE_INIT") orelse return error.SkipZigTest);
+    const ctx_p = std.mem.span(std.c.getenv("HY3D_DENOISE_CTX") orelse return error.SkipZigTest);
+    const steps_s = std.mem.span(std.c.getenv("HY3D_DENOISE_STEPS") orelse return error.SkipZigTest);
+    const grid_p = std.mem.span(std.c.getenv("HY3D_E2E_GRID") orelse return error.SkipZigTest);
+    const res_s = std.mem.span(std.c.getenv("HY3D_E2E_RES") orelse return error.SkipZigTest);
+    const a = testing.allocator;
+    const io = std.Io.Threaded.global_single_threaded.io();
+```
+
 ### HY3D_DINO_IN
 
 hy3d dino in: engine setting; built-in default retained
 
 Scope: mlx-serve. Class: advanced.
+
+Source: `engines/mlx-serve/src/hunyuan3d.zig:2560`. Unset read: NULL from getenv; the literal consumer below supplies any fallback.
+
+```text
+test "hy3d oracle: DINO features match reference" {
+    const model_dir = std.mem.span(std.c.getenv("HY3D_TEST_MODEL") orelse return error.SkipZigTest);
+    const in_p = std.mem.span(std.c.getenv("HY3D_DINO_IN") orelse return error.SkipZigTest);
+    const out_p = std.mem.span(std.c.getenv("HY3D_DINO_OUT") orelse return error.SkipZigTest);
+    const a = testing.allocator;
+    const io = std.Io.Threaded.global_single_threaded.io();
+    const in_d = try readF32(io, a, in_p);
+```
 
 ### HY3D_DINO_OUT
 
@@ -47794,11 +49666,35 @@ hy3d dino out: engine setting; built-in default retained
 
 Scope: mlx-serve. Class: advanced.
 
+Source: `engines/mlx-serve/src/hunyuan3d.zig:2561`. Unset read: NULL from getenv; the literal consumer below supplies any fallback.
+
+```text
+    const model_dir = std.mem.span(std.c.getenv("HY3D_TEST_MODEL") orelse return error.SkipZigTest);
+    const in_p = std.mem.span(std.c.getenv("HY3D_DINO_IN") orelse return error.SkipZigTest);
+    const out_p = std.mem.span(std.c.getenv("HY3D_DINO_OUT") orelse return error.SkipZigTest);
+    const a = testing.allocator;
+    const io = std.Io.Threaded.global_single_threaded.io();
+    const in_d = try readF32(io, a, in_p);
+    defer a.free(in_d);
+```
+
 ### HY3D_E2E_GRID
 
 hy3d e2e grid: engine setting; built-in default retained
 
 Scope: mlx-serve. Class: advanced.
+
+Source: `engines/mlx-serve/src/hunyuan3d.zig:2711`. Unset read: NULL from getenv; the literal consumer below supplies any fallback.
+
+```text
+    const ctx_p = std.mem.span(std.c.getenv("HY3D_DENOISE_CTX") orelse return error.SkipZigTest);
+    const steps_s = std.mem.span(std.c.getenv("HY3D_DENOISE_STEPS") orelse return error.SkipZigTest);
+    const grid_p = std.mem.span(std.c.getenv("HY3D_E2E_GRID") orelse return error.SkipZigTest);
+    const res_s = std.mem.span(std.c.getenv("HY3D_E2E_RES") orelse return error.SkipZigTest);
+    const a = testing.allocator;
+    const io = std.Io.Threaded.global_single_threaded.io();
+    const init_d = try readF32(io, a, init_p);
+```
 
 ### HY3D_E2E_MIN
 
@@ -47806,11 +49702,35 @@ hy3d e2e min: engine setting; built-in default retained
 
 Scope: mlx-serve. Class: advanced.
 
+Source: `engines/mlx-serve/src/hunyuan3d.zig:2724`. Unset read: NULL from getenv; the literal consumer below supplies any fallback.
+
+```text
+    const res = try std.fmt.parseInt(u32, res_s, 10);
+    const guidance: f32 = if (std.c.getenv("HY3D_DENOISE_GUIDANCE")) |v| try std.fmt.parseFloat(f32, std.mem.span(v)) else 5.0;
+    const min_corr: f64 = if (std.c.getenv("HY3D_E2E_MIN")) |v| try std.fmt.parseFloat(f64, std.mem.span(v)) else 0.98;
+
+    const s = mlx.mlx_default_gpu_stream_new();
+    const cfg = try readConfigFile(io, a, model_dir);
+    var dit = try loadDit(a, cfg, model_dir, s);
+```
+
 ### HY3D_E2E_NVERT
 
 hy3d e2e nvert: engine setting; built-in default retained
 
 Scope: mlx-serve. Class: advanced.
+
+Source: `engines/mlx-serve/src/hunyuan3d.zig:2763`. Unset read: NULL from getenv; the literal consumer below supplies any fallback.
+
+```text
+        try testing.expect(mesh.vertices[i] >= -VOLUME_BOUND - 0.01 and mesh.vertices[i] <= VOLUME_BOUND + 0.01);
+    }
+    if (std.c.getenv("HY3D_E2E_NVERT")) |v| {
+        const ref_n = try std.fmt.parseInt(usize, std.mem.span(v), 10);
+        const lo = ref_n * 9 / 10;
+        const hi = ref_n * 11 / 10;
+        try testing.expect(nvert >= lo and nvert <= hi);
+```
 
 ### HY3D_E2E_RES
 
@@ -47818,11 +49738,35 @@ hy3d e2e res: engine setting; built-in default retained
 
 Scope: mlx-serve. Class: advanced.
 
+Source: `engines/mlx-serve/src/hunyuan3d.zig:2712`. Unset read: NULL from getenv; the literal consumer below supplies any fallback.
+
+```text
+    const steps_s = std.mem.span(std.c.getenv("HY3D_DENOISE_STEPS") orelse return error.SkipZigTest);
+    const grid_p = std.mem.span(std.c.getenv("HY3D_E2E_GRID") orelse return error.SkipZigTest);
+    const res_s = std.mem.span(std.c.getenv("HY3D_E2E_RES") orelse return error.SkipZigTest);
+    const a = testing.allocator;
+    const io = std.Io.Threaded.global_single_threaded.io();
+    const init_d = try readF32(io, a, init_p);
+    defer a.free(init_d);
+```
+
 ### HY3D_SDF
 
 hy3d sdf: engine setting; built-in default retained
 
 Scope: mlx-serve. Class: advanced.
+
+Source: `engines/mlx-serve/src/hunyuan3d.zig:2630`. Unset read: NULL from getenv; the literal consumer below supplies any fallback.
+
+```text
+    const lat_p = std.mem.span(std.c.getenv("HY3D_SDF_LAT") orelse return error.SkipZigTest);
+    const pts_p = std.mem.span(std.c.getenv("HY3D_SDF_PTS") orelse return error.SkipZigTest);
+    const sdf_p = std.mem.span(std.c.getenv("HY3D_SDF") orelse return error.SkipZigTest);
+    const a = testing.allocator;
+    const io = std.Io.Threaded.global_single_threaded.io();
+    const lat = try readF32(io, a, lat_p);
+    defer a.free(lat);
+```
 
 ### HY3D_SDF_LAT
 
@@ -47830,11 +49774,35 @@ hy3d sdf lat: engine setting; built-in default retained
 
 Scope: mlx-serve. Class: advanced.
 
+Source: `engines/mlx-serve/src/hunyuan3d.zig:2628`. Unset read: NULL from getenv; the literal consumer below supplies any fallback.
+
+```text
+test "hy3d oracle: latent to SDF matches reference" {
+    const model_dir = std.mem.span(std.c.getenv("HY3D_TEST_MODEL") orelse return error.SkipZigTest);
+    const lat_p = std.mem.span(std.c.getenv("HY3D_SDF_LAT") orelse return error.SkipZigTest);
+    const pts_p = std.mem.span(std.c.getenv("HY3D_SDF_PTS") orelse return error.SkipZigTest);
+    const sdf_p = std.mem.span(std.c.getenv("HY3D_SDF") orelse return error.SkipZigTest);
+    const a = testing.allocator;
+    const io = std.Io.Threaded.global_single_threaded.io();
+```
+
 ### HY3D_SDF_PTS
 
 hy3d sdf pts: engine setting; built-in default retained
 
 Scope: mlx-serve. Class: advanced.
+
+Source: `engines/mlx-serve/src/hunyuan3d.zig:2629`. Unset read: NULL from getenv; the literal consumer below supplies any fallback.
+
+```text
+    const model_dir = std.mem.span(std.c.getenv("HY3D_TEST_MODEL") orelse return error.SkipZigTest);
+    const lat_p = std.mem.span(std.c.getenv("HY3D_SDF_LAT") orelse return error.SkipZigTest);
+    const pts_p = std.mem.span(std.c.getenv("HY3D_SDF_PTS") orelse return error.SkipZigTest);
+    const sdf_p = std.mem.span(std.c.getenv("HY3D_SDF") orelse return error.SkipZigTest);
+    const a = testing.allocator;
+    const io = std.Io.Threaded.global_single_threaded.io();
+    const lat = try readF32(io, a, lat_p);
+```
 
 ### HY3D_TEST_MODEL
 
@@ -47842,11 +49810,83 @@ hy3d test model: engine setting; built-in default retained
 
 Scope: mlx-serve. Class: advanced.
 
+Source: `engines/mlx-serve/src/hunyuan3d.zig:2559`. Unset read: NULL from getenv; the literal consumer below supplies any fallback.
+
+```text
+// post-preprocess — isolates resize-kernel drift), HY3D_DINO_OUT ([1,1370,1024]).
+test "hy3d oracle: DINO features match reference" {
+    const model_dir = std.mem.span(std.c.getenv("HY3D_TEST_MODEL") orelse return error.SkipZigTest);
+    const in_p = std.mem.span(std.c.getenv("HY3D_DINO_IN") orelse return error.SkipZigTest);
+    const out_p = std.mem.span(std.c.getenv("HY3D_DINO_OUT") orelse return error.SkipZigTest);
+    const a = testing.allocator;
+    const io = std.Io.Threaded.global_single_threaded.io();
+```
+
+Source: `engines/mlx-serve/src/hunyuan3d.zig:2586`. Unset read: NULL from getenv; the literal consumer below supplies any fallback.
+
+```text
+// [2,1370,1024], HY3D_VEL_SIGMA (float string), HY3D_VEL [2,4096,64].
+test "hy3d oracle: DiT velocity matches reference" {
+    const model_dir = std.mem.span(std.c.getenv("HY3D_TEST_MODEL") orelse return error.SkipZigTest);
+    const lat_p = std.mem.span(std.c.getenv("HY3D_VEL_LAT") orelse return error.SkipZigTest);
+    const ctx_p = std.mem.span(std.c.getenv("HY3D_VEL_CTX") orelse return error.SkipZigTest);
+    const sig_s = std.mem.span(std.c.getenv("HY3D_VEL_SIGMA") orelse return error.SkipZigTest);
+    const vel_p = std.mem.span(std.c.getenv("HY3D_VEL") orelse return error.SkipZigTest);
+```
+
+Source: `engines/mlx-serve/src/hunyuan3d.zig:2627`. Unset read: NULL from getenv; the literal consumer below supplies any fallback.
+
+```text
+// per-head qkv de-interleave — a plain-concat conversion fails HERE).
+test "hy3d oracle: latent to SDF matches reference" {
+    const model_dir = std.mem.span(std.c.getenv("HY3D_TEST_MODEL") orelse return error.SkipZigTest);
+    const lat_p = std.mem.span(std.c.getenv("HY3D_SDF_LAT") orelse return error.SkipZigTest);
+    const pts_p = std.mem.span(std.c.getenv("HY3D_SDF_PTS") orelse return error.SkipZigTest);
+    const sdf_p = std.mem.span(std.c.getenv("HY3D_SDF") orelse return error.SkipZigTest);
+    const a = testing.allocator;
+```
+
+Source: `engines/mlx-serve/src/hunyuan3d.zig:2669`. Unset read: NULL from getenv; the literal consumer below supplies any fallback.
+
+```text
+// via HY3D_DENOISE_GUIDANCE).
+test "hy3d oracle: denoise loop matches reference" {
+    const model_dir = std.mem.span(std.c.getenv("HY3D_TEST_MODEL") orelse return error.SkipZigTest);
+    const init_p = std.mem.span(std.c.getenv("HY3D_DENOISE_INIT") orelse return error.SkipZigTest);
+    const ctx_p = std.mem.span(std.c.getenv("HY3D_DENOISE_CTX") orelse return error.SkipZigTest);
+    const steps_s = std.mem.span(std.c.getenv("HY3D_DENOISE_STEPS") orelse return error.SkipZigTest);
+    const out_p = std.mem.span(std.c.getenv("HY3D_DENOISE_OUT") orelse return error.SkipZigTest);
+```
+
+Source: `engines/mlx-serve/src/hunyuan3d.zig:2707`. Unset read: NULL from getenv; the literal consumer below supplies any fallback.
+
+```text
+// set 0.97 for the 8-bit build).
+test "hy3d oracle: e2e SDF grid matches reference" {
+    const model_dir = std.mem.span(std.c.getenv("HY3D_TEST_MODEL") orelse return error.SkipZigTest);
+    const init_p = std.mem.span(std.c.getenv("HY3D_DENOISE_INIT") orelse return error.SkipZigTest);
+    const ctx_p = std.mem.span(std.c.getenv("HY3D_DENOISE_CTX") orelse return error.SkipZigTest);
+    const steps_s = std.mem.span(std.c.getenv("HY3D_DENOISE_STEPS") orelse return error.SkipZigTest);
+    const grid_p = std.mem.span(std.c.getenv("HY3D_E2E_GRID") orelse return error.SkipZigTest);
+```
+
 ### HY3D_VEL
 
 hy3d vel: engine setting; built-in default retained
 
 Scope: mlx-serve. Class: advanced.
+
+Source: `engines/mlx-serve/src/hunyuan3d.zig:2590`. Unset read: NULL from getenv; the literal consumer below supplies any fallback.
+
+```text
+    const ctx_p = std.mem.span(std.c.getenv("HY3D_VEL_CTX") orelse return error.SkipZigTest);
+    const sig_s = std.mem.span(std.c.getenv("HY3D_VEL_SIGMA") orelse return error.SkipZigTest);
+    const vel_p = std.mem.span(std.c.getenv("HY3D_VEL") orelse return error.SkipZigTest);
+    const a = testing.allocator;
+    const io = std.Io.Threaded.global_single_threaded.io();
+    const lat = try readF32(io, a, lat_p);
+    defer a.free(lat);
+```
 
 ### HY3D_VEL_CTX
 
@@ -47854,11 +49894,35 @@ hy3d vel ctx: engine setting; built-in default retained
 
 Scope: mlx-serve. Class: advanced.
 
+Source: `engines/mlx-serve/src/hunyuan3d.zig:2588`. Unset read: NULL from getenv; the literal consumer below supplies any fallback.
+
+```text
+    const model_dir = std.mem.span(std.c.getenv("HY3D_TEST_MODEL") orelse return error.SkipZigTest);
+    const lat_p = std.mem.span(std.c.getenv("HY3D_VEL_LAT") orelse return error.SkipZigTest);
+    const ctx_p = std.mem.span(std.c.getenv("HY3D_VEL_CTX") orelse return error.SkipZigTest);
+    const sig_s = std.mem.span(std.c.getenv("HY3D_VEL_SIGMA") orelse return error.SkipZigTest);
+    const vel_p = std.mem.span(std.c.getenv("HY3D_VEL") orelse return error.SkipZigTest);
+    const a = testing.allocator;
+    const io = std.Io.Threaded.global_single_threaded.io();
+```
+
 ### HY3D_VEL_LAT
 
 hy3d vel lat: engine setting; built-in default retained
 
 Scope: mlx-serve. Class: advanced.
+
+Source: `engines/mlx-serve/src/hunyuan3d.zig:2587`. Unset read: NULL from getenv; the literal consumer below supplies any fallback.
+
+```text
+test "hy3d oracle: DiT velocity matches reference" {
+    const model_dir = std.mem.span(std.c.getenv("HY3D_TEST_MODEL") orelse return error.SkipZigTest);
+    const lat_p = std.mem.span(std.c.getenv("HY3D_VEL_LAT") orelse return error.SkipZigTest);
+    const ctx_p = std.mem.span(std.c.getenv("HY3D_VEL_CTX") orelse return error.SkipZigTest);
+    const sig_s = std.mem.span(std.c.getenv("HY3D_VEL_SIGMA") orelse return error.SkipZigTest);
+    const vel_p = std.mem.span(std.c.getenv("HY3D_VEL") orelse return error.SkipZigTest);
+    const a = testing.allocator;
+```
 
 ### HY3D_VEL_SIGMA
 
@@ -47866,11 +49930,35 @@ hy3d vel sigma: engine setting; built-in default retained
 
 Scope: mlx-serve. Class: advanced.
 
+Source: `engines/mlx-serve/src/hunyuan3d.zig:2589`. Unset read: NULL from getenv; the literal consumer below supplies any fallback.
+
+```text
+    const lat_p = std.mem.span(std.c.getenv("HY3D_VEL_LAT") orelse return error.SkipZigTest);
+    const ctx_p = std.mem.span(std.c.getenv("HY3D_VEL_CTX") orelse return error.SkipZigTest);
+    const sig_s = std.mem.span(std.c.getenv("HY3D_VEL_SIGMA") orelse return error.SkipZigTest);
+    const vel_p = std.mem.span(std.c.getenv("HY3D_VEL") orelse return error.SkipZigTest);
+    const a = testing.allocator;
+    const io = std.Io.Threaded.global_single_threaded.io();
+    const lat = try readF32(io, a, lat_p);
+```
+
 ### HY3_MODEL_DIR
 
 hy3 model dir: engine setting; built-in default retained
 
 Scope: mlx-serve. Class: advanced.
+
+Source: `engines/mlx-serve/src/chat.zig:9548`. Unset read: NULL from getenv; the literal consumer below supplies any fallback.
+
+```text
+    // (thinking on), closed think (thinking off), tool-call args rendered via
+    // arguments.items(), tool_response wrapping for role:"tool".
+    const dir = std.c.getenv("HY3_MODEL_DIR") orelse return error.SkipZigTest;
+    const allocator = testing.allocator;
+    const path = try std.fmt.allocPrint(allocator, "{s}/chat_template.jinja", .{std.mem.span(dir)});
+    defer allocator.free(path);
+    const io = std.Io.Threaded.global_single_threaded.io();
+```
 
 ### HY_ALLOW_NON_STREAMING
 
@@ -48076,17 +50164,53 @@ image test model: engine setting; built-in default retained
 
 Scope: mlx-serve. Class: advanced.
 
+Source: `engines/mlx-serve/src/gen.zig:4737`. Unset read: NULL from getenv; the literal consumer below supplies any fallback.
+
+```text
+//   IMAGE_TEST_MODEL=<flux dir>  (optional IMAGE_TEST_STEPS, default 1)
+test "ImageEngine FLUX generatePng produces a PNG (characterization)" {
+    const model_dir = std.mem.span(std.c.getenv("IMAGE_TEST_MODEL") orelse return error.SkipZigTest);
+    const a = testing.allocator;
+    const io = std.Io.Threaded.global_single_threaded.io();
+    const steps: u32 = if (std.c.getenv("IMAGE_TEST_STEPS")) |v| (std.fmt.parseInt(u32, std.mem.span(v), 10) catch 1) else 1;
+    var eng = try ImageEngine.load(io, a, model_dir);
+```
+
 ### IMAGE_TEST_STEPS
 
 image test steps: engine setting; built-in default retained
 
 Scope: mlx-serve. Class: advanced.
 
+Source: `engines/mlx-serve/src/gen.zig:4740`. Unset read: NULL from getenv; the literal consumer below supplies any fallback.
+
+```text
+    const a = testing.allocator;
+    const io = std.Io.Threaded.global_single_threaded.io();
+    const steps: u32 = if (std.c.getenv("IMAGE_TEST_STEPS")) |v| (std.fmt.parseInt(u32, std.mem.span(v), 10) catch 1) else 1;
+    var eng = try ImageEngine.load(io, a, model_dir);
+    defer eng.deinit();
+    const sz = eng.normalizeSize(1024, 1024);
+    const pngb = try eng.generatePng(a, "a red fox in the snow", sz.w, sz.h, 42, steps, null);
+```
+
 ### INKLING_FIXTURES
 
 inkling fixtures: engine setting; built-in default retained
 
 Scope: mlx-serve. Class: advanced.
+
+Source: `engines/mlx-serve/src/transformer.zig:45368`. Unset read: NULL from getenv; the literal consumer below supplies any fallback.
+
+```text
+
+fn loadInklingFixtures(allocator: std.mem.Allocator) !?std.json.Parsed(std.json.Value) {
+    const path_z = std.c.getenv("INKLING_FIXTURES") orelse return null;
+    const path = std.mem.span(path_z);
+    if (path.len == 0) return null;
+    const io = std.Io.Threaded.global_single_threaded.io();
+    const file = try std.Io.Dir.openFileAbsolute(io, path, .{});
+```
 
 ### JACCL_COORDINATOR
 
@@ -48134,7 +50258,7 @@ def main() -> int:
 
 Runtime-local cache/temp directory; no model download is performed.
 
-Scope: ds4-win, image, mac-ds4, mlx-serve, rtx-llama, studio, video. Class: preset.
+Scope: ds4-win, image, mac-ds4, mlx-serve, rtx-llama, studio, video, mac-mlx, mac-llama, mac-mference. Class: preset.
 
 Source: `vendor/studio/studio/config.py:220`. Unset read: KeyError unless an earlier assignment supplies the variable.
 
@@ -48213,17 +50337,65 @@ kokoro fixtures: engine setting; built-in default retained
 
 Scope: mlx-serve. Class: advanced.
 
+Source: `engines/mlx-serve/src/kokoro.zig:2565`. Unset read: NULL from getenv; the literal consumer below supplies any fallback.
+
+```text
+
+fn fixturesDir() ?[]const u8 {
+    const p = std.c.getenv("KOKORO_FIXTURES") orelse return null;
+    return std.mem.span(p);
+}
+
+fn readFixtureF32(a: std.mem.Allocator, dir: []const u8, name: []const u8) ![]f32 {
+```
+
 ### KOKORO_TEST_MODEL
 
 kokoro test model: engine setting; built-in default retained
 
 Scope: mlx-serve. Class: advanced.
 
+Source: `engines/mlx-serve/src/kokoro.zig:2477`. Unset read: NULL from getenv; the literal consumer below supplies any fallback.
+
+```text
+
+fn liveModelDir() ?[]const u8 {
+    const p = std.c.getenv("KOKORO_TEST_MODEL") orelse return null;
+    return std.mem.span(p);
+}
+
+fn testIo() std.Io {
+```
+
+Source: `engines/mlx-serve/src/kokoro_g2p.zig:676`. Unset read: NULL from getenv; the literal consumer below supplies any fallback.
+
+```text
+
+fn liveModelDir() ?[]const u8 {
+    const p = std.c.getenv("KOKORO_TEST_MODEL") orelse return null;
+    return std.mem.span(p);
+}
+
+fn testIo() std.Io {
+```
+
 ### KREA2_REF
 
 KREA2_REF: advanced engine setting; built-in default retained
 
-Scope: image. Class: advanced.
+Scope: image, mlx-serve. Class: advanced.
+
+Source: `engines/mlx-serve/tests/dump_krea_fixtures.py:41`. Unset read: os.path.expanduser('~/krea2_ref').
+
+```text
+W, H, STEPS, SEED = 512, 512, 8, 0
+
+DEFAULT_REF = os.environ.get("KREA2_REF", os.path.expanduser("~/krea2_ref"))
+
+
+def main():
+    if len(sys.argv) < 2:
+```
 
 ### KREA_DECODED
 
@@ -48231,11 +50403,35 @@ krea decoded: engine setting; built-in default retained
 
 Scope: mlx-serve. Class: advanced.
 
+Source: `engines/mlx-serve/src/krea.zig:3040`. Unset read: NULL from getenv; the literal consumer below supplies any fallback.
+
+```text
+    const model_dir = std.mem.span(std.c.getenv("KREA_TEST_MODEL") orelse return error.SkipZigTest);
+    const lat_p = std.mem.span(std.c.getenv("KREA_VAE_LATENT") orelse return error.SkipZigTest);
+    const dec_p = std.mem.span(std.c.getenv("KREA_DECODED") orelse return error.SkipZigTest);
+    const lath_s = std.mem.span(std.c.getenv("KREA_VAE_LATH") orelse return error.SkipZigTest);
+    const a = testing.allocator;
+    const io = std.Io.Threaded.global_single_threaded.io();
+    const lat = try readF32(io, a, lat_p);
+```
+
 ### KREA_E2E
 
 krea e2e: engine setting; built-in default retained
 
 Scope: mlx-serve. Class: advanced.
+
+Source: `engines/mlx-serve/src/krea.zig:3076`. Unset read: NULL from getenv; the literal consumer below supplies any fallback.
+
+```text
+    const ids_p = std.mem.span(std.c.getenv("KREA_IDS") orelse return error.SkipZigTest);
+    const mask_p = std.mem.span(std.c.getenv("KREA_MASK") orelse return error.SkipZigTest);
+    const e2e_p = std.mem.span(std.c.getenv("KREA_E2E") orelse return error.SkipZigTest);
+    const a = testing.allocator;
+    const io = std.Io.Threaded.global_single_threaded.io();
+    const ids = try readI32(io, a, ids_p);
+    defer a.free(ids);
+```
 
 ### KREA_E2E_H
 
@@ -48243,11 +50439,35 @@ krea e2e h: engine setting; built-in default retained
 
 Scope: mlx-serve. Class: advanced.
 
+Source: `engines/mlx-serve/src/krea.zig:3086`. Unset read: NULL from getenv; the literal consumer below supplies any fallback.
+
+```text
+    defer a.free(ref);
+    const width: u32 = if (std.c.getenv("KREA_E2E_W")) |v| try std.fmt.parseInt(u32, std.mem.span(v), 10) else 512;
+    const height: u32 = if (std.c.getenv("KREA_E2E_H")) |v| try std.fmt.parseInt(u32, std.mem.span(v), 10) else 512;
+    const seed: u64 = if (std.c.getenv("KREA_E2E_SEED")) |v| try std.fmt.parseInt(u64, std.mem.span(v), 10) else 0;
+    const steps: u32 = if (std.c.getenv("KREA_E2E_STEPS")) |v| try std.fmt.parseInt(u32, std.mem.span(v), 10) else 8;
+
+    const s = mlx.mlx_default_gpu_stream_new();
+```
+
 ### KREA_E2E_SEED
 
 krea e2e seed: engine setting; built-in default retained
 
 Scope: mlx-serve. Class: advanced.
+
+Source: `engines/mlx-serve/src/krea.zig:3087`. Unset read: NULL from getenv; the literal consumer below supplies any fallback.
+
+```text
+    const width: u32 = if (std.c.getenv("KREA_E2E_W")) |v| try std.fmt.parseInt(u32, std.mem.span(v), 10) else 512;
+    const height: u32 = if (std.c.getenv("KREA_E2E_H")) |v| try std.fmt.parseInt(u32, std.mem.span(v), 10) else 512;
+    const seed: u64 = if (std.c.getenv("KREA_E2E_SEED")) |v| try std.fmt.parseInt(u64, std.mem.span(v), 10) else 0;
+    const steps: u32 = if (std.c.getenv("KREA_E2E_STEPS")) |v| try std.fmt.parseInt(u32, std.mem.span(v), 10) else 8;
+
+    const s = mlx.mlx_default_gpu_stream_new();
+    defer _ = mlx.mlx_stream_free(s);
+```
 
 ### KREA_E2E_STEPS
 
@@ -48255,11 +50475,35 @@ krea e2e steps: engine setting; built-in default retained
 
 Scope: mlx-serve. Class: advanced.
 
+Source: `engines/mlx-serve/src/krea.zig:3088`. Unset read: NULL from getenv; the literal consumer below supplies any fallback.
+
+```text
+    const height: u32 = if (std.c.getenv("KREA_E2E_H")) |v| try std.fmt.parseInt(u32, std.mem.span(v), 10) else 512;
+    const seed: u64 = if (std.c.getenv("KREA_E2E_SEED")) |v| try std.fmt.parseInt(u64, std.mem.span(v), 10) else 0;
+    const steps: u32 = if (std.c.getenv("KREA_E2E_STEPS")) |v| try std.fmt.parseInt(u32, std.mem.span(v), 10) else 8;
+
+    const s = mlx.mlx_default_gpu_stream_new();
+    defer _ = mlx.mlx_stream_free(s);
+    var eng: Engine = undefined;
+```
+
 ### KREA_E2E_W
 
 krea e2e w: engine setting; built-in default retained
 
 Scope: mlx-serve. Class: advanced.
+
+Source: `engines/mlx-serve/src/krea.zig:3085`. Unset read: NULL from getenv; the literal consumer below supplies any fallback.
+
+```text
+    const ref = try readF32(io, a, e2e_p);
+    defer a.free(ref);
+    const width: u32 = if (std.c.getenv("KREA_E2E_W")) |v| try std.fmt.parseInt(u32, std.mem.span(v), 10) else 512;
+    const height: u32 = if (std.c.getenv("KREA_E2E_H")) |v| try std.fmt.parseInt(u32, std.mem.span(v), 10) else 512;
+    const seed: u64 = if (std.c.getenv("KREA_E2E_SEED")) |v| try std.fmt.parseInt(u64, std.mem.span(v), 10) else 0;
+    const steps: u32 = if (std.c.getenv("KREA_E2E_STEPS")) |v| try std.fmt.parseInt(u32, std.mem.span(v), 10) else 8;
+
+```
 
 ### KREA_IDS
 
@@ -48267,11 +50511,59 @@ krea ids: engine setting; built-in default retained
 
 Scope: mlx-serve. Class: advanced.
 
+Source: `engines/mlx-serve/src/krea.zig:2942`. Unset read: NULL from getenv; the literal consumer below supplies any fallback.
+
+```text
+test "krea text encoder reproduces hidden states" {
+    const model_dir = std.mem.span(std.c.getenv("KREA_TEST_MODEL") orelse return error.SkipZigTest);
+    const ids_p = std.mem.span(std.c.getenv("KREA_IDS") orelse return error.SkipZigTest);
+    const mask_p = std.mem.span(std.c.getenv("KREA_MASK") orelse return error.SkipZigTest);
+    const pe_p = std.mem.span(std.c.getenv("KREA_PE") orelse return error.SkipZigTest);
+    const a = testing.allocator;
+    const io = std.Io.Threaded.global_single_threaded.io();
+```
+
+Source: `engines/mlx-serve/src/krea.zig:3074`. Unset read: NULL from getenv; the literal consumer below supplies any fallback.
+
+```text
+test "krea end-to-end pipeline matches reference image" {
+    const model_dir = std.mem.span(std.c.getenv("KREA_TEST_MODEL") orelse return error.SkipZigTest);
+    const ids_p = std.mem.span(std.c.getenv("KREA_IDS") orelse return error.SkipZigTest);
+    const mask_p = std.mem.span(std.c.getenv("KREA_MASK") orelse return error.SkipZigTest);
+    const e2e_p = std.mem.span(std.c.getenv("KREA_E2E") orelse return error.SkipZigTest);
+    const a = testing.allocator;
+    const io = std.Io.Threaded.global_single_threaded.io();
+```
+
 ### KREA_MASK
 
 krea mask: engine setting; built-in default retained
 
 Scope: mlx-serve. Class: advanced.
+
+Source: `engines/mlx-serve/src/krea.zig:2943`. Unset read: NULL from getenv; the literal consumer below supplies any fallback.
+
+```text
+    const model_dir = std.mem.span(std.c.getenv("KREA_TEST_MODEL") orelse return error.SkipZigTest);
+    const ids_p = std.mem.span(std.c.getenv("KREA_IDS") orelse return error.SkipZigTest);
+    const mask_p = std.mem.span(std.c.getenv("KREA_MASK") orelse return error.SkipZigTest);
+    const pe_p = std.mem.span(std.c.getenv("KREA_PE") orelse return error.SkipZigTest);
+    const a = testing.allocator;
+    const io = std.Io.Threaded.global_single_threaded.io();
+    const ids = try readI32(io, a, ids_p);
+```
+
+Source: `engines/mlx-serve/src/krea.zig:3075`. Unset read: NULL from getenv; the literal consumer below supplies any fallback.
+
+```text
+    const model_dir = std.mem.span(std.c.getenv("KREA_TEST_MODEL") orelse return error.SkipZigTest);
+    const ids_p = std.mem.span(std.c.getenv("KREA_IDS") orelse return error.SkipZigTest);
+    const mask_p = std.mem.span(std.c.getenv("KREA_MASK") orelse return error.SkipZigTest);
+    const e2e_p = std.mem.span(std.c.getenv("KREA_E2E") orelse return error.SkipZigTest);
+    const a = testing.allocator;
+    const io = std.Io.Threaded.global_single_threaded.io();
+    const ids = try readI32(io, a, ids_p);
+```
 
 ### KREA_PE
 
@@ -48279,11 +50571,83 @@ krea pe: engine setting; built-in default retained
 
 Scope: mlx-serve. Class: advanced.
 
+Source: `engines/mlx-serve/src/krea.zig:2944`. Unset read: NULL from getenv; the literal consumer below supplies any fallback.
+
+```text
+    const ids_p = std.mem.span(std.c.getenv("KREA_IDS") orelse return error.SkipZigTest);
+    const mask_p = std.mem.span(std.c.getenv("KREA_MASK") orelse return error.SkipZigTest);
+    const pe_p = std.mem.span(std.c.getenv("KREA_PE") orelse return error.SkipZigTest);
+    const a = testing.allocator;
+    const io = std.Io.Threaded.global_single_threaded.io();
+    const ids = try readI32(io, a, ids_p);
+    defer a.free(ids);
+```
+
 ### KREA_TEST_MODEL
 
 krea test model: engine setting; built-in default retained
 
 Scope: mlx-serve. Class: advanced.
+
+Source: `engines/mlx-serve/src/krea.zig:2888`. Unset read: NULL from getenv; the literal consumer below supplies any fallback.
+
+```text
+// pixels must round-trip through the oracle-validated decoder.  KREA_TEST_MODEL
+test "krea VAE encoder round-trips through the decoder" {
+    const model_dir = std.mem.span(std.c.getenv("KREA_TEST_MODEL") orelse return error.SkipZigTest);
+    const a = testing.allocator;
+    const io = std.Io.Threaded.global_single_threaded.io();
+    const s = mlx.mlx_default_gpu_stream_new();
+    defer _ = mlx.mlx_stream_free(s);
+```
+
+Source: `engines/mlx-serve/src/krea.zig:2941`. Unset read: NULL from getenv; the literal consumer below supplies any fallback.
+
+```text
+// Stage 1: text encoder. KREA_TEST_MODEL, KREA_IDS, KREA_MASK, KREA_PE.
+test "krea text encoder reproduces hidden states" {
+    const model_dir = std.mem.span(std.c.getenv("KREA_TEST_MODEL") orelse return error.SkipZigTest);
+    const ids_p = std.mem.span(std.c.getenv("KREA_IDS") orelse return error.SkipZigTest);
+    const mask_p = std.mem.span(std.c.getenv("KREA_MASK") orelse return error.SkipZigTest);
+    const pe_p = std.mem.span(std.c.getenv("KREA_PE") orelse return error.SkipZigTest);
+    const a = testing.allocator;
+```
+
+Source: `engines/mlx-serve/src/krea.zig:2985`. Unset read: NULL from getenv; the literal consumer below supplies any fallback.
+
+```text
+// KREA_TEST_MODEL, KREA_VEL_IMG, KREA_VEL_CTX, KREA_VEL_POS, KREA_VEL_VALID, KREA_VEL.
+test "krea DiT reproduces velocity" {
+    const model_dir = std.mem.span(std.c.getenv("KREA_TEST_MODEL") orelse return error.SkipZigTest);
+    const img_p = std.mem.span(std.c.getenv("KREA_VEL_IMG") orelse return error.SkipZigTest);
+    const ctx_p = std.mem.span(std.c.getenv("KREA_VEL_CTX") orelse return error.SkipZigTest);
+    const pos_p = std.mem.span(std.c.getenv("KREA_VEL_POS") orelse return error.SkipZigTest);
+    const valid_p = std.mem.span(std.c.getenv("KREA_VEL_VALID") orelse return error.SkipZigTest);
+```
+
+Source: `engines/mlx-serve/src/krea.zig:3038`. Unset read: NULL from getenv; the literal consumer below supplies any fallback.
+
+```text
+// Stage 3: VAE decode. KREA_TEST_MODEL, KREA_VAE_LATENT, KREA_DECODED.
+test "krea VAE reproduces decoded image" {
+    const model_dir = std.mem.span(std.c.getenv("KREA_TEST_MODEL") orelse return error.SkipZigTest);
+    const lat_p = std.mem.span(std.c.getenv("KREA_VAE_LATENT") orelse return error.SkipZigTest);
+    const dec_p = std.mem.span(std.c.getenv("KREA_DECODED") orelse return error.SkipZigTest);
+    const lath_s = std.mem.span(std.c.getenv("KREA_VAE_LATH") orelse return error.SkipZigTest);
+    const a = testing.allocator;
+```
+
+Source: `engines/mlx-serve/src/krea.zig:3073`. Unset read: NULL from getenv; the literal consumer below supplies any fallback.
+
+```text
+// image [0,1]), KREA_E2E_W, KREA_E2E_H, KREA_E2E_SEED, KREA_E2E_STEPS.
+test "krea end-to-end pipeline matches reference image" {
+    const model_dir = std.mem.span(std.c.getenv("KREA_TEST_MODEL") orelse return error.SkipZigTest);
+    const ids_p = std.mem.span(std.c.getenv("KREA_IDS") orelse return error.SkipZigTest);
+    const mask_p = std.mem.span(std.c.getenv("KREA_MASK") orelse return error.SkipZigTest);
+    const e2e_p = std.mem.span(std.c.getenv("KREA_E2E") orelse return error.SkipZigTest);
+    const a = testing.allocator;
+```
 
 ### KREA_TE_MIN
 
@@ -48291,11 +50655,35 @@ krea te min: engine setting; built-in default retained
 
 Scope: mlx-serve. Class: advanced.
 
+Source: `engines/mlx-serve/src/krea.zig:2978`. Unset read: NULL from getenv; the literal consumer below supplies any fallback.
+
+```text
+    // DEFINITIVE proofs are downstream: DiT 0.99995, VAE 1.0, e2e 0.9996 (bf16) /
+    // 0.99964 (8-bit encoder).
+    const min_corr: f64 = if (std.c.getenv("KREA_TE_MIN")) |v| (std.fmt.parseFloat(f64, std.mem.span(v)) catch 0.997) else 0.997;
+    try testing.expect(corr > min_corr);
+}
+
+// Stage 2: DiT one forward → velocity at t=1.0.
+```
+
 ### KREA_VAE_LATENT
 
 krea vae latent: engine setting; built-in default retained
 
 Scope: mlx-serve. Class: advanced.
+
+Source: `engines/mlx-serve/src/krea.zig:3039`. Unset read: NULL from getenv; the literal consumer below supplies any fallback.
+
+```text
+test "krea VAE reproduces decoded image" {
+    const model_dir = std.mem.span(std.c.getenv("KREA_TEST_MODEL") orelse return error.SkipZigTest);
+    const lat_p = std.mem.span(std.c.getenv("KREA_VAE_LATENT") orelse return error.SkipZigTest);
+    const dec_p = std.mem.span(std.c.getenv("KREA_DECODED") orelse return error.SkipZigTest);
+    const lath_s = std.mem.span(std.c.getenv("KREA_VAE_LATH") orelse return error.SkipZigTest);
+    const a = testing.allocator;
+    const io = std.Io.Threaded.global_single_threaded.io();
+```
 
 ### KREA_VAE_LATH
 
@@ -48303,11 +50691,35 @@ krea vae lath: engine setting; built-in default retained
 
 Scope: mlx-serve. Class: advanced.
 
+Source: `engines/mlx-serve/src/krea.zig:3041`. Unset read: NULL from getenv; the literal consumer below supplies any fallback.
+
+```text
+    const lat_p = std.mem.span(std.c.getenv("KREA_VAE_LATENT") orelse return error.SkipZigTest);
+    const dec_p = std.mem.span(std.c.getenv("KREA_DECODED") orelse return error.SkipZigTest);
+    const lath_s = std.mem.span(std.c.getenv("KREA_VAE_LATH") orelse return error.SkipZigTest);
+    const a = testing.allocator;
+    const io = std.Io.Threaded.global_single_threaded.io();
+    const lat = try readF32(io, a, lat_p);
+    defer a.free(lat);
+```
+
 ### KREA_VEL
 
 krea vel: engine setting; built-in default retained
 
 Scope: mlx-serve. Class: advanced.
+
+Source: `engines/mlx-serve/src/krea.zig:2990`. Unset read: NULL from getenv; the literal consumer below supplies any fallback.
+
+```text
+    const pos_p = std.mem.span(std.c.getenv("KREA_VEL_POS") orelse return error.SkipZigTest);
+    const valid_p = std.mem.span(std.c.getenv("KREA_VEL_VALID") orelse return error.SkipZigTest);
+    const vel_p = std.mem.span(std.c.getenv("KREA_VEL") orelse return error.SkipZigTest);
+    const a = testing.allocator;
+    const io = std.Io.Threaded.global_single_threaded.io();
+    const imgd = try readF32(io, a, img_p);
+    defer a.free(imgd);
+```
 
 ### KREA_VEL_CTX
 
@@ -48315,11 +50727,35 @@ krea vel ctx: engine setting; built-in default retained
 
 Scope: mlx-serve. Class: advanced.
 
+Source: `engines/mlx-serve/src/krea.zig:2987`. Unset read: NULL from getenv; the literal consumer below supplies any fallback.
+
+```text
+    const model_dir = std.mem.span(std.c.getenv("KREA_TEST_MODEL") orelse return error.SkipZigTest);
+    const img_p = std.mem.span(std.c.getenv("KREA_VEL_IMG") orelse return error.SkipZigTest);
+    const ctx_p = std.mem.span(std.c.getenv("KREA_VEL_CTX") orelse return error.SkipZigTest);
+    const pos_p = std.mem.span(std.c.getenv("KREA_VEL_POS") orelse return error.SkipZigTest);
+    const valid_p = std.mem.span(std.c.getenv("KREA_VEL_VALID") orelse return error.SkipZigTest);
+    const vel_p = std.mem.span(std.c.getenv("KREA_VEL") orelse return error.SkipZigTest);
+    const a = testing.allocator;
+```
+
 ### KREA_VEL_IMG
 
 krea vel img: engine setting; built-in default retained
 
 Scope: mlx-serve. Class: advanced.
+
+Source: `engines/mlx-serve/src/krea.zig:2986`. Unset read: NULL from getenv; the literal consumer below supplies any fallback.
+
+```text
+test "krea DiT reproduces velocity" {
+    const model_dir = std.mem.span(std.c.getenv("KREA_TEST_MODEL") orelse return error.SkipZigTest);
+    const img_p = std.mem.span(std.c.getenv("KREA_VEL_IMG") orelse return error.SkipZigTest);
+    const ctx_p = std.mem.span(std.c.getenv("KREA_VEL_CTX") orelse return error.SkipZigTest);
+    const pos_p = std.mem.span(std.c.getenv("KREA_VEL_POS") orelse return error.SkipZigTest);
+    const valid_p = std.mem.span(std.c.getenv("KREA_VEL_VALID") orelse return error.SkipZigTest);
+    const vel_p = std.mem.span(std.c.getenv("KREA_VEL") orelse return error.SkipZigTest);
+```
 
 ### KREA_VEL_POS
 
@@ -48327,11 +50763,35 @@ krea vel pos: engine setting; built-in default retained
 
 Scope: mlx-serve. Class: advanced.
 
+Source: `engines/mlx-serve/src/krea.zig:2988`. Unset read: NULL from getenv; the literal consumer below supplies any fallback.
+
+```text
+    const img_p = std.mem.span(std.c.getenv("KREA_VEL_IMG") orelse return error.SkipZigTest);
+    const ctx_p = std.mem.span(std.c.getenv("KREA_VEL_CTX") orelse return error.SkipZigTest);
+    const pos_p = std.mem.span(std.c.getenv("KREA_VEL_POS") orelse return error.SkipZigTest);
+    const valid_p = std.mem.span(std.c.getenv("KREA_VEL_VALID") orelse return error.SkipZigTest);
+    const vel_p = std.mem.span(std.c.getenv("KREA_VEL") orelse return error.SkipZigTest);
+    const a = testing.allocator;
+    const io = std.Io.Threaded.global_single_threaded.io();
+```
+
 ### KREA_VEL_VALID
 
 krea vel valid: engine setting; built-in default retained
 
 Scope: mlx-serve. Class: advanced.
+
+Source: `engines/mlx-serve/src/krea.zig:2989`. Unset read: NULL from getenv; the literal consumer below supplies any fallback.
+
+```text
+    const ctx_p = std.mem.span(std.c.getenv("KREA_VEL_CTX") orelse return error.SkipZigTest);
+    const pos_p = std.mem.span(std.c.getenv("KREA_VEL_POS") orelse return error.SkipZigTest);
+    const valid_p = std.mem.span(std.c.getenv("KREA_VEL_VALID") orelse return error.SkipZigTest);
+    const vel_p = std.mem.span(std.c.getenv("KREA_VEL") orelse return error.SkipZigTest);
+    const a = testing.allocator;
+    const io = std.Io.Threaded.global_single_threaded.io();
+    const imgd = try readF32(io, a, img_p);
+```
 
 ### LAGUNA_FIXTURES
 
@@ -48339,17 +50799,53 @@ laguna fixtures: engine setting; built-in default retained
 
 Scope: mlx-serve. Class: advanced.
 
+Source: `engines/mlx-serve/src/transformer.zig:44971`. Unset read: NULL from getenv; the literal consumer below supplies any fallback.
+
+```text
+    // normal CI; run with LAGUNA_FIXTURES=/tmp/laguna_fixtures.json. The
+    // fixture's `yarn.freqs` = 1/inv_freq (the mlx_fast_rope denominator).
+    const path_z = std.c.getenv("LAGUNA_FIXTURES") orelse return error.SkipZigTest;
+    const path = std.mem.span(path_z);
+    if (path.len == 0) return error.SkipZigTest;
+    const io = std.Io.Threaded.global_single_threaded.io();
+    const file = try std.Io.Dir.openFileAbsolute(io, path, .{});
+```
+
 ### LFM2_VISION_FIXTURE
 
 lfm2 vision fixture: engine setting; built-in default retained
 
 Scope: mlx-serve. Class: advanced.
 
+Source: `engines/mlx-serve/src/lfm2_vision.zig:708`. Unset read: NULL from getenv; the literal consumer below supplies any fallback.
+
+```text
+test "lfm2 vision live: tower parity vs the executed reference" {
+    const raw_model = std.c.getenv("LFM2_VISION_MODEL") orelse return error.SkipZigTest;
+    const raw_fix = std.c.getenv("LFM2_VISION_FIXTURE") orelse return error.SkipZigTest;
+    const model_dir = std.mem.sliceTo(raw_model, 0);
+    const fix_path = std.mem.sliceTo(raw_fix, 0);
+    if (model_dir.len == 0 or fix_path.len == 0) return error.SkipZigTest;
+    const a = testing.allocator;
+```
+
 ### LFM2_VISION_MODEL
 
 lfm2 vision model: engine setting; built-in default retained
 
 Scope: mlx-serve. Class: advanced.
+
+Source: `engines/mlx-serve/src/lfm2_vision.zig:707`. Unset read: NULL from getenv; the literal consumer below supplies any fallback.
+
+```text
+//   zig build test -Doptimize=ReleaseFast -Dtest-filter="lfm2 vision live"
+test "lfm2 vision live: tower parity vs the executed reference" {
+    const raw_model = std.c.getenv("LFM2_VISION_MODEL") orelse return error.SkipZigTest;
+    const raw_fix = std.c.getenv("LFM2_VISION_FIXTURE") orelse return error.SkipZigTest;
+    const model_dir = std.mem.sliceTo(raw_model, 0);
+    const fix_path = std.mem.sliceTo(raw_fix, 0);
+    if (model_dir.len == 0 or fix_path.len == 0) return error.SkipZigTest;
+```
 
 ### LINENOISE_ASSUME_TTY
 
@@ -48793,7 +51289,7 @@ Source: `engines/ds4-win/ds4_cuda.cu:30558`. Unset read: NULL from getenv; the l
 
 Keep the decoder open across appended turns; 0 restores close/reopen.
 
-Scope: rtx-llama, ds4-win. Class: advanced.
+Scope: ds4-win, rtx-llama. Class: advanced.
 
 Source: `engines/streaming-llama/prefill_llama.cpp/tools/dsv41-prefill/live-session.inc:200`. Unset read: NULL from getenv; the literal consumer below supplies any fallback.
 
@@ -48895,7 +51391,7 @@ Source: `engines/streaming-llama/prefill_llama.cpp/tools/dsv41-prefill/live-sess
 
 DirectStorage heap residency control; preserve backend admission requirements.
 
-Scope: rtx-llama, ds4-win. Class: advanced.
+Scope: ds4-win, rtx-llama. Class: advanced.
 
 Source: `engines/streaming-llama/prefill_llama.cpp/src/llama-weight-fetcher.cpp:2617`. Unset read: NULL from getenv; the literal consumer below supplies any fallback.
 
@@ -48915,7 +51411,7 @@ Producer early Engram loader: reads submitted per batch (1-4096, default 256, at
 
 Scope: rtx-llama. Class: advanced.
 
-Source: `engines/streaming-llama/prefill_llama.cpp/src/llama-dsv41-engram-prefetch.cpp:318`. Unset read: Wrapper/conditional default: see the literal call and consumer below.
+Source: `engines/streaming-llama/prefill_llama.cpp/src/llama-dsv41-engram-prefetch.cpp:319`. Unset read: Wrapper/conditional default: see the literal call and consumer below.
 
 ```text
         early_small=uint32_t(std::min<uint64_t>(depth,(per-large_slot)/(small_slot+large_slot/16)));
@@ -48951,7 +51447,7 @@ Producer early Engram loader: queue depth per I/O ring (32-4096, default 1024).
 
 Scope: rtx-llama. Class: advanced.
 
-Source: `engines/streaming-llama/prefill_llama.cpp/src/llama-dsv41-engram-prefetch.cpp:307`. Unset read: Wrapper/conditional default: see the literal call and consumer below.
+Source: `engines/streaming-llama/prefill_llama.cpp/src/llama-dsv41-engram-prefetch.cpp:308`. Unset read: Wrapper/conditional default: see the literal call and consumer below.
 
 ```text
         early_mode=true;prior=std::move(prior_cache);
@@ -49005,7 +51501,7 @@ Producer prefill: low sets a low DirectStorage priority hint for Engram table re
 
 Scope: rtx-llama. Class: advanced.
 
-Source: `engines/streaming-llama/prefill_llama.cpp/src/llama-dsv41-engram-prefetch.cpp:176`. Unset read: NULL from getenv; the literal consumer below supplies any fallback.
+Source: `engines/streaming-llama/prefill_llama.cpp/src/llama-dsv41-engram-prefetch.cpp:177`. Unset read: NULL from getenv; the literal consumer below supplies any fallback.
 
 ```text
             // DirectStorage streaming only if LLAMADECODE_ENGRAM_IO_PRIORITY=low (measured: low priority starves
@@ -49017,7 +51513,7 @@ Source: `engines/streaming-llama/prefill_llama.cpp/src/llama-dsv41-engram-prefet
         }
 ```
 
-Source: `engines/streaming-llama/prefill_llama.cpp/src/llama-dsv41-engram-prefetch.cpp:403`. Unset read: NULL from getenv; the literal consumer below supplies any fallback.
+Source: `engines/streaming-llama/prefill_llama.cpp/src/llama-dsv41-engram-prefetch.cpp:404`. Unset read: NULL from getenv; the literal consumer below supplies any fallback.
 
 ```text
             FILE_FLAG_NO_BUFFERING|FILE_FLAG_OVERLAPPED|FILE_FLAG_RANDOM_ACCESS|FILE_FLAG_OPEN_REPARSE_POINT,nullptr);
@@ -49035,10 +51531,10 @@ Producer early Engram loader: number of I/O rings (1-8, default 4).
 
 Scope: rtx-llama. Class: advanced.
 
-Source: `engines/streaming-llama/prefill_llama.cpp/src/llama-dsv41-engram-prefetch.cpp:306`. Unset read: Wrapper/conditional default: see the literal call and consumer below.
+Source: `engines/streaming-llama/prefill_llama.cpp/src/llama-dsv41-engram-prefetch.cpp:307`. Unset read: Wrapper/conditional default: see the literal call and consumer below.
 
 ```text
-        prepare(layout,tokens,count,offsets,admitted,initial); // host_plan holds the fixed 4 MiB IO reserve
+        prepare(layout,tokens,count,offsets,admitted,initial,text_mask); // host_plan holds the fixed 4 MiB IO reserve
         early_mode=true;prior=std::move(prior_cache);
         early_rings=env_u32("LLAMADECODE_ENGRAM_RINGS",4,1,8);
         const uint32_t depth=env_u32("LLAMADECODE_ENGRAM_DEPTH",1024,32,4096);
@@ -49105,7 +51601,7 @@ inline void llama_dsv41_layer_log(const char *format,...){
 
 Owner digest verification mode; full rehashes complete owner state.
 
-Scope: rtx-llama, ds4-win. Class: advanced.
+Scope: ds4-win, rtx-llama. Class: advanced.
 
 Source: `engines/streaming-llama/prefill_llama.cpp/src/llama-dsv41-owner-digest.h:50`. Unset read: NULL from getenv; the literal consumer below supplies any fallback.
 
@@ -49159,7 +51655,7 @@ inline void announce() {
 
 Optional native tile timing diagnostics.
 
-Scope: rtx-llama, ds4-win. Class: advanced.
+Scope: ds4-win, rtx-llama. Class: advanced.
 
 Source: `engines/streaming-llama/prefill_llama.cpp/src/llama-dsv41-executor.cpp:59`. Unset read: NULL from getenv; the literal consumer below supplies any fallback.
 
@@ -53433,7 +55929,7 @@ Producer prefill: Engram table read start policy; built-in default retained.
 
 Scope: rtx-llama, rtx-producer. Class: advanced.
 
-Source: `engines/streaming-llama/prefill_llama.cpp/tools/dsv41-prefill/main.cpp:922`. Unset read: NULL from getenv; the literal consumer below supplies any fallback.
+Source: `engines/streaming-llama/prefill_llama.cpp/tools/dsv41-prefill/main.cpp:920`. Unset read: NULL from getenv; the literal consumer below supplies any fallback.
 
 ```text
         // load (7.9 s at 43K) left a 7.4 s join wait and prefill fell to 1,052 tok/s,
@@ -53451,19 +55947,19 @@ LLAMA_DSV41_ENGRAM_PROMPT_OVERLAP: qualified preset/runtime setting; override fo
 
 Scope: rtx-llama. Class: preset.
 
-Source: `engines/streaming-llama/prefill_llama.cpp/src/llama-dsv41-sweep.cpp:667`. Unset read: NULL from getenv; the literal consumer below supplies any fallback.
+Source: `engines/streaming-llama/prefill_llama.cpp/src/llama-dsv41-sweep.cpp:671`. Unset read: NULL from getenv; the literal consumer below supplies any fallback.
 
 ```text
         const auto schedule=llama_dsv41_plan_append(p->options.pair_ffn,p->options.carry.max_tile_tokens,p->options.compute_step_tokens,p->position_offset,p->options.unaligned_append_step_tokens);
         const uint32_t compute_step=schedule.step;
         const char*engram_overlap_env=std::getenv("LLAMA_DSV41_ENGRAM_PROMPT_OVERLAP");
-        const bool engram_overlap=!p->options.images&&engram_overlap_env&&std::strcmp(engram_overlap_env,"1")==0;
+        const bool engram_overlap=(!p->options.images||p->options.engram_tile_lookahead)&&engram_overlap_env&&std::strcmp(engram_overlap_env,"1")==0;
         require(!engram_overlap||p->options.engram_tile_lookahead,"Engram prompt overlap requires the existing lookahead worker");
-        auto prepare_engram=[&]{
-            const auto started=std::chrono::steady_clock::now();std::string reason;
+        std::vector<uint8_t>text_mask;
+        if(p->options.images){
 ```
 
-Source: `engines/streaming-llama/prefill_llama.cpp/src/llama-dsv41-weights.cpp:722`. Unset read: NULL from getenv; the literal consumer below supplies any fallback.
+Source: `engines/streaming-llama/prefill_llama.cpp/src/llama-dsv41-weights.cpp:724`. Unset read: NULL from getenv; the literal consumer below supplies any fallback.
 
 ```text
     if(!llama_dsv41_engram_early_enabled()||p->options.engram_early_tokens.empty())return;
@@ -53475,7 +55971,7 @@ Source: `engines/streaming-llama/prefill_llama.cpp/src/llama-dsv41-weights.cpp:7
     const auto&tokens=p->options.engram_early_tokens;const auto&tail=p->options.engram_early_tail;
 ```
 
-Source: `engines/streaming-llama/prefill_llama.cpp/src/llama-dsv41-weights.cpp:747`. Unset read: NULL from getenv; the literal consumer below supplies any fallback.
+Source: `engines/streaming-llama/prefill_llama.cpp/src/llama-dsv41-weights.cpp:749`. Unset read: NULL from getenv; the literal consumer below supplies any fallback.
 
 ```text
 bool llama_dsv41_weight_provider::start_engram_append(const std::vector<int32_t>&tokens,llama_dsv41::engram_history initial,double gap_s,std::string&error){return p->guard([&]{
@@ -53487,10 +55983,10 @@ bool llama_dsv41_weight_provider::start_engram_append(const std::vector<int32_t>
     require(overlap&&std::strcmp(overlap,"1")==0,"LLAMADECODE_ENGRAM_EARLY requires LLAMA_DSV41_ENGRAM_PROMPT_OVERLAP=1 (per-table adoption)");
 ```
 
-Source: `engines/streaming-llama/prefill_llama.cpp/src/llama-dsv41-weights.cpp:768`. Unset read: NULL from getenv; the literal consumer below supplies any fallback.
+Source: `engines/streaming-llama/prefill_llama.cpp/src/llama-dsv41-weights.cpp:770`. Unset read: NULL from getenv; the literal consumer below supplies any fallback.
 
 ```text
-bool llama_dsv41_weight_provider::prepare_engram_prompt(const std::vector<int32_t>&tokens,const std::function<bool()>&stop,std::string&error,llama_dsv41::engram_history initial){return p->guard([&]{
+bool llama_dsv41_weight_provider::prepare_engram_prompt(const std::vector<int32_t>&tokens,const std::function<bool()>&stop,std::string&error,llama_dsv41::engram_history initial,const uint8_t* text_mask){return p->guard([&]{
     if(!p->options.engram_prefetch_host_bytes)return;
     const char*overlap=std::getenv("LLAMA_DSV41_ENGRAM_PROMPT_OVERLAP");
     const bool during_layer_zero=overlap&&std::strcmp(overlap,"1")==0&&p->leased&&p->next==1;
@@ -53499,7 +55995,7 @@ bool llama_dsv41_weight_provider::prepare_engram_prompt(const std::vector<int32_
     if(p->early&&p->early->tokens==tokens){
 ```
 
-Source: `engines/streaming-llama/prefill_llama.cpp/tools/dsv41-prefill/main.cpp:885`. Unset read: NULL from getenv; the literal consumer below supplies any fallback.
+Source: `engines/streaming-llama/prefill_llama.cpp/tools/dsv41-prefill/main.cpp:883`. Unset read: NULL from getenv; the literal consumer below supplies any fallback.
 
 ```text
             // DS4COMBO producer-warm: the prompt's tokens are known now, so its
@@ -53511,7 +56007,7 @@ Source: `engines/streaming-llama/prefill_llama.cpp/tools/dsv41-prefill/main.cpp:
                 std::vector<int32_t> tail;
 ```
 
-Source: `engines/streaming-llama/prefill_llama.cpp/tools/dsv41-prefill/main.cpp:923`. Unset read: NULL from getenv; the literal consumer below supplies any fallback.
+Source: `engines/streaming-llama/prefill_llama.cpp/tools/dsv41-prefill/main.cpp:921`. Unset read: NULL from getenv; the literal consumer below supplies any fallback.
 
 ```text
         // against 1,238 tok/s with the ordinary layer-0 overlapped load. Opt-in only.
@@ -53529,7 +56025,7 @@ LLAMA_DSV41_ENGRAM_SUBMIT_BATCH: advanced engine setting; built-in default retai
 
 Scope: rtx-llama. Class: advanced.
 
-Source: `engines/streaming-llama/prefill_llama.cpp/src/llama-dsv41-engram-prefetch.cpp:226`. Unset read: NULL from getenv; the literal consumer below supplies any fallback.
+Source: `engines/streaming-llama/prefill_llama.cpp/src/llama-dsv41-engram-prefetch.cpp:227`. Unset read: NULL from getenv; the literal consumer below supplies any fallback.
 
 ```text
         size_t next_row=0;uint32_t next_table=0;UINT_PTR sequence=0;
@@ -53899,7 +56395,7 @@ Source: `engines/streaming-llama/prefill_llama.cpp/src/llama-kv-cache-dsv4.cpp:3
 
 LLAMA_DSV4_COMP_DUMP: advanced engine setting; built-in default retained
 
-Scope: rtx-llama. Class: advanced.
+Scope: mac-llama, rtx-llama. Class: advanced.
 
 Source: `engines/streaming-llama/prefill_llama.cpp/src/llama-context.cpp:8511`. Unset read: NULL from getenv; the literal consumer below supplies any fallback.
 
@@ -54067,6 +56563,18 @@ Source: `engines/streaming-llama/prefill_llama.cpp/src/models/deepseek-v4.cpp:16
         }();
         if (comp_dump_pin && il == dsv4_comp_dump_layer()) {
             ggml_set_output(lid_state_kv);
+```
+
+Source: `engines/streaming-llama/prefill_llama.cpp/tools/decode-receiver/main.cpp:3242`. Unset read: NULL from getenv; the literal consumer below supplies any fallback.
+
+```text
+        // it is on the graph that actually produces the tokens here, because this context IS the one
+        // doing the work.
+        if (const char * dump_pref = std::getenv("LLAMA_DSV4_COMP_DUMP")) {
+            if (dump_pref[0]) {
+                ctx_params.cb_eval = dsv4_recv_dump_cb;
+                ctx_params.cb_eval_user_data = (void *) dump_pref;
+                fprintf(stderr, "[decode-server] COMP_DUMP armed on this receiver -> %s.*\n", dump_pref);
 ```
 
 ### LLAMA_DSV4_COMP_DUMP_FIRINGS
@@ -54523,7 +57031,31 @@ Source: `engines/streaming-llama/prefill_llama.cpp/src/llama-context.cpp:3639`. 
 
 LLAMA_DSV4_MAC_RETAIN_HANDLE: advanced engine setting; built-in default retained
 
-Scope: rtx-llama. Class: advanced.
+Scope: mac-mlx, rtx-llama. Class: advanced.
+
+Source: `engines/mlx-receiver/mlx_token_stream_server.py:1855`. Unset read: ''.
+
+```text
+            sys.stderr.write(f'[mlx-server] request warm-up eval failed: {_we}\n')
+        swi_last_logits_2d = None
+        _mac_retain_handle_enabled = os.environ.get('LLAMA_DSV4_MAC_RETAIN_HANDLE', '') not in ('', '0')
+        _kv_inject_was_requested = bool(kv_state_bytes)
+        _kv_inject_succeeded = False
+        _kv_outer_view = None
+        if kv_state_bytes:
+```
+
+Source: `engines/mlx-receiver/mlx_token_stream_server.py:3017`. Unset read: ''.
+
+```text
+                config_prompt_token_count = int(cfg.get('prompt_token_count', 0) or 0)
+                config_prompt_hash = int(cfg.get('prompt_hash', 0) or 0)
+                if os.environ.get('LLAMA_DSV4_MAC_RETAIN_HANDLE', '') not in ('', '0'):
+                    config_reuse_retained_count = int(cfg.get('reuse_retained_count', 0) or 0)
+                    config_reuse_retained_prefix_hash = int(cfg.get('reuse_retained_prefix_hash', 0) or 0) & 9223372036854775807
+                config_sampling_profile = _sampling_profile_from_config(cfg)
+                config_prompt_token_ids = cfg.get('prompt_token_ids')
+```
 
 Source: `engines/streaming-llama/prefill_llama.cpp/tools/server/server-common.cpp:1036`. Unset read: NULL from getenv; the literal consumer below supplies any fallback.
 
@@ -55159,7 +57691,7 @@ Source: `engines/streaming-llama/prefill_llama.cpp/src/models/deepseek-v4.cpp:97
 
 LLAMA_DS_FACTORY_STAGING_MB: advanced engine setting; built-in default retained
 
-Scope: rtx-llama. Class: advanced.
+Scope: rtx-llama, studio. Class: advanced.
 
 Source: `engines/streaming-llama/prefill_llama.cpp/src/llama-weight-fetcher.cpp:2517`. Unset read: NULL from getenv; the literal consumer below supplies any fallback.
 
@@ -55189,7 +57721,7 @@ def generate_one(root, request, *, streaming, precision='bf16', cache=None, eage
 
 LLAMA_DS_STAGING_MB: advanced engine setting; built-in default retained
 
-Scope: image, rtx-llama, video. Class: advanced.
+Scope: image, rtx-llama, studio, video. Class: advanced.
 
 Source: `engines/streaming-llama/prefill_llama.cpp/src/llama-weight-fetcher.cpp:2232`. Unset read: NULL from getenv; the literal consumer below supplies any fallback.
 
@@ -58093,7 +60625,67 @@ Source: `engines/streaming-llama/prefill_llama.cpp/common/arg.cpp:3573`. Unset r
 
 LLAMA_PD_CACHE_DISABLE: advanced engine setting; built-in default retained
 
-Scope: rtx-llama. Class: advanced.
+Scope: mac-llama, rtx-llama. Class: advanced.
+
+Source: `engines/streaming-llama/prefill_llama.cpp/tools/decode-receiver/main.cpp:552`. Unset read: NULL from getenv; the literal consumer below supplies any fallback.
+
+```text
+                             uint32_t & out_cached_len, uint64_t & out_session_id) {
+    // Safety env gate: LLAMA_PD_CACHE_DISABLE=1 → immediate miss
+    if (const char * dis = std::getenv("LLAMA_PD_CACHE_DISABLE")) {
+        if (dis[0] == '1') { return false; }
+    }
+    std::lock_guard<std::mutex> lk(g_prefix_cache_mu);
+    auto it = g_prefix_cache.find(prefix_hash);
+```
+
+Source: `engines/streaming-llama/prefill_llama.cpp/tools/decode-receiver/main.cpp:622`. Unset read: NULL from getenv; the literal consumer below supplies any fallback.
+
+```text
+    if (!ctx) { return; }
+    // Safety env gate: LLAMA_PD_CACHE_DISABLE=1 → no-op
+    if (const char * dis = std::getenv("LLAMA_PD_CACHE_DISABLE")) {
+        if (dis[0] == '1') { return; }
+    }
+    // KV capture is opt-in: must set LLAMA_PD_CACHE_CAPTURE=1 explicitly.
+    // On Mac/Metal, set this to enable Phase-2 KV serialization.
+```
+
+Source: `engines/streaming-llama/prefill_llama.cpp/tools/decode-receiver/main.cpp:712`. Unset read: NULL from getenv; the literal consumer below supplies any fallback.
+
+```text
+                             const int32_t * token_ids = nullptr, int n_token_ids = 0) {
+    // Safety env gate: LLAMA_PD_CACHE_DISABLE=1 → no-op
+    if (const char * dis = std::getenv("LLAMA_PD_CACHE_DISABLE")) {
+        if (dis[0] == '1') { return; }
+    }
+
+    // Capture KV state from context (Phase-2: full serialization).
+```
+
+Source: `engines/streaming-llama/prefill_llama.cpp/tools/decode-receiver/main.cpp:3084`. Unset read: NULL from getenv; the literal consumer below supplies any fallback.
+
+```text
+            const bool pd_cache_hit = (meta.flags & LLAMA_KV_ARTIFACT_FLAG_CACHE_HIT) != 0;
+            bool disabled = false;
+            if (const char * dis = std::getenv("LLAMA_PD_CACHE_DISABLE")) { disabled = (dis[0] == '1'); }
+            if (pd_cache_hit && !disabled) {
+                const uint64_t snap_sid = meta.pd_session_id;
+                fprintf(stderr, "[worker-%d] Session %d: PROMPT-DIRECT CACHE HIT (sid=0x%llx)\n",
+                        sess.session_id, sid, (unsigned long long) snap_sid);
+```
+
+Source: `engines/streaming-llama/prefill_llama.cpp/tools/decode-receiver/main.cpp:3470`. Unset read: NULL from getenv; the literal consumer below supplies any fallback.
+
+```text
+                // Gate: safety env disable
+                bool disabled = false;
+                if (const char * dis = std::getenv("LLAMA_PD_CACHE_DISABLE")) {
+                    disabled = (dis[0] == '1');
+                }
+                if (disabled) {
+                    fprintf(stderr, "[decode-server] Session %d: CACHE HIT but LLAMA_PD_CACHE_DISABLE=1 — treating as miss\n",
+```
 
 Source: `engines/streaming-llama/prefill_llama.cpp/tools/server/server-context.cpp:254`. Unset read: NULL from getenv; the literal consumer below supplies any fallback.
 
@@ -62703,6 +65295,18 @@ llama test model: engine setting; built-in default retained
 
 Scope: mlx-serve. Class: advanced.
 
+Source: `engines/mlx-serve/src/arch/llama.zig:395`. Unset read: NULL from getenv; the literal consumer below supplies any fallback.
+
+```text
+    // libc getenv (same idiom as src/generate.zig / src/arch/ds4.zig); the
+    // returned pointer is owned by the environment, so no free is needed.
+    const raw = std.c.getenv("LLAMA_TEST_MODEL") orelse return null;
+    const slice = std.mem.sliceTo(raw, 0);
+    return if (slice.len == 0) null else slice;
+}
+
+```
+
 ### LLAMA_TRACE
 
 LLAMA_TRACE: advanced engine setting; built-in default retained
@@ -63885,11 +66489,35 @@ ltx ada emb: engine setting; built-in default retained
 
 Scope: mlx-serve. Class: advanced.
 
+Source: `engines/mlx-serve/src/ltx_video.zig:5464`. Unset read: NULL from getenv; the literal consumer below supplies any fallback.
+
+```text
+    const dir = std.mem.span(std.c.getenv("LTX_TEST_MODEL") orelse return error.SkipZigTest);
+    const pp = std.mem.span(std.c.getenv("LTX_ADA_PARAMS") orelse return error.SkipZigTest);
+    const ep = std.mem.span(std.c.getenv("LTX_ADA_EMB") orelse return error.SkipZigTest);
+    const allocator = testing.allocator;
+    const io = std.Io.Threaded.global_single_threaded.io();
+    const s = mlx.mlx_default_gpu_stream_new();
+    defer _ = mlx.mlx_stream_free(s);
+```
+
 ### LTX_ADA_PARAMS
 
 ltx ada params: engine setting; built-in default retained
 
 Scope: mlx-serve. Class: advanced.
+
+Source: `engines/mlx-serve/src/ltx_video.zig:5463`. Unset read: NULL from getenv; the literal consumer below supplies any fallback.
+
+```text
+test "ltx DiT adaLN conditioning reproduces AdaLayerNormSingle" {
+    const dir = std.mem.span(std.c.getenv("LTX_TEST_MODEL") orelse return error.SkipZigTest);
+    const pp = std.mem.span(std.c.getenv("LTX_ADA_PARAMS") orelse return error.SkipZigTest);
+    const ep = std.mem.span(std.c.getenv("LTX_ADA_EMB") orelse return error.SkipZigTest);
+    const allocator = testing.allocator;
+    const io = std.Io.Threaded.global_single_threaded.io();
+    const s = mlx.mlx_default_gpu_stream_new();
+```
 
 ### LTX_AUDIO_DIR
 
@@ -63897,11 +66525,35 @@ ltx audio dir: engine setting; built-in default retained
 
 Scope: mlx-serve. Class: advanced.
 
+Source: `engines/mlx-serve/src/gen.zig:1684`. Unset read: NULL from getenv; the literal consumer below supplies any fallback.
+
+```text
+fn loadAudioVae(io: std.Io, allocator: std.mem.Allocator, model_dir: []const u8, cpu_s: mlx.mlx_stream) ?ltx.Component {
+    // The directory holding the two audio files: model dir, or an override.
+    const dir: []const u8 = if (std.c.getenv("LTX_AUDIO_DIR")) |env| blk: {
+        const e = std.mem.span(env);
+        break :blk if (e.len > 0) e else model_dir;
+    } else model_dir;
+    var ap: [1024]u8 = undefined;
+```
+
 ### LTX_AUDIO_ENC_LATENT
 
 ltx audio enc latent: engine setting; built-in default retained
 
 Scope: mlx-serve. Class: advanced.
+
+Source: `engines/mlx-serve/src/ltx_audio.zig:1359`. Unset read: NULL from getenv; the literal consumer below supplies any fallback.
+
+```text
+    const s = mlx.mlx_default_gpu_stream_new();
+    const wave_p = std.mem.span(std.c.getenv("LTX_AUDIO_ENC_WAVE") orelse return error.SkipZigTest);
+    const lat_p = std.mem.span(std.c.getenv("LTX_AUDIO_ENC_LATENT") orelse return error.SkipZigTest);
+    const io = std.Io.Threaded.global_single_threaded.io();
+    var comp = (try loadAudioComp(alloc)) orelse return error.SkipZigTest;
+    defer comp.deinit();
+
+```
 
 ### LTX_AUDIO_ENC_MIN
 
@@ -63909,11 +66561,35 @@ ltx audio enc min: engine setting; built-in default retained
 
 Scope: mlx-serve. Class: advanced.
 
+Source: `engines/mlx-serve/src/ltx_audio.zig:1374`. Unset read: NULL from getenv; the literal consumer below supplies any fallback.
+
+```text
+    const got = evalRead(tokens, s);
+    const cos = cosine(got, ref_lat);
+    const min: f64 = if (std.c.getenv("LTX_AUDIO_ENC_MIN")) |v| (std.fmt.parseFloat(f64, std.mem.span(v)) catch 0.99) else 0.99;
+    std.debug.print("[ltx-audio] encoder latent cos={d:.5} (min {d:.3}), n={d} vs {d}\n", .{ cos, min, got.len, ref_lat.len });
+    try testing.expect(cos > min);
+}
+
+```
+
 ### LTX_AUDIO_ENC_WAVE
 
 ltx audio enc wave: engine setting; built-in default retained
 
 Scope: mlx-serve. Class: advanced.
+
+Source: `engines/mlx-serve/src/ltx_audio.zig:1358`. Unset read: NULL from getenv; the literal consumer below supplies any fallback.
+
+```text
+    const alloc = testing.allocator;
+    const s = mlx.mlx_default_gpu_stream_new();
+    const wave_p = std.mem.span(std.c.getenv("LTX_AUDIO_ENC_WAVE") orelse return error.SkipZigTest);
+    const lat_p = std.mem.span(std.c.getenv("LTX_AUDIO_ENC_LATENT") orelse return error.SkipZigTest);
+    const io = std.Io.Threaded.global_single_threaded.io();
+    var comp = (try loadAudioComp(alloc)) orelse return error.SkipZigTest;
+    defer comp.deinit();
+```
 
 ### LTX_AUDIO_LATENT
 
@@ -63921,11 +66597,47 @@ ltx audio latent: engine setting; built-in default retained
 
 Scope: mlx-serve. Class: advanced.
 
+Source: `engines/mlx-serve/src/ltx_audio.zig:1208`. Unset read: NULL from getenv; the literal consumer below supplies any fallback.
+
+```text
+    const alloc = testing.allocator;
+    const s = mlx.mlx_default_gpu_stream_new();
+    const lat_p = std.mem.span(std.c.getenv("LTX_AUDIO_LATENT") orelse return error.SkipZigTest);
+    const mel_p = std.mem.span(std.c.getenv("LTX_AUDIO_MEL") orelse return error.SkipZigTest);
+    const io = std.Io.Threaded.global_single_threaded.io();
+    var comp = (try loadAudioComp(alloc)) orelse return error.SkipZigTest;
+    defer comp.deinit();
+```
+
 ### LTX_AUDIO_MEL
 
 ltx audio mel: engine setting; built-in default retained
 
 Scope: mlx-serve. Class: advanced.
+
+Source: `engines/mlx-serve/src/ltx_audio.zig:1209`. Unset read: NULL from getenv; the literal consumer below supplies any fallback.
+
+```text
+    const s = mlx.mlx_default_gpu_stream_new();
+    const lat_p = std.mem.span(std.c.getenv("LTX_AUDIO_LATENT") orelse return error.SkipZigTest);
+    const mel_p = std.mem.span(std.c.getenv("LTX_AUDIO_MEL") orelse return error.SkipZigTest);
+    const io = std.Io.Threaded.global_single_threaded.io();
+    var comp = (try loadAudioComp(alloc)) orelse return error.SkipZigTest;
+    defer comp.deinit();
+
+```
+
+Source: `engines/mlx-serve/src/ltx_audio.zig:1234`. Unset read: NULL from getenv; the literal consumer below supplies any fallback.
+
+```text
+    const alloc = testing.allocator;
+    const s = mlx.mlx_default_gpu_stream_new();
+    const mel_p = std.mem.span(std.c.getenv("LTX_AUDIO_MEL") orelse return error.SkipZigTest);
+    const wave_p = std.mem.span(std.c.getenv("LTX_AUDIO_WAVE") orelse return error.SkipZigTest);
+    const io = std.Io.Threaded.global_single_threaded.io();
+    var comp = (try loadAudioComp(alloc)) orelse return error.SkipZigTest;
+    defer comp.deinit();
+```
 
 ### LTX_AUDIO_MEL_MIN
 
@@ -63933,11 +66645,35 @@ ltx audio mel min: engine setting; built-in default retained
 
 Scope: mlx-serve. Class: advanced.
 
+Source: `engines/mlx-serve/src/ltx_audio.zig:1226`. Unset read: NULL from getenv; the literal consumer below supplies any fallback.
+
+```text
+    const got = evalRead(mel, s);
+    const cos = cosine(got, ref_mel);
+    const min: f64 = if (std.c.getenv("LTX_AUDIO_MEL_MIN")) |v| (std.fmt.parseFloat(f64, std.mem.span(v)) catch 0.99) else 0.99;
+    std.debug.print("[ltx-audio] VAE mel cos={d:.5} (min {d:.3}), n={d} vs {d}\n", .{ cos, min, got.len, ref_mel.len });
+    try testing.expect(cos > min);
+}
+
+```
+
 ### LTX_AUDIO_TEST_MODEL
 
 ltx audio test model: engine setting; built-in default retained
 
 Scope: mlx-serve. Class: advanced.
+
+Source: `engines/mlx-serve/src/ltx_audio.zig:1107`. Unset read: NULL from getenv; the literal consumer below supplies any fallback.
+
+```text
+// vocoder.safetensors).
+fn loadAudioComp(alloc: std.mem.Allocator) !?ltx.Component {
+    const raw = std.c.getenv("LTX_AUDIO_TEST_MODEL") orelse return null;
+    const dir = std.mem.span(raw);
+    var ap: [1024]u8 = undefined;
+    var vp: [1024]u8 = undefined;
+    const audio_path = try std.fmt.bufPrintSentinel(&ap, "{s}/audio_vae.safetensors", .{dir}, 0);
+```
 
 ### LTX_AUDIO_TRACE
 
@@ -63945,11 +66681,35 @@ ltx audio trace: engine setting; built-in default retained
 
 Scope: mlx-serve. Class: advanced.
 
+Source: `engines/mlx-serve/src/ltx_audio.zig:328`. Unset read: NULL from getenv; the literal consumer below supplies any fallback.
+
+```text
+
+fn dbg(tag: []const u8, x: mlx.mlx_array) void {
+    if (std.c.getenv("LTX_AUDIO_TRACE") == null) return;
+    const sh = mlx.getShape(x);
+    std.debug.print("[ltx-audio-trace] {s}: ndim={d} shape=", .{ tag, sh.len });
+    for (sh) |d| std.debug.print("{d},", .{d});
+    std.debug.print("\n", .{});
+```
+
 ### LTX_AUDIO_WAVE
 
 ltx audio wave: engine setting; built-in default retained
 
 Scope: mlx-serve. Class: advanced.
+
+Source: `engines/mlx-serve/src/ltx_audio.zig:1235`. Unset read: NULL from getenv; the literal consumer below supplies any fallback.
+
+```text
+    const s = mlx.mlx_default_gpu_stream_new();
+    const mel_p = std.mem.span(std.c.getenv("LTX_AUDIO_MEL") orelse return error.SkipZigTest);
+    const wave_p = std.mem.span(std.c.getenv("LTX_AUDIO_WAVE") orelse return error.SkipZigTest);
+    const io = std.Io.Threaded.global_single_threaded.io();
+    var comp = (try loadAudioComp(alloc)) orelse return error.SkipZigTest;
+    defer comp.deinit();
+
+```
 
 ### LTX_AUDIO_WAVE_MIN
 
@@ -63957,11 +66717,35 @@ ltx audio wave min: engine setting; built-in default retained
 
 Scope: mlx-serve. Class: advanced.
 
+Source: `engines/mlx-serve/src/ltx_audio.zig:1254`. Unset read: NULL from getenv; the literal consumer below supplies any fallback.
+
+```text
+    // layout (see tests/dump_ltx_audio_fixtures.py), so cosine is order-aligned.
+    const cos = cosine(got, ref_wave);
+    const min: f64 = if (std.c.getenv("LTX_AUDIO_WAVE_MIN")) |v| (std.fmt.parseFloat(f64, std.mem.span(v)) catch 0.9) else 0.9;
+    std.debug.print("[ltx-audio] vocoder wave cos={d:.5} (min {d:.3}), n={d} vs {d}\n", .{ cos, min, got.len, ref_wave.len });
+    try testing.expect(cos > min);
+}
+
+```
+
 ### LTX_B0_OUTA
 
 ltx b0 outa: engine setting; built-in default retained
 
 Scope: mlx-serve. Class: advanced.
+
+Source: `engines/mlx-serve/src/ltx_video.zig:5744`. Unset read: NULL from getenv; the literal consumer below supplies any fallback.
+
+```text
+    const refv = try readF32(io, allocator, std.mem.span(std.c.getenv("LTX_B0_OUTV") orelse return error.SkipZigTest));
+    defer allocator.free(refv);
+    const refa = try readF32(io, allocator, std.mem.span(std.c.getenv("LTX_B0_OUTA") orelse return error.SkipZigTest));
+    defer allocator.free(refa);
+    var vf = mlx.mlx_array_new();
+    defer _ = mlx.mlx_array_free(vf);
+    try mlx.check(mlx.mlx_astype(&vf, out.v, .float32, s));
+```
 
 ### LTX_B0_OUTV
 
@@ -63969,11 +66753,35 @@ ltx b0 outv: engine setting; built-in default retained
 
 Scope: mlx-serve. Class: advanced.
 
+Source: `engines/mlx-serve/src/ltx_video.zig:5742`. Unset read: NULL from getenv; the literal consumer below supplies any fallback.
+
+```text
+    defer _ = mlx.mlx_array_free(out.a);
+
+    const refv = try readF32(io, allocator, std.mem.span(std.c.getenv("LTX_B0_OUTV") orelse return error.SkipZigTest));
+    defer allocator.free(refv);
+    const refa = try readF32(io, allocator, std.mem.span(std.c.getenv("LTX_B0_OUTA") orelse return error.SkipZigTest));
+    defer allocator.free(refa);
+    var vf = mlx.mlx_array_new();
+```
+
 ### LTX_CONNT_AIN
 
 ltx connt ain: engine setting; built-in default retained
 
 Scope: mlx-serve. Class: advanced.
+
+Source: `engines/mlx-serve/src/ltx_video.zig:5311`. Unset read: NULL from getenv; the literal consumer below supplies any fallback.
+
+```text
+    const vin_p = std.mem.span(std.c.getenv("LTX_CONNT_VIN") orelse return error.SkipZigTest);
+    const vout_p = std.mem.span(std.c.getenv("LTX_CONNT_VOUT") orelse return error.SkipZigTest);
+    const ain_p = std.mem.span(std.c.getenv("LTX_CONNT_AIN") orelse return error.SkipZigTest);
+    const aout_p = std.mem.span(std.c.getenv("LTX_CONNT_AOUT") orelse return error.SkipZigTest);
+    const allocator = testing.allocator;
+    const io = std.Io.Threaded.global_single_threaded.io();
+    const s = mlx.mlx_default_gpu_stream_new();
+```
 
 ### LTX_CONNT_AOUT
 
@@ -63981,11 +66789,35 @@ ltx connt aout: engine setting; built-in default retained
 
 Scope: mlx-serve. Class: advanced.
 
+Source: `engines/mlx-serve/src/ltx_video.zig:5312`. Unset read: NULL from getenv; the literal consumer below supplies any fallback.
+
+```text
+    const vout_p = std.mem.span(std.c.getenv("LTX_CONNT_VOUT") orelse return error.SkipZigTest);
+    const ain_p = std.mem.span(std.c.getenv("LTX_CONNT_AIN") orelse return error.SkipZigTest);
+    const aout_p = std.mem.span(std.c.getenv("LTX_CONNT_AOUT") orelse return error.SkipZigTest);
+    const allocator = testing.allocator;
+    const io = std.Io.Threaded.global_single_threaded.io();
+    const s = mlx.mlx_default_gpu_stream_new();
+    defer _ = mlx.mlx_stream_free(s);
+```
+
 ### LTX_CONNT_VIN
 
 ltx connt vin: engine setting; built-in default retained
 
 Scope: mlx-serve. Class: advanced.
+
+Source: `engines/mlx-serve/src/ltx_video.zig:5309`. Unset read: NULL from getenv; the literal consumer below supplies any fallback.
+
+```text
+test "ltx connectorTransform reproduces Embeddings1DConnector" {
+    const dir = std.mem.span(std.c.getenv("LTX_TEST_MODEL") orelse return error.SkipZigTest);
+    const vin_p = std.mem.span(std.c.getenv("LTX_CONNT_VIN") orelse return error.SkipZigTest);
+    const vout_p = std.mem.span(std.c.getenv("LTX_CONNT_VOUT") orelse return error.SkipZigTest);
+    const ain_p = std.mem.span(std.c.getenv("LTX_CONNT_AIN") orelse return error.SkipZigTest);
+    const aout_p = std.mem.span(std.c.getenv("LTX_CONNT_AOUT") orelse return error.SkipZigTest);
+    const allocator = testing.allocator;
+```
 
 ### LTX_CONNT_VOUT
 
@@ -63993,11 +66825,35 @@ ltx connt vout: engine setting; built-in default retained
 
 Scope: mlx-serve. Class: advanced.
 
+Source: `engines/mlx-serve/src/ltx_video.zig:5310`. Unset read: NULL from getenv; the literal consumer below supplies any fallback.
+
+```text
+    const dir = std.mem.span(std.c.getenv("LTX_TEST_MODEL") orelse return error.SkipZigTest);
+    const vin_p = std.mem.span(std.c.getenv("LTX_CONNT_VIN") orelse return error.SkipZigTest);
+    const vout_p = std.mem.span(std.c.getenv("LTX_CONNT_VOUT") orelse return error.SkipZigTest);
+    const ain_p = std.mem.span(std.c.getenv("LTX_CONNT_AIN") orelse return error.SkipZigTest);
+    const aout_p = std.mem.span(std.c.getenv("LTX_CONNT_AOUT") orelse return error.SkipZigTest);
+    const allocator = testing.allocator;
+    const io = std.Io.Threaded.global_single_threaded.io();
+```
+
 ### LTX_CONN_AUDIO
 
 ltx conn audio: engine setting; built-in default retained
 
 Scope: mlx-serve. Class: advanced.
+
+Source: `engines/mlx-serve/src/ltx_video.zig:5241`. Unset read: NULL from getenv; the literal consumer below supplies any fallback.
+
+```text
+    const sp = std.mem.span(std.c.getenv("LTX_CONN_STACK") orelse return error.SkipZigTest);
+    const vp = std.mem.span(std.c.getenv("LTX_CONN_VIDEO") orelse return error.SkipZigTest);
+    const ap = std.mem.span(std.c.getenv("LTX_CONN_AUDIO") orelse return error.SkipZigTest);
+    const allocator = testing.allocator;
+    const io = std.Io.Threaded.global_single_threaded.io();
+    const s = mlx.mlx_default_gpu_stream_new();
+    defer _ = mlx.mlx_stream_free(s);
+```
 
 ### LTX_CONN_STACK
 
@@ -64005,11 +66861,35 @@ ltx conn stack: engine setting; built-in default retained
 
 Scope: mlx-serve. Class: advanced.
 
+Source: `engines/mlx-serve/src/ltx_video.zig:5239`. Unset read: NULL from getenv; the literal consumer below supplies any fallback.
+
+```text
+test "ltx connectorProject reproduces TextEmbeddingProjection" {
+    const dir = std.mem.span(std.c.getenv("LTX_TEST_MODEL") orelse return error.SkipZigTest);
+    const sp = std.mem.span(std.c.getenv("LTX_CONN_STACK") orelse return error.SkipZigTest);
+    const vp = std.mem.span(std.c.getenv("LTX_CONN_VIDEO") orelse return error.SkipZigTest);
+    const ap = std.mem.span(std.c.getenv("LTX_CONN_AUDIO") orelse return error.SkipZigTest);
+    const allocator = testing.allocator;
+    const io = std.Io.Threaded.global_single_threaded.io();
+```
+
 ### LTX_CONN_VIDEO
 
 ltx conn video: engine setting; built-in default retained
 
 Scope: mlx-serve. Class: advanced.
+
+Source: `engines/mlx-serve/src/ltx_video.zig:5240`. Unset read: NULL from getenv; the literal consumer below supplies any fallback.
+
+```text
+    const dir = std.mem.span(std.c.getenv("LTX_TEST_MODEL") orelse return error.SkipZigTest);
+    const sp = std.mem.span(std.c.getenv("LTX_CONN_STACK") orelse return error.SkipZigTest);
+    const vp = std.mem.span(std.c.getenv("LTX_CONN_VIDEO") orelse return error.SkipZigTest);
+    const ap = std.mem.span(std.c.getenv("LTX_CONN_AUDIO") orelse return error.SkipZigTest);
+    const allocator = testing.allocator;
+    const io = std.Io.Threaded.global_single_threaded.io();
+    const s = mlx.mlx_default_gpu_stream_new();
+```
 
 ### LTX_CONVIN_X
 
@@ -64017,11 +66897,35 @@ ltx convin x: engine setting; built-in default retained
 
 Scope: mlx-serve. Class: advanced.
 
+Source: `engines/mlx-serve/src/ltx_video.zig:4932`. Unset read: NULL from getenv; the literal consumer below supplies any fallback.
+
+```text
+test "ltx decoderConv3d matches reference conv_in" {
+    const dir = std.mem.span(std.c.getenv("LTX_TEST_MODEL") orelse return error.SkipZigTest);
+    const xp = std.mem.span(std.c.getenv("LTX_CONVIN_X") orelse return error.SkipZigTest);
+    const yp = std.mem.span(std.c.getenv("LTX_CONVIN_Y") orelse return error.SkipZigTest);
+    const allocator = testing.allocator;
+    const io = std.Io.Threaded.global_single_threaded.io();
+    const s = mlx.mlx_default_gpu_stream_new();
+```
+
 ### LTX_CONVIN_Y
 
 ltx convin y: engine setting; built-in default retained
 
 Scope: mlx-serve. Class: advanced.
+
+Source: `engines/mlx-serve/src/ltx_video.zig:4933`. Unset read: NULL from getenv; the literal consumer below supplies any fallback.
+
+```text
+    const dir = std.mem.span(std.c.getenv("LTX_TEST_MODEL") orelse return error.SkipZigTest);
+    const xp = std.mem.span(std.c.getenv("LTX_CONVIN_X") orelse return error.SkipZigTest);
+    const yp = std.mem.span(std.c.getenv("LTX_CONVIN_Y") orelse return error.SkipZigTest);
+    const allocator = testing.allocator;
+    const io = std.Io.Threaded.global_single_threaded.io();
+    const s = mlx.mlx_default_gpu_stream_new();
+    defer _ = mlx.mlx_stream_free(s);
+```
 
 ### LTX_DIFFVAE_LATENT
 
@@ -64029,11 +66933,71 @@ ltx diffvae latent: engine setting; built-in default retained
 
 Scope: mlx-serve. Class: advanced.
 
+Source: `engines/mlx-serve/src/ltx_diffvae_forward.zig:1405`. Unset read: NULL from getenv; the literal consumer below supplies any fallback.
+
+```text
+test "diffvae parity: every stage reproduces the reference decoder" {
+    const dir = std.mem.span(std.c.getenv("LTX_DIFFVAE_MODEL") orelse return error.SkipZigTest);
+    const lat_p = std.mem.span(std.c.getenv("LTX_DIFFVAE_LATENT") orelse return error.SkipZigTest);
+    const alloc = testing.allocator;
+    const io = std.Io.Threaded.global_single_threaded.io();
+    const s = mlx.mlx_default_gpu_stream_new();
+    defer _ = mlx.mlx_stream_free(s);
+```
+
 ### LTX_DIFFVAE_MODEL
 
 ltx diffvae model: engine setting; built-in default retained
 
 Scope: mlx-serve. Class: advanced.
+
+Source: `engines/mlx-serve/src/ltx_diffvae_forward.zig:1316`. Unset read: NULL from getenv; the literal consumer below supplies any fallback.
+
+```text
+//   LTX_DIFFVAE_MODEL = a pack dir holding vae_diffusion_decoder.safetensors
+test "diffvae decode runs the whole ladder on the shipped checkpoint" {
+    const dir = std.mem.span(std.c.getenv("LTX_DIFFVAE_MODEL") orelse return error.SkipZigTest);
+    const alloc = testing.allocator;
+    const s = mlx.mlx_default_gpu_stream_new();
+    defer _ = mlx.mlx_stream_free(s);
+    const cpu_s = mlx.mlx_default_cpu_stream_new();
+```
+
+Source: `engines/mlx-serve/src/ltx_diffvae_forward.zig:1404`. Unset read: NULL from getenv; the literal consumer below supplies any fallback.
+
+```text
+//   LTX_DIFFVAE_MODEL + LTX_DIFFVAE_{LATENT,STAGE0,STAGE1,STAGE2,CONTEXT,XT,VPRED,PIXELS}
+test "diffvae parity: every stage reproduces the reference decoder" {
+    const dir = std.mem.span(std.c.getenv("LTX_DIFFVAE_MODEL") orelse return error.SkipZigTest);
+    const lat_p = std.mem.span(std.c.getenv("LTX_DIFFVAE_LATENT") orelse return error.SkipZigTest);
+    const alloc = testing.allocator;
+    const io = std.Io.Threaded.global_single_threaded.io();
+    const s = mlx.mlx_default_gpu_stream_new();
+```
+
+Source: `engines/mlx-serve/src/ltx_diffvae_forward.zig:1516`. Unset read: NULL from getenv; the literal consumer below supplies any fallback.
+
+```text
+//   LTX_DIFFVAE_MODEL = a pack dir holding vae_diffusion_decoder.safetensors
+test "diffvae tiled decode agrees with the whole-volume decode, seams included" {
+    const dir = std.mem.span(std.c.getenv("LTX_DIFFVAE_MODEL") orelse return error.SkipZigTest);
+    const alloc = testing.allocator;
+    const s = mlx.mlx_default_gpu_stream_new();
+    defer _ = mlx.mlx_stream_free(s);
+    const cpu_s = mlx.mlx_default_cpu_stream_new();
+```
+
+Source: `engines/mlx-serve/src/ltx_diffvae_forward.zig:1622`. Unset read: NULL from getenv; the literal consumer below supplies any fallback.
+
+```text
+//   LTX_DIFFVAE_MODEL = a pack dir; ~768x512x97, minutes.
+test "diffvae decode peak stays inside the budget the residency bill promises" {
+    const dir = std.mem.span(std.c.getenv("LTX_DIFFVAE_MODEL") orelse return error.SkipZigTest);
+    if (std.c.getenv("LTX_DIFFVAE_PEAK") == null) return error.SkipZigTest;
+    const alloc = testing.allocator;
+    const s = mlx.mlx_default_gpu_stream_new();
+    defer _ = mlx.mlx_stream_free(s);
+```
 
 ### LTX_DIFFVAE_PEAK
 
@@ -64041,11 +67005,35 @@ ltx diffvae peak: engine setting; built-in default retained
 
 Scope: mlx-serve. Class: advanced.
 
+Source: `engines/mlx-serve/src/ltx_diffvae_forward.zig:1623`. Unset read: NULL from getenv; the literal consumer below supplies any fallback.
+
+```text
+test "diffvae decode peak stays inside the budget the residency bill promises" {
+    const dir = std.mem.span(std.c.getenv("LTX_DIFFVAE_MODEL") orelse return error.SkipZigTest);
+    if (std.c.getenv("LTX_DIFFVAE_PEAK") == null) return error.SkipZigTest;
+    const alloc = testing.allocator;
+    const s = mlx.mlx_default_gpu_stream_new();
+    defer _ = mlx.mlx_stream_free(s);
+    const cpu_s = mlx.mlx_default_cpu_stream_new();
+```
+
 ### LTX_DIFFVAE_PIXELS
 
 ltx diffvae pixels: engine setting; built-in default retained
 
 Scope: mlx-serve. Class: advanced.
+
+Source: `engines/mlx-serve/src/ltx_diffvae_forward.zig:1486`. Unset read: NULL from getenv; the literal consumer below supplies any fallback.
+
+```text
+    }
+
+    if (std.c.getenv("LTX_DIFFVAE_PIXELS")) |p| {
+        const want = try readF32(io, alloc, std.mem.span(p));
+        defer alloc.free(want);
+        // The shipped contract: ONE step, the prediction IS x0.
+        var tbuf: [8]f32 = undefined;
+```
 
 ### LTX_DIFFVAE_VPRED
 
@@ -64053,11 +67041,35 @@ ltx diffvae vpred: engine setting; built-in default retained
 
 Scope: mlx-serve. Class: advanced.
 
+Source: `engines/mlx-serve/src/ltx_diffvae_forward.zig:1473`. Unset read: NULL from getenv; the literal consumer below supplies any fallback.
+
+```text
+    const model_dtype = mlx.mlx_array_dtype(context);
+
+    if (std.c.getenv("LTX_DIFFVAE_VPRED")) |p| {
+        const want = try readF32(io, alloc, std.mem.span(p));
+        defer alloc.free(want);
+        const x_in = try astype(x_t0, model_dtype, s);
+        defer _ = mlx.mlx_array_free(x_in);
+```
+
 ### LTX_DIFFVAE_XT
 
 ltx diffvae xt: engine setting; built-in default retained
 
 Scope: mlx-serve. Class: advanced.
+
+Source: `engines/mlx-serve/src/ltx_diffvae_forward.zig:1461`. Unset read: NULL from getenv; the literal consumer below supplies any fallback.
+
+```text
+    const context = x;
+
+    const xt_p = std.mem.span(std.c.getenv("LTX_DIFFVAE_XT") orelse return error.SkipZigTest);
+    const xtbuf = try readF32(io, alloc, xt_p);
+    defer alloc.free(xtbuf);
+    const csh = mlx.getShape(context);
+    const xt_shape = [_]c_int{ 1, csh[1], csh[2], csh[3], @intCast(cfg.patchChannels()) };
+```
 
 ### LTX_ENC_H
 
@@ -64065,11 +67077,35 @@ ltx enc h: engine setting; built-in default retained
 
 Scope: mlx-serve. Class: advanced.
 
+Source: `engines/mlx-serve/src/ltx_video.zig:5066`. Unset read: NULL from getenv; the literal consumer below supplies any fallback.
+
+```text
+    const pp = std.mem.span(std.c.getenv("LTX_ENC_PIXELS") orelse return error.SkipZigTest);
+    const lp = std.mem.span(std.c.getenv("LTX_ENC_LATENT") orelse return error.SkipZigTest);
+    const H: c_int = if (std.c.getenv("LTX_ENC_H")) |e| (std.fmt.parseInt(c_int, std.mem.span(e), 10) catch 256) else 256;
+    const W: c_int = if (std.c.getenv("LTX_ENC_W")) |e| (std.fmt.parseInt(c_int, std.mem.span(e), 10) catch 256) else 256;
+    const allocator = testing.allocator;
+    const io = std.Io.Threaded.global_single_threaded.io();
+    const s = mlx.mlx_default_gpu_stream_new();
+```
+
 ### LTX_ENC_LATENT
 
 ltx enc latent: engine setting; built-in default retained
 
 Scope: mlx-serve. Class: advanced.
+
+Source: `engines/mlx-serve/src/ltx_video.zig:5065`. Unset read: NULL from getenv; the literal consumer below supplies any fallback.
+
+```text
+    const dir = std.mem.span(std.c.getenv("LTX_TEST_MODEL") orelse return error.SkipZigTest);
+    const pp = std.mem.span(std.c.getenv("LTX_ENC_PIXELS") orelse return error.SkipZigTest);
+    const lp = std.mem.span(std.c.getenv("LTX_ENC_LATENT") orelse return error.SkipZigTest);
+    const H: c_int = if (std.c.getenv("LTX_ENC_H")) |e| (std.fmt.parseInt(c_int, std.mem.span(e), 10) catch 256) else 256;
+    const W: c_int = if (std.c.getenv("LTX_ENC_W")) |e| (std.fmt.parseInt(c_int, std.mem.span(e), 10) catch 256) else 256;
+    const allocator = testing.allocator;
+    const io = std.Io.Threaded.global_single_threaded.io();
+```
 
 ### LTX_ENC_PIXELS
 
@@ -64077,11 +67113,35 @@ ltx enc pixels: engine setting; built-in default retained
 
 Scope: mlx-serve. Class: advanced.
 
+Source: `engines/mlx-serve/src/ltx_video.zig:5064`. Unset read: NULL from getenv; the literal consumer below supplies any fallback.
+
+```text
+test "ltx VAE encoder reproduces reference VideoEncoder" {
+    const dir = std.mem.span(std.c.getenv("LTX_TEST_MODEL") orelse return error.SkipZigTest);
+    const pp = std.mem.span(std.c.getenv("LTX_ENC_PIXELS") orelse return error.SkipZigTest);
+    const lp = std.mem.span(std.c.getenv("LTX_ENC_LATENT") orelse return error.SkipZigTest);
+    const H: c_int = if (std.c.getenv("LTX_ENC_H")) |e| (std.fmt.parseInt(c_int, std.mem.span(e), 10) catch 256) else 256;
+    const W: c_int = if (std.c.getenv("LTX_ENC_W")) |e| (std.fmt.parseInt(c_int, std.mem.span(e), 10) catch 256) else 256;
+    const allocator = testing.allocator;
+```
+
 ### LTX_ENC_W
 
 ltx enc w: engine setting; built-in default retained
 
 Scope: mlx-serve. Class: advanced.
+
+Source: `engines/mlx-serve/src/ltx_video.zig:5067`. Unset read: NULL from getenv; the literal consumer below supplies any fallback.
+
+```text
+    const lp = std.mem.span(std.c.getenv("LTX_ENC_LATENT") orelse return error.SkipZigTest);
+    const H: c_int = if (std.c.getenv("LTX_ENC_H")) |e| (std.fmt.parseInt(c_int, std.mem.span(e), 10) catch 256) else 256;
+    const W: c_int = if (std.c.getenv("LTX_ENC_W")) |e| (std.fmt.parseInt(c_int, std.mem.span(e), 10) catch 256) else 256;
+    const allocator = testing.allocator;
+    const io = std.Io.Threaded.global_single_threaded.io();
+    const s = mlx.mlx_default_gpu_stream_new();
+    defer _ = mlx.mlx_stream_free(s);
+```
 
 ### LTX_FRAMES_LATENT
 
@@ -64089,11 +67149,35 @@ ltx frames latent: engine setting; built-in default retained
 
 Scope: mlx-serve. Class: advanced.
 
+Source: `engines/mlx-serve/src/ltx_video.zig:6173`. Unset read: NULL from getenv; the literal consumer below supplies any fallback.
+
+```text
+test "ltx DiT latent-to-frames reproduces reference decode" {
+    const dir = std.mem.span(std.c.getenv("LTX_TEST_MODEL") orelse return error.SkipZigTest);
+    const lp = std.mem.span(std.c.getenv("LTX_FRAMES_LATENT") orelse return error.SkipZigTest);
+    const rp = std.mem.span(std.c.getenv("LTX_FRAMES_REF") orelse return error.SkipZigTest);
+    const allocator = testing.allocator;
+    const io = std.Io.Threaded.global_single_threaded.io();
+    const s = mlx.mlx_default_gpu_stream_new();
+```
+
 ### LTX_FRAMES_REF
 
 ltx frames ref: engine setting; built-in default retained
 
 Scope: mlx-serve. Class: advanced.
+
+Source: `engines/mlx-serve/src/ltx_video.zig:6174`. Unset read: NULL from getenv; the literal consumer below supplies any fallback.
+
+```text
+    const dir = std.mem.span(std.c.getenv("LTX_TEST_MODEL") orelse return error.SkipZigTest);
+    const lp = std.mem.span(std.c.getenv("LTX_FRAMES_LATENT") orelse return error.SkipZigTest);
+    const rp = std.mem.span(std.c.getenv("LTX_FRAMES_REF") orelse return error.SkipZigTest);
+    const allocator = testing.allocator;
+    const io = std.Io.Threaded.global_single_threaded.io();
+    const s = mlx.mlx_default_gpu_stream_new();
+    defer _ = mlx.mlx_stream_free(s);
+```
 
 ### LTX_FWD_AVEL
 
@@ -64101,11 +67185,35 @@ ltx fwd avel: engine setting; built-in default retained
 
 Scope: mlx-serve. Class: advanced.
 
+Source: `engines/mlx-serve/src/ltx_video.zig:5818`. Unset read: NULL from getenv; the literal consumer below supplies any fallback.
+
+```text
+    const refv = try readF32(io, allocator, std.mem.span(std.c.getenv("LTX_FWD_VVEL") orelse return error.SkipZigTest));
+    defer allocator.free(refv);
+    const refa = try readF32(io, allocator, std.mem.span(std.c.getenv("LTX_FWD_AVEL") orelse return error.SkipZigTest));
+    defer allocator.free(refa);
+    var vf = mlx.mlx_array_new();
+    defer _ = mlx.mlx_array_free(vf);
+    try mlx.check(mlx.mlx_astype(&vf, out.v, .float32, s));
+```
+
 ### LTX_FWD_VVEL
 
 ltx fwd vvel: engine setting; built-in default retained
 
 Scope: mlx-serve. Class: advanced.
+
+Source: `engines/mlx-serve/src/ltx_video.zig:5816`. Unset read: NULL from getenv; the literal consumer below supplies any fallback.
+
+```text
+    defer _ = mlx.mlx_array_free(out.a);
+
+    const refv = try readF32(io, allocator, std.mem.span(std.c.getenv("LTX_FWD_VVEL") orelse return error.SkipZigTest));
+    defer allocator.free(refv);
+    const refa = try readF32(io, allocator, std.mem.span(std.c.getenv("LTX_FWD_AVEL") orelse return error.SkipZigTest));
+    defer allocator.free(refa);
+    var vf = mlx.mlx_array_new();
+```
 
 ### LTX_GEMMA_DIR
 
@@ -64113,11 +67221,47 @@ ltx gemma dir: engine setting; built-in default retained
 
 Scope: mlx-serve. Class: advanced.
 
+Source: `engines/mlx-serve/src/gen.zig:1727`. Unset read: NULL from getenv; the literal consumer below supplies any fallback.
+
+```text
+/// so a partial download never gets handed back.
+fn resolveGemmaDir(io: std.Io, allocator: std.mem.Allocator, model_dir: []const u8, version: ltx.LtxVersion) ![]u8 {
+    if (std.c.getenv("LTX_GEMMA_DIR")) |env| {
+        const e = std.mem.span(env);
+        // A relative override would feed openFileAbsolute's assert downstream
+        // (ReleaseFast UB) — ignore it loudly instead.
+        if (e.len > 0 and std.fs.path.isAbsolute(e)) return allocator.dupe(u8, e);
+```
+
+Source: `engines/mlx-serve/src/gen.zig:3992`. Unset read: NULL from getenv; the literal consumer below supplies any fallback.
+
+```text
+fn ltxTextEncoderBytes(io: std.Io) u64 {
+    var buf: [1024]u8 = undefined;
+    if (std.c.getenv("LTX_GEMMA_DIR")) |env| {
+        const e = std.mem.span(env);
+        if (std.fs.path.isAbsolute(e)) return sumSafetensorsAt(io, e);
+    }
+    const home = std.mem.span(std.c.getenv("HOME") orelse return 0);
+```
+
 ### LTX_GEMMA_IDS
 
 ltx gemma ids: engine setting; built-in default retained
 
 Scope: mlx-serve. Class: advanced.
+
+Source: `engines/mlx-serve/src/ltx_video.zig:5411`. Unset read: NULL from getenv; the literal consumer below supplies any fallback.
+
+```text
+test "ltx gemmaCapture reproduces reference hidden states" {
+    const dir = std.mem.span(std.c.getenv("LTX_GEMMA_MODEL") orelse return error.SkipZigTest);
+    const idp = std.mem.span(std.c.getenv("LTX_GEMMA_IDS") orelse return error.SkipZigTest);
+    const allocator = testing.allocator;
+    const io = std.Io.Threaded.global_single_threaded.io();
+    const s = mlx.mlx_default_gpu_stream_new();
+    defer _ = mlx.mlx_stream_free(s);
+```
 
 ### LTX_GEMMA_MODEL
 
@@ -64125,11 +67269,47 @@ ltx gemma model: engine setting; built-in default retained
 
 Scope: mlx-serve. Class: advanced.
 
+Source: `engines/mlx-serve/src/ltx_video.zig:5410`. Unset read: NULL from getenv; the literal consumer below supplies any fallback.
+
+```text
+//   LTX_GEMMA_S0/S1/S24/S48 = f32 raw of reference states 0/1/24/48
+test "ltx gemmaCapture reproduces reference hidden states" {
+    const dir = std.mem.span(std.c.getenv("LTX_GEMMA_MODEL") orelse return error.SkipZigTest);
+    const idp = std.mem.span(std.c.getenv("LTX_GEMMA_IDS") orelse return error.SkipZigTest);
+    const allocator = testing.allocator;
+    const io = std.Io.Threaded.global_single_threaded.io();
+    const s = mlx.mlx_default_gpu_stream_new();
+```
+
+Source: `engines/mlx-serve/src/ltx_video.zig:6255`. Unset read: NULL from getenv; the literal consumer below supplies any fallback.
+
+```text
+test "ltx DiT encodeTextLtx reproduces PromptEncoder" {
+    const dir = std.mem.span(std.c.getenv("LTX_TEST_MODEL") orelse return error.SkipZigTest);
+    const gdir = std.mem.span(std.c.getenv("LTX_GEMMA_MODEL") orelse return error.SkipZigTest);
+    const idp = std.mem.span(std.c.getenv("LTX_TEXT_IDS") orelse return error.SkipZigTest);
+    const allocator = testing.allocator;
+    const io = std.Io.Threaded.global_single_threaded.io();
+    const s = mlx.mlx_default_gpu_stream_new();
+```
+
 ### LTX_NSA_PARAMS
 
 ltx nsa params: engine setting; built-in default retained
 
 Scope: mlx-serve. Class: advanced.
+
+Source: `engines/mlx-serve/src/ltx_video.zig:5514`. Unset read: NULL from getenv; the literal consumer below supplies any fallback.
+
+```text
+    const dir = std.mem.span(std.c.getenv("LTX_TEST_MODEL") orelse return error.SkipZigTest);
+    const vhp = std.mem.span(std.c.getenv("LTX_NSA_VH") orelse return error.SkipZigTest);
+    const pp = std.mem.span(std.c.getenv("LTX_NSA_PARAMS") orelse return error.SkipZigTest);
+    const rp = std.mem.span(std.c.getenv("LTX_NSA_REF") orelse return error.SkipZigTest);
+    const allocator = testing.allocator;
+    const io = std.Io.Threaded.global_single_threaded.io();
+    const s = mlx.mlx_default_gpu_stream_new();
+```
 
 ### LTX_NSA_REF
 
@@ -64137,11 +67317,35 @@ ltx nsa ref: engine setting; built-in default retained
 
 Scope: mlx-serve. Class: advanced.
 
+Source: `engines/mlx-serve/src/ltx_video.zig:5515`. Unset read: NULL from getenv; the literal consumer below supplies any fallback.
+
+```text
+    const vhp = std.mem.span(std.c.getenv("LTX_NSA_VH") orelse return error.SkipZigTest);
+    const pp = std.mem.span(std.c.getenv("LTX_NSA_PARAMS") orelse return error.SkipZigTest);
+    const rp = std.mem.span(std.c.getenv("LTX_NSA_REF") orelse return error.SkipZigTest);
+    const allocator = testing.allocator;
+    const io = std.Io.Threaded.global_single_threaded.io();
+    const s = mlx.mlx_default_gpu_stream_new();
+    defer _ = mlx.mlx_stream_free(s);
+```
+
 ### LTX_NSA_VH
 
 ltx nsa vh: engine setting; built-in default retained
 
 Scope: mlx-serve. Class: advanced.
+
+Source: `engines/mlx-serve/src/ltx_video.zig:5513`. Unset read: NULL from getenv; the literal consumer below supplies any fallback.
+
+```text
+test "ltx DiT ditNormedSA reproduces compute_video_normed_sa" {
+    const dir = std.mem.span(std.c.getenv("LTX_TEST_MODEL") orelse return error.SkipZigTest);
+    const vhp = std.mem.span(std.c.getenv("LTX_NSA_VH") orelse return error.SkipZigTest);
+    const pp = std.mem.span(std.c.getenv("LTX_NSA_PARAMS") orelse return error.SkipZigTest);
+    const rp = std.mem.span(std.c.getenv("LTX_NSA_REF") orelse return error.SkipZigTest);
+    const allocator = testing.allocator;
+    const io = std.Io.Threaded.global_single_threaded.io();
+```
 
 ### LTX_POS_A
 
@@ -64149,11 +67353,131 @@ ltx pos a: engine setting; built-in default retained
 
 Scope: mlx-serve. Class: advanced.
 
+Source: `engines/mlx-serve/src/ltx_video.zig:5568`. Unset read: NULL from getenv; the literal consumer below supplies any fallback.
+
+```text
+test "ltx DiT ditRope matches reference precompute_rope_freqs" {
+    const pvp = std.c.getenv("LTX_POS_V") orelse return error.SkipZigTest;
+    const pap = std.c.getenv("LTX_POS_A") orelse return error.SkipZigTest;
+    const allocator = testing.allocator;
+    const io = std.Io.Threaded.global_single_threaded.io();
+    const s = mlx.mlx_default_gpu_stream_new();
+    defer _ = mlx.mlx_stream_free(s);
+```
+
+Source: `engines/mlx-serve/src/ltx_video.zig:5714`. Unset read: NULL from getenv; the literal consumer below supplies any fallback.
+
+```text
+    const vpos = try readF32(io, allocator, std.mem.span(std.c.getenv("LTX_POS_V") orelse return error.SkipZigTest));
+    defer allocator.free(vpos);
+    const apos = try readF32(io, allocator, std.mem.span(std.c.getenv("LTX_POS_A") orelse return error.SkipZigTest));
+    defer allocator.free(apos);
+    const NvU: u32 = @intCast(vpos.len / 3);
+    const NaU: u32 = @intCast(apos.len);
+    const vtmp = try allocator.alloc(f32, NvU);
+```
+
+Source: `engines/mlx-serve/src/ltx_video.zig:5808`. Unset read: NULL from getenv; the literal consumer below supplies any fallback.
+
+```text
+    const vpos = try readF32(io, allocator, std.mem.span(std.c.getenv("LTX_POS_V") orelse return error.SkipZigTest));
+    defer allocator.free(vpos);
+    const apos = try readF32(io, allocator, std.mem.span(std.c.getenv("LTX_POS_A") orelse return error.SkipZigTest));
+    defer allocator.free(apos);
+
+    const cfg = LtxConfig{};
+    const out = try ditForward(&comp, allocator, cfg, vlat.x, alat.x, 0.7, vtext.x, atext.x, vpos, apos, null, null, .{}, s);
+```
+
+Source: `engines/mlx-serve/src/ltx_video.zig:6139`. Unset read: NULL from getenv; the literal consumer below supplies any fallback.
+
+```text
+    const vpos = try readF32(io, allocator, std.mem.span(std.c.getenv("LTX_POS_V") orelse return error.SkipZigTest));
+    defer allocator.free(vpos);
+    const apos = try readF32(io, allocator, std.mem.span(std.c.getenv("LTX_POS_A") orelse return error.SkipZigTest));
+    defer allocator.free(apos);
+    const sigmas = try readF32(io, allocator, std.mem.span(std.c.getenv("LTX_SAMP_SIGMAS") orelse return error.SkipZigTest));
+    defer allocator.free(sigmas);
+
+```
+
+Source: `engines/mlx-serve/src/ltx_video.zig:6229`. Unset read: NULL from getenv; the literal consumer below supplies any fallback.
+
+```text
+test "ltx DiT computeVideoPositions matches reference" {
+    const pvp = std.c.getenv("LTX_POS_V") orelse return error.SkipZigTest;
+    const pap = std.c.getenv("LTX_POS_A") orelse return error.SkipZigTest;
+    const allocator = testing.allocator;
+    const io = std.Io.Threaded.global_single_threaded.io();
+    const refv = try readF32(io, allocator, std.mem.span(pvp));
+    defer allocator.free(refv);
+```
+
 ### LTX_POS_V
 
 ltx pos v: engine setting; built-in default retained
 
 Scope: mlx-serve. Class: advanced.
+
+Source: `engines/mlx-serve/src/ltx_video.zig:5567`. Unset read: NULL from getenv; the literal consumer below supplies any fallback.
+
+```text
+// LTX_ROPE_VX{COS,SIN}=[1,32,Nv,32], LTX_ROPE_AX{COS,SIN}=[1,32,Na,32].
+test "ltx DiT ditRope matches reference precompute_rope_freqs" {
+    const pvp = std.c.getenv("LTX_POS_V") orelse return error.SkipZigTest;
+    const pap = std.c.getenv("LTX_POS_A") orelse return error.SkipZigTest;
+    const allocator = testing.allocator;
+    const io = std.Io.Threaded.global_single_threaded.io();
+    const s = mlx.mlx_default_gpu_stream_new();
+```
+
+Source: `engines/mlx-serve/src/ltx_video.zig:5712`. Unset read: NULL from getenv; the literal consumer below supplies any fallback.
+
+```text
+
+    // positions → rope
+    const vpos = try readF32(io, allocator, std.mem.span(std.c.getenv("LTX_POS_V") orelse return error.SkipZigTest));
+    defer allocator.free(vpos);
+    const apos = try readF32(io, allocator, std.mem.span(std.c.getenv("LTX_POS_A") orelse return error.SkipZigTest));
+    defer allocator.free(apos);
+    const NvU: u32 = @intCast(vpos.len / 3);
+```
+
+Source: `engines/mlx-serve/src/ltx_video.zig:5806`. Unset read: NULL from getenv; the literal consumer below supplies any fallback.
+
+```text
+    defer _ = mlx.mlx_array_free(atext.x);
+
+    const vpos = try readF32(io, allocator, std.mem.span(std.c.getenv("LTX_POS_V") orelse return error.SkipZigTest));
+    defer allocator.free(vpos);
+    const apos = try readF32(io, allocator, std.mem.span(std.c.getenv("LTX_POS_A") orelse return error.SkipZigTest));
+    defer allocator.free(apos);
+
+```
+
+Source: `engines/mlx-serve/src/ltx_video.zig:6137`. Unset read: NULL from getenv; the literal consumer below supplies any fallback.
+
+```text
+    defer _ = mlx.mlx_array_free(nga.x);
+
+    const vpos = try readF32(io, allocator, std.mem.span(std.c.getenv("LTX_POS_V") orelse return error.SkipZigTest));
+    defer allocator.free(vpos);
+    const apos = try readF32(io, allocator, std.mem.span(std.c.getenv("LTX_POS_A") orelse return error.SkipZigTest));
+    defer allocator.free(apos);
+    const sigmas = try readF32(io, allocator, std.mem.span(std.c.getenv("LTX_SAMP_SIGMAS") orelse return error.SkipZigTest));
+```
+
+Source: `engines/mlx-serve/src/ltx_video.zig:6228`. Unset read: NULL from getenv; the literal consumer below supplies any fallback.
+
+```text
+// Cheap, no model. Gated on LTX_POS_V / LTX_POS_A dumps.
+test "ltx DiT computeVideoPositions matches reference" {
+    const pvp = std.c.getenv("LTX_POS_V") orelse return error.SkipZigTest;
+    const pap = std.c.getenv("LTX_POS_A") orelse return error.SkipZigTest;
+    const allocator = testing.allocator;
+    const io = std.Io.Threaded.global_single_threaded.io();
+    const refv = try readF32(io, allocator, std.mem.span(pvp));
+```
 
 ### LTX_SAMP_FINAL_A
 
@@ -64161,11 +67485,35 @@ ltx samp final a: engine setting; built-in default retained
 
 Scope: mlx-serve. Class: advanced.
 
+Source: `engines/mlx-serve/src/ltx_video.zig:6151`. Unset read: NULL from getenv; the literal consumer below supplies any fallback.
+
+```text
+    const refv = try readF32(io, allocator, std.mem.span(std.c.getenv("LTX_SAMP_FINAL_V") orelse return error.SkipZigTest));
+    defer allocator.free(refv);
+    const refa = try readF32(io, allocator, std.mem.span(std.c.getenv("LTX_SAMP_FINAL_A") orelse return error.SkipZigTest));
+    defer allocator.free(refa);
+    var vf = mlx.mlx_array_new();
+    defer _ = mlx.mlx_array_free(vf);
+    try mlx.check(mlx.mlx_astype(&vf, out.v, .float32, s));
+```
+
 ### LTX_SAMP_FINAL_V
 
 ltx samp final v: engine setting; built-in default retained
 
 Scope: mlx-serve. Class: advanced.
+
+Source: `engines/mlx-serve/src/ltx_video.zig:6149`. Unset read: NULL from getenv; the literal consumer below supplies any fallback.
+
+```text
+    defer _ = mlx.mlx_array_free(out.a);
+
+    const refv = try readF32(io, allocator, std.mem.span(std.c.getenv("LTX_SAMP_FINAL_V") orelse return error.SkipZigTest));
+    defer allocator.free(refv);
+    const refa = try readF32(io, allocator, std.mem.span(std.c.getenv("LTX_SAMP_FINAL_A") orelse return error.SkipZigTest));
+    defer allocator.free(refa);
+    var vf = mlx.mlx_array_new();
+```
 
 ### LTX_SAMP_SIGMAS
 
@@ -64173,11 +67521,251 @@ ltx samp sigmas: engine setting; built-in default retained
 
 Scope: mlx-serve. Class: advanced.
 
+Source: `engines/mlx-serve/src/ltx_video.zig:6076`. Unset read: NULL from getenv; the literal consumer below supplies any fallback.
+
+```text
+// no model load. Gated on LTX_SAMP_SIGMAS=<samp_sigmas.raw [num_steps+1]>.
+test "ltx DiT dynamicShiftSchedule matches reference" {
+    const sp = std.c.getenv("LTX_SAMP_SIGMAS") orelse return error.SkipZigTest;
+    const allocator = testing.allocator;
+    const io = std.Io.Threaded.global_single_threaded.io();
+    const ref = try readF32(io, allocator, std.mem.span(sp));
+    defer allocator.free(ref);
+```
+
+Source: `engines/mlx-serve/src/ltx_video.zig:6141`. Unset read: NULL from getenv; the literal consumer below supplies any fallback.
+
+```text
+    const apos = try readF32(io, allocator, std.mem.span(std.c.getenv("LTX_POS_A") orelse return error.SkipZigTest));
+    defer allocator.free(apos);
+    const sigmas = try readF32(io, allocator, std.mem.span(std.c.getenv("LTX_SAMP_SIGMAS") orelse return error.SkipZigTest));
+    defer allocator.free(sigmas);
+
+    const cfg = LtxConfig{};
+    const out = try ditSampleCfg(&comp, allocator, cfg, nv.x, na.x, cv.x, ca.x, ngv.x, nga.x, vpos, apos, sigmas, .{ .cfg = 3.0, .rescale = 0.7 }, .{ .cfg = 7.0, .rescale = 0.7 }, null, null, null, null, .{}, s);
+```
+
 ### LTX_TEST_MODEL
 
 ltx test model: engine setting; built-in default retained
 
 Scope: mlx-serve. Class: advanced.
+
+Source: `engines/mlx-serve/src/ltx_video.zig:4849`. Unset read: NULL from getenv; the literal consumer below supplies any fallback.
+
+```text
+//   LTX_TEST_MODEL = path to the snapshot dir
+test "ltx loader: connector + vae_decoder key map" {
+    const dir = std.mem.span(std.c.getenv("LTX_TEST_MODEL") orelse return error.SkipZigTest);
+    const allocator = testing.allocator;
+    const s = mlx.mlx_default_cpu_stream_new();
+    defer _ = mlx.mlx_stream_free(s);
+
+```
+
+Source: `engines/mlx-serve/src/ltx_video.zig:4931`. Unset read: NULL from getenv; the literal consumer below supplies any fallback.
+
+```text
+//     ([1,3,8,8,128] input / [1,3,8,8,1024] output of conv_in).
+test "ltx decoderConv3d matches reference conv_in" {
+    const dir = std.mem.span(std.c.getenv("LTX_TEST_MODEL") orelse return error.SkipZigTest);
+    const xp = std.mem.span(std.c.getenv("LTX_CONVIN_X") orelse return error.SkipZigTest);
+    const yp = std.mem.span(std.c.getenv("LTX_CONVIN_Y") orelse return error.SkipZigTest);
+    const allocator = testing.allocator;
+    const io = std.Io.Threaded.global_single_threaded.io();
+```
+
+Source: `engines/mlx-serve/src/ltx_video.zig:4995`. Unset read: NULL from getenv; the literal consumer below supplies any fallback.
+
+```text
+//   LTX_VAE_DECODED = raw f32 [1,3,9,256,384] (BCFHW) reference decoded pixels
+test "ltx vaeDecode reproduces reference VideoDecoder" {
+    const dir = std.mem.span(std.c.getenv("LTX_TEST_MODEL") orelse return error.SkipZigTest);
+    const lp = std.mem.span(std.c.getenv("LTX_VAE_LATENT") orelse return error.SkipZigTest);
+    const dp = std.mem.span(std.c.getenv("LTX_VAE_DECODED") orelse return error.SkipZigTest);
+    const allocator = testing.allocator;
+    const io = std.Io.Threaded.global_single_threaded.io();
+```
+
+Source: `engines/mlx-serve/src/ltx_video.zig:5063`. Unset read: NULL from getenv; the literal consumer below supplies any fallback.
+
+```text
+// Build fixtures with tests/dump_ltx_vae_encoder_fixtures.py.
+test "ltx VAE encoder reproduces reference VideoEncoder" {
+    const dir = std.mem.span(std.c.getenv("LTX_TEST_MODEL") orelse return error.SkipZigTest);
+    const pp = std.mem.span(std.c.getenv("LTX_ENC_PIXELS") orelse return error.SkipZigTest);
+    const lp = std.mem.span(std.c.getenv("LTX_ENC_LATENT") orelse return error.SkipZigTest);
+    const H: c_int = if (std.c.getenv("LTX_ENC_H")) |e| (std.fmt.parseInt(c_int, std.mem.span(e), 10) catch 256) else 256;
+    const W: c_int = if (std.c.getenv("LTX_ENC_W")) |e| (std.fmt.parseInt(c_int, std.mem.span(e), 10) catch 256) else 256;
+```
+
+Source: `engines/mlx-serve/src/ltx_video.zig:5120`. Unset read: NULL from getenv; the literal consumer below supplies any fallback.
+
+```text
+//   LTX_VAE_DIR (preferred) or LTX_TEST_MODEL
+test "ltx preview: the Latent2RGB preview resembles the decoded frame" {
+    const raw = std.c.getenv("LTX_VAE_DIR") orelse std.c.getenv("LTX_TEST_MODEL") orelse return error.SkipZigTest;
+    const dir = std.mem.span(raw);
+    if (dir.len == 0) return error.SkipZigTest;
+    const preview_mod = @import("preview.zig");
+    const allocator = testing.allocator;
+```
+
+Source: `engines/mlx-serve/src/ltx_video.zig:5238`. Unset read: NULL from getenv; the literal consumer below supplies any fallback.
+
+```text
+//   LTX_CONN_STACK = [49,1,T,3840] f32; LTX_CONN_VIDEO/AUDIO = reference outputs
+test "ltx connectorProject reproduces TextEmbeddingProjection" {
+    const dir = std.mem.span(std.c.getenv("LTX_TEST_MODEL") orelse return error.SkipZigTest);
+    const sp = std.mem.span(std.c.getenv("LTX_CONN_STACK") orelse return error.SkipZigTest);
+    const vp = std.mem.span(std.c.getenv("LTX_CONN_VIDEO") orelse return error.SkipZigTest);
+    const ap = std.mem.span(std.c.getenv("LTX_CONN_AUDIO") orelse return error.SkipZigTest);
+    const allocator = testing.allocator;
+```
+
+Source: `engines/mlx-serve/src/ltx_video.zig:5308`. Unset read: NULL from getenv; the literal consumer below supplies any fallback.
+
+```text
+//   LTX_TEST_MODEL, LTX_CONNT_VIN/VOUT (video [1,256,4096]), LTX_CONNT_AIN/AOUT (audio [1,256,2048]).
+test "ltx connectorTransform reproduces Embeddings1DConnector" {
+    const dir = std.mem.span(std.c.getenv("LTX_TEST_MODEL") orelse return error.SkipZigTest);
+    const vin_p = std.mem.span(std.c.getenv("LTX_CONNT_VIN") orelse return error.SkipZigTest);
+    const vout_p = std.mem.span(std.c.getenv("LTX_CONNT_VOUT") orelse return error.SkipZigTest);
+    const ain_p = std.mem.span(std.c.getenv("LTX_CONNT_AIN") orelse return error.SkipZigTest);
+    const aout_p = std.mem.span(std.c.getenv("LTX_CONNT_AOUT") orelse return error.SkipZigTest);
+```
+
+Source: `engines/mlx-serve/src/ltx_video.zig:5462`. Unset read: NULL from getenv; the literal consumer below supplies any fallback.
+
+```text
+//   LTX_TEST_MODEL=<ltx-2.3-mlx-q4 snapshot>, LTX_ADA_PARAMS=<params.raw>, LTX_ADA_EMB=<emb.raw>
+test "ltx DiT adaLN conditioning reproduces AdaLayerNormSingle" {
+    const dir = std.mem.span(std.c.getenv("LTX_TEST_MODEL") orelse return error.SkipZigTest);
+    const pp = std.mem.span(std.c.getenv("LTX_ADA_PARAMS") orelse return error.SkipZigTest);
+    const ep = std.mem.span(std.c.getenv("LTX_ADA_EMB") orelse return error.SkipZigTest);
+    const allocator = testing.allocator;
+    const io = std.Io.Threaded.global_single_threaded.io();
+```
+
+Source: `engines/mlx-serve/src/ltx_video.zig:5512`. Unset read: NULL from getenv; the literal consumer below supplies any fallback.
+
+```text
+//   LTX_NSA_PARAMS=<video_adaln_params.raw [1,36864]>, LTX_NSA_REF=<normed_sa.raw [1,192,4096]>
+test "ltx DiT ditNormedSA reproduces compute_video_normed_sa" {
+    const dir = std.mem.span(std.c.getenv("LTX_TEST_MODEL") orelse return error.SkipZigTest);
+    const vhp = std.mem.span(std.c.getenv("LTX_NSA_VH") orelse return error.SkipZigTest);
+    const pp = std.mem.span(std.c.getenv("LTX_NSA_PARAMS") orelse return error.SkipZigTest);
+    const rp = std.mem.span(std.c.getenv("LTX_NSA_REF") orelse return error.SkipZigTest);
+    const allocator = testing.allocator;
+```
+
+Source: `engines/mlx-serve/src/ltx_video.zig:5643`. Unset read: NULL from getenv; the literal consumer below supplies any fallback.
+
+```text
+// Gated on LTX_TEST_MODEL + the block-0 IO .raw dumps (LTX_B0_*).
+test "ltx DiT block-0 forward reproduces BasicAVTransformerBlock" {
+    const dir = std.mem.span(std.c.getenv("LTX_TEST_MODEL") orelse return error.SkipZigTest);
+    const allocator = testing.allocator;
+    const io = std.Io.Threaded.global_single_threaded.io();
+    const s = mlx.mlx_default_gpu_stream_new();
+    defer _ = mlx.mlx_stream_free(s);
+```
+
+Source: `engines/mlx-serve/src/ltx_video.zig:5768`. Unset read: NULL from getenv; the literal consumer below supplies any fallback.
+
+```text
+// Gated on LTX_TEST_MODEL + latent/text/position/velocity .raw dumps (LTX_FWD_*).
+test "ltx DiT ditForward reproduces LTXModel velocity" {
+    const dir = std.mem.span(std.c.getenv("LTX_TEST_MODEL") orelse return error.SkipZigTest);
+    const allocator = testing.allocator;
+    const io = std.Io.Threaded.global_single_threaded.io();
+    const s = mlx.mlx_default_gpu_stream_new();
+    defer _ = mlx.mlx_stream_free(s);
+```
+
+Source: `engines/mlx-serve/src/ltx_video.zig:5845`. Unset read: NULL from getenv; the literal consumer below supplies any fallback.
+
+```text
+//   LTX_TEST_MODEL = ltx-2.3-mlx-q4 snapshot dir (for transformer-dev.safetensors)
+test "ltx DiT per-token AdaLN uniform-mask equals scalar (no t2v regression)" {
+    const dir = std.mem.span(std.c.getenv("LTX_TEST_MODEL") orelse return error.SkipZigTest);
+    const allocator = testing.allocator;
+    const s = mlx.mlx_default_gpu_stream_new();
+    defer _ = mlx.mlx_stream_free(s);
+    const cpu_s = mlx.mlx_default_cpu_stream_new();
+```
+
+Source: `engines/mlx-serve/src/ltx_video.zig:5949`. Unset read: NULL from getenv; the literal consumer below supplies any fallback.
+
+```text
+//   LTX_TEST_MODEL = ltx-2.3-mlx-q4 snapshot dir (for transformer-dev.safetensors)
+test "ltx DiT audio_sigma == sigma equals the shared-sigma path (a2vid tripwire)" {
+    const dir = std.mem.span(std.c.getenv("LTX_TEST_MODEL") orelse return error.SkipZigTest);
+    const allocator = testing.allocator;
+    const s = mlx.mlx_default_gpu_stream_new();
+    defer _ = mlx.mlx_stream_free(s);
+    const cpu_s = mlx.mlx_default_cpu_stream_new();
+```
+
+Source: `engines/mlx-serve/src/ltx_video.zig:6019`. Unset read: NULL from getenv; the literal consumer below supplies any fallback.
+
+```text
+//   LTX_TEST_MODEL = ltx-2.3-mlx-q4 snapshot dir (for transformer-dev.safetensors)
+test "ltx a2vid frozen audio is a fixed point of the guided Euler loop" {
+    const dir = std.mem.span(std.c.getenv("LTX_TEST_MODEL") orelse return error.SkipZigTest);
+    const allocator = testing.allocator;
+    const s = mlx.mlx_default_gpu_stream_new();
+    defer _ = mlx.mlx_stream_free(s);
+    const cpu_s = mlx.mlx_default_cpu_stream_new();
+```
+
+Source: `engines/mlx-serve/src/ltx_video.zig:6094`. Unset read: NULL from getenv; the literal consumer below supplies any fallback.
+
+```text
+// denoised latents. Gated on LTX_TEST_MODEL + the sampler .raw dumps (LTX_SAMP_*).
+test "ltx DiT ditSampleCfg reproduces guided denoise loop" {
+    const dir = std.mem.span(std.c.getenv("LTX_TEST_MODEL") orelse return error.SkipZigTest);
+    const allocator = testing.allocator;
+    const io = std.Io.Threaded.global_single_threaded.io();
+    const s = mlx.mlx_default_gpu_stream_new();
+    defer _ = mlx.mlx_stream_free(s);
+```
+
+Source: `engines/mlx-serve/src/ltx_video.zig:6172`. Unset read: NULL from getenv; the literal consumer below supplies any fallback.
+
+```text
+// LTX_FRAMES_LATENT=<samp_final_v.raw [1,192,128]>, LTX_FRAMES_REF=<frames_u8.raw>.
+test "ltx DiT latent-to-frames reproduces reference decode" {
+    const dir = std.mem.span(std.c.getenv("LTX_TEST_MODEL") orelse return error.SkipZigTest);
+    const lp = std.mem.span(std.c.getenv("LTX_FRAMES_LATENT") orelse return error.SkipZigTest);
+    const rp = std.mem.span(std.c.getenv("LTX_FRAMES_REF") orelse return error.SkipZigTest);
+    const allocator = testing.allocator;
+    const io = std.Io.Threaded.global_single_threaded.io();
+```
+
+Source: `engines/mlx-serve/src/ltx_video.zig:6254`. Unset read: NULL from getenv; the literal consumer below supplies any fallback.
+
+```text
+// + LTX_GEMMA_MODEL + LTX_TEXT_IDS/VIDEO/AUDIO.
+test "ltx DiT encodeTextLtx reproduces PromptEncoder" {
+    const dir = std.mem.span(std.c.getenv("LTX_TEST_MODEL") orelse return error.SkipZigTest);
+    const gdir = std.mem.span(std.c.getenv("LTX_GEMMA_MODEL") orelse return error.SkipZigTest);
+    const idp = std.mem.span(std.c.getenv("LTX_TEXT_IDS") orelse return error.SkipZigTest);
+    const allocator = testing.allocator;
+    const io = std.Io.Threaded.global_single_threaded.io();
+```
+
+Source: `engines/mlx-serve/src/ltx_video.zig:6571`. Unset read: NULL from getenv; the literal consumer below supplies any fallback.
+
+```text
+// LatentUpsampler (fixtures from tests/dump_ltx_upsampler_fixtures.py).
+test "ltx latent upsampler reproduces reference LatentUpsampler" {
+    const dir = std.mem.span(std.c.getenv("LTX_TEST_MODEL") orelse return error.SkipZigTest);
+    const lp = std.mem.span(std.c.getenv("LTX_UP_LATENT") orelse return error.SkipZigTest);
+    const op = std.mem.span(std.c.getenv("LTX_UP_OUT") orelse return error.SkipZigTest);
+    const allocator = testing.allocator;
+    const io = std.Io.Threaded.global_single_threaded.io();
+```
 
 ### LTX_TEXT_AUDIO
 
@@ -64185,11 +67773,35 @@ ltx text audio: engine setting; built-in default retained
 
 Scope: mlx-serve. Class: advanced.
 
+Source: `engines/mlx-serve/src/ltx_video.zig:6287`. Unset read: NULL from getenv; the literal consumer below supplies any fallback.
+
+```text
+    const refv = try readF32(io, allocator, std.mem.span(std.c.getenv("LTX_TEXT_VIDEO") orelse return error.SkipZigTest));
+    defer allocator.free(refv);
+    const refa = try readF32(io, allocator, std.mem.span(std.c.getenv("LTX_TEXT_AUDIO") orelse return error.SkipZigTest));
+    defer allocator.free(refa);
+    const vc = corrF32(mlx.mlx_array_data_float32(vf).?, refv, 0);
+    const ac = corrF32(mlx.mlx_array_data_float32(af).?, refa, 0);
+    std.debug.print("[ltx-text] video corr={d:.6} audio corr={d:.6}\n", .{ vc, ac });
+```
+
 ### LTX_TEXT_IDS
 
 ltx text ids: engine setting; built-in default retained
 
 Scope: mlx-serve. Class: advanced.
+
+Source: `engines/mlx-serve/src/ltx_video.zig:6256`. Unset read: NULL from getenv; the literal consumer below supplies any fallback.
+
+```text
+    const dir = std.mem.span(std.c.getenv("LTX_TEST_MODEL") orelse return error.SkipZigTest);
+    const gdir = std.mem.span(std.c.getenv("LTX_GEMMA_MODEL") orelse return error.SkipZigTest);
+    const idp = std.mem.span(std.c.getenv("LTX_TEXT_IDS") orelse return error.SkipZigTest);
+    const allocator = testing.allocator;
+    const io = std.Io.Threaded.global_single_threaded.io();
+    const s = mlx.mlx_default_gpu_stream_new();
+    defer _ = mlx.mlx_stream_free(s);
+```
 
 ### LTX_TEXT_VIDEO
 
@@ -64197,11 +67809,35 @@ ltx text video: engine setting; built-in default retained
 
 Scope: mlx-serve. Class: advanced.
 
+Source: `engines/mlx-serve/src/ltx_video.zig:6285`. Unset read: NULL from getenv; the literal consumer below supplies any fallback.
+
+```text
+    _ = mlx.mlx_array_eval(af);
+
+    const refv = try readF32(io, allocator, std.mem.span(std.c.getenv("LTX_TEXT_VIDEO") orelse return error.SkipZigTest));
+    defer allocator.free(refv);
+    const refa = try readF32(io, allocator, std.mem.span(std.c.getenv("LTX_TEXT_AUDIO") orelse return error.SkipZigTest));
+    defer allocator.free(refa);
+    const vc = corrF32(mlx.mlx_array_data_float32(vf).?, refv, 0);
+```
+
 ### LTX_UP_LATENT
 
 ltx up latent: engine setting; built-in default retained
 
 Scope: mlx-serve. Class: advanced.
+
+Source: `engines/mlx-serve/src/ltx_video.zig:6572`. Unset read: NULL from getenv; the literal consumer below supplies any fallback.
+
+```text
+test "ltx latent upsampler reproduces reference LatentUpsampler" {
+    const dir = std.mem.span(std.c.getenv("LTX_TEST_MODEL") orelse return error.SkipZigTest);
+    const lp = std.mem.span(std.c.getenv("LTX_UP_LATENT") orelse return error.SkipZigTest);
+    const op = std.mem.span(std.c.getenv("LTX_UP_OUT") orelse return error.SkipZigTest);
+    const allocator = testing.allocator;
+    const io = std.Io.Threaded.global_single_threaded.io();
+    const s = mlx.mlx_default_gpu_stream_new();
+```
 
 ### LTX_UP_OUT
 
@@ -64209,11 +67845,35 @@ ltx up out: engine setting; built-in default retained
 
 Scope: mlx-serve. Class: advanced.
 
+Source: `engines/mlx-serve/src/ltx_video.zig:6573`. Unset read: NULL from getenv; the literal consumer below supplies any fallback.
+
+```text
+    const dir = std.mem.span(std.c.getenv("LTX_TEST_MODEL") orelse return error.SkipZigTest);
+    const lp = std.mem.span(std.c.getenv("LTX_UP_LATENT") orelse return error.SkipZigTest);
+    const op = std.mem.span(std.c.getenv("LTX_UP_OUT") orelse return error.SkipZigTest);
+    const allocator = testing.allocator;
+    const io = std.Io.Threaded.global_single_threaded.io();
+    const s = mlx.mlx_default_gpu_stream_new();
+    defer _ = mlx.mlx_stream_free(s);
+```
+
 ### LTX_VAE_DECODED
 
 ltx vae decoded: engine setting; built-in default retained
 
 Scope: mlx-serve. Class: advanced.
+
+Source: `engines/mlx-serve/src/ltx_video.zig:4997`. Unset read: NULL from getenv; the literal consumer below supplies any fallback.
+
+```text
+    const dir = std.mem.span(std.c.getenv("LTX_TEST_MODEL") orelse return error.SkipZigTest);
+    const lp = std.mem.span(std.c.getenv("LTX_VAE_LATENT") orelse return error.SkipZigTest);
+    const dp = std.mem.span(std.c.getenv("LTX_VAE_DECODED") orelse return error.SkipZigTest);
+    const allocator = testing.allocator;
+    const io = std.Io.Threaded.global_single_threaded.io();
+    const s = mlx.mlx_default_gpu_stream_new();
+    defer _ = mlx.mlx_stream_free(s);
+```
 
 ### LTX_VAE_DIR
 
@@ -64221,11 +67881,35 @@ ltx vae dir: engine setting; built-in default retained
 
 Scope: mlx-serve. Class: advanced.
 
+Source: `engines/mlx-serve/src/ltx_video.zig:5120`. Unset read: NULL from getenv; the literal consumer below supplies any fallback.
+
+```text
+//   LTX_VAE_DIR (preferred) or LTX_TEST_MODEL
+test "ltx preview: the Latent2RGB preview resembles the decoded frame" {
+    const raw = std.c.getenv("LTX_VAE_DIR") orelse std.c.getenv("LTX_TEST_MODEL") orelse return error.SkipZigTest;
+    const dir = std.mem.span(raw);
+    if (dir.len == 0) return error.SkipZigTest;
+    const preview_mod = @import("preview.zig");
+    const allocator = testing.allocator;
+```
+
 ### LTX_VAE_LATENT
 
 ltx vae latent: engine setting; built-in default retained
 
 Scope: mlx-serve. Class: advanced.
+
+Source: `engines/mlx-serve/src/ltx_video.zig:4996`. Unset read: NULL from getenv; the literal consumer below supplies any fallback.
+
+```text
+test "ltx vaeDecode reproduces reference VideoDecoder" {
+    const dir = std.mem.span(std.c.getenv("LTX_TEST_MODEL") orelse return error.SkipZigTest);
+    const lp = std.mem.span(std.c.getenv("LTX_VAE_LATENT") orelse return error.SkipZigTest);
+    const dp = std.mem.span(std.c.getenv("LTX_VAE_DECODED") orelse return error.SkipZigTest);
+    const allocator = testing.allocator;
+    const io = std.Io.Threaded.global_single_threaded.io();
+    const s = mlx.mlx_default_gpu_stream_new();
+```
 
 ### MAGEFLOW_DIT_FIXTURE
 
@@ -64233,11 +67917,35 @@ mageflow dit fixture: engine setting; built-in default retained
 
 Scope: mlx-serve. Class: advanced.
 
+Source: `engines/mlx-serve/src/mage_flow.zig:4302`. Unset read: NULL from getenv; the literal consumer below supplies any fallback.
+
+```text
+test "MageFlow DiT forward parity (env-gated)" {
+    const model_dir = std.mem.span(std.c.getenv("MAGEFLOW_TEST_MODEL") orelse return error.SkipZigTest);
+    const fixture = std.mem.span(std.c.getenv("MAGEFLOW_DIT_FIXTURE") orelse return error.SkipZigTest);
+    const a = testing.allocator;
+    const io = std.Io.Threaded.global_single_threaded.io();
+    const s = mlx.mlx_default_gpu_stream_new();
+
+```
+
 ### MAGEFLOW_DIT_MASKED_FIXTURE
 
 mageflow dit masked fixture: engine setting; built-in default retained
 
 Scope: mlx-serve. Class: advanced.
+
+Source: `engines/mlx-serve/src/mage_flow.zig:4327`. Unset read: NULL from getenv; the literal consumer below supplies any fallback.
+
+```text
+test "MageFlow DiT masked parity (env-gated)" {
+    const model_dir = std.mem.span(std.c.getenv("MAGEFLOW_TEST_MODEL") orelse return error.SkipZigTest);
+    const fixture = std.mem.span(std.c.getenv("MAGEFLOW_DIT_MASKED_FIXTURE") orelse return error.SkipZigTest);
+    const a = testing.allocator;
+    const io = std.Io.Threaded.global_single_threaded.io();
+    const s = mlx.mlx_default_gpu_stream_new();
+
+```
 
 ### MAGEFLOW_E2E_BF16_FIXTURE
 
@@ -64245,11 +67953,35 @@ mageflow e2e bf16 fixture: engine setting; built-in default retained
 
 Scope: mlx-serve. Class: advanced.
 
+Source: `engines/mlx-serve/src/mage_flow.zig:4368`. Unset read: NULL from getenv; the literal consumer below supplies any fallback.
+
+```text
+test "MageFlow end-to-end DiT-loop parity bf16 (env-gated)" {
+    const model_dir = std.mem.span(std.c.getenv("MAGEFLOW_TEST_MODEL") orelse return error.SkipZigTest);
+    const fixture = std.mem.span(std.c.getenv("MAGEFLOW_E2E_BF16_FIXTURE") orelse return error.SkipZigTest);
+    const a = testing.allocator;
+    const io = std.Io.Threaded.global_single_threaded.io();
+    const s = mlx.mlx_default_gpu_stream_new();
+    var dit = try Dit.load(io, a, s, model_dir, .bfloat16);
+```
+
 ### MAGEFLOW_EDIT_E2E_FIXTURE
 
 mageflow edit e2e fixture: engine setting; built-in default retained
 
 Scope: mlx-serve. Class: advanced.
+
+Source: `engines/mlx-serve/src/mage_flow.zig:4419`. Unset read: NULL from getenv; the literal consumer below supplies any fallback.
+
+```text
+test "MageFlow edit loop parity bf16 (env-gated)" {
+    const model_dir = std.mem.span(std.c.getenv("MAGEFLOW_TEST_MODEL") orelse return error.SkipZigTest);
+    const fixture = std.mem.span(std.c.getenv("MAGEFLOW_EDIT_E2E_FIXTURE") orelse return error.SkipZigTest);
+    const a = testing.allocator;
+    const io = std.Io.Threaded.global_single_threaded.io();
+    const s = mlx.mlx_default_gpu_stream_new();
+    var dit = try Dit.load(io, a, s, model_dir, .bfloat16);
+```
 
 ### MAGEFLOW_TEST_MODEL
 
@@ -64257,11 +67989,167 @@ mageflow test model: engine setting; built-in default retained
 
 Scope: mlx-serve. Class: advanced.
 
+Source: `engines/mlx-serve/src/mage_flow.zig:4051`. Unset read: NULL from getenv; the literal consumer below supplies any fallback.
+
+```text
+// unset so CI stays hermetic.
+test "MageFlow VAE decode parity (env-gated)" {
+    const model_dir = std.mem.span(std.c.getenv("MAGEFLOW_TEST_MODEL") orelse return error.SkipZigTest);
+    const fixture = std.mem.span(std.c.getenv("MAGEFLOW_VAE_FIXTURE") orelse return error.SkipZigTest);
+    const a = testing.allocator;
+    const io = std.Io.Threaded.global_single_threaded.io();
+    const s = mlx.mlx_default_gpu_stream_new();
+```
+
+Source: `engines/mlx-serve/src/mage_flow.zig:4088`. Unset read: NULL from getenv; the literal consumer below supplies any fallback.
+
+```text
+// — the live edit feeds the reference's exact ref-latents at E7.5).
+test "MageFlow VAE encode parity (env-gated)" {
+    const model_dir = std.mem.span(std.c.getenv("MAGEFLOW_TEST_MODEL") orelse return error.SkipZigTest);
+    const fixture = std.mem.span(std.c.getenv("MAGEFLOW_VAE_ENC_FIXTURE") orelse return error.SkipZigTest);
+    const a = testing.allocator;
+    const io = std.Io.Threaded.global_single_threaded.io();
+    const s = mlx.mlx_default_gpu_stream_new();
+```
+
+Source: `engines/mlx-serve/src/mage_flow.zig:4118`. Unset read: NULL from getenv; the literal consumer below supplies any fallback.
+
+```text
+// pixel_values (preprocessing decoupled — E7.3).
+test "MageFlow ViT parity (env-gated)" {
+    const model_dir = std.mem.span(std.c.getenv("MAGEFLOW_TEST_MODEL") orelse return error.SkipZigTest);
+    const fixture = std.mem.span(std.c.getenv("MAGEFLOW_VIT_FIXTURE") orelse return error.SkipZigTest);
+    const a = testing.allocator;
+    const io = std.Io.Threaded.global_single_threaded.io();
+    const s = mlx.mlx_default_gpu_stream_new();
+```
+
+Source: `engines/mlx-serve/src/mage_flow.zig:4162`. Unset read: NULL from getenv; the literal consumer below supplies any fallback.
+
+```text
+// + pixel_values (tokenization/preprocessing decoupled — E7.3).
+test "MageFlow TE edit parity (env-gated)" {
+    const model_dir = std.mem.span(std.c.getenv("MAGEFLOW_TEST_MODEL") orelse return error.SkipZigTest);
+    const fixture = std.mem.span(std.c.getenv("MAGEFLOW_TE_EDIT_FIXTURE") orelse return error.SkipZigTest);
+    const a = testing.allocator;
+    const io = std.Io.Threaded.global_single_threaded.io();
+    const s = mlx.mlx_default_gpu_stream_new();
+```
+
+Source: `engines/mlx-serve/src/mage_flow.zig:4205`. Unset read: NULL from getenv; the literal consumer below supplies any fallback.
+
+```text
+// 16×16 → 64 image tokens; PROMPT pinned to the dump script).
+test "MageFlow edit tokenization parity (env-gated)" {
+    const model_dir = std.mem.span(std.c.getenv("MAGEFLOW_TEST_MODEL") orelse return error.SkipZigTest);
+    const fixture = std.mem.span(std.c.getenv("MAGEFLOW_TE_EDIT_FIXTURE") orelse return error.SkipZigTest);
+    const a = testing.allocator;
+    const io = std.Io.Threaded.global_single_threaded.io();
+    const s = mlx.mlx_default_gpu_stream_new();
+```
+
+Source: `engines/mlx-serve/src/mage_flow.zig:4301`. Unset read: NULL from getenv; the literal consumer below supplies any fallback.
+
+```text
+// t=0.7, no mask). Skips when unset.
+test "MageFlow DiT forward parity (env-gated)" {
+    const model_dir = std.mem.span(std.c.getenv("MAGEFLOW_TEST_MODEL") orelse return error.SkipZigTest);
+    const fixture = std.mem.span(std.c.getenv("MAGEFLOW_DIT_FIXTURE") orelse return error.SkipZigTest);
+    const a = testing.allocator;
+    const io = std.Io.Threaded.global_single_threaded.io();
+    const s = mlx.mlx_default_gpu_stream_new();
+```
+
+Source: `engines/mlx-serve/src/mage_flow.zig:4326`. Unset read: NULL from getenv; the literal consumer below supplies any fallback.
+
+```text
+// 6 padded, t=0.3). Gated on MAGEFLOW_TEST_MODEL + MAGEFLOW_DIT_MASKED_FIXTURE.
+test "MageFlow DiT masked parity (env-gated)" {
+    const model_dir = std.mem.span(std.c.getenv("MAGEFLOW_TEST_MODEL") orelse return error.SkipZigTest);
+    const fixture = std.mem.span(std.c.getenv("MAGEFLOW_DIT_MASKED_FIXTURE") orelse return error.SkipZigTest);
+    const a = testing.allocator;
+    const io = std.Io.Threaded.global_single_threaded.io();
+    const s = mlx.mlx_default_gpu_stream_new();
+```
+
+Source: `engines/mlx-serve/src/mage_flow.zig:4367`. Unset read: NULL from getenv; the literal consumer below supplies any fallback.
+
+```text
+// pins the un-rounded-timestep washing regression (f32 timestep → cosine 0.55).
+test "MageFlow end-to-end DiT-loop parity bf16 (env-gated)" {
+    const model_dir = std.mem.span(std.c.getenv("MAGEFLOW_TEST_MODEL") orelse return error.SkipZigTest);
+    const fixture = std.mem.span(std.c.getenv("MAGEFLOW_E2E_BF16_FIXTURE") orelse return error.SkipZigTest);
+    const a = testing.allocator;
+    const io = std.Io.Threaded.global_single_threaded.io();
+    const s = mlx.mlx_default_gpu_stream_new();
+```
+
+Source: `engines/mlx-serve/src/mage_flow.zig:4418`. Unset read: NULL from getenv; the literal consumer below supplies any fallback.
+
+```text
+// tests/dump_mageflow_edit_e2e_fixture.py). LH=LW=8, 1 ref → frames=2.
+test "MageFlow edit loop parity bf16 (env-gated)" {
+    const model_dir = std.mem.span(std.c.getenv("MAGEFLOW_TEST_MODEL") orelse return error.SkipZigTest);
+    const fixture = std.mem.span(std.c.getenv("MAGEFLOW_EDIT_E2E_FIXTURE") orelse return error.SkipZigTest);
+    const a = testing.allocator;
+    const io = std.Io.Threaded.global_single_threaded.io();
+    const s = mlx.mlx_default_gpu_stream_new();
+```
+
+Source: `engines/mlx-serve/src/mage_flow.zig:4453`. Unset read: NULL from getenv; the literal consumer below supplies any fallback.
+
+```text
+// f32. Skips when unset.
+test "MageFlow TE conditioning parity (env-gated)" {
+    const model_dir = std.mem.span(std.c.getenv("MAGEFLOW_TEST_MODEL") orelse return error.SkipZigTest);
+    const fixture = std.mem.span(std.c.getenv("MAGEFLOW_TE_FIXTURE") orelse return error.SkipZigTest);
+    const a = testing.allocator;
+    const io = std.Io.Threaded.global_single_threaded.io();
+    const s = mlx.mlx_default_gpu_stream_new();
+```
+
 ### MAGEFLOW_TE_EDIT_FIXTURE
 
 mageflow te edit fixture: engine setting; built-in default retained
 
 Scope: mlx-serve. Class: advanced.
+
+Source: `engines/mlx-serve/src/mage_flow.zig:4163`. Unset read: NULL from getenv; the literal consumer below supplies any fallback.
+
+```text
+test "MageFlow TE edit parity (env-gated)" {
+    const model_dir = std.mem.span(std.c.getenv("MAGEFLOW_TEST_MODEL") orelse return error.SkipZigTest);
+    const fixture = std.mem.span(std.c.getenv("MAGEFLOW_TE_EDIT_FIXTURE") orelse return error.SkipZigTest);
+    const a = testing.allocator;
+    const io = std.Io.Threaded.global_single_threaded.io();
+    const s = mlx.mlx_default_gpu_stream_new();
+
+```
+
+Source: `engines/mlx-serve/src/mage_flow.zig:4206`. Unset read: NULL from getenv; the literal consumer below supplies any fallback.
+
+```text
+test "MageFlow edit tokenization parity (env-gated)" {
+    const model_dir = std.mem.span(std.c.getenv("MAGEFLOW_TEST_MODEL") orelse return error.SkipZigTest);
+    const fixture = std.mem.span(std.c.getenv("MAGEFLOW_TE_EDIT_FIXTURE") orelse return error.SkipZigTest);
+    const a = testing.allocator;
+    const io = std.Io.Threaded.global_single_threaded.io();
+    const s = mlx.mlx_default_gpu_stream_new();
+
+```
+
+Source: `engines/mlx-serve/src/mage_flow.zig:4253`. Unset read: NULL from getenv; the literal consumer below supplies any fallback.
+
+```text
+// Gated on MAGEFLOW_TE_EDIT_FIXTURE carrying `source_rgb` (skips on older ones).
+test "MageFlow VLM preprocessing parity (env-gated)" {
+    const fixture = std.mem.span(std.c.getenv("MAGEFLOW_TE_EDIT_FIXTURE") orelse return error.SkipZigTest);
+    const a = testing.allocator;
+    const s = mlx.mlx_default_gpu_stream_new();
+
+    var fx = try model_mod.loadWeightsSingleFile(a, fixture);
+```
 
 ### MAGEFLOW_TE_FIXTURE
 
@@ -64269,11 +68157,35 @@ mageflow te fixture: engine setting; built-in default retained
 
 Scope: mlx-serve. Class: advanced.
 
+Source: `engines/mlx-serve/src/mage_flow.zig:4454`. Unset read: NULL from getenv; the literal consumer below supplies any fallback.
+
+```text
+test "MageFlow TE conditioning parity (env-gated)" {
+    const model_dir = std.mem.span(std.c.getenv("MAGEFLOW_TEST_MODEL") orelse return error.SkipZigTest);
+    const fixture = std.mem.span(std.c.getenv("MAGEFLOW_TE_FIXTURE") orelse return error.SkipZigTest);
+    const a = testing.allocator;
+    const io = std.Io.Threaded.global_single_threaded.io();
+    const s = mlx.mlx_default_gpu_stream_new();
+
+```
+
 ### MAGEFLOW_VAE_ENC_FIXTURE
 
 mageflow vae enc fixture: engine setting; built-in default retained
 
 Scope: mlx-serve. Class: advanced.
+
+Source: `engines/mlx-serve/src/mage_flow.zig:4089`. Unset read: NULL from getenv; the literal consumer below supplies any fallback.
+
+```text
+test "MageFlow VAE encode parity (env-gated)" {
+    const model_dir = std.mem.span(std.c.getenv("MAGEFLOW_TEST_MODEL") orelse return error.SkipZigTest);
+    const fixture = std.mem.span(std.c.getenv("MAGEFLOW_VAE_ENC_FIXTURE") orelse return error.SkipZigTest);
+    const a = testing.allocator;
+    const io = std.Io.Threaded.global_single_threaded.io();
+    const s = mlx.mlx_default_gpu_stream_new();
+
+```
 
 ### MAGEFLOW_VAE_FIXTURE
 
@@ -64281,11 +68193,35 @@ mageflow vae fixture: engine setting; built-in default retained
 
 Scope: mlx-serve. Class: advanced.
 
+Source: `engines/mlx-serve/src/mage_flow.zig:4052`. Unset read: NULL from getenv; the literal consumer below supplies any fallback.
+
+```text
+test "MageFlow VAE decode parity (env-gated)" {
+    const model_dir = std.mem.span(std.c.getenv("MAGEFLOW_TEST_MODEL") orelse return error.SkipZigTest);
+    const fixture = std.mem.span(std.c.getenv("MAGEFLOW_VAE_FIXTURE") orelse return error.SkipZigTest);
+    const a = testing.allocator;
+    const io = std.Io.Threaded.global_single_threaded.io();
+    const s = mlx.mlx_default_gpu_stream_new();
+
+```
+
 ### MAGEFLOW_VIT_FIXTURE
 
 mageflow vit fixture: engine setting; built-in default retained
 
 Scope: mlx-serve. Class: advanced.
+
+Source: `engines/mlx-serve/src/mage_flow.zig:4119`. Unset read: NULL from getenv; the literal consumer below supplies any fallback.
+
+```text
+test "MageFlow ViT parity (env-gated)" {
+    const model_dir = std.mem.span(std.c.getenv("MAGEFLOW_TEST_MODEL") orelse return error.SkipZigTest);
+    const fixture = std.mem.span(std.c.getenv("MAGEFLOW_VIT_FIXTURE") orelse return error.SkipZigTest);
+    const a = testing.allocator;
+    const io = std.Io.Threaded.global_single_threaded.io();
+    const s = mlx.mlx_default_gpu_stream_new();
+
+```
 
 ### MAGI2_ACT_GB_PER_TOKEN
 
@@ -65082,13 +69018,37 @@ Source: `vendor/engines/cosmos_windows/weight_streaming/magi2_moe_binding.py:120
 
 MAX_GAP_S: advanced engine setting; built-in default retained
 
-Scope: image. Class: advanced.
+Scope: image, mlx-serve. Class: advanced.
+
+Source: `engines/mlx-serve/tests/stream_keepalive_probe.py:21`. Unset read: 15.
+
+```text
+MODEL = sys.argv[3]
+
+MAX_GAP_S = float(os.environ.get("MAX_GAP_S", 15))
+MIN_BUFFER_S = float(os.environ.get("MIN_BUFFER_S", 8))
+
+DESC = "Write text content to a file on disk."
+# Long, mechanical content: the model emits it as one giant tool-call argument,
+```
 
 ### MAX_TOKENS
 
 MAX_TOKENS: advanced engine setting; built-in default retained
 
-Scope: image. Class: advanced.
+Scope: image, mlx-serve. Class: advanced.
+
+Source: `engines/mlx-serve/tests/test_agent_stop_repro.py:497`. Unset read: '4096'.
+
+```text
+    p.add_argument("--host", default="127.0.0.1")
+    p.add_argument("--port", type=int, default=int(os.environ.get("PORT", "11234")))
+    p.add_argument("--max-tokens", type=int, default=int(os.environ.get("MAX_TOKENS", "4096")))
+    p.add_argument("--max-turns", type=int, default=20)
+    p.add_argument("--runs", type=int, default=1, help="repeat the full run N times")
+    p.add_argument("--temperature", type=float, default=0.7)
+    p.add_argument("--min-tokens-for-suspicion", type=int, default=100)
+```
 
 ### MEM_GUARD_ABORT_FLOOR_GB
 
@@ -65216,11 +69176,35 @@ minicpm5 model dir: engine setting; built-in default retained
 
 Scope: mlx-serve. Class: advanced.
 
+Source: `engines/mlx-serve/src/chat.zig:9473`. Unset read: NULL from getenv; the literal consumer below supplies any fallback.
+
+```text
+    // MiniCPM5 V3 parser corpus (all single-turn) never caught it.
+    // Same wrong-family prompt-format class as the Hy3 str.format test above.
+    const dir = std.c.getenv("MINICPM5_MODEL_DIR") orelse return error.SkipZigTest;
+    const allocator = testing.allocator;
+    const path = try std.fmt.allocPrint(allocator, "{s}/chat_template.jinja", .{std.mem.span(dir)});
+    defer allocator.free(path);
+    const io = std.Io.Threaded.global_single_threaded.io();
+```
+
 ### MINIMAX_H3_ABLATE
 
 minimax h3 ablate: engine setting; built-in default retained
 
 Scope: mlx-serve. Class: advanced.
+
+Source: `engines/mlx-serve/src/minimax_h3.zig:4094`. Unset read: Wrapper/conditional default: see the literal call and consumer below.
+
+```text
+    // Profiling arms: never set by any server path; the live-test harness and
+    // profile drivers own the env. A non-empty junk value is LOUDLY off.
+    const abl_raw = envStr("MINIMAX_H3_ABLATE");
+    const abl_mode = ablateModeFrom(abl_raw);
+    if (abl_raw != null and std.meta.activeTag(abl_mode) == .off)
+        log.warn("[minimax-h3] MINIMAX_H3_ABLATE='{s}' not recognized; profiling arms OFF\n", .{abl_raw.?});
+
+```
 
 ### MINIMAX_H3_ADALN_PRECOMPUTE
 
@@ -65228,11 +69212,35 @@ minimax h3 adaln precompute: engine setting; built-in default retained
 
 Scope: mlx-serve. Class: advanced.
 
+Source: `engines/mlx-serve/src/minimax_h3.zig:4930`. Unset read: Wrapper/conditional default: see the literal call and consumer below.
+
+```text
+/// answer is either an OOM (billed shed, ran full) or a refused load.
+pub fn adalnPrecomputeOn() bool {
+    const raw = envStr("MINIMAX_H3_ADALN_PRECOMPUTE") orelse return true;
+    return !std.mem.eql(u8, raw, "0");
+}
+
+fn allFinite(x: mlx.mlx_array, s: S) !bool {
+```
+
 ### MINIMAX_H3_ATTN_BCAST
 
 minimax h3 attn bcast: engine setting; built-in default retained
 
 Scope: mlx-serve. Class: advanced.
+
+Source: `engines/mlx-serve/src/minimax_h3.zig:4191`. Unset read: Wrapper/conditional default: see the literal call and consumer below.
+
+```text
+        // between — the branch is ~70% of a 768p step. Cache cost: one
+        // [S, hidden] bf16 per block (~20 GB at 768p, ~1.4 GB at 256px).
+        const speed = resolveSpeed(req.fast, req.turbo, envStr("MINIMAX_H3_STEP_CACHE"), envStr("MINIMAX_H3_ATTN_BCAST"));
+        log.info("[minimax-h3] speed recipe: step-cache {d:.3}, attn-broadcast k={d} (fast={any}, turbo={})\n", .{ speed.step_cache, speed.bcast_k, req.fast, req.turbo });
+        const bcast_k: u32 = speed.bcast_k;
+        var attn_bcast: ?AttnBroadcast = if (bcast_k > 1) try AttnBroadcast.init(allocator, model.blocks.len) else null;
+        defer if (attn_bcast) |*ab| ab.deinit();
+```
 
 ### MINIMAX_H3_AUDIO_ENC_FIXTURE
 
@@ -65240,11 +69248,35 @@ minimax h3 audio enc fixture: engine setting; built-in default retained
 
 Scope: mlx-serve. Class: advanced.
 
+Source: `engines/mlx-serve/src/minimax_h3_audio.zig:745`. Unset read: NULL from getenv; the literal consumer below supplies any fallback.
+
+```text
+test "minimax h3 audio live: encoder parity vs the executed reference" {
+    const raw_model = std.c.getenv("MINIMAX_H3_MODEL") orelse return error.SkipZigTest;
+    const raw_fix = std.c.getenv("MINIMAX_H3_AUDIO_ENC_FIXTURE") orelse return error.SkipZigTest;
+    const model_dir = std.mem.sliceTo(raw_model, 0);
+    const fix_path = std.mem.sliceTo(raw_fix, 0);
+    // An EMPTY env var must skip like an absent one — `VAR= binary` reaches
+    // getenv as "" and load_safetensors("") is an uncatchable MLX error.
+```
+
 ### MINIMAX_H3_DIR
 
 minimax h3 dir: engine setting; built-in default retained
 
 Scope: mlx-serve. Class: advanced.
+
+Source: `engines/mlx-serve/src/minimax_h3.zig:4828`. Unset read: Wrapper/conditional default: see the literal call and consumer below.
+
+```text
+// matching how the LTX path already delivers video.
+test "minimax h3 live: generates a clip" {
+    const dir = envStr("MINIMAX_H3_DIR") orelse return error.SkipZigTest;
+    log.enableStderr(); // the phase/step lines are this harness's output
+    const a = testing.allocator;
+    const io = std.Io.Threaded.global_single_threaded.io();
+    const s = mlx.gpuStream();
+```
 
 ### MINIMAX_H3_FRAMES
 
@@ -65252,11 +69284,35 @@ minimax h3 frames: engine setting; built-in default retained
 
 Scope: mlx-serve. Class: advanced.
 
+Source: `engines/mlx-serve/src/minimax_h3.zig:4835`. Unset read: Wrapper/conditional default: see the literal call and consumer below.
+
+```text
+
+    const size = envU32("MINIMAX_H3_SIZE", 256);
+    const frames = envU32("MINIMAX_H3_FRAMES", 56);
+    const steps = envU32("MINIMAX_H3_STEPS", 30);
+    const out_dir = envStr("MINIMAX_H3_OUT") orelse "/tmp/h3out";
+
+    // Two layouts are accepted so the SAME test covers both: the raw staging
+```
+
 ### MINIMAX_H3_GEMM_UBENCH
 
 minimax h3 gemm ubench: engine setting; built-in default retained
 
 Scope: mlx-serve. Class: advanced.
+
+Source: `engines/mlx-serve/src/minimax_h3.zig:6414`. Unset read: NULL from getenv; the literal consumer below supplies any fallback.
+
+```text
+    // `mlx_matmul` of identical dimensions as the ceiling. Gap = what a kernel
+    // could theoretically win; no gap = nothing to write.
+    const raw = std.c.getenv("MINIMAX_H3_GEMM_UBENCH") orelse return error.SkipZigTest;
+    const seq: c_int = std.fmt.parseInt(c_int, std.mem.sliceTo(raw, 0), 10) catch 19444;
+    log.enableStderr();
+    const a = std.testing.allocator;
+    const s = mlx.gpuStream();
+```
 
 ### MINIMAX_H3_MODEL
 
@@ -65264,11 +69320,107 @@ minimax h3 model: engine setting; built-in default retained
 
 Scope: mlx-serve. Class: advanced.
 
+Source: `engines/mlx-serve/src/minimax_h3.zig:4844`. Unset read: Wrapper/conditional default: see the literal call and consumer below.
+
+```text
+    // ship). Both load through MfLinear's one geometry solve — running the
+    // quantized dir here is what proves that.
+    const converted = envStr("MINIMAX_H3_MODEL");
+    const te = if (converted) |m|
+        try std.fmt.allocPrint(a, "{s}/text_encoder.safetensors", .{m})
+    else
+        try std.fmt.allocPrint(a, "{s}/src/text_encoders/qwen3vl_32b_minimax_h3_bf16.safetensors", .{dir});
+```
+
+Source: `engines/mlx-serve/src/minimax_h3.zig:5474`. Unset read: NULL from getenv; the literal consumer below supplies any fallback.
+
+```text
+//   zig build test -Doptimize=ReleaseFast -Dtest-filter="vision tower parity"
+test "minimax h3 live: vision tower parity vs the executed reference" {
+    const raw_model = std.c.getenv("MINIMAX_H3_MODEL") orelse return error.SkipZigTest;
+    const raw_fix = std.c.getenv("MINIMAX_H3_VIT_FIXTURE") orelse return error.SkipZigTest;
+    const model_dir = std.mem.sliceTo(raw_model, 0);
+    const fix_path = std.mem.sliceTo(raw_fix, 0);
+    if (model_dir.len == 0 or fix_path.len == 0) return error.SkipZigTest;
+```
+
+Source: `engines/mlx-serve/src/minimax_h3_audio.zig:744`. Unset read: NULL from getenv; the literal consumer below supplies any fallback.
+
+```text
+//   zig build test -Doptimize=ReleaseFast -Dtest-filter="audio encoder parity"
+test "minimax h3 audio live: encoder parity vs the executed reference" {
+    const raw_model = std.c.getenv("MINIMAX_H3_MODEL") orelse return error.SkipZigTest;
+    const raw_fix = std.c.getenv("MINIMAX_H3_AUDIO_ENC_FIXTURE") orelse return error.SkipZigTest;
+    const model_dir = std.mem.sliceTo(raw_model, 0);
+    const fix_path = std.mem.sliceTo(raw_fix, 0);
+    // An EMPTY env var must skip like an absent one — `VAR= binary` reaches
+```
+
+Source: `engines/mlx-serve/src/minimax_h3_vae.zig:1110`. Unset read: NULL from getenv; the literal consumer below supplies any fallback.
+
+```text
+    // there. Tiles are SEMANTIC (each renormalizes rope over its own extent),
+    // so tile outputs genuinely differ and an unblended seam is visible.
+    const raw_model = std.c.getenv("MINIMAX_H3_MODEL") orelse return error.SkipZigTest;
+    const model_dir = std.mem.sliceTo(raw_model, 0);
+    if (model_dir.len == 0) return error.SkipZigTest;
+    const a = testing.allocator;
+    const io = std.Io.Threaded.global_single_threaded.io();
+```
+
+Source: `engines/mlx-serve/src/minimax_h3_vae.zig:1790`. Unset read: NULL from getenv; the literal consumer below supplies any fallback.
+
+```text
+    // The video frames MOVE, so a port that collapses, reverses or mis-strides
+    // the temporal axis cannot pass; a static clip would let all three through.
+    const raw_model = std.c.getenv("MINIMAX_H3_MODEL") orelse return error.SkipZigTest;
+    const raw_fix = std.c.getenv("MINIMAX_H3_VAE_ENC_FIXTURE") orelse return error.SkipZigTest;
+    const model_dir = std.mem.sliceTo(raw_model, 0);
+    const fix_path = std.mem.sliceTo(raw_fix, 0);
+    // An EMPTY env var must skip like an absent one: getenv("")-style unset
+```
+
+Source: `engines/mlx-serve/src/minimax_h3_vae.zig:1898`. Unset read: NULL from getenv; the literal consumer below supplies any fallback.
+
+```text
+    // discriminates: mirrored output = VAE-side flip; clean output = the flip
+    // lives in the DiT cond wiring instead.
+    const raw_model = std.c.getenv("MINIMAX_H3_MODEL") orelse return error.SkipZigTest;
+    const model_dir = std.mem.sliceTo(raw_model, 0);
+    const a = testing.allocator;
+    const s = mlx.gpuStream();
+
+```
+
+Source: `engines/mlx-serve/src/minimax_h3_vae.zig:1982`. Unset read: NULL from getenv; the literal consumer below supplies any fallback.
+
+```text
+    // and correlate. The GOLDEN-ANGLE HUE WHEEL this file used to ship is the
+    // control arm — a bar the retired projection also clears proves nothing.
+    const raw_model = std.c.getenv("MINIMAX_H3_MODEL") orelse return error.SkipZigTest;
+    const model_dir = std.mem.sliceTo(raw_model, 0);
+    if (model_dir.len == 0) return error.SkipZigTest;
+    const a = testing.allocator;
+    const s = mlx.gpuStream();
+```
+
 ### MINIMAX_H3_OUT
 
 minimax h3 out: engine setting; built-in default retained
 
 Scope: mlx-serve. Class: advanced.
+
+Source: `engines/mlx-serve/src/minimax_h3.zig:4837`. Unset read: Wrapper/conditional default: see the literal call and consumer below.
+
+```text
+    const frames = envU32("MINIMAX_H3_FRAMES", 56);
+    const steps = envU32("MINIMAX_H3_STEPS", 30);
+    const out_dir = envStr("MINIMAX_H3_OUT") orelse "/tmp/h3out";
+
+    // Two layouts are accepted so the SAME test covers both: the raw staging
+    // tree of upstream bf16 files, and a converted model dir from
+    // tests/convert_minimax_h3_weights.py (which is also what the app will
+```
 
 ### MINIMAX_H3_PROGRESSIVE_NVENC
 
@@ -65312,11 +69464,35 @@ minimax h3 prompt: engine setting; built-in default retained
 
 Scope: mlx-serve. Class: advanced.
 
+Source: `engines/mlx-serve/src/minimax_h3.zig:4871`. Unset read: Wrapper/conditional default: see the literal call and consumer below.
+
+```text
+    defer a.free(tokdir);
+
+    const prompt = envStr("MINIMAX_H3_PROMPT") orelse
+        "A calico cat sits on a sunlit windowsill, slowly blinking as it watches rain streak down the glass. " ++
+        "The camera holds steady in a close medium shot. Warm afternoon light rims the cat's fur against the cool grey outside. " ++
+        "overall_soundscape: steady rainfall against glass with a soft room tone and the cat's quiet purring.";
+
+```
+
 ### MINIMAX_H3_SDPA_UBENCH
 
 minimax h3 sdpa ubench: engine setting; built-in default retained
 
 Scope: mlx-serve. Class: advanced.
+
+Source: `engines/mlx-serve/src/minimax_h3.zig:6301`. Unset read: NULL from getenv; the literal consumer below supplies any fallback.
+
+```text
+    // its raw FLOPs say ~0.2 s. This times the EXACT call in isolation through
+    // OUR libmlx (the pip-mlx probe cross-checks a different build).
+    const raw = std.c.getenv("MINIMAX_H3_SDPA_UBENCH") orelse return error.SkipZigTest;
+    const seq: c_int = std.fmt.parseInt(c_int, std.mem.sliceTo(raw, 0), 10) catch 9266;
+    log.enableStderr();
+    const s = mlx.gpuStream();
+    const io = std.Io.Threaded.global_single_threaded.io();
+```
 
 ### MINIMAX_H3_SIZE
 
@@ -65324,11 +69500,35 @@ minimax h3 size: engine setting; built-in default retained
 
 Scope: mlx-serve. Class: advanced.
 
+Source: `engines/mlx-serve/src/minimax_h3.zig:4834`. Unset read: Wrapper/conditional default: see the literal call and consumer below.
+
+```text
+    const s = mlx.gpuStream();
+
+    const size = envU32("MINIMAX_H3_SIZE", 256);
+    const frames = envU32("MINIMAX_H3_FRAMES", 56);
+    const steps = envU32("MINIMAX_H3_STEPS", 30);
+    const out_dir = envStr("MINIMAX_H3_OUT") orelse "/tmp/h3out";
+
+```
+
 ### MINIMAX_H3_SPARSE_ATTN
 
 minimax h3 sparse attn: engine setting; built-in default retained
 
 Scope: mlx-serve. Class: advanced.
+
+Source: `engines/mlx-serve/src/minimax_h3.zig:4182`. Unset read: Wrapper/conditional default: see the literal call and consumer below.
+
+```text
+
+        // ── sparse attention (OPT-IN) ──
+        model.sparse_policy = sparsePolicyFrom(envStr("MINIMAX_H3_SPARSE_ATTN"));
+        if (model.sparse_policy != .off)
+            log.info("[minimax-h3] sparse attention policy: {s}\n", .{@tagName(model.sparse_policy)});
+
+        // ── attention broadcast (PAB-style, OPT-IN) ──
+```
 
 ### MINIMAX_H3_SPARSE_UBENCH
 
@@ -65336,17 +69536,53 @@ minimax h3 sparse ubench: engine setting; built-in default retained
 
 Scope: mlx-serve. Class: advanced.
 
+Source: `engines/mlx-serve/src/minimax_h3.zig:6341`. Unset read: NULL from getenv; the literal consumer below supplies any fallback.
+
+```text
+    // spatial (nb = t, the latent frames) needs 0.8-2.9 GB. Fewer FLOPs, far
+    // more bytes. This test is what turns that reading into a number.
+    if (std.c.getenv("MINIMAX_H3_SPARSE_UBENCH") == null) return error.SkipZigTest;
+    log.enableStderr();
+    const s = mlx.gpuStream();
+    const io = std.Io.Threaded.global_single_threaded.io();
+    const nh: c_int = 56;
+```
+
 ### MINIMAX_H3_STEPS
 
 minimax h3 steps: engine setting; built-in default retained
 
 Scope: mlx-serve. Class: advanced.
 
+Source: `engines/mlx-serve/src/minimax_h3.zig:4836`. Unset read: Wrapper/conditional default: see the literal call and consumer below.
+
+```text
+    const size = envU32("MINIMAX_H3_SIZE", 256);
+    const frames = envU32("MINIMAX_H3_FRAMES", 56);
+    const steps = envU32("MINIMAX_H3_STEPS", 30);
+    const out_dir = envStr("MINIMAX_H3_OUT") orelse "/tmp/h3out";
+
+    // Two layouts are accepted so the SAME test covers both: the raw staging
+    // tree of upstream bf16 files, and a converted model dir from
+```
+
 ### MINIMAX_H3_STEP_CACHE
 
 minimax h3 step cache: engine setting; built-in default retained
 
 Scope: mlx-serve. Class: advanced.
+
+Source: `engines/mlx-serve/src/minimax_h3.zig:4191`. Unset read: Wrapper/conditional default: see the literal call and consumer below.
+
+```text
+        // between — the branch is ~70% of a 768p step. Cache cost: one
+        // [S, hidden] bf16 per block (~20 GB at 768p, ~1.4 GB at 256px).
+        const speed = resolveSpeed(req.fast, req.turbo, envStr("MINIMAX_H3_STEP_CACHE"), envStr("MINIMAX_H3_ATTN_BCAST"));
+        log.info("[minimax-h3] speed recipe: step-cache {d:.3}, attn-broadcast k={d} (fast={any}, turbo={})\n", .{ speed.step_cache, speed.bcast_k, req.fast, req.turbo });
+        const bcast_k: u32 = speed.bcast_k;
+        var attn_bcast: ?AttnBroadcast = if (bcast_k > 1) try AttnBroadcast.init(allocator, model.blocks.len) else null;
+        defer if (attn_bcast) |*ab| ab.deinit();
+```
 
 ### MINIMAX_H3_VAE_AUDIO_CACHE
 
@@ -65588,6 +69824,18 @@ minimax h3 vae enc fixture: engine setting; built-in default retained
 
 Scope: mlx-serve. Class: advanced.
 
+Source: `engines/mlx-serve/src/minimax_h3_vae.zig:1791`. Unset read: NULL from getenv; the literal consumer below supplies any fallback.
+
+```text
+    // the temporal axis cannot pass; a static clip would let all three through.
+    const raw_model = std.c.getenv("MINIMAX_H3_MODEL") orelse return error.SkipZigTest;
+    const raw_fix = std.c.getenv("MINIMAX_H3_VAE_ENC_FIXTURE") orelse return error.SkipZigTest;
+    const model_dir = std.mem.sliceTo(raw_model, 0);
+    const fix_path = std.mem.sliceTo(raw_fix, 0);
+    // An EMPTY env var must skip like an absent one: getenv("")-style unset
+    // (`VAR= binary`) reaches here as "", and load_safetensors("") is an
+```
+
 ### MINIMAX_H3_VAE_HOST_OUTPUT
 
 MINIMAX_H3_VAE_HOST_OUTPUT: advanced engine setting; built-in default retained
@@ -65696,11 +69944,35 @@ minimax h3 vision blocks: engine setting; built-in default retained
 
 Scope: mlx-serve. Class: advanced.
 
+Source: `engines/mlx-serve/src/minimax_h3.zig:3961`. Unset read: NULL from getenv; the literal consumer below supplies any fallback.
+
+```text
+    // `MINIMAX_H3_VISION_BLOCKS=1` re-enables it for fl2va A/Bs.
+    const vision_blocks_on = blk: {
+        const raw = std.c.getenv("MINIMAX_H3_VISION_BLOCKS") orelse break :blk false;
+        break :blk !std.mem.eql(u8, std.mem.sliceTo(raw, 0), "0");
+    };
+    var label_buf: [32]u8 = undefined;
+    for (req.keyframes, 0..) |kf, ki| {
+```
+
 ### MINIMAX_H3_VISION_DEEPSTACK
 
 minimax h3 vision deepstack: engine setting; built-in default retained
 
 Scope: mlx-serve. Class: advanced.
+
+Source: `engines/mlx-serve/src/minimax_h3.zig:2849`. Unset read: NULL from getenv; the literal consumer below supplies any fallback.
+
+```text
+/// into the LM's own residual stream rather than into its input.
+fn deepstackEnabled() bool {
+    const raw = std.c.getenv("MINIMAX_H3_VISION_DEEPSTACK") orelse return true;
+    return !std.mem.eql(u8, std.mem.sliceTo(raw, 0), "0");
+}
+
+/// One 2-frame patch block entering the ViT. A still image repeats itself to
+```
 
 ### MINIMAX_H3_VISION_MROPE
 
@@ -65708,11 +69980,35 @@ minimax h3 vision mrope: engine setting; built-in default retained
 
 Scope: mlx-serve. Class: advanced.
 
+Source: `engines/mlx-serve/src/minimax_h3.zig:3068`. Unset read: NULL from getenv; the literal consumer below supplies any fallback.
+
+```text
+        //    conditioning of the WHOLE prompt, not just the vision rows.
+        const mrope_on = blk2: {
+            const raw = std.c.getenv("MINIMAX_H3_VISION_MROPE") orelse break :blk2 true;
+            break :blk2 !std.mem.eql(u8, std.mem.sliceTo(raw, 0), "0");
+        };
+        const positions = if (mrope_on) try h3v.mropePositions(allocator, seq_u, spans.items) else null;
+        defer if (positions) |p| allocator.free(p);
+```
+
 ### MINIMAX_H3_VIT_FIXTURE
 
 minimax h3 vit fixture: engine setting; built-in default retained
 
 Scope: mlx-serve. Class: advanced.
+
+Source: `engines/mlx-serve/src/minimax_h3.zig:5475`. Unset read: NULL from getenv; the literal consumer below supplies any fallback.
+
+```text
+test "minimax h3 live: vision tower parity vs the executed reference" {
+    const raw_model = std.c.getenv("MINIMAX_H3_MODEL") orelse return error.SkipZigTest;
+    const raw_fix = std.c.getenv("MINIMAX_H3_VIT_FIXTURE") orelse return error.SkipZigTest;
+    const model_dir = std.mem.sliceTo(raw_model, 0);
+    const fix_path = std.mem.sliceTo(raw_fix, 0);
+    if (model_dir.len == 0 or fix_path.len == 0) return error.SkipZigTest;
+    const a = testing.allocator;
+```
 
 ### MINIMAX_H3_WIDTH
 
@@ -65720,11 +70016,47 @@ minimax h3 width: engine setting; built-in default retained
 
 Scope: mlx-serve. Class: advanced.
 
+Source: `engines/mlx-serve/src/minimax_h3.zig:4884`. Unset read: Wrapper/conditional default: see the literal call and consumer below.
+
+```text
+    }, .{
+        .prompt = prompt,
+        .width = envU32("MINIMAX_H3_WIDTH", size),
+        .height = size,
+        .frames = frames,
+        .steps = steps,
+    }, null, s);
+```
+
+Source: `engines/mlx-serve/src/minimax_h3.zig:4896`. Unset read: Wrapper/conditional default: see the literal call and consumer below.
+
+```text
+    try testing.expect(finite);
+    try testing.expectEqual(alignFrameCount(@max(5, frames)), res.frame_count);
+    try testing.expectEqual(envU32("MINIMAX_H3_WIDTH", size), res.width);
+    try testing.expectEqual(size, res.height);
+
+    try writeFrames(a, io, &res, out_dir, s);
+
+```
+
 ### MIN_BUFFER_S
 
 MIN_BUFFER_S: advanced engine setting; built-in default retained
 
-Scope: image. Class: advanced.
+Scope: image, mlx-serve. Class: advanced.
+
+Source: `engines/mlx-serve/tests/stream_keepalive_probe.py:22`. Unset read: 8.
+
+```text
+
+MAX_GAP_S = float(os.environ.get("MAX_GAP_S", 15))
+MIN_BUFFER_S = float(os.environ.get("MIN_BUFFER_S", 8))
+
+DESC = "Write text content to a file on disk."
+# Long, mechanical content: the model emits it as one giant tool-call argument,
+# which the server buffers end-to-end while it watches for the closing tag.
+```
 
 ### MLXSERVE_DEVICE
 
@@ -65732,11 +70064,35 @@ mlxserve device: engine setting; built-in default retained
 
 Scope: mlx-serve. Class: advanced.
 
+Source: `engines/mlx-serve/src/ios_lib.zig:97`. Unset read: NULL from getenv; the literal consumer below supplies any fallback.
+
+```text
+    var metal_avail: bool = false;
+    try mlx.check(mlx.mlx_metal_is_available(&metal_avail));
+    const force_cpu = if (std.c.getenv("MLXSERVE_DEVICE")) |d| std.mem.eql(u8, std.mem.sliceTo(d, 0), "cpu") else false;
+    log.info("[ios] Metal GPU available: {}, force_cpu: {}\n", .{ metal_avail, force_cpu });
+    if (force_cpu) {
+        const cpu_dev = mlx.mlx_device_new_type(.cpu, 0);
+        defer _ = mlx.mlx_device_free(cpu_dev);
+```
+
 ### MLXSERVE_LOWMEM
 
 mlxserve lowmem: engine setting; built-in default retained
 
 Scope: mlx-serve. Class: advanced.
+
+Source: `engines/mlx-serve/src/gen.zig:318`. Unset read: NULL from getenv; the literal consumer below supplies any fallback.
+
+```text
+
+    fn lowMemDefault() bool {
+        const env: ?[]const u8 = if (std.c.getenv("MLXSERVE_LOWMEM")) |v| std.mem.sliceTo(v, 0) else null;
+        return lowMemFromInputs(@import("build_options").ios, env, metrics.getTotalMemBytes());
+    }
+
+    fn load(io: std.Io, allocator: std.mem.Allocator, model_dir: []const u8) !FluxImpl {
+```
 
 ### MLX_BUILD_BACKEND_PACKAGE
 
@@ -65773,6 +70129,18 @@ Scope: mlx-serve. Class: advanced.
 mlx enable tf32: engine setting; built-in default retained
 
 Scope: mlx-serve. Class: advanced.
+
+Source: `engines/mlx-serve/src/transformer.zig:4192`. Unset read: NULL from getenv; the literal consumer below supplies any fallback.
+
+```text
+    if (qsa_score_tf32_env) |v| return v;
+    const v = blk: {
+        const raw = std.c.getenv("MLX_ENABLE_TF32") orelse break :blk true;
+        break :blk qsaScoreTf32ValueOn(std.mem.sliceTo(raw, 0));
+    };
+    qsa_score_tf32_env = v;
+    return v;
+```
 
 ### MLX_HOSTFILE
 
@@ -65822,29 +70190,89 @@ mlx serve add rmsnorm fused: engine setting; built-in default retained
 
 Scope: mlx-serve. Class: advanced.
 
+Source: `engines/mlx-serve/src/transformer.zig:34197`. Unset read: NULL from getenv; the literal consumer below supplies any fallback.
+
+```text
+    if (add_rmsnorm_override) |v| return v;
+    if (add_rmsnorm_env) |v| return v;
+    const raw = std.c.getenv("MLX_SERVE_ADD_RMSNORM_FUSED");
+    const enabled = raw != null and std.mem.eql(u8, std.mem.sliceTo(raw.?, 0), "1");
+    add_rmsnorm_env = enabled;
+    return enabled;
+}
+```
+
 ### MLX_SERVE_ANE_BANK_MAX_BYTES
 
 mlx serve ane bank max bytes: engine setting; built-in default retained
 
 Scope: mlx-serve. Class: advanced.
 
+Source: `engines/mlx-serve/src/ane.zig:731`. Unset read: NULL from getenv; the literal consumer below supplies any fallback.
+
+```text
+
+pub fn bankMaxBytes() u64 {
+    const raw = std.c.getenv("MLX_SERVE_ANE_BANK_MAX_BYTES") orelse return DEFAULT_BANK_MAX_BYTES;
+    const v = std.fmt.parseInt(u64, std.mem.sliceTo(raw, 0), 10) catch return DEFAULT_BANK_MAX_BYTES;
+    return if (v == 0) DEFAULT_BANK_MAX_BYTES else v;
+}
+
+```
+
 ### MLX_SERVE_ANE_CACHE
 
 MLX_SERVE_ANE_CACHE: advanced engine setting; built-in default retained
 
-Scope: image. Class: advanced.
+Scope: image, mlx-serve. Class: advanced.
+
+Source: `engines/mlx-serve/lib/ane/ane_bridge.m:83`. Unset read: NULL from getenv; the literal consumer below supplies any fallback.
+
+```text
+
+bool msv_ane_cache_enabled(void) {
+    const char *env = getenv("MLX_SERVE_ANE_CACHE");
+    return !env || atoi(env) != 0;
+}
+
+static void bridge_write_sources(NSString *directory, NSData *program,
+```
 
 ### MLX_SERVE_ANE_CACHE_CAP_GB
 
 MLX_SERVE_ANE_CACHE_CAP_GB: advanced engine setting; built-in default retained
 
-Scope: image. Class: advanced.
+Scope: image, mlx-serve. Class: advanced.
+
+Source: `engines/mlx-serve/lib/ane/ane_bridge.m:172`. Unset read: NULL from getenv; the literal consumer below supplies any fallback.
+
+```text
+
+static unsigned long long bridge_cache_cap_bytes(void) {
+    const char *env = getenv("MLX_SERVE_ANE_CACHE_CAP_GB");
+    long gb = env ? atol(env) : 40;
+    if (gb <= 0) gb = 40;
+    return (unsigned long long)gb << 30;
+}
+```
 
 ### MLX_SERVE_ANE_CACHE_DIR
 
 MLX_SERVE_ANE_CACHE_DIR: advanced engine setting; built-in default retained
 
-Scope: image. Class: advanced.
+Scope: image, mlx-serve. Class: advanced.
+
+Source: `engines/mlx-serve/lib/ane/ane_bridge.m:74`. Unset read: NULL from getenv; the literal consumer below supplies any fallback.
+
+```text
+
+static NSString *bridge_cache_root(void) {
+    const char *override = getenv("MLX_SERVE_ANE_CACHE_DIR");
+    NSString *root = override ? @(override) :
+        [NSHomeDirectory() stringByAppendingPathComponent:@".mlx-serve/ane-cache"];
+    [[NSFileManager defaultManager] createDirectoryAtPath:root
+        withIntermediateDirectories:YES attributes:nil error:nil];
+```
 
 ### MLX_SERVE_ANE_DUAL
 
@@ -65852,11 +70280,35 @@ mlx serve ane dual: engine setting; built-in default retained
 
 Scope: mlx-serve. Class: advanced.
 
+Source: `engines/mlx-serve/src/ane.zig:574`. Unset read: NULL from getenv; the literal consumer below supplies any fallback.
+
+```text
+/// (unmeasurable on single-ANE silicon; private API on top of private API).
+pub fn dualEnabled() bool {
+    return dualEnabledFrom(if (std.c.getenv("MLX_SERVE_ANE_DUAL")) |p| std.mem.sliceTo(p, 0) else null, chipBrand());
+}
+
+/// MLX_SERVE_ANE_DUAL=1 forces it on, =0 off; unset = the chip default.
+pub fn dualEnabledFrom(raw: ?[]const u8, chip: []const u8) bool {
+```
+
 ### MLX_SERVE_ANE_DUAL_SHARE_INPUT
 
 mlx serve ane dual share input: engine setting; built-in default retained
 
 Scope: mlx-serve. Class: advanced.
+
+Source: `engines/mlx-serve/src/ane.zig:592`. Unset read: NULL from getenv; the literal consumer below supplies any fallback.
+
+```text
+/// against a ~20 ms eval. Flip it once dual is proven.
+pub fn dualShareInput() bool {
+    const raw = std.c.getenv("MLX_SERVE_ANE_DUAL_SHARE_INPUT") orelse return false;
+    return std.mem.eql(u8, std.mem.sliceTo(raw, 0), "1");
+}
+
+/// Neural Engine instances a chip carries. Ultra parts fuse two dies and
+```
 
 ### MLX_SERVE_ANE_FORCE
 
@@ -65864,11 +70316,35 @@ mlx serve ane force: engine setting; built-in default retained
 
 Scope: mlx-serve. Class: advanced.
 
+Source: `engines/mlx-serve/src/scheduler.zig:3975`. Unset read: NULL from getenv; the literal consumer below supplies any fallback.
+
+```text
+    // compiled fixed-shape tile matches the width the forward will run.
+    if (params.ane_prefill) {
+        const ane_force: ?[]const u8 = if (std.c.getenv("MLX_SERVE_ANE_FORCE")) |p| std.mem.span(p) else null;
+        if (!ane_mod.anePrefillAllowed(transformer_mod.verifyQmmNaxAvailable(), ane_force)) {
+            // ANE prefill is M4-and-below: on NAX machines it measured a
+            // loss (M5 Max, PR #223). `/props` ane stays absent, as off.
+            log.info(
+```
+
 ### MLX_SERVE_ANE_GDN
 
 mlx serve ane gdn: engine setting; built-in default retained
 
 Scope: mlx-serve. Class: advanced.
+
+Source: `engines/mlx-serve/src/ane.zig:547`. Unset read: NULL from getenv; the literal consumer below supplies any fallback.
+
+```text
+/// keeps `--ane-prefill` MLP-only — the attribution lever for A/Bs.
+pub fn gdnEnabled() bool {
+    const raw = std.c.getenv("MLX_SERVE_ANE_GDN") orelse return true;
+    return !std.mem.eql(u8, std.mem.sliceTo(raw, 0), "0");
+}
+
+/// How each projection splits between ANE and GPU (A1, ane-plan-aug-18).
+```
 
 ### MLX_SERVE_ANE_MODE
 
@@ -65876,11 +70352,35 @@ mlx serve ane mode: engine setting; built-in default retained
 
 Scope: mlx-serve. Class: advanced.
 
+Source: `engines/mlx-serve/src/ane.zig:565`. Unset read: NULL from getenv; the literal consumer below supplies any fallback.
+
+```text
+
+pub fn splitMode() Mode {
+    const raw = std.c.getenv("MLX_SERVE_ANE_MODE") orelse return .channel;
+    if (std.mem.eql(u8, std.mem.sliceTo(raw, 0), "row")) return .row;
+    return .channel;
+}
+
+```
+
 ### MLX_SERVE_ANE_SPLIT
 
 mlx serve ane split: engine setting; built-in default retained
 
 Scope: mlx-serve. Class: advanced.
+
+Source: `engines/mlx-serve/src/ane.zig:226`. Unset read: NULL from getenv; the literal consumer below supplies any fallback.
+
+```text
+/// MLX_SERVE_ANE_SPLIT parsed; null when unset or outside (0, 1].
+pub fn explicitShareEnv() ?f32 {
+    const raw = std.c.getenv("MLX_SERVE_ANE_SPLIT") orelse return null;
+    const v = std.fmt.parseFloat(f32, std.mem.sliceTo(raw, 0)) catch return null;
+    if (!(v > 0) or v > 1) return null;
+    return v;
+}
+```
 
 ### MLX_SERVE_ATTN_GATE_FUSED
 
@@ -65888,11 +70388,35 @@ mlx serve attn gate fused: engine setting; built-in default retained
 
 Scope: mlx-serve. Class: advanced.
 
+Source: `engines/mlx-serve/src/transformer.zig:34377`. Unset read: NULL from getenv; the literal consumer below supplies any fallback.
+
+```text
+    if (attn_gate_fused_override) |v| return v;
+    if (attn_gate_fused_env) |v| return v;
+    const raw = std.c.getenv("MLX_SERVE_ATTN_GATE_FUSED");
+    const enabled = raw != null and std.mem.eql(u8, std.mem.sliceTo(raw.?, 0), "1");
+    attn_gate_fused_env = enabled;
+    return enabled;
+}
+```
+
 ### MLX_SERVE_CACHE_LIMIT
 
 mlx serve cache limit: engine setting; built-in default retained
 
 Scope: mlx-serve. Class: advanced.
+
+Source: `engines/mlx-serve/src/server.zig:3266`. Unset read: NULL from getenv; the literal consumer below supplies any fallback.
+
+```text
+/// to 1 GB on small-RAM machines during media gen, and iOS boots at 384 MB.
+pub fn applyMlxCacheLimit() void {
+    const env: ?[]const u8 = if (std.c.getenv("MLX_SERVE_CACHE_LIMIT")) |p|
+        std.mem.span(p)
+    else
+        null;
+    const cap = mlxCacheLimitFromEnv(env, metrics.getTotalMemBytes());
+```
 
 ### MLX_SERVE_COMPILE_FORWARD
 
@@ -65900,11 +70424,47 @@ mlx serve compile forward: engine setting; built-in default retained
 
 Scope: mlx-serve. Class: advanced.
 
+Source: `engines/mlx-serve/src/scheduler.zig:3603`. Unset read: NULL from getenv; the literal consumer below supplies any fallback.
+
+```text
+    // many different chunk sizes. Tied to byte-equivalence pin in
+    // tests/test_phase2_forward_equivalence.sh.
+    if (std.c.getenv("MLX_SERVE_COMPILE_FORWARD") != null) {
+        const raw = std.c.getenv("MLX_SERVE_COMPILE_FORWARD").?;
+        const slice = std.mem.sliceTo(raw, 0);
+        if (std.mem.eql(u8, slice, "1")) {
+            xfm_ptr.compileForward();
+```
+
+Source: `engines/mlx-serve/src/scheduler.zig:3604`. Unset read: NULL from getenv; the literal consumer below supplies any fallback.
+
+```text
+    // tests/test_phase2_forward_equivalence.sh.
+    if (std.c.getenv("MLX_SERVE_COMPILE_FORWARD") != null) {
+        const raw = std.c.getenv("MLX_SERVE_COMPILE_FORWARD").?;
+        const slice = std.mem.sliceTo(raw, 0);
+        if (std.mem.eql(u8, slice, "1")) {
+            xfm_ptr.compileForward();
+        }
+```
+
 ### MLX_SERVE_CONVERT_WORKERS
 
 MLX_SERVE_CONVERT_WORKERS: advanced engine setting; built-in default retained
 
-Scope: image. Class: advanced.
+Scope: image, mlx-serve. Class: advanced.
+
+Source: `engines/mlx-serve/tests/convert_dsv4_weights.py:623`. Unset read: '6'.
+
+```text
+    total_size = 0
+    pool = None
+    workers = int(os.environ.get("MLX_SERVE_CONVERT_WORKERS", "6"))
+
+    for gi, gname in enumerate(order):
+        shard_file = f"model-{gname.replace('.', '-')}.safetensors"
+        shard_path = os.path.join(out, shard_file)
+```
 
 ### MLX_SERVE_DECODE_ASYNC_LADDER
 
@@ -65912,11 +70472,47 @@ mlx serve decode async ladder: engine setting; built-in default retained
 
 Scope: mlx-serve. Class: advanced.
 
+Source: `engines/mlx-serve/src/transformer.zig:15389`. Unset read: NULL from getenv; the literal consumer below supplies any fallback.
+
+```text
+            .owns_norms = config.norm_has_offset,
+            .decode_async_ladder = decodeAsyncLadderStride(
+                if (std.c.getenv("MLX_SERVE_DECODE_ASYNC_LADDER")) |v| std.mem.span(v) else null,
+            ),
+            .gelu_coeff = if (need_gelu) bf16Scalar(0.7978845608028654, s) else null,
+            .gelu_inner = if (need_gelu) bf16Scalar(0.044715, s) else null,
+            .half = bf16Scalar(0.5, s),
+```
+
 ### MLX_SERVE_DECODE_ATTN_QUANT
 
 mlx serve decode attn quant: engine setting; built-in default retained
 
 Scope: mlx-serve. Class: advanced.
+
+Source: `engines/mlx-serve/src/transformer.zig:32542`. Unset read: NULL from getenv; the literal consumer below supplies any fallback.
+
+```text
+pub fn decodeAttnQuantExplicit() bool {
+    if (decode_attn_quant_override) |v| return v; // test seam counts as explicit
+    if (std.c.getenv("MLX_SERVE_DECODE_ATTN_QUANT")) |raw| {
+        return std.mem.eql(u8, std.mem.sliceTo(raw, 0), "1");
+    }
+    return decode_attn_quant_flag orelse false;
+}
+```
+
+Source: `engines/mlx-serve/src/transformer.zig:32554`. Unset read: NULL from getenv; the literal consumer below supplies any fallback.
+
+```text
+        // Env wins over the flag: it is the bench scripts' A/B hand
+        // (fwd_ubench/prefill_ab pass env, not flags).
+        if (std.c.getenv("MLX_SERVE_DECODE_ATTN_QUANT")) |raw| {
+            break :blk std.mem.eql(u8, std.mem.sliceTo(raw, 0), "1");
+        }
+        break :blk decode_attn_quant_flag orelse DECODE_ATTN_QUANT_DEFAULT;
+    };
+```
 
 ### MLX_SERVE_DECODE_ATTN_QUANT_NVFP4_FROM
 
@@ -65924,11 +70520,35 @@ mlx serve decode attn quant nvfp4 from: engine setting; built-in default retaine
 
 Scope: mlx-serve. Class: advanced.
 
+Source: `engines/mlx-serve/src/transformer.zig:32503`. Unset read: NULL from getenv; the literal consumer below supplies any fallback.
+
+```text
+    if (attn_dq_nvfp4_from_env) |v| return v;
+    const parsed: ?i64 = blk: {
+        const raw = std.c.getenv("MLX_SERVE_DECODE_ATTN_QUANT_NVFP4_FROM") orelse break :blk null;
+        const s = std.mem.sliceTo(raw, 0);
+        if (std.mem.eql(u8, s, "off")) break :blk -1;
+        break :blk std.fmt.parseInt(i64, s, 10) catch null;
+    };
+```
+
 ### MLX_SERVE_DECODE_FWD_UBENCH
 
 mlx serve decode fwd ubench: engine setting; built-in default retained
 
 Scope: mlx-serve. Class: advanced.
+
+Source: `engines/mlx-serve/src/scheduler.zig:3617`. Unset read: NULL from getenv; the literal consumer below supplies any fallback.
+
+```text
+    // token is the model and how much is everything else. Resets the KV cache
+    // afterwards so the probe cannot pollute real requests.
+    if (std.c.getenv("MLX_SERVE_DECODE_FWD_UBENCH")) |raw| {
+        const n = std.fmt.parseInt(usize, std.mem.sliceTo(raw, 0), 10) catch 0;
+        if (n > 0) {
+            const io_u = @import("io_util.zig");
+            const tio = std.Io.Threaded.global_single_threaded.io();
+```
 
 ### MLX_SERVE_DECODE_FWD_UBENCH_KV
 
@@ -65936,11 +70556,35 @@ mlx serve decode fwd ubench kv: engine setting; built-in default retained
 
 Scope: mlx-serve. Class: advanced.
 
+Source: `engines/mlx-serve/src/scheduler.zig:3632`. Unset read: NULL from getenv; the literal consumer below supplies any fallback.
+
+```text
+            };
+            const kv_pre: usize = blk: {
+                const r = std.c.getenv("MLX_SERVE_DECODE_FWD_UBENCH_KV") orelse break :blk 0;
+                break :blk std.fmt.parseInt(usize, std.mem.sliceTo(r, 0), 10) catch 0;
+            };
+            const tok_slice = try sch.allocator.alloc(i32, @min(rows, 4096));
+            defer sch.allocator.free(tok_slice);
+```
+
 ### MLX_SERVE_DECODE_FWD_UBENCH_S
 
 mlx serve decode fwd ubench s: engine setting; built-in default retained
 
 Scope: mlx-serve. Class: advanced.
+
+Source: `engines/mlx-serve/src/scheduler.zig:3628`. Unset read: NULL from getenv; the literal consumer below supplies any fallback.
+
+```text
+            // tokens first so the meter runs at a real context length.
+            const rows: usize = blk: {
+                const r = std.c.getenv("MLX_SERVE_DECODE_FWD_UBENCH_S") orelse break :blk 1;
+                break :blk @max(1, std.fmt.parseInt(usize, std.mem.sliceTo(r, 0), 10) catch 1);
+            };
+            const kv_pre: usize = blk: {
+                const r = std.c.getenv("MLX_SERVE_DECODE_FWD_UBENCH_KV") orelse break :blk 0;
+```
 
 ### MLX_SERVE_DECODE_PROFILE
 
@@ -65948,11 +70592,35 @@ mlx serve decode profile: engine setting; built-in default retained
 
 Scope: mlx-serve. Class: advanced.
 
+Source: `engines/mlx-serve/src/transformer.zig:32313`. Unset read: NULL from getenv; the literal consumer below supplies any fallback.
+
+```text
+fn decodeProfileEnabled() bool {
+    if (decode_prof_enabled) |v| return v;
+    const v = std.c.getenv("MLX_SERVE_DECODE_PROFILE") != null;
+    decode_prof_enabled = v;
+    return v;
+}
+
+```
+
 ### MLX_SERVE_DFLASH
 
 mlx serve dflash: engine setting; built-in default retained
 
 Scope: mlx-serve. Class: advanced.
+
+Source: `engines/mlx-serve/src/scheduler.zig:3803`. Unset read: NULL from getenv; the literal consumer below supplies any fallback.
+
+```text
+        in_dir_drafter orelse "";
+    if (drafter_dir.len > 0 and dflash_mod.probeIsDflash(sch.io, sch.allocator, drafter_dir)) {
+        const env_off = if (std.c.getenv("MLX_SERVE_DFLASH")) |v| v[0] == '0' else false;
+        if (env_off) {
+            log.info("[dflash] sidecar at {s} skipped (MLX_SERVE_DFLASH=0)\n", .{drafter_dir});
+        } else {
+            const d = try sch.allocator.create(DflashModel);
+```
 
 ### MLX_SERVE_DFLASH_CHOOSER
 
@@ -65960,11 +70628,35 @@ mlx serve dflash chooser: engine setting; built-in default retained
 
 Scope: mlx-serve. Class: advanced.
 
+Source: `engines/mlx-serve/src/generate.zig:1665`. Unset read: NULL from getenv; the literal consumer below supplies any fallback.
+
+```text
+    fn dflashChooserEnabled() bool {
+        if (dflash_chooser_cache) |v| return v;
+        const raw = std.c.getenv("MLX_SERVE_DFLASH_CHOOSER");
+        const on = raw != null and std.mem.eql(u8, std.mem.span(raw.?), "1");
+        dflash_chooser_cache = on;
+        return on;
+    }
+```
+
 ### MLX_SERVE_DFLASH_DRAFT_HEAD_BITS
 
 mlx serve dflash draft head bits: engine setting; built-in default retained
 
 Scope: mlx-serve. Class: advanced.
+
+Source: `engines/mlx-serve/src/dflash.zig:772`. Unset read: NULL from getenv; the literal consumer below supplies any fallback.
+
+```text
+    /// a supported affine width → that, anything else ("0", "off") → disabled.
+    pub fn draftHeadBitsFromEnv() u32 {
+        const p = std.c.getenv("MLX_SERVE_DFLASH_DRAFT_HEAD_BITS") orelse return DEFAULT_DRAFT_HEAD_BITS;
+        const v = std.fmt.parseInt(u32, std.mem.span(p), 10) catch return 0;
+        return switch (v) {
+            2, 3, 4, 6, 8 => v,
+            else => 0,
+```
 
 ### MLX_SERVE_DFLASH_MARKOV
 
@@ -65972,11 +70664,35 @@ mlx serve dflash markov: engine setting; built-in default retained
 
 Scope: mlx-serve. Class: advanced.
 
+Source: `engines/mlx-serve/src/generate.zig:8953`. Unset read: NULL from getenv; the literal consumer below supplies any fallback.
+
+```text
+    /// the Markov chain is worth, never a default.
+    fn dflashMarkovEnabled() bool {
+        const p = std.c.getenv("MLX_SERVE_DFLASH_MARKOV") orelse return true;
+        return !std.mem.eql(u8, std.mem.span(p), "0");
+    }
+
+    fn dflashSelectorEnabled() bool {
+```
+
 ### MLX_SERVE_DFLASH_QUANT_BITS
 
 mlx serve dflash quant bits: engine setting; built-in default retained
 
 Scope: mlx-serve. Class: advanced.
+
+Source: `engines/mlx-serve/src/dflash.zig:454`. Unset read: NULL from getenv; the literal consumer below supplies any fallback.
+
+```text
+/// affine width → that, anything else ("0", "off") → dense bf16.
+pub fn quantBitsFromEnv() u32 {
+    const p = std.c.getenv("MLX_SERVE_DFLASH_QUANT_BITS") orelse return DEFAULT_QUANT_BITS;
+    const v = std.fmt.parseInt(u32, std.mem.span(p), 10) catch return 0;
+    return switch (v) {
+        2, 3, 4, 5, 6, 8 => v,
+        else => 0,
+```
 
 ### MLX_SERVE_DFLASH_SAMPLED_DRAFTS
 
@@ -65984,11 +70700,35 @@ mlx serve dflash sampled drafts: engine setting; built-in default retained
 
 Scope: mlx-serve. Class: advanced.
 
+Source: `engines/mlx-serve/src/generate.zig:8937`. Unset read: NULL from getenv; the literal consumer below supplies any fallback.
+
+```text
+        if (dflash_sampled_drafts_cache) |v| return v;
+        var on = false;
+        if (std.c.getenv("MLX_SERVE_DFLASH_SAMPLED_DRAFTS")) |p| {
+            const val = std.mem.span(p);
+            if (val.len > 0 and val[0] == '1') on = true;
+        }
+        dflash_sampled_drafts_cache = on;
+```
+
 ### MLX_SERVE_DFLASH_SELECTOR
 
 mlx serve dflash selector: engine setting; built-in default retained
 
 Scope: mlx-serve. Class: advanced.
+
+Source: `engines/mlx-serve/src/generate.zig:8960`. Unset read: NULL from getenv; the literal consumer below supplies any fallback.
+
+```text
+        if (dflash_selector_cache) |v| return v;
+        var on = true;
+        if (std.c.getenv("MLX_SERVE_DFLASH_SELECTOR")) |p| {
+            const val = std.mem.span(p);
+            if (val.len > 0 and val[0] == '0') on = false;
+        }
+        dflash_selector_cache = on;
+```
 
 ### MLX_SERVE_DIFFUSION_TRACE
 
@@ -65996,11 +70736,71 @@ mlx serve diffusion trace: engine setting; built-in default retained
 
 Scope: mlx-serve. Class: advanced.
 
+Source: `engines/mlx-serve/src/diffusion.zig:434`. Unset read: NULL from getenv; the literal consumer below supplies any fallback.
+
+```text
+            try mlx.check(mlx.mlx_array_eval(canvas));
+
+            if (std.c.getenv("MLX_SERVE_DIFFUSION_TRACE") != null) {
+                const me = try meanScalar(entropy, self.xfm.s);
+                var mask_i32 = mlx.mlx_array_new();
+                defer _ = mlx.mlx_array_free(mask_i32);
+                mlx.check(mlx.mlx_astype(&mask_i32, accept_mask, .float32, self.xfm.s)) catch {};
+```
+
+Source: `engines/mlx-serve/src/transformer.zig:23272`. Unset read: NULL from getenv; the literal consumer below supplies any fallback.
+
+```text
+        defer _ = mlx.mlx_array_free(expert_normed);
+
+        if (std.c.getenv("MLX_SERVE_DIFFUSION_TRACE") != null and trace_tail_once) {
+            trace_tail_once = false;
+            debugTraceHead("tail residual", h, self.s);
+            debugTraceHead("tail shared_normed", shared_normed, self.s);
+            debugTraceHead("tail expert_normed", expert_normed, self.s);
+```
+
+Source: `engines/mlx-serve/src/transformer.zig:23503`. Unset read: NULL from getenv; the literal consumer below supplies any fallback.
+
+```text
+        var h = try self.embedding(canvas_ids);
+        if (self_cond_embeddings) |sig| {
+            const dbg_sc = std.c.getenv("MLX_SERVE_DIFFUSION_TRACE") != null;
+            if (dbg_sc) debugTraceHead("sc sig", sig, self.s);
+            const sig_normed = try self.rmsNorm(sig, sc.pre_norm);
+            defer _ = mlx.mlx_array_free(sig_normed);
+            if (dbg_sc) debugTraceHead("sc normed", sig_normed, self.s);
+```
+
+Source: `engines/mlx-serve/src/transformer.zig:23534`. Unset read: NULL from getenv; the literal consumer below supplies any fallback.
+
+```text
+        const seq_len: c_int = x_shape[1];
+
+        const dbg = std.c.getenv("MLX_SERVE_DIFFUSION_TRACE") != null;
+        if (dbg) debugTraceHead("embed+sc", h, self.s);
+
+        var dt = mlx.DtypeTrace.begin("diffusion-decoder", h, switch (ml[0].attn) {
+            .full => |f| f.q_w,
+```
+
 ### MLX_SERVE_DIFFVAE_OUTPUT
 
 mlx serve diffvae output: engine setting; built-in default retained
 
 Scope: mlx-serve. Class: advanced.
+
+Source: `engines/mlx-serve/src/ltx_diffvae_forward.zig:870`. Unset read: NULL from getenv; the literal consumer below supplies any fallback.
+
+```text
+    pub fn resolved() Sampler {
+        var out = Sampler.default;
+        if (std.c.getenv("MLX_SERVE_DIFFVAE_OUTPUT")) |raw| {
+            out.predict_x0 = std.mem.eql(u8, std.mem.sliceTo(raw, 0), "x0");
+        }
+        if (std.c.getenv("MLX_SERVE_DIFFVAE_STEPS")) |raw| {
+            if (std.fmt.parseInt(u32, std.mem.sliceTo(raw, 0), 10)) |v| {
+```
 
 ### MLX_SERVE_DIFFVAE_STEPS
 
@@ -66008,11 +70808,35 @@ mlx serve diffvae steps: engine setting; built-in default retained
 
 Scope: mlx-serve. Class: advanced.
 
+Source: `engines/mlx-serve/src/ltx_diffvae_forward.zig:873`. Unset read: NULL from getenv; the literal consumer below supplies any fallback.
+
+```text
+            out.predict_x0 = std.mem.eql(u8, std.mem.sliceTo(raw, 0), "x0");
+        }
+        if (std.c.getenv("MLX_SERVE_DIFFVAE_STEPS")) |raw| {
+            if (std.fmt.parseInt(u32, std.mem.sliceTo(raw, 0), 10)) |v| {
+                if (v > 0) out.num_steps = v;
+            } else |_| {}
+        }
+```
+
 ### MLX_SERVE_DIFFVAE_TILE_TOKENS
 
 mlx serve diffvae tile tokens: engine setting; built-in default retained
 
 Scope: mlx-serve. Class: advanced.
+
+Source: `engines/mlx-serve/src/ltx_diffvae_forward.zig:74`. Unset read: NULL from getenv; the literal consumer below supplies any fallback.
+
+```text
+    if (tile_budget_cached) |v| return v;
+    const v: u64 = blk: {
+        if (std.c.getenv("MLX_SERVE_DIFFVAE_TILE_TOKENS")) |raw| {
+            if (std.fmt.parseInt(u64, std.mem.sliceTo(raw, 0), 10)) |parsed| {
+                if (parsed > 0) break :blk parsed;
+            } else |_| {}
+        }
+```
 
 ### MLX_SERVE_DIFFVAE_TSCALE
 
@@ -66020,11 +70844,35 @@ mlx serve diffvae tscale: engine setting; built-in default retained
 
 Scope: mlx-serve. Class: advanced.
 
+Source: `engines/mlx-serve/src/ltx_diffvae_forward.zig:878`. Unset read: NULL from getenv; the literal consumer below supplies any fallback.
+
+```text
+            } else |_| {}
+        }
+        if (std.c.getenv("MLX_SERVE_DIFFVAE_TSCALE")) |raw| {
+            out.timestep_scale = std.fmt.parseFloat(f32, std.mem.sliceTo(raw, 0)) catch out.timestep_scale;
+        }
+        return out;
+    }
+```
+
 ### MLX_SERVE_DISPATCH_PROBE
 
 mlx serve dispatch probe: engine setting; built-in default retained
 
 Scope: mlx-serve. Class: advanced.
+
+Source: `engines/mlx-serve/src/transformer.zig:34649`. Unset read: NULL from getenv; the literal consumer below supplies any fallback.
+
+```text
+pub fn dispatchProbeCount() usize {
+    if (dispatch_probe_cached) |v| return v;
+    const raw = std.c.getenv("MLX_SERVE_DISPATCH_PROBE");
+    const n: usize = if (raw) |r| std.fmt.parseInt(usize, std.mem.sliceTo(r, 0), 10) catch 0 else 0;
+    dispatch_probe_cached = n;
+    return n;
+}
+```
 
 ### MLX_SERVE_DSPARK_PROFILE
 
@@ -66032,11 +70880,59 @@ mlx serve dspark profile: engine setting; built-in default retained
 
 Scope: mlx-serve. Class: advanced.
 
+Source: `engines/mlx-serve/src/deepseek_v4.zig:1271`. Unset read: NULL from getenv; the literal consumer below supplies any fallback.
+
+```text
+        .ds_hc_head_scale = if (dspark_on) try toHostF32(a, dw.dspark.?.hc_head_scale, 1, s) else &.{},
+        .ds_conf_thr = dsparkConfThreshold(),
+        .ds_prof = if (dspark_on and std.c.getenv("MLX_SERVE_DSPARK_PROFILE") != null) DsparkProfile{} else null,
+    };
+}
+
+/// Confidence gate, in the reference implementation's own units: the env var
+```
+
 ### MLX_SERVE_DSPARK_TRACE
 
 mlx serve dspark trace: engine setting; built-in default retained
 
 Scope: mlx-serve. Class: advanced.
+
+Source: `engines/mlx-serve/src/deepseek_v4.zig:5607`. Unset read: NULL from getenv; the literal consumer below supplies any fallback.
+
+```text
+    const total = try gpuOp2(mlx.mlx_add, routed, sd_r, m.s);
+    defer _ = mlx.mlx_array_free(total);
+    if (li >= m.n_layers and std.c.getenv("MLX_SERVE_DSPARK_TRACE") != null) {
+        const pr = struct {
+            fn f(al: std.mem.Allocator, arr: mlx.mlx_array, n: usize, s2: mlx.mlx_stream) f64 {
+                const hh = toHostF32(al, arr, n, s2) catch return -1;
+                defer al.free(hh);
+```
+
+Source: `engines/mlx-serve/src/deepseek_v4.zig:8631`. Unset read: NULL from getenv; the literal consumer below supplies any fallback.
+
+```text
+    defer _ = mlx.mlx_array_free(stream_g);
+
+    const ds_trace = std.c.getenv("MLX_SERVE_DSPARK_TRACE") != null;
+    if (ds_trace) {
+        const sh = try toHostF32(a, stream_g, B * hcm * d, m.s);
+        defer a.free(sh);
+        var nrm: f64 = 0;
+```
+
+Source: `engines/mlx-serve/src/deepseek_v4.zig:9055`. Unset read: NULL from getenv; the literal consumer below supplies any fallback.
+
+```text
+        if (v > nrow[next_am]) next_am = j;
+    }
+    if (std.c.getenv("MLX_SERVE_DSPARK_TRACE") != null) {
+        var vam: [16]u32 = undefined;
+        for (0..B) |k| {
+            const row = vl[k * m.vocab ..][0..m.vocab];
+            var am2: usize = 0;
+```
 
 ### MLX_SERVE_DSV4_COMP_DEFER
 
@@ -66044,11 +70940,35 @@ mlx serve dsv4 comp defer: engine setting; built-in default retained
 
 Scope: mlx-serve. Class: advanced.
 
+Source: `engines/mlx-serve/src/deepseek_v4.zig:1628`. Unset read: NULL from getenv; the literal consumer below supplies any fallback.
+
+```text
+fn compDeferEnabled() bool {
+    if (comp_defer_state) |v| return v;
+    const v = if (std.c.getenv("MLX_SERVE_DSV4_COMP_DEFER")) |e| e[0] != '0' else true;
+    comp_defer_state = v;
+    return v;
+}
+
+```
+
 ### MLX_SERVE_DSV4_DEC_CHAIN
 
 mlx serve dsv4 dec chain: engine setting; built-in default retained
 
 Scope: mlx-serve. Class: advanced.
+
+Source: `engines/mlx-serve/src/deepseek_v4.zig:1717`. Unset read: NULL from getenv; the literal consumer below supplies any fallback.
+
+```text
+fn decChainEnabled() bool {
+    if (dec_chain_state) |v| return v;
+    const v = if (std.c.getenv("MLX_SERVE_DSV4_DEC_CHAIN")) |e| e[0] != '0' else true;
+    dec_chain_state = v;
+    return v;
+}
+/// Test hook: force the decode-chain arm on/off (null = re-read the env).
+```
 
 ### MLX_SERVE_DSV4_DRAIN_PREFETCH
 
@@ -66056,11 +70976,143 @@ mlx serve dsv4 drain prefetch: engine setting; built-in default retained
 
 Scope: mlx-serve. Class: advanced.
 
+Source: `engines/mlx-serve/src/deepseek_v4.zig:6260`. Unset read: NULL from getenv; the literal consumer below supplies any fallback.
+
+```text
+fn drainPrefetchEnabled() bool {
+    if (drain_prefetch_state) |v| return v;
+    const v = if (std.c.getenv("MLX_SERVE_DSV4_DRAIN_PREFETCH")) |e| e[0] != '0' else true;
+    drain_prefetch_state = v;
+    return v;
+}
+
+```
+
 ### MLX_SERVE_DSV4_DSPARK
 
 mlx serve dsv4 dspark: engine setting; built-in default retained
 
 Scope: mlx-serve. Class: advanced.
+
+Source: `engines/mlx-serve/src/deepseek_v4.zig:1171`. Unset read: NULL from getenv; the literal consumer below supplies any fallback.
+
+```text
+    // here in one batched eval or disable with an honest log. Default OFF:
+    // untouched lazy stages cost nothing and the model serves serial.
+    const ds_env = std.c.getenv("MLX_SERVE_DSV4_DSPARK");
+    const ds_opt_in = if (ds_env) |v| (v[0] == '1' or v[0] == 'f') else false;
+    const ds_force = if (ds_env) |v| v[0] == 'f' else false;
+    const has_stages = dw.dspark != null and dw.layers.len > n_layers;
+    var dspark_on = ds_opt_in and has_stages;
+```
+
+Source: `engines/mlx-serve/src/deepseek_v4.zig:2422`. Unset read: Wrapper/conditional default: see the literal call and consumer below.
+
+```text
+/// (test order must not decide whether the stages arm).
+fn testEnableDspark() void {
+    _ = setenv("MLX_SERVE_DSV4_DSPARK", "1", 1);
+}
+
+test "dsv4: fp8/fp4 QAT sims match the python oracle goldens" {
+    var x8 = [_]f32{ 0.001, -0.02, 0.3, -4.0, 55.0, -600.0, 0.125, 3.14159 };
+```
+
+Source: `engines/mlx-serve/src/deepseek_v4.zig:3020`. Unset read: Wrapper/conditional default: see the literal call and consumer below.
+
+```text
+    const s = mlx.gpuStream();
+    defer _ = mlx.mlx_stream_free(s);
+    _ = unsetenv("MLX_SERVE_DSV4_DSPARK"); // test-order hygiene: lazy needs DSpark off
+    var mdl = try initModel(allocator, &cfg, dw, s);
+    defer mdl.deinit();
+    try testing.expect(mdl.embed_g != null);
+
+```
+
+Source: `engines/mlx-serve/src/deepseek_v4.zig:3144`. Unset read: Wrapper/conditional default: see the literal call and consumer below.
+
+```text
+    defer _ = mlx.mlx_stream_free(s);
+
+    _ = unsetenv("MLX_SERVE_DSV4_DSPARK");
+    {
+        const dw = try loadDsv4Weights(allocator, &cfg, &weights);
+        var mdl = try initModel(allocator, &cfg, dw, s);
+        defer mdl.deinit();
+```
+
+Source: `engines/mlx-serve/src/deepseek_v4.zig:10064`. Unset read: Wrapper/conditional default: see the literal call and consumer below.
+
+```text
+    const s = mlx.gpuStream();
+    defer _ = mlx.mlx_stream_free(s);
+    _ = unsetenv("MLX_SERVE_DSV4_DSPARK");
+    var mdl = try initModel(allocator, &cfg, dw, s);
+    defer mdl.deinit();
+
+    var rng = std.Random.DefaultPrng.init(43);
+```
+
+Source: `engines/mlx-serve/src/deepseek_v4.zig:10216`. Unset read: Wrapper/conditional default: see the literal call and consumer below.
+
+```text
+        const s = mlx.gpuStream();
+        defer _ = mlx.mlx_stream_free(s);
+        _ = unsetenv("MLX_SERVE_DSV4_DSPARK");
+        var mdl = try initModel(allocator, &cfg, dw, s);
+        defer mdl.deinit();
+        var st = try initDecodeState(&mdl, allocator);
+        defer deinitDecodeState(&st);
+```
+
+Source: `engines/mlx-serve/src/generate.zig:2250`. Unset read: NULL from getenv; the literal consumer below supplies any fallback.
+
+```text
+            // machinery this arch cannot roll back.
+            const mdl_ds = xfm.dsv4.?;
+            const dspark_env_off = if (std.c.getenv("MLX_SERVE_DSV4_DSPARK")) |v| v[0] == '0' else false;
+            const arm = dsparkArmFor(sampling, options.logprobs_n, dsparkStochEnabled());
+            if (mdl_ds.n_mtp > 0 and !dspark_env_off and arm != .off) {
+                dspark_active = true;
+                dspark_stochastic = arm == .stochastic;
+```
+
+Source: `engines/mlx-serve/src/generate.zig:16783`. Unset read: Wrapper/conditional default: see the literal call and consumer below.
+
+```text
+test "dsv4: nextPld on a chokepoint-disabled generator stays serial (DSV4_MINI)" {
+    // DSpark is opt-in at load; the nextDspark arm below needs it armed.
+    _ = setenv("MLX_SERVE_DSV4_DSPARK", "1", 1);
+    // The live corruption path (2026-07-31, log 166348-166361): the scheduler
+    // decode tick dispatched on `slot.enable_pld` alone, so it called
+    // `nextPld` on a generator whose init the dsv4 guard had already flipped
+    // to pld_enabled=false — and nextPld trusted its caller, ran lookup +
+```
+
+Source: `engines/mlx-serve/src/generate.zig:16969`. Unset read: Wrapper/conditional default: see the literal call and consumer below.
+
+```text
+    // COUNTED (dspark_attempted) — a silent serial fallback emits perfectly
+    // plausible tokens.
+    _ = setenv("MLX_SERVE_DSV4_DSPARK", "1", 1);
+    const path_z = std.c.getenv("DSV4_MINI") orelse return;
+    if (mlx.noGpuBackend()) return;
+    const path = std.mem.span(path_z);
+    const allocator = testing.allocator;
+```
+
+Source: `engines/mlx-serve/src/main.zig:742`. Unset read: Wrapper/conditional default: see the literal call and consumer below.
+
+```text
+            // ~11 GB resident, so the default leaves them lazy and serves
+            // serial. deepseek_v4.initModel reads the env at model load.
+            _ = setenv("MLX_SERVE_DSV4_DSPARK", "1", 1);
+            // Same flag, embedded engine: arm ds4's DSpark runtime when a
+            // DSpark support GGUF sits beside a served .gguf model.
+            ds4_dspark = true;
+        } else if (std.mem.eql(u8, args[i], "--decode-attn-quant")) {
+```
 
 ### MLX_SERVE_DSV4_DSPARK_CONF
 
@@ -66068,11 +71120,71 @@ mlx serve dsv4 dspark conf: engine setting; built-in default retained
 
 Scope: mlx-serve. Class: advanced.
 
+Source: `engines/mlx-serve/src/deepseek_v4.zig:1289`. Unset read: NULL from getenv; the literal consumer below supplies any fallback.
+
+```text
+fn dsparkConfThreshold() f32 {
+    var p: f32 = 0;
+    if (std.c.getenv("MLX_SERVE_DSV4_DSPARK_CONF")) |v| {
+        p = std.fmt.parseFloat(f32, std.mem.span(v)) catch 0;
+    }
+    if (p <= 0) return -std.math.inf(f32);
+    if (p >= 1) return std.math.inf(f32);
+```
+
+Source: `engines/mlx-serve/src/generate.zig:17062`. Unset read: Wrapper/conditional default: see the literal call and consumer below.
+
+```text
+    // confidence-gate test). The env is read at initModel, so this needs a
+    // fresh Transformer; unset after — test order must not inherit the gate.
+    _ = setenv("MLX_SERVE_DSV4_DSPARK_CONF", "999999", 1);
+    defer _ = unsetenv("MLX_SERVE_DSV4_DSPARK_CONF");
+    var xfm2 = try Transformer.init(io, allocator, cfg, &weights);
+    defer xfm2.deinit();
+    var gen2 = try Generator.initWithOptions(io, allocator, &xfm2, &tok_dummy, &prompt, 64, sampled, &.{}, .{
+```
+
+Source: `engines/mlx-serve/src/generate.zig:17063`. Unset read: Wrapper/conditional default: see the literal call and consumer below.
+
+```text
+    // fresh Transformer; unset after — test order must not inherit the gate.
+    _ = setenv("MLX_SERVE_DSV4_DSPARK_CONF", "999999", 1);
+    defer _ = unsetenv("MLX_SERVE_DSV4_DSPARK_CONF");
+    var xfm2 = try Transformer.init(io, allocator, cfg, &weights);
+    defer xfm2.deinit();
+    var gen2 = try Generator.initWithOptions(io, allocator, &xfm2, &tok_dummy, &prompt, 64, sampled, &.{}, .{
+        .pld_enabled = true,
+```
+
 ### MLX_SERVE_DSV4_DSPARK_STOCH
 
 mlx serve dsv4 dspark stoch: engine setting; built-in default retained
 
 Scope: mlx-serve. Class: advanced.
+
+Source: `engines/mlx-serve/src/generate.zig:2200`. Unset read: NULL from getenv; the literal consumer below supplies any fallback.
+
+```text
+    fn dsparkStochEnabled() bool {
+        if (dspark_stoch_cache) |v| return v;
+        const raw: ?[]const u8 = if (std.c.getenv("MLX_SERVE_DSV4_DSPARK_STOCH")) |p| std.mem.span(p) else null;
+        const on = dsparkStochEnabledFromEnv(raw);
+        dspark_stoch_cache = on;
+        return on;
+    }
+```
+
+Source: `engines/mlx-serve/src/generate.zig:17002`. Unset read: NULL from getenv; the literal consumer below supplies any fallback.
+
+```text
+    // the matching behavior — that makes the `MLX_SERVE_DSV4_DSPARK_STOCH=0`
+    // run a real test of the fallback, not a skip.
+    const stoch_raw: ?[]const u8 = if (std.c.getenv("MLX_SERVE_DSV4_DSPARK_STOCH")) |p| std.mem.span(p) else null;
+    const stoch_on = Generator.dsparkStochEnabledFromEnv(stoch_raw);
+
+    var xfm = try Transformer.init(io, allocator, cfg, &weights);
+    defer xfm.deinit();
+```
 
 ### MLX_SERVE_DSV4_EMIT_KERNEL
 
@@ -66080,11 +71192,35 @@ mlx serve dsv4 emit kernel: engine setting; built-in default retained
 
 Scope: mlx-serve. Class: advanced.
 
+Source: `engines/mlx-serve/src/deepseek_v4.zig:1701`. Unset read: NULL from getenv; the literal consumer below supplies any fallback.
+
+```text
+fn emitKernelEnabled() bool {
+    if (emit_kernel_state) |v| return v;
+    const v = if (std.c.getenv("MLX_SERVE_DSV4_EMIT_KERNEL")) |e| e[0] != '0' else true;
+    emit_kernel_state = v;
+    return v;
+}
+/// Test hook: force the fused-emission arm on/off (null = re-read the env).
+```
+
 ### MLX_SERVE_DSV4_GPU_EMIT
 
 mlx serve dsv4 gpu emit: engine setting; built-in default retained
 
 Scope: mlx-serve. Class: advanced.
+
+Source: `engines/mlx-serve/src/deepseek_v4.zig:1681`. Unset read: NULL from getenv; the literal consumer below supplies any fallback.
+
+```text
+fn gpuEmitEnabled() bool {
+    if (gpu_emit_state) |v| return v;
+    const v = if (std.c.getenv("MLX_SERVE_DSV4_GPU_EMIT")) |e| e[0] != '0' else true;
+    gpu_emit_state = v;
+    return v;
+}
+
+```
 
 ### MLX_SERVE_DSV4_HCPOST
 
@@ -66092,11 +71228,35 @@ mlx serve dsv4 hcpost: engine setting; built-in default retained
 
 Scope: mlx-serve. Class: advanced.
 
+Source: `engines/mlx-serve/src/deepseek_v4.zig:1154`. Unset read: NULL from getenv; the literal consumer below supplies any fallback.
+
+```text
+    else
+        null;
+    const hc_post_env_off = if (std.c.getenv("MLX_SERVE_DSV4_HCPOST")) |v| v[0] == '0' else false;
+    const hc_post_k = if (sink_y_k != null and !hc_post_env_off)
+        buildHcPostKernel(hc, dim)
+    else
+        null;
+```
+
 ### MLX_SERVE_DSV4_LAYER_CAP
 
 mlx serve dsv4 layer cap: engine setting; built-in default retained
 
 Scope: mlx-serve. Class: advanced.
+
+Source: `engines/mlx-serve/src/deepseek_v4.zig:5912`. Unset read: NULL from getenv; the literal consumer below supplies any fallback.
+
+```text
+    // sublayer — slope/intercept attribution of the serial forward.
+    const cap = blk: {
+        const e = std.c.getenv("MLX_SERVE_DSV4_LAYER_CAP") orelse break :blk m.n_layers;
+        break :blk std.fmt.parseInt(usize, std.mem.span(e), 10) catch m.n_layers;
+    };
+    const skip_moe = std.c.getenv("MLX_SERVE_DSV4_SKIP_MOE") != null;
+    for (0..@min(m.n_layers, cap)) |li| {
+```
 
 ### MLX_SERVE_DSV4_LAZY_DECODE
 
@@ -66104,11 +71264,35 @@ mlx serve dsv4 lazy decode: engine setting; built-in default retained
 
 Scope: mlx-serve. Class: advanced.
 
+Source: `engines/mlx-serve/src/deepseek_v4.zig:1801`. Unset read: NULL from getenv; the literal consumer below supplies any fallback.
+
+```text
+fn lazyDecodeEnabled() bool {
+    if (lazy_decode_state) |v| return v;
+    const v = if (std.c.getenv("MLX_SERVE_DSV4_LAZY_DECODE")) |e| e[0] != '0' else true;
+    lazy_decode_state = v;
+    return v;
+}
+
+```
+
 ### MLX_SERVE_DSV4_MOE_GATEUP
 
 mlx serve dsv4 moe gateup: engine setting; built-in default retained
 
 Scope: mlx-serve. Class: advanced.
+
+Source: `engines/mlx-serve/src/deepseek_v4.zig:1737`. Unset read: NULL from getenv; the literal consumer below supplies any fallback.
+
+```text
+fn moeGateUpEnabled() bool {
+    if (moe_gateup_state) |v| return v;
+    const v = if (std.c.getenv("MLX_SERVE_DSV4_MOE_GATEUP")) |e| e[0] == '1' else false;
+    moe_gateup_state = v;
+    return v;
+}
+/// Test hook: force the MoE gate+up arm on/off (null = re-read the env).
+```
 
 ### MLX_SERVE_DSV4_MOE_ROUTE_GPU
 
@@ -66116,11 +71300,35 @@ mlx serve dsv4 moe route gpu: engine setting; built-in default retained
 
 Scope: mlx-serve. Class: advanced.
 
+Source: `engines/mlx-serve/src/deepseek_v4.zig:1617`. Unset read: NULL from getenv; the literal consumer below supplies any fallback.
+
+```text
+fn moeRouteGpuEnabled() bool {
+    if (moe_route_gpu_state) |v| return v;
+    const v = if (std.c.getenv("MLX_SERVE_DSV4_MOE_ROUTE_GPU")) |e| e[0] != '0' else true;
+    moe_route_gpu_state = v;
+    return v;
+}
+
+```
+
 ### MLX_SERVE_DSV4_PREFILL_SUB
 
 mlx serve dsv4 prefill sub: engine setting; built-in default retained
 
 Scope: mlx-serve. Class: advanced.
+
+Source: `engines/mlx-serve/src/deepseek_v4.zig:8071`. Unset read: NULL from getenv; the literal consumer below supplies any fallback.
+
+```text
+    if (prefill_sub_state) |v| return v;
+    var v: usize = PREFILL_SUB;
+    if (std.c.getenv("MLX_SERVE_DSV4_PREFILL_SUB")) |e| {
+        const parsed = std.fmt.parseInt(usize, std.mem.span(e), 10) catch PREFILL_SUB;
+        if (parsed > 0) v = parsed;
+    }
+    prefill_sub_state = v;
+```
 
 ### MLX_SERVE_DSV4_SINKHORN
 
@@ -66128,11 +71336,35 @@ mlx serve dsv4 sinkhorn: engine setting; built-in default retained
 
 Scope: mlx-serve. Class: advanced.
 
+Source: `engines/mlx-serve/src/deepseek_v4.zig:1144`. Unset read: NULL from getenv; the literal consumer below supplies any fallback.
+
+```text
+        break :blk arr;
+    };
+    const sink_env_off = if (std.c.getenv("MLX_SERVE_DSV4_SINKHORN")) |v| v[0] == '0' else false;
+    const sink_k = if (mlx.streamIsGpu(s) and !sink_env_off)
+        buildSinkhornKernel(hc, cfg.dsv4_hc_sinkhorn_iters)
+    else
+        null;
+```
+
 ### MLX_SERVE_DSV4_SINKY
 
 mlx serve dsv4 sinky: engine setting; built-in default retained
 
 Scope: mlx-serve. Class: advanced.
+
+Source: `engines/mlx-serve/src/deepseek_v4.zig:1149`. Unset read: NULL from getenv; the literal consumer below supplies any fallback.
+
+```text
+    else
+        null;
+    const sink_y_env_off = if (std.c.getenv("MLX_SERVE_DSV4_SINKY")) |v| v[0] == '0' else false;
+    const sink_y_k = if (sink_k != null and !sink_y_env_off)
+        buildSinkhornYKernel(hc, cfg.dsv4_hc_sinkhorn_iters, dim)
+    else
+        null;
+```
 
 ### MLX_SERVE_DSV4_SINK_SOFTMAX
 
@@ -66140,11 +71372,35 @@ mlx serve dsv4 sink softmax: engine setting; built-in default retained
 
 Scope: mlx-serve. Class: advanced.
 
+Source: `engines/mlx-serve/src/deepseek_v4.zig:1757`. Unset read: NULL from getenv; the literal consumer below supplies any fallback.
+
+```text
+fn sinkSoftmaxEnabled() bool {
+    if (sink_softmax_state) |v| return v;
+    const v = if (std.c.getenv("MLX_SERVE_DSV4_SINK_SOFTMAX")) |e| e[0] == '1' else false;
+    sink_softmax_state = v;
+    return v;
+}
+/// Test hook: force the sink-softmax arm on/off (null = re-read the env).
+```
+
 ### MLX_SERVE_DSV4_SKIP_MOE
 
 mlx serve dsv4 skip moe: engine setting; built-in default retained
 
 Scope: mlx-serve. Class: advanced.
+
+Source: `engines/mlx-serve/src/deepseek_v4.zig:5915`. Unset read: NULL from getenv; the literal consumer below supplies any fallback.
+
+```text
+        break :blk std.fmt.parseInt(usize, std.mem.span(e), 10) catch m.n_layers;
+    };
+    const skip_moe = std.c.getenv("MLX_SERVE_DSV4_SKIP_MOE") != null;
+    for (0..@min(m.n_layers, cap)) |li| {
+        const h = &m.hl[li];
+        const ly = &m.dw.layers[li];
+        const ratio: usize = ly.compress_ratio;
+```
 
 ### MLX_SERVE_DSV4_TRACE
 
@@ -66152,11 +71408,35 @@ mlx serve dsv4 trace: engine setting; built-in default retained
 
 Scope: mlx-serve. Class: advanced.
 
+Source: `engines/mlx-serve/src/deepseek_v4.zig:1815`. Unset read: NULL from getenv; the literal consumer below supplies any fallback.
+
+```text
+fn dsv4TraceEnabled() bool {
+    if (dsv4_trace_state) |v| return v;
+    const v = if (std.c.getenv("MLX_SERVE_DSV4_TRACE")) |e| e[0] == '1' else false;
+    dsv4_trace_state = v;
+    return v;
+}
+/// Compressor barrier time (sync + host pushes) accumulated inside the layer
+```
+
 ### MLX_SERVE_DSV4_WO_QMM
 
 mlx serve dsv4 wo qmm: engine setting; built-in default retained
 
 Scope: mlx-serve. Class: advanced.
+
+Source: `engines/mlx-serve/src/deepseek_v4.zig:1640`. Unset read: NULL from getenv; the literal consumer below supplies any fallback.
+
+```text
+fn woAQmmEnabled() bool {
+    if (wo_qmm_state) |v| return v;
+    const v = if (std.c.getenv("MLX_SERVE_DSV4_WO_QMM")) |e| e[0] != '0' else true;
+    wo_qmm_state = v;
+    return v;
+}
+
+```
 
 ### MLX_SERVE_DUMP_RESTORE
 
@@ -66164,11 +71444,35 @@ mlx serve dump restore: engine setting; built-in default retained
 
 Scope: mlx-serve. Class: advanced.
 
+Source: `engines/mlx-serve/src/restore_dump.zig:31`. Unset read: NULL from getenv; the literal consumer below supplies any fallback.
+
+```text
+    }
+    if (!dump_dir_read) {
+        dump_dir_cached = dumpRestoreDirFromEnv(std.c.getenv("MLX_SERVE_DUMP_RESTORE"));
+        dump_dir_read = true;
+    }
+    return dump_dir_cached;
+}
+```
+
 ### MLX_SERVE_F16_NARROW_1D
 
 mlx serve f16 narrow 1d: engine setting; built-in default retained
 
 Scope: mlx-serve. Class: advanced.
+
+Source: `engines/mlx-serve/src/model.zig:3731`. Unset read: NULL from getenv; the literal consumer below supplies any fallback.
+
+```text
+    if (narrow_1d_env) |v| return v;
+    const on = blk: {
+        const raw = std.c.getenv("MLX_SERVE_F16_NARROW_1D") orelse break :blk true;
+        break :blk !std.mem.eql(u8, std.mem.sliceTo(raw, 0), "0");
+    };
+    narrow_1d_env = on;
+    return on;
+```
 
 ### MLX_SERVE_FORCE_BATCHED
 
@@ -66176,11 +71480,35 @@ mlx serve force batched: engine setting; built-in default retained
 
 Scope: mlx-serve. Class: advanced.
 
+Source: `engines/mlx-serve/src/scheduler.zig:1469`. Unset read: NULL from getenv; the literal consumer below supplies any fallback.
+
+```text
+        // single client. Uses libc getenv to stay allocator-free.
+        const force_batched = blk: {
+            const raw = std.c.getenv("MLX_SERVE_FORCE_BATCHED");
+            if (raw == null) break :blk false;
+            const slice = std.mem.sliceTo(raw.?, 0);
+            break :blk std.mem.eql(u8, slice, "1");
+        };
+```
+
 ### MLX_SERVE_FORCE_GPU_FAMILY_FALLBACK
 
 mlx serve force gpu family fallback: engine setting; built-in default retained
 
 Scope: mlx-serve. Class: advanced.
+
+Source: `engines/mlx-serve/src/transformer.zig:1649`. Unset read: NULL from getenv; the literal consumer below supplies any fallback.
+
+```text
+fn computeNaxAvailable() bool {
+    var force = false;
+    if (std.c.getenv("MLX_SERVE_FORCE_GPU_FAMILY_FALLBACK")) |p| {
+        const v = std.mem.span(p);
+        force = v.len > 0 and v[0] == '1';
+    }
+    var arch_buf: [128]u8 = undefined;
+```
 
 ### MLX_SERVE_FUSED_256
 
@@ -66188,11 +71516,35 @@ mlx serve fused 256: engine setting; built-in default retained
 
 Scope: mlx-serve. Class: advanced.
 
+Source: `engines/mlx-serve/src/transformer.zig:2481`. Unset read: NULL from getenv; the literal consumer below supplies any fallback.
+
+```text
+    if (fused256_override) |v| return v;
+    if (fused256_env_cached) |v| return v;
+    const raw = std.c.getenv("MLX_SERVE_FUSED_256");
+    const enabled = raw == null or !std.mem.eql(u8, std.mem.sliceTo(raw.?, 0), "0");
+    fused256_env_cached = enabled;
+    return enabled;
+}
+```
+
 ### MLX_SERVE_FUSED_256_BUDGET
 
 mlx serve fused 256 budget: engine setting; built-in default retained
 
 Scope: mlx-serve. Class: advanced.
+
+Source: `engines/mlx-serve/src/transformer.zig:2529`. Unset read: NULL from getenv; the literal consumer below supplies any fallback.
+
+```text
+    if (fused256_budget_env_cached) |v| return v;
+    const v: i64 = blk: {
+        const raw = std.c.getenv("MLX_SERVE_FUSED_256_BUDGET") orelse break :blk FUSED256_DEFAULT_DISPATCH_BUDGET;
+        break :blk std.fmt.parseInt(i64, std.mem.sliceTo(raw, 0), 10) catch FUSED256_DEFAULT_DISPATCH_BUDGET;
+    };
+    fused256_budget_env_cached = v;
+    return v;
+```
 
 ### MLX_SERVE_FUSED_256_CAUSAL
 
@@ -66200,11 +71552,35 @@ mlx serve fused 256 causal: engine setting; built-in default retained
 
 Scope: mlx-serve. Class: advanced.
 
+Source: `engines/mlx-serve/src/transformer.zig:2558`. Unset read: NULL from getenv; the literal consumer below supplies any fallback.
+
+```text
+    if (fused256_causal_env_cached) |v| return v;
+    const mode: Fused256CausalMode = blk: {
+        const raw = std.c.getenv("MLX_SERVE_FUSED_256_CAUSAL") orelse break :blk .all;
+        if (std.mem.eql(u8, std.mem.sliceTo(raw, 0), "0")) break :blk .off;
+        break :blk .all;
+    };
+    fused256_causal_env_cached = mode;
+```
+
 ### MLX_SERVE_FUSED_QKV
 
 mlx serve fused qkv: engine setting; built-in default retained
 
 Scope: mlx-serve. Class: advanced.
+
+Source: `engines/mlx-serve/src/transformer.zig:32458`. Unset read: NULL from getenv; the literal consumer below supplies any fallback.
+
+```text
+    if (fused_qkv_override) |v| return v;
+    if (fused_qkv_env) |v| return v;
+    const raw = std.c.getenv("MLX_SERVE_FUSED_QKV");
+    const enabled = raw != null and std.mem.eql(u8, std.mem.sliceTo(raw.?, 0), "1");
+    fused_qkv_env = enabled;
+    return enabled;
+}
+```
 
 ### MLX_SERVE_GDN_BLOCKED
 
@@ -66212,11 +71588,35 @@ mlx serve gdn blocked: engine setting; built-in default retained
 
 Scope: mlx-serve. Class: advanced.
 
+Source: `engines/mlx-serve/src/transformer.zig:233`. Unset read: NULL from getenv; the literal consumer below supplies any fallback.
+
+```text
+    if (gdn_blocked_override) |v| return v;
+    if (gdn_blocked_env_cached) |v| return v;
+    const raw = std.c.getenv("MLX_SERVE_GDN_BLOCKED");
+    const enabled = raw == null or !std.mem.eql(u8, std.mem.sliceTo(raw.?, 0), "0");
+    gdn_blocked_env_cached = enabled;
+    return enabled;
+}
+```
+
 ### MLX_SERVE_GDN_BLOCK_T
 
 mlx serve gdn block t: engine setting; built-in default retained
 
 Scope: mlx-serve. Class: advanced.
+
+Source: `engines/mlx-serve/src/transformer.zig:294`. Unset read: NULL from getenv; the literal consumer below supplies any fallback.
+
+```text
+    if (gdn_block_t_cached) |v| return v;
+    const v: u32 = blk: {
+        const raw = std.c.getenv("MLX_SERVE_GDN_BLOCK_T") orelse break :blk 32;
+        const parsed = std.fmt.parseInt(u32, std.mem.sliceTo(raw, 0), 10) catch break :blk 32;
+        for (GDN_BLOCKED_TBS) |cand| {
+            if (cand == parsed) break :blk parsed;
+        }
+```
 
 ### MLX_SERVE_GDN_DECODE_FUSED
 
@@ -66224,11 +71624,35 @@ mlx serve gdn decode fused: engine setting; built-in default retained
 
 Scope: mlx-serve. Class: advanced.
 
+Source: `engines/mlx-serve/src/transformer.zig:33042`. Unset read: NULL from getenv; the literal consumer below supplies any fallback.
+
+```text
+    if (gdn_decode_fused_override) |v| return v;
+    if (gdn_decode_fused_env) |v| return v;
+    const raw = std.c.getenv("MLX_SERVE_GDN_DECODE_FUSED");
+    const enabled = raw == null or !std.mem.eql(u8, std.mem.sliceTo(raw.?, 0), "0");
+    gdn_decode_fused_env = enabled;
+    return enabled;
+}
+```
+
 ### MLX_SERVE_GDN_PREFILL_FUSED
 
 mlx serve gdn prefill fused: engine setting; built-in default retained
 
 Scope: mlx-serve. Class: advanced.
+
+Source: `engines/mlx-serve/src/transformer.zig:33093`. Unset read: NULL from getenv; the literal consumer below supplies any fallback.
+
+```text
+    if (gdn_prefill_fused_override) |on| return on;
+    if (gdn_prefill_fused_env) |on| return on;
+    const raw = std.c.getenv("MLX_SERVE_GDN_PREFILL_FUSED");
+    const on = raw == null or !std.mem.eql(u8, std.mem.span(raw.?), "0");
+    gdn_prefill_fused_env = on;
+    return on;
+}
+```
 
 ### MLX_SERVE_GDN_PREWORK
 
@@ -66236,11 +71660,35 @@ mlx serve gdn prework: engine setting; built-in default retained
 
 Scope: mlx-serve. Class: advanced.
 
+Source: `engines/mlx-serve/src/transformer.zig:33028`. Unset read: NULL from getenv; the literal consumer below supplies any fallback.
+
+```text
+    if (gdn_prework_override) |v| return v;
+    if (gdn_prework_env) |v| return v;
+    const raw = std.c.getenv("MLX_SERVE_GDN_PREWORK");
+    const enabled = raw == null or !std.mem.eql(u8, std.mem.sliceTo(raw.?, 0), "0");
+    gdn_prework_env = enabled;
+    return enabled;
+}
+```
+
 ### MLX_SERVE_GDN_UBENCH
 
 mlx serve gdn ubench: engine setting; built-in default retained
 
 Scope: mlx-serve. Class: advanced.
+
+Source: `engines/mlx-serve/src/transformer.zig:49184`. Unset read: NULL from getenv; the literal consumer below supplies any fallback.
+
+```text
+    // real Qwen3.6-27B geometry. Run with:
+    //   MLX_SERVE_GDN_UBENCH=1 zig build test -Doptimize=ReleaseFast -Dtest-filter="GDN µbench"
+    if (std.c.getenv("MLX_SERVE_GDN_UBENCH") == null) return error.SkipZigTest;
+    const io_util = @import("io_util.zig");
+    const tio = testing.io;
+    const s = mlx.gpuStream();
+    const B: c_int = 1;
+```
 
 ### MLX_SERVE_HC_FUSED
 
@@ -66248,11 +71696,35 @@ mlx serve hc fused: engine setting; built-in default retained
 
 Scope: mlx-serve. Class: advanced.
 
+Source: `engines/mlx-serve/src/transformer.zig:35157`. Unset read: NULL from getenv; the literal consumer below supplies any fallback.
+
+```text
+    if (hc_fused_override) |v| return v;
+    if (hc_fused_env) |v| return v;
+    const raw = std.c.getenv("MLX_SERVE_HC_FUSED");
+    const enabled = raw == null or !std.mem.eql(u8, std.mem.sliceTo(raw.?, 0), "0");
+    hc_fused_env = enabled;
+    return enabled;
+}
+```
+
 ### MLX_SERVE_HC_PREFILL
 
 mlx serve hc prefill: engine setting; built-in default retained
 
 Scope: mlx-serve. Class: advanced.
+
+Source: `engines/mlx-serve/src/hc_prefill.zig:16`. Unset read: NULL from getenv; the literal consumer below supplies any fallback.
+
+```text
+pub fn enabled() bool {
+    if (enabled_env) |on| return on;
+    const raw = std.c.getenv("MLX_SERVE_HC_PREFILL");
+    const on = raw == null or !std.mem.eql(u8, std.mem.sliceTo(raw.?, 0), "0");
+    enabled_env = on;
+    return on;
+}
+```
 
 ### MLX_SERVE_KVQ_UBENCH
 
@@ -66260,11 +71732,47 @@ mlx serve kvq ubench: engine setting; built-in default retained
 
 Scope: mlx-serve. Class: advanced.
 
+Source: `engines/mlx-serve/src/kv_quant.zig:962`. Unset read: NULL from getenv; the literal consumer below supplies any fallback.
+
+```text
+    // (c) kv-quant off (SDPA over resident dense K/V). µbench wins can lose
+    // live — this SCOPES the work; the live A/B decides defaults.
+    const raw = std.c.getenv("MLX_SERVE_KVQ_UBENCH");
+    if (raw == null or std.mem.eql(u8, std.mem.sliceTo(raw.?, 0), "0")) return;
+
+    const s = mlx.gpuStream();
+    const D: c_int = 128;
+```
+
+Source: `engines/mlx-serve/src/transformer.zig:39242`. Unset read: NULL from getenv; the literal consumer below supplies any fallback.
+
+```text
+    // SDPA at real decode geometries. Companion to kv_quant.zig's composed
+    // µbench; the live A/B decides defaults.
+    const raw = std.c.getenv("MLX_SERVE_KVQ_UBENCH");
+    if (raw == null or std.mem.eql(u8, std.mem.sliceTo(raw.?, 0), "0")) return;
+    const s = mlx.gpuStream();
+    const io = std.Io.Threaded.global_single_threaded.io();
+
+```
+
 ### MLX_SERVE_KV_ATTN_FUSED
 
 mlx serve kv attn fused: engine setting; built-in default retained
 
 Scope: mlx-serve. Class: advanced.
+
+Source: `engines/mlx-serve/src/transformer.zig:14370`. Unset read: NULL from getenv; the literal consumer below supplies any fallback.
+
+```text
+fn kvAttnFusedEnvEnabled() bool {
+    if (kv_attn_fused_env) |v| return v;
+    const raw = std.c.getenv("MLX_SERVE_KV_ATTN_FUSED");
+    const enabled = raw == null or !std.mem.eql(u8, std.mem.sliceTo(raw.?, 0), "0");
+    kv_attn_fused_env = enabled;
+    return enabled;
+}
+```
 
 ### MLX_SERVE_KV_ATTN_KERNEL
 
@@ -66272,11 +71780,35 @@ mlx serve kv attn kernel: engine setting; built-in default retained
 
 Scope: mlx-serve. Class: advanced.
 
+Source: `engines/mlx-serve/src/transformer.zig:13813`. Unset read: NULL from getenv; the literal consumer below supplies any fallback.
+
+```text
+    if (qkv_dec_override) |v| return v;
+    if (qkv_dec_env) |v| return v;
+    const raw = std.c.getenv("MLX_SERVE_KV_ATTN_KERNEL");
+    const enabled = raw == null or !std.mem.eql(u8, std.mem.sliceTo(raw.?, 0), "0");
+    qkv_dec_env = enabled;
+    return enabled;
+}
+```
+
 ### MLX_SERVE_KV_ATTN_MIN_TK
 
 mlx serve kv attn min tk: engine setting; built-in default retained
 
 Scope: mlx-serve. Class: advanced.
+
+Source: `engines/mlx-serve/src/transformer.zig:14390`. Unset read: NULL from getenv; the literal consumer below supplies any fallback.
+
+```text
+    if (kv_attn_min_tk_env) |v| return v;
+    const v: c_int = blk: {
+        const raw = std.c.getenv("MLX_SERVE_KV_ATTN_MIN_TK") orelse break :blk KV_ATTN_FUSED_MIN_TK;
+        break :blk std.fmt.parseInt(c_int, std.mem.sliceTo(raw, 0), 10) catch KV_ATTN_FUSED_MIN_TK;
+    };
+    kv_attn_min_tk_env = v;
+    return v;
+```
 
 ### MLX_SERVE_KV_ATTN_VERIFY
 
@@ -66284,11 +71816,35 @@ mlx serve kv attn verify: engine setting; built-in default retained
 
 Scope: mlx-serve. Class: advanced.
 
+Source: `engines/mlx-serve/src/transformer.zig:14195`. Unset read: NULL from getenv; the literal consumer below supplies any fallback.
+
+```text
+    if (qkv_ver_override) |v| return v;
+    if (qkv_ver_env) |v| return v;
+    const raw = std.c.getenv("MLX_SERVE_KV_ATTN_VERIFY");
+    const enabled = qkvVerifyKernelEnabledFrom(
+        verifyQmmNaxAvailable(),
+        if (raw) |v| std.mem.sliceTo(v, 0) else null,
+    );
+```
+
 ### MLX_SERVE_KV_GROW
 
 mlx serve kv grow: engine setting; built-in default retained
 
 Scope: mlx-serve. Class: advanced.
+
+Source: `engines/mlx-serve/src/transformer.zig:7337`. Unset read: NULL from getenv; the literal consumer below supplies any fallback.
+
+```text
+        if (kv_grow_linear_cache) |v| return v;
+        var linear = false;
+        if (std.c.getenv("MLX_SERVE_KV_GROW")) |p| {
+            linear = std.mem.eql(u8, std.mem.span(p), "linear");
+        }
+        kv_grow_linear_cache = linear;
+        return linear;
+```
 
 ### MLX_SERVE_KV_RESERVE
 
@@ -66296,11 +71852,35 @@ mlx serve kv reserve: engine setting; built-in default retained
 
 Scope: mlx-serve. Class: advanced.
 
+Source: `engines/mlx-serve/src/transformer.zig:7315`. Unset read: NULL from getenv; the literal consumer below supplies any fallback.
+
+```text
+        if (kv_reserve_cache) |v| return v;
+        var on = true;
+        if (std.c.getenv("MLX_SERVE_KV_RESERVE")) |p| {
+            on = !std.mem.eql(u8, std.mem.span(p), "0");
+        }
+        kv_reserve_cache = on;
+        return on;
+```
+
 ### MLX_SERVE_LAGUNA_UBENCH
 
 mlx serve laguna ubench: engine setting; built-in default retained
 
 Scope: mlx-serve. Class: advanced.
+
+Source: `engines/mlx-serve/src/transformer.zig:48479`. Unset read: NULL from getenv; the literal consumer below supplies any fallback.
+
+```text
+    // it manufactures a bandwidth floor far below the real one and makes the
+    // live path look pathological by comparison.
+    if (std.c.getenv("MLX_SERVE_LAGUNA_UBENCH") == null) return error.SkipZigTest;
+    const io_util = @import("io_util.zig");
+    const tio = testing.io;
+    const s = mlx.gpuStream();
+    const allocator = testing.allocator;
+```
 
 ### MLX_SERVE_LAYER_CAP
 
@@ -66308,11 +71888,35 @@ mlx serve layer cap: engine setting; built-in default retained
 
 Scope: mlx-serve. Class: advanced.
 
+Source: `engines/mlx-serve/src/transformer.zig:32137`. Unset read: NULL from getenv; the literal consumer below supplies any fallback.
+
+```text
+    if (layer_cap_env == null) {
+        layer_cap_env = blk: {
+            const raw = std.c.getenv("MLX_SERVE_LAYER_CAP") orelse break :blk 0;
+            break :blk std.fmt.parseInt(usize, std.mem.sliceTo(raw, 0), 10) catch 0;
+        };
+    }
+    const cap = layer_cap_env.?;
+```
+
 ### MLX_SERVE_LMHEAD_PRUNE
 
 mlx serve lmhead prune: engine setting; built-in default retained
 
 Scope: mlx-serve. Class: advanced.
+
+Source: `engines/mlx-serve/src/transformer.zig:33535`. Unset read: NULL from getenv; the literal consumer below supplies any fallback.
+
+```text
+    if (lmhead_prune_env) |v| return v;
+    const enabled = blk: {
+        if (std.c.getenv("MLX_SERVE_LMHEAD_PRUNE")) |raw| {
+            break :blk !std.mem.eql(u8, std.mem.sliceTo(raw, 0), "0");
+        }
+        break :blk LMHEAD_PRUNE_DEFAULT;
+    };
+```
 
 ### MLX_SERVE_LMHEAD_PRUNE_TRACE
 
@@ -66320,11 +71924,35 @@ mlx serve lmhead prune trace: engine setting; built-in default retained
 
 Scope: mlx-serve. Class: advanced.
 
+Source: `engines/mlx-serve/src/transformer.zig:33547`. Unset read: NULL from getenv; the literal consumer below supplies any fallback.
+
+```text
+fn lmHeadPruneTraceEnabled() bool {
+    if (lmhead_prune_trace_cached) |v| return v;
+    const raw = std.c.getenv("MLX_SERVE_LMHEAD_PRUNE_TRACE");
+    const enabled = raw != null and std.mem.eql(u8, std.mem.sliceTo(raw.?, 0), "1");
+    lmhead_prune_trace_cached = enabled;
+    return enabled;
+}
+```
+
 ### MLX_SERVE_LMHEAD_UBENCH
 
 mlx serve lmhead ubench: engine setting; built-in default retained
 
 Scope: mlx-serve. Class: advanced.
+
+Source: `engines/mlx-serve/src/transformer.zig:53060`. Unset read: NULL from getenv; the literal consumer below supplies any fallback.
+
+```text
+
+test "lm-head prune µbench: dense vs coarse vs full pipeline at Laguna XS geometry (MLX_SERVE_LMHEAD_UBENCH=1)" {
+    const raw = std.c.getenv("MLX_SERVE_LMHEAD_UBENCH") orelse return error.SkipZigTest;
+    if (!std.mem.eql(u8, std.mem.sliceTo(raw, 0), "1")) return error.SkipZigTest;
+    const io_util = @import("io_util.zig");
+    const s = mlx.gpuStream();
+    var prng = std.Random.DefaultPrng.init(0xBE9C);
+```
 
 ### MLX_SERVE_LOOP_TRIM
 
@@ -66332,11 +71960,47 @@ mlx serve loop trim: engine setting; built-in default retained
 
 Scope: mlx-serve. Class: advanced.
 
+Source: `engines/mlx-serve/src/scheduler.zig:5194`. Unset read: NULL from getenv; the literal consumer below supplies any fallback.
+
+```text
+pub fn loopTrimEnabled() bool {
+    if (loop_trim_env) |v| return v;
+    const raw = std.c.getenv("MLX_SERVE_LOOP_TRIM");
+    const enabled = raw == null or !std.mem.eql(u8, std.mem.sliceTo(raw.?, 0), "0");
+    loop_trim_env = enabled;
+    return enabled;
+}
+```
+
 ### MLX_SERVE_MF_DQ_GEMM
 
 mlx serve mf dq gemm: engine setting; built-in default retained
 
 Scope: mlx-serve. Class: advanced.
+
+Source: `engines/mlx-serve/src/mage_flow.zig:556`. Unset read: NULL from getenv; the literal consumer below supplies any fallback.
+
+```text
+    if (mf_dq_gemm_override) |v| return v;
+    if (!mf_dq_gemm_env_done) {
+        const raw = std.c.getenv("MLX_SERVE_MF_DQ_GEMM");
+        mf_dq_gemm_env_val = mfDqGemmFloorFrom(if (raw) |r| std.mem.sliceTo(r, 0) else null);
+        mf_dq_gemm_env_done = true;
+    }
+    return mf_dq_gemm_env_val;
+```
+
+Source: `engines/mlx-serve/src/minimax_h3.zig:3765`. Unset read: NULL from getenv; the literal consumer below supplies any fallback.
+
+```text
+    // env always win (MLX_SERVE_MF_DQ_GEMM=0 kills, =N sets the floor).
+    const dq_override_prev = mage_flow.mf_dq_gemm_override;
+    if (std.c.getenv("MLX_SERVE_MF_DQ_GEMM") == null)
+        mage_flow.mf_dq_gemm_override = @as(?usize, 2048);
+    defer mage_flow.mf_dq_gemm_override = dq_override_prev;
+
+    // ── 1. tokenize (raw ids, NO special tokens and no chat template) ──
+```
 
 ### MLX_SERVE_MLX_ERROR_LATCH
 
@@ -66344,11 +72008,35 @@ mlx serve mlx error latch: engine setting; built-in default retained
 
 Scope: mlx-serve. Class: advanced.
 
+Source: `engines/mlx-serve/src/mlx.zig:801`. Unset read: NULL from getenv; the literal consumer below supplies any fallback.
+
+```text
+/// restores mlx-c's `exit(-1)` handler.
+pub fn installErrorHandler() void {
+    if (std.c.getenv("MLX_SERVE_MLX_ERROR_LATCH")) |p| {
+        if (std.mem.eql(u8, std.mem.span(p), "0")) {
+            log.info("[mlx] error latch disabled — an MLX error will exit the process\n", .{});
+            return;
+        }
+```
+
 ### MLX_SERVE_MOE_DOWN_REDUCE_FUSED
 
 mlx serve moe down reduce fused: engine setting; built-in default retained
 
 Scope: mlx-serve. Class: advanced.
+
+Source: `engines/mlx-serve/src/transformer.zig:36201`. Unset read: NULL from getenv; the literal consumer below supplies any fallback.
+
+```text
+    if (downred_override) |v| return v;
+    if (downred_env) |v| return v;
+    const raw = std.c.getenv("MLX_SERVE_MOE_DOWN_REDUCE_FUSED");
+    const enabled = raw == null or !std.mem.eql(u8, std.mem.sliceTo(raw.?, 0), "0");
+    downred_env = enabled;
+    return enabled;
+}
+```
 
 ### MLX_SERVE_MOE_GATEUP_FUSED
 
@@ -66356,11 +72044,35 @@ mlx serve moe gateup fused: engine setting; built-in default retained
 
 Scope: mlx-serve. Class: advanced.
 
+Source: `engines/mlx-serve/src/transformer.zig:35600`. Unset read: NULL from getenv; the literal consumer below supplies any fallback.
+
+```text
+    if (gqmv_gateup_override) |v| return v;
+    if (gqmv_gateup_env) |v| return v;
+    const raw = std.c.getenv("MLX_SERVE_MOE_GATEUP_FUSED");
+    const enabled = raw == null or !std.mem.eql(u8, std.mem.sliceTo(raw.?, 0), "0");
+    gqmv_gateup_env = enabled;
+    return enabled;
+}
+```
+
 ### MLX_SERVE_MOE_GATHER_TRACE
 
 mlx serve moe gather trace: engine setting; built-in default retained
 
 Scope: mlx-serve. Class: advanced.
+
+Source: `engines/mlx-serve/src/transformer.zig:47879`. Unset read: NULL from getenv; the literal consumer below supplies any fallback.
+
+```text
+    // Trace mode: run the gather and qmv sections in long sustained bursts so an
+    // Instruments Metal System Trace shows a clean, comparable GPU timeline.
+    const gather_trace = std.c.getenv("MLX_SERVE_MOE_GATHER_TRACE") != null;
+    const E: c_int = 256;
+    const N: c_int = 1024; // moe_intermediate (gate/up out)
+    const K: c_int = 3072; // hidden
+    const TOPK: c_int = 10;
+```
 
 ### MLX_SERVE_MOE_GATHER_UBENCH
 
@@ -66368,11 +72080,35 @@ mlx serve moe gather ubench: engine setting; built-in default retained
 
 Scope: mlx-serve. Class: advanced.
 
+Source: `engines/mlx-serve/src/transformer.zig:47872`. Unset read: NULL from getenv; the literal consumer below supplies any fallback.
+
+```text
+    // MoE ~7.5ms). If this is far slower, the gap is our MLX build/runtime;
+    // if it matches, the gap is the live server context (stream/alloc/pipeline).
+    if (std.c.getenv("MLX_SERVE_MOE_GATHER_UBENCH") == null) return error.SkipZigTest;
+    const io_util = @import("io_util.zig");
+    const tio = testing.io;
+    const s = mlx.gpuStream();
+    const allocator = testing.allocator;
+```
+
 ### MLX_SERVE_MOE_ROUTER_FUSED
 
 mlx serve moe router fused: engine setting; built-in default retained
 
 Scope: mlx-serve. Class: advanced.
+
+Source: `engines/mlx-serve/src/transformer.zig:31961`. Unset read: NULL from getenv; the literal consumer below supplies any fallback.
+
+```text
+    if (moe_router_fused_override) |v| return v;
+    if (moe_router_fused_env) |v| return v;
+    const raw = std.c.getenv("MLX_SERVE_MOE_ROUTER_FUSED");
+    const enabled = raw == null or !std.mem.eql(u8, std.mem.sliceTo(raw.?, 0), "0");
+    moe_router_fused_env = enabled;
+    return enabled;
+}
+```
 
 ### MLX_SERVE_MOE_ROWS_FUSED
 
@@ -66380,11 +72116,35 @@ mlx serve moe rows fused: engine setting; built-in default retained
 
 Scope: mlx-serve. Class: advanced.
 
+Source: `engines/mlx-serve/src/transformer.zig:35800`. Unset read: NULL from getenv; the literal consumer below supplies any fallback.
+
+```text
+    if (moe_rows_fused_override) |v| return v;
+    if (moe_rows_fused_env) |v| return v;
+    const raw = std.c.getenv("MLX_SERVE_MOE_ROWS_FUSED");
+    const enabled = raw == null or !std.mem.eql(u8, std.mem.sliceTo(raw.?, 0), "0");
+    moe_rows_fused_env = enabled;
+    return enabled;
+}
+```
+
 ### MLX_SERVE_MOE_VERIFY_PAIRED_GU
 
 mlx serve moe verify paired gu: engine setting; built-in default retained
 
 Scope: mlx-serve. Class: advanced.
+
+Source: `engines/mlx-serve/src/transformer.zig:15349`. Unset read: NULL from getenv; the literal consumer below supplies any fallback.
+
+```text
+            mtpNaxOqeAffineTrunkFrom(&config, moe_layers);
+        const verify_paired_gu_installed = blk: {
+            const raw = std.c.getenv("MLX_SERVE_MOE_VERIFY_PAIRED_GU") orelse break :blk false;
+            if (raw[0] == '0') break :blk false;
+            // A pack or chip outside the contract declines like every other
+            // shape-gated kernel; only a matching pack that disagrees with
+            // stock is a load error.
+```
 
 ### MLX_SERVE_MTP_ADAPTIVE
 
@@ -66392,11 +72152,35 @@ mlx serve mtp adaptive: engine setting; built-in default retained
 
 Scope: mlx-serve. Class: advanced.
 
+Source: `engines/mlx-serve/src/generate.zig:9005`. Unset read: NULL from getenv; the literal consumer below supplies any fallback.
+
+```text
+        if (mtp_adaptive_cache) |v| return v;
+        var on = true;
+        if (std.c.getenv("MLX_SERVE_MTP_ADAPTIVE")) |p| {
+            const val = std.mem.span(p);
+            if (val.len > 0 and val[0] == '0') on = false;
+        }
+        mtp_adaptive_cache = on;
+```
+
 ### MLX_SERVE_MTP_ADAPTIVE_SERIAL
 
 mlx serve mtp adaptive serial: engine setting; built-in default retained
 
 Scope: mlx-serve. Class: advanced.
+
+Source: `engines/mlx-serve/src/generate.zig:9732`. Unset read: NULL from getenv; the literal consumer below supplies any fallback.
+
+```text
+    fn mtpAdaptiveSerialEnabled() bool {
+        if (mtp_adaptive_serial_cache) |v| return v;
+        const raw: ?[]const u8 = if (std.c.getenv("MLX_SERVE_MTP_ADAPTIVE_SERIAL")) |p| std.mem.span(p) else null;
+        const on = mtpAdaptiveSerialEnabledFromEnv(raw);
+        mtp_adaptive_serial_cache = on;
+        return on;
+    }
+```
 
 ### MLX_SERVE_MTP_BATCHED
 
@@ -66404,11 +72188,35 @@ mlx serve mtp batched: engine setting; built-in default retained
 
 Scope: mlx-serve. Class: advanced.
 
+Source: `engines/mlx-serve/src/scheduler.zig:7680`. Unset read: NULL from getenv; the literal consumer below supplies any fallback.
+
+```text
+fn mtpGroupEnabled() bool {
+    if (mtp_group_env) |v| return v;
+    const on = if (std.c.getenv("MLX_SERVE_MTP_BATCHED")) |p| !std.mem.eql(u8, std.mem.span(p), "0") else true;
+    mtp_group_env = on;
+    return on;
+}
+
+```
+
 ### MLX_SERVE_MTP_BATCHED_QWEN4
 
 mlx serve mtp batched qwen4: engine setting; built-in default retained
 
 Scope: mlx-serve. Class: advanced.
+
+Source: `engines/mlx-serve/src/scheduler.zig:7690`. Unset read: NULL from getenv; the literal consumer below supplies any fallback.
+
+```text
+fn mtpBatchedQwen4Enabled() bool {
+    if (mtp_batched_qwen4_env) |v| return v;
+    const on = if (std.c.getenv("MLX_SERVE_MTP_BATCHED_QWEN4")) |p| !std.mem.eql(u8, std.mem.span(p), "0") else false;
+    mtp_batched_qwen4_env = on;
+    return on;
+}
+
+```
 
 ### MLX_SERVE_MTP_BATCH_CORR
 
@@ -66416,11 +72224,35 @@ mlx serve mtp batch corr: engine setting; built-in default retained
 
 Scope: mlx-serve. Class: advanced.
 
+Source: `engines/mlx-serve/src/generate.zig:6450`. Unset read: NULL from getenv; the literal consumer below supplies any fallback.
+
+```text
+    fn mtpBatchCorrEnabled() bool {
+        if (mtp_batch_corr_cache) |v| return v;
+        const raw: ?[]const u8 = if (std.c.getenv("MLX_SERVE_MTP_BATCH_CORR")) |p| std.mem.span(p) else null;
+        const on = mtpBatchCorrEnabledFromEnv(raw);
+        mtp_batch_corr_cache = on;
+        return on;
+    }
+```
+
 ### MLX_SERVE_MTP_COST_TABLE
 
 mlx serve mtp cost table: engine setting; built-in default retained
 
 Scope: mlx-serve. Class: advanced.
+
+Source: `engines/mlx-serve/src/generate.zig:8432`. Unset read: NULL from getenv; the literal consumer below supplies any fallback.
+
+```text
+    fn mtpCostTableEnabled() bool {
+        if (mtp_cost_table_cache) |v| return v;
+        const raw: ?[]const u8 = if (std.c.getenv("MLX_SERVE_MTP_COST_TABLE")) |p| std.mem.span(p) else null;
+        const on = mtpLiveCostEnabledFromEnv(raw);
+        mtp_cost_table_cache = on;
+        return on;
+    }
+```
 
 ### MLX_SERVE_MTP_DRAFT_GREEDY
 
@@ -66428,11 +72260,59 @@ mlx serve mtp draft greedy: engine setting; built-in default retained
 
 Scope: mlx-serve. Class: advanced.
 
+Source: `engines/mlx-serve/src/generate.zig:7903`. Unset read: NULL from getenv; the literal consumer below supplies any fallback.
+
+```text
+        if (mtp_draft_proposal_cache) |v| return v;
+        var mode: DraftProposal = .per_request;
+        if (std.c.getenv("MLX_SERVE_MTP_DRAFT_GREEDY")) |p| {
+            const val = std.mem.span(p);
+            if (val.len > 0 and val[0] == '0') mode = .sampled;
+            if (val.len > 0 and val[0] == '1') mode = .greedy;
+        }
+```
+
 ### MLX_SERVE_MTP_DRAFT_HEAD_BITS
 
 mlx serve mtp draft head bits: engine setting; built-in default retained
 
 Scope: mlx-serve. Class: advanced.
+
+Source: `engines/mlx-serve/src/mtp.zig:835`. Unset read: NULL from getenv; the literal consumer below supplies any fallback.
+
+```text
+    /// a supported bit width → that; anything else ("0", "off") → disabled.
+    fn draftHeadBitsFromEnv() u32 {
+        const p = std.c.getenv("MLX_SERVE_MTP_DRAFT_HEAD_BITS") orelse return 3;
+        const raw = std.mem.span(p);
+        const v = std.fmt.parseInt(u32, raw, 10) catch return 0;
+        return switch (v) {
+            2, 3, 4, 6, 8 => v,
+```
+
+Source: `engines/mlx-serve/src/mtp.zig:5287`. Unset read: Wrapper/conditional default: see the literal call and consumer below.
+
+```text
+    // ...while the environment now says 2. Every draft below must still be
+    // dispatched at 3.
+    _ = setenv("MLX_SERVE_MTP_DRAFT_HEAD_BITS", "2", 1);
+    defer _ = unsetenv("MLX_SERVE_MTP_DRAFT_HEAD_BITS");
+    try testing.expectEqual(@as(u32, 2), rerankCoarseBits());
+
+    var logged = false;
+```
+
+Source: `engines/mlx-serve/src/mtp.zig:5288`. Unset read: Wrapper/conditional default: see the literal call and consumer below.
+
+```text
+    // dispatched at 3.
+    _ = setenv("MLX_SERVE_MTP_DRAFT_HEAD_BITS", "2", 1);
+    defer _ = unsetenv("MLX_SERVE_MTP_DRAFT_HEAD_BITS");
+    try testing.expectEqual(@as(u32, 2), rerankCoarseBits());
+
+    var logged = false;
+    const eps: f32 = 1e-3;
+```
 
 ### MLX_SERVE_MTP_DRAFT_RERANK
 
@@ -66440,11 +72320,35 @@ mlx serve mtp draft rerank: engine setting; built-in default retained
 
 Scope: mlx-serve. Class: advanced.
 
+Source: `engines/mlx-serve/src/mtp.zig:889`. Unset read: NULL from getenv; the literal consumer below supplies any fallback.
+
+```text
+    /// surfaces keep the 3-bit draft head they were measured with).
+    pub fn draftRerankMode() enum { auto, on, off } {
+        const p = std.c.getenv("MLX_SERVE_MTP_DRAFT_RERANK") orelse return .auto;
+        const raw = std.mem.span(p);
+        if (std.mem.eql(u8, raw, "0")) return .off;
+        if (std.mem.eql(u8, raw, "1")) return .on;
+        return .auto;
+```
+
 ### MLX_SERVE_MTP_DRAFT_TEMP
 
 mlx serve mtp draft temp: engine setting; built-in default retained
 
 Scope: mlx-serve. Class: advanced.
+
+Source: `engines/mlx-serve/src/generate.zig:7952`. Unset read: NULL from getenv; the literal consumer below supplies any fallback.
+
+```text
+        if (mtp_draft_temp_env) |v| return v;
+        var parsed: ?f32 = null;
+        if (std.c.getenv("MLX_SERVE_MTP_DRAFT_TEMP")) |p| {
+            if (std.fmt.parseFloat(f32, std.mem.span(p)) catch null) |v| {
+                if (v > 0.01 and v <= 4.0) parsed = v;
+            }
+        }
+```
 
 ### MLX_SERVE_MTP_EARLY_DISPATCH
 
@@ -66452,11 +72356,35 @@ mlx serve mtp early dispatch: engine setting; built-in default retained
 
 Scope: mlx-serve. Class: advanced.
 
+Source: `engines/mlx-serve/src/generate.zig:9044`. Unset read: NULL from getenv; the literal consumer below supplies any fallback.
+
+```text
+    fn mtpEarlyDispatchEnabled() bool {
+        if (mtp_early_dispatch_cache) |v| return v;
+        const raw: ?[]const u8 = if (std.c.getenv("MLX_SERVE_MTP_EARLY_DISPATCH")) |p| std.mem.span(p) else null;
+        const on = mtpEarlyDispatchEnabledFromEnv(raw);
+        mtp_early_dispatch_cache = on;
+        return on;
+    }
+```
+
 ### MLX_SERVE_MTP_EV_COSTS
 
 mlx serve mtp ev costs: engine setting; built-in default retained
 
 Scope: mlx-serve. Class: advanced.
+
+Source: `engines/mlx-serve/src/generate.zig:9143`. Unset read: NULL from getenv; the literal consumer below supplies any fallback.
+
+```text
+
+    fn mtpEvCosts(profile: mtp_mod.MtpCostProfile) MtpEvCosts {
+        return mtpEvCostsForProfile(profile, if (std.c.getenv("MLX_SERVE_MTP_EV_COSTS")) |p| std.mem.span(p) else null);
+    }
+
+    /// Extension dry-spell gate constants: after MTP_EXT_DRY_ROUNDS
+    /// consecutive extension-CONSIDERED rounds whose confidence gate never
+```
 
 ### MLX_SERVE_MTP_EV_SEED
 
@@ -66464,11 +72392,35 @@ mlx serve mtp ev seed: engine setting; built-in default retained
 
 Scope: mlx-serve. Class: advanced.
 
+Source: `engines/mlx-serve/src/generate.zig:9023`. Unset read: NULL from getenv; the literal consumer below supplies any fallback.
+
+```text
+    fn mtpEvSeedEnabled() bool {
+        if (mtp_ev_seed_cache) |v| return v;
+        const raw: ?[]const u8 = if (std.c.getenv("MLX_SERVE_MTP_EV_SEED")) |p| std.mem.span(p) else null;
+        const on = mtpEvSeedEnabledFromEnv(raw);
+        mtp_ev_seed_cache = on;
+        return on;
+    }
+```
+
 ### MLX_SERVE_MTP_EXT_DRY
 
 mlx serve mtp ext dry: engine setting; built-in default retained
 
 Scope: mlx-serve. Class: advanced.
+
+Source: `engines/mlx-serve/src/generate.zig:9232`. Unset read: NULL from getenv; the literal consumer below supplies any fallback.
+
+```text
+    fn mtpExtDryEnabled() bool {
+        if (mtp_ext_dry_cache) |v| return v;
+        const raw: ?[]const u8 = if (std.c.getenv("MLX_SERVE_MTP_EXT_DRY")) |p| std.mem.span(p) else null;
+        const on = mtpExtDryEnabledFromEnv(raw);
+        mtp_ext_dry_cache = on;
+        return on;
+    }
+```
 
 ### MLX_SERVE_MTP_FORCE_DEPTH
 
@@ -66476,11 +72428,35 @@ mlx serve mtp force depth: engine setting; built-in default retained
 
 Scope: mlx-serve. Class: advanced.
 
+Source: `engines/mlx-serve/src/round_cost.zig:814`. Unset read: NULL from getenv; the literal consumer below supplies any fallback.
+
+```text
+        persistDiagArmedFrom(&.{
+            std.c.getenv("MLX_SERVE_MTP_TRACE"),
+            std.c.getenv("MLX_SERVE_MTP_FORCE_DEPTH"),
+        });
+}
+
+pub fn storeShouldWrite(persist_on: bool, diag_armed: bool, key_len: usize) bool {
+```
+
 ### MLX_SERVE_MTP_GROUP_PLANNER
 
 mlx serve mtp group planner: engine setting; built-in default retained
 
 Scope: mlx-serve. Class: advanced.
+
+Source: `engines/mlx-serve/src/mtp_group_planner.zig:431`. Unset read: NULL from getenv; the literal consumer below supplies any fallback.
+
+```text
+    if (enabled_override) |value| return value;
+    if (enabled_cache) |value| return value;
+    const value = enabledFromEnv(std.c.getenv("MLX_SERVE_MTP_GROUP_PLANNER"));
+    enabled_cache = value;
+    return value;
+}
+
+```
 
 ### MLX_SERVE_MTP_HEAD_PERSIST
 
@@ -66488,11 +72464,35 @@ mlx serve mtp head persist: engine setting; built-in default retained
 
 Scope: mlx-serve. Class: advanced.
 
+Source: `engines/mlx-serve/src/generate.zig:456`. Unset read: NULL from getenv; the literal consumer below supplies any fallback.
+
+```text
+pub fn mtpHeadPersistEnabled() bool {
+    if (mtp_head_persist_env) |v| return v;
+    const raw = std.c.getenv("MLX_SERVE_MTP_HEAD_PERSIST");
+    const on = mtpHeadPersistFromEnv(if (raw) |r| std.mem.sliceTo(r, 0) else null);
+    mtp_head_persist_env = on;
+    return on;
+}
+```
+
 ### MLX_SERVE_MTP_HEAD_QUANT_BITS
 
 mlx serve mtp head quant bits: engine setting; built-in default retained
 
 Scope: mlx-serve. Class: advanced.
+
+Source: `engines/mlx-serve/src/mtp.zig:1814`. Unset read: NULL from getenv; the literal consumer below supplies any fallback.
+
+```text
+fn headQuantBits() u32 {
+    if (head_quant_override) |v| return v;
+    const p = std.c.getenv("MLX_SERVE_MTP_HEAD_QUANT_BITS") orelse return DEFAULT_HEAD_QUANT_BITS;
+    const v = std.fmt.parseInt(u32, std.mem.sliceTo(p, 0), 10) catch return DEFAULT_HEAD_QUANT_BITS;
+    return switch (v) {
+        0, 2, 3, 4, 5, 6, 8 => v,
+        else => DEFAULT_HEAD_QUANT_BITS,
+```
 
 ### MLX_SERVE_MTP_KV_ONLY
 
@@ -66500,11 +72500,35 @@ mlx serve mtp kv only: engine setting; built-in default retained
 
 Scope: mlx-serve. Class: advanced.
 
+Source: `engines/mlx-serve/src/mtp.zig:2881`. Unset read: NULL from getenv; the literal consumer below supplies any fallback.
+
+```text
+    if (mtp_kv_only_override) |v| return v;
+    if (mtp_kv_only_env) |v| return v;
+    const raw = std.c.getenv("MLX_SERVE_MTP_KV_ONLY");
+    const enabled = raw == null or !std.mem.eql(u8, std.mem.sliceTo(raw.?, 0), "0");
+    mtp_kv_only_env = enabled;
+    return enabled;
+}
+```
+
 ### MLX_SERVE_MTP_LIVECOST
 
 mlx serve mtp livecost: engine setting; built-in default retained
 
 Scope: mlx-serve. Class: advanced.
+
+Source: `engines/mlx-serve/src/generate.zig:9451`. Unset read: NULL from getenv; the literal consumer below supplies any fallback.
+
+```text
+    fn mtpLiveCostEnabled() bool {
+        if (mtp_livecost_cache) |v| return v;
+        const raw: ?[]const u8 = if (std.c.getenv("MLX_SERVE_MTP_LIVECOST")) |p| std.mem.span(p) else null;
+        const on = mtpLiveCostEnabledFromEnv(raw);
+        mtp_livecost_cache = on;
+        return on;
+    }
+```
 
 ### MLX_SERVE_MTP_PREDRAFT
 
@@ -66512,11 +72536,35 @@ mlx serve mtp predraft: engine setting; built-in default retained
 
 Scope: mlx-serve. Class: advanced.
 
+Source: `engines/mlx-serve/src/generate.zig:9064`. Unset read: NULL from getenv; the literal consumer below supplies any fallback.
+
+```text
+    fn mtpPredraftEnabled() bool {
+        if (mtp_predraft_cache) |v| return v;
+        const raw: ?[]const u8 = if (std.c.getenv("MLX_SERVE_MTP_PREDRAFT")) |p| std.mem.span(p) else null;
+        const on = mtpPredraftEnabledFromEnv(raw);
+        mtp_predraft_cache = on;
+        return on;
+    }
+```
+
 ### MLX_SERVE_MTP_QWEN4_PROFILE
 
 mlx serve mtp qwen4 profile: engine setting; built-in default retained
 
 Scope: mlx-serve. Class: advanced.
+
+Source: `engines/mlx-serve/src/mtp.zig:356`. Unset read: NULL from getenv; the literal consumer below supplies any fallback.
+
+```text
+    if (qwen4_g17_env_cache) |v| return v;
+    var on = true;
+    if (std.c.getenv("MLX_SERVE_MTP_QWEN4_PROFILE")) |p| {
+        const val = std.mem.span(p);
+        if (val.len > 0 and val[0] == '0') on = false;
+    }
+    qwen4_g17_env_cache = on;
+```
 
 ### MLX_SERVE_MTP_REGIME
 
@@ -66524,11 +72572,35 @@ mlx serve mtp regime: engine setting; built-in default retained
 
 Scope: mlx-serve. Class: advanced.
 
+Source: `engines/mlx-serve/src/generate.zig:9434`. Unset read: NULL from getenv; the literal consumer below supplies any fallback.
+
+```text
+    fn mtpRegimeGateEnabled() bool {
+        if (mtp_regime_cache) |v| return v;
+        const raw: ?[]const u8 = if (std.c.getenv("MLX_SERVE_MTP_REGIME")) |p| std.mem.span(p) else null;
+        const on = mtpLiveCostEnabledFromEnv(raw);
+        mtp_regime_cache = on;
+        return on;
+    }
+```
+
 ### MLX_SERVE_MTP_TOKENV3
 
 mlx serve mtp tokenv3: engine setting; built-in default retained
 
 Scope: mlx-serve. Class: advanced.
+
+Source: `engines/mlx-serve/src/main.zig:532`. Unset read: NULL from getenv; the literal consumer below supplies any fallback.
+
+```text
+    var mtp_depth: u32 = 0; // 0 = auto (EV cap 8 on eligible M5 NAX, else 6; fixed cap 3); explicit wins
+    var mtp_typical_raw: ?[]const u8 = if (std.c.getenv("MLX_SERVE_MTP_TYPICAL")) |v| std.mem.span(v) else null;
+    var mtp_tokenv3_raw: ?[]const u8 = if (std.c.getenv("MLX_SERVE_MTP_TOKENV3")) |v| std.mem.span(v) else null;
+    // Plan 04 Phase 1: pre-fault weights and pre-compile kernels at boot.
+    // Default ON in serve mode — small boot-time cost, big cold-prefill win.
+    // --no-warmup-eager opts out for benchmarking / minimal-footprint deployments.
+    var warmup_eager: bool = true;
+```
 
 ### MLX_SERVE_MTP_TRACE
 
@@ -66536,11 +72608,35 @@ mlx serve mtp trace: engine setting; built-in default retained
 
 Scope: mlx-serve. Class: advanced.
 
+Source: `engines/mlx-serve/src/round_cost.zig:813`. Unset read: NULL from getenv; the literal consumer below supplies any fallback.
+
+```text
+    return qwen4ProfileArmed() or
+        persistDiagArmedFrom(&.{
+            std.c.getenv("MLX_SERVE_MTP_TRACE"),
+            std.c.getenv("MLX_SERVE_MTP_FORCE_DEPTH"),
+        });
+}
+
+```
+
 ### MLX_SERVE_MTP_TRACE_SYNC
 
 mlx serve mtp trace sync: engine setting; built-in default retained
 
 Scope: mlx-serve. Class: advanced.
+
+Source: `engines/mlx-serve/src/generate.zig:7095`. Unset read: NULL from getenv; the literal consumer below supplies any fallback.
+
+```text
+        // verify build so the `sync` lap shows the pending lazy work (draft
+        // chain, rollback, commit) and `verify` the forward alone.
+        if (tracing and std.c.getenv("MLX_SERVE_MTP_TRACE_SYNC") != null) {
+            var sync_watch = io_util.Stopwatch.init(self.timer.io);
+            try mlx.check(mlx.mlx_array_eval(st.verify_input));
+            self.mtp_trace.add(.sync, sync_watch.read());
+            st.ph.reset();
+```
 
 ### MLX_SERVE_MTP_TYPICAL
 
@@ -66548,11 +72644,35 @@ mlx serve mtp typical: engine setting; built-in default retained
 
 Scope: mlx-serve. Class: advanced.
 
+Source: `engines/mlx-serve/src/main.zig:531`. Unset read: NULL from getenv; the literal consumer below supplies any fallback.
+
+```text
+    var mtp_head_kv_quant = false;
+    var mtp_depth: u32 = 0; // 0 = auto (EV cap 8 on eligible M5 NAX, else 6; fixed cap 3); explicit wins
+    var mtp_typical_raw: ?[]const u8 = if (std.c.getenv("MLX_SERVE_MTP_TYPICAL")) |v| std.mem.span(v) else null;
+    var mtp_tokenv3_raw: ?[]const u8 = if (std.c.getenv("MLX_SERVE_MTP_TOKENV3")) |v| std.mem.span(v) else null;
+    // Plan 04 Phase 1: pre-fault weights and pre-compile kernels at boot.
+    // Default ON in serve mode — small boot-time cost, big cold-prefill win.
+    // --no-warmup-eager opts out for benchmarking / minimal-footprint deployments.
+```
+
 ### MLX_SERVE_MUSIC3_DEPTH_BITS
 
 mlx serve music3 depth bits: engine setting; built-in default retained
 
 Scope: mlx-serve. Class: advanced.
+
+Source: `engines/mlx-serve/src/music3.zig:1236`. Unset read: NULL from getenv; the literal consumer below supplies any fallback.
+
+```text
+/// replay agreement vs the 8-bit arm AND listening both hold.
+fn maybeRequantDepth(w: *Weights, cfg: Cfg, s: S) !void {
+    const raw = std.c.getenv("MLX_SERVE_MUSIC3_DEPTH_BITS") orelse return;
+    const bits = std.fmt.parseInt(u32, std.mem.span(raw), 10) catch return;
+    if (bits == 8) return; // the pack width — nothing to do
+    switch (bits) {
+        2, 3, 4, 5, 6 => {},
+```
 
 ### MLX_SERVE_MUSIC3_DEPTH_KV
 
@@ -66560,11 +72680,35 @@ mlx serve music3 depth kv: engine setting; built-in default retained
 
 Scope: mlx-serve. Class: advanced.
 
+Source: `engines/mlx-serve/src/music3.zig:1928`. Unset read: NULL from getenv; the literal consumer below supplies any fallback.
+
+```text
+/// the naive full-re-forward path — it IS the reference shape.
+fn depthKvEnabled() bool {
+    const raw = std.c.getenv("MLX_SERVE_MUSIC3_DEPTH_KV") orelse return true;
+    return raw[0] != '0';
+}
+
+pub const MusicRequest = struct {
+```
+
 ### MLX_SERVE_MUSIC3_INST_CAPTION
 
 mlx serve music3 inst caption: engine setting; built-in default retained
 
 Scope: mlx-serve. Class: advanced.
+
+Source: `engines/mlx-serve/src/music3.zig:159`. Unset read: NULL from getenv; the literal consumer below supplies any fallback.
+
+```text
+/// the arm that was measured to leave vocal texture in.
+pub fn instrumentalCaptionEnabled() bool {
+    const raw = std.c.getenv("MLX_SERVE_MUSIC3_INST_CAPTION") orelse return true;
+    return raw[0] != '0';
+}
+
+fn captionContainsAny(caption: []const u8, needles: []const []const u8) bool {
+```
 
 ### MLX_SERVE_MUSIC3_INST_TAG
 
@@ -66572,11 +72716,47 @@ mlx serve music3 inst tag: engine setting; built-in default retained
 
 Scope: mlx-serve. Class: advanced.
 
+Source: `engines/mlx-serve/src/music3.zig:113`. Unset read: NULL from getenv; the literal consumer below supplies any fallback.
+
+```text
+/// The marker actually sent, honoring the env override.
+pub fn instrumentalMarker() []const u8 {
+    const raw = std.c.getenv("MLX_SERVE_MUSIC3_INST_TAG") orelse return markerFromEnvValue(null);
+    return markerFromEnvValue(std.mem.span(raw));
+}
+
+/// Split out so the override's three arms are testable without an environment.
+```
+
 ### MLX_SERVE_MUSIC3_LMHEAD_PRUNE
 
 mlx serve music3 lmhead prune: engine setting; built-in default retained
 
 Scope: mlx-serve. Class: advanced.
+
+Source: `engines/mlx-serve/src/music3.zig:1211`. Unset read: NULL from getenv; the literal consumer below supplies any fallback.
+
+```text
+/// affine-quantized.
+fn buildPrunedHead(cfg: Cfg, lm_w: *const Weights, s: S) !?PrunedHead {
+    if (std.c.getenv("MLX_SERVE_MUSIC3_LMHEAD_PRUNE")) |v| {
+        if (v[0] == '0') return null;
+    }
+    const wq = lm_w.get("lm_head.weight") orelse return null;
+    const sc = lm_w.get("lm_head.scales") orelse return null;
+```
+
+Source: `engines/mlx-serve/src/music3.zig:2907`. Unset read: NULL from getenv; the literal consumer below supplies any fallback.
+
+```text
+    // pruned head: 16385 rows sliced from the full head, same packed geometry
+    // (kill switch MLX_SERVE_MUSIC3_LMHEAD_PRUNE=0 must leave it unbuilt)
+    const prune_killed = if (std.c.getenv("MLX_SERVE_MUSIC3_LMHEAD_PRUNE")) |v| v[0] == '0' else false;
+    if (prune_killed) {
+        try testing.expect(e.pruned_head == null);
+    } else {
+        const full = try getW(&e.lm_w, "lm_head.weight");
+```
 
 ### MLX_SERVE_NAX_SDPA
 
@@ -66584,11 +72764,35 @@ mlx serve nax sdpa: engine setting; built-in default retained
 
 Scope: mlx-serve. Class: advanced.
 
+Source: `engines/mlx-serve/src/transformer.zig:1678`. Unset read: NULL from getenv; the literal consumer below supplies any fallback.
+
+```text
+    if (nax_sdpa_env) |v| return v;
+    if (nax_sdpa_avail_cache == null) nax_sdpa_avail_cache = computeNaxAvailable();
+    const raw = std.c.getenv("MLX_SERVE_NAX_SDPA");
+    const on = naxSdpaPreferredFrom(nax_sdpa_avail_cache.?, if (raw) |v| std.mem.sliceTo(v, 0) else null);
+    nax_sdpa_env = on;
+    if (on) log.info("[nax-sdpa] engaged: stock fused sdpa (force_fused) serves hd-256 causal prefill and verify blocks > 8 rows; msv_attn_p256 causal arm declined (MLX_SERVE_NAX_SDPA=0 restores)\n", .{});
+    return on;
+```
+
 ### MLX_SERVE_NGRAM_WARM
 
 mlx serve ngram warm: engine setting; built-in default retained
 
 Scope: mlx-serve. Class: advanced.
+
+Source: `engines/mlx-serve/src/qwen4_exp.zig:143`. Unset read: NULL from getenv; the literal consumer below supplies any fallback.
+
+```text
+    if (warm_env_cached) |v| return v;
+    const v = blk: {
+        const raw = std.c.getenv("MLX_SERVE_NGRAM_WARM") orelse break :blk true;
+        break :blk raw[0] != '0';
+    };
+    warm_env_cached = v;
+    return v;
+```
 
 ### MLX_SERVE_PREFILL_CHUNK_ADAPTIVE
 
@@ -66596,11 +72800,35 @@ mlx serve prefill chunk adaptive: engine setting; built-in default retained
 
 Scope: mlx-serve. Class: advanced.
 
+Source: `engines/mlx-serve/src/server.zig:5673`. Unset read: NULL from getenv; the literal consumer below supplies any fallback.
+
+```text
+    if (!perRequestPrefillChunkEnabled(config)) return false;
+    if (adaptive_chunk_override) |v| return v;
+    const raw = std.c.getenv("MLX_SERVE_PREFILL_CHUNK_ADAPTIVE") orelse return true;
+    return !std.mem.eql(u8, std.mem.sliceTo(raw, 0), "0");
+}
+
+/// Consecutive supporting probes a widening needs: the probe is taken after `mlx_clear_cache`
+```
+
 ### MLX_SERVE_PREFILL_CHUNK_CTX_BAR
 
 mlx serve prefill chunk ctx bar: engine setting; built-in default retained
 
 Scope: mlx-serve. Class: advanced.
+
+Source: `engines/mlx-serve/src/server.zig:3485`. Unset read: NULL from getenv; the literal consumer below supplies any fallback.
+
+```text
+    if (ctx_bar_cached) |v| return v;
+    const v = blk: {
+        const raw = std.c.getenv("MLX_SERVE_PREFILL_CHUNK_CTX_BAR") orelse break :blk true;
+        break :blk !std.mem.eql(u8, std.mem.sliceTo(raw, 0), "0");
+    };
+    ctx_bar_cached = v;
+    return v;
+```
 
 ### MLX_SERVE_PREFILL_CHUNK_PER_REQUEST
 
@@ -66608,11 +72836,35 @@ mlx serve prefill chunk per request: engine setting; built-in default retained
 
 Scope: mlx-serve. Class: advanced.
 
+Source: `engines/mlx-serve/src/server.zig:5574`. Unset read: NULL from getenv; the literal consumer below supplies any fallback.
+
+```text
+    if (!config.perRequestPrefillChunk()) return false;
+    if (per_request_chunk_override) |v| return v;
+    const raw = std.c.getenv("MLX_SERVE_PREFILL_CHUNK_PER_REQUEST") orelse return true;
+    return !std.mem.eql(u8, std.mem.sliceTo(raw, 0), "0");
+}
+
+/// The widest ladder rung this request can afford, priced by the same estimator that admits
+```
+
 ### MLX_SERVE_PREFILL_DQ_GEMM
 
 mlx serve prefill dq gemm: engine setting; built-in default retained
 
 Scope: mlx-serve. Class: advanced.
+
+Source: `engines/mlx-serve/src/transformer.zig:36848`. Unset read: NULL from getenv; the literal consumer below supplies any fallback.
+
+```text
+    if (prefill_dq_gemm_override) |v| return v;
+    if (prefill_dq_gemm_env_cached) |v| return v;
+    const raw = std.c.getenv("MLX_SERVE_PREFILL_DQ_GEMM");
+    const enabled = raw == null or !std.mem.eql(u8, std.mem.sliceTo(raw.?, 0), "0");
+    prefill_dq_gemm_env_cached = enabled;
+    return enabled;
+}
+```
 
 ### MLX_SERVE_PREFILL_INTERLEAVE
 
@@ -66620,11 +72872,35 @@ mlx serve prefill interleave: engine setting; built-in default retained
 
 Scope: mlx-serve. Class: advanced.
 
+Source: `engines/mlx-serve/src/scheduler.zig:5744`. Unset read: NULL from getenv; the literal consumer below supplies any fallback.
+
+```text
+pub fn prefillInterleaveEnabled() bool {
+    if (prefill_interleave_cached) |v| return v;
+    const raw = std.c.getenv("MLX_SERVE_PREFILL_INTERLEAVE");
+    const on = raw == null or !std.mem.eql(u8, std.mem.sliceTo(raw.?, 0), "0");
+    prefill_interleave_cached = on;
+    return on;
+}
+```
+
 ### MLX_SERVE_PREFILL_QMM_UBENCH
 
 mlx serve prefill qmm ubench: engine setting; built-in default retained
 
 Scope: mlx-serve. Class: advanced.
+
+Source: `engines/mlx-serve/src/transformer.zig:49060`. Unset read: NULL from getenv; the literal consumer below supplies any fallback.
+
+```text
+
+test "prefill qmm µbench: stock qmm vs dequant+GEMM at 27B prefill shapes (MLX_SERVE_PREFILL_QMM_UBENCH=1)" {
+    if (std.c.getenv("MLX_SERVE_PREFILL_QMM_UBENCH") == null) return error.SkipZigTest;
+    const io_util = @import("io_util.zig");
+    const tio = testing.io;
+    const s = mlx.gpuStream();
+    const allocator = testing.allocator;
+```
 
 ### MLX_SERVE_PREFIX_SSD_FIRST
 
@@ -66632,11 +72908,35 @@ mlx serve prefix ssd first: engine setting; built-in default retained
 
 Scope: mlx-serve. Class: advanced.
 
+Source: `engines/mlx-serve/src/prefix_cache.zig:255`. Unset read: NULL from getenv; the literal consumer below supplies any fallback.
+
+```text
+    if (ssd_first_env_cached) |v| return v;
+    const v = blk: {
+        const raw = std.c.getenv("MLX_SERVE_PREFIX_SSD_FIRST") orelse break :blk true;
+        break :blk !std.mem.eql(u8, std.mem.sliceTo(raw, 0), "0");
+    };
+    ssd_first_env_cached = v;
+    return v;
+```
+
 ### MLX_SERVE_QK_NORM_ROPE_FUSED
 
 mlx serve qk norm rope fused: engine setting; built-in default retained
 
 Scope: mlx-serve. Class: advanced.
+
+Source: `engines/mlx-serve/src/transformer.zig:32593`. Unset read: NULL from getenv; the literal consumer below supplies any fallback.
+
+```text
+    if (qk_fused_override) |v| return v;
+    if (qk_fused_env) |v| return v;
+    const raw = std.c.getenv("MLX_SERVE_QK_NORM_ROPE_FUSED");
+    const enabled = raw == null or !std.mem.eql(u8, std.mem.sliceTo(raw.?, 0), "0");
+    qk_fused_env = enabled;
+    return enabled;
+}
+```
 
 ### MLX_SERVE_QSA_ATTN_BALANCED
 
@@ -66644,11 +72944,35 @@ mlx serve qsa attn balanced: engine setting; built-in default retained
 
 Scope: mlx-serve. Class: advanced.
 
+Source: `engines/mlx-serve/src/transformer.zig:5065`. Unset read: NULL from getenv; the literal consumer below supplies any fallback.
+
+```text
+    if (qsa_attn_balanced_env) |v| return v;
+    const v = blk: {
+        const raw = std.c.getenv("MLX_SERVE_QSA_ATTN_BALANCED") orelse break :blk false;
+        break :blk std.mem.eql(u8, std.mem.sliceTo(raw, 0), "1");
+    };
+    qsa_attn_balanced_env = v;
+    return v;
+```
+
 ### MLX_SERVE_QSA_ATTN_KERNEL
 
 mlx serve qsa attn kernel: engine setting; built-in default retained
 
 Scope: mlx-serve. Class: advanced.
+
+Source: `engines/mlx-serve/src/transformer.zig:5105`. Unset read: NULL from getenv; the literal consumer below supplies any fallback.
+
+```text
+    if (qsa_attn_kernel_env) |v| return v;
+    const v = blk: {
+        const raw = std.c.getenv("MLX_SERVE_QSA_ATTN_KERNEL") orelse break :blk true;
+        break :blk !std.mem.eql(u8, std.mem.sliceTo(raw, 0), "0");
+    };
+    qsa_attn_kernel_env = v;
+    return v;
+```
 
 ### MLX_SERVE_QSA_BATCHED_GATHER
 
@@ -66656,11 +72980,35 @@ mlx serve qsa batched gather: engine setting; built-in default retained
 
 Scope: mlx-serve. Class: advanced.
 
+Source: `engines/mlx-serve/src/transformer.zig:2762`. Unset read: NULL from getenv; the literal consumer below supplies any fallback.
+
+```text
+    if (qsa_batched_gather_env_cached) |v| return v;
+    const v = blk: {
+        const raw = std.c.getenv("MLX_SERVE_QSA_BATCHED_GATHER") orelse break :blk true;
+        break :blk !std.mem.eql(u8, std.mem.sliceTo(raw, 0), "0");
+    };
+    qsa_batched_gather_env_cached = v;
+    return v;
+```
+
 ### MLX_SERVE_QSA_DECODE_GATHER
 
 mlx serve qsa decode gather: engine setting; built-in default retained
 
 Scope: mlx-serve. Class: advanced.
+
+Source: `engines/mlx-serve/src/transformer.zig:2747`. Unset read: NULL from getenv; the literal consumer below supplies any fallback.
+
+```text
+    if (qsa_decode_gather_env_cached) |v| return v;
+    const v = blk: {
+        const raw = std.c.getenv("MLX_SERVE_QSA_DECODE_GATHER") orelse break :blk true;
+        break :blk !std.mem.eql(u8, std.mem.sliceTo(raw, 0), "0");
+    };
+    qsa_decode_gather_env_cached = v;
+    return v;
+```
 
 ### MLX_SERVE_QSA_FUSED
 
@@ -66668,11 +73016,35 @@ mlx serve qsa fused: engine setting; built-in default retained
 
 Scope: mlx-serve. Class: advanced.
 
+Source: `engines/mlx-serve/src/transformer.zig:2627`. Unset read: NULL from getenv; the literal consumer below supplies any fallback.
+
+```text
+    if (qsa_fused_env_cached) |v| return v;
+    const v = blk: {
+        const raw = std.c.getenv("MLX_SERVE_QSA_FUSED") orelse break :blk true;
+        break :blk !std.mem.eql(u8, std.mem.sliceTo(raw, 0), "0");
+    };
+    qsa_fused_env_cached = v;
+    return v;
+```
+
 ### MLX_SERVE_QSA_GATHER
 
 mlx serve qsa gather: engine setting; built-in default retained
 
 Scope: mlx-serve. Class: advanced.
+
+Source: `engines/mlx-serve/src/transformer.zig:2694`. Unset read: NULL from getenv; the literal consumer below supplies any fallback.
+
+```text
+    if (qsa_gather_env_cached) |v| return v;
+    const v = blk: {
+        const raw = std.c.getenv("MLX_SERVE_QSA_GATHER") orelse break :blk true;
+        break :blk !std.mem.eql(u8, std.mem.sliceTo(raw, 0), "0");
+    };
+    qsa_gather_env_cached = v;
+    return v;
+```
 
 ### MLX_SERVE_QSA_GATHER_BK
 
@@ -66680,11 +73052,35 @@ mlx serve qsa gather bk: engine setting; built-in default retained
 
 Scope: mlx-serve. Class: advanced.
 
+Source: `engines/mlx-serve/src/transformer.zig:2728`. Unset read: NULL from getenv; the literal consumer below supplies any fallback.
+
+```text
+    if (qsa_gather_bk_cached) |v| return v;
+    var v: c_int = QSA_GATHER_BK_DEFAULT;
+    if (std.c.getenv("MLX_SERVE_QSA_GATHER_BK")) |raw| {
+        const parsed = std.fmt.parseInt(c_int, std.mem.sliceTo(raw, 0), 10) catch v;
+        if (parsed == 16 or parsed == 32) v = parsed;
+    }
+    qsa_gather_bk_cached = v;
+```
+
 ### MLX_SERVE_QSA_GATHER_MIN_KV
 
 mlx serve qsa gather min kv: engine setting; built-in default retained
 
 Scope: mlx-serve. Class: advanced.
+
+Source: `engines/mlx-serve/src/transformer.zig:2712`. Unset read: NULL from getenv; the literal consumer below supplies any fallback.
+
+```text
+    if (qsa_gather_min_kv_cached) |v| return v;
+    var v: c_int = QSA_GATHER_MIN_KV_DEFAULT;
+    if (std.c.getenv("MLX_SERVE_QSA_GATHER_MIN_KV")) |raw| {
+        v = std.fmt.parseInt(c_int, std.mem.sliceTo(raw, 0), 10) catch v;
+    }
+    qsa_gather_min_kv_cached = v;
+    return v;
+```
 
 ### MLX_SERVE_QSA_HISTORY_SHARE
 
@@ -66692,11 +73088,47 @@ mlx serve qsa history share: engine setting; built-in default retained
 
 Scope: mlx-serve. Class: advanced.
 
+Source: `engines/mlx-serve/src/transformer.zig:2794`. Unset read: NULL from getenv; the literal consumer below supplies any fallback.
+
+```text
+    if (qsa_history_share_env_cached) |v| return v;
+    const v = blk: {
+        const raw = std.c.getenv("MLX_SERVE_QSA_HISTORY_SHARE") orelse break :blk true;
+        break :blk !std.mem.eql(u8, std.mem.sliceTo(raw, 0), "0");
+    };
+    qsa_history_share_env_cached = v;
+    return v;
+```
+
 ### MLX_SERVE_QSA_NAX
 
 mlx serve qsa nax: engine setting; built-in default retained
 
 Scope: mlx-serve. Class: advanced.
+
+Source: `engines/mlx-serve/src/transformer.zig:3006`. Unset read: NULL from getenv; the literal consumer below supplies any fallback.
+
+```text
+    if (qsa_nax_override) |v| return v;
+    if (qsa_nax_env) |v| return v;
+    const raw = std.c.getenv("MLX_SERVE_QSA_NAX");
+    const v = qsaNaxEnabledFrom(if (raw) |r| std.mem.sliceTo(r, 0) else null);
+    qsa_nax_env = v;
+    return v;
+}
+```
+
+Source: `engines/mlx-serve/src/transformer.zig:3093`. Unset read: NULL from getenv; the literal consumer below supplies any fallback.
+
+```text
+        if (!v) return;
+    } else {
+        const raw = std.c.getenv("MLX_SERVE_QSA_NAX");
+        if (!qsaNaxEnabledFrom(if (raw) |r| std.mem.sliceTo(r, 0) else null)) return;
+    }
+    if (!verifyQmmNaxAvailable()) return;
+    if (!qsaNaxOsOk()) return;
+```
 
 ### MLX_SERVE_QSA_SCORE_FUSED
 
@@ -66704,11 +73136,35 @@ mlx serve qsa score fused: engine setting; built-in default retained
 
 Scope: mlx-serve. Class: advanced.
 
+Source: `engines/mlx-serve/src/transformer.zig:4126`. Unset read: NULL from getenv; the literal consumer below supplies any fallback.
+
+```text
+    if (qsa_score_fused_env) |v| return v;
+    const v = blk: {
+        const raw = std.c.getenv("MLX_SERVE_QSA_SCORE_FUSED") orelse break :blk true;
+        break :blk !std.mem.eql(u8, std.mem.sliceTo(raw, 0), "0");
+    };
+    qsa_score_fused_env = v;
+    return v;
+```
+
 ### MLX_SERVE_QSA_SCORE_SHEET_MB
 
 mlx serve qsa score sheet mb: engine setting; built-in default retained
 
 Scope: mlx-serve. Class: advanced.
+
+Source: `engines/mlx-serve/src/transformer.zig:6541`. Unset read: NULL from getenv; the literal consumer below supplies any fallback.
+
+```text
+    if (qsa_score_sheet_mb_override) |mb| return mb << 20;
+    if (qsa_score_sheet_mb_cached) |mb| return mb << 20;
+    const raw = std.c.getenv("MLX_SERVE_QSA_SCORE_SHEET_MB");
+    const mb = qsaScoreSheetMbFrom(if (raw) |r| std.mem.sliceTo(r, 0) else null);
+    qsa_score_sheet_mb_cached = mb;
+    if (mb != QSA_SCORE_SHEET_BUDGET_MB_DEFAULT and !qsa_score_sheet_logged) {
+        qsa_score_sheet_logged = true;
+```
 
 ### MLX_SERVE_QSA_SELECT_KERNEL
 
@@ -66716,11 +73172,35 @@ mlx serve qsa select kernel: engine setting; built-in default retained
 
 Scope: mlx-serve. Class: advanced.
 
+Source: `engines/mlx-serve/src/transformer.zig:3843`. Unset read: NULL from getenv; the literal consumer below supplies any fallback.
+
+```text
+    if (qsa_select_kernel_env) |v| return v;
+    const v = blk: {
+        const raw = std.c.getenv("MLX_SERVE_QSA_SELECT_KERNEL") orelse break :blk true;
+        break :blk !std.mem.eql(u8, std.mem.sliceTo(raw, 0), "0");
+    };
+    qsa_select_kernel_env = v;
+    return v;
+```
+
 ### MLX_SERVE_QSA_SELECT_SPLIT
 
 mlx serve qsa select split: engine setting; built-in default retained
 
 Scope: mlx-serve. Class: advanced.
+
+Source: `engines/mlx-serve/src/transformer.zig:3960`. Unset read: NULL from getenv; the literal consumer below supplies any fallback.
+
+```text
+    if (qsa_select_split_env) |v| return v;
+    const v = blk: {
+        const raw = std.c.getenv("MLX_SERVE_QSA_SELECT_SPLIT") orelse break :blk true;
+        break :blk !std.mem.eql(u8, std.mem.sliceTo(raw, 0), "0");
+    };
+    qsa_select_split_env = v;
+    return v;
+```
 
 ### MLX_SERVE_QSA_SELECT_TG
 
@@ -66728,11 +73208,35 @@ mlx serve qsa select tg: engine setting; built-in default retained
 
 Scope: mlx-serve. Class: advanced.
 
+Source: `engines/mlx-serve/src/transformer.zig:3723`. Unset read: NULL from getenv; the literal consumer below supplies any fallback.
+
+```text
+    if (qsa_select_tg_cached) |v| return v;
+    var v: c_int = 0;
+    if (std.c.getenv("MLX_SERVE_QSA_SELECT_TG")) |raw| {
+        const parsed = std.fmt.parseInt(c_int, std.mem.sliceTo(raw, 0), 10) catch v;
+        if (parsed == 256 or parsed == 512 or parsed == 1024) v = parsed;
+    }
+    qsa_select_tg_cached = v;
+```
+
 ### MLX_SERVE_QSA_VERIFY_GATHER
 
 mlx serve qsa verify gather: engine setting; built-in default retained
 
 Scope: mlx-serve. Class: advanced.
+
+Source: `engines/mlx-serve/src/transformer.zig:5858`. Unset read: NULL from getenv; the literal consumer below supplies any fallback.
+
+```text
+    if (qsa_verify_gather_env_cached) |v| return v;
+    const v = blk: {
+        const raw = std.c.getenv("MLX_SERVE_QSA_VERIFY_GATHER") orelse break :blk true;
+        break :blk !std.mem.eql(u8, std.mem.sliceTo(raw, 0), "0");
+    };
+    qsa_verify_gather_env_cached = v;
+    return v;
+```
 
 ### MLX_SERVE_QSA_VERIFY_GATHER_MIN_KV
 
@@ -66740,11 +73244,47 @@ mlx serve qsa verify gather min kv: engine setting; built-in default retained
 
 Scope: mlx-serve. Class: advanced.
 
+Source: `engines/mlx-serve/src/transformer.zig:5884`. Unset read: NULL from getenv; the literal consumer below supplies any fallback.
+
+```text
+    if (!qsa_verify_gather_min_kv_env_read) {
+        qsa_verify_gather_min_kv_env_read = true;
+        if (std.c.getenv("MLX_SERVE_QSA_VERIFY_GATHER_MIN_KV")) |raw| {
+            qsa_verify_gather_min_kv_env = std.fmt.parseInt(c_int, std.mem.sliceTo(raw, 0), 10) catch null;
+        }
+    }
+    if (qsa_verify_gather_min_kv_env) |v| return v;
+```
+
 ### MLX_SERVE_RAW_DUMP_FILE
 
 mlx serve raw dump file: engine setting; built-in default retained
 
 Scope: mlx-serve. Class: advanced.
+
+Source: `engines/mlx-serve/src/server.zig:10953`. Unset read: NULL from getenv; the literal consumer below supplies any fallback.
+
+```text
+            // a harvester can slice each record exactly (the text is arbitrary
+            // bytes, so the byte count — not a delimiter — defines the record).
+            if (std.c.getenv("MLX_SERVE_RAW_DUMP_FILE")) |dump_path| {
+                appendRawToolDump(std.mem.span(dump_path), tools_json, text_buf.items);
+            }
+        }
+        // Merge re-opened mid-text thought channels into the leading block so
+```
+
+Source: `engines/mlx-serve/src/server.zig:16418`. Unset read: NULL from getenv; the literal consumer below supplies any fallback.
+
+```text
+        if (log.isDebug() and text_buf.items.len > 0) {
+            log.debug("  raw generated text before tool parse ({d}b): {s}\n", .{ text_buf.items.len, text_buf.items[0..@min(text_buf.items.len, 4000)] });
+            if (std.c.getenv("MLX_SERVE_RAW_DUMP_FILE")) |dump_path| {
+                appendRawToolDump(std.mem.span(dump_path), tools_json, text_buf.items);
+            }
+        }
+        // Merge re-opened mid-text thought channels into the leading block so
+```
 
 ### MLX_SERVE_RESTORE_MOVE
 
@@ -66752,11 +73292,35 @@ mlx serve restore move: engine setting; built-in default retained
 
 Scope: mlx-serve. Class: advanced.
 
+Source: `engines/mlx-serve/src/prefix_cache.zig:272`. Unset read: NULL from getenv; the literal consumer below supplies any fallback.
+
+```text
+    if (restore_move_env_cached) |v| return v;
+    const v = blk: {
+        const raw = std.c.getenv("MLX_SERVE_RESTORE_MOVE") orelse break :blk true;
+        break :blk !std.mem.eql(u8, std.mem.sliceTo(raw, 0), "0");
+    };
+    restore_move_env_cached = v;
+    return v;
+```
+
 ### MLX_SERVE_ROUND_COST_PERSIST
 
 mlx serve round cost persist: engine setting; built-in default retained
 
 Scope: mlx-serve. Class: advanced.
+
+Source: `engines/mlx-serve/src/round_cost.zig:788`. Unset read: NULL from getenv; the literal consumer below supplies any fallback.
+
+```text
+
+pub fn persistEnabled() bool {
+    const raw = std.c.getenv("MLX_SERVE_ROUND_COST_PERSIST");
+    return persistEnabledFrom(if (raw) |r| std.mem.span(r) else null);
+}
+
+pub fn persistDiagArmedFrom(raws: []const ?[*:0]const u8) bool {
+```
 
 ### MLX_SERVE_SDPA_SPLIT
 
@@ -66764,11 +73328,35 @@ mlx serve sdpa split: engine setting; built-in default retained
 
 Scope: mlx-serve. Class: advanced.
 
+Source: `engines/mlx-serve/src/transformer.zig:6748`. Unset read: NULL from getenv; the literal consumer below supplies any fallback.
+
+```text
+    if (sdpa_split_env_cached) |v| return v;
+    const v = blk: {
+        const raw = std.c.getenv("MLX_SERVE_SDPA_SPLIT") orelse break :blk true;
+        break :blk !std.mem.eql(u8, std.mem.sliceTo(raw, 0), "0");
+    };
+    sdpa_split_env_cached = v;
+    return v;
+```
+
 ### MLX_SERVE_SLIDING_BLOCK_TRIM
 
 mlx serve sliding block trim: engine setting; built-in default retained
 
 Scope: mlx-serve. Class: advanced.
+
+Source: `engines/mlx-serve/src/transformer.zig:7077`. Unset read: NULL from getenv; the literal consumer below supplies any fallback.
+
+```text
+pub fn slidingBlockTrimEnabled() bool {
+    if (sliding_block_trim_cached) |v| return v;
+    const raw = std.c.getenv("MLX_SERVE_SLIDING_BLOCK_TRIM");
+    const on = raw == null or !std.mem.eql(u8, std.mem.sliceTo(raw.?, 0), "0");
+    sliding_block_trim_cached = on;
+    return on;
+}
+```
 
 ### MLX_SERVE_SSD_CHUNK_SHARE
 
@@ -66776,11 +73364,35 @@ mlx serve ssd chunk share: engine setting; built-in default retained
 
 Scope: mlx-serve. Class: advanced.
 
+Source: `engines/mlx-serve/src/kv_disk_cache.zig:3336`. Unset read: NULL from getenv; the literal consumer below supplies any fallback.
+
+```text
+    if (chunk_share_env_cached) |v| return v;
+    const v = blk: {
+        const raw = std.c.getenv("MLX_SERVE_SSD_CHUNK_SHARE") orelse break :blk true;
+        break :blk !std.mem.eql(u8, std.mem.sliceTo(raw, 0), "0");
+    };
+    chunk_share_env_cached = v;
+    return v;
+```
+
 ### MLX_SERVE_SSD_WRITE_THROUGH
 
 mlx serve ssd write through: engine setting; built-in default retained
 
 Scope: mlx-serve. Class: advanced.
+
+Source: `engines/mlx-serve/src/scheduler.zig:5816`. Unset read: NULL from getenv; the literal consumer below supplies any fallback.
+
+```text
+    if (write_through_env_cached) |v| return v;
+    const v = blk: {
+        const raw = std.c.getenv("MLX_SERVE_SSD_WRITE_THROUGH") orelse break :blk writeThroughEnabledFromEnv(null);
+        break :blk writeThroughEnabledFromEnv(std.mem.sliceTo(raw, 0));
+    };
+    write_through_env_cached = v;
+    return v;
+```
 
 ### MLX_SERVE_SUPPRESS_RESERVED
 
@@ -66788,11 +73400,35 @@ mlx serve suppress reserved: engine setting; built-in default retained
 
 Scope: mlx-serve. Class: advanced.
 
+Source: `engines/mlx-serve/src/generate.zig:782`. Unset read: NULL from getenv; the literal consumer below supplies any fallback.
+
+```text
+/// so a silent no-op is visible (the silent-fallback class).
+pub fn installSuppressMask(xfm: *Transformer, tok: *const Tokenizer, chat_template: []const u8, eos_ids: []const u32) void {
+    if (std.c.getenv("MLX_SERVE_SUPPRESS_RESERVED")) |v| {
+        if (v[0] == '0') {
+            log.info("[suppress] reserved-token suppression disabled by env\n", .{});
+            return;
+        }
+```
+
 ### MLX_SERVE_SWIGLU_FUSED
 
 mlx serve swiglu fused: engine setting; built-in default retained
 
 Scope: mlx-serve. Class: advanced.
+
+Source: `engines/mlx-serve/src/transformer.zig:34548`. Unset read: NULL from getenv; the literal consumer below supplies any fallback.
+
+```text
+    if (swiglu_fused_override) |v| return v;
+    if (swiglu_fused_env) |v| return v;
+    const raw = std.c.getenv("MLX_SERVE_SWIGLU_FUSED");
+    const enabled = raw == null or !std.mem.eql(u8, std.mem.sliceTo(raw.?, 0), "0");
+    swiglu_fused_env = enabled;
+    return enabled;
+}
+```
 
 ### MLX_SERVE_TTS_ADD_RMSNORM
 
@@ -66800,11 +73436,35 @@ mlx serve tts add rmsnorm: engine setting; built-in default retained
 
 Scope: mlx-serve. Class: advanced.
 
+Source: `engines/mlx-serve/src/tts.zig:560`. Unset read: NULL from getenv; the literal consumer below supplies any fallback.
+
+```text
+fn ttsAddRmsEnabled() bool {
+    if (tts_add_rms_env) |v| return v;
+    const raw = std.c.getenv("MLX_SERVE_TTS_ADD_RMSNORM");
+    const enabled = raw == null or !std.mem.eql(u8, std.mem.sliceTo(raw.?, 0), "0");
+    tts_add_rms_env = enabled;
+    return enabled;
+}
+```
+
 ### MLX_SERVE_TTS_ASYNC_STRIDE
 
 mlx serve tts async stride: engine setting; built-in default retained
 
 Scope: mlx-serve. Class: advanced.
+
+Source: `engines/mlx-serve/src/tts.zig:358`. Unset read: NULL from getenv; the literal consumer below supplies any fallback.
+
+```text
+fn ttsAsyncStride() u32 {
+    if (async_stride_env) |v| return v;
+    const v: u32 = if (std.c.getenv("MLX_SERVE_TTS_ASYNC_STRIDE")) |raw|
+        std.fmt.parseInt(u32, std.mem.sliceTo(raw, 0), 10) catch 1
+    else
+        1;
+    async_stride_env = v;
+```
 
 ### MLX_SERVE_TTS_COMPILE
 
@@ -66812,11 +73472,35 @@ mlx serve tts compile: engine setting; built-in default retained
 
 Scope: mlx-serve. Class: advanced.
 
+Source: `engines/mlx-serve/src/tts.zig:320`. Unset read: NULL from getenv; the literal consumer below supplies any fallback.
+
+```text
+    if (cp_compile_override) |v| return v;
+    if (cp_compile_env) |v| return v;
+    const raw = std.c.getenv("MLX_SERVE_TTS_COMPILE");
+    const enabled = raw == null or !std.mem.eql(u8, std.mem.sliceTo(raw.?, 0), "0");
+    cp_compile_env = enabled;
+    return enabled;
+}
+```
+
 ### MLX_SERVE_TTS_CP_CACHE
 
 mlx serve tts cp cache: engine setting; built-in default retained
 
 Scope: mlx-serve. Class: advanced.
+
+Source: `engines/mlx-serve/src/tts.zig:335`. Unset read: NULL from getenv; the literal consumer below supplies any fallback.
+
+```text
+    if (cp_cache_override) |v| return v;
+    if (cp_cache_env) |v| return v;
+    const raw = std.c.getenv("MLX_SERVE_TTS_CP_CACHE");
+    const enabled = raw == null or !std.mem.eql(u8, std.mem.sliceTo(raw.?, 0), "0");
+    cp_cache_env = enabled;
+    return enabled;
+}
+```
 
 ### MLX_SERVE_TTS_GPU_PREDICT
 
@@ -66824,11 +73508,35 @@ mlx serve tts gpu predict: engine setting; built-in default retained
 
 Scope: mlx-serve. Class: advanced.
 
+Source: `engines/mlx-serve/src/tts.zig:302`. Unset read: NULL from getenv; the literal consumer below supplies any fallback.
+
+```text
+    if (gpu_predict_override) |v| return v;
+    if (gpu_predict_env) |v| return v;
+    const raw = std.c.getenv("MLX_SERVE_TTS_GPU_PREDICT");
+    const enabled = raw == null or !std.mem.eql(u8, std.mem.sliceTo(raw.?, 0), "0");
+    gpu_predict_env = enabled;
+    return enabled;
+}
+```
+
 ### MLX_SERVE_TTS_SPK_CACHE
 
 mlx serve tts spk cache: engine setting; built-in default retained
 
 Scope: mlx-serve. Class: advanced.
+
+Source: `engines/mlx-serve/src/tts.zig:2397`. Unset read: NULL from getenv; the literal consumer below supplies any fallback.
+
+```text
+fn spkCacheEnabled() bool {
+    if (spk_cache_env) |v| return v;
+    const raw = std.c.getenv("MLX_SERVE_TTS_SPK_CACHE");
+    const enabled = raw == null or !std.mem.eql(u8, std.mem.sliceTo(raw.?, 0), "0");
+    spk_cache_env = enabled;
+    return enabled;
+}
+```
 
 ### MLX_SERVE_VERIFY_QMM
 
@@ -66836,11 +73544,35 @@ mlx serve verify qmm: engine setting; built-in default retained
 
 Scope: mlx-serve. Class: advanced.
 
+Source: `engines/mlx-serve/src/transformer.zig:1201`. Unset read: NULL from getenv; the literal consumer below supplies any fallback.
+
+```text
+    if (verify_qmm_enabled_cache) |v| return v;
+    var on = true;
+    if (std.c.getenv("MLX_SERVE_VERIFY_QMM")) |p| {
+        const val = std.mem.span(p);
+        if (val.len > 0 and val[0] == '0') on = false;
+    }
+    verify_qmm_enabled_cache = on;
+```
+
 ### MLX_SERVE_VERIFY_QMM_CROSSROW
 
 mlx serve verify qmm crossrow: engine setting; built-in default retained
 
 Scope: mlx-serve. Class: advanced.
+
+Source: `engines/mlx-serve/src/transformer.zig:1223`. Unset read: NULL from getenv; the literal consumer below supplies any fallback.
+
+```text
+    if (vqmm_crossrow_env_cached) |v| return v;
+    const v = blk: {
+        const raw = std.c.getenv("MLX_SERVE_VERIFY_QMM_CROSSROW") orelse break :blk false;
+        break :blk std.mem.eql(u8, std.mem.sliceTo(raw, 0), "1");
+    };
+    vqmm_crossrow_env_cached = v;
+    return v;
+```
 
 ### MLX_SERVE_VERIFY_QMM_MIXED_PLAIN
 
@@ -66848,11 +73580,35 @@ mlx serve verify qmm mixed plain: engine setting; built-in default retained
 
 Scope: mlx-serve. Class: advanced.
 
+Source: `engines/mlx-serve/src/transformer.zig:1289`. Unset read: NULL from getenv; the literal consumer below supplies any fallback.
+
+```text
+    if (vqmm_mixed_plain_env_cache) |v| return v;
+    var mode: u8 = 2;
+    if (std.c.getenv("MLX_SERVE_VERIFY_QMM_MIXED_PLAIN")) |p| {
+        const val = std.mem.span(p);
+        if (val.len > 0 and val[0] == '0') mode = 0;
+        if (val.len > 0 and val[0] == '1') mode = 1;
+    }
+```
+
 ### MLX_SERVE_VERIFY_QMM_NAX
 
 mlx serve verify qmm nax: engine setting; built-in default retained
 
 Scope: mlx-serve. Class: advanced.
+
+Source: `engines/mlx-serve/src/transformer.zig:1713`. Unset read: NULL from getenv; the literal consumer below supplies any fallback.
+
+```text
+    if (vqmm_nax_env_cache) |v| return v;
+    var on = true;
+    if (std.c.getenv("MLX_SERVE_VERIFY_QMM_NAX")) |p| {
+        const val = std.mem.span(p);
+        if (val.len > 0 and val[0] == '0') on = false;
+    }
+    vqmm_nax_env_cache = on;
+```
 
 ### MLX_SERVE_VERIFY_QMM_NAX_MIN_M
 
@@ -66860,11 +73616,35 @@ mlx serve verify qmm nax min m: engine setting; built-in default retained
 
 Scope: mlx-serve. Class: advanced.
 
+Source: `engines/mlx-serve/src/transformer.zig:1770`. Unset read: NULL from getenv; the literal consumer below supplies any fallback.
+
+```text
+    if (!vqmm_nax_min_m_env_checked) {
+        vqmm_nax_min_m_cache = naxMinMOverrideFrom(
+            if (std.c.getenv("MLX_SERVE_VERIFY_QMM_NAX_MIN_M")) |p| std.mem.span(p) else null,
+        );
+        vqmm_nax_min_m_env_checked = true;
+    }
+    return vqmm_nax_min_m_cache orelse naxMinMForBitsFrom(bits, null);
+```
+
 ### MLX_SERVE_VERIFY_QMM_NAX_MIXED
 
 mlx serve verify qmm nax mixed: engine setting; built-in default retained
 
 Scope: mlx-serve. Class: advanced.
+
+Source: `engines/mlx-serve/src/transformer.zig:1728`. Unset read: NULL from getenv; the literal consumer below supplies any fallback.
+
+```text
+    if (vqmm_nax_mixed_env_cache) |v| return v;
+    var on = true;
+    if (std.c.getenv("MLX_SERVE_VERIFY_QMM_NAX_MIXED")) |p| {
+        const val = std.mem.span(p);
+        if (val.len > 0 and val[0] == '0') on = false;
+    }
+    vqmm_nax_mixed_env_cache = on;
+```
 
 ### MLX_SERVE_VERIFY_WIDTH_UBENCH
 
@@ -66872,11 +73652,35 @@ mlx serve verify width ubench: engine setting; built-in default retained
 
 Scope: mlx-serve. Class: advanced.
 
+Source: `engines/mlx-serve/src/transformer.zig:48647`. Unset read: NULL from getenv; the literal consumer below supplies any fallback.
+
+```text
+    // 16 wastes half the 32-row tile). The limit is a per-shape number, so the
+    // cliff is what this prints — a whole-model per-round estimate at each M.
+    if (std.c.getenv("MLX_SERVE_VERIFY_WIDTH_UBENCH") == null) return error.SkipZigTest;
+    const io_util = @import("io_util.zig");
+    const tio = testing.io;
+    const s = mlx.gpuStream();
+    const allocator = testing.allocator;
+```
+
 ### MLX_SERVE_VISION_CHUNKED
 
 mlx serve vision chunked: engine setting; built-in default retained
 
 Scope: mlx-serve. Class: advanced.
+
+Source: `engines/mlx-serve/src/generate.zig:1121`. Unset read: NULL from getenv; the literal consumer below supplies any fallback.
+
+```text
+pub fn visionChunkedPrefillEnabled() bool {
+    if (vision_chunked_cached) |v| return v;
+    const raw = std.c.getenv("MLX_SERVE_VISION_CHUNKED");
+    const on = raw == null or !std.mem.eql(u8, std.mem.sliceTo(raw.?, 0), "0");
+    vision_chunked_cached = on;
+    return on;
+}
+```
 
 ### MLX_SERVE_VQMM_BN
 
@@ -66884,11 +73688,35 @@ mlx serve vqmm bn: engine setting; built-in default retained
 
 Scope: mlx-serve. Class: advanced.
 
+Source: `engines/mlx-serve/src/transformer.zig:978`. Unset read: NULL from getenv; the literal consumer below supplies any fallback.
+
+```text
+    if (vqmm_bn_override_cache) |v| return v;
+    var v: c_int = 0;
+    if (std.c.getenv("MLX_SERVE_VQMM_BN")) |p| {
+        const parsed = std.fmt.parseInt(c_int, std.mem.span(p), 10) catch 0;
+        for (VQMM_BN_CHOICES) |c| {
+            if (c == parsed) v = parsed;
+        }
+```
+
 ### MLX_SERVE_VQMM_KPARTS
 
 mlx serve vqmm kparts: engine setting; built-in default retained
 
 Scope: mlx-serve. Class: advanced.
+
+Source: `engines/mlx-serve/src/transformer.zig:1013`. Unset read: NULL from getenv; the literal consumer below supplies any fallback.
+
+```text
+    const forced = vqmm_kparts_override_cache orelse blk: {
+        var v: c_int = 0;
+        if (std.c.getenv("MLX_SERVE_VQMM_KPARTS")) |p| {
+            const parsed = std.fmt.parseInt(c_int, std.mem.span(p), 10) catch 0;
+            if (parsed >= 1 and parsed <= 8) v = parsed;
+        }
+        vqmm_kparts_override_cache = v;
+```
 
 ### MLX_SERVE_VQMM_MIXED_UBENCH
 
@@ -66896,11 +73724,35 @@ mlx serve vqmm mixed ubench: engine setting; built-in default retained
 
 Scope: mlx-serve. Class: advanced.
 
+Source: `engines/mlx-serve/src/transformer.zig:48902`. Unset read: NULL from getenv; the literal consumer below supplies any fallback.
+
+```text
+
+test "verifyQmm mixed-width NAX µbench (MLX_SERVE_VQMM_MIXED_UBENCH=1)" {
+    if (std.c.getenv("MLX_SERVE_VQMM_MIXED_UBENCH") == null) return error.SkipZigTest;
+    if (!verifyQmmNaxAvailable()) return error.SkipZigTest;
+    const io_util = @import("io_util.zig");
+    const tio = testing.io;
+    const s = mlx.gpuStream();
+```
+
 ### MLX_SERVE_VQMM_PARITY_DEBUG
 
 mlx serve vqmm parity debug: engine setting; built-in default retained
 
 Scope: mlx-serve. Class: advanced.
+
+Source: `engines/mlx-serve/src/transformer.zig:46667`. Unset read: NULL from getenv; the literal consumer below supplies any fallback.
+
+```text
+    const cos_kern = dot_k / (@sqrt(nk) * @sqrt(nt));
+
+    if (std.c.getenv("MLX_SERVE_VQMM_PARITY_DEBUG") != null) {
+        std.debug.print(
+            "[vqmm-parity] {s:>16}: n={d} max {d:.5}/{d:.5} rms {d:.6}/{d:.6} (ratio {d:.3}) cos {d:.7}/{d:.7}\n",
+            .{ label, count, stock_max, kern_max, rms_stock, rms_kern, if (rms_stock > 0) rms_kern / rms_stock else 0, cos_stock, cos_kern },
+        );
+```
 
 ### MLX_SERVE_VQMM_UBENCH
 
@@ -66908,17 +73760,53 @@ mlx serve vqmm ubench: engine setting; built-in default retained
 
 Scope: mlx-serve. Class: advanced.
 
+Source: `engines/mlx-serve/src/transformer.zig:48753`. Unset read: NULL from getenv; the literal consumer below supplies any fallback.
+
+```text
+
+test "verifyQmm µbench: kernel vs stock per 27B shape (MLX_SERVE_VQMM_UBENCH=1)" {
+    if (std.c.getenv("MLX_SERVE_VQMM_UBENCH") == null) return error.SkipZigTest;
+    const io_util = @import("io_util.zig");
+    const tio = testing.io;
+    const s = mlx.gpuStream();
+    const allocator = testing.allocator;
+```
+
 ### MLX_SERVE_WIRED
 
 mlx serve wired: engine setting; built-in default retained
 
 Scope: mlx-serve. Class: advanced.
 
+Source: `engines/mlx-serve/src/mlx.zig:687`. Unset read: NULL from getenv; the literal consumer below supplies any fallback.
+
+```text
+/// so `fit` capacity tracks the live set. The caller logs the result.
+pub fn applyWiredPolicy() WiredPolicyResult {
+    const mode = WiredMode.fromEnv(if (std.c.getenv("MLX_SERVE_WIRED")) |p| std.mem.span(p) else null);
+    if (noGpuBackend()) return .{ .mode = mode, .target = null };
+    var prev: usize = 0;
+    switch (mode) {
+        .off => {
+```
+
 ### MLX_SERVE_WIRED_SLACK_MB
 
 mlx serve wired slack mb: engine setting; built-in default retained
 
 Scope: mlx-serve. Class: advanced.
+
+Source: `engines/mlx-serve/src/mlx.zig:709`. Unset read: NULL from getenv; the literal consumer below supplies any fallback.
+
+```text
+            _ = mlx_get_active_memory(&active);
+            const slack_mb: usize = blk: {
+                const raw_c = std.c.getenv("MLX_SERVE_WIRED_SLACK_MB") orelse break :blk 64;
+                const raw = std.mem.span(raw_c);
+                break :blk std.fmt.parseInt(usize, raw, 10) catch 64;
+            };
+            const target = wiredFitTarget(active, slack_mb << 20, max_rec) orelse
+```
 
 ### MLX_WORLD_SIZE
 
@@ -66930,7 +73818,19 @@ Scope: mlx-serve. Class: advanced.
 
 MODEL: advanced engine setting; built-in default retained
 
-Scope: image. Class: advanced.
+Scope: image, mlx-serve. Class: advanced.
+
+Source: `engines/mlx-serve/tests/test_agent_loop.py:156`. Unset read: 'mlx-serve'.
+
+```text
+
+    body = {
+        "model": os.environ.get("MODEL", "mlx-serve"),
+        "messages": messages,
+        "max_tokens": max_tokens,
+        "temperature": 0.7,
+        "stream": True,
+```
 
 ### MODEL_ENDPOINT
 
@@ -66954,7 +73854,7 @@ std::string get_model_endpoint() {
 
 Runtime-local cache/temp directory; no model download is performed.
 
-Scope: ds4-win, image, mac-ds4, mlx-serve, rtx-llama, studio, video. Class: preset.
+Scope: ds4-win, image, mac-ds4, mlx-serve, rtx-llama, studio, video, mac-mlx, mac-llama, mac-mference. Class: preset.
 
 ### MTMD_BACKEND_DEVICE
 
@@ -66998,11 +73898,71 @@ mtp lmhead test file: engine setting; built-in default retained
 
 Scope: mlx-serve. Class: advanced.
 
+Source: `engines/mlx-serve/src/transformer.zig:42982`. Unset read: NULL from getenv; the literal consumer below supplies any fallback.
+
+```text
+    const s = mlx.gpuStream();
+    var prng = std.Random.DefaultPrng.init(0x5A4E);
+    const path = std.c.getenv("MTP_LMHEAD_TEST_FILE") orelse return error.SkipZigTest;
+    var weights = try model_mod.loadWeightsSingleFile(testing.allocator, std.mem.span(path));
+    defer weights.deinit();
+    const w = weights.get("language_model.lm_head.weight") orelse return error.MissingLmHead;
+    const sc = weights.get("language_model.lm_head.scales") orelse return error.MissingLmHead;
+```
+
+Source: `engines/mlx-serve/src/transformer.zig:60994`. Unset read: NULL from getenv; the literal consumer below supplies any fallback.
+
+```text
+
+test "MTP coarse pairs preserve row-kernel logits (MTP_LMHEAD_TEST_FILE)" {
+    const path = std.c.getenv("MTP_LMHEAD_TEST_FILE") orelse return error.SkipZigTest;
+    if (mlx.noGpuBackend() or !verifySharedHardware()) return error.SkipZigTest;
+    const s = mlx.gpuStream();
+    var weights = try model_mod.loadWeightsSingleFile(testing.allocator, std.mem.span(path));
+    defer weights.deinit();
+```
+
 ### MTP_TEST_MODEL
 
 mtp test model: engine setting; built-in default retained
 
 Scope: mlx-serve. Class: advanced.
+
+Source: `engines/mlx-serve/src/generate.zig:18799`. Unset read: NULL from getenv; the literal consumer below supplies any fallback.
+
+```text
+
+test "plain to prime resumes the same MTP history and next draft as legacy hidden capture" {
+    const path = std.c.getenv("MTP_TEST_MODEL") orelse return error.SkipZigTest;
+    if (mlx.noGpuBackend()) return error.SkipZigTest;
+    const a = testing.allocator;
+    const io = std.Io.Threaded.global_single_threaded.io();
+    var config = try model_mod.parseConfig(io, a, std.mem.span(path));
+```
+
+Source: `engines/mlx-serve/src/generate.zig:18897`. Unset read: NULL from getenv; the literal consumer below supplies any fallback.
+
+```text
+
+test "cold grouped MTP rounds detach and resume exactly like solo heads" {
+    const path = std.c.getenv("MTP_TEST_MODEL") orelse return error.SkipZigTest;
+    if (mlx.noGpuBackend()) return error.SkipZigTest;
+    const a = testing.allocator;
+    const io = std.Io.Threaded.global_single_threaded.io();
+    var config = try model_mod.parseConfig(io, a, std.mem.span(path));
+```
+
+Source: `engines/mlx-serve/src/transformer.zig:60598`. Unset read: NULL from getenv; the literal consumer below supplies any fallback.
+
+```text
+
+test "verify MoE rows preserve every value with fewer graph operations" {
+    const path = std.c.getenv("MTP_TEST_MODEL") orelse return error.SkipZigTest;
+    if (mlx.noGpuBackend()) return error.SkipZigTest;
+    const allocator = testing.allocator;
+    const stream = mlx.gpuStream();
+    const io = std.Io.Threaded.global_single_threaded.io();
+```
 
 ### MUSE_VISION_FIXTURE
 
@@ -67010,11 +73970,35 @@ muse vision fixture: engine setting; built-in default retained
 
 Scope: mlx-serve. Class: advanced.
 
+Source: `engines/mlx-serve/src/muse_vision.zig:802`. Unset read: NULL from getenv; the literal consumer below supplies any fallback.
+
+```text
+test "muse vision live: tower parity vs the executed reference" {
+    const raw_model = std.c.getenv("MUSE_VISION_MODEL") orelse return error.SkipZigTest;
+    const raw_fix = std.c.getenv("MUSE_VISION_FIXTURE") orelse return error.SkipZigTest;
+    const model_dir = std.mem.sliceTo(raw_model, 0);
+    const fix_path = std.mem.sliceTo(raw_fix, 0);
+    if (model_dir.len == 0 or fix_path.len == 0) return error.SkipZigTest;
+    const a = testing.allocator;
+```
+
 ### MUSE_VISION_MODEL
 
 muse vision model: engine setting; built-in default retained
 
 Scope: mlx-serve. Class: advanced.
+
+Source: `engines/mlx-serve/src/muse_vision.zig:801`. Unset read: NULL from getenv; the literal consumer below supplies any fallback.
+
+```text
+//   zig build test -Doptimize=ReleaseFast -Dtest-filter="muse vision parity"
+test "muse vision live: tower parity vs the executed reference" {
+    const raw_model = std.c.getenv("MUSE_VISION_MODEL") orelse return error.SkipZigTest;
+    const raw_fix = std.c.getenv("MUSE_VISION_FIXTURE") orelse return error.SkipZigTest;
+    const model_dir = std.mem.sliceTo(raw_model, 0);
+    const fix_path = std.mem.sliceTo(raw_fix, 0);
+    if (model_dir.len == 0 or fix_path.len == 0) return error.SkipZigTest;
+```
 
 ### MUSIC3_COST_FRAMES
 
@@ -67022,11 +74006,47 @@ music3 cost frames: engine setting; built-in default retained
 
 Scope: mlx-serve. Class: advanced.
 
+Source: `engines/mlx-serve/src/music3.zig:3140`. Unset read: NULL from getenv; the literal consumer below supplies any fallback.
+
+```text
+    var smp = Sampler{ .seed = 0 };
+    const frames: u32 = blk: {
+        const raw = std.c.getenv("MUSIC3_COST_FRAMES") orelse break :blk 100;
+        break :blk std.fmt.parseInt(u32, std.mem.span(raw), 10) catch 100;
+    };
+    const ar = try e.runArStage(a, toks.ids, toks.uncond, .{ .max_frames = frames }, &smp, null);
+    defer _ = mlx.mlx_array_free(ar.frame_buf);
+```
+
 ### MUSIC3_COST_PROBE
 
 music3 cost probe: engine setting; built-in default retained
 
 Scope: mlx-serve. Class: advanced.
+
+Source: `engines/mlx-serve/src/music3.zig:1922`. Unset read: NULL from getenv; the literal consumer below supplies any fallback.
+
+```text
+/// with the probe on (symmetric overhead).
+fn costProbeEnabled() bool {
+    return std.c.getenv("MUSIC3_COST_PROBE") != null;
+}
+
+/// Depth-decoder KV cache (default ON). MLX_SERVE_MUSIC3_DEPTH_KV=0 keeps
+/// the naive full-re-forward path — it IS the reference shape.
+```
+
+Source: `engines/mlx-serve/src/music3.zig:3129`. Unset read: NULL from getenv; the literal consumer below supplies any fallback.
+
+```text
+test "music3 frame cost probe (env-gated, informational)" {
+    if (mlx.noGpuBackend()) return error.SkipZigTest;
+    _ = std.c.getenv("MUSIC3_COST_PROBE") orelse return error.SkipZigTest;
+    log.enableStderr(); // the ms/frame line IS this harness's output
+    const a = testing.allocator;
+    const io = std.Io.Threaded.global_single_threaded.io();
+    var e = try testEngine(io, a);
+```
 
 ### MUSIC3_FIXTURES
 
@@ -67034,17 +74054,53 @@ music3 fixtures: engine setting; built-in default retained
 
 Scope: mlx-serve. Class: advanced.
 
+Source: `engines/mlx-serve/src/music3.zig:2875`. Unset read: NULL from getenv; the literal consumer below supplies any fallback.
+
+```text
+
+fn fixturesDir() ![]const u8 {
+    return std.mem.span(std.c.getenv("MUSIC3_FIXTURES") orelse return error.SkipZigTest);
+}
+
+test "music3 load: shapes match the checkpoint contract" {
+    if (mlx.noGpuBackend()) return error.SkipZigTest;
+```
+
 ### MUSIC3_TEST_MODEL
 
 music3 test model: engine setting; built-in default retained
 
 Scope: mlx-serve. Class: advanced.
 
+Source: `engines/mlx-serve/src/music3.zig:2870`. Unset read: NULL from getenv; the literal consumer below supplies any fallback.
+
+```text
+
+fn testEngine(io: std.Io, a: std.mem.Allocator) !*Engine {
+    const model_dir = std.mem.span(std.c.getenv("MUSIC3_TEST_MODEL") orelse return error.SkipZigTest);
+    return Engine.load(io, a, model_dir);
+}
+
+fn fixturesDir() ![]const u8 {
+```
+
 ### MUSIC3_WAV_OUT
 
 music3 wav out: engine setting; built-in default retained
 
 Scope: mlx-serve. Class: advanced.
+
+Source: `engines/mlx-serve/src/music3.zig:3100`. Unset read: NULL from getenv; the literal consumer below supplies any fallback.
+
+```text
+test "music3 wav dump harness (env-gated, fixed seed)" {
+    if (mlx.noGpuBackend()) return error.SkipZigTest;
+    const out_path = std.mem.span(std.c.getenv("MUSIC3_WAV_OUT") orelse return error.SkipZigTest);
+    if (out_path.len == 0 or out_path[0] != '/') return error.SkipZigTest;
+    log.enableStderr();
+    const a = testing.allocator;
+    const io = std.Io.Threaded.global_single_threaded.io();
+```
 
 ### NCCL_DEBUG
 
@@ -67104,7 +74160,7 @@ bool tty_can_use_colors() {
 
 Runtime-local cache/temp directory; no model download is performed.
 
-Scope: ds4-win, image, mac-ds4, mlx-serve, rtx-llama, studio, video. Class: preset.
+Scope: ds4-win, image, mac-ds4, mlx-serve, rtx-llama, studio, video, mac-mlx, mac-llama, mac-mference. Class: preset.
 
 ### N_GPU_LAYERS
 
@@ -67188,7 +74244,7 @@ Scope: mlx-serve. Class: advanced.
 
 PATH: advanced engine setting; built-in default retained
 
-Scope: ds4-win, image, mac-ds4, video. Class: advanced.
+Scope: ds4-win, image, mac-ds4, mlx-serve, video. Class: advanced.
 
 Source: `engines/ds4-mac/ds4_web.c:992`. Unset read: NULL from getenv; the literal consumer below supplies any fallback.
 
@@ -67212,6 +74268,18 @@ Source: `engines/ds4-win/ds4_web.c:1040`. Unset read: NULL from getenv; the lite
         char *path = web_xstrdup(pathenv);
         char *save = NULL;
         for (char *dir = strtok_r(path, ":", &save); dir; dir = strtok_r(NULL, ":", &save)) {
+```
+
+Source: `engines/mlx-serve/app/Sources/MLXServe/Services/CLIInstaller.swift:190`. Unset read: Wrapper/conditional default: see the literal call and consumer below.
+
+```text
+    /// process PATH if the shell misbehaves or hangs.
+    static func userShellPathEntries() -> [String] {
+        let fallback = parsePathEntries(ProcessInfo.processInfo.environment["PATH"] ?? "")
+        guard let path = LoginShellEnv.values(of: ["PATH"])["PATH"] else { return fallback }
+        return parsePathEntries(path)
+    }
+
 ```
 
 Source: `vendor/engines/cosmos_windows/weight_streaming/hunyuan3d_backend.py:332`. Unset read: ''.
@@ -67290,13 +74358,25 @@ Source: `vendor/studio/studio/adapter.py:624`. Unset read: None.
 
 Runtime-local cache/temp directory; no model download is performed.
 
-Scope: ds4-win, image, mac-ds4, mlx-serve, rtx-llama, studio, video. Class: preset.
+Scope: ds4-win, image, mac-ds4, mlx-serve, rtx-llama, studio, video, mac-mlx, mac-llama, mac-mference. Class: preset.
 
 ### PORT
 
 PORT: advanced engine setting; built-in default retained
 
-Scope: rtx-llama. Class: advanced.
+Scope: mlx-serve, rtx-llama. Class: advanced.
+
+Source: `engines/mlx-serve/tests/test_agent_stop_repro.py:496`. Unset read: '11234'.
+
+```text
+    p = argparse.ArgumentParser()
+    p.add_argument("--host", default="127.0.0.1")
+    p.add_argument("--port", type=int, default=int(os.environ.get("PORT", "11234")))
+    p.add_argument("--max-tokens", type=int, default=int(os.environ.get("MAX_TOKENS", "4096")))
+    p.add_argument("--max-turns", type=int, default=20)
+    p.add_argument("--runs", type=int, default=1, help="repeat the full run N times")
+    p.add_argument("--temperature", type=float, default=0.7)
+```
 
 ### PROBE_SECONDS
 
@@ -67344,13 +74424,13 @@ Scope: mlx-serve. Class: advanced.
 
 Keep inference offline and avoid global cache/bytecode writes.
 
-Scope: ds4-win, image, mac-ds4, mlx-serve, rtx-llama, studio, video. Class: preset.
+Scope: ds4-win, image, mac-ds4, mlx-serve, rtx-llama, studio, video, mac-mlx, mac-llama, mac-mference. Class: preset.
 
 ### PYTHONPATH
 
 The stack and its vendored engine module paths.
 
-Scope: ds4-win, image, mac-ds4, mlx-serve, rtx-llama, studio, video. Class: preset.
+Scope: ds4-win, image, mac-ds4, mlx-serve, rtx-llama, studio, video, mac-mlx, mac-llama, mac-mference. Class: preset.
 
 Source: `vendor/studio/studio/adapter.py:1469`. Unset read: ''.
 
@@ -67454,11 +74534,35 @@ qv gh: engine setting; built-in default retained
 
 Scope: mlx-serve. Class: advanced.
 
+Source: `engines/mlx-serve/src/qwen_vision.zig:1521`. Unset read: NULL from getenv; the literal consumer below supplies any fallback.
+
+```text
+    const model_raw = std.c.getenv("QWEN_VISION_TEST_MODEL") orelse return error.SkipZigTest;
+    const fix_raw = std.c.getenv("QWEN_VISION_FIXTURE") orelse return error.SkipZigTest;
+    const gh_raw = std.c.getenv("QV_GH") orelse return error.SkipZigTest;
+    const gw_raw = std.c.getenv("QV_GW") orelse return error.SkipZigTest;
+    const dir = std.mem.sliceTo(model_raw, 0);
+    const fix = std.mem.sliceTo(fix_raw, 0);
+    if (dir.len == 0 or fix.len == 0) return error.SkipZigTest;
+```
+
 ### QV_GW
 
 qv gw: engine setting; built-in default retained
 
 Scope: mlx-serve. Class: advanced.
+
+Source: `engines/mlx-serve/src/qwen_vision.zig:1522`. Unset read: NULL from getenv; the literal consumer below supplies any fallback.
+
+```text
+    const fix_raw = std.c.getenv("QWEN_VISION_FIXTURE") orelse return error.SkipZigTest;
+    const gh_raw = std.c.getenv("QV_GH") orelse return error.SkipZigTest;
+    const gw_raw = std.c.getenv("QV_GW") orelse return error.SkipZigTest;
+    const dir = std.mem.sliceTo(model_raw, 0);
+    const fix = std.mem.sliceTo(fix_raw, 0);
+    if (dir.len == 0 or fix.len == 0) return error.SkipZigTest;
+    const grid_h = try std.fmt.parseInt(u32, std.mem.sliceTo(gh_raw, 0), 10);
+```
 
 ### QWEN4_BENCH
 
@@ -67478,6 +74582,18 @@ qwen4 dump qsa blocks: engine setting; built-in default retained
 
 Scope: mlx-serve. Class: advanced.
 
+Source: `engines/mlx-serve/src/transformer.zig:4579`. Unset read: NULL from getenv; the literal consumer below supplies any fallback.
+
+```text
+    if (qsa_dump_blocks_read) return qsa_dump_blocks_cached;
+    qsa_dump_blocks_read = true;
+    const raw = std.c.getenv("QWEN4_DUMP_QSA_BLOCKS") orelse return null;
+    if (!diagEnvValueOn(raw)) return null;
+    const s = std.mem.sliceTo(raw, 0);
+    qsa_dump_blocks_cached = s;
+    return s;
+```
+
 ### QWEN4_DUMP_QUANT
 
 Engine setting; retains its built-in default. The literal source consumer below records its behavior.
@@ -67490,11 +74606,47 @@ qwen4 fixture: engine setting; built-in default retained
 
 Scope: mlx-serve. Class: advanced.
 
+Source: `engines/mlx-serve/src/transformer.zig:55428`. Unset read: NULL from getenv; the literal consumer below supplies any fallback.
+
+```text
+test "qwen4 batched decode: one forwardMoeBatchedDecode tick == two serial ticks (GDN + PLE history + QSA keys/mask)" {
+    const model_dir = std.c.getenv("QWEN4_TEST_MODEL") orelse return error.SkipZigTest;
+    const fixture_path = std.c.getenv("QWEN4_FIXTURE") orelse return error.SkipZigTest;
+    if (mlx.noGpuBackend()) return error.SkipZigTest;
+    const allocator = testing.allocator;
+    const s = mlx.gpuStream();
+    const io = std.Io.Threaded.global_single_threaded.io();
+```
+
+Source: `engines/mlx-serve/src/transformer.zig:55869`. Unset read: NULL from getenv; the literal consumer below supplies any fallback.
+
+```text
+test "qwen4 fixture: full prefill, chunked prefill + decode past the QSA budget match the HF reference" {
+    const model_dir = std.c.getenv("QWEN4_TEST_MODEL") orelse return error.SkipZigTest;
+    const fixture_path = std.c.getenv("QWEN4_FIXTURE") orelse return error.SkipZigTest;
+    if (mlx.noGpuBackend()) return error.SkipZigTest;
+    const allocator = testing.allocator;
+    const s = mlx.gpuStream();
+    const io = std.Io.Threaded.global_single_threaded.io();
+```
+
 ### QWEN4_FIXTURE_BF16
 
 qwen4 fixture bf16: engine setting; built-in default retained
 
 Scope: mlx-serve. Class: advanced.
+
+Source: `engines/mlx-serve/src/transformer.zig:55181`. Unset read: NULL from getenv; the literal consumer below supplies any fallback.
+
+```text
+    // random model), against a bf16 reference the streams agree to 0.9998.
+    const model_dir = std.c.getenv("QWEN4_TEST_MODEL") orelse return error.SkipZigTest;
+    const fixture_path = std.c.getenv("QWEN4_FIXTURE_BF16") orelse return error.SkipZigTest;
+    if (mlx.noGpuBackend()) return error.SkipZigTest;
+    const allocator = testing.allocator;
+    const s = mlx.gpuStream();
+    const io = std.Io.Threaded.global_single_threaded.io();
+```
 
 ### QWEN4_FIXTURE_VISION
 
@@ -67502,11 +74654,35 @@ qwen4 fixture vision: engine setting; built-in default retained
 
 Scope: mlx-serve. Class: advanced.
 
+Source: `engines/mlx-serve/src/transformer.zig:54883`. Unset read: NULL from getenv; the literal consumer below supplies any fallback.
+
+```text
+    const qwen_vision = @import("qwen_vision.zig");
+    const model_dir = std.c.getenv("QWEN4_TEST_MODEL") orelse return error.SkipZigTest;
+    const fixture_path = std.c.getenv("QWEN4_FIXTURE_VISION") orelse return error.SkipZigTest;
+    if (mlx.noGpuBackend()) return error.SkipZigTest;
+    const allocator = testing.allocator;
+    const s = mlx.gpuStream();
+    const io = std.Io.Threaded.global_single_threaded.io();
+```
+
 ### QWEN4_NO_HCFUSE
 
 qwen4 no hcfuse: engine setting; built-in default retained
 
 Scope: mlx-serve. Class: advanced.
+
+Source: `engines/mlx-serve/src/transformer.zig:15780`. Unset read: NULL from getenv; the literal consumer below supplies any fallback.
+
+```text
+    /// qwen4_exp: compile the four hyper-connection elementwise tails.
+    pub fn compileQwen4Hc(self: *Transformer) void {
+        if (std.c.getenv("QWEN4_NO_HCFUSE") != null) return;
+        const specs = .{
+            .{ &self.compiled_hc_silu, &hcSiluCallback, true },
+            .{ &self.compiled_hc_mix, &hcMixCallback, false },
+            .{ &self.compiled_hc_inj, &hcInjCallback, true },
+```
 
 ### QWEN4_PLE_PREFETCH
 
@@ -67514,11 +74690,35 @@ qwen4 ple prefetch: engine setting; built-in default retained
 
 Scope: mlx-serve. Class: advanced.
 
+Source: `engines/mlx-serve/src/qwen4_exp.zig:561`. Unset read: NULL from getenv; the literal consumer below supplies any fallback.
+
+```text
+    };
+    if (S.v) |v| return v;
+    const raw = std.c.getenv("QWEN4_PLE_PREFETCH");
+    const v = raw == null or raw.?[0] != '0';
+    S.v = v;
+    return v;
+}
+```
+
 ### QWEN4_PLE_PREFETCH_PREFILL
 
 qwen4 ple prefetch prefill: engine setting; built-in default retained
 
 Scope: mlx-serve. Class: advanced.
+
+Source: `engines/mlx-serve/src/qwen4_exp.zig:642`. Unset read: NULL from getenv; the literal consumer below supplies any fallback.
+
+```text
+    };
+    const mode = S.v orelse blk: {
+        const raw = std.c.getenv("QWEN4_PLE_PREFETCH_PREFILL");
+        const m = plePrefillPrefetchModeFromEnv(if (raw) |r| std.mem.sliceTo(r, 0) else null);
+        S.v = m;
+        break :blk m;
+    };
+```
 
 ### QWEN4_PLE_PREFETCH_PREFILL_MIN_KV
 
@@ -67526,17 +74726,53 @@ qwen4 ple prefetch prefill min kv: engine setting; built-in default retained
 
 Scope: mlx-serve. Class: advanced.
 
+Source: `engines/mlx-serve/src/qwen4_exp.zig:630`. Unset read: NULL from getenv; the literal consumer below supplies any fallback.
+
+```text
+    };
+    if (S.v) |v| return v;
+    const raw = std.c.getenv("QWEN4_PLE_PREFETCH_PREFILL_MIN_KV");
+    const v = plePrefillPrefetchMinKvFromEnv(if (raw) |r| std.mem.sliceTo(r, 0) else null);
+    S.v = v;
+    return v;
+}
+```
+
 ### QWEN4_PROFILE_FWD
 
 qwen4 profile fwd: engine setting; built-in default retained
 
 Scope: mlx-serve. Class: advanced.
 
+Source: `engines/mlx-serve/src/transformer.zig:32221`. Unset read: NULL from getenv; the literal consumer below supplies any fallback.
+
+```text
+
+    fn init(seq_len: c_int, h: mlx.mlx_array) !Qwen4FwdProf {
+        const env = std.c.getenv("QWEN4_PROFILE_FWD");
+        // `=1`: S 2..16 (verify). `=all`: any S, including decode S=1 and prefill.
+        const all = env != null and env.?[0] == 'a';
+        const timing = diagEnvOn("QWEN4_PROFILE_FWD") and (all or (seq_len >= 2 and seq_len <= 16));
+        var p: Qwen4FwdProf = .{ .timing = timing, .ops = diagEnvOn("QWEN4_OPCOUNT"), .clock = ProfClock.init() };
+```
+
 ### QWEN4_REF_DTYPE
 
 QWEN4_REF_DTYPE: advanced engine setting; built-in default retained
 
-Scope: image. Class: advanced.
+Scope: image, mlx-serve. Class: advanced.
+
+Source: `engines/mlx-serve/tests/dump_qwen4_exp_fixtures.py:42`. Unset read: 'f32'.
+
+```text
+# QWEN4_REF_DTYPE=bf16 renders the reference in the shipped dtype (bf16 residual
+# streams); f32 is the tighter oracle for the math but not what the checkpoint runs.
+REF_DTYPE = torch.bfloat16 if os.environ.get("QWEN4_REF_DTYPE", "f32") == "bf16" else torch.float32
+from safetensors.numpy import save_file
+from safetensors.torch import save_file as save_torch
+
+sys.path.insert(0, os.path.dirname(os.path.abspath(__file__)))
+```
 
 ### QWEN4_STANDIN
 
@@ -67544,11 +74780,263 @@ qwen4 standin: engine setting; built-in default retained
 
 Scope: mlx-serve. Class: advanced.
 
+Source: `engines/mlx-serve/src/transformer.zig:32160`. Unset read: NULL from getenv; the literal consumer below supplies any fallback.
+
+```text
+    if (standin_cached) |v| return v;
+    var v = Standin{};
+    if (std.c.getenv("QWEN4_STANDIN")) |raw| {
+        var it = std.mem.splitScalar(u8, std.mem.sliceTo(raw, 0), ',');
+        while (it.next()) |tok| {
+            if (std.mem.eql(u8, tok, "gdn")) v.gdn = true;
+            if (std.mem.eql(u8, tok, "attn")) v.attn = true;
+```
+
 ### QWEN4_TEST_MODEL
 
 qwen4 test model: engine setting; built-in default retained
 
 Scope: mlx-serve. Class: advanced.
+
+Source: `engines/mlx-serve/src/generate.zig:18390`. Unset read: NULL from getenv; the literal consumer below supplies any fallback.
+
+```text
+
+test "Generator rounds preserve acceptance and next-round stashes at N=2/4" {
+    const model_dir = std.c.getenv("QWEN4_TEST_MODEL") orelse return error.SkipZigTest;
+    if (mlx.noGpuBackend()) return error.SkipZigTest;
+    const predraft = Generator.mtp_predraft_cache;
+    const forced = Generator.mtp_force_depth_cache;
+    const planner = group_planner.enabled_override;
+```
+
+Source: `engines/mlx-serve/src/generate.zig:18537`. Unset read: NULL from getenv; the literal consumer below supplies any fallback.
+
+```text
+
+test "acceptance failure restores every unfinished row after verify returns" {
+    const model_dir = std.c.getenv("QWEN4_TEST_MODEL") orelse return error.SkipZigTest;
+    if (mlx.noGpuBackend()) return error.SkipZigTest;
+    const a = testing.allocator;
+    const io = std.Io.Threaded.global_single_threaded.io();
+    var config = try model_mod.parseConfig(io, a, std.mem.span(model_dir));
+```
+
+Source: `engines/mlx-serve/src/mtp.zig:263`. Unset read: NULL from getenv; the literal consumer below supplies any fallback.
+
+```text
+
+test "Qwen4 mixed MTP profile validates the live checkpoint (QWEN4_TEST_MODEL)" {
+    const path = std.c.getenv("QWEN4_TEST_MODEL") orelse return error.SkipZigTest;
+    if (mlx.noGpuBackend() or !transformer_mod.verifyQmmNaxAvailable()) return error.SkipZigTest;
+    const a = testing.allocator;
+    const io = std.Io.Threaded.global_single_threaded.io();
+    var config = try model_mod.parseConfig(io, a, std.mem.span(path));
+```
+
+Source: `engines/mlx-serve/src/transformer.zig:10966`. Unset read: NULL from getenv; the literal consumer below supplies any fallback.
+
+```text
+
+test "qwen4 MTP head: N=1 FORCE_BATCHED draft ids and logits mlx_equal solo at depths 1/2/4" {
+    const model_dir = std.c.getenv("QWEN4_TEST_MODEL") orelse return error.SkipZigTest;
+    if (mlx.noGpuBackend()) return error.SkipZigTest;
+    const t = std.testing;
+    const allocator = t.allocator;
+    const s = mlx.gpuStream();
+```
+
+Source: `engines/mlx-serve/src/transformer.zig:11107`. Unset read: NULL from getenv; the literal consumer below supplies any fallback.
+
+```text
+
+test "MTP head: N=2/4 mlx_equal drafts/logits vs solo" {
+    const model_dir = std.c.getenv("QWEN4_TEST_MODEL") orelse return error.SkipZigTest;
+    if (mlx.noGpuBackend()) return error.SkipZigTest;
+    const t = std.testing;
+    const allocator = t.allocator;
+    const s = mlx.gpuStream();
+```
+
+Source: `engines/mlx-serve/src/transformer.zig:54882`. Unset read: NULL from getenv; the literal consumer below supplies any fallback.
+
+```text
+    // keys roped at 3-D block-start positions (the layer-3 mask is EXACT).
+    const qwen_vision = @import("qwen_vision.zig");
+    const model_dir = std.c.getenv("QWEN4_TEST_MODEL") orelse return error.SkipZigTest;
+    const fixture_path = std.c.getenv("QWEN4_FIXTURE_VISION") orelse return error.SkipZigTest;
+    if (mlx.noGpuBackend()) return error.SkipZigTest;
+    const allocator = testing.allocator;
+    const s = mlx.gpuStream();
+```
+
+Source: `engines/mlx-serve/src/transformer.zig:55180`. Unset read: NULL from getenv; the literal consumer below supplies any fallback.
+
+```text
+    // reads 0.905 at the logits (bf16 rounding compounds through the tiny
+    // random model), against a bf16 reference the streams agree to 0.9998.
+    const model_dir = std.c.getenv("QWEN4_TEST_MODEL") orelse return error.SkipZigTest;
+    const fixture_path = std.c.getenv("QWEN4_FIXTURE_BF16") orelse return error.SkipZigTest;
+    if (mlx.noGpuBackend()) return error.SkipZigTest;
+    const allocator = testing.allocator;
+    const s = mlx.gpuStream();
+```
+
+Source: `engines/mlx-serve/src/transformer.zig:55427`. Unset read: NULL from getenv; the literal consumer below supplies any fallback.
+
+```text
+
+test "qwen4 batched decode: one forwardMoeBatchedDecode tick == two serial ticks (GDN + PLE history + QSA keys/mask)" {
+    const model_dir = std.c.getenv("QWEN4_TEST_MODEL") orelse return error.SkipZigTest;
+    const fixture_path = std.c.getenv("QWEN4_FIXTURE") orelse return error.SkipZigTest;
+    if (mlx.noGpuBackend()) return error.SkipZigTest;
+    const allocator = testing.allocator;
+    const s = mlx.gpuStream();
+```
+
+Source: `engines/mlx-serve/src/transformer.zig:55549`. Unset read: NULL from getenv; the literal consumer below supplies any fallback.
+
+```text
+
+test "qwen4 deferred PLE: pipelined decode AND MTP verify widths match the direct forward (QWEN4_TEST_MODEL)" {
+    const model_dir = std.c.getenv("QWEN4_TEST_MODEL") orelse return error.SkipZigTest;
+    if (mlx.noGpuBackend()) return error.SkipZigTest;
+    const allocator = testing.allocator;
+    const s = mlx.gpuStream();
+    const io = std.Io.Threaded.global_single_threaded.io();
+```
+
+Source: `engines/mlx-serve/src/transformer.zig:55778`. Unset read: NULL from getenv; the literal consumer below supplies any fallback.
+
+```text
+
+test "batched PLE defer engages at N=2 and matches eager at S=1 and S=4" {
+    const model_dir = std.c.getenv("QWEN4_TEST_MODEL") orelse return error.SkipZigTest;
+    if (mlx.noGpuBackend()) return error.SkipZigTest;
+    const allocator = testing.allocator;
+    const s = mlx.gpuStream();
+    const io = std.Io.Threaded.global_single_threaded.io();
+```
+
+Source: `engines/mlx-serve/src/transformer.zig:55868`. Unset read: NULL from getenv; the literal consumer below supplies any fallback.
+
+```text
+
+test "qwen4 fixture: full prefill, chunked prefill + decode past the QSA budget match the HF reference" {
+    const model_dir = std.c.getenv("QWEN4_TEST_MODEL") orelse return error.SkipZigTest;
+    const fixture_path = std.c.getenv("QWEN4_FIXTURE") orelse return error.SkipZigTest;
+    if (mlx.noGpuBackend()) return error.SkipZigTest;
+    const allocator = testing.allocator;
+    const s = mlx.gpuStream();
+```
+
+Source: `engines/mlx-serve/src/transformer.zig:56413`. Unset read: NULL from getenv; the literal consumer below supplies any fallback.
+
+```text
+    // head proposes, and the trunk's verify forward decides every byte that
+    // ships, so a last-ulp difference can move acceptance and never output.
+    const model_dir = std.c.getenv("QWEN4_TEST_MODEL") orelse return error.SkipZigTest;
+    if (mlx.noGpuBackend()) return error.SkipZigTest;
+    const allocator = testing.allocator;
+    const s = mlx.gpuStream();
+    const io = std.Io.Threaded.global_single_threaded.io();
+```
+
+Source: `engines/mlx-serve/src/transformer.zig:56522`. Unset read: NULL from getenv; the literal consumer below supplies any fallback.
+
+```text
+
+test "qwen4 MTP head: quantized KV rollback + re-append matches dense draft ids (QWEN4_TEST_MODEL)" {
+    const model_dir = std.c.getenv("QWEN4_TEST_MODEL") orelse return error.SkipZigTest;
+    if (mlx.noGpuBackend()) return error.SkipZigTest;
+    const allocator = testing.allocator;
+    const s = mlx.gpuStream();
+    const io = std.Io.Threaded.global_single_threaded.io();
+```
+
+Source: `engines/mlx-serve/src/transformer.zig:56925`. Unset read: NULL from getenv; the literal consumer below supplies any fallback.
+
+```text
+    // free half is unconditional at every k: it aborts this binary rather
+    // than failing an assertion.
+    const model_dir = std.c.getenv("QWEN4_TEST_MODEL") orelse return error.SkipZigTest;
+    if (mlx.noGpuBackend()) return error.SkipZigTest;
+    const allocator = testing.allocator;
+    const s = mlx.gpuStream();
+    const io = std.Io.Threaded.global_single_threaded.io();
+```
+
+Source: `engines/mlx-serve/src/transformer.zig:59698`. Unset read: NULL from getenv; the literal consumer below supplies any fallback.
+
+```text
+
+test "row-axis verify: every row of a group verify is byte-identical to its solo verify" {
+    const model_dir = std.c.getenv("QWEN4_TEST_MODEL") orelse return error.SkipZigTest;
+    if (mlx.noGpuBackend()) return error.SkipZigTest;
+    const allocator = testing.allocator;
+    const s = mlx.gpuStream();
+    const io = std.Io.Threaded.global_single_threaded.io();
+```
+
+Source: `engines/mlx-serve/src/transformer.zig:59849`. Unset read: NULL from getenv; the literal consumer below supplies any fallback.
+
+```text
+
+test "per-row rollback: different accept counts across rows restore exactly the solo states" {
+    const model_dir = std.c.getenv("QWEN4_TEST_MODEL") orelse return error.SkipZigTest;
+    if (mlx.noGpuBackend()) return error.SkipZigTest;
+    const allocator = testing.allocator;
+    const s = mlx.gpuStream();
+    const io = std.Io.Threaded.global_single_threaded.io();
+```
+
+Source: `engines/mlx-serve/src/transformer.zig:59952`. Unset read: NULL from getenv; the literal consumer below supplies any fallback.
+
+```text
+
+test "deferred PLE at N rows: a failed row abandons every row's claim and leaves the slots usable" {
+    const model_dir = std.c.getenv("QWEN4_TEST_MODEL") orelse return error.SkipZigTest;
+    if (mlx.noGpuBackend()) return error.SkipZigTest;
+    const allocator = testing.allocator;
+    const s = mlx.gpuStream();
+    const io = std.Io.Threaded.global_single_threaded.io();
+```
+
+Source: `engines/mlx-serve/src/transformer.zig:60121`. Unset read: NULL from getenv; the literal consumer below supplies any fallback.
+
+```text
+test "group round: a row's own argmax and budget decide it, and nothing else does" {
+    const gen_mod = @import("generate.zig");
+    const model_dir = std.c.getenv("QWEN4_TEST_MODEL") orelse return error.SkipZigTest;
+    if (mlx.noGpuBackend()) return error.SkipZigTest;
+    const allocator = testing.allocator;
+    const s = mlx.gpuStream();
+    const io = std.Io.Threaded.global_single_threaded.io();
+```
+
+Source: `engines/mlx-serve/src/transformer.zig:60291`. Unset read: NULL from getenv; the literal consumer below supplies any fallback.
+
+```text
+
+test "N=4 rollback: rejects, partial accepts and full accept restore solo states" {
+    const model_dir = std.c.getenv("QWEN4_TEST_MODEL") orelse return error.SkipZigTest;
+    if (mlx.noGpuBackend()) return error.SkipZigTest;
+    const allocator = testing.allocator;
+    const s = mlx.gpuStream();
+    const io = std.Io.Threaded.global_single_threaded.io();
+```
+
+Source: `engines/mlx-serve/src/transformer.zig:61090`. Unset read: NULL from getenv; the literal consumer below supplies any fallback.
+
+```text
+
+test "single-stream verify optimizations preserve native outputs and captures (QWEN4_TEST_MODEL)" {
+    const path = std.c.getenv("QWEN4_TEST_MODEL") orelse return error.SkipZigTest;
+    if (mlx.noGpuBackend()) return error.SkipZigTest;
+    const a = testing.allocator;
+    const io = std.Io.Threaded.global_single_threaded.io();
+    const old_features = single_verify_test_features;
+```
 
 ### QWEN4_YARN_FIXTURES
 
@@ -67556,11 +75044,35 @@ qwen4 yarn fixtures: engine setting; built-in default retained
 
 Scope: mlx-serve. Class: advanced.
 
+Source: `engines/mlx-serve/src/mrope.zig:761`. Unset read: NULL from getenv; the literal consumer below supplies any fallback.
+
+```text
+    //     QWEN4_YARN_FIXTURES=/tmp/qwen4_yarn.json \
+    //         zig build test -Dtest-filter="qwen4 yarn parity"
+    const path_z = std.c.getenv("QWEN4_YARN_FIXTURES") orelse return error.SkipZigTest;
+    const path = std.mem.span(path_z);
+    if (path.len == 0) return error.SkipZigTest;
+    const io = std.Io.Threaded.global_single_threaded.io();
+    const file = try std.Io.Dir.openFileAbsolute(io, path, .{});
+```
+
 ### QWEN_PREPROCESS_FIXTURE
 
 qwen preprocess fixture: engine setting; built-in default retained
 
 Scope: mlx-serve. Class: advanced.
+
+Source: `engines/mlx-serve/src/qwen_vision.zig:1442`. Unset read: NULL from getenv; the literal consumer below supplies any fallback.
+
+```text
+
+test "qwen preprocessing parity vs reference pixel_values (QWEN_PREPROCESS_FIXTURE)" {
+    const fixture_raw = std.c.getenv("QWEN_PREPROCESS_FIXTURE") orelse return error.SkipZigTest;
+    const fixture = std.mem.span(fixture_raw);
+    const io = std.testing.io;
+    const allocator = std.testing.allocator;
+
+```
 
 ### QWEN_VISION_FIXTURE
 
@@ -67568,11 +75080,35 @@ qwen vision fixture: engine setting; built-in default retained
 
 Scope: mlx-serve. Class: advanced.
 
+Source: `engines/mlx-serve/src/qwen_vision.zig:1520`. Unset read: NULL from getenv; the literal consumer below supplies any fallback.
+
+```text
+test "qwen vision parity vs reference embeddings (QWEN_VISION_TEST_MODEL)" {
+    const model_raw = std.c.getenv("QWEN_VISION_TEST_MODEL") orelse return error.SkipZigTest;
+    const fix_raw = std.c.getenv("QWEN_VISION_FIXTURE") orelse return error.SkipZigTest;
+    const gh_raw = std.c.getenv("QV_GH") orelse return error.SkipZigTest;
+    const gw_raw = std.c.getenv("QV_GW") orelse return error.SkipZigTest;
+    const dir = std.mem.sliceTo(model_raw, 0);
+    const fix = std.mem.sliceTo(fix_raw, 0);
+```
+
 ### QWEN_VISION_TEST_MODEL
 
 qwen vision test model: engine setting; built-in default retained
 
 Scope: mlx-serve. Class: advanced.
+
+Source: `engines/mlx-serve/src/qwen_vision.zig:1519`. Unset read: NULL from getenv; the literal consumer below supplies any fallback.
+
+```text
+// then run via tests/test_qwen_vision_parity.sh (sets the env vars below).
+test "qwen vision parity vs reference embeddings (QWEN_VISION_TEST_MODEL)" {
+    const model_raw = std.c.getenv("QWEN_VISION_TEST_MODEL") orelse return error.SkipZigTest;
+    const fix_raw = std.c.getenv("QWEN_VISION_FIXTURE") orelse return error.SkipZigTest;
+    const gh_raw = std.c.getenv("QV_GH") orelse return error.SkipZigTest;
+    const gw_raw = std.c.getenv("QV_GW") orelse return error.SkipZigTest;
+    const dir = std.mem.sliceTo(model_raw, 0);
+```
 
 ### REASONER_SELFTEST_IMG
 
@@ -67597,6 +75133,18 @@ Source: `vendor/engines/cosmos_windows/train_reasoner_lora.py:183`. Unset read: 
 replay dump soft: engine setting; built-in default retained
 
 Scope: mlx-serve. Class: advanced.
+
+Source: `engines/mlx-serve/src/tool_traffic_replay_test.zig:72`. Unset read: NULL from getenv; the literal consumer below supplies any fallback.
+
+```text
+test "tool traffic replay: captured agent traffic survives parse + schema coercion" {
+    g_fail_count = 0;
+    dump_soft = std.c.getenv("REPLAY_DUMP_SOFT") != null;
+    var line_it = std.mem.splitScalar(u8, fixture, '\n');
+    var idx: usize = 0;
+    var records: usize = 0;
+    var total_calls: usize = 0;
+```
 
 ### SCAIL2_ALLOW_ATTN_FALLBACK
 
@@ -67753,6 +75301,18 @@ _ATTN_BACKEND_CHECKED = False
 single mtp test context: engine setting; built-in default retained
 
 Scope: mlx-serve. Class: advanced.
+
+Source: `engines/mlx-serve/src/transformer.zig:61106`. Unset read: NULL from getenv; the literal consumer below supplies any fallback.
+
+```text
+    xfm.compileGdnGate();
+    xfm.compileMoeRouting();
+    const prefix_len = if (std.c.getenv("SINGLE_MTP_TEST_CONTEXT")) |value| try std.fmt.parseInt(usize, std.mem.span(value), 10) else 4101;
+    const ids = try a.alloc(i32, prefix_len + 64);
+    defer a.free(ids);
+    for (ids, 0..) |*id, i| id.* = @intCast(1 + (i * 7919) % 40000);
+    var slots: [2]*Qwen4TestSlot = undefined;
+```
 
 ### SKIP_LOAD_MODEL
 
@@ -68160,7 +75720,7 @@ Source: `vendor/engines/cosmos_windows/gguf_qat/streamed_model_deepseek2.py:538`
 
 STUDIO_AGENT_MEMORY_EMBED_MODEL: advanced engine setting; built-in default retained
 
-Scope: image. Class: advanced.
+Scope: image, studio. Class: advanced.
 
 Source: `vendor/studio/studio/config.py:172`. Unset read: Wrapper/conditional default: see the literal call and consumer below.
 
@@ -68448,7 +76008,7 @@ Source: `vendor/studio/studio/config.py:145`. Unset read: None.
 
 STUDIO_CHAT_MODEL: advanced engine setting; built-in default retained
 
-Scope: image. Class: advanced.
+Scope: image, studio. Class: advanced.
 
 Source: `vendor/studio/studio/config.py:146`. Unset read: Wrapper/conditional default: see the literal call and consumer below.
 
@@ -68874,7 +76434,7 @@ Source: `vendor/engines/cosmos_windows/weight_streaming/domainshuttle_backend.py
 
 STUDIO_DSV4F_0731_MAC_GGUF: advanced engine setting; built-in default retained
 
-Scope: image. Class: advanced.
+Scope: image, studio. Class: advanced.
 
 Source: `vendor/studio/studio/mlx_model_presets.py:48`. Unset read: Wrapper/conditional default: see the literal call and consumer below.
 
@@ -68892,7 +76452,7 @@ QWEN38_UNCENSORED_MAC_MLX = _env('STUDIO_QWEN38_UNCENSORED_MAC_MLX', '')
 
 STUDIO_DSV4_PIPELINE_LAYERS: advanced engine setting; built-in default retained
 
-Scope: image. Class: advanced.
+Scope: image, studio. Class: advanced.
 
 Source: `vendor/studio/studio/mlx_model_presets.py:11`. Unset read: Wrapper/conditional default: see the literal call and consumer below.
 
@@ -68910,7 +76470,7 @@ def build_preset(model_key: str, mode: str) -> dict:
 
 STUDIO_DSV4_RANK0_MODEL: advanced engine setting; built-in default retained
 
-Scope: image. Class: advanced.
+Scope: image, studio. Class: advanced.
 
 Source: `vendor/studio/studio/mlx_model_presets.py:11`. Unset read: Wrapper/conditional default: see the literal call and consumer below.
 
@@ -68976,7 +76536,7 @@ Source: `vendor/studio/studio/adapter.py:3142`. Unset read: '12'.
 
 STUDIO_FORCE_MOCK: advanced engine setting; built-in default retained
 
-Scope: image. Class: advanced.
+Scope: image, studio. Class: advanced.
 
 Source: `vendor/studio/studio/config.py:142`. Unset read: Wrapper/conditional default: see the literal call and consumer below.
 
@@ -68994,7 +76554,7 @@ Source: `vendor/studio/studio/config.py:142`. Unset read: Wrapper/conditional de
 
 STUDIO_GLM46_MAC_GGUF: advanced engine setting; built-in default retained
 
-Scope: image. Class: advanced.
+Scope: image, studio. Class: advanced.
 
 Source: `vendor/studio/studio/mlx_model_presets.py:47`. Unset read: Wrapper/conditional default: see the literal call and consumer below.
 
@@ -69012,7 +76572,7 @@ def build_qwen38_mlx_serve_preset() -> dict:
 
 STUDIO_GLM51_MAC_MLX: advanced engine setting; built-in default retained
 
-Scope: image. Class: advanced.
+Scope: image, studio. Class: advanced.
 
 Source: `vendor/studio/studio/mlx_model_presets.py:11`. Unset read: Wrapper/conditional default: see the literal call and consumer below.
 
@@ -69030,7 +76590,7 @@ def build_preset(model_key: str, mode: str) -> dict:
 
 STUDIO_GLM51_PIPELINE_LAYERS: advanced engine setting; built-in default retained
 
-Scope: image. Class: advanced.
+Scope: image, studio. Class: advanced.
 
 Source: `vendor/studio/studio/mlx_model_presets.py:11`. Unset read: Wrapper/conditional default: see the literal call and consumer below.
 
@@ -69048,7 +76608,7 @@ def build_preset(model_key: str, mode: str) -> dict:
 
 STUDIO_GLM51_RTX_GGUF: advanced engine setting; built-in default retained
 
-Scope: image. Class: advanced.
+Scope: image, studio. Class: advanced.
 
 Source: `vendor/studio/studio/mlx_model_presets.py:11`. Unset read: Wrapper/conditional default: see the literal call and consumer below.
 
@@ -69066,7 +76626,7 @@ def build_preset(model_key: str, mode: str) -> dict:
 
 STUDIO_GLM52_MAC_MLX: advanced engine setting; built-in default retained
 
-Scope: image. Class: advanced.
+Scope: image, studio. Class: advanced.
 
 Source: `vendor/studio/studio/mlx_model_presets.py:11`. Unset read: Wrapper/conditional default: see the literal call and consumer below.
 
@@ -69084,7 +76644,7 @@ def build_preset(model_key: str, mode: str) -> dict:
 
 STUDIO_GLM52_MLX_SERVER: advanced engine setting; built-in default retained
 
-Scope: image. Class: advanced.
+Scope: image, studio. Class: advanced.
 
 Source: `vendor/studio/studio/mlx_model_presets.py:11`. Unset read: Wrapper/conditional default: see the literal call and consumer below.
 
@@ -69102,7 +76662,7 @@ def build_preset(model_key: str, mode: str) -> dict:
 
 STUDIO_GLM52_MTP_ADAPTIVE: advanced engine setting; built-in default retained
 
-Scope: image. Class: advanced.
+Scope: image, studio. Class: advanced.
 
 Source: `vendor/studio/studio/mlx_model_presets.py:11`. Unset read: Wrapper/conditional default: see the literal call and consumer below.
 
@@ -69120,7 +76680,7 @@ def build_preset(model_key: str, mode: str) -> dict:
 
 STUDIO_GLM52_MTP_MAX_DRAFT: advanced engine setting; built-in default retained
 
-Scope: image. Class: advanced.
+Scope: image, studio. Class: advanced.
 
 Source: `vendor/studio/studio/mlx_model_presets.py:11`. Unset read: Wrapper/conditional default: see the literal call and consumer below.
 
@@ -69138,7 +76698,7 @@ def build_preset(model_key: str, mode: str) -> dict:
 
 STUDIO_GLM52_MTP_MODE: advanced engine setting; built-in default retained
 
-Scope: image. Class: advanced.
+Scope: image, studio. Class: advanced.
 
 Source: `vendor/studio/studio/mlx_model_presets.py:11`. Unset read: Wrapper/conditional default: see the literal call and consumer below.
 
@@ -69156,7 +76716,7 @@ def build_preset(model_key: str, mode: str) -> dict:
 
 STUDIO_GLM52_MTP_SIDECAR: advanced engine setting; built-in default retained
 
-Scope: image. Class: advanced.
+Scope: image, studio. Class: advanced.
 
 Source: `vendor/studio/studio/mlx_model_presets.py:11`. Unset read: Wrapper/conditional default: see the literal call and consumer below.
 
@@ -69174,7 +76734,7 @@ def build_preset(model_key: str, mode: str) -> dict:
 
 STUDIO_GLM52_MTP_TOKEN_BUDGET: advanced engine setting; built-in default retained
 
-Scope: image. Class: advanced.
+Scope: image, studio. Class: advanced.
 
 Source: `vendor/studio/studio/mlx_model_presets.py:11`. Unset read: Wrapper/conditional default: see the literal call and consumer below.
 
@@ -69192,7 +76752,7 @@ def build_preset(model_key: str, mode: str) -> dict:
 
 STUDIO_GLM52_PIPELINE_LAYERS: advanced engine setting; built-in default retained
 
-Scope: image. Class: advanced.
+Scope: image, studio. Class: advanced.
 
 Source: `vendor/studio/studio/mlx_model_presets.py:11`. Unset read: Wrapper/conditional default: see the literal call and consumer below.
 
@@ -69210,7 +76770,7 @@ def build_preset(model_key: str, mode: str) -> dict:
 
 STUDIO_GLM52_RTX_GGUF: advanced engine setting; built-in default retained
 
-Scope: image. Class: advanced.
+Scope: image, studio. Class: advanced.
 
 Source: `vendor/studio/studio/mlx_model_presets.py:11`. Unset read: Wrapper/conditional default: see the literal call and consumer below.
 
@@ -69582,7 +77142,7 @@ _lock = threading.Lock()
 
 STUDIO_H3VLM_MAC_MLX: advanced engine setting; built-in default retained
 
-Scope: image. Class: advanced.
+Scope: image, studio. Class: advanced.
 
 Source: `vendor/studio/studio/mlx_model_presets.py:11`. Unset read: Wrapper/conditional default: see the literal call and consumer below.
 
@@ -70368,7 +77928,7 @@ def _repo_dir() -> Path:
 
 STUDIO_HOST: advanced engine setting; built-in default retained
 
-Scope: image. Class: advanced.
+Scope: image, studio. Class: advanced.
 
 Source: `vendor/studio/studio/config.py:139`. Unset read: Wrapper/conditional default: see the literal call and consumer below.
 
@@ -70944,7 +78504,7 @@ Source: `vendor/studio/studio/adapter.py:1630`. Unset read: ''.
 
 STUDIO_K27_MAC_MLX: advanced engine setting; built-in default retained
 
-Scope: image. Class: advanced.
+Scope: image, studio. Class: advanced.
 
 Source: `vendor/studio/studio/mlx_model_presets.py:11`. Unset read: Wrapper/conditional default: see the literal call and consumer below.
 
@@ -70962,7 +78522,7 @@ def build_preset(model_key: str, mode: str) -> dict:
 
 STUDIO_K27_PIPELINE_LAYERS: advanced engine setting; built-in default retained
 
-Scope: image. Class: advanced.
+Scope: image, studio. Class: advanced.
 
 Source: `vendor/studio/studio/mlx_model_presets.py:11`. Unset read: Wrapper/conditional default: see the literal call and consumer below.
 
@@ -70980,7 +78540,7 @@ def build_preset(model_key: str, mode: str) -> dict:
 
 STUDIO_K27_RTX_GGUF: advanced engine setting; built-in default retained
 
-Scope: image. Class: advanced.
+Scope: image, studio. Class: advanced.
 
 Source: `vendor/studio/studio/mlx_model_presets.py:11`. Unset read: Wrapper/conditional default: see the literal call and consumer below.
 
@@ -70998,7 +78558,7 @@ def build_preset(model_key: str, mode: str) -> dict:
 
 STUDIO_K3_BIN: advanced engine setting; built-in default retained
 
-Scope: image. Class: advanced.
+Scope: image, studio. Class: advanced.
 
 Source: `vendor/studio/studio/mlx_model_presets.py:11`. Unset read: Wrapper/conditional default: see the literal call and consumer below.
 
@@ -71016,7 +78576,7 @@ def build_preset(model_key: str, mode: str) -> dict:
 
 STUDIO_K3_MAC_GGUF: advanced engine setting; built-in default retained
 
-Scope: image. Class: advanced.
+Scope: image, studio. Class: advanced.
 
 Source: `vendor/studio/studio/mlx_model_presets.py:11`. Unset read: Wrapper/conditional default: see the literal call and consumer below.
 
@@ -71034,7 +78594,7 @@ def build_preset(model_key: str, mode: str) -> dict:
 
 STUDIO_K3_RPC_PEERS: advanced engine setting; built-in default retained
 
-Scope: image. Class: advanced.
+Scope: image, studio. Class: advanced.
 
 Source: `vendor/studio/studio/mlx_model_presets.py:11`. Unset read: Wrapper/conditional default: see the literal call and consumer below.
 
@@ -71052,7 +78612,7 @@ def build_preset(model_key: str, mode: str) -> dict:
 
 STUDIO_K3_RTX_GGUF: advanced engine setting; built-in default retained
 
-Scope: image. Class: advanced.
+Scope: image, studio. Class: advanced.
 
 Source: `vendor/studio/studio/mlx_model_presets.py:11`. Unset read: Wrapper/conditional default: see the literal call and consumer below.
 
@@ -71070,7 +78630,7 @@ def build_preset(model_key: str, mode: str) -> dict:
 
 STUDIO_K3_TS: advanced engine setting; built-in default retained
 
-Scope: image. Class: advanced.
+Scope: image, studio. Class: advanced.
 
 Source: `vendor/studio/studio/mlx_model_presets.py:11`. Unset read: Wrapper/conditional default: see the literal call and consumer below.
 
@@ -71142,7 +78702,7 @@ Source: `vendor/studio/studio/config.py:175`. Unset read: str(_default_output_di
 
 STUDIO_M3_MAC_GGUF: advanced engine setting; built-in default retained
 
-Scope: image. Class: advanced.
+Scope: image, studio. Class: advanced.
 
 Source: `vendor/studio/studio/mlx_model_presets.py:37`. Unset read: Wrapper/conditional default: see the literal call and consumer below.
 
@@ -71160,7 +78720,7 @@ def build_prism_bonsai_local_preset(model_path: str) -> dict:
 
 STUDIO_M3_RTX_GGUF: advanced engine setting; built-in default retained
 
-Scope: image. Class: advanced.
+Scope: image, studio. Class: advanced.
 
 Source: `vendor/studio/studio/mlx_model_presets.py:37`. Unset read: Wrapper/conditional default: see the literal call and consumer below.
 
@@ -71178,7 +78738,7 @@ def build_prism_bonsai_local_preset(model_path: str) -> dict:
 
 STUDIO_MAC_REMOTE_HOST: advanced engine setting; built-in default retained
 
-Scope: image. Class: advanced.
+Scope: image, studio. Class: advanced.
 
 Source: `vendor/studio/studio/mlx_model_presets.py:10`. Unset read: Wrapper/conditional default: see the literal call and consumer below.
 
@@ -71196,7 +78756,7 @@ def build_preset(model_key: str, mode: str) -> dict:
 
 STUDIO_MIMO25_MAC_MLX: advanced engine setting; built-in default retained
 
-Scope: image. Class: advanced.
+Scope: image, studio. Class: advanced.
 
 Source: `vendor/studio/studio/mlx_model_presets.py:11`. Unset read: Wrapper/conditional default: see the literal call and consumer below.
 
@@ -71214,7 +78774,7 @@ def build_preset(model_key: str, mode: str) -> dict:
 
 STUDIO_MIMO25_PIPELINE_LAYERS: advanced engine setting; built-in default retained
 
-Scope: image. Class: advanced.
+Scope: image, studio. Class: advanced.
 
 Source: `vendor/studio/studio/mlx_model_presets.py:11`. Unset read: Wrapper/conditional default: see the literal call and consumer below.
 
@@ -71232,7 +78792,7 @@ def build_preset(model_key: str, mode: str) -> dict:
 
 STUDIO_MIMO25_RANK0_BUDGET_GB: advanced engine setting; built-in default retained
 
-Scope: image. Class: advanced.
+Scope: image, studio. Class: advanced.
 
 Source: `vendor/studio/studio/mlx_model_presets.py:11`. Unset read: Wrapper/conditional default: see the literal call and consumer below.
 
@@ -71250,7 +78810,7 @@ def build_preset(model_key: str, mode: str) -> dict:
 
 STUDIO_MIMO25_RANK1_BUDGET_GB: advanced engine setting; built-in default retained
 
-Scope: image. Class: advanced.
+Scope: image, studio. Class: advanced.
 
 Source: `vendor/studio/studio/mlx_model_presets.py:11`. Unset read: Wrapper/conditional default: see the literal call and consumer below.
 
@@ -71268,7 +78828,7 @@ def build_preset(model_key: str, mode: str) -> dict:
 
 STUDIO_MIMO25_RTX_GGUF: advanced engine setting; built-in default retained
 
-Scope: image. Class: advanced.
+Scope: image, studio. Class: advanced.
 
 Source: `vendor/studio/studio/mlx_model_presets.py:11`. Unset read: Wrapper/conditional default: see the literal call and consumer below.
 
@@ -71370,7 +78930,7 @@ Source: `vendor/studio/studio/config.py:170`. Unset read: str(_default_output_di
 
 STUDIO_PACKAGED: advanced engine setting; built-in default retained
 
-Scope: image. Class: advanced.
+Scope: image, studio. Class: advanced.
 
 Source: `vendor/studio/studio/paths.py:24`. Unset read: Wrapper/conditional default: see the literal call and consumer below.
 
@@ -71388,7 +78948,19 @@ def _env_bool(name: str, default: bool=False) -> bool:
 
 STUDIO_PAIR_TOKEN: advanced engine setting; built-in default retained
 
-Scope: studio. Class: advanced.
+Scope: mac-mlx, studio. Class: advanced.
+
+Source: `vendor/mac-mlx/mlx_vlm/rpc_pipeline.py:434`. Unset read: ''.
+
+```text
+            if rank == 1 and descriptor.exists():
+                remote = json.loads(descriptor.read_text())
+                remote["token"] = os.environ.get("STUDIO_PAIR_TOKEN", "")
+            loaded = load_native(model_path, pipeline_group=group, remote=remote)
+            # The first-stage worker receives token IDs and encoded features.
+            # It needs neither the media processor nor PyTorch dependencies.
+            processor = (load_processor(model_path, True, eos_token_ids=raw_config.get("eos_token_id"))
+```
 
 Source: `vendor/studio/studio/config.py:79`. Unset read: None.
 
@@ -71406,7 +78978,7 @@ def env_pair_token() -> Optional[str]:
 
 STUDIO_PORT: advanced engine setting; built-in default retained
 
-Scope: image. Class: advanced.
+Scope: image, studio. Class: advanced.
 
 Source: `vendor/studio/studio/config.py:140`. Unset read: Wrapper/conditional default: see the literal call and consumer below.
 
@@ -71454,7 +79026,7 @@ Source: `vendor/engines/cosmos_windows/gguf_qat/train_glm_qat_coordinate.py:84`.
 
 STUDIO_QWEN38_MAC_MLX: advanced engine setting; built-in default retained
 
-Scope: image. Class: advanced.
+Scope: image, studio. Class: advanced.
 
 Source: `vendor/studio/studio/mlx_model_presets.py:46`. Unset read: Wrapper/conditional default: see the literal call and consumer below.
 
@@ -71472,7 +79044,7 @@ def build_qwen38_mlx_serve_preset() -> dict:
 
 STUDIO_QWEN38_UNCENSORED_MAC_MLX: advanced engine setting; built-in default retained
 
-Scope: image. Class: advanced.
+Scope: image, studio. Class: advanced.
 
 Source: `vendor/studio/studio/mlx_model_presets.py:52`. Unset read: Wrapper/conditional default: see the literal call and consumer below.
 
@@ -71490,7 +79062,7 @@ def build_qwen38_uncensored_preset(*, ctx: int=512000) -> dict:
 
 STUDIO_REAL_LLM: advanced engine setting; built-in default retained
 
-Scope: image. Class: advanced.
+Scope: image, studio. Class: advanced.
 
 Source: `vendor/studio/studio/config.py:148`. Unset read: Wrapper/conditional default: see the literal call and consumer below.
 
@@ -71508,7 +79080,7 @@ Source: `vendor/studio/studio/config.py:148`. Unset read: Wrapper/conditional de
 
 STUDIO_REAL_TRAIN: advanced engine setting; built-in default retained
 
-Scope: image. Class: advanced.
+Scope: image, studio. Class: advanced.
 
 Source: `vendor/studio/studio/config.py:149`. Unset read: Wrapper/conditional default: see the literal call and consumer below.
 
@@ -71526,7 +79098,7 @@ Source: `vendor/studio/studio/config.py:149`. Unset read: Wrapper/conditional de
 
 STUDIO_REASONER_MAX_NEW_TOKENS: advanced engine setting; built-in default retained
 
-Scope: image. Class: advanced.
+Scope: image, studio. Class: advanced.
 
 Source: `vendor/studio/studio/config.py:154`. Unset read: Wrapper/conditional default: see the literal call and consumer below.
 
@@ -71646,7 +79218,7 @@ def _sdedit_i2i_enabled(backend: str) -> bool:
 
 Semicolon separated Windows volumes excluded from model/cache placement; empty excludes none. Configure via env_overrides.
 
-Scope: studio, image, video. Class: advanced.
+Scope: image, studio, video. Class: advanced.
 
 Source: `vendor/studio/studio/config.py:108`. Unset read: ''.
 
@@ -72024,13 +79596,13 @@ Source: `vendor/studio/studio/adapter.py:1864`. Unset read: '6'.
 
 Runtime-local cache/temp directory; no model download is performed.
 
-Scope: ds4-win, image, mac-ds4, mlx-serve, rtx-llama, studio, video. Class: preset.
+Scope: ds4-win, image, mac-ds4, mlx-serve, rtx-llama, studio, video, mac-mlx, mac-llama, mac-mference. Class: preset.
 
 ### TEMP
 
 Runtime-local cache/temp directory; no model download is performed.
 
-Scope: ds4-win, image, mac-ds4, mlx-serve, rtx-llama, studio, video. Class: preset.
+Scope: ds4-win, image, mac-ds4, mlx-serve, rtx-llama, studio, video, mac-mlx, mac-llama, mac-mference. Class: preset.
 
 Source: `engines/streaming-llama/prefill_llama.cpp/src/llama-context.cpp:5343`. Unset read: NULL from getenv; the literal consumer below supplies any fallback.
 
@@ -72072,7 +79644,7 @@ Source: `vendor/engines/cosmos_windows/validate_reasoner.py:66`. Unset read: '/t
 
 TERM: advanced engine setting; built-in default retained
 
-Scope: ds4-win, mac-ds4, rtx-llama. Class: advanced.
+Scope: ds4-win, mac-ds4, mac-mlx, rtx-llama. Class: advanced.
 
 Source: `engines/ds4-mac/linenoise.c:595`. Unset read: NULL from getenv; the literal consumer below supplies any fallback.
 
@@ -72110,11 +79682,23 @@ Source: `engines/streaming-llama/prefill_llama.cpp/common/common.cpp:1041`. Unse
     }
 ```
 
+Source: `vendor/mac-mlx/mlx_vlm/generate/diffusion.py:69`. Unset read: 'xterm'.
+
+```text
+
+def _supports_in_place_output() -> bool:
+    return os.isatty(1) and os.environ.get("TERM", "xterm") != "dumb"
+
+
+def _format_diffusion_draft_line(
+    response: GenerationResult,
+```
+
 ### TMP
 
 Runtime-local cache/temp directory; no model download is performed.
 
-Scope: ds4-win, image, mac-ds4, mlx-serve, rtx-llama, studio, video. Class: preset.
+Scope: ds4-win, image, mac-ds4, mlx-serve, rtx-llama, studio, video, mac-mlx, mac-llama, mac-mference. Class: preset.
 
 Source: `engines/streaming-llama/prefill_llama.cpp/src/llama-context.cpp:5341`. Unset read: NULL from getenv; the literal consumer below supplies any fallback.
 
@@ -72156,7 +79740,7 @@ Source: `engines/streaming-llama/prefill_llama.cpp/tools/server/server-context.c
 
 Runtime-local cache/temp directory; no model download is performed.
 
-Scope: ds4-win, image, mac-ds4, mlx-serve, rtx-llama, studio, video. Class: preset.
+Scope: ds4-win, image, mac-ds4, mlx-serve, rtx-llama, studio, video, mac-mlx, mac-llama, mac-mference. Class: preset.
 
 ### TORCHDYNAMO_DISABLE
 
@@ -72204,7 +79788,7 @@ Source: `vendor/engines/cosmos_windows/validate_reasoner.py:31`. Unset read: '1'
 
 Runtime-local cache/temp directory; no model download is performed.
 
-Scope: ds4-win, image, mac-ds4, mlx-serve, rtx-llama, studio, video. Class: preset.
+Scope: ds4-win, image, mac-ds4, mlx-serve, rtx-llama, studio, video, mac-mlx, mac-llama, mac-mference. Class: preset.
 
 ### TORCH_COMPILE_DISABLE
 
@@ -72264,13 +79848,13 @@ Source: `vendor/engines/cosmos_windows/weight_streaming/magi2_refiner_probe.py:1
 
 Runtime-local cache/temp directory; no model download is performed.
 
-Scope: ds4-win, image, mac-ds4, mlx-serve, rtx-llama, studio, video. Class: preset.
+Scope: ds4-win, image, mac-ds4, mlx-serve, rtx-llama, studio, video, mac-mlx, mac-llama, mac-mference. Class: preset.
 
 ### TORCH_HOME
 
 Runtime-local cache/temp directory; no model download is performed.
 
-Scope: ds4-win, image, mac-ds4, mlx-serve, rtx-llama, studio, video. Class: preset.
+Scope: ds4-win, image, mac-ds4, mlx-serve, rtx-llama, studio, video, mac-mlx, mac-llama, mac-mference. Class: preset.
 
 Source: `vendor/engines/cosmos_windows/weight_streaming/trellis_backend.py:236`. Unset read: ''.
 
@@ -72288,7 +79872,7 @@ Source: `vendor/engines/cosmos_windows/weight_streaming/trellis_backend.py:236`.
 
 Runtime-local cache/temp directory; no model download is performed.
 
-Scope: ds4-win, image, mac-ds4, mlx-serve, rtx-llama, studio, video. Class: preset.
+Scope: ds4-win, image, mac-ds4, mlx-serve, rtx-llama, studio, video, mac-mlx, mac-llama, mac-mference. Class: preset.
 
 ### TRANSFORMERS_OFFLINE
 
@@ -72312,7 +79896,7 @@ Source: `vendor/engines/cosmos_windows/hunyuan_gen.py:750`. Unset read: '1'.
 
 Runtime-local cache/temp directory; no model download is performed.
 
-Scope: ds4-win, image, mac-ds4, mlx-serve, rtx-llama, studio, video. Class: preset.
+Scope: ds4-win, image, mac-ds4, mlx-serve, rtx-llama, studio, video, mac-mlx, mac-llama, mac-mference. Class: preset.
 
 ### TTS_FRAMES
 
@@ -72320,11 +79904,47 @@ tts frames: engine setting; built-in default retained
 
 Scope: mlx-serve. Class: advanced.
 
+Source: `engines/mlx-serve/src/tts.zig:3310`. Unset read: NULL from getenv; the literal consumer below supplies any fallback.
+
+```text
+    const allocator = std.testing.allocator;
+
+    const n_frames: u32 = if (std.c.getenv("TTS_FRAMES")) |v|
+        std.fmt.parseInt(u32, std.mem.span(v), 10) catch 24
+    else
+        24;
+
+```
+
 ### TTS_INPUT_IDS
 
 tts input ids: engine setting; built-in default retained
 
 Scope: mlx-serve. Class: advanced.
+
+Source: `engines/mlx-serve/src/tts.zig:3306`. Unset read: NULL from getenv; the literal consumer below supplies any fallback.
+
+```text
+test "talker+predictor reproduce greedy oracle codes" {
+    const model_dir = std.mem.span(std.c.getenv("TTS_TEST_MODEL") orelse return error.SkipZigTest);
+    const ids_path = std.mem.span(std.c.getenv("TTS_INPUT_IDS") orelse return error.SkipZigTest);
+    const codes_path = std.mem.span(std.c.getenv("TTS_REF_CODES") orelse return error.SkipZigTest);
+    const allocator = std.testing.allocator;
+
+    const n_frames: u32 = if (std.c.getenv("TTS_FRAMES")) |v|
+```
+
+Source: `engines/mlx-serve/src/tts.zig:3503`. Unset read: NULL from getenv; the literal consumer below supplies any fallback.
+
+```text
+test "end-to-end native TTS produces non-silent audio" {
+    const model_dir = std.mem.span(std.c.getenv("TTS_TEST_MODEL") orelse return error.SkipZigTest);
+    const ids_path = std.mem.span(std.c.getenv("TTS_INPUT_IDS") orelse return error.SkipZigTest);
+    const allocator = std.testing.allocator;
+    const io = std.Io.Threaded.global_single_threaded.io();
+
+    const ids = try readI32File(io, allocator, ids_path);
+```
 
 ### TTS_PARITY_8BIT
 
@@ -72332,11 +79952,35 @@ tts parity 8bit: engine setting; built-in default retained
 
 Scope: mlx-serve. Class: advanced.
 
+Source: `engines/mlx-serve/src/tts.zig:3628`. Unset read: NULL from getenv; the literal consumer below supplies any fallback.
+
+```text
+test "8-bit checkpoint parity vs bf16 (greedy, cloned voice)" {
+    const bf16_dir = std.mem.span(std.c.getenv("TTS_PARITY_BF16") orelse return error.SkipZigTest);
+    const q8_dir = std.mem.span(std.c.getenv("TTS_PARITY_8BIT") orelse return error.SkipZigTest);
+    const allocator = std.testing.allocator;
+    const io = std.Io.Threaded.global_single_threaded.io();
+    const s = mlx.mlx_default_gpu_stream_new();
+    defer _ = mlx.mlx_stream_free(s);
+```
+
 ### TTS_PARITY_BF16
 
 tts parity bf16: engine setting; built-in default retained
 
 Scope: mlx-serve. Class: advanced.
+
+Source: `engines/mlx-serve/src/tts.zig:3627`. Unset read: NULL from getenv; the literal consumer below supplies any fallback.
+
+```text
+//   TTS_PARITY_BF16 = bf16 model dir; TTS_PARITY_8BIT = 8-bit model dir
+test "8-bit checkpoint parity vs bf16 (greedy, cloned voice)" {
+    const bf16_dir = std.mem.span(std.c.getenv("TTS_PARITY_BF16") orelse return error.SkipZigTest);
+    const q8_dir = std.mem.span(std.c.getenv("TTS_PARITY_8BIT") orelse return error.SkipZigTest);
+    const allocator = std.testing.allocator;
+    const io = std.Io.Threaded.global_single_threaded.io();
+    const s = mlx.mlx_default_gpu_stream_new();
+```
 
 ### TTS_QUANT_TEST_MODEL
 
@@ -72344,11 +79988,35 @@ tts quant test model: engine setting; built-in default retained
 
 Scope: mlx-serve. Class: advanced.
 
+Source: `engines/mlx-serve/src/tts.zig:3585`. Unset read: NULL from getenv; the literal consumer below supplies any fallback.
+
+```text
+//   TTS_QUANT_TEST_MODEL = 8-bit model dir
+test "8-bit quantized checkpoint loads and produces non-silent audio" {
+    const model_dir = std.mem.span(std.c.getenv("TTS_QUANT_TEST_MODEL") orelse return error.SkipZigTest);
+    const allocator = std.testing.allocator;
+    const io = std.Io.Threaded.global_single_threaded.io();
+    const s = mlx.mlx_default_gpu_stream_new();
+    defer _ = mlx.mlx_stream_free(s);
+```
+
 ### TTS_REF_AUDIO
 
 tts ref audio: engine setting; built-in default retained
 
 Scope: mlx-serve. Class: advanced.
+
+Source: `engines/mlx-serve/src/tts.zig:3375`. Unset read: NULL from getenv; the literal consumer below supplies any fallback.
+
+```text
+    const model_dir = std.mem.span(std.c.getenv("TTS_TEST_MODEL") orelse return error.SkipZigTest);
+    const codes_path = std.mem.span(std.c.getenv("TTS_REF_CODES") orelse return error.SkipZigTest);
+    const audio_path = std.mem.span(std.c.getenv("TTS_REF_AUDIO") orelse return error.SkipZigTest);
+    const allocator = std.testing.allocator;
+    const io = std.Io.Threaded.global_single_threaded.io();
+
+    const ref_codes = try readI32File(io, allocator, codes_path);
+```
 
 ### TTS_REF_CODES
 
@@ -72356,11 +80024,47 @@ tts ref codes: engine setting; built-in default retained
 
 Scope: mlx-serve. Class: advanced.
 
+Source: `engines/mlx-serve/src/tts.zig:3307`. Unset read: NULL from getenv; the literal consumer below supplies any fallback.
+
+```text
+    const model_dir = std.mem.span(std.c.getenv("TTS_TEST_MODEL") orelse return error.SkipZigTest);
+    const ids_path = std.mem.span(std.c.getenv("TTS_INPUT_IDS") orelse return error.SkipZigTest);
+    const codes_path = std.mem.span(std.c.getenv("TTS_REF_CODES") orelse return error.SkipZigTest);
+    const allocator = std.testing.allocator;
+
+    const n_frames: u32 = if (std.c.getenv("TTS_FRAMES")) |v|
+        std.fmt.parseInt(u32, std.mem.span(v), 10) catch 24
+```
+
+Source: `engines/mlx-serve/src/tts.zig:3374`. Unset read: NULL from getenv; the literal consumer below supplies any fallback.
+
+```text
+test "codec decoder reproduces reference audio" {
+    const model_dir = std.mem.span(std.c.getenv("TTS_TEST_MODEL") orelse return error.SkipZigTest);
+    const codes_path = std.mem.span(std.c.getenv("TTS_REF_CODES") orelse return error.SkipZigTest);
+    const audio_path = std.mem.span(std.c.getenv("TTS_REF_AUDIO") orelse return error.SkipZigTest);
+    const allocator = std.testing.allocator;
+    const io = std.Io.Threaded.global_single_threaded.io();
+
+```
+
 ### TTS_SPK_EMB
 
 tts spk emb: engine setting; built-in default retained
 
 Scope: mlx-serve. Class: advanced.
+
+Source: `engines/mlx-serve/src/tts.zig:3430`. Unset read: NULL from getenv; the literal consumer below supplies any fallback.
+
+```text
+    const model_dir = std.mem.span(std.c.getenv("TTS_TEST_MODEL") orelse return error.SkipZigTest);
+    const ref_path = std.mem.span(std.c.getenv("TTS_SPK_REF") orelse return error.SkipZigTest);
+    const emb_path = std.mem.span(std.c.getenv("TTS_SPK_EMB") orelse return error.SkipZigTest);
+    const allocator = std.testing.allocator;
+    const io = std.Io.Threaded.global_single_threaded.io();
+
+    const ref = try readF32File(io, allocator, ref_path);
+```
 
 ### TTS_SPK_MEL
 
@@ -72368,11 +80072,35 @@ tts spk mel: engine setting; built-in default retained
 
 Scope: mlx-serve. Class: advanced.
 
+Source: `engines/mlx-serve/src/tts.zig:3448`. Unset read: NULL from getenv; the literal consumer below supplies any fallback.
+
+```text
+    // Optional: validate the (deterministic, f32) mel-spectrogram in isolation,
+    // to separate a mel bug from bf16 ECAPA drift.
+    if (std.c.getenv("TTS_SPK_MEL")) |mp| {
+        const mel_oracle = try readF32File(io, allocator, std.mem.span(mp));
+        defer allocator.free(mel_oracle);
+        const mel = try melSpectrogram(allocator, ref, enc.mel_basis, enc.hann, s);
+        defer _ = mlx.mlx_array_free(mel);
+```
+
 ### TTS_SPK_REF
 
 tts spk ref: engine setting; built-in default retained
 
 Scope: mlx-serve. Class: advanced.
+
+Source: `engines/mlx-serve/src/tts.zig:3429`. Unset read: NULL from getenv; the literal consumer below supplies any fallback.
+
+```text
+test "speaker encoder (ECAPA-TDNN) matches the Python oracle" {
+    const model_dir = std.mem.span(std.c.getenv("TTS_TEST_MODEL") orelse return error.SkipZigTest);
+    const ref_path = std.mem.span(std.c.getenv("TTS_SPK_REF") orelse return error.SkipZigTest);
+    const emb_path = std.mem.span(std.c.getenv("TTS_SPK_EMB") orelse return error.SkipZigTest);
+    const allocator = std.testing.allocator;
+    const io = std.Io.Threaded.global_single_threaded.io();
+
+```
 
 ### TTS_TEST_MODEL
 
@@ -72380,11 +80108,155 @@ tts test model: engine setting; built-in default retained
 
 Scope: mlx-serve. Class: advanced.
 
+Source: `engines/mlx-serve/src/tts.zig:3305`. Unset read: NULL from getenv; the literal consumer below supplies any fallback.
+
+```text
+//   TTS_FRAMES     = optional number of frames to check (default 24)
+test "talker+predictor reproduce greedy oracle codes" {
+    const model_dir = std.mem.span(std.c.getenv("TTS_TEST_MODEL") orelse return error.SkipZigTest);
+    const ids_path = std.mem.span(std.c.getenv("TTS_INPUT_IDS") orelse return error.SkipZigTest);
+    const codes_path = std.mem.span(std.c.getenv("TTS_REF_CODES") orelse return error.SkipZigTest);
+    const allocator = std.testing.allocator;
+
+```
+
+Source: `engines/mlx-serve/src/tts.zig:3373`. Unset read: NULL from getenv; the literal consumer below supplies any fallback.
+
+```text
+//   TTS_TEST_MODEL = model dir; TTS_REF_CODES = [T,16] int32; TTS_REF_AUDIO = f32 waveform
+test "codec decoder reproduces reference audio" {
+    const model_dir = std.mem.span(std.c.getenv("TTS_TEST_MODEL") orelse return error.SkipZigTest);
+    const codes_path = std.mem.span(std.c.getenv("TTS_REF_CODES") orelse return error.SkipZigTest);
+    const audio_path = std.mem.span(std.c.getenv("TTS_REF_AUDIO") orelse return error.SkipZigTest);
+    const allocator = std.testing.allocator;
+    const io = std.Io.Threaded.global_single_threaded.io();
+```
+
+Source: `engines/mlx-serve/src/tts.zig:3428`. Unset read: NULL from getenv; the literal consumer below supplies any fallback.
+
+```text
+//   TTS_TEST_MODEL = model dir; TTS_SPK_REF = ref audio f32; TTS_SPK_EMB = oracle [enc_dim] f32
+test "speaker encoder (ECAPA-TDNN) matches the Python oracle" {
+    const model_dir = std.mem.span(std.c.getenv("TTS_TEST_MODEL") orelse return error.SkipZigTest);
+    const ref_path = std.mem.span(std.c.getenv("TTS_SPK_REF") orelse return error.SkipZigTest);
+    const emb_path = std.mem.span(std.c.getenv("TTS_SPK_EMB") orelse return error.SkipZigTest);
+    const allocator = std.testing.allocator;
+    const io = std.Io.Threaded.global_single_threaded.io();
+```
+
+Source: `engines/mlx-serve/src/tts.zig:3502`. Unset read: NULL from getenv; the literal consumer below supplies any fallback.
+
+```text
+//   TTS_TEST_MODEL, TTS_INPUT_IDS, TTS_WAV_OUT (output path, optional)
+test "end-to-end native TTS produces non-silent audio" {
+    const model_dir = std.mem.span(std.c.getenv("TTS_TEST_MODEL") orelse return error.SkipZigTest);
+    const ids_path = std.mem.span(std.c.getenv("TTS_INPUT_IDS") orelse return error.SkipZigTest);
+    const allocator = std.testing.allocator;
+    const io = std.Io.Threaded.global_single_threaded.io();
+
+```
+
+Source: `engines/mlx-serve/src/tts.zig:3549`. Unset read: NULL from getenv; the literal consumer below supplies any fallback.
+
+```text
+// full WAV comes out. Gated on TTS_TEST_MODEL.
+test "Synthesizer: native text to WAV" {
+    const model_dir = std.mem.span(std.c.getenv("TTS_TEST_MODEL") orelse return error.SkipZigTest);
+    const allocator = std.testing.allocator;
+    const io = std.Io.Threaded.global_single_threaded.io();
+    const s = mlx.mlx_default_gpu_stream_new();
+    defer _ = mlx.mlx_stream_free(s);
+```
+
+Source: `engines/mlx-serve/src/tts.zig:3790`. Unset read: NULL from getenv; the literal consumer below supplies any fallback.
+
+```text
+//   TTS_TEST_MODEL = model dir (any Qwen3-TTS -Base checkpoint)
+test "spk cache: cached path skips encoder, bit-identical to uncached" {
+    const model_dir = std.mem.span(std.c.getenv("TTS_TEST_MODEL") orelse return error.SkipZigTest);
+    const allocator = std.testing.allocator;
+    const io = std.Io.Threaded.global_single_threaded.io();
+    const s = mlx.mlx_default_gpu_stream_new();
+    defer _ = mlx.mlx_stream_free(s);
+```
+
+Source: `engines/mlx-serve/src/tts.zig:3838`. Unset read: NULL from getenv; the literal consumer below supplies any fallback.
+
+```text
+    // resolveSpeakerEmbedding chokepoint warmSpeaker uses, so a divergence
+    // between warm and synthesis keying is structurally impossible.
+    const model_dir = std.mem.span(std.c.getenv("TTS_TEST_MODEL") orelse return error.SkipZigTest);
+    const allocator = std.testing.allocator;
+    const io = std.Io.Threaded.global_single_threaded.io();
+    const s = mlx.mlx_default_gpu_stream_new();
+    defer _ = mlx.mlx_stream_free(s);
+```
+
+Source: `engines/mlx-serve/src/tts.zig:3913`. Unset read: NULL from getenv; the literal consumer below supplies any fallback.
+
+```text
+//   TTS_TEST_MODEL = model dir (any Qwen3-TTS -Base checkpoint)
+test "gpu predict: generateCodes byte-identical to host predictor loop" {
+    const model_dir = std.mem.span(std.c.getenv("TTS_TEST_MODEL") orelse return error.SkipZigTest);
+    const allocator = std.testing.allocator;
+    const io = std.Io.Threaded.global_single_threaded.io();
+    const s = mlx.mlx_default_gpu_stream_new();
+    defer _ = mlx.mlx_stream_free(s);
+```
+
+Source: `engines/mlx-serve/src/tts.zig:3965`. Unset read: NULL from getenv; the literal consumer below supplies any fallback.
+
+```text
+//   TTS_TEST_MODEL = model dir (any Qwen3-TTS -Base checkpoint)
+test "compiled chain: greedy codes agree with the lazy chain within band" {
+    const model_dir = std.mem.span(std.c.getenv("TTS_TEST_MODEL") orelse return error.SkipZigTest);
+    const allocator = std.testing.allocator;
+    const io = std.Io.Threaded.global_single_threaded.io();
+    const s = mlx.mlx_default_gpu_stream_new();
+    defer _ = mlx.mlx_stream_free(s);
+```
+
+Source: `engines/mlx-serve/src/tts.zig:4011`. Unset read: NULL from getenv; the literal consumer below supplies any fallback.
+
+```text
+//   TTS_TEST_MODEL = model dir (any Qwen3-TTS -Base checkpoint)
+test "cached predictor: greedy codes agree with full re-forward within band" {
+    const model_dir = std.mem.span(std.c.getenv("TTS_TEST_MODEL") orelse return error.SkipZigTest);
+    const allocator = std.testing.allocator;
+    const io = std.Io.Threaded.global_single_threaded.io();
+    const s = mlx.mlx_default_gpu_stream_new();
+    defer _ = mlx.mlx_stream_free(s);
+```
+
 ### TTS_TRACE
 
 tts trace: engine setting; built-in default retained
 
 Scope: mlx-serve. Class: advanced.
+
+Source: `engines/mlx-serve/src/tts.zig:1166`. Unset read: NULL from getenv; the literal consumer below supplies any fallback.
+
+```text
+                    log.info("[tts] GPU-chained code predictor engaged (1 sync/frame)\n", .{});
+                }
+                if (std.c.getenv("TTS_TRACE") != null and frame < 60) std.debug.print("{d} ", .{frame_codes[0]});
+                if (frame_codes[0] == @as(u32, @intCast(cfg.codec_eos))) {
+                    _ = mlx.mlx_array_free(next_input);
+                    break;
+                }
+```
+
+Source: `engines/mlx-serve/src/tts.zig:1184`. Unset read: NULL from getenv; the literal consumer below supplies any fallback.
+
+```text
+            talker_ns += @intCast(pt0.untilNow(io_prof, .boot).nanoseconds);
+
+            if (std.c.getenv("TTS_TRACE") != null and frame < 60) std.debug.print("{d} ", .{code0});
+            if (code0 == @as(u32, @intCast(cfg.codec_eos))) break;
+
+            // Track unique code0 for the next step's repetition penalty.
+            const c0i: i32 = @intCast(code0);
+```
 
 ### TTS_WAV_OUT
 
@@ -72392,11 +80264,23 @@ tts wav out: engine setting; built-in default retained
 
 Scope: mlx-serve. Class: advanced.
 
+Source: `engines/mlx-serve/src/tts.zig:3531`. Unset read: NULL from getenv; the literal consumer below supplies any fallback.
+
+```text
+    try std.testing.expect(peak > 0.02);
+
+    if (std.c.getenv("TTS_WAV_OUT")) |out_c| {
+        const bytes = try wav_mod.encodePcm16Mono(allocator, wav_samples, 24000);
+        defer allocator.free(bytes);
+        const out = std.mem.span(out_c);
+        const f = try std.Io.Dir.createFileAbsolute(io, out, .{});
+```
+
 ### UV_CACHE_DIR
 
 Runtime-local cache/temp directory; no model download is performed.
 
-Scope: ds4-win, image, mac-ds4, mlx-serve, rtx-llama, studio, video. Class: preset.
+Scope: ds4-win, image, mac-ds4, mlx-serve, rtx-llama, studio, video, mac-mlx, mac-llama, mac-mference. Class: preset.
 
 ### VIDEOX_ATTENTION_TYPE
 
@@ -72702,7 +80586,7 @@ Source: `vendor/engines/cosmos_windows/weight_streaming/backends.py:82`. Unset r
 
 Runtime-local cache/temp directory; no model download is performed.
 
-Scope: ds4-win, image, mac-ds4, mlx-serve, rtx-llama, studio, video. Class: preset.
+Scope: ds4-win, image, mac-ds4, mlx-serve, rtx-llama, studio, video, mac-mlx, mac-llama, mac-mference. Class: preset.
 
 Source: `engines/streaming-llama/prefill_llama.cpp/common/common.cpp:943`. Unset read: NULL from getenv; the literal consumer below supplies any fallback.
 
@@ -72734,17 +80618,41 @@ xdg config home: engine setting; built-in default retained
 
 Scope: mlx-serve. Class: advanced.
 
+Source: `engines/mlx-serve/app/Sources/MLXServe/Services/CLILauncher.swift:418`. Unset read: Wrapper/conditional default: see the literal call and consumer below.
+
+```text
+            try? FileManager.default.createDirectory(atPath: cliDir, withIntermediateDirectories: true)
+            let userCli: String
+            if let xdg = ProcessInfo.processInfo.environment["XDG_CONFIG_HOME"], !xdg.isEmpty {
+                userCli = (xdg as NSString).appendingPathComponent("opencode/cli.json")
+            } else {
+                userCli = NSString(string: "~/.config/opencode/cli.json").expandingTildeInPath
+            }
+```
+
+Source: `engines/mlx-serve/src/launch.zig:683`. Unset read: NULL from getenv; the literal consumer below supplies any fallback.
+
+```text
+
+fn userOpencodeCliPath(allocator: std.mem.Allocator) ![]u8 {
+    if (std.c.getenv("XDG_CONFIG_HOME")) |xdg| {
+        const dir = std.mem.span(xdg);
+        if (dir.len > 0) return std.fmt.allocPrint(allocator, "{s}/opencode/cli.json", .{dir});
+    }
+    return std.fmt.allocPrint(allocator, "{s}/.config/opencode/cli.json", .{homeDir()});
+```
+
 ### ZIG_GLOBAL_CACHE_DIR
 
 Runtime-local cache/temp directory; no model download is performed.
 
-Scope: ds4-win, image, mac-ds4, mlx-serve, rtx-llama, studio, video. Class: preset.
+Scope: ds4-win, image, mac-ds4, mlx-serve, rtx-llama, studio, video, mac-mlx, mac-llama, mac-mference. Class: preset.
 
 ### ZIG_LOCAL_CACHE_DIR
 
 Runtime-local cache/temp directory; no model download is performed.
 
-Scope: ds4-win, image, mac-ds4, mlx-serve, rtx-llama, studio, video. Class: preset.
+Scope: ds4-win, image, mac-ds4, mlx-serve, rtx-llama, studio, video, mac-mlx, mac-llama, mac-mference. Class: preset.
 
 ### ZIMAGE_ALLOW_NON_DIRECTSTORAGE
 
@@ -72876,7 +80784,7 @@ Source: `vendor/engines/cosmos_windows/weight_streaming/zimage_backend.py:43`. U
 
 BOOGU_ALLOW_NON_DIRECTSTORAGE: explicit engine setting; inherited values are cleared and the native default is retained.
 
-Scope: image, video. Class: advanced.
+Scope: image, studio, video. Class: advanced.
 
 Source: `vendor/studio/studio/boogu_krea.py:415`. Unset read: None.
 
@@ -72912,7 +80820,7 @@ Source: `engines/ds4-mac/ds4_native_session_setup.inc:25`. Unset read: Wrapper/c
 
 KREA2_ALLOW_NON_DIRECTSTORAGE: explicit engine setting; inherited values are cleared and the native default is retained.
 
-Scope: image, video. Class: advanced.
+Scope: image, studio, video. Class: advanced.
 
 Source: `vendor/studio/studio/krea2_diffusion.py:860`. Unset read: None.
 
@@ -72930,7 +80838,7 @@ Source: `vendor/studio/studio/krea2_diffusion.py:860`. Unset read: None.
 
 STUDIO_COMFYUI_MODELS: explicit engine setting; inherited values are cleared and the native default is retained.
 
-Scope: image, video. Class: advanced.
+Scope: image, studio, video. Class: advanced.
 
 Source: `vendor/studio/studio/krea2_diffusion.py:16`. Unset read: None.
 
@@ -72948,7 +80856,7 @@ def _comfy_models_base() -> Path:
 
 STUDIO_H3_CONTINUITY_PROJECTION: explicit engine setting; inherited values are cleared and the native default is retained.
 
-Scope: image, video. Class: advanced.
+Scope: image, studio, video. Class: advanced.
 
 Source: `vendor/studio/studio/h3_live.py:196`. Unset read: ''.
 
@@ -72966,7 +80874,7 @@ Source: `vendor/studio/studio/h3_live.py:196`. Unset read: ''.
 
 STUDIO_H3_CONTINUITY_PROJECTION_ALPHA: explicit engine setting; inherited values are cleared and the native default is retained.
 
-Scope: image, video. Class: advanced.
+Scope: image, studio, video. Class: advanced.
 
 Source: `vendor/studio/studio/h3_live.py:199`. Unset read: '1'.
 
@@ -72984,7 +80892,7 @@ Source: `vendor/studio/studio/h3_live.py:199`. Unset read: '1'.
 
 STUDIO_H3_STEP_ADAPTERS: explicit engine setting; inherited values are cleared and the native default is retained.
 
-Scope: image, video. Class: advanced.
+Scope: image, studio, video. Class: advanced.
 
 Source: `vendor/studio/studio/h3_model_profiles.py:51`. Unset read: ''.
 
@@ -73002,7 +80910,7 @@ def profile_adapters(profile: H3ModelProfile, requested) -> tuple:
 
 STUDIO_KREA2_DIRECT_MIN_FREE_GB: explicit engine setting; inherited values are cleared and the native default is retained.
 
-Scope: image, video. Class: advanced.
+Scope: image, studio, video. Class: advanced.
 
 Source: `vendor/studio/studio/krea2_diffusion.py:1272`. Unset read: raw_need.
 
@@ -73020,7 +80928,7 @@ Source: `vendor/studio/studio/krea2_diffusion.py:1272`. Unset read: raw_need.
 
 STUDIO_KREA2_DIT: explicit engine setting; inherited values are cleared and the native default is retained.
 
-Scope: image, video. Class: advanced.
+Scope: image, studio, video. Class: advanced.
 
 Source: `vendor/studio/studio/krea2_diffusion.py:34`. Unset read: None.
 
@@ -73038,7 +80946,7 @@ def krea2_available() -> bool:
 
 STUDIO_KREA2_DTYPE: explicit engine setting; inherited values are cleared and the native default is retained.
 
-Scope: image, video. Class: advanced.
+Scope: image, studio, video. Class: advanced.
 
 Source: `vendor/studio/studio/krea2_diffusion.py:427`. Unset read: 'float16'.
 
@@ -73056,7 +80964,7 @@ def _krea2_resident_dtype():
 
 STUDIO_KREA2_EDIT_LORA: explicit engine setting; inherited values are cleared and the native default is retained.
 
-Scope: image, video. Class: advanced.
+Scope: image, studio, video. Class: advanced.
 
 Source: `vendor/studio/studio/krea2_diffusion.py:81`. Unset read: None.
 
@@ -73074,7 +80982,7 @@ Source: `vendor/studio/studio/krea2_diffusion.py:81`. Unset read: None.
 
 STUDIO_KREA2_MIN_FREE_GB: explicit engine setting; inherited values are cleared and the native default is retained.
 
-Scope: image, video. Class: advanced.
+Scope: image, studio, video. Class: advanced.
 
 Source: `vendor/studio/studio/krea2_diffusion.py:757`. Unset read: need_gb.
 
@@ -73092,7 +81000,7 @@ def _require_free_memory(need_gb: float=55.0) -> None:
 
 STUDIO_KREA2_MPS_COMPILE: explicit engine setting; inherited values are cleared and the native default is retained.
 
-Scope: image, video. Class: advanced.
+Scope: image, studio, video. Class: advanced.
 
 Source: `vendor/studio/studio/krea2_diffusion.py:1235`. Unset read: '1'.
 
@@ -73110,7 +81018,7 @@ def _configure_krea2_regional_compile(transformer, device: str) -> bool:
 
 STUDIO_KREA2_TEXT_ENCODER: explicit engine setting; inherited values are cleared and the native default is retained.
 
-Scope: image, video. Class: advanced.
+Scope: image, studio, video. Class: advanced.
 
 Source: `vendor/studio/studio/krea2_diffusion.py:34`. Unset read: None.
 
@@ -73128,7 +81036,7 @@ def krea2_available() -> bool:
 
 STUDIO_KREA2_VAE: explicit engine setting; inherited values are cleared and the native default is retained.
 
-Scope: image, video. Class: advanced.
+Scope: image, studio, video. Class: advanced.
 
 Source: `vendor/studio/studio/krea2_diffusion.py:34`. Unset read: None.
 
@@ -73146,7 +81054,7 @@ def krea2_available() -> bool:
 
 STUDIO_KREA2_WIN_MIRROR: explicit engine setting; inherited values are cleared and the native default is retained.
 
-Scope: image, video. Class: advanced.
+Scope: image, studio, video. Class: advanced.
 
 Source: `vendor/studio/studio/krea2_diffusion.py:20`. Unset read: ''.
 
@@ -73164,7 +81072,7 @@ Source: `vendor/studio/studio/krea2_diffusion.py:20`. Unset read: ''.
 
 STUDIO_QWEN3VL_CACHE: explicit engine setting; inherited values are cleared and the native default is retained.
 
-Scope: image, video. Class: advanced.
+Scope: image, studio, video. Class: advanced.
 
 Source: `vendor/studio/studio/krea2_diffusion.py:12`. Unset read: None.
 
@@ -73182,7 +81090,7 @@ def _comfy_models_base() -> Path:
 
 STUDIO_QWEN3VL_REPO: explicit engine setting; inherited values are cleared and the native default is retained.
 
-Scope: image, video. Class: advanced.
+Scope: image, studio, video. Class: advanced.
 
 Source: `vendor/studio/studio/krea2_diffusion.py:11`. Unset read: 'Qwen/Qwen3-VL-4B-Instruct'.
 
@@ -73200,7 +81108,7 @@ def _comfy_models_base() -> Path:
 
 STUDIO_QWEN_IMAGE21_BASE: explicit engine setting; inherited values are cleared and the native default is retained.
 
-Scope: image, video. Class: advanced.
+Scope: image, studio, video. Class: advanced.
 
 Source: `vendor/studio/studio/qwen_comfy_load.py:6`. Unset read: ''.
 
@@ -73218,7 +81126,7 @@ def _block_index(target_key: str) -> int | None:
 
 STUDIO_QWEN_IMAGE21_MODEL: explicit engine setting; inherited values are cleared and the native default is retained.
 
-Scope: image, video. Class: advanced.
+Scope: image, studio, video. Class: advanced.
 
 Source: `vendor/studio/studio/qwen_image21.py:544`. Unset read: DEFAULT_MODEL_DIR.
 
@@ -73236,7 +81144,7 @@ Source: `vendor/studio/studio/qwen_image21.py:544`. Unset read: DEFAULT_MODEL_DI
 
 STUDIO_QWEN_IMAGE21_OFFLOAD: explicit engine setting; inherited values are cleared and the native default is retained.
 
-Scope: image, video. Class: advanced.
+Scope: image, studio, video. Class: advanced.
 
 Source: `vendor/studio/studio/qwen_image21.py:545`. Unset read: ''.
 
@@ -73254,7 +81162,7 @@ Source: `vendor/studio/studio/qwen_image21.py:545`. Unset read: ''.
 
 STUDIO_QWEN_IMAGE21_PACK_DIR: explicit engine setting; inherited values are cleared and the native default is retained.
 
-Scope: image, video. Class: advanced.
+Scope: image, studio, video. Class: advanced.
 
 Source: `vendor/studio/studio/qwen_block_weights.py:57`. Unset read: ''.
 
@@ -73272,7 +81180,7 @@ Source: `vendor/studio/studio/qwen_block_weights.py:57`. Unset read: ''.
 
 STUDIO_QWEN_IMAGE21_TEXT_ENCODER_8BIT: explicit engine setting; inherited values are cleared and the native default is retained.
 
-Scope: image, video. Class: advanced.
+Scope: image, studio, video. Class: advanced.
 
 Source: `vendor/studio/studio/qwen_image21.py:392`. Unset read: '1'.
 
@@ -73290,7 +81198,7 @@ Source: `vendor/studio/studio/qwen_image21.py:392`. Unset read: '1'.
 
 STUDIO_QWEN_IMAGE21_VRAM_FRACTION: explicit engine setting; inherited values are cleared and the native default is retained.
 
-Scope: image, video. Class: advanced.
+Scope: image, studio, video. Class: advanced.
 
 Source: `vendor/studio/studio/qwen_image21.py:386`. Unset read: '0.92'.
 
@@ -73308,7 +81216,7 @@ Source: `vendor/studio/studio/qwen_image21.py:386`. Unset read: '0.92'.
 
 STUDIO_QWEN_IMAGE_REPO: explicit engine setting; inherited values are cleared and the native default is retained.
 
-Scope: image, video. Class: advanced.
+Scope: image, studio, video. Class: advanced.
 
 Source: `vendor/studio/studio/krea2_diffusion.py:10`. Unset read: 'Qwen/Qwen-Image'.
 
@@ -73326,7 +81234,7 @@ KREA2_TAP_LAYERS = (2, 5, 8, 11, 14, 17, 20, 23, 26, 29, 32, 35)
 
 STUDIO_RAM_ABORT_FLOOR_GB: explicit engine setting; inherited values are cleared and the native default is retained.
 
-Scope: image, video. Class: advanced.
+Scope: image, studio, video. Class: advanced.
 
 Source: `vendor/studio/studio/safety.py:11`. Unset read: '1.0'.
 
@@ -73344,7 +81252,7 @@ def free_ram_gb() -> float:
 
 STUDIO_RAM_PREFLIGHT_FORCE: explicit engine setting; inherited values are cleared and the native default is retained.
 
-Scope: image, video. Class: advanced.
+Scope: image, studio, video. Class: advanced.
 
 Source: `vendor/studio/studio/ram_preflight.py:71`. Unset read: ''.
 
@@ -73362,7 +81270,7 @@ def wait_for_host_ram(min_free_gb: float, *, label: str='launch', timeout_s: flo
 
 STUDIO_SKIP_RAM_PREFLIGHT: explicit engine setting; inherited values are cleared and the native default is retained.
 
-Scope: image, video. Class: advanced.
+Scope: image, studio, video. Class: advanced.
 
 Source: `vendor/studio/studio/ram_preflight.py:71`. Unset read: ''.
 
@@ -73374,4 +81282,7934 @@ def wait_for_host_ram(min_free_gb: float, *, label: str='launch', timeout_s: flo
     import time as _t
     deadline = _t.monotonic() + max(0.0, float(timeout_s))
     last = best = free_host_ram_gb()
+```
+
+### APC_BLOCK_SIZE
+
+Advanced backend control APC_BLOCK_SIZE. Set explicitly only for the selected backend; its literal read and fallback are documented below.
+
+Scope: mac-mlx. Class: advanced.
+
+Source: `vendor/mac-mlx/mlx_vlm/apc.py:3855`. Unset read: DEFAULT_BLOCK_SIZE.
+
+```text
+    if os.environ.get("APC_ENABLED", "0") not in ("1", "true", "True", "yes"):
+        return None
+    block_size = int(os.environ.get("APC_BLOCK_SIZE", DEFAULT_BLOCK_SIZE))
+    num_blocks = int(os.environ.get("APC_NUM_BLOCKS", DEFAULT_NUM_BLOCKS))
+
+    disk: Optional[DiskBlockStore] = None
+    disk_path = os.environ.get("APC_DISK_PATH")
+```
+
+### APC_DEBUG
+
+Advanced backend control APC_DEBUG. Set explicitly only for the selected backend; its literal read and fallback are documented below.
+
+Scope: mac-mlx. Class: advanced.
+
+Source: `vendor/mac-mlx/mlx_vlm/generate/ar.py:2056`. Unset read: None.
+
+```text
+                    )
+                finalize()
+        if logger.isEnabledFor(logging.DEBUG) and os.environ.get("APC_DEBUG"):
+            c0 = self.prompt_cache[0] if self.prompt_cache else None
+            if c0 is not None:
+                off = getattr(c0, "offset", None)
+                lp = getattr(c0, "left_padding", None)
+```
+
+Source: `vendor/mac-mlx/mlx_vlm/generate/ar.py:2916`. Unset read: None.
+
+```text
+            n = min(self.prefill_batch_size, len(self._unprocessed_sequences))
+            sequences = self._unprocessed_sequences[:n]
+            if logger.isEnabledFor(logging.DEBUG) and os.environ.get("APC_DEBUG"):
+                logger.warning(
+                    "APC admit n=%d (pending=%d)",
+                    n,
+                    len(self._unprocessed_sequences),
+```
+
+### APC_DISK_DIRECT_MAX_OVERREAD_MB
+
+Advanced backend control APC_DISK_DIRECT_MAX_OVERREAD_MB. Set explicitly only for the selected backend; its literal read and fallback are documented below.
+
+Scope: mac-mlx. Class: advanced.
+
+Source: `vendor/mac-mlx/mlx_vlm/apc.py:844`. Unset read: '8'.
+
+```text
+        self._header_cache_max = int(os.environ.get("APC_DISK_HEADER_CACHE", 4))
+        self._direct_max_overread_bytes = int(
+            float(os.environ.get("APC_DISK_DIRECT_MAX_OVERREAD_MB", "8")) * (1 << 20)
+        )
+        # Bound layer-major shard size so disk eviction is segment-granular
+        # instead of one huge all-or-nothing prefix file. A Qwen3-VL-4B block
+        # is ~2.25 MiB, so 256 blocks is roughly a 576 MiB shard before the
+```
+
+### APC_DISK_EVAL_BLOCK_CHUNK
+
+Advanced backend control APC_DISK_EVAL_BLOCK_CHUNK. Set explicitly only for the selected backend; its literal read and fallback are documented below.
+
+Scope: mac-mlx. Class: advanced.
+
+Source: `vendor/mac-mlx/mlx_vlm/apc.py:2853`. Unset read: '8'.
+
+```text
+        # path; raise it on a known-roomy machine to claw back wall time.
+        self._disk_eval_block_chunk = max(
+            1, int(os.environ.get("APC_DISK_EVAL_BLOCK_CHUNK", "8"))
+        )
+        # Number of disk blocks to coalesce into one direct byte-range read.
+        # This is separate from eval chunking: a larger read chunk improves
+        # SSD throughput/readahead while eval still happens in small batches.
+```
+
+### APC_DISK_HEADER_CACHE
+
+Advanced backend control APC_DISK_HEADER_CACHE. Set explicitly only for the selected backend; its literal read and fallback are documented below.
+
+Scope: mac-mlx. Class: advanced.
+
+Source: `vendor/mac-mlx/mlx_vlm/apc.py:842`. Unset read: 4.
+
+```text
+        self._header_cache: "OrderedDict[Path, Tuple[dict, dict, int]]" = OrderedDict()
+        self._header_cache_lock = threading.Lock()
+        self._header_cache_max = int(os.environ.get("APC_DISK_HEADER_CACHE", 4))
+        self._direct_max_overread_bytes = int(
+            float(os.environ.get("APC_DISK_DIRECT_MAX_OVERREAD_MB", "8")) * (1 << 20)
+        )
+        # Bound layer-major shard size so disk eviction is segment-granular
+```
+
+### APC_DISK_LOAD_BLOCK_CHUNK
+
+Advanced backend control APC_DISK_LOAD_BLOCK_CHUNK. Set explicitly only for the selected backend; its literal read and fallback are documented below.
+
+Scope: mac-mlx. Class: advanced.
+
+Source: `vendor/mac-mlx/mlx_vlm/apc.py:2862`. Unset read: '256'.
+
+```text
+        # small relative to the model's recommended Apple-Silicon working set.
+        self._disk_load_block_chunk = max(
+            1, int(os.environ.get("APC_DISK_LOAD_BLOCK_CHUNK", "256"))
+        )
+        # Apple Metal has a per-process resource-count ceiling separate from
+        # byte memory. Qwen3-VL-4B stores 72 MLX tensors per APCBlock, so a
+        # very large pool can hit the ceiling before unified memory is scarce.
+```
+
+### APC_DISK_MAX_GB
+
+Advanced backend control APC_DISK_MAX_GB. Set explicitly only for the selected backend; its literal read and fallback are documented below.
+
+Scope: mac-mlx. Class: advanced.
+
+Source: `vendor/mac-mlx/mlx_vlm/apc.py:3862`. Unset read: 0.
+
+```text
+    if disk_path:
+        ns = model_namespace or os.environ.get("APC_DISK_NAMESPACE", "default")
+        max_gb = float(os.environ.get("APC_DISK_MAX_GB", 0))
+        max_bytes = int(max_gb * (1 << 30)) if max_gb > 0 else None
+        workers = int(os.environ.get("APC_DISK_WORKERS", "1"))
+        try:
+            disk = DiskBlockStore(
+```
+
+### APC_DISK_MIN_FREE_RAM_GB
+
+Advanced backend control APC_DISK_MIN_FREE_RAM_GB. Set explicitly only for the selected backend; its literal read and fallback are documented below.
+
+Scope: mac-mlx. Class: advanced.
+
+Source: `vendor/mac-mlx/mlx_vlm/apc.py:2840`. Unset read: '2.0'.
+
+```text
+        # disk speed-up. Disabled when set to 0.
+        self._disk_min_free_ram_bytes = int(
+            float(os.environ.get("APC_DISK_MIN_FREE_RAM_GB", "2.0")) * (1 << 30)
+        )
+        # Number of disk-loaded blocks to coalesce per ``mx.eval`` during
+        # warm-disk restore. The disk read itself is always serial (no
+        # thread pool, no buffering of mmap views beyond this batch); the
+```
+
+### APC_DISK_MMAP_CACHE
+
+Advanced backend control APC_DISK_MMAP_CACHE. Set explicitly only for the selected backend; its literal read and fallback are documented below.
+
+Scope: mac-mlx. Class: advanced.
+
+Source: `vendor/mac-mlx/mlx_vlm/apc.py:869`. Unset read: 2.
+
+```text
+        self._mmap_cache: "OrderedDict[Path, Tuple[dict, dict]]" = OrderedDict()
+        self._mmap_cache_lock = threading.Lock()
+        self._mmap_cache_max = int(os.environ.get("APC_DISK_MMAP_CACHE", 2))
+
+        n_orphans = self._cleanup_partials()
+        if n_orphans:
+            logger.info(
+```
+
+### APC_DISK_NAMESPACE
+
+Advanced backend control APC_DISK_NAMESPACE. Set explicitly only for the selected backend; its literal read and fallback are documented below.
+
+Scope: mac-mlx. Class: advanced.
+
+Source: `vendor/mac-mlx/mlx_vlm/apc.py:3861`. Unset read: 'default'.
+
+```text
+    disk_path = os.environ.get("APC_DISK_PATH")
+    if disk_path:
+        ns = model_namespace or os.environ.get("APC_DISK_NAMESPACE", "default")
+        max_gb = float(os.environ.get("APC_DISK_MAX_GB", 0))
+        max_bytes = int(max_gb * (1 << 30)) if max_gb > 0 else None
+        workers = int(os.environ.get("APC_DISK_WORKERS", "1"))
+        try:
+```
+
+### APC_DISK_PATH
+
+Advanced backend control APC_DISK_PATH. Set explicitly only for the selected backend; its literal read and fallback are documented below.
+
+Scope: mac-mlx. Class: advanced.
+
+Source: `vendor/mac-mlx/mlx_vlm/apc.py:3859`. Unset read: None.
+
+```text
+
+    disk: Optional[DiskBlockStore] = None
+    disk_path = os.environ.get("APC_DISK_PATH")
+    if disk_path:
+        ns = model_namespace or os.environ.get("APC_DISK_NAMESPACE", "default")
+        max_gb = float(os.environ.get("APC_DISK_MAX_GB", 0))
+        max_bytes = int(max_gb * (1 << 30)) if max_gb > 0 else None
+```
+
+### APC_DISK_READ_MODE
+
+Advanced backend control APC_DISK_READ_MODE. Set explicitly only for the selected backend; its literal read and fallback are documented below.
+
+Scope: mac-mlx. Class: advanced.
+
+Source: `vendor/mac-mlx/mlx_vlm/apc.py:831`. Unset read: 'direct'.
+
+```text
+        # with normal file I/O, then constructs MLX-managed arrays from those
+        # bytes. Keep the old mmap path available for comparison.
+        self._read_mode = os.environ.get("APC_DISK_READ_MODE", "direct").lower()
+        if self._read_mode not in ("direct", "mmap"):
+            logger.warning(
+                "APC disk: unknown APC_DISK_READ_MODE=%r; using direct",
+                self._read_mode,
+```
+
+### APC_DISK_RESTORE_CLEAR_EVERY
+
+Advanced backend control APC_DISK_RESTORE_CLEAR_EVERY. Set explicitly only for the selected backend; its literal read and fallback are documented below.
+
+Scope: mac-mlx. Class: advanced.
+
+Source: `vendor/mac-mlx/mlx_vlm/apc.py:859`. Unset read: '1'.
+
+```text
+        # memory for slightly lower restore overhead.
+        self._restore_clear_every = max(
+            0, int(os.environ.get("APC_DISK_RESTORE_CLEAR_EVERY", "1"))
+        )
+        # Bounded LRU of mmap'd shards: shard_path -> (arrays_dict, file_metadata).
+        # Default capped at 2 — the within-restore working set is typically
+        # one shard, occasionally two (for a multi-shard restore). Larger
+```
+
+### APC_DISK_SHARD_MAX_BLOCKS
+
+Advanced backend control APC_DISK_SHARD_MAX_BLOCKS. Set explicitly only for the selected backend; its literal read and fallback are documented below.
+
+Scope: mac-mlx. Class: advanced.
+
+Source: `vendor/mac-mlx/mlx_vlm/apc.py:851`. Unset read: '256'.
+
+```text
+        # small KV step padding.
+        self._shard_max_blocks = max(
+            1, int(os.environ.get("APC_DISK_SHARD_MAX_BLOCKS", "256"))
+        )
+        # Layer-major warm-disk restore concatenates segment shards one layer
+        # at a time. Clearing MLX's allocator cache after each layer keeps the
+        # temporary segment tensors from coexisting with the fully-restored
+```
+
+### APC_DISK_TRACE
+
+Advanced backend control APC_DISK_TRACE. Set explicitly only for the selected backend; its literal read and fallback are documented below.
+
+Scope: mac-mlx. Class: advanced.
+
+Source: `vendor/mac-mlx/mlx_vlm/apc.py:2049`. Unset read: ''.
+
+```text
+        if not block_hashes:
+            return None
+        trace = os.environ.get("APC_DISK_TRACE", "").lower() in ("1", "true", "yes")
+        trace_t0 = time.perf_counter()
+
+        entries: List[Tuple[Path, int]] = []
+        for h in block_hashes:
+```
+
+### APC_DISK_WORKERS
+
+Advanced backend control APC_DISK_WORKERS. Set explicitly only for the selected backend; its literal read and fallback are documented below.
+
+Scope: mac-mlx. Class: advanced.
+
+Source: `vendor/mac-mlx/mlx_vlm/apc.py:3864`. Unset read: '1'.
+
+```text
+        max_gb = float(os.environ.get("APC_DISK_MAX_GB", 0))
+        max_bytes = int(max_gb * (1 << 30)) if max_gb > 0 else None
+        workers = int(os.environ.get("APC_DISK_WORKERS", "1"))
+        try:
+            disk = DiskBlockStore(
+                Path(disk_path).expanduser(),
+                namespace=ns,
+```
+
+### APC_ENABLED
+
+Advanced backend control APC_ENABLED. Set explicitly only for the selected backend; its literal read and fallback are documented below.
+
+Scope: mac-mlx. Class: advanced.
+
+Source: `vendor/mac-mlx/mlx_vlm/apc.py:3853`. Unset read: '0'.
+
+```text
+    are MLX-owned buffers rather than mmap-backed safetensors views.
+    """
+    if os.environ.get("APC_ENABLED", "0") not in ("1", "true", "True", "yes"):
+        return None
+    block_size = int(os.environ.get("APC_BLOCK_SIZE", DEFAULT_BLOCK_SIZE))
+    num_blocks = int(os.environ.get("APC_NUM_BLOCKS", DEFAULT_NUM_BLOCKS))
+
+```
+
+### APC_EXACT_CACHE_ENTRIES
+
+Advanced backend control APC_EXACT_CACHE_ENTRIES. Set explicitly only for the selected backend; its literal read and fallback are documented below.
+
+Scope: mac-mlx. Class: advanced.
+
+Source: `vendor/mac-mlx/mlx_vlm/apc.py:2830`. Unset read: '2'.
+
+```text
+        self.disk = disk
+        self._exact_cache_max = max(
+            0, int(os.environ.get("APC_EXACT_CACHE_ENTRIES", "2"))
+        )
+        self.exact_cache_guard_tokens = max(
+            1, int(os.environ.get("APC_EXACT_PREFIX_GUARD_TOKENS", "16"))
+        )
+```
+
+### APC_EXACT_PREFIX_GUARD_TOKENS
+
+Advanced backend control APC_EXACT_PREFIX_GUARD_TOKENS. Set explicitly only for the selected backend; its literal read and fallback are documented below.
+
+Scope: mac-mlx. Class: advanced.
+
+Source: `vendor/mac-mlx/mlx_vlm/apc.py:2833`. Unset read: '16'.
+
+```text
+        )
+        self.exact_cache_guard_tokens = max(
+            1, int(os.environ.get("APC_EXACT_PREFIX_GUARD_TOKENS", "16"))
+        )
+        # If free RAM (best-effort reading) drops below this, skip disk
+        # promotion this turn and fall back to memory-only matching. The
+        # request still serves correctly — it just doesn't get the warm-
+```
+
+### APC_HASH
+
+Advanced backend control APC_HASH. Set explicitly only for the selected backend; its literal read and fallback are documented below.
+
+Scope: mac-mlx. Class: advanced.
+
+Source: `vendor/mac-mlx/mlx_vlm/apc.py:67`. Unset read: 'fast'.
+
+```text
+
+def _hash_use_sha256() -> bool:
+    return os.environ.get("APC_HASH", "fast").lower() == "sha256"
+
+
+def _hash_tokens(parent: int, tokens: Tuple[int, ...], extra: int) -> int:
+    """Chain hash for a single block."""
+```
+
+### APC_LAYER_MAJOR_MEMORY_MIN_TOKENS
+
+Advanced backend control APC_LAYER_MAJOR_MEMORY_MIN_TOKENS. Set explicitly only for the selected backend; its literal read and fallback are documented below.
+
+Scope: mac-mlx. Class: advanced.
+
+Source: `vendor/mac-mlx/mlx_vlm/apc.py:2878`. Unset read: '50000'.
+
+```text
+        # warm-memory reuse for repeated long-document prompts.
+        self._layer_major_memory_min_tokens = max(
+            0, int(os.environ.get("APC_LAYER_MAJOR_MEMORY_MIN_TOKENS", "50000"))
+        )
+
+    # ---------- LRU free queue (O(1)) ----------
+    def _free_push(self, b: APCBlock) -> None:
+```
+
+### APC_MAX_POOL_TENSORS
+
+Advanced backend control APC_MAX_POOL_TENSORS. Set explicitly only for the selected backend; its literal read and fallback are documented below.
+
+Scope: mac-mlx. Class: advanced.
+
+Source: `vendor/mac-mlx/mlx_vlm/apc.py:2870`. Unset read: '450000'.
+
+```text
+        # the resource limit. Set to 0 to disable.
+        self._max_pool_tensors = max(
+            0, int(os.environ.get("APC_MAX_POOL_TENSORS", "450000"))
+        )
+        # Optional compact warm-memory tier for long KV-only prefixes. When a
+        # prompt reaches this many full-block tokens, store one layer-major
+        # prompt-cache snapshot instead of thousands of per-block tensors. This
+```
+
+### APC_NUM_BLOCKS
+
+Advanced backend control APC_NUM_BLOCKS. Set explicitly only for the selected backend; its literal read and fallback are documented below.
+
+Scope: mac-mlx. Class: advanced.
+
+Source: `vendor/mac-mlx/mlx_vlm/apc.py:3856`. Unset read: DEFAULT_NUM_BLOCKS.
+
+```text
+        return None
+    block_size = int(os.environ.get("APC_BLOCK_SIZE", DEFAULT_BLOCK_SIZE))
+    num_blocks = int(os.environ.get("APC_NUM_BLOCKS", DEFAULT_NUM_BLOCKS))
+
+    disk: Optional[DiskBlockStore] = None
+    disk_path = os.environ.get("APC_DISK_PATH")
+    if disk_path:
+```
+
+### BENCH_LIVE_COMMUNITY
+
+Advanced backend control BENCH_LIVE_COMMUNITY. Set explicitly only for the selected backend; its literal read and fallback are documented below.
+
+Scope: mlx-serve. Class: advanced.
+
+Source: `engines/mlx-serve/app/Tests/MLXCoreTests/BenchmarkRunnerLiveTests.swift:54`. Unset read: Wrapper/conditional default: see the literal call and consumer below.
+
+```text
+final class BenchmarkCommunityLiveTests: XCTestCase {
+    func testEveryLiveRowDecodes() async throws {
+        guard ProcessInfo.processInfo.environment["BENCH_LIVE_COMMUNITY"] == "1" else {
+            throw XCTSkip("set BENCH_LIVE_COMMUNITY=1")
+        }
+        let url = BenchmarkStore.communityFetchURL(limit: 500)!
+        let (data, _) = try await URLSession.shared.data(from: url)
+```
+
+### BENCH_LIVE_MODEL
+
+Advanced backend control BENCH_LIVE_MODEL. Set explicitly only for the selected backend; its literal read and fallback are documented below.
+
+Scope: mlx-serve. Class: advanced.
+
+Source: `engines/mlx-serve/app/Tests/MLXCoreTests/BenchmarkRunnerLiveTests.swift:20`. Unset read: Wrapper/conditional default: see the literal call and consumer below.
+
+```text
+        let api = APIClient()
+        let props = try await api.fetchPropsRaw(port: port)
+        let model = ProcessInfo.processInfo.environment["BENCH_LIVE_MODEL"]
+            ?? ((props["default_generation_settings"] as? [String: Any])?["model"] as? String ?? "")
+        XCTAssertFalse(model.isEmpty, "no model to benchmark")
+
+        let ladder = Array(BenchmarkSuite.ladder.prefix(
+```
+
+### BENCH_LIVE_PORT
+
+Advanced backend control BENCH_LIVE_PORT. Set explicitly only for the selected backend; its literal read and fallback are documented below.
+
+Scope: mlx-serve. Class: advanced.
+
+Source: `engines/mlx-serve/app/Tests/MLXCoreTests/BenchmarkRunnerLiveTests.swift:14`. Unset read: Wrapper/conditional default: see the literal call and consumer below.
+
+```text
+    @MainActor
+    func testTheLadderClimbsAgainstALiveServer() async throws {
+        guard let portText = ProcessInfo.processInfo.environment["BENCH_LIVE_PORT"],
+              let port = UInt16(portText) else {
+            throw XCTSkip("set BENCH_LIVE_PORT to run against a live server")
+        }
+        let api = APIClient()
+```
+
+### BENCH_LIVE_RUNGS
+
+Advanced backend control BENCH_LIVE_RUNGS. Set explicitly only for the selected backend; its literal read and fallback are documented below.
+
+Scope: mlx-serve. Class: advanced.
+
+Source: `engines/mlx-serve/app/Tests/MLXCoreTests/BenchmarkRunnerLiveTests.swift:25`. Unset read: Wrapper/conditional default: see the literal call and consumer below.
+
+```text
+
+        let ladder = Array(BenchmarkSuite.ladder.prefix(
+            Int(ProcessInfo.processInfo.environment["BENCH_LIVE_RUNGS"] ?? "4") ?? 4))
+        let runner = BenchmarkRunner(api: api)
+        let rows = await runner.run(ladder: ladder, modelId: model, port: port)
+
+        XCTAssertEqual(runner.phase, .done, "\(runner.phase)")
+```
+
+### BONSAI_TOKEN
+
+Advanced backend control BONSAI_TOKEN. Set explicitly only for the selected backend; its literal read and fallback are documented below.
+
+Scope: mac-mlx. Class: advanced.
+
+Source: `vendor/mac-mlx/mlx_vlm/models/bonsai/download.py:31`. Unset read: None.
+
+```text
+            snapshot_download(
+                repo_id=spec.repo_id,
+                token=token or os.environ.get("BONSAI_TOKEN") or None,
+                max_workers=max_workers,
+            )
+        )
+    else:
+```
+
+Source: `vendor/mac-mlx/mlx_vlm/models/bonsai/download.py:45`. Unset read: None.
+
+```text
+            repo_id=spec.repo_id,
+            local_dir=str(target),
+            token=token or os.environ.get("BONSAI_TOKEN") or None,
+            max_workers=max_workers,
+        )
+    validate_model_layout(target)
+    return target
+```
+
+### DOCS_RAG_AUTODL_PORT
+
+Advanced backend control DOCS_RAG_AUTODL_PORT. Set explicitly only for the selected backend; its literal read and fallback are documented below.
+
+Scope: mlx-serve. Class: advanced.
+
+Source: `engines/mlx-serve/app/Tests/MLXCoreTests/DocumentIndexTests.swift:529`. Unset read: Wrapper/conditional default: see the literal call and consumer below.
+
+```text
+    @MainActor
+    func testAutoProviderProvisionsEncoderEndToEnd() async throws {
+        guard let portStr = ProcessInfo.processInfo.environment["DOCS_RAG_AUTODL_PORT"],
+              let port = UInt16(portStr) else {
+            throw XCTSkip("DOCS_RAG_AUTODL_PORT not set — live auto-provisioning test skipped")
+        }
+        let embedder = await ServerEmbedding.autoProvider(port: port)()
+```
+
+### DOCS_RAG_FOLDER
+
+Advanced backend control DOCS_RAG_FOLDER. Set explicitly only for the selected backend; its literal read and fallback are documented below.
+
+Scope: mlx-serve. Class: advanced.
+
+Source: `engines/mlx-serve/app/Tests/MLXCoreTests/DocumentIndexRealDataTests.swift:17`. Unset read: Wrapper/conditional default: see the literal call and consumer below.
+
+```text
+
+    private static var folder: URL? {
+        guard let path = ProcessInfo.processInfo.environment["DOCS_RAG_FOLDER"], !path.isEmpty else {
+            return nil
+        }
+        return URL(fileURLWithPath: NSString(string: path).expandingTildeInPath)
+    }
+```
+
+### DOCS_RAG_PORT
+
+Advanced backend control DOCS_RAG_PORT. Set explicitly only for the selected backend; its literal read and fallback are documented below.
+
+Scope: mlx-serve. Class: advanced.
+
+Source: `engines/mlx-serve/app/Tests/MLXCoreTests/DocumentIndexRealDataTests.swift:39`. Unset read: Wrapper/conditional default: see the literal call and consumer below.
+
+```text
+        // otherwise retrieval is lexical-only, which the structural
+        // assertions below are designed to survive.
+        let port = ProcessInfo.processInfo.environment["DOCS_RAG_PORT"].flatMap { UInt16($0) }
+        let index = DocumentIndex(folderURL: folder, embedderProvider: {
+            guard let port else { return nil }
+            return await ServerEmbedding.probe(port: port)()
+        })
+```
+
+### DSV41_
+
+Advanced backend control DSV41_. Set explicitly only for the selected backend; its literal read and fallback are documented below.
+
+Scope: mac-mlx. Class: advanced.
+
+Source: `vendor/mac-mlx/mlx_vlm/custom_kernels/deepseek_v41/test_index_fused_cpu.py:428`. Unset read: Wrapper/conditional default: see the literal call and consumer below.
+
+```text
+                 "FFN_FUSED", "FFN_DOWN_BF16", "FFN_EXPERT_PAD16", "FFN_EXPERT_TILES",
+                 "PROMOTE_DECODE_WEIGHTS", "S4_COMPILE_INDEXER", "S4_PRECOMPUTE", "S4_BYPASS"):
+        monkeypatch.setenv("DSV41_" + name, "0")
+    monkeypatch.setenv("DSV41_INDEX_WORKSPACE_MB", "512")
+    ns = _production()
+    calls = []
+    ns["prepare_index_fused"] = lambda layers, skip=False: calls.append(
+```
+
+Source: `vendor/mac-mlx/mlx_vlm/custom_kernels/deepseek_v41/test_index_fused_cpu.py:722`. Unset read: Wrapper/conditional default: see the literal call and consumer below.
+
+```text
+    ns, calls, indexer, model = dispatch
+    monkeypatch.setenv("DSV41_INDEX_FUSED", "1")
+    monkeypatch.setenv("DSV41_" + conflict, "1")
+    with pytest.raises(ValueError, match="cannot combine"):
+        ns["attach"](model, ".")
+    assert not calls and not indexer.index_fused
+    monkeypatch.setenv("DSV41_" + conflict, "0")
+```
+
+Source: `vendor/mac-mlx/mlx_vlm/custom_kernels/deepseek_v41/test_index_fused_cpu.py:726`. Unset read: Wrapper/conditional default: see the literal call and consumer below.
+
+```text
+        ns["attach"](model, ".")
+    assert not calls and not indexer.index_fused
+    monkeypatch.setenv("DSV41_" + conflict, "0")
+    ns["attach"](model, ".")
+    monkeypatch.setenv("DSV41_" + conflict, "1")
+    x = np.ones((1, 64, 4), np.float32)
+    with pytest.raises(ValueError, match="cannot combine"):
+```
+
+Source: `vendor/mac-mlx/mlx_vlm/custom_kernels/deepseek_v41/test_index_fused_cpu.py:728`. Unset read: Wrapper/conditional default: see the literal call and consumer below.
+
+```text
+    monkeypatch.setenv("DSV41_" + conflict, "0")
+    ns["attach"](model, ".")
+    monkeypatch.setenv("DSV41_" + conflict, "1")
+    x = np.ones((1, 64, 4), np.float32)
+    with pytest.raises(ValueError, match="cannot combine"):
+        ns["forward"](indexer, x, x, 0, 128, None, None, None)
+
+```
+
+### DSV41_ASYNC_PREPARE
+
+Advanced backend control DSV41_ASYNC_PREPARE. Set explicitly only for the selected backend; its literal read and fallback are documented below.
+
+Scope: mac-mlx. Class: advanced.
+
+Source: `vendor/mac-mlx/mlx_vlm/models/deepseek_v41/language.py:2232`. Unset read: '0'.
+
+```text
+        # Launch the embedding while the CPU hash/table path prepares its rows.
+        # Kept independently switchable so its contribution can be measured.
+        if os.environ.get("DSV41_ASYNC_PREPARE", "0") == "1":
+            mx.async_eval(h)
+        token_mask = None
+        if cache.engram is not None:
+            if image_mask is not None and os.environ.get("DSV41_COALESCE_HASH_INPUTS", "0") == "1":
+```
+
+### DSV41_BOUNDED_CACHE
+
+Advanced backend control DSV41_BOUNDED_CACHE. Set explicitly only for the selected backend; its literal read and fallback are documented below.
+
+Scope: mac-mlx. Class: advanced.
+
+Source: `vendor/mac-mlx/mlx_vlm/runtime_profile.py:143`. Unset read: None.
+
+```text
+                restore.append(lambda limit=old: mx.set_cache_limit(limit))
+            elif experiment == "unbounded_cache":
+                old = os.environ.get("DSV41_BOUNDED_CACHE")
+                os.environ["DSV41_BOUNDED_CACHE"] = "0"
+                restore.append(lambda: os.environ.pop("DSV41_BOUNDED_CACHE", None) if old is None else os.environ.__setitem__("DSV41_BOUNDED_CACHE", old))
+            elif experiment == "fast_rms_norm":
+                old = os.environ.get("DSV41_FAST_RMS_NORM")
+```
+
+Source: `vendor/mac-mlx/mlx_vlm/runtime_profile.py:144`. Unset read: Assigned by the runtime; see literal consumer.
+
+```text
+            elif experiment == "unbounded_cache":
+                old = os.environ.get("DSV41_BOUNDED_CACHE")
+                os.environ["DSV41_BOUNDED_CACHE"] = "0"
+                restore.append(lambda: os.environ.pop("DSV41_BOUNDED_CACHE", None) if old is None else os.environ.__setitem__("DSV41_BOUNDED_CACHE", old))
+            elif experiment == "fast_rms_norm":
+                old = os.environ.get("DSV41_FAST_RMS_NORM")
+                os.environ["DSV41_FAST_RMS_NORM"] = "1"
+```
+
+Source: `vendor/mac-mlx/mlx_vlm/models/deepseek_v41/language.py:1103`. Unset read: '0'.
+
+```text
+        if self.step < 1:
+            raise ValueError("DSV41_CACHE_STEP must be positive")
+        self.bounded = os.environ.get("DSV41_BOUNDED_CACHE", "0") == "1"
+        self.layers = [_LayerCache(self.step, self.bounded) for _ in model.layers]
+        self._offset = 0
+        self.engram = None
+        if model.layout is not None:
+```
+
+Source: `vendor/mac-mlx/mlx_vlm/models/deepseek_v41/test_bounded_cache.py:29`. Unset read: Wrapper/conditional default: see the literal call and consumer below.
+
+```text
+def test_bounded_matches_history(model, monkeypatch, chunk):
+    ids = helper.token_ids()
+    monkeypatch.setenv("DSV41_BOUNDED_CACHE", "0")
+    full = model.make_cache()
+    monkeypatch.setenv("DSV41_BOUNDED_CACHE", "1")
+    bounded = model.make_cache()
+    for start in range(0, ids.shape[1], chunk):
+```
+
+Source: `vendor/mac-mlx/mlx_vlm/models/deepseek_v41/test_bounded_cache.py:31`. Unset read: Wrapper/conditional default: see the literal call and consumer below.
+
+```text
+    monkeypatch.setenv("DSV41_BOUNDED_CACHE", "0")
+    full = model.make_cache()
+    monkeypatch.setenv("DSV41_BOUNDED_CACHE", "1")
+    bounded = model.make_cache()
+    for start in range(0, ids.shape[1], chunk):
+        x = ids[:, start:start + chunk]
+        expected = model(x, cache=full).logits
+```
+
+Source: `vendor/mac-mlx/mlx_vlm/models/deepseek_v41/test_bounded_cache.py:58`. Unset read: Wrapper/conditional default: see the literal call and consumer below.
+
+```text
+
+def test_compressor_missing_history_fails(model, monkeypatch):
+    monkeypatch.setenv("DSV41_BOUNDED_CACHE", "1")
+    cache = model.make_cache()
+    mx.eval(model(helper.token_ids()[:, :17], cache=cache).logits)
+    lc = cache[0].layers[2]
+    with pytest.raises(ValueError, match="no longer retained"):
+```
+
+### DSV41_CACHE_STEP
+
+Advanced backend control DSV41_CACHE_STEP. Set explicitly only for the selected backend; its literal read and fallback are documented below.
+
+Scope: mac-mlx. Class: advanced.
+
+Source: `vendor/mac-mlx/mlx_vlm/models/deepseek_v41/language.py:1098`. Unset read: DSV41_CACHE_STEP.
+
+```text
+        self._attentions = [layer.attn for layer in model.layers]
+        try:
+            self.step = int(os.environ.get("DSV41_CACHE_STEP", DSV41_CACHE_STEP))
+        except ValueError:
+            self.step = DSV41_CACHE_STEP
+        if self.step < 1:
+            raise ValueError("DSV41_CACHE_STEP must be positive")
+```
+
+Source: `vendor/mac-mlx/mlx_vlm/models/deepseek_v41/test_language_dsv41_mac.py:357`. Unset read: Wrapper/conditional default: see the literal call and consumer below.
+
+```text
+    """
+    # Force real doublings in a short test; production defaults to 2048 rows.
+    monkeypatch.setenv("DSV41_CACHE_STEP", "16")
+    model, _ = model_and_ids
+    ids = mx.array(np.random.default_rng(29).integers(3, VOCAB, (1, 301)).astype(np.int32))
+    cache = model.make_cache()
+    pieces = [model(ids[:, :1], cache=cache).logits]
+```
+
+### DSV41_CANDIDATE_LANGUAGE
+
+Advanced backend control DSV41_CANDIDATE_LANGUAGE. Set explicitly only for the selected backend; its literal read and fallback are documented below.
+
+Scope: mac-mlx. Class: advanced.
+
+Source: `vendor/mac-mlx/mlx_vlm/models/deepseek_v41/test_bounded_cache.py:14`. Unset read: None.
+
+```text
+@pytest.fixture
+def model(monkeypatch):
+    candidate = os.environ.get("DSV41_CANDIDATE_LANGUAGE")
+    if candidate:
+        spec = importlib.util.spec_from_file_location(
+            "mlx_vlm.models.deepseek_v41._candidate_language", candidate)
+        module = importlib.util.module_from_spec(spec)
+```
+
+### DSV41_COALESCE_HASH_INPUTS
+
+Advanced backend control DSV41_COALESCE_HASH_INPUTS. Set explicitly only for the selected backend; its literal read and fallback are documented below.
+
+Scope: mac-mlx. Class: advanced.
+
+Source: `vendor/mac-mlx/mlx_vlm/models/deepseek_v41/language.py:2236`. Unset read: '0'.
+
+```text
+        token_mask = None
+        if cache.engram is not None:
+            if image_mask is not None and os.environ.get("DSV41_COALESCE_HASH_INPUTS", "0") == "1":
+                # One device-to-host boundary instead of separate ids/mask waits.
+                packed = np.array(mx.concatenate([inputs, image_mask.astype(inputs.dtype)], axis=0))
+                ids, token_mask = packed[:inputs.shape[0]], ~packed[inputs.shape[0]:].astype(bool)
+            else:
+```
+
+### DSV41_COMPILE_BLOCK
+
+Advanced backend control DSV41_COMPILE_BLOCK. Set explicitly only for the selected backend; its literal read and fallback are documented below.
+
+Scope: mac-mlx. Class: advanced.
+
+Source: `vendor/mac-mlx/mlx_vlm/models/deepseek_v41/language.py:1806`. Unset read: '0'.
+
+```text
+                from .megakernel import decode_block
+                return decode_block(self, h, pre_mix, start_pos, cache, shared, image_mask)
+            if os.environ.get("DSV41_COMPILE_BLOCK", "0") == "1" and h.shape[:2] == (1, 1):
+                from .block_graph import BlockGraphs
+                graph = getattr(self, "_block_graph", None)
+                if graph is None:
+                    graph = BlockGraphs()
+```
+
+Source: `vendor/mac-mlx/mlx_vlm/models/deepseek_v41/language.py:2259`. Unset read: '0'.
+
+```text
+        pre_mix = mx.broadcast_to((mx.arange(hc) == 0).astype(mx.float32), (b, n, hc))
+        capture_set = set(capture_layer_ids) if capture_layer_ids else set()
+        if os.environ.get("DSV41_COMPILE_BLOCK", "0") == "1":
+            from .block_graph import BlockGraphs
+            if getattr(self, "_block_graph", None) is None:
+                object.__setattr__(self, "_block_graph", BlockGraphs())
+                for layer in self.layers:
+```
+
+Source: `vendor/mac-mlx/mlx_vlm/models/deepseek_v41/megakernel.py:138`. Unset read: '0'.
+
+```text
+    """Use incoming pre for attention, attention's pre for FFN (staggered HC)."""
+    _check(h)
+    if os.environ.get("DSV41_COMPILE_BLOCK", "0") == "1":
+        graph = getattr(layer, "_megakernel_graph", None)
+        if graph is None:
+            graph = _MegakernelGraphs()
+            object.__setattr__(layer, "_megakernel_graph", graph)
+```
+
+### DSV41_COMPILE_PRIMITIVES
+
+Advanced backend control DSV41_COMPILE_PRIMITIVES. Set explicitly only for the selected backend; its literal read and fallback are documented below.
+
+Scope: mac-mlx. Class: advanced.
+
+Source: `vendor/mac-mlx/mlx_vlm/runtime_profile.py:174`. Unset read: None.
+
+```text
+                language._v41_expert_select = mx.compile(namespace[node.name])
+                restore.append(lambda f=original_select: setattr(language, "_v41_expert_select", f))
+                old = os.environ.get("DSV41_COMPILE_PRIMITIVES")
+                os.environ["DSV41_COMPILE_PRIMITIVES"] = "1"
+                restore.append(lambda: os.environ.pop("DSV41_COMPILE_PRIMITIVES", None) if old is None else os.environ.__setitem__("DSV41_COMPILE_PRIMITIVES", old))
+            elif experiment == "compile_hc":
+                old = hc.COMPILE_POST
+```
+
+Source: `vendor/mac-mlx/mlx_vlm/runtime_profile.py:175`. Unset read: Assigned by the runtime; see literal consumer.
+
+```text
+                restore.append(lambda f=original_select: setattr(language, "_v41_expert_select", f))
+                old = os.environ.get("DSV41_COMPILE_PRIMITIVES")
+                os.environ["DSV41_COMPILE_PRIMITIVES"] = "1"
+                restore.append(lambda: os.environ.pop("DSV41_COMPILE_PRIMITIVES", None) if old is None else os.environ.__setitem__("DSV41_COMPILE_PRIMITIVES", old))
+            elif experiment == "compile_hc":
+                old = hc.COMPILE_POST
+                hc.COMPILE_POST = True
+```
+
+Source: `vendor/mac-mlx/mlx_vlm/custom_kernels/deepseek_v41/test_grouped_gemm.py:386`. Unset read: Wrapper/conditional default: see the literal call and consumer below.
+
+```text
+@pytest.mark.parametrize("config_name", TEST_CONFIGS)
+def test_composed_moe(monkeypatch, compile_combine, case, config_name):
+    monkeypatch.setenv("DSV41_COMPILE_PRIMITIVES", compile_combine)
+    moe = make_moe(E, D, I)
+    ids, _ = routes(case)
+    indices = mx.array(ids)
+    mx.random.seed(341)
+```
+
+Source: `vendor/mac-mlx/mlx_vlm/models/deepseek_v41/language.py:225`. Unset read: '0'.
+
+```text
+                x.astype(mx.float32), self.weight.astype(mx.float32), self.eps
+            ).astype(x.dtype)
+        if os.environ.get("DSV41_COMPILE_PRIMITIVES", "0") == "1":
+            return _v41_rms_norm(x, self.weight, self.eps)
+        dtype = x.dtype
+        xf = x.astype(mx.float32)
+        var = mx.mean(mx.square(xf), axis=-1, keepdims=True)
+```
+
+Source: `vendor/mac-mlx/mlx_vlm/models/deepseek_v41/language.py:816`. Unset read: '0'.
+
+```text
+            # Inference opt-in: this changes stored parameter dtype/memory.
+            self.weight = self.weight.astype(mx.float32)
+        if os.environ.get("DSV41_COMPILE_PRIMITIVES", "0") == "1":
+            bias = self.e_score_correction_bias
+            if image_mask is not None:
+                bias = mx.where(image_mask[..., None], self.bias_vl, bias)
+            return _v41_expert_select(
+```
+
+Source: `vendor/mac-mlx/mlx_vlm/models/deepseek_v41/language.py:989`. Unset read: '0'.
+
+```text
+                y = (_ffn_down_bf16(self.switch_mlp, xf, indices) if down_bf16
+                     else self.switch_mlp(xf, indices))            # [tokens, topk, dim]
+            if os.environ.get("DSV41_COMPILE_PRIMITIVES", "0") == "1":
+                y = _v41_moe_combine(y, weights)
+            else:
+                y = mx.sum(y.astype(mx.float32) * weights[..., None], axis=-2)
+        y = y + self.shared_experts(xf).astype(mx.float32)
+```
+
+Source: `vendor/mac-mlx/mlx_vlm/models/deepseek_v41/language.py:1408`. Unset read: '0'.
+
+```text
+            shape = (kv.shape[0], stop - first, ratio, kv.shape[-1])
+            score = lc.absolute_slice("score", first * ratio, stop * ratio).reshape(shape)
+            if os.environ.get("DSV41_COMPILE_PRIMITIVES", "0") == "1":
+                kv = _v41_compress_pool(kv.reshape(shape), score)
+            else:
+                kv = mx.sum(kv.reshape(shape) * mx.softmax(score, axis=2), axis=2)
+        return self.norm(kv.astype(dtype))
+```
+
+Source: `vendor/mac-mlx/mlx_vlm/models/deepseek_v41/moe_prefill.py:46`. Unset read: '0'.
+
+```text
+    down = project(hidden, mlp.down_proj, mx.float32)
+    y = down[inverse].reshape(*indices.shape, xf.shape[-1])
+    if os.environ.get("DSV41_COMPILE_PRIMITIVES", "0") == "1":
+        from .language import _v41_moe_combine
+
+        return _v41_moe_combine(y, weights)
+    return mx.sum(y.astype(mx.float32) * weights[..., None], axis=-2)
+```
+
+Source: `vendor/mac-mlx/mlx_vlm/models/deepseek_v41/test_ffn_down_bf16_cpu.py:52`. Unset read: Wrapper/conditional default: see the literal call and consumer below.
+
+```text
+    ns = _load()
+    monkeypatch.setenv("DSV41_PREFILL_GROUPED_MXFP4", "0")
+    monkeypatch.setenv("DSV41_COMPILE_PRIMITIVES", "0")
+    calls = []
+    routed = np.arange(n * 6 * 4, dtype=np.float32).reshape(n, 6, 4) / 100
+    weights = np.full((n, 6), 0.25, np.float32)
+    moe = SimpleNamespace(dim=4, ffn_down_bf16=False,
+```
+
+Source: `vendor/mac-mlx/mlx_vlm/models/deepseek_v41/test_ffn_expert_pad_cpu.py:165`. Unset read: Wrapper/conditional default: see the literal call and consumer below.
+
+```text
+    monkeypatch.setenv("DSV41_PREFILL_GROUPED_MXFP4", "1")
+    monkeypatch.setenv("DSV41_PREFILL_GROUPED_MIN_ROWS", "64")
+    monkeypatch.setenv("DSV41_COMPILE_PRIMITIVES", "0")
+    up = Mock(side_effect=lambda x, ids, **kw: x * (ids[:, None, None] + 1))
+    up.num_experts = 8
+    mlp = SimpleNamespace(training=False, up_proj=up,
+                          gate_proj=lambda x, ids, **kw: np.ones_like(x),
+```
+
+### DSV41_COMPILE_SPARSE_ATTN
+
+Advanced backend control DSV41_COMPILE_SPARSE_ATTN. Set explicitly only for the selected backend; its literal read and fallback are documented below.
+
+Scope: mac-mlx. Class: advanced.
+
+Source: `vendor/mac-mlx/mlx_vlm/custom_kernels/deepseek_v41/validate_sdpa.py:39`. Unset read: Assigned by the runtime; see literal consumer.
+
+```text
+    os.environ['DSV41_SDPA_SPARSE_ATTN'] = '1' if path == 'sdpa' else '0'
+    os.environ['DSV41_METAL_SPARSE_ATTN'] = '1' if path == 'metal' else '0'
+    os.environ['DSV41_COMPILE_SPARSE_ATTN'] = '1' if path == 'compiled' else '0'
+
+
+def metrics(actual, expected):
+    a, e = np.asarray(actual, dtype=np.float64), np.asarray(expected, dtype=np.float64)
+```
+
+Source: `vendor/mac-mlx/mlx_vlm/models/deepseek_v41/language.py:343`. Unset read: '0'.
+
+```text
+
+    attend = partial(_sparse_attn_chunk, sdpa=True) if use_sdpa else _sparse_attn_chunk
+    if not use_sdpa and os.environ.get("DSV41_COMPILE_SPARSE_ATTN", "0") == "1":
+        # Reuse the callable across chunks AND layers; MLX caches by input shape.
+        if not hasattr(sparse_attn, "_compiled_chunk"):
+            sparse_attn._compiled_chunk = mx.compile(_sparse_attn_chunk)
+        attend = sparse_attn._compiled_chunk
+```
+
+### DSV41_COMPRESS_RATIOS
+
+Advanced backend control DSV41_COMPRESS_RATIOS. Set explicitly only for the selected backend; its literal read and fallback are documented below.
+
+Scope: mac-mlx. Class: advanced.
+
+Source: `vendor/mac-mlx/mlx_vlm/models/deepseek_v41/test_kv_selection_width.py:72`. Unset read: Wrapper/conditional default: see the literal call and consumer below.
+
+```text
+    back.
+    """
+    monkeypatch.setenv("DSV41_COMPRESS_RATIOS", "0,0,0,0")
+    cfg = _text_config()
+    assert cfg.compress_ratios[2] == 2
+```
+
+### DSV41_DSPARK
+
+Advanced backend control DSV41_DSPARK. Set explicitly only for the selected backend; its literal read and fallback are documented below.
+
+Scope: mac-mlx. Class: advanced.
+
+Source: `engines/mlx-receiver/mlx_token_stream_server.py:159`. Unset read: '0'.
+
+```text
+    sizes = {'bfloat16': 2, 'float32': 4, 'uint32': 4, 'uint8': 1}
+    specs = expected_parameters(config.text_config, source)
+    resident_specs = {name: spec for name, spec in specs.items() if not (name.startswith('dspark.') and os.environ.get('DSV41_DSPARK', '0') != '1')}
+    parameter_bytes = sum((sizes[dtype] * prod(shape) for dtype, shape in resident_specs.values()))
+    if config.vision_config is not None:
+        parameter_bytes += sum((2 * prod(shape) for _, shape in expected_vision_parameters(config.vision_config, config.text_config.hidden_size).values()))
+    if os.environ.get('DSV41_PROMOTE_DECODE_WEIGHTS', '0') == '1':
+```
+
+Source: `vendor/mac-mlx/mlx_vlm/models/deepseek_v41/dspark_receiver.py:18`. Unset read: '0'.
+
+```text
+
+def enabled():
+    if os.environ.get("DSV41_DSPARK", "0") != "1":
+        return False
+    # Optional local diagnostic control permits A/B on the same loaded weights.
+    # The preset's off switch always wins. No network request controls this file.
+    control = os.environ.get("DSV41_DSPARK_MODE_FILE")
+```
+
+Source: `vendor/mac-mlx/mlx_vlm/models/deepseek_v41/language.py:2005`. Unset read: '0'.
+
+```text
+            "DSV41_PREFILL_CONE will not switch DSV41_PREFILL_LAYER_MAJOR on for you.")
+    tail, tail_set = prefill_cone_tail()
+    if cone and os.environ.get("DSV41_DSPARK", "0") == "1" and not tail_set:
+        raise ValueError(
+            "DSV41_PREFILL_CONE=1 with DSV41_DSPARK=1 needs DSV41_PREFILL_CONE_TAIL=<W> "
+            "set explicitly. The drafter is warmed from the target's rows at the END of "
+            "the prompt -- DSV4.1 DSpark from the capture taps of layers "
+```
+
+Source: `vendor/mac-mlx/mlx_vlm/models/deepseek_v41/test_prefill_cone.py:159`. Unset read: Wrapper/conditional default: see the literal call and consumer below.
+
+```text
+    monkeypatch.setenv("DSV41_PREFILL_CONE", "1")
+    monkeypatch.setenv("DSV41_PREFILL_LAYER_MAJOR", "1")
+    monkeypatch.setenv("DSV41_DSPARK", "1")
+    monkeypatch.delenv("DSV41_PREFILL_CONE_TAIL", raising=False)
+    with pytest.raises(ValueError) as excinfo:
+        _prefill_switches(4096, _Cache(), None)
+    message = str(excinfo.value)
+```
+
+Source: `vendor/mac-mlx/mlx_vlm/models/deepseek_v41/test_prefill_cone.py:172`. Unset read: Wrapper/conditional default: see the literal call and consumer below.
+
+```text
+    monkeypatch.setenv("DSV41_PREFILL_CONE", "1")
+    monkeypatch.setenv("DSV41_PREFILL_LAYER_MAJOR", "1")
+    monkeypatch.delenv("DSV41_DSPARK", raising=False)
+    monkeypatch.delenv("DSV41_PREFILL_CONE_TAIL", raising=False)
+    with pytest.raises(ValueError) as excinfo:
+        _prefill_switches(4096, _Cache(), [37, 38, 39])
+    assert "capture_layer_ids" in str(excinfo.value)
+```
+
+Source: `vendor/mac-mlx/mlx_vlm/models/deepseek_v41/test_prefill_cone.py:996`. Unset read: Wrapper/conditional default: see the literal call and consumer below.
+
+```text
+    monkeypatch.setenv("DSV41_PREFILL_CONE", "1")
+    monkeypatch.setenv("DSV41_PREFILL_LAYER_MAJOR", "1")
+    monkeypatch.setenv("DSV41_DSPARK", "1")
+    monkeypatch.delenv("DSV41_PREFILL_CONE_TAIL", raising=False)
+    with pytest.raises(ValueError) as excinfo:
+        _prefill_switches(4096, _Cache(), None)
+    message = str(excinfo.value)
+```
+
+Source: `vendor/mac-mlx/mlx_vlm/models/deepseek_v41/test_prefill_cone.py:1011`. Unset read: Wrapper/conditional default: see the literal call and consumer below.
+
+```text
+    monkeypatch.setenv("DSV41_PREFILL_CONE", "1")
+    monkeypatch.setenv("DSV41_PREFILL_LAYER_MAJOR", "1")
+    monkeypatch.delenv("DSV41_DSPARK", raising=False)
+    monkeypatch.delenv("DSV41_PREFILL_CONE_TAIL", raising=False)
+    with pytest.raises(ValueError) as excinfo:
+        _prefill_switches(4096, _Cache(), [37, 38, 39])
+    assert "DSV41_PREFILL_CONE_TAIL" in str(excinfo.value)
+```
+
+### DSV41_DSPARK_ADAPTIVE
+
+Advanced backend control DSV41_DSPARK_ADAPTIVE. Set explicitly only for the selected backend; its literal read and fallback are documented below.
+
+Scope: mac-mlx. Class: advanced.
+
+Source: `vendor/mac-mlx/mlx_vlm/speculative/dspark.py:229`. Unset read: '0'.
+
+```text
+    # per round (measured at the walk, which forces the target tokens) and committed counts.
+    controller = None
+    if os.environ.get("DSV41_DSPARK_ADAPTIVE", "0") == "1":
+        from .dspark_controller import DSparkCostController
+        controller = DSparkCostController.from_env()
+        draft_model.cost_controller = controller
+    from time import perf_counter as _clock
+```
+
+### DSV41_DSPARK_COLD_BENCH
+
+Advanced backend control DSV41_DSPARK_COLD_BENCH. Set explicitly only for the selected backend; its literal read and fallback are documented below.
+
+Scope: mac-mlx. Class: advanced.
+
+Source: `engines/mlx-receiver/mlx_token_stream_server.py:1661`. Unset read: '0'.
+
+```text
+            importlib.reload(runtime_profile).run_requested(self.model, prompt_token_ids)
+        is_dsv41 = _is_dsv41(self.model)
+        if is_dsv41 and os.environ.get('DSV41_DSPARK_COLD_BENCH', '0') == '1':
+            self._retained_cache = None
+            self._retained_tokens = []
+        vision_prompt = getattr(self, '_dsv41_vision_prompt', None) if is_dsv41 else None
+        self._dsv41_vision_prompt = None
+```
+
+### DSV41_DSPARK_COMPILE_HEAD
+
+Advanced backend control DSV41_DSPARK_COMPILE_HEAD. Set explicitly only for the selected backend; its literal read and fallback are documented below.
+
+Scope: mac-mlx. Class: advanced.
+
+Source: `vendor/mac-mlx/mlx_vlm/models/deepseek_v41/dspark.py:399`. Unset read: '0'.
+
+```text
+        last._walk_key = key
+        last._walk = (mx.compile(walk, inputs=mx.random.state, outputs=mx.random.state)
+                      if os.environ.get("DSV41_DSPARK_COMPILE_HEAD", "0") == "1"
+                      else walk)
+    ids, corrected, embeds = last._walk(
+        logits, anchor, last.markov_head.embed.weight, last.markov_head.head.weight)
+    confidence = last.confidence_head(hidden, embeds)
+```
+
+### DSV41_DSPARK_MODE_FILE
+
+Advanced backend control DSV41_DSPARK_MODE_FILE. Set explicitly only for the selected backend; its literal read and fallback are documented below.
+
+Scope: mac-mlx. Class: advanced.
+
+Source: `vendor/mac-mlx/mlx_vlm/models/deepseek_v41/dspark_receiver.py:22`. Unset read: None.
+
+```text
+    # Optional local diagnostic control permits A/B on the same loaded weights.
+    # The preset's off switch always wins. No network request controls this file.
+    control = os.environ.get("DSV41_DSPARK_MODE_FILE")
+    return not control or bool(json.loads(Path(control).read_text())["enabled"])
+
+
+class _ReceiverSampler:
+```
+
+Source: `vendor/mac-mlx/mlx_vlm/models/deepseek_v41/dspark_receiver.py:95`. Unset read: None.
+
+```text
+        if self.hidden is None:
+            raise RuntimeError("DSpark requires captures from local prefill")
+        control = os.environ.get("DSV41_DSPARK_MODE_FILE")
+        if control and json.loads(Path(control).read_text()).get("audit", False):
+            self.audit(cache, first)
+        yield first
+        rounds = _dspark_rounds(self.model, self.drafter, cache, self.hidden,
+```
+
+### DSV41_DSPARK_REJECT_LOG
+
+Advanced backend control DSV41_DSPARK_REJECT_LOG. Set explicitly only for the selected backend; its literal read and fallback are documented below.
+
+Scope: mac-mlx. Class: advanced.
+
+Source: `vendor/mac-mlx/mlx_vlm/speculative/dspark.py:161`. Unset read: ''.
+
+```text
+#
+# Off unless DSV41_DSPARK_REJECT_LOG names a file. One short JSON line per round.
+_DSPARK_REJECT_LOG = os.environ.get("DSV41_DSPARK_REJECT_LOG", "")
+
+
+def _dspark_record_round(draft_tokens, target_tokens, accepted):
+    """Append one round: what was drafted, what the target wanted, how many survived."""
+```
+
+### DSV41_DSPARK_STATS
+
+Advanced backend control DSV41_DSPARK_STATS. Set explicitly only for the selected backend; its literal read and fallback are documented below.
+
+Scope: mac-mlx. Class: advanced.
+
+Source: `vendor/mac-mlx/mlx_vlm/models/deepseek_v41/dspark_receiver.py:48`. Unset read: None.
+
+```text
+
+        self._rng_before = (_copy_rng_state()
+                            if os.environ.get("DSV41_DSPARK_STATS") else None)
+        self.model = language_model
+        self.drafter = language_model.make_dspark_drafter()
+        if os.environ.get("DSV41_DSPARK_TIMING", "0") == "1":
+            from ...speculative.dspark_timing import DSparkTiming
+```
+
+Source: `vendor/mac-mlx/mlx_vlm/models/deepseek_v41/dspark_receiver.py:145`. Unset read: '/tmp/dsv41_s1_stats.json'.
+
+```text
+                capture_norm_ratio=float((mx.linalg.norm(actual_h.astype(mx.float32))/mx.linalg.norm(reference_h.astype(mx.float32))).item()),
+                argmax_equal=bool(mx.array_equal(mx.argmax(out.logits,axis=-1),mx.argmax(reference,axis=-1)).item()))
+            destination = os.environ.get('DSV41_DSPARK_STATS','/tmp/dsv41_s1_stats.json')+'.audit.json'
+            Path(destination).write_text(json.dumps(result,indent=2)+'\n')
+        finally:
+            _restore_rng_state(before)
+
+```
+
+Source: `vendor/mac-mlx/mlx_vlm/models/deepseek_v41/dspark_receiver.py:169`. Unset read: None.
+
+```text
+                    target_calls_per_accepted_draft=calls/sum(accepts) if sum(accepts) else None,
+                    target_and_draft_calls_per_committed_token=(calls+self.drafter.draft_calls)/max(1,emitted))
+        destination = os.environ.get("DSV41_DSPARK_STATS")
+        timing = getattr(self.drafter, "phase_timing", None)
+        if timing is not None:
+            result["phase_timing"] = timing.summary()
+        controller = getattr(self.drafter, "cost_controller", None)
+```
+
+### DSV41_DSPARK_TIMING
+
+Advanced backend control DSV41_DSPARK_TIMING. Set explicitly only for the selected backend; its literal read and fallback are documented below.
+
+Scope: mac-mlx. Class: advanced.
+
+Source: `vendor/mac-mlx/mlx_vlm/models/deepseek_v41/dspark_receiver.py:51`. Unset read: '0'.
+
+```text
+        self.model = language_model
+        self.drafter = language_model.make_dspark_drafter()
+        if os.environ.get("DSV41_DSPARK_TIMING", "0") == "1":
+            from ...speculative.dspark_timing import DSparkTiming
+            self.drafter.phase_timing = DSparkTiming()
+        if not getattr(language_model, "_dspark_materialized", False):
+            # Studio's existing loader explicitly materializes backbone layers.
+```
+
+### DSV41_EXPERT_TILES_TEST_RELEASE
+
+Advanced backend control DSV41_EXPERT_TILES_TEST_RELEASE. Set explicitly only for the selected backend; its literal read and fallback are documented below.
+
+Scope: mac-mlx. Class: advanced.
+
+Source: `vendor/mac-mlx/mlx_vlm/custom_kernels/deepseek_v41/test_expert_tiles_qmm.py:31`. Unset read: '0'.
+
+```text
+from mlx_vlm.models.deepseek_v41.language import ClampedSwiGLU
+
+RELEASE = os.environ.get("DSV41_EXPERT_TILES_TEST_RELEASE", "0") == "1"
+D, I = (5120, 2304) if RELEASE else (128, 96)
+CASES = ["probe_a", "balanced32", "8x1536", "singleton_empty", "boundaries"]
+CASES += [f"remainder_{r}" for r in range(16)]
+
+```
+
+### DSV41_FAST_RMS_NORM
+
+Advanced backend control DSV41_FAST_RMS_NORM. Set explicitly only for the selected backend; its literal read and fallback are documented below.
+
+Scope: mac-mlx. Class: advanced.
+
+Source: `vendor/mac-mlx/mlx_vlm/runtime_profile.py:147`. Unset read: None.
+
+```text
+                restore.append(lambda: os.environ.pop("DSV41_BOUNDED_CACHE", None) if old is None else os.environ.__setitem__("DSV41_BOUNDED_CACHE", old))
+            elif experiment == "fast_rms_norm":
+                old = os.environ.get("DSV41_FAST_RMS_NORM")
+                os.environ["DSV41_FAST_RMS_NORM"] = "1"
+                restore.append(lambda: os.environ.pop("DSV41_FAST_RMS_NORM", None) if old is None else os.environ.__setitem__("DSV41_FAST_RMS_NORM", old))
+            elif experiment == "metal_sinkhorn":
+                importlib.reload(hc)
+```
+
+Source: `vendor/mac-mlx/mlx_vlm/runtime_profile.py:148`. Unset read: Assigned by the runtime; see literal consumer.
+
+```text
+            elif experiment == "fast_rms_norm":
+                old = os.environ.get("DSV41_FAST_RMS_NORM")
+                os.environ["DSV41_FAST_RMS_NORM"] = "1"
+                restore.append(lambda: os.environ.pop("DSV41_FAST_RMS_NORM", None) if old is None else os.environ.__setitem__("DSV41_FAST_RMS_NORM", old))
+            elif experiment == "metal_sinkhorn":
+                importlib.reload(hc)
+                original = language._hc_split_sinkhorn_ops
+```
+
+Source: `vendor/mac-mlx/mlx_vlm/models/deepseek_v41/language.py:221`. Unset read: '0'.
+
+```text
+        # fp32 to fast RMSNorm: bf16 inputs AND weights otherwise round the
+        # normalized activation before multiplying the learned weight.
+        if os.environ.get("DSV41_FAST_RMS_NORM", "0") == "1":
+            return mx.fast.rms_norm(
+                x.astype(mx.float32), self.weight.astype(mx.float32), self.eps
+            ).astype(x.dtype)
+        if os.environ.get("DSV41_COMPILE_PRIMITIVES", "0") == "1":
+```
+
+Source: `vendor/mac-mlx/mlx_vlm/models/deepseek_v41/test_sinkhorn_metal.py:34`. Unset read: Wrapper/conditional default: see the literal call and consumer below.
+
+```text
+    norm.weight = 1 + mx.random.normal((width,)) * 0.1
+    x = mx.random.normal((1, 17, width)).astype(dtype)
+    monkeypatch.setenv("DSV41_FAST_RMS_NORM", "0")
+    expected = norm(x)
+    monkeypatch.setenv("DSV41_FAST_RMS_NORM", "1")
+    actual = norm(x)
+    mx.eval(actual, expected)
+```
+
+Source: `vendor/mac-mlx/mlx_vlm/models/deepseek_v41/test_sinkhorn_metal.py:36`. Unset read: Wrapper/conditional default: see the literal call and consumer below.
+
+```text
+    monkeypatch.setenv("DSV41_FAST_RMS_NORM", "0")
+    expected = norm(x)
+    monkeypatch.setenv("DSV41_FAST_RMS_NORM", "1")
+    actual = norm(x)
+    mx.eval(actual, expected)
+    # Native reduction order can put a BF16 result on the adjacent rounding
+    # value. The real QAT model is separately held to the long retrieval gate.
+```
+
+### DSV41_FFN_DOWN_BF16
+
+Advanced backend control DSV41_FFN_DOWN_BF16. Set explicitly only for the selected backend; its literal read and fallback are documented below.
+
+Scope: mac-mlx. Class: advanced.
+
+Source: `vendor/mac-mlx/mlx_vlm/models/deepseek_v41/language.py:2500`. Unset read: '0'.
+
+```text
+            if fused_flag == "1" and (
+                    getattr(self, "_ffn_down_bf16_attached",
+                            os.environ.get("DSV41_FFN_DOWN_BF16", "0") == "1")
+                    or getattr(self, "_ffn_expert_pad16_attached",
+                               os.environ.get("DSV41_FFN_EXPERT_PAD16", "0") == "1")
+                    or getattr(self, "_ffn_expert_tiles_attached",
+                               os.environ.get("DSV41_FFN_EXPERT_TILES", "0") == "1")
+```
+
+Source: `vendor/mac-mlx/mlx_vlm/models/deepseek_v41/language.py:2509`. Unset read: '0'.
+
+```text
+                                 "EXPERT_TILES and PREFILL_GROUPED_MXFP4 to be off")
+        if not hasattr(self, "_ffn_down_bf16_attached"):
+            self._ffn_down_bf16_attached = os.environ.get("DSV41_FFN_DOWN_BF16", "0") == "1"
+            for layer in self.layers:
+                layer.ffn.ffn_down_bf16 = self._ffn_down_bf16_attached
+        if not hasattr(self, "_ffn_expert_pad16_attached"):
+            self._ffn_expert_pad16_attached = os.environ.get("DSV41_FFN_EXPERT_PAD16", "0") == "1"
+```
+
+Source: `vendor/mac-mlx/mlx_vlm/models/deepseek_v41/test_ffn_down_bf16.py:63`. Unset read: Wrapper/conditional default: see the literal call and consumer below.
+
+```text
+    mx.eval(reference)
+    # Exercise the real attach method without needing an Engram checkpoint.
+    monkeypatch.setenv("DSV41_FFN_DOWN_BF16", "1")
+    holder = SimpleNamespace(layers=[SimpleNamespace(ffn=moe, engram=None)],
+                             model=SimpleNamespace(layout=None))
+    lang.LanguageModel.attach_engram_storage(holder, ".")
+    monkeypatch.setenv("DSV41_FFN_DOWN_BF16", "0")  # Latched at attach.
+```
+
+Source: `vendor/mac-mlx/mlx_vlm/models/deepseek_v41/test_ffn_down_bf16.py:67`. Unset read: Wrapper/conditional default: see the literal call and consumer below.
+
+```text
+                             model=SimpleNamespace(layout=None))
+    lang.LanguageModel.attach_engram_storage(holder, ".")
+    monkeypatch.setenv("DSV41_FFN_DOWN_BF16", "0")  # Latched at attach.
+    actual = moe(x)
+    mx.eval(actual)
+    # DSpark verification is excluded even at n=2048.
+    with lang._v41_verification():
+```
+
+Source: `vendor/mac-mlx/mlx_vlm/models/deepseek_v41/test_ffn_down_bf16_cpu.py:37`. Unset read: Wrapper/conditional default: see the literal call and consumer below.
+
+```text
+    monkeypatch.delenv("DSV41_PROMOTE_DECODE_WEIGHTS", raising=False)
+    if flag is None:
+        monkeypatch.delenv("DSV41_FFN_DOWN_BF16", raising=False)
+    else:
+        monkeypatch.setenv("DSV41_FFN_DOWN_BF16", flag)
+    model = SimpleNamespace(layers=[SimpleNamespace(ffn=moe, engram=None)],
+                            model=SimpleNamespace(layout=None))
+```
+
+Source: `vendor/mac-mlx/mlx_vlm/models/deepseek_v41/test_ffn_down_bf16_cpu.py:39`. Unset read: Wrapper/conditional default: see the literal call and consumer below.
+
+```text
+        monkeypatch.delenv("DSV41_FFN_DOWN_BF16", raising=False)
+    else:
+        monkeypatch.setenv("DSV41_FFN_DOWN_BF16", flag)
+    model = SimpleNamespace(layers=[SimpleNamespace(ffn=moe, engram=None)],
+                            model=SimpleNamespace(layout=None))
+    ns["attach"](model, ".")
+    return model
+```
+
+Source: `vendor/mac-mlx/mlx_vlm/models/deepseek_v41/test_ffn_down_bf16_cpu.py:62`. Unset read: Wrapper/conditional default: see the literal call and consumer below.
+
+```text
+    ns["_ffn_down_bf16"] = lambda *a: (calls.append("bf16") or routed)
+    model = _attach(ns, moe, monkeypatch, flag)
+    monkeypatch.setenv("DSV41_FFN_DOWN_BF16", "0" if flag == "1" else "1")
+    ns["attach"](model, ".")  # Environment changes after attach have no effect.
+    ns["_v41_verify_context"].set(verify)
+    actual = ns["forward"](moe, np.ones((1, n, 4), np.float32))
+    assert calls == ["bf16" if flag == "1" and n >= 64 and not verify else "fp32"]
+```
+
+Source: `vendor/mac-mlx/mlx_vlm/models/deepseek_v41/test_ffn_expert_pad.py:152`. Unset read: Wrapper/conditional default: see the literal call and consumer below.
+
+```text
+    mx.eval(reference)
+    monkeypatch.setenv("DSV41_FFN_EXPERT_PAD16", "1")
+    monkeypatch.setenv("DSV41_FFN_DOWN_BF16", "1" if down_bf16 else "0")
+    holder = SimpleNamespace(layers=[SimpleNamespace(ffn=moe, engram=None)],
+                             model=SimpleNamespace(layout=None))
+    lang.LanguageModel.attach_engram_storage(holder, ".")
+    monkeypatch.setenv("DSV41_FFN_EXPERT_PAD16", "0")
+```
+
+Source: `vendor/mac-mlx/mlx_vlm/models/deepseek_v41/test_ffn_expert_pad.py:157`. Unset read: Wrapper/conditional default: see the literal call and consumer below.
+
+```text
+    lang.LanguageModel.attach_engram_storage(holder, ".")
+    monkeypatch.setenv("DSV41_FFN_EXPERT_PAD16", "0")
+    monkeypatch.setenv("DSV41_FFN_DOWN_BF16", "0" if down_bf16 else "1")
+    lang.LanguageModel.attach_engram_storage(holder, ".")
+    assert moe.ffn_expert_pad16 and moe.ffn_down_bf16 == down_bf16
+    # The pad helper must win over grouped prefill, with the down dtype composed.
+    monkeypatch.setenv("DSV41_PREFILL_GROUPED_MXFP4", "1")
+```
+
+Source: `vendor/mac-mlx/mlx_vlm/models/deepseek_v41/test_ffn_expert_pad_cpu.py:160`. Unset read: Wrapper/conditional default: see the literal call and consumer below.
+
+```text
+    monkeypatch.setitem(sys.modules, "mlx_lm.models.switch_layers", switch)
+    monkeypatch.setenv("DSV41_FFN_EXPERT_PAD16", "1")
+    monkeypatch.setenv("DSV41_FFN_DOWN_BF16", "0")
+    monkeypatch.setenv("DSV41_PROMOTE_DECODE_WEIGHTS", "0")
+    # Padding must also take precedence over grouped prefill.
+    monkeypatch.setenv("DSV41_PREFILL_GROUPED_MXFP4", "1")
+    monkeypatch.setenv("DSV41_PREFILL_GROUPED_MIN_ROWS", "64")
+```
+
+### DSV41_FFN_EXPERT_PAD16
+
+Advanced backend control DSV41_FFN_EXPERT_PAD16. Set explicitly only for the selected backend; its literal read and fallback are documented below.
+
+Scope: mac-mlx. Class: advanced.
+
+Source: `vendor/mac-mlx/mlx_vlm/models/deepseek_v41/language.py:2502`. Unset read: '0'.
+
+```text
+                            os.environ.get("DSV41_FFN_DOWN_BF16", "0") == "1")
+                    or getattr(self, "_ffn_expert_pad16_attached",
+                               os.environ.get("DSV41_FFN_EXPERT_PAD16", "0") == "1")
+                    or getattr(self, "_ffn_expert_tiles_attached",
+                               os.environ.get("DSV41_FFN_EXPERT_TILES", "0") == "1")
+                    or os.environ.get("DSV41_PREFILL_GROUPED_MXFP4", "0") == "1"):
+                raise ValueError("DSV41_FFN_FUSED requires DOWN_BF16, EXPERT_PAD16, "
+```
+
+Source: `vendor/mac-mlx/mlx_vlm/models/deepseek_v41/language.py:2513`. Unset read: '0'.
+
+```text
+                layer.ffn.ffn_down_bf16 = self._ffn_down_bf16_attached
+        if not hasattr(self, "_ffn_expert_pad16_attached"):
+            self._ffn_expert_pad16_attached = os.environ.get("DSV41_FFN_EXPERT_PAD16", "0") == "1"
+            for layer in self.layers:
+                layer.ffn.ffn_expert_pad16 = self._ffn_expert_pad16_attached
+        if not hasattr(self, "_ffn_expert_tiles_attached"):
+            flag = os.environ.get("DSV41_FFN_EXPERT_TILES", "0")
+```
+
+Source: `vendor/mac-mlx/mlx_vlm/models/deepseek_v41/test_ffn_down_bf16_cpu.py:34`. Unset read: Wrapper/conditional default: see the literal call and consumer below.
+
+```text
+
+def _attach(ns, moe, monkeypatch, flag):
+    monkeypatch.setenv("DSV41_FFN_EXPERT_PAD16", "0")
+    monkeypatch.delenv("DSV41_PROMOTE_DECODE_WEIGHTS", raising=False)
+    if flag is None:
+        monkeypatch.delenv("DSV41_FFN_DOWN_BF16", raising=False)
+    else:
+```
+
+Source: `vendor/mac-mlx/mlx_vlm/models/deepseek_v41/test_ffn_expert_pad.py:151`. Unset read: Wrapper/conditional default: see the literal call and consumer below.
+
+```text
+    reference = moe(x)
+    mx.eval(reference)
+    monkeypatch.setenv("DSV41_FFN_EXPERT_PAD16", "1")
+    monkeypatch.setenv("DSV41_FFN_DOWN_BF16", "1" if down_bf16 else "0")
+    holder = SimpleNamespace(layers=[SimpleNamespace(ffn=moe, engram=None)],
+                             model=SimpleNamespace(layout=None))
+    lang.LanguageModel.attach_engram_storage(holder, ".")
+```
+
+Source: `vendor/mac-mlx/mlx_vlm/models/deepseek_v41/test_ffn_expert_pad.py:156`. Unset read: Wrapper/conditional default: see the literal call and consumer below.
+
+```text
+                             model=SimpleNamespace(layout=None))
+    lang.LanguageModel.attach_engram_storage(holder, ".")
+    monkeypatch.setenv("DSV41_FFN_EXPERT_PAD16", "0")
+    monkeypatch.setenv("DSV41_FFN_DOWN_BF16", "0" if down_bf16 else "1")
+    lang.LanguageModel.attach_engram_storage(holder, ".")
+    assert moe.ffn_expert_pad16 and moe.ffn_down_bf16 == down_bf16
+    # The pad helper must win over grouped prefill, with the down dtype composed.
+```
+
+Source: `vendor/mac-mlx/mlx_vlm/models/deepseek_v41/test_ffn_expert_pad_cpu.py:159`. Unset read: Wrapper/conditional default: see the literal call and consumer below.
+
+```text
+    switch._scatter_unsort = lambda y, inv, shape: y[inv].reshape(*shape, 1, y.shape[-1])
+    monkeypatch.setitem(sys.modules, "mlx_lm.models.switch_layers", switch)
+    monkeypatch.setenv("DSV41_FFN_EXPERT_PAD16", "1")
+    monkeypatch.setenv("DSV41_FFN_DOWN_BF16", "0")
+    monkeypatch.setenv("DSV41_PROMOTE_DECODE_WEIGHTS", "0")
+    # Padding must also take precedence over grouped prefill.
+    monkeypatch.setenv("DSV41_PREFILL_GROUPED_MXFP4", "1")
+```
+
+Source: `vendor/mac-mlx/mlx_vlm/models/deepseek_v41/test_ffn_expert_pad_cpu.py:177`. Unset read: Wrapper/conditional default: see the literal call and consumer below.
+
+```text
+                             model=SimpleNamespace(layout=None))
+    ns["attach"](holder, ".")
+    monkeypatch.setenv("DSV41_FFN_EXPERT_PAD16", "0")
+    ns["attach"](holder, ".")
+    assert moe.ffn_expert_pad16  # Attached value survives environment changes.
+    rng = np.random.default_rng(41)
+    for forward, n in enumerate((64, 65, 64)):
+```
+
+### DSV41_FFN_EXPERT_TILES
+
+Advanced backend control DSV41_FFN_EXPERT_TILES. Set explicitly only for the selected backend; its literal read and fallback are documented below.
+
+Scope: mac-mlx. Class: advanced.
+
+Source: `vendor/mac-mlx/mlx_vlm/custom_kernels/deepseek_v41/test_expert_tiles_cpu.py:112`. Unset read: Wrapper/conditional default: see the literal call and consumer below.
+
+```text
+    ns, calls, moe, model, dspark = dispatch
+    if flag is None:
+        monkeypatch.delenv("DSV41_FFN_EXPERT_TILES")
+    else:
+        monkeypatch.setenv("DSV41_FFN_EXPERT_TILES", flag)
+    ns["attach"](model, ".")
+    monkeypatch.setenv("DSV41_FFN_EXPERT_TILES", "0" if flag == "1" else "1")
+```
+
+Source: `vendor/mac-mlx/mlx_vlm/custom_kernels/deepseek_v41/test_expert_tiles_cpu.py:114`. Unset read: Wrapper/conditional default: see the literal call and consumer below.
+
+```text
+        monkeypatch.delenv("DSV41_FFN_EXPERT_TILES")
+    else:
+        monkeypatch.setenv("DSV41_FFN_EXPERT_TILES", flag)
+    ns["attach"](model, ".")
+    monkeypatch.setenv("DSV41_FFN_EXPERT_TILES", "0" if flag == "1" else "1")
+    ns["attach"](model, ".")
+    ns["_v41_verify_context"].set(verify)
+```
+
+Source: `vendor/mac-mlx/mlx_vlm/custom_kernels/deepseek_v41/test_expert_tiles_cpu.py:116`. Unset read: Wrapper/conditional default: see the literal call and consumer below.
+
+```text
+        monkeypatch.setenv("DSV41_FFN_EXPERT_TILES", flag)
+    ns["attach"](model, ".")
+    monkeypatch.setenv("DSV41_FFN_EXPERT_TILES", "0" if flag == "1" else "1")
+    ns["attach"](model, ".")
+    ns["_v41_verify_context"].set(verify)
+    result = ns["forward"](moe, np.ones((1, n, 4), np.float32))
+    custom = flag == "1" and n >= 64 and not verify
+```
+
+Source: `vendor/mac-mlx/mlx_vlm/custom_kernels/deepseek_v41/test_expert_tiles_cpu.py:129`. Unset read: Wrapper/conditional default: see the literal call and consumer below.
+
+```text
+def test_attach_compile_failure_is_fatal_and_retryable(dispatch, monkeypatch):
+    ns, calls, moe, model, _ = dispatch
+    monkeypatch.setenv("DSV41_FFN_EXPERT_TILES", "1")
+    def fail(layers):
+        raise RuntimeError("Metal compiler rejected shader")
+    ns["prepare_expert_tiles"] = fail
+    with pytest.raises(RuntimeError, match="Metal compiler"):
+```
+
+Source: `vendor/mac-mlx/mlx_vlm/custom_kernels/deepseek_v41/test_expert_tiles_cpu.py:145`. Unset read: Wrapper/conditional default: see the literal call and consumer below.
+
+```text
+def test_attach_rejects_conflicting_experiments(dispatch, monkeypatch, conflict):
+    ns, calls, _, model, _ = dispatch
+    monkeypatch.setenv("DSV41_FFN_EXPERT_TILES", "1")
+    monkeypatch.setenv(conflict, "1")
+    with pytest.raises(ValueError, match="requires DOWN_BF16"):
+        ns["attach"](model, ".")
+    assert not calls and not hasattr(model, "_ffn_expert_tiles_attached")
+```
+
+Source: `vendor/mac-mlx/mlx_vlm/custom_kernels/deepseek_v41/test_expert_tiles_cpu.py:154`. Unset read: Wrapper/conditional default: see the literal call and consumer below.
+
+```text
+def test_attach_rejects_unknown_flag(dispatch, monkeypatch):
+    ns, _, _, model, _ = dispatch
+    monkeypatch.setenv("DSV41_FFN_EXPERT_TILES", "yes")
+    with pytest.raises(ValueError, match="must be 0 or 1"):
+        ns["attach"](model, ".")
+
+
+```
+
+Source: `vendor/mac-mlx/mlx_vlm/models/deepseek_v41/language.py:2504`. Unset read: '0'.
+
+```text
+                               os.environ.get("DSV41_FFN_EXPERT_PAD16", "0") == "1")
+                    or getattr(self, "_ffn_expert_tiles_attached",
+                               os.environ.get("DSV41_FFN_EXPERT_TILES", "0") == "1")
+                    or os.environ.get("DSV41_PREFILL_GROUPED_MXFP4", "0") == "1"):
+                raise ValueError("DSV41_FFN_FUSED requires DOWN_BF16, EXPERT_PAD16, "
+                                 "EXPERT_TILES and PREFILL_GROUPED_MXFP4 to be off")
+        if not hasattr(self, "_ffn_down_bf16_attached"):
+```
+
+Source: `vendor/mac-mlx/mlx_vlm/models/deepseek_v41/language.py:2517`. Unset read: '0'.
+
+```text
+                layer.ffn.ffn_expert_pad16 = self._ffn_expert_pad16_attached
+        if not hasattr(self, "_ffn_expert_tiles_attached"):
+            flag = os.environ.get("DSV41_FFN_EXPERT_TILES", "0")
+            if flag not in ("0", "1"):
+                raise ValueError("DSV41_FFN_EXPERT_TILES must be 0 or 1")
+            if flag == "1":
+                if (self._ffn_down_bf16_attached or self._ffn_expert_pad16_attached
+```
+
+### DSV41_FFN_FUSED
+
+Advanced backend control DSV41_FFN_FUSED. Set explicitly only for the selected backend; its literal read and fallback are documented below.
+
+Scope: mac-mlx. Class: advanced.
+
+Source: `vendor/mac-mlx/mlx_vlm/custom_kernels/deepseek_v41/test_fused_ffn_cpu.py:84`. Unset read: Wrapper/conditional default: see the literal call and consumer below.
+
+```text
+    ns, calls, moe, model, dspark = dispatch
+    if flag is None:
+        monkeypatch.delenv("DSV41_FFN_FUSED", raising=False)
+    else:
+        monkeypatch.setenv("DSV41_FFN_FUSED", flag)
+    ns["attach"](model, ".")
+    assert calls == (["compile-fused"] if flag == "1" else [])
+```
+
+Source: `vendor/mac-mlx/mlx_vlm/custom_kernels/deepseek_v41/test_fused_ffn_cpu.py:86`. Unset read: Wrapper/conditional default: see the literal call and consumer below.
+
+```text
+        monkeypatch.delenv("DSV41_FFN_FUSED", raising=False)
+    else:
+        monkeypatch.setenv("DSV41_FFN_FUSED", flag)
+    ns["attach"](model, ".")
+    assert calls == (["compile-fused"] if flag == "1" else [])
+    assert model._ffn_fused_attached == moe.ffn_fused == (flag == "1")
+    assert not dspark.ffn_fused
+```
+
+Source: `vendor/mac-mlx/mlx_vlm/custom_kernels/deepseek_v41/test_fused_ffn_cpu.py:92`. Unset read: Wrapper/conditional default: see the literal call and consumer below.
+
+```text
+    assert not dspark.ffn_fused
+    # Later environment changes cannot change a published latch.
+    monkeypatch.setenv("DSV41_FFN_FUSED", "0" if flag == "1" else "1")
+    ns["attach"](model, ".")
+    calls.clear()
+    token = ns["_v41_verify_context"].set(verify)
+    try:
+```
+
+Source: `vendor/mac-mlx/mlx_vlm/custom_kernels/deepseek_v41/test_fused_ffn_cpu.py:109`. Unset read: Wrapper/conditional default: see the literal call and consumer below.
+
+```text
+def test_conflicts_fail_before_compile(dispatch, monkeypatch, other):
+    ns, calls, _, model, _ = dispatch
+    monkeypatch.setenv("DSV41_FFN_FUSED", "1")
+    monkeypatch.setenv(other, "1")
+    with pytest.raises(ValueError, match="FFN_FUSED requires"):
+        ns["attach"](model, ".")
+    assert not calls and not hasattr(model, "_ffn_fused_attached")
+```
+
+Source: `vendor/mac-mlx/mlx_vlm/custom_kernels/deepseek_v41/test_fused_ffn_cpu.py:118`. Unset read: Wrapper/conditional default: see the literal call and consumer below.
+
+```text
+def test_invalid_flag_and_compile_failure_retry(dispatch, monkeypatch):
+    ns, calls, moe, model, _ = dispatch
+    monkeypatch.setenv("DSV41_FFN_FUSED", "yes")
+    with pytest.raises(ValueError, match="must be 0 or 1"):
+        ns["attach"](model, ".")
+    monkeypatch.setenv("DSV41_FFN_FUSED", "1")
+
+```
+
+Source: `vendor/mac-mlx/mlx_vlm/custom_kernels/deepseek_v41/test_fused_ffn_cpu.py:121`. Unset read: Wrapper/conditional default: see the literal call and consumer below.
+
+```text
+    with pytest.raises(ValueError, match="must be 0 or 1"):
+        ns["attach"](model, ".")
+    monkeypatch.setenv("DSV41_FFN_FUSED", "1")
+
+    def fail(layers):
+        raise RuntimeError("shader failed")
+
+```
+
+Source: `vendor/mac-mlx/mlx_vlm/models/deepseek_v41/language.py:2495`. Unset read: '0'.
+
+```text
+                    layer.attn.indexer.index_fused = self._index_fused_attached
+        if not hasattr(self, "_ffn_fused_attached"):
+            fused_flag = os.environ.get("DSV41_FFN_FUSED", "0")
+            if fused_flag not in ("0", "1"):
+                raise ValueError("DSV41_FFN_FUSED must be 0 or 1")
+            if fused_flag == "1" and (
+                    getattr(self, "_ffn_down_bf16_attached",
+```
+
+### DSV41_FFN_FUSED_TEST_RELEASE
+
+Advanced backend control DSV41_FFN_FUSED_TEST_RELEASE. Set explicitly only for the selected backend; its literal read and fallback are documented below.
+
+Scope: mac-mlx. Class: advanced.
+
+Source: `vendor/mac-mlx/mlx_vlm/custom_kernels/deepseek_v41/test_fused_ffn_qmm.py:30`. Unset read: '0'.
+
+```text
+from mlx_vlm.models.deepseek_v41.language import ClampedSwiGLU
+
+D, I = (5120, 2304) if os.environ.get("DSV41_FFN_FUSED_TEST_RELEASE", "0") == "1" else (128, 96)
+CASES = ["probe_a", "balanced32", "8x1536", "singleton_empty", "fused_boundaries"]
+
+
+@pytest.fixture(scope="module", autouse=True)
+```
+
+### DSV41_GATE_FP32
+
+Advanced backend control DSV41_GATE_FP32. Set explicitly only for the selected backend; its literal read and fallback are documented below.
+
+Scope: mac-mlx. Class: advanced.
+
+Source: `vendor/mac-mlx/mlx_vlm/models/deepseek_v41/language.py:811`. Unset read: '0'.
+
+```text
+
+    def __call__(self, x: mx.array, image_mask=None):
+        if os.environ.get("DSV41_GATE_FP32", "0") == "1" and self.weight.dtype != mx.float32:
+            # Promote the parameter itself once, rather than keeping a second
+            # cached array that becomes stale after load_weights/update/casting.
+            # Inference opt-in: this changes stored parameter dtype/memory.
+            self.weight = self.weight.astype(mx.float32)
+```
+
+### DSV41_GRAPH_REPORT
+
+Advanced backend control DSV41_GRAPH_REPORT. Set explicitly only for the selected backend; its literal read and fallback are documented below.
+
+Scope: mac-mlx. Class: advanced.
+
+Source: `vendor/mac-mlx/mlx_vlm/models/deepseek_v41/language.py:2282`. Unset read: '0'.
+
+```text
+            LEDGER["cut_steps"] += 1
+        graph = getattr(self, "_block_graph", None)
+        if graph is not None and n == 1 and os.environ.get("DSV41_GRAPH_REPORT", "0") == "1":
+            graph.report(len(self.layers))
+        h = hc_pre(h, pre_mix)
+        if hidden_sink is not None:
+            hidden_sink.append(h)
+```
+
+### DSV41_GROUPED_TEST_CONFIGS
+
+Advanced backend control DSV41_GROUPED_TEST_CONFIGS. Set explicitly only for the selected backend; its literal read and fallback are documented below.
+
+Scope: mac-mlx. Class: advanced.
+
+Source: `vendor/mac-mlx/mlx_vlm/custom_kernels/deepseek_v41/test_grouped_gemm.py:45`. Unset read: 'fast'.
+
+```text
+D, I = (5120, 2304) if RELEASE else (128, 96)
+CASES = ("balanced32", "random2048", "random8192", "skewed", "empty", "tails")
+_selected = os.environ.get("DSV41_GROUPED_TEST_CONFIGS", "fast")
+TEST_CONFIGS = [None] + list(CONFIGS if _selected == "all" else _selected.split(","))
+
+
+def assert_bits(label, actual, reference):
+```
+
+### DSV41_GROUPED_TEST_RELEASE
+
+Advanced backend control DSV41_GROUPED_TEST_RELEASE. Set explicitly only for the selected backend; its literal read and fallback are documented below.
+
+Scope: mac-mlx. Class: advanced.
+
+Source: `vendor/mac-mlx/mlx_vlm/custom_kernels/deepseek_v41/test_grouped_gemm.py:41`. Unset read: '0'.
+
+```text
+from mlx_vlm.models.deepseek_v41.moe_prefill import moe_prefill_grouped
+
+RELEASE = os.environ.get("DSV41_GROUPED_TEST_RELEASE", "0") == "1"
+E, TOPK = 384, 6
+D, I = (5120, 2304) if RELEASE else (128, 96)
+CASES = ("balanced32", "random2048", "random8192", "skewed", "empty", "tails")
+_selected = os.environ.get("DSV41_GROUPED_TEST_CONFIGS", "fast")
+```
+
+### DSV41_GROUPED_TEST_WORKER
+
+Advanced backend control DSV41_GROUPED_TEST_WORKER. Set explicitly only for the selected backend; its literal read and fallback are documented below.
+
+Scope: mac-mlx. Class: advanced.
+
+Source: `vendor/mac-mlx/mlx_vlm/custom_kernels/deepseek_v41/conftest.py:20`. Unset read: None.
+
+```text
+def pytest_runtest_protocol(item, nextitem):
+    # Intercept BEFORE fixture setup: projection fixtures also submit GPU work.
+    if not _grouped_test(item) or os.environ.get("DSV41_GROUPED_TEST_WORKER") == "1":
+        return None
+    job = Variant("pytest", item.nodeid)
+    env = dict(os.environ, DSV41_GROUPED_TEST_WORKER="1", PYTHONUNBUFFERED="1")
+    import subprocess
+```
+
+Source: `vendor/mac-mlx/mlx_vlm/custom_kernels/deepseek_v41/conftest.py:48`. Unset read: None.
+
+```text
+@pytest.fixture(autouse=True)
+def grouped_test_launch_watchdog(request, monkeypatch):
+    if not _grouped_test(request.node) or os.environ.get("DSV41_GROUPED_TEST_WORKER") != "1":
+        return
+    import mlx.core as mx
+    import mlx_vlm.custom_kernels.deepseek_v41.grouped_gemm as kernel
+    import mlx_vlm.models.deepseek_v41.moe_prefill as adapter
+```
+
+### DSV41_HC_COMPILE_POST
+
+Advanced backend control DSV41_HC_COMPILE_POST. Set explicitly only for the selected backend; its literal read and fallback are documented below.
+
+Scope: mac-mlx. Class: advanced.
+
+Source: `vendor/mac-mlx/mlx_vlm/models/deepseek_v41/hyper_connection.py:28`. Unset read: '0'.
+
+```text
+
+
+COMPILE_POST = os.environ.get("DSV41_HC_COMPILE_POST", "0") == "1"
+SINKHORN_CALLS = 0
+FUSED_CALLS = 0
+POST_CALLS = 0
+
+```
+
+### DSV41_HC_FAST_NORM
+
+Advanced backend control DSV41_HC_FAST_NORM. Set explicitly only for the selected backend; its literal read and fallback are documented below.
+
+Scope: mac-mlx. Class: advanced.
+
+Source: `vendor/mac-mlx/mlx_vlm/models/deepseek_v41/language.py:1670`. Unset read: '0'.
+
+```text
+        # Moving the normalization before GEMM changes FP32 rounding. Keep the
+        # reference's projection-first order unless explicitly opted in.
+        self.fast_norm = os.environ.get("DSV41_HC_FAST_NORM", "0") == "1"
+        size = (2 + self.hc) * self.hc
+        self.fn = mx.zeros((size, self.hc * config.hidden_size), dtype=mx.float32)
+        self.base = mx.zeros((size,), dtype=mx.float32)
+        self.scale = mx.zeros((3,), dtype=mx.float32)
+```
+
+### DSV41_HC_FUSED
+
+Advanced backend control DSV41_HC_FUSED. Set explicitly only for the selected backend; its literal read and fallback are documented below.
+
+Scope: mac-mlx. Class: advanced.
+
+Source: `vendor/mac-mlx/mlx_vlm/models/deepseek_v41/language.py:1677`. Unset read: '0'.
+
+```text
+
+    def __call__(self, x, incoming_pre=None):
+        if os.environ.get("DSV41_HC_FUSED", "0") == "1":
+            from .hyper_connection import fused_staggered_hc
+
+            if incoming_pre is None:
+                raise ValueError("DSV41_HC_FUSED needs incoming_pre; block_graph integration is required")
+```
+
+Source: `vendor/mac-mlx/mlx_vlm/models/deepseek_v41/language.py:1776`. Unset read: '0'.
+
+```text
+            from .megakernel import collapse_norm_rows
+            return collapse_norm_rows(h, pre_mix, self.attn_norm)
+        if os.environ.get("DSV41_HC_FUSED", "0") == "1":
+            x = self.attn_hc(h, pre_mix)[0]
+        else:
+            x = hc_pre(h, pre_mix)
+        return self.attn_norm(x)
+```
+
+Source: `vendor/mac-mlx/mlx_vlm/models/deepseek_v41/language.py:1816`. Unset read: '0'.
+
+```text
+                from .megakernel import prefill_block
+                return prefill_block(self, h, pre_mix, start_pos, cache, shared, image_mask)
+        if os.environ.get("DSV41_HC_FUSED", "0") == "1":
+            x, attn_pre, post, comb = self.attn_hc(h, pre_mix)
+        else:
+            attn_pre, post, comb = self.attn_hc(h)
+            x = hc_pre(h, pre_mix)
+```
+
+Source: `vendor/mac-mlx/mlx_vlm/models/deepseek_v41/language.py:1829`. Unset read: '0'.
+
+```text
+            mx.synchronize()
+            _prefill_layer_add(self.attn.layer_id, "attn_ms", (time.perf_counter() - _t0) * 1000.0)
+        if os.environ.get("DSV41_HC_FUSED", "0") == "1":
+            x, ffn_pre, post, comb = self.ffn_hc(h, attn_pre)
+        else:
+            ffn_pre, post, comb = self.ffn_hc(h)
+            x = hc_pre(h, attn_pre)
+```
+
+### DSV41_HC_FUSED_POST
+
+Advanced backend control DSV41_HC_FUSED_POST. Set explicitly only for the selected backend; its literal read and fallback are documented below.
+
+Scope: mac-mlx. Class: advanced.
+
+Source: `vendor/mac-mlx/mlx_vlm/models/deepseek_v41/language.py:1707`. Unset read: '0'.
+
+```text
+    from .hyper_connection import COMPILE_POST, compiled_hc_post
+
+    if os.environ.get("DSV41_HC_FUSED_POST", "0") == "1":
+        from .hyper_connection import metal_hc_post
+
+        return metal_hc_post(x, residual, post, comb)
+    if COMPILE_POST:
+```
+
+### DSV41_HEAD_BF16
+
+Advanced backend control DSV41_HEAD_BF16. Set explicitly only for the selected backend; its literal read and fallback are documented below.
+
+Scope: mac-mlx. Class: advanced.
+
+Source: `engines/mlx-receiver/mlx_token_stream_server.py:164`. Unset read: '0'.
+
+```text
+        parameter_bytes += sum((2 * prod(shape) for _, shape in expected_vision_parameters(config.vision_config, config.text_config.hidden_size).values()))
+    if os.environ.get('DSV41_PROMOTE_DECODE_WEIGHTS', '0') == '1':
+        parameter_bytes += sum(((4 - sizes[dtype]) * prod(shape) for name, (dtype, shape) in specs.items() if name.endswith('.wo_a.weight') and os.environ.get('DSV41_WO_A_BF16', '0') != '1' or (name == 'lm_head.weight' and os.environ.get('DSV41_HEAD_BF16', '0') != '1')))
+    available, breakdown = _dsv41_wait_for_memory(source, parameter_bytes, _read_vm_stat, timeout_s=float(os.environ.get('DSV41_MEMORY_GUARD_WAIT_S', '90')))
+    required = _dsv41_memory_guard(available, source, parameter_bytes)
+    print(f"[DSV41] memory available={available / (1 << 30):.2f} GiB resident_required={required / (1 << 30):.0f} GiB headroom=20 GiB source={source} QAT={os.environ.get('DSV41_QAT', '1')} [{_dsv41_breakdown_text(breakdown)}]", file=sys.stderr, flush=True)
+    model_dir = Path(model_dir)
+```
+
+Source: `vendor/mac-mlx/mlx_vlm/models/deepseek_v41/language.py:86`. Unset read: '0'.
+
+```text
+# attach time, loudly). Both off: byte-for-byte the previous path.
+_WO_A_BF16 = os.environ.get("DSV41_WO_A_BF16", "0") == "1"
+_HEAD_BF16 = os.environ.get("DSV41_HEAD_BF16", "0") == "1"
+_PREFETCH_POOL = None
+
+
+def _prefetch_pool():
+```
+
+Source: `vendor/mac-mlx/mlx_vlm/models/deepseek_v41/test_decode_bf16_contractions.py:37`. Unset read: Wrapper/conditional default: see the literal call and consumer below.
+
+```text
+
+def test_head_bf16_without_the_kernel_is_refused(monkeypatch):
+    monkeypatch.setenv("DSV41_HEAD_BF16", "1")
+    monkeypatch.delenv("DSV41_OMLX_HEAD", raising=False)
+    import importlib
+    from mlx_vlm.models.deepseek_v41 import language as lang
+    importlib.reload(lang)
+```
+
+Source: `vendor/mac-mlx/mlx_vlm/models/deepseek_v41/test_decode_bf16_contractions.py:47`. Unset read: Wrapper/conditional default: see the literal call and consumer below.
+
+```text
+            lang.LanguageModel.attach_engram_storage(obj, "/nonexistent")
+    finally:
+        monkeypatch.delenv("DSV41_HEAD_BF16", raising=False)
+        importlib.reload(lang)
+```
+
+### DSV41_INDEX_FUSED
+
+Advanced backend control DSV41_INDEX_FUSED. Set explicitly only for the selected backend; its literal read and fallback are documented below.
+
+Scope: mac-mlx. Class: advanced.
+
+Source: `vendor/mac-mlx/mlx_vlm/custom_kernels/deepseek_v41/test_index_fused_cpu.py:476`. Unset read: Wrapper/conditional default: see the literal call and consumer below.
+
+```text
+    ns, calls, indexer, model = dispatch
+    if flag is None:
+        monkeypatch.delenv("DSV41_INDEX_FUSED")
+    else:
+        monkeypatch.setenv("DSV41_INDEX_FUSED", flag)
+    ns["attach"](model, ".")
+    monkeypatch.setenv("DSV41_INDEX_FUSED", "0" if flag == "1" else "1")
+```
+
+Source: `vendor/mac-mlx/mlx_vlm/custom_kernels/deepseek_v41/test_index_fused_cpu.py:478`. Unset read: Wrapper/conditional default: see the literal call and consumer below.
+
+```text
+        monkeypatch.delenv("DSV41_INDEX_FUSED")
+    else:
+        monkeypatch.setenv("DSV41_INDEX_FUSED", flag)
+    ns["attach"](model, ".")
+    monkeypatch.setenv("DSV41_INDEX_FUSED", "0" if flag == "1" else "1")
+    ns["attach"](model, ".")
+    ns["_v41_verify_context"].set(verify)
+```
+
+Source: `vendor/mac-mlx/mlx_vlm/custom_kernels/deepseek_v41/test_index_fused_cpu.py:480`. Unset read: Wrapper/conditional default: see the literal call and consumer below.
+
+```text
+        monkeypatch.setenv("DSV41_INDEX_FUSED", flag)
+    ns["attach"](model, ".")
+    monkeypatch.setenv("DSV41_INDEX_FUSED", "0" if flag == "1" else "1")
+    ns["attach"](model, ".")
+    ns["_v41_verify_context"].set(verify)
+    x = np.ones((1, n, 4), np.float32)
+    out = ns["forward"](indexer, x, x, 0, 128, None,
+```
+
+Source: `vendor/mac-mlx/mlx_vlm/custom_kernels/deepseek_v41/test_index_fused_cpu.py:496`. Unset read: Wrapper/conditional default: see the literal call and consumer below.
+
+```text
+        dispatch, monkeypatch, skip, precompute):
+    ns, calls, indexer, model = dispatch
+    monkeypatch.setenv("DSV41_INDEX_FUSED", "1")
+    monkeypatch.setenv("DSV41_INDEX_SKIP", skip)
+    monkeypatch.setenv("DSV41_S4_PRECOMPUTE", precompute)
+    # 0 = always skip when the switch is on; this nb is far below the shipped
+    # DSV41_INDEX_SKIP_MIN_NB, which is gated on its own below.
+```
+
+Source: `vendor/mac-mlx/mlx_vlm/custom_kernels/deepseek_v41/test_index_fused_cpu.py:527`. Unset read: Wrapper/conditional default: see the literal call and consumer below.
+
+```text
+    block mask at stride block_size, so the kernel takes it as-is."""
+    ns, calls, indexer, model = dispatch
+    monkeypatch.setenv("DSV41_INDEX_FUSED", "1")
+    monkeypatch.setenv("DSV41_INDEX_SKIP", "1")
+    monkeypatch.setenv("DSV41_S4_PRECOMPUTE", "0")
+    monkeypatch.setenv("DSV41_INDEX_SKIP_MIN_NB", "0")
+    indexer.uses_candidates = True
+```
+
+Source: `vendor/mac-mlx/mlx_vlm/custom_kernels/deepseek_v41/test_index_fused_cpu.py:570`. Unset read: Wrapper/conditional default: see the literal call and consumer below.
+
+```text
+    """
+    ns, calls, indexer, model = dispatch
+    monkeypatch.setenv("DSV41_INDEX_FUSED", "1")
+    monkeypatch.setenv("DSV41_INDEX_SKIP", skip)
+    monkeypatch.setenv("DSV41_S4_PRECOMPUTE", precompute)
+    if min_nb is None:
+        monkeypatch.delenv("DSV41_INDEX_SKIP_MIN_NB", raising=False)
+```
+
+Source: `vendor/mac-mlx/mlx_vlm/custom_kernels/deepseek_v41/test_index_fused_cpu.py:638`. Unset read: Wrapper/conditional default: see the literal call and consumer below.
+
+```text
+    decline early and engage later, and each outcome prints once."""
+    ns, calls, indexer, model = dispatch
+    monkeypatch.setenv("DSV41_INDEX_FUSED", "1")
+    monkeypatch.setenv("DSV41_INDEX_SKIP", "1")
+    monkeypatch.setenv("DSV41_S4_PRECOMPUTE", "1")
+    monkeypatch.setenv("DSV41_INDEX_SKIP_MIN_NB", "136")
+    indexer.uses_candidates = True
+```
+
+Source: `vendor/mac-mlx/mlx_vlm/custom_kernels/deepseek_v41/test_index_fused_cpu.py:669`. Unset read: Wrapper/conditional default: see the literal call and consumer below.
+
+```text
+def test_an_invalid_threshold_is_loud_at_attach(dispatch, monkeypatch, value, skip):
+    ns, calls, indexer, model = dispatch
+    monkeypatch.setenv("DSV41_INDEX_FUSED", "1")
+    monkeypatch.setenv("DSV41_INDEX_SKIP", skip)
+    monkeypatch.setenv("DSV41_INDEX_SKIP_MIN_NB", value)
+    with pytest.raises(ValueError, match="must be a non-negative integer"):
+        ns["attach"](model, ".")
+```
+
+Source: `vendor/mac-mlx/mlx_vlm/custom_kernels/deepseek_v41/test_index_fused_cpu.py:683`. Unset read: Wrapper/conditional default: see the literal call and consumer below.
+
+```text
+def test_a_valid_threshold_is_accepted_at_attach(dispatch, monkeypatch, value, expected):
+    ns, calls, indexer, model = dispatch
+    monkeypatch.setenv("DSV41_INDEX_FUSED", "1")
+    monkeypatch.setenv("DSV41_INDEX_SKIP", "1")
+    monkeypatch.setenv("DSV41_INDEX_SKIP_MIN_NB", value)
+    ns["attach"](model, ".")
+    assert calls == ["compile+skip"] and indexer.index_fused
+```
+
+Source: `vendor/mac-mlx/mlx_vlm/custom_kernels/deepseek_v41/test_index_fused_cpu.py:697`. Unset read: Wrapper/conditional default: see the literal call and consumer below.
+
+```text
+def test_skip_switch_is_validated_at_attach(dispatch, monkeypatch, fused, skip, message):
+    ns, calls, indexer, model = dispatch
+    monkeypatch.setenv("DSV41_INDEX_FUSED", fused)
+    monkeypatch.setenv("DSV41_INDEX_SKIP", skip)
+    with pytest.raises(ValueError, match=message):
+        ns["attach"](model, ".")
+    assert not calls and not indexer.index_fused
+```
+
+Source: `vendor/mac-mlx/mlx_vlm/custom_kernels/deepseek_v41/test_index_fused_cpu.py:706`. Unset read: Wrapper/conditional default: see the literal call and consumer below.
+
+```text
+def test_failed_compile_does_not_latch(dispatch, monkeypatch):
+    ns, calls, indexer, model = dispatch
+    monkeypatch.setenv("DSV41_INDEX_FUSED", "1")
+    def fail(layers, skip=False):
+        raise RuntimeError("compile failed")
+    ns["prepare_index_fused"] = fail
+    with pytest.raises(RuntimeError, match="compile failed"):
+```
+
+Source: `vendor/mac-mlx/mlx_vlm/custom_kernels/deepseek_v41/test_index_fused_cpu.py:721`. Unset read: Wrapper/conditional default: see the literal call and consumer below.
+
+```text
+def test_conflicts_at_attach_and_after_attach(dispatch, monkeypatch, conflict):
+    ns, calls, indexer, model = dispatch
+    monkeypatch.setenv("DSV41_INDEX_FUSED", "1")
+    monkeypatch.setenv("DSV41_" + conflict, "1")
+    with pytest.raises(ValueError, match="cannot combine"):
+        ns["attach"](model, ".")
+    assert not calls and not indexer.index_fused
+```
+
+Source: `vendor/mac-mlx/mlx_vlm/custom_kernels/deepseek_v41/test_index_fused_cpu.py:736`. Unset read: Wrapper/conditional default: see the literal call and consumer below.
+
+```text
+def test_invalid_switch(dispatch, monkeypatch):
+    ns, _, _, model = dispatch
+    monkeypatch.setenv("DSV41_INDEX_FUSED", "yes")
+    with pytest.raises(ValueError, match="must be 0 or 1"):
+        ns["attach"](model, ".")
+
+
+```
+
+Source: `vendor/mac-mlx/mlx_vlm/models/deepseek_v41/language.py:2467`. Unset read: '0'.
+
+```text
+                               "fp32 logits); refusing to serve bf16 logits silently")
+        if not hasattr(self, "_index_fused_attached"):
+            index_flag = os.environ.get("DSV41_INDEX_FUSED", "0")
+            if index_flag not in ("0", "1"):
+                raise ValueError("DSV41_INDEX_FUSED must be 0 or 1")
+            skip_flag = os.environ.get("DSV41_INDEX_SKIP", "0")
+            if skip_flag not in ("0", "1"):
+```
+
+### DSV41_INDEX_SKIP
+
+Advanced backend control DSV41_INDEX_SKIP. Set explicitly only for the selected backend; its literal read and fallback are documented below.
+
+Scope: mac-mlx. Class: advanced.
+
+Source: `vendor/mac-mlx/mlx_vlm/custom_kernels/deepseek_v41/test_index_fused.py:448`. Unset read: Wrapper/conditional default: see the literal call and consumer below.
+
+```text
+    eager, fused = _model_paths(64, 1031, candidates=True)
+    expected = eager()
+    monkeypatch.setenv("DSV41_INDEX_SKIP", "1")
+    prewarm_index_skip(8, precompute)
+    actual = fused()
+    mx.eval(*expected, *actual)
+    _same_sets(actual[0], expected[0])
+```
+
+Source: `vendor/mac-mlx/mlx_vlm/custom_kernels/deepseek_v41/test_index_fused.py:469`. Unset read: Wrapper/conditional default: see the literal call and consumer below.
+
+```text
+    """
+    monkeypatch.setenv("DSV41_S4_PRECOMPUTE", str(int(precompute)))
+    monkeypatch.setenv("DSV41_INDEX_SKIP", "1")
+    monkeypatch.setenv("DSV41_INDEX_SKIP_MIN_NB", str(min_nb))
+    prewarm_index_skip(8, precompute)
+    masked = []
+    real = index_fused_module.index_scores_fused
+```
+
+Source: `vendor/mac-mlx/mlx_vlm/custom_kernels/deepseek_v41/test_index_fused_cpu.py:497`. Unset read: Wrapper/conditional default: see the literal call and consumer below.
+
+```text
+    ns, calls, indexer, model = dispatch
+    monkeypatch.setenv("DSV41_INDEX_FUSED", "1")
+    monkeypatch.setenv("DSV41_INDEX_SKIP", skip)
+    monkeypatch.setenv("DSV41_S4_PRECOMPUTE", precompute)
+    # 0 = always skip when the switch is on; this nb is far below the shipped
+    # DSV41_INDEX_SKIP_MIN_NB, which is gated on its own below.
+    monkeypatch.setenv("DSV41_INDEX_SKIP_MIN_NB", "0")
+```
+
+Source: `vendor/mac-mlx/mlx_vlm/custom_kernels/deepseek_v41/test_index_fused_cpu.py:528`. Unset read: Wrapper/conditional default: see the literal call and consumer below.
+
+```text
+    ns, calls, indexer, model = dispatch
+    monkeypatch.setenv("DSV41_INDEX_FUSED", "1")
+    monkeypatch.setenv("DSV41_INDEX_SKIP", "1")
+    monkeypatch.setenv("DSV41_S4_PRECOMPUTE", "0")
+    monkeypatch.setenv("DSV41_INDEX_SKIP_MIN_NB", "0")
+    indexer.uses_candidates = True
+    ns["attach"](model, ".")
+```
+
+Source: `vendor/mac-mlx/mlx_vlm/custom_kernels/deepseek_v41/test_index_fused_cpu.py:571`. Unset read: Wrapper/conditional default: see the literal call and consumer below.
+
+```text
+    ns, calls, indexer, model = dispatch
+    monkeypatch.setenv("DSV41_INDEX_FUSED", "1")
+    monkeypatch.setenv("DSV41_INDEX_SKIP", skip)
+    monkeypatch.setenv("DSV41_S4_PRECOMPUTE", precompute)
+    if min_nb is None:
+        monkeypatch.delenv("DSV41_INDEX_SKIP_MIN_NB", raising=False)
+    else:
+```
+
+Source: `vendor/mac-mlx/mlx_vlm/custom_kernels/deepseek_v41/test_index_fused_cpu.py:639`. Unset read: Wrapper/conditional default: see the literal call and consumer below.
+
+```text
+    ns, calls, indexer, model = dispatch
+    monkeypatch.setenv("DSV41_INDEX_FUSED", "1")
+    monkeypatch.setenv("DSV41_INDEX_SKIP", "1")
+    monkeypatch.setenv("DSV41_S4_PRECOMPUTE", "1")
+    monkeypatch.setenv("DSV41_INDEX_SKIP_MIN_NB", "136")
+    indexer.uses_candidates = True
+    ns["attach"](model, ".")
+```
+
+Source: `vendor/mac-mlx/mlx_vlm/custom_kernels/deepseek_v41/test_index_fused_cpu.py:670`. Unset read: Wrapper/conditional default: see the literal call and consumer below.
+
+```text
+    ns, calls, indexer, model = dispatch
+    monkeypatch.setenv("DSV41_INDEX_FUSED", "1")
+    monkeypatch.setenv("DSV41_INDEX_SKIP", skip)
+    monkeypatch.setenv("DSV41_INDEX_SKIP_MIN_NB", value)
+    with pytest.raises(ValueError, match="must be a non-negative integer"):
+        ns["attach"](model, ".")
+    # Nothing compiled, nothing latched: no silent fallback to the default.
+```
+
+Source: `vendor/mac-mlx/mlx_vlm/custom_kernels/deepseek_v41/test_index_fused_cpu.py:684`. Unset read: Wrapper/conditional default: see the literal call and consumer below.
+
+```text
+    ns, calls, indexer, model = dispatch
+    monkeypatch.setenv("DSV41_INDEX_FUSED", "1")
+    monkeypatch.setenv("DSV41_INDEX_SKIP", "1")
+    monkeypatch.setenv("DSV41_INDEX_SKIP_MIN_NB", value)
+    ns["attach"](model, ".")
+    assert calls == ["compile+skip"] and indexer.index_fused
+    assert ns["_index_skip_min_nb"]() == expected
+```
+
+Source: `vendor/mac-mlx/mlx_vlm/custom_kernels/deepseek_v41/test_index_fused_cpu.py:698`. Unset read: Wrapper/conditional default: see the literal call and consumer below.
+
+```text
+    ns, calls, indexer, model = dispatch
+    monkeypatch.setenv("DSV41_INDEX_FUSED", fused)
+    monkeypatch.setenv("DSV41_INDEX_SKIP", skip)
+    with pytest.raises(ValueError, match=message):
+        ns["attach"](model, ".")
+    assert not calls and not indexer.index_fused
+
+```
+
+Source: `vendor/mac-mlx/mlx_vlm/models/deepseek_v41/language.py:593`. Unset read: '0'.
+
+```text
+        bsz, n, _ = x.shape
+        fused_index = (self.index_fused and n >= 64 and not _v41_verify_context.get())
+        skip_enabled = fused_index and os.environ.get("DSV41_INDEX_SKIP", "0") == "1"
+        if self.index_fused:
+            for name in ("DSV41_PREFILL_TILED_INDEX", "DSV41_PREFILL_V41_INDEX",
+                         "DSV41_METAL_INDEXER"):
+                if os.environ.get(name, "0") == "1":
+```
+
+Source: `vendor/mac-mlx/mlx_vlm/models/deepseek_v41/language.py:2470`. Unset read: '0'.
+
+```text
+            if index_flag not in ("0", "1"):
+                raise ValueError("DSV41_INDEX_FUSED must be 0 or 1")
+            skip_flag = os.environ.get("DSV41_INDEX_SKIP", "0")
+            if skip_flag not in ("0", "1"):
+                raise ValueError("DSV41_INDEX_SKIP must be 0 or 1")
+            if skip_flag == "1" and index_flag != "1":
+                raise ValueError("DSV41_INDEX_SKIP=1 requires DSV41_INDEX_FUSED=1")
+```
+
+### DSV41_INDEX_SKIP_MIN_NB
+
+Advanced backend control DSV41_INDEX_SKIP_MIN_NB. Set explicitly only for the selected backend; its literal read and fallback are documented below.
+
+Scope: mac-mlx. Class: advanced.
+
+Source: `vendor/mac-mlx/mlx_vlm/custom_kernels/deepseek_v41/test_index_fused.py:470`. Unset read: Wrapper/conditional default: see the literal call and consumer below.
+
+```text
+    monkeypatch.setenv("DSV41_S4_PRECOMPUTE", str(int(precompute)))
+    monkeypatch.setenv("DSV41_INDEX_SKIP", "1")
+    monkeypatch.setenv("DSV41_INDEX_SKIP_MIN_NB", str(min_nb))
+    prewarm_index_skip(8, precompute)
+    masked = []
+    real = index_fused_module.index_scores_fused
+
+```
+
+Source: `vendor/mac-mlx/mlx_vlm/custom_kernels/deepseek_v41/test_index_fused_cpu.py:501`. Unset read: Wrapper/conditional default: see the literal call and consumer below.
+
+```text
+    # 0 = always skip when the switch is on; this nb is far below the shipped
+    # DSV41_INDEX_SKIP_MIN_NB, which is gated on its own below.
+    monkeypatch.setenv("DSV41_INDEX_SKIP_MIN_NB", "0")
+    indexer.uses_candidates = True
+    ns["attach"](model, ".")
+    assert calls == ["compile+skip" if skip == "1" else "compile"]
+    n, nb = 64, 136  # 17 blocks of eight: not a multiple of four either.
+```
+
+Source: `vendor/mac-mlx/mlx_vlm/custom_kernels/deepseek_v41/test_index_fused_cpu.py:530`. Unset read: Wrapper/conditional default: see the literal call and consumer below.
+
+```text
+    monkeypatch.setenv("DSV41_INDEX_SKIP", "1")
+    monkeypatch.setenv("DSV41_S4_PRECOMPUTE", "0")
+    monkeypatch.setenv("DSV41_INDEX_SKIP_MIN_NB", "0")
+    indexer.uses_candidates = True
+    ns["attach"](model, ".")
+    n, nb = 64, 136
+    x = np.ones((1, n, 4), np.float32)
+```
+
+Source: `vendor/mac-mlx/mlx_vlm/custom_kernels/deepseek_v41/test_index_fused_cpu.py:574`. Unset read: Wrapper/conditional default: see the literal call and consumer below.
+
+```text
+    monkeypatch.setenv("DSV41_S4_PRECOMPUTE", precompute)
+    if min_nb is None:
+        monkeypatch.delenv("DSV41_INDEX_SKIP_MIN_NB", raising=False)
+    else:
+        monkeypatch.setenv("DSV41_INDEX_SKIP_MIN_NB", str(min_nb))
+    indexer.uses_candidates = True
+    ns["attach"](model, ".")
+```
+
+Source: `vendor/mac-mlx/mlx_vlm/custom_kernels/deepseek_v41/test_index_fused_cpu.py:576`. Unset read: Wrapper/conditional default: see the literal call and consumer below.
+
+```text
+        monkeypatch.delenv("DSV41_INDEX_SKIP_MIN_NB", raising=False)
+    else:
+        monkeypatch.setenv("DSV41_INDEX_SKIP_MIN_NB", str(min_nb))
+    indexer.uses_candidates = True
+    ns["attach"](model, ".")
+    n = 64
+    keep = np.zeros((1, n, -(-nb // 8)), bool)
+```
+
+Source: `vendor/mac-mlx/mlx_vlm/custom_kernels/deepseek_v41/test_index_fused_cpu.py:641`. Unset read: Wrapper/conditional default: see the literal call and consumer below.
+
+```text
+    monkeypatch.setenv("DSV41_INDEX_SKIP", "1")
+    monkeypatch.setenv("DSV41_S4_PRECOMPUTE", "1")
+    monkeypatch.setenv("DSV41_INDEX_SKIP_MIN_NB", "136")
+    indexer.uses_candidates = True
+    ns["attach"](model, ".")
+    capsys.readouterr()
+    n = 64
+```
+
+Source: `vendor/mac-mlx/mlx_vlm/custom_kernels/deepseek_v41/test_index_fused_cpu.py:671`. Unset read: Wrapper/conditional default: see the literal call and consumer below.
+
+```text
+    monkeypatch.setenv("DSV41_INDEX_FUSED", "1")
+    monkeypatch.setenv("DSV41_INDEX_SKIP", skip)
+    monkeypatch.setenv("DSV41_INDEX_SKIP_MIN_NB", value)
+    with pytest.raises(ValueError, match="must be a non-negative integer"):
+        ns["attach"](model, ".")
+    # Nothing compiled, nothing latched: no silent fallback to the default.
+    assert not calls and not indexer.index_fused
+```
+
+Source: `vendor/mac-mlx/mlx_vlm/custom_kernels/deepseek_v41/test_index_fused_cpu.py:685`. Unset read: Wrapper/conditional default: see the literal call and consumer below.
+
+```text
+    monkeypatch.setenv("DSV41_INDEX_FUSED", "1")
+    monkeypatch.setenv("DSV41_INDEX_SKIP", "1")
+    monkeypatch.setenv("DSV41_INDEX_SKIP_MIN_NB", value)
+    ns["attach"](model, ".")
+    assert calls == ["compile+skip"] and indexer.index_fused
+    assert ns["_index_skip_min_nb"]() == expected
+    assert ns["_index_skip_decision"](expected, 24)[0]
+```
+
+Source: `vendor/mac-mlx/mlx_vlm/models/deepseek_v41/language.py:448`. Unset read: '60000'.
+
+```text
+    loud failure here, never a silent fallback to the default.
+    """
+    raw = os.environ.get("DSV41_INDEX_SKIP_MIN_NB", "60000")
+    try:
+        value = int(raw)
+    except (TypeError, ValueError):
+        value = -1
+```
+
+### DSV41_INDEX_TOPK
+
+Advanced backend control DSV41_INDEX_TOPK. Set explicitly only for the selected backend; its literal read and fallback are documented below.
+
+Scope: mac-mlx. Class: advanced.
+
+Source: `vendor/mac-mlx/mlx_vlm/custom_kernels/deepseek_v41/test_index_prefill.py:41`. Unset read: Wrapper/conditional default: see the literal call and consumer below.
+
+```text
+    monkeypatch.setenv("DSV41_QAT", "1")
+    monkeypatch.setenv("DSV41_METAL_QUANT", "0")
+    monkeypatch.setenv("DSV41_INDEX_TOPK", "512")
+
+
+def _inputs(n, context, mask, *, batch=1, dtype=mx.float32, seed=71):
+    mx.random.seed(seed)
+```
+
+Source: `vendor/mac-mlx/mlx_vlm/models/deepseek_v41/test_kv_selection_width.py:31`. Unset read: Wrapper/conditional default: see the literal call and consumer below.
+
+```text
+
+def test_kv_widths_default_to_the_checkpoints_own_values(monkeypatch):
+    monkeypatch.delenv("DSV41_INDEX_TOPK", raising=False)
+    monkeypatch.delenv("DSV41_SLIDING_WINDOW", raising=False)
+    cfg = _text_config()
+    assert cfg.index_topk == 512
+    assert cfg.sliding_window == 128
+```
+
+Source: `vendor/mac-mlx/mlx_vlm/models/deepseek_v41/test_kv_selection_width.py:39`. Unset read: Wrapper/conditional default: see the literal call and consumer below.
+
+```text
+
+def test_kv_widths_can_be_widened_by_environment(monkeypatch):
+    monkeypatch.setenv("DSV41_INDEX_TOPK", "4096")
+    monkeypatch.setenv("DSV41_SLIDING_WINDOW", "1024")
+    cfg = _text_config()
+    assert cfg.index_topk == 4096
+    assert cfg.sliding_window == 1024
+```
+
+Source: `vendor/mac-mlx/mlx_vlm/models/deepseek_v41/test_kv_selection_width.py:48`. Unset read: Wrapper/conditional default: see the literal call and consumer below.
+
+```text
+def test_an_unset_or_blank_override_is_not_a_zero(monkeypatch):
+    """A preset writing an empty string must not collapse the dense window to nothing."""
+    monkeypatch.setenv("DSV41_INDEX_TOPK", "")
+    monkeypatch.setenv("DSV41_SLIDING_WINDOW", "   ")
+    cfg = _text_config()
+    assert cfg.index_topk == 512
+    assert cfg.sliding_window == 128
+```
+
+Source: `vendor/mac-mlx/mlx_vlm/models/deepseek_v41/test_kv_selection_width.py:57`. Unset read: Wrapper/conditional default: see the literal call and consumer below.
+
+```text
+@pytest.mark.parametrize("bad", ["0", "-1", "many"])
+def test_a_nonsense_width_is_refused_rather_than_coerced(monkeypatch, bad):
+    monkeypatch.setenv("DSV41_INDEX_TOPK", bad)
+    monkeypatch.delenv("DSV41_SLIDING_WINDOW", raising=False)
+    with pytest.raises(ValueError, match="DSV41_INDEX_TOPK"):
+        _text_config()
+
+```
+
+### DSV41_INDEX_WORKSPACE_MB
+
+Advanced backend control DSV41_INDEX_WORKSPACE_MB. Set explicitly only for the selected backend; its literal read and fallback are documented below.
+
+Scope: mac-mlx. Class: advanced.
+
+Source: `vendor/mac-mlx/mlx_vlm/custom_kernels/deepseek_v41/test_index_fused_cpu.py:429`. Unset read: Wrapper/conditional default: see the literal call and consumer below.
+
+```text
+                 "PROMOTE_DECODE_WEIGHTS", "S4_COMPILE_INDEXER", "S4_PRECOMPUTE", "S4_BYPASS"):
+        monkeypatch.setenv("DSV41_" + name, "0")
+    monkeypatch.setenv("DSV41_INDEX_WORKSPACE_MB", "512")
+    ns = _production()
+    calls = []
+    ns["prepare_index_fused"] = lambda layers, skip=False: calls.append(
+        "compile+skip" if skip else "compile")
+```
+
+Source: `vendor/mac-mlx/mlx_vlm/models/deepseek_v41/language.py:692`. Unset read: '0'.
+
+```text
+                _index_scores.compiled = mx.compile(partial(_index_scores, matmul=True), shapeless=True)
+            score_fn = _index_scores.compiled
+        workspace_mb = int(os.environ.get("DSV41_INDEX_WORKSPACE_MB", "0"))
+        query_chunk = (max(1, workspace_mb * 1024**2 // (bsz * self.n_heads * nb * 4))
+                       if workspace_mb > 0 else n)
+        masked_by_kernel = False
+        if fused_index:
+```
+
+Source: `vendor/mac-mlx/mlx_vlm/models/deepseek_v41/test_bounded_cache.py:82`. Unset read: Wrapper/conditional default: see the literal call and consumer below.
+
+```text
+
+    monkeypatch.setattr(mx, "einsum", counted)
+    monkeypatch.setenv("DSV41_INDEX_WORKSPACE_MB", "0")
+    a = attn.indexer(x, qr, 8192, 8209, attn.rope, keys, SimpleNamespace(candidates=None))
+    mx.eval(a)
+    assert calls == [17]
+    calls.clear()
+```
+
+Source: `vendor/mac-mlx/mlx_vlm/models/deepseek_v41/test_bounded_cache.py:87`. Unset read: Wrapper/conditional default: see the literal call and consumer below.
+
+```text
+    assert calls == [17]
+    calls.clear()
+    monkeypatch.setenv("DSV41_INDEX_WORKSPACE_MB", "1")
+    b = attn.indexer(x, qr, 8192, 8209, attn.rope, keys, SimpleNamespace(candidates=None))
+    mx.eval(b)
+    assert len(calls) > 1 and sum(calls) == 17
+    assert bool(mx.array_equal(a, b).item())
+```
+
+Source: `vendor/mac-mlx/mlx_vlm/models/deepseek_v41/test_speed_merge_mac.py:29`. Unset read: Wrapper/conditional default: see the literal call and consumer below.
+
+```text
+    mx.eval(indexer.parameters(), x, qr, keys)
+
+    monkeypatch.setenv("DSV41_INDEX_WORKSPACE_MB", "0")
+    expected = indexer(x, qr, width - n, 0, rope, keys,
+                       SimpleNamespace(candidates=None))
+    mx.eval(expected)
+
+```
+
+Source: `vendor/mac-mlx/mlx_vlm/models/deepseek_v41/test_speed_merge_mac.py:46`. Unset read: Wrapper/conditional default: see the literal call and consumer below.
+
+```text
+        counted.compiled = counted_compiled
+    monkeypatch.setattr(language, "_index_scores", counted)
+    monkeypatch.setenv("DSV41_INDEX_WORKSPACE_MB", "1")
+    actual = indexer(x, qr, width - n, 0, rope, keys,
+                     SimpleNamespace(candidates=None))
+    mx.eval(actual)
+    assert calls == [8, 8, 1], "S4 scoring must retain mainline's query tiles"
+```
+
+### DSV41_MEGAKERNEL
+
+Advanced backend control DSV41_MEGAKERNEL. Set explicitly only for the selected backend; its literal read and fallback are documented below.
+
+Scope: mac-mlx. Class: advanced.
+
+Source: `vendor/mac-mlx/mlx_vlm/models/deepseek_v41/language.py:1803`. Unset read: '0'.
+
+```text
+            # default prefill runs when DSV41_PREFILL_MEGAKERNEL is off.
+        else:
+            if os.environ.get("DSV41_MEGAKERNEL", "0") == "1" and h.shape[:2] == (1, 1):
+                from .megakernel import decode_block
+                return decode_block(self, h, pre_mix, start_pos, cache, shared, image_mask)
+            if os.environ.get("DSV41_COMPILE_BLOCK", "0") == "1" and h.shape[:2] == (1, 1):
+                from .block_graph import BlockGraphs
+```
+
+### DSV41_MEMORY_GUARD_WAIT_S
+
+Advanced backend control DSV41_MEMORY_GUARD_WAIT_S. Set explicitly only for the selected backend; its literal read and fallback are documented below.
+
+Scope: mac-mlx. Class: advanced.
+
+Source: `engines/mlx-receiver/mlx_token_stream_server.py:165`. Unset read: '90'.
+
+```text
+    if os.environ.get('DSV41_PROMOTE_DECODE_WEIGHTS', '0') == '1':
+        parameter_bytes += sum(((4 - sizes[dtype]) * prod(shape) for name, (dtype, shape) in specs.items() if name.endswith('.wo_a.weight') and os.environ.get('DSV41_WO_A_BF16', '0') != '1' or (name == 'lm_head.weight' and os.environ.get('DSV41_HEAD_BF16', '0') != '1')))
+    available, breakdown = _dsv41_wait_for_memory(source, parameter_bytes, _read_vm_stat, timeout_s=float(os.environ.get('DSV41_MEMORY_GUARD_WAIT_S', '90')))
+    required = _dsv41_memory_guard(available, source, parameter_bytes)
+    print(f"[DSV41] memory available={available / (1 << 30):.2f} GiB resident_required={required / (1 << 30):.0f} GiB headroom=20 GiB source={source} QAT={os.environ.get('DSV41_QAT', '1')} [{_dsv41_breakdown_text(breakdown)}]", file=sys.stderr, flush=True)
+    model_dir = Path(model_dir)
+    model = Model(config)
+```
+
+### DSV41_METAL_INDEXER
+
+Advanced backend control DSV41_METAL_INDEXER. Set explicitly only for the selected backend; its literal read and fallback are documented below.
+
+Scope: mac-mlx. Class: advanced.
+
+Source: `vendor/mac-mlx/mlx_vlm/custom_kernels/deepseek_v41/test_index_prefill.py:235`. Unset read: Wrapper/conditional default: see the literal call and consumer below.
+
+```text
+    monkeypatch.setenv("DSV41_S4_PRECOMPUTE", str(int(precompute)))
+    monkeypatch.setenv("DSV41_S4_BYPASS", "0")
+    monkeypatch.setenv("DSV41_METAL_INDEXER", "0")
+    monkeypatch.setenv("DSV41_S4_COMPILE_INDEXER", "0")
+    # Exercise the production n>=64 gate, including zero-length geometry.
+    monkeypatch.setenv("DSV41_PREFILL_TILED_MIN_N", "64")
+    monkeypatch.setattr(lang, "_rope", lambda rope, q, pos: q)
+```
+
+Source: `vendor/mac-mlx/mlx_vlm/custom_kernels/deepseek_v41/test_index_prefill.py:292`. Unset read: Wrapper/conditional default: see the literal call and consumer below.
+
+```text
+    monkeypatch.setattr(lang, "_PREFILL_MXFP8_STEEL", False)
+    monkeypatch.setenv("DSV41_S4_BYPASS", "0")
+    monkeypatch.setenv("DSV41_METAL_INDEXER", "0")
+    monkeypatch.setenv("DSV41_S4_COMPILE_INDEXER", "0")
+    indexer = Indexer(TextConfig(hidden_size=64, q_lora_rank=64), 2)
+    monkeypatch.setenv("DSV41_PREFILL_TILED_MIN_N", "64")
+    for n, enabled in [(64, None), (1, "1"), (16, "1"), (63, "1")]:
+```
+
+Source: `vendor/mac-mlx/mlx_vlm/models/deepseek_v41/language.py:677`. Unset read: '0'.
+
+```text
+        # while sharing S4 geometry and allowing its optional compiled scorer.
+        score_fn = _index_scores
+        metal_indexer = os.environ.get("DSV41_METAL_INDEXER", "0") == "1"
+        _s4_count("index_score", self.layer_id)
+        if fused_index:
+            from ...custom_kernels.deepseek_v41.index_fused import index_scores_fused
+        elif v41_index:
+```
+
+### DSV41_METAL_QUANT
+
+Advanced backend control DSV41_METAL_QUANT. Set explicitly only for the selected backend; its literal read and fallback are documented below.
+
+Scope: mac-mlx. Class: advanced.
+
+Source: `vendor/mac-mlx/mlx_vlm/custom_kernels/deepseek_v41/test_index_prefill.py:40`. Unset read: Wrapper/conditional default: see the literal call and consumer below.
+
+```text
+def _reference_environment(monkeypatch):
+    monkeypatch.setenv("DSV41_QAT", "1")
+    monkeypatch.setenv("DSV41_METAL_QUANT", "0")
+    monkeypatch.setenv("DSV41_INDEX_TOPK", "512")
+
+
+def _inputs(n, context, mask, *, batch=1, dtype=mx.float32, seed=71):
+```
+
+Source: `vendor/mac-mlx/mlx_vlm/models/deepseek_v41/language.py:157`. Unset read: '0'.
+
+```text
+    if os.environ.get("DSV41_QAT", "1") == "0":
+        return x
+    if os.environ.get("DSV41_METAL_QUANT", "0") == "1":
+        from .quant_kernels import fake_quant
+        return fake_quant(x, block, "fp8_ue8m0")
+    dtype = x.dtype
+    shape = x.shape
+```
+
+Source: `vendor/mac-mlx/mlx_vlm/models/deepseek_v41/language.py:173`. Unset read: '0'.
+
+```text
+    if os.environ.get("DSV41_QAT", "1") == "0":
+        return x
+    if os.environ.get("DSV41_METAL_QUANT", "0") == "1":
+        from .quant_kernels import fake_quant
+        return fake_quant(x, block, "fp4_ue8m0")
+    dtype = x.dtype
+    shape = x.shape
+```
+
+Source: `vendor/mac-mlx/mlx_vlm/models/deepseek_v41/language.py:189`. Unset read: '0'.
+
+```text
+    if os.environ.get("DSV41_QAT", "1") == "0":
+        return x
+    if os.environ.get("DSV41_METAL_QUANT", "0") == "1":
+        from .quant_kernels import fake_quant
+        return fake_quant(x, block, "fp4_e4m3")
+    dtype = x.dtype
+    shape = x.shape
+```
+
+### DSV41_METAL_SINKHORN
+
+Advanced backend control DSV41_METAL_SINKHORN. Set explicitly only for the selected backend; its literal read and fallback are documented below.
+
+Scope: mac-mlx. Class: advanced.
+
+Source: `vendor/mac-mlx/mlx_vlm/models/deepseek_v41/language.py:1693`. Unset read: '0'.
+
+```text
+            mixes = (xf @ self.fn.astype(mx.float32).T) * rsqrt
+        split = _hc_split_sinkhorn_ops
+        if os.environ.get("DSV41_METAL_SINKHORN", "0") == "1":
+            from .hyper_connection import metal_sinkhorn
+            split = metal_sinkhorn
+        return split(mixes, self.scale, self.base, self.hc, self.iters, self.eps)
+
+```
+
+### DSV41_METAL_SPARSE_ATTN
+
+Advanced backend control DSV41_METAL_SPARSE_ATTN. Set explicitly only for the selected backend; its literal read and fallback are documented below.
+
+Scope: mac-mlx. Class: advanced.
+
+Source: `vendor/mac-mlx/mlx_vlm/custom_kernels/deepseek_v41/test_sparse_attention_prefill.py:202`. Unset read: Wrapper/conditional default: see the literal call and consumer below.
+
+```text
+    assert dispatch.sparse_attention(*case) is marker
+    # The new flag alone reaches the dispatcher through language.sparse_attn.
+    monkeypatch.delenv("DSV41_METAL_SPARSE_ATTN", raising=False)
+    monkeypatch.delenv("DSV41_SDPA_SPARSE_ATTN", raising=False)
+    assert sparse_attn(*case) is marker
+    q, banks, sink, ids, scale = case
+    decode = (q[:, :1], banks, sink, ids[:, :1], scale)
+```
+
+Source: `vendor/mac-mlx/mlx_vlm/custom_kernels/deepseek_v41/test_sparse_attention_prefill.py:241`. Unset read: Wrapper/conditional default: see the literal call and consumer below.
+
+```text
+
+    monkeypatch.setattr(module, "sparse_attn_prefill", forbidden)
+    monkeypatch.setenv("DSV41_METAL_SPARSE_ATTN", metal)
+    monkeypatch.setenv("DSV41_SDPA_SPARSE_ATTN", "0")
+    if threshold is None:
+        monkeypatch.delenv("DSV41_PREFILL_FLASH_MIN_N", raising=False)
+    else:
+```
+
+Source: `vendor/mac-mlx/mlx_vlm/custom_kernels/deepseek_v41/validate_sdpa.py:38`. Unset read: Assigned by the runtime; see literal consumer.
+
+```text
+def select(path):
+    os.environ['DSV41_SDPA_SPARSE_ATTN'] = '1' if path == 'sdpa' else '0'
+    os.environ['DSV41_METAL_SPARSE_ATTN'] = '1' if path == 'metal' else '0'
+    os.environ['DSV41_COMPILE_SPARSE_ATTN'] = '1' if path == 'compiled' else '0'
+
+
+def metrics(actual, expected):
+```
+
+Source: `vendor/mac-mlx/mlx_vlm/custom_kernels/deepseek_v41/validate_sdpa_edges.py:106`. Unset read: Assigned by the runtime; see literal consumer.
+
+```text
+            for m in (1,3,257):
+                os.environ['DSV41_SDPA_SPARSE_ATTN'] = sdpa
+                os.environ['DSV41_METAL_SPARSE_ATTN'] = metal
+                counts.update(sdpa=0,metal=0)
+                qq=mx.broadcast_to(q,(1,m,64,512))
+                ii=mx.broadcast_to(idx,(1,m,1))
+                mx.eval(run(qq,kv,sink,ii,1.))
+```
+
+Source: `vendor/mac-mlx/mlx_vlm/models/deepseek_v41/language.py:317`. Unset read: '0'.
+
+```text
+    if sdpa not in ("0", "1", "decode", "prefill"):
+        raise ValueError("DSV41_SDPA_SPARSE_ATTN must be 0, 1, decode, or prefill")
+    metal = os.environ.get("DSV41_METAL_SPARSE_ATTN", "0")
+    if metal not in ("0", "1", "decode", "prefill"):
+        raise ValueError("DSV41_METAL_SPARSE_ATTN must be 0, 1, decode, or prefill")
+    regime = "decode" if q.shape[1] == 1 else "prefill"
+    use_sdpa = sdpa in ("1", regime)
+```
+
+Source: `vendor/mac-mlx/mlx_vlm/models/deepseek_v41/test_bounded_cache.py:22`. Unset read: Wrapper/conditional default: see the literal call and consumer below.
+
+```text
+        monkeypatch.setattr(helper, "LanguageModel", module.LanguageModel)
+    monkeypatch.setenv("DSV41_QAT", "1")
+    monkeypatch.setenv("DSV41_METAL_SPARSE_ATTN", "0")
+    return helper.random_model()
+
+
+@pytest.mark.parametrize("chunk", [1, 5, 17])
+```
+
+### DSV41_METAL_SPARSE_DECODE
+
+Advanced backend control DSV41_METAL_SPARSE_DECODE. Set explicitly only for the selected backend; its literal read and fallback are documented below.
+
+Scope: mac-mlx. Class: advanced.
+
+Source: `vendor/mac-mlx/mlx_vlm/custom_kernels/deepseek_v41/sparse_attention.py:95`. Unset read: '0'.
+
+```text
+    b, m, h, d = q.shape
+    k = indices.shape[-1]
+    streaming = (os.environ.get("DSV41_METAL_SPARSE_DECODE", "0") == "1"
+                 and m == 1 and d == 512)
+    max_k = 32768 if streaming else 640
+    if d % 32 or not 32 <= d <= 512 or not 1 <= k <= max_k or m < 1:
+        raise ValueError(f"V4.1 Metal requires D=32..512 aligned to 32, 1<=K<={max_k}, M>=1")
+```
+
+### DSV41_META_DIR
+
+Advanced backend control DSV41_META_DIR. Set explicitly only for the selected backend; its literal read and fallback are documented below.
+
+Scope: mac-mlx. Class: advanced.
+
+Source: `vendor/mac-mlx/mlx_vlm/models/deepseek_v41/test_checkpoint_layout_v41.py:31`. Unset read: KeyError unless an earlier assignment supplies the variable.
+
+```text
+@pytest.fixture(scope="module")
+def release():
+    candidates = [os.environ["DSV41_META_DIR"]] if "DSV41_META_DIR" in os.environ else [
+        "~/tmp/dsv41", "./tmp/upstream_dsv41"
+    ]
+    roots = [Path(path).expanduser() for path in candidates]
+    root = next((path for path in roots if all(
+```
+
+Source: `vendor/mac-mlx/mlx_vlm/models/deepseek_v41/test_dspark_dsv41.py:100`. Unset read: KeyError unless an earlier assignment supplies the variable.
+
+```text
+def _release():
+    """(raw config, tensor manifest, TextConfig) or None when absent."""
+    roots = ([Path(os.environ["DSV41_META_DIR"])] if "DSV41_META_DIR" in os.environ
+             else [Path("~/tmp/dsv41").expanduser(), Path("./tmp/upstream_dsv41")])
+    for root in roots:
+        paths = [root / "v41_config.json", root / "v41_tensors.json"]
+        if all(p.is_file() for p in paths):
+```
+
+### DSV41_MLX_COMMIT
+
+Advanced backend control DSV41_MLX_COMMIT. Set explicitly only for the selected backend; its literal read and fallback are documented below.
+
+Scope: mac-mlx. Class: advanced.
+
+Source: `vendor/mac-mlx/mlx_vlm/custom_kernels/deepseek_v41/test_grouped_gemm.py:62`. Unset read: 'unrecorded'.
+
+```text
+def record_runtime():
+    print(json.dumps(dict(mlx=mx.__version__, mlx_path=mx.__file__, release=RELEASE,
+                          mlx_commit=os.environ.get("DSV41_MLX_COMMIT", "unrecorded"),
+                          device=mx.metal.device_info())))
+
+
+def routes(case, experts=E):
+```
+
+Source: `vendor/mac-mlx/mlx_vlm/custom_kernels/deepseek_v41/test_grouped_gemm.py:444`. Unset read: 'unrecorded'.
+
+```text
+    report(worker=label, shapes=shapes, mlx=mx.__version__, mlx_path=mx.__file__,
+           platform=platform.platform(),
+           mlx_commit=os.environ.get("DSV41_MLX_COMMIT", "unrecorded"))
+
+    # This small check runs only after explicit --attribution-unsafe, and only in
+    # the selected MODE. All its GPU work/readback shares a bounded host scope.
+    if job.mode != "full":
+```
+
+### DSV41_OMLX_HEAD
+
+Advanced backend control DSV41_OMLX_HEAD. Set explicitly only for the selected backend; its literal read and fallback are documented below.
+
+Scope: mac-mlx. Class: advanced.
+
+Source: `vendor/mac-mlx/mlx_vlm/models/deepseek_v41/language.py:2382`. Unset read: '0'.
+
+```text
+                # nothing to cut, and a full-width prefill has shape[1] rows here.)
+                head_in = head_in[:, -1:]
+            if (os.environ.get("DSV41_OMLX_HEAD", "0") == "1"
+                    and type(self.lm_head) is nn.Linear and "bias" not in self.lm_head):
+                from .omlx_head import project_logits
+
+                logits = project_logits(head_in, self.lm_head.weight)
+```
+
+Source: `vendor/mac-mlx/mlx_vlm/models/deepseek_v41/language.py:2463`. Unset read: '0'.
+
+```text
+
+    def attach_engram_storage(self, model_dir):
+        if _HEAD_BF16 and os.environ.get("DSV41_OMLX_HEAD", "0") != "1":
+            raise RuntimeError("DSV41_HEAD_BF16=1 needs DSV41_OMLX_HEAD=1 (bf16 head storage with "
+                               "fp32 logits); refusing to serve bf16 logits silently")
+        if not hasattr(self, "_index_fused_attached"):
+            index_flag = os.environ.get("DSV41_INDEX_FUSED", "0")
+```
+
+Source: `vendor/mac-mlx/mlx_vlm/models/deepseek_v41/test_decode_bf16_contractions.py:38`. Unset read: Wrapper/conditional default: see the literal call and consumer below.
+
+```text
+def test_head_bf16_without_the_kernel_is_refused(monkeypatch):
+    monkeypatch.setenv("DSV41_HEAD_BF16", "1")
+    monkeypatch.delenv("DSV41_OMLX_HEAD", raising=False)
+    import importlib
+    from mlx_vlm.models.deepseek_v41 import language as lang
+    importlib.reload(lang)
+    try:
+```
+
+### DSV41_OUR_ENGRAM
+
+Advanced backend control DSV41_OUR_ENGRAM. Set explicitly only for the selected backend; its literal read and fallback are documented below.
+
+Scope: mac-mlx. Class: advanced.
+
+Source: `vendor/mac-mlx/mlx_vlm/models/deepseek_v41/test_engram_hash_parity.py:130`. Unset read: Path(__file__).with_name('engram.py').
+
+```text
+    # Reuse the oracle's env overrides and platform-aware local path defaults.
+    oracle = load(Path(__file__).with_name("reference_cpu_dsv41.py"), "dsv41_hash_paths")
+    ours = Path(os.environ.get("DSV41_OUR_ENGRAM", Path(__file__).with_name("engram.py"))).expanduser()
+    required = [oracle.REF_DIR / "engram.py", ours,
+                oracle.TOKENIZER_DIR / "tokenizer.json", oracle.TOKENIZER_DIR / "tokenizer_config.json"]
+    if not all(path.is_file() for path in required):
+        pytest.skip("Engram parity inputs absent; set DSV41_REF_DIR, DSV41_TOKENIZER_DIR "
+```
+
+### DSV41_PN_DIR
+
+Advanced backend control DSV41_PN_DIR. Set explicitly only for the selected backend; its literal read and fallback are documented below.
+
+Scope: mac-mlx. Class: advanced.
+
+Source: `vendor/mac-mlx/mlx_vlm/models/deepseek_v41/test_language_dsv41_mac.py:506`. Unset read: './tmp/upstream_dsv41/pipenetwork'.
+
+```text
+def test_torch_reference_parity(monkeypatch):
+    torch = pytest.importorskip("torch")
+    root = Path(os.environ.get("DSV41_PN_DIR", "./tmp/upstream_dsv41/pipenetwork"))
+    if not root.is_dir():
+        pytest.skip("Set DSV41_PN_DIR to the PipeNetwork checkout for reference parity")
+    monkeypatch.setenv("DSV41_QAT", "0")
+    old_dtype = torch.get_default_dtype()
+```
+
+### DSV41_PREFILL_CHUNK
+
+Advanced backend control DSV41_PREFILL_CHUNK. Set explicitly only for the selected backend; its literal read and fallback are documented below.
+
+Scope: mac-mlx. Class: advanced.
+
+Source: `engines/mlx-receiver/mlx_token_stream_server.py:1686`. Unset read: '256'.
+
+```text
+            mtp_hidden = None
+            swi_config = None
+            chunk_size = int(os.environ.get('DSV41_PREFILL_CHUNK', '256'))
+            if not 1 <= chunk_size <= 4096:
+                raise ValueError('DSV41_PREFILL_CHUNK must be in 1..4096')
+            if not prompt_token_ids:
+                raise ValueError('[DSV41] Local prefill requires prompt tokens')
+```
+
+Source: `vendor/mac-mlx/mlx_vlm/models/deepseek_v41/language.py:1882`. Unset read: '256'.
+
+```text
+def _prefill_chunk_size():
+    """DSV41_PREFILL_CHUNK, validated exactly as the receiver validates it."""
+    raw = os.environ.get("DSV41_PREFILL_CHUNK", "256")
+    try:
+        value = int(raw)
+    except (TypeError, ValueError):
+        raise ValueError(f"DSV41_PREFILL_CHUNK must be in 1..4096, got {raw!r}") from None
+```
+
+Source: `vendor/mac-mlx/mlx_vlm/models/deepseek_v41/test_prefill_cone.py:439`. Unset read: Wrapper/conditional default: see the literal call and consumer below.
+
+```text
+    monkeypatch.setenv("DSV41_PREFILL_LAYER_MAJOR", "1")
+    monkeypatch.setenv("DSV41_PREFILL_CONE", "1")
+    monkeypatch.setenv("DSV41_PREFILL_CHUNK", str(chunk))
+    if tail is None:
+        monkeypatch.delenv("DSV41_PREFILL_CONE_TAIL", raising=False)
+    else:
+        monkeypatch.setenv("DSV41_PREFILL_CONE_TAIL", str(tail))
+```
+
+Source: `vendor/mac-mlx/mlx_vlm/models/deepseek_v41/test_prefill_cone.py:488`. Unset read: Wrapper/conditional default: see the literal call and consumer below.
+
+```text
+
+    monkeypatch.setenv("DSV41_PREFILL_LAYER_MAJOR", "1")
+    monkeypatch.setenv("DSV41_PREFILL_CHUNK", chunk)
+    arm = _logits(model, ids)
+
+    assert arm.shape == control.shape
+    assert bool(mx.array_equal(arm, control).item()), (
+```
+
+Source: `vendor/mac-mlx/mlx_vlm/models/deepseek_v41/test_prefill_cone.py:506`. Unset read: Wrapper/conditional default: see the literal call and consumer below.
+
+```text
+
+    monkeypatch.setenv("DSV41_PREFILL_LAYER_MAJOR", "1")
+    monkeypatch.setenv("DSV41_PREFILL_CHUNK", str(CHUNK))
+    arm = model.make_cache()
+    model(ids, cache=arm)
+
+    assert arm[0].offset == control[0].offset
+```
+
+Source: `vendor/mac-mlx/mlx_vlm/models/deepseek_v41/test_prefill_cone.py:904`. Unset read: Wrapper/conditional default: see the literal call and consumer below.
+
+```text
+    for name, value in switches.items():
+        monkeypatch.setenv(name, value)
+    monkeypatch.setenv("DSV41_PREFILL_CHUNK", str(CHUNK))
+    arm = _logits(model, ids)
+
+    if switches.get("DSV41_PREFILL_CONE") == "1":
+        assert arm.shape[1] == 1, arm.shape
+```
+
+### DSV41_PREFILL_CONE
+
+Advanced backend control DSV41_PREFILL_CONE. Set explicitly only for the selected backend; its literal read and fallback are documented below.
+
+Scope: mac-mlx. Class: advanced.
+
+Source: `vendor/mac-mlx/mlx_vlm/models/deepseek_v41/language.py:1997`. Unset read: '0'.
+
+```text
+    """
+    layer_major = os.environ.get("DSV41_PREFILL_LAYER_MAJOR", "0") == "1"
+    cone = os.environ.get("DSV41_PREFILL_CONE", "0") == "1"
+    if cone and not layer_major:
+        raise ValueError(
+            "DSV41_PREFILL_CONE=1 requires DSV41_PREFILL_LAYER_MAJOR=1: the cone "
+            "replaces phase two of the layer-major split and there is no phase two "
+```
+
+Source: `vendor/mac-mlx/mlx_vlm/models/deepseek_v41/test_prefill_cone.py:147`. Unset read: Wrapper/conditional default: see the literal call and consumer below.
+
+```text
+
+def test_cone_without_layer_major_raises_and_names_both(monkeypatch):
+    monkeypatch.setenv("DSV41_PREFILL_CONE", "1")
+    monkeypatch.delenv("DSV41_PREFILL_LAYER_MAJOR", raising=False)
+    with pytest.raises(ValueError) as excinfo:
+        _prefill_switches(4096, _Cache(), None)
+    message = str(excinfo.value)
+```
+
+Source: `vendor/mac-mlx/mlx_vlm/models/deepseek_v41/test_prefill_cone.py:157`. Unset read: Wrapper/conditional default: see the literal call and consumer below.
+
+```text
+
+def test_cone_with_dspark_raises_and_names_both(monkeypatch):
+    monkeypatch.setenv("DSV41_PREFILL_CONE", "1")
+    monkeypatch.setenv("DSV41_PREFILL_LAYER_MAJOR", "1")
+    monkeypatch.setenv("DSV41_DSPARK", "1")
+    monkeypatch.delenv("DSV41_PREFILL_CONE_TAIL", raising=False)
+    with pytest.raises(ValueError) as excinfo:
+```
+
+Source: `vendor/mac-mlx/mlx_vlm/models/deepseek_v41/test_prefill_cone.py:170`. Unset read: Wrapper/conditional default: see the literal call and consumer below.
+
+```text
+
+def test_cone_with_capture_layers_raises(monkeypatch):
+    monkeypatch.setenv("DSV41_PREFILL_CONE", "1")
+    monkeypatch.setenv("DSV41_PREFILL_LAYER_MAJOR", "1")
+    monkeypatch.delenv("DSV41_DSPARK", raising=False)
+    monkeypatch.delenv("DSV41_PREFILL_CONE_TAIL", raising=False)
+    with pytest.raises(ValueError) as excinfo:
+```
+
+Source: `vendor/mac-mlx/mlx_vlm/models/deepseek_v41/test_prefill_cone.py:181`. Unset read: Wrapper/conditional default: see the literal call and consumer below.
+
+```text
+def test_layer_major_with_bounded_cache_raises(monkeypatch):
+    monkeypatch.setenv("DSV41_PREFILL_LAYER_MAJOR", "1")
+    monkeypatch.delenv("DSV41_PREFILL_CONE", raising=False)
+
+    class Bounded:
+        bounded = True
+
+```
+
+Source: `vendor/mac-mlx/mlx_vlm/models/deepseek_v41/test_prefill_cone.py:432`. Unset read: Wrapper/conditional default: see the literal call and consumer below.
+
+```text
+def _off(monkeypatch):
+    monkeypatch.delenv("DSV41_PREFILL_LAYER_MAJOR", raising=False)
+    monkeypatch.delenv("DSV41_PREFILL_CONE", raising=False)
+    monkeypatch.delenv("DSV41_PREFILL_CONE_TAIL", raising=False)
+
+
+def _cone_on(monkeypatch, chunk=CHUNK, tail=None):
+```
+
+Source: `vendor/mac-mlx/mlx_vlm/models/deepseek_v41/test_prefill_cone.py:438`. Unset read: Wrapper/conditional default: see the literal call and consumer below.
+
+```text
+def _cone_on(monkeypatch, chunk=CHUNK, tail=None):
+    monkeypatch.setenv("DSV41_PREFILL_LAYER_MAJOR", "1")
+    monkeypatch.setenv("DSV41_PREFILL_CONE", "1")
+    monkeypatch.setenv("DSV41_PREFILL_CHUNK", str(chunk))
+    if tail is None:
+        monkeypatch.delenv("DSV41_PREFILL_CONE_TAIL", raising=False)
+    else:
+```
+
+Source: `vendor/mac-mlx/mlx_vlm/models/deepseek_v41/test_prefill_cone.py:994`. Unset read: Wrapper/conditional default: see the literal call and consumer below.
+
+```text
+
+def test_dspark_refusal_is_present_without_a_tail_and_absent_with_one(monkeypatch):
+    monkeypatch.setenv("DSV41_PREFILL_CONE", "1")
+    monkeypatch.setenv("DSV41_PREFILL_LAYER_MAJOR", "1")
+    monkeypatch.setenv("DSV41_DSPARK", "1")
+    monkeypatch.delenv("DSV41_PREFILL_CONE_TAIL", raising=False)
+    with pytest.raises(ValueError) as excinfo:
+```
+
+Source: `vendor/mac-mlx/mlx_vlm/models/deepseek_v41/test_prefill_cone.py:1009`. Unset read: Wrapper/conditional default: see the literal call and consumer below.
+
+```text
+
+def test_capture_refusal_is_present_without_a_tail_and_absent_with_one(monkeypatch):
+    monkeypatch.setenv("DSV41_PREFILL_CONE", "1")
+    monkeypatch.setenv("DSV41_PREFILL_LAYER_MAJOR", "1")
+    monkeypatch.delenv("DSV41_DSPARK", raising=False)
+    monkeypatch.delenv("DSV41_PREFILL_CONE_TAIL", raising=False)
+    with pytest.raises(ValueError) as excinfo:
+```
+
+Source: `vendor/mac-mlx/mlx_vlm/models/deepseek_v41/test_prefill_cone.py:1031`. Unset read: Wrapper/conditional default: see the literal call and consumer below.
+
+```text
+    # And neither switch sets the tail.
+    monkeypatch.delenv("DSV41_PREFILL_CONE_TAIL", raising=False)
+    monkeypatch.setenv("DSV41_PREFILL_CONE", "1")
+    assert prefill_cone_tail() == (1, False)
+
+
+def _cone_run(model, ids, monkeypatch, tail, **kwargs):
+```
+
+### DSV41_PREFILL_CONE_TAIL
+
+Advanced backend control DSV41_PREFILL_CONE_TAIL. Set explicitly only for the selected backend; its literal read and fallback are documented below.
+
+Scope: mac-mlx. Class: advanced.
+
+Source: `engines/mlx-receiver/mlx_token_stream_server.py:701`. Unset read: None.
+
+```text
+
+def _dsv41_cone_tail_rows():
+    raw = os.environ.get('DSV41_PREFILL_CONE_TAIL')
+    if raw is None:
+        return None
+    tail = int(raw)
+    if tail < 1:
+```
+
+Source: `vendor/mac-mlx/mlx_vlm/models/deepseek_v41/language.py:1974`. Unset read: None.
+
+```text
+    be read as consent to truncate somebody's history.
+    """
+    raw = os.environ.get("DSV41_PREFILL_CONE_TAIL")
+    if raw is None:
+        return 1, False
+    try:
+        tail = int(raw)
+```
+
+Source: `vendor/mac-mlx/mlx_vlm/models/deepseek_v41/test_prefill_cone.py:160`. Unset read: Wrapper/conditional default: see the literal call and consumer below.
+
+```text
+    monkeypatch.setenv("DSV41_PREFILL_LAYER_MAJOR", "1")
+    monkeypatch.setenv("DSV41_DSPARK", "1")
+    monkeypatch.delenv("DSV41_PREFILL_CONE_TAIL", raising=False)
+    with pytest.raises(ValueError) as excinfo:
+        _prefill_switches(4096, _Cache(), None)
+    message = str(excinfo.value)
+    assert "DSV41_PREFILL_CONE" in message
+```
+
+Source: `vendor/mac-mlx/mlx_vlm/models/deepseek_v41/test_prefill_cone.py:173`. Unset read: Wrapper/conditional default: see the literal call and consumer below.
+
+```text
+    monkeypatch.setenv("DSV41_PREFILL_LAYER_MAJOR", "1")
+    monkeypatch.delenv("DSV41_DSPARK", raising=False)
+    monkeypatch.delenv("DSV41_PREFILL_CONE_TAIL", raising=False)
+    with pytest.raises(ValueError) as excinfo:
+        _prefill_switches(4096, _Cache(), [37, 38, 39])
+    assert "capture_layer_ids" in str(excinfo.value)
+
+```
+
+Source: `vendor/mac-mlx/mlx_vlm/models/deepseek_v41/test_prefill_cone.py:433`. Unset read: Wrapper/conditional default: see the literal call and consumer below.
+
+```text
+    monkeypatch.delenv("DSV41_PREFILL_LAYER_MAJOR", raising=False)
+    monkeypatch.delenv("DSV41_PREFILL_CONE", raising=False)
+    monkeypatch.delenv("DSV41_PREFILL_CONE_TAIL", raising=False)
+
+
+def _cone_on(monkeypatch, chunk=CHUNK, tail=None):
+    monkeypatch.setenv("DSV41_PREFILL_LAYER_MAJOR", "1")
+```
+
+Source: `vendor/mac-mlx/mlx_vlm/models/deepseek_v41/test_prefill_cone.py:441`. Unset read: Wrapper/conditional default: see the literal call and consumer below.
+
+```text
+    monkeypatch.setenv("DSV41_PREFILL_CHUNK", str(chunk))
+    if tail is None:
+        monkeypatch.delenv("DSV41_PREFILL_CONE_TAIL", raising=False)
+    else:
+        monkeypatch.setenv("DSV41_PREFILL_CONE_TAIL", str(tail))
+
+
+```
+
+Source: `vendor/mac-mlx/mlx_vlm/models/deepseek_v41/test_prefill_cone.py:443`. Unset read: Wrapper/conditional default: see the literal call and consumer below.
+
+```text
+        monkeypatch.delenv("DSV41_PREFILL_CONE_TAIL", raising=False)
+    else:
+        monkeypatch.setenv("DSV41_PREFILL_CONE_TAIL", str(tail))
+
+
+def test_the_default_path_is_not_chunk_invariant(tiny, monkeypatch):
+    """PINNED, so nobody rediscovers it as a bug in the layer-major or cone code.
+```
+
+Source: `vendor/mac-mlx/mlx_vlm/models/deepseek_v41/test_prefill_cone.py:979`. Unset read: Wrapper/conditional default: see the literal call and consumer below.
+
+```text
+def test_cone_tail_switch_parses(monkeypatch, raw, parsed):
+    if raw is None:
+        monkeypatch.delenv("DSV41_PREFILL_CONE_TAIL", raising=False)
+    else:
+        monkeypatch.setenv("DSV41_PREFILL_CONE_TAIL", raw)
+    assert prefill_cone_tail() == parsed
+
+```
+
+Source: `vendor/mac-mlx/mlx_vlm/models/deepseek_v41/test_prefill_cone.py:981`. Unset read: Wrapper/conditional default: see the literal call and consumer below.
+
+```text
+        monkeypatch.delenv("DSV41_PREFILL_CONE_TAIL", raising=False)
+    else:
+        monkeypatch.setenv("DSV41_PREFILL_CONE_TAIL", raw)
+    assert prefill_cone_tail() == parsed
+
+
+@pytest.mark.parametrize("raw", ["0", "-1", "half", ""])
+```
+
+Source: `vendor/mac-mlx/mlx_vlm/models/deepseek_v41/test_prefill_cone.py:987`. Unset read: Wrapper/conditional default: see the literal call and consumer below.
+
+```text
+@pytest.mark.parametrize("raw", ["0", "-1", "half", ""])
+def test_cone_tail_switch_refuses_nonsense(monkeypatch, raw):
+    monkeypatch.setenv("DSV41_PREFILL_CONE_TAIL", raw)
+    with pytest.raises(ValueError) as excinfo:
+        prefill_cone_tail()
+    assert "DSV41_PREFILL_CONE_TAIL" in str(excinfo.value)
+
+```
+
+Source: `vendor/mac-mlx/mlx_vlm/models/deepseek_v41/test_prefill_cone.py:997`. Unset read: Wrapper/conditional default: see the literal call and consumer below.
+
+```text
+    monkeypatch.setenv("DSV41_PREFILL_LAYER_MAJOR", "1")
+    monkeypatch.setenv("DSV41_DSPARK", "1")
+    monkeypatch.delenv("DSV41_PREFILL_CONE_TAIL", raising=False)
+    with pytest.raises(ValueError) as excinfo:
+        _prefill_switches(4096, _Cache(), None)
+    message = str(excinfo.value)
+    assert "DSV41_PREFILL_CONE_TAIL" in message, message
+```
+
+Source: `vendor/mac-mlx/mlx_vlm/models/deepseek_v41/test_prefill_cone.py:1004`. Unset read: Wrapper/conditional default: see the literal call and consumer below.
+
+```text
+    assert "DSV41_DSPARK" in message, message
+
+    monkeypatch.setenv("DSV41_PREFILL_CONE_TAIL", "512")
+    assert _prefill_switches(4096, _Cache(), None) == (True, True)
+
+
+def test_capture_refusal_is_present_without_a_tail_and_absent_with_one(monkeypatch):
+```
+
+Source: `vendor/mac-mlx/mlx_vlm/models/deepseek_v41/test_prefill_cone.py:1012`. Unset read: Wrapper/conditional default: see the literal call and consumer below.
+
+```text
+    monkeypatch.setenv("DSV41_PREFILL_LAYER_MAJOR", "1")
+    monkeypatch.delenv("DSV41_DSPARK", raising=False)
+    monkeypatch.delenv("DSV41_PREFILL_CONE_TAIL", raising=False)
+    with pytest.raises(ValueError) as excinfo:
+        _prefill_switches(4096, _Cache(), [37, 38, 39])
+    assert "DSV41_PREFILL_CONE_TAIL" in str(excinfo.value)
+
+```
+
+Source: `vendor/mac-mlx/mlx_vlm/models/deepseek_v41/test_prefill_cone.py:1017`. Unset read: Wrapper/conditional default: see the literal call and consumer below.
+
+```text
+    assert "DSV41_PREFILL_CONE_TAIL" in str(excinfo.value)
+
+    monkeypatch.setenv("DSV41_PREFILL_CONE_TAIL", "128")
+    assert _prefill_switches(4096, _Cache(), [37, 38, 39]) == (True, True)
+
+
+def test_the_tail_never_implies_a_switch_and_no_switch_implies_the_tail(monkeypatch):
+```
+
+Source: `vendor/mac-mlx/mlx_vlm/models/deepseek_v41/test_prefill_cone.py:1024`. Unset read: Wrapper/conditional default: see the literal call and consumer below.
+
+```text
+    for name in ("DSV41_PREFILL_LAYER_MAJOR", "DSV41_PREFILL_CONE", "DSV41_DSPARK"):
+        monkeypatch.delenv(name, raising=False)
+    monkeypatch.setenv("DSV41_PREFILL_CONE_TAIL", "512")
+    # A tail on its own switches nothing on.
+    assert _prefill_switches(4096, _Cache(), None) == (False, False)
+    monkeypatch.setenv("DSV41_PREFILL_LAYER_MAJOR", "1")
+    assert _prefill_switches(4096, _Cache(), None) == (True, False)
+```
+
+Source: `vendor/mac-mlx/mlx_vlm/models/deepseek_v41/test_prefill_cone.py:1030`. Unset read: Wrapper/conditional default: see the literal call and consumer below.
+
+```text
+    assert _prefill_switches(4096, _Cache(), None) == (True, False)
+    # And neither switch sets the tail.
+    monkeypatch.delenv("DSV41_PREFILL_CONE_TAIL", raising=False)
+    monkeypatch.setenv("DSV41_PREFILL_CONE", "1")
+    assert prefill_cone_tail() == (1, False)
+
+
+```
+
+### DSV41_PREFILL_FLASH_ATTN
+
+Advanced backend control DSV41_PREFILL_FLASH_ATTN. Set explicitly only for the selected backend; its literal read and fallback are documented below.
+
+Scope: mac-mlx. Class: advanced.
+
+Source: `vendor/mac-mlx/mlx_vlm/custom_kernels/deepseek_v41/sparse_attention.py:24`. Unset read: '0'.
+
+```text
+def prefill_flash_enabled(n):
+    """Opt-in prefill threshold; decode/DSpark batches <=8 are always excluded."""
+    return (n > 8 and os.environ.get("DSV41_PREFILL_FLASH_ATTN", "0") == "1"
+            and n >= max(9, int(os.environ.get("DSV41_PREFILL_FLASH_MIN_N", "64"))))
+
+
+@lru_cache(maxsize=1)
+```
+
+Source: `vendor/mac-mlx/mlx_vlm/custom_kernels/deepseek_v41/test_sparse_attention_prefill.py:195`. Unset read: Wrapper/conditional default: see the literal call and consumer below.
+
+```text
+    monkeypatch.setattr(module, "sparse_attn_prefill", lambda *args: marker)
+    monkeypatch.delenv("DSV41_PREFILL_FLASH_MIN_N", raising=False)
+    monkeypatch.delenv("DSV41_PREFILL_FLASH_ATTN", raising=False)
+    before = dispatch.status()
+    assert dispatch.sparse_attention(*case) is not marker
+    assert dispatch.status()["prefill_flash"] == before["prefill_flash"]
+    monkeypatch.setenv("DSV41_PREFILL_FLASH_ATTN", "1")
+```
+
+Source: `vendor/mac-mlx/mlx_vlm/custom_kernels/deepseek_v41/test_sparse_attention_prefill.py:199`. Unset read: Wrapper/conditional default: see the literal call and consumer below.
+
+```text
+    assert dispatch.sparse_attention(*case) is not marker
+    assert dispatch.status()["prefill_flash"] == before["prefill_flash"]
+    monkeypatch.setenv("DSV41_PREFILL_FLASH_ATTN", "1")
+    assert dispatch.sparse_attention(*case) is marker
+    # The new flag alone reaches the dispatcher through language.sparse_attn.
+    monkeypatch.delenv("DSV41_METAL_SPARSE_ATTN", raising=False)
+    monkeypatch.delenv("DSV41_SDPA_SPARSE_ATTN", raising=False)
+```
+
+Source: `vendor/mac-mlx/mlx_vlm/custom_kernels/deepseek_v41/test_sparse_attention_prefill.py:218`. Unset read: Wrapper/conditional default: see the literal call and consumer below.
+
+```text
+@pytest.mark.parametrize("threshold", [None, "1", "128"])
+def test_prefill_threshold(n, threshold, monkeypatch):
+    monkeypatch.setenv("DSV41_PREFILL_FLASH_ATTN", "1")
+    if threshold is None:
+        monkeypatch.delenv("DSV41_PREFILL_FLASH_MIN_N", raising=False)
+    else:
+        monkeypatch.setenv("DSV41_PREFILL_FLASH_MIN_N", threshold)
+```
+
+Source: `vendor/mac-mlx/mlx_vlm/custom_kernels/deepseek_v41/test_sparse_attention_prefill.py:225`. Unset read: Wrapper/conditional default: see the literal call and consumer below.
+
+```text
+    expected = n > 8 and n >= int(threshold or "64")
+    assert dispatch.prefill_flash_enabled(n) is expected
+    monkeypatch.setenv("DSV41_PREFILL_FLASH_ATTN", "0")
+    assert not dispatch.prefill_flash_enabled(n)
+
+
+@pytest.mark.parametrize("n", [6, 8, 63])
+```
+
+Source: `vendor/mac-mlx/mlx_vlm/models/deepseek_v41/language.py:307`. Unset read: '0'.
+
+```text
+
+        return sparse_attn_v41(q, kv, attn_sink, topk_idxs, softmax_scale)
+    if os.environ.get("DSV41_PREFILL_FLASH_ATTN", "0") == "1":
+        from ...custom_kernels.deepseek_v41.sparse_attention import (
+            prefill_flash_enabled, sparse_attention,
+        )
+
+```
+
+### DSV41_PREFILL_FLASH_MIN_N
+
+Advanced backend control DSV41_PREFILL_FLASH_MIN_N. Set explicitly only for the selected backend; its literal read and fallback are documented below.
+
+Scope: mac-mlx. Class: advanced.
+
+Source: `vendor/mac-mlx/mlx_vlm/custom_kernels/deepseek_v41/sparse_attention.py:25`. Unset read: '64'.
+
+```text
+    """Opt-in prefill threshold; decode/DSpark batches <=8 are always excluded."""
+    return (n > 8 and os.environ.get("DSV41_PREFILL_FLASH_ATTN", "0") == "1"
+            and n >= max(9, int(os.environ.get("DSV41_PREFILL_FLASH_MIN_N", "64"))))
+
+
+@lru_cache(maxsize=1)
+def _kernel():
+```
+
+Source: `vendor/mac-mlx/mlx_vlm/custom_kernels/deepseek_v41/test_sparse_attention_prefill.py:194`. Unset read: Wrapper/conditional default: see the literal call and consumer below.
+
+```text
+
+    monkeypatch.setattr(module, "sparse_attn_prefill", lambda *args: marker)
+    monkeypatch.delenv("DSV41_PREFILL_FLASH_MIN_N", raising=False)
+    monkeypatch.delenv("DSV41_PREFILL_FLASH_ATTN", raising=False)
+    before = dispatch.status()
+    assert dispatch.sparse_attention(*case) is not marker
+    assert dispatch.status()["prefill_flash"] == before["prefill_flash"]
+```
+
+Source: `vendor/mac-mlx/mlx_vlm/custom_kernels/deepseek_v41/test_sparse_attention_prefill.py:220`. Unset read: Wrapper/conditional default: see the literal call and consumer below.
+
+```text
+    monkeypatch.setenv("DSV41_PREFILL_FLASH_ATTN", "1")
+    if threshold is None:
+        monkeypatch.delenv("DSV41_PREFILL_FLASH_MIN_N", raising=False)
+    else:
+        monkeypatch.setenv("DSV41_PREFILL_FLASH_MIN_N", threshold)
+    expected = n > 8 and n >= int(threshold or "64")
+    assert dispatch.prefill_flash_enabled(n) is expected
+```
+
+Source: `vendor/mac-mlx/mlx_vlm/custom_kernels/deepseek_v41/test_sparse_attention_prefill.py:222`. Unset read: Wrapper/conditional default: see the literal call and consumer below.
+
+```text
+        monkeypatch.delenv("DSV41_PREFILL_FLASH_MIN_N", raising=False)
+    else:
+        monkeypatch.setenv("DSV41_PREFILL_FLASH_MIN_N", threshold)
+    expected = n > 8 and n >= int(threshold or "64")
+    assert dispatch.prefill_flash_enabled(n) is expected
+    monkeypatch.setenv("DSV41_PREFILL_FLASH_ATTN", "0")
+    assert not dispatch.prefill_flash_enabled(n)
+```
+
+Source: `vendor/mac-mlx/mlx_vlm/custom_kernels/deepseek_v41/test_sparse_attention_prefill.py:244`. Unset read: Wrapper/conditional default: see the literal call and consumer below.
+
+```text
+    monkeypatch.setenv("DSV41_SDPA_SPARSE_ATTN", "0")
+    if threshold is None:
+        monkeypatch.delenv("DSV41_PREFILL_FLASH_MIN_N", raising=False)
+    else:
+        monkeypatch.setenv("DSV41_PREFILL_FLASH_MIN_N", threshold)
+    case = _case(n, 128, "mixed", h=8)
+    for path in (dispatch.sparse_attention, sparse_attn):
+```
+
+Source: `vendor/mac-mlx/mlx_vlm/custom_kernels/deepseek_v41/test_sparse_attention_prefill.py:246`. Unset read: Wrapper/conditional default: see the literal call and consumer below.
+
+```text
+        monkeypatch.delenv("DSV41_PREFILL_FLASH_MIN_N", raising=False)
+    else:
+        monkeypatch.setenv("DSV41_PREFILL_FLASH_MIN_N", threshold)
+    case = _case(n, 128, "mixed", h=8)
+    for path in (dispatch.sparse_attention, sparse_attn):
+        with _flash_switch("0"):
+            expected = path(*case)
+```
+
+### DSV41_PREFILL_GROUPED_MIN_ROWS
+
+Advanced backend control DSV41_PREFILL_GROUPED_MIN_ROWS. Set explicitly only for the selected backend; its literal read and fallback are documented below.
+
+Scope: mac-mlx. Class: advanced.
+
+Source: `vendor/mac-mlx/mlx_vlm/custom_kernels/deepseek_v41/test_grouped_gemm.py:425`. Unset read: Wrapper/conditional default: see the literal call and consumer below.
+
+```text
+    monkeypatch.setattr(adapter, "moe_prefill_grouped", grouped)
+    monkeypatch.delenv("DSV41_PREFILL_GROUPED_MXFP4", raising=False)
+    monkeypatch.delenv("DSV41_PREFILL_GROUPED_MIN_ROWS", raising=False)
+    MoE.__call__(fake, mx.zeros((1, 256, 32), dtype=mx.bfloat16))
+    monkeypatch.setenv("DSV41_PREFILL_GROUPED_MXFP4", "1")
+    for rows in (1, 255, 256):
+        MoE.__call__(fake, mx.zeros((1, rows, 32), dtype=mx.bfloat16))
+```
+
+Source: `vendor/mac-mlx/mlx_vlm/custom_kernels/deepseek_v41/test_grouped_gemm.py:430`. Unset read: Wrapper/conditional default: see the literal call and consumer below.
+
+```text
+    for rows in (1, 255, 256):
+        MoE.__call__(fake, mx.zeros((1, rows, 32), dtype=mx.bfloat16))
+    monkeypatch.setenv("DSV41_PREFILL_GROUPED_MIN_ROWS", "1")
+    MoE.__call__(fake, mx.zeros((1, 1, 32), dtype=mx.bfloat16))
+    assert calls == ["original", "original", "original", "grouped", "original"]
+
+
+```
+
+Source: `vendor/mac-mlx/mlx_vlm/models/deepseek_v41/language.py:971`. Unset read: '256'.
+
+```text
+                and not fused
+                and xf.shape[0] > 1
+                and xf.shape[0] >= int(os.environ.get("DSV41_PREFILL_GROUPED_MIN_ROWS", "256"))):
+            from .moe_prefill import moe_prefill_grouped
+
+            y = moe_prefill_grouped(self, xf, indices, weights)
+        else:
+```
+
+Source: `vendor/mac-mlx/mlx_vlm/models/deepseek_v41/test_ffn_expert_pad_cpu.py:164`. Unset read: Wrapper/conditional default: see the literal call and consumer below.
+
+```text
+    # Padding must also take precedence over grouped prefill.
+    monkeypatch.setenv("DSV41_PREFILL_GROUPED_MXFP4", "1")
+    monkeypatch.setenv("DSV41_PREFILL_GROUPED_MIN_ROWS", "64")
+    monkeypatch.setenv("DSV41_COMPILE_PRIMITIVES", "0")
+    up = Mock(side_effect=lambda x, ids, **kw: x * (ids[:, None, None] + 1))
+    up.num_experts = 8
+    mlp = SimpleNamespace(training=False, up_proj=up,
+```
+
+### DSV41_PREFILL_GROUPED_MXFP4
+
+Advanced backend control DSV41_PREFILL_GROUPED_MXFP4. Set explicitly only for the selected backend; its literal read and fallback are documented below.
+
+Scope: mac-mlx. Class: advanced.
+
+Source: `vendor/mac-mlx/mlx_vlm/custom_kernels/deepseek_v41/test_grouped_gemm.py:424`. Unset read: Wrapper/conditional default: see the literal call and consumer below.
+
+```text
+        shared_experts=lambda x: mx.zeros_like(x))
+    monkeypatch.setattr(adapter, "moe_prefill_grouped", grouped)
+    monkeypatch.delenv("DSV41_PREFILL_GROUPED_MXFP4", raising=False)
+    monkeypatch.delenv("DSV41_PREFILL_GROUPED_MIN_ROWS", raising=False)
+    MoE.__call__(fake, mx.zeros((1, 256, 32), dtype=mx.bfloat16))
+    monkeypatch.setenv("DSV41_PREFILL_GROUPED_MXFP4", "1")
+    for rows in (1, 255, 256):
+```
+
+Source: `vendor/mac-mlx/mlx_vlm/custom_kernels/deepseek_v41/test_grouped_gemm.py:427`. Unset read: Wrapper/conditional default: see the literal call and consumer below.
+
+```text
+    monkeypatch.delenv("DSV41_PREFILL_GROUPED_MIN_ROWS", raising=False)
+    MoE.__call__(fake, mx.zeros((1, 256, 32), dtype=mx.bfloat16))
+    monkeypatch.setenv("DSV41_PREFILL_GROUPED_MXFP4", "1")
+    for rows in (1, 255, 256):
+        MoE.__call__(fake, mx.zeros((1, rows, 32), dtype=mx.bfloat16))
+    monkeypatch.setenv("DSV41_PREFILL_GROUPED_MIN_ROWS", "1")
+    MoE.__call__(fake, mx.zeros((1, 1, 32), dtype=mx.bfloat16))
+```
+
+Source: `vendor/mac-mlx/mlx_vlm/models/deepseek_v41/language.py:965`. Unset read: '0'.
+
+```text
+        fused = (getattr(self, "ffn_fused", False) and xf.shape[0] >= 64
+                 and not _v41_verify_context.get())
+        if (os.environ.get("DSV41_PREFILL_GROUPED_MXFP4", "0") == "1"
+                and not down_bf16  # Precision trial uses the stock gather_qmm kernels.
+                and not pad16
+                and not expert_tiles
+                and not fused
+```
+
+Source: `vendor/mac-mlx/mlx_vlm/models/deepseek_v41/language.py:2505`. Unset read: '0'.
+
+```text
+                    or getattr(self, "_ffn_expert_tiles_attached",
+                               os.environ.get("DSV41_FFN_EXPERT_TILES", "0") == "1")
+                    or os.environ.get("DSV41_PREFILL_GROUPED_MXFP4", "0") == "1"):
+                raise ValueError("DSV41_FFN_FUSED requires DOWN_BF16, EXPERT_PAD16, "
+                                 "EXPERT_TILES and PREFILL_GROUPED_MXFP4 to be off")
+        if not hasattr(self, "_ffn_down_bf16_attached"):
+            self._ffn_down_bf16_attached = os.environ.get("DSV41_FFN_DOWN_BF16", "0") == "1"
+```
+
+Source: `vendor/mac-mlx/mlx_vlm/models/deepseek_v41/language.py:2522`. Unset read: '0'.
+
+```text
+            if flag == "1":
+                if (self._ffn_down_bf16_attached or self._ffn_expert_pad16_attached
+                        or os.environ.get("DSV41_PREFILL_GROUPED_MXFP4", "0") == "1"):
+                    raise ValueError("DSV41_FFN_EXPERT_TILES requires DOWN_BF16, EXPERT_PAD16 "
+                                     "and PREFILL_GROUPED_MXFP4 to be off")
+                from ...custom_kernels.deepseek_v41.moe_prefill_expert_tiles import prepare_expert_tiles
+
+```
+
+Source: `vendor/mac-mlx/mlx_vlm/models/deepseek_v41/test_ffn_down_bf16_cpu.py:51`. Unset read: Wrapper/conditional default: see the literal call and consumer below.
+
+```text
+def test_dispatch_and_attach_latch(monkeypatch, flag, n, verify):
+    ns = _load()
+    monkeypatch.setenv("DSV41_PREFILL_GROUPED_MXFP4", "0")
+    monkeypatch.setenv("DSV41_COMPILE_PRIMITIVES", "0")
+    calls = []
+    routed = np.arange(n * 6 * 4, dtype=np.float32).reshape(n, 6, 4) / 100
+    weights = np.full((n, 6), 0.25, np.float32)
+```
+
+Source: `vendor/mac-mlx/mlx_vlm/models/deepseek_v41/test_ffn_expert_pad.py:161`. Unset read: Wrapper/conditional default: see the literal call and consumer below.
+
+```text
+    assert moe.ffn_expert_pad16 and moe.ffn_down_bf16 == down_bf16
+    # The pad helper must win over grouped prefill, with the down dtype composed.
+    monkeypatch.setenv("DSV41_PREFILL_GROUPED_MXFP4", "1")
+    pad = Mock(wraps=lang._ffn_expert_pad16)
+    monkeypatch.setattr(lang, "_ffn_expert_pad16", pad)
+    _assert_bits(moe(x), reference)
+    _assert_bits(moe(x), reference)
+```
+
+Source: `vendor/mac-mlx/mlx_vlm/models/deepseek_v41/test_ffn_expert_pad.py:169`. Unset read: Wrapper/conditional default: see the literal call and consumer below.
+
+```text
+    assert all(call.args[3] == down_bf16 for call in pad.call_args_list)
+    assert capsys.readouterr().out.count("FFN_EXPERT_PAD16 engaged") == 1
+    monkeypatch.setenv("DSV41_PREFILL_GROUPED_MXFP4", "0")
+    for n in (1, 63, 64):
+        for verify in (False, True):
+            pad.reset_mock()
+            token = lang._v41_verify_context.set(verify)
+```
+
+Source: `vendor/mac-mlx/mlx_vlm/models/deepseek_v41/test_ffn_expert_pad_cpu.py:163`. Unset read: Wrapper/conditional default: see the literal call and consumer below.
+
+```text
+    monkeypatch.setenv("DSV41_PROMOTE_DECODE_WEIGHTS", "0")
+    # Padding must also take precedence over grouped prefill.
+    monkeypatch.setenv("DSV41_PREFILL_GROUPED_MXFP4", "1")
+    monkeypatch.setenv("DSV41_PREFILL_GROUPED_MIN_ROWS", "64")
+    monkeypatch.setenv("DSV41_COMPILE_PRIMITIVES", "0")
+    up = Mock(side_effect=lambda x, ids, **kw: x * (ids[:, None, None] + 1))
+    up.num_experts = 8
+```
+
+### DSV41_PREFILL_LAST_LOGITS
+
+Advanced backend control DSV41_PREFILL_LAST_LOGITS. Set explicitly only for the selected backend; its literal read and fallback are documented below.
+
+Scope: mac-mlx. Class: advanced.
+
+Source: `engines/mlx-receiver/mlx_token_stream_server.py:1795`. Unset read: '0'.
+
+```text
+        def _forward_token_ids_with_topk(ids_arr, final=True):
+            nonlocal vision_embeds
+            skip_logits = not final and is_dsv41 and (os.environ.get('DSV41_PREFILL_LAST_LOGITS', '0') == '1')
+            with mx.stream(gen_stream):
+                if dspark_runtime is not None:
+                    out = dspark_runtime.capture(ids_arr, cache, skip_logits=skip_logits)
+                    return (out.logits, None, None)
+```
+
+### DSV41_PREFILL_LAYER_MAJOR
+
+Advanced backend control DSV41_PREFILL_LAYER_MAJOR. Set explicitly only for the selected backend; its literal read and fallback are documented below.
+
+Scope: mac-mlx. Class: advanced.
+
+Source: `engines/mlx-receiver/mlx_token_stream_server.py:2212`. Unset read: '0'.
+
+```text
+                    _pl_model = None
+                    _pl_error = type(_plexc).__name__
+            _layer_major = is_dsv41 and os.environ.get('DSV41_PREFILL_LAYER_MAJOR', '0') == '1' and (n_to_prefill > 1)
+            _prefill_bounds = [(0, n_to_prefill)] if _layer_major else [(start, min(start + chunk_size, n_to_prefill)) for start in range(0, n_to_prefill, chunk_size)]
+            if _layer_major:
+                sys.stderr.write(f'[mlx-server] DSV41_PREFILL_LAYER_MAJOR=1: one forward of {n_to_prefill} tok (the model chunks at DSV41_PREFILL_CHUNK)\n')
+                sys.stderr.flush()
+```
+
+Source: `vendor/mac-mlx/mlx_vlm/models/deepseek_v41/language.py:1996`. Unset read: '0'.
+
+```text
+    DSV41_PREFILL_LAYER_MAJOR is refused, never promoted.
+    """
+    layer_major = os.environ.get("DSV41_PREFILL_LAYER_MAJOR", "0") == "1"
+    cone = os.environ.get("DSV41_PREFILL_CONE", "0") == "1"
+    if cone and not layer_major:
+        raise ValueError(
+            "DSV41_PREFILL_CONE=1 requires DSV41_PREFILL_LAYER_MAJOR=1: the cone "
+```
+
+Source: `vendor/mac-mlx/mlx_vlm/models/deepseek_v41/test_prefill_cone.py:148`. Unset read: Wrapper/conditional default: see the literal call and consumer below.
+
+```text
+def test_cone_without_layer_major_raises_and_names_both(monkeypatch):
+    monkeypatch.setenv("DSV41_PREFILL_CONE", "1")
+    monkeypatch.delenv("DSV41_PREFILL_LAYER_MAJOR", raising=False)
+    with pytest.raises(ValueError) as excinfo:
+        _prefill_switches(4096, _Cache(), None)
+    message = str(excinfo.value)
+    assert "DSV41_PREFILL_CONE" in message
+```
+
+Source: `vendor/mac-mlx/mlx_vlm/models/deepseek_v41/test_prefill_cone.py:158`. Unset read: Wrapper/conditional default: see the literal call and consumer below.
+
+```text
+def test_cone_with_dspark_raises_and_names_both(monkeypatch):
+    monkeypatch.setenv("DSV41_PREFILL_CONE", "1")
+    monkeypatch.setenv("DSV41_PREFILL_LAYER_MAJOR", "1")
+    monkeypatch.setenv("DSV41_DSPARK", "1")
+    monkeypatch.delenv("DSV41_PREFILL_CONE_TAIL", raising=False)
+    with pytest.raises(ValueError) as excinfo:
+        _prefill_switches(4096, _Cache(), None)
+```
+
+Source: `vendor/mac-mlx/mlx_vlm/models/deepseek_v41/test_prefill_cone.py:171`. Unset read: Wrapper/conditional default: see the literal call and consumer below.
+
+```text
+def test_cone_with_capture_layers_raises(monkeypatch):
+    monkeypatch.setenv("DSV41_PREFILL_CONE", "1")
+    monkeypatch.setenv("DSV41_PREFILL_LAYER_MAJOR", "1")
+    monkeypatch.delenv("DSV41_DSPARK", raising=False)
+    monkeypatch.delenv("DSV41_PREFILL_CONE_TAIL", raising=False)
+    with pytest.raises(ValueError) as excinfo:
+        _prefill_switches(4096, _Cache(), [37, 38, 39])
+```
+
+Source: `vendor/mac-mlx/mlx_vlm/models/deepseek_v41/test_prefill_cone.py:180`. Unset read: Wrapper/conditional default: see the literal call and consumer below.
+
+```text
+
+def test_layer_major_with_bounded_cache_raises(monkeypatch):
+    monkeypatch.setenv("DSV41_PREFILL_LAYER_MAJOR", "1")
+    monkeypatch.delenv("DSV41_PREFILL_CONE", raising=False)
+
+    class Bounded:
+        bounded = True
+```
+
+Source: `vendor/mac-mlx/mlx_vlm/models/deepseek_v41/test_prefill_cone.py:198`. Unset read: Wrapper/conditional default: see the literal call and consumer below.
+
+```text
+        monkeypatch.delenv(name, raising=False)
+    assert _prefill_switches(4096, _Cache(), None) == (False, False)
+    monkeypatch.setenv("DSV41_PREFILL_LAYER_MAJOR", "1")
+    # LAYER_MAJOR alone must NOT switch the cone on.
+    assert _prefill_switches(4096, _Cache(), None) == (True, False)
+    # A single token is a decode step: neither switch engages.
+    assert _prefill_switches(1, _Cache(), None) == (False, False)
+```
+
+Source: `vendor/mac-mlx/mlx_vlm/models/deepseek_v41/test_prefill_cone.py:431`. Unset read: Wrapper/conditional default: see the literal call and consumer below.
+
+```text
+
+def _off(monkeypatch):
+    monkeypatch.delenv("DSV41_PREFILL_LAYER_MAJOR", raising=False)
+    monkeypatch.delenv("DSV41_PREFILL_CONE", raising=False)
+    monkeypatch.delenv("DSV41_PREFILL_CONE_TAIL", raising=False)
+
+
+```
+
+Source: `vendor/mac-mlx/mlx_vlm/models/deepseek_v41/test_prefill_cone.py:437`. Unset read: Wrapper/conditional default: see the literal call and consumer below.
+
+```text
+
+def _cone_on(monkeypatch, chunk=CHUNK, tail=None):
+    monkeypatch.setenv("DSV41_PREFILL_LAYER_MAJOR", "1")
+    monkeypatch.setenv("DSV41_PREFILL_CONE", "1")
+    monkeypatch.setenv("DSV41_PREFILL_CHUNK", str(chunk))
+    if tail is None:
+        monkeypatch.delenv("DSV41_PREFILL_CONE_TAIL", raising=False)
+```
+
+Source: `vendor/mac-mlx/mlx_vlm/models/deepseek_v41/test_prefill_cone.py:487`. Unset read: Wrapper/conditional default: see the literal call and consumer below.
+
+```text
+    control, _ = _control(model, ids, chunk=int(chunk))
+
+    monkeypatch.setenv("DSV41_PREFILL_LAYER_MAJOR", "1")
+    monkeypatch.setenv("DSV41_PREFILL_CHUNK", chunk)
+    arm = _logits(model, ids)
+
+    assert arm.shape == control.shape
+```
+
+Source: `vendor/mac-mlx/mlx_vlm/models/deepseek_v41/test_prefill_cone.py:505`. Unset read: Wrapper/conditional default: see the literal call and consumer below.
+
+```text
+    _, control = _control(model, ids, chunk=CHUNK)
+
+    monkeypatch.setenv("DSV41_PREFILL_LAYER_MAJOR", "1")
+    monkeypatch.setenv("DSV41_PREFILL_CHUNK", str(CHUNK))
+    arm = model.make_cache()
+    model(ids, cache=arm)
+
+```
+
+Source: `vendor/mac-mlx/mlx_vlm/models/deepseek_v41/test_prefill_cone.py:995`. Unset read: Wrapper/conditional default: see the literal call and consumer below.
+
+```text
+def test_dspark_refusal_is_present_without_a_tail_and_absent_with_one(monkeypatch):
+    monkeypatch.setenv("DSV41_PREFILL_CONE", "1")
+    monkeypatch.setenv("DSV41_PREFILL_LAYER_MAJOR", "1")
+    monkeypatch.setenv("DSV41_DSPARK", "1")
+    monkeypatch.delenv("DSV41_PREFILL_CONE_TAIL", raising=False)
+    with pytest.raises(ValueError) as excinfo:
+        _prefill_switches(4096, _Cache(), None)
+```
+
+Source: `vendor/mac-mlx/mlx_vlm/models/deepseek_v41/test_prefill_cone.py:1010`. Unset read: Wrapper/conditional default: see the literal call and consumer below.
+
+```text
+def test_capture_refusal_is_present_without_a_tail_and_absent_with_one(monkeypatch):
+    monkeypatch.setenv("DSV41_PREFILL_CONE", "1")
+    monkeypatch.setenv("DSV41_PREFILL_LAYER_MAJOR", "1")
+    monkeypatch.delenv("DSV41_DSPARK", raising=False)
+    monkeypatch.delenv("DSV41_PREFILL_CONE_TAIL", raising=False)
+    with pytest.raises(ValueError) as excinfo:
+        _prefill_switches(4096, _Cache(), [37, 38, 39])
+```
+
+Source: `vendor/mac-mlx/mlx_vlm/models/deepseek_v41/test_prefill_cone.py:1027`. Unset read: Wrapper/conditional default: see the literal call and consumer below.
+
+```text
+    # A tail on its own switches nothing on.
+    assert _prefill_switches(4096, _Cache(), None) == (False, False)
+    monkeypatch.setenv("DSV41_PREFILL_LAYER_MAJOR", "1")
+    assert _prefill_switches(4096, _Cache(), None) == (True, False)
+    # And neither switch sets the tail.
+    monkeypatch.delenv("DSV41_PREFILL_CONE_TAIL", raising=False)
+    monkeypatch.setenv("DSV41_PREFILL_CONE", "1")
+```
+
+### DSV41_PREFILL_LEDGER
+
+Advanced backend control DSV41_PREFILL_LEDGER. Set explicitly only for the selected backend; its literal read and fallback are documented below.
+
+Scope: mac-mlx. Class: advanced.
+
+Source: `engines/mlx-receiver/mlx_token_stream_server.py:2201`. Unset read: '0'.
+
+```text
+            _probe = _first_fwd_probe_wrap(lang) if _first_fwd_probe_enabled() else None
+            _t_first_fwd = time.time()
+            _prefill_ledger_on = is_dsv41 and os.environ.get('DSV41_PREFILL_LEDGER', '0') == '1'
+            if _prefill_ledger_on:
+                _pl = {'tokens': 0, 'chunks': 0, 'build_ms': 0.0, 'eval_ms': 0.0}
+                _pl_model = None
+                try:
+```
+
+Source: `vendor/mac-mlx/mlx_vlm/models/deepseek_v41/prefill_ledger.py:14`. Unset read: '0'.
+
+```text
+import os
+
+_PREFILL_LEDGER_ON = os.environ.get("DSV41_PREFILL_LEDGER", "0") == "1"
+_PREFILL_LEDGER_CUTS_LEVEL: int = (
+    {"1": 1, "2": 2}.get(os.environ.get("DSV41_PREFILL_LEDGER_CUTS", "0"), 0)
+    if _PREFILL_LEDGER_ON else 0
+)
+```
+
+### DSV41_PREFILL_LEDGER_CUTS
+
+Advanced backend control DSV41_PREFILL_LEDGER_CUTS. Set explicitly only for the selected backend; its literal read and fallback are documented below.
+
+Scope: mac-mlx. Class: advanced.
+
+Source: `vendor/mac-mlx/mlx_vlm/models/deepseek_v41/prefill_ledger.py:16`. Unset read: '0'.
+
+```text
+_PREFILL_LEDGER_ON = os.environ.get("DSV41_PREFILL_LEDGER", "0") == "1"
+_PREFILL_LEDGER_CUTS_LEVEL: int = (
+    {"1": 1, "2": 2}.get(os.environ.get("DSV41_PREFILL_LEDGER_CUTS", "0"), 0)
+    if _PREFILL_LEDGER_ON else 0
+)
+_PREFILL_LEDGER_CUTS = _PREFILL_LEDGER_CUTS_LEVEL > 0
+PREFILL_LEDGER = {"hash_ms": 0.0, "engram_fetch_ms": 0.0, "tokens": 0, "chunks": 0}
+```
+
+### DSV41_PREFILL_MEGAKERNEL
+
+Advanced backend control DSV41_PREFILL_MEGAKERNEL. Set explicitly only for the selected backend; its literal read and fallback are documented below.
+
+Scope: mac-mlx. Class: advanced.
+
+Source: `vendor/mac-mlx/mlx_vlm/models/deepseek_v41/language.py:1773`. Unset read: '0'.
+
+```text
+        to the eager collapse and must therefore be used by BOTH halves.
+        """
+        if os.environ.get("DSV41_PREFILL_MEGAKERNEL", "0") == "1" and h.shape[1] > 1:
+            from .megakernel import collapse_norm_rows
+            return collapse_norm_rows(h, pre_mix, self.attn_norm)
+        if os.environ.get("DSV41_HC_FUSED", "0") == "1":
+            x = self.attn_hc(h, pre_mix)[0]
+```
+
+Source: `vendor/mac-mlx/mlx_vlm/models/deepseek_v41/language.py:1797`. Unset read: '0'.
+
+```text
+            # single row -- the two single-token DECODE specialisations below are
+            # not that path and are never reachable from the cone.
+            if os.environ.get("DSV41_PREFILL_MEGAKERNEL", "0") == "1":
+                return _prefill_block_prepared(self, h, pre_mix, start_pos, cache,
+                                               shared, image_mask)
+            # Otherwise fall through to the eager path, which is exactly what the
+            # default prefill runs when DSV41_PREFILL_MEGAKERNEL is off.
+```
+
+Source: `vendor/mac-mlx/mlx_vlm/models/deepseek_v41/language.py:1813`. Unset read: '0'.
+
+```text
+                    object.__setattr__(self, "_block_graph", graph)
+                return graph(self, h, pre_mix, start_pos, cache, shared, image_mask)
+            if os.environ.get("DSV41_PREFILL_MEGAKERNEL", "0") == "1" and h.shape[1] > 1:
+                from .megakernel import prefill_block
+                return prefill_block(self, h, pre_mix, start_pos, cache, shared, image_mask)
+        if os.environ.get("DSV41_HC_FUSED", "0") == "1":
+            x, attn_pre, post, comb = self.attn_hc(h, pre_mix)
+```
+
+Source: `vendor/mac-mlx/mlx_vlm/models/deepseek_v41/test_megakernel_prefill.py:204`. Unset read: Wrapper/conditional default: see the literal call and consumer below.
+
+```text
+    monkeypatch.setattr(ledger, "_PREFILL_LEDGER_CUTS", cuts)
+    monkeypatch.setattr(ledger, "PREFILL_LAYER_MS", {})
+    monkeypatch.setenv("DSV41_PREFILL_MEGAKERNEL", "1")
+    # Existing switches must not send a multi-token call into decode/compile or
+    # demand incoming_pre from HyperConnection's separate fused-HC entry point.
+    for flag in ("DSV41_MEGAKERNEL", "DSV41_COMPILE_BLOCK", "DSV41_HC_FUSED"):
+        monkeypatch.setenv(flag, "1")
+```
+
+Source: `vendor/mac-mlx/mlx_vlm/models/deepseek_v41/test_prefill_cone.py:896`. Unset read: Wrapper/conditional default: see the literal call and consumer below.
+
+```text
+    model, ids, _ = tiny
+    monkeypatch.setenv("DSV41_QAT", "1")
+    monkeypatch.setenv("DSV41_PREFILL_MEGAKERNEL", "1")
+    _off(monkeypatch)
+    control, _ = _control(model, ids, chunk=CHUNK)
+    wide, _ = _control(model, ids, chunk=WIDE)
+    noise = _noise(control[0, -1], wide[0, -1])
+```
+
+### DSV41_PREFILL_MXFP8_STEEL
+
+Advanced backend control DSV41_PREFILL_MXFP8_STEEL. Set explicitly only for the selected backend; its literal read and fallback are documented below.
+
+Scope: mac-mlx. Class: advanced.
+
+Source: `vendor/mac-mlx/mlx_vlm/models/deepseek_v41/prefill_linear.py:9`. Unset read: '0'.
+
+```text
+
+
+_PREFILL_MXFP8_STEEL = os.environ.get("DSV41_PREFILL_MXFP8_STEEL", "0") == "1"
+# Ignore the tuning variable entirely on the default path.
+_PREFILL_STEEL_MIN_M = (
+    int(os.environ.get("DSV41_PREFILL_STEEL_MIN_M", "256"))
+    if _PREFILL_MXFP8_STEEL else 256
+```
+
+### DSV41_PREFILL_STEEL_MIN_M
+
+Advanced backend control DSV41_PREFILL_STEEL_MIN_M. Set explicitly only for the selected backend; its literal read and fallback are documented below.
+
+Scope: mac-mlx. Class: advanced.
+
+Source: `vendor/mac-mlx/mlx_vlm/models/deepseek_v41/prefill_linear.py:12`. Unset read: '256'.
+
+```text
+# Ignore the tuning variable entirely on the default path.
+_PREFILL_STEEL_MIN_M = (
+    int(os.environ.get("DSV41_PREFILL_STEEL_MIN_M", "256"))
+    if _PREFILL_MXFP8_STEEL else 256
+)
+STEEL_CALLS = 0
+
+```
+
+### DSV41_PREFILL_TILED_INDEX
+
+Advanced backend control DSV41_PREFILL_TILED_INDEX. Set explicitly only for the selected backend; its literal read and fallback are documented below.
+
+Scope: mac-mlx. Class: advanced.
+
+Source: `vendor/mac-mlx/mlx_vlm/custom_kernels/deepseek_v41/test_index_prefill.py:250`. Unset read: Wrapper/conditional default: see the literal call and consumer below.
+
+```text
+    qr = mx.random.normal((1, n, 64))
+    reference, fused = SimpleNamespace(candidates=None), SimpleNamespace(candidates=None)
+    monkeypatch.setenv("DSV41_PREFILL_TILED_INDEX", "0")
+    e0 = source(x, qr, 0, 128, None, keys, reference)
+    e1 = consumer(x, qr, 0, 128, None, keys, reference)
+    monkeypatch.setenv("DSV41_PREFILL_TILED_INDEX", "1")
+    tiled = importlib.import_module("mlx_vlm.custom_kernels.deepseek_v41.index_prefill")
+```
+
+Source: `vendor/mac-mlx/mlx_vlm/custom_kernels/deepseek_v41/test_index_prefill.py:253`. Unset read: Wrapper/conditional default: see the literal call and consumer below.
+
+```text
+    e0 = source(x, qr, 0, 128, None, keys, reference)
+    e1 = consumer(x, qr, 0, 128, None, keys, reference)
+    monkeypatch.setenv("DSV41_PREFILL_TILED_INDEX", "1")
+    tiled = importlib.import_module("mlx_vlm.custom_kernels.deepseek_v41.index_prefill")
+    calls = []
+
+    def tracked(*args, **kwargs):
+```
+
+Source: `vendor/mac-mlx/mlx_vlm/custom_kernels/deepseek_v41/test_index_prefill.py:298`. Unset read: Wrapper/conditional default: see the literal call and consumer below.
+
+```text
+    for n, enabled in [(64, None), (1, "1"), (16, "1"), (63, "1")]:
+        if enabled is None:
+            monkeypatch.delenv("DSV41_PREFILL_TILED_INDEX", raising=False)
+        else:
+            monkeypatch.setenv("DSV41_PREFILL_TILED_INDEX", enabled)
+        x, _, _, keys, _, _, _ = _inputs(n, 1031, False)
+        mx.eval(indexer(x, x, 2062 - n, 128, None, keys, SimpleNamespace(candidates=None)))
+```
+
+Source: `vendor/mac-mlx/mlx_vlm/custom_kernels/deepseek_v41/test_index_prefill.py:300`. Unset read: Wrapper/conditional default: see the literal call and consumer below.
+
+```text
+            monkeypatch.delenv("DSV41_PREFILL_TILED_INDEX", raising=False)
+        else:
+            monkeypatch.setenv("DSV41_PREFILL_TILED_INDEX", enabled)
+        x, _, _, keys, _, _, _ = _inputs(n, 1031, False)
+        mx.eval(indexer(x, x, 2062 - n, 128, None, keys, SimpleNamespace(candidates=None)))
+
+
+```
+
+Source: `vendor/mac-mlx/mlx_vlm/models/deepseek_v41/language.py:640`. Unset read: '0'.
+
+```text
+        v41_index = _v41_prefill_enabled("INDEX", n)
+        if (not v41_index and n >= int(os.environ.get("DSV41_PREFILL_TILED_MIN_N", "64"))
+                and os.environ.get("DSV41_PREFILL_TILED_INDEX", "0") == "1"):
+            from ...custom_kernels.deepseek_v41.index_prefill import index_scores_topk
+
+            _s4_count("index_score", self.layer_id)
+            need_blocks = self.is_candidate_source and not (precompute and all_candidates)
+```
+
+### DSV41_PREFILL_TILED_MIN_N
+
+Advanced backend control DSV41_PREFILL_TILED_MIN_N. Set explicitly only for the selected backend; its literal read and fallback are documented below.
+
+Scope: mac-mlx. Class: advanced.
+
+Source: `vendor/mac-mlx/mlx_vlm/custom_kernels/deepseek_v41/test_index_prefill.py:238`. Unset read: Wrapper/conditional default: see the literal call and consumer below.
+
+```text
+    monkeypatch.setenv("DSV41_S4_COMPILE_INDEXER", "0")
+    # Exercise the production n>=64 gate, including zero-length geometry.
+    monkeypatch.setenv("DSV41_PREFILL_TILED_MIN_N", "64")
+    monkeypatch.setattr(lang, "_rope", lambda rope, q, pos: q)
+    monkeypatch.setattr(lang, "_PREFILL_MXFP8_STEEL", False)
+    mx.random.seed(71)
+    args = TextConfig(hidden_size=64, q_lora_rank=64, candidate_topk_blocks=256 if all_candidates else 5)
+```
+
+Source: `vendor/mac-mlx/mlx_vlm/custom_kernels/deepseek_v41/test_index_prefill.py:295`. Unset read: Wrapper/conditional default: see the literal call and consumer below.
+
+```text
+    monkeypatch.setenv("DSV41_S4_COMPILE_INDEXER", "0")
+    indexer = Indexer(TextConfig(hidden_size=64, q_lora_rank=64), 2)
+    monkeypatch.setenv("DSV41_PREFILL_TILED_MIN_N", "64")
+    for n, enabled in [(64, None), (1, "1"), (16, "1"), (63, "1")]:
+        if enabled is None:
+            monkeypatch.delenv("DSV41_PREFILL_TILED_INDEX", raising=False)
+        else:
+```
+
+Source: `vendor/mac-mlx/mlx_vlm/models/deepseek_v41/language.py:639`. Unset read: '64'.
+
+```text
+        # kernel is far slower than the eager path at tiny n (2026-09-15 arm: decode 20 -> 7-14 tok/s).
+        v41_index = _v41_prefill_enabled("INDEX", n)
+        if (not v41_index and n >= int(os.environ.get("DSV41_PREFILL_TILED_MIN_N", "64"))
+                and os.environ.get("DSV41_PREFILL_TILED_INDEX", "0") == "1"):
+            from ...custom_kernels.deepseek_v41.index_prefill import index_scores_topk
+
+            _s4_count("index_score", self.layer_id)
+```
+
+### DSV41_PREFILL_V41_
+
+Advanced backend control DSV41_PREFILL_V41_. Set explicitly only for the selected backend; its literal read and fallback are documented below.
+
+Scope: mac-mlx. Class: advanced.
+
+Source: `vendor/mac-mlx/mlx_vlm/custom_kernels/deepseek_v41/v41_dispatch.py:13`. Unset read: Wrapper/conditional default: see the literal call and consumer below.
+
+```text
+def enabled(kind, n):
+    return (n >= 64 and not _VERIFY.get()
+            and os.environ.get("DSV41_PREFILL_V41_" + kind, "0") == "1")
+
+
+@contextmanager
+def verification():
+```
+
+### DSV41_PROMOTE_DECODE_WEIGHTS
+
+Advanced backend control DSV41_PROMOTE_DECODE_WEIGHTS. Set explicitly only for the selected backend; its literal read and fallback are documented below.
+
+Scope: mac-mlx. Class: advanced.
+
+Source: `engines/mlx-receiver/mlx_token_stream_server.py:163`. Unset read: '0'.
+
+```text
+    if config.vision_config is not None:
+        parameter_bytes += sum((2 * prod(shape) for _, shape in expected_vision_parameters(config.vision_config, config.text_config.hidden_size).values()))
+    if os.environ.get('DSV41_PROMOTE_DECODE_WEIGHTS', '0') == '1':
+        parameter_bytes += sum(((4 - sizes[dtype]) * prod(shape) for name, (dtype, shape) in specs.items() if name.endswith('.wo_a.weight') and os.environ.get('DSV41_WO_A_BF16', '0') != '1' or (name == 'lm_head.weight' and os.environ.get('DSV41_HEAD_BF16', '0') != '1')))
+    available, breakdown = _dsv41_wait_for_memory(source, parameter_bytes, _read_vm_stat, timeout_s=float(os.environ.get('DSV41_MEMORY_GUARD_WAIT_S', '90')))
+    required = _dsv41_memory_guard(available, source, parameter_bytes)
+    print(f"[DSV41] memory available={available / (1 << 30):.2f} GiB resident_required={required / (1 << 30):.0f} GiB headroom=20 GiB source={source} QAT={os.environ.get('DSV41_QAT', '1')} [{_dsv41_breakdown_text(breakdown)}]", file=sys.stderr, flush=True)
+```
+
+Source: `vendor/mac-mlx/mlx_vlm/models/deepseek_v41/language.py:2539`. Unset read: '0'.
+
+```text
+            for layer in self.layers:
+                layer.ffn.ffn_fused = self._ffn_fused_attached
+        if os.environ.get("DSV41_PROMOTE_DECODE_WEIGHTS", "0") == "1":
+            # These contractions already execute in FP32. Retaining that exact
+            # representation removes full weight conversions on every token.
+            # This deliberately spends 3.73 GiB for the release checkpoint.
+            # DSV41_WO_A_BF16 / DSV41_HEAD_BF16 leave the weight bf16 and read half the bytes.
+```
+
+Source: `vendor/mac-mlx/mlx_vlm/models/deepseek_v41/test_ffn_down_bf16_cpu.py:35`. Unset read: Wrapper/conditional default: see the literal call and consumer below.
+
+```text
+def _attach(ns, moe, monkeypatch, flag):
+    monkeypatch.setenv("DSV41_FFN_EXPERT_PAD16", "0")
+    monkeypatch.delenv("DSV41_PROMOTE_DECODE_WEIGHTS", raising=False)
+    if flag is None:
+        monkeypatch.delenv("DSV41_FFN_DOWN_BF16", raising=False)
+    else:
+        monkeypatch.setenv("DSV41_FFN_DOWN_BF16", flag)
+```
+
+Source: `vendor/mac-mlx/mlx_vlm/models/deepseek_v41/test_ffn_expert_pad_cpu.py:161`. Unset read: Wrapper/conditional default: see the literal call and consumer below.
+
+```text
+    monkeypatch.setenv("DSV41_FFN_EXPERT_PAD16", "1")
+    monkeypatch.setenv("DSV41_FFN_DOWN_BF16", "0")
+    monkeypatch.setenv("DSV41_PROMOTE_DECODE_WEIGHTS", "0")
+    # Padding must also take precedence over grouped prefill.
+    monkeypatch.setenv("DSV41_PREFILL_GROUPED_MXFP4", "1")
+    monkeypatch.setenv("DSV41_PREFILL_GROUPED_MIN_ROWS", "64")
+    monkeypatch.setenv("DSV41_COMPILE_PRIMITIVES", "0")
+```
+
+### DSV41_QAT
+
+Advanced backend control DSV41_QAT. Set explicitly only for the selected backend; its literal read and fallback are documented below.
+
+Scope: mac-mlx. Class: advanced.
+
+Source: `engines/mlx-receiver/mlx_token_stream_server.py:167`. Unset read: '1'.
+
+```text
+    available, breakdown = _dsv41_wait_for_memory(source, parameter_bytes, _read_vm_stat, timeout_s=float(os.environ.get('DSV41_MEMORY_GUARD_WAIT_S', '90')))
+    required = _dsv41_memory_guard(available, source, parameter_bytes)
+    print(f"[DSV41] memory available={available / (1 << 30):.2f} GiB resident_required={required / (1 << 30):.0f} GiB headroom=20 GiB source={source} QAT={os.environ.get('DSV41_QAT', '1')} [{_dsv41_breakdown_text(breakdown)}]", file=sys.stderr, flush=True)
+    model_dir = Path(model_dir)
+    model = Model(config)
+    weight_map = json.loads((model_dir / 'model.safetensors.index.json').read_text())['weight_map']
+    shards = {}
+```
+
+Source: `vendor/mac-mlx/mlx_vlm/custom_kernels/deepseek_v41/test_index_prefill.py:39`. Unset read: Wrapper/conditional default: see the literal call and consumer below.
+
+```text
+@pytest.fixture(autouse=True)
+def _reference_environment(monkeypatch):
+    monkeypatch.setenv("DSV41_QAT", "1")
+    monkeypatch.setenv("DSV41_METAL_QUANT", "0")
+    monkeypatch.setenv("DSV41_INDEX_TOPK", "512")
+
+
+```
+
+Source: `vendor/mac-mlx/mlx_vlm/models/deepseek_v41/language.py:155`. Unset read: '1'.
+
+```text
+def fake_quant_fp8_ue8m0(x: mx.array, block: int = 32) -> mx.array:
+    """act_quant(..., scale_fmt='ue8m0', inplace=True): fp8 round-trip, pow2 scales."""
+    if os.environ.get("DSV41_QAT", "1") == "0":
+        return x
+    if os.environ.get("DSV41_METAL_QUANT", "0") == "1":
+        from .quant_kernels import fake_quant
+        return fake_quant(x, block, "fp8_ue8m0")
+```
+
+Source: `vendor/mac-mlx/mlx_vlm/models/deepseek_v41/language.py:171`. Unset read: '1'.
+
+```text
+def fake_quant_fp4_ue8m0(x: mx.array, block: int = 32) -> mx.array:
+    """fp4_act_quant(..., scale_dtype=e8m0, inplace=True): the indexer's q/k path."""
+    if os.environ.get("DSV41_QAT", "1") == "0":
+        return x
+    if os.environ.get("DSV41_METAL_QUANT", "0") == "1":
+        from .quant_kernels import fake_quant
+        return fake_quant(x, block, "fp4_ue8m0")
+```
+
+Source: `vendor/mac-mlx/mlx_vlm/models/deepseek_v41/language.py:187`. Unset read: '1'.
+
+```text
+def fake_quant_fp4_e4m3(x: mx.array, block: int = 16) -> mx.array:
+    """fp4_act_quant(..., 16, scale_dtype=e4m3, inplace=True): the compressed-KV path."""
+    if os.environ.get("DSV41_QAT", "1") == "0":
+        return x
+    if os.environ.get("DSV41_METAL_QUANT", "0") == "1":
+        from .quant_kernels import fake_quant
+        return fake_quant(x, block, "fp4_e4m3")
+```
+
+Source: `vendor/mac-mlx/mlx_vlm/models/deepseek_v41/language.py:1122`. Unset read: '1'.
+
+```text
+        from mlx_lm.models import cache as lm_cache
+
+        qat = os.environ.get("DSV41_QAT", "1") != "0"
+        key = (id(model), qat)
+        entry = self._restore_models.get(key)
+        if entry is None or entry[0]() is not model or entry[2] is not token_map:
+            digest = hashlib.sha256(json.dumps(
+```
+
+Source: `vendor/mac-mlx/mlx_vlm/models/deepseek_v41/language.py:1157`. Unset read: '1'.
+
+```text
+        if len(meta_state) != 2 or meta_state[0] != "deepseek_v41_v1":
+            raise ValueError("Unsupported V4.1 cache metadata")
+        qat = os.environ.get("DSV41_QAT", "1") != "0"
+        matches = [(ref(), token_map) for (_, bound_qat), (ref, sig, token_map)
+                   in list(cls._restore_models.items())
+                   if sig == meta_state[1] and bound_qat == qat and ref() is not None]
+        if len(matches) != 1:
+```
+
+Source: `vendor/mac-mlx/mlx_vlm/models/deepseek_v41/language.py:1175`. Unset read: '1'.
+
+```text
+        import copy
+
+        if self._qat != (os.environ.get("DSV41_QAT", "1") != "0"):
+            raise ValueError("V4.1 cache QAT mode changed")
+        out = copy.copy(self)
+        out.layers = []
+        for lc in self.layers:
+```
+
+Source: `vendor/mac-mlx/mlx_vlm/models/deepseek_v41/test_bounded_cache.py:21`. Unset read: Wrapper/conditional default: see the literal call and consumer below.
+
+```text
+        spec.loader.exec_module(module)
+        monkeypatch.setattr(helper, "LanguageModel", module.LanguageModel)
+    monkeypatch.setenv("DSV41_QAT", "1")
+    monkeypatch.setenv("DSV41_METAL_SPARSE_ATTN", "0")
+    return helper.random_model()
+
+
+```
+
+Source: `vendor/mac-mlx/mlx_vlm/models/deepseek_v41/test_language_dsv41_mac.py:279`. Unset read: Wrapper/conditional default: see the literal call and consumer below.
+
+```text
+@pytest.fixture(params=["0", "1"], ids=["qat-off", "qat-on"])
+def model_and_ids(request, monkeypatch):
+    monkeypatch.setenv("DSV41_QAT", request.param)
+    return random_model(), token_ids()
+
+
+def test_prefill_decode_and_chunks(model_and_ids):
+```
+
+Source: `vendor/mac-mlx/mlx_vlm/models/deepseek_v41/test_language_dsv41_mac.py:391`. Unset read: None.
+
+```text
+    assert all(count <= limit for _, count in growth.values())
+    actual = mx.concatenate(pieces, axis=1)
+    if os.environ.get("DSV41_QAT") == "1":
+        reference_cache = model.make_cache()
+        expected = model(ids, cache=reference_cache).logits
+        mx.eval(actual, expected, reference_cache[0].state)
+        actual_np, expected_np = np.asarray(actual), np.asarray(expected)
+```
+
+Source: `vendor/mac-mlx/mlx_vlm/models/deepseek_v41/test_language_dsv41_mac.py:509`. Unset read: Wrapper/conditional default: see the literal call and consumer below.
+
+```text
+    if not root.is_dir():
+        pytest.skip("Set DSV41_PN_DIR to the PipeNetwork checkout for reference parity")
+    monkeypatch.setenv("DSV41_QAT", "0")
+    old_dtype = torch.get_default_dtype()
+    try:
+        torch.set_default_dtype(torch.float32)
+        ref = load_reference(root, monkeypatch, torch)
+```
+
+Source: `vendor/mac-mlx/mlx_vlm/models/deepseek_v41/test_prefill_cone.py:462`. Unset read: Wrapper/conditional default: see the literal call and consumer below.
+
+```text
+    """
+    model, ids, _ = tiny
+    monkeypatch.setenv("DSV41_QAT", "1")
+    _off(monkeypatch)
+    one, _ = _control(model, ids, chunk=WIDE)
+    four, _ = _control(model, ids, chunk=CHUNK)
+    assert one.shape == four.shape
+```
+
+Source: `vendor/mac-mlx/mlx_vlm/models/deepseek_v41/test_prefill_cone.py:483`. Unset read: Wrapper/conditional default: see the literal call and consumer below.
+
+```text
+    """
+    model, ids, _ = tiny
+    monkeypatch.setenv("DSV41_QAT", qat)
+    _off(monkeypatch)
+    control, _ = _control(model, ids, chunk=int(chunk))
+
+    monkeypatch.setenv("DSV41_PREFILL_LAYER_MAJOR", "1")
+```
+
+Source: `vendor/mac-mlx/mlx_vlm/models/deepseek_v41/test_prefill_cone.py:501`. Unset read: Wrapper/conditional default: see the literal call and consumer below.
+
+```text
+def test_layer_major_leaves_the_same_cache(tiny, monkeypatch, qat):
+    model, ids, config = tiny
+    monkeypatch.setenv("DSV41_QAT", qat)
+    _off(monkeypatch)
+    _, control = _control(model, ids, chunk=CHUNK)
+
+    monkeypatch.setenv("DSV41_PREFILL_LAYER_MAJOR", "1")
+```
+
+Source: `vendor/mac-mlx/mlx_vlm/models/deepseek_v41/test_prefill_cone.py:540`. Unset read: Wrapper/conditional default: see the literal call and consumer below.
+
+```text
+        "the tiny prompt must be long enough for the cone to skip rows")
+
+    monkeypatch.setenv("DSV41_QAT", qat)
+    _off(monkeypatch)
+    control, _ = _control(model, ids, chunk=CHUNK)
+    wide, _ = _control(model, ids, chunk=WIDE)
+    noise = _noise(control[0, -1], wide[0, -1])
+```
+
+Source: `vendor/mac-mlx/mlx_vlm/models/deepseek_v41/test_prefill_cone.py:566`. Unset read: Wrapper/conditional default: see the literal call and consumer below.
+
+```text
+    boundary = prefill_boundary_layer(config)
+
+    monkeypatch.setenv("DSV41_QAT", "1")
+    _cone_on(monkeypatch)
+    cache = model.make_cache()
+    model(ids, cache=cache)
+
+```
+
+Source: `vendor/mac-mlx/mlx_vlm/models/deepseek_v41/test_prefill_cone.py:612`. Unset read: Wrapper/conditional default: see the literal call and consumer below.
+
+```text
+    """
+    model, ids, config = tiny
+    monkeypatch.setenv("DSV41_QAT", "1")
+    _cone_on(monkeypatch)
+    cache = model.make_cache()
+    model(ids[:, :PREFIX_LONG], cache=cache)
+    floor = _expected_floor(PREFIX_LONG, config)
+```
+
+Source: `vendor/mac-mlx/mlx_vlm/models/deepseek_v41/test_prefill_cone.py:626`. Unset read: Wrapper/conditional default: see the literal call and consumer below.
+
+```text
+def test_a_fresh_cache_has_no_floor(tiny, monkeypatch):
+    model, ids, _ = tiny
+    monkeypatch.setenv("DSV41_QAT", "1")
+    _off(monkeypatch)
+    _, cache = _control(model, ids, chunk=CHUNK)
+    assert cache[0].is_trimmable() is True
+    assert cache[0].trim_floor() == 0
+```
+
+Source: `vendor/mac-mlx/mlx_vlm/models/deepseek_v41/test_prefill_cone.py:636`. Unset read: Wrapper/conditional default: see the literal call and consumer below.
+
+```text
+def test_a_cone_cache_refuses_a_rewind_below_its_floor(tiny, monkeypatch):
+    model, ids, config = tiny
+    monkeypatch.setenv("DSV41_QAT", "1")
+    _cone_on(monkeypatch)
+    cache = model.make_cache()
+    model(ids[:, :PREFIX_LONG], cache=cache)
+    floor = _expected_floor(PREFIX_LONG, config)
+```
+
+Source: `vendor/mac-mlx/mlx_vlm/models/deepseek_v41/test_prefill_cone.py:656`. Unset read: Wrapper/conditional default: see the literal call and consumer below.
+
+```text
+    model, ids, config = tiny
+    tail = 4
+    monkeypatch.setenv("DSV41_QAT", "1")
+    _cone_on(monkeypatch, tail=tail)
+    cache = model.make_cache()
+    model(ids[:, :PREFIX_LONG], cache=cache)
+
+```
+
+Source: `vendor/mac-mlx/mlx_vlm/models/deepseek_v41/test_prefill_cone.py:677`. Unset read: Wrapper/conditional default: see the literal call and consumer below.
+
+```text
+    """
+    model, ids, _ = tiny
+    monkeypatch.setenv("DSV41_QAT", "1")
+    _cone_on(monkeypatch)
+    cache = model.make_cache()
+    model(ids[:, :PREFIX_LONG], cache=cache)
+
+```
+
+Source: `vendor/mac-mlx/mlx_vlm/models/deepseek_v41/test_prefill_cone.py:739`. Unset read: Wrapper/conditional default: see the literal call and consumer below.
+
+```text
+    model, ids, _ = tiny
+    n = int(ids.shape[1])
+    monkeypatch.setenv("DSV41_QAT", "1")
+    _off(monkeypatch)
+    base_rewind, _, _ = _default_turn_two(model, ids, prefix, rewind=True)
+    base_fresh, _, _ = _default_turn_two(model, ids, prefix, rewind=False)
+    noise = _noise(base_rewind[0, -1], base_fresh[0, -1])
+```
+
+Source: `vendor/mac-mlx/mlx_vlm/models/deepseek_v41/test_prefill_cone.py:766`. Unset read: Wrapper/conditional default: see the literal call and consumer below.
+
+```text
+    """
+    model, ids, _ = tiny
+    monkeypatch.setenv("DSV41_QAT", "1")
+    _off(monkeypatch)
+    _, base_rewind, _ = _default_turn_two(model, ids, prefix, rewind=True, decodes=3)
+    _, base_fresh, _ = _default_turn_two(model, ids, prefix, rewind=False, decodes=3)
+
+```
+
+Source: `vendor/mac-mlx/mlx_vlm/models/deepseek_v41/test_prefill_cone.py:794`. Unset read: Wrapper/conditional default: see the literal call and consumer below.
+
+```text
+    model, ids, _ = tiny
+    assert prefix % CHUNK == 0, "the arm's chunk boundaries must line up with the control"
+    monkeypatch.setenv("DSV41_QAT", "1")
+    _off(monkeypatch)
+    control, _ = _control(model, ids, chunk=CHUNK)
+    base, _, _ = _default_turn_two(model, ids, prefix, rewind=True)
+    noise = _noise(base[0, -1], control[0, -1])
+```
+
+Source: `vendor/mac-mlx/mlx_vlm/models/deepseek_v41/test_prefill_cone.py:819`. Unset read: Wrapper/conditional default: see the literal call and consumer below.
+
+```text
+        "this test needs a delta long enough for turn two to cone as well")
+
+    monkeypatch.setenv("DSV41_QAT", "1")
+    _cone_on(monkeypatch)
+    cache = model.make_cache()
+    model(ids[:, :prefix], cache=cache)
+    first_floor = cache[0].trim_floor()
+```
+
+Source: `vendor/mac-mlx/mlx_vlm/models/deepseek_v41/test_prefill_cone.py:843`. Unset read: Wrapper/conditional default: see the literal call and consumer below.
+
+```text
+        "this test needs a delta short enough that the cone covers all of it")
+
+    monkeypatch.setenv("DSV41_QAT", "1")
+    _cone_on(monkeypatch)
+    cache = model.make_cache()
+    model(ids[:, :prefix], cache=cache)
+    model(ids[:, prefix:], cache=cache)
+```
+
+Source: `vendor/mac-mlx/mlx_vlm/models/deepseek_v41/test_prefill_cone.py:861`. Unset read: Wrapper/conditional default: see the literal call and consumer below.
+
+```text
+    """
+    model, ids, _ = tiny
+    monkeypatch.setenv("DSV41_QAT", "1")
+    _off(monkeypatch)
+    _, control_cache = _control(model, ids, chunk=CHUNK)
+    control = [model(ids[:, -1:], cache=control_cache).logits for _ in range(3)]
+    _, wide_cache = _control(model, ids, chunk=WIDE)
+```
+
+Source: `vendor/mac-mlx/mlx_vlm/models/deepseek_v41/test_prefill_cone.py:895`. Unset read: Wrapper/conditional default: see the literal call and consumer below.
+
+```text
+    """
+    model, ids, _ = tiny
+    monkeypatch.setenv("DSV41_QAT", "1")
+    monkeypatch.setenv("DSV41_PREFILL_MEGAKERNEL", "1")
+    _off(monkeypatch)
+    control, _ = _control(model, ids, chunk=CHUNK)
+    wide, _ = _control(model, ids, chunk=WIDE)
+```
+
+Source: `vendor/mac-mlx/mlx_vlm/models/deepseek_v41/test_prefill_cone.py:1062`. Unset read: Wrapper/conditional default: see the literal call and consumer below.
+
+```text
+        "the tiny prompt must still be longer than the widened boundary cone")
+
+    monkeypatch.setenv("DSV41_QAT", "1")
+    control = _cone_run(model, ids, monkeypatch, 1).logits
+    arm = _cone_run(model, ids, monkeypatch, tail).logits
+    mx.eval(control, arm)
+
+```
+
+Source: `vendor/mac-mlx/mlx_vlm/models/deepseek_v41/test_prefill_cone.py:1084`. Unset read: Wrapper/conditional default: see the literal call and consumer below.
+
+```text
+    """
+    model, ids, _ = tiny
+    monkeypatch.setenv("DSV41_QAT", "1")
+    wide = _cone_run(model, ids, monkeypatch, 2 * tail,
+                     return_hidden=True).hidden_states[-1]
+    arm = _cone_run(model, ids, monkeypatch, tail,
+                    return_hidden=True).hidden_states[-1]
+```
+
+Source: `vendor/mac-mlx/mlx_vlm/models/deepseek_v41/test_prefill_cone.py:1107`. Unset read: Wrapper/conditional default: see the literal call and consumer below.
+
+```text
+    """
+    model, ids, _ = tiny
+    monkeypatch.setenv("DSV41_QAT", "1")
+    _off(monkeypatch)
+    control = _hidden_chunked(model, ids, CHUNK)
+    wide = _hidden_chunked(model, ids, WIDE)
+    noise = _noise(control[:, -tail:], wide[:, -tail:])
+```
+
+Source: `vendor/mac-mlx/mlx_vlm/models/deepseek_v41/test_prefill_cone.py:1133`. Unset read: Wrapper/conditional default: see the literal call and consumer below.
+
+```text
+    taps = [config.num_hidden_layers - 3, config.num_hidden_layers - 2,
+            config.num_hidden_layers - 1]
+    monkeypatch.setenv("DSV41_QAT", "1")
+    _off(monkeypatch)
+    control = _taps_chunked(model, ids, CHUNK, taps)
+    wide_chunk = _taps_chunked(model, ids, WIDE, taps)
+
+```
+
+Source: `vendor/mac-mlx/mlx_vlm/models/deepseek_v41/test_speed_merge_mac.py:18`. Unset read: Wrapper/conditional default: see the literal call and consumer below.
+
+```text
+    monkeypatch.setenv("DSV41_S4_BYPASS", "0")
+    monkeypatch.setenv("DSV41_S4_COMPILE_INDEXER", compiled)
+    monkeypatch.setenv("DSV41_QAT", "1")
+    mx.random.seed(41)
+    cfg = tiny_config()
+    indexer = language.Indexer(cfg, 5)
+    rope = language.Attention(5, cfg).rope
+```
+
+### DSV41_S4_BYPASS
+
+Advanced backend control DSV41_S4_BYPASS. Set explicitly only for the selected backend; its literal read and fallback are documented below.
+
+Scope: mac-mlx. Class: advanced.
+
+Source: `vendor/mac-mlx/mlx_vlm/custom_kernels/deepseek_v41/test_index_prefill.py:234`. Unset read: Wrapper/conditional default: see the literal call and consumer below.
+
+```text
+    lang = importlib.import_module("mlx_vlm.models.deepseek_v41.language")
+    monkeypatch.setenv("DSV41_S4_PRECOMPUTE", str(int(precompute)))
+    monkeypatch.setenv("DSV41_S4_BYPASS", "0")
+    monkeypatch.setenv("DSV41_METAL_INDEXER", "0")
+    monkeypatch.setenv("DSV41_S4_COMPILE_INDEXER", "0")
+    # Exercise the production n>=64 gate, including zero-length geometry.
+    monkeypatch.setenv("DSV41_PREFILL_TILED_MIN_N", "64")
+```
+
+Source: `vendor/mac-mlx/mlx_vlm/custom_kernels/deepseek_v41/test_index_prefill.py:291`. Unset read: Wrapper/conditional default: see the literal call and consumer below.
+
+```text
+    monkeypatch.setattr(lang, "_rope", lambda rope, q, pos: q)
+    monkeypatch.setattr(lang, "_PREFILL_MXFP8_STEEL", False)
+    monkeypatch.setenv("DSV41_S4_BYPASS", "0")
+    monkeypatch.setenv("DSV41_METAL_INDEXER", "0")
+    monkeypatch.setenv("DSV41_S4_COMPILE_INDEXER", "0")
+    indexer = Indexer(TextConfig(hidden_size=64, q_lora_rank=64), 2)
+    monkeypatch.setenv("DSV41_PREFILL_TILED_MIN_N", "64")
+```
+
+Source: `vendor/mac-mlx/mlx_vlm/models/deepseek_v41/language.py:617`. Unset read: '1'.
+
+```text
+            shared.candidates, getattr(shared, "candidates_start", None), start_pos)
+
+        if (os.environ.get("DSV41_S4_BYPASS", "1") == "1"
+                and nb <= self.index_topk and all_candidates
+                and (not self.uses_candidates or shared_candidates is None)):
+            # Sorted top-k of the whole row is the identity, including the
+            # causal -1 lanes in prefill. Key publication still happens above us.
+```
+
+Source: `vendor/mac-mlx/mlx_vlm/models/deepseek_v41/test_speed_merge_mac.py:16`. Unset read: Wrapper/conditional default: see the literal call and consumer below.
+
+```text
+def test_s4_scoring_keeps_workspace_bound_and_selected_positions(monkeypatch, compiled):
+    monkeypatch.setenv("DSV41_S4_PRECOMPUTE", "1")
+    monkeypatch.setenv("DSV41_S4_BYPASS", "0")
+    monkeypatch.setenv("DSV41_S4_COMPILE_INDEXER", compiled)
+    monkeypatch.setenv("DSV41_QAT", "1")
+    mx.random.seed(41)
+    cfg = tiny_config()
+```
+
+### DSV41_S4_COMPILE_INDEXER
+
+Advanced backend control DSV41_S4_COMPILE_INDEXER. Set explicitly only for the selected backend; its literal read and fallback are documented below.
+
+Scope: mac-mlx. Class: advanced.
+
+Source: `vendor/mac-mlx/mlx_vlm/custom_kernels/deepseek_v41/test_index_prefill.py:236`. Unset read: Wrapper/conditional default: see the literal call and consumer below.
+
+```text
+    monkeypatch.setenv("DSV41_S4_BYPASS", "0")
+    monkeypatch.setenv("DSV41_METAL_INDEXER", "0")
+    monkeypatch.setenv("DSV41_S4_COMPILE_INDEXER", "0")
+    # Exercise the production n>=64 gate, including zero-length geometry.
+    monkeypatch.setenv("DSV41_PREFILL_TILED_MIN_N", "64")
+    monkeypatch.setattr(lang, "_rope", lambda rope, q, pos: q)
+    monkeypatch.setattr(lang, "_PREFILL_MXFP8_STEEL", False)
+```
+
+Source: `vendor/mac-mlx/mlx_vlm/custom_kernels/deepseek_v41/test_index_prefill.py:293`. Unset read: Wrapper/conditional default: see the literal call and consumer below.
+
+```text
+    monkeypatch.setenv("DSV41_S4_BYPASS", "0")
+    monkeypatch.setenv("DSV41_METAL_INDEXER", "0")
+    monkeypatch.setenv("DSV41_S4_COMPILE_INDEXER", "0")
+    indexer = Indexer(TextConfig(hidden_size=64, q_lora_rank=64), 2)
+    monkeypatch.setenv("DSV41_PREFILL_TILED_MIN_N", "64")
+    for n, enabled in [(64, None), (1, "1"), (16, "1"), (63, "1")]:
+        if enabled is None:
+```
+
+Source: `vendor/mac-mlx/mlx_vlm/models/deepseek_v41/language.py:688`. Unset read: '0'.
+
+```text
+            from ...custom_kernels.deepseek_v41.indexer import index_scores, index_topk
+            score_fn = index_scores
+        elif os.environ.get("DSV41_S4_COMPILE_INDEXER", "0") == "1":
+            if not hasattr(_index_scores, "compiled"):
+                _index_scores.compiled = mx.compile(partial(_index_scores, matmul=True), shapeless=True)
+            score_fn = _index_scores.compiled
+        workspace_mb = int(os.environ.get("DSV41_INDEX_WORKSPACE_MB", "0"))
+```
+
+Source: `vendor/mac-mlx/mlx_vlm/models/deepseek_v41/test_speed_merge_mac.py:17`. Unset read: Wrapper/conditional default: see the literal call and consumer below.
+
+```text
+    monkeypatch.setenv("DSV41_S4_PRECOMPUTE", "1")
+    monkeypatch.setenv("DSV41_S4_BYPASS", "0")
+    monkeypatch.setenv("DSV41_S4_COMPILE_INDEXER", compiled)
+    monkeypatch.setenv("DSV41_QAT", "1")
+    mx.random.seed(41)
+    cfg = tiny_config()
+    indexer = language.Indexer(cfg, 5)
+```
+
+### DSV41_S4_COUNT
+
+Advanced backend control DSV41_S4_COUNT. Set explicitly only for the selected backend; its literal read and fallback are documented below.
+
+Scope: mac-mlx. Class: advanced.
+
+Source: `vendor/mac-mlx/mlx_vlm/models/deepseek_v41/language.py:364`. Unset read: '0'.
+
+```text
+_SPARSE_TABLES = {}
+_S4_COUNTS = {}
+_S4_COUNT_ENABLED = os.environ.get("DSV41_S4_COUNT", "0") == "1"
+
+
+def _s4_count(name, layer=None, amount=1):
+    if _S4_COUNT_ENABLED:
+```
+
+### DSV41_S4_DENSE
+
+Advanced backend control DSV41_S4_DENSE. Set explicitly only for the selected backend; its literal read and fallback are documented below.
+
+Scope: mac-mlx. Class: advanced.
+
+Source: `vendor/mac-mlx/mlx_vlm/models/deepseek_v41/language.py:1623`. Unset read: '0'.
+
+```text
+            # Window-only and shared-index/KV reuse layers do no index work.
+            _prefill_layer_add(self.layer_id, "attn_index_ms", _index_ms)
+        if (os.environ.get("DSV41_S4_DENSE", "0") == "1" and n == 1
+                and self.ratio and end_pos // self.ratio and shared.dense_compressed):
+            out = _dense_decode_attn(q, kv_all, self.attn_sink,
+                                     self.window_size, self.head_dim ** -0.5)
+        else:
+```
+
+### DSV41_S4_PRECOMPUTE
+
+Advanced backend control DSV41_S4_PRECOMPUTE. Set explicitly only for the selected backend; its literal read and fallback are documented below.
+
+Scope: mac-mlx. Class: advanced.
+
+Source: `vendor/mac-mlx/mlx_vlm/custom_kernels/deepseek_v41/test_index_fused.py:410`. Unset read: KeyError unless an earlier assignment supplies the variable.
+
+```text
+    keys = lang.fake_quant_fp4_ue8m0(mx.random.normal((1, nb, 128)).astype(mx.bfloat16))
+    keep = (mx.random.uniform(shape=(1, n, (nb + 7) // 8)) > 0.4) if candidates else None
+    if keep is not None and os.environ["DSV41_S4_PRECOMPUTE"] == "0":
+        keep = mx.repeat(keep, 8, axis=-1)[..., :nb]
+    rope = lang.DeepseekV4RoPE(config.qk_rope_head_dim, config.compress_rope_theta,
+                             dict(config.rope_scaling))
+    mx.eval(x, qr, keys, indexer.parameters(), rope.parameters())
+```
+
+Source: `vendor/mac-mlx/mlx_vlm/custom_kernels/deepseek_v41/test_index_fused.py:430`. Unset read: Wrapper/conditional default: see the literal call and consumer below.
+
+```text
+@pytest.mark.parametrize("source,candidates", [(False, False), (False, True), (True, False)])
+def test_whole_indexer_and_candidate_source(monkeypatch, precompute, source, candidates):
+    monkeypatch.setenv("DSV41_S4_PRECOMPUTE", str(int(precompute)))
+    eager, fused = _model_paths(64, 1031, candidates=candidates, source=source)
+    expected, actual = eager(), fused()
+    mx.eval(*expected, *actual)
+    _same_sets(actual[0], expected[0])
+```
+
+Source: `vendor/mac-mlx/mlx_vlm/custom_kernels/deepseek_v41/test_index_fused.py:445`. Unset read: Wrapper/conditional default: see the literal call and consumer below.
+
+```text
+    and its per-position mask now reaches the kernel instead of being refused.
+    """
+    monkeypatch.setenv("DSV41_S4_PRECOMPUTE", str(int(precompute)))
+    eager, fused = _model_paths(64, 1031, candidates=True)
+    expected = eager()
+    monkeypatch.setenv("DSV41_INDEX_SKIP", "1")
+    prewarm_index_skip(8, precompute)
+```
+
+Source: `vendor/mac-mlx/mlx_vlm/custom_kernels/deepseek_v41/test_index_fused.py:468`. Unset read: Wrapper/conditional default: see the literal call and consumer below.
+
+```text
+    below, exactly at, and above the gate.
+    """
+    monkeypatch.setenv("DSV41_S4_PRECOMPUTE", str(int(precompute)))
+    monkeypatch.setenv("DSV41_INDEX_SKIP", "1")
+    monkeypatch.setenv("DSV41_INDEX_SKIP_MIN_NB", str(min_nb))
+    prewarm_index_skip(8, precompute)
+    masked = []
+```
+
+Source: `vendor/mac-mlx/mlx_vlm/custom_kernels/deepseek_v41/test_index_fused_cpu.py:498`. Unset read: Wrapper/conditional default: see the literal call and consumer below.
+
+```text
+    monkeypatch.setenv("DSV41_INDEX_FUSED", "1")
+    monkeypatch.setenv("DSV41_INDEX_SKIP", skip)
+    monkeypatch.setenv("DSV41_S4_PRECOMPUTE", precompute)
+    # 0 = always skip when the switch is on; this nb is far below the shipped
+    # DSV41_INDEX_SKIP_MIN_NB, which is gated on its own below.
+    monkeypatch.setenv("DSV41_INDEX_SKIP_MIN_NB", "0")
+    indexer.uses_candidates = True
+```
+
+Source: `vendor/mac-mlx/mlx_vlm/custom_kernels/deepseek_v41/test_index_fused_cpu.py:529`. Unset read: Wrapper/conditional default: see the literal call and consumer below.
+
+```text
+    monkeypatch.setenv("DSV41_INDEX_FUSED", "1")
+    monkeypatch.setenv("DSV41_INDEX_SKIP", "1")
+    monkeypatch.setenv("DSV41_S4_PRECOMPUTE", "0")
+    monkeypatch.setenv("DSV41_INDEX_SKIP_MIN_NB", "0")
+    indexer.uses_candidates = True
+    ns["attach"](model, ".")
+    n, nb = 64, 136
+```
+
+Source: `vendor/mac-mlx/mlx_vlm/custom_kernels/deepseek_v41/test_index_fused_cpu.py:572`. Unset read: Wrapper/conditional default: see the literal call and consumer below.
+
+```text
+    monkeypatch.setenv("DSV41_INDEX_FUSED", "1")
+    monkeypatch.setenv("DSV41_INDEX_SKIP", skip)
+    monkeypatch.setenv("DSV41_S4_PRECOMPUTE", precompute)
+    if min_nb is None:
+        monkeypatch.delenv("DSV41_INDEX_SKIP_MIN_NB", raising=False)
+    else:
+        monkeypatch.setenv("DSV41_INDEX_SKIP_MIN_NB", str(min_nb))
+```
+
+Source: `vendor/mac-mlx/mlx_vlm/custom_kernels/deepseek_v41/test_index_fused_cpu.py:640`. Unset read: Wrapper/conditional default: see the literal call and consumer below.
+
+```text
+    monkeypatch.setenv("DSV41_INDEX_FUSED", "1")
+    monkeypatch.setenv("DSV41_INDEX_SKIP", "1")
+    monkeypatch.setenv("DSV41_S4_PRECOMPUTE", "1")
+    monkeypatch.setenv("DSV41_INDEX_SKIP_MIN_NB", "136")
+    indexer.uses_candidates = True
+    ns["attach"](model, ".")
+    capsys.readouterr()
+```
+
+Source: `vendor/mac-mlx/mlx_vlm/custom_kernels/deepseek_v41/test_index_prefill.py:233`. Unset read: Wrapper/conditional default: see the literal call and consumer below.
+
+```text
+def test_indexer_source_and_consumer_hook(monkeypatch, precompute, all_candidates):
+    lang = importlib.import_module("mlx_vlm.models.deepseek_v41.language")
+    monkeypatch.setenv("DSV41_S4_PRECOMPUTE", str(int(precompute)))
+    monkeypatch.setenv("DSV41_S4_BYPASS", "0")
+    monkeypatch.setenv("DSV41_METAL_INDEXER", "0")
+    monkeypatch.setenv("DSV41_S4_COMPILE_INDEXER", "0")
+    # Exercise the production n>=64 gate, including zero-length geometry.
+```
+
+Source: `vendor/mac-mlx/mlx_vlm/models/deepseek_v41/language.py:602`. Unset read: '1'.
+
+```text
+        ratio = self.ratio
+        nb = index_k.shape[1]
+        precompute = os.environ.get("DSV41_S4_PRECOMPUTE", "1") == "1"
+        # This is a compressed-position threshold, NOT an attention threshold:
+        # even when all candidate blocks fit, index_topk still prunes positions.
+        candidate_limit = self.candidate_topk_blocks * self.candidate_block_size
+        all_candidates = nb <= candidate_limit
+```
+
+Source: `vendor/mac-mlx/mlx_vlm/models/deepseek_v41/test_speed_merge_mac.py:15`. Unset read: Wrapper/conditional default: see the literal call and consumer below.
+
+```text
+@pytest.mark.parametrize("compiled", ["0", "1"])
+def test_s4_scoring_keeps_workspace_bound_and_selected_positions(monkeypatch, compiled):
+    monkeypatch.setenv("DSV41_S4_PRECOMPUTE", "1")
+    monkeypatch.setenv("DSV41_S4_BYPASS", "0")
+    monkeypatch.setenv("DSV41_S4_COMPILE_INDEXER", compiled)
+    monkeypatch.setenv("DSV41_QAT", "1")
+    mx.random.seed(41)
+```
+
+### DSV41_SDPA_SPARSE_ATTN
+
+Advanced backend control DSV41_SDPA_SPARSE_ATTN. Set explicitly only for the selected backend; its literal read and fallback are documented below.
+
+Scope: mac-mlx. Class: advanced.
+
+Source: `vendor/mac-mlx/mlx_vlm/custom_kernels/deepseek_v41/test_sparse_attention_prefill.py:203`. Unset read: Wrapper/conditional default: see the literal call and consumer below.
+
+```text
+    # The new flag alone reaches the dispatcher through language.sparse_attn.
+    monkeypatch.delenv("DSV41_METAL_SPARSE_ATTN", raising=False)
+    monkeypatch.delenv("DSV41_SDPA_SPARSE_ATTN", raising=False)
+    assert sparse_attn(*case) is marker
+    q, banks, sink, ids, scale = case
+    decode = (q[:, :1], banks, sink, ids[:, :1], scale)
+    with _flash_switch("0"):
+```
+
+Source: `vendor/mac-mlx/mlx_vlm/custom_kernels/deepseek_v41/test_sparse_attention_prefill.py:242`. Unset read: Wrapper/conditional default: see the literal call and consumer below.
+
+```text
+    monkeypatch.setattr(module, "sparse_attn_prefill", forbidden)
+    monkeypatch.setenv("DSV41_METAL_SPARSE_ATTN", metal)
+    monkeypatch.setenv("DSV41_SDPA_SPARSE_ATTN", "0")
+    if threshold is None:
+        monkeypatch.delenv("DSV41_PREFILL_FLASH_MIN_N", raising=False)
+    else:
+        monkeypatch.setenv("DSV41_PREFILL_FLASH_MIN_N", threshold)
+```
+
+Source: `vendor/mac-mlx/mlx_vlm/custom_kernels/deepseek_v41/validate_sdpa.py:37`. Unset read: Assigned by the runtime; see literal consumer.
+
+```text
+
+def select(path):
+    os.environ['DSV41_SDPA_SPARSE_ATTN'] = '1' if path == 'sdpa' else '0'
+    os.environ['DSV41_METAL_SPARSE_ATTN'] = '1' if path == 'metal' else '0'
+    os.environ['DSV41_COMPILE_SPARSE_ATTN'] = '1' if path == 'compiled' else '0'
+
+
+```
+
+Source: `vendor/mac-mlx/mlx_vlm/custom_kernels/deepseek_v41/validate_sdpa_edges.py:105`. Unset read: Assigned by the runtime; see literal consumer.
+
+```text
+        for sdpa,metal in [('0','0'),('1','1'),('decode','prefill'),('prefill','decode')]:
+            for m in (1,3,257):
+                os.environ['DSV41_SDPA_SPARSE_ATTN'] = sdpa
+                os.environ['DSV41_METAL_SPARSE_ATTN'] = metal
+                counts.update(sdpa=0,metal=0)
+                qq=mx.broadcast_to(q,(1,m,64,512))
+                ii=mx.broadcast_to(idx,(1,m,1))
+```
+
+Source: `vendor/mac-mlx/mlx_vlm/models/deepseek_v41/language.py:314`. Unset read: '0'.
+
+```text
+        if prefill_flash_enabled(q.shape[1]):
+            return sparse_attention(q, kv, attn_sink, topk_idxs, softmax_scale)
+    sdpa = os.environ.get("DSV41_SDPA_SPARSE_ATTN", "0")
+    if sdpa not in ("0", "1", "decode", "prefill"):
+        raise ValueError("DSV41_SDPA_SPARSE_ATTN must be 0, 1, decode, or prefill")
+    metal = os.environ.get("DSV41_METAL_SPARSE_ATTN", "0")
+    if metal not in ("0", "1", "decode", "prefill"):
+```
+
+### DSV41_SLIDING_WINDOW
+
+Advanced backend control DSV41_SLIDING_WINDOW. Set explicitly only for the selected backend; its literal read and fallback are documented below.
+
+Scope: mac-mlx. Class: advanced.
+
+Source: `vendor/mac-mlx/mlx_vlm/models/deepseek_v41/test_kv_selection_width.py:32`. Unset read: Wrapper/conditional default: see the literal call and consumer below.
+
+```text
+def test_kv_widths_default_to_the_checkpoints_own_values(monkeypatch):
+    monkeypatch.delenv("DSV41_INDEX_TOPK", raising=False)
+    monkeypatch.delenv("DSV41_SLIDING_WINDOW", raising=False)
+    cfg = _text_config()
+    assert cfg.index_topk == 512
+    assert cfg.sliding_window == 128
+
+```
+
+Source: `vendor/mac-mlx/mlx_vlm/models/deepseek_v41/test_kv_selection_width.py:40`. Unset read: Wrapper/conditional default: see the literal call and consumer below.
+
+```text
+def test_kv_widths_can_be_widened_by_environment(monkeypatch):
+    monkeypatch.setenv("DSV41_INDEX_TOPK", "4096")
+    monkeypatch.setenv("DSV41_SLIDING_WINDOW", "1024")
+    cfg = _text_config()
+    assert cfg.index_topk == 4096
+    assert cfg.sliding_window == 1024
+
+```
+
+Source: `vendor/mac-mlx/mlx_vlm/models/deepseek_v41/test_kv_selection_width.py:49`. Unset read: Wrapper/conditional default: see the literal call and consumer below.
+
+```text
+    """A preset writing an empty string must not collapse the dense window to nothing."""
+    monkeypatch.setenv("DSV41_INDEX_TOPK", "")
+    monkeypatch.setenv("DSV41_SLIDING_WINDOW", "   ")
+    cfg = _text_config()
+    assert cfg.index_topk == 512
+    assert cfg.sliding_window == 128
+
+```
+
+Source: `vendor/mac-mlx/mlx_vlm/models/deepseek_v41/test_kv_selection_width.py:58`. Unset read: Wrapper/conditional default: see the literal call and consumer below.
+
+```text
+def test_a_nonsense_width_is_refused_rather_than_coerced(monkeypatch, bad):
+    monkeypatch.setenv("DSV41_INDEX_TOPK", bad)
+    monkeypatch.delenv("DSV41_SLIDING_WINDOW", raising=False)
+    with pytest.raises(ValueError, match="DSV41_INDEX_TOPK"):
+        _text_config()
+
+
+```
+
+### DSV41_STEP_LEDGER
+
+Advanced backend control DSV41_STEP_LEDGER. Set explicitly only for the selected backend; its literal read and fallback are documented below.
+
+Scope: mac-mlx. Class: advanced.
+
+Source: `engines/mlx-receiver/mlx_token_stream_server.py:2387`. Unset read: '0'.
+
+```text
+                _swi_active = False
+        with _wired(self.model):
+            _ledger_on = os.environ.get('DSV41_STEP_LEDGER', '0') == '1'
+            _ledger = {'build_ms': 0.0, 'wait_ms': 0.0, 'emit_ms': 0.0, 'iter_ms': 0.0, 'n': 0}
+            if dspark_runtime is not None:
+                dspark_tokens = dspark_runtime.tokens(cache, first_id, max_tokens)
+                try:
+```
+
+Source: `engines/mlx-receiver/mlx_token_stream_server.py:2870`. Unset read: '0'.
+
+```text
+        decode_dt = time.time() - decode_t0
+        decode_tok_s = tokens_generated / max(decode_dt, 1e-09)
+        if os.environ.get('DSV41_STEP_LEDGER', '0') == '1':
+            try:
+                _lg = locals().get('_ledger') or {}
+                _n = max(1, int(_lg.get('n', 0)))
+                _parts = ['tokens=%d' % _lg.get('n', 0)]
+```
+
+Source: `vendor/mac-mlx/mlx_vlm/models/deepseek_v41/engram.py:51`. Unset read: '0'.
+
+```text
+
+# Phase 0 of the v41 port (2026-09-15): host milliseconds spent fetching Engram rows per decode step.
+_LEDGER_ON = os.environ.get("DSV41_STEP_LEDGER", "0") == "1"
+LEDGER = {"engram_host_ms": 0.0, "engram_calls": 0}
+
+DEAD = -1  # a position that takes no part in an n-gram (an image span)
+ROW_BYTES = 256 + 8  # fp8 row + e8m0 scales
+```
+
+Source: `vendor/mac-mlx/mlx_vlm/models/deepseek_v41/language.py:68`. Unset read: '0'.
+
+```text
+# the host; DSV41_STEP_LEDGER_CUTS=1 additionally evaluates after every layer of a decode step and records
+# per-layer GPU ms (attribution only: it serialises the N+1 pipeline).
+_LEDGER_ON = os.environ.get("DSV41_STEP_LEDGER", "0") == "1"
+_LEDGER_CUTS = _LEDGER_ON and os.environ.get("DSV41_STEP_LEDGER_CUTS", "0") == "1"
+# v41 port lever 1 (2026-09-15): intra-step overlap for decode steps. The ledger showed the DSV4.1
+# step fully serial -- the host builds all 40 layers (with two 3-6 ms Engram memmap fetches inline)
+# and only then does the GPU start. With DSV41_STEP_OVERLAP=1: the rows of every Engram layer after
+```
+
+### DSV41_STEP_LEDGER_CUTS
+
+Advanced backend control DSV41_STEP_LEDGER_CUTS. Set explicitly only for the selected backend; its literal read and fallback are documented below.
+
+Scope: mac-mlx. Class: advanced.
+
+Source: `vendor/mac-mlx/mlx_vlm/models/deepseek_v41/language.py:69`. Unset read: '0'.
+
+```text
+# per-layer GPU ms (attribution only: it serialises the N+1 pipeline).
+_LEDGER_ON = os.environ.get("DSV41_STEP_LEDGER", "0") == "1"
+_LEDGER_CUTS = _LEDGER_ON and os.environ.get("DSV41_STEP_LEDGER_CUTS", "0") == "1"
+# v41 port lever 1 (2026-09-15): intra-step overlap for decode steps. The ledger showed the DSV4.1
+# step fully serial -- the host builds all 40 layers (with two 3-6 ms Engram memmap fetches inline)
+# and only then does the GPU start. With DSV41_STEP_OVERLAP=1: the rows of every Engram layer after
+# the first are fetched on a worker thread as soon as the step's hashes exist, and an async_eval is
+```
+
+### DSV41_STEP_OVERLAP
+
+Advanced backend control DSV41_STEP_OVERLAP. Set explicitly only for the selected backend; its literal read and fallback are documented below.
+
+Scope: mac-mlx. Class: advanced.
+
+Source: `vendor/mac-mlx/mlx_vlm/models/deepseek_v41/language.py:76`. Unset read: '0'.
+
+```text
+# issued right before the second Engram layer so the GPU runs layers 0..13 while the host finishes
+# the fetch and builds 14..39. Numerics are untouched (the same ops in the same order).
+_STEP_OVERLAP = os.environ.get("DSV41_STEP_OVERLAP", "0") == "1"
+# Prefill too (2026-09-15 evening): a 512-token chunk fetches 12,288 Engram rows per Engram layer on the
+# host; with this switch layer 14's fetch runs on the worker while the GPU has layers 0..13.
+_STEP_OVERLAP_PREFILL = _STEP_OVERLAP and os.environ.get("DSV41_STEP_OVERLAP_PREFILL", "0") == "1"
+# v41 port lever 2a (2026-09-15): the promoted fp32 decode weights are half of what a token reads
+```
+
+### DSV41_STEP_OVERLAP_PREFILL
+
+Advanced backend control DSV41_STEP_OVERLAP_PREFILL. Set explicitly only for the selected backend; its literal read and fallback are documented below.
+
+Scope: mac-mlx. Class: advanced.
+
+Source: `vendor/mac-mlx/mlx_vlm/models/deepseek_v41/language.py:79`. Unset read: '0'.
+
+```text
+# Prefill too (2026-09-15 evening): a 512-token chunk fetches 12,288 Engram rows per Engram layer on the
+# host; with this switch layer 14's fetch runs on the worker while the GPU has layers 0..13.
+_STEP_OVERLAP_PREFILL = _STEP_OVERLAP and os.environ.get("DSV41_STEP_OVERLAP_PREFILL", "0") == "1"
+# v41 port lever 2a (2026-09-15): the promoted fp32 decode weights are half of what a token reads
+# (wo_a 134 MB x 40 layers + lm_head 2.65 GB of ~16 GB). DSV41_WO_A_BF16=1 contracts the attention
+# output in bf16 (fp32 accumulation inside the GEMM; wo_b consumes bf16 anyway) from a bf16 weight;
+# DSV41_HEAD_BF16=1 keeps the head bf16 and needs DSV41_OMLX_HEAD=1 for fp32 logits (checked at
+```
+
+### DSV41_TEST_FFN_DIM
+
+Advanced backend control DSV41_TEST_FFN_DIM. Set explicitly only for the selected backend; its literal read and fallback are documented below.
+
+Scope: mac-mlx. Class: advanced.
+
+Source: `vendor/mac-mlx/mlx_vlm/models/deepseek_v41/test_ffn_down_bf16.py:44`. Unset read: '256'.
+
+```text
+    monkeypatch.setattr(lang, "_PREFILL_MXFP8_STEEL", False)
+    monkeypatch.setattr(lang, "_FFN_DOWN_BF16_ENGAGED", False)
+    dim = int(os.environ.get("DSV41_TEST_FFN_DIM", "256"))
+    inter = int(os.environ.get("DSV41_TEST_FFN_INTER", "256"))
+    experts = int(os.environ.get("DSV41_TEST_FFN_EXPERTS", "32"))
+    args = TextConfig(hidden_size=dim, moe_intermediate_size=inter,
+                      n_routed_experts=experts, num_experts_per_tok=6)
+```
+
+Source: `vendor/mac-mlx/mlx_vlm/models/deepseek_v41/test_ffn_expert_pad.py:43`. Unset read: '256'.
+
+```text
+    if not mx.metal.is_available():
+        pytest.skip("Requires Mac Metal")
+    dim = int(os.environ.get("DSV41_TEST_FFN_DIM", "256"))
+    inter = int(os.environ.get("DSV41_TEST_FFN_INTER", "256"))
+    experts = int(os.environ.get("DSV41_TEST_FFN_EXPERTS", "384"))
+    assert experts >= 6
+    routes = _zipf_routing(experts)
+```
+
+### DSV41_TEST_FFN_EXPERTS
+
+Advanced backend control DSV41_TEST_FFN_EXPERTS. Set explicitly only for the selected backend; its literal read and fallback are documented below.
+
+Scope: mac-mlx. Class: advanced.
+
+Source: `vendor/mac-mlx/mlx_vlm/models/deepseek_v41/test_ffn_down_bf16.py:46`. Unset read: '32'.
+
+```text
+    dim = int(os.environ.get("DSV41_TEST_FFN_DIM", "256"))
+    inter = int(os.environ.get("DSV41_TEST_FFN_INTER", "256"))
+    experts = int(os.environ.get("DSV41_TEST_FFN_EXPERTS", "32"))
+    args = TextConfig(hidden_size=dim, moe_intermediate_size=inter,
+                      n_routed_experts=experts, num_experts_per_tok=6)
+    mx.random.seed(41)
+    moe = lang.MoE(args)
+```
+
+Source: `vendor/mac-mlx/mlx_vlm/models/deepseek_v41/test_ffn_expert_pad.py:45`. Unset read: '384'.
+
+```text
+    dim = int(os.environ.get("DSV41_TEST_FFN_DIM", "256"))
+    inter = int(os.environ.get("DSV41_TEST_FFN_INTER", "256"))
+    experts = int(os.environ.get("DSV41_TEST_FFN_EXPERTS", "384"))
+    assert experts >= 6
+    routes = _zipf_routing(experts)
+    assert all(len(set(row)) == 6 for row in routes)
+    counts = np.bincount(routes.ravel(), minlength=experts)
+```
+
+### DSV41_TEST_FFN_INTER
+
+Advanced backend control DSV41_TEST_FFN_INTER. Set explicitly only for the selected backend; its literal read and fallback are documented below.
+
+Scope: mac-mlx. Class: advanced.
+
+Source: `vendor/mac-mlx/mlx_vlm/models/deepseek_v41/test_ffn_down_bf16.py:45`. Unset read: '256'.
+
+```text
+    monkeypatch.setattr(lang, "_FFN_DOWN_BF16_ENGAGED", False)
+    dim = int(os.environ.get("DSV41_TEST_FFN_DIM", "256"))
+    inter = int(os.environ.get("DSV41_TEST_FFN_INTER", "256"))
+    experts = int(os.environ.get("DSV41_TEST_FFN_EXPERTS", "32"))
+    args = TextConfig(hidden_size=dim, moe_intermediate_size=inter,
+                      n_routed_experts=experts, num_experts_per_tok=6)
+    mx.random.seed(41)
+```
+
+Source: `vendor/mac-mlx/mlx_vlm/models/deepseek_v41/test_ffn_expert_pad.py:44`. Unset read: '256'.
+
+```text
+        pytest.skip("Requires Mac Metal")
+    dim = int(os.environ.get("DSV41_TEST_FFN_DIM", "256"))
+    inter = int(os.environ.get("DSV41_TEST_FFN_INTER", "256"))
+    experts = int(os.environ.get("DSV41_TEST_FFN_EXPERTS", "384"))
+    assert experts >= 6
+    routes = _zipf_routing(experts)
+    assert all(len(set(row)) == 6 for row in routes)
+```
+
+### DSV41_WO_A_BF16
+
+Advanced backend control DSV41_WO_A_BF16. Set explicitly only for the selected backend; its literal read and fallback are documented below.
+
+Scope: mac-mlx. Class: advanced.
+
+Source: `engines/mlx-receiver/mlx_token_stream_server.py:164`. Unset read: '0'.
+
+```text
+        parameter_bytes += sum((2 * prod(shape) for _, shape in expected_vision_parameters(config.vision_config, config.text_config.hidden_size).values()))
+    if os.environ.get('DSV41_PROMOTE_DECODE_WEIGHTS', '0') == '1':
+        parameter_bytes += sum(((4 - sizes[dtype]) * prod(shape) for name, (dtype, shape) in specs.items() if name.endswith('.wo_a.weight') and os.environ.get('DSV41_WO_A_BF16', '0') != '1' or (name == 'lm_head.weight' and os.environ.get('DSV41_HEAD_BF16', '0') != '1')))
+    available, breakdown = _dsv41_wait_for_memory(source, parameter_bytes, _read_vm_stat, timeout_s=float(os.environ.get('DSV41_MEMORY_GUARD_WAIT_S', '90')))
+    required = _dsv41_memory_guard(available, source, parameter_bytes)
+    print(f"[DSV41] memory available={available / (1 << 30):.2f} GiB resident_required={required / (1 << 30):.0f} GiB headroom=20 GiB source={source} QAT={os.environ.get('DSV41_QAT', '1')} [{_dsv41_breakdown_text(breakdown)}]", file=sys.stderr, flush=True)
+    model_dir = Path(model_dir)
+```
+
+Source: `vendor/mac-mlx/mlx_vlm/models/deepseek_v41/language.py:85`. Unset read: '0'.
+
+```text
+# DSV41_HEAD_BF16=1 keeps the head bf16 and needs DSV41_OMLX_HEAD=1 for fp32 logits (checked at
+# attach time, loudly). Both off: byte-for-byte the previous path.
+_WO_A_BF16 = os.environ.get("DSV41_WO_A_BF16", "0") == "1"
+_HEAD_BF16 = os.environ.get("DSV41_HEAD_BF16", "0") == "1"
+_PREFETCH_POOL = None
+
+
+```
+
+### DSV4_EXPECTED_WORLD_SIZE
+
+Advanced backend control DSV4_EXPECTED_WORLD_SIZE. Set explicitly only for the selected backend; its literal read and fallback are documented below.
+
+Scope: mac-mlx. Class: advanced.
+
+Source: `vendor/mac-mlx/mlx_vlm/server/cli.py:237`. Unset read: '0'.
+
+```text
+    # handshake confirms BOTH ranks are live past init() before the heavy materialize.
+    try:
+        _expected_world = int(os.environ.get("DSV4_EXPECTED_WORLD_SIZE", "0") or "0")
+    except ValueError:
+        _expected_world = 0
+    if _expected_world > 1:
+        if group.size() != _expected_world:
+```
+
+### KV_BITS
+
+Advanced backend control KV_BITS. Set explicitly only for the selected backend; its literal read and fallback are documented below.
+
+Scope: mac-mlx. Class: advanced.
+
+Source: `vendor/mac-mlx/mlx_vlm/server/app.py:387`. Unset read: None.
+
+```text
+        logger.info("Pre-loading model: %s", model_path)
+        get_cached_model(model_path, adapter_path)
+        kv_bits = os.environ.get("KV_BITS")
+        kv_scheme = os.environ.get("KV_QUANT_SCHEME", "uniform")
+        if kv_bits:
+            logger.info("KV cache quantization: bits=%s scheme=%s", kv_bits, kv_scheme)
+        logger.info("Model ready, continuous batching enabled.")
+```
+
+Source: `vendor/mac-mlx/mlx_vlm/server/cli.py:203`. Unset read: Assigned by the runtime; see literal consumer.
+
+```text
+    os.environ["MLX_VLM_ENABLE_THINKING"] = "1" if args.enable_thinking else "0"
+    if args.kv_bits is not None:
+        os.environ["KV_BITS"] = str(args.kv_bits)
+    os.environ["KV_GROUP_SIZE"] = str(args.kv_group_size)
+    os.environ["KV_QUANT_SCHEME"] = args.kv_quant_scheme
+    if args.max_kv_size is not None:
+        os.environ["MAX_KV_SIZE"] = str(args.max_kv_size)
+```
+
+Source: `vendor/mac-mlx/mlx_vlm/server/generation.py:218`. Unset read: 0.
+
+```text
+
+def get_quantized_kv_bits(model: str):
+    kv_bits = float(os.environ.get("KV_BITS", 0))
+    if kv_bits == 0:
+        return None
+    if "qat" in model:
+        print(f"Model {model} is quantization aware, KV cache will not be quantized.")
+```
+
+### KV_GROUP_SIZE
+
+Advanced backend control KV_GROUP_SIZE. Set explicitly only for the selected backend; its literal read and fallback are documented below.
+
+Scope: mac-mlx. Class: advanced.
+
+Source: `vendor/mac-mlx/mlx_vlm/server/cli.py:204`. Unset read: Assigned by the runtime; see literal consumer.
+
+```text
+    if args.kv_bits is not None:
+        os.environ["KV_BITS"] = str(args.kv_bits)
+    os.environ["KV_GROUP_SIZE"] = str(args.kv_group_size)
+    os.environ["KV_QUANT_SCHEME"] = args.kv_quant_scheme
+    if args.max_kv_size is not None:
+        os.environ["MAX_KV_SIZE"] = str(args.max_kv_size)
+    os.environ["QUANTIZED_KV_START"] = str(args.quantized_kv_start)
+```
+
+Source: `vendor/mac-mlx/mlx_vlm/server/generation.py:228`. Unset read: DEFAULT_KV_GROUP_SIZE.
+
+```text
+
+def get_kv_group_size():
+    return int(os.environ.get("KV_GROUP_SIZE", DEFAULT_KV_GROUP_SIZE))
+
+
+def get_kv_quant_scheme():
+    return os.environ.get("KV_QUANT_SCHEME", DEFAULT_KV_QUANT_SCHEME)
+```
+
+### KV_QUANT_SCHEME
+
+Advanced backend control KV_QUANT_SCHEME. Set explicitly only for the selected backend; its literal read and fallback are documented below.
+
+Scope: mac-mlx. Class: advanced.
+
+Source: `vendor/mac-mlx/mlx_vlm/server/app.py:388`. Unset read: 'uniform'.
+
+```text
+        get_cached_model(model_path, adapter_path)
+        kv_bits = os.environ.get("KV_BITS")
+        kv_scheme = os.environ.get("KV_QUANT_SCHEME", "uniform")
+        if kv_bits:
+            logger.info("KV cache quantization: bits=%s scheme=%s", kv_bits, kv_scheme)
+        logger.info("Model ready, continuous batching enabled.")
+    yield
+```
+
+Source: `vendor/mac-mlx/mlx_vlm/server/cli.py:205`. Unset read: Assigned by the runtime; see literal consumer.
+
+```text
+        os.environ["KV_BITS"] = str(args.kv_bits)
+    os.environ["KV_GROUP_SIZE"] = str(args.kv_group_size)
+    os.environ["KV_QUANT_SCHEME"] = args.kv_quant_scheme
+    if args.max_kv_size is not None:
+        os.environ["MAX_KV_SIZE"] = str(args.max_kv_size)
+    os.environ["QUANTIZED_KV_START"] = str(args.quantized_kv_start)
+    if args.top_logprobs_k is not None:
+```
+
+Source: `vendor/mac-mlx/mlx_vlm/server/generation.py:232`. Unset read: DEFAULT_KV_QUANT_SCHEME.
+
+```text
+
+def get_kv_quant_scheme():
+    return os.environ.get("KV_QUANT_SCHEME", DEFAULT_KV_QUANT_SCHEME)
+
+
+def get_max_kv_size(model: str):
+    max_kv_tokens = int(os.environ.get("MAX_KV_SIZE", 0))
+```
+
+### LLAMA_FORCE_MLA_STRATEGY_A
+
+Advanced backend control LLAMA_FORCE_MLA_STRATEGY_A. Set explicitly only for the selected backend; its literal read and fallback are documented below.
+
+Scope: mac-llama. Class: advanced.
+
+Source: `engines/streaming-llama/prefill_llama.cpp/tools/decode-receiver/main.cpp:2688`. Unset read: NULL from getenv; the literal consumer below supplies any fallback.
+
+```text
+    const bool is_iswa = (llama_model_n_swa(model) > 0);
+    const bool is_hybrid = llama_model_is_hybrid(model);
+    const char * force_mla_strategy_a_env = std::getenv("LLAMA_FORCE_MLA_STRATEGY_A");
+    const bool force_mla_strategy_a =
+        force_mla_strategy_a_env && force_mla_strategy_a_env[0] != '\0' && force_mla_strategy_a_env[0] != '0';
+    bool use_strategy_b = (!force_mla_strategy_a && is_mla) || is_iswa || is_hybrid;
+    if (sample_from_prefill_logits) {
+```
+
+### LLAMA_HANDOFF_PREFIX_BACKOFF
+
+Advanced backend control LLAMA_HANDOFF_PREFIX_BACKOFF. Set explicitly only for the selected backend; its literal read and fallback are documented below.
+
+Scope: mac-llama. Class: advanced.
+
+Source: `engines/streaming-llama/prefill_llama.cpp/tools/decode-receiver/main.cpp:1378`. Unset read: NULL from getenv; the literal consumer below supplies any fallback.
+
+```text
+            }
+        }
+        if (const char * env = std::getenv("LLAMA_HANDOFF_PREFIX_BACKOFF")) {
+            const int parsed = std::atoi(env);
+            if (parsed > 0) {
+                const uint32_t backoff = (uint32_t) parsed;
+                const uint32_t adjusted = logical_prefix > backoff ? (logical_prefix - backoff) : 0u;
+```
+
+### LLAMA_HANDOFF_SAMPLE_PREFILL_LOGITS
+
+Advanced backend control LLAMA_HANDOFF_SAMPLE_PREFILL_LOGITS. Set explicitly only for the selected backend; its literal read and fallback are documented below.
+
+Scope: mac-llama. Class: advanced.
+
+Source: `engines/streaming-llama/prefill_llama.cpp/tools/decode-receiver/main.cpp:2651`. Unset read: NULL from getenv; the literal consumer below supplies any fallback.
+
+```text
+    }
+    common_sampler_ptr smpl(common_sampler_init(model, sparams));
+    const char * sample_prefill_logits_env = std::getenv("LLAMA_HANDOFF_SAMPLE_PREFILL_LOGITS");
+    const bool sample_from_prefill_logits =
+        prompt_applied &&
+        sample_prefill_logits_env &&
+        sample_prefill_logits_env[0] != '\0' &&
+```
+
+### LLAMA_HANDOFF_SUFFIX_BATCH
+
+Advanced backend control LLAMA_HANDOFF_SUFFIX_BATCH. Set explicitly only for the selected backend; its literal read and fallback are documented below.
+
+Scope: mac-llama. Class: advanced.
+
+Source: `engines/streaming-llama/prefill_llama.cpp/tools/decode-receiver/main.cpp:1247`. Unset read: NULL from getenv; the literal consumer below supplies any fallback.
+
+```text
+    // 1243-token suffix, costing ~25 s of avoidable Mac prefill latency.
+    int n_batch = std::max(1, (int) llama_n_batch(ctx));
+    if (const char * env = std::getenv("LLAMA_HANDOFF_SUFFIX_BATCH")) {
+        const int parsed = std::atoi(env);
+        if (parsed > 0) {
+            n_batch = parsed;
+        }
+```
+
+Source: `engines/streaming-llama/prefill_llama.cpp/tools/decode-receiver/main.cpp:1477`. Unset read: NULL from getenv; the literal consumer below supplies any fallback.
+
+```text
+        // round-trip count for typical suffix sizes.
+        int n_batch = std::max(1, (int) llama_n_batch(ctx));
+        if (const char * env = std::getenv("LLAMA_HANDOFF_SUFFIX_BATCH")) {
+            const int parsed = std::atoi(env);
+            if (parsed > 0) {
+                n_batch = parsed;
+            }
+```
+
+Source: `engines/streaming-llama/prefill_llama.cpp/tools/decode-receiver/main.cpp:1660`. Unset read: NULL from getenv; the literal consumer below supplies any fallback.
+
+```text
+        // unnecessary round-trip count for typical suffix sizes.
+        int n_batch = std::max(1, (int) llama_n_batch(ctx));
+        if (const char * env = std::getenv("LLAMA_HANDOFF_SUFFIX_BATCH")) {
+            const int parsed = std::atoi(env);
+            if (parsed > 0) {
+                n_batch = parsed;
+            }
+```
+
+### LLAMA_MLX_ALLOW_NO_TAIL
+
+Advanced backend control LLAMA_MLX_ALLOW_NO_TAIL. Set explicitly only for the selected backend; its literal read and fallback are documented below.
+
+Scope: mac-mlx. Class: advanced.
+
+Source: `engines/mlx-receiver/mlx_token_stream_server.py:1721`. Unset read: '0'.
+
+```text
+            _safe_inject_cells = 1000000
+            _max_safe_tail = int(os.environ.get('LLAMA_MLX_MAX_SAFE_TAIL', '2048'))
+            _allow_no_tail = os.environ.get('LLAMA_MLX_ALLOW_NO_TAIL', '0') not in ('', '0')
+            _np = len(prompt_token_ids)
+            _bypass_reason = None
+            if not _enable_streaming:
+                _bypass_reason = 'default-disabled (set LLAMA_MLX_ENABLE_STREAMING_INJECT=1 to opt in)'
+```
+
+### LLAMA_MLX_CACHE_LIMIT_GB
+
+Advanced backend control LLAMA_MLX_CACHE_LIMIT_GB. Set explicitly only for the selected backend; its literal read and fallback are documented below.
+
+Scope: mac-mlx. Class: advanced.
+
+Source: `engines/mlx-receiver/mlx_token_stream_server.py:3282`. Unset read: '24'.
+
+```text
+        del _warmup_cache, _warmup_lang, _warmup_ids, _warmup_out, _warmup_logits
+        mx.clear_cache()
+        _lim_gb = float(os.environ.get('LLAMA_MLX_CACHE_LIMIT_GB', '24') or 24)
+        try:
+            mx.set_cache_limit(int(_lim_gb * (1 << 30)))
+            sys.stderr.write(f"[mlx-server] Metal buffer pool bounded at {_lim_gb:g} GB (per-request clear {('ON' if _clear_cache_per_request() else 'off')})\n")
+            sys.stderr.flush()
+```
+
+### LLAMA_MLX_CLEAR_CACHE_PER_REQUEST
+
+Advanced backend control LLAMA_MLX_CLEAR_CACHE_PER_REQUEST. Set explicitly only for the selected backend; its literal read and fallback are documented below.
+
+Scope: mac-mlx. Class: advanced.
+
+Source: `engines/mlx-receiver/mlx_token_stream_server.py:505`. Unset read: ''.
+
+```text
+
+def _clear_cache_per_request() -> bool:
+    return os.environ.get('LLAMA_MLX_CLEAR_CACHE_PER_REQUEST', '') not in ('', '0')
+
+def _kva_prompt_count_hash(kva_ref) -> Tuple[int, int]:
+    close_after = False
+    if isinstance(kva_ref, (bytes, bytearray, memoryview)):
+```
+
+### LLAMA_MLX_ENABLE_STREAMING_INJECT
+
+Advanced backend control LLAMA_MLX_ENABLE_STREAMING_INJECT. Set explicitly only for the selected backend; its literal read and fallback are documented below.
+
+Scope: mac-mlx. Class: advanced.
+
+Source: `engines/mlx-receiver/mlx_token_stream_server.py:1718`. Unset read: '1'.
+
+```text
+                _img_positions = []
+        if kv_state_bytes:
+            _enable_streaming = os.environ.get('LLAMA_MLX_ENABLE_STREAMING_INJECT', '1') not in ('', '0')
+            _safe_inject_cells = 1000000
+            _max_safe_tail = int(os.environ.get('LLAMA_MLX_MAX_SAFE_TAIL', '2048'))
+            _allow_no_tail = os.environ.get('LLAMA_MLX_ALLOW_NO_TAIL', '0') not in ('', '0')
+            _np = len(prompt_token_ids)
+```
+
+### LLAMA_MLX_ENGRAM_CACHE_FRACTION
+
+Advanced backend control LLAMA_MLX_ENGRAM_CACHE_FRACTION. Set explicitly only for the selected backend; its literal read and fallback are documented below.
+
+Scope: mac-mlx. Class: advanced.
+
+Source: `vendor/mac-mlx/mlx_vlm/models/deepseek_v41/engram.py:834`. Unset read: str(DEFAULT_CACHE_FRACTION).
+
+```text
+        raise ValueError("LLAMA_MLX_ENGRAM_CACHE_GB must be finite and nonnegative")
+    if fraction is None:
+        fraction = float(os.environ.get("LLAMA_MLX_ENGRAM_CACHE_FRACTION",
+                                        str(DEFAULT_CACHE_FRACTION)) or DEFAULT_CACHE_FRACTION)
+    if not 0 <= fraction <= 1:
+        raise ValueError("LLAMA_MLX_ENGRAM_CACHE_FRACTION must be in [0, 1]")
+    if margin_gb is None:
+```
+
+Source: `vendor/mac-mlx/mlx_vlm/models/deepseek_v41/engram.py:988`. Unset read: str(DEFAULT_CACHE_FRACTION).
+
+```text
+                "budget_mode": "auto" if cache_budget_bytes is None else "per_table",
+                "budget_decision": decision, "maps_bytes": self.num_embeddings * 4,
+                "cache_fraction": float(os.environ.get("LLAMA_MLX_ENGRAM_CACHE_FRACTION",
+                                                       str(DEFAULT_CACHE_FRACTION))),
+                "cache_margin_gb": _env_float("LLAMA_MLX_ENGRAM_CACHE_MARGIN_GB", DEFAULT_CACHE_MARGIN_GB),
+                "cache_reserve_gb": _env_float("LLAMA_MLX_ENGRAM_CACHE_RESERVE_GB", DEFAULT_CACHE_RESERVE_GB),
+                "cache_cap_gb": os.environ.get("LLAMA_MLX_ENGRAM_CACHE_GB")}
+```
+
+### LLAMA_MLX_ENGRAM_CACHE_GB
+
+Advanced backend control LLAMA_MLX_ENGRAM_CACHE_GB. Set explicitly only for the selected backend; its literal read and fallback are documented below.
+
+Scope: mac-mlx. Class: advanced.
+
+Source: `vendor/mac-mlx/mlx_vlm/models/deepseek_v41/engram.py:829`. Unset read: ''.
+
+```text
+    fraction near 1.0 from promising memory the box does not have; the wired term is what stops it
+    from promising memory Metal will not map."""
+    env = os.environ.get("LLAMA_MLX_ENGRAM_CACHE_GB", "").strip()
+    cap = float(env) if env else None
+    if cap is not None and (not np.isfinite(cap) or cap < 0):
+        raise ValueError("LLAMA_MLX_ENGRAM_CACHE_GB must be finite and nonnegative")
+    if fraction is None:
+```
+
+Source: `vendor/mac-mlx/mlx_vlm/models/deepseek_v41/engram.py:992`. Unset read: None.
+
+```text
+                "cache_margin_gb": _env_float("LLAMA_MLX_ENGRAM_CACHE_MARGIN_GB", DEFAULT_CACHE_MARGIN_GB),
+                "cache_reserve_gb": _env_float("LLAMA_MLX_ENGRAM_CACHE_RESERVE_GB", DEFAULT_CACHE_RESERVE_GB),
+                "cache_cap_gb": os.environ.get("LLAMA_MLX_ENGRAM_CACHE_GB")}
+
+    def warm(self) -> int:
+        count = self.rows_cache.warm() if self.rows_cache is not None else 0
+        if self._report and self.rows_cache is not None:
+```
+
+### LLAMA_MLX_ENGRAM_CACHE_MARGIN_GB
+
+Advanced backend control LLAMA_MLX_ENGRAM_CACHE_MARGIN_GB. Set explicitly only for the selected backend; its literal read and fallback are documented below.
+
+Scope: mac-mlx. Class: advanced.
+
+Source: `vendor/mac-mlx/mlx_vlm/models/deepseek_v41/engram.py:839`. Unset read: Wrapper/conditional default: see the literal call and consumer below.
+
+```text
+        raise ValueError("LLAMA_MLX_ENGRAM_CACHE_FRACTION must be in [0, 1]")
+    if margin_gb is None:
+        margin_gb = _env_float("LLAMA_MLX_ENGRAM_CACHE_MARGIN_GB", DEFAULT_CACHE_MARGIN_GB)
+    if reserve_gb is None:
+        reserve_gb = _env_float("LLAMA_MLX_ENGRAM_CACHE_RESERVE_GB", DEFAULT_CACHE_RESERVE_GB)
+    limit = 0
+    try:
+```
+
+Source: `vendor/mac-mlx/mlx_vlm/models/deepseek_v41/engram.py:990`. Unset read: Wrapper/conditional default: see the literal call and consumer below.
+
+```text
+                "cache_fraction": float(os.environ.get("LLAMA_MLX_ENGRAM_CACHE_FRACTION",
+                                                       str(DEFAULT_CACHE_FRACTION))),
+                "cache_margin_gb": _env_float("LLAMA_MLX_ENGRAM_CACHE_MARGIN_GB", DEFAULT_CACHE_MARGIN_GB),
+                "cache_reserve_gb": _env_float("LLAMA_MLX_ENGRAM_CACHE_RESERVE_GB", DEFAULT_CACHE_RESERVE_GB),
+                "cache_cap_gb": os.environ.get("LLAMA_MLX_ENGRAM_CACHE_GB")}
+
+    def warm(self) -> int:
+```
+
+### LLAMA_MLX_ENGRAM_CACHE_QUIET
+
+Advanced backend control LLAMA_MLX_ENGRAM_CACHE_QUIET. Set explicitly only for the selected backend; its literal read and fallback are documented below.
+
+Scope: mac-mlx. Class: advanced.
+
+Source: `vendor/mac-mlx/mlx_vlm/models/deepseek_v41/engram.py:909`. Unset read: ''.
+
+```text
+    """Total model cache budget, printing the decision line unless LLAMA_MLX_ENGRAM_CACHE_QUIET."""
+    decision = cache_budget_decision(margin_gb, reserve_gb)
+    if os.environ.get("LLAMA_MLX_ENGRAM_CACHE_QUIET", "").strip() not in ("1", "true", "yes"):
+        print(format_budget_decision(decision), flush=True)
+    return decision["budget_bytes"]
+
+
+```
+
+Source: `vendor/mac-mlx/mlx_vlm/models/deepseek_v41/engram.py:976`. Unset read: ''.
+
+```text
+            if cache_budget_bytes is None:
+                decision = cache_budget_decision()
+                if os.environ.get("LLAMA_MLX_ENGRAM_CACHE_QUIET", "").strip() not in ("1", "true", "yes"):
+                    print(format_budget_decision(decision), flush=True)
+                total = decision["budget_bytes"]
+                budget = total // count
+            else:
+```
+
+### LLAMA_MLX_ENGRAM_CACHE_RESERVE_GB
+
+Advanced backend control LLAMA_MLX_ENGRAM_CACHE_RESERVE_GB. Set explicitly only for the selected backend; its literal read and fallback are documented below.
+
+Scope: mac-mlx. Class: advanced.
+
+Source: `vendor/mac-mlx/mlx_vlm/models/deepseek_v41/engram.py:841`. Unset read: Wrapper/conditional default: see the literal call and consumer below.
+
+```text
+        margin_gb = _env_float("LLAMA_MLX_ENGRAM_CACHE_MARGIN_GB", DEFAULT_CACHE_MARGIN_GB)
+    if reserve_gb is None:
+        reserve_gb = _env_float("LLAMA_MLX_ENGRAM_CACHE_RESERVE_GB", DEFAULT_CACHE_RESERVE_GB)
+    limit = 0
+    try:
+        limit = _sysctl_int("iogpu.wired_limit_mb") * 1024 * 1024
+    except Exception:  # noqa: BLE001
+```
+
+Source: `vendor/mac-mlx/mlx_vlm/models/deepseek_v41/engram.py:991`. Unset read: Wrapper/conditional default: see the literal call and consumer below.
+
+```text
+                                                       str(DEFAULT_CACHE_FRACTION))),
+                "cache_margin_gb": _env_float("LLAMA_MLX_ENGRAM_CACHE_MARGIN_GB", DEFAULT_CACHE_MARGIN_GB),
+                "cache_reserve_gb": _env_float("LLAMA_MLX_ENGRAM_CACHE_RESERVE_GB", DEFAULT_CACHE_RESERVE_GB),
+                "cache_cap_gb": os.environ.get("LLAMA_MLX_ENGRAM_CACHE_GB")}
+
+    def warm(self) -> int:
+        count = self.rows_cache.warm() if self.rows_cache is not None else 0
+```
+
+### LLAMA_MLX_ENGRAM_REPORT
+
+Advanced backend control LLAMA_MLX_ENGRAM_REPORT. Set explicitly only for the selected backend; its literal read and fallback are documented below.
+
+Scope: mac-mlx. Class: advanced.
+
+Source: `vendor/mac-mlx/mlx_vlm/models/deepseek_v41/engram.py:945`. Unset read: ''.
+
+```text
+        self._lookup_tokens = 0
+        self._lookup_rows = 0
+        self._report = os.environ.get("LLAMA_MLX_ENGRAM_REPORT", "") == "1"
+        self._last_phase = None
+        self.wkv = nn.Linear(self.n_cols * self.head_dim, self.dim * (self.hc_mult + 1), bias=False)
+        self.q_weight = mx.ones((self.hc_mult, self.dim), dtype=mx.bfloat16)
+        self.k_weight = mx.ones((self.hc_mult, self.dim), dtype=mx.bfloat16)
+```
+
+### LLAMA_MLX_ENGRAM_RUN_ID
+
+Advanced backend control LLAMA_MLX_ENGRAM_RUN_ID. Set explicitly only for the selected backend; its literal read and fallback are documented below.
+
+Scope: mac-mlx. Class: advanced.
+
+Source: `vendor/mac-mlx/mlx_vlm/models/deepseek_v41/engram.py:1017`. Unset read: None.
+
+```text
+    def _report_snapshot(self, event: str) -> None:
+        """Opt-in diagnostics at load/phase boundaries, never device scalar reads per step."""
+        record = {"event": event, "run_id": os.environ.get("LLAMA_MLX_ENGRAM_RUN_ID"),
+                  **self.stats(), **process_memory_io()}
+        if event == "attached":
+            _, counters, _ = host_available_bytes()
+            record["host_wired_bytes"] = counters.get("wired")
+```
+
+### LLAMA_MLX_ENGRAM_SOURCE
+
+Advanced backend control LLAMA_MLX_ENGRAM_SOURCE. Set explicitly only for the selected backend; its literal read and fallback are documented below.
+
+Scope: mac-mlx. Class: advanced.
+
+Source: `engines/mlx-receiver/mlx_token_stream_server.py:144`. Unset read: None.
+
+```text
+    import mlx.core as mx
+    import mlx.nn as nn
+    source = (os.environ.get('LLAMA_MLX_ENGRAM_SOURCE') or raw.get('engram_source', raw.get('text_config', {}).get('engram_source', 'hybrid'))).strip().lower()
+
+    def _read_vm_stat() -> str:
+        try:
+            return subprocess.check_output(['vm_stat'], text=True)
+```
+
+Source: `vendor/mac-mlx/mlx_vlm/models/deepseek_v41/engram.py:935`. Unset read: None.
+
+```text
+        self.n_cols = layout.n_cols
+        self.num_embeddings = layout.num_embeddings[self.layer_hash_index]
+        self.source = (os.environ.get("LLAMA_MLX_ENGRAM_SOURCE") or getattr(config, "engram_source", "hybrid") or "hybrid").strip().lower()
+        if self.source not in ("ram", "nvme", "hybrid"):
+            raise ValueError(f"engram_source must be ram, nvme or hybrid, got {self.source!r}")
+        n_chunks = int(getattr(config, "engram_ram_chunks", 8) or 8)
+        self.embed = EngramTableRAM(self.num_embeddings, self.head_dim, n_chunks) if self.source == "ram" else None
+```
+
+### LLAMA_MLX_FIRST_FWD_PROBE
+
+Advanced backend control LLAMA_MLX_FIRST_FWD_PROBE. Set explicitly only for the selected backend; its literal read and fallback are documented below.
+
+Scope: mac-mlx. Class: advanced.
+
+Source: `engines/mlx-receiver/mlx_token_stream_server.py:404`. Unset read: ''.
+
+```text
+
+def _first_fwd_probe_enabled() -> bool:
+    if os.environ.get('LLAMA_MLX_FIRST_FWD_PROBE', '') not in ('', '0'):
+        return True
+    try:
+        return os.path.exists(os.path.expanduser('~/.streaming-studio/first_fwd_probe'))
+    except Exception:
+```
+
+### LLAMA_MLX_FULL_KV_LOGIT_TAIL
+
+Advanced backend control LLAMA_MLX_FULL_KV_LOGIT_TAIL. Set explicitly only for the selected backend; its literal read and fallback are documented below.
+
+Scope: mac-mlx. Class: advanced.
+
+Source: `engines/mlx-receiver/mlx_token_stream_server.py:1903`. Unset read: '1'.
+
+```text
+                            _orig_max = getattr(_rope_scaling, 'original_max_position_embeddings', cell_count)
+                        safe_cells = min(cell_count, int(_orig_max))
+                    _force_logit_tail = os.environ.get('LLAMA_MLX_FULL_KV_LOGIT_TAIL', '1') not in ('', '0')
+                    if _force_logit_tail and safe_cells >= n_prompt and (n_prompt > 0):
+                        safe_cells = max(0, n_prompt - max(1, int(os.environ.get('LLAMA_MLX_TAIL_REPREFILL_N', 1))))
+                        sys.stderr.write('[mlx-server] full-KV inject: retaining 1-token MLX tail to compute first generated token logits\n')
+                        sys.stderr.flush()
+```
+
+### LLAMA_MLX_INJECT_DIAG
+
+Advanced backend control LLAMA_MLX_INJECT_DIAG. Set explicitly only for the selected backend; its literal read and fallback are documented below.
+
+Scope: mac-mlx. Class: advanced.
+
+Source: `engines/mlx-receiver/mlx_token_stream_server.py:1934`. Unset read: ''.
+
+```text
+                    _validate_kv_injection_cache(cache, safe_cells)
+                    cell_count = safe_cells
+                    if os.environ.get('LLAMA_MLX_INJECT_DIAG', '') not in ('', '0'):
+                        try:
+                            _c0m = cache[0].caches[0] if hasattr(cache[0], 'caches') else cache[0]
+                            _kl = _c0m.keys
+                            _kp = _c0m.values
+```
+
+### LLAMA_MLX_KEEP_WARM
+
+Advanced backend control LLAMA_MLX_KEEP_WARM. Set explicitly only for the selected backend; its literal read and fallback are documented below.
+
+Scope: mac-mlx. Class: advanced.
+
+Source: `engines/mlx-receiver/kv_handoff.py:141`. Unset read: '1'.
+
+```text
+
+def _keep_warm_enabled() -> bool:
+    return os.environ.get('LLAMA_MLX_KEEP_WARM', '1') not in ('', '0')
+
+def _keep_warm_period_s() -> float:
+    try:
+        return max(0.05, float(os.environ.get('LLAMA_MLX_KEEP_WARM_S', '1.0') or 1.0))
+```
+
+### LLAMA_MLX_KEEP_WARM_S
+
+Advanced backend control LLAMA_MLX_KEEP_WARM_S. Set explicitly only for the selected backend; its literal read and fallback are documented below.
+
+Scope: mac-mlx. Class: advanced.
+
+Source: `engines/mlx-receiver/kv_handoff.py:145`. Unset read: '1.0'.
+
+```text
+def _keep_warm_period_s() -> float:
+    try:
+        return max(0.05, float(os.environ.get('LLAMA_MLX_KEEP_WARM_S', '1.0') or 1.0))
+    except ValueError:
+        return 1.0
+
+def _start_keep_warm_thread() -> None:
+```
+
+### LLAMA_MLX_KIMI_VISION
+
+Advanced backend control LLAMA_MLX_KIMI_VISION. Set explicitly only for the selected backend; its literal read and fallback are documented below.
+
+Scope: mac-mlx. Class: advanced.
+
+Source: `engines/mlx-receiver/mlx_token_stream_server.py:1181`. Unset read: '1'.
+
+```text
+        if not raw_config.get('vision_config') or not vision_weights:
+            return
+        if os.environ.get('LLAMA_MLX_KIMI_VISION', '1') in ('', '0'):
+            self._kimi_vision_error = 'image input disabled (LLAMA_MLX_KIMI_VISION=0)'
+            return
+        try:
+            from kimi_vision import KimiVision
+```
+
+### LLAMA_MLX_KVA_WAIT_S
+
+Advanced backend control LLAMA_MLX_KVA_WAIT_S. Set explicitly only for the selected backend; its literal read and fallback are documented below.
+
+Scope: mac-mlx. Class: advanced.
+
+Source: `engines/mlx-receiver/mlx_token_stream_server.py:3058`. Unset read: '600'.
+
+```text
+        if kva_path_shared is not None and (config_prompt_hash or config_prompt_token_count):
+            import time as _time
+            _wait_s = float(os.environ.get('LLAMA_MLX_KVA_WAIT_S', '600'))
+            _poll_s = 0.05
+            _deadline = _time.monotonic() + _wait_s
+            _last_logged_ref = id(kva_path)
+            sys.stderr.write(f'[mlx-server] waiting up to {_wait_s:.0f}s for KVA matching config_hash=0x{config_prompt_hash:016x} count={config_prompt_token_count}\n')
+```
+
+### LLAMA_MLX_K_PE_SCALE
+
+Advanced backend control LLAMA_MLX_K_PE_SCALE. Set explicitly only for the selected backend; its literal read and fallback are documented below.
+
+Scope: mac-mlx. Class: advanced.
+
+Source: `engines/mlx-receiver/kv_converter.py:210`. Unset read: '1.0'.
+
+```text
+    row_elements_mla = kv_lora_rank + qk_rope_head_dim
+    import os as _os
+    k_pe_undo_scale = float(_os.environ.get('LLAMA_MLX_K_PE_SCALE', '1.0'))
+    mv = payload if isinstance(payload, memoryview) else memoryview(payload)
+    for _il in range(n_layer):
+        k_type = read('<i')
+        k_size_row = read('<Q')
+```
+
+### LLAMA_MLX_LCP_REUSE_MIN
+
+Advanced backend control LLAMA_MLX_LCP_REUSE_MIN. Set explicitly only for the selected backend; its literal read and fallback are documented below.
+
+Scope: mac-mlx. Class: advanced.
+
+Source: `engines/mlx-receiver/mlx_token_stream_server.py:1034`. Unset read: '64'.
+
+```text
+
+class MLXSession:
+    _LCP_REUSE_MIN = int(os.environ.get('LLAMA_MLX_LCP_REUSE_MIN', '64'))
+
+    def __init__(self, model_path: str, mtp_mode: str='off', mtp_sidecar: str='auto', mtp_max_draft: int=1, mtp_quantized_sidecar_policy: str='warn', mtp_debug_windows: int=0, mtp_compute_dtype: str='float16', mtp_recurrent_state: str='raw', mtp_schedule: str='reference', mtp_prompt_history: str='committed', mtp_cache_commit: str='replay', mtp_verify_profile: str='safe', mtp_target_token_eval: str='auto', mtp_verify_forward: str='auto', mtp_verify_hidden_eval: str='auto', mtp_history_materialization: str='auto', mtp_share_topk_source: str='internal', mtp_match_trunk_precision: str='auto', mtp_adaptive_depth: str='off', mtp_token_budget: int=0, adapters: Optional[List[str]]=None, token_sidecars: Optional[List[str]]=None, token_sidecar_scale: float=1.0, sampling_profile: Optional[Dict[str, Any]]=None):
+        self.model_path = model_path
+        self._sampling_profile = _merge_sampling_profiles(sampling_profile)
+```
+
+### LLAMA_MLX_MAX_SAFE_TAIL
+
+Advanced backend control LLAMA_MLX_MAX_SAFE_TAIL. Set explicitly only for the selected backend; its literal read and fallback are documented below.
+
+Scope: mac-mlx. Class: advanced.
+
+Source: `engines/mlx-receiver/mlx_token_stream_server.py:1720`. Unset read: '2048'.
+
+```text
+            _enable_streaming = os.environ.get('LLAMA_MLX_ENABLE_STREAMING_INJECT', '1') not in ('', '0')
+            _safe_inject_cells = 1000000
+            _max_safe_tail = int(os.environ.get('LLAMA_MLX_MAX_SAFE_TAIL', '2048'))
+            _allow_no_tail = os.environ.get('LLAMA_MLX_ALLOW_NO_TAIL', '0') not in ('', '0')
+            _np = len(prompt_token_ids)
+            _bypass_reason = None
+            if not _enable_streaming:
+```
+
+### LLAMA_MLX_NO_YARN_TRUNC
+
+Advanced backend control LLAMA_MLX_NO_YARN_TRUNC. Set explicitly only for the selected backend; its literal read and fallback are documented below.
+
+Scope: mac-mlx. Class: advanced.
+
+Source: `engines/mlx-receiver/mlx_token_stream_server.py:1892`. Unset read: '1'.
+
+```text
+                        raise RuntimeError('KV artifact cells exceed the supplied prompt')
+                    cell_count = _delta_base + _incoming_cells
+                    _no_yarn_trunc = os.environ.get('LLAMA_MLX_NO_YARN_TRUNC', '1') not in ('', '0')
+                    _orig_max = cell_count
+                    if _no_yarn_trunc:
+                        safe_cells = cell_count
+                    else:
+```
+
+### LLAMA_MLX_PROMPT_CACHE_DIR
+
+Advanced backend control LLAMA_MLX_PROMPT_CACHE_DIR. Set explicitly only for the selected backend; its literal read and fallback are documented below.
+
+Scope: mac-mlx. Class: advanced.
+
+Source: `engines/mlx-receiver/mlx_token_stream_server.py:1280`. Unset read: ''.
+
+```text
+
+    def _init_prompt_store(self):
+        cache_dir = os.environ.get('LLAMA_MLX_PROMPT_CACHE_DIR', '').strip()
+        if not cache_dir:
+            self._prompt_store = None
+            return
+        try:
+```
+
+### LLAMA_MLX_PROMPT_CACHE_HOT
+
+Advanced backend control LLAMA_MLX_PROMPT_CACHE_HOT. Set explicitly only for the selected backend; its literal read and fallback are documented below.
+
+Scope: mac-mlx. Class: advanced.
+
+Source: `engines/mlx-receiver/mlx_token_stream_server.py:1295`. Unset read: '8'.
+
+```text
+                mlx_lm_ver = ''
+            mkey = model_key_for(self.model_path, quant_cfg, mlx_lm_ver)
+            hot = int(os.environ.get('LLAMA_MLX_PROMPT_CACHE_HOT', '8'))
+            max_gb = float(os.environ.get('LLAMA_MLX_PROMPT_CACHE_MAX_GB', '500'))
+            self._prompt_store = PromptCacheStore(cache_dir, mkey, hot_size=hot, max_gb=max_gb, lcp_reuse_min=self._LCP_REUSE_MIN)
+            sys.stderr.write(f'[mlx-server] prompt-cache store enabled: dir={cache_dir} model_key={mkey} hot={hot} max_gb={max_gb}\n')
+            sys.stderr.flush()
+```
+
+### LLAMA_MLX_PROMPT_CACHE_MAX_GB
+
+Advanced backend control LLAMA_MLX_PROMPT_CACHE_MAX_GB. Set explicitly only for the selected backend; its literal read and fallback are documented below.
+
+Scope: mac-mlx. Class: advanced.
+
+Source: `engines/mlx-receiver/mlx_token_stream_server.py:1296`. Unset read: '500'.
+
+```text
+            mkey = model_key_for(self.model_path, quant_cfg, mlx_lm_ver)
+            hot = int(os.environ.get('LLAMA_MLX_PROMPT_CACHE_HOT', '8'))
+            max_gb = float(os.environ.get('LLAMA_MLX_PROMPT_CACHE_MAX_GB', '500'))
+            self._prompt_store = PromptCacheStore(cache_dir, mkey, hot_size=hot, max_gb=max_gb, lcp_reuse_min=self._LCP_REUSE_MIN)
+            sys.stderr.write(f'[mlx-server] prompt-cache store enabled: dir={cache_dir} model_key={mkey} hot={hot} max_gb={max_gb}\n')
+            sys.stderr.flush()
+        except Exception as e:
+```
+
+### LLAMA_MLX_SKIP_TAIL
+
+Advanced backend control LLAMA_MLX_SKIP_TAIL. Set explicitly only for the selected backend; its literal read and fallback are documented below.
+
+Scope: mac-mlx. Class: advanced.
+
+Source: `engines/mlx-receiver/mlx_token_stream_server.py:2046`. Unset read: '0'.
+
+```text
+                sys.stderr.write(f'[mlx-server] KV inject done in {inject_dt:.2f}s, cell_count={cell_count}\n')
+                sys.stderr.flush()
+                _skip_tail = os.environ.get('LLAMA_MLX_SKIP_TAIL', '0') not in ('', '0')
+                tail_ids = [] if _skip_tail else prompt_token_ids[cell_count:]
+                if tail_ids:
+                    tail_arr = mx.array(tail_ids)
+                    n_tail = len(tail_ids)
+```
+
+### LLAMA_MLX_SWI_MAX_STEPS
+
+Advanced backend control LLAMA_MLX_SWI_MAX_STEPS. Set explicitly only for the selected backend; its literal read and fallback are documented below.
+
+Scope: mac-mlx. Class: advanced.
+
+Source: `engines/mlx-receiver/mlx_token_stream_server.py:2428`. Unset read: str(max(4 * _swi_n_predict, _swi_n_predict + 2048)).
+
+```text
+                swi = SwiState(cfg=swi_config, endthink_ids=list(swi_embed['endthink_ids']), convergence_ids=list(swi_embed['convergence_ids']), termination_ids=list(swi_embed['termination_ids']))
+                _swi_n_predict = max(1, int(max_tokens))
+                _swi_step_cap = int(os.environ.get('LLAMA_MLX_SWI_MAX_STEPS', str(max(4 * _swi_n_predict, _swi_n_predict + 2048))))
+
+                def _swi_forward_ids(tok_id: int):
+                    with mx.stream(gen_stream):
+                        out = lang_swi(mx.array([[int(tok_id)]]), cache=cache)
+```
+
+### LLAMA_MLX_TAIL_REPREFILL_N
+
+Advanced backend control LLAMA_MLX_TAIL_REPREFILL_N. Set explicitly only for the selected backend; its literal read and fallback are documented below.
+
+Scope: mac-mlx. Class: advanced.
+
+Source: `engines/mlx-receiver/mlx_token_stream_server.py:1905`. Unset read: 1.
+
+```text
+                    _force_logit_tail = os.environ.get('LLAMA_MLX_FULL_KV_LOGIT_TAIL', '1') not in ('', '0')
+                    if _force_logit_tail and safe_cells >= n_prompt and (n_prompt > 0):
+                        safe_cells = max(0, n_prompt - max(1, int(os.environ.get('LLAMA_MLX_TAIL_REPREFILL_N', 1))))
+                        sys.stderr.write('[mlx-server] full-KV inject: retaining 1-token MLX tail to compute first generated token logits\n')
+                        sys.stderr.flush()
+                    if safe_cells < cell_count:
+                        sys.stderr.write(f'[mlx-server] truncating injection to {safe_cells} cells (YaRN boundary at {_orig_max}); {cell_count - safe_cells} cells will be re-prefilled\n')
+```
+
+### LLAMA_MLX_TEXT_LM_LOAD
+
+Advanced backend control LLAMA_MLX_TEXT_LM_LOAD. Set explicitly only for the selected backend; its literal read and fallback are documented below.
+
+Scope: mac-mlx. Class: advanced.
+
+Source: `engines/mlx-receiver/mlx_token_stream_server.py:1116`. Unset read: '1'.
+
+```text
+                raise SystemExit(128 + signum)
+            signal.signal(signal.SIGTERM, terminate)
+        prefer_text_lm_requested = os.environ.get('LLAMA_MLX_TEXT_LM_LOAD', '1') not in ('', '0')
+        prefer_text_lm = not is_dsv41 and prefer_text_lm_requested and _has_vlm_text_config(self.model_path)
+        if prefer_text_lm_requested and (not prefer_text_lm):
+            sys.stderr.write('[mlx-server] text MLX-LM loader skipped: checkpoint has no text_config\n')
+            sys.stderr.flush()
+```
+
+### LLAMA_MLX_TEXT_LM_STRICT
+
+Advanced backend control LLAMA_MLX_TEXT_LM_STRICT. Set explicitly only for the selected backend; its literal read and fallback are documented below.
+
+Scope: mac-mlx. Class: advanced.
+
+Source: `engines/mlx-receiver/mlx_token_stream_server.py:1131`. Unset read: '1'.
+
+```text
+                sys.stderr.flush()
+            except Exception as e_text:
+                strict_text = os.environ.get('LLAMA_MLX_TEXT_LM_STRICT', '1') not in ('', '0')
+                if strict_text:
+                    raise RuntimeError(f'Failed Kimi text MLX-LM load: {e_text}')
+                sys.stderr.write(f'[mlx-server] Kimi text MLX-LM load failed: {e_text}; falling back to mlx_vlm full-KV cache path\n')
+                sys.stderr.flush()
+```
+
+### LLAMA_MLX_WIRED_LIMIT_GB
+
+Advanced backend control LLAMA_MLX_WIRED_LIMIT_GB. Set explicitly only for the selected backend; its literal read and fallback are documented below.
+
+Scope: mac-mlx. Class: advanced.
+
+Source: `engines/mlx-receiver/mlx_token_stream_server.py:1084`. Unset read: ''.
+
+```text
+            max_rec = mx.device_info().get('max_recommended_working_set_size', 0)
+            if max_rec <= 0:
+                _env_gb = os.environ.get('LLAMA_MLX_WIRED_LIMIT_GB', '').strip()
+                if _env_gb:
+                    max_rec = int(float(_env_gb) * 1024 ** 3)
+                else:
+                    try:
+```
+
+### LLAMA_PD_CACHE_CAPTURE
+
+Advanced backend control LLAMA_PD_CACHE_CAPTURE. Set explicitly only for the selected backend; its literal read and fallback are documented below.
+
+Scope: mac-llama. Class: advanced.
+
+Source: `engines/streaming-llama/prefill_llama.cpp/tools/decode-receiver/main.cpp:632`. Unset read: NULL from getenv; the literal consumer below supplies any fallback.
+
+```text
+#if defined(_WIN32) || defined(_WIN64)
+    static bool warned_once = false;
+    if (const char * cap = std::getenv("LLAMA_PD_CACHE_CAPTURE"); cap && cap[0] == '1' && !warned_once) {
+        fprintf(stderr, "[pd-cache] WARNING: LLAMA_PD_CACHE_CAPTURE=1 is IGNORED on Windows — CUDA KV serialization crashes. Only Mac/Metal receiver supports Phase-2 KV capture.\n");
+        warned_once = true;
+    }
+    return;
+```
+
+Source: `engines/streaming-llama/prefill_llama.cpp/tools/decode-receiver/main.cpp:638`. Unset read: NULL from getenv; the literal consumer below supplies any fallback.
+
+```text
+    return;
+#else
+    if (const char * cap = std::getenv("LLAMA_PD_CACHE_CAPTURE")) {
+        if (cap[0] != '1') { return; }
+    } else {
+        return;  // not set → skip
+    }
+```
+
+### LLAMA_PD_CACHE_DIR
+
+Advanced backend control LLAMA_PD_CACHE_DIR. Set explicitly only for the selected backend; its literal read and fallback are documented below.
+
+Scope: mac-llama. Class: advanced.
+
+Source: `engines/streaming-llama/prefill_llama.cpp/tools/decode-receiver/main.cpp:187`. Unset read: NULL from getenv; the literal consumer below supplies any fallback.
+
+```text
+    if (g_inited) { return; }
+    g_inited = true;
+    const char * dir = std::getenv("LLAMA_PD_CACHE_DIR");
+    if (!dir || dir[0] == '\0') { return; }   // disabled => RAM-only legacy
+    g_dir = dir;
+
+    double max_gb = 50.0;
+```
+
+### LLAMA_PD_CACHE_HOT
+
+Advanced backend control LLAMA_PD_CACHE_HOT. Set explicitly only for the selected backend; its literal read and fallback are documented below.
+
+Scope: mac-llama. Class: advanced.
+
+Source: `engines/streaming-llama/prefill_llama.cpp/tools/decode-receiver/main.cpp:89`. Unset read: NULL from getenv; the literal consumer below supplies any fallback.
+
+```text
+static int pd_cache_hot_max() {
+    static const int n = []() {
+        if (const char * e = std::getenv("LLAMA_PD_CACHE_HOT")) {
+            const int v = std::atoi(e);
+            if (v > 0) { return v; }
+        }
+        return 4;
+```
+
+### LLAMA_PD_CACHE_MAX_GB
+
+Advanced backend control LLAMA_PD_CACHE_MAX_GB. Set explicitly only for the selected backend; its literal read and fallback are documented below.
+
+Scope: mac-llama. Class: advanced.
+
+Source: `engines/streaming-llama/prefill_llama.cpp/tools/decode-receiver/main.cpp:192`. Unset read: NULL from getenv; the literal consumer below supplies any fallback.
+
+```text
+
+    double max_gb = 50.0;
+    if (const char * e = std::getenv("LLAMA_PD_CACHE_MAX_GB")) {
+        const double v = std::atof(e);
+        if (v > 0.0) { max_gb = v; }
+    }
+    g_max_bytes = (uint64_t)(max_gb * 1024.0 * 1024.0 * 1024.0);
+```
+
+### LLAMA_PD_RESIDENT_KV_REUSE
+
+Advanced backend control LLAMA_PD_RESIDENT_KV_REUSE. Set explicitly only for the selected backend; its literal read and fallback are documented below.
+
+Scope: mac-llama. Class: advanced.
+
+Source: `engines/streaming-llama/prefill_llama.cpp/tools/decode-receiver/main.cpp:535`. Unset read: NULL from getenv; the literal consumer below supplies any fallback.
+
+```text
+
+static bool resident_kv_reuse_enabled() {
+    const char * e = std::getenv("LLAMA_PD_RESIDENT_KV_REUSE");
+    return e && e[0] == '1';
+}
+// Exact longest-common-prefix length (token-by-token; stops at first divergence
+// so rollback/branch/edit naturally clamp reuse to the divergence point). No hashing.
+```
+
+### LLAMA_PD_RESIDENT_SINGLETOK_MAX
+
+Advanced backend control LLAMA_PD_RESIDENT_SINGLETOK_MAX. Set explicitly only for the selected backend; its literal read and fallback are documented below.
+
+Scope: mac-llama. Class: advanced.
+
+Source: `engines/streaming-llama/prefill_llama.cpp/tools/decode-receiver/main.cpp:1498`. Unset read: NULL from getenv; the literal consumer below supplies any fallback.
+
+```text
+        // residual (~6s) is RTX-SIDE, not the Mac. Keep the knob for experiments only.
+        static const int resident_singletok_max = []() {
+            const char * e = std::getenv("LLAMA_PD_RESIDENT_SINGLETOK_MAX");
+            return (e && e[0]) ? std::max(0, atoi(e)) : 0;
+        }();
+        if (resident_reuse_n > 0 && (int) suffix_tokens > 0 && (int) suffix_tokens <= resident_singletok_max) {
+            n_batch = 1;
+```
+
+### M3_MLX_SPARSE
+
+Advanced backend control M3_MLX_SPARSE. Set explicitly only for the selected backend; its literal read and fallback are documented below.
+
+Scope: mac-mlx. Class: advanced.
+
+Source: `vendor/mac-mlx/mlx_vlm/models/minimax_m3/minimax_m3.py:221`. Unset read: '1'.
+
+```text
+        # index Q/K are RoPE'd at the query positions (position-aware selection, matches RTX); ik is roped
+        # BEFORE caching so cached prior index-K stays roped at its own positions (decode-consistency holds).
+        if self.sparse and os.getenv("M3_MLX_SPARSE", "1") != "0":
+            a = self.args
+            iq = self.index_q_norm(self.index_q_proj(x).reshape(B, L, a.indexer_n_head, a.indexer_head_size))
+            ik = self.index_k_norm(self.index_k_proj(x).reshape(B, L, a.indexer_head_size))
+            q_offset = (cache.offset - L) if isinstance(cache, M3Cache) else 0  # position of query 0
+```
+
+Source: `vendor/mac-mlx/mlx_vlm/models/minimax_m3/test_mtp.py:29`. Unset read: Assigned by the runtime; see literal consumer.
+
+```text
+
+def main():
+    os.environ["M3_MLX_SPARSE"] = "1"
+    mx.random.seed(0)
+    layer = M3MTPLayer(ARGS)
+    mx.eval(layer.parameters())
+    H, L = ARGS.hidden_size, 6
+```
+
+Source: `vendor/mac-mlx/mlx_vlm/models/minimax_m3/test_synthetic.py:38`. Unset read: Assigned by the runtime; see literal consumer.
+
+```text
+
+def fwd(model, n_tok, sparse):
+    os.environ["M3_MLX_SPARSE"] = "1" if sparse else "0"
+    logits = model(mx.array([_toks(n_tok)]))[0, -1]
+    return int(mx.argmax(logits).item()), round(float(mx.max(logits).item()), 4)
+
+
+```
+
+Source: `vendor/mac-mlx/mlx_vlm/models/minimax_m3/test_synthetic.py:45`. Unset read: Assigned by the runtime; see literal consumer.
+
+```text
+def fwd_incremental(model, n_tok):
+    """Last token's logits via prefill(0..n-2) + decode(1) using the M3Cache (decode-path MSA)."""
+    os.environ["M3_MLX_SPARSE"] = "1"
+    t = _toks(n_tok)
+    cache = model.make_cache()
+    if n_tok > 1:
+        model(mx.array([t[:-1]]), cache=cache)
+```
+
+Source: `vendor/mac-mlx/mlx_vlm/models/minimax_m3/test_synthetic.py:57`. Unset read: Assigned by the runtime; see literal consumer.
+
+```text
+    """B=2 batch of two distinct sequences; each row must equal that sequence's B=1 result (sequences
+    are independent, so batching must not change per-row output)."""
+    os.environ["M3_MLX_SPARSE"] = "1"
+    t0 = [(i * 7 + 1) % ARGS.vocab_size for i in range(n_tok)]
+    t1 = [(i * 5 + 3) % ARGS.vocab_size for i in range(n_tok)]
+    batched = model(mx.array([t0, t1]))[:, -1]
+    a0 = int(mx.argmax(model(mx.array([t0]))[0, -1]).item())
+```
+
+### MAX_KV_SIZE
+
+Advanced backend control MAX_KV_SIZE. Set explicitly only for the selected backend; its literal read and fallback are documented below.
+
+Scope: mac-mlx. Class: advanced.
+
+Source: `vendor/mac-mlx/mlx_vlm/server/cli.py:207`. Unset read: Assigned by the runtime; see literal consumer.
+
+```text
+    os.environ["KV_QUANT_SCHEME"] = args.kv_quant_scheme
+    if args.max_kv_size is not None:
+        os.environ["MAX_KV_SIZE"] = str(args.max_kv_size)
+    os.environ["QUANTIZED_KV_START"] = str(args.quantized_kv_start)
+    if args.top_logprobs_k is not None:
+        os.environ["TOP_LOGPROBS_K"] = str(args.top_logprobs_k)
+
+```
+
+Source: `vendor/mac-mlx/mlx_vlm/server/generation.py:236`. Unset read: 0.
+
+```text
+
+def get_max_kv_size(model: str):
+    max_kv_tokens = int(os.environ.get("MAX_KV_SIZE", 0))
+    if max_kv_tokens == 0:
+        return None
+    if get_quantized_kv_bits(model) is not None:
+        print(f"Model {model} uses QuantizedKVCache, can't set max KV size.")
+```
+
+Source: `vendor/mac-mlx/mlx_vlm/server/generation.py:246`. Unset read: 0.
+
+```text
+
+def get_configured_context_limit():
+    max_kv_tokens = int(os.environ.get("MAX_KV_SIZE", 0))
+    return max_kv_tokens or None
+
+
+def _count_prompt_tokens(raw_inputs: dict) -> int:
+```
+
+### MCP_CONFIG_PATH
+
+Advanced backend control MCP_CONFIG_PATH. Set explicitly only for the selected backend; its literal read and fallback are documented below.
+
+Scope: mlx-serve. Class: advanced.
+
+Source: `engines/mlx-serve/app/Sources/MLXServe/Models/MCPConfig.swift:110`. Unset read: Wrapper/conditional default: see the literal call and consumer below.
+
+```text
+    /// mcp.json with `bogus` and `nopkg` entries.
+    static var path: String {
+        if let p = ProcessInfo.processInfo.environment["MCP_CONFIG_PATH"], !p.isEmpty {
+            return (p as NSString).expandingTildeInPath
+        }
+        let dir = NSString(string: "~/.mlx-serve").expandingTildeInPath
+        try? FileManager.default.createDirectory(atPath: dir, withIntermediateDirectories: true)
+```
+
+Source: `engines/mlx-serve/app/Tests/MLXCoreTests/MCPFailFastTests.swift:25`. Unset read: Wrapper/conditional default: see the literal call and consumer below.
+
+```text
+        try? FileManager.default.createDirectory(atPath: dir, withIntermediateDirectories: true)
+        sandboxPath = (dir as NSString).appendingPathComponent("mcp.json")
+        setenv("MCP_CONFIG_PATH", sandboxPath, 1)
+    }
+
+    override func tearDown() async throws {
+        if let p = sandboxPath {
+```
+
+Source: `engines/mlx-serve/app/Tests/MLXCoreTests/MCPFailFastTests.swift:33`. Unset read: Wrapper/conditional default: see the literal call and consumer below.
+
+```text
+            try? FileManager.default.removeItem(atPath: dir)
+        }
+        unsetenv("MCP_CONFIG_PATH")
+    }
+
+    func testStartEnabledFailsFastWhenServerDiesDuringInit() async throws {
+        try XCTSkipUnless(BuildFeatures.current.hostShell, "spawns a host script; the App Store build routes MCP into the guest")
+```
+
+Source: `engines/mlx-serve/app/Tests/MLXCoreTests/MCPTests.swift:71`. Unset read: Wrapper/conditional default: see the literal call and consumer below.
+
+```text
+    func testMCPConfigPreservesKeyOrderThroughSaveAndLoad() throws {
+        let tmp = NSTemporaryDirectory().appending("mcp-order-\(UUID().uuidString).json")
+        setenv("MCP_CONFIG_PATH", tmp, 1)
+        defer { unsetenv("MCP_CONFIG_PATH"); try? FileManager.default.removeItem(atPath: tmp) }
+
+        // Deliberately non-alphabetical source order — exposes any sort/hash shuffle.
+        let source = #"""
+```
+
+Source: `engines/mlx-serve/app/Tests/MLXCoreTests/MCPTests.swift:72`. Unset read: Wrapper/conditional default: see the literal call and consumer below.
+
+```text
+        let tmp = NSTemporaryDirectory().appending("mcp-order-\(UUID().uuidString).json")
+        setenv("MCP_CONFIG_PATH", tmp, 1)
+        defer { unsetenv("MCP_CONFIG_PATH"); try? FileManager.default.removeItem(atPath: tmp) }
+
+        // Deliberately non-alphabetical source order — exposes any sort/hash shuffle.
+        let source = #"""
+        {
+```
+
+Source: `engines/mlx-serve/app/Tests/MLXCoreTests/MCPTests.swift:199`. Unset read: Wrapper/conditional default: see the literal call and consumer below.
+
+```text
+    func testRemoteEntryHeadersAndTypeSurviveSaveAndLoad() throws {
+        let tmp = NSTemporaryDirectory().appending("mcp-headers-\(UUID().uuidString).json")
+        setenv("MCP_CONFIG_PATH", tmp, 1)
+        defer { unsetenv("MCP_CONFIG_PATH"); try? FileManager.default.removeItem(atPath: tmp) }
+
+        // The reporter's exact shape.
+        let source = #"""
+```
+
+Source: `engines/mlx-serve/app/Tests/MLXCoreTests/MCPTests.swift:200`. Unset read: Wrapper/conditional default: see the literal call and consumer below.
+
+```text
+        let tmp = NSTemporaryDirectory().appending("mcp-headers-\(UUID().uuidString).json")
+        setenv("MCP_CONFIG_PATH", tmp, 1)
+        defer { unsetenv("MCP_CONFIG_PATH"); try? FileManager.default.removeItem(atPath: tmp) }
+
+        // The reporter's exact shape.
+        let source = #"""
+        {
+```
+
+Source: `engines/mlx-serve/app/Tests/MLXCoreTests/MCPTests.swift:544`. Unset read: Wrapper/conditional default: see the literal call and consumer below.
+
+```text
+        let dir = NSTemporaryDirectory().appending("mcp-restart-\(UUID().uuidString)")
+        try FileManager.default.createDirectory(atPath: dir, withIntermediateDirectories: true)
+        setenv("MCP_CONFIG_PATH", (dir as NSString).appendingPathComponent("mcp.json"), 1)
+        defer { unsetenv("MCP_CONFIG_PATH"); try? FileManager.default.removeItem(atPath: dir) }
+        let manager = MCPManager()
+        var config = MCPConfig()
+        config.mcpServers["would-spawn"] = MCPServerEntry(
+```
+
+Source: `engines/mlx-serve/app/Tests/MLXCoreTests/MCPTests.swift:545`. Unset read: Wrapper/conditional default: see the literal call and consumer below.
+
+```text
+        try FileManager.default.createDirectory(atPath: dir, withIntermediateDirectories: true)
+        setenv("MCP_CONFIG_PATH", (dir as NSString).appendingPathComponent("mcp.json"), 1)
+        defer { unsetenv("MCP_CONFIG_PATH"); try? FileManager.default.removeItem(atPath: dir) }
+        let manager = MCPManager()
+        var config = MCPConfig()
+        config.mcpServers["would-spawn"] = MCPServerEntry(
+            command: "/usr/bin/false", args: [], env: nil, disabled: false)
+```
+
+### MCP_TOOL_TIMEOUT
+
+Advanced backend control MCP_TOOL_TIMEOUT. Set explicitly only for the selected backend; its literal read and fallback are documented below.
+
+Scope: mlx-serve. Class: advanced.
+
+Source: `engines/mlx-serve/app/Sources/MLXServe/Services/MCPManager.swift:219`. Unset read: Wrapper/conditional default: see the literal call and consumer below.
+
+```text
+    /// the watchdog without waiting 90s per run.
+    nonisolated static var toolCallTimeoutSeconds: Double {
+        if let raw = ProcessInfo.processInfo.environment["MCP_TOOL_TIMEOUT"],
+           let v = Double(raw), v > 0 {
+            return v
+        }
+        return 90
+```
+
+### MFERENCE_HOTPATH_METRICS
+
+Advanced backend control MFERENCE_HOTPATH_METRICS. Set explicitly only for the selected backend; its literal read and fallback are documented below.
+
+Scope: mac-mference. Class: advanced.
+
+Source: `engines/mference/Sources/Mference/Runtime/Inference/HotPathInstrumentation.swift:92`. Unset read: Wrapper/conditional default: see the literal call and consumer below.
+
+```text
+    private var cachePlanMisses: UInt64 = 0
+
+    init(enabled: Bool = ProcessInfo.processInfo.environment["MFERENCE_HOTPATH_METRICS"] == "1") {
+        self.enabled = enabled
+    }
+
+    func recordCommandBufferCommit() {
+```
+
+Source: `engines/mference/Sources/MferenceCLI/Run.swift:125`. Unset read: Wrapper/conditional default: see the literal call and consumer below.
+
+```text
+            lines += "  unaccounted (GPU waits): "
+            lines += String(format: "%.1f", total - accounted) + " ms\n"
+            if ProcessInfo.processInfo.environment["MFERENCE_HOTPATH_METRICS"] == "1" {
+                lines += "  " + runner.hotPathMetrics.logDescription + "\n"
+            }
+            stderr.write(Data(lines.utf8))
+        }
+```
+
+Source: `engines/mference/Sources/MferenceServer/Core/ServerInference.swift:348`. Unset read: Wrapper/conditional default: see the literal call and consumer below.
+
+```text
+        let needsToolTemplate = prepared.needsToolTemplate
+        let promptIDs = prepared.promptIDs
+        let hotPathStart = ProcessInfo.processInfo.environment["MFERENCE_HOTPATH_METRICS"] == "1"
+            ? runner.hotPathMetrics
+            : nil
+        var completed = false
+        defer {
+```
+
+### MFERENCE_MODEL
+
+Advanced backend control MFERENCE_MODEL. Set explicitly only for the selected backend; its literal read and fallback are documented below.
+
+Scope: mac-mference. Class: advanced.
+
+Source: `engines/mference/Sources/MferenceApp/Core/Installation/AppModelInstallDescriptor.swift:103`. Unset read: Wrapper/conditional default: see the literal call and consumer below.
+
+```text
+    /// without an environment also select the alternative model.
+    public static var selected: AppModelInstallDescriptor {
+        let environmentValue = ProcessInfo.processInfo.environment["MFERENCE_MODEL"]
+        let preferenceValue = UserDefaults(suiteName: "Mference")?
+            .string(forKey: "model")
+        switch environmentValue ?? preferenceValue {
+        case "qwen36": return .qwen36
+```
+
+### MFERENCE_PHASES
+
+Advanced backend control MFERENCE_PHASES. Set explicitly only for the selected backend; its literal read and fallback are documented below.
+
+Scope: mac-mference. Class: advanced.
+
+Source: `engines/mference/Sources/MferenceCLI/Run.swift:113`. Unset read: Wrapper/conditional default: see the literal call and consumer below.
+
+```text
+            }
+
+        if ProcessInfo.processInfo.environment["MFERENCE_PHASES"] == "1" {
+            let ms = { (n: UInt64) in String(format: "%.1f", Double(n) / 1e6) }
+            let total = stats.decodeSeconds * 1000
+            let accounted = Double(runner.totalCb1Nanos + runner.totalIoNanos
+                                   + runner.totalCb2Nanos) / 1e6
+```
+
+### MLX_DSPARK_BLOCK_FP32
+
+Advanced backend control MLX_DSPARK_BLOCK_FP32. Set explicitly only for the selected backend; its literal read and fallback are documented below.
+
+Scope: mac-mlx. Class: advanced.
+
+Source: `vendor/mac-mlx/mlx_vlm/models/deepseek_v41/dspark.py:156`. Unset read: ''.
+
+```text
+# test whether the drafter is being quietly degraded by bf16 on Metal, which would surface only
+# as acceptance rate. Default off so the production path is unchanged.
+_DSPARK_BLOCK_FP32 = os.environ.get("MLX_DSPARK_BLOCK_FP32", "") not in ("", "0")
+# COUNT INVOCATIONS, do not announce installations. An env var that reaches the process proves
+# nothing about whether the branch ran -- and the first fp32 arm came out FASTER than bf16,
+# which is the wrong direction for real fp32 matmuls and is exactly what a silently-inert
+# flag looks like. This says, once, that the cast actually executed.
+```
+
+### MLX_DSV4_NEEDLE_POS
+
+Advanced backend control MLX_DSV4_NEEDLE_POS. Set explicitly only for the selected backend; its literal read and fallback are documented below.
+
+Scope: mac-mlx. Class: advanced.
+
+Source: `vendor/mac-mlx/mlx_vlm/models/deepseek_v4/language.py:536`. Unset read: '5352'.
+
+```text
+            try:
+                _ratio = int(self.compressor.compress_ratio)
+                _npos = int(os.environ.get("MLX_DSV4_NEEDLE_POS", "5352"))
+                _nrow = (_npos // _ratio) if _ratio else -1
+                if 0 <= _nrow < scores.shape[-1]:
+                    _sd = scores[0, -1]  # last (decode) query token's masked per-pooled-row scores
+                    _nsc = float(_sd[_nrow]); _rank = int((_sd > _sd[_nrow]).sum().item())
+```
+
+### MLX_DSV4_NEEDLE_TRACE
+
+Advanced backend control MLX_DSV4_NEEDLE_TRACE. Set explicitly only for the selected backend; its literal read and fallback are documented below.
+
+Scope: mac-mlx. Class: advanced.
+
+Source: `vendor/mac-mlx/mlx_vlm/models/deepseek_v4/language.py:532`. Unset read: None.
+
+```text
+        # Indexer call (per sparse layer): ratio, needle_row=pos//ratio, n_pooled, k, needle_score, needle_rank
+        # (# pooled rows scoring higher), selected(1/0). Compare needle_rank to the RTX trace (~460-582).
+        _nt = os.environ.get("MLX_DSV4_NEEDLE_TRACE")
+        if _nt:
+            try:
+                _ratio = int(self.compressor.compress_ratio)
+                _npos = int(os.environ.get("MLX_DSV4_NEEDLE_POS", "5352"))
+```
+
+### MLX_GLM_DSA_DECODE_ONLY
+
+Advanced backend control MLX_GLM_DSA_DECODE_ONLY. Set explicitly only for the selected backend; its literal read and fallback are documented below.
+
+Scope: mac-mlx. Class: advanced.
+
+Source: `vendor/mac-mlx/mlx_vlm/models/glm_moe_dsa/glm_moe_dsa.py:156`. Unset read: Wrapper/conditional default: see the literal call and consumer below.
+
+```text
+        if cache is not None:
+            k, _ = cache.update_and_fetch(k, mx.zeros([b, 1, s, 0]))
+        if _env_flag("MLX_GLM_DSA_DECODE_ONLY") and s > 1:
+            return None
+        if k.shape[2] <= self.index_topk:
+            return None
+        if _env_flag("MLX_GLM_DSA_RECENT_TOPK"):
+```
+
+Source: `vendor/mac-mlx/mlx_vlm/models/glm_moe_dsa/glm_moe_dsa.py:396`. Unset read: Wrapper/conditional default: see the literal call and consumer below.
+
+```text
+        "indexer_rope_interleave": getattr(config, "indexer_rope_interleave", None),
+        "recent_topk": _env_flag("MLX_GLM_DSA_RECENT_TOPK"),
+        "decode_only": _env_flag("MLX_GLM_DSA_DECODE_ONLY"),
+    }
+    try:
+        setattr(config, "_glm_dsa_runtime", runtime)
+        setattr(language_model, "_glm_dsa_runtime", runtime)
+```
+
+### MLX_GLM_DSA_NATIVE_KERNELS
+
+Advanced backend control MLX_GLM_DSA_NATIVE_KERNELS. Set explicitly only for the selected backend; its literal read and fallback are documented below.
+
+Scope: mac-mlx. Class: advanced.
+
+Source: `vendor/mac-mlx/mlx_vlm/custom_kernels/glm_moe_dsa/fast.py:23`. Unset read: ''.
+
+```text
+    _ext = None
+    _IMPORT_ERROR = exc
+    if os.environ.get("MLX_GLM_DSA_NATIVE_KERNELS", "").lower() not in {"0", "false", "no", "off"}:
+        logger.critical("GLM NATIVE EXTENSION FAILED admission (load/ABI/Metal): %r. "
+                        "Run glm_moe_dsa/build.py with the serving Python; "
+                        "set MLX_GLM_DSA_NATIVE_KERNELS=0 only for an explicit baseline.", exc)
+else:
+```
+
+Source: `vendor/mac-mlx/mlx_vlm/custom_kernels/glm_moe_dsa/measure_loaded.py:28`. Unset read: None.
+
+```text
+    # This avoids changing the live serving policy after the measurement.
+    saved=[(m,dict(m.__dict__)) for m in modules+[ops]]
+    old=os.environ.get('MLX_GLM_DSA_NATIVE_KERNELS')
+    result=dict(model=str(type(model)),lang=str(type(lang)),runs=[],steps=steps,
+                prompt_tokens=prompt_tokens,policy='separate caches; warm/off/on/on/off; no model reload')
+    ids=(list(prompt_ids)*((prompt_tokens+len(prompt_ids)-1)//len(prompt_ids)))[:prompt_tokens]
+    try:
+```
+
+Source: `vendor/mac-mlx/mlx_vlm/custom_kernels/glm_moe_dsa/measure_loaded.py:33`. Unset read: Assigned by the runtime; see literal consumer.
+
+```text
+    ids=(list(prompt_ids)*((prompt_tokens+len(prompt_ids)-1)//len(prompt_ids)))[:prompt_tokens]
+    try:
+        os.environ['MLX_GLM_DSA_NATIVE_KERNELS']='1'
+        for m in modules+[ops]: importlib.reload(m)
+        if not ops.native_available(): raise RuntimeError(f'Native unavailable: {ops.status()}')
+        result['native_status']=ops.status()
+        counts={}
+```
+
+Source: `vendor/mac-mlx/mlx_vlm/custom_kernels/glm_moe_dsa/measure_loaded.py:47`. Unset read: Assigned by the runtime; see literal consumer.
+
+```text
+            setattr(ops,name,counted)
+        for enabled in (False,True,False,True,True,False):
+            os.environ['MLX_GLM_DSA_NATIVE_KERNELS']='1' if enabled else '0'
+            cache=lang.make_cache() if hasattr(lang,'make_cache') else make_prompt_cache(lang)
+            t=time.perf_counter()
+            for begin in range(0,len(ids),256):
+                out=lang(mx.array([ids[begin:begin+256]],mx.int32),cache=cache)
+```
+
+Source: `vendor/mac-mlx/mlx_vlm/custom_kernels/glm_moe_dsa/measure_loaded.py:77`. Unset read: Assigned by the runtime; see literal consumer.
+
+```text
+            module.__dict__.clear(); module.__dict__.update(state)
+        if old is None: os.environ.pop('MLX_GLM_DSA_NATIVE_KERNELS',None)
+        else: os.environ['MLX_GLM_DSA_NATIVE_KERNELS']=old
+        Path(output).write_text(json.dumps(result,indent=2))
+```
+
+Source: `vendor/mac-mlx/mlx_vlm/models/glm_moe_dsa/native_ops.py:47`. Unset read: ''.
+
+```text
+
+def _native_forced_off() -> bool:
+    return str(os.environ.get("MLX_GLM_DSA_NATIVE_KERNELS", "")).strip().lower() in {
+        "0",
+        "false",
+        "no",
+        "off",
+```
+
+### MLX_GLM_DSA_RECENT_TOPK
+
+Advanced backend control MLX_GLM_DSA_RECENT_TOPK. Set explicitly only for the selected backend; its literal read and fallback are documented below.
+
+Scope: mac-mlx. Class: advanced.
+
+Source: `vendor/mac-mlx/mlx_vlm/models/glm_moe_dsa/glm_moe_dsa.py:160`. Unset read: Wrapper/conditional default: see the literal call and consumer below.
+
+```text
+        if k.shape[2] <= self.index_topk:
+            return None
+        if _env_flag("MLX_GLM_DSA_RECENT_TOPK"):
+            q_pos = mx.arange(offset, offset + s) if not isinstance(offset, mx.array) else offset + mx.arange(s)
+            start = mx.maximum(q_pos - self.index_topk + 1, 0)
+            idx = start[:, None] + mx.arange(self.index_topk)[None, :]
+            idx = mx.minimum(idx, k.shape[2] - 1)
+```
+
+Source: `vendor/mac-mlx/mlx_vlm/models/glm_moe_dsa/glm_moe_dsa.py:395`. Unset read: Wrapper/conditional default: see the literal call and consumer below.
+
+```text
+        "rope_interleave": getattr(config, "rope_interleave", None),
+        "indexer_rope_interleave": getattr(config, "indexer_rope_interleave", None),
+        "recent_topk": _env_flag("MLX_GLM_DSA_RECENT_TOPK"),
+        "decode_only": _env_flag("MLX_GLM_DSA_DECODE_ONLY"),
+    }
+    try:
+        setattr(config, "_glm_dsa_runtime", runtime)
+```
+
+### MLX_GLM_DSA_SHARE_TOPK
+
+Advanced backend control MLX_GLM_DSA_SHARE_TOPK. Set explicitly only for the selected backend; its literal read and fallback are documented below.
+
+Scope: mac-mlx. Class: advanced.
+
+Source: `vendor/mac-mlx/mlx_vlm/models/glm_moe_dsa/glm_moe_dsa.py:349`. Unset read: Wrapper/conditional default: see the literal call and consumer below.
+
+```text
+    disable_shared = (
+        _env_flag("MLX_VLM_GLM_DSA_DISABLE_SHARED")
+        or _env_off("MLX_GLM_DSA_SHARE_TOPK")
+    )
+    layers = getattr(getattr(language_model, "model", None), "layers", []) or []
+    patched_dsa = 0
+    patched_shared = 0
+```
+
+### MLX_GLM_DSA_SPARSE
+
+Advanced backend control MLX_GLM_DSA_SPARSE. Set explicitly only for the selected backend; its literal read and fallback are documented below.
+
+Scope: mac-mlx. Class: advanced.
+
+Source: `vendor/mac-mlx/mlx_vlm/models/glm_moe_dsa/glm_moe_dsa.py:345`. Unset read: Wrapper/conditional default: see the literal call and consumer below.
+
+```text
+    disable_dsa = (
+        _env_flag("MLX_VLM_GLM_DSA_DISABLE")
+        or _env_off("MLX_GLM_DSA_SPARSE")
+    )
+    disable_shared = (
+        _env_flag("MLX_VLM_GLM_DSA_DISABLE_SHARED")
+        or _env_off("MLX_GLM_DSA_SHARE_TOPK")
+```
+
+### MLX_INIT_AT
+
+Advanced backend control MLX_INIT_AT. Set explicitly only for the selected backend; its literal read and fallback are documented below.
+
+Scope: mac-mlx. Class: advanced.
+
+Source: `vendor/mac-mlx/mlx_vlm/server/cli.py:219`. Unset read: None.
+
+```text
+    logger.setLevel(log_level)
+
+    init_at = os.environ.get("MLX_INIT_AT")
+    if init_at:
+        try:
+            delay = float(init_at) - time.time()
+            if delay > 0:
+```
+
+### MLX_MIMO_CAPACITY_LIMIT
+
+Advanced backend control MLX_MIMO_CAPACITY_LIMIT. Set explicitly only for the selected backend; its literal read and fallback are documented below.
+
+Scope: mac-mlx. Class: advanced.
+
+Source: `vendor/mac-mlx/mlx_vlm/rpc_pipeline.py:453`. Unset read: '0'.
+
+```text
+                    return _rank0_logits(inner, hidden, cache, [1])
+                probe_capacity(inner, capacity_tokens, capacity_forward,
+                    limit_bytes=int(os.environ.get("MLX_MIMO_CAPACITY_LIMIT", "0")))
+            print("RPC_QUANT_MODULES " + json.dumps({"rank": rank, **_quant_module_summary(inner)}), flush=True)
+            print(f"RPC rank {rank}: materialized native MiMo", flush=True)
+            return loaded, processor, inner.start_idx, inner.end_idx
+
+```
+
+Source: `vendor/mac-mlx/mlx_vlm/rpc_pipeline.py:2385`. Unset read: Assigned by the runtime; see literal consumer.
+
+```text
+    if args.max_context and args.kv_bits == 8:
+        os.environ["MLX_MIMO_CAPACITY_TOKENS"] = str(args.max_context)
+        os.environ["MLX_MIMO_CAPACITY_LIMIT"] = str(int(getattr(args, "wired_limit_mb", 0) or 0) * 2**20)
+    args.func(args)
+
+
+if __name__ == "__main__":
+```
+
+### MLX_MIMO_CAPACITY_TOKENS
+
+Advanced backend control MLX_MIMO_CAPACITY_TOKENS. Set explicitly only for the selected backend; its literal read and fallback are documented below.
+
+Scope: mac-mlx. Class: advanced.
+
+Source: `vendor/mac-mlx/mlx_vlm/rpc_pipeline.py:444`. Unset read: '0'.
+
+```text
+            _assert_gpu_runtime(loaded.language_model, rank=rank, require_gpu=require_gpu)
+            inner = loaded.language_model
+            capacity_tokens = int(os.environ.get("MLX_MIMO_CAPACITY_TOKENS", "0"))
+            if capacity_tokens:
+                from .models.mimo_v2.capacity import probe_capacity
+                def capacity_forward(cache):
+                    if rank == 1:
+```
+
+Source: `vendor/mac-mlx/mlx_vlm/rpc_pipeline.py:2384`. Unset read: Assigned by the runtime; see literal consumer.
+
+```text
+        os.environ["MLX_MIMO_KV_BITS"] = str(args.kv_bits)
+    if args.max_context and args.kv_bits == 8:
+        os.environ["MLX_MIMO_CAPACITY_TOKENS"] = str(args.max_context)
+        os.environ["MLX_MIMO_CAPACITY_LIMIT"] = str(int(getattr(args, "wired_limit_mb", 0) or 0) * 2**20)
+    args.func(args)
+
+
+```
+
+### MLX_MIMO_KV_BITS
+
+Advanced backend control MLX_MIMO_KV_BITS. Set explicitly only for the selected backend; its literal read and fallback are documented below.
+
+Scope: mac-mlx. Class: advanced.
+
+Source: `vendor/mac-mlx/mlx_vlm/rpc_pipeline.py:2382`. Unset read: Assigned by the runtime; see literal consumer.
+
+```text
+    args = parser.parse_args()
+    if args.kv_bits:
+        os.environ["MLX_MIMO_KV_BITS"] = str(args.kv_bits)
+    if args.max_context and args.kv_bits == 8:
+        os.environ["MLX_MIMO_CAPACITY_TOKENS"] = str(args.max_context)
+        os.environ["MLX_MIMO_CAPACITY_LIMIT"] = str(int(getattr(args, "wired_limit_mb", 0) or 0) * 2**20)
+    args.func(args)
+```
+
+Source: `vendor/mac-mlx/mlx_vlm/models/mimo_v2/mimo_v2.py:86`. Unset read: None.
+
+```text
+            else:
+                caches.append(QuantizedKVCache(group_size=64, bits=8)
+                              if os.environ.get("MLX_MIMO_KV_BITS") == "8" else KVCache())
+        return caches
+
+
+class Model(nn.Module):
+```
+
+### MLX_RPC_REQUEST_TIMEOUT
+
+Advanced backend control MLX_RPC_REQUEST_TIMEOUT. Set explicitly only for the selected backend; its literal read and fallback are documented below.
+
+Scope: mac-mlx. Class: advanced.
+
+Source: `vendor/mac-mlx/mlx_vlm/rpc_pipeline.py:2343`. Unset read: '1800'.
+
+```text
+        "--request-timeout",
+        type=float,
+        default=float(os.environ.get("MLX_RPC_REQUEST_TIMEOUT", "1800")),
+        help="Per-request stream timeout in seconds; set 0 to disable the server-side timeout.",
+    )
+    serve_parser.add_argument(
+        "--threaded-stream",
+```
+
+### MLX_RPC_STREAM_PROGRESS_INTERVAL
+
+Advanced backend control MLX_RPC_STREAM_PROGRESS_INTERVAL. Set explicitly only for the selected backend; its literal read and fallback are documented below.
+
+Scope: mac-mlx. Class: advanced.
+
+Source: `vendor/mac-mlx/mlx_vlm/rpc_pipeline.py:2337`. Unset read: '10'.
+
+```text
+        "--stream-progress-interval",
+        type=float,
+        default=float(os.environ.get("MLX_RPC_STREAM_PROGRESS_INTERVAL", "10")),
+        help="Seconds between in-band SSE progress packets while waiting for the first token.",
+    )
+    serve_parser.add_argument(
+        "--request-timeout",
+```
+
+### MLX_SERVE_LIVE_DOWNLOAD
+
+Advanced backend control MLX_SERVE_LIVE_DOWNLOAD. Set explicitly only for the selected backend; its literal read and fallback are documented below.
+
+Scope: mlx-serve. Class: advanced.
+
+Source: `engines/mlx-serve/app/Tests/MLXCoreTests/ChunkedDownloadTests.swift:337`. Unset read: Wrapper/conditional default: see the literal call and consumer below.
+
+```text
+    /// isn't reading line drift as a win.
+    func testLiveHuggingFaceThroughput() async throws {
+        try XCTSkipUnless(ProcessInfo.processInfo.environment["MLX_SERVE_LIVE_DOWNLOAD"] == "1",
+                          "set MLX_SERVE_LIVE_DOWNLOAD=1 to measure against the real CDN")
+        let url = URL(string: "https://huggingface.co/ddalcu/Kokoro-82M-MLX-Serve/resolve/main/model.safetensors")!
+        let size: Int64 = 324_613_768
+
+```
+
+Source: `engines/mlx-serve/app/Tests/MLXCoreTests/ChunkedDownloadTests.swift:394`. Unset read: Wrapper/conditional default: see the literal call and consumer below.
+
+```text
+    /// 302 every time. Same opt-in env var.
+    func testLiveSharedSessionHandshakeCost() async throws {
+        try XCTSkipUnless(ProcessInfo.processInfo.environment["MLX_SERVE_LIVE_DOWNLOAD"] == "1",
+                          "set MLX_SERVE_LIVE_DOWNLOAD=1 to measure against the real CDN")
+        let repo = "mlx-community/Qwen3-8B-4bit"
+        let files = ["config.json", "tokenizer_config.json", "special_tokens_map.json", "added_tokens.json",
+                     "model.safetensors.index.json", "vocab.json", "merges.txt", "README.md",
+```
+
+### MLX_SERVE_LIVE_VARIANT
+
+Advanced backend control MLX_SERVE_LIVE_VARIANT. Set explicitly only for the selected backend; its literal read and fallback are documented below.
+
+Scope: mlx-serve. Class: advanced.
+
+Source: `engines/mlx-serve/app/Tests/MLXCoreTests/MlxVariantTests.swift:388`. Unset read: Wrapper/conditional default: see the literal call and consumer below.
+
+```text
+
+    private func requireLive() throws {
+        try XCTSkipUnless(ProcessInfo.processInfo.environment["MLX_SERVE_LIVE_VARIANT"] == "1")
+    }
+
+    func testTheRealRepoIsDetectedAsAShelf() async throws {
+        try requireLive()
+```
+
+### MLX_SERVE_LIVE_VARIANT_FOLDER
+
+Advanced backend control MLX_SERVE_LIVE_VARIANT_FOLDER. Set explicitly only for the selected backend; its literal read and fallback are documented below.
+
+Scope: mlx-serve. Class: advanced.
+
+Source: `engines/mlx-serve/app/Tests/MLXCoreTests/MlxVariantTests.swift:409`. Unset read: Wrapper/conditional default: see the literal call and consumer below.
+
+```text
+        let root = try XCTUnwrap(ProcessInfo.processInfo.environment["MLX_SERVE_LIVE_VARIANT_ROOT"],
+                                 "set MLX_SERVE_LIVE_VARIANT_ROOT to a models root")
+        let folder = ProcessInfo.processInfo.environment["MLX_SERVE_LIVE_VARIANT_FOLDER"] ?? "mxfp4"
+        try FileManager.default.createDirectory(atPath: root, withIntermediateDirectories: true)
+        let manager = DownloadManager(modelsRoot: root)
+        let dest = MlxVariantScan.localRepoId(repoId: repoId, folder: folder)
+
+```
+
+### MLX_SERVE_LIVE_VARIANT_ROOT
+
+Advanced backend control MLX_SERVE_LIVE_VARIANT_ROOT. Set explicitly only for the selected backend; its literal read and fallback are documented below.
+
+Scope: mlx-serve. Class: advanced.
+
+Source: `engines/mlx-serve/app/Tests/MLXCoreTests/MlxVariantTests.swift:407`. Unset read: Wrapper/conditional default: see the literal call and consumer below.
+
+```text
+    func testDownloadingOneVariantProducesALoadableModelDir() async throws {
+        try requireLive()
+        let root = try XCTUnwrap(ProcessInfo.processInfo.environment["MLX_SERVE_LIVE_VARIANT_ROOT"],
+                                 "set MLX_SERVE_LIVE_VARIANT_ROOT to a models root")
+        let folder = ProcessInfo.processInfo.environment["MLX_SERVE_LIVE_VARIANT_FOLDER"] ?? "mxfp4"
+        try FileManager.default.createDirectory(atPath: root, withIntermediateDirectories: true)
+        let manager = DownloadManager(modelsRoot: root)
+```
+
+### MLX_TRUST_REMOTE_CODE
+
+Advanced backend control MLX_TRUST_REMOTE_CODE. Set explicitly only for the selected backend; its literal read and fallback are documented below.
+
+Scope: mac-mlx. Class: advanced.
+
+Source: `vendor/mac-mlx/mlx_vlm/server/cli.py:186`. Unset read: Assigned by the runtime; see literal consumer.
+
+```text
+        os.environ["MLX_VLM_PIPELINE_LAYERS"] = args.pipeline_layers
+    if args.trust_remote_code:
+        os.environ["MLX_TRUST_REMOTE_CODE"] = "true"
+    if args.model:
+        os.environ["MLX_VLM_PRELOAD_MODEL"] = args.model
+        if args.adapter_path:
+            os.environ["MLX_VLM_PRELOAD_ADAPTER"] = args.adapter_path
+```
+
+Source: `vendor/mac-mlx/mlx_vlm/server/generation.py:515`. Unset read: 'false'.
+
+```text
+        # Use the load function from utils.py which handles path resolution and loading
+        trust_remote_code = (
+            os.environ.get("MLX_TRUST_REMOTE_CODE", "false").lower() == "true"
+        )
+        tensor_group, pipeline_group, distributed_group = _distributed_groups_from_env()
+        if distributed_group.size() > 1:
+            if adapter_path:
+```
+
+### MLX_VLM_BATCH_CACHE_EVAL_INTERVAL
+
+Advanced backend control MLX_VLM_BATCH_CACHE_EVAL_INTERVAL. Set explicitly only for the selected backend; its literal read and fallback are documented below.
+
+Scope: mac-mlx. Class: advanced.
+
+Source: `vendor/mac-mlx/mlx_vlm/generate/ar.py:99`. Unset read: None.
+
+```text
+
+def _get_batch_cache_eval_interval() -> int:
+    raw = os.environ.get("MLX_VLM_BATCH_CACHE_EVAL_INTERVAL")
+    if raw is None:
+        return DEFAULT_BATCH_CACHE_EVAL_INTERVAL
+    try:
+        return max(0, int(raw))
+```
+
+### MLX_VLM_CACHE_DIR
+
+Advanced backend control MLX_VLM_CACHE_DIR. Set explicitly only for the selected backend; its literal read and fallback are documented below.
+
+Scope: mac-mlx. Class: advanced.
+
+Source: `vendor/mac-mlx/mlx_vlm/models/deepseek_v41/engram.py:142`. Unset read: Path.home() / '.cache' / 'mlx_vlm'.
+
+```text
+
+def cache_dir() -> Path:
+    return Path(os.environ.get("MLX_VLM_CACHE_DIR", Path.home() / ".cache" / "mlx_vlm"))
+
+
+def load_compressed_token_map(tokenizer_json: str | Path, expected_size: int) -> Tuple[np.ndarray, int]:
+    """The compressed map, cached under ~/.cache/mlx_vlm keyed by the tokenizer file's size+mtime
+```
+
+### MLX_VLM_DISTRIBUTED_BACKEND
+
+Advanced backend control MLX_VLM_DISTRIBUTED_BACKEND. Set explicitly only for the selected backend; its literal read and fallback are documented below.
+
+Scope: mac-mlx. Class: advanced.
+
+Source: `vendor/mac-mlx/mlx_vlm/server/cli.py:46`. Unset read: 'any'.
+
+```text
+        "--distributed-backend",
+        type=str,
+        default=os.environ.get("MLX_VLM_DISTRIBUTED_BACKEND", "any"),
+        choices=["any", "ring", "mpi", "nccl", "jaccl"],
+        help="MLX distributed backend to initialize (default: %(default)s).",
+    )
+    parser.add_argument(
+```
+
+Source: `vendor/mac-mlx/mlx_vlm/server/cli.py:182`. Unset read: Assigned by the runtime; see literal consumer.
+
+```text
+    args = parser.parse_args()
+    os.environ["MLX_VLM_PIPELINE"] = "1" if args.pipeline else "0"
+    os.environ["MLX_VLM_DISTRIBUTED_BACKEND"] = args.distributed_backend
+    if args.pipeline_layers:
+        os.environ["MLX_VLM_PIPELINE_LAYERS"] = args.pipeline_layers
+    if args.trust_remote_code:
+        os.environ["MLX_TRUST_REMOTE_CODE"] = "true"
+```
+
+Source: `vendor/mac-mlx/mlx_vlm/server/generation.py:111`. Unset read: 'any'.
+
+```text
+
+def _distributed_groups_from_env():
+    backend = os.environ.get("MLX_VLM_DISTRIBUTED_BACKEND", "any")
+    group = mx.distributed.init(backend=backend)
+    if group.size() <= 1:
+        return None, None, group
+    if _env_flag("MLX_VLM_PIPELINE"):
+```
+
+Source: `vendor/mac-mlx/mlx_vlm/server/generation.py:791`. Unset read: 'any'.
+
+```text
+        self.requests: Queue = Queue()
+        self._distributed_group = mx.distributed.init(
+            backend=os.environ.get("MLX_VLM_DISTRIBUTED_BACKEND", "any")
+        )
+        self._is_distributed = self._distributed_group.size() > 1
+        self._rank = self._distributed_group.rank()
+        self._stop = False
+```
+
+### MLX_VLM_DRAFT_BLOCK_SIZE
+
+Advanced backend control MLX_VLM_DRAFT_BLOCK_SIZE. Set explicitly only for the selected backend; its literal read and fallback are documented below.
+
+Scope: mac-mlx. Class: advanced.
+
+Source: `vendor/mac-mlx/mlx_vlm/server/cli.py:197`. Unset read: Assigned by the runtime; see literal consumer.
+
+```text
+            os.environ["MLX_VLM_DRAFT_KIND"] = args.draft_kind
+        if args.draft_block_size is not None:
+            os.environ["MLX_VLM_DRAFT_BLOCK_SIZE"] = str(args.draft_block_size)
+    if args.prefill_step_size:
+        os.environ["PREFILL_STEP_SIZE"] = str(args.prefill_step_size)
+    os.environ["MLX_VLM_MAX_TOKENS"] = str(args.max_tokens)
+    os.environ["MLX_VLM_ENABLE_THINKING"] = "1" if args.enable_thinking else "0"
+```
+
+Source: `vendor/mac-mlx/mlx_vlm/server/generation.py:62`. Unset read: None.
+
+```text
+
+def _get_draft_block_size_from_env():
+    draft_block_size_str = os.environ.get("MLX_VLM_DRAFT_BLOCK_SIZE")
+    return int(draft_block_size_str) if draft_block_size_str else None
+
+
+def _notify_queues(queues, *items):
+```
+
+### MLX_VLM_DRAFT_KIND
+
+Advanced backend control MLX_VLM_DRAFT_KIND. Set explicitly only for the selected backend; its literal read and fallback are documented below.
+
+Scope: mac-mlx. Class: advanced.
+
+Source: `vendor/mac-mlx/mlx_vlm/server/cli.py:195`. Unset read: Assigned by the runtime; see literal consumer.
+
+```text
+        os.environ["MLX_VLM_DRAFT_MODEL"] = args.draft_model
+        if args.draft_kind is not None:
+            os.environ["MLX_VLM_DRAFT_KIND"] = args.draft_kind
+        if args.draft_block_size is not None:
+            os.environ["MLX_VLM_DRAFT_BLOCK_SIZE"] = str(args.draft_block_size)
+    if args.prefill_step_size:
+        os.environ["PREFILL_STEP_SIZE"] = str(args.prefill_step_size)
+```
+
+Source: `vendor/mac-mlx/mlx_vlm/server/generation.py:840`. Unset read: None.
+
+```text
+
+        draft_model = None
+        draft_kind = os.environ.get("MLX_VLM_DRAFT_KIND")
+        draft_model_path = os.environ.get("MLX_VLM_DRAFT_MODEL")
+        if self._is_distributed and draft_model_path:
+            raise ValueError("Speculative decoding is not supported in distributed mode.")
+        if draft_model_path:
+```
+
+### MLX_VLM_DRAFT_MODEL
+
+Advanced backend control MLX_VLM_DRAFT_MODEL. Set explicitly only for the selected backend; its literal read and fallback are documented below.
+
+Scope: mac-mlx. Class: advanced.
+
+Source: `vendor/mac-mlx/mlx_vlm/server/cli.py:193`. Unset read: Assigned by the runtime; see literal consumer.
+
+```text
+    os.environ["MLX_VLM_VISION_CACHE_SIZE"] = str(args.vision_cache_size)
+    if args.draft_model:
+        os.environ["MLX_VLM_DRAFT_MODEL"] = args.draft_model
+        if args.draft_kind is not None:
+            os.environ["MLX_VLM_DRAFT_KIND"] = args.draft_kind
+        if args.draft_block_size is not None:
+            os.environ["MLX_VLM_DRAFT_BLOCK_SIZE"] = str(args.draft_block_size)
+```
+
+Source: `vendor/mac-mlx/mlx_vlm/server/generation.py:841`. Unset read: None.
+
+```text
+        draft_model = None
+        draft_kind = os.environ.get("MLX_VLM_DRAFT_KIND")
+        draft_model_path = os.environ.get("MLX_VLM_DRAFT_MODEL")
+        if self._is_distributed and draft_model_path:
+            raise ValueError("Speculative decoding is not supported in distributed mode.")
+        if draft_model_path:
+            from ..speculative.drafters import (
+```
+
+### MLX_VLM_ENABLE_THINKING
+
+Advanced backend control MLX_VLM_ENABLE_THINKING. Set explicitly only for the selected backend; its literal read and fallback are documented below.
+
+Scope: mac-mlx. Class: advanced.
+
+Source: `vendor/mac-mlx/mlx_vlm/server/cli.py:201`. Unset read: Assigned by the runtime; see literal consumer.
+
+```text
+        os.environ["PREFILL_STEP_SIZE"] = str(args.prefill_step_size)
+    os.environ["MLX_VLM_MAX_TOKENS"] = str(args.max_tokens)
+    os.environ["MLX_VLM_ENABLE_THINKING"] = "1" if args.enable_thinking else "0"
+    if args.kv_bits is not None:
+        os.environ["KV_BITS"] = str(args.kv_bits)
+    os.environ["KV_GROUP_SIZE"] = str(args.kv_group_size)
+    os.environ["KV_QUANT_SCHEME"] = args.kv_quant_scheme
+```
+
+Source: `vendor/mac-mlx/mlx_vlm/server/generation.py:211`. Unset read: None.
+
+```text
+
+def get_server_enable_thinking():
+    raw = os.environ.get("MLX_VLM_ENABLE_THINKING")
+    if raw is None:
+        return DEFAULT_ENABLE_THINKING
+    return raw.lower() in ("1", "true", "yes", "on")
+
+```
+
+### MLX_VLM_GLM_DSA_DISABLE
+
+Advanced backend control MLX_VLM_GLM_DSA_DISABLE. Set explicitly only for the selected backend; its literal read and fallback are documented below.
+
+Scope: mac-mlx. Class: advanced.
+
+Source: `vendor/mac-mlx/mlx_vlm/models/glm_moe_dsa/glm_moe_dsa.py:344`. Unset read: Wrapper/conditional default: see the literal call and consumer below.
+
+```text
+    """
+    disable_dsa = (
+        _env_flag("MLX_VLM_GLM_DSA_DISABLE")
+        or _env_off("MLX_GLM_DSA_SPARSE")
+    )
+    disable_shared = (
+        _env_flag("MLX_VLM_GLM_DSA_DISABLE_SHARED")
+```
+
+### MLX_VLM_GLM_DSA_DISABLE_SHARED
+
+Advanced backend control MLX_VLM_GLM_DSA_DISABLE_SHARED. Set explicitly only for the selected backend; its literal read and fallback are documented below.
+
+Scope: mac-mlx. Class: advanced.
+
+Source: `vendor/mac-mlx/mlx_vlm/models/glm_moe_dsa/glm_moe_dsa.py:348`. Unset read: Wrapper/conditional default: see the literal call and consumer below.
+
+```text
+    )
+    disable_shared = (
+        _env_flag("MLX_VLM_GLM_DSA_DISABLE_SHARED")
+        or _env_off("MLX_GLM_DSA_SHARE_TOPK")
+    )
+    layers = getattr(getattr(language_model, "model", None), "layers", []) or []
+    patched_dsa = 0
+```
+
+### MLX_VLM_MAX_TOKENS
+
+Advanced backend control MLX_VLM_MAX_TOKENS. Set explicitly only for the selected backend; its literal read and fallback are documented below.
+
+Scope: mac-mlx. Class: advanced.
+
+Source: `vendor/mac-mlx/mlx_vlm/server/cli.py:200`. Unset read: Assigned by the runtime; see literal consumer.
+
+```text
+    if args.prefill_step_size:
+        os.environ["PREFILL_STEP_SIZE"] = str(args.prefill_step_size)
+    os.environ["MLX_VLM_MAX_TOKENS"] = str(args.max_tokens)
+    os.environ["MLX_VLM_ENABLE_THINKING"] = "1" if args.enable_thinking else "0"
+    if args.kv_bits is not None:
+        os.environ["KV_BITS"] = str(args.kv_bits)
+    os.environ["KV_GROUP_SIZE"] = str(args.kv_group_size)
+```
+
+Source: `vendor/mac-mlx/mlx_vlm/server/generation.py:80`. Unset read: DEFAULT_MAX_TOKENS.
+
+```text
+
+def get_server_max_tokens():
+    return int(os.environ.get("MLX_VLM_MAX_TOKENS", DEFAULT_MAX_TOKENS))
+
+
+def get_token_queue_timeout():
+    raw_timeout = os.environ.get("MLX_VLM_TOKEN_QUEUE_TIMEOUT", "")
+```
+
+Source: `vendor/mac-mlx/mlx_vlm/server/schemas.py:25`. Unset read: DEFAULT_MAX_TOKENS.
+
+```text
+
+def get_server_max_tokens():
+    return int(os.environ.get("MLX_VLM_MAX_TOKENS", DEFAULT_MAX_TOKENS))
+
+
+class FlexibleBaseModel(BaseModel):
+    """Base model that ignores/accepts any unknown OpenAI SDK fields."""
+```
+
+### MLX_VLM_PIPELINE
+
+Advanced backend control MLX_VLM_PIPELINE. Set explicitly only for the selected backend; its literal read and fallback are documented below.
+
+Scope: mac-mlx. Class: advanced.
+
+Source: `vendor/mac-mlx/mlx_vlm/server/cli.py:181`. Unset read: Assigned by the runtime; see literal consumer.
+
+```text
+    )
+    args = parser.parse_args()
+    os.environ["MLX_VLM_PIPELINE"] = "1" if args.pipeline else "0"
+    os.environ["MLX_VLM_DISTRIBUTED_BACKEND"] = args.distributed_backend
+    if args.pipeline_layers:
+        os.environ["MLX_VLM_PIPELINE_LAYERS"] = args.pipeline_layers
+    if args.trust_remote_code:
+```
+
+Source: `vendor/mac-mlx/mlx_vlm/server/generation.py:115`. Unset read: Wrapper/conditional default: see the literal call and consumer below.
+
+```text
+    if group.size() <= 1:
+        return None, None, group
+    if _env_flag("MLX_VLM_PIPELINE"):
+        return None, group, group
+    return group, None, group
+
+
+```
+
+### MLX_VLM_PIPELINE_LAYERS
+
+Advanced backend control MLX_VLM_PIPELINE_LAYERS. Set explicitly only for the selected backend; its literal read and fallback are documented below.
+
+Scope: mac-mlx. Class: advanced.
+
+Source: `vendor/mac-mlx/mlx_vlm/rpc_pipeline.py:421`. Unset read: Assigned by the runtime; see literal consumer.
+
+```text
+    require_gpu: bool,
+):
+    os.environ["MLX_VLM_PIPELINE_LAYERS"] = pipeline_layers
+    model_path = get_model_path(model)
+    group = _PipelineGroup(rank, size)
+
+    raw_config = json.loads((Path(model_path) / "config.json").read_text())
+```
+
+Source: `vendor/mac-mlx/mlx_vlm/models/text_only.py:118`. Unset read: None.
+
+```text
+        self.pipeline_size = group.size()
+        n_layers = len(core.layers)
+        raw_counts = os.environ.get("MLX_VLM_PIPELINE_LAYERS") or os.environ.get(
+            "MLX_PIPELINE_LAYERS", ""
+        )
+        if raw_counts:
+            counts = [int(part.strip()) for part in raw_counts.split(",") if part.strip()]
+```
+
+Source: `vendor/mac-mlx/mlx_vlm/models/deepseek_v4/language.py:951`. Unset read: None.
+
+```text
+        self.pipeline_size = group.size()
+        n_layers = self.args.num_hidden_layers
+        raw_counts = os.environ.get("MLX_VLM_PIPELINE_LAYERS") or os.environ.get(
+            "MLX_PIPELINE_LAYERS", ""
+        )
+        if raw_counts:
+            counts = [int(part.strip()) for part in raw_counts.split(",") if part.strip()]
+```
+
+Source: `vendor/mac-mlx/mlx_vlm/models/mimo_v2/mimo_v2.py:40`. Unset read: None.
+
+```text
+        n_layers = len(self.model.layers)
+
+        raw_counts = os.environ.get("MLX_VLM_PIPELINE_LAYERS") or os.environ.get(
+            "MLX_PIPELINE_LAYERS", ""
+        )
+        if raw_counts:
+            counts = [int(part.strip()) for part in raw_counts.split(",") if part.strip()]
+```
+
+Source: `vendor/mac-mlx/mlx_vlm/server/cli.py:53`. Unset read: ''.
+
+```text
+        "--pipeline-layers",
+        type=str,
+        default=os.environ.get("MLX_VLM_PIPELINE_LAYERS", ""),
+        help=(
+            "Comma-separated layer counts per rank for pipeline mode "
+            "(rank 0 owns the final layers, e.g. 52,9 for a 61-layer model)."
+        ),
+```
+
+Source: `vendor/mac-mlx/mlx_vlm/server/cli.py:184`. Unset read: Assigned by the runtime; see literal consumer.
+
+```text
+    os.environ["MLX_VLM_DISTRIBUTED_BACKEND"] = args.distributed_backend
+    if args.pipeline_layers:
+        os.environ["MLX_VLM_PIPELINE_LAYERS"] = args.pipeline_layers
+    if args.trust_remote_code:
+        os.environ["MLX_TRUST_REMOTE_CODE"] = "true"
+    if args.model:
+        os.environ["MLX_VLM_PRELOAD_MODEL"] = args.model
+```
+
+### MLX_VLM_PRELOAD_ADAPTER
+
+Advanced backend control MLX_VLM_PRELOAD_ADAPTER. Set explicitly only for the selected backend; its literal read and fallback are documented below.
+
+Scope: mac-mlx. Class: advanced.
+
+Source: `vendor/mac-mlx/mlx_vlm/server/cli.py:190`. Unset read: Assigned by the runtime; see literal consumer.
+
+```text
+        os.environ["MLX_VLM_PRELOAD_MODEL"] = args.model
+        if args.adapter_path:
+            os.environ["MLX_VLM_PRELOAD_ADAPTER"] = args.adapter_path
+    os.environ["MLX_VLM_VISION_CACHE_SIZE"] = str(args.vision_cache_size)
+    if args.draft_model:
+        os.environ["MLX_VLM_DRAFT_MODEL"] = args.draft_model
+        if args.draft_kind is not None:
+```
+
+### MLX_VLM_PRELOAD_MODEL
+
+Advanced backend control MLX_VLM_PRELOAD_MODEL. Set explicitly only for the selected backend; its literal read and fallback are documented below.
+
+Scope: mac-mlx. Class: advanced.
+
+Source: `vendor/mac-mlx/mlx_vlm/server/cli.py:188`. Unset read: Assigned by the runtime; see literal consumer.
+
+```text
+        os.environ["MLX_TRUST_REMOTE_CODE"] = "true"
+    if args.model:
+        os.environ["MLX_VLM_PRELOAD_MODEL"] = args.model
+        if args.adapter_path:
+            os.environ["MLX_VLM_PRELOAD_ADAPTER"] = args.adapter_path
+    os.environ["MLX_VLM_VISION_CACHE_SIZE"] = str(args.vision_cache_size)
+    if args.draft_model:
+```
+
+### MLX_VLM_RESPONSE_STORE_LIMIT
+
+Advanced backend control MLX_VLM_RESPONSE_STORE_LIMIT. Set explicitly only for the selected backend; its literal read and fallback are documented below.
+
+Scope: mac-mlx. Class: advanced.
+
+Source: `vendor/mac-mlx/mlx_vlm/server/responses_state.py:12`. Unset read: '1024'.
+
+```text
+from fastapi import HTTPException
+
+RESPONSE_STORE_LIMIT = int(os.environ.get("MLX_VLM_RESPONSE_STORE_LIMIT", "1024"))
+_CONTENT_MARKERS = ("<|START_TEXT|>", "<|END_TEXT|>")
+
+
+def _strip_content_markers(text: str) -> str:
+```
+
+### MLX_VLM_TOKEN_QUEUE_TIMEOUT
+
+Advanced backend control MLX_VLM_TOKEN_QUEUE_TIMEOUT. Set explicitly only for the selected backend; its literal read and fallback are documented below.
+
+Scope: mac-mlx. Class: advanced.
+
+Source: `vendor/mac-mlx/mlx_vlm/server/generation.py:84`. Unset read: ''.
+
+```text
+
+def get_token_queue_timeout():
+    raw_timeout = os.environ.get("MLX_VLM_TOKEN_QUEUE_TIMEOUT", "")
+    if raw_timeout == "":
+        return DEFAULT_TOKEN_QUEUE_TIMEOUT
+    try:
+        timeout = float(raw_timeout)
+```
+
+### MLX_VLM_VISION_CACHE_SIZE
+
+Advanced backend control MLX_VLM_VISION_CACHE_SIZE. Set explicitly only for the selected backend; its literal read and fallback are documented below.
+
+Scope: mac-mlx. Class: advanced.
+
+Source: `vendor/mac-mlx/mlx_vlm/server/app.py:568`. Unset read: '20'.
+
+```text
+        return model, None, config
+
+    vision_cache_size = int(os.environ.get("MLX_VLM_VISION_CACHE_SIZE", "20"))
+    vision_cache = VisionFeatureCache(max_size=vision_cache_size)
+
+    # APC: build a shared block pool if opted in via env var.
+    runtime.apc_manager = _apc.from_env(model_namespace=model_path)
+```
+
+Source: `vendor/mac-mlx/mlx_vlm/server/cli.py:191`. Unset read: Assigned by the runtime; see literal consumer.
+
+```text
+        if args.adapter_path:
+            os.environ["MLX_VLM_PRELOAD_ADAPTER"] = args.adapter_path
+    os.environ["MLX_VLM_VISION_CACHE_SIZE"] = str(args.vision_cache_size)
+    if args.draft_model:
+        os.environ["MLX_VLM_DRAFT_MODEL"] = args.draft_model
+        if args.draft_kind is not None:
+            os.environ["MLX_VLM_DRAFT_KIND"] = args.draft_kind
+```
+
+### MLX_VLM_WEIGHT_SHIP
+
+Advanced backend control MLX_VLM_WEIGHT_SHIP. Set explicitly only for the selected backend; its literal read and fallback are documented below.
+
+Scope: mac-mlx. Class: advanced.
+
+Source: `vendor/mac-mlx/mlx_vlm/utils.py:1074`. Unset read: ''.
+
+```text
+    same-disk / shared-storage setups. Enable with ``MLX_VLM_WEIGHT_SHIP=1`` or the
+    server flag ``--weight-source ship-from-rank0``."""
+    return os.environ.get("MLX_VLM_WEIGHT_SHIP", "").strip().lower() in {
+        "1",
+        "true",
+        "yes",
+        "on",
+```
+
+### PREFILL_STEP_SIZE
+
+Advanced backend control PREFILL_STEP_SIZE. Set explicitly only for the selected backend; its literal read and fallback are documented below.
+
+Scope: mac-mlx. Class: advanced.
+
+Source: `vendor/mac-mlx/mlx_vlm/server/cli.py:199`. Unset read: Assigned by the runtime; see literal consumer.
+
+```text
+            os.environ["MLX_VLM_DRAFT_BLOCK_SIZE"] = str(args.draft_block_size)
+    if args.prefill_step_size:
+        os.environ["PREFILL_STEP_SIZE"] = str(args.prefill_step_size)
+    os.environ["MLX_VLM_MAX_TOKENS"] = str(args.max_tokens)
+    os.environ["MLX_VLM_ENABLE_THINKING"] = "1" if args.enable_thinking else "0"
+    if args.kv_bits is not None:
+        os.environ["KV_BITS"] = str(args.kv_bits)
+```
+
+Source: `vendor/mac-mlx/mlx_vlm/server/generation.py:76`. Unset read: DEFAULT_PREFILL_STEP_SIZE.
+
+```text
+
+def get_prefill_step_size():
+    return int(os.environ.get("PREFILL_STEP_SIZE", DEFAULT_PREFILL_STEP_SIZE))
+
+
+def get_server_max_tokens():
+    return int(os.environ.get("MLX_VLM_MAX_TOKENS", DEFAULT_MAX_TOKENS))
+```
+
+### QUANTIZED_KV_START
+
+Advanced backend control QUANTIZED_KV_START. Set explicitly only for the selected backend; its literal read and fallback are documented below.
+
+Scope: mac-mlx. Class: advanced.
+
+Source: `vendor/mac-mlx/mlx_vlm/server/cli.py:208`. Unset read: Assigned by the runtime; see literal consumer.
+
+```text
+    if args.max_kv_size is not None:
+        os.environ["MAX_KV_SIZE"] = str(args.max_kv_size)
+    os.environ["QUANTIZED_KV_START"] = str(args.quantized_kv_start)
+    if args.top_logprobs_k is not None:
+        os.environ["TOP_LOGPROBS_K"] = str(args.top_logprobs_k)
+
+    log_level = getattr(logging, args.log_level.upper(), logging.INFO)
+```
+
+Source: `vendor/mac-mlx/mlx_vlm/server/generation.py:268`. Unset read: DEFAULT_QUANTIZED_KV_START.
+
+```text
+
+def get_quantized_kv_start():
+    return int(os.environ.get("QUANTIZED_KV_START", DEFAULT_QUANTIZED_KV_START))
+
+
+def get_top_logprobs_k():
+    """Max per-token top_logprobs honored by the server (0 = disabled).
+```
+
+### SANDBOX_KERNEL
+
+Advanced backend control SANDBOX_KERNEL. Set explicitly only for the selected backend; its literal read and fallback are documented below.
+
+Scope: mlx-serve. Class: advanced.
+
+Source: `engines/mlx-serve/app/Sources/MLXServe/Services/SandboxSmoke.swift:127`. Unset read: Wrapper/conditional default: see the literal call and consumer below.
+
+```text
+                    || env["CONTAIN_SMOKE_REAL_PROVISION"] == "1"
+                if !realProvision {
+                    setenv("SANDBOX_KERNEL", kernel, 1)
+                    setenv("SANDBOX_ROOTFS", rootfs, 1)
+                } else {
+                    log("[smoke] (real provisioning: fetch kernel + pull \(Self.guestArchNote))")
+                }
+```
+
+### SANDBOX_RAM_GB
+
+Advanced backend control SANDBOX_RAM_GB. Set explicitly only for the selected backend; its literal read and fallback are documented below.
+
+Scope: mlx-serve. Class: advanced.
+
+Source: `engines/mlx-serve/app/Sources/MLXServe/Services/AgentSandbox.swift:1221`. Unset read: Wrapper/conditional default: see the literal call and consumer below.
+
+```text
+        // browser-deps `npm install` at ~850 MB RSS (issue #150 follow-up), and
+        // an agent that compiles or runs headless Chromium needs real headroom.
+        let ramGB = ProcessInfo.processInfo.environment["SANDBOX_RAM_GB"].flatMap { UInt64($0) } ?? 4
+        cfg.ramBytes = ramGB * 1024 * 1024 * 1024
+
+        // Guest monitor consumer: every snapshot carries /proc/meminfo (tray RAM
+        // readout — always), and when networked also the guest IP + listening
+```
+
+### SANDBOX_ROOTFS
+
+Advanced backend control SANDBOX_ROOTFS. Set explicitly only for the selected backend; its literal read and fallback are documented below.
+
+Scope: mlx-serve. Class: advanced.
+
+Source: `engines/mlx-serve/app/Sources/MLXServe/Services/SandboxSmoke.swift:128`. Unset read: Wrapper/conditional default: see the literal call and consumer below.
+
+```text
+                if !realProvision {
+                    setenv("SANDBOX_KERNEL", kernel, 1)
+                    setenv("SANDBOX_ROOTFS", rootfs, 1)
+                } else {
+                    log("[smoke] (real provisioning: fetch kernel + pull \(Self.guestArchNote))")
+                }
+                let image = env["SANDBOX_SMOKE_IMAGE"] ?? env["CONTAIN_SMOKE_IMAGE"] ?? ServerOptions.SandboxConfig.baseImage
+```
+
+### SANDBOX_SMOKE_IMAGE
+
+Advanced backend control SANDBOX_SMOKE_IMAGE. Set explicitly only for the selected backend; its literal read and fallback are documented below.
+
+Scope: mlx-serve. Class: advanced.
+
+Source: `engines/mlx-serve/app/Sources/MLXServe/Services/SandboxSmoke.swift:341`. Unset read: Wrapper/conditional default: see the literal call and consumer below.
+
+```text
+
+    static var guestArchNote: String {
+        let img = ProcessInfo.processInfo.environment["SANDBOX_SMOKE_IMAGE"] ?? ServerOptions.SandboxConfig.baseImage
+        return "\(img) (\(AgentSandbox.guestArch))"
+    }
+
+    /// One `/usr/bin/ssh` round-trip into the guest via the loopback mirror —
+```
+
+### SHELL
+
+Advanced backend control SHELL. Set explicitly only for the selected backend; its literal read and fallback are documented below.
+
+Scope: mlx-serve. Class: advanced.
+
+Source: `engines/mlx-serve/app/Sources/MLXServe/Services/LoginShellEnv.swift:56`. Unset read: Wrapper/conditional default: see the literal call and consumer below.
+
+```text
+    static func values(of names: [String]) -> [String: String] {
+        guard !names.isEmpty else { return [:] }
+        let shell = ProcessInfo.processInfo.environment["SHELL"] ?? "/bin/zsh"
+
+        let p = Process()
+        p.executableURL = URL(fileURLWithPath: shell)
+        p.arguments = ["-l", "-i", "-c", probeCommand(names)]
+```
+
+### STUDIO_GLM_DSA_ALLOW_FA_DENSE
+
+Advanced backend control STUDIO_GLM_DSA_ALLOW_FA_DENSE. Set explicitly only for the selected backend; its literal read and fallback are documented below.
+
+Scope: studio. Class: advanced.
+
+Source: `vendor/studio/studio/general_launch.py:95`. Unset read: None.
+
+```text
+        r['dsa_sparse'] = mode != 'dense'
+        if str(r.get('fa') or '').strip().lower() == 'on' and mode == 'dense':
+            if os.environ.get('STUDIO_GLM_DSA_ALLOW_FA_DENSE') == '1':
+                print('studio: glm-dsa dense: KEEPING -fa on because STUDIO_GLM_DSA_ALLOW_FA_DENSE=1 -- this configuration garbles on SM120 (measured 2026-08-27)', flush=True)
+            else:
+                print('studio: glm-dsa dense: forcing -fa off; dense+fa=on garbles on SM120 (measured 2026-08-27). Set STUDIO_GLM_DSA_ALLOW_FA_DENSE=1 to override.', flush=True)
+                r['fa'] = 'off'
+```
+
+### STUDIO_GLM_DSA_MODE
+
+Advanced backend control STUDIO_GLM_DSA_MODE. Set explicitly only for the selected backend; its literal read and fallback are documented below.
+
+Scope: studio. Class: advanced.
+
+Source: `vendor/studio/studio/general_launch.py:87`. Unset read: None.
+
+```text
+    if arch == 'glm-dsa':
+        _default_mode = 'dense' if r.get('dsa_sparse') is False else 'full'
+        mode = str(r.get('dsa_mode') or os.environ.get('STUDIO_GLM_DSA_MODE') or _default_mode).strip().lower()
+        if mode == 'semi':
+            mode = 'full'
+        if mode not in ('dense', 'full'):
+            mode = 'full'
+```
+
+### TARREADER_REAL_LAYER
+
+Advanced backend control TARREADER_REAL_LAYER. Set explicitly only for the selected backend; its literal read and fallback are documented below.
+
+Scope: mlx-serve. Class: advanced.
+
+Source: `engines/mlx-serve/app/Tests/MLXCoreTests/TarReaderTests.swift:260`. Unset read: Wrapper/conditional default: see the literal call and consumer below.
+
+```text
+
+    func testRealDockerLayerMatchesSystemTar() throws {
+        guard let layer = ProcessInfo.processInfo.environment["TARREADER_REAL_LAYER"] else {
+            throw XCTSkip("set TARREADER_REAL_LAYER to a .tar.gz image layer")
+        }
+        let mine = try tempDir("mine")
+        let theirs = try tempDir("theirs")
+```
+
+### TESTING_MODE
+
+Advanced backend control TESTING_MODE. Set explicitly only for the selected backend; its literal read and fallback are documented below.
+
+Scope: mlx-serve. Class: advanced.
+
+Source: `engines/mlx-serve/app/Sources/MLXServe/AppState.swift:604`. Unset read: Wrapper/conditional default: see the literal call and consumer below.
+
+```text
+        TaskNotifier.shared.appState = self
+        taskScheduler.start()
+        if ProcessInfo.processInfo.environment["TESTING_MODE"] != nil {
+            testServer.start(appState: self)
+        }
+        AgentEngine.cleanupOverflowFiles()
+
+```
+
+### TOP_LOGPROBS_K
+
+Advanced backend control TOP_LOGPROBS_K. Set explicitly only for the selected backend; its literal read and fallback are documented below.
+
+Scope: mac-mlx. Class: advanced.
+
+Source: `vendor/mac-mlx/mlx_vlm/server/cli.py:210`. Unset read: Assigned by the runtime; see literal consumer.
+
+```text
+    os.environ["QUANTIZED_KV_START"] = str(args.quantized_kv_start)
+    if args.top_logprobs_k is not None:
+        os.environ["TOP_LOGPROBS_K"] = str(args.top_logprobs_k)
+
+    log_level = getattr(logging, args.log_level.upper(), logging.INFO)
+    logging.basicConfig(
+        level=log_level,
+```
+
+Source: `vendor/mac-mlx/mlx_vlm/server/generation.py:277`. Unset read: 0.
+
+```text
+    with top_logprobs>0 still succeed but the top_logprobs list stays empty.
+    """
+    k = int(os.environ.get("TOP_LOGPROBS_K", 0))
+    return max(0, min(k, 20))
+
+
+def _token_window_rate(token_times: List[float], window: int) -> Optional[float]:
+```
+
+### TRANSFORMERS_NO_ADVISORY_WARNINGS
+
+Advanced backend control TRANSFORMERS_NO_ADVISORY_WARNINGS. Set explicitly only for the selected backend; its literal read and fallback are documented below.
+
+Scope: mac-mlx. Class: advanced.
+
+Source: `vendor/mac-mlx/mlx_vlm/__init__.py:3`. Unset read: Assigned by the runtime; see literal consumer.
+
+```text
+import os
+
+os.environ["TRANSFORMERS_NO_ADVISORY_WARNINGS"] = "1"
+os.environ["TRANSFORMERS_VERBOSITY"] = "error"
+
+from .convert import convert
+from .generate import (
+```
+
+### TRANSFORMERS_VERBOSITY
+
+Advanced backend control TRANSFORMERS_VERBOSITY. Set explicitly only for the selected backend; its literal read and fallback are documented below.
+
+Scope: mac-mlx. Class: advanced.
+
+Source: `vendor/mac-mlx/mlx_vlm/__init__.py:4`. Unset read: Assigned by the runtime; see literal consumer.
+
+```text
+
+os.environ["TRANSFORMERS_NO_ADVISORY_WARNINGS"] = "1"
+os.environ["TRANSFORMERS_VERBOSITY"] = "error"
+
+from .convert import convert
+from .generate import (
+    BatchResponse,
+```
+
+### VIDEO_MAX_PIXELS
+
+Advanced backend control VIDEO_MAX_PIXELS. Set explicitly only for the selected backend; its literal read and fallback are documented below.
+
+Scope: mac-mlx. Class: advanced.
+
+Source: `vendor/mac-mlx/mlx_vlm/video_generate.py:47`. Unset read: 128000 * 28 * 28 * 0.9.
+
+```text
+# Set the maximum number of video token inputs.
+VIDEO_TOTAL_PIXELS = int(
+    float(os.environ.get("VIDEO_MAX_PIXELS", 128000 * 28 * 28 * 0.9))
+)
+
+
+def round_by_factor(number: int, factor: int) -> int:
+```
+
+### VZ_AGENT_HOST_BIN
+
+Advanced backend control VZ_AGENT_HOST_BIN. Set explicitly only for the selected backend; its literal read and fallback are documented below.
+
+Scope: mlx-serve. Class: advanced.
+
+Source: `engines/mlx-serve/app/Tests/MLXCoreTests/GuestChannelTests.swift:123`. Unset read: Wrapper/conditional default: see the literal call and consumer below.
+
+```text
+
+    override func setUpWithError() throws {
+        guard let binary = ProcessInfo.processInfo.environment["VZ_AGENT_HOST_BIN"],
+              FileManager.default.isExecutableFile(atPath: binary) else {
+            throw XCTSkip("set VZ_AGENT_HOST_BIN (build it with `zig build vz-agent-host`)")
+        }
+        socketPath = NSTemporaryDirectory() + "vz-\(UUID().uuidString.prefix(8)).sock"
+```
+
+Source: `engines/mlx-serve/app/Tests/MLXCoreTests/MCPSpawnerTests.swift:286`. Unset read: Wrapper/conditional default: see the literal call and consumer below.
+
+```text
+
+    override func setUpWithError() throws {
+        guard let binary = ProcessInfo.processInfo.environment["VZ_AGENT_HOST_BIN"],
+              FileManager.default.isExecutableFile(atPath: binary) else {
+            throw XCTSkip("set VZ_AGENT_HOST_BIN (build it with `zig build vz-agent-host`)")
+        }
+        socketPath = NSTemporaryDirectory() + "vzb-\(UUID().uuidString.prefix(8)).sock"
 ```

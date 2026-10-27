@@ -1,0 +1,7 @@
+{
+  "upstream": "https://github.com/ggml-org/llama.cpp",
+  "upstream_revision": "0b5be7e4a25862bc2777d0c47eae18788a8c963a",
+  "overlay_source_revision": "4e98f6b387af1cb488993c4e7d4326be300b359e",
+  "receiver_source": "engines/streaming-llama/prefill_llama.cpp/tools/decode-receiver",
+  "changes": "Portable build overlay for the retained KV/token receiver. WIR and cross-tokenizer WIR are unavailable in this upstream compatibility target."
+}
