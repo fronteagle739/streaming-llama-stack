@@ -13,7 +13,7 @@ import uuid
 from .config import path, ROOT
 from .engines import Engines
 from .tools import Tools
-from .tool_activity import activity, outcome, without_activity
+from .tool_activity import activity, outcome, without_activity, discovery_results
 
 
 def media_request(kind, body, cfg):
@@ -57,9 +57,18 @@ class Stack:
         if not isinstance(body.get('messages'), list) or not body['messages']:
             raise ValueError('messages must be a nonempty array')
         body = deepcopy(body)
-        for message in body['messages']:
+        discoveries = {}
+        for index, message in enumerate(body['messages']):
             if message.get('role')=='assistant' and isinstance(message.get('content'),str):
+                for result in discovery_results(message['content']):
+                    key=(result['tool'],json.dumps(result['arguments'],sort_keys=True))
+                    anchor=discoveries[key][0] if key in discoveries else index
+                    discoveries[key]=(anchor,result)
                 message['content']=without_activity(message['content'])
+        for anchor, result in discoveries.values():
+            # A fixed original turn keeps subsequent prompt prefixes stable;
+            # a deliberate refresh replaces the facts at that same anchor.
+            body['messages'][anchor]['content'] += '\n\nKnown media discovery result (reuse until refreshed):\n' + json.dumps(result)
         # Client-owned tools remain client-owned. Stack tool names cannot be overridden.
         stack_names = set(self.tools.schemas)
         client_tools = body.get('tools', [])
