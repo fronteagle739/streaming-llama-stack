@@ -50,7 +50,7 @@ def read(path):
     return json.loads(Path(path).read_text(encoding='utf-8-sig')) if path else {}
 
 
-def overlay(preset, local=None, model=None, yoco_keep=None, vision=None):
+def overlay(preset, local=None, model=None, yoco_keep=None, vision=None, profile=None):
     """The config file for `slstack start --config`: the local keys, then the preset."""
     if preset not in PRESETS:
         raise ValueError('preset must be one of ' + ', '.join(PRESETS))
@@ -60,6 +60,13 @@ def overlay(preset, local=None, model=None, yoco_keep=None, vision=None):
     env = dict(result.get('env_overrides') or {})
     env.update(COMMON_ENV)
     result.update(PRESETS[preset], serving='single_engine', producer_host_reserve_gib=1, env_overrides=env, **FOLD)
+    if profile is not None:
+        if profile not in ('accurate','fast','ultra','ultra-yoco'):raise ValueError('Unknown single-engine quality profile')
+        result['producer_profile']='ultra' if profile=='ultra-yoco' else profile
+        expected=140 if profile=='ultra-yoco' else 0
+        if yoco_keep is not None and yoco_keep!=expected:raise ValueError('YOCO selection conflicts with the quality profile')
+        yoco_keep=expected
+        result['preset_name']='DSV4.1 single engine / '+profile+' / '+preset
     if yoco_keep is not None:
         if type(yoco_keep) is not int or yoco_keep not in (0,140):raise ValueError('yoco_keep must be 0 or 140')
         result['yoco_keep']=yoco_keep
@@ -114,6 +121,7 @@ def resolved(cfg):
 def main(argv=None):
     parser = argparse.ArgumentParser(description=__doc__, formatter_class=argparse.RawDescriptionHelpFormatter)
     parser.add_argument('--preset', required=True, choices=sorted(PRESETS))
+    parser.add_argument('--profile',choices=('accurate','fast','ultra','ultra-yoco'))
     parser.add_argument('--config', help='Your local config (paths, ports, budgets); optional')
     parser.add_argument('--yoco-keep', type=int, choices=(0,140), default=None, help='Approximate bounded replay (0 off, 140 on)')
     parser.add_argument('--vision',action='store_true',default=None,help='Enable native image prefill and auto-detect the matching vision GGUF (requires the vision-capable producer)')
@@ -121,7 +129,7 @@ def main(argv=None):
     parser.add_argument('--write', help='Write the start config here')
     parser.add_argument('--dry-run', action='store_true', help='Print the resolved settings')
     args = parser.parse_args(argv)
-    cfg = overlay(args.preset, read(args.config), args.model, args.yoco_keep, args.vision)
+    cfg = overlay(args.preset, read(args.config), args.model, args.yoco_keep, args.vision,args.profile)
     if args.write:
         target = Path(args.write)
         target.parent.mkdir(parents=True, exist_ok=True)
