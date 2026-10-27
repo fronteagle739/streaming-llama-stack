@@ -1,0 +1,8 @@
+{
+  "upstream": "https://github.com/ml-explore/mlx",
+  "base_revision": "117b4f18061be46acd91c2d50ac45bfd3094f32f",
+  "source_revision": "3e100741f1f35e14580847f720b642e9f4a7d2d8",
+  "patch_sha256": "35c237637effe6813fb146e7b46cd6cf7c5ce5c0da1cafe5ecfbfba6d497b44a",
+  "purpose": "Listen on all ring sockets before accepting; close failed connection sockets and report the original errno.",
+  "application": "Optional source-build patch. Check against the exact upstream source first. Do not downgrade the pinned Python MLX runtime to this historical source base."
+}

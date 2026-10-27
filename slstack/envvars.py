@@ -13,6 +13,7 @@ _WARNED = set()
 READ = re.compile(r'''(?:\b\w*env\w*|environ\.get|environ\.setdefault)\s*\(\s*[Lru]*["']([A-Z][A-Z0-9_]+)["']|environ\s*\[\s*["']([A-Z][A-Z0-9_]+)["']''')
 DIRECT_READ = re.compile(r'''(?:process|import\.meta)\.env(?:\.([A-Z][A-Z0-9_]+)|\[\s*["']([A-Z][A-Z0-9_]+)["']\s*\])|getEnvVar(?:Owned|Sentinel)\s*\([^,]+,\s*["']([A-Z][A-Z0-9_]+)["']''')
 WINDOWS_READ = re.compile(r'''\b(?:GetEnvironmentVariable[AW]|getenv_s|_dupenv_s)\s*\([^;\n]*?["']([A-Z][A-Z0-9_]+)["']''')
+SWIFT_READ = re.compile(r'''\bProcessInfo\.processInfo\.environment\s*\[\s*["']([A-Z][A-Z0-9_]+)["']''')
 HOST_VARIABLES = {'PATH', 'HOME', 'USERPROFILE', 'LOCALAPPDATA', 'APPDATA', 'SYSTEMROOT',
                   'WINDIR', 'LANG', 'LC_ALL', 'LC_CTYPE', 'TERM', 'COMSPEC', 'PATHEXT',
                   'USERNAME', 'LOGNAME', 'USER', 'SHELL', 'PWD', 'OLDPWD', 'CUDA_PATH',
@@ -42,7 +43,7 @@ def matches_model_signature(cfg, signature):
 
 def inventory():
     found = {}
-    extensions = {'.c', '.h', '.cpp', '.hpp', '.cu', '.cuh', '.inc', '.m', '.mm', '.py', '.zig', '.js', '.ts', '.svelte'}
+    extensions = {'.c', '.h', '.cpp', '.hpp', '.cu', '.cuh', '.inc', '.m', '.mm', '.py', '.zig', '.js', '.ts', '.svelte', '.swift'}
     for root in (ROOT / 'engines', ROOT / 'vendor'):
         for directory, children, files in os.walk(root):
             children[:] = [s for s in children if s not in {'.git', 'node_modules', 'build', '.venv', '__pycache__', '.svelte-kit', 'dist', '_app'}]
@@ -54,6 +55,7 @@ def inventory():
                     matches = [m[1] or m[2] for m in READ.finditer(line)]
                     matches += [next(s for s in m.groups() if s) for m in DIRECT_READ.finditer(line)]
                     matches += [m[1] for m in WINDOWS_READ.finditer(line)]
+                    matches += [m[1] for m in SWIFT_READ.finditer(line)]
                     for name in matches:
                         reference = f'{p.relative_to(ROOT).as_posix()}:{line_number}'
                         if reference not in found.setdefault(name, []):

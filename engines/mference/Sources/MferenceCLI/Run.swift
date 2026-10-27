@@ -1,0 +1,321 @@
+import Foundation
+import Metal
+import Mference
+
+private struct MessageJSON: Decodable {
+    let role: String
+    let content: String
+}
+
+public struct RunResult: Equatable, Sendable {
+    public let exitCode: Int32
+    public init(exitCode: Int32) { self.exitCode = exitCode }
+}
+
+public func run(args: Args,
+                stdout: FileHandle = .standardOutput,
+                stderr: FileHandle = .standardError) async -> RunResult {
+    if args.chat {
+        return await runChat(args: args, stdout: stdout, stderr: stderr)
+    }
+    do {
+        let modelURL = URL(fileURLWithPath: args.model)
+        let tokenizer = try await MFTokenizer.load(forModelDirectory: modelURL)
+        let promptIds: [Int32]
+        if let rawPrompt = args.prompt {
+            promptIds = tokenizer.encode(rawPrompt, addBOS: true)
+        } else if let messagesFile = args.messagesFile {
+            let data = try Data(contentsOf: URL(fileURLWithPath: messagesFile),
+                                options: [.mappedIfSafe])
+            let rows = try JSONDecoder().decode([MessageJSON].self, from: data)
+            let messages = try rows.map { row -> MFTokenizer.Message in
+                guard let role = MFTokenizer.Role(rawValue: row.role) else {
+                    throw MFTokenizerError.invalidChatTemplate("unsupported role \(row.role)")
+                }
+                return MFTokenizer.Message(role: role, content: row.content)
+            }
+            let rendered = try tokenizer.applyChatTemplate(messages)
+            promptIds = tokenizer.encode(rendered, addBOS: false)
+        } else {
+            return errored(stderr, "one of --prompt or --messages-file is required", 2)
+        }
+        guard !promptIds.isEmpty else { return errored(stderr, "empty prompt", 2) }
+        guard promptIds.count < args.maxContext else {
+            return errored(
+                stderr,
+                "context overflow: prompt \(promptIds.count) reaches maxContext \(args.maxContext)",
+                2)
+        }
+        let effectiveMaxNew = min(args.maxNew, args.maxContext - promptIds.count)
+        let config = GenerationConfig(
+            maxNewTokens: effectiveMaxNew,
+            temperature: args.temperature,
+            topK: args.topK,
+            topP: args.topP,
+            repetitionPenalty: args.repetitionPenalty,
+            seed: args.seed,
+            stopStrings: args.stops,
+            extraStopTokens: [])
+        let prefillChunkTokens: Int
+        switch args.prefillChunk {
+        case .fixed(let n):
+            prefillChunkTokens = n
+        case .auto:
+            // Smallest allowed chunk that covers the prompt: one chunk per
+            // prompt when it fits, which reads each layer's routed experts
+            // exactly once during prefill.
+            prefillChunkTokens = RuntimeConfiguration.allowedPrefillChunkTokens
+                .first(where: { $0 >= promptIds.count })
+                ?? RuntimeConfiguration.allowedPrefillChunkTokens.last!
+        }
+        let runtime = RuntimeConfiguration(
+            expertCacheSlots: args.expertCacheSlots,
+            rdadvisePolicy: RDAdvicePolicyMode.parse(args.rdadvise),
+            prefillChunkTokens: prefillChunkTokens,
+            forceLogitsHead: !config.isPureGreedy)
+
+        guard MTLCreateSystemDefaultDevice() != nil else {
+            return errored(stderr, "no Metal device", 1)
+        }
+        let context = try MetalContext()
+        let model = try Model.load(
+            directoryURL: modelURL,
+            device: context.device,
+            streamingMode: .pread(slotCount: runtime.expertCacheSlots),
+            expertCachePolicy: runtime.modelExpertCachePolicy,
+            integrityPolicy: .fullSha256)
+        let runner = try RealForwardRunner(
+            model: model,
+            context: context,
+            maxContext: args.maxContext,
+            runtimeConfiguration: runtime)
+        let scratch = try RawCompletionScratch(context: context,
+                                               vocab: model.config.vocabSize,
+                                               logitSoftcap: Float(model.config.finalLogitSoftcap))
+        let stats = try await runRawCompletion(
+            producer: runner,
+            tokenizer: tokenizer,
+            promptIds: promptIds,
+            config: config,
+            context: context,
+            scratch: scratch,
+            prefillConfig: runtime.prefillConfig) { progress in
+                switch progress {
+                case .prefill:
+                    break
+                case .token(_, _, let delta):
+                    if !delta.isEmpty { stdout.write(Data(delta.utf8)) }
+                case .tail(let tail):
+                    stdout.write(Data(tail.utf8))
+                }
+            }
+
+        if ProcessInfo.processInfo.environment["MFERENCE_PHASES"] == "1" {
+            let ms = { (n: UInt64) in String(format: "%.1f", Double(n) / 1e6) }
+            let total = stats.decodeSeconds * 1000
+            let accounted = Double(runner.totalCb1Nanos + runner.totalIoNanos
+                                   + runner.totalCb2Nanos) / 1e6
+            var lines = "\n[phases over \(stats.newTokens) tokens, decode "
+            lines += String(format: "%.0f", total) + " ms]\n"
+            lines += "  cb1 encode+commit: " + ms(runner.totalCb1Nanos) + " ms\n"
+            lines += "  expert io await:   " + ms(runner.totalIoNanos) + " ms\n"
+            lines += "  cb2 encode+commit: " + ms(runner.totalCb2Nanos) + " ms\n"
+            lines += "  unaccounted (GPU waits): "
+            lines += String(format: "%.1f", total - accounted) + " ms\n"
+            if ProcessInfo.processInfo.environment["MFERENCE_HOTPATH_METRICS"] == "1" {
+                lines += "  " + runner.hotPathMetrics.logDescription + "\n"
+            }
+            stderr.write(Data(lines.utf8))
+        }
+        if !args.quiet {
+            let tokensPerSecond = stats.decodeSeconds > 0
+                ? Double(stats.newTokens) / stats.decodeSeconds
+                : 0
+            let footer = "\n[stop=\(String(describing: stats.reason)) prefill=\(stats.prefillTokens)tok/\(String(format: "%.2f", stats.prefillSeconds))s new=\(stats.newTokens)tok decode=\(String(format: "%.2f", stats.decodeSeconds))s tok/s=\(String(format: "%.3f", tokensPerSecond))]\n"
+            stderr.write(Data(footer.utf8))
+        }
+        return RunResult(exitCode: 0)
+    } catch is CancellationError {
+        stdout.write(Data("\n".utf8))
+        return RunResult(exitCode: 130)
+    } catch {
+        return errored(stderr, "\(error)", 1)
+    }
+}
+
+private func errored(_ stderr: FileHandle, _ message: String, _ code: Int32) -> RunResult {
+    stderr.write(Data("error: \(message)\n".utf8))
+    return RunResult(exitCode: code)
+}
+
+/// Interactive multi-turn chat. The model is loaded once and every turn
+/// re-renders the whole history through the tokenizer's chat template, so the
+/// REPL follows whichever dialect the loaded checkpoint uses. Each turn starts
+/// from a reset KV cache (`runRawCompletion`'s default), so no state leaks
+/// between turns.
+private func runChat(args: Args,
+                     stdout: FileHandle,
+                     stderr: FileHandle) async -> RunResult {
+    do {
+        let modelURL = URL(fileURLWithPath: args.model)
+        let tokenizer = try await MFTokenizer.load(forModelDirectory: modelURL)
+        let baseConfig = GenerationConfig(
+            maxNewTokens: args.maxNew,
+            temperature: args.temperature,
+            topK: args.topK,
+            topP: args.topP,
+            repetitionPenalty: args.repetitionPenalty,
+            seed: args.seed,
+            stopStrings: args.stops,
+            extraStopTokens: [])
+        // Interactive chat has no prompt at load time, so `auto` keeps the
+        // production default; a fixed size applies to every turn's prefill.
+        let prefillChunkTokens: Int
+        switch args.prefillChunk {
+        case .fixed(let n): prefillChunkTokens = n
+        case .auto: prefillChunkTokens = 128
+        }
+        let runtime = RuntimeConfiguration(
+            expertCacheSlots: args.expertCacheSlots,
+            rdadvisePolicy: RDAdvicePolicyMode.parse(args.rdadvise),
+            prefillChunkTokens: prefillChunkTokens,
+            forceLogitsHead: !baseConfig.isPureGreedy)
+
+        guard MTLCreateSystemDefaultDevice() != nil else {
+            return errored(stderr, "no Metal device", 1)
+        }
+        let context = try MetalContext()
+        let model = try Model.load(
+            directoryURL: modelURL,
+            device: context.device,
+            streamingMode: .pread(slotCount: runtime.expertCacheSlots),
+            expertCachePolicy: runtime.modelExpertCachePolicy,
+            integrityPolicy: .fullSha256)
+        let runner = try RealForwardRunner(
+            model: model,
+            context: context,
+            maxContext: args.maxContext,
+            runtimeConfiguration: runtime)
+        let scratch = try RawCompletionScratch(context: context,
+                                               vocab: model.config.vocabSize,
+                                               logitSoftcap: Float(model.config.finalLogitSoftcap))
+
+        let opening: [MFTokenizer.Message] = args.systemPrompt.map {
+            [MFTokenizer.Message(role: .system, content: $0)]
+        } ?? []
+        var history = opening
+        let promptTokens = { (messages: [MFTokenizer.Message]) throws -> Int in
+            tokenizer.encode(try tokenizer.applyChatTemplate(messages), addBOS: false).count
+        }
+
+        stderr.write(Data("Interactive chat. Commands: /clear, /history, /quit.\n".utf8))
+        while true {
+            stderr.write(Data("\nyou> ".utf8))
+            // A nil line is EOF (Ctrl-D): leave the loop and exit cleanly.
+            guard let line = readLine(strippingNewline: true) else {
+                stderr.write(Data("\n".utf8))
+                return RunResult(exitCode: 0)
+            }
+            let input = line.trimmingCharacters(in: .whitespacesAndNewlines)
+            if input.isEmpty { continue }
+            if input.hasPrefix("/") {
+                switch input {
+                case "/quit", "/exit":
+                    return RunResult(exitCode: 0)
+                case "/clear":
+                    history = opening
+                    stderr.write(Data("history cleared\n".utf8))
+                case "/history":
+                    for message in history {
+                        stderr.write(Data("[\(message.role.rawValue)] \(message.content ?? "")\n".utf8))
+                    }
+                default:
+                    stderr.write(Data("unknown command \(input); try /clear, /history, or /quit\n".utf8))
+                }
+                continue
+            }
+
+            let turn = history + [MFTokenizer.Message(role: .user, content: input)]
+            let fitted = try trimChatHistory(turn, limit: args.maxContext, measure: promptTokens)
+            guard fitted.fits else {
+                stderr.write(Data(
+                    "error: message needs \(fitted.tokens) tokens and does not fit maxContext \(args.maxContext); shorten it or raise --max-context\n".utf8))
+                continue
+            }
+            if fitted.dropped > 0 {
+                stderr.write(Data("note: dropped \(fitted.dropped) oldest message(s) to fit the context\n".utf8))
+            }
+            history = fitted.messages
+
+            let promptIds = tokenizer.encode(try tokenizer.applyChatTemplate(history),
+                                             addBOS: false)
+            var config = baseConfig
+            config.maxNewTokens = min(args.maxNew, args.maxContext - promptIds.count)
+            let reply = try await streamChatTurn(promptIds: promptIds,
+                                                 config: config,
+                                                 tokenizer: tokenizer,
+                                                 runner: runner,
+                                                 context: context,
+                                                 scratch: scratch,
+                                                 runtime: runtime,
+                                                 quiet: args.quiet,
+                                                 stdout: stdout,
+                                                 stderr: stderr)
+            if !reply.isEmpty {
+                history.append(MFTokenizer.Message(role: .assistant, content: reply))
+            }
+        }
+    } catch is CancellationError {
+        stdout.write(Data("\n".utf8))
+        return RunResult(exitCode: 130)
+    } catch {
+        return errored(stderr, "\(error)", 1)
+    }
+}
+
+/// Generate one assistant turn, streaming deltas to `stdout`, and return the
+/// text that was streamed so the caller can append it to the history.
+private func streamChatTurn(promptIds: [Int32],
+                            config: GenerationConfig,
+                            tokenizer: MFTokenizer,
+                            runner: RealForwardRunner,
+                            context: MetalContext,
+                            scratch: RawCompletionScratch,
+                            runtime: RuntimeConfiguration,
+                            quiet: Bool,
+                            stdout: FileHandle,
+                            stderr: FileHandle) async throws -> String {
+    var reply = ""
+    let stats = try await runRawCompletion(
+        producer: runner,
+        tokenizer: tokenizer,
+        promptIds: promptIds,
+        config: config,
+        context: context,
+        scratch: scratch,
+        prefillConfig: runtime.prefillConfig) { progress in
+            switch progress {
+            case .prefill:
+                break
+            case .token(_, _, let delta):
+                if !delta.isEmpty {
+                    stdout.write(Data(delta.utf8))
+                    reply += delta
+                }
+            case .tail(let tail):
+                if !tail.isEmpty {
+                    stdout.write(Data(tail.utf8))
+                    reply += tail
+                }
+            }
+        }
+    stdout.write(Data("\n".utf8))
+    if !quiet {
+        let tokensPerSecond = stats.decodeSeconds > 0
+            ? Double(stats.newTokens) / stats.decodeSeconds
+            : 0
+        let footer = "[stop=\(String(describing: stats.reason)) prefill=\(stats.prefillTokens)tok/\(String(format: "%.2f", stats.prefillSeconds))s new=\(stats.newTokens)tok decode=\(String(format: "%.2f", stats.decodeSeconds))s tok/s=\(String(format: "%.3f", tokensPerSecond))]\n"
+        stderr.write(Data(footer.utf8))
+    }
+    return reply
+}

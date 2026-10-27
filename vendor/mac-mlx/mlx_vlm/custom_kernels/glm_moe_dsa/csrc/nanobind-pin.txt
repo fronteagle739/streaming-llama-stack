@@ -1,0 +1,8 @@
+# ABI PIN for building the oMLX GLM DSA native kernels (_ext).
+# The nanobind used to build _ext MUST match the nanobind that the installed `mlx` wheel was built against,
+# or mlx::core::array is a different C++ type across the module boundary and every native call raises
+# `TypeError: incompatible function arguments` (silent fallback to pure-MLX = zero speedup).
+# mlx bundles nanobind v2.12.0 (mlx's CMakeLists: GIT_TAG v2.12.0). Install BEFORE cmake configure:
+#     pip install --no-deps -r nanobind-pin.txt
+# and never `pip install -U` it past 2.12.0 without rebuilding _ext against the new mlx.
+nanobind==2.12.0

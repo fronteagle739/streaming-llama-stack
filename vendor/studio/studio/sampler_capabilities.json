@@ -1,0 +1,364 @@
+{
+  "fields": {
+    "temperature": {
+      "label": "Temperature",
+      "type": "number",
+      "flag": "--temp"
+    },
+    "top_k": {
+      "label": "Top-k",
+      "type": "integer",
+      "flag": "--top-k"
+    },
+    "top_p": {
+      "label": "Top-p",
+      "type": "number",
+      "flag": "--top-p"
+    },
+    "min_p": {
+      "label": "Min-p",
+      "type": "number",
+      "flag": "--min-p"
+    },
+    "typical_p": {
+      "label": "Typical-p",
+      "type": "number",
+      "flag": "--typical"
+    },
+    "rep_pen": {
+      "label": "Repeat penalty",
+      "type": "number",
+      "flag": "--repeat-penalty"
+    },
+    "repeat_last_n": {
+      "label": "Repeat window (tokens)",
+      "type": "integer",
+      "flag": "--repeat-last-n"
+    },
+    "presence_penalty": {
+      "label": "Presence penalty",
+      "type": "number",
+      "flag": "--presence-penalty"
+    },
+    "frequency_penalty": {
+      "label": "Frequency penalty",
+      "type": "number",
+      "flag": "--frequency-penalty"
+    },
+    "presence_context_size": {
+      "label": "Presence window (tokens)",
+      "type": "integer"
+    },
+    "frequency_context_size": {
+      "label": "Frequency window (tokens)",
+      "type": "integer"
+    },
+    "seed": {
+      "label": "Seed",
+      "type": "integer",
+      "flag": "--seed"
+    },
+    "mirostat": {
+      "label": "Mirostat (0 off, 1, 2)",
+      "type": "integer",
+      "flag": "--mirostat"
+    },
+    "mirostat_tau": {
+      "label": "Mirostat target entropy",
+      "type": "number",
+      "flag": "--mirostat-ent"
+    },
+    "mirostat_eta": {
+      "label": "Mirostat learning rate",
+      "type": "number",
+      "flag": "--mirostat-lr"
+    },
+    "min_keep": {
+      "label": "Minimum tokens to keep",
+      "type": "integer"
+    },
+    "xtc_probability": {
+      "label": "XTC probability",
+      "type": "number",
+      "flag": "--xtc-probability"
+    },
+    "xtc_threshold": {
+      "label": "XTC threshold",
+      "type": "number",
+      "flag": "--xtc-threshold"
+    },
+    "dynatemp_range": {
+      "label": "Dynamic temperature range",
+      "type": "number",
+      "flag": "--dynatemp-range"
+    },
+    "dynatemp_exponent": {
+      "label": "Dynamic temperature exponent",
+      "type": "number",
+      "flag": "--dynatemp-exp"
+    },
+    "top_n_sigma": {
+      "label": "Top-n sigma",
+      "type": "number",
+      "flag": "--top-nsigma"
+    },
+    "dry_multiplier": {
+      "label": "DRY multiplier",
+      "type": "number",
+      "flag": "--dry-multiplier"
+    },
+    "dry_base": {
+      "label": "DRY base",
+      "type": "number",
+      "flag": "--dry-base"
+    },
+    "dry_allowed_length": {
+      "label": "DRY allowed length",
+      "type": "integer",
+      "flag": "--dry-allowed-length"
+    },
+    "dry_penalty_last_n": {
+      "label": "DRY window (tokens)",
+      "type": "integer",
+      "flag": "--dry-penalty-last-n"
+    },
+    "adaptive_target": {
+      "label": "Adaptive-p target",
+      "type": "number",
+      "flag": "--adaptive-target"
+    },
+    "adaptive_decay": {
+      "label": "Adaptive-p decay",
+      "type": "number",
+      "flag": "--adaptive-decay"
+    },
+    "samplers": {
+      "type": "strings",
+      "label": "Sampler order (JSON array; include adaptive_p to enable Adaptive-p)",
+      "flag": "--samplers"
+    },
+    "dry_sequence_breakers": {
+      "type": "strings",
+      "label": "DRY sequence breakers (JSON array)",
+      "flag": "--dry-sequence-breaker"
+    }
+  },
+  "profiles": {
+    "basalt": {
+      "keys": ["temperature", "top_k", "top_p", "min_p", "presence_penalty", "frequency_penalty", "rep_pen", "repeat_last_n", "seed"],
+      "wire": {"rep_pen": "repetition_penalty", "repeat_last_n": "penalty_last_n"},
+      "note": "Basalt native OpenAI request sampling."
+    },
+    "llama": {
+      "keys": [
+        "temperature",
+        "top_k",
+        "top_p",
+        "min_p",
+        "typical_p",
+        "rep_pen",
+        "repeat_last_n",
+        "presence_penalty",
+        "frequency_penalty",
+        "seed",
+        "mirostat",
+        "mirostat_tau",
+        "mirostat_eta",
+        "min_keep",
+        "xtc_probability",
+        "xtc_threshold",
+        "dynatemp_range",
+        "dynatemp_exponent",
+        "top_n_sigma",
+        "dry_multiplier",
+        "dry_base",
+        "dry_allowed_length",
+        "dry_penalty_last_n",
+        "adaptive_target",
+        "adaptive_decay",
+        "samplers",
+        "dry_sequence_breakers"
+      ],
+      "wire": {
+        "rep_pen": "repeat_penalty"
+      },
+      "launch": true
+    },
+    "llama-decode": {
+      "keys": [
+        "temperature",
+        "top_k",
+        "top_p",
+        "min_p",
+        "typical_p",
+        "rep_pen",
+        "repeat_last_n",
+        "presence_penalty",
+        "frequency_penalty",
+        "seed",
+        "mirostat",
+        "mirostat_tau",
+        "mirostat_eta",
+        "min_keep",
+        "xtc_probability",
+        "xtc_threshold",
+        "dynatemp_range",
+        "dynatemp_exponent",
+        "top_n_sigma"
+      ],
+      "wire": {
+        "rep_pen": "repeat_penalty"
+      },
+      "note": "KV handoff carries one shared sampler profile. Decode request settings also configure the prefill sampler."
+    },
+    "mlx-lm": {
+      "keys": [
+        "temperature",
+        "top_k",
+        "top_p",
+        "min_p",
+        "rep_pen",
+        "repeat_last_n",
+        "presence_penalty",
+        "frequency_penalty",
+        "presence_context_size",
+        "frequency_context_size",
+        "seed",
+        "xtc_probability",
+        "xtc_threshold"
+      ],
+      "wire": {
+        "rep_pen": "repetition_penalty",
+        "repeat_last_n": "repetition_context_size"
+      },
+      "launch_keys": [
+        "temperature",
+        "top_k",
+        "top_p",
+        "min_p"
+      ]
+    },
+    "mlx-vlm": {
+      "keys": [
+        "temperature",
+        "top_p",
+        "rep_pen",
+        "repeat_last_n",
+        "presence_penalty",
+        "frequency_penalty",
+        "presence_context_size",
+        "frequency_context_size",
+        "seed"
+      ],
+      "wire": {
+        "rep_pen": "repetition_penalty",
+        "repeat_last_n": "repetition_context_size"
+      },
+      "note": "Top-k and min-p are hidden: the audited server batch sampler ignores them. Select MLX-LM explicitly for its wider text sampler."
+    },
+    "mlx-receiver": {
+      "keys": [
+        "temperature",
+        "top_k",
+        "top_p",
+        "min_p",
+        "seed",
+        "min_keep"
+      ],
+      "note": "Receiver seed <= 0 leaves the random generator unseeded. Penalties, typical-p and mirostat are parsed but unused."
+    },
+    "mtp-shim": {
+      "keys": [
+        "temperature",
+        "top_k",
+        "top_p",
+        "min_p"
+      ],
+      "note": "The MTP shim forwards only temperature, top-k, top-p and min-p."
+    },
+    "ds4": {
+      "keys": [
+        "temperature",
+        "top_k",
+        "top_p",
+        "min_p",
+        "seed"
+      ],
+      "note": "DS4 seed <= 0 uses an automatic seed."
+    },
+    "ninfer": {
+      "keys": [
+        "temperature",
+        "top_k",
+        "top_p",
+        "presence_penalty",
+        "frequency_penalty",
+        "seed"
+      ],
+      "note": "NInfer Chat Completions does not parse min-p or repetition penalty."
+    },
+    "mference": {
+      "keys": [
+        "temperature",
+        "top_k",
+        "top_p",
+        "rep_pen",
+        "seed"
+      ],
+      "wire": {
+        "rep_pen": "repetition_penalty"
+      },
+      "note": "Mference requires top-k 1 to 256, top-p > 0 and a positive repetition penalty."
+    },
+    "mlx-rpc": {
+      "keys": [],
+      "note": "The RPC layer-split engine uses argmax only; sampler settings cannot change it."
+    },
+    "openai": {
+      "keys": [
+        "temperature",
+        "top_p",
+        "presence_penalty",
+        "frequency_penalty",
+        "seed"
+      ],
+      "note": "Use this contract only for an endpoint/model supporting the standard OpenAI Chat sampling fields."
+    },
+    "openrouter": {
+      "keys": [
+        "temperature",
+        "top_k",
+        "top_p",
+        "min_p",
+        "typical_p",
+        "rep_pen",
+        "presence_penalty",
+        "frequency_penalty",
+        "seed"
+      ],
+      "wire": {
+        "rep_pen": "repetition_penalty"
+      },
+      "note": "Controls use the selected model's advertised supported_parameters. Routing requires support for every sent parameter."
+    },
+    "anthropic": {
+      "keys": [],
+      "note": "The Studio Anthropic adapter drops sampling fields; no sampler controls are exposed."
+    },
+    "unknown": {
+      "keys": [],
+      "note": "Sampler support is unverified. Detect model capabilities or select a verified endpoint contract."
+    },
+    "legacy-kimi-launch": {
+      "keys": [],
+      "note": "The legacy Kimi batch launcher has no sampler flag passthrough. Set the decode request sampler on the peer half, or select the general streaming engine for configurable launch defaults."
+    },
+    "diffusion-server": {
+      "keys": [
+        "temperature",
+        "seed"
+      ],
+      "note": "Diffusion temperature is a flat schedule alias; explicit t_min/t_max in Chat diffusion settings take priority. Entropy/denoising controls remain in the diffusion panel. AR truncation and penalties are unsupported."
+    }
+  }
+}
