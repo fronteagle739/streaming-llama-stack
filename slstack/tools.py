@@ -24,7 +24,7 @@ def media_schema(kind):
                    'strength':{'type':'number','minimum':-4,'maximum':4,'default':1}},'required':['name'],'additionalProperties':False}}
     props.update(source_image={'type':'string','minLength':1,'maxLength':4096,
                      'description':'Chat image reference ID for an uploaded image, or /outputs/... URL of a generated image. Use for i2i or the first frame of i2v.'},
-                 reference_images={'type':'array','maxItems':8,'default':[],
+                 reference_images={'type':'array','maxItems':9,'default':[],
                      'items':{'type':'string','minLength':1,'maxLength':4096},
                      'description':'Explicit image reference IDs or generated image URLs for this generation only. Use multiple images only with a compatible model.'},
                  modality={'type':'string','enum':['t2i','i2i'] if kind=='image' else ['t2v','i2v','ref2v'],
@@ -109,7 +109,7 @@ class Tools:
                 kind = name.removeprefix('generate_')
                 description = f'Generate {kind} with a supported Studio model in {self.cfg[kind + "_mode"]} mode. Reuse known model/LoRA IDs from this conversation; do not list models or LoRAs before every generation. Omit model for the selected default. Discover only unknown choices and refresh only after relevant settings change, an unavailable-model/adapter error, or an explicit refresh request. Media is displayed inline automatically; confirm briefly without file paths or job receipts. Only one GPU job runs at a time. Backend may reject unsupported model settings.'
                 description += ' Use source_image or reference_images only when requested: uploaded images have Chat image reference IDs beside them; generated images can be reused by their /outputs/... URLs. Reuse those exact identifiers, never invent paths. Check the selected model modalities when choosing i2i, i2v or ref2v; do not silently substitute a text-only generation.'
-                if kind=='video':description += ' For H3, supply its labelled audiovisual caption: integrated_multimodal_description with [Shot 1], overall_soundscape, and non_diegetic_music (N/A if none). Preserve requested dialogue and sounds. Omit num_frames for the selected model default; H3 uses 121 frames at 24 fps.'
+                if kind=='video':description += ' For H3, supply its labelled audiovisual caption: integrated_multimodal_description with [Shot 1], overall_soundscape, and non_diegetic_music (N/A if none). In ref2v prompts, use <Picture 1>, <Picture 2>, etc. in the exact reference_images order to bind identities or styles. Preserve requested dialogue and sounds. Omit num_frames for the selected model default; H3 uses 121 frames at 24 fps.'
             rows.append({'name': name, 'description': description, 'inputSchema': schema})
         return rows
 

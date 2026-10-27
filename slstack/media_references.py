@@ -143,3 +143,11 @@ def conditioning(kind,args,arch,model):
         if not refs:refs=[image];image=None
     return dict(modality='ref2v' if mode=='ref2v' and arch=='minimax-h3' else native,
                 image_path=image,reference_images=refs,denoise=args.get('denoise'))
+
+
+def h3_reference_prompt(prompt,count):
+    """Studio shot_render's ordered Picture/Subject bindings, without filenames."""
+    header='Ordered MiniMax H3 visual references (keep this exact order):'
+    if not count or prompt.startswith(header):return prompt
+    labelled=[f'<Picture {index}> / <Subject {index}>: Supplied reference image {index}.' for index in range(1,count+1)]
+    return '\n'.join([header,*labelled,'','Target video request:',prompt])

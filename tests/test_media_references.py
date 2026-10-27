@@ -92,7 +92,7 @@ class MediaReferenceTests(unittest.TestCase):
         self.assertEqual(row['denoise'],.25)
         row=validate(media_schema('video'),dict(prompt='Animate',modality='ref2v',reference_images=['/outputs/a.png']))
         self.assertEqual(row['reference_images'],['/outputs/a.png'])
-        for args in (dict(reference_images=[{}]),dict(reference_images=['a']*9),dict(modality='i2v'),dict(denoise=1.1)):
+        for args in (dict(reference_images=[{}]),dict(reference_images=['a']*10),dict(modality='i2v'),dict(denoise=1.1)):
             with self.assertRaises(ValueError):validate(media_schema('image'),dict(prompt='Edit',**args))
 
     def test_uploaded_then_generated_image_reaches_sequential_chat_tools(self):
@@ -156,6 +156,16 @@ class MediaReferenceTests(unittest.TestCase):
                     if inputs.get('_source_image_path'):self.assertEqual(Path(params.image_path).read_bytes(),png())
                     else:self.assertEqual([Path(p).read_bytes() for p in params.reference_images],[png()])
                     self.assertEqual(params.denoise,inputs.get('denoise'))
+                    if arch=='minimax-h3' and params.reference_images:
+                        self.assertIn('<Picture 1> / <Subject 1>',params.prompt)
+                        self.assertTrue(params.prompt.endswith('non_diegetic_music: N/A'))
+
+    def test_reference_caption_keeps_studio_picture_order_and_explicit_bindings(self):
+        from slstack.media_references import h3_reference_prompt
+        prompt=h3_reference_prompt('A person from <Picture 1> in the style of <Picture 2>.',2)
+        self.assertLess(prompt.index('<Picture 1> /'),prompt.index('<Picture 2> /'))
+        self.assertEqual(h3_reference_prompt(prompt,2),prompt)
+        self.assertEqual(h3_reference_prompt('Unconditioned',0),'Unconditioned')
 
     def test_unsupported_conditioning_fails_before_the_engine_unloads_or_starts_a_job(self):
         from slstack.tools import Tools
