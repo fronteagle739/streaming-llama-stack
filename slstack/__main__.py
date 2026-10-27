@@ -19,6 +19,7 @@ def main():
     mlx_setup = sub.add_parser('setup-mlx', help='Install the retained MLX-VLM fork and native GLM kernels')
     mlx_setup.add_argument('--check', action='store_true')
     mlx_setup.add_argument('--no-native-glm', action='store_true')
+    mlx_setup.add_argument('--wheelhouse', help='Use a local wheel directory without accessing a package index')
     from .backends import BACKENDS
     decoder = sub.add_parser('decode', help='Start a configured decoder on its serving host')
     decoder.add_argument('--model')
@@ -116,7 +117,7 @@ def main():
         return 0
     if args.command == 'setup-mlx':
         from .mlx_setup import setup
-        result = setup(cfg, check=args.check, native_glm=not args.no_native_glm)
+        result = setup(cfg, check=args.check, native_glm=not args.no_native_glm, wheelhouse=args.wheelhouse)
         print(json.dumps(result, indent=2))
         return 0 if result['ready'] else 1
     if args.command == 'install':

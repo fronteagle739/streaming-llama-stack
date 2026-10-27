@@ -29,6 +29,7 @@ def main():
     parser.add_argument('--install-dir', type=Path, help='explicit target package directory')
     parser.add_argument('--fetch-build-deps', action='store_true')
     parser.add_argument('--jobs', type=int, default=3)
+    parser.add_argument('--wheelhouse', type=Path)
     args = parser.parse_args()
     if platform.system() != 'Darwin':
         raise RuntimeError('Build requires macOS and the Metal compiler toolchain')
@@ -44,7 +45,8 @@ def main():
     if args.fetch_build_deps:
         deps = build/('deps-'+version)
         if not (deps/'nanobind/cmake').is_dir():
-            subprocess.run([sys.executable,'-m','pip','install','--no-deps','--target',str(deps),
+            offline=['--no-index','--find-links',str(args.wheelhouse.resolve())] if args.wheelhouse else []
+            subprocess.run([sys.executable,'-m','pip','install',*offline,'--no-deps','--target',str(deps),
                             f'nanobind=={version}'],check=True)
         nb_root=deps/'nanobind/cmake'
     else:
