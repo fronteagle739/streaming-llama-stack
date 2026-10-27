@@ -1,6 +1,6 @@
 # Paired launchers
 
-Every preset directory contains `mac-big-memory.sh`, `rtx-fast-gpu.ps1`, and
+The runnable Mac preset directories contain `mac-big-memory.sh`, `rtx-fast-gpu.ps1`, and
 `preset.json`. Scripts resolve the stack relative to themselves. Private model
 paths, interface addresses and tokens belong in separate local config files;
 they override the recipe's placeholder settings. Dry runs list unresolved fields
@@ -14,10 +14,16 @@ and start nothing. Normal launches refuse unresolved placeholders.
 | `kimi-k2.7-standard-streaming` | Standard Kimi K2.7 settings, using the same weights and receiver with a 512-token RTX microbatch. Replaces the retired Kimi K2.6 weight selection. |
 | `glm-5.1-streaming`, `glm-5.2-streaming`, `glm-5.3-streaming` | Full GLM DSA route: RTX GGUF prefill and Mac MLX receiver, 262,144 configured context, full sparse DSA, 512 microbatch, F16 KV, MTP off. |
 
-Negotiated YOCO state v1 export exists; Mac decode with YOCO has not been
-benchmarked. The `dsv41-ultra-yoco` directory records a configuration recipe;
-its controller integration still needs separate completion. The published
-two-machine measurement predates YOCO and uses plain ULTRA prefill.
+The `dsv41-ultra-yoco` route is integrated and measured with negotiated YOCO v1
+and mode3 state. Round 4 reached 1,670 prefill tok/s on a 198,287-token image
+prompt and 31.0 Mac decode tok/s. The matched 49,787-token image prompt reached
+1,477 prefill tok/s with YOCO and 1,197 without it.
+[Timings and conditions](../../docs/YOCO_PAIRED_QUALIFICATION.md).
+
+The [large-RAM ds4-win untested example](dsv41-large-ram-untested/README.md)
+contains a portable preview launcher and config pair for a Windows/Linux
+RAM-rich decode host. Its missing CPU mode3/YOCO receiver is documented;
+the launcher refuses to start either half.
 
 The GLM recipes share the retained full-DSA route and current Studio streaming
 defaults; they are not separate new benchmark qualifications. GLM 5.3 Flash uses
