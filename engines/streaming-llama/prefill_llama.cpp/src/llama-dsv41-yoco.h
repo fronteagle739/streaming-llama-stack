@@ -13,13 +13,17 @@ struct plan {
     uint32_t first=0, count=0, layers=40;
     bool approximate=false, encoder_only=false;
 };
-inline plan schedule(uint32_t keep,operation op,bool images,uint32_t logical_begin,
+inline plan schedule(uint32_t keep,operation op,bool /*images*/,uint32_t logical_begin,
                      uint32_t logical_end,uint32_t sweep_begin,uint32_t sweep_end) {
     validate(keep);
     if(logical_begin>=logical_end || sweep_begin<logical_begin || sweep_end>logical_end || sweep_begin>=sweep_end)
         throw std::runtime_error("YOCO logical/sweep bounds are invalid");
     plan p{0,sweep_end-sweep_begin,40,false,false};
-    if(!keep || op!=operation::prefill || images || logical_end-logical_begin<=keep) return p;
+    // Projected vision rows follow the same layer coverage as text. Seeding
+    // and Engram masks use absolute image spans in the sweep, before narrowing
+    // decoder coverage. Layer20 must publish EVERY row; an image intersecting
+    // the replay tail remains a projected image row in layers21..39 as well.
+    if(!keep || op!=operation::prefill || logical_end-logical_begin<=keep) return p;
     const uint32_t replay=logical_end-keep;
     if(sweep_end<logical_end) {
         // Internal encoder endpoints are not continuable frontiers. Keep the

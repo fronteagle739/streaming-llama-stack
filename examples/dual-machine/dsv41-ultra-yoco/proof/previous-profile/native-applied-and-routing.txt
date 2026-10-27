@@ -1,0 +1,59 @@
+NATIVE_SESSION_LOCAL_FIRST route=mac tokens=23 live_prefix=0 mac_work=23 threshold=11776
+PAIRED_SAMPLER_APPLIED phase=answer temperature=0.829999983 top_p=0.870000005 top_k=37 min_p=0.0599999987 quality_speed=0.219999999 presence_penalty=0 frequency_penalty=0 repeat_penalty=1 repeat_last_n=64 logit_bias_count=0 seed=123456 max_tokens=128 policy=mac-mimo-selection-only all_experts_resident=1 typ_p=1 dynatemp_range=0 dynatemp_exponent=1 xtc_probability=0 xtc_threshold=0.100000001 dry_multiplier=0 dry_base=1.75 dry_allowed_length=2 dry_penalty_last_n=-1 sampler_order_count=5
+NATIVE_SESSION_LOCAL_FIRST route=mac tokens=104 live_prefix=90 mac_work=14 threshold=11776
+PAIRED_SAMPLER_APPLIED phase=answer temperature=0.829999983 top_p=0.870000005 top_k=37 min_p=0.0599999987 quality_speed=0.219999999 presence_penalty=0 frequency_penalty=0 repeat_penalty=1 repeat_last_n=64 logit_bias_count=0 seed=123456 max_tokens=128 policy=mac-mimo-selection-only all_experts_resident=1 typ_p=1 dynatemp_range=0 dynatemp_exponent=1 xtc_probability=0 xtc_threshold=0.100000001 dry_multiplier=0 dry_base=1.75 dry_allowed_length=2 dry_penalty_last_n=-1 sampler_order_count=5
+NATIVE_SESSION_LOCAL_FIRST route=rtx tokens=198287 live_prefix=0 mac_work=198287 threshold=11776
+NATIVE_SESSION_TRANSFER initial=1 position=49152 bytes=333636668 milliseconds=1549.773 includes=pipe-network-import-hash-ack
+NATIVE_SESSION_TRANSFER initial=0 position=98304 bytes=333636872 milliseconds=2070.053 includes=pipe-network-import-hash-ack
+NATIVE_SESSION_TRANSFER initial=0 position=147456 bytes=333636872 milliseconds=2440.631 includes=pipe-network-import-hash-ack
+NATIVE_SESSION_TRANSFER initial=0 position=196608 bytes=333636872 milliseconds=2848.409 includes=pipe-network-import-hash-ack
+NATIVE_SESSION_TRANSFER initial=0 position=198287 bytes=29628228 milliseconds=1940.886 includes=pipe-network-import-hash-ack
+PAIRED_SAMPLER_APPLIED phase=answer temperature=0.829999983 top_p=0.870000005 top_k=37 min_p=0.0599999987 quality_speed=0.219999999 presence_penalty=0 frequency_penalty=0 repeat_penalty=1 repeat_last_n=64 logit_bias_count=0 seed=123456 max_tokens=128 policy=mac-mimo-selection-only all_experts_resident=1 typ_p=1 dynatemp_range=0 dynatemp_exponent=1 xtc_probability=0 xtc_threshold=0.100000001 dry_multiplier=0 dry_base=1.75 dry_allowed_length=2 dry_penalty_last_n=-1 sampler_order_count=5
+NATIVE_SESSION_SYNC_TIMING mode=async position=198319 tokens=32 force=0 prev_step_ms=32.473 ready_ms=0.080 work_ms=2.434 total_ms=2.514 next_step_ms=32.050 queued=1
+NATIVE_SESSION_DECODE_DELTA position=198319 bytes=5322120 milliseconds=599.328 queue_ms=0.062 source=decode async=1 includes=hash-network-apply-ack
+NATIVE_SESSION_SYNC_TIMING mode=async position=198351 tokens=32 force=0 prev_step_ms=31.122 ready_ms=0.117 work_ms=0.809 total_ms=0.927 next_step_ms=32.691 queued=1
+NATIVE_SESSION_DECODE_DELTA position=198351 bytes=5322120 milliseconds=610.264 queue_ms=0.015 source=decode async=1 includes=hash-network-apply-ack
+NATIVE_SESSION_SYNC_TIMING mode=async position=198383 tokens=32 force=0 prev_step_ms=30.795 ready_ms=0.063 work_ms=0.771 total_ms=0.835 next_step_ms=31.427 queued=1
+NATIVE_SESSION_DECODE_DELTA position=198383 bytes=5322120 milliseconds=623.558 queue_ms=0.012 source=decode async=1 includes=hash-network-apply-ack
+NATIVE_SESSION_DECODE_DELTA position=198391 bytes=1727784 milliseconds=201.214 queue_ms=362.518 source=decode async=1 includes=hash-network-apply-ack
+NATIVE_SESSION_SYNC_TIMING mode=async position=198391 tokens=8 force=1 prev_step_ms=1.422 ready_ms=0.059 work_ms=2.382 total_ms=2.441 next_step_ms=660.372 queued=2
+NATIVE_SESSION_LOCAL_PREFILL base=198391 target=198414 tokens=23 chunks=1 milliseconds=704.059 threshold=11776 catch_up=async
+PAIRED_SAMPLER_APPLIED phase=answer temperature=0.829999983 top_p=0.870000005 top_k=37 min_p=0.0599999987 quality_speed=0.219999999 presence_penalty=0 frequency_penalty=0 repeat_penalty=1 repeat_last_n=64 logit_bias_count=0 seed=123456 max_tokens=128 policy=mac-mimo-selection-only all_experts_resident=1 typ_p=1 dynatemp_range=0 dynatemp_exponent=1 xtc_probability=0 xtc_threshold=0.100000001 dry_multiplier=0 dry_base=1.75 dry_allowed_length=2 dry_penalty_last_n=-1 sampler_order_count=5
+NATIVE_SESSION_SYNC_TIMING mode=async position=198414 tokens=23 force=1 prev_step_ms=702.796 ready_ms=0.059 work_ms=1.171 total_ms=1.231 next_step_ms=37.335 queued=1
+NATIVE_SESSION_DECODE_DELTA position=198414 bytes=3965796 milliseconds=399.651 queue_ms=0.037 source=local-prefill async=1 includes=hash-network-apply-ack
+NATIVE_SESSION_DECODE_DELTA position=198417 bytes=975124 milliseconds=173.483 queue_ms=296.282 source=decode async=1 includes=hash-network-apply-ack
+NATIVE_SESSION_LOCAL_FIRST route=rtx tokens=105054 live_prefix=0 mac_work=105054 threshold=11776
+NATIVE_SESSION_TRANSFER initial=1 position=49152 bytes=333636668 milliseconds=1505.706 includes=pipe-network-import-hash-ack
+NATIVE_SESSION_TRANSFER initial=0 position=98304 bytes=333636872 milliseconds=1996.531 includes=pipe-network-import-hash-ack
+NATIVE_SESSION_TRANSFER initial=0 position=105054 bytes=62094464 milliseconds=1267.883 includes=pipe-network-import-hash-ack
+PAIRED_SAMPLER_APPLIED phase=answer temperature=0.829999983 top_p=0.870000005 top_k=37 min_p=0.0599999987 quality_speed=0.219999999 presence_penalty=0 frequency_penalty=0 repeat_penalty=1 repeat_last_n=64 logit_bias_count=0 seed=123456 max_tokens=128 policy=mac-mimo-selection-only all_experts_resident=1 typ_p=1 dynatemp_range=0 dynatemp_exponent=1 xtc_probability=0 xtc_threshold=0.100000001 dry_multiplier=0 dry_base=1.75 dry_allowed_length=2 dry_penalty_last_n=-1 sampler_order_count=5
+NATIVE_SESSION_DECODE_DELTA position=105060 bytes=1415968 milliseconds=178.438 queue_ms=0.038 source=decode async=1 includes=hash-network-apply-ack
+NATIVE_SESSION_SYNC_TIMING mode=async position=105060 tokens=6 force=1 prev_step_ms=0.866 ready_ms=0.051 work_ms=0.511 total_ms=0.562 next_step_ms=457.079 queued=1
+NATIVE_SESSION_LOCAL_PREFILL base=105060 target=105080 tokens=20 chunks=1 milliseconds=611.120 threshold=11776 catch_up=async
+PAIRED_SAMPLER_APPLIED phase=answer temperature=0.829999983 top_p=0.870000005 top_k=37 min_p=0.0599999987 quality_speed=0.219999999 presence_penalty=0 frequency_penalty=0 repeat_penalty=1 repeat_last_n=64 logit_bias_count=0 seed=123456 max_tokens=128 policy=mac-mimo-selection-only all_experts_resident=1 typ_p=1 dynatemp_range=0 dynatemp_exponent=1 xtc_probability=0 xtc_threshold=0.100000001 dry_multiplier=0 dry_base=1.75 dry_allowed_length=2 dry_penalty_last_n=-1 sampler_order_count=5
+NATIVE_SESSION_SYNC_TIMING mode=async position=105080 tokens=20 force=1 prev_step_ms=609.675 ready_ms=0.078 work_ms=1.362 total_ms=1.440 next_step_ms=36.197 queued=1
+NATIVE_SESSION_DECODE_DELTA position=105080 bytes=3512664 milliseconds=417.981 queue_ms=0.018 source=local-prefill async=1 includes=hash-network-apply-ack
+NATIVE_SESSION_SYNC_TIMING mode=async position=105086 tokens=6 force=1 prev_step_ms=1.106 ready_ms=0.099 work_ms=1.199 total_ms=1.299 next_step_ms=301.966 queued=2
+NATIVE_SESSION_DECODE_DELTA position=105086 bytes=1415968 milliseconds=173.946 queue_ms=222.406 source=decode async=1 includes=hash-network-apply-ack
+NATIVE_SESSION_LOCAL_PREFILL base=105086 target=105105 tokens=19 chunks=1 milliseconds=582.575 threshold=11776 catch_up=async
+PAIRED_SAMPLER_APPLIED phase=answer temperature=0.829999983 top_p=0.870000005 top_k=37 min_p=0.0599999987 quality_speed=0.219999999 presence_penalty=0 frequency_penalty=0 repeat_penalty=1 repeat_last_n=64 logit_bias_count=0 seed=123456 max_tokens=128 policy=mac-mimo-selection-only all_experts_resident=1 typ_p=1 dynatemp_range=0 dynatemp_exponent=1 xtc_probability=0 xtc_threshold=0.100000001 dry_multiplier=0 dry_base=1.75 dry_allowed_length=2 dry_penalty_last_n=-1 sampler_order_count=5
+NATIVE_SESSION_SYNC_TIMING mode=async position=105105 tokens=19 force=1 prev_step_ms=581.825 ready_ms=0.045 work_ms=0.701 total_ms=0.746 next_step_ms=35.124 queued=1
+NATIVE_SESSION_DECODE_DELTA position=105105 bytes=3371348 milliseconds=326.258 queue_ms=0.018 source=local-prefill async=1 includes=hash-network-apply-ack
+NATIVE_SESSION_DECODE_DELTA position=105106 bytes=670988 milliseconds=155.491 queue_ms=289.590 source=decode async=1 includes=hash-network-apply-ack
+NATIVE_SESSION_LOCAL_FIRST route=rtx tokens=49787 live_prefix=0 mac_work=49787 threshold=11776
+NATIVE_SESSION_TRANSFER initial=1 position=49152 bytes=333636668 milliseconds=1567.118 includes=pipe-network-import-hash-ack
+NATIVE_SESSION_TRANSFER initial=0 position=49787 bytes=22942452 milliseconds=661.848 includes=pipe-network-import-hash-ack
+PAIRED_SAMPLER_APPLIED phase=answer temperature=0.829999983 top_p=0.870000005 top_k=37 min_p=0.0599999987 quality_speed=0.219999999 presence_penalty=0 frequency_penalty=0 repeat_penalty=1 repeat_last_n=64 logit_bias_count=0 seed=123456 max_tokens=128 policy=mac-mimo-selection-only all_experts_resident=1 typ_p=1 dynatemp_range=0 dynatemp_exponent=1 xtc_probability=0 xtc_threshold=0.100000001 dry_multiplier=0 dry_base=1.75 dry_allowed_length=2 dry_penalty_last_n=-1 sampler_order_count=5
+NATIVE_SESSION_SYNC_TIMING mode=async position=49819 tokens=32 force=0 prev_step_ms=31.847 ready_ms=0.099 work_ms=1.403 total_ms=1.503 next_step_ms=31.860 queued=1
+NATIVE_SESSION_DECODE_DELTA position=49819 bytes=5322120 milliseconds=561.594 queue_ms=0.076 source=decode async=1 includes=hash-network-apply-ack
+NATIVE_SESSION_SYNC_TIMING mode=async position=49851 tokens=32 force=0 prev_step_ms=31.371 ready_ms=0.073 work_ms=1.662 total_ms=1.735 next_step_ms=31.594 queued=1
+NATIVE_SESSION_DECODE_DELTA position=49851 bytes=5322120 milliseconds=564.107 queue_ms=0.036 source=decode async=1 includes=hash-network-apply-ack
+NATIVE_SESSION_SYNC_TIMING mode=async position=49883 tokens=32 force=0 prev_step_ms=31.185 ready_ms=0.089 work_ms=1.361 total_ms=1.451 next_step_ms=31.413 queued=1
+NATIVE_SESSION_SYNC_TIMING mode=async position=49887 tokens=4 force=1 prev_step_ms=1.210 ready_ms=0.077 work_ms=0.630 total_ms=0.707 next_step_ms=447.454 queued=2
+NATIVE_SESSION_DECODE_DELTA position=49883 bytes=5322120 milliseconds=615.296 queue_ms=0.022 source=decode async=1 includes=hash-network-apply-ack
+NATIVE_SESSION_DECODE_DELTA position=49887 bytes=1128728 milliseconds=163.325 queue_ms=488.034 source=decode async=1 includes=hash-network-apply-ack
+NATIVE_SESSION_LOCAL_PREFILL base=49887 target=49910 tokens=23 chunks=1 milliseconds=686.322 threshold=11776 catch_up=async
+PAIRED_SAMPLER_APPLIED phase=answer temperature=0.829999983 top_p=0.870000005 top_k=37 min_p=0.0599999987 quality_speed=0.219999999 presence_penalty=0 frequency_penalty=0 repeat_penalty=1 repeat_last_n=64 logit_bias_count=0 seed=123456 max_tokens=128 policy=mac-mimo-selection-only all_experts_resident=1 typ_p=1 dynatemp_range=0 dynatemp_exponent=1 xtc_probability=0 xtc_threshold=0.100000001 dry_multiplier=0 dry_base=1.75 dry_allowed_length=2 dry_penalty_last_n=-1 sampler_order_count=5
+NATIVE_SESSION_SYNC_TIMING mode=async position=49910 tokens=23 force=1 prev_step_ms=685.097 ready_ms=0.071 work_ms=1.150 total_ms=1.222 next_step_ms=32.073 queued=1
+NATIVE_SESSION_DECODE_DELTA position=49910 bytes=3965796 milliseconds=443.476 queue_ms=0.039 source=local-prefill async=1 includes=hash-network-apply-ack
+NATIVE_SESSION_DECODE_DELTA position=49912 bytes=816912 milliseconds=152.247 queue_ms=378.709 source=decode async=1 includes=hash-network-apply-ack

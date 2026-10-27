@@ -58,7 +58,7 @@ class Broker:
                 record.producer = owned.producer
                 record.metadata = dict(owned.producer.ready)
                 record.state = 'ready'
-                record.request = {k: v for k, v in record.request.items() if k != 'tokens'}
+                record.request = {k: v for k, v in record.request.items() if k not in ('tokens','vision')}
             while not record.cancel.wait(0.1):
                 p = record.producer
                 require(p.failure is None, p.failure or 'Producer failed')
@@ -134,13 +134,17 @@ class Broker:
             r.cancel.set()
             r.busy = False
 
-    def enqueue(self, sid, row):
+    def enqueue(self, sid, row, *, vision=None):
         require(row.get('operation') != 'apply_decode_delta', 'Decode delta requires its streamed request body')
+        require('vision_spans_file' not in row,'Network paths are never trusted vision descriptors')
+        require(vision is None or row.get('operation')=='prefill','Projected vision requires prefill')
         r, p = self._claim(sid, row)
 
         def work():
             try:
-                reply = p.begin_export(row) if row['operation'] in ['export_initial', 'export_delta'] else p.request(row)
+                actual=dict(row)
+                if vision is not None:actual['vision_spans_file']=p.stage_vision(vision,row['base']['position'])
+                reply = p.begin_export(actual) if row['operation'] in ['export_initial', 'export_delta'] else p.request(actual)
                 self._complete(r, row, reply)
             except BaseException as exc:
                 p._poison(exc)
@@ -242,7 +246,8 @@ def create_router(broker, authorize):
     @router.post('/{sid}')
     async def start(sid: str, request: HTTPRequest):
         try:
-            return JSONResponse(broker.start(initial_request(sid, headers(request), await body(request, 49152 * 4))), status_code=202)
+            from slstack.paired_vision import MAX_BODY
+            return JSONResponse(broker.start(initial_request(sid, headers(request), await body(request, MAX_BODY))), status_code=202)
         except Refused as exc:
             raise rejected(exc) from None
 
@@ -273,6 +278,23 @@ def create_router(broker, authorize):
         try:
             return broker.operation(sid, sequence)
         except Refused as exc:
+            raise rejected(exc) from None
+
+    @router.post('/{sid}/vision')
+    async def vision_prefill(sid: str, request: HTTPRequest):
+        try:
+            import hashlib,struct
+            from slstack.paired_vision import MEDIA,MAX_BODY,unpack
+            h=headers(request);wire=h.get('x-dsv41-control','').encode('ascii')
+            require(len(wire)<=16384,'Vision control header too large')
+            row=control(wire)
+            require(row.get('operation')=='prefill','Expected projected prefill')
+            data=await body(request,MAX_BODY)
+            require(h.get('content-type')==MEDIA and h.get('content-length')==str(len(data)) and h.get('x-dsv41-body-sha256')==hashlib.sha256(data).hexdigest(),'Projected body SHA/extent mismatch')
+            tokens,images=unpack(data,base=row['base']['position'])
+            row['tokens']=list(struct.unpack('<%dI'%(len(tokens)//4),tokens))
+            return JSONResponse(broker.enqueue(sid,row,vision=images),status_code=202)
+        except (ValueError,TypeError,KeyError,UnicodeError,struct.error) as exc:
             raise rejected(exc) from None
 
     class PayloadResponse(StreamingResponse):

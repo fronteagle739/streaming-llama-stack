@@ -81,7 +81,8 @@ def apply(env, cfg, scope):
     scope = SCOPE_ALIASES.get(scope, scope)
     context = {**cfg, 'host_budget_bytes': int(cfg.get('host_budget_gib', 8) * (1 << 30)),
                'host_budget_mb': int(cfg.get('host_budget_gib', 8) * 1024),
-               'physical_floor_bytes': int(cfg.get('min_available_gib', 4) * (1 << 30)),
+               'physical_floor_bytes': int(cfg.get('min_available_gib', .5) * (1 << 30)),
+               'runtime_floor_bytes': int(cfg.get('runtime_min_free_gib', 4) * (1 << 30)),
                'host_budget_decimal_gb': cfg.get('host_budget_gib', 8) * (1 << 30) / 1e9,
                'physical_floor_decimal_gb': cfg.get('min_available_gib', 4) * (1 << 30) / 1e9,
                'job_commit_mb': int(cfg.get('job_commit_gib', 48) * 1024),
@@ -212,7 +213,10 @@ def validate_table():
     current = inventory()
     missing = set(current) - present
     indexed = {row['var']: row for row in table}
-    stale = [var for var in current if var in indexed and set(indexed[var]['reads']) != set(current[var])]
+    # Match envdocs.reference_table: the separately pinned MLX gitlink may be
+    # uninitialized, while its checked-in immutable source evidence is retained.
+    stale = [var for var in current if var in indexed and set(indexed[var]['reads']) !=
+             set(current[var]) | {ref for ref in indexed[var]['reads'] if ref.startswith('engines/mlx-serve/')}]
     if missing or stale or len(present) != len(table) or any(not r['doc'] for r in table):
         raise ValueError(f'Environment table out of date: missing={sorted(missing)}, stale={sorted(stale)}')
     return len(table)

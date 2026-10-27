@@ -105,9 +105,9 @@ def render(table):
             values = '; '.join(f'{s}: `{v}`' for s, v in row.get('defaults_by_scope', {}).items()) or 'Explicit runtime value'
             out.append(f"| `{row['flag']}` | {cell(values)} | {cell(row['doc'])} |")
     out += ['', 'Budget placeholders use the admitted child budget: `{host_budget_bytes}`, '
-            '`{host_budget_mb}` and `{physical_floor_bytes}`. `{host_budget_gib}` and '
+            '`{host_budget_mb}`, `{physical_floor_bytes}` (admission) and `{runtime_floor_bytes}` (runtime). `{host_budget_gib}` and '
             '`{min_available_gib}` use GiB. User overrides are literal strings, including JSON and braces.', '',
-            'Hardware commands use the pinned shared ownership/paging guard and have an active-command limit of 19 minutes. '
+            'Hardware commands use the pinned shared ownership/paging guard. Model operations wait while progress advances; only stalled work expires. '
             'It enforces the physical budget/floor and a separate Windows device-backing commit allowance. '
             'Windows owned-page observations are bounded and incremental; Darwin disk-only process attribution is unavailable. '
             'Zero observed pages does not establish exhaustive zero pagefile I/O. Resource leases remain held if owned cleanup cannot be confirmed.', '',

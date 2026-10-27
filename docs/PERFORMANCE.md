@@ -32,7 +32,23 @@ The last row returned the correct long-document marker. Native embedding/layers/
 
 An older 224,588-token recall reported 2.15 tok/s for a six-token reply, including one-time context/open/inspection overhead. Its token steps ran at 131–179 ms once warm (5.6–7.6 tok/s). It is not a comparable sustained-rate regression against the longer decode above.
 
-## RTX prefill → Mac decode (measured before YOCO, plain ULTRA prefill)
+## RTX prefill → Mac decode
+
+The real YOCO140 image and long-recall WebUI gate passes. [Qualification and raw metrics](YOCO_PAIRED_QUALIFICATION.md).
+
+| Prefill / workload | Tokens | RTX compute (s) | Transfer/import/hash/ACK (s) | Mac decode tok/s | WebUI prompt (s) |
+|---|---:|---:|---:|---:|---:|
+| Plain ULTRA, historical text | 184,432 | 173.252 | 7.662 | 31.494 | 229.128 |
+| YOCO140, uploaded image, shared streaming-llama plan | 198,287 | 98.771 | 5.657 | 30.982 | 118.766 |
+
+The YOCO run uses four internal sweeps and one final handoff, with no one-token warmup. Its WebUI prompt rate is **1,669.559 tok/s**, versus the supplied 985.74 historical image reference. These workloads differ; the controlled matrix uses identical 49,787-token image prompts, zero reused tokens, the same 1M BF16 growable cache, and matching producer profiles/budgets.
+
+| Route | YOCO140 seconds | YOCO tok/s | Full seconds | Full tok/s | YOCO speedup |
+|---|---:|---:|---:|---:|---:|
+| Single RTX | 30.359 | 1,639.942 | 38.172 | 1,304.281 | 1.257× |
+| RTX → Mac | 33.716 | 1,476.679 | 41.607 | 1,196.596 | 1.234× |
+
+Paired adds 3.357 / 3.435 seconds to the single-engine prompt intervals. Native prefill compute also matches: paired 26.815 / 34.685 s versus single 27.833 / 35.229 s. The former twofold paired gap came mainly from warmup and repeated tiny-tail prefill/export boundaries. [Sweep, export, transfer, Engram and memory accounting](YOCO_PAIRED_QUALIFICATION.md).
 
 The 184,432-token document used four RTX chunks. Native RTX compute totaled **173.2521194 s**, excluding the 16.1972473 s one-token warmup and other serialization/startup work. Four transfer/import/hash/ACK intervals totaled **7.662391 s**. Mac decode evaluated **97 tokens in 3.080 s = 31.4935 tok/s**, including reasoning. The Mac server reported **229.128 s** through prompt processing and **232.208 s** through generation.
 
@@ -56,6 +72,6 @@ Faster introduced a code typo; Max speed introduced C++ syntax errors. These are
 
 ## Memory
 
-Single-engine launch presets use a 6.25 GiB producer base plan, 7.75 GiB producer maximum and 9.25 GiB controller-plus-producer budget, an 8 GiB desktop admission reserve and a 4 GiB runtime physical-RAM floor. The paired 184K run used a separate 8 GiB producer host budget. GPU private-commit backing has its own ceiling; it does not authorize that amount of physical host RAM.
+Single-engine launch presets use a 6.25 GiB producer base plan, 7.75 GiB producer maximum and 9.25 GiB controller-plus-producer budget, a 2 GiB desktop admission reserve and a 4 GiB runtime physical-RAM floor. The reserve is configurable with `producer_desktop_reserve_gib`; larger configured admission floors still apply. Historical timings used the then-current 8 GiB desktop reserve. The paired 184K run used a separate 8 GiB producer host budget. GPU private-commit backing has its own ceiling; it does not authorize that amount of physical host RAM.
 
 Global pagefile counters in some historical runs rose slightly despite ample free RAM. Those counters cannot attribute paging to the producer. No machine-wide zero-paging claim follows from these measurements.

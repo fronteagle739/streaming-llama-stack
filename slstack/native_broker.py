@@ -74,20 +74,43 @@ def model_receipt(cfg, report=None):
     return target
 
 
+class ProgressGuardedTransport:
+    """HTTP transfers inherit the producer's progress guard, without a total cap.
+
+    The pinned broker reads operation_seconds for asyncio.timeout(); the actual
+    producer still retains its finite stall window for pipe, hashing and GPU work.
+    Bound methods delegate to that original owner, including close and poisoning.
+    """
+    operation_seconds = None
+
+    def __init__(self, producer):
+        self.owner = producer
+
+    def __getattr__(self, name):
+        return getattr(self.owner, name)
+
+
 class OwnedProducer:
-    def __init__(self, cfg, request, cancel):
+    def __init__(self, cfg, request, cancel, *, on_start=None):
         vendor()
         from studio.dsv41_session_contract import CONTEXT, require
         from studio.dsv41_session_process import Producer
         from .native_profiles import profile
         from studio.dsv41_windows_runner import _Native
-        self.cfg, self.request, self.cancel = cfg, request, cancel
+        self.cfg, self.request, self.cancel = cfg, {k:v for k,v in request.items() if k!='vision'}, cancel
         self.stack = ExitStack()
         self.producer = None
+        self.loading_process = None
+        self.prefill_plan = {}
+        self.logical_tokens = len(request['tokens']) // 4
+        self.progress_started = time.monotonic()
+        self.progress_state = {}
+        self.progress_lock = threading.Lock()
         self.closed = False
         self.timer = None
         self.attempted = False
         self.failure_cleanup = None
+        self._progress_cleanup=on_start(self) if on_start else None
         try:
             binary = path(cfg['llama_producer'])
             pin = sha256(binary)
@@ -114,7 +137,32 @@ class OwnedProducer:
             if hashlib.sha256(request['tokens']).hexdigest() != request['tokens_sha256']:
                 raise ValueError('Initial native token identity differs')
             settings = profile(request['tier'], request.get('techniques'))
-            args = dict(settings['arguments'])
+            # Use the exact single-engine fold/direct-open/cache configuration.
+            # Only the DSpark capture and negotiated export provenance differ.
+            from .combo_producer import prefill_arguments
+            from .memory_counters import available_physical_bytes
+            prefill_cfg = {**cfg, 'context': CONTEXT, 'producer_profile': request['tier']}
+            # Match the single-engine 1M cache preset. Grow only the used rows;
+            # BF16 preserves the existing QAT values and admits the full window.
+            prefill_cfg.setdefault('ctx_cache_precision','bf16')
+            prefill_cfg.setdefault('ctx_cache_growable',True)
+            args, self.prefill_plan = prefill_arguments(prefill_cfg, self.logical_tokens,
+                                                       available_physical_bytes(), export_state=True, techniques=request.get('techniques'))
+            self.vision=[]
+            self.vision_leases=set()
+            def stage_vision(images,base):
+                from .paired_vision import materialize
+                descriptor=materialize(directory/'vision',images,previous=self.vision,base=base)
+                rows=json.loads(descriptor.read_text())
+                for row in rows:
+                    if row['file'] not in self.vision_leases:
+                        self.stack.enter_context(native.read_lease(Path(row['file'])))
+                        self.vision_leases.add(row['file'])
+                self.stack.enter_context(native.read_lease(descriptor))
+                self.vision=[{k:v for k,v in row.items() if k!='data'} for row in images]
+                return str(descriptor)
+            if request.get('vision'):
+                args['--vision-spans-file']=stage_vision(request['vision'],0)
             keep=cfg.get('yoco_keep',0)
             require(type(keep) is int and keep in (0,140), 'Unsupported paired YOCO window')
             require(request.get('yoco_keep',0)==keep and request.get('yoco_state_version',0)==(1 if keep else 0),
@@ -125,9 +173,10 @@ class OwnedProducer:
                 args.update({'--yoco-keep':str(keep),'--yoco-remote-state-version':'1'})
             from .combo_ram import runtime_min_free_gib
             runtime_floor = runtime_min_free_gib(cfg)
-            host_bytes = min(8 << 30, int(cfg['host_budget_gib'] * (1 << 30)))
+            host_bytes = self.prefill_plan['host_bytes']
             floor = int(cfg['min_available_gib'] * (1 << 30))
-            if native.memory() < host_bytes + floor:
+            desktop_reserve = max(floor, int(cfg.get('producer_desktop_reserve_gib',.5) * (1 << 30)))
+            if native.memory() < host_bytes + desktop_reserve:
                 raise MemoryError('Native producer physical host admission refused')
             if native.gpu(0, cfg['gpu_uuid']) < int(args['--job-device-bytes']) + int(args['--gpu-reserve-bytes']):
                 raise MemoryError('Native producer physical GPU admission refused')
@@ -144,34 +193,76 @@ class OwnedProducer:
             # DS4COMBO2 liveness: no fixed lease_minutes cap; the Producer's no-progress window
             # (stall_seconds) ends a stalled session, and idle_seconds still retires an idle one.
             self.timer = None
-            # Leave 256 MiB within the aggregate for broker/metadata. The native
-            # engine retains its full allocation/RSS cap; this is a hard minimum,
-            # never a hard maximum that could force pages out.
+            # Match single-engine residency protection; the outer controller
+            # budget includes its separate measured margin.
             from .working_set import protect_working_set
-            working_minimum = host_bytes - (256 << 20)
+            working_minimum = host_bytes
             def protect(job):
-                return protect_working_set(job, working_minimum, floor, host_bytes,
+                return protect_working_set(job, working_minimum, floor, int(cfg['host_budget_gib']*(1<<30)),
                                            receipt=directory / 'working-set.json')
             self.attempted = True
-            self.producer = Producer(request['session'], argv, env, directory, host_bytes=host_bytes,
+            prefill_started=time.monotonic()
+            owner=self
+            class PublishingProducer(Producer):
+                def _initialize(process,*a,**kw):
+                    owner.loading_process=process
+                    try:return super()._initialize(*a,**kw)
+                    finally:owner.loading_process=None
+            self.producer = PublishingProducer(request['session'], argv, env, directory, host_bytes=host_bytes,
                                      runtime_min_free_gib=runtime_floor,
                                      physical_floor=floor, operation_seconds=min(600, cfg['request_timeout_s']), stall_seconds=stall_seconds(cfg),
                                      idle_seconds=cfg['lease_minutes'] * 60, native=native,
                                      cancelled=cancelled, after_resume=protect)
+            # Actual RTX operation clocks, separate from the Mac's transfer /
+            # import / acknowledgment intervals. Initial time includes startup.
+            self.prefill_timings=[dict(operation='startup_and_initial_prefill',
+                tokens=len(request['tokens'])//4,seconds=time.monotonic()-prefill_started)]
+            timing_file=directory/'prefill-timings.json'
+            atomic_json(timing_file,self.prefill_timings)
+            native_request=self.producer.request
+            def timed_request(row):
+                started=time.monotonic();result=native_request(row)
+                operation=row.get('operation')
+                self.prefill_timings.append(dict(operation=operation,
+                    tokens=len(row.get('tokens',[])),seconds=time.monotonic()-started))
+                atomic_json(timing_file,self.prefill_timings)
+                return result
+            self.producer.request=timed_request
+            native_export=self.producer.begin_export
+            def timed_export(row):
+                started=time.monotonic();result=native_export(row)
+                self.prefill_timings.append(dict(operation='export_prepare',tokens=0,
+                    bytes=result.get('bytes'),seconds=time.monotonic()-started))
+                atomic_json(timing_file,self.prefill_timings);return result
+            self.producer.begin_export=timed_export
             cp = self.producer.ready['checkpoint']
+            self.producer.stage_vision=stage_vision
             require(self.producer.ready.get('yoco_keep',0)==keep and self.producer.ready.get('yoco_state_version',0)==(1 if keep else 0),
                     'Producer did not negotiate the requested YOCO state version')
             require(cp['context'] == CONTEXT and cp['position'] == len(request['tokens']) // 4
                     and cp['tokens_sha256'] == request['tokens_sha256'], 'Initial producer checkpoint differs')
             self.producer.ready['profile'] = settings
             atomic_json(directory / 'launch.json', {'producer_sha256': pin, 'settings': settings,
+                        'argv':argv,'prefill_plan':self.prefill_plan,
+                        'backend':'streaming-llama single-engine prefill then mode3 export',
                         'source_revision': cfg['producer_source_revision'], 'model_copied': False,
                         'host_bytes': host_bytes, 'physical_floor': floor,
                         'working_set': self.producer.resume_admission})
+            self.producer = ProgressGuardedTransport(self.producer)
         except BaseException as exc:
             self.failure_cleanup = getattr(exc, 'owned_cleanup', None)
             self.close()
             raise
+
+    def prefill_progress(self):
+        from types import SimpleNamespace
+        from .combo_single import prefill_snapshot
+        process=self.producer or self.loading_process
+        active=SimpleNamespace(process=process,prefill_plan=self.prefill_plan)
+        with self.progress_lock:
+            return prefill_snapshot(SimpleNamespace(producer=active),
+                dict(new_tokens=self.logical_tokens,prefill_started=self.progress_started),
+                self.progress_state,time.monotonic())
 
     def close(self):
         if self.closed:
@@ -189,6 +280,7 @@ class OwnedProducer:
             atomic_json(self.directory / 'cleanup.json', self.receipt)
         self.stack.close()
         self.closed = True
+        if self._progress_cleanup:self._progress_cleanup()
         return self.receipt
 
 
@@ -202,7 +294,26 @@ def serve(cfg):
     token = Path(cfg['pair_token_file']).read_text(encoding='utf-8').strip()
     if len(token) < 16:
         raise ValueError('Explicit pairing token required')
-    broker = Broker(lambda request, cancel: OwnedProducer(cfg, request, cancel))
+    def factory(request,cancel):
+        def publish(owner):
+            starting[request['session']]=owner
+            return lambda:starting.pop(request['session'],None)
+        try:
+            return OwnedProducer(cfg,request,cancel,on_start=publish)
+        except BaseException as error:
+            print('NATIVE_SESSION_START_FAILED '+json.dumps({'session':request.get('session'),
+                  'error':str(error)}),flush=True)
+            raise
+    starting = {}
+    class ProgressBroker(Broker):
+        def status(self,sid):
+            row=super().status(sid)
+            owner=starting.get(sid)
+            if owner and (progress:=owner.prefill_progress()):
+                row.update(prefill_processed=progress['tokens_done'],prefill_total=progress['tokens_total'],
+                           prefill_elapsed_ms=int(progress['elapsed_s']*1000))
+            return row
+    broker = ProgressBroker(factory)
 
     @asynccontextmanager
     async def lifespan(app):
@@ -210,6 +321,12 @@ def serve(cfg):
         broker.close()
 
     app = FastAPI(lifespan=lifespan, docs_url=None, redoc_url=None)
+    @app.exception_handler(HTTPException)
+    async def rejected_request(request,error):
+        from fastapi.responses import JSONResponse
+        print('NATIVE_SESSION_HTTP_REFUSED '+json.dumps({'path':request.url.path,
+              'status':error.status_code,'detail':error.detail}),flush=True)
+        return JSONResponse({'detail':error.detail},status_code=error.status_code)
 
     def authorize(x_studio_token: str = Header(default='')):
         if not hmac.compare_digest(token, x_studio_token):

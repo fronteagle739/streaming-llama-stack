@@ -1,0 +1,104 @@
+{
+  "components": [
+    {
+      "pid": 22996,
+      "role": "broker",
+      "peak_rss": 136880128,
+      "peak_private_commit": 119304192
+    },
+    {
+      "pid": 30548,
+      "role": "producer",
+      "peak_rss": 6195798016,
+      "peak_private_commit": 17895436288
+    },
+    {
+      "pid": 22496,
+      "role": "controller",
+      "peak_rss": 49651712,
+      "peak_private_commit": 35659776
+    },
+    {
+      "pid": 14900,
+      "role": "producer",
+      "peak_rss": 6667272192,
+      "peak_private_commit": 18071986176
+    },
+    {
+      "pid": 16904,
+      "role": "producer",
+      "peak_rss": 6086287360,
+      "peak_private_commit": 17347747840
+    },
+    {
+      "pid": 21432,
+      "role": "controller",
+      "peak_rss": 49164288,
+      "peak_private_commit": 35037184
+    },
+    {
+      "pid": 28244,
+      "role": "broker",
+      "peak_rss": 123449344,
+      "peak_private_commit": 106971136
+    },
+    {
+      "pid": 33888,
+      "role": "producer",
+      "peak_rss": 5774569472,
+      "peak_private_commit": 16809832448
+    },
+    {
+      "pid": 12624,
+      "role": "producer",
+      "peak_rss": 6016835584,
+      "peak_private_commit": 17345011712
+    },
+    {
+      "pid": 14408,
+      "role": "controller",
+      "peak_rss": 49377280,
+      "peak_private_commit": 36605952
+    },
+    {
+      "pid": 11352,
+      "role": "producer",
+      "peak_rss": 6021287936,
+      "peak_private_commit": 22067609600
+    },
+    {
+      "pid": 18280,
+      "role": "controller",
+      "peak_rss": 48664576,
+      "peak_private_commit": 36290560
+    },
+    {
+      "pid": 37156,
+      "role": "producer",
+      "peak_rss": 6046949376,
+      "peak_private_commit": 22067298304
+    }
+  ],
+  "min_available": 10423922688,
+  "paired_guard": {
+    "peak_tree_rss": 6808735744,
+    "min_available": 10475151360,
+    "host_budget_gib": 8.5,
+    "floor_gib": 0.5,
+    "cleanup_confirmed": true,
+    "owned_paging": {
+      "attribution": "bounded process pagefile observation",
+      "observed_paged_bytes": 0,
+      "observed_processes": [],
+      "scanned_pages": 33790399,
+      "completed_scans": 2194
+    },
+    "system_pagefile_pressure": {
+      "maximum_growth_bytes": 0,
+      "kill_above_bytes": 256000000,
+      "scope": "global; not process attribution"
+    }
+  },
+  "runtime_min_free_gib": 4,
+  "interpretation": "Raw private commitment includes GPU/driver backing and is not physical RAM. RSS/working set is separately measured. Bounded observed pagefile slots are not exhaustive disk-I/O attribution. Export payloads stream in <=64KiB pages; no whole-state broker allocation."
+}
