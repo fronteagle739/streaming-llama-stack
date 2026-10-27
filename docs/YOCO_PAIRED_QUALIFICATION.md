@@ -20,6 +20,20 @@ The scheduler/carry fixture passes 42,170 checks on Windows and Apple Silicon,
 including image spans before, across and within the replay tail. These checks
 do not establish numerical equivalence or KL/recall quality.
 
+The subsequent RTX numerical image gate compares full evaluation with keep=140
+using an SHA-256-verified real image projection. With the image intersecting
+the replay tail, KL(full || YOCO) is 0.05814 nats and top-10 recall is 90%; with
+the image entirely before the tail, KL is 0.00733 nats and top-10 recall is 90%.
+Both arms retain the same leading color token. These are frontier distributions,
+not full generated image answers or Mac decode. All four arms retain the native
+8 GiB host cap, 2 GiB desktop admission reserve, 4 GiB runtime floor and paging
+stop; receipts show no budget breach or paging growth. See
+[numerical evidence](YOCO_IMAGE_NUMERICAL.json) and `tests/yoco_image_gate.py`.
+
+The live single-engine headless WebUI also answered its arithmetic check
+correctly. Its actual native log applied temperature .83, top-p .87, top-k 37,
+min-p .06 and bias .22. This does not replace paired Mac decode qualification.
+
 The RTX previously forwarded chat request fields but omitted the separate WebUI
 generation profile. Both streaming and buffered requests now carry that complete
 profile. Core Mac sampler defaults are resolved from it, with explicit request
@@ -60,8 +74,6 @@ live decode gate. Toolbar changes on the paired path apply on the next turn.
 The following work remains:
 
 - Qualify the candidate transport and samplers with real Mac decode and images.
-- Run image KL/recall comparisons against full evaluation, including images
-  before and within the replay tail.
 - Run a real headless browser gate with at least 100K prompt tokens, two further
   Mac-decoded turns, an uploaded image and a referring follow-up. Verify applied
   sampler settings in native decode evidence and check single-engine behavior.
