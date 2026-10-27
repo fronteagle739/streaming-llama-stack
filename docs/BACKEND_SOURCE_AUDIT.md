@@ -21,8 +21,9 @@ accepting a build. Compiled outputs belong in the isolated decode environment.
 | `llama-decode` | RTX KV handoff and token stream | Receiver target retained in the streaming-llama build. |
 | `llama-decode-upstream` | RTX KV handoff and token stream | Portable overlay retained against pinned upstream; WIR is unavailable in this compatibility target. |
 | `ds4` | Native state broker | Existing native source and state receiver; separate pairing path. |
-| `mlx-serve` | OpenAI HTTP; performs its own prefill | Pinned public Git link. Requires staged MLX/MLX-C, libllama, Jinja, webp and the required Zig/Metal toolchain. A Zig-only build is insufficient. |
-| `omlx` | OpenAI HTTP; performs its own prefill | Launch/settings glue retained. Requires an isolated oMLX install with its native kernels; a Python package install alone does not establish those kernels are available. |
+| `ds4-peer` | Earlier DS4P peer protocol | Consistent portable peer receiver sources retained separately from the DSV4.1 state broker. |
+| `mlx-serve` | OpenAI HTTP; performs its own prefill | Pinned server, MLX/MLX-C, libllama, DS4, OpenCode, Jinja, webp and Metal build inputs installed by `setup-backend`. |
+| `omlx` | OpenAI HTTP; performs its own prefill | Separate pinned environment and model libraries, with native kernels compiled by `setup-backend`. |
 | `mlx-lm` | OpenAI HTTP; performs its own prefill | Isolated dependency profile and Studio launch arguments. |
 | `mlx-vlm` | OpenAI HTTP; performs its own prefill | The retained customised package, with its server and model implementations. |
 | `mtp-shim` | OpenAI HTTP over the MLX receiver | Both receiver and shim processes are required; both command lines are retained. |
@@ -31,8 +32,9 @@ accepting a build. Compiled outputs belong in the isolated decode environment.
 
 HTTP compatibility alone does not provide RTX KV injection. Model architecture,
 tensor layout, quantisation and state format must also match the selected backend.
-`scripts/audit_backend_sources.py` checks source inputs and reports external
-requirements. It does not claim every backend has been built or run.
+`scripts/audit_backend_sources.py` checks source inputs, export hashes and Git's
+tracked inventory. Build instructions are in [backend setup](BACKEND_SETUP.md).
+A source audit does not establish a native build or a successful model run.
 
 `slstack decode --config local.json --check` checks the selected decoder's local
 model and executable paths. Set `decode.backend`, `decode.model_path`, its bind
@@ -40,11 +42,11 @@ address and backend-specific options in that local file; omit `--check` to run.
 Both receiver and shim children are launched for `mtp-shim`, within one shared
 host-memory guardian. A successful path check is not a model-load qualification.
 
-The general RTX producer still uses bounded GPU reservations. Its current
-supervisor imposes the configured reservation lifetime on the producer process;
-an indefinitely running general server needs request-scoped reservation handling
-before that use can be advertised. The existing DSV4.1 WebUI process uses its
-separate established serving path.
+The general RTX producer uses a request-scoped GPU reservation. It closes after
+each response or cancellation, keeping the reservation lifetime separate from
+the WebUI server lifetime. Subsequent requests currently restart that producer;
+do not interpret historical warm-producer or prefix-reuse timings as measurements
+of this lifecycle. The established DSV4.1 WebUI serving path is separate.
 
 ## GLM family
 

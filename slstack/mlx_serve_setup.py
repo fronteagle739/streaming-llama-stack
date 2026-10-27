@@ -71,6 +71,7 @@ def install(build):
     llama_stage=source/'lib/llama'
     build.cmake(llama,output/'llama',['-DLLAMA_BUILD_TESTS=OFF','-DLLAMA_BUILD_EXAMPLES=OFF',
                 '-DLLAMA_BUILD_TOOLS=OFF','-DLLAMA_BUILD_SERVER=OFF','-DLLAMA_BUILD_COMMON=OFF',
+                '-DLLAMA_BUILD_APP=OFF','-DLLAMA_BUILD_MTMD=OFF',
                 '-DLLAMA_CURL=OFF','-DLLAMA_OPENSSL=OFF','-DGGML_METAL=ON','-DGGML_METAL_EMBED_LIBRARY=ON',
                 '-DBUILD_SHARED_LIBS=ON','-DCMAKE_INSTALL_PREFIX='+str(llama_stage)],install=True)
     (llama_stage/'.version').write_text('b10809\n')
