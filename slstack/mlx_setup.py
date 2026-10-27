@@ -28,6 +28,26 @@ def source_digest():
     return digest.hexdigest()
 
 
+def inspect_installation(cfg):
+    """Check saved build/smoke receipts without importing a GPU runtime."""
+    venv=Path(cfg['runtime_root'])/'decode-venv';python=venv/'bin/python'
+    marker=venv/'slstack-source.json'
+    previous=json.loads(marker.read_text()) if marker.is_file() else {}
+    current=python.is_file() and previous.get('source_sha256')==source_digest()
+    manifests=list(venv.glob('lib/python*/site-packages/mlx_vlm/custom_kernels/glm_moe_dsa/native-build.json'))
+    built=False;verified=False
+    if len(manifests)==1:
+        manifest=manifests[0];record=json.loads(manifest.read_text())
+        artifacts=record.get('artifacts',{})
+        def matches(name,sha):
+            file=manifest.parent/name
+            return file.is_file() and hashlib.sha256(file.read_bytes()).hexdigest()==sha
+        built=bool(current and artifacts and all(matches(name,sha) for name,sha in artifacts.items()))
+        verified=built and previous.get('native_glm') and record.get('smoke_verified')
+    return dict(python=str(python),source_current=bool(current),built=bool(built),ready=bool(verified),
+                verification_pending=not bool(verified))
+
+
 def setup(cfg, *, check=False, native_glm=True, wheelhouse=None, build_only=False):
     if sys.platform!='darwin' or platform.machine()!='arm64':
         raise ValueError('MLX decode setup requires Apple Silicon macOS')

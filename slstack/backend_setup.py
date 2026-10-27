@@ -203,9 +203,8 @@ def check(cfg,name):
     if not path.is_file():return dict(backend=name,built=False,ready=False,reason='Run setup-backend for this backend')
     result=json.loads(path.read_text())
     if name in ('mlx-receiver','mlx-lm','mlx-vlm','mtp-shim'):
-        from .mlx_setup import setup as mlx_setup
-        verified=mlx_setup(cfg,check=True)
-        return {**result,**verified,'backend':name,'built':bool(verified.get('built',verified.get('ready')))}
+        from .mlx_setup import inspect_installation
+        return {**result,**inspect_installation(cfg),'backend':name}
     from .backend_cache import fingerprint
     artifacts=result.get('binaries',{})
     result['built']=bool(artifacts) and all(Path(p).is_file() and digest(p)==sha for p,sha in artifacts.items())

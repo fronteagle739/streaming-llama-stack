@@ -105,5 +105,23 @@ class BackendSetup(unittest.TestCase):
         self.assertNotIn('url:',result)
         with self.assertRaisesRegex(ValueError,'Unpinned'):swift_manifest(original,{})
 
+    def test_mlx_build_receipts_are_checked_without_importing_the_runtime(self):
+        from slstack.mlx_setup import inspect_installation
+        root=self.fixture();venv=root/'decode-venv';python=venv/'bin/python'
+        python.parent.mkdir(parents=True);python.write_bytes(b'test interpreter')
+        marker=venv/'slstack-source.json'
+        marker.write_text(json.dumps(dict(source_sha256='source-pin',native_glm=True)))
+        package=venv/'lib/python3.12/site-packages/mlx_vlm/custom_kernels/glm_moe_dsa'
+        package.mkdir(parents=True);artifact=package/'_ext.so';artifact.write_bytes(b'test native artifact')
+        manifest=package/'native-build.json';record=dict(artifacts={'_ext.so':digest(artifact)},smoke_verified=False)
+        manifest.write_text(json.dumps(record))
+        with patch('slstack.mlx_setup.source_digest',return_value='source-pin'):
+            result=inspect_installation({'runtime_root':str(root)})
+            self.assertTrue(result['built']);self.assertFalse(result['ready'])
+            record['smoke_verified']=True;manifest.write_text(json.dumps(record))
+            self.assertTrue(inspect_installation({'runtime_root':str(root)})['ready'])
+            artifact.write_bytes(b'changed artifact')
+            self.assertFalse(inspect_installation({'runtime_root':str(root)})['ready'])
+
 
 if __name__=='__main__':unittest.main()
