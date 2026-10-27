@@ -80,7 +80,7 @@ class GeneralRequests(unittest.TestCase):
         source=(Path(__file__).resolve().parents[1]/'slstack/generation.js').read_text(encoding='utf-8')
         script='''const fs=require('fs'),vm=require('vm');
 const data=JSON.parse(fs.readFileSync(0,'utf8'));let received;
-const context={URL,location:{href:'http://127.0.0.1/'},
+const context={URL,location:{href:'http://127.0.0.1/',origin:'http://127.0.0.1'},
  window:{slstackNativeGeneration:data.native,fetch:(url,init)=>{received=JSON.parse(init.body);return Promise.resolve({});}},
  document:{createElement:()=>{throw new Error('interceptor installed');}}};
 try{vm.runInNewContext(data.source,context);}catch(e){if(e.message!=='interceptor installed')throw e;}
