@@ -127,23 +127,27 @@ struct store {
 };
 
 template<ggml_sort_order order>
+static __device__ __forceinline__ bool argsort_before(const float * x, int a, int b, int ncols) {
+    if (a >= ncols) return false;
+    if (b >= ncols) return true;
+    // Match CPU argsort/top-k and the tiled CUDA top-k merge. ReLU indexer
+    // scores have exact zero ties; selecting another tied pool changes attention.
+    return (order == GGML_SORT_ORDER_ASC ? x[a] < x[b] : x[a] > x[b]) ||
+        (x[a] == x[b] && a < b);
+}
+
+template<ggml_sort_order order>
 static __device__ __forceinline__ void sort(int ncols_pad, int ncols, int col, const float * x_row, int * dst_row) {
     for (int k = 2; k <= ncols_pad; k *= 2) {
         for (int j = k / 2; j > 0; j /= 2) {
             int ixj = col ^ j;
             if (ixj > col) {
                 if ((col & k) == 0) {
-                    if (dst_row[col] >= ncols ||
-                        (dst_row[ixj] < ncols && (order == GGML_SORT_ORDER_ASC ?
-                            x_row[dst_row[col]] > x_row[dst_row[ixj]] :
-                            x_row[dst_row[col]] < x_row[dst_row[ixj]]))) {
+                    if (argsort_before<order>(x_row, dst_row[ixj], dst_row[col], ncols)) {
                         ggml_cuda_swap(dst_row[col], dst_row[ixj]);
                     }
                 } else {
-                    if (dst_row[ixj] >= ncols ||
-                        (dst_row[col] < ncols && (order == GGML_SORT_ORDER_ASC ?
-                            x_row[dst_row[col]] < x_row[dst_row[ixj]] :
-                            x_row[dst_row[col]] > x_row[dst_row[ixj]]))) {
+                    if (argsort_before<order>(x_row, dst_row[col], dst_row[ixj], ncols)) {
                         ggml_cuda_swap(dst_row[col], dst_row[ixj]);
                     }
                 }
@@ -162,17 +166,11 @@ static __device__ __forceinline__ void sort_strided(
                 const int ixj = col ^ j;
                 if (ixj > col) {
                     if ((col & k) == 0) {
-                        if (dst_row[col] >= ncols ||
-                            (dst_row[ixj] < ncols && (order == GGML_SORT_ORDER_ASC ?
-                                x_row[dst_row[col]] > x_row[dst_row[ixj]] :
-                                x_row[dst_row[col]] < x_row[dst_row[ixj]]))) {
+                        if (argsort_before<order>(x_row, dst_row[ixj], dst_row[col], ncols)) {
                             ggml_cuda_swap(dst_row[col], dst_row[ixj]);
                         }
                     } else {
-                        if (dst_row[ixj] >= ncols ||
-                            (dst_row[col] < ncols && (order == GGML_SORT_ORDER_ASC ?
-                                x_row[dst_row[col]] < x_row[dst_row[ixj]] :
-                                x_row[dst_row[col]] > x_row[dst_row[ixj]]))) {
+                        if (argsort_before<order>(x_row, dst_row[col], dst_row[ixj], ncols)) {
                             ggml_cuda_swap(dst_row[col], dst_row[ixj]);
                         }
                     }

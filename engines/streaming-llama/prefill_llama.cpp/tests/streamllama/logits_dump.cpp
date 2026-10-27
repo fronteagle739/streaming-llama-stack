@@ -1,19 +1,51 @@
 // Dump the logits of a deterministic prompt (+ a few single-token decode steps) for fork-vs-upstream comparison.
-// Uses only the public llama.h API so the same source builds against the fork and against upstream.
+// Uses public llama/ggml APIs so the same source can build against upstream.
 //
-// usage: logits-dump <model.gguf> <out.bin> <n_prompt> <n_ubatch> [n_decode=8] [flash_attn=0] [seed=1234] [gpu_layers=0] [restore=0]
+// usage: logits-dump model.gguf out.bin n_prompt n_ubatch [n_decode=8]
+//        [flash_attn=0] [seed=1234] [gpu_layers=0] [restore=0]
+//        [trace_dir=-] [force_f32=0]
 // out.bin: int32 n_rows, int32 n_vocab, then n_rows*n_vocab float32 (prompt rows, then one row per decode step)
+// Tracing reads synchronized tensors via the scheduler callback, adds no nodes,
+// and pins no buffers. It splits execution and is diagnostic only. Confirm fixes
+// with trace_dir=- and force_f32=0 (no callback at all).
 
 #include "llama.h"
-
+#include "ggml-backend.h"
+#include <vector>
 #include <cstdio>
 #include <cstdlib>
 #include <cstdint>
-#include <vector>
+#include <string>
+#include <cstring>
+struct probe { std::string dir; FILE * manifest=nullptr; int phase=0, node=0, strict=0, strict_count=0; };
+static bool observe(ggml_tensor * t, bool ask, void * data) {
+    auto & p=*static_cast<probe *>(data);
+    if (ask) {
+        if (p.strict && (t->op==GGML_OP_MUL_MAT || t->op==GGML_OP_MUL_MAT_ID)) {
+            t->op_params[0]=GGML_PREC_F32;
+            if (++p.strict_count<=8) fprintf(stderr,"PROBE F32 engaged name=%s op=%s\n",t->name,ggml_op_name(t->op));
+        }
+        return p.manifest && t->type==GGML_TYPE_F32 && t->name[0];
+    }
+    char stem[64]; snprintf(stem,sizeof(stem),"%d-%d",p.phase,p.node++);
+    fprintf(p.manifest,"%d\t%s\t%s\t%s",p.phase,t->name,ggml_op_name(t->op),stem);
+    for(int i=0;i<4;++i) fprintf(p.manifest,"\t%lld",(long long)t->ne[i]);
+    fprintf(p.manifest,"\n"); fflush(p.manifest);
+    std::vector<unsigned char> bytes(ggml_nbytes(t));
+    ggml_backend_tensor_get(t,bytes.data(),0,bytes.size());
+    FILE * f=fopen((p.dir+"/"+stem+".bin").c_str(),"wb"); if(!f) std::abort();
+    for(int64_t i3=0;i3<t->ne[3];++i3) for(int64_t i2=0;i2<t->ne[2];++i2)
+    for(int64_t i1=0;i1<t->ne[1];++i1) for(int64_t i0=0;i0<t->ne[0];++i0) {
+        float value; memcpy(&value,bytes.data()+i0*t->nb[0]+i1*t->nb[1]+i2*t->nb[2]+i3*t->nb[3],4);
+        fwrite(&value,4,1,f);
+    }
+    fclose(f); return true;
+}
+
 
 int main(int argc, char ** argv) {
     if (argc < 5) {
-        fprintf(stderr, "usage: %s model.gguf out.bin n_prompt n_ubatch [n_decode] [flash_attn] [seed] [gpu_layers] [restore]\n", argv[0]);
+        fprintf(stderr, "usage: %s model.gguf out.bin n_prompt n_ubatch [n_decode] [flash_attn] [seed] [gpu_layers] [restore] [trace_dir=-] [force_f32=0]\n", argv[0]);
         return 1;
     }
     const char * path_model = argv[1];
@@ -34,6 +66,13 @@ int main(int argc, char ** argv) {
         return 1;
     }
 
+    probe p;
+    if(argc>10 && strcmp(argv[10],"-")!=0) {
+        p.dir=argv[10]; p.manifest=fopen((p.dir+"/tensors.tsv").c_str(),"w");
+        if(!p.manifest) return 4;
+    }
+    p.strict=argc>11 ? atoi(argv[11]):0;
+    fprintf(stderr,"PROBE graphs_disabled=%s strict=%d tracing=%d\n",getenv("GGML_CUDA_DISABLE_GRAPHS")?getenv("GGML_CUDA_DISABLE_GRAPHS"):"unset",p.strict,p.manifest!=nullptr);
     llama_context_params cparams = llama_context_default_params();
     cparams.n_ctx           = 512;
     cparams.n_batch         = n_prompt;
@@ -42,6 +81,7 @@ int main(int argc, char ** argv) {
     cparams.n_threads       = 2;
     cparams.n_threads_batch = 2;
     cparams.flash_attn_type = fa ? LLAMA_FLASH_ATTN_TYPE_ENABLED : LLAMA_FLASH_ATTN_TYPE_DISABLED;
+    if(p.strict || p.manifest) { cparams.cb_eval=observe; cparams.cb_eval_user_data=&p; }
     cparams.no_perf         = true;
     cparams.type_k = GGML_TYPE_F32;
     cparams.type_v = GGML_TYPE_F32;
@@ -92,6 +132,7 @@ int main(int argc, char ** argv) {
         if (llama_state_set_data(ctx, state.data(), saved) != saved) return 3;
     }
 
+    p.phase=1;
     for (int j = 0; j < n_decode; ++j) {
         batch.token[0]     = next_tok();
         batch.pos[0]       = n_prompt + j;
@@ -115,6 +156,8 @@ int main(int argc, char ** argv) {
 
     fprintf(stderr, "wrote %d rows x %d logits to %s\n", hdr[0], hdr[1], path_out);
 
+    if(p.manifest) fclose(p.manifest);
+    fprintf(stderr,"PROBE strict_nodes=%d\n",p.strict_count);
     llama_batch_free(batch);
     llama_free(ctx);
     llama_model_free(model);

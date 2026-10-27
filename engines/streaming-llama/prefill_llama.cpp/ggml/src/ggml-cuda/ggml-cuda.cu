@@ -3239,7 +3239,13 @@ static void ggml_cuda_mul_mat(ggml_backend_cuda_context & ctx, const ggml_tensor
     bool use_mul_mat_vec_f = (src0->type == GGML_TYPE_F32 || src0->type == GGML_TYPE_F16 || src0->type == GGML_TYPE_BF16)
         && src1->type == GGML_TYPE_F32 && dst->type == GGML_TYPE_F32;
     bool use_mul_mat_f     = !ggml_is_quantized(src0->type)
-        && src1->type == GGML_TYPE_F32 && dst->type == GGML_TYPE_F32;
+        && src1->type == GGML_TYPE_F32 && dst->type == GGML_TYPE_F32
+        // NVIDIA MMF consumes TF32 operands even for F32 tensors. Keep F32
+        // mantissas in both default and explicit-F32 graphs: otherwise changing
+        // the microbatch switches between TF32 MMF and F32 vector/cuBLAS math.
+        && !(src0->type == GGML_TYPE_F32 &&
+             (GGML_CUDA_CC_IS_NVIDIA(ggml_cuda_info().devices[ctx.device].cc) ||
+              dst->op_params[0] == GGML_PREC_F32));
     bool use_mul_mat_vec_q = ggml_is_quantized(src0->type) && !bad_padding_clear
         && src1->type == GGML_TYPE_F32 && dst->type == GGML_TYPE_F32
         && src1->ne[1] <= MMVQ_MAX_BATCH_SIZE;
@@ -3391,6 +3397,20 @@ static void ggml_cuda_mul_mat_id(ggml_backend_cuda_context & ctx, ggml_tensor * 
 
     const int cc = ggml_cuda_info().devices[ggml_cuda_get_device()].cc;
 
+    // Keep routed F32 inputs in F32. MMF uses TF32 on NVIDIA, whereas the
+    // single-token fused/vector path retains F32. That batch-dependent loss
+    // can change sparse indexer selections downstream. Reuse the exact vector
+    // kernel for small batches and sorted F32 cuBLAS for larger batches.
+    if (src0->type == GGML_TYPE_F32 &&
+        ggml_cuda_should_use_mmvf(src0->type, cc, src0->ne, src0->nb, ne2)) {
+        if (g_op_profile_enabled) g_mmid_route_mmvf.fetch_add(1, std::memory_order_relaxed);
+        mmid_capture.route("mmvf");
+        projection.route("mmvf");
+        ggml_cuda_mul_mat_vec_f(ctx, src0, src1, ids, dst);
+        mmid_capture.finish();
+        return;
+    }
+
     // bug#2 stream_local (2026-07-18): ggml_cuda_mul_mat_id, unlike ggml_cuda_mul_mat, did NOT honor the
     // GGML_PREC_F32 op-param, so ggml_mul_mat_set_prec() on an expert matmul was a no-op. At decode
     // (ne2<=4) quantized experts route to MMVQ, at prefill to MMQ/mmq_id - different quantized kernels.
@@ -3398,7 +3418,8 @@ static void ggml_cuda_mul_mat_id(ggml_backend_cuda_context & ctx, ggml_tensor * 
     // matmul, SKIP all quantized kernels (MMVQ/MMQ/mmq_id/mmf) and fall through to the dequant->F32 cuBLAS
     // path, so a DSV4 nt==1 decode (LLAMA_DSV4_DECODE_F32_MOE=1) can bypass the single-column MMVQ kernel.
     const bool force_cublas_prec_id =
-        ggml_is_quantized(src0->type) && ggml_get_op_params_i32(dst, 0) == GGML_PREC_F32;
+        src0->type == GGML_TYPE_F32 ||
+        (ggml_is_quantized(src0->type) && ggml_get_op_params_i32(dst, 0) == GGML_PREC_F32);
     if (src1->type == GGML_TYPE_F32 && dst->type == GGML_TYPE_F32 && !force_cublas_prec_id) {
         static_assert(MMVQ_MAX_BATCH_SIZE == MMVF_MAX_BATCH_SIZE);
         if (ne2 <= MMVQ_MAX_BATCH_SIZE) {
@@ -3594,6 +3615,8 @@ static void ggml_cuda_mul_mat_id(ggml_backend_cuda_context & ctx, ggml_tensor * 
         dst_slice.nb[2]  = dst_slice.ne[1] * dst_slice.nb[1];
         dst_slice.nb[3]  = dst_slice.ne[2] * dst_slice.nb[2];
         dst_slice.data   = dst_data_cur;
+        // Preserve the caller's precision through the per-expert dispatch.
+        dst_slice.op_params[0] = src0->type == GGML_TYPE_F32 ? GGML_PREC_F32 : dst->op_params[0];
 
         ggml_cuda_mul_mat(ctx, &src0_slice, &src1_slice, &dst_slice);
         CUDA_CHECK(cudaGetLastError());
@@ -4245,7 +4268,15 @@ static bool ggml_cuda_graph_check_compability(ggml_cgraph * cgraph) {
 #endif
         }
 
-        if (ggml_ds4_native_half_requested(node) || (node->op == GGML_OP_MUL_MAT_ID && node->ne[2] != 1)) {
+        // The routed fallback reads IDs on the host and synchronizes the stream.
+        // Odd/unaligned F32 shapes cannot use the capture-safe vector kernel.
+        const bool f32_id_host_sort = node->op == GGML_OP_MUL_MAT_ID &&
+            node->src[0]->type == GGML_TYPE_F32 &&
+            !ggml_cuda_should_use_mmvf(GGML_TYPE_F32,
+                ggml_cuda_info().devices[ggml_cuda_get_device()].cc,
+                node->src[0]->ne, node->src[0]->nb, node->ne[2]);
+        if (ggml_ds4_native_half_requested(node) || f32_id_host_sort ||
+            (node->op == GGML_OP_MUL_MAT_ID && node->ne[2] != 1)) {
             use_cuda_graph = false; // This node type is not supported by CUDA graph capture
 #ifndef NDEBUG
             GGML_LOG_DEBUG("%s: disabling CUDA graphs due to unsupported node type\n", __func__);
@@ -6273,6 +6304,13 @@ static enum ggml_status ggml_backend_cuda_graph_compute(ggml_backend_t backend, 
     }
 
     ggml_cuda_graph_evaluate_and_capture(cuda_ctx, cgraph, use_cuda_graph, cuda_graph_update_required, graph_key);
+    // Observe the executed path without inserting nodes or pinning allocations.
+    static const bool trace_graphs = std::getenv("GGML_CUDA_GRAPH_TRACE") != nullptr;
+    static std::atomic<int> graph_trace_count{0};
+    if (trace_graphs && graph_trace_count.fetch_add(1, std::memory_order_relaxed) < 32) {
+        fprintf(stderr, "CUDA_GRAPH_EXEC mode=%s update=%d nodes=%d\n",
+                use_cuda_graph ? "launch" : "direct", int(cuda_graph_update_required), cgraph->n_nodes);
+    }
     ggml_cuda_fusion_counts_maybe_dump();
 
     return GGML_STATUS_SUCCESS;
