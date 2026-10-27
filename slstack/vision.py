@@ -122,3 +122,14 @@ def render_tokens(text,tokenizer,blocks):
         spans.append(dict(position=len(tokens),count=block['count'],file=block['file'],sha256=block['sha256']))
         tokens.extend([129264]*block['count']);cursor=at+len(block['marker'])
     tokens.extend(tokenizer.rendered(text[cursor:]));return tokens,spans
+
+
+def spans_match(tokens,spans):
+    """Check image positions against the exact token sequence to be evaluated."""
+    end=0
+    for span in spans:
+        position,count=span['position'],span['count']
+        if position<end or count<=0 or position+count>len(tokens):return False
+        if any(tokens[row]!=129264 for row in range(position,position+count)):return False
+        end=position+count
+    return True
