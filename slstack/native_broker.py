@@ -142,7 +142,7 @@ class OwnedProducer:
             runtime_floor = runtime_min_free_gib(cfg)
             host_bytes = min(8 << 30, int(cfg['host_budget_gib'] * (1 << 30)))
             floor = int(cfg['min_available_gib'] * (1 << 30))
-            desktop_reserve = max(floor, int(cfg.get('producer_desktop_reserve_gib',8) * (1 << 30)))
+            desktop_reserve = max(floor, int(cfg.get('producer_desktop_reserve_gib',2) * (1 << 30)))
             if native.memory() < host_bytes + desktop_reserve:
                 raise MemoryError('Native producer physical host admission refused')
             if native.gpu(0, cfg['gpu_uuid']) < int(args['--job-device-bytes']) + int(args['--gpu-reserve-bytes']):

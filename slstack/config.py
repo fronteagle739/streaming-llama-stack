@@ -26,7 +26,7 @@ def load(path=None, overrides=None):
         raise ValueError('mode must be accurate, fast, ultra or hyper')
     if cfg.get('serving', 'single_engine') not in ('single_engine', 'native'):
         raise ValueError('serving must be single_engine or native')
-    for key in ('host_budget_gib', 'min_available_gib', 'job_commit_gib', 'request_timeout_s', 'lease_minutes'):
+    for key in ('host_budget_gib', 'min_available_gib', 'producer_desktop_reserve_gib', 'job_commit_gib', 'request_timeout_s', 'lease_minutes'):
         if not isinstance(cfg[key], (int, float)) or not math.isfinite(cfg[key]) or cfg[key] <= 0:
             raise ValueError(f'{key} must be finite and positive')
     if type(cfg.get('gpu_min_free_mib', 0)) is not int or cfg.get('gpu_min_free_mib', 0) < 0:
