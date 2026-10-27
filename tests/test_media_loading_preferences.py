@@ -55,5 +55,15 @@ class MediaLoadingPreferencesTests(unittest.TestCase):
                 self.assertEqual(request['cfg'][kind+'_mode'],'resident')
                 self.assertEqual(result['mode'],'resident')
 
+    def test_admission_failure_survives_when_worker_never_created_its_log(self):
+        engine=object.__new__(Engines);engine.cfg=dict(self.cfg)
+        engine.preferences=Preferences(dict(self.cfg))
+        job=Mock();job.log=self.root/'never-started.log'
+        job.wait.side_effect=RuntimeError('RTX admission refused: ACTIVE holds exist')
+        with patch('slstack.engines.OwnedProcess',return_value=job),patch('slstack.media_profiles.python_for',return_value=sys.executable):
+            with self.assertRaisesRegex(RuntimeError,'RTX admission refused: ACTIVE holds exist'):
+                engine._media('video',dict(model='h3',prompt='fixture'))
+        job.stop.assert_called_once_with()
+
 
 if __name__=='__main__':unittest.main()

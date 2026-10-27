@@ -473,7 +473,8 @@ class Engines:
             failure = None
             try:proc.wait()
             except RuntimeError as exc:failure = exc
-            rows = [x[len('DS4STACK_RESULT '):] for x in proc.log.read_text(errors='replace').splitlines()
+            output = proc.log.read_text(errors='replace') if proc.log.is_file() else ''
+            rows = [x[len('DS4STACK_RESULT '):] for x in output.splitlines()
                     if x.startswith('DS4STACK_RESULT ')]
             if len(rows) != 1:
                 if failure:raise failure
