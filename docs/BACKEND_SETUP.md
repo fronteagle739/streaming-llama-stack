@@ -79,3 +79,22 @@ than relying on files in Studio. Choose a CUDA architecture matching the GPU.
 See [the backend audit](BACKEND_SOURCE_AUDIT.md) for qualification status and
 existing measurements, and [paired examples](../examples/dual-machine/README.md)
 for model paths, interface settings and launch order.
+
+## Verified build run
+
+On October 27, 2026, the single offline `--backend all --build-only` command
+completed successfully for all 12 registered backends in an isolated runtime.
+It used the retained stack sources and pinned source/wheel caches, with no
+dependency on a Studio checkout. The host was a 512 GB M3 Ultra Mac Studio with
+macOS 26.2, Python 3.12.12, Swift 6.3.3, CMake 4.4.4 and Zig 0.17.0.
+
+The run built native DS4, DS4P, both llama receivers and llama-server, mlx-serve
+and its native dependencies, oMLX's native kernels, the custom MLX-VLM GLM
+kernels, and Mference's HTTP server, native decode service and repacker. Read-only
+checks matched all recorded build hashes. The custom MLX and oMLX extensions
+matched their respective MLX binary ABI tags.
+
+[The build receipt](evidence/backend-builds-20261027.json) records the source
+checkpoint and binary hashes. Every backend remains marked `ready: false` in
+that receipt: this compile-only run performed no model generation, GPU
+correctness smoke, cross-machine inference or new inference performance test.

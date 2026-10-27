@@ -318,7 +318,7 @@ def handler(stack):
                 except (OSError,ValueError) as exc:return self.send(400,{'error':{'message':str(exc)}})
             if route == '/props':
                 command = stack.cfg['ds4_command']
-                if hasattr(stack.engines,'context_size'):
+                if stack.cfg.get('general'):
                     n_ctx=stack.engines.context_size()
                 elif stack.cfg.get('mac'):
                     n_ctx = 1000001
