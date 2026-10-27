@@ -59644,6 +59644,7 @@ typedef struct {
 
 struct ds4_session {
     ds4_engine *engine;
+    float paired_quality_speed; /* Request control, never a KV/model weight. */
     ds4_dist_session *distributed;
     uint64_t tp_session_id;
     uint64_t glm_reserved_graph_bytes;
@@ -61602,6 +61603,25 @@ bool ds4_engine_has_mtp(ds4_engine *e) {
     return e && e->backend != DS4_BACKEND_CPU &&
            e->distributed.role == DS4_DISTRIBUTED_NONE &&
            e->mtp_ready;
+}
+
+bool ds4_engine_quality_speed_resident(ds4_engine *e) {
+    return e && e->backend == DS4_BACKEND_METAL && !e->ssd_streaming &&
+        e->distributed.role == DS4_DISTRIBUTED_NONE;
+}
+
+/* Studio's Mac MiMo policy subtracts bias*calibrated_spread*ramp only
+ * from an uncached expert's selection score. Its original combine probability
+ * is retained. Every expert on this admitted native-session lane is resident:
+ * the uncached set is empty, so the exact policy is the existing Metal top-k.
+ * Keep the requested control in the actual decoding session and refuse its
+ * use on a streaming backend rather than applying a different heuristic. */
+int ds4_session_quality_speed_set(ds4_session *s,float value) {
+    if(!s || !(value>=0 && value<=1.36125f) || !ds4_engine_quality_speed_resident(s->engine))return 1;
+    s->paired_quality_speed=value;return 0;
+}
+float ds4_session_quality_speed_get(const ds4_session *s) {
+    return s?s->paired_quality_speed:0;
 }
 
 bool ds4_engine_mtp_exact_sampling(ds4_engine *e) {

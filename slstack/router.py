@@ -309,7 +309,8 @@ def handler(stack):
                                        'media_progress': progress.snapshot() if progress else None},
                                  extra={'Cache-Control':'no-store'})
             if route == '/slstack/generation':
-                return self.send(200, dict(stack.generation.state(), supported=not bool(stack.cfg.get('mac') or stack.cfg.get('general'))))
+                return self.send(200, dict(stack.generation.state(), supported=not bool(stack.cfg.get('general')),
+                    applies='next request' if stack.cfg.get('mac') else 'next token boundary'))
             if route == '/slstack/settings':
                 return self.send(200,stack.preferences.state())
             if route == '/slstack/browse':
@@ -419,9 +420,8 @@ def handler(stack):
                     return self.send(200,stack.preferences.update(body))
                 if route == '/slstack/generation':
                     if stack.cfg.get('general'):raise ValueError('Use the WebUI or OpenAI request sampler settings for this backend')
-                    if stack.cfg.get('mac'):raise ValueError('This decoder has no live generation controls')
                     return self.send(200, dict(settings=stack.generation.update(body), supported=True,
-                        scope='session', applies='next token boundary'))
+                        scope='session', applies='next request' if stack.cfg.get('mac') else 'next token boundary'))
                 if route == '/v1/stack/shutdown':
                     # Loopback-only router; the launcher asks for a graceful stop before any forced one.
                     threading.Thread(target=server_ref[0].shutdown, daemon=True).start()

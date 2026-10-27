@@ -10,6 +10,22 @@ from slstack.mac import setup, source_digest
 
 
 class MacBuildIntegrityTests(unittest.TestCase):
+    def test_generated_sampler_build_sources_do_not_change_source_identity(self):
+        root,directory,cfg=self.fixture();before=source_digest(directory)
+        generated=directory/'.paired-samplers/ggml/CMakeFiles/id.c'
+        generated.parent.mkdir(parents=True);generated.write_text('/* generated compiler detection */')
+        self.assertEqual(source_digest(directory),before)
+
+    def test_changing_a_linked_upstream_sampler_invalidates_the_mac_build(self):
+        root,directory,cfg=self.fixture()
+        (directory/'ds4_sampling_bridge.cpp').write_text('/* bridge */')
+        src=directory.parent/'streaming-llama/prefill_llama.cpp/src';src.mkdir(parents=True)
+        for name in ('llama-sampler.cpp','llama-vocab.cpp','unicode.cpp','unicode-data.cpp','llama-impl.cpp','llama-grammar.cpp'):
+            (src/name).write_text('/* source */')
+        before=source_digest(directory)
+        (src/'llama-sampler.cpp').write_text('/* changed sampler */')
+        self.assertNotEqual(source_digest(directory),before)
+
     def fixture(self):
         root = ROOT / 'runtime' / 'fixtures' / ('mac-build-' + uuid.uuid4().hex)
         directory = root / 'engines' / 'ds4-mac'

@@ -653,7 +653,9 @@ void run_live_session(std::unique_ptr<llama_dsv41_sweep>&sweep,
             reply({{"peer_synchronized",have_remote&&remote.describe()==current.describe()},{"argmax",argmax},{"vectors",argmax.size()},
                 {"evaluated_tokens",step_ms.size()},{"step_ms",step_ms},{"decode_ms",total_ms},{"RTX_decode",true}});
         }else if(operation=="prefill"){
-            dsv41_live::keys(command,{"session","model_sha256","sequence","operation","base","tokens"});same_base();
+            if(command.contains("vision_spans_file"))
+                dsv41_live::keys(command,{"session","model_sha256","sequence","operation","base","tokens","vision_spans_file"});
+            else dsv41_live::keys(command,{"session","model_sha256","sequence","operation","base","tokens"});same_base();
             // LLAMADECODE B0: a local-only session (never exported to a peer)
             // may append without a peer; a peer-bound session keeps exact sync.
             const bool local_only=!have_remote&&!initial_sent&&!awaiting_ack;
@@ -662,9 +664,12 @@ void run_live_session(std::unique_ptr<llama_dsv41_sweep>&sweep,
             const auto&ids=command.at("tokens");require(ids.is_array()&&!ids.empty()&&ids.size()<=capacity,"Live prefill token count exceeds reserved chunk");
             require(ids.size()<uint64_t(options.context)-current.frontier.position,"Live prefill exceeds context capacity");
             std::vector<int32_t>tokens;tokens.reserve(ids.size());for(const auto&v:ids){const auto n=dsv41_live::u64(v);require(n<129280,"Live token out of vocabulary");tokens.push_back(int32_t(n));}
+            auto next_images=options.image_spans;
+            if(command.contains("vision_spans_file"))
+                next_images=studio_vision_spans(command.at("vision_spans_file").get<std::string>(),uint32_t(options.context));
             // The borrowed decode bridge binds target-only owners. Mode3
             // needs the streaming path to maintain its complete DSpark ring.
-            if(ds4_decode_enabled()&&!options.capture_dspark&&tokens.size()<=append_decode_max()){
+            if(ds4_decode_enabled()&&!options.capture_dspark&&next_images.empty()&&tokens.size()<=append_decode_max()){
                 // Small append: teacher-forced ds4 steps on the resident state (the
                 // decode/decode_forced step), every token evaluated; same reply and
                 // checkpoint as the sweep. The frontier logits come from ds4's decode kernels.
@@ -682,8 +687,9 @@ void run_live_session(std::unique_ptr<llama_dsv41_sweep>&sweep,
             }
             // LLAMADECODE_ENGRAM_EARLY: this append's Engram rows start now, before
             // its open, start_request and layer-0 weight fetch (off: no-op).
-            {std::string early_error;success(sweep->start_append_engram(tokens,early_error),early_error);}
+            if(!command.contains("vision_spans_file")) {std::string early_error;success(sweep->start_append_engram(tokens,early_error),early_error);}
             auto previous=std::move(sweep);sweep.reset(new llama_dsv41_sweep);auto next_options=options;auto next_weights=weights;
+            next_options.image_spans=std::move(next_images);next_options.images=!next_options.image_spans.empty();
             next_options.yoco_logical_begin=next_options.yoco_logical_end=0;next_options.carry.tokens=uint32_t(tokens.size());if(next_weights.engram_prefetch_host_bytes)next_weights.engram_prefetch_tokens=uint32_t(tokens.size());
             std::string error;success(sweep->open(next_weights,next_options,error,nullptr,previous.get()),error);require(!previous->ready(),"Transferred prefix still publishes");previous.reset();
             const double admission_ms=ms(started);success(sweep->run(tokens,[]{return should_stop();},error),error);const auto timing=sweep->timing();

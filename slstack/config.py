@@ -17,11 +17,19 @@ def load(path=None, overrides=None):
     if cfg.get('mac'):
         from .pairing import endpoint
         cfg['mac'] = endpoint(cfg['mac'])
+    if 'paired_local_prefill_max_tokens' in cfg:
+        from .combo_crossover import paired_threshold
+        paired_threshold(cfg)
+    keep=cfg.get('yoco_keep',0)
+    if type(keep) is not int or keep not in (0,140):
+        raise ValueError('yoco_keep must be 0 or 140')
+    if keep and not cfg.get('mac') and cfg.get('serving','single_engine')!='single_engine':
+        raise ValueError('YOCO needs single_engine or an explicitly paired Mac receiver')
     if cfg.get('native_tier', 'accurate') not in ('accurate', 'fast', 'ultra', 'hyper'):
         raise ValueError('mode must be accurate, fast, ultra or hyper')
     if cfg.get('serving', 'single_engine') not in ('single_engine', 'native'):
         raise ValueError('serving must be single_engine or native')
-    for key in ('host_budget_gib', 'min_available_gib', 'job_commit_gib', 'request_timeout_s', 'lease_minutes'):
+    for key in ('host_budget_gib', 'min_available_gib', 'producer_desktop_reserve_gib', 'job_commit_gib', 'request_timeout_s', 'lease_minutes'):
         if not isinstance(cfg[key], (int, float)) or not math.isfinite(cfg[key]) or cfg[key] <= 0:
             raise ValueError(f'{key} must be finite and positive')
     if type(cfg.get('gpu_min_free_mib', 0)) is not int or cfg.get('gpu_min_free_mib', 0) < 0:

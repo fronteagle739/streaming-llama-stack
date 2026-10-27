@@ -119,7 +119,10 @@ def command(row, session, sequence, mode=3, prefill_max=MAX_PREFILL):
              # LLAMADECODE B5: live quality-speed control of the in-process decode bias.
              'quality_speed': ['value'], 'generation_start': ['settings'], 'export_local': ['base']}
     require(type(op) is str and op in extra, 'Unknown session operation')
-    keys(row, common + extra[op])
+    owned_vision = op=='prefill' and 'vision_spans_file' in row
+    keys(row, common + extra[op] + (['vision_spans_file'] if owned_vision else []))
+    if owned_vision:
+        require(type(row['vision_spans_file']) is str and 0<len(row['vision_spans_file'])<=1024,'Invalid owned vision descriptor')
     if 'base' in row:
         checkpoint(row['base'], mode)
     if op == 'rewind':
@@ -176,8 +179,23 @@ def command(row, session, sequence, mode=3, prefill_max=MAX_PREFILL):
     return row
 
 def initial_request(session, headers, body):
+    # Authenticated SLVP carries exact native projected spans, including spans
+    # beyond the first49152-token sweep. No sender-supplied filesystem paths.
+    if isinstance(headers,dict) and any(k.lower()=='content-type' and v=='application/vnd.studio.dsv41.projected-v1' for k,v in headers.items()):
+        from slstack.paired_vision import unpack
+        h={k.lower():v for k,v in headers.items()}
+        require(len(h)==len(headers),'Duplicate request header')
+        require(h.get('content-length')==str(len(body)) and h.get('x-dsv41-body-sha256')==hashlib.sha256(body).hexdigest(),'Projected body SHA/extent mismatch')
+        try:tokens,images=unpack(body)
+        except (ValueError,TypeError,struct.error) as exc:raise Refused(str(exc)) from exc
+        h.update({'content-type':'application/vnd.studio.dsv41.tokens-le32','content-length':str(len(tokens))})
+        result=initial_request(session,h,tokens)
+        result['vision']=images
+        return result
     session_identity(session)
-    require(type(body) is bytes and 0 < len(body) <= MAX_PREFILL * 4 and (len(body) % 4 == 0), 'Initial token extent')
+    # The initial logical prompt is internally swept by the same producer fold
+    # planner as single-engine mode; it is not one incremental RPC chunk.
+    require(type(body) is bytes and 0 < len(body) <= (CONTEXT - 1) * 4 and (len(body) % 4 == 0), 'Initial token extent')
     require(type(headers) is dict and all((type(k) is str and type(v) is str for k, v in headers.items())), 'Invalid request headers')
     h = {k.lower(): v for k, v in headers.items()}
     require(len(h) == len(headers), 'Duplicate request header')

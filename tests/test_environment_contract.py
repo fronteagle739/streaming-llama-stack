@@ -11,6 +11,13 @@ from slstack.envvars import apply, validate_table
 
 
 class EnvironmentContractTests(unittest.TestCase):
+    def test_pinned_external_evidence_is_retained_but_stale_local_reads_fail(self):
+        row=dict(var='PATH',doc='Host path',reads=['engines/current.c:1','engines/mlx-serve/pinned.zig:2'])
+        with patch('slstack.envvars.rows',return_value=[row]),patch('slstack.envvars.inventory',return_value={'PATH':['engines/current.c:1']}):
+            self.assertEqual(validate_table(),1)
+            with patch('slstack.envvars.inventory',return_value={'PATH':['engines/current.c:3']}):
+                with self.assertRaisesRegex(ValueError,'stale'):validate_table()
+
     def test_all_source_reads_have_documented_table_rows(self):
         self.assertGreater(validate_table(), 100)
 

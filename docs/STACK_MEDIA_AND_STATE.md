@@ -105,7 +105,7 @@ physical allocation across their processes is not implemented.
 
 ## RTX/Mac YOCO transfer
 
-Negotiated YOCO state v1 export exists. Mac decode with YOCO has not been benchmarked. The published two-machine timing was measured before YOCO (plain ULTRA prefill).
+Negotiated YOCO state v1 passes the live Mac decode, 105K recall and 198K uploaded-image WebUI gate. Historical plain-ULTRA and new YOCO timings are both retained in [performance](PERFORMANCE.md).
 
 Paired presets negotiate YOCO140 and state version1 explicitly in pairing,
 startup headers and native readiness. Unrecognized/mismatched peers cannot
@@ -114,3 +114,11 @@ artifact geometry, including a complete DSpark ring, with all-region hashes.
 The provenance remains YOCO-derived. Ordinary exact mode is unchanged.
 
 Compatible YOCO transport carries initial and appended mode3 state, including the complete DSpark ring and incremental updates. Rewind checks the restored state hashes. Both peers must negotiate the same format before transfer. A successful compile or state import alone does not establish equal model outputs across different arithmetic paths.
+
+The paired image candidate uses a bounded SLVP v1 envelope containing final
+token IDs, absolute image spans and the original SLVI projected embeddings.
+SHA-256 binds the complete body and each projection. The authenticated broker
+creates immutable owned files; network callers cannot supply filesystem paths.
+Historical image identities must match on continuation. The Mac restores image
+fingerprints after native state import. CPU checks cover initial/incremental
+transport and images before, across and inside the YOCO replay tail. Numerical KL/recall and live image conversation qualification pass. [Receipts and browser evidence](YOCO_PAIRED_QUALIFICATION.md).

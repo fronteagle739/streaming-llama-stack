@@ -2,6 +2,7 @@
 from __future__ import annotations
 import argparse
 import ctypes
+import dataclasses
 import json
 import os
 from pathlib import Path
@@ -10,12 +11,30 @@ import sys
 import time
 import psutil
 from .progress import Window, activity
+from .memory_counters import available_physical_bytes
 from .native_broker import vendor
 vendor()
 from studio.job_guard import OwnedProcesses, OwnedView
 from studio.job_paging import PagingWatch, paging_bytes
 
 GiB = 1024 ** 3
+
+
+class GracefulOwnedProcesses(OwnedProcesses):
+    """POSIX model cleanup has no SIGKILL fallback; retain failed ownership."""
+    def stop(self, grace=60, timeout=3):
+        self.refresh()
+        errors=[]
+        for process in reversed(self.live()):
+            try:process.terminate()
+            except psutil.NoSuchProcess:pass
+            except Exception as error:errors.append(repr(error))
+        deadline=time.monotonic()+grace
+        while self.live() and time.monotonic()<deadline:time.sleep(.05)
+        survivors=[p.pid for p in self.live()]
+        return dict(confirmed=not survivors and not errors,surviving_owned_pids=survivors,
+                    errors=errors,identities=[dataclasses.asdict(x) for x in self.identities.values()],
+                    retired_identities=[dataclasses.asdict(x) for x in self.retired_identities],forced_kill=False)
 
 
 class GPUWindowReader:
@@ -55,9 +74,10 @@ class GPUWindowReader:
 
 def admit(budget_gib, floor_gib):
     ram = psutil.virtual_memory()
-    if not 0 < budget_gib * GiB <= ram.available - floor_gib * GiB:
-        raise MemoryError(f'Host budget {budget_gib:.2f} GiB cannot fit: available={ram.available / GiB:.2f}, floor={floor_gib:.2f}')
-    return ram.available
+    available=available_physical_bytes()
+    if not 0 < budget_gib * GiB <= available - floor_gib * GiB:
+        raise MemoryError(f'Host budget {budget_gib:.2f} GiB cannot fit: available={available / GiB:.2f}, floor={floor_gib:.2f}')
+    return available
 
 
 def kill_tree(proc):
@@ -120,7 +140,9 @@ def _supervise(spec):
     # Engine/GPU jobs use the pinned shared Studio guard. A server that opens its own
     # per-request GPU windows (combo_proxy) or a job bound to a named lease stays on
     # the owned loop below, which checks the window and ledger identity every poll.
-    if spec.get('paging_telemetry') and not (spec.get('gpu_window_file') or spec.get('gpu_lease_identity')):
+    # Persistent servers retain the owned loop's RAM/paging checks. The pinned
+    # shared adapter renews its finite no-progress window on tree/log activity.
+    if spec.get('timeout_s') is not None and spec.get('paging_telemetry') and not (spec.get('gpu_window_file') or spec.get('gpu_lease_identity')):
         from .shared_guard import supervise as shared_supervise
         return shared_supervise({**spec,'timeout_s':min(spec['timeout_s'],1140)})
     if not (spec.get('paging_telemetry') or spec.get('gpu_window_file') or spec.get('gpu_lease_identity')):
@@ -150,8 +172,8 @@ def _supervise(spec):
 def _supervise_plain(spec):
     """Release CPU/build loop: whole-tree RSS, deadline, stop file and shared holds.
     Builds spawn thousands of short-lived compilers, beyond the owned-process bound."""
-    budget, floor = spec['host_budget_gib'], spec['min_available_gib']
-    admit(budget, floor)
+    budget, floor = spec['host_budget_gib'], max(spec['min_available_gib'],spec.get('runtime_min_free_gib',0))
+    admit(budget, spec['min_available_gib'])
     from .lease import HoldWatcher
     watch = spec.get('hold_watch')
     watcher = HoldWatcher(watch['path'], watch['identity'], mac=watch.get('mac', False),
@@ -160,7 +182,7 @@ def _supervise_plain(spec):
         raise RuntimeError('Yielding before process creation to shared hold: ' + watcher.reason())
     flags = subprocess.CREATE_NO_WINDOW | 4 if os.name == 'nt' else 0  # suspended until Job admission
     start = time.monotonic()
-    peak, minimum, reason = 0, psutil.virtual_memory().available, None
+    peak, minimum, reason = 0, available_physical_bytes(), None
     from .memory_counters import snapshot, PagefilePressure
     paging_before = snapshot() if spec.get('paging_telemetry') else None
     pressure = PagefilePressure() if spec.get('paging_telemetry') else None
@@ -201,11 +223,12 @@ def _supervise_plain(spec):
                             row['last_page_faults'] = faults
                             row['peak_private_commit_bytes'] = max(row['peak_private_commit_bytes'],
                                 getattr(info, 'private', getattr(info, 'pagefile', 0)))
+                            row['peak_working_set_bytes'] = max(row.get('peak_working_set_bytes',0),info.rss)
                         except psutil.NoSuchProcess:
                             pass
                 except psutil.NoSuchProcess:
                     rss = 0
-                free = psutil.virtual_memory().available
+                free = available_physical_bytes()
                 peak, minimum = max(peak, rss), min(minimum, free)
                 if rss > budget * GiB or free < floor * GiB:
                     reason = f'HOST MEMORY LIMIT: tree RSS={rss}, available={free}'
@@ -248,8 +271,8 @@ def _supervise_plain(spec):
 
 
 def _supervise_owned(spec,paging_watch,paging_warnings):
-    budget, floor = spec['host_budget_gib'], spec['min_available_gib']
-    admit(budget, floor)
+    budget, floor = spec['host_budget_gib'], max(spec['min_available_gib'],spec.get('runtime_min_free_gib',0))
+    admit(budget, spec['min_available_gib'])
     from .lease import HoldWatcher
     watch = spec.get('hold_watch')
     watcher = HoldWatcher(watch['path'], watch['identity'], mac=watch.get('mac', False),
@@ -258,7 +281,7 @@ def _supervise_owned(spec,paging_watch,paging_warnings):
         raise RuntimeError('Yielding before process creation to shared hold: ' + watcher.reason())
     flags = subprocess.CREATE_NO_WINDOW | 4 if os.name == 'nt' else 0  # suspended until Job admission
     start = time.monotonic()
-    peak, minimum, reason = 0, psutil.virtual_memory().available, None
+    peak, minimum, reason = 0, available_physical_bytes(), None
     from .memory_counters import snapshot, PagefilePressure
     paging_before = snapshot() if spec.get('paging_telemetry') else None
     pressure = PagefilePressure() if spec.get('paging_telemetry') else None
@@ -278,7 +301,7 @@ def _supervise_owned(spec,paging_watch,paging_warnings):
                                  stdout=log, stderr=log, creationflags=flags,
                                  start_new_session=os.name != 'nt')
         job = None
-        owned = OwnedProcesses(child)
+        owned = OwnedProcesses(child) if os.name=='nt' else GracefulOwnedProcesses(child)
         cleanup = None
         try:
             if os.name == 'nt':
@@ -309,11 +332,12 @@ def _supervise_owned(spec,paging_watch,paging_warnings):
                             row['last_page_faults'] = faults
                             row['peak_private_commit_bytes'] = max(row['peak_private_commit_bytes'],
                                 getattr(info, 'private', getattr(info, 'pagefile', 0)))
+                            row['peak_working_set_bytes'] = max(row.get('peak_working_set_bytes',0),info.rss)
                         except psutil.NoSuchProcess:
                             pass
                 except psutil.NoSuchProcess:
                     rss = commit = 0;members=[]
-                free = psutil.virtual_memory().available
+                free = available_physical_bytes()
                 peak, minimum = max(peak, rss), min(minimum, free)
                 if rss > budget * GiB or free < floor * GiB:
                     reason = f'HOST MEMORY LIMIT: tree RSS={rss}, available={free}'
@@ -390,15 +414,17 @@ def _supervise_owned(spec,paging_watch,paging_warnings):
                     cleanup=owned.stop()
                     break
                 time.sleep(.05)
-            code = child.wait()
+            code = child.poll() if cleanup and not cleanup['confirmed'] else child.wait()
+            if code is None:code=1
         except BaseException as exc:
-            reason=repr(exc);cleanup=owned.stop();code=child.wait(timeout=10)
+            reason=repr(exc);cleanup=owned.stop();code=child.poll()
+            if code is None:code=1
         finally:
-            if child.poll() is None:
+            if child.poll() is None and cleanup is None:
                 cleanup=owned.stop();child.wait(timeout=10)
             if job:
                 job[0].CloseHandle(job[1])
-            cleanup=owned.stop()
+            if cleanup is None:cleanup=owned.stop()
     receipt = {'exit_code': code, 'reason': reason, 'peak_tree_rss': peak,
                'min_available': minimum, 'elapsed_s': time.monotonic() - start,
                'started_monotonic': start, 'no_progress_window_s': spec['timeout_s'],
@@ -415,7 +441,7 @@ def _supervise_owned(spec,paging_watch,paging_warnings):
                    paging_scanned_pages=paging_watch.observer.scanned_pages,
                    paging_completed_scans=paging_watch.observer.completed_scans,
                    paging_attribution=paging_watch.observer.attribution,paging_policy=paging_watch.details(),cleanup=cleanup,
-                   release_allowed=cleanup['confirmed'],reservation_samples=reservation_samples,
+                   release_allowed=cleanup['confirmed'],cleanup_confirmed=cleanup['confirmed'],reservation_samples=reservation_samples,
                    paging_interpretation='Process faults include soft and hard faults. Private commit/pagefile usage is not disk I/O. System counters include other processes; these counters alone do not prove core/KV residency.')
     Path(spec['receipt']).write_text(json.dumps(receipt, indent=2))
     if not cleanup['confirmed']:
@@ -456,7 +482,7 @@ def supervise(spec):
                     if (Path(spec['stop']).exists() or not owner.is_running() or
                         abs(owner.create_time() - spec['owner_created']) > .01):
                         raise RuntimeError('GPU admission wait stopped by its owner')
-                    if psutil.virtual_memory().available < spec['min_available_gib'] * GiB:
+                    if available_physical_bytes() < spec['min_available_gib'] * GiB:
                         raise MemoryError('Available physical RAM fell below the admission-wait floor')
                     time.sleep(.5)
         return _supervise(spec)

@@ -12,7 +12,7 @@ Both presets: serving single_engine (streaming-llama ULTRA prefill + ds4-decode.
 producer), DirectStorage read parts 8, 512 MiB VRAM reserve beside the L2 expert tier, the default
 quality/speed setting, the fold sweep plan (49152-token primary sweeps, the remainder folded into the
 last sweep up to 61,440 tokens, else its own sweep),
-producer_host_reserve_gib 1, Engram early load auto with no Engram row cache.
+producer_host_reserve_gib 0.5, Engram early load auto with no Engram row cache.
   262k: context 262144, f32 context cache, growable; the L2 tier takes its full NVML offer.
   1m:   context 999424, bf16 context cache, growable (the largest growable bf16 context that fits
         the producer's admitted cache: 2 MiB rounding on 8 ranges refuses 1,000,001).
@@ -59,7 +59,7 @@ def overlay(preset, local=None, model=None, yoco_keep=None, vision=None, profile
         result['model'] = model
     env = dict(result.get('env_overrides') or {})
     env.update(COMMON_ENV)
-    result.update(PRESETS[preset], serving='single_engine', producer_host_reserve_gib=1, env_overrides=env, **FOLD)
+    result.update(PRESETS[preset], serving='single_engine', producer_host_reserve_gib=.5, env_overrides=env, **FOLD)
     if profile is not None:
         if profile not in ('accurate','fast','ultra','ultra-yoco'):raise ValueError('Unknown single-engine quality profile')
         result['producer_profile']='ultra' if profile=='ultra-yoco' else profile

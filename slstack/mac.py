@@ -26,12 +26,16 @@ from .progress import Window, activity, readiness_seconds
 
 def budget(cfg, maximum=400):
     import psutil
-    free = psutil.virtual_memory().available / (1 << 30)
-    floor = max(2, cfg.get('min_available_gib', 2))
-    requested = cfg.get('mac_host_budget_gib') or min(maximum, (free - floor) * .9)
-    if requested <= 0 or requested + floor > free:
+    from .memory_counters import available_physical_bytes
+    free = available_physical_bytes() / (1 << 30)
+    floor = cfg.get('min_available_gib', .5)
+    reserve = max(cfg.get('producer_desktop_reserve_gib', .5), floor)
+    requested = cfg.get('mac_host_budget_gib') or min(maximum, (free - reserve) * .9)
+    if requested <= 0 or requested + reserve > free:
         raise MemoryError('Mac physical memory budget cannot be admitted')
-    return {**cfg, 'host_budget_gib': requested, 'min_available_gib': floor}
+    from .combo_ram import runtime_min_free_gib
+    return {**cfg, 'host_budget_gib': requested, 'min_available_gib': floor,
+            'runtime_min_free_gib':runtime_min_free_gib(cfg)}
 
 
 def replacement_budget(cfg, maximum, previous_budget, timeout=60):
@@ -67,13 +71,30 @@ def check_backend_port(port):
 
 
 def source_digest(directory):
-    files = sorted(p for p in directory.rglob('*') if p.is_file() and
+    files = sorted(p for p in directory.rglob('*') if p.is_file() and '.paired-samplers' not in p.relative_to(directory).parts and
                    (p.suffix in {'.c', '.h', '.m', '.metal', '.inc'} or p.name == 'Makefile'))
     digest = hashlib.sha256()
     for file in files:
         digest.update(file.relative_to(directory).as_posix().encode() + b'\0')
         digest.update(bytes.fromhex(sha256(file)))
+    # The linked sampler implementations are retained llama.cpp source. Build
+    # products are excluded; changing a sampler input must invalidate the pin.
+    if (directory/'ds4_sampling_bridge.cpp').is_file():
+        digest.update(b'ds4_sampling_bridge.cpp\0'+bytes.fromhex(sha256(directory/'ds4_sampling_bridge.cpp')))
+        source=directory.parent/'streaming-llama/prefill_llama.cpp'
+        upstream=[*(source/'src').glob('*.h'),*(source/'include').glob('*.h')]
+        upstream.extend(source/'src'/name for name in ('llama-sampler.cpp','llama-vocab.cpp','unicode.cpp','unicode-data.cpp','llama-impl.cpp','llama-grammar.cpp'))
+        upstream.extend(p for p in (source/'ggml').rglob('*') if p.is_file() and p.suffix in {'.c','.cpp','.h','.hpp','.cmake','.in','.txt'})
+        for file in sorted(upstream):
+            digest.update(b'llama/'+file.relative_to(source).as_posix().encode()+b'\0'+bytes.fromhex(sha256(file)))
     return digest.hexdigest()
+
+
+def native_vision_path(cfg):
+    from .config import configure_vision
+    selected=configure_vision({**cfg,'vision_bridge_version':1}).get('vision_encoder')
+    if selected and not path(selected).is_file():raise ValueError('Configured Mac vision encoder does not exist')
+    return selected
 
 
 def setup(cfg, backend='ds4', *, check=False, zig=None):
@@ -103,8 +124,8 @@ def setup(cfg, backend='ds4', *, check=False, zig=None):
         current = (binary.is_file() and previous.get('source_sha256') == source_pin
                    and previous.get('binary_sha256') == sha256(binary))
         if not current and not check:
-            if not shutil.which('clang') or not shutil.which('make'):
-                raise ValueError('Install Xcode command line tools: xcode-select --install')
+            if not shutil.which('clang') or not shutil.which('make') or not shutil.which('cmake'):
+                raise ValueError('Mac ds4 build requires Xcode command line tools and CMake')
             build_cfg = {**cfg, 'host_budget_gib': 2, 'min_available_gib': 4}
             flags = '-O3 -ffast-math -g -mcpu=native -Wall -Wextra -std=c99 -DDS4_NATIVE_FRONTIER_ENABLE=1'
             OwnedProcess(build_cfg, ['make', '-j2', 'ds4-server', 'CFLAGS=' + flags], 'build-mac-ds4',
@@ -250,10 +271,12 @@ class Receiver:
                 mtp_draft=preset.get('ds4_mtp_draft'), batched_session=1,
                 kv_cache_min_tokens=preset.get('kv_cache_min_tokens'),
                 kv_cache_cold_max_tokens=preset.get('kv_cache_cold_max_tokens'),
-                kv_cache_continued_interval_tokens=preset.get('kv_cache_continued_interval_tokens'))
+                kv_cache_continued_interval_tokens=preset.get('kv_cache_continued_interval_tokens'),
+                vision=native_vision_path(cfg))
             env['DS4_NATIVE_SESSION'] = '1' if native else '0'
             env['DS4_NATIVE_SESSION_HOST_BYTES'] = str(int(cfg['host_budget_gib'] * (1 << 30)))
-            env['DS4_NATIVE_SESSION_HOST_FLOOR_BYTES'] = str(int(cfg['min_available_gib'] * (1 << 30)))
+            from .combo_ram import runtime_min_free_gib
+            env['DS4_NATIVE_SESSION_HOST_FLOOR_BYTES'] = str(int(runtime_min_free_gib(cfg) * (1 << 30)))
             if native:
                 if not self.peer:
                     raise ValueError('Pair the RTX producer first')
@@ -276,10 +299,12 @@ class Receiver:
                     DS4_NATIVE_SESSION_RENDERER_SHA256=self.build['renderer_sha256'],
                     DS4_NATIVE_SESSION_PRODUCER_SHA256=self.peer['producer_sha256'], DS4_NATIVE_SESSION_DEADLINE_SECONDS='600',
                     DS4_NATIVE_SESSION_HOST_BYTES=str(int(cfg['host_budget_gib'] * (1 << 30))),
-                    DS4_NATIVE_SESSION_HOST_FLOOR_BYTES=str(int(cfg['min_available_gib'] * (1 << 30))))
+                    DS4_NATIVE_SESSION_HOST_FLOOR_BYTES=str(int(runtime_min_free_gib(cfg) * (1 << 30))))
                 for name, value in dynamic.items():
                     env.setdefault(name, value)
                 env['DS4_NATIVE_SESSION_YOCO_KEEP']=str(self.peer.get('yoco_keep',0))
+                from .combo_crossover import paired_threshold
+                env['DS4_NATIVE_SESSION_LOCAL_PREFILL_MAX_TOKENS']=str(paired_threshold(cfg))
         cfg['env_overrides'] = env
         # DS4COMBO2 liveness: the Mac engine has no lifetime cap; the guard's memory limits stay.
         self.engine = OwnedProcess(cfg, command, 'mac-' + self.backend, cwd=Path(cfg['runtime_root']),
@@ -304,6 +329,9 @@ class Receiver:
     def chat(self, body, *, qualification=None):
         if qualification is None and self.backend == 'ds4' and (not self.peer or self.peer.get('status') != 'qualified'):
             raise ValueError('Complete the real native/pair parity handshake first')
+        if self.backend == 'ds4':
+            from .paired_generation import decode_request
+            body = decode_request(body)
         native = self.backend == 'ds4' and qualification != 'native'
         self.ready(native)
         body = dict(body, stream=False)
@@ -336,13 +364,15 @@ class Receiver:
     def events(self, body):
         if self.backend != 'ds4' or not self.peer or self.peer.get('status') != 'qualified':
             raise ValueError('Complete native pairing before streaming')
+        from .paired_generation import decode_request
+        body = decode_request(body)
         self.ready(True)
         from .pairing import conversation_key
         from .streaming import events
         body = {**body,'stream':True,'prompt_cache_key':conversation_key(body)}
         body.setdefault('include_previous_reasoning',True)
         yield from events(f'http://127.0.0.1:{self.cfg.get("mac_engine_port",8181)}/v1/chat/completions',
-                          body, timeout=self.cfg['request_timeout_s'])
+                          body, timeout=None)  # native/producer progress guards own liveness
 
 
 def wait_for_receiver(cfg, job):

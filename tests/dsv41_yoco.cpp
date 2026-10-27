@@ -50,7 +50,25 @@ int main(){
             expect(p.first==0&&p.layers==40&&!p.approximate);
         }
         const auto image=y::schedule(140,y::operation::prefill,true,0,n,0,n);
-        expect(image.layers==40&&image.first==0&&!image.approximate);
+        expect(image.layers==40&&image.first==n-std::min(n,140u)&&image.approximate==(n>140));
+        // Vision rows have the same absolute coverage as text: every image
+        // position reaches layer20, including spans before/through/inside the
+        // last140 replay rows. Decoder layers retain those image rows in tail.
+        for(uint32_t image_first:{0u,n/2,n>70?n-70:0u}){
+            const uint32_t image_end=std::min(n,image_first+128);
+            uint32_t source_rows=0,tail_rows=0;
+            for(const auto&e:extents){
+                const auto p=y::schedule(140,y::operation::prefill,true,0,n,e.first,e.first+e.count);
+                expect(y::first_row(p,20)==0);
+                source_rows+=std::min(e.first+e.count,image_end)>std::max(e.first,image_first)?
+                    std::min(e.first+e.count,image_end)-std::max(e.first,image_first):0;
+                if(!p.encoder_only){const uint32_t first=std::max(e.first+p.first,image_first);
+                    tail_rows+=image_end>first?image_end-first:0;}
+            }
+            expect(source_rows==image_end-image_first);
+            const uint32_t first=std::max(n-std::min(n,140u),image_first);
+            expect(tail_rows==(image_end>first?image_end-first:0));
+        }
     }
     // A logical append retains absolute positions and only its own tail.
     const auto append=y::schedule(140,y::operation::prefill,false,50000,153189,148304,153189);

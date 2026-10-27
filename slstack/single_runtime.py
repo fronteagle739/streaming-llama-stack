@@ -40,7 +40,7 @@ KEPT = ('generation_control_file', 'stack_preferences_file', 'vision_encoder', '
         # LLAMADECODE fold sweep plan (owner): primary sweep S*, the remainder folded into the last sweep up
         # to the fold cap; the host max is the ceiling for that largest sweep's bank.
         'producer_prefill_sweep_tokens', 'producer_prefill_fold_cap_tokens', 'producer_host_max_gib',
-        'producer_desktop_reserve_gib',   # per-machine desktop RAM reserve kept free by admission (default 8 GiB)
+        'producer_desktop_reserve_gib',   # per-machine desktop RAM reserve kept free by admission (default 0.5 GiB)
         'runtime_min_free_gib',          # runtime available physical RAM floor (default 4 GiB; 0 disables it)
         'comfyui_models', 'studio_python')  # envvars.json placeholders the proxy's studio/producer scopes expand
 
@@ -125,6 +125,11 @@ def stack_config(cfg):
         model_receipt=path(cfg['model_receipt']) if cfg.get('model_receipt') else None, revision=revision,
         host_budget_gib=cfg['host_budget_gib'] - .25)
     result.update(producer_sha256=sha256(producer), producer_source_revision=revision)
+    # A live stack launcher can reserve the complete gate before starting this
+    # child. Keep its identity for gpu_lease's strict live-ancestor validation.
+    # Packaged/installed configs deliberately continue to omit this capability.
+    if cfg.get('_gpu_parent_lease'):
+        result['_gpu_parent_lease'] = cfg['_gpu_parent_lease']
     if result['combo_worker_host_budget_gib'] < result['producer_host_budget_gib'] + .5:
         raise ValueError('host_budget_gib must leave 0.75 GiB above producer_host_budget_gib for the controller')
     return result
@@ -138,7 +143,7 @@ def preset(cfg, installed):
             ds4_cache_affinity_bias=0, ds4_cache_affinity_spread_file=str(installed / 'qualification/affinity-spreads.txt'),
             ds4_extra_flags='--cuda', ds4_env=dict(DECODE_ENV),
             ds4_host_memory_budget_mb=int((cfg['host_budget_gib'] + .25) * 1024),
-            ds4_host_memory_reserve_mb=max(2048,int(cfg['min_available_gib'] * 1024))))  # Studio ds4_memory.admit minimum
+            ds4_host_memory_reserve_mb=max(512,int(cfg['min_available_gib'] * 1024))))
 
 
 def normal_argv(studio_native, definition):
