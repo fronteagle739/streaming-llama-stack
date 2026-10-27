@@ -27,13 +27,5 @@ sampler defaults. Old producer executables without generation-control version
 revision, phase, bias, sampler values and token position. POST accepts partial
 updates for `value`, `per_phase`, `sampler`, and `phases`.
 
-Validation: 53 Python tests passed, 2 skipped, plus 8 subtests. The CPU native
-regression exercises real special-token/DSML/code boundaries, seeded sampling,
-top-k/top-p/min-p, next-token revision changes and partial-publication recovery.
-The compiled UltraYOCO model returned the expected short answer. Headless
-desktop light/dark and 390-pixel phone checks passed without page errors or
-horizontal overflow. During the owner's live use, native logs recorded bias
-and temperature revision changes within one uninterrupted decode, including
-temperature revisions 106, 108 and 109 at token positions 2104, 2105 and 2106.
-The owner's live session was preserved; no separate controlled latency
-benchmark is claimed.
+
+Bias and sampler changes are observed at token boundaries within an uninterrupted decode. Explicit API sampler parameters apply for that request; partial publications preserve the previous valid revision until the new one is complete.

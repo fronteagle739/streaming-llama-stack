@@ -55,9 +55,7 @@ Windows media workers resolve the weight-fetcher library beside the selected
 producer, or from an explicit `weight_fetcher` configuration. Runtime staging
 includes that library when present. GPU admission creates the default hold
 ledger before child checks use its resolved path; an empty configuration no
-longer resolves to the current directory. The media library import/load check
-passed. The separate media DirectStorage fetch gate and full image/video
-generation remain unqualified while GPU admission refuses the occupied GPUs.
+longer resolves to the current directory. Media generation requires the selected component files, a loadable weight-fetcher and available GPU admission.
 
 ## KV and YOCO checkpoints
 
@@ -65,7 +63,7 @@ Separate switches control saving/restoring KV around media jobs and when
 conversation histories change. YOCO state is included automatically whenever
 the selected preset uses YOCO. Checkpoints bind the original model, renderer,
 producer build, precision, YOCO replay window, exact tokens, image identities,
-logits and every native owner hash. Payloads stream in bounded pages; a full
+logits and every native state-region hash. Payloads stream in bounded pages; a full
 payload is not staged in RAM. Checkpoints have a disk budget and free-space
 admission. Existing files are preserved when that budget is exhausted.
 
@@ -77,7 +75,7 @@ also saves the current conversation when its checkpoint switch is enabled.
 
 The local YOCO proof used a 491-token prefix, YOCO140 and a 999,424-token admitted
 context. Resident append and restored append produced identical token, logit
-and owner hashes with the same streaming arithmetic. This does not establish
+and state-region hashes with the same streaming arithmetic. This does not establish
 exact equality between different prefill kernel families or exact full-model
 prefill: YOCO remains an approximate prefill preset.
 
@@ -107,18 +105,12 @@ physical allocation across their processes is not implemented.
 
 ## RTX/Mac YOCO transfer
 
+Negotiated YOCO state v1 export exists. Mac decode with YOCO has not been benchmarked. The published two-machine timing was measured before YOCO (plain ULTRA prefill).
+
 Paired presets negotiate YOCO140 and state version1 explicitly in pairing,
 startup headers and native readiness. Unrecognized/mismatched peers cannot
 enable YOCO export. Version1 uses the original mode3 payload and incremental
-artifact geometry, including a complete DSpark ring, with all-owner hashes.
+artifact geometry, including a complete DSpark ring, with all-region hashes.
 The provenance remains YOCO-derived. Ordinary exact mode is unchanged.
 
-The RTX GPU gate passed with a 645-token YOCO140 prefix: initial and appended
-mode3 payloads verified every owner hash, including 128 DSpark rows, followed
-by a 1,428,256-byte incremental export and a hash-identical rewind. This checks
-the producer transfer mechanics; it is not a Mac generation/parity result.
-
-Mac builds and generation qualification must use the synchronized RTX source.
-A successful source transfer or compile alone is not an end-to-end Mac decode
-qualification. Keep the active Mac engine until the new pair passes its native
-and paired qualification checks.
+Compatible YOCO transport carries initial and appended mode3 state, including the complete DSpark ring and incremental updates. Rewind checks the restored state hashes. Both peers must negotiate the same format before transfer. A successful compile or state import alone does not establish equal model outputs across different arithmetic paths.

@@ -1,7 +1,5 @@
 # Media engine and trainer source
 
-Derived from a private fork at c5ee9ec9dd47786287e576e78fbb42e5f4c4eac3, cosmos_windows. Only Python engine/trainer modules are retained. Documentation, backups, tests, data, weights and private history are excluded. Machine-specific fallback paths were cleared. MIT for owner-authored code; third-party licenses must accompany reused third-party modules.
+Original Studio media/trainer integration modules, MIT, with upstream packages attributed by their retained licences and dependency declarations. No separate upstream Git branch point has been established for this original integration source.
 
-Local Anima fixes load explicit adapters through the pipeline's native-name converter for both the transformer and text conditioner, materialize adapter tensors alongside a streamed meta-device base, and bind/evict only the wrapped base weights. Adapter shape and finite-value checks fail visibly before sampling. The shared adapter helper accepts an optional low-memory loader argument; other callers retain their existing behavior.
-
-H3 indexes only the selected transformer's immediate shard files. Nested composition caches and alternate model copies are excluded from that component, preventing unrelated tensor prefixes from binding into the selected model. Other callers retain recursive indexing by default.
+Changes: portable model/component paths, explicit adapter conversion and validation for streamed models, bounded loading, isolated worker integration and H3 immediate-shard indexing. Reused third-party modules retain their own terms.
