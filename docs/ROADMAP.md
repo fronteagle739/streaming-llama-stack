@@ -1,21 +1,23 @@
 # Limitations and roadmap
 
-## Known limitations
+## Limitations
 
-- The Windows kernels target compute capability 12.0. Hardware beyond the measured RTX 5090 and M3 Ultra configurations needs separate evaluation.
-- The 1M launcher admits 999,424 tokens. Published long-document recall measurements cover up to 237,703 prompt tokens, not a complete million-token prompt.
-- YOCO is approximate. Image-containing prompts use full evaluation, and faster expert-routing settings can introduce code errors.
-- Media families and LoRA are experimental. Language-model adapters require the native ds4 path; a media checkpoint needs matching encoders, VAEs and adapters.
-- The first prompt includes producer startup. Initial model verification hashes the complete file. Neither cost should be reported as sustained decode speed.
-- Paired operation requires matching model/renderer identities, compatible native state formats and sufficient memory on both hosts. A layer-by-layer distributed pipeline is separate from the supported RTX-prefill/Mac-decode session handoff.
-- There is no verified public download URL for the exact measured Flash 1017 Q4 GGUF; see the README model TODO.
+- Windows kernels target compute capability 12.0 (RTX 50-series). Other GPUs are untested.
+- The single-engine DeepSeek V4.1 path expects Q4_K routed experts and Q8_0 for the rest.
+- The faster quality/speed settings cost quality. Max speed introduced syntax
+  errors in C++ tests; use Max quality or Balanced for code.
+- YOCO is approximate and opt-in.
+- The first prompt includes engine startup, and decode is slower until the expert
+  cache warms up (about 100 tokens). The first check hashes the model once.
+- GLM-5.3 Flash and Qwen3.8 Flash Next are not yet in the streaming engine.
+- Media generation and LoRA are experimental.
 
-## Planned work
+## Planned
 
-- Publish a reproducible source and conversion recipe for the measured GGUF.
-- Extend quality and long-context measurements across more prompt types, context depths and devices.
-- Reduce cold-start and DirectStorage setup overhead; improve VRAM use without increasing the host-RAM budget.
-- Broaden media/adapter coverage and improve visible save/reload progress during GPU handoffs.
-- Explore distributed layer execution independently of the existing paired session transport.
-
-See [Performance](PERFORMANCE.md), [paired operation](TWO_MACHINE.md), and [Variables](VARIABLES.md) for current behavior.
+- A DeepSeek V4.1 GGUF conversion script based on antirez's ds4 converter.
+- Support for other DeepSeek V4.1 quantizations in the single-engine path.
+- An example two-machine configuration with a large-RAM second machine (for
+  example a DDR4 server) running ds4-win decode.
+- Faster cold start and DirectStorage setup; better VRAM use within the same RAM budget.
+- Wider quality and long-context testing across prompt types and hardware.
+- More media models and adapters.

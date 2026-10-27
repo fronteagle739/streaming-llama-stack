@@ -1,26 +1,68 @@
-# RTX prefill and Mac decode
+# Two machines: RTX prefill, Mac decode
 
-The paired backend uses the RTX for long prompt prefill and an M3 Ultra for decode. It is a supported session handoff used through Studio. It does not divide every transformer layer between machines.
+The RTX 5090 does what it is fast at: streaming prefill of long prompts. The Mac
+Studio does what it is fast at: decode with the whole model in 512 GB of unified
+memory. They share one live session.
 
-Install the stack on both hosts and configure the identical Flash 1017 Q4 model. The Mac needs enough unified memory for its native core, context and safety reserve; the measured system has 512 GB. The RTX retains its own explicit host budget and available-RAM floor.
+## Speed
 
-On the Mac:
+DeepSeek V4.1 Flash, RTX 5090 desktop plus M3 Ultra (512 GB), measured in the
+stack's web UI:
+
+| Prompt | YOCO | Prompt time | Prefill tok/s | Mac decode tok/s |
+|---|---|---:|---:|---:|
+| 198,287 tokens with an image | On | 118.8 s | 1,670 | 31.0 |
+| 49,787 tokens with an image | On | 33.7 s | 1,477 | 31.8 |
+| 49,787 tokens with an image | Off | 41.6 s | 1,197 | — |
+
+The 198K image prompt runs 1.69× faster than on one machine without YOCO
+(986 tok/s). The handoff itself adds about 3.4 s.
+
+## How a session flows
+
+1. The Mac receives the whole prompt.
+2. Under 11,776 new tokens, the Mac prefills it itself (about 350–390 tok/s).
+   No round trip.
+3. Longer prompts go to the RTX. It runs the same prefill as the single-machine
+   setup, then sends the finished state to the Mac once.
+4. The Mac decodes and keeps the session. Short follow-ups stay on the Mac;
+   long additions go back to the RTX.
+
+Images travel with the prompt. Pairing checks that both sides run the same model,
+tokenizer and engine versions.
+
+## Memory
+
+The RTX side has an 8.5 GiB RAM budget and peaked at 6.3 GiB. The Mac runs with
+a 400 GiB budget.
+
+## Setup
+
+Install on both machines and use the same model file. On the Mac:
 
 ```sh
 ./bin/slstack install --all
-./bin/slstack mac --model '<model_dir>/DeepSeek-V4.1-Flash-1017-Q4-v41.gguf' --host-budget-gib 400 --min-available-gib 8
+./bin/slstack mac --model '<model_dir>/<deepseek-v4.1-flash>.gguf' --host-budget-gib 400 --min-available-gib 8
 ```
 
-Use the receiver's printed endpoint, pairing token and Windows command:
+The Mac prints its endpoint, a pairing token and the Windows command. On Windows:
 
 ```powershell
 ./slstack.ps1 rtx --config my.local.json --mac <mac-endpoint> --pair-token <printed-token> --webui
 ```
 
-Pairing checks model, tokenizer/renderer, engine identity, state format and memory admission. Keep tokens in local runtime configuration. Both hosts must be able to reach their announced transport endpoints. Stop foreground launchers with Ctrl-C and allow native shutdown to complete.
+Keep the pairing token in local configuration. Stop with Ctrl-C.
 
-Initial or incremental state moves from the RTX to the Mac. Decode and small local appends update the live session; changes flow back to the RTX before another offloaded append. A strict join prevents a new RTX turn from using stale state. Short follow-ups can remain local instead of replaying a long document. Edits, reasoning-history changes and incompatible checkpoints can require rewind or fresh prefill. [Prefix reuse](PREFIX_REUSE.md)
+Follow-ups reuse the session; edits to earlier messages rewind it.
+[Prefix reuse](PREFIX_REUSE.md) · [State transfer and images](STACK_MEDIA_AND_STATE.md)
 
-The recorded case was measured before YOCO (plain ULTRA prefill). The 184,432-token case used 173.252 s RTX compute, 7.662 s transfer/import and 31.494 Mac decode tok/s; the full prompt interval was 229.128 s. [Timing details](PERFORMANCE.md)
+## Other models
 
-Negotiated YOCO state v1 export exists. Mac decode with YOCO has not been benchmarked. Approximate YOCO transport requires explicit negotiation of compatible state support on both peers. See [media/state behavior](STACK_MEDIA_AND_STATE.md) for the YOCO format and checkpoint requirements.
+The handoff is general. Kimi K2.7 and GLM-5.1/5.2/5.3 use RTX prefill with an MLX
+receiver on the Mac. Presets are in
+[examples/dual-machine](../examples/dual-machine/README.md).
+
+## Planned: a large-RAM decode box
+
+An example configuration for an RTX prefill machine paired with a large-RAM
+second machine (for example a DDR4 server) running ds4-win decode is planned.
