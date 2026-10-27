@@ -402,6 +402,30 @@
       "sha256": "036246682a11aec57bc4da565f7e4d268a5760eca5f20f167aafc4d5cdbb28f2",
       "media_type": "image/png",
       "review": "Visually inspected actual headless stack WebUI. Synthetic red-square, weather and recall prompts only; actual sampler controls, advancing progress and numerical context/rate statistics visible. No addresses, credentials or personal paths visible. Shared single-engine producer profile."
+    },
+    {
+      "path": "examples/anygguf-gpu-smoke/prefill-progress.png",
+      "sha256": "70e3993ad0d7c5fcabb73ffd76f59f010ecbc2aacba3b7633bffd3414ab803e4",
+      "media_type": "image/png",
+      "review": "Visually inspected actual isolated WebUI in headless Chromium. Synthetic recall and weather-station prompts only; no personal paths, credentials, network addresses or owner data. PNG pixels only, no text or EXIF metadata."
+    },
+    {
+      "path": "examples/anygguf-gpu-smoke/recall.png",
+      "sha256": "7bfa6b1a568015f120e943af6f0d3fb5c863c05744198a84f43631142d4350e3",
+      "media_type": "image/png",
+      "review": "Visually inspected actual isolated WebUI in headless Chromium. Synthetic recall and weather-station prompts only; no personal paths, credentials, network addresses or owner data. PNG pixels only, no text or EXIF metadata."
+    },
+    {
+      "path": "examples/anygguf-gpu-smoke/max-quality.png",
+      "sha256": "57916a16921a20a5770588508b554ab36248f9a76488327158c7e842a3049c5d",
+      "media_type": "image/png",
+      "review": "Visually inspected actual isolated WebUI in headless Chromium. Synthetic recall and weather-station prompts only; no personal paths, credentials, network addresses or owner data. PNG pixels only, no text or EXIF metadata."
+    },
+    {
+      "path": "examples/anygguf-gpu-smoke/max-speed.png",
+      "sha256": "bc7613d7a1ca772cf7b2a2530ada3b022d719b876851476d5c54cc3de9db2d8e",
+      "media_type": "image/png",
+      "review": "Visually inspected actual isolated WebUI in headless Chromium. Synthetic recall and weather-station prompts only; no personal paths, credentials, network addresses or owner data. PNG pixels only, no text or EXIF metadata."
     }
   ]
 }
