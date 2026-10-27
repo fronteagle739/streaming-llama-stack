@@ -519,6 +519,10 @@ int ds4_engine_create_with_gpu_config(ds4_engine **out,
 void ds4_engine_close(ds4_engine *e);
 void ds4_engine_summary(ds4_engine *e);
 int ds4_engine_vocab_size(ds4_engine *e);
+/* Selection-only cache affinity has no missing candidates on this policy. */
+bool ds4_engine_quality_speed_resident(ds4_engine *e);
+int ds4_session_quality_speed_set(ds4_session *s,float value);
+float ds4_session_quality_speed_get(const ds4_session *s);
 uint32_t ds4_engine_prefill_chunk(ds4_engine *e);
 int ds4_engine_power(ds4_engine *e);
 int ds4_engine_set_power(ds4_engine *e, int power_percent);

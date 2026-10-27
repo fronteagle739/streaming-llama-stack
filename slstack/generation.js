@@ -5,14 +5,20 @@
   const phases = {reasoning: 'Reasoning', answer: 'Answer', tool_call: 'Tools', code: 'Code'};
   const points = [['Max quality', 0], ['Balanced', .35], ['Fast', .65], ['Faster', .9], ['Max speed', 1.36125]];
   let settings, applied, selected = 'reasoning', dirty = false, saving = false, editing = false, request = 0;
-  let revision = 0, pending = {}, timer, error = '';
+  let revision = 0, pending = {}, timer, error = '', appliesAt = 'the next token';
   const originalFetch = window.fetch.bind(window);
   // The toolbar owns sampling for WebUI turns. Remove the stock UI's always-
   // present defaults, which otherwise override explicit per-phase settings.
   // Direct API callers retain the OpenAI request-level override semantics.
-  window.fetch = function(input, init) {
+  window.fetch = async function(input, init) {
     let url; try { url = new URL(typeof input === 'string' ? input : input.url, location.href); } catch {}
     if (url?.origin === location.origin && /\/chat\/completions$/.test(url.pathname) && typeof init?.body === 'string') {
+      // A Send immediately after typing must carry the committed toolbar
+      // revision. Await the pending35ms debounce and any in-flight save.
+      clearTimeout(timer);
+      await flush();
+      while (saving || dirty) {if (!saving) await flush();else await new Promise(resolve => setTimeout(resolve, 5));}
+      if (error) throw new Error(error);
       try {
         const body = JSON.parse(init.body);
         for (const key of ['temperature', 'top_p', 'top_k', 'min_p']) delete body[key];
@@ -80,17 +86,19 @@
     const label = settings.per_phase ? 'Per phase' : modeName(Number(range.value));
     toolbar.querySelector('#sl-generation-mode').textContent = label;
     range.setAttribute('aria-valuetext', `${label}, bias ${range.value}`);
-    range.title = `Bias ${Number(range.value).toFixed(3)} · next token`;
+    range.title = `Bias ${Number(range.value).toFixed(3)} · ${appliesAt}`;
+    toolbar.querySelector('label').title = `Quality vs speed. Changing this slider sets every phase; applies at ${appliesAt}.`;
+    panel.querySelector('small').textContent = `Quality and sampling for this session. Changes apply at ${appliesAt}.`;
     panel.querySelector('#sl-generation-enabled').checked = settings.per_phase;
     panel.querySelectorAll('[role=tab]').forEach(b => {b.setAttribute('aria-selected', String(b.dataset.phase === selected));b.title = applied?.phase === b.dataset.phase ? 'Current phase' : phases[b.dataset.phase];});
     const status = panel.querySelector('#sl-generation-status');
     status.setAttribute('role', error ? 'alert' : 'status');
-    status.textContent = error || (saving ? 'Saving…' : applied?.revision === settings.revision ? `Applied · ${phases[applied.phase]} · token ${applied.position}` : 'Saved · applies at the next token');
+    status.textContent = error || (saving ? 'Saving…' : applied?.revision === settings.revision ? `Applied · ${phases[applied.phase]} · token ${applied.position}` : `Saved · applies at ${appliesAt}`);
   }
   function renderFields() {
     if (!settings) return;
     const phase = settings.per_phase, knobs = phase ? settings.phases[selected] : {...settings.sampler, bias: settings.value};
-    const fields = [['bias', 'Speed bias', 0, 1.36125, .00125], ['temperature', 'Temperature', 0, 2, .05], ['top_p', 'Top p', .001, 1, .01], ['top_k', 'Top k', 0, 1024, 1], ['min_p', 'Min p', 0, 1, .01]];
+    const fields = [['bias', 'Speed bias', 0, 1.36125, 'any'], ['temperature', 'Temperature', 0, 2, 'any'], ['top_p', 'Top p', .001, 1, 'any'], ['top_k', 'Top k', 0, 1024, 1], ['min_p', 'Min p', 0, 1, 'any']];
     panel.querySelector('#sl-generation-fields').innerHTML = fields.map(([key, title, min, max, step]) => `<label class="sl-generation-field"><span>${title}</span><input aria-label="${phase ? phases[selected] : 'All phases'} ${title}" data-knob="${key}" type="number" min="${min}" max="${max}" step="${step}" value="${knobs[key]}"></label>`).join('');
     panel.querySelector('.sl-generation-tabs').style.opacity = phase ? '1' : '.5';
     panel.querySelectorAll('[data-knob]').forEach(input => input.addEventListener('input', () => {
@@ -110,6 +118,7 @@
     try {
       const response = await originalFetch('/slstack/generation', {method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify(patch)});
       const data = await response.json();if (!response.ok) throw new Error(data.error?.message || 'Settings refused');
+      appliesAt = data.applies === 'next request' ? 'the next turn' : 'the next token';
       revision = data.settings.revision;
       settings = merge(data.settings, pending);
     } catch (e) {error = `Couldn’t apply settings: ${e.message}`;}
@@ -129,6 +138,7 @@
     try {
       const response=await originalFetch('/slstack/generation',{cache:'no-store'});if(!response.ok)throw new Error('Generation controls unavailable');
       const data=await response.json();if(!data.supported){toolbar.hidden=true;return;}
+      appliesAt = data.applies === 'next request' ? 'the next turn' : 'the next token';
       applied=data.applied;
       if(!saving&&!dirty&&!editing&&data.settings.revision>=revision){const first=!settings;settings=data.settings;revision=settings.revision;if(first||panel.open&&!panel.contains(document.activeElement))renderFields();}
       paint();

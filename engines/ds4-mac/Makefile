@@ -92,8 +92,36 @@ help:
 ds4: ds4_cli.o ds4_help.o ds4_prompt_prefix.o linenoise.o ds4_gpu_args.o $(CORE_OBJS)
 	$(CC) $(CFLAGS) -o $@ ds4_cli.o ds4_help.o ds4_prompt_prefix.o linenoise.o ds4_gpu_args.o $(CORE_OBJS) $(METAL_LDLIBS)
 
-ds4-server: ds4_server.o ds4_score.o ds4_help.o ds4_kvstore.o rax.o ds4_gpu_args.o $(CORE_OBJS)
-	$(CC) $(CFLAGS) -o $@ ds4_server.o ds4_score.o ds4_help.o ds4_kvstore.o rax.o ds4_gpu_args.o $(CORE_OBJS) $(METAL_LDLIBS)
+PAIRED_LLAMA := ../streaming-llama/prefill_llama.cpp
+PAIRED_DIR := .paired-samplers
+PAIRED_INCLUDES := -I$(PAIRED_LLAMA)/include -I$(PAIRED_LLAMA)/src -I$(PAIRED_LLAMA)/ggml/include -I$(PAIRED_LLAMA)/ggml/src
+PAIRED_UNITS := llama-sampler llama-vocab unicode unicode-data llama-impl llama-grammar
+PAIRED_OBJS := ds4_sampling_bridge.o $(addprefix $(PAIRED_DIR)/,$(addsuffix .o,$(PAIRED_UNITS)))
+PAIRED_GGML := $(PAIRED_DIR)/ggml/src/libggml-base.a
+ds4_server.o: ds4_paired_sampling.h ds4_sampling_bridge.h ds4_quality_phase.h ds4_quality_code.h ds4_native_session_vision.inc
+ds4_server.o: CFLAGS += -fno-finite-math-only
+ds4.o ds4_server.o: $(wildcard ds4_native*.inc ds4_native*.h dsv41*.h)
+$(PAIRED_OBJS): $(wildcard $(PAIRED_LLAMA)/src/*.h $(PAIRED_LLAMA)/include/*.h $(PAIRED_LLAMA)/ggml/include/*.h)
+CMAKE ?= cmake
+ifeq ($(UNAME_S),Darwin)
+PAIRED_LINK := -lc++ -Wl,-dead_strip
+else
+PAIRED_LINK := -lstdc++ -Wl,--gc-sections
+endif
+
+$(PAIRED_DIR)/%.o: $(PAIRED_LLAMA)/src/%.cpp
+	mkdir -p $(PAIRED_DIR)
+	$(CXX) -O2 -std=c++17 -ffunction-sections -fdata-sections $(PAIRED_INCLUDES) -c $< -o $@
+
+ds4_sampling_bridge.o: ds4_sampling_bridge.cpp ds4_sampling_bridge.h ds4.h
+	$(CXX) -O2 -std=c++17 -ffunction-sections -fdata-sections $(PAIRED_INCLUDES) -c $< -o $@
+
+$(PAIRED_GGML): $(wildcard $(PAIRED_LLAMA)/ggml/src/*.[ch] $(PAIRED_LLAMA)/ggml/src/*.cpp $(PAIRED_LLAMA)/ggml/include/*.h $(PAIRED_LLAMA)/ggml/cmake/*.cmake) $(PAIRED_LLAMA)/ggml/CMakeLists.txt $(PAIRED_LLAMA)/ggml/src/CMakeLists.txt
+	$(CMAKE) -S $(PAIRED_LLAMA)/ggml -B $(PAIRED_DIR)/ggml -DBUILD_SHARED_LIBS=OFF -DGGML_CPU=OFF -DGGML_METAL=OFF -DGGML_BLAS=OFF -DGGML_OPENMP=OFF -DGGML_BUILD_TESTS=OFF -DGGML_BUILD_EXAMPLES=OFF
+	$(CMAKE) --build $(PAIRED_DIR)/ggml --target ggml-base --parallel 1
+
+ds4-server: ds4_server.o ds4_score.o ds4_help.o ds4_kvstore.o rax.o ds4_gpu_args.o $(CORE_OBJS) $(PAIRED_OBJS) $(PAIRED_GGML)
+	$(CC) $(CFLAGS) -o $@ ds4_server.o ds4_score.o ds4_help.o ds4_kvstore.o rax.o ds4_gpu_args.o $(CORE_OBJS) $(PAIRED_OBJS) $(PAIRED_GGML) $(PAIRED_LINK) $(METAL_LDLIBS)
 
 ds4-bench: ds4_bench.o ds4_help.o ds4_gpu_args.o $(CORE_OBJS)
 	$(CC) $(CFLAGS) -o $@ ds4_bench.o ds4_help.o ds4_gpu_args.o $(CORE_OBJS) $(METAL_LDLIBS)

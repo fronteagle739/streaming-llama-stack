@@ -24,3 +24,11 @@ Initial or incremental state moves from the RTX to the Mac. Decode and small loc
 The recorded case was measured before YOCO (plain ULTRA prefill). The 184,432-token case used 173.252 s RTX compute, 7.662 s transfer/import and 31.494 Mac decode tok/s; the full prompt interval was 229.128 s. [Timing details](PERFORMANCE.md)
 
 Negotiated YOCO state v1 export exists. Mac decode with YOCO has not been benchmarked. Approximate YOCO transport requires explicit negotiation of compatible state support on both peers. See [media/state behavior](STACK_MEDIA_AND_STATE.md) for the YOCO format and checkpoint requirements.
+
+The paired candidate accepts the default WebUI phase profile and explicit
+sampler overrides. Toolbar changes apply on the next turn. Its Mac launcher
+selects the compatible existing vision encoder beside the language model, or
+uses `vision_encoder`/`ds4_vision`. Projected image spans and identities travel
+over the authenticated session channel for initial and appended prompts.
+These paths have CPU/browser-fixture coverage; the required live image and
+long-context YOCO gate is still incomplete.
