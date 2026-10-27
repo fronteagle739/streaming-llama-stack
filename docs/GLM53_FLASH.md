@@ -121,7 +121,7 @@ The result directory must be new and inside the configured runtime. On Windows,
 The runner checks holds and acquires/releases a GPU lease for the CUDA run;
 both children run under the existing RSS/commit/available-RAM guards.
 
-**Full graph numerical acceptance still fails.** With the existing random
+**Round two did not pass full graph numerical acceptance.** With the existing random
 ds4-layout fixture, a 65-token prompt, 16-token microbatches, restored state and
 eight continuation tokens, only 67/73 CPU/CUDA top tokens agree; maximum logit
 difference is 3.6379032. CUDA 64-versus-16 microbatch comparison at a 64-token
@@ -135,3 +135,71 @@ model chat, 16K/50K prefill rate, warm decode rate, ULTRA producer, external GLM
 ds4 state binding, or context preset is qualified by this round. Fast storage
 capacity remains insufficient for the full model under the authorized move
 destinations. Model discovery alone does not remove that blocker.
+
+## Round three: CUDA numerical agreement
+
+Two independent causes were isolated with the tiny fixtures and scalar oracles:
+
+* NVIDIA's floating-point MMF kernel consumes TF32 operands for F32 weights.
+  Switching microbatch size selected different precision, and an explicit F32
+  request did not exclude that kernel. Routed expert slices also lost the
+  caller's precision parameter. The first material discrepancy was in MoE;
+  it then changed a later sparse pool selection. F32 dense/routed operations now
+  reuse the existing F32 vector/cuBLAS paths, and expert slices preserve their
+  precision. Odd-width routed fallback graphs are excluded from capture because
+  their existing host ID sort synchronizes the stream.
+* Correcting precision exposed exact zero plateaus in indexer scores at longer
+  prompts. CPU partial sorting and CUDA bitonic sorting could choose different
+  tied pools. For example, scores tied at zero for pools 0, 4 and 6; the backends
+  selected `{0,4}` and `{0,6}`. CPU argsort/top-k and both CUDA bitonic sorting
+  paths now break equal-value ties by the smaller original index, matching the
+  existing tiled CUDA merge. No score perturbation or tolerance increase is used.
+
+The fixes change default F32 execution as well as explicit-F32 diagnostics.
+F32 matrix throughput may be lower than TF32; no performance qualification is
+inferred from these fixtures. Default quantized matmul dispatch is retained.
+The tie convention also applies to other users of the changed CPU/CUDA sorts.
+Other backend implementations and optional CUB fallbacks are not qualified here.
+
+`glm53-op-check` adds scalar comparisons for dense/routed matmuls, masked MLA,
+mHC pre/gated-pre/Sinkhorn/post, and indexer scoring/top-k. It checks the exact
+selected set at a zero plateau, including signed zeros and masked future pools.
+Four successive graph executions change input values and expert IDs. The KDA
+scalar matrix remains separate. Negative controls linked to the pre-fix libraries
+fail these new regressions; corrected binaries pass.
+
+`glm53-logits` accepts optional `trace_dir` and `force_f32` arguments after the
+existing restore argument. The trace reads synchronized tensors without adding
+nodes or pinning buffers, but scheduler callbacks split execution; use it only
+for diagnosis. `trace_dir=- force_f32=0` installs no callback. Backend
+`GGML_CUDA_GRAPH_TRACE=1` emits bounded direct/launch markers after execution.
+
+The guarded runner verifies the resolved child environment and actual launch
+markers. This matters: the producer launch profile intentionally disables CUDA
+graphs. Standalone checks use the native engine profile, preserving the same
+GPU lease and memory guards, without changing that production default.
+
+Build `glm53-logits`, `glm53-op-check` and `glm53-kda-check` for CPU and CUDA,
+then run from the retained llama source directory:
+
+```sh
+python -B tests/streamllama/run_glm53_cuda.py --config "$CONFIG" \
+  --models "$FIXTURES" --cpu-binary "$CPU_LOGITS" --cuda-binary "$CUDA_LOGITS" \
+  --cpu-ops "$CPU_OPS" --cuda-ops "$CUDA_OPS" \
+  --cpu-kda "$CPU_KDA" --cuda-kda "$CUDA_KDA" --output "$RESULTS"
+```
+
+Use explicit host/commit caps at or below 3 GiB, a 4 GiB physical-RAM floor,
+the selected GPU UUID, a shared hold ledger and task-local cache/temp paths.
+The output directory must be new. On Windows the optional
+`--cuda-library-directory` selects installed CUDA runtime DLLs. A nonzero
+`gpu_wait_seconds` lets admission wait for transient utilization to settle.
+
+The matrix covers all three layouts, 64/65/320 prompt tokens, 64/16 microbatches,
+eight continuation tokens, cleared-cache restore, default/F32 precision and
+capture enabled/disabled. Every top token must agree, and the existing
+`compare_logits.py` maximum-logit threshold remains 1e-2. Numerical evidence and
+the separate scalar thresholds are in `examples/glm53_flash/round3.json`.
+These checks qualify synthetic numerical agreement only. The original model,
+ULTRA/ds4 producer integration, trained-model WebUI and speed acceptance remain
+outside this round.

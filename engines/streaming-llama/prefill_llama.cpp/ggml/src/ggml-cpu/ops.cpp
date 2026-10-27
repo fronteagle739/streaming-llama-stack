@@ -7918,6 +7918,7 @@ template<enum ggml_sort_order order>
 struct cmp_argsort {
     const float * data;
     bool operator()(int32_t a, int32_t b) const {
+        if (data[a] == data[b]) return a < b;
         if constexpr (order == GGML_SORT_ORDER_ASC) {
             return data[a] < data[b];
         } else {
@@ -7990,7 +7991,7 @@ void ggml_compute_forward_argsort(
 struct cmp_top_k {
     const float * data;
     bool operator()(int32_t a, int32_t b) const {
-        return data[a] > data[b];
+        return data[a] > data[b] || (data[a] == data[b] && a < b);
     }
 };
 
