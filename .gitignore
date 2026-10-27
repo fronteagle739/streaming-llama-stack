@@ -25,6 +25,7 @@ runtime/
 *.metallib
 *.air
 *.winmd
+engines/ds4-mac/.paired-samplers/
 
 # Additional outputs of the reproducible web UI build.
 /engines/streaming-llama/prefill_llama.cpp/tools/server/public/index.html

@@ -58,8 +58,7 @@ class InheritedLeaseTests(unittest.TestCase):
             variants = [dict(guardian_pid=-1),
                         dict(guardian_created=original['guardian_created'] - 1),
                         dict(released=True), dict(cleanup_uncertain=True),
-                        dict(host_budget_gib=.1), dict(min_available_gib=3),
-                        dict(expires='2000-01-01T00:00:00+00:00')]
+                        dict(host_budget_gib=.1), dict(min_available_gib=3)]
             for change in variants:
                 with self.subTest(change=change):
                     record.write_text(json.dumps({**original, **change}))
@@ -77,6 +76,14 @@ class InheritedLeaseTests(unittest.TestCase):
                     with self.assertRaises(AdmissionRefused), gpu_lease(cfg):
                         self.fail('Conflicting reservation admitted')
             self.hold.write_text(original)
+
+    def test_live_ancestor_can_finish_after_estimated_expiry(self):
+        with self.probe, gpu_lease(self.cfg) as identity:
+            record = self.reference(identity)
+            row = json.loads(record.read_text())
+            record.write_text(json.dumps({**row, 'expires': '2000-01-01T00:00:00+00:00'}))
+            with gpu_lease({**self.cfg, '_gpu_parent_lease': str(record)}) as child:
+                self.assertEqual(child, identity)
 
     def test_pair_keeps_reservation_when_broker_cleanup_is_uncertain(self):
         pair = Pair.__new__(Pair)

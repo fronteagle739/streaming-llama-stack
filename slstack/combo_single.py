@@ -139,11 +139,33 @@ class Splitter:
         return ''
 
 
+def prefill_snapshot(engine, metrics, state, now):
+    """Read the real diagnostic stream even while the cold constructor waits."""
+    from .prefill_progress import PrefillProgress
+    active = engine.producer or getattr(engine, 'starting_producer', None)
+    process = getattr(active, 'process', None) or getattr(active, 'loading_process', None)
+    total = metrics.get('new_tokens')
+    if process is None or not total or 'first_token_seconds' in metrics:
+        return None
+    diagnostic = bytes(getattr(process, 'diagnostic', b''))
+    if state.get('process') is not process:
+        state.update(process=process, tracker=None, offset=0)
+    if state.get('tracker') is None:
+        from studio.dsv41_session_contract import negotiate_prefill, split_prefill
+        plan = getattr(active, 'prefill_plan', {})
+        size = max(plan.get('sweeps') or [split_prefill(int(total), negotiate_prefill(getattr(process, 'ready', None) or {}))])
+        state['tracker'] = PrefillProgress(total, size, started=metrics.get('prefill_started', now))
+    offset = state.get('offset', 0)
+    if len(diagnostic) < offset:offset = 0
+    state['tracker'].feed(diagnostic[offset:]);state['offset'] = len(diagnostic)
+    return state['tracker'].snapshot(now)
+
+
 class SingleEngine:
     """The resident producer, its live token ids and the per-conversation state."""
     def __init__(self, cfg, *, tokenizer=None, producer_factory=None, lease_factory=None):
         self.cfg = deepcopy(cfg);self.tokenizer = tokenizer
-        self.producer = None;self.live = [];self.leases = None;self.lease_id = None
+        self.producer = None;self.starting_producer = None;self.live = [];self.leases = None;self.lease_id = None
         self.tool_memory = {};self.lock = threading.Lock();self.stopping = threading.Event()
         self.quality_value = None;self.applied_quality = None;self.last_used = time.monotonic()
         from .generation import Store
@@ -170,7 +192,10 @@ class SingleEngine:
         if base:
             reader, contract = base;contract = deepcopy(contract)
             contract.update(request_id=session, owner_epoch=epoch);base = reader, contract
-        return ComboProducer(self.cfg, session, epoch, tokens, self.stopping.is_set, base=base)
+        try:
+            return ComboProducer(self.cfg, session, epoch, tokens, self.stopping.is_set, base=base,
+                                 on_start=lambda value:setattr(self, 'starting_producer', value))
+        finally:self.starting_producer = None
 
     def save_snapshot(self, reason):
         from .local_cache import options
@@ -322,8 +347,8 @@ class SingleEngine:
             if image_spans:self.cfg['_vision_spans']=image_spans
             else:self.cfg.pop('_vision_spans',None)
             if not spans_match(tokens,image_spans):raise ValueError('Rendered image spans differ from the selected token sequence')
-            self.launch(tokens, base=base);metrics['producer_launch_prefill_seconds'] = time.monotonic() - started
             metrics['reused_prefix_tokens'] = reused;metrics['new_tokens'] = len(tokens)-reused
+            self.launch(tokens, base=base);metrics['producer_launch_prefill_seconds'] = time.monotonic() - started
         else:
             append = tokens[len(self.live):];metrics['reused_prefix_tokens'] = len(self.live);metrics['new_tokens'] = len(append)
             # LLAMADECODE single sweep: negotiated one-op maximum (49152 from old producers), and a
@@ -335,7 +360,8 @@ class SingleEngine:
             # chunk independently (which would fetch all decoder weights again).
             if self.cfg.get('yoco_keep',0) and len(append)>chunk:
                 self.retire('YOCO long logical append requires re-prefill')
-                self.launch(tokens);metrics['reused_prefix_tokens']=0;metrics['new_tokens']=len(tokens)
+                metrics['reused_prefix_tokens']=0;metrics['new_tokens']=len(tokens)
+                self.launch(tokens)
                 append=[]
             for offset in range(0, len(append), chunk):
                 self.producer.prefill(append[offset:offset + chunk]);self.live.extend(append[offset:offset + chunk])
@@ -683,23 +709,16 @@ def handler(proxy):
                     try:self.wfile.write(data);self.wfile.flush()
                     except OSError:alive[0] = False   # client gone: the decode stops at its next token boundary
             def write(row):send_raw(b'data: ' + json.dumps(row, separators=(',', ':'), ensure_ascii=False).encode() + b'\n\n')
-            progress = dict(tracker=None, offset=0)
+            current = getattr(engine.producer, 'process', None)
+            progress = dict(tracker=None, process=current, offset=len(getattr(current, 'diagnostic', b'')))
             def progress_beat():
                 # Owner: streaming clients get prefill percent. Parsed from the resident producer's
                 # per-layer sweep lines; a cold launch (producer still opening) gets a keepalive.
-                from .prefill_progress import PrefillProgress, chunk as progress_chunk
-                process = getattr(engine.producer, 'process', None);total = metrics.get('new_tokens')
-                if process is None or not total or 'first_token_seconds' in metrics:
+                from .prefill_progress import chunk as progress_chunk
+                snapshot = prefill_snapshot(engine, metrics, progress, time.monotonic())
+                if snapshot is None:
                     send_raw(b': progress\n\n');return
-                diagnostic = process.diagnostic
-                if progress['tracker'] is None:
-                    from studio.dsv41_session_contract import negotiate_prefill, split_prefill
-                    size = split_prefill(int(total), negotiate_prefill(getattr(process, 'ready', None) or {}))
-                    progress['tracker'] = PrefillProgress(total, size, started=metrics.get('prefill_started', time.monotonic()))
-                    progress['offset'] = len(diagnostic)
-                if len(diagnostic) < progress['offset']:progress['offset'] = 0   # rotated
-                progress['tracker'].feed(bytes(diagnostic[progress['offset']:]));progress['offset'] = len(diagnostic)
-                write(progress_chunk(cid, model, created, progress['tracker'].snapshot(time.monotonic())))
+                write(progress_chunk(cid, model, created, snapshot))
             final = {}
             def emit(kind, *values):
                 if kind == 'delta' and streaming:

@@ -4,7 +4,7 @@
     "model_name": "Kimi-K2.7",
     "runtime_root": "runtime/kimi-standard-streaming",
     "host_budget_gib": 8,
-    "min_available_gib": 4,
+    "min_available_gib": 0.5,
     "general": {
       "mode": "streaming",
       "server": "build/llama/bin/llama-server.exe",
@@ -37,7 +37,8 @@
         "kv_port": 9100,
         "token_port": 9101
       }
-    }
+    },
+    "producer_desktop_reserve_gib": 0.5
   },
   "mac": {
     "runtime_root": "runtime/kimi-standard-streaming",
@@ -55,6 +56,7 @@
       "top_p": 0.95,
       "top_k": 0
     },
-    "mac_host_budget_gib": 400
+    "mac_host_budget_gib": 400,
+    "producer_desktop_reserve_gib": 0.5
   }
 }
