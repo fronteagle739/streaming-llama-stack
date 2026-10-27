@@ -15,7 +15,7 @@ static bool requested_sampling(const request *r) {
            r->top_p_set && fabsf(r->top_p-.87f)<1e-6f &&
            r->top_k_set && r->top_k==37 &&
            r->min_p_set && fabsf(r->min_p-.06f)<1e-6f &&
-           r->seed==123456 && r->max_tokens==79 && r->paired.bias_set &&
+           r->seed_set && r->seed==123456 && r->max_tokens==79 && r->paired.bias_set &&
            fabsf(r->paired.bias[DS4_QUALITY_REASONING]-.22f)<1e-6f &&
            fabsf(r->paired.presence-.14f)<1e-6f && fabsf(r->paired.frequency-.27f)<1e-6f &&
            fabsf(r->paired.repeat-1.12f)<1e-6f && r->paired.last_n==513 &&
@@ -52,6 +52,8 @@ int main(int argc,char **argv) {
     /* The same assertion must fail if a future proxy/parser drops to greedy. */
     r.temperature=0;r.top_p=1;r.top_k=0;r.min_p=0;
     if (requested_sampling(&r)) {request_free(&r);return 3;}
+    request_free(&r);
+    if(!parse_chat_request(NULL,NULL,"{\"messages\":[{\"role\":\"user\",\"content\":\"q\"}],\"seed\":0}",128,1000001,&r,err,sizeof(err)) || !r.seed_set || r.seed!=0)return 15;
     request_free(&r);
     /* Exact transform of a small independent logit vector, including a repeated
      * negative logit, a repeated positive one and an absent biased token. */

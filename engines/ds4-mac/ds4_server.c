@@ -832,6 +832,7 @@ typedef struct {
     bool min_p_set;
     bool top_k_set;
     uint64_t seed;
+    bool seed_set;
     bool stream;
     bool stream_include_usage;
     bool ignore_eos;
@@ -3912,11 +3913,11 @@ static bool parse_chat_request(ds4_engine *e, server *s, const char *body, int d
             r->top_k_set = true;
         } else if (!strcmp(key, "seed")) {
             double v = 0.0;
-            if (!json_number(&p, &v)) {
+            if (!json_number(&p, &v) || !(v>=0 && v<9007199254740992.0) || floor(v)!=v) {
                 free(key);
                 goto bad;
             }
-            r->seed = v > 0.0 ? (uint64_t)v : 0;
+            r->seed = (uint64_t)v;r->seed_set=true;
         } else if (!strcmp(key, "stream")) {
             if (!json_bool(&p, &r->stream)) {
                 free(key);
@@ -5383,11 +5384,11 @@ static bool parse_completion_request(ds4_engine *e, const char *body, int def_to
             r->top_k_set = true;
         } else if (!strcmp(key, "seed")) {
             double v = 0.0;
-            if (!json_number(&p, &v)) {
+            if (!json_number(&p, &v) || !(v>=0 && v<9007199254740992.0) || floor(v)!=v) {
                 free(key);
                 goto bad;
             }
-            r->seed = v > 0.0 ? (uint64_t)v : 0;
+            r->seed = (uint64_t)v;r->seed_set=true;
         } else if (!strcmp(key, "stream")) {
             if (!json_bool(&p, &r->stream)) {
                 free(key);
@@ -14308,7 +14309,7 @@ static void generate_job_inner(server *s, server_slot *slot, job *j) {
     bool dsml_recovery_attempted = false;
     int recovery_completion = 0;
     uint64_t rng = j->req.seed;
-    if (!rng && !random_bytes(&rng, sizeof(rng))) {
+    if (!j->req.seed_set && !random_bytes(&rng, sizeof(rng))) {
         rng = ((uint64_t)time(NULL) << 32) ^ (uint64_t)(uintptr_t)j;
     }
     if (!rng) rng = UINT64_C(0x9e3779b97f4a7c15);
