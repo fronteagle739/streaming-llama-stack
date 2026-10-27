@@ -1,71 +1,19 @@
-# Single-RTX ULTRA prefill and native decode
+# Two-process single-RTX coordinator
 
-This candidate reuses the original ULTRA producer and the Windows ds4 decoder.
-The CUDA native core has passed a real 384-vector byte-exact checkpoint reopen
-and saved-frontier rewind test. ULTRA import parity, crossover, long-context
-performance and normal Studio acceptance are still pending. Source and CPU
-tests do not qualify the combined preset.
+This advanced coordinator alternates a streaming ULTRA producer and a native Windows ds4 decoder on one GPU. For ordinary chat use the [single-engine launcher](../README.md#quickstart), which runs prefill and decode in one producer process.
 
-The request queue now imports the existing four-phase persistence correction
-from BIASFIX revision `e1e45374ddc307c75bd7fc0e4b8dccce6b0af6e2`.
-Unknown, duplicate and embedded-NUL phase values fail explicitly. The real
-request acceptance checks Code independently from Answer across a live update
-and the next saved request; endpoint readback alone is insufficient.
+## State contract
 
-The scheduler reuses Studio's shared paging policy, bounded process-attributed
-page observer and exact process ownership implementation from revision
-`f6c4b544e14a0bdbda7fa0e7a9496f0eadf9ed2c`. Global page-file growth is a warning
-up to the shared 256 MB pressure limit. Any observed owned page-file use fails.
-CPU-only reservations are admitted only with the full remaining job budget,
-the foreign host budget and reserve, and the physical floor still available.
-New GPU or larger reservations preempt the job; uncertainty retains its lease.
+The mode-1 adapter provides bounded visit, delta apply, full restore and mutable-frontier rewind. Owners are state regions identified by kind and index: 48 at even positions and 54 at odd positions. Mode 3 remains the producer's separate session format.
 
-The versioned mode-1 contract binds the original model, native tokenizer and
-template, both RoPE implementations, F32 KV, context, position, token/logit
-hashes and every owner by kind/index. Mode 1 has 48 even-position owners or
-54 odd-position owners. The existing mode-3 producer default is retained.
+The contract binds the original model, native tokenizer/template, RoPE inputs, F32 KV, context, position, epoch, generation, token/logit hashes and every region hash. Transfers use 64 KiB pages in budgeted locked RAM. A failed import invalidates the epoch and cannot publish stale bytes.
 
-Each request uses one positive owner epoch. The coordinator exports into
-budgeted locked RAM, retires the native owned Job, certifies recovered VRAM,
-starts ULTRA, imports the base and prefills only the changed suffix. It then
-exports, certifies producer retirement and restores the actual native decoder.
-Every release requires an empty Job, a signaled process, a gone PID and
-recovered physical VRAM. A failed transfer poisons the epoch; it cannot fall
-back or publish stale bytes.
+Before switching, the coordinator requires an empty process Job, a signaled process, a retired PID and recovered physical VRAM. It restores the expert cache and uses the real new suffix size for follow-up routing. [Prefix reuse](PREFIX_REUSE.md)
 
-`combo_calibrate` reuses Kimi's crossover equation with measured end-to-end
-costs. Its decision includes preparation and the first 100 decode tokens to
-charge cold-cache refill. TTFT is recorded separately. Each admission adds at
-most one measured pair, retaining completed receipts. Both bracket endpoints
-must repeat with reversed route order before automatic routing qualifies.
-Only matching model, engine, provider and workspace evidence can be reused.
+## Calibration and inspection
 
-Short follow-ups use new suffix size rather than total context. When the
-normal reasoning-history policy requires bounded rewind, the coordinator
-logs replayed history separately and uses an additional native render to
-identify the new user text. That policy keeps a short follow-up native even
-when its retained document is large. No second tokenizer is introduced.
+`combo_calibrate` compares end-to-end routes, including preparation and the first 100 decoded tokens. TTFT is separate from steady decode speed. Calibration binds model, binaries, provider and workspace identity; it cannot be reused for mismatched inputs.
 
-`combo_measure` records actual OpenAI streaming TTFT, native 100/500/1000-token
-milestones, the 500-to-1000 warm rate, individual transfer legs and exact prefix
-reuse. `combo_alternating` tests six turns with native-only replay of the same
-actual transcript, full-vocabulary 384-vector comparisons, document-fact
-checks and both reasoning-history settings. Its TTFT explicitly includes
-qualification probes; the separate performance campaign omits those probes.
+`combo_measure` records streaming TTFT, 100/500/1000-token milestones, warm decode windows, transfer legs and prefix reuse. `combo_alternating` compares a six-turn transcript with native-only replay and complete logit vectors. These tools require explicit budgets and independent GPU admission. Automatic routing requires a compatible measured crossover rather than a guessed threshold.
 
-All hardware commands require the shared independent `slstack.guard`, an
-aggregate physical budget and available-RAM floor, and separate GPU windows
-of at most 19 minutes. Qualification uses locked checkpoint/reference RAM and
-the original GGUF in place. No model conversion or disk checkpoint is used.
-
-`scripts/build_combo_runtime.py` stages an immutable runtime only after the
-mandatory parity, three 50K quality settings and both six-turn campaigns pass.
-It reuses Studio's actual pure native-argv builder and emits a normal preset.
-Staging does not install files or mutate settings. The installed launcher
-uses the normal native Bearer token and quality/speed API. It is CPU-only
-while idle; each chat acquires its own independently guarded GPU window.
-Native streaming bytes are relayed unchanged, with terminal metadata held
-until checkpoint publication and certified owner retirement complete.
-
-The new preset and desktop/phone GUI evidence must be produced after those
-hardware receipts. No combined-preset throughput or GUI result is claimed yet.
+The immutable-runtime builder stages matching executable dependencies after its parity and conversation checks. Staging itself does not install a preset. Quality controls use authenticated native endpoints and preserve independent reasoning, tool, answer and code settings.
