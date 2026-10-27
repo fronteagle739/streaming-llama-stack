@@ -10,6 +10,10 @@ build/
 ds4.lock
 
 runtime/
+!engines/mference/Sources/Mference/Runtime/
+!engines/mference/Sources/Mference/Runtime/**
+!engines/mference/Sources/MferenceApp/Core/State/
+!engines/mference/Sources/MferenceApp/Core/State/**
 *.local.*
 *.exe
 *.dll

@@ -1,0 +1,394 @@
+{
+  "source_revision": "c3acb62863e9f533df338f891c24d983ab7ee2df",
+  "purpose": "Consistent DS4P Metal receiver source used by the paired streaming presets; retained on both hosts in the stack. Distinct from the DSV4.1 native state receiver.",
+  "files": [
+    {
+      "path": "LICENSE",
+      "sha256": "6fe44832a0468faf7a8b551ac5891b03c56ce76320b8ecc7e16488465abb9ec0",
+      "bytes": 1833,
+      "export_sha256": "6fe44832a0468faf7a8b551ac5891b03c56ce76320b8ecc7e16488465abb9ec0"
+    },
+    {
+      "path": "Makefile",
+      "sha256": "984db8555d65b134ff6ba2bf9dcf994e3b42631748877a6f40c64dac6103858b",
+      "bytes": 26160,
+      "export_sha256": "984db8555d65b134ff6ba2bf9dcf994e3b42631748877a6f40c64dac6103858b"
+    },
+    {
+      "path": "ds4.c",
+      "sha256": "5e1f3548f35a7b069d4e801b9c928524ff5bb6b7215c024a4d76f63d2e149651",
+      "bytes": 3141500,
+      "export_sha256": "5e1f3548f35a7b069d4e801b9c928524ff5bb6b7215c024a4d76f63d2e149651"
+    },
+    {
+      "path": "ds4.h",
+      "sha256": "e86307ce8ffa6e5506d16f016a3a22e47289e2d16f077339a03652905bd4ded1",
+      "bytes": 24061,
+      "export_sha256": "e86307ce8ffa6e5506d16f016a3a22e47289e2d16f077339a03652905bd4ded1"
+    },
+    {
+      "path": "ds4_agent.c",
+      "sha256": "6d3c8c383e19d770a97cf8196c24d0249f79d1ca82cb1062f5af76480cb1b443",
+      "bytes": 443094,
+      "export_sha256": "6d3c8c383e19d770a97cf8196c24d0249f79d1ca82cb1062f5af76480cb1b443"
+    },
+    {
+      "path": "ds4_bench.c",
+      "sha256": "bace5e3c5a2a3947e02cf19dd2af2ba9902f7efa483f7c11887162b418b3aba3",
+      "bytes": 38447,
+      "export_sha256": "bace5e3c5a2a3947e02cf19dd2af2ba9902f7efa483f7c11887162b418b3aba3"
+    },
+    {
+      "path": "ds4_cli.c",
+      "sha256": "763b222347fbfa849e4141a8b8dbfeb72d2f1bffe3a0aa096b60b3c5af57f1d2",
+      "bytes": 91447,
+      "export_sha256": "763b222347fbfa849e4141a8b8dbfeb72d2f1bffe3a0aa096b60b3c5af57f1d2"
+    },
+    {
+      "path": "ds4_distributed.c",
+      "sha256": "08ff11e22f2c5791de72cc910d94a6817c7a8310bde4b9cee57379f3be75e0f2",
+      "bytes": 324309,
+      "export_sha256": "08ff11e22f2c5791de72cc910d94a6817c7a8310bde4b9cee57379f3be75e0f2"
+    },
+    {
+      "path": "ds4_distributed.h",
+      "sha256": "cf2f60eb677e0eb8aeb3f8d2966636ae075893ae2198beb5e446e483af537f9e",
+      "bytes": 3782,
+      "export_sha256": "cf2f60eb677e0eb8aeb3f8d2966636ae075893ae2198beb5e446e483af537f9e"
+    },
+    {
+      "path": "ds4_distributed_win32.c",
+      "sha256": "32e1b7d46174497f28e8a8ae17a99adb73343baa7406ab7a4644961074bfc2bc",
+      "bytes": 4792,
+      "export_sha256": "32e1b7d46174497f28e8a8ae17a99adb73343baa7406ab7a4644961074bfc2bc"
+    },
+    {
+      "path": "ds4_dstorage.h",
+      "sha256": "d5fd4315f79e4c2a196c869af4a1d2b3c5e211535af80cf5cf8444803eb02415",
+      "bytes": 6995,
+      "export_sha256": "d5fd4315f79e4c2a196c869af4a1d2b3c5e211535af80cf5cf8444803eb02415"
+    },
+    {
+      "path": "ds4_eval.c",
+      "sha256": "19545bf6c0a55cb91b7e3120344ec69ad4cfb5c87cf91e82ec4191a590013f23",
+      "bytes": 206854,
+      "export_sha256": "dbf915618ad2a247952cda6eafb5de7d400a7e38c593061b736919d0bf158dd1"
+    },
+    {
+      "path": "ds4_gpu.h",
+      "sha256": "1b9500d36363cb2ddbbd81c5cac1d6ed79765a74fc3b4c92ce504c513c26156c",
+      "bytes": 125319,
+      "export_sha256": "1b9500d36363cb2ddbbd81c5cac1d6ed79765a74fc3b4c92ce504c513c26156c"
+    },
+    {
+      "path": "ds4_gpu_args.c",
+      "sha256": "8df9f52e84ce55e55e87e6558d10e7b3380d416cdddbd82c11dd82def1acf890",
+      "bytes": 8594,
+      "export_sha256": "8df9f52e84ce55e55e87e6558d10e7b3380d416cdddbd82c11dd82def1acf890"
+    },
+    {
+      "path": "ds4_gpu_args.h",
+      "sha256": "bb9398a37f0e5f346641aee6d556c4703a41ed2c09442693e48dab591a50d993",
+      "bytes": 3030,
+      "export_sha256": "bb9398a37f0e5f346641aee6d556c4703a41ed2c09442693e48dab591a50d993"
+    },
+    {
+      "path": "ds4_gpu_mgpu.h",
+      "sha256": "57d3977180a391d7ac50ab063ba157047578fb0004551bff16a48225a6389f87",
+      "bytes": 10742,
+      "export_sha256": "57d3977180a391d7ac50ab063ba157047578fb0004551bff16a48225a6389f87"
+    },
+    {
+      "path": "ds4_help.c",
+      "sha256": "50064942c77e85ea3a3d84966b65f2eac8ea4181eb2f7472ce7b9ebf9872cc31",
+      "bytes": 33337,
+      "export_sha256": "76654592313646b72a2f2d73f4c80b090bd5049578bb06a01cca41bb1711a322"
+    },
+    {
+      "path": "ds4_help.h",
+      "sha256": "0b4af2be3ec7278a3f56489c945b88a56a744c0743c6f63fbbe70c0d9498ec0c",
+      "bytes": 268,
+      "export_sha256": "0b4af2be3ec7278a3f56489c945b88a56a744c0743c6f63fbbe70c0d9498ec0c"
+    },
+    {
+      "path": "ds4_iq2_tables_cuda.inc",
+      "sha256": "216c89f646971c6cb282460d68705e3a3618defc4610a34f5d7352cfb8ee863e",
+      "bytes": 6173,
+      "export_sha256": "216c89f646971c6cb282460d68705e3a3618defc4610a34f5d7352cfb8ee863e"
+    },
+    {
+      "path": "ds4_kvstore.c",
+      "sha256": "82b76bb04b6490887a4a665f96bbd30f6798b0d1000943b917122ee14c42777c",
+      "bytes": 50990,
+      "export_sha256": "82b76bb04b6490887a4a665f96bbd30f6798b0d1000943b917122ee14c42777c"
+    },
+    {
+      "path": "ds4_kvstore.h",
+      "sha256": "f250f018d18e9ba0bdbe03208067d075782a45ddebbbc0ba0f207d7091a2fff0",
+      "bytes": 9011,
+      "export_sha256": "f250f018d18e9ba0bdbe03208067d075782a45ddebbbc0ba0f207d7091a2fff0"
+    },
+    {
+      "path": "ds4_layer_pack.c",
+      "sha256": "ed93c59f8f7579e03ee74ffda8e4677653d408b6f2fc53db54270825909f23ce",
+      "bytes": 5975,
+      "export_sha256": "ed93c59f8f7579e03ee74ffda8e4677653d408b6f2fc53db54270825909f23ce"
+    },
+    {
+      "path": "ds4_layer_pack.h",
+      "sha256": "cbe111519a7a1035f934f890d3512e42d068c8d683295ee077a984cc5ae32bcf",
+      "bytes": 2838,
+      "export_sha256": "cbe111519a7a1035f934f890d3512e42d068c8d683295ee077a984cc5ae32bcf"
+    },
+    {
+      "path": "ds4_metal.m",
+      "sha256": "2edc20f27e10b35702cc7713c96136042709875b34189c8a3d26ee70b6fbdd7f",
+      "bytes": 1968208,
+      "export_sha256": "2edc20f27e10b35702cc7713c96136042709875b34189c8a3d26ee70b6fbdd7f"
+    },
+    {
+      "path": "ds4_peer.c",
+      "sha256": "79c1282b9fdda1e83ff629ac8887dd1b0c11d61f55956d9ffec297aeb8ff142d",
+      "bytes": 99469,
+      "export_sha256": "79c1282b9fdda1e83ff629ac8887dd1b0c11d61f55956d9ffec297aeb8ff142d"
+    },
+    {
+      "path": "ds4_peer.h",
+      "sha256": "252239877a4744e5af507d014655babf1c92a5c38ebbba85be8e53a4a8c06abf",
+      "bytes": 12596,
+      "export_sha256": "252239877a4744e5af507d014655babf1c92a5c38ebbba85be8e53a4a8c06abf"
+    },
+    {
+      "path": "ds4_rocm.h",
+      "sha256": "666c354f86581be9c8989c3799a7c5e2a9e55ea2fb140cdb59d3bbef987658bf",
+      "bytes": 6086,
+      "export_sha256": "666c354f86581be9c8989c3799a7c5e2a9e55ea2fb140cdb59d3bbef987658bf"
+    },
+    {
+      "path": "ds4_server.c",
+      "sha256": "340a801f4885b331e44f14b5fe573bf5981da34d3b0017384292b51c30c95f23",
+      "bytes": 772132,
+      "export_sha256": "340a801f4885b331e44f14b5fe573bf5981da34d3b0017384292b51c30c95f23"
+    },
+    {
+      "path": "ds4_ssd.c",
+      "sha256": "d2396ea3ec6056330420ce70f0d8399e6f14d33cdeee73b201e06ff073b9f2ab",
+      "bytes": 7288,
+      "export_sha256": "d2396ea3ec6056330420ce70f0d8399e6f14d33cdeee73b201e06ff073b9f2ab"
+    },
+    {
+      "path": "ds4_ssd.h",
+      "sha256": "6d96ed420fe55c725578662f35f3724f7ce3a6c46676d528d652c0119f92665d",
+      "bytes": 1215,
+      "export_sha256": "6d96ed420fe55c725578662f35f3724f7ce3a6c46676d528d652c0119f92665d"
+    },
+    {
+      "path": "ds4_streaming_hotlist.inc",
+      "sha256": "f531a6ce780abd31eeabafb865221f8407965f358184850996a5e010a6386d92",
+      "bytes": 192470,
+      "export_sha256": "f531a6ce780abd31eeabafb865221f8407965f358184850996a5e010a6386d92"
+    },
+    {
+      "path": "ds4_streaming_hotlist_glm52.inc",
+      "sha256": "f90296ccf162cbf4d438a6e44c129b0367683ba9cf72a54621ca14b2ad5c2cb8",
+      "bytes": 94282,
+      "export_sha256": "f90296ccf162cbf4d438a6e44c129b0367683ba9cf72a54621ca14b2ad5c2cb8"
+    },
+    {
+      "path": "ds4_tp.c",
+      "sha256": "79f86cfa83cf40519ee251c55bc8c5dfd50baba11664bbbb9a38a584e7375282",
+      "bytes": 86619,
+      "export_sha256": "5a5e74cab09bf3dcf97664741015833381bfe8bc37a5338d179b01cb9f527e31"
+    },
+    {
+      "path": "ds4_tp.h",
+      "sha256": "b377eeb3c0f376038a9c2e1168f26c784da6cadf969da9516478fa8275e65cdb",
+      "bytes": 9493,
+      "export_sha256": "b377eeb3c0f376038a9c2e1168f26c784da6cadf969da9516478fa8275e65cdb"
+    },
+    {
+      "path": "ds4_tp_win32.c",
+      "sha256": "144a52e4bc7387e58859f8070b93db357cb5b8b7abeeccb1920aa8a5660b7e17",
+      "bytes": 14397,
+      "export_sha256": "144a52e4bc7387e58859f8070b93db357cb5b8b7abeeccb1920aa8a5660b7e17"
+    },
+    {
+      "path": "ds4_web.c",
+      "sha256": "5e17204a0ef7f780ce2fb7d2a0485f5dfb6d30443cbc987cf1c6de7a7085f1d0",
+      "bytes": 50186,
+      "export_sha256": "5e17204a0ef7f780ce2fb7d2a0485f5dfb6d30443cbc987cf1c6de7a7085f1d0"
+    },
+    {
+      "path": "ds4_web.h",
+      "sha256": "e43748a12480a31186961c8f2b67510441e139d3b9b82d35b6ba8017a65849a8",
+      "bytes": 927,
+      "export_sha256": "e43748a12480a31186961c8f2b67510441e139d3b9b82d35b6ba8017a65849a8"
+    },
+    {
+      "path": "ds4_win32.c",
+      "sha256": "2794ce50a725c2cbd0246cfa850fd22b1df0e18ef990ceb9a1bf25d97810f105",
+      "bytes": 36424,
+      "export_sha256": "2794ce50a725c2cbd0246cfa850fd22b1df0e18ef990ceb9a1bf25d97810f105"
+    },
+    {
+      "path": "ds4_win32.h",
+      "sha256": "2ab7b7f72a345b5fbdda8f28a2192799acd2c4229a59bf1120bccd4b16161454",
+      "bytes": 11745,
+      "export_sha256": "2ab7b7f72a345b5fbdda8f28a2192799acd2c4229a59bf1120bccd4b16161454"
+    },
+    {
+      "path": "linenoise.c",
+      "sha256": "5105c3e8f6f1bb12cee0e2f36bea152c3849b9febe5061a020ed317f13cbf1d1",
+      "bytes": 94572,
+      "export_sha256": "5105c3e8f6f1bb12cee0e2f36bea152c3849b9febe5061a020ed317f13cbf1d1"
+    },
+    {
+      "path": "linenoise.h",
+      "sha256": "99e703fa0d60355df94b49cb0741702a62e6ff8782c7db02c2817f7ecfa41e9a",
+      "bytes": 6605,
+      "export_sha256": "99e703fa0d60355df94b49cb0741702a62e6ff8782c7db02c2817f7ecfa41e9a"
+    },
+    {
+      "path": "linenoise_win32.c",
+      "sha256": "7264bb21a89fdcaf5fd40618b0d6b8525f071ea9acf096a4d15379e1cc556e58",
+      "bytes": 3654,
+      "export_sha256": "7264bb21a89fdcaf5fd40618b0d6b8525f071ea9acf096a4d15379e1cc556e58"
+    },
+    {
+      "path": "metal/argsort.metal",
+      "sha256": "0c868f5cbf751f889bb73aa5ac8599ff2b4359d9ed9aabd035043550256df790",
+      "bytes": 8348,
+      "export_sha256": "0c868f5cbf751f889bb73aa5ac8599ff2b4359d9ed9aabd035043550256df790"
+    },
+    {
+      "path": "metal/bin.metal",
+      "sha256": "4b537679fe874fa4dea079bbb10634b3feeb2cce9b737bdb602fe6926fbb175a",
+      "bytes": 6580,
+      "export_sha256": "4b537679fe874fa4dea079bbb10634b3feeb2cce9b737bdb602fe6926fbb175a"
+    },
+    {
+      "path": "metal/concat.metal",
+      "sha256": "04fb0fc2a3b51015444e330290b979a56e4cac82aee523afa2b42e361ab23da7",
+      "bytes": 1932,
+      "export_sha256": "04fb0fc2a3b51015444e330290b979a56e4cac82aee523afa2b42e361ab23da7"
+    },
+    {
+      "path": "metal/cpy.metal",
+      "sha256": "88d77cb71d83295be4097f2b820f60daac3bbbc75e1d4caf68327727be382ec4",
+      "bytes": 9219,
+      "export_sha256": "88d77cb71d83295be4097f2b820f60daac3bbbc75e1d4caf68327727be382ec4"
+    },
+    {
+      "path": "metal/dense.metal",
+      "sha256": "29ab6ab533be38e8780db04b7b2dcaf4be8de840be150a74fdf6d8812df51e48",
+      "bytes": 93072,
+      "export_sha256": "29ab6ab533be38e8780db04b7b2dcaf4be8de840be150a74fdf6d8812df51e48"
+    },
+    {
+      "path": "metal/dsv4_hc.metal",
+      "sha256": "ea96934c2ce4daf5afef14349932f2e065ef9505c6147c85ddff76bcb358aca5",
+      "bytes": 58149,
+      "export_sha256": "ea96934c2ce4daf5afef14349932f2e065ef9505c6147c85ddff76bcb358aca5"
+    },
+    {
+      "path": "metal/dsv4_kv.metal",
+      "sha256": "90cf84f3544b26c192752c96ceea1ccac466008071d30b7847e8037c4a088449",
+      "bytes": 24084,
+      "export_sha256": "90cf84f3544b26c192752c96ceea1ccac466008071d30b7847e8037c4a088449"
+    },
+    {
+      "path": "metal/dsv4_misc.metal",
+      "sha256": "7734c7461995c12c1d0a7cc66a95860d63e869039994dbe2a6104558a7bd78bc",
+      "bytes": 266687,
+      "export_sha256": "7734c7461995c12c1d0a7cc66a95860d63e869039994dbe2a6104558a7bd78bc"
+    },
+    {
+      "path": "metal/dsv4_rope.metal",
+      "sha256": "f56cb24a381c27435953d120448bc22c1b2314b151280445246bd28920b4d518",
+      "bytes": 35980,
+      "export_sha256": "f56cb24a381c27435953d120448bc22c1b2314b151280445246bd28920b4d518"
+    },
+    {
+      "path": "metal/flash_attn.metal",
+      "sha256": "c9ec79daf2063cd9e8c4e8874c123fbf2642c3fb6247b16aa21e1e0e6db92fcc",
+      "bytes": 61784,
+      "export_sha256": "c9ec79daf2063cd9e8c4e8874c123fbf2642c3fb6247b16aa21e1e0e6db92fcc"
+    },
+    {
+      "path": "metal/get_rows.metal",
+      "sha256": "bd3b352a6ffb138ae5e391db97b211f8386d417365eac2caa3730f55a075aa3a",
+      "bytes": 6976,
+      "export_sha256": "bd3b352a6ffb138ae5e391db97b211f8386d417365eac2caa3730f55a075aa3a"
+    },
+    {
+      "path": "metal/glu.metal",
+      "sha256": "59281e30a27cc2eb618800b6e53a57e234f65f1a1e680d6267d9139e1a06b627",
+      "bytes": 2129,
+      "export_sha256": "59281e30a27cc2eb618800b6e53a57e234f65f1a1e680d6267d9139e1a06b627"
+    },
+    {
+      "path": "metal/moe.metal",
+      "sha256": "42ecbaf00cc239d06b1d5dd1aedcc9e508570171c5126750c9ee51e8445a04d9",
+      "bytes": 400012,
+      "export_sha256": "42ecbaf00cc239d06b1d5dd1aedcc9e508570171c5126750c9ee51e8445a04d9"
+    },
+    {
+      "path": "metal/norm.metal",
+      "sha256": "a2a5433516fde73fe63a412c551206a63d6a6034f389a6df6263f385fd4e2ba4",
+      "bytes": 14066,
+      "export_sha256": "a2a5433516fde73fe63a412c551206a63d6a6034f389a6df6263f385fd4e2ba4"
+    },
+    {
+      "path": "metal/repeat.metal",
+      "sha256": "2c6142b47a2007d246f5eb6e7395047627bb6dfa02c649311d16620da35007cd",
+      "bytes": 1640,
+      "export_sha256": "2c6142b47a2007d246f5eb6e7395047627bb6dfa02c649311d16620da35007cd"
+    },
+    {
+      "path": "metal/set_rows.metal",
+      "sha256": "25f597bf5f5fb5a3791efc68e3182539727609f09c45750ef9376ed430d7a029",
+      "bytes": 1909,
+      "export_sha256": "25f597bf5f5fb5a3791efc68e3182539727609f09c45750ef9376ed430d7a029"
+    },
+    {
+      "path": "metal/softmax.metal",
+      "sha256": "6eaa6ce78c4b221b3c7fe45647d6eb42f165201992a243d77d04cf2668fb7664",
+      "bytes": 7679,
+      "export_sha256": "6eaa6ce78c4b221b3c7fe45647d6eb42f165201992a243d77d04cf2668fb7664"
+    },
+    {
+      "path": "metal/sum_rows.metal",
+      "sha256": "7e1f3ad3f945b1f6f59aa2d8ee5bf464052d989a632c33ea95ce50d3c4fbf0fc",
+      "bytes": 2737,
+      "export_sha256": "7e1f3ad3f945b1f6f59aa2d8ee5bf464052d989a632c33ea95ce50d3c4fbf0fc"
+    },
+    {
+      "path": "metal/unary.metal",
+      "sha256": "56be9a0316b02d4f16cdf9487074e5a7c94215a15d9b58917e38c474cbe16dde",
+      "bytes": 9585,
+      "export_sha256": "56be9a0316b02d4f16cdf9487074e5a7c94215a15d9b58917e38c474cbe16dde"
+    },
+    {
+      "path": "rax.c",
+      "sha256": "6bfc4ff704560b4f9dcc76c3f51b6680597b66206b3c206b634eb3a22ba0f343",
+      "bytes": 105528,
+      "export_sha256": "6bfc4ff704560b4f9dcc76c3f51b6680597b66206b3c206b634eb3a22ba0f343"
+    },
+    {
+      "path": "rax.h",
+      "sha256": "e9281e1a444c0cd090b187d2271d200fcc02106062d9f827a7f2d590594cdce4",
+      "bytes": 14251,
+      "export_sha256": "e9281e1a444c0cd090b187d2271d200fcc02106062d9f827a7f2d590594cdce4"
+    },
+    {
+      "path": "rax_malloc.h",
+      "sha256": "5ab2fa4a8bbf94401cf15f7dde1b0050f0b5ea9f60ccb81f0dcb1e7b392e5d93",
+      "bytes": 2058,
+      "export_sha256": "5ab2fa4a8bbf94401cf15f7dde1b0050f0b5ea9f60ccb81f0dcb1e7b392e5d93"
+    }
+  ],
+  "local_changes": [
+    "Help example uses loopback instead of an operator interface address.",
+    "Generic interface setup guidance and descriptive multiple-choice self-test variable."
+  ]
+}

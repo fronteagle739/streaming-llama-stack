@@ -839,7 +839,7 @@
     {
       "path": "mlx_vlm/custom_kernels/glm_moe_dsa/build.py",
       "source_sha256": "605308ac33c19850ec23ff3e0d6967df9a3335a0227335f6eebd813bd0807bb4",
-      "export_sha256": "25a2dc05a650549fea9c04669f537e4355a1403904999ba28862b4dc28e044e4",
+      "export_sha256": "6b08f429ae8ffe19fbc80150b0c5c243589711fd378bb5a1cee51c2b6e8db313",
       "bytes": 4548
     },
     {
@@ -899,7 +899,7 @@
     {
       "path": "mlx_vlm/custom_kernels/glm_moe_dsa/csrc/CMakeLists.txt",
       "source_sha256": "0e8ce50c123a10a8722717b4d9694b4efe155972852acb7d2f88253cd1dc69a2",
-      "export_sha256": "3a05e1d7c54b7b9e81fdc66b40a0bf468e2b82756345a292e3c925a08a855954",
+      "export_sha256": "c83680ede6ae6d5272affb683f16e7cc9ec2908f18014bcd6a761d3a69c9d8ce",
       "bytes": 5192
     },
     {

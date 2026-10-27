@@ -9,7 +9,9 @@ and start nothing. Normal launches refuse unresolved placeholders.
 | Preset directories | Route |
 | --- | --- |
 | `dsv41-accurate`, `dsv41-fast`, `dsv41-ultra`, `dsv41-ultra-yoco` | Original DSV4.1 GGUF: RTX streaming producer and native Mac ds4 state receiver. The selected directory fixes the RTX prefill tier and YOCO choice. |
+| `dsv4-flash-peer-streaming`, `dsv4-flash-153g-peer-streaming` | Earlier DS4P peer protocol: RTX streams GGUF weights and prefills, Mac decodes. These use `ds4-peer`, distinct from the DSV4.1 native state broker. |
 | `kimi-k2.7-streaming` | Studio's optimised Kimi K2.7 streaming settings: RTX GGUF prefill and Mac MLX receiver, 65,536 RTX / 262,144 Mac configured context, 24,576 batch, 2,048 microbatch, F16 KV, MTP off. |
+| `kimi-k2.7-standard-streaming` | Standard Kimi K2.7 settings, using the same weights and receiver with a 512-token RTX microbatch. Replaces the retired Kimi K2.6 weight selection. |
 | `glm-5.1-streaming`, `glm-5.2-streaming`, `glm-5.3-streaming` | Full GLM DSA route: RTX GGUF prefill and Mac MLX receiver, 262,144 configured context, full sparse DSA, 512 microbatch, F16 KV, MTP off. |
 
 Negotiated YOCO state v1 export exists; Mac decode with YOCO has not been
@@ -82,3 +84,13 @@ token. `--setup` builds the retained native Mac engine. Its original-model prese
 checks the wired memory limit and prints the required system setting if needed.
 Neither script changes that system setting automatically. This route uses the
 existing authenticated state broker rather than the generic MLX KV receiver.
+
+The DS4P examples require a matching Mac GGUF path in both private configs:
+`general.mac.model_path` on RTX and `decode.model_path` on Mac. Start the Mac
+listener first and permit its peer port 49173 on the selected interface. Its
+HTTP endpoint stays on loopback. RTX uses `--peer-role decode`, two cache budgets
+and no batched-session flag, matching Studio's peer launch path. The two recipes
+differ in weight selection; choose compatible quantizations and adjust the host
+budget for the selected GGUF. The Studio preset with an optional small fast
+model uses this same large-model peer path; its separate automatic fast-model
+switch is not implemented by these examples.

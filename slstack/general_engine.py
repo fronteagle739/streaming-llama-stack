@@ -6,7 +6,7 @@ from pathlib import Path
 import socket
 import sys
 import time
-from .backends import backend
+from .backends import backend,installed_binary
 from .config import ROOT,path
 from .engines import Engines,http_json
 from .native_broker import vendor
@@ -27,6 +27,17 @@ class Remote:
 
 def launch_spec(cfg):
     vendor()
+    if cfg['general'].get('mode')=='peer':
+        from studio.peer_launch import ds4p_peer_argv
+        general=cfg['general'];rtx=dict(general.get('rtx') or {});mac=general.get('mac') or {}
+        if backend(mac.get('backend','ds4-peer')).name!='ds4-peer':raise ValueError('Peer mode requires the ds4-peer decoder')
+        rtx['model_path']=str(path(cfg['model']))
+        binary=general.get('server') or installed_binary(cfg['runtime_root'],'ds4-peer-rtx',ROOT/'engines/ds4-win/ds4-server.exe')
+        argv=ds4p_peer_argv(rtx,mac,str(path(binary)),host=cfg['host'],port=int(general.get('rtx_port',8094)))[1]
+        env={'DS4_PEER_IO_TIMEOUT_SEC':str(int(rtx.get('peer_io_timeout_sec',120))),
+             'DS4_CUDA_DS_GPU_DEST':'1','DS4_CUDA_ATTN_COMP_CACHE_Q8':'0'}
+        if cfg.get('gpu_uuid'):env['CUDA_VISIBLE_DEVICES']=cfg['gpu_uuid']
+        return argv,env,f"http://{cfg['host']}:{int(general.get('rtx_port',8094))}"
     from studio.general_launch import streaming_prefill_env,streaming_prefill_argv,stream_arch_id,_resolve_gguf_model_path
     from studio.gguf_meta import _read_kv_header
     from .general_templates import template_file
@@ -49,10 +60,11 @@ def launch_spec(cfg):
     template=rtx.pop('jinja_file',None)
     prepared=template_file(cfg['runtime_root'],inline=rtx.get('jinja'),filename=str(path(template)) if template else None,metadata=metadata)
     if prepared:rtx['jinja']=prepared
-    server=str(path(general.get('server','build/llama/bin/llama-server.exe')))
+    server=str(path(general.get('server') or installed_binary(cfg['runtime_root'],'rtx-producer',ROOT/'build/llama/bin/llama-server.exe')))
     host=cfg['host'];port=int(general.get('rtx_port',8094))
     argv=streaming_prefill_argv(rtx,mac,server,host=host,port=port)
     env=streaming_prefill_env(rtx,mac)
+    if cfg.get('gpu_uuid'):env['CUDA_VISIBLE_DEVICES']=cfg['gpu_uuid']
     env['LLAMA_KV_CACHE_DIR']=str(Path(cfg['runtime_root'])/'prefill-cache')
     env.setdefault('LLAMA_KV_CACHE_MAX_GB','16')
     return argv,env,f'http://{host}:{port}'
@@ -85,7 +97,7 @@ class GeneralEngines(Engines):
                 self.remote=Remote(endpoint,headers,model)
                 self.status('Mac '+backend(mac.get('backend','mlx-serve')).name+' ready')
                 return
-            if mode!='streaming':raise ValueError('general.mode must be streaming or remote')
+            if mode not in ('streaming','peer'):raise ValueError('general.mode must be streaming, peer or remote')
             argv,env,url=launch_spec(self.cfg)
             self.status('Loading general RTX streaming prefill')
             self.loading_model=self.selected_model
@@ -93,7 +105,8 @@ class GeneralEngines(Engines):
             # owns the producer's GPU hold and its original memory/floor limits.
             launch={**self.cfg,'env_overrides':{**self.cfg.get('env_overrides',{}),**env},
                     'host_budget_gib':self.cfg.get('general_producer_host_budget_gib',self.cfg['host_budget_gib']-.75)}
-            self.llm=OwnedProcess(launch,argv,'general-prefill',cwd=ROOT,gpu=True,scope='rtx-producer',unbounded=True)
+            self.llm=OwnedProcess(launch,argv,'general-prefill',cwd=ROOT,gpu=True,
+                                  scope='ds4-win' if mode=='peer' else 'rtx-producer',unbounded=True)
             window=Window(readiness_seconds(self.cfg))
             try:
                 while not window.expired():
@@ -108,6 +121,16 @@ class GeneralEngines(Engines):
                 raise TimeoutError('General producer stopped making startup progress')
             except BaseException:self.close();raise
     def chat(self,body):
-        self.select(body.get('model'));self.ready();return self.remote.chat(body)
+        with self.lock:
+            try:
+                self.select(body.get('model'));self.ready();return self.remote.chat(body)
+            finally:
+                if self.cfg['general'].get('mode','streaming')!='remote':self.close()
     def chat_events(self,body):
-        self.select(body.get('model'));self.ready();yield from self.remote.events(body)
+        # Bound the GPU reservation to a request, never the WebUI service's
+        # lifetime. Cleanup also runs when a browser disconnects or cancels.
+        with self.lock:
+            try:
+                self.select(body.get('model'));self.ready();yield from self.remote.events(body)
+            finally:
+                if self.cfg['general'].get('mode','streaming')!='remote':self.close()

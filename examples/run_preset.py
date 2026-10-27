@@ -54,14 +54,19 @@ def main(argv=None):
     parser.add_argument('--config',required=True,help='Your private config; never a file containing model weights')
     parser.add_argument('--dry-run',action='store_true',help='Show the generated config; start nothing and write nothing')
     parser.add_argument('--setup',action='store_true',help='Prepare the Mac MLX or native DS4 backend')
-    parser.add_argument('--wheelhouse',help='Optional offline MLX dependency wheels')
+    parser.add_argument('--wheelhouse',help='Optional offline backend dependency wheels')
+    parser.add_argument('--cache-dir',help='Pinned backend source cache')
+    parser.add_argument('--offline',action='store_true')
+    parser.add_argument('--build-only',action='store_true',help='Compile without GPU verification')
     args=parser.parse_args(argv)
     if args.preset and not args.machine:parser.error('--machine is required with --preset')
     if args.setup and (args.single or args.machine!='mac'):parser.error('--setup applies to a Mac dual-machine preset')
     local=json.loads(Path(args.config).read_text(encoding='utf-8-sig'))
     cfg,command=prepare(args,local)
-    if args.setup:command='mac-setup' if cfg.get('backend')=='ds4' else 'setup-mlx'
-    if args.wheelhouse and command!='setup-mlx':parser.error('--wheelhouse applies to MLX --setup')
+    selected=cfg.get('backend') or cfg.get('decode',{}).get('backend','mlx-receiver')
+    if args.setup:command='mac-setup' if selected=='ds4' else 'setup-backend'
+    if (args.wheelhouse or args.cache_dir or args.offline or args.build_only) and command!='setup-backend':
+        parser.error('Offline and build-only options apply to a decoder --setup')
     missing=missing_settings(cfg)
     if args.dry_run:
         from slstack.envvars import redact_cfg
@@ -74,7 +79,11 @@ def main(argv=None):
     effective=runtime/('example-'+name+'.local.json')
     effective.write_text(json.dumps(cfg,indent=2)+'\n')
     argv=[sys.executable,'-B',str(ROOT/'scripts/bootstrap.py'),'--config',str(effective),command]
+    if command=='setup-backend':argv.extend(['--backend',selected])
     if args.wheelhouse:argv.extend(['--wheelhouse',str(Path(args.wheelhouse).resolve())])
+    if args.cache_dir:argv.extend(['--cache-dir',str(Path(args.cache_dir).resolve())])
+    if args.offline:argv.append('--offline')
+    if args.build_only:argv.append('--build-only')
     return subprocess.call(argv,cwd=ROOT)
 
 

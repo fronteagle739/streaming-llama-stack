@@ -21,6 +21,15 @@ def main():
     mlx_setup.add_argument('--no-native-glm', action='store_true')
     mlx_setup.add_argument('--wheelhouse', help='Use a local wheel directory without accessing a package index')
     from .backends import BACKENDS
+    backend_setup = sub.add_parser('setup-backend', help='Install a pinned decoder and its build dependencies')
+    backend_setup.add_argument('--backend', choices=[*BACKENDS,'all'], required=True)
+    backend_setup.add_argument('--check', action='store_true')
+    backend_setup.add_argument('--fetch-only', action='store_true')
+    backend_setup.add_argument('--build-only', action='store_true',help='Compile without GPU smoke checks; verification stays pending')
+    backend_setup.add_argument('--offline', action='store_true')
+    backend_setup.add_argument('--cache-dir')
+    backend_setup.add_argument('--wheelhouse')
+    backend_setup.add_argument('--jobs',type=int,choices=(1,2),default=2)
     decoder = sub.add_parser('decode', help='Start a configured decoder on its serving host')
     decoder.add_argument('--model')
     decoder.add_argument('--backend', choices=list(BACKENDS))
@@ -111,6 +120,18 @@ def main():
         result = run(cfg, model=args.model, selected=args.backend, check=args.check)
         print(json.dumps(result, indent=2))
         return 0 if result['ready'] else 1
+    if args.command == 'setup-backend':
+        from .backend_setup import setup
+        names=list(BACKENDS) if args.backend=='all' else [args.backend]
+        results=[]
+        for name in names:
+            try:
+                results.append(setup(cfg,name,check_only=args.check,fetch_only=args.fetch_only,build_only=args.build_only,
+                                     cache_dir=args.cache_dir,offline=args.offline,wheelhouse=args.wheelhouse,jobs=args.jobs))
+            except (OSError,ValueError,RuntimeError) as exc:results.append(dict(backend=name,built=False,ready=False,error=str(exc)))
+        print(json.dumps(results,indent=2))
+        if args.check:return 0 if all(r.get('ready') for r in results) else 1
+        return 0 if all(r.get('downloaded') is not None or r.get('built') or r.get('ready') for r in results) else 1
     if args.command == 'decode-internal':
         from .decode import serve
         serve(cfg)

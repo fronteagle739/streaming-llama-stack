@@ -35,7 +35,7 @@ def check(cfg, *, verify_journal=True):
         from .backends import backend
         general=cfg['general'];spec=backend(general.get('mac',{}).get('backend','mlx-receiver'))
         record('decode_backend',True,spec.name+' / '+spec.transport)
-        if general.get('mode','streaming')=='streaming':
+        if general.get('mode','streaming') in ('streaming','peer'):
             from .general_engine import launch_spec
             argv,env,url=launch_spec(cfg)
             record('general_producer',Path(argv[0]).is_file(),argv[0])

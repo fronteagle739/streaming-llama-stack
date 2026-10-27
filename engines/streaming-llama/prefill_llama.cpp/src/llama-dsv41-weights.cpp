@@ -564,6 +564,9 @@ bool llama_dsv41_weight_provider::resume_device(std::string&error){return p->gua
 },error);}
 bool llama_dsv41_weight_provider::device_suspended()const{std::lock_guard<std::mutex>lock(p->mutex);return p->device_suspended;}
 void llama_dsv41_weight_provider::implementation::create_pipeline(){
+#if !defined(_WIN32) || !defined(GGML_USE_CUDA)
+    throw std::runtime_error("V4.1 physical weight provider requires Windows CUDA/DirectStorage");
+#else
     auto*p=this;
     wf_params params=wf_params_default();params.model_path=p->options.model_path.c_str();params.gpu_backend=p->options.backend;params.mode=WF_MODE_DSTORAGE;
     params.n_layers=int(p->stage_count());params.n_gpu_buffers=int(p->options.buffers);params.max_layer_bytes=p->planned.maximum_stage_bytes;params.n_ram_buffers=0;
@@ -609,6 +612,7 @@ void llama_dsv41_weight_provider::implementation::create_pipeline(){
     }
     require(!wf_has_failed(p->fetcher),"Original layer registration failed");p->identity();if(p->options.ds_gpu_ring_slots)wf_set_layer_major_mode(p->fetcher,true);p->apply_pause("cold_wf_start");wf_start(p->fetcher);
     require(!wf_has_failed(p->fetcher),"Original DirectStorage pipeline startup failed");p->mark_weight_stream(true);
+#endif
 }
 bool llama_dsv41_weight_provider::open(const config&options,std::string&error){return inspect(options,error)&&allocate(error);}
 bool llama_dsv41_weight_provider::restart_prompt(const config&options,std::string&error){return p->guard([&]{
@@ -891,6 +895,10 @@ bool llama_dsv41_weight_provider::acquire_layer_dense(uint32_t layer,llama_dsv41
     out.ffn.gate=p->pool[0];out.ffn.up=p->pool[1];out.ffn.down=p->pool[2];
 },error);}
 bool llama_dsv41_weight_provider::acquire_layer_experts(uint32_t layer,const std::vector<int32_t>&ids,std::vector<int32_t>&slots,std::string&error){slots.clear();return p->guard([&]{
+#if !defined(_WIN32) || !defined(GGML_USE_CUDA)
+    (void)layer;(void)ids;
+    throw std::runtime_error("V4.1 physical expert cache requires Windows CUDA/DirectStorage");
+#else
     require(layer<40&&p->decode_layout&&p->leased&&p->next==1+2*layer&&p->experts_prebound,"Routed experts require their leased dense stage");
     require(!ids.empty()&&ids.size()<=6*4096,"Routed expert set size invalid");
     const auto slot_of=p->assign_expert_slots(layer,ids.data(),ids.size(),ggml_backend_cuda_get_stream(p->options.backend));
@@ -898,6 +906,7 @@ bool llama_dsv41_weight_provider::acquire_layer_experts(uint32_t layer,const std
     p->dense_held=int(1+2*layer);++p->next;
     p->acquire(2+2*layer);
     slots.reserve(ids.size());for(const auto id:ids)slots.push_back(slot_of.at(id));
+#endif
 },error);}
 bool llama_dsv41_weight_provider::prepare_external_decode(const config&options,std::string&error){
     if(!restart_prompt(options,error))return false;   // switches to the decode layout (options.decode_layout)
