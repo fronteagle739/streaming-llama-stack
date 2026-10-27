@@ -26,11 +26,15 @@ def scope_for(name):
 
 def inspect(cfg, model=None, selected=None):
     local=settings(cfg,model,selected);spec=backend(local.get('backend','mlx-receiver'))
-    argv=commands(local,runtime=cfg['runtime_root'],write_settings=False)
     missing=[]
+    try:argv=commands(local,runtime=cfg['runtime_root'],write_settings=False)
+    except (OSError,ValueError) as exc:argv=[];missing.append(str(exc))
     if not Path(local['model_path']).exists():missing.append('decode model_path does not exist')
     for command in argv:
         if not Path(command[0]).is_file() and not shutil.which(command[0]):missing.append('Missing backend executable: '+command[0])
+    if (Path(cfg['runtime_root'])/'state/backends'/(spec.name+'.json')).is_file():
+        from .backend_setup import check as installed
+        if not installed(cfg,spec.name).get('ready'):missing.append('Backend installation is unverified or changed; run setup-backend --backend '+spec.name)
     return dict(backend=spec.name,transport=spec.transport,ready=not missing,missing=missing)
 
 
