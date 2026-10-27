@@ -2,6 +2,7 @@
 // toolbar, Lucide strokes and theme tokens. Injected by the stack router so the
 // upstream generated UI bundle need not be patched or rebuilt.
 (() => {
+  const nativeControls = window.slstackNativeGeneration !== false;
   const phases = {reasoning: 'Reasoning', answer: 'Answer', tool_call: 'Tools', code: 'Code'};
   const points = [['Max quality', 0], ['Balanced', .35], ['Fast', .65], ['Faster', .9], ['Max speed', 1.36125]];
   let settings, applied, selected = 'reasoning', dirty = false, saving = false, editing = false, request = 0;
@@ -15,13 +16,14 @@
     if (url?.origin === location.origin && /\/chat\/completions$/.test(url.pathname) && typeof init?.body === 'string') {
       try {
         const body = JSON.parse(init.body);
-        for (const key of ['temperature', 'top_p', 'top_k', 'min_p']) delete body[key];
+        if (nativeControls) for (const key of ['temperature', 'top_p', 'top_k', 'min_p']) delete body[key];
         if (body.seed == null || body.seed < 0) delete body.seed;
         init = {...init, body: JSON.stringify(body)};
       } catch {}
     }
     return originalFetch(input, init);
   };
+  if (!nativeControls) return;
   const style = document.createElement('style');
   style.textContent = `
     #sl-generation-toolbar{display:flex;align-items:center;gap:8px;pointer-events:auto;font:inherit;color:var(--foreground);min-height:32px}
