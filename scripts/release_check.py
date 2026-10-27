@@ -13,7 +13,7 @@ RULES = {
     'private network': r'\b(?:192\.168\.\d{1,3}\.\d{1,3}|10\.\d{1,3}\.\d{1,3}\.\d{1,3})\b',
     'credential': r'(?<![A-Za-z0-9_])(?:gh[pousr]_[A-Za-z0-9_]{20,}|github_pat_[A-Za-z0-9_]{20,}|hf_[A-Za-z0-9]{20,}|sk-[A-Za-z0-9_-]{20,}|AKIA[0-9A-Z]{16}|AIza[A-Za-z0-9_-]{30,}|xox[baprs]-[A-Za-z0-9-]{15,}|-----BEGIN (?:RSA |EC |OPENSSH )?PRIVATE KEY-----)',
     'machine path': r'''(?i:(?<![%\w])[dlm]:[\\/]|(?<![%\w])[a-z]:[\\/]{1,2}(?:Users|scratch|GitHub|models_archive)(?:[\\/]|["']))|/(?:Users|home)/[^/\s"']+/|/Volumes/[^/\s"']+/''',
-    'private identity': r'(?i)\bedw+a{1,2}rd[\s._-]*h[o]lmes(?:[\s._-]*c[r]anborne)?\b|\bh[o]lmes[\s._-]*c[r]anborne\b',
+    'private identity': r'(?i)\bedw+a{1,2}rd[\s._-]*h[o]lmes(?:[\s._-]*c[r]anborne)?\b|\bh[o]lmes[\s._-]*c[r]anborne\b|c[r]anborne|e[h]olmes|e[d]studio',
     'excluded project': r'(?i)\bmc[-_]?4(?:\b|_)',
     'coordination file': r'DEPLOY_HOLD\.md',
     'old product name': r'\bds4stack\b|ds4-stack',
@@ -170,6 +170,48 @@ def scan(root=ROOT):
     return findings
 
 
+def scan_index(root=ROOT):
+    """Read the exact staged bytes, including additions absent from HEAD."""
+    def git(*args):
+        return subprocess.check_output(['git', '--no-replace-objects', '-C', str(root), *args])
+    compiled, forbidden, images = compiled_rules(root), forbidden_literals(root), reviewed_images(root)
+    findings = []
+    rows = git('ls-files', '--stage', '-z').split(b'\0')
+    batch = subprocess.Popen(['git', '--no-replace-objects', '-C', str(root), 'cat-file', '--batch'],
+                             stdin=subprocess.PIPE, stdout=subprocess.PIPE)
+    try:
+        for row in rows:
+            if not row:continue
+            meta, name = row.split(b'\t', 1)
+            mode, oid, stage = meta.split()
+            relative = name.decode('utf-8')
+            if stage != b'0':
+                findings.append((relative, 0, 'unmerged index entry'));continue
+            if mode == b'160000':
+                if relative != 'engines/mlx-serve' or oid != b'6991ba3ad3d356891d43211dec941cc6f9ff6dd6':
+                    findings.append((relative, 0, 'unreviewed submodule'))
+                continue
+            batch.stdin.write(oid + b'\n');batch.stdin.flush()
+            header = batch.stdout.readline().split()
+            if len(header) != 3 or header[1] != b'blob':raise ValueError('Invalid staged blob')
+            raw = batch.stdout.read(int(header[2]))
+            if len(raw) != int(header[2]) or batch.stdout.read(1) != b'\n':raise ValueError('Incomplete staged blob')
+            findings.extend(scan_blob(relative, raw, compiled, forbidden, images))
+    finally:
+        batch.stdin.close();batch.stdout.close();batch.wait()
+    return findings
+
+
+def scan_identities(root=ROOT):
+    findings = []
+    expected = r'Front Eagle <fronteagle739@users\.noreply\.github\.com> \d+ [+-]\d{4}'
+    for variable in ('GIT_AUTHOR_IDENT', 'GIT_COMMITTER_IDENT'):
+        identity = subprocess.check_output(['git', '-C', str(root), 'var', variable]).decode().strip()
+        if not re.fullmatch(expected, identity):
+            findings.append((variable, 0, 'commit requires Front Eagle identity'))
+    return findings
+
+
 def scan_history(root=ROOT, revision='HEAD'):
     """Audit reachable commit metadata and every historical tree/blob, not other refs."""
     def git(*args):
@@ -219,8 +261,15 @@ def main():
     parser = argparse.ArgumentParser()
     parser.add_argument('--summary', action='store_true')
     parser.add_argument('--history', metavar='REF', help='also audit all source and commit metadata reachable from this release ref')
+    parser.add_argument('--staged', action='store_true', help='audit exact index bytes instead of working files')
+    parser.add_argument('--identities', action='store_true', help='require Front Eagle author and committer')
+    parser.add_argument('--commit-message', type=Path, help='audit a pending commit message')
     args = parser.parse_args()
-    found = scan()
+    found = scan_index() if args.staged else scan()
+    if args.identities:
+        found.extend(scan_identities())
+    if args.commit_message:
+        found.extend(scan_blob('commit-message', args.commit_message.read_bytes(), compiled_rules(ROOT), forbidden_literals(ROOT), {}))
     if args.history:
         found.extend(scan_history(revision=args.history))
     if args.summary:

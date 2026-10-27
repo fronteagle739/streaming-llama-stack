@@ -9,7 +9,7 @@ import zlib
 import os
 import subprocess
 from slstack.config import ROOT
-from scripts.release_check import scan, reviewed_png, scan_history
+from scripts.release_check import scan, reviewed_png, scan_history, scan_index, scan_identities
 
 
 class ReleaseCheckTests(unittest.TestCase):
@@ -121,6 +121,29 @@ class ReleaseCheckTests(unittest.TestCase):
         self.assertEqual(len(findings), 1)
         self.assertEqual(findings[0][2], 'forbidden audit literal')
         self.assertIn(':code.py', findings[0][0])
+
+    def test_index_gate_reads_staged_bytes_when_working_copy_has_been_cleaned(self):
+        root, git = self.history_fixture()
+        git('add', 'code.py')
+        (root / 'code.py').write_text('value = 1\n')
+        self.assertEqual(scan_index(root), [('code.py', 2, 'forbidden audit literal')])
+
+    def test_builtin_identity_rule_also_blocks_standalone_aliases(self):
+        root = self.fixture()
+        names = ['Cran' + 'borne', 'ehol' + 'mes', 'edst' + 'udio']
+        (root / 'code.py').write_text('\n'.join(names))
+        with patch('scripts.release_check.subprocess.check_output', return_value=b'code.py\0'):
+            self.assertEqual([row[1] for row in scan(root)], [1, 2, 3])
+
+    def test_identity_gate_checks_environment_overrides(self):
+        root, git = self.history_fixture()
+        git('config', 'user.name', 'Front Eagle')
+        git('config', 'user.email', 'fronteagle739@users.noreply.github.com')
+        with patch.dict(os.environ, {'GIT_AUTHOR_NAME': 'Other Contributor',
+                                    'GIT_COMMITTER_NAME': 'Front Eagle',
+                                    'GIT_AUTHOR_EMAIL': 'fronteagle739@users.noreply.github.com',
+                                    'GIT_COMMITTER_EMAIL': 'fronteagle739@users.noreply.github.com'}):
+            self.assertEqual(scan_identities(root), [('GIT_AUTHOR_IDENT', 0, 'commit requires Front Eagle identity')])
 
     def test_history_requires_both_front_eagle_identities_and_ignores_other_refs(self):
         root, git = self.history_fixture()

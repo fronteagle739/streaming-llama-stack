@@ -1,3 +1,5 @@
 #!/bin/sh
 set -eu
-exec sh scripts/release_check
+root=$(git rev-parse --show-toplevel)
+if command -v python >/dev/null 2>&1; then py=python; else py=python3; fi
+exec "$py" -B "$root/scripts/release_check.py" --staged --identities --summary

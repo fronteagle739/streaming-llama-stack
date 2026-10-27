@@ -96,6 +96,12 @@ New commits use Front Eagle <fronteagle739@users.noreply.github.com> for both au
 and committer. Run `python -B scripts/release_check.py --history HEAD` to audit the
 source tree and reachable release history before pushing.
 
+The pre-commit and commit-message hooks check exact staged file contents,
+the pending message, and both Git identities. They reject private identity
+aliases, credentials and non-example machine paths before a commit is created.
+Enable them in each checkout with `git config core.hooksPath .githooks`.
+They complement the historical audit; they do not rewrite existing commits.
+
 
 Register native models with `--models first.gguf,second.gguf`, or set `models` to objects with `id`, `path` and optional `lora` in your local config. `/v1/models` exposes those ids; the existing web UI picker and each request's `model` field select them per chat. An unloaded selection uses the normal owned unload/load path, with status in the UI. `--resident first,second` records a requested pair; it currently performs normal switching and does not claim simultaneous residency or fast switching. The pinned llama-server has its own `--models-preset`/`--models-dir` router, but it cannot directly host the native ds4 adapter, so this bridge reuses its UI API shape.
 
