@@ -253,7 +253,7 @@ class SingleEngine:
     def prepare(self, body, metrics):
         """Render, then make the producer's frontier equal the full prompt."""
         from .combo_session import render_body
-        from .vision import has_images, Images, render_tokens
+        from .vision import has_images, Images, render_tokens, spans_match
         blocks=[];media_identity=''
         if has_images(body):
             if not self.cfg.get('vision_bridge_version'):raise ValueError('This launcher needs the native vision-prefill build')
@@ -266,10 +266,12 @@ class SingleEngine:
         rendered = render_body(body)
         def render(memory):
             text,canonical,request=ds4_render.render(rendered,tokenizer,tool_memory=memory)
-            if blocks:canonical,self.cfg['_vision_spans']=render_tokens(text,tokenizer,blocks)
-            else:self.cfg.pop('_vision_spans',None)
-            return text,canonical,request
-        text, canonical, request = render(self.tool_memory)
+            spans=[]
+            if blocks:canonical,spans=render_tokens(text,tokenizer,blocks)
+            return text,canonical,request,spans
+        text, canonical, request, image_spans = render(self.tool_memory)
+        if image_spans:self.cfg['_vision_spans']=image_spans
+        else:self.cfg.pop('_vision_spans',None)
         if len(canonical) >= self.cfg['context'] - 1:raise ValueError('Prompt exceeds the admitted context')
         metrics.update(prompt_tokens=len(canonical))
         tokens, source = ds4_render.continue_live(self.live if self.producer else [], text, canonical, tokenizer)
@@ -279,6 +281,11 @@ class SingleEngine:
             tokens = ds4_render.continue_cut_turn(self.live, cut['start'], text, assistants[-1] if assistants else None, tokenizer,
                                                   think=cut['think'], reasoning=cut['reasoning'], content=cut['content'])
             if tokens is not None:source = 'memory-cut-turn'
+        # Text-prefix/cut-turn recovery can change token boundaries. Never use
+        # canonical image offsets with a differently tokenized live prefix.
+        if tokens is not None and image_spans and not spans_match(tokens,image_spans):
+            tokens=None;source='image-layout-miss'
+        if self.producer is None and tokens is None:tokens=canonical
         metrics['prefix_source'] = source
         if self.producer is not None and tokens is None:
             metrics['fresh_reason'] = 'rendered history diverges from the live frontier'
@@ -296,7 +303,7 @@ class SingleEngine:
             base = None
             for saved, payload in candidates:
                 if not self.cache.compatible(saved):continue
-                candidate_text, candidate_canonical, candidate_request = render(saved['tool_memory'])
+                candidate_text, candidate_canonical, candidate_request, candidate_spans = render(saved['tool_memory'])
                 matched, candidate_source = ds4_render.continue_live(saved['tokens'], candidate_text, candidate_canonical, tokenizer)
                 cut = saved.get('cut_turn')
                 if matched is None and cut and cut['end'] == len(saved['tokens']):
@@ -304,12 +311,17 @@ class SingleEngine:
                     matched = ds4_render.continue_cut_turn(saved['tokens'], cut['start'], candidate_text, assistants[-1] if assistants else None,
                         tokenizer, think=cut['think'], reasoning=cut['reasoning'], content=cut['content'])
                 if matched is None or len(matched) <= len(saved['tokens']):continue
+                if candidate_spans and not spans_match(matched,candidate_spans):continue
                 reader = self.cache.verify(saved, payload)
                 base = reader, saved['contract'];tokens = matched
+                image_spans=candidate_spans
                 text, request = candidate_text, candidate_request;self.tool_memory = dict(saved['tool_memory'])
                 metrics.update(prefix_source='checkpoint', restored_yoco_keep=saved['contract']['local_state']['yoco_keep'])
                 break
             reused = base[1]['position'] if base else 0
+            if image_spans:self.cfg['_vision_spans']=image_spans
+            else:self.cfg.pop('_vision_spans',None)
+            if not spans_match(tokens,image_spans):raise ValueError('Rendered image spans differ from the selected token sequence')
             self.launch(tokens, base=base);metrics['producer_launch_prefill_seconds'] = time.monotonic() - started
             metrics['reused_prefix_tokens'] = reused;metrics['new_tokens'] = len(tokens)-reused
         else:

@@ -4,12 +4,42 @@ from copy import deepcopy
 from pathlib import Path
 import tempfile
 import unittest
+from types import SimpleNamespace
+from unittest.mock import patch
 from slstack.config import configure_vision
-from slstack.vision import Images, image_bytes, render_tokens
+from slstack.vision import Images, image_bytes, render_tokens, spans_match
 from slstack.local_cache import Cache, VERSION
 
 
 class VisionTests(unittest.TestCase):
+    def test_rejected_checkpoint_render_cannot_move_selected_image_spans(self):
+        from test_combo_single import Harness
+        from slstack import combo_single
+        h=Harness([]);engine=h.engine
+        engine.cfg['vision_bridge_version']=1
+        block=dict(marker='[image]',count=3,file='embedding.vision',sha256='a'*64)
+        engine.images=SimpleNamespace(prepare=lambda body,admit:(dict(messages=[dict(role='user',content='[image]')]),[block],'pixels'))
+        saved=dict(tokens=h.tok.rendered('unrelated'),tool_memory={'old':'memory'})
+        engine.cache=SimpleNamespace(compatible=lambda saved:True,
+            candidates=lambda:[(saved,Path(h.dir)/'unused.kv')],
+            verify=lambda *args:self.fail('Rejected checkpoint reached verification'))
+        def render(body,tokenizer,*,tool_memory):
+            text=('P'*8 if tool_memory else 'P')+'[image]T'
+            return text,tokenizer.rendered(text),dict(messages=[])
+        body=dict(messages=[dict(role='user',content=[dict(type='image_url',image_url={'url':'unused'})])])
+        with patch.object(combo_single.ds4_render,'render',side_effect=render), \
+             patch('slstack.local_cache.options',return_value=(Path(h.dir),{'cache_conversations':True})):
+            engine.prepare(body,{})
+        self.assertEqual(engine.cfg['_vision_spans'][0]['position'],1)
+        self.assertTrue(spans_match(h.launched[0].launch,engine.cfg['_vision_spans']))
+        engine.retire('fixture complete')
+
+    def test_span_check_rejects_offsets_from_a_different_tokenization(self):
+        tokens=[7,129264,129264,8]
+        self.assertTrue(spans_match(tokens,[dict(position=1,count=2)]))
+        self.assertFalse(spans_match(tokens,[dict(position=0,count=2)]))
+        self.assertFalse(spans_match(tokens,[dict(position=1,count=4)]))
+
     def test_embedded_images_have_native_positions_and_no_caption(self):
         images=Images({})
         images.encode=lambda raw,admit:dict(key=raw.hex(),count=3,file='embedding.vision',sha256='a'*64)
