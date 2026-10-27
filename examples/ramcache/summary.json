@@ -1,0 +1,196 @@
+{
+  "status": "BLOCKED_MEMORY_ADMISSION",
+  "base_commit": "6d69c4624dcc36c81221a1f6e87559c98b457a5d",
+  "branch": "agent/ramcache",
+  "physical_total": 33675202560,
+  "studio_paused": {
+    "status": "PAUSED_GRACEFULLY",
+    "samples": [
+      {
+        "available": 14966472704,
+        "pagefile": 211443712
+      },
+      {
+        "available": 15150071808,
+        "pagefile": 157745152
+      },
+      {
+        "available": 15150637056,
+        "pagefile": 153366528
+      },
+      {
+        "available": 15158198272,
+        "pagefile": 153366528
+      },
+      {
+        "available": 15161393152,
+        "pagefile": 153366528
+      },
+      {
+        "available": 15158218752,
+        "pagefile": 153366528
+      },
+      {
+        "available": 15156645888,
+        "pagefile": 153366528
+      },
+      {
+        "available": 15158517760,
+        "pagefile": 153366528
+      },
+      {
+        "available": 15131410432,
+        "pagefile": 153366528
+      },
+      {
+        "available": 15134466048,
+        "pagefile": 153366528
+      }
+    ],
+    "minimum_available": 14966472704,
+    "physical_total": 33675202560
+  },
+  "baseline": {
+    "source_commit": "5ec948606934f425bf8e4271657a61e7d219d661",
+    "evidence_commit": "0787f09d8dbf2f47f65394a7cd6af56038e379fe",
+    "historical": true,
+    "min_available": 8162062336,
+    "peak_tree_rss": 6380183552,
+    "runs": {
+      "max-quality": {
+        "warm": {
+          "steps": 899,
+          "milliseconds": 131976.868,
+          "tokens_per_second": 6.811799776912421
+        },
+        "expert_counts": {
+          "l1_hits": 77341,
+          "l2_hits": 53173,
+          "misses": 85246
+        },
+        "expert_percent": {
+          "l1_hits": 35.845847237671485,
+          "l2_hits": 24.644512421208752,
+          "misses": 39.50964034111976
+        },
+        "ram_expert_percent": 0,
+        "native_sha256": "3e5e06ecefae9a5713e1852b5b346560c08d07f869ccd0f68e64eac93ef57d86"
+      },
+      "max-speed": {
+        "warm": {
+          "steps": 899,
+          "milliseconds": 49517.911,
+          "tokens_per_second": 18.155046968762473
+        },
+        "expert_counts": {
+          "l1_hits": 116572,
+          "l2_hits": 93388,
+          "misses": 5800
+        },
+        "expert_percent": {
+          "l1_hits": 54.02855024100853,
+          "l2_hits": 43.28327771598072,
+          "misses": 2.6881720430107525
+        },
+        "ram_expert_percent": 0,
+        "native_sha256": "d583cf548815996082e53e16262a3700782a2084ced0736436f66e2028644f63"
+      }
+    }
+  },
+  "points": [
+    {
+      "extra_gib": 3.5,
+      "cache_mib": 3584,
+      "outer_gib": 12.0,
+      "producer_base_gib": 9.75,
+      "runtime_floor_gib": 4.5,
+      "available_before": 14636605440,
+      "pagefile_before": 153366528,
+      "prefill_plan": {
+        "capacity": 49553,
+        "host_bytes": 10512564224,
+        "carry_delta": 38391808,
+        "engram_delta": 5158464,
+        "base_host_bytes": 10468982784,
+        "max_host_bytes": 12079595520,
+        "available_bytes": null,
+        "capped_by": "producer_host_max_gib",
+        "prompt_tokens": 49553,
+        "single_sweep": true,
+        "policy": "fold",
+        "sweep_tokens": 49152,
+        "sweeps": [
+          49553
+        ],
+        "fold_tail": false,
+        "fold_cap": 61440,
+        "rebalance": false,
+        "reason": null
+      },
+      "native_plan_plus_floor": 15344402432,
+      "status": "REFUSED",
+      "error": "MemoryError('Native host plan plus4.5GiB reserve cannot fit physical RAM before launch')",
+      "available_after": 14630670336
+    },
+    {
+      "extra_gib": 7.0,
+      "cache_mib": 7168,
+      "outer_gib": 15.5,
+      "producer_base_gib": 13.25,
+      "runtime_floor_gib": 4.5,
+      "available_before": 13618376704,
+      "pagefile_before": 153366528,
+      "prefill_plan": {
+        "capacity": 49553,
+        "host_bytes": 14270660608,
+        "carry_delta": 38391808,
+        "engram_delta": 5158464,
+        "base_host_bytes": 14227079168,
+        "max_host_bytes": 15837691904,
+        "available_bytes": null,
+        "capped_by": "producer_host_max_gib",
+        "prompt_tokens": 49553,
+        "single_sweep": true,
+        "policy": "fold",
+        "sweep_tokens": 49152,
+        "sweeps": [
+          49553
+        ],
+        "fold_tail": false,
+        "fold_cap": 61440,
+        "rebalance": false,
+        "reason": null
+      },
+      "native_plan_plus_floor": 19102498816,
+      "status": "REFUSED",
+      "error": "MemoryError('Native host plan plus4.5GiB reserve cannot fit physical RAM before launch')",
+      "available_after": 13580779520,
+      "measurement_context": "Live admission check happened during Studio restoration. Separately, the saved paused-memory maximum is also below this point required bytes; no paused performance run is claimed.",
+      "paused_maximum_available": 15161393152
+    }
+  ],
+  "binary_sha256": {
+    "ds4-decode.dll": "3f37f47b1d8785db59580427b6358fb72fb9289af64205fad087741fd7806142",
+    "dstorage.dll": "cae65787f61514bec6f012f44546e68b19e39d8854a9ab52af813370d44b272a",
+    "dstoragecore.dll": "cf85b19a92a8276f8baca0db9bbcd60735bad50768deb303d310e84d5f4fdd11",
+    "llama-dsv41-prefill.exe": "19878db2ce5d9ee5c86abf18924acbed581bdb2dd13f6a45129b9013d659a303"
+  },
+  "restoration": {
+    "status": "RESTORED",
+    "daemon_pid": 26160,
+    "http_status": 200,
+    "launcher_exit_code": 0,
+    "remote_link_running": true,
+    "remote_link_serving": true,
+    "end_to_end_ok": true,
+    "host_budget_bytes": 8589934592,
+    "runtime_floor_bytes": 4294967296,
+    "peak_observed_charged_bytes": 6615072768,
+    "min_available": 12762189824,
+    "launcher": "launch_studio_latest.ps1 -NoBrowser",
+    "task_scratch_dependency": false,
+    "task_scratch_dependency_checked": "L:/scratch/ramcache"
+  },
+  "gpu_engine_launched": false,
+  "shipping_default_changed": false
+}

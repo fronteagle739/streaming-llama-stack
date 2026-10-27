@@ -6,6 +6,10 @@ Every figure below was measured; each says what was timed.
 
 [Any-GGUF Q4_K/Q8_0 smoke](ANYGGUF_GPU_SMOKE.md): 49.6K-token recall at **1,592 tok/s**; warm decode **6.8 tok/s** (Max quality) / **18.2 tok/s** (Max speed).
 
+[Host-RAM cache admission trial](RAMCACHE_TRIAL.md): +3.5/+7 GiB Engram row-cache
+points could not fit the current desktop's physical RAM reserve. No new decode
+speed measurement; the single-engine expert L1/L2 are both VRAM tiers.
+
 ## DeepSeek V4.1 Flash on one RTX 5090
 
 Model: DeepSeek V4.1 Flash GGUF, Q4_K routed experts and Q8_0 for the rest
