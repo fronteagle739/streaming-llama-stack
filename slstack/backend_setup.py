@@ -183,12 +183,16 @@ def mference(build):
     output=build.runtime/'build'/('mference-'+revision[:16])
     build.run(['swift','build','--package-path',source,'--scratch-path',output,'-c','release',
                '--product','MferenceServer','-j',build.jobs],'mference-compile')
+    build.run(['swift','build','--package-path',source,'--scratch-path',output,'-c','release',
+               '--product','MferenceDecodeService','-j',build.jobs],'mference-receiver-compile')
     binary=output/'release/MferenceServer'
-    return build.report('mference',revision,[binary],binary=str(binary))
+    receiver=output/'release/MferenceDecodeService'
+    resources=[p for bundle in (output/'release').glob('*.bundle') for p in bundle.rglob('*') if p.is_file()]
+    return build.report('mference',revision,[binary,receiver,*resources],binary=str(binary),decode_service=str(receiver))
 
 
 def inputs_for(name):
-    if name=='mlx-serve':return ['mlx-serve','mlx-serve-ds4','mlx-serve-mlx','mlx-serve-mlxc','mlx-serve-opencode','mlx-serve-llama','webp','metal-cpp','mlx-json','mlx-fmt']
+    if name=='mlx-serve':return ['mlx-serve','mlx-serve-ds4','mlx-serve-mlx','mlx-serve-mlxc','mlx-serve-opencode','mlx-serve-llama','webp','metal-cpp','mlx-json','mlx-fmt','mlx-gguflib']
     if name=='omlx':return ['omlx','omlx-mlx-lm','omlx-mlx-embeddings','omlx-mlx-vlm','omlx-mlx-audio']
     if name=='mference':return ['swift-'+r['identity'] for r in json.loads((ROOT/'engines/mference/Package.resolved').read_text())['pins']]
     return ['llama-upstream'] if name=='llama-decode-upstream' else []

@@ -54,11 +54,12 @@ def install(build):
                 '-DWEBP_BUILD_VWEBP=OFF','-DWEBP_BUILD_WEBPINFO=OFF','-DWEBP_BUILD_EXTRAS=OFF'],install=True)
     mlx,_=build.stage(build.source('mlx-serve-mlx'),'mlx-serve-mlx')
     stage=source/'lib/mlx'
-    metal_cpp=build.source('metal-cpp');json_source=build.source('mlx-json');fmt=build.source('mlx-fmt')
+    metal_cpp=build.source('metal-cpp');json_source=build.source('mlx-json');fmt=build.source('mlx-fmt');gguf=build.source('mlx-gguflib')
     build.cmake(mlx,output/'mlx',['-DCMAKE_OSX_DEPLOYMENT_TARGET=26.2','-DBUILD_SHARED_LIBS=ON',
                 '-DMLX_BUILD_TESTS=OFF','-DMLX_BUILD_EXAMPLES=OFF','-DCMAKE_INSTALL_PREFIX='+str(stage),
                 '-DFETCHCONTENT_SOURCE_DIR_METAL_CPP='+str(metal_cpp),'-DFETCHCONTENT_SOURCE_DIR_JSON='+str(json_source),
-                '-DFETCHCONTENT_SOURCE_DIR_FMT='+str(fmt),'-DFETCHCONTENT_FULLY_DISCONNECTED=ON'],install=True)
+                '-DFETCHCONTENT_SOURCE_DIR_FMT='+str(fmt),'-DFETCHCONTENT_SOURCE_DIR_GGUFLIB='+str(gguf),
+                '-DFETCHCONTENT_FULLY_DISCONNECTED=ON'],install=True)
     mlxc,_=build.stage(build.source('mlx-serve-mlxc'),'mlx-serve-mlxc')
     build.cmake(mlxc,output/'mlxc',['-DCMAKE_OSX_DEPLOYMENT_TARGET=26.2','-DBUILD_SHARED_LIBS=ON',
                 '-DMLX_C_USE_SYSTEM_MLX=ON','-DMLX_C_BUILD_EXAMPLES=OFF','-DCMAKE_PREFIX_PATH='+str(stage),
