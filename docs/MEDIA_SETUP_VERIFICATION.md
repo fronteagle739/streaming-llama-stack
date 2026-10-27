@@ -53,6 +53,12 @@ Additional H3 verification on 2026-10-27:
 - A 121-frame request produced a 5.175-second clip depicting the requested cup
   scene, both at eight steps and with an explicitly attached three-step TaoMate
   LoRA. MP4 inspection confirmed H.264 video and AAC audio.
+- The previously failed owl request was replayed with the same fused INT8
+  ConvRot checkpoint, seed, dimensions and three-step adapter. Frame inspection
+  confirmed a recognizable owl in the requested courtyard, replacing grey noise.
+- Worker import paths were checked against the bundled Studio and engine
+  sources. No separate Studio checkout was imported. A launch refused before
+  worker creation preserves its admission error even when no worker log exists.
 - Output video routes support byte ranges and stream bounded chunks. When a
   conversation checkpoint is unavailable, completed media is published before
   replaying its conversation on the next model request.
