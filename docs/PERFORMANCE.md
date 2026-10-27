@@ -1,6 +1,6 @@
 # Measured performance
 
-These are existing Flash 1017 Q4 measurements from October 24–27, 2026. Windows runs used an RTX 5090 with local NVMe and approximately 32 GB host RAM; Mac runs used an M3 Ultra with 512 GB unified memory. Rates depend on content, routing, cache warmth and context. ULTRA changes arithmetic relative to Accurate; YOCO additionally approximates prefill.
+These are existing Flash 1017 Q4 measurements from October 24–27, 2026. Windows runs used an RTX 5090 with local NVMe and explicit host-memory budgets; Mac runs used an M3 Ultra with 512 GB unified memory. Rates depend on content, routing, cache warmth and context. ULTRA changes arithmetic relative to Accurate; YOCO additionally approximates prefill.
 
 ## ULTRA prefill
 
@@ -32,7 +32,7 @@ The last row returned the correct long-document marker. Native embedding/layers/
 
 An older 224,588-token recall reported 2.15 tok/s for a six-token reply, including one-time context/open/inspection overhead. Its token steps ran at 131–179 ms once warm (5.6–7.6 tok/s). It is not a comparable sustained-rate regression against the longer decode above.
 
-## RTX prefill → Mac decode
+## RTX prefill → Mac decode (measured before YOCO, plain ULTRA prefill)
 
 The 184,432-token document used four RTX chunks. Native RTX compute totaled **173.2521194 s**, excluding the 16.1972473 s one-token warmup and other serialization/startup work. Four transfer/import/hash/ACK intervals totaled **7.662391 s**. Mac decode evaluated **97 tokens in 3.080 s = 31.4935 tok/s**, including reasoning. The Mac server reported **229.128 s** through prompt processing and **232.208 s** through generation.
 

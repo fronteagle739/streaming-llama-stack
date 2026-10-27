@@ -78,7 +78,7 @@ These are separate historical observations, not one combined speed guarantee:
 | GLM-5.3 sustained decode, August 30 | 14.0738 tok/s short; 4.89483 tok/s at 11,550 prompt tokens | Synchronized native fork, UD-Q4_K_XL, F16 KV, M3 Ultra; first-to-last emitted-token timing excludes prefill, transfer, load and teardown. Coherence/recall gates passed. |
 
 The distributed hardware record identifies an RTX 5090 32 GB and a Mac Studio
-M3 Ultra with 512 GB unified memory. The RTX host has 32 GB DDR5 and a
+M3 Ultra with 512 GB unified memory. The historical storage record describes a
 25 GB/s RAID-0 NVMe array. These measurements must not be described as a
 single-RTX decode result or as a validated 400/18 tok/s pair for every GLM version.
 

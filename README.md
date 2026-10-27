@@ -1,6 +1,22 @@
 # Streaming Llama Stack
 
-Run DeepSeek-V4.1 Flash, a roughly 483 GiB GGUF, on one RTX 5090 by streaming weights from NVMe through DirectStorage. The stack combines streaming prefill and ds4 decode kernels in one process, an OpenAI-compatible API, and the llama.cpp web UI. It supports context windows up to approximately 1M tokens with a small host-RAM budget. An optional Apple M3 Ultra can take over decode after the RTX prefills a prompt and hands over its KV session; this two-machine path has been used daily through Studio for months.
+Stream model weights from NVMe through DirectStorage for RTX prefill, then decode locally or hand the session to a Mac. The streaming-llama engine (a llama.cpp fork), session handoff and Mac decoder integrations serve multiple model families. The combined streaming-prefill/ds4-kernel decode producer is specific to DeepSeek-V4.1 Flash. An OpenAI-compatible API and the llama.cpp web UI sit above these engines.
+
+The measurements below use a roughly 483 GiB DeepSeek-V4.1 Flash GGUF on an RTX 5090, with an optional M3 Ultra for decode. This path admits approximately 1M tokens with bounded host RAM; the two-machine session handoff has been used through Studio for months.
+
+## Supported models
+
+Streaming support belongs to the selected engine and model architecture, rather than to one model filename. The retained general launcher can construct non-DeepSeek streaming commands; its producer reservation lifetime still needs request-scoped handling before continuous general serving can be advertised. See [model routes, existing measurements and launcher boundaries](docs/SUPPORTED_MODELS.md).
+
+| Model family | Retained route | Existing evidence |
+|---|---|---|
+| DeepSeek V4 / V4.1 Flash | Streaming-llama prefill; paired native/MLX decode; V4.1 combined producer | V4.1 measurements below; combined producer requirements below |
+| Kimi K2.6 / K2.7 | Streaming-llama prefill and MLX receiver handoff | K2.7 about 8,190 prompt tokens: 50.27 / 49.55 prefill tok/s in an SSD-bound A/B |
+| Full GLM-5.1 / 5.2 / 5.3 (`glm-dsa`) | Streaming-llama prefill and Mac MLX receiver | Historical GLM-5.1 prefill 414.8 tok/s at 15,616 tokens; separate GLM-5.3 Mac decode 14.074 tok/s on a short prompt |
+| DeepSeek V2/V3; MiniMax M2/M3 | Retained streaming launch mappings and graph implementations | Source integration; no comparable end-to-end measurement established here |
+| Step-3.5 / 3.7 (`step35`) | Retained graph; Studio local streaming preset | Preset/source evidence; no comparable measurement established here |
+
+Mac decode also has MLX-VLM, MLX-LM, mlx-serve and llama-server routes for their supported models. An HTTP decoder performs its own prefill unless it implements a compatible state import; an HTTP connection alone is not an RTX KV handoff. GLM-5.3 Flash and Qwen3.8 Flash Next are distinct architectures from full GLM DSA and earlier Qwen families; see the linked model notes for their current source/port status.
 
 ## Measured results
 
@@ -14,22 +30,22 @@ Existing measurements on the Flash 1017 Q4 model; no new benchmark runs. Prefill
 | Single engine, bias off / Max speed | 14,859 | 6.03 / 12.93 decode tok/s overall | RTX 5090, NVMe |
 | Single engine, bias off / Max speed | 43,327 | 5.97 / 12.65 decode tok/s overall | RTX 5090, NVMe |
 | Single engine, bias off, 999,424-token window | 237,703 | Correct long-document recall; 254.326 s native prefill; 5.184 decode tok/s over 52 tokens | RTX 5090, NVMe |
-| RTX prefill → Mac decode | 184,432 | **173.252 s** RTX compute + **7.662 s** transfer/import; **31.494 decode tok/s** | RTX 5090 → M3 Ultra, 512 GB |
+| RTX prefill → Mac decode, measured before YOCO (plain ULTRA prefill) | 184,432 | **173.252 s** RTX compute + **7.662 s** transfer/import; **31.494 decode tok/s** | RTX 5090 → M3 Ultra, 512 GB |
 | Mac-only ds4, first 100 decoded tokens | ≈9K / ≈24K | 30.7–31.2 / 31.26–31.47 decode tok/s | M3 Ultra, 512 GB |
 | Native quality/speed dial, 3K-token story / C++ runs | Five routing settings | 5.8→14.2 / 5.0→13.3 decode tok/s | RTX 5090, NVMe |
-| Single-engine host budget | 262,144 / 999,424 configured | Producer maximum **7.75 GiB**; controller + producer **9.25 GiB** | RTX 5090, ≈32 GB host RAM |
+| Single-engine host budget | 262,144 / 999,424 configured | Producer maximum **7.75 GiB**; controller + producer **9.25 GiB** | RTX 5090, bounded host RAM |
 
 The 1M preset admits **999,424 tokens** with a growable bf16 context cache. The long recall above used 237,703 prompt tokens; it is not a full million-token prompt measurement. The paired long request took 229.128 s through prefill and 232.208 s through decode; RTX compute and transfer omit other startup and request work. Faster routing changes expert selection and can reduce answer quality.
 
 ## How it works
 
-**Prefill amortizes each weight pass across many tokens.** Each full prefill pass streams every required weight once, so throughput depends on how many tokens share that pass. The default planner uses 49,152-token sweeps and folds a remainder into the last sweep when it fits the 61,440-token cap. Overlapping reads and compute hide much of the storage cost at large sweep sizes.
+**Prefill amortizes each weight pass across many tokens.** Each full prefill pass streams every required weight once, so throughput depends on how many tokens share that pass. The combined V4.1 producer's default planner uses 49,152-token sweeps and folds a remainder into the last sweep when it fits the 61,440-token cap. Overlapping reads and compute hide much of the storage cost at large sweep sizes.
 
-**Decode fetches selected experts.** Dense weights stay resident and a VRAM expert tier retains frequently used experts; DirectStorage supplies misses. Streaming prefill and the ds4 decode kernels share one producer process. The conversation stays resident between turns, and append-only turns process their new tokens.
+**The combined V4.1 decoder fetches selected experts.** Dense weights stay resident and a VRAM expert tier retains frequently used experts; DirectStorage supplies misses. Streaming prefill and the ds4 decode kernels share one producer process. The conversation stays resident between turns, and append-only turns process their new tokens.
 
-**YOCO is approximate and opt-in.** Layer 20 runs in full. Earlier sweeps skip decoder layers 21–39; the final sweep evaluates their last 140 positions. It changes outputs. Image-containing prompts use full evaluation. See [YOCO measurements and quality](docs/ULTRAYOCO_QUALIFICATION.md) and [state transfer](docs/STACK_MEDIA_AND_STATE.md).
+**YOCO is approximate and opt-in.** It follows DeepSeek’s [DeepInfer YOCO prefill truncation](https://github.com/deepseek-ai/DeepInfer/blob/553741557a57df44a46fb3ab72b6aafeaf945337/README.md), with keep=140; TensorSharp is a secondary reference. Our streaming variant skips the weight reads and evaluation of layers 21–39 on non-final sweeps. Layer 20 runs in full; the final sweep evaluates the decoder suffix’s last 140 positions. It changes outputs. Image-containing prompts use full evaluation. See [YOCO measurements and quality](docs/ULTRAYOCO_QUALIFICATION.md) and [state transfer](docs/STACK_MEDIA_AND_STATE.md).
 
-**Two machines share a live session.** The RTX sends initial or incremental KV/native state to the Mac, which decodes and sends state updates back. Short follow-ups can stay on the Mac; longer additions use RTX prefill. Pairing validates model, renderer and engine identities. See [paired operation](docs/TWO_MACHINE.md).
+**Two machines share a live session.** The RTX sends initial or incremental KV/native state to the Mac, which decodes and sends state updates back. Short follow-ups can stay on the Mac; longer additions use RTX prefill. Pairing validates model, renderer and engine identities. The measured paired result predates YOCO and uses plain ULTRA prefill. Negotiated YOCO state v1 export exists; Mac decode with YOCO has not been benchmarked. See [paired operation](docs/TWO_MACHINE.md).
 
 **The model can choose its quality/speed setting.** Cache-affinity routing favors resident experts at faster settings. The UI slider, API and MCP tools expose Max quality, Balanced, Fast, Faster and Max speed, independently for reasoning, tool calls, answers and code. Use the lower settings for precise code; the fastest measured settings introduced code errors. [Live controls](docs/LIVE_GENERATION.md)
 
@@ -39,11 +55,13 @@ The 1M preset admits **999,424 tokens** with a growable bf16 context cache. The 
 
 - **Windows RTX:** RTX 50-series, compute capability 12.0; the measured configuration uses a 32 GB RTX 5090. Native builds target CUDA `120a` by default.
 - **Fast local NVMe and DirectStorage:** room for the roughly 483 GiB GGUF plus build/runtime files. Storage throughput affects inference speed.
-- **Host RAM:** enough for the 9.25 GiB stack budget, desktop reserve and other applications. The measurements used approximately 32 GB. Admission refuses insufficient available memory.
+- **Host RAM:** enough for the 9.25 GiB stack budget, desktop reserve and other applications. Admission refuses insufficient available memory.
 - **Build tools:** Python 3.12, Visual Studio C++ Build Tools, CMake, Ninja, CUDA Toolkit (tested with 13.2), and Node.js/npm (tested with Node 24). Installation needs package-network access; inference uses locally supplied weights.
 - **Optional Mac:** M3 Ultra with 512 GB unified memory, the same language-model GGUF, and network connectivity to the RTX.
 
-The measured file is `DeepSeek-V4.1-Flash-1017-Q4-v41.gguf`, SHA-256 `2cc6bc254f22a0238020e61e931c0cac865218aada1eed9c0036d9f4031c6e5f`. Other V4/V4.1 GGUFs are not interchangeable. **TODO: publish a verified download URL or conversion recipe for this exact 1017 Q4 file.** The public [ds4 model repository](https://huggingface.co/antirez/deepseek-v4.1-flash-gguf) contains other builds; an exact matching public artifact has not been established. Model weights are never downloaded by the installer.
+The combined producer requires native `deepseek41` architecture metadata and the checked 40-layer Flash geometry, `Q4_K` routed experts, `Q8_0` dense/shared/head matrices, and the specified F16/F32 tensors and Engram layout. Its receipt currently pins `DeepSeek-V4.1-Flash-1017-Q4-v41.gguf`, SHA-256 `2cc6bc254f22a0238020e61e931c0cac865218aada1eed9c0036d9f4031c6e5f`. **TODO: publish a verified download URL or conversion recipe for this exact measured file.**
+
+The broader ds4 CUDA decoder contains `IQ2_XXS`/`Q2_K`, `Q4_K` and `MXFP4` expert kernels. Public [antirez DeepSeek-V4.1 Flash GGUF files](https://huggingface.co/antirez/deepseek-v4.1-flash-gguf/tree/main) include these quantization families. That kernel coverage does not bypass the combined producer’s current Q4 loader and receipt checks. [Code requirements and model notes](docs/SUPPORTED_MODELS.md) distinguish these paths. Model weights are supplied locally and are never downloaded by the installer.
 
 ## Quickstart
 
@@ -113,7 +131,7 @@ Keep the pairing token in local runtime configuration. Stop foreground launchers
 
 Stack code and original Studio integration modules use the [MIT licence](LICENSE). Embedded projects keep their own licences and attribution; see [NOTICE](NOTICE).
 
-- [DeepSeek](https://github.com/deepseek-ai) for the model.
+- [DeepSeek](https://github.com/deepseek-ai) for the model and [DeepInfer](https://github.com/deepseek-ai/DeepInfer/blob/553741557a57df44a46fb3ab72b6aafeaf945337/README.md) for YOCO prefill truncation (keep=140); TensorSharp is a secondary implementation reference. Our contribution is skipping decoder-layer reads on non-final streaming sweeps.
 - [llama.cpp / ggml](https://github.com/ggml-org/llama.cpp) for inference infrastructure and the web UI.
 - [antirez/ds4](https://github.com/antirez/ds4), [ds4-win-NovaStar](https://github.com/mishal-harbi/ds4-win-NovaStar), and [IngeniousIdiocy's V4.1 backend](https://github.com/IngeniousIdiocy/ds4-v41-m3ultra) for native inference and kernels.
 - [mlx-serve](https://github.com/ddalcu/mlx-serve) for the optional MLX service integration.
