@@ -212,7 +212,10 @@ def validate_table():
     current = inventory()
     missing = set(current) - present
     indexed = {row['var']: row for row in table}
-    stale = [var for var in current if var in indexed and set(indexed[var]['reads']) != set(current[var])]
+    # Match envdocs.reference_table: the separately pinned MLX gitlink may be
+    # uninitialized, while its checked-in immutable source evidence is retained.
+    stale = [var for var in current if var in indexed and set(indexed[var]['reads']) !=
+             set(current[var]) | {ref for ref in indexed[var]['reads'] if ref.startswith('engines/mlx-serve/')}]
     if missing or stale or len(present) != len(table) or any(not r['doc'] for r in table):
         raise ValueError(f'Environment table out of date: missing={sorted(missing)}, stale={sorted(stale)}')
     return len(table)
