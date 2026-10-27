@@ -42,6 +42,13 @@ def recover_leases(runtime_root, task='DS4STACK'):
     return released
 
 
+def recover_runtime_leases(runtime_root, task='DS4STACK'):
+    """Recover this configured owner's dead guardians in its two known runtimes."""
+    root = Path(runtime_root)
+    return [identity for location in (root, root / 'single-engine')
+            for identity in recover_leases(location, task)]
+
+
 def active_holds(text, *, mac=None):
     """Unreleased ledger holds, parsed by the vendored Studio priority_holds.
 
