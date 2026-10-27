@@ -6,6 +6,8 @@ vision, cache handling and optional MTP support. Installing stock MLX-VLM would
 lose these changes. `setup-mlx` installs the retained package into a separate
 decode environment using `locks/mac-mlx-py312.txt`.
 
+Use `bin/slstack setup-mlx` with local runtime configuration. On an offline host, `--wheelhouse <directory>` supplies local wheels for runtime and native build dependencies; the customised package still comes from retained source.
+
 The package includes native C++ sources, CMake inputs, Metal headers and licence notices. Package data
 now includes the GLM native build inputs. The GLM builder chooses nanobind headers
 for the installed MLX ABI and evaluates real scoring/top-k operations before
@@ -37,6 +39,12 @@ model and executable paths. Set `decode.backend`, `decode.model_path`, its bind
 address and backend-specific options in that local file; omit `--check` to run.
 Both receiver and shim children are launched for `mtp-shim`, within one shared
 host-memory guardian. A successful path check is not a model-load qualification.
+
+The general RTX producer still uses bounded GPU reservations. Its current
+supervisor imposes the configured reservation lifetime on the producer process;
+an indefinitely running general server needs request-scoped reservation handling
+before that use can be advertised. The existing DSV4.1 WebUI process uses its
+separate established serving path.
 
 ## GLM family
 
