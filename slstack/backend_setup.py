@@ -200,11 +200,11 @@ def inputs_for(name):
 
 def check(cfg,name):
     path=Path(cfg['runtime_root'])/'state/backends'/(name+'.json')
-    if not path.is_file():return dict(backend=name,built=False,ready=False,reason='Run setup-backend for this backend')
-    result=json.loads(path.read_text())
     if name in ('mlx-receiver','mlx-lm','mlx-vlm','mtp-shim'):
         from .mlx_setup import inspect_installation
-        return {**result,**inspect_installation(cfg),'backend':name}
+        return {**(json.loads(path.read_text()) if path.is_file() else {}),**inspect_installation(cfg),'backend':name}
+    if not path.is_file():return dict(backend=name,built=False,ready=False,reason='Run setup-backend for this backend')
+    result=json.loads(path.read_text())
     from .backend_cache import fingerprint
     artifacts=result.get('binaries',{})
     result['built']=bool(artifacts) and all(Path(p).is_file() and digest(p)==sha for p,sha in artifacts.items())

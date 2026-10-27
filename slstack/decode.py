@@ -32,7 +32,9 @@ def inspect(cfg, model=None, selected=None):
     if not Path(local['model_path']).exists():missing.append('decode model_path does not exist')
     for command in argv:
         if not Path(command[0]).is_file() and not shutil.which(command[0]):missing.append('Missing backend executable: '+command[0])
-    if (Path(cfg['runtime_root'])/'state/backends'/(spec.name+'.json')).is_file():
+    managed=(Path(cfg['runtime_root'])/'state/backends'/(spec.name+'.json')).is_file()
+    managed=managed or (spec.setup=='mlx' and (Path(cfg['runtime_root'])/'decode-venv/slstack-source.json').is_file())
+    if managed:
         from .backend_setup import check as installed
         if not installed(cfg,spec.name).get('ready'):missing.append('Backend installation is unverified or changed; run setup-backend --backend '+spec.name)
     return dict(backend=spec.name,transport=spec.transport,ready=not missing,missing=missing)

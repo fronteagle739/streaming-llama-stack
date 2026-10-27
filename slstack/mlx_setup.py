@@ -44,6 +44,7 @@ def inspect_installation(cfg):
             return file.is_file() and hashlib.sha256(file.read_bytes()).hexdigest()==sha
         built=bool(current and artifacts and all(matches(name,sha) for name,sha in artifacts.items()))
         verified=built and previous.get('native_glm') and record.get('smoke_verified')
+    if current and previous.get('native_glm_required') is False:built=verified=True
     return dict(python=str(python),source_current=bool(current),built=bool(built),ready=bool(verified),
                 verification_pending=not bool(verified))
 
@@ -102,7 +103,7 @@ runpy.run_path(str(p/'build.py'),run_name='__main__')
     result=dict(ready=False,python=str(python),source_current=bool(current),source_sha256=revision,native_glm=False)
     if not python.is_file():return result
     if build_only:
-        if not check:atomic_json(marker,dict(source_sha256=revision,native_glm=already_native,built=True))
+        if not check:atomic_json(marker,dict(source_sha256=revision,native_glm=already_native,native_glm_required=native_glm,built=True))
         result.update(built=bool(current),verification_pending=True)
         atomic_json(runtime/'state/mlx-backend-check.json',result)
         return result
@@ -123,6 +124,6 @@ print('SLSTACK_MLX_PROBE='+json.dumps(dict(version=m.version('mlx-vlm'),legacy_i
     inside=package.is_relative_to(python.parent.parent)
     result['ready']=bool(current and inside and actual['legacy_indexer'] and actual['current_indexer'] and (not native_glm or (actual['native'] and (not check or already_native))))
     if not check and result['ready']:
-        atomic_json(marker,dict(source_sha256=revision,native_glm=bool(actual['native']) or already_native))
+        atomic_json(marker,dict(source_sha256=revision,native_glm=bool(actual['native']) or already_native,native_glm_required=native_glm))
     atomic_json(runtime/'state/mlx-backend-check.json',result)
     return result
