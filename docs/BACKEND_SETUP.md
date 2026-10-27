@@ -22,6 +22,10 @@ Pass a private config using `--config` before the command. `--backend all` insta
 all registered Mac backends. Keep at least 16 GiB free on the runtime volume;
 large compiler caches and multiple backends may require more. Compiler jobs are
 limited to one or two and run under the stack's host memory guardian.
+The default build memory budget is 3 GiB, or 8 GiB for mlx-serve's native MLX
+Metal linker, with at least 4 GiB of system memory kept available. An explicit
+`backend_build_budget_gib` in local config overrides that budget; a lower limit
+can stop the linker before it finishes.
 
 | Backend | Installation |
 | --- | --- |
