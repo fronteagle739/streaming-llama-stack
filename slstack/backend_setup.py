@@ -224,7 +224,8 @@ def setup(cfg,name,*,check_only=False,fetch_only=False,build_only=False,cache_di
     volume=Path(cfg['runtime_root']).resolve()
     while not volume.exists():volume=volume.parent
     if shutil.disk_usage(volume).free<16*1024**3:raise OSError('Backend setup requires 16 GiB free for inputs, build outputs and safety headroom')
-    build=Build(cfg,cache_dir=cache_dir,offline=offline,wheelhouse=wheelhouse,jobs=jobs)
+    build=Build({**cfg,'backend_build_budget_gib':cfg.get('backend_build_budget_gib',8 if name=='mlx-serve' else 3)},
+                cache_dir=cache_dir,offline=offline,wheelhouse=wheelhouse,jobs=jobs)
     if name in ('mlx-receiver','mlx-lm','mlx-vlm','mtp-shim'):
         from .mlx_setup import setup as mlx_setup
         result=mlx_setup(cfg,wheelhouse=wheelhouse,build_only=build_only)
