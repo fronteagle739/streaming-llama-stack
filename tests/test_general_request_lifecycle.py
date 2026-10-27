@@ -1,7 +1,11 @@
 """General decoder reservations end on success, failure and cancellation."""
 import threading
+from http.server import ThreadingHTTPServer
+import json
+from types import SimpleNamespace
 import unittest
 from unittest.mock import Mock
+import urllib.request
 
 from slstack.general_engine import GeneralEngines
 
@@ -40,6 +44,20 @@ class GeneralRequests(unittest.TestCase):
         engine,remote,job,_=self.fixture()
         stream=engine.chat_events({});next(stream);stream.close()
         job.stop.assert_called_once();remote.close.assert_called_once()
+
+    def test_webui_props_report_the_general_preset_context(self):
+        from slstack.router import handler
+        engine=GeneralEngines.__new__(GeneralEngines)
+        engine.cfg={'general':{'mode':'streaming','rtx':{'ctx':65536}}}
+        stack=SimpleNamespace(engines=engine,cfg={**engine.cfg,'ds4_command':['server','--ctx','262144']},
+                              models=SimpleNamespace(rows=[{}],default='model'))
+        server=ThreadingHTTPServer(('127.0.0.1',0),handler(stack))
+        thread=threading.Thread(target=server.serve_forever,daemon=True);thread.start()
+        try:
+            with urllib.request.urlopen('http://127.0.0.1:'+str(server.server_port)+'/props') as response:
+                props=json.load(response)
+            self.assertEqual(props['default_generation_settings']['n_ctx'],65536)
+        finally:server.shutdown();server.server_close();thread.join()
 
 
 if __name__=='__main__':unittest.main()

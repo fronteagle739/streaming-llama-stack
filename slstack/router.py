@@ -308,7 +308,9 @@ def handler(stack):
                 except (OSError,ValueError) as exc:return self.send(400,{'error':{'message':str(exc)}})
             if route == '/props':
                 command = stack.cfg['ds4_command']
-                if stack.cfg.get('mac'):
+                if hasattr(stack.engines,'context_size'):
+                    n_ctx=stack.engines.context_size()
+                elif stack.cfg.get('mac'):
                     n_ctx = 1000001
                 elif getattr(stack.engines, 'single_engine', lambda: False)():
                     from .single_runtime import context
