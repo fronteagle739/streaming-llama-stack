@@ -118,6 +118,7 @@ class BackendSetup(unittest.TestCase):
         with patch('slstack.mlx_setup.source_digest',return_value='source-pin'):
             result=inspect_installation({'runtime_root':str(root)})
             self.assertTrue(result['built']);self.assertFalse(result['ready'])
+            self.assertFalse(check({'runtime_root':str(root)},'mlx-lm')['ready'])
             record['smoke_verified']=True;manifest.write_text(json.dumps(record))
             self.assertTrue(inspect_installation({'runtime_root':str(root)})['ready'])
             artifact.write_bytes(b'changed artifact')
