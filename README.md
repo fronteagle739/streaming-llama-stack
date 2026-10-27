@@ -89,12 +89,12 @@ one DeepSeek V4.1-specific part.
   CUDA 13.2 and Node.js 24.
 - **Optional Mac:** M3 Ultra with 512 GB, on the same network, with the same model file.
 
-**Model.** A DeepSeek V4.1 Flash GGUF with Q4_K routed experts and Q8_0 for the
-rest. DeepSeek releases V4.1 Flash with low-bit experts and FP8 for everything
-else (about 475 GiB), so this GGUF (483 GiB) is the model at its released
-precision. A conversion script based on
-[antirez's ds4 converter](https://github.com/antirez/ds4) is coming. The installer
-never downloads weights.
+**Model.** A native DeepSeek V4.1 Flash GGUF using supported tensor types:
+Q4_K, IQ2_XXS/Q2_K or MXFP4 routed experts, with Q8_0, Q4_K or Q4_0 dense
+matrices. The measured file uses Q4_K experts and Q8_0 dense matrices (483 GiB).
+[Supported layouts and conversion from existing safetensors](docs/DSV41_GGUF.md)
+include a pinned wrapper around antirez's ds4 converter and a header-only dry run.
+The installer never downloads weights.
 
 ## Quickstart
 

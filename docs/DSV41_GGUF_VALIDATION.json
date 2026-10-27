@@ -1,0 +1,68 @@
+{
+  "schema": "anygguf-cpu-header/1",
+  "base_commit": "2ad5e17a38e78479e5c27e5cc598c01d1b2497f7",
+  "antirez_commit": "ee7e8405232c8971000cc7ba2b945b00bf6d20d3",
+  "reference_headers": {
+    "main": {
+      "tensors": 1046,
+      "header_bytes": 5828292,
+      "header_sha256": "5cb77ddb72546115004a1eea3d09f79e504f5e26220a99e01d088603e5b5d691",
+      "types": {
+        "1": 110,
+        "0": 493,
+        "8": 321,
+        "12": 120,
+        "24": 2
+      },
+      "actual_header_matches_plan": true,
+      "payload_read": false
+    },
+    "dspark": {
+      "tensors": 81,
+      "header_bytes": 5999,
+      "header_sha256": "581552955fe29bdc8144e77c5679b4c44ff8aab79c0520044afa76960b679924",
+      "types": {
+        "1": 6,
+        "0": 39,
+        "8": 27,
+        "12": 9
+      },
+      "actual_header_matches_plan": true,
+      "payload_read": false
+    },
+    "vision": {
+      "tensors": 266,
+      "header_bytes": 18586,
+      "header_sha256": "5f2fe2a6adc93cb94cbbebd3bd20fe19a3cec24374c15d733f558f1f32bc4048",
+      "types": {
+        "30": 266
+      },
+      "actual_header_matches_plan": true,
+      "payload_read": false
+    }
+  },
+  "python_suite": {
+    "tests": 542,
+    "skipped": 11,
+    "failures": 0,
+    "errors": 0
+  },
+  "cpu_mm_id_relative_rmse": {
+    "Q4_K": 0.0005498,
+    "IQ2_XXS": 0.00054626,
+    "Q2_K": 0.00054839,
+    "MXFP4": 0.0003
+  },
+  "checks": {
+    "cpu_native_library": true,
+    "cpu_native_server_help": true,
+    "cuda_host_compile": true,
+    "producer_cuda_syntax": true
+  },
+  "host_budget_gib": 2,
+  "free_ram_floor_gib": 4,
+  "model_downloads": 0,
+  "model_payload_conversion": false,
+  "gpu_engine_runs": 0,
+  "scope": "Single-file native deepseek41 Flash GGUFs; public MXFP4 split files require prior lossless assembly. CPU/header coverage is not a GPU quality/performance qualification."
+}

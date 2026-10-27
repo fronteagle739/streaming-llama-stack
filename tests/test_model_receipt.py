@@ -1,10 +1,11 @@
 """The one-time full model SHA-256 runs at install/check, never silently on the first prompt.
 
-CPU only: a small temp file stands in for the GGUF and MODEL_SHA256 is patched to its digest.
+CPU only: a small temp file stands in for the selected GGUF.
 """
 import hashlib
 import json
 import os
+import struct
 from pathlib import Path
 import tempfile
 import unittest
@@ -27,13 +28,13 @@ class ModelReceiptTests(unittest.TestCase):
         root = Path(self.temp.name)
         self.model = root / 'models' / NAME
         self.model.parent.mkdir()
-        self.model.write_bytes(os.urandom((3 << 20) + 17))   # several 1 MiB hash blocks
+        def string(value):
+            raw=value.encode();return struct.pack('<Q',len(raw))+raw
+        header=b'GGUF'+struct.pack('<IQQ',3,0,1)+string('general.architecture')+struct.pack('<I',8)+string('deepseek41')
+        self.model.write_bytes(header+os.urandom((3 << 20) + 17))   # several 1 MiB hash blocks
         self.digest = hashlib.sha256(self.model.read_bytes()).hexdigest()
         self.cfg = {'model': str(self.model), 'runtime_root': str(root / 'runtime')}
         self.target = root.resolve() / 'runtime' / 'single-engine' / 'state' / 'original-model.json'
-        patch = mock.patch.object(contract, 'MODEL_SHA256', self.digest)
-        patch.start()
-        self.addCleanup(patch.stop)
         self.addCleanup(self.temp.cleanup)
 
     def test_check_path_writes_the_serving_receipt_with_progress(self):
@@ -63,8 +64,8 @@ class ModelReceiptTests(unittest.TestCase):
         self.assertFalse(self.target.exists())
 
     def test_wrong_model_fails_the_check_row(self):
-        with mock.patch.object(contract, 'MODEL_SHA256', '0' * 64), mock.patch('builtins.print'):
-            result = check_module.verify_model_receipt(self.cfg)
+        with mock.patch('builtins.print'):
+            result = check_module.verify_model_receipt({**self.cfg,'model_sha256':'0'*64})
         self.assertFalse(result['ready'])
         self.assertIn('native handoff refused', result['error'])
         self.assertFalse(self.target.exists())

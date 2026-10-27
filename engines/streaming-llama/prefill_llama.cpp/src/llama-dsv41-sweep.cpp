@@ -1,6 +1,7 @@
 #include "llama-dsv41-layer-log.h"
 #include "llama-dsv41-test-fault.h"
 #include "llama-dsv41-sweep.h"
+#include "llama-dsv41-quant-types.h"
 #include "llama-dsv41-append-schedule.h"
 #include "llama-dsv41-engram-prefetch.h"
 #include <cstdlib>
@@ -141,7 +142,7 @@ struct llama_dsv41_sweep::implementation {
         } head_scope(backend);
 #endif
         require(norm&&norm->data&&norm->buffer&&ggml_nelements(norm)==width&&weight&&weight->data&&weight->buffer&&
-            weight->type==GGML_TYPE_Q8_0&&weight->ne[0]==width&&weight->ne[1]==vocabulary&&weight->ne[2]==1&&weight->ne[3]==1,
+            llama_dsv41_quant::dense(weight->type)&&weight->ne[0]==width&&weight->ne[1]==vocabulary&&weight->ne[2]==1&&weight->ne[3]==1,
             "V4.1 staged output head geometry changed");
         constexpr uint32_t head_rows=4096;
         llama_dsv41_layer_log("[dsv41-sweep] head begin rows=%u slice_rows=%u precision=F32\n",vocabulary,head_rows);

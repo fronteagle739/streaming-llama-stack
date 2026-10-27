@@ -3,6 +3,7 @@ from contextlib import ExitStack
 import hashlib
 import json
 import os
+import re
 from pathlib import Path
 import sys
 import threading
@@ -39,8 +40,9 @@ def model_receipt(cfg, report=None):
     to start without a completed full-SHA receipt for the main weights. A missing receipt is
     therefore hashed here, blocking; report(message), when given, receives the progress."""
     vendor()
-    from studio.dsv41_session_contract import MODEL_SHA256
     model = path(cfg['model'])
+    from .gguf_header import read_header, validate_dsv41_types
+    validate_dsv41_types(read_header(model))
     current = model.stat()
     identity = {'size': current.st_size, 'dev': current.st_dev, 'ino': current.st_ino,
                 'mtime_ns': current.st_mtime_ns}
@@ -52,10 +54,11 @@ def model_receipt(cfg, report=None):
         if not candidate.is_file():
             continue
         data = json.loads(candidate.read_text(encoding='utf-8-sig'))
-        row = data.get('receipts', {}).get('DeepSeek-V4.1-Flash-1017-Q4-v41.gguf', {})
-        if row.get('sha256') == MODEL_SHA256 and row.get('final_identity') == identity:
+        row = data.get('receipts', {}).get(model.name, {})
+        if (re.fullmatch('[0-9a-f]{64}', str(row.get('sha256', ''))) and row.get('final_identity') == identity
+                and (not cfg.get('model_sha256') or row['sha256']==cfg['model_sha256'])):
             if candidate != target:
-                atomic_json(target, {'receipts': {'DeepSeek-V4.1-Flash-1017-Q4-v41.gguf': row},
+                atomic_json(target, {'receipts': {model.name: row},
                                      'validation': 'prior SHA receipt and unchanged physical identity',
                                      'source_receipt_sha256': sha256(candidate)})
             return target
@@ -67,11 +70,19 @@ def model_receipt(cfg, report=None):
         report(message)
     digest = sha256(model, hash_progress(report) if report else None)
     after = model.stat()
-    if digest != MODEL_SHA256 or (after.st_size, after.st_dev, after.st_ino, after.st_mtime_ns) != tuple(identity.values()):
-        raise ValueError('Original 1017 model hash/identity differs; native handoff refused')
-    atomic_json(target, {'receipts': {'DeepSeek-V4.1-Flash-1017-Q4-v41.gguf':
+    if (cfg.get('model_sha256') and digest != cfg['model_sha256']) or (after.st_size, after.st_dev, after.st_ino, after.st_mtime_ns) != tuple(identity.values()):
+        raise ValueError('Selected model hash/identity differs; native handoff refused')
+    atomic_json(target, {'receipts': {model.name:
                                      {'sha256': digest, 'final_identity': identity}}, 'validation': 'full SHA-256'})
     return target
+
+
+def model_digest(cfg, receipt=None):
+    receipt = receipt or model_receipt(cfg)
+    row = json.loads(Path(receipt).read_text(encoding='utf-8-sig'))['receipts'][path(cfg['model']).name]
+    digest = row['sha256']
+    if not re.fullmatch('[0-9a-f]{64}', digest):raise ValueError('Invalid selected model digest')
+    return digest
 
 
 class ProgressGuardedTransport:

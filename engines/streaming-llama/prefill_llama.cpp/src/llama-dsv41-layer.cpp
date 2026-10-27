@@ -129,7 +129,7 @@ llama_dsv41_layer_graph::result llama_dsv41_layer_graph::build(uint32_t layer,co
 llama_dsv41_layer_graph::result llama_dsv41_layer_graph::build_pair(uint32_t layer,const llama_dsv41_tile_plan &p,
         uint32_t compressed_rows,const weights &w,const inputs &in,const cache &state,
         const llama_dsv41_expert_profile::policy &expert)const{
-    const bool native_pair=llama_dsv41_expert_profile::natural_half(expert);
+    const bool native_pair=llama_dsv41_expert_profile::native_attention(expert);
     const uint32_t attention_rows=native_pair?2048u:4096u;
     const char * reuse_option=std::getenv("LLAMA_DSV41_REUSE_CHILD_RAW_METADATA");
     GGML_ASSERT(!reuse_option||!std::strcmp(reuse_option,"0")||!std::strcmp(reuse_option,"1"));
@@ -200,7 +200,7 @@ llama_dsv41_layer_graph::result llama_dsv41_layer_graph::build_pair(uint32_t lay
     const auto left=build_attention(layer,first,compressed_rows,w,sub(first,0),state,expert);
     const auto right=build_attention(layer,second,compressed_rows,w,sub(second,attention_rows),left.after,expert);
     llama_dsv41_ffn_graph feed_forward(ctx,ops,swiglu_limit,expert_scale);
-    const auto routed=feed_forward.build_routed_pair(w.ffn,ggml_concat(ctx,left.ffn.input,right.ffn.input,1),in.token_kinds,native_pair);
+    const auto routed=feed_forward.build_routed_pair(w.ffn,ggml_concat(ctx,left.ffn.input,right.ffn.input,1),in.token_kinds,native_pair&&!expert.generic_weights);
     auto finish=[&](const attention_part &part,uint32_t offset,uint32_t rows){
         auto *one=ggml_view_2d(ctx,routed.output,5120,rows,routed.output->nb[1],size_t(offset)*routed.output->nb[1]);
         return ops.complete(ggml_add(ctx,one,feed_forward.build_shared(w.ffn,part.ffn.input)),part.ffn);

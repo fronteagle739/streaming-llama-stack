@@ -29,18 +29,21 @@ Flash Next runs on the Mac through mlx-serve.
 
 ## DeepSeek V4.1 Flash files
 
-The single-engine path expects a GGUF with Q4_K routed experts, Q8_0 attention,
-shared-expert and head matrices, and F16/F32 for embeddings, norms and routers.
-This is DeepSeek V4.1 Flash at its released precision: DeepSeek ships low-bit
-experts and FP8 for everything else (about 475 GiB of safetensors), and the GGUF
-is 483 GiB. So Max quality is the full model, and the dial's KL figures are
-measured against full precision.
+The combined single-engine producer accepts native `deepseek41` Flash GGUFs
+with Q4_K, IQ2_XXS gate/up plus Q2_K down, or MXFP4 experts. Dense matrices
+accept Q8_0, Q4_K and Q4_0; auxiliaries retain the architecture's F16/F32/I8
+representations. Unsupported tensors fail before hashing or engine startup
+with their name and type. Receipts bind the selected file's digest and physical
+identity; filenames and a particular measured model SHA are not admission rules.
 
-Any DeepSeek V4.1 Flash GGUF with that layout works. A conversion script based
-on [antirez's ds4 converter](https://github.com/antirez/ds4) is coming.
+The measured 483 GiB file uses Q4_K experts and Q8_0 dense matrices. Quality/speed
+and YOCO measurements refer to that file. Other quantizations have CPU/header
+coverage, not new GPU quality or throughput measurements.
 
-The ds4 CUDA decoder also has IQ2_XXS/Q2_K, Q4_K and MXFP4 expert kernels, which
-match the [public antirez V4.1 Flash GGUFs](https://huggingface.co/antirez/deepseek-v4.1-flash-gguf/tree/main).
+[Conversion instructions](DSV41_GGUF.md) cover existing raw safetensors, the
+measured main/DSpark/Vision layouts, and public antirez GGUFs. The public MXFP4
+shards require lossless assembly into one GGUF before this single-file loader
+can open them. No model is downloaded by the wrapper.
 
 ## Choosing a route
 

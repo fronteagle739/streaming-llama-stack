@@ -11,7 +11,7 @@ import struct
 import time
 from .config import path, environment
 from .journal import atomic_json, sha256
-from .native_broker import vendor, model_receipt
+from .native_broker import vendor, model_receipt, model_digest
 from .native_profiles import profile
 from .combo_contract import validate
 from .combo_state import transport_checkpoint, payload_bytes
@@ -248,7 +248,6 @@ class ComboProducer:
         elif keep and base is not None:raise ValueError('YOCO requires a local snapshot with YOCO provenance')
         runtime_floor=runtime_min_free_gib(cfg)
         vendor()
-        from studio.dsv41_session_contract import MODEL_SHA256
         from studio.dsv41_session_process import Producer
         from studio.dsv41_windows_runner import _Native
         self.session=session;self.epoch=epoch;self.process=None;self.closed=False;self.leases=ExitStack()
@@ -263,6 +262,7 @@ class ComboProducer:
         if sha256(binary)!=cfg['producer_sha256']:raise ValueError('ULTRA binary pin differs')
         self.directory=Path(cfg['runtime_root'])/('ultra-'+secrets.token_hex(8));self.directory.mkdir()
         native=runner or _Native();receipt=model_receipt(cfg)
+        self.model_sha256=model_digest(cfg,receipt)
         tier=cfg.get('producer_profile','ultra')
         if tier not in ('accurate','fast','ultra'):raise ValueError('Combo producer profile must be accurate, fast or ultra (original weights; no HYPER)')
         import psutil
@@ -329,7 +329,7 @@ class ComboProducer:
                     try:return super()._initialize(*args,**kwargs)
                     finally:owner.loading_process=None
             self.process=PublishingProducer(session,argv,env,self.directory,host_bytes=host_bytes,
-                runtime_min_free_gib=runtime_floor,
+                runtime_min_free_gib=runtime_floor,model_sha256=self.model_sha256,
                 physical_floor=int(cfg['min_available_gib']*(1<<30)),operation_seconds=min(1140,cfg['request_timeout_s']),stall_seconds=stall_seconds(cfg),
                 idle_seconds=cfg['lease_minutes']*60,native=native,cancelled=cancelled,native_mode=1,bootstrap=bootstrap,owner_epoch=epoch,
                 after_resume=lambda job:protect_working_set(job,host_bytes,int(cfg['min_available_gib']*(1<<30)),
@@ -363,8 +363,7 @@ class ComboProducer:
 
     def command(self,operation,**extra):
         if operation!='close':combo_abort.check('producer '+operation)
-        from studio.dsv41_session_contract import MODEL_SHA256
-        return dict(session=self.session,model_sha256=MODEL_SHA256,sequence=self.process.sequence,operation=operation,**extra)
+        return dict(session=self.session,model_sha256=self.model_sha256,sequence=self.process.sequence,operation=operation,**extra)
 
     # --- DS4COMBO fast switch: keep-alive producer (suspend / resume) ---------
     def suspend(self):
