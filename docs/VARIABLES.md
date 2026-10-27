@@ -48640,18 +48640,6 @@ Source: `engines/mference/Sources/MferenceRepack/Command/main.swift:179`. Unset 
         let result = try await RemoteStreamingRepacker(options: options).run()
 ```
 
-Source: `engines/mlx-serve/src/cli.zig:304`. Unset read: NULL from getenv; the literal consumer below supplies any fallback.
-
-```text
-fn curlBaseArgs(list: *std.ArrayList([]const u8), allocator: std.mem.Allocator) !?[]u8 {
-    try list.appendSlice(allocator, &.{ "curl", "-fL", "--retry", "3", "--retry-delay", "2" });
-    if (std.c.getenv("HF_TOKEN")) |tok| {
-        const header = try std.fmt.allocPrint(allocator, "Authorization: Bearer {s}", .{std.mem.span(tok)});
-        try list.appendSlice(allocator, &.{ "-H", header });
-        return header;
-    }
-```
-
 Source: `engines/streaming-llama/prefill_llama.cpp/common/arg.cpp:3087`. Unset read: Wrapper/conditional default: see the literal call and consumer below.
 
 ```text
@@ -48722,6 +48710,18 @@ Source: `vendor/mac-mlx/mlx_vlm/models/ideogram4/download.py:53`. Unset read: No
         "max_workers": max_workers,
     }
     if local_dir is not None:
+```
+
+Source: `engines/mlx-serve/src/cli.zig:304`. Unset read: NULL from getenv; the literal consumer below supplies any fallback.
+
+```text
+fn curlBaseArgs(list: *std.ArrayList([]const u8), allocator: std.mem.Allocator) !?[]u8 {
+    try list.appendSlice(allocator, &.{ "curl", "-fL", "--retry", "3", "--retry-delay", "2" });
+    if (std.c.getenv("HF_TOKEN")) |tok| {
+        const header = try std.fmt.allocPrint(allocator, "Authorization: Bearer {s}", .{std.mem.span(tok)});
+        try list.appendSlice(allocator, &.{ "-H", header });
+        return header;
+    }
 ```
 
 ### HOME
@@ -48848,6 +48848,42 @@ Source: `engines/ds4-win/ds4_web.c:1445`. Unset read: NULL from getenv; the lite
     snprintf(web->home, sizeof(web->home), "%s", home);
     snprintf(web->profile_dir, sizeof(web->profile_dir), "%s/.ds4/browser", home);
     web->port = cfg && cfg->port > 0 ? cfg->port : DS4_WEB_DEFAULT_PORT;
+```
+
+Source: `engines/streaming-llama/prefill_llama.cpp/common/common.cpp:945`. Unset read: NULL from getenv; the literal consumer below supplies any fallback.
+
+```text
+        if (std::getenv("XDG_CACHE_HOME")) {
+            cache_directory = std::getenv("XDG_CACHE_HOME");
+        } else if (std::getenv("HOME")) {
+            cache_directory = std::getenv("HOME") + std::string("/.cache/");
+        } else {
+#    if defined(__linux__)
+            /* no $HOME is defined, fallback to getpwuid */
+```
+
+Source: `engines/streaming-llama/prefill_llama.cpp/common/common.cpp:946`. Unset read: NULL from getenv; the literal consumer below supplies any fallback.
+
+```text
+            cache_directory = std::getenv("XDG_CACHE_HOME");
+        } else if (std::getenv("HOME")) {
+            cache_directory = std::getenv("HOME") + std::string("/.cache/");
+        } else {
+#    if defined(__linux__)
+            /* no $HOME is defined, fallback to getpwuid */
+            struct passwd * pw = getpwuid(getuid());
+```
+
+Source: `engines/streaming-llama/prefill_llama.cpp/common/common.cpp:961`. Unset read: NULL from getenv; the literal consumer below supplies any fallback.
+
+```text
+        }
+#elif defined(__APPLE__)
+        cache_directory = std::getenv("HOME") + std::string("/Library/Caches/");
+#elif defined(_WIN32)
+        cache_directory = std::getenv("LOCALAPPDATA");
+#elif defined(__EMSCRIPTEN__)
+        GGML_ABORT("not implemented on this platform");
 ```
 
 Source: `engines/mlx-serve/src/cli.zig:199`. Unset read: NULL from getenv; the literal consumer below supplies any fallback.
@@ -48992,42 +49028,6 @@ Source: `engines/mlx-serve/src/arch/ds4.zig:139`. Unset read: NULL from getenv; 
         log.err("[ds4] HOME not set; cannot stage Metal kernels\n", .{});
         return Error.KernelExtractionFailed;
     }
-```
-
-Source: `engines/streaming-llama/prefill_llama.cpp/common/common.cpp:945`. Unset read: NULL from getenv; the literal consumer below supplies any fallback.
-
-```text
-        if (std::getenv("XDG_CACHE_HOME")) {
-            cache_directory = std::getenv("XDG_CACHE_HOME");
-        } else if (std::getenv("HOME")) {
-            cache_directory = std::getenv("HOME") + std::string("/.cache/");
-        } else {
-#    if defined(__linux__)
-            /* no $HOME is defined, fallback to getpwuid */
-```
-
-Source: `engines/streaming-llama/prefill_llama.cpp/common/common.cpp:946`. Unset read: NULL from getenv; the literal consumer below supplies any fallback.
-
-```text
-            cache_directory = std::getenv("XDG_CACHE_HOME");
-        } else if (std::getenv("HOME")) {
-            cache_directory = std::getenv("HOME") + std::string("/.cache/");
-        } else {
-#    if defined(__linux__)
-            /* no $HOME is defined, fallback to getpwuid */
-            struct passwd * pw = getpwuid(getuid());
-```
-
-Source: `engines/streaming-llama/prefill_llama.cpp/common/common.cpp:961`. Unset read: NULL from getenv; the literal consumer below supplies any fallback.
-
-```text
-        }
-#elif defined(__APPLE__)
-        cache_directory = std::getenv("HOME") + std::string("/Library/Caches/");
-#elif defined(_WIN32)
-        cache_directory = std::getenv("LOCALAPPDATA");
-#elif defined(__EMSCRIPTEN__)
-        GGML_ABORT("not implemented on this platform");
 ```
 
 ### HUGGINGFACE_HUB_CACHE
@@ -74270,18 +74270,6 @@ Source: `engines/ds4-win/ds4_web.c:1040`. Unset read: NULL from getenv; the lite
         for (char *dir = strtok_r(path, ":", &save); dir; dir = strtok_r(NULL, ":", &save)) {
 ```
 
-Source: `engines/mlx-serve/app/Sources/MLXServe/Services/CLIInstaller.swift:190`. Unset read: Wrapper/conditional default: see the literal call and consumer below.
-
-```text
-    /// process PATH if the shell misbehaves or hangs.
-    static func userShellPathEntries() -> [String] {
-        let fallback = parsePathEntries(ProcessInfo.processInfo.environment["PATH"] ?? "")
-        guard let path = LoginShellEnv.values(of: ["PATH"])["PATH"] else { return fallback }
-        return parsePathEntries(path)
-    }
-
-```
-
 Source: `vendor/engines/cosmos_windows/weight_streaming/hunyuan3d_backend.py:332`. Unset read: ''.
 
 ```text
@@ -74304,6 +74292,18 @@ Source: `vendor/engines/cosmos_windows/weight_streaming/hunyuan3d_backend.py:337
         if hasattr(os, 'add_dll_directory'):
             try:
                 handles.append(os.add_dll_directory(s))
+```
+
+Source: `engines/mlx-serve/app/Sources/MLXServe/Services/CLIInstaller.swift:190`. Unset read: Wrapper/conditional default: see the literal call and consumer below.
+
+```text
+    /// process PATH if the shell misbehaves or hangs.
+    static func userShellPathEntries() -> [String] {
+        let fallback = parsePathEntries(ProcessInfo.processInfo.environment["PATH"] ?? "")
+        guard let path = LoginShellEnv.values(of: ["PATH"])["PATH"] else { return fallback }
+        return parsePathEntries(path)
+    }
+
 ```
 
 ### PID_ALLOW_LOW_VRAM
@@ -87806,18 +87806,6 @@ Source: `engines/mlx-serve/app/Sources/MLXServe/Services/MCPManager.swift:219`. 
 Advanced backend control MFERENCE_HOTPATH_METRICS. Set explicitly only for the selected backend; its literal read and fallback are documented below.
 
 Scope: mac-mference. Class: advanced.
-
-Source: `engines/mference/Sources/Mference/Runtime/Inference/HotPathInstrumentation.swift:92`. Unset read: Wrapper/conditional default: see the literal call and consumer below.
-
-```text
-    private var cachePlanMisses: UInt64 = 0
-
-    init(enabled: Bool = ProcessInfo.processInfo.environment["MFERENCE_HOTPATH_METRICS"] == "1") {
-        self.enabled = enabled
-    }
-
-    func recordCommandBufferCommit() {
-```
 
 Source: `engines/mference/Sources/MferenceCLI/Run.swift:125`. Unset read: Wrapper/conditional default: see the literal call and consumer below.
 
