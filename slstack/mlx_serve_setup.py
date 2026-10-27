@@ -22,6 +22,9 @@ def portable_sources(files):
             text=text.replace('addIncludePath(.{ .cwd_relative = "/opt/homebrew/include" })','addIncludePath(.{ .cwd_relative = stack_include })')
             text=text.replace('addLibraryPath(.{ .cwd_relative = "/opt/homebrew/lib" })','addLibraryPath(.{ .cwd_relative = stack_lib })')
             text=text.replace('linkSystemLibrary("webp", .{})','linkSystemLibrary("webp", .{ .use_pkg_config = .no })')
+            anchor='    module.linkSystemLibrary("llama", .{ .use_pkg_config = .no });'
+            assert text.count(anchor)==1
+            text=text.replace(anchor,anchor+'\n    module.linkSystemLibrary("ggml-base", .{ .use_pkg_config = .no });')
             anchor='fn verifyBrewDeps(b: *std.Build) void {'
             assert text.count(anchor)==1
             text=text.replace(anchor,'''fn verifyBrewDeps(b: *std.Build, stack_prefix: ?[]const u8) void {
