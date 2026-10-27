@@ -76,6 +76,7 @@ if wheelhouse:sys.argv.extend(['--wheelhouse',wheelhouse[0]])
 runpy.run_path(str(p/'build.py'),run_name='__main__')
 '''
             run([str(python),'-B','-c',builder,str(runtime/'build/mlx-glm-native'),*([str(wheelhouse)] if wheelhouse else [])],'setup-mlx-glm-native')
+        run([str(python),'-B','-m','pip','check'],'setup-mlx-dependency-check')
         current=True
     result=dict(ready=False,python=str(python),source_current=bool(current),source_sha256=revision,native_glm=False)
     if not python.is_file():return result

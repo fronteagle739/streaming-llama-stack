@@ -10,8 +10,9 @@ def main():
     parser.add_argument('--config')
     parser.add_argument('--check',action='store_true')
     parser.add_argument('--no-native-glm',action='store_true',help='Explicit pure-MLX baseline; does not claim accelerated GLM performance')
+    parser.add_argument('--wheelhouse',help='Offline directory containing dependencies and build wheels')
     args=parser.parse_args()
-    result=setup(load(args.config),check=args.check,native_glm=not args.no_native_glm)
+    result=setup(load(args.config),check=args.check,native_glm=not args.no_native_glm,wheelhouse=args.wheelhouse)
     print(json.dumps(result,indent=2));return 0 if result['ready'] else 1
 
 if __name__=='__main__':raise SystemExit(main())
