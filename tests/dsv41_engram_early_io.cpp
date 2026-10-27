@@ -102,9 +102,12 @@ int main(int argc, char **argv) {
         ref.prepare(layout, tokens.data(), uint32_t(tokens.size()), offsets, admitted, h, mask.data());
         ref.load(path.c_str(), verified, file_bytes, [] { return false; });
         cached.prepare_early(layout, tokens.data(), uint32_t(tokens.size()), offsets, admitted, h, nullptr, mask.data());
-        cached.load_early(path.c_str(), verified, file_bytes, [] { return false; });
-        expect(cached.budget() <= admitted && check(cached, &ref, tokens, h, mask.data()),
-               "image mask: batched rows match exact masked reader across block boundaries and restored history");
+        bool ready = false;
+        std::thread loader([&] { cached.load_early(path.c_str(), verified, file_bytes, [] { return false; }); });
+        try { cached.wait_table(0, [] { return false; }); cached.wait_table(1, [] { return false; }); ready = true; } catch (...) {}
+        loader.join();
+        expect(ready && cached.budget() <= admitted && check(cached, &ref, tokens, h, mask.data()),
+               "image mask: async tables match exact masked reader across block boundaries and restored history");
     }
 
     struct setting { const char *rings, *depth, *batch; };
