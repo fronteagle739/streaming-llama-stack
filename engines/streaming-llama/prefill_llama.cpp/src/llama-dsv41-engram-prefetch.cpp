@@ -28,6 +28,14 @@
 // The early multi-ring loader serves every Engram load (all EARLY arms). =0:
 // no early start, and the weight-stream marker is never set.
 static std::atomic<bool> llama_dsv41_engram_weight_pass{false};
+static uint32_t engram_read_alignment(){
+    static const uint32_t alignment=[]{
+        const char*e=std::getenv("LLAMADECODE_ENGRAM_READ_ALIGN");
+        if(!e||!*e||!std::strcmp(e,"4096"))return 4096u;
+        if(!std::strcmp(e,"512"))return 512u;
+        throw std::invalid_argument("LLAMADECODE_ENGRAM_READ_ALIGN must be 512 or 4096");
+    }();return alignment;
+}
 static llama_dsv41_engram_early::mode llama_dsv41_engram_early_mode(){
     static const auto m=llama_dsv41_engram_early::parse_mode(std::getenv("LLAMADECODE_ENGRAM_EARLY"));return m;
 }
@@ -160,7 +168,7 @@ public:
                 for(size_t i=0;i<tables[t].ids.size();++i)if(row_cache->contains(uint32_t(t),tables[t].ids[i]))held[i>>3]|=uint8_t(1u<<(i&7));
             }
             size_t pos=0;llama_dsv41_engram_plan::extent e;
-            while(llama_dsv41_engram_plan::next_extent(tables[t].ids.data(),tables[t].ids.size(),held.empty()?nullptr:held.data(),pos,bases[t],row_bytes,llama_dsv41_engram_plan::default_merge_cap,e))++n;
+            while(llama_dsv41_engram_plan::next_extent(tables[t].ids.data(),tables[t].ids.size(),held.empty()?nullptr:held.data(),pos,bases[t],row_bytes,llama_dsv41_engram_plan::default_merge_cap,e,engram_read_alignment()))++n;
         }
         return n;
     }
@@ -401,6 +409,14 @@ public:
         io.file=CreateFileW(path,GENERIC_READ,FILE_SHARE_READ,nullptr,OPEN_EXISTING,
             FILE_FLAG_NO_BUFFERING|FILE_FLAG_OVERLAPPED|FILE_FLAG_RANDOM_ACCESS|FILE_FLAG_OPEN_REPARSE_POINT,nullptr);
         require(io.file!=INVALID_HANDLE_VALUE,"Cannot open original Engram file for its own IoRings");
+        if(engram_read_alignment()!=4096){
+            FILE_STORAGE_INFO storage{};
+            require(GetFileInformationByHandleEx(io.file,FileStorageInfo,&storage,sizeof(storage))&&
+                    storage.LogicalBytesPerSector&&engram_read_alignment()%storage.LogicalBytesPerSector==0,
+                    "E13 read alignment is incompatible with model-file logical sector geometry");
+            std::fprintf(stderr,"PERFEXP_E13 read_alignment=%u logical_sector=%u physical_sector=%u\n",
+                         engram_read_alignment(),storage.LogicalBytesPerSector,storage.PhysicalBytesPerSectorForPerformance);
+        }
         {   const char*e=std::getenv("LLAMADECODE_ENGRAM_IO_PRIORITY");
             FILE_IO_PRIORITY_HINT_INFO hint{};hint.PriorityHint=e&&!std::strcmp(e,"low")?IoPriorityHintLow:IoPriorityHintNormal;
             const BOOL ok=SetFileInformationByHandle(io.file,FileIoPriorityHintInfo,&hint,sizeof(hint));
@@ -458,7 +474,7 @@ public:
             if(have_pending)return true;
             while(cur_table<2){
                 const auto& t=tables[cur_table];
-                if(ep::next_extent(t.ids.data(),t.ids.size(),hits[cur_table].empty()?nullptr:hits[cur_table].data(),cur_pos,bases[cur_table],row_bytes,large_slot,pending)){
+                if(ep::next_extent(t.ids.data(),t.ids.size(),hits[cur_table].empty()?nullptr:hits[cur_table].data(),cur_pos,bases[cur_table],row_bytes,large_slot,pending,engram_read_alignment())){
                     pending_table=cur_table;have_pending=true;return true;}
                 ++cur_table;cur_pos=0;
             }
@@ -474,7 +490,7 @@ public:
                     // (same rows land, more requests) instead of starving.
                     if(r.submitted+r.staged>=early_small/4)return;
                     const auto& t=tables[pending_table];cur_pos=pending.first;
-                    require(ep::next_extent(t.ids.data(),t.ids.size(),hits[pending_table].empty()?nullptr:hits[pending_table].data(),cur_pos,bases[pending_table],row_bytes,small_slot,pending),"Engram re-plan lost its rows");
+                    require(ep::next_extent(t.ids.data(),t.ids.size(),hits[pending_table].empty()?nullptr:hits[pending_table].data(),cur_pos,bases[pending_table],row_bytes,small_slot,pending,engram_read_alignment()),"Engram re-plan lost its rows");
                     ++replanned;
                 }
                 auto& pool=pending.bytes>small_slot?r.free_large:r.free_small;
