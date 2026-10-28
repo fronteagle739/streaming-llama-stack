@@ -39,3 +39,8 @@ YOCO is approximate and its long-prompt measurements are text-only. Use an
 appropriate vision-enabled local config and producer for image prompts; do not
 advertise the text-only YOCO speed as image throughput. Prefill quality is separate
 from the live decode bias slider and phase sampler controls.
+
+Certified FP4 index scoring is enabled by default on supported SM120 BF16-index
+paths. The100K comparison is bit-identical and faster; unsupported inputs use
+the existing BF16 scorer. Set `LLAMA_DSV41_INDEX_FP4` to `"0"` in local
+`env_overrides` to disable it. See [E6 measurements](../../docs/EXPERIMENT_E6.md).

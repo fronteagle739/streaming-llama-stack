@@ -625,7 +625,7 @@ void run_live_session(std::unique_ptr<llama_dsv41_sweep>&sweep,
             require(path.is_absolute()&&!std::filesystem::exists(path),"Forced decode logits path must be absolute and new");
             HANDLE file=CreateFileW(path.c_str(),GENERIC_WRITE,0,nullptr,CREATE_NEW,FILE_ATTRIBUTE_NORMAL,nullptr);
             require(file!=INVALID_HANDLE_VALUE,"Cannot create forced decode logits file");
-            struct closer{HANDLE h;~closer(){CloseHandle(h);}}close_file{file};
+            struct closer{HANDLE h;~closer(){if(h!=INVALID_HANDLE_VALUE)CloseHandle(h);}}close_file{file};
             std::vector<int32_t>argmax;std::vector<double>step_ms;std::string error;std::vector<float>logits;
             for(size_t index=0;index<forced.size();++index){
                 stop();const auto step_started=clock_type::now();
@@ -651,6 +651,9 @@ void run_live_session(std::unique_ptr<llama_dsv41_sweep>&sweep,
                 step_ms.push_back(ms(step_started));
                 std::fprintf(stderr,"LLAMADECODE_FORCED_STEP index=%zu forced=%d argmax=%d step_ms=%.3f\n",index,forced[index],best,step_ms.back());std::fflush(stderr);
             }
+            // Publish a completed dump only after releasing its exclusive
+            // Windows writer handle; the receiver may open it immediately.
+            require(CloseHandle(close_file.h)!=0,"Forced decode logits close failed");close_file.h=INVALID_HANDLE_VALUE;
             current=inspect();double total_ms=0;for(const double v:step_ms)total_ms+=v;
             reply({{"peer_synchronized",have_remote&&remote.describe()==current.describe()},{"argmax",argmax},{"vectors",argmax.size()},
                 {"evaluated_tokens",step_ms.size()},{"step_ms",step_ms},{"decode_ms",total_ms},{"RTX_decode",true}});

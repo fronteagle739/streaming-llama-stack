@@ -5,6 +5,7 @@
   "min_available_gib": 4,
   "env_overrides": {
     "LLAMADECODE_APPEND_RESIDENT_SWEEP": "1",
-    "LLAMADECODE_APPEND_DECODE_MAX": "0"
+    "LLAMADECODE_APPEND_DECODE_MAX": "0",
+    "LLAMA_DSV41_INDEX_FP4": "1"
   }
 }
