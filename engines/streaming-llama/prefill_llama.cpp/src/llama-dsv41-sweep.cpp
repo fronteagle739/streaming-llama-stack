@@ -3,6 +3,7 @@
 #include "llama-dsv41-sweep.h"
 #include "llama-dsv41-quant-types.h"
 #include "llama-dsv41-append-schedule.h"
+#include "llama-dsv41-prefill-plan.h"
 #include "llama-dsv41-engram-prefetch.h"
 #include <cstdlib>
 
@@ -238,7 +239,7 @@ bool llama_dsv41_sweep::open(const llama_dsv41_weight_provider::config &input_we
         }
         if(options.yoco_keep){
             require(!restored||restored->local_snapshot,"YOCO requires a local snapshot with explicit YOCO provenance");
-            require(options.fixed&&options.carry.resident_ram&&options.carry.direct_ram_tiles&&options.admitted_hidden_bytes&&options.carry.export_hidden_after_head&&options.carry.max_tile_tokens>=140&&(!options.compute_step_tokens||options.compute_step_tokens>=140)&&!options.diagnostic_layers&&!options.diagnostic_carry&&
+            require(options.fixed&&options.carry.resident_ram&&options.carry.direct_ram_tiles&&options.admitted_hidden_bytes&&options.carry.export_hidden_after_head&&options.carry.max_tile_tokens>=options.yoco_keep&&(!options.compute_step_tokens||options.compute_step_tokens>=options.yoco_keep)&&!options.diagnostic_layers&&!options.diagnostic_carry&&
                 !std::getenv("DSV41_BOUNDARY_CAPTURE"),"YOCO requires the single-engine fixed RAM owner without full-row diagnostics");
             if(prefix){
                 require(prefix!=this,"YOCO prefix cannot be its own destination");
@@ -251,6 +252,7 @@ bool llama_dsv41_sweep::open(const llama_dsv41_weight_provider::config &input_we
             const uint32_t end=options.yoco_logical_end?options.yoco_logical_end:begin+options.carry.tokens;
             p->yoco=llama_dsv41_yoco::schedule(options.yoco_keep,options.operation,options.images,
                 options.yoco_logical_end?options.yoco_logical_begin:begin,end,begin,begin+options.carry.tokens);
+            llama_dsv41_yoco::align_exact(p->yoco,options.compute_step_tokens?options.compute_step_tokens:options.carry.max_tile_tokens);
             options.carry.yoco_first=p->yoco.first;
             weights.yoco_encoder_only=p->yoco.encoder_only;
         }
@@ -741,6 +743,8 @@ bool llama_dsv41_sweep::run(const std::vector<int32_t>&tokens,const cancelled&st
             });
         };
         double token_acquire_ms=0,token_executor_ms=0,token_compute_ms=0,token_prepare_ms=0;
+        const auto fixed=p->options.fixed;
+        const uint32_t resident_prefix=fixed&&fixed->bank_rows()<fixed->tokens?fixed->bank_rows()-fixed->tile:0;
         for(uint32_t layer=0;layer<p->yoco.layers;++layer){
             const auto layer_started=std::chrono::steady_clock::now();
             auto elapsed=[](auto start){return std::chrono::duration<double,std::milli>(std::chrono::steady_clock::now()-start).count();};
@@ -767,8 +771,8 @@ bool llama_dsv41_sweep::run(const std::vector<int32_t>&tokens,const cancelled&st
             const double carry_begin_ms=elapsed(ledger_started);
             llama_dsv41::engram_history history=p->initial_engram;
             if(p->options.engram_tile_lookahead&&(layer==0||layer==13))queue_engram(layer+1,0,p->initial_engram);
-            for(uint32_t start=llama_dsv41_yoco::first_row(p->yoco,layer);start<owned.size();start+=compute_step){
-                p->check_stop(stop);const uint32_t count=std::min(compute_step,uint32_t(owned.size())-start);
+            for(uint32_t start=llama_dsv41_yoco::first_row(p->yoco,layer);start<owned.size();){
+                p->check_stop(stop);const uint32_t count=llama_dsv41_prefill::tile_count(start,uint32_t(owned.size()),compute_step,resident_prefix);
                 const auto carry_read_started=std::chrono::steady_clock::now();
                 llama_dsv41_carry_store::tile input;llama_dsv41_carry_store::ram_lease direct;
                 if(p->options.admitted_pinned_device_bytes)success(p->carry.acquire_ram_tile(start,count,direct,error),error);
@@ -776,7 +780,7 @@ bool llama_dsv41_sweep::run(const std::vector<int32_t>&tokens,const cancelled&st
                 carry_read_ms+=elapsed(carry_read_started);
                 llama_dsv41_tile_executor::request request;request.layer=layer;request.start=start;request.count=count;request.compressed_rows=compressed;
                 request.position_offset=p->position_offset;request.single_attention_append=schedule.single_attention_append;
-                if(layer>20&&p->yoco.approximate){request.single_attention_append=false;request.yoco_first=p->yoco.first;request.yoco_raw_begin=p->position_offset+p->yoco.first;}
+                if(layer>20&&(p->yoco.approximate||p->yoco.exact_cone)){request.single_attention_append=false;request.yoco_first=p->yoco.first;request.yoco_raw_begin=p->position_offset+p->yoco.first;}
                 request.residual=std::move(input.residual);request.previous_pre=std::move(input.previous_pre);
                 if(p->options.admitted_pinned_device_bytes)request.direct=direct;
                 if(p->options.admitted_prefetch_device_bytes&&uint64_t(start)+count<owned.size()){
@@ -790,6 +794,7 @@ bool llama_dsv41_sweep::run(const std::vector<int32_t>&tokens,const cancelled&st
                     request.dense_bank=dense_bank;request.routed_bank=routed_bank;
                     request.route_hook=[this,layer](const std::vector<int32_t>&ids,std::vector<int32_t>&slots,std::string&why){return p->provider.acquire_layer_experts(layer,ids,slots,why);};
                 }
+                if(p->provider.routed_prefill(layer))request.prefill_route_hook=[this,layer](const std::vector<int32_t>&ids,std::string&why){return p->provider.prefill_experts(layer,ids,why);};
                 if(!query_source(layer))request.selected=std::move(input.selected);
                 if(layer>20)request.candidates=std::move(input.candidates);
                 request.token_kinds.assign(count,0);
@@ -839,6 +844,7 @@ bool llama_dsv41_sweep::run(const std::vector<int32_t>&tokens,const cancelled&st
                     void *bank=nullptr;uint64_t bytes=0;success(p->carry.ram_storage(bank,bytes,error),error);
                     p->options.diagnostic_carry(layer,start,count,bank,bytes,p->cache->raw(layer));
                 }
+                start+=count;
             }
             if(layer==1)p->final_engram=history;
             if(layer==14)require(history.tail==p->final_engram.tail,"Engram layers disagreed on the completed chunk history");
@@ -881,13 +887,15 @@ bool llama_dsv41_sweep::run(const std::vector<int32_t>&tokens,const cancelled&st
         }
         llama_dsv41_layer_log("DS4PERF_PROMPT_HEAD_COMPLETE tokens=%zu processing_ms=%.6f bulk_hidden_export_pending=%u\n",owned.size(),p->measured.prompt_processing_ms,unsigned(p->options.carry.export_hidden_after_head));
         if(p->options.carry.export_hidden_after_head){
-            for(uint32_t first=p->yoco.first;first<owned.size();first+=p->options.carry.max_tile_tokens){
+            for(uint32_t first=p->yoco.first;first<owned.size();){
                 p->check_stop(stop);llama_dsv41_carry_store::ram_lease lease;
-                success(p->carry.acquire_ram_export(first,std::min(p->options.carry.max_tile_tokens,uint32_t(owned.size())-first),lease,error),error);
+                const uint32_t count=llama_dsv41_prefill::tile_count(first,uint32_t(owned.size()),p->options.carry.max_tile_tokens,resident_prefix);
+                success(p->carry.acquire_ram_export(first,count,lease,error),error);
                 std::optional<llama_dsv41_carry_store::ram_completion>completion;
                 success(p->executor->export_hidden_tile(lease,completion,error),error);p->check_stop(stop);
                 require(bool(completion),"Final hidden export omitted completed validation/copy proof");
                 success(p->carry.complete_ram_export(lease,*completion,error),error);
+                first+=count;
             }
             p->executor.reset();
         }
