@@ -73,6 +73,10 @@
     {
       "path": "h3_image_mode.py",
       "purpose": "Apply Studio audiovisual caption fields to plain chat video prompts without launching an extra LLM. Preserve supplied shot structure, dialogue and audio fields."
+    },
+    {
+      "path": "dsv41_session_process.py, dsv41_windows_runner.py",
+      "purpose": "Cooperative abort on paging and host RSS trips; 0.5 GiB runtime floor; progress-aware retirement before logged force fallback, with forced-kill receipt fields. Clear kill-on-close before executing engine code. No model arithmetic or host expert tier."
     }
   ],
   "modules": [

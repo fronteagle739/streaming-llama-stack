@@ -1,20 +1,10 @@
-"""Cancel an owned single-engine tree without terminating a GPU process.
-
-The memory/paging verdict remains a failure. A stalled retirement retains its
-ownership certificate instead of falling back to terminate or kill-on-close.
-"""
-import dataclasses
+"""Single-engine abort files and HTTP shutdown before the common retirement wait."""
 from pathlib import Path
 import threading
-import time
 import urllib.parse
 import urllib.request
-import psutil
 
-from .progress import Window, activity
-from .native_broker import vendor
-vendor()
-from studio.job_guard import OwnedProcesses
+from .shutdown import ProgressOwnedProcesses
 
 
 def validate(policy):
@@ -24,15 +14,13 @@ def validate(policy):
         raise ValueError('Cooperative stop must use the local stack shutdown endpoint')
 
 
-class CooperativeOwnedProcesses(OwnedProcesses):
-    def __init__(self,child,spec):
-        super().__init__(child)
-        self.spec=spec
+class CooperativeOwnedProcesses(ProgressOwnedProcesses):
+    def stop(self,grace=180,timeout=10):
+        # Inner producers have two retirement windows (30 + 90 seconds).
+        # Give their controllers time to finish those before an outer fallback.
+        return super().stop(grace=grace,timeout=timeout)
 
-    def stop(self,grace=30,timeout=None):
-        errors=[];request_errors=[];done=threading.Event()
-        try:self.refresh()
-        except Exception as error:errors.append(type(error).__name__)
+    def request(self,members,done,request_errors):
         root=Path(self.spec['runtime_root']).resolve()
         # These directories belong to this guardian. Never touch another
         # runtime or follow a link outside the owned root.
@@ -61,28 +49,4 @@ class CooperativeOwnedProcesses(OwnedProcesses):
                     return
                 except OSError as error:request_errors.append(type(error).__name__)
                 done.wait(.2)
-        worker=threading.Thread(target=request,daemon=True);worker.start()
-        window=Window(float(policy.get('stall_seconds',grace)))
-        try:
-            while True:
-                try:live=self.refresh()
-                except Exception as error:errors.append(type(error).__name__);break
-                if not live:break
-                # Controller HTTP retries/heartbeats are not model progress.
-                signal=[]
-                for p in live:
-                    try:
-                        model=p.name().lower()=='llama-dsv41-prefill.exe'
-                        signal.append((p.pid,p.create_time(),activity(p.pid,self.spec['log']) if model else None))
-                    except psutil.NoSuchProcess:pass
-                    except Exception as error:errors.append(type(error).__name__)
-                window.observe(tuple(signal))
-                if window.expired():break
-                time.sleep(.05)
-        finally:done.set();worker.join(timeout=.1)
-        try:survivors=[p.pid for p in self.live()]
-        except Exception as error:errors.append(type(error).__name__);survivors=list(self.identities)
-        return dict(confirmed=not survivors and not errors,surviving_owned_pids=survivors,errors=errors,
-                    identities=[dataclasses.asdict(x) for x in self.identities.values()],
-                    retired_identities=[dataclasses.asdict(x) for x in self.retired_identities],
-                    forced_kill=False,cooperative=True,cooperative_request_errors=request_errors)
+        threading.Thread(target=request,daemon=True).start()

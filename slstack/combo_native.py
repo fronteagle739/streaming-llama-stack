@@ -372,16 +372,17 @@ class Native:
             try:
                 self.control('shutdown')
                 # The budget starts once the reply has arrived.
-                deadline=time.monotonic()+float(self.cfg.get('native_graceful_shutdown_seconds',30))
-                while (exited:=self.process.job.poll()) is None and time.monotonic()<deadline:time.sleep(0.05)
+                from .shutdown import wait_for_exit
+                exited=wait_for_exit(self.process.job,float(self.cfg.get('native_graceful_shutdown_seconds',60)),
+                    diagnostic=lambda:len(self.process.diagnostic))
                 self.shutdown_path='graceful-pending' if exited is not None else 'graceful-timeout-terminate'
             except BaseException as exc:
                 self.shutdown_path='graceful-failed-terminate: '+repr(exc)[:200]
             self.shutdown_seconds=time.monotonic()-started
-        # Still alive here: process.close() escalates (Ctrl-Break, long wait) and never kills;
-        # a decoder still alive after that is left running and reported STUCK.
+        # The owned runner repeats cancellation and waits while retirement advances;
+        # only a full quiet grace allows its loudly logged force fallback.
         if self.process.job is not None and self.process.job.poll() is None:
-            print('DS4COMBO native graceful retire did not finish ('+self.shutdown_path+'); escalating, never killing',flush=True)
+            print('DS4COMBO native graceful retire did not finish ('+self.shutdown_path+'); requesting cooperative cancellation and waiting for retirement',flush=True)
         try:proof=self.process.close()
         except RuntimeError as exc:
             if 'STUCK PROCESS' in str(exc):record_stuck(self.cfg,self.directory,self.process,exc)

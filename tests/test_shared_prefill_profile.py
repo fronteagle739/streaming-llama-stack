@@ -32,7 +32,7 @@ def test_50k_uses_one_folded_sweep_and_no_warmup():
     assert arguments['--prefill-fold-cap-tokens'] == '61440'
 
 
-def test_desktop_reserve_is_512mib_and_runtime_floor_remains_four():
+def test_desktop_reserve_is_512mib_and_runtime_floor_is_half():
     from unittest.mock import patch
     from slstack.config import load
     from slstack.mac import budget

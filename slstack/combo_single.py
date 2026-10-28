@@ -28,6 +28,7 @@ import os
 from pathlib import Path
 import re
 import secrets
+import sys
 import threading
 import time
 import psutil
@@ -233,6 +234,7 @@ class SingleEngine:
                 print('DS4SINGLE retiring producer: ' + why, flush=True)
                 receipt = producer.close()
         except BaseException as exc:
+            self.producer = producer
             self.poison = 'Unconfirmed GPU release: ' + repr(exc)
             raise
         finally:
@@ -663,9 +665,7 @@ def handler(proxy):
             """Graceful stop (Studio eject / switch-away): retire the producer so its VRAM and GPU hold
             are released, then end serving so the process exits 0 and its guardian writes the receipt."""
             engine = proxy.engine
-            # Let an in-flight decode reach its ordinary token boundary before
-            # waiting for the session lock. Prefill cancellation is supplied by
-            # the guardian's producer abort file.
+            # Cancel at the next token boundary before waiting for the session lock.
             producer=engine.producer
             if producer is not None and hasattr(producer,'cancel_decode'):producer.cancel_decode()
             if not engine.lock.acquire(timeout=float(proxy.cfg.get('request_timeout_s', 600))):
@@ -674,8 +674,7 @@ def handler(proxy):
                 if engine.poison:raise RuntimeError('Single-engine owner is poisoned: ' + engine.poison)
                 if engine.producer is not None or engine.leases is not None:engine.retire('shutdown')
             except Exception as exc:
-                # An unconfirmed release keeps serving: exiting would let the kill-on-close Job
-                # end a producer that may still hold VRAM. The caller reports it as stuck.
+                # Keep the owner and its lease until retirement is certified.
                 return self.send(503, dict(error=dict(message=str(exc), type='single_engine_refused')))
             finally:engine.lock.release()
             engine.stopping.set()
@@ -784,9 +783,11 @@ def handler(proxy):
             except Exception as exc:
                 metrics['failure'] = repr(exc)
                 if engine.poison and engine.poison.startswith('Unconfirmed GPU release'):
-                    os._exit(72)   # outer kill-on-close Job retires descendants before orphan-lease recovery
-                try:engine.retire('request failed: ' + repr(exc)[:200])
-                except BaseException:os._exit(72)
+                    print('OWNED CLEANUP UNCONFIRMED: '+engine.poison+'; retaining ownership',file=sys.stderr,flush=True)
+                else:
+                    try:engine.retire('request failed: ' + repr(exc)[:200])
+                    except BaseException as cleanup:
+                        print('OWNED CLEANUP UNCONFIRMED: '+repr(cleanup)+'; retaining ownership',file=sys.stderr,flush=True)
                 error = dict(error=dict(message=str(exc), type='single_engine_refused'))
                 if headers:
                     try:self.wfile.write(b'data: ' + json.dumps(error, separators=(',', ':')).encode() + b'\n\ndata: [DONE]\n\n');self.wfile.flush()

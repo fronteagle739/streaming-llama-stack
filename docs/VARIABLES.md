@@ -38,6 +38,8 @@ Native controls take effect at token boundaries. The response reports requested 
 
 ## Launcher settings
 
+`runtime_min_free_gib` and `--runtime-min-free-gib` default to 0.5 GiB of available physical RAM during execution; 0 disables this floor. Admission still requires the declared host budget plus its reserve. The host RSS budget and paging stop remain enabled. Shutdown requests cooperative cancellation first, waits while diagnostics or memory reclamation advance, and allows a logged force kill only after a full quiet grace period.
+
 | Flag | Scope and DSV4.1 default | Purpose |
 |---|---|---|
 | `--clang-module-cache-path` | ds4-win: `{runtime_root}/cache/clang_module_cache_path`; mac-ds4: `{runtime_root}/cache/clang_module_cache_path`; rtx-llama: `{runtime_root}/cache/clang_module_cache_path`; image: `{runtime_root}/cache/clang_module_cache_path`; video: `{runtime_root}/cache/clang_module_cache_path`; studio: `{runtime_root}/cache/clang_module_cache_path`; mlx-serve: `{runtime_root}/cache/clang_module_cache_path`; mac-mlx: `{runtime_root}/cache/clang_module_cache_path`; mac-llama: `{runtime_root}/cache/clang_module_cache_path`; mac-mference: `{runtime_root}/cache/clang_module_cache_path` | Runtime-local cache/temp directory; no model download is performed. |
@@ -125,7 +127,7 @@ Native controls take effect at token boundaries. The response reports requested 
 | `--llamadecode-host-cache-admit` | rtx-llama: `1` | Single-engine bounded RAM admission. Observe 32 scalar layer passes, select frequently evicted experts, then fill at most one payload per selected key until the next prefill. 0 retains an empty admitted tier for zero-hit overhead qualification; it never changes router scores at quality bias 0. |
 | `--llamadecode-logits-trace` | Explicit runtime value | Optional local binary correctness trace: position, input token and vocabulary size as three uint32 fields followed by float32 logits, once every 32 positions. Compare only identical token prefixes and quality bias 0. The operator supplies a scratch file; disabled when unset. |
 | `--llamadecode-l2-max-slots` | Explicit runtime value | Optional single-engine VRAM L2 slot upper bound. Useful for reproducible tier comparisons; physical VRAM admission remains authoritative. Unset uses all admitted slots. |
-| `--llamadecode-host-cpu-verify` | rtx-llama: `0` | Optional CPU RAM-expert diagnostic: compare the first 16 hybrid FFN rows with the all-GPU result on identical activations. Logs relative RMS/max error; disabled when unset or 0. Extra GPU work is excluded from performance qualification. |
+| `--llamadecode-host-cpu-verify` | rtx-llama: `0` | Diagnostic only: 1 compares the first 16 hybrid FFN rows with all-GPU; all checks every serviced row; reference checks every row and forwards the GPU result. Extended modes trace discrepant activation quantization. Adds GPU work and changes cache promotions; disable for timing. |
 
 Budget placeholders use the admitted child budget: `{host_budget_bytes}`, `{host_budget_mb}`, `{physical_floor_bytes}` (admission) and `{runtime_floor_bytes}` (runtime). `{host_budget_gib}` and `{min_available_gib}` use GiB. User overrides are literal strings, including JSON and braces.
 
@@ -100586,7 +100588,7 @@ Source: `engines/streaming-llama/prefill_llama.cpp/src/llama-dsv41-weights.cpp:1
 
 ### LLAMADECODE_HOST_CPU_VERIFY
 
-Optional CPU RAM-expert diagnostic: compare the first 16 hybrid FFN rows with the all-GPU result on identical activations. Logs relative RMS/max error; disabled when unset or 0. Extra GPU work is excluded from performance qualification.
+Diagnostic only: 1 compares the first 16 hybrid FFN rows with all-GPU; all checks every serviced row; reference checks every row and forwards the GPU result. Extended modes trace discrepant activation quantization. Adds GPU work and changes cache promotions; disable for timing.
 
 Scope: rtx-llama. Class: advanced.
 
@@ -100602,14 +100604,14 @@ Source: `engines/ds4-win/ds4_decode_adapter.inc:39`. Unset read: NULL from geten
     return 1;
 ```
 
-Source: `engines/ds4-win/ds4_external_host_compute_wrapper.inc:64`. Unset read: NULL from getenv; the literal consumer below supplies any fallback.
+Source: `engines/ds4-win/ds4_external_host_compute_wrapper.inc:66`. Unset read: NULL from getenv; the literal consumer below supplies any fallback.
 
 ```text
     if(!cuda_ok(cudaStreamSynchronize(cuda_decode_stream()),"CPU expert scratch retirement"))return 0;
     static unsigned verify_count=0;
     const char*verify=getenv("LLAMADECODE_HOST_CPU_VERIFY");
-    if(verify&&*verify&&strcmp(verify,"0")&&verify_count++<16u){
+    const bool verify_all=verify&&(!strcmp(verify,"all")||!strcmp(verify,"reference"));
+    if(verify&&*verify&&strcmp(verify,"0")&&(verify_all||verify_count<16u)){
+        ++verify_count;
         std::array<float,5120>hybrid{},reference{};
-        if(job.count!=n_expert&&!ds4_gpu_tensor_read(out,0,hybrid.data(),out_dim*sizeof(float)))return 0;
-        for(uint32_t i=0;i<out_dim;++i)hybrid[i]+=job.out[i];
 ```

@@ -215,7 +215,7 @@ def gpu_lease(cfg):
                          'released': False,
                          # Cooperative trees survive a lost guardian. Its death
                          # alone is never evidence that the GPU owner retired.
-                         'cooperative_retirement': cfg.get('serving','single_engine')=='single_engine'}
+                         'cooperative_retirement': True}
             atomic_json(lease_path, lease_row)
             line = f"\nACTIVE: {task} {identity}; exclusive configured GPU; expires {expiry.isoformat()}; host RSS {cfg['host_budget_gib']} GiB; floor {cfg['min_available_gib']} GiB\n"
             stream.seek(0, 2)

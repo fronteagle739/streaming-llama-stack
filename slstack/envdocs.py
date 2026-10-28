@@ -97,6 +97,12 @@ def render(table):
            'whether the backend applies the setting server-wide. An unsupported backend must report '
            'that capability explicitly. Short throughput windows are observations, not benchmark guarantees.', '',
            '## Launcher settings', '',
+           '`runtime_min_free_gib` and `--runtime-min-free-gib` default to 0.5 GiB '
+           'of available physical RAM during execution; 0 disables this floor. '
+           'Admission still requires the declared host budget plus its reserve. '
+           'The host RSS budget and paging stop remain enabled. Shutdown requests cooperative '
+           'cancellation first, waits while diagnostics or memory reclamation advance, and '
+           'allows a logged force kill only after a full quiet grace period.', '',
            '| Flag | Scope and DSV4.1 default | Purpose |', '|---|---|---|']
     def cell(value):
         return str(value).replace('|', '\\|').replace('\n', ' ')

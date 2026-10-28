@@ -76,7 +76,7 @@ class ProducerAbort(unittest.TestCase):
         row = dict(status='complete', session=SESSION, model_sha256=MODEL_SHA256, owner_epoch=7, sequence=1)
         self.assertEqual(producer((json.dumps(row) + '\n').encode(), b'', None)._receive(), row)
 
-    def watch(self, floor=4.0, available=3<<30, paged=0):
+    def watch(self, floor=4.0, available=3<<30, paged=0, rss=None):
         p=producer(b'{"status":"rea',b'',None)
         p.job_lock=threading.Lock();p.stuck=None
         p.job.pid=123
@@ -89,7 +89,10 @@ class ProducerAbort(unittest.TestCase):
         p.floor=1<<30;p.host_bytes=8<<30;p.budget_breaches=0;p.first_budget_breach=None
         p._paging_tick=9;p.paging_growth=0;p._paging0=0;p._paging_limit=256000000;p._paging_bytes=lambda:paged
         p.deadline=None;p.activity=float('inf');p.idle_seconds=1;p.ready=None
-        with patch('studio.dsv41_session_process.psutil.virtual_memory',return_value=SimpleNamespace(available=available)),patch('studio.dsv41_session_process.psutil.Process',side_effect=psutil.NoSuchProcess(123)):
+        root=SimpleNamespace(memory_info=lambda:SimpleNamespace(rss=rss),children=lambda **kwargs:[],is_running=lambda:True)
+        lookup=(patch('studio.dsv41_session_process.psutil.Process',return_value=root) if rss is not None else
+                patch('studio.dsv41_session_process.psutil.Process',side_effect=psutil.NoSuchProcess(123)))
+        with patch('studio.dsv41_session_process.psutil.virtual_memory',return_value=SimpleNamespace(available=available)),lookup:
             p._watch()
         return p,stops
 
@@ -115,6 +118,21 @@ class ProducerAbort(unittest.TestCase):
         p,stops=self.watch(floor=0,paged=256000001)
         self.assertIn('paging detected',p.failure)
         self.assertEqual(stops,[dict(graceful_seconds=30,stuck_seconds=120)])
+
+    def test_host_rss_budget_trip_requests_the_same_cooperative_retirement(self):
+        p,stops=self.watch(floor=0,available=10<<30,rss=(8<<30)+1)
+        self.assertIn('host RSS budget exceeded',p.failure)
+        self.assertEqual(stops,[dict(graceful_seconds=30,stuck_seconds=120)])
+
+    def test_abort_file_is_published_before_the_owned_runner_stop(self):
+        import tempfile
+        from pathlib import Path
+        with tempfile.TemporaryDirectory() as directory:
+            p=Producer.__new__(Producer);p.job_lock=threading.Lock();p.stuck=None
+            p.abort_file=str(Path(directory)/'guard.abort');p.job=Mock()
+            p.job.stop.side_effect=lambda **kwargs:self.assertTrue(Path(p.abort_file).exists())
+            p._stop_job()
+            p.job.stop.assert_called_once_with(graceful_seconds=30,stuck_seconds=120)
 
 
 if __name__ == '__main__':

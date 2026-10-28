@@ -26,9 +26,7 @@ def operation_live(now, deadline, last_progress, stall_seconds):
 
 
 class Producer:
-    # Owner rule: never force-kill a producer that may hold VRAM. Stop = Ctrl-Break,
-    # graceful_seconds, a second Ctrl-Break, up to stuck_seconds; still alive = STUCK,
-    # left running, receipt/log marked, GPU work refused (the caller keeps its hold).
+    # Cooperative abort, Ctrl-Break and progress-aware grace precede any force fallback.
     graceful_seconds = 30
     stuck_seconds = 120
     stuck = None
@@ -38,6 +36,10 @@ class Producer:
         with self.job_lock:
             if self.job and not self.stuck:
                 try:
+                    abort_file=getattr(self,'abort_file',None)
+                    if abort_file:
+                        try:Path(abort_file).touch(exist_ok=True)
+                        except OSError:log.exception('Could not publish cooperative producer abort')
                     self.job.stop(graceful_seconds=self.graceful_seconds, stuck_seconds=self.stuck_seconds)
                 except StuckProcess as exc:
                     self.stuck = str(exc)
@@ -74,6 +76,7 @@ class Producer:
             raise
 
     def _initialize(self, session, argv, env, directory, *, host_bytes, physical_floor, operation_seconds, idle_seconds, native, cancelled, runtime_check):
+        self.abort_file=env.get('LLAMADECODE_ABORT_FILE')
         session_identity(session)
         require(type(host_bytes) is int and host_bytes > 0 and (type(physical_floor) is int) and (physical_floor >= 512 << 20), 'Explicit host budget/floor required')
         require(0 < operation_seconds <= 3600 and 0 < idle_seconds <= 3600, 'Bounded session deadlines required')
@@ -84,7 +87,7 @@ class Producer:
         self.session, self.native = (session, native)
         self.host_bytes, self.floor = (host_bytes, physical_floor)
         # Admission and runtime floors are independent. The runtime available-RAM stop defaults to
-        # 512 MiB (owner decision); 0 opts into paging-only. Keep the paging stop as well.
+        # 0.5 GiB; 0 opts into paging-only. Keep the existing paging stop as well.
         from .job_paging import paging_bytes, GLOBAL_PAGING_LIMIT
         self._paging_bytes, self._paging_limit = paging_bytes, GLOBAL_PAGING_LIMIT
         self._paging0 = paging_bytes(); self.paging_growth = 0; self._paging_tick = 0
@@ -118,6 +121,9 @@ class Producer:
             child_in, self.input, self.output, child_out, self.errors, child_err = self.files
             self.creation_attempted = True
             self.job = native.suspended(argv, env, Path(directory), child_in.fileno(), child_out.fileno(), child_err.fileno())
+            self.job.retirement_diagnostic=lambda:len(self.diagnostic)
+            from slstack.shutdown import gpu_free_reader
+            self.job.gpu_free=gpu_free_reader(env.get('CUDA_VISIBLE_DEVICES'))
             child_in.close()
             child_out.close()
             child_err.close()
@@ -195,6 +201,7 @@ class Producer:
                     self.budget_breaches += 1
                     if self.first_budget_breach is None:
                         self.first_budget_breach = dict(available=available, rss=rss, floor=self.floor, host_budget=self.host_bytes)
+                require(rss <= self.host_bytes,'Persistent producer stopped: host RSS budget exceeded')
                 self._paging_tick += 1
                 if self._paging_tick % 10 == 0:   # ~1 Hz
                     self.paging_growth = max(self.paging_growth, self._paging_bytes() - self._paging0)
@@ -471,7 +478,7 @@ class Producer:
         self.stop_event.set()
         self._stop_job()
         if self.stuck:
-            # Left running: reader threads stay blocked on its pipes and the pipes stay open.
+            # Exit remains unconfirmed: readers may still own its open pipes.
             # Only the Job handle closes (kill-on-close was cleared, so this cannot kill).
             pid = self.job.pid if self.job else None
             self.receipt = dict(session=self.session, host_budget=self.host_bytes, physical_floor=self.floor,
@@ -496,6 +503,8 @@ class Producer:
         exited = self.job is None or self.job.poll() is not None
         empty = self.job is None or self.job.active() == 0
         self.receipt = dict(session=self.session, host_budget=self.host_bytes, physical_floor=self.floor, runtime_min_free_gib=self.runtime_min_free_gib, peak_rss=self.peak_rss, minimum_available_ram=self.minimum_available, paging_growth=self.paging_growth, budget_breaches=self.budget_breaches, first_budget_breach=self.first_budget_breach, failure=self.failure, owned_pid=pid, owned_job_empty=empty, owned_process_signaled=exited, exit_code=self.job.poll() if self.job is not None else getattr(self, 'exit_code', None))
+        self.receipt.update(forced_kill=bool(getattr(self.job,'forced_kill',False)),
+                            force_reason=getattr(self.job,'force_reason',None))
         with self.job_lock:
             if self.job:
                 self.job.close()

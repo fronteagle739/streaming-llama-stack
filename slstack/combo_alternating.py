@@ -53,7 +53,10 @@ def bounded_window(cfg,window,sessions):
         window(True,lease)
         try:yield
         finally:
-            if any(s.poison and s.poison.startswith('Unconfirmed GPU release') for s in sessions):os._exit(72)
+            if any(s.poison and s.poison.startswith('Unconfirmed GPU release') for s in sessions):
+                error=RuntimeError('Unconfirmed GPU release; retaining owned window and lease')
+                error.owned_cleanup_uncertain=True
+                raise error
             window(False)
 
 
