@@ -203,17 +203,20 @@ DS4X_EXPORT void ds4x_set_expert_hook(ds4_gpu_external_expert_hook hook, void *u
 }
 
 /* B5: ds4-win's cache-affinity bias (selection only; original combine weights) on
- * the caller's cache residency. mean 0 disables. Same configure call, warmup,
+ * the caller's cache residency. mean 0 disables bias; calibration can observe.
+ * Same configure call, warmup,
  * ramp and per-model spread calibration as the native engine. */
 DS4X_EXPORT int ds4x_set_affinity(float mean, uint32_t warmup, uint32_t ramp, const char *spread_file,
                                   ds4_gpu_external_residency_hook residency, void *user) {
     if (!g_ds4x.open || !isfinite(mean) || mean < 0.0f || mean > 1.36125f) return 0;
     ds4_gpu_set_external_residency_hook(residency, user);
-    if (!ds4_gpu_cache_affinity_configure(mean, warmup, ramp, spread_file, NULL, 0, 0u, 0)) return 0;
-    if (mean > 0.0f &&
+    const char *calibrate=getenv("DS4_CACHE_AFFINITY_CALIBRATE");
+    if (!ds4_gpu_cache_affinity_configure(mean, warmup, ramp, spread_file, calibrate, 0, 0u, 0)) return 0;
+    g_cache_affinity_observe=calibrate && *calibrate;
+    if ((mean > 0.0f || g_cache_affinity_observe) &&
         !ds4_gpu_cache_affinity_prepare_model(g_ds4x.model.map, g_ds4x.model.size, DS4_N_EXPERT, DS4_N_LAYER)) return 0;
     g_cache_affinity_bias = mean;
-    g_ds4x_affinity = mean > 0.0f && residency;
+    g_ds4x_affinity = (mean > 0.0f || g_cache_affinity_observe) && residency;
     ds4_gpu_external_affinity_phase(g_ds4x_affinity ? 1 : 0);
     fprintf(stderr, "LLAMADECODE_DS4X_AFFINITY mean=%.6g warmup=%u ramp=%u spread=%s enabled=%d\n",
             mean, warmup, ramp, spread_file ? spread_file : "", (int)g_ds4x_affinity);
@@ -280,6 +283,7 @@ DS4X_EXPORT int ds4x_prefill(const int32_t *tokens, uint32_t count, uint32_t pos
 
 DS4X_EXPORT void ds4x_close(void) {
     if (!g_ds4x.open) return;
+    ds4_gpu_cache_affinity_finish();
     ds41_gpu_graph *g = &g_ds4x.graph;
     for (uint32_t i = 0; i < 40; i++) g->window[i] = NULL;
     for (uint32_t i = 0; i < 4; i++) {
@@ -292,7 +296,7 @@ DS4X_EXPORT void ds4x_close(void) {
     ds4_gpu_set_external_expert_hook(NULL, NULL);
     ds4_gpu_set_external_residency_hook(NULL, NULL);
     ds4_gpu_external_affinity_phase(0);
-    g_ds4x_affinity = false; g_cache_affinity_bias = 0.0f;
+    g_ds4x_affinity = false; g_cache_affinity_bias = 0.0f;g_cache_affinity_observe=false;
     ds4_gpu_external_decode_mode(0);
     model_close(&g_ds4x.model);
     memset(&g_ds4x, 0, sizeof(g_ds4x));

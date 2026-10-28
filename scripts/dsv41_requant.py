@@ -22,6 +22,8 @@ from slstack.lease import active_holds
 LABEL='Q4\u2192MXFP4 requant (lossy), speed proxy for native FP4'
 SUFFIXES=('_gate_exps.weight','_up_exps.weight','_down_exps.weight')
 SIZES={0:(1,4),1:(1,2),8:(32,34),12:(256,144),24:(1,1),39:(32,17)}
+_hold_cache={}
+_conversion_hold=None
 
 def align(n,a):return (n+a-1)//a*a
 def string(s):
@@ -82,7 +84,20 @@ def durable_json(path,state):
             time.sleep(.05)
 
 def gpu_holds(path):
-    try:return active_holds(path.read_text(encoding='utf-8-sig'))
+    try:
+        stat=path.stat();stamp=(stat.st_mtime_ns,stat.st_size)
+        if stat.st_size>16<<20:return ['GPU ledger exceeds its 16 MiB observation budget; conversion paused']
+        cached=_hold_cache.get(path)
+        if cached is not None and cached[0]==stamp:holds=cached[1]
+        else:
+            holds=active_holds(path.read_text(encoding='utf-8-sig'))
+            _hold_cache[path]=(stamp,holds)
+        if _conversion_hold:
+            task,identity=_conversion_hold
+            own=[line for line in holds if line.split()[:3]==['ACTIVE:',task,identity+';']]
+            if len(own)!=1:return ['Conversion reservation is absent; conversion paused']
+            holds=[line for line in holds if line not in own]
+        return holds
     except OSError:
         # A concurrent ledger writer may temporarily exclude readers on
         # Windows. Unknown ownership must pause all source reads.
@@ -132,6 +147,7 @@ def worker(args):
         if state['completed']:
             # Do not trust an interrupted or externally altered partial.
             output.seek(0)
+            idle()
             observed_header=output.read(len(header))
             if observed_header!=header:raise ValueError('Resume header changed')
             whole_hash.update(observed_header)
@@ -139,6 +155,7 @@ def worker(args):
                 t=tensors[row['index']];output.seek(len(header)+t['offset'])
                 digest=hashlib.sha256();left=nbytes(t)
                 while left:
+                    idle()
                     block=output.read(min(left,16<<20))
                     if not block:raise ValueError('Truncated completed tensor')
                     digest.update(block);whole_hash.update(block);left-=len(block)
@@ -161,6 +178,7 @@ def worker(args):
                 if len(raw)!=size:raise ValueError('Short source tensor read')
                 input_hash.update(raw)
                 block=convert(raw,args.threads) if t['type']==39 else raw
+                if shutil.disk_usage(args.out.parent).free<len(block)+20*2**30:raise ValueError('Output volume reached the 20 GiB reserve')
                 output.write(block);output_hash.update(block);whole_hash.update(block);left-=size;done+=len(block)
                 if time.monotonic()-last>5:
                     checkpoint(status='RUNNING',tensor=t['name'],tensor_index=index,tensor_bytes=done,
@@ -174,13 +192,18 @@ def worker(args):
             checkpoint(status='RUNNING',tensor=t['name'],tensor_index=index,tensor_bytes=done,output_position=output.tell())
         if output.tell()!=total or partial.stat().st_size!=total:raise ValueError('Final output size mismatch')
     expected={t['name']:dict(type=t['type'],shape=t['shape']) for t in tensors}
+    idle()
     if tensor_map(read_header(partial))!=expected:raise ValueError('Converted header mismatch')
     digest=whole_hash
     if not getattr(args,'defer_readback',False):
         digest=hashlib.sha256()
         checkpoint(status='HASHING_OUTPUT')
         with partial.open('rb',buffering=0) as f:
-            while block:=f.read(16<<20):digest.update(block)
+            while True:
+                idle()
+                block=f.read(16<<20)
+                if not block:break
+                digest.update(block)
         if digest.digest()!=whole_hash.digest():raise ValueError('Output readback differs from written-byte hash')
     partial.rename(args.out)
     checkpoint(status='COMPLETE',sha256=digest.hexdigest(),readback_verified=not getattr(args,'defer_readback',False),
@@ -199,6 +222,7 @@ def main():
     p.add_argument('--runtime-floor-gib',type=float,default=1)
     p.add_argument('--resume',action='store_true')
     p.add_argument('--defer-readback',action='store_true',help='Hash all bytes during writing; require stored-byte readback during the later verified copy before timing')
+    p.add_argument('--conversion-lease',type=Path,help='Existing live ancestor reservation held through conversion and readback')
     p.add_argument('--worker',action='store_true',help=argparse.SUPPRESS)
     args=p.parse_args()
     if not 1<=args.threads<=16 or not math.isfinite(args.host_budget_gib) or not 0<args.host_budget_gib<=8 or not math.isfinite(args.runtime_floor_gib) or args.runtime_floor_gib<.5:
@@ -217,7 +241,17 @@ def main():
             else:
                 import fcntl
                 fcntl.flock(lock,fcntl.LOCK_EX|fcntl.LOCK_NB)
-            worker(args)
+            if args.conversion_lease:
+                from slstack.lease import gpu_lease
+                row=json.loads(args.conversion_lease.read_text(encoding='utf-8'))
+                cfg=dict(task=row['task'],hold_file=str(args.hold_file),
+                         _gpu_parent_lease=str(args.conversion_lease),
+                         host_budget_gib=args.host_budget_gib,min_available_gib=args.runtime_floor_gib)
+                with gpu_lease(cfg) as identity:
+                    global _conversion_hold
+                    _conversion_hold=(row['task'],identity)
+                    worker(args)
+            else:worker(args)
         return 0
     deadline=time.monotonic()+21600
     reported=0

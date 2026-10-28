@@ -849,6 +849,15 @@ bool llama_dsv41_tile_executor::run(const request&in,const llama_dsv41_layer_gra
     if(cache.execution_poisoned){error="V4.1 tile cache requires clear after an incomplete computation";return false;}
     try{
         auto expert=requested_expert;
+        const bool stored_fp4=std::getenv("LLAMA_DSV41_STORED_MXFP4")&&std::string(std::getenv("LLAMA_DSV41_STORED_MXFP4"))=="1";
+        if(stored_fp4){
+            require(w.ffn.gate->type==GGML_TYPE_MXFP4&&w.ffn.up->type==GGML_TYPE_MXFP4&&w.ffn.down->type==GGML_TYPE_MXFP4,
+                    "Stored FP4 experiment requires the complete MXFP4 expert triplet");
+            require(!expert.expert_mxfp4&&!expert.expert_f16_cublas&&!expert.sorted_expert_routing&&
+                    !llama_dsv41_expert_profile::natural_half(expert),"Stored FP4 excludes alternate routed arithmetic");
+            require(std::getenv("GGML_CUDA_DISABLE_GRAPHS")&&std::string(std::getenv("GGML_CUDA_DISABLE_GRAPHS"))=="1",
+                    "Stored FP4 experiment requires uncaptured dispatch witnesses");
+        }
         expert.generic_weights=w.ffn.gate->type!=GGML_TYPE_Q4_K||w.ffn.up->type!=GGML_TYPE_Q4_K||w.ffn.down->type!=GGML_TYPE_Q4_K;
         if(w.attention.q_a->type!=GGML_TYPE_Q8_0||w.attention.q_b->type!=GGML_TYPE_Q8_0||w.attention.kv->type!=GGML_TYPE_Q8_0||
            w.attention.out_a->type!=GGML_TYPE_Q8_0||w.attention.out_b->type!=GGML_TYPE_Q8_0||
@@ -1186,6 +1195,16 @@ bool llama_dsv41_tile_executor::run(const request&in,const llama_dsv41_layer_gra
                        if(index_f32_cublas_enabled())require(ggml_dsv41_index_f32_causal_tag(node,score_start,ratio),"F32 index causal slab proof exceeds contiguous position contract");
                   }}}
         if(workspace&&workspace->casts)graph=workspace->casts->prepare(ctx.get(),graph,in.layer,&backend_temporary);
+        if(stored_fp4&&in.count>4){
+            unsigned tagged=0;
+            for(int i=0;i<ggml_graph_n_nodes(graph);++i){auto *node=ggml_graph_node(graph,i);
+                if(node->op!=GGML_OP_MUL_MAT_ID)continue;
+                require(node->src[0]->type==GGML_TYPE_MXFP4&&node->op_params[2]==0,"Stored FP4 graph source/tag differs");
+                node->op_params[0]=GGML_PREC_DEFAULT;node->op_params[2]=0x46345034;node->op_params[3]=1;
+                require(ggml_dsv41_native_fp4_valid(node),"Stored FP4 graph exceeds the existing native MMA contract");++tagged;
+            }
+            require(tagged==3,"Stored FP4 requires exactly gate/up/down products");
+        }
         if(expert.expert_mxfp4){
             require(std::getenv("GGML_CUDA_DISABLE_GRAPHS")&&std::string(std::getenv("GGML_CUDA_DISABLE_GRAPHS"))=="1","Expert FP4 packing requires the explicit uncaptured producer path");
             require(dense_mxfp4&&workspace&&workspace->casts&&!workspace->cache_layouts&&!pair_ffn,"Expert FP4 requires the existing dense FP4 cast bank, allocator-only graph and<=4K lane");
@@ -1446,7 +1465,7 @@ bool llama_dsv41_tile_executor::run(const request&in,const llama_dsv41_layer_gra
         const auto attention_g16_before=attention_g16?ggml_backend_cuda_dsv41_token_tile_g16_queued():0;
         const auto union_before=merge_rows?ggml_backend_cuda_dsv41_token_union_queued():0;
         const auto expert_cublas_before=expert.expert_f16_cublas?ggml_backend_cuda_dsv41_expert_cublas_queued():0;
-        const auto expert_fp4_before=expert.expert_mxfp4?ggml_backend_cuda_native_mxfp4_routed_queued():0;
+        const auto expert_fp4_before=(expert.expert_mxfp4||stored_fp4)?ggml_backend_cuda_native_mxfp4_routed_queued():0;
         const auto hc_expand_before=ggml_backend_cuda_dsv41_hc_expand_queued();
         const auto hc_bf16_before=expert.hc_bf16_epilogue?ggml_backend_cuda_dsv41_hc_bf16_queued():0;
         const auto hc_half_before=hc_projection_f16_gemm?ggml_backend_cuda_dsv41_hc_half_queued():0;
@@ -1579,9 +1598,10 @@ bool llama_dsv41_tile_executor::run(const request&in,const llama_dsv41_layer_gra
                 (calls||(!elements&&!nc)),"Actual completed vector cast counters are empty/inconsistent");
             llama_dsv41_layer_log("DS4PERF_CAST_VECTOR_COMPLETE layer=%u start=%u count=%u calls=%llu elements=%llu strided_calls=%llu original_cast_helper=1 alignment_tail_overlap_guards=1\n",in.layer,in.start,in.count,(unsigned long long)calls,(unsigned long long)elements,(unsigned long long)nc);
         }
-        if(expert.expert_mxfp4){const uint64_t expected=in.count>4?3:0;
+        if(expert.expert_mxfp4||stored_fp4){const uint64_t expected=in.count>4?3:0;
             require(ggml_backend_cuda_native_mxfp4_routed_queued()==expert_fp4_before+expected,"Actual expert native FP4 activation/MMA witness differs");
             llama_dsv41_layer_log("DS4PERF_EXPERT_MXFP4_COMPLETE layer=%u start=%u count=%u actual=%llu weights_FP4=1 activations_FP4=1 accumulation_F32=1 small_batch_original=%u\n",in.layer,in.start,in.count,(unsigned long long)expected,unsigned(in.count<=4));
+            if(stored_fp4)llama_dsv41_layer_log("NATIVEFP4_STORED_COMPLETE layer=%u start=%u count=%u actual=%llu offline_weights=1 runtime_weight_conversion=0 tiny_rows_generic_MXFP4=%u\n",in.layer,in.start,in.count,(unsigned long long)expected,unsigned(in.count<=4));
         }
         if(index_cublas){uint64_t expected=0;
             for(int i=0;i<ggml_graph_n_nodes(graph);++i)expected+=ggml_dsv41_index_cublas_requested(ggml_graph_node(graph,i))?1:0;
