@@ -1,3 +1,4 @@
+#include "llama-dsv41-profile-stage.h"
 #include "llama-dsv41-attention.h"
 #include "boundary-capture.h"
 
@@ -18,6 +19,7 @@ ggml_tensor * llama_dsv41_attention_graph::qat(ggml_tensor * input,ggml_dsv4_qat
 
 llama_dsv41_attention_graph::projected llama_dsv41_attention_graph::project(
         const weights & w,ggml_tensor * input,ggml_tensor * positions,ggml_tensor * frequencies) const {
+    llama_dsv41_profile_stage profile_stage(ctx,"attention_projection");
     const int64_t count=input->ne[1];
     GGML_ASSERT(w.q_b->ne[1]%512==0 && w.kv->ne[1]==512 && input->ne[2]==1 && input->ne[3]==1);
     const int64_t heads=w.q_b->ne[1]/512;
@@ -46,6 +48,7 @@ llama_dsv41_attention_graph::compressed llama_dsv41_attention_graph::compress(
         const weights & w,ggml_tensor * input,const llama_dsv41_tile_plan & p,
         ggml_tensor * previous_kv,ggml_tensor * previous_score,
         ggml_tensor * publication_positions,ggml_tensor * frequencies) const {
+    llama_dsv41_profile_stage profile_stage(ctx,"compressor");
     GGML_ASSERT(p.ratio==1 || p.ratio==2);
     GGML_ASSERT(input->ne[1]==p.count && w.compressor && w.compressor->ne[1]==512);
     ggml_tensor * projected=mm(w.compressor,input,p.ratio==1);
@@ -80,6 +83,7 @@ llama_dsv41_attention_graph::compressed llama_dsv41_attention_graph::compress(
 
 llama_dsv41_attention_graph::index_query llama_dsv41_attention_graph::project_index(
         const weights & w,ggml_tensor * qr,ggml_tensor * input,ggml_tensor * positions,ggml_tensor * frequencies) const {
+    llama_dsv41_profile_stage profile_stage(ctx,"index_projection");
     const int64_t count=input->ne[1];
     GGML_ASSERT(w.index_q && w.index_q->ne[1]==128*32 && w.index_weights && w.index_weights->ne[1]==32);
     auto * q=ggml_reshape_3d(ctx,mm(w.index_q,qr,true),128,32,count);
@@ -91,6 +95,7 @@ llama_dsv41_attention_graph::index_query llama_dsv41_attention_graph::project_in
 
 ggml_tensor * llama_dsv41_attention_graph::finish(
         const weights & w,ggml_tensor * heads,ggml_tensor * positions,ggml_tensor * frequencies) const {
+    llama_dsv41_profile_stage profile_stage(ctx,"attention_output");
     GGML_ASSERT(heads->ne[0]==512 && heads->ne[3]==1 && w.out_a && w.out_b);
     // Native GGUF/this loader stores out_a flattened[4096,8192]. Restore
     // [4096,1024,8] for the grouped product without copying the weight bytes.

@@ -78,7 +78,11 @@ The final rebuilt producer also passes the50K secondary pair:38.890 to36.531s
 (1,285.678 to1,368.701 tokens/s),17 exact logit rows, KL0 and identical
 retrieval. That pair includes variable startup/Engram I/O, so its full6.46%
 throughput difference is not attributed entirely to the index kernel.
-The200K secondary is pending free GPU admission; no200K claim is made here.
+The200K secondary also passes:174.406 to163.266s (1,146.750 to1,224.995
+tokens/s, +6.82%), TTFT175.156 to164.047s,17 exact logit rows and identical
+retrieval. All ready/frontier/forced checkpoint fields match at every context.
+Real candidate FP4 dispatches are104/200/2972 at50K/100K/200K, with no
+certificate fallback. See `examples/perfexp/e6/results.json` for pins and guards.
 
 ## Separate 100K synchronized stage diagnostics
 
@@ -97,6 +101,74 @@ synchronizes operations: use the separate clean pairs for headline speed.
 Other wall contains startup/carry/host scheduling and other GPU operations;
 it is not an independently measured compressor timer. Exposed acquire is
 already included in wall time.
+
+## Attributing the remaining GPU and wall time
+
+A separate matched100K diagnostic validates optional semantic names against
+names disabled:17 exact logit rows, KL0, identical recall. It fixes the index
+to BF16 to explain the original control. GPU events total53.125s, of which
+18.896s is routed expert GEMM,8.806s sparse attention and4.883s index scoring.
+The remaining20.540s has these disjoint constructor/weight-identity groups:
+
+| Group | GPU s |
+|---|---:|
+| Attention output, including split projections and epilogue | 4.732 |
+| Attention input projections | 2.298 |
+| HC post/expand | 2.001 |
+| Copies/layout with no retained owner label | 1.822 |
+| Index selection | 1.806 |
+| Shared expert, excluding nested activation group | 1.180 |
+| Routed expert non-GEMM work | 1.054 |
+| FFN activations | 1.039 |
+| HC projection/mixes | 0.884 |
+| HC flat normalization | 0.881 |
+| Other rotary operations | 0.775 |
+| Router | 0.500 |
+| Engram compute/projection | 0.431 |
+| HC pre/collapse | 0.414 |
+| Index projections | 0.155 |
+| FFN combination | 0.140 |
+| HC block rounding | 0.136 |
+| Other normalization | 0.116 |
+| Compressor, excluding separately grouped norms/rotary | 0.040 |
+| HC combination | 0.035 |
+| Cache publication, initialization, head and seed | 0.053 |
+| Semantically unassigned | 0.048 |
+
+Dense matrix operations total6.592s across these groups; copy/concat/contiguous
+operations total3.695s and QAT/round trips2.248s. These are another view of
+the same events, not extra time. Split F16 matrices retain weight identities
+in node names even when their physical operands are anonymous leaves; the
+earlier0.191s named-operand attention-output-A subset was not its full cost.
+The complete semantic-by-operation matrix is in `stage-attribution.json`.
+
+CPU analysis of the original79.578s profile partitions its26.505s wall less
+summed node time exactly: prepare7.674, upload4.459, readback0.749,
+compute-wall less recorded GPU7.641, outside layers4.699, exposed acquire0.912,
+executor phase gap0.173, layer scaffold/carry0.186, cache/cleanup0.012.
+The7.641s difference includes profiler synchronization, dispatch, copy/queue
+waits and unrecorded GPU work. It is not a production launch-only measurement.
+
+New nested clocks split the named diagnostic's7.699s prepare interval into
+binding2.932s (registration2.925s inside it), graph construction0.487s,
+allocator reservation3.763s, and0.517s other preparation. Outside-layer
+receipts separately measure inspection/admission/allocation, identity
+preflight, final hidden export, payload export and embedding/head/coordinator
+work. All partitions and residuals are retained in the JSON, rather than
+assigning unknown time to a guessed kernel. These are host intervals, not
+CPU-cycle samples; allocator/transfer calls can wait on device work.
+
+## Remaining experiment order
+
+E14 has the largest conditional repeated-prefix benefit, but no cold-prefill
+benefit; audit its missing native boundary capture first. Then measure E10's
+actual decode launch/HC graph share and E7's short-chunk CPU/GPU component.
+Those experiments target decode/short prompts, not the measured100K attention
+output/projection bottleneck. E15 has no supported power-limit headroom.
+E17 stays last as instructed: its memory benefit needs a real storage path.
+NATIVEFP4 retains priority1, including its expert and dense work; this branch
+takes only free exclusive leases. Host registration/reservation/upload work
+also informs SINGLEPASS rather than duplicating that owner's carry changes.
 
 ## Reproduction and limits
 
