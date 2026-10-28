@@ -91,18 +91,48 @@ struct llama_dsv41_weight_provider::implementation {
     uint64_t l2_hits=0,l2_stored=0;
     ds4_external_host_cache_v1 host{};
     uint32_t host_slots=0;uint64_t host_hits=0,host_stored=0,host_bytes=0;
+    double host_store_ms=0,host_sync_ms=0,host_upload_ms=0,hook_ms=0;
+    mutable double residency_ms=0;
+    // Observe evictions without moving payloads, then admit one bounded hot
+    // working set. Rewriting an LRU on every L2 eviction streams gigabytes
+    // backwards over PCIe even when the RAM tier never produces a hit.
+    std::array<uint32_t,40*384> host_frequency{};
+    std::array<uint8_t,40*384> host_admitted{};
+    uint32_t host_observations=0;bool host_selected=false;
+    void select_host_working_set(uint32_t layer){
+        if(!host_slots||host_selected||layer!=0)return;
+        const char*admit=std::getenv("LLAMADECODE_HOST_CACHE_ADMIT");
+        if(admit&&!std::strcmp(admit,"0"))return;
+        if(++host_observations<=32)return;
+        std::vector<int32_t>keys;
+        for(int32_t k=0;k<int32_t(host_frequency.size());++k)if(host_frequency[k])keys.push_back(k);
+        std::stable_sort(keys.begin(),keys.end(),[&](int32_t a,int32_t b){return host_frequency[a]>host_frequency[b];});
+        keys.resize(std::min<size_t>(host_slots,keys.size()));
+        for(auto key:keys)host_admitted[key]=1;
+        host_selected=true;
+        std::fprintf(stderr,"LLAMADECODE_HOST_WORKING_SET observed_passes=%u selected=%zu bounded_admission=1\n",host_observations-1,keys.size());
+    }
+    struct timer {
+        double &sum;std::chrono::steady_clock::time_point start=std::chrono::steady_clock::now();
+        explicit timer(double&s):sum(s){}
+        ~timer(){sum+=std::chrono::duration<double,std::milli>(std::chrono::steady_clock::now()-start).count();}
+    };
     void release_host(){
         if(host_slots)std::fprintf(stderr,"LLAMADECODE_HOST_CACHE_RELEASE slots=%u bytes=%llu before_prefill_or_teardown=1\n",host_slots,(unsigned long long)host_bytes);
         if(host.clear)host.clear();host_slots=0;host_bytes=0;
+        host_frequency.fill(0);host_admitted.fill(0);host_observations=0;host_selected=false;
     }
-    void store_host(int32_t key,const char*const bases[3],uint64_t slot,const std::array<uint64_t,3>&stride){
+    void store_host(int32_t key,const char*const bases[3],uint64_t slot,const std::array<uint64_t,3>&stride,void*stream){
         if(!host_slots||key<0)return;
+        if(!host_selected){if(host_frequency[key]!=UINT32_MAX)++host_frequency[key];return;}
+        if(!host_admitted[key])return;
         const uint32_t layer=uint32_t(key)/384;
         if(host.find(layer,uint32_t(key)%384)>=0)return;
+        timer measured(host_store_ms);
         const uint64_t sizes[3]={routed[layer*3]->nb[2],routed[layer*3+1]->nb[2],routed[layer*3+2]->nb[2]};
         const char*src[3]={bases[0]+slot*stride[0],bases[1]+slot*stride[1],bases[2]+slot*stride[2]};
 #ifdef GGML_USE_CUDA
-        require(cudaDeviceSynchronize()==cudaSuccess,"RAM expert victim synchronization failed");
+        {timer measured_sync(host_sync_ms);require(cudaStreamSynchronize(static_cast<cudaStream_t>(stream))==cudaSuccess,"RAM expert victim synchronization failed");}
 #endif
         require(host.store(layer,uint32_t(key)%384,src,sizes)==1,"RAM expert victim admission failed");
         if(host.find(layer,uint32_t(key)%384)>=0)++host_stored;
@@ -126,6 +156,8 @@ struct llama_dsv41_weight_provider::implementation {
     // so a miss never evicts an expert this same request needs. Only misses
     // are fetched (explicit DirectStorage extents into bank 0).
     std::unordered_map<int32_t,int32_t> assign_expert_slots(uint32_t layer,const int32_t*ids,size_t count,void*stream){
+        timer measured(hook_ms);
+        select_host_working_set(layer);
         select_pool(layer);
         std::vector<int32_t>unique;for(size_t i=0;i<count;++i){const auto id=ids[i];require(id>=0&&id<384,"Routed expert id out of range");if(std::find(unique.begin(),unique.end(),id)==unique.end())unique.push_back(id);}
         require(unique.size()<=pool_slots,"Routed experts exceed the cache pool");
@@ -145,9 +177,9 @@ struct llama_dsv41_weight_provider::implementation {
                 if(l2_slots>=2){   // keep the evicted expert in L2 (its least-recent slot; never the one read below)
                     const int32_t t=l2_lru.back();require(t!=from_l2,"Expert L2 victim slot collides with its source");
                     l2_lru.splice(l2_lru.begin(),l2_lru,l2_pos[size_t(t)]);
-                    if(l2_key[size_t(t)]>=0){store_host(l2_key[size_t(t)],l2_base.data(),uint64_t(t),pool_max_stride);l2_of.erase(l2_key[size_t(t)]);}
+                    if(l2_key[size_t(t)]>=0){store_host(l2_key[size_t(t)],l2_base.data(),uint64_t(t),pool_max_stride,stream);l2_of.erase(l2_key[size_t(t)]);}
                     copy_slot(l2_base.data(),uint64_t(t),l1,uint64_t(slot),stream,true);copied=true;l2_key[size_t(t)]=victim;l2_of[victim]=t;++l2_stored;
-                }else store_host(victim,l1,uint64_t(slot),pool_stride);}
+                }else store_host(victim,l1,uint64_t(slot),pool_stride,stream);}
             slot_key[size_t(slot)]=key;key_slot[key]=slot;slot_of[e]=slot;
             if(from_l2>=0){
                 copy_slot(l1,uint64_t(slot),l2_base.data(),uint64_t(from_l2),stream,false);copied=true;
@@ -156,6 +188,7 @@ struct llama_dsv41_weight_provider::implementation {
             }
             const int ram=host_slots?host.find(layer,uint32_t(e)):-1;
             if(ram>=0){
+                timer measured_upload(host_upload_ms);
 #ifdef GGML_USE_CUDA
                 require(cudaStreamSynchronize(static_cast<cudaStream_t>(stream))==cudaSuccess,"RAM hit destination synchronization failed");
 #endif
@@ -1000,9 +1033,11 @@ bool llama_dsv41_weight_provider::external_expert_slots(uint32_t layer,const int
 llama_dsv41_weight_provider::expert_cache_stats llama_dsv41_weight_provider::cache_stats()const{std::lock_guard<std::mutex>lock(p->mutex);
     expert_cache_stats s;s.slots=p->pool_slots;s.hits=p->cache_hits;s.misses=p->cache_misses;s.fetched_bytes=p->cache_bytes;s.fetch_ms=p->cache_ms;
     s.l2_slots=p->l2_slots;s.l2_hits=p->l2_hits;s.l2_stored=p->l2_stored;
-    s.host_slots=p->host_slots;s.host_hits=p->host_hits;s.host_stored=p->host_stored;s.host_bytes=p->host_bytes;return s;}
+    s.host_slots=p->host_slots;s.host_hits=p->host_hits;s.host_stored=p->host_stored;s.host_bytes=p->host_bytes;
+    s.host_store_ms=p->host_store_ms;s.host_sync_ms=p->host_sync_ms;s.host_upload_ms=p->host_upload_ms;s.hook_ms=p->hook_ms;s.residency_ms=p->residency_ms;return s;}
 bool llama_dsv41_weight_provider::decode_residency(uint32_t layer,uint8_t*tier,uint32_t experts)const{
     std::lock_guard<std::mutex>lock(p->mutex);
+    implementation::timer measured(p->residency_ms);
     if(!tier||experts!=384||layer>=40||!p->decode_layout)return false;
     std::memset(tier,0,experts);
     for(const auto key:p->slot_key)if(key>=0&&uint32_t(key)/384==layer)tier[key%384]=1;
@@ -1056,7 +1091,12 @@ uint64_t llama_dsv41_weight_provider::decode_cache_slot_bytes()const{return p->p
 bool llama_dsv41_weight_provider::grow_decode_cache(uint64_t bytes,uint32_t*slots,std::string&error){return p->guard([&]{
     require(slots&&p->decode_layout&&p->pool[0]&&p->pool[0]->data&&!p->l2_buffer&&!p->leased,"Expert L2 requires an idle decode-layout provider without an L2");
     const uint64_t slot_bytes=p->pool_max_stride[0]+p->pool_max_stride[1]+p->pool_max_stride[2];
-    const uint32_t n=uint32_t(std::min<uint64_t>(bytes/slot_bytes,40ull*384-p->pool_slots));*slots=0;
+    uint32_t n=uint32_t(std::min<uint64_t>(bytes/slot_bytes,40ull*384-p->pool_slots));*slots=0;
+    if(const char*e=std::getenv("LLAMADECODE_L2_MAX_SLOTS")){
+        char*end=nullptr;errno=0;const auto cap=std::strtoul(e,&end,10);
+        require(*e&&*e!='-'&&!errno&&end!=e&&!*end&&cap<=40u*384u,"Invalid LLAMADECODE_L2_MAX_SLOTS");
+        n=std::min(n,uint32_t(cap));
+    }
     if(n<2){std::fprintf(stderr,"LLAMADECODE_L2 slots=0 offered_bytes=%llu\n",(unsigned long long)bytes);return;}
     const auto buft=ggml_backend_get_default_buffer_type(p->options.backend);
     auto*buffer=ggml_backend_buft_alloc_buffer(buft,size_t(uint64_t(n)*slot_bytes));

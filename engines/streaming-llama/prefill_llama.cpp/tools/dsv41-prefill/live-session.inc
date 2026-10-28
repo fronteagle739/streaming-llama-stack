@@ -215,6 +215,7 @@ struct ds4_external {
     int(*x_prefill_ws)(uint32_t,char*,size_t)=nullptr;int(*x_prefill)(const int32_t*,uint32_t,uint32_t,const int32_t*,uint32_t,float*)=nullptr;
     int(*x_replace)(uint64_t,uint64_t,void*)=nullptr;uint64_t(*x_drop)()=nullptr; // keep-open (optional exports)
     ds4_external_host_cache_v1 host_cache{};
+    void(*x_host_timing)(double*,uint64_t*)=nullptr;
     uint64_t host_limit=0;
     void grow_host(){if(host_cache.resize){std::string error;
         success(provider->configure_host_cache(host_cache,host_limit,llama_dsv41_host_memory::runtime_min_free_bytes,error),error);}}
@@ -263,10 +264,31 @@ struct ds4_external {
         require(module,"Cannot load ds4-decode.dll beside the producer");
         bind(x_open,"ds4x_open");bind(x_map,"ds4x_model_map");bind(x_register,"ds4x_register_weight");bind(x_bind,"ds4x_bind_state");
         bind(x_hook,"ds4x_set_expert_hook");bind(x_decode,"ds4x_decode");bind(x_close,"ds4x_close");bind(x_affinity,"ds4x_set_affinity");
+        x_host_timing=reinterpret_cast<decltype(x_host_timing)>(GetProcAddress(module,"ds4x_host_timing_v1"));
         const char*ram=std::getenv("LLAMADECODE_HOST_CACHE_MB");
         if(ram&&*ram&&std::strcmp(ram,"0")){
             int(*api)(ds4_external_host_cache_v1*)=nullptr;bind(api,"ds4x_host_cache_v1");
             require(api(&host_cache)==1,"ds4-decode RAM cache ABI refused");
+            const char*mode=std::getenv("LLAMADECODE_HOST_MODE");
+            require(!mode||!std::strcmp(mode,"upload")||!std::strcmp(mode,"cpu")||!std::strcmp(mode,"mix"),"LLAMADECODE_HOST_MODE must be upload, cpu or mix");
+            if(mode&&std::strcmp(mode,"upload")){
+                int(*cpu)(ds4_external_dot)=nullptr;bind(cpu,"ds4x_host_cpu_v1");
+                // The GPU producer does not otherwise initialize the CPU
+                // backend. Its SIMD dot uses the CPU FP16 lookup table.
+                ggml_cpu_init();
+                const auto dot=ggml_get_type_traits_cpu(GGML_TYPE_Q4_K)->vec_dot;
+                std::array<uint8_t,144>qw{};std::array<uint8_t,292>qx{};
+                const uint16_t half_one=ggml_fp32_to_fp16(1.0f);const float one=1.0f;
+                std::memcpy(qw.data(),&half_one,2);std::memcpy(qx.data(),&one,4);
+                for(size_t i=4;i<8;++i)qw[i]=1;for(size_t i=12;i<16;++i)qw[i]=1;
+                std::fill(qw.begin()+16,qw.end(),uint8_t(0x11));
+                std::fill(qx.begin()+4,qx.begin()+260,uint8_t(1));
+                for(size_t i=260;i<292;i+=2){const int16_t sum=16;std::memcpy(qx.data()+i,&sum,2);}
+                float known=0;dot(256,&known,0,qw.data(),0,qx.data(),0,1);
+                require(std::isfinite(known)&&std::abs(known-256.0f)<0.001f,"CPU Q4_K dot known-answer check failed");
+                require(cpu(dot)==1,"CPU expert kernel registration failed");
+                std::fprintf(stderr,"LLAMADECODE_HOST_CPU_ISA avx2=%d avx512=%d\n",ggml_cpu_has_avx2(),ggml_cpu_has_avx512());
+            }
         }
         if(append_multirow_enabled()){bind(x_prefill_ws,"ds4x_prefill_workspace");bind(x_prefill,"ds4x_prefill");}
         x_bind_ex=reinterpret_cast<decltype(x_bind_ex)>(GetProcAddress(module,"ds4x_bind_state_ex"));
@@ -351,10 +373,26 @@ struct ds4_external {
         if(position%16==0)check_decode_vram_reserve();
         double f0[4]{};uint64_t r0=0,b0=0;wf_extent_fetch_stats(f0,&r0,&b0);
         const auto before=provider->cache_stats();const auto started=std::chrono::steady_clock::now();
+        double cpu0[4]{};uint64_t count0[2]{};if(x_host_timing)x_host_timing(cpu0,count0);
         require(x_decode(token,position,tail.data(),3,logits.data())==1,"ds4-win decode step failed");
         const double decode_ms=std::chrono::duration<double,std::milli>(std::chrono::steady_clock::now()-started).count();
         success(sweep.commit_external_token(token,logits,error),error);
         const auto after=provider->cache_stats();double f1[4]{};uint64_t r1=0,b1=0;wf_extent_fetch_stats(f1,&r1,&b1);
+        double cpu1[4]{};uint64_t count1[2]{};if(x_host_timing)x_host_timing(cpu1,count1);
+        std::fprintf(stderr,"LLAMADECODE_TIER_TIME position=%u hook_ms=%.4f store_ms=%.4f victim_sync_ms=%.4f upload_ms=%.4f residency_ms=%.4f cpu_ms=%.4f cpu_wait_ms=%.4f cpu_transfer_ms=%.4f cpu_merge_ms=%.4f cpu_experts=%llu\n",position,
+            after.hook_ms-before.hook_ms,after.host_store_ms-before.host_store_ms,after.host_sync_ms-before.host_sync_ms,
+            after.host_upload_ms-before.host_upload_ms,after.residency_ms-before.residency_ms,
+            cpu1[0]-cpu0[0],cpu1[1]-cpu0[1],cpu1[2]-cpu0[2],cpu1[3]-cpu0[3],(unsigned long long)(count1[0]-count0[0]));
+        // Opt-in bounded correctness trace. Original logits, sampled once per
+        // 32 positions; the caller supplies a scratch path and compares only
+        // identical token prefixes. No extra model evaluation or routing.
+        const char*trace=std::getenv("LLAMADECODE_LOGITS_TRACE");
+        if(trace&&*trace&&position%32==0){
+            auto*f=std::fopen(trace,"ab");require(f,"Cannot open decode logits trace");
+            const uint32_t header[3]={position,uint32_t(token),uint32_t(logits.size())};
+            const bool ok=std::fwrite(header,sizeof(header),1,f)==1&&std::fwrite(logits.data(),sizeof(float),logits.size(),f)==logits.size();
+            std::fclose(f);require(ok,"Decode logits trace write failed");
+        }
         std::fprintf(stderr,"LLAMADECODE_DS4X_TOKEN position=%u decode_ms=%.3f ds_bytes=%llu ds_ms=%.3f l1_hits=%llu l2_hits=%llu misses=%llu l1_slots=%u l2_slots=%u ds_submit_ms=%.3f ds_fence_ms=%.3f ds_verify_ms=%.3f ds_cuda_ms=%.3f ds_requests=%llu ds_batches=%llu host_hits=%llu host_stored=%llu host_slots=%u host_bytes=%llu\n",position,decode_ms,
             (unsigned long long)(after.fetched_bytes-before.fetched_bytes),after.fetch_ms-before.fetch_ms,(unsigned long long)(after.hits-before.hits),
             (unsigned long long)(after.l2_hits-before.l2_hits),(unsigned long long)(after.misses-before.misses),after.slots,after.l2_slots,

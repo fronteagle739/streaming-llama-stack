@@ -44,6 +44,11 @@ class OwnedProcess:
                 'runtime_min_free_gib': cfg.get('runtime_min_free_gib',0.5) if scope in ('ds4-win','ds4-mac','rtx-producer','mlx-serve') else 0,
                 'owner_pid': os.getpid(), 'owner_created': psutil.Process().create_time(),
                 'stop': str(self.stop_path), 'receipt': str(self.receipt), 'log': str(self.log)}
+        self.cooperative_stop=bool(name in ('router','single-engine') and cfg.get('serving','single_engine')=='single_engine')
+        if self.cooperative_stop:
+            url=(cfg['ds4_url'] if name=='single-engine' else f'http://127.0.0.1:{cfg["port"]}')
+            spec['cooperative_stop']=dict(url=url+'/v1/stack/shutdown',
+                abort_file=cfg.get('env_overrides',{}).get('LLAMADECODE_ABORT_FILE'))
         if stdin is not None:
             spec['stdin'] = stdin
         if cfg.get('hold_watch'):
@@ -73,7 +78,7 @@ class OwnedProcess:
         try:
             self.proc.wait(timeout=15 if os.name=='nt' else 90)
         except subprocess.TimeoutExpired:
-            if os.name!='nt':
+            if os.name!='nt' or self.cooperative_stop:
                 error=RuntimeError('Graceful owned shutdown incomplete; no forced termination attempted')
                 error.owned_cleanup_uncertain=True
                 raise error

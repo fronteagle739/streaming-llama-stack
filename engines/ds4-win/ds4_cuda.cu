@@ -35636,7 +35636,40 @@ __global__ static void moe_round_f16_kernel(float *x, uint64_t n) {
     if (i < n) x[i] = __half2float(__float2half_rn(x[i]));
 }
 
+#include "ds4_external_host_compute.inc"
+
 static int routed_moe_launch(
+        ds4_gpu_tensor *out,
+        ds4_gpu_tensor *gate,
+        ds4_gpu_tensor *up,
+        ds4_gpu_tensor *mid,
+        ds4_gpu_tensor *down,
+        const void *model_map,
+        uint64_t model_size,
+        uint64_t gate_offset,
+        uint64_t up_offset,
+        uint64_t down_offset,
+        uint32_t gate_type,
+        uint32_t down_type,
+        uint64_t gate_expert_bytes,
+        uint64_t gate_row_bytes,
+        uint64_t down_expert_bytes,
+        uint64_t down_row_bytes,
+        uint32_t expert_in_dim,
+        uint32_t expert_mid_dim,
+        uint32_t out_dim,
+        const ds4_gpu_tensor *selected,
+        const ds4_gpu_tensor *weights,
+        uint32_t n_total_expert,
+        uint32_t n_expert,
+        float clamp,
+        const ds4_gpu_tensor *x,
+        uint32_t layer_index,
+        uint32_t n_tokens,
+        int allow_streaming,
+        int owned_filtered);
+
+static int routed_moe_launch_impl(
         ds4_gpu_tensor *out,
         ds4_gpu_tensor *gate,
         ds4_gpu_tensor *up,
@@ -35702,6 +35735,7 @@ static int routed_moe_launch(
         if (!ds4_gpu_tensor_read(selected, 0, ids.data(), (uint64_t)assignments * sizeof(int32_t))) return 0;
         for (const int32_t id : ids) {
             if (id < 0 || (uint32_t)id >= n_total_expert) return 0;
+            if(std::find(g_external_cpu_ids.begin(),g_external_cpu_ids.end(),id)!=g_external_cpu_ids.end())continue;
             if (std::find(unique.begin(), unique.end(), id) == unique.end()) unique.push_back(id);
         }
         static const uint32_t group_cap = [] {
@@ -35736,7 +35770,10 @@ static int routed_moe_launch(
             return 0;
         }
         for (const int32_t slot : slots) if (slot < 0 || (uint32_t)slot >= n_slots) return 0;
-        for (int32_t &id : ids) id = slots[(size_t)(std::find(unique.begin(), unique.end(), id) - unique.begin())];
+        for (int32_t &id : ids){
+            const auto at=std::find(unique.begin(),unique.end(),id);
+            id=at==unique.end()?-1:slots[size_t(at-unique.begin())];
+        }
         if (g_ds4x_slot_tensor.bytes < (uint64_t)assignments * sizeof(int32_t)) {
             if (g_ds4x_slot_tensor.ptr) { (void)cudaFree(g_ds4x_slot_tensor.ptr); g_ds4x_slot_tensor = {}; }
             const uint64_t bytes = (uint64_t)(assignments > 64u ? assignments : 64u) * sizeof(int32_t);
@@ -37525,6 +37562,8 @@ static int routed_moe_launch(
     }
     return ok;
 }
+
+#include "ds4_external_host_compute_wrapper.inc"
 
 extern "C" int ds4_gpu_routed_moe_one_owned_tensor(
         ds4_gpu_tensor *out,

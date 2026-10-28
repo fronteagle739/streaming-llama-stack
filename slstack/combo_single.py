@@ -663,6 +663,11 @@ def handler(proxy):
             """Graceful stop (Studio eject / switch-away): retire the producer so its VRAM and GPU hold
             are released, then end serving so the process exits 0 and its guardian writes the receipt."""
             engine = proxy.engine
+            # Let an in-flight decode reach its ordinary token boundary before
+            # waiting for the session lock. Prefill cancellation is supplied by
+            # the guardian's producer abort file.
+            producer=engine.producer
+            if producer is not None and hasattr(producer,'cancel_decode'):producer.cancel_decode()
             if not engine.lock.acquire(timeout=float(proxy.cfg.get('request_timeout_s', 600))):
                 return self.send(409, dict(error=dict(message='Another request owns this decoder')))
             try:

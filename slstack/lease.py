@@ -16,14 +16,14 @@ class AdmissionRefused(RuntimeError):
 
 
 def recover_leases(runtime_root, task='DS4STACK'):
-    """Release only this stack's recorded dead guardians, after their kill-on-close Jobs have closed."""
+    """Recover legacy kill-on-close guardians; retain cooperative owners for inspection."""
     root = Path(runtime_root) / 'state' / 'leases'
     if not root.exists():
         return []
     released = []
     for file in root.glob('*.json'):
         row = json.loads(file.read_text())
-        if row.get('task') != task or row.get('released') or row.get('cleanup_uncertain'):
+        if row.get('task') != task or row.get('released') or row.get('cleanup_uncertain') or row.get('cooperative_retirement'):
             continue
         try:
             proc = psutil.Process(row['guardian_pid'])
@@ -212,7 +212,10 @@ def gpu_lease(cfg):
                          'guardian_pid': os.getpid(), 'guardian_created': psutil.Process().create_time(),
                          'host_budget_gib': cfg['host_budget_gib'],
                          'min_available_gib': cfg['min_available_gib'], 'expires': expiry.isoformat(),
-                         'released': False}
+                         'released': False,
+                         # Cooperative trees survive a lost guardian. Its death
+                         # alone is never evidence that the GPU owner retired.
+                         'cooperative_retirement': cfg.get('serving','single_engine')=='single_engine'}
             atomic_json(lease_path, lease_row)
             line = f"\nACTIVE: {task} {identity}; exclusive configured GPU; expires {expiry.isoformat()}; host RSS {cfg['host_budget_gib']} GiB; floor {cfg['min_available_gib']} GiB\n"
             stream.seek(0, 2)
