@@ -100537,7 +100537,7 @@ Source: `engines/streaming-llama/prefill_llama.cpp/src/llama-dsv41-weights.cpp:1
 
 ### LLAMADECODE_APPEND_RESIDENT_SWEEP
 
-E2c experimental resident-expert sweep: 1 runs at most32 appended tokens with the original sweep graph on retained decode-layout experts; default0. Requires APPEND_DECODE_MAX=0 and an existing resident decoder. L2 is released before restoring the admitted prefill graph. Numerical/state equivalence and speed are qualification gates, not assumptions.
+E2c default resident-expert sweep for at most32 new tokens after resident decode. Set0 for full sweeps. The owner accepted measured follow-up KL0.0000235/0.000224/0.00250 at2K/8K/32K, with recall/top1 passing and append2.7-2.9s versus17.5-18.2s. Uses the original sweep policy, releases L2 before restoring prefill buffers, and keeps the existing cache type. Exactness remains a future target.
 
 Scope: rtx-llama. Class: advanced.
 
@@ -100547,7 +100547,7 @@ Source: `engines/streaming-llama/prefill_llama.cpp/src/llama-dsv41-resident-appe
 // graph for a bounded append. Never changes KV type or the arithmetic policy.
 inline bool llama_dsv41_resident_append_enabled(){
     const char *value=std::getenv("LLAMADECODE_APPEND_RESIDENT_SWEEP");
-    return value&&!std::strcmp(value,"1");
+    return !value||!*value||!std::strcmp(value,"1");
 }
 constexpr unsigned llama_dsv41_resident_append_limit=32;
 ```

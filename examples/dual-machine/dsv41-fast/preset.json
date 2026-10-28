@@ -8,7 +8,11 @@
     "yoco_keep": 0,
     "mac": "http://MAC_HOST:8180",
     "pair_token": "SET_SHARED_PAIRING_TOKEN",
-    "producer_desktop_reserve_gib": 0.5
+    "producer_desktop_reserve_gib": 0.5,
+    "env_overrides": {
+      "LLAMADECODE_APPEND_RESIDENT_SWEEP": "1",
+      "LLAMADECODE_APPEND_DECODE_MAX": "0"
+    }
   },
   "mac": {
     "model": "SET_MAC_GGUF_PATH",

@@ -691,8 +691,7 @@ void run_live_session(std::unique_ptr<llama_dsv41_sweep>&sweep,
             // its open, start_request and layer-0 weight fetch (off: no-op).
             if(!command.contains("vision_spans_file")) {std::string early_error;success(sweep->start_append_engram(tokens,early_error),early_error);}
             bool resident_sweep=false;
-            if(llama_dsv41_resident_append_enabled()&&ds4_decode_enabled()&&!options.capture_dspark&&next_images.empty()&&tokens.size()<=llama_dsv41_resident_append_limit){
-                require(append_decode_max()==0,"Resident sweep and native append experiments require separate settings");
+            if(llama_dsv41_resident_append_enabled()&&append_decode_max()==0&&ds4_decode_enabled()&&!options.capture_dspark&&next_images.empty()&&tokens.size()<=llama_dsv41_resident_append_limit){
                 auto *provider=sweep->provider_for_external_decode();
                 resident_sweep=provider&&provider->decode_layout();
                 if(resident_sweep){std::string why;success(provider->release_decode_cache(why),why);}

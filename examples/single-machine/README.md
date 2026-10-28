@@ -3,6 +3,12 @@
 Each quality setting has an API-only launcher and a `-webui` launcher. Both run
 the same single engine: streaming-llama prefill followed by modified ds4 decode.
 
+Short follow-ups reuse resident experts through the sweep graph by default.
+The measured32-token append took2.7-2.9s, with small numerical differences
+(KL0.0000235-0.00250 at2K-32K; recall/top-1 passed). Set
+`"LLAMADECODE_APPEND_RESIDENT_SWEEP": "0"` in `env_overrides` to use full sweeps.
+See the [measured tradeoff](../../docs/EXPERIMENT_E2C.md).
+
 | Scripts | Prefill setting |
 | --- | --- |
 | `dsv41-accurate*.ps1` | Accurate arithmetic; YOCO off |

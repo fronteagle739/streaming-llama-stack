@@ -52,7 +52,8 @@
   "enable_bash": false,
   "cache_affinity_spread_file": "",
   "env_overrides": {
-    "LLAMADECODE_APPEND_DECODE_MAX": "0"
+    "LLAMADECODE_APPEND_DECODE_MAX": "0",
+    "LLAMADECODE_APPEND_RESIDENT_SWEEP": "1"
   },
   "models": [],
   "resident": [],

@@ -14,6 +14,15 @@
 
 ## Planned
 
+- Make resident follow-ups exact (the original resident decoder's observed
+  layer-boundary divergence starts after attention, before routing). The current
+  sweep-resident default is faster but still numerically different: measured
+  follow-up KL0.0000235/0.000224/0.00250 at2K/8K/32K. The owner accepted this
+  tradeoff; set `LLAMADECODE_APPEND_RESIDENT_SWEEP=0` for full-sweep follow-ups.
+  Finer traces localize the original decoder difference to query/KV projection
+  and RoPE; the sweep-resident alternative first differs at layer8's FFN output
+  in the2K first-token diagnostic. See [E2c evidence](EXPERIMENT_E2C.md).
+
 - Revisit the experimental host-RAM expert tier on machines with much more RAM
   (untested). It gave no gain on the 32 GB machine and is not in this release;
   [measured decode rates](PERFORMANCE.md#host-ram-expert-tier).

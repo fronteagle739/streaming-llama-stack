@@ -52,7 +52,9 @@ healthy Studio/Remote Link result and confirmed owned cleanup.
 new tokens but executes the original sweep graph. It releases L2 before restoring
 the startup-admitted prefill graph and hidden buffers. Its existing router hook
 fetches only the chosen experts; the arithmetic policy and cache type are kept.
-It requires `LLAMADECODE_APPEND_DECODE_MAX=0`. The default remains off.
+It requires `LLAMADECODE_APPEND_DECODE_MAX=0`. The owner accepted the measured
+quality tradeoff below; it now defaults on. Set
+`LLAMADECODE_APPEND_RESIDENT_SWEEP=0` to retain full-sweep follow-ups.
 
 Same-day matched control/candidate, identical binary/model and canonical32-token
 follow-up, bias0, fresh engine for each arm:
@@ -73,9 +75,12 @@ Timing is from untraced runs; the separate traces are not speed evidence.
 
 The owner considered the2K KL acceptable for a default, conditional on8K/32K
 remaining at approximately1e-4 or lower, recall passing, and no slowdown. Both
-larger contexts exceed that requested KL gate. **Default adoption is held; the
-faster but non-exact path is retained only as an opt-in toggle.** It has not been
-declared quality-neutral or bit-exact. The small2K KL does not generalize.
+larger contexts exceeded that initial gate, so adoption was initially held.
+The owner subsequently explicitly accepted32K KL0.0025, approved the default
+across examples/profiles, retained the off toggle, and made exactness a future
+roadmap target. **The sweep-resident path now defaults on by that decision.**
+It has not been declared quality-neutral or bit-exact. The small2K KL does not
+generalize. The older native single-token append remains off by default.
 
 A matched2K trace of this alternative first differs at layer8's FFN output
 (max_abs0.00390625, relative L2 0.000326660); layers0-7 are exact at the first
