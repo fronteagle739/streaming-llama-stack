@@ -8,13 +8,15 @@ def test_mac_host_budget_does_not_inherit_windows_commit_cap():
     assert commit_budget_gib(cfg,windows=True)==48
 
 
-def test_graceful_cleanup_retains_live_owner_without_killing():
+def test_uncertain_identity_cleanup_retains_live_owner_without_killing():
     from types import SimpleNamespace
     survivor=SimpleNamespace(pid=123,terminate=lambda:None,kill=lambda:(_ for _ in ()).throw(AssertionError('SIGKILL forbidden')))
     owned=object.__new__(guard.GracefulOwnedProcesses)
+    owned.spec={}
     owned.identities={};owned.retired_identities=[]
-    owned.refresh=lambda:None;owned.live=lambda:[survivor]
-    receipt=owned.stop(grace=0)
+    def unavailable():raise RuntimeError('Owned identity observation unavailable')
+    owned.refresh=unavailable;owned.live=lambda:[survivor]
+    receipt=owned.stop(grace=60)
     assert receipt['surviving_owned_pids']==[123] and not receipt['confirmed']
     assert receipt['forced_kill'] is False
 

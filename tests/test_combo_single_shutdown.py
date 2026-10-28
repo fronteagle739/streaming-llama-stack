@@ -56,6 +56,7 @@ class ShutdownTests(unittest.TestCase):
         with self.assertRaises(urllib.error.HTTPError) as refused:self.call('/v1/stack/shutdown', {})
         self.assertEqual(refused.exception.code, 503)
         self.assertFalse(self.h.engine.stopping.is_set());self.assertTrue(self.serving.is_alive())
+        self.assertIs(self.h.engine.producer,self.h.launched[0])
 
 
 if __name__ == '__main__':unittest.main()

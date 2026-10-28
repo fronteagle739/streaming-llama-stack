@@ -61,7 +61,7 @@ inline void report(const char *event, const state &s, uint64_t host = 0, uint64_
         DWORD(size_t(n) < sizeof(text) ? size_t(n) : sizeof(text) - 1), &done, nullptr); }
 }
 // Runtime available physical RAM floor, independent of admission's reserve.
-// Owner 2026-10-28: use a 512 MiB runtime floor. 0 disables
+// Runtime floor defaults to 512 MiB. 0 disables
 // it; the existing paging stop remains enabled in either case.
 inline std::atomic<bool> floor_stop{false}, memory_query_failed{false};
 inline std::atomic<uint64_t> stopped_available{0};

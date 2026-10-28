@@ -476,8 +476,9 @@ class ComboProducer:
         try:
             p.request(self.command('close'))
             # The budget starts once the reply has arrived.
-            deadline=time.monotonic()+float(self.cfg.get('producer_graceful_shutdown_seconds',30))
-            while (exited:=job.poll()) is None and time.monotonic()<deadline:time.sleep(0.05)
+            from .shutdown import wait_for_exit
+            exited=wait_for_exit(job,float(self.cfg.get('producer_graceful_shutdown_seconds',60)),
+                diagnostic=lambda:len(p.diagnostic))
             self.shutdown_path='graceful-pending' if exited is not None else 'graceful-timeout-terminate'
         except BaseException as exc:
             self.shutdown_path='graceful-failed-terminate: '+repr(exc)[:200]
@@ -493,11 +494,11 @@ class ComboProducer:
     def close(self):
         if self.closed:return self.receipt
         if self.process:self.graceful_exit()
-        # Still alive here: process.close() escalates (Ctrl-Break, long wait) and never kills;
-        # a producer still alive after that is left running and reported STUCK.
+        # The owned runner repeats cancellation and waits while retirement advances;
+        # only a full quiet grace allows its loudly logged force fallback.
         job=getattr(self.process,'job',None) if self.process else None
         if job is not None and job.poll() is None:
-            print('DS4COMBO producer graceful retire did not finish ('+str(self.shutdown_path)+'); escalating, never killing',flush=True)
+            print('DS4COMBO producer graceful retire did not finish ('+str(self.shutdown_path)+'); requesting cooperative cancellation and waiting for retirement',flush=True)
         try:
             proof=self.process.close() if self.process else getattr(self,'failure_cleanup',None) or dict(creation_attempted=False)
         except RuntimeError as exc:

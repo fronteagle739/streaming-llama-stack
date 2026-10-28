@@ -97039,7 +97039,7 @@
       "rtx-llama"
     ],
     "classification": "advanced",
-    "doc": "Optional CPU RAM-expert diagnostic: compare the first 16 hybrid FFN rows with the all-GPU result on identical activations. Logs relative RMS/max error; disabled when unset or 0. Extra GPU work is excluded from performance qualification.",
+    "doc": "Diagnostic only: 1 compares the first 16 hybrid FFN rows with all-GPU; all checks every serviced row; reference checks every row and forwards the GPU result. Extended modes trace discrepant activation quantization. Adds GPU work and changes cache promotions; disable for timing.",
     "flag": "--llamadecode-host-cpu-verify",
     "default": "0",
     "defaults_by_scope": {
@@ -97047,7 +97047,7 @@
     },
     "reads": [
       "engines/ds4-win/ds4_decode_adapter.inc:39",
-      "engines/ds4-win/ds4_external_host_compute_wrapper.inc:64"
+      "engines/ds4-win/ds4_external_host_compute_wrapper.inc:66"
     ],
     "code_defaults": [
       {
@@ -97057,10 +97057,10 @@
         "consumer": "    if(!dot)return 0;\n    g_external_cpu_dot=dot;\n    const char*verify=getenv(\"LLAMADECODE_HOST_CPU_VERIFY\");\n    g_external_cpu_verify=verify&&*verify&&strcmp(verify,\"0\");\n    ds4_threads_init();\n    fprintf(stderr,\"LLAMADECODE_HOST_CPU threads=%u quant=Q4_K activation=Q8_K dispatched_ggml_dot=1\\n\",g_pool.n_threads);\n    return 1;"
       },
       {
-        "source": "engines/ds4-win/ds4_external_host_compute_wrapper.inc:64",
+        "source": "engines/ds4-win/ds4_external_host_compute_wrapper.inc:66",
         "unset": "NULL from getenv; the literal consumer below supplies any fallback",
         "read": "const char*verify=getenv(\"LLAMADECODE_HOST_CPU_VERIFY\");",
-        "consumer": "    if(!cuda_ok(cudaStreamSynchronize(cuda_decode_stream()),\"CPU expert scratch retirement\"))return 0;\n    static unsigned verify_count=0;\n    const char*verify=getenv(\"LLAMADECODE_HOST_CPU_VERIFY\");\n    if(verify&&*verify&&strcmp(verify,\"0\")&&verify_count++<16u){\n        std::array<float,5120>hybrid{},reference{};\n        if(job.count!=n_expert&&!ds4_gpu_tensor_read(out,0,hybrid.data(),out_dim*sizeof(float)))return 0;\n        for(uint32_t i=0;i<out_dim;++i)hybrid[i]+=job.out[i];"
+        "consumer": "    if(!cuda_ok(cudaStreamSynchronize(cuda_decode_stream()),\"CPU expert scratch retirement\"))return 0;\n    static unsigned verify_count=0;\n    const char*verify=getenv(\"LLAMADECODE_HOST_CPU_VERIFY\");\n    const bool verify_all=verify&&(!strcmp(verify,\"all\")||!strcmp(verify,\"reference\"));\n    if(verify&&*verify&&strcmp(verify,\"0\")&&(verify_all||verify_count<16u)){\n        ++verify_count;\n        std::array<float,5120>hybrid{},reference{};"
       }
     ],
     "code_default": "NULL from getenv; the literal consumer below supplies any fallback"

@@ -239,7 +239,9 @@ def handler(proxy):
                         proxy.window(False)
                     except BaseException:
                         if session.poison and session.poison.startswith('Unconfirmed GPU release'):
-                            os._exit(72) # Outer kill-on-close Job retires descendants before orphan-lease recovery.
+                            error=RuntimeError(session.poison+'; retaining GPU ownership')
+                            error.owned_cleanup_uncertain=True
+                            raise error
                         proxy.window(False);raise
                 if streaming:self.wfile.write(terminal);self.wfile.flush()
                 else:self.send(200,result)
@@ -353,6 +355,7 @@ def guarded(cfg,config):
     run_config=root/('server-'+run_id+'.config.json');atomic_json(run_config,cfg)
     command=[sys.executable,'-B','-m','slstack.combo_proxy','--config',str(run_config),'--serve','--run-id',run_id,'--window',str(window)]
     spec=dict(command=command,cwd=str(Path(__file__).resolve().parents[1]),env=env,runtime_root=str(root),task='DS4COMBO',
+        gpu_uuid=cfg.get('gpu_uuid'),
         host_budget_gib=cfg['combo_worker_host_budget_gib'],min_available_gib=cfg['min_available_gib'],job_commit_gib=cfg['job_commit_gib'],timeout_s=None,   # a server has no lifetime cap; requests use the progress-renewed window
         
         owner_pid=owner.pid,owner_created=owner.create_time(),stop=str(root/('server-'+run_id+'.stop')),

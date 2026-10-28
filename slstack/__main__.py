@@ -237,7 +237,8 @@ def main():
                 urllib.request.urlopen(urllib.request.Request(f'http://{cfg["host"]}:{cfg["port"]}/v1/stack/shutdown',
                                                               data=b'{}', headers={'Content-Type': 'application/json'}),
                                        timeout=10).read()
-                proc.proc.wait(timeout=120)
+                from .shutdown import wait_for_exit,gpu_free_reader
+                wait_for_exit(proc.proc, 120, diagnostic=proc.log,gpu_free=gpu_free_reader(cfg.get('gpu_uuid')))
             except Exception as exc:
                 print('Graceful router stop failed: ' + repr(exc), file=sys.stderr)
             if proc.proc.poll() is None:

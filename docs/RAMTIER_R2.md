@@ -1,5 +1,7 @@
 # Single-engine RAM experts: Round 2
 
+[Round 3](RAMTIER_R3.md) confirms the explicit 10 GiB performance points and localizes CPU sequence differences to activation quantization. Its full-row diagnostic supersedes the first-16 arithmetic check below.
+
 Continuous victim admission caused the Round 1 slowdown. At Max quality, the original 3.49 GiB cache spent 135.021 ms/token admitting about 95 experts, including 3.935 ms in explicit device synchronization. Uploading RAM hits took another 13.985 ms/token. The whole cache-off native step took 136.823 ms. At Max speed, admissions cost 16.652 ms, uploads 10.049 ms and residency scans 4.493 ms/token. These diagnostic intervals contained 155 warm steps; their binary hashes were not saved before supersession.
 
 The fix selects a bounded hot set after 32 observation passes and fills each selected payload once. A direct key index replaces linear RAM scans. Payloads remain locked and uploads use the existing pinned staging buffers. CPU mode borrows RAM payloads while the existing ds4 row pool and llama Q4_K CPU dot kernels overlap the GPU experts. The final row is combined before advancing the layer. See [design and controls](RAMTIER.md).

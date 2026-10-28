@@ -25,7 +25,7 @@ It does not improve both dial settings here: faster settings already favour VRAM
 
 **Untested:** the tier is expected to help more on machines with more RAM.
 
-[Timing, hit rates and correctness](RAMTIER_R2.md). [Round 1 observations and history](RAMTIER.md).
+[Timing and hit rates](RAMTIER_R2.md). [Full CPU correctness verdict](RAMTIER_R3.md): CPU/mix fail strict Max quality sequence equivalence; activation quantization amplifies middle-row rounding. [Round 1 observations and history](RAMTIER.md).
 
 ## DeepSeek V4.1 Flash on one RTX 5090
 

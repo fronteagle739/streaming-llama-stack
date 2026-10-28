@@ -198,6 +198,7 @@ class OwnedProducer:
                          '--carry': str(directory / 'carry-not-created'), '--payload': str(directory / 'payload-not-created')})
             argv = [str(binary), *[str(v) for item in args.items() for v in item]]
             env = environment(cfg, 'rtx-producer')
+            if not env.get('LLAMADECODE_ABORT_FILE'):env['LLAMADECODE_ABORT_FILE']=str(directory/'guard.abort')
             libraries = [str(path(p)) for p in cfg.get('producer_library_directories', [])]
             env['PATH'] = os.pathsep.join([str(binary.parent), *libraries, env.get('PATH', '')])
             from .combo_producer import stall_seconds   # local: combo_producer imports this module

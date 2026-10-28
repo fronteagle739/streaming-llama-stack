@@ -4,6 +4,7 @@ import hashlib
 import os
 from pathlib import Path
 import sys
+import threading
 import time
 import psutil
 from .journal import atomic_json
@@ -35,6 +36,56 @@ def supervise(spec):
     if abs(parent.create_time()-spec['owner_created']) > .01:
         raise RuntimeError('Owning process identity changed before launch')
     class Adapter(GuardedJob):
+        def __init__(self,*args,**kwargs):
+            super().__init__(*args,**kwargs)
+            self.retirement_lock=threading.RLock()
+            self.retirement_proof=None
+
+        def _cooperative_ownership(self):
+            # Keep memory limits but prevent handle-close/pipe-loss from
+            # bypassing cooperative retirement on either Windows or POSIX.
+            if self.kernel_job:
+                kernel=self.kernel_job
+                limits=kernel.Limits()
+                limits.basic.flags=0x200 | 0x100
+                limits.process=limits.job=int(self.commit_limit)
+                if not kernel.api.SetInformationJobObject(kernel.handle,9,
+                        kernel.c.byref(limits),kernel.c.sizeof(limits)):
+                    raise kernel.c.WinError(kernel.c.get_last_error())
+            if self.child and self.child.stdin and not self.child.stdin.closed:
+                self.child.stdin.write(b'H')
+                self.child.stdin.flush()
+                self.child.stdin.close()
+
+        def start(self,*args,**kwargs):
+            result=super().start(*args,**kwargs)
+            self._cooperative_ownership()
+            return result
+
+        def _stop(self):
+            from .shutdown import ProgressOwnedProcesses
+            with self.retirement_lock:
+                if self.retirement_proof is not None:return self.retirement_proof
+                # Preserve the pinned provider's identity ledger and paging checks.
+                self._cooperative_ownership()
+                owned=ProgressOwnedProcesses.from_owned(self.owned,
+                    {**spec,'stop_reason':self.failure or 'shared guarded job retirement'})
+                cleanup=owned.stop()
+                if cleanup['forced_kill'] and self.kernel_job:
+                    # Catch descendants born between ownership polls only after grace.
+                    self.kernel_job.stop()
+                self.retirement_proof=cleanup
+                return cleanup
+
+        def close(self):
+            from .shutdown import wait_for_thread,gpu_free_reader
+            self.finished.set()
+            if self.monitor and self.monitor is not threading.current_thread():
+                try:wait_for_thread(self.monitor,self.child,diagnostic=spec['log'],
+                    gpu_free=gpu_free_reader(spec.get('gpu_uuid') or (spec.get('gpu') or {}).get('gpu_uuid')))
+                except RuntimeError as error:raise CleanupUnconfirmed(str(error)) from error
+            return super().close()
+
         def _priority(self):
             super()._priority()
             if Path(spec['stop']).exists():
@@ -81,6 +132,7 @@ def supervise(spec):
                   'job_commit_gib':commitment/GiB,
                   'child_pid':job.child.pid if job.child else None,
                   'shared_guard_commit':'2774636281ab32bf871497f0a8caae23c6b6cdc7',
+                  'stack_retirement_policy':'cooperative request, progress-aware grace, logged force fallback',
                   'shared_guard_certificate':str(certificate),'cleanup_confirmed':certain,
                   'paging_policy':job.watcher.details(),
                   'owned_paging':{'attribution':job.watcher.observer.attribution,
