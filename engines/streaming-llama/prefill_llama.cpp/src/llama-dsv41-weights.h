@@ -165,7 +165,8 @@ public:
     struct expert_cache_stats{uint32_t slots=0;uint64_t hits=0,misses=0,fetched_bytes=0;double fetch_ms=0;
         uint32_t l2_slots=0;uint64_t l2_hits=0,l2_stored=0;double assign_ms=0,copy_sync_ms=0;};
         uint32_t l2_slots=0;uint64_t l2_hits=0,l2_stored=0;
-        uint32_t host_slots=0;uint64_t host_hits=0,host_stored=0,host_bytes=0;};
+        uint32_t host_slots=0;uint64_t host_hits=0,host_stored=0,host_bytes=0;
+        double host_store_ms=0,host_sync_ms=0,host_upload_ms=0,hook_ms=0,residency_ms=0;};
     bool configure_host_cache(const ds4_external_host_cache_v1 &api,uint64_t host_limit,uint64_t floor,std::string &error);
     bool release_host_cache(std::string &error);
     bool release_prefill_rows(std::string &error);

@@ -4969,6 +4969,12 @@
       {
         "source": "engines/ds4-win/ds4_cuda.cu:38576",
         "unset": "NULL from getenv; the literal consumer below supplies any fallback",
+        "read": "if (getenv(\"DS4_CUDA_DISABLE_Q8_HC_EXPAND_FUSED\") == NULL) {",
+        "consumer": "        uint32_t                n_embd,\n        uint32_t                n_hc) {\n    if (getenv(\"DS4_CUDA_DISABLE_Q8_HC_EXPAND_FUSED\") == NULL) {\n        return cuda_matmul_q8_0_hc_expand_tensor_labeled(out_hc, shared_out,\n                                                        model_map, model_size,\n                                                        weight_offset,\n                                                        in_dim, out_dim,"
+      },
+      {
+        "source": "engines/ds4-win/ds4_cuda.cu:38445",
+        "unset": "NULL from getenv; the literal consumer below supplies any fallback",
         "read": "if (getenv(\"DS4_CUDA_DISABLE_Q8_HC_EXPAND_FUSED\") != NULL) return 0;",
         "consumer": "        uint32_t n_embd,\n        uint32_t n_hc) {\n    if (getenv(\"DS4_CUDA_DISABLE_Q8_HC_EXPAND_FUSED\") != NULL) return 0;\n    return cuda_matmul_q8_0_hc_expand_tensor_labeled(\n            out_hc,\n            shared_out,\n            model_map,"
       },
@@ -8602,6 +8608,12 @@
         "unset": "NULL from getenv; the literal consumer below supplies any fallback",
         "read": "getenv(\"DS4_CUDA_MOE_NO_DIRECT_DOWN_SUM6\") == NULL;",
         "consumer": "        const uint32_t use_direct_down_sum =\n            (n_tokens == 1u || small_exact_batch) && (n_expert == 6u || n_expert == 3u) &&\n            getenv(\"DS4_CUDA_MOE_NO_DIRECT_DOWN_SUM6\") == NULL;\n        const uint32_t use_direct_midq =\n            q4k_path && use_direct_down_sum && !write_gate_up &&\n            getenv(\"DS4_CUDA_MOE_DIRECT_MIDQ\") != NULL &&\n            getenv(\"DS4_CUDA_MOE_NO_DIRECT_MIDQ\") == NULL;"
+      },
+      {
+        "source": "engines/ds4-win/ds4_external_host_compute_wrapper.inc:20",
+        "unset": "NULL from getenv; the literal consumer below supplies any fallback",
+        "read": "!getenv(\"DS4_CUDA_MOE_NO_DIRECT_DOWN_SUM6\");",
+        "consumer": "        n_tokens==1u&&(n_expert==6u||n_expert==3u)&&gate_type==12u&&down_type==12u&&\n        expert_in_dim==5120u&&expert_mid_dim==2304u&&out_dim==5120u&&\n        !getenv(\"DS4_CUDA_MOE_NO_DIRECT_DOWN_SUM6\");\n    if(!eligible)return routed_moe_launch_impl(DS4_EXTERNAL_MOE_ARGS);\n    std::array<int32_t,6>ids{};std::array<float,6>w{};std::array<uint8_t,384>tier{};\n    if(!ds4_gpu_tensor_read(selected,0,ids.data(),n_expert*sizeof(int32_t)))return 0;\n    bool found=false;"
       }
     ]
   },
@@ -15107,7 +15119,7 @@
         "consumer": "static uint32_t cuda_stream_host_expert_cache_requested_budget(void) {\n    uint32_t cap = g_stream_host_expert_budget_override;\n    const char *env = getenv(\"DS4_CUDA_STREAMING_HOST_CACHE_N\");\n    if (env && env[0]) {\n        char *end = NULL;\n        errno = 0;\n        unsigned long v = strtoul(env, &end, 10);"
       },
       {
-        "source": "engines/streaming-llama/prefill_llama.cpp/src/llama-dsv41-weights.cpp:1042",
+        "source": "engines/streaming-llama/prefill_llama.cpp/src/llama-dsv41-weights.cpp:1077",
         "unset": "NULL from getenv; the literal consumer below supplies any fallback",
         "read": "const char*n=std::getenv(\"DS4_CUDA_STREAMING_HOST_CACHE_N\");",
         "consumer": "    require(p->pool_max_stride[0]==p->pool_max_stride[1],\"RAM expert gate/up geometry mismatch\");\n    const auto width=p->pool_max_stride[0]+p->pool_max_stride[1]+p->pool_max_stride[2];\n    const char*n=std::getenv(\"DS4_CUDA_STREAMING_HOST_CACHE_N\");\n    uint64_t capped=offer;\n    if(n&&*n){char*end=nullptr;errno=0;const auto count=std::strtoull(n,&end,10);\n        require(n[0]!='-'&&!errno&&end!=n&&!*end&&count<=UINT64_MAX/width,\"Invalid DS4_CUDA_STREAMING_HOST_CACHE_N\");capped=std::min(capped,count*width);}\n    p->host_slots=api.resize(capped,p->pool_max_stride[0],p->pool_max_stride[2]);p->host_bytes=uint64_t(p->host_slots)*width;"
@@ -49169,9 +49181,10 @@
     "classification": "advanced",
     "scopes": [
       "ds4-win",
-      "mac-ds4"
+      "mac-ds4",
+      "rtx-llama"
     ],
-    "doc": "DS4_THREADS: advanced engine setting; built-in default retained",
+    "doc": "DS4_THREADS: advanced engine setting; built-in default retained Also controls the single-engine RAM-expert CPU worker pool (default 12, limited by available processors).",
     "reads": [
       "engines/ds4-mac/ds4.c:1999",
       "engines/ds4-peer/ds4.c:1891",
@@ -98550,26 +98563,161 @@
     "scopes": [
       "rtx-llama"
     ],
-    "doc": "Single-engine pinned host expert victim tier after VRAM L1/L2. 0 disables (qualification default); auto uses measured physical and process-budget headroom; integer MiB is an upper bound. Keeps the configured runtime floor plus 512 MiB desktop reserve and a 256 MiB allocation margin. Released before append prefill; completed Engram rows are reusable headroom. Requires the versioned ds4-decode host-cache export.",
+    "doc": "Single-engine locked RAM expert tier after VRAM L1/L2. 0 disables; auto uses admitted physical/process headroom; integer MiB is an upper bound. Bounded hot-set admission avoids continuous GPU victim writeback. Keeps the runtime floor plus 512 MiB desktop reserve and 256 MiB margin; drops before append prefill. See LLAMADECODE_HOST_MODE for upload/CPU service.",
     "reads": [
-      "engines/streaming-llama/prefill_llama.cpp/src/llama-dsv41-weights.cpp:1023",
-      "engines/streaming-llama/prefill_llama.cpp/tools/dsv41-prefill/live-session.inc:266"
+      "engines/streaming-llama/prefill_llama.cpp/src/llama-dsv41-weights.cpp:1058",
+      "engines/streaming-llama/prefill_llama.cpp/tools/dsv41-prefill/live-session.inc:268"
     ],
     "defaults_by_scope": {
       "rtx-llama": "0"
     },
     "code_defaults": [
       {
-        "source": "engines/streaming-llama/prefill_llama.cpp/src/llama-dsv41-weights.cpp:1023",
+        "source": "engines/streaming-llama/prefill_llama.cpp/src/llama-dsv41-weights.cpp:1058",
         "unset": "NULL from getenv; the literal consumer below supplies any fallback",
         "read": "const char*e=std::getenv(\"LLAMADECODE_HOST_CACHE_MB\");",
         "consumer": "    p->host=api;if(p->host_slots)return;\n#ifdef _WIN32\n    const char*e=std::getenv(\"LLAMADECODE_HOST_CACHE_MB\");\n    // Qualification decides the shipping default. An explicit auto uses all\n    // admitted headroom, an integer is an exact upper bound, and 0 is off.\n    if(!e||!e[0]||!std::strcmp(e,\"0\"))return;\n    uint64_t requested=UINT64_MAX;"
       },
       {
-        "source": "engines/streaming-llama/prefill_llama.cpp/tools/dsv41-prefill/live-session.inc:266",
+        "source": "engines/streaming-llama/prefill_llama.cpp/tools/dsv41-prefill/live-session.inc:268",
         "unset": "NULL from getenv; the literal consumer below supplies any fallback",
         "read": "const char*ram=std::getenv(\"LLAMADECODE_HOST_CACHE_MB\");",
-        "consumer": "        bind(x_open,\"ds4x_open\");bind(x_map,\"ds4x_model_map\");bind(x_register,\"ds4x_register_weight\");bind(x_bind,\"ds4x_bind_state\");\n        bind(x_hook,\"ds4x_set_expert_hook\");bind(x_decode,\"ds4x_decode\");bind(x_close,\"ds4x_close\");bind(x_affinity,\"ds4x_set_affinity\");\n        const char*ram=std::getenv(\"LLAMADECODE_HOST_CACHE_MB\");\n        if(ram&&*ram&&std::strcmp(ram,\"0\")){\n            int(*api)(ds4_external_host_cache_v1*)=nullptr;bind(api,\"ds4x_host_cache_v1\");\n            require(api(&host_cache)==1,\"ds4-decode RAM cache ABI refused\");\n        }"
+        "consumer": "        bind(x_hook,\"ds4x_set_expert_hook\");bind(x_decode,\"ds4x_decode\");bind(x_close,\"ds4x_close\");bind(x_affinity,\"ds4x_set_affinity\");\n        x_host_timing=reinterpret_cast<decltype(x_host_timing)>(GetProcAddress(module,\"ds4x_host_timing_v1\"));\n        const char*ram=std::getenv(\"LLAMADECODE_HOST_CACHE_MB\");\n        if(ram&&*ram&&std::strcmp(ram,\"0\")){\n            int(*api)(ds4_external_host_cache_v1*)=nullptr;bind(api,\"ds4x_host_cache_v1\");\n            require(api(&host_cache)==1,\"ds4-decode RAM cache ABI refused\");\n            const char*mode=std::getenv(\"LLAMADECODE_HOST_MODE\");"
+      }
+    ],
+    "code_default": "NULL from getenv; the literal consumer below supplies any fallback"
+  },
+  {
+    "var": "LLAMADECODE_HOST_MODE",
+    "flag": "--llamadecode-host-mode",
+    "default": "upload",
+    "classification": "advanced",
+    "scopes": [
+      "rtx-llama"
+    ],
+    "doc": "Single-engine RAM expert service: upload (pinned staging), cpu (Q4_K FFN on the existing ds4 worker pool with dispatched llama CPU dot kernels), or mix (measured per-expert CPU/upload cost). CPU work overlaps the GPU experts and merges the output row. Other quantization and multi-row calls use upload. Requires a matching producer and decode library. CPU and mix are experimental: local FFN roundoff is small, but strict full-sequence KL/top-1 screening did not pass; upload remains the opt-in service default.",
+    "reads": [
+      "engines/ds4-win/ds4_external_host_compute.inc:40",
+      "engines/streaming-llama/prefill_llama.cpp/tools/dsv41-prefill/live-session.inc:272"
+    ],
+    "defaults_by_scope": {
+      "rtx-llama": "upload"
+    },
+    "code_defaults": [
+      {
+        "source": "engines/ds4-win/ds4_external_host_compute.inc:40",
+        "unset": "NULL from getenv; the literal consumer below supplies any fallback",
+        "read": "static int mode=[]{const char*p=getenv(\"LLAMADECODE_HOST_MODE\");return p&&!strcmp(p,\"cpu\")?1:p&&!strcmp(p,\"mix\")?2:0;}();",
+        "consumer": "static void external_cpu_shutdown(){g_external_cpu.shutdown();g_external_host_busy=false;}\nstatic int external_cpu_mode(){\n    static int mode=[]{const char*p=getenv(\"LLAMADECODE_HOST_MODE\");return p&&!strcmp(p,\"cpu\")?1:p&&!strcmp(p,\"mix\")?2:0;}();\n    return mode;\n}\n/* A CPU slot is represented by -1 only inside the qualified Q4 decode path.\n * Its gate result is unused and the existing down sum skips it. */"
+      },
+      {
+        "source": "engines/streaming-llama/prefill_llama.cpp/tools/dsv41-prefill/live-session.inc:272",
+        "unset": "NULL from getenv; the literal consumer below supplies any fallback",
+        "read": "const char*mode=std::getenv(\"LLAMADECODE_HOST_MODE\");",
+        "consumer": "            int(*api)(ds4_external_host_cache_v1*)=nullptr;bind(api,\"ds4x_host_cache_v1\");\n            require(api(&host_cache)==1,\"ds4-decode RAM cache ABI refused\");\n            const char*mode=std::getenv(\"LLAMADECODE_HOST_MODE\");\n            require(!mode||!std::strcmp(mode,\"upload\")||!std::strcmp(mode,\"cpu\")||!std::strcmp(mode,\"mix\"),\"LLAMADECODE_HOST_MODE must be upload, cpu or mix\");\n            if(mode&&std::strcmp(mode,\"upload\")){\n                int(*cpu)(ds4_external_dot)=nullptr;bind(cpu,\"ds4x_host_cpu_v1\");\n                // The GPU producer does not otherwise initialize the CPU"
+      }
+    ],
+    "code_default": "NULL from getenv; the literal consumer below supplies any fallback"
+  },
+  {
+    "var": "LLAMADECODE_HOST_CACHE_ADMIT",
+    "flag": "--llamadecode-host-cache-admit",
+    "default": "1",
+    "classification": "advanced",
+    "scopes": [
+      "rtx-llama"
+    ],
+    "doc": "Single-engine bounded RAM admission. Observe 32 scalar layer passes, select frequently evicted experts, then fill at most one payload per selected key until the next prefill. 0 retains an empty admitted tier for zero-hit overhead qualification; it never changes router scores at quality bias 0.",
+    "reads": [
+      "engines/streaming-llama/prefill_llama.cpp/src/llama-dsv41-weights.cpp:104"
+    ],
+    "defaults_by_scope": {
+      "rtx-llama": "1"
+    },
+    "code_defaults": [
+      {
+        "source": "engines/streaming-llama/prefill_llama.cpp/src/llama-dsv41-weights.cpp:104",
+        "unset": "NULL from getenv; the literal consumer below supplies any fallback",
+        "read": "const char*admit=std::getenv(\"LLAMADECODE_HOST_CACHE_ADMIT\");",
+        "consumer": "    void select_host_working_set(uint32_t layer){\n        if(!host_slots||host_selected||layer!=0)return;\n        const char*admit=std::getenv(\"LLAMADECODE_HOST_CACHE_ADMIT\");\n        if(admit&&!std::strcmp(admit,\"0\"))return;\n        if(++host_observations<=32)return;\n        std::vector<int32_t>keys;\n        for(int32_t k=0;k<int32_t(host_frequency.size());++k)if(host_frequency[k])keys.push_back(k);"
+      }
+    ],
+    "code_default": "NULL from getenv; the literal consumer below supplies any fallback"
+  },
+  {
+    "var": "LLAMADECODE_LOGITS_TRACE",
+    "flag": "--llamadecode-logits-trace",
+    "default": null,
+    "classification": "advanced",
+    "scopes": [
+      "rtx-llama"
+    ],
+    "doc": "Optional local binary correctness trace: position, input token and vocabulary size as three uint32 fields followed by float32 logits, once every 32 positions. Compare only identical token prefixes and quality bias 0. The operator supplies a scratch file; disabled when unset.",
+    "reads": [
+      "engines/streaming-llama/prefill_llama.cpp/tools/dsv41-prefill/live-session.inc:389"
+    ],
+    "defaults_by_scope": {},
+    "code_defaults": [
+      {
+        "source": "engines/streaming-llama/prefill_llama.cpp/tools/dsv41-prefill/live-session.inc:389",
+        "unset": "NULL from getenv; the literal consumer below supplies any fallback",
+        "read": "const char*trace=std::getenv(\"LLAMADECODE_LOGITS_TRACE\");",
+        "consumer": "        // 32 positions; the caller supplies a scratch path and compares only\n        // identical token prefixes. No extra model evaluation or routing.\n        const char*trace=std::getenv(\"LLAMADECODE_LOGITS_TRACE\");\n        if(trace&&*trace&&position%32==0){\n            auto*f=std::fopen(trace,\"ab\");require(f,\"Cannot open decode logits trace\");\n            const uint32_t header[3]={position,uint32_t(token),uint32_t(logits.size())};\n            const bool ok=std::fwrite(header,sizeof(header),1,f)==1&&std::fwrite(logits.data(),sizeof(float),logits.size(),f)==logits.size();"
+      }
+    ],
+    "code_default": "NULL from getenv; the literal consumer below supplies any fallback"
+  },
+  {
+    "var": "LLAMADECODE_L2_MAX_SLOTS",
+    "flag": "--llamadecode-l2-max-slots",
+    "default": null,
+    "classification": "advanced",
+    "scopes": [
+      "rtx-llama"
+    ],
+    "doc": "Optional single-engine VRAM L2 slot upper bound. Useful for reproducible tier comparisons; physical VRAM admission remains authoritative. Unset uses all admitted slots.",
+    "reads": [
+      "engines/streaming-llama/prefill_llama.cpp/src/llama-dsv41-weights.cpp:1095"
+    ],
+    "defaults_by_scope": {},
+    "code_defaults": [
+      {
+        "source": "engines/streaming-llama/prefill_llama.cpp/src/llama-dsv41-weights.cpp:1095",
+        "unset": "NULL from getenv; the literal consumer below supplies any fallback",
+        "read": "if(const char*e=std::getenv(\"LLAMADECODE_L2_MAX_SLOTS\")){",
+        "consumer": "    const uint64_t slot_bytes=p->pool_max_stride[0]+p->pool_max_stride[1]+p->pool_max_stride[2];\n    uint32_t n=uint32_t(std::min<uint64_t>(bytes/slot_bytes,40ull*384-p->pool_slots));*slots=0;\n    if(const char*e=std::getenv(\"LLAMADECODE_L2_MAX_SLOTS\")){\n        char*end=nullptr;errno=0;const auto cap=std::strtoul(e,&end,10);\n        require(*e&&*e!='-'&&!errno&&end!=e&&!*end&&cap<=40u*384u,\"Invalid LLAMADECODE_L2_MAX_SLOTS\");\n        n=std::min(n,uint32_t(cap));\n    }"
+      }
+    ],
+    "code_default": "NULL from getenv; the literal consumer below supplies any fallback"
+  },
+  {
+    "var": "LLAMADECODE_HOST_CPU_VERIFY",
+    "scopes": [
+      "rtx-llama"
+    ],
+    "classification": "advanced",
+    "doc": "Optional CPU RAM-expert diagnostic: compare the first 16 hybrid FFN rows with the all-GPU result on identical activations. Logs relative RMS/max error; disabled when unset or 0. Extra GPU work is excluded from performance qualification.",
+    "flag": "--llamadecode-host-cpu-verify",
+    "default": "0",
+    "defaults_by_scope": {
+      "rtx-llama": "0"
+    },
+    "reads": [
+      "engines/ds4-win/ds4_decode_adapter.inc:39",
+      "engines/ds4-win/ds4_external_host_compute_wrapper.inc:64"
+    ],
+    "code_defaults": [
+      {
+        "source": "engines/ds4-win/ds4_decode_adapter.inc:39",
+        "unset": "NULL from getenv; the literal consumer below supplies any fallback",
+        "read": "const char*verify=getenv(\"LLAMADECODE_HOST_CPU_VERIFY\");",
+        "consumer": "    if(!dot)return 0;\n    g_external_cpu_dot=dot;\n    const char*verify=getenv(\"LLAMADECODE_HOST_CPU_VERIFY\");\n    g_external_cpu_verify=verify&&*verify&&strcmp(verify,\"0\");\n    ds4_threads_init();\n    fprintf(stderr,\"LLAMADECODE_HOST_CPU threads=%u quant=Q4_K activation=Q8_K dispatched_ggml_dot=1\\n\",g_pool.n_threads);\n    return 1;"
+      },
+      {
+        "source": "engines/ds4-win/ds4_external_host_compute_wrapper.inc:64",
+        "unset": "NULL from getenv; the literal consumer below supplies any fallback",
+        "read": "const char*verify=getenv(\"LLAMADECODE_HOST_CPU_VERIFY\");",
+        "consumer": "    if(!cuda_ok(cudaStreamSynchronize(cuda_decode_stream()),\"CPU expert scratch retirement\"))return 0;\n    static unsigned verify_count=0;\n    const char*verify=getenv(\"LLAMADECODE_HOST_CPU_VERIFY\");\n    if(verify&&*verify&&strcmp(verify,\"0\")&&verify_count++<16u){\n        std::array<float,5120>hybrid{},reference{};\n        if(job.count!=n_expert&&!ds4_gpu_tensor_read(out,0,hybrid.data(),out_dim*sizeof(float)))return 0;\n        for(uint32_t i=0;i<out_dim;++i)hybrid[i]+=job.out[i];"
       }
     ],
     "code_default": "NULL from getenv; the literal consumer below supplies any fallback"

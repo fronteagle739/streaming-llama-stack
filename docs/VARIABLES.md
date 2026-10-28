@@ -142,7 +142,12 @@ Native controls take effect at token boundaries. The response reports requested 
 | `--xdg-cache-home` | ds4-win: `{runtime_root}/cache/xdg_cache_home`; mac-ds4: `{runtime_root}/cache/xdg_cache_home`; rtx-llama: `{runtime_root}/cache/xdg_cache_home`; image: `{runtime_root}/cache/xdg_cache_home`; video: `{runtime_root}/cache/xdg_cache_home`; studio: `{runtime_root}/cache/xdg_cache_home`; mlx-serve: `{runtime_root}/cache/xdg_cache_home`; mac-mlx: `{runtime_root}/cache/xdg_cache_home`; mac-llama: `{runtime_root}/cache/xdg_cache_home`; mac-mference: `{runtime_root}/cache/xdg_cache_home` | Runtime-local cache/temp directory; no model download is performed. |
 | `--zig-global-cache-dir` | ds4-win: `{runtime_root}/cache/zig_global_cache_dir`; mac-ds4: `{runtime_root}/cache/zig_global_cache_dir`; rtx-llama: `{runtime_root}/cache/zig_global_cache_dir`; image: `{runtime_root}/cache/zig_global_cache_dir`; video: `{runtime_root}/cache/zig_global_cache_dir`; studio: `{runtime_root}/cache/zig_global_cache_dir`; mlx-serve: `{runtime_root}/cache/zig_global_cache_dir`; mac-mlx: `{runtime_root}/cache/zig_global_cache_dir`; mac-llama: `{runtime_root}/cache/zig_global_cache_dir`; mac-mference: `{runtime_root}/cache/zig_global_cache_dir` | Runtime-local cache/temp directory; no model download is performed. |
 | `--zig-local-cache-dir` | ds4-win: `{runtime_root}/cache/zig_local_cache_dir`; mac-ds4: `{runtime_root}/cache/zig_local_cache_dir`; rtx-llama: `{runtime_root}/cache/zig_local_cache_dir`; image: `{runtime_root}/cache/zig_local_cache_dir`; video: `{runtime_root}/cache/zig_local_cache_dir`; studio: `{runtime_root}/cache/zig_local_cache_dir`; mlx-serve: `{runtime_root}/cache/zig_local_cache_dir`; mac-mlx: `{runtime_root}/cache/zig_local_cache_dir`; mac-llama: `{runtime_root}/cache/zig_local_cache_dir`; mac-mference: `{runtime_root}/cache/zig_local_cache_dir` | Runtime-local cache/temp directory; no model download is performed. |
-| `--llamadecode-host-cache-mb` | rtx-llama: `0` | Single-engine pinned host expert victim tier after VRAM L1/L2. 0 disables (qualification default); auto uses measured physical and process-budget headroom; integer MiB is an upper bound. Keeps the configured runtime floor plus 512 MiB desktop reserve and a 256 MiB allocation margin. Released before append prefill; completed Engram rows are reusable headroom. Requires the versioned ds4-decode host-cache export. |
+| `--llamadecode-host-cache-mb` | rtx-llama: `0` | Single-engine locked RAM expert tier after VRAM L1/L2. 0 disables; auto uses admitted physical/process headroom; integer MiB is an upper bound. Bounded hot-set admission avoids continuous GPU victim writeback. Keeps the runtime floor plus 512 MiB desktop reserve and 256 MiB margin; drops before append prefill. See LLAMADECODE_HOST_MODE for upload/CPU service. |
+| `--llamadecode-host-mode` | rtx-llama: `upload` | Single-engine RAM expert service: upload (pinned staging), cpu (Q4_K FFN on the existing ds4 worker pool with dispatched llama CPU dot kernels), or mix (measured per-expert CPU/upload cost). CPU work overlaps the GPU experts and merges the output row. Other quantization and multi-row calls use upload. Requires a matching producer and decode library. CPU and mix are experimental: local FFN roundoff is small, but strict full-sequence KL/top-1 screening did not pass; upload remains the opt-in service default. |
+| `--llamadecode-host-cache-admit` | rtx-llama: `1` | Single-engine bounded RAM admission. Observe 32 scalar layer passes, select frequently evicted experts, then fill at most one payload per selected key until the next prefill. 0 retains an empty admitted tier for zero-hit overhead qualification; it never changes router scores at quality bias 0. |
+| `--llamadecode-logits-trace` | Explicit runtime value | Optional local binary correctness trace: position, input token and vocabulary size as three uint32 fields followed by float32 logits, once every 32 positions. Compare only identical token prefixes and quality bias 0. The operator supplies a scratch file; disabled when unset. |
+| `--llamadecode-l2-max-slots` | Explicit runtime value | Optional single-engine VRAM L2 slot upper bound. Useful for reproducible tier comparisons; physical VRAM admission remains authoritative. Unset uses all admitted slots. |
+| `--llamadecode-host-cpu-verify` | rtx-llama: `0` | Optional CPU RAM-expert diagnostic: compare the first 16 hybrid FFN rows with the all-GPU result on identical activations. Logs relative RMS/max error; disabled when unset or 0. Extra GPU work is excluded from performance qualification. |
 
 Budget placeholders use the admitted child budget: `{host_budget_bytes}`, `{host_budget_mb}`, `{physical_floor_bytes}` (admission) and `{runtime_floor_bytes}` (runtime). `{host_budget_gib}` and `{min_available_gib}` use GiB. User overrides are literal strings, including JSON and braces.
 
@@ -4970,6 +4975,18 @@ Source: `engines/ds4-win/ds4_cuda.cu:38537`. Unset read: NULL from getenv; the l
 Source: `engines/ds4-win/ds4_cuda.cu:38576`. Unset read: NULL from getenv; the literal consumer below supplies any fallback.
 
 ```text
+        uint32_t                n_embd,
+        uint32_t                n_hc) {
+    if (getenv("DS4_CUDA_DISABLE_Q8_HC_EXPAND_FUSED") == NULL) {
+        return cuda_matmul_q8_0_hc_expand_tensor_labeled(out_hc, shared_out,
+                                                        model_map, model_size,
+                                                        weight_offset,
+                                                        in_dim, out_dim,
+```
+
+Source: `engines/ds4-win/ds4_cuda.cu:38445`. Unset read: NULL from getenv; the literal consumer below supplies any fallback.
+
+```text
         uint32_t n_embd,
         uint32_t n_hc) {
     if (getenv("DS4_CUDA_DISABLE_Q8_HC_EXPAND_FUSED") != NULL) return 0;
@@ -9171,6 +9188,18 @@ Source: `engines/ds4-win/ds4_cuda.cu:36724`. Unset read: NULL from getenv; the l
             q4k_path && use_direct_down_sum && !write_gate_up &&
             getenv("DS4_CUDA_MOE_DIRECT_MIDQ") != NULL &&
             getenv("DS4_CUDA_MOE_NO_DIRECT_MIDQ") == NULL;
+```
+
+Source: `engines/ds4-win/ds4_external_host_compute_wrapper.inc:20`. Unset read: NULL from getenv; the literal consumer below supplies any fallback.
+
+```text
+        n_tokens==1u&&(n_expert==6u||n_expert==3u)&&gate_type==12u&&down_type==12u&&
+        expert_in_dim==5120u&&expert_mid_dim==2304u&&out_dim==5120u&&
+        !getenv("DS4_CUDA_MOE_NO_DIRECT_DOWN_SUM6");
+    if(!eligible)return routed_moe_launch_impl(DS4_EXTERNAL_MOE_ARGS);
+    std::array<int32_t,6>ids{};std::array<float,6>w{};std::array<uint8_t,384>tier{};
+    if(!ds4_gpu_tensor_read(selected,0,ids.data(),n_expert*sizeof(int32_t)))return 0;
+    bool found=false;
 ```
 
 ### DS4_CUDA_MOE_NO_DIRECT_MIDQ
@@ -16535,7 +16564,7 @@ static uint32_t cuda_stream_host_expert_cache_requested_budget(void) {
         unsigned long v = strtoul(env, &end, 10);
 ```
 
-Source: `engines/streaming-llama/prefill_llama.cpp/src/llama-dsv41-weights.cpp:1042`. Unset read: NULL from getenv; the literal consumer below supplies any fallback.
+Source: `engines/streaming-llama/prefill_llama.cpp/src/llama-dsv41-weights.cpp:1077`. Unset read: NULL from getenv; the literal consumer below supplies any fallback.
 
 ```text
     require(p->pool_max_stride[0]==p->pool_max_stride[1],"RAM expert gate/up geometry mismatch");
@@ -56035,9 +56064,9 @@ Scope: mlx-serve. Class: advanced.
 
 ### DS4_THREADS
 
-DS4_THREADS: advanced engine setting; built-in default retained
+DS4_THREADS: advanced engine setting; built-in default retained Also controls the single-engine RAM-expert CPU worker pool (default 12, limited by available processors).
 
-Scope: ds4-win, mac-ds4. Class: advanced.
+Scope: ds4-win, mac-ds4, rtx-llama. Class: advanced.
 
 Source: `engines/ds4-mac/ds4.c:1999`. Unset read: NULL from getenv; the literal consumer below supplies any fallback.
 
@@ -101874,11 +101903,11 @@ Source: `vendor/engines/cosmos_windows/weight_streaming/zimage_backend.py:43`. U
 
 ### LLAMADECODE_HOST_CACHE_MB
 
-Single-engine pinned host expert victim tier after VRAM L1/L2. 0 disables (qualification default); auto uses measured physical and process-budget headroom; integer MiB is an upper bound. Keeps the configured runtime floor plus 512 MiB desktop reserve and a 256 MiB allocation margin. Released before append prefill; completed Engram rows are reusable headroom. Requires the versioned ds4-decode host-cache export.
+Single-engine locked RAM expert tier after VRAM L1/L2. 0 disables; auto uses admitted physical/process headroom; integer MiB is an upper bound. Bounded hot-set admission avoids continuous GPU victim writeback. Keeps the runtime floor plus 512 MiB desktop reserve and 256 MiB margin; drops before append prefill. See LLAMADECODE_HOST_MODE for upload/CPU service.
 
 Scope: rtx-llama. Class: advanced.
 
-Source: `engines/streaming-llama/prefill_llama.cpp/src/llama-dsv41-weights.cpp:1023`. Unset read: NULL from getenv; the literal consumer below supplies any fallback.
+Source: `engines/streaming-llama/prefill_llama.cpp/src/llama-dsv41-weights.cpp:1058`. Unset read: NULL from getenv; the literal consumer below supplies any fallback.
 
 ```text
     p->host=api;if(p->host_slots)return;
@@ -101890,14 +101919,128 @@ Source: `engines/streaming-llama/prefill_llama.cpp/src/llama-dsv41-weights.cpp:1
     uint64_t requested=UINT64_MAX;
 ```
 
-Source: `engines/streaming-llama/prefill_llama.cpp/tools/dsv41-prefill/live-session.inc:266`. Unset read: NULL from getenv; the literal consumer below supplies any fallback.
+Source: `engines/streaming-llama/prefill_llama.cpp/tools/dsv41-prefill/live-session.inc:268`. Unset read: NULL from getenv; the literal consumer below supplies any fallback.
 
 ```text
-        bind(x_open,"ds4x_open");bind(x_map,"ds4x_model_map");bind(x_register,"ds4x_register_weight");bind(x_bind,"ds4x_bind_state");
         bind(x_hook,"ds4x_set_expert_hook");bind(x_decode,"ds4x_decode");bind(x_close,"ds4x_close");bind(x_affinity,"ds4x_set_affinity");
+        x_host_timing=reinterpret_cast<decltype(x_host_timing)>(GetProcAddress(module,"ds4x_host_timing_v1"));
         const char*ram=std::getenv("LLAMADECODE_HOST_CACHE_MB");
         if(ram&&*ram&&std::strcmp(ram,"0")){
             int(*api)(ds4_external_host_cache_v1*)=nullptr;bind(api,"ds4x_host_cache_v1");
             require(api(&host_cache)==1,"ds4-decode RAM cache ABI refused");
-        }
+            const char*mode=std::getenv("LLAMADECODE_HOST_MODE");
+```
+
+### LLAMADECODE_HOST_MODE
+
+Single-engine RAM expert service: upload (pinned staging), cpu (Q4_K FFN on the existing ds4 worker pool with dispatched llama CPU dot kernels), or mix (measured per-expert CPU/upload cost). CPU work overlaps the GPU experts and merges the output row. Other quantization and multi-row calls use upload. Requires a matching producer and decode library. CPU and mix are experimental: local FFN roundoff is small, but strict full-sequence KL/top-1 screening did not pass; upload remains the opt-in service default.
+
+Scope: rtx-llama. Class: advanced.
+
+Source: `engines/ds4-win/ds4_external_host_compute.inc:40`. Unset read: NULL from getenv; the literal consumer below supplies any fallback.
+
+```text
+static void external_cpu_shutdown(){g_external_cpu.shutdown();g_external_host_busy=false;}
+static int external_cpu_mode(){
+    static int mode=[]{const char*p=getenv("LLAMADECODE_HOST_MODE");return p&&!strcmp(p,"cpu")?1:p&&!strcmp(p,"mix")?2:0;}();
+    return mode;
+}
+/* A CPU slot is represented by -1 only inside the qualified Q4 decode path.
+ * Its gate result is unused and the existing down sum skips it. */
+```
+
+Source: `engines/streaming-llama/prefill_llama.cpp/tools/dsv41-prefill/live-session.inc:272`. Unset read: NULL from getenv; the literal consumer below supplies any fallback.
+
+```text
+            int(*api)(ds4_external_host_cache_v1*)=nullptr;bind(api,"ds4x_host_cache_v1");
+            require(api(&host_cache)==1,"ds4-decode RAM cache ABI refused");
+            const char*mode=std::getenv("LLAMADECODE_HOST_MODE");
+            require(!mode||!std::strcmp(mode,"upload")||!std::strcmp(mode,"cpu")||!std::strcmp(mode,"mix"),"LLAMADECODE_HOST_MODE must be upload, cpu or mix");
+            if(mode&&std::strcmp(mode,"upload")){
+                int(*cpu)(ds4_external_dot)=nullptr;bind(cpu,"ds4x_host_cpu_v1");
+                // The GPU producer does not otherwise initialize the CPU
+```
+
+### LLAMADECODE_HOST_CACHE_ADMIT
+
+Single-engine bounded RAM admission. Observe 32 scalar layer passes, select frequently evicted experts, then fill at most one payload per selected key until the next prefill. 0 retains an empty admitted tier for zero-hit overhead qualification; it never changes router scores at quality bias 0.
+
+Scope: rtx-llama. Class: advanced.
+
+Source: `engines/streaming-llama/prefill_llama.cpp/src/llama-dsv41-weights.cpp:104`. Unset read: NULL from getenv; the literal consumer below supplies any fallback.
+
+```text
+    void select_host_working_set(uint32_t layer){
+        if(!host_slots||host_selected||layer!=0)return;
+        const char*admit=std::getenv("LLAMADECODE_HOST_CACHE_ADMIT");
+        if(admit&&!std::strcmp(admit,"0"))return;
+        if(++host_observations<=32)return;
+        std::vector<int32_t>keys;
+        for(int32_t k=0;k<int32_t(host_frequency.size());++k)if(host_frequency[k])keys.push_back(k);
+```
+
+### LLAMADECODE_LOGITS_TRACE
+
+Optional local binary correctness trace: position, input token and vocabulary size as three uint32 fields followed by float32 logits, once every 32 positions. Compare only identical token prefixes and quality bias 0. The operator supplies a scratch file; disabled when unset.
+
+Scope: rtx-llama. Class: advanced.
+
+Source: `engines/streaming-llama/prefill_llama.cpp/tools/dsv41-prefill/live-session.inc:389`. Unset read: NULL from getenv; the literal consumer below supplies any fallback.
+
+```text
+        // 32 positions; the caller supplies a scratch path and compares only
+        // identical token prefixes. No extra model evaluation or routing.
+        const char*trace=std::getenv("LLAMADECODE_LOGITS_TRACE");
+        if(trace&&*trace&&position%32==0){
+            auto*f=std::fopen(trace,"ab");require(f,"Cannot open decode logits trace");
+            const uint32_t header[3]={position,uint32_t(token),uint32_t(logits.size())};
+            const bool ok=std::fwrite(header,sizeof(header),1,f)==1&&std::fwrite(logits.data(),sizeof(float),logits.size(),f)==logits.size();
+```
+
+### LLAMADECODE_L2_MAX_SLOTS
+
+Optional single-engine VRAM L2 slot upper bound. Useful for reproducible tier comparisons; physical VRAM admission remains authoritative. Unset uses all admitted slots.
+
+Scope: rtx-llama. Class: advanced.
+
+Source: `engines/streaming-llama/prefill_llama.cpp/src/llama-dsv41-weights.cpp:1095`. Unset read: NULL from getenv; the literal consumer below supplies any fallback.
+
+```text
+    const uint64_t slot_bytes=p->pool_max_stride[0]+p->pool_max_stride[1]+p->pool_max_stride[2];
+    uint32_t n=uint32_t(std::min<uint64_t>(bytes/slot_bytes,40ull*384-p->pool_slots));*slots=0;
+    if(const char*e=std::getenv("LLAMADECODE_L2_MAX_SLOTS")){
+        char*end=nullptr;errno=0;const auto cap=std::strtoul(e,&end,10);
+        require(*e&&*e!='-'&&!errno&&end!=e&&!*end&&cap<=40u*384u,"Invalid LLAMADECODE_L2_MAX_SLOTS");
+        n=std::min(n,uint32_t(cap));
+    }
+```
+
+### LLAMADECODE_HOST_CPU_VERIFY
+
+Optional CPU RAM-expert diagnostic: compare the first 16 hybrid FFN rows with the all-GPU result on identical activations. Logs relative RMS/max error; disabled when unset or 0. Extra GPU work is excluded from performance qualification.
+
+Scope: rtx-llama. Class: advanced.
+
+Source: `engines/ds4-win/ds4_decode_adapter.inc:39`. Unset read: NULL from getenv; the literal consumer below supplies any fallback.
+
+```text
+    if(!dot)return 0;
+    g_external_cpu_dot=dot;
+    const char*verify=getenv("LLAMADECODE_HOST_CPU_VERIFY");
+    g_external_cpu_verify=verify&&*verify&&strcmp(verify,"0");
+    ds4_threads_init();
+    fprintf(stderr,"LLAMADECODE_HOST_CPU threads=%u quant=Q4_K activation=Q8_K dispatched_ggml_dot=1\n",g_pool.n_threads);
+    return 1;
+```
+
+Source: `engines/ds4-win/ds4_external_host_compute_wrapper.inc:64`. Unset read: NULL from getenv; the literal consumer below supplies any fallback.
+
+```text
+    if(!cuda_ok(cudaStreamSynchronize(cuda_decode_stream()),"CPU expert scratch retirement"))return 0;
+    static unsigned verify_count=0;
+    const char*verify=getenv("LLAMADECODE_HOST_CPU_VERIFY");
+    if(verify&&*verify&&strcmp(verify,"0")&&verify_count++<16u){
+        std::array<float,5120>hybrid{},reference{};
+        if(job.count!=n_expert&&!ds4_gpu_tensor_read(out,0,hybrid.data(),out_dim*sizeof(float)))return 0;
+        for(uint32_t i=0;i<out_dim;++i)hybrid[i]+=job.out[i];
 ```
