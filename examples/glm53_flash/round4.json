@@ -1,0 +1,772 @@
+{
+  "round": 4,
+  "status": "PARTIAL",
+  "model": {
+    "file": "GLM-5.3-Flash-Q4_K.gguf",
+    "bytes": 190875526464,
+    "sha256": "c7a0d950363238dd7804782c88340d737775aba53a15f8d4fdcc34e984f25221",
+    "verification": "Whole SHA-256 verified by the separate model-move receipt; same file size/mtime at task admission"
+  },
+  "source_base": "eed1d59b3848aec7727e2247f093c569aae7a634",
+  "build": "Incremental current changed CPU/CUDA units; retained unchanged static libraries/CUDA objects. No complete fresh CUDA template rebuild.",
+  "streaming_graphs": [
+    {
+      "model": "ds4-full",
+      "prompt": 64,
+      "microbatch": 64,
+      "last_only": false,
+      "rows": 72,
+      "max_abs": 2.3603439331054688e-05,
+      "top_agree": 72,
+      "peak_rss": 964431872,
+      "min_available": 14012080128
+    },
+    {
+      "model": "ds4-full",
+      "prompt": 64,
+      "microbatch": 64,
+      "last_only": true,
+      "rows": 9,
+      "max_abs": 1.4781951904296875e-05,
+      "top_agree": 9,
+      "peak_rss": 963928064,
+      "min_available": 14079344640
+    },
+    {
+      "model": "ds4-full",
+      "prompt": 65,
+      "microbatch": 16,
+      "last_only": false,
+      "rows": 73,
+      "max_abs": 2.014636993408203e-05,
+      "top_agree": 73,
+      "peak_rss": 937783296,
+      "min_available": 14110965760
+    },
+    {
+      "model": "ds4-full",
+      "prompt": 65,
+      "microbatch": 16,
+      "last_only": true,
+      "rows": 9,
+      "max_abs": 1.800060272216797e-05,
+      "top_agree": 9,
+      "peak_rss": 936931328,
+      "min_available": 14067634176
+    },
+    {
+      "model": "ds4-full",
+      "prompt": 320,
+      "microbatch": 16,
+      "last_only": false,
+      "rows": 328,
+      "max_abs": 2.3573637008666992e-05,
+      "top_agree": 328,
+      "peak_rss": 939622400,
+      "min_available": 14111141888
+    },
+    {
+      "model": "ds4-full",
+      "prompt": 320,
+      "microbatch": 16,
+      "last_only": true,
+      "rows": 9,
+      "max_abs": 1.33514404296875e-05,
+      "top_agree": 9,
+      "peak_rss": 937963520,
+      "min_available": 14112813056
+    },
+    {
+      "model": "up-full",
+      "prompt": 64,
+      "microbatch": 64,
+      "last_only": false,
+      "rows": 72,
+      "max_abs": 2.288818359375e-05,
+      "top_agree": 72,
+      "peak_rss": 965046272,
+      "min_available": 14049308672
+    },
+    {
+      "model": "up-full",
+      "prompt": 64,
+      "microbatch": 64,
+      "last_only": true,
+      "rows": 9,
+      "max_abs": 1.2636184692382812e-05,
+      "top_agree": 9,
+      "peak_rss": 963579904,
+      "min_available": 14094725120
+    },
+    {
+      "model": "up-full",
+      "prompt": 65,
+      "microbatch": 16,
+      "last_only": false,
+      "rows": 73,
+      "max_abs": 2.1219253540039062e-05,
+      "top_agree": 73,
+      "peak_rss": 937156608,
+      "min_available": 14105866240
+    },
+    {
+      "model": "up-full",
+      "prompt": 65,
+      "microbatch": 16,
+      "last_only": true,
+      "rows": 9,
+      "max_abs": 1.4066696166992188e-05,
+      "top_agree": 9,
+      "peak_rss": 937250816,
+      "min_available": 14078074880
+    },
+    {
+      "model": "up-full",
+      "prompt": 320,
+      "microbatch": 16,
+      "last_only": false,
+      "rows": 328,
+      "max_abs": 2.3603439331054688e-05,
+      "top_agree": 328,
+      "peak_rss": 939073536,
+      "min_available": 14110707712
+    },
+    {
+      "model": "up-full",
+      "prompt": 320,
+      "microbatch": 16,
+      "last_only": true,
+      "rows": 9,
+      "max_abs": 1.1444091796875e-05,
+      "top_agree": 9,
+      "peak_rss": 938029056,
+      "min_available": 14106173440
+    },
+    {
+      "model": "up-shared",
+      "prompt": 64,
+      "microbatch": 64,
+      "last_only": false,
+      "rows": 72,
+      "max_abs": 2.0742416381835938e-05,
+      "top_agree": 72,
+      "peak_rss": 962846720,
+      "min_available": 14035873792
+    },
+    {
+      "model": "up-shared",
+      "prompt": 64,
+      "microbatch": 64,
+      "last_only": true,
+      "rows": 9,
+      "max_abs": 6.9141387939453125e-06,
+      "top_agree": 9,
+      "peak_rss": 963153920,
+      "min_available": 14080147456
+    }
+  ],
+  "refusals": [
+    {
+      "model": "up-shared.gguf",
+      "reason": "shared-indexer boundaries are not supported",
+      "cleanup_confirmed": true
+    },
+    {
+      "model": "ds4-full.gguf",
+      "reason": "projection divisible by 128",
+      "cleanup_confirmed": true
+    }
+  ],
+  "native_adapter": {
+    "status": "PASS",
+    "cases": [
+      "invalid context refused",
+      "one-byte scratch budget refused",
+      "missing owners refused",
+      "45-layer native state bound",
+      "undersized owner refused before mutation",
+      "out-of-context frontier refused",
+      "non-monotonic decode refused",
+      "close preserves borrowed allocation and contents"
+    ],
+    "owner_bytes": 154210304,
+    "trained_model_decode": false,
+    "weight_registration": false,
+    "guard": {
+      "host_budget_gib": 3,
+      "job_commit_gib": 8,
+      "floor_gib": 4,
+      "peak_tree_rss": 308748288,
+      "min_available": 14862557184,
+      "cleanup_confirmed": true
+    }
+  },
+  "trained_streaming": {
+    "16k": {
+      "prefill_tokens": 16380,
+      "prefill_seconds": 55.281544,
+      "prefill_tok_s": 296.301421,
+      "code": 0,
+      "guard": {
+        "exit_code": 0,
+        "reason": null,
+        "peak_tree_rss": 2583429120,
+        "min_available": 12359229440,
+        "elapsed_s": 69.29599999997299,
+        "host_budget_gib": 6,
+        "job_commit_gib": 32,
+        "floor_gib": 4,
+        "owned_paged_bytes": 0,
+        "global_paging_growth": 0,
+        "cleanup_confirmed": true
+      },
+      "token_ids": [
+        20,
+        154827
+      ],
+      "evidence_sha256": "c5f8236fef3944a11fee6c54cb54a41c615dcb428ca901b225fba4790c3df905",
+      "engine": "streaming graph for prefill and decode; native decode not connected",
+      "trace_callback": false,
+      "answer": "5"
+    },
+    "49k": {
+      "prefill_tokens": 49520,
+      "prefill_seconds": 232.208352,
+      "prefill_tok_s": 213.256756,
+      "code": 0,
+      "guard": {
+        "exit_code": 0,
+        "reason": null,
+        "peak_tree_rss": 4835041280,
+        "min_available": 9763708928,
+        "elapsed_s": 246.34399999998277,
+        "host_budget_gib": 6,
+        "job_commit_gib": 32,
+        "floor_gib": 4,
+        "owned_paged_bytes": 0,
+        "global_paging_growth": 0,
+        "cleanup_confirmed": true
+      },
+      "token_ids": [
+        20,
+        154827
+      ],
+      "evidence_sha256": "2c21fd26a864a10fa734c23e1adc9ea0728a9b6030211a79f73aafba02512377",
+      "engine": "streaming graph for prefill and decode; native decode not connected",
+      "trace_callback": false,
+      "answer": "5"
+    },
+    "keep_open": {
+      "prefill_tokens": 19,
+      "prefill_seconds": 12.207136,
+      "prefill_tok_s": 1.556467,
+      "code": 0,
+      "guard": {
+        "exit_code": 0,
+        "reason": null,
+        "peak_tree_rss": 1651736576,
+        "min_available": 13327167488,
+        "elapsed_s": 61.48399999999674,
+        "host_budget_gib": 6,
+        "job_commit_gib": 32,
+        "floor_gib": 4,
+        "owned_paged_bytes": 0,
+        "global_paging_growth": 0,
+        "cleanup_confirmed": true
+      },
+      "token_ids": [
+        20,
+        154827,
+        22,
+        154827
+      ],
+      "evidence_sha256": "94ca5adae3a8fea1a018565d0511aee53e3b313009e35570ec1df19bbd40fb2d",
+      "engine": "streaming graph for prefill and decode; native decode not connected",
+      "trace_callback": false,
+      "append": {
+        "reused": 21,
+        "tokens": 17,
+        "seconds": 11.868111,
+        "code": 0
+      },
+      "answers": [
+        "5",
+        "7"
+      ]
+    }
+  },
+  "dsv41": {
+    "preliminary": {
+      "browser": {
+        "status": "PASS",
+        "turns": 4,
+        "errors": [],
+        "prefill_tok_s": 1659.5666298270341
+      },
+      "runs": {
+        "recall-50k": {
+          "answer": "The unique retrieval key is **AMBER OTTER 731**.\n\nI retrieved the key from the opening line of the archive record. The rest of the record consisted of the sentence \u201cThe weather station records calm winds and clear skies.\u201d repeated many times, which did not contain any additional key or relevant information.",
+          "timings": {
+            "cache_n": 0,
+            "prompt_n": 49553,
+            "prompt_ms": 29858.99999999674,
+            "predicted_n": 61,
+            "predicted_ms": 11463.760199999999,
+            "predicted_per_second": 5.321116190131054,
+            "prompt_per_second": 1659.5666298270341
+          },
+          "stats": "Context: 49614/1000001 (4.96%)\nOutput: 61/128 (48%)\n5.3 tokens/sec",
+          "incremental_events": 60,
+          "stream_span_ms": 9469,
+          "input_sha256": "7244e858ae5d016b6370d3ffcf8929bfaeb5b21a475a4390836bb82fd216c371",
+          "native_steps": 61,
+          "evidence_sha256": {
+            "recall-50k-proof.json": "c115e5c889a5d0b4df4297e04da2ff4719c5cc0c841ca82e2bd874d76bee0cbb",
+            "recall-50k-native.txt": "7a9469a63fe5bf67503c4c2ffc15f337c2320cfd244d496debee55caec8eb269"
+          }
+        },
+        "followup": {
+          "answer": "The number was 731. It appears at the end of the retrieval key \"AMBER OTTER 731.\"",
+          "timings": {
+            "cache_n": 49614,
+            "prompt_n": 22,
+            "prompt_ms": 3547.000000020489,
+            "predicted_n": 23,
+            "predicted_ms": 3732.9072000000006,
+            "predicted_per_second": 6.161417567519492,
+            "prompt_per_second": 6.202424584119797
+          },
+          "stats": "Context: 49659/1000001 (4.97%)\nOutput: 23/128 (18%)\n6.2 tokens/sec",
+          "incremental_events": 21,
+          "stream_span_ms": 3571.300000011921,
+          "input_sha256": "f65243a58aee9193b7b5ad83e519b6d250f59364a14de01fcfccfd4d3aa9f262",
+          "native_steps": 23,
+          "evidence_sha256": {
+            "followup-proof.json": "879836745d46b00ed1967be3cb9f4800f659cf5a6a780ffc9c6a08c6ff141014",
+            "followup-native.txt": "ed4485712c244dc86fd485f00479a521b2f0069313f8cf1f6a333d04e68d5bc4"
+          }
+        },
+        "max-quality": {
+          "answer": "# 100 Practical Steps for Maintaining a Weather Station\n\n1. **Create a maintenance logbook.** Begin by establishing a dedicated logbook, either paper or digital, where every inspection, repair, and calibration is recorded with a date and initials. This log becomes the station's memory and helps you spot recurring faults before they become failures. Review the log monthly to identify patterns such as sensors drifting at the same time each season.\n\n2. **Inventory all equipment at installation.** List every sensor, cable, mast, enclosure, and power component with its model and serial number. Photograph the installed layout from several angles and store the images with the inventory. This baseline makes it far easier to notice missing or damaged parts during later inspections.\n\n3. **Read the manufacturer's manual cover to cover.** Each instrument has specific tolerances, maintenance intervals, and cleaning instructions that generic advice cannot replace. Highlight the sections on calibration and error codes, and keep the manual in a waterproof container near the station. Revisit the manual whenever a reading looks suspicious.\n\n4. **Establish a routine inspection schedule.** Set daily, weekly, monthly, quarterly, and annual tasks and assign them to specific people. A calendar reminder system prevents small chores from being forgotten during busy periods. Post the schedule where anyone who might cover for you can see it.\n\n5. **Check data remotely every day.** Review the previous 24 hours of readings for gaps, flatlines, or implausible values such as a temperature jump of 20 degrees in one minute. Early detection of anomalies prevents weeks of corrupted data. Note any suspicious pattern in the logbook for physical follow-up.\n\n6. **Verify power supply status daily.** Confirm that batteries, solar panels, or mains connections are delivering the expected voltage. Many data gaps trace back to a failing battery or a shadowed solar panel. Record voltage readings so you can predict when a battery is nearing end of life.\n\n7. **Inspect the mast and guy wires weekly.** Look for loose bolts, frayed cables, corrosion, and any leaning of the mast. A mast that shifts even slightly will corrupt wind direction readings. Tighten hardware to the manufacturer's torque specifications rather than guessing.\n\n8. **Clean the rain gauge funnel weekly.** Debris, leaves, and insect nests block the funnel and cause underreporting of rainfall. Flush the funnel with clean water and check that the tipping bucket moves freely. Record the cleaning date and any debris found.\n\n9. **Check the rain gauge tipping bucket mechanism monthly.** Manually tip the bucket and confirm the data logger registers each tip. Listen for a clean, consistent click and watch for sticking or double-counting. If the bucket hesitates, clean the pivot and check for wear.\n\n10. **Calibrate the rain gauge annually with a known volume.** Use a calibrated dropper or a measured volume of water to confirm that each tip corresponds to the correct rainfall amount. Compare the total registered against the volume poured and adjust the calibration screw if needed. Document the before and after values in the logbook.\n\n11. **Clean the temperature and humidity sensor shield monthly.** Dust, pollen, and spider webs inside the radiation shield distort readings by restricting airflow. Remove the shield plates carefully and wash them with mild soap and water. Let them dry fully before reassembly to avoid introducing moisture.\n\n12. **Inspect the temperature sensor for physical damage quarterly.** Look for cracked housings, corroded contacts, and loose wiring. A damaged sensor may still report values but with reduced accuracy. Replace any sensor showing physical deterioration rather than waiting for failure.\n\n13. **Compare temperature readings against a reference thermometer quarterly.** Place a calibrated reference thermometer near the sensor shield for a side-by-side comparison over several hours. A consistent offset indicates the need for recalibration or replacement. Record the offset and the correction applied.\n\n14. **Check the humidity sensor for drift every six months.** Humidity sensors are prone to slow drift, especially in dusty or coastal environments. Compare against a reference hygrometer or a saturated salt solution test. Replace sensors that exceed the manufacturer's drift specification.\n\n15. **Clean the anemometer cups or propeller monthly.** Dirt and insect residue add weight and friction, causing the anemometer to underread wind speed. Wipe the cups with a soft cloth and check that they spin freely. Inspect the bearing for roughness while the cups are off.\n\n16. **Inspect the wind vane for balance and freedom of movement monthly.** A vane that sticks or is unbalanced will report a biased direction. Gently flick the vane and confirm it settles smoothly into the wind. Check the counterweight and the bearing for wear or corrosion.\n\n17. **Lubricate anemometer and vane bearings per manufacturer guidance.** Use only the lubricant specified by the manufacturer, as wrong lubricants attract dust or degrade plastics. Apply sparingly and wipe away excess. Note the lubrication date so you can track bearing life.\n\n18. **Verify",
+          "timings": {
+            "cache_n": 49659,
+            "prompt_n": 41,
+            "prompt_ms": 6688.000000023749,
+            "predicted_n": 1000,
+            "predicted_ms": 142852.84579999986,
+            "predicted_per_second": 7.0002105621335895,
+            "prompt_per_second": 6.130382775097848
+          },
+          "stats": "Context: 50700/1000001 (5.07%)\nOutput: 1000/1000 (100%)\n7.0 tokens/sec",
+          "incremental_events": 996,
+          "stream_span_ms": 142640.80000001192,
+          "input_sha256": "c48b9f8579acb362642d92d4fd71cf37bd694060fb148d5931dce6ffff37b618",
+          "native_steps": 999,
+          "warm_after100": {
+            "steps": 899,
+            "milliseconds": 127646.567,
+            "tokens_per_second": 7.042884279057815
+          },
+          "evidence_sha256": {
+            "max-quality-proof.json": "165a6dff84c525efdf90c2b6968f89107fa7262b846e7a03863917cb40b839db",
+            "max-quality-native.txt": "2d5d39e059f1dd225b5f08bcbbdebd55142683a0dcb1a23bb57793444e490606"
+          }
+        },
+        "max-speed": {
+          "answer": "# 100 Practical Steps for Analyzing Weather Station Data\n\n1. **Establish a data quality baseline before analysis.** Begin by documenting the station's instrument type, exposure, height, and calibration history so every later conclusion is grounded in context. Analysts who ignore metadata often mistake siting errors for climate signals. Keep this metadata file alongside the dataset at all times.\n\n2. **Inventory every variable and its units.** List temperature, humidity, pressure, wind speed, wind direction, rainfall, solar radiation, and soil temperature with their exact units and averaging periods. Confusing a gust with a mean wind speed can distort any derived statistic. Confirm units against the manufacturer specification rather than assuming metric defaults.\n\n3. **Confirm the timestamp convention and time zone.** Determine whether timestamps are local, UTC, or offset from UTC and whether they mark the start or end of an observation period. A one-hour shift can silently ruin diurnal cycle analysis. Record the convention in the metadata file and check it against the logger configuration.\n\n4. **Check the sampling interval and aggregation method.** Establish whether values are instantaneous samples, means over an interval, or extremes within an interval. Mixing instantaneous and averaged values in one series creates artificial spikes. Harmonize all series to a common interval before combining them.\n\n5. **Plot the raw data first, before any statistics.** Create time series plots of every variable at full resolution to see gaps, spikes, and regime shifts with your own eyes. Visual inspection often reveals problems that summary statistics conceal. Save these plots as a first-pass quality report.\n\n6. **Flag missing data explicitly and never interpolate blindly.** Mark every gap with its duration and cause where known, and treat flagged gaps as missing rather than filling them silently. Blind interpolation can fabricate trends that do not exist. Report the percentage of missing data for each variable and period.\n\n7. **Screen for physically impossible values.** Set hard limits for each variable, such as relative humidity above 100 percent or below 0 percent, and flag anything outside them. Impossible values usually indicate sensor saturation, wiring faults, or logger errors. Correct or exclude these values before computing averages.\n\n8. **Apply step-change tests to detect spikes.** Flag abrupt jumps that exceed plausible rates of change for the variable and interval, such as a 10 \u00b0C change in one minute. Real fronts can produce rapid changes, so confirm flagged events against neighboring variables. Retain flagged values only when corroborated by other sensors.\n\n9. **Apply persistence tests to detect stuck sensors.** Flag sequences of identical values lasting many intervals, which indicate a frozen sensor or a blocked aspiration. A stuck sensor can masquerade as calm, stable weather. Cross-check with neighboring stations or redundant sensors before discarding.\n\n10. **Run internal consistency checks between variables.** Verify that dewpoint never exceeds temperature, that gusts are at least the mean wind speed, and that rainfall events coincide with high humidity. Violations point to calibration drift or wiring swaps. Document each violation and the resolution applied.\n\n11. **Run spatial consistency checks against neighboring stations.** Compare your station with nearby stations of similar exposure and elevation using correlation and difference statistics. Persistent offsets suggest siting problems or calibration drift rather than genuine microclimate. Quantify offsets and decide whether to correct or exclude.\n\n12. **Assess the station's exposure and metadata history.** Review whether trees, buildings, or equipment changes altered exposure over time, since a single new anemometer height creates an artificial break. Exposure changes often explain apparent trends better than climate does. Mark suspected break points in the metadata timeline.\n\n13. **Test for homogeneity using standard statistical methods.** Apply tests such as the standard normal homogeneity test, the Mann-Whitney test, or the Buishand range test to detect break points in the series. Homogeneity testing separates instrument and siting artifacts from real climate signals. Interpret results alongside the metadata rather than in isolation.\n\n14. **Correct identified breaks with documented methods.** When a break is confirmed, apply a documented adjustment such as a ratio or difference correction using a reliable reference series. Every adjustment must be recorded with its method, period, and rationale. Unadjusted series should be retained alongside adjusted ones for transparency.\n\n15. **Compute basic descriptive statistics with uncertainty.** Calculate means, medians, standard deviations, and extremes together with their confidence intervals and sample sizes. A mean without its uncertainty is an incomplete statement. Report the number of valid observations alongside every statistic.\n\n16. **Calculate diurnal cycles and their seasonality.** Composite hourly temperature and humidity curves by month to reveal the daily cycle and its seasonal modulation. Diurnal amplitude is a sensitive indicator of exposure changes such as sheltering or urbanization. Compare cycles across years to detect subtle shifts.\n\n17. **Derive wind roses and directional statistics.** Build wind roses by speed and direction bins, and compute directional means and frequencies. Wind roses expose exposure changes and prevailing regime shifts that scalar means obscure. Use consistent speed bins and document the bin",
+          "timings": {
+            "cache_n": 50699,
+            "prompt_n": 44,
+            "prompt_ms": 7281.0000000172295,
+            "predicted_n": 1000,
+            "predicted_ms": 54116.454899999924,
+            "predicted_per_second": 18.478667936542926,
+            "prompt_per_second": 6.043125944224129
+          },
+          "stats": "Context: 51743/1000001 (5.17%)\nOutput: 1000/1000 (100%)\n18.5 tokens/sec",
+          "incremental_events": 995,
+          "stream_span_ms": 54025.69999998808,
+          "input_sha256": "09511d3497ee57ad6a2f0200f73a61a4f1c4de33fcaa94a7fcc713ab95e29c06",
+          "native_steps": 999,
+          "warm_after100": {
+            "steps": 899,
+            "milliseconds": 48446.895,
+            "tokens_per_second": 18.556400776561638
+          },
+          "evidence_sha256": {
+            "max-speed-proof.json": "15788348b05a00b4110d0215f9fcaff38c4076f7114e7c39a434e078bba87037",
+            "max-speed-native.txt": "4e68666a2eb28fe7e64a7fa5f3b25b7e1efbcceccd7c4d08bd2a406e6ae938ca"
+          }
+        }
+      }
+    },
+    "final": {
+      "browser": {
+        "status": "PASS",
+        "turns": 4,
+        "errors": [],
+        "prefill_tok_s": 1773.6774285940696
+      },
+      "runs": {
+        "recall-50k": {
+          "answer": "The unique retrieval key is **AMBER OTTER 731**.\n\nI retrieved the key from the opening line of the archive record. The rest of the record consisted of the sentence \u201cThe weather station records calm winds and clear skies.\u201d repeated many times, which did not contain any additional key or relevant information.",
+          "timings": {
+            "cache_n": 0,
+            "prompt_n": 49553,
+            "prompt_ms": 27937.99999996554,
+            "predicted_n": 61,
+            "predicted_ms": 11111.8332,
+            "predicted_per_second": 5.48964323906518,
+            "prompt_per_second": 1773.6774285940696
+          },
+          "stats": "Context: 49614/1000001 (4.96%)\nOutput: 61/128 (48%)\n5.5 tokens/sec",
+          "incremental_events": 60,
+          "stream_span_ms": 9431.800000011921,
+          "input_sha256": "7244e858ae5d016b6370d3ffcf8929bfaeb5b21a475a4390836bb82fd216c371",
+          "native_steps": 61,
+          "evidence_sha256": {
+            "recall-50k-proof.json": "50ca36019eb3b2558e97b848a0797e76d3f99c3b4b179ec5b173f8ca3b569f8d",
+            "recall-50k-native.txt": "09a5530ab78ae1e61795ffb5ab83dabc9aef51da64b05d7d22723fd8bd17bf57"
+          }
+        },
+        "followup": {
+          "answer": "The number was 731. It appears at the end of the retrieval key \"AMBER OTTER 731.\"",
+          "timings": {
+            "cache_n": 49614,
+            "prompt_n": 22,
+            "prompt_ms": 3467.9999999934807,
+            "predicted_n": 23,
+            "predicted_ms": 3705.5483999999997,
+            "predicted_per_second": 6.206908537478555,
+            "prompt_per_second": 6.343713956182628
+          },
+          "stats": "Context: 49659/1000001 (4.97%)\nOutput: 23/128 (18%)\n6.2 tokens/sec",
+          "incremental_events": 21,
+          "stream_span_ms": 3539.7999999523163,
+          "input_sha256": "f65243a58aee9193b7b5ad83e519b6d250f59364a14de01fcfccfd4d3aa9f262",
+          "native_steps": 23,
+          "evidence_sha256": {
+            "followup-proof.json": "1c31b14e770160756d6baf684eab21b831fabada6e5055b68a1f58a1e19a5600",
+            "followup-native.txt": "5427d563c3559d1c8865e890471439210dedd10add9efdd9aae95f73b1d727cd"
+          }
+        },
+        "max-quality": {
+          "answer": "# 100 Practical Steps for Maintaining a Weather Station\n\n1. **Create a maintenance logbook.** Begin by establishing a dedicated logbook, either paper or digital, where every inspection, repair, and calibration is recorded with a date and initials. This log becomes the station's memory and helps you spot recurring faults before they become failures. Review the log monthly to identify patterns such as sensors drifting at the same time each season.\n\n2. **Inventory all equipment at installation.** List every sensor, cable, mast, enclosure, and power component with its model and serial number. Photograph the installed layout from several angles and store the images with the inventory. This baseline makes it far easier to notice missing or damaged parts during later inspections.\n\n3. **Read the manufacturer's manual cover to cover.** Each instrument has specific tolerances, maintenance intervals, and cleaning instructions that generic advice cannot replace. Highlight the sections on calibration and error codes, and keep the manual in a waterproof container near the station. Revisit the manual whenever a reading looks suspicious.\n\n4. **Establish a routine inspection schedule.** Set daily, weekly, monthly, quarterly, and annual tasks and assign them to specific people. A calendar reminder system prevents small chores from being forgotten during busy periods. Post the schedule where anyone who might cover for you can see it.\n\n5. **Check data remotely every day.** Review the previous 24 hours of readings for gaps, flatlines, or implausible values such as a temperature jump of 20 degrees in one minute. Early detection of anomalies prevents weeks of corrupted data. Note any suspicious pattern in the logbook for physical follow-up.\n\n6. **Verify power supply status daily.** Confirm that batteries, solar panels, or mains connections are delivering the expected voltage. Many data gaps trace back to a failing battery or a shadowed solar panel. Record voltage readings so you can predict when a battery is nearing end of life.\n\n7. **Inspect the mast and guy wires weekly.** Look for loose bolts, frayed cables, corrosion, and any leaning of the mast. A mast that shifts even slightly will corrupt wind direction readings. Tighten hardware to the manufacturer's torque specifications rather than guessing.\n\n8. **Clean the rain gauge funnel weekly.** Debris, leaves, and insect nests block the funnel and cause underreporting of rainfall. Flush the funnel with clean water and check that the tipping bucket moves freely. Record the cleaning date and any debris found.\n\n9. **Check the rain gauge tipping bucket mechanism monthly.** Manually tip the bucket and confirm the data logger registers each tip. Listen for a clean, consistent click and watch for sticking or double-counting. If the bucket hesitates, clean the pivot and check for wear.\n\n10. **Calibrate the rain gauge annually with a known volume.** Use a calibrated dropper or a measured volume of water to confirm that each tip corresponds to the correct rainfall amount. Compare the total registered against the volume poured and adjust the calibration screw if needed. Document the before and after values in the logbook.\n\n11. **Clean the temperature and humidity sensor shield monthly.** Dust, pollen, and spider webs inside the radiation shield distort readings by restricting airflow. Remove the shield plates carefully and wash them with mild soap and water. Let them dry fully before reassembly to avoid introducing moisture.\n\n12. **Inspect the temperature sensor for physical damage quarterly.** Look for cracked housings, corroded contacts, and loose wiring. A damaged sensor may still report values but with reduced accuracy. Replace any sensor showing physical deterioration rather than waiting for failure.\n\n13. **Compare temperature readings against a reference thermometer quarterly.** Place a calibrated reference thermometer near the sensor shield for a side-by-side comparison over several hours. A consistent offset indicates the need for recalibration or replacement. Record the offset and the correction applied.\n\n14. **Check the humidity sensor for drift every six months.** Humidity sensors are prone to slow drift, especially in dusty or coastal environments. Compare against a reference hygrometer or a saturated salt solution test. Replace sensors that exceed the manufacturer's drift specification.\n\n15. **Clean the anemometer cups or propeller monthly.** Dirt and insect residue add weight and friction, causing the anemometer to underread wind speed. Wipe the cups with a soft cloth and check that they spin freely. Inspect the bearing for roughness while the cups are off.\n\n16. **Inspect the wind vane for balance and freedom of movement monthly.** A vane that sticks or is unbalanced will report a biased direction. Gently flick the vane and confirm it settles smoothly into the wind. Check the counterweight and the bearing for wear or corrosion.\n\n17. **Lubricate anemometer and vane bearings per manufacturer guidance.** Use only the lubricant specified by the manufacturer, as wrong lubricants attract dust or degrade plastics. Apply sparingly and wipe away excess. Note the lubrication date so you can track bearing life.\n\n18. **Verify",
+          "timings": {
+            "cache_n": 49659,
+            "prompt_n": 41,
+            "prompt_ms": 6639.999999955762,
+            "predicted_n": 1000,
+            "predicted_ms": 142902.2165,
+            "predicted_per_second": 6.997792088130417,
+            "prompt_per_second": 6.174698795221861
+          },
+          "stats": "Context: 50700/1000001 (5.07%)\nOutput: 1000/1000 (100%)\n7.0 tokens/sec",
+          "incremental_events": 996,
+          "stream_span_ms": 142695.20000004768,
+          "input_sha256": "c48b9f8579acb362642d92d4fd71cf37bd694060fb148d5931dce6ffff37b618",
+          "native_steps": 999,
+          "warm_after100": {
+            "steps": 899,
+            "milliseconds": 127625.251,
+            "tokens_per_second": 7.0440605832775205
+          },
+          "evidence_sha256": {
+            "max-quality-proof.json": "f08c96736a3970598b911422c202280eeb3af11758d9b8641dfd4512c13ace0b",
+            "max-quality-native.txt": "15acdab3ca599ad210aa3a86769d63c3d047f01c0c806f381ade18bff839910d"
+          }
+        },
+        "max-speed": {
+          "answer": "# 100 Practical Steps for Analyzing Weather Station Data\n\n1. **Establish a data quality baseline before analysis.** Begin by documenting the station's instrument type, exposure, height, and calibration history so every later conclusion is grounded in context. Analysts who ignore metadata often mistake siting errors for climate signals. Keep this metadata file alongside the dataset at all times.\n\n2. **Inventory every variable and its units.** List temperature, humidity, pressure, wind speed, wind direction, rainfall, solar radiation, and soil temperature with their exact units and averaging periods. Confusing a gust with a mean wind speed can distort any derived statistic. Confirm units against the manufacturer specification rather than assuming metric defaults.\n\n3. **Confirm the timestamp convention and time zone.** Determine whether timestamps are local, UTC, or offset from UTC and whether they mark the start or end of an observation period. A one-hour shift can silently ruin diurnal cycle analysis. Record the convention in the metadata file and check it against the logger configuration.\n\n4. **Check the sampling interval and aggregation method.** Establish whether values are instantaneous samples, means over an interval, or extremes within an interval. Mixing instantaneous and averaged values in one series creates artificial spikes. Harmonize all series to a common interval before combining them.\n\n5. **Plot the raw data first, before any statistics.** Create time series plots of every variable at full resolution to see gaps, spikes, and regime shifts with your own eyes. Visual inspection often reveals problems that summary statistics conceal. Save these plots as a first-pass quality report.\n\n6. **Flag missing data explicitly and never interpolate blindly.** Mark every gap with its duration and cause where known, and treat flagged gaps as missing rather than filling them silently. Blind interpolation can fabricate trends that do not exist. Report the percentage of missing data for each variable and period.\n\n7. **Screen for physically impossible values.** Set hard limits for each variable, such as relative humidity above 100 percent or below 0 percent, and flag anything outside them. Impossible values usually indicate sensor saturation, wiring faults, or logger errors. Correct or exclude these values before computing averages.\n\n8. **Apply step-change tests to detect spikes.** Flag abrupt jumps that exceed plausible rates of change for the variable and interval, such as a 10 \u00b0C change in one minute. Real fronts can produce rapid changes, so confirm flagged events against neighboring variables. Retain flagged values only when corroborated by other sensors.\n\n9. **Apply persistence tests to detect stuck sensors.** Flag sequences of identical values lasting many intervals, which indicate a frozen sensor or a blocked aspiration. A stuck sensor can masquerade as calm, stable weather. Cross-check with neighboring stations or redundant sensors before discarding.\n\n10. **Run internal consistency checks between variables.** Verify that dewpoint never exceeds temperature, that gusts are at least the mean wind speed, and that rainfall events coincide with high humidity. Violations point to calibration drift or wiring swaps. Document each violation and the resolution applied.\n\n11. **Run spatial consistency checks against neighboring stations.** Compare your station with nearby stations of similar exposure and elevation using correlation and difference statistics. Persistent offsets suggest siting problems or calibration drift rather than genuine microclimate. Quantify offsets and decide whether to correct or exclude.\n\n12. **Assess the station's exposure and metadata history.** Review whether trees, buildings, or equipment changes altered exposure over time, since a single new anemometer height creates an artificial break. Exposure changes often explain apparent trends better than climate does. Mark suspected break points in the metadata timeline.\n\n13. **Test for homogeneity using standard statistical methods.** Apply tests such as the standard normal homogeneity test, the Mann-Whitney test, or the Buishand range test to detect break points in the series. Homogeneity testing separates instrument and siting artifacts from real climate signals. Interpret results alongside the metadata rather than in isolation.\n\n14. **Correct identified breaks with documented methods.** When a break is confirmed, apply a documented adjustment such as a ratio or difference correction using a reliable reference series. Every adjustment must be recorded with its method, period, and rationale. Unadjusted series should be retained alongside adjusted ones for transparency.\n\n15. **Compute basic descriptive statistics with uncertainty.** Calculate means, medians, standard deviations, and extremes together with their confidence intervals and sample sizes. A mean without its uncertainty is an incomplete statement. Report the number of valid observations alongside every statistic.\n\n16. **Calculate diurnal cycles and their seasonality.** Composite hourly temperature and humidity curves by month to reveal the daily cycle and its seasonal modulation. Diurnal amplitude is a sensitive indicator of exposure changes such as sheltering or urbanization. Compare cycles across years to detect subtle shifts.\n\n17. **Derive wind roses and directional statistics.** Build wind roses by speed and direction bins, and compute directional means and frequencies. Wind roses expose exposure changes and prevailing regime shifts that scalar means obscure. Use consistent speed bins and document the bin",
+          "timings": {
+            "cache_n": 50699,
+            "prompt_n": 44,
+            "prompt_ms": 7452.999999979511,
+            "predicted_n": 1000,
+            "predicted_ms": 53433.95560000003,
+            "predicted_per_second": 18.714691599586526,
+            "prompt_per_second": 5.90366295453119
+          },
+          "stats": "Context: 51743/1000001 (5.17%)\nOutput: 1000/1000 (100%)\n18.7 tokens/sec",
+          "incremental_events": 995,
+          "stream_span_ms": 53338.39999997616,
+          "input_sha256": "09511d3497ee57ad6a2f0200f73a61a4f1c4de33fcaa94a7fcc713ab95e29c06",
+          "native_steps": 999,
+          "warm_after100": {
+            "steps": 899,
+            "milliseconds": 47826.771,
+            "tokens_per_second": 18.797003878852703
+          },
+          "evidence_sha256": {
+            "max-speed-proof.json": "387cf426c4474206fb18979e732b44c62f7f378d35ceff1095447614b14722ce",
+            "max-speed-native.txt": "2bcf064522b2bcea0135b1717b1af7ed7106710cb352744303d6d7f3dabd7737"
+          }
+        }
+      }
+    },
+    "comparison": {
+      "prefill": {
+        "reference": 1592.1285,
+        "measured": 1773.6774285940696,
+        "percent_change": 11.402906775054245,
+        "within_absolute_5pct": false,
+        "no_slowdown_beyond_5pct": true
+      },
+      "max-quality": {
+        "reference": 6.8118,
+        "measured": 7.0440605832775205,
+        "percent_change": 3.409680015231231,
+        "within_absolute_5pct": true,
+        "no_slowdown_beyond_5pct": true
+      },
+      "max-speed": {
+        "reference": 18.15505,
+        "measured": 18.797003878852703,
+        "percent_change": 3.535952139226839,
+        "within_absolute_5pct": true,
+        "no_slowdown_beyond_5pct": true
+      }
+    },
+    "strict_5pct_band_pass": false,
+    "no_slowdown_beyond_5pct": true,
+    "binaries": {
+      "llama-dsv41-prefill.exe": {
+        "bytes": 87483392,
+        "sha256": "de2af94a8a12c11f9c815fdd745caf0d5d3f2669a2ed8ba0dbbb3217d9d44669"
+      },
+      "ds4-decode.dll": {
+        "bytes": 24158720,
+        "sha256": "7fbfc97f5db3bf33c8a1f630a8230d890ac412e2302e05cb571b26c1716cba75"
+      }
+    },
+    "cleanup": {
+      "host_budget": 6754467840,
+      "physical_floor": 4294967296,
+      "runtime_min_free_gib": 4.0,
+      "peak_rss": 6007689216,
+      "minimum_available_ram": 8132796416,
+      "paging_growth": 864256,
+      "budget_breaches": 0,
+      "failure": null,
+      "exit_code": 0,
+      "owned_pid_gone": true,
+      "owned_job_empty": true,
+      "producer_shutdown_path": "graceful",
+      "producer_shutdown_seconds": 0.9209999999729916
+    }
+  },
+  "gaps": [
+    "ULTRA fold/sweep GLM producer",
+    "native/llama state conversion and round-trip",
+    "actual native trained-model decode and expert/dense weight ownership",
+    "native keep-open append integration",
+    "GLM WebUI/Studio presets and warm native decode qualification",
+    "multi-batch shared-indexer boundary owner"
+  ],
+  "cpu_graphs": [
+    {
+      "model": "up-full",
+      "prompt": 64,
+      "ubatch": 64,
+      "restore": false,
+      "rows": 72,
+      "same_layout_max_abs_diff": 0.0,
+      "layout_max_abs_diff": 0.0,
+      "peak_rss": 28491776,
+      "min_available": 14981992448
+    },
+    {
+      "model": "up-full",
+      "prompt": 64,
+      "ubatch": 16,
+      "restore": false,
+      "rows": 72,
+      "same_layout_max_abs_diff": 0.0,
+      "layout_max_abs_diff": 0.0,
+      "peak_rss": 9396224,
+      "min_available": 14987931648
+    },
+    {
+      "model": "up-full",
+      "prompt": 64,
+      "ubatch": 16,
+      "restore": true,
+      "rows": 72,
+      "same_layout_max_abs_diff": 0.0,
+      "layout_max_abs_diff": 0.0,
+      "peak_rss": 9445376,
+      "min_available": 14992199680
+    },
+    {
+      "model": "up-full",
+      "prompt": 320,
+      "ubatch": 64,
+      "restore": false,
+      "rows": 328,
+      "same_layout_max_abs_diff": 0.0,
+      "layout_max_abs_diff": 0.0,
+      "peak_rss": 32313344,
+      "min_available": 14973812736
+    },
+    {
+      "model": "up-full",
+      "prompt": 320,
+      "ubatch": 16,
+      "restore": false,
+      "rows": 328,
+      "same_layout_max_abs_diff": 0.0,
+      "layout_max_abs_diff": 0.0,
+      "peak_rss": 32616448,
+      "min_available": 14880743424
+    },
+    {
+      "model": "up-full",
+      "prompt": 320,
+      "ubatch": 16,
+      "restore": true,
+      "rows": 328,
+      "same_layout_max_abs_diff": 0.0,
+      "layout_max_abs_diff": 0.0,
+      "peak_rss": 32731136,
+      "min_available": 14965104640
+    },
+    {
+      "model": "up-shared",
+      "prompt": 64,
+      "ubatch": 64,
+      "restore": false,
+      "rows": 72,
+      "same_layout_max_abs_diff": 0.0,
+      "layout_max_abs_diff": 0.0,
+      "peak_rss": 9576448,
+      "min_available": 14981943296
+    },
+    {
+      "model": "up-shared",
+      "prompt": 64,
+      "ubatch": 16,
+      "restore": false,
+      "rows": 72,
+      "same_layout_max_abs_diff": 0.0,
+      "layout_max_abs_diff": 0.0,
+      "peak_rss": 9580544,
+      "min_available": 14980177920
+    },
+    {
+      "model": "up-shared",
+      "prompt": 64,
+      "ubatch": 16,
+      "restore": true,
+      "rows": 72,
+      "same_layout_max_abs_diff": 0.0,
+      "layout_max_abs_diff": 0.0,
+      "peak_rss": 31465472,
+      "min_available": 14968078336
+    },
+    {
+      "model": "up-shared",
+      "prompt": 320,
+      "ubatch": 64,
+      "restore": false,
+      "rows": 328,
+      "same_layout_max_abs_diff": 0.0,
+      "layout_max_abs_diff": 0.0,
+      "peak_rss": 31731712,
+      "min_available": 14980149248
+    },
+    {
+      "model": "up-shared",
+      "prompt": 320,
+      "ubatch": 16,
+      "restore": false,
+      "rows": 328,
+      "same_layout_max_abs_diff": 0.0,
+      "layout_max_abs_diff": 0.0,
+      "peak_rss": 31559680,
+      "min_available": 14976319488
+    },
+    {
+      "model": "up-shared",
+      "prompt": 320,
+      "ubatch": 16,
+      "restore": true,
+      "rows": 328,
+      "same_layout_max_abs_diff": 0.0,
+      "layout_max_abs_diff": 0.0,
+      "peak_rss": 32202752,
+      "min_available": 14968459264
+    },
+    {
+      "model": "ds4-full",
+      "prompt": 64,
+      "ubatch": 64,
+      "restore": false,
+      "rows": 72,
+      "same_layout_max_abs_diff": 0.0,
+      "layout_max_abs_diff": 1.1920928955078125e-05,
+      "peak_rss": 9359360,
+      "min_available": 14984142848
+    },
+    {
+      "model": "ds4-full",
+      "prompt": 64,
+      "ubatch": 16,
+      "restore": false,
+      "rows": 72,
+      "same_layout_max_abs_diff": 0.0,
+      "layout_max_abs_diff": 1.1920928955078125e-05,
+      "peak_rss": 9400320,
+      "min_available": 14990344192
+    },
+    {
+      "model": "ds4-full",
+      "prompt": 64,
+      "ubatch": 16,
+      "restore": true,
+      "rows": 72,
+      "same_layout_max_abs_diff": 0.0,
+      "layout_max_abs_diff": 1.1920928955078125e-05,
+      "peak_rss": 9396224,
+      "min_available": 14986002432
+    },
+    {
+      "model": "ds4-full",
+      "prompt": 320,
+      "ubatch": 64,
+      "restore": false,
+      "rows": 328,
+      "same_layout_max_abs_diff": 0.0,
+      "layout_max_abs_diff": 2.2232532501220703e-05,
+      "peak_rss": 33267712,
+      "min_available": 14965420032
+    },
+    {
+      "model": "ds4-full",
+      "prompt": 320,
+      "ubatch": 16,
+      "restore": false,
+      "rows": 328,
+      "same_layout_max_abs_diff": 0.0,
+      "layout_max_abs_diff": 2.2232532501220703e-05,
+      "peak_rss": 32239616,
+      "min_available": 14969872384
+    },
+    {
+      "model": "ds4-full",
+      "prompt": 320,
+      "ubatch": 16,
+      "restore": true,
+      "rows": 328,
+      "same_layout_max_abs_diff": 0.0,
+      "layout_max_abs_diff": 2.2232532501220703e-05,
+      "peak_rss": 32743424,
+      "min_available": 14968688640
+    }
+  ],
+  "python_tests": {
+    "run": 20,
+    "passed": 19,
+    "skipped": 1,
+    "skip": "Separate Studio source fixture absent"
+  }
+}

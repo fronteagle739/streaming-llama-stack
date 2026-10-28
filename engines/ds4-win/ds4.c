@@ -51798,6 +51798,25 @@ static bool glm53_graph_prefill_workspace_ensure(
         ds4_glm_gpu_graph *g,
         uint32_t           rows);
 
+#ifdef DS4_EXTERNAL_DECODE
+/* The GLM external adapter supplies every cache. Only bounded one-row scratch
+ * is allocated by the native graph. Ordinary engine allocations are unchanged. */
+static bool g_ds4glm_external_alloc;
+static uint64_t g_ds4glm_scratch_limit, g_ds4glm_scratch_bytes;
+#define DS4_GLM_EXTERNAL_CHARGE(bytes_, admitted_) do { \
+    if (g_ds4glm_external_alloc) { \
+        (admitted_) = (bytes_) <= g_ds4glm_scratch_limit - g_ds4glm_scratch_bytes; \
+        if (admitted_) g_ds4glm_scratch_bytes += (bytes_); \
+        else fprintf(stderr,"GLM_EXTERNAL_SCRATCH_REFUSED bytes=%llu charged=%llu limit=%llu\n", \
+            (unsigned long long)(bytes_), (unsigned long long)g_ds4glm_scratch_bytes, \
+            (unsigned long long)g_ds4glm_scratch_limit); \
+    } \
+} while (0)
+#else
+#define g_ds4glm_external_alloc false
+#define DS4_GLM_EXTERNAL_CHARGE(bytes_, admitted_) ((void)0)
+#endif
+
 static bool glm_graph_alloc_slice(
         ds4_glm_gpu_graph *g,
         const ds4_model   *model,
@@ -51819,7 +51838,7 @@ static bool glm_graph_alloc_slice(
     g->ssd_streaming_cold = ssd_streaming_cold;
 
     if (!glm_graph_context_request(ctx_size, &g->ctx_size)) return false;
-    if (!glm_graph_memory_guard_slice_with_transient(
+    if (!g_ds4glm_external_alloc && !glm_graph_memory_guard_slice_with_transient(
                 model,
                 weights,
                 g->ssd_streaming,
@@ -51935,7 +51954,7 @@ static bool glm_graph_alloc_slice(
     const uint64_t compact_indexer_tail_bytes =
         (uint64_t)DS4_GLM53_INDEX_POOL_SIZE * DS4_N_INDEXER_HEAD_DIM *
         sizeof(float);
-    const uint64_t batch_rows =
+    const uint64_t batch_rows = g_ds4glm_external_alloc ? 1u :
         glm_graph_batch_row_cap(g->ctx_cap,
                                 g->indexed_prefill_cap,
                                 g->full_kv_cache);
@@ -52009,7 +52028,10 @@ static bool glm_graph_alloc_slice(
     bool ok = true;
 #define DS4_GLM_GRAPH_ALLOC_TENSOR(var, bytes_) \
     do { \
-        (var) = ds4_gpu_tensor_alloc((bytes_)); \
+        const uint64_t alloc_bytes_ = (bytes_); \
+        bool admitted_ = true; \
+        DS4_GLM_EXTERNAL_CHARGE(alloc_bytes_, admitted_); \
+        (var) = admitted_ ? ds4_gpu_tensor_alloc(alloc_bytes_) : NULL; \
         if (!(var)) { \
             fprintf(stderr, "ds4: GLM graph could not allocate %s\n", #var); \
             ok = false; \
@@ -52144,7 +52166,7 @@ static bool glm_graph_alloc_slice(
     }
     DS4_GLM_GRAPH_ALLOC_TENSOR(g->batch_ffn_out, batch_rows * emb_bytes);
 
-    for (uint32_t il = g->layer_start; ok && il <= g->layer_end; il++) {
+    for (uint32_t il = g->layer_start; !g_ds4glm_external_alloc && ok && il <= g->layer_end; il++) {
         int cache_tier = 0;
         if (g->placement && g->placement[il + 1u] >= 0 &&
             g->placement[il + 1u] < DS4_MAX_GPUS) {
@@ -52211,7 +52233,7 @@ static bool glm_graph_alloc_slice(
             glm_graph_free(g);
             return false;
         }
-        for (uint32_t il = g->layer_start; il <= g->layer_end; il++) {
+        for (uint32_t il = g->layer_start; !g_ds4glm_external_alloc && il <= g->layer_end; il++) {
             if (ds4_glm53_layer_is_kda(il)) {
                 if (ds4_gpu_tensor_fill_f32(g->layer_kda_conv_state[il], 0.0f,
                                             kda_conv_state_bytes / sizeof(float)) == 0 ||
@@ -52235,7 +52257,7 @@ static bool glm_graph_alloc_slice(
             }
         }
     }
-    if (g->glm53 &&
+    if (g->glm53 && !g_ds4glm_external_alloc &&
         !glm53_graph_prefill_workspace_ensure(g, g->batch_cap)) {
         fprintf(stderr,
                 "ds4: GLM graph could not allocate the static GLM-5.3 "

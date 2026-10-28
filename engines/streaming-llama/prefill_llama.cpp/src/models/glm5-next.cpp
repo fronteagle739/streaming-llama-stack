@@ -60,6 +60,13 @@ public:
 };
 
 // x / sqrt(sum(x^2) + eps), FLA's l2 norm (upstream build_gdn_l2_norm)
+// The trained ds4 GGUF keeps several norm/affine vectors in BF16. Binary
+// broadcast kernels consume these operands as F32; preserve the stored values
+// with an explicit conversion inside the consuming layer's graph range.
+static ggml_tensor * glm5_f32(ggml_context * ctx, ggml_tensor * t) {
+    return t && t->type != GGML_TYPE_F32 ? ggml_cast(ctx, t, GGML_TYPE_F32) : t;
+}
+
 static ggml_tensor * glm5_l2_norm(ggml_context * ctx, ggml_tensor * x, float eps) {
     const float n = x->ne[0];
     return ggml_scale(ctx, ggml_rms_norm(ctx, x, eps/n), 1.0f/sqrtf(n));
@@ -111,8 +118,8 @@ static ggml_tensor * glm5_view_2d(ggml_context * ctx, ggml_tensor * t, int64_t n
 }
 
 static ggml_tensor * glm5_hc_affine(ggml_context * ctx, ggml_tensor * x, ggml_tensor * scale, ggml_tensor * base) {
-    x = ggml_mul(ctx, x, scale);
-    x = ggml_add(ctx, x, base);
+    x = ggml_mul(ctx, x, glm5_f32(ctx, scale));
+    x = ggml_add(ctx, x, glm5_f32(ctx, base));
     return x;
 }
 
@@ -190,6 +197,9 @@ ggml_tensor * llm_build_glm5_next::build_hc_pre(
 
     ggml_tensor * flat = ggml_reshape_2d(ctx0, x, hc_dim, nt);
     ggml_tensor * flat_norm = ggml_rms_norm(ctx0, flat, norm_rms_eps);
+    // Name the first arithmetic node so layer-major ranges include this
+    // normalization after restoring each microbatch boundary.
+    cb(flat_norm, "hc_input_norm", il);
     ggml_tensor * mixes = ggml_mul_mat(ctx0, hc_fn, flat_norm);
     cb(mixes, "hc_mixes", il);
 
@@ -273,7 +283,7 @@ llm_build_glm5_next::llm_build_glm5_next(const llama_model & model, const llm_gr
         cur = build_hc_pre(inpL, layer.hc_attn_fn, layer.hc_attn_scale, layer.hc_attn_base, &post, &comb, il);
         cb(cur, "hc_attn_pre", il);
 
-        cur = build_norm(cur, layer.attn_norm, nullptr, LLM_NORM_RMS, il);
+        cur = build_norm(cur, glm5_f32(ctx0, layer.attn_norm), nullptr, LLM_NORM_RMS, il);
         cb(cur, "attn_norm", il);
         ggml_build_forward_expand(gf, cur);
 
@@ -291,7 +301,7 @@ llm_build_glm5_next::llm_build_glm5_next(const llama_model & model, const llm_gr
         cur = build_hc_pre(inpL, layer.hc_ffn_fn, layer.hc_ffn_scale, layer.hc_ffn_base, &post, &comb, il);
         cb(cur, "hc_ffn_pre", il);
 
-        cur = build_norm(cur, layer.ffn_norm, nullptr, LLM_NORM_RMS, il);
+        cur = build_norm(cur, glm5_f32(ctx0, layer.ffn_norm), nullptr, LLM_NORM_RMS, il);
         cb(cur, "ffn_norm", il);
 
         if ((uint32_t) il < hparams.n_layer_dense_lead) {
@@ -307,7 +317,7 @@ llm_build_glm5_next::llm_build_glm5_next(const llama_model & model, const llm_gr
                     layer.ffn_up_exps,
                     layer.ffn_gate_exps,
                     layer.ffn_down_exps,
-                    layer.ffn_exp_probs_b,
+                    glm5_f32(ctx0, layer.ffn_exp_probs_b),
                     n_expert, n_expert_used,
                     LLM_FFN_SILU, hparams.expert_weights_norm,
                     hparams.expert_weights_scale,
@@ -341,7 +351,7 @@ llm_build_glm5_next::llm_build_glm5_next(const llama_model & model, const llm_gr
     cur = build_hc_mean(inpL);
     cb(cur, "hc_head", -1);
 
-    cur = build_norm(cur, model.output_norm, nullptr, LLM_NORM_RMS, -1);
+    cur = build_norm(cur, glm5_f32(ctx0, model.output_norm), nullptr, LLM_NORM_RMS, -1);
     cb(cur, "result_norm", -1);
     res->t_embd = cur;
 
@@ -375,9 +385,9 @@ ggml_tensor * llm_build_glm5_next::build_kda_layer(
     // Decay gate, ssm_a holds -exp(A_log) (the ds4 GGUF stores A_log itself)
     ggml_tensor * f_a = ggml_mul_mat(ctx0, layer.ssm_f_a, cur);
     ggml_tensor * g1  = ggml_mul_mat(ctx0, layer.ssm_f_b, f_a);
-    g1 = ggml_add(ctx0, g1, layer.ssm_dt_b);
+    g1 = ggml_add(ctx0, g1, glm5_f32(ctx0, layer.ssm_dt_b));
 
-    ggml_tensor * A = layer.ssm_a;
+    ggml_tensor * A = glm5_f32(ctx0, layer.ssm_a);
     if (hparams.kda_a_is_log) {
         A = ggml_neg(ctx0, ggml_exp(ctx0, A));
     }
@@ -438,7 +448,7 @@ ggml_tensor * llm_build_glm5_next::build_kda_layer(
     g2 = ggml_reshape_3d(ctx0, g2, head_dim, n_head_kda, n_tokens);
 
     ggml_tensor * o      = ggml_reshape_3d(ctx0, output, head_dim, n_head_kda, n_tokens);
-    ggml_tensor * normed = build_norm(o, layer.ssm_o_norm, nullptr, LLM_NORM_RMS, il);
+    ggml_tensor * normed = build_norm(o, glm5_f32(ctx0, layer.ssm_o_norm), nullptr, LLM_NORM_RMS, il);
     cb(g2, "kda_g2", il);
     cb(normed, "kda_normed", il);
     ggml_tensor * gated = ggml_mul(ctx0, normed, ggml_sigmoid(ctx0, g2));
@@ -470,7 +480,7 @@ ggml_tensor * llm_build_glm5_next::build_kpool_select(
 
     // Per-token key and pool gate scores, cached together
     ggml_tensor * ik = ggml_mul_mat(ctx0, layer.indexer_attn_k, cur);
-    ik = build_norm(ik, layer.indexer_k_norm, layer.indexer_k_norm_b, LLM_NORM, il);
+    ik = build_norm(ik, glm5_f32(ctx0, layer.indexer_k_norm), glm5_f32(ctx0, layer.indexer_k_norm_b), LLM_NORM, il);
     cb(ik, "indexer_k", il);
 
     ggml_tensor * ig = ggml_mul_mat(ctx0, layer.indexer_kpool_gate, cur);
@@ -491,7 +501,7 @@ ggml_tensor * llm_build_glm5_next::build_kpool_select(
     ggml_tensor * pk = ggml_view_3d(ctx0, rows, n_embd_indexer, kpool, n_new, rows->nb[1], rows->nb[2], 0);
     ggml_tensor * pg = ggml_view_3d(ctx0, rows, n_embd_indexer, kpool, n_new, rows->nb[1], rows->nb[2], ggml_row_size(rows->type, n_embd_indexer));
 
-    ggml_tensor * logits = ggml_add(ctx0, pg, layer.indexer_kpool_ape);
+    ggml_tensor * logits = ggml_add(ctx0, pg, glm5_f32(ctx0, layer.indexer_kpool_ape));
     logits = ggml_cont(ctx0, ggml_permute(ctx0, logits, 1, 0, 2, 3)); // [kpool, head_dim, n_new]
     ggml_tensor * probs = ggml_soft_max(ctx0, ggml_reshape_2d(ctx0, logits, kpool, n_embd_indexer*n_new));
     probs = ggml_reshape_3d(ctx0, probs, kpool, n_embd_indexer, n_new);
@@ -602,14 +612,14 @@ ggml_tensor * llm_build_glm5_next::build_dsa_layer(
     GGML_ASSERT(hparams.n_rot == 0 && "GLM5-Next MLA is nope-only");
 
     ggml_tensor * qr = ggml_mul_mat(ctx0, layer.wq_a, cur);
-    qr = build_norm(qr, layer.attn_q_a_norm, nullptr, LLM_NORM_RMS, il);
+    qr = build_norm(qr, glm5_f32(ctx0, layer.attn_q_a_norm), nullptr, LLM_NORM_RMS, il);
     cb(qr, "q_resid", il);
 
     ggml_tensor * q = ggml_mul_mat(ctx0, layer.wq_b, qr);
     q = ggml_reshape_3d(ctx0, q, n_embd_head_qk_nope, n_head, n_tokens);
 
     ggml_tensor * kv_cmpr = ggml_mul_mat(ctx0, layer.wkv_a_mqa, cur);
-    kv_cmpr = build_norm(kv_cmpr, layer.attn_kv_a_norm, nullptr, LLM_NORM_RMS, il);
+    kv_cmpr = build_norm(kv_cmpr, glm5_f32(ctx0, layer.attn_kv_a_norm), nullptr, LLM_NORM_RMS, il);
     kv_cmpr = ggml_reshape_3d(ctx0, kv_cmpr, kv_lora_rank, 1, n_tokens);
     cb(kv_cmpr, "kv_cmpr", il);
 

@@ -8250,8 +8250,10 @@ ggml_status llama_context::graph_compute_per_layer(ggml_cgraph *     gf,
                                                    bool              batched,
                                                    layer_callback_fn pre_layer_cb,
                                                    layer_callback_fn post_layer_cb) {
+    // Match decode_layer_major's target graph, which excludes NextN/MTP.
+    const int trunk_layers = model.hparams.n_layer - model.hparams.nextn_predict_layers;
     const int n_layer = model.hparams.n_layer_kv_from_start >= 0
-                      ? (int)model.hparams.n_layer_kv_from_start : (int)model.hparams.n_layer;
+                      ? std::min((int)model.hparams.n_layer_kv_from_start, trunk_layers) : trunk_layers;
     last_layer_compute_times_ms.assign(n_layer > 0 ? n_layer : 0, 0.0f);
     const char * trace_env = std::getenv("LLAMA_PREFILL_LAYER_TRACE");
     const bool   trace_layer_order =
@@ -9613,6 +9615,19 @@ int llama_context::decode_layer_major(llama_batch & batch, llama_hidden_mode hid
     const uint32_t n_tokens_all  = balloc->get_n_tokens();
     const uint32_t n_outputs_all = balloc->get_n_outputs();
 
+    if (model.arch == LLM_ARCH_GLM5_NEXT && n_tokens_all > cparams.n_ubatch) {
+        if (n_tokens_all % cparams.n_ubatch != 0) {
+            LLAMA_LOG_ERROR("%s: GLM recurrent streaming requires a uniform bulk and a separate exact tail; padded recurrence is unsafe\n", __func__);
+            return -1;
+        }
+        for (uint32_t il=0; il<hparams.n_layer-hparams.nextn_predict_layers; ++il) {
+            if (!hparams.is_recurrent(il) && !hparams.is_indexer_full(il)) {
+                LLAMA_LOG_ERROR("%s: GLM streamed multi-microbatch shared-indexer boundaries are not supported\n", __func__);
+                return -1;
+            }
+        }
+    }
+
     GGML_ASSERT(n_tokens_all <= cparams.n_batch);
     GGML_ASSERT((cparams.causal_attn || cparams.n_ubatch >= n_tokens_all) &&
                 "non-causal attention requires n_ubatch >= n_tokens");
@@ -9786,6 +9801,7 @@ int llama_context::decode_layer_major(llama_batch & batch, llama_hidden_mode hid
 
     fprintf(stderr, "*** DLM_DIAG: finding max ubatch among %d ubatches...\n", n_ubatches); fflush(stderr);
     int max_ub_idx = 0;
+    int32_t max_ub_outputs = 0;
     {
         uint32_t max_tokens = 0;
         for (int u = 0; u < n_ubatches; u++) {
@@ -9793,6 +9809,9 @@ int llama_context::decode_layer_major(llama_batch & batch, llama_hidden_mode hid
             mctx->seek(u);
             const auto & ub = mctx->get_ubatch();
             fprintf(stderr, "*** DLM_DIAG: ubatch %d: n_tokens=%u\n", u, ub.n_tokens); fflush(stderr);
+            int32_t ub_outputs = 0;
+            for (uint32_t i = 0; i < ub.n_tokens; ++i) ub_outputs += ub.output[i] != 0;
+            max_ub_outputs = std::max(max_ub_outputs, ub_outputs);
             if (ub.n_tokens > max_tokens) {
                 max_tokens = ub.n_tokens;
                 max_ub_idx = u;
@@ -9919,7 +9938,10 @@ int llama_context::decode_layer_major(llama_batch & batch, llama_hidden_mode hid
                 n_out += (int32_t)(build_ubatch.output[i] != 0);
             }
         }
-        n_outputs = n_out;
+        // A last-token-only GLM prompt can select the first microbatch
+        // for graph sizing even though only the final one requests logits.
+        // Allocate its head for the largest actual output count.
+        n_outputs = model.arch == LLM_ARCH_GLM5_NEXT ? max_ub_outputs : n_out;
     }
 
     fprintf(stderr, "*** DLM_DIAG: n_outputs set=%d, finding GPU backend (n_backends=%zu)...\n", n_outputs, backends.size()); fflush(stderr);
@@ -15167,10 +15189,18 @@ int llama_context::decode_layer_major(llama_batch & batch, llama_hidden_mode hid
             restore_tensor_refs[restore_ref_count++] = t;
         };
 
-        add_restore_ref(layer_input->src[0] ? layer_input->src[0] : layer_input);
-        add_restore_ref(residual_tensor[il]);
+        // GLM's first consumer is the mHC mixing matmul: src[0] is a
+        // weight, not the prior activation. Restore the canonical four-stream
+        // boundary, which is also the residual carry, and its views resolve
+        // against this same tensor below.
+        if (model.arch == LLM_ARCH_GLM5_NEXT) {
+            add_restore_ref(l_out[il - 1]);
+        } else {
+            add_restore_ref(layer_input->src[0] ? layer_input->src[0] : layer_input);
+            add_restore_ref(residual_tensor[il]);
+        }
 
-        if (!narrow_hidden_restore) {
+        if (!narrow_hidden_restore && model.arch != LLM_ARCH_GLM5_NEXT) {
             for (int ni = layer_start[il]; ni < layer_end[il] && restore_ref_count < PCS_MAX_RESTORES; ++ni) {
                 ggml_tensor * node = gf->nodes[ni];
                 for (int si = 0; si < GGML_MAX_SRC && restore_ref_count < PCS_MAX_RESTORES; ++si) {
@@ -21617,11 +21647,13 @@ int llama_context::decode_layer_major(llama_batch & batch, llama_hidden_mode hid
                         hidden_gpu_base + (size_t)u * hidden_bytes, nbytes);
                     break;
                 case LLAMA_HIDDEN_DBLBUF:
-                    ggml_backend_tensor_set(l_out[n_layer - 1], hidden_cpu[u].data(), 0, nbytes);
+                    ggml_backend_tensor_set(l_out[n_layer - 1],
+                        use_pinned_hidden ? hidden_pinned[u] : hidden_cpu[u].data(), 0, nbytes);
                     break;
                 case LLAMA_HIDDEN_CPU:
                 default:
-                    ggml_backend_tensor_set(l_out[n_layer - 1], hidden_cpu[u].data(), 0, nbytes);
+                    ggml_backend_tensor_set(l_out[n_layer - 1],
+                        use_pinned_hidden ? hidden_pinned[u] : hidden_cpu[u].data(), 0, nbytes);
                     break;
             }
         }

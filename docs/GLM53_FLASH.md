@@ -203,3 +203,143 @@ the separate scalar thresholds are in `examples/glm53_flash/round3.json`.
 These checks qualify synthetic numerical agreement only. The original model,
 ULTRA/ds4 producer integration, trained-model WebUI and speed acceptance remain
 outside this round.
+
+
+## Round four: trained-model streaming bring-up (partial)
+
+The verified Q4_K GGUF is now on local fast storage. The target engine is still
+incomplete: the measurements below use the existing layer-major streaming graph
+for both prefill and decode. They do not qualify the requested ULTRA/ds4 GLM
+producer or its WebUI/Studio presets.
+
+The trained model exposed several integration defects absent from a resident
+random-weight graph:
+
+* Target streaming stages now exclude the NextN/MTP block, and include the
+  indexer's learned pool gate and positional weights.
+* Initial streamed addresses use the fetcher's aligned allocation offsets, so
+  views constructed before execution agree with subsequent weight remapping.
+  Global weights already resident on a device keep their allocation.
+* BF16 scalar normalization and affine tensors are explicitly cast to F32
+  inside their consuming layer. The graph no longer passes them to binary
+  broadcast operations that expect F32/F16. F32 fixture weights remain unchanged.
+* Direct-compute DirectStorage heaps do not use the staging-only range relay.
+  Its absent staging pointer had left a CUDA invalid-value error reported by
+  the next layer's cast. Missing staging/destinations now fail explicitly.
+* mHC input normalization is named at its actual layer boundary. A multi-batch
+  restore targets the prior four-stream activation; the first mHC matmul's
+  first source is a weight. Pool plans are rebuilt when replay seeks a batch.
+* Output-head sizing includes the largest requested output count across batches,
+  including last-token-only requests. Final hidden restoration honors pinned
+  host staging, rather than reading an empty ordinary CPU vector.
+
+Recurrent streaming callers must submit a uniform bulk and then the exact tail
+in a separate decode call. The bring-up and logits tools do this explicitly;
+implicit padding would advance KDA recurrence through fake tokens. Unsupported
+CUDA convolution geometry (projection not divisible by 128) and multi-batch
+shared-indexer models now refuse. The latter needs an additional per-batch
+selection boundary owner. The trained ds4-layout model has a full indexer in
+every MLA block. Resident graph coverage for shared-indexer layouts remains.
+
+`glm53-stream-smoke MODEL PROMPT_FILE CONTEXT DECODE_TOKENS
+[FOLLOWUP_SUFFIX_FILE]` is built with `LLAMA_BUILD_GLM53_TESTS=ON`. Invoke it
+through the stack memory/GPU guardian with explicit budgets, a selected GPU and
+shared lease ledger. It requires `LLAMA_PREFILL_WF=1`; the numerical runner
+below records the other streaming settings. It accepts preformatted GLM text,
+uses F16 KV and one sequence, and caps requested decode at 128 tokens. The
+optional suffix follows the already committed model end/next-role token,
+without a new BOS. A truncated first response refuses the follow-up.
+
+The trained model answered `5` to two plus three, then `7` to ?add two? in the
+same process: 21 existing token positions were retained and 17 suffix tokens
+appended. This is CLI evidence, not GLM WebUI acceptance. Each streamed decode
+step still reads the target layers, taking about 11.7 seconds; no native warm
+decode throughput is claimed.
+
+| Trained-model bring-up | Measurement |
+|---|---|
+| 16,380-token prefill | 55.281544 s; 296.301421 tokens/s |
+| 49,520-token prefill | 232.208352 s; 213.256756 tokens/s |
+| Result after both long prompts | `5`, then end of turn |
+
+Times include uniform bulk plus exact-tail processing. Repeated `word` filler
+and a short arithmetic question are a basic coherence check, not long-range
+retrieval or a quality benchmark. The 49.5K loop spends much of its time in
+hidden transfers and input setup; this is not the dedicated ULTRA fold/sweep
+executor. The body-only rates must not be substituted for the full times above.
+
+`ds4-decode.dll` also has an experimental `ds4glm_*` C ABI. It reuses native
+GLM token kernels, external weight registration and expert hooks. Its graph
+allocates bounded single-token scratch without native weight residency,
+per-layer caches or a prefill workspace. The caller owns all KDA convolution
+and recurrent buffers, F16 latent/index caches and raw pool tails. Binding
+validates every span, precision, context and frontier before replacing views;
+failed decode requires fresh binding. Close detaches borrowed views before
+freeing scratch. GLM and V4.1 external sessions are exclusive because native
+shape/backend globals represent one model.
+
+The real-model-header ownership test passes eight cases, including a one-byte
+scratch refusal, missing/undersized owners, bad frontiers and preservation of
+borrowed CUDA memory after close. The successful 128-context bank owns
+154,210,304 bytes; native scratch is 48,051,540 bytes. This does not prove weight
+registration, prefill state conversion or even one trained-model native decode.
+The ABI's context bound is not a qualified serving preset.
+
+For the synthetic streaming checks, generate the existing fixtures with the
+optional KDA head dimension `32` (128 channels) and run:
+
+```sh
+python -B tests/streamllama/run_glm53_streaming.py --config "$CONFIG" \
+  --models "$FIXTURES" --cpu-binary "$CPU_LOGITS" \
+  --cuda-binary "$CUDA_LOGITS" --unsupported-model "$ORIGINAL_64_CHANNEL_MODEL" \
+  --output "$NEW_OUTPUT"
+```
+
+Fourteen uninstrumented streaming comparisons against seven CPU references
+pass, including 64/65/320 prompt tokens, 64/16 microbatches, all-row/last-only
+logits and eight continuation steps. All 1,081 top tokens agree; maximum logit
+difference is 2.3603439331e-05 at the unchanged 1e-2 threshold. Two unsupported
+controls refuse cleanly. The original CPU graph suite passes 18 cases. These
+checks use a 3 GiB host cap, up to 8 GiB WDDM commit allowance and a 4 GiB free
+physical-RAM floor. Long trained-model runs use a 6 GiB host cap and 32 GiB
+WDDM commit allowance under the same physical floor. Commit allowance is not a
+physical-memory allowance. Final monitored receipts report no owned paging;
+kernel ETW is unavailable, so they do not prove system-wide absence of paging.
+
+The native ownership check has a guarded entry point:
+
+```sh
+python -B engines/ds4-win/run_glm_external.py --config "$CONFIG" \
+  --model "$MODEL" --library "$DECODE_DLL" --cuda-runtime "$CUDA_RUNTIME_DLL" \
+  --output "$NEW_RESULT"
+```
+
+Remaining work: bridge and round-trip native/llama convolution and pooled-index
+layouts; register caller-owned dense and expert weights; compare actual native
+decode logits and keep-open appends against streaming references; integrate the
+existing producer/router/planner and quality/speed controls; then qualify GLM
+WebUI/Studio 262K/max presets and warm decode. No GLM YOCO behavior is enabled.
+Sanitized measurements and the separate DSV4.1 gate are in
+`examples/glm53_flash/round4.json`.
+
+
+The required DSV4.1 shared-code WebUI regression was rerun with the current
+producer and external-decode DLL. Four real turns pass, including retrieval of
+`AMBER OTTER 731` from 49,553 tokens, a cached follow-up, and two 1,000-token
+quality/speed responses. Incremental SSE, progress and live stats remain active;
+there are no browser page errors. The native process shuts down gracefully.
+
+| DSV4.1 comparison | Current | Round-two reference | Change |
+|---|---:|---:|---:|
+| Fresh prefill tokens/s | 1,773.6774 | 1,592.1285 | +11.40% |
+| Max-quality warm tokens/s | 7.04406 | 6.81180 | +3.41% |
+| Max-speed warm tokens/s | 18.79700 | 18.15505 | +3.54% |
+
+Both warm intervals contain all 899 evaluated steps after the first 100.
+The final prefill is faster than the requested absolute +/-5% band, so the
+strict all-metrics timing-band verdict is **false**. All three metrics satisfy
+a 5% no-slowdown floor. An earlier run measured 1,659.57 prefill tokens/s;
+both runs are retained instead of selecting the one inside the band. This is
+a regression smoke with observed timing variation, not a statistical speedup
+claim or permission to merge the unfinished GLM engine. Browser screenshots
+are `round4-dsv-recall.png` and `round4-dsv-speed.png` beside the JSON evidence.

@@ -5,7 +5,7 @@
 #   up-full.gguf   : upstream converter layout, every MLA layer has its own indexer
 #   ds4-full.gguf  : the same weights as up-full.gguf in the ds4 (antirez GLM-5.3-Flash) layout
 #
-# usage: PYTHONPATH=<llama.cpp>/gguf-py python3 make_tiny_glm5next.py <out_dir> [seed]
+# usage: PYTHONPATH=<llama.cpp>/gguf-py python3 make_tiny_glm5next.py <out_dir> [seed] [kda_head_dim=16]
 import sys
 import os
 import numpy as np
@@ -17,7 +17,9 @@ os.makedirs(out_dir, exist_ok=True)
 
 ARCH = "glm5-next"
 n_vocab, n_embd, n_head = 256, 64, 4
-head_dim_kda, d_conv = 16, 4
+head_dim_kda, d_conv = int(sys.argv[3]) if len(sys.argv)>3 else 16, 4
+if head_dim_kda not in (16,32,64,128):
+    raise ValueError('KDA head dimension must be 16, 32, 64 or 128')
 d_inner = n_head * head_dim_kda
 q_lora, kv_lora, qk_nope, v_head = 32, 32, 16, 16
 n_ihead, ihead, kpool, top_k = 4, 16, 4, 8
