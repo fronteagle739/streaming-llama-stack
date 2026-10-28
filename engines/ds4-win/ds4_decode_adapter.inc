@@ -46,6 +46,11 @@ DS4X_EXPORT int ds4x_host_cpu_v1(ds4_external_dot dot) {
 /* Reuse standalone ds4's persistent row pool, SwiGLU workers, Q8_K
  * activation quantizer and down accumulation. The provider pins the borrowed
  * RAM payloads until this call completes. Bounded stack scratch: < 100 KiB. */
+static block_q8_K g_external_trace_xq[5120/QK_K],g_external_trace_midq[6*2304/QK_K];
+static float g_external_trace_mid[6*2304];
+const void *ds4_external_cpu_trace(int which){
+    return which==0?(const void*)g_external_trace_xq:which==1?(const void*)g_external_trace_midq:(const void*)g_external_trace_mid;
+}
 int ds4_external_cpu_q4(float *out,const float *x,const char *const *gate,
         const char *const *up,const char *const *down,const float *weights,
         uint32_t n,uint32_t in_dim,uint32_t mid_dim,uint32_t out_dim,float clamp) {
@@ -67,6 +72,9 @@ int ds4_external_cpu_q4(float *out,const float *x,const char *const *gate,
     for(uint32_t i=0;i<n;++i){d.base[i]=(const uint8_t*)down[i];d.row_bytes[i]=down_row;d.xq[i]=midq+(uint64_t)i*(mid_dim/QK_K);}
     ds4_parallel_for(out_dim,matvec_q4_k_accum_worker,&d);
     if(g_external_cpu_verify){
+        memcpy(g_external_trace_xq,xq,sizeof(xq));
+        memcpy(g_external_trace_midq,midq,n*(mid_dim/QK_K)*sizeof(block_q8_K));
+        memcpy(g_external_trace_mid,mid,n*mid_dim*sizeof(float));
         static unsigned calls=0;if(calls++<16){double xn=0,mn=0,on=0;for(uint32_t i=0;i<in_dim;++i)xn+=x[i]*x[i];for(uint32_t i=0;i<n*mid_dim;++i)mn+=mid[i]*mid[i];for(uint32_t i=0;i<out_dim;++i)on+=out[i]*out[i];fprintf(stderr,"LLAMADECODE_HOST_CPU_FFN n=%u weight=%.9g x_norm=%.9g mid_norm=%.9g out_norm=%.9g\n",n,weights[0],sqrt(xn),sqrt(mn),sqrt(on));}
     }
     return 1;

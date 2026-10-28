@@ -38,9 +38,15 @@ scratch file. `tests/ramtier_compare_logits.py` compares only identical input
 prefixes. The existing native `decode_forced` path supports complete
 teacher-forced comparisons without sampling divergence. CPU registration initializes
 llama CPU conversion tables and requires a known-answer Q4_K dot.
-`LLAMADECODE_HOST_CPU_VERIFY=1` optionally compares the first 16 hybrid FFN
-rows with all-GPU rows on identical activations; it adds GPU work and is
-disabled for timing runs.
+`LLAMADECODE_HOST_CPU_VERIFY=1` compares the first 16 hybrid FFN rows with
+all-GPU rows on identical activations. `all` checks every serviced row and
+continues with the hybrid result. `reference` checks every serviced row and
+continues with the GPU result, isolating local arithmetic from accumulated
+decode-state differences. For discrepant rows, both extended modes also report
+input/middle Q8_K byte differences and the unquantized middle-row error.
+All verification modes add GPU work and change cache promotions; they are
+diagnostics and must be disabled for performance measurements. In particular,
+their Max speed routing is not the same as an ordinary CPU run.
 
 History searches in the clean stack and the earlier stack found no host expert
 tier in the single-engine provider. The earlier LLAMADECODE plan proposed one,
