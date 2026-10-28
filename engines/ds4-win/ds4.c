@@ -44863,7 +44863,9 @@ static bool ds41_graph_layer(ds41_gpu_graph *g, const ds4_model *m,
                             const ds4_layer_weights *l, uint32_t il, int token) {
     if (g->tp_world == 1 && ds41_dump_pos(g->pos)) {
         const uint32_t p = g->pos, hc = DS4_N_HC * DS4_N_EMBD;
-        return ds41_graph_before_attention(g, m, l, il) &&
+        return ds41_dump_put(g->residual, 0, hc, il, p, 11) &&
+            (il || ds41_dump_put(g->pre, 0, DS4_N_HC, il, p, 12)) &&
+            ds41_graph_before_attention(g, m, l, il) &&
             ds41_dump_put(g->norm, 0, DS4_N_EMBD, il, p, 0) &&
             ds41_attention(g, m, l, il, false) &&
             ds41_dump_put(g->after_attn, 0, hc, il, p, 1) &&

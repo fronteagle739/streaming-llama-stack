@@ -55,6 +55,14 @@ def evidence(root, experiment, cfg):
 
 def run_child(args, cfg, arm, label):
     root=args.root
+    if args.trace_append:
+        dump=root/(label+'.layers.bin')
+        if dump.exists():raise FileExistsError('Attribution output already exists: '+str(dump))
+        cfg['env_overrides'].update(DS4COMBO_V41_DUMP=str(dump),
+                                   DS4COMBO_V41_DUMP_POS=str(args.count+77),LLAMADECODE_DS4_BIAS='0')
+        actual=environment(cfg,'rtx-producer')
+        for key in ('DS4COMBO_V41_DUMP','DS4COMBO_V41_DUMP_POS','LLAMADECODE_DS4_BIAS'):
+            if actual.get(key)!=cfg['env_overrides'][key]:raise ValueError('Attribution setting not applied: '+key)
     seed_path=args.seed_file or root/'seed.tokens.le32'
     if not seed_path.resolve().is_relative_to(root):raise ValueError('Fixture must stay under configured scratch')
     seed=seed_path.read_bytes()
@@ -69,6 +77,10 @@ def run_child(args, cfg, arm, label):
     tokens=list(struct.unpack('<'+'I'*args.count,raw))
     forced=tokens[-min(16,len(tokens)):]
     model=Path(cfg['model']);identity=model.stat()
+    dll=Path(cfg['llama_producer']).parent/'ds4-decode.dll'
+    dll_hash=hashlib.file_digest(dll.open('rb'),'sha256').hexdigest()
+    if cfg.get('producer_decode_dll_sha256') and dll_hash!=cfg['producer_decode_dll_sha256']:
+        raise ValueError('Decode DLL hash differs from the pinned diagnostic build')
     result=dict(experiment=args.experiment,arm=arm,day=datetime.now(timezone.utc).date().isoformat(),
                 model=str(model),model_bytes=identity.st_size,model_mtime_ns=identity.st_mtime_ns,
                 prompt_tokens=len(tokens),input_sha256=hashlib.sha256(raw).hexdigest(),
@@ -77,6 +89,8 @@ def run_child(args, cfg, arm, label):
                 config_sha256=cfg['_pair_config_sha256'],
                 source_revision=cfg['producer_source_revision'],status='RUNNING',
                 candidate_setting=args.candidate)
+    result['decode_dll_sha256']=dll_hash
+    result['trace_append']=args.trace_append
     target=root/(label+'.json')
     producer=None;owner=[];done=threading.Event();samples=[]
     if target.exists():raise FileExistsError('Retain prior evidence; use a new experiment label: '+str(target))
@@ -140,6 +154,10 @@ def run_child(args, cfg, arm, label):
         result['forced']=producer.decode_forced(forced,logits)
         result['logits_sha256']=hashlib.file_digest(logits.open('rb'),'sha256').hexdigest()
         if args.append:
+            result['append_base_checkpoint']=producer.checkpoint
+            result['append_quality_bias']=0
+            if args.trace_append and producer.checkpoint['position']!=args.count+77:
+                raise ValueError('Attribution position no longer matches the untouched append boundary')
             meta=read_header(model)['metadata']
             tokenizer=Tokenizer(meta['tokenizer.ggml.tokens'],meta['tokenizer.ggml.merges'])
             question=tokenizer.text('\nRepeat the original archive retrieval key exactly.')
@@ -187,6 +205,7 @@ def main():
     p.add_argument('--warmup',type=int,default=0)
     p.add_argument('--append',type=int,default=0)
     p.add_argument('--capture-kv',action='store_true')
+    p.add_argument('--trace-append',action='store_true',help='Synchronizing E2c first-append-token layer trace; never use as timing evidence')
     p.add_argument('--candidate-first',action='store_true')
     p.add_argument('--engram-turns',type=int,choices=(0,3),default=0)
     p.add_argument('--resume',action='store_true')
@@ -199,6 +218,8 @@ def main():
     if not re.fullmatch('[A-Za-z][A-Za-z0-9_-]{0,63}',args.experiment):raise ValueError('Use a bounded experiment label')
     if not 1<=args.count<=200000 or not 1<=args.decode<=128 or not 0<=args.warmup<=128:raise ValueError('Unbounded experiment')
     if not 0<=args.append<=256:raise ValueError('Unbounded append experiment')
+    if args.trace_append and (not args.append or args.engram_turns or args.decode_before_forced):
+        raise ValueError('Attribution requires the canonical append sequence')
     if args.decode_before_forced and (args.append or args.engram_turns):
         raise ValueError('Natural decode window cannot mix with append/turn timing')
     root=args.root.resolve()
@@ -232,7 +253,19 @@ def main():
                     and row.get('config_sha256')==cfg['_pair_config_sha256']
                     and row.get('seed_sha256')==hashlib.sha256((args.seed_file or root/'seed.tokens.le32').read_bytes()).hexdigest()
                     and row.get('candidate_setting')==list(args.candidate)
-                    and len(row.get('turns',[]))==args.engram_turns):
+                    and len(row.get('turns',[]))==args.engram_turns
+                    and row.get('trace_append',False)==args.trace_append
+                    and row.get('append_tokens',0)==args.append):
+                # A completed arm may have stopped at the external health gate.
+                # Preserve its original failure receipt, and require recovery
+                # before reusing its numerical evidence or admitting another arm.
+                guard=json.loads((root/(args.experiment+'-'+arm+'-guard.json')).read_text())
+                if not guard.get('cleanup_confirmed'):raise RuntimeError('Completed arm lacks confirmed owned cleanup')
+                recovered=dict(health=http('health'),remote=http('remote-link/status'))
+                remote=recovered['remote']
+                if recovered['health'].get('model') is not None or not (remote.get('running') and remote.get('serving') and remote.get('end_to_end',{}).get('ok')):
+                    raise RuntimeError('Completed arm cannot resume until Studio/Remote Link health recovers')
+                (root/(args.experiment+'-'+arm+'-resume-health.json')).write_text(json.dumps(recovered,indent=2))
                 print('RESUME_COMPLETED_ARM',arm,flush=True)
                 continue
             raise ValueError('Prior arm cannot be resumed; use a new label')

@@ -10,7 +10,78 @@ The owner's subsequent correction requires faster-but-lossy paths off by default
 `LLAMADECODE_APPEND_DECODE_MAX` now defaults to `0` in code, producer environment
 and the example config; explicitly set `96` to reproduce the measured toggle.
 The original measurements below used explicit `0`/`96`, so this default change
-does not alter them. The accuracy attribution remains in progress.
+does not alter them. A resident-expert sweep candidate is being qualified;
+the original single-token adapter remains numerically different.
+
+## Follow-up accuracy attribution
+
+A synchronizing 2K diagnostic reproduces the original follow-up KL exactly:
+0.010867756, first-token top-1 unchanged and retrieval passing. Both arms set
+bias zero; native receipts confirm affinity disabled. The complete saved
+checkpoint immediately before the same32-token append is identical, including
+token, logit and all cache-owner hashes.
+
+At the first appended token, absolute position2125, layer0 input residual,
+initial pre seed and normalized attention input are bit-exact. The first
+observed hidden difference is layer0's output after attention: maximum absolute
+error0.00390625, relative L2 error0.003465757. This precedes expert routing.
+Expert order first differs at layer3 (the same set); the first expert-set
+difference is at layer13. Across40 layers,34 select the same set at this token.
+The changed expert sets follow an earlier attention-path difference; they are
+not evidence of a deliberately enabled residency bias. The boundary state is
+identical. The specific operation inside attention still needs finer tracing.
+
+These observations cover one append token, not every intermediate distribution
+of the32-token turn. The trace synchronizes GPU work and supplies no speed
+measurement. A strict bounded reader checks complete40-layer coverage, finite
+values, unique records and matched binary/input/checkpoint receipts.
+
+A finer matched trace finds query-after-RoPE differences already at layer0
+(max_abs0.125, relative L2 0.00233625), and new raw-KV QAT differences
+(max_abs0.03125, relative L2 0.00749470). Thus the difference begins within the
+projection/RoPE calculations before attention lookup and before expert selection.
+It does not originate in pre-existing cache state or an enabled residency bias.
+The trace does not isolate one particular fused kernel or reduction instruction.
+One public-relay health check timed out after the control closed; the failure was
+retained, health subsequently recovered, and the continuation required a fresh
+healthy Studio/Remote Link result and confirmed owned cleanup.
+
+## Sweep-based resident expert candidate
+
+`LLAMADECODE_APPEND_RESIDENT_SWEEP=1` retains L1 expert placement for at most32
+new tokens but executes the original sweep graph. It releases L2 before restoring
+the startup-admitted prefill graph and hidden buffers. Its existing router hook
+fetches only the chosen experts; the arithmetic policy and cache type are kept.
+It requires `LLAMADECODE_APPEND_DECODE_MAX=0`. The default remains off.
+
+Same-day matched control/candidate, identical binary/model and canonical32-token
+follow-up, bias0, fresh engine for each arm:
+
+| Initial context | Full sweep append s | Resident sweep append s | Full/resident TTFT s | Follow-up KL | Top-1 / retrieval |
+|---|---:|---:|---:|---:|---|
+| 2048 | 17.937 | 2.937 | 17.953 / 2.953 | 0.0000234684 | 100% / both pass |
+| 8192 | 18.156 | 2.734 | 18.187 / 2.750 | 0.0002244271 | 100% / both pass |
+| 32768 | 17.547 | 2.796 | 17.579 / 2.828 | 0.0024988856 | 100% / both pass |
+
+All17 unchanged initial/forced full-vocabulary rows per pair are bit-exact.
+Complete pre-append checkpoint hashes match. Post-append owner and logit hashes
+do not match. There is one untouched follow-up frontier per pair, not a complete
+intermediate-trajectory quality comparison. All six engines closed gracefully,
+with confirmed owned cleanup under the6.5GiB host cap. Peak sampled tree RSS
+was6,165,630,976 bytes and minimum available RAM7,718,727,680 bytes; no guard stop.
+Timing is from untraced runs; the separate traces are not speed evidence.
+
+The owner considered the2K KL acceptable for a default, conditional on8K/32K
+remaining at approximately1e-4 or lower, recall passing, and no slowdown. Both
+larger contexts exceed that requested KL gate. **Default adoption is held; the
+faster but non-exact path is retained only as an opt-in toggle.** It has not been
+declared quality-neutral or bit-exact. The small2K KL does not generalize.
+
+A matched2K trace of this alternative first differs at layer8's FFN output
+(max_abs0.00390625, relative L2 0.000326660); layers0-7 are exact at the first
+append token. Expert sets first differ at layer21, with37/40 sets equal there.
+The physical slot mapping changes the grouped expert execution; this is an
+attribution lead, not proof of a particular summation-order defect.
 
 ## Cold prompt plan
 
