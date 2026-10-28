@@ -11,6 +11,7 @@
 #include "llama-dsv41-dense-half-admission.h"
 #include "llama-dsv41-route-split.h"
 #include "llama-dsv41-hash-dump.h"
+#include "llama-dsv41-attribution.h"
 #include "ggml-dsv41-expert-routing.h"
 #include "ggml-dsv41-topk.h"
 #include "ggml-dsv41-stream-topk.h"
@@ -362,6 +363,10 @@ struct llama_dsv41_tile_executor::pinned_storage {
     ggml_backend_t backend=nullptr;
 #ifdef GGML_USE_CUDA
     bool registered=false,tile_registration=false,pageable_copies=false;
+    static constexpr uint64_t host_copy_staging_bytes=64ull*1024*1024;
+    std::shared_ptr<void> host_copy_staging;
+    uint64_t staging_copies=0,staging_bytes=0;
+
     std::vector<std::vector<uint8_t>> pending_host_uploads;
     void *registered_tile=nullptr;uint64_t registered_tile_bytes=0;
     cudaStream_t copies=nullptr;
@@ -372,6 +377,8 @@ struct llama_dsv41_tile_executor::pinned_storage {
     static void ok(cudaError_t e,const char *message){if(e!=cudaSuccess)throw std::runtime_error(std::string(message)+": "+cudaGetErrorString(e));}
     static void cleanup(cudaError_t e){if(e!=cudaSuccess){llama_dsv41_layer_log("DSV41_PINNED_COPY_CLEANUP_FAILED %s\n",cudaGetErrorString(e));std::fflush(stderr);std::abort();}}
     ~pinned_storage(){
+        if(host_copy_staging)llama_dsv41_layer_log("PERFEXP_HOST_STAGING_RETIRE copies=%llu bytes=%llu buffer_bytes=%llu\n",
+            (unsigned long long)staging_copies,(unsigned long long)staging_bytes,(unsigned long long)host_copy_staging_bytes);
         if(copies)cleanup(cudaStreamSynchronize(copies));
         if(backend)ggml_backend_synchronize(backend);
         if(registered_tile)cleanup(cudaHostUnregister(registered_tile));
@@ -409,7 +416,7 @@ struct llama_dsv41_tile_executor::pinned_storage {
         if(std::getenv("DS4PERF_RING_TRACE")&&elapsed(before)>1)llama_dsv41_layer_log("DS4PERF_VALIDATION_API host_ms=%.6f\n",elapsed(before));
     }
     void bind_lease(const llama_dsv41_carry_store::ram_lease &lease,const llama_dsv41_carry_store::ram_lookahead *lookahead=nullptr){
-        if(!tile_registration)return;
+        if(!tile_registration||host_copy_staging)return;
         require(!registered&&lease.base==base&&lease.bytes==bytes&&lease.count(),"Tile pin requires its exact existing RAM lease");
         (void)lease.row(0);(void)lease.row(lease.count()-1);
         uint32_t next_rows=0;const uint8_t*last=lease.row(lease.count()-1);
@@ -444,6 +451,35 @@ struct llama_dsv41_tile_executor::pinned_storage {
     }
     void queue(bool to_device,const llama_dsv41_carry_store::ram_lease &lease,uint64_t offset,uint64_t width,ggml_tensor *tensor){
         require(!current_bank_copies_forbidden,"A resident-only reader attempted an unregistered RAM bank copy");
+        if(host_copy_staging){
+            require(tile_registration&&!registered&&!registered_tile&&!pageable_copies&&!prefetch_buffer&&
+                lease.base==base&&lease.bytes==bytes&&lease.count()&&width&&width<=host_copy_staging_bytes&&
+                offset<=llama_dsv41_carry_store::ram_record_bytes&&width<=llama_dsv41_carry_store::ram_record_bytes-offset&&
+                tensor&&tensor->data&&ggml_is_contiguous(tensor)&&ggml_nbytes(tensor)==width*lease.count(),
+                "Persistent host staging escaped its exact admitted carry/tensor");
+            (void)lease.row(0);(void)lease.row(lease.count()-1);
+            auto*stage=static_cast<uint8_t*>(host_copy_staging.get());
+            // Retire every prior consumer before overwriting the one host slot.
+            // D2H waits on readback_ready's original compute event. No carry
+            // generation can commit until finish() and the original validation.
+            ok(cudaStreamSynchronize(copies),"Persistent host staging prior copy did not finish");
+            const uint32_t capacity=uint32_t(host_copy_staging_bytes/width);
+            for(uint32_t first=0;first<lease.count();first+=capacity){
+                const uint32_t rows=std::min(capacity,lease.count()-first);
+                const uint64_t count=uint64_t(rows)*width;
+                if(to_device)for(uint32_t i=0;i<rows;++i)
+                    std::memcpy(stage+uint64_t(i)*width,lease.row(first+i)+offset,size_t(width));
+                auto*device=static_cast<char*>(tensor->data)+uint64_t(first)*width;
+                ok(cudaMemcpyAsync(to_device?static_cast<void*>(device):stage,
+                    to_device?static_cast<const void*>(stage):device,size_t(count),
+                    to_device?cudaMemcpyHostToDevice:cudaMemcpyDeviceToHost,copies),"Persistent host staging copy failed");
+                ok(cudaStreamSynchronize(copies),"Persistent host staging copy did not finish");
+                if(!to_device)for(uint32_t i=0;i<rows;++i)
+                    std::memcpy(lease.row(first+i)+offset,stage+uint64_t(i)*width,size_t(width));
+                staging_copies++;staging_bytes+=count;
+            }
+            return;
+        }
         if(pageable_copies){
             require(!registered&&!tile_registration&&!prefetch_buffer&&lease.base==base&&lease.bytes==bytes&&width&&offset<=llama_dsv41_carry_store::ram_record_bytes&&width<=llama_dsv41_carry_store::ram_record_bytes-offset&&tensor&&tensor->data&&ggml_is_contiguous(tensor)&&ggml_nbytes(tensor)==width*lease.count(),"Pageable vector copy escaped its exact resident lease/tensor");
             (void)lease.row(0);(void)lease.row(lease.count()-1);
@@ -671,6 +707,27 @@ llama_dsv41_tile_executor::llama_dsv41_tile_executor(ggml_backend_t backend,llam
                 const bool ram_lookahead=!fixed->bf16&&!fixed->ids&&!fixed->metadata&&!defer_hidden_readback&&admitted_prefetch_bytes;
                 require(!fixed->ram_registration&&(full_resident||(fixed->tile_registration&&!fixed->pageable_copies&&ram_lookahead)),"Tile registration requires its explicit resident or RAM-lookahead plan");
                 pinned->tile_registration=fixed->tile_registration;pinned->pageable_copies=fixed->pageable_copies;
+                const char*staging=std::getenv("LLAMADECODE_HOST_COPY_STAGING");
+                require(!staging||!std::strcmp(staging,"0")||!std::strcmp(staging,"1")||!std::strcmp(staging,"auto"),"Host copy staging requires0/1/auto");
+                const bool stage_auto=!staging||!std::strcmp(staging,"auto");
+                const bool stage_supported=fixed->tile_registration&&!fixed->pageable_copies&&!admitted_prefetch_bytes;
+                const bool stage_spill=resident_hidden_tokens>fixed->bank_rows();
+                const bool stage_on=stage_supported&&((staging&&!std::strcmp(staging,"1"))||(stage_auto&&stage_spill));
+                require(!(staging&&!std::strcmp(staging,"1"))||stage_supported,"Forced host staging requires fixed tile-registration without async lookahead");
+                llama_dsv41_layer_log("PERFEXP_HOST_STAGING_POLICY requested=%s enabled=%u logical_rows=%u bank_rows=%u spill=%u supported=%u\n",
+                    staging?staging:"auto",unsigned(stage_on),resident_hidden_tokens,fixed->bank_rows(),unsigned(stage_spill),unsigned(stage_supported));
+                if(stage_on){
+                    if(!fixed->host_copy_staging){
+                        void*slot=nullptr;
+                        pinned_storage::ok(cudaMallocHost(&slot,pinned_storage::host_copy_staging_bytes),"Bounded persistent host staging allocation failed");
+                        fixed->host_copy_staging=std::shared_ptr<void>(slot,[](void*p){pinned_storage::cleanup(cudaFreeHost(p));});
+                        llama_dsv41_layer_log("PERFEXP_HOST_STAGING_ALLOC bytes=%llu fixed_lifetime=1 carry_bank_registered=0\n",
+                            (unsigned long long)pinned_storage::host_copy_staging_bytes);
+                    }
+                    pinned->host_copy_staging=fixed->host_copy_staging;
+                    llama_dsv41_layer_log("PERFEXP_HOST_STAGING_BIND bytes=%llu fixed_owner_reused=1 carry_generation_checks=1\n",
+                        (unsigned long long)pinned_storage::host_copy_staging_bytes);
+                }
                 llama_dsv41_layer_log(fixed->pageable_copies?"DS4PERF_FIXED_RAM_PAGEABLE_VECTORS view_bytes=%llu whole_bank_pinned=0 existing_backend_API=1\n":"DS4PERF_FIXED_RAM_TILE_REGISTRATION view_bytes=%llu whole_bank_pinned=0 no_new_staging=1\n",(unsigned long long)direct->bytes);
             }else{
                 unsigned flags=0;pinned_storage::ok(cudaHostGetFlags(&flags,direct->base),"Fixed carry RAM is no longer registered");
@@ -916,7 +973,7 @@ bool llama_dsv41_tile_executor::run(const request&in,const llama_dsv41_layer_gra
         const bool direct_input=bool(in.direct);
         require(direct_input==bool(pinned),"Pinned carry request/configuration mode changed");
         bool skip_tile_pin=false;
-        double tile_bind_ms=0,tile_register_ms=0,tile_launch_ms=0,tile_sync_ms=0;float tile_gpu_ms=-1;
+        double tile_bind_ms=0,tile_register_ms=0,tile_graph_ms=0,tile_reserve_ms=0,tile_launch_ms=0,tile_sync_ms=0;float tile_gpu_ms=-1;
 #ifdef GGML_USE_CUDA
         struct bank_copy_scope {pinned_storage*p;~bank_copy_scope(){if(p)p->current_bank_copies_forbidden=false;}} bank_scope{pinned.get()};
 #endif
@@ -1025,7 +1082,9 @@ bool llama_dsv41_tile_executor::run(const request&in,const llama_dsv41_layer_gra
         int routed_split=-1; // LLAMADECODE B1: first node after the router cut
         ggml_tensor*expert_slot_input=nullptr; // LLAMADECODE B2
         ggml_tensor*hash_experts=nullptr; // LLAMADECODE_HASH_DUMP only
+        std::vector<std::pair<uint32_t,ggml_tensor*>> attribution_stages;
         if(workspace&&workspace->cache_layouts){
+            require(!llama_dsv41_attribution_active(in.position_offset+in.start,in.count),"E2c attribution refuses cached layer graphs");
             require(!boundary.active()&&!resident,"Cached layer graphs refuse capture and hidden-bank rebinding");
             if(workspace->layer!=in.layer){
                 workspace->variants.clear();workspace->layer=in.layer;
@@ -1045,6 +1104,7 @@ bool llama_dsv41_tile_executor::run(const request&in,const llama_dsv41_layer_gra
         auto &backend_temporary=compiled->backend_temporary;
         auto &rounded_matrices=compiled->rounded_matrices;auto &split_matrices=compiled->split_matrices;
         ggml_tensor *spill_slot=nullptr;   // LLAMADECODE single sweep: the slot's BF16 view (spilled tiles)
+        const auto graph_prepare_started=tile_timing_enabled()?clock_type::now():clock_type::time_point{};
         if(graph_cache_hit)compiled->bindings.restore(in.start,in.count);
         else {
         const bool long_index=expert.index_key_windows&&query_source(in.layer)&&in.compressed_rows>131072;
@@ -1114,9 +1174,23 @@ bool llama_dsv41_tile_executor::run(const request&in,const llama_dsv41_layer_gra
             ratio?cache.index(in.layer):nullptr,nullptr,nullptr};
         if(pooled){state.previous_pool_kv=cache.pool_kv(in.layer);state.previous_pool_score=cache.pool_score(in.layer);}
         graph=ggml_new_graph_custom(ctx.get(),long_index?16384:8192,false);
+        const bool attribution=llama_dsv41_attribution_active(in.position_offset+in.start,in.count);
+        unsigned attribution_expands=0;
         llama_dsv41_graph_ops::observer boundary_observer;
-        if(boundary.active())boundary_observer=[&](ggml_tensor*t,const char*name){
-            ggml_set_name(t,name);boundary.observe(t,name);
+        if(boundary.active()||attribution)boundary_observer=[&](ggml_tensor*t,const char*name){
+            ggml_set_name(t,name);if(boundary.active())boundary.observe(t,name);
+            if(!attribution)return;
+            if(!std::strcmp(name,"dsv41_weighted_norm_bf16")&&t->src[0]&&t->src[0]->op==GGML_OP_MUL){
+                const auto *weight=t->src[0]->src[1];
+                if(weight==w.attn_norm)attribution_stages.push_back({0,t});
+                if(weight==w.ffn_norm)attribution_stages.push_back({2,t});
+            }
+            if(!std::strcmp(name,"dsv41_hc_expand_bf16")&&attribution_expands++==0)
+                attribution_stages.push_back({1,t});
+            if(!std::strcmp(name,"dsv41_rope_bf16_tail")&&t->ne[0]==512&&t->ne[1]==64)
+                attribution_stages.push_back({7,t});
+            if(!std::strcmp(name,"dsv41_inverse_rope_bf16_tail")&&t->ne[0]==512&&t->ne[1]==64)
+                attribution_stages.push_back({9,t});
         };
         boundary.add(input.residual,"common_residual");
         boundary.add(input.previous_pre,"previous_pre");
@@ -1136,6 +1210,17 @@ bool llama_dsv41_tile_executor::run(const request&in,const llama_dsv41_layer_gra
         if(in.route_hook){expert_slot_input=ggml_new_tensor_2d(ctx.get(),GGML_TYPE_I32,6,in.count);ggml_set_name(expert_slot_input,"dsv41_expert_slots");
             ggml_set_input(expert_slot_input);routed_weights.ffn.expert_slots=expert_slot_input;}
         values=pair_ffn?factory.build_pair(in.layer,p,in.compressed_rows,routed_weights,input,state,expert):factory.build(in.layer,p,in.compressed_rows,routed_weights,input,state,expert);
+        if(attribution){
+            require((!pair_ffn||in.count<=attention_rows)&&(!workspace||!workspace->cache_layouts),"E2c attribution requires fresh, single-attention layer graphs");
+            require(std::count_if(attribution_stages.begin(),attribution_stages.end(),[](const auto&s){return s.first<=2;})==3,"E2c attribution lost attention/FFN stage coverage");
+            for(int i=0;i<ggml_graph_n_nodes(graph);++i){auto*t=ggml_graph_node(graph,i);
+                if(t->op==GGML_OP_DSV4_ACT_QAT&&t->op_params[0]==GGML_DSV41_QAT_FP8_E8M0&&ggml_nelements(t)==int64_t(512)*in.count)
+                    attribution_stages.push_back({8,t});
+                if(t->op==GGML_OP_MUL_MAT&&t->src[0]==w.attention.out_b)
+                    attribution_stages.push_back({10,t});
+            }
+            for(auto &stage:attribution_stages){stage.second=ggml_cont(ctx.get(),stage.second);ggml_set_output(stage.second);ggml_build_forward_expand(graph,stage.second);}
+        }
         if(capture_dspark){
             capture_ticket=in.yoco_raw_begin?cache.dspark_completion.begin_replay(in.layer-37,in.position_offset+in.start,in.count):cache.dspark_completion.begin(in.layer-37,in.position_offset+in.start,in.count);
             llama_dsv41_dspark_capture::enqueue(ctx.get(),graph,cache.dspark_ring,values.dspark_mean,
@@ -1261,7 +1346,7 @@ bool llama_dsv41_tile_executor::run(const request&in,const llama_dsv41_layer_gra
         for(auto*t:uploaded_inputs)ggml_build_forward_expand(graph,t);
         routed_split=-1;
         hash_experts=nullptr;
-        if(llama_dsv41_hash_dump_enabled()){ // diagnostic: keep the routed ids readable after compute
+        if(llama_dsv41_hash_dump_enabled()||llama_dsv41_attribution_active(in.position_offset+in.start,in.count)){ // diagnostic: keep the routed ids readable after compute
             for(int i=0;i<ggml_graph_n_nodes(graph);++i)if(!std::strcmp(ggml_get_name(ggml_graph_node(graph,i)),"dsv41_ffn_selected_experts")){hash_experts=ggml_graph_node(graph,i);ggml_set_output(hash_experts);}
         }
         if(in.prefill_route_hook){
@@ -1304,6 +1389,7 @@ bool llama_dsv41_tile_executor::run(const request&in,const llama_dsv41_layer_gra
             workspace->variants.push_back(std::move(fresh));
         }
         }
+        if(tile_timing_enabled())tile_graph_ms=elapsed(graph_prepare_started);
         if(const char *diag=std::getenv("DS4PERF_DIAGNOSTIC_LAYERS")){if(*diag){
             llama_dsv41_layer_log("DS4PERF_GRAPH_TRACE layer=%u start=%u count=%u hit=%u semantic_fnv64=%016llx",in.layer,in.start,in.count,unsigned(graph_cache_hit),
                 (unsigned long long)llama_dsv41_graph_digest(ctx.get(),graph));std::fputc(10,stderr);std::fflush(stderr);
@@ -1320,10 +1406,12 @@ bool llama_dsv41_tile_executor::run(const request&in,const llama_dsv41_layer_gra
 #ifdef GGML_USE_CUDA
         allocation.pending_copies=pinned?pinned->copies:nullptr;
 #endif
+        const auto graph_reserve_started=tile_timing_enabled()?clock_type::now():clock_type::time_point{};
         allocation.owned=!workspace;
         allocation.value=workspace?workspace->value:ggml_gallocr_new(buft);require(allocation.value,"V4.1 lifetime allocator creation failed");
         const uint64_t scratch=llama_dsv41_allocate_native_graph(allocation.value,graph,
             backend_temporary,admitted_graph_bytes);
+        if(tile_timing_enabled())tile_reserve_ms=elapsed(graph_reserve_started);
         const uint64_t actual=scratch-backend_temporary;
         uint64_t rope_aliases=0,rope_alias_bytes=0,rope_tagged=0;
         if(rope_inplace){
@@ -1460,6 +1548,11 @@ bool llama_dsv41_tile_executor::run(const request&in,const llama_dsv41_layer_gra
         if(llama_dsv41_hash_dump_enabled()){ggml_backend_synchronize(backend);
             llama_dsv41_hash_phase("in",in.layer,in.position_offset+in.start,in.count,graph,{},{},{});}
         cache.execution_poisoned=true;const auto compute_start=clock_type::now();
+        if(llama_dsv41_attribution_active(in.position_offset+in.start,in.count)){
+            ggml_backend_synchronize(backend);
+            llama_dsv41_attribution_write(input.residual,in.position_offset+in.start,in.count,in.layer,11,5120*4);
+            if(in.layer==0)llama_dsv41_attribution_write(input.previous_pre,in.position_offset+in.start,in.count,in.layer,12,4);
+        }
 #if defined(GGML_USE_CUDA)
         ggml_ds4_native_half_stats expert_before{},expert_after{};
         const auto index_before=index_cublas?ggml_backend_cuda_dsv41_index_cublas_queued():0;
@@ -1572,6 +1665,13 @@ bool llama_dsv41_tile_executor::run(const request&in,const llama_dsv41_layer_gra
         // Both events precede the synchronize on the same stream, so they are complete here.
         if(tile_stream)pinned_storage::ok(cudaEventElapsedTime(&tile_gpu_ms,tile_events[0],tile_events[1]),"Tile timing elapsed read failed");
 #endif
+        if(llama_dsv41_attribution_active(in.position_offset+in.start,in.count)){
+            for(const auto &stage:attribution_stages)
+                llama_dsv41_attribution_write(stage.second,in.position_offset+in.start,in.count,in.layer,stage.first,
+                    stage.first==1?5120*4:stage.first==7||stage.first==9?512*64:stage.first==8?512:5120);
+            llama_dsv41_attribution_write(values.residual,in.position_offset+in.start,in.count,in.layer,6,5120*4);
+            llama_dsv41_attribution_write(hash_experts,in.position_offset+in.start,in.count,in.layer,3,6);
+        }
         if(llama_dsv41_hash_dump_enabled()){
             std::vector<int32_t>experts;
             if(hash_experts){experts.resize(size_t(ggml_nelements(hash_experts)));ggml_backend_tensor_get(hash_experts,experts.data(),0,experts.size()*4);}
@@ -1801,8 +1901,8 @@ bool llama_dsv41_tile_executor::run(const request&in,const llama_dsv41_layer_gra
         pending.readback_ms=elapsed(readback_start);
         const auto cleanup_started=clock_type::now();allocation.release();pending.cleanup_ms=elapsed(cleanup_started);
         if(capture_dspark)cache.dspark_completion.commit(capture_ticket);
-        if(tile_timing_enabled())llama_dsv41_layer_log("LLAMADECODE_TILE_TIMING layer=%u tile=%u rows=%u host_prepare_ms=%.3f host_bind_ms=%.3f host_register_ms=%.3f host_upload_ms=%.3f host_launch_ms=%.3f host_sync_ms=%.3f gpu_ms=%.3f compute_ms=%.3f host_readback_ms=%.3f host_cleanup_ms=%.3f skip_pin=%u prefetch=%u\n",
-            in.layer,in.start,in.count,pending.prepare_ms,tile_bind_ms,tile_register_ms,pending.upload_ms,tile_launch_ms,tile_sync_ms,double(tile_gpu_ms),pending.compute_ms,pending.readback_ms,pending.cleanup_ms,unsigned(skip_tile_pin),unsigned(prefetch_next));
+        if(tile_timing_enabled())llama_dsv41_layer_log("LLAMADECODE_TILE_TIMING layer=%u tile=%u rows=%u host_prepare_ms=%.3f host_bind_ms=%.3f host_register_ms=%.3f host_graph_ms=%.3f host_reserve_ms=%.3f host_upload_ms=%.3f host_launch_ms=%.3f host_sync_ms=%.3f gpu_ms=%.3f compute_ms=%.3f host_readback_ms=%.3f host_cleanup_ms=%.3f skip_pin=%u prefetch=%u\n",
+            in.layer,in.start,in.count,pending.prepare_ms,tile_bind_ms,tile_register_ms,tile_graph_ms,tile_reserve_ms,pending.upload_ms,tile_launch_ms,tile_sync_ms,double(tile_gpu_ms),pending.compute_ms,pending.readback_ms,pending.cleanup_ms,unsigned(skip_tile_pin),unsigned(prefetch_next));
         out=std::move(pending);cache.execution_poisoned=false;probe.pre_return_ms=elapsed(prepare_started);probe.complete=true;return true;
     }catch(const std::exception&failure){error=failure.what();return false;}
 }

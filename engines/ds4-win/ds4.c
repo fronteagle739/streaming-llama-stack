@@ -44863,7 +44863,9 @@ static bool ds41_graph_layer(ds41_gpu_graph *g, const ds4_model *m,
                             const ds4_layer_weights *l, uint32_t il, int token) {
     if (g->tp_world == 1 && ds41_dump_pos(g->pos)) {
         const uint32_t p = g->pos, hc = DS4_N_HC * DS4_N_EMBD;
-        return ds41_graph_before_attention(g, m, l, il) &&
+        return ds41_dump_put(g->residual, 0, hc, il, p, 11) &&
+            (il || ds41_dump_put(g->pre, 0, DS4_N_HC, il, p, 12)) &&
+            ds41_graph_before_attention(g, m, l, il) &&
             ds41_dump_put(g->norm, 0, DS4_N_EMBD, il, p, 0) &&
             ds41_attention(g, m, l, il, false) &&
             ds41_dump_put(g->after_attn, 0, hc, il, p, 1) &&
@@ -44906,8 +44908,63 @@ static bool ds41_decode_island(ds41_gpu_graph *g, const ds4_model *m,
     }
 }
 
+static bool ds41_single_hc_graphs_on(void) {
+#if defined(__APPLE__) || defined(DS4_ROCM_BUILD)
+    return false;
+#else
+    static int cached = -1;
+    if (cached < 0) { const char *value = getenv("DS4_CUDA_SINGLE_GPU_HC_GRAPHS"); cached = !value || value[0] == '1'; }
+    return cached != 0;
+#endif
+}
+static bool ds41_hc_graph_profile_on(void) {
+    static int cached = -1;
+    if (cached < 0) { const char *value = getenv("DS4_CUDA_HC_GRAPH_PROFILE"); cached = value && value[0] == '1'; }
+    return cached != 0;
+}
+static double g_ds41_hc_encode_s;
+static uint32_t g_ds41_hc_calls, g_ds41_hc_replays;
+
+/* HC pre-norm/mixes only: no positions, cache writes, Engram, router or expert
+ * callbacks enter capture. The attention path, including its fused projection,
+ * is identical to eager single-GPU decode. */
+static bool ds41_single_hc_island(ds41_gpu_graph *g, const ds4_model *m,
+                                  const ds4_layer_weights *l, uint32_t il) {
+    const bool profile = ds41_hc_graph_profile_on();
+    const double began = profile ? now_sec() : 0.0;
+    bool ok;
+    if (!ds41_single_hc_graphs_on() || !ds4_gpu_decode_graphs_supported()) {
+        ok = ds41_graph_before_attention(g, m, l, il);
+    } else {
+        const ds4_decode_graph_key key = {
+            .il = il, .island = 0, .variant = 42,
+            .cur_hc = g->residual, .after_attn_hc = g->after_attn,
+            .after_ffn_hc = g->ffn_split, .attn_norm = (void *)m->map,
+        };
+        for (;;) {
+            const int state = ds4_gpu_decode_graph_begin(&key);
+            if (state == 1) { ok = true; if (profile) g_ds41_hc_replays++; break; }
+            ok = ds41_graph_before_attention(g, m, l, il);
+            if (state != 0) break;
+            if (!ok) ds4_gpu_decode_graph_abort(&key);
+            else if (ds4_gpu_decode_graph_end(&key) == 0) break;
+            /* Failed capture executed no work: retry eagerly via the native
+             * state machine, which has retired that graph entry. */
+        }
+    }
+    if (profile) { g_ds41_hc_calls++; g_ds41_hc_encode_s += now_sec() - began; }
+    return ok;
+}
+
 static bool ds41_graph_decode_layer(ds41_gpu_graph *g, const ds4_model *m,
                                     const ds4_layer_weights *l, uint32_t il, int token) {
+    if (g->tp_world == 1 && !g->streaming && !g->quality && !g->imatrix && !g->image_count &&
+        !g_expert_profile.active && !getenv("DS4_CUDA_MOE_PROFILE") &&
+        !metal_graph_debug_get_config()->prefix && !getenv("DS4COMBO_V41_DUMP") &&
+        !ds41_engram_layer(il) && (ds41_single_hc_graphs_on() || ds41_hc_graph_profile_on()))
+        return ds41_single_hc_island(g, m, l, il) && ds41_attention(g, m, l, il, false) &&
+            ds41_hc_mix(g, m, l, true, g->attn_split) && ds41_moe(g, m, l, il, (uint32_t)token) &&
+            ds41_graph_after_moe(g, m, l, il, il + 1u == DS4_N_LAYER);
     if (g->tp_world != 2 || g->streaming || g->quality || g->imatrix ||
         g->image_count || getenv("DS4_METAL_DISABLE_V41_TP_SHARED_OWNER") ||
         g_expert_profile.active || getenv("DS4_CUDA_MOE_PROFILE") ||

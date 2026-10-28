@@ -1,0 +1,83 @@
+{
+  "component_only": true,
+  "cpu_threads": 8,
+  "results": [
+    {
+      "cpu_ms": 0.098,
+      "finite": true,
+      "gpu_ms": 0.0867,
+      "max_abs": 0.0020599858835339546,
+      "relative_l2": 0.01680266479613814,
+      "rows": 1
+    },
+    {
+      "cpu_ms": 2.5233,
+      "finite": true,
+      "gpu_ms": 0.1248,
+      "max_abs": 0.004655662924051285,
+      "relative_l2": 0.027173139063237584,
+      "rows": 32
+    },
+    {
+      "cpu_ms": 10.0516,
+      "finite": true,
+      "gpu_ms": 0.1726,
+      "max_abs": 0.004655662924051285,
+      "relative_l2": 0.026102768256862696,
+      "rows": 128
+    },
+    {
+      "cpu_ms": 20.1525,
+      "finite": true,
+      "gpu_ms": 0.2061,
+      "max_abs": 0.0046585071831941605,
+      "relative_l2": 0.02627195623412996,
+      "rows": 256
+    }
+  ],
+  "weights_bytes": 19906560,
+  "verdict": "reject tested CPU expert component; hybrid split needs native integration",
+  "guard": {
+    "exit_code": 0,
+    "reason": null,
+    "peak_tree_rss": 438042624,
+    "min_available": 14400839680,
+    "elapsed_s": 1.0,
+    "host_budget_gib": 3.0,
+    "floor_gib": 0.5,
+    "runtime_min_free_gib": 0.5,
+    "no_progress_window_s": 600,
+    "job_commit_gib": 12.0,
+    "child_pid": 28244,
+    "shared_guard_commit": "2774636281ab32bf871497f0a8caae23c6b6cdc7",
+    "stack_retirement_policy": "cooperative request, progress-aware grace, logged force fallback",
+    "shared_guard_certificate": "L:\\scratch\\perfexp\\component-runtime\\jobs\\component-c24755e0bb7641baab172b7b190f238b.receipt.shared.json",
+    "cleanup_confirmed": true,
+    "paging_policy": {
+      "owned_paging_limit_bytes": 67108864,
+      "owned_paging_baseline": "zero at gated job launch",
+      "peak_owned_paged_bytes": 0,
+      "pagefile_hard_fault_rate": null,
+      "pagefile_hard_fault_attribution": "UNAVAILABLE: Windows kernel ETW access refused: [Errno 5] kernel pagefile ETW unavailable",
+      "pagefile_hard_fault_limit_per_second": 100,
+      "pagefile_hard_fault_duration_seconds": 5,
+      "scan_pages": 58930,
+      "last_paged_processes": []
+    },
+    "owned_paging": {
+      "attribution": "bounded process pagefile observation",
+      "observed_paged_bytes": 0,
+      "observed_processes": [],
+      "scanned_pages": 58930,
+      "completed_scans": 3
+    },
+    "system_pagefile_pressure": {
+      "maximum_growth_bytes": 0,
+      "kill_above_bytes": 256000000,
+      "scope": "global; not process attribution"
+    },
+    "paging_interpretation": "Owned observation is bounded and incremental. Zero observed pages is not an exhaustive zero-I/O proof. Darwin disk-only process attribution is unavailable."
+  },
+  "binary_sha256": "9899a0474b4a64f6745bfdbaf00cd97c80fc6a58f3cb161c875de6cff7ccf2ee",
+  "timing_scope": "Resident weights and inputs; graph compute plus synchronization only. Upload/I/O excluded."
+}

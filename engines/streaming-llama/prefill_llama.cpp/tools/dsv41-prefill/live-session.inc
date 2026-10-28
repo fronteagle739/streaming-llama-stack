@@ -2,6 +2,7 @@
 #include "live-session-checkpoint.h"
 #include "llama-dsv41-artifact.h"
 #include "llama-dsv41-layer-log.h"
+#include "llama-dsv41-resident-append.h"
 #include <thread>
 #include <filesystem>
 #include <optional>
@@ -181,10 +182,10 @@ void ensure_decode_context(llama_dsv41_sweep&sweep,const llama_dsv41_fixed_stora
 }
 bool ds4_decode_enabled(){static const bool on=[]{const char*e=std::getenv("LLAMADECODE_DS4_DECODE");return e&&e[0]=='1'&&!e[1];}();return on;}
 // LLAMADECODE append-via-decode: with the ds4 decode on, a live prefill of at
-// most LLAMADECODE_APPEND_DECODE_MAX tokens (default 96 = measured crossover, 0 = off) is appended
+// most LLAMADECODE_APPEND_DECODE_MAX tokens (default 0 = off; opt-in 96) is appended
 // one token at a time through the ds4 decode step instead of a full weight sweep.
 uint64_t append_decode_max(){static const uint64_t n=[]{const char*e=std::getenv("LLAMADECODE_APPEND_DECODE_MAX");
-    return e&&*e?uint64_t(std::max<long long>(0,std::min<long long>(std::strtoll(e,nullptr,10),4096))):uint64_t(96);}();return n;} /* measured crossover: 13-token sweep 17.4 s / ds4 step ~0.163 s = ~107 tokens; 96 keeps margin */
+    return e&&*e?uint64_t(std::max<long long>(0,std::min<long long>(std::strtoll(e,nullptr,10),4096))):uint64_t(0);}();return n;} /* E2c measured faster but non-exact; owner requires opt-in until attribution/fix. */
 // LLAMADECODE decode cancel: the client creates LLAMADECODE_DECODE_CANCEL_FILE
 // while a decode op runs; the loop stops at the next token boundary exactly as at
 // max_tokens (the last sampled token is returned, not evaluated). Cleared at
@@ -609,6 +610,41 @@ void run_live_session(std::unique_ptr<llama_dsv41_sweep>&sweep,
                 int(cancelled),current.frontier.position,total_ms,total_ms>0?evaluated*1000.0/total_ms:0.0);std::fflush(stderr);
             reply({{"peer_synchronized",have_remote&&remote.describe()==current.describe()},{"tokens",generated},{"evaluated_tokens",evaluated},{"stopped",stopped},
                 {"cancelled",cancelled},{"step_ms",step_ms},{"decode_ms",total_ms},{"RTX_decode",true}});
+        }else if(operation=="perfexp_kv_samples"){
+            dsv41_live::keys(command,{"session","model_sha256","sequence","operation","base","path"});same_base();
+            const char*gate=std::getenv("LLAMADECODE_PERFEXP_KV_SAMPLES");
+            require(gate&&!std::strcmp(gate,"1"),"Experimental KV sampling is disabled");
+            const auto path=std::filesystem::u8path(command.at("path").get<std::string>());
+            require(path.is_absolute()&&!std::filesystem::exists(path),"KV sample path must be absolute and new");
+            HANDLE file=CreateFileW(path.c_str(),GENERIC_WRITE,0,nullptr,CREATE_NEW,FILE_ATTRIBUTE_NORMAL,nullptr);
+            require(file!=INVALID_HANDLE_VALUE,"Cannot create KV sample file");
+            struct sample_closer{HANDLE h;~sample_closer(){CloseHandle(h);}}closer{file};
+            llama_dsv41::wire_plan plan;std::string error;
+            success(llama_dsv41::make_wire_plan(current.frontier,plan,error),error);
+            uint64_t cursor=52+uint64_t(current.frontier.position)*4+129280ull*4,output_offset=0;
+            json segments=json::array();std::array<unsigned char,65536>buffer{};
+            success(sweep->inspect_local([&](wire_payload_reader&r,std::string&why){
+                for(const auto&span:plan.spans){
+                    const bool kv=span.kind==llama_dsv41::state_kind::compressed,index=span.kind==llama_dsv41::state_kind::index;
+                    if(kv||index){
+                        const uint32_t width=kv?512:128;
+                        const uint64_t bytes=std::min<uint64_t>(span.bytes,128ull*width*4);
+                        segments.push_back({{"kind",kv?"compressed":"index"},{"index",span.index},{"width",width},
+                                            {"rows",bytes/(width*4)},{"offset",output_offset},{"bytes",bytes}});
+                        for(uint64_t off=0;off<bytes;off+=buffer.size()){
+                            stop();const size_t n=size_t(std::min<uint64_t>(bytes-off,buffer.size()));
+                            if(!r.read(cursor+span.bytes-bytes+off,buffer.data(),n,why))return false;
+                            DWORD written=0;if(!WriteFile(file,buffer.data(),DWORD(n),&written,nullptr)||written!=n){why="KV sample write failed";return false;}
+                        }
+                        output_offset+=bytes;
+                    }
+                    cursor+=span.bytes;
+                }
+                return true;
+            },error),error);
+            require(segments.size()==8&&cursor==plan.bytes,"Incomplete KV sample layout");
+            reply({{"experimental",true},{"position",current.frontier.position},{"bytes",output_offset},{"segments",segments},
+                   {"cache_storage_changed",false}});
         }else if(operation=="decode_forced"){
             // LLAMADECODE B0/B1 gate: teacher-forced 1-row decode. For each i the
             // frontier's full F32 logits are written to logits_path (raw rows of
@@ -624,7 +660,7 @@ void run_live_session(std::unique_ptr<llama_dsv41_sweep>&sweep,
             require(path.is_absolute()&&!std::filesystem::exists(path),"Forced decode logits path must be absolute and new");
             HANDLE file=CreateFileW(path.c_str(),GENERIC_WRITE,0,nullptr,CREATE_NEW,FILE_ATTRIBUTE_NORMAL,nullptr);
             require(file!=INVALID_HANDLE_VALUE,"Cannot create forced decode logits file");
-            struct closer{HANDLE h;~closer(){CloseHandle(h);}}close_file{file};
+            struct closer{HANDLE h;~closer(){if(h!=INVALID_HANDLE_VALUE)CloseHandle(h);}}close_file{file};
             std::vector<int32_t>argmax;std::vector<double>step_ms;std::string error;std::vector<float>logits;
             for(size_t index=0;index<forced.size();++index){
                 stop();const auto step_started=clock_type::now();
@@ -650,6 +686,9 @@ void run_live_session(std::unique_ptr<llama_dsv41_sweep>&sweep,
                 step_ms.push_back(ms(step_started));
                 std::fprintf(stderr,"LLAMADECODE_FORCED_STEP index=%zu forced=%d argmax=%d step_ms=%.3f\n",index,forced[index],best,step_ms.back());std::fflush(stderr);
             }
+            // Publish a completed dump only after releasing its exclusive
+            // Windows writer handle; the receiver may open it immediately.
+            require(CloseHandle(close_file.h)!=0,"Forced decode logits close failed");close_file.h=INVALID_HANDLE_VALUE;
             current=inspect();double total_ms=0;for(const double v:step_ms)total_ms+=v;
             reply({{"peer_synchronized",have_remote&&remote.describe()==current.describe()},{"argmax",argmax},{"vectors",argmax.size()},
                 {"evaluated_tokens",step_ms.size()},{"step_ms",step_ms},{"decode_ms",total_ms},{"RTX_decode",true}});
@@ -689,13 +728,21 @@ void run_live_session(std::unique_ptr<llama_dsv41_sweep>&sweep,
             // LLAMADECODE_ENGRAM_EARLY: this append's Engram rows start now, before
             // its open, start_request and layer-0 weight fetch (off: no-op).
             if(!command.contains("vision_spans_file")) {std::string early_error;success(sweep->start_append_engram(tokens,early_error),early_error);}
+            bool resident_sweep=false;
+            if(llama_dsv41_resident_append_enabled()&&append_decode_max()==0&&ds4_decode_enabled()&&!options.capture_dspark&&next_images.empty()&&tokens.size()<=llama_dsv41_resident_append_limit){
+                auto *provider=sweep->provider_for_external_decode();
+                resident_sweep=provider&&provider->decode_layout();
+                if(resident_sweep){std::string why;success(provider->release_decode_cache(why),why);}
+            }
             auto previous=std::move(sweep);sweep.reset(new llama_dsv41_sweep);auto next_options=options;auto next_weights=weights;
             next_options.image_spans=std::move(next_images);next_options.images=!next_options.image_spans.empty();
+            if(resident_sweep)next_weights.decode_layout=true;
             next_options.yoco_logical_begin=next_options.yoco_logical_end=0;next_options.carry.tokens=uint32_t(tokens.size());if(next_weights.engram_prefetch_host_bytes)next_weights.engram_prefetch_tokens=uint32_t(tokens.size());
             std::string error;success(sweep->open(next_weights,next_options,error,nullptr,previous.get()),error);require(!previous->ready(),"Transferred prefix still publishes");previous.reset();
             const double admission_ms=ms(started);success(sweep->run(tokens,[]{return should_stop();},error),error);const auto timing=sweep->timing();
             const uint32_t before=current.frontier.position;current=inspect();require(current.frontier.position==before+tokens.size(),"Live prefill position did not advance exactly");
-            reply({{"peer_synchronized",false},{"prompt_tokens",tokens.size()},{"prompt_processing_ms",admission_ms+timing.prompt_processing_ms},{"export_preparation_ms",timing.export_preparation_ms}});
+            std::fprintf(stderr,"PERFEXP_RESIDENT_SWEEP enabled=%d tokens=%zu same_sweep_policy=1 l2_released_before_prefill_restore=1\n",int(resident_sweep),tokens.size());std::fflush(stderr);
+            reply({{"peer_synchronized",false},{"prompt_tokens",tokens.size()},{"prompt_processing_ms",admission_ms+timing.prompt_processing_ms},{"export_preparation_ms",timing.export_preparation_ms},{"append_resident_sweep",resident_sweep}});
         }else require(false,"Unknown persistent session operation");
     }
 }

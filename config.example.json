@@ -51,7 +51,11 @@
   "lora": [],
   "enable_bash": false,
   "cache_affinity_spread_file": "",
-  "env_overrides": {},
+  "env_overrides": {
+    "LLAMADECODE_APPEND_DECODE_MAX": "0",
+    "LLAMADECODE_APPEND_RESIDENT_SWEEP": "1",
+    "LLAMA_DSV41_INDEX_FP4": "1"
+  },
   "models": [],
   "resident": [],
   "gpu_wait_seconds": 0,

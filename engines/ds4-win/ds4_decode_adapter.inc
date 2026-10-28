@@ -136,11 +136,13 @@ DS4X_EXPORT int ds4x_register_weight(uint64_t file_offset, uint64_t bytes, void 
  * bound-state views are kept; the caller rebinds its state before decoding.
  * Callers invoke these only between decode steps (no ds4 work in flight). */
 DS4X_EXPORT int ds4x_replace_weight(uint64_t file_offset, uint64_t bytes, void *device_ptr) {
+    if (ds41_single_hc_graphs_on()) ds4_gpu_decode_graphs_invalidate();
     if (!g_ds4x.open || !device_ptr || !bytes) return 0;
     return ds4_gpu_replace_external_range(g_ds4x.model.map, file_offset, bytes, device_ptr);
 }
 
 DS4X_EXPORT uint64_t ds4x_drop_weights(void) {
+    if (ds41_single_hc_graphs_on()) ds4_gpu_decode_graphs_invalidate();
     if (!g_ds4x.open) return 0;
 #if !defined(__APPLE__) && !defined(DS4_ROCM_BUILD)
     ds4_gpu_decode_graphs_invalidate();   /* captured islands hold weight pointers (unused at tp_world 1) */
@@ -229,7 +231,14 @@ DS4X_EXPORT int ds4x_decode(int token, uint32_t position, const int32_t *history
     g->pos = position;
     g->valid = true;
     for (uint32_t i = 0; i < DS4_ENGRAM_NGRAM - 1; i++) g->history.tail[i] = history_tail[i];
-    return ds41_graph_step(g, &g_ds4x.model, &g_ds4x.weights, token, logits) ? 1 : 0;
+    g_ds41_hc_encode_s = 0.0; g_ds41_hc_calls = g_ds41_hc_replays = 0;
+    const bool ok = ds41_graph_step(g, &g_ds4x.model, &g_ds4x.weights, token, logits);
+    if (ds41_hc_graph_profile_on()) {
+        fprintf(stderr, "PERFEXP_HC_GRAPH_TOKEN position=%u calls=%u replays=%u encode_ms=%.6f enabled=%d\n",
+                position, g_ds41_hc_calls, g_ds41_hc_replays, g_ds41_hc_encode_s * 1000.0,
+                (int)ds41_single_hc_graphs_on()); fflush(stderr);
+    }
+    return ok ? 1 : 0;
 }
 
 /* LLAMADECODE multi-row append: ds4-win's own layer-major prefill

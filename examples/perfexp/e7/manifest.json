@@ -1,0 +1,25 @@
+{
+  "model": "D:\\models\\big_models\\deepseek-ai\\DeepSeek-V4.1-Flash-1017-ds4-Q4\\DeepSeek-V4.1-Flash-1017-Q4-v41.gguf",
+  "model_bytes": 518596067328,
+  "tensors": [
+    {
+      "name": "blk.0.ffn_gate_exps.weight",
+      "offset": 2190082048,
+      "bytes": 6635520,
+      "expert_id": 0
+    },
+    {
+      "name": "blk.0.ffn_up_exps.weight",
+      "offset": 4750655488,
+      "bytes": 6635520,
+      "expert_id": 0
+    },
+    {
+      "name": "blk.0.ffn_down_exps.weight",
+      "offset": 7311228928,
+      "bytes": 6635520,
+      "expert_id": 0
+    }
+  ],
+  "component_only": true
+}

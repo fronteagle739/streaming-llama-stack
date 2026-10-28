@@ -15,11 +15,30 @@ spec.loader.exec_module(dsv41_single)
 
 GATED_ENV = {'DS4_DS_READ_PARTS': '8', 'LLAMADECODE_VRAM_RESERVE_MIB': '512',
              'LLAMADECODE_ENGRAM_EARLY': 'auto', 'LLAMADECODE_ENGRAM_CACHE_MB': '0',
-             'LLAMADECODE_APPEND_DECODE_MAX': '96', 'LLAMADECODE_RECENCY_LFU': '1',
-             'LLAMADECODE_LFU_HALF_LIFE': '16'}
+             'LLAMADECODE_APPEND_DECODE_MAX': '0', 'LLAMADECODE_APPEND_RESIDENT_SWEEP': '1',
+             'LLAMA_DSV41_INDEX_FP4': '1', 'DS4_CUDA_SINGLE_GPU_HC_GRAPHS': '1', 'LLAMADECODE_HOST_COPY_STAGING': 'auto',
+             'LLAMADECODE_RECENCY_LFU': '1', 'LLAMADECODE_LFU_HALF_LIFE': '16'}
 
 
 class LaunchConfigTests(unittest.TestCase):
+    def test_every_profile_preserves_the_resident_sweep_off_toggle(self):
+        for preset in ('262k','1m'):
+            for profile in ('accurate','fast','ultra','ultra-yoco'):
+                with self.subTest(preset=preset,profile=profile):
+                    defaults=dsv41_single.overlay(preset,profile=profile)
+                    self.assertEqual(defaults['env_overrides']['LLAMADECODE_APPEND_RESIDENT_SWEEP'],'1')
+                    self.assertEqual(defaults['env_overrides']['LLAMA_DSV41_INDEX_FP4'],'1')
+                    local={'env_overrides':{'LLAMADECODE_APPEND_RESIDENT_SWEEP':'0','LLAMA_DSV41_INDEX_FP4':'0','DS4_CUDA_SINGLE_GPU_HC_GRAPHS':'0','LLAMADECODE_HOST_COPY_STAGING':'0','LLAMADECODE_RECENCY_LFU':'0'}}
+                    cfg=dsv41_single.overlay(preset,local,profile=profile)
+                    self.assertEqual(cfg['env_overrides']['LLAMADECODE_APPEND_RESIDENT_SWEEP'],'0')
+                    self.assertEqual(cfg['env_overrides']['LLAMA_DSV41_INDEX_FP4'],'0')
+                    self.assertEqual(cfg['env_overrides']['DS4_CUDA_SINGLE_GPU_HC_GRAPHS'],'0')
+                    self.assertEqual(cfg['env_overrides']['LLAMADECODE_HOST_COPY_STAGING'],'0')
+                    self.assertEqual(cfg['env_overrides']['LLAMADECODE_RECENCY_LFU'],'0')
+                    self.assertEqual(cfg['env_overrides']['LLAMADECODE_LFU_HALF_LIFE'],'16')
+                    self.assertEqual(cfg['env_overrides']['LLAMADECODE_APPEND_DECODE_MAX'],'0')
+                    self.assertEqual(local,{'env_overrides':{'LLAMADECODE_APPEND_RESIDENT_SWEEP':'0','LLAMA_DSV41_INDEX_FP4':'0','DS4_CUDA_SINGLE_GPU_HC_GRAPHS':'0','LLAMADECODE_HOST_COPY_STAGING':'0','LLAMADECODE_RECENCY_LFU':'0'}})
+
     def test_262k_is_f32_growable_single_engine(self):
         cfg = dsv41_single.overlay('262k')
         self.assertEqual((cfg['context'], cfg['ctx_cache_precision'], cfg['ctx_cache_growable']), (262144, 'f32', True))
@@ -80,7 +99,7 @@ class LaunchConfigTests(unittest.TestCase):
         self.assertEqual(cfg['env_overrides']['LLAMADECODE_APPEND_DECODE_MAX'],'96')
 
     def test_resident_followup_defaults_on_only_for_ultra_cone(self):
-        self.assertEqual(dsv41_single.overlay('262k')['env_overrides']['LLAMADECODE_APPEND_DECODE_MAX'],'96')
+        self.assertEqual(dsv41_single.overlay('262k')['env_overrides']['LLAMADECODE_APPEND_DECODE_MAX'],'0')
         self.assertEqual(dsv41_single.overlay('262k',profile='ultra-yoco')['env_overrides']['LLAMADECODE_APPEND_DECODE_MAX'],'0')
         off=dsv41_single.overlay('262k',dict(env_overrides={'LLAMADECODE_APPEND_DECODE_MAX':'0'}))
         self.assertEqual(off['env_overrides']['LLAMADECODE_APPEND_DECODE_MAX'],'0')
