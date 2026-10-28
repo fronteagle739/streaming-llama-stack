@@ -5,8 +5,8 @@ Use the exact Flash 1017 Q4 model described in the [README](../README.md#require
 ## Install
 
 ```powershell
-git clone --recurse-submodules https://github.com/fronteagle739/streaming-llama-stack-clean.git
-cd streaming-llama-stack-clean
+git clone --recurse-submodules https://github.com/fronteagle739/streaming-llama-stack.git
+cd streaming-llama-stack
 ./slstack.ps1 install --all
 ./slstack.ps1 install --all --check
 ```
