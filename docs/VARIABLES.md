@@ -100683,3 +100683,21 @@ static bool ds41_hc_graph_profile_on(void) {
 static double g_ds41_hc_encode_s;
 static uint32_t g_ds41_hc_calls, g_ds41_hc_replays;
 ```
+
+### LLAMADECODE_PERFEXP_KV_SAMPLES
+
+E17 experiment diagnostic only: 1 allows bounded KV sampling over the private producer pipe; default off. It does not change cache storage or any preset.
+
+Scope: rtx-llama. Class: advanced.
+
+Source: `engines/streaming-llama/prefill_llama.cpp/tools/dsv41-prefill/live-session.inc:615`. Unset read: NULL from getenv; the literal consumer below supplies any fallback.
+
+```text
+        }else if(operation=="perfexp_kv_samples"){
+            dsv41_live::keys(command,{"session","model_sha256","sequence","operation","base","path"});same_base();
+            const char*gate=std::getenv("LLAMADECODE_PERFEXP_KV_SAMPLES");
+            require(gate&&!std::strcmp(gate,"1"),"Experimental KV sampling is disabled");
+            const auto path=std::filesystem::u8path(command.at("path").get<std::string>());
+            require(path.is_absolute()&&!std::filesystem::exists(path),"KV sample path must be absolute and new");
+            HANDLE file=CreateFileW(path.c_str(),GENERIC_WRITE,0,nullptr,CREATE_NEW,FILE_ATTRIBUTE_NORMAL,nullptr);
+```

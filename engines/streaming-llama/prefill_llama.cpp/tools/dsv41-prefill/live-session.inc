@@ -610,6 +610,41 @@ void run_live_session(std::unique_ptr<llama_dsv41_sweep>&sweep,
                 int(cancelled),current.frontier.position,total_ms,total_ms>0?evaluated*1000.0/total_ms:0.0);std::fflush(stderr);
             reply({{"peer_synchronized",have_remote&&remote.describe()==current.describe()},{"tokens",generated},{"evaluated_tokens",evaluated},{"stopped",stopped},
                 {"cancelled",cancelled},{"step_ms",step_ms},{"decode_ms",total_ms},{"RTX_decode",true}});
+        }else if(operation=="perfexp_kv_samples"){
+            dsv41_live::keys(command,{"session","model_sha256","sequence","operation","base","path"});same_base();
+            const char*gate=std::getenv("LLAMADECODE_PERFEXP_KV_SAMPLES");
+            require(gate&&!std::strcmp(gate,"1"),"Experimental KV sampling is disabled");
+            const auto path=std::filesystem::u8path(command.at("path").get<std::string>());
+            require(path.is_absolute()&&!std::filesystem::exists(path),"KV sample path must be absolute and new");
+            HANDLE file=CreateFileW(path.c_str(),GENERIC_WRITE,0,nullptr,CREATE_NEW,FILE_ATTRIBUTE_NORMAL,nullptr);
+            require(file!=INVALID_HANDLE_VALUE,"Cannot create KV sample file");
+            struct sample_closer{HANDLE h;~sample_closer(){CloseHandle(h);}}closer{file};
+            llama_dsv41::wire_plan plan;std::string error;
+            success(llama_dsv41::make_wire_plan(current.frontier,plan,error),error);
+            uint64_t cursor=52+uint64_t(current.frontier.position)*4+129280ull*4,output_offset=0;
+            json segments=json::array();std::array<unsigned char,65536>buffer{};
+            success(sweep->inspect_local([&](wire_payload_reader&r,std::string&why){
+                for(const auto&span:plan.spans){
+                    const bool kv=span.kind==llama_dsv41::state_kind::compressed,index=span.kind==llama_dsv41::state_kind::index;
+                    if(kv||index){
+                        const uint32_t width=kv?512:128;
+                        const uint64_t bytes=std::min<uint64_t>(span.bytes,128ull*width*4);
+                        segments.push_back({{"kind",kv?"compressed":"index"},{"index",span.index},{"width",width},
+                                            {"rows",bytes/(width*4)},{"offset",output_offset},{"bytes",bytes}});
+                        for(uint64_t off=0;off<bytes;off+=buffer.size()){
+                            stop();const size_t n=size_t(std::min<uint64_t>(bytes-off,buffer.size()));
+                            if(!r.read(cursor+span.bytes-bytes+off,buffer.data(),n,why))return false;
+                            DWORD written=0;if(!WriteFile(file,buffer.data(),DWORD(n),&written,nullptr)||written!=n){why="KV sample write failed";return false;}
+                        }
+                        output_offset+=bytes;
+                    }
+                    cursor+=span.bytes;
+                }
+                return true;
+            },error),error);
+            require(segments.size()==8&&cursor==plan.bytes,"Incomplete KV sample layout");
+            reply({{"experimental",true},{"position",current.frontier.position},{"bytes",output_offset},{"segments",segments},
+                   {"cache_storage_changed",false}});
         }else if(operation=="decode_forced"){
             // LLAMADECODE B0/B1 gate: teacher-forced 1-row decode. For each i the
             // frontier's full F32 logits are written to logits_path (raw rows of

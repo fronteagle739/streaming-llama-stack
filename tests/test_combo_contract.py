@@ -1,5 +1,6 @@
 import copy
 import json
+import os
 import unittest
 
 from slstack.combo_contract import VERSION, owner_layout, parse, validate, same_checkpoint, ram_checkpoint_bytes
@@ -73,6 +74,18 @@ class ContractTest(unittest.TestCase):
         request=dict(session='1'*32,model_sha256=MODEL_SHA256,sequence=1,operation='save_rewind',base=base)
         self.assertEqual(command(request,'1'*32,1,1),request)
         with self.assertRaises(ValueError):command(request,'1'*32,1)
+
+    def test_bounded_local_kv_sample_command(self):
+        base=dict(context=262144,position=129,mode=1,capture_end=0,capture_length=0,
+                  tokens_sha256='a'*64,logits_sha256='b'*64,owner_sha256=['c'*64]*54)
+        row=dict(session='1'*32,model_sha256=MODEL_SHA256,sequence=1,
+                 operation='perfexp_kv_samples',base=base,path=os.path.abspath('kv-samples.f32'))
+        self.assertEqual(command(row,'1'*32,1,1),row)
+        for value in ('',None,123,'x'*1025):
+            with self.subTest(path=value),self.assertRaises(ValueError):
+                command({**row,'path':value},'1'*32,1,1)
+        with self.assertRaises(ValueError):command({**row,'tokens':[1]},'1'*32,1,1)
+        with self.assertRaises(ValueError):command(row,'1'*32,2,1)
 
     def test_decode_delta_accepted_maximum(self):
         # rtxmac-producer-2: <=128-token deltas are the normal chunk; one delta
