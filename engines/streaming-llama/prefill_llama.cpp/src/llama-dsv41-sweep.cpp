@@ -250,8 +250,8 @@ bool llama_dsv41_sweep::open(const llama_dsv41_weight_provider::config &input_we
         const uint64_t effective_hidden=options.fixed&&options.fixed->prefill_cache_ceiling?
             options.fixed->prefill_hidden_bytes:options.admitted_hidden_bytes;
         llama_dsv41_yoco::validate(options.yoco_keep);
-        require(options.yoco_remote_state_version==0||(options.yoco_remote_state_version==1&&options.yoco_keep==140&&options.capture_dspark),
-            "YOCO remote state requires version1 and complete mode3 DSpark capture");
+        require(options.yoco_remote_state_version==0||(llama_dsv41_yoco::remote_compatible(options.yoco_keep,options.yoco_remote_state_version)&&options.capture_dspark),
+            "YOCO remote state requires matching keep/version and complete mode3 DSpark capture");
         if(restored&&restored->local_snapshot){
             require(restored->yoco_keep==options.yoco_keep,"Local snapshot YOCO preset differs");
             require(restored->cache_precision==(options.compressed_cache_bf16?"bf16":"f32"),"Local snapshot cache precision differs");
@@ -594,7 +594,7 @@ bool llama_dsv41_sweep::open(const llama_dsv41_weight_provider::config &input_we
 bool llama_dsv41_sweep::suspend_device(std::string&error){
     std::unique_lock<std::mutex>lock(p->mutex,std::try_to_lock);error.clear();
     if(!lock.owns_lock()){error="V4.1 sweep is already active";return false;}
-    if(p->options.yoco_keep&&p->options.yoco_remote_state_version!=1){error="YOCO state requires local snapshot or negotiated remote version1";return false;}
+    if(!llama_dsv41_yoco::remote_compatible(p->options.yoco_keep,p->options.yoco_remote_state_version)){error="YOCO state requires matching negotiated remote keep/version";return false;}
     try{
         require(p->state==implementation::completed&&!p->device_suspended&&p->options.fixed&&p->options.fixed->ram&&!p->options.fixed->ram_registration,
             "Device suspend requires a completed fixed owner with tile-registered carry RAM");
@@ -945,7 +945,7 @@ bool llama_dsv41_sweep::export_native(const consumer&send,std::string&error){
     {
         std::unique_lock<std::mutex>lock(p->mutex,std::try_to_lock);
         if(!lock.owns_lock()){error="V4.1 sweep is already active";return false;}
-        if(p->options.yoco_keep&&p->options.yoco_remote_state_version!=1){error="YOCO remote state requires explicit version1 peer negotiation";return false;}
+        if(!llama_dsv41_yoco::remote_compatible(p->options.yoco_keep,p->options.yoco_remote_state_version)){error="YOCO remote state requires matching keep/version peer negotiation";return false;}
     }
     return inspect_local(send,error);
 }
@@ -989,7 +989,7 @@ bool llama_dsv41_sweep::apply_decode_delta(const decode_delta&update,
         const llama_dsv41::wire_read_span&read,std::string&error){
     std::unique_lock<std::mutex>lock(p->mutex,std::try_to_lock);error.clear();
     if(!lock.owns_lock()){error="V4.1 sweep already owns the frontier";return false;}
-    if(p->options.yoco_keep&&p->options.yoco_remote_state_version!=1){error="YOCO state requires local snapshot or negotiated remote version1";return false;}
+    if(!llama_dsv41_yoco::remote_compatible(p->options.yoco_keep,p->options.yoco_remote_state_version)){error="YOCO state requires matching negotiated remote keep/version";return false;}
     try{
         p->check_stop();require(p->state==implementation::completed&&p->published.load()&&
             p->options.stateful_chunks&&p->cache&&p->carry.frontier_ready()&&!p->executor,
@@ -1044,7 +1044,7 @@ bool llama_dsv41_sweep::apply_decode_delta(const decode_delta&update,
 bool llama_dsv41_sweep::capture_rewind_anchor(rewind_anchor&out,std::string&error){
     std::unique_lock<std::mutex>lock(p->mutex,std::try_to_lock);error.clear();
     if(!lock.owns_lock()){error="V4.1 sweep already owns the frontier";return false;}
-    if(p->options.yoco_keep&&p->options.yoco_remote_state_version!=1){error="YOCO state requires local snapshot or negotiated remote version1";return false;}
+    if(!llama_dsv41_yoco::remote_compatible(p->options.yoco_keep,p->options.yoco_remote_state_version)){error="YOCO state requires matching negotiated remote keep/version";return false;}
     try{
         p->check_stop();require(p->state==implementation::completed&&p->published.load()&&
             p->options.stateful_chunks&&p->cache&&!p->executor,
@@ -1077,7 +1077,7 @@ bool llama_dsv41_sweep::restore_rewind_anchor(const rewind_anchor&anchor,
         const std::vector<std::string>&current_hashes,std::string&error){
     std::unique_lock<std::mutex>lock(p->mutex,std::try_to_lock);error.clear();
     if(!lock.owns_lock()){error="V4.1 sweep already owns the frontier";return false;}
-    if(p->options.yoco_keep&&p->options.yoco_remote_state_version!=1){error="YOCO state requires local snapshot or negotiated remote version1";return false;}
+    if(!llama_dsv41_yoco::remote_compatible(p->options.yoco_keep,p->options.yoco_remote_state_version)){error="YOCO state requires matching negotiated remote keep/version";return false;}
     try{
         p->check_stop();const uint32_t old=uint32_t(p->tokens.size()),target=anchor.frontier.position;
         require(p->state==implementation::completed&&p->published.load()&&p->options.stateful_chunks&&

@@ -214,8 +214,8 @@ def initial_request(session, headers, body):
     require(tier in ['accurate', 'fast', 'ultra', 'hyper'], 'Explicit qualified tier required')
     result = dict(session=session, context=CONTEXT, tier=tier, tokens=body, tokens_sha256=h['x-dsv41-tokens-sha256'])
     keep=h.get('x-dsv41-yoco-keep','0');version=h.get('x-dsv41-yoco-state-version','0')
-    require((keep,version) in (('0','0'),('140','1')), 'YOCO state requires matching explicit keep/version')
-    if keep!='0':result.update(yoco_keep=140,yoco_state_version=1)
+    require((keep,version) in (('0','0'),('140','1'),('2541','2')), 'YOCO state requires matching explicit keep/version')
+    if keep!='0':result.update(yoco_keep=int(keep),yoco_state_version=int(version))
     if 'x-dsv41-techniques' in h:
         wire = h['x-dsv41-techniques'].encode('utf-8')
         require(len(wire) <= 4096, 'Technique header too large')

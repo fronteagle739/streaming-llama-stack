@@ -24,11 +24,10 @@ def load(path=None, overrides=None):
     if 'paired_local_prefill_max_tokens' in cfg:
         from .combo_crossover import paired_threshold
         paired_threshold(cfg)
-    keep=cfg.get('yoco_keep',0)
+    cfg.setdefault('yoco_keep',2541 if cfg.get('mac') or cfg.get('serving','single_engine')=='single_engine' else 0)
+    keep=cfg['yoco_keep']
     if type(keep) is not int or keep not in (0,140,2541):
         raise ValueError('yoco_keep must be 0, 140 or 2541')
-    if keep==2541 and (cfg.get('mac') or cfg.get('serving','single_engine')!='single_engine'):
-        raise ValueError('The dependency cone requires local single_engine')
     if keep and not cfg.get('mac') and cfg.get('serving','single_engine')!='single_engine':
         raise ValueError('YOCO needs single_engine or an explicitly paired Mac receiver')
     if cfg.get('native_tier', 'accurate') not in ('accurate', 'fast', 'ultra', 'hyper'):

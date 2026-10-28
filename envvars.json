@@ -1957,7 +1957,7 @@
     "reads": [
       "engines/streaming-llama/prefill_llama.cpp/src/llama-dsv41-executor.cpp:1424",
       "engines/streaming-llama/prefill_llama.cpp/src/llama-dsv41-executor.cpp:1464",
-      "engines/streaming-llama/prefill_llama.cpp/tools/dsv41-prefill/main.cpp:742"
+      "engines/streaming-llama/prefill_llama.cpp/tools/dsv41-prefill/main.cpp:744"
     ],
     "code_defaults": [
       {
@@ -1973,7 +1973,7 @@
         "consumer": "            llama_dsv41_layer_log(\"DS4PERF_BF16_INPLACE_LAYOUT layer=%u start=%u count=%u tagged=%llu actual_aliases=%llu alias_bytes=%llu original_lifetime_checks=1\\n\",in.layer,in.start,in.count,(unsigned long long)tagged,(unsigned long long)aliases,(unsigned long long)bytes);\n        }\n        if(const char *diag=std::getenv(\"DS4PERF_DIAGNOSTIC_LAYERS\")){if(*diag){\n            llama_dsv41_layer_log(\"DS4PERF_LAYOUT_TRACE layer=%u start=%u count=%u hit=%u layout_fnv64=%016llx\",in.layer,in.start,in.count,unsigned(graph_cache_hit),\n                (unsigned long long)llama_dsv41_graph_digest(ctx.get(),graph,true));std::fputc(10,stderr);std::fflush(stderr);\n        }}\n        require(boundary.bytes()<=actual,\"Boundary outputs escaped actual graph admission\");"
       },
       {
-        "source": "engines/streaming-llama/prefill_llama.cpp/tools/dsv41-prefill/main.cpp:742",
+        "source": "engines/streaming-llama/prefill_llama.cpp/tools/dsv41-prefill/main.cpp:744",
         "unset": "NULL from getenv; the literal consumer below supplies any fallback",
         "read": "if(const char *diag=std::getenv(\"DS4PERF_DIAGNOSTIC_LAYERS\")){if(*diag){",
         "consumer": "        report[\"resident_hidden_storage\"]=options.resident_bf16?\"BF16 after validated existing BF16 boundary; layer0 input unchanged F32\":\"F32\";\n        options.carry.ram_prefix_tokens=uint32_t(ram_prefix);options.carry.disk_reserve_bytes=disk_reserve;\n        if(const char *diag=std::getenv(\"DS4PERF_DIAGNOSTIC_LAYERS\")){if(*diag){\n            const auto layers=integer(diag);require(layers>0&&layers<40&&resident_ram&&llama_dsv41_expert_profile::native(expert),\n                \"Incomplete diagnostics require native RAM TEST and1..39 layers\");\n            options.diagnostic_layers=uint32_t(layers);report[\"intentional_incomplete_diagnostic_layers\"]=layers;\n            options.diagnostic_carry=[](uint32_t layer,uint32_t first,uint32_t count,const void *bank,uint64_t bytes,const ggml_tensor *raw){"
@@ -40472,17 +40472,17 @@
     ],
     "doc": "DS4_NATIVE_SESSION_DEADLINE_SECONDS: qualified Mac native preset setting; override explicitly for another plan",
     "reads": [
-      "engines/ds4-mac/ds4_native_session_setup.inc:36"
+      "engines/ds4-mac/ds4_native_session_setup.inc:40"
     ],
     "defaults_by_scope": {
       "mac-ds4": "600"
     },
     "code_defaults": [
       {
-        "source": "engines/ds4-mac/ds4_native_session_setup.inc:36",
+        "source": "engines/ds4-mac/ds4_native_session_setup.inc:40",
         "unset": "Wrapper/conditional default: see the literal call and consumer below",
         "read": "!ds4_nf_env_uint(\"DS4_NATIVE_SESSION_DEADLINE_SECONDS\",&c->http.deadline_seconds,60,7200)||",
-        "consumer": "    if(yoco&&strcmp(yoco,\"0\")){if(strcmp(yoco,\"140\"))goto bad;c->yoco_keep=140;}\n    if(!ds4_nf_pair_token(token,c->http.token)||!ds4_nf_env_uint(\"DS4_NATIVE_SESSION_PORT\",&port,1,65535)||\n       !ds4_nf_env_uint(\"DS4_NATIVE_SESSION_DEADLINE_SECONDS\",&c->http.deadline_seconds,60,7200)||\n       inet_pton(AF_INET,host,&c->http.broker.sin_addr)!=1||!ds4_engine_native_frontier_identity(engine,&c->http.model))goto bad;\n    strcpy(c->http.host,host);strcpy(c->tier,tier);c->http.broker.sin_family=AF_INET;c->http.broker.sin_port=htons((uint16_t)port);\n    if(techniques){size_t n=strlen(techniques);if(n>=sizeof(c->techniques)||!ds4_ns_json_depth(techniques,n))goto bad;\n        for(size_t i=0;i<n;i++)if((unsigned char)techniques[i]<32||(unsigned char)techniques[i]>126)goto bad;"
+        "consumer": "    }\n    if(!ds4_nf_pair_token(token,c->http.token)||!ds4_nf_env_uint(\"DS4_NATIVE_SESSION_PORT\",&port,1,65535)||\n       !ds4_nf_env_uint(\"DS4_NATIVE_SESSION_DEADLINE_SECONDS\",&c->http.deadline_seconds,60,7200)||\n       inet_pton(AF_INET,host,&c->http.broker.sin_addr)!=1||!ds4_engine_native_frontier_identity(engine,&c->http.model))goto bad;\n    strcpy(c->http.host,host);strcpy(c->tier,tier);c->http.broker.sin_family=AF_INET;c->http.broker.sin_port=htons((uint16_t)port);\n    if(techniques){size_t n=strlen(techniques);if(n>=sizeof(c->techniques)||!ds4_ns_json_depth(techniques,n))goto bad;\n        for(size_t i=0;i<n;i++)if((unsigned char)techniques[i]<32||(unsigned char)techniques[i]>126)goto bad;"
       }
     ]
   },
@@ -40594,17 +40594,17 @@
     ],
     "doc": "DS4_NATIVE_SESSION_PORT: qualified Mac native preset setting; override explicitly for another plan",
     "reads": [
-      "engines/ds4-mac/ds4_native_session_setup.inc:35"
+      "engines/ds4-mac/ds4_native_session_setup.inc:39"
     ],
     "defaults_by_scope": {
       "mac-ds4": "8765"
     },
     "code_defaults": [
       {
-        "source": "engines/ds4-mac/ds4_native_session_setup.inc:35",
+        "source": "engines/ds4-mac/ds4_native_session_setup.inc:39",
         "unset": "Wrapper/conditional default: see the literal call and consumer below",
         "read": "if(!ds4_nf_pair_token(token,c->http.token)||!ds4_nf_env_uint(\"DS4_NATIVE_SESSION_PORT\",&port,1,65535)||",
-        "consumer": "    const char*yoco=ds4_nf_env(\"DS4_NATIVE_SESSION_YOCO_KEEP\");\n    if(yoco&&strcmp(yoco,\"0\")){if(strcmp(yoco,\"140\"))goto bad;c->yoco_keep=140;}\n    if(!ds4_nf_pair_token(token,c->http.token)||!ds4_nf_env_uint(\"DS4_NATIVE_SESSION_PORT\",&port,1,65535)||\n       !ds4_nf_env_uint(\"DS4_NATIVE_SESSION_DEADLINE_SECONDS\",&c->http.deadline_seconds,60,7200)||\n       inet_pton(AF_INET,host,&c->http.broker.sin_addr)!=1||!ds4_engine_native_frontier_identity(engine,&c->http.model))goto bad;\n    strcpy(c->http.host,host);strcpy(c->tier,tier);c->http.broker.sin_family=AF_INET;c->http.broker.sin_port=htons((uint16_t)port);\n    if(techniques){size_t n=strlen(techniques);if(n>=sizeof(c->techniques)||!ds4_ns_json_depth(techniques,n))goto bad;"
+        "consumer": "        else goto bad;\n    }\n    if(!ds4_nf_pair_token(token,c->http.token)||!ds4_nf_env_uint(\"DS4_NATIVE_SESSION_PORT\",&port,1,65535)||\n       !ds4_nf_env_uint(\"DS4_NATIVE_SESSION_DEADLINE_SECONDS\",&c->http.deadline_seconds,60,7200)||\n       inet_pton(AF_INET,host,&c->http.broker.sin_addr)!=1||!ds4_engine_native_frontier_identity(engine,&c->http.model))goto bad;\n    strcpy(c->http.host,host);strcpy(c->tier,tier);c->http.broker.sin_family=AF_INET;c->http.broker.sin_port=htons((uint16_t)port);\n    if(techniques){size_t n=strlen(techniques);if(n>=sizeof(c->techniques)||!ds4_ns_json_depth(techniques,n))goto bad;"
       }
     ]
   },
@@ -49160,7 +49160,7 @@
       "engines/streaming-llama/prefill_llama.cpp/src/llama-dsv41-sweep.cpp:295",
       "engines/streaming-llama/prefill_llama.cpp/tools/dsv41-prefill/main.cpp:395",
       "engines/streaming-llama/prefill_llama.cpp/tools/dsv41-prefill/main.cpp:512",
-      "engines/streaming-llama/prefill_llama.cpp/tools/dsv41-prefill/main.cpp:889"
+      "engines/streaming-llama/prefill_llama.cpp/tools/dsv41-prefill/main.cpp:891"
     ],
     "code_defaults": [
       {
@@ -49230,7 +49230,7 @@
         "consumer": "        if(fold_plan.tail){std::fprintf(stderr,\"LLAMADECODE_PREFILL_FOLD_TAIL tokens=%zu primary_sweep_tokens=%u remainder=%u capacity=%u fold_cap=%u folded_last=%u sweep_tokens=%s\\n\",\n            tokens.size(),fold_plan.sweep,fold_plan.last,uint32_t(chunk_option),uint32_t(fold_cap),fold_plan.sweep+fold_plan.last,sweep_list.c_str());std::fflush(stderr);}\n        require(!chunk_option||(resident_ram&&!hybrid&&!std::getenv(\"DSV41_BOUNDARY_CAPTURE\")),\"Stateful chunks require explicit RAM carry and no boundary capture\");\n        require(!chunk_option||!pair_ffn||tokens.size()<=chunk_tokens||sweep_step%4096==0||unaligned_append_step==2048,\"Paired chunk size must align absolute attention positions\");\n        const auto context=number(\"--context\");require(context<=1048576&&tokens.size()<context,\"Native payload requires context room for the next decode token\");\n        require(!args.count(\"--session-stdio\")||args.at(\"--session-stdio\")==\"0\"||args.at(\"--session-stdio\")==\"1\",\"session-stdio requires0/1\");\n        const bool live=args.count(\"--session-stdio\")&&args.at(\"--session-stdio\")==\"1\";"
       },
       {
-        "source": "engines/streaming-llama/prefill_llama.cpp/tools/dsv41-prefill/main.cpp:889",
+        "source": "engines/streaming-llama/prefill_llama.cpp/tools/dsv41-prefill/main.cpp:891",
         "unset": "NULL from getenv; the literal consumer below supplies any fallback",
         "read": "require(resident_ram&&!options.diagnostic_layers&&!std::getenv(\"DSV41_BOUNDARY_CAPTURE\"),\"One-token warmup requires RAM carry and no boundary/incomplete diagnostics\");",
         "consumer": "        uint64_t warm_cublas=0;\n        if(warm){\n            require(resident_ram&&!options.diagnostic_layers&&!std::getenv(\"DSV41_BOUNDARY_CAPTURE\"),\"One-token warmup requires RAM carry and no boundary/incomplete diagnostics\");\n            auto warm_options=options;auto warm_weights=weights;\n            warm_options.yoco_keep=0;warm_options.yoco_remote_state_version=0;warm_options.yoco_logical_end=0;warm_options.carry.tokens=1;warm_options.pair_ffn=false;\n            warm_options.carry.max_tile_tokens=std::min(4096u,warm_options.carry.max_tile_tokens);\n            warm_options.compute_step_tokens=std::min(warm_options.compute_step_tokens,warm_options.carry.max_tile_tokens);"
@@ -50089,7 +50089,7 @@
       "engines/streaming-llama/prefill_llama.cpp/src/llama-dsv41-executor.cpp:684",
       "engines/streaming-llama/prefill_llama.cpp/src/llama-dsv41-executor.cpp:1330",
       "engines/streaming-llama/prefill_llama.cpp/src/llama-dsv41-executor.cpp:1335",
-      "engines/streaming-llama/prefill_llama.cpp/tools/dsv41-prefill/main.cpp:739"
+      "engines/streaming-llama/prefill_llama.cpp/tools/dsv41-prefill/main.cpp:741"
     ],
     "defaults_by_scope": {
       "rtx-llama": "1"
@@ -50144,7 +50144,7 @@
         "consumer": "            else llama_dsv41_layer_log(\"DS4PERF_EXPERT_MXFP4_SMALL_BATCH layer=%u count=%u unchanged_original_weights=1 native_MMA_minimum_rows=5\\n\",in.layer,in.count);\n        }\n        require(!expert.reuse_expert_routing_map||(std::getenv(\"GGML_CUDA_DISABLE_GRAPHS\")&&std::string(std::getenv(\"GGML_CUDA_DISABLE_GRAPHS\"))==\"1\"),\"Routing-map reuse requires the explicit uncaptured producer path\");\n        if(expert.sorted_expert_routing){\n            unsigned tagged=0;for(int i=0;i<ggml_graph_n_nodes(graph);++i)tagged+=ggml_dsv41_sorted_routing_tag(ggml_graph_node(graph,i),expert.reuse_expert_routing_map)?1:0;\n            require(tagged==3,\"Explicit count/prefix/scatter routing did not match exactly gate/up/down\");\n        }"
       },
       {
-        "source": "engines/streaming-llama/prefill_llama.cpp/tools/dsv41-prefill/main.cpp:739",
+        "source": "engines/streaming-llama/prefill_llama.cpp/tools/dsv41-prefill/main.cpp:741",
         "unset": "NULL from getenv; the literal consumer below supplies any fallback",
         "read": "require(!options.resident_bf16||(options.carry.defer_hidden_readback&&std::getenv(\"GGML_CUDA_DISABLE_GRAPHS\")&&std::string(std::getenv(\"GGML_CUDA_DISABLE_GRAPHS\"))==\"1\"),\"Resident BF16 test requires explicit full resident readback and disabled CUDA capture\");",
         "consumer": "        require(!args.count(\"--resident-hidden-bf16\")||args.at(\"--resident-hidden-bf16\")==\"0\"||args.at(\"--resident-hidden-bf16\")==\"1\",\"resident-hidden-bf16 requires0/1\");\n        options.resident_bf16=args.count(\"--resident-hidden-bf16\")&&args.at(\"--resident-hidden-bf16\")==\"1\";\n        require(!options.resident_bf16||(options.carry.defer_hidden_readback&&std::getenv(\"GGML_CUDA_DISABLE_GRAPHS\")&&std::string(std::getenv(\"GGML_CUDA_DISABLE_GRAPHS\"))==\"1\"),\"Resident BF16 test requires explicit full resident readback and disabled CUDA capture\");\n        report[\"resident_hidden_storage\"]=options.resident_bf16?\"BF16 after validated existing BF16 boundary; layer0 input unchanged F32\":\"F32\";\n        options.carry.ram_prefix_tokens=uint32_t(ram_prefix);options.carry.disk_reserve_bytes=disk_reserve;\n        if(const char *diag=std::getenv(\"DS4PERF_DIAGNOSTIC_LAYERS\")){if(*diag){\n            const auto layers=integer(diag);require(layers>0&&layers<40&&resident_ram&&llama_dsv41_expert_profile::native(expert),"
@@ -55395,7 +55395,7 @@
     "doc": "Producer decode: release prefill-only graph and hidden buffers before decode so the L2 expert cache can use them (default on); 0 disables.",
     "reads": [
       "engines/streaming-llama/prefill_llama.cpp/src/llama-dsv41-sweep.cpp:197",
-      "engines/streaming-llama/prefill_llama.cpp/tools/dsv41-prefill/main.cpp:843"
+      "engines/streaming-llama/prefill_llama.cpp/tools/dsv41-prefill/main.cpp:845"
     ],
     "code_defaults": [
       {
@@ -55405,7 +55405,7 @@
         "consumer": "// hidden bank; the prefill-sized reservations go back to the device (the\n// decode L2 expert cache uses them). LLAMADECODE_DECODE_COMPACT=0 disables.\nstatic bool decode_compact_enabled(){static const bool on=[]{const char*e=std::getenv(\"LLAMADECODE_DECODE_COMPACT\");return !(e&&e[0]=='0'&&!e[1]);}();return on;}\nstatic void compact_fixed(llama_dsv41_fixed_storage&f,uint64_t admitted_hidden){\n    require(f.ready&&f.graph&&!f.decode_compact,\"Decode compaction requires the ready prefill plan\");\n    ggml_backend_synchronize(f.backend);\n    const uint64_t old_graph=ggml_gallocr_get_buffer_size(f.graph.get(),0),old_hidden=f.hidden?ggml_backend_buffer_get_size(f.hidden.get()):0;"
       },
       {
-        "source": "engines/streaming-llama/prefill_llama.cpp/tools/dsv41-prefill/main.cpp:843",
+        "source": "engines/streaming-llama/prefill_llama.cpp/tools/dsv41-prefill/main.cpp:845",
         "unset": "NULL from getenv; the literal consumer below supplies any fallback",
         "read": "const char *compact=std::getenv(\"LLAMADECODE_DECODE_COMPACT\");",
         "consumer": "            const char *carry_loan=std::getenv(\"LLAMADECODE_SINGLEPASS_VRAM\");\n            if(carry_loan&&std::strcmp(carry_loan,\"1\")==0&&reserved_chunk>49152&&!restored){\n                const char *compact=std::getenv(\"LLAMADECODE_DECODE_COMPACT\");\n                require(direct_open&&!warm&&options.yoco_keep==2541&&options.ctx_cache_grow_step&&\n                    options.resident_bf16&&options.resident_ids&&options.resident_metadata&&\n                    options.carry.defer_hidden_readback&&options.carry.export_hidden_after_head&&\n                    !(compact&&std::strcmp(compact,\"0\")==0),\"Carry VRAM loan requires direct-open exact cone, growable BF16 and decode compaction\");"
@@ -61116,11 +61116,11 @@
     ],
     "doc": "Producer prefill: Engram table read start policy; built-in default retained.",
     "reads": [
-      "engines/streaming-llama/prefill_llama.cpp/tools/dsv41-prefill/main.cpp:952"
+      "engines/streaming-llama/prefill_llama.cpp/tools/dsv41-prefill/main.cpp:954"
     ],
     "code_defaults": [
       {
-        "source": "engines/streaming-llama/prefill_llama.cpp/tools/dsv41-prefill/main.cpp:952",
+        "source": "engines/streaming-llama/prefill_llama.cpp/tools/dsv41-prefill/main.cpp:954",
         "unset": "NULL from getenv; the literal consumer below supplies any fallback",
         "read": "const char*early_direct=std::getenv(\"LLAMA_DSV41_ENGRAM_EARLY_DIRECT\");",
         "consumer": "        // load (7.9 s at 43K) left a 7.4 s join wait and prefill fell to 1,052 tok/s,\n        // against 1,238 tok/s with the ordinary layer-0 overlapped load. Opt-in only.\n        const char*early_direct=std::getenv(\"LLAMA_DSV41_ENGRAM_EARLY_DIRECT\");\n        if(!(engram_early_cold&&sweep->early_engram_queued())&&direct_open&&early_direct&&std::strcmp(early_direct,\"1\")==0){const char*overlap=std::getenv(\"LLAMA_DSV41_ENGRAM_PROMPT_OVERLAP\");\n            if(weights.engram_prefetch_host_bytes&&options.engram_tile_lookahead&&overlap&&std::strcmp(overlap,\"1\")==0){\n                const std::vector<int32_t> first(tokens.begin(),tokens.begin()+first_sweep_tokens);\n                success(sweep->start_next_engram(first,early_tail,error),error);"
@@ -61143,8 +61143,8 @@
       "engines/streaming-llama/prefill_llama.cpp/src/llama-dsv41-weights.cpp:801",
       "engines/streaming-llama/prefill_llama.cpp/src/llama-dsv41-weights.cpp:826",
       "engines/streaming-llama/prefill_llama.cpp/src/llama-dsv41-weights.cpp:847",
-      "engines/streaming-llama/prefill_llama.cpp/tools/dsv41-prefill/main.cpp:915",
-      "engines/streaming-llama/prefill_llama.cpp/tools/dsv41-prefill/main.cpp:953"
+      "engines/streaming-llama/prefill_llama.cpp/tools/dsv41-prefill/main.cpp:917",
+      "engines/streaming-llama/prefill_llama.cpp/tools/dsv41-prefill/main.cpp:955"
     ],
     "defaults_by_scope": {
       "rtx-llama": "1"
@@ -61175,13 +61175,13 @@
         "consumer": "bool llama_dsv41_weight_provider::prepare_engram_prompt(const std::vector<int32_t>&tokens,const std::function<bool()>&stop,std::string&error,llama_dsv41::engram_history initial,const uint8_t* text_mask){return p->guard([&]{\n    if(!p->options.engram_prefetch_host_bytes)return;\n    const char*overlap=std::getenv(\"LLAMA_DSV41_ENGRAM_PROMPT_OVERLAP\");\n    const bool during_layer_zero=overlap&&std::strcmp(overlap,\"1\")==0&&p->leased&&p->next==1;\n    require(p->allocated&&((!p->leased&&p->next==0)||during_layer_zero)&&!p->engram_prompt&&tokens.size()==p->options.engram_prefetch_tokens,\n        \"Engram whole-prompt cache requires its initial or explicitly overlapped layer-zero lease\");p->identity();\n    if(p->early&&p->early->tokens==tokens){"
       },
       {
-        "source": "engines/streaming-llama/prefill_llama.cpp/tools/dsv41-prefill/main.cpp:915",
+        "source": "engines/streaming-llama/prefill_llama.cpp/tools/dsv41-prefill/main.cpp:917",
         "unset": "NULL from getenv; the literal consumer below supplies any fallback",
         "read": "{const char*overlap=std::getenv(\"LLAMA_DSV41_ENGRAM_PROMPT_OVERLAP\");",
         "consumer": "            // DS4COMBO producer-warm: the prompt's tokens are known now, so its\n            // Engram rows load on their own IoRing during this warmup pass.\n            {const char*overlap=std::getenv(\"LLAMA_DSV41_ENGRAM_PROMPT_OVERLAP\");\n             // Auto (or a skipped =1 start) that queued nothing: the ordinary producer-warm start.\n             if(!(engram_early&&warm_request->early_engram_queued())&&weights.engram_prefetch_host_bytes&&options.engram_tile_lookahead&&overlap&&std::strcmp(overlap,\"1\")==0){\n                const std::vector<int32_t> first(tokens.begin(),tokens.begin()+first_sweep_tokens);\n                std::vector<int32_t> tail;"
       },
       {
-        "source": "engines/streaming-llama/prefill_llama.cpp/tools/dsv41-prefill/main.cpp:953",
+        "source": "engines/streaming-llama/prefill_llama.cpp/tools/dsv41-prefill/main.cpp:955",
         "unset": "NULL from getenv; the literal consumer below supplies any fallback",
         "read": "if(!(engram_early_cold&&sweep->early_engram_queued())&&direct_open&&early_direct&&std::strcmp(early_direct,\"1\")==0){const char*overlap=std::getenv(\"LLAMA_DSV41_ENGRAM_PROMPT_OVERLAP\");",
         "consumer": "        // against 1,238 tok/s with the ordinary layer-0 overlapped load. Opt-in only.\n        const char*early_direct=std::getenv(\"LLAMA_DSV41_ENGRAM_EARLY_DIRECT\");\n        if(!(engram_early_cold&&sweep->early_engram_queued())&&direct_open&&early_direct&&std::strcmp(early_direct,\"1\")==0){const char*overlap=std::getenv(\"LLAMA_DSV41_ENGRAM_PROMPT_OVERLAP\");\n            if(weights.engram_prefetch_host_bytes&&options.engram_tile_lookahead&&overlap&&std::strcmp(overlap,\"1\")==0){\n                const std::vector<int32_t> first(tokens.begin(),tokens.begin()+first_sweep_tokens);\n                success(sweep->start_next_engram(first,early_tail,error),error);\n            }}"
@@ -89058,20 +89058,21 @@
     "scopes": [
       "mac-ds4"
     ],
-    "doc": "Negotiated YOCO replay window: 0 or 140; set by the paired preset.",
+    "doc": "Negotiated replay window: 0, approximate 140/v1, or exact cone 2541/v2; supplied by the paired preset.",
     "reads": [
       "engines/ds4-mac/ds4_native_session_setup.inc:33"
     ],
     "allowed_values": [
       "0",
-      "140"
+      "140",
+      "2541"
     ],
     "code_defaults": [
       {
         "source": "engines/ds4-mac/ds4_native_session_setup.inc:33",
         "unset": "Wrapper/conditional default: see the literal call and consumer below",
         "read": "const char*yoco=ds4_nf_env(\"DS4_NATIVE_SESSION_YOCO_KEEP\");",
-        "consumer": "    if(ds4_nf_env(\"DS4_NATIVE_SESSION_LOCAL_PREFILL_MAX_TOKENS\")&&\n       !ds4_nf_env_uint(\"DS4_NATIVE_SESSION_LOCAL_PREFILL_MAX_TOKENS\",&c->local_prefill_max,0,49152))goto bad;\n    const char*yoco=ds4_nf_env(\"DS4_NATIVE_SESSION_YOCO_KEEP\");\n    if(yoco&&strcmp(yoco,\"0\")){if(strcmp(yoco,\"140\"))goto bad;c->yoco_keep=140;}\n    if(!ds4_nf_pair_token(token,c->http.token)||!ds4_nf_env_uint(\"DS4_NATIVE_SESSION_PORT\",&port,1,65535)||\n       !ds4_nf_env_uint(\"DS4_NATIVE_SESSION_DEADLINE_SECONDS\",&c->http.deadline_seconds,60,7200)||\n       inet_pton(AF_INET,host,&c->http.broker.sin_addr)!=1||!ds4_engine_native_frontier_identity(engine,&c->http.model))goto bad;"
+        "consumer": "    if(ds4_nf_env(\"DS4_NATIVE_SESSION_LOCAL_PREFILL_MAX_TOKENS\")&&\n       !ds4_nf_env_uint(\"DS4_NATIVE_SESSION_LOCAL_PREFILL_MAX_TOKENS\",&c->local_prefill_max,0,49152))goto bad;\n    const char*yoco=ds4_nf_env(\"DS4_NATIVE_SESSION_YOCO_KEEP\");\n    if(yoco&&strcmp(yoco,\"0\")){\n        if(!strcmp(yoco,\"140\"))c->yoco_keep=140;\n        else if(!strcmp(yoco,\"2541\"))c->yoco_keep=2541;\n        else goto bad;"
       }
     ]
   },
@@ -96960,13 +96961,13 @@
         "source": "engines/ds4-mac/ds4_native_session_setup.inc:31",
         "unset": "Wrapper/conditional default: see the literal call and consumer below",
         "read": "if(ds4_nf_env(\"DS4_NATIVE_SESSION_LOCAL_PREFILL_MAX_TOKENS\")&&",
-        "consumer": "     if(policy){if(!strcmp(policy,\"defer\"))c->catchup_defer=true;else if(strcmp(policy,\"stream\"))goto bad;}}\n    c->local_prefill_max=11776;\n    if(ds4_nf_env(\"DS4_NATIVE_SESSION_LOCAL_PREFILL_MAX_TOKENS\")&&\n       !ds4_nf_env_uint(\"DS4_NATIVE_SESSION_LOCAL_PREFILL_MAX_TOKENS\",&c->local_prefill_max,0,49152))goto bad;\n    const char*yoco=ds4_nf_env(\"DS4_NATIVE_SESSION_YOCO_KEEP\");\n    if(yoco&&strcmp(yoco,\"0\")){if(strcmp(yoco,\"140\"))goto bad;c->yoco_keep=140;}\n    if(!ds4_nf_pair_token(token,c->http.token)||!ds4_nf_env_uint(\"DS4_NATIVE_SESSION_PORT\",&port,1,65535)||"
+        "consumer": "     if(policy){if(!strcmp(policy,\"defer\"))c->catchup_defer=true;else if(strcmp(policy,\"stream\"))goto bad;}}\n    c->local_prefill_max=11776;\n    if(ds4_nf_env(\"DS4_NATIVE_SESSION_LOCAL_PREFILL_MAX_TOKENS\")&&\n       !ds4_nf_env_uint(\"DS4_NATIVE_SESSION_LOCAL_PREFILL_MAX_TOKENS\",&c->local_prefill_max,0,49152))goto bad;\n    const char*yoco=ds4_nf_env(\"DS4_NATIVE_SESSION_YOCO_KEEP\");\n    if(yoco&&strcmp(yoco,\"0\")){\n        if(!strcmp(yoco,\"140\"))c->yoco_keep=140;"
       },
       {
         "source": "engines/ds4-mac/ds4_native_session_setup.inc:32",
         "unset": "Wrapper/conditional default: see the literal call and consumer below",
         "read": "!ds4_nf_env_uint(\"DS4_NATIVE_SESSION_LOCAL_PREFILL_MAX_TOKENS\",&c->local_prefill_max,0,49152))goto bad;",
-        "consumer": "    c->local_prefill_max=11776;\n    if(ds4_nf_env(\"DS4_NATIVE_SESSION_LOCAL_PREFILL_MAX_TOKENS\")&&\n       !ds4_nf_env_uint(\"DS4_NATIVE_SESSION_LOCAL_PREFILL_MAX_TOKENS\",&c->local_prefill_max,0,49152))goto bad;\n    const char*yoco=ds4_nf_env(\"DS4_NATIVE_SESSION_YOCO_KEEP\");\n    if(yoco&&strcmp(yoco,\"0\")){if(strcmp(yoco,\"140\"))goto bad;c->yoco_keep=140;}\n    if(!ds4_nf_pair_token(token,c->http.token)||!ds4_nf_env_uint(\"DS4_NATIVE_SESSION_PORT\",&port,1,65535)||\n       !ds4_nf_env_uint(\"DS4_NATIVE_SESSION_DEADLINE_SECONDS\",&c->http.deadline_seconds,60,7200)||"
+        "consumer": "    c->local_prefill_max=11776;\n    if(ds4_nf_env(\"DS4_NATIVE_SESSION_LOCAL_PREFILL_MAX_TOKENS\")&&\n       !ds4_nf_env_uint(\"DS4_NATIVE_SESSION_LOCAL_PREFILL_MAX_TOKENS\",&c->local_prefill_max,0,49152))goto bad;\n    const char*yoco=ds4_nf_env(\"DS4_NATIVE_SESSION_YOCO_KEEP\");\n    if(yoco&&strcmp(yoco,\"0\")){\n        if(!strcmp(yoco,\"140\"))c->yoco_keep=140;\n        else if(!strcmp(yoco,\"2541\"))c->yoco_keep=2541;"
       }
     ]
   },
@@ -97404,11 +97405,11 @@
     ],
     "doc": "Borrow unused growable-cache physical reservation for prefill carry, within the original device admission. Engine default 0; the qualified 1M text exact-cone launcher enables it. Explicit 0 retains the control.",
     "reads": [
-      "engines/streaming-llama/prefill_llama.cpp/tools/dsv41-prefill/main.cpp:841"
+      "engines/streaming-llama/prefill_llama.cpp/tools/dsv41-prefill/main.cpp:843"
     ],
     "code_defaults": [
       {
-        "source": "engines/streaming-llama/prefill_llama.cpp/tools/dsv41-prefill/main.cpp:841",
+        "source": "engines/streaming-llama/prefill_llama.cpp/tools/dsv41-prefill/main.cpp:843",
         "unset": "NULL from getenv; the literal consumer below supplies any fallback",
         "read": "const char *carry_loan=std::getenv(\"LLAMADECODE_SINGLEPASS_VRAM\");",
         "consumer": "            options.fixed->tokens=reserved_chunk;options.fixed->tile=options.carry.max_tile_tokens;options.fixed->context=options.context;\n            uint64_t hidden_budget=options.admitted_hidden_bytes;\n            const char *carry_loan=std::getenv(\"LLAMADECODE_SINGLEPASS_VRAM\");\n            if(carry_loan&&std::strcmp(carry_loan,\"1\")==0&&reserved_chunk>49152&&!restored){\n                const char *compact=std::getenv(\"LLAMADECODE_DECODE_COMPACT\");\n                require(direct_open&&!warm&&options.yoco_keep==2541&&options.ctx_cache_grow_step&&\n                    options.resident_bf16&&options.resident_ids&&options.resident_metadata&&"

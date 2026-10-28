@@ -101,8 +101,8 @@ class LaunchConfigTests(unittest.TestCase):
                 args,plan=prefill_arguments(cfg,count,20*1024**3)
                 self.assertEqual(args['--yoco-keep'],'2541')
                 self.assertEqual(args['--capture-dspark'],'0')
-            with self.assertRaisesRegex(ValueError,'no negotiated remote state'):
-                prefill_arguments(cfg,49555,20*1024**3,export_state=True)
+            remote,_=prefill_arguments(cfg,49555,20*1024**3,export_state=True)
+            self.assertEqual(remote['--yoco-remote-state-version'],'2')
 
     def test_resident_followup_is_an_explicit_local_toggle(self):
         cfg=dsv41_single.overlay('262k',dict(env_overrides={'LLAMADECODE_APPEND_DECODE_MAX':'96'}))

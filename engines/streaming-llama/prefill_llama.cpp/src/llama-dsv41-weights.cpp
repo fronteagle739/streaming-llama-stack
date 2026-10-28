@@ -962,6 +962,7 @@ bool llama_dsv41_weight_provider::prefill_experts(uint32_t layer,const std::vect
         }
     }
     uint64_t bytes=0;double ms=0;
+    const auto fetch_started=std::chrono::steady_clock::now();
 #ifdef GGML_USE_CUDA
     if(!extents.empty())require(wf_fetch_extents_direct(p->fetcher,int((layer+1)%p->options.buffers),extents.data(),int(extents.size()),
         ggml_backend_cuda_get_stream(p->options.backend),&bytes,&ms)&&!wf_has_failed(p->fetcher),"Prefill routed expert transfer failed");
@@ -974,8 +975,10 @@ bool llama_dsv41_weight_provider::prefill_experts(uint32_t layer,const std::vect
         llama_dsv41_layer_log("[dsv41-byte-ledger] stage=%u tensor=%s file_offset=%llu bytes=%llu source=experts first=%u count=%u\n",
             layer+1,e.t->name,(unsigned long long)(e.file_offset+uint64_t(range.first)*e.t->nb[2]),
             (unsigned long long)(uint64_t(range.count)*e.t->nb[2]),range.first,range.count);
-    llama_dsv41_layer_log("[dsv41-prefill-experts] stage=%u rows=%zu active=%u new=%u resident=%u bytes=%llu fetch_ms=%.6f\n",
-        layer+1,ids.size()/6,reads.active,reads.additional,unsigned(std::count(p->prefill_loaded.begin(),p->prefill_loaded.end(),true)),(unsigned long long)bytes,ms);
+    llama_dsv41_layer_log("[dsv41-prefill-experts] stage=%u rows=%zu active=%u new=%u resident=%u bytes=%llu fetch_ms=%.6f begin_epoch_ms=%.6f end_epoch_ms=%.6f\n",
+        layer+1,ids.size()/6,reads.active,reads.additional,unsigned(std::count(p->prefill_loaded.begin(),p->prefill_loaded.end(),true)),(unsigned long long)bytes,ms,
+        std::chrono::duration<double,std::milli>(fetch_started.time_since_epoch()).count(),
+        std::chrono::duration<double,std::milli>(std::chrono::steady_clock::now().time_since_epoch()).count());
 },error);}
 void llama_dsv41_weight_provider::fetch_totals(uint64_t&bytes,double&milliseconds)const{std::lock_guard<std::mutex>lock(p->mutex);bytes=p->fetched_total;milliseconds=p->fetch_ms_total;}
 bool llama_dsv41_weight_provider::decode_banks(uint32_t layer,const void*&dense,const void*&routed)const{

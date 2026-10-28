@@ -1934,6 +1934,9 @@ bool llama_dsv41_tile_executor::run(const request&in,const llama_dsv41_layer_gra
         if(capture_dspark)cache.dspark_completion.commit(capture_ticket);
         if(tile_timing_enabled())llama_dsv41_layer_log("LLAMADECODE_TILE_TIMING layer=%u tile=%u rows=%u host_prepare_ms=%.3f host_bind_ms=%.3f host_register_ms=%.3f host_graph_ms=%.3f host_reserve_ms=%.3f host_upload_ms=%.3f host_launch_ms=%.3f host_sync_ms=%.3f gpu_ms=%.3f compute_ms=%.3f host_readback_ms=%.3f host_cleanup_ms=%.3f skip_pin=%u prefetch=%u\n",
             in.layer,in.start,in.count,pending.prepare_ms,tile_bind_ms,tile_register_ms,tile_graph_ms,tile_reserve_ms,pending.upload_ms,tile_launch_ms,tile_sync_ms,double(tile_gpu_ms),pending.compute_ms,pending.readback_ms,pending.cleanup_ms,unsigned(skip_tile_pin),unsigned(prefetch_next));
+        llama_dsv41_layer_log("[dsv41-host-timeline] layer=%u start=%u rows=%u begin_epoch_ms=%.6f end_epoch_ms=%.6f\n",
+            in.layer,in.start,in.count,std::chrono::duration<double,std::milli>(prepare_started.time_since_epoch()).count(),
+            std::chrono::duration<double,std::milli>(clock_type::now().time_since_epoch()).count());
         out=std::move(pending);cache.execution_poisoned=false;probe.pre_return_ms=elapsed(prepare_started);probe.complete=true;return true;
     }catch(const std::exception&failure){error=failure.what();return false;}
 }

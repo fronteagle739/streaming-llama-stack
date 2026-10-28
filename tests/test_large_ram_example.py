@@ -34,7 +34,7 @@ class LargeRamExample(unittest.TestCase):
         self.assertEqual(Path(result['proposed_argv'][2]), ROOT / 'scripts/bootstrap.py')
         flags, _ = prefill_arguments(self.cfg['rtx'], 49787, int(12.5 * 2**30), export_state=True)
         self.assertEqual(result['state_export']['flags'], flags)
-        for key, value in {'--capture-dspark': '1', '--yoco-keep': '140', '--yoco-remote-state-version': '1'}.items():
+        for key, value in {'--capture-dspark': '1', '--yoco-keep': '2541', '--yoco-remote-state-version': '2'}.items():
             self.assertEqual(flags[key], value)
 
     def test_preview_starts_nothing_writes_nothing_and_redacts_both_tokens(self):
@@ -71,6 +71,7 @@ class LargeRamExample(unittest.TestCase):
 
     def test_invalid_budget_and_incompatible_export_are_refused(self):
         for section, key, value in [('rtx', 'yoco_keep', 0), ('decode_plan', 'native_state_mode', 1),
+                                    ('decode_plan', 'yoco_state_version', 1),('decode_plan', 'yoco_keep', 140),
                                     ('rtx', 'host_budget_gib', float('inf')),
                                     ('decode_plan', 'host_budget_gib', -1),
                                     ('decode_plan', 'min_available_gib', float('nan')),

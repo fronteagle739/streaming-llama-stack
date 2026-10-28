@@ -268,7 +268,7 @@ def main():
         raise ValueError('Candidate setting is not applied to the producer: '+key)
     label=args.experiment+'-'+(arm or 'pair')+'-'+str(args.count)
     if arm:
-        cfg['hold_watch']=dict(path=cfg['hold_file'],identity=args.lease,task='PERFEXP')
+        cfg['hold_watch']=dict(path=cfg['hold_file'],identity=args.lease,task=cfg.get('task','PERFEXP'))
         run_child(args,cfg,arm,label)
         return
     evidence(root,args.experiment,cfg)
@@ -319,7 +319,7 @@ def main():
                 time.sleep(1)
             else:lease_context=candidate_context
         try:
-            cfg['hold_watch']=dict(path=cfg['hold_file'],identity=lease,task='PERFEXP')
+            cfg['hold_watch']=dict(path=cfg['hold_file'],identity=lease,task=cfg.get('task','PERFEXP'))
             before=http('health')
             # No active Studio model is the observed initial state. Refuse a
             # state change rather than silently losing another user's session.

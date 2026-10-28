@@ -16,6 +16,15 @@ enum class operation { prefill, decode, verify, append_decode, all_logits };
 inline void validate(uint32_t keep) {
     if(keep!=0 && keep!=140 && keep!=exact_keep) throw std::runtime_error("yoco_keep must be 0, 140 or 2541");
 }
+// Provenance is negotiated separately from the unchanged complete mode3 wire
+// layout. v1 is approximate140; v2 certifies the exact dependency cone. Never
+// interpret one version as the other, including for a short full-row prompt.
+inline uint32_t remote_version(uint32_t keep) {
+    validate(keep);return keep==exact_keep?2u:keep==140?1u:0u;
+}
+inline bool remote_compatible(uint32_t keep,uint32_t version) {
+    return remote_version(keep)==version;
+}
 struct plan {
     uint32_t first=0, count=0, layers=40;
     bool approximate=false, encoder_only=false;

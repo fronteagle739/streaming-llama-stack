@@ -5,7 +5,7 @@
     "host_budget_gib": 13.5,
     "min_available_gib": 0.5,
     "native_tier": "ultra",
-    "yoco_keep": 0,
+    "yoco_keep": 2541,
     "mac": "http://MAC_HOST:8180",
     "pair_token": "SET_SHARED_PAIRING_TOKEN",
     "producer_desktop_reserve_gib": 0.5,
