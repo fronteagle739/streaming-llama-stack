@@ -21,9 +21,36 @@ LIBRARY=os.environ.get('NATIVEFP4_REQUANT_LIBRARY')
 
 @unittest.skipUnless(np is not None and LIBRARY,'Set NATIVEFP4_REQUANT_LIBRARY to the built CPU adapter')
 class RequantTests(unittest.TestCase):
+    def test_conversion_reservation_filters_only_its_exact_lease(self):
+        with tempfile.TemporaryDirectory() as directory:
+            path=Path(directory)/'ledger';path.write_text('reservation')
+            own='ACTIVE: NATIVEFP4 own; exclusive configured GPU'
+            foreign='ACTIVE: OTHER foreign; exclusive configured GPU'
+            with patch.object(rq,'_conversion_hold',('NATIVEFP4','own')):
+                with patch.object(rq,'active_holds',return_value=[own,foreign]):
+                    self.assertEqual(rq.gpu_holds(path),[foreign])
+                path.write_text('own reservation only')
+                with patch.object(rq,'active_holds',return_value=[own]):
+                    self.assertFalse(rq.gpu_holds(path))
+                path.write_text('reservation changed')
+                with patch.object(rq,'active_holds',return_value=[]):
+                    self.assertTrue(rq.gpu_holds(path))
+
     def test_unreadable_gpu_ledger_fails_closed(self):
-        with patch.object(Path,'read_text',side_effect=PermissionError('writer lock')):
-            self.assertTrue(rq.gpu_holds(Path('ledger')))
+        with tempfile.TemporaryDirectory() as directory:
+            path=Path(directory)/'ledger';path.write_text('')
+            with patch.object(Path,'read_text',side_effect=PermissionError('writer lock')):
+                self.assertTrue(rq.gpu_holds(path))
+
+    def test_gpu_ledger_cache_observes_a_new_hold(self):
+        with tempfile.TemporaryDirectory() as directory:
+            path=Path(directory)/'ledger';path.write_text('')
+            with patch.object(rq,'active_holds',side_effect=lambda text:['active'] if text else []) as parse:
+                self.assertFalse(rq.gpu_holds(path));self.assertFalse(rq.gpu_holds(path))
+                self.assertEqual(parse.call_count,1)
+                path.write_text('ACTIVE: timed run')
+                self.assertTrue(rq.gpu_holds(path))
+                self.assertEqual(parse.call_count,2)
 
     def test_atomic_receipt_retries_windows_reader_conflict(self):
         with tempfile.TemporaryDirectory() as directory:
@@ -87,6 +114,10 @@ class RequantTests(unittest.TestCase):
             source=root/'source.gguf';source.write_bytes(raw)
             args=SimpleNamespace(requant_gguf=source,out=root/'out.gguf',runtime_root=root,
                                  hold_file=hold,quants_library=Path(LIBRARY),resume=False,threads=2,runtime_floor_gib=4)
+            with patch('shutil.disk_usage',side_effect=[SimpleNamespace(free=10**12),SimpleNamespace(free=20*2**30)]):
+                with self.assertRaisesRegex(ValueError,'20 GiB reserve'):rq.worker(args)
+            self.assertEqual(json.loads((root/'requant-progress.json').read_text())['completed'],[])
+            args.resume=True
             original=rq.converter
             calls=[]
             def fail_after_first(lib):

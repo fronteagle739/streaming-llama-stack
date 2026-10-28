@@ -1,0 +1,28 @@
+{
+  "label": "Q4\u2192MXFP4 requant (lossy), speed proxy for native FP4",
+  "status": "PASS",
+  "sha256": "cf05bdccb86b823ce794eab2ca033a649b6a2f5c03cee8a4b177d86de017ae44",
+  "bytes": 501609136128,
+  "source_sha256": "2cc6bc254f22a0238020e61e931c0cac865218aada1eed9c0036d9f4031c6e5f",
+  "source_bytes": 518596067328,
+  "source_header_sha256": "34cafe7f195194999b24d7aa719a144e9999442d4a69cb1a8cbce2e57359482f",
+  "conversion_library_sha256": "170e1bf1ab6f2aa59b4e94006114d97110ef8bd14a8f928a3a5a40e1a134e7cf",
+  "readback_verified": true,
+  "tensors": 1046,
+  "mxfp4_expert_tensors": 120,
+  "unchanged_tensors_verified": 926,
+  "final_resumed_segment": {
+    "exit_code": 0,
+    "reason": null,
+    "elapsed_s": 1558.5,
+    "peak_tree_rss": 126210048,
+    "min_available": 11853582336,
+    "host_budget_gib": 1.0,
+    "floor_gib": 1.0,
+    "cleanup_confirmed": true
+  },
+  "source_retained": true,
+  "storage": "Direct experiment output on the same fast model volume; no copy/move",
+  "verification": "Full stored bytes including header/padding match the streaming write hash; durable resume prefix reverified",
+  "receipt_sha256": "3c57f5d80a73eac47250c891ca6dd50111573ec9ecdc846176bf64b8540d8966"
+}

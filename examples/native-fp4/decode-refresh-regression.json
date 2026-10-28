@@ -1,0 +1,12 @@
+{
+  "status": "PASS",
+  "prompt_tokens": 2048,
+  "generated_tokens": 64,
+  "old_decode_library_sha256": "05dc6764ab6f2f932e3cc8467c8e73f96f50fe2a456f9e7610e0c7d1222dec13",
+  "new_decode_library_sha256": "91dd102586c5afad4a2c94a5ba52c2be06149ce96752747dbdbb86a353930b38",
+  "prompt_sha256": "a2f499596816d3c4cdf007ee3f8ae99e6a2a63a46482fd8bc41e33f0a2565d6f",
+  "model_sha256": "2cc6bc254f22a0238020e61e931c0cac865218aada1eed9c0036d9f4031c6e5f",
+  "producer_sha256": "9b634ae28a62d1e84b762ff88403b6aadb4709fd7d363d59fb294f74a9b7f82d",
+  "compared": "64 generated IDs, final full-vocabulary logits SHA256 and all owner-state component hashes",
+  "logits_sha256": "a24237c256fb1067895636d4a5f0ab72d14ade0a91cc64f29f4b6f7b423e3cbd"
+}

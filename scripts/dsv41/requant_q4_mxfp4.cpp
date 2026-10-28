@@ -4,6 +4,9 @@
 #include <cstdint>
 #include <cstring>
 #include <cmath>
+#ifdef __AVX2__
+#include <immintrin.h>
+#endif
 #ifdef _WIN32
 #define EXPORT extern "C" __declspec(dllexport)
 #else
@@ -34,13 +37,50 @@ EXPORT int requant_q4_mxfp4(const uint8_t*src,uint8_t*dst,int64_t blocks,int thr
             int sc,m;scale_min(j,in+4,sc,m);
             const float ds=d*sc,ms=dm*m;
             const uint8_t*q=in+16+(j/2)*32;
-            float values[16],amax=0;
+            float amax=0;
+#ifdef __AVX2__
+            const __m256i bytes=_mm256_loadu_si256(reinterpret_cast<const __m256i*>(q));
+            const __m256i codes=_mm256_and_si256(j%2?_mm256_srli_epi16(bytes,4):bytes,_mm256_set1_epi8(15));
+            __m128i lo=_mm_min_epu8(_mm256_castsi256_si128(codes),_mm256_extracti128_si256(codes,1));
+            __m128i hi=_mm_max_epu8(_mm256_castsi256_si128(codes),_mm256_extracti128_si256(codes,1));
+#define REDUCE_CODES(shift) lo=_mm_min_epu8(lo,_mm_srli_si128(lo,shift)); hi=_mm_max_epu8(hi,_mm_srli_si128(hi,shift));
+            REDUCE_CODES(8) REDUCE_CODES(4) REDUCE_CODES(2) REDUCE_CODES(1)
+#undef REDUCE_CODES
+            // Absolute affine values attain their maximum at a used code's
+            // minimum or maximum. Preserve the scalar multiply/subtract order.
+            const float low=ds*(_mm_cvtsi128_si32(lo)&255)-ms;
+            const float high=ds*(_mm_cvtsi128_si32(hi)&255)-ms;
+            amax=std::fmax(std::fabs(low),std::fabs(high));
+#else
+            float values[16];
             for(int v=0;v<16;++v)values[v]=ds*v-ms;
             uint8_t codes[32];
             for(int k=0;k<32;++k){codes[k]=j%2?q[k]>>4:q[k]&15;amax=std::fmax(amax,std::fabs(values[codes[k]]));}
+#endif
             const int exponent=amax>0?int(std::floor(std::log2(amax)))-2+127:0;
             if(exponent<0||exponent>254){invalid|=1;continue;}
             const float inverse_scale=std::ldexp(1.f,127-exponent);
+#ifdef __AVX2__
+            __m128i map_parts[2];
+            for(int part=0;part<2;++part) {
+                const __m256 indices=_mm256_add_ps(_mm256_setr_ps(0,1,2,3,4,5,6,7),_mm256_set1_ps(float(part*8)));
+                const __m256 value=_mm256_sub_ps(_mm256_mul_ps(_mm256_set1_ps(ds),indices),_mm256_set1_ps(ms));
+                const __m256 x=_mm256_mul_ps(_mm256_andnot_ps(_mm256_set1_ps(-0.f),value),_mm256_set1_ps(inverse_scale));
+                __m256i c=_mm256_setzero_si256();
+                const float midpoints[]={.25f,.75f,1.25f,1.75f,2.5f,3.5f,5.f};
+                for(float midpoint:midpoints)
+                    c=_mm256_sub_epi32(c,_mm256_castps_si256(_mm256_cmp_ps(x,_mm256_set1_ps(midpoint),_CMP_GT_OQ)));
+                const __m256i negative=_mm256_castps_si256(_mm256_cmp_ps(value,_mm256_setzero_ps(),_CMP_LT_OQ));
+                const __m256i nonzero=_mm256_cmpgt_epi32(c,_mm256_setzero_si256());
+                c=_mm256_add_epi32(c,_mm256_and_si256(_mm256_and_si256(negative,nonzero),_mm256_set1_epi32(8)));
+                map_parts[part]=_mm_packus_epi32(_mm256_castsi256_si128(c),_mm256_extracti128_si256(c,1));
+            }
+            const __m128i mapping=_mm_packus_epi16(map_parts[0],map_parts[1]);
+            const __m256i mapped=_mm256_shuffle_epi8(_mm256_broadcastsi128_si256(mapping),codes);
+            const __m128i packed=_mm_or_si128(_mm256_castsi256_si128(mapped),_mm_slli_epi16(_mm256_extracti128_si256(mapped,1),4));
+            uint8_t*out=dst+(b*8+j)*17;out[0]=uint8_t(exponent);
+            _mm_storeu_si128(reinterpret_cast<__m128i*>(out+1),packed);
+#else
             uint8_t mapping[16];
             for(int v=0;v<16;++v) {
                 // Power-of-two normalization is exact for finite Q4_K
@@ -53,6 +93,7 @@ EXPORT int requant_q4_mxfp4(const uint8_t*src,uint8_t*dst,int64_t blocks,int thr
             }
             uint8_t*out=dst+(b*8+j)*17;out[0]=uint8_t(exponent);
             for(int k=0;k<16;++k)out[k+1]=mapping[codes[k]]|(mapping[codes[k+16]]<<4);
+#endif
         }
     }
     return invalid;

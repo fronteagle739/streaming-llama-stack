@@ -42,3 +42,47 @@ are distinct experiment families. Kernel TFLOPS cannot be converted directly
 into model tokens/s. The full model still needs routed activation packing,
 epilogues in the model's required rounding/weighting order, streaming,
 attention/indexer work and end-to-end quality gates.
+
+## Stored-weight speed proxy
+
+`speed_proxy.py` runs one model comparison through the shared benchmark lease,
+host-memory budget and paging guard. Supply a private experiment config with
+the verified model/receipt, rebuilt producer/decode library, ULTRA profile and
+YOCO settings. Keep every runtime/cache/output path on the admitted scratch
+volume. Set explicit `host_budget_gib`, `producer_host_budget_gib`,
+`min_available_gib` and `runtime_min_free_gib` values before launch. The measured
+configuration used 7.25/6.25 GiB host ceilings, a 1 GiB physical floor and a
+512 MiB desktop GPU reserve. Windows device-backing commitment is a separate
+allowance, not permission to page host data.
+
+Create little-endian uint32 prompt and fixed-continuation token files once and
+reuse their exact bytes in both arms. Calibrate each model at bias zero first:
+
+```text
+python -B examples/native-fp4/speed_proxy.py --config q4-config.json --tokens calibration.tokens.le32 --arm q4 --decode 64 --calibrate q4-spreads.txt --output q4-calibration.json
+python -B examples/native-fp4/speed_proxy.py --config q4-config.json --tokens prompt.tokens.le32 --arm q4 --bias 0 --decode 1000 --continuation forced.tokens.le32 --output q4-quality.json
+python -B examples/native-fp4/speed_proxy.py --config proxy-config.json --tokens prompt.tokens.le32 --arm proxy --bias 0 --decode 1000 --continuation forced.tokens.le32 --output proxy-quality.json
+python -B examples/native-fp4/compare_logits.py --reference q4-quality.json --candidate proxy-quality.json --out proxy-kl.json
+```
+
+For the calibrated speed end, set the config's `cache_affinity_spread_file` to
+that model's generated file and use `--bias 1.36125`. Generate the proxy's own
+calibration using `--arm proxy`; Q4 and proxy files have different identities.
+The first 100 decode steps are excluded from warm throughput. The logit
+comparison checks input, continuation, producer/decode hashes and profile,
+compares the full vocabulary and excludes the pre-setter frontier row.
+The shipping dial waits 100 tokens and ramps for eight. To measure its quality
+cost, collect a 140-token fixed continuation in each arm and pass
+`--skip-first 109` to the comparator, leaving 31 rows after warmup/ramp. Short
+32-row continuations can compare proxy versus Q4 at bias zero, but cannot
+establish the dial's quality cost; the comparator refuses that claim. A
+bias-zero proxy can also serve as the reference for the proxy's dial comparison.
+
+`--arm proxy` explicitly enables the stored MXFP4 experiment; the default
+engine setting remains off. Every result is labelled **Q4→MXFP4 requant
+(lossy), speed proxy for native FP4**. This W4A4 path uses the existing MMA
+dispatch, with no runtime weight conversion; tiny batches retain the generic
+MXFP4 path. See [the format and conversion notes](../../docs/NATIVEFP4.md).
+Use `--profile-stages` in separate diagnostic runs to collect per-node GPU
+timings and tile walls; profiling synchronizes operations and must not be
+mixed into the headline throughput comparison.

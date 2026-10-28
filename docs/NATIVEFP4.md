@@ -220,6 +220,8 @@ python -B scripts/convert_dsv41_gguf.py --requant-gguf <current-Q4.gguf> --out <
 
 Build `scripts/dsv41/requant_q4_mxfp4.cpp` as a shared library with precise
 floating point and OpenMP (MSVC: `/O2 /fp:strict /openmp /LD /std:c++17`).
+An AVX2 host can additionally use `/arch:AVX2`; the vector midpoint mapper
+preserves the scalar quantizer's code order and exact ties.
 The adapter follows GGML's scalar Q4_K decoder and MXFP4 quantizer, including
 its first-code tie rule. This is an offline CPU route; it requires no GPU.
 Dense and Engram tensor bytes are copied unchanged. All names and shapes
@@ -247,9 +249,48 @@ The optimized midpoint mapper also matched the original GGML-style search
 byte-for-byte on 253,952 random packed blocks covering every finite half bit
 pattern for both Q4_K scales, including negative values and subnormals.
 
-Full conversion, storage placement and end-to-end speed/quality results are
-still pending. Timed model runs require the approved fast model volume and
+The complete speed proxy passed full stored-byte readback verification:
+501,609,136,128 bytes, SHA-256
+`cf05bdccb86b823ce794eab2ca033a649b6a2f5c03cee8a4b177d86de017ae44`.
+[The conversion receipt](../examples/native-fp4/proxy-verification.json) records
+all 926 unchanged tensor hashes, the 120 converted experts and memory limits.
+The original Q4 file is retained. Native-source conversion and full
+end-to-end speed/quality qualification remain separate work.
+Timed model runs require the approved fast model volume and
 the same frozen prompts/profile as the Q4 controls. Report recall and
 KL/top-1 against Q4 bias zero; do not infer native quality from this proxy.
-The owner's current storage instruction is to finish the output on I: and
-wait for an approved timing location. No D: model moves or proxy copy are authorized.
+The owner's latest storage instruction is to write converted GGUFs directly
+to the approved experiment folder on D:, preserving the original Q4 folder
+and at least 20 GiB free. The converter checks the reserve before each chunk.
+Ordinarily source reads, resume verification and final output readback pause
+during shared GPU holds. A priority conversion can instead hold the shared
+benchmark reservation continuously: pass its live ancestor lease file with
+`--conversion-lease`. Only that exact reservation is excluded from the pause
+check; a foreign hold, unreadable ledger or missing own hold fails closed.
+Keep the reservation through final stored-byte verification and release it
+immediately afterwards. The abandoned partial is retained for orchestrator cleanup;
+only the watchdog safetensors download may continue writing to I:.
+
+For the stored-weight experiment, set `LLAMA_DSV41_STORED_MXFP4=1` and
+`GGML_CUDA_DISABLE_GRAPHS=1` with MXFP4 gate/up/down weights and the ULTRA
+profile. This opt-in tags the three existing native FP4 MMA graph nodes and
+requires their completed CUDA dispatch counters. It performs no runtime weight
+conversion. Activations use the existing FP4 quantizer and accumulation is
+F32; this W4A4 arithmetic differs from the reference engine's W4A8. Batches of
+four rows or fewer retain the generic MXFP4 path and have no tensor-core claim.
+Alternate expert arithmetic profiles are refused. The toggle is off by default.
+Rebuild both `ds4.c` and `ds4_cuda.cu` with `DS4_EXTERNAL_DECODE=1` for the
+external decode library; an older CUDA object can handle Q4 while refusing
+MXFP4 external expert pointers. The rebuilt library's Q4 regression matched
+64 generated IDs, the final full-vocabulary logits hash and all owner-state
+hashes; [the receipt](../examples/native-fp4/decode-refresh-regression.json)
+records the old and new binary identities.
+
+Calibration files bind the non-Engram mapping size and header identity. Generate
+one for each model by setting `DS4_CACHE_AFFINITY_CALIBRATE` to a new output,
+selecting bias zero and decoding at least 64 tokens through the external
+decode adapter. Close the session to write the 40 layer spreads. The adapter
+observes routing without applying a bias during calibration. Reuse the resulting
+file only for its matching model. Engram is deliberately unmapped before the
+identity is calculated: compare the saved size to the first Engram offset,
+not the complete file size. A different model identity is not an admissible control.
