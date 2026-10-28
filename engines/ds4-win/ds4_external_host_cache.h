@@ -24,6 +24,8 @@ extern "C" {
 int ds4_external_cpu_q4(float *out, const float *x, const char *const *gate,
     const char *const *up, const char *const *down, const float *weights,
     uint32_t n, uint32_t in_dim, uint32_t mid_dim, uint32_t out_dim, float clamp);
+/* Diagnostic snapshots are populated only when CPU verification is enabled. */
+const void *ds4_external_cpu_trace(int which);
 #ifdef __cplusplus
 }
 #endif
