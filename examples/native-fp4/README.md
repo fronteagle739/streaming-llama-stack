@@ -103,8 +103,8 @@ to the stage totals.
 Dispatch witnesses confirm the stored-weight GGML native FP4 MMA path, with
 no runtime weight conversion. These engine numbers use the original GGML
 kernel. An optional [FlashInfer prefill adapter](../../engines/streaming-llama/flashinfer-sm120/README.md)
-has passed narrow adapter checks; model dispatch, quality and speed checks are
-pending. The proxy expert work achieved
+has passed narrow adapter and matched synthetic 100K checks; its ABI 2
+integration regresses speed, as reported below. The 50K proxy expert work achieved
 132.80 effective TFLOPS versus about 490 TFLOPS on the balanced standalone
 FlashInfer fixture; these different routing workloads are not a matched
 kernel comparison. The complete prompt fetches 298.84 GB of model tensors,
@@ -119,3 +119,41 @@ The separate `DS4_CUDA_MXFP4_DECODE_MMA` experiment is also off by default.
 Its CPU build includes a bounded K=2304 tail loader and launch counters, but
 the corrected GPU fixture, full-model accuracy and speed qualification are
 deferred. The accepted decode results use the existing MMVQ path.
+
+## Primary 100K comparison
+
+[`primary-100k-comparison.json`](primary-100k-comparison.json) records the matched
+100,000-token fixture, one producer/decode DLL, bias zero, ULTRA and approximate
+YOCO140. Both FP4 rows are **Q4→MXFP4 requant (lossy), speed proxy for native FP4**.
+Startup is included; these are single measurements on a synthetic prompt.
+
+| Path | Unprofiled prefill seconds | tokens/s |
+|---|---:|---:|
+| Q4 control | 46.453 | 2152.71 |
+| Stored MXFP4, current W4A4 | 44.406 | 2251.95 |
+| Stored MXFP4, FlashInfer W4A8 ABI 2 | 69.547 | 1437.88 |
+
+FlashInfer completed all 544 graphs and 1632 gate/up/down products. Its adapter
+is correct within the scalar-check scope but this integration is slower.
+The separate synchronized profiles give:
+
+| Path | Stream wait s | Expert operators s | Sparse attention s | Indexer s | Other wall s | Effective expert TFLOPS |
+|---|---:|---:|---:|---:|---:|---:|
+| Q4 | 6.840 | 9.144 | 4.456 | 2.500 | 26.561 | 97.66 |
+| MXFP4 W4A4 | 7.404 | 6.628 | 4.454 | 2.497 | 26.439 | 134.72 |
+| FlashInfer W4A8 ABI 2 | 4.503 | 17.656 | 4.430 | 2.522 | 96.045 | 50.58 |
+
+Each profile accounts for 892,943,518,924,800 useful routed-expert FLOPs:
+`2*3*5120*2304*6*(21*100000+19*140)`. The two sweeps execute 61 layer passes;
+upper-layer YOCO work runs only in the final sweep. Expert operator timings
+include activation packing and FlashInfer's runtime weight-layout rearrangement.
+The roughly 490-TFLOPS standalone balanced GEMM excludes those adapters and uses
+different routing. These figures do not measure pure FlashInfer core utilization.
+The FlashInfer profile's tile compute spans total 108.579 s, versus 34.713 s
+summed node timings; that gap includes execution/instrumentation overhead and
+cannot be assigned to compressor arithmetic. Profiling walls are diagnostic.
+
+Seven matched forced rows across the full 129280-token vocabulary give mean
+KL(Q4‖W4A4)=0.03605 and KL(Q4‖FlashInfer)=0.04611; top-1 matches all seven.
+The untouched frontier is reported separately in the JSON. One fixture is not
+broad accuracy or recall evidence. Both lossy experiments remain off by default.
