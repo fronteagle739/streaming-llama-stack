@@ -4,9 +4,13 @@ A 32-token follow-up used the existing resident decoder in 4.45-4.72 s instead
 of a 17.36-18.22 s full weight sweep, after matched 2K/8K/32K initial prompts.
 Recall and first-token top-1 checks passed. Follow-up logits were numerically
 different, with KL 0.00108-0.01087; this is not a bit-exact substitution.
-Verdict: **adopt the existing resident follow-up path with its documented
+Verdict: **adopt the resident follow-up as an opt-in toggle with its documented
 numerical difference; do not enable whole-prompt demand reads at 8K/32K**.
-No shipping default or preset was changed.
+The owner's subsequent correction requires faster-but-lossy paths off by default.
+`LLAMADECODE_APPEND_DECODE_MAX` now defaults to `0` in code, producer environment
+and the example config; explicitly set `96` to reproduce the measured toggle.
+The original measurements below used explicit `0`/`96`, so this default change
+does not alter them. The accuracy attribution remains in progress.
 
 ## Cold prompt plan
 

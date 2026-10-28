@@ -181,10 +181,10 @@ void ensure_decode_context(llama_dsv41_sweep&sweep,const llama_dsv41_fixed_stora
 }
 bool ds4_decode_enabled(){static const bool on=[]{const char*e=std::getenv("LLAMADECODE_DS4_DECODE");return e&&e[0]=='1'&&!e[1];}();return on;}
 // LLAMADECODE append-via-decode: with the ds4 decode on, a live prefill of at
-// most LLAMADECODE_APPEND_DECODE_MAX tokens (default 96 = measured crossover, 0 = off) is appended
+// most LLAMADECODE_APPEND_DECODE_MAX tokens (default 0 = off; opt-in 96) is appended
 // one token at a time through the ds4 decode step instead of a full weight sweep.
 uint64_t append_decode_max(){static const uint64_t n=[]{const char*e=std::getenv("LLAMADECODE_APPEND_DECODE_MAX");
-    return e&&*e?uint64_t(std::max<long long>(0,std::min<long long>(std::strtoll(e,nullptr,10),4096))):uint64_t(96);}();return n;} /* measured crossover: 13-token sweep 17.4 s / ds4 step ~0.163 s = ~107 tokens; 96 keeps margin */
+    return e&&*e?uint64_t(std::max<long long>(0,std::min<long long>(std::strtoll(e,nullptr,10),4096))):uint64_t(0);}();return n;} /* E2c measured faster but non-exact; owner requires opt-in until attribution/fix. */
 // LLAMADECODE decode cancel: the client creates LLAMADECODE_DECODE_CANCEL_FILE
 // while a decode op runs; the loop stops at the next token boundary exactly as at
 // max_tokens (the last sampled token is returned, not evaluated). Cleared at
