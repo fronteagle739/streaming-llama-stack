@@ -123,6 +123,8 @@ Native controls take effect at token boundaries. The response reports requested 
 | `--xdg-cache-home` | ds4-win: `{runtime_root}/cache/xdg_cache_home`; mac-ds4: `{runtime_root}/cache/xdg_cache_home`; rtx-llama: `{runtime_root}/cache/xdg_cache_home`; image: `{runtime_root}/cache/xdg_cache_home`; video: `{runtime_root}/cache/xdg_cache_home`; studio: `{runtime_root}/cache/xdg_cache_home`; mlx-serve: `{runtime_root}/cache/xdg_cache_home`; mac-mlx: `{runtime_root}/cache/xdg_cache_home`; mac-llama: `{runtime_root}/cache/xdg_cache_home`; mac-mference: `{runtime_root}/cache/xdg_cache_home` | Runtime-local cache/temp directory; no model download is performed. |
 | `--zig-global-cache-dir` | ds4-win: `{runtime_root}/cache/zig_global_cache_dir`; mac-ds4: `{runtime_root}/cache/zig_global_cache_dir`; rtx-llama: `{runtime_root}/cache/zig_global_cache_dir`; image: `{runtime_root}/cache/zig_global_cache_dir`; video: `{runtime_root}/cache/zig_global_cache_dir`; studio: `{runtime_root}/cache/zig_global_cache_dir`; mlx-serve: `{runtime_root}/cache/zig_global_cache_dir`; mac-mlx: `{runtime_root}/cache/zig_global_cache_dir`; mac-llama: `{runtime_root}/cache/zig_global_cache_dir`; mac-mference: `{runtime_root}/cache/zig_global_cache_dir` | Runtime-local cache/temp directory; no model download is performed. |
 | `--zig-local-cache-dir` | ds4-win: `{runtime_root}/cache/zig_local_cache_dir`; mac-ds4: `{runtime_root}/cache/zig_local_cache_dir`; rtx-llama: `{runtime_root}/cache/zig_local_cache_dir`; image: `{runtime_root}/cache/zig_local_cache_dir`; video: `{runtime_root}/cache/zig_local_cache_dir`; studio: `{runtime_root}/cache/zig_local_cache_dir`; mlx-serve: `{runtime_root}/cache/zig_local_cache_dir`; mac-mlx: `{runtime_root}/cache/zig_local_cache_dir`; mac-llama: `{runtime_root}/cache/zig_local_cache_dir`; mac-mference: `{runtime_root}/cache/zig_local_cache_dir` | Runtime-local cache/temp directory; no model download is performed. |
+| `--llamadecode-recency-lfu` | Explicit runtime value | E8 opt-in L2 expert-cache placement: 0 (default) retains LRU; 1 uses recency-weighted LFU with a 25% admission margin. Configure the score half life separately; routes and arithmetic are unchanged. |
+| `--llamadecode-lfu-half-life` | Explicit runtime value | E8 experiment: LFU score half life in tokens, 1 (default) or 16. Only used when the opt-in recency-LFU policy is enabled; expert routes and arithmetic are unchanged. |
 
 Budget placeholders use the admitted child budget: `{host_budget_bytes}`, `{host_budget_mb}`, `{physical_floor_bytes}` (admission) and `{runtime_floor_bytes}` (runtime). `{host_budget_gib}` and `{min_available_gib}` use GiB. User overrides are literal strings, including JSON and braces.
 
@@ -57423,7 +57425,7 @@ Source: `engines/streaming-llama/prefill_llama.cpp/ggml/src/ggml-cuda/ggml-cuda.
         // For UMA systems (like DGX Spark), use system memory info
 ```
 
-Source: `engines/streaming-llama/prefill_llama.cpp/src/llama-dsv41-weights.cpp:537`. Unset read: NULL from getenv; the literal consumer below supplies any fallback.
+Source: `engines/streaming-llama/prefill_llama.cpp/src/llama-dsv41-weights.cpp:564`. Unset read: NULL from getenv; the literal consumer below supplies any fallback.
 
 ```text
     require(!options.compute_direct||(options.buffers==2&&options.async_staging_drain&&options.auto_request_size&&!options.ds_gpu_ring_slots),
@@ -62286,7 +62288,7 @@ Producer decode: bind the resident decode weights once at the switch to decode (
 
 Scope: rtx-llama. Class: advanced.
 
-Source: `engines/streaming-llama/prefill_llama.cpp/src/llama-dsv41-weights.cpp:84`. Unset read: NULL from getenv; the literal consumer below supplies any fallback.
+Source: `engines/streaming-llama/prefill_llama.cpp/src/llama-dsv41-weights.cpp:85`. Unset read: NULL from getenv; the literal consumer below supplies any fallback.
 
 ```text
     // LLAMADECODE bind-once: set after a complete decode-layout pass; cleared on any layout rebuild.
@@ -67080,42 +67082,6 @@ Source: `engines/streaming-llama/prefill_llama.cpp/src/llama-dsv41-sweep.cpp:672
         if(p->options.images){
 ```
 
-Source: `engines/streaming-llama/prefill_llama.cpp/src/llama-dsv41-weights.cpp:755`. Unset read: NULL from getenv; the literal consumer below supplies any fallback.
-
-```text
-    if(!llama_dsv41_engram_early_enabled()||p->options.engram_early_tokens.empty())return;
-    require(p->options.engram_prefetch_host_bytes&&p->inspected&&!p->allocated&&!p->early,"Cold early Engram start requires an inspected, admitted, unallocated provider");
-    const char*overlap=std::getenv("LLAMA_DSV41_ENGRAM_PROMPT_OVERLAP");
-    if(llama_dsv41_engram_early_auto()&&!(overlap&&std::strcmp(overlap,"1")==0)){
-        llama_dsv41_layer_log("LLAMADECODE_ENGRAM_EARLY_DECISION at=cold_before_wf_start tokens=%zu early=0 reason=prompt_overlap_off\n",p->options.engram_early_tokens.size());return;}
-    require(overlap&&std::strcmp(overlap,"1")==0,"LLAMADECODE_ENGRAM_EARLY requires LLAMA_DSV41_ENGRAM_PROMPT_OVERLAP=1 (per-table adoption)");
-    const auto&tokens=p->options.engram_early_tokens;const auto&tail=p->options.engram_early_tail;
-```
-
-Source: `engines/streaming-llama/prefill_llama.cpp/src/llama-dsv41-weights.cpp:780`. Unset read: NULL from getenv; the literal consumer below supplies any fallback.
-
-```text
-bool llama_dsv41_weight_provider::start_engram_append(const std::vector<int32_t>&tokens,llama_dsv41::engram_history initial,double gap_s,std::string&error){return p->guard([&]{
-    require(llama_dsv41_engram_early_enabled(),"Append early Engram start requires LLAMADECODE_ENGRAM_EARLY=1 or auto");
-    const char*overlap=std::getenv("LLAMA_DSV41_ENGRAM_PROMPT_OVERLAP");
-    if(llama_dsv41_engram_early_auto()&&(!(overlap&&std::strcmp(overlap,"1")==0)||!p->options.engram_prefetch_host_bytes)){
-        llama_dsv41_layer_log("LLAMADECODE_ENGRAM_EARLY_DECISION at=append_tokens_arrived tokens=%zu early=0 reason=%s\n",tokens.size(),
-            p->options.engram_prefetch_host_bytes?"prompt_overlap_off":"no_engram_prefetch");return;}
-    require(overlap&&std::strcmp(overlap,"1")==0,"LLAMADECODE_ENGRAM_EARLY requires LLAMA_DSV41_ENGRAM_PROMPT_OVERLAP=1 (per-table adoption)");
-```
-
-Source: `engines/streaming-llama/prefill_llama.cpp/src/llama-dsv41-weights.cpp:801`. Unset read: NULL from getenv; the literal consumer below supplies any fallback.
-
-```text
-bool llama_dsv41_weight_provider::prepare_engram_prompt(const std::vector<int32_t>&tokens,const std::function<bool()>&stop,std::string&error,llama_dsv41::engram_history initial,const uint8_t* text_mask){return p->guard([&]{
-    if(!p->options.engram_prefetch_host_bytes)return;
-    const char*overlap=std::getenv("LLAMA_DSV41_ENGRAM_PROMPT_OVERLAP");
-    const bool during_layer_zero=overlap&&std::strcmp(overlap,"1")==0&&p->leased&&p->next==1;
-    require(p->allocated&&((!p->leased&&p->next==0)||during_layer_zero)&&!p->engram_prompt&&tokens.size()==p->options.engram_prefetch_tokens,
-        "Engram whole-prompt cache requires its initial or explicitly overlapped layer-zero lease");p->identity();
-    if(p->early&&p->early->tokens==tokens){
-```
-
 Source: `engines/streaming-llama/prefill_llama.cpp/tools/dsv41-prefill/main.cpp:886`. Unset read: NULL from getenv; the literal consumer below supplies any fallback.
 
 ```text
@@ -67138,6 +67104,42 @@ Source: `engines/streaming-llama/prefill_llama.cpp/tools/dsv41-prefill/main.cpp:
                 const std::vector<int32_t> first(tokens.begin(),tokens.begin()+first_sweep_tokens);
                 success(sweep->start_next_engram(first,early_tail,error),error);
             }}
+```
+
+Source: `engines/streaming-llama/prefill_llama.cpp/src/llama-dsv41-weights.cpp:782`. Unset read: NULL from getenv; the literal consumer below supplies any fallback.
+
+```text
+    if(!llama_dsv41_engram_early_enabled()||p->options.engram_early_tokens.empty())return;
+    require(p->options.engram_prefetch_host_bytes&&p->inspected&&!p->allocated&&!p->early,"Cold early Engram start requires an inspected, admitted, unallocated provider");
+    const char*overlap=std::getenv("LLAMA_DSV41_ENGRAM_PROMPT_OVERLAP");
+    if(llama_dsv41_engram_early_auto()&&!(overlap&&std::strcmp(overlap,"1")==0)){
+        llama_dsv41_layer_log("LLAMADECODE_ENGRAM_EARLY_DECISION at=cold_before_wf_start tokens=%zu early=0 reason=prompt_overlap_off\n",p->options.engram_early_tokens.size());return;}
+    require(overlap&&std::strcmp(overlap,"1")==0,"LLAMADECODE_ENGRAM_EARLY requires LLAMA_DSV41_ENGRAM_PROMPT_OVERLAP=1 (per-table adoption)");
+    const auto&tokens=p->options.engram_early_tokens;const auto&tail=p->options.engram_early_tail;
+```
+
+Source: `engines/streaming-llama/prefill_llama.cpp/src/llama-dsv41-weights.cpp:807`. Unset read: NULL from getenv; the literal consumer below supplies any fallback.
+
+```text
+bool llama_dsv41_weight_provider::start_engram_append(const std::vector<int32_t>&tokens,llama_dsv41::engram_history initial,double gap_s,std::string&error){return p->guard([&]{
+    require(llama_dsv41_engram_early_enabled(),"Append early Engram start requires LLAMADECODE_ENGRAM_EARLY=1 or auto");
+    const char*overlap=std::getenv("LLAMA_DSV41_ENGRAM_PROMPT_OVERLAP");
+    if(llama_dsv41_engram_early_auto()&&(!(overlap&&std::strcmp(overlap,"1")==0)||!p->options.engram_prefetch_host_bytes)){
+        llama_dsv41_layer_log("LLAMADECODE_ENGRAM_EARLY_DECISION at=append_tokens_arrived tokens=%zu early=0 reason=%s\n",tokens.size(),
+            p->options.engram_prefetch_host_bytes?"prompt_overlap_off":"no_engram_prefetch");return;}
+    require(overlap&&std::strcmp(overlap,"1")==0,"LLAMADECODE_ENGRAM_EARLY requires LLAMA_DSV41_ENGRAM_PROMPT_OVERLAP=1 (per-table adoption)");
+```
+
+Source: `engines/streaming-llama/prefill_llama.cpp/src/llama-dsv41-weights.cpp:828`. Unset read: NULL from getenv; the literal consumer below supplies any fallback.
+
+```text
+bool llama_dsv41_weight_provider::prepare_engram_prompt(const std::vector<int32_t>&tokens,const std::function<bool()>&stop,std::string&error,llama_dsv41::engram_history initial,const uint8_t* text_mask){return p->guard([&]{
+    if(!p->options.engram_prefetch_host_bytes)return;
+    const char*overlap=std::getenv("LLAMA_DSV41_ENGRAM_PROMPT_OVERLAP");
+    const bool during_layer_zero=overlap&&std::strcmp(overlap,"1")==0&&p->leased&&p->next==1;
+    require(p->allocated&&((!p->leased&&p->next==0)||during_layer_zero)&&!p->engram_prompt&&tokens.size()==p->options.engram_prefetch_tokens,
+        "Engram whole-prompt cache requires its initial or explicitly overlapped layer-zero lease");p->identity();
+    if(p->early&&p->early->tokens==tokens){
 ```
 
 ### LLAMA_DSV41_ENGRAM_SUBMIT_BATCH
@@ -100459,4 +100461,40 @@ Source: `engines/ds4-mac/ds4_native_session_setup.inc:28`. Unset read: Wrapper/c
     c->local_prefill_max=11776;
     if(ds4_nf_env("DS4_NATIVE_SESSION_LOCAL_PREFILL_MAX_TOKENS")&&
        !ds4_nf_env_uint("DS4_NATIVE_SESSION_LOCAL_PREFILL_MAX_TOKENS",&c->local_prefill_max,0,49152))goto bad;
+```
+
+### LLAMADECODE_RECENCY_LFU
+
+E8 opt-in L2 expert-cache placement: 0 (default) retains LRU; 1 uses recency-weighted LFU with a 25% admission margin. Configure the score half life separately; routes and arithmetic are unchanged.
+
+Scope: rtx-llama. Class: advanced.
+
+Source: `engines/streaming-llama/prefill_llama.cpp/src/llama-dsv41-weights.cpp:94`. Unset read: NULL from getenv; the literal consumer below supplies any fallback.
+
+```text
+    llama_dsv41_recency_lfu::scores lfu_scores;
+    static bool recency_lfu_enabled(){static const bool enabled=[]{
+        const char*value=std::getenv("LLAMADECODE_RECENCY_LFU");
+        if(value&&*value&&std::strcmp(value,"0")&&std::strcmp(value,"1"))
+            throw std::invalid_argument("LLAMADECODE_RECENCY_LFU must be 0 or 1");
+        const bool on=value&&!std::strcmp(value,"1");
+        std::fprintf(stderr,"PERFEXP_E8 recency_lfu=%d admission_margin_percent=25 tier=l2\n",int(on));
+```
+
+### LLAMADECODE_LFU_HALF_LIFE
+
+E8 experiment: LFU score half life in tokens, 1 (default) or 16. Only used when the opt-in recency-LFU policy is enabled; expert routes and arithmetic are unchanged.
+
+Scope: rtx-llama. Class: advanced.
+
+Source: `engines/streaming-llama/prefill_llama.cpp/src/llama-dsv41-weights.cpp:102`. Unset read: NULL from getenv; the literal consumer below supplies any fallback.
+
+```text
+    }();return enabled;}
+    static uint32_t recency_lfu_half_life(){static const uint32_t period=[]{
+        const char*value=std::getenv("LLAMADECODE_LFU_HALF_LIFE");
+        const uint32_t n=!value||!std::strcmp(value,"1")?1u:!std::strcmp(value,"16")?16u:0u;
+        if(!n)throw std::invalid_argument("LLAMADECODE_LFU_HALF_LIFE must be 1 or 16");
+        std::fprintf(stderr,"PERFEXP_E8 lfu_half_life_tokens=%u\n",n);return n;
+    }();return period;}
 ```
