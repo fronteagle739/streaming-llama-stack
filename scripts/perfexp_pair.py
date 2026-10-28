@@ -23,9 +23,10 @@ import urllib.request
 
 sys.path.insert(0, str(Path(__file__).resolve().parents[1]))
 from slstack.config import load, environment
-from slstack.combo_producer import ComboProducer
+from slstack.combo_producer import ComboProducer, prefill_plan
 from slstack.lease import gpu_lease, AdmissionRefused
 from slstack.process import OwnedProcess
+from slstack.guard import admit
 from slstack.gguf_header import read_header
 from slstack.ds4_render import Tokenizer
 
@@ -134,12 +135,15 @@ def run_child(args, cfg, arm, label):
                 turn['frontier']=producer.decode_forced([0],root/(label+f'.turn{index}.f32'))
                 turn['recall']=producer.decode(32)
                 result['turns'].append(turn)
+        def measure_decode():
+            if args.warmup:result['warmup']=producer.decode(args.warmup)
+            start=time.monotonic();result['decode']=producer.decode(args.decode)
+            result['decode_seconds']=time.monotonic()-start
+        result['forced_after_decode']=args.decode_before_forced
+        if args.decode_before_forced:measure_decode()
         result['forced']=producer.decode_forced(forced,logits)
         result['logits_sha256']=hashlib.file_digest(logits.open('rb'),'sha256').hexdigest()
-        if args.warmup:
-            result['warmup']=producer.decode(args.warmup)
-        start=time.monotonic();result['decode']=producer.decode(args.decode)
-        result['decode_seconds']=time.monotonic()-start
+        if not args.decode_before_forced:measure_decode()
         if args.capture_kv:
             kv_path=root/(label+'.kv.f32')
             result['kv_samples']=producer.process.request(producer.command('perfexp_kv_samples',base=producer.checkpoint,path=str(kv_path)))
@@ -173,11 +177,14 @@ def main():
     p.add_argument('--engram-turns',type=int,choices=(0,3),default=0)
     p.add_argument('--resume',action='store_true')
     p.add_argument('--seed-file',type=Path)
+    p.add_argument('--decode-before-forced',action='store_true')
     p.add_argument('--child',choices=('control','candidate'))
     p.add_argument('--lease')
     args=p.parse_args()
     if not 1<=args.count<=200000 or not 1<=args.decode<=128 or not 0<=args.warmup<=128:raise ValueError('Unbounded experiment')
     if not 0<=args.append<=256:raise ValueError('Unbounded append experiment')
+    if args.decode_before_forced and (args.append or args.engram_turns):
+        raise ValueError('Natural decode window cannot mix with append/turn timing')
     root=args.root.resolve()
     args.root=root
     cfg=load(root/'config.json')
@@ -216,12 +223,21 @@ def main():
         deadline=time.monotonic()+cfg.get('pair_wait_seconds',900)
         lease_context=None
         while lease_context is None:
-            candidate_context=gpu_lease(cfg)
-            try:lease=candidate_context.__enter__()
-            except (AdmissionRefused,PermissionError) as error:
+            try:
+                # Reserve the thin parent/guardian startup overhead as well as
+                # the enforced child-tree cap; acquire no GPU hold while short.
+                admit(cfg['host_budget_gib']+.25,cfg['min_available_gib'])
+                # The native executable also requires one GiB beyond its own
+                # planned host bank before allocating it. Respect that stricter
+                # admission separately from the runtime 0.5 GiB floor.
+                native_plan=prefill_plan(cfg,args.count)
+                admit(native_plan['host_bytes']/2**30+.25,1)
+                candidate_context=gpu_lease(cfg)
+                lease=candidate_context.__enter__()
+            except (AdmissionRefused,PermissionError,MemoryError) as error:
                 if time.monotonic()>=deadline:raise
-                print('WAIT_GPU',str(error),flush=True)
-                time.sleep(10)
+                print('WAIT_ADMISSION',str(error),flush=True)
+                time.sleep(1)
             else:lease_context=candidate_context
         try:
             cfg['hold_watch']=dict(path=cfg['hold_file'],identity=lease,task='PERFEXP')
