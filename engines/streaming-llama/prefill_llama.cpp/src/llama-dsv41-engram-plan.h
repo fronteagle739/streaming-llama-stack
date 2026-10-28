@@ -1,7 +1,8 @@
 #pragma once
 // LLAMADECODE_ENGRAM_EARLY: pure read planner for the whole-prompt Engram row
-// cache. Sorted row ids of one table -> 4 KiB-aligned file extents. Rows on the
-// same or the next 4 KiB page merge into one extent up to a byte cap (64 KiB).
+// cache. Sorted row ids of one table -> aligned file extents (4 KiB by default,
+// optionally 512 B). Rows on the same or adjacent aligned sectors merge up to
+// a byte cap (64 KiB).
 // Rows marked in an optional hit bitmap are already resident and are skipped.
 // No IO, no allocation in next_extent; build() materialises a plan for tests.
 #include <algorithm>
@@ -16,8 +17,8 @@ constexpr uint32_t page_bytes = 4096;
 constexpr uint32_t default_merge_cap = 65536;
 
 struct extent {
-    uint64_t file_offset = 0; // 4 KiB aligned
-    uint32_t bytes = 0;       // multiple of 4 KiB, <= cap
+    uint64_t file_offset = 0; // aligned to the selected read geometry
+    uint32_t bytes = 0;       // multiple of read alignment, <= cap
     uint32_t first = 0;       // first id index in the extent (not a hit)
     uint32_t last = 0;        // last id index in the extent (not a hit), inclusive
     uint32_t rows = 0;        // non-hit rows in [first, last]
@@ -35,16 +36,18 @@ inline uint32_t row_offset(const extent &e, const uint32_t *ids, size_t i, uint6
 // Next extent at or after *pos. ids must be non-decreasing (duplicates allowed:
 // they map to the same bytes). Returns false when every remaining row is a hit.
 inline bool next_extent(const uint32_t *ids, size_t n, const uint8_t *hits, size_t &pos,
-                        uint64_t base, uint32_t row_bytes, uint32_t cap, extent &out) {
-    if (row_bytes == 0 || row_bytes > page_bytes || cap < 2 * page_bytes || cap % page_bytes)
+                        uint64_t base, uint32_t row_bytes, uint32_t cap, extent &out,
+                        uint32_t read_alignment = page_bytes) {
+    if ((read_alignment != 512 && read_alignment != page_bytes) || row_bytes == 0 ||
+        row_bytes > read_alignment || cap < 2 * read_alignment || cap % read_alignment)
         throw std::invalid_argument("Engram plan geometry");
     while (pos < n && is_hit(hits, pos)) ++pos;
     if (pos >= n) return false;
     auto span = [&](size_t i, uint64_t &b, uint64_t &e) {
         if (i && ids[i] < ids[i - 1]) throw std::invalid_argument("Engram plan ids must be sorted");
         const uint64_t off = base + uint64_t(ids[i]) * row_bytes;
-        b = off & ~uint64_t(page_bytes - 1);
-        e = (off + row_bytes + page_bytes - 1) & ~uint64_t(page_bytes - 1);
+        b = off & ~uint64_t(read_alignment - 1);
+        e = (off + row_bytes + read_alignment - 1) & ~uint64_t(read_alignment - 1);
     };
     uint64_t begin = 0, end = 0;
     span(pos, begin, end);
@@ -81,11 +84,11 @@ struct plan {
 };
 
 inline plan build(const uint32_t *ids, size_t n, const uint8_t *hits, uint64_t base, uint32_t row_bytes,
-                  uint32_t cap = default_merge_cap) {
+                  uint32_t cap = default_merge_cap, uint32_t read_alignment = page_bytes) {
     plan p;
     size_t pos = 0;
     extent e;
-    while (next_extent(ids, n, hits, pos, base, row_bytes, cap, e)) {
+    while (next_extent(ids, n, hits, pos, base, row_bytes, cap, e, read_alignment)) {
         p.extents.push_back(e);
         p.bytes += e.bytes;
         for (size_t i = e.first; i <= e.last; ++i)
