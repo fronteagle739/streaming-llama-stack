@@ -31,6 +31,10 @@ struct llama_dsv41_fixed_storage {
     std::shared_ptr<llama_dsv41_carry_store::ram_backing> ram;
     std::shared_ptr<void> ram_registration;
     uint64_t graph_bytes=0,hidden_bytes=0,cache_bytes=0;
+    // Temporary carry loan from unmapped growable-cache physical capacity.
+    // The immutable admission still charges base hidden + full-context cache.
+    uint32_t prefill_cache_ceiling=0,restore_hidden_rows=0;
+    uint64_t prefill_hidden_bytes=0,restore_hidden_bytes=0;
     uint64_t backend_temporary_reserve_bytes=1024ull*1024*1024;
     // The same fixed owners can serve an explicitly selected unpaired graph.
     // This changes allocation lifetime only, never expert/attention arithmetic.

@@ -203,6 +203,12 @@ static void compact_fixed(llama_dsv41_fixed_storage&f,uint64_t admitted_hidden){
     require(bool(f.graph),"Decode graph allocator creation failed");f.graph_bytes=0;
     if(f.hidden){f.hidden.reset();f.hidden=llama_dsv41_tile_executor::reserve_hidden(f.backend,1,f.tile,f.bf16,f.ids,f.metadata,admitted_hidden);
         f.hidden_bytes=ggml_backend_buffer_get_size(f.hidden.get());}
+    if(f.prefill_cache_ceiling){
+        f.hidden_rows=f.restore_hidden_rows;f.full_hidden_bytes=f.restore_hidden_bytes;
+        f.prefill_cache_ceiling=0;f.prefill_hidden_bytes=0;
+        f.cache->prefill_ceiling(0);
+        std::fprintf(stderr,"SINGLEPASS_VRAM_LOAN_RELEASED before_cache_growth=1 future_prefill_bank_rows=%u\n",f.bank_rows());
+    }
     f.decode_compact=true;
     std::fprintf(stderr,"LLAMADECODE_DECODE_COMPACT graph_bytes=%llu->dynamic hidden_bytes=%llu->%llu\n",(unsigned long long)old_graph,(unsigned long long)old_hidden,(unsigned long long)f.hidden_bytes);
 }
@@ -230,6 +236,18 @@ bool llama_dsv41_sweep::open(const llama_dsv41_weight_provider::config &input_we
     std::unique_lock<std::mutex>lock(p->mutex,std::try_to_lock);error.clear();
     if(!lock.owns_lock()){error="V4.1 sweep is already active";return false;}
     try{
+        if(prefix&&options.fixed&&options.fixed->prefill_cache_ceiling){
+            std::unique_lock<std::mutex>previous_lock(prefix->p->mutex,std::try_to_lock);
+            require(previous_lock.owns_lock(),"Carry loan prefix is active");
+            require(prefix->p->options.fixed==options.fixed&&prefix->p->backend==weights.backend,
+                "Carry loan belongs to a different prefix/backend");
+            // Encoder-only continuations are still inside the initial logical
+            // prefill. A later user append retires the loan before admission.
+            if(prefix->p->state==implementation::completed)
+                compact_fixed(*options.fixed,options.admitted_hidden_bytes);
+        }
+        const uint64_t effective_hidden=options.fixed&&options.fixed->prefill_cache_ceiling?
+            options.fixed->prefill_hidden_bytes:options.admitted_hidden_bytes;
         llama_dsv41_yoco::validate(options.yoco_keep);
         require(options.yoco_remote_state_version==0||(options.yoco_remote_state_version==1&&options.yoco_keep==140&&options.capture_dspark),
             "YOCO remote state requires version1 and complete mode3 DSpark capture");
@@ -308,7 +326,7 @@ bool llama_dsv41_sweep::open(const llama_dsv41_weight_provider::config &input_we
         require(!options.pair_ffn||((native_pair?options.carry.max_tile_tokens==4096:
             ((options.dense_mxfp4||options.expert.dense_activation_q8_1)&&llama_dsv41_expert_profile::activation_rounding_q8_1(options.expert)&&
              (options.carry.max_tile_tokens==4096||options.carry.max_tile_tokens==8192||options.carry.max_tile_tokens==16384)))&&
-            options.carry.direct_ram_tiles&&((options.carry.defer_hidden_readback&&options.admitted_hidden_bytes>=resident_required(bank_rows))||
+            options.carry.direct_ram_tiles&&((options.carry.defer_hidden_readback&&effective_hidden>=resident_required(bank_rows))||
             (!options.admitted_hidden_bytes&&options.admitted_prefetch_device_bytes&&!options.carry.defer_hidden_readback&&!options.resident_bf16&&!options.resident_ids&&!options.resident_metadata))&&
             !options.diagnostic_carry),"Fixed grouped FFN requires bounded native4K or explicit original-Q8/hyper-fast selection and admitted resident/RAM owner");
         require(options.carry.max_tile_tokens<=4096||options.pair_ffn,"8192 groups require paired attention/FFN construction");
@@ -317,7 +335,7 @@ bool llama_dsv41_sweep::open(const llama_dsv41_weight_provider::config &input_we
         require(!options.engram_tile_lookahead||weights.engram_prefetch_host_bytes,
             "Engram tile lookahead requires the existing immutable whole-prompt cache");
         require(!options.carry.export_hidden_after_head||options.carry.defer_hidden_readback,"Post-head hidden export requires full-device retention");
-        require(!options.carry.defer_hidden_readback||(options.carry.direct_ram_tiles&&options.admitted_pinned_device_bytes&&options.reuse_graph&&!options.reuse_layer_graph&&!options.admitted_prefetch_device_bytes&&!options.diagnostic_carry&&options.admitted_hidden_bytes>=resident_required(bank_rows)),"Final-only hidden readback requires full admitted VRAM residency and forbids intermediate RAM captures");
+        require(!options.carry.defer_hidden_readback||(options.carry.direct_ram_tiles&&options.admitted_pinned_device_bytes&&options.reuse_graph&&!options.reuse_layer_graph&&!options.admitted_prefetch_device_bytes&&!options.diagnostic_carry&&effective_hidden>=resident_required(bank_rows)),"Final-only hidden readback requires full admitted VRAM residency and forbids intermediate RAM captures");
         require(!options.merge_attention_selected_rows||options.expert.token_tile_attention,"Selected-row union requires explicit token-tile attention");
         require(!options.coalesce_dense||(options.admitted_cast_device_bytes&&options.expert.dense_inputs_f16),"Dense coalescing requires explicit F16 inputs and admitted cast cache");
         require(!options.admitted_index_device_bytes||(options.carry.resident_ram&&options.reuse_graph&&!options.reuse_layer_graph&&
@@ -513,10 +531,14 @@ bool llama_dsv41_sweep::open(const llama_dsv41_weight_provider::config &input_we
                 require(f.graph_bytes==reserve,"Fixed graph physical capacity differs from exact reservation");
                 }else llama_dsv41_layer_log("DS4PERF_GRAPH_CAPACITY_DYNAMIC group=16384 within_explicit_graph_and_job_cap=1 allocation_in_prompt_clock=1\n");
                 if(options.admitted_hidden_bytes){
-                    f.hidden=llama_dsv41_tile_executor::reserve_hidden(f.backend,f.bank_rows(),f.tile,f.bf16,f.ids,f.metadata,options.admitted_hidden_bytes);
+                    f.hidden=llama_dsv41_tile_executor::reserve_hidden(f.backend,f.bank_rows(),f.tile,f.bf16,f.ids,f.metadata,effective_hidden);
                     f.hidden_bytes=ggml_backend_buffer_get_size(f.hidden.get());
                 }else require(!f.bf16&&!f.ids&&!f.metadata,"Layerwise RAM path cannot claim full-device banks");
                 f.cache.reset(new llama_dsv41_cache_storage(native_owners(),f.context,ggml_backend_get_default_buffer_type(f.backend),options.admitted_cache_bytes,options.compressed_cache_bf16,options.capture_dspark,options.ctx_cache_grow_step));
+                if(f.prefill_cache_ceiling){
+                    require(f.hidden_bytes<=options.admitted_hidden_bytes+cache_charge,"Carry loan exceeds hidden plus cache reservation");
+                    f.cache->prefill_ceiling(f.prefill_cache_ceiling,options.admitted_hidden_bytes+cache_charge-f.hidden_bytes);
+                }
                 f.cache_bytes=f.cache->allocated_bytes();f.ready=true;
                 ggml_backend_synchronize(f.backend);
                 llama_dsv41_layer_log("DS4PERF_FIXED_BEFORE_FIRST_LEASE tokens=%u tile=%u graph_bytes=%llu hidden_bytes=%llu cache_bytes=%llu existing_allocators=1 provider_heaps_created=1\n",f.tokens,f.tile,(unsigned long long)f.graph_bytes,(unsigned long long)f.hidden_bytes,(unsigned long long)f.cache_bytes);
@@ -561,7 +583,7 @@ bool llama_dsv41_sweep::open(const llama_dsv41_weight_provider::config &input_we
         }
         p->executor.reset(new llama_dsv41_tile_executor(p->backend,*p->cache,p->options.admitted_graph_bytes,
             1e-20f,1e-6f,20,10.f,1.5f,p->options.carry.max_tile_tokens,
-            p->options.admitted_hidden_bytes?p->options.carry.tokens:0,p->options.admitted_hidden_bytes,
+            p->options.admitted_hidden_bytes?p->options.carry.tokens:0,effective_hidden,
             p->options.admitted_pinned_device_bytes?&direct_span:nullptr,p->options.reuse_graph,p->options.reuse_layer_graph,p->options.admitted_cast_device_bytes,p->options.audit_casts,p->options.admitted_index_device_bytes,p->options.admitted_prefetch_device_bytes,p->options.coalesce_dense,p->options.carry.defer_hidden_readback,p->options.merge_attention_selected_rows,p->options.hc_projection_f16_gemm,p->options.dense_mxfp4,p->options.resident_bf16,p->options.carry.export_hidden_after_head,p->options.async_inputs,p->options.resident_ids,p->options.resident_metadata,p->options.pair_ffn,p->options.fixed));
         llama_dsv41_layer_log(prefix?"DS4PERF_APPEND_ALLOCATIONS_OPEN cache_preserved=1 required_owner_admission_counted=1\n":"DS4PERF_FIXED_ALLOCATIONS_OPEN cache=1 resident=1 pinned_owner=1 before_prompt_clock=1\n");
         p->check_stop();p->state=implementation::opened;return true;
@@ -861,6 +883,18 @@ bool llama_dsv41_sweep::run(const std::vector<int32_t>&tokens,const cancelled&st
             llama_dsv41_layer_log("[dsv41-perf] layer=%u wall_ms=%.6f acquire_ms=%.6f upload_ms=%.6f compute_ms=%.6f readback_ms=%.6f engram_ms=%.6f prepare_ms=%.6f cleanup_ms=%.6f carry_read_ms=%.6f carry_write_ms=%.6f weight_cache_ms=%.6f\n",
                 layer,elapsed(layer_started),acquire_ms,upload_ms,compute_ms,readback_ms,engram_ms,prepare_ms,cleanup_ms,carry_read_ms,carry_write_ms,weight_cache_ms);std::fflush(stderr);
             llama_dsv41_layer_log("[dsv41-sweep] layer=%u complete\n",layer);std::fflush(stderr);
+#ifdef GGML_USE_CUDA
+            // Cumulative diagnostic snapshots let callers difference every
+            // layer, including operations whose tensor names carry no layer.
+            // Both existing profiling switches are required; timed runs do
+            // not dump, create events or synchronize here.
+            const char *node_profile=std::getenv("LLAMA_CUDA_OP_PROFILE_NODES");
+            const char *tile_timing=std::getenv("LLAMADECODE_TILE_TIMING");
+            if(node_profile&&node_profile[0]=='1'&&tile_timing&&tile_timing[0]=='1'){
+                ggml_cuda_op_profile_dump_now();
+                llama_dsv41_layer_log("SINGLEPASS_LAYER_NODE_SNAPSHOT layer=%u\n",layer);
+            }
+#endif
         }
         require(!engram_next.valid(),"Unconsumed Engram lookahead at completed frontier");
         if(p->yoco.encoder_only){
