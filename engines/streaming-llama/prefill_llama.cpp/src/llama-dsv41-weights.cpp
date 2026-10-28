@@ -1,5 +1,6 @@
 #include "llama-dsv41-layer-log.h"
 #include "llama-dsv41-weights.h"
+#include "llama-dsv41-prefill-routes.h"
 #include "llama-dsv41-quant-types.h"
 #include <tuple>
 #include "llama-dsv41-engram-prefetch.h"
@@ -69,6 +70,9 @@ struct llama_dsv41_weight_provider::implementation {
     std::array<stage,82>decode_stages;bool decode_layout=false;bool experts_prebound=false;int dense_held=-1;
     uint64_t resident_dense_bytes=0,decode_bank0_resident=0;
     uint64_t fetched_total=0;double fetch_ms_total=0;
+    bool lazy_prefill=false,byte_ledger=false;
+    uint32_t lazy_from_layer=0;
+    std::array<bool,384>prefill_loaded{};
     std::array<ggml_tensor*,40*3>routed{};std::array<ggml_tensor*,40*3>shared{};
     bool shared_tensor(const ggml_tensor*t)const{return std::find(shared.begin(),shared.end(),t)!=shared.end();}
     // LLAMADECODE B2: decode expert cache. Bank 0 = [embedding | shared experts |
@@ -172,6 +176,8 @@ struct llama_dsv41_weight_provider::implementation {
     uint32_t stage_count()const{return decode_layout?82u:42u;}
     stage&stage_at(uint32_t id){return decode_layout?decode_stages[id]:stages[id];}
     bool routed_tensor(const ggml_tensor*t)const{return std::find(routed.begin(),routed.end(),t)!=routed.end();}
+    bool lazy_tensor(const ggml_tensor*t)const{const auto at=std::find(routed.begin(),routed.end(),t);
+        return lazy_prefill&&!decode_layout&&at!=routed.end()&&uint32_t(at-routed.begin())/3>=lazy_from_layer;}
     static void place(stage&target,const entry&from,ggml_backend_buffer_type_t buft){
         const auto where=align(target.bytes,ggml_backend_buft_get_alignment(buft));
         target.entries.push_back({from.t,from.file_offset,where,from.allocation});target.bytes=add(where,from.allocation);
@@ -180,6 +186,7 @@ struct llama_dsv41_weight_provider::implementation {
     void spans_for(const stage&s,std::vector<wf_weight_span>&spans)const{
         for(const auto&e:s.entries){
             require(!(decode_layout&&routed_tensor(e.t)),"Routed experts are not decode stages");
+            if(lazy_tensor(e.t))continue;
             {wf_weight_span s{};s.tensor_name=e.t->name;s.file_offset=e.file_offset;s.nbytes=ggml_nbytes(e.t);s.alloc_size=e.allocation;s.alloc_offset=e.gpu_offset;s.expert_idx=-1;spans.push_back(s);}
         }
     }
@@ -502,11 +509,17 @@ struct llama_dsv41_weight_provider::implementation {
         }
         if(prebound_routed)experts_prebound=false;
         ggml_backend_synchronize(options.backend);leased=true;
+        prefill_loaded.fill(false);
         uint64_t fetched=0;double fetch_ms=0;
         require(wf_get_required_layer_fetch(fetcher,int(id),&fetched,&fetch_ms),"Completed strict DirectStorage timing unavailable");
         fetched_total+=fetched;fetch_ms_total+=fetch_ms;
         llama_dsv41_layer_log("[dsv41-fetch] stage=%u bytes=%llu fetch_ms=%.6f decimal_GB_s=%.6f\n",
             id,(unsigned long long)fetched,fetch_ms,double(fetched)/fetch_ms/1e6);
+        if(byte_ledger)for(const auto&e:stage_at(id).entries){
+            if(lazy_tensor(e.t))continue;
+            llama_dsv41_layer_log("[dsv41-byte-ledger] stage=%u tensor=%s file_offset=%llu bytes=%llu source=stage\n",
+                id,e.t->name,(unsigned long long)e.file_offset,(unsigned long long)ggml_nbytes(e.t));
+        }
         std::fflush(stderr);
     }
 };
@@ -595,6 +608,12 @@ void llama_dsv41_weight_provider::implementation::create_pipeline(){
     throw std::runtime_error("V4.1 physical weight provider requires Windows CUDA/DirectStorage");
 #else
     auto*p=this;
+    const char*lazy=std::getenv("LLAMADECODE_PREFILL_ROUTED");
+    require(!lazy||!std::strcmp(lazy,"0")||!std::strcmp(lazy,"1")||!std::strcmp(lazy,"tail"),"LLAMADECODE_PREFILL_ROUTED must be0,1 or tail");
+    p->lazy_prefill=lazy&&std::strcmp(lazy,"0");p->lazy_from_layer=lazy&&!std::strcmp(lazy,"tail")?21:0;
+    const char*ledger=std::getenv("LLAMADECODE_BYTE_LEDGER");p->byte_ledger=ledger&&!std::strcmp(ledger,"1");
+    require(!p->lazy_prefill||(p->options.compute_direct&&!p->options.ds_gpu_ring_slots&&!p->options.zero_padding_only),
+        "Routed prefill requires direct compute banks without GPU ring or padding-only mode");
     wf_params params=wf_params_default();params.model_path=p->options.model_path.c_str();params.gpu_backend=p->options.backend;params.mode=WF_MODE_DSTORAGE;
     params.n_layers=int(p->stage_count());params.n_gpu_buffers=int(p->options.buffers);params.max_layer_bytes=p->planned.maximum_stage_bytes;params.n_ram_buffers=0;
     params.io_block_size=size_t(p->planned.request_bytes);params.ds_staging_limit_bytes=size_t(p->options.staging_limit_bytes);
@@ -902,6 +921,35 @@ bool llama_dsv41_weight_provider::acquire_embeddings(ggml_tensor*&out,std::strin
 bool llama_dsv41_weight_provider::acquire_layer(uint32_t layer,llama_dsv41_layer_graph::weights&out,std::string&error){out={};return p->guard([&]{require(layer<40&&!p->decode_layout,"Invalid physical layer");p->acquire(layer+1);out=p->layers[layer];},error);}
 bool llama_dsv41_weight_provider::acquire_head(ggml_tensor*&norm,ggml_tensor*&out,std::string&error){norm=nullptr;out=nullptr;return p->guard([&]{p->acquire(p->stage_count()-1);norm=p->head_norm;out=p->head_weight;},error);}
 bool llama_dsv41_weight_provider::decode_layout()const{std::lock_guard<std::mutex>lock(p->mutex);return p->decode_layout;}
+bool llama_dsv41_weight_provider::routed_prefill(uint32_t layer)const{std::lock_guard<std::mutex>lock(p->mutex);return p->lazy_prefill&&!p->decode_layout&&layer>=p->lazy_from_layer;}
+bool llama_dsv41_weight_provider::prefill_experts(uint32_t layer,const std::vector<int32_t>&ids,std::string&error){return p->guard([&]{
+    require(p->lazy_prefill&&!p->decode_layout&&layer>=p->lazy_from_layer&&layer<40&&p->leased&&p->next==layer+1,
+        "Routed prefill requires its leased layer bank");
+    const auto reads=llama_dsv41_prefill_routes::plan(p->prefill_loaded,ids);
+    std::vector<wf_extent>extents;
+    for(const auto&e:p->stages[layer+1].entries)if(p->routed_tensor(e.t)){
+        require(e.t->ne[2]==384&&ggml_nbytes(e.t)==384*e.t->nb[2],"Prefill expert stride differs");
+        for(const auto&range:reads.ranges){const auto first=range.first,end=first+range.count;
+            const uint64_t offset=uint64_t(first)*e.t->nb[2],bytes=uint64_t(end-first)*e.t->nb[2];
+            extents.push_back({e.file_offset+offset,e.gpu_offset+offset,bytes,0});
+        }
+    }
+    uint64_t bytes=0;double ms=0;
+#ifdef GGML_USE_CUDA
+    if(!extents.empty())require(wf_fetch_extents_direct(p->fetcher,int((layer+1)%p->options.buffers),extents.data(),int(extents.size()),
+        ggml_backend_cuda_get_stream(p->options.backend),&bytes,&ms)&&!wf_has_failed(p->fetcher),"Prefill routed expert transfer failed");
+#else
+    require(extents.empty(),"Routed prefill requires CUDA");
+#endif
+    llama_dsv41_prefill_routes::commit(p->prefill_loaded,reads);
+    p->fetched_total+=bytes;p->fetch_ms_total+=ms;
+    if(p->byte_ledger)for(const auto&e:p->stages[layer+1].entries)if(p->routed_tensor(e.t))for(const auto&range:reads.ranges)
+        llama_dsv41_layer_log("[dsv41-byte-ledger] stage=%u tensor=%s file_offset=%llu bytes=%llu source=experts first=%u count=%u\n",
+            layer+1,e.t->name,(unsigned long long)(e.file_offset+uint64_t(range.first)*e.t->nb[2]),
+            (unsigned long long)(uint64_t(range.count)*e.t->nb[2]),range.first,range.count);
+    llama_dsv41_layer_log("[dsv41-prefill-experts] stage=%u rows=%zu active=%u new=%u resident=%u bytes=%llu fetch_ms=%.6f\n",
+        layer+1,ids.size()/6,reads.active,reads.additional,unsigned(std::count(p->prefill_loaded.begin(),p->prefill_loaded.end(),true)),(unsigned long long)bytes,ms);
+},error);}
 void llama_dsv41_weight_provider::fetch_totals(uint64_t&bytes,double&milliseconds)const{std::lock_guard<std::mutex>lock(p->mutex);bytes=p->fetched_total;milliseconds=p->fetch_ms_total;}
 bool llama_dsv41_weight_provider::decode_banks(uint32_t layer,const void*&dense,const void*&routed)const{
     std::lock_guard<std::mutex>lock(p->mutex);dense=routed=nullptr;
