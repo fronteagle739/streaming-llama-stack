@@ -7,6 +7,7 @@
 #include "llama-dsv41-delta.h"
 #include "llama-weight-fetcher.h"
 #include "llama-wf-bounded-policy.h"
+#include "llama-dsv41-recency-lfu.h"
 
 #include <algorithm>
 #include <unordered_map>
@@ -88,6 +89,21 @@ struct llama_dsv41_weight_provider::implementation {
     std::vector<int32_t>l2_key;std::unordered_map<int32_t,int32_t>l2_of;
     std::list<int32_t>l2_lru;std::vector<std::list<int32_t>::iterator>l2_pos;
     uint64_t l2_hits=0,l2_stored=0;
+    llama_dsv41_recency_lfu::scores lfu_scores;
+    static bool recency_lfu_enabled(){static const bool enabled=[]{
+        const char*value=std::getenv("LLAMADECODE_RECENCY_LFU");
+        if(value&&*value&&std::strcmp(value,"0")&&std::strcmp(value,"1"))
+            throw std::invalid_argument("LLAMADECODE_RECENCY_LFU must be 0 or 1");
+        const bool on=value&&!std::strcmp(value,"1");
+        std::fprintf(stderr,"PERFEXP_E8 recency_lfu=%d admission_margin_percent=25 tier=l2\n",int(on));
+        return on;
+    }();return enabled;}
+    static uint32_t recency_lfu_half_life(){static const uint32_t period=[]{
+        const char*value=std::getenv("LLAMADECODE_LFU_HALF_LIFE");
+        const uint32_t n=!value||!std::strcmp(value,"1")?1u:!std::strcmp(value,"16")?16u:0u;
+        if(!n)throw std::invalid_argument("LLAMADECODE_LFU_HALF_LIFE must be 1 or 16");
+        std::fprintf(stderr,"PERFEXP_E8 lfu_half_life_tokens=%u\n",n);return n;
+    }();return period;}
     void copy_slot(char*const dst[3],uint64_t dst_slot,const char*const src[3],uint64_t src_slot,void*stream,bool to_l2){
 #ifdef GGML_USE_CUDA
         for(uint32_t k=0;k<3;++k)require(cudaMemcpyAsync(dst[k]+dst_slot*(to_l2?pool_max_stride[k]:pool_stride[k]),src[k]+src_slot*(to_l2?pool_stride[k]:pool_max_stride[k]),pool_stride[k],
@@ -110,6 +126,10 @@ struct llama_dsv41_weight_provider::implementation {
         select_pool(layer);
         std::vector<int32_t>unique;for(size_t i=0;i<count;++i){const auto id=ids[i];require(id>=0&&id<384,"Routed expert id out of range");if(std::find(unique.begin(),unique.end(),id)==unique.end())unique.push_back(id);}
         require(unique.size()<=pool_slots,"Routed experts exceed the cache pool");
+        if(recency_lfu_enabled()){
+            if(layer==0)lfu_scores.tick(recency_lfu_half_life());
+            for(const auto e:unique)lfu_scores.touch(int32_t(layer)*384+e);
+        }
         std::vector<int32_t>missing;std::unordered_map<int32_t,int32_t>slot_of;
         for(const auto e:unique){const int32_t key=int32_t(layer)*384+e;auto it=key_slot.find(key);
             if(it!=key_slot.end()){slot_of[e]=it->second;lru.splice(lru.begin(),lru,lru_pos[size_t(it->second)]);++cache_hits;}
@@ -124,10 +144,17 @@ struct llama_dsv41_weight_provider::implementation {
             const int32_t victim=slot_key[size_t(slot)];
             if(victim>=0){key_slot.erase(victim);
                 if(l2_slots>=2){   // keep the evicted expert in L2 (its least-recent slot; never the one read below)
-                    const int32_t t=l2_lru.back();require(t!=from_l2,"Expert L2 victim slot collides with its source");
+                    int32_t t=l2_lru.back();
+                    if(recency_lfu_enabled()){
+                        for(auto it=l2_lru.rbegin();it!=l2_lru.rend();++it)
+                            if(*it!=from_l2&&lfu_scores.get(l2_key[size_t(*it)])<lfu_scores.get(l2_key[size_t(t)]))t=*it;
+                    }
+                    require(t!=from_l2,"Expert L2 victim slot collides with its source");
+                    if(!recency_lfu_enabled()||lfu_scores.admit(victim,l2_key[size_t(t)])){
                     l2_lru.splice(l2_lru.begin(),l2_lru,l2_pos[size_t(t)]);
                     if(l2_key[size_t(t)]>=0)l2_of.erase(l2_key[size_t(t)]);
                     copy_slot(l2_base.data(),uint64_t(t),l1,uint64_t(slot),stream,true);copied=true;l2_key[size_t(t)]=victim;l2_of[victim]=t;++l2_stored;
+                    }
                 }}
             slot_key[size_t(slot)]=key;key_slot[key]=slot;slot_of[e]=slot;
             if(from_l2>=0){
