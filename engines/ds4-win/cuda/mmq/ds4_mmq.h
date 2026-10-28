@@ -901,6 +901,10 @@ int ds4_mmq_q4_K_dense_pair_vec(
 // default stream.
 void ds4_pool_set_stream(cudaStream_t stream);
 
+// Host launch witness for successful native MXFP4 MoE MMA submissions.
+// Completion still requires the caller's normal stream synchronization.
+uint64_t ds4_mmq_native_fp4_queued(void);
+
 #ifdef __cplusplus
 } // extern "C"
 #endif

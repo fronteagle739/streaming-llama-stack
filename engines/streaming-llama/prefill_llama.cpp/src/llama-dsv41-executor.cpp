@@ -7,6 +7,7 @@
 #include "llama-dsv41-graph-bindings.h"
 #include <array>
 #include "llama-dsv41-executor.h"
+#include "llama-dsv41-flashinfer-budget.h"
 #include "llama-dsv41-dense-half-admission.h"
 #include "llama-dsv41-route-split.h"
 #include "llama-dsv41-hash-dump.h"
@@ -849,6 +850,8 @@ bool llama_dsv41_tile_executor::run(const request&in,const llama_dsv41_layer_gra
     if(cache.execution_poisoned){error="V4.1 tile cache requires clear after an incomplete computation";return false;}
     try{
         auto expert=requested_expert;
+        const bool route_histogram=std::getenv("LLAMA_DSV41_ROUTE_HISTOGRAM")&&std::string(std::getenv("LLAMA_DSV41_ROUTE_HISTOGRAM"))=="1";
+        require(!route_histogram||!workspace||!workspace->cache_layouts,"Routing histogram requires fresh graph bindings");
         const bool stored_fp4=std::getenv("LLAMA_DSV41_STORED_MXFP4")&&std::string(std::getenv("LLAMA_DSV41_STORED_MXFP4"))=="1";
         if(stored_fp4){
             require(w.ffn.gate->type==GGML_TYPE_MXFP4&&w.ffn.up->type==GGML_TYPE_MXFP4&&w.ffn.down->type==GGML_TYPE_MXFP4,
@@ -1246,6 +1249,11 @@ bool llama_dsv41_tile_executor::run(const request&in,const llama_dsv41_layer_gra
             backend_temporary+=raw_mirror;
         }else if(expert.token_tile_attention)backend_temporary+=256ull*1024*1024;
         if(pair_ffn&&!native_pair)backend_temporary+=(in.count>8192?640ull:320ull)*1024*1024; // explicit8192-row MMQ activation/maps/pool temporary
+        if(stored_fp4&&llama_dsv41_flashinfer::requested()&&in.count>4){
+            const uint64_t rows=uint64_t(in.count)*6;
+            const uint64_t extra=std::max(llama_dsv41_flashinfer::workspace_bytes(2304,5120,rows),llama_dsv41_flashinfer::workspace_bytes(5120,2304,rows));
+            backend_temporary+=extra;
+        }
         if(fixed&&backend_temporary>fixed->backend_temporary_reserve_bytes)
             std::fprintf(stderr,"LLAMADECODE_RESERVE layer=%u rows=%u backend_temporary=%llu declared_reserve=%llu rounded=%u split=%u\n",in.layer,in.count,
                 (unsigned long long)backend_temporary,(unsigned long long)fixed->backend_temporary_reserve_bytes,rounded_matrices,split_matrices);
@@ -1256,7 +1264,7 @@ bool llama_dsv41_tile_executor::run(const request&in,const llama_dsv41_layer_gra
         for(auto*t:uploaded_inputs)ggml_build_forward_expand(graph,t);
         routed_split=-1;
         hash_experts=nullptr;
-        if(llama_dsv41_hash_dump_enabled()){ // diagnostic: keep the routed ids readable after compute
+        if(llama_dsv41_hash_dump_enabled()||route_histogram){ // diagnostic: keep routed ids readable after compute
             for(int i=0;i<ggml_graph_n_nodes(graph);++i)if(!std::strcmp(ggml_get_name(ggml_graph_node(graph,i)),"dsv41_ffn_selected_experts")){hash_experts=ggml_graph_node(graph,i);ggml_set_output(hash_experts);}
         }
         if(in.route_hook){
@@ -1466,6 +1474,8 @@ bool llama_dsv41_tile_executor::run(const request&in,const llama_dsv41_layer_gra
         const auto union_before=merge_rows?ggml_backend_cuda_dsv41_token_union_queued():0;
         const auto expert_cublas_before=expert.expert_f16_cublas?ggml_backend_cuda_dsv41_expert_cublas_queued():0;
         const auto expert_fp4_before=(expert.expert_mxfp4||stored_fp4)?ggml_backend_cuda_native_mxfp4_routed_queued():0;
+        const bool flashinfer_fp4=stored_fp4&&std::getenv("LLAMA_DSV41_FLASHINFER_MXFP4")&&std::string(std::getenv("LLAMA_DSV41_FLASHINFER_MXFP4"))=="1";
+        const auto flashinfer_fp4_before=flashinfer_fp4?ggml_backend_cuda_dsv41_flashinfer_queued():0;
         const auto hc_expand_before=ggml_backend_cuda_dsv41_hc_expand_queued();
         const auto hc_bf16_before=expert.hc_bf16_epilogue?ggml_backend_cuda_dsv41_hc_bf16_queued():0;
         const auto hc_half_before=hc_projection_f16_gemm?ggml_backend_cuda_dsv41_hc_half_queued():0;
@@ -1541,6 +1551,18 @@ bool llama_dsv41_tile_executor::run(const request&in,const llama_dsv41_layer_gra
         // Both events precede the synchronize on the same stream, so they are complete here.
         if(tile_stream)pinned_storage::ok(cudaEventElapsedTime(&tile_gpu_ms,tile_events[0],tile_events[1]),"Tile timing elapsed read failed");
 #endif
+        if(route_histogram){
+            require(hash_experts&&hash_experts->type==GGML_TYPE_I32&&
+                    ggml_nelements(hash_experts)==int64_t(in.count)*6&&
+                    w.ffn.gate->ne[2]==384,"Routing histogram requires exactly six ids per row and 384 experts");
+            std::vector<int32_t>ids(size_t(in.count)*6);
+            ggml_backend_tensor_get(hash_experts,ids.data(),0,ids.size()*sizeof(int32_t));
+            std::array<uint32_t,384>counts{};
+            for(auto id:ids){require(id>=0&&id<384,"Routing histogram found invalid expert id");++counts[size_t(id)];}
+            std::string csv;for(auto count:counts){if(!csv.empty())csv+=',';csv+=std::to_string(count);}
+            llama_dsv41_layer_log("NATIVEFP4_ROUTE_HISTOGRAM layer=%u start=%u rows=%u experts=384 topk=6 counts=%s\n",
+                in.layer,in.position_offset+in.start,in.count,csv.c_str());
+        }
         if(llama_dsv41_hash_dump_enabled()){
             std::vector<int32_t>experts;
             if(hash_experts){experts.resize(size_t(ggml_nelements(hash_experts)));ggml_backend_tensor_get(hash_experts,experts.data(),0,experts.size()*4);}
@@ -1600,7 +1622,10 @@ bool llama_dsv41_tile_executor::run(const request&in,const llama_dsv41_layer_gra
         }
         if(expert.expert_mxfp4||stored_fp4){const uint64_t expected=in.count>4?3:0;
             require(ggml_backend_cuda_native_mxfp4_routed_queued()==expert_fp4_before+expected,"Actual expert native FP4 activation/MMA witness differs");
-            llama_dsv41_layer_log("DS4PERF_EXPERT_MXFP4_COMPLETE layer=%u start=%u count=%u actual=%llu weights_FP4=1 activations_FP4=1 accumulation_F32=1 small_batch_original=%u\n",in.layer,in.start,in.count,(unsigned long long)expected,unsigned(in.count<=4));
+            if(flashinfer_fp4){
+                require(ggml_backend_cuda_dsv41_flashinfer_queued()==flashinfer_fp4_before+expected,"Actual FlashInfer W4A8 launch count differs");
+                llama_dsv41_layer_log("NATIVEFP4_FLASHINFER_COMPLETE layer=%u start=%u count=%u actual=%llu weights_MXFP4=1 activations_MXFP8=1 activation_scale_block=32 accumulation_F32=1 epilogue_BF16=1 runtime_weight_requantization=0\n",in.layer,in.start,in.count,(unsigned long long)expected);
+            }else llama_dsv41_layer_log("DS4PERF_EXPERT_MXFP4_COMPLETE layer=%u start=%u count=%u actual=%llu weights_FP4=1 activations_FP4=1 accumulation_F32=1 small_batch_original=%u\n",in.layer,in.start,in.count,(unsigned long long)expected,unsigned(in.count<=4));
             if(stored_fp4)llama_dsv41_layer_log("NATIVEFP4_STORED_COMPLETE layer=%u start=%u count=%u actual=%llu offline_weights=1 runtime_weight_conversion=0 tiny_rows_generic_MXFP4=%u\n",in.layer,in.start,in.count,(unsigned long long)expected,unsigned(in.count<=4));
         }
         if(index_cublas){uint64_t expected=0;

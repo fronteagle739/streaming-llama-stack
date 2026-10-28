@@ -1,0 +1,123 @@
+{
+  "status": "PASS",
+  "bridge_sha256": "8bbc22b60e9b0ff9793d132b74a31a462b8c16319cfb7d4ae3608974074bd8fd",
+  "abi": 2,
+  "scope": "Synthetic hash32 operands with observed routing; canonical nibble/scale layout, activation packing, permuted gather/scatter and BF16 oracle; not model quality.",
+  "results": [
+    {
+      "status": "PASS",
+      "N": 2304,
+      "K": 5120,
+      "rows": 840,
+      "full_output_finite": true,
+      "sampled_double_reference_elements": 36,
+      "max_absolute_error": 0,
+      "gather_and_scatter_permuted": true,
+      "case": "q4-layer39-start49415-rows140",
+      "memcheck_errors": 0,
+      "guard": {
+        "exit_code": 0,
+        "reason": null,
+        "host_budget_gib": 2,
+        "floor_gib": 1,
+        "peak_tree_rss": 194809856,
+        "min_available": 15508742144,
+        "cleanup_confirmed": true
+      }
+    },
+    {
+      "status": "PASS",
+      "N": 5120,
+      "K": 2304,
+      "rows": 840,
+      "full_output_finite": true,
+      "sampled_double_reference_elements": 36,
+      "max_absolute_error": 0,
+      "gather_and_scatter_permuted": true,
+      "case": "q4-layer39-start49415-rows140",
+      "memcheck_errors": 0,
+      "guard": {
+        "exit_code": 0,
+        "reason": null,
+        "host_budget_gib": 2,
+        "floor_gib": 1,
+        "peak_tree_rss": 195903488,
+        "min_available": 15563235328,
+        "cleanup_confirmed": true
+      }
+    },
+    {
+      "status": "PASS",
+      "N": 2304,
+      "K": 5120,
+      "rows": 24576,
+      "full_output_finite": true,
+      "sampled_double_reference_elements": 36,
+      "max_absolute_error": 0,
+      "gather_and_scatter_permuted": true,
+      "case": "q4-layer20-start8192-rows4096",
+      "memcheck_errors": null,
+      "guard": {
+        "exit_code": 0,
+        "reason": null,
+        "host_budget_gib": 2,
+        "floor_gib": 1,
+        "peak_tree_rss": 130736128,
+        "min_available": 15701303296,
+        "cleanup_confirmed": true
+      }
+    },
+    {
+      "status": "PASS",
+      "N": 5120,
+      "K": 2304,
+      "rows": 24576,
+      "full_output_finite": true,
+      "sampled_double_reference_elements": 36,
+      "max_absolute_error": 0,
+      "gather_and_scatter_permuted": true,
+      "case": "q4-layer20-start8192-rows4096",
+      "memcheck_errors": null,
+      "guard": {
+        "exit_code": 0,
+        "reason": null,
+        "host_budget_gib": 2,
+        "floor_gib": 1,
+        "peak_tree_rss": 145317888,
+        "min_available": 15614435328,
+        "cleanup_confirmed": true
+      }
+    }
+  ],
+  "platform": "Windows / RTX 5090 SM120a",
+  "flashinfer_commit": "1d622fdb1b053fc532069914bc9a6b498bd5f722",
+  "compiler": "CUDA 13.2",
+  "cute_dsl": "4.8.1",
+  "torch": "2.11.0+cu128",
+  "producer_sha256": "02818d701a8e1309d5b63ab666394b6886a7bfa9dbe28cc5074e6b635a4eda44",
+  "source_sha256": {
+    "engines/streaming-llama/flashinfer-sm120/export_kernel.py": "6836b92cbdab02d82cc40b64d998f2d92664411f6ed376319fabe68340ce600e",
+    "engines/streaming-llama/flashinfer-sm120/build.ps1": "eed7a9e22ac18659568e6ed1d42be603fbe98f906cff9d29cdad0f0a5ea7eed7",
+    "engines/streaming-llama/flashinfer-sm120/flashinfer_bridge.h": "f1e73883027418b54170de9b136c957f88d06685e770a8615e051adea4fc80a5",
+    "engines/streaming-llama/flashinfer-sm120/flashinfer_bridge.cu": "2fb331a929721ada10c28aa20c90c4bc91c81244a095c39075eb4c31700f94cc",
+    "engines/streaming-llama/flashinfer-sm120/bridge_check.cu": "8e689603de9bad9492e8f5120e8deda5e5e344f8ba71b30594cf072d558c2864",
+    "engines/streaming-llama/flashinfer-sm120/source/manifest.json": "908a3a0e4d692edac791e2a70ac6facac3c76102759d8400696373d0098eac62",
+    "engines/streaming-llama/prefill_llama.cpp/ggml/src/ggml-cuda/dsv41-flashinfer.cuh": "0d576f76362ca85bd793379f313f8f4e30d3acd2ff0c796bf1b4dc6218294910",
+    "engines/streaming-llama/prefill_llama.cpp/ggml/src/ggml-cuda/mmq.cu": "e7275b08ffe1ecc1498648f0fd8ccc0fee5e466a664351016948d0a71e98b545",
+    "engines/streaming-llama/prefill_llama.cpp/src/llama-dsv41-flashinfer-budget.h": "b02d771ef2c45ffb82875d76ed5afafdfe795858ba505be356b7b82f7b29659e",
+    "engines/streaming-llama/prefill_llama.cpp/src/llama-dsv41-executor.cpp": "79df0e13dc64d64abe53de34386ed61ad9e4329bc5614dae55b0c42022ab54b4",
+    "engines/streaming-llama/prefill_llama.cpp/src/llama-dsv41-sweep.cpp": "85343caa3975d44d9f9257b9ebecd313d8d8930a193703e001fbeebf4ce45c15",
+    "engines/streaming-llama/prefill_llama.cpp/tools/dsv41-prefill/main.cpp": "4fe5258dbb719c669842f429e5a71deb0bb169b256bc419ce79e85afc369f47e"
+  },
+  "aot_object_sha256": {
+    "fi_mxfp4_2304_5120.o": "1dd2e14e29896ea1f918aab17285c4bdd113acc11cb046f8a04fbf52ee9fb2ec",
+    "fi_mxfp4_5120_2304.o": "880eb0093c12fbbbd432ecf2ca7b87f81830e9e0a52a17734c4b92897963f172"
+  },
+  "admission": {
+    "abi": 2,
+    "workspace_reserve_bytes": 3489660928,
+    "policy": "Repartition the existing fixed device graph cap; physical device admission and host-memory/paging guards stay enabled."
+  },
+  "model_qualification": "PENDING",
+  "limitations": "Four synthetic adapter checks, using routing histograms observed in Q4. Tail shapes have sanitizer coverage. Max-skew 4K shapes have finite-output checks and 36 exact double/BF16 reference samples each; not exhaustive numerical or model quality validation."
+}

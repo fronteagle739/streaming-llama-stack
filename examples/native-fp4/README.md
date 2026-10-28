@@ -1,4 +1,4 @@
-# Standalone native-format kernel experiment
+# Native-format kernel and stored-weight experiments
 
 These are synthetic balanced grouped GEMMs, not engine throughput or observed
 route histograms. The `hash32-v1` fixture generates the same mathematical
@@ -14,8 +14,9 @@ Pinned dependencies used for FlashInfer: source
 unmodified GEMM module is imported without the full serving/EP wrapper, whose
 declared Torch dependency is newer. Its activation scale granularity is
 explicitly set to 32 to match the native checkpoint. This does not qualify
-the package's complete fused MoE path. FlashInfer is Apache-2.0; no kernel
-source is copied into the engine by this experiment.
+the package's complete fused MoE path. FlashInfer is Apache-2.0. The standalone
+scripts import the pinned source; the optional engine adapter separately vendors
+a small dependency-closed subset with its licence and byte hashes.
 
 Set `NATIVEFP4_BENCH_ROOT` to the sole benchmark scratch directory,
 `NATIVEFP4_FLASHINFER_SOURCE` to the pinned source archive extraction, and
@@ -93,10 +94,17 @@ tokens, Q4 took 29.875 s: stream wait 7.364 s, experts 4.590 s, sparse attention
 proxy for native FP4** took 29.547 s: 8.201 / 3.336 / 2.245 / 0.726 / 15.038 s
 in the same order. Other includes projections, compressor/HC work, scheduling,
 startup and carry work; it is a wall residual, not a measured compressor timer.
+The records also provide disjoint executor phase wall sums and subsets of
+other GPU time identified by HC/compressor node names. Anonymous intermediates
+remain unattributed. Registration is nested inside binding/preparation, and
+launch/GPU spans overlap compute; these diagnostic clocks must not be added
+to the stage totals.
 
 Dispatch witnesses confirm the stored-weight GGML native FP4 MMA path, with
-no runtime weight conversion. FlashInfer W4A8 is still a standalone benchmark,
-not the kernel behind these engine numbers. The proxy expert work achieved
+no runtime weight conversion. These engine numbers use the original GGML
+kernel. An optional [FlashInfer prefill adapter](../../engines/streaming-llama/flashinfer-sm120/README.md)
+has passed narrow adapter checks; model dispatch, quality and speed checks are
+pending. The proxy expert work achieved
 132.80 effective TFLOPS versus about 490 TFLOPS on the balanced standalone
 FlashInfer fixture; these different routing workloads are not a matched
 kernel comparison. The complete prompt fetches 298.84 GB of model tensors,
@@ -106,3 +114,8 @@ New comparisons use 100K prompts as the primary point. The longer campaigns
 and decode MMA qualification are deferred while attention and single-pass
 experiments have higher GPU priority. No default changes follow from these
 lossy or diagnostic results.
+
+The separate `DS4_CUDA_MXFP4_DECODE_MMA` experiment is also off by default.
+Its CPU build includes a bounded K=2304 tail loader and launch counters, but
+the corrected GPU fixture, full-model accuracy and speed qualification are
+deferred. The accepted decode results use the existing MMVQ path.

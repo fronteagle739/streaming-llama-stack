@@ -9,6 +9,9 @@ static std::atomic<uint64_t> native_mxfp4_dense_queued{0};
 extern "C" uint64_t ggml_backend_cuda_native_mxfp4_dense_queued(void){return native_mxfp4_dense_queued.load(std::memory_order_acquire);}
 #include "quantize.cuh"
 #include "mmid.cuh"
+#include "dsv41-flashinfer.cuh"
+static std::atomic<uint64_t> dsv41_flashinfer_queued{0};
+extern "C" uint64_t ggml_backend_cuda_dsv41_flashinfer_queued(void){return dsv41_flashinfer_queued.load(std::memory_order_acquire);}
 
 static void ggml_cuda_mul_mat_q_switch_type(ggml_backend_cuda_context & ctx, const mmq_args & args, cudaStream_t stream) {
     switch (args.type_x) {
@@ -197,6 +200,15 @@ void ggml_cuda_mul_mat_q(
         CUDA_CHECK(cudaGetLastError());
     }
 
+    if(use_native_mxfp4&&ne12>4&&dsv41_flashinfer_requested()){
+        GGML_ASSERT(ggml_dsv41_native_fp4_valid(dst)&&"FlashInfer requires the explicitly tagged stored MXFP4 graph");
+        CUDA_CHECK(static_cast<cudaError_t>(dsv41_flashinfer_bridge()(src0_d,src1_d,ids_src1.get(),ids_dst.get(),expert_bounds.get(),dst_d,
+            int(ne_get_rows),int(ne01),int(ne00),nb11/ts_src1,s1,s2,3328ull<<20,stream)));
+        CUDA_CHECK(cudaGetLastError());
+        native_mxfp4_routed_queued.fetch_add(1,std::memory_order_release);
+        dsv41_flashinfer_queued.fetch_add(1,std::memory_order_release);
+        return;
+    }
     const size_t nbytes_src1_q8_1 = ne12*n_expert_used*ne10_padded * sizeof(block_q8_1)/QK8_1 +
         get_mmq_x_max_host(cc)*sizeof(block_q8_1_mmq);
     ggml_cuda_pool_alloc<char> src1_q8_1(ctx.pool(), nbytes_src1_q8_1);

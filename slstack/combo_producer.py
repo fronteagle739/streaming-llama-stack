@@ -232,6 +232,11 @@ def prefill_arguments(cfg, count, available, *, export_state=False, techniques=N
     if keep:
         arguments['--yoco-keep'] = str(keep)
         if export_state:arguments['--yoco-remote-state-version'] = '1'
+    if cfg.get('env_overrides',{}).get('LLAMA_DSV41_FLASHINFER_MXFP4')=='1':
+        if cfg.get('producer_profile','ultra')!='ultra' or arguments.get('--pair-ffn-tiles')!='1':
+            raise ValueError('FlashInfer stored MXFP4 requires the bounded paired ULTRA workspace')
+        # Repartition the existing graph cap; neither job nor device ceiling grows.
+        arguments['--backend-temporary-reserve-bytes']=str(3328<<20)
     return arguments, plan
 
 

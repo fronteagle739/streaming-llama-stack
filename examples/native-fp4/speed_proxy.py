@@ -9,6 +9,7 @@ import hashlib
 import json
 import os
 from pathlib import Path
+import re
 import secrets
 import struct
 import sys
@@ -60,6 +61,9 @@ def run(args, cfg):
                   decode_library_sha256=hashlib.file_digest(
                       (Path(cfg['llama_producer']).parent / 'ds4-decode.dll').open('rb'), 'sha256').hexdigest(),
                   profiled=args.profile_stages,
+                  flashinfer_requested=cfg['env_overrides'].get('LLAMA_DSV41_FLASHINFER_MXFP4') == '1',
+                  decode_mma_requested=cfg['env_overrides'].get('DS4_CUDA_MXFP4_DECODE_MMA') == '1',
+                  route_histogram_requested=cfg['env_overrides'].get('LLAMA_DSV41_ROUTE_HISTOGRAM') == '1',
                   affinity_warmup_tokens=int(cfg['env_overrides'].get('DS4_CACHE_AFFINITY_WARMUP_TOKENS','100')),
                   affinity_ramp_tokens=int(cfg['env_overrides'].get('DS4_CACHE_AFFINITY_RAMP_TOKENS','8')),
                   memory_limits={key: cfg[key] for key in (
@@ -69,8 +73,17 @@ def run(args, cfg):
             Path(cfg['cache_affinity_spread_file']).open('rb'), 'sha256').hexdigest()
     producer = None
     try:
+        if record['flashinfer_requested']:
+            if args.arm != 'proxy':
+                raise ValueError('FlashInfer stored-weight experiment requires the proxy arm')
+            bridge = Path(cfg['env_overrides']['LLAMA_DSV41_FLASHINFER_MXFP4_DLL'])
+            record['flashinfer_bridge_sha256'] = hashlib.file_digest(bridge.open('rb'), 'sha256').hexdigest()
+        header = read_header(cfg['model'])
+        experts = [t for t in header['tensors'] if t['name'].endswith(
+            ('_gate_exps.weight', '_up_exps.weight', '_down_exps.weight'))]
+        if args.arm == 'q4' and (len(experts) != 120 or any(t['type'] != 12 for t in experts)):
+            raise ValueError('Q4 control requires exactly 120 original Q4_K expert tensors')
         if args.arm == 'proxy':
-            header = read_header(cfg['model'])
             if header['metadata'].get('deepseek41.speed_proxy') != LABEL:
                 raise ValueError('Proxy model marker is absent or incorrect')
             if sum(t['type'] == 39 for t in header['tensors']) != 120:
@@ -102,7 +115,25 @@ def run(args, cfg):
     finally:
         if producer is not None:
             record['cleanup'] = producer.close()
+        if record['status'] == 'PASS' and record['flashinfer_requested']:
+            text = trace.read_text(encoding='utf-8', errors='replace')
+            actual = re.findall(r'NATIVEFP4_FLASHINFER_COMPLETE layer=(\d+) start=(\d+) count=(\d+) actual=(\d+) ', text)
+            stored = re.findall(r'NATIVEFP4_STORED_COMPLETE layer=(\d+) start=(\d+) count=(\d+) actual=(\d+) ', text)
+            record['flashinfer_completed_graphs'] = len(actual)
+            record['flashinfer_completed_products'] = sum(int(row[3]) for row in actual)
+            if not actual or actual != stored or any(int(row[3]) != (3 if int(row[2]) > 4 else 0) for row in actual):
+                record.update(status='FAIL', error='Missing or inconsistent completed FlashInfer W4A8 graph witnesses')
+        if record['status'] == 'PASS' and record['decode_mma_requested'] and args.decode:
+            layers = sorted(int(layer) for layer in re.findall(
+                r'NATIVEFP4_DECODE_QUEUED layer=(\d+) calls=3 rows=1 offline_weights=1 runtime_weight_conversion=0 activation=fp4',
+                trace.read_text(encoding='utf-8', errors='replace')))
+            record['decode_mma_queued_layers'] = layers
+            if layers != list(range(40)):
+                record.update(status='FAIL', error='Missing native FP4 decode launch witnesses for all40 layers')
         args.output.write_text(json.dumps(record, indent=2, default=str), encoding='utf-8')
+        if record['status'] == 'FAIL' and (record.get('flashinfer_requested') or (
+                record.get('decode_mma_requested') and 'decode_mma_queued_layers' in record)):
+            raise RuntimeError(record['error'])
 
 
 def main():

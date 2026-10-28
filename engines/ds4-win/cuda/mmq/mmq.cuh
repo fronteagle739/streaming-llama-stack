@@ -970,12 +970,20 @@ static __device__ __forceinline__ void load_tiles_mxfp4_fp4(const char * __restr
 
         // quantize_mxfp4_mmq permutes nibbles to match the quantized format
         const int k0 = kbx * 4;
-        memcpy(x_qs + i * MMQ_MMA_TILE_X_K_FP4 + k0, bxi->qs, 16);
+        // The row stride is in32-value blocks. A K2304 row ends halfway
+        // through the512-column MMA tile; never load another row/expert's
+        // codes or scales (the last row would exceed the tensor allocation).
+        const int block_in_row = kbx0 % stride + kbx;
+        if (block_in_row < stride) {
+            memcpy(x_qs + i * MMQ_MMA_TILE_X_K_FP4 + k0, bxi->qs, 16);
+        } else {
+            memset(x_qs + i * MMQ_MMA_TILE_X_K_FP4 + k0, 0, 16);
+        }
 
         // Load E8M0 scales: pack 2 consecutive scales into one uint32
         if (kbx % 2 == 0) {
-            uint32_t e = bxi->e;
-            e |= ((bxi + 1)->e << 8);
+            uint32_t e = block_in_row < stride ? bxi->e : 0;
+            e |= (block_in_row + 1 < stride ? (bxi + 1)->e : 0) << 8;
             x_sc[i * MMQ_MMA_TILE_X_K_FP4 + kbx / 2] = e;
         }
     }
