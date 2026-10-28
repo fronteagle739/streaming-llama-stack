@@ -14,7 +14,24 @@ the rest), so "Max quality" below is the full model.
 
 ### Prefill
 
-ULTRA prefill, YOCO off. Times include engine startup.
+The single-machine default is ULTRA exact cone with routed tail reads and one
+chunk per weight pass. These measured text runs use growable BF16 cache and
+include engine startup:
+
+| Prompt tokens | Prefill time | Prefill tok/s | Peak engine RAM |
+|---:|---:|---:|---:|
+| 49,555 | 25.375 s | 1,952.91 | — |
+| 100,000 | 45.484 s | 2,198.58 | 5.79 GiB |
+| 200,000 | 94.079 s | 2,125.87 | 5.94 GiB |
+| 400,000 | 232.500 s | 1,720.43 | 6.24 GiB |
+
+At 49,555 tokens, the same-build full eager control took 36.250 s
+(1,367.03 tok/s); the cone preserved every logit and cache checkpoint hash.
+The 262K launcher retains growable F32 cache; the 1M launcher uses BF16.
+Cone image throughput and one-million-token throughput have not been measured.
+[Receipts](MULTICHUNK_QUALIFICATION.json) · [Defaults and toggles](MERGEPERF.md).
+
+Earlier full ULTRA prefill, YOCO off, including startup:
 
 | Prompt tokens | Prefill time | Prefill tok/s |
 |---:|---:|---:|
@@ -26,7 +43,7 @@ ULTRA prefill, YOCO off. Times include engine startup.
 
 With the engine already loaded, one 49,152-token pass runs at **1,920 tok/s**.
 
-**One million tokens.** A single session prefilled 1,000,000 tokens in
+**Earlier full-prefill one-million-token run.** A single session prefilled 1,000,000 tokens in
 1,808 s (**553 tok/s**), in 49,152-token passes, without resetting the
 context. Peak engine RAM was 5.7 GiB.
 

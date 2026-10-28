@@ -46,7 +46,7 @@ def missing_settings(value,prefix=''):
 def main(argv=None):
     parser=argparse.ArgumentParser(description=__doc__)
     group=parser.add_mutually_exclusive_group(required=True)
-    group.add_argument('--single',choices=('accurate','fast','ultra','ultra-yoco'))
+    group.add_argument('--single',choices=('accurate','fast','ultra','ultra-yoco','ultra-cone'))
     group.add_argument('--preset',choices=sorted(p.parent.name for p in (ROOT/'examples/dual-machine').glob('*/preset.json')))
     parser.add_argument('--machine',choices=('mac','rtx'))
     parser.add_argument('--context',choices=('262k','1m'),default='262k')

@@ -8,7 +8,7 @@ rather than merging, so env_overrides is merged here.
     python -B scripts/dsv41_single.py --preset 262k [--config my.local.json] [--model M.gguf] --write runtime/x.local.json
     python -B scripts/dsv41_single.py --preset 1m --config my.local.json --dry-run      (prints the resolved settings)
 
-Both presets: serving single_engine (streaming-llama ULTRA prefill + ds4-decode.dll decode in one
+Both presets: serving single_engine (ULTRA exact-cone prefill + ds4-decode.dll decode in one
 producer), DirectStorage read parts 8, 512 MiB VRAM reserve beside the L2 expert tier, the default
 quality/speed setting, the fold sweep plan (49152-token primary sweeps, the remainder folded into the
 last sweep up to 61,440 tokens, else its own sweep),
@@ -59,11 +59,15 @@ def overlay(preset, local=None, model=None, yoco_keep=None, vision=None, profile
         result['model'] = model
     env = dict(result.get('env_overrides') or {})
     env.update(COMMON_ENV)
+    # Resident appends change logits (E2c); an explicit local toggle may enable them.
+    env.setdefault('LLAMADECODE_APPEND_DECODE_MAX', '0')
     result.update(PRESETS[preset], serving='single_engine', producer_host_reserve_gib=.5, env_overrides=env, **FOLD)
     from slstack.multichunk import selection
     chunks=selection(result.get('producer_chunks_per_pass',1))
     if chunks!=1 and local and 'producer_host_max_gib' in local:
         result['producer_host_max_gib']=local['producer_host_max_gib']
+    if profile is None and yoco_keep is None:
+        profile='ultra-cone'
     if profile is not None:
         if profile not in ('accurate','fast','ultra','ultra-yoco','ultra-cone'):raise ValueError('Unknown single-engine quality profile')
         result['producer_profile']='ultra' if profile in ('ultra-yoco','ultra-cone') else profile
@@ -128,7 +132,7 @@ def main(argv=None):
     parser.add_argument('--profile',choices=('accurate','fast','ultra','ultra-yoco','ultra-cone'))
     parser.add_argument('--chunks-per-pass', choices=('auto','1','2','3','4'), help='Chunks sharing each layer weight lease; explicit RAM budget required')
     parser.add_argument('--config', help='Your local config (paths, ports, budgets); optional')
-    parser.add_argument('--yoco-keep', type=int, choices=(0,140,2541), default=None, help='Bounded replay: 0 full, 140 approximate, 2541 dependency cone (experimental local only)')
+    parser.add_argument('--yoco-keep', type=int, choices=(0,140,2541), default=None, help='Bounded replay: 0 full, 140 approximate, 2541 exact dependency cone (local only)')
     parser.add_argument('--vision',action='store_true',default=None,help='Enable native image prefill and auto-detect the matching vision GGUF (requires the vision-capable producer)')
     parser.add_argument('--model', help='DSV4.1 GGUF path (overrides "model" in --config)')
     parser.add_argument('--write', help='Write the start config here')
