@@ -6,21 +6,26 @@ Every figure below was measured; each says what was timed.
 
 [Any-GGUF Q4_K/Q8_0 smoke](ANYGGUF_GPU_SMOKE.md): 49.6K-token recall at **1,592 tok/s**; warm decode **6.8 tok/s** (Max quality) / **18.2 tok/s** (Max speed).
 
-[Host expert tier trial](RAMTIER.md), same Q4_K/Q8_0 checkpoint and actual
-WebUI, 49,553-token prompt and 1,000-token replies:
+## Host-RAM expert tier
 
-| Host tier | Warm Max quality | Warm Max speed |
-|---|---:|---:|
-| Off | 7.26 tok/s | 18.89 tok/s |
-| 3.49 GiB (3.5 GiB requested) | 3.50 tok/s | 12.43 tok/s |
-| 10.99 GiB (auto) | 3.36 tok/s | 11.32 tok/s |
+The host-RAM expert tier is opt-in and off by default. Choose upload mode, CPU-compute mode, or a mix that selects between them. CPU and mix are experimental and can change token choices.
 
-The tier reduced SSD reads but slowed both settings, so it remains opt-in.
-Auto reclaimed 4.26 GiB of prefill carry RAM, retained native state exports,
-and passed a longer append with tier release/regrowth. Runtime RAM floor defaults
-are now 512 MiB; the separate desktop admission reserve is still 512 MiB.
-These are bounded single-run observations; see the trial for hit rates,
-memory/paging observations, build differences and failed-attempt disclosures.
+Measured on the 32 GB RAM / RTX 5090 machine, with about 50K tokens of context and 1,000-token replies. Warm decode excludes the first 100 generated tokens. Tier sizes below are settings; payloads round down to whole experts.
+
+| RAM tier setting | Mode | Max quality | Max speed |
+|---|---|---:|---:|
+| Off | GPU | **6.87 tok/s** | **18.26 tok/s** |
+| 3.5 GiB | Upload | **6.79 tok/s** | **17.34 tok/s** |
+| 3.5 GiB | CPU | **6.81 tok/s** | **14.58 tok/s** |
+| 10 GiB | Upload | **6.49 tok/s** | **15.23 tok/s** |
+| 10 GiB | CPU | **6.93 tok/s** | **13.22 tok/s** |
+| 10 GiB | Mix | **6.94 tok/s** | **12.08 tok/s** |
+
+It does not improve both dial settings here: faster settings already favour VRAM-resident experts, misses are spread thin, and at Max speed the CPU path makes the GPU wait.
+
+**Untested:** the tier is expected to help more on machines with more RAM.
+
+[Timing, hit rates and correctness](RAMTIER_R2.md). [Round 1 observations and history](RAMTIER.md).
 
 ## DeepSeek V4.1 Flash on one RTX 5090
 

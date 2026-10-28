@@ -6,6 +6,7 @@ extern "C" unsigned long long ggml_backend_cuda_dsv41_pv_strided_queued(void);
 #include <bcrypt.h>
 #include <dxgi1_4.h>
 #include "ggml-cuda.h"
+#include "ggml-cpu.h"
 #include <cuda.h>
 #include "ggml-dsv41-gather-half.h"
 #include "ggml-dsv41-split-f32.h"

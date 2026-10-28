@@ -359,6 +359,9 @@ def guarded(cfg,config):
         log=str(root/('server-'+run_id+'.log')),receipt=str(root/('server-'+run_id+'.json')),paging_telemetry=True,
         gpu_window_file=str(window),gpu_run_id=run_id,gpu_hold_file=cfg['hold_file'],
         gpu_window_stall_seconds=cfg.get('gpu_window_stall_seconds',30))
+    if cfg.get('serving_mode')=='single_engine':
+        spec['cooperative_stop']=dict(url=f'http://127.0.0.1:{cfg["port"]}/v1/stack/shutdown',
+            abort_file=cfg.get('env_overrides',{}).get('LLAMADECODE_ABORT_FILE'))
     from .envvars import split_secrets
     atomic_json(root/('server-'+run_id+'.spec.json'),dict(spec,env=split_secrets(env)[0]))   # the token stays in memory
     return supervise(spec)

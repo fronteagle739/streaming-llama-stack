@@ -48,6 +48,27 @@ Other models on the same streaming engine and RTX 5090:
 
 [Full numbers, with the conditions for each](docs/PERFORMANCE.md).
 
+### Host-RAM expert tier
+
+The host-RAM expert tier is opt-in and off by default. Choose upload mode, CPU-compute mode, or a mix that selects between them. CPU and mix are experimental and can change token choices.
+
+Measured on the 32 GB RAM / RTX 5090 machine, with about 50K tokens of context and 1,000-token replies. Warm decode excludes the first 100 generated tokens. Tier sizes below are settings; payloads round down to whole experts.
+
+| RAM tier setting | Mode | Max quality | Max speed |
+|---|---|---:|---:|
+| Off | GPU | **6.87 tok/s** | **18.26 tok/s** |
+| 3.5 GiB | Upload | **6.79 tok/s** | **17.34 tok/s** |
+| 3.5 GiB | CPU | **6.81 tok/s** | **14.58 tok/s** |
+| 10 GiB | Upload | **6.49 tok/s** | **15.23 tok/s** |
+| 10 GiB | CPU | **6.93 tok/s** | **13.22 tok/s** |
+| 10 GiB | Mix | **6.94 tok/s** | **12.08 tok/s** |
+
+It does not improve both dial settings here: faster settings already favour VRAM-resident experts, misses are spread thin, and at Max speed the CPU path makes the GPU wait.
+
+**Untested:** the tier is expected to help more on machines with more RAM.
+
+[Settings and detailed results](docs/RAMTIER_R2.md).
+
 ## How it works
 
 **Streaming prefill.** Prefill reads each layer's weights once per pass and runs
@@ -94,7 +115,7 @@ one DeepSeek V4.1-specific part.
 - **Storage:** fast local NVMe with DirectStorage. Measured on a NVMe RAID-0 at
   about 25 GB/s. Storage speed sets prefill and cold decode speed.
 - **System RAM:** 32 GB. The engine needs its 9.25 GiB budget plus a 512 MiB
-  desktop reserve free, and stops cleanly if RAM drops below 4 GiB free.
+  desktop reserve free. The runtime RAM floor defaults to 512 MiB.
 - **Build tools:** Windows, Python 3.12, Visual Studio C++ Build Tools, CMake, Ninja,
   CUDA 13.2 and Node.js 24.
 - **Optional Mac:** M3 Ultra with 512 GB, on the same network, with the same model file.
@@ -129,7 +150,7 @@ model path and GPU UUID. `*.local.*` files are ignored by Git.
   "model": "<model_dir>/<deepseek-v4.1-flash>.gguf",
   "gpu_uuid": "<GPU-UUID>",
   "host_budget_gib": 9.25,
-  "min_available_gib": 4,
+  "min_available_gib": 0.5,
   "runtime_min_free_gib": 0.5
 }
 ```
