@@ -59,8 +59,9 @@ it gave no gain on this machine. Warm decode after the first 100 tokens, about
 | Tier off | 7.16 tok/s | 18.54 tok/s |
 | 3.5 GiB, upload to GPU | 7.16 tok/s | 18.18 tok/s |
 | 3.5 GiB, CPU compute | 6.86 tok/s | 15.87 tok/s |
-| Full size (~11 GiB), CPU compute | 7.34 tok/s | 13.74 tok/s |
-| Full size (~11 GiB), mix of both | 7.27 tok/s | 13.45 tok/s |
+| 10 GiB, upload to GPU | 6.49 tok/s | 15.23 tok/s |
+| 10 GiB, CPU compute | 6.93 tok/s | 13.22 tok/s |
+| 10 GiB, mix of both | 6.94 tok/s | 12.08 tok/s |
 
 The speed settings already favour VRAM-resident experts, misses are spread
 thinly, and at Max speed the GPU waits for the CPU. It is expected to matter
