@@ -258,3 +258,7 @@ own licences; see [NOTICE](NOTICE).
 - [mlx-serve](https://github.com/ddalcu/mlx-serve) for the optional MLX service.
 - [Microsoft DirectStorage](https://github.com/microsoft/DirectStorage) for
   storage-to-GPU transfers.
+
+## Support
+
+If this project is useful to you and you would like to support its development, you can [buy me a coffee on Ko-fi](https://ko-fi.com/FrontEagle).
