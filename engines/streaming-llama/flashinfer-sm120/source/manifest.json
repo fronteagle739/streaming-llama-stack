@@ -1,0 +1,33 @@
+{
+  "upstream": "https://github.com/flashinfer-ai/flashinfer",
+  "commit": "1d622fdb1b053fc532069914bc9a6b498bd5f722",
+  "license": "Apache-2.0",
+  "modifications": "None; five dependency-closed kernel files copied byte-for-byte.",
+  "files": [
+    {
+      "upstream": "flashinfer/fused_moe/cute_dsl/blackwell_sm12x/kernel_moe_mxfp8_mxfp4_gemm.py",
+      "vendored": "kernel_moe_mxfp8_mxfp4_gemm.py",
+      "sha256": "09898e9e1db9f2e31c36295ee1af69c52bbe8c7f8cf68ce449e5acae3f907cf8"
+    },
+    {
+      "upstream": "flashinfer/fused_moe/cute_dsl/blackwell_sm12x/_moe_utils/moe_epilogue.py",
+      "vendored": "_moe_utils/moe_epilogue.py",
+      "sha256": "18005e1e260a6893412d5042b941df42bc55268ce0350a8b597b09792a7a587f"
+    },
+    {
+      "upstream": "flashinfer/fused_moe/cute_dsl/blackwell_sm12x/_moe_utils/moe_kernel_builder.py",
+      "vendored": "_moe_utils/moe_kernel_builder.py",
+      "sha256": "48ecf9a39a110fc51faa4658df84a0f1f9483e418c7b755269469102bd44d41c"
+    },
+    {
+      "upstream": "flashinfer/fused_moe/cute_dsl/blackwell_sm12x/_moe_utils/moe_scheduler.py",
+      "vendored": "_moe_utils/moe_scheduler.py",
+      "sha256": "22614ab2aa5ee60ef0604bd9b844a8ac284c43292b87f6e006d5b1062d4caaa9"
+    },
+    {
+      "upstream": "flashinfer/fused_moe/cute_dsl/blackwell_sm12x/_moe_utils/sm12x_blockscaled_layout.py",
+      "vendored": "_moe_utils/sm12x_blockscaled_layout.py",
+      "sha256": "a43d197fb3235d50635473509acf76c801d88fc7429015eeb507c5c118a5e727"
+    }
+  ]
+}

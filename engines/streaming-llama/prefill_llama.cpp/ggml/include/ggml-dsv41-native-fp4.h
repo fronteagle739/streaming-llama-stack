@@ -16,6 +16,7 @@ inline bool ggml_dsv41_native_fp4_valid(const ggml_tensor *t){
 }
 extern "C" GGML_BACKEND_API uint64_t ggml_backend_cuda_native_mxfp4_routed_queued(void);
 extern "C" GGML_BACKEND_API uint64_t ggml_backend_cuda_native_mxfp4_dense_queued(void);
+extern "C" GGML_BACKEND_API uint64_t ggml_backend_cuda_dsv41_flashinfer_queued(void);
 // Reuses the existing FP4 activation quantizer with ordinary17-byte weight
 // blocks as its destination. Caller owns disjoint CUDA input/output/scratch.
 // No allocation, model edit, disk I/O or implicit stream synchronization.

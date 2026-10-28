@@ -27,9 +27,15 @@
 #include "ds4_mmq_d2r.cuh"
 
 #include <cstdio>
+#include <atomic>
 #include <cstdlib>
 #include <cstring>
 #include <cstring>
+
+static std::atomic<uint64_t> native_fp4_queued{0};
+extern "C" uint64_t ds4_mmq_native_fp4_queued(void) {
+    return native_fp4_queued.load(std::memory_order_relaxed);
+}
 
 #if defined(__has_include)
 #if __has_include(<nvtx3/nvToolsExt.h>)
@@ -503,10 +509,13 @@ ggml_backend_cuda_context * get_ctx_for_device(int device) {
 template <ggml_type type>
 bool ds4_mmq_k_tile_supported(const char *tag, int K, int cc) {
     if constexpr (type == GGML_TYPE_MXFP4 || type == GGML_TYPE_NVFP4) {
-        if (blackwell_mma_available(cc) && K % MMQ_ITER_K_FP4 != 0) {
+        // MXFP4's bounded loader zeroes the partial final512-column tile.
+        // DSV4.1 down uses K2304; its256-column tail must not read the next row.
+        constexpr int k_alignment = type == GGML_TYPE_MXFP4 ? 256 : MMQ_ITER_K_FP4;
+        if (blackwell_mma_available(cc) && K % k_alignment != 0) {
             fprintf(stderr,
                     "%s: Blackwell FP4 K=%d must be a multiple of %d\n",
-                    tag, K, MMQ_ITER_K_FP4);
+                    tag, K, k_alignment);
             return false;
         }
     }
@@ -1163,6 +1172,7 @@ int ds4_mmq_moe_impl(
         fprintf(stderr, "%s: mul_mat_q_case (moe) launch failed: %s\n", tag, cudaGetErrorString(err));
         return -4;
     }
+    if (use_native_fp4) native_fp4_queued.fetch_add(1, std::memory_order_relaxed);
     if (sanitize_out) {
         ds4_mmq_sanitize_f32(out_f32, (uint64_t)M * (uint64_t)ne_get_rows, stream);
     }
@@ -1751,6 +1761,7 @@ int ds4_mmq_moe_pair_impl(
             fprintf(stderr, "%s: mul_mat_q_case (pair b) launch failed: %s\n", tag, cudaGetErrorString(err));
             return -5;
         }
+        if (use_native_fp4) native_fp4_queued.fetch_add(2, std::memory_order_relaxed);
     }
     }
     }

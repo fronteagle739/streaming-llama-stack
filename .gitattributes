@@ -1,4 +1,6 @@
 docs/evidence/** -text
+# Preserve pinned upstream bytes for the FlashInfer source manifest on Windows.
+engines/streaming-llama/flashinfer-sm120/source/** -text
 examples/**/*.sh text eol=lf
 # LF webui sources keep the tracked built index.html.gz reproducible on Windows.
 engines/streaming-llama/prefill_llama.cpp/tools/server/webui/**/*.svelte text eol=lf

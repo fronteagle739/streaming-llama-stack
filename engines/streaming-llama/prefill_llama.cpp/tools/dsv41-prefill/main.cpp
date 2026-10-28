@@ -13,6 +13,7 @@ extern "C" uint64_t ggml_backend_cuda_dsv41_pv_view_queued(void);
 #include "ggml-dsv41-carry-copy.h"
 #include "ggml-ds4-native-half-stats.h"
 #include "llama-dsv41-sweep.h"
+#include "llama-dsv41-flashinfer-budget.h"
 #include "profile-check.h"
 #include "llama-dsv41-ctx-cache-plan.h"
 #include "llama-dsv41-prefill-plan.h"
@@ -548,7 +549,11 @@ int wmain(int argc,wchar_t**argv){
         require(!yoco_keep||hash_only,"YOCO refuses native payload files; use local hash-only diagnostics");
         require(!live||hash_only,"Live initial payload must stream without a disk copy");
         const uint64_t backend_reserve=args.count("--backend-temporary-reserve-bytes")?number("--backend-temporary-reserve-bytes"):gib;
-        require(backend_reserve==gib||(backend_reserve==768ull*1024*1024&&pair_ffn),"Backend reserve must be1GiB or explicit768MiB fixed grouped plan");
+        const bool flashinfer_reserve=llama_dsv41_flashinfer::requested()&&pair_ffn&&
+            std::getenv("LLAMA_DSV41_STORED_MXFP4")&&std::string(std::getenv("LLAMA_DSV41_STORED_MXFP4"))=="1";
+        require(backend_reserve==gib||(backend_reserve==768ull*1024*1024&&pair_ffn)||
+            (flashinfer_reserve&&backend_reserve==llama_dsv41_flashinfer::reserve_bytes),"Backend reserve must match the explicit arithmetic/workspace plan");
+        require(!flashinfer_reserve||backend_reserve==llama_dsv41_flashinfer::reserve_bytes,"FlashInfer requires its bounded workspace inside the existing graph device cap");
         const auto output_volume=native_file::volume(path("--payload"));
         require(!hybrid||(path("--carry").root_name()==L"D:"&&llama_dsv41_expert_profile::native(expert)&&disk_reserve==1024ull*1024*1024),
             "Hybrid TEST requires D: overflow, native experts and explicit1GiB disk reserve");

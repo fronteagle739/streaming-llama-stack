@@ -36029,8 +36029,19 @@ static int routed_moe_launch(
 
         const cudaStream_t stream =
             n_tokens == 1u ? cuda_decode_stream() : (cudaStream_t)0;
+        // Reuse the existing Blackwell MMQ kernel for tiny-M as an explicit
+        // W4A4 experiment. FP4 activation rounding changes decode arithmetic.
+        const bool decode_mma = n_tokens == 1u &&
+            cuda_env_flag_enabled("DS4_CUDA_MXFP4_DECODE_MMA", 0);
+        if (decode_mma && (n_expert != 6u || expert_in_dim != 5120u ||
+                           expert_mid_dim != 2304u || out_dim != 5120u ||
+                           ds4_gpu_decode_graphs_supported())) {
+            fprintf(stderr, "ds4: MXFP4 decode MMA requires DSV4.1 top-6 shapes and DS4_CUDA_DECODE_GRAPHS=0\n");
+            return 0;
+        }
+        const uint64_t fp4_before = decode_mma ? ds4_mmq_native_fp4_queued() : 0;
         int rc = -1;
-        if (n_tokens == 1u && n_expert == 6u) {
+        if (n_tokens == 1u && n_expert == 6u && !decode_mma) {
             rc = ds4_mmq_mxfp4_moe_gate_up_mid_vec(
                 gate_w, up_w, (const float *)x->ptr,
                 (const int32_t *)mx_selected->ptr,
@@ -36086,6 +36097,18 @@ static int routed_moe_launch(
                     out_dim, n_expert, n_tokens, /*guard_nonfinite=*/1);
                 rc = cuda_ok(cudaGetLastError(),
                              "mxfp4 moe sum launch") ? 0 : -1;
+            }
+        }
+        if (rc == 0 && decode_mma) {
+            if (ds4_mmq_native_fp4_queued() != fp4_before + 3u) {
+                fprintf(stderr, "ds4: MXFP4 decode refused: three native FP4 MMA launches were not witnessed\n");
+                return 0;
+            }
+            // Bounded logging; every call above still validates all three launches.
+            static bool witnessed[40] = {};
+            if (layer_index < 40u && !witnessed[layer_index]) {
+                witnessed[layer_index] = true;
+                fprintf(stderr, "NATIVEFP4_DECODE_QUEUED layer=%u calls=3 rows=1 offline_weights=1 runtime_weight_conversion=0 activation=fp4\n", layer_index);
             }
         }
         if (rc == 0) return 1;
