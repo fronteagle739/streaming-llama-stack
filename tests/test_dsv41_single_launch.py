@@ -32,6 +32,16 @@ class LaunchConfigTests(unittest.TestCase):
     def test_1m_is_bf16_growable_at_999424(self):
         cfg = dsv41_single.overlay('1m')
         self.assertEqual((cfg['context'], cfg['ctx_cache_precision'], cfg['ctx_cache_growable']), (999424, 'bf16', True))
+        self.assertEqual(cfg['env_overrides']['LLAMADECODE_SINGLEPASS_VRAM'], '1')
+
+    def test_carry_loan_scope_and_explicit_control(self):
+        key='LLAMADECODE_SINGLEPASS_VRAM'
+        self.assertEqual(dsv41_single.overlay('1m',dict(env_overrides={key:'0'}))['env_overrides'][key], '0')
+        for cfg in (dsv41_single.overlay('262k'), dsv41_single.overlay('1m',profile='accurate'),
+                    dsv41_single.overlay('1m',profile='ultra-yoco'), dsv41_single.overlay('1m',vision=True),
+                    dsv41_single.overlay('1m',dict(producer_fixed_direct_open=False)),
+                    dsv41_single.overlay('1m',dict(env_overrides={'LLAMADECODE_DECODE_COMPACT':'0'}))):
+            self.assertNotIn(key,cfg['env_overrides'])
 
     def test_local_keys_survive_and_gated_keys_win(self):
         local = {'model': 'M.gguf', 'port': 9000, 'env_overrides': {'FOO': '1', 'LLAMADECODE_ENGRAM_CACHE_MB': '64'},

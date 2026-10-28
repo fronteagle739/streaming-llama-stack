@@ -14,6 +14,8 @@ def load(path=None, overrides=None):
     cfg.update({k: v for k, v in (overrides or {}).items() if v is not None})
     from .multichunk import selection
     selection(cfg.get('producer_chunks_per_pass', 1))
+    from .singlepass import registration
+    registration(cfg.get('producer_carry_registration', 'tile'))
     from .combo_ram import runtime_min_free_gib
     cfg['runtime_min_free_gib'] = runtime_min_free_gib(cfg)
     if cfg.get('mac'):
