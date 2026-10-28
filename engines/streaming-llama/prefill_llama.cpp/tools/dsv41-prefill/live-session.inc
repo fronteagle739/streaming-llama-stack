@@ -2,6 +2,7 @@
 #include "live-session-checkpoint.h"
 #include "llama-dsv41-artifact.h"
 #include "llama-dsv41-layer-log.h"
+#include "llama-dsv41-resident-append.h"
 #include <thread>
 #include <filesystem>
 #include <optional>
@@ -689,13 +690,22 @@ void run_live_session(std::unique_ptr<llama_dsv41_sweep>&sweep,
             // LLAMADECODE_ENGRAM_EARLY: this append's Engram rows start now, before
             // its open, start_request and layer-0 weight fetch (off: no-op).
             if(!command.contains("vision_spans_file")) {std::string early_error;success(sweep->start_append_engram(tokens,early_error),early_error);}
+            bool resident_sweep=false;
+            if(llama_dsv41_resident_append_enabled()&&ds4_decode_enabled()&&!options.capture_dspark&&next_images.empty()&&tokens.size()<=llama_dsv41_resident_append_limit){
+                require(append_decode_max()==0,"Resident sweep and native append experiments require separate settings");
+                auto *provider=sweep->provider_for_external_decode();
+                resident_sweep=provider&&provider->decode_layout();
+                if(resident_sweep){std::string why;success(provider->release_decode_cache(why),why);}
+            }
             auto previous=std::move(sweep);sweep.reset(new llama_dsv41_sweep);auto next_options=options;auto next_weights=weights;
             next_options.image_spans=std::move(next_images);next_options.images=!next_options.image_spans.empty();
+            if(resident_sweep)next_weights.decode_layout=true;
             next_options.yoco_logical_begin=next_options.yoco_logical_end=0;next_options.carry.tokens=uint32_t(tokens.size());if(next_weights.engram_prefetch_host_bytes)next_weights.engram_prefetch_tokens=uint32_t(tokens.size());
             std::string error;success(sweep->open(next_weights,next_options,error,nullptr,previous.get()),error);require(!previous->ready(),"Transferred prefix still publishes");previous.reset();
             const double admission_ms=ms(started);success(sweep->run(tokens,[]{return should_stop();},error),error);const auto timing=sweep->timing();
             const uint32_t before=current.frontier.position;current=inspect();require(current.frontier.position==before+tokens.size(),"Live prefill position did not advance exactly");
-            reply({{"peer_synchronized",false},{"prompt_tokens",tokens.size()},{"prompt_processing_ms",admission_ms+timing.prompt_processing_ms},{"export_preparation_ms",timing.export_preparation_ms}});
+            std::fprintf(stderr,"PERFEXP_RESIDENT_SWEEP enabled=%d tokens=%zu same_sweep_policy=1 l2_released_before_prefill_restore=1\n",int(resident_sweep),tokens.size());std::fflush(stderr);
+            reply({{"peer_synchronized",false},{"prompt_tokens",tokens.size()},{"prompt_processing_ms",admission_ms+timing.prompt_processing_ms},{"export_preparation_ms",timing.export_preparation_ms},{"append_resident_sweep",resident_sweep}});
         }else require(false,"Unknown persistent session operation");
     }
 }

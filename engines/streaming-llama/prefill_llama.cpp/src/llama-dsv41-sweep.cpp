@@ -11,6 +11,7 @@
 #include "llama-dsv41-host-plan-log.h"
 #include "llama-dsv41-executor.h"
 #include "boundary-capture.h"
+#include "llama-dsv41-resident-append.h"
 #include "ggml-alloc.h"
 #ifdef GGML_USE_CUDA
 #include "ggml-cuda.h"
@@ -753,7 +754,7 @@ bool llama_dsv41_sweep::run(const std::vector<int32_t>&tokens,const cancelled&st
             // LLAMADECODE B1: the decode layout leases the dense stage here; the
             // routed experts arrive through the executor's router hook.
             const bool routed_decode=p->provider.decode_layout();
-            if(routed_decode){require(owned.size()==1,"Routed decode layout serves exactly one appended token");
+            if(routed_decode){require(owned.size()==1||(llama_dsv41_resident_append_enabled()&&owned.size()<=llama_dsv41_resident_append_limit),"Routed decode layout serves one token or the opt-in bounded resident append");
                 success(p->provider.acquire_layer_dense(layer,weights,error),error);}
             else success(p->provider.acquire_layer(layer,weights,error),error);
             const double acquire_ms=elapsed(layer_started);

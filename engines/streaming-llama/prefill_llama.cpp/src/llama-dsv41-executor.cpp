@@ -10,6 +10,7 @@
 #include "llama-dsv41-dense-half-admission.h"
 #include "llama-dsv41-route-split.h"
 #include "llama-dsv41-hash-dump.h"
+#include "llama-dsv41-attribution.h"
 #include "ggml-dsv41-expert-routing.h"
 #include "ggml-dsv41-topk.h"
 #include "ggml-dsv41-stream-topk.h"
@@ -1001,7 +1002,9 @@ bool llama_dsv41_tile_executor::run(const request&in,const llama_dsv41_layer_gra
         int routed_split=-1; // LLAMADECODE B1: first node after the router cut
         ggml_tensor*expert_slot_input=nullptr; // LLAMADECODE B2
         ggml_tensor*hash_experts=nullptr; // LLAMADECODE_HASH_DUMP only
+        std::vector<std::pair<uint32_t,ggml_tensor*>> attribution_stages;
         if(workspace&&workspace->cache_layouts){
+            require(!llama_dsv41_attribution_active(in.position_offset+in.start,in.count),"E2c attribution refuses cached layer graphs");
             require(!boundary.active()&&!resident,"Cached layer graphs refuse capture and hidden-bank rebinding");
             if(workspace->layer!=in.layer){
                 workspace->variants.clear();workspace->layer=in.layer;
@@ -1090,9 +1093,23 @@ bool llama_dsv41_tile_executor::run(const request&in,const llama_dsv41_layer_gra
             ratio?cache.index(in.layer):nullptr,nullptr,nullptr};
         if(pooled){state.previous_pool_kv=cache.pool_kv(in.layer);state.previous_pool_score=cache.pool_score(in.layer);}
         graph=ggml_new_graph_custom(ctx.get(),long_index?16384:8192,false);
+        const bool attribution=llama_dsv41_attribution_active(in.position_offset+in.start,in.count);
+        unsigned attribution_expands=0;
         llama_dsv41_graph_ops::observer boundary_observer;
-        if(boundary.active())boundary_observer=[&](ggml_tensor*t,const char*name){
-            ggml_set_name(t,name);boundary.observe(t,name);
+        if(boundary.active()||attribution)boundary_observer=[&](ggml_tensor*t,const char*name){
+            ggml_set_name(t,name);if(boundary.active())boundary.observe(t,name);
+            if(!attribution)return;
+            if(!std::strcmp(name,"dsv41_weighted_norm_bf16")&&t->src[0]&&t->src[0]->op==GGML_OP_MUL){
+                const auto *weight=t->src[0]->src[1];
+                if(weight==w.attn_norm)attribution_stages.push_back({0,t});
+                if(weight==w.ffn_norm)attribution_stages.push_back({2,t});
+            }
+            if(!std::strcmp(name,"dsv41_hc_expand_bf16")&&attribution_expands++==0)
+                attribution_stages.push_back({1,t});
+            if(!std::strcmp(name,"dsv41_rope_bf16_tail")&&t->ne[0]==512&&t->ne[1]==64)
+                attribution_stages.push_back({7,t});
+            if(!std::strcmp(name,"dsv41_inverse_rope_bf16_tail")&&t->ne[0]==512&&t->ne[1]==64)
+                attribution_stages.push_back({9,t});
         };
         boundary.add(input.residual,"common_residual");
         boundary.add(input.previous_pre,"previous_pre");
@@ -1112,6 +1129,17 @@ bool llama_dsv41_tile_executor::run(const request&in,const llama_dsv41_layer_gra
         if(in.route_hook){expert_slot_input=ggml_new_tensor_2d(ctx.get(),GGML_TYPE_I32,6,in.count);ggml_set_name(expert_slot_input,"dsv41_expert_slots");
             ggml_set_input(expert_slot_input);routed_weights.ffn.expert_slots=expert_slot_input;}
         values=pair_ffn?factory.build_pair(in.layer,p,in.compressed_rows,routed_weights,input,state,expert):factory.build(in.layer,p,in.compressed_rows,routed_weights,input,state,expert);
+        if(attribution){
+            require((!pair_ffn||in.count<=attention_rows)&&(!workspace||!workspace->cache_layouts),"E2c attribution requires fresh, single-attention layer graphs");
+            require(std::count_if(attribution_stages.begin(),attribution_stages.end(),[](const auto&s){return s.first<=2;})==3,"E2c attribution lost attention/FFN stage coverage");
+            for(int i=0;i<ggml_graph_n_nodes(graph);++i){auto*t=ggml_graph_node(graph,i);
+                if(t->op==GGML_OP_DSV4_ACT_QAT&&t->op_params[0]==GGML_DSV41_QAT_FP8_E8M0&&ggml_nelements(t)==int64_t(512)*in.count)
+                    attribution_stages.push_back({8,t});
+                if(t->op==GGML_OP_MUL_MAT&&t->src[0]==w.attention.out_b)
+                    attribution_stages.push_back({10,t});
+            }
+            for(auto &stage:attribution_stages){stage.second=ggml_cont(ctx.get(),stage.second);ggml_set_output(stage.second);ggml_build_forward_expand(graph,stage.second);}
+        }
         if(capture_dspark){
             capture_ticket=in.yoco_raw_begin?cache.dspark_completion.begin_replay(in.layer-37,in.position_offset+in.start,in.count):cache.dspark_completion.begin(in.layer-37,in.position_offset+in.start,in.count);
             llama_dsv41_dspark_capture::enqueue(ctx.get(),graph,cache.dspark_ring,values.dspark_mean,
@@ -1237,7 +1265,7 @@ bool llama_dsv41_tile_executor::run(const request&in,const llama_dsv41_layer_gra
         for(auto*t:uploaded_inputs)ggml_build_forward_expand(graph,t);
         routed_split=-1;
         hash_experts=nullptr;
-        if(llama_dsv41_hash_dump_enabled()){ // diagnostic: keep the routed ids readable after compute
+        if(llama_dsv41_hash_dump_enabled()||llama_dsv41_attribution_active(in.position_offset+in.start,in.count)){ // diagnostic: keep the routed ids readable after compute
             for(int i=0;i<ggml_graph_n_nodes(graph);++i)if(!std::strcmp(ggml_get_name(ggml_graph_node(graph,i)),"dsv41_ffn_selected_experts")){hash_experts=ggml_graph_node(graph,i);ggml_set_output(hash_experts);}
         }
         if(in.route_hook){
@@ -1423,6 +1451,11 @@ bool llama_dsv41_tile_executor::run(const request&in,const llama_dsv41_layer_gra
         if(llama_dsv41_hash_dump_enabled()){ggml_backend_synchronize(backend);
             llama_dsv41_hash_phase("in",in.layer,in.position_offset+in.start,in.count,graph,{},{},{});}
         cache.execution_poisoned=true;const auto compute_start=clock_type::now();
+        if(llama_dsv41_attribution_active(in.position_offset+in.start,in.count)){
+            ggml_backend_synchronize(backend);
+            llama_dsv41_attribution_write(input.residual,in.position_offset+in.start,in.count,in.layer,11,5120*4);
+            if(in.layer==0)llama_dsv41_attribution_write(input.previous_pre,in.position_offset+in.start,in.count,in.layer,12,4);
+        }
 #if defined(GGML_USE_CUDA)
         ggml_ds4_native_half_stats expert_before{},expert_after{};
         const auto index_before=index_cublas?ggml_backend_cuda_dsv41_index_cublas_queued():0;
@@ -1522,6 +1555,13 @@ bool llama_dsv41_tile_executor::run(const request&in,const llama_dsv41_layer_gra
         // Both events precede the synchronize on the same stream, so they are complete here.
         if(tile_stream)pinned_storage::ok(cudaEventElapsedTime(&tile_gpu_ms,tile_events[0],tile_events[1]),"Tile timing elapsed read failed");
 #endif
+        if(llama_dsv41_attribution_active(in.position_offset+in.start,in.count)){
+            for(const auto &stage:attribution_stages)
+                llama_dsv41_attribution_write(stage.second,in.position_offset+in.start,in.count,in.layer,stage.first,
+                    stage.first==1?5120*4:stage.first==7||stage.first==9?512*64:stage.first==8?512:5120);
+            llama_dsv41_attribution_write(values.residual,in.position_offset+in.start,in.count,in.layer,6,5120*4);
+            llama_dsv41_attribution_write(hash_experts,in.position_offset+in.start,in.count,in.layer,3,6);
+        }
         if(llama_dsv41_hash_dump_enabled()){
             std::vector<int32_t>experts;
             if(hash_experts){experts.resize(size_t(ggml_nelements(hash_experts)));ggml_backend_tensor_get(hash_experts,experts.data(),0,experts.size()*4);}
