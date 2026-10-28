@@ -402,6 +402,18 @@
       "sha256": "036246682a11aec57bc4da565f7e4d268a5760eca5f20f167aafc4d5cdbb28f2",
       "media_type": "image/png",
       "review": "Visually inspected actual headless stack WebUI. Synthetic red-square, weather and recall prompts only; actual sampler controls, advancing progress and numerical context/rate statistics visible. No addresses, credentials or personal paths visible. Shared single-engine producer profile."
+    },
+    {
+      "path": "examples/glm53_flash/round4-dsv-recall.png",
+      "media_type": "image/png",
+      "sha256": "912655a3e0773a9d31dac84b976c575d5b4668ee0c4c502117aa34efba15c3d0",
+      "review": "Visually reviewed the real browser screenshot: synthetic weather-station recall/continuation, model name and live statistics only; no credentials, private identity or machine paths. Pixel-only PNG verified by the release gate."
+    },
+    {
+      "path": "examples/glm53_flash/round4-dsv-speed.png",
+      "media_type": "image/png",
+      "sha256": "eead8509ac2d3b7bc0066db6bddb33e36e547f70f2ea70ca709f6c9d99a11894",
+      "review": "Visually reviewed the real browser screenshot: synthetic weather-station recall/continuation, model name and live statistics only; no credentials, private identity or machine paths. Pixel-only PNG verified by the release gate."
     }
   ]
 }

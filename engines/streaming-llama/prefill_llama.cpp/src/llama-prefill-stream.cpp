@@ -743,6 +743,8 @@ static void collect_tensors_from_layer(const llama_layer & layer,
     PUSH_IF(indexer_proj)
     PUSH_IF(indexer_attn_k)
     PUSH_IF(indexer_attn_q_b)
+    PUSH_IF(indexer_kpool_gate)
+    PUSH_IF(indexer_kpool_ape)
 
     // V4.1 projections/gates are ordinary per-layer streamed weights. The
     // opaque Engram tables intentionally have no tensor in this list: their
@@ -779,7 +781,7 @@ size_t llama_layer_weight_bytes(const llama_model * model, int layer_idx) {
 void prefill_collect_layer_tensors(const llama_model *              model,
                                    std::vector<layer_tensor_info> & out_layers,
                                    size_t &                         out_max_layer_bytes) {
-    const int n_layer = model->hparams.n_layer;
+    const int n_layer = model->hparams.n_layer - model->hparams.nextn_predict_layers;
     out_layers.resize(n_layer);
     out_max_layer_bytes = 0;
 
@@ -875,7 +877,7 @@ static bool is_attention_tensor(const char * name) {
 //
 size_t prefill_collect_attention_tensors(const llama_model *              model,
                                          std::vector<layer_tensor_info> & out_layers) {
-    const int n_layer = model->hparams.n_layer;
+    const int n_layer = model->hparams.n_layer - model->hparams.nextn_predict_layers;
     out_layers.resize(n_layer);
     size_t total_attn_bytes = 0;
 
@@ -1057,7 +1059,12 @@ static void collect_persistent_tensors(const llama_model *              model,
     out_total_bytes = 0;
 
 #define PUSH_PERSIST(field)                                \
-    if (model->field) {                                    \
+    /* The WF loader already places some globals on the GPU. Keep their \
+     * original owner; tensor_set below accepts a host source, so treating a \
+     * device pointer as orig_data both duplicates VRAM and makes an invalid \
+     * HostToDevice copy. */                               \
+    if (model->field && !(model->field->buffer && model->field->data && \
+            !ggml_backend_buffer_is_host(model->field->buffer))) { \
         tensor_remap_entry e;                              \
         e.tensor      = model->field;                      \
         e.orig_buffer = model->field->buffer;              \
@@ -1290,7 +1297,19 @@ int llama_prefill_stream(llama_context *                     ctx,
         LLAMA_LOG_ERROR("%s: [DIAG] llama_get_model returned null!\n", __func__);
         return -1;
     }
-    const int n_layer = model->hparams.n_layer;
+    // The target graph excludes NextN/MTP blocks. They have no target nodes or
+    // streaming weights and must not become empty trailing WF stages.
+    const int n_layer = model->hparams.n_layer - model->hparams.nextn_predict_layers;
+
+#ifdef GGML_USE_CUDA
+    // WF skips host weight copies; a CPU convolution fallback would consume
+    // sentinel weights. Refuse unsupported CUDA geometry before executing it.
+    if (model->arch == LLM_ARCH_GLM5_NEXT && model->hparams.wf_active &&
+            (model->hparams.n_head()*model->hparams.n_embd_head_kda) % 128 != 0) {
+        LLAMA_LOG_ERROR("%s: GLM streamed KDA convolution requires projection divisible by 128; CPU fallback is unsafe with sentinel weights\n", __func__);
+        return -1;
+    }
+#endif
 
     const char * dsv4_route_trace_path = std::getenv("LLAMA_DSV4_ROUTE_TRACE");
     const bool dsv4_route_trace_enabled =
@@ -2110,9 +2129,14 @@ int llama_prefill_stream(llama_context *                     ctx,
                     // All layers share the same WF buffer (reused per layer),
                     // so all layers' tensors point to overlapping ranges.
                     // This tells the allocator to avoid the WF buffer range.
-                    size_t data_offset = offset % wf_buf_cap;
+                    // Graph views cache this address during allocation. Use
+                    // the exact same aligned packing as WF registration and
+                    // wf_adapter_remap_tensors; a tightly packed byte sum leaves
+                    // every view after the first padding gap on stale bytes.
+                    const size_t data_offset = entry.alloc_size > 0 ? entry.alloc_offset : offset;
+                    GGML_ASSERT(data_offset <= wf_buf_cap && entry.nbytes <= wf_buf_cap-data_offset);
                     entry.tensor->data = (char *)wf_buf_base + data_offset;
-                    offset += entry.nbytes;
+                    offset = data_offset + (entry.alloc_size > 0 ? entry.alloc_size : entry.nbytes);
                 }
             }
             LLAMA_LOG_INFO("%s: [DIAG] tensor remap to WF buffer complete\n", __func__);

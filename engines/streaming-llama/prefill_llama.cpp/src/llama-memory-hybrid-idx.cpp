@@ -541,8 +541,15 @@ void llama_memory_hybrid_idx_context::seek(size_t idx) {
         ctx_idx->seek(idx);
     }
 
-    // apply() rebuilds the k-pool state for the ubatch it lands on
     i_cur = idx;
+    // The layer-major executor applies all ubatches once, then seeks repeatedly
+    // without re-applying their memory mutations. Rebuild the lightweight pool
+    // selection against the committed layout for the selected ubatch too.
+    if (kpool_track() && kpool_st) {
+        mem->kpool_layout_update();
+        kpool_build_state(get_ubatch());
+        i_kpool = i_cur;
+    }
 }
 
 bool llama_memory_hybrid_idx_context::kpool_track() const {

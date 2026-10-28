@@ -3678,6 +3678,13 @@ static bool wf_dstorage_transfer_layer(wf_context * wf, int layer_idx, int gpu_i
 static bool wf_dstorage_transfer_range(wf_context * wf, int layer_idx,
                                         void * dest_buf, size_t byte_start, size_t byte_end) {
     if (wf->ds_failed.load(std::memory_order_acquire)) return false;
+    // This helper is the staging relay. Direct-compute/prefetch heaps have no
+    // staging allocation and must use their own full-layer transfer path.
+    if (!dest_buf || !wf->ds_stage.cuda_ptr || byte_end < byte_start) {
+        WF_ERR("DirectStorage range relay requires live staging and a valid destination/range");
+        wf->ds_failed.store(true, std::memory_order_release);
+        return false;
+    }
     std::lock_guard<std::mutex> ds_lock(wf->ds_queue_mutex);
     auto & layer = wf->layers[layer_idx];
     IDStorageQueue * queue = wf->ds_queue;
@@ -5728,6 +5735,12 @@ void * wf_wait_layer_gpu(wf_context * wf, int layer_idx) {
 void wf_prefetch_next_layer(wf_context * wf, int current_layer_idx) {
 #ifdef WF_HAS_DSTORAGE
     if (!wf || !wf->prefetch_buf || wf->prefetch_buf_size == 0 || !wf->ds_initialized) return;
+    // The direct path's prefetch buffer IS its imported DS destination heap;
+    // ds_stage.cuda_ptr is intentionally null. The staging-only range relay
+    // issued a cudaMemcpy from null here and left cudaErrorInvalidValue for
+    // the next layer's first kernel. The normal direct full-layer fetch owns
+    // this heap and its fence ordering; do not send it through the relay.
+    if (wf->ds_direct_mode) return;
 
     int next_il = current_layer_idx + wf->dir;   // +dir: forward next layer, reverse previous layer
     if (next_il < 0 || next_il >= (int)wf->layers.size() || wf->layers[next_il].total_bytes == 0) return;

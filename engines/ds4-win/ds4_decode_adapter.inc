@@ -27,6 +27,7 @@ static struct {
     ds4_gpu_tensor window[40], compressed[4], index_cache[4], previous_kv[4], previous_score[4];
     ds4_gpu_tensor *spare_kv, *spare_score;   /* ratio-1 owner 3 keeps no pool tail */
 } g_ds4x;
+static int ds4glm_is_open(void);
 
 static void ds4x_set_error(char *error, size_t cap, const char *message) {
     if (error && cap) snprintf(error, cap, "%s", message);
@@ -36,7 +37,7 @@ static void ds4x_set_error(char *error, size_t cap, const char *message) {
  * sentinel embeddings and V4.1 image layout, without loading an LLM session. */
 DS4X_EXPORT int ds4x_vision_file(const char *model_path, const char *vision_path,
         const char *image_path, const char *output_path, char *error, size_t cap) {
-    if (g_ds4x.open || !model_path || !vision_path || !image_path || !output_path) {
+    if (g_ds4x.open || ds4glm_is_open() || !model_path || !vision_path || !image_path || !output_path) {
         ds4x_set_error(error,cap,"Vision encoding requires an isolated worker");return 0;
     }
     ds4_engine *e=calloc(1,sizeof(*e));if(!e){ds4x_set_error(error,cap,"Vision metadata allocation failed");return 0;}ds4_vision_embedding embedding={0};ds4_vision_span span={0};ds4_tokens tokens={0};
@@ -89,7 +90,7 @@ DS4X_EXPORT int ds4x_vision_file(const char *model_path, const char *vision_path
 }
 
 DS4X_EXPORT int ds4x_open(const char *model_path, uint32_t ctx, char *error, size_t cap) {
-    if (g_ds4x.open) { ds4x_set_error(error, cap, "ds4x already open"); return 0; }
+    if (g_ds4x.open || ds4glm_is_open()) { ds4x_set_error(error, cap, "external decoder already open"); return 0; }
     if (!model_path || !ctx) { ds4x_set_error(error, cap, "ds4x_open requires a model and context"); return 0; }
     model_open(&g_ds4x.model, model_path, false, false);
     config_validate_model(&g_ds4x.model);
@@ -297,4 +298,5 @@ DS4X_EXPORT void ds4x_close(void) {
     model_close(&g_ds4x.model);
     memset(&g_ds4x, 0, sizeof(g_ds4x));
 }
+#include "ds4_glm_decode_adapter.inc"
 #endif
