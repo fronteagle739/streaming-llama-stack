@@ -86,3 +86,23 @@ MXFP4 path. See [the format and conversion notes](../../docs/NATIVEFP4.md).
 Use `--profile-stages` in separate diagnostic runs to collect per-node GPU
 timings and tile walls; profiling synchronizes operations and must not be
 mixed into the headline throughput comparison.
+
+The accepted diagnostic records are in `proxy-stage-profiles.json`. At 49,555
+tokens, Q4 took 29.875 s: stream wait 7.364 s, experts 4.590 s, sparse attention
+2.250 s, indexer 0.726 s, other 14.945 s. The **Q4→MXFP4 requant (lossy), speed
+proxy for native FP4** took 29.547 s: 8.201 / 3.336 / 2.245 / 0.726 / 15.038 s
+in the same order. Other includes projections, compressor/HC work, scheduling,
+startup and carry work; it is a wall residual, not a measured compressor timer.
+
+Dispatch witnesses confirm the stored-weight GGML native FP4 MMA path, with
+no runtime weight conversion. FlashInfer W4A8 is still a standalone benchmark,
+not the kernel behind these engine numbers. The proxy expert work achieved
+132.80 effective TFLOPS versus about 490 TFLOPS on the balanced standalone
+FlashInfer fixture; these different routing workloads are not a matched
+kernel comparison. The complete prompt fetches 298.84 GB of model tensors,
+not the entire 501.61 GB file. Engram rows are fetched on demand.
+
+New comparisons use 100K prompts as the primary point. The longer campaigns
+and decode MMA qualification are deferred while attention and single-pass
+experiments have higher GPU priority. No default changes follow from these
+lossy or diagnostic results.

@@ -1,0 +1,356 @@
+{
+  "status": "IN_PROGRESS",
+  "profiles": [
+    {
+      "status": "PASS",
+      "arm": "q4",
+      "label": "Q4_K/Q8_0 control",
+      "prompt_tokens": 49555,
+      "sweeps": [
+        49555
+      ],
+      "diagnostic_only": true,
+      "prefill_seconds": 29.875,
+      "stage_seconds": {
+        "stream_wait": 7.363770799999999,
+        "expert_gemm": 4.590374272581997,
+        "sparse_attention_core": 2.2500844136860003,
+        "indexer_core": 0.726076994234,
+        "other_wall": 14.944693519498006
+      },
+      "gpu_seconds": {
+        "sparse_attention_core": 2.2500844136860003,
+        "indexer_core": 0.726076994234,
+        "other_gpu": 5.09605766335818,
+        "expert_gemm": 4.590374272581997
+      },
+      "layer_count": 40,
+      "fetched_bytes": 315825603008,
+      "routed_expert_flops": 443068003123200,
+      "routed_effective_tflops": 96.5211063005507,
+      "nominal_5090_dense_fp4_tflops": 1676,
+      "fp4_roof_ratio_reference_only": null,
+      "useful_fetch_bytes_per_wall_second": 10571568301.523012,
+      "layer_ledger_ms": {
+        "wall_ms": 26802.2595,
+        "acquire_ms": 7363.770799999999,
+        "carry_begin_ms": 0.06569999999999998,
+        "executor_wall_ms": 19260.47459999999,
+        "executor_phase_gap_ms": 57.41299999999998,
+        "engram_ms": 0.8744000000000001,
+        "carry_read_ms": 0.21189999999999995,
+        "carry_write_ms": 0.29880000000000023,
+        "carry_commit_ms": 0.08379999999999999,
+        "provider_release_ms": 0.16519999999999996,
+        "scaffold_ms": 176.3143
+      },
+      "definitions": {
+        "stream_wait": "Sum of exposed per-layer acquire wall time; transfer-duration sums overlap compute.",
+        "expert_gemm": "MUL_MAT_ID nodes whose weight origin is a routed expert.",
+        "sparse_attention_core": "FLASH_ATTN nodes; projection, RoPE and packing remain in other.",
+        "indexer_core": "Index scores, their top-k, candidate blocks and selected masks.",
+        "other_wall": "Wall residual including other GPU work, CPU scheduling, carry/Engram work and startup."
+      },
+      "caveat": "CUDA profiling synchronizes operations. These diagnostic walls are not headline throughput or an unsynchronized overlap decomposition.",
+      "producer_sha256": "9b634ae28a62d1e84b762ff88403b6aadb4709fd7d363d59fb294f74a9b7f82d",
+      "decode_library_sha256": "91dd102586c5afad4a2c94a5ba52c2be06149ce96752747dbdbb86a353930b38",
+      "model_sha256": "2cc6bc254f22a0238020e61e931c0cac865218aada1eed9c0036d9f4031c6e5f",
+      "input_sha256": "8be73d98c9ac8c19cd46796c9836f16f0fafe0cc4c2e1c1f4177ecedceb4420c",
+      "measurement_sha256": "e614ee0171ef5f31e22e38edc9a3f34dd2192f5abf4a4c51f0ca31cd682a2a08",
+      "trace_sha256": "159ab7524c903bea3e254a93463396a0dd73f6be55fcb47e021141cbba89327d",
+      "guard": {
+        "host_budget_gib": 7.25,
+        "floor_gib": 1,
+        "peak_tree_rss": 6158225408,
+        "min_available": 8784269312,
+        "cleanup_confirmed": true
+      }
+    },
+    {
+      "status": "PASS",
+      "arm": "proxy",
+      "label": "Q4\u2192MXFP4 requant (lossy), speed proxy for native FP4",
+      "prompt_tokens": 49555,
+      "sweeps": [
+        49555
+      ],
+      "diagnostic_only": true,
+      "prefill_seconds": 29.54700000002049,
+      "stage_seconds": {
+        "stream_wait": 8.2009411,
+        "expert_gemm": 3.336387775536002,
+        "sparse_attention_core": 2.244741694391,
+        "indexer_core": 0.726490047076,
+        "other_wall": 15.038439383017487
+      },
+      "gpu_seconds": {
+        "sparse_attention_core": 2.244741694391,
+        "indexer_core": 0.726490047076,
+        "other_gpu": 5.075348063928162,
+        "expert_gemm": 3.336387775536002
+      },
+      "layer_count": 40,
+      "fetched_bytes": 298838671808,
+      "routed_expert_flops": 443068003123200,
+      "routed_effective_tflops": 132.79871313879863,
+      "nominal_5090_dense_fp4_tflops": 1676,
+      "fp4_roof_ratio_reference_only": 0.07923550903269608,
+      "useful_fetch_bytes_per_wall_second": 10114010620.631292,
+      "layer_ledger_ms": {
+        "wall_ms": 26413.6275,
+        "acquire_ms": 8200.9411,
+        "carry_begin_ms": 0.08129999999999998,
+        "executor_wall_ms": 18058.60470000001,
+        "executor_phase_gap_ms": 58.5377,
+        "engram_ms": 0.9125,
+        "carry_read_ms": 0.22240000000000001,
+        "carry_write_ms": 0.2995,
+        "carry_commit_ms": 0.08630000000000002,
+        "provider_release_ms": 0.12799999999999995,
+        "scaffold_ms": 152.35169999999997
+      },
+      "definitions": {
+        "stream_wait": "Sum of exposed per-layer acquire wall time; transfer-duration sums overlap compute.",
+        "expert_gemm": "MUL_MAT_ID nodes whose weight origin is a routed expert.",
+        "sparse_attention_core": "FLASH_ATTN nodes; projection, RoPE and packing remain in other.",
+        "indexer_core": "Index scores, their top-k, candidate blocks and selected masks.",
+        "other_wall": "Wall residual including other GPU work, CPU scheduling, carry/Engram work and startup."
+      },
+      "caveat": "CUDA profiling synchronizes operations. These diagnostic walls are not headline throughput or an unsynchronized overlap decomposition.",
+      "producer_sha256": "9b634ae28a62d1e84b762ff88403b6aadb4709fd7d363d59fb294f74a9b7f82d",
+      "decode_library_sha256": "91dd102586c5afad4a2c94a5ba52c2be06149ce96752747dbdbb86a353930b38",
+      "model_sha256": "cf05bdccb86b823ce794eab2ca033a649b6a2f5c03cee8a4b177d86de017ae44",
+      "input_sha256": "8be73d98c9ac8c19cd46796c9836f16f0fafe0cc4c2e1c1f4177ecedceb4420c",
+      "measurement_sha256": "b3a6d63b61fdd314b861238da89f949cd8482909ee86d52acc172c7e6771c318",
+      "trace_sha256": "caaef934cc80d9f8a4b814fd4906b2a2ca7e579eba87df8a355d78fe5e42ff2e",
+      "guard": {
+        "host_budget_gib": 7.25,
+        "floor_gib": 1,
+        "peak_tree_rss": 6173679616,
+        "min_available": 8298651648,
+        "cleanup_confirmed": true
+      }
+    },
+    {
+      "status": "PASS",
+      "arm": "q4",
+      "label": "Q4_K/Q8_0 control",
+      "prompt_tokens": 200000,
+      "sweeps": [
+        49152,
+        49152,
+        49152,
+        52544
+      ],
+      "diagnostic_only": true,
+      "prefill_seconds": 105.54699999996228,
+      "stage_seconds": {
+        "stream_wait": 8.214885200000001,
+        "expert_gemm": 17.972370442694,
+        "sparse_attention_core": 8.803424201042,
+        "indexer_core": 8.87317749417201,
+        "other_wall": 61.68314266205427
+      },
+      "gpu_seconds": {
+        "sparse_attention_core": 8.803424201042,
+        "indexer_core": 8.87317749417201,
+        "other_gpu": 29.896971817973924,
+        "expert_gemm": 17.972370442694
+      },
+      "layer_count": 103,
+      "fetched_bytes": 814973249000,
+      "routed_expert_flops": 1784757406924800,
+      "routed_effective_tflops": 99.30562095943927,
+      "nominal_5090_dense_fp4_tflops": 1676,
+      "fp4_roof_ratio_reference_only": null,
+      "useful_fetch_bytes_per_wall_second": 7721425042.874656,
+      "layer_ledger_ms": {
+        "wall_ms": 99229.9553,
+        "acquire_ms": 8214.8852,
+        "carry_begin_ms": 0.13090000000000007,
+        "executor_wall_ms": 90440.96030000004,
+        "executor_phase_gap_ms": 212.69049999999996,
+        "engram_ms": 22.735899999999997,
+        "carry_read_ms": 0.9796000000000001,
+        "carry_write_ms": 1.2913000000000012,
+        "carry_commit_ms": 0.21770000000000003,
+        "provider_release_ms": 0.3532000000000001,
+        "scaffold_ms": 548.4012
+      },
+      "definitions": {
+        "stream_wait": "Sum of exposed per-layer acquire wall time; transfer-duration sums overlap compute.",
+        "expert_gemm": "MUL_MAT_ID nodes whose weight origin is a routed expert.",
+        "sparse_attention_core": "FLASH_ATTN nodes; projection, RoPE and packing remain in other.",
+        "indexer_core": "Index scores, their top-k, candidate blocks and selected masks.",
+        "other_wall": "Wall residual including other GPU work, CPU scheduling, carry/Engram work and startup."
+      },
+      "caveat": "CUDA profiling synchronizes operations. These diagnostic walls are not headline throughput or an unsynchronized overlap decomposition.",
+      "producer_sha256": "9b634ae28a62d1e84b762ff88403b6aadb4709fd7d363d59fb294f74a9b7f82d",
+      "decode_library_sha256": "91dd102586c5afad4a2c94a5ba52c2be06149ce96752747dbdbb86a353930b38",
+      "model_sha256": "2cc6bc254f22a0238020e61e931c0cac865218aada1eed9c0036d9f4031c6e5f",
+      "input_sha256": "01cc49bd78b532e9046cd82ed104f30656f34c16c734a74f9b9be2517ba049da",
+      "measurement_sha256": "da9dfac289a00385d06c2be2637d2d4f491d7b642e5c217dd252886464eb63d7",
+      "trace_sha256": "4969e449804332ab69ce4cbb4e5e6fbfbc85f91048f184331bd3f7faaa374066",
+      "guard": {
+        "host_budget_gib": 7.25,
+        "floor_gib": 1,
+        "peak_tree_rss": 6471520256,
+        "min_available": 7621615616,
+        "cleanup_confirmed": true
+      }
+    },
+    {
+      "status": "PASS",
+      "arm": "proxy",
+      "label": "Q4\u2192MXFP4 requant (lossy), speed proxy for native FP4",
+      "prompt_tokens": 200000,
+      "sweeps": [
+        49152,
+        49152,
+        49152,
+        52544
+      ],
+      "diagnostic_only": true,
+      "prefill_seconds": 100.23500000004424,
+      "stage_seconds": {
+        "stream_wait": 8.6512932,
+        "expert_gemm": 13.107741120164011,
+        "sparse_attention_core": 8.815632334890001,
+        "indexer_core": 8.873797349490994,
+        "other_wall": 60.786535995499236
+      },
+      "gpu_seconds": {
+        "sparse_attention_core": 8.815632334890001,
+        "indexer_core": 8.873797349490994,
+        "other_gpu": 29.933993407505817,
+        "expert_gemm": 13.107741120164011
+      },
+      "layer_count": 103,
+      "fetched_bytes": 771231901160,
+      "routed_expert_flops": 1784757406924800,
+      "routed_effective_tflops": 136.16056272115847,
+      "nominal_5090_dense_fp4_tflops": 1676,
+      "fp4_roof_ratio_reference_only": 0.08124138587181293,
+      "useful_fetch_bytes_per_wall_second": 7694237553.346232,
+      "layer_ledger_ms": {
+        "wall_ms": 94053.98420000004,
+        "acquire_ms": 8651.2932,
+        "carry_begin_ms": 0.13230000000000003,
+        "executor_wall_ms": 84886.64199999999,
+        "executor_phase_gap_ms": 198.12049999999988,
+        "engram_ms": 3.4892,
+        "carry_read_ms": 0.7036999999999997,
+        "carry_write_ms": 0.9529999999999996,
+        "carry_commit_ms": 0.1987,
+        "provider_release_ms": 0.3186000000000001,
+        "scaffold_ms": 510.25350000000003
+      },
+      "definitions": {
+        "stream_wait": "Sum of exposed per-layer acquire wall time; transfer-duration sums overlap compute.",
+        "expert_gemm": "MUL_MAT_ID nodes whose weight origin is a routed expert.",
+        "sparse_attention_core": "FLASH_ATTN nodes; projection, RoPE and packing remain in other.",
+        "indexer_core": "Index scores, their top-k, candidate blocks and selected masks.",
+        "other_wall": "Wall residual including other GPU work, CPU scheduling, carry/Engram work and startup."
+      },
+      "caveat": "CUDA profiling synchronizes operations. These diagnostic walls are not headline throughput or an unsynchronized overlap decomposition.",
+      "producer_sha256": "9b634ae28a62d1e84b762ff88403b6aadb4709fd7d363d59fb294f74a9b7f82d",
+      "decode_library_sha256": "91dd102586c5afad4a2c94a5ba52c2be06149ce96752747dbdbb86a353930b38",
+      "model_sha256": "cf05bdccb86b823ce794eab2ca033a649b6a2f5c03cee8a4b177d86de017ae44",
+      "input_sha256": "01cc49bd78b532e9046cd82ed104f30656f34c16c734a74f9b9be2517ba049da",
+      "measurement_sha256": "7738ae0acd4067aaf9fb90a3cd7d8caaf433550f7565ecdf58ff396ed83066c7",
+      "trace_sha256": "ba26369a795eb5c8850cb2e10fd6d214ac3fb83de6ef57696387bf967d040b43",
+      "guard": {
+        "host_budget_gib": 7.25,
+        "floor_gib": 1,
+        "peak_tree_rss": 6478729216,
+        "min_available": 7912222720,
+        "cleanup_confirmed": true
+      }
+    },
+    {
+      "status": "PASS",
+      "arm": "q4",
+      "label": "Q4_K/Q8_0 control",
+      "prompt_tokens": 1000000,
+      "sweeps": [
+        49152,
+        49152,
+        49152,
+        49152,
+        49152,
+        49152,
+        49152,
+        49152,
+        49152,
+        49152,
+        49152,
+        49152,
+        49152,
+        49152,
+        49152,
+        49152,
+        49152,
+        49152,
+        49152,
+        49152,
+        16960
+      ],
+      "diagnostic_only": true,
+      "prefill_seconds": 1012.390000000014,
+      "stage_seconds": {
+        "stream_wait": 10.8971545,
+        "expert_gemm": 88.95049385708987,
+        "sparse_attention_core": 43.849967196628995,
+        "indexer_core": 195.58809842675487,
+        "other_wall": 673.1042860195403
+      },
+      "gpu_seconds": {
+        "indexer_core": 195.58809842675487,
+        "sparse_attention_core": 43.849967196628995,
+        "other_gpu": 499.06743151692854,
+        "expert_gemm": 88.95049385708987
+      },
+      "layer_count": 460,
+      "fetched_bytes": 3643476576288,
+      "routed_expert_flops": 8919268510924800,
+      "routed_effective_tflops": 100.27227645587583,
+      "nominal_5090_dense_fp4_tflops": 1676,
+      "fp4_roof_ratio_reference_only": null,
+      "useful_fetch_bytes_per_wall_second": 3598886374.1126933,
+      "layer_ledger_ms": {
+        "wall_ms": 989838.5432000005,
+        "acquire_ms": 10897.154499999999,
+        "carry_begin_ms": 0.4225999999999993,
+        "executor_wall_ms": 975721.3836000004,
+        "executor_phase_gap_ms": 1048.1870999999994,
+        "engram_ms": 17.8237,
+        "carry_read_ms": 4.435900000000004,
+        "carry_write_ms": 6.028399999999997,
+        "carry_commit_ms": 0.908300000000001,
+        "provider_release_ms": 1.4660999999999955,
+        "scaffold_ms": 3188.920100000002
+      },
+      "definitions": {
+        "stream_wait": "Sum of exposed per-layer acquire wall time; transfer-duration sums overlap compute.",
+        "expert_gemm": "MUL_MAT_ID nodes whose weight origin is a routed expert.",
+        "sparse_attention_core": "FLASH_ATTN nodes; projection, RoPE and packing remain in other.",
+        "indexer_core": "Index scores, their top-k, candidate blocks and selected masks.",
+        "other_wall": "Wall residual including other GPU work, CPU scheduling, carry/Engram work and startup."
+      },
+      "caveat": "CUDA profiling synchronizes operations. These diagnostic walls are not headline throughput or an unsynchronized overlap decomposition.",
+      "producer_sha256": "9b634ae28a62d1e84b762ff88403b6aadb4709fd7d363d59fb294f74a9b7f82d",
+      "decode_library_sha256": "91dd102586c5afad4a2c94a5ba52c2be06149ce96752747dbdbb86a353930b38",
+      "model_sha256": "2cc6bc254f22a0238020e61e931c0cac865218aada1eed9c0036d9f4031c6e5f",
+      "input_sha256": "2116d1cf3eed9b52155436c55d0cfc571cd6926c9e90224a299c9a6fa312f72d",
+      "measurement_sha256": "4f76e14e137089603767b2cdb896398e6e2144af429840b8179cc0361100c173",
+      "trace_sha256": "69f42acea4793194471f90acdcfb8c6aa39162089431b9126e25430a39f51b57",
+      "guard": {
+        "host_budget_gib": 7.25,
+        "floor_gib": 1,
+        "peak_tree_rss": 6229749760,
+        "min_available": 7230181376,
+        "cleanup_confirmed": true
+      }
+    }
+  ]
+}
