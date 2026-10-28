@@ -72,6 +72,14 @@ inline fold_plan fold(uint32_t n, uint32_t s, uint32_t cap, uint32_t fold_cap = 
 // The (first, count) sweep list the producer runs: fold(n, s, cap, fold_cap) when
 // s is set, else today's split(n, cap). Empty = refused.
 struct extent { uint32_t first = 0, count = 0; };
+// A replay suffix may start between the resident prefix and its RAM staging
+// slot. Neither compute nor final export may straddle those physical owners.
+inline uint32_t tile_count(uint32_t first, uint32_t end, uint32_t step, uint32_t resident_prefix = 0) {
+    if(first>=end||!step)return 0;
+    uint32_t count=std::min(step,end-first);
+    if(resident_prefix&&first<resident_prefix)count=std::min(count,resident_prefix-first);
+    return count;
+}
 inline std::vector<extent> plan_sweeps(uint32_t n, uint32_t cap, uint32_t s = 0, uint32_t fold_cap = 0) {
     std::vector<extent> out;
     if (s) {

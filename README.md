@@ -72,9 +72,11 @@ more on machines with much more RAM; that is untested and listed in the
 
 **Streaming prefill.** Prefill reads each layer's weights once per pass and runs
 the whole prompt chunk through that layer before moving on. The cost of reading
-483 GiB is shared by every token in the pass, so longer prompts run faster per
-token. DirectStorage reads the next layer while the GPU computes the current one.
-DeepSeek V4.1 uses 49,152-token passes.
+the weights is shared by every token in the pass. A complete DeepSeek V4.1 Q4
+pass reads 315.8 GB; Engram rows are gathered separately. DirectStorage reads the
+next layer while the GPU computes the current one. DeepSeek V4.1 uses
+49,152-token passes, with optional RAM-admitted chunk grouping.
+[Routed reads, the exact replay cone and byte accounting](docs/MULTICHUNK_PREFILL.md).
 
 **Expert-cache decode.** Dense weights stay in VRAM. Routed experts live in a VRAM
 cache, and misses are read from NVMe. After the first hundred or so tokens the
