@@ -12,6 +12,7 @@ from datetime import datetime, timezone
 import hashlib
 import json
 import os
+import re
 from pathlib import Path
 import secrets
 import struct
@@ -100,11 +101,6 @@ def run_child(args, cfg, arm, label):
         result.update(prefill_seconds=producer.prefill_seconds,tok_s=len(tokens)/producer.prefill_seconds,
                       plan=producer.prefill_plan,ready=producer.process.ready,
                       native_directory=str(producer.directory),prefill_finished_at=time.monotonic())
-        if args.append:
-            start=time.monotonic()
-            result['append']=producer.prefill(tokens[-args.append:])
-            result['append_seconds']=time.monotonic()-start
-            result['append_tokens']=args.append
         producer.quality(0)
         logits=root/(label+'.logits.f32')
         first=producer.decode(1)
@@ -136,6 +132,24 @@ def run_child(args, cfg, arm, label):
                 result['turns'].append(turn)
         result['forced']=producer.decode_forced(forced,logits)
         result['logits_sha256']=hashlib.file_digest(logits.open('rb'),'sha256').hexdigest()
+        if args.append:
+            meta=read_header(model)['metadata']
+            tokenizer=Tokenizer(meta['tokenizer.ggml.tokens'],meta['tokenizer.ggml.merges'])
+            question=tokenizer.text('\nRepeat the original archive retrieval key exactly.')
+            fill=args.append-len(question)-4
+            if fill<0:raise ValueError('Append too short for the retrieval question and chat markers')
+            body=tokenizer.text('Consider the previous conversation. ')
+            turn=[tokenizer.eos,tokenizer.user]+(body*(fill//len(body)+1))[:fill]+question+[tokenizer.assistant,tokenizer.think_end]
+            assert len(turn)==args.append
+            result['append_input_sha256']=hashlib.sha256(struct.pack('<'+'I'*len(turn),*turn)).hexdigest()
+            start=time.monotonic()
+            result['append']=producer.prefill(turn)
+            result['append_seconds']=time.monotonic()-start
+            result['append_tokens']=args.append
+            result['append_first_token']=producer.decode(1)['tokens']
+            result['append_ttft_seconds']=time.monotonic()-start
+            result['append_frontier']=producer.decode_forced([0],root/(label+'.append.f32'))
+            result['append_recall']=producer.decode(32)
         if args.warmup:
             result['warmup']=producer.decode(args.warmup)
         start=time.monotonic();result['decode']=producer.decode(args.decode)
@@ -173,14 +187,18 @@ def main():
     p.add_argument('--engram-turns',type=int,choices=(0,3),default=0)
     p.add_argument('--resume',action='store_true')
     p.add_argument('--seed-file',type=Path)
+    p.add_argument('--config-name',default='config.json')
     p.add_argument('--child',choices=('control','candidate'))
     p.add_argument('--lease')
     args=p.parse_args()
+    if not re.fullmatch('[A-Za-z][A-Za-z0-9_-]{0,63}',args.experiment):raise ValueError('Use a bounded experiment label')
     if not 1<=args.count<=200000 or not 1<=args.decode<=128 or not 0<=args.warmup<=128:raise ValueError('Unbounded experiment')
     if not 0<=args.append<=256:raise ValueError('Unbounded append experiment')
     root=args.root.resolve()
     args.root=root
-    cfg=load(root/'config.json')
+    if Path(args.config_name).name!=args.config_name or not args.config_name.endswith('.json'):
+        raise ValueError('Config must be a JSON basename in the configured scratch root')
+    cfg=load(root/args.config_name)
     cfg['_pair_config_sha256']=hashlib.sha256(json.dumps(cfg,sort_keys=True,default=str).encode()).hexdigest()
     if Path(cfg['runtime_root']).resolve().parent!=root:
         raise ValueError('Runtime and evidence must use the one configured scratch root')
