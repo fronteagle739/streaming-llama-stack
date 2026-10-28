@@ -6,6 +6,7 @@ import os
 from pathlib import Path
 import re
 import subprocess
+import time
 import uuid
 import psutil
 from .journal import atomic_json
@@ -13,6 +14,17 @@ from .journal import atomic_json
 
 class AdmissionRefused(RuntimeError):
     pass
+
+
+def read_hold_text(path):
+    """Wait briefly for another admission's byte-range lock; never use stale holds."""
+    for attempt in range(51):
+        try:
+            return Path(path).read_text(encoding='utf-8-sig')
+        except PermissionError:
+            if attempt == 50:
+                raise
+            time.sleep(.02)
 
 
 def recover_leases(runtime_root, task='DS4STACK'):
@@ -136,7 +148,7 @@ class HoldWatcher:
             if stat.st_size > 16 * 1024**2:
                 raise RuntimeError('Shared hold ledger exceeds its observation budget')
             blocking = []
-            for line in active_holds(self.path.read_text(encoding='utf-8-sig'), mac=bool(self.mac)):
+            for line in active_holds(read_hold_text(self.path), mac=bool(self.mac)):
                 match = re.match(r'^(?:MAC |RTX )?ACTIVE:\s+(\S+)\s+(\S+)', line.strip())
                 if not match or (match[1], match[2].rstrip(';')) != (self.task, self.identity):
                     blocking.append(line)
