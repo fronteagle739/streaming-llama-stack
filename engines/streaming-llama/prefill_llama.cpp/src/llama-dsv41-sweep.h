@@ -179,7 +179,7 @@ public:
     // The provider of this completed owner (resident decode weights, expert cache).
     llama_dsv41_weight_provider *provider_for_external_decode();
     // LLAMADECODE: decode-sized fixed plan for an external decoder (no executor runs).
-    bool compact_for_external_decode(std::string &error);
+    bool compact_for_external_decode(std::string &error,bool release_host=false);
     // LLAMADECODE growable context cache: map the owner caches to cover `tokens`
     // positions before an external decoder writes there (no-op when fixed).
     bool ensure_context(uint32_t tokens,const char *phase,bool *grew,std::string &error);

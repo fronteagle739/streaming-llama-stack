@@ -11,6 +11,7 @@
 #include "llama-dsv41-cache.h"
 #include "llama-dsv41-device-admission.h"
 #include "llama-dsv41-host-plan-log.h"
+#include "llama-dsv41-host-memory.h"
 #include "llama-dsv41-executor.h"
 #include "boundary-capture.h"
 #include "llama-dsv41-resident-append.h"
@@ -258,6 +259,9 @@ bool llama_dsv41_sweep::open(const llama_dsv41_weight_provider::config &input_we
         }
         const uint64_t effective_hidden=options.fixed&&options.fixed->prefill_cache_ceiling?
             options.fixed->prefill_hidden_bytes:options.admitted_hidden_bytes;
+        // The append can restore the full prefill graph/host plan below.
+        // Return the previous owner's decode RAM before any new admission.
+        if(prefix)success(prefix->p->provider.release_host_cache(error),error);
         llama_dsv41_yoco::validate(options.yoco_keep);
         require(options.yoco_remote_state_version==0||(llama_dsv41_yoco::remote_compatible(options.yoco_keep,options.yoco_remote_state_version)&&options.capture_dspark),
             "YOCO remote state requires matching keep/version and complete mode3 DSpark capture");
@@ -492,6 +496,15 @@ bool llama_dsv41_sweep::open(const llama_dsv41_weight_provider::config &input_we
         require(measured.ok&&host<=options.admitted_host_bytes,
             "V4.1 provider/cache/graph/carry combined job exceeds total resource admission");
         if(row_cache_new)success(p->provider.create_engram_row_cache(row_cache_new,error),error);
+        if(options.fixed&&options.fixed->ram&&options.fixed->ram->suspended()){
+#ifdef _WIN32
+            MEMORYSTATUSEX memory{};memory.dwLength=sizeof(memory);
+            const uint64_t floor=std::max<uint64_t>(llama_dsv41_host_memory::runtime_min_free_bytes,512ull<<20);
+            require(GlobalMemoryStatusEx(&memory)&&memory.ullAvailPhys>=floor&&options.fixed->ram->size()<=memory.ullAvailPhys-floor,
+                "Restoring prefill carry would cross the physical RAM floor");
+#endif
+            options.fixed->ram->resume_pages();
+        }
         // LLAMADECODE_ENGRAM_EARLY: tokens known, file verified, job admitted:
         // the request's Engram rows start now, before RAM/DS/weight-fetch setup.
         if(!warmup&&!prefix)success(p->provider.start_engram_cold(error),error);
@@ -626,7 +639,7 @@ bool llama_dsv41_sweep::suspend_device(std::string&error){
         p->published.store(false);p->executor.reset();
         if(p->cache)p->cache->forget_owner_digests(); // device contents are dropped
         success(p->carry.retire_shared_ram(error),error);
-        f.ram->suspend_pages();
+        if(!f.ram->suspended())f.ram->suspend_pages();
         success(p->provider.suspend_device(error),error);
 #ifdef GGML_USE_CUDA
         size_t released=0;int blocks=0;
@@ -1205,10 +1218,16 @@ bool llama_dsv41_sweep::ensure_context(uint32_t tokens,const char*phase,bool*gre
     return p->cache->ensure_tokens(tokens,phase,grew,error);
 }
 uint64_t llama_dsv41_sweep::context_next_step_bytes()const{std::lock_guard<std::mutex>lock(p->mutex);return p->cache?p->cache->next_step_bytes():0;}
-bool llama_dsv41_sweep::compact_for_external_decode(std::string&error){
+bool llama_dsv41_sweep::compact_for_external_decode(std::string&error,bool release_host){
     std::lock_guard<std::mutex>lock(p->mutex);error.clear();
     try{
         require(p->state==implementation::completed&&!p->executor&&p->options.fixed,"External decode compaction requires a completed idle fixed owner");
+        auto&f=*p->options.fixed;
+        if(release_host&&f.ram&&!f.ram->suspended()&&!f.ram_registration){
+            ggml_backend_synchronize(p->backend);
+            success(p->carry.release_completed_ram(error),error);f.ram->suspend_pages();
+            std::fprintf(stderr,"LLAMADECODE_PREFILL_CARRY_RELEASE bytes=%llu frontier_certificate_kept=1 exports_use_gpu_owners=1\n",(unsigned long long)f.ram->size());
+        }
         if(!p->options.fixed->decode_compact&&decode_compact_enabled())compact_fixed(*p->options.fixed,p->options.admitted_hidden_bytes);
         return true;
     }catch(const std::exception&failure){error=failure.what();return false;}

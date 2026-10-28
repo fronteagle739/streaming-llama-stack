@@ -58,7 +58,7 @@ Native controls take effect at token boundaries. The response reports requested 
 | `--ds4-cuda-prefill-edge-vram` | ds4-win: `0` | Keep 0: retain the native core in VRAM during prefill. Values enabling core eviction are refused by this memory-resident launcher. |
 | `--ds4-cuda-streaming-expert-cache-class-isolation` | ds4-win: `0` | DS4_CUDA_STREAMING_EXPERT_CACHE_CLASS_ISOLATION: qualified preset/runtime setting; override for a different memory or arithmetic plan |
 | `--ds4-cuda-streaming-expert-cache-reserve-gb` | ds4-win: `2` | DS4_CUDA_STREAMING_EXPERT_CACHE_RESERVE_GB: qualified preset/runtime setting; override for a different memory or arithmetic plan |
-| `--ds4-cuda-streaming-host-cache-n` | ds4-win: `0` | DS4_CUDA_STREAMING_HOST_CACHE_N: qualified preset/runtime setting; override for a different memory or arithmetic plan |
+| `--ds4-cuda-streaming-host-cache-n` | ds4-win: `0` | Expert-count upper bound for the host cache. On the single engine it optionally caps LLAMADECODE_HOST_CACHE_MB; unset leaves byte/physical admission authoritative. |
 | `--ds4-host-memory-budget-mb` | ds4-win: `{native_commit_mb}` | Windows native private-commit cap in MiB, including WDDM GPU backing. Defaults to the qualified45056MiB ceiling bounded by job_commit_gib; physical RSS is separately guarded by host_budget_gib. |
 | `--ds4-metal-disable-v41-layer-prefill` | mac-ds4: `1` | DS4_METAL_DISABLE_V41_LAYER_PREFILL: qualified preset/runtime setting; override for a different memory or arithmetic plan |
 | `--ds4-metal-wired-core-kv` | mac-ds4: `1` | Use anonymous owned, mlock-protected shared Metal core, KV and tensor storage; allocation or wiring failure refuses startup. The launcher requires this for native Mac inference. |
@@ -142,6 +142,7 @@ Native controls take effect at token boundaries. The response reports requested 
 | `--xdg-cache-home` | ds4-win: `{runtime_root}/cache/xdg_cache_home`; mac-ds4: `{runtime_root}/cache/xdg_cache_home`; rtx-llama: `{runtime_root}/cache/xdg_cache_home`; image: `{runtime_root}/cache/xdg_cache_home`; video: `{runtime_root}/cache/xdg_cache_home`; studio: `{runtime_root}/cache/xdg_cache_home`; mlx-serve: `{runtime_root}/cache/xdg_cache_home`; mac-mlx: `{runtime_root}/cache/xdg_cache_home`; mac-llama: `{runtime_root}/cache/xdg_cache_home`; mac-mference: `{runtime_root}/cache/xdg_cache_home` | Runtime-local cache/temp directory; no model download is performed. |
 | `--zig-global-cache-dir` | ds4-win: `{runtime_root}/cache/zig_global_cache_dir`; mac-ds4: `{runtime_root}/cache/zig_global_cache_dir`; rtx-llama: `{runtime_root}/cache/zig_global_cache_dir`; image: `{runtime_root}/cache/zig_global_cache_dir`; video: `{runtime_root}/cache/zig_global_cache_dir`; studio: `{runtime_root}/cache/zig_global_cache_dir`; mlx-serve: `{runtime_root}/cache/zig_global_cache_dir`; mac-mlx: `{runtime_root}/cache/zig_global_cache_dir`; mac-llama: `{runtime_root}/cache/zig_global_cache_dir`; mac-mference: `{runtime_root}/cache/zig_global_cache_dir` | Runtime-local cache/temp directory; no model download is performed. |
 | `--zig-local-cache-dir` | ds4-win: `{runtime_root}/cache/zig_local_cache_dir`; mac-ds4: `{runtime_root}/cache/zig_local_cache_dir`; rtx-llama: `{runtime_root}/cache/zig_local_cache_dir`; image: `{runtime_root}/cache/zig_local_cache_dir`; video: `{runtime_root}/cache/zig_local_cache_dir`; studio: `{runtime_root}/cache/zig_local_cache_dir`; mlx-serve: `{runtime_root}/cache/zig_local_cache_dir`; mac-mlx: `{runtime_root}/cache/zig_local_cache_dir`; mac-llama: `{runtime_root}/cache/zig_local_cache_dir`; mac-mference: `{runtime_root}/cache/zig_local_cache_dir` | Runtime-local cache/temp directory; no model download is performed. |
+| `--llamadecode-host-cache-mb` | rtx-llama: `0` | Single-engine pinned host expert victim tier after VRAM L1/L2. 0 disables (qualification default); auto uses measured physical and process-budget headroom; integer MiB is an upper bound. Keeps the configured runtime floor plus 512 MiB desktop reserve and a 256 MiB allocation margin. Released before append prefill; completed Engram rows are reusable headroom. Requires the versioned ds4-decode host-cache export. |
 
 Budget placeholders use the admitted child budget: `{host_budget_bytes}`, `{host_budget_mb}`, `{physical_floor_bytes}` (admission) and `{runtime_floor_bytes}` (runtime). `{host_budget_gib}` and `{min_available_gib}` use GiB. User overrides are literal strings, including JSON and braces.
 
@@ -16518,9 +16519,9 @@ Source: `engines/ds4-win/ds4_cuda.cu:3760`. Unset read: NULL from getenv; the li
 
 ### DS4_CUDA_STREAMING_HOST_CACHE_N
 
-DS4_CUDA_STREAMING_HOST_CACHE_N: qualified preset/runtime setting; override for a different memory or arithmetic plan
+Expert-count upper bound for the host cache. On the single engine it optionally caps LLAMADECODE_HOST_CACHE_MB; unset leaves byte/physical admission authoritative.
 
-Scope: ds4-win. Class: preset.
+Scope: ds4-win, rtx-llama. Class: preset.
 
 Source: `engines/ds4-win/ds4_cuda.cu:5055`. Unset read: NULL from getenv; the literal consumer below supplies any fallback.
 
@@ -16532,6 +16533,18 @@ static uint32_t cuda_stream_host_expert_cache_requested_budget(void) {
         char *end = NULL;
         errno = 0;
         unsigned long v = strtoul(env, &end, 10);
+```
+
+Source: `engines/streaming-llama/prefill_llama.cpp/src/llama-dsv41-weights.cpp:1042`. Unset read: NULL from getenv; the literal consumer below supplies any fallback.
+
+```text
+    require(p->pool_max_stride[0]==p->pool_max_stride[1],"RAM expert gate/up geometry mismatch");
+    const auto width=p->pool_max_stride[0]+p->pool_max_stride[1]+p->pool_max_stride[2];
+    const char*n=std::getenv("DS4_CUDA_STREAMING_HOST_CACHE_N");
+    uint64_t capped=offer;
+    if(n&&*n){char*end=nullptr;errno=0;const auto count=std::strtoull(n,&end,10);
+        require(n[0]!='-'&&!errno&&end!=n&&!*end&&count<=UINT64_MAX/width,"Invalid DS4_CUDA_STREAMING_HOST_CACHE_N");capped=std::min(capped,count*width);}
+    p->host_slots=api.resize(capped,p->pool_max_stride[0],p->pool_max_stride[2]);p->host_bytes=uint64_t(p->host_slots)*width;
 ```
 
 ### DS4_CUDA_STREAMING_HOST_CACHE_VERBOSE
@@ -101857,4 +101870,34 @@ Source: `vendor/engines/cosmos_windows/weight_streaming/zimage_backend.py:43`. U
         from cosmos_windows import mem_guard
     except Exception:
         mem_guard = None
+```
+
+### LLAMADECODE_HOST_CACHE_MB
+
+Single-engine pinned host expert victim tier after VRAM L1/L2. 0 disables (qualification default); auto uses measured physical and process-budget headroom; integer MiB is an upper bound. Keeps the configured runtime floor plus 512 MiB desktop reserve and a 256 MiB allocation margin. Released before append prefill; completed Engram rows are reusable headroom. Requires the versioned ds4-decode host-cache export.
+
+Scope: rtx-llama. Class: advanced.
+
+Source: `engines/streaming-llama/prefill_llama.cpp/src/llama-dsv41-weights.cpp:1023`. Unset read: NULL from getenv; the literal consumer below supplies any fallback.
+
+```text
+    p->host=api;if(p->host_slots)return;
+#ifdef _WIN32
+    const char*e=std::getenv("LLAMADECODE_HOST_CACHE_MB");
+    // Qualification decides the shipping default. An explicit auto uses all
+    // admitted headroom, an integer is an exact upper bound, and 0 is off.
+    if(!e||!e[0]||!std::strcmp(e,"0"))return;
+    uint64_t requested=UINT64_MAX;
+```
+
+Source: `engines/streaming-llama/prefill_llama.cpp/tools/dsv41-prefill/live-session.inc:266`. Unset read: NULL from getenv; the literal consumer below supplies any fallback.
+
+```text
+        bind(x_open,"ds4x_open");bind(x_map,"ds4x_model_map");bind(x_register,"ds4x_register_weight");bind(x_bind,"ds4x_bind_state");
+        bind(x_hook,"ds4x_set_expert_hook");bind(x_decode,"ds4x_decode");bind(x_close,"ds4x_close");bind(x_affinity,"ds4x_set_affinity");
+        const char*ram=std::getenv("LLAMADECODE_HOST_CACHE_MB");
+        if(ram&&*ram&&std::strcmp(ram,"0")){
+            int(*api)(ds4_external_host_cache_v1*)=nullptr;bind(api,"ds4x_host_cache_v1");
+            require(api(&host_cache)==1,"ds4-decode RAM cache ABI refused");
+        }
 ```
