@@ -1,0 +1,724 @@
+{
+  "status": "PASS",
+  "adapter_abi": 3,
+  "label": "Q4\u2192MXFP4 requant (lossy), speed proxy for native FP4",
+  "primary_prompt_tokens": 100000,
+  "default_enabled": false,
+  "native_precision_claim": false,
+  "conditions": "Same frozen synthetic prompt, ULTRA, approximate YOCO140, same producer/decode DLL, bias zero; both prompt-only prefill and launch-to-ready TTFT reported; legacy prefill_seconds is TTFT. One engine per exclusive lease with physical RAM and paging guards.",
+  "limitations": "One synthetic fixture, eight fixed logit rows; not broad task/recall accuracy. Separate synchronized profiles are diagnostic only.",
+  "measurements": [
+    {
+      "arm": "q4",
+      "label": "Q4_K/Q8_0 control",
+      "prompt_tokens": 100000,
+      "input_sha256": "4ffeee4837f76e364da2cc241938e3e79f61901d6d4c0824d5f6cddba8db4320",
+      "profile": "ultra",
+      "yoco_keep": 140,
+      "bias": 0,
+      "producer_sha256": "d84d3b940cde48d2b91adca3102b02af7d297af8a5b7bd7b68e25a3b4e5d7e5e",
+      "decode_library_sha256": "91dd102586c5afad4a2c94a5ba52c2be06149ce96752747dbdbb86a353930b38",
+      "model_sha256": "2cc6bc254f22a0238020e61e931c0cac865218aada1eed9c0036d9f4031c6e5f",
+      "prefill_seconds": 46.92200000002049,
+      "prefill_tok_s": 2131.1964536881705,
+      "flashinfer_requested": false,
+      "kernel": "q4",
+      "sweeps": [
+        49152,
+        50848
+      ],
+      "measurement_sha256": "e48bdf33393698a7f816695b9a8302594e61057dc983099cc9df3c2ad0c7798e",
+      "guard": {
+        "exit_code": 0,
+        "reason": null,
+        "peak_tree_rss": 6251712512,
+        "min_available": 8883609600,
+        "host_budget_gib": 7.25,
+        "floor_gib": 1,
+        "cleanup_confirmed": true
+      },
+      "prompt_prefill_seconds": 43.990537100000005,
+      "prompt_prefill_tok_s": 2273.2161640281493,
+      "ttft_seconds": 46.92200000002049,
+      "ttft_tok_s": 2131.1964536881705,
+      "prefill_seconds_scope": "legacy alias for launch-to-ready TTFT; startup included",
+      "prompt_clock_definition": "Native sequential embedding_40_layers_head clock: all prompt sweeps, token preparation and between-sweep ownership admission through synchronized frontier logits. Initial model open/allocation, final bulk export/certification, recall and decode excluded. Early Engram prefetch can overlap initial open.",
+      "ttft_clock_definition": "Host ComboProducer launch boundary through frontier READY: process startup, model open/allocation, prompt processing, final state certification and IPC included; external harness prechecks, recall and decode excluded.",
+      "setup_and_ready_overhead_seconds": 2.9314629000204846,
+      "overhead_definition": "TTFT minus prompt interval; includes setup and post-head certification/IPC, not just process startup.",
+      "native_prompt_receipt_sha256": "acdbc952df472450cbfcb85e93686103d4974907a7bf4b44a5686a88edcc0acd",
+      "native_prompt_phase_ms": {
+        "embedding_40_layers_head": 43990.5371,
+        "append_owner_admission": 108.5731,
+        "chunk_token_preparation": 0.0363
+      },
+      "stored_completed_products": 0,
+      "trace_sha256": "0797845e0970cc0927c5bfa725a4ff38e05e64eb1467196eb60736e682dd92f2"
+    },
+    {
+      "arm": "proxy",
+      "label": "Q4\u2192MXFP4 requant (lossy), speed proxy for native FP4",
+      "prompt_tokens": 100000,
+      "input_sha256": "4ffeee4837f76e364da2cc241938e3e79f61901d6d4c0824d5f6cddba8db4320",
+      "profile": "ultra",
+      "yoco_keep": 140,
+      "bias": 0,
+      "producer_sha256": "d84d3b940cde48d2b91adca3102b02af7d297af8a5b7bd7b68e25a3b4e5d7e5e",
+      "decode_library_sha256": "91dd102586c5afad4a2c94a5ba52c2be06149ce96752747dbdbb86a353930b38",
+      "model_sha256": "cf05bdccb86b823ce794eab2ca033a649b6a2f5c03cee8a4b177d86de017ae44",
+      "prefill_seconds": 44.85899999999674,
+      "prefill_tok_s": 2229.207071044991,
+      "flashinfer_requested": false,
+      "kernel": "mxfp4",
+      "sweeps": [
+        49152,
+        50848
+      ],
+      "measurement_sha256": "5eec1e2101dea208abc19938be74ae8db0db51b1eec7dddc340789992a36aad2",
+      "guard": {
+        "exit_code": 0,
+        "reason": null,
+        "peak_tree_rss": 6290247680,
+        "min_available": 8734543872,
+        "host_budget_gib": 7.25,
+        "floor_gib": 1,
+        "cleanup_confirmed": true
+      },
+      "prompt_prefill_seconds": 42.028574799999994,
+      "prompt_prefill_tok_s": 2379.3335956754836,
+      "ttft_seconds": 44.85899999999674,
+      "ttft_tok_s": 2229.207071044991,
+      "prefill_seconds_scope": "legacy alias for launch-to-ready TTFT; startup included",
+      "prompt_clock_definition": "Native sequential embedding_40_layers_head clock: all prompt sweeps, token preparation and between-sweep ownership admission through synchronized frontier logits. Initial model open/allocation, final bulk export/certification, recall and decode excluded. Early Engram prefetch can overlap initial open.",
+      "ttft_clock_definition": "Host ComboProducer launch boundary through frontier READY: process startup, model open/allocation, prompt processing, final state certification and IPC included; external harness prechecks, recall and decode excluded.",
+      "setup_and_ready_overhead_seconds": 2.8304251999967462,
+      "overhead_definition": "TTFT minus prompt interval; includes setup and post-head certification/IPC, not just process startup.",
+      "native_prompt_receipt_sha256": "a8c2c76f39804e71600d637affa1d04c92d010467cdd50e798399d08e8aaa3ae",
+      "native_prompt_phase_ms": {
+        "embedding_40_layers_head": 42028.574799999995,
+        "append_owner_admission": 106.9419,
+        "chunk_token_preparation": 0.038900000000000004
+      },
+      "stored_completed_products": 1632,
+      "trace_sha256": "c9b9554f02ca635ff7927bfb1732a72d125f33656c3581b1afc83bcc516ebc83"
+    },
+    {
+      "arm": "proxy",
+      "label": "Q4\u2192MXFP4 requant (lossy), speed proxy for native FP4",
+      "prompt_tokens": 100000,
+      "input_sha256": "4ffeee4837f76e364da2cc241938e3e79f61901d6d4c0824d5f6cddba8db4320",
+      "profile": "ultra",
+      "yoco_keep": 140,
+      "bias": 0,
+      "producer_sha256": "d84d3b940cde48d2b91adca3102b02af7d297af8a5b7bd7b68e25a3b4e5d7e5e",
+      "decode_library_sha256": "91dd102586c5afad4a2c94a5ba52c2be06149ce96752747dbdbb86a353930b38",
+      "model_sha256": "cf05bdccb86b823ce794eab2ca033a649b6a2f5c03cee8a4b177d86de017ae44",
+      "prefill_seconds": 43.53200000000652,
+      "prefill_tok_s": 2297.160709362883,
+      "flashinfer_requested": true,
+      "kernel": "flashinfer",
+      "sweeps": [
+        49152,
+        50848
+      ],
+      "measurement_sha256": "a9b24144b9cf8bec235c030898aa3ab460587e200ee916d6d73ad377fdbd1e33",
+      "guard": {
+        "exit_code": 0,
+        "reason": null,
+        "peak_tree_rss": 6329024512,
+        "min_available": 8618385408,
+        "host_budget_gib": 7.25,
+        "floor_gib": 1,
+        "cleanup_confirmed": true
+      },
+      "flashinfer_bridge_sha256": "2fb1a5ff138348d1ca56700550311c9628e8409c906983b4c8bfcdc9a01caeb9",
+      "flashinfer_completed_graphs": 544,
+      "flashinfer_completed_products": 1632,
+      "prompt_prefill_seconds": 40.733872299999994,
+      "prompt_prefill_tok_s": 2454.9593336845614,
+      "ttft_seconds": 43.53200000000652,
+      "ttft_tok_s": 2297.160709362883,
+      "prefill_seconds_scope": "legacy alias for launch-to-ready TTFT; startup included",
+      "prompt_clock_definition": "Native sequential embedding_40_layers_head clock: all prompt sweeps, token preparation and between-sweep ownership admission through synchronized frontier logits. Initial model open/allocation, final bulk export/certification, recall and decode excluded. Early Engram prefetch can overlap initial open.",
+      "ttft_clock_definition": "Host ComboProducer launch boundary through frontier READY: process startup, model open/allocation, prompt processing, final state certification and IPC included; external harness prechecks, recall and decode excluded.",
+      "setup_and_ready_overhead_seconds": 2.7981277000065248,
+      "overhead_definition": "TTFT minus prompt interval; includes setup and post-head certification/IPC, not just process startup.",
+      "native_prompt_receipt_sha256": "b7d5985fcad92691101b7e444c3e808fc8762be5b09f7a4f862afa5fb09d5646",
+      "native_prompt_phase_ms": {
+        "embedding_40_layers_head": 40733.872299999995,
+        "append_owner_admission": 111.9549,
+        "chunk_token_preparation": 0.093
+      },
+      "stored_completed_products": 1632,
+      "trace_sha256": "cdd3a6bd441c2f12b1cdb9e40641252913e72923f10b60810c6a281c4737465d"
+    }
+  ],
+  "quality_comparisons": [
+    {
+      "status": "PASS",
+      "label": "Q4\u2192MXFP4 requant (lossy), speed proxy for native FP4",
+      "reference_sha256": "e48bdf33393698a7f816695b9a8302594e61057dc983099cc9df3c2ad0c7798e",
+      "candidate_sha256": "5eec1e2101dea208abc19938be74ae8db0db51b1eec7dddc340789992a36aad2",
+      "input_sha256": "4ffeee4837f76e364da2cc241938e3e79f61901d6d4c0824d5f6cddba8db4320",
+      "producer_sha256": "d84d3b940cde48d2b91adca3102b02af7d297af8a5b7bd7b68e25a3b4e5d7e5e",
+      "vocabulary": 129280,
+      "forced_rows": 8,
+      "compared_rows": 7,
+      "excluded_rows": [
+        0
+      ],
+      "exclusion_reason": "Frontier precedes the live setter; requested warmup/ramp prefix also excluded",
+      "kl_direction": "q4 bias zero to candidate; natural logarithm",
+      "mean_kl": 0.036049026062615445,
+      "max_kl": 0.2501828050456448,
+      "top1_agreement": 1.0,
+      "rows": [
+        {
+          "row": 1,
+          "kl_control_to_candidate": 0.2501828050456448,
+          "top1_control": 671,
+          "top1_candidate": 671
+        },
+        {
+          "row": 2,
+          "kl_control_to_candidate": 0.00023626579725694993,
+          "top1_control": 55961,
+          "top1_candidate": 55961
+        },
+        {
+          "row": 3,
+          "kl_control_to_candidate": 0.0009177392991265056,
+          "top1_control": 41273,
+          "top1_candidate": 41273
+        },
+        {
+          "row": 4,
+          "kl_control_to_candidate": 0.0001894314959930778,
+          "top1_control": 3676,
+          "top1_candidate": 3676
+        },
+        {
+          "row": 5,
+          "kl_control_to_candidate": 0.00033759907662419213,
+          "top1_control": 28,
+          "top1_candidate": 28
+        },
+        {
+          "row": 6,
+          "kl_control_to_candidate": 0.00047268366499939805,
+          "top1_control": 270,
+          "top1_candidate": 270
+        },
+        {
+          "row": 7,
+          "kl_control_to_candidate": 6.658058663180333e-06,
+          "top1_control": 5463,
+          "top1_candidate": 5463
+        }
+      ],
+      "reference_kernel": "q4",
+      "candidate_kernel": "mxfp4",
+      "untouched_prefill_frontier": {
+        "kl_control_to_candidate": 7.26653771732e-09,
+        "top1_control": 18715,
+        "top1_candidate": 18715
+      },
+      "frontier_scope": "Both bias zero, identical input, producer, decode DLL and YOCO. Row zero compares untouched prefill; the seven later forced rows are reported separately."
+    },
+    {
+      "status": "PASS",
+      "label": "Q4\u2192MXFP4 requant (lossy), speed proxy for native FP4",
+      "reference_sha256": "e48bdf33393698a7f816695b9a8302594e61057dc983099cc9df3c2ad0c7798e",
+      "candidate_sha256": "a9b24144b9cf8bec235c030898aa3ab460587e200ee916d6d73ad377fdbd1e33",
+      "input_sha256": "4ffeee4837f76e364da2cc241938e3e79f61901d6d4c0824d5f6cddba8db4320",
+      "producer_sha256": "d84d3b940cde48d2b91adca3102b02af7d297af8a5b7bd7b68e25a3b4e5d7e5e",
+      "vocabulary": 129280,
+      "forced_rows": 8,
+      "compared_rows": 7,
+      "excluded_rows": [
+        0
+      ],
+      "exclusion_reason": "Frontier precedes the live setter; requested warmup/ramp prefix also excluded",
+      "kl_direction": "q4 bias zero to candidate; natural logarithm",
+      "mean_kl": 0.04610976553699509,
+      "max_kl": 0.3218881551453347,
+      "top1_agreement": 1.0,
+      "rows": [
+        {
+          "row": 1,
+          "kl_control_to_candidate": 0.3218881551453347,
+          "top1_control": 671,
+          "top1_candidate": 671
+        },
+        {
+          "row": 2,
+          "kl_control_to_candidate": 0.0003740381743983742,
+          "top1_control": 55961,
+          "top1_candidate": 55961
+        },
+        {
+          "row": 3,
+          "kl_control_to_candidate": 0.00030577375021752023,
+          "top1_control": 41273,
+          "top1_candidate": 41273
+        },
+        {
+          "row": 4,
+          "kl_control_to_candidate": 2.135653218444594e-05,
+          "top1_control": 3676,
+          "top1_candidate": 3676
+        },
+        {
+          "row": 5,
+          "kl_control_to_candidate": 0.0001280025674982777,
+          "top1_control": 28,
+          "top1_candidate": 28
+        },
+        {
+          "row": 6,
+          "kl_control_to_candidate": 3.145621384664972e-05,
+          "top1_control": 270,
+          "top1_candidate": 270
+        },
+        {
+          "row": 7,
+          "kl_control_to_candidate": 1.957637548570064e-05,
+          "top1_control": 5463,
+          "top1_candidate": 5463
+        }
+      ],
+      "reference_kernel": "q4",
+      "candidate_kernel": "flashinfer",
+      "untouched_prefill_frontier": {
+        "kl_control_to_candidate": 1.1753494262329017e-08,
+        "top1_control": 18715,
+        "top1_candidate": 18715
+      },
+      "frontier_scope": "Both bias zero, identical input, producer, decode DLL and YOCO. Row zero compares untouched prefill; the seven later forced rows are reported separately."
+    },
+    {
+      "status": "PASS",
+      "label": "Q4\u2192MXFP4 requant (lossy), speed proxy for native FP4",
+      "reference_sha256": "5eec1e2101dea208abc19938be74ae8db0db51b1eec7dddc340789992a36aad2",
+      "candidate_sha256": "a9b24144b9cf8bec235c030898aa3ab460587e200ee916d6d73ad377fdbd1e33",
+      "input_sha256": "4ffeee4837f76e364da2cc241938e3e79f61901d6d4c0824d5f6cddba8db4320",
+      "producer_sha256": "d84d3b940cde48d2b91adca3102b02af7d297af8a5b7bd7b68e25a3b4e5d7e5e",
+      "vocabulary": 129280,
+      "forced_rows": 8,
+      "compared_rows": 7,
+      "excluded_rows": [
+        0
+      ],
+      "exclusion_reason": "Frontier precedes the live setter; requested warmup/ramp prefix also excluded",
+      "kl_direction": "proxy bias zero to candidate; natural logarithm",
+      "mean_kl": 0.04330455544868498,
+      "max_kl": 0.2999716838168144,
+      "top1_agreement": 1.0,
+      "rows": [
+        {
+          "row": 1,
+          "kl_control_to_candidate": 0.2999716838168144,
+          "top1_control": 671,
+          "top1_candidate": 671
+        },
+        {
+          "row": 2,
+          "kl_control_to_candidate": 8.414241741548555e-05,
+          "top1_control": 55961,
+          "top1_candidate": 55961
+        },
+        {
+          "row": 3,
+          "kl_control_to_candidate": 0.0014362228282360045,
+          "top1_control": 41273,
+          "top1_candidate": 41273
+        },
+        {
+          "row": 4,
+          "kl_control_to_candidate": 0.000340106619624758,
+          "top1_control": 3676,
+          "top1_candidate": 3676
+        },
+        {
+          "row": 5,
+          "kl_control_to_candidate": 0.0006015551078680237,
+          "top1_control": 28,
+          "top1_candidate": 28
+        },
+        {
+          "row": 6,
+          "kl_control_to_candidate": 0.0006807695484131674,
+          "top1_control": 270,
+          "top1_candidate": 270
+        },
+        {
+          "row": 7,
+          "kl_control_to_candidate": 1.740780242298859e-05,
+          "top1_control": 5463,
+          "top1_candidate": 5463
+        }
+      ],
+      "reference_kernel": "mxfp4",
+      "candidate_kernel": "flashinfer",
+      "untouched_prefill_frontier": {
+        "kl_control_to_candidate": 1.770795438162857e-08,
+        "top1_control": 18715,
+        "top1_candidate": 18715
+      },
+      "frontier_scope": "Both bias zero, identical input, producer, decode DLL and YOCO. Row zero compares untouched prefill; the seven later forced rows are reported separately."
+    }
+  ],
+  "diagnostic_profiles": [
+    {
+      "status": "PASS",
+      "arm": "q4",
+      "label": "Q4_K/Q8_0 control",
+      "prompt_tokens": 100000,
+      "sweeps": [
+        49152,
+        50848
+      ],
+      "diagnostic_only": true,
+      "prefill_seconds": 51.53099999995902,
+      "stage_wall_seconds": 48.69155139999999,
+      "stage_seconds_scope": "prompt_only",
+      "stage_seconds": {
+        "stream_wait": 8.632151400000001,
+        "expert_gemm": 9.123072769285997,
+        "sparse_attention_core": 4.450971767783001,
+        "indexer_core": 2.492701767493,
+        "other_wall": 23.992653695437983
+      },
+      "gpu_seconds": {
+        "sparse_attention_core": 4.450971767783001,
+        "indexer_core": 2.492701767493,
+        "other_gpu": 10.225238685687847,
+        "expert_gemm": 9.123072769285997
+      },
+      "layer_count": 61,
+      "fetched_bytes": 482208151672,
+      "other_gpu_by_named_origin_seconds": {
+        "remaining": 7.970793790006029,
+        "named_hc": 2.111527967788984,
+        "named_compressor_and_pool": 0.14291692789300015
+      },
+      "tile_count": 544,
+      "tile_phase_seconds": {
+        "host_prepare": 4.835076999999997,
+        "host_upload": 2.509953000000002,
+        "compute": 30.69922500000001,
+        "host_readback": 0.40600500000000006,
+        "host_cleanup": 0.0005670000000000004
+      },
+      "tile_nested_seconds": {
+        "host_bind": 1.6513849999999997,
+        "host_register": 1.6474969999999995,
+        "host_launch": 30.67240099999999,
+        "host_sync": 0.019366000000000008,
+        "gpu": 30.665069000000024
+      },
+      "routed_expert_flops": 892943518924800,
+      "routed_effective_tflops": 97.87749604837195,
+      "nominal_5090_dense_fp4_tflops": 1676,
+      "fp4_roof_ratio_reference_only": null,
+      "useful_fetch_bytes_per_wall_second": 9903322810.782326,
+      "layer_ledger_ms": {
+        "wall_ms": 47374.08690000001,
+        "acquire_ms": 8632.1514,
+        "carry_begin_ms": 0.08850000000000001,
+        "executor_wall_ms": 38567.58339999999,
+        "executor_phase_gap_ms": 107.52940000000001,
+        "engram_ms": 1.7294,
+        "carry_read_ms": 0.3532000000000002,
+        "carry_write_ms": 0.49470000000000003,
+        "carry_commit_ms": 0.12469999999999999,
+        "provider_release_ms": 0.2052,
+        "scaffold_ms": 171.35639999999998
+      },
+      "definitions": {
+        "stream_wait": "Sum of exposed per-layer acquire wall time; transfer-duration sums overlap compute.",
+        "expert_gemm": "MUL_MAT_ID nodes whose weight origin is a routed expert.",
+        "sparse_attention_core": "FLASH_ATTN nodes; projection, RoPE and packing remain in other.",
+        "indexer_core": "Index scores, their top-k, candidate blocks and selected masks.",
+        "other_wall": "Selected wall residual including other GPU work, CPU scheduling and carry/Engram work; startup is included only for legacy TTFT scope.",
+        "other_gpu_by_named_origin_seconds": "Disjoint subsets of other_gpu identified by node or immediate source names; anonymous intermediates remain in remaining. These are not full semantic phase timers.",
+        "tile_phase_seconds": "Disjoint executor phase wall sums; compute includes graph launch and synchronization. The executor post-compute gap and work outside tiles are not included.",
+        "tile_nested_seconds": "Diagnostics only: register is inside bind, bind is inside prepare, launch and sync are inside compute, and gpu spans overlap compute. Never add these to tile phases or stage_seconds."
+      },
+      "caveat": "CUDA profiling synchronizes operations. These diagnostic walls are not headline throughput or an unsynchronized overlap decomposition.",
+      "producer_sha256": "d84d3b940cde48d2b91adca3102b02af7d297af8a5b7bd7b68e25a3b4e5d7e5e",
+      "decode_library_sha256": "91dd102586c5afad4a2c94a5ba52c2be06149ce96752747dbdbb86a353930b38",
+      "flashinfer_requested": false,
+      "flashinfer_bridge_sha256": null,
+      "flashinfer_completed_graphs": null,
+      "flashinfer_completed_products": null,
+      "model_sha256": "2cc6bc254f22a0238020e61e931c0cac865218aada1eed9c0036d9f4031c6e5f",
+      "input_sha256": "4ffeee4837f76e364da2cc241938e3e79f61901d6d4c0824d5f6cddba8db4320",
+      "measurement_sha256": "be95f09722f4cd693ed44bf3939eac92671ddfdba5aaf93421587cfba2e89f86",
+      "trace_sha256": "45ed7ac2e462ecd7276ef68afd5581bfdbea8b3c3345cdc9323382d5188724e3",
+      "prompt_prefill_seconds": 48.69155139999999,
+      "prompt_prefill_tok_s": 2053.7443791532187,
+      "ttft_seconds": 51.53099999995902,
+      "ttft_tok_s": 1940.579457027411,
+      "prefill_seconds_scope": "legacy alias for launch-to-ready TTFT; startup included",
+      "prompt_clock_definition": "Native sequential embedding_40_layers_head clock: all prompt sweeps, token preparation and between-sweep ownership admission through synchronized frontier logits. Initial model open/allocation, final bulk export/certification, recall and decode excluded. Early Engram prefetch can overlap initial open.",
+      "ttft_clock_definition": "Host ComboProducer launch boundary through frontier READY: process startup, model open/allocation, prompt processing, final state certification and IPC included; external harness prechecks, recall and decode excluded.",
+      "setup_and_ready_overhead_seconds": 2.8394485999590344,
+      "overhead_definition": "TTFT minus prompt interval; includes setup and post-head certification/IPC, not just process startup.",
+      "native_prompt_receipt_sha256": "796527532c6e7833de93325104f93e91621e9b5f880fbf49fe3adca29f4b2928",
+      "native_prompt_phase_ms": {
+        "embedding_40_layers_head": 48691.55139999999,
+        "append_owner_admission": 108.7697,
+        "chunk_token_preparation": 0.060399999999999995
+      },
+      "kernel": "q4",
+      "independent_expected_flops": 892943518924800,
+      "guard": {
+        "exit_code": 0,
+        "reason": null,
+        "peak_tree_rss": 6329716736,
+        "min_available": 8439308288,
+        "host_budget_gib": 7.25,
+        "floor_gib": 1,
+        "cleanup_confirmed": true
+      }
+    },
+    {
+      "status": "PASS",
+      "arm": "proxy",
+      "label": "Q4\u2192MXFP4 requant (lossy), speed proxy for native FP4",
+      "prompt_tokens": 100000,
+      "sweeps": [
+        49152,
+        50848
+      ],
+      "diagnostic_only": true,
+      "prefill_seconds": 47.67200000002049,
+      "stage_wall_seconds": 44.8155157,
+      "stage_seconds_scope": "prompt_only",
+      "stage_seconds": {
+        "stream_wait": 7.542171299999999,
+        "expert_gemm": 6.621300616791996,
+        "sparse_attention_core": 4.452261624722999,
+        "indexer_core": 2.496465887702,
+        "other_wall": 23.703316270783006
+      },
+      "gpu_seconds": {
+        "sparse_attention_core": 4.452261624722999,
+        "indexer_core": 2.496465887702,
+        "other_gpu": 10.265074977534871,
+        "expert_gemm": 6.621300616791996
+      },
+      "layer_count": 61,
+      "fetched_bytes": 456303081592,
+      "other_gpu_by_named_origin_seconds": {
+        "remaining": 8.010479874511038,
+        "named_hc": 2.111502655004991,
+        "named_compressor_and_pool": 0.14309244801899998
+      },
+      "tile_count": 544,
+      "tile_phase_seconds": {
+        "host_prepare": 4.769558999999999,
+        "host_upload": 2.4657480000000005,
+        "compute": 28.032063000000015,
+        "host_readback": 0.40039399999999953,
+        "host_cleanup": 0.0005710000000000004
+      },
+      "tile_nested_seconds": {
+        "host_bind": 1.6221949999999992,
+        "host_register": 1.6182960000000002,
+        "host_launch": 28.004901999999987,
+        "host_sync": 0.01839699999999998,
+        "gpu": 27.998919
+      },
+      "routed_expert_flops": 892943518924800,
+      "routed_effective_tflops": 134.85923243844937,
+      "nominal_5090_dense_fp4_tflops": 1676,
+      "fp4_roof_ratio_reference_only": 0.08046493582246382,
+      "useful_fetch_bytes_per_wall_second": 10181810349.936462,
+      "layer_ledger_ms": {
+        "wall_ms": 43499.68119999999,
+        "acquire_ms": 7542.171299999999,
+        "carry_begin_ms": 0.09299999999999997,
+        "executor_wall_ms": 35778.575999999994,
+        "executor_phase_gap_ms": 101.1489,
+        "engram_ms": 1.7001,
+        "carry_read_ms": 0.28320000000000023,
+        "carry_write_ms": 0.3806,
+        "carry_commit_ms": 0.1176,
+        "provider_release_ms": 0.1846,
+        "scaffold_ms": 176.1748
+      },
+      "definitions": {
+        "stream_wait": "Sum of exposed per-layer acquire wall time; transfer-duration sums overlap compute.",
+        "expert_gemm": "MUL_MAT_ID nodes whose weight origin is a routed expert.",
+        "sparse_attention_core": "FLASH_ATTN nodes; projection, RoPE and packing remain in other.",
+        "indexer_core": "Index scores, their top-k, candidate blocks and selected masks.",
+        "other_wall": "Selected wall residual including other GPU work, CPU scheduling and carry/Engram work; startup is included only for legacy TTFT scope.",
+        "other_gpu_by_named_origin_seconds": "Disjoint subsets of other_gpu identified by node or immediate source names; anonymous intermediates remain in remaining. These are not full semantic phase timers.",
+        "tile_phase_seconds": "Disjoint executor phase wall sums; compute includes graph launch and synchronization. The executor post-compute gap and work outside tiles are not included.",
+        "tile_nested_seconds": "Diagnostics only: register is inside bind, bind is inside prepare, launch and sync are inside compute, and gpu spans overlap compute. Never add these to tile phases or stage_seconds."
+      },
+      "caveat": "CUDA profiling synchronizes operations. These diagnostic walls are not headline throughput or an unsynchronized overlap decomposition.",
+      "producer_sha256": "d84d3b940cde48d2b91adca3102b02af7d297af8a5b7bd7b68e25a3b4e5d7e5e",
+      "decode_library_sha256": "91dd102586c5afad4a2c94a5ba52c2be06149ce96752747dbdbb86a353930b38",
+      "flashinfer_requested": false,
+      "flashinfer_bridge_sha256": null,
+      "flashinfer_completed_graphs": null,
+      "flashinfer_completed_products": null,
+      "model_sha256": "cf05bdccb86b823ce794eab2ca033a649b6a2f5c03cee8a4b177d86de017ae44",
+      "input_sha256": "4ffeee4837f76e364da2cc241938e3e79f61901d6d4c0824d5f6cddba8db4320",
+      "measurement_sha256": "94ef80042bd2bf9d9afb900217a8c6d62353fad1aa1c92e5be8b698d70bd2424",
+      "trace_sha256": "d0e40d832489cfea488bb47cdd8acbf1464256d3309a783c1a7e926cbfffd68b",
+      "prompt_prefill_seconds": 44.8155157,
+      "prompt_prefill_tok_s": 2231.3700609719863,
+      "ttft_seconds": 47.67200000002049,
+      "ttft_tok_s": 2097.6673938571284,
+      "prefill_seconds_scope": "legacy alias for launch-to-ready TTFT; startup included",
+      "prompt_clock_definition": "Native sequential embedding_40_layers_head clock: all prompt sweeps, token preparation and between-sweep ownership admission through synchronized frontier logits. Initial model open/allocation, final bulk export/certification, recall and decode excluded. Early Engram prefetch can overlap initial open.",
+      "ttft_clock_definition": "Host ComboProducer launch boundary through frontier READY: process startup, model open/allocation, prompt processing, final state certification and IPC included; external harness prechecks, recall and decode excluded.",
+      "setup_and_ready_overhead_seconds": 2.8564843000204903,
+      "overhead_definition": "TTFT minus prompt interval; includes setup and post-head certification/IPC, not just process startup.",
+      "native_prompt_receipt_sha256": "cb6fe4e38657af5ef9b48ca00095983ee4492861fce059f9aee5cfc99a181ae5",
+      "native_prompt_phase_ms": {
+        "embedding_40_layers_head": 44815.515699999996,
+        "append_owner_admission": 107.8844,
+        "chunk_token_preparation": 0.0315
+      },
+      "kernel": "mxfp4",
+      "independent_expected_flops": 892943518924800,
+      "guard": {
+        "exit_code": 0,
+        "reason": null,
+        "peak_tree_rss": 6285369344,
+        "min_available": 8721633280,
+        "host_budget_gib": 7.25,
+        "floor_gib": 1,
+        "cleanup_confirmed": true
+      }
+    },
+    {
+      "status": "PASS",
+      "arm": "proxy",
+      "label": "Q4\u2192MXFP4 requant (lossy), speed proxy for native FP4",
+      "prompt_tokens": 100000,
+      "sweeps": [
+        49152,
+        50848
+      ],
+      "diagnostic_only": true,
+      "prefill_seconds": 49.32800000003772,
+      "stage_wall_seconds": 46.4309622,
+      "stage_seconds_scope": "prompt_only",
+      "stage_seconds": {
+        "stream_wait": 9.5372704,
+        "expert_gemm": 5.369610073861,
+        "sparse_attention_core": 4.452495265065999,
+        "indexer_core": 2.5153902076040002,
+        "other_wall": 24.556196253469
+      },
+      "gpu_seconds": {
+        "sparse_attention_core": 4.452495265065999,
+        "indexer_core": 2.5153902076040002,
+        "other_gpu": 10.23285734275086,
+        "expert_gemm": 5.369610073861
+      },
+      "layer_count": 61,
+      "fetched_bytes": 456303081592,
+      "other_gpu_by_named_origin_seconds": {
+        "remaining": 7.978401344146052,
+        "named_hc": 2.1113132144739866,
+        "named_compressor_and_pool": 0.14314278413100007
+      },
+      "tile_count": 544,
+      "tile_phase_seconds": {
+        "host_prepare": 5.017573,
+        "host_upload": 2.612940999999999,
+        "compute": 27.10645599999999,
+        "host_readback": 0.4086099999999998,
+        "host_cleanup": 0.0005750000000000004
+      },
+      "tile_nested_seconds": {
+        "host_bind": 1.7117360000000004,
+        "host_register": 1.7073910000000003,
+        "host_launch": 27.078060999999988,
+        "host_sync": 0.019535999999999984,
+        "gpu": 27.070333999999995
+      },
+      "routed_expert_flops": 892943518924800,
+      "routed_effective_tflops": 166.29578435715575,
+      "nominal_5090_dense_fp4_tflops": 1676,
+      "fp4_roof_ratio_reference_only": 0.09922182837539126,
+      "useful_fetch_bytes_per_wall_second": 9827560316.895607,
+      "layer_ledger_ms": {
+        "wall_ms": 45008.677500000005,
+        "acquire_ms": 9537.270400000001,
+        "carry_begin_ms": 0.11980000000000005,
+        "executor_wall_ms": 35270.801699999996,
+        "executor_phase_gap_ms": 115.25820000000002,
+        "engram_ms": 1.8932999999999998,
+        "carry_read_ms": 0.40490000000000015,
+        "carry_write_ms": 0.5628999999999997,
+        "carry_commit_ms": 0.12149999999999998,
+        "provider_release_ms": 0.22340000000000002,
+        "scaffold_ms": 197.27960000000002
+      },
+      "definitions": {
+        "stream_wait": "Sum of exposed per-layer acquire wall time; transfer-duration sums overlap compute.",
+        "expert_gemm": "MUL_MAT_ID nodes whose weight origin is a routed expert.",
+        "sparse_attention_core": "FLASH_ATTN nodes; projection, RoPE and packing remain in other.",
+        "indexer_core": "Index scores, their top-k, candidate blocks and selected masks.",
+        "other_wall": "Selected wall residual including other GPU work, CPU scheduling and carry/Engram work; startup is included only for legacy TTFT scope.",
+        "other_gpu_by_named_origin_seconds": "Disjoint subsets of other_gpu identified by node or immediate source names; anonymous intermediates remain in remaining. These are not full semantic phase timers.",
+        "tile_phase_seconds": "Disjoint executor phase wall sums; compute includes graph launch and synchronization. The executor post-compute gap and work outside tiles are not included.",
+        "tile_nested_seconds": "Diagnostics only: register is inside bind, bind is inside prepare, launch and sync are inside compute, and gpu spans overlap compute. Never add these to tile phases or stage_seconds."
+      },
+      "caveat": "CUDA profiling synchronizes operations. These diagnostic walls are not headline throughput or an unsynchronized overlap decomposition.",
+      "producer_sha256": "d84d3b940cde48d2b91adca3102b02af7d297af8a5b7bd7b68e25a3b4e5d7e5e",
+      "decode_library_sha256": "91dd102586c5afad4a2c94a5ba52c2be06149ce96752747dbdbb86a353930b38",
+      "flashinfer_requested": true,
+      "flashinfer_bridge_sha256": "2fb1a5ff138348d1ca56700550311c9628e8409c906983b4c8bfcdc9a01caeb9",
+      "flashinfer_completed_graphs": 544,
+      "flashinfer_completed_products": 1632,
+      "model_sha256": "cf05bdccb86b823ce794eab2ca033a649b6a2f5c03cee8a4b177d86de017ae44",
+      "input_sha256": "4ffeee4837f76e364da2cc241938e3e79f61901d6d4c0824d5f6cddba8db4320",
+      "measurement_sha256": "1f19aa23aaf7532dcf7d68d9b9ea0a5a71b0ef36298457a9120dc886495985e5",
+      "trace_sha256": "189e240322ae1c5d025aeb3d829d0ef5d777accfe4c58b8e2710740c07931700",
+      "prompt_prefill_seconds": 46.4309622,
+      "prompt_prefill_tok_s": 2153.7352503972015,
+      "ttft_seconds": 49.32800000003772,
+      "ttft_tok_s": 2027.2461887756149,
+      "prefill_seconds_scope": "legacy alias for launch-to-ready TTFT; startup included",
+      "prompt_clock_definition": "Native sequential embedding_40_layers_head clock: all prompt sweeps, token preparation and between-sweep ownership admission through synchronized frontier logits. Initial model open/allocation, final bulk export/certification, recall and decode excluded. Early Engram prefetch can overlap initial open.",
+      "ttft_clock_definition": "Host ComboProducer launch boundary through frontier READY: process startup, model open/allocation, prompt processing, final state certification and IPC included; external harness prechecks, recall and decode excluded.",
+      "setup_and_ready_overhead_seconds": 2.8970378000377153,
+      "overhead_definition": "TTFT minus prompt interval; includes setup and post-head certification/IPC, not just process startup.",
+      "native_prompt_receipt_sha256": "32af128b0e3e279d16ed03af78ca7c749baad2fa12c5decac53e51728eeedde2",
+      "native_prompt_phase_ms": {
+        "embedding_40_layers_head": 46430.9622,
+        "append_owner_admission": 112.0592,
+        "chunk_token_preparation": 0.0742
+      },
+      "kernel": "flashinfer",
+      "independent_expected_flops": 892943518924800,
+      "guard": {
+        "exit_code": 0,
+        "reason": null,
+        "peak_tree_rss": 6303240192,
+        "min_available": 8503021568,
+        "host_budget_gib": 7.25,
+        "floor_gib": 1,
+        "cleanup_confirmed": true
+      }
+    }
+  ],
+  "reserved_batch_guard": {
+    "exit_code": 0,
+    "reason": null,
+    "peak_tree_rss": 6454267904,
+    "min_available": 8468303872,
+    "host_budget_gib": 7.25,
+    "floor_gib": 1,
+    "cleanup_confirmed": true
+  }
+}

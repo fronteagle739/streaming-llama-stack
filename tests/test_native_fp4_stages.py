@@ -40,6 +40,10 @@ class StageAccounting(unittest.TestCase):
             self.assertAlmostEqual(sum(result['tile_phase_seconds'].values()), 1.34)
             self.assertEqual(result['tile_nested_seconds']['host_register'], .06)
             self.assertEqual(result['tile_count'], 1)
+            prompt = stages.summarize(measurement, trace, prompt_timing={'prompt_prefill_seconds':8})
+            self.assertEqual(prompt['stage_seconds']['other_wall'], 5)
+            self.assertEqual(prompt['stage_seconds_scope'], 'prompt_only')
+            self.assertEqual(prompt['stage_wall_seconds'], 8)
 
 
 if __name__ == '__main__':

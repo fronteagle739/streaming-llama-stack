@@ -13,20 +13,25 @@
 
 struct native_block { uint8_t scale; uint8_t codes[16]; };
 static_assert(sizeof(native_block)==17,"Canonical GGML MXFP4 block");
-static __global__ void rearrange_weights(const native_block *input,uint8_t *values,uint32_t *scales,int n,int k) {
-    const size_t i=size_t(blockIdx.x)*blockDim.x+threadIdx.x;
-    const size_t total=size_t(384)*n*(k/32);
-    if(i>=total)return;
+static __global__ void rearrange_weights(const native_block *input,uint8_t *values,uint32_t *scales,const int32_t *bounds,int n,int k) {
+    const int expert=blockIdx.z;
+    if(bounds[expert]==bounds[expert+1])return;
+    const size_t local=size_t(blockIdx.x)*blockDim.x+threadIdx.x;
+    const size_t expert_blocks=size_t(n)*(k/32);
+    if(local>=expert_blocks)return;
+    const size_t i=size_t(expert)*expert_blocks+local;
     const auto b=input[i];
+    uint32_t packed_values[4]={0,0,0,0};
     #pragma unroll
     for(int j=0;j<16;++j) {
         const int lo=2*j,hi=lo+1;
         const unsigned a=(b.codes[lo&15]>>(lo>=16?4:0))&15;
         const unsigned c=(b.codes[hi&15]>>(hi>=16?4:0))&15;
-        values[i*16+j]=uint8_t(a|(c<<4));
+        packed_values[j/4]|=uint32_t(a|(c<<4))<<((j%4)*8);
     }
+    reinterpret_cast<uint4*>(values)[i]=make_uint4(packed_values[0],packed_values[1],packed_values[2],packed_values[3]);
     if((i&3)==0){
-        const int kb=i%(k/32),column=(i/(k/32))%n,expert=i/(size_t(n)*(k/32));
+        const int kb=local%(k/32),column=local/(k/32);
         uint32_t packed=0;
         #pragma unroll
         for(int j=0;j<4;++j)packed|=uint32_t(input[i+j].scale)<<(8*j);
@@ -63,42 +68,34 @@ static __global__ void scatter_output(const __nv_bfloat16 *input,const int32_t *
     const int route=scatter[i/n];
     output[int64_t(route/6)*token_stride+int64_t(route%6)*slot_stride+i%n]=__bfloat162float(input[i]);
 }
-struct allocation {
-    void *data=nullptr;cudaStream_t stream;
-    explicit allocation(cudaStream_t s):stream(s){}
-    cudaError_t get(size_t bytes){return cudaMallocAsync(&data,bytes,stream);}
-    ~allocation(){if(data)cudaFreeAsync(data,stream);}
-};
+struct workspace_view { void *data; };
 #if defined(_WIN32)
 #define BRIDGE_EXPORT extern "C" __declspec(dllexport)
 #else
 #define BRIDGE_EXPORT extern "C" __attribute__((visibility("default")))
 #endif
-BRIDGE_EXPORT int slstack_flashinfer_mxfp4_abi(){return 2;}
+BRIDGE_EXPORT int slstack_flashinfer_mxfp4_abi(){return 3;}
 BRIDGE_EXPORT int slstack_flashinfer_mxfp4(const void *weights,const float *input,
     const int32_t *gather,const int32_t *scatter,const int32_t *bounds,float *output,
-    int rows,int n,int k,int64_t input_stride,int64_t slot_stride,int64_t token_stride,uint64_t workspace_limit,cudaStream_t stream) {
+    int rows,int n,int k,int64_t input_stride,int64_t slot_stride,int64_t token_stride,void *workspace,uint64_t workspace_bytes,cudaStream_t stream) {
     if(rows<=0||rows>4096*6||!((n==2304&&k==5120)||(n==5120&&k==2304)))return int(cudaErrorInvalidValue);
     int device;cudaDeviceProp properties;
     auto error=cudaGetDevice(&device);if(error!=cudaSuccess)return int(error);
     error=cudaGetDeviceProperties(&properties,device);if(error!=cudaSuccess)return int(error);
     if(properties.major!=12||properties.minor!=0)return int(cudaErrorInvalidDeviceFunction);
     const int sf_rows=(rows+384*3+127)/128*128;
-    const size_t wb=size_t(384)*n*k/2,sb=size_t(384)*n*k/32;
-    const size_t ab=size_t(rows)*k,sa=size_t(sf_rows)*k/32,ob=size_t(rows)*n*2;
-    // The caller repartitions its fixed graph arena under the same total device
-    // cap. cudaMemGetInfo double-charges imported D3D12 resources on this path;
-    // it is not the physical admission proof. Keep allocation errors fatal.
-    if(workspace_limit>(3328ull<<20)||workspace_limit<wb+sb+ab+sa+ob+5*256+(16ull<<20)){
-        std::fprintf(stderr,"FlashInfer explicit workspace admission failed: limit=%llu required=%zu\n",static_cast<unsigned long long>(workspace_limit),wb+sb+ab+sa+ob+5*256+(16ull<<20));
+    const auto offsets=ggml_dsv41_flashinfer::layout(rows,n,k);
+    const size_t sa=size_t(sf_rows)*k/32;
+    if(!workspace||(reinterpret_cast<uintptr_t>(workspace)&255)||workspace_bytes>(3328ull<<20)||workspace_bytes<offsets.bytes){
+        std::fprintf(stderr,"FlashInfer caller workspace admission failed: bytes=%llu required=%llu\n",static_cast<unsigned long long>(workspace_bytes),static_cast<unsigned long long>(offsets.bytes));
         return int(cudaErrorMemoryAllocation);
     }
-    allocation w(stream),sfb(stream),a(stream),sfa(stream),out(stream);
+    auto *base=static_cast<uint8_t*>(workspace);
+    workspace_view w{base+offsets.weight},sfb{base+offsets.weight_scale},a{base+offsets.activation},sfa{base+offsets.activation_scale},out{base+offsets.output};
     #define TRY_CUDA(call) do{error=(call);if(error!=cudaSuccess)return int(error);}while(0)
-    TRY_CUDA(w.get(wb));TRY_CUDA(sfb.get(sb));TRY_CUDA(a.get(ab));TRY_CUDA(sfa.get(sa));TRY_CUDA(out.get(ob));
     TRY_CUDA(cudaMemsetAsync(sfa.data,0,sa,stream));
-    const size_t blocks=size_t(384)*n*(k/32);
-    rearrange_weights<<<unsigned((blocks+255)/256),256,0,stream>>>(static_cast<const native_block*>(weights),static_cast<uint8_t*>(w.data),static_cast<uint32_t*>(sfb.data),n,k);
+    const size_t blocks=size_t(n)*(k/32);
+    rearrange_weights<<<dim3(unsigned((blocks+255)/256),1,384),256,0,stream>>>(static_cast<const native_block*>(weights),static_cast<uint8_t*>(w.data),static_cast<uint32_t*>(sfb.data),bounds,n,k);
     TRY_CUDA(cudaGetLastError());
     pack_activations<<<(rows*(k/32)+7)/8,256,0,stream>>>(input,gather,bounds,static_cast<__nv_fp8_e4m3*>(a.data),static_cast<uint8_t*>(sfa.data),rows,k,sf_rows,input_stride);
     TRY_CUDA(cudaGetLastError());

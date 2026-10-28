@@ -1,0 +1,54 @@
+{
+  "status": "PASS",
+  "scope": "Same model/input/decode DLL/bias/profile/YOCO; producer differs because workspace/layout implementation changed. Independent direct comparison of all 8*129280 logit bit patterns, not a bypass of within-build pairing checks.",
+  "results": [
+    {
+      "kernel": "q4",
+      "previous_producer_sha256": "02818d701a8e1309d5b63ab666394b6886a7bfa9dbe28cc5074e6b635a4eda44",
+      "candidate_producer_sha256": "d84d3b940cde48d2b91adca3102b02af7d297af8a5b7bd7b68e25a3b4e5d7e5e",
+      "previous_prefill_seconds": 46.45299999997951,
+      "candidate_prefill_seconds": 46.92200000002049,
+      "logits_bitwise_equal": true,
+      "differing_logit_elements": 0,
+      "max_absolute_logit_difference": 0.0,
+      "previous_prompt_prefill_seconds": 43.6857264,
+      "candidate_prompt_prefill_seconds": 43.990537100000005,
+      "previous_ttft_seconds": 46.45299999997951,
+      "candidate_ttft_seconds": 46.92200000002049,
+      "legacy_prefill_seconds_scope": "TTFT including startup",
+      "identical_logits_sha256": "095ee44d9cc17102defe85c9aca81c5a8d94d6aa448ebcd104d69ce883a94627"
+    },
+    {
+      "kernel": "mxfp4",
+      "previous_producer_sha256": "02818d701a8e1309d5b63ab666394b6886a7bfa9dbe28cc5074e6b635a4eda44",
+      "candidate_producer_sha256": "d84d3b940cde48d2b91adca3102b02af7d297af8a5b7bd7b68e25a3b4e5d7e5e",
+      "previous_prefill_seconds": 44.40600000001723,
+      "candidate_prefill_seconds": 44.85899999999674,
+      "logits_bitwise_equal": true,
+      "differing_logit_elements": 0,
+      "max_absolute_logit_difference": 0.0,
+      "previous_prompt_prefill_seconds": 41.6306646,
+      "candidate_prompt_prefill_seconds": 42.028574799999994,
+      "previous_ttft_seconds": 44.40600000001723,
+      "candidate_ttft_seconds": 44.85899999999674,
+      "legacy_prefill_seconds_scope": "TTFT including startup",
+      "identical_logits_sha256": "2cf0ef2fbafb61a377df414d6f0ccd0d8d97fc31e2d7e7ceee2a7d9bc56b0e8d"
+    },
+    {
+      "kernel": "flashinfer",
+      "previous_producer_sha256": "02818d701a8e1309d5b63ab666394b6886a7bfa9dbe28cc5074e6b635a4eda44",
+      "candidate_producer_sha256": "d84d3b940cde48d2b91adca3102b02af7d297af8a5b7bd7b68e25a3b4e5d7e5e",
+      "previous_prefill_seconds": 69.54700000002049,
+      "candidate_prefill_seconds": 43.53200000000652,
+      "logits_bitwise_equal": true,
+      "differing_logit_elements": 0,
+      "max_absolute_logit_difference": 0.0,
+      "previous_prompt_prefill_seconds": 66.4112907,
+      "candidate_prompt_prefill_seconds": 40.733872299999994,
+      "previous_ttft_seconds": 69.54700000002049,
+      "candidate_ttft_seconds": 43.53200000000652,
+      "legacy_prefill_seconds_scope": "TTFT including startup",
+      "identical_logits_sha256": "024d0a4627dad67cf1672cf71bf307f4ed1b902af510615bf4a7655ab95502a1"
+    }
+  ]
+}

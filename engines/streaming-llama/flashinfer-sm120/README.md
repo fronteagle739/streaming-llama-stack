@@ -23,15 +23,24 @@ unsupported shape and insufficient VRAM fail loudly.
 
 The opt-in reserves 3328 MiB for the adapter and existing backend temporaries
 inside the producer's existing device cap. The fixed graph arena shrinks by
-the same amount; admission rejects a graph that no longer fits. ABI 2 takes
-this explicit workspace bound. Imported DirectStorage/D3D resources can make
+the same amount; admission rejects a graph that no longer fits. ABI 3 takes
+one caller-owned workspace, with offsets shared by the bridge and GGML. GGML
+reuses its fixed maximum size across gate/up/down and aligns the suballocation
+to 256 bytes. Admission includes padding, legacy-pool lookahead and module
+headroom. The bridge performs no CUDA allocations and changes no default CUDA
+memory-pool policy. At the decode transition, legacy pool storage is released;
+VMM pools retain bounded mappings until backend destruction, and decode-cache
+admission uses the remaining physical free memory.
+
+Imported DirectStorage/D3D resources can make
 CUDA's free-memory query count the same allocation twice, so admission uses
 the existing physical device plan and still treats allocation errors as fatal.
 
 The bridge supports 384 experts, six routes and the exact gate/up/down dimensions
 5120↔2304, with at most 4096 source rows per graph. It rearranges canonical
 17-byte MXFP4 weight blocks into FlashInfer's adjacent-nibble values and packed
-E8M0 scales. Weight values/scales are unchanged; this runtime layout work is
+E8M0 scales. Inactive experts are skipped and packed values use vector stores.
+Weight values/scales are unchanged; this runtime layout work is
 included in engine timings. Activations are quantized to E4M3 with an E8M0
 scale per 32 values. FlashInfer accumulates in F32 and stores BF16; the adapter
 scatters those values into the original F32 graph output. Activation rounding
@@ -46,7 +55,7 @@ compares samples across active and highly loaded experts. Run both projections
 under compute-sanitizer and the exclusive GPU guard before model measurements.
 Both projections passed the tail fixture under compute-sanitizer (zero errors)
 and the most skewed observed 4K routing tile with exact sampled reference
-results. A matched synthetic 100K model run completed all 1632 expert products
+results. The historical ABI 2 matched synthetic 100K run completed all 1632 expert products
 but regressed throughput; the full timing and narrow quality comparison are in
 [`primary-100k-comparison.json`](../../../examples/native-fp4/primary-100k-comparison.json).
 Source-native conversion and broad model qualification remain in progress.
@@ -62,3 +71,7 @@ sampled comparisons exactly, with full-output finiteness and zero sanitizer
 errors. See [`flashinfer-native-weight-validation.json`](../../../examples/native-fp4/flashinfer-native-weight-validation.json).
 These checks use representable synthetic activations; the full-model comparison
 still determines the effect of activation rounding.
+
+The current ABI3 checks and 100K results are in [`flashinfer-workspace-validation.json`](../../../examples/native-fp4/flashinfer-workspace-validation.json) and [`primary-100k-workspace-comparison.json`](../../../examples/native-fp4/primary-100k-workspace-comparison.json). The earlier ABI2 checks apply to the implementation at commit `0c3361c7b978c58c62c06d7ad32ade72a7445832`; its DLL and receipts are preserved. ABI3 reduced this fixture’s prompt-only prefill to 40.734 seconds (43.532-second launch-to-ready TTFT) with all eight logit rows bit-identical to ABI2, but the lossy proxy toggle remains off.
+
+`speed_proxy.py` records both `prompt_prefill_seconds`/`prompt_prefill_tok_s` from the native sequential clock and `ttft_seconds`/`ttft_tok_s` from launch through READY. Use prompt-only throughput against the reference repository. Historical `prefill_seconds`/`prefill_tok_s` remain explicit TTFT aliases.

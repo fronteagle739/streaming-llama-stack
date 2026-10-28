@@ -1,0 +1,183 @@
+{
+  "status": "PASS",
+  "abi": 3,
+  "bridge_sha256": "2fb1a5ff138348d1ca56700550311c9628e8409c906983b4c8bfcdc9a01caeb9",
+  "synthetic": [
+    {
+      "status": "PASS",
+      "N": 2304,
+      "K": 5120,
+      "rows": 840,
+      "full_output_finite": true,
+      "sampled_double_reference_elements": 36,
+      "max_absolute_error": 0,
+      "gather_and_scatter_permuted": true,
+      "name": "fi-v3-certified-synthetic-q4-layer39-start49415-rows140-2304-5120",
+      "memcheck_errors": 0,
+      "log_file_sha256": "d53070075e6c8e20586a9543e846cd36081b5d88682b95237e02f855c2fd0e5b"
+    },
+    {
+      "status": "PASS",
+      "N": 5120,
+      "K": 2304,
+      "rows": 840,
+      "full_output_finite": true,
+      "sampled_double_reference_elements": 36,
+      "max_absolute_error": 0,
+      "gather_and_scatter_permuted": true,
+      "name": "fi-v3-certified-synthetic-q4-layer39-start49415-rows140-5120-2304",
+      "memcheck_errors": 0,
+      "log_file_sha256": "16eee80c99ff9eb0715ecaa022fe4401cf37d6427a75323b85fd17f491add0bc"
+    },
+    {
+      "status": "PASS",
+      "N": 2304,
+      "K": 5120,
+      "rows": 24576,
+      "full_output_finite": true,
+      "sampled_double_reference_elements": 36,
+      "max_absolute_error": 0,
+      "gather_and_scatter_permuted": true,
+      "name": "fi-v3-certified-synthetic-q4-layer20-start8192-rows4096-2304-5120",
+      "memcheck_errors": null,
+      "log_file_sha256": "974ce45d3df3802f780fcb3b147e192191a9fe7e425c876d72dc873d404a4196"
+    },
+    {
+      "status": "PASS",
+      "N": 5120,
+      "K": 2304,
+      "rows": 24576,
+      "full_output_finite": true,
+      "sampled_double_reference_elements": 36,
+      "max_absolute_error": 0,
+      "gather_and_scatter_permuted": true,
+      "name": "fi-v3-certified-synthetic-q4-layer20-start8192-rows4096-5120-2304",
+      "memcheck_errors": null,
+      "log_file_sha256": "42e1fa3fdac526250812926cc8ef86770fad3dfedafe241c00e82eae334aa8b9"
+    }
+  ],
+  "stored_weight": [
+    {
+      "status": "PASS",
+      "N": 2304,
+      "K": 5120,
+      "rows": 840,
+      "weight_source": "stored-MXFP4-proxy-GGUF",
+      "full_output_finite": true,
+      "sampled_double_reference_elements": 36,
+      "max_absolute_error": 0,
+      "gather_and_scatter_permuted": true,
+      "name": "fi-v3-certified-native-gate",
+      "memcheck_errors": 0,
+      "log_file_sha256": "9ffd2e165625ebecfe669b7eced086ffe9765dc87c76016f55bf24688c657fa6",
+      "tensor": "blk.20.ffn_gate_exps.weight"
+    },
+    {
+      "status": "PASS",
+      "N": 2304,
+      "K": 5120,
+      "rows": 840,
+      "weight_source": "stored-MXFP4-proxy-GGUF",
+      "full_output_finite": true,
+      "sampled_double_reference_elements": 36,
+      "max_absolute_error": 0,
+      "gather_and_scatter_permuted": true,
+      "name": "fi-v3-certified-native-up",
+      "memcheck_errors": 0,
+      "log_file_sha256": "9ffd2e165625ebecfe669b7eced086ffe9765dc87c76016f55bf24688c657fa6",
+      "tensor": "blk.20.ffn_up_exps.weight"
+    },
+    {
+      "status": "PASS",
+      "N": 5120,
+      "K": 2304,
+      "rows": 840,
+      "weight_source": "stored-MXFP4-proxy-GGUF",
+      "full_output_finite": true,
+      "sampled_double_reference_elements": 36,
+      "max_absolute_error": 0,
+      "gather_and_scatter_permuted": true,
+      "name": "fi-v3-certified-native-down",
+      "memcheck_errors": 0,
+      "log_file_sha256": "f20e01f78c99a26cf452ecb31ffc82dad7204bfa425e245fbd527610b8083bc2",
+      "tensor": "blk.20.ffn_down_exps.weight"
+    }
+  ],
+  "checker_sha256": "c6eaf7e2d69f83be2143065b52558202cdc31364b4a67f9bf0595046e712548e",
+  "native_checker_sha256": "be6ba9b96933a54cb18cd8fe8a2b897ca52dd66409bbd3e696e727860f5f7b9e",
+  "scope": "Observed routing, synthetic representable activations, synthetic and actual canonical stored proxy weights, sampled independent double/BF16 oracle. Not broad model quality.",
+  "guard": {
+    "exit_code": 0,
+    "reason": null,
+    "peak_tree_rss": 279703552,
+    "min_available": 14795829248,
+    "elapsed_s": 16.95300000003772,
+    "host_budget_gib": 2,
+    "floor_gib": 1,
+    "job_commit_gib": 16,
+    "cleanup_confirmed": true
+  },
+  "model_batch_guard": {
+    "exit_code": 0,
+    "reason": null,
+    "peak_tree_rss": 6454267904,
+    "min_available": 8468303872,
+    "elapsed_s": 337.23399999999674,
+    "host_budget_gib": 7.25,
+    "floor_gib": 1,
+    "job_commit_gib": 32,
+    "cleanup_confirmed": true
+  },
+  "label": "Q4\u2192MXFP4 requant (lossy), speed proxy for native FP4",
+  "model_sha256": "cf05bdccb86b823ce794eab2ca033a649b6a2f5c03cee8a4b177d86de017ae44",
+  "default_enabled": false,
+  "compiled_producer_sha256": "d84d3b940cde48d2b91adca3102b02af7d297af8a5b7bd7b68e25a3b4e5d7e5e",
+  "source_files": {
+    "engines/streaming-llama/flashinfer-sm120/flashinfer_bridge.cu": {
+      "build_bytes_sha256": "42c9cc5e6b8afbdd389200663f3659f37dece4578b46f0ab3028db281bba042b",
+      "canonical_lf_sha256": "42c9cc5e6b8afbdd389200663f3659f37dece4578b46f0ab3028db281bba042b"
+    },
+    "engines/streaming-llama/flashinfer-sm120/flashinfer_bridge.h": {
+      "build_bytes_sha256": "d8263f2df0beeafc065c3b6c7b6a56f095a64b5c0ec0f1f67aeb81e2b853e053",
+      "canonical_lf_sha256": "d8263f2df0beeafc065c3b6c7b6a56f095a64b5c0ec0f1f67aeb81e2b853e053"
+    },
+    "engines/streaming-llama/flashinfer-sm120/bridge_check.cu": {
+      "build_bytes_sha256": "04e871851c3f0960b3d1bf1e6b3d326eb56d1edfd19d1a5023d2948ee885426c",
+      "canonical_lf_sha256": "91541e26eb214238bfdb0bde84cc27a36e37aae0cbe90c9aa519fde5abdd967b"
+    },
+    "engines/streaming-llama/flashinfer-sm120/bridge_native_check.cu": {
+      "build_bytes_sha256": "a93d3fbdf2af0b76c30904e3db9129b0c1d55c2e0be7146996d9358005b7f9a6",
+      "canonical_lf_sha256": "0006dbc1a13930e66404efdbddb15c197821ef7dac9d91247c96ee2246ece0aa"
+    },
+    "engines/streaming-llama/prefill_llama.cpp/ggml/src/ggml-dsv41-flashinfer-workspace.h": {
+      "build_bytes_sha256": "c2666cdd4c3e38adf9bb175c63aaae9aec9ffa45ae2963417d6bb57a561d1cf0",
+      "canonical_lf_sha256": "c2666cdd4c3e38adf9bb175c63aaae9aec9ffa45ae2963417d6bb57a561d1cf0"
+    },
+    "engines/streaming-llama/prefill_llama.cpp/ggml/src/ggml-cuda/mmq.cu": {
+      "build_bytes_sha256": "e22f0cdd1223bf1cc0237773e2bd091163c957c16d487807ab17a9bf776c5f39",
+      "canonical_lf_sha256": "30cfa07f4697d7d2254cc36fa4c29f0734ed9e48f13f052993c25770e74f44ef"
+    },
+    "engines/streaming-llama/prefill_llama.cpp/ggml/src/ggml-cuda/dsv41-flashinfer.cuh": {
+      "build_bytes_sha256": "406252b4ac5e23c7922b28fe994d9978bdeb82ca703893b4868b793d7a95bcb2",
+      "canonical_lf_sha256": "406252b4ac5e23c7922b28fe994d9978bdeb82ca703893b4868b793d7a95bcb2"
+    },
+    "engines/streaming-llama/prefill_llama.cpp/src/llama-dsv41-flashinfer-budget.h": {
+      "build_bytes_sha256": "c5121cab93f65f1ae9b52cf5ff907a7de4b9ca834a66a784c45394f21bc570d4",
+      "canonical_lf_sha256": "c5121cab93f65f1ae9b52cf5ff907a7de4b9ca834a66a784c45394f21bc570d4"
+    },
+    "engines/streaming-llama/prefill_llama.cpp/src/llama-dsv41-sweep.cpp": {
+      "build_bytes_sha256": "86a1cf0f49634970b34a9c75dfee487160f84461741ecadcd46588b1bc93809b",
+      "canonical_lf_sha256": "b015d69a1ef0aa2ecf8a120ff75a8c596b2e05bfbc307980711635d5889188e2"
+    }
+  },
+  "previous_failed_smoke": {
+    "accepted": false,
+    "reason": "GGML VMM suballocation was 128-byte aligned; ABI3 requires 256. Corrected caller reserves and aligns 255 bytes of padding.",
+    "guard": {
+      "exit_code": 3221225786,
+      "reason": "OSError(5, 'owned process paging handle unavailable')",
+      "cleanup_confirmed": true,
+      "release_allowed": true
+    }
+  }
+}

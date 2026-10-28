@@ -29,7 +29,16 @@ class FlashInferAdmissionTests(unittest.TestCase):
             rounded=sum((size+255)//256*256 for size in buffers)
             module_headroom=16<<20
             other_temporaries=448<<20
-            self.assertLess(rounded+module_headroom+other_temporaries,reserve)
+            # ABI3 uses a fixed maximum allocation to avoid legacy-pool growth
+            # when gate/up and down request different sizes. Admit its lookahead.
+            maximum_routes=6*4096
+            scale_rows=((maximum_routes+384*3+127)//128)*128
+            fixed_buffers=[384*5120*2304//2,384*5120*2304//32,
+                maximum_routes*2304,scale_rows*2304//32,maximum_routes*5120*2]
+            fixed_rounded=sum((size+255)//256*256 for size in fixed_buffers)
+            self.assertLessEqual(rounded,fixed_rounded)
+            pooled=((int(1.05*(fixed_rounded+255))+255)//256)*256
+            self.assertLess(pooled+module_headroom+other_temporaries,reserve)
 
     def test_incompatible_arithmetic_profile_is_rejected_before_engine_creation(self):
         cfg=self.config('1');cfg['producer_profile']='accurate'

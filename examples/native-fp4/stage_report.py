@@ -7,7 +7,7 @@ from pathlib import Path
 import re
 
 
-def summarize(measurement, trace):
+def summarize(measurement, trace, *, prompt_timing=None):
     row = json.loads(measurement.read_text(encoding='utf-8'))
     if row.get('status') != 'PASS' or row.get('profiled') is not True or row.get('decode'):
         raise ValueError('A successful prefill-only profiling measurement is required')
@@ -72,7 +72,9 @@ def summarize(measurement, trace):
                 origin = 'remaining'
             other_origins[origin] += ms / 1000
         gpu[category] += ms / 1000
-    wall = row['prefill_seconds']
+    if prompt_timing is None and 'prompt_prefill_seconds' in row:
+        prompt_timing = {key: row[key] for key in ('prompt_prefill_seconds', 'prompt_prefill_tok_s', 'ttft_seconds', 'ttft_tok_s')}
+    wall = prompt_timing['prompt_prefill_seconds'] if prompt_timing else row['prefill_seconds']
     wait = ledger['acquire_ms'] / 1000
     residual = wall - wait - sum(gpu.get(key, 0) for key in (
         'expert_gemm', 'sparse_attention_core', 'indexer_core'))
@@ -80,9 +82,10 @@ def summarize(measurement, trace):
         raise ValueError('Stage counters exceed measured wall')
     with trace.open('rb') as stream:
         trace_sha256 = hashlib.file_digest(stream, 'sha256').hexdigest()
-    return dict(status='PASS', arm=row['arm'], label=row['label'],
+    result = dict(status='PASS', arm=row['arm'], label=row['label'],
                 prompt_tokens=row['prompt_tokens'], sweeps=row['plan']['sweeps'],
-                diagnostic_only=True, prefill_seconds=wall,
+                diagnostic_only=True, prefill_seconds=row['prefill_seconds'],
+                stage_wall_seconds=wall, stage_seconds_scope='prompt_only' if prompt_timing else 'legacy_ttft_including_startup',
                 stage_seconds=dict(stream_wait=wait, expert_gemm=gpu['expert_gemm'],
                                    sparse_attention_core=gpu['sparse_attention_core'],
                                    indexer_core=gpu['indexer_core'], other_wall=residual),
@@ -105,7 +108,7 @@ def summarize(measurement, trace):
                                  expert_gemm='MUL_MAT_ID nodes whose weight origin is a routed expert.',
                                  sparse_attention_core='FLASH_ATTN nodes; projection, RoPE and packing remain in other.',
                                  indexer_core='Index scores, their top-k, candidate blocks and selected masks.',
-                                 other_wall='Wall residual including other GPU work, CPU scheduling, carry/Engram work and startup.',
+                                 other_wall='Selected wall residual including other GPU work, CPU scheduling and carry/Engram work; startup is included only for legacy TTFT scope.',
                                  other_gpu_by_named_origin_seconds='Disjoint subsets of other_gpu identified by node or immediate source names; anonymous intermediates remain in remaining. These are not full semantic phase timers.',
                                  tile_phase_seconds='Disjoint executor phase wall sums; compute includes graph launch and synchronization. The executor post-compute gap and work outside tiles are not included.',
                                  tile_nested_seconds='Diagnostics only: register is inside bind, bind is inside prepare, launch and sync are inside compute, and gpu spans overlap compute. Never add these to tile phases or stage_seconds.'),
@@ -118,6 +121,9 @@ def summarize(measurement, trace):
                 model_sha256=row['model_sha256'], input_sha256=row['input_sha256'],
                 measurement_sha256=hashlib.sha256(measurement.read_bytes()).hexdigest(),
                 trace_sha256=trace_sha256)
+    if prompt_timing:
+        result.update(prompt_timing)
+    return result
 
 
 if __name__ == '__main__':

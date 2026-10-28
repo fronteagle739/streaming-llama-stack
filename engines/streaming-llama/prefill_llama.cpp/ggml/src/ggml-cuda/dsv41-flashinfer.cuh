@@ -1,5 +1,6 @@
 #pragma once
 #include <cstdlib>
+#include "ggml-dsv41-flashinfer-workspace.h"
 #ifdef _WIN32
 #ifndef NOMINMAX
 #define NOMINMAX
@@ -7,7 +8,7 @@
 #include <windows.h>
 #endif
 using dsv41_flashinfer_fn=int (*)(const void*,const float*,const int32_t*,const int32_t*,const int32_t*,float*,
-    int,int,int,int64_t,int64_t,int64_t,uint64_t,cudaStream_t);
+    int,int,int,int64_t,int64_t,int64_t,void*,uint64_t,cudaStream_t);
 static bool dsv41_flashinfer_requested(){
     const char *value=std::getenv("LLAMA_DSV41_FLASHINFER_MXFP4");
     return value&&std::strcmp(value,"1")==0;
@@ -22,7 +23,7 @@ static dsv41_flashinfer_fn dsv41_flashinfer_bridge(){
         GGML_ASSERT(library&&"FlashInfer bridge DLL failed to load");
         auto abi=reinterpret_cast<int(*)()>(GetProcAddress(library,"slstack_flashinfer_mxfp4_abi"));
         auto call=reinterpret_cast<dsv41_flashinfer_fn>(GetProcAddress(library,"slstack_flashinfer_mxfp4"));
-        GGML_ASSERT(abi&&abi()==2&&call&&"FlashInfer bridge ABI mismatch");
+        GGML_ASSERT(abi&&abi()==3&&call&&"FlashInfer bridge ABI mismatch");
         return call;
 #else
         GGML_ABORT("This optional FlashInfer AOT bridge is currently qualified on Windows only");

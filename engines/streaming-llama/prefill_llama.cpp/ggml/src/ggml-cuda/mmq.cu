@@ -202,8 +202,12 @@ void ggml_cuda_mul_mat_q(
 
     if(use_native_mxfp4&&ne12>4&&dsv41_flashinfer_requested()){
         GGML_ASSERT(ggml_dsv41_native_fp4_valid(dst)&&"FlashInfer requires the explicitly tagged stored MXFP4 graph");
+        // VMM suballocations are 128-byte aligned. Reserve padding rather than
+        // assuming the cudaMalloc base alignment survives suballocation.
+        ggml_cuda_pool_alloc<char> workspace(ctx.pool(),ggml_dsv41_flashinfer::workspace_bytes+255);
+        void *aligned_workspace=reinterpret_cast<void*>((reinterpret_cast<uintptr_t>(workspace.get())+255)&~uintptr_t(255));
         CUDA_CHECK(static_cast<cudaError_t>(dsv41_flashinfer_bridge()(src0_d,src1_d,ids_src1.get(),ids_dst.get(),expert_bounds.get(),dst_d,
-            int(ne_get_rows),int(ne01),int(ne00),nb11/ts_src1,s1,s2,3328ull<<20,stream)));
+            int(ne_get_rows),int(ne01),int(ne00),nb11/ts_src1,s1,s2,aligned_workspace,ggml_dsv41_flashinfer::workspace_bytes,stream)));
         CUDA_CHECK(cudaGetLastError());
         native_mxfp4_routed_queued.fetch_add(1,std::memory_order_release);
         dsv41_flashinfer_queued.fetch_add(1,std::memory_order_release);

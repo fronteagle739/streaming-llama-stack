@@ -1,5 +1,7 @@
 # Native-format kernel and stored-weight experiments
 
+Timing fields now report prompt-only prefill and launch-to-ready TTFT separately. Older startup-inclusive fields retain that meaning; see the primary 100K tables below.
+
 These are synthetic balanced grouped GEMMs, not engine throughput or observed
 route histograms. The `hash32-v1` fixture generates the same mathematical
 operands independently in Python and CUDA. The activation values are exactly
@@ -120,40 +122,58 @@ Its CPU build includes a bounded K=2304 tail loader and launch counters, but
 the corrected GPU fixture, full-model accuracy and speed qualification are
 deferred. The accepted decode results use the existing MMVQ path.
 
-## Primary 100K comparison
+## Primary 100K comparison: both timing boundaries
 
-[`primary-100k-comparison.json`](primary-100k-comparison.json) records the matched
-100,000-token fixture, one producer/decode DLL, bias zero, ULTRA and approximate
-YOCO140. Both FP4 rows are **Q4→MXFP4 requant (lossy), speed proxy for native FP4**.
-Startup is included; these are single measurements on a synthetic prompt.
+Every table below separates **prompt-only prefill** from **launch-to-ready TTFT**. All tokens/s columns use the stated clock. Use prompt-only time for comparisons with the reference repository. Historical `prefill_seconds` and `prefill_tok_s` fields remain aliases for TTFT and its throughput; explicit fields remove that ambiguity.
 
-| Path | Unprofiled prefill seconds | tokens/s |
-|---|---:|---:|
-| Q4 control | 46.453 | 2152.71 |
-| Stored MXFP4, current W4A4 | 44.406 | 2251.95 |
-| Stored MXFP4, FlashInfer W4A8 ABI 2 | 69.547 | 1437.88 |
+The native prompt clock covers the embedding, every prompt sweep, between-sweep ownership admission and token preparation through synchronized frontier logits. It excludes initial model open/allocation and final bulk export/certification. Early Engram prefetch can overlap initial open. TTFT includes process startup, model open, prompt processing, final certification and READY IPC; external harness prechecks, recall and decode are excluded. Each recovered clock is bound to the model, producer and exact input hashes, and its chunks reconcile to the native total. The original raw measurement files are unchanged.
 
-FlashInfer completed all 544 graphs and 1632 gate/up/down products. Its adapter
-is correct within the scalar-check scope but this integration is slower.
-The separate synchronized profiles give:
+Both FP4 rows in every table are **Q4→MXFP4 requant (lossy), speed proxy for native FP4**. Each matrix uses one common producer and stable decode DLL, a frozen 100,000-token synthetic input, ULTRA, bias zero and approximate YOCO140. These are single measurements.
 
-| Path | Stream wait s | Expert operators s | Sparse attention s | Indexer s | Other wall s | Effective expert TFLOPS |
-|---|---:|---:|---:|---:|---:|---:|
-| Q4 | 6.840 | 9.144 | 4.456 | 2.500 | 26.561 | 97.66 |
-| MXFP4 W4A4 | 7.404 | 6.628 | 4.454 | 2.497 | 26.439 | 134.72 |
-| FlashInfer W4A8 ABI 2 | 4.503 | 17.656 | 4.430 | 2.522 | 96.045 | 50.58 |
+### Historical ABI2 integration
 
-Each profile accounts for 892,943,518,924,800 useful routed-expert FLOPs:
-`2*3*5120*2304*6*(21*100000+19*140)`. The two sweeps execute 61 layer passes;
-upper-layer YOCO work runs only in the final sweep. Expert operator timings
-include activation packing and FlashInfer's runtime weight-layout rearrangement.
-The roughly 490-TFLOPS standalone balanced GEMM excludes those adapters and uses
-different routing. These figures do not measure pure FlashInfer core utilization.
-The FlashInfer profile's tile compute spans total 108.579 s, versus 34.713 s
-summed node timings; that gap includes execution/instrumentation overhead and
-cannot be assigned to compressor arithmetic. Profiling walls are diagnostic.
+Full timing, dispatch, quality and diagnostic evidence: [`primary-100k-comparison.json`](primary-100k-comparison.json).
 
-Seven matched forced rows across the full 129280-token vocabulary give mean
-KL(Q4‖W4A4)=0.03605 and KL(Q4‖FlashInfer)=0.04611; top-1 matches all seven.
-The untouched frontier is reported separately in the JSON. One fixture is not
-broad accuracy or recall evidence. Both lossy experiments remain off by default.
+| Path | Prompt-only s | Prompt-only tokens/s | TTFT s | Tokens/TTFT s |
+|---|---:|---:|---:|---:|
+| Q4 control | 43.686 | 2289.08 | 46.453 | 2152.71 |
+| Stored MXFP4 W4A4 | 41.631 | 2402.08 | 44.406 | 2251.95 |
+| Stored MXFP4 FlashInfer W4A8 | 66.411 | 1505.77 | 69.547 | 1437.88 |
+
+Separate synchronized stage diagnostics; the stage columns sum to the **prompt-only** wall. TTFT is also shown, and is not part of that sum.
+
+| Path | Profile prompt s | Profile TTFT s | Stream wait s | Expert s | Attention s | Indexer s | Other prompt wall s | Expert TFLOPS |
+|---|---:|---:|---:|---:|---:|---:|---:|---:|
+| Q4 control | 46.663 | 49.500 | 6.840 | 9.144 | 4.456 | 2.500 | 23.724 | 97.66 |
+| Stored MXFP4 W4A4 | 44.608 | 47.422 | 7.404 | 6.628 | 4.454 | 2.497 | 23.625 | 134.72 |
+| Stored MXFP4 FlashInfer W4A8 | 122.350 | 125.156 | 4.503 | 17.656 | 4.430 | 2.522 | 93.239 | 50.58 |
+
+### Current ABI3 workspace integration
+
+Full timing, dispatch, quality and diagnostic evidence: [`primary-100k-workspace-comparison.json`](primary-100k-workspace-comparison.json).
+
+| Path | Prompt-only s | Prompt-only tokens/s | TTFT s | Tokens/TTFT s |
+|---|---:|---:|---:|---:|
+| Q4 control | 43.991 | 2273.22 | 46.922 | 2131.20 |
+| Stored MXFP4 W4A4 | 42.029 | 2379.33 | 44.859 | 2229.21 |
+| Stored MXFP4 FlashInfer W4A8 | 40.734 | 2454.96 | 43.532 | 2297.16 |
+
+Separate synchronized stage diagnostics; the stage columns sum to the **prompt-only** wall. TTFT is also shown, and is not part of that sum.
+
+| Path | Profile prompt s | Profile TTFT s | Stream wait s | Expert s | Attention s | Indexer s | Other prompt wall s | Expert TFLOPS |
+|---|---:|---:|---:|---:|---:|---:|---:|---:|
+| Q4 control | 48.692 | 51.531 | 8.632 | 9.123 | 4.451 | 2.493 | 23.993 | 97.88 |
+| Stored MXFP4 W4A4 | 44.816 | 47.672 | 7.542 | 6.621 | 4.452 | 2.496 | 23.703 | 134.86 |
+| Stored MXFP4 FlashInfer W4A8 | 46.431 | 49.328 | 9.537 | 5.370 | 4.452 | 2.515 | 24.556 | 166.30 |
+
+Each profile accounts for 892,943,518,924,800 useful routed-expert FLOPs: `2*3*5120*2304*6*(21*100000+19*140)`. There are 61 layer passes; upper-layer YOCO work runs only in the final sweep. This approximate 140-row tail differs from the reference’s exact 2541-row cone. Expert timings include packing/layout work. The roughly 490-TFLOPS balanced standalone GEMM excludes those adapters and uses different routing, so the integrated figures do not measure pure GEMM-core utilization.
+
+ABI3 uses caller-owned bounded workspace, skips inactive experts during layout conversion and coalesces packed weight stores. The combined change reduced FlashInfer prompt-only prefill from 66.411 to 40.734 seconds, and TTFT from 69.547 to 43.532 seconds. Individual contributions were not isolated. Diagnostic tile compute fell from 108.579 to 27.106 seconds. Profiling walls are diagnostic, separate from clean throughput.
+
+[`flashinfer-workspace-regression.json`](flashinfer-workspace-regression.json) checks every one of the 8 x 129280 logit bit patterns between old and new builds: all three paths match exactly. This is a narrow regression check on one fixture. Seven forced rows give unchanged mean KL(Q4 to W4A4)=0.036049, KL(Q4 to FlashInfer)=0.046110 and KL(W4A4 to FlashInfer)=0.043305; top-1 agrees on all seven. The untouched frontier is separate. This does not establish broad accuracy or recall, or remove the proxy’s measured quality differences from Q4.
+
+[`flashinfer-workspace-validation.json`](flashinfer-workspace-validation.json) records the current ABI3 identity, source hashes, four routing/layout oracle checks and three checks using actual stored gate/up/down weights. Tail checks and all stored-weight checks pass compute-sanitizer with zero errors. It also preserves the rejected initial 128-byte-alignment smoke test and cleanup result.
+
+ABI3 is the implementation behind the existing FlashInfer toggle. The toggle stays off by default because the proxy is lossy. GGML VMM workspace mappings remain bounded and retained until backend destruction; decode-cache admission observes the remaining physical free memory. Decode performance with this retained workspace is not qualified.
+
+FlashInfer has about 3.2% higher prompt-only throughput than current MXFP4 in this fixture. That small end-to-end difference needs repeated workload testing. Integrated expert throughput is 166.3 TFLOPS. No source-native or broad quality-neutral speed claim follows.

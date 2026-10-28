@@ -91,7 +91,31 @@
         "peak_tree_rss": 6158225408,
         "min_available": 8784269312,
         "cleanup_confirmed": true
-      }
+      },
+      "prompt_prefill_seconds": 27.389664500000002,
+      "prompt_prefill_tok_s": 1809.2591093987294,
+      "ttft_seconds": 29.875,
+      "ttft_tok_s": 1658.744769874477,
+      "prefill_seconds_scope": "legacy alias for launch-to-ready TTFT; startup included",
+      "prompt_clock_definition": "Native sequential embedding_40_layers_head clock: all prompt sweeps, token preparation and between-sweep ownership admission through synchronized frontier logits. Initial model open/allocation, final bulk export/certification, recall and decode excluded. Early Engram prefetch can overlap initial open.",
+      "ttft_clock_definition": "Host ComboProducer launch boundary through frontier READY: process startup, model open/allocation, prompt processing, final state certification and IPC included; external harness prechecks, recall and decode excluded.",
+      "setup_and_ready_overhead_seconds": 2.485335499999998,
+      "overhead_definition": "TTFT minus prompt interval; includes setup and post-head certification/IPC, not just process startup.",
+      "native_prompt_receipt_sha256": "5dd2b4a79bc480dd3b5f8416cb922155bd0504b1a1bb9ad9aa661c2bdcf5bb07",
+      "native_prompt_phase_ms": {
+        "embedding_40_layers_head": 27389.664500000003,
+        "append_owner_admission": 0.0,
+        "chunk_token_preparation": 0.0201
+      },
+      "stage_seconds_scope": "legacy_ttft_including_startup",
+      "prompt_stage_seconds": {
+        "stream_wait": 7.363770799999999,
+        "expert_gemm": 4.590374272581997,
+        "sparse_attention_core": 2.2500844136860003,
+        "indexer_core": 0.726076994234,
+        "other_wall": 12.459358019498008
+      },
+      "prompt_stage_seconds_scope": "prompt_only"
     },
     {
       "status": "PASS",
@@ -183,7 +207,31 @@
         "peak_tree_rss": 6173679616,
         "min_available": 8298651648,
         "cleanup_confirmed": true
-      }
+      },
+      "prompt_prefill_seconds": 27.0087449,
+      "prompt_prefill_tok_s": 1834.7761135690537,
+      "ttft_seconds": 29.54700000002049,
+      "ttft_tok_s": 1677.1584255581154,
+      "prefill_seconds_scope": "legacy alias for launch-to-ready TTFT; startup included",
+      "prompt_clock_definition": "Native sequential embedding_40_layers_head clock: all prompt sweeps, token preparation and between-sweep ownership admission through synchronized frontier logits. Initial model open/allocation, final bulk export/certification, recall and decode excluded. Early Engram prefetch can overlap initial open.",
+      "ttft_clock_definition": "Host ComboProducer launch boundary through frontier READY: process startup, model open/allocation, prompt processing, final state certification and IPC included; external harness prechecks, recall and decode excluded.",
+      "setup_and_ready_overhead_seconds": 2.538255100020489,
+      "overhead_definition": "TTFT minus prompt interval; includes setup and post-head certification/IPC, not just process startup.",
+      "native_prompt_receipt_sha256": "c799473ecff7140ac0057c821aa039be650c239998a019bdfb553c6779e72a8c",
+      "native_prompt_phase_ms": {
+        "embedding_40_layers_head": 27008.7449,
+        "append_owner_admission": 0.0,
+        "chunk_token_preparation": 0.0335
+      },
+      "stage_seconds_scope": "legacy_ttft_including_startup",
+      "prompt_stage_seconds": {
+        "stream_wait": 8.2009411,
+        "expert_gemm": 3.336387775536002,
+        "sparse_attention_core": 2.244741694391,
+        "indexer_core": 0.726490047076,
+        "other_wall": 12.500184282997001
+      },
+      "prompt_stage_seconds_scope": "prompt_only"
     },
     {
       "status": "PASS",
@@ -278,7 +326,31 @@
         "peak_tree_rss": 6471520256,
         "min_available": 7621615616,
         "cleanup_confirmed": true
-      }
+      },
+      "prompt_prefill_seconds": 102.0504776,
+      "prompt_prefill_tok_s": 1959.8144438277475,
+      "ttft_seconds": 105.54699999996228,
+      "ttft_tok_s": 1894.8904279616804,
+      "prefill_seconds_scope": "legacy alias for launch-to-ready TTFT; startup included",
+      "prompt_clock_definition": "Native sequential embedding_40_layers_head clock: all prompt sweeps, token preparation and between-sweep ownership admission through synchronized frontier logits. Initial model open/allocation, final bulk export/certification, recall and decode excluded. Early Engram prefetch can overlap initial open.",
+      "ttft_clock_definition": "Host ComboProducer launch boundary through frontier READY: process startup, model open/allocation, prompt processing, final state certification and IPC included; external harness prechecks, recall and decode excluded.",
+      "setup_and_ready_overhead_seconds": 3.496522399962288,
+      "overhead_definition": "TTFT minus prompt interval; includes setup and post-head certification/IPC, not just process startup.",
+      "native_prompt_receipt_sha256": "f21880c72d5066137c0e35589ee2def53f2ad8d708a0b53024ce7aebd7ed227e",
+      "native_prompt_phase_ms": {
+        "embedding_40_layers_head": 102050.4776,
+        "append_owner_admission": 335.02790000000005,
+        "chunk_token_preparation": 0.12980000000000003
+      },
+      "stage_seconds_scope": "legacy_ttft_including_startup",
+      "prompt_stage_seconds": {
+        "stream_wait": 8.214885200000001,
+        "expert_gemm": 17.972370442694,
+        "sparse_attention_core": 8.803424201042,
+        "indexer_core": 8.87317749417201,
+        "other_wall": 58.186620262091985
+      },
+      "prompt_stage_seconds_scope": "prompt_only"
     },
     {
       "status": "PASS",
@@ -373,7 +445,31 @@
         "peak_tree_rss": 6478729216,
         "min_available": 7912222720,
         "cleanup_confirmed": true
-      }
+      },
+      "prompt_prefill_seconds": 96.8120175,
+      "prompt_prefill_tok_s": 2065.8592307509757,
+      "ttft_seconds": 100.23500000004424,
+      "ttft_tok_s": 1995.3110191042224,
+      "prefill_seconds_scope": "legacy alias for launch-to-ready TTFT; startup included",
+      "prompt_clock_definition": "Native sequential embedding_40_layers_head clock: all prompt sweeps, token preparation and between-sweep ownership admission through synchronized frontier logits. Initial model open/allocation, final bulk export/certification, recall and decode excluded. Early Engram prefetch can overlap initial open.",
+      "ttft_clock_definition": "Host ComboProducer launch boundary through frontier READY: process startup, model open/allocation, prompt processing, final state certification and IPC included; external harness prechecks, recall and decode excluded.",
+      "setup_and_ready_overhead_seconds": 3.4229825000442418,
+      "overhead_definition": "TTFT minus prompt interval; includes setup and post-head certification/IPC, not just process startup.",
+      "native_prompt_receipt_sha256": "220f2979e6710693a2e9a81751bdfe731c0bf7be1541200f50308febe3a9ea5f",
+      "native_prompt_phase_ms": {
+        "embedding_40_layers_head": 96812.0175,
+        "append_owner_admission": 323.1664,
+        "chunk_token_preparation": 0.17930000000000001
+      },
+      "stage_seconds_scope": "legacy_ttft_including_startup",
+      "prompt_stage_seconds": {
+        "stream_wait": 8.6512932,
+        "expert_gemm": 13.107741120164011,
+        "sparse_attention_core": 8.815632334890001,
+        "indexer_core": 8.873797349490994,
+        "other_wall": 57.363553495454994
+      },
+      "prompt_stage_seconds_scope": "prompt_only"
     },
     {
       "status": "PASS",
@@ -485,7 +581,31 @@
         "peak_tree_rss": 6229749760,
         "min_available": 7230181376,
         "cleanup_confirmed": true
-      }
+      },
+      "prompt_prefill_seconds": 1004.0749930999999,
+      "prompt_prefill_tok_s": 995.9415450758128,
+      "ttft_seconds": 1012.390000000014,
+      "ttft_tok_s": 987.7616333626233,
+      "prefill_seconds_scope": "legacy alias for launch-to-ready TTFT; startup included",
+      "prompt_clock_definition": "Native sequential embedding_40_layers_head clock: all prompt sweeps, token preparation and between-sweep ownership admission through synchronized frontier logits. Initial model open/allocation, final bulk export/certification, recall and decode excluded. Early Engram prefetch can overlap initial open.",
+      "ttft_clock_definition": "Host ComboProducer launch boundary through frontier READY: process startup, model open/allocation, prompt processing, final state certification and IPC included; external harness prechecks, recall and decode excluded.",
+      "setup_and_ready_overhead_seconds": 8.315006900014055,
+      "overhead_definition": "TTFT minus prompt interval; includes setup and post-head certification/IPC, not just process startup.",
+      "native_prompt_receipt_sha256": "f1041ff0b7cd1b87ac1ad3bcb384ae76adfbbf6e94d35efb568d44accd58e115",
+      "native_prompt_phase_ms": {
+        "embedding_40_layers_head": 1004074.9931,
+        "append_owner_admission": 2006.6870999999999,
+        "chunk_token_preparation": 0.5336000000000001
+      },
+      "stage_seconds_scope": "legacy_ttft_including_startup",
+      "prompt_stage_seconds": {
+        "stream_wait": 10.8971545,
+        "expert_gemm": 88.95049385708987,
+        "sparse_attention_core": 43.849967196628995,
+        "indexer_core": 195.58809842675487,
+        "other_wall": 664.7892791195261
+      },
+      "prompt_stage_seconds_scope": "prompt_only"
     }
   ]
 }

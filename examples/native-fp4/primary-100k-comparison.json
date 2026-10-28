@@ -4,7 +4,7 @@
   "primary_prompt_tokens": 100000,
   "default_enabled": false,
   "native_precision_claim": false,
-  "conditions": "Same frozen synthetic prompt, ULTRA, approximate YOCO140, same producer/decode DLL, bias zero; prefill includes startup. One engine per exclusive lease with physical RAM and paging guards.",
+  "conditions": "Same frozen synthetic prompt, ULTRA, approximate YOCO140, same producer/decode DLL, bias zero; both prompt-only prefill and launch-to-ready TTFT reported; legacy prefill_seconds is TTFT. One engine per exclusive lease with physical RAM and paging guards.",
   "limitations": "One synthetic fixture, eight fixed logit rows; not broad task/recall accuracy. Separate synchronized profiles are diagnostic only.",
   "measurements": [
     {
@@ -35,6 +35,21 @@
         "host_budget_gib": 7.25,
         "floor_gib": 1,
         "cleanup_confirmed": true
+      },
+      "prompt_prefill_seconds": 43.6857264,
+      "prompt_prefill_tok_s": 2289.077193872642,
+      "ttft_seconds": 46.45299999997951,
+      "ttft_tok_s": 2152.713495361852,
+      "prefill_seconds_scope": "legacy alias for launch-to-ready TTFT; startup included",
+      "prompt_clock_definition": "Native sequential embedding_40_layers_head clock: all prompt sweeps, token preparation and between-sweep ownership admission through synchronized frontier logits. Initial model open/allocation, final bulk export/certification, recall and decode excluded. Early Engram prefetch can overlap initial open.",
+      "ttft_clock_definition": "Host ComboProducer launch boundary through frontier READY: process startup, model open/allocation, prompt processing, final state certification and IPC included; external harness prechecks, recall and decode excluded.",
+      "setup_and_ready_overhead_seconds": 2.767273599979511,
+      "overhead_definition": "TTFT minus prompt interval; includes setup and post-head certification/IPC, not just process startup.",
+      "native_prompt_receipt_sha256": "1bcf202799bb3695fc2c8f034d8b71b8b9ddd32e56f8efc1272d02fefc20642e",
+      "native_prompt_phase_ms": {
+        "embedding_40_layers_head": 43685.7264,
+        "append_owner_admission": 107.3528,
+        "chunk_token_preparation": 0.0298
       },
       "stored_completed_products": 0,
       "trace_sha256": "d273205f10eb24e8e8e096d0d067f55d9d77421a828be94c5552ce8d7836b21c"
@@ -67,6 +82,21 @@
         "host_budget_gib": 7.25,
         "floor_gib": 1,
         "cleanup_confirmed": true
+      },
+      "prompt_prefill_seconds": 41.6306646,
+      "prompt_prefill_tok_s": 2402.0755123856466,
+      "ttft_seconds": 44.40600000001723,
+      "ttft_tok_s": 2251.94793496287,
+      "prefill_seconds_scope": "legacy alias for launch-to-ready TTFT; startup included",
+      "prompt_clock_definition": "Native sequential embedding_40_layers_head clock: all prompt sweeps, token preparation and between-sweep ownership admission through synchronized frontier logits. Initial model open/allocation, final bulk export/certification, recall and decode excluded. Early Engram prefetch can overlap initial open.",
+      "ttft_clock_definition": "Host ComboProducer launch boundary through frontier READY: process startup, model open/allocation, prompt processing, final state certification and IPC included; external harness prechecks, recall and decode excluded.",
+      "setup_and_ready_overhead_seconds": 2.7753354000172266,
+      "overhead_definition": "TTFT minus prompt interval; includes setup and post-head certification/IPC, not just process startup.",
+      "native_prompt_receipt_sha256": "ad9f595d1a640225e7986e43921ceb3c3c55b673f64b481001b3cb8ecbf22e0f",
+      "native_prompt_phase_ms": {
+        "embedding_40_layers_head": 41630.664600000004,
+        "append_owner_admission": 105.1627,
+        "chunk_token_preparation": 0.0299
       },
       "stored_completed_products": 1632,
       "trace_sha256": "e37b7291ccce3020b5c5dbdf18c4baf9f3ff18b9524d74ae26fa636473615767"
@@ -103,6 +133,21 @@
       "flashinfer_bridge_sha256": "8bbc22b60e9b0ff9793d132b74a31a462b8c16319cfb7d4ae3608974074bd8fd",
       "flashinfer_completed_graphs": 544,
       "flashinfer_completed_products": 1632,
+      "prompt_prefill_seconds": 66.4112907,
+      "prompt_prefill_tok_s": 1505.768054587742,
+      "ttft_seconds": 69.54700000002049,
+      "ttft_tok_s": 1437.8765439195154,
+      "prefill_seconds_scope": "legacy alias for launch-to-ready TTFT; startup included",
+      "prompt_clock_definition": "Native sequential embedding_40_layers_head clock: all prompt sweeps, token preparation and between-sweep ownership admission through synchronized frontier logits. Initial model open/allocation, final bulk export/certification, recall and decode excluded. Early Engram prefetch can overlap initial open.",
+      "ttft_clock_definition": "Host ComboProducer launch boundary through frontier READY: process startup, model open/allocation, prompt processing, final state certification and IPC included; external harness prechecks, recall and decode excluded.",
+      "setup_and_ready_overhead_seconds": 3.135709300020494,
+      "overhead_definition": "TTFT minus prompt interval; includes setup and post-head certification/IPC, not just process startup.",
+      "native_prompt_receipt_sha256": "46375630cd3b1b8f11882d2fb81053655f9900e5290e379c28c036bdf748bc78",
+      "native_prompt_phase_ms": {
+        "embedding_40_layers_head": 66411.2907,
+        "append_owner_admission": 111.3844,
+        "chunk_token_preparation": 0.0524
+      },
       "stored_completed_products": 1632,
       "trace_sha256": "9cec5b5a9e9c5c35654b7fb98017a1e177bb09315dbd17cd123000c753402e3c"
     }
@@ -334,12 +379,14 @@
       ],
       "diagnostic_only": true,
       "prefill_seconds": 49.5,
+      "stage_wall_seconds": 46.66280929999999,
+      "stage_seconds_scope": "prompt_only",
       "stage_seconds": {
         "stream_wait": 6.8399243000000025,
         "expert_gemm": 9.143744318546995,
         "sparse_attention_core": 4.455785598396999,
         "indexer_core": 2.4998123144660007,
-        "other_wall": 26.560733468590005
+        "other_wall": 23.723542768589997
       },
       "gpu_seconds": {
         "sparse_attention_core": 4.455785598396999,
@@ -373,7 +420,7 @@
       "routed_effective_tflops": 97.65622132648335,
       "nominal_5090_dense_fp4_tflops": 1676,
       "fp4_roof_ratio_reference_only": null,
-      "useful_fetch_bytes_per_wall_second": 9741578821.656565,
+      "useful_fetch_bytes_per_wall_second": 10333885998.415447,
       "layer_ledger_ms": {
         "wall_ms": 45373.481600000014,
         "acquire_ms": 6839.924300000002,
@@ -392,7 +439,7 @@
         "expert_gemm": "MUL_MAT_ID nodes whose weight origin is a routed expert.",
         "sparse_attention_core": "FLASH_ATTN nodes; projection, RoPE and packing remain in other.",
         "indexer_core": "Index scores, their top-k, candidate blocks and selected masks.",
-        "other_wall": "Wall residual including other GPU work, CPU scheduling, carry/Engram work and startup.",
+        "other_wall": "Selected wall residual including other GPU work, CPU scheduling and carry/Engram work; startup is included only for legacy TTFT scope.",
         "other_gpu_by_named_origin_seconds": "Disjoint subsets of other_gpu identified by node or immediate source names; anonymous intermediates remain in remaining. These are not full semantic phase timers.",
         "tile_phase_seconds": "Disjoint executor phase wall sums; compute includes graph launch and synchronization. The executor post-compute gap and work outside tiles are not included.",
         "tile_nested_seconds": "Diagnostics only: register is inside bind, bind is inside prepare, launch and sync are inside compute, and gpu spans overlap compute. Never add these to tile phases or stage_seconds."
@@ -408,6 +455,21 @@
       "input_sha256": "4ffeee4837f76e364da2cc241938e3e79f61901d6d4c0824d5f6cddba8db4320",
       "measurement_sha256": "496d6636d7a02d3239b80bda1c99dd50207dfc334e5032fb0da7afbf5c664f4e",
       "trace_sha256": "28ea1418c352390c25721ac93d02a9fe1789edaf8a76cf63172867abf520309c",
+      "prompt_prefill_seconds": 46.66280929999999,
+      "prompt_prefill_tok_s": 2143.034281478634,
+      "ttft_seconds": 49.5,
+      "ttft_tok_s": 2020.20202020202,
+      "prefill_seconds_scope": "legacy alias for launch-to-ready TTFT; startup included",
+      "prompt_clock_definition": "Native sequential embedding_40_layers_head clock: all prompt sweeps, token preparation and between-sweep ownership admission through synchronized frontier logits. Initial model open/allocation, final bulk export/certification, recall and decode excluded. Early Engram prefetch can overlap initial open.",
+      "ttft_clock_definition": "Host ComboProducer launch boundary through frontier READY: process startup, model open/allocation, prompt processing, final state certification and IPC included; external harness prechecks, recall and decode excluded.",
+      "setup_and_ready_overhead_seconds": 2.837190700000008,
+      "overhead_definition": "TTFT minus prompt interval; includes setup and post-head certification/IPC, not just process startup.",
+      "native_prompt_receipt_sha256": "a445d240ab5c458f05cd719f8b64b3008598ce01bc257d691bf7daa38ba63c0f",
+      "native_prompt_phase_ms": {
+        "embedding_40_layers_head": 46662.80929999999,
+        "append_owner_admission": 110.8551,
+        "chunk_token_preparation": 0.042
+      },
       "kernel": "q4",
       "independent_expected_flops": 892943518924800,
       "guard": {
@@ -431,12 +493,14 @@
       ],
       "diagnostic_only": true,
       "prefill_seconds": 47.42200000002049,
+      "stage_wall_seconds": 44.6078642,
+      "stage_seconds_scope": "prompt_only",
       "stage_seconds": {
         "stream_wait": 7.403558600000002,
         "expert_gemm": 6.628086595234998,
         "sparse_attention_core": 4.454349079461999,
         "indexer_core": 2.4970104627159997,
-        "other_wall": 26.438995262607488
+        "other_wall": 23.624859462587
       },
       "gpu_seconds": {
         "sparse_attention_core": 4.454349079461999,
@@ -470,7 +534,7 @@
       "routed_effective_tflops": 134.72116063884056,
       "nominal_5090_dense_fp4_tflops": 1676,
       "fp4_roof_ratio_reference_only": 0.08038255408045379,
-      "useful_fetch_bytes_per_wall_second": 9622181299.645794,
+      "useful_fetch_bytes_per_wall_second": 10229207109.001196,
       "layer_ledger_ms": {
         "wall_ms": 43285.578400000006,
         "acquire_ms": 7403.558600000002,
@@ -489,7 +553,7 @@
         "expert_gemm": "MUL_MAT_ID nodes whose weight origin is a routed expert.",
         "sparse_attention_core": "FLASH_ATTN nodes; projection, RoPE and packing remain in other.",
         "indexer_core": "Index scores, their top-k, candidate blocks and selected masks.",
-        "other_wall": "Wall residual including other GPU work, CPU scheduling, carry/Engram work and startup.",
+        "other_wall": "Selected wall residual including other GPU work, CPU scheduling and carry/Engram work; startup is included only for legacy TTFT scope.",
         "other_gpu_by_named_origin_seconds": "Disjoint subsets of other_gpu identified by node or immediate source names; anonymous intermediates remain in remaining. These are not full semantic phase timers.",
         "tile_phase_seconds": "Disjoint executor phase wall sums; compute includes graph launch and synchronization. The executor post-compute gap and work outside tiles are not included.",
         "tile_nested_seconds": "Diagnostics only: register is inside bind, bind is inside prepare, launch and sync are inside compute, and gpu spans overlap compute. Never add these to tile phases or stage_seconds."
@@ -505,6 +569,21 @@
       "input_sha256": "4ffeee4837f76e364da2cc241938e3e79f61901d6d4c0824d5f6cddba8db4320",
       "measurement_sha256": "50d80afc5b1640b45e93d3021366b8cc9e97cba6e055df5e875a28e4fea640bc",
       "trace_sha256": "33da700418b174e12974553222354ec131be685ab3187f4ff9d84c02d84c31c4",
+      "prompt_prefill_seconds": 44.6078642,
+      "prompt_prefill_tok_s": 2241.757183254696,
+      "ttft_seconds": 47.42200000002049,
+      "ttft_tok_s": 2108.725907805592,
+      "prefill_seconds_scope": "legacy alias for launch-to-ready TTFT; startup included",
+      "prompt_clock_definition": "Native sequential embedding_40_layers_head clock: all prompt sweeps, token preparation and between-sweep ownership admission through synchronized frontier logits. Initial model open/allocation, final bulk export/certification, recall and decode excluded. Early Engram prefetch can overlap initial open.",
+      "ttft_clock_definition": "Host ComboProducer launch boundary through frontier READY: process startup, model open/allocation, prompt processing, final state certification and IPC included; external harness prechecks, recall and decode excluded.",
+      "setup_and_ready_overhead_seconds": 2.8141358000204875,
+      "overhead_definition": "TTFT minus prompt interval; includes setup and post-head certification/IPC, not just process startup.",
+      "native_prompt_receipt_sha256": "431baf904e90e82f84c19d47312794e890a2fb81f62b27a6eb0e3c0f4cf5301c",
+      "native_prompt_phase_ms": {
+        "embedding_40_layers_head": 44607.8642,
+        "append_owner_admission": 92.3344,
+        "chunk_token_preparation": 0.0513
+      },
       "kernel": "mxfp4",
       "independent_expected_flops": 892943518924800,
       "guard": {
@@ -528,12 +607,14 @@
       ],
       "diagnostic_only": true,
       "prefill_seconds": 125.15600000001723,
+      "stage_wall_seconds": 122.3495286,
+      "stage_seconds_scope": "prompt_only",
       "stage_seconds": {
         "stream_wait": 4.503138999999999,
         "expert_gemm": 17.65552573393999,
         "sparse_attention_core": 4.429876505853,
         "indexer_core": 2.5223389754179992,
-        "other_wall": 96.04511978480625
+        "other_wall": 93.238648384789
       },
       "gpu_seconds": {
         "sparse_attention_core": 4.429876505853,
@@ -567,7 +648,7 @@
       "routed_effective_tflops": 50.57586686349734,
       "nominal_5090_dense_fp4_tflops": 1676,
       "fp4_roof_ratio_reference_only": 0.030176531541466194,
-      "useful_fetch_bytes_per_wall_second": 3645874601.2331586,
+      "useful_fetch_bytes_per_wall_second": 3729504206.6226645,
       "layer_ledger_ms": {
         "wall_ms": 120981.6636,
         "acquire_ms": 4503.138999999999,
@@ -586,7 +667,7 @@
         "expert_gemm": "MUL_MAT_ID nodes whose weight origin is a routed expert.",
         "sparse_attention_core": "FLASH_ATTN nodes; projection, RoPE and packing remain in other.",
         "indexer_core": "Index scores, their top-k, candidate blocks and selected masks.",
-        "other_wall": "Wall residual including other GPU work, CPU scheduling, carry/Engram work and startup.",
+        "other_wall": "Selected wall residual including other GPU work, CPU scheduling and carry/Engram work; startup is included only for legacy TTFT scope.",
         "other_gpu_by_named_origin_seconds": "Disjoint subsets of other_gpu identified by node or immediate source names; anonymous intermediates remain in remaining. These are not full semantic phase timers.",
         "tile_phase_seconds": "Disjoint executor phase wall sums; compute includes graph launch and synchronization. The executor post-compute gap and work outside tiles are not included.",
         "tile_nested_seconds": "Diagnostics only: register is inside bind, bind is inside prepare, launch and sync are inside compute, and gpu spans overlap compute. Never add these to tile phases or stage_seconds."
@@ -602,6 +683,21 @@
       "input_sha256": "4ffeee4837f76e364da2cc241938e3e79f61901d6d4c0824d5f6cddba8db4320",
       "measurement_sha256": "c2803d33309aeb1199913d0e85d282f64c1da60ad1863a4c43b18fb16e0a3c2e",
       "trace_sha256": "876992fbd141a8f2f9c21e5360fec34ee0c6d858a5e5cf12d4773f2cccd347b1",
+      "prompt_prefill_seconds": 122.3495286,
+      "prompt_prefill_tok_s": 817.3304886766846,
+      "ttft_seconds": 125.15600000001723,
+      "ttft_tok_s": 799.0028444500163,
+      "prefill_seconds_scope": "legacy alias for launch-to-ready TTFT; startup included",
+      "prompt_clock_definition": "Native sequential embedding_40_layers_head clock: all prompt sweeps, token preparation and between-sweep ownership admission through synchronized frontier logits. Initial model open/allocation, final bulk export/certification, recall and decode excluded. Early Engram prefetch can overlap initial open.",
+      "ttft_clock_definition": "Host ComboProducer launch boundary through frontier READY: process startup, model open/allocation, prompt processing, final state certification and IPC included; external harness prechecks, recall and decode excluded.",
+      "setup_and_ready_overhead_seconds": 2.80647140001723,
+      "overhead_definition": "TTFT minus prompt interval; includes setup and post-head certification/IPC, not just process startup.",
+      "native_prompt_receipt_sha256": "4211b51c65f01dd8fe40ae93b741e2586d50a49cc30c056c7916232574212d8f",
+      "native_prompt_phase_ms": {
+        "embedding_40_layers_head": 122349.5286,
+        "append_owner_admission": 114.5185,
+        "chunk_token_preparation": 0.09
+      },
       "kernel": "flashinfer",
       "independent_expected_flops": 892943518924800,
       "guard": {

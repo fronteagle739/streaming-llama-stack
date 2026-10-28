@@ -197,6 +197,14 @@ static bool decode_compact_enabled(){static const bool on=[]{const char*e=std::g
 static void compact_fixed(llama_dsv41_fixed_storage&f,uint64_t admitted_hidden){
     require(f.ready&&f.graph&&!f.decode_compact,"Decode compaction requires the ready prefill plan");
     ggml_backend_synchronize(f.backend);
+#ifdef GGML_USE_CUDA
+    if(llama_dsv41_flashinfer::requested()){
+        const size_t released=ggml_backend_cuda_pool_clear(f.backend);
+        // Legacy pools release storage; VMM pools retain their bounded mappings
+        // until backend destruction. Decode L2 admission observes physical free.
+        std::fprintf(stderr,"NATIVEFP4_FLASHINFER_WORKSPACE_POOL_CLEAR released_bytes=%zu phase=prefill_to_decode\n",released);
+    }
+#endif
     const uint64_t old_graph=ggml_gallocr_get_buffer_size(f.graph.get(),0),old_hidden=f.hidden?ggml_backend_buffer_get_size(f.hidden.get()):0;
     f.full_graph_reserve=f.graph_bytes;f.full_hidden_bytes=f.hidden_bytes;
     f.graph=std::shared_ptr<ggml_gallocr>(ggml_gallocr_new(ggml_backend_get_default_buffer_type(f.backend)),ggml_gallocr_free);
