@@ -239,7 +239,9 @@ def handler(proxy):
                         proxy.window(False)
                     except BaseException:
                         if session.poison and session.poison.startswith('Unconfirmed GPU release'):
-                            os._exit(72) # Outer kill-on-close Job retires descendants before orphan-lease recovery.
+                            error=RuntimeError(session.poison+'; retaining GPU ownership')
+                            error.owned_cleanup_uncertain=True
+                            raise error
                         proxy.window(False);raise
                 if streaming:self.wfile.write(terminal);self.wfile.flush()
                 else:self.send(200,result)
@@ -353,12 +355,16 @@ def guarded(cfg,config):
     run_config=root/('server-'+run_id+'.config.json');atomic_json(run_config,cfg)
     command=[sys.executable,'-B','-m','slstack.combo_proxy','--config',str(run_config),'--serve','--run-id',run_id,'--window',str(window)]
     spec=dict(command=command,cwd=str(Path(__file__).resolve().parents[1]),env=env,runtime_root=str(root),task='DS4COMBO',
+        gpu_uuid=cfg.get('gpu_uuid'),
         host_budget_gib=cfg['combo_worker_host_budget_gib'],min_available_gib=cfg['min_available_gib'],job_commit_gib=cfg['job_commit_gib'],timeout_s=None,   # a server has no lifetime cap; requests use the progress-renewed window
         
         owner_pid=owner.pid,owner_created=owner.create_time(),stop=str(root/('server-'+run_id+'.stop')),
         log=str(root/('server-'+run_id+'.log')),receipt=str(root/('server-'+run_id+'.json')),paging_telemetry=True,
         gpu_window_file=str(window),gpu_run_id=run_id,gpu_hold_file=cfg['hold_file'],
         gpu_window_stall_seconds=cfg.get('gpu_window_stall_seconds',30))
+    if cfg.get('serving_mode')=='single_engine':
+        spec['cooperative_stop']=dict(url=f'http://127.0.0.1:{cfg["port"]}/v1/stack/shutdown',
+            abort_file=cfg.get('env_overrides',{}).get('LLAMADECODE_ABORT_FILE'))
     from .envvars import split_secrets
     atomic_json(root/('server-'+run_id+'.spec.json'),dict(spec,env=split_secrets(env)[0]))   # the token stays in memory
     return supervise(spec)
@@ -367,7 +373,7 @@ def guarded(cfg,config):
 if __name__=='__main__':
     parser=argparse.ArgumentParser();parser.add_argument('--config',required=True);parser.add_argument('--serve',action='store_true')
     parser.add_argument('--run-id');parser.add_argument('--window')
-    parser.add_argument('--runtime-min-free-gib',type=float,help='Runtime available physical RAM floor (default 4 GiB; 0 disables it)')
+    parser.add_argument('--runtime-min-free-gib',type=float,help='Runtime available physical RAM floor (default 0.5 GiB; 0 disables it)')
     parser.add_argument('--native-argv',nargs=argparse.REMAINDER)
     args=parser.parse_args();config=Path(args.config).resolve();cfg=json.loads(config.read_text())
     if args.runtime_min_free_gib is not None:cfg['runtime_min_free_gib']=args.runtime_min_free_gib

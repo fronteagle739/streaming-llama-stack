@@ -14,6 +14,9 @@
 
 ## Planned
 
+- Revisit the experimental host-RAM expert tier on machines with much more RAM
+  (untested). It gave no gain on the 32 GB machine and is not in this release;
+  [measured decode rates](PERFORMANCE.md#host-ram-expert-tier).
 - Complete the CPU mode3/YOCO receiver for the delivered
   [large-RAM ds4-win untested example](../examples/dual-machine/dsv41-large-ram-untested/README.md).
 - Faster cold start and DirectStorage setup; better VRAM use within the same RAM budget.

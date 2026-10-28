@@ -48,6 +48,25 @@ Other models on the same streaming engine and RTX 5090:
 
 [Full numbers, with the conditions for each](docs/PERFORMANCE.md).
 
+### Host-RAM expert tier
+
+An experimental host-RAM expert tier was evaluated and is not in this release:
+it gave no gain on this machine. Warm decode after the first 100 tokens, about
+50K context, RTX 5090 and 32 GB RAM:
+
+| Run | Max quality | Max speed |
+|---|---:|---:|
+| Tier off | 7.16 tok/s | 18.54 tok/s |
+| 3.5 GiB, upload to GPU | 7.16 tok/s | 18.18 tok/s |
+| 3.5 GiB, CPU compute | 6.86 tok/s | 15.87 tok/s |
+| Full size (~11 GiB), CPU compute | 7.34 tok/s | 13.74 tok/s |
+| Full size (~11 GiB), mix of both | 7.27 tok/s | 13.45 tok/s |
+
+The speed settings already favour VRAM-resident experts, misses are spread
+thinly, and at Max speed the GPU waits for the CPU. It is expected to matter
+more on machines with much more RAM; that is untested and listed in the
+[roadmap](docs/ROADMAP.md).
+
 ## How it works
 
 **Streaming prefill.** Prefill reads each layer's weights once per pass and runs
@@ -94,7 +113,7 @@ one DeepSeek V4.1-specific part.
 - **Storage:** fast local NVMe with DirectStorage. Measured on a NVMe RAID-0 at
   about 25 GB/s. Storage speed sets prefill and cold decode speed.
 - **System RAM:** 32 GB. The engine needs its 9.25 GiB budget plus a 512 MiB
-  desktop reserve free, and stops cleanly if RAM drops below 4 GiB free.
+  desktop reserve free, and stops cleanly if RAM drops below 0.5 GiB free.
 - **Build tools:** Windows, Python 3.12, Visual Studio C++ Build Tools, CMake, Ninja,
   CUDA 13.2 and Node.js 24.
 - **Optional Mac:** M3 Ultra with 512 GB, on the same network, with the same model file.
@@ -130,7 +149,7 @@ model path and GPU UUID. `*.local.*` files are ignored by Git.
   "gpu_uuid": "<GPU-UUID>",
   "host_budget_gib": 9.25,
   "min_available_gib": 4,
-  "runtime_min_free_gib": 4
+  "runtime_min_free_gib": 0.5
 }
 ```
 

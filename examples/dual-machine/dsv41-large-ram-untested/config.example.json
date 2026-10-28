@@ -6,7 +6,7 @@
     "context": 1000001,
     "host_budget_gib": 8.5,
     "min_available_gib": 0.5,
-    "runtime_min_free_gib": 4,
+    "runtime_min_free_gib": 0.5,
     "producer_desktop_reserve_gib": 0.5,
     "native_tier": "ultra",
     "producer_profile": "ultra",

@@ -71,6 +71,25 @@ about 19.7 tok/s (51 ms per token).
 Decode in the 1M-context preset, after a 237,703-token prompt: 5.2 tok/s at Max
 quality over a 52-token reply.
 
+### Host-RAM expert tier
+
+An experimental host-RAM expert tier was evaluated and is not in this release:
+it gave no gain on this machine. Warm decode after the first 100 tokens, about
+50K context, RTX 5090 and 32 GB RAM:
+
+| Run | Max quality | Max speed |
+|---|---:|---:|
+| Tier off | 7.16 tok/s | 18.54 tok/s |
+| 3.5 GiB, upload to GPU | 7.16 tok/s | 18.18 tok/s |
+| 3.5 GiB, CPU compute | 6.86 tok/s | 15.87 tok/s |
+| Full size (~11 GiB), CPU compute | 7.34 tok/s | 13.74 tok/s |
+| Full size (~11 GiB), mix of both | 7.27 tok/s | 13.45 tok/s |
+
+The speed settings already favour VRAM-resident experts, misses are spread
+thinly, and at Max speed the GPU waits for the CPU. It is expected to matter
+more on machines with much more RAM; that is untested and listed in the
+[roadmap](ROADMAP.md).
+
 ### Quality/speed dial
 
 The dial adds a bias toward experts already in VRAM. At 0 (Max quality) the

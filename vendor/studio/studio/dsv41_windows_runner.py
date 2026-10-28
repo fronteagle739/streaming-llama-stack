@@ -15,8 +15,7 @@ from .dsv41_session_contract import Refused, require
 
 log = logging.getLogger(__name__)
 
-# Studio c0403208a7 (owner rule: never force-kill a process that may hold VRAM or
-# DirectStorage resources). Run detached: attach to the owned root's windowless
+# Studio c0403208a7 cooperative console request. Run detached: attach to the owned root's windowless
 # console and raise Ctrl-Break there; the helper shields itself with its own handler
 # registered after AttachConsole and waits for it to see the event before leaving.
 _CTRL_BREAK = """import ctypes,os,sys,threading
@@ -38,11 +37,11 @@ os._exit(0 if seen.wait(5) else 12)
 
 
 class StuckProcess(RuntimeError):
-    """A resumed process still alive after every graceful step: left running, never terminated."""
+    """Owned exit remains unconfirmed after the retirement sequence."""
 
 
 def stuck_message(pid, reason):
-    return "DSV41 STUCK PROCESS pid=%s holding VRAM, NOT killed; owner action needed (%s)" % (pid, reason)
+    return "DSV41 STUCK PROCESS pid=%s exit unconfirmed, may hold VRAM; owner action needed (%s)" % (pid, reason)
 
 class _Memory(C.Structure):
     _fields_ = [('length', W.DWORD), ('load', W.DWORD)] + [(name, C.c_ulonglong) for name in ('total', 'available', 'page', 'page_free', 'virtual', 'virtual_free', 'extended')]
@@ -278,6 +277,8 @@ class _Job:
         return int(self.pi.pid)
 
     def resume(self):
+        # A lost controller is not permission to bypass cooperative retirement.
+        self.release_kill_on_close()
         require(self.n.k.ResumeThread(self.pi.thread) != 4294967295, 'Owned worker resume failed')
         self.resumed = True
 
@@ -306,21 +307,25 @@ class _Job:
         return True
 
     def _wait_empty(self, seconds):
-        deadline = time.monotonic() + seconds
-        while self.active() and time.monotonic() < deadline:
+        from slstack.shutdown import RetirementProgress, process_members
+        progress=RetirementProgress(max(seconds,.001),
+            diagnostic=getattr(self,'retirement_diagnostic',None),gpu_free=getattr(self,'gpu_free',None))
+        while self.active():
+            progress.observe(process_members(self))
+            if progress.window.expired():return False
             time.sleep(0.05)
-        return not self.active()
+        return True
 
     def release_kill_on_close(self):
         limits = _Limits()
         limits.basic.flags = 0
         self.n.ok(self.n.k.SetInformationJobObject(self.job, 9, C.byref(limits), C.sizeof(limits)))
 
-    def stop(self, graceful_seconds=0, stuck_seconds=None):
-        """Never kills a resumed process (it may hold VRAM): Ctrl-Break, graceful_seconds,
-        a second Ctrl-Break, up to stuck_seconds in total, then StuckProcess with the
-        process left running and kill-on-close cleared. A never-resumed root ran no code
-        and holds nothing: that one is terminated."""
+    def stop(self, graceful_seconds=60, stuck_seconds=None):
+        """Two cooperative requests with renewable grace, then a loud force fallback.
+
+        A never-resumed root ran no code and holds no engine resources.
+        """
         if not self.active():
             return 'exited'
         if not self.resumed:
@@ -343,7 +348,13 @@ class _Job:
                 code = self.poll()
                 how = 'graceful' if attempt == 1 else 'graceful-late'
                 return how if code in (0, 130) else '%s-crashed exit=%s' % (how, code)
-        reason = 'alive %ds after Ctrl-Break%s' % (stuck_seconds, ('; ' + '; '.join(failures)) if failures else '')
+        reason = 'no shutdown progress for %ds after cooperative requests%s' % (stuck_seconds, ('; ' + '; '.join(failures)) if failures else '')
+        self.forced_kill=True;self.force_reason=reason
+        log.critical('FORCE KILL LAST FALLBACK: owned PID=%s; %s',self.pid,reason)
+        self.n.ok(self.n.k.TerminateJobObject(self.job,137))
+        if self._wait_empty(30):
+            self.n.k.WaitForSingleObject(self.pi.process,2000)
+            return 'forced-kill: '+reason
         self.release_kill_on_close()
         message = stuck_message(self.pid, reason)
         log.critical(message)

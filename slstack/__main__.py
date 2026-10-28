@@ -13,7 +13,7 @@ def main():
     parser.add_argument('--config')
     parser.add_argument('--host-budget-gib', type=float)
     parser.add_argument('--min-available-gib', type=float)
-    parser.add_argument('--runtime-min-free-gib', type=float, help='Runtime available physical RAM floor (default 4 GiB; 0 disables it)')
+    parser.add_argument('--runtime-min-free-gib', type=float, help='Runtime available physical RAM floor (default 0.5 GiB; 0 disables it)')
     sub = parser.add_subparsers(dest='command', required=True)
     sub.add_parser('check')
     mlx_setup = sub.add_parser('setup-mlx', help='Install the retained MLX-VLM fork and native GLM kernels')
@@ -237,7 +237,8 @@ def main():
                 urllib.request.urlopen(urllib.request.Request(f'http://{cfg["host"]}:{cfg["port"]}/v1/stack/shutdown',
                                                               data=b'{}', headers={'Content-Type': 'application/json'}),
                                        timeout=10).read()
-                proc.proc.wait(timeout=120)
+                from .shutdown import wait_for_exit,gpu_free_reader
+                wait_for_exit(proc.proc, 120, diagnostic=proc.log,gpu_free=gpu_free_reader(cfg.get('gpu_uuid')))
             except Exception as exc:
                 print('Graceful router stop failed: ' + repr(exc), file=sys.stderr)
             if proc.proc.poll() is None:

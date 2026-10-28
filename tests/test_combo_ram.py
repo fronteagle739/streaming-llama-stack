@@ -12,8 +12,8 @@ from slstack.combo_ram import LockedRam, kernel_api, protect_working_set,wait_fo
 
 
 class RuntimeFloorTest(unittest.TestCase):
-    def test_default_is_four_and_zero_disables(self):
-        self.assertEqual(runtime_min_free_gib({}),4.0)
+    def test_default_is_half_and_zero_disables(self):
+        self.assertEqual(runtime_min_free_gib({}),0.5)
         self.assertEqual(runtime_min_free_gib(dict(runtime_min_free_gib=0)),0.0)
         self.assertEqual(runtime_min_free_gib(dict(runtime_min_free_gib=6.5)),6.5)
 
