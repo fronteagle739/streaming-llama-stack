@@ -1957,18 +1957,6 @@ DS4PERF_DIAGNOSTIC_LAYERS: advanced engine setting; built-in default retained
 
 Scope: rtx-llama. Class: advanced.
 
-Source: `engines/streaming-llama/prefill_llama.cpp/tools/dsv41-prefill/main.cpp:738`. Unset read: NULL from getenv; the literal consumer below supplies any fallback.
-
-```text
-        report["resident_hidden_storage"]=options.resident_bf16?"BF16 after validated existing BF16 boundary; layer0 input unchanged F32":"F32";
-        options.carry.ram_prefix_tokens=uint32_t(ram_prefix);options.carry.disk_reserve_bytes=disk_reserve;
-        if(const char *diag=std::getenv("DS4PERF_DIAGNOSTIC_LAYERS")){if(*diag){
-            const auto layers=integer(diag);require(layers>0&&layers<40&&resident_ram&&llama_dsv41_expert_profile::native(expert),
-                "Incomplete diagnostics require native RAM TEST and1..39 layers");
-            options.diagnostic_layers=uint32_t(layers);report["intentional_incomplete_diagnostic_layers"]=layers;
-            options.diagnostic_carry=[](uint32_t layer,uint32_t first,uint32_t count,const void *bank,uint64_t bytes,const ggml_tensor *raw){
-```
-
 Source: `engines/streaming-llama/prefill_llama.cpp/src/llama-dsv41-executor.cpp:1301`. Unset read: NULL from getenv; the literal consumer below supplies any fallback.
 
 ```text
@@ -1991,6 +1979,18 @@ Source: `engines/streaming-llama/prefill_llama.cpp/src/llama-dsv41-executor.cpp:
                 (unsigned long long)llama_dsv41_graph_digest(ctx.get(),graph,true));std::fputc(10,stderr);std::fflush(stderr);
         }}
         require(boundary.bytes()<=actual,"Boundary outputs escaped actual graph admission");
+```
+
+Source: `engines/streaming-llama/prefill_llama.cpp/tools/dsv41-prefill/main.cpp:738`. Unset read: NULL from getenv; the literal consumer below supplies any fallback.
+
+```text
+        report["resident_hidden_storage"]=options.resident_bf16?"BF16 after validated existing BF16 boundary; layer0 input unchanged F32":"F32";
+        options.carry.ram_prefix_tokens=uint32_t(ram_prefix);options.carry.disk_reserve_bytes=disk_reserve;
+        if(const char *diag=std::getenv("DS4PERF_DIAGNOSTIC_LAYERS")){if(*diag){
+            const auto layers=integer(diag);require(layers>0&&layers<40&&resident_ram&&llama_dsv41_expert_profile::native(expert),
+                "Incomplete diagnostics require native RAM TEST and1..39 layers");
+            options.diagnostic_layers=uint32_t(layers);report["intentional_incomplete_diagnostic_layers"]=layers;
+            options.diagnostic_carry=[](uint32_t layer,uint32_t first,uint32_t count,const void *bank,uint64_t bytes,const ggml_tensor *raw){
 ```
 
 ### DS4PERF_EXECUTOR_WALL_PROBE
@@ -56345,54 +56345,6 @@ capture::capture(uint32_t layer,uint32_t start,uint32_t count,const std::vector<
     p=std::make_unique<implementation>();
 ```
 
-Source: `engines/streaming-llama/prefill_llama.cpp/src/llama-dsv41-layer.cpp:48`. Unset read: NULL from getenv; the literal consumer below supplies any fallback.
-
-```text
-        uint32_t compressed_rows,const weights & w,const inputs & in,const cache & state,
-        const llama_dsv41_expert_profile::policy & expert) const {
-    llama_dsv41_expert_profile::validate(expert,p.count,std::getenv("DSV41_BOUNDARY_CAPTURE"));
-    GGML_ASSERT(layer<40 && p.ratio==(layer<2?0u:layer<20?2u:1u));
-    GGML_ASSERT(in.residual->ne[0]==5120 && in.residual->ne[1]==4 && in.residual->ne[2]==p.count);
-    GGML_ASSERT(in.previous_pre && in.previous_pre->ne[0]==4 && in.previous_pre->ne[1]==p.count);
-    GGML_ASSERT(p.ratio!=0 || compressed_rows==0);
-```
-
-Source: `engines/streaming-llama/prefill_llama.cpp/tools/dsv41-prefill/main.cpp:391`. Unset read: NULL from getenv; the literal consumer below supplies any fallback.
-
-```text
-        expert.admitted_pool_bytes=expert_options?number("--expert-workspace-bytes"):0;
-        expert.admitted_code_runtime_bytes=expert_options?number("--expert-runtime-bytes"):0;
-        llama_dsv41_expert_profile::validate(expert,uint32_t(tile_tokens),std::getenv("DSV41_BOUNDARY_CAPTURE"));
-        const auto native_columns=args.count("--native-expert-columns")?integer(args.at("--native-expert-columns")):16;
-        require(native_columns==DS4PERF_NATIVE_COLUMNS,"Requested native expert columns do not match this explicitly built engine");
-        if(native_columns!=16){
-            using namespace llama_dsv41_native_columns_resource_proof;
-```
-
-Source: `engines/streaming-llama/prefill_llama.cpp/tools/dsv41-prefill/main.cpp:508`. Unset read: NULL from getenv; the literal consumer below supplies any fallback.
-
-```text
-        if(fold_plan.tail){std::fprintf(stderr,"LLAMADECODE_PREFILL_FOLD_TAIL tokens=%zu primary_sweep_tokens=%u remainder=%u capacity=%u fold_cap=%u folded_last=%u sweep_tokens=%s\n",
-            tokens.size(),fold_plan.sweep,fold_plan.last,uint32_t(chunk_option),uint32_t(fold_cap),fold_plan.sweep+fold_plan.last,sweep_list.c_str());std::fflush(stderr);}
-        require(!chunk_option||(resident_ram&&!hybrid&&!std::getenv("DSV41_BOUNDARY_CAPTURE")),"Stateful chunks require explicit RAM carry and no boundary capture");
-        require(!chunk_option||!pair_ffn||tokens.size()<=chunk_tokens||sweep_step%4096==0||unaligned_append_step==2048,"Paired chunk size must align absolute attention positions");
-        const auto context=number("--context");require(context<=1048576&&tokens.size()<context,"Native payload requires context room for the next decode token");
-        require(!args.count("--session-stdio")||args.at("--session-stdio")=="0"||args.at("--session-stdio")=="1","session-stdio requires0/1");
-        const bool live=args.count("--session-stdio")&&args.at("--session-stdio")=="1";
-```
-
-Source: `engines/streaming-llama/prefill_llama.cpp/tools/dsv41-prefill/main.cpp:860`. Unset read: NULL from getenv; the literal consumer below supplies any fallback.
-
-```text
-        uint64_t warm_cublas=0;
-        if(warm){
-            require(resident_ram&&!options.diagnostic_layers&&!std::getenv("DSV41_BOUNDARY_CAPTURE"),"One-token warmup requires RAM carry and no boundary/incomplete diagnostics");
-            auto warm_options=options;auto warm_weights=weights;
-            warm_options.yoco_keep=0;warm_options.yoco_remote_state_version=0;warm_options.yoco_logical_end=0;warm_options.carry.tokens=1;warm_options.pair_ffn=false;
-            warm_options.carry.max_tile_tokens=std::min(4096u,warm_options.carry.max_tile_tokens);
-            warm_options.compute_step_tokens=std::min(warm_options.compute_step_tokens,warm_options.carry.max_tile_tokens);
-```
-
 Source: `engines/streaming-llama/prefill_llama.cpp/src/llama-dsv41-executor.cpp:879`. Unset read: NULL from getenv; the literal consumer below supplies any fallback.
 
 ```text
@@ -56403,6 +56355,18 @@ Source: `engines/streaming-llama/prefill_llama.cpp/src/llama-dsv41-executor.cpp:
         const uint32_t absolute_start=in.position_offset+in.start;
         require(!in.position_offset||!workspace||!workspace->cache_layouts,"Offset chunks require allocator-only graph mode");
         require(!in.single_attention_append||(pair_ffn&&in.position_offset%4096&&in.start%2048==0&&in.count<=2048&&admitted_tile_tokens>=4096&&workspace&&!workspace->cache_layouts),
+```
+
+Source: `engines/streaming-llama/prefill_llama.cpp/src/llama-dsv41-layer.cpp:48`. Unset read: NULL from getenv; the literal consumer below supplies any fallback.
+
+```text
+        uint32_t compressed_rows,const weights & w,const inputs & in,const cache & state,
+        const llama_dsv41_expert_profile::policy & expert) const {
+    llama_dsv41_expert_profile::validate(expert,p.count,std::getenv("DSV41_BOUNDARY_CAPTURE"));
+    GGML_ASSERT(layer<40 && p.ratio==(layer<2?0u:layer<20?2u:1u));
+    GGML_ASSERT(in.residual->ne[0]==5120 && in.residual->ne[1]==4 && in.residual->ne[2]==p.count);
+    GGML_ASSERT(in.previous_pre && in.previous_pre->ne[0]==4 && in.previous_pre->ne[1]==p.count);
+    GGML_ASSERT(p.ratio!=0 || compressed_rows==0);
 ```
 
 Source: `engines/streaming-llama/prefill_llama.cpp/src/llama-dsv41-sweep.cpp:243`. Unset read: NULL from getenv; the literal consumer below supplies any fallback.
@@ -56439,6 +56403,42 @@ Source: `engines/streaming-llama/prefill_llama.cpp/src/llama-dsv41-sweep.cpp:275
             llama_dsv41_expert_profile::native(options.expert)&&options.admitted_pinned_device_bytes>=64ull*1024*1024),
             "Direct pinned RAM requires native experts, admitted RAM bank and separate64MiB device ceiling");
         require(!options.admitted_prefetch_device_bytes||(options.admitted_pinned_device_bytes&&options.reuse_graph&&!options.reuse_layer_graph&&
+```
+
+Source: `engines/streaming-llama/prefill_llama.cpp/tools/dsv41-prefill/main.cpp:391`. Unset read: NULL from getenv; the literal consumer below supplies any fallback.
+
+```text
+        expert.admitted_pool_bytes=expert_options?number("--expert-workspace-bytes"):0;
+        expert.admitted_code_runtime_bytes=expert_options?number("--expert-runtime-bytes"):0;
+        llama_dsv41_expert_profile::validate(expert,uint32_t(tile_tokens),std::getenv("DSV41_BOUNDARY_CAPTURE"));
+        const auto native_columns=args.count("--native-expert-columns")?integer(args.at("--native-expert-columns")):16;
+        require(native_columns==DS4PERF_NATIVE_COLUMNS,"Requested native expert columns do not match this explicitly built engine");
+        if(native_columns!=16){
+            using namespace llama_dsv41_native_columns_resource_proof;
+```
+
+Source: `engines/streaming-llama/prefill_llama.cpp/tools/dsv41-prefill/main.cpp:508`. Unset read: NULL from getenv; the literal consumer below supplies any fallback.
+
+```text
+        if(fold_plan.tail){std::fprintf(stderr,"LLAMADECODE_PREFILL_FOLD_TAIL tokens=%zu primary_sweep_tokens=%u remainder=%u capacity=%u fold_cap=%u folded_last=%u sweep_tokens=%s\n",
+            tokens.size(),fold_plan.sweep,fold_plan.last,uint32_t(chunk_option),uint32_t(fold_cap),fold_plan.sweep+fold_plan.last,sweep_list.c_str());std::fflush(stderr);}
+        require(!chunk_option||(resident_ram&&!hybrid&&!std::getenv("DSV41_BOUNDARY_CAPTURE")),"Stateful chunks require explicit RAM carry and no boundary capture");
+        require(!chunk_option||!pair_ffn||tokens.size()<=chunk_tokens||sweep_step%4096==0||unaligned_append_step==2048,"Paired chunk size must align absolute attention positions");
+        const auto context=number("--context");require(context<=1048576&&tokens.size()<context,"Native payload requires context room for the next decode token");
+        require(!args.count("--session-stdio")||args.at("--session-stdio")=="0"||args.at("--session-stdio")=="1","session-stdio requires0/1");
+        const bool live=args.count("--session-stdio")&&args.at("--session-stdio")=="1";
+```
+
+Source: `engines/streaming-llama/prefill_llama.cpp/tools/dsv41-prefill/main.cpp:860`. Unset read: NULL from getenv; the literal consumer below supplies any fallback.
+
+```text
+        uint64_t warm_cublas=0;
+        if(warm){
+            require(resident_ram&&!options.diagnostic_layers&&!std::getenv("DSV41_BOUNDARY_CAPTURE"),"One-token warmup requires RAM carry and no boundary/incomplete diagnostics");
+            auto warm_options=options;auto warm_weights=weights;
+            warm_options.yoco_keep=0;warm_options.yoco_remote_state_version=0;warm_options.yoco_logical_end=0;warm_options.carry.tokens=1;warm_options.pair_ffn=false;
+            warm_options.carry.max_tile_tokens=std::min(4096u,warm_options.carry.max_tile_tokens);
+            warm_options.compute_step_tokens=std::min(warm_options.compute_step_tokens,warm_options.carry.max_tile_tokens);
 ```
 
 ### DSV4_MINI
@@ -57383,18 +57383,6 @@ Source: `engines/streaming-llama/prefill_llama.cpp/src/llama-context.cpp:25212`.
                         "off. Otherwise cudaStreamBeginCapture collides.\n",
 ```
 
-Source: `engines/streaming-llama/prefill_llama.cpp/tools/dsv41-prefill/main.cpp:735`. Unset read: NULL from getenv; the literal consumer below supplies any fallback.
-
-```text
-        require(!args.count("--resident-hidden-bf16")||args.at("--resident-hidden-bf16")=="0"||args.at("--resident-hidden-bf16")=="1","resident-hidden-bf16 requires0/1");
-        options.resident_bf16=args.count("--resident-hidden-bf16")&&args.at("--resident-hidden-bf16")=="1";
-        require(!options.resident_bf16||(options.carry.defer_hidden_readback&&std::getenv("GGML_CUDA_DISABLE_GRAPHS")&&std::string(std::getenv("GGML_CUDA_DISABLE_GRAPHS"))=="1"),"Resident BF16 test requires explicit full resident readback and disabled CUDA capture");
-        report["resident_hidden_storage"]=options.resident_bf16?"BF16 after validated existing BF16 boundary; layer0 input unchanged F32":"F32";
-        options.carry.ram_prefix_tokens=uint32_t(ram_prefix);options.carry.disk_reserve_bytes=disk_reserve;
-        if(const char *diag=std::getenv("DS4PERF_DIAGNOSTIC_LAYERS")){if(*diag){
-            const auto layers=integer(diag);require(layers>0&&layers<40&&resident_ram&&llama_dsv41_expert_profile::native(expert),
-```
-
 Source: `engines/streaming-llama/prefill_llama.cpp/src/llama-dsv41-executor.cpp:608`. Unset read: NULL from getenv; the literal consumer below supplies any fallback.
 
 ```text
@@ -57429,6 +57417,18 @@ Source: `engines/streaming-llama/prefill_llama.cpp/src/llama-dsv41-executor.cpp:
             unsigned tagged=0;for(int i=0;i<ggml_graph_n_nodes(graph);++i)tagged+=ggml_dsv41_sorted_routing_tag(ggml_graph_node(graph,i),expert.reuse_expert_routing_map)?1:0;
             require(tagged==3,"Explicit count/prefix/scatter routing did not match exactly gate/up/down");
         }
+```
+
+Source: `engines/streaming-llama/prefill_llama.cpp/tools/dsv41-prefill/main.cpp:735`. Unset read: NULL from getenv; the literal consumer below supplies any fallback.
+
+```text
+        require(!args.count("--resident-hidden-bf16")||args.at("--resident-hidden-bf16")=="0"||args.at("--resident-hidden-bf16")=="1","resident-hidden-bf16 requires0/1");
+        options.resident_bf16=args.count("--resident-hidden-bf16")&&args.at("--resident-hidden-bf16")=="1";
+        require(!options.resident_bf16||(options.carry.defer_hidden_readback&&std::getenv("GGML_CUDA_DISABLE_GRAPHS")&&std::string(std::getenv("GGML_CUDA_DISABLE_GRAPHS"))=="1"),"Resident BF16 test requires explicit full resident readback and disabled CUDA capture");
+        report["resident_hidden_storage"]=options.resident_bf16?"BF16 after validated existing BF16 boundary; layer0 input unchanged F32":"F32";
+        options.carry.ram_prefix_tokens=uint32_t(ram_prefix);options.carry.disk_reserve_bytes=disk_reserve;
+        if(const char *diag=std::getenv("DS4PERF_DIAGNOSTIC_LAYERS")){if(*diag){
+            const auto layers=integer(diag);require(layers>0&&layers<40&&resident_ram&&llama_dsv41_expert_profile::native(expert),
 ```
 
 ### GGML_CUDA_ENABLE_UNIFIED_MEMORY
@@ -62493,7 +62493,7 @@ Source: `engines/streaming-llama/prefill_llama.cpp/tools/dsv41-prefill/live-sess
 }
 bool ds4_decode_enabled(){static const bool on=[]{const char*e=std::getenv("LLAMADECODE_DS4_DECODE");return e&&e[0]=='1'&&!e[1];}();return on;}
 // LLAMADECODE append-via-decode: with the ds4 decode on, a live prefill of at
-// most LLAMADECODE_APPEND_DECODE_MAX tokens (default 96 = measured crossover, 0 = off) is appended
+// most LLAMADECODE_APPEND_DECODE_MAX tokens (default 0 = off; opt-in 96) is appended
 // one token at a time through the ds4 decode step instead of a full weight sweep.
 uint64_t append_decode_max(){static const uint64_t n=[]{const char*e=std::getenv("LLAMADECODE_APPEND_DECODE_MAX");
 ```
@@ -66716,7 +66716,7 @@ LLAMA_DSA_SCORE_CAUSAL_TILE: advanced engine setting; built-in default retained
 
 Scope: rtx-llama. Class: advanced.
 
-Source: `engines/streaming-llama/prefill_llama.cpp/ggml/src/ggml-cuda/dsa-indexer-score.cu:1004`. Unset read: NULL from getenv; the literal consumer below supplies any fallback.
+Source: `engines/streaming-llama/prefill_llama.cpp/ggml/src/ggml-cuda/dsa-indexer-score.cu:1006`. Unset read: NULL from getenv; the literal consumer below supplies any fallback.
 
 ```text
     // dsa_indexer_score_cublas can skip GEMM/accum for causally-invalid key rows (see its comment).
@@ -66734,7 +66734,7 @@ LLAMA_DSA_SCORE_CUBLAS: advanced engine setting; built-in default retained
 
 Scope: rtx-llama. Class: advanced.
 
-Source: `engines/streaming-llama/prefill_llama.cpp/ggml/src/ggml-cuda/dsa-indexer-score.cu:1009`. Unset read: NULL from getenv; the literal consumer below supplies any fallback.
+Source: `engines/streaming-llama/prefill_llama.cpp/ggml/src/ggml-cuda/dsa-indexer-score.cu:1011`. Unset read: NULL from getenv; the literal consumer below supplies any fallback.
 
 ```text
 
@@ -66752,7 +66752,7 @@ LLAMA_DSA_SCORE_CUBLAS_K_SLAB: advanced engine setting; built-in default retaine
 
 Scope: rtx-llama. Class: advanced.
 
-Source: `engines/streaming-llama/prefill_llama.cpp/ggml/src/ggml-cuda/dsa-indexer-score.cu:695`. Unset read: NULL from getenv; the literal consumer below supplies any fallback.
+Source: `engines/streaming-llama/prefill_llama.cpp/ggml/src/ggml-cuda/dsa-indexer-score.cu:696`. Unset read: NULL from getenv; the literal consumer below supplies any fallback.
 
 ```text
 
@@ -66770,7 +66770,7 @@ LLAMA_DSA_SCORE_CUBLAS_NQ_SLAB: advanced engine setting; built-in default retain
 
 Scope: rtx-llama. Class: advanced.
 
-Source: `engines/streaming-llama/prefill_llama.cpp/ggml/src/ggml-cuda/dsa-indexer-score.cu:713`. Unset read: NULL from getenv; the literal consumer below supplies any fallback.
+Source: `engines/streaming-llama/prefill_llama.cpp/ggml/src/ggml-cuda/dsa-indexer-score.cu:714`. Unset read: NULL from getenv; the literal consumer below supplies any fallback.
 
 ```text
     // k_slab=16384; 0 or negative = no q-chunking = legacy behavior).
@@ -66908,7 +66908,7 @@ LLAMA_DSA_TOPK_COVERAGE_BANDS: advanced engine setting; built-in default retaine
 
 Scope: rtx-llama. Class: advanced.
 
-Source: `engines/streaming-llama/prefill_llama.cpp/ggml/src/ggml-cuda/dsa-indexer-score.cu:1040`. Unset read: NULL from getenv; the literal consumer below supplies any fallback.
+Source: `engines/streaming-llama/prefill_llama.cpp/ggml/src/ggml-cuda/dsa-indexer-score.cu:1042`. Unset read: NULL from getenv; the literal consumer below supplies any fallback.
 
 ```text
     // byte-identical to the exact-global dsa_topk_select_kernel. Marker: LLAMA_DSA_TOPK_COVERAGE_BANDS.
@@ -66926,7 +66926,7 @@ LLAMA_DSA_TOPK_COVERAGE_WEIGHTED: advanced engine setting; built-in default reta
 
 Scope: rtx-llama. Class: advanced.
 
-Source: `engines/streaming-llama/prefill_llama.cpp/ggml/src/ggml-cuda/dsa-indexer-score.cu:1046`. Unset read: NULL from getenv; the literal consumer below supplies any fallback.
+Source: `engines/streaming-llama/prefill_llama.cpp/ggml/src/ggml-cuda/dsa-indexer-score.cu:1048`. Unset read: NULL from getenv; the literal consumer below supplies any fallback.
 
 ```text
 
@@ -66980,10 +66980,10 @@ LLAMA_DSV41_ATTN_G16: advanced engine setting; built-in default retained
 
 Scope: rtx-llama. Class: advanced.
 
-Source: `engines/streaming-llama/prefill_llama.cpp/ggml/src/ggml-cuda/dsv41-ds4-token-tile.cu:1024`. Unset read: NULL from getenv; the literal consumer below supplies any fallback.
+Source: `engines/streaming-llama/prefill_llama.cpp/ggml/src/ggml-cuda/dsv41-ds4-token-tile.cu:1032`. Unset read: NULL from getenv; the literal consumer below supplies any fallback.
 
 ```text
-        CUDA_CHECK(cudaGetLastError());ds4_token_union_queued.fetch_add(1,std::memory_order_release);
+        return;
     }
     const char *g16_env=std::getenv("LLAMA_DSV41_ATTN_G16");
     const bool g16=g16_env&&g16_env[0]=='1'&&g16_env[1]=='\0';
@@ -67106,28 +67106,16 @@ LLAMA_DSV41_ENGRAM_PROMPT_OVERLAP: qualified preset/runtime setting; override fo
 
 Scope: rtx-llama. Class: preset.
 
-Source: `engines/streaming-llama/prefill_llama.cpp/tools/dsv41-prefill/main.cpp:886`. Unset read: NULL from getenv; the literal consumer below supplies any fallback.
+Source: `engines/streaming-llama/prefill_llama.cpp/src/llama-dsv41-sweep.cpp:673`. Unset read: NULL from getenv; the literal consumer below supplies any fallback.
 
 ```text
-            // DS4COMBO producer-warm: the prompt's tokens are known now, so its
-            // Engram rows load on their own IoRing during this warmup pass.
-            {const char*overlap=std::getenv("LLAMA_DSV41_ENGRAM_PROMPT_OVERLAP");
-             // Auto (or a skipped =1 start) that queued nothing: the ordinary producer-warm start.
-             if(!(engram_early&&warm_request->early_engram_queued())&&weights.engram_prefetch_host_bytes&&options.engram_tile_lookahead&&overlap&&std::strcmp(overlap,"1")==0){
-                const std::vector<int32_t> first(tokens.begin(),tokens.begin()+first_sweep_tokens);
-                std::vector<int32_t> tail;
-```
-
-Source: `engines/streaming-llama/prefill_llama.cpp/tools/dsv41-prefill/main.cpp:924`. Unset read: NULL from getenv; the literal consumer below supplies any fallback.
-
-```text
-        // against 1,238 tok/s with the ordinary layer-0 overlapped load. Opt-in only.
-        const char*early_direct=std::getenv("LLAMA_DSV41_ENGRAM_EARLY_DIRECT");
-        if(!(engram_early_cold&&sweep->early_engram_queued())&&direct_open&&early_direct&&std::strcmp(early_direct,"1")==0){const char*overlap=std::getenv("LLAMA_DSV41_ENGRAM_PROMPT_OVERLAP");
-            if(weights.engram_prefetch_host_bytes&&options.engram_tile_lookahead&&overlap&&std::strcmp(overlap,"1")==0){
-                const std::vector<int32_t> first(tokens.begin(),tokens.begin()+first_sweep_tokens);
-                success(sweep->start_next_engram(first,early_tail,error),error);
-            }}
+        const auto schedule=llama_dsv41_plan_append(p->options.pair_ffn,p->options.carry.max_tile_tokens,p->options.compute_step_tokens,p->position_offset,p->options.unaligned_append_step_tokens);
+        const uint32_t compute_step=schedule.step;
+        const char*engram_overlap_env=std::getenv("LLAMA_DSV41_ENGRAM_PROMPT_OVERLAP");
+        const bool engram_overlap=(!p->options.images||p->options.engram_tile_lookahead)&&engram_overlap_env&&std::strcmp(engram_overlap_env,"1")==0;
+        require(!engram_overlap||p->options.engram_tile_lookahead,"Engram prompt overlap requires the existing lookahead worker");
+        std::vector<uint8_t>text_mask;
+        if(p->options.images){
 ```
 
 Source: `engines/streaming-llama/prefill_llama.cpp/src/llama-dsv41-weights.cpp:782`. Unset read: NULL from getenv; the literal consumer below supplies any fallback.
@@ -67166,16 +67154,28 @@ bool llama_dsv41_weight_provider::prepare_engram_prompt(const std::vector<int32_
     if(p->early&&p->early->tokens==tokens){
 ```
 
-Source: `engines/streaming-llama/prefill_llama.cpp/src/llama-dsv41-sweep.cpp:673`. Unset read: NULL from getenv; the literal consumer below supplies any fallback.
+Source: `engines/streaming-llama/prefill_llama.cpp/tools/dsv41-prefill/main.cpp:886`. Unset read: NULL from getenv; the literal consumer below supplies any fallback.
 
 ```text
-        const auto schedule=llama_dsv41_plan_append(p->options.pair_ffn,p->options.carry.max_tile_tokens,p->options.compute_step_tokens,p->position_offset,p->options.unaligned_append_step_tokens);
-        const uint32_t compute_step=schedule.step;
-        const char*engram_overlap_env=std::getenv("LLAMA_DSV41_ENGRAM_PROMPT_OVERLAP");
-        const bool engram_overlap=(!p->options.images||p->options.engram_tile_lookahead)&&engram_overlap_env&&std::strcmp(engram_overlap_env,"1")==0;
-        require(!engram_overlap||p->options.engram_tile_lookahead,"Engram prompt overlap requires the existing lookahead worker");
-        std::vector<uint8_t>text_mask;
-        if(p->options.images){
+            // DS4COMBO producer-warm: the prompt's tokens are known now, so its
+            // Engram rows load on their own IoRing during this warmup pass.
+            {const char*overlap=std::getenv("LLAMA_DSV41_ENGRAM_PROMPT_OVERLAP");
+             // Auto (or a skipped =1 start) that queued nothing: the ordinary producer-warm start.
+             if(!(engram_early&&warm_request->early_engram_queued())&&weights.engram_prefetch_host_bytes&&options.engram_tile_lookahead&&overlap&&std::strcmp(overlap,"1")==0){
+                const std::vector<int32_t> first(tokens.begin(),tokens.begin()+first_sweep_tokens);
+                std::vector<int32_t> tail;
+```
+
+Source: `engines/streaming-llama/prefill_llama.cpp/tools/dsv41-prefill/main.cpp:924`. Unset read: NULL from getenv; the literal consumer below supplies any fallback.
+
+```text
+        // against 1,238 tok/s with the ordinary layer-0 overlapped load. Opt-in only.
+        const char*early_direct=std::getenv("LLAMA_DSV41_ENGRAM_EARLY_DIRECT");
+        if(!(engram_early_cold&&sweep->early_engram_queued())&&direct_open&&early_direct&&std::strcmp(early_direct,"1")==0){const char*overlap=std::getenv("LLAMA_DSV41_ENGRAM_PROMPT_OVERLAP");
+            if(weights.engram_prefetch_host_bytes&&options.engram_tile_lookahead&&overlap&&std::strcmp(overlap,"1")==0){
+                const std::vector<int32_t> first(tokens.begin(),tokens.begin()+first_sweep_tokens);
+                success(sweep->start_next_engram(first,early_tail,error),error);
+            }}
 ```
 
 ### LLAMA_DSV41_ENGRAM_SUBMIT_BATCH
@@ -67238,18 +67238,6 @@ LLAMA_DSV41_INDEX_F32_CUBLAS: advanced engine setting; built-in default retained
 
 Scope: rtx-llama. Class: advanced.
 
-Source: `engines/streaming-llama/prefill_llama.cpp/tools/dsv41-prefill/main.cpp:372`. Unset read: Wrapper/conditional default: see the literal call and consumer below.
-
-```text
-            args.count("--index-cublas-device-bytes")&&integer(args.at("--index-cublas-device-bytes"))>=64ull*1024*1024),
-            "F32 cuBLAS indexer requires exclusive F32 operands, native expert profile, <=4K tile and explicit 64MiB workspace");
-        require(_putenv_s("LLAMA_DSV41_INDEX_F32_CUBLAS",index_f32?"1":"0")==0,"Cannot bind explicit F32 index selection");
-        report["indexer_f32_cublas"]={{"enabled",index_f32},{"operands","unconverted F32"},{"accumulation","pedantic F32 GEMM; original ordered F32 head reduction"},{"changed_dot_reduction",index_f32},{"numerically_qualified",false}};
-
-        require(!expert.index_bf16||(args.count("--index-cublas-device-bytes")&&integer(args.at("--index-cublas-device-bytes"))>=64ull*1024*1024),"BF16 indexer requires its explicit existing64MiB device admission");
-        require(!args.count("--token-tile-attention-f16-probabilities")||args.at("--token-tile-attention-f16-probabilities")=="0"||args.at("--token-tile-attention-f16-probabilities")=="1","token-tile-attention-f16-probabilities requires0/1");
-```
-
 Source: `engines/streaming-llama/prefill_llama.cpp/src/llama-dsv41-executor.cpp:92`. Unset read: NULL from getenv; the literal consumer below supplies any fallback.
 
 ```text
@@ -67260,6 +67248,18 @@ bool index_f32_cublas_enabled(){
     return v&&!std::strcmp(v,"1");
 }
 bool query_source(uint32_t layer){return layer==2||layer==8||layer==14||layer==20||layer==24||layer==28||layer==32||layer==36;}
+```
+
+Source: `engines/streaming-llama/prefill_llama.cpp/tools/dsv41-prefill/main.cpp:372`. Unset read: Wrapper/conditional default: see the literal call and consumer below.
+
+```text
+            args.count("--index-cublas-device-bytes")&&integer(args.at("--index-cublas-device-bytes"))>=64ull*1024*1024),
+            "F32 cuBLAS indexer requires exclusive F32 operands, native expert profile, <=4K tile and explicit 64MiB workspace");
+        require(_putenv_s("LLAMA_DSV41_INDEX_F32_CUBLAS",index_f32?"1":"0")==0,"Cannot bind explicit F32 index selection");
+        report["indexer_f32_cublas"]={{"enabled",index_f32},{"operands","unconverted F32"},{"accumulation","pedantic F32 GEMM; original ordered F32 head reduction"},{"changed_dot_reduction",index_f32},{"numerically_qualified",false}};
+
+        require(!expert.index_bf16||(args.count("--index-cublas-device-bytes")&&integer(args.at("--index-cublas-device-bytes"))>=64ull*1024*1024),"BF16 indexer requires its explicit existing64MiB device admission");
+        require(!args.count("--token-tile-attention-f16-probabilities")||args.at("--token-tile-attention-f16-probabilities")=="0"||args.at("--token-tile-attention-f16-probabilities")=="1","token-tile-attention-f16-probabilities requires0/1");
 ```
 
 ### LLAMA_DSV41_MUL_F16_STORE
@@ -100550,4 +100550,58 @@ inline bool llama_dsv41_resident_append_enabled(){
     return !value||!*value||!std::strcmp(value,"1");
 }
 constexpr unsigned llama_dsv41_resident_append_limit=32;
+```
+
+### LLAMA_DSV41_TILELANG_ATTENTION
+
+E6 opt-in SM120 TileLang sparse attention for native token-tile graphs with at most131072 compressed rows. Default0 retains the native kernel. Requires the pinned dynamic16-head/512-dimension image. Query conversion and BF16 softmax probability arithmetic can change logits; full-model quality is an adoption gate.
+
+Scope: rtx-llama. Class: advanced.
+
+Source: `engines/streaming-llama/prefill_llama.cpp/ggml/src/ggml-cuda/dsv41-ds4-token-tile.cu:1025`. Unset read: NULL from getenv; the literal consumer below supplies any fallback.
+
+```text
+        CUDA_CHECK(cudaGetLastError());ds4_token_union_queued.fetch_add(1,std::memory_order_release);
+    }
+    const char *tilelang_env=std::getenv("LLAMA_DSV41_TILELANG_ATTENTION");
+    if(tilelang_env&&tilelang_env[0]=='1'&&!tilelang_env[1]&&comp_rows<=131072){
+        dsv41_tilelang_attention(ctx,dst,raw_half.get(),comp_ptr+(merge?512:0),raw_rows,raw_min,comp_rows-(merge?1u:0u));
+        ds4_token_tile_queued.fetch_add(1,std::memory_order_release);
+        if(direct_f16)ds4_token_f16_table_queued.fetch_add(1,std::memory_order_release);
+```
+
+### LLAMA_DSV41_TILELANG_CUBIN
+
+E6 local path to the pinned TileLang sparse-attention CUDA image; required only when enabled. The experiment runner verifies its SHA256 before engine launch. Not model weights.
+
+Scope: rtx-llama. Class: advanced.
+
+Source: `engines/streaming-llama/prefill_llama.cpp/ggml/src/ggml-cuda/dsv41-tilelang.cuh:14`. Unset read: NULL from getenv; the literal consumer below supplies any fallback.
+
+```text
+    static CUmodule module=nullptr;static CUfunction function=nullptr;static std::once_flag initialized;
+    std::call_once(initialized,[]{
+        const char *path=std::getenv("LLAMA_DSV41_TILELANG_CUBIN");
+        GGML_ASSERT(path&&*path);
+        dsv41_tilelang_driver(cuModuleLoad(&module,path),"load pinned SM120 image");
+        dsv41_tilelang_driver(cuModuleGetFunction(&function,module,"sparse_attn_kernel__kernel"),"resolve sparse attention");
+        dsv41_tilelang_driver(cuFuncSetAttribute(function,CU_FUNC_ATTRIBUTE_MAX_DYNAMIC_SHARED_SIZE_BYTES,86016),"admit86KiB shared memory");
+```
+
+### LLAMA_DSV41_INDEX_FP4
+
+E6 default SM120 FP4/E8M0 MMA index scorer for the existing BF16 index profile. Set0 to retain BF16. Packs already quantized values exactly; every operation requires a conservative FP32 integer-sum certificate or falls back to original BF16 cuBLAS. At100K,73.969 to71.171s,17full-vocabulary logit rows bit-identical, KL0 and retrieval pass. No stored KV change.
+
+Scope: rtx-llama. Class: advanced.
+
+Source: `engines/streaming-llama/prefill_llama.cpp/ggml/src/ggml-cuda/dsv41-index-fp4.cuh:74`. Unset read: NULL from getenv; the literal consumer below supplies any fallback.
+
+```text
+
+static bool dsv41_index_fp4(ggml_backend_cuda_context&ctx,ggml_tensor*dst){
+    if(!ggml_dsv41_index_fp4_enabled(std::getenv("LLAMA_DSV41_INDEX_FP4")))return false;
+    GGML_ASSERT(ggml_cuda_info().devices[ctx.device].cc==1200);
+    const int tokens=int(dst->ne[1]),rows=int(dst->ne[0]),qrows=tokens*32;
+    const uint64_t bytes=uint64_t(qrows+rows)*68+7*4;
+    GGML_ASSERT(bytes<=64ull*1024*1024&&"FP4 index workspace exceeds existing64MiB reserve");
 ```

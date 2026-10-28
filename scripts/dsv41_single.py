@@ -60,6 +60,7 @@ def overlay(preset, local=None, model=None, yoco_keep=None, vision=None, profile
         result['model'] = model
     env = dict(result.get('env_overrides') or {})
     env.setdefault('LLAMADECODE_APPEND_RESIDENT_SWEEP','1')  # explicit0 keeps full sweeps
+    env.setdefault('LLAMA_DSV41_INDEX_FP4','1')  # explicit0 keeps BF16 index scoring
     env.update(COMMON_ENV)
     result.update(PRESETS[preset], serving='single_engine', producer_host_reserve_gib=.5, env_overrides=env, **FOLD)
     if profile is not None:

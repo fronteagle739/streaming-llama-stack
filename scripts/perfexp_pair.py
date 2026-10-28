@@ -22,6 +22,19 @@ import threading
 import time
 import urllib.request
 
+
+def completed_artifact_sha256(path):
+    # Windows may briefly retain a writer/AV sharing lock after the producer
+    # acknowledges a completed logits dump. Retry only this read, never decode.
+    deadline=time.monotonic()+1
+    while True:
+        try:
+            with path.open('rb') as stream:
+                return hashlib.file_digest(stream,'sha256').hexdigest()
+        except PermissionError:
+            if time.monotonic()>=deadline:raise
+            time.sleep(.02)
+
 sys.path.insert(0, str(Path(__file__).resolve().parents[1]))
 from slstack.config import load, environment
 from slstack.combo_producer import ComboProducer, prefill_plan
@@ -81,6 +94,13 @@ def run_child(args, cfg, arm, label):
     dll_hash=hashlib.file_digest(dll.open('rb'),'sha256').hexdigest()
     if cfg.get('producer_decode_dll_sha256') and dll_hash!=cfg['producer_decode_dll_sha256']:
         raise ValueError('Decode DLL hash differs from the pinned diagnostic build')
+    kernel_assets=[]
+    for asset in cfg.get('producer_kernel_assets',[]):
+        path=Path(asset['path']).resolve()
+        if not path.is_relative_to(root):raise ValueError('Kernel asset must stay in configured scratch')
+        digest=hashlib.file_digest(path.open('rb'),'sha256').hexdigest()
+        if digest!=asset['sha256']:raise ValueError('Kernel image hash differs from the pinned build')
+        kernel_assets.append(dict(path=str(path),sha256=digest,bytes=path.stat().st_size))
     result=dict(experiment=args.experiment,arm=arm,day=datetime.now(timezone.utc).date().isoformat(),
                 model=str(model),model_bytes=identity.st_size,model_mtime_ns=identity.st_mtime_ns,
                 prompt_tokens=len(tokens),input_sha256=hashlib.sha256(raw).hexdigest(),
@@ -90,6 +110,7 @@ def run_child(args, cfg, arm, label):
                 source_revision=cfg['producer_source_revision'],status='RUNNING',
                 candidate_setting=args.candidate)
     result['decode_dll_sha256']=dll_hash
+    result['kernel_assets']=kernel_assets
     result['trace_append']=args.trace_append
     target=root/(label+'.json')
     producer=None;owner=[];done=threading.Event();samples=[]
@@ -152,7 +173,7 @@ def run_child(args, cfg, arm, label):
         result['forced_after_decode']=args.decode_before_forced
         if args.decode_before_forced:measure_decode()
         result['forced']=producer.decode_forced(forced,logits)
-        result['logits_sha256']=hashlib.file_digest(logits.open('rb'),'sha256').hexdigest()
+        result['logits_sha256']=completed_artifact_sha256(logits)
         if args.append:
             result['append_base_checkpoint']=producer.checkpoint
             result['append_quality_bias']=0

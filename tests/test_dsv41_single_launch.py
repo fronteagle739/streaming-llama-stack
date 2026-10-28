@@ -15,7 +15,8 @@ spec.loader.exec_module(dsv41_single)
 
 GATED_ENV = {'DS4_DS_READ_PARTS': '8', 'LLAMADECODE_VRAM_RESERVE_MIB': '512',
              'LLAMADECODE_ENGRAM_EARLY': 'auto', 'LLAMADECODE_ENGRAM_CACHE_MB': '0',
-             'LLAMADECODE_APPEND_DECODE_MAX': '0', 'LLAMADECODE_APPEND_RESIDENT_SWEEP': '1'}
+             'LLAMADECODE_APPEND_DECODE_MAX': '0', 'LLAMADECODE_APPEND_RESIDENT_SWEEP': '1',
+             'LLAMA_DSV41_INDEX_FP4': '1'}
 
 
 class LaunchConfigTests(unittest.TestCase):
@@ -25,11 +26,13 @@ class LaunchConfigTests(unittest.TestCase):
                 with self.subTest(preset=preset,profile=profile):
                     defaults=dsv41_single.overlay(preset,profile=profile)
                     self.assertEqual(defaults['env_overrides']['LLAMADECODE_APPEND_RESIDENT_SWEEP'],'1')
-                    local={'env_overrides':{'LLAMADECODE_APPEND_RESIDENT_SWEEP':'0'}}
+                    self.assertEqual(defaults['env_overrides']['LLAMA_DSV41_INDEX_FP4'],'1')
+                    local={'env_overrides':{'LLAMADECODE_APPEND_RESIDENT_SWEEP':'0','LLAMA_DSV41_INDEX_FP4':'0'}}
                     cfg=dsv41_single.overlay(preset,local,profile=profile)
                     self.assertEqual(cfg['env_overrides']['LLAMADECODE_APPEND_RESIDENT_SWEEP'],'0')
+                    self.assertEqual(cfg['env_overrides']['LLAMA_DSV41_INDEX_FP4'],'0')
                     self.assertEqual(cfg['env_overrides']['LLAMADECODE_APPEND_DECODE_MAX'],'0')
-                    self.assertEqual(local,{'env_overrides':{'LLAMADECODE_APPEND_RESIDENT_SWEEP':'0'}})
+                    self.assertEqual(local,{'env_overrides':{'LLAMADECODE_APPEND_RESIDENT_SWEEP':'0','LLAMA_DSV41_INDEX_FP4':'0'}})
 
     def test_262k_is_f32_growable_single_engine(self):
         cfg = dsv41_single.overlay('262k')

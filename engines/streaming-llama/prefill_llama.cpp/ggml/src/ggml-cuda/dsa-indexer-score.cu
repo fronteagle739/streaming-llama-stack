@@ -40,6 +40,7 @@
 #include <cfloat>
 #include <cstdint>
 #include <vector>
+#include "dsv41-index-fp4.cuh"
 
 #define DSA_INDEXER_SCORE_D       128
 #define DSA_INDEXER_SCORE_BLOCK   32   // = 1 warp
@@ -862,6 +863,7 @@ void ggml_cuda_op_dsv41_index_score_cublas(ggml_backend_cuda_context&ctx,ggml_te
         CUDA_CHECK(cudaGetLastError());dsv41_index_cublas_queued.fetch_add(1,std::memory_order_release);return;
     }
     if(ggml_dsv41_index_bf16_requested(dst)){
+        if(dsv41_index_fp4(ctx,dst)){dsv41_index_cublas_queued.fetch_add(1,std::memory_order_release);return;}
         // Host-only adapter: reuse ggml's BF16 conversion, cuBLAS GEMM and
         // GLM's existing ordered accumulation/mask kernels. No new GPU kernel.
         constexpr int D=128,H=32,q_slab=256,Hc=DSA_INDEXER_GEMM_HEAD_CHUNK;

@@ -991,6 +991,7 @@ extern "C" uint64_t ggml_backend_cuda_dsv41_token_f16_table_queued(void){return 
 extern "C" uint64_t ggml_backend_cuda_dsv41_token_tile_g16_queued(void){return ds4_token_tile_g16_queued.load(std::memory_order_acquire);}
 extern "C" uint64_t ggml_backend_cuda_dsv41_token_union_queued(void){return ds4_token_union_queued.load(std::memory_order_acquire);}
 extern "C" uint64_t ggml_backend_cuda_dsv41_token_tile_queued(void){return ds4_token_tile_queued.load(std::memory_order_acquire);}
+#include "dsv41-tilelang.cuh"
 void ggml_cuda_op_dsv41_ds4_token_tile(ggml_backend_cuda_context &ctx,ggml_tensor *dst){
     GGML_ASSERT(ggml_dsv41_token_tile_valid(dst));
     const int cc=ggml_cuda_info().devices[ctx.device].cc;
@@ -1020,6 +1021,13 @@ void ggml_cuda_op_dsv41_ds4_token_tile(ggml_backend_cuda_context &ctx,ggml_tenso
             (int2*)dst->src[3]->data,(uint32_t*)dst->src[4]->data,(const int32_t*)dst->src[6]->data,
             nullptr,start,count,uint32_t(dst->op_params[2]),uint32_t(dst->op_params[6]),actual_rows,uint32_t(dst->src[3]->ne[1]));
         CUDA_CHECK(cudaGetLastError());ds4_token_union_queued.fetch_add(1,std::memory_order_release);
+    }
+    const char *tilelang_env=std::getenv("LLAMA_DSV41_TILELANG_ATTENTION");
+    if(tilelang_env&&tilelang_env[0]=='1'&&!tilelang_env[1]&&comp_rows<=131072){
+        dsv41_tilelang_attention(ctx,dst,raw_half.get(),comp_ptr+(merge?512:0),raw_rows,raw_min,comp_rows-(merge?1u:0u));
+        ds4_token_tile_queued.fetch_add(1,std::memory_order_release);
+        if(direct_f16)ds4_token_f16_table_queued.fetch_add(1,std::memory_order_release);
+        return;
     }
     const char *g16_env=std::getenv("LLAMA_DSV41_ATTN_G16");
     const bool g16=g16_env&&g16_env[0]=='1'&&g16_env[1]=='\0';
