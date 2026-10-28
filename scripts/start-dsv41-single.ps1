@@ -26,7 +26,7 @@ if (-not $Config) {
 }
 if ($Config) { $Config = (Resolve-Path -LiteralPath $Config).Path }
 
-$ModeSuffix = if ($YocoKeep) { "-ultra-yoco" } else { "" }
+$ModeSuffix = if ($YocoKeep -eq 2541) { "-ultra-cone" } elseif ($YocoKeep -eq 140) { "-ultra-yoco" } else { "" }
 $StartConfig = Join-Path $Root "runtime\dsv41-single-$Preset$ModeSuffix.local.json"
 $genArgs = @('-B', (Join-Path $Root 'scripts\dsv41_single.py'), '--preset', $Preset, '--write', $StartConfig)
 $profile = if ($YocoKeep -eq 2541) { 'ultra-cone' } elseif ($YocoKeep -eq 140) { 'ultra-yoco' } else { 'ultra' }

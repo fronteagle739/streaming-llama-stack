@@ -15,7 +15,8 @@ spec.loader.exec_module(dsv41_single)
 
 GATED_ENV = {'DS4_DS_READ_PARTS': '8', 'LLAMADECODE_VRAM_RESERVE_MIB': '512',
              'LLAMADECODE_ENGRAM_EARLY': 'auto', 'LLAMADECODE_ENGRAM_CACHE_MB': '0',
-             'LLAMADECODE_APPEND_DECODE_MAX': '0'}
+             'LLAMADECODE_APPEND_DECODE_MAX': '0', 'LLAMADECODE_RECENCY_LFU': '1',
+             'LLAMADECODE_LFU_HALF_LIFE': '16'}
 
 
 class LaunchConfigTests(unittest.TestCase):
@@ -33,13 +34,13 @@ class LaunchConfigTests(unittest.TestCase):
         self.assertEqual((cfg['context'], cfg['ctx_cache_precision'], cfg['ctx_cache_growable']), (999424, 'bf16', True))
 
     def test_local_keys_survive_and_gated_keys_win(self):
-        local = {'model': 'M.gguf', 'port': 9000, 'env_overrides': {'FOO': '1', 'LLAMADECODE_ENGRAM_CACHE_MB': '2048'},
+        local = {'model': 'M.gguf', 'port': 9000, 'env_overrides': {'FOO': '1', 'LLAMADECODE_ENGRAM_CACHE_MB': '64'},
                  'producer_host_max_gib': 12, 'producer_prefill_sweep_tokens': 98304, 'context': 4096}
         cfg = dsv41_single.overlay('262k', local, model='N.gguf')
         self.assertEqual((cfg['model'], cfg['port'], cfg['context']), ('N.gguf', 9000, 262144))
-        self.assertEqual(cfg['env_overrides'], {'FOO': '1', **GATED_ENV})
+        self.assertEqual(cfg['env_overrides'], {'FOO': '1', **GATED_ENV, 'LLAMADECODE_ENGRAM_CACHE_MB': '64'})
         self.assertEqual((cfg['producer_host_max_gib'], cfg['producer_prefill_sweep_tokens']), (7.75, 49152))   # gated fold plan wins
-        self.assertEqual(local['env_overrides']['LLAMADECODE_ENGRAM_CACHE_MB'], '2048')   # input untouched
+        self.assertEqual(local['env_overrides']['LLAMADECODE_ENGRAM_CACHE_MB'], '64')   # input untouched
 
     def test_resolved_producer_flags_env_and_sweep(self):
         fold = {'--prefill-sweep-tokens': '49152', '--prefill-fold-cap-tokens': '61440', '--yoco-keep': '2541'}
@@ -78,6 +79,17 @@ class LaunchConfigTests(unittest.TestCase):
         cfg=dsv41_single.overlay('262k',dict(env_overrides={'LLAMADECODE_APPEND_DECODE_MAX':'96'}))
         self.assertEqual(cfg['env_overrides']['LLAMADECODE_APPEND_DECODE_MAX'],'96')
 
+    def test_lfu_and_engram_options_reach_the_producer(self):
+        cfg=dsv41_single.overlay('262k',dict(env_overrides={
+            'LLAMADECODE_RECENCY_LFU':'0', 'LLAMADECODE_LFU_HALF_LIFE':'1',
+            'LLAMADECODE_ENGRAM_READ_ALIGN':'512','LLAMADECODE_ENGRAM_EARLY':'0',
+            'LLAMADECODE_ENGRAM_CACHE_MB':'64'}))
+        with tempfile.TemporaryDirectory() as runtime:
+            resolved=dsv41_single.resolved({**cfg,'runtime_root':runtime})
+        for key in ('LLAMADECODE_RECENCY_LFU','LLAMADECODE_LFU_HALF_LIFE',
+                    'LLAMADECODE_ENGRAM_READ_ALIGN','LLAMADECODE_ENGRAM_EARLY','LLAMADECODE_ENGRAM_CACHE_MB'):
+            self.assertEqual(resolved['producer_env'][key],cfg['env_overrides'][key])
+
     def test_write_and_dry_run_cli(self):
         with tempfile.TemporaryDirectory() as folder:
             local = Path(folder) / 'my.local.json'
@@ -100,8 +112,9 @@ class LaunchConfigTests(unittest.TestCase):
         self.assertIn('bootstrap.py', result.stdout)
         self.assertIn('start --webui', result.stdout)
         self.assertIn('Router / web UI: http://127.0.0.1:', result.stdout)
-        written = json.loads((ROOT / 'runtime' / 'dsv41-single-262k.local.json').read_text(encoding='utf-8'))
+        written = json.loads((ROOT / 'runtime' / 'dsv41-single-262k-ultra-cone.local.json').read_text(encoding='utf-8'))
         self.assertEqual(written['ctx_cache_precision'], 'f32')
+        self.assertEqual(written['yoco_keep'],2541)
 
 
 class KeptKeyTests(unittest.TestCase):

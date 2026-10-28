@@ -30,6 +30,9 @@ filled. Averaged over the whole reply, including that warm-up, Max speed gives
 cone with routed tail reads, N=1 and growable BF16 cache, including startup.
 The matched 49,555-token full-prefill control took 36.25 s; the cone's logits
 and cache hashes were bit-identical. [Measurements and cache settings](docs/PERFORMANCE.md#prefill).
+The example decode defaults also enable exact LFU admission with a 16-token
+half life: a separate 8K workload improved by 1.5–10.6% in two repetitions.
+[LFU measurements](docs/EXPERIMENT_E8.md).
 
 Add a Mac Studio M3 Ultra (512 GB) for decode:
 
