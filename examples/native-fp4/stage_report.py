@@ -14,6 +14,8 @@ def summarize(measurement, trace):
     nodes = []
     pending = None
     ledger = defaultdict(float)
+    tile_ms = defaultdict(float)
+    tile_count = 0
     fetched = layers = 0
     with trace.open(encoding='utf-8', errors='replace') as stream:
         for line in stream:
@@ -37,9 +39,16 @@ def summarize(measurement, trace):
                         ledger[key] += float(value)
             elif '[dsv41-fetch] ' in line:
                 fetched += int(re.search(r'bytes=(\d+)', line)[1])
+            elif line.startswith('LLAMADECODE_TILE_TIMING '):
+                tile_count += 1
+                for key, value in re.findall(r'(\w+_ms)=([-0-9.]+)', line):
+                    if float(value) < 0:
+                        raise ValueError('Incomplete CUDA tile timing')
+                    tile_ms[key] += float(value)
     if not nodes or not layers:
         raise ValueError('Missing complete node or layer profile')
     gpu = defaultdict(float)
+    other_origins = defaultdict(float)
     expert_flops = 0
     for count, ms, description in nodes:
         op = description.split('|', 1)[0]
@@ -55,6 +64,13 @@ def summarize(measurement, trace):
             category = 'indexer_core'
         else:
             category = 'other_gpu'
+            if 'dsv41_hc_' in description or re.search(r'\|[ab]=blk\.\d+\.hc_', description):
+                origin = 'named_hc'
+            elif any(name in description for name in ('compressor_', 'dsv41_compressed_', 'dsv41_pool_')):
+                origin = 'named_compressor_and_pool'
+            else:
+                origin = 'remaining'
+            other_origins[origin] += ms / 1000
         gpu[category] += ms / 1000
     wall = row['prefill_seconds']
     wait = ledger['acquire_ms'] / 1000
@@ -62,6 +78,8 @@ def summarize(measurement, trace):
         'expert_gemm', 'sparse_attention_core', 'indexer_core'))
     if residual < 0:
         raise ValueError('Stage counters exceed measured wall')
+    with trace.open('rb') as stream:
+        trace_sha256 = hashlib.file_digest(stream, 'sha256').hexdigest()
     return dict(status='PASS', arm=row['arm'], label=row['label'],
                 prompt_tokens=row['prompt_tokens'], sweeps=row['plan']['sweeps'],
                 diagnostic_only=True, prefill_seconds=wall,
@@ -69,6 +87,13 @@ def summarize(measurement, trace):
                                    sparse_attention_core=gpu['sparse_attention_core'],
                                    indexer_core=gpu['indexer_core'], other_wall=residual),
                 gpu_seconds=dict(gpu), layer_count=layers, fetched_bytes=fetched,
+                other_gpu_by_named_origin_seconds=dict(other_origins),
+                tile_count=tile_count,
+                tile_phase_seconds={key.removesuffix('_ms'): tile_ms[key] / 1000 for key in (
+                    'host_prepare_ms', 'host_upload_ms', 'compute_ms',
+                    'host_readback_ms', 'host_cleanup_ms')},
+                tile_nested_seconds={key.removesuffix('_ms'): tile_ms[key] / 1000 for key in (
+                    'host_bind_ms', 'host_register_ms', 'host_launch_ms', 'host_sync_ms', 'gpu_ms')},
                 routed_expert_flops=expert_flops,
                 routed_effective_tflops=expert_flops / gpu['expert_gemm'] / 1e12,
                 nominal_5090_dense_fp4_tflops=1676,
@@ -80,12 +105,19 @@ def summarize(measurement, trace):
                                  expert_gemm='MUL_MAT_ID nodes whose weight origin is a routed expert.',
                                  sparse_attention_core='FLASH_ATTN nodes; projection, RoPE and packing remain in other.',
                                  indexer_core='Index scores, their top-k, candidate blocks and selected masks.',
-                                 other_wall='Wall residual including other GPU work, CPU scheduling, carry/Engram work and startup.'),
+                                 other_wall='Wall residual including other GPU work, CPU scheduling, carry/Engram work and startup.',
+                                 other_gpu_by_named_origin_seconds='Disjoint subsets of other_gpu identified by node or immediate source names; anonymous intermediates remain in remaining. These are not full semantic phase timers.',
+                                 tile_phase_seconds='Disjoint executor phase wall sums; compute includes graph launch and synchronization. The executor post-compute gap and work outside tiles are not included.',
+                                 tile_nested_seconds='Diagnostics only: register is inside bind, bind is inside prepare, launch and sync are inside compute, and gpu spans overlap compute. Never add these to tile phases or stage_seconds.'),
                 caveat='CUDA profiling synchronizes operations. These diagnostic walls are not headline throughput or an unsynchronized overlap decomposition.',
                 producer_sha256=row['producer_sha256'], decode_library_sha256=row['decode_library_sha256'],
+                flashinfer_requested=row.get('flashinfer_requested', False),
+                flashinfer_bridge_sha256=row.get('flashinfer_bridge_sha256'),
+                flashinfer_completed_graphs=row.get('flashinfer_completed_graphs'),
+                flashinfer_completed_products=row.get('flashinfer_completed_products'),
                 model_sha256=row['model_sha256'], input_sha256=row['input_sha256'],
                 measurement_sha256=hashlib.sha256(measurement.read_bytes()).hexdigest(),
-                trace_sha256=hashlib.file_digest(trace.open('rb'), 'sha256').hexdigest())
+                trace_sha256=trace_sha256)
 
 
 if __name__ == '__main__':

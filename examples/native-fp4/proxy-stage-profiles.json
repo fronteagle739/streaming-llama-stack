@@ -26,6 +26,26 @@
       },
       "layer_count": 40,
       "fetched_bytes": 315825603008,
+      "other_gpu_by_named_origin_seconds": {
+        "remaining": 3.994753215290002,
+        "named_hc": 1.047025408124998,
+        "named_compressor_and_pool": 0.05427903994299999
+      },
+      "tile_count": 292,
+      "tile_phase_seconds": {
+        "host_prepare": 2.5766979999999973,
+        "host_upload": 1.3657939999999988,
+        "compute": 15.019348,
+        "host_readback": 0.234562,
+        "host_cleanup": 0.00031100000000000024
+      },
+      "tile_nested_seconds": {
+        "host_bind": 0.8779349999999996,
+        "host_register": 0.875577,
+        "host_launch": 15.005128999999998,
+        "host_sync": 0.010188000000000001,
+        "gpu": 15.001036999999998
+      },
       "routed_expert_flops": 443068003123200,
       "routed_effective_tflops": 96.5211063005507,
       "nominal_5090_dense_fp4_tflops": 1676,
@@ -49,11 +69,18 @@
         "expert_gemm": "MUL_MAT_ID nodes whose weight origin is a routed expert.",
         "sparse_attention_core": "FLASH_ATTN nodes; projection, RoPE and packing remain in other.",
         "indexer_core": "Index scores, their top-k, candidate blocks and selected masks.",
-        "other_wall": "Wall residual including other GPU work, CPU scheduling, carry/Engram work and startup."
+        "other_wall": "Wall residual including other GPU work, CPU scheduling, carry/Engram work and startup.",
+        "other_gpu_by_named_origin_seconds": "Disjoint subsets of other_gpu identified by node or immediate source names; anonymous intermediates remain in remaining. These are not full semantic phase timers.",
+        "tile_phase_seconds": "Disjoint executor phase wall sums; compute includes graph launch and synchronization. The executor post-compute gap and work outside tiles are not included.",
+        "tile_nested_seconds": "Diagnostics only: register is inside bind, bind is inside prepare, launch and sync are inside compute, and gpu spans overlap compute. Never add these to tile phases or stage_seconds."
       },
       "caveat": "CUDA profiling synchronizes operations. These diagnostic walls are not headline throughput or an unsynchronized overlap decomposition.",
       "producer_sha256": "9b634ae28a62d1e84b762ff88403b6aadb4709fd7d363d59fb294f74a9b7f82d",
       "decode_library_sha256": "91dd102586c5afad4a2c94a5ba52c2be06149ce96752747dbdbb86a353930b38",
+      "flashinfer_requested": false,
+      "flashinfer_bridge_sha256": null,
+      "flashinfer_completed_graphs": null,
+      "flashinfer_completed_products": null,
       "model_sha256": "2cc6bc254f22a0238020e61e931c0cac865218aada1eed9c0036d9f4031c6e5f",
       "input_sha256": "8be73d98c9ac8c19cd46796c9836f16f0fafe0cc4c2e1c1f4177ecedceb4420c",
       "measurement_sha256": "e614ee0171ef5f31e22e38edc9a3f34dd2192f5abf4a4c51f0ca31cd682a2a08",
@@ -91,6 +118,26 @@
       },
       "layer_count": 40,
       "fetched_bytes": 298838671808,
+      "other_gpu_by_named_origin_seconds": {
+        "remaining": 3.9732718072340045,
+        "named_hc": 1.047968320710993,
+        "named_compressor_and_pool": 0.054107935983
+      },
+      "tile_count": 292,
+      "tile_phase_seconds": {
+        "host_prepare": 2.6119899999999996,
+        "host_upload": 1.3773609999999994,
+        "compute": 13.768704000000001,
+        "host_readback": 0.23519399999999982,
+        "host_cleanup": 0.00031100000000000024
+      },
+      "tile_nested_seconds": {
+        "host_bind": 0.8977559999999996,
+        "host_register": 0.8951659999999996,
+        "host_launch": 13.754233999999993,
+        "host_sync": 0.010398999999999999,
+        "gpu": 13.750196999999993
+      },
       "routed_expert_flops": 443068003123200,
       "routed_effective_tflops": 132.79871313879863,
       "nominal_5090_dense_fp4_tflops": 1676,
@@ -114,11 +161,18 @@
         "expert_gemm": "MUL_MAT_ID nodes whose weight origin is a routed expert.",
         "sparse_attention_core": "FLASH_ATTN nodes; projection, RoPE and packing remain in other.",
         "indexer_core": "Index scores, their top-k, candidate blocks and selected masks.",
-        "other_wall": "Wall residual including other GPU work, CPU scheduling, carry/Engram work and startup."
+        "other_wall": "Wall residual including other GPU work, CPU scheduling, carry/Engram work and startup.",
+        "other_gpu_by_named_origin_seconds": "Disjoint subsets of other_gpu identified by node or immediate source names; anonymous intermediates remain in remaining. These are not full semantic phase timers.",
+        "tile_phase_seconds": "Disjoint executor phase wall sums; compute includes graph launch and synchronization. The executor post-compute gap and work outside tiles are not included.",
+        "tile_nested_seconds": "Diagnostics only: register is inside bind, bind is inside prepare, launch and sync are inside compute, and gpu spans overlap compute. Never add these to tile phases or stage_seconds."
       },
       "caveat": "CUDA profiling synchronizes operations. These diagnostic walls are not headline throughput or an unsynchronized overlap decomposition.",
       "producer_sha256": "9b634ae28a62d1e84b762ff88403b6aadb4709fd7d363d59fb294f74a9b7f82d",
       "decode_library_sha256": "91dd102586c5afad4a2c94a5ba52c2be06149ce96752747dbdbb86a353930b38",
+      "flashinfer_requested": false,
+      "flashinfer_bridge_sha256": null,
+      "flashinfer_completed_graphs": null,
+      "flashinfer_completed_products": null,
       "model_sha256": "cf05bdccb86b823ce794eab2ca033a649b6a2f5c03cee8a4b177d86de017ae44",
       "input_sha256": "8be73d98c9ac8c19cd46796c9836f16f0fafe0cc4c2e1c1f4177ecedceb4420c",
       "measurement_sha256": "b3a6d63b61fdd314b861238da89f949cd8482909ee86d52acc172c7e6771c318",
@@ -159,6 +213,26 @@
       },
       "layer_count": 103,
       "fetched_bytes": 814973249000,
+      "other_gpu_by_named_origin_seconds": {
+        "remaining": 25.26530890839701,
+        "named_hc": 4.2149127981701655,
+        "named_compressor_and_pool": 0.41675011140699997
+      },
+      "tile_count": 1048,
+      "tile_phase_seconds": {
+        "host_prepare": 9.745805000000006,
+        "host_upload": 4.861204999999997,
+        "compute": 74.87547099999992,
+        "host_readback": 0.7297289999999996,
+        "host_cleanup": 0.001125999999999989
+      },
+      "tile_nested_seconds": {
+        "host_bind": 3.129147000000004,
+        "host_register": 3.121218000000003,
+        "host_launch": 74.82340899999997,
+        "host_sync": 0.03681899999999999,
+        "gpu": 74.80787500000007
+      },
       "routed_expert_flops": 1784757406924800,
       "routed_effective_tflops": 99.30562095943927,
       "nominal_5090_dense_fp4_tflops": 1676,
@@ -182,11 +256,18 @@
         "expert_gemm": "MUL_MAT_ID nodes whose weight origin is a routed expert.",
         "sparse_attention_core": "FLASH_ATTN nodes; projection, RoPE and packing remain in other.",
         "indexer_core": "Index scores, their top-k, candidate blocks and selected masks.",
-        "other_wall": "Wall residual including other GPU work, CPU scheduling, carry/Engram work and startup."
+        "other_wall": "Wall residual including other GPU work, CPU scheduling, carry/Engram work and startup.",
+        "other_gpu_by_named_origin_seconds": "Disjoint subsets of other_gpu identified by node or immediate source names; anonymous intermediates remain in remaining. These are not full semantic phase timers.",
+        "tile_phase_seconds": "Disjoint executor phase wall sums; compute includes graph launch and synchronization. The executor post-compute gap and work outside tiles are not included.",
+        "tile_nested_seconds": "Diagnostics only: register is inside bind, bind is inside prepare, launch and sync are inside compute, and gpu spans overlap compute. Never add these to tile phases or stage_seconds."
       },
       "caveat": "CUDA profiling synchronizes operations. These diagnostic walls are not headline throughput or an unsynchronized overlap decomposition.",
       "producer_sha256": "9b634ae28a62d1e84b762ff88403b6aadb4709fd7d363d59fb294f74a9b7f82d",
       "decode_library_sha256": "91dd102586c5afad4a2c94a5ba52c2be06149ce96752747dbdbb86a353930b38",
+      "flashinfer_requested": false,
+      "flashinfer_bridge_sha256": null,
+      "flashinfer_completed_graphs": null,
+      "flashinfer_completed_products": null,
       "model_sha256": "2cc6bc254f22a0238020e61e931c0cac865218aada1eed9c0036d9f4031c6e5f",
       "input_sha256": "01cc49bd78b532e9046cd82ed104f30656f34c16c734a74f9b9be2517ba049da",
       "measurement_sha256": "da9dfac289a00385d06c2be2637d2d4f491d7b642e5c217dd252886464eb63d7",
@@ -227,6 +308,26 @@
       },
       "layer_count": 103,
       "fetched_bytes": 771231901160,
+      "other_gpu_by_named_origin_seconds": {
+        "remaining": 25.300017568278022,
+        "named_hc": 4.216909951101146,
+        "named_compressor_and_pool": 0.4170658881270002
+      },
+      "tile_count": 1048,
+      "tile_phase_seconds": {
+        "host_prepare": 9.439259000000005,
+        "host_upload": 4.743249999999993,
+        "compute": 69.76905000000004,
+        "host_readback": 0.720454999999998,
+        "host_cleanup": 0.0011169999999999897
+      },
+      "tile_nested_seconds": {
+        "host_bind": 3.0783400000000056,
+        "host_register": 3.0710070000000007,
+        "host_launch": 69.71784599999997,
+        "host_sync": 0.03635599999999998,
+        "gpu": 69.70440699999999
+      },
       "routed_expert_flops": 1784757406924800,
       "routed_effective_tflops": 136.16056272115847,
       "nominal_5090_dense_fp4_tflops": 1676,
@@ -250,11 +351,18 @@
         "expert_gemm": "MUL_MAT_ID nodes whose weight origin is a routed expert.",
         "sparse_attention_core": "FLASH_ATTN nodes; projection, RoPE and packing remain in other.",
         "indexer_core": "Index scores, their top-k, candidate blocks and selected masks.",
-        "other_wall": "Wall residual including other GPU work, CPU scheduling, carry/Engram work and startup."
+        "other_wall": "Wall residual including other GPU work, CPU scheduling, carry/Engram work and startup.",
+        "other_gpu_by_named_origin_seconds": "Disjoint subsets of other_gpu identified by node or immediate source names; anonymous intermediates remain in remaining. These are not full semantic phase timers.",
+        "tile_phase_seconds": "Disjoint executor phase wall sums; compute includes graph launch and synchronization. The executor post-compute gap and work outside tiles are not included.",
+        "tile_nested_seconds": "Diagnostics only: register is inside bind, bind is inside prepare, launch and sync are inside compute, and gpu spans overlap compute. Never add these to tile phases or stage_seconds."
       },
       "caveat": "CUDA profiling synchronizes operations. These diagnostic walls are not headline throughput or an unsynchronized overlap decomposition.",
       "producer_sha256": "9b634ae28a62d1e84b762ff88403b6aadb4709fd7d363d59fb294f74a9b7f82d",
       "decode_library_sha256": "91dd102586c5afad4a2c94a5ba52c2be06149ce96752747dbdbb86a353930b38",
+      "flashinfer_requested": false,
+      "flashinfer_bridge_sha256": null,
+      "flashinfer_completed_graphs": null,
+      "flashinfer_completed_products": null,
       "model_sha256": "cf05bdccb86b823ce794eab2ca033a649b6a2f5c03cee8a4b177d86de017ae44",
       "input_sha256": "01cc49bd78b532e9046cd82ed104f30656f34c16c734a74f9b9be2517ba049da",
       "measurement_sha256": "7738ae0acd4067aaf9fb90a3cd7d8caaf433550f7565ecdf58ff396ed83066c7",
@@ -312,6 +420,26 @@
       },
       "layer_count": 460,
       "fetched_bytes": 3643476576288,
+      "other_gpu_by_named_origin_seconds": {
+        "remaining": 470.6748568967022,
+        "named_hc": 21.063700795774885,
+        "named_compressor_and_pool": 7.328873824448997
+      },
+      "tile_count": 5164,
+      "tile_phase_seconds": {
+        "host_prepare": 53.511487999999844,
+        "host_upload": 17.17930999999994,
+        "compute": 900.9636610000024,
+        "host_readback": 2.949482999999991,
+        "host_cleanup": 0.005713000000000164
+      },
+      "tile_nested_seconds": {
+        "host_bind": 13.709631000000021,
+        "host_register": 13.675652000000008,
+        "host_launch": 900.7056789999973,
+        "host_sync": 0.18560800000000027,
+        "gpu": 900.6700459999997
+      },
       "routed_expert_flops": 8919268510924800,
       "routed_effective_tflops": 100.27227645587583,
       "nominal_5090_dense_fp4_tflops": 1676,
@@ -335,11 +463,18 @@
         "expert_gemm": "MUL_MAT_ID nodes whose weight origin is a routed expert.",
         "sparse_attention_core": "FLASH_ATTN nodes; projection, RoPE and packing remain in other.",
         "indexer_core": "Index scores, their top-k, candidate blocks and selected masks.",
-        "other_wall": "Wall residual including other GPU work, CPU scheduling, carry/Engram work and startup."
+        "other_wall": "Wall residual including other GPU work, CPU scheduling, carry/Engram work and startup.",
+        "other_gpu_by_named_origin_seconds": "Disjoint subsets of other_gpu identified by node or immediate source names; anonymous intermediates remain in remaining. These are not full semantic phase timers.",
+        "tile_phase_seconds": "Disjoint executor phase wall sums; compute includes graph launch and synchronization. The executor post-compute gap and work outside tiles are not included.",
+        "tile_nested_seconds": "Diagnostics only: register is inside bind, bind is inside prepare, launch and sync are inside compute, and gpu spans overlap compute. Never add these to tile phases or stage_seconds."
       },
       "caveat": "CUDA profiling synchronizes operations. These diagnostic walls are not headline throughput or an unsynchronized overlap decomposition.",
       "producer_sha256": "9b634ae28a62d1e84b762ff88403b6aadb4709fd7d363d59fb294f74a9b7f82d",
       "decode_library_sha256": "91dd102586c5afad4a2c94a5ba52c2be06149ce96752747dbdbb86a353930b38",
+      "flashinfer_requested": false,
+      "flashinfer_bridge_sha256": null,
+      "flashinfer_completed_graphs": null,
+      "flashinfer_completed_products": null,
       "model_sha256": "2cc6bc254f22a0238020e61e931c0cac865218aada1eed9c0036d9f4031c6e5f",
       "input_sha256": "2116d1cf3eed9b52155436c55d0cfc571cd6926c9e90224a299c9a6fa312f72d",
       "measurement_sha256": "4f76e14e137089603767b2cdb896398e6e2144af429840b8179cc0361100c173",
