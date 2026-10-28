@@ -21,7 +21,16 @@
     "producer_fixed_direct_open": true,
     "mac": "http://SET_DECODE_HOST:8180",
     "pair_token": "SET_SHARED_PAIRING_TOKEN",
-    "webui": true
+    "webui": true,
+    "env_overrides": {
+      "LLAMADECODE_APPEND_RESIDENT_SWEEP": "1",
+      "LLAMADECODE_APPEND_DECODE_MAX": "0",
+      "LLAMA_DSV41_INDEX_FP4": "1",
+      "DS4_CUDA_SINGLE_GPU_HC_GRAPHS": "1",
+      "LLAMADECODE_HOST_COPY_STAGING": "auto",
+      "LLAMADECODE_RECENCY_LFU": "1",
+      "LLAMADECODE_LFU_HALF_LIFE": "16"
+    }
   },
   "decode_plan": {
     "status": "UNTESTED example; design fields, not ds4 CLI options",
