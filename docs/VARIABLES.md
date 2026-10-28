@@ -56360,7 +56360,7 @@ Source: `engines/streaming-llama/prefill_llama.cpp/src/llama-dsv41-layer.cpp:48`
     GGML_ASSERT(p.ratio!=0 || compressed_rows==0);
 ```
 
-Source: `engines/streaming-llama/prefill_llama.cpp/src/llama-dsv41-sweep.cpp:243`. Unset read: NULL from getenv; the literal consumer below supplies any fallback.
+Source: `engines/streaming-llama/prefill_llama.cpp/src/llama-dsv41-sweep.cpp:251`. Unset read: NULL from getenv; the literal consumer below supplies any fallback.
 
 ```text
             require(!restored||restored->local_snapshot,"YOCO requires a local snapshot with explicit YOCO provenance");
@@ -56372,7 +56372,7 @@ Source: `engines/streaming-llama/prefill_llama.cpp/src/llama-dsv41-sweep.cpp:243
                 require(previous_lock.owns_lock(),"YOCO prefix is active");
 ```
 
-Source: `engines/streaming-llama/prefill_llama.cpp/src/llama-dsv41-sweep.cpp:274`. Unset read: NULL from getenv; the literal consumer below supplies any fallback.
+Source: `engines/streaming-llama/prefill_llama.cpp/src/llama-dsv41-sweep.cpp:282`. Unset read: NULL from getenv; the literal consumer below supplies any fallback.
 
 ```text
         require(!options.unaligned_append_step_tokens||(options.stateful_chunks&&options.fixed&&options.reuse_graph&&!options.reuse_layer_graph),"Unaligned append policy requires the existing stateful fixed owner");
@@ -56384,7 +56384,7 @@ Source: `engines/streaming-llama/prefill_llama.cpp/src/llama-dsv41-sweep.cpp:274
             "Direct pinned RAM requires native experts, admitted RAM bank and separate64MiB device ceiling");
 ```
 
-Source: `engines/streaming-llama/prefill_llama.cpp/src/llama-dsv41-sweep.cpp:275`. Unset read: NULL from getenv; the literal consumer below supplies any fallback.
+Source: `engines/streaming-llama/prefill_llama.cpp/src/llama-dsv41-sweep.cpp:283`. Unset read: NULL from getenv; the literal consumer below supplies any fallback.
 
 ```text
         require(!options.compute_step_tokens||(options.compute_step_tokens<=options.carry.max_tile_tokens&&(!options.pair_ffn||options.compute_step_tokens==options.carry.max_tile_tokens)),"Logical compute step exceeds its admitted tile or changes paired group alignment");
@@ -62390,7 +62390,7 @@ static bool decode_compact_enabled(){static const bool on=[]{const char*e=std::g
 static void compact_fixed(llama_dsv41_fixed_storage&f,uint64_t admitted_hidden){
     require(f.ready&&f.graph&&!f.decode_compact,"Decode compaction requires the ready prefill plan");
     ggml_backend_synchronize(f.backend);
-    const uint64_t old_graph=ggml_gallocr_get_buffer_size(f.graph.get(),0),old_hidden=f.hidden?ggml_backend_buffer_get_size(f.hidden.get()):0;
+#ifdef GGML_USE_CUDA
 ```
 
 ### LLAMADECODE_DECODE_LAYOUT
@@ -62573,7 +62573,7 @@ Producer Engram row cache kept in host RAM across turns, in MiB; 0 disables it. 
 
 Scope: rtx-llama. Class: advanced.
 
-Source: `engines/streaming-llama/prefill_llama.cpp/src/llama-dsv41-sweep.cpp:425`. Unset read: NULL from getenv; the literal consumer below supplies any fallback.
+Source: `engines/streaming-llama/prefill_llama.cpp/src/llama-dsv41-sweep.cpp:433`. Unset read: NULL from getenv; the literal consumer below supplies any fallback.
 
 ```text
         const uint64_t row_cache_have=p->provider.engram_row_cache_bytes();uint64_t row_cache_new=0;
@@ -67091,7 +67091,7 @@ LLAMA_DSV41_ENGRAM_PROMPT_OVERLAP: qualified preset/runtime setting; override fo
 
 Scope: rtx-llama. Class: preset.
 
-Source: `engines/streaming-llama/prefill_llama.cpp/src/llama-dsv41-sweep.cpp:675`. Unset read: NULL from getenv; the literal consumer below supplies any fallback.
+Source: `engines/streaming-llama/prefill_llama.cpp/src/llama-dsv41-sweep.cpp:683`. Unset read: NULL from getenv; the literal consumer below supplies any fallback.
 
 ```text
         const auto schedule=llama_dsv41_plan_append(p->options.pair_ffn,p->options.carry.max_tile_tokens,p->options.compute_step_tokens,p->position_offset,p->options.unaligned_append_step_tokens);
@@ -100538,10 +100538,10 @@ Opt-in stored MXFP4 expert prefill through the pinned FlashInfer SM120 W4A8 grou
 
 Scope: rtx-llama. Class: advanced.
 
-Source: `engines/streaming-llama/prefill_llama.cpp/ggml/src/ggml-cuda/dsv41-flashinfer.cuh:12`. Unset read: NULL from getenv; the literal consumer below supplies any fallback.
+Source: `engines/streaming-llama/prefill_llama.cpp/ggml/src/ggml-cuda/dsv41-flashinfer.cuh:13`. Unset read: NULL from getenv; the literal consumer below supplies any fallback.
 
 ```text
-    int,int,int,int64_t,int64_t,int64_t,uint64_t,cudaStream_t);
+    int,int,int,int64_t,int64_t,int64_t,void*,uint64_t,cudaStream_t);
 static bool dsv41_flashinfer_requested(){
     const char *value=std::getenv("LLAMA_DSV41_FLASHINFER_MXFP4");
     return value&&std::strcmp(value,"1")==0;
@@ -100562,16 +100562,16 @@ Source: `engines/streaming-llama/prefill_llama.cpp/src/llama-dsv41-executor.cpp:
         const auto hc_half_before=hc_projection_f16_gemm?ggml_backend_cuda_dsv41_hc_half_queued():0;
 ```
 
-Source: `engines/streaming-llama/prefill_llama.cpp/src/llama-dsv41-flashinfer-budget.h:7`. Unset read: NULL from getenv; the literal consumer below supplies any fallback.
+Source: `engines/streaming-llama/prefill_llama.cpp/src/llama-dsv41-flashinfer-budget.h:8`. Unset read: NULL from getenv; the literal consumer below supplies any fallback.
 
 ```text
 namespace llama_dsv41_flashinfer {
 constexpr uint64_t reserve_bytes=3328ull*1024*1024;
 inline bool requested(){const char *v=std::getenv("LLAMA_DSV41_FLASHINFER_MXFP4");return v&&!std::strcmp(v,"1");}
 inline uint64_t workspace_bytes(uint64_t n,uint64_t k,uint64_t rows){
-    const uint64_t sf_rows=(rows+384*3+127)/128*128;
-    return 384*n*k/2+384*n*k/32+rows*k+sf_rows*k/32+rows*n*2+5*256+16ull*1024*1024;
-}
+    (void)n;(void)k;(void)rows;
+    // GGML legacy-pool allocation look-ahead, plus AOT module headroom.
+    return ggml_dsv41_flashinfer::align256((ggml_dsv41_flashinfer::workspace_bytes+255)*105/100+1)+16ull*1024*1024;
 ```
 
 ### LLAMA_DSV41_FLASHINFER_MXFP4_DLL
@@ -100580,7 +100580,7 @@ Absolute path to the optional ABI2 FlashInfer AOT bridge DLL. Loaded only when t
 
 Scope: rtx-llama. Class: advanced.
 
-Source: `engines/streaming-llama/prefill_llama.cpp/ggml/src/ggml-cuda/dsv41-flashinfer.cuh:18`. Unset read: NULL from getenv; the literal consumer below supplies any fallback.
+Source: `engines/streaming-llama/prefill_llama.cpp/ggml/src/ggml-cuda/dsv41-flashinfer.cuh:19`. Unset read: NULL from getenv; the literal consumer below supplies any fallback.
 
 ```text
     static dsv41_flashinfer_fn function=[](){

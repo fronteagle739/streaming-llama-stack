@@ -108,6 +108,8 @@ def run(args, cfg):
                       prefill_tok_s=len(tokens) / producer.prefill_seconds,
                       plan=producer.prefill_plan, model_sha256=producer.model_sha256,
                       ready=producer.process.ready)
+        from timing_report import from_receipt
+        record.update(from_receipt(producer.directory / 'producer.json', record))
         record['quality_reply'] = producer.quality(args.bias)
         if args.continuation:
             _, continuation = token_ids(args.continuation)

@@ -56,7 +56,9 @@ int main(int argc,char **argv){
     }
     auto library=LoadLibraryA(argv[1]);if(!library){std::fprintf(stderr,"LoadLibrary failed: %lu\n",GetLastError());return 2;}
     auto call=reinterpret_cast<slstack_flashinfer_mxfp4_fn>(GetProcAddress(library,"slstack_flashinfer_mxfp4"));if(!call)return 2;
-    native_block *weights;float *input,*output;int *gather,*scatter,*gpu_bounds;
+    auto abi=reinterpret_cast<int(*)()>(GetProcAddress(library,"slstack_flashinfer_mxfp4_abi"));if(!abi||abi()!=3)return 2;
+    native_block *weights;float *input,*output;int *gather,*scatter,*gpu_bounds;void *workspace;
+    check(cudaMalloc(&workspace,ggml_dsv41_flashinfer::workspace_bytes));
     size_t blocks=size_t(384)*n*k/32;
     check(cudaMalloc(&weights,blocks*sizeof(native_block)));check(cudaMalloc(&input,size_t(rows)*k*4));check(cudaMalloc(&output,size_t(rows)*n*4));
     check(cudaMalloc(&gather,rows*4));check(cudaMalloc(&scatter,rows*4));check(cudaMalloc(&gpu_bounds,385*4));
@@ -68,7 +70,7 @@ int main(int argc,char **argv){
         check(cudaMemcpy(weights+size_t(e)*expert_blocks,native_weights[e].data(),expert_blocks*sizeof(native_block),cudaMemcpyHostToDevice));
     fill_input<<<unsigned((size_t(rows)*k+255)/256),256>>>(input,rows,k,gpu_bounds);
     check(cudaMemset(output,0xff,size_t(rows)*n*4));check(cudaDeviceSynchronize());
-    check(static_cast<cudaError_t>(call(weights,input,gather,scatter,gpu_bounds,output,rows,n,k,k,n,n*6,3328ull<<20,nullptr)));
+    check(static_cast<cudaError_t>(call(weights,input,gather,scatter,gpu_bounds,output,rows,n,k,k,n,n*6,workspace,ggml_dsv41_flashinfer::workspace_bytes,nullptr)));
     check(cudaDeviceSynchronize());
     std::vector<float> actual(size_t(rows)*n);check(cudaMemcpy(actual.data(),output,actual.size()*4,cudaMemcpyDeviceToHost));
     for(float value:actual)if(!std::isfinite(value)){std::fprintf(stderr,"Nonfinite/unwritten output\n");return 3;}
@@ -86,5 +88,5 @@ int main(int argc,char **argv){
     }
     if(maximum){std::fprintf(stderr,"Adapter oracle mismatch: %.9g\n",maximum);return 3;}
     std::printf("{\"status\":\"PASS\",\"N\":%d,\"K\":%d,\"rows\":%d,\"weight_source\":\"stored-MXFP4-proxy-GGUF\",\"full_output_finite\":true,\"sampled_double_reference_elements\":%d,\"max_absolute_error\":0,\"gather_and_scatter_permuted\":true}\n",n,k,rows,checked);
-    check(cudaFree(weights));check(cudaFree(input));check(cudaFree(output));check(cudaFree(gather));check(cudaFree(scatter));check(cudaFree(gpu_bounds));return 0;
+    check(cudaFree(workspace));check(cudaFree(weights));check(cudaFree(input));check(cudaFree(output));check(cudaFree(gather));check(cudaFree(scatter));check(cudaFree(gpu_bounds));return 0;
 }
