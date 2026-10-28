@@ -362,6 +362,10 @@ struct llama_dsv41_tile_executor::pinned_storage {
     ggml_backend_t backend=nullptr;
 #ifdef GGML_USE_CUDA
     bool registered=false,tile_registration=false,pageable_copies=false;
+    static constexpr uint64_t host_copy_staging_bytes=64ull*1024*1024;
+    std::shared_ptr<void> host_copy_staging;
+    uint64_t staging_copies=0,staging_bytes=0;
+
     std::vector<std::vector<uint8_t>> pending_host_uploads;
     void *registered_tile=nullptr;uint64_t registered_tile_bytes=0;
     cudaStream_t copies=nullptr;
@@ -372,6 +376,8 @@ struct llama_dsv41_tile_executor::pinned_storage {
     static void ok(cudaError_t e,const char *message){if(e!=cudaSuccess)throw std::runtime_error(std::string(message)+": "+cudaGetErrorString(e));}
     static void cleanup(cudaError_t e){if(e!=cudaSuccess){llama_dsv41_layer_log("DSV41_PINNED_COPY_CLEANUP_FAILED %s\n",cudaGetErrorString(e));std::fflush(stderr);std::abort();}}
     ~pinned_storage(){
+        if(host_copy_staging)llama_dsv41_layer_log("PERFEXP_HOST_STAGING_RETIRE copies=%llu bytes=%llu buffer_bytes=%llu\n",
+            (unsigned long long)staging_copies,(unsigned long long)staging_bytes,(unsigned long long)host_copy_staging_bytes);
         if(copies)cleanup(cudaStreamSynchronize(copies));
         if(backend)ggml_backend_synchronize(backend);
         if(registered_tile)cleanup(cudaHostUnregister(registered_tile));
@@ -409,7 +415,7 @@ struct llama_dsv41_tile_executor::pinned_storage {
         if(std::getenv("DS4PERF_RING_TRACE")&&elapsed(before)>1)llama_dsv41_layer_log("DS4PERF_VALIDATION_API host_ms=%.6f\n",elapsed(before));
     }
     void bind_lease(const llama_dsv41_carry_store::ram_lease &lease,const llama_dsv41_carry_store::ram_lookahead *lookahead=nullptr){
-        if(!tile_registration)return;
+        if(!tile_registration||host_copy_staging)return;
         require(!registered&&lease.base==base&&lease.bytes==bytes&&lease.count(),"Tile pin requires its exact existing RAM lease");
         (void)lease.row(0);(void)lease.row(lease.count()-1);
         uint32_t next_rows=0;const uint8_t*last=lease.row(lease.count()-1);
@@ -444,6 +450,35 @@ struct llama_dsv41_tile_executor::pinned_storage {
     }
     void queue(bool to_device,const llama_dsv41_carry_store::ram_lease &lease,uint64_t offset,uint64_t width,ggml_tensor *tensor){
         require(!current_bank_copies_forbidden,"A resident-only reader attempted an unregistered RAM bank copy");
+        if(host_copy_staging){
+            require(tile_registration&&!registered&&!registered_tile&&!pageable_copies&&!prefetch_buffer&&
+                lease.base==base&&lease.bytes==bytes&&lease.count()&&width&&width<=host_copy_staging_bytes&&
+                offset<=llama_dsv41_carry_store::ram_record_bytes&&width<=llama_dsv41_carry_store::ram_record_bytes-offset&&
+                tensor&&tensor->data&&ggml_is_contiguous(tensor)&&ggml_nbytes(tensor)==width*lease.count(),
+                "Persistent host staging escaped its exact admitted carry/tensor");
+            (void)lease.row(0);(void)lease.row(lease.count()-1);
+            auto*stage=static_cast<uint8_t*>(host_copy_staging.get());
+            // Retire every prior consumer before overwriting the one host slot.
+            // D2H waits on readback_ready's original compute event. No carry
+            // generation can commit until finish() and the original validation.
+            ok(cudaStreamSynchronize(copies),"Persistent host staging prior copy did not finish");
+            const uint32_t capacity=uint32_t(host_copy_staging_bytes/width);
+            for(uint32_t first=0;first<lease.count();first+=capacity){
+                const uint32_t rows=std::min(capacity,lease.count()-first);
+                const uint64_t count=uint64_t(rows)*width;
+                if(to_device)for(uint32_t i=0;i<rows;++i)
+                    std::memcpy(stage+uint64_t(i)*width,lease.row(first+i)+offset,size_t(width));
+                auto*device=static_cast<char*>(tensor->data)+uint64_t(first)*width;
+                ok(cudaMemcpyAsync(to_device?static_cast<void*>(device):stage,
+                    to_device?static_cast<const void*>(stage):device,size_t(count),
+                    to_device?cudaMemcpyHostToDevice:cudaMemcpyDeviceToHost,copies),"Persistent host staging copy failed");
+                ok(cudaStreamSynchronize(copies),"Persistent host staging copy did not finish");
+                if(!to_device)for(uint32_t i=0;i<rows;++i)
+                    std::memcpy(lease.row(first+i)+offset,stage+uint64_t(i)*width,size_t(width));
+                staging_copies++;staging_bytes+=count;
+            }
+            return;
+        }
         if(pageable_copies){
             require(!registered&&!tile_registration&&!prefetch_buffer&&lease.base==base&&lease.bytes==bytes&&width&&offset<=llama_dsv41_carry_store::ram_record_bytes&&width<=llama_dsv41_carry_store::ram_record_bytes-offset&&tensor&&tensor->data&&ggml_is_contiguous(tensor)&&ggml_nbytes(tensor)==width*lease.count(),"Pageable vector copy escaped its exact resident lease/tensor");
             (void)lease.row(0);(void)lease.row(lease.count()-1);
@@ -648,6 +683,27 @@ llama_dsv41_tile_executor::llama_dsv41_tile_executor(ggml_backend_t backend,llam
                 const bool ram_lookahead=!fixed->bf16&&!fixed->ids&&!fixed->metadata&&!defer_hidden_readback&&admitted_prefetch_bytes;
                 require(!fixed->ram_registration&&(full_resident||(fixed->tile_registration&&!fixed->pageable_copies&&ram_lookahead)),"Tile registration requires its explicit resident or RAM-lookahead plan");
                 pinned->tile_registration=fixed->tile_registration;pinned->pageable_copies=fixed->pageable_copies;
+                const char*staging=std::getenv("LLAMADECODE_HOST_COPY_STAGING");
+                require(!staging||!std::strcmp(staging,"0")||!std::strcmp(staging,"1")||!std::strcmp(staging,"auto"),"Host copy staging requires0/1/auto");
+                const bool stage_auto=!staging||!std::strcmp(staging,"auto");
+                const bool stage_supported=fixed->tile_registration&&!fixed->pageable_copies&&!admitted_prefetch_bytes;
+                const bool stage_spill=resident_hidden_tokens>fixed->bank_rows();
+                const bool stage_on=stage_supported&&((staging&&!std::strcmp(staging,"1"))||(stage_auto&&stage_spill));
+                require(!(staging&&!std::strcmp(staging,"1"))||stage_supported,"Forced host staging requires fixed tile-registration without async lookahead");
+                llama_dsv41_layer_log("PERFEXP_HOST_STAGING_POLICY requested=%s enabled=%u logical_rows=%u bank_rows=%u spill=%u supported=%u\n",
+                    staging?staging:"auto",unsigned(stage_on),resident_hidden_tokens,fixed->bank_rows(),unsigned(stage_spill),unsigned(stage_supported));
+                if(stage_on){
+                    if(!fixed->host_copy_staging){
+                        void*slot=nullptr;
+                        pinned_storage::ok(cudaMallocHost(&slot,pinned_storage::host_copy_staging_bytes),"Bounded persistent host staging allocation failed");
+                        fixed->host_copy_staging=std::shared_ptr<void>(slot,[](void*p){pinned_storage::cleanup(cudaFreeHost(p));});
+                        llama_dsv41_layer_log("PERFEXP_HOST_STAGING_ALLOC bytes=%llu fixed_lifetime=1 carry_bank_registered=0\n",
+                            (unsigned long long)pinned_storage::host_copy_staging_bytes);
+                    }
+                    pinned->host_copy_staging=fixed->host_copy_staging;
+                    llama_dsv41_layer_log("PERFEXP_HOST_STAGING_BIND bytes=%llu fixed_owner_reused=1 carry_generation_checks=1\n",
+                        (unsigned long long)pinned_storage::host_copy_staging_bytes);
+                }
                 llama_dsv41_layer_log(fixed->pageable_copies?"DS4PERF_FIXED_RAM_PAGEABLE_VECTORS view_bytes=%llu whole_bank_pinned=0 existing_backend_API=1\n":"DS4PERF_FIXED_RAM_TILE_REGISTRATION view_bytes=%llu whole_bank_pinned=0 no_new_staging=1\n",(unsigned long long)direct->bytes);
             }else{
                 unsigned flags=0;pinned_storage::ok(cudaHostGetFlags(&flags,direct->base),"Fixed carry RAM is no longer registered");
