@@ -7,6 +7,13 @@ existing arithmetic profile and stored cache type are unchanged. Each pair
 changes one explicit environment switch. This measures this full-prefill
 configuration; it is not an exact-cone or MXFP4-weight comparison.
 
+All throughput below uses prompt execution only: seed embeddings through frontier
+logits, including every sweep and inter-sweep admission, excluding process/model
+open and bulk hidden/payload export. End-to-end TTFT includes native startup
+and the first returned token, but excludes lease queue and harness preparation.
+The original raw `prefill_seconds` field includes producer startup; it is
+retained for audit and must not be used as prompt-only time.
+
 ## TileLang attention: reject
 
 `LLAMA_DSV41_TILELANG_ATTENTION=1` adapts native sparse membership records to
@@ -15,12 +22,12 @@ DeepSeek's TileLang kernel: BF16 operands/probabilities, 16-head groups,
 The existing native attention kernel is the control. Input/output conversion,
 index preparation and image dispatch are included in the candidate timing.
 
-| 100K | Prefill s | tokens/s | First output s | Retrieval |
+| 100K | Prompt s | prompt tokens/s | TTFT s | Retrieval |
 |---|---:|---:|---:|---|
-| Native | 75.312 | 1,327.810 | 76.031 | pass |
-| TileLang | 87.594 | 1,141.631 | 88.360 | pass |
+| Native | 70.519 | 1,418.063 | 76.031 | pass |
+| TileLang | 84.054 | 1,189.711 | 88.360 | pass |
 
-The candidate is 16.3% slower. Untouched-frontier KL is 0.00098803258,
+The candidate takes 19.2% longer for prompt execution. Untouched-frontier KL is 0.00098803258,
 top-1 agrees, and subsequent natural continuations differ. Forced rows after
 those differing prefixes are not a matched quality comparison. The native
 128-query/100K-key component also regresses: 0.627872 to 1.111712 ms.
@@ -53,18 +60,18 @@ Clean median of three repetitions after two warmups: BF16 2.152544 ms,
 FP4 0.973600 ms. The deliberate fallback costs2.402720 versus2.120992 ms.
 These are component timings, not full-model throughput.
 
-| Clean100K confirmation | Prefill s | tokens/s | First output s | Retrieval |
+| Clean100K confirmation | Prompt s | prompt tokens/s | TTFT s | Retrieval |
 |---|---:|---:|---:|---|
-| BF16 control | 73.969 | 1,351.918 | 74.688 | pass |
-| Certified FP4 | 71.171 | 1,405.067 | 71.891 | pass |
+| BF16 control | 70.459 | 1,419.262 | 74.688 | pass |
+| Certified FP4 | 67.746 | 1,476.101 | 71.891 | pass |
 
-Throughput improves3.93%. All17 full-vocabulary rows are bit-identical, KL0,
+Prompt throughput improves4.00%. All17 full-vocabulary rows are bit-identical, KL0,
 top-1 agrees17/17, natural answers and owner checkpoints match. The default
 is enabled in every DSV4.1 example and the shared single-engine profile
 overlay. Explicit `LLAMA_DSV41_INDEX_FP4=0` retains BF16. Profiles and shapes
 that do not use the existing BF16 index scorer retain their existing path.
 
-The first clean100K attempt measured74.563 to71.172 s, but its post-run logits
+The first clean100K attempt measured74.563 to71.172 startup-inclusive seconds, but its post-run logits
 hash read raced the native exclusive writer handle. The failure receipt is
 retained and excluded from the accepted clean pair above. Native
 publication now closes that writer before replying; the harness also bounds
@@ -74,19 +81,20 @@ accumulation orders, plus boundary refusals and default/off behavior.
 Launcher/environment validation passes23 tests, including explicit0
 preservation across both presets and all available profiles.
 
-The final rebuilt producer also passes the50K secondary pair:38.890 to36.531s
-(1,285.678 to1,368.701 tokens/s),17 exact logit rows, KL0 and identical
-retrieval. That pair includes variable startup/Engram I/O, so its full6.46%
-throughput difference is not attributed entirely to the index kernel.
-The200K secondary also passes:174.406 to163.266s (1,146.750 to1,224.995
-tokens/s, +6.82%), TTFT175.156 to164.047s,17 exact logit rows and identical
-retrieval. All ready/frontier/forced checkpoint fields match at every context.
+The final rebuilt producer also passes the50K secondary pair: prompt execution
+34.311 to33.685s (1,457.244 to1,484.357 prompt tokens/s, +1.86%), TTFT39.641
+to37.266s,17 exact logit rows, KL0 and identical retrieval. Its larger
+startup-inclusive improvement includes variable startup/Engram I/O.
+The200K secondary also passes: prompt execution169.666 to158.399s
+(1,178.787 to1,262.633 prompt tokens/s, +7.11%), TTFT175.156 to164.047s,
+17 exact logit rows and identical retrieval. All ready/frontier/forced
+checkpoint fields match at every context.
 Real candidate FP4 dispatches are104/200/2972 at50K/100K/200K, with no
 certificate fallback. See `examples/perfexp/e6/results.json` for pins and guards.
 
 ## Separate 100K synchronized stage diagnostics
 
-| Arm | Wall s | Exposed acquire s | Expert GEMM s | Sparse attention s | Index score s | Other GPU s |
+| Arm | Startup-inclusive wall s | Exposed acquire s | Expert GEMM s | Sparse attention s | Index score s | Other GPU s |
 |---|---:|---:|---:|---:|---:|---:|
 | Native attention | 79.859 | 0.872 | 18.826 | 8.932 | 4.883 | 20.481 |
 | TileLang attention | 93.250 | 0.807 | 18.680 | 22.634 | 4.847 | 20.387 |
@@ -142,12 +150,17 @@ in node names even when their physical operands are anonymous leaves; the
 earlier0.191s named-operand attention-output-A subset was not its full cost.
 The complete semantic-by-operation matrix is in `stage-attribution.json`.
 
-CPU analysis of the original79.578s profile partitions its26.505s wall less
+CPU analysis of the original79.578s startup-inclusive profile partitions its26.505s wall less
 summed node time exactly: prepare7.674, upload4.459, readback0.749,
 compute-wall less recorded GPU7.641, outside layers4.699, exposed acquire0.912,
 executor phase gap0.173, layer scaffold/carry0.186, cache/cleanup0.012.
 The7.641s difference includes profiler synchronization, dispatch, copy/queue
 waits and unrecorded GPU work. It is not a production launch-only measurement.
+
+The native append-owner admission and chunk-token-preparation subclocks are
+nested inside prompt execution; they are not added again to the phase sum.
+Correcting this nesting leaves0.270494s harness-versus-native residual in
+the original BF16 profile.
 
 New nested clocks split the named diagnostic's7.699s prepare interval into
 binding2.932s (registration2.925s inside it), graph construction0.487s,

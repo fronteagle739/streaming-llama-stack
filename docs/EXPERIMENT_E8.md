@@ -1,5 +1,6 @@
 # E8: recency-weighted L2 admission
 
+Timing scope: historical prefill seconds/tokens per second in this report include producer startup; they are not prompt-execution-only measurements. TTFT includes startup and first output.
 Verdict: **adopt the opt-in LFU policy with a 16-token half life**. On one frozen
 8K synthetic-record workload, it reduced routed expert-miss bytes by 11.7% in
 both repetitions. Warm decode improved by 1.5-10.6%. Keep LRU as the default;

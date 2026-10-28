@@ -100590,7 +100590,7 @@ Source: `engines/streaming-llama/prefill_llama.cpp/ggml/src/ggml-cuda/dsv41-tile
 
 ### LLAMA_DSV41_INDEX_FP4
 
-E6 default SM120 FP4/E8M0 MMA index scorer for the existing BF16 index profile. Set0 to retain BF16. Packs already quantized values exactly; every operation requires a conservative FP32 integer-sum certificate or falls back to original BF16 cuBLAS. At100K,73.969 to71.171s,17full-vocabulary logit rows bit-identical, KL0 and retrieval pass. No stored KV change.
+E6 default SM120 FP4/E8M0 MMA index scorer for the existing BF16 index profile. Set0 to retain BF16. Packs already quantized values exactly; every operation requires a conservative FP32 integer-sum certificate or falls back to original BF16 cuBLAS. At100K,prompt execution70.459 to67.746s, TTFT74.688 to71.891s,17full-vocabulary logit rows bit-identical, KL0 and retrieval pass. No stored KV change.
 
 Scope: rtx-llama. Class: advanced.
 

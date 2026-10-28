@@ -1,5 +1,6 @@
 # E13: selected Engram row I/O
 
+Timing scope: historical prefill seconds/tokens per second in this report include producer startup; they are not prompt-execution-only measurements. TTFT includes startup and first output.
 Opt-in 512 B reads reduced requested Engram bytes by about 82% with exact
 results. A 64 MiB row cache eliminated nearly all reads on repeated turns.
 Neither change establishes a general TTFT or prefill speedup on this machine.

@@ -1,5 +1,6 @@
 # E2c: short-prompt plan and prior-turn residency
 
+Timing scope: historical prefill seconds/tokens per second in this report include producer startup; they are not prompt-execution-only measurements. TTFT includes startup and first output.
 A 32-token follow-up used the existing resident decoder in 4.45-4.72 s instead
 of a 17.36-18.22 s full weight sweep, after matched 2K/8K/32K initial prompts.
 Recall and first-token top-1 checks passed. Follow-up logits were numerically

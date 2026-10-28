@@ -142,6 +142,13 @@ def run_child(args, cfg, arm, label):
         first=producer.decode(1)
         result['ttft_seconds']=time.monotonic()-opened
         result['ttft_before_quality_probe']=True
+        native_report=json.loads((producer.directory/'producer.json').read_text(encoding='utf-8'))
+        prompt_seconds=float(native_report['phase_ms']['embedding_40_layers_head'])/1000
+        if not 0<prompt_seconds<=producer.prefill_seconds:
+            raise ValueError('Native prompt-only timing is absent or outside producer wall')
+        result.update(prompt_prefill_seconds=prompt_seconds,prompt_tok_s=len(tokens)/prompt_seconds,
+                      producer_startup_inclusive_seconds=producer.prefill_seconds,
+                      prefill_timing_scope='prompt: seed embeddings through required frontier head/sync; process/model open and bulk export excluded; TTFT: producer initialization through first returned token, excludes lease queue')
         # The final sampled token is not evaluated. Read this same untouched
         # frontier after timing first output, so the quality probe adds no TTFT.
         result['frontier']=producer.decode_forced([0],root/(label+'.frontier.f32'))
@@ -213,7 +220,7 @@ def run_child(args, cfg, arm, label):
             after=model.stat()
             result['model_unchanged']=(identity.st_size,identity.st_mtime_ns)==(after.st_size,after.st_mtime_ns)
             target.write_text(json.dumps(result,indent=2,default=str))
-            print(json.dumps({k:result.get(k) for k in ('experiment','arm','status','prefill_seconds','tok_s','error')}),flush=True)
+            print(json.dumps({k:result.get(k) for k in ('experiment','arm','status','prompt_prefill_seconds','prompt_tok_s','ttft_seconds','producer_startup_inclusive_seconds','error')}),flush=True)
 
 
 def main():

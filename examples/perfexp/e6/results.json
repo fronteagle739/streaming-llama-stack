@@ -1,5 +1,5 @@
 {
-  "note": "One fresh matched pair per context.100K is primary.50K contains different startup/Engram timing; do not attribute its full difference to the kernel. All use original Q4 and full non-cone prefill; these are not current-main exact-cone or MXFP4-weight numbers.",
+  "note": "Prompt-only: native seed embeddings through required frontier head/sync, excluding process/model open and bulk export; includes required inter-sweep admission. TTFT: producer initialization request through first returned token, excludes lease queue and harness preparation. Historical startup-inclusive producer times are retained separately. One fresh matched pair per context;100K primary; original Q4 full non-cone prefill, not current-main cone/VRAM carry or MXFP4-weight numbers.",
   "rows": [
     {
       "experiment": "E6-index-confirm",
@@ -7,11 +7,12 @@
       "arms": [
         {
           "arm": "control",
-          "prefill_seconds": 73.96899999998277,
-          "tok_s": 1351.9176952510281,
           "ttft_seconds": 74.68800000002375,
           "recall_pass": true,
           "graceful": true,
+          "prompt_prefill_seconds": 70.4591425,
+          "prompt_tok_s": 1419.2622341380327,
+          "producer_startup_inclusive_seconds": 73.96899999998277,
           "producer_sha256": "e14c693c91c4d6fd37b50082bdb6fb9b99f3edb53849a97ef584b6366d9b1b34",
           "decode_dll_sha256": "3f37f47b1d8785db59580427b6358fb72fb9289af64205fad087741fd7806142",
           "input_sha256": "f1010fb108384951936b468cb8548b8d423962f677421c699993356bbf265814",
@@ -19,11 +20,12 @@
         },
         {
           "arm": "candidate",
-          "prefill_seconds": 71.17099999997299,
-          "tok_s": 1405.0666704140442,
           "ttft_seconds": 71.89100000000326,
           "recall_pass": true,
           "graceful": true,
+          "prompt_prefill_seconds": 67.7460456,
+          "prompt_tok_s": 1476.1009165086973,
+          "producer_startup_inclusive_seconds": 71.17099999997299,
           "producer_sha256": "e14c693c91c4d6fd37b50082bdb6fb9b99f3edb53849a97ef584b6366d9b1b34",
           "decode_dll_sha256": "3f37f47b1d8785db59580427b6358fb72fb9289af64205fad087741fd7806142",
           "input_sha256": "f1010fb108384951936b468cb8548b8d423962f677421c699993356bbf265814",
@@ -46,7 +48,8 @@
           "top1": 1.0
         }
       },
-      "throughput_ratio": 1.0393137654383222
+      "prompt_throughput_ratio": 1.040048048206669,
+      "legacy_startup_inclusive_throughput_ratio": 1.0393137654383222
     },
     {
       "experiment": "E6-index-secondary",
@@ -54,11 +57,12 @@
       "arms": [
         {
           "arm": "control",
-          "prefill_seconds": 38.89000000001397,
-          "tok_s": 1285.6775520694791,
           "ttft_seconds": 39.64100000000326,
           "recall_pass": true,
           "graceful": true,
+          "prompt_prefill_seconds": 34.3113462,
+          "prompt_tok_s": 1457.2439014357296,
+          "producer_startup_inclusive_seconds": 38.89000000001397,
           "producer_sha256": "1448677591ada7b87e226f83cb8e55e18b1dd7ee77ff78353438ccf5d51182b0",
           "decode_dll_sha256": "3f37f47b1d8785db59580427b6358fb72fb9289af64205fad087741fd7806142",
           "input_sha256": "15eb6fe4f15fdb20a355607401dd7b8771f5d23866f72964da65adb73f16e3d3",
@@ -66,11 +70,12 @@
         },
         {
           "arm": "candidate",
-          "prefill_seconds": 36.53100000001723,
-          "tok_s": 1368.70055569178,
           "ttft_seconds": 37.26600000000326,
           "recall_pass": true,
           "graceful": true,
+          "prompt_prefill_seconds": 33.684618400000005,
+          "prompt_tok_s": 1484.3570262918577,
+          "producer_startup_inclusive_seconds": 36.53100000001723,
           "producer_sha256": "1448677591ada7b87e226f83cb8e55e18b1dd7ee77ff78353438ccf5d51182b0",
           "decode_dll_sha256": "3f37f47b1d8785db59580427b6358fb72fb9289af64205fad087741fd7806142",
           "input_sha256": "15eb6fe4f15fdb20a355607401dd7b8771f5d23866f72964da65adb73f16e3d3",
@@ -93,7 +98,8 @@
           "top1": 1.0
         }
       },
-      "throughput_ratio": 1.0645752922174487
+      "prompt_throughput_ratio": 1.0186057562700488,
+      "legacy_startup_inclusive_throughput_ratio": 1.0645752922174487
     },
     {
       "experiment": "E6-index-secondary",
@@ -101,11 +107,12 @@
       "arms": [
         {
           "arm": "control",
-          "prefill_seconds": 174.40600000001723,
-          "tok_s": 1146.7495384331976,
           "ttft_seconds": 175.15599999995902,
           "recall_pass": true,
           "graceful": true,
+          "prompt_prefill_seconds": 169.66595239999998,
+          "prompt_tok_s": 1178.7868878281795,
+          "producer_startup_inclusive_seconds": 174.40600000001723,
           "producer_sha256": "1448677591ada7b87e226f83cb8e55e18b1dd7ee77ff78353438ccf5d51182b0",
           "decode_dll_sha256": "3f37f47b1d8785db59580427b6358fb72fb9289af64205fad087741fd7806142",
           "input_sha256": "189b0e6752e763f2c56c3ac800247c0572095cb02dbb6d425bdf6bfd9f5fd7c9",
@@ -113,11 +120,12 @@
         },
         {
           "arm": "candidate",
-          "prefill_seconds": 163.26600000000326,
-          "tok_s": 1224.994793772102,
           "ttft_seconds": 164.0470000000205,
           "recall_pass": true,
           "graceful": true,
+          "prompt_prefill_seconds": 158.39915980000004,
+          "prompt_tok_s": 1262.6329600013444,
+          "producer_startup_inclusive_seconds": 163.26600000000326,
           "producer_sha256": "1448677591ada7b87e226f83cb8e55e18b1dd7ee77ff78353438ccf5d51182b0",
           "decode_dll_sha256": "3f37f47b1d8785db59580427b6358fb72fb9289af64205fad087741fd7806142",
           "input_sha256": "189b0e6752e763f2c56c3ac800247c0572095cb02dbb6d425bdf6bfd9f5fd7c9",
@@ -140,7 +148,8 @@
           "top1": 1.0
         }
       },
-      "throughput_ratio": 1.0682322100131916
+      "prompt_throughput_ratio": 1.0711291184512959,
+      "legacy_startup_inclusive_throughput_ratio": 1.0682322100131916
     }
   ],
   "state_and_guard_audit": [

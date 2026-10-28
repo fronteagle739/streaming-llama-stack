@@ -230,8 +230,6 @@
       },
       "partition_error_s": 0.0,
       "outside_layer_partition_seconds": {
-        "append_owner_admission": 0.0947201,
-        "chunk_token_preparation": 4.5700000000000006e-05,
         "final_hidden_export_preparation": 0.7936373,
         "input_identity_hash_budget_preflight": 0.26657990000000004,
         "inspect_admit_allocate": 3.2846999,
@@ -239,7 +237,11 @@
         "payload_close_readonly_rehash": 2.0000000000000002e-07,
         "run_dispatch_bookkeeping": 0.0001193999999981088,
         "embedding_head_and_dispatch_outside_layer_intervals": 1.3868204000000048,
-        "harness_wall_less_reported_native_phases": 0.3554949000032508
+        "harness_wall_less_additive_native_phases": 0.45026070000325547
+      },
+      "nested_native_prompt_subclocks_seconds": {
+        "append_owner_admission": 0.0947201,
+        "chunk_token_preparation": 4.5700000000000006e-05
       },
       "nested_tile_clocks_seconds": {
         "host_prepare_ms": 7.733689999999993,
@@ -278,8 +280,6 @@
       },
       "partition_error_s": 3.552713678800501e-15,
       "outside_layer_partition_seconds": {
-        "append_owner_admission": 0.0905068,
-        "chunk_token_preparation": 6.24e-05,
         "final_hidden_export_preparation": 0.7949286,
         "input_identity_hash_budget_preflight": 0.2684334,
         "inspect_admit_allocate": 1.9115925999999999,
@@ -287,7 +287,11 @@
         "payload_close_readonly_rehash": 1.0000000000000001e-07,
         "run_dispatch_bookkeeping": 9.589999999957399e-05,
         "embedding_head_and_dispatch_outside_layer_intervals": 1.3764255000000247,
-        "harness_wall_less_reported_native_phases": 0.2226291000032461
+        "harness_wall_less_additive_native_phases": 0.31319830000325055
+      },
+      "nested_native_prompt_subclocks_seconds": {
+        "append_owner_admission": 0.0905068,
+        "chunk_token_preparation": 6.24e-05
       },
       "nested_tile_clocks_seconds": {
         "host_prepare_ms": 7.698724000000006,
@@ -328,8 +332,6 @@
       },
       "partition_error_s": 3.552713678800501e-15,
       "outside_layer_partition_seconds": {
-        "append_owner_admission": 0.09405759999999999,
-        "chunk_token_preparation": 4.2300000000000005e-05,
         "final_hidden_export_preparation": 0.7652445999999999,
         "input_identity_hash_budget_preflight": 0.24197069999999998,
         "inspect_admit_allocate": 1.7858744999999998,
@@ -337,7 +339,11 @@
         "payload_close_readonly_rehash": 0.0,
         "run_dispatch_bookkeeping": 0.00011649999999463034,
         "embedding_head_and_dispatch_outside_layer_intervals": 1.2902123999999873,
-        "harness_wall_less_reported_native_phases": 0.17639439997951456
+        "harness_wall_less_additive_native_phases": 0.2704942999795037
+      },
+      "nested_native_prompt_subclocks_seconds": {
+        "append_owner_admission": 0.09405759999999999,
+        "chunk_token_preparation": 4.2300000000000005e-05
       },
       "nested_tile_clocks_seconds": {
         "host_prepare_ms": 7.674444999999999,
@@ -374,8 +380,6 @@
       },
       "partition_error_s": -7.105427357601002e-15,
       "outside_layer_partition_seconds": {
-        "append_owner_admission": 0.0953525,
-        "chunk_token_preparation": 4.73e-05,
         "final_hidden_export_preparation": 0.7991203,
         "input_identity_hash_budget_preflight": 0.238347,
         "inspect_admit_allocate": 1.7760582999999999,
@@ -383,7 +387,11 @@
         "payload_close_readonly_rehash": 1.0000000000000001e-07,
         "run_dispatch_bookkeeping": 0.00010200000000850196,
         "embedding_head_and_dispatch_outside_layer_intervals": 1.281090400000025,
-        "harness_wall_less_reported_native_phases": 0.1710056000237472
+        "harness_wall_less_additive_native_phases": 0.2664054000237428
+      },
+      "nested_native_prompt_subclocks_seconds": {
+        "append_owner_admission": 0.0953525,
+        "chunk_token_preparation": 4.73e-05
       },
       "nested_tile_clocks_seconds": {
         "host_prepare_ms": 7.745611999999999,
