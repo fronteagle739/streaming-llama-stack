@@ -204,7 +204,7 @@ def run_child(args, cfg, arm, label):
             result['append_frontier']=producer.decode_forced([0],root/(label+'.append.f32'))
             result['append_recall']=producer.decode(32)
         if not args.decode_before_forced:measure_decode()
-        if args.capture_kv:
+        if args.capture_kv and arm=='candidate':
             kv_path=root/(label+'.kv.f32')
             result['kv_samples']=producer.process.request(producer.command('perfexp_kv_samples',base=producer.checkpoint,path=str(kv_path)))
         result['status']='PASS'

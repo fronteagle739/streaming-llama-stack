@@ -118,7 +118,9 @@ def command(row, session, sequence, mode=3, prefill_max=MAX_PREFILL, model_sha25
              # LLAMADECODE B0: in-process greedy RTX decode (no peer).
              'decode': ['base', 'max_tokens', 'stop_tokens'], 'decode_forced': ['base', 'tokens', 'logits_path'],
              # LLAMADECODE B5: live quality-speed control of the in-process decode bias.
-             'quality_speed': ['value'], 'generation_start': ['settings'], 'export_local': ['base']}
+             'quality_speed': ['value'], 'generation_start': ['settings'], 'export_local': ['base'],
+             # Local bounded E17 diagnostic; native endpoint additionally requires its explicit off-by-default setting.
+             'perfexp_kv_samples': ['base', 'path']}
     require(type(op) is str and op in extra, 'Unknown session operation')
     owned_vision = op=='prefill' and 'vision_spans_file' in row
     keys(row, common + extra[op] + (['vision_spans_file'] if owned_vision else []))
@@ -164,6 +166,8 @@ def command(row, session, sequence, mode=3, prefill_max=MAX_PREFILL, model_sha25
         from slstack.generation import SAMPLERS, number
         require(type(settings['overrides']) is dict and set(settings['overrides']) <= set(SAMPLERS), 'Unknown sampler')
         for name,value in settings['overrides'].items():number(value, *SAMPLERS[name], name == 'top_k')
+    if op == 'perfexp_kv_samples':
+        require(type(row['path']) is str and 0 < len(row['path']) <= 1024, 'KV sample output path')
     if op == 'decode_forced':
         tokens = row['tokens']
         require(type(tokens) is list and 0 < len(tokens) <= 4096, 'Forced decode token extent')

@@ -31,3 +31,12 @@
 - Faster cold start and DirectStorage setup; better VRAM use within the same RAM budget.
 - Wider quality and long-context testing across prompt types and hardware.
 - More media models and adapters.
+
+### Packed KV integration after E17
+
+The E17 sampled codec is lossless on the tested existing QAT KV/index values.
+Native packed owner allocation, append/publication and checkpoint/wire handling,
+and fused sparse attention/index loads remain future work. Qualify full-model
+long-context recall and KL/top-1 against an actual8-bit cache; then measure
+VRAM peaks, larger sweep/context admission and end-to-end speed. The890B/token
+layout formula and component unpack timings alone do not establish those gains.
