@@ -126,10 +126,18 @@ cache checkpoint hashes against N=1. Grouping remains opt-in.
 
 ### Decode
 
+Single-machine examples enable recency LFU with a 16-token half life. On the
+matched 8K F32-cache workload, warm decode improved 5.7624 → 6.3731 and
+5.8081 → 5.8944 tok/s (+10.6% and +1.5%). Logits and generated prefixes were
+exact, KL 0; expert-miss bytes fell 11.7% in both repetitions. These separate
+controls do not establish the combined cone/LFU speed or a general 10.6% gain.
+Set `LLAMADECODE_RECENCY_LFU=0` for the earlier LRU policy.
+[E8 conditions](EXPERIMENT_E8.md).
+
 Decode speed depends on how many routed experts are already in VRAM. The first
 100 tokens fill the cache; after that the rate settles.
 
-Single engine, 500-token replies, rate per 100-token window:
+Earlier LRU single-engine controls, 500-token replies, rate per 100-token window:
 
 | Prompt | Setting | Tokens 1–100 | 101–200 | 201–300 | 301–400 | 401–500 | Whole reply |
 |---:|---|---:|---:|---:|---:|---:|---:|

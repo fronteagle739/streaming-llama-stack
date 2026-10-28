@@ -29,8 +29,13 @@ sys.path.insert(0, str(ROOT))
 COMMON_ENV = {
     'DS4_DS_READ_PARTS': '8',                 # DirectStorage split reads (the engines' default)
     'LLAMADECODE_VRAM_RESERVE_MIB': '512',    # physical VRAM kept free beside the L2 tier (default)
+}
+DEFAULT_ENV = {
     'LLAMADECODE_ENGRAM_EARLY': 'auto',       # default
     'LLAMADECODE_ENGRAM_CACHE_MB': '0',       # no row cache: unset takes all admission headroom on this revision
+    'LLAMADECODE_APPEND_DECODE_MAX': '0',     # E2c resident appends change logits; explicit toggle only
+    'LLAMADECODE_RECENCY_LFU': '1',          # E8 exact placement policy, faster in both measured repetitions
+    'LLAMADECODE_LFU_HALF_LIFE': '16',       # qualified cadence; one-token decay was effectively neutral
 }
 PRESETS = {
     '262k': dict(context=262144, ctx_cache_precision='f32', ctx_cache_growable=True,
@@ -59,8 +64,7 @@ def overlay(preset, local=None, model=None, yoco_keep=None, vision=None, profile
         result['model'] = model
     env = dict(result.get('env_overrides') or {})
     env.update(COMMON_ENV)
-    # Resident appends change logits (E2c); an explicit local toggle may enable them.
-    env.setdefault('LLAMADECODE_APPEND_DECODE_MAX', '0')
+    for key,value in DEFAULT_ENV.items():env.setdefault(key,value)
     result.update(PRESETS[preset], serving='single_engine', producer_host_reserve_gib=.5, env_overrides=env, **FOLD)
     from slstack.multichunk import selection
     chunks=selection(result.get('producer_chunks_per_pass',1))

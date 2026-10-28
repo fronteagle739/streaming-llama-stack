@@ -1,5 +1,9 @@
 # E8: recency-weighted L2 admission
 
+Integration update: the [example defaults](MERGEPERF.md) now enable the qualified
+16-token policy. The original experiment below left shipping presets unchanged;
+the engine's unset-variable behavior remains LRU for direct callers.
+
 Verdict: **adopt the opt-in LFU policy with a 16-token half life**. On one frozen
 8K synthetic-record workload, it reduced routed expert-miss bytes by 11.7% in
 both repetitions. Warm decode improved by 1.5-10.6%. Keep LRU as the default;
