@@ -29,6 +29,20 @@ def token_ids(path):
     return raw, list(struct.unpack('<' + 'I' * (len(raw) // 4), raw))
 
 
+def completed_logits_sha256(path):
+    # The native forced-decode reply can precede its exclusive Windows file
+    # handle's RAII close. Retry only the completed artifact read, never decode.
+    deadline = time.monotonic() + 1.0
+    while True:
+        try:
+            with path.open('rb') as stream:
+                return hashlib.file_digest(stream, 'sha256').hexdigest()
+        except PermissionError:
+            if time.monotonic() >= deadline:
+                raise
+            time.sleep(.01)
+
+
 def run(args, cfg):
     from slstack.combo_producer import ComboProducer
     from slstack.native_broker import vendor
@@ -101,7 +115,7 @@ def run(args, cfg):
             record.update(forced_tokens=continuation,
                           forced_reply=producer.decode_forced(continuation, logits),
                           logits_path=str(logits),
-                          logits_sha256=hashlib.file_digest(logits.open('rb'), 'sha256').hexdigest())
+                          logits_sha256=completed_logits_sha256(logits))
         if args.decode:
             record['decode'] = producer.decode(args.decode)
             steps = record['decode']['step_ms'][100:]
