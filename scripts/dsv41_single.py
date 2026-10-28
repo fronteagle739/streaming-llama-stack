@@ -60,6 +60,7 @@ def overlay(preset, local=None, model=None, yoco_keep=None, vision=None, profile
         result['model'] = model
     env = dict(result.get('env_overrides') or {})
     env.setdefault('LLAMADECODE_APPEND_RESIDENT_SWEEP','1')  # explicit0 keeps full sweeps
+    env.setdefault('DS4_CUDA_SINGLE_GPU_HC_GRAPHS','1')  # explicit0 keeps eager HC input work
     env.setdefault('LLAMA_DSV41_INDEX_FP4','1')  # explicit0 keeps BF16 index scoring
     env.update(COMMON_ENV)
     result.update(PRESETS[preset], serving='single_engine', producer_host_reserve_gib=.5, env_overrides=env, **FOLD)
@@ -106,7 +107,7 @@ def resolved(cfg):
     keep_yoco=yoco_keep(single)
     if keep_yoco:flags['--yoco-keep']=str(keep_yoco)
     env = apply({}, single, 'rtx-producer')
-    keep = ('LLAMADECODE_', 'DS4_DS_READ_PARTS', 'LLAMA_DSV41_')
+    keep = ('LLAMADECODE_', 'DS4_DS_READ_PARTS', 'LLAMA_DSV41_', 'DS4_CUDA_SINGLE_GPU_HC_GRAPHS')
     return dict(
         serving=merged.get('serving'), model=merged.get('model') or '(set "model" in your config or pass -Model)',
         router=f"http://{merged['host']}:{merged['port']}", engine=merged['ds4_url'],

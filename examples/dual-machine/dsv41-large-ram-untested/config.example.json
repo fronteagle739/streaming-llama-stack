@@ -25,7 +25,8 @@
     "env_overrides": {
       "LLAMADECODE_APPEND_RESIDENT_SWEEP": "1",
       "LLAMADECODE_APPEND_DECODE_MAX": "0",
-      "LLAMA_DSV41_INDEX_FP4": "1"
+      "LLAMA_DSV41_INDEX_FP4": "1",
+      "DS4_CUDA_SINGLE_GPU_HC_GRAPHS": "1"
     }
   },
   "decode_plan": {
