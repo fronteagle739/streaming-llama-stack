@@ -1,5 +1,5 @@
 #!/usr/bin/env python3
-"""Wrap pinned antirez/ds4 planners and quantizers for the measured Q4 layout.
+"""Wrap pinned antirez/ds4 planners for Q4 or native-FP4 experts/Q8 dense.
 
 Dry-run requires only config.json and model.safetensors.index.json. It never
 opens safetensors, a quantizer library, a tokenizer, or tensor payloads.
@@ -132,6 +132,55 @@ def make_plan(component,modules,config,index,reference,db=None):
 def planned_map(plan):return {p.name:dict(type=p.qtype,shape=list(p.shape)) for p in plan}
 
 
+def native_layout(reference):
+    """Keep the measured layout except the 120 main routed expert tensors."""
+    return {name:dict(row,type=39) if name.endswith(('_gate_exps.weight','_up_exps.weight','_down_exps.weight'))
+            else dict(row) for name,row in reference.items()}
+
+
+def pack_native_expert(db,name):
+    """Reorder packed E2M1 nibbles and interleave unchanged E8M0 scales.
+
+    Source byte j holds values 2*j and 2*j+1. GGML byte j holds values j
+    and j+16. Both use the same E2M1 codebook and one E8M0 scale per 32;
+    no floating point dequantization, rounding or scale adjustment occurs.
+    """
+    import numpy as np
+    info,scale = db.info(name),db.info(name.removesuffix('.weight')+'.scale')
+    shape = info['shape']
+    if info['dtype']!='I8' or len(shape)!=2 or shape[1]%16:
+        raise ValueError('Native FP4 expert requires packed I8 rows divisible by16: '+name)
+    if scale['dtype']!='F8_E8M0' or scale['shape']!=[shape[0],shape[1]//16]:
+        raise ValueError('Native FP4 expert requires E8M0 per32 scales: '+name)
+    packed=np.frombuffer(db.read(name),dtype=np.uint8).reshape(-1,16)
+    scales=np.frombuffer(db.read(name.removesuffix('.weight')+'.scale'),dtype=np.uint8).reshape(-1)
+    if np.any(scales==255):raise ValueError('Nonfinite native FP4 scale: '+name)
+    result=np.empty((len(scales),17),dtype=np.uint8)
+    result[:,0]=scales
+    result[:,1::2]=(packed[:,:8]&15)|((packed[:,8:]&15)<<4)
+    result[:,2::2]=(packed[:,:8]>>4)|(packed[:,8:]&240)
+    return result.tobytes()
+
+
+def native_writer(module):
+    """Add one expert-copy branch to the hash-pinned upstream streaming writer.
+
+    Retain its dense quantizer, Engram copier, alignment, durable resume journal,
+    disk reserve and output checks. The fetched upstream files stay unchanged.
+    Like index_planner(), this adapter operates on a pinned function's AST.
+    """
+    tree=ast.parse(Path(module.__file__).read_text(encoding='utf-8'))
+    function=next(n for n in tree.body if isinstance(n,ast.FunctionDef) and n.name=='write_gguf')
+    callbacks=[n for n in ast.walk(function) if isinstance(n,ast.FunctionDef) and n.name=='convert']
+    if len(callbacks)!=1:raise ValueError('Pinned writer expert callback changed')
+    callbacks[0].body[:0]=ast.parse('''if item.qtype == 39:
+    return pack_native_expert(db, item.source.format(expert=expert)), False
+''').body
+    namespace=dict(vars(module),pack_native_expert=pack_native_expert)
+    exec(compile(ast.fix_missing_locations(ast.Module(body=[function],type_ignores=[])),module.__file__,'exec'),namespace)
+    return namespace['write_gguf']
+
+
 def convert(args,modules,config,index,reference):
     q,d,v,g = (modules[n] for n in ('deepseek41_quantize','deepseek41_dspark','deepseek41_vision','glm53_quantize'))
     db = g.SourceDB(str(args.source),index_validator=lambda _:None,scale_validator=q.validate_scales)
@@ -139,8 +188,11 @@ def convert(args,modules,config,index,reference):
         plan = make_plan(args.component,modules,config,index,reference,db)
         if args.component == 'main':
             _,records = q.metadata(str(args.source),args.source_revision)
-            records += [g.kv_string('deepseek41.quantization',q.QUANTIZATION['q4']),
-                        g.kv_string('deepseek41.calibration','weight-energy bootstrap')]
+            native=args.expert_format=='native-fp4'
+            records += [g.kv_string('deepseek41.quantization',
+                        'native E2M1/E8M0 MXFP4 routed experts; Q8_0 dense' if native else q.QUANTIZATION['q4']),
+                        g.kv_string('deepseek41.calibration',
+                        'lossless expert repack; weight-energy bootstrap dense' if native else 'weight-energy bootstrap')]
         elif args.component == 'dspark':
             records = d.metadata(config,args.source_revision)
             # Remove the newer lossless recipe's encoding assertion.
@@ -153,7 +205,8 @@ def convert(args,modules,config,index,reference):
             v.create_gguf(str(args.out),plan,records,db,overwrite=False)
             return
         args.hf,args.out,args.imatrix = str(args.source),str(args.out),None
-        q.write_gguf(args,plan,records,db)
+        writer=native_writer(q) if args.component=='main' and args.expert_format=='native-fp4' else q.write_gguf
+        writer(args,plan,records,db)
     finally:db.close()
 
 
@@ -164,25 +217,32 @@ def guarded_conversion(args):
         raise ValueError('--execute requires a finite positive --host-budget-gib')
     output = args.out.resolve()
     output.parent.mkdir(parents=True,exist_ok=True)
+    runtime = (getattr(args,'runtime_root',None) or output.parent).resolve()
+    runtime.mkdir(parents=True,exist_ok=True)
     command = [sys.executable,'-B',str(Path(__file__).resolve()),*sys.argv[1:],'--worker']
     # A plan requested by the caller was already published by this parent.
     if '--plan' in command:
         at=command.index('--plan');del command[at:at+2]
-    receipt = output.with_suffix(output.suffix+'.memory.json')
-    env = dict(os.environ,PYTHONDONTWRITEBYTECODE='1',TEMP=str(output.parent),TMP=str(output.parent))
+    receipt = runtime/(output.name+'.memory.json')
+    env = dict(os.environ,PYTHONDONTWRITEBYTECODE='1',TEMP=str(runtime),TMP=str(runtime),TMPDIR=str(runtime))
     env['SLSTACK_DSV41_CONVERSION_PARENT']=str(os.getpid())
     return supervise(dict(command=command,cwd=str(ROOT),env=env,host_budget_gib=args.host_budget_gib,
-        job_commit_gib=args.host_budget_gib,min_available_gib=args.runtime_floor_gib,timeout_s=600,
-        owner_pid=os.getpid(),owner_created=psutil.Process().create_time(),runtime_root=str(output.parent),
-        stop=str(output)+'.stop',log=str(output)+'.conversion.log',receipt=str(receipt)))
+        job_commit_gib=args.host_budget_gib,min_available_gib=args.runtime_floor_gib,timeout_s=21600,
+        owner_pid=os.getpid(),owner_created=psutil.Process().create_time(),runtime_root=str(runtime),
+        stop=str(runtime/(output.name+'.stop')),log=str(runtime/(output.name+'.conversion.log')),receipt=str(receipt)))
 
 
 def main():
+    if '--requant-gguf' in sys.argv:
+        from dsv41_requant import main as requant_main
+        return requant_main()
     parser = argparse.ArgumentParser(description=__doc__)
     parser.add_argument('--source',type=Path,required=True,help='Existing raw checkpoint directory; never downloaded')
     parser.add_argument('--ds4-tools',type=Path,required=True,help='Pinned gguf-tools source directory')
     parser.add_argument('--fetch-tools',action='store_true',help='Fetch only pinned converter source files, never models')
     parser.add_argument('--component',choices=('main','dspark','vision'),default='main')
+    parser.add_argument('--expert-format',choices=('q4','native-fp4'),default='q4',
+                        help='Main routed experts only; dense remains Q8_0 (no supported native FP8 type)')
     mode = parser.add_mutually_exclusive_group(required=True)
     mode.add_argument('--dry-run',action='store_true')
     mode.add_argument('--execute',action='store_true')
@@ -194,9 +254,12 @@ def main():
     parser.add_argument('--threads',type=int,default=1)
     parser.add_argument('--resume',action='store_true')
     parser.add_argument('--host-budget-gib',type=float)
+    parser.add_argument('--runtime-root',type=Path,help='Guard logs, receipts and temporary files; defaults to the output directory')
     parser.add_argument('--runtime-floor-gib',type=float,default=4)
     parser.add_argument('--worker',action='store_true',help=argparse.SUPPRESS)
     args = parser.parse_args()
+    if args.expert_format=='native-fp4' and args.component!='main':
+        parser.error('--expert-format native-fp4 applies only to the main model; preserve the existing sidecars')
     if not 1<=args.threads<=32 or args.runtime_floor_gib<4:parser.error('threads must be 1..32 and RAM floor at least 4 GiB')
     if not re.fullmatch('[0-9a-f]{40}',args.source_revision):parser.error('source revision must be a full commit SHA')
     if args.execute and (not args.out or (args.component!='vision' and not args.quants_library)):
@@ -205,6 +268,7 @@ def main():
     config,index = read_json(args.source/'config.json'),read_json(args.source/'model.safetensors.index.json')
     if config.get('model_type')!='deepseek_v41':raise ValueError('Expected DeepSeek V4.1 source config')
     reference = read_json(RECIPE/'reference-layout.json')['components'][args.component]['tensors']
+    if args.expert_format=='native-fp4':reference=native_layout(reference)
     plan = make_plan(args.component,modules,config,index,reference)
     inventory = planned_map(plan)
     if args.reference_gguf and inventory != tensor_map(read_header(args.reference_gguf)):

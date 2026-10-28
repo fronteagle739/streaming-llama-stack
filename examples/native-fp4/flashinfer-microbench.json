@@ -1,0 +1,173 @@
+{
+  "status": "PASS",
+  "source_commit": "1d622fdb1b053fc532069914bc9a6b498bd5f722",
+  "fixture": "hash32-v1",
+  "torch": "2.11.0+cu128",
+  "scale_granularity_A": 32,
+  "scale_granularity_B": 32,
+  "scope": "Synthetic token-packed grouped GEMMs; balanced M, not an observed routing histogram; activation quantization and layout preparation excluded",
+  "rows": [
+    {
+      "experts": 1,
+      "M_per_expert": 128,
+      "N": 2304,
+      "K": 5120,
+      "tile": [
+        64,
+        128,
+        128
+      ],
+      "stages": 2,
+      "activation_sf_rows": 256,
+      "activation_sf_alignment": 4,
+      "sampled_double_reference_elements": 9,
+      "bit_exact_on_samples": true,
+      "max_scaled_error": 0.0,
+      "graph_ms": 0.021919860010561735,
+      "eager_ms": 0.024396799504756927,
+      "TFLOPS": 137.7699893404844,
+      "logical_effective_GB_s": 343.6401508207883,
+      "weight_banks": 23,
+      "weight_bank_bytes": 135659520
+    },
+    {
+      "experts": 6,
+      "M_per_expert": 1,
+      "N": 2304,
+      "K": 5120,
+      "tile": [
+        64,
+        128,
+        128
+      ],
+      "stages": 2,
+      "activation_sf_rows": 128,
+      "activation_sf_alignment": 4,
+      "sampled_double_reference_elements": 9,
+      "bit_exact_on_samples": true,
+      "max_scaled_error": 0.0,
+      "graph_ms": 0.038119998574256894,
+      "eager_ms": 0.03964479863643646,
+      "TFLOPS": 3.713477578553648,
+      "logical_effective_GB_s": 987.9488302350795,
+      "weight_banks": 4,
+      "weight_bank_bytes": 141557760
+    },
+    {
+      "experts": 6,
+      "M_per_expert": 1,
+      "N": 5120,
+      "K": 2304,
+      "tile": [
+        64,
+        128,
+        128
+      ],
+      "stages": 2,
+      "activation_sf_rows": 128,
+      "activation_sf_alignment": 4,
+      "sampled_double_reference_elements": 9,
+      "bit_exact_on_samples": true,
+      "max_scaled_error": 0.0,
+      "graph_ms": 0.03972640037536621,
+      "eager_ms": 0.04149760007858276,
+      "TFLOPS": 3.563317055218977,
+      "logical_effective_GB_s": 948.4115259373706,
+      "weight_banks": 4,
+      "weight_bank_bytes": 141557760
+    },
+    {
+      "experts": 384,
+      "M_per_expert": 64,
+      "N": 2304,
+      "K": 5120,
+      "tile": [
+        64,
+        128,
+        128
+      ],
+      "stages": 2,
+      "activation_sf_rows": 25728,
+      "activation_sf_alignment": 4,
+      "sampled_double_reference_elements": 27,
+      "bit_exact_on_samples": true,
+      "max_scaled_error": 0.0,
+      "graph_ms": 1.6136415481567383,
+      "eager_ms": 1.6115087509155273,
+      "TFLOPS": 359.3242784448186,
+      "logical_effective_GB_s": 1641.9318224834444,
+      "weight_banks": 1,
+      "weight_bank_bytes": 2264924160
+    },
+    {
+      "experts": 384,
+      "M_per_expert": 64,
+      "N": 5120,
+      "K": 2304,
+      "tile": [
+        64,
+        128,
+        128
+      ],
+      "stages": 2,
+      "activation_sf_rows": 25728,
+      "activation_sf_alignment": 4,
+      "sampled_double_reference_elements": 27,
+      "bit_exact_on_samples": true,
+      "max_scaled_error": 0.0,
+      "graph_ms": 1.7033559799194335,
+      "eager_ms": 1.7176687240600585,
+      "TFLOPS": 340.39894877841374,
+      "logical_effective_GB_s": 1594.8121050589134,
+      "weight_banks": 1,
+      "weight_bank_bytes": 2264924160
+    },
+    {
+      "experts": 384,
+      "M_per_expert": 768,
+      "N": 2304,
+      "K": 5120,
+      "tile": [
+        64,
+        128,
+        128
+      ],
+      "stages": 2,
+      "activation_sf_rows": 296064,
+      "activation_sf_alignment": 4,
+      "sampled_double_reference_elements": 27,
+      "bit_exact_on_samples": true,
+      "max_scaled_error": 0.0,
+      "graph_ms": 14.240568542480469,
+      "eager_ms": 13.571572875976562,
+      "TFLOPS": 488.59334504548224,
+      "logical_effective_GB_s": 373.7611851747667,
+      "weight_banks": 1,
+      "weight_bank_bytes": 2264924160
+    },
+    {
+      "experts": 384,
+      "M_per_expert": 768,
+      "N": 5120,
+      "K": 2304,
+      "tile": [
+        64,
+        128,
+        128
+      ],
+      "stages": 2,
+      "activation_sf_rows": 296064,
+      "activation_sf_alignment": 4,
+      "sampled_double_reference_elements": 27,
+      "bit_exact_on_samples": true,
+      "max_scaled_error": 0.0,
+      "graph_ms": 14.587173461914062,
+      "eager_ms": 14.0946533203125,
+      "TFLOPS": 476.9839090270901,
+      "logical_effective_GB_s": 420.0328273326799,
+      "weight_banks": 1,
+      "weight_bank_bytes": 2264924160
+    }
+  ],
+  "finished": 1793205388.816832
+}

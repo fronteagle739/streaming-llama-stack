@@ -68,6 +68,12 @@ for the raw input, roughly 483 GiB main output, 7.8 GiB DSpark, 0.91 GiB Vision,
 and upstream's free-space reserve. Conversion is CPU-only and can take a long
 time. It was not performed again for this release.
 
+An optional `--expert-format native-fp4` recipe preserves the main routed
+experts in their released E2M1/E8M0 MXFP4 representation, keeping the same Q8_0
+dense recipe. See the [source audit and candidate limits](NATIVEFP4.md).
+Its lossless expert repack and small-file writer are CPU-tested; full conversion
+and native GPU performance/quality qualification remain pending.
+
 The committed [reference tensor map](../scripts/dsv41/reference-layout.json)
 was extracted from the existing RTX main, DSpark and Vision GGUF **headers
 only**. It records header hashes, shapes and actual per-tensor type IDs. Main

@@ -1,0 +1,140 @@
+{
+  "date": "2026-10-28",
+  "device": "RTX 5090 SM120",
+  "profile": "single-engine ULTRA, YOCO140, BF16 growable cache, 49152 primary sweep, 61440 fold cap",
+  "producer_source_revision": "5ec948606934f425bf8e4271657a61e7d219d661",
+  "producer_sha256": "19878db2ce5d9ee5c86abf18924acbed581bdb2dd13f6a45129b9013d659a303",
+  "input": "repeated frozen ANYGGUF recall-token body, without a semantic recall check",
+  "tensor_payload_bytes": {
+    "other": 10060841408,
+    "expert": 305764761600,
+    "engram": 202758032400
+  },
+  "runs": [
+    {
+      "prompt_tokens": 49555,
+      "tokens_per_second_with_startup": 1693.3196651315534,
+      "startup_and_prefill_seconds": 29.264999999955762,
+      "sweeps": [
+        49555
+      ],
+      "layer_ledger_ms": {
+        "wall_ms": 26096.4078,
+        "acquire_ms": 8178.5706,
+        "carry_begin_ms": 0.0762,
+        "executor_wall_ms": 17746.3799,
+        "executor_phase_gap_ms": 56.7598,
+        "engram_ms": 0.9924,
+        "carry_read_ms": 0.1817,
+        "carry_write_ms": 0.2204,
+        "carry_commit_ms": 0.0744,
+        "provider_release_ms": 0.1341,
+        "scaffold_ms": 169.7781
+      },
+      "fetch_bytes_total": 315825603008.0,
+      "fetch_duration_ms_sum_not_exposed_wait": 20006.6408,
+      "log_sha256": "3c740c2b5b34a1e6e7439104d5a7a8e9b55e826aea4a2a79acf79cffd3bde222",
+      "cleanup": {
+        "peak_rss": 6007611392,
+        "minimum_available_ram": 9296859136,
+        "paging_growth": 0,
+        "budget_breaches": 0,
+        "failure": null,
+        "forced_kill": false,
+        "owned_pid_gone": true,
+        "producer_shutdown_path": "graceful"
+      }
+    },
+    {
+      "prompt_tokens": 200000,
+      "tokens_per_second_with_startup": 2062.1958261157174,
+      "startup_and_prefill_seconds": 96.98399999999674,
+      "sweeps": [
+        49152,
+        49152,
+        49152,
+        52544
+      ],
+      "layer_ledger_ms": {
+        "wall_ms": 90222.3242,
+        "acquire_ms": 7013.0437,
+        "carry_begin_ms": 0.1278,
+        "executor_wall_ms": 82498.1351,
+        "executor_phase_gap_ms": 205.7242,
+        "engram_ms": 3.917,
+        "carry_read_ms": 0.7749,
+        "carry_write_ms": 1.0999,
+        "carry_commit_ms": 0.1984,
+        "provider_release_ms": 0.3432,
+        "scaffold_ms": 704.6842
+      },
+      "fetch_bytes_total": 806443813904.0,
+      "fetch_duration_ms_sum_not_exposed_wait": 48984.3909,
+      "log_sha256": "2944a155273956c90a83f1ad08056df38841a01e291de5f75ea4684704140ba8",
+      "cleanup": {
+        "peak_rss": 6377275392,
+        "minimum_available_ram": 8464306176,
+        "paging_growth": 14229504,
+        "budget_breaches": 0,
+        "failure": null,
+        "forced_kill": false,
+        "owned_pid_gone": true,
+        "producer_shutdown_path": "graceful"
+      }
+    },
+    {
+      "prompt_tokens": 1000000,
+      "tokens_per_second_with_startup": 1045.2226010573509,
+      "startup_and_prefill_seconds": 956.7339999999967,
+      "sweeps": [
+        49152,
+        49152,
+        49152,
+        49152,
+        49152,
+        49152,
+        49152,
+        49152,
+        49152,
+        49152,
+        49152,
+        49152,
+        49152,
+        49152,
+        49152,
+        49152,
+        49152,
+        49152,
+        49152,
+        49152,
+        16960
+      ],
+      "layer_ledger_ms": {
+        "wall_ms": 933854.0857,
+        "acquire_ms": 17886.8664,
+        "carry_begin_ms": 0.5093,
+        "executor_wall_ms": 913731.0806,
+        "executor_phase_gap_ms": 1088.1473,
+        "engram_ms": 21.353,
+        "carry_read_ms": 4.307,
+        "carry_write_ms": 5.9579,
+        "carry_commit_ms": 0.9728,
+        "provider_release_ms": 1.6389,
+        "scaffold_ms": 2201.3998
+      },
+      "fetch_bytes_total": 3643476576288.0,
+      "fetch_duration_ms_sum_not_exposed_wait": 238438.6478,
+      "log_sha256": "e01219c5ec1f7d6b33b5665a52785c9974b63722fc516602323615a1fd9c130f",
+      "cleanup": {
+        "peak_rss": 6076792832,
+        "minimum_available_ram": 5909581824,
+        "paging_growth": 4227072,
+        "budget_breaches": 0,
+        "failure": null,
+        "forced_kill": false,
+        "owned_pid_gone": true,
+        "producer_shutdown_path": "graceful"
+      }
+    }
+  ]
+}

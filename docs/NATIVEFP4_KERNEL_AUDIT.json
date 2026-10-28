@@ -1,0 +1,192 @@
+{
+  "status": "partial_source_build_and_synthetic_microbenchmark_audit",
+  "source_builds_completed": false,
+  "microbenchmarks_completed": true,
+  "fastest_correct_kernel_selected": false,
+  "candidates": [
+    {
+      "repo": "fronteagle739/streaming-llama-stack",
+      "commit": "9624b6159cef26c6f0a173c5c471b9e1f74181a1",
+      "build": "PASS: standalone HYPER native MXFP4 MMQ",
+      "microbenchmark": "PASS: hash32-v1 sampled double reference",
+      "tflops": [
+        321.535638,
+        344.608179
+      ],
+      "effective_bandwidth_gbs": [
+        409.943983,
+        295.867211
+      ],
+      "license": "See engines/streaming-llama/PROVENANCE.md",
+      "files": {
+        "engines/streaming-llama/prefill_llama.cpp/src/llama-dsv41-weight-casts.h": {
+          "url": "https://github.com/fronteagle739/streaming-llama-stack/blob/9624b6159cef26c6f0a173c5c471b9e1f74181a1/engines/streaming-llama/prefill_llama.cpp/src/llama-dsv41-weight-casts.h",
+          "sha256": "866eed419b82c951009ccfb92f0865a5bbc1e25b9b92681274edf649bd030601"
+        }
+      },
+      "receipt": "examples/native-fp4/hyper-microbench.json"
+    },
+    {
+      "repo": "NVIDIA/cutlass",
+      "commit": "91843b71d90737e0a9b86f7d9df213cff5a3526f",
+      "files": {
+        "README.md": {
+          "url": "https://raw.githubusercontent.com/NVIDIA/cutlass/91843b71d90737e0a9b86f7d9df213cff5a3526f/README.md",
+          "sha256": "4c8b2f037b278ef2ee30e3a02af9d9995609b81da8a604b345767e5b8c08d4d0"
+        },
+        "LICENSE.txt": {
+          "url": "https://raw.githubusercontent.com/NVIDIA/cutlass/91843b71d90737e0a9b86f7d9df213cff5a3526f/LICENSE.txt",
+          "sha256": "ad1513ca983da737a6843364ad19e8424a56d860736c2da773b8c5be527e1475"
+        },
+        "examples/79_blackwell_geforce_gemm/79d_blackwell_geforce_nvfp4_grouped_gemm.cu": {
+          "url": "https://raw.githubusercontent.com/NVIDIA/cutlass/91843b71d90737e0a9b86f7d9df213cff5a3526f/examples/79_blackwell_geforce_gemm/79d_blackwell_geforce_nvfp4_grouped_gemm.cu",
+          "sha256": "804f35444e903e25ed534d03cd7181991e7d5556bf500d8743d1aa6ee3681533"
+        },
+        "test/unit/gemm/device/sm120_blockscaled_tensorop_gemm/sm120_bs_gemm_mxf4_mxf4_f32_f32.cu": {
+          "url": "https://raw.githubusercontent.com/NVIDIA/cutlass/91843b71d90737e0a9b86f7d9df213cff5a3526f/test/unit/gemm/device/sm120_blockscaled_tensorop_gemm/sm120_bs_gemm_mxf4_mxf4_f32_f32.cu",
+          "sha256": "d308150d4d9b11e21ce8afea05604fe74bc43e7188eafc3681e4ce508bcd407e"
+        },
+        "include/cutlass/gemm/collective/builders/sm120_array_mma_builder.inl": {
+          "url": "https://raw.githubusercontent.com/NVIDIA/cutlass/91843b71d90737e0a9b86f7d9df213cff5a3526f/include/cutlass/gemm/collective/builders/sm120_array_mma_builder.inl",
+          "sha256": "a2897ac52692bf9edd0313118227cf91237a46b1ff98cfcd8ad2d4004ee89293"
+        }
+      },
+      "build": "PASS: standalone pinned W4A8/W4A4/W8A8 binaries",
+      "microbenchmark": "REJECTED: admission/execution/reference qualification failed; no accepted throughput",
+      "tflops": null,
+      "effective_bandwidth_gbs": null,
+      "license": "BSD-3-Clause"
+    },
+    {
+      "repo": "flashinfer-ai/flashinfer",
+      "commit": "1d622fdb1b053fc532069914bc9a6b498bd5f722",
+      "files": {
+        "README.md": {
+          "url": "https://raw.githubusercontent.com/flashinfer-ai/flashinfer/1d622fdb1b053fc532069914bc9a6b498bd5f722/README.md",
+          "sha256": "472bc506d8a67ca7d8048650b9fc8f17d75f5adbaa016b505b76bbb48a8b4fbc"
+        },
+        "LICENSE": {
+          "url": "https://raw.githubusercontent.com/flashinfer-ai/flashinfer/1d622fdb1b053fc532069914bc9a6b498bd5f722/LICENSE",
+          "sha256": "cb67c224f503e0a063908950b12f89a7280c6e527dcffac972aa114e4bf3c5de"
+        },
+        "benchmarks/bench_b12x_mxfp4_moe.py": {
+          "url": "https://raw.githubusercontent.com/flashinfer-ai/flashinfer/1d622fdb1b053fc532069914bc9a6b498bd5f722/benchmarks/bench_b12x_mxfp4_moe.py",
+          "sha256": "82ea42d2bb83d405d84b7a8433bbe240dd8e70ccf3165502fe3bf8ab27dbb54a"
+        },
+        "benchmarks/bench_groupwise_grouped_gemm_mxfp4_blackwell.py": {
+          "url": "https://raw.githubusercontent.com/flashinfer-ai/flashinfer/1d622fdb1b053fc532069914bc9a6b498bd5f722/benchmarks/bench_groupwise_grouped_gemm_mxfp4_blackwell.py",
+          "sha256": "e485b9e446928a01c5834f8ee2597a5ac865f5de073ca1ef099d512ef804a462"
+        },
+        "benchmarks/bench_groupwise_grouped_gemm_nvfp4_blackwell_geforce.py": {
+          "url": "https://raw.githubusercontent.com/flashinfer-ai/flashinfer/1d622fdb1b053fc532069914bc9a6b498bd5f722/benchmarks/bench_groupwise_grouped_gemm_nvfp4_blackwell_geforce.py",
+          "sha256": "bc4f2fd33b23a50a101f4273e44fd459b5dfd3b409b13ddb961e0a7b3bba44e3"
+        }
+      },
+      "build": "PASS: direct CuTe DSL SM120 W4A8 kernel",
+      "microbenchmark": "PASS: hash32-v1 sampled double reference",
+      "tflops": [
+        476.9839090270901,
+        488.59334504548224
+      ],
+      "effective_bandwidth_gbs": [
+        420.0328273326799,
+        373.7611851747667
+      ],
+      "license": "Apache-2.0",
+      "receipt": "examples/native-fp4/flashinfer-microbench.json"
+    },
+    {
+      "repo": "vllm-project/vllm",
+      "commit": "df028dffa548710fb77320a5c08b87ae58757933",
+      "files": {
+        "README.md": {
+          "url": "https://raw.githubusercontent.com/vllm-project/vllm/df028dffa548710fb77320a5c08b87ae58757933/README.md",
+          "sha256": "4dc7399323b9660117f8cc1226afb7a81cdbb912dbb4ae74b66d89052417d11c"
+        },
+        "LICENSE": {
+          "url": "https://raw.githubusercontent.com/vllm-project/vllm/df028dffa548710fb77320a5c08b87ae58757933/LICENSE",
+          "sha256": "c71d239df91726fc519c6eb72d318ec65820627232b2f796219e87dcf35d0ab4"
+        },
+        "csrc/quantization/fp4/mxfp4_blockwise_moe_kernel.cu": {
+          "url": "https://raw.githubusercontent.com/vllm-project/vllm/df028dffa548710fb77320a5c08b87ae58757933/csrc/quantization/fp4/mxfp4_blockwise_moe_kernel.cu",
+          "sha256": "c9e11b4a03b1a80f0a8b83ae4d4dc8b316581cf2a5dc67ca3a73ff43045ddeec"
+        },
+        "csrc/quantization/fp4/nvfp4_scaled_mm_sm120_kernels.cu": {
+          "url": "https://raw.githubusercontent.com/vllm-project/vllm/df028dffa548710fb77320a5c08b87ae58757933/csrc/quantization/fp4/nvfp4_scaled_mm_sm120_kernels.cu",
+          "sha256": "e727bbc90f2b36858e85ca7294cfe9cf950bb9bf772e7e26e8a677180f388668"
+        }
+      },
+      "build": "NOT RUN",
+      "microbenchmark": "NOT RUN",
+      "tflops": null,
+      "effective_bandwidth_gbs": null,
+      "license": "Apache-2.0"
+    },
+    {
+      "repo": "sgl-project/sglang",
+      "commit": "286e01859487535bfbc6355cee1bb5c6bff9c08d",
+      "files": {
+        "README.md": {
+          "url": "https://raw.githubusercontent.com/sgl-project/sglang/286e01859487535bfbc6355cee1bb5c6bff9c08d/README.md",
+          "sha256": "a7654a48a8cd08c824e4445cb906405704148a3c55fb84362c7071d27397303c"
+        },
+        "LICENSE": {
+          "url": "https://raw.githubusercontent.com/sgl-project/sglang/286e01859487535bfbc6355cee1bb5c6bff9c08d/LICENSE",
+          "sha256": "1495e1e757ef4d0925a2350563cf5754bb23c51701a8ec4fb3c5cdcbedae6747"
+        },
+        "python/sglang/srt/layers/moe/moe_runner/deep_gemm_sm120.py": {
+          "url": "https://raw.githubusercontent.com/sgl-project/sglang/286e01859487535bfbc6355cee1bb5c6bff9c08d/python/sglang/srt/layers/moe/moe_runner/deep_gemm_sm120.py",
+          "sha256": "e26537ece494b14426d7c873ddd96ed35694b56e4efcf0e8cac00642759faa6a"
+        },
+        "python/sglang/kernels/ops/gemm/sm120_nvfp4_moe.py": {
+          "url": "https://raw.githubusercontent.com/sgl-project/sglang/286e01859487535bfbc6355cee1bb5c6bff9c08d/python/sglang/kernels/ops/gemm/sm120_nvfp4_moe.py",
+          "sha256": "441cb809c1da421f301d7edb9bbfc735a3192ecbe7411a3587c6e92ce2239222"
+        }
+      },
+      "build": "NOT RUN",
+      "microbenchmark": "NOT RUN",
+      "tflops": null,
+      "effective_bandwidth_gbs": null,
+      "license": "Apache-2.0"
+    },
+    {
+      "repo": "deepseek-ai/DeepGEMM",
+      "commit": "5081f8513af57e61696de4f4f04b0e707ffb503e",
+      "files": {
+        "README.md": {
+          "url": "https://raw.githubusercontent.com/deepseek-ai/DeepGEMM/5081f8513af57e61696de4f4f04b0e707ffb503e/README.md",
+          "sha256": "1112521165450d617bf0ff0cc06d8944f7b4548ecf4727e1d16143671014a4d2"
+        },
+        "LICENSE": {
+          "url": "https://raw.githubusercontent.com/deepseek-ai/DeepGEMM/5081f8513af57e61696de4f4f04b0e707ffb503e/LICENSE",
+          "sha256": "6c73a30c14a2938abaa6afe98ebb19e6d81dac5bd4ace0cb05c61c20afa37b85"
+        }
+      },
+      "build": "NOT RUN",
+      "microbenchmark": "NOT RUN",
+      "tflops": null,
+      "effective_bandwidth_gbs": null,
+      "license": "MIT"
+    },
+    {
+      "repo": "NVIDIA/TensorRT-LLM",
+      "commit": "18c972e22c5a408ddd5af3eac3971b9e5d22d184",
+      "files": {
+        "README.md": {
+          "url": "https://raw.githubusercontent.com/NVIDIA/TensorRT-LLM/18c972e22c5a408ddd5af3eac3971b9e5d22d184/README.md",
+          "sha256": "34910562b401901946e8c95e847d18b92ba9add78cba582971ef99b90f3123ad"
+        },
+        "LICENSE": {
+          "url": "https://raw.githubusercontent.com/NVIDIA/TensorRT-LLM/18c972e22c5a408ddd5af3eac3971b9e5d22d184/LICENSE",
+          "sha256": "a56e691155bb532ea212f701d3ecacb2db549fa64757f9bad3e06bc9177f46ea"
+        }
+      },
+      "build": "NOT RUN",
+      "microbenchmark": "NOT RUN",
+      "tflops": null,
+      "effective_bandwidth_gbs": null,
+      "license": "Apache-2.0; component licenses also apply"
+    }
+  ],
+  "scope": "Accepted standalone FlashInfer/HYPER synthetic GEMMs; other candidates and engine integration pending"
+}
