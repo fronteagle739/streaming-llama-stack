@@ -62248,17 +62248,17 @@ bool abort_file_present(){
 
 ### LLAMADECODE_APPEND_DECODE_MAX
 
-Producer live prefill: with LLAMADECODE_DS4_DECODE=1, an append of at most this many tokens is teacher-forced through the ds4 single-token decode step (about 0.15-0.2 s per token) instead of a full weight sweep; larger appends keep the sweep. The frontier logits then come from ds4's decode kernels.
+Producer resident append toggle: 0 (default) keeps full sweeps. Opt in with 96 for the measured faster but numerically different single-token decode path. E2c observed follow-up KL up to0.01087 at bias0; accuracy attribution is in progress. Appends above the threshold keep the sweep.
 
 Scope: rtx-llama. Class: preset.
 
 Source: `engines/streaming-llama/prefill_llama.cpp/tools/dsv41-prefill/live-session.inc:186`. Unset read: NULL from getenv; the literal consumer below supplies any fallback.
 
 ```text
-// most LLAMADECODE_APPEND_DECODE_MAX tokens (default 96 = measured crossover, 0 = off) is appended
+// most LLAMADECODE_APPEND_DECODE_MAX tokens (default 0 = off; opt-in 96) is appended
 // one token at a time through the ds4 decode step instead of a full weight sweep.
 uint64_t append_decode_max(){static const uint64_t n=[]{const char*e=std::getenv("LLAMADECODE_APPEND_DECODE_MAX");
-    return e&&*e?uint64_t(std::max<long long>(0,std::min<long long>(std::strtoll(e,nullptr,10),4096))):uint64_t(96);}();return n;} /* measured crossover: 13-token sweep 17.4 s / ds4 step ~0.163 s = ~107 tokens; 96 keeps margin */
+    return e&&*e?uint64_t(std::max<long long>(0,std::min<long long>(std::strtoll(e,nullptr,10),4096))):uint64_t(0);}();return n;} /* E2c measured faster but non-exact; owner requires opt-in until attribution/fix. */
 // LLAMADECODE decode cancel: the client creates LLAMADECODE_DECODE_CANCEL_FILE
 // while a decode op runs; the loop stops at the next token boundary exactly as at
 // max_tokens (the last sampled token is returned, not evaluated). Cleared at
