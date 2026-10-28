@@ -251,6 +251,8 @@ def prefill_arguments(cfg, count, available, *, export_state=False, techniques=N
     if keep:
         arguments['--yoco-keep'] = str(keep)
         if export_state:arguments['--yoco-remote-state-version'] = '1'
+    from .singlepass import arguments as carry_arguments
+    carry_arguments(cfg, arguments)
     return arguments, plan
 
 

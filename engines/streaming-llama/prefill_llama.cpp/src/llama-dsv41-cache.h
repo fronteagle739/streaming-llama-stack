@@ -39,6 +39,9 @@ public:
     // Map the owners to cover `tokens` positions (rounded up to the step).
     // No-op for a fixed cache or when already covered; logs each grow event.
     bool ensure_tokens(uint32_t tokens, const char * phase, bool * grew, std::string & error);
+    // A carry loan may only coexist with this bounded physical cache mapping.
+    // Clear after the oversized hidden bank is freed, before decode/append.
+    void prefill_ceiling(uint32_t tokens,uint64_t physical_bytes=0);
     void clear();
     bool captures_dspark() const { return dspark_ring!=nullptr; }
     bool dspark_ready(uint32_t position) const;
@@ -140,6 +143,7 @@ private:
     ggml_context_ptr grow_tensors;
     ggml_backend_buffer_ptr grow_buffer;
     bool ensure_tokens_locked(uint32_t tokens, const char * phase, bool * grew, std::string & error);
+    uint32_t transient_ceiling=0;
     void clear_grown_locked();
 
     static int source_index(uint32_t source_layer);

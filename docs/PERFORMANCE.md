@@ -15,21 +15,32 @@ the rest), so "Max quality" below is the full model.
 ### Prefill
 
 The single-machine default is ULTRA exact cone with routed tail reads and one
-chunk per weight pass. These measured text runs use growable BF16 cache and
-include engine startup:
+chunk per weight pass. The 1M text preset keeps prefill carry in unused
+physical space from the growable cache's original reservation, then returns
+that space before decode or cache growth. Total device admission is unchanged.
+These frozen recall-fixture runs use BF16 cache and include engine startup:
 
-| Prompt tokens | Prefill time | Prefill tok/s | Peak engine RAM |
+| Prompt tokens | Prefill time | Prefill tok/s | Peak guarded process-tree RAM |
 |---:|---:|---:|---:|
-| 49,555 | 25.375 s | 1,952.91 | — |
-| 100,000 | 45.484 s | 2,198.58 | 5.79 GiB |
-| 200,000 | 94.079 s | 2,125.87 | 5.94 GiB |
-| 400,000 | 232.500 s | 1,720.43 | 6.24 GiB |
+| 50,000 | 24.203 s | 2,065.86 | 5.72 GiB |
+| 100,000 | 43.063 s | 2,322.18 | 5.85 GiB |
+| 200,000 | 92.407 s | 2,164.34 | 6.04 GiB |
 
+The 100K time is the mean of 42.954 and 43.172 s; the other lengths are individual
+runs. The corresponding N=1 controls were 25.344 / 45.141 / 93.141 s at
+50K / 100K / 200K. Full checkpoint hashes and teacher-forced full-vocabulary
+F32 logits match exactly, and all retrieval checks return the archive key.
+The repeated background can affect routed weight reads; these numbers describe
+this fixture. [Stage clocks, conditions and receipts](SINGLEPASS_PREFILL.md).
+
+The earlier carry policy measured 25.375 s at 49,555 tokens, 45.484 s at 100K,
+94.079 s at 200K, and 232.500 s (1,720.43 tok/s; 6.24 GiB engine RAM) at 400K.
 At 49,555 tokens, the same-build full eager control took 36.250 s
 (1,367.03 tok/s); the cone preserved every logit and cache checkpoint hash.
-The 262K launcher retains growable F32 cache; the 1M launcher uses BF16.
-Cone image throughput and one-million-token throughput have not been measured.
-[Receipts](MULTICHUNK_QUALIFICATION.json) · [Defaults and toggles](MERGEPERF.md).
+The 400K result has not been remeasured with the carry policy. The 262K launcher
+retains growable F32 cache; the 1M launcher uses BF16. Cone image throughput and
+one-million-token throughput have not been measured.
+[Earlier receipts](MULTICHUNK_QUALIFICATION.json) · [Defaults and toggles](MERGEPERF.md).
 
 Earlier full ULTRA prefill, YOCO off, including startup:
 
@@ -104,8 +115,14 @@ automatic range is narrower than the recall-body win.
 
 ### More chunks per weight pass
 
-Routed exact-cone configuration throughout. Startup is included. Each cell is
-prompt tok/s; the default remains N=1 because grouping was slower.
+With VRAM carry, 100K in one weight pass improves from 52.235 to 44.633 s.
+The optimized two-pass N=1 control is faster at 43.063 s, so grouping remains
+explicit. At 200K, N=2 improves from 109.000 to 95.672 s; N=1 takes 92.407 s.
+The old bank spilled many more encoder rows when grouped; registration and
+carry transfers explain the regression. [Attribution and reproduction](SINGLEPASS_PREFILL.md).
+
+Earlier routed exact-cone measurements, before VRAM carry, including startup.
+Each cell is prompt tok/s:
 
 | Prompt tokens | N=1 | N=2 | N=3 | N=4 |
 |---:|---:|---:|---:|---:|
