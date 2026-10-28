@@ -38,6 +38,8 @@ Native controls take effect at token boundaries. The response reports requested 
 
 ## Launcher settings
 
+`runtime_min_free_gib` and `--runtime-min-free-gib` default to 0.5 GiB of available physical RAM during execution; 0 disables this floor. Admission still requires the declared host budget plus its reserve. The host RSS budget and paging stop remain enabled. Shutdown requests cooperative cancellation first, waits while diagnostics or memory reclamation advance, and allows a logged force kill only after a full quiet grace period.
+
 | Flag | Scope and DSV4.1 default | Purpose |
 |---|---|---|
 | `--clang-module-cache-path` | ds4-win: `{runtime_root}/cache/clang_module_cache_path`; mac-ds4: `{runtime_root}/cache/clang_module_cache_path`; rtx-llama: `{runtime_root}/cache/clang_module_cache_path`; image: `{runtime_root}/cache/clang_module_cache_path`; video: `{runtime_root}/cache/clang_module_cache_path`; studio: `{runtime_root}/cache/clang_module_cache_path`; mlx-serve: `{runtime_root}/cache/clang_module_cache_path`; mac-mlx: `{runtime_root}/cache/clang_module_cache_path`; mac-llama: `{runtime_root}/cache/clang_module_cache_path`; mac-mference: `{runtime_root}/cache/clang_module_cache_path` | Runtime-local cache/temp directory; no model download is performed. |
@@ -47133,7 +47135,7 @@ static int ds4_ns_memory_start(void){
     const char*budget_text=ds4_nf_env("DS4_NATIVE_SESSION_HOST_BYTES");
     const char*floor_text=ds4_nf_env("DS4_NATIVE_SESSION_HOST_FLOOR_BYTES");uint64_t budget=0,floor=0;
     if(strcmp(enable,"1")||!budget_text||!floor_text||!ds4_nf_u64(&budget_text,&budget)||*budget_text||
-       !ds4_nf_u64(&floor_text,&floor)||*floor_text||floor<(1ull<<30)||
+       !ds4_nf_u64(&floor_text,&floor)||*floor_text||floor<(512ull<<20)||
 ```
 
 Source: `engines/ds4-mac/ds4_native_session_setup.inc:8`. Unset read: Wrapper/conditional default: see the literal call and consumer below.
@@ -47180,7 +47182,7 @@ static int ds4_ns_memory_start(void){
     const char*budget_text=ds4_nf_env("DS4_NATIVE_SESSION_HOST_BYTES");
     const char*floor_text=ds4_nf_env("DS4_NATIVE_SESSION_HOST_FLOOR_BYTES");uint64_t budget=0,floor=0;
     if(strcmp(enable,"1")||!budget_text||!floor_text||!ds4_nf_u64(&budget_text,&budget)||*budget_text||
-       !ds4_nf_u64(&floor_text,&floor)||*floor_text||floor<(1ull<<30)||
+       !ds4_nf_u64(&floor_text,&floor)||*floor_text||floor<(512ull<<20)||
        !ds4_ns_guard_begin(&ds4_ns_server_memory,budget,floor)) {
 ```
 
@@ -47197,7 +47199,7 @@ Source: `engines/ds4-mac/ds4_native_session_memory.inc:71`. Unset read: Wrapper/
     const char*budget_text=ds4_nf_env("DS4_NATIVE_SESSION_HOST_BYTES");
     const char*floor_text=ds4_nf_env("DS4_NATIVE_SESSION_HOST_FLOOR_BYTES");uint64_t budget=0,floor=0;
     if(strcmp(enable,"1")||!budget_text||!floor_text||!ds4_nf_u64(&budget_text,&budget)||*budget_text||
-       !ds4_nf_u64(&floor_text,&floor)||*floor_text||floor<(1ull<<30)||
+       !ds4_nf_u64(&floor_text,&floor)||*floor_text||floor<(512ull<<20)||
        !ds4_ns_guard_begin(&ds4_ns_server_memory,budget,floor)) {
         fprintf(stderr,"native session explicit host budget/floor refused before engine startup\n");return -1;
 ```

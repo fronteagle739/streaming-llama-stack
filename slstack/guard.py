@@ -1,8 +1,7 @@
-"""Independent process-tree guardian, Windows kill-on-close Job, RSS and free-RAM checks."""
+"""Independent process-tree guardian with cooperative retirement and memory checks."""
 from __future__ import annotations
 import argparse
 import ctypes
-import dataclasses
 import json
 import os
 from pathlib import Path
@@ -20,21 +19,7 @@ from studio.job_paging import PagingWatch, paging_bytes
 GiB = 1024 ** 3
 
 
-class GracefulOwnedProcesses(OwnedProcesses):
-    """POSIX model cleanup has no SIGKILL fallback; retain failed ownership."""
-    def stop(self, grace=60, timeout=3):
-        self.refresh()
-        errors=[]
-        for process in reversed(self.live()):
-            try:process.terminate()
-            except psutil.NoSuchProcess:pass
-            except Exception as error:errors.append(repr(error))
-        deadline=time.monotonic()+grace
-        while self.live() and time.monotonic()<deadline:time.sleep(.05)
-        survivors=[p.pid for p in self.live()]
-        return dict(confirmed=not survivors and not errors,surviving_owned_pids=survivors,
-                    errors=errors,identities=[dataclasses.asdict(x) for x in self.identities.values()],
-                    retired_identities=[dataclasses.asdict(x) for x in self.retired_identities],forced_kill=False)
+from .shutdown import ProgressOwnedProcesses as GracefulOwnedProcesses
 
 
 class GPUWindowReader:
@@ -80,22 +65,19 @@ def admit(budget_gib, floor_gib):
     return available
 
 
-def kill_tree(proc):
-    try:
-        root = psutil.Process(proc.pid)
-        children = root.children(recursive=True)
-        for p in reversed(children):
-            try:
-                p.kill()
-            except psutil.NoSuchProcess:
-                pass
-        proc.kill()
-    except (psutil.NoSuchProcess, ProcessLookupError):
-        pass
+def kill_tree(proc, spec=None):
+    """Legacy name: request cooperative exit and wait before the last force fallback."""
+    owned = GracefulOwnedProcesses(proc, spec)
+    proof = owned.stop()
+    if not proof['confirmed']:
+        error = RuntimeError('Owned process cleanup unconfirmed')
+        error.owned_cleanup_uncertain = True
+        raise error
     proc.wait(timeout=10)
+    return proof
 
 
-def windows_job(proc, commit_gib):
+def windows_job(proc, commit_gib, *, kill_on_close=True):
     from ctypes import wintypes as w
     class Basic(ctypes.Structure):
         _fields_ = [('PerProcessUserTimeLimit', ctypes.c_int64), ('PerJobUserTimeLimit', ctypes.c_int64),
@@ -119,7 +101,7 @@ def windows_job(proc, commit_gib):
     if not job:
         raise ctypes.WinError(ctypes.get_last_error())
     limits = Extended()
-    limits.BasicLimitInformation.LimitFlags = 0x2000 | 0x200  # KILL_ON_JOB_CLOSE | JOB_MEMORY
+    limits.BasicLimitInformation.LimitFlags = (0x2000 if kill_on_close else 0) | 0x200
     limits.JobMemoryLimit = int(commit_gib * GiB)
     try:
         if not kernel.SetInformationJobObject(job, 9, ctypes.byref(limits), ctypes.sizeof(limits)):
@@ -142,10 +124,10 @@ def _supervise(spec):
     # the owned loop below, which checks the window and ledger identity every poll.
     # Persistent servers retain the owned loop's RAM/paging checks. The pinned
     # shared adapter renews its finite no-progress window on tree/log activity.
-    if spec.get('timeout_s') is not None and spec.get('paging_telemetry') and not (spec.get('gpu_window_file') or spec.get('gpu_lease_identity')):
+    if spec.get('timeout_s') is not None and spec.get('paging_telemetry') and not (spec.get('gpu_window_file') or spec.get('gpu_lease_identity') or spec.get('cooperative_stop')):
         from .shared_guard import supervise as shared_supervise
         return shared_supervise({**spec,'timeout_s':min(spec['timeout_s'],1140)})
-    if not (spec.get('paging_telemetry') or spec.get('gpu_window_file') or spec.get('gpu_lease_identity')):
+    if not (spec.get('paging_telemetry') or spec.get('gpu_window_file') or spec.get('gpu_lease_identity') or spec.get('cooperative_stop')):
         return _supervise_plain(spec)
     admit(spec['host_budget_gib'],spec['min_available_gib'])
     warnings=[]
@@ -171,7 +153,7 @@ def _supervise(spec):
 
 def _supervise_plain(spec):
     """Release CPU/build loop: whole-tree RSS, deadline, stop file and shared holds.
-    Builds spawn thousands of short-lived compilers, beyond the owned-process bound."""
+    Retire dead build identities between polls so compiler churn stays bounded."""
     budget, floor = spec['host_budget_gib'], max(spec['min_available_gib'],spec.get('runtime_min_free_gib',0))
     admit(budget, spec['min_available_gib'])
     from .lease import HoldWatcher
@@ -195,9 +177,11 @@ def _supervise_plain(spec):
                                  stdout=log, stderr=log, creationflags=flags,
                                  start_new_session=os.name != 'nt')
         job = None
+        owned = GracefulOwnedProcesses(child,spec)
+        cleanup = None
         try:
             if os.name == 'nt':
-                job = windows_job(child, spec['job_commit_gib'])
+                job = windows_job(child, spec['job_commit_gib'], kill_on_close=False)
             if 'stdin' in spec:
                 child.stdin.write(spec['stdin'].encode())
                 child.stdin.close()
@@ -209,9 +193,13 @@ def _supervise_plain(spec):
                 except psutil.NoSuchProcess:
                     reason = 'owning process exited'
                 try:
-                    p = psutil.Process(child.pid)
+                    # Keep live descendants across parent exit without retaining
+                    # thousands of dead compiler identities in the owned set.
+                    owned.identities={pid:identity for pid,identity in owned.identities.items()
+                        if pid==child.pid or identity.process() is not None}
+                    owned.retired_identities=[]
                     rss = 0
-                    for member in [p, *p.children(recursive=True)]:
+                    for member in owned.refresh():
                         try:
                             info, created = member.memory_info(), member.create_time()
                             rss += info.rss
@@ -249,28 +237,37 @@ def _supervise_plain(spec):
                     except OSError as exc:
                         reason = 'Shared hold observation failed: ' + str(exc)
                 if reason:
-                    kill_tree(child)
+                    spec['stop_reason'] = reason
+                    cleanup = owned.stop()
                     break
                 time.sleep(.05)
-            code = child.wait()
+            code = child.poll() if cleanup and not cleanup['confirmed'] else child.wait()
+            if code is None:code=1
         finally:
-            if child.poll() is None:
-                kill_tree(child)
+            if cleanup is None:cleanup=owned.stop()
             if job:
                 job[0].CloseHandle(job[1])
     receipt = {'exit_code': code, 'reason': reason, 'peak_tree_rss': peak,
                'min_available': minimum, 'elapsed_s': time.monotonic() - start,
                'host_budget_gib': budget, 'floor_gib': floor,
-               'job_commit_gib': spec['job_commit_gib'], 'child_pid': child.pid}
+               'job_commit_gib': spec['job_commit_gib'], 'child_pid': child.pid,
+               'cleanup':cleanup,'cleanup_confirmed':cleanup['confirmed'],'release_allowed':cleanup['confirmed']}
     receipt.update(paging_before=paging_before, paging_after=snapshot() if spec.get('paging_telemetry') else None,
                    system_pagefile_pressure=pressure.receipt() if pressure else None,
                    process_memory_counters=list(process_counters.values()),
                    paging_interpretation='Process faults include soft and hard faults. Private commit/pagefile usage is not disk I/O. System counters include other processes; these counters alone do not prove core/KV residency.')
     Path(spec['receipt']).write_text(json.dumps(receipt, indent=2))
+    if not cleanup['confirmed']:
+        error=RuntimeError('Owned cleanup unconfirmed; resource ownership retained')
+        error.owned_cleanup_uncertain=True
+        raise error
     return 0 if code == 0 and reason is None else 1
 
 
 def _supervise_owned(spec,paging_watch,paging_warnings):
+    if spec.get('cooperative_stop'):
+        from .cooperative_stop import validate
+        validate(spec['cooperative_stop'])
     budget, floor = spec['host_budget_gib'], max(spec['min_available_gib'],spec.get('runtime_min_free_gib',0))
     admit(budget, spec['min_available_gib'])
     from .lease import HoldWatcher
@@ -301,11 +298,14 @@ def _supervise_owned(spec,paging_watch,paging_warnings):
                                  stdout=log, stderr=log, creationflags=flags,
                                  start_new_session=os.name != 'nt')
         job = None
-        owned = OwnedProcesses(child) if os.name=='nt' else GracefulOwnedProcesses(child)
+        if spec.get('cooperative_stop'):
+            from .cooperative_stop import CooperativeOwnedProcesses
+            owned=CooperativeOwnedProcesses(child,spec)
+        else:owned = GracefulOwnedProcesses(child, spec)
         cleanup = None
         try:
             if os.name == 'nt':
-                job = windows_job(child, spec['job_commit_gib'])
+                job = windows_job(child, spec['job_commit_gib'],kill_on_close=False)
             if 'stdin' in spec:
                 child.stdin.write(spec['stdin'].encode())
                 child.stdin.close()
@@ -406,11 +406,12 @@ def _supervise_owned(spec,paging_watch,paging_warnings):
                         if ledger_blocked_since is None:ledger_blocked_since=time.monotonic()
                         if time.monotonic()-ledger_blocked_since>=1:
                             reason = 'GPU hold ledger unavailable for1second: ' + str(exc)
-                if members:
+                if members and spec.get('paging_telemetry'):
                     failure=paging_watch.check(OwnedView(members),rss,commit,rss_limit=budget*GiB,
                         commit_limit=spec['job_commit_gib']*GiB,floor=floor*GiB)
                     if failure:reason=reason or failure
                 if reason:
+                    spec['stop_reason'] = reason
                     cleanup=owned.stop()
                     break
                 time.sleep(.05)
@@ -487,8 +488,8 @@ def supervise(spec):
                     time.sleep(.5)
         return _supervise(spec)
     finally:
-        # If this outer guardian killed an inner GPU guardian, its Windows Job is
-        # now closed. Release that recorded orphan rather than leaving an ACTIVE hold.
+        # Legacy kill-on-close orphans can be recovered. Cooperative lease
+        # records retain ownership because guardian death cannot prove cleanup.
         if not getattr(sys.exc_info()[1], 'owned_cleanup_uncertain', False):
             recover_leases(spec['runtime_root'], (spec.get('gpu') or {}).get('task', spec.get('task', 'DS4STACK')))
 

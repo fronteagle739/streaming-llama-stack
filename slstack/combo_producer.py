@@ -108,7 +108,7 @@ def prefill_plan(cfg,prompt_tokens,available=None):
         # Owner 2026-10-25 ("every run makes you freeze like the computer's run out of RAM"): locked producer
         # pages cannot be paged out, so admission keeps a DESKTOP RESERVE free for Windows, Claude Code and the
         # desktop: the producer's raised budget is at most available - producer_desktop_reserve_gib (per
-        # machine, default 0.5 GiB). The separate runtime_min_free_gib stop defaults to 4 GiB.
+        # machine, default 0.5 GiB). The separate runtime_min_free_gib stop defaults to 0.5 GiB.
         reserve=max(float(cfg.get('producer_host_reserve_gib',.5)),float(cfg.get('producer_desktop_reserve_gib',.5)))
         room=int(available)-int(reserve*(1<<30))
         if room<top:top=max(base,room);capped_by='desktop_reserve' if reserve>float(cfg.get('producer_host_reserve_gib',.5)) else 'available_ram'
@@ -307,6 +307,7 @@ class ComboProducer:
                         write(ram.read(offset,min(65536,size-offset)))
         argv=[str(binary),*[str(v) for item in args.items() for v in item]]
         env=environment(cfg,'rtx-producer')
+        if not env.get('LLAMADECODE_ABORT_FILE'):env['LLAMADECODE_ABORT_FILE']=str(self.directory/'guard.abort')
         if cfg.get('cache_affinity_spread_file') and not env.get('LLAMADECODE_DS4_SPREAD'):
             env['LLAMADECODE_DS4_SPREAD']=str(path(cfg['cache_affinity_spread_file']))   # B5 calibration (native's file)
         self.cancel_path=self.directory/'decode.cancel'   # LLAMADECODE decode cancel (see cancel_decode)
@@ -453,8 +454,9 @@ class ComboProducer:
         try:
             p.request(self.command('close'))
             # The budget starts once the reply has arrived.
-            deadline=time.monotonic()+float(self.cfg.get('producer_graceful_shutdown_seconds',30))
-            while (exited:=job.poll()) is None and time.monotonic()<deadline:time.sleep(0.05)
+            from .shutdown import wait_for_exit
+            exited=wait_for_exit(job,float(self.cfg.get('producer_graceful_shutdown_seconds',60)),
+                diagnostic=lambda:len(p.diagnostic))
             self.shutdown_path='graceful-pending' if exited is not None else 'graceful-timeout-terminate'
         except BaseException as exc:
             self.shutdown_path='graceful-failed-terminate: '+repr(exc)[:200]
@@ -470,11 +472,11 @@ class ComboProducer:
     def close(self):
         if self.closed:return self.receipt
         if self.process:self.graceful_exit()
-        # Still alive here: process.close() escalates (Ctrl-Break, long wait) and never kills;
-        # a producer still alive after that is left running and reported STUCK.
+        # The owned runner repeats cancellation and waits while retirement advances;
+        # only a full quiet grace allows its loudly logged force fallback.
         job=getattr(self.process,'job',None) if self.process else None
         if job is not None and job.poll() is None:
-            print('DS4COMBO producer graceful retire did not finish ('+str(self.shutdown_path)+'); escalating, never killing',flush=True)
+            print('DS4COMBO producer graceful retire did not finish ('+str(self.shutdown_path)+'); requesting cooperative cancellation and waiting for retirement',flush=True)
         try:
             proof=self.process.close() if self.process else getattr(self,'failure_cleanup',None) or dict(creation_attempted=False)
         except RuntimeError as exc:

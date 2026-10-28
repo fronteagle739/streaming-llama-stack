@@ -13,6 +13,7 @@ from urllib.parse import urlsplit
 from .config import path
 from .process import OwnedProcess
 from .progress import Window, activity, readiness_seconds
+from .shutdown import wait_for_exit,gpu_free_reader
 
 
 def http_json(url, body=None, timeout=30, headers=None):
@@ -126,7 +127,7 @@ class Engines:
         """Graceful exit that must succeed (media swap): verified by exit code and the engine's log."""
         self.combo('shutdown')
         try:
-            code = self.llm.proc.wait(timeout=float(self.cfg.get('native_graceful_shutdown_seconds', 60)))
+            code = wait_for_exit(self.llm.proc, float(self.cfg.get('native_graceful_shutdown_seconds', 60)), diagnostic=self.llm.log,gpu_free=gpu_free_reader(self.cfg.get('gpu_uuid')))
         except subprocess.TimeoutExpired:
             raise RuntimeError('Native engine did not exit after its graceful shutdown request')
         log = self.llm.log.read_text(errors='replace') if self.llm.log.exists() else ''
@@ -147,14 +148,14 @@ class Engines:
                 # The producer exits gracefully (VRAM freed, GPU hold released), then the server ends.
                 try:
                     self.single('shutdown')
-                    clean = self.llm.proc.wait(timeout=float(self.cfg.get('producer_graceful_shutdown_seconds', 120))) == 0
+                    clean = wait_for_exit(self.llm.proc, float(self.cfg.get('producer_graceful_shutdown_seconds', 120)), diagnostic=self.llm.log,gpu_free=gpu_free_reader(self.cfg.get('gpu_uuid'))) == 0
                 except (OSError, RuntimeError, TimeoutError, subprocess.TimeoutExpired):
                     print('Single-engine graceful shutdown failed; stopping the owned job', flush=True)
             if self.llm.proc.poll() is None and self.combo_enabled() and self.combo_sequence > 1:
                 # Studio-style exit: the engine drains DirectStorage and frees GPU/host memory.
                 try:
                     self.combo('shutdown')
-                    clean = self.llm.proc.wait(timeout=float(self.cfg.get('native_graceful_shutdown_seconds', 60))) == 0
+                    clean = wait_for_exit(self.llm.proc, float(self.cfg.get('native_graceful_shutdown_seconds', 60)), diagnostic=self.llm.log,gpu_free=gpu_free_reader(self.cfg.get('gpu_uuid'))) == 0
                 except (OSError, RuntimeError, TimeoutError, subprocess.TimeoutExpired):
                     print('Native graceful shutdown failed; stopping the owned job', flush=True)
             if self.llm.proc.poll() is None and not self.single_engine():
@@ -162,7 +163,7 @@ class Engines:
                     result = http_json(self.cfg['ds4_url'] + '/v1/train/close', {}, timeout=10,
                                        headers={'Authorization': 'Bearer ' + self.cfg['_control_token']})
                     if result.get('closing'):
-                        clean = self.llm.proc.wait(timeout=30) == 0
+                        clean = wait_for_exit(self.llm.proc, 60, diagnostic=self.llm.log,gpu_free=gpu_free_reader(self.cfg.get('gpu_uuid'))) == 0
                 except (OSError, RuntimeError, TimeoutError, subprocess.TimeoutExpired):
                     pass
             self.llm.stop()

@@ -40413,7 +40413,7 @@
         "source": "engines/ds4-mac/ds4_native_session_memory.inc:69",
         "unset": "Wrapper/conditional default: see the literal call and consumer below",
         "read": "const char*enable=ds4_nf_env(\"DS4_NATIVE_SESSION\");if(!enable||!strcmp(enable,\"0\"))return 0;",
-        "consumer": "static void ds4_ns_memory_stop(void){ds4_ns_guard_end(&ds4_ns_server_memory);}\nstatic int ds4_ns_memory_start(void){\n    const char*enable=ds4_nf_env(\"DS4_NATIVE_SESSION\");if(!enable||!strcmp(enable,\"0\"))return 0;\n    const char*budget_text=ds4_nf_env(\"DS4_NATIVE_SESSION_HOST_BYTES\");\n    const char*floor_text=ds4_nf_env(\"DS4_NATIVE_SESSION_HOST_FLOOR_BYTES\");uint64_t budget=0,floor=0;\n    if(strcmp(enable,\"1\")||!budget_text||!floor_text||!ds4_nf_u64(&budget_text,&budget)||*budget_text||\n       !ds4_nf_u64(&floor_text,&floor)||*floor_text||floor<(1ull<<30)||"
+        "consumer": "static void ds4_ns_memory_stop(void){ds4_ns_guard_end(&ds4_ns_server_memory);}\nstatic int ds4_ns_memory_start(void){\n    const char*enable=ds4_nf_env(\"DS4_NATIVE_SESSION\");if(!enable||!strcmp(enable,\"0\"))return 0;\n    const char*budget_text=ds4_nf_env(\"DS4_NATIVE_SESSION_HOST_BYTES\");\n    const char*floor_text=ds4_nf_env(\"DS4_NATIVE_SESSION_HOST_FLOOR_BYTES\");uint64_t budget=0,floor=0;\n    if(strcmp(enable,\"1\")||!budget_text||!floor_text||!ds4_nf_u64(&budget_text,&budget)||*budget_text||\n       !ds4_nf_u64(&floor_text,&floor)||*floor_text||floor<(512ull<<20)||"
       },
       {
         "source": "engines/ds4-mac/ds4_native_session_setup.inc:8",
@@ -40469,7 +40469,7 @@
         "source": "engines/ds4-mac/ds4_native_session_memory.inc:70",
         "unset": "Wrapper/conditional default: see the literal call and consumer below",
         "read": "const char*budget_text=ds4_nf_env(\"DS4_NATIVE_SESSION_HOST_BYTES\");",
-        "consumer": "static int ds4_ns_memory_start(void){\n    const char*enable=ds4_nf_env(\"DS4_NATIVE_SESSION\");if(!enable||!strcmp(enable,\"0\"))return 0;\n    const char*budget_text=ds4_nf_env(\"DS4_NATIVE_SESSION_HOST_BYTES\");\n    const char*floor_text=ds4_nf_env(\"DS4_NATIVE_SESSION_HOST_FLOOR_BYTES\");uint64_t budget=0,floor=0;\n    if(strcmp(enable,\"1\")||!budget_text||!floor_text||!ds4_nf_u64(&budget_text,&budget)||*budget_text||\n       !ds4_nf_u64(&floor_text,&floor)||*floor_text||floor<(1ull<<30)||\n       !ds4_ns_guard_begin(&ds4_ns_server_memory,budget,floor)) {"
+        "consumer": "static int ds4_ns_memory_start(void){\n    const char*enable=ds4_nf_env(\"DS4_NATIVE_SESSION\");if(!enable||!strcmp(enable,\"0\"))return 0;\n    const char*budget_text=ds4_nf_env(\"DS4_NATIVE_SESSION_HOST_BYTES\");\n    const char*floor_text=ds4_nf_env(\"DS4_NATIVE_SESSION_HOST_FLOOR_BYTES\");uint64_t budget=0,floor=0;\n    if(strcmp(enable,\"1\")||!budget_text||!floor_text||!ds4_nf_u64(&budget_text,&budget)||*budget_text||\n       !ds4_nf_u64(&floor_text,&floor)||*floor_text||floor<(512ull<<20)||\n       !ds4_ns_guard_begin(&ds4_ns_server_memory,budget,floor)) {"
       }
     ],
     "maximum_context": "host_budget_bytes"
@@ -40495,7 +40495,7 @@
         "source": "engines/ds4-mac/ds4_native_session_memory.inc:71",
         "unset": "Wrapper/conditional default: see the literal call and consumer below",
         "read": "const char*floor_text=ds4_nf_env(\"DS4_NATIVE_SESSION_HOST_FLOOR_BYTES\");uint64_t budget=0,floor=0;",
-        "consumer": "    const char*enable=ds4_nf_env(\"DS4_NATIVE_SESSION\");if(!enable||!strcmp(enable,\"0\"))return 0;\n    const char*budget_text=ds4_nf_env(\"DS4_NATIVE_SESSION_HOST_BYTES\");\n    const char*floor_text=ds4_nf_env(\"DS4_NATIVE_SESSION_HOST_FLOOR_BYTES\");uint64_t budget=0,floor=0;\n    if(strcmp(enable,\"1\")||!budget_text||!floor_text||!ds4_nf_u64(&budget_text,&budget)||*budget_text||\n       !ds4_nf_u64(&floor_text,&floor)||*floor_text||floor<(1ull<<30)||\n       !ds4_ns_guard_begin(&ds4_ns_server_memory,budget,floor)) {\n        fprintf(stderr,\"native session explicit host budget/floor refused before engine startup\\n\");return -1;"
+        "consumer": "    const char*enable=ds4_nf_env(\"DS4_NATIVE_SESSION\");if(!enable||!strcmp(enable,\"0\"))return 0;\n    const char*budget_text=ds4_nf_env(\"DS4_NATIVE_SESSION_HOST_BYTES\");\n    const char*floor_text=ds4_nf_env(\"DS4_NATIVE_SESSION_HOST_FLOOR_BYTES\");uint64_t budget=0,floor=0;\n    if(strcmp(enable,\"1\")||!budget_text||!floor_text||!ds4_nf_u64(&budget_text,&budget)||*budget_text||\n       !ds4_nf_u64(&floor_text,&floor)||*floor_text||floor<(512ull<<20)||\n       !ds4_ns_guard_begin(&ds4_ns_server_memory,budget,floor)) {\n        fprintf(stderr,\"native session explicit host budget/floor refused before engine startup\\n\");return -1;"
       }
     ],
     "minimum_context": "physical_floor_bytes"

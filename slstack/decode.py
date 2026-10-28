@@ -75,8 +75,13 @@ def serve(cfg):
                 if code is not None:raise RuntimeError('Decoder child exited with code '+str(code))
             time.sleep(.25)
     finally:
+        from .shutdown import ProgressOwnedProcesses
+        owners=[]
         for child in children:
-            if child.poll() is None:child.terminate()
-        for child in children:
-            try:child.wait(timeout=10)
-            except subprocess.TimeoutExpired:child.kill();child.wait()
+            if child.poll() is None:owners.append(ProgressOwnedProcesses(child))
+        for owner in owners:
+            proof=owner.stop()
+            if not proof['confirmed']:
+                error=RuntimeError('Mac decoder cleanup unconfirmed; ownership retained')
+                error.owned_cleanup_uncertain=True
+                raise error
