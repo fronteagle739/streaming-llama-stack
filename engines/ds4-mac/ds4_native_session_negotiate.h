@@ -9,6 +9,15 @@
 #include <stdint.h>
 #define DS4_NS_DECODE_DELTA_CHUNK 128u
 #define DS4_NS_DECODE_DELTA_MAX 49152u
+/* The complete mode3 state layout is shared. The authenticated keep/version
+   pair distinguishes approximate replay from exact cone provenance. */
+static uint32_t ds4_ns_yoco_version(uint32_t keep){
+    return keep==2541u?2u:keep==140u?1u:0u;
+}
+static bool ds4_ns_negotiate_yoco_values(uint32_t expected,uint64_t keep,uint64_t version){
+    return (expected==0u||expected==140u||expected==2541u)&&
+        keep==expected&&version==ds4_ns_yoco_version(expected);
+}
 static bool ds4_ns_negotiate_decode_values(bool have_delta_max,uint64_t delta_max,bool have_legacy,uint64_t legacy,uint32_t*effective){
     uint64_t advertised=DS4_NS_DECODE_DELTA_CHUNK;
     if(have_delta_max)advertised=delta_max;

@@ -224,8 +224,10 @@ With YOCO, the 198,287-token image prompt prefills at **1,670 tok/s**
 and Mac decode reaches **31.0 tok/s**. The matched 49,787-token image prompt
 prefills at **1,477 tok/s** with YOCO and **1,197 tok/s** without it.
 [Pairing, routing and measured speeds](docs/TWO_MACHINE.md).
-Use the [ULTRA + YOCO paired preset](examples/dual-machine/dsv41-ultra-yoco/preset.json)
-with the [example launchers](examples/dual-machine/README.md) to enable YOCO.
+Use the [ULTRA exact-cone paired preset](examples/dual-machine/dsv41-ultra-cone/preset.json)
+with the [example launchers](examples/dual-machine/README.md). ULTRA paired defaults
+now use keep2541 and negotiated state v2; the rates above are historical
+approximate140/v1 measurements. [Cone state protocol](docs/CONE_STATE.md).
 
 For a Windows/Linux second machine with enough RAM to hold the model, see the
 [large-RAM ds4-win untested example](examples/dual-machine/dsv41-large-ram-untested/README.md).

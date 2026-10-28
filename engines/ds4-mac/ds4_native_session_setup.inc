@@ -31,7 +31,11 @@ static int ds4_ns_setup(ds4_engine*engine,const ds4_engine_options*opt,int conte
     if(ds4_nf_env("DS4_NATIVE_SESSION_LOCAL_PREFILL_MAX_TOKENS")&&
        !ds4_nf_env_uint("DS4_NATIVE_SESSION_LOCAL_PREFILL_MAX_TOKENS",&c->local_prefill_max,0,49152))goto bad;
     const char*yoco=ds4_nf_env("DS4_NATIVE_SESSION_YOCO_KEEP");
-    if(yoco&&strcmp(yoco,"0")){if(strcmp(yoco,"140"))goto bad;c->yoco_keep=140;}
+    if(yoco&&strcmp(yoco,"0")){
+        if(!strcmp(yoco,"140"))c->yoco_keep=140;
+        else if(!strcmp(yoco,"2541"))c->yoco_keep=2541;
+        else goto bad;
+    }
     if(!ds4_nf_pair_token(token,c->http.token)||!ds4_nf_env_uint("DS4_NATIVE_SESSION_PORT",&port,1,65535)||
        !ds4_nf_env_uint("DS4_NATIVE_SESSION_DEADLINE_SECONDS",&c->http.deadline_seconds,60,7200)||
        inet_pton(AF_INET,host,&c->http.broker.sin_addr)!=1||!ds4_engine_native_frontier_identity(engine,&c->http.model))goto bad;

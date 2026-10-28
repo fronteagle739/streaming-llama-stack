@@ -422,7 +422,7 @@ void run_live_session(std::unique_ptr<llama_dsv41_sweep>&sweep,
     current=inspect();
     send({{"status","ready"},{"session",session},{"model_sha256",model_sha},{"next_sequence",guard.expected()},
         {"checkpoint",current.describe()},{"maximum_prefill_tokens",std::min(capacity,llama_dsv41_prefill::legacy_sweep_tokens)},{"maximum_prefill_sweep_tokens",capacity},{"maximum_decode_tokens",llama_dsv41::decode_delta_chunk_tokens},{"maximum_decode_delta_tokens",llama_dsv41::decode_delta_max_tokens},{"control_host_bytes",64*1024*1024},
-        {"generation_control_version",1},{"local_snapshot_version",1},{"vision_prefill_version",1},{"yoco_keep",options.yoco_keep},{"yoco_state_version",options.yoco_remote_state_version},{"transport",options.yoco_keep&&options.yoco_remote_state_version!=1?"local approximate state; remote export disabled":"private owned pipes; existing native payload and artifact v2.1 delta"}});
+        {"generation_control_version",1},{"local_snapshot_version",1},{"vision_prefill_version",1},{"yoco_keep",options.yoco_keep},{"yoco_state_version",options.yoco_remote_state_version},{"transport",options.yoco_keep&&!llama_dsv41_yoco::remote_compatible(options.yoco_keep,options.yoco_remote_state_version)?"local bounded state; remote export disabled":"private owned pipes; existing native payload and artifact v2.1 delta"}});
     for(;;){
         io.renew();auto command=dsv41_live::parse_control(io.line());guard.accept(command);if(owner_epoch)command.erase("owner_epoch");
         const auto operation=command.at("operation").get<std::string>();const auto sequence=dsv41_live::u64(command.at("sequence"));
@@ -515,7 +515,7 @@ void run_live_session(std::unique_ptr<llama_dsv41_sweep>&sweep,
             std::fprintf(stderr,"LLAMADECODE_LOCAL_SNAPSHOT yoco_keep=%u bytes=%llu milliseconds=%.3f\n",options.yoco_keep,(unsigned long long)sent,ms(started));
         }else if(operation=="export_initial"||operation=="export_delta"){
             dsv41_live::keys(command,{"session","model_sha256","sequence","operation","base"});same_base();
-            require(!options.yoco_keep||options.yoco_remote_state_version==1,"YOCO remote export requires version1 peer negotiation");
+            require(llama_dsv41_yoco::remote_compatible(options.yoco_keep,options.yoco_remote_state_version),"YOCO remote export requires matching keep/version peer negotiation");
             const bool initial=operation=="export_initial";
             require(!awaiting_ack,"Previous state transfer awaits an exact acknowledgement");
             require(initial?(!initial_sent&&!have_remote):(have_remote&&remote.frontier.position<current.frontier.position),"Full resend or delta without an acknowledged base refused");

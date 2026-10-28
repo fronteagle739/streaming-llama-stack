@@ -259,7 +259,7 @@ const char*usage=
 "Optional --native-rhs-pack 0|1 (default0; qualified native half RHS packing,384MiB expert workspace).\n"
 "Optional --pv-strided-probabilities 0|1 (default0; native F32 PV without probability copy).\n"
 "Optional --reuse-child-raw-metadata 0|1 (default0; omit unused grouped child arrays).\n"
-"Optional --yoco-keep 0|140|2541 (default0; 140 approximate, 2541 dependency cone; local only).\n"
+"Optional --yoco-keep 0|140|2541 (default0; 140 approximate, 2541 exact dependency cone).\n"
 "Optional --unaligned-append-step-tokens 0|2048 (default0; explicit bounded continuation after Mac decode, unchanged fixed owners).\n"
 "Optional --resident-pageable-copies 0|1 (default0; resident paired RAM mirrors use existing bounded backend vector copies).\n"
 "Optional --tile-host-registration 0|1 (default0; paired full-resident plan registers only its current RAM lease).\n"
@@ -665,8 +665,10 @@ int wmain(int argc,wchar_t**argv){
         require(!ctx_cache.growable||!switch_arena,"ctx-cache-growable is not covered by the switch arena's suspend/resume");
         report["compressed_cache_bf16"]={{"enabled",options.compressed_cache_bf16},{"lossless_existing_QAT_BF16_values",true},{"canonical_wire_F32",true},{"raw_and_pool_tails_F32",true}};
         options.context=uint32_t(context);options.yoco_keep=uint32_t(yoco_keep);
-        options.yoco_remote_state_version=args.count("--yoco-remote-state-version")?uint32_t(integer(args.at("--yoco-remote-state-version"))):0;
-        require(options.yoco_remote_state_version<=1,"Unsupported YOCO remote state version");
+        const auto remote_state_version=args.count("--yoco-remote-state-version")?integer(args.at("--yoco-remote-state-version")):0;
+        require(remote_state_version<=2,"Unsupported YOCO remote state version");
+        options.yoco_remote_state_version=uint32_t(remote_state_version);
+        require(options.yoco_remote_state_version==0||llama_dsv41_yoco::remote_compatible(uint32_t(yoco_keep),options.yoco_remote_state_version),"Unsupported or mismatched YOCO remote state version");
         if(args.count("--vision-spans-file")){
             options.image_spans=studio_vision_spans(args.at("--vision-spans-file"),options.context);options.images=true;
             report["vision"]={{"images",options.image_spans.size()},{"embedding_width",5120},{"native_image_token",129264},{"image_router_bias",true},{"seed_host_tile_rows",128}};

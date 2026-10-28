@@ -29,7 +29,7 @@ private:
         if(j.contains("local_state")){
             const auto&local=j.at("local_state");keys(local,{"version","yoco_keep","cache_precision","producer_sha256"});
             need(local.at("version")=="slstack-local-state/1","Unknown local snapshot version");
-            const auto keep=u64(local.at("yoco_keep"));need(keep==0||keep==140,"Local YOCO mode invalid");
+            const auto keep=u64(local.at("yoco_keep"));need(keep==0||keep==140||keep==2541,"Local YOCO mode invalid");
             const auto precision=local.at("cache_precision").get<std::string>();need(precision=="f32"||precision=="bf16","Local cache precision invalid");
             need(sha_valid(local.at("producer_sha256").get<std::string>()),"Local producer digest invalid");
             base.local_snapshot=true;base.yoco_keep=uint32_t(keep);base.cache_precision=precision;standard.erase("local_state");

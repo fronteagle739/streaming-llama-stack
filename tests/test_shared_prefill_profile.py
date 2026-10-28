@@ -2,7 +2,7 @@
 from slstack.combo_producer import prefill_arguments
 
 
-CFG = dict(context=1000001, producer_profile='ultra', yoco_keep=140,
+CFG = dict(context=1000001, producer_profile='ultra', yoco_keep=2541,
            producer_host_budget_gib=6.25, producer_host_max_gib=7.75,
            producer_prefill_sweep_tokens=49152, producer_prefill_fold_cap_tokens=61440,
            producer_desktop_reserve_gib=.5, host_budget_gib=9.25,
@@ -16,7 +16,7 @@ def test_paired_and_single_share_every_prefill_flag_except_required_capture():
         assert plan == peer_plan
         differences = {key for key in single.keys() | paired.keys() if single.get(key) != paired.get(key)}
         assert differences == {'--capture-dspark', '--yoco-remote-state-version'}
-        assert paired['--capture-dspark'] == '1' and paired['--yoco-remote-state-version'] == '1'
+        assert paired['--capture-dspark'] == '1' and paired['--yoco-remote-state-version'] == '2'
         assert paired['--warmup-one-token'] == '0' and paired['--fixed-direct-open'] == '1'
         assert paired['--ctx-cache-growable'] == '1' and paired['--ctx-cache-precision'] == 'f32'
         assert paired['--job-host-bytes'] == str(plan['host_bytes'])

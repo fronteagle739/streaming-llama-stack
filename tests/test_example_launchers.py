@@ -16,6 +16,16 @@ launcher=importlib.util.module_from_spec(spec);spec.loader.exec_module(launcher)
 
 
 class Launchers(unittest.TestCase):
+    def test_paired_ultra_presets_default_exact_and_approximation_is_explicit(self):
+        from argparse import Namespace
+        for name in ('dsv41-ultra','dsv41-ultra-yoco','dsv41-ultra-cone'):
+            args=Namespace(single=None,preset=name,machine='rtx',approximate_yoco=False)
+            cfg,command=launcher.prepare(args,{'yoco_keep':140})
+            self.assertEqual((command,cfg['yoco_keep']),('rtx',2541))
+            args.approximate_yoco=True
+            cfg,_=launcher.prepare(args,{})
+            self.assertEqual(cfg['yoco_keep'],140)
+
     @unittest.skipUnless(shutil.which('powershell'),'PowerShell is needed to execute Windows examples')
     def test_all_single_machine_scripts_are_read_only_dry_runs(self):
         with tempfile.TemporaryDirectory() as folder:
@@ -33,7 +43,7 @@ class Launchers(unittest.TestCase):
                     cone=profile in ('ultra-cone','ultra-yoco')
                     self.assertEqual(cfg['producer_profile'],'ultra' if cone else profile)
                     self.assertEqual(cfg['yoco_keep'],2541 if cone else 0)
-                    self.assertEqual(cfg['env_overrides']['LLAMADECODE_APPEND_DECODE_MAX'],'96' if cone else '0')
+                    self.assertEqual(cfg['env_overrides']['LLAMADECODE_APPEND_DECODE_MAX'],'0')
                     self.assertEqual(cfg['webui'],file.stem.endswith('-webui'))
                     self.assertNotIn('example-placeholder',run.stdout)
                     self.assertFalse(runtime.exists())

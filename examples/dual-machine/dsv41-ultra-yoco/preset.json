@@ -7,7 +7,7 @@
     "runtime_min_free_gib": 0.5,
     "producer_desktop_reserve_gib": 0.5,
     "native_tier": "ultra",
-    "yoco_keep": 140,
+    "yoco_keep": 2541,
     "mac": "http://MAC_HOST:8180",
     "pair_token": "SET_SHARED_PAIRING_TOKEN",
     "producer_profile": "ultra",

@@ -10,7 +10,7 @@
     "producer_desktop_reserve_gib": 0.5,
     "native_tier": "ultra",
     "producer_profile": "ultra",
-    "yoco_keep": 140,
+    "yoco_keep": 2541,
     "producer_host_budget_gib": 6.25,
     "producer_host_max_gib": 7.75,
     "producer_host_reserve_gib": 0.5,
@@ -43,7 +43,7 @@
     "min_available_gib": 4,
     "pair_token": "SET_SHARED_PAIRING_TOKEN",
     "native_state_mode": 3,
-    "yoco_state_version": 1,
-    "yoco_keep": 140
+    "yoco_state_version": 2,
+    "yoco_keep": 2541
   }
 }

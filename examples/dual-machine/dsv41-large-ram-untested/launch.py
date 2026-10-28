@@ -1,4 +1,4 @@
-"""UNTESTED example: RTX ULTRA + YOCO export to a large-RAM ds4-win box.
+"""UNTESTED example: RTX ULTRA exact-cone export to a large-RAM ds4-win box.
 
 Only --dry-run is implemented: the CPU mode3/YOCO receiver is missing.
 No model, runtime directory, network connection or subprocess is opened.
@@ -16,7 +16,7 @@ sys.path.insert(0, str(ROOT))
 
 GAP = (
     'ds4-win has native V4.1 import for GPU modes 1/2, but lacks the '
-    'RAM-resident CPU receiver for mode3 DSpark state and YOCO v1 used '
+    'RAM-resident CPU receiver for mode3 DSpark state and exact cone v2 used '
     'by the existing RTX-to-Mac handoff. See this example README.'
 )
 
@@ -26,10 +26,10 @@ def plan(machine, config):
     from slstack.combo_producer import prefill_arguments
     rtx = config['rtx']
     decode = config['decode_plan']
-    if (rtx['producer_profile'], rtx['native_tier'], rtx['yoco_keep']) != ('ultra', 'ultra', 140):
-        raise ValueError('This example requires ULTRA + YOCO140')
-    if (decode['native_state_mode'], decode['yoco_state_version'], decode['yoco_keep']) != (3, 1, 140):
-        raise ValueError('This example requires mode3 and YOCO v1')
+    if (rtx['producer_profile'], rtx['native_tier'], rtx['yoco_keep']) != ('ultra', 'ultra', 2541):
+        raise ValueError('This example requires ULTRA exact cone2541')
+    if (decode['native_state_mode'], decode['yoco_state_version'], decode['yoco_keep']) != (3, 2, 2541):
+        raise ValueError('This example requires mode3 and exact cone v2')
     for cfg in (rtx, decode):
         budget = float(cfg['host_budget_gib'])
         floor = float(cfg['runtime_min_free_gib' if cfg is rtx else 'min_available_gib'])

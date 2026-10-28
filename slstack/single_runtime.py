@@ -55,6 +55,7 @@ def serving_config(cfg, *, runtime_root, studio_root, llama_producer, library_di
     """The combo_proxy serving_mode=single_engine configuration (shared by Studio and the stack)."""
     host = cfg['host_budget_gib'] if host_budget_gib is None else host_budget_gib
     result = {k: deepcopy(cfg[k]) for k in KEPT if k in cfg}
+    result.setdefault('yoco_keep',2541)
     result.update(serving_mode='single_engine', source_revision=revision,
         runtime_root=str(runtime_root), studio_root=str(studio_root), llama_producer=str(llama_producer),
         producer_library_directories=[str(p) for p in library_directories],

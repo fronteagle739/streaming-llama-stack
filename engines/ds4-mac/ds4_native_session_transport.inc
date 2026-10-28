@@ -100,7 +100,7 @@ static bool ds4_ns_poll(ds4_ns_session*s,ds4_nf_io*io,const char*suffix,bool sta
             if(strcmp(s->id,r->session))return false;
             if(!strcmp(r->state,"ready"))return ds4_ns_identity(s,r)&&r->have_checkpoint&&r->next_sequence==1&&
                 r->maximum_prefill_tokens==49152&&ds4_ns_negotiate_decode(r,&s->decode_delta_max)&&r->control_host_bytes==(64u<<20)&&
-                r->yoco_keep==s->config->yoco_keep&&r->yoco_state_version==(s->config->yoco_keep?1u:0u);
+                ds4_ns_negotiate_yoco_values(s->config->yoco_keep,r->yoco_keep,r->yoco_state_version);
             if(strcmp(r->state,"starting"))return false;
         }else{
             if(r->sequence!=s->sequence)return false;
@@ -377,7 +377,7 @@ static bool ds4_ns_start_remote(ds4_ns_session*s,ds4_nf_io*io,const ds4_tokens*f
     ds4_ns_text b={extra,sizeof(extra),true};
     ds4_ns_put(&b,"X-DSV41-Model-SHA256: %s\r\nX-DSV41-Tokens-SHA256: %s\r\nX-DSV41-Context: 1000001\r\nX-DSV41-Mode: 3\r\nX-DSV41-Tokens: %d\r\nX-DSV41-Tier: %s\r\n",DS4_NF_MODEL_SHA,hash,first->len,s->config->tier);
     if(*s->config->techniques)ds4_ns_put(&b,"X-DSV41-Techniques: %s\r\n",s->config->techniques);
-    if(s->config->yoco_keep)ds4_ns_put(&b,"X-DSV41-Yoco-Keep: %u\r\nX-DSV41-Yoco-State-Version: 1\r\n",s->config->yoco_keep);
+    if(s->config->yoco_keep)ds4_ns_put(&b,"X-DSV41-Yoco-Keep: %u\r\nX-DSV41-Yoco-State-Version: %u\r\n",s->config->yoco_keep,ds4_ns_yoco_version(s->config->yoco_keep));
     ds4_ns_vision_body wire={0};
     if(image_count){
         if(!ds4_ns_vision_pack(first,images,image_count,&wire))return false;
