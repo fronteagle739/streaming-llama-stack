@@ -83,6 +83,8 @@ Native controls take effect at token boundaries. The response reports requested 
 | `--huggingface-hub-cache` | ds4-win: `{runtime_root}/cache/huggingface_hub_cache`; mac-ds4: `{runtime_root}/cache/huggingface_hub_cache`; rtx-llama: `{runtime_root}/cache/huggingface_hub_cache`; image: `{runtime_root}/cache/huggingface_hub_cache`; video: `{runtime_root}/cache/huggingface_hub_cache`; studio: `{runtime_root}/cache/huggingface_hub_cache`; mlx-serve: `{runtime_root}/cache/huggingface_hub_cache`; mac-mlx: `{runtime_root}/cache/huggingface_hub_cache`; mac-llama: `{runtime_root}/cache/huggingface_hub_cache`; mac-mference: `{runtime_root}/cache/huggingface_hub_cache` | Runtime-local cache/temp directory; no model download is performed. |
 | `--kernels-cache` | ds4-win: `{runtime_root}/cache/kernels_cache`; mac-ds4: `{runtime_root}/cache/kernels_cache`; rtx-llama: `{runtime_root}/cache/kernels_cache`; image: `{runtime_root}/cache/kernels_cache`; video: `{runtime_root}/cache/kernels_cache`; studio: `{runtime_root}/cache/kernels_cache`; mlx-serve: `{runtime_root}/cache/kernels_cache`; mac-mlx: `{runtime_root}/cache/kernels_cache`; mac-llama: `{runtime_root}/cache/kernels_cache`; mac-mference: `{runtime_root}/cache/kernels_cache` | Runtime-local cache/temp directory; no model download is performed. |
 | `--llamadecode-engram-read-align` | Explicit runtime value | E13 experiment: Engram direct-read alignment, 4096 bytes (default) or opt-in 512 bytes. The 512-byte arm requires compatible logical sector geometry and preserves all row bytes. |
+| `--llamadecode-recency-lfu` | Explicit runtime value | E8 experiment: recency-weighted LFU admission for the L2 expert victim cache; 0 (default) preserves LRU, 1 decays scores per token and requires a 25% admission margin. |
+| `--llamadecode-lfu-half-life` | Explicit runtime value | E8 experiment: LFU score half life in tokens, 1 (default) or 16. Only used when the opt-in recency-LFU policy is enabled; expert routes and arithmetic are unchanged. |
 | `--llama-dsv41-cast-vector` | rtx-llama: `1` | LLAMA_DSV41_CAST_VECTOR: qualified preset/runtime setting; override for a different memory or arithmetic plan |
 | `--llama-dsv41-engram-prompt-overlap` | rtx-llama: `1` | LLAMA_DSV41_ENGRAM_PROMPT_OVERLAP: qualified preset/runtime setting; override for a different memory or arithmetic plan |
 | `--llama-dsv41-mul-f16-store` | rtx-llama: `1` | LLAMA_DSV41_MUL_F16_STORE: qualified preset/runtime setting; override for a different memory or arithmetic plan |
@@ -123,8 +125,6 @@ Native controls take effect at token boundaries. The response reports requested 
 | `--xdg-cache-home` | ds4-win: `{runtime_root}/cache/xdg_cache_home`; mac-ds4: `{runtime_root}/cache/xdg_cache_home`; rtx-llama: `{runtime_root}/cache/xdg_cache_home`; image: `{runtime_root}/cache/xdg_cache_home`; video: `{runtime_root}/cache/xdg_cache_home`; studio: `{runtime_root}/cache/xdg_cache_home`; mlx-serve: `{runtime_root}/cache/xdg_cache_home`; mac-mlx: `{runtime_root}/cache/xdg_cache_home`; mac-llama: `{runtime_root}/cache/xdg_cache_home`; mac-mference: `{runtime_root}/cache/xdg_cache_home` | Runtime-local cache/temp directory; no model download is performed. |
 | `--zig-global-cache-dir` | ds4-win: `{runtime_root}/cache/zig_global_cache_dir`; mac-ds4: `{runtime_root}/cache/zig_global_cache_dir`; rtx-llama: `{runtime_root}/cache/zig_global_cache_dir`; image: `{runtime_root}/cache/zig_global_cache_dir`; video: `{runtime_root}/cache/zig_global_cache_dir`; studio: `{runtime_root}/cache/zig_global_cache_dir`; mlx-serve: `{runtime_root}/cache/zig_global_cache_dir`; mac-mlx: `{runtime_root}/cache/zig_global_cache_dir`; mac-llama: `{runtime_root}/cache/zig_global_cache_dir`; mac-mference: `{runtime_root}/cache/zig_global_cache_dir` | Runtime-local cache/temp directory; no model download is performed. |
 | `--zig-local-cache-dir` | ds4-win: `{runtime_root}/cache/zig_local_cache_dir`; mac-ds4: `{runtime_root}/cache/zig_local_cache_dir`; rtx-llama: `{runtime_root}/cache/zig_local_cache_dir`; image: `{runtime_root}/cache/zig_local_cache_dir`; video: `{runtime_root}/cache/zig_local_cache_dir`; studio: `{runtime_root}/cache/zig_local_cache_dir`; mlx-serve: `{runtime_root}/cache/zig_local_cache_dir`; mac-mlx: `{runtime_root}/cache/zig_local_cache_dir`; mac-llama: `{runtime_root}/cache/zig_local_cache_dir`; mac-mference: `{runtime_root}/cache/zig_local_cache_dir` | Runtime-local cache/temp directory; no model download is performed. |
-| `--llamadecode-recency-lfu` | Explicit runtime value | E8 opt-in L2 expert-cache placement: 0 (default) retains LRU; 1 uses recency-weighted LFU with a 25% admission margin. Configure the score half life separately; routes and arithmetic are unchanged. |
-| `--llamadecode-lfu-half-life` | Explicit runtime value | E8 experiment: LFU score half life in tokens, 1 (default) or 16. Only used when the opt-in recency-LFU policy is enabled; expert routes and arithmetic are unchanged. |
 
 Budget placeholders use the admitted child budget: `{host_budget_bytes}`, `{host_budget_mb}`, `{physical_floor_bytes}` (admission) and `{runtime_floor_bytes}` (runtime). `{host_budget_gib}` and `{min_available_gib}` use GiB. User overrides are literal strings, including JSON and braces.
 
@@ -1969,7 +1969,7 @@ DS4PERF_DIAGNOSTIC_LAYERS: advanced engine setting; built-in default retained
 
 Scope: rtx-llama. Class: advanced.
 
-Source: `engines/streaming-llama/prefill_llama.cpp/src/llama-dsv41-executor.cpp:1303`. Unset read: NULL from getenv; the literal consumer below supplies any fallback.
+Source: `engines/streaming-llama/prefill_llama.cpp/src/llama-dsv41-executor.cpp:1359`. Unset read: NULL from getenv; the literal consumer below supplies any fallback.
 
 ```text
         }
@@ -1981,7 +1981,7 @@ Source: `engines/streaming-llama/prefill_llama.cpp/src/llama-dsv41-executor.cpp:
         const auto buft=ggml_backend_get_default_buffer_type(backend);
 ```
 
-Source: `engines/streaming-llama/prefill_llama.cpp/src/llama-dsv41-executor.cpp:1343`. Unset read: NULL from getenv; the literal consumer below supplies any fallback.
+Source: `engines/streaming-llama/prefill_llama.cpp/src/llama-dsv41-executor.cpp:1399`. Unset read: NULL from getenv; the literal consumer below supplies any fallback.
 
 ```text
             llama_dsv41_layer_log("DS4PERF_BF16_INPLACE_LAYOUT layer=%u start=%u count=%u tagged=%llu actual_aliases=%llu alias_bytes=%llu original_lifetime_checks=1\n",in.layer,in.start,in.count,(unsigned long long)tagged,(unsigned long long)aliases,(unsigned long long)bytes);
@@ -2011,7 +2011,7 @@ DS4PERF_EXECUTOR_WALL_PROBE: advanced engine setting; built-in default retained
 
 Scope: rtx-llama. Class: advanced.
 
-Source: `engines/streaming-llama/prefill_llama.cpp/src/llama-dsv41-executor.cpp:873`. Unset read: NULL from getenv; the literal consumer below supplies any fallback.
+Source: `engines/streaming-llama/prefill_llama.cpp/src/llama-dsv41-executor.cpp:929`. Unset read: NULL from getenv; the literal consumer below supplies any fallback.
 
 ```text
                 llama_dsv41_layer_log("DS4PERF_EXECUTOR_WALL_PROBE layer=%u start=%u count=%u wall_ms=%.6f pre_return_ms=%.6f teardown_ms=%.6f prepare_flush_ms=%.6f post_checks_ms=%.6f boundary_ms=%.6f unexplained_ms=%.6f\n",in.layer,in.start,in.count,wall,pre_return_ms,wall-pre_return_ms,prepare_flush_ms,post_checks_ms,boundary_ms,pre_return_ms-phases-prepare_flush_ms-post_checks_ms-boundary_ms);}}
@@ -2041,7 +2041,7 @@ template<typename T>std::vector<T>download(ggml_tensor*t,size_t maximum){
     require(t->type==(std::is_same<T,float>::value?GGML_TYPE_F32:GGML_TYPE_I32),"V4.1 tile readback type changed");
 ```
 
-Source: `engines/streaming-llama/prefill_llama.cpp/src/llama-dsv41-executor.cpp:409`. Unset read: NULL from getenv; the literal consumer below supplies any fallback.
+Source: `engines/streaming-llama/prefill_llama.cpp/src/llama-dsv41-executor.cpp:415`. Unset read: NULL from getenv; the literal consumer below supplies any fallback.
 
 ```text
         ok(cudaStreamSynchronize(compute()),"GPU carry validation did not complete");
@@ -2049,11 +2049,11 @@ Source: `engines/streaming-llama/prefill_llama.cpp/src/llama-dsv41-executor.cpp:
         if(std::getenv("DS4PERF_RING_TRACE")&&elapsed(before)>1)llama_dsv41_layer_log("DS4PERF_VALIDATION_API host_ms=%.6f\n",elapsed(before));
     }
     void bind_lease(const llama_dsv41_carry_store::ram_lease &lease,const llama_dsv41_carry_store::ram_lookahead *lookahead=nullptr){
-        if(!tile_registration)return;
+        if(!tile_registration||host_copy_staging)return;
         require(!registered&&lease.base==base&&lease.bytes==bytes&&lease.count(),"Tile pin requires its exact existing RAM lease");
 ```
 
-Source: `engines/streaming-llama/prefill_llama.cpp/src/llama-dsv41-executor.cpp:480`. Unset read: NULL from getenv; the literal consumer below supplies any fallback.
+Source: `engines/streaming-llama/prefill_llama.cpp/src/llama-dsv41-executor.cpp:515`. Unset read: NULL from getenv; the literal consumer below supplies any fallback.
 
 ```text
                 static_cast<char*>(tensor->data)+uint64_t(first)*width,copies)),"Direct pinned 2D carry copy failed");
@@ -3789,7 +3789,7 @@ Source: `engines/ds4-win/ds4.c:25712`. Unset read: NULL from getenv; the literal
 
 DS4_CUDA_DECODE_GRAPHS: advanced engine setting; built-in default retained
 
-Scope: ds4-win, mac-ds4. Class: advanced.
+Scope: ds4-win, mac-ds4, rtx-llama. Class: advanced.
 
 Source: `engines/ds4-mac/ds4_cuda.cu:910`. Unset read: NULL from getenv; the literal consumer below supplies any fallback.
 
@@ -56369,7 +56369,7 @@ capture::capture(uint32_t layer,uint32_t start,uint32_t count,const std::vector<
     p=std::make_unique<implementation>();
 ```
 
-Source: `engines/streaming-llama/prefill_llama.cpp/src/llama-dsv41-executor.cpp:879`. Unset read: NULL from getenv; the literal consumer below supplies any fallback.
+Source: `engines/streaming-llama/prefill_llama.cpp/src/llama-dsv41-executor.cpp:935`. Unset read: NULL from getenv; the literal consumer below supplies any fallback.
 
 ```text
         unsigned mul_f16_fused=0;
@@ -57407,7 +57407,7 @@ Source: `engines/streaming-llama/prefill_llama.cpp/src/llama-context.cpp:25212`.
                         "off. Otherwise cudaStreamBeginCapture collides.\n",
 ```
 
-Source: `engines/streaming-llama/prefill_llama.cpp/src/llama-dsv41-executor.cpp:608`. Unset read: NULL from getenv; the literal consumer below supplies any fallback.
+Source: `engines/streaming-llama/prefill_llama.cpp/src/llama-dsv41-executor.cpp:643`. Unset read: NULL from getenv; the literal consumer below supplies any fallback.
 
 ```text
     swiglu_limit(swiglu_limit),expert_scale(expert_scale),sinkhorn_iters(sinkhorn_iters),admitted_tile_tokens(admitted_tile_tokens),resident_bf16(resident_bf16),export_hidden_after_head(export_hidden_after_head),async_inputs(async_inputs),resident_ids(resident_ids),resident_metadata(resident_metadata),defer_hidden_readback(defer_hidden_readback),merge_attention_selected_rows(merge_attention_selected_rows),hc_projection_f16_gemm(hc_projection_f16_gemm),dense_mxfp4(dense_mxfp4),pair_ffn(pair_ffn),fixed(fixed){
@@ -57419,7 +57419,7 @@ Source: `engines/streaming-llama/prefill_llama.cpp/src/llama-dsv41-executor.cpp:
     require(!export_hidden_after_head||defer_hidden_readback,"Post-head export requires full-device hidden retention");
 ```
 
-Source: `engines/streaming-llama/prefill_llama.cpp/src/llama-dsv41-executor.cpp:1219`. Unset read: NULL from getenv; the literal consumer below supplies any fallback.
+Source: `engines/streaming-llama/prefill_llama.cpp/src/llama-dsv41-executor.cpp:1275`. Unset read: NULL from getenv; the literal consumer below supplies any fallback.
 
 ```text
         if(workspace&&workspace->casts)graph=workspace->casts->prepare(ctx.get(),graph,in.layer,&backend_temporary);
@@ -57431,7 +57431,7 @@ Source: `engines/streaming-llama/prefill_llama.cpp/src/llama-dsv41-executor.cpp:
         }
 ```
 
-Source: `engines/streaming-llama/prefill_llama.cpp/src/llama-dsv41-executor.cpp:1224`. Unset read: NULL from getenv; the literal consumer below supplies any fallback.
+Source: `engines/streaming-llama/prefill_llama.cpp/src/llama-dsv41-executor.cpp:1280`. Unset read: NULL from getenv; the literal consumer below supplies any fallback.
 
 ```text
             else llama_dsv41_layer_log("DS4PERF_EXPERT_MXFP4_SMALL_BATCH layer=%u count=%u unchanged_original_weights=1 native_MMA_minimum_rows=5\n",in.layer,in.count);
@@ -62762,6 +62762,42 @@ void grow_decode_l2(llama_dsv41_sweep&sweep,const llama_dsv41_fixed_storage*fixe
     // Owner rule: keep a 2 GiB physical reserve (NVML free already excludes
 ```
 
+### LLAMADECODE_RECENCY_LFU
+
+E8 experiment: recency-weighted LFU admission for the L2 expert victim cache; 0 (default) preserves LRU, 1 decays scores per token and requires a 25% admission margin.
+
+Scope: rtx-llama. Class: advanced.
+
+Source: `engines/streaming-llama/prefill_llama.cpp/src/llama-dsv41-weights.cpp:94`. Unset read: NULL from getenv; the literal consumer below supplies any fallback.
+
+```text
+    llama_dsv41_recency_lfu::scores lfu_scores;
+    static bool recency_lfu_enabled(){static const bool enabled=[]{
+        const char*value=std::getenv("LLAMADECODE_RECENCY_LFU");
+        if(value&&*value&&std::strcmp(value,"0")&&std::strcmp(value,"1"))
+            throw std::invalid_argument("LLAMADECODE_RECENCY_LFU must be 0 or 1");
+        const bool on=value&&!std::strcmp(value,"1");
+        std::fprintf(stderr,"PERFEXP_E8 recency_lfu=%d admission_margin_percent=25 tier=l2\n",int(on));
+```
+
+### LLAMADECODE_LFU_HALF_LIFE
+
+E8 experiment: LFU score half life in tokens, 1 (default) or 16. Only used when the opt-in recency-LFU policy is enabled; expert routes and arithmetic are unchanged.
+
+Scope: rtx-llama. Class: advanced.
+
+Source: `engines/streaming-llama/prefill_llama.cpp/src/llama-dsv41-weights.cpp:102`. Unset read: NULL from getenv; the literal consumer below supplies any fallback.
+
+```text
+    }();return enabled;}
+    static uint32_t recency_lfu_half_life(){static const uint32_t period=[]{
+        const char*value=std::getenv("LLAMADECODE_LFU_HALF_LIFE");
+        const uint32_t n=!value||!std::strcmp(value,"1")?1u:!std::strcmp(value,"16")?16u:0u;
+        if(!n)throw std::invalid_argument("LLAMADECODE_LFU_HALF_LIFE must be 1 or 16");
+        std::fprintf(stderr,"PERFEXP_E8 lfu_half_life_tokens=%u\n",n);return n;
+    }();return period;}
+```
+
 ### LLAMADECODE_LAYER_LOG
 
 Diagnostic only: 1 prints per-layer timing lines.
@@ -67016,7 +67052,7 @@ Source: `engines/streaming-llama/prefill_llama.cpp/ggml/src/ggml-cuda/dsv41-ds4-
     attention_tokentile_hmma_kernel<16u><<<dim3(tiles,4),512,tt_TokentileSmemBudget<kTTStageRows,16u>::total,stream>>>(
 ```
 
-Source: `engines/streaming-llama/prefill_llama.cpp/src/llama-dsv41-executor.cpp:1482`. Unset read: NULL from getenv; the literal consumer below supplies any fallback.
+Source: `engines/streaming-llama/prefill_llama.cpp/src/llama-dsv41-executor.cpp:1538`. Unset read: NULL from getenv; the literal consumer below supplies any fallback.
 
 ```text
         const auto stream_topk_before=expert.index_key_windows?ggml_backend_cuda_dsv41_stream_topk_queued():0;
@@ -67046,7 +67082,7 @@ Source: `engines/streaming-llama/prefill_llama.cpp/ggml/src/ggml-cuda/dsv4-act-q
                     (const float4*)src_d,(float4*)dst_d,vectors);
 ```
 
-Source: `engines/streaming-llama/prefill_llama.cpp/src/llama-dsv41-executor.cpp:1477`. Unset read: NULL from getenv; the literal consumer below supplies any fallback.
+Source: `engines/streaming-llama/prefill_llama.cpp/src/llama-dsv41-executor.cpp:1533`. Unset read: NULL from getenv; the literal consumer below supplies any fallback.
 
 ```text
         const auto cast_elements_before=cast_vector?ggml_backend_cuda_dsv41_cast_vector_elements():0;
@@ -67076,7 +67112,7 @@ Source: `engines/streaming-llama/prefill_llama.cpp/ggml/src/ggml-cuda/dsv41-cast
         const int64_t total=n0*n1*n2*n3;
 ```
 
-Source: `engines/streaming-llama/prefill_llama.cpp/src/llama-dsv41-executor.cpp:1473`. Unset read: NULL from getenv; the literal consumer below supplies any fallback.
+Source: `engines/streaming-llama/prefill_llama.cpp/src/llama-dsv41-executor.cpp:1529`. Unset read: NULL from getenv; the literal consumer below supplies any fallback.
 
 ```text
         const auto dense_bf16_store_before=dense_bf16_store?ggml_backend_cuda_dsv41_dense_bf16_store_queued():0;
@@ -67094,7 +67130,7 @@ LLAMA_DSV41_DENSE_BF16_STORE: advanced engine setting; built-in default retained
 
 Scope: rtx-llama. Class: advanced.
 
-Source: `engines/streaming-llama/prefill_llama.cpp/src/llama-dsv41-executor.cpp:875`. Unset read: NULL from getenv; the literal consumer below supplies any fallback.
+Source: `engines/streaming-llama/prefill_llama.cpp/src/llama-dsv41-executor.cpp:931`. Unset read: NULL from getenv; the literal consumer below supplies any fallback.
 
 ```text
         probe.enabled=std::getenv("DS4PERF_EXECUTOR_WALL_PROBE")&&std::string(std::getenv("DS4PERF_EXECUTOR_WALL_PROBE"))=="1";
@@ -67292,7 +67328,7 @@ LLAMA_DSV41_MUL_F16_STORE: qualified preset/runtime setting; override for a diff
 
 Scope: rtx-llama. Class: preset.
 
-Source: `engines/streaming-llama/prefill_llama.cpp/src/llama-dsv41-executor.cpp:876`. Unset read: NULL from getenv; the literal consumer below supplies any fallback.
+Source: `engines/streaming-llama/prefill_llama.cpp/src/llama-dsv41-executor.cpp:932`. Unset read: NULL from getenv; the literal consumer below supplies any fallback.
 
 ```text
         const bool rope_inplace=std::getenv("LLAMA_DSV41_ROPE_INPLACE")&&std::string(std::getenv("LLAMA_DSV41_ROPE_INPLACE"))=="1";
@@ -67364,7 +67400,7 @@ LLAMA_DSV41_ROPE_INPLACE: qualified preset/runtime setting; override for a diffe
 
 Scope: rtx-llama. Class: preset.
 
-Source: `engines/streaming-llama/prefill_llama.cpp/src/llama-dsv41-executor.cpp:874`. Unset read: NULL from getenv; the literal consumer below supplies any fallback.
+Source: `engines/streaming-llama/prefill_llama.cpp/src/llama-dsv41-executor.cpp:930`. Unset read: NULL from getenv; the literal consumer below supplies any fallback.
 
 ```text
         } probe{in,out,prepare_started};
@@ -67382,7 +67418,7 @@ LLAMA_DSV41_SKIP_UNUSED_TILE_PIN: qualified preset/runtime setting; override for
 
 Scope: rtx-llama. Class: preset.
 
-Source: `engines/streaming-llama/prefill_llama.cpp/src/llama-dsv41-executor.cpp:907`. Unset read: NULL from getenv; the literal consumer below supplies any fallback.
+Source: `engines/streaming-llama/prefill_llama.cpp/src/llama-dsv41-executor.cpp:963`. Unset read: NULL from getenv; the literal consumer below supplies any fallback.
 
 ```text
             (void)d.row(0);(void)d.row(in.count-1);
@@ -67412,7 +67448,7 @@ static bool dsv41_topk_radix_enabled(const int tile_size, const int k) {
 #endif
 ```
 
-Source: `engines/streaming-llama/prefill_llama.cpp/src/llama-dsv41-executor.cpp:1468`. Unset read: NULL from getenv; the literal consumer below supplies any fallback.
+Source: `engines/streaming-llama/prefill_llama.cpp/src/llama-dsv41-executor.cpp:1524`. Unset read: NULL from getenv; the literal consumer below supplies any fallback.
 
 ```text
         const auto dense_before=expert.dense_inputs_f16?ggml_backend_cuda_dsv41_dense_half_queued():0;
@@ -100523,40 +100559,22 @@ Source: `engines/ds4-mac/ds4_native_session_setup.inc:28`. Unset read: Wrapper/c
        !ds4_nf_env_uint("DS4_NATIVE_SESSION_LOCAL_PREFILL_MAX_TOKENS",&c->local_prefill_max,0,49152))goto bad;
 ```
 
-### LLAMADECODE_RECENCY_LFU
+### LLAMADECODE_PERFEXP_KV_SAMPLES
 
-E8 opt-in L2 expert-cache placement: 0 (default) retains LRU; 1 uses recency-weighted LFU with a 25% admission margin. Configure the score half life separately; routes and arithmetic are unchanged.
-
-Scope: rtx-llama. Class: advanced.
-
-Source: `engines/streaming-llama/prefill_llama.cpp/src/llama-dsv41-weights.cpp:94`. Unset read: NULL from getenv; the literal consumer below supplies any fallback.
-
-```text
-    llama_dsv41_recency_lfu::scores lfu_scores;
-    static bool recency_lfu_enabled(){static const bool enabled=[]{
-        const char*value=std::getenv("LLAMADECODE_RECENCY_LFU");
-        if(value&&*value&&std::strcmp(value,"0")&&std::strcmp(value,"1"))
-            throw std::invalid_argument("LLAMADECODE_RECENCY_LFU must be 0 or 1");
-        const bool on=value&&!std::strcmp(value,"1");
-        std::fprintf(stderr,"PERFEXP_E8 recency_lfu=%d admission_margin_percent=25 tier=l2\n",int(on));
-```
-
-### LLAMADECODE_LFU_HALF_LIFE
-
-E8 experiment: LFU score half life in tokens, 1 (default) or 16. Only used when the opt-in recency-LFU policy is enabled; expert routes and arithmetic are unchanged.
+E17 experiment diagnostic only: 1 allows bounded KV sampling over the private producer pipe; default off. It does not change cache storage or any preset.
 
 Scope: rtx-llama. Class: advanced.
 
-Source: `engines/streaming-llama/prefill_llama.cpp/src/llama-dsv41-weights.cpp:102`. Unset read: NULL from getenv; the literal consumer below supplies any fallback.
+Source: `engines/streaming-llama/prefill_llama.cpp/tools/dsv41-prefill/live-session.inc:615`. Unset read: NULL from getenv; the literal consumer below supplies any fallback.
 
 ```text
-    }();return enabled;}
-    static uint32_t recency_lfu_half_life(){static const uint32_t period=[]{
-        const char*value=std::getenv("LLAMADECODE_LFU_HALF_LIFE");
-        const uint32_t n=!value||!std::strcmp(value,"1")?1u:!std::strcmp(value,"16")?16u:0u;
-        if(!n)throw std::invalid_argument("LLAMADECODE_LFU_HALF_LIFE must be 1 or 16");
-        std::fprintf(stderr,"PERFEXP_E8 lfu_half_life_tokens=%u\n",n);return n;
-    }();return period;}
+        }else if(operation=="perfexp_kv_samples"){
+            dsv41_live::keys(command,{"session","model_sha256","sequence","operation","base","path"});same_base();
+            const char*gate=std::getenv("LLAMADECODE_PERFEXP_KV_SAMPLES");
+            require(gate&&!std::strcmp(gate,"1"),"Experimental KV sampling is disabled");
+            const auto path=std::filesystem::u8path(command.at("path").get<std::string>());
+            require(path.is_absolute()&&!std::filesystem::exists(path),"KV sample path must be absolute and new");
+            HANDLE file=CreateFileW(path.c_str(),GENERIC_WRITE,0,nullptr,CREATE_NEW,FILE_ATTRIBUTE_NORMAL,nullptr);
 ```
 
 ### LLAMADECODE_APPEND_RESIDENT_SWEEP
@@ -100574,6 +100592,42 @@ inline bool llama_dsv41_resident_append_enabled(){
     return !value||!*value||!std::strcmp(value,"1");
 }
 constexpr unsigned llama_dsv41_resident_append_limit=32;
+```
+
+### DS4_CUDA_SINGLE_GPU_HC_GRAPHS
+
+E10 default CUDA single-GPU V4.1 HC input graphs. Explicit0 keeps eager execution;1 captures position-independent HC mixes/norm before attention. Two exact matched pairs gain1.75-2.01% decode throughput. Engram layers, positions, cache writes and expert callbacks remain eager; dense-weight rebinding invalidates captures. Unsupported/Metal/ROCm paths remain unchanged.
+
+Scope: ds4-win, mac-ds4, rtx-llama. Class: advanced.
+
+Source: `engines/ds4-win/ds4.c:44916`. Unset read: NULL from getenv; the literal consumer below supplies any fallback.
+
+```text
+#else
+    static int cached = -1;
+    if (cached < 0) { const char *value = getenv("DS4_CUDA_SINGLE_GPU_HC_GRAPHS"); cached = !value || value[0] == '1'; }
+    return cached != 0;
+#endif
+}
+static bool ds41_hc_graph_profile_on(void) {
+```
+
+### DS4_CUDA_HC_GRAPH_PROFILE
+
+E10 synchronizing-independent host encoding timer: 1 logs per-token HC call/replay counts and CPU encoding wall; default0. It is not GPU kernel duration or a full launch-overhead measurement.
+
+Scope: ds4-win, mac-ds4, rtx-llama. Class: advanced.
+
+Source: `engines/ds4-win/ds4.c:44922`. Unset read: NULL from getenv; the literal consumer below supplies any fallback.
+
+```text
+static bool ds41_hc_graph_profile_on(void) {
+    static int cached = -1;
+    if (cached < 0) { const char *value = getenv("DS4_CUDA_HC_GRAPH_PROFILE"); cached = value && value[0] == '1'; }
+    return cached != 0;
+}
+static double g_ds41_hc_encode_s;
+static uint32_t g_ds41_hc_calls, g_ds41_hc_replays;
 ```
 
 ### LLAMA_DSV41_TILELANG_ATTENTION
@@ -100648,56 +100702,20 @@ public:
     llama_dsv41_profile_stage(ggml_context*c,const char*s):llama_dsv41_profile_stage(c,s,enabled()){}
 ```
 
-### DS4_CUDA_SINGLE_GPU_HC_GRAPHS
+### LLAMADECODE_HOST_COPY_STAGING
 
-E10 default CUDA single-GPU V4.1 HC input graphs. Explicit0 keeps eager execution;1 captures position-independent HC mixes/norm before attention. Two exact matched pairs gain1.75-2.01% decode throughput. Engram layers, positions, cache writes and expert callbacks remain eager; dense-weight rebinding invalidates captures. Unsupported/Metal/ROCm paths remain unchanged.
-
-Scope: ds4-win, mac-ds4, rtx-llama. Class: advanced.
-
-Source: `engines/ds4-win/ds4.c:44916`. Unset read: NULL from getenv; the literal consumer below supplies any fallback.
-
-```text
-#else
-    static int cached = -1;
-    if (cached < 0) { const char *value = getenv("DS4_CUDA_SINGLE_GPU_HC_GRAPHS"); cached = !value || value[0] == '1'; }
-    return cached != 0;
-#endif
-}
-static bool ds41_hc_graph_profile_on(void) {
-```
-
-### DS4_CUDA_HC_GRAPH_PROFILE
-
-E10 synchronizing-independent host encoding timer: 1 logs per-token HC call/replay counts and CPU encoding wall; default0. It is not GPU kernel duration or a full launch-overhead measurement.
-
-Scope: ds4-win, mac-ds4, rtx-llama. Class: advanced.
-
-Source: `engines/ds4-win/ds4.c:44922`. Unset read: NULL from getenv; the literal consumer below supplies any fallback.
-
-```text
-static bool ds41_hc_graph_profile_on(void) {
-    static int cached = -1;
-    if (cached < 0) { const char *value = getenv("DS4_CUDA_HC_GRAPH_PROFILE"); cached = value && value[0] == '1'; }
-    return cached != 0;
-}
-static double g_ds41_hc_encode_s;
-static uint32_t g_ds41_hc_calls, g_ds41_hc_replays;
-```
-
-### LLAMADECODE_PERFEXP_KV_SAMPLES
-
-E17 experiment diagnostic only: 1 allows bounded KV sampling over the private producer pipe; default off. It does not change cache storage or any preset.
+E18 bounded64MiB pinned host transfer slot, allocated once per fixed run and reused by sweep executors. Auto selects it only when the logical tile plan spills beyond the resident hidden bank; short/full-resident plans keep direct copies.0 forces original tile registration;1 forces staging on supported fixed non-lookahead plans. Exact gather/scatter and completion checks remain; extra64MiB stays inside enforced host/device budgets.
 
 Scope: rtx-llama. Class: advanced.
 
-Source: `engines/streaming-llama/prefill_llama.cpp/tools/dsv41-prefill/live-session.inc:615`. Unset read: NULL from getenv; the literal consumer below supplies any fallback.
+Source: `engines/streaming-llama/prefill_llama.cpp/src/llama-dsv41-executor.cpp:686`. Unset read: NULL from getenv; the literal consumer below supplies any fallback.
 
 ```text
-        }else if(operation=="perfexp_kv_samples"){
-            dsv41_live::keys(command,{"session","model_sha256","sequence","operation","base","path"});same_base();
-            const char*gate=std::getenv("LLAMADECODE_PERFEXP_KV_SAMPLES");
-            require(gate&&!std::strcmp(gate,"1"),"Experimental KV sampling is disabled");
-            const auto path=std::filesystem::u8path(command.at("path").get<std::string>());
-            require(path.is_absolute()&&!std::filesystem::exists(path),"KV sample path must be absolute and new");
-            HANDLE file=CreateFileW(path.c_str(),GENERIC_WRITE,0,nullptr,CREATE_NEW,FILE_ATTRIBUTE_NORMAL,nullptr);
+                require(!fixed->ram_registration&&(full_resident||(fixed->tile_registration&&!fixed->pageable_copies&&ram_lookahead)),"Tile registration requires its explicit resident or RAM-lookahead plan");
+                pinned->tile_registration=fixed->tile_registration;pinned->pageable_copies=fixed->pageable_copies;
+                const char*staging=std::getenv("LLAMADECODE_HOST_COPY_STAGING");
+                require(!staging||!std::strcmp(staging,"0")||!std::strcmp(staging,"1")||!std::strcmp(staging,"auto"),"Host copy staging requires0/1/auto");
+                const bool stage_auto=!staging||!std::strcmp(staging,"auto");
+                const bool stage_supported=fixed->tile_registration&&!fixed->pageable_copies&&!admitted_prefetch_bytes;
+                const bool stage_spill=resident_hidden_tokens>fixed->bank_rows();
 ```

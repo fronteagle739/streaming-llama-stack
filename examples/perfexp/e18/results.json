@@ -1,0 +1,714 @@
+{
+  "verdict": "adopt auto for supported fixed plans that spill their resident hidden bank; explicit0 original,1 force staging",
+  "pairs": [
+    {
+      "experiment": "E18-stage2049",
+      "count": 2049,
+      "arms": [
+        {
+          "arm": "control",
+          "prompt_seconds": 16.4155263,
+          "prompt_tok_s": 124.82085329180094,
+          "ttft_seconds": 21.89100000000326,
+          "tile_count": 40,
+          "tile_phase_ms": {
+            "host_prepare_ms": 210.932,
+            "host_bind_ms": 0.008,
+            "host_register_ms": 0.0,
+            "host_graph_ms": 19.599,
+            "host_reserve_ms": 156.859,
+            "host_upload_ms": 45.291000000000004,
+            "host_readback_ms": 16.27,
+            "host_cleanup_ms": 0.044,
+            "compute_ms": 1361.286,
+            "gpu_ms": 1355.958
+          },
+          "native_phases_ms": {
+            "append_owner_admission": 0.0,
+            "chunk_token_preparation": 0.0014,
+            "embedding_40_layers_head": 16415.5263,
+            "final_hidden_export_preparation": 8.0976,
+            "input_identity_hash_budget_preflight": 248.3189,
+            "inspect_admit_allocate": 4123.0212,
+            "native_payload_export_flush": 14.8434,
+            "payload_close_readonly_rehash": 0.0002,
+            "run_dispatch_bookkeeping": 0.048700000000337695
+          },
+          "register_count": 1,
+          "staging_alloc_count": 0,
+          "staging_bind_count": 0,
+          "guard": {
+            "exit_code": 0,
+            "reason": null,
+            "peak_tree_rss": 5896577024,
+            "min_available": 8808984576,
+            "elapsed_s": 37.01500000001397,
+            "host_budget_gib": 7.5,
+            "floor_gib": 0.5,
+            "runtime_min_free_gib": 0.5,
+            "no_progress_window_s": 600,
+            "job_commit_gib": 32.0,
+            "child_pid": 980,
+            "shared_guard_commit": "2774636281ab32bf871497f0a8caae23c6b6cdc7",
+            "stack_retirement_policy": "cooperative request, progress-aware grace, logged force fallback",
+            "shared_guard_certificate": "L:\\scratch\\perfexp\\runtime\\jobs\\E18-stage2049-control-e6f1f132fe604770bacf8e6a01abc5fe.receipt.shared.json",
+            "cleanup_confirmed": true,
+            "paging_policy": {
+              "owned_paging_limit_bytes": 67108864,
+              "owned_paging_baseline": "zero at gated job launch",
+              "peak_owned_paged_bytes": 0,
+              "pagefile_hard_fault_rate": null,
+              "pagefile_hard_fault_attribution": "UNAVAILABLE: Windows kernel ETW access refused: [Errno 5] kernel pagefile ETW unavailable",
+              "pagefile_hard_fault_limit_per_second": 100,
+              "pagefile_hard_fault_duration_seconds": 5,
+              "scan_pages": 1402055,
+              "last_paged_processes": []
+            },
+            "owned_paging": {
+              "attribution": "bounded process pagefile observation",
+              "observed_paged_bytes": 0,
+              "observed_processes": [],
+              "scanned_pages": 1402055,
+              "completed_scans": 70
+            },
+            "system_pagefile_pressure": {
+              "maximum_growth_bytes": 0,
+              "kill_above_bytes": 256000000,
+              "scope": "global; not process attribution"
+            },
+            "paging_interpretation": "Owned observation is bounded and incremental. Zero observed pages is not an exhaustive zero-I/O proof. Darwin disk-only process attribution is unavailable."
+          },
+          "producer_sha256": "6ba6dbf299a9c9b2079e4108351e4131eb258d8d352bcb97564a161a46d37ba9"
+        },
+        {
+          "arm": "candidate",
+          "prompt_seconds": 16.9863538,
+          "prompt_tok_s": 120.62624057671518,
+          "ttft_seconds": 19.71899999998277,
+          "tile_count": 40,
+          "tile_phase_ms": {
+            "host_prepare_ms": 207.25300000000001,
+            "host_bind_ms": 0.006,
+            "host_register_ms": 0.0,
+            "host_graph_ms": 18.95,
+            "host_reserve_ms": 154.651,
+            "host_upload_ms": 59.114000000000004,
+            "host_readback_ms": 17.107,
+            "host_cleanup_ms": 0.04,
+            "compute_ms": 1368.371,
+            "gpu_ms": 1362.578
+          },
+          "native_phases_ms": {
+            "append_owner_admission": 0.0,
+            "chunk_token_preparation": 0.002,
+            "embedding_40_layers_head": 16986.3538,
+            "final_hidden_export_preparation": 16.9854,
+            "input_identity_hash_budget_preflight": 250.2332,
+            "inspect_admit_allocate": 1553.6507,
+            "native_payload_export_flush": 14.8584,
+            "payload_close_readonly_rehash": 0.0001,
+            "run_dispatch_bookkeeping": 0.03360000000023433
+          },
+          "register_count": 0,
+          "staging_alloc_count": 1,
+          "staging_bind_count": 1,
+          "guard": {
+            "exit_code": 0,
+            "reason": null,
+            "peak_tree_rss": 5966766080,
+            "min_available": 8707637248,
+            "elapsed_s": 34.40600000001723,
+            "host_budget_gib": 7.5,
+            "floor_gib": 0.5,
+            "runtime_min_free_gib": 0.5,
+            "no_progress_window_s": 600,
+            "job_commit_gib": 32.0,
+            "child_pid": 32232,
+            "shared_guard_commit": "2774636281ab32bf871497f0a8caae23c6b6cdc7",
+            "stack_retirement_policy": "cooperative request, progress-aware grace, logged force fallback",
+            "shared_guard_certificate": "L:\\scratch\\perfexp\\runtime\\jobs\\E18-stage2049-candidate-3afa41fdbee049f7a49a03ad61ecf56f.receipt.shared.json",
+            "cleanup_confirmed": true,
+            "paging_policy": {
+              "owned_paging_limit_bytes": 67108864,
+              "owned_paging_baseline": "zero at gated job launch",
+              "peak_owned_paged_bytes": 0,
+              "pagefile_hard_fault_rate": null,
+              "pagefile_hard_fault_attribution": "UNAVAILABLE: Windows kernel ETW access refused: [Errno 5] kernel pagefile ETW unavailable",
+              "pagefile_hard_fault_limit_per_second": 100,
+              "pagefile_hard_fault_duration_seconds": 5,
+              "scan_pages": 1216646,
+              "last_paged_processes": []
+            },
+            "owned_paging": {
+              "attribution": "bounded process pagefile observation",
+              "observed_paged_bytes": 0,
+              "observed_processes": [],
+              "scanned_pages": 1216646,
+              "completed_scans": 62
+            },
+            "system_pagefile_pressure": {
+              "maximum_growth_bytes": 0,
+              "kill_above_bytes": 256000000,
+              "scope": "global; not process attribution"
+            },
+            "paging_interpretation": "Owned observation is bounded and incremental. Zero observed pages is not an exhaustive zero-I/O proof. Darwin disk-only process attribution is unavailable."
+          },
+          "producer_sha256": "6ba6dbf299a9c9b2079e4108351e4131eb258d8d352bcb97564a161a46d37ba9"
+        }
+      ],
+      "gates": {
+        "frontier": {
+          "rows": 1,
+          "bit_exact": true,
+          "mean_kl": 0.0,
+          "max_kl": 0,
+          "top1": 1.0
+        },
+        "forced": {
+          "rows": 16,
+          "bit_exact": true,
+          "mean_kl": 0.0,
+          "max_kl": 0,
+          "top1": 1.0
+        }
+      },
+      "prompt_throughput_ratio": 0.9663949363871133
+    },
+    {
+      "experiment": "E18-stage100k",
+      "count": 100000,
+      "arms": [
+        {
+          "arm": "control",
+          "prompt_seconds": 65.5618569,
+          "prompt_tok_s": 1525.277115816407,
+          "ttft_seconds": 69.70400000002701,
+          "tile_count": 1000,
+          "tile_phase_ms": {
+            "host_prepare_ms": 7922.772,
+            "host_bind_ms": 2956.314,
+            "host_register_ms": 2949.839,
+            "host_graph_ms": 483.726,
+            "host_reserve_ms": 3774.28,
+            "host_upload_ms": 4415.126,
+            "host_readback_ms": 785.048,
+            "host_cleanup_ms": 1.047,
+            "compute_ms": 50496.451,
+            "gpu_ms": 50392.558
+          },
+          "native_phases_ms": {
+            "append_owner_admission": 106.4331,
+            "chunk_token_preparation": 0.0393,
+            "embedding_40_layers_head": 65561.8569,
+            "final_hidden_export_preparation": 802.5108,
+            "input_identity_hash_budget_preflight": 255.1883,
+            "inspect_admit_allocate": 1743.9455,
+            "native_payload_export_flush": 348.4214,
+            "payload_close_readonly_rehash": 0.0002,
+            "run_dispatch_bookkeeping": 0.11349999999583815
+          },
+          "register_count": 337,
+          "staging_alloc_count": 0,
+          "staging_bind_count": 0,
+          "guard": {
+            "exit_code": 0,
+            "reason": null,
+            "peak_tree_rss": 6255042560,
+            "min_available": 8590258176,
+            "elapsed_s": 85.40600000001723,
+            "host_budget_gib": 7.5,
+            "floor_gib": 0.5,
+            "runtime_min_free_gib": 0.5,
+            "no_progress_window_s": 600,
+            "job_commit_gib": 32.0,
+            "child_pid": 14108,
+            "shared_guard_commit": "2774636281ab32bf871497f0a8caae23c6b6cdc7",
+            "stack_retirement_policy": "cooperative request, progress-aware grace, logged force fallback",
+            "shared_guard_certificate": "L:\\scratch\\perfexp\\runtime\\jobs\\E18-stage100k-control-bffa1b337a5743b9a169b54759a271cc.receipt.shared.json",
+            "cleanup_confirmed": true,
+            "paging_policy": {
+              "owned_paging_limit_bytes": 67108864,
+              "owned_paging_baseline": "zero at gated job launch",
+              "peak_owned_paged_bytes": 0,
+              "pagefile_hard_fault_rate": null,
+              "pagefile_hard_fault_attribution": "UNAVAILABLE: Windows kernel ETW access refused: [Errno 5] kernel pagefile ETW unavailable",
+              "pagefile_hard_fault_limit_per_second": 100,
+              "pagefile_hard_fault_duration_seconds": 5,
+              "scan_pages": 3416411,
+              "last_paged_processes": []
+            },
+            "owned_paging": {
+              "attribution": "bounded process pagefile observation",
+              "observed_paged_bytes": 0,
+              "observed_processes": [],
+              "scanned_pages": 3416411,
+              "completed_scans": 172
+            },
+            "system_pagefile_pressure": {
+              "maximum_growth_bytes": 0,
+              "kill_above_bytes": 256000000,
+              "scope": "global; not process attribution"
+            },
+            "paging_interpretation": "Owned observation is bounded and incremental. Zero observed pages is not an exhaustive zero-I/O proof. Darwin disk-only process attribution is unavailable."
+          },
+          "producer_sha256": "6ba6dbf299a9c9b2079e4108351e4131eb258d8d352bcb97564a161a46d37ba9"
+        },
+        {
+          "arm": "candidate",
+          "prompt_seconds": 63.306814499999994,
+          "prompt_tok_s": 1579.608779715176,
+          "ttft_seconds": 67.56300000002375,
+          "tile_count": 1000,
+          "tile_phase_ms": {
+            "host_prepare_ms": 5147.29,
+            "host_bind_ms": 0.081,
+            "host_register_ms": 0.0,
+            "host_graph_ms": 532.617,
+            "host_reserve_ms": 3835.684,
+            "host_upload_ms": 3021.206,
+            "host_readback_ms": 1473.242,
+            "host_cleanup_ms": 1.274,
+            "compute_ms": 50701.642,
+            "gpu_ms": 50589.572
+          },
+          "native_phases_ms": {
+            "append_owner_admission": 86.562,
+            "chunk_token_preparation": 0.0418,
+            "embedding_40_layers_head": 63306.81449999999,
+            "final_hidden_export_preparation": 703.1345,
+            "input_identity_hash_budget_preflight": 272.7487,
+            "inspect_admit_allocate": 1851.3425,
+            "native_payload_export_flush": 348.8281,
+            "payload_close_readonly_rehash": 0.0,
+            "run_dispatch_bookkeeping": 0.11390000000403688
+          },
+          "register_count": 0,
+          "staging_alloc_count": 1,
+          "staging_bind_count": 2,
+          "guard": {
+            "exit_code": 0,
+            "reason": null,
+            "peak_tree_rss": 6324944896,
+            "min_available": 3813744640,
+            "elapsed_s": 84.51600000000326,
+            "host_budget_gib": 7.5,
+            "floor_gib": 0.5,
+            "runtime_min_free_gib": 0.5,
+            "no_progress_window_s": 600,
+            "job_commit_gib": 32.0,
+            "child_pid": 32892,
+            "shared_guard_commit": "2774636281ab32bf871497f0a8caae23c6b6cdc7",
+            "stack_retirement_policy": "cooperative request, progress-aware grace, logged force fallback",
+            "shared_guard_certificate": "L:\\scratch\\perfexp\\runtime\\jobs\\E18-stage100k-candidate-677da8bfe739484d8c07d897a9c01d87.receipt.shared.json",
+            "cleanup_confirmed": true,
+            "paging_policy": {
+              "owned_paging_limit_bytes": 67108864,
+              "owned_paging_baseline": "zero at gated job launch",
+              "peak_owned_paged_bytes": 0,
+              "pagefile_hard_fault_rate": null,
+              "pagefile_hard_fault_attribution": "UNAVAILABLE: Windows kernel ETW access refused: [Errno 5] kernel pagefile ETW unavailable",
+              "pagefile_hard_fault_limit_per_second": 100,
+              "pagefile_hard_fault_duration_seconds": 5,
+              "scan_pages": 2834761,
+              "last_paged_processes": []
+            },
+            "owned_paging": {
+              "attribution": "bounded process pagefile observation",
+              "observed_paged_bytes": 0,
+              "observed_processes": [],
+              "scanned_pages": 2834761,
+              "completed_scans": 143
+            },
+            "system_pagefile_pressure": {
+              "maximum_growth_bytes": 182771712,
+              "kill_above_bytes": 256000000,
+              "scope": "global; not process attribution"
+            },
+            "paging_interpretation": "Owned observation is bounded and incremental. Zero observed pages is not an exhaustive zero-I/O proof. Darwin disk-only process attribution is unavailable."
+          },
+          "producer_sha256": "6ba6dbf299a9c9b2079e4108351e4131eb258d8d352bcb97564a161a46d37ba9"
+        }
+      ],
+      "gates": {
+        "frontier": {
+          "rows": 1,
+          "bit_exact": true,
+          "mean_kl": 0.0,
+          "max_kl": 0,
+          "top1": 1.0
+        },
+        "forced": {
+          "rows": 16,
+          "bit_exact": true,
+          "mean_kl": 0.0,
+          "max_kl": 0,
+          "top1": 1.0
+        }
+      },
+      "prompt_throughput_ratio": 1.0356208477367
+    },
+    {
+      "experiment": "E18-auto100k-r2",
+      "count": 100000,
+      "arms": [
+        {
+          "arm": "control",
+          "prompt_seconds": 65.54203079999999,
+          "prompt_tok_s": 1525.738503665651,
+          "ttft_seconds": 69.75,
+          "tile_count": 1000,
+          "tile_phase_ms": {
+            "host_prepare_ms": 7784.783,
+            "host_bind_ms": 2949.941,
+            "host_register_ms": 2943.434,
+            "host_graph_ms": 472.864,
+            "host_reserve_ms": 3812.614,
+            "host_upload_ms": 4602.526,
+            "host_readback_ms": 786.301,
+            "host_cleanup_ms": 1.122,
+            "compute_ms": 50539.305,
+            "gpu_ms": 50439.105
+          },
+          "native_phases_ms": {
+            "append_owner_admission": 93.9954,
+            "chunk_token_preparation": 0.0219,
+            "embedding_40_layers_head": 65542.0308,
+            "final_hidden_export_preparation": 797.6613,
+            "input_identity_hash_budget_preflight": 255.1696,
+            "inspect_admit_allocate": 1801.9231,
+            "native_payload_export_flush": 347.3265,
+            "payload_close_readonly_rehash": 0.0001,
+            "run_dispatch_bookkeeping": 0.11810000001401022
+          },
+          "register_count": 337,
+          "staging_alloc_count": 0,
+          "staging_bind_count": 0,
+          "guard": {
+            "exit_code": 0,
+            "reason": null,
+            "peak_tree_rss": 6197026816,
+            "min_available": 8770187264,
+            "elapsed_s": 85.26499999995576,
+            "host_budget_gib": 7.5,
+            "floor_gib": 0.5,
+            "runtime_min_free_gib": 0.5,
+            "no_progress_window_s": 600,
+            "job_commit_gib": 32.0,
+            "child_pid": 15356,
+            "shared_guard_commit": "2774636281ab32bf871497f0a8caae23c6b6cdc7",
+            "stack_retirement_policy": "cooperative request, progress-aware grace, logged force fallback",
+            "shared_guard_certificate": "L:\\scratch\\perfexp\\runtime\\jobs\\E18-auto100k-r2-control-cde982a6344f481e91aba0231cf5ab5c.receipt.shared.json",
+            "cleanup_confirmed": true,
+            "paging_policy": {
+              "owned_paging_limit_bytes": 67108864,
+              "owned_paging_baseline": "zero at gated job launch",
+              "peak_owned_paged_bytes": 0,
+              "pagefile_hard_fault_rate": null,
+              "pagefile_hard_fault_attribution": "UNAVAILABLE: Windows kernel ETW access refused: [Errno 5] kernel pagefile ETW unavailable",
+              "pagefile_hard_fault_limit_per_second": 100,
+              "pagefile_hard_fault_duration_seconds": 5,
+              "scan_pages": 3494731,
+              "last_paged_processes": []
+            },
+            "owned_paging": {
+              "attribution": "bounded process pagefile observation",
+              "observed_paged_bytes": 0,
+              "observed_processes": [],
+              "scanned_pages": 3494731,
+              "completed_scans": 175
+            },
+            "system_pagefile_pressure": {
+              "maximum_growth_bytes": 0,
+              "kill_above_bytes": 256000000,
+              "scope": "global; not process attribution"
+            },
+            "paging_interpretation": "Owned observation is bounded and incremental. Zero observed pages is not an exhaustive zero-I/O proof. Darwin disk-only process attribution is unavailable."
+          },
+          "producer_sha256": "886e6fe5c432aa204ef5b197e847d435b1e7c04f8fccbe9e914f8cc4a83fa685",
+          "staging_policy_witnesses": [
+            "PERFEXP_HOST_STAGING_POLICY requested=0 enabled=0 logical_rows=49152 bank_rows=49152 spill=0 supported=1",
+            "PERFEXP_HOST_STAGING_POLICY requested=0 enabled=0 logical_rows=50848 bank_rows=49152 spill=1 supported=1"
+          ]
+        },
+        {
+          "arm": "candidate",
+          "prompt_seconds": 63.3798074,
+          "prompt_tok_s": 1577.7895847629225,
+          "ttft_seconds": 67.51499999995576,
+          "tile_count": 1000,
+          "tile_phase_ms": {
+            "host_prepare_ms": 6024.126,
+            "host_bind_ms": 1244.837,
+            "host_register_ms": 1242.096,
+            "host_graph_ms": 472.123,
+            "host_reserve_ms": 3770.246,
+            "host_upload_ms": 3769.388,
+            "host_readback_ms": 1368.913,
+            "host_cleanup_ms": 1.2770000000000001,
+            "compute_ms": 50384.356,
+            "gpu_ms": 50282.194
+          },
+          "native_phases_ms": {
+            "append_owner_admission": 102.1837,
+            "chunk_token_preparation": 0.0376,
+            "embedding_40_layers_head": 63379.8074,
+            "final_hidden_export_preparation": 741.2013999999999,
+            "input_identity_hash_budget_preflight": 287.1889,
+            "inspect_admit_allocate": 1745.3237,
+            "native_payload_export_flush": 346.5709,
+            "payload_close_readonly_rehash": 0.0,
+            "run_dispatch_bookkeeping": 0.10640000000239525
+          },
+          "register_count": 132,
+          "staging_alloc_count": 1,
+          "staging_bind_count": 1,
+          "guard": {
+            "exit_code": 0,
+            "reason": null,
+            "peak_tree_rss": 6241755136,
+            "min_available": 8796463104,
+            "elapsed_s": 83.04700000002049,
+            "host_budget_gib": 7.5,
+            "floor_gib": 0.5,
+            "runtime_min_free_gib": 0.5,
+            "no_progress_window_s": 600,
+            "job_commit_gib": 32.0,
+            "child_pid": 20800,
+            "shared_guard_commit": "2774636281ab32bf871497f0a8caae23c6b6cdc7",
+            "stack_retirement_policy": "cooperative request, progress-aware grace, logged force fallback",
+            "shared_guard_certificate": "L:\\scratch\\perfexp\\runtime\\jobs\\E18-auto100k-r2-candidate-ec63b78ee9f743f1bf4eff1980b86e52.receipt.shared.json",
+            "cleanup_confirmed": true,
+            "paging_policy": {
+              "owned_paging_limit_bytes": 67108864,
+              "owned_paging_baseline": "zero at gated job launch",
+              "peak_owned_paged_bytes": 0,
+              "pagefile_hard_fault_rate": null,
+              "pagefile_hard_fault_attribution": "UNAVAILABLE: Windows kernel ETW access refused: [Errno 5] kernel pagefile ETW unavailable",
+              "pagefile_hard_fault_limit_per_second": 100,
+              "pagefile_hard_fault_duration_seconds": 5,
+              "scan_pages": 3373660,
+              "last_paged_processes": []
+            },
+            "owned_paging": {
+              "attribution": "bounded process pagefile observation",
+              "observed_paged_bytes": 0,
+              "observed_processes": [],
+              "scanned_pages": 3373660,
+              "completed_scans": 171
+            },
+            "system_pagefile_pressure": {
+              "maximum_growth_bytes": 0,
+              "kill_above_bytes": 256000000,
+              "scope": "global; not process attribution"
+            },
+            "paging_interpretation": "Owned observation is bounded and incremental. Zero observed pages is not an exhaustive zero-I/O proof. Darwin disk-only process attribution is unavailable."
+          },
+          "producer_sha256": "886e6fe5c432aa204ef5b197e847d435b1e7c04f8fccbe9e914f8cc4a83fa685",
+          "staging_policy_witnesses": [
+            "PERFEXP_HOST_STAGING_POLICY requested=auto enabled=0 logical_rows=49152 bank_rows=49152 spill=0 supported=1",
+            "PERFEXP_HOST_STAGING_POLICY requested=auto enabled=1 logical_rows=50848 bank_rows=49152 spill=1 supported=1"
+          ]
+        }
+      ],
+      "gates": {
+        "frontier": {
+          "rows": 1,
+          "bit_exact": true,
+          "mean_kl": 0.0,
+          "max_kl": 0,
+          "top1": 1.0
+        },
+        "forced": {
+          "rows": 16,
+          "bit_exact": true,
+          "mean_kl": 0.0,
+          "max_kl": 0,
+          "top1": 1.0
+        }
+      },
+      "prompt_throughput_ratio": 1.0341153356045067
+    },
+    {
+      "experiment": "E18-auto2049",
+      "count": 2049,
+      "arms": [
+        {
+          "arm": "control",
+          "prompt_seconds": 16.0776745,
+          "prompt_tok_s": 127.44380413970939,
+          "ttft_seconds": 18.89000000001397,
+          "tile_count": 40,
+          "tile_phase_ms": {
+            "host_prepare_ms": 203.12,
+            "host_bind_ms": 0.009000000000000001,
+            "host_register_ms": 0.0,
+            "host_graph_ms": 19.252,
+            "host_reserve_ms": 153.002,
+            "host_upload_ms": 43.414,
+            "host_readback_ms": 15.703,
+            "host_cleanup_ms": 0.042,
+            "compute_ms": 1341.493,
+            "gpu_ms": 1336.348
+          },
+          "native_phases_ms": {
+            "append_owner_admission": 0.0,
+            "chunk_token_preparation": 0.0011,
+            "embedding_40_layers_head": 16077.6745,
+            "final_hidden_export_preparation": 7.8507,
+            "input_identity_hash_budget_preflight": 271.5841,
+            "inspect_admit_allocate": 1580.6051,
+            "native_payload_export_flush": 14.7743,
+            "payload_close_readonly_rehash": 0.0001,
+            "run_dispatch_bookkeeping": 0.0655000000014816
+          },
+          "register_count": 1,
+          "staging_alloc_count": 0,
+          "staging_bind_count": 0,
+          "guard": {
+            "exit_code": 0,
+            "reason": null,
+            "peak_tree_rss": 5894389760,
+            "min_available": 9140219904,
+            "elapsed_s": 33.67200000002049,
+            "host_budget_gib": 7.5,
+            "floor_gib": 0.5,
+            "runtime_min_free_gib": 0.5,
+            "no_progress_window_s": 600,
+            "job_commit_gib": 32.0,
+            "child_pid": 15008,
+            "shared_guard_commit": "2774636281ab32bf871497f0a8caae23c6b6cdc7",
+            "stack_retirement_policy": "cooperative request, progress-aware grace, logged force fallback",
+            "shared_guard_certificate": "L:\\scratch\\perfexp\\runtime\\jobs\\E18-auto2049-control-1836b16cbe524d03ba78bfe25900624a.receipt.shared.json",
+            "cleanup_confirmed": true,
+            "paging_policy": {
+              "owned_paging_limit_bytes": 67108864,
+              "owned_paging_baseline": "zero at gated job launch",
+              "peak_owned_paged_bytes": 0,
+              "pagefile_hard_fault_rate": null,
+              "pagefile_hard_fault_attribution": "UNAVAILABLE: Windows kernel ETW access refused: [Errno 5] kernel pagefile ETW unavailable",
+              "pagefile_hard_fault_limit_per_second": 100,
+              "pagefile_hard_fault_duration_seconds": 5,
+              "scan_pages": 1318941,
+              "last_paged_processes": []
+            },
+            "owned_paging": {
+              "attribution": "bounded process pagefile observation",
+              "observed_paged_bytes": 0,
+              "observed_processes": [],
+              "scanned_pages": 1318941,
+              "completed_scans": 67
+            },
+            "system_pagefile_pressure": {
+              "maximum_growth_bytes": 0,
+              "kill_above_bytes": 256000000,
+              "scope": "global; not process attribution"
+            },
+            "paging_interpretation": "Owned observation is bounded and incremental. Zero observed pages is not an exhaustive zero-I/O proof. Darwin disk-only process attribution is unavailable."
+          },
+          "producer_sha256": "886e6fe5c432aa204ef5b197e847d435b1e7c04f8fccbe9e914f8cc4a83fa685",
+          "staging_policy_witnesses": [
+            "PERFEXP_HOST_STAGING_POLICY requested=0 enabled=0 logical_rows=2049 bank_rows=49152 spill=0 supported=1"
+          ]
+        },
+        {
+          "arm": "candidate",
+          "prompt_seconds": 16.6064867,
+          "prompt_tok_s": 123.3855201895293,
+          "ttft_seconds": 19.39100000000326,
+          "tile_count": 40,
+          "tile_phase_ms": {
+            "host_prepare_ms": 207.19299999999998,
+            "host_bind_ms": 0.006,
+            "host_register_ms": 0.0,
+            "host_graph_ms": 19.238,
+            "host_reserve_ms": 157.57399999999998,
+            "host_upload_ms": 44.843,
+            "host_readback_ms": 15.884,
+            "host_cleanup_ms": 0.041,
+            "compute_ms": 1361.794,
+            "gpu_ms": 1355.543
+          },
+          "native_phases_ms": {
+            "append_owner_admission": 0.0,
+            "chunk_token_preparation": 0.0026,
+            "embedding_40_layers_head": 16606.4867,
+            "final_hidden_export_preparation": 8.3347,
+            "input_identity_hash_budget_preflight": 271.9174,
+            "inspect_admit_allocate": 1554.1741,
+            "native_payload_export_flush": 15.5558,
+            "payload_close_readonly_rehash": 0.0,
+            "run_dispatch_bookkeeping": 0.040300000000000225
+          },
+          "register_count": 1,
+          "staging_alloc_count": 0,
+          "staging_bind_count": 0,
+          "guard": {
+            "exit_code": 0,
+            "reason": null,
+            "peak_tree_rss": 5897588736,
+            "min_available": 9043845120,
+            "elapsed_s": 34.57800000003772,
+            "host_budget_gib": 7.5,
+            "floor_gib": 0.5,
+            "runtime_min_free_gib": 0.5,
+            "no_progress_window_s": 600,
+            "job_commit_gib": 32.0,
+            "child_pid": 33404,
+            "shared_guard_commit": "2774636281ab32bf871497f0a8caae23c6b6cdc7",
+            "stack_retirement_policy": "cooperative request, progress-aware grace, logged force fallback",
+            "shared_guard_certificate": "L:\\scratch\\perfexp\\runtime\\jobs\\E18-auto2049-candidate-c367b3f4ceb549b5ad466003d011d410.receipt.shared.json",
+            "cleanup_confirmed": true,
+            "paging_policy": {
+              "owned_paging_limit_bytes": 67108864,
+              "owned_paging_baseline": "zero at gated job launch",
+              "peak_owned_paged_bytes": 0,
+              "pagefile_hard_fault_rate": null,
+              "pagefile_hard_fault_attribution": "UNAVAILABLE: Windows kernel ETW access refused: [Errno 5] kernel pagefile ETW unavailable",
+              "pagefile_hard_fault_limit_per_second": 100,
+              "pagefile_hard_fault_duration_seconds": 5,
+              "scan_pages": 1347631,
+              "last_paged_processes": []
+            },
+            "owned_paging": {
+              "attribution": "bounded process pagefile observation",
+              "observed_paged_bytes": 0,
+              "observed_processes": [],
+              "scanned_pages": 1347631,
+              "completed_scans": 69
+            },
+            "system_pagefile_pressure": {
+              "maximum_growth_bytes": 0,
+              "kill_above_bytes": 256000000,
+              "scope": "global; not process attribution"
+            },
+            "paging_interpretation": "Owned observation is bounded and incremental. Zero observed pages is not an exhaustive zero-I/O proof. Darwin disk-only process attribution is unavailable."
+          },
+          "producer_sha256": "886e6fe5c432aa204ef5b197e847d435b1e7c04f8fccbe9e914f8cc4a83fa685",
+          "staging_policy_witnesses": [
+            "PERFEXP_HOST_STAGING_POLICY requested=auto enabled=0 logical_rows=2049 bank_rows=49152 spill=0 supported=1"
+          ]
+        }
+      ],
+      "gates": {
+        "frontier": {
+          "rows": 1,
+          "bit_exact": true,
+          "mean_kl": 0.0,
+          "max_kl": 0,
+          "top1": 1.0
+        },
+        "forced": {
+          "rows": 16,
+          "bit_exact": true,
+          "mean_kl": 0.0,
+          "max_kl": 0,
+          "top1": 1.0
+        }
+      },
+      "prompt_throughput_ratio": 0.9681562867840071
+    }
+  ],
+  "excluded": [
+    "E18-auto100k: control outer bootstrap receipt race; engine numerical result retained but pair excluded"
+  ]
+}

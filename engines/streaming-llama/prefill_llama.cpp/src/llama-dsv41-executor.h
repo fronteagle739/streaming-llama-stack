@@ -30,6 +30,8 @@ struct llama_dsv41_fixed_storage {
     std::shared_ptr<llama_dsv41_cache_storage> cache;
     std::shared_ptr<llama_dsv41_carry_store::ram_backing> ram;
     std::shared_ptr<void> ram_registration;
+    // E18: one bounded pinned transfer buffer retained across all sweep executors.
+    std::shared_ptr<void> host_copy_staging;
     uint64_t graph_bytes=0,hidden_bytes=0,cache_bytes=0;
     uint64_t backend_temporary_reserve_bytes=1024ull*1024*1024;
     // The same fixed owners can serve an explicitly selected unpaired graph.
