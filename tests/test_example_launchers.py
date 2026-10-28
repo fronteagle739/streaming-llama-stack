@@ -33,7 +33,7 @@ class Launchers(unittest.TestCase):
                     cone=profile in ('ultra-cone','ultra-yoco')
                     self.assertEqual(cfg['producer_profile'],'ultra' if cone else profile)
                     self.assertEqual(cfg['yoco_keep'],2541 if cone else 0)
-                    self.assertEqual(cfg['env_overrides']['LLAMADECODE_APPEND_DECODE_MAX'],'0')
+                    self.assertEqual(cfg['env_overrides']['LLAMADECODE_APPEND_DECODE_MAX'],'96' if cone else '0')
                     self.assertEqual(cfg['webui'],file.stem.endswith('-webui'))
                     self.assertNotIn('example-placeholder',run.stdout)
                     self.assertFalse(runtime.exists())

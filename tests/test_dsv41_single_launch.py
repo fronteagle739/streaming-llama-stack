@@ -15,7 +15,7 @@ spec.loader.exec_module(dsv41_single)
 
 GATED_ENV = {'DS4_DS_READ_PARTS': '8', 'LLAMADECODE_VRAM_RESERVE_MIB': '512',
              'LLAMADECODE_ENGRAM_EARLY': 'auto', 'LLAMADECODE_ENGRAM_CACHE_MB': '0',
-             'LLAMADECODE_APPEND_DECODE_MAX': '0', 'LLAMADECODE_RECENCY_LFU': '1',
+             'LLAMADECODE_APPEND_DECODE_MAX': '96', 'LLAMADECODE_RECENCY_LFU': '1',
              'LLAMADECODE_LFU_HALF_LIFE': '16'}
 
 
@@ -78,6 +78,12 @@ class LaunchConfigTests(unittest.TestCase):
     def test_resident_followup_is_an_explicit_local_toggle(self):
         cfg=dsv41_single.overlay('262k',dict(env_overrides={'LLAMADECODE_APPEND_DECODE_MAX':'96'}))
         self.assertEqual(cfg['env_overrides']['LLAMADECODE_APPEND_DECODE_MAX'],'96')
+
+    def test_resident_followup_defaults_on_only_for_ultra_cone(self):
+        self.assertEqual(dsv41_single.overlay('262k')['env_overrides']['LLAMADECODE_APPEND_DECODE_MAX'],'96')
+        self.assertEqual(dsv41_single.overlay('262k',profile='ultra-yoco')['env_overrides']['LLAMADECODE_APPEND_DECODE_MAX'],'0')
+        off=dsv41_single.overlay('262k',dict(env_overrides={'LLAMADECODE_APPEND_DECODE_MAX':'0'}))
+        self.assertEqual(off['env_overrides']['LLAMADECODE_APPEND_DECODE_MAX'],'0')
 
     def test_lfu_and_engram_options_reach_the_producer(self):
         cfg=dsv41_single.overlay('262k',dict(env_overrides={
