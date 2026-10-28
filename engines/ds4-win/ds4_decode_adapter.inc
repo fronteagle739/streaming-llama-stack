@@ -10,8 +10,9 @@
  *   - the canonical V4.1 state: raw rings, compressed/index caches and pool
  *     tails, bound as views (same layout and values as ds4-win's own);
  *   - the routed experts: a hook returns cache-pool bases and slot ids.
- * ds4-win allocates only its per-token scratch. No streaming, SSD tiers,
- * host caches, prefill workspace or draft model start here. */
+ * ds4-win allocates its per-token scratch. The optional versioned host-cache
+ * bridge reuses ds4's pinned cache for producer-owned expert victims. No
+ * standalone streamer, prefill workspace or draft model starts here. */
 #ifdef DS4_EXTERNAL_DECODE
 #if defined(_WIN32)
 #define DS4X_EXPORT __declspec(dllexport)

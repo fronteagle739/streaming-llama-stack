@@ -15089,9 +15089,10 @@
     "code_default": "NULL from getenv; the literal consumer below supplies any fallback",
     "classification": "preset",
     "scopes": [
-      "ds4-win"
+      "ds4-win",
+      "rtx-llama"
     ],
-    "doc": "DS4_CUDA_STREAMING_HOST_CACHE_N: qualified preset/runtime setting; override for a different memory or arithmetic plan",
+    "doc": "Expert-count upper bound for the host cache. On the single engine it optionally caps LLAMADECODE_HOST_CACHE_MB; unset leaves byte/physical admission authoritative.",
     "reads": [
       "engines/ds4-win/ds4_cuda.cu:5055"
     ],
@@ -15104,6 +15105,12 @@
         "unset": "NULL from getenv; the literal consumer below supplies any fallback",
         "read": "const char *env = getenv(\"DS4_CUDA_STREAMING_HOST_CACHE_N\");",
         "consumer": "static uint32_t cuda_stream_host_expert_cache_requested_budget(void) {\n    uint32_t cap = g_stream_host_expert_budget_override;\n    const char *env = getenv(\"DS4_CUDA_STREAMING_HOST_CACHE_N\");\n    if (env && env[0]) {\n        char *end = NULL;\n        errno = 0;\n        unsigned long v = strtoul(env, &end, 10);"
+      },
+      {
+        "source": "engines/streaming-llama/prefill_llama.cpp/src/llama-dsv41-weights.cpp:1042",
+        "unset": "NULL from getenv; the literal consumer below supplies any fallback",
+        "read": "const char*n=std::getenv(\"DS4_CUDA_STREAMING_HOST_CACHE_N\");",
+        "consumer": "    require(p->pool_max_stride[0]==p->pool_max_stride[1],\"RAM expert gate/up geometry mismatch\");\n    const auto width=p->pool_max_stride[0]+p->pool_max_stride[1]+p->pool_max_stride[2];\n    const char*n=std::getenv(\"DS4_CUDA_STREAMING_HOST_CACHE_N\");\n    uint64_t capped=offer;\n    if(n&&*n){char*end=nullptr;errno=0;const auto count=std::strtoull(n,&end,10);\n        require(n[0]!='-'&&!errno&&end!=n&&!*end&&count<=UINT64_MAX/width,\"Invalid DS4_CUDA_STREAMING_HOST_CACHE_N\");capped=std::min(capped,count*width);}\n    p->host_slots=api.resize(capped,p->pool_max_stride[0],p->pool_max_stride[2]);p->host_bytes=uint64_t(p->host_slots)*width;"
       }
     ]
   },
@@ -98534,5 +98541,37 @@
         "consumer": "    ram_guard.preflight_host_ram(floor, label, skip_env='ZIMAGE_SKIP_RAM_PREFLIGHT', force_env='ZIMAGE_FORCE_RESIDENT', advice='Use the Z-Image per-block streamer (stream_weights=True) on a RAM-constrained box.')\n    max_proc = float(os.environ.get('ZIMAGE_MAX_PROC_RAM_GB', 14.0))\n    min_free = float(os.environ.get('ZIMAGE_WATCHDOG_MIN_FREE_GB', 4.0))\n    try:\n        from cosmos_windows import mem_guard\n    except Exception:\n        mem_guard = None"
       }
     ]
+  },
+  {
+    "var": "LLAMADECODE_HOST_CACHE_MB",
+    "flag": "--llamadecode-host-cache-mb",
+    "default": "0",
+    "classification": "advanced",
+    "scopes": [
+      "rtx-llama"
+    ],
+    "doc": "Single-engine pinned host expert victim tier after VRAM L1/L2. 0 disables (qualification default); auto uses measured physical and process-budget headroom; integer MiB is an upper bound. Keeps the configured runtime floor plus 512 MiB desktop reserve and a 256 MiB allocation margin. Released before append prefill; completed Engram rows are reusable headroom. Requires the versioned ds4-decode host-cache export.",
+    "reads": [
+      "engines/streaming-llama/prefill_llama.cpp/src/llama-dsv41-weights.cpp:1023",
+      "engines/streaming-llama/prefill_llama.cpp/tools/dsv41-prefill/live-session.inc:266"
+    ],
+    "defaults_by_scope": {
+      "rtx-llama": "0"
+    },
+    "code_defaults": [
+      {
+        "source": "engines/streaming-llama/prefill_llama.cpp/src/llama-dsv41-weights.cpp:1023",
+        "unset": "NULL from getenv; the literal consumer below supplies any fallback",
+        "read": "const char*e=std::getenv(\"LLAMADECODE_HOST_CACHE_MB\");",
+        "consumer": "    p->host=api;if(p->host_slots)return;\n#ifdef _WIN32\n    const char*e=std::getenv(\"LLAMADECODE_HOST_CACHE_MB\");\n    // Qualification decides the shipping default. An explicit auto uses all\n    // admitted headroom, an integer is an exact upper bound, and 0 is off.\n    if(!e||!e[0]||!std::strcmp(e,\"0\"))return;\n    uint64_t requested=UINT64_MAX;"
+      },
+      {
+        "source": "engines/streaming-llama/prefill_llama.cpp/tools/dsv41-prefill/live-session.inc:266",
+        "unset": "NULL from getenv; the literal consumer below supplies any fallback",
+        "read": "const char*ram=std::getenv(\"LLAMADECODE_HOST_CACHE_MB\");",
+        "consumer": "        bind(x_open,\"ds4x_open\");bind(x_map,\"ds4x_model_map\");bind(x_register,\"ds4x_register_weight\");bind(x_bind,\"ds4x_bind_state\");\n        bind(x_hook,\"ds4x_set_expert_hook\");bind(x_decode,\"ds4x_decode\");bind(x_close,\"ds4x_close\");bind(x_affinity,\"ds4x_set_affinity\");\n        const char*ram=std::getenv(\"LLAMADECODE_HOST_CACHE_MB\");\n        if(ram&&*ram&&std::strcmp(ram,\"0\")){\n            int(*api)(ds4_external_host_cache_v1*)=nullptr;bind(api,\"ds4x_host_cache_v1\");\n            require(api(&host_cache)==1,\"ds4-decode RAM cache ABI refused\");\n        }"
+      }
+    ],
+    "code_default": "NULL from getenv; the literal consumer below supplies any fallback"
   }
 ]

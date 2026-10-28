@@ -4937,8 +4937,8 @@ static int g_host_cache_pinned = 1;
 static void cuda_stream_host_expert_cache_free_buffers(
         char *gate_ptr,
         char *up_ptr,
-        char *down_ptr) {
-    if (g_host_cache_pinned) {
+        char *down_ptr, int pinned = g_host_cache_pinned) {
+    if (pinned) {
         if (gate_ptr) cudaFreeHost(gate_ptr);
         if (up_ptr)   cudaFreeHost(up_ptr);
         if (down_ptr) cudaFreeHost(down_ptr);
@@ -4980,12 +4980,12 @@ static void cuda_stream_host_expert_cache_update_peak(
 }
 
 static void cuda_stream_host_expert_cache_release(
-        cuda_stream_host_expert_cache *cache) {
+        cuda_stream_host_expert_cache *cache, int pinned = g_host_cache_pinned) {
     if (!cache) return;
     /* [2026-08-16] cudaFreeHost: these are cudaMallocHost'd (pinned) now. free() here would be
      * heap corruption. */
     cuda_stream_host_expert_cache_free_buffers(
-        cache->gate_ptr, cache->up_ptr, cache->down_ptr);
+        cache->gate_ptr, cache->up_ptr, cache->down_ptr, pinned);
     cache->slots.clear();
     cache->slots.shrink_to_fit();
     /* memset would blow away the std::vector header; clear the POD fields by hand. */
@@ -6839,6 +6839,12 @@ static int cuda_stream_host_expert_cache_load_slot(
     return 1;
 }
 
+static bool cuda_stream_host_expert_cache_admit(const cuda_stream_host_expert_cache_slot &resident,
+        uint32_t layer, uint32_t expert) {
+    return !((cuda_stream_cache_lfu_enabled() || (g_affinity_cap && g_affinity_current_biased)) && resident.valid &&
+        cuda_affinity_cache_priority(layer, expert) < cuda_affinity_cache_priority(resident.layer, resident.expert));
+}
+
 static int cuda_stream_host_expert_cache_get_slot(
         cuda_stream_host_expert_cache *cache,
         const void *model_map,
@@ -6874,9 +6880,7 @@ static int cuda_stream_host_expert_cache_get_slot(
 
     const uint32_t load_slot = cuda_stream_host_expert_cache_lru_slot(cache);
     const auto &resident = cache->slots[load_slot];
-    if ((cuda_stream_cache_lfu_enabled() || (g_affinity_cap && g_affinity_current_biased)) && resident.valid &&
-        cuda_affinity_cache_priority(layer, expert) <
-        cuda_affinity_cache_priority(resident.layer, resident.expert)) return -1;
+    if (!cuda_stream_host_expert_cache_admit(resident, layer, expert)) return -1;
     const int append = !cache->slots[load_slot].valid;
     if (!cuda_stream_host_expert_cache_load_slot(cache,
                                                  model_map,
@@ -6920,6 +6924,8 @@ static int cuda_stream_host_expert_cache_copy_to_device(
                               cudaMemcpyHostToDevice),
                    "RAM cached down expert upload");
 }
+
+#include "ds4_external_host_cache.inc"
 
 /* [2026-08-16] Merged-run variant of the copy above.
  *

@@ -12,6 +12,17 @@ from slstack.combo_ram import LockedRam, kernel_api, protect_working_set,wait_fo
 
 
 class RuntimeFloorTest(unittest.TestCase):
+    def test_decode_budget_stays_inside_the_aggregate_and_reuses_prefill_ceiling(self):
+        from slstack.combo_producer import decode_host_budget
+        G=1<<30
+        self.assertEqual(decode_host_budget({},6*G),6*G)
+        cfg=dict(host_budget_gib=13,producer_decode_host_budget_gib=12.5)
+        self.assertEqual(decode_host_budget(cfg,6*G),int(12.5*G))
+        with self.assertRaises(MemoryError):decode_host_budget(dict(cfg,producer_decode_host_budget_gib=12.6),6*G)
+        for bad in (True,0,-1,float('nan'),float('inf'),'12'):
+            with self.subTest(value=bad),self.assertRaises(ValueError):
+                decode_host_budget(dict(cfg,producer_decode_host_budget_gib=bad),6*G)
+
     def test_default_is_half_and_zero_disables(self):
         self.assertEqual(runtime_min_free_gib({}),0.5)
         self.assertEqual(runtime_min_free_gib(dict(runtime_min_free_gib=0)),0.0)
