@@ -893,7 +893,7 @@ bool llama_dsv41_tile_executor::run(const request&in,const llama_dsv41_layer_gra
         const bool direct_input=bool(in.direct);
         require(direct_input==bool(pinned),"Pinned carry request/configuration mode changed");
         bool skip_tile_pin=false;
-        double tile_bind_ms=0,tile_register_ms=0,tile_launch_ms=0,tile_sync_ms=0;float tile_gpu_ms=-1;
+        double tile_bind_ms=0,tile_register_ms=0,tile_graph_ms=0,tile_reserve_ms=0,tile_launch_ms=0,tile_sync_ms=0;float tile_gpu_ms=-1;
 #ifdef GGML_USE_CUDA
         struct bank_copy_scope {pinned_storage*p;~bank_copy_scope(){if(p)p->current_bank_copies_forbidden=false;}} bank_scope{pinned.get()};
 #endif
@@ -1024,6 +1024,7 @@ bool llama_dsv41_tile_executor::run(const request&in,const llama_dsv41_layer_gra
         auto &backend_temporary=compiled->backend_temporary;
         auto &rounded_matrices=compiled->rounded_matrices;auto &split_matrices=compiled->split_matrices;
         ggml_tensor *spill_slot=nullptr;   // LLAMADECODE single sweep: the slot's BF16 view (spilled tiles)
+        const auto graph_prepare_started=tile_timing_enabled()?clock_type::now():clock_type::time_point{};
         if(graph_cache_hit)compiled->bindings.restore(in.start,in.count);
         else {
         const bool long_index=expert.index_key_windows&&query_source(in.layer)&&in.compressed_rows>131072;
@@ -1298,6 +1299,7 @@ bool llama_dsv41_tile_executor::run(const request&in,const llama_dsv41_layer_gra
             workspace->variants.push_back(std::move(fresh));
         }
         }
+        if(tile_timing_enabled())tile_graph_ms=elapsed(graph_prepare_started);
         if(const char *diag=std::getenv("DS4PERF_DIAGNOSTIC_LAYERS")){if(*diag){
             llama_dsv41_layer_log("DS4PERF_GRAPH_TRACE layer=%u start=%u count=%u hit=%u semantic_fnv64=%016llx",in.layer,in.start,in.count,unsigned(graph_cache_hit),
                 (unsigned long long)llama_dsv41_graph_digest(ctx.get(),graph));std::fputc(10,stderr);std::fflush(stderr);
@@ -1314,10 +1316,12 @@ bool llama_dsv41_tile_executor::run(const request&in,const llama_dsv41_layer_gra
 #ifdef GGML_USE_CUDA
         allocation.pending_copies=pinned?pinned->copies:nullptr;
 #endif
+        const auto graph_reserve_started=tile_timing_enabled()?clock_type::now():clock_type::time_point{};
         allocation.owned=!workspace;
         allocation.value=workspace?workspace->value:ggml_gallocr_new(buft);require(allocation.value,"V4.1 lifetime allocator creation failed");
         const uint64_t scratch=llama_dsv41_allocate_native_graph(allocation.value,graph,
             backend_temporary,admitted_graph_bytes);
+        if(tile_timing_enabled())tile_reserve_ms=elapsed(graph_reserve_started);
         const uint64_t actual=scratch-backend_temporary;
         uint64_t rope_aliases=0,rope_alias_bytes=0,rope_tagged=0;
         if(rope_inplace){
@@ -1791,8 +1795,8 @@ bool llama_dsv41_tile_executor::run(const request&in,const llama_dsv41_layer_gra
         pending.readback_ms=elapsed(readback_start);
         const auto cleanup_started=clock_type::now();allocation.release();pending.cleanup_ms=elapsed(cleanup_started);
         if(capture_dspark)cache.dspark_completion.commit(capture_ticket);
-        if(tile_timing_enabled())llama_dsv41_layer_log("LLAMADECODE_TILE_TIMING layer=%u tile=%u rows=%u host_prepare_ms=%.3f host_bind_ms=%.3f host_register_ms=%.3f host_upload_ms=%.3f host_launch_ms=%.3f host_sync_ms=%.3f gpu_ms=%.3f compute_ms=%.3f host_readback_ms=%.3f host_cleanup_ms=%.3f skip_pin=%u prefetch=%u\n",
-            in.layer,in.start,in.count,pending.prepare_ms,tile_bind_ms,tile_register_ms,pending.upload_ms,tile_launch_ms,tile_sync_ms,double(tile_gpu_ms),pending.compute_ms,pending.readback_ms,pending.cleanup_ms,unsigned(skip_tile_pin),unsigned(prefetch_next));
+        if(tile_timing_enabled())llama_dsv41_layer_log("LLAMADECODE_TILE_TIMING layer=%u tile=%u rows=%u host_prepare_ms=%.3f host_bind_ms=%.3f host_register_ms=%.3f host_graph_ms=%.3f host_reserve_ms=%.3f host_upload_ms=%.3f host_launch_ms=%.3f host_sync_ms=%.3f gpu_ms=%.3f compute_ms=%.3f host_readback_ms=%.3f host_cleanup_ms=%.3f skip_pin=%u prefetch=%u\n",
+            in.layer,in.start,in.count,pending.prepare_ms,tile_bind_ms,tile_register_ms,tile_graph_ms,tile_reserve_ms,pending.upload_ms,tile_launch_ms,tile_sync_ms,double(tile_gpu_ms),pending.compute_ms,pending.readback_ms,pending.cleanup_ms,unsigned(skip_tile_pin),unsigned(prefetch_next));
         out=std::move(pending);cache.execution_poisoned=false;probe.pre_return_ms=elapsed(prepare_started);probe.complete=true;return true;
     }catch(const std::exception&failure){error=failure.what();return false;}
 }
