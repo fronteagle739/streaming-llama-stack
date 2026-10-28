@@ -30,6 +30,7 @@
 #define NOMINMAX
 #endif
 #include <windows.h>
+#include <psapi.h>
 #include <malloc.h>
 #if defined(LLAMA_DIRECTSTORAGE) && defined(GGML_USE_CUDA)
 #include <dstorage.h>
@@ -88,6 +89,24 @@ struct llama_dsv41_weight_provider::implementation {
     std::vector<int32_t>l2_key;std::unordered_map<int32_t,int32_t>l2_of;
     std::list<int32_t>l2_lru;std::vector<std::list<int32_t>::iterator>l2_pos;
     uint64_t l2_hits=0,l2_stored=0;
+    ds4_external_host_cache_v1 host{};
+    uint32_t host_slots=0;uint64_t host_hits=0,host_stored=0,host_bytes=0;
+    void release_host(){
+        if(host_slots)std::fprintf(stderr,"LLAMADECODE_HOST_CACHE_RELEASE slots=%u bytes=%llu before_prefill_or_teardown=1\n",host_slots,(unsigned long long)host_bytes);
+        if(host.clear)host.clear();host_slots=0;host_bytes=0;
+    }
+    void store_host(int32_t key,const char*const bases[3],uint64_t slot,const std::array<uint64_t,3>&stride){
+        if(!host_slots||key<0)return;
+        const uint32_t layer=uint32_t(key)/384;
+        if(host.find(layer,uint32_t(key)%384)>=0)return;
+        const uint64_t sizes[3]={routed[layer*3]->nb[2],routed[layer*3+1]->nb[2],routed[layer*3+2]->nb[2]};
+        const char*src[3]={bases[0]+slot*stride[0],bases[1]+slot*stride[1],bases[2]+slot*stride[2]};
+#ifdef GGML_USE_CUDA
+        require(cudaDeviceSynchronize()==cudaSuccess,"RAM expert victim synchronization failed");
+#endif
+        require(host.store(layer,uint32_t(key)%384,src,sizes)==1,"RAM expert victim admission failed");
+        if(host.find(layer,uint32_t(key)%384)>=0)++host_stored;
+    }
     void copy_slot(char*const dst[3],uint64_t dst_slot,const char*const src[3],uint64_t src_slot,void*stream,bool to_l2){
 #ifdef GGML_USE_CUDA
         for(uint32_t k=0;k<3;++k)require(cudaMemcpyAsync(dst[k]+dst_slot*(to_l2?pool_max_stride[k]:pool_stride[k]),src[k]+src_slot*(to_l2?pool_stride[k]:pool_max_stride[k]),pool_stride[k],
@@ -126,14 +145,22 @@ struct llama_dsv41_weight_provider::implementation {
                 if(l2_slots>=2){   // keep the evicted expert in L2 (its least-recent slot; never the one read below)
                     const int32_t t=l2_lru.back();require(t!=from_l2,"Expert L2 victim slot collides with its source");
                     l2_lru.splice(l2_lru.begin(),l2_lru,l2_pos[size_t(t)]);
-                    if(l2_key[size_t(t)]>=0)l2_of.erase(l2_key[size_t(t)]);
+                    if(l2_key[size_t(t)]>=0){store_host(l2_key[size_t(t)],l2_base.data(),uint64_t(t),pool_max_stride);l2_of.erase(l2_key[size_t(t)]);}
                     copy_slot(l2_base.data(),uint64_t(t),l1,uint64_t(slot),stream,true);copied=true;l2_key[size_t(t)]=victim;l2_of[victim]=t;++l2_stored;
-                }}
+                }else store_host(victim,l1,uint64_t(slot),pool_stride);}
             slot_key[size_t(slot)]=key;key_slot[key]=slot;slot_of[e]=slot;
             if(from_l2>=0){
                 copy_slot(l1,uint64_t(slot),l2_base.data(),uint64_t(from_l2),stream,false);copied=true;
                 l2_of.erase(key);l2_key[size_t(from_l2)]=-1;l2_lru.splice(l2_lru.end(),l2_lru,l2_pos[size_t(from_l2)]);++l2_hits;
                 continue;
+            }
+            const int ram=host_slots?host.find(layer,uint32_t(e)):-1;
+            if(ram>=0){
+#ifdef GGML_USE_CUDA
+                require(cudaStreamSynchronize(static_cast<cudaStream_t>(stream))==cudaSuccess,"RAM hit destination synchronization failed");
+#endif
+                char*dst[3]={l1[0]+uint64_t(slot)*pool_stride[0],l1[1]+uint64_t(slot)*pool_stride[1],l1[2]+uint64_t(slot)*pool_stride[2]};
+                require(host.upload(uint32_t(ram),dst,pool_stride.data())==1,"RAM cached expert upload failed");++host_hits;continue;
             }
             ++cache_misses;
             for(uint32_t k=0;k<3;++k){
@@ -278,7 +305,7 @@ struct llama_dsv41_weight_provider::implementation {
         join_early();
         engram_prompt.reset();
         if(options.backend&&allocated)ggml_backend_synchronize(options.backend);
-        release_l2();
+        release_host();release_l2();
         if(fetcher){wf_stop(fetcher);wf_quiesce(fetcher);wf_destroy(fetcher);fetcher=nullptr;}
         mark_weight_stream(false);
         for(auto&s:stages)for(auto&e:s.entries){e.t->data=nullptr;e.t->buffer=nullptr;}
@@ -661,7 +688,7 @@ bool llama_dsv41_weight_provider::restart_prompt(const config&options,std::strin
         require(!options.decode_layout||(p->options.compute_direct&&p->options.buffers==2&&!p->options.zero_padding_only),
             "Decode layout requires the strict two-bank direct fetch profile");
         const auto started=std::chrono::steady_clock::now();
-        p->release_l2();   // LLAMADECODE: the decode-only L2 returns its VRAM before the prefill plan is restored
+        p->release_host();p->release_l2();   // return decode tiers before prefill restores its plan
         wf_destroy(p->fetcher);p->fetcher=nullptr;
         for(auto&s:p->stages)for(auto&e:s.entries){e.t->data=nullptr;e.t->buffer=nullptr;}
         p->buffers.clear();p->decode_layout=options.decode_layout;p->experts_prebound=false;p->dense_held=-1;p->resident_bound=false;p->create_pipeline();
@@ -972,15 +999,59 @@ bool llama_dsv41_weight_provider::external_expert_slots(uint32_t layer,const int
 },error);}
 llama_dsv41_weight_provider::expert_cache_stats llama_dsv41_weight_provider::cache_stats()const{std::lock_guard<std::mutex>lock(p->mutex);
     expert_cache_stats s;s.slots=p->pool_slots;s.hits=p->cache_hits;s.misses=p->cache_misses;s.fetched_bytes=p->cache_bytes;s.fetch_ms=p->cache_ms;
-    s.l2_slots=p->l2_slots;s.l2_hits=p->l2_hits;s.l2_stored=p->l2_stored;return s;}
+    s.l2_slots=p->l2_slots;s.l2_hits=p->l2_hits;s.l2_stored=p->l2_stored;
+    s.host_slots=p->host_slots;s.host_hits=p->host_hits;s.host_stored=p->host_stored;s.host_bytes=p->host_bytes;return s;}
 bool llama_dsv41_weight_provider::decode_residency(uint32_t layer,uint8_t*tier,uint32_t experts)const{
     std::lock_guard<std::mutex>lock(p->mutex);
     if(!tier||experts!=384||layer>=40||!p->decode_layout)return false;
     std::memset(tier,0,experts);
     for(const auto key:p->slot_key)if(key>=0&&uint32_t(key)/384==layer)tier[key%384]=1;
     for(const auto key:p->l2_key)if(key>=0&&uint32_t(key)/384==layer)tier[key%384]=1;
+    if(p->host_slots)for(uint32_t e=0;e<experts;++e)if(!tier[e]&&p->host.find(layer,e)>=0)tier[e]=2;
     return true;
 }
+bool llama_dsv41_weight_provider::release_host_cache(std::string&error){return p->guard([&]{
+    require(!p->leased,"RAM expert release requires an idle provider");p->release_host();},error);}
+bool llama_dsv41_weight_provider::release_prefill_rows(std::string&error){return p->guard([&]{
+    require(!p->leased&&p->next==p->stage_count(),"Prefill row release requires a completed provider");
+    p->join_early();p->early.reset();p->engram_prompt.reset();p->row_cache.reset();
+},error);}
+bool llama_dsv41_weight_provider::configure_host_cache(const ds4_external_host_cache_v1&api,uint64_t limit,uint64_t floor,std::string&error){return p->guard([&]{
+    require(p->decode_layout&&!p->leased&&api.resize&&api.find&&api.upload&&api.store&&api.clear,"Invalid RAM expert cache bridge");
+    p->host=api;if(p->host_slots)return;
+#ifdef _WIN32
+    const char*e=std::getenv("LLAMADECODE_HOST_CACHE_MB");
+    // Qualification decides the shipping default. An explicit auto uses all
+    // admitted headroom, an integer is an exact upper bound, and 0 is off.
+    if(!e||!e[0]||!std::strcmp(e,"0"))return;
+    uint64_t requested=UINT64_MAX;
+    if(std::strcmp(e,"auto")){
+        char*end=nullptr;errno=0;const auto mb=std::strtoull(e,&end,10);
+        require(e[0]!='-'&&!errno&&end!=e&&!*end&&mb<=UINT64_MAX/mib,"LLAMADECODE_HOST_CACHE_MB must be auto or nonnegative MiB");requested=mb*mib;
+    }
+    MEMORYSTATUSEX memory{};memory.dwLength=sizeof(memory);
+    PROCESS_MEMORY_COUNTERS_EX process{};process.cb=sizeof(process);
+    require(GlobalMemoryStatusEx(&memory)&&GetProcessMemoryInfo(GetCurrentProcess(),reinterpret_cast<PROCESS_MEMORY_COUNTERS*>(&process),sizeof(process)),"Cannot measure RAM expert admission");
+    const uint64_t reserve=add(floor,512*mib),margin=256*mib;
+    const uint64_t physical=memory.ullAvailPhys>reserve+margin?memory.ullAvailPhys-reserve-margin:0;
+    const uint64_t rss=process.WorkingSetSize;
+    const uint64_t budget=limit>rss+margin?limit-rss-margin:0;
+    const uint64_t offer=std::min(requested,std::min(physical,budget));
+    require(p->pool_max_stride[0]==p->pool_max_stride[1],"RAM expert gate/up geometry mismatch");
+    const auto width=p->pool_max_stride[0]+p->pool_max_stride[1]+p->pool_max_stride[2];
+    const char*n=std::getenv("DS4_CUDA_STREAMING_HOST_CACHE_N");
+    uint64_t capped=offer;
+    if(n&&*n){char*end=nullptr;errno=0;const auto count=std::strtoull(n,&end,10);
+        require(n[0]!='-'&&!errno&&end!=n&&!*end&&count<=UINT64_MAX/width,"Invalid DS4_CUDA_STREAMING_HOST_CACHE_N");capped=std::min(capped,count*width);}
+    p->host_slots=api.resize(capped,p->pool_max_stride[0],p->pool_max_stride[2]);p->host_bytes=uint64_t(p->host_slots)*width;
+    require(GlobalMemoryStatusEx(&memory)&&memory.ullAvailPhys>=reserve,"RAM expert allocation crossed physical reserve");
+    std::fprintf(stderr,"LLAMADECODE_HOST_CACHE slots=%u bytes=%llu offer=%llu host_limit=%llu rss_before=%llu available_after=%llu runtime_floor=%llu desktop_reserve=%llu\n",
+        p->host_slots,(unsigned long long)p->host_bytes,(unsigned long long)capped,(unsigned long long)limit,(unsigned long long)rss,
+        (unsigned long long)memory.ullAvailPhys,(unsigned long long)floor,(unsigned long long)(512*mib));
+#else
+    (void)limit;(void)floor;throw std::runtime_error("RAM expert cache requires Windows CUDA");
+#endif
+},error);}
 uint64_t llama_dsv41_weight_provider::decode_cache_slot_bytes()const{return p->pool_max_stride[0]+p->pool_max_stride[1]+p->pool_max_stride[2];}
 bool llama_dsv41_weight_provider::grow_decode_cache(uint64_t bytes,uint32_t*slots,std::string&error){return p->guard([&]{
     require(slots&&p->decode_layout&&p->pool[0]&&p->pool[0]->data&&!p->l2_buffer&&!p->leased,"Expert L2 requires an idle decode-layout provider without an L2");

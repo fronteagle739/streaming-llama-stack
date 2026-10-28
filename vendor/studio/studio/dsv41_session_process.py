@@ -44,7 +44,7 @@ class Producer:
                     with self.state_lock:
                         self.failure = self.stuck if self.failure is None else self.failure + '; ' + self.stuck
 
-    def __init__(self, session, argv, env, directory, *, host_bytes, physical_floor, operation_seconds=600, idle_seconds=3600, native=None, cancelled=None, runtime_check=None, native_mode=3, bootstrap=None, startup=None, owner_epoch=0, after_resume=None, stall_seconds=None, runtime_min_free_gib=4.0, model_sha256=None):
+    def __init__(self, session, argv, env, directory, *, host_bytes, physical_floor, operation_seconds=600, idle_seconds=3600, native=None, cancelled=None, runtime_check=None, native_mode=3, bootstrap=None, startup=None, owner_epoch=0, after_resume=None, stall_seconds=None, runtime_min_free_gib=0.5, model_sha256=None):
         self.model_sha256 = MODEL_SHA256 if model_sha256 is None else model_sha256
         from .dsv41_session_contract import hex_value
         hex_value(self.model_sha256,64)
@@ -84,7 +84,7 @@ class Producer:
         self.session, self.native = (session, native)
         self.host_bytes, self.floor = (host_bytes, physical_floor)
         # Admission and runtime floors are independent. The runtime available-RAM stop defaults to
-        # the known safe 4 GiB; 0 opts into paging-only. Keep the existing paging stop as well.
+        # 512 MiB (owner decision); 0 opts into paging-only. Keep the paging stop as well.
         from .job_paging import paging_bytes, GLOBAL_PAGING_LIMIT
         self._paging_bytes, self._paging_limit = paging_bytes, GLOBAL_PAGING_LIMIT
         self._paging0 = paging_bytes(); self.paging_growth = 0; self._paging_tick = 0

@@ -130,7 +130,7 @@ model path and GPU UUID. `*.local.*` files are ignored by Git.
   "gpu_uuid": "<GPU-UUID>",
   "host_budget_gib": 9.25,
   "min_available_gib": 4,
-  "runtime_min_free_gib": 4
+  "runtime_min_free_gib": 0.5
 }
 ```
 

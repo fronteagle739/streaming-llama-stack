@@ -70,7 +70,7 @@ static int ds4_ns_memory_start(void){
     const char*budget_text=ds4_nf_env("DS4_NATIVE_SESSION_HOST_BYTES");
     const char*floor_text=ds4_nf_env("DS4_NATIVE_SESSION_HOST_FLOOR_BYTES");uint64_t budget=0,floor=0;
     if(strcmp(enable,"1")||!budget_text||!floor_text||!ds4_nf_u64(&budget_text,&budget)||*budget_text||
-       !ds4_nf_u64(&floor_text,&floor)||*floor_text||floor<(1ull<<30)||
+       !ds4_nf_u64(&floor_text,&floor)||*floor_text||floor<(512ull<<20)||
        !ds4_ns_guard_begin(&ds4_ns_server_memory,budget,floor)) {
         fprintf(stderr,"native session explicit host budget/floor refused before engine startup\n");return -1;
     }

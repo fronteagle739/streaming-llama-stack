@@ -33,11 +33,11 @@ def plan(machine, config):
     for cfg in (rtx, decode):
         budget = float(cfg['host_budget_gib'])
         floor = float(cfg['runtime_min_free_gib' if cfg is rtx else 'min_available_gib'])
-        if not math.isfinite(budget) or budget <= 0 or not math.isfinite(floor) or floor < 4:
-            raise ValueError('Set a finite positive host budget and at least 4 GiB runtime free-RAM floor')
+        if not math.isfinite(budget) or budget <= 0 or not math.isfinite(floor) or floor < .5:
+            raise ValueError('Set a finite positive host budget and at least 0.5 GiB runtime free-RAM floor')
     # Config/argv preview only: a representative 50K request and hypothetical
     # available RAM, not a physical-memory admission or an engine launch.
-    flags, _ = prefill_arguments(rtx, 49787, int((rtx['host_budget_gib'] + 4) * 2**30), export_state=True)
+    flags, _ = prefill_arguments(rtx, 49787, int((rtx['host_budget_gib'] + .5) * 2**30), export_state=True)
     return {
         'status': 'UNTESTED example',
         'launchable': False,

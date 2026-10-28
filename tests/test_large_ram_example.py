@@ -74,7 +74,7 @@ class LargeRamExample(unittest.TestCase):
                                     ('rtx', 'host_budget_gib', float('inf')),
                                     ('decode_plan', 'host_budget_gib', -1),
                                     ('decode_plan', 'min_available_gib', float('nan')),
-                                    ('rtx', 'runtime_min_free_gib', 0.5)]:
+                                    ('rtx', 'runtime_min_free_gib', 0.25)]:
             cfg = copy.deepcopy(self.cfg)
             cfg[section][key] = value
             with self.subTest(section=section, key=key, value=value), self.assertRaises(ValueError):

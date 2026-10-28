@@ -3,6 +3,7 @@ from __future__ import annotations
 from contextlib import ExitStack
 import hashlib
 import json
+import math
 import os
 from pathlib import Path
 import re
@@ -52,6 +53,22 @@ def ctx_cache(cfg):
     if type(growable) is not bool:raise ValueError('ctx_cache_growable must be true or false')
     if growable and cfg.get('producer_keep_alive'):raise ValueError('ctx_cache_growable is not covered by the switch arena (producer_keep_alive)')
     return precision,growable
+
+
+def decode_host_budget(cfg, prefill_bytes):
+    """A decode tier may reuse prefill RAM, inside a separately admitted ceiling.
+
+    This ceiling does not enlarge the fold planner's prefill workspace. It is
+    admitted before launch and watched by the same producer and aggregate guard.
+    """
+    value=cfg.get('producer_decode_host_budget_gib')
+    if value is None:return prefill_bytes
+    if type(value) not in (int,float) or not math.isfinite(value) or value<=0:
+        raise ValueError('producer_decode_host_budget_gib must be finite and positive')
+    ceiling=max(prefill_bytes,int(value*(1<<30))//65536*65536)
+    if ceiling+(.5*(1<<30))>cfg['host_budget_gib']*(1<<30):
+        raise MemoryError('Decode host ceiling must leave 512 MiB for the controller inside host_budget_gib')
+    return ceiling
 
 LEGACY_SWEEP=49152
 def carry_bank_bytes(rows):
@@ -108,7 +125,7 @@ def prefill_plan(cfg,prompt_tokens,available=None):
         # Owner 2026-10-25 ("every run makes you freeze like the computer's run out of RAM"): locked producer
         # pages cannot be paged out, so admission keeps a DESKTOP RESERVE free for Windows, Claude Code and the
         # desktop: the producer's raised budget is at most available - producer_desktop_reserve_gib (per
-        # machine, default 0.5 GiB). The separate runtime_min_free_gib stop defaults to 4 GiB.
+        # machine, default 0.5 GiB). The separate runtime_min_free_gib stop defaults to 0.5 GiB.
         reserve=max(float(cfg.get('producer_host_reserve_gib',.5)),float(cfg.get('producer_desktop_reserve_gib',.5)))
         room=int(available)-int(reserve*(1<<30))
         if room<top:top=max(base,room);capped_by='desktop_reserve' if reserve>float(cfg.get('producer_host_reserve_gib',.5)) else 'available_ram'
@@ -267,7 +284,7 @@ class ComboProducer:
         if tier not in ('accurate','fast','ultra'):raise ValueError('Combo producer profile must be accurate, fast or ultra (original weights; no HYPER)')
         import psutil
         args,plan=prefill_arguments(cfg,len(tokens),psutil.virtual_memory().available)
-        self.prefill_plan=plan;host_bytes=plan['host_bytes']
+        self.prefill_plan=plan;host_bytes=decode_host_budget(cfg,plan['host_bytes'])
         if plan.get('policy')=='fold':   # owner fold policy: S-token sweeps, remainder folded into the last
             args['--prefill-sweep-tokens']=str(plan['sweep_tokens']);args['--prefill-fold-cap-tokens']=str(plan['fold_cap'])
             print('LLAMADECODE_PREFILL_FOLD sweep_tokens=%s primary_sweep_tokens=%d capacity=%d fold_cap=%d rebalance=%d%s'%(','.join(map(str,plan['sweeps'])),plan['sweep_tokens'],plan['capacity'],plan['fold_cap'],int(plan['rebalance']),

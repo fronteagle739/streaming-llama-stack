@@ -23,7 +23,7 @@ PAGE=65536
 
 
 def runtime_min_free_gib(cfg):
-    value=cfg.get('runtime_min_free_gib',4.0)
+    value=cfg.get('runtime_min_free_gib',0.5)
     if type(value) not in (int,float) or not math.isfinite(value) or not 0<=value<2**34:
         raise ValueError('runtime_min_free_gib must be finite and nonnegative (<2**34); 0 disables it')
     return float(value)
