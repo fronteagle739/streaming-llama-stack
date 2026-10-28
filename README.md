@@ -134,8 +134,8 @@ with a header-only dry run. The installer never downloads weights.
 ## Quickstart
 
 ```powershell
-git clone --recurse-submodules https://github.com/fronteagle739/streaming-llama-stack-clean.git
-cd streaming-llama-stack-clean
+git clone --recurse-submodules https://github.com/fronteagle739/streaming-llama-stack.git
+cd streaming-llama-stack
 ./slstack.ps1 install --all
 ./slstack.ps1 install --all --check
 ```
