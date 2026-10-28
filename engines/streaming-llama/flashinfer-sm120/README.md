@@ -49,3 +49,13 @@ and the most skewed observed 4K routing tile with exact sampled reference
 results. Full model qualification is still in progress.
 The source hashes, DLL identity and guarded checks are recorded in
 [`flashinfer-adapter-validation.json`](../../../examples/native-fp4/flashinfer-adapter-validation.json).
+
+`bridge_native_check.cu` additionally accepts the hash-verified proxy GGUF and
+an absolute tensor data offset after the four ordinary checker arguments.
+It reads the first/middle/last/hottest active expert matrices from that actual
+stored tensor and compares their outputs with a separate scalar E2M1/E8M0
+decoder and double/BF16 dot-product oracle. Gate, up and down each passed 36
+sampled comparisons exactly, with full-output finiteness and zero sanitizer
+errors. See [`flashinfer-native-weight-validation.json`](../../../examples/native-fp4/flashinfer-native-weight-validation.json).
+These checks use representable synthetic activations; the full-model comparison
+still determines the effect of activation rounding.

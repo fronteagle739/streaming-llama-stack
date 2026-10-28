@@ -1,0 +1,65 @@
+{
+  "status": "PASS",
+  "bridge_sha256": "8bbc22b60e9b0ff9793d132b74a31a462b8c16319cfb7d4ae3608974074bd8fd",
+  "checker_sha256": "8f29536eb0b0fe8e8a7f6d0e1f0ba49acaa767342e782fa603667673246a49ad",
+  "source_sha256": "c0c438103265d31cad5f90dc9f480a3cf5be694263e7638ba425d2bd36aa8846",
+  "model_sha256": "cf05bdccb86b823ce794eab2ca033a649b6a2f5c03cee8a4b177d86de017ae44",
+  "label": "Q4\u2192MXFP4 requant (lossy), speed proxy for native FP4",
+  "scope": "Actual canonical stored gate/up/down expert weights from the hash-verified proxy, representable synthetic E4M3 activations, permuted routing, full-output finiteness and sampled independent double/BF16 oracle. Not general model quality.",
+  "results": [
+    {
+      "status": "PASS",
+      "N": 2304,
+      "K": 5120,
+      "rows": 840,
+      "weight_source": "stored-MXFP4-proxy-GGUF",
+      "full_output_finite": true,
+      "sampled_double_reference_elements": 36,
+      "max_absolute_error": 0,
+      "gather_and_scatter_permuted": true,
+      "tensor": "blk.20.ffn_gate_exps.weight",
+      "memcheck_errors": 0,
+      "case": "q4-layer39-start49415-rows140",
+      "log_sha256": "a3ca047e4310450c481bd85d34abeeb0ae7b8fe3477dfa1fb1feea49aab7f7ad"
+    },
+    {
+      "status": "PASS",
+      "N": 2304,
+      "K": 5120,
+      "rows": 840,
+      "weight_source": "stored-MXFP4-proxy-GGUF",
+      "full_output_finite": true,
+      "sampled_double_reference_elements": 36,
+      "max_absolute_error": 0,
+      "gather_and_scatter_permuted": true,
+      "tensor": "blk.20.ffn_up_exps.weight",
+      "memcheck_errors": 0,
+      "case": "q4-layer39-start49415-rows140",
+      "log_sha256": "a3ca047e4310450c481bd85d34abeeb0ae7b8fe3477dfa1fb1feea49aab7f7ad"
+    },
+    {
+      "status": "PASS",
+      "N": 5120,
+      "K": 2304,
+      "rows": 840,
+      "weight_source": "stored-MXFP4-proxy-GGUF",
+      "full_output_finite": true,
+      "sampled_double_reference_elements": 36,
+      "max_absolute_error": 0,
+      "gather_and_scatter_permuted": true,
+      "tensor": "blk.20.ffn_down_exps.weight",
+      "memcheck_errors": 0,
+      "case": "q4-layer39-start49415-rows140",
+      "log_sha256": "ff80793aedb81fafe9dba958a77176d3826e5ea4035ccec160683510043e467d"
+    }
+  ],
+  "guard": {
+    "exit_code": 0,
+    "reason": null,
+    "peak_tree_rss": 276742144,
+    "min_available": 14923063296,
+    "host_budget_gib": 2,
+    "floor_gib": 1,
+    "cleanup_confirmed": true
+  }
+}
