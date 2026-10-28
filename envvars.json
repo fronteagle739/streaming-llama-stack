@@ -55566,11 +55566,11 @@
     ],
     "doc": "Producer early Engram loader: reads submitted per batch (1-4096, default 256, at most half the small-read budget).",
     "reads": [
-      "engines/streaming-llama/prefill_llama.cpp/src/llama-dsv41-engram-prefetch.cpp:319"
+      "engines/streaming-llama/prefill_llama.cpp/src/llama-dsv41-engram-prefetch.cpp:327"
     ],
     "code_defaults": [
       {
-        "source": "engines/streaming-llama/prefill_llama.cpp/src/llama-dsv41-engram-prefetch.cpp:319",
+        "source": "engines/streaming-llama/prefill_llama.cpp/src/llama-dsv41-engram-prefetch.cpp:327",
         "unset": "Wrapper/conditional default: see the literal call and consumer below",
         "read": "early_batch=std::min(env_u32(\"LLAMADECODE_ENGRAM_BATCH\",256,1,4096),std::max(1u,early_small/2));",
         "consumer": "        early_small=uint32_t(std::min<uint64_t>(depth,(per-large_slot)/(small_slot+large_slot/16)));\n        early_large=std::max(1u,early_small/16);\n        early_batch=std::min(env_u32(\"LLAMADECODE_ENGRAM_BATCH\",256,1,4096),std::max(1u,early_small/2));\n        early_arena=uint64_t(early_rings)*(uint64_t(early_small)*small_slot+uint64_t(early_large)*large_slot);\n        host_plan=add(without,add(meta,early_arena));\n        require(host_plan<=admitted,\"Early Engram rows and IO arena exceed explicit host admission\");\n    }"
@@ -55610,11 +55610,11 @@
     ],
     "doc": "Producer early Engram loader: queue depth per I/O ring (32-4096, default 1024).",
     "reads": [
-      "engines/streaming-llama/prefill_llama.cpp/src/llama-dsv41-engram-prefetch.cpp:308"
+      "engines/streaming-llama/prefill_llama.cpp/src/llama-dsv41-engram-prefetch.cpp:316"
     ],
     "code_defaults": [
       {
-        "source": "engines/streaming-llama/prefill_llama.cpp/src/llama-dsv41-engram-prefetch.cpp:308",
+        "source": "engines/streaming-llama/prefill_llama.cpp/src/llama-dsv41-engram-prefetch.cpp:316",
         "unset": "Wrapper/conditional default: see the literal call and consumer below",
         "read": "const uint32_t depth=env_u32(\"LLAMADECODE_ENGRAM_DEPTH\",1024,32,4096);",
         "consumer": "        early_mode=true;prior=std::move(prior_cache);\n        early_rings=env_u32(\"LLAMADECODE_ENGRAM_RINGS\",4,1,8);\n        const uint32_t depth=env_u32(\"LLAMADECODE_ENGRAM_DEPTH\",1024,32,4096);\n        const uint64_t rows=uint64_t(tables[0].ids.size())+tables[1].ids.size();\n        const uint64_t without=host_plan-4*1024*1024;\n        // Slot tables, plan state and (with a prior cache) the hit bitmaps.\n        const uint64_t meta=add(256*1024,add(uint64_t(early_rings)*(depth+depth/16+1)*64,prior||row_cache?rows/8+64:0));"
@@ -55632,17 +55632,44 @@
     ],
     "doc": "Producer Engram prompt load: auto (default) starts it before the first weight fetch when the predicted load fits the gap, else at sweep start; 1 always early; 0 at sweep start; pause loads Engram alone and holds the weight stream for layers >= 1 until it ends.",
     "reads": [
-      "engines/streaming-llama/prefill_llama.cpp/src/llama-dsv41-engram-prefetch.cpp:32"
+      "engines/streaming-llama/prefill_llama.cpp/src/llama-dsv41-engram-prefetch.cpp:40"
     ],
     "code_defaults": [
       {
-        "source": "engines/streaming-llama/prefill_llama.cpp/src/llama-dsv41-engram-prefetch.cpp:32",
+        "source": "engines/streaming-llama/prefill_llama.cpp/src/llama-dsv41-engram-prefetch.cpp:40",
         "unset": "NULL from getenv; the literal consumer below supplies any fallback",
         "read": "static const auto m=llama_dsv41_engram_early::parse_mode(std::getenv(\"LLAMADECODE_ENGRAM_EARLY\"));return m;",
-        "consumer": "static std::atomic<bool> llama_dsv41_engram_weight_pass{false};\nstatic llama_dsv41_engram_early::mode llama_dsv41_engram_early_mode(){\n    static const auto m=llama_dsv41_engram_early::parse_mode(std::getenv(\"LLAMADECODE_ENGRAM_EARLY\"));return m;\n}\nbool llama_dsv41_engram_early_enabled(){return llama_dsv41_engram_early_mode()!=llama_dsv41_engram_early::mode::off;}\nbool llama_dsv41_engram_early_auto(){return llama_dsv41_engram_early_mode()==llama_dsv41_engram_early::mode::automatic;}\nbool llama_dsv41_engram_early_pause(){return llama_dsv41_engram_early_mode()==llama_dsv41_engram_early::mode::pause;}"
+        "consumer": "}\nstatic llama_dsv41_engram_early::mode llama_dsv41_engram_early_mode(){\n    static const auto m=llama_dsv41_engram_early::parse_mode(std::getenv(\"LLAMADECODE_ENGRAM_EARLY\"));return m;\n}\nbool llama_dsv41_engram_early_enabled(){return llama_dsv41_engram_early_mode()!=llama_dsv41_engram_early::mode::off;}\nbool llama_dsv41_engram_early_auto(){return llama_dsv41_engram_early_mode()==llama_dsv41_engram_early::mode::automatic;}\nbool llama_dsv41_engram_early_pause(){return llama_dsv41_engram_early_mode()==llama_dsv41_engram_early::mode::pause;}"
       }
     ],
     "code_default": "NULL from getenv; the literal consumer below supplies any fallback"
+  },
+  {
+    "var": "LLAMADECODE_ENGRAM_READ_ALIGN",
+    "flag": "--llamadecode-engram-read-align",
+    "default": null,
+    "classification": "advanced",
+    "scopes": [
+      "rtx-llama"
+    ],
+    "doc": "E13 experiment: Engram direct-read alignment, 4096 bytes (default) or opt-in 512 bytes. The 512-byte arm requires compatible logical sector geometry and preserves all row bytes.",
+    "reads": [
+      "engines/streaming-llama/prefill_llama.cpp/src/llama-dsv41-engram-prefetch.cpp:33"
+    ],
+    "code_defaults": [
+      {
+        "source": "engines/streaming-llama/prefill_llama.cpp/src/llama-dsv41-engram-prefetch.cpp:33",
+        "unset": "NULL from getenv; the literal consumer below supplies any fallback",
+        "read": "const char*e=std::getenv(\"LLAMADECODE_ENGRAM_READ_ALIGN\");",
+        "consumer": "static uint32_t engram_read_alignment(){\n    static const uint32_t alignment=[]{\n        const char*e=std::getenv(\"LLAMADECODE_ENGRAM_READ_ALIGN\");\n        if(!e||!*e||!std::strcmp(e,\"4096\"))return 4096u;\n        if(!std::strcmp(e,\"512\"))return 512u;\n        throw std::invalid_argument(\"LLAMADECODE_ENGRAM_READ_ALIGN must be 512 or 4096\");\n    }();return alignment;"
+      }
+    ],
+    "code_default": "NULL from getenv; the literal consumer below supplies any fallback",
+    "defaults_by_scope": {},
+    "allowed_values": [
+      "4096",
+      "512"
+    ]
   },
   {
     "var": "LLAMADECODE_ENGRAM_IOPS",
@@ -55654,11 +55681,11 @@
     ],
     "doc": "Producer early Engram loader: modelled storage request rate used by the auto decision, requests/s in [1000, 1e8].",
     "reads": [
-      "engines/streaming-llama/prefill_llama.cpp/src/llama-dsv41-engram-prefetch.cpp:38"
+      "engines/streaming-llama/prefill_llama.cpp/src/llama-dsv41-engram-prefetch.cpp:46"
     ],
     "code_defaults": [
       {
-        "source": "engines/streaming-llama/prefill_llama.cpp/src/llama-dsv41-engram-prefetch.cpp:38",
+        "source": "engines/streaming-llama/prefill_llama.cpp/src/llama-dsv41-engram-prefetch.cpp:46",
         "unset": "NULL from getenv; the literal consumer below supplies any fallback",
         "read": "static const double v=llama_dsv41_engram_early::parse_iops(std::getenv(\"LLAMADECODE_ENGRAM_IOPS\"));return v;",
         "consumer": "bool llama_dsv41_engram_early_pause(){return llama_dsv41_engram_early_mode()==llama_dsv41_engram_early::mode::pause;}\ndouble llama_dsv41_engram_early_iops(){\n    static const double v=llama_dsv41_engram_early::parse_iops(std::getenv(\"LLAMADECODE_ENGRAM_IOPS\"));return v;\n}\nvoid llama_dsv41_engram_weight_stream(bool active){llama_dsv41_engram_weight_pass.store(active,std::memory_order_relaxed);}\n#ifdef _WIN32\n// Submit/cleanup contracts: https://learn.microsoft.com/windows/win32/api/ioringapi/nf-ioringapi-submitioring"
@@ -55676,21 +55703,21 @@
     ],
     "doc": "Producer prefill: low sets a low DirectStorage priority hint for Engram table reads; the default normal priority is measured faster (low priority starves the reads).",
     "reads": [
-      "engines/streaming-llama/prefill_llama.cpp/src/llama-dsv41-engram-prefetch.cpp:177",
-      "engines/streaming-llama/prefill_llama.cpp/src/llama-dsv41-engram-prefetch.cpp:404"
+      "engines/streaming-llama/prefill_llama.cpp/src/llama-dsv41-engram-prefetch.cpp:185",
+      "engines/streaming-llama/prefill_llama.cpp/src/llama-dsv41-engram-prefetch.cpp:420"
     ],
     "code_defaults": [
       {
-        "source": "engines/streaming-llama/prefill_llama.cpp/src/llama-dsv41-engram-prefetch.cpp:177",
+        "source": "engines/streaming-llama/prefill_llama.cpp/src/llama-dsv41-engram-prefetch.cpp:185",
         "unset": "NULL from getenv; the literal consumer below supplies any fallback",
         "read": "const char*e=std::getenv(\"LLAMADECODE_ENGRAM_IO_PRIORITY\");",
         "consumer": "            // DirectStorage streaming only if LLAMADECODE_ENGRAM_IO_PRIORITY=low (measured: low priority starves\n            // the reads, 43K layers 123 s vs 33 s; default stays normal).\n            const char*e=std::getenv(\"LLAMADECODE_ENGRAM_IO_PRIORITY\");\n            FILE_IO_PRIORITY_HINT_INFO hint{};hint.PriorityHint=e&&!std::strcmp(e,\"low\")?IoPriorityHintLow:IoPriorityHintNormal; /* low measured 123 s vs 33 s (starved); normal is the default */\n            const BOOL ok=SetFileInformationByHandle(io.file,FileIoPriorityHintInfo,&hint,sizeof(hint));\n            static bool logged=false;if(!logged){logged=true;std::fprintf(stderr,\"LLAMADECODE_ENGRAM_IO_PRIORITY hint=%s applied=%d\\n\",hint.PriorityHint==IoPriorityHintLow?\"low\":\"normal\",int(ok));}\n        }"
       },
       {
-        "source": "engines/streaming-llama/prefill_llama.cpp/src/llama-dsv41-engram-prefetch.cpp:404",
+        "source": "engines/streaming-llama/prefill_llama.cpp/src/llama-dsv41-engram-prefetch.cpp:420",
         "unset": "NULL from getenv; the literal consumer below supplies any fallback",
         "read": "{   const char*e=std::getenv(\"LLAMADECODE_ENGRAM_IO_PRIORITY\");",
-        "consumer": "            FILE_FLAG_NO_BUFFERING|FILE_FLAG_OVERLAPPED|FILE_FLAG_RANDOM_ACCESS|FILE_FLAG_OPEN_REPARSE_POINT,nullptr);\n        require(io.file!=INVALID_HANDLE_VALUE,\"Cannot open original Engram file for its own IoRings\");\n        {   const char*e=std::getenv(\"LLAMADECODE_ENGRAM_IO_PRIORITY\");\n            FILE_IO_PRIORITY_HINT_INFO hint{};hint.PriorityHint=e&&!std::strcmp(e,\"low\")?IoPriorityHintLow:IoPriorityHintNormal;\n            const BOOL ok=SetFileInformationByHandle(io.file,FileIoPriorityHintInfo,&hint,sizeof(hint));\n            std::fprintf(stderr,\"LLAMADECODE_ENGRAM_IO_PRIORITY hint=%s applied=%d early=1\\n\",hint.PriorityHint==IoPriorityHintLow?\"low\":\"normal\",int(ok));\n        }"
+        "consumer": "                         engram_read_alignment(),storage.LogicalBytesPerSector,storage.PhysicalBytesPerSectorForPerformance);\n        }\n        {   const char*e=std::getenv(\"LLAMADECODE_ENGRAM_IO_PRIORITY\");\n            FILE_IO_PRIORITY_HINT_INFO hint{};hint.PriorityHint=e&&!std::strcmp(e,\"low\")?IoPriorityHintLow:IoPriorityHintNormal;\n            const BOOL ok=SetFileInformationByHandle(io.file,FileIoPriorityHintInfo,&hint,sizeof(hint));\n            std::fprintf(stderr,\"LLAMADECODE_ENGRAM_IO_PRIORITY hint=%s applied=%d early=1\\n\",hint.PriorityHint==IoPriorityHintLow?\"low\":\"normal\",int(ok));\n        }"
       }
     ],
     "code_default": "NULL from getenv; the literal consumer below supplies any fallback"
@@ -55705,11 +55732,11 @@
     ],
     "doc": "Producer early Engram loader: number of I/O rings (1-8, default 4).",
     "reads": [
-      "engines/streaming-llama/prefill_llama.cpp/src/llama-dsv41-engram-prefetch.cpp:307"
+      "engines/streaming-llama/prefill_llama.cpp/src/llama-dsv41-engram-prefetch.cpp:315"
     ],
     "code_defaults": [
       {
-        "source": "engines/streaming-llama/prefill_llama.cpp/src/llama-dsv41-engram-prefetch.cpp:307",
+        "source": "engines/streaming-llama/prefill_llama.cpp/src/llama-dsv41-engram-prefetch.cpp:315",
         "unset": "Wrapper/conditional default: see the literal call and consumer below",
         "read": "early_rings=env_u32(\"LLAMADECODE_ENGRAM_RINGS\",4,1,8);",
         "consumer": "        prepare(layout,tokens,count,offsets,admitted,initial,text_mask); // host_plan holds the fixed 4 MiB IO reserve\n        early_mode=true;prior=std::move(prior_cache);\n        early_rings=env_u32(\"LLAMADECODE_ENGRAM_RINGS\",4,1,8);\n        const uint32_t depth=env_u32(\"LLAMADECODE_ENGRAM_DEPTH\",1024,32,4096);\n        const uint64_t rows=uint64_t(tables[0].ids.size())+tables[1].ids.size();\n        const uint64_t without=host_plan-4*1024*1024;\n        // Slot tables, plan state and (with a prior cache) the hit bitmaps."
@@ -61059,11 +61086,11 @@
     ],
     "doc": "LLAMA_DSV41_ENGRAM_SUBMIT_BATCH: advanced engine setting; built-in default retained",
     "reads": [
-      "engines/streaming-llama/prefill_llama.cpp/src/llama-dsv41-engram-prefetch.cpp:227"
+      "engines/streaming-llama/prefill_llama.cpp/src/llama-dsv41-engram-prefetch.cpp:235"
     ],
     "code_defaults": [
       {
-        "source": "engines/streaming-llama/prefill_llama.cpp/src/llama-dsv41-engram-prefetch.cpp:227",
+        "source": "engines/streaming-llama/prefill_llama.cpp/src/llama-dsv41-engram-prefetch.cpp:235",
         "unset": "NULL from getenv; the literal consumer below supplies any fallback",
         "read": "const char*batch_env=std::getenv(\"LLAMA_DSV41_ENGRAM_SUBMIT_BATCH\");",
         "consumer": "        size_t next_row=0;uint32_t next_table=0;UINT_PTR sequence=0;\n        uint64_t read_bytes=0,read_requests=0,submits=0;size_t table0_done=0;\n        const char*batch_env=std::getenv(\"LLAMA_DSV41_ENGRAM_SUBMIT_BATCH\");\n        const bool batch_submits=batch_env&&std::strcmp(batch_env,\"1\")==0;\n        auto issue=[&](uint32_t i){\n            while(next_table<2&&next_row==tables[next_table].ids.size()){++next_table;next_row=0;}\n            if(next_table==2)return false;"
