@@ -87,6 +87,14 @@ def overlay(preset, local=None, model=None, yoco_keep=None, vision=None, profile
         if type(yoco_keep) is not int or yoco_keep not in (0,140,2541):raise ValueError('yoco_keep must be 0, 140 or 2541')
         result['yoco_keep']=yoco_keep
     if vision:result['vision_bridge_version']=1
+    # Qualified Q4 exact-cone carry lifetime: use the unused growable-cache
+    # reservation during initial prefill, then restore it before cache growth.
+    # Keep N=1: the optimized two-sweep control is faster than grouped N=2.
+    if (preset=='1m' and result.get('producer_profile','ultra')=='ultra' and
+            result.get('yoco_keep')==2541 and not result.get('vision_bridge_version') and
+            result.get('producer_fixed_direct_open',True) and
+            env.get('LLAMADECODE_DECODE_COMPACT','1')!='0'):
+        env.setdefault('LLAMADECODE_SINGLEPASS_VRAM','1')
     return result
 
 

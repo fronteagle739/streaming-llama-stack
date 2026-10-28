@@ -1,4 +1,5 @@
 #include "llama-dsv41-layer-log.h"
+#include "llama-dsv41-singlepass.h"
 #include "llama-dsv41-yoco.h"
 #include "llama-dsv41-compact-proof.h"
 #include "ggml-dsv41-bf16-inplace.h"
@@ -434,16 +435,32 @@ struct llama_dsv41_tile_executor::pinned_storage {
         const uint64_t offset=uint64_t(first-static_cast<uint8_t*>(base));
         const uint64_t size=uint64_t(last-first)+llama_dsv41_carry_store::ram_record_bytes;
         require(offset<=bytes&&size<=bytes-offset&&size<=2ull*1024*1024*1024,"Tile pin escaped admitted RAM bank or2GiB bound");
-        void *ptr=first;
-        if(registered_tile==ptr&&registered_tile_bytes==size)return;
+        void *ptr=first;uint64_t pin_size=size;
+        const char *window=std::getenv("LLAMADECODE_SINGLEPASS_PIN");
+        if(window&&std::strcmp(window,"1")==0){
+            // Registration covers allocation lifetime, not permission to read
+            // future rows. queue() still requires the exact live tile lease.
+            // Four 4K tiles fit below the existing 2GiB registration ceiling.
+            constexpr uint64_t window_rows=16384;
+            const uint64_t first_row=uint64_t(lease.start())/window_rows*window_rows;
+            const uint64_t begin=llama_dsv41_carry_store::ram_header_bytes+
+                first_row/32*llama_dsv41_carry_store::ram_page_bytes;
+            const uint64_t end=std::min(bytes,llama_dsv41_carry_store::ram_header_bytes+
+                (first_row+window_rows)/32*llama_dsv41_carry_store::ram_page_bytes);
+            require(begin<=offset&&offset+size<=bytes&&end>begin,"Pin window escaped its existing RAM allocation");
+            ptr=static_cast<uint8_t*>(base)+begin;pin_size=std::max(end,offset+size)-begin;
+            require(pin_size<=2ull*1024*1024*1024,"Pin window exceeds the existing2GiB bound");
+            const uintptr_t held=reinterpret_cast<uintptr_t>(registered_tile),at=reinterpret_cast<uintptr_t>(first);
+            if(registered_tile&&at>=held&&at-held<=registered_tile_bytes&&size<=registered_tile_bytes-(at-held))return;
+        }else if(registered_tile==ptr&&registered_tile_bytes==size)return;
         // Original copy stream completion protects the old registration. No
         // new host buffer or stream; the bank/lease ownership stays unchanged.
         ok(cudaStreamSynchronize(copies),"Previous tile copies did not complete before pin rebinding");
         const auto register_started=clock_type::now();
         if(registered_tile){ok(cudaHostUnregister(registered_tile),"Previous tile RAM unregister failed");registered_tile=nullptr;registered_tile_bytes=0;}
         size_t free_before=0,total=0,free_after=0;ok(cudaMemGetInfo(&free_before,&total),"Cannot inspect GPU memory before tile registration");
-        ok(cudaHostRegister(ptr,size_t(size),cudaHostRegisterDefault),"Active tile RAM registration failed");
-        registered_tile=ptr;registered_tile_bytes=size;
+        ok(cudaHostRegister(ptr,size_t(pin_size),cudaHostRegisterDefault),"Active tile RAM registration failed");
+        registered_tile=ptr;registered_tile_bytes=pin_size;
         last_register_ms=elapsed(register_started); // includes the cudaMemGetInfo between unregister and register
         ok(cudaMemGetInfo(&free_after,&total),"Cannot inspect GPU memory after tile registration");
         llama_dsv41_layer_log("DS4PERF_TILE_HOST_REGISTRATION first=%u count=%u bytes=%llu previous_copy_stream_complete=1 existing_RAM_bank=1\n",lease.start(),lease.count()+next_rows,(unsigned long long)size);
@@ -1209,7 +1226,21 @@ bool llama_dsv41_tile_executor::run(const request&in,const llama_dsv41_layer_gra
         auto routed_weights=w;expert_slot_input=nullptr;
         if(in.route_hook){expert_slot_input=ggml_new_tensor_2d(ctx.get(),GGML_TYPE_I32,6,in.count);ggml_set_name(expert_slot_input,"dsv41_expert_slots");
             ggml_set_input(expert_slot_input);routed_weights.ffn.expert_slots=expert_slot_input;}
-        values=pair_ffn?factory.build_pair(in.layer,p,in.compressed_rows,routed_weights,input,state,expert):factory.build(in.layer,p,in.compressed_rows,routed_weights,input,state,expert);
+        uint32_t graph_compressed_rows=in.compressed_rows;
+        const char *canonical_index=std::getenv("LLAMADECODE_SINGLEPASS_INDEX");
+        if(canonical_index&&std::strcmp(canonical_index,"1")==0&&ratio&&resident&&resident->full()){
+            const uint32_t end=in.position_offset+resident->total_tokens;
+            const uint32_t frontier=llama_dsv41_singlepass::frontier(absolute_start,end);
+            require(frontier>=absolute_start+in.count&&frontier<=end,
+                "Canonical index frontier does not cover the complete causal tile");
+            graph_compressed_rows=std::min(in.compressed_rows,frontier/ratio);
+            require(std::min(512u,graph_compressed_rows)==selected_width&&
+                std::min(2048u,(graph_compressed_rows+7)/8)==candidate_width,
+                "Canonical index frontier changed compact carry widths");
+            llama_dsv41_layer_log("SINGLEPASS_INDEX_FRONTIER layer=%u start=%u count=%u pass_end=%u frontier=%u keys=%u full_keys=%u\n",
+                in.layer,absolute_start,in.count,end,frontier,graph_compressed_rows,in.compressed_rows);
+        }
+        values=pair_ffn?factory.build_pair(in.layer,p,graph_compressed_rows,routed_weights,input,state,expert):factory.build(in.layer,p,graph_compressed_rows,routed_weights,input,state,expert);
         if(attribution){
             require((!pair_ffn||in.count<=attention_rows)&&(!workspace||!workspace->cache_layouts),"E2c attribution requires fresh, single-attention layer graphs");
             require(std::count_if(attribution_stages.begin(),attribution_stages.end(),[](const auto&s){return s.first<=2;})==3,"E2c attribution lost attention/FFN stage coverage");

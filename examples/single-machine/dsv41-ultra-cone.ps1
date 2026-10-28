@@ -1,4 +1,5 @@
 # DSV4.1: exact ULTRA dependency-cone prefill, API only.
+# The 1m preset uses the qualified VRAM carry lifetime and N=1 weight passes.
 param([Parameter(Mandatory=$true)][string]$Config,
       [ValidateSet('262k','1m')][string]$Context='262k', [switch]$DryRun)
 $ErrorActionPreference='Stop'
