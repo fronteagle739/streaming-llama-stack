@@ -1,0 +1,2464 @@
+{
+  "model_sha256": "2cc6bc254f22a0238020e61e931c0cac865218aada1eed9c0036d9f4031c6e5f",
+  "scope": "Single RTX5090, ULTRA, BF16 growable context cache, original Q4_K/Q8_0 GGUF. Startup included; all byte-ledger runs are diagnostic for detailed I/O. Board VRAM includes existing display/context usage. RSS is the native producer peak.",
+  "baseline_e1": {
+    "prompt_tokens": 49555,
+    "fetched_bytes": 315825603008,
+    "exposed_acquire_ms": 8178.571,
+    "executor_wall_ms": 17746.38,
+    "overlapped_backend_transfer_ms": 20006.641,
+    "attribution": "Previously measured NATIVEFP4 control"
+  },
+  "runs": [
+    {
+      "label": "e2-r0-n1-2048-k0",
+      "status": "PASS",
+      "prompt_tokens": 2048,
+      "input_sha256": "a2f499596816d3c4cdf007ee3f8ae99e6a2a63a46482fd8bc41e33f0a2565d6f",
+      "producer_sha256": "e85467548def5a174fc4c60a93f1f2e7218e10e3aeb569f501f9efb692ecc364",
+      "requested_chunks": "1",
+      "routed_reads": "0",
+      "yoco_keep": 0,
+      "seconds": 25.06199999997625,
+      "tok_s": 81.71734099441149,
+      "peak_vram_mib": 26845,
+      "peak_producer_rss_bytes": 5787578368,
+      "minimum_available_ram": 8088244224,
+      "paging_growth": 0,
+      "budget_breaches": 0,
+      "graceful": true,
+      "owned_pid_gone": true,
+      "model_unchanged": true,
+      "head_sha256": "4972739e3a6d835117acf089fc5ee599bd95574ba81372f645d16b992137b3d5",
+      "sweeps": [
+        2048
+      ],
+      "passes": [
+        {
+          "fetched_bytes": 315825603008,
+          "fetch_ms_overlapped": 21200.7069,
+          "exposed_acquire_ms": 18838.6755,
+          "routed_fetch_wait_ms": 0,
+          "tensor_bytes_by_role": {},
+          "tensor_ledger_reconciles": null,
+          "wall_totals": {
+            "wall_ms": 20638.5815,
+            "acquire_ms": 18838.6755,
+            "carry_begin_ms": 0.1093,
+            "executor_wall_ms": 1793.9479,
+            "executor_phase_gap_ms": 13.9169,
+            "engram_ms": 0.0581,
+            "carry_read_ms": 0.0555,
+            "carry_write_ms": 0.0736,
+            "carry_commit_ms": 0.1053,
+            "provider_release_ms": 0.1749,
+            "scaffold_ms": 5.3814
+          }
+        }
+      ],
+      "fetched_bytes": 315825603008,
+      "layers_acquire_ms": 18838.6755,
+      "executor_wall_ms": 1793.9479,
+      "native_phase_ms": {
+        "append_owner_admission": 0.0,
+        "chunk_token_preparation": 0.002,
+        "embedding_40_layers_head": 21131.9033,
+        "final_hidden_export_preparation": 7.9672,
+        "input_identity_hash_budget_preflight": 272.634,
+        "inspect_admit_allocate": 3125.2448,
+        "native_payload_export_flush": 19.787,
+        "payload_close_readonly_rehash": 0.0002,
+        "run_dispatch_bookkeeping": 0.04059999999940622
+      }
+    },
+    {
+      "label": "e2-r1-n1-2048-k0",
+      "status": "PASS",
+      "prompt_tokens": 2048,
+      "input_sha256": "a2f499596816d3c4cdf007ee3f8ae99e6a2a63a46482fd8bc41e33f0a2565d6f",
+      "producer_sha256": "e85467548def5a174fc4c60a93f1f2e7218e10e3aeb569f501f9efb692ecc364",
+      "requested_chunks": "1",
+      "routed_reads": "1",
+      "yoco_keep": 0,
+      "seconds": 10.34299999999348,
+      "tok_s": 198.00831480240655,
+      "peak_vram_mib": 26845,
+      "peak_producer_rss_bytes": 5785878528,
+      "minimum_available_ram": 10852679680,
+      "paging_growth": 0,
+      "budget_breaches": 0,
+      "graceful": true,
+      "owned_pid_gone": true,
+      "model_unchanged": true,
+      "head_sha256": "4972739e3a6d835117acf089fc5ee599bd95574ba81372f645d16b992137b3d5",
+      "sweeps": [
+        2048
+      ],
+      "passes": [
+        {
+          "fetched_bytes": 147794330048,
+          "fetch_ms_overlapped": 7531.421200000002,
+          "exposed_acquire_ms": 20.8688,
+          "routed_fetch_wait_ms": 6495.5515000000005,
+          "tensor_bytes_by_role": {
+            "dense_and_other": 8033710528,
+            "embedding": 1323827200,
+            "head": 703303680,
+            "routed_experts": 137733488640
+          },
+          "tensor_ledger_reconciles": true,
+          "wall_totals": {
+            "wall_ms": 8216.6705,
+            "acquire_ms": 20.8688,
+            "carry_begin_ms": 0.0731,
+            "executor_wall_ms": 8191.2346,
+            "executor_phase_gap_ms": 10.891,
+            "engram_ms": 0.0376,
+            "carry_read_ms": 0.0311,
+            "carry_write_ms": 0.0506,
+            "carry_commit_ms": 0.0862,
+            "provider_release_ms": 0.1361,
+            "scaffold_ms": 4.1524
+          }
+        }
+      ],
+      "fetched_bytes": 147794330048,
+      "layers_acquire_ms": 20.8688,
+      "executor_wall_ms": 8191.2346,
+      "native_phase_ms": {
+        "append_owner_admission": 0.0,
+        "chunk_token_preparation": 0.0025,
+        "embedding_40_layers_head": 8301.9922,
+        "final_hidden_export_preparation": 7.9255,
+        "input_identity_hash_budget_preflight": 262.3263,
+        "inspect_admit_allocate": 1550.5836,
+        "native_payload_export_flush": 17.3545,
+        "payload_close_readonly_rehash": 0.0002,
+        "run_dispatch_bookkeeping": 0.05319999999966196
+      }
+    },
+    {
+      "label": "e2-r0-n1-8192-k0",
+      "status": "PASS",
+      "prompt_tokens": 8192,
+      "input_sha256": "4b08871cef55e56e37f6b07222d55bca8d0f78413b1bf7d2842350ce2fdf61a6",
+      "producer_sha256": "d15994bb88ab5c0da42ea6c2e8bc9f504d7a3feea3cfc7ee02674c580212f1fc",
+      "requested_chunks": "1",
+      "routed_reads": "0",
+      "yoco_keep": 0,
+      "seconds": 21.23399999999674,
+      "tok_s": 385.7963643214306,
+      "peak_vram_mib": 26923,
+      "peak_producer_rss_bytes": 6010261504,
+      "minimum_available_ram": 10707554304,
+      "paging_growth": 0,
+      "budget_breaches": 0,
+      "graceful": true,
+      "owned_pid_gone": true,
+      "model_unchanged": true,
+      "head_sha256": "6175720c0cd0f0d5bc22a4eec1db953d70008fb2a0a250e54b6eff37679a145b",
+      "sweeps": [
+        8192
+      ],
+      "passes": [
+        {
+          "fetched_bytes": 315825603008,
+          "fetch_ms_overlapped": 18930.0357,
+          "exposed_acquire_ms": 13463.0373,
+          "routed_fetch_wait_ms": 0,
+          "tensor_bytes_by_role": {
+            "dense_and_other": 8033710528,
+            "embedding": 1323827200,
+            "head": 703303680,
+            "routed_experts": 305764761600
+          },
+          "tensor_ledger_reconciles": true,
+          "wall_totals": {
+            "wall_ms": 18769.1415,
+            "acquire_ms": 13463.0373,
+            "carry_begin_ms": 0.1353,
+            "executor_wall_ms": 5270.8259,
+            "executor_phase_gap_ms": 21.6288,
+            "engram_ms": 0.1159,
+            "carry_read_ms": 0.1057,
+            "carry_write_ms": 0.1188,
+            "carry_commit_ms": 0.08600000000000001,
+            "provider_release_ms": 0.1406,
+            "scaffold_ms": 34.576
+          }
+        }
+      ],
+      "fetched_bytes": 315825603008,
+      "layers_acquire_ms": 13463.0373,
+      "executor_wall_ms": 5270.8259,
+      "native_phase_ms": {
+        "append_owner_admission": 0.0,
+        "chunk_token_preparation": 0.0037,
+        "embedding_40_layers_head": 18909.361800000002,
+        "final_hidden_export_preparation": 70.9114,
+        "input_identity_hash_budget_preflight": 272.4106,
+        "inspect_admit_allocate": 1557.7573,
+        "native_payload_export_flush": 47.8082,
+        "payload_close_readonly_rehash": 0.0002,
+        "run_dispatch_bookkeeping": 0.04959999999933018
+      }
+    },
+    {
+      "label": "e2-r1-n1-8192-k0",
+      "status": "PASS",
+      "prompt_tokens": 8192,
+      "input_sha256": "4b08871cef55e56e37f6b07222d55bca8d0f78413b1bf7d2842350ce2fdf61a6",
+      "producer_sha256": "d15994bb88ab5c0da42ea6c2e8bc9f504d7a3feea3cfc7ee02674c580212f1fc",
+      "requested_chunks": "1",
+      "routed_reads": "1",
+      "yoco_keep": 0,
+      "seconds": 15.59399999998277,
+      "tok_s": 525.3302552269496,
+      "peak_vram_mib": 26923,
+      "peak_producer_rss_bytes": 5945020416,
+      "minimum_available_ram": 10615853056,
+      "paging_growth": 0,
+      "budget_breaches": 0,
+      "graceful": true,
+      "owned_pid_gone": true,
+      "model_unchanged": true,
+      "head_sha256": "6175720c0cd0f0d5bc22a4eec1db953d70008fb2a0a250e54b6eff37679a145b",
+      "sweeps": [
+        8192
+      ],
+      "passes": [
+        {
+          "fetched_bytes": 161788641728,
+          "fetch_ms_overlapped": 9452.0794,
+          "exposed_acquire_ms": 14.6447,
+          "routed_fetch_wait_ms": 7729.6566,
+          "tensor_bytes_by_role": {
+            "dense_and_other": 8033710528,
+            "embedding": 1323827200,
+            "head": 703303680,
+            "routed_experts": 151727800320
+          },
+          "tensor_ledger_reconciles": true,
+          "wall_totals": {
+            "wall_ms": 13028.5691,
+            "acquire_ms": 14.6447,
+            "carry_begin_ms": 0.0498,
+            "executor_wall_ms": 12990.6108,
+            "executor_phase_gap_ms": 20.5939,
+            "engram_ms": 0.1095,
+            "carry_read_ms": 0.0696,
+            "carry_write_ms": 0.1144,
+            "carry_commit_ms": 0.0673,
+            "provider_release_ms": 0.1161,
+            "scaffold_ms": 22.7869
+          }
+        }
+      ],
+      "fetched_bytes": 161788641728,
+      "layers_acquire_ms": 14.6447,
+      "executor_wall_ms": 12990.6108,
+      "native_phase_ms": {
+        "append_owner_admission": 0.0,
+        "chunk_token_preparation": 0.0031,
+        "embedding_40_layers_head": 13163.6606,
+        "final_hidden_export_preparation": 73.812,
+        "input_identity_hash_budget_preflight": 284.9137,
+        "inspect_admit_allocate": 1800.7537,
+        "native_payload_export_flush": 46.9726,
+        "payload_close_readonly_rehash": 0.0002,
+        "run_dispatch_bookkeeping": 0.05560000000140519
+      }
+    },
+    {
+      "label": "e2-r0-n1-32768-k0",
+      "status": "PASS",
+      "prompt_tokens": 32768,
+      "input_sha256": "a12613fe16b86adce0853fa73a21759e428f212f37dc7c6350f49fd1296ccee0",
+      "producer_sha256": "d15994bb88ab5c0da42ea6c2e8bc9f504d7a3feea3cfc7ee02674c580212f1fc",
+      "requested_chunks": "1",
+      "routed_reads": "0",
+      "yoco_keep": 0,
+      "seconds": 24.53100000001723,
+      "tok_s": 1335.7792181312211,
+      "peak_vram_mib": 26995,
+      "peak_producer_rss_bytes": 5965103104,
+      "minimum_available_ram": 10615504896,
+      "paging_growth": 0,
+      "budget_breaches": 0,
+      "graceful": true,
+      "owned_pid_gone": true,
+      "model_unchanged": true,
+      "head_sha256": "a00b88d42aa7db04432efeaa6b93f643889c6372e58bc58909553a71b4909f21",
+      "sweeps": [
+        32768
+      ],
+      "passes": [
+        {
+          "fetched_bytes": 315825603008,
+          "fetch_ms_overlapped": 19118.104499999998,
+          "exposed_acquire_ms": 1205.8876,
+          "routed_fetch_wait_ms": 0,
+          "tensor_bytes_by_role": {
+            "dense_and_other": 8033710528,
+            "embedding": 1323827200,
+            "head": 703303680,
+            "routed_experts": 305764761600
+          },
+          "tensor_ledger_reconciles": true,
+          "wall_totals": {
+            "wall_ms": 21570.9869,
+            "acquire_ms": 1205.8876,
+            "carry_begin_ms": 0.0785,
+            "executor_wall_ms": 20304.3406,
+            "executor_phase_gap_ms": 69.1252,
+            "engram_ms": 0.5972,
+            "carry_read_ms": 0.272,
+            "carry_write_ms": 0.3177,
+            "carry_commit_ms": 0.0805,
+            "provider_release_ms": 0.1261,
+            "scaffold_ms": 59.2867
+          }
+        }
+      ],
+      "fetched_bytes": 315825603008,
+      "layers_acquire_ms": 1205.8876,
+      "executor_wall_ms": 20304.3406,
+      "native_phase_ms": {
+        "append_owner_admission": 0.0,
+        "chunk_token_preparation": 0.0172,
+        "embedding_40_layers_head": 21941.6276,
+        "final_hidden_export_preparation": 262.0992,
+        "input_identity_hash_budget_preflight": 265.7231,
+        "inspect_admit_allocate": 1677.2867,
+        "native_payload_export_flush": 169.5384,
+        "payload_close_readonly_rehash": 0.0002,
+        "run_dispatch_bookkeeping": 0.038900000000126056
+      }
+    },
+    {
+      "label": "e2-r1-n1-32768-k0",
+      "status": "PASS",
+      "prompt_tokens": 32768,
+      "input_sha256": "a12613fe16b86adce0853fa73a21759e428f212f37dc7c6350f49fd1296ccee0",
+      "producer_sha256": "d15994bb88ab5c0da42ea6c2e8bc9f504d7a3feea3cfc7ee02674c580212f1fc",
+      "requested_chunks": "1",
+      "routed_reads": "1",
+      "yoco_keep": 0,
+      "seconds": 30.82800000003772,
+      "tok_s": 1062.9298040729177,
+      "peak_vram_mib": 26995,
+      "peak_producer_rss_bytes": 5959909376,
+      "minimum_available_ram": 10691555328,
+      "paging_growth": 0,
+      "budget_breaches": 0,
+      "graceful": true,
+      "owned_pid_gone": true,
+      "model_unchanged": true,
+      "head_sha256": "a00b88d42aa7db04432efeaa6b93f643889c6372e58bc58909553a71b4909f21",
+      "sweeps": [
+        32768
+      ],
+      "passes": [
+        {
+          "fetched_bytes": 174608466368,
+          "fetch_ms_overlapped": 9629.182999999995,
+          "exposed_acquire_ms": 23.8188,
+          "routed_fetch_wait_ms": 7930.281,
+          "tensor_bytes_by_role": {
+            "dense_and_other": 8033710528,
+            "embedding": 1323827200,
+            "head": 703303680,
+            "routed_experts": 164547624960
+          },
+          "tensor_ledger_reconciles": true,
+          "wall_totals": {
+            "wall_ms": 27944.2319,
+            "acquire_ms": 23.8188,
+            "carry_begin_ms": 0.0416,
+            "executor_wall_ms": 27863.5635,
+            "executor_phase_gap_ms": 56.5987,
+            "engram_ms": 0.5173,
+            "carry_read_ms": 0.187,
+            "carry_write_ms": 0.2608,
+            "carry_commit_ms": 0.0655,
+            "provider_release_ms": 0.09519999999999999,
+            "scaffold_ms": 55.682199999999995
+          }
+        }
+      ],
+      "fetched_bytes": 174608466368,
+      "layers_acquire_ms": 23.8188,
+      "executor_wall_ms": 27863.5635,
+      "native_phase_ms": {
+        "append_owner_admission": 0.0,
+        "chunk_token_preparation": 0.0147,
+        "embedding_40_layers_head": 28279.3141,
+        "final_hidden_export_preparation": 257.8491,
+        "input_identity_hash_budget_preflight": 234.4261,
+        "inspect_admit_allocate": 1679.78,
+        "native_payload_export_flush": 169.393,
+        "payload_close_readonly_rehash": 0.0001,
+        "run_dispatch_bookkeeping": 0.059199999999123065
+      }
+    },
+    {
+      "label": "code-r0-n1-2048-k0",
+      "status": "PASS",
+      "prompt_tokens": 2048,
+      "input_sha256": "32ee65d6732dde57889d2ce52d5b9043543c4dab8a84c6c57af148ee0e176cdc",
+      "producer_sha256": "74113968f9006808b0e7fe88989538a5a6692f7cbc1add2ae542771f99558bbe",
+      "requested_chunks": "1",
+      "routed_reads": "0",
+      "yoco_keep": 0,
+      "seconds": 19.17200000002049,
+      "tok_s": 106.82244940526869,
+      "peak_vram_mib": 26845,
+      "peak_producer_rss_bytes": 5810507776,
+      "minimum_available_ram": 10817847296,
+      "paging_growth": 0,
+      "budget_breaches": 0,
+      "graceful": true,
+      "owned_pid_gone": true,
+      "model_unchanged": true,
+      "head_sha256": "51aae30fbc7de0d30951943243f2e025ecfb944652f98292873202a0f84f1503",
+      "sweeps": [
+        2048
+      ],
+      "passes": [
+        {
+          "fetched_bytes": 315825603008,
+          "fetch_ms_overlapped": 17167.7745,
+          "exposed_acquire_ms": 15191.8209,
+          "routed_fetch_wait_ms": 0,
+          "tensor_bytes_by_role": {
+            "dense_and_other": 8033710528,
+            "embedding": 1323827200,
+            "head": 703303680,
+            "routed_experts": 305764761600
+          },
+          "tensor_ledger_reconciles": true,
+          "wall_totals": {
+            "wall_ms": 16977.1012,
+            "acquire_ms": 15191.8209,
+            "carry_begin_ms": 0.1142,
+            "executor_wall_ms": 1779.2498,
+            "executor_phase_gap_ms": 11.7488,
+            "engram_ms": 0.0363,
+            "carry_read_ms": 0.0387,
+            "carry_write_ms": 0.0788,
+            "carry_commit_ms": 0.1264,
+            "provider_release_ms": 0.2056,
+            "scaffold_ms": 5.4305
+          }
+        }
+      ],
+      "fetched_bytes": 315825603008,
+      "layers_acquire_ms": 15191.8209,
+      "executor_wall_ms": 1779.2498,
+      "native_phase_ms": {
+        "append_owner_admission": 0.0,
+        "chunk_token_preparation": 0.0058,
+        "embedding_40_layers_head": 17094.1116,
+        "final_hidden_export_preparation": 8.2679,
+        "input_identity_hash_budget_preflight": 264.3273,
+        "inspect_admit_allocate": 1601.6112,
+        "native_payload_export_flush": 18.341,
+        "payload_close_readonly_rehash": 0.0,
+        "run_dispatch_bookkeeping": 0.03260000000119412
+      }
+    },
+    {
+      "label": "code-rauto-n1-2048-k0",
+      "status": "PASS",
+      "prompt_tokens": 2048,
+      "input_sha256": "32ee65d6732dde57889d2ce52d5b9043543c4dab8a84c6c57af148ee0e176cdc",
+      "producer_sha256": "74113968f9006808b0e7fe88989538a5a6692f7cbc1add2ae542771f99558bbe",
+      "requested_chunks": "1",
+      "routed_reads": "1",
+      "yoco_keep": 0,
+      "seconds": 15.23399999999674,
+      "tok_s": 134.4361297098883,
+      "peak_vram_mib": 26845,
+      "peak_producer_rss_bytes": 5811175424,
+      "minimum_available_ram": 10879471616,
+      "paging_growth": 0,
+      "budget_breaches": 0,
+      "graceful": true,
+      "owned_pid_gone": true,
+      "model_unchanged": true,
+      "head_sha256": "51aae30fbc7de0d30951943243f2e025ecfb944652f98292873202a0f84f1503",
+      "sweeps": [
+        2048
+      ],
+      "passes": [
+        {
+          "fetched_bytes": 263073219008,
+          "fetch_ms_overlapped": 12248.700900000002,
+          "exposed_acquire_ms": 20.4254,
+          "routed_fetch_wait_ms": 11116.8552,
+          "tensor_bytes_by_role": {
+            "dense_and_other": 8033710528,
+            "embedding": 1323827200,
+            "head": 703303680,
+            "routed_experts": 253012377600
+          },
+          "tensor_ledger_reconciles": true,
+          "wall_totals": {
+            "wall_ms": 12962.1803,
+            "acquire_ms": 20.4254,
+            "carry_begin_ms": 0.0475,
+            "executor_wall_ms": 12924.4049,
+            "executor_phase_gap_ms": 11.4949,
+            "engram_ms": 8.4303,
+            "carry_read_ms": 0.0288,
+            "carry_write_ms": 0.0679,
+            "carry_commit_ms": 0.1133,
+            "provider_release_ms": 0.1703,
+            "scaffold_ms": 8.4919
+          }
+        }
+      ],
+      "fetched_bytes": 263073219008,
+      "layers_acquire_ms": 20.4254,
+      "executor_wall_ms": 12924.4049,
+      "native_phase_ms": {
+        "append_owner_admission": 0.0,
+        "chunk_token_preparation": 0.0009,
+        "embedding_40_layers_head": 13114.73,
+        "final_hidden_export_preparation": 7.8812,
+        "input_identity_hash_budget_preflight": 276.5185,
+        "inspect_admit_allocate": 1621.447,
+        "native_payload_export_flush": 17.9636,
+        "payload_close_readonly_rehash": 0.0001,
+        "run_dispatch_bookkeeping": 0.04930000000039314
+      }
+    },
+    {
+      "label": "code-r0-n1-8192-k0",
+      "status": "PASS",
+      "prompt_tokens": 8192,
+      "input_sha256": "656d8dfe5f3fc2c479e80c925ea7d1c54b3e2176139a6c29d4879d82d40685c6",
+      "producer_sha256": "74113968f9006808b0e7fe88989538a5a6692f7cbc1add2ae542771f99558bbe",
+      "requested_chunks": "1",
+      "routed_reads": "0",
+      "yoco_keep": 0,
+      "seconds": 20.57799999997951,
+      "tok_s": 398.0950529695868,
+      "peak_vram_mib": 26923,
+      "peak_producer_rss_bytes": 6003752960,
+      "minimum_available_ram": 10719862784,
+      "paging_growth": 0,
+      "budget_breaches": 0,
+      "graceful": true,
+      "owned_pid_gone": true,
+      "model_unchanged": true,
+      "head_sha256": "e8398ecabe270f6bfdb61620c1479a0004a7a2bf7ccba0542ec1e4d79ee312dd",
+      "sweeps": [
+        8192
+      ],
+      "passes": [
+        {
+          "fetched_bytes": 315825603008,
+          "fetch_ms_overlapped": 18466.9878,
+          "exposed_acquire_ms": 12531.3533,
+          "routed_fetch_wait_ms": 0,
+          "tensor_bytes_by_role": {
+            "dense_and_other": 8033710528,
+            "embedding": 1323827200,
+            "head": 703303680,
+            "routed_experts": 305764761600
+          },
+          "tensor_ledger_reconciles": true,
+          "wall_totals": {
+            "wall_ms": 18087.5357,
+            "acquire_ms": 12531.3533,
+            "carry_begin_ms": 0.125,
+            "executor_wall_ms": 5509.6659,
+            "executor_phase_gap_ms": 25.7504,
+            "engram_ms": 5.867100000000001,
+            "carry_read_ms": 0.0883,
+            "carry_write_ms": 0.1694,
+            "carry_commit_ms": 0.0987,
+            "provider_release_ms": 0.16999999999999998,
+            "scaffold_ms": 39.998
+          }
+        }
+      ],
+      "fetched_bytes": 315825603008,
+      "layers_acquire_ms": 12531.3533,
+      "executor_wall_ms": 5509.6659,
+      "native_phase_ms": {
+        "append_owner_admission": 0.0,
+        "chunk_token_preparation": 0.0023,
+        "embedding_40_layers_head": 18398.094,
+        "final_hidden_export_preparation": 70.9577,
+        "input_identity_hash_budget_preflight": 264.0896,
+        "inspect_admit_allocate": 1600.345,
+        "native_payload_export_flush": 48.9981,
+        "payload_close_readonly_rehash": 0.0002,
+        "run_dispatch_bookkeeping": 0.04619999999970048
+      }
+    },
+    {
+      "label": "code-rauto-n1-8192-k0",
+      "status": "PASS",
+      "prompt_tokens": 8192,
+      "input_sha256": "656d8dfe5f3fc2c479e80c925ea7d1c54b3e2176139a6c29d4879d82d40685c6",
+      "producer_sha256": "74113968f9006808b0e7fe88989538a5a6692f7cbc1add2ae542771f99558bbe",
+      "requested_chunks": "1",
+      "routed_reads": "1",
+      "yoco_keep": 0,
+      "seconds": 21.39100000000326,
+      "tok_s": 382.96479827959195,
+      "peak_vram_mib": 26923,
+      "peak_producer_rss_bytes": 6013976576,
+      "minimum_available_ram": 10704171008,
+      "paging_growth": 0,
+      "budget_breaches": 0,
+      "graceful": true,
+      "owned_pid_gone": true,
+      "model_unchanged": true,
+      "head_sha256": "e8398ecabe270f6bfdb61620c1479a0004a7a2bf7ccba0542ec1e4d79ee312dd",
+      "sweeps": [
+        8192
+      ],
+      "passes": [
+        {
+          "fetched_bytes": 291997450688,
+          "fetch_ms_overlapped": 14956.065200000005,
+          "exposed_acquire_ms": 32.5829,
+          "routed_fetch_wait_ms": 13111.3686,
+          "tensor_bytes_by_role": {
+            "dense_and_other": 8033710528,
+            "embedding": 1323827200,
+            "head": 703303680,
+            "routed_experts": 281936609280
+          },
+          "tensor_ledger_reconciles": true,
+          "wall_totals": {
+            "wall_ms": 18926.0323,
+            "acquire_ms": 32.5829,
+            "carry_begin_ms": 0.0626,
+            "executor_wall_ms": 18604.3705,
+            "executor_phase_gap_ms": 23.7516,
+            "engram_ms": 245.04379999999998,
+            "carry_read_ms": 0.0778,
+            "carry_write_ms": 0.1227,
+            "carry_commit_ms": 0.0787,
+            "provider_release_ms": 0.1334,
+            "scaffold_ms": 43.5599
+          }
+        }
+      ],
+      "fetched_bytes": 291997450688,
+      "layers_acquire_ms": 32.5829,
+      "executor_wall_ms": 18604.3705,
+      "native_phase_ms": {
+        "append_owner_admission": 0.0,
+        "chunk_token_preparation": 0.0076,
+        "embedding_40_layers_head": 19165.623900000002,
+        "final_hidden_export_preparation": 74.0957,
+        "input_identity_hash_budget_preflight": 265.9229,
+        "inspect_admit_allocate": 1647.9123,
+        "native_payload_export_flush": 46.747,
+        "payload_close_readonly_rehash": 0.0001,
+        "run_dispatch_bookkeeping": 0.05869999999944753
+      }
+    },
+    {
+      "label": "e4align-r1-n1-8192-k0",
+      "status": "PASS",
+      "prompt_tokens": 8192,
+      "input_sha256": "4b08871cef55e56e37f6b07222d55bca8d0f78413b1bf7d2842350ce2fdf61a6",
+      "producer_sha256": "f8ee0a32d968ba59383f394693027a59b79ccbd76387c9a9a4648518deb6adb7",
+      "requested_chunks": "1",
+      "routed_reads": "1",
+      "yoco_keep": 0,
+      "seconds": 14.936999999976251,
+      "tok_s": 548.4367677587885,
+      "peak_vram_mib": 26923,
+      "peak_producer_rss_bytes": 5945327616,
+      "minimum_available_ram": 10759999488,
+      "paging_growth": 0,
+      "budget_breaches": 0,
+      "graceful": true,
+      "owned_pid_gone": true,
+      "model_unchanged": true,
+      "head_sha256": "6175720c0cd0f0d5bc22a4eec1db953d70008fb2a0a250e54b6eff37679a145b",
+      "sweeps": [
+        8192
+      ],
+      "passes": [
+        {
+          "fetched_bytes": 161788641728,
+          "fetch_ms_overlapped": 8872.961600000004,
+          "exposed_acquire_ms": 11.8158,
+          "routed_fetch_wait_ms": 7257.8906,
+          "tensor_bytes_by_role": {
+            "dense_and_other": 8033710528,
+            "embedding": 1323827200,
+            "head": 703303680,
+            "routed_experts": 151727800320
+          },
+          "tensor_ledger_reconciles": true,
+          "wall_totals": {
+            "wall_ms": 12471.2189,
+            "acquire_ms": 11.8158,
+            "carry_begin_ms": 0.0342,
+            "executor_wall_ms": 12444.4395,
+            "executor_phase_gap_ms": 19.9289,
+            "engram_ms": 0.1099,
+            "carry_read_ms": 0.0612,
+            "carry_write_ms": 0.0998,
+            "carry_commit_ms": 0.062,
+            "provider_release_ms": 0.0859,
+            "scaffold_ms": 14.5106
+          }
+        }
+      ],
+      "fetched_bytes": 161788641728,
+      "layers_acquire_ms": 11.8158,
+      "executor_wall_ms": 12444.4395,
+      "native_phase_ms": {
+        "append_owner_admission": 0.0,
+        "chunk_token_preparation": 0.0025,
+        "embedding_40_layers_head": 12596.7518,
+        "final_hidden_export_preparation": 72.3242,
+        "input_identity_hash_budget_preflight": 265.4133,
+        "inspect_admit_allocate": 1566.2584,
+        "native_payload_export_flush": 47.0456,
+        "payload_close_readonly_rehash": 0.0002,
+        "run_dispatch_bookkeeping": 0.045600000000391105
+      }
+    },
+    {
+      "label": "e4align-r1-n1-8192-k2541",
+      "status": "PASS",
+      "prompt_tokens": 8192,
+      "input_sha256": "4b08871cef55e56e37f6b07222d55bca8d0f78413b1bf7d2842350ce2fdf61a6",
+      "producer_sha256": "f8ee0a32d968ba59383f394693027a59b79ccbd76387c9a9a4648518deb6adb7",
+      "requested_chunks": "1",
+      "routed_reads": "1",
+      "yoco_keep": 2541,
+      "seconds": 13.51600000000326,
+      "tok_s": 606.0964782478562,
+      "peak_vram_mib": 26923,
+      "peak_producer_rss_bytes": 5945425920,
+      "minimum_available_ram": 10269065216,
+      "paging_growth": 0,
+      "budget_breaches": 0,
+      "graceful": true,
+      "owned_pid_gone": true,
+      "model_unchanged": true,
+      "head_sha256": "6175720c0cd0f0d5bc22a4eec1db953d70008fb2a0a250e54b6eff37679a145b",
+      "sweeps": [
+        8192
+      ],
+      "passes": [
+        {
+          "fetched_bytes": 134954598848,
+          "fetch_ms_overlapped": 8870.501600000003,
+          "exposed_acquire_ms": 20.8016,
+          "routed_fetch_wait_ms": 7190.1884,
+          "tensor_bytes_by_role": {
+            "dense_and_other": 8033710528,
+            "embedding": 1323827200,
+            "head": 703303680,
+            "routed_experts": 124893757440
+          },
+          "tensor_ledger_reconciles": true,
+          "wall_totals": {
+            "wall_ms": 11212.6312,
+            "acquire_ms": 20.8016,
+            "carry_begin_ms": 0.0443,
+            "executor_wall_ms": 11176.9192,
+            "executor_phase_gap_ms": 16.6746,
+            "engram_ms": 0.1038,
+            "carry_read_ms": 0.0563,
+            "carry_write_ms": 0.0983,
+            "carry_commit_ms": 0.09519999999999999,
+            "provider_release_ms": 0.1277,
+            "scaffold_ms": 14.3848
+          }
+        }
+      ],
+      "fetched_bytes": 134954598848,
+      "layers_acquire_ms": 20.8016,
+      "executor_wall_ms": 11176.9192,
+      "native_phase_ms": {
+        "append_owner_admission": 0.0,
+        "chunk_token_preparation": 0.0192,
+        "embedding_40_layers_head": 11347.747000000001,
+        "final_hidden_export_preparation": 15.7498,
+        "input_identity_hash_budget_preflight": 285.8342,
+        "inspect_admit_allocate": 1631.2434,
+        "native_payload_export_flush": 47.8163,
+        "payload_close_readonly_rehash": 0.0001,
+        "run_dispatch_bookkeeping": 0.0337999999988412
+      }
+    },
+    {
+      "label": "e4final-r1-n1-49555-k0",
+      "status": "PASS",
+      "prompt_tokens": 49555,
+      "input_sha256": "b3d79635cc9bde20472affb732e7ba877eb16acf09afd2f17956cb535484ed46",
+      "producer_sha256": "74113968f9006808b0e7fe88989538a5a6692f7cbc1add2ae542771f99558bbe",
+      "requested_chunks": "1",
+      "routed_reads": "1",
+      "yoco_keep": 0,
+      "seconds": 44.46899999998277,
+      "tok_s": 1114.3718095756415,
+      "peak_vram_mib": 27061,
+      "peak_producer_rss_bytes": 6093729792,
+      "minimum_available_ram": 10698584064,
+      "paging_growth": 0,
+      "budget_breaches": 0,
+      "graceful": true,
+      "owned_pid_gone": true,
+      "model_unchanged": true,
+      "head_sha256": "f72b6bf3c8661fbc1e2ccc79f3c6f72b6d5d4b98070ef53a630f3e648565735c",
+      "sweeps": [
+        49555
+      ],
+      "passes": [
+        {
+          "fetched_bytes": 185955205568,
+          "fetch_ms_overlapped": 10292.433900000004,
+          "exposed_acquire_ms": 33.6614,
+          "routed_fetch_wait_ms": 8731.1049,
+          "tensor_bytes_by_role": {
+            "dense_and_other": 8033710528,
+            "embedding": 1323827200,
+            "head": 703303680,
+            "routed_experts": 175894364160
+          },
+          "tensor_ledger_reconciles": true,
+          "wall_totals": {
+            "wall_ms": 40881.8736,
+            "acquire_ms": 33.6614,
+            "carry_begin_ms": 0.0676,
+            "executor_wall_ms": 40634.7215,
+            "executor_phase_gap_ms": 90.76389999999999,
+            "engram_ms": 0.7828999999999999,
+            "carry_read_ms": 0.262,
+            "carry_write_ms": 0.3839,
+            "carry_commit_ms": 0.079,
+            "provider_release_ms": 0.0994,
+            "scaffold_ms": 211.8159
+          }
+        }
+      ],
+      "fetched_bytes": 185955205568,
+      "layers_acquire_ms": 33.6614,
+      "executor_wall_ms": 40634.7215,
+      "native_phase_ms": {
+        "append_owner_admission": 0.0,
+        "chunk_token_preparation": 0.0103,
+        "embedding_40_layers_head": 41354.7221,
+        "final_hidden_export_preparation": 389.7631,
+        "input_identity_hash_budget_preflight": 296.6356,
+        "inspect_admit_allocate": 1777.1743,
+        "native_payload_export_flush": 255.8931,
+        "payload_close_readonly_rehash": 0.0002,
+        "run_dispatch_bookkeeping": 0.054000000000201
+      }
+    },
+    {
+      "label": "e4align-r1-n1-49555-k2541",
+      "status": "PASS",
+      "prompt_tokens": 49555,
+      "input_sha256": "b3d79635cc9bde20472affb732e7ba877eb16acf09afd2f17956cb535484ed46",
+      "producer_sha256": "f8ee0a32d968ba59383f394693027a59b79ccbd76387c9a9a4648518deb6adb7",
+      "requested_chunks": "1",
+      "routed_reads": "1",
+      "yoco_keep": 2541,
+      "seconds": 29.67099999997299,
+      "tok_s": 1670.1493040357625,
+      "peak_vram_mib": 30901,
+      "peak_producer_rss_bytes": 6098911232,
+      "minimum_available_ram": 9983496192,
+      "paging_growth": 0,
+      "budget_breaches": 0,
+      "graceful": true,
+      "owned_pid_gone": true,
+      "model_unchanged": true,
+      "head_sha256": "f72b6bf3c8661fbc1e2ccc79f3c6f72b6d5d4b98070ef53a630f3e648565735c",
+      "sweeps": [
+        49555
+      ],
+      "passes": [
+        {
+          "fetched_bytes": 155876393408,
+          "fetch_ms_overlapped": 9197.399199999998,
+          "exposed_acquire_ms": 13.501900000000001,
+          "routed_fetch_wait_ms": 7446.8076,
+          "tensor_bytes_by_role": {
+            "dense_and_other": 8033710528,
+            "embedding": 1323827200,
+            "head": 703303680,
+            "routed_experts": 145815552000
+          },
+          "tensor_ledger_reconciles": true,
+          "wall_totals": {
+            "wall_ms": 26650.3921,
+            "acquire_ms": 13.501900000000001,
+            "carry_begin_ms": 0.0421,
+            "executor_wall_ms": 26549.3685,
+            "executor_phase_gap_ms": 65.2401,
+            "engram_ms": 0.8376,
+            "carry_read_ms": 0.1994,
+            "carry_write_ms": 0.282,
+            "carry_commit_ms": 0.0848,
+            "provider_release_ms": 0.1179,
+            "scaffold_ms": 85.9579
+          }
+        },
+        {
+          "fetched_bytes": 10060841408,
+          "fetch_ms_overlapped": 574.9557,
+          "exposed_acquire_ms": 0,
+          "routed_fetch_wait_ms": 0,
+          "tensor_bytes_by_role": {
+            "dense_and_other": 8033710528,
+            "embedding": 1323827200,
+            "head": 703303680
+          },
+          "tensor_ledger_reconciles": true,
+          "wall_totals": {}
+        }
+      ],
+      "fetched_bytes": 165937234816,
+      "layers_acquire_ms": 13.501900000000001,
+      "executor_wall_ms": 26549.3685,
+      "native_phase_ms": {
+        "append_owner_admission": 0.0,
+        "chunk_token_preparation": 0.0235,
+        "embedding_40_layers_head": 27143.8359,
+        "final_hidden_export_preparation": 41.6794,
+        "input_identity_hash_budget_preflight": 251.7267,
+        "inspect_admit_allocate": 1743.3608,
+        "native_payload_export_flush": 254.7642,
+        "payload_close_readonly_rehash": 0.0001,
+        "run_dispatch_bookkeeping": 0.06150000000069156
+      }
+    },
+    {
+      "label": "e4final-r0-n1-49555-k0",
+      "status": "PASS",
+      "prompt_tokens": 49555,
+      "input_sha256": "b3d79635cc9bde20472affb732e7ba877eb16acf09afd2f17956cb535484ed46",
+      "producer_sha256": "74113968f9006808b0e7fe88989538a5a6692f7cbc1add2ae542771f99558bbe",
+      "requested_chunks": "1",
+      "routed_reads": "0",
+      "yoco_keep": 0,
+      "seconds": 36.25,
+      "tok_s": 1367.0344827586207,
+      "peak_vram_mib": 27061,
+      "peak_producer_rss_bytes": 6064521216,
+      "minimum_available_ram": 10653958144,
+      "paging_growth": 0,
+      "budget_breaches": 0,
+      "graceful": true,
+      "owned_pid_gone": true,
+      "model_unchanged": true,
+      "head_sha256": "f72b6bf3c8661fbc1e2ccc79f3c6f72b6d5d4b98070ef53a630f3e648565735c",
+      "sweeps": [
+        49555
+      ],
+      "passes": [
+        {
+          "fetched_bytes": 315825603008,
+          "fetch_ms_overlapped": 18852.152000000002,
+          "exposed_acquire_ms": 8.1066,
+          "routed_fetch_wait_ms": 0,
+          "tensor_bytes_by_role": {
+            "dense_and_other": 8033710528,
+            "embedding": 1323827200,
+            "head": 703303680,
+            "routed_experts": 305764761600
+          },
+          "tensor_ledger_reconciles": true,
+          "wall_totals": {
+            "wall_ms": 32642.190599999998,
+            "acquire_ms": 8.1066,
+            "carry_begin_ms": 0.0412,
+            "executor_wall_ms": 32409.6504,
+            "executor_phase_gap_ms": 91.9603,
+            "engram_ms": 0.8894,
+            "carry_read_ms": 0.3009,
+            "carry_write_ms": 0.4686,
+            "carry_commit_ms": 0.0769,
+            "provider_release_ms": 0.1243,
+            "scaffold_ms": 222.53230000000002
+          }
+        }
+      ],
+      "fetched_bytes": 315825603008,
+      "layers_acquire_ms": 8.1066,
+      "executor_wall_ms": 32409.6504,
+      "native_phase_ms": {
+        "append_owner_admission": 0.0,
+        "chunk_token_preparation": 0.0249,
+        "embedding_40_layers_head": 33198.0844,
+        "final_hidden_export_preparation": 382.1706,
+        "input_identity_hash_budget_preflight": 274.4325,
+        "inspect_admit_allocate": 1901.0644,
+        "native_payload_export_flush": 253.0319,
+        "payload_close_readonly_rehash": 0.0002,
+        "run_dispatch_bookkeeping": 0.05849999999685451
+      }
+    },
+    {
+      "label": "e4final-rauto-n1-49555-k2541",
+      "status": "PASS",
+      "prompt_tokens": 49555,
+      "input_sha256": "b3d79635cc9bde20472affb732e7ba877eb16acf09afd2f17956cb535484ed46",
+      "producer_sha256": "74113968f9006808b0e7fe88989538a5a6692f7cbc1add2ae542771f99558bbe",
+      "requested_chunks": "1",
+      "routed_reads": "tail",
+      "yoco_keep": 2541,
+      "seconds": 25.375,
+      "tok_s": 1952.9064039408868,
+      "peak_vram_mib": 27061,
+      "peak_producer_rss_bytes": 6003761152,
+      "minimum_available_ram": 10606186496,
+      "paging_growth": 0,
+      "budget_breaches": 0,
+      "graceful": true,
+      "owned_pid_gone": true,
+      "model_unchanged": true,
+      "head_sha256": "f72b6bf3c8661fbc1e2ccc79f3c6f72b6d5d4b98070ef53a630f3e648565735c",
+      "sweeps": [
+        49555
+      ],
+      "passes": [
+        {
+          "fetched_bytes": 231023657408,
+          "fetch_ms_overlapped": 13689.313300000005,
+          "exposed_acquire_ms": 15.2929,
+          "routed_fetch_wait_ms": 2824.3952,
+          "tensor_bytes_by_role": {
+            "dense_and_other": 8033710528,
+            "embedding": 1323827200,
+            "head": 703303680,
+            "routed_experts": 220962816000
+          },
+          "tensor_ledger_reconciles": true,
+          "wall_totals": {
+            "wall_ms": 22277.9618,
+            "acquire_ms": 15.2929,
+            "carry_begin_ms": 0.0358,
+            "executor_wall_ms": 22112.3587,
+            "executor_phase_gap_ms": 64.9082,
+            "engram_ms": 0.8626,
+            "carry_read_ms": 0.1949,
+            "carry_write_ms": 0.293,
+            "carry_commit_ms": 0.0735,
+            "provider_release_ms": 0.1285,
+            "scaffold_ms": 148.7219
+          }
+        }
+      ],
+      "fetched_bytes": 231023657408,
+      "layers_acquire_ms": 15.2929,
+      "executor_wall_ms": 22112.3587,
+      "native_phase_ms": {
+        "append_owner_admission": 0.0,
+        "chunk_token_preparation": 0.0125,
+        "embedding_40_layers_head": 22842.900400000002,
+        "final_hidden_export_preparation": 40.2492,
+        "input_identity_hash_budget_preflight": 254.4588,
+        "inspect_admit_allocate": 1745.4925,
+        "native_payload_export_flush": 251.1662,
+        "payload_close_readonly_rehash": 0.0001,
+        "run_dispatch_bookkeeping": 0.041299999999154124
+      }
+    },
+    {
+      "label": "e4final-r0-n1-49555-k2541",
+      "status": "PASS",
+      "prompt_tokens": 49555,
+      "input_sha256": "b3d79635cc9bde20472affb732e7ba877eb16acf09afd2f17956cb535484ed46",
+      "producer_sha256": "74113968f9006808b0e7fe88989538a5a6692f7cbc1add2ae542771f99558bbe",
+      "requested_chunks": "1",
+      "routed_reads": "0",
+      "yoco_keep": 2541,
+      "seconds": 131.4529999999795,
+      "tok_s": 376.97884414967876,
+      "peak_vram_mib": 27061,
+      "peak_producer_rss_bytes": 6097993728,
+      "minimum_available_ram": 6167293952,
+      "paging_growth": 1261568,
+      "budget_breaches": 0,
+      "graceful": true,
+      "owned_pid_gone": true,
+      "model_unchanged": true,
+      "head_sha256": "f72b6bf3c8661fbc1e2ccc79f3c6f72b6d5d4b98070ef53a630f3e648565735c",
+      "sweeps": [
+        49555
+      ],
+      "passes": [
+        {
+          "fetched_bytes": 315825603008,
+          "fetch_ms_overlapped": 20004.2613,
+          "exposed_acquire_ms": 6454.6968,
+          "routed_fetch_wait_ms": 0,
+          "tensor_bytes_by_role": {
+            "dense_and_other": 8033710528,
+            "embedding": 1323827200,
+            "head": 703303680,
+            "routed_experts": 305764761600
+          },
+          "tensor_ledger_reconciles": true,
+          "wall_totals": {
+            "wall_ms": 39174.5057,
+            "acquire_ms": 6454.6968,
+            "carry_begin_ms": 0.0825,
+            "executor_wall_ms": 32490.5372,
+            "executor_phase_gap_ms": 62.3651,
+            "engram_ms": 0.9171,
+            "carry_read_ms": 0.2096,
+            "carry_write_ms": 0.353,
+            "carry_commit_ms": 0.0762,
+            "provider_release_ms": 0.1292,
+            "scaffold_ms": 227.5041
+          }
+        }
+      ],
+      "fetched_bytes": 315825603008,
+      "layers_acquire_ms": 6454.6968,
+      "executor_wall_ms": 32490.5372,
+      "native_phase_ms": {
+        "append_owner_admission": 0.0,
+        "chunk_token_preparation": 0.0295,
+        "embedding_40_layers_head": 40626.947199999995,
+        "final_hidden_export_preparation": 113.7621,
+        "input_identity_hash_budget_preflight": 266.8738,
+        "inspect_admit_allocate": 89332.515,
+        "native_payload_export_flush": 255.321,
+        "payload_close_readonly_rehash": 0.0002,
+        "run_dispatch_bookkeeping": 0.046800000003628384
+      },
+      "timing_limit": "Inspect/admit/allocation startup outlier; do not attribute its total difference solely to the replay setting."
+    },
+    {
+      "label": "e5-rtail-n1-100000-k2541",
+      "status": "PASS",
+      "prompt_tokens": 100000,
+      "input_sha256": "4ffeee4837f76e364da2cc241938e3e79f61901d6d4c0824d5f6cddba8db4320",
+      "producer_sha256": "74113968f9006808b0e7fe88989538a5a6692f7cbc1add2ae542771f99558bbe",
+      "requested_chunks": "1",
+      "routed_reads": "tail",
+      "yoco_keep": 2541,
+      "seconds": 45.48399999999674,
+      "tok_s": 2198.57532319073,
+      "peak_vram_mib": 27211,
+      "peak_producer_rss_bytes": 6218993664,
+      "minimum_available_ram": 10362519552,
+      "paging_growth": 0,
+      "budget_breaches": 0,
+      "graceful": true,
+      "owned_pid_gone": true,
+      "model_unchanged": true,
+      "head_sha256": "d41f30548603a0ca6c042fc1ad0a005431a8bdfa9263ff842470799d8e4fa573",
+      "sweeps": [
+        49152,
+        50848
+      ],
+      "passes": [
+        {
+          "fetched_bytes": 166382548664,
+          "fetch_ms_overlapped": 10215.6744,
+          "exposed_acquire_ms": 80.78120000000001,
+          "routed_fetch_wait_ms": 0,
+          "tensor_bytes_by_role": {
+            "dense_and_other": 4532221624,
+            "embedding": 1323827200,
+            "routed_experts": 160526499840
+          },
+          "tensor_ledger_reconciles": true,
+          "wall_totals": {
+            "wall_ms": 16563.892,
+            "acquire_ms": 80.78120000000001,
+            "carry_begin_ms": 0.0298,
+            "executor_wall_ms": 16251.0257,
+            "executor_phase_gap_ms": 51.5925,
+            "engram_ms": 0.8125,
+            "carry_read_ms": 0.19469999999999998,
+            "carry_write_ms": 0.2622,
+            "carry_commit_ms": 0.039,
+            "provider_release_ms": 0.0625,
+            "scaffold_ms": 230.6844
+          }
+        },
+        {
+          "fetched_bytes": 238329364928,
+          "fetch_ms_overlapped": 13946.221800000007,
+          "exposed_acquire_ms": 7.2907,
+          "routed_fetch_wait_ms": 3215.889,
+          "tensor_bytes_by_role": {
+            "dense_and_other": 8033710528,
+            "embedding": 1323827200,
+            "head": 703303680,
+            "routed_experts": 228268523520
+          },
+          "tensor_ledger_reconciles": true,
+          "wall_totals": {
+            "wall_ms": 24749.7088,
+            "acquire_ms": 7.2907,
+            "carry_begin_ms": 0.0525,
+            "executor_wall_ms": 24575.3689,
+            "executor_phase_gap_ms": 58.5383,
+            "engram_ms": 0.9355,
+            "carry_read_ms": 0.2088,
+            "carry_write_ms": 0.3053,
+            "carry_commit_ms": 0.0692,
+            "provider_release_ms": 0.1082,
+            "scaffold_ms": 165.3697
+          }
+        }
+      ],
+      "fetched_bytes": 404711913592,
+      "layers_acquire_ms": 88.07190000000001,
+      "executor_wall_ms": 40826.3946,
+      "native_phase_ms": {
+        "append_owner_admission": 109.5756,
+        "chunk_token_preparation": 0.0388,
+        "embedding_40_layers_head": 42573.3057,
+        "final_hidden_export_preparation": 58.2976,
+        "input_identity_hash_budget_preflight": 265.2806,
+        "inspect_admit_allocate": 1767.6492,
+        "native_payload_export_flush": 510.952,
+        "payload_close_readonly_rehash": 0.0002,
+        "run_dispatch_bookkeeping": 0.07630000000595771
+      }
+    },
+    {
+      "label": "e5-rtail-n2-100000-k2541",
+      "status": "PASS",
+      "prompt_tokens": 100000,
+      "input_sha256": "4ffeee4837f76e364da2cc241938e3e79f61901d6d4c0824d5f6cddba8db4320",
+      "producer_sha256": "74113968f9006808b0e7fe88989538a5a6692f7cbc1add2ae542771f99558bbe",
+      "requested_chunks": "2",
+      "routed_reads": "tail",
+      "yoco_keep": 2541,
+      "seconds": 52.85899999999674,
+      "tok_s": 1891.8254223501422,
+      "peak_vram_mib": 27211,
+      "peak_producer_rss_bytes": 10767147008,
+      "minimum_available_ram": 5783273472,
+      "paging_growth": 0,
+      "budget_breaches": 0,
+      "graceful": true,
+      "owned_pid_gone": true,
+      "model_unchanged": true,
+      "head_sha256": "d41f30548603a0ca6c042fc1ad0a005431a8bdfa9263ff842470799d8e4fa573",
+      "sweeps": [
+        100000
+      ],
+      "passes": [
+        {
+          "fetched_bytes": 238329364928,
+          "fetch_ms_overlapped": 15195.860400000003,
+          "exposed_acquire_ms": 14.493,
+          "routed_fetch_wait_ms": 3147.4031,
+          "tensor_bytes_by_role": {
+            "dense_and_other": 8033710528,
+            "embedding": 1323827200,
+            "head": 703303680,
+            "routed_experts": 228268523520
+          },
+          "tensor_ledger_reconciles": true,
+          "wall_totals": {
+            "wall_ms": 47511.1163,
+            "acquire_ms": 14.493,
+            "carry_begin_ms": 0.0434,
+            "executor_wall_ms": 47076.9466,
+            "executor_phase_gap_ms": 109.4974,
+            "engram_ms": 1.8876,
+            "carry_read_ms": 0.4023,
+            "carry_write_ms": 0.556,
+            "carry_commit_ms": 0.0702,
+            "provider_release_ms": 0.1119,
+            "scaffold_ms": 416.6053
+          }
+        }
+      ],
+      "fetched_bytes": 238329364928,
+      "layers_acquire_ms": 14.493,
+      "executor_wall_ms": 47076.9466,
+      "native_phase_ms": {
+        "append_owner_admission": 0.0,
+        "chunk_token_preparation": 0.0241,
+        "embedding_40_layers_head": 48524.2937,
+        "final_hidden_export_preparation": 58.2385,
+        "input_identity_hash_budget_preflight": 263.1669,
+        "inspect_admit_allocate": 3194.4198,
+        "native_payload_export_flush": 499.8919,
+        "payload_close_readonly_rehash": 0.0002,
+        "run_dispatch_bookkeeping": 0.0437000000014649
+      }
+    },
+    {
+      "label": "e5-rtail-n3-100000-k2541",
+      "status": "PASS",
+      "prompt_tokens": 100000,
+      "input_sha256": "4ffeee4837f76e364da2cc241938e3e79f61901d6d4c0824d5f6cddba8db4320",
+      "producer_sha256": "74113968f9006808b0e7fe88989538a5a6692f7cbc1add2ae542771f99558bbe",
+      "requested_chunks": "3",
+      "routed_reads": "tail",
+      "yoco_keep": 2541,
+      "seconds": 53.125,
+      "tok_s": 1882.3529411764705,
+      "peak_vram_mib": 27211,
+      "peak_producer_rss_bytes": 10747744256,
+      "minimum_available_ram": 5847756800,
+      "paging_growth": 0,
+      "budget_breaches": 0,
+      "graceful": true,
+      "owned_pid_gone": true,
+      "model_unchanged": true,
+      "head_sha256": "d41f30548603a0ca6c042fc1ad0a005431a8bdfa9263ff842470799d8e4fa573",
+      "sweeps": [
+        100000
+      ],
+      "passes": [
+        {
+          "fetched_bytes": 238329364928,
+          "fetch_ms_overlapped": 15215.676400000006,
+          "exposed_acquire_ms": 89.342,
+          "routed_fetch_wait_ms": 3410.3197,
+          "tensor_bytes_by_role": {
+            "dense_and_other": 8033710528,
+            "embedding": 1323827200,
+            "head": 703303680,
+            "routed_experts": 228268523520
+          },
+          "tensor_ledger_reconciles": true,
+          "wall_totals": {
+            "wall_ms": 47620.163,
+            "acquire_ms": 89.342,
+            "carry_begin_ms": 0.0451,
+            "executor_wall_ms": 47205.5631,
+            "executor_phase_gap_ms": 104.5576,
+            "engram_ms": 1.7332,
+            "carry_read_ms": 0.3636,
+            "carry_write_ms": 0.5252,
+            "carry_commit_ms": 0.0702,
+            "provider_release_ms": 0.11599999999999999,
+            "scaffold_ms": 322.4046
+          }
+        }
+      ],
+      "fetched_bytes": 238329364928,
+      "layers_acquire_ms": 89.342,
+      "executor_wall_ms": 47205.5631,
+      "native_phase_ms": {
+        "append_owner_admission": 0.0,
+        "chunk_token_preparation": 0.0218,
+        "embedding_40_layers_head": 48706.560600000004,
+        "final_hidden_export_preparation": 56.4659,
+        "input_identity_hash_budget_preflight": 278.0873,
+        "inspect_admit_allocate": 3227.1063,
+        "native_payload_export_flush": 531.9601,
+        "payload_close_readonly_rehash": 0.0002,
+        "run_dispatch_bookkeeping": 0.033399999995857854
+      }
+    },
+    {
+      "label": "e5-rtail-n4-100000-k2541",
+      "status": "PASS",
+      "prompt_tokens": 100000,
+      "input_sha256": "4ffeee4837f76e364da2cc241938e3e79f61901d6d4c0824d5f6cddba8db4320",
+      "producer_sha256": "74113968f9006808b0e7fe88989538a5a6692f7cbc1add2ae542771f99558bbe",
+      "requested_chunks": "4",
+      "routed_reads": "tail",
+      "yoco_keep": 2541,
+      "seconds": 52.84399999998277,
+      "tok_s": 1892.3624252523011,
+      "peak_vram_mib": 27211,
+      "peak_producer_rss_bytes": 10762870784,
+      "minimum_available_ram": 5684256768,
+      "paging_growth": 0,
+      "budget_breaches": 0,
+      "graceful": true,
+      "owned_pid_gone": true,
+      "model_unchanged": true,
+      "head_sha256": "d41f30548603a0ca6c042fc1ad0a005431a8bdfa9263ff842470799d8e4fa573",
+      "sweeps": [
+        100000
+      ],
+      "passes": [
+        {
+          "fetched_bytes": 238329364928,
+          "fetch_ms_overlapped": 14992.9077,
+          "exposed_acquire_ms": 14.557500000000001,
+          "routed_fetch_wait_ms": 3503.5876,
+          "tensor_bytes_by_role": {
+            "dense_and_other": 8033710528,
+            "embedding": 1323827200,
+            "head": 703303680,
+            "routed_experts": 228268523520
+          },
+          "tensor_ledger_reconciles": true,
+          "wall_totals": {
+            "wall_ms": 47617.576,
+            "acquire_ms": 14.557500000000001,
+            "carry_begin_ms": 0.0338,
+            "executor_wall_ms": 47131.1342,
+            "executor_phase_gap_ms": 108.3794,
+            "engram_ms": 1.8392,
+            "carry_read_ms": 0.3841,
+            "carry_write_ms": 0.5413,
+            "carry_commit_ms": 0.0765,
+            "provider_release_ms": 0.1171,
+            "scaffold_ms": 468.8923
+          }
+        }
+      ],
+      "fetched_bytes": 238329364928,
+      "layers_acquire_ms": 14.557500000000001,
+      "executor_wall_ms": 47131.1342,
+      "native_phase_ms": {
+        "append_owner_admission": 0.0,
+        "chunk_token_preparation": 0.1464,
+        "embedding_40_layers_head": 48656.778399999996,
+        "final_hidden_export_preparation": 57.9994,
+        "input_identity_hash_budget_preflight": 259.504,
+        "inspect_admit_allocate": 3060.3377,
+        "native_payload_export_flush": 511.8805,
+        "payload_close_readonly_rehash": 0.0001,
+        "run_dispatch_bookkeeping": 0.04740000000371225
+      }
+    },
+    {
+      "label": "e5-rtail-n1-200000-k2541",
+      "status": "PASS",
+      "prompt_tokens": 200000,
+      "input_sha256": "01cc49bd78b532e9046cd82ed104f30656f34c16c734a74f9b9be2517ba049da",
+      "producer_sha256": "74113968f9006808b0e7fe88989538a5a6692f7cbc1add2ae542771f99558bbe",
+      "requested_chunks": "1",
+      "routed_reads": "tail",
+      "yoco_keep": 2541,
+      "seconds": 94.07900000002701,
+      "tok_s": 2125.8729365739705,
+      "peak_vram_mib": 27513,
+      "peak_producer_rss_bytes": 6381379584,
+      "minimum_available_ram": 10082926592,
+      "paging_growth": 0,
+      "budget_breaches": 0,
+      "graceful": true,
+      "owned_pid_gone": true,
+      "model_unchanged": true,
+      "head_sha256": "2dd665117ebbbf77a26842f6992317de0fed86e056f9bfbc483a6387f753650f",
+      "sweeps": [
+        49152,
+        49152,
+        49152,
+        52544
+      ],
+      "passes": [
+        {
+          "fetched_bytes": 166382548664,
+          "fetch_ms_overlapped": 10539.481399999999,
+          "exposed_acquire_ms": 40.1359,
+          "routed_fetch_wait_ms": 0,
+          "tensor_bytes_by_role": {
+            "dense_and_other": 4532221624,
+            "embedding": 1323827200,
+            "routed_experts": 160526499840
+          },
+          "tensor_ledger_reconciles": true,
+          "wall_totals": {
+            "wall_ms": 16411.4937,
+            "acquire_ms": 40.1359,
+            "carry_begin_ms": 0.0268,
+            "executor_wall_ms": 16282.2518,
+            "executor_phase_gap_ms": 48.8544,
+            "engram_ms": 0.9002,
+            "carry_read_ms": 0.1841,
+            "carry_write_ms": 0.256,
+            "carry_commit_ms": 0.0437,
+            "provider_release_ms": 0.0684,
+            "scaffold_ms": 87.6268
+          }
+        },
+        {
+          "fetched_bytes": 166382548664,
+          "fetch_ms_overlapped": 10616.1072,
+          "exposed_acquire_ms": 27.5912,
+          "routed_fetch_wait_ms": 0,
+          "tensor_bytes_by_role": {
+            "dense_and_other": 4532221624,
+            "embedding": 1323827200,
+            "routed_experts": 160526499840
+          },
+          "tensor_ledger_reconciles": true,
+          "wall_totals": {
+            "wall_ms": 17235.941,
+            "acquire_ms": 27.5912,
+            "carry_begin_ms": 0.0352,
+            "executor_wall_ms": 17121.184,
+            "executor_phase_gap_ms": 45.2832,
+            "engram_ms": 0.8763,
+            "carry_read_ms": 0.1736,
+            "carry_write_ms": 0.2475,
+            "carry_commit_ms": 0.0409,
+            "provider_release_ms": 0.0688,
+            "scaffold_ms": 85.7235
+          }
+        },
+        {
+          "fetched_bytes": 166382548664,
+          "fetch_ms_overlapped": 10041.640500000001,
+          "exposed_acquire_ms": 137.964,
+          "routed_fetch_wait_ms": 0,
+          "tensor_bytes_by_role": {
+            "dense_and_other": 4532221624,
+            "embedding": 1323827200,
+            "routed_experts": 160526499840
+          },
+          "tensor_ledger_reconciles": true,
+          "wall_totals": {
+            "wall_ms": 22009.9801,
+            "acquire_ms": 137.964,
+            "carry_begin_ms": 0.0348,
+            "executor_wall_ms": 21762.9338,
+            "executor_phase_gap_ms": 44.5753,
+            "engram_ms": 0.9262,
+            "carry_read_ms": 0.1513,
+            "carry_write_ms": 0.2126,
+            "carry_commit_ms": 0.0401,
+            "provider_release_ms": 0.0623,
+            "scaffold_ms": 107.655
+          }
+        },
+        {
+          "fetched_bytes": 234407772608,
+          "fetch_ms_overlapped": 13765.669400000006,
+          "exposed_acquire_ms": 39.9094,
+          "routed_fetch_wait_ms": 3005.2889,
+          "tensor_bytes_by_role": {
+            "dense_and_other": 8033710528,
+            "embedding": 1323827200,
+            "head": 703303680,
+            "routed_experts": 224346931200
+          },
+          "tensor_ledger_reconciles": true,
+          "wall_totals": {
+            "wall_ms": 32124.606,
+            "acquire_ms": 39.9094,
+            "carry_begin_ms": 0.0614,
+            "executor_wall_ms": 31989.5524,
+            "executor_phase_gap_ms": 54.5994,
+            "engram_ms": 0.9819,
+            "carry_read_ms": 0.195,
+            "carry_write_ms": 0.2821,
+            "carry_commit_ms": 0.0863,
+            "provider_release_ms": 0.1296,
+            "scaffold_ms": 93.4079
+          }
+        }
+      ],
+      "fetched_bytes": 733555418600,
+      "layers_acquire_ms": 245.6005,
+      "executor_wall_ms": 87155.922,
+      "native_phase_ms": {
+        "append_owner_admission": 308.9001,
+        "chunk_token_preparation": 0.0635,
+        "embedding_40_layers_head": 90506.96349999998,
+        "final_hidden_export_preparation": 15.841,
+        "input_identity_hash_budget_preflight": 279.9426,
+        "inspect_admit_allocate": 1894.8504,
+        "native_payload_export_flush": 1006.225,
+        "payload_close_readonly_rehash": 0.0001,
+        "run_dispatch_bookkeeping": 0.19640000001562363
+      }
+    },
+    {
+      "label": "e5-rtail-n2-200000-k2541",
+      "status": "PASS",
+      "prompt_tokens": 200000,
+      "input_sha256": "01cc49bd78b532e9046cd82ed104f30656f34c16c734a74f9b9be2517ba049da",
+      "producer_sha256": "74113968f9006808b0e7fe88989538a5a6692f7cbc1add2ae542771f99558bbe",
+      "requested_chunks": "2",
+      "routed_reads": "tail",
+      "yoco_keep": 2541,
+      "seconds": 108.45299999997951,
+      "tok_s": 1844.1168063588632,
+      "peak_vram_mib": 27513,
+      "peak_producer_rss_bytes": 10915880960,
+      "minimum_available_ram": 5675630592,
+      "paging_growth": 29020160,
+      "budget_breaches": 0,
+      "graceful": true,
+      "owned_pid_gone": true,
+      "model_unchanged": true,
+      "head_sha256": "2dd665117ebbbf77a26842f6992317de0fed86e056f9bfbc483a6387f753650f",
+      "sweeps": [
+        98304,
+        101696
+      ],
+      "passes": [
+        {
+          "fetched_bytes": 166382548664,
+          "fetch_ms_overlapped": 11432.5568,
+          "exposed_acquire_ms": 10.6051,
+          "routed_fetch_wait_ms": 0,
+          "tensor_bytes_by_role": {
+            "dense_and_other": 4532221624,
+            "embedding": 1323827200,
+            "routed_experts": 160526499840
+          },
+          "tensor_ledger_reconciles": true,
+          "wall_totals": {
+            "wall_ms": 40228.384,
+            "acquire_ms": 10.6051,
+            "carry_begin_ms": 0.038,
+            "executor_wall_ms": 39792.8098,
+            "executor_phase_gap_ms": 96.0728,
+            "engram_ms": 2.4577999999999998,
+            "carry_read_ms": 0.35459999999999997,
+            "carry_write_ms": 0.4818,
+            "carry_commit_ms": 0.0381,
+            "provider_release_ms": 0.0657,
+            "scaffold_ms": 421.5331
+          }
+        },
+        {
+          "fetched_bytes": 234407772608,
+          "fetch_ms_overlapped": 15137.63149999999,
+          "exposed_acquire_ms": 10.6981,
+          "routed_fetch_wait_ms": 3017.5039,
+          "tensor_bytes_by_role": {
+            "dense_and_other": 8033710528,
+            "embedding": 1323827200,
+            "head": 703303680,
+            "routed_experts": 224346931200
+          },
+          "tensor_ledger_reconciles": true,
+          "wall_totals": {
+            "wall_ms": 61379.501,
+            "acquire_ms": 10.6981,
+            "carry_begin_ms": 0.0572,
+            "executor_wall_ms": 60957.9802,
+            "executor_phase_gap_ms": 100.0188,
+            "engram_ms": 1.7957,
+            "carry_read_ms": 0.3557,
+            "carry_write_ms": 0.49069999999999997,
+            "carry_commit_ms": 0.0788,
+            "provider_release_ms": 0.1328,
+            "scaffold_ms": 407.91179999999997
+          }
+        }
+      ],
+      "fetched_bytes": 400790321272,
+      "layers_acquire_ms": 21.3032,
+      "executor_wall_ms": 100750.79000000001,
+      "native_phase_ms": {
+        "append_owner_admission": 209.5799,
+        "chunk_token_preparation": 0.0863,
+        "embedding_40_layers_head": 103835.0678,
+        "final_hidden_export_preparation": 15.8133,
+        "input_identity_hash_budget_preflight": 279.0065,
+        "inspect_admit_allocate": 2948.1572,
+        "native_payload_export_flush": 997.5322,
+        "payload_close_readonly_rehash": 0.0001,
+        "run_dispatch_bookkeeping": 0.07849999999760193
+      }
+    },
+    {
+      "label": "e5-rtail-n3-200000-k2541",
+      "status": "REFUSED_PHYSICAL_RAM",
+      "prompt_tokens": 200000,
+      "requested_chunks": 3,
+      "required_worker_bytes": 17047748608,
+      "required_outer_gib": 16.876953125,
+      "available_bytes": 16670195712,
+      "engine_started": false
+    },
+    {
+      "label": "e5-rtail-n4-200000-k2541",
+      "status": "REFUSED_PHYSICAL_RAM",
+      "prompt_tokens": 200000,
+      "requested_chunks": 4,
+      "required_worker_bytes": 22572892160,
+      "required_outer_gib": 22.02264404296875,
+      "available_bytes": 16670265344,
+      "engine_started": false
+    },
+    {
+      "label": "e5-rtail-n1-400000-k2541",
+      "status": "PASS",
+      "prompt_tokens": 400000,
+      "input_sha256": "ffeed18ed7a783435e27eb65a6da62ae72b9c2a747aa36db93db05b02fd97288",
+      "producer_sha256": "74113968f9006808b0e7fe88989538a5a6692f7cbc1add2ae542771f99558bbe",
+      "requested_chunks": "1",
+      "routed_reads": "tail",
+      "yoco_keep": 2541,
+      "seconds": 232.5,
+      "tok_s": 1720.4301075268818,
+      "peak_vram_mib": 28123,
+      "peak_producer_rss_bytes": 6699212800,
+      "minimum_available_ram": 9812471808,
+      "paging_growth": 0,
+      "budget_breaches": 0,
+      "graceful": true,
+      "owned_pid_gone": true,
+      "model_unchanged": true,
+      "head_sha256": "a2322e17cd2371e7a445d9f7ad256697d9ed15339e942e2af83c492712bc3cbb",
+      "sweeps": [
+        49152,
+        49152,
+        49152,
+        49152,
+        49152,
+        49152,
+        49152,
+        55936
+      ],
+      "passes": [
+        {
+          "fetched_bytes": 166382548664,
+          "fetch_ms_overlapped": 9985.4712,
+          "exposed_acquire_ms": 45.0678,
+          "routed_fetch_wait_ms": 0,
+          "tensor_bytes_by_role": {
+            "dense_and_other": 4532221624,
+            "embedding": 1323827200,
+            "routed_experts": 160526499840
+          },
+          "tensor_ledger_reconciles": true,
+          "wall_totals": {
+            "wall_ms": 16354.2612,
+            "acquire_ms": 45.0678,
+            "carry_begin_ms": 0.0164,
+            "executor_wall_ms": 16219.0219,
+            "executor_phase_gap_ms": 47.588,
+            "engram_ms": 0.9125,
+            "carry_read_ms": 0.1688,
+            "carry_write_ms": 0.2005,
+            "carry_commit_ms": 0.0354,
+            "provider_release_ms": 0.0633,
+            "scaffold_ms": 88.7746
+          }
+        },
+        {
+          "fetched_bytes": 166382548664,
+          "fetch_ms_overlapped": 9975.702899999998,
+          "exposed_acquire_ms": 5.0799,
+          "routed_fetch_wait_ms": 0,
+          "tensor_bytes_by_role": {
+            "dense_and_other": 4532221624,
+            "embedding": 1323827200,
+            "routed_experts": 160526499840
+          },
+          "tensor_ledger_reconciles": true,
+          "wall_totals": {
+            "wall_ms": 17200.2224,
+            "acquire_ms": 5.0799,
+            "carry_begin_ms": 0.0175,
+            "executor_wall_ms": 17108.5028,
+            "executor_phase_gap_ms": 44.2859,
+            "engram_ms": 0.8968,
+            "carry_read_ms": 0.1533,
+            "carry_write_ms": 0.1865,
+            "carry_commit_ms": 0.0416,
+            "provider_release_ms": 0.0667,
+            "scaffold_ms": 85.2773
+          }
+        },
+        {
+          "fetched_bytes": 166382548664,
+          "fetch_ms_overlapped": 9877.294800000003,
+          "exposed_acquire_ms": 29.441499999999998,
+          "routed_fetch_wait_ms": 0,
+          "tensor_bytes_by_role": {
+            "dense_and_other": 4532221624,
+            "embedding": 1323827200,
+            "routed_experts": 160526499840
+          },
+          "tensor_ledger_reconciles": true,
+          "wall_totals": {
+            "wall_ms": 21945.0539,
+            "acquire_ms": 29.441499999999998,
+            "carry_begin_ms": 0.0339,
+            "executor_wall_ms": 21828.7104,
+            "executor_phase_gap_ms": 47.0392,
+            "engram_ms": 0.8974,
+            "carry_read_ms": 0.154,
+            "carry_write_ms": 0.1939,
+            "carry_commit_ms": 0.04,
+            "provider_release_ms": 0.0589,
+            "scaffold_ms": 85.5239
+          }
+        },
+        {
+          "fetched_bytes": 166382548664,
+          "fetch_ms_overlapped": 9908.6186,
+          "exposed_acquire_ms": 19.1755,
+          "routed_fetch_wait_ms": 0,
+          "tensor_bytes_by_role": {
+            "dense_and_other": 4532221624,
+            "embedding": 1323827200,
+            "routed_experts": 160526499840
+          },
+          "tensor_ledger_reconciles": true,
+          "wall_totals": {
+            "wall_ms": 24213.0485,
+            "acquire_ms": 19.1755,
+            "carry_begin_ms": 0.0264,
+            "executor_wall_ms": 24102.2623,
+            "executor_phase_gap_ms": 46.465,
+            "engram_ms": 0.8546,
+            "carry_read_ms": 0.1648,
+            "carry_write_ms": 0.2102,
+            "carry_commit_ms": 0.0457,
+            "provider_release_ms": 0.08209999999999999,
+            "scaffold_ms": 90.2269
+          }
+        },
+        {
+          "fetched_bytes": 166382548664,
+          "fetch_ms_overlapped": 9760.3087,
+          "exposed_acquire_ms": 30.9316,
+          "routed_fetch_wait_ms": 0,
+          "tensor_bytes_by_role": {
+            "dense_and_other": 4532221624,
+            "embedding": 1323827200,
+            "routed_experts": 160526499840
+          },
+          "tensor_ledger_reconciles": true,
+          "wall_totals": {
+            "wall_ms": 26818.91,
+            "acquire_ms": 30.9316,
+            "carry_begin_ms": 0.0272,
+            "executor_wall_ms": 26697.0792,
+            "executor_phase_gap_ms": 44.805,
+            "engram_ms": 0.9891,
+            "carry_read_ms": 0.1615,
+            "carry_write_ms": 0.1948,
+            "carry_commit_ms": 0.0406,
+            "provider_release_ms": 0.0668,
+            "scaffold_ms": 89.4192
+          }
+        },
+        {
+          "fetched_bytes": 166382548664,
+          "fetch_ms_overlapped": 9951.007699999998,
+          "exposed_acquire_ms": 4.0545,
+          "routed_fetch_wait_ms": 0,
+          "tensor_bytes_by_role": {
+            "dense_and_other": 4532221624,
+            "embedding": 1323827200,
+            "routed_experts": 160526499840
+          },
+          "tensor_ledger_reconciles": true,
+          "wall_totals": {
+            "wall_ms": 31708.421599999998,
+            "acquire_ms": 4.0545,
+            "carry_begin_ms": 0.022600000000000002,
+            "executor_wall_ms": 31617.464,
+            "executor_phase_gap_ms": 49.8303,
+            "engram_ms": 0.8087,
+            "carry_read_ms": 0.168,
+            "carry_write_ms": 0.2063,
+            "carry_commit_ms": 0.0444,
+            "provider_release_ms": 0.0682,
+            "scaffold_ms": 85.5849
+          }
+        },
+        {
+          "fetched_bytes": 166382548664,
+          "fetch_ms_overlapped": 9899.056,
+          "exposed_acquire_ms": 6.3583,
+          "routed_fetch_wait_ms": 0,
+          "tensor_bytes_by_role": {
+            "dense_and_other": 4532221624,
+            "embedding": 1323827200,
+            "routed_experts": 160526499840
+          },
+          "tensor_ledger_reconciles": true,
+          "wall_totals": {
+            "wall_ms": 34573.390400000004,
+            "acquire_ms": 6.3583,
+            "carry_begin_ms": 0.0237,
+            "executor_wall_ms": 34477.8261,
+            "executor_phase_gap_ms": 48.0124,
+            "engram_ms": 0.9988,
+            "carry_read_ms": 0.1627,
+            "carry_write_ms": 0.2081,
+            "carry_commit_ms": 0.0456,
+            "provider_release_ms": 0.0716,
+            "scaffold_ms": 87.6955
+          }
+        },
+        {
+          "fetched_bytes": 219477852608,
+          "fetch_ms_overlapped": 13486.608399999994,
+          "exposed_acquire_ms": 7.5779,
+          "routed_fetch_wait_ms": 2466.2497,
+          "tensor_bytes_by_role": {
+            "dense_and_other": 8033710528,
+            "embedding": 1323827200,
+            "head": 703303680,
+            "routed_experts": 209417011200
+          },
+          "tensor_ledger_reconciles": true,
+          "wall_totals": {
+            "wall_ms": 49319.191,
+            "acquire_ms": 7.5779,
+            "carry_begin_ms": 0.0582,
+            "executor_wall_ms": 49211.2314,
+            "executor_phase_gap_ms": 61.2074,
+            "engram_ms": 1.0144,
+            "carry_read_ms": 0.20650000000000002,
+            "carry_write_ms": 0.275,
+            "carry_commit_ms": 0.0782,
+            "provider_release_ms": 0.1186,
+            "scaffold_ms": 98.6308
+          }
+        }
+      ],
+      "fetched_bytes": 1384155693256,
+      "layers_acquire_ms": 147.68699999999998,
+      "executor_wall_ms": 221262.0981,
+      "native_phase_ms": {
+        "append_owner_admission": 723.7062000000001,
+        "chunk_token_preparation": 0.19590000000000002,
+        "embedding_40_layers_head": 227572.1806,
+        "final_hidden_export_preparation": 13.2483,
+        "input_identity_hash_budget_preflight": 278.3785,
+        "inspect_admit_allocate": 2069.6817,
+        "native_payload_export_flush": 1975.2608,
+        "payload_close_readonly_rehash": 0.0002,
+        "run_dispatch_bookkeeping": 0.46190000000135
+      }
+    },
+    {
+      "label": "e5-rtail-n2-400000-k2541",
+      "status": "PASS",
+      "prompt_tokens": 400000,
+      "input_sha256": "ffeed18ed7a783435e27eb65a6da62ae72b9c2a747aa36db93db05b02fd97288",
+      "producer_sha256": "74113968f9006808b0e7fe88989538a5a6692f7cbc1add2ae542771f99558bbe",
+      "requested_chunks": "2",
+      "routed_reads": "tail",
+      "yoco_keep": 2541,
+      "seconds": 266.7179999999935,
+      "tok_s": 1499.7113055737136,
+      "peak_vram_mib": 28123,
+      "peak_producer_rss_bytes": 11239899136,
+      "minimum_available_ram": 5317603328,
+      "paging_growth": 0,
+      "budget_breaches": 0,
+      "graceful": true,
+      "owned_pid_gone": true,
+      "model_unchanged": true,
+      "head_sha256": "a2322e17cd2371e7a445d9f7ad256697d9ed15339e942e2af83c492712bc3cbb",
+      "sweeps": [
+        98304,
+        98304,
+        98304,
+        105088
+      ],
+      "passes": [
+        {
+          "fetched_bytes": 166382548664,
+          "fetch_ms_overlapped": 11658.942800000003,
+          "exposed_acquire_ms": 4.0488,
+          "routed_fetch_wait_ms": 0,
+          "tensor_bytes_by_role": {
+            "dense_and_other": 4532221624,
+            "embedding": 1323827200,
+            "routed_experts": 160526499840
+          },
+          "tensor_ledger_reconciles": true,
+          "wall_totals": {
+            "wall_ms": 40415.4463,
+            "acquire_ms": 4.0488,
+            "carry_begin_ms": 0.0188,
+            "executor_wall_ms": 39972.7135,
+            "executor_phase_gap_ms": 93.5621,
+            "engram_ms": 1.7088,
+            "carry_read_ms": 0.32489999999999997,
+            "carry_write_ms": 0.4472,
+            "carry_commit_ms": 0.0409,
+            "provider_release_ms": 0.0668,
+            "scaffold_ms": 436.0766
+          }
+        },
+        {
+          "fetched_bytes": 166382548664,
+          "fetch_ms_overlapped": 11543.2837,
+          "exposed_acquire_ms": 13.7211,
+          "routed_fetch_wait_ms": 0,
+          "tensor_bytes_by_role": {
+            "dense_and_other": 4532221624,
+            "embedding": 1323827200,
+            "routed_experts": 160526499840
+          },
+          "tensor_ledger_reconciles": true,
+          "wall_totals": {
+            "wall_ms": 53892.4583,
+            "acquire_ms": 13.7211,
+            "carry_begin_ms": 0.0234,
+            "executor_wall_ms": 53573.7051,
+            "executor_phase_gap_ms": 93.0605,
+            "engram_ms": 1.5438,
+            "carry_read_ms": 0.331,
+            "carry_write_ms": 0.4782,
+            "carry_commit_ms": 0.0412,
+            "provider_release_ms": 0.0712,
+            "scaffold_ms": 302.5433
+          }
+        },
+        {
+          "fetched_bytes": 166382548664,
+          "fetch_ms_overlapped": 11388.6057,
+          "exposed_acquire_ms": 10.7277,
+          "routed_fetch_wait_ms": 0,
+          "tensor_bytes_by_role": {
+            "dense_and_other": 4532221624,
+            "embedding": 1323827200,
+            "routed_experts": 160526499840
+          },
+          "tensor_ledger_reconciles": true,
+          "wall_totals": {
+            "wall_ms": 69099.1262,
+            "acquire_ms": 10.7277,
+            "carry_begin_ms": 0.0375,
+            "executor_wall_ms": 68649.73,
+            "executor_phase_gap_ms": 95.8793,
+            "engram_ms": 1.5901999999999998,
+            "carry_read_ms": 0.3343,
+            "carry_write_ms": 0.4706,
+            "carry_commit_ms": 0.0404,
+            "provider_release_ms": 0.0796,
+            "scaffold_ms": 436.1159
+          }
+        },
+        {
+          "fetched_bytes": 219477852608,
+          "fetch_ms_overlapped": 14718.3081,
+          "exposed_acquire_ms": 17.6041,
+          "routed_fetch_wait_ms": 2367.2252,
+          "tensor_bytes_by_role": {
+            "dense_and_other": 8033710528,
+            "embedding": 1323827200,
+            "head": 703303680,
+            "routed_experts": 209417011200
+          },
+          "tensor_ledger_reconciles": true,
+          "wall_totals": {
+            "wall_ms": 92478.5767,
+            "acquire_ms": 17.6041,
+            "carry_begin_ms": 0.0482,
+            "executor_wall_ms": 92066.973,
+            "executor_phase_gap_ms": 111.0306,
+            "engram_ms": 1.8621,
+            "carry_read_ms": 0.3589,
+            "carry_write_ms": 0.5213,
+            "carry_commit_ms": 0.0715,
+            "provider_release_ms": 0.1234,
+            "scaffold_ms": 391.0142
+          }
+        }
+      ],
+      "fetched_bytes": 718625498600,
+      "layers_acquire_ms": 46.1017,
+      "executor_wall_ms": 254263.12159999998,
+      "native_phase_ms": {
+        "append_owner_admission": 633.2868000000001,
+        "chunk_token_preparation": 0.201,
+        "embedding_40_layers_head": 260595.60740000004,
+        "final_hidden_export_preparation": 13.932,
+        "input_identity_hash_budget_preflight": 265.3183,
+        "inspect_admit_allocate": 3240.2149,
+        "native_payload_export_flush": 2042.8765,
+        "payload_close_readonly_rehash": 0.0001,
+        "run_dispatch_bookkeeping": 0.23569999996176882
+      }
+    },
+    {
+      "label": "e5-rtail-n3-400000-k2541",
+      "status": "REFUSED_PHYSICAL_RAM",
+      "prompt_tokens": 400000,
+      "requested_chunks": 3,
+      "required_worker_bytes": 17047748608,
+      "required_outer_gib": 16.876953125,
+      "available_bytes": 16777986048,
+      "engine_started": false
+    },
+    {
+      "label": "e5-rtail-n4-400000-k2541",
+      "status": "REFUSED_PHYSICAL_RAM",
+      "prompt_tokens": 400000,
+      "requested_chunks": 4,
+      "required_worker_bytes": 22929539072,
+      "required_outer_gib": 22.35479736328125,
+      "available_bytes": 16786227200,
+      "engine_started": false
+    }
+  ],
+  "quality": [
+    {
+      "control": "e2-r0-n1-2048-k0",
+      "candidate": "e2-r1-n1-2048-k0",
+      "input_sha256": "a2f499596816d3c4cdf007ee3f8ae99e6a2a63a46482fd8bc41e33f0a2565d6f",
+      "vectors": 1,
+      "bit_exact": true,
+      "max_abs_error": 0.0,
+      "kl": 0.0,
+      "top1_equal": true,
+      "checkpoint_equal": true
+    },
+    {
+      "control": "e2-r0-n1-8192-k0",
+      "candidate": "e2-r1-n1-8192-k0",
+      "input_sha256": "4b08871cef55e56e37f6b07222d55bca8d0f78413b1bf7d2842350ce2fdf61a6",
+      "vectors": 1,
+      "bit_exact": true,
+      "max_abs_error": 0.0,
+      "kl": 0.0,
+      "top1_equal": true,
+      "checkpoint_equal": true
+    },
+    {
+      "control": "e2-r0-n1-32768-k0",
+      "candidate": "e2-r1-n1-32768-k0",
+      "input_sha256": "a12613fe16b86adce0853fa73a21759e428f212f37dc7c6350f49fd1296ccee0",
+      "vectors": 1,
+      "bit_exact": true,
+      "max_abs_error": 0.0,
+      "kl": 0.0,
+      "top1_equal": true,
+      "checkpoint_equal": true
+    },
+    {
+      "control": "code-r0-n1-2048-k0",
+      "candidate": "code-rauto-n1-2048-k0",
+      "input_sha256": "32ee65d6732dde57889d2ce52d5b9043543c4dab8a84c6c57af148ee0e176cdc",
+      "vectors": 1,
+      "bit_exact": true,
+      "max_abs_error": 0.0,
+      "kl": 0.0,
+      "top1_equal": true,
+      "checkpoint_equal": true
+    },
+    {
+      "control": "code-r0-n1-8192-k0",
+      "candidate": "code-rauto-n1-8192-k0",
+      "input_sha256": "656d8dfe5f3fc2c479e80c925ea7d1c54b3e2176139a6c29d4879d82d40685c6",
+      "vectors": 1,
+      "bit_exact": true,
+      "max_abs_error": 0.0,
+      "kl": 0.0,
+      "top1_equal": true,
+      "checkpoint_equal": true
+    },
+    {
+      "control": "e4align-r1-n1-8192-k0",
+      "candidate": "e4align-r1-n1-8192-k2541",
+      "input_sha256": "4b08871cef55e56e37f6b07222d55bca8d0f78413b1bf7d2842350ce2fdf61a6",
+      "vectors": 1,
+      "bit_exact": true,
+      "max_abs_error": 0.0,
+      "kl": 0.0,
+      "top1_equal": true,
+      "checkpoint_equal": true
+    },
+    {
+      "control": "e4final-r1-n1-49555-k0",
+      "candidate": "e4align-r1-n1-49555-k2541",
+      "input_sha256": "b3d79635cc9bde20472affb732e7ba877eb16acf09afd2f17956cb535484ed46",
+      "vectors": 1,
+      "bit_exact": true,
+      "max_abs_error": 0.0,
+      "kl": 0.0,
+      "top1_equal": true,
+      "checkpoint_equal": true
+    },
+    {
+      "control": "e4final-r0-n1-49555-k0",
+      "candidate": "e4final-rauto-n1-49555-k2541",
+      "input_sha256": "b3d79635cc9bde20472affb732e7ba877eb16acf09afd2f17956cb535484ed46",
+      "vectors": 1,
+      "bit_exact": true,
+      "max_abs_error": 0.0,
+      "kl": 0.0,
+      "top1_equal": true,
+      "checkpoint_equal": true
+    },
+    {
+      "control": "e5-rtail-n1-100000-k2541",
+      "candidate": "e5-rtail-n2-100000-k2541",
+      "input_sha256": "4ffeee4837f76e364da2cc241938e3e79f61901d6d4c0824d5f6cddba8db4320",
+      "vectors": 1,
+      "bit_exact": true,
+      "max_abs_error": 0.0,
+      "kl": 0.0,
+      "top1_equal": true,
+      "checkpoint_equal": true
+    },
+    {
+      "control": "e5-rtail-n1-100000-k2541",
+      "candidate": "e5-rtail-n3-100000-k2541",
+      "input_sha256": "4ffeee4837f76e364da2cc241938e3e79f61901d6d4c0824d5f6cddba8db4320",
+      "vectors": 1,
+      "bit_exact": true,
+      "max_abs_error": 0.0,
+      "kl": 0.0,
+      "top1_equal": true,
+      "checkpoint_equal": true
+    },
+    {
+      "control": "e5-rtail-n1-100000-k2541",
+      "candidate": "e5-rtail-n4-100000-k2541",
+      "input_sha256": "4ffeee4837f76e364da2cc241938e3e79f61901d6d4c0824d5f6cddba8db4320",
+      "vectors": 1,
+      "bit_exact": true,
+      "max_abs_error": 0.0,
+      "kl": 0.0,
+      "top1_equal": true,
+      "checkpoint_equal": true
+    },
+    {
+      "control": "e5-rtail-n1-200000-k2541",
+      "candidate": "e5-rtail-n2-200000-k2541",
+      "input_sha256": "01cc49bd78b532e9046cd82ed104f30656f34c16c734a74f9b9be2517ba049da",
+      "vectors": 1,
+      "bit_exact": true,
+      "max_abs_error": 0.0,
+      "kl": 0.0,
+      "top1_equal": true,
+      "checkpoint_equal": true
+    },
+    {
+      "control": "e5-rtail-n1-400000-k2541",
+      "candidate": "e5-rtail-n2-400000-k2541",
+      "input_sha256": "ffeed18ed7a783435e27eb65a6da62ae72b9c2a747aa36db93db05b02fd97288",
+      "vectors": 1,
+      "bit_exact": true,
+      "max_abs_error": 0.0,
+      "kl": 0.0,
+      "top1_equal": true,
+      "checkpoint_equal": true
+    },
+    {
+      "control": "e4final-r0-n1-49555-k0",
+      "candidate": "e4final-r0-n1-49555-k2541",
+      "input_sha256": "b3d79635cc9bde20472affb732e7ba877eb16acf09afd2f17956cb535484ed46",
+      "vectors": 1,
+      "bit_exact": true,
+      "max_abs_error": 0.0,
+      "kl": 0.0,
+      "top1_equal": true,
+      "checkpoint_equal": true
+    },
+    {
+      "control": "e4final-r0-n1-49555-k2541",
+      "candidate": "e4final-rauto-n1-49555-k2541",
+      "input_sha256": "b3d79635cc9bde20472affb732e7ba877eb16acf09afd2f17956cb535484ed46",
+      "vectors": 1,
+      "bit_exact": true,
+      "max_abs_error": 0.0,
+      "kl": 0.0,
+      "top1_equal": true,
+      "checkpoint_equal": true
+    }
+  ],
+  "carry_copy": [
+    {
+      "ds": 0,
+      "directions": 1,
+      "copy_bytes_per_direction": 2147483648,
+      "h2d_ms": 37.286816,
+      "d2h_ms": 0.0,
+      "h2d_GB_s": 57.593646,
+      "d2h_GB_s": 0.0,
+      "ds_bytes": 0,
+      "wall_ms": 38.5909,
+      "ds_busy_at_copy_begin": 0,
+      "ds_busy_after_copies": 0
+    },
+    {
+      "ds": 0,
+      "directions": 2,
+      "copy_bytes_per_direction": 2147483648,
+      "h2d_ms": 0.0,
+      "d2h_ms": 37.596287,
+      "h2d_GB_s": 0.0,
+      "d2h_GB_s": 57.119568,
+      "ds_bytes": 0,
+      "wall_ms": 37.757,
+      "ds_busy_at_copy_begin": 0,
+      "ds_busy_after_copies": 0
+    },
+    {
+      "ds": 0,
+      "directions": 3,
+      "copy_bytes_per_direction": 2147483648,
+      "h2d_ms": 37.164639,
+      "d2h_ms": 37.486847,
+      "h2d_GB_s": 57.782982,
+      "d2h_GB_s": 57.286324,
+      "ds_bytes": 0,
+      "wall_ms": 74.9249,
+      "ds_busy_at_copy_begin": 0,
+      "ds_busy_after_copies": 0
+    },
+    {
+      "ds": 1,
+      "directions": 1,
+      "copy_bytes_per_direction": 2147483648,
+      "h2d_ms": 37.284351,
+      "d2h_ms": 0.0,
+      "h2d_GB_s": 57.597452,
+      "d2h_GB_s": 0.0,
+      "ds_bytes": 4294967296,
+      "wall_ms": 290.5737,
+      "ds_busy_at_copy_begin": 1,
+      "ds_busy_after_copies": 1
+    },
+    {
+      "ds": 1,
+      "directions": 2,
+      "copy_bytes_per_direction": 2147483648,
+      "h2d_ms": 0.0,
+      "d2h_ms": 38.441982,
+      "h2d_GB_s": 0.0,
+      "d2h_GB_s": 55.862979,
+      "ds_bytes": 4294967296,
+      "wall_ms": 267.0158,
+      "ds_busy_at_copy_begin": 1,
+      "ds_busy_after_copies": 1
+    },
+    {
+      "ds": 1,
+      "directions": 3,
+      "copy_bytes_per_direction": 2147483648,
+      "h2d_ms": 53.514305,
+      "d2h_ms": 39.45203,
+      "h2d_GB_s": 40.129151,
+      "d2h_GB_s": 54.432779,
+      "ds_bytes": 4294967296,
+      "wall_ms": 265.343,
+      "ds_busy_at_copy_begin": 1,
+      "ds_busy_after_copies": 1
+    }
+  ],
+  "diagnostic": {
+    "prompt_tokens": 49555,
+    "input_sha256": "b3d79635cc9bde20472affb732e7ba877eb16acf09afd2f17956cb535484ed46",
+    "producer_sha256": "74113968f9006808b0e7fe88989538a5a6692f7cbc1add2ae542771f99558bbe",
+    "seconds": 27.31300000002375,
+    "gpu_node_ms": {
+      "expert_gemm": 4951.210884218,
+      "attention_and_indexer": 4753.19269461,
+      "other_gpu": 4015.6345590290002
+    },
+    "gpu_node_count": 5948,
+    "copy_probes": [
+      {
+        "round": 0,
+        "h2d": 1,
+        "rows": 4096,
+        "bytes": 335544320,
+        "gpu_ms": 8.63536,
+        "host_ms": 21.93,
+        "begin_epoch_ms": 435822553.7684,
+        "end_epoch_ms": 435822575.6984,
+        "existing_registered_RAM": 1,
+        "gpu_GB_s": 38.857015804784055,
+        "host_GB_s": 15.300698586411308,
+        "overlapping_weight_stages": [
+          2
+        ]
+      },
+      {
+        "round": 0,
+        "h2d": 0,
+        "rows": 4096,
+        "bytes": 335544320,
+        "gpu_ms": 6.720416,
+        "host_ms": 6.9683,
+        "begin_epoch_ms": 435822575.7266,
+        "end_epoch_ms": 435822582.6949,
+        "existing_registered_RAM": 1,
+        "gpu_GB_s": 49.92909962716593,
+        "host_GB_s": 48.15296700773503,
+        "overlapping_weight_stages": [
+          2
+        ]
+      },
+      {
+        "round": 1,
+        "h2d": 1,
+        "rows": 4096,
+        "bytes": 335544320,
+        "gpu_ms": 9.848832,
+        "host_ms": 10.0532,
+        "begin_epoch_ms": 435822582.7049,
+        "end_epoch_ms": 435822592.7581,
+        "existing_registered_RAM": 1,
+        "gpu_GB_s": 34.069453108754416,
+        "host_GB_s": 33.37686706720248,
+        "overlapping_weight_stages": [
+          2
+        ]
+      },
+      {
+        "round": 1,
+        "h2d": 0,
+        "rows": 4096,
+        "bytes": 335544320,
+        "gpu_ms": 6.113216,
+        "host_ms": 6.2671,
+        "begin_epoch_ms": 435822592.7655,
+        "end_epoch_ms": 435822599.0326,
+        "existing_registered_RAM": 1,
+        "gpu_GB_s": 54.88834682105131,
+        "host_GB_s": 53.54060410716281,
+        "overlapping_weight_stages": [
+          2
+        ]
+      },
+      {
+        "round": 2,
+        "h2d": 1,
+        "rows": 4096,
+        "bytes": 335544320,
+        "gpu_ms": 9.949472,
+        "host_ms": 10.1086,
+        "begin_epoch_ms": 435822599.038,
+        "end_epoch_ms": 435822609.1465,
+        "existing_registered_RAM": 1,
+        "gpu_GB_s": 33.7248368556643,
+        "host_GB_s": 33.19394574916408,
+        "overlapping_weight_stages": [
+          2
+        ]
+      },
+      {
+        "round": 2,
+        "h2d": 0,
+        "rows": 4096,
+        "bytes": 335544320,
+        "gpu_ms": 6.086592,
+        "host_ms": 6.3099,
+        "begin_epoch_ms": 435822609.1674,
+        "end_epoch_ms": 435822615.4773,
+        "existing_registered_RAM": 1,
+        "gpu_GB_s": 55.12843969170269,
+        "host_GB_s": 53.17743862818745,
+        "overlapping_weight_stages": [
+          2
+        ]
+      }
+    ],
+    "head_bit_exact": true,
+    "checkpoint_equal": true,
+    "note": "Separate instrumented run, not a throughput control. Probe rates use the actual registered carry lease during the real weight stream; overlap is with submitted-to-fenced stage intervals, not a hardware DMA trace."
+  },
+  "carry_copy_scope": "64MiB pinned buffers; 2GiB per direction; 4GiB DirectStorage read when enabled. Active DS fences span copy intervals. This synthetic queue is not a raw RAID bandwidth benchmark. Separate GPU-event rates do not prove simultaneous H2D/D2H; inspect wall time as well."
+}

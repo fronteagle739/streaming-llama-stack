@@ -39,7 +39,7 @@ KEPT = ('generation_control_file', 'stack_preferences_file', 'vision_encoder', '
         'producer_host_reserve_gib',
         # LLAMADECODE fold sweep plan (owner): primary sweep S*, the remainder folded into the last sweep up
         # to the fold cap; the host max is the ceiling for that largest sweep's bank.
-        'producer_prefill_sweep_tokens', 'producer_prefill_fold_cap_tokens', 'producer_host_max_gib',
+        'producer_prefill_sweep_tokens', 'producer_prefill_fold_cap_tokens', 'producer_host_max_gib', 'producer_chunks_per_pass',
         'producer_desktop_reserve_gib',   # per-machine desktop RAM reserve kept free by admission (default 0.5 GiB)
         'runtime_min_free_gib',          # runtime available physical RAM floor (default 0.5 GiB; 0 disables it)
         'comfyui_models', 'studio_python')  # envvars.json placeholders the proxy's studio/producer scopes expand

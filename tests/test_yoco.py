@@ -27,13 +27,13 @@ class YocoTests(unittest.TestCase):
     def test_config_rejects_malformed_keep_before_launch(self):
         from slstack.config import load
         for keep in (True,'140',139,141):
-            with self.subTest(keep=keep),self.assertRaisesRegex(ValueError,'0 or 140'):
+            with self.subTest(keep=keep),self.assertRaisesRegex(ValueError,'0, 140 or 2541'):
                 load(overrides=dict(gpu_uuid='GPU-test',yoco_keep=keep))
         # CLI None means "no override"; explicit JSON null is malformed.
         import tempfile
         config=Path(tempfile.mkdtemp())/'null.local.json'
         config.write_text('{"yoco_keep":null}')
-        with self.assertRaisesRegex(ValueError,'0 or 140'):
+        with self.assertRaisesRegex(ValueError,'0, 140 or 2541'):
             load(config,overrides=dict(gpu_uuid='GPU-test'))
 
     def test_both_launch_modes_keep_the_flag_and_budgets(self):
@@ -54,8 +54,18 @@ class YocoTests(unittest.TestCase):
             with self.assertRaisesRegex(ValueError,'local single_engine'):
                 yoco_keep(dict(yoco_keep=140,serving_mode=serving))
         for keep in (-1,1,139,141,True,'140',None):
-            with self.assertRaisesRegex(ValueError,'0 or 140'):
+            with self.assertRaisesRegex(ValueError,'0, 140 or 2541'):
                 yoco_keep(dict(yoco_keep=keep,serving_mode='single_engine'))
+
+    def test_dependency_cone_has_distinct_local_identity_and_no_remote_export(self):
+        from slstack.combo_producer import prefill_arguments
+        from slstack.config import load
+        cfg=load(overrides=dict(gpu_uuid='GPU-test',yoco_keep=2541,context=999424,ctx_cache_precision='bf16',ctx_cache_growable=True))
+        self.assertEqual(yoco_keep(cfg),2541)
+        args,_=prefill_arguments(cfg,4096,20*(1<<30))
+        self.assertEqual(args['--yoco-keep'],'2541')
+        with self.assertRaises(ValueError):prefill_arguments(cfg,4096,20*(1<<30),export_state=True)
+        with self.assertRaises(ValueError):load(overrides=dict(gpu_uuid='GPU-test',yoco_keep=2541,mac='http://example.test:8180'))
 
     def test_wrappers_support_webui(self):
         for preset in ('262k','1m'):
