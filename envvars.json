@@ -96989,12 +96989,12 @@
   {
     "var": "LLAMADECODE_APPEND_RESIDENT_SWEEP",
     "flag": null,
-    "default": "0",
+    "default": "1",
     "classification": "advanced",
     "scopes": [
       "rtx-llama"
     ],
-    "doc": "E2c experimental resident-expert sweep: 1 runs at most32 appended tokens with the original sweep graph on retained decode-layout experts; default0. Requires APPEND_DECODE_MAX=0 and an existing resident decoder. L2 is released before restoring the admitted prefill graph. Numerical/state equivalence and speed are qualification gates, not assumptions.",
+    "doc": "E2c default resident-expert sweep for at most32 new tokens after resident decode. Set0 for full sweeps. The owner accepted measured follow-up KL0.0000235/0.000224/0.00250 at2K/8K/32K, with recall/top1 passing and append2.7-2.9s versus17.5-18.2s. Uses the original sweep policy, releases L2 before restoring prefill buffers, and keeps the existing cache type. Exactness remains a future target.",
     "reads": [
       "engines/streaming-llama/prefill_llama.cpp/src/llama-dsv41-resident-append.h:7"
     ],
@@ -97003,12 +97003,12 @@
         "source": "engines/streaming-llama/prefill_llama.cpp/src/llama-dsv41-resident-append.h:7",
         "unset": "NULL from getenv; the literal consumer below supplies any fallback",
         "read": "const char *value=std::getenv(\"LLAMADECODE_APPEND_RESIDENT_SWEEP\");",
-        "consumer": "// graph for a bounded append. Never changes KV type or the arithmetic policy.\ninline bool llama_dsv41_resident_append_enabled(){\n    const char *value=std::getenv(\"LLAMADECODE_APPEND_RESIDENT_SWEEP\");\n    return value&&!std::strcmp(value,\"1\");\n}\nconstexpr unsigned llama_dsv41_resident_append_limit=32;"
+        "consumer": "// graph for a bounded append. Never changes KV type or the arithmetic policy.\ninline bool llama_dsv41_resident_append_enabled(){\n    const char *value=std::getenv(\"LLAMADECODE_APPEND_RESIDENT_SWEEP\");\n    return !value||!*value||!std::strcmp(value,\"1\");\n}\nconstexpr unsigned llama_dsv41_resident_append_limit=32;"
       }
     ],
     "code_default": "NULL from getenv; the literal consumer below supplies any fallback",
     "defaults_by_scope": {
-      "rtx-llama": "0"
+      "rtx-llama": "1"
     },
     "allowed_values": [
       "0",

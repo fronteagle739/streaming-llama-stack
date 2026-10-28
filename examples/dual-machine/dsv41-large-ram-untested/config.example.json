@@ -21,7 +21,11 @@
     "producer_fixed_direct_open": true,
     "mac": "http://SET_DECODE_HOST:8180",
     "pair_token": "SET_SHARED_PAIRING_TOKEN",
-    "webui": true
+    "webui": true,
+    "env_overrides": {
+      "LLAMADECODE_APPEND_RESIDENT_SWEEP": "1",
+      "LLAMADECODE_APPEND_DECODE_MAX": "0"
+    }
   },
   "decode_plan": {
     "status": "UNTESTED example; design fields, not ds4 CLI options",

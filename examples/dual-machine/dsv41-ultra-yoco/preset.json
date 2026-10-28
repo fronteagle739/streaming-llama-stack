@@ -18,7 +18,11 @@
     "producer_prefill_fold_cap_tokens": 61440,
     "ctx_cache_precision": "bf16",
     "ctx_cache_growable": true,
-    "producer_fixed_direct_open": true
+    "producer_fixed_direct_open": true,
+    "env_overrides": {
+      "LLAMADECODE_APPEND_RESIDENT_SWEEP": "1",
+      "LLAMADECODE_APPEND_DECODE_MAX": "0"
+    }
   },
   "mac": {
     "model": "SET_MAC_GGUF_PATH",

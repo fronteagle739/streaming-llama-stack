@@ -31,6 +31,7 @@ COMMON_ENV = {
     'LLAMADECODE_VRAM_RESERVE_MIB': '512',    # physical VRAM kept free beside the L2 tier (default)
     'LLAMADECODE_ENGRAM_EARLY': 'auto',       # default
     'LLAMADECODE_ENGRAM_CACHE_MB': '0',       # no row cache: unset takes all admission headroom on this revision
+    'LLAMADECODE_APPEND_DECODE_MAX': '0',    # use the qualified sweep-resident path, not native per-token appends
 }
 PRESETS = {
     '262k': dict(context=262144, ctx_cache_precision='f32', ctx_cache_growable=True,
@@ -58,6 +59,7 @@ def overlay(preset, local=None, model=None, yoco_keep=None, vision=None, profile
     if model:
         result['model'] = model
     env = dict(result.get('env_overrides') or {})
+    env.setdefault('LLAMADECODE_APPEND_RESIDENT_SWEEP','1')  # explicit0 keeps full sweeps
     env.update(COMMON_ENV)
     result.update(PRESETS[preset], serving='single_engine', producer_host_reserve_gib=.5, env_overrides=env, **FOLD)
     if profile is not None:

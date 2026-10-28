@@ -2,5 +2,9 @@
   "runtime_root": "runtime/dsv41-single",
   "model": "SET_DSV41_GGUF_PATH",
   "host_budget_gib": 13.5,
-  "min_available_gib": 4
+  "min_available_gib": 4,
+  "env_overrides": {
+    "LLAMADECODE_APPEND_RESIDENT_SWEEP": "1",
+    "LLAMADECODE_APPEND_DECODE_MAX": "0"
+  }
 }
