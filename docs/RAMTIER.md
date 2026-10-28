@@ -3,13 +3,44 @@
 The producer can now use the host-cache implementation from standalone
 ds4 between its VRAM L2 and DirectStorage. The versioned `ds4x_host_cache_v1`
 bridge reuses ds4's allocation/backoff, LRU/admission and pinned upload code.
-L2 victims populate RAM; with L2 disabled, L1 victims populate RAM. RAM hits
+The cache observes 32 scalar layer passes without copying payloads, selects a
+bounded set of frequently evicted keys, and fills each selected key once from
+an L2 victim (L1 when L2 is disabled). Membership stays fixed until the next
+prefill. This avoids continuous reverse PCIe traffic from replacing the RAM
+LRU on every eviction. The ds4 allocator, admission checks, LRU slot allocator
+and pinned staging remain shared; key lookup uses a fixed direct index. RAM hits
 upload the original expert bytes and avoid an NVMe read. Copies complete before
 publishing a key or reusing a source. The payload uses ds4's host allocator and
 is fully locked with `VirtualLock`; one expert's pinned ds4 buffers stage both
 directions. CUDA never receives a pageable pointer. This avoids WDDM's observed
 whole-tier CUDA pinning limit. Mixed quantization transfers only the original
 layer's extent. The quality/speed residency hook includes host experts.
+
+`LLAMADECODE_HOST_MODE=upload|cpu|mix` selects expert service. Upload remains
+the default service when a cache is explicitly enabled. CPU mode reuses ds4's
+persistent row worker pool, Q8_K activation quantizer and SwiGLU/down workers,
+with llama's dispatched Q4_K CPU dot kernel. A persistent coordinator starts
+RAM experts while the GPU handles the other routed experts; their output rows
+are combined before the next layer. The cache cannot evict borrowed CPU
+payloads. Unsupported quantization, geometry and multi-row calls use upload.
+Mix warms both service-cost estimates, compares cost per expert and periodically
+probes CPU cost again. Its local cost decision does not model future VRAM
+promotion or every effect of biased routing; measured end-to-end results govern
+the shipping default. CPU and mix remain experimental: a small local FFN
+roundoff result does not establish full-sequence quality equivalence. The
+Round 2 report publishes KL/top-1 and the failed strict sequence screen.
+
+`LLAMADECODE_HOST_CACHE_ADMIT=0` admits an empty tier for zero-hit qualification.
+`LLAMADECODE_L2_MAX_SLOTS` optionally caps L2 to hold VRAM capacity constant in
+comparisons; the physical VRAM guard still applies. `LLAMADECODE_LOGITS_TRACE`
+optionally writes sampled full-vocabulary logits to an operator-supplied local
+scratch file. `tests/ramtier_compare_logits.py` compares only identical input
+prefixes. The existing native `decode_forced` path supports complete
+teacher-forced comparisons without sampling divergence. CPU registration initializes
+llama CPU conversion tables and requires a known-answer Q4_K dot.
+`LLAMADECODE_HOST_CPU_VERIFY=1` optionally compares the first 16 hybrid FFN
+rows with all-GPU rows on identical activations; it adds GPU work and is
+disabled for timing runs.
 
 History searches in the clean stack and the earlier stack found no host expert
 tier in the single-engine provider. The earlier LLAMADECODE plan proposed one,
@@ -48,7 +79,11 @@ Per-token `LLAMADECODE_DS4X_TOKEN` counters distinguish `l1_hits`, `l2_hits`,
 allocation. Engram counters are not expert hits. Warm rates exclude the first
 100 generated tokens and exclude append prefill.
 
-## Measurements
+See [Round 2 measurements and CPU comparison](RAMTIER_R2.md) for the current
+performance decision, controlled correctness and safety exclusions. The cache
+stays off by default.
+
+## Round 1 measurements
 
 One RTX 5090, 32 GB host RAM, the original Q4_K/Q8_0 checkpoint, actual stack
 WebUI in headless Chromium. Each setting generated 1,000 tokens; each warm

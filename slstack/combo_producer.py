@@ -472,12 +472,17 @@ class ComboProducer:
                     owner.loading_process=process
                     try:return super()._initialize(*args,**kwargs)
                     finally:owner.loading_process=None
+            def admitted(job):
+                # A lost controller must leave a GPU owner recoverable. Memory
+                # and paging stops use its abort file and retirement barrier.
+                job.release_kill_on_close()
+                return protect_working_set(job,host_bytes,int(cfg['min_available_gib']*(1<<30)),
+                    int(cfg['host_budget_gib']*(1<<30)),receipt=self.directory/'resident-admission.json')
             self.process=PublishingProducer(session,argv,env,self.directory,host_bytes=host_bytes,
                 runtime_min_free_gib=runtime_floor,model_sha256=self.model_sha256,
                 physical_floor=int(cfg['min_available_gib']*(1<<30)),operation_seconds=min(1140,cfg['request_timeout_s']),stall_seconds=stall_seconds(cfg),
                 idle_seconds=cfg['lease_minutes']*60,native=native,cancelled=cancelled,native_mode=1,bootstrap=bootstrap,owner_epoch=epoch,
-                after_resume=lambda job:protect_working_set(job,host_bytes,int(cfg['min_available_gib']*(1<<30)),
-                    int(cfg['host_budget_gib']*(1<<30)),receipt=self.directory/'resident-admission.json'))
+                after_resume=admitted)
             if keep and self.process.ready.get('yoco_keep')!=keep:raise ValueError('Producer YOCO mode identity differs')
             self.checkpoint=self.process.ready['checkpoint']
             expected_position=(base[1]['position'] if base else 0)+len(tokens)

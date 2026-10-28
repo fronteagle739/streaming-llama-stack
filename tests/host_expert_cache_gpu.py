@@ -48,6 +48,8 @@ def check(dll_path, cuda_directory):
     try:
         for d in device:ok(cuda.cudaMalloc(C.byref(d),1024))
         assert api.resize(3*(256*2+512),256,512)==3
+        assert api.find(40,0)==-1 and api.find(0,384)==-1
+        assert api.store(40,0,(ptr*3)(),(u64*3)(256,256,512))==0
         for key in (0,1,2):put(key,(256,256,512))
         get(0,(256,256,512));put(3,(256,256,512))
         assert api.find(0,1)==-1 and api.find(0,0)>=0
@@ -57,6 +59,9 @@ def check(dll_path, cuda_directory):
         assert api.find(1,20)==-1
         put(700,(256,256,512));get(700,(256,256,512))
         assert api.resize(0,256,512)==0 and api.find(1,316)==-1
+        assert api.resize(2048,256,512)==2
+        assert api.find(0,0)==-1 and api.find(1,316)==-1
+        put(0,(256,256,512));get(0,(256,256,512))
         return dict(status='PASS',byte_comparisons=comparisons,model_opened=False)
     finally:
         api.clear()
