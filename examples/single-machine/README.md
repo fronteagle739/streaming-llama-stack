@@ -41,8 +41,9 @@ appropriate vision-enabled local config and producer for image prompts; do not
 advertise the text-only YOCO speed as image throughput. Prefill quality is separate
 from the live decode bias slider and phase sampler controls.
 
-Short resident follow-ups are off by default because they change logits. Set
-`env_overrides.LLAMADECODE_APPEND_DECODE_MAX` to `"96"` in your private config
-to enable the measured faster path. [Measurements and other toggles](../../docs/MERGEPERF.md).
+Short resident follow-ups (about 4x faster first output on a short follow-up
+turn, with a small logit difference) are on in the default `ultra-cone` profile
+and off in the other profiles. Set `env_overrides.LLAMADECODE_APPEND_DECODE_MAX`
+to `"0"` to turn them off, or `"96"` to turn them on elsewhere. [Measurements and other toggles](../../docs/MERGEPERF.md).
 Exact LFU admission defaults to `LLAMADECODE_RECENCY_LFU=1` with
 `LLAMADECODE_LFU_HALF_LIFE=16`; set LFU to `"0"` for the earlier LRU policy.

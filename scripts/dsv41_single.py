@@ -63,6 +63,7 @@ def overlay(preset, local=None, model=None, yoco_keep=None, vision=None, profile
     if model:
         result['model'] = model
     env = dict(result.get('env_overrides') or {})
+    explicit_append = 'LLAMADECODE_APPEND_DECODE_MAX' in env
     env.update(COMMON_ENV)
     for key,value in DEFAULT_ENV.items():env.setdefault(key,value)
     result.update(PRESETS[preset], serving='single_engine', producer_host_reserve_gib=.5, env_overrides=env, **FOLD)
@@ -79,6 +80,9 @@ def overlay(preset, local=None, model=None, yoco_keep=None, vision=None, profile
         if yoco_keep is not None and yoco_keep!=expected:raise ValueError('YOCO selection conflicts with the quality profile')
         yoco_keep=expected
         result['preset_name']='DSV4.1 single engine / '+profile+' / '+preset
+        if profile=='ultra-cone' and not explicit_append:
+            env['LLAMADECODE_APPEND_DECODE_MAX']='96'   # owner: resident follow-ups on in the ultra-cone preset (KL ~0.001-0.011 toggle)
+            result['env_overrides']=env
     if yoco_keep is not None:
         if type(yoco_keep) is not int or yoco_keep not in (0,140,2541):raise ValueError('yoco_keep must be 0, 140 or 2541')
         result['yoco_keep']=yoco_keep
