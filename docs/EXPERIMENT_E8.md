@@ -1,18 +1,20 @@
 # E8: recency-weighted L2 admission
 
 Timing scope: historical prefill seconds/tokens per second in this report include producer startup; they are not prompt-execution-only measurements. TTFT includes startup and first output.
-Verdict: **adopt the opt-in LFU policy with a 16-token half life**. On one frozen
+Verdict: **adopt LFU with a16-token half life as the example default**. On one frozen
 8K synthetic-record workload, it reduced routed expert-miss bytes by 11.7% in
-both repetitions. Warm decode improved by 1.5-10.6%. Keep LRU as the default;
-this is not a general speedup or a long-context qualification.
+both repetitions. Warm decode improved by1.5-10.6%. The owner rule now enables
+this exact winner in every example and shared profile; explicit0 keeps LRU.
+This is not a general speedup or a long-context qualification.
 
 ```text
 LLAMADECODE_RECENCY_LFU=1
 LLAMADECODE_LFU_HALF_LIFE=16
 ```
 
-These are advanced settings. The policy defaults off, and the half-life control
-defaults to 1 for reproducing the first arm. Scores affect L2 victim selection
+These are advanced settings. Examples explicitly use1/16 and the overlay
+preserves local overrides. The low-level native fallback remains off/half-life1
+for callers that do not use an example or provide settings. Scores affect L2 victim selection
 and admission only. Routing, weights, arithmetic and L1 placement are unchanged.
 The least-scored eligible L2 slot is selected, excluding any live source slot.
 An incoming victim must exceed its score by 25%; otherwise it is discarded.
@@ -23,7 +25,8 @@ Scores halve at the selected token interval, with LRU breaking equal-score ties.
 Each pair used the same current Q4 model and producer binary, F32 context cache,
 ULTRA arithmetic, 512 MiB desktop reserve and 0.5 GiB runtime floor. Only the
 LFU enable setting varied. In the 16-token pairs, half life was fixed at 16 on
-both arms. No shipping preset changed.
+both arms. The later example-default follow-up applies the qualified1/16
+combination without changing any native arithmetic or cache implementation.
 
 The input asks for the archive key followed by 100 numbered review notes. The
 timed window contains 127 evaluated tokens after 62 natural recall tokens and

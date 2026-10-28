@@ -60,6 +60,8 @@ def overlay(preset, local=None, model=None, yoco_keep=None, vision=None, profile
         result['model'] = model
     env = dict(result.get('env_overrides') or {})
     env.setdefault('LLAMADECODE_APPEND_RESIDENT_SWEEP','1')  # explicit0 keeps full sweeps
+    env.setdefault('LLAMADECODE_RECENCY_LFU','1')  # qualified E8 policy; explicit0 keeps LRU
+    env.setdefault('LLAMADECODE_LFU_HALF_LIFE','16')
     env.setdefault('LLAMADECODE_HOST_COPY_STAGING','auto')  # stage only spills; explicit0 keeps direct tile copies
     env.setdefault('DS4_CUDA_SINGLE_GPU_HC_GRAPHS','1')  # explicit0 keeps eager HC input work
     env.setdefault('LLAMA_DSV41_INDEX_FP4','1')  # explicit0 keeps BF16 index scoring
