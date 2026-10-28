@@ -1,0 +1,627 @@
+{
+  "status": "PASS",
+  "label": "Q4\u2192MXFP4 requant (lossy), speed proxy for native FP4",
+  "primary_prompt_tokens": 100000,
+  "default_enabled": false,
+  "native_precision_claim": false,
+  "conditions": "Same frozen synthetic prompt, ULTRA, approximate YOCO140, same producer/decode DLL, bias zero; prefill includes startup. One engine per exclusive lease with physical RAM and paging guards.",
+  "limitations": "One synthetic fixture, eight fixed logit rows; not broad task/recall accuracy. Separate synchronized profiles are diagnostic only.",
+  "measurements": [
+    {
+      "arm": "q4",
+      "label": "Q4_K/Q8_0 control",
+      "prompt_tokens": 100000,
+      "input_sha256": "4ffeee4837f76e364da2cc241938e3e79f61901d6d4c0824d5f6cddba8db4320",
+      "profile": "ultra",
+      "yoco_keep": 140,
+      "bias": 0,
+      "producer_sha256": "02818d701a8e1309d5b63ab666394b6886a7bfa9dbe28cc5074e6b635a4eda44",
+      "decode_library_sha256": "91dd102586c5afad4a2c94a5ba52c2be06149ce96752747dbdbb86a353930b38",
+      "model_sha256": "2cc6bc254f22a0238020e61e931c0cac865218aada1eed9c0036d9f4031c6e5f",
+      "prefill_seconds": 46.45299999997951,
+      "prefill_tok_s": 2152.713495361852,
+      "flashinfer_requested": false,
+      "kernel": "q4",
+      "sweeps": [
+        49152,
+        50848
+      ],
+      "measurement_sha256": "3d2e3d612020cace219fb279fba34350db358a34c30d8415a2d8159d9e1decb3",
+      "guard": {
+        "exit_code": 0,
+        "reason": null,
+        "peak_tree_rss": 6319988736,
+        "min_available": 8900108288,
+        "host_budget_gib": 7.25,
+        "floor_gib": 1,
+        "cleanup_confirmed": true
+      },
+      "stored_completed_products": 0,
+      "trace_sha256": "d273205f10eb24e8e8e096d0d067f55d9d77421a828be94c5552ce8d7836b21c"
+    },
+    {
+      "arm": "proxy",
+      "label": "Q4\u2192MXFP4 requant (lossy), speed proxy for native FP4",
+      "prompt_tokens": 100000,
+      "input_sha256": "4ffeee4837f76e364da2cc241938e3e79f61901d6d4c0824d5f6cddba8db4320",
+      "profile": "ultra",
+      "yoco_keep": 140,
+      "bias": 0,
+      "producer_sha256": "02818d701a8e1309d5b63ab666394b6886a7bfa9dbe28cc5074e6b635a4eda44",
+      "decode_library_sha256": "91dd102586c5afad4a2c94a5ba52c2be06149ce96752747dbdbb86a353930b38",
+      "model_sha256": "cf05bdccb86b823ce794eab2ca033a649b6a2f5c03cee8a4b177d86de017ae44",
+      "prefill_seconds": 44.40600000001723,
+      "prefill_tok_s": 2251.94793496287,
+      "flashinfer_requested": false,
+      "kernel": "mxfp4",
+      "sweeps": [
+        49152,
+        50848
+      ],
+      "measurement_sha256": "1014b2abb7a8e9feedc7293398eddb6b790900be58b8c07dd115ec33e998e514",
+      "guard": {
+        "exit_code": 0,
+        "reason": null,
+        "peak_tree_rss": 6336413696,
+        "min_available": 8844386304,
+        "host_budget_gib": 7.25,
+        "floor_gib": 1,
+        "cleanup_confirmed": true
+      },
+      "stored_completed_products": 1632,
+      "trace_sha256": "e37b7291ccce3020b5c5dbdf18c4baf9f3ff18b9524d74ae26fa636473615767"
+    },
+    {
+      "arm": "proxy",
+      "label": "Q4\u2192MXFP4 requant (lossy), speed proxy for native FP4",
+      "prompt_tokens": 100000,
+      "input_sha256": "4ffeee4837f76e364da2cc241938e3e79f61901d6d4c0824d5f6cddba8db4320",
+      "profile": "ultra",
+      "yoco_keep": 140,
+      "bias": 0,
+      "producer_sha256": "02818d701a8e1309d5b63ab666394b6886a7bfa9dbe28cc5074e6b635a4eda44",
+      "decode_library_sha256": "91dd102586c5afad4a2c94a5ba52c2be06149ce96752747dbdbb86a353930b38",
+      "model_sha256": "cf05bdccb86b823ce794eab2ca033a649b6a2f5c03cee8a4b177d86de017ae44",
+      "prefill_seconds": 69.54700000002049,
+      "prefill_tok_s": 1437.8765439195154,
+      "flashinfer_requested": true,
+      "kernel": "flashinfer",
+      "sweeps": [
+        49152,
+        50848
+      ],
+      "measurement_sha256": "060160615c32253a17d9abe9829a63d6055e3c29515a189d29decb54f7652d11",
+      "guard": {
+        "exit_code": 0,
+        "reason": null,
+        "peak_tree_rss": 6260953088,
+        "min_available": 8621801472,
+        "host_budget_gib": 7.25,
+        "floor_gib": 1,
+        "cleanup_confirmed": true
+      },
+      "flashinfer_bridge_sha256": "8bbc22b60e9b0ff9793d132b74a31a462b8c16319cfb7d4ae3608974074bd8fd",
+      "flashinfer_completed_graphs": 544,
+      "flashinfer_completed_products": 1632,
+      "stored_completed_products": 1632,
+      "trace_sha256": "9cec5b5a9e9c5c35654b7fb98017a1e177bb09315dbd17cd123000c753402e3c"
+    }
+  ],
+  "quality_comparisons": [
+    {
+      "status": "PASS",
+      "label": "Q4\u2192MXFP4 requant (lossy), speed proxy for native FP4",
+      "reference_sha256": "3d2e3d612020cace219fb279fba34350db358a34c30d8415a2d8159d9e1decb3",
+      "candidate_sha256": "1014b2abb7a8e9feedc7293398eddb6b790900be58b8c07dd115ec33e998e514",
+      "input_sha256": "4ffeee4837f76e364da2cc241938e3e79f61901d6d4c0824d5f6cddba8db4320",
+      "producer_sha256": "02818d701a8e1309d5b63ab666394b6886a7bfa9dbe28cc5074e6b635a4eda44",
+      "vocabulary": 129280,
+      "forced_rows": 8,
+      "compared_rows": 7,
+      "excluded_rows": [
+        0
+      ],
+      "exclusion_reason": "Frontier precedes the live setter; requested warmup/ramp prefix also excluded",
+      "kl_direction": "q4 bias zero to candidate; natural logarithm",
+      "mean_kl": 0.036049026062615445,
+      "max_kl": 0.2501828050456448,
+      "top1_agreement": 1.0,
+      "rows": [
+        {
+          "row": 1,
+          "kl_control_to_candidate": 0.2501828050456448,
+          "top1_control": 671,
+          "top1_candidate": 671
+        },
+        {
+          "row": 2,
+          "kl_control_to_candidate": 0.00023626579725694993,
+          "top1_control": 55961,
+          "top1_candidate": 55961
+        },
+        {
+          "row": 3,
+          "kl_control_to_candidate": 0.0009177392991265056,
+          "top1_control": 41273,
+          "top1_candidate": 41273
+        },
+        {
+          "row": 4,
+          "kl_control_to_candidate": 0.0001894314959930778,
+          "top1_control": 3676,
+          "top1_candidate": 3676
+        },
+        {
+          "row": 5,
+          "kl_control_to_candidate": 0.00033759907662419213,
+          "top1_control": 28,
+          "top1_candidate": 28
+        },
+        {
+          "row": 6,
+          "kl_control_to_candidate": 0.00047268366499939805,
+          "top1_control": 270,
+          "top1_candidate": 270
+        },
+        {
+          "row": 7,
+          "kl_control_to_candidate": 6.658058663180333e-06,
+          "top1_control": 5463,
+          "top1_candidate": 5463
+        }
+      ],
+      "reference_kernel": "q4",
+      "candidate_kernel": "mxfp4",
+      "untouched_prefill_frontier": {
+        "kl_control_to_candidate": 7.26653771732e-09,
+        "top1_control": 18715,
+        "top1_candidate": 18715
+      },
+      "frontier_scope": "Both bias zero, identical input, producer, decode DLL and YOCO. Row zero compares untouched prefill; the seven later forced rows are reported separately."
+    },
+    {
+      "status": "PASS",
+      "label": "Q4\u2192MXFP4 requant (lossy), speed proxy for native FP4",
+      "reference_sha256": "3d2e3d612020cace219fb279fba34350db358a34c30d8415a2d8159d9e1decb3",
+      "candidate_sha256": "060160615c32253a17d9abe9829a63d6055e3c29515a189d29decb54f7652d11",
+      "input_sha256": "4ffeee4837f76e364da2cc241938e3e79f61901d6d4c0824d5f6cddba8db4320",
+      "producer_sha256": "02818d701a8e1309d5b63ab666394b6886a7bfa9dbe28cc5074e6b635a4eda44",
+      "vocabulary": 129280,
+      "forced_rows": 8,
+      "compared_rows": 7,
+      "excluded_rows": [
+        0
+      ],
+      "exclusion_reason": "Frontier precedes the live setter; requested warmup/ramp prefix also excluded",
+      "kl_direction": "q4 bias zero to candidate; natural logarithm",
+      "mean_kl": 0.04610976553699509,
+      "max_kl": 0.3218881551453347,
+      "top1_agreement": 1.0,
+      "rows": [
+        {
+          "row": 1,
+          "kl_control_to_candidate": 0.3218881551453347,
+          "top1_control": 671,
+          "top1_candidate": 671
+        },
+        {
+          "row": 2,
+          "kl_control_to_candidate": 0.0003740381743983742,
+          "top1_control": 55961,
+          "top1_candidate": 55961
+        },
+        {
+          "row": 3,
+          "kl_control_to_candidate": 0.00030577375021752023,
+          "top1_control": 41273,
+          "top1_candidate": 41273
+        },
+        {
+          "row": 4,
+          "kl_control_to_candidate": 2.135653218444594e-05,
+          "top1_control": 3676,
+          "top1_candidate": 3676
+        },
+        {
+          "row": 5,
+          "kl_control_to_candidate": 0.0001280025674982777,
+          "top1_control": 28,
+          "top1_candidate": 28
+        },
+        {
+          "row": 6,
+          "kl_control_to_candidate": 3.145621384664972e-05,
+          "top1_control": 270,
+          "top1_candidate": 270
+        },
+        {
+          "row": 7,
+          "kl_control_to_candidate": 1.957637548570064e-05,
+          "top1_control": 5463,
+          "top1_candidate": 5463
+        }
+      ],
+      "reference_kernel": "q4",
+      "candidate_kernel": "flashinfer",
+      "untouched_prefill_frontier": {
+        "kl_control_to_candidate": 1.1753494262329017e-08,
+        "top1_control": 18715,
+        "top1_candidate": 18715
+      },
+      "frontier_scope": "Both bias zero, identical input, producer, decode DLL and YOCO. Row zero compares untouched prefill; the seven later forced rows are reported separately."
+    },
+    {
+      "status": "PASS",
+      "label": "Q4\u2192MXFP4 requant (lossy), speed proxy for native FP4",
+      "reference_sha256": "1014b2abb7a8e9feedc7293398eddb6b790900be58b8c07dd115ec33e998e514",
+      "candidate_sha256": "060160615c32253a17d9abe9829a63d6055e3c29515a189d29decb54f7652d11",
+      "input_sha256": "4ffeee4837f76e364da2cc241938e3e79f61901d6d4c0824d5f6cddba8db4320",
+      "producer_sha256": "02818d701a8e1309d5b63ab666394b6886a7bfa9dbe28cc5074e6b635a4eda44",
+      "vocabulary": 129280,
+      "forced_rows": 8,
+      "compared_rows": 7,
+      "excluded_rows": [
+        0
+      ],
+      "exclusion_reason": "Frontier precedes the live setter; requested warmup/ramp prefix also excluded",
+      "kl_direction": "proxy bias zero to candidate; natural logarithm",
+      "mean_kl": 0.04330455544868498,
+      "max_kl": 0.2999716838168144,
+      "top1_agreement": 1.0,
+      "rows": [
+        {
+          "row": 1,
+          "kl_control_to_candidate": 0.2999716838168144,
+          "top1_control": 671,
+          "top1_candidate": 671
+        },
+        {
+          "row": 2,
+          "kl_control_to_candidate": 8.414241741548555e-05,
+          "top1_control": 55961,
+          "top1_candidate": 55961
+        },
+        {
+          "row": 3,
+          "kl_control_to_candidate": 0.0014362228282360045,
+          "top1_control": 41273,
+          "top1_candidate": 41273
+        },
+        {
+          "row": 4,
+          "kl_control_to_candidate": 0.000340106619624758,
+          "top1_control": 3676,
+          "top1_candidate": 3676
+        },
+        {
+          "row": 5,
+          "kl_control_to_candidate": 0.0006015551078680237,
+          "top1_control": 28,
+          "top1_candidate": 28
+        },
+        {
+          "row": 6,
+          "kl_control_to_candidate": 0.0006807695484131674,
+          "top1_control": 270,
+          "top1_candidate": 270
+        },
+        {
+          "row": 7,
+          "kl_control_to_candidate": 1.740780242298859e-05,
+          "top1_control": 5463,
+          "top1_candidate": 5463
+        }
+      ],
+      "reference_kernel": "mxfp4",
+      "candidate_kernel": "flashinfer",
+      "untouched_prefill_frontier": {
+        "kl_control_to_candidate": 1.770795438162857e-08,
+        "top1_control": 18715,
+        "top1_candidate": 18715
+      },
+      "frontier_scope": "Both bias zero, identical input, producer, decode DLL and YOCO. Row zero compares untouched prefill; the seven later forced rows are reported separately."
+    }
+  ],
+  "diagnostic_profiles": [
+    {
+      "status": "PASS",
+      "arm": "q4",
+      "label": "Q4_K/Q8_0 control",
+      "prompt_tokens": 100000,
+      "sweeps": [
+        49152,
+        50848
+      ],
+      "diagnostic_only": true,
+      "prefill_seconds": 49.5,
+      "stage_seconds": {
+        "stream_wait": 6.8399243000000025,
+        "expert_gemm": 9.143744318546995,
+        "sparse_attention_core": 4.455785598396999,
+        "indexer_core": 2.4998123144660007,
+        "other_wall": 26.560733468590005
+      },
+      "gpu_seconds": {
+        "sparse_attention_core": 4.455785598396999,
+        "indexer_core": 2.4998123144660007,
+        "other_gpu": 10.26955308927791,
+        "expert_gemm": 9.143744318546995
+      },
+      "layer_count": 61,
+      "fetched_bytes": 482208151672,
+      "other_gpu_by_named_origin_seconds": {
+        "remaining": 8.014962881452053,
+        "named_hc": 2.1118105918179944,
+        "named_compressor_and_pool": 0.14277961600800004
+      },
+      "tile_count": 544,
+      "tile_phase_seconds": {
+        "host_prepare": 4.7102710000000005,
+        "host_upload": 2.573741999999999,
+        "compute": 30.554673000000005,
+        "host_readback": 0.4013669999999997,
+        "host_cleanup": 0.0005760000000000004
+      },
+      "tile_nested_seconds": {
+        "host_bind": 1.6262099999999997,
+        "host_register": 1.622112,
+        "host_launch": 30.528994999999984,
+        "host_sync": 0.018352999999999974,
+        "gpu": 30.521372999999997
+      },
+      "routed_expert_flops": 892943518924800,
+      "routed_effective_tflops": 97.65622132648335,
+      "nominal_5090_dense_fp4_tflops": 1676,
+      "fp4_roof_ratio_reference_only": null,
+      "useful_fetch_bytes_per_wall_second": 9741578821.656565,
+      "layer_ledger_ms": {
+        "wall_ms": 45373.481600000014,
+        "acquire_ms": 6839.924300000002,
+        "carry_begin_ms": 0.08420000000000001,
+        "executor_wall_ms": 38353.64270000001,
+        "executor_phase_gap_ms": 104.2189,
+        "engram_ms": 1.8903,
+        "carry_read_ms": 0.28419999999999995,
+        "carry_write_ms": 0.4194000000000001,
+        "carry_commit_ms": 0.10559999999999996,
+        "provider_release_ms": 0.1896999999999999,
+        "scaffold_ms": 176.94120000000004
+      },
+      "definitions": {
+        "stream_wait": "Sum of exposed per-layer acquire wall time; transfer-duration sums overlap compute.",
+        "expert_gemm": "MUL_MAT_ID nodes whose weight origin is a routed expert.",
+        "sparse_attention_core": "FLASH_ATTN nodes; projection, RoPE and packing remain in other.",
+        "indexer_core": "Index scores, their top-k, candidate blocks and selected masks.",
+        "other_wall": "Wall residual including other GPU work, CPU scheduling, carry/Engram work and startup.",
+        "other_gpu_by_named_origin_seconds": "Disjoint subsets of other_gpu identified by node or immediate source names; anonymous intermediates remain in remaining. These are not full semantic phase timers.",
+        "tile_phase_seconds": "Disjoint executor phase wall sums; compute includes graph launch and synchronization. The executor post-compute gap and work outside tiles are not included.",
+        "tile_nested_seconds": "Diagnostics only: register is inside bind, bind is inside prepare, launch and sync are inside compute, and gpu spans overlap compute. Never add these to tile phases or stage_seconds."
+      },
+      "caveat": "CUDA profiling synchronizes operations. These diagnostic walls are not headline throughput or an unsynchronized overlap decomposition.",
+      "producer_sha256": "02818d701a8e1309d5b63ab666394b6886a7bfa9dbe28cc5074e6b635a4eda44",
+      "decode_library_sha256": "91dd102586c5afad4a2c94a5ba52c2be06149ce96752747dbdbb86a353930b38",
+      "flashinfer_requested": false,
+      "flashinfer_bridge_sha256": null,
+      "flashinfer_completed_graphs": null,
+      "flashinfer_completed_products": null,
+      "model_sha256": "2cc6bc254f22a0238020e61e931c0cac865218aada1eed9c0036d9f4031c6e5f",
+      "input_sha256": "4ffeee4837f76e364da2cc241938e3e79f61901d6d4c0824d5f6cddba8db4320",
+      "measurement_sha256": "496d6636d7a02d3239b80bda1c99dd50207dfc334e5032fb0da7afbf5c664f4e",
+      "trace_sha256": "28ea1418c352390c25721ac93d02a9fe1789edaf8a76cf63172867abf520309c",
+      "kernel": "q4",
+      "independent_expected_flops": 892943518924800,
+      "guard": {
+        "exit_code": 0,
+        "reason": null,
+        "peak_tree_rss": 6251958272,
+        "min_available": 8725450752,
+        "host_budget_gib": 7.25,
+        "floor_gib": 1,
+        "cleanup_confirmed": true
+      }
+    },
+    {
+      "status": "PASS",
+      "arm": "proxy",
+      "label": "Q4\u2192MXFP4 requant (lossy), speed proxy for native FP4",
+      "prompt_tokens": 100000,
+      "sweeps": [
+        49152,
+        50848
+      ],
+      "diagnostic_only": true,
+      "prefill_seconds": 47.42200000002049,
+      "stage_seconds": {
+        "stream_wait": 7.403558600000002,
+        "expert_gemm": 6.628086595234998,
+        "sparse_attention_core": 4.454349079461999,
+        "indexer_core": 2.4970104627159997,
+        "other_wall": 26.438995262607488
+      },
+      "gpu_seconds": {
+        "sparse_attention_core": 4.454349079461999,
+        "indexer_core": 2.4970104627159997,
+        "other_gpu": 10.297400027357888,
+        "expert_gemm": 6.628086595234998
+      },
+      "layer_count": 61,
+      "fetched_bytes": 456303081592,
+      "other_gpu_by_named_origin_seconds": {
+        "remaining": 8.04292748526103,
+        "named_hc": 2.1113769262719857,
+        "named_compressor_and_pool": 0.14309561582499997
+      },
+      "tile_count": 544,
+      "tile_phase_seconds": {
+        "host_prepare": 4.6401370000000055,
+        "host_upload": 2.5425800000000014,
+        "compute": 28.00801900000003,
+        "host_readback": 0.4002039999999999,
+        "host_cleanup": 0.0005630000000000003
+      },
+      "tile_nested_seconds": {
+        "host_bind": 1.614417,
+        "host_register": 1.6104580000000002,
+        "host_launch": 27.981125999999996,
+        "host_sync": 0.018195000000000006,
+        "gpu": 27.973635999999985
+      },
+      "routed_expert_flops": 892943518924800,
+      "routed_effective_tflops": 134.72116063884056,
+      "nominal_5090_dense_fp4_tflops": 1676,
+      "fp4_roof_ratio_reference_only": 0.08038255408045379,
+      "useful_fetch_bytes_per_wall_second": 9622181299.645794,
+      "layer_ledger_ms": {
+        "wall_ms": 43285.578400000006,
+        "acquire_ms": 7403.558600000002,
+        "carry_begin_ms": 0.08770000000000001,
+        "executor_wall_ms": 35701.46039999999,
+        "executor_phase_gap_ms": 101.11990000000002,
+        "engram_ms": 2.0269,
+        "carry_read_ms": 0.2829000000000001,
+        "carry_write_ms": 0.41540000000000005,
+        "carry_commit_ms": 0.1036,
+        "provider_release_ms": 0.1764,
+        "scaffold_ms": 177.4665
+      },
+      "definitions": {
+        "stream_wait": "Sum of exposed per-layer acquire wall time; transfer-duration sums overlap compute.",
+        "expert_gemm": "MUL_MAT_ID nodes whose weight origin is a routed expert.",
+        "sparse_attention_core": "FLASH_ATTN nodes; projection, RoPE and packing remain in other.",
+        "indexer_core": "Index scores, their top-k, candidate blocks and selected masks.",
+        "other_wall": "Wall residual including other GPU work, CPU scheduling, carry/Engram work and startup.",
+        "other_gpu_by_named_origin_seconds": "Disjoint subsets of other_gpu identified by node or immediate source names; anonymous intermediates remain in remaining. These are not full semantic phase timers.",
+        "tile_phase_seconds": "Disjoint executor phase wall sums; compute includes graph launch and synchronization. The executor post-compute gap and work outside tiles are not included.",
+        "tile_nested_seconds": "Diagnostics only: register is inside bind, bind is inside prepare, launch and sync are inside compute, and gpu spans overlap compute. Never add these to tile phases or stage_seconds."
+      },
+      "caveat": "CUDA profiling synchronizes operations. These diagnostic walls are not headline throughput or an unsynchronized overlap decomposition.",
+      "producer_sha256": "02818d701a8e1309d5b63ab666394b6886a7bfa9dbe28cc5074e6b635a4eda44",
+      "decode_library_sha256": "91dd102586c5afad4a2c94a5ba52c2be06149ce96752747dbdbb86a353930b38",
+      "flashinfer_requested": false,
+      "flashinfer_bridge_sha256": null,
+      "flashinfer_completed_graphs": null,
+      "flashinfer_completed_products": null,
+      "model_sha256": "cf05bdccb86b823ce794eab2ca033a649b6a2f5c03cee8a4b177d86de017ae44",
+      "input_sha256": "4ffeee4837f76e364da2cc241938e3e79f61901d6d4c0824d5f6cddba8db4320",
+      "measurement_sha256": "50d80afc5b1640b45e93d3021366b8cc9e97cba6e055df5e875a28e4fea640bc",
+      "trace_sha256": "33da700418b174e12974553222354ec131be685ab3187f4ff9d84c02d84c31c4",
+      "kernel": "mxfp4",
+      "independent_expected_flops": 892943518924800,
+      "guard": {
+        "exit_code": 0,
+        "reason": null,
+        "peak_tree_rss": 6335418368,
+        "min_available": 8747909120,
+        "host_budget_gib": 7.25,
+        "floor_gib": 1,
+        "cleanup_confirmed": true
+      }
+    },
+    {
+      "status": "PASS",
+      "arm": "proxy",
+      "label": "Q4\u2192MXFP4 requant (lossy), speed proxy for native FP4",
+      "prompt_tokens": 100000,
+      "sweeps": [
+        49152,
+        50848
+      ],
+      "diagnostic_only": true,
+      "prefill_seconds": 125.15600000001723,
+      "stage_seconds": {
+        "stream_wait": 4.503138999999999,
+        "expert_gemm": 17.65552573393999,
+        "sparse_attention_core": 4.429876505853,
+        "indexer_core": 2.5223389754179992,
+        "other_wall": 96.04511978480625
+      },
+      "gpu_seconds": {
+        "sparse_attention_core": 4.429876505853,
+        "indexer_core": 2.5223389754179992,
+        "other_gpu": 10.104893505944936,
+        "expert_gemm": 17.65552573393999
+      },
+      "layer_count": 61,
+      "fetched_bytes": 456303081592,
+      "other_gpu_by_named_origin_seconds": {
+        "remaining": 7.879255649639022,
+        "named_hc": 2.0844360004139846,
+        "named_compressor_and_pool": 0.14120185589200007
+      },
+      "tile_count": 544,
+      "tile_phase_seconds": {
+        "host_prepare": 4.816759000000002,
+        "host_upload": 2.365426000000001,
+        "compute": 108.579,
+        "host_readback": 0.40411499999999956,
+        "host_cleanup": 0.0006710000000000005
+      },
+      "tile_nested_seconds": {
+        "host_bind": 1.5365859999999991,
+        "host_register": 1.531025,
+        "host_launch": 108.55146700000005,
+        "host_sync": 0.01779699999999997,
+        "gpu": 108.548123
+      },
+      "routed_expert_flops": 892943518924800,
+      "routed_effective_tflops": 50.57586686349734,
+      "nominal_5090_dense_fp4_tflops": 1676,
+      "fp4_roof_ratio_reference_only": 0.030176531541466194,
+      "useful_fetch_bytes_per_wall_second": 3645874601.2331586,
+      "layer_ledger_ms": {
+        "wall_ms": 120981.6636,
+        "acquire_ms": 4503.138999999999,
+        "carry_begin_ms": 0.08640000000000002,
+        "executor_wall_ms": 116294.14330000004,
+        "executor_phase_gap_ms": 119.02890000000005,
+        "engram_ms": 2.2161999999999997,
+        "carry_read_ms": 0.5127999999999998,
+        "carry_write_ms": 0.7904999999999995,
+        "carry_commit_ms": 0.16560000000000002,
+        "provider_release_ms": 0.3558,
+        "scaffold_ms": 180.25399999999996
+      },
+      "definitions": {
+        "stream_wait": "Sum of exposed per-layer acquire wall time; transfer-duration sums overlap compute.",
+        "expert_gemm": "MUL_MAT_ID nodes whose weight origin is a routed expert.",
+        "sparse_attention_core": "FLASH_ATTN nodes; projection, RoPE and packing remain in other.",
+        "indexer_core": "Index scores, their top-k, candidate blocks and selected masks.",
+        "other_wall": "Wall residual including other GPU work, CPU scheduling, carry/Engram work and startup.",
+        "other_gpu_by_named_origin_seconds": "Disjoint subsets of other_gpu identified by node or immediate source names; anonymous intermediates remain in remaining. These are not full semantic phase timers.",
+        "tile_phase_seconds": "Disjoint executor phase wall sums; compute includes graph launch and synchronization. The executor post-compute gap and work outside tiles are not included.",
+        "tile_nested_seconds": "Diagnostics only: register is inside bind, bind is inside prepare, launch and sync are inside compute, and gpu spans overlap compute. Never add these to tile phases or stage_seconds."
+      },
+      "caveat": "CUDA profiling synchronizes operations. These diagnostic walls are not headline throughput or an unsynchronized overlap decomposition.",
+      "producer_sha256": "02818d701a8e1309d5b63ab666394b6886a7bfa9dbe28cc5074e6b635a4eda44",
+      "decode_library_sha256": "91dd102586c5afad4a2c94a5ba52c2be06149ce96752747dbdbb86a353930b38",
+      "flashinfer_requested": true,
+      "flashinfer_bridge_sha256": "8bbc22b60e9b0ff9793d132b74a31a462b8c16319cfb7d4ae3608974074bd8fd",
+      "flashinfer_completed_graphs": 544,
+      "flashinfer_completed_products": 1632,
+      "model_sha256": "cf05bdccb86b823ce794eab2ca033a649b6a2f5c03cee8a4b177d86de017ae44",
+      "input_sha256": "4ffeee4837f76e364da2cc241938e3e79f61901d6d4c0824d5f6cddba8db4320",
+      "measurement_sha256": "c2803d33309aeb1199913d0e85d282f64c1da60ad1863a4c43b18fb16e0a3c2e",
+      "trace_sha256": "876992fbd141a8f2f9c21e5360fec34ee0c6d858a5e5cf12d4773f2cccd347b1",
+      "kernel": "flashinfer",
+      "independent_expected_flops": 892943518924800,
+      "guard": {
+        "exit_code": 0,
+        "reason": null,
+        "peak_tree_rss": 6281580544,
+        "min_available": 8487116800,
+        "host_budget_gib": 7.25,
+        "floor_gib": 1,
+        "cleanup_confirmed": true
+      }
+    }
+  ],
+  "reserved_batch_guard": {
+    "exit_code": 0,
+    "reason": null,
+    "peak_tree_rss": 6449922048,
+    "min_available": 8495353856,
+    "host_budget_gib": 7.25,
+    "floor_gib": 1,
+    "cleanup_confirmed": true
+  }
+}

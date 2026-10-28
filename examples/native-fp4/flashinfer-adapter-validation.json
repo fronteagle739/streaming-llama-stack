@@ -118,6 +118,15 @@
     "workspace_reserve_bytes": 3489660928,
     "policy": "Repartition the existing fixed device graph cap; physical device admission and host-memory/paging guards stay enabled."
   },
-  "model_qualification": "PENDING",
+  "model_qualification": {
+    "status": "SYNTHETIC_100K_PASS",
+    "broad_accuracy_validated": false,
+    "source_native_validated": false,
+    "prefill_seconds": 69.54700000002049,
+    "completed_graphs": 544,
+    "completed_products": 1632,
+    "report": "primary-100k-comparison.json",
+    "default_enabled": false
+  },
   "limitations": "Four synthetic adapter checks, using routing histograms observed in Q4. Tail shapes have sanitizer coverage. Max-skew 4K shapes have finite-output checks and 36 exact double/BF16 reference samples each; not exhaustive numerical or model quality validation."
 }

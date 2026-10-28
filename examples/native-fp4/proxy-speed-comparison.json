@@ -1,0 +1,248 @@
+{
+  "status": "IN_PROGRESS",
+  "label": "Q4\u2192MXFP4 requant (lossy), speed proxy for native FP4",
+  "native_precision_claim": false,
+  "default_enabled": false,
+  "conditions": "ULTRA, YOCO keep140, exact frozen token bytes, one engine on the shared GPU lease; startup included in prefill wall",
+  "interpretation": "Per-layer acquisition is exposed stream wait; transfer-duration sums overlap computation. Long prompts retain the admitted approximately49K weight sweeps.",
+  "measurements": [
+    {
+      "arm": "proxy",
+      "label": "Q4\u2192MXFP4 requant (lossy), speed proxy for native FP4",
+      "prompt_tokens": 49555,
+      "bias": 0.0,
+      "input_sha256": "8be73d98c9ac8c19cd46796c9836f16f0fafe0cc4c2e1c1f4177ecedceb4420c",
+      "profile": "ultra",
+      "yoco_keep": 140,
+      "producer_sha256": "9b634ae28a62d1e84b762ff88403b6aadb4709fd7d363d59fb294f74a9b7f82d",
+      "decode_library_sha256": "91dd102586c5afad4a2c94a5ba52c2be06149ce96752747dbdbb86a353930b38",
+      "model_sha256": "cf05bdccb86b823ce794eab2ca033a649b6a2f5c03cee8a4b177d86de017ae44",
+      "prefill_seconds": 27.56299999996554,
+      "prefill_tok_s": 1797.881217576532,
+      "warm_decode": {
+        "discarded_steps": 100,
+        "steps": 899,
+        "seconds": 187.3428769,
+        "tok_s": 4.798687918515679
+      },
+      "affinity_warmup_tokens": 100,
+      "affinity_ramp_tokens": 8,
+      "sweeps": [
+        49555
+      ],
+      "host_and_cleanup": {
+        "peak_rss": 6074544128,
+        "minimum_available_ram": 7104835584,
+        "paging_growth": 0,
+        "budget_breaches": 0,
+        "owned_pid_gone": true,
+        "forced_kill": false
+      },
+      "guard": {
+        "exit_code": 0,
+        "reason": null,
+        "host_budget_gib": 7.25,
+        "floor_gib": 1,
+        "cleanup_confirmed": true
+      },
+      "layer_count": 40,
+      "layer_ledger_ms": {
+        "wall_ms": 24326.473299999998,
+        "acquire_ms": 7797.1186,
+        "carry_begin_ms": 0.0715,
+        "executor_wall_ms": 16358.067399999996,
+        "executor_phase_gap_ms": 59.8346,
+        "engram_ms": 0.9884,
+        "carry_read_ms": 0.24040000000000006,
+        "carry_write_ms": 0.3201000000000001,
+        "carry_commit_ms": 0.12710000000000005,
+        "provider_release_ms": 0.12260000000000001,
+        "scaffold_ms": 169.41719999999998
+      },
+      "prefill_fetched_bytes": 308899513216,
+      "transfer_duration_ms_sum_not_exposed_wait": 19773.786999999986,
+      "stored_mxfp4_mma_dispatches": 876,
+      "trace_sha256": "f4bb54b1e4297d7e69281c635a444643dc3cd916a1dcb1761a3d44f5aa6a0fa7",
+      "measurement_sha256": "6e53b3350fbfdca5587608d9d634d7fe6291fa82ebf564fd84f0c1c260f4dc85"
+    },
+    {
+      "arm": "proxy",
+      "label": "Q4\u2192MXFP4 requant (lossy), speed proxy for native FP4",
+      "prompt_tokens": 49555,
+      "bias": 1.36125,
+      "input_sha256": "8be73d98c9ac8c19cd46796c9836f16f0fafe0cc4c2e1c1f4177ecedceb4420c",
+      "profile": "ultra",
+      "yoco_keep": 140,
+      "producer_sha256": "9b634ae28a62d1e84b762ff88403b6aadb4709fd7d363d59fb294f74a9b7f82d",
+      "decode_library_sha256": "91dd102586c5afad4a2c94a5ba52c2be06149ce96752747dbdbb86a353930b38",
+      "model_sha256": "cf05bdccb86b823ce794eab2ca033a649b6a2f5c03cee8a4b177d86de017ae44",
+      "prefill_seconds": 27.04700000002049,
+      "prefill_tok_s": 1832.181018226142,
+      "warm_decode": {
+        "discarded_steps": 100,
+        "steps": 899,
+        "seconds": 79.5313857,
+        "tok_s": 11.303713522496817
+      },
+      "affinity_calibration_sha256": "7ab16d163d5f11782436edb70f2c74e6c9ecc5334ac285b80945a826fe7abeda",
+      "affinity_warmup_tokens": 100,
+      "affinity_ramp_tokens": 8,
+      "sweeps": [
+        49555
+      ],
+      "host_and_cleanup": {
+        "peak_rss": 6004387840,
+        "minimum_available_ram": 7751843840,
+        "paging_growth": 0,
+        "budget_breaches": 0,
+        "owned_pid_gone": true,
+        "forced_kill": false
+      },
+      "guard": {
+        "exit_code": 0,
+        "reason": null,
+        "host_budget_gib": 7.25,
+        "floor_gib": 1,
+        "cleanup_confirmed": true
+      },
+      "layer_count": 40,
+      "layer_ledger_ms": {
+        "wall_ms": 23884.3301,
+        "acquire_ms": 7622.7497,
+        "carry_begin_ms": 0.0698,
+        "executor_wall_ms": 16173.995499999995,
+        "executor_phase_gap_ms": 57.65249999999999,
+        "engram_ms": 0.9417,
+        "carry_read_ms": 0.18489999999999998,
+        "carry_write_ms": 0.23950000000000002,
+        "carry_commit_ms": 0.08229999999999998,
+        "provider_release_ms": 0.11550000000000002,
+        "scaffold_ms": 85.95120000000003
+      },
+      "prefill_fetched_bytes": 308899513216,
+      "transfer_duration_ms_sum_not_exposed_wait": 19221.072799999987,
+      "stored_mxfp4_mma_dispatches": 876,
+      "trace_sha256": "f8979406690c5e330a5fd9414950bf25430d8ca26aead9b19a5187c6ddb763a9",
+      "measurement_sha256": "d5d5de2a03f47b9ad133875c3034d54568cbb6306e5a54cad6599f03fadc9ee8"
+    },
+    {
+      "arm": "q4",
+      "label": "Q4_K/Q8_0 control",
+      "prompt_tokens": 49555,
+      "bias": 0.0,
+      "input_sha256": "8be73d98c9ac8c19cd46796c9836f16f0fafe0cc4c2e1c1f4177ecedceb4420c",
+      "profile": "ultra",
+      "yoco_keep": 140,
+      "producer_sha256": "9b634ae28a62d1e84b762ff88403b6aadb4709fd7d363d59fb294f74a9b7f82d",
+      "decode_library_sha256": "91dd102586c5afad4a2c94a5ba52c2be06149ce96752747dbdbb86a353930b38",
+      "model_sha256": "2cc6bc254f22a0238020e61e931c0cac865218aada1eed9c0036d9f4031c6e5f",
+      "prefill_seconds": 28.25,
+      "prefill_tok_s": 1754.1592920353983,
+      "warm_decode": {
+        "discarded_steps": 100,
+        "steps": 899,
+        "seconds": 146.4982246,
+        "tok_s": 6.136593139300065
+      },
+      "affinity_warmup_tokens": 100,
+      "affinity_ramp_tokens": 8,
+      "sweeps": [
+        49555
+      ],
+      "host_and_cleanup": {
+        "peak_rss": 6007640064,
+        "minimum_available_ram": 7739088896,
+        "paging_growth": 0,
+        "budget_breaches": 0,
+        "owned_pid_gone": true,
+        "forced_kill": false
+      },
+      "guard": {
+        "exit_code": 0,
+        "reason": null,
+        "host_budget_gib": 7.25,
+        "floor_gib": 1,
+        "cleanup_confirmed": true
+      },
+      "layer_count": 40,
+      "layer_ledger_ms": {
+        "wall_ms": 25132.27729999999,
+        "acquire_ms": 7470.037399999999,
+        "carry_begin_ms": 0.0678,
+        "executor_wall_ms": 17548.08650000001,
+        "executor_phase_gap_ms": 56.124599999999994,
+        "engram_ms": 1.0312999999999999,
+        "carry_read_ms": 0.21960000000000002,
+        "carry_write_ms": 0.26600000000000007,
+        "carry_commit_ms": 0.08349999999999999,
+        "provider_release_ms": 0.11779999999999996,
+        "scaffold_ms": 112.3674
+      },
+      "prefill_fetched_bytes": 325886444416,
+      "transfer_duration_ms_sum_not_exposed_wait": 19131.340599999985,
+      "stored_mxfp4_mma_dispatches": 0,
+      "trace_sha256": "014a75a70af1082e45adb4d4afdc797fb62f6b6067cbd583fece34486e94490f",
+      "measurement_sha256": "231e36effaf521d063102730bab8d5b0199b568465653fe313e248247eeae822"
+    },
+    {
+      "arm": "q4",
+      "label": "Q4_K/Q8_0 control",
+      "prompt_tokens": 49555,
+      "bias": 1.36125,
+      "input_sha256": "8be73d98c9ac8c19cd46796c9836f16f0fafe0cc4c2e1c1f4177ecedceb4420c",
+      "profile": "ultra",
+      "yoco_keep": 140,
+      "producer_sha256": "9b634ae28a62d1e84b762ff88403b6aadb4709fd7d363d59fb294f74a9b7f82d",
+      "decode_library_sha256": "91dd102586c5afad4a2c94a5ba52c2be06149ce96752747dbdbb86a353930b38",
+      "model_sha256": "2cc6bc254f22a0238020e61e931c0cac865218aada1eed9c0036d9f4031c6e5f",
+      "prefill_seconds": 28.03200000000652,
+      "prefill_tok_s": 1767.8010844744747,
+      "warm_decode": {
+        "discarded_steps": 100,
+        "steps": 899,
+        "seconds": 43.5198605,
+        "tok_s": 20.657235332820058
+      },
+      "affinity_calibration_sha256": "f19b756971d51f9faece93775c8751aaa6b25eb54bc607891578465a09d101be",
+      "affinity_warmup_tokens": 100,
+      "affinity_ramp_tokens": 8,
+      "sweeps": [
+        49555
+      ],
+      "host_and_cleanup": {
+        "peak_rss": 6007476224,
+        "minimum_available_ram": 7977082880,
+        "paging_growth": 6959104,
+        "budget_breaches": 0,
+        "owned_pid_gone": true,
+        "forced_kill": false
+      },
+      "guard": {
+        "exit_code": 0,
+        "reason": null,
+        "host_budget_gib": 7.25,
+        "floor_gib": 1,
+        "cleanup_confirmed": true
+      },
+      "layer_count": 40,
+      "layer_ledger_ms": {
+        "wall_ms": 24878.74910000001,
+        "acquire_ms": 7359.205200000001,
+        "carry_begin_ms": 0.0637,
+        "executor_wall_ms": 17388.53380000001,
+        "executor_phase_gap_ms": 56.14110000000001,
+        "engram_ms": 1.0532,
+        "carry_read_ms": 0.19419999999999998,
+        "carry_write_ms": 0.2658000000000001,
+        "carry_commit_ms": 0.0791,
+        "provider_release_ms": 0.11799999999999998,
+        "scaffold_ms": 129.23610000000002
+      },
+      "prefill_fetched_bytes": 325886444416,
+      "transfer_duration_ms_sum_not_exposed_wait": 18914.291599999982,
+      "stored_mxfp4_mma_dispatches": 0,
+      "trace_sha256": "ba71fab94a0ae611ce99c54de4db70d94802ea9e3ac93a5d72acc3d3f3586663",
+      "measurement_sha256": "abf30bacf8c50938109bf5fc54b77b24090d34a8015f99191079139ead5815d7"
+    }
+  ]
+}

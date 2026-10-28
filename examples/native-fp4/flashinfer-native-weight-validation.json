@@ -20,7 +20,8 @@
       "tensor": "blk.20.ffn_gate_exps.weight",
       "memcheck_errors": 0,
       "case": "q4-layer39-start49415-rows140",
-      "log_sha256": "a3ca047e4310450c481bd85d34abeeb0ae7b8fe3477dfa1fb1feea49aab7f7ad"
+      "normalized_log_utf8_sha256": "a3ca047e4310450c481bd85d34abeeb0ae7b8fe3477dfa1fb1feea49aab7f7ad",
+      "log_file_sha256": "9ffd2e165625ebecfe669b7eced086ffe9765dc87c76016f55bf24688c657fa6"
     },
     {
       "status": "PASS",
@@ -35,7 +36,8 @@
       "tensor": "blk.20.ffn_up_exps.weight",
       "memcheck_errors": 0,
       "case": "q4-layer39-start49415-rows140",
-      "log_sha256": "a3ca047e4310450c481bd85d34abeeb0ae7b8fe3477dfa1fb1feea49aab7f7ad"
+      "normalized_log_utf8_sha256": "a3ca047e4310450c481bd85d34abeeb0ae7b8fe3477dfa1fb1feea49aab7f7ad",
+      "log_file_sha256": "9ffd2e165625ebecfe669b7eced086ffe9765dc87c76016f55bf24688c657fa6"
     },
     {
       "status": "PASS",
@@ -50,7 +52,8 @@
       "tensor": "blk.20.ffn_down_exps.weight",
       "memcheck_errors": 0,
       "case": "q4-layer39-start49415-rows140",
-      "log_sha256": "ff80793aedb81fafe9dba958a77176d3826e5ea4035ccec160683510043e467d"
+      "normalized_log_utf8_sha256": "ff80793aedb81fafe9dba958a77176d3826e5ea4035ccec160683510043e467d",
+      "log_file_sha256": "f20e01f78c99a26cf452ecb31ffc82dad7204bfa425e245fbd527610b8083bc2"
     }
   ],
   "guard": {

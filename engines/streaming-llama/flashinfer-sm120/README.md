@@ -46,7 +46,10 @@ compares samples across active and highly loaded experts. Run both projections
 under compute-sanitizer and the exclusive GPU guard before model measurements.
 Both projections passed the tail fixture under compute-sanitizer (zero errors)
 and the most skewed observed 4K routing tile with exact sampled reference
-results. Full model qualification is still in progress.
+results. A matched synthetic 100K model run completed all 1632 expert products
+but regressed throughput; the full timing and narrow quality comparison are in
+[`primary-100k-comparison.json`](../../../examples/native-fp4/primary-100k-comparison.json).
+Source-native conversion and broad model qualification remain in progress.
 The source hashes, DLL identity and guarded checks are recorded in
 [`flashinfer-adapter-validation.json`](../../../examples/native-fp4/flashinfer-adapter-validation.json).
 
