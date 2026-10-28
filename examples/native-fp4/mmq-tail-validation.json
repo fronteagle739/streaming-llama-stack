@@ -1,0 +1,108 @@
+{
+  "status": "PASS",
+  "results": [
+    {
+      "case": "streaming-fixed-tail",
+      "returncode": 0,
+      "errors_zero": true,
+      "output": "========= COMPUTE-SANITIZER\n{\"status\":\"PASS\",\"fixture\":\"hash32-v1\",\"experts\":384,\"M_per_expert\":1,\"N\":5120,\"K\":2304,\"mmq_x\":8,\"mmq_y\":128,\"milliseconds\":254.231506,\"TFLOPS\":0.0356356172,\"logical_effective_GB_s\":9.49881954,\"sampled_reference_elements\":27,\"max_absolute_error\":0,\"banks\":1}\n========= ERROR SUMMARY: 0 errors\n"
+    },
+    {
+      "case": "ds4-fixed-grid-gate",
+      "returncode": 0,
+      "errors_zero": true,
+      "output": "========= COMPUTE-SANITIZER\n{\"status\":\"PASS\",\"fixture\":\"hash32-v1\",\"experts\":6,\"M_per_expert\":1,\"N\":2304,\"K\":5120,\"mmq_x\":8,\"mmq_y\":128,\"milliseconds\":3.92868686,\"TFLOPS\":0.0360318257,\"logical_effective_GB_s\":9.58942705,\"sampled_reference_elements\":13824,\"max_absolute_error\":0,\"banks\":4}\n========= ERROR SUMMARY: 0 errors\n"
+    },
+    {
+      "case": "ds4-fixed-grid-down",
+      "returncode": 0,
+      "errors_zero": true,
+      "output": "========= COMPUTE-SANITIZER\n{\"status\":\"PASS\",\"fixture\":\"hash32-v1\",\"experts\":6,\"M_per_expert\":1,\"N\":5120,\"K\":2304,\"mmq_x\":8,\"mmq_y\":128,\"milliseconds\":4.17940521,\"TFLOPS\":0.0338703124,\"logical_effective_GB_s\":9.02827031,\"sampled_reference_elements\":30720,\"max_absolute_error\":0,\"banks\":4}\n========= ERROR SUMMARY: 0 errors\n"
+    }
+  ],
+  "guard": {
+    "exit_code": 0,
+    "reason": null,
+    "elapsed_s": 35.90600000001723,
+    "peak_tree_rss": 223100928,
+    "min_available": 13982969856,
+    "host_budget_gib": 2,
+    "floor_gib": 1,
+    "job_commit_gib": 16,
+    "cleanup_confirmed": true
+  },
+  "observed_routing_validation": {
+    "status": "PASS",
+    "results": [
+      {
+        "case": "gate-full",
+        "errors_zero": true,
+        "log_sha256": "d7432e832f5c62727ac29998cf5f0b683d12ab32568591e3bdae1996fe880b34"
+      },
+      {
+        "case": "down-full",
+        "errors_zero": true,
+        "log_sha256": "b096b246fa525523bb6c8d12a1e84a210b57075193b5a95bdf1742b871e8bc5d"
+      },
+      {
+        "case": "observed-tail",
+        "errors_zero": true,
+        "log_sha256": "dd0f37270e4aaf4a4a3ca698d3bc5d458cc5940b862121b8d1829da5fcd5097b"
+      }
+    ]
+  },
+  "observed_routing_guard": {
+    "exit_code": 0,
+    "reason": null,
+    "elapsed_s": 23.25,
+    "peak_tree_rss": 658518016,
+    "min_available": 14390857728,
+    "host_budget_gib": 3,
+    "floor_gib": 1,
+    "job_commit_gib": 16,
+    "cleanup_confirmed": true
+  },
+  "flashinfer_guard": {
+    "exit_code": 0,
+    "reason": null,
+    "elapsed_s": 17.42199999996228,
+    "peak_tree_rss": 1142136832,
+    "min_available": 13814300672,
+    "host_budget_gib": 3,
+    "floor_gib": 1,
+    "job_commit_gib": 16,
+    "cleanup_confirmed": true
+  },
+  "build": {
+    "status": "PASS",
+    "execution_qualified": false,
+    "builds": [
+      {
+        "name": "hyper-observed-fixed",
+        "binary_sha256": "6eb723515967db039a1d9391eac0fbcc8bd2df25f8c1d13dcd9b182f82fff460",
+        "source_sha256": "73e04a276cb4cef34ef60cb97b770c14d3b53b8d19669c66d7cba5c292dc37e7",
+        "mmq_header_sha256": "61ae63fd2c2b1baa7bd3bca335e05f4b50e9c1e7b51574d9fa5869ccb840690a"
+      },
+      {
+        "name": "ds4-observed-fixed",
+        "binary_sha256": "25aed17af2000134b584decceadab455997339928d5f891cd9f2c7c2f96c3383",
+        "source_sha256": "73e04a276cb4cef34ef60cb97b770c14d3b53b8d19669c66d7cba5c292dc37e7",
+        "mmq_header_sha256": "620bb4e9c96c7dad0f9bfbb236dfdbad155269f18e907c350cfd8ec0bc627b10"
+      }
+    ]
+  },
+  "producer_sha256": "e1cee767e3761a30ec11aecd623d8efe8b21e0f5d23c8b33d5b3a16458e99b68",
+  "bounds_fix": "Streaming MXFP4 loader zero-fills padded K blocks and scale pairs; K2304 must not read the next row/expert. Existing DS4 bounds protection was unchanged. The DS4 fixture fixup grid required Y/32 blocks in grid.y.",
+  "rejected_before": {
+    "accepted": false,
+    "streaming_memcheck_errors": 11,
+    "streaming_log_sha256": "f8300bdb86807272ed9f18053e7bb054c67d1cabe59c3f3bcfb106bc782cc0ed",
+    "ds4_fixture_reason": "Old fixture omitted grid.y=Y/32 in fixup; sampled checks missed unwritten/incorrect rows. Corrected full output sentinel and all-output oracle pass.",
+    "ds4_log_sha256": "8129786885c88ef418b285adee99c60bb1f6fabff03da07ba5743e3c7e604292"
+  },
+  "source_files": {
+    "engines/streaming-llama/prefill_llama.cpp/ggml/src/ggml-cuda/mmq.cuh": "61ae63fd2c2b1baa7bd3bca335e05f4b50e9c1e7b51574d9fa5869ccb840690a",
+    "examples/native-fp4/hyper_microbench.cu": "73e04a276cb4cef34ef60cb97b770c14d3b53b8d19669c66d7cba5c292dc37e7",
+    "examples/native-fp4/flashinfer_microbench.py": "623d1295bcf943b47e1b5075f54e310869efc81eb03b42e1d5b67221d2cc1175"
+  }
+}

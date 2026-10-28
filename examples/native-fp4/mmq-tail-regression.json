@@ -1,0 +1,36 @@
+{
+  "status": "PASS",
+  "scope": "Independent exact comparison of all 8 x 129280 logit bit patterns per path; same frozen 100K fixture, model, stable decode DLL, bias/profile/YOCO. Producer differs for MMQ K-tail bounds protection. Narrow regression only.",
+  "results": [
+    {
+      "kernel": "q4",
+      "previous_producer_sha256": "d84d3b940cde48d2b91adca3102b02af7d297af8a5b7bd7b68e25a3b4e5d7e5e",
+      "candidate_producer_sha256": "e1cee767e3761a30ec11aecd623d8efe8b21e0f5d23c8b33d5b3a16458e99b68",
+      "previous_logits_sha256": "095ee44d9cc17102defe85c9aca81c5a8d94d6aa448ebcd104d69ce883a94627",
+      "candidate_logits_sha256": "095ee44d9cc17102defe85c9aca81c5a8d94d6aa448ebcd104d69ce883a94627",
+      "logits_bitwise_equal": true,
+      "differing_logit_elements": 0,
+      "max_absolute_logit_difference": 0.0
+    },
+    {
+      "kernel": "mxfp4",
+      "previous_producer_sha256": "d84d3b940cde48d2b91adca3102b02af7d297af8a5b7bd7b68e25a3b4e5d7e5e",
+      "candidate_producer_sha256": "e1cee767e3761a30ec11aecd623d8efe8b21e0f5d23c8b33d5b3a16458e99b68",
+      "previous_logits_sha256": "2cf0ef2fbafb61a377df414d6f0ccd0d8d97fc31e2d7e7ceee2a7d9bc56b0e8d",
+      "candidate_logits_sha256": "2cf0ef2fbafb61a377df414d6f0ccd0d8d97fc31e2d7e7ceee2a7d9bc56b0e8d",
+      "logits_bitwise_equal": true,
+      "differing_logit_elements": 0,
+      "max_absolute_logit_difference": 0.0
+    },
+    {
+      "kernel": "flashinfer",
+      "previous_producer_sha256": "d84d3b940cde48d2b91adca3102b02af7d297af8a5b7bd7b68e25a3b4e5d7e5e",
+      "candidate_producer_sha256": "e1cee767e3761a30ec11aecd623d8efe8b21e0f5d23c8b33d5b3a16458e99b68",
+      "previous_logits_sha256": "024d0a4627dad67cf1672cf71bf307f4ed1b902af510615bf4a7655ab95502a1",
+      "candidate_logits_sha256": "024d0a4627dad67cf1672cf71bf307f4ed1b902af510615bf4a7655ab95502a1",
+      "logits_bitwise_equal": true,
+      "differing_logit_elements": 0,
+      "max_absolute_logit_difference": 0.0
+    }
+  ]
+}

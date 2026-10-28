@@ -148,7 +148,7 @@ Separate synchronized stage diagnostics; the stage columns sum to the **prompt-o
 | Stored MXFP4 W4A4 | 44.608 | 47.422 | 7.404 | 6.628 | 4.454 | 2.497 | 23.625 | 134.72 |
 | Stored MXFP4 FlashInfer W4A8 | 122.350 | 125.156 | 4.503 | 17.656 | 4.430 | 2.522 | 93.239 | 50.58 |
 
-### Current ABI3 workspace integration
+### ABI3 workspace integration before the MMQ tail bounds fix
 
 Full timing, dispatch, quality and diagnostic evidence: [`primary-100k-workspace-comparison.json`](primary-100k-workspace-comparison.json).
 
@@ -177,3 +177,44 @@ ABI3 uses caller-owned bounded workspace, skips inactive experts during layout c
 ABI3 is the implementation behind the existing FlashInfer toggle. The toggle stays off by default because the proxy is lossy. GGML VMM workspace mappings remain bounded and retained until backend destruction; decode-cache admission observes the remaining physical free memory. Decode performance with this retained workspace is not qualified.
 
 FlashInfer has about 3.2% higher prompt-only throughput than current MXFP4 in this fixture. That small end-to-end difference needs repeated workload testing. Integrated expert throughput is 166.3 TFLOPS. No source-native or broad quality-neutral speed claim follows.
+
+## MMQ tail bounds fix and repeated 100K matrix
+
+The streaming MXFP4 loader previously read beyond the final K=2304 row while loading the padded MMA tile. An exact-size expert allocation exposed 11 compute-sanitizer errors. It now zero-fills the missing blocks and scale pairs. This correctness fix applies to the existing stored-MXFP4 path; the lossy proxy and FlashInfer settings remain off by default.
+
+[`mmq-tail-validation.json`](mmq-tail-validation.json) preserves the rejected read and fixture failure, source/build identities and fresh guards. Both streaming and DS4 fixtures pass all 44,544 gate/down output values each, with zero sanitizer errors. The streaming 384-expert and observed sparse tail checks also pass. The DS4 numerical failure was in the fixture: its fixup launch omitted grid.y=Y/32. Full-model decode MMA qualification remains pending.
+
+[`primary-100k-tail-comparison.json`](primary-100k-tail-comparison.json) repeats the matched primary matrix with one new common producer and the same input, decode DLL, bias and approximate YOCO. Both FP4 rows are **Q4→MXFP4 requant (lossy), speed proxy for native FP4**.
+
+| Path | Prompt-only s | Prompt-only tokens/s | TTFT s | Tokens/TTFT s |
+|---|---:|---:|---:|---:|
+| Q4 control | 44.147 | 2265.14 | 46.984 | 2128.38 |
+| Stored MXFP4 W4A4 | 41.910 | 2386.06 | 44.781 | 2233.09 |
+| Stored MXFP4 FlashInfer W4A8 | 41.492 | 2410.11 | 44.360 | 2254.28 |
+
+Separate synchronized diagnostics, with stages summing to prompt-only wall:
+
+| Path | Profile prompt s | Profile TTFT s | Wait s | Expert s | Attention s | Indexer s | Other prompt s | Expert TFLOPS |
+|---|---:|---:|---:|---:|---:|---:|---:|---:|
+| Q4 control | 48.085 | 51.016 | 7.938 | 9.122 | 4.451 | 2.506 | 24.068 | 97.89 |
+| Stored MXFP4 W4A4 | 45.313 | 48.375 | 7.720 | 6.623 | 4.452 | 2.497 | 24.021 | 134.82 |
+| Stored MXFP4 FlashInfer W4A8 | 44.538 | 47.422 | 7.910 | 5.393 | 4.454 | 2.510 | 24.272 | 165.58 |
+
+[`mmq-tail-regression.json`](mmq-tail-regression.json) verifies the recorded artifact hashes and all 8 x 129280 logit bit patterns for each path against the previous ABI3 build: zero differences. The two 100K repetitions show a small, variable end-to-end FlashInfer gain over current MXFP4; these are not enough to establish a general speed improvement. No additional quality claim follows. The first batch completed the clean matrix and Q4 profile, then the next launcher exited before starting an engine. The two missing profiles passed under a fresh lease; the rejected batch receipt is retained.
+
+## Observed routing kernel comparison
+
+[`observed-kernel-comparison.json`](observed-kernel-comparison.json) uses three histograms selected from the captured 49,555-token prompt: the most and least concentrated full 4096-row graphs, plus the final 140-row graph. All 384 experts remain in the weight banks, including inactive experts. These are synthetic representable operands using observed counts, not actual stored-weight tensors. Both implementations check finite full outputs and sampled exact double references, with their respective F32/BF16 output rounding.
+
+| Graph | N x K | Active experts | Maximum M | HYPER eager TFLOPS | FlashInfer eager TFLOPS | FlashInfer graph TFLOPS |
+|---|---|---:|---:|---:|---:|
+| q4-layer20-start8192-rows4096 | 2304 x 5120 | 97 | 4069 | 99.55 | 481.00 | 476.90 |
+| q4-layer20-start8192-rows4096 | 5120 x 2304 | 97 | 4069 | 83.35 | 465.11 | 459.64 |
+| q4-layer19-start0-rows4096 | 2304 x 5120 | 276 | 1192 | 125.22 | 338.57 | 329.06 |
+| q4-layer19-start0-rows4096 | 5120 x 2304 | 276 | 1192 | 132.50 | 326.86 | 316.29 |
+| q4-layer39-start49415-rows140 | 2304 x 5120 | 120 | 58 | 17.11 | 41.65 | 41.82 |
+| q4-layer39-start49415-rows140 | 5120 x 2304 | 120 | 58 | 19.26 | 42.30 | 42.43 |
+
+The raw normalized results are [`observed-hyper-microbench.json`](observed-hyper-microbench.json) and [`observed-flashinfer-microbench.json`](observed-flashinfer-microbench.json). Times exclude packing and activation quantization. HYPER uses 100 eager launches; FlashInfer records 20 eager launches and separate CUDA graph replay timing. Logical effective bandwidth counts the operands touched by active experts and outputs, not PCIe traffic. These are distinct output precisions and timing protocols, so the columns do not isolate instruction throughput.
+
+To reproduce a histogram, pass `--route-cases observed-routing.json --output <new-result.json>` to the FlashInfer fixture. For HYPER, pack one case’s 384 counts as little-endian signed int32 values and pass `384 <maximum-count> N K --counts <counts-file>`. In counts mode the fixture’s legacy `M_per_expert` output means the launch maximum; normalized public records use `maximum_M`. Build with `NATIVEFP4_DS4_MMQ=1` and DS4 MMQ headers to check that implementation; add `--full-reference` for the tiny six-expert M=1 full-output oracle. Always use an exclusive GPU lease, explicit host-memory ceiling, physical-RAM and device floors, and paging stop. The recorded accepted host ceilings were 2 or 3 GiB with a 1 GiB physical floor. The first FlashInfer histogram launcher used Python3.12 with a Python3.13 dependency environment and failed before benchmarking; the accepted retry uses the pinned environment’s interpreter.
