@@ -20,6 +20,10 @@ prompt and 31.0 Mac decode tok/s. The matched 49,787-token image prompt reached
 1,477 prefill tok/s with YOCO and 1,197 without it.
 [Timings and conditions](../../docs/YOCO_PAIRED_QUALIFICATION.md).
 
+Paired presets retain YOCO keep 140. The single-machine exact cone (keep 2541)
+has no negotiated remote state version: its export is refused before launch.
+The same gap applies to the large-RAM preview. [Defaults and limits](../../docs/MERGEPERF.md).
+
 The [large-RAM ds4-win untested example](dsv41-large-ram-untested/README.md)
 contains a portable preview launcher and config pair for a Windows/Linux
 RAM-rich decode host. Its missing CPU mode3/YOCO receiver is documented;

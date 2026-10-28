@@ -30,11 +30,24 @@ class Launchers(unittest.TestCase):
                     self.assertEqual(run.returncode,0,run.stderr)
                     result=json.loads(run.stdout);cfg=result['config']
                     profile=file.stem.removeprefix('dsv41-').removesuffix('-webui')
-                    self.assertEqual(cfg['producer_profile'],'ultra' if profile=='ultra-yoco' else profile)
-                    self.assertEqual(cfg['yoco_keep'],140 if profile=='ultra-yoco' else 0)
+                    cone=profile in ('ultra-cone','ultra-yoco')
+                    self.assertEqual(cfg['producer_profile'],'ultra' if cone else profile)
+                    self.assertEqual(cfg['yoco_keep'],2541 if cone else 0)
+                    self.assertEqual(cfg['env_overrides']['LLAMADECODE_APPEND_DECODE_MAX'],'0')
                     self.assertEqual(cfg['webui'],file.stem.endswith('-webui'))
                     self.assertNotIn('example-placeholder',run.stdout)
                     self.assertFalse(runtime.exists())
+
+    @unittest.skipUnless(shutil.which('powershell'),'PowerShell is needed to execute Windows examples')
+    def test_legacy_yoco_launchers_require_explicit_approximation(self):
+        with tempfile.TemporaryDirectory() as folder:
+            local=Path(folder)/'test.local.json';local.write_text('{}')
+            for file in sorted((ROOT/'examples/single-machine').glob('*ultra-yoco*.ps1')):
+                run=subprocess.run(['powershell','-NoProfile','-File',str(file),'-Config',str(local),
+                                    '-ApproximateYoco','-Context','1m','-DryRun'],capture_output=True,text=True,timeout=30)
+                self.assertEqual(run.returncode,0,run.stderr)
+                cfg=json.loads(run.stdout)['config']
+                self.assertEqual((cfg['producer_profile'],cfg['yoco_keep']),('ultra',140))
 
     def test_every_dual_recipe_refuses_unresolved_settings_before_start(self):
         with tempfile.TemporaryDirectory() as folder:

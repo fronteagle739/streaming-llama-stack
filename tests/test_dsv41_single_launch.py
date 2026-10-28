@@ -14,7 +14,8 @@ dsv41_single = importlib.util.module_from_spec(spec)
 spec.loader.exec_module(dsv41_single)
 
 GATED_ENV = {'DS4_DS_READ_PARTS': '8', 'LLAMADECODE_VRAM_RESERVE_MIB': '512',
-             'LLAMADECODE_ENGRAM_EARLY': 'auto', 'LLAMADECODE_ENGRAM_CACHE_MB': '0'}
+             'LLAMADECODE_ENGRAM_EARLY': 'auto', 'LLAMADECODE_ENGRAM_CACHE_MB': '0',
+             'LLAMADECODE_APPEND_DECODE_MAX': '0'}
 
 
 class LaunchConfigTests(unittest.TestCase):
@@ -41,7 +42,7 @@ class LaunchConfigTests(unittest.TestCase):
         self.assertEqual(local['env_overrides']['LLAMADECODE_ENGRAM_CACHE_MB'], '2048')   # input untouched
 
     def test_resolved_producer_flags_env_and_sweep(self):
-        fold = {'--prefill-sweep-tokens': '49152', '--prefill-fold-cap-tokens': '61440'}
+        fold = {'--prefill-sweep-tokens': '49152', '--prefill-fold-cap-tokens': '61440', '--yoco-keep': '2541'}
         for preset, flags in (('262k', {'--context': '262144', '--compressed-cache-bf16': '0',
                                         '--ctx-cache-precision': 'f32', '--ctx-cache-growable': '1', **fold}),
                               ('1m', {'--context': '999424', '--compressed-cache-bf16': '1',
@@ -58,6 +59,24 @@ class LaunchConfigTests(unittest.TestCase):
                 self.assertEqual(row['sweep_plan']['capacity_tokens'], 49152)   # a short prompt keeps the base bank
                 self.assertGreater(row['sweep_plan']['max_host_bytes'], row['sweep_plan']['base_host_bytes'])
                 self.assertEqual(row['single_engine']['producer_host_reserve_gib'], .5)
+
+    def test_default_cone_reaches_native_args_and_keeps_qualified_routing_boundary(self):
+        from slstack.combo_producer import prefill_arguments, routed_prefill_choice
+        for preset in ('262k','1m'):
+            cfg=dsv41_single.overlay(preset, dict(producer_profile='accurate', yoco_keep=140))
+            self.assertEqual((cfg['producer_profile'],cfg['yoco_keep']),('ultra',2541))
+            self.assertEqual(cfg.get('producer_chunks_per_pass',1),1)
+            for count, routed in ((2048,'1'),(2049,'tail'),(49555,'tail')):
+                self.assertEqual(routed_prefill_choice(cfg,count),routed)
+                args,plan=prefill_arguments(cfg,count,20*1024**3)
+                self.assertEqual(args['--yoco-keep'],'2541')
+                self.assertEqual(args['--capture-dspark'],'0')
+            with self.assertRaisesRegex(ValueError,'no negotiated remote state'):
+                prefill_arguments(cfg,49555,20*1024**3,export_state=True)
+
+    def test_resident_followup_is_an_explicit_local_toggle(self):
+        cfg=dsv41_single.overlay('262k',dict(env_overrides={'LLAMADECODE_APPEND_DECODE_MAX':'96'}))
+        self.assertEqual(cfg['env_overrides']['LLAMADECODE_APPEND_DECODE_MAX'],'96')
 
     def test_write_and_dry_run_cli(self):
         with tempfile.TemporaryDirectory() as folder:
