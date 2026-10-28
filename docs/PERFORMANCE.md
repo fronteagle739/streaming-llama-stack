@@ -6,6 +6,22 @@ Every figure below was measured; each says what was timed.
 
 [Any-GGUF Q4_K/Q8_0 smoke](ANYGGUF_GPU_SMOKE.md): 49.6K-token recall at **1,592 tok/s**; warm decode **6.8 tok/s** (Max quality) / **18.2 tok/s** (Max speed).
 
+[Host expert tier trial](RAMTIER.md), same Q4_K/Q8_0 checkpoint and actual
+WebUI, 49,553-token prompt and 1,000-token replies:
+
+| Host tier | Warm Max quality | Warm Max speed |
+|---|---:|---:|
+| Off | 7.26 tok/s | 18.89 tok/s |
+| 3.49 GiB (3.5 GiB requested) | 3.50 tok/s | 12.43 tok/s |
+| 10.99 GiB (auto) | 3.36 tok/s | 11.32 tok/s |
+
+The tier reduced SSD reads but slowed both settings, so it remains opt-in.
+Auto reclaimed 4.26 GiB of prefill carry RAM, retained native state exports,
+and passed a longer append with tier release/regrowth. Runtime RAM floor defaults
+are now 512 MiB; the separate desktop admission reserve is still 512 MiB.
+These are bounded single-run observations; see the trial for hit rates,
+memory/paging observations, build differences and failed-attempt disclosures.
+
 ## DeepSeek V4.1 Flash on one RTX 5090
 
 Model: DeepSeek V4.1 Flash GGUF, Q4_K routed experts and Q8_0 for the rest

@@ -62,7 +62,7 @@
 
 #define DS4_WIN32_SOCKET_BASE 0x40000000
 
-#define DS4_HOST_RESERVE_BYTES (UINT64_C(1) << 30)
+#define DS4_HOST_RESERVE_BYTES (UINT64_C(512) << 20)
 /* WDDM commitment is not physical residency. Match the owner's 1 GiB
  * available-RAM guard; retain OS commit headroom without a RAM+commit cap. */
 static SRWLOCK g_host_memory_lock = SRWLOCK_INIT;

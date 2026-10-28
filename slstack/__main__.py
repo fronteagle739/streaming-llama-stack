@@ -13,7 +13,7 @@ def main():
     parser.add_argument('--config')
     parser.add_argument('--host-budget-gib', type=float)
     parser.add_argument('--min-available-gib', type=float)
-    parser.add_argument('--runtime-min-free-gib', type=float, help='Runtime available physical RAM floor (default 4 GiB; 0 disables it)')
+    parser.add_argument('--runtime-min-free-gib', type=float, help='Runtime available physical RAM floor (default 0.5 GiB; 0 disables it)')
     sub = parser.add_subparsers(dest='command', required=True)
     sub.add_parser('check')
     mlx_setup = sub.add_parser('setup-mlx', help='Install the retained MLX-VLM fork and native GLM kernels')

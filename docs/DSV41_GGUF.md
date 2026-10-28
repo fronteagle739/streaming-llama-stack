@@ -109,7 +109,7 @@ Use `--component dspark` with the same arguments for DSpark; use `--component
 vision` without `--quants-library` for Vision. Keep output paths distinct. The
 main/DSpark writer supports upstream's `--resume`. Existing complete outputs
 are never overwritten. The selected host budget must fit available physical
-RAM plus the default 4 GiB free-RAM floor. The supervisor enforces an aggregate
+RAM plus the default 512 MiB free-RAM floor. The supervisor enforces an aggregate
 Windows Job commitment limit and watches tree RSS/available RAM; failures are
 loud. Its 600-second timeout is a renewable **no-progress** window, not a total
 conversion deadline. On POSIX the existing supervisor supplies RSS/floor checks.

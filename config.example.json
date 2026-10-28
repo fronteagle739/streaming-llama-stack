@@ -5,7 +5,7 @@
   "host_budget_gib": 8,
   "min_available_gib": 0.5,
   "producer_desktop_reserve_gib": 0.5,
-  "runtime_min_free_gib": 4.0,
+  "runtime_min_free_gib": 0.5,
   "job_commit_gib": 48,
   "request_timeout_s": 900,
   "lease_minutes": 19,

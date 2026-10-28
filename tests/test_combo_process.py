@@ -123,8 +123,8 @@ class ProcessTest(unittest.TestCase):
             process=Producer('1'*32,['unused'],dict(os.environ),Path('.'),host_bytes=512<<20,
                 physical_floor=4<<30,native=native,native_mode=1,startup=lambda owned:dict(status='ready'))
             self.assertTrue(process.creation_attempted)
-            self.assertEqual(process.runtime_min_free_gib,4.0)
-            self.assertEqual(process.runtime_floor,4<<30)
+            self.assertEqual(process.runtime_min_free_gib,0.5)
+            self.assertEqual(process.runtime_floor,512<<20)
             proof=process.close()
         self.assertTrue(all(proof[k] for k in ('owned_job_empty','owned_process_signaled','owned_pid_gone')))
         self.assertFalse(native.job.running)
@@ -165,7 +165,7 @@ class ProcessTest(unittest.TestCase):
             with patch('studio.dsv41_session_process.Producer',Process),patch('slstack.combo_producer.environment',return_value={}),patch('slstack.combo_producer.model_receipt',return_value=Path(sys.executable)),patch('slstack.combo_producer.model_digest',return_value=MODEL_SHA256):
                 p=ComboProducer(chosen,'1'*32,42,[1],lambda:False,runner=Files())
             p.leases.close()
-            argv,kwargs=seen[-1];expected=4.0 if floor is None else floor
+            argv,kwargs=seen[-1];expected=0.5 if floor is None else floor
             self.assertEqual(float(argv[argv.index('--runtime-min-free-gib')+1]),expected)
             self.assertEqual(kwargs['runtime_min_free_gib'],expected)
 

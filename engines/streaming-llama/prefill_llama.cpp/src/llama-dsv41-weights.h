@@ -8,6 +8,7 @@
 #include <memory>
 #include <string>
 #include <vector>
+#include "../../../ds4-win/ds4_external_host_cache.h"
 
 // Original native-1017 GGUF -> bounded DirectStorage layer staging. Metadata
 // tensors never mmap or allocate their complete file payload. Engram tables
@@ -29,6 +30,7 @@ public:
         ggml_backend_t backend=nullptr;
         // Includes compute buffers plus DS GPU staging and factory host stage.
         uint64_t admitted_device_bytes=0,admitted_host_bytes=0;
+        uint64_t job_host_bytes=0; // complete process RSS ceiling, including decode RAM
         uint32_t buffers=1;
         // Source-pinned candidate profile, independently admitted before allocate.
         // Zero/default retains the measured baseline, not an environment override.
@@ -153,7 +155,11 @@ public:
     bool external_expert_slots(uint32_t layer,const int32_t *ids,uint32_t n,int32_t *slots,
         const char **gate,const char **up,const char **down,uint32_t *slot_count,void *cuda_stream,std::string &error);
     struct expert_cache_stats{uint32_t slots=0;uint64_t hits=0,misses=0,fetched_bytes=0;double fetch_ms=0;
-        uint32_t l2_slots=0;uint64_t l2_hits=0,l2_stored=0;};
+        uint32_t l2_slots=0;uint64_t l2_hits=0,l2_stored=0;
+        uint32_t host_slots=0;uint64_t host_hits=0,host_stored=0,host_bytes=0;};
+    bool configure_host_cache(const ds4_external_host_cache_v1 &api,uint64_t host_limit,uint64_t floor,std::string &error);
+    bool release_host_cache(std::string &error);
+    bool release_prefill_rows(std::string &error);
     // LLAMADECODE cache growth: an exclusive VRAM L2 behind the bank-0 pool
     // (decode layout only). L1 victims are copied into it; an L1 miss found
     // in L2 is copied back instead of fetched. Released when the provider

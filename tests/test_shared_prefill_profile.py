@@ -38,11 +38,11 @@ def test_desktop_reserve_is_512mib_and_runtime_floor_remains_four():
     from slstack.mac import budget
     cfg = load(overrides={'gpu_uuid': 'GPU-test'})
     assert cfg['producer_desktop_reserve_gib'] == .5 and cfg['min_available_gib'] == .5
-    assert cfg['runtime_min_free_gib'] == 4
+    assert cfg['runtime_min_free_gib'] == 0.5
     with patch('slstack.memory_counters.available_physical_bytes', return_value=int(400.5*2**30)):
         mac = budget({**cfg, 'mac_host_budget_gib': 400})
     assert mac['host_budget_gib'] == 400 and mac['min_available_gib'] == .5
-    assert mac['runtime_min_free_gib'] == 4
+    assert mac['runtime_min_free_gib'] == 0.5
 
 def test_broker_reads_actual_progress_before_cold_producer_ready():
     from slstack.native_broker import OwnedProducer

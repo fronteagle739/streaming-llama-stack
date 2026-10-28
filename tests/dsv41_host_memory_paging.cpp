@@ -13,7 +13,7 @@ static void expect(bool ok, const char *what) {
 
 int main() {
     const uint64_t G = 1ull << 30, base = 3 * G;
-    expect(hm::runtime_min_free_bytes == 4 * G, "runtime floor defaults to 4 GiB");
+    expect(hm::runtime_min_free_bytes == G / 2, "runtime floor defaults to 512 MiB");
     for (const char *bad : {"", "-1", "nan", "inf", "4oops", "17179869184"})
         expect(!hm::configure_runtime_min_free_gib(bad), "invalid floor rejected before admission");
     expect(hm::configure_runtime_min_free_gib("6.5") && hm::runtime_min_free_bytes == 6 * G + G / 2, "fractional GiB supported");
@@ -28,14 +28,14 @@ int main() {
 
     // The admission reserve remains independent of the runtime floor.
     hm::state low{};
-    low.available = 512ull << 20; low.total = 32 * G; low.commit = 40 * G; low.commit_limit = 128 * G;
-    expect(hm::low_memory(low), "512 MiB free is below the 1 GiB reserve (recorded)");
+    low.available = (512ull << 20)-1; low.total = 32 * G; low.commit = 40 * G; low.commit_limit = 128 * G;
+    expect(hm::low_memory(low), "below the 512 MiB admission reserve (recorded)");
     hm::state ok{};
     ok.available = 12 * G; ok.total = 32 * G; ok.commit = 40 * G; ok.commit_limit = 128 * G;
     expect(!hm::low_memory(ok), "12 GiB free is not low");
     hm::state commit{};
-    commit.available = 12 * G; commit.total = 32 * G; commit.commit = 128 * G - (512ull << 20); commit.commit_limit = 128 * G;
-    expect(hm::low_memory(commit), "commit within 1 GiB of the limit (recorded)");
+    commit.available = 12 * G; commit.total = 32 * G; commit.commit = 128 * G - (512ull << 20)+1; commit.commit_limit = 128 * G;
+    expect(hm::low_memory(commit), "commit within 512 MiB of the limit (recorded)");
     // Admission still checks fit (begin uses fits with the plan).
     expect(!hm::fits(ok, 13 * G, 0), "admission: 13 GiB host plan does not fit 12 GiB free");
     expect(hm::fits(ok, 10 * G, 0), "admission: 10 GiB host plan fits");

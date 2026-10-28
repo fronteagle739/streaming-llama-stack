@@ -19,13 +19,13 @@
 // Physical host residency and WDDM backing commitment are independent budgets.
 // A caller supplies its complete bounded host/device plan before CUDA starts.
 namespace llama_dsv41_host_memory {
-constexpr uint64_t reserve = UINT64_C(1) << 30;
+constexpr uint64_t reserve = UINT64_C(512) << 20;
 struct state {
     uint64_t available = 0, total = 0, commit = 0, commit_limit = 0;
     uint64_t private_bytes = 0, private_peak = 0;
 };
 inline uint64_t private_limit = 0;
-inline uint64_t runtime_min_free_bytes = UINT64_C(4) << 30;
+inline uint64_t runtime_min_free_bytes = UINT64_C(512) << 20;
 inline HANDLE job = nullptr;
 inline bool read(state &s) {
     MEMORYSTATUSEX m{}; m.dwLength = sizeof(m);
@@ -61,7 +61,7 @@ inline void report(const char *event, const state &s, uint64_t host = 0, uint64_
         DWORD(size_t(n) < sizeof(text) ? size_t(n) : sizeof(text) - 1), &done, nullptr); }
 }
 // Runtime available physical RAM floor, independent of admission's reserve.
-// Owner 2026-10-25: restore the known safe 4 GiB stop as a startup flag. 0 disables
+// Owner 2026-10-28: use a 512 MiB runtime floor. 0 disables
 // it; the existing paging stop remains enabled in either case.
 inline std::atomic<bool> floor_stop{false}, memory_query_failed{false};
 inline std::atomic<uint64_t> stopped_available{0};

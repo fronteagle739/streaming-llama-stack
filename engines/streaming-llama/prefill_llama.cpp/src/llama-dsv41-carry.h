@@ -165,6 +165,9 @@ public:
     // Retire a completed one-token view before reusing its pre-registered bank.
     // Invalidate it first; live/seeding/incomplete leases cannot release credit.
     bool retire_shared_ram(std::string &error);
+    // Keep the completed frontier certificate, but release all hidden-row
+    // references/leases. Native exports use the separate token/logit/GPU owners.
+    bool release_completed_ram(std::string &error);
     bool retire_yoco_encoder(std::string &error);
 
     // Seed contiguous pages once; ID widths must initially be zero. All four

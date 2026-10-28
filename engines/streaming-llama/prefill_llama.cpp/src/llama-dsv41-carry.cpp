@@ -62,7 +62,7 @@ void put64(uint8_t * out, uint64_t value) {
 }
 
 struct llama_dsv41_carry_store::implementation {
-    enum phase { fresh, seeding, between_layers, running_layer, awaiting_head, sealed, poisoned };
+    enum phase { fresh, seeding, between_layers, running_layer, awaiting_head, sealed, poisoned, sealed_detached };
     mutable std::mutex mutex;
     phase state = fresh;
     config options;
@@ -450,9 +450,22 @@ void llama_dsv41_carry_store::ram_backing::resume_pages(){
 
 bool llama_dsv41_carry_store::retire_shared_ram(std::string &error){
     return p->guarded([&]{
-        require(p->state==implementation::sealed&&!p->lease&&p->options.shared_ram&&p->shared_bank_claim.owns_lock(),"Only a completed sealed shared RAM owner can retire");
+        require(!p->lease&&(p->state==implementation::sealed_detached||
+            (p->state==implementation::sealed&&p->options.shared_ram&&p->shared_bank_claim.owns_lock())),"Only a completed sealed shared RAM owner can retire");
         p->state=implementation::poisoned;++p->ram_generation;p->resident.reset();p->resident_bytes=0;
-        p->shared_bank_claim.unlock();p->options.shared_ram.reset();
+        if(p->shared_bank_claim.owns_lock())p->shared_bank_claim.unlock();p->options.shared_ram.reset();
+    },error);
+}
+bool llama_dsv41_carry_store::release_completed_ram(std::string &error){
+    return p->guarded([&]{
+        if(p->state==implementation::sealed_detached)return;
+        require(p->state==implementation::sealed&&!p->lease&&p->options.shared_ram&&p->shared_bank_claim.owns_lock(),
+            "Only a certified unleased shared carry can release its hidden rows");
+        // No header write after this point: the sealed certificate is in this
+        // object; physical rows are no longer readable. A later prefill gets a
+        // fresh store on the recommitted bank, after retiring this certificate.
+        p->state=implementation::sealed_detached;++p->ram_generation;
+        p->resident.reset();p->resident_bytes=0;p->shared_bank_claim.unlock();p->options.shared_ram.reset();
     },error);
 }
 
@@ -814,7 +827,7 @@ bool llama_dsv41_carry_store::certify_frontier(std::string & error) {
     }, error);
 }
 bool llama_dsv41_carry_store::frontier_ready() const {
-    std::lock_guard<std::mutex> guard(p->mutex); return p->state == implementation::sealed;
+    std::lock_guard<std::mutex> guard(p->mutex); return p->state == implementation::sealed || p->state == implementation::sealed_detached;
 }
 bool llama_dsv41_carry_store::failed() const {
     std::lock_guard<std::mutex> guard(p->mutex); return p->state == implementation::poisoned;

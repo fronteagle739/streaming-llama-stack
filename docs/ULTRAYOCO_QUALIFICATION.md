@@ -15,7 +15,7 @@ RTX 5090; original Q4 model; shipping ULTRA arithmetic and fold planner;
 6.25 GiB, maximum 7.75 GiB, desktop reserve 8 GiB, physical-RAM floor 4 GiB.
 The timing runs used explicit memory budgets and available-RAM monitoring.
 The current default desktop admission reserve is 512 MiB (owner, 2026-10-27);
-the runtime floor remains 4 GiB. The historical timings above used 8 GiB.
+the runtime floor is now 512 MiB (owner decision after qualification). The historical timings above used 8 GiB.
 
 Times include producer startup and prefill, excluding subsequent export or
 decode. Each row ran in **exact / YOCO / exact / YOCO** order.

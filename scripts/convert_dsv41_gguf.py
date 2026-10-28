@@ -194,10 +194,10 @@ def main():
     parser.add_argument('--threads',type=int,default=1)
     parser.add_argument('--resume',action='store_true')
     parser.add_argument('--host-budget-gib',type=float)
-    parser.add_argument('--runtime-floor-gib',type=float,default=4)
+    parser.add_argument('--runtime-floor-gib',type=float,default=0.5)
     parser.add_argument('--worker',action='store_true',help=argparse.SUPPRESS)
     args = parser.parse_args()
-    if not 1<=args.threads<=32 or args.runtime_floor_gib<4:parser.error('threads must be 1..32 and RAM floor at least 4 GiB')
+    if not 1<=args.threads<=32 or args.runtime_floor_gib<0.5:parser.error('threads must be 1..32 and RAM floor at least 0.5 GiB')
     if not re.fullmatch('[0-9a-f]{40}',args.source_revision):parser.error('source revision must be a full commit SHA')
     if args.execute and (not args.out or (args.component!='vision' and not args.quants_library)):
         parser.error('--execute needs --out and (main/DSpark) --quants-library')

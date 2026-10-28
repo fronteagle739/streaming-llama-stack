@@ -30,7 +30,7 @@ class RuntimeTests(unittest.TestCase):
         from slstack.config import load
         from slstack.__main__ import main
         cfg=load(overrides={'gpu_uuid':'GPU-test'})
-        self.assertEqual(cfg['runtime_min_free_gib'],4.0)
+        self.assertEqual(cfg['runtime_min_free_gib'],0.5)
         for argv in (['slstack','--runtime-min-free-gib','0','check'],['slstack','check','--runtime-min-free-gib','6.5']):
             with self.subTest(argv=argv),patch.object(sys,'argv',argv),patch('slstack.__main__.load',return_value=cfg) as loaded,patch('slstack.check.check',return_value=[]):
                 self.assertEqual(main(),0)

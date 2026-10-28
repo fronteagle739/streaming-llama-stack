@@ -6,6 +6,7 @@
 #include <stdexcept>
 #include <limits>
 #include <string>
+#include <unordered_map>
 #ifdef _WIN32
 #ifndef NOMINMAX
 #define NOMINMAX
@@ -22,6 +23,7 @@ namespace llama_dsv41_locked_ram {
 struct lock_state {
     std::mutex mutex;
     uint64_t bytes=0;
+    std::unordered_map<void*,uint64_t> suspended;
 #ifdef _WIN32
     SIZE_T original_min=0,original_max=0;
 #endif
@@ -32,19 +34,21 @@ inline lock_state &state(){static lock_state value;return value;}
 // fresh zeroed pages at the same address. Contents are not preserved.
 inline void suspend_pages(void *memory,uint64_t bytes){
     auto &record=state();std::lock_guard<std::mutex> guard(record.mutex);
-    if(!memory||!bytes||bytes>record.bytes)throw std::runtime_error("Locked carry RAM suspend geometry differs");
+    if(!memory||!bytes||bytes>record.bytes||record.suspended.count(memory))throw std::runtime_error("Locked carry RAM suspend geometry differs");
 #ifdef _WIN32
     if(!VirtualUnlock(memory,size_t(bytes))&&GetLastError()!=ERROR_NOT_LOCKED)throw std::runtime_error("Locked carry RAM unlock failed");
     if(!VirtualFree(memory,size_t(bytes),MEM_DECOMMIT))throw std::runtime_error("Locked carry RAM decommit failed");
 #else
     if(munlock(memory,bytes)!=0||madvise(memory,bytes,MADV_DONTNEED)!=0)throw std::runtime_error("Locked carry RAM release failed");
 #endif
-    record.bytes-=bytes;
+    record.suspended.emplace(memory,bytes);record.bytes-=bytes;
     std::fprintf(stderr,"DS4COMBO_CARRY_RAM_SUSPENDED bytes=%llu active_bytes=%llu same_address=1\n",(unsigned long long)bytes,(unsigned long long)record.bytes);
 }
 inline void resume_pages(void *memory,uint64_t bytes){
     auto &record=state();std::lock_guard<std::mutex> guard(record.mutex);
-    if(!memory||!bytes)throw std::runtime_error("Locked carry RAM resume geometry differs");
+    const auto pending=record.suspended.find(memory);
+    if(!memory||!bytes||pending==record.suspended.end()||pending->second!=bytes||bytes>UINT64_MAX-record.bytes)
+        throw std::runtime_error("Locked carry RAM resume geometry differs");
 #ifdef _WIN32
     MEMORYSTATUSEX available{};available.dwLength=sizeof(available);
     if(!GlobalMemoryStatusEx(&available)||bytes>available.ullAvailPhys)
@@ -55,7 +59,7 @@ inline void resume_pages(void *memory,uint64_t bytes){
 #else
     if(mlock(memory,bytes)!=0)throw std::runtime_error("Resumed carry RAM cannot be locked");
 #endif
-    record.bytes+=bytes;
+    record.suspended.erase(pending);record.bytes+=bytes;
     std::fprintf(stderr,"DS4COMBO_CARRY_RAM_RESUMED bytes=%llu active_bytes=%llu same_address=1\n",(unsigned long long)bytes,(unsigned long long)record.bytes);
 }
 inline std::shared_ptr<uint8_t[]> allocate(uint64_t bytes,uint64_t admission) {
@@ -108,7 +112,7 @@ inline std::shared_ptr<uint8_t[]> allocate(uint64_t bytes,uint64_t admission) {
 #else
         munlock(pointer,size);munmap(pointer,size);
 #endif
-        locked.bytes-=size;
+        if(!locked.suspended.erase(pointer))locked.bytes-=size;
 #ifdef _WIN32
         if(!locked.bytes) {
             SIZE_T current_min=0,current_max=0;
