@@ -11,16 +11,17 @@ DeepSeek V4.1 Flash, an OpenAI-compatible API, MCP tools and the llama.cpp web U
 ## Results
 
 DeepSeek V4.1 Flash on one RTX 5090 desktop with 32 GB of RAM.
-**FP4 (tensor-core-native layout)** measures **29.6 s prompt-only** at 100K,
-about **3,370 tok/s**, now in one weight pass by default (OPUS22 round 6: the
+**FP4 (tensor-core-native layout)** measures **26.3 s prompt-only** at 100K,
+about **3,800 tok/s** (16.9 GB/s storage; 29.6 s before the round-6 host and
+HC-fusion steps), now in one weight pass by default (OPUS22 round 6: the
 compact host carry record and an all-rows VRAM hidden bank; logits bit-identical
 to the two-sweep plan). The earlier two-sweep FP4 run measured 32.4 s. The matched eager control for the Q4 shipping-default
 dense path measures **32.6 s**. The Q4_K/Q8_0 default model is 483 GiB.
 
 | Prompt tokens | Configuration | Timing | Time | Rate |
 |---:|---|---|---:|---:|
-| 100,000 | FP4 (tensor-core-native layout), single weight pass (default), eager | Prompt-only | **29.646 s** | **3,373.13 tok/s** |
-| 100,000 | FP4 (tensor-core-native layout), single weight pass (default), eager | TTFT | **32.906 s** | — |
+| 100,000 | FP4 (tensor-core-native layout), single weight pass (default), eager | Prompt-only | **26.307 s** | **3,801.33 tok/s** |
+| 100,000 | FP4 (tensor-core-native layout), single weight pass (default), eager | TTFT | **29.406 s** | — |
 | 100,000 | FP4 (tensor-core-native layout), CUDA graphs, two sweeps | Prompt-only | 32.374 s | 3,088.92 tok/s |
 | 100,000 | FP4 (tensor-core-native layout), CUDA graphs, two sweeps | TTFT | 35.406 s | — |
 | 100,000 | Q4 shipping-default dense path, matched eager control | Prompt-only | 32.616 s | 3,066.01 tok/s |

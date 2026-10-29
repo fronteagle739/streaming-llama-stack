@@ -44,6 +44,11 @@ so the layer-0 seed and source-layer ID mirrors no longer register carry pages
 per tile (special-layer host time 3.2 -> 1.5 s), and the Engram rows' finite
 check runs on the Engram lookahead worker. 100K: 28.6-29.1 s, bit-identical.
 
+Round 6 step 5 (default, exact): the HC projection's RMS_NORM and its only
+consumer, the F32->F16 cast, run as one CUDA kernel, and a layer result that is
+already materialized is no longer copied by `keep()`. 100K: **26.307 s**
+prompt-only (3,801 tok/s), TTFT 29.406 s, at 16.9 GB/s storage; bit-identical.
+
 In the new default the 21 sweep layers are compute-bound (21 s wall against
 10 s of weight reads) and the 19 tail layers are storage-bound (8 s). Details:
 `examples/opus22/RESULTS.md` section 8.
