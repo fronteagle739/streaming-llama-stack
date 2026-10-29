@@ -162,4 +162,33 @@ bool engram_read_batch(const engram_read_at & read_at, uint64_t file_bytes,
     error.clear();
     return true;
 }
+bool engram_read_raw_batch(const engram_read_at & read_at, uint64_t file_bytes,
+                           uint64_t table_offset, uint32_t table_rows,
+                           const uint32_t * rows, size_t tokens, size_t row_stride,
+                           uint8_t * output, std::string & error) {
+    const uint64_t table_bytes = uint64_t(table_rows) * engram_row_bytes;
+    if (!read_at || !table_rows || table_offset > uint64_t(INT64_MAX) ||
+        table_bytes > uint64_t(INT64_MAX) - table_offset ||
+        table_offset > file_bytes || table_bytes > file_bytes - table_offset ||
+        (tokens && (!rows || !output || row_stride < engram_columns)) ||
+        tokens > SIZE_MAX / (engram_columns * engram_row_bytes) ||
+        (tokens && tokens - 1 > (SIZE_MAX / sizeof(uint32_t) - engram_columns) / row_stride)) {
+        return fail(error, "invalid Engram table range or batch");
+    }
+    for (size_t i = 0; i < tokens; ++i) {
+        for (size_t j = 0; j < engram_columns; ++j) {
+            if (rows[i * row_stride + j] >= table_rows) return fail(error, "Engram row out of range");
+        }
+    }
+    for (size_t i = 0; i < tokens; ++i) {
+        for (size_t j = 0; j < engram_columns; ++j) {
+            if (!read_at(table_offset + uint64_t(rows[i * row_stride + j]) * engram_row_bytes,
+                         output + (i * engram_columns + j) * engram_row_bytes, engram_row_bytes)) {
+                return fail(error, "Engram row read failed");
+            }
+        }
+    }
+    error.clear();
+    return true;
+}
 } // namespace llama_dsv41

@@ -120,6 +120,10 @@ public:
     bool engram_tile(uint32_t index,llama_dsv41::engram_history &history,
         const int32_t *tokens,const uint8_t *text_mask,size_t count,
         std::vector<float> &output,std::string &error);
+    // OPUS22: the same rows undecoded (count*24*264 bytes) for the GPU decode.
+    bool engram_tile_raw(uint32_t index,llama_dsv41::engram_history &history,
+        const int32_t *tokens,const uint8_t *text_mask,size_t count,
+        std::vector<uint8_t> &output,std::string &error);
     // Advance decoded text history with the existing hash/token-map logic.
     // No table fetch or model computation. Only a completed released pass may
     // accept at most128 already evaluated tokens per synchronization batch.

@@ -766,10 +766,15 @@ bool llama_dsv41_sweep::run(const std::vector<int32_t>&tokens,const cancelled&st
             uint32_t layer=0,start=0,count=0;
             llama_dsv41::engram_history history;
             std::vector<float> rows;
+            std::vector<uint8_t> raw;   // OPUS22 GPU decode: undecoded rows instead of rows
             double cpu_ms=0,table_wait_ms=0;
             bool finite=false;
         };
             std::future<engram_ready> engram_next;
+        // OPUS22: with the direct (pinned, GPU-validated) tile path, decode Engram
+        // rows on the GPU. LLAMA_DSV41_ENGRAM_GPU_DECODE=0 keeps the host decode.
+        const char *engram_gpu_env=std::getenv("LLAMA_DSV41_ENGRAM_GPU_DECODE");
+        const bool engram_gpu_decode=p->options.admitted_pinned_device_bytes&&!(engram_gpu_env&&!std::strcmp(engram_gpu_env,"0"));
         auto queue_engram=[&](uint32_t layer,uint32_t start,const llama_dsv41::engram_history &history){
             require(!engram_next.valid(),"Engram lookahead cannot overwrite unconsumed rows");
             engram_next=std::async(std::launch::async,[&,layer,start,history]{
@@ -781,12 +786,16 @@ bool llama_dsv41_sweep::run(const std::vector<int32_t>&tokens,const cancelled&st
                 out.layer=layer;out.start=start;out.count=std::min(compute_step,uint32_t(owned.size())-start);out.history=history;
                 std::vector<uint8_t>mask(out.count,1);std::string reason;
                 if(!text_mask.empty())std::copy_n(text_mask.data()+start,out.count,mask.data());
-                p->check_stop(stop);out.rows.reserve(uint64_t(out.count)*6144);std::vector<float>part;
+                p->check_stop(stop);
+                if(engram_gpu_decode&&out.count<=4096){
+                    success(p->provider.engram_tile_raw(layer==1?0:1,out.history,owned.data()+start,mask.data(),out.count,out.raw,reason),reason);
+                }else{
+                out.rows.reserve(uint64_t(out.count)*6144);std::vector<float>part;
                 for(uint32_t offset=0;offset<out.count;offset+=4096){const auto rows=std::min(4096u,out.count-offset);
                     p->check_stop(stop);success(p->provider.engram_tile(layer==1?0:1,out.history,owned.data()+start+offset,mask.data()+offset,rows,part,reason),reason);out.rows.insert(out.rows.end(),part.begin(),part.end());}
                 // The executor's host finite check, run here on the worker (same bit test and message).
                 require(std::all_of(out.rows.begin(),out.rows.end(),[](float v){uint32_t b;std::memcpy(&b,&v,4);return (b&0x7f800000u)!=0x7f800000u;}),
-                    "Nonfinite V4.1 tile activation");out.finite=true;
+                    "Nonfinite V4.1 tile activation");out.finite=true;}
                 out.cpu_ms=std::chrono::duration<double,std::milli>(std::chrono::steady_clock::now()-begun).count();return out;
             });
         };
@@ -860,9 +869,10 @@ bool llama_dsv41_sweep::run(const std::vector<int32_t>&tokens,const cancelled&st
                     if(p->options.engram_tile_lookahead){
                         require(engram_next.valid(),"Engram lookahead omitted the required tile");
                         auto prepared=engram_next.get();
-                        require(prepared.layer==layer&&prepared.start==start&&prepared.count==count&&prepared.rows.size()==uint64_t(count)*6144,
+                        require(prepared.layer==layer&&prepared.start==start&&prepared.count==count&&
+                            (prepared.rows.size()==uint64_t(count)*6144||(prepared.rows.empty()&&prepared.raw.size()==uint64_t(count)*24*264)),
                             "Engram lookahead belongs to a different layer/tile");
-                        history=prepared.history;request.engram_rows=std::move(prepared.rows);request.engram_rows_finite=prepared.finite;
+                        history=prepared.history;request.engram_rows=std::move(prepared.rows);request.engram_raw=std::move(prepared.raw);request.engram_rows_finite=prepared.finite;
                         llama_dsv41_layer_log("DS4PERF_ENGRAM_LOOKAHEAD layer=%u start=%u count=%u cpu_ms=%.6f exposed_wait_ms=%.6f prepared_prompt_cache=1\n",layer,start,count,prepared.cpu_ms,elapsed(engram_started));
                         if(engram_overlap&&start==0)llama_dsv41_layer_log("DS4PERF_ENGRAM_TABLE_READY table=%u consumer_layer=%u exposed_wait_ms=%.6f worker_table_wait_ms=%.6f\n",
                             layer==1?0u:1u,layer,elapsed(engram_started),prepared.table_wait_ms);

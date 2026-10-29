@@ -404,11 +404,24 @@ struct llama_dsv41_tile_executor::pinned_storage {
         if(registered)cleanup(cudaHostUnregister(base));
         prefetch_destroy_events();
         if(flags_device)cleanup(cudaFree(flags_device));
+        if(engram_raw_device)cleanup(cudaFree(engram_raw_device));
         if(flags_host)cleanup(cudaFreeHost(flags_host));
         if(ready)cleanup(cudaEventDestroy(ready));
         if(copies)cleanup(cudaStreamDestroy(copies));
     }
     cudaStream_t compute()const{return static_cast<cudaStream_t>(ggml_backend_cuda_get_stream(backend));}
+    // OPUS22: raw Engram rows -> device scratch -> exact GPU decode into the
+    // tile's F32 input, all on the compute stream ahead of validate().
+    void *engram_raw_device=nullptr;uint64_t engram_raw_capacity=0;
+    void engram_decode(const std::vector<uint8_t> &raw,ggml_tensor *out){
+        require(out&&out->data&&raw.size()%264==0&&ggml_nbytes(out)==raw.size()/264*256*sizeof(float),"GPU Engram decode geometry changed");
+        if(raw.size()>engram_raw_capacity){
+            if(engram_raw_device){ok(cudaStreamSynchronize(compute()),"Engram scratch drain");ok(cudaFree(engram_raw_device),"Engram scratch free");engram_raw_device=nullptr;}
+            ok(cudaMalloc(&engram_raw_device,raw.size()),"Engram scratch allocation");engram_raw_capacity=raw.size();
+        }
+        ok(cudaMemcpyAsync(engram_raw_device,raw.data(),raw.size(),cudaMemcpyHostToDevice,compute()),"Engram raw upload");
+        ok(cudaError_t(ggml_dsv41_cuda_engram_decode(engram_raw_device,static_cast<float*>(out->data),raw.size()/264,compute())),"Engram GPU decode");
+    }
     void validate(const llama_dsv41_validation &p){
         if(p.residual_n>uint64_t(5120)*4*4096){
             require(p.residual_n%(5120*4)==0,"Grouped validation residual row geometry changed");
@@ -1141,7 +1154,9 @@ bool llama_dsv41_tile_executor::run(const request&in,const llama_dsv41_layer_gra
         const bool engram=engram_layer(in.layer);
         const int64_t row_width=engram?w.engram_wkv->ne[0]:0;
         require(!engram||(row_width>0&&row_width<=6144),"V4.1 gathered Engram row width is invalid");
-        require(in.engram_rows.size()==size_t(row_width)*in.count,"V4.1 tile gathered Engram rows differ from staged WKV input");
+        require(in.engram_raw.empty()?in.engram_rows.size()==size_t(row_width)*in.count:
+            (direct_input&&row_width==6144&&in.engram_rows.empty()&&in.engram_raw.size()==size_t(in.count)*24*264),
+            "V4.1 tile gathered Engram rows differ from staged WKV input");
         require(in.text_mask.size()==(engram?in.count:0)&&std::all_of(in.text_mask.begin(),in.text_mask.end(),[](int8_t v){return v==0||v==1;}),
                 "V4.1 tile requires an explicit Engram text mask");
         const auto finite_started=clock_type::now();
@@ -1650,7 +1665,15 @@ bool llama_dsv41_tile_executor::run(const request&in,const llama_dsv41_layer_gra
         }
 #endif
         const double up_before_engram_ms=elapsed(upload_start);
-        if(engram){upload_input(input.engram_rows,in.engram_rows);if(!all_text)upload_input(input.text_mask,in.text_mask);}
+        if(engram){
+            if(!in.engram_raw.empty()){
+#ifdef GGML_USE_CUDA
+                pinned->engram_decode(in.engram_raw,input.engram_rows);
+#else
+                require(false,"GPU Engram decode requires CUDA");
+#endif
+            }else upload_input(input.engram_rows,in.engram_rows);
+            if(!all_text)upload_input(input.text_mask,in.text_mask);}
         const double up_engram_ms=elapsed(upload_start)-up_before_engram_ms;
         if(!zero_kinds)upload_input(input.token_kinds,in.token_kinds);
         boundary.upload_replacements();

@@ -66,6 +66,9 @@ public:
         std::vector<float> residual,previous_pre,engram_rows;
         // OPUS22: the Engram lookahead worker already ran the same finite check off the critical path.
         bool engram_rows_finite=false;
+        // OPUS22: undecoded Engram rows (count*24*264 B) instead of engram_rows;
+        // decoded on the GPU and checked by the tile's finite validator.
+        std::vector<uint8_t> engram_raw;
         std::vector<int32_t> selected,candidates,token_kinds;
         std::vector<int8_t> text_mask;
         std::optional<llama_dsv41_carry_store::ram_lease> direct;
