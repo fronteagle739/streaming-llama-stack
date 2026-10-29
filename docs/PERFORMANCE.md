@@ -17,6 +17,31 @@ cone. The current kernel stack includes certified FP4 index scoring, native-pari
 fused Sinkhorn, TileLang attention, E18 automatic transfer staging, allocation-plan
 reuse and the exact OTHER22 HC/CONCAT/QAT improvements. N=1 remains the default.
 
+**Single weight pass by default (OPUS22 round 6, 2026-10-29).** One 100K
+prompt now reads each layer once (about 299 GB instead of 456 GB). Two exact
+changes make it fit: the host carry record shrinks from 92,176 to 51,216 B per
+row (`producer_carry_compact_record`: the layer-0 seed is stored as the exact
+F16 embedding row and widened on the GPU; spills and the final export keep the
+BF16 bank bytes), and the CUDA hidden bank holds every sweep row
+(`producer_hidden_all_rows`: the bytes come from the graph admission, whose
+fixed 8.96 GB reservation is far above the measured 3.71 GB planned peak at
+100K). The sweep plan defaults to `producer_prefill_sweep_tokens: "auto"` (one
+sweep up to the host-capped capacity, else near-equal sweeps). All three are
+on by default for text prompts on the resident BF16 plan and can be set to
+false/49152 to restore the earlier plan. Logits are bit-identical to the
+two-sweep plan at 8K and 100K. FP4 proxy, exact cone, 131,072 context, eager:
+
+| Plan (same build, experimental + OPUS22 round 6) | Prompt-only | Rate | TTFT | Host plan |
+|---|---:|---:|---:|---:|
+| Two sweeps, legacy record (control) | 34.579 s | 2,891.92 tok/s | 38.781 s | 7.25 GiB base |
+| Two sweeps, compact record | 30.916 s | 3,234.57 tok/s | 33.344 s | |
+| One sweep, compact record, 54,944 rows spilled to RAM | 38.074 s | 2,626.46 tok/s | 77.906 s | 8.41 GiB |
+| **One sweep, compact record, all rows resident (new default)** | **29.646 s** | **3,373.13 tok/s** | **32.906 s** | 7.41 GiB |
+
+In the new default the 21 sweep layers are compute-bound (21 s wall against
+10 s of weight reads) and the 19 tail layers are storage-bound (8 s). Details:
+`examples/opus22/RESULTS.md` section 8.
+
 Latest 100,000-token measurements. The OTHER22 rows use exact cone, zero
 quality bias, 131,072 context and 49,152/50,848-token sweeps. The matched eager
 control measures the Q4 shipping-default dense path at 32.6 s; the FP8 dense

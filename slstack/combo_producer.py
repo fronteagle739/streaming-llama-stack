@@ -60,10 +60,23 @@ def carry_bank_bytes(rows,compact=False):
     return 4096+(rows+31)//32*(1642496 if compact else 2953216)
 
 def carry_compact(cfg):
-    """producer_carry_compact_record (default false): exact F16 seed + BF16 hidden host carry record."""
+    """producer_carry_compact_record: exact F16 seed + BF16 hidden host carry record (51 KB/row instead
+    of 92). Unset, prefill_arguments enables it for text prompts on the resident BF16 plan (compact_default)."""
     value=cfg.get('producer_carry_compact_record',False)
     if type(value) is not bool:raise ValueError('producer_carry_compact_record must be true or false')
     return value
+
+COMPACT_REQUIRES={'--batch-seed-ram':'1','--resident-hidden-bf16':'1','--resident-compact-ids':'1','--direct-carry-budget':'1',
+                  '--resident-hidden-final-readback':'1','--carry-storage':'ram'}
+
+def resident_plan(arguments):
+    return all(arguments.get(k)==v for k,v in COMPACT_REQUIRES.items())
+
+def compact_default(cfg,arguments):
+    """OPUS22 round 6 defaults (exact, owner: single stream by default): the compact carry record and the
+    all-rows hidden bank are on for text prompts on the resident BF16 plan unless set explicitly."""
+    on=resident_plan(arguments) and not cfg.get('_vision_spans') and not cfg.get('producer_keep_alive')
+    return dict(producer_carry_compact_record=on,producer_hidden_all_rows=on)
 
 def engram_prompt_bytes(rows):
     """Whole-prompt Engram row cache admission (llama_dsv41_prefill::engram_prompt_bytes)."""
@@ -150,7 +163,12 @@ def prefill_plan(cfg,prompt_tokens,available=None):
                     int(prompt_tokens),base+sum(extra(min(max(LEGACY_SWEEP,int(prompt_tokens)),limit))),top,capped_by,want))
 
 def fold_plan(cfg,prompt_tokens,available,sweep,base,top,capped_by,extra,limit):
-    """prefill_plan under producer_prefill_sweep_tokens (the owner fold policy)."""
+    """prefill_plan under producer_prefill_sweep_tokens (the owner fold policy).
+    sweep 'auto' (the default since OPUS22 round 6, owner: single stream by default): one sweep up to
+    the largest capacity under the host cap (rounded down to 4096); a longer prompt is rebalanced into
+    near-equal sweeps under that cap (the fold cap does not apply)."""
+    auto=sweep=='auto'
+    if auto:sweep=max(LEGACY_SWEEP,limit//4096*4096)
     if type(sweep) is not int or sweep<=0 or sweep%4096 or sweep>limit:
         raise ValueError('producer_prefill_sweep_tokens must be a positive multiple of 4096 within the context')
     cap=limit
@@ -163,6 +181,7 @@ def fold_plan(cfg,prompt_tokens,available,sweep,base,top,capped_by,extra,limit):
         cap=lo
     fold_cap=cfg.get('producer_prefill_fold_cap_tokens',FOLD_CAP)
     if type(fold_cap) is not int or fold_cap<=0:raise ValueError('producer_prefill_fold_cap_tokens must be a positive token count')
+    if auto:sweep=max(LEGACY_SWEEP,cap//4096*4096);fold_cap=limit
     n=int(prompt_tokens)
     if n>sweep and sweep>cap:
         raise ValueError('producer_prefill_sweep_tokens %d exceeds the largest capacity %d under the cap (%s)'%(sweep,cap,capped_by))
@@ -178,6 +197,32 @@ def fold_plan(cfg,prompt_tokens,available,sweep,base,top,capped_by,extra,limit):
                     sweep,sweeps[-1],sweep+sweeps[-1],fold_cap,sweeps[-1]) if tail else
                     'fold: last sweep %d exceeds the largest capacity %d (%s); rebalanced into %s'%(
                     sum(sweeps[n//sweep-1:]),cap,capped_by,'+'.join(map(str,sweeps[n//sweep-1:]))) if rebalance else None)
+
+RESIDENT_ROW_BYTES=40960+16+512*4+2048*4   # resident BF16 hidden + pre + compact IDs (llama-dsv41-executor layout)
+RESIDENT_FIXED_BYTES=16<<20                 # per-tile metadata rows and tensor alignment
+GRAPH_FLOOR_BYTES=5<<30                     # measured 100K planned graph peak 3.71 GB (OPUS22 round 6), plus margin
+
+def resident_all_rows(cfg,arguments,capacity):
+    """producer_hidden_all_rows: size the CUDA hidden bank for every sweep row, so a single sweep does
+    not spill, by moving bytes from the graph admission (its fixed reservation is far above the planned
+    graph peak: 3.71 GB of 8.96 GB at 100K). The job and device ceilings are unchanged; a graph that no
+    longer fits fails loudly in the producer's admission check. When every row cannot fit above the
+    graph floor, the bank takes what does fit and the producer's existing exact spill covers the rest."""
+    value=cfg.get('producer_hidden_all_rows',False)
+    if type(value) is not bool:raise ValueError('producer_hidden_all_rows must be true or false')
+    if not value:return arguments
+    if arguments.get('--resident-hidden-bf16')!='1' or arguments.get('--resident-compact-ids')!='1':
+        raise ValueError('producer_hidden_all_rows requires the BF16-resident hidden bank and compact IDs')
+    need=RESIDENT_ROW_BYTES*int(capacity)+RESIDENT_FIXED_BYTES
+    have=int(arguments['--hidden-device-bytes'])
+    if need<=have:return arguments
+    # Whole 2 MiB units keep the fixed graph reservation at its exact allocator granularity.
+    unit=2<<20
+    spare=int(arguments['--graph-bytes'])-int(arguments.get('--backend-temporary-reserve-bytes',1<<30))-GRAPH_FLOOR_BYTES
+    moved=min(-(-(need-have)//unit)*unit,max(0,spare)//unit*unit)
+    if not moved:return arguments
+    arguments['--hidden-device-bytes']=str(have+moved);arguments['--graph-bytes']=str(int(arguments['--graph-bytes'])-moved)
+    return arguments
 
 def stall_seconds(cfg):
     """No-progress window for a producer operation. A long operation (a 262K-token prefill, a long
@@ -218,11 +263,11 @@ def prefill_arguments(cfg, count, available, *, export_state=False, techniques=N
     Mac importer. It does not select another arithmetic or storage profile.
     """
     selected = dict(cfg)
-    for key, value in dict(producer_host_budget_gib=6.25, producer_host_max_gib=7.75,
-                           producer_prefill_sweep_tokens=49152,
-                           producer_prefill_fold_cap_tokens=61440).items():
-        selected.setdefault(key, value)
     arguments = dict(profile(cfg.get('producer_profile', 'ultra'), techniques if techniques is not None else cfg.get('native_techniques'))['arguments'])
+    for key, value in dict(producer_host_budget_gib=6.25, producer_host_max_gib=7.75,
+                           producer_prefill_sweep_tokens='auto',
+                           producer_prefill_fold_cap_tokens=61440, **compact_default(cfg, arguments)).items():
+        selected.setdefault(key, value)
     plan = prefill_plan(selected, count, available)
     arguments['--prefill-chunk-tokens'] = str(plan['capacity'])
     arguments['--job-host-bytes'] = str(plan['host_bytes'])
@@ -230,7 +275,7 @@ def prefill_arguments(cfg, count, available, *, export_state=False, techniques=N
                        ('--provider-host-bytes', plan['engram_delta']),
                        ('--engram-prefetch-bytes', plan['engram_delta'])):
         arguments[key] = str(int(arguments[key]) + delta)
-    if carry_compact(cfg):
+    if carry_compact(selected):
         arguments['--carry-compact-record'] = '1'
     arguments['--prefill-sweep-tokens'] = str(plan['sweep_tokens'])
     arguments['--prefill-fold-cap-tokens'] = str(plan['fold_cap'])
@@ -288,6 +333,7 @@ def prefill_arguments(cfg, count, available, *, export_state=False, techniques=N
         if batch=='16384':
             arguments['--expert-workspace-bytes']=str(640<<20)
             arguments['--graph-bytes']=str(int(arguments['--graph-bytes'])-(320<<20))
+    resident_all_rows(selected, arguments, plan['capacity'])
     from .singlepass import arguments as carry_arguments
     carry_arguments(cfg, arguments)
     if cfg.get('env_overrides',{}).get('LLAMA_DSV41_DENSE_FP8')=='1':

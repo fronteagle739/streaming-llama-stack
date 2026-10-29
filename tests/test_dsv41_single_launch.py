@@ -46,7 +46,7 @@ class LaunchConfigTests(unittest.TestCase):
         self.assertEqual(cfg['producer_host_reserve_gib'], .5)
         self.assertEqual(cfg['env_overrides'], GATED_ENV)
         self.assertEqual((cfg['producer_prefill_sweep_tokens'], cfg['producer_prefill_fold_cap_tokens'], cfg['producer_host_max_gib']),
-                         (49152, 61440, 7.75))   # the gated fold sweep plan
+                         ('auto', 61440, 7.75))   # single stream by default (OPUS22 round 6)
 
     def test_1m_is_bf16_growable_at_999424(self):
         cfg = dsv41_single.overlay('1m')
@@ -68,11 +68,11 @@ class LaunchConfigTests(unittest.TestCase):
         cfg = dsv41_single.overlay('262k', local, model='N.gguf')
         self.assertEqual((cfg['model'], cfg['port'], cfg['context']), ('N.gguf', 9000, 262144))
         self.assertEqual(cfg['env_overrides'], {'FOO': '1', **GATED_ENV, 'LLAMADECODE_ENGRAM_CACHE_MB': '64'})
-        self.assertEqual((cfg['producer_host_max_gib'], cfg['producer_prefill_sweep_tokens']), (7.75, 49152))   # gated fold plan wins
+        self.assertEqual((cfg['producer_host_max_gib'], cfg['producer_prefill_sweep_tokens']), (7.75, 'auto'))   # gated sweep plan wins
         self.assertEqual(local['env_overrides']['LLAMADECODE_ENGRAM_CACHE_MB'], '64')   # input untouched
 
     def test_resolved_producer_flags_env_and_sweep(self):
-        fold = {'--prefill-sweep-tokens': '49152', '--prefill-fold-cap-tokens': '61440', '--yoco-keep': '2541'}
+        fold = {'--yoco-keep': '2541'}
         for preset, flags in (('262k', {'--context': '262144', '--compressed-cache-bf16': '0',
                                         '--ctx-cache-precision': 'f32', '--ctx-cache-growable': '1', **fold}),
                               ('1m', {'--context': '999424', '--compressed-cache-bf16': '1',
@@ -80,12 +80,17 @@ class LaunchConfigTests(unittest.TestCase):
             with self.subTest(preset=preset):
                 with tempfile.TemporaryDirectory() as runtime:
                     row = dsv41_single.resolved({**dsv41_single.overlay(preset), 'runtime_root': runtime})
-                self.assertEqual(row['producer_flags'], flags)
+                produced = dict(row['producer_flags'])
+                sweep = int(produced.pop('--prefill-sweep-tokens'))
+                # 'auto': one sweep up to the host-capped capacity; the fold cap is the context limit.
+                self.assertTrue(sweep >= 49152 and sweep % 4096 == 0)
+                self.assertEqual(int(produced.pop('--prefill-fold-cap-tokens')), int(flags['--context']) - 1)
+                self.assertEqual(produced, flags)
                 for key, value in GATED_ENV.items():
                     self.assertEqual(row['producer_env'][key], value)
                 self.assertEqual(row['producer_env']['LLAMADECODE_DS4_DECODE'], '1')
                 self.assertEqual((row['sweep_plan']['policy'], row['sweep_plan']['primary_sweep_tokens'],
-                                  row['sweep_plan']['fold_cap_tokens']), ('fold', 49152, 61440))
+                                  row['sweep_plan']['fold_cap_tokens']), ('fold', sweep, int(flags['--context']) - 1))
                 self.assertEqual(row['sweep_plan']['capacity_tokens'], 49152)   # a short prompt keeps the base bank
                 self.assertGreater(row['sweep_plan']['max_host_bytes'], row['sweep_plan']['base_host_bytes'])
                 self.assertEqual(row['single_engine']['producer_host_reserve_gib'], .5)

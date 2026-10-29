@@ -3,7 +3,7 @@ from slstack.combo_producer import prefill_arguments
 
 
 CFG = dict(context=1000001, producer_profile='ultra', yoco_keep=2541,
-           producer_host_budget_gib=6.25, producer_host_max_gib=7.75,
+           producer_host_budget_gib=6.25, producer_host_max_gib=7.75, producer_hidden_all_rows=False,
            producer_prefill_sweep_tokens=49152, producer_prefill_fold_cap_tokens=61440,
            producer_desktop_reserve_gib=.5, host_budget_gib=9.25,
            ctx_cache_precision='f32', ctx_cache_growable=True)

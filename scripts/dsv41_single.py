@@ -52,7 +52,9 @@ REMOVED = ('producer_host_max_gib', 'producer_keep_alive', 'producer_prefill_swe
 # The gated fold sweep plan (a qualified reference measurement, 2026-10-25): primary sweep S* tokens, the
 # remainder folded into the last sweep while it stays <= the fold cap, else its own sweep. The host max
 # is only the ceiling for the largest sweep's bank (capacity <= the fold cap).
-FOLD = dict(producer_prefill_sweep_tokens=49152, producer_prefill_fold_cap_tokens=61440, producer_host_max_gib=7.75)
+# OPUS22 round 6 (owner: single stream by default): 'auto' = one sweep up to the host-capped capacity
+# (100K fits 7.75 GiB with the compact carry record), else near-equal sweeps under that cap.
+FOLD = dict(producer_prefill_sweep_tokens='auto', producer_prefill_fold_cap_tokens=61440, producer_host_max_gib=7.75)
 
 
 def read(path):

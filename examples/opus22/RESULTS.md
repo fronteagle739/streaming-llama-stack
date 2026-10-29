@@ -224,3 +224,21 @@ GPU buffer destination, "host" a 512 MiB host-memory ring (`DSTORAGE_REQUEST_DES
   read path. The candidates are the drive or array state of old data. The volume is 99% full, so there is little
   free space for the drives' internal housekeeping; old-data read slowdown or read-retry on the members
   is another candidate. Freshly written data reads faster, though not uniformly (section 6).
+
+## 8. Round 6: one weight pass at 100K (carry shrink, all rows in VRAM)
+
+Owner plan (2026-10-29): prompt time close to one read of the weights (~299 GB). Steps 1-3 done here; every arm is one 100K run, FP4 proxy, exact cone, eager, frontier logits compared bit for bit.
+
+1. **Full CUDA build** of the producer from `experimental` (68d3fd6) to one stable path. Control: 34.58 s prompt, logits `36b2ac83...9b19`. This differs from the earlier snapshot-link value `afee4831...f9574a` (built from OTHER22 round-3 objects) by KL 3.8e-9 with the same top-1; it is the round-6 reference.
+2. **Compact host carry record** (`--carry-compact-record`, config `producer_carry_compact_record`): 51,216 B per row instead of 92,176 B. The seed pass stores the exact F16 embedding row (10,240 B); the layer-0 tile uploads it and widens/repeats it on the GPU as a validated graph prefix. Spills and the post-head export keep the BF16 bank bytes; host readers widen them exactly. 8K and 100K logits are bit-identical to the legacy record. The 100K single-sweep host plan falls from 12.2 to 8.4 GiB (7.4 GiB at the 6.25 GiB base), so it fits.
+3. **All rows in VRAM** (`producer_hidden_all_rows`). The fixed graph reservation (8.96 GB) is the admission cap, not a measured peak; the new `DS4PERF_GRAPH_PLANNED` log shows the real planned peak is 3.71 GB over all 590 tiles at 100K. Moving 2.6 GB from the graph admission to the hidden bank holds all 100,000 rows (`strategy=resident`), with no change to the job or device caps; the graph keeps a 5 GiB floor.
+
+| Arm | Prompt s | TTFT s | Logits |
+|---|---:|---:|---|
+| two sweeps, legacy record (`b6-ctl`) | 34.58 | 38.78 | reference |
+| two sweeps, compact (`c6-compact`) | 30.92 | 33.34 | identical |
+| one sweep, compact, spill 54,944 rows (`c6c-compact-single`) | 38.07 | 77.91 | identical |
+| one sweep, compact, all resident (`c8b-compact-allres-single`) | 29.78 | 32.98 | identical |
+| new defaults, nothing set (`d9-auto`) | 29.65 | 32.91 | identical |
+
+Where the 29.8 s goes now (`scripts/opus22_decompose.py`): the 21 sweep layers take 21.0 s against 10.1 s of weight fetch (GPU tile busy 16.3 s, host-serial 4.5 s, 3.65 s of it on layers 0/1/2/8/14/20); the 19 tail layers take 8.05 s, almost all storage wait; 299 GB read at 15.8 GB/s (18.95 s). Next: steps 4-5 (host work onto the GPU, then fusing the per-layer small-op chain) to bring the sweep down to its fetch time.

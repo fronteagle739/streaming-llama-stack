@@ -326,6 +326,9 @@ uint64_t llama_dsv41_allocate_native_graph(ggml_gallocr_t allocation,ggml_cgraph
     require(ggml_gallocr_alloc_graph(allocation,graph),"V4.1 admitted lifetime graph allocation failed");
     const uint64_t actual=ggml_gallocr_get_buffer_size(allocation,0);
     require(actual<=admitted_graph_bytes-backend_temporary,"V4.1 lifetime allocation exceeded preflight admission");
+    // OPUS22: the graph's own planned peak (the buffer is the fixed reservation).
+    llama_dsv41_layer_log("DS4PERF_GRAPH_PLANNED planned=%llu reserved=%llu backend_temporary=%llu\n",
+        (unsigned long long)planned,(unsigned long long)actual,(unsigned long long)backend_temporary);
     return actual+backend_temporary;
 }
 
