@@ -3055,6 +3055,8 @@ static void model_open(ds4_model *m, const char *path, bool metal_mapping,
     if (m->version != 3) ds4_die("only GGUF v3 is supported");
 
     parse_metadata(m, &c);
+    if (model_find_kv(m, "deepseek41.expert_layout") || model_find_kv(m, "deepseek41.dense_layout"))
+        ds4_die("kernel-native FP4 expert layout requires its matching prefill loader; ds4 decode is not yet supported");
     parse_tensors(m, &c);
     model_unmap_engram(m);
     model_unmap_qwen_ngrams(m, path);

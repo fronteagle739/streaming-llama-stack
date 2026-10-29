@@ -50,9 +50,22 @@ def summarize(measurement, trace, *, prompt_timing=None):
     gpu = defaultdict(float)
     other_origins = defaultdict(float)
     expert_flops = 0
+    dense_seconds=dense_flops=0
+    dense_products=0
     for count, ms, description in nodes:
         op = description.split('|', 1)[0]
-        if op == 'MUL_MAT_ID' and '_exps.weight' in description:
+        if op=='MUL_MAT' and re.search(r'\|a=blk\.\d+\.(?:attn_q_a|attn_q_b|attn_kv|attn_output_b|ffn_gate_shexp|ffn_up_shexp|ffn_down_shexp)\.weight\|',description):
+            shape=[int(x) for x in re.search(r'\|dst=([0-9,]+)',description)[1].split(',')]
+            k=int(re.search(r'\|ashape=(\d+),',description)[1])
+            dense_seconds+=ms/1000;dense_products+=count
+            dense_flops+=count*2*k*shape[0]*shape[1]*shape[2]*shape[3]
+        if op == 'CUSTOM' and 'dsv41_native_fp4_fused_ffn' in description:
+            category='expert_gemm'
+            shape=[int(x) for x in re.search(r'\|dst=([0-9,]+)',description)[1].split(',')]
+            if len(shape)!=4 or shape[0]!=5120 or shape[2:]!=[1,1]:
+                raise ValueError('Malformed fused expert profile shape')
+            expert_flops+=count*3*2*5120*2304*6*shape[1]
+        elif op == 'MUL_MAT_ID' and '_exps.weight' in description:
             category = 'expert_gemm'
             shape = [int(x) for x in re.search(r'\|dst=([0-9,]+)', description)[1].split(',')]
             k = int(re.search(r'\|ashape=(\d+),', description)[1])
@@ -91,6 +104,9 @@ def summarize(measurement, trace, *, prompt_timing=None):
                                    indexer_core=gpu['indexer_core'], other_wall=residual),
                 gpu_seconds=dict(gpu), layer_count=layers, fetched_bytes=fetched,
                 other_gpu_by_named_origin_seconds=dict(other_origins),
+                selected_dense_subset=dict(seconds=dense_seconds,products=dense_products,useful_flops=dense_flops,
+                    effective_tflops=dense_flops/dense_seconds/1e12 if dense_seconds else None,
+                    scope='Named seven dense/shared projections; included in other_gpu and other_wall, never add again; FP8 includes weight/activation packing and output conversion'),
                 tile_count=tile_count,
                 tile_phase_seconds={key.removesuffix('_ms'): tile_ms[key] / 1000 for key in (
                     'host_prepare_ms', 'host_upload_ms', 'compute_ms',
@@ -105,7 +121,7 @@ def summarize(measurement, trace, *, prompt_timing=None):
                 useful_fetch_bytes_per_wall_second=fetched / wall,
                 layer_ledger_ms=dict(ledger),
                 definitions=dict(stream_wait='Sum of exposed per-layer acquire wall time; transfer-duration sums overlap compute.',
-                                 expert_gemm='MUL_MAT_ID nodes whose weight origin is a routed expert.',
+                                 expert_gemm='Routed MUL_MAT_ID products, or packed CUSTOM FFN including route-map construction, gather/quantization, three products, SwiGLU and ordered combine; boundaries differ by implementation.',
                                  sparse_attention_core='FLASH_ATTN nodes; projection, RoPE and packing remain in other.',
                                  indexer_core='Index scores, their top-k, candidate blocks and selected masks.',
                                  other_wall='Selected wall residual including other GPU work, CPU scheduling and carry/Engram work; startup is included only for legacy TTFT scope.',

@@ -77,4 +77,44 @@ class FlashInferAdmissionTests(unittest.TestCase):
             self.assertEqual(candidate[key],original[key])
         self.assertEqual(candidate['--job-device-bytes'],original['--job-device-bytes'])
 
+    def test_native_ffn_returns_workspace_bytes_to_the_existing_graph_cap(self):
+        for rows in ['4096','8192','16384']:
+            cfg=self.config('1');cfg['env_overrides']['LLAMA_DSV41_FLASHINFER_BATCH_TOKENS']=rows
+            original,plan=prefill_arguments(cfg,100000,24<<30)
+            cfg['env_overrides']['LLAMA_DSV41_FLASHINFER_NATIVE_FFN_DLL']='/experiment/bin/slstack-flashinfer-native-ffn.dll'
+            native,actual=prefill_arguments(cfg,100000,24<<30)
+            self.assertEqual(plan,actual)
+            self.assertLess(int(native['--backend-temporary-reserve-bytes']),int(original['--backend-temporary-reserve-bytes']))
+            for key in ['--job-device-bytes','--job-host-bytes','--provider-device-bytes','--cache-bytes','--hidden-device-bytes']:
+                self.assertEqual(native[key],original[key])
+
+    def test_dense_fp8_stays_inside_the_same_total_device_and_host_plan(self):
+        for native in [False,True]:
+            cfg=self.config('1' if native else None)
+            if native:cfg['env_overrides']['LLAMA_DSV41_FLASHINFER_NATIVE_FFN_DLL']='/experiment/bin/native.dll'
+            original,plan=prefill_arguments(cfg,100000,24<<30)
+            cfg['env_overrides']['LLAMA_DSV41_DENSE_FP8']='1'
+            changed,actual=prefill_arguments(cfg,100000,24<<30)
+            self.assertEqual(plan,actual)
+            self.assertGreater(int(changed['--backend-temporary-reserve-bytes']),int(original['--backend-temporary-reserve-bytes']))
+            for key in ['--job-device-bytes','--job-host-bytes','--graph-bytes','--cache-bytes','--provider-device-bytes']:
+                self.assertEqual(changed[key],original[key])
+
+    def test_bounded_prefill_returns_only_unreachable_cache_rows_to_graph(self):
+        cfg=self.config('1');cfg['context']=131072
+        cfg['env_overrides']['LLAMA_DSV41_FLASHINFER_NATIVE_FFN_DLL']='/experiment/bin/native.dll'
+        original,plan=prefill_arguments(cfg,100000,24<<30)
+        cfg['native_fp4_prefill_only']=True
+        native,actual=prefill_arguments(cfg,100000,24<<30)
+        self.assertEqual(plan,actual)
+        self.assertEqual(native['--job-device-bytes'],original['--job-device-bytes'])
+        self.assertEqual(sum(int(native[k]) for k in ['--cache-bytes','--graph-bytes']),
+                         sum(int(original[k]) for k in ['--cache-bytes','--graph-bytes']))
+        # Four full-context plus three half-context BF16 owners, VMM-rounded.
+        expected=40*128*512*4+3*2*512*4
+        expected+=sum(-(-(((131072+1)//2 if owner<3 else 131072)*width*2)//(2<<20))*(2<<20)
+                      for owner in range(4) for width in (512,128))
+        self.assertEqual(int(native['--cache-bytes']),expected)
+        self.assertGreater(int(native['--graph-bytes']),int(original['--graph-bytes']))
+
 if __name__=='__main__':unittest.main()

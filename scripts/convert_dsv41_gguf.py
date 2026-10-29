@@ -21,6 +21,8 @@ ROOT = Path(__file__).resolve().parents[1]
 RECIPE = Path(__file__).with_name('dsv41')
 sys.path.insert(0,str(ROOT))
 from slstack.gguf_header import read_header, tensor_map, TYPE_NAMES
+from scripts.dsv41_fp4_layout import CANONICAL,FLASHINFER,KEY,pack_expert
+from scripts import dsv41_fp8_layout as dense_fp8
 
 
 def read_json(path):return json.loads(Path(path).read_text(encoding='utf-8-sig'))
@@ -162,7 +164,17 @@ def pack_native_expert(db,name):
     return result.tobytes()
 
 
-def native_writer(module):
+def write_native_experts(fp,item,db):
+    k,n,experts=item.shape
+    if experts!=384:raise ValueError('Kernel-native FP4 requires384 experts')
+    scales=bytearray(n*k//32*experts)
+    for expert in range(experts):
+        values,sf=pack_expert(pack_native_expert(db,item.source.format(expert=expert)),n,k)
+        fp.write(values);begin=expert*len(sf);scales[begin:begin+len(sf)]=sf
+    fp.write(scales)
+
+
+def native_writer(module,kernel_layout=False,native_dense=False):
     """Add one expert-copy branch to the hash-pinned upstream streaming writer.
 
     Retain its dense quantizer, Engram copier, alignment, durable resume journal,
@@ -177,6 +189,26 @@ def native_writer(module):
     return pack_native_expert(db, item.source.format(expert=expert)), False
 ''').body
     namespace=dict(vars(module),pack_native_expert=pack_native_expert)
+    if kernel_layout:
+        expert_branches=[n for n in ast.walk(function) if isinstance(n,ast.If) and isinstance(n.test,ast.Attribute) and n.test.attr=='is_expert']
+        if len(expert_branches)!=1:raise ValueError('Pinned expert writer branch changed')
+        expert_branches[0].body=ast.parse('write_native_experts(fp,item,db)').body
+        namespace['write_native_experts']=write_native_experts
+    if native_dense:
+        branches=[n for n in ast.walk(function) if isinstance(n,ast.If) and isinstance(n.test,ast.Attribute) and n.test.attr=='is_expert']
+        if len(branches)!=1:raise ValueError('Pinned dense writer branch changed')
+        original=branches[0].orelse
+        replacement=ast.parse('if native_dense_selected(item):\n    fp.write(pack_native_dense(db,item.source,item.shape))\nelse:\n    pass').body[0]
+        replacement.orelse=original;branches[0].orelse=[replacement]
+        namespace.update(native_dense_selected=dense_fp8.selected,pack_native_dense=dense_fp8.pack_source)
+    # Keep the completed resume journal as provenance; no file deletion.
+    class KeepJournal(ast.NodeTransformer):
+        def visit_Expr(self,node):
+            call=node.value
+            if isinstance(call,ast.Call) and isinstance(call.func,ast.Attribute) and isinstance(call.func.value,ast.Name) and call.func.value.id=='os' and call.func.attr=='unlink':
+                return ast.copy_location(ast.Pass(),node)
+            return self.generic_visit(node)
+    function=KeepJournal().visit(function)
     exec(compile(ast.fix_missing_locations(ast.Module(body=[function],type_ignores=[])),module.__file__,'exec'),namespace)
     return namespace['write_gguf']
 
@@ -190,9 +222,13 @@ def convert(args,modules,config,index,reference):
             _,records = q.metadata(str(args.source),args.source_revision)
             native=args.expert_format=='native-fp4'
             records += [g.kv_string('deepseek41.quantization',
-                        'native E2M1/E8M0 MXFP4 routed experts; Q8_0 dense' if native else q.QUANTIZATION['q4']),
+                        ('native E2M1/E8M0 experts; selected native E4M3/E8M0 dense; remaining reference recipe' if getattr(args,'dense_format','q8')=='native-fp8' else 'native E2M1/E8M0 MXFP4 routed experts; Q8_0 dense') if native else q.QUANTIZATION['q4']),
                         g.kv_string('deepseek41.calibration',
-                        'lossless expert repack; weight-energy bootstrap dense' if native else 'weight-energy bootstrap')]
+                        ('lossless expert and selected FP8 repack; remaining reference bootstrap' if getattr(args,'dense_format','q8')=='native-fp8' else 'lossless expert repack; weight-energy bootstrap dense') if native else 'weight-energy bootstrap')]
+            if getattr(args,'expert_layout',CANONICAL)==FLASHINFER:
+                records.append(g.kv_string(KEY,FLASHINFER))
+            if getattr(args,'dense_format','q8')=='native-fp8':
+                records.append(g.kv_string(dense_fp8.KEY,dense_fp8.LAYOUT))
         elif args.component == 'dspark':
             records = d.metadata(config,args.source_revision)
             # Remove the newer lossless recipe's encoding assertion.
@@ -205,7 +241,7 @@ def convert(args,modules,config,index,reference):
             v.create_gguf(str(args.out),plan,records,db,overwrite=False)
             return
         args.hf,args.out,args.imatrix = str(args.source),str(args.out),None
-        writer=native_writer(q) if args.component=='main' and args.expert_format=='native-fp4' else q.write_gguf
+        writer=native_writer(q,getattr(args,'expert_layout',CANONICAL)==FLASHINFER,getattr(args,'dense_format','q8')=='native-fp8') if args.component=='main' and args.expert_format=='native-fp4' else q.write_gguf
         writer(args,plan,records,db)
     finally:db.close()
 
@@ -242,7 +278,9 @@ def main():
     parser.add_argument('--fetch-tools',action='store_true',help='Fetch only pinned converter source files, never models')
     parser.add_argument('--component',choices=('main','dspark','vision'),default='main')
     parser.add_argument('--expert-format',choices=('q4','native-fp4'),default='q4',
-                        help='Main routed experts only; dense remains Q8_0 (no supported native FP8 type)')
+                        help='Main routed experts; select the dense encoding separately with --dense-format')
+    parser.add_argument('--expert-layout',choices=(CANONICAL,FLASHINFER),default=CANONICAL)
+    parser.add_argument('--dense-format',choices=('q8','native-fp8'),default='q8')
     mode = parser.add_mutually_exclusive_group(required=True)
     mode.add_argument('--dry-run',action='store_true')
     mode.add_argument('--execute',action='store_true')
@@ -258,6 +296,10 @@ def main():
     parser.add_argument('--runtime-floor-gib',type=float,default=4)
     parser.add_argument('--worker',action='store_true',help=argparse.SUPPRESS)
     args = parser.parse_args()
+    if args.dense_format=='native-fp8' and (args.component!='main' or args.expert_format!='native-fp4' or args.expert_layout!=FLASHINFER):
+        parser.error('Native FP8 dense requires main native-fp4 with the matching kernel-native expert layout')
+    if args.expert_layout!=CANONICAL and (args.component!='main' or args.expert_format!='native-fp4'):
+        parser.error('Kernel-native expert layout requires main --expert-format native-fp4')
     if args.expert_format=='native-fp4' and args.component!='main':
         parser.error('--expert-format native-fp4 applies only to the main model; preserve the existing sidecars')
     if not 1<=args.threads<=32 or args.runtime_floor_gib<4:parser.error('threads must be 1..32 and RAM floor at least 4 GiB')

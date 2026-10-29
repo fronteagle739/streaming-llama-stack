@@ -75,6 +75,9 @@ def run(args, cfg):
                   decode_library_sha256=hashlib.file_digest(
                       (Path(cfg['llama_producer']).parent / 'ds4-decode.dll').open('rb'), 'sha256').hexdigest(),
                   profiled=args.profile_stages,
+                  prefill_only=args.prefill_only,
+                  native_ffn_requested=bool(cfg['env_overrides'].get('LLAMA_DSV41_FLASHINFER_NATIVE_FFN_DLL')),
+                  dense_fp8_requested=cfg['env_overrides'].get('LLAMA_DSV41_DENSE_FP8')=='1',
                   flashinfer_requested=cfg['env_overrides'].get('LLAMA_DSV41_FLASHINFER_MXFP4') == '1',
                   flashinfer_batch_tokens=int(cfg['env_overrides'].get('LLAMA_DSV41_FLASHINFER_BATCH_TOKENS','4096')),
                   configured_context=cfg['context'],
@@ -89,19 +92,32 @@ def run(args, cfg):
             Path(cfg['cache_affinity_spread_file']).open('rb'), 'sha256').hexdigest()
     producer = None
     try:
+        if record['dense_fp8_requested']:
+            dense_bridge=Path(cfg['env_overrides']['LLAMA_DSV41_DENSE_FP8_DLL'])
+            record['dense_fp8_bridge_sha256']=hashlib.file_digest(dense_bridge.open('rb'),'sha256').hexdigest()
+            record['label']+=' + Q8_0->FP8 dense (lossy), speed proxy for native FP8'
         if record['flashinfer_requested']:
             if args.arm != 'proxy':
                 raise ValueError('FlashInfer stored-weight experiment requires the proxy arm')
-            bridge = Path(cfg['env_overrides']['LLAMA_DSV41_FLASHINFER_MXFP4_DLL'])
+            bridge = Path(cfg['env_overrides']['LLAMA_DSV41_FLASHINFER_NATIVE_FFN_DLL'] if record['native_ffn_requested'] else cfg['env_overrides']['LLAMA_DSV41_FLASHINFER_MXFP4_DLL'])
             record['flashinfer_bridge_sha256'] = hashlib.file_digest(bridge.open('rb'), 'sha256').hexdigest()
         header = read_header(cfg['model'])
+        record['native_dense_layout']=header['metadata'].get('deepseek41.dense_layout')
+        if args.arm=='proxy' and 'deepseek41.speed_proxy' not in header['metadata']:
+            record['label']='native E2M1/E8M0 routed experts; reference dense recipe'
+            if record['dense_fp8_requested']:record['label']+=' + selected native E4M3/E8M0 dense projections' if record['native_dense_layout'] else ' + Q8_0->FP8 dense (lossy), speed proxy for native FP8'
+        if record['native_dense_layout']:
+            record['label']=record['label'].replace('Q8_0->FP8 dense (lossy), speed proxy for native FP8','selected native E4M3/E8M0 dense projections')
         experts = [t for t in header['tensors'] if t['name'].endswith(
             ('_gate_exps.weight', '_up_exps.weight', '_down_exps.weight'))]
         if args.arm == 'q4' and (len(experts) != 120 or any(t['type'] != 12 for t in experts)):
             raise ValueError('Q4 control requires exactly 120 original Q4_K expert tensors')
         if args.arm == 'proxy':
-            if header['metadata'].get('deepseek41.speed_proxy') != LABEL:
+            marker=header['metadata'].get('deepseek41.speed_proxy')
+            if marker is not None and marker != LABEL:
                 raise ValueError('Proxy model marker is absent or incorrect')
+            if marker is None and header['metadata'].get('deepseek41.expert_layout')!='flashinfer-sm120-mxfp8-mxfp4-v1':
+                raise ValueError('Native source experiment requires the explicit packed expert layout')
             if sum(t['type'] == 39 for t in header['tensors']) != 120:
                 raise ValueError('Expected exactly 120 stored MXFP4 expert tensors')
         producer = ComboProducer(cfg, secrets.token_hex(16), 1, tokens,
@@ -112,7 +128,7 @@ def run(args, cfg):
                       ready=producer.process.ready)
         from timing_report import from_receipt
         record.update(from_receipt(producer.directory / 'producer.json', record))
-        record['quality_reply'] = producer.quality(args.bias)
+        if not args.prefill_only:record['quality_reply'] = producer.quality(args.bias)
         if args.continuation:
             _, continuation = token_ids(args.continuation)
             logits = args.output.with_name(args.output.stem + '-' + secrets.token_hex(6) + '-logits.f32')
@@ -137,9 +153,16 @@ def run(args, cfg):
             text = trace.read_text(encoding='utf-8', errors='replace')
             actual = re.findall(r'NATIVEFP4_FLASHINFER_COMPLETE layer=(\d+) start=(\d+) count=(\d+) actual=(\d+) ', text)
             stored = re.findall(r'NATIVEFP4_STORED_COMPLETE layer=(\d+) start=(\d+) count=(\d+) actual=(\d+) ', text)
+            if record['native_ffn_requested']:
+                native=re.findall(r'NATIVEFP4_NATIVE_FFN_COMPLETE layer=(\d+) start=(\d+) count=(\d+) actual=1 products=3 routing_maps=1 input_gathers=1 runtime_weight_repack_bytes=0 routed_F32_bytes=0 epilogue_BF16=1',text)
+                actual=[(*row,'3') for row in native];stored=actual
+                record['native_ffn_completed_graphs']=len(native)
+                record['runtime_weight_repack_bytes']=0
+                if {int(row[0]) for row in native}!=set(range(40)):
+                    record.update(status='FAIL',error='Native FFN witnesses do not cover all40 layers')
             record['flashinfer_completed_graphs'] = len(actual)
             record['flashinfer_completed_products'] = sum(int(row[3]) for row in actual)
-            if not actual or actual != stored or any(int(row[3]) != (3 if int(row[2]) > 4 else 0) for row in actual):
+            if not actual or actual != stored or any(int(row[3]) != (3 if record['native_ffn_requested'] or int(row[2]) > 4 else 0) for row in actual):
                 record.update(status='FAIL', error='Missing or inconsistent completed FlashInfer W4A8 graph witnesses')
         if record['status'] == 'PASS' and record['decode_mma_requested'] and args.decode:
             layers = sorted(int(layer) for layer in re.findall(
@@ -148,8 +171,15 @@ def run(args, cfg):
             record['decode_mma_queued_layers'] = layers
             if layers != list(range(40)):
                 record.update(status='FAIL', error='Missing native FP4 decode launch witnesses for all40 layers')
+        if record['status']=='PASS' and record['dense_fp8_requested']:
+            source='native_FP8' if record.get('native_dense_layout') else 'Q8_0'
+            proxy='0' if record.get('native_dense_layout') else '1'
+            actual=re.findall(r'NATIVEFP4_DENSE_FP8_COMPLETE layer=(\d+) start=(\d+) count=(\d+) actual=(\d+) source='+source+r' weight_scale=E8M0_32x32 activation=MXFP8 lossy_speed_proxy='+proxy,trace.read_text(encoding='utf-8',errors='replace'))
+            record['dense_fp8_completed_products']=sum(int(row[3]) for row in actual)
+            if {int(row[0]) for row in actual}!=set(range(40)) or not record['dense_fp8_completed_products']:
+                record.update(status='FAIL',error='Missing FP8 dense completion witnesses for all40 layers')
         args.output.write_text(json.dumps(record, indent=2, default=str), encoding='utf-8')
-        if record['status'] == 'FAIL' and (record.get('flashinfer_requested') or (
+        if record['status'] == 'FAIL' and (record.get('dense_fp8_requested') or record.get('flashinfer_requested') or (
                 record.get('decode_mma_requested') and 'decode_mma_queued_layers' in record)):
             raise RuntimeError(record['error'])
 
@@ -165,6 +195,7 @@ def main():
     p.add_argument('--continuation', type=Path)
     p.add_argument('--calibrate', type=Path)
     p.add_argument('--profile-stages', action='store_true')
+    p.add_argument('--prefill-only',action='store_true',help='No decode/quality dial; optional one-token continuation saves only the untouched frontier')
     p.add_argument('--worker', action='store_true', help=argparse.SUPPRESS)
     args = p.parse_args()
     if not 0 <= args.bias <= 1.36125 or args.decode < 0:
@@ -172,6 +203,11 @@ def main():
     if args.output.exists():
         p.error('Refusing to overwrite an existing measurement')
     cfg = load(str(args.config))
+    if args.prefill_only:
+        if args.decode or args.calibrate or args.bias or (args.continuation and len(token_ids(args.continuation)[1])!=1):
+            p.error('Prefill-only permits only bias0 and an optional single frontier probe')
+        cfg['native_fp4_prefill_only']=True
+        cfg['env_overrides'].update(LLAMADECODE_DS4_DECODE='0',LLAMADECODE_PREFILL_ROUTED='0')
     if args.calibrate:
         if args.bias or args.decode < 64 or args.calibrate.exists():
             p.error('Calibration needs bias zero, at least 64 decode tokens and a new output path')

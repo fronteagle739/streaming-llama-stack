@@ -1,6 +1,7 @@
 docs/evidence/** -text
 # Preserve pinned upstream bytes for the FlashInfer source manifest on Windows.
 engines/streaming-llama/flashinfer-sm120/source/** -text
+engines/streaming-llama/flashinfer-sm120/dense-source/** -text
 # Performance evidence digests bind exact bytes, including recorded newlines.
 examples/dual-machine/dsv41-ultra-cone/proof/performance/** -text
 examples/dual-machine/dsv41-ultra-cone/proof/PERFORMANCE.md -text

@@ -18,6 +18,7 @@ ROOT=Path(__file__).resolve().parents[1]
 sys.path.insert(0,str(ROOT))
 from slstack.gguf_header import read_header, tensor_map, validate_dsv41_types
 from slstack.lease import active_holds
+from scripts.dsv41_fp4_layout import CANONICAL,FLASHINFER,KEY,validate_layout,requant_chunks
 
 LABEL='Q4\u2192MXFP4 requant (lossy), speed proxy for native FP4'
 SUFFIXES=('_gate_exps.weight','_up_exps.weight','_down_exps.weight')
@@ -34,7 +35,8 @@ def nbytes(t):
     if count%block:raise ValueError('Unaligned tensor '+t['name'])
     return count//block*size
 
-def layout(source):
+def layout(source,expert_layout=CANONICAL):
+    validate_layout(expert_layout)
     h=validate_dsv41_types(read_header(source))
     a=h['metadata'].get('general.alignment',32)
     if a<32 or a>65536 or a&(a-1):raise ValueError('Unsupported alignment')
@@ -49,8 +51,12 @@ def layout(source):
     with source.open('rb') as f:prefix=f.read(h['header_bytes']-desc_size)
     key='deepseek41.speed_proxy'
     if key in h['metadata']:raise ValueError('Input already has speed-proxy marker')
-    prefix=prefix[:16]+struct.pack('<Q',len(h['metadata'])+1)+prefix[24:]
+    if KEY in h['metadata']:raise ValueError('Source already has a kernel-native expert layout')
+    prefix=prefix[:16]+struct.pack('<Q',len(h['metadata'])+1+(expert_layout!=CANONICAL))+prefix[24:]
     prefix+=string(key)+struct.pack('<I',8)+string(LABEL)
+    if expert_layout!=CANONICAL:
+        if a<128:raise ValueError('Kernel-native FP4 requires alignment>=128')
+        prefix+=string(KEY)+struct.pack('<I',8)+string(expert_layout)
     desc=b''.join(string(t['name'])+struct.pack('<I',len(t['shape']))+
                   struct.pack('<'+'Q'*len(t['shape']),*t['shape'])+
                   struct.pack('<IQ',t['type'],t['offset']) for t in tensors)
@@ -111,13 +117,15 @@ def worker(args):
         if (args.runtime_root/'requant.stop').exists():raise InterruptedError('Cooperative conversion stop')
         if not waiting:print('WAIT_GPU: no source reads until the shared GPU ledger is clear',flush=True);waiting=True
         time.sleep(.25)
-    h,tensors,header,total,data_start,a=layout(args.requant_gguf)
+    expert_layout=getattr(args,'expert_layout',CANONICAL)
+    h,tensors,header,total,data_start,a=layout(args.requant_gguf,expert_layout)
     src_stat=args.requant_gguf.stat()
     identity=dict(path=str(args.requant_gguf.resolve()),size=src_stat.st_size,mtime_ns=src_stat.st_mtime_ns,
                   header_sha256=hashlib.sha256(json.dumps(h,sort_keys=True).encode()).hexdigest(),
                   library_sha256=hashlib.sha256(args.quants_library.read_bytes()).hexdigest(),
                   output=str(args.out.resolve()),expected_bytes=total)
-    journal=args.runtime_root/'requant-progress.json'
+    if expert_layout!=CANONICAL:identity['expert_layout']=expert_layout
+    journal=args.runtime_root/('requant-progress.json' if expert_layout==CANONICAL else 'requant-native-progress.json')
     partial=args.out.with_name(args.out.name+'.partial')
     if args.out.exists():raise FileExistsError('Refusing existing completed output')
     state={'identity':identity,'label':LABEL,'status':'RUNNING','completed':[],'started':time.time()}
@@ -171,15 +179,21 @@ def worker(args):
             source.seek(data_start+old['offset']);output.seek(len(header)+t['offset'])
             left=nbytes(old);done=0;input_hash=hashlib.sha256();output_hash=hashlib.sha256()
             started=time.monotonic();last=started
-            while left:
+            def chunks():
+                nonlocal left
+                while left:
+                    idle()
+                    size=min(left,65536*144 if t['type']==39 else 16<<20)
+                    raw=source.read(size)
+                    if len(raw)!=size:raise ValueError('Short source tensor read')
+                    input_hash.update(raw);left-=size
+                    yield convert(raw,args.threads) if t['type']==39 else raw
+            converted=(requant_chunks(source,old,t,convert,args.threads,idle,input_hash)
+                if expert_layout==FLASHINFER and t['type']==39 else chunks())
+            for block in converted:
                 idle()
-                size=min(left,65536*144 if t['type']==39 else 16<<20)
-                raw=source.read(size)
-                if len(raw)!=size:raise ValueError('Short source tensor read')
-                input_hash.update(raw)
-                block=convert(raw,args.threads) if t['type']==39 else raw
                 if shutil.disk_usage(args.out.parent).free<len(block)+20*2**30:raise ValueError('Output volume reached the 20 GiB reserve')
-                output.write(block);output_hash.update(block);whole_hash.update(block);left-=size;done+=len(block)
+                output.write(block);output_hash.update(block);whole_hash.update(block);done+=len(block)
                 if time.monotonic()-last>5:
                     checkpoint(status='RUNNING',tensor=t['name'],tensor_index=index,tensor_bytes=done,
                                output_position=output.tell(),expected_bytes=total)
@@ -218,6 +232,8 @@ def main():
     p.add_argument('--hold-file',type=Path,required=True)
     p.add_argument('--quants-library',type=Path,required=True)
     p.add_argument('--threads',type=int,default=4)
+    p.add_argument('--expert-layout',choices=(CANONICAL,FLASHINFER),default=CANONICAL,
+                   help='Explicit kernel-native byte layout; lossy Q4 speed proxy remains unshipped')
     p.add_argument('--host-budget-gib',type=float,required=True)
     p.add_argument('--runtime-floor-gib',type=float,default=1)
     p.add_argument('--resume',action='store_true')

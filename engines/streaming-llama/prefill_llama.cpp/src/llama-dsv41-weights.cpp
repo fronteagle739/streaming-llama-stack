@@ -3,6 +3,7 @@
 #include "llama-dsv41-prefill-routes.h"
 #include "llama-dsv41-tail-hint.h"
 #include "llama-dsv41-quant-types.h"
+#include "ggml-dsv41-dense-fp8.h"
 #include <tuple>
 #include "llama-dsv41-engram-prefetch.h"
 #include "llama-dsv41-engram-early-decision.h"
@@ -428,6 +429,25 @@ struct llama_dsv41_weight_provider::implementation {
         return result;
     }
     void metadata(){
+        const auto dense_key=gguf_find_key(gguf.get(),"deepseek41.dense_layout");
+        if(dense_key>=0){
+            require(gguf_get_kv_type(gguf.get(),dense_key)==GGUF_TYPE_STRING&&
+                !std::strcmp(gguf_get_val_str(gguf.get(),dense_key),"fp8-e4m3-e8m0-32x32-v1"),"Unknown native FP8 dense layout");
+            require(ggml_dsv41_dense_fp8_requested()&&!options.decode_layout,
+                "Native FP8 dense requires its explicit prefill-only FP8 kernel");
+            require(gguf_find_key(gguf.get(),"deepseek41.expert_layout")>=0,"Native FP8 requires the matching native expert bundle");
+        }
+        const auto layout_key=gguf_find_key(gguf.get(),"deepseek41.expert_layout");
+        if(layout_key>=0){
+            require(gguf_get_kv_type(gguf.get(),layout_key)==GGUF_TYPE_STRING&&
+                !std::strcmp(gguf_get_val_str(gguf.get(),layout_key),"flashinfer-sm120-mxfp8-mxfp4-v1"),
+                "Unknown or mismatched native FP4 expert layout");
+            require(gguf_get_alignment(gguf.get())>=128,"Native FP4 requires128-byte file/tensor alignment");
+            require(!options.decode_layout,"Kernel-native FP4 decode cache is not implemented; prefill-only experiment");
+            const char *bridge=std::getenv("LLAMA_DSV41_FLASHINFER_NATIVE_FFN_DLL");
+            require(bridge&&*bridge,"Kernel-native FP4 requires its explicit native FFN bridge");
+            for(auto&w:layers)w.ffn.native_fp4_layout=true;
+        }
         const auto arch=gguf_find_key(gguf.get(),"general.architecture");
         require(arch>=0&&gguf_get_kv_type(gguf.get(),arch)==GGUF_TYPE_STRING&&
             std::strcmp(gguf_get_val_str(gguf.get(),arch),"deepseek41")==0,"Not a native V4.1 GGUF");
@@ -490,7 +510,15 @@ struct llama_dsv41_weight_provider::implementation {
             if(query(l)){a.index_q=get("indexer.attn_q_b.weight",GGML_TYPE_F16,{1280,4096});a.index_weights=get("indexer.proj.weight",GGML_TYPE_F16,{5120,32});}
             f.router=get("ffn_gate_inp.weight",GGML_TYPE_F32,{5120,384});f.text_bias=get("exp_probs_b.bias",GGML_TYPE_F32,{384});f.image_bias=get("exp_probs_b_vl.bias",GGML_TYPE_F32,{384});
             f.gate=get("ffn_gate_exps.weight",GGML_TYPE_Q4_K,{5120,2304,384});f.up=get("ffn_up_exps.weight",GGML_TYPE_Q4_K,{5120,2304,384});f.down=get("ffn_down_exps.weight",GGML_TYPE_Q4_K,{2304,5120,384});
+            require(!f.native_fp4_layout||(f.gate->type==GGML_TYPE_MXFP4&&f.up->type==GGML_TYPE_MXFP4&&f.down->type==GGML_TYPE_MXFP4),
+                "Kernel-native FP4 layout requires a complete MXFP4 triplet");
             f.shared_gate=get("ffn_gate_shexp.weight",GGML_TYPE_Q8_0,{5120,2304});f.shared_up=get("ffn_up_shexp.weight",GGML_TYPE_Q8_0,{5120,2304});f.shared_down=get("ffn_down_shexp.weight",GGML_TYPE_Q8_0,{2304,5120});
+            if(gguf_find_key(gguf.get(),"deepseek41.dense_layout")>=0)
+                for(auto*t:{a.q_a,a.q_b,a.kv,a.out_b,f.shared_gate,f.shared_up,f.shared_down}){
+                    require(t->type==GGML_TYPE_Q8_0&&t->ne[0]%128==0&&t->ne[1]%128==0&&t->ne[2]==1&&t->ne[3]==1,
+                        "Native FP8 dense tensor type or geometry mismatch");
+                    t->op_params[14]=ggml_dsv41_dense_fp8_magic;t->op_params[15]=1;
+                }
             if(!llama_dsv41_quant::triplet(f.gate->type,f.up->type,f.down->type))
                 throw std::runtime_error("Unsupported DSV4.1 tensor triplet "+prefix+"ffn_gate_exps.weight="+ggml_type_name(f.gate->type)+", ffn_up_exps.weight="+ggml_type_name(f.up->type)+", ffn_down_exps.weight="+ggml_type_name(f.down->type));
             routed[l*3]=f.gate;routed[l*3+1]=f.up;routed[l*3+2]=f.down;shared[l*3]=f.shared_gate;shared[l*3+1]=f.shared_up;shared[l*3+2]=f.shared_down;
@@ -785,6 +813,8 @@ bool llama_dsv41_weight_provider::restart_prompt(const config&options,std::strin
         for(uint32_t i=22;i<42;++i)require(wf_set_layer_skipped(p->fetcher,int(i),options.yoco_encoder_only),"YOCO pass fetch mask change refused");
     p->options.yoco_encoder_only=options.yoco_encoder_only;
     if(options.decode_layout!=p->decode_layout){
+        require(!p->layers[0].ffn.native_fp4_layout||!options.decode_layout,
+            "Kernel-native FP4 decode cache is not implemented; prefill-only experiment");
         // LLAMADECODE B1: rebuild the same admitted pipeline with the other stage
         // layout. Same banks/staging/admission; only stage registration differs.
         require(!options.decode_layout||(p->options.compute_direct&&p->options.buffers==2&&!p->options.zero_padding_only),

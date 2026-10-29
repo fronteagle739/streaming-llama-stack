@@ -42,7 +42,21 @@ def model_receipt(cfg, report=None):
     vendor()
     model = path(cfg['model'])
     from .gguf_header import read_header, validate_dsv41_types
-    validate_dsv41_types(read_header(model))
+    header=read_header(model)
+    packed=header['metadata'].get('deepseek41.expert_layout')
+    if packed is not None:
+        env=cfg.get('env_overrides',{})
+        if (cfg.get('native_fp4_prefill_only') is not True or
+            not env.get('LLAMA_DSV41_FLASHINFER_NATIVE_FFN_DLL') or
+            env.get('LLAMA_DSV41_STORED_MXFP4')!='1' or
+            env.get('LLAMADECODE_DS4_DECODE')!='0' or env.get('LLAMADECODE_PREFILL_ROUTED')!='0'):
+            raise ValueError('Kernel-native expert layout requires explicit prefill-only mode, its native bridge, full-stage reads and disabled ds4 decode')
+    dense=header['metadata'].get('deepseek41.dense_layout')
+    if dense is not None:
+        env=cfg.get('env_overrides',{})
+        if env.get('LLAMA_DSV41_DENSE_FP8')!='1' or not env.get('LLAMA_DSV41_DENSE_FP8_DLL') or env.get('LLAMA_DSV41_DENSE_BF16_STORE')!='1':
+            raise ValueError('Native FP8 dense requires its explicit kernel and BF16 boundary profile')
+    validate_dsv41_types(header,expert_layout=packed,dense_layout=dense)
     current = model.stat()
     identity = {'size': current.st_size, 'dev': current.st_dev, 'ino': current.st_ino,
                 'mtime_ns': current.st_mtime_ns}
