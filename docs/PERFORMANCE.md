@@ -99,6 +99,11 @@ Round 10 (OPUS22, default, within tolerance, not bitwise):
   top-1 is the planted key token in both.
 200K: **39.066 s** prompt-only (5,120 tok/s), TTFT 45.83 s (RAM was ~9.6 GiB free), 17.4 GB/s;
 sweep GPU 28.8 -> 26.8 s. 100K retrieval prompt: 22.24 s against 24.14 s with the TileLang image.
+- attn_output_a's 8 group products run as one grouped node (`LLAMA_DSV41_GROUPED_HALF`,
+  default 1): per group the same F16 weight casts and the same cuBLAS call, written into
+  that group's output slice, so the 7-node concat tree (0.31 s at 200K) is gone;
+  logits bit-identical. 200K: **38.150 s** prompt-only (5,242 tok/s), TTFT 42.49 s, at
+  16.8 GB/s; sweep GPU 26.8 -> 25.4 s.
 
 In the new default the 21 sweep layers are compute-bound (21 s wall against
 10 s of weight reads) and the 19 tail layers are storage-bound (8 s). Details:
