@@ -57,6 +57,10 @@ static id<MTLLibrary> g_library;
 static id<MTLCommandBuffer> g_batch_cb;
 static id<MTLComputeCommandEncoder> g_batch_enc;
 static BOOL g_batch_encoder_concurrent;
+static BOOL g_dsv41_shared_down_overlap;
+static BOOL g_dsv41_verify_rows;
+static ds4_gpu_tensor *g_dsv41_moe_dedup_plan;
+void ds4_gpu_dsv41_verify_rows(int on) { g_dsv41_verify_rows = on != 0; }
 static BOOL g_batch_has_work;
 
 /* ---- Encoder timeline diagnostic (DS4_METAL_ENCODER_TIMELINE=<file>) ----
@@ -2399,9 +2403,18 @@ static int ds4_gpu_scratch_needs_cpu_access(const char *label) {
            strcmp(label, "ds4_attention_output_group_ids") == 0;
 }
 
+/* Upstream da48ab1: GPU-read-only model views do not need hazard tracking.
+ * This changes only the resource option, including for our admitted anonymous
+ * wired file buffers. Allocation, mlock, direct reads and budget checks remain.
+ * Preserve the historical explicit UNTRACKED override on every model. */
+static int g_model_untracked_default;
+void ds4_gpu_set_model_untracked_default(int on) { g_model_untracked_default = on != 0; }
 static MTLResourceOptions ds4_gpu_model_resource_options(void) {
     MTLResourceOptions options = MTLResourceStorageModeShared;
-    if (getenv("DS4_METAL_MODEL_UNTRACKED") != NULL) {
+    const char *tracked = getenv("DS4_METAL_MODEL_TRACKED");
+    const bool keep_tracked = tracked && tracked[0] && strcmp(tracked, "0") != 0;
+    if (getenv("DS4_METAL_MODEL_UNTRACKED") != NULL ||
+        (g_model_untracked_default && !keep_tracked)) {
         options |= MTLResourceHazardTrackingModeUntracked;
     }
     return options;
@@ -10388,6 +10401,34 @@ int ds4_gpu_tensor_copy(ds4_gpu_tensor *dst, uint64_t dst_offset,
     if (bytes == 0) return 1;
     if (!g_batch_cb) return 0;
 
+    /* Upstream 1df25c6: bitwise aligned copies stay in the serial compute
+     * encoder. Misaligned, overlapping and concurrent cases keep the blit. */
+    const char *copy_off = getenv("DS4_METAL_DISABLE_COMPUTE_TENSOR_COPY");
+    const bool compute_copy = !(copy_off && copy_off[0] && strcmp(copy_off, "0") != 0);
+    const uint64_t src_at = s.offset + src_offset, dst_at = d.offset + dst_offset;
+    if (compute_copy && !g_batch_encoder_concurrent &&
+        ((src_at | dst_at | bytes) & 15u) == 0 && bytes / 16u <= UINT32_MAX &&
+        (s.buffer != d.buffer || src_at + bytes <= dst_at || dst_at + bytes <= src_at)) {
+        static id<MTLComputePipelineState> copy_pipeline;
+        if (!copy_pipeline) copy_pipeline = ds4_gpu_get_pipeline("kernel_ds4_copy_u4");
+        if (copy_pipeline) {
+            @autoreleasepool {
+                id<MTLComputeCommandEncoder> enc = ds4_gpu_compute_encoder(g_batch_cb);
+                if (!enc) return 0;
+                const uint32_t n = (uint32_t)(bytes / 16u);
+                [enc setComputePipelineState:copy_pipeline];
+                [enc setBytes:&n length:sizeof(n) atIndex:0];
+                [enc setBuffer:s.buffer offset:(NSUInteger)src_at atIndex:1];
+                [enc setBuffer:d.buffer offset:(NSUInteger)dst_at atIndex:2];
+                const NSUInteger nth = 256u;
+                [enc dispatchThreadgroups:MTLSizeMake(((NSUInteger)n + nth - 1u) / nth, 1, 1)
+                     threadsPerThreadgroup:MTLSizeMake(nth, 1, 1)];
+                ds4_gpu_end_compute_encoder(g_batch_cb, enc);
+            }
+            return 1;
+        }
+    }
+
     /* C inference callers have no surrounding autorelease pool. In particular,
      * validation-layer blit bookkeeping otherwise accumulates across tokens. */
     @autoreleasepool {
@@ -10567,6 +10608,24 @@ int ds4_gpu_commands_active(void) {
     return g_batch_cb != nil;
 }
 
+int ds4_gpu_dsv41_shared_down_overlap_begin(void) {
+    if (!g_batch_cb || g_batch_encoder_concurrent || g_ledger_mode >= 2 ||
+        g_ssd_streaming_mode || g_quality_mode) return 0;
+    ds4_gpu_close_batch_encoder();
+    g_batch_encoder_concurrent = YES;
+    g_dsv41_shared_down_overlap = YES;
+    return 1;
+}
+
+void ds4_gpu_dsv41_shared_down_overlap_end(void) {
+    if (!g_dsv41_shared_down_overlap) return;
+    /* Ordered encoders supply the execution and visibility dependency for
+     * both producers, including the retained fused routed-down HC epilogue. */
+    ds4_gpu_close_batch_encoder();
+    g_batch_encoder_concurrent = NO;
+    g_dsv41_shared_down_overlap = NO;
+}
+
 /* Exact M5 full-FFN overlap inside one concurrent compute encoder.  Shared
  * gate/up and routed IQ2 pair-SwiGLU launch together; explicit level barriers
  * precede the routed Q2 and shared Q8 down consumers. */
@@ -10597,6 +10656,7 @@ static NSUInteger g_parallel_gate_up_nsg;
 static NSUInteger g_parallel_gate_up_nr0;
 static NSUInteger g_parallel_gate_up_smem;
 static int g_parallel_ffn_mode; /* 2: gate/up + down */
+static BOOL g_parallel_ffn_bf16_request;
 static int g_parallel_ffn_stage;
 static BOOL g_parallel_q8_pending;
 static BOOL g_parallel_q8_encoded;
@@ -10630,6 +10690,7 @@ static void ds4_gpu_parallel_ffn_reset_state(BOOL close_encoder) {
     }
 
     g_batch_encoder_concurrent = NO;
+    g_dsv41_shared_down_overlap = NO;
     g_parallel_q8_pending = NO;
     g_parallel_q8_encoded = NO;
     g_parallel_ffn_mode = 0;
@@ -10676,7 +10737,7 @@ void ds4_gpu_parallel_ffn_abort(void) {
  * wrapper abort an armed concurrent FFN without touching its many
  * established fallback branches. */
 static void ds4_gpu_parallel_ffn_scope_cleanup(BOOL *armed) {
-    if (armed && *armed && g_parallel_q8_pending) {
+    if (armed && *armed && (g_parallel_q8_pending || g_dsv41_shared_down_overlap)) {
         ds4_gpu_parallel_ffn_abort();
     }
 }
@@ -10752,10 +10813,15 @@ static int ds4_gpu_parallel_ffn_start_range(
     if (!gate_wbuf || !up_wbuf || !down_wbuf) return 0;
 
     ds4_gpu_mv_dispatch gate_dispatch = ds4_gpu_make_q8_0_mv_dispatch();
-    const char *gate_fn = "kernel_dsv4_shared_gate_up_swiglu_q8_0";
+    if (g_parallel_ffn_bf16_request && (model_dim != 5120 || shared_dim != 2304 ||
+        shared_lane_offset || shared_lane_count != shared_dim ||
+        gate_dispatch.nsg != 4 || gate_dispatch.nr0 != 2)) return 0;
+    const char *gate_fn = g_parallel_ffn_bf16_request ?
+        "kernel_dsv41_shared_mid_swiglu_q8_0_bf16" : "kernel_dsv4_shared_gate_up_swiglu_q8_0";
     id<MTLComputePipelineState> gate_pipeline =
         ds4_gpu_get_mul_mv_pipeline(gate_fn, gate_dispatch.nsg);
     id<MTLComputePipelineState> down_pipeline =
+        g_parallel_ffn_bf16_request ? ds4_gpu_get_pipeline("ds41_q8_virtual72_bf16") :
         ds4_gpu_get_mul_mv_pipeline("kernel_mul_mv_q8_0_f32", 4);
     if (!gate_pipeline || !down_pipeline ||
         down_pipeline.maxTotalThreadsPerThreadgroup < 128u) {
@@ -10799,7 +10865,7 @@ static int ds4_gpu_parallel_ffn_start_range(
         ds4_gpu_make_q8_0_mv_args(shared_dim, model_dim);
     g_parallel_q8_args.ne00 = (int32_t)shared_lane_count;
     g_parallel_q8_args.ne10 = (int32_t)shared_lane_count;
-    g_parallel_q8_args.nr0 = 2;
+    g_parallel_q8_args.nr0 = g_parallel_ffn_bf16_request ? 4 : 2;
 
     g_parallel_ffn_mode = 2;
     g_parallel_ffn_stage = 0;
@@ -10826,6 +10892,21 @@ int ds4_gpu_parallel_ffn_start(
         gate, up, mid, shared_out, model_map, model_size,
         gate_offset, up_offset, down_offset, model_dim, shared_dim,
         0, shared_dim, x, clamp);
+}
+
+int ds4_gpu_parallel_ffn_start_bf16(ds4_gpu_tensor *gate, ds4_gpu_tensor *up,
+        ds4_gpu_tensor *mid, ds4_gpu_tensor *shared, const void *map, uint64_t size,
+        uint64_t gate_offset, uint64_t up_offset, uint64_t down_offset,
+        uint32_t model_dim, uint32_t shared_dim, const ds4_gpu_tensor *x, float clamp) {
+    g_parallel_ffn_bf16_request = YES;
+    const int ok = ds4_gpu_parallel_ffn_start_range(gate,up,mid,shared,map,size,
+        gate_offset,up_offset,down_offset,model_dim,shared_dim,0,shared_dim,x,clamp);
+    g_parallel_ffn_bf16_request = NO;
+    if (ok) {
+        static int witnessed;
+        if (!witnessed++) fprintf(stderr,"[concurrent-ffn] upstream BF16 shared/routed two-stage schedule\n");
+    }
+    return ok;
 }
 
 int ds4_gpu_parallel_ffn_start_sliced(
@@ -11000,9 +11081,10 @@ static void ds4_gpu_encode_parallel_q8_down(
     [enc setBuffer:g_parallel_q8_x offset:g_parallel_q8_x_offset atIndex:2];
     [enc setBuffer:g_parallel_q8_out offset:g_parallel_q8_out_offset atIndex:3];
     }
-    [enc setThreadgroupMemoryLength:32u * 2u * sizeof(float) atIndex:0];
+    if (g_parallel_q8_args.nr0 == 2)
+        [enc setThreadgroupMemoryLength:32u * 2u * sizeof(float) atIndex:0];
     [enc dispatchThreadgroups:MTLSizeMake(
-             ((NSUInteger)g_parallel_q8_args.ne0 + 1u) / 2u, 1, 1)
+             ((NSUInteger)g_parallel_q8_args.ne0 + g_parallel_q8_args.nr0 - 1u) / g_parallel_q8_args.nr0, 1, 1)
          threadsPerThreadgroup:MTLSizeMake(32, 4, 1)];
 }
 
@@ -11220,7 +11302,7 @@ int ds4_gpu_commit_and_wait_selected_readback(uint64_t event_value, const char *
  * the GPU signals g_tp_gpu_event, and the pre-encoded combine kernel waits
  * on g_tp_cpu_event.  A dedicated service thread bridges the two: it spins
  * until the GPU reaches the gate, runs the transport exchange (RDMA WRITE
- * plus flag poll, or a TCP write/read pair — behind the callback), and
+ * plus flag poll, or a TCP write/read pair â€” behind the callback), and
  * CPU-signals the release.  On exchange failure the release is signaled
  * anyway so the GPU never deadlocks; the failure latches in g_tp_failed
  * and the eval aborts at the next command-buffer boundary.
@@ -12200,7 +12282,7 @@ void ds4_gpu_tp_set_batch_exchange(ds4_gpu_tp_batch_exchange_fn fn) {
 }
 
 /* Verify-block batch gate: same arrival/release machinery as the row gate
- * (the FFN flag word and event pair are reused — a decode gate and a batch
+ * (the FFN flag word and event pair are reused â€” a decode gate and a batch
  * gate are never in flight together, and seq values stay globally unique),
  * but the service thread runs the multi-row exchange callback. */
 int ds4_gpu_tp_batch_gate_encode(uint32_t layer, uint32_t rows) {
@@ -12576,6 +12658,7 @@ int ds4_gpu_synchronize(void) {
 }
 
 void ds4_gpu_cleanup(void) {
+    g_dsv41_verify_rows = NO;
     if (!g_initialized) return;
     ds4_gpu_queue_keepalive_stop_thread();
 
@@ -12593,6 +12676,8 @@ void ds4_gpu_cleanup(void) {
             g_stream_expert_cache_batch_seq = 0;
         }
         (void)ds4_gpu_wait_pending_command_buffers("cleanup");
+        ds4_gpu_tensor_free(g_dsv41_moe_dedup_plan);
+        g_dsv41_moe_dedup_plan = NULL;
         if (ds4_gpu_stream_expert_timing_summary_enabled() &&
             getenv("DS4_METAL_MEMORY_REPORT") == NULL) {
             ds4_gpu_print_memory_report("at cleanup");
@@ -28933,10 +29018,17 @@ int ds4_gpu_attention_output_low_q8_tensor(
             };
             /* R8': the rounding twin writes the same words the separate
              * kernel_dsv41_bf16_linear pass over this output would write. */
+            const bool fixed_low = g_ds41_levers.attn_low_static &&
+                group_dim == 4096u && rank == 1024u && n_groups == 8u;
             id<MTLComputePipelineState> pipeline =
-                ds4_gpu_get_mul_mv_pipeline(round ?
+                ds4_gpu_get_mul_mv_pipeline(fixed_low ? (round ?
+                    "kernel_dsv41_attn_low_static_bf16" : "kernel_dsv41_attn_low_static") : (round ?
                     "kernel_dsv4_attn_out_low_q8_0_f32_bf16" :
-                    "kernel_dsv4_attn_out_low_q8_0_f32", 4);
+                    "kernel_dsv4_attn_out_low_q8_0_f32"), 4);
+            if (fixed_low) {
+                static int witnessed;
+                if (!witnessed++) fprintf(stderr, "[attn-low-static] scalar 8x4096->1024; retained BF16 store boundary\n");
+            }
             ok = ds4_gpu_encode_attn_out_low_q8_direct(cb,
                                                          pipeline,
                                                          &args,
@@ -34317,6 +34409,62 @@ static int ds4_gpu_encode_mul_mv_id_pair_swiglu(
     [enc dispatchThreadgroups:(swizzle ? MTLSizeMake(pairs*16u, 1, (row_groups+15u)/16u) : MTLSizeMake(row_groups, 1, pairs))
          threadsPerThreadgroup:MTLSizeMake(32, nsg, 1)];
     ds4_gpu_end_compute_encoder(cb, enc);
+    return 1;
+}
+
+/* MOE_DEDUP: a few rows' pair/SwiGLU with the distinct experts read once: the plan
+ * dispatch, then one threadgroup per distinct expert with a simdgroup per
+ * (row, slot) pair (kernel_mul_mv_id_mxfp4_pair_swiglu_dedup_f32). */
+static int ds4_gpu_encode_mul_mv_id_pair_swiglu_dedup(
+        id<MTLCommandBuffer>        cb,
+        const ds4_gpu_mul_mv_id_args *args,
+        const ds4_gpu_dsv4_moe_swiglu_weight_args *act,
+        id<MTLBuffer> src0_a, NSUInteger src0_a_off,
+        id<MTLBuffer> src0_b, NSUInteger src0_b_off,
+        id<MTLBuffer> src1, NSUInteger src1_off,
+        id<MTLBuffer> dst_a, NSUInteger dst_a_off,
+        id<MTLBuffer> dst_b, NSUInteger dst_b_off,
+        id<MTLBuffer> dst_mid, NSUInteger dst_mid_off,
+        id<MTLBuffer> ids, NSUInteger ids_off,
+        id<MTLBuffer> weights, NSUInteger weights_off,
+        NSUInteger threadgroup_bytes, uint32_t rows) {
+    static id<MTLComputePipelineState> plan_pipeline, pair_pipeline;
+    if (!cb || !args || !act || !rows || rows > 8u || args->nei0 <= 0 || args->nei0 > 8 ||
+        args->nei1 != (int32_t)rows || (uint64_t)args->nei0 * rows > 64u) return 0;
+    if (!plan_pipeline) plan_pipeline = ds4_gpu_get_pipeline("kernel_dsv41_moe_dedup_plan");
+    if (!pair_pipeline) pair_pipeline = ds4_gpu_get_pipeline("kernel_mul_mv_id_mxfp4_pair_swiglu_dedup_f32");
+    if (!g_dsv41_moe_dedup_plan) g_dsv41_moe_dedup_plan = ds4_gpu_tensor_alloc(4096);
+    id<MTLBuffer> plan = ds4_gpu_tensor_buffer(g_dsv41_moe_dedup_plan);
+    if (!plan_pipeline || !pair_pipeline || !plan) return 0;
+    const NSUInteger nr0 = (NSUInteger)args->nr0;
+    const NSUInteger row_groups = ((NSUInteger)args->ne01 + nr0 - 1u) / nr0;
+    const NSUInteger pairs = (NSUInteger)args->nei0 * (NSUInteger)args->nei1;
+    id<MTLComputeCommandEncoder> enc = ds4_gpu_compute_encoder(cb);
+    [enc setComputePipelineState:plan_pipeline];
+    [enc setBytes:args length:sizeof(*args) atIndex:0];
+    [enc setBuffer:ids offset:ids_off atIndex:1];
+    [enc setBuffer:plan offset:0 atIndex:2];
+    [enc dispatchThreadgroups:MTLSizeMake(1, 1, 1) threadsPerThreadgroup:MTLSizeMake(32, 1, 1)];
+    ds4_gpu_end_compute_encoder(cb, enc);
+    enc = ds4_gpu_compute_encoder(cb);
+    [enc setComputePipelineState:pair_pipeline];
+    [enc setBytes:args length:sizeof(*args) atIndex:0];
+    [enc setBytes:act  length:sizeof(*act)  atIndex:1];
+    [enc setBuffer:src0_a  offset:src0_a_off  atIndex:2];
+    [enc setBuffer:src0_b  offset:src0_b_off  atIndex:3];
+    [enc setBuffer:src1    offset:src1_off    atIndex:4];
+    [enc setBuffer:dst_a   offset:dst_a_off   atIndex:5];
+    [enc setBuffer:dst_b   offset:dst_b_off   atIndex:6];
+    [enc setBuffer:dst_mid offset:dst_mid_off atIndex:7];
+    [enc setBuffer:ids     offset:ids_off     atIndex:8];
+    [enc setBuffer:weights offset:weights_off atIndex:9];
+    [enc setBuffer:plan    offset:0           atIndex:10];
+    if (threadgroup_bytes != 0) [enc setThreadgroupMemoryLength:threadgroup_bytes atIndex:0];
+    [enc dispatchThreadgroups:MTLSizeMake(row_groups, 1, pairs)
+         threadsPerThreadgroup:MTLSizeMake(32, rows, 1)];
+    ds4_gpu_end_compute_encoder(cb, enc);
+    static int witnessed;
+    if (!witnessed++) fprintf(stderr,"[moe-dedup] exact MXFP4 gate/up pair plan and shared expert reads, rows=%u\n",rows);
     return 1;
 }
 
@@ -43010,7 +43158,7 @@ int ds4_gpu_routed_moe_one_tensor(
         bool                    force_resident) {
     BOOL parallel_ffn_scope
         __attribute__((cleanup(ds4_gpu_parallel_ffn_scope_cleanup))) =
-            g_parallel_q8_pending;
+            g_parallel_q8_pending || g_dsv41_shared_down_overlap;
     if (!g_initialized && !ds4_gpu_init()) return 0;
     /* TP sharding: only the owned contiguous expert range is mapped,
      * so bind from the owned base, validate only its bytes, and tell the
@@ -43347,6 +43495,22 @@ int ds4_gpu_routed_moe_one_tensor(
             n_tokens == 1 &&
             down_sum6_pipeline != nil;
 
+        /* Only a resident fused pair has no intermediate producer dependency.
+         * Close the shared-down encoder on every other route before encoding
+         * it, preserving all user-selected kernels and expert formats. */
+        if (g_dsv41_shared_down_overlap &&
+            !(gate_type == DS4_METAL_TENSOR_MXFP4 && down_type == DS4_METAL_TENSOR_MXFP4 &&
+              n_tokens == 1 && n_expert == 6 && n_total_expert == 384 &&
+              expert_in_dim == 5120 && expert_mid_dim == 2304 && out_dim == 5120 &&
+              first_expert == 0 && n_bind_expert == n_total_expert &&
+              g_tp_split_world == 1 && add_in == NULL && force_resident &&
+              !write_clamped_moe && fuse_pair_swiglu && direct_down_sum))
+            ds4_gpu_dsv41_shared_down_overlap_end();
+        if (g_dsv41_shared_down_overlap) {
+            static int witnessed;
+            if (!witnessed++) fprintf(stderr, "[shared-down-overlap] concurrent virtual Q8 down and resident MXFP4 routed pair; serial consumer boundary\n");
+        }
+
         if (g_parallel_q8_pending) {
             /* A concurrent encoder invalidates every implicit dependency in
              * this generic function. Admit only resident fused pair-SwiGLU
@@ -43365,19 +43529,23 @@ int ds4_gpu_routed_moe_one_tensor(
                 g_tp_split_rank == 0 && g_tp_split_world == 1 &&
                 add_in == NULL && (force_resident || !g_ssd_streaming_mode) &&
                 !write_clamped_moe && fuse_pair_swiglu && direct_down_sum;
+            const bool v41_parallel_shape = n_total_expert == 384 && expert_in_dim == 5120 &&
+                expert_mid_dim == 2304 && out_dim == 5120 && gate_row_bytes == 2720 &&
+                gate_expert_bytes == 6266880 && down_row_bytes == 1224 && down_expert_bytes == 6266880;
             const bool parallel_mxfp4_tp_route =
                 g_parallel_ffn_mode == 2 &&
                 gate_type == DS4_METAL_TENSOR_MXFP4 &&
                 down_type == DS4_METAL_TENSOR_MXFP4 &&
-                n_tokens == 1 && n_expert == 6 && n_total_expert == 256 &&
+                n_tokens == 1 && n_expert == 6 && (v41_parallel_shape || (n_total_expert == 256 &&
                 expert_in_dim == 4096 && expert_mid_dim == 2048 &&
                 out_dim == 4096 && gate_row_bytes == 2176 &&
                 gate_expert_bytes == 4456448 && down_row_bytes == 1088 &&
-                down_expert_bytes == 4456448 &&
-                ((g_tp_split_rank == 0 && first_expert == 0u) ||
+                down_expert_bytes == 4456448)) &&
+                ((v41_parallel_shape && g_tp_split_world == 1 && first_expert == 0 && n_bind_expert == n_total_expert) ||
+                 (g_tp_split_world == 2 && ((g_tp_split_rank == 0 && first_expert == 0u) ||
                  (g_tp_split_rank == 1 &&
-                  first_expert + n_bind_expert == n_total_expert)) &&
-                g_tp_split_world == 2 && add_in == NULL &&
+                  first_expert + n_bind_expert == n_total_expert)))) &&
+                add_in == NULL &&
                 (force_resident || !g_ssd_streaming_mode) &&
                 !write_clamped_moe && fuse_pair_swiglu && direct_down_sum;
             if (!parallel_iq2_route && !parallel_mxfp4_tp_route) {
@@ -45350,6 +45518,7 @@ int ds4_gpu_routed_moe_one_tensor(
                                             gate_rows_per_group_is_nr0);
         }
         DS4_METAL_PROFILE_MOE_ONE_STAGE("gate_up");
+        ds4_gpu_dsv41_shared_down_overlap_end();
         if (ok && (!fuse_pair_swiglu || use_q4_group24_experts)) {
             ok = ds4_gpu_encode_moe_swiglu_weight(cb,
                                                     gatebuf,
@@ -46017,7 +46186,13 @@ int ds4_gpu_routed_moe_batch_tensor(
             n_expert == 6u && expert_in_dim == 5120u && expert_mid_dim == 2304u &&
             out_dim == 5120u &&
             ((gate_type == DS4_METAL_TENSOR_IQ2_XXS && down_type == DS4_METAL_TENSOR_Q2_K) ||
-             (gate_type == DS4_METAL_TENSOR_Q4_K && down_type == DS4_METAL_TENSOR_Q4_K));
+             (gate_type == DS4_METAL_TENSOR_Q4_K && down_type == DS4_METAL_TENSOR_Q4_K) ||
+             (gate_type == DS4_METAL_TENSOR_MXFP4 && down_type == DS4_METAL_TENSOR_MXFP4 &&
+              g_dsv41_verify_rows && g_ds41_levers.verify_mxfp4));
+        if (v41_decode_batch && n_tokens > 5u && gate_type == DS4_METAL_TENSOR_MXFP4) {
+            static int witnessed;
+            if (!witnessed++) fprintf(stderr, "[verify-mxfp4] DSpark 6-8 rows use scalar-ordered fused pair and direct sum; ordinary batches unchanged\n");
+        }
         const bool use_tiny_pair_mv =
             !g_quality_mode &&
             (n_tokens <= 5u || v41_decode_batch ||
@@ -46774,7 +46949,15 @@ int ds4_gpu_routed_moe_batch_tensor(
                 .write_clamped = 0,
                 .clamp_value = clamp,
             };
-            ok = ds4_gpu_encode_mul_mv_id_pair_swiglu(cb,
+            const bool dedup = g_ds41_levers.mxfp4_dedup &&
+                gate_type == DS4_METAL_TENSOR_MXFP4 && n_tokens >= 2u && n_tokens <= 8u &&
+                !use_tp_mxfp4_static_batch && g_tp_split_world == 1 && !g_batch_encoder_concurrent;
+            ok = dedup ? ds4_gpu_encode_mul_mv_id_pair_swiglu_dedup(cb,&gate_args,&act_args,
+                    gate_buf,(NSUInteger)gate_inner,up_buf,(NSUInteger)up_inner,
+                    xbuf,ds4_gpu_tensor_offset(x),gatebuf,ds4_gpu_tensor_offset(gate),
+                    upbuf,ds4_gpu_tensor_offset(up),midbuf,ds4_gpu_tensor_offset(mid),
+                    selectedbuf,ds4_gpu_tensor_offset(selected),weightsbuf,ds4_gpu_tensor_offset(weights),
+                    gate_smem,n_tokens) : ds4_gpu_encode_mul_mv_id_pair_swiglu(cb,
                                                        tiny_pair_swiglu_pipeline,
                                                        &gate_args,
                                                        &act_args,
@@ -48423,7 +48606,7 @@ int ds4_gpu_hc_expand_tensor(
     return 1;
 }
 
-/* Expand of the SUM of two block vectors — the TP attention combine folded
+/* Expand of the SUM of two block vectors â€” the TP attention combine folded
  * into the HC expand (the kernel's has_add path adds them element-wise
  * before the post/comb mixing, canonical rank order preserved by argument
  * position). */

@@ -726,7 +726,7 @@ kernel void kernel_mul_mv_q8_0_f32_pair(
 // same lane that owns the reduced output row.  The point is not to fuse two
 // independent weight streams into one matmul; it is to remove the separate
 // activation pass and its reread of the two 2048-wide rows.
-template<short NR0, bool STORE_GATE_UP>
+template<short NR0, bool STORE_GATE_UP, bool BF16 = false>
 void kernel_dsv4_shared_gate_up_swiglu_q8_0_impl(
         constant ds4_metal_args_mul_mv & args,
         device const char * src0_gate,
@@ -829,8 +829,10 @@ void kernel_dsv4_shared_gate_up_swiglu_q8_0_impl(
         (uint64_t)im * args.ne0 * args.ne1 + (uint64_t)r1 * args.ne0;
 
     FOR_UNROLL (short row = 0; row < NR0 && r0 + row < args.ne01; ++row) {
-        const float gate = simd_sum(sh_gate[row][tiisg]);
-        const float up = simd_sum(sh_up[row][tiisg]);
+        const float raw_gate = simd_sum(sh_gate[row][tiisg]);
+        const float raw_up = simd_sum(sh_up[row][tiisg]);
+        const float gate = BF16 ? dsv41_bf16(raw_gate) : raw_gate;
+        const float up = BF16 ? dsv41_bf16(raw_up) : raw_up;
         if (tiisg == 0 && sgitg == 0) {
             const uint out_row = r0 + row;
             if (STORE_GATE_UP) {
@@ -844,9 +846,22 @@ void kernel_dsv4_shared_gate_up_swiglu_q8_0_impl(
                 u = clamp(u, -clamp_value, clamp_value);
             }
             const float silu = g / (1.0f + exp(-g));
-            mid_f32[out_row] = silu * u;
+            mid_f32[out_row] = BF16 ? dsv41_bf16(silu * u) : silu * u;
         }
     }
+}
+
+/* Upstream 555e258: the shared expert's gate/up and middle BF16 boundaries. */
+kernel void kernel_dsv41_shared_mid_swiglu_q8_0_bf16(
+        constant ds4_metal_args_mul_mv &args,
+        device const char *gate, device const char *up, device const char *x,
+        device char *gate_out, device char *up_out, device char *mid,
+        constant float &clamp,
+        threadgroup char *shmem [[threadgroup(0)]],
+        uint3 tg [[threadgroup_position_in_grid]],
+        ushort lane [[thread_index_in_simdgroup]], ushort sg [[simdgroup_index_in_threadgroup]]) {
+    kernel_dsv4_shared_gate_up_swiglu_q8_0_impl<N_R0_Q8_0,false,true>(
+        args,gate,up,x,gate_out,up_out,mid,clamp,shmem,tg,lane,sg);
 }
 
 [[host_name("kernel_dsv4_shared_gate_up_swiglu_q8_0")]]

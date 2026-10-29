@@ -18,3 +18,17 @@ command-buffer cadence behind `DS4_DS41_DECODE_QUEUE2=1`; existing cadence is
 retained at zero. Q4 serial decode improves about 2.3% at 8K and 131K with
 identical 128-token outputs. Paired qualification and the MXFP4 comparison are
 pending; this is not an upstream rebase. See `docs/MACDECODE.md` at stack root.
+
+Round 4 ports from the still-current upstream
+`f48c5e2e20b1aaae1c79735a8457225d2469ae73`:
+read-only weight hazard policy (`da48ab1c`), compute tensor copies (`1df25c6f`),
+fixed low projection (`e06a0b7f`), full BF16 shared/routed FFN overlap
+(`555e258f`), MXFP4 verify-row admission (`04830a71`), exact expert-read
+deduplication (`a5635c52`), and persistent per-row Engram workers (`bb7e488f`
+and the current reader implementation). The down-only overlap adaptation
+retains the fork's combined router/shared/HC producer as a separate option.
+All original paths, samplers, vision, native import, disk KV and cone support
+remain. The new graph levers are opt-in; weight views and eligible aligned
+copies adopt upstream defaults with explicit controls. The owned anonymous
+wired allocation/admission policy is unchanged. See `docs/MACDECODE_ROUND4.md`
+for exactness checks, measured scope and remaining release qualification.
