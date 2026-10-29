@@ -183,7 +183,7 @@ def gpu_lease(cfg):
                 or cfg['host_budget_gib'] > row.get('host_budget_gib', 0)
                 or cfg['min_available_gib'] < row.get('min_available_gib', float('inf'))):
             raise AdmissionRefused('Inherited GPU reservation is not a live compatible ancestor lease')
-        lines = active_holds(hold.read_text(encoding='utf-8-sig'))
+        lines = active_holds(read_hold_text(hold))
         own = [line for line in lines if re.match(
             r'^ACTIVE:\s+' + re.escape(task) + r'\s+' + re.escape(row['id']) + r'(?:;|\s|$)', line)]
         foreign = [line for line in lines if line not in own]

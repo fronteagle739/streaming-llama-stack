@@ -25,7 +25,6 @@ from .progress import Window, activity, readiness_seconds
 
 
 def budget(cfg, maximum=400):
-    import psutil
     from .memory_counters import available_physical_bytes
     free = available_physical_bytes() / (1 << 30)
     floor = cfg.get('min_available_gib', .5)
@@ -45,14 +44,14 @@ def replacement_budget(cfg, maximum, previous_budget, timeout=60):
     requested = {**cfg, 'mac_host_budget_gib': cfg.get('mac_host_budget_gib') or previous_budget}
     # Owner rule (no fixed timeouts): `timeout` is the no-progress window; it is renewed while
     # available memory keeps rising (the retired buffers are still draining).
-    import psutil
+    from .memory_counters import available_physical_bytes
     window = Window(timeout)
     announced = False
     while True:
         try:
             return budget(requested, maximum)
         except MemoryError:
-            window.rising(psutil.virtual_memory().available)
+            window.rising(available_physical_bytes())
             if window.expired():
                 raise MemoryError('Mac physical memory stopped recovering for %.0fs after certified backend cleanup (%.0fs since retire)'
                                   % (window.idle(), window.elapsed())) from None
@@ -389,6 +388,7 @@ class Receiver:
         if not self.peer:
             raise ValueError('No candidate peer')
         self.peer['status'] = 'qualified'
+        self.peer['qualification_kind'] = 'common-prefix-full-vocabulary-KL' if self.peer.get('cross_quant') else 'exact-greedy-parity'
         self.peer['tiny_parity_sha256'] = hashlib.sha256(json.dumps(self.qualification, sort_keys=True).encode()).hexdigest()
         atomic_json(self.token_file.with_name('peer.json'), self.peer)
         return {k: v for k, v in self.peer.items() if k != 'producer_ipv4'}

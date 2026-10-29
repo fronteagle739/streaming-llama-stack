@@ -5,6 +5,11 @@
 #define DS4_NATIVE_SESSION_ROUTE_H
 #include <stdbool.h>
 #include <stdint.h>
+/* A disk seed may initialize an idle/lazy session. Once the RTX owns a
+ * checkpoint, replacement must use the verified rewind/import protocol. */
+static inline bool ds4_ns_disk_seed_allowed(bool configured, bool started) {
+    return !configured || !started;
+}
 static inline bool ds4_ns_local_work(uint32_t threshold, uint32_t live,
                                      uint32_t total, bool extends) {
     return threshold && extends && total >= live && total-live < threshold;

@@ -14015,6 +14015,11 @@ static void generate_job_inner(server *s, server_slot *slot, job *j) {
     }
     if (cached == 0) slot->continued_last_store_tokens = 0;
     bool incoming_pinned = false;
+    bool disk_seed_allowed = true;
+#if DS4_NATIVE_FRONTIER_ENABLE && defined(__APPLE__)
+    disk_seed_allowed = ds4_ns_disk_seed_allowed(s->native_session != NULL,
+                                                slot->native_session.started);
+#endif
     if (s->kv.enabled && cached == 0 &&
         old_pos >= s->kv.opt.min_tokens) {
         /* ES1: the outgoing store below runs an eviction pass, and on
@@ -14030,7 +14035,7 @@ static void generate_job_inner(server *s, server_slot *slot, job *j) {
          * would silently discard the newer conversation state. */
         kv_cache_store_current(s, slot, "evict");
     }
-    if (cached == 0) {
+    if (cached == 0 && disk_seed_allowed) {
         disk_cached = multimodal ?
             kv_cache_try_load_multimodal(s, slot, &j->req, &effective_prompt,
                                          &disk_cache_path,

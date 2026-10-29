@@ -6,11 +6,12 @@ static void ds4_ns_config_free(ds4_ns_config*c){if(c){ds4_ns_preserve_history_re
 static int ds4_ns_setup(ds4_engine*engine,const ds4_engine_options*opt,int context,int slots,
                          const char*disk_cache,ds4_ns_config**out,char*err,size_t cap){
     *out=NULL;const char*enabled=ds4_nf_env("DS4_NATIVE_SESSION");if(!enabled||!strcmp(enabled,"0"))return 0;
-    if(strcmp(enabled,"1")||context!=1000001||slots!=1||(disk_cache&&*disk_cache)||
+    if(strcmp(enabled,"1")||context!=1000001||slots!=1||
        !ds4_engine_is_deepseek41(engine)||opt->backend!=DS4_BACKEND_METAL||!opt->dspark||!opt->mtp_path||ds4_engine_mtp_draft_tokens(engine)<=1||
        opt->directional_steering_file||opt->load_slice||opt->tp.role!=DS4_TP_NONE||opt->distributed.role!=DS4_DISTRIBUTED_NONE||
        (ds4_nf_env("DS4_NATIVE_FRONTIER")&&strcmp(ds4_nf_env("DS4_NATIVE_FRONTIER"),"0")))
-        return ds4_nf_error(err,cap,"session requires original local Metal DSpark, one1M slot, and no disk-cache restore");
+        return ds4_nf_error(err,cap,"session requires local Metal DSpark and one1M slot");
+    fprintf(stderr,"native session disk KV configured=%d policy=seed-before-remote-start; active checkpoints use verified rewind/import\n",disk_cache&&*disk_cache?1:0);
     const char*host=ds4_nf_env("DS4_NATIVE_SESSION_IPV4"),*token=ds4_nf_env("DS4_NATIVE_SESSION_PAIR_TOKEN_FILE");
     const char*tier=ds4_nf_env("DS4_NATIVE_SESSION_TIER"),*techniques=ds4_nf_env("DS4_NATIVE_SESSION_TECHNIQUES");
     const char*path=ds4_nf_env("DS4_NATIVE_SESSION_QUALIFICATION"),*pin=ds4_nf_env("DS4_NATIVE_SESSION_QUALIFICATION_SHA256");

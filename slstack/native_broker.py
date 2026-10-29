@@ -279,6 +279,8 @@ class OwnedProducer:
             self.producer = ProgressGuardedTransport(self.producer)
         except BaseException as exc:
             self.failure_cleanup = getattr(exc, 'owned_cleanup', None)
+            if hasattr(self, 'directory') and (diagnostic := getattr(exc, 'owned_diagnostic', None)):
+                (self.directory / 'stderr.log').write_bytes(diagnostic)
             self.close()
             raise
 
@@ -329,6 +331,8 @@ def serve(cfg):
         try:
             return OwnedProducer(cfg,request,cancel,on_start=publish)
         except BaseException as error:
+            import traceback
+            traceback.print_exc()
             print('NATIVE_SESSION_START_FAILED '+json.dumps({'session':request.get('session'),
                   'error':str(error)}),flush=True)
             raise

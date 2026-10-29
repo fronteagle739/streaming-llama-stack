@@ -39,5 +39,13 @@ class CompatibilityTests(unittest.TestCase):
         with self.assertRaises(ValueError):continuation_kl(a,b[:-4],2)
         with self.assertRaises(ValueError):continuation_kl(a,struct.pack('<4f',1,2,float('nan'),4),2)
 
+    def test_pairing_and_observation_settings_reach_the_mac_engine(self):
+        from slstack.config import load, environment
+        settings={key:'a'*64 for key in ['DS4_NATIVE_SESSION_MODEL_SHA256',
+            'DS4_NATIVE_SESSION_RECEIVER_MODEL_SHA256','DS4_NATIVE_SESSION_COMPATIBILITY_SHA256']}
+        settings['DS4_NATIVE_QUALIFICATION_LOGITS']='/explicit/qualification.f32'
+        env=environment(load(overrides={'env_overrides':settings}), 'ds4-mac')
+        for key,value in settings.items():self.assertEqual(env.get(key),value,key)
+
 
 if __name__=='__main__':unittest.main()
