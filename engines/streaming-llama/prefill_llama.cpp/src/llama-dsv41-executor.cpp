@@ -28,6 +28,7 @@
 #include "ggml-dsv41-cast-vector.h"
 #include "ggml-dsv41-mul-f16-store.h"
 #include "ggml-dsv41-hc-expand.h"
+#include "ggml-dsv41-grouped-half.h"
 #include "boundary-capture.h"
 #include "llama-dsv41-rope.h"
 #include "ggml-alloc.h"
@@ -205,9 +206,21 @@ static bool dsv41_original_q8_dense(const ggml_tensor *node) {
     return false;
 }
 
+static ggml_cgraph *llama_dsv41_native_batch_graph_ex(ggml_context *ctx,ggml_cgraph *original,
+        uint32_t count,uint64_t operation_limit,uint64_t *backend_temporary,
+        uint32_t *rounded_matrices,uint32_t *split_matrices,bool grouped_half);
 ggml_cgraph *llama_dsv41_native_batch_graph(ggml_context *ctx,ggml_cgraph *original,
         uint32_t count,uint64_t operation_limit,uint64_t *backend_temporary,
         uint32_t *rounded_matrices,uint32_t *split_matrices) {
+    return llama_dsv41_native_batch_graph_ex(ctx,original,count,operation_limit,backend_temporary,rounded_matrices,split_matrices,false);
+}
+static bool dsv41_grouped_half_enabled(){
+    static const bool on=[]{const char *e=std::getenv("LLAMA_DSV41_GROUPED_HALF");return !e||!(e[0]=='0'&&!e[1]);}();
+    return on;
+}
+static ggml_cgraph *llama_dsv41_native_batch_graph_ex(ggml_context *ctx,ggml_cgraph *original,
+        uint32_t count,uint64_t operation_limit,uint64_t *backend_temporary,
+        uint32_t *rounded_matrices,uint32_t *split_matrices,bool grouped_half) {
     require(ctx&&original&&operation_limit&&backend_temporary&&rounded_matrices&&split_matrices,
         "Invalid native batch graph rewrite");
     *backend_temporary=0;*rounded_matrices=0;*split_matrices=0;
@@ -248,6 +261,25 @@ ggml_cgraph *llama_dsv41_native_batch_graph(ggml_context *ctx,ggml_cgraph *origi
         require(rows>0,"One native F32 projection row exceeds backend temporary admission");
         std::vector<ggml_tensor*>group_parts;
         const int64_t groups=std::max(weight->ne[2],input->ne[2]);
+        if(grouped_half&&native_q8&&groups>1&&groups+1<=GGML_MAX_SRC&&weight->ne[2]==groups&&input->ne[2]==groups&&
+           int64_t(rows)>=weight->ne[1]&&count>8&&input->ne[1]>8&&input->ne[1]<=4096&&ggml_is_contiguous(node)){
+            // One grouped node: per-group F16 weights (same casts), per-group cuBLAS
+            // into dst slices on the GPU; no concat tree. Bit-identical products.
+            ggml_tensor *parts[GGML_MAX_SRC]={};
+            for(int64_t group=0;group<groups;++group){
+                auto*part=ggml_view_2d(ctx,weight,weight->ne[0],weight->ne[1],weight->nb[1],size_t(group)*weight->nb[2]);
+                part=ggml_cast(ctx,ggml_cast(ctx,part,GGML_TYPE_F32),GGML_TYPE_F16);
+                ggml_set_name(part,"dsv41_native_q8_weight_f16");parts[group]=part;
+            }
+            auto*src1=input;
+            node->op=GGML_OP_CUSTOM;std::memset(node->op_params,0,sizeof(node->op_params));
+            node->op_params[0]=0x47525031;node->op_params[1]=1;node->op_params[2]=int32_t(groups);
+            for(auto*&src:node->src)src=nullptr;
+            node->src[0]=src1;for(int64_t group=0;group<groups;++group)node->src[1+group]=parts[group];
+            node->view_src=nullptr;node->view_offs=0;
+            require(ggml_dsv41_grouped_half_valid(node),"Grouped F16 projection lost its geometry");
+            ++*rounded_matrices;++*split_matrices;continue;
+        }
         for(int64_t group=0;group<groups;++group){
             auto*group_input=input;
             if(groups>1)group_input=ggml_view_2d(ctx,input,input->ne[0],input->ne[1],
@@ -1390,8 +1422,9 @@ bool llama_dsv41_tile_executor::run(const request&in,const llama_dsv41_layer_gra
             // Other admitted GGUFs may contain only Q4 dense projections.
             // The Q8 activation option applies to Q8 weights when present.
         }
-        graph=llama_dsv41_native_batch_graph(ctx.get(),graph,in.count,96ull*1024*1024,
-            &backend_temporary,&rounded_matrices,&split_matrices);
+        graph=llama_dsv41_native_batch_graph_ex(ctx.get(),graph,in.count,96ull*1024*1024,
+            &backend_temporary,&rounded_matrices,&split_matrices,
+            expert.dense_inputs_f16&&in.count>uint32_t(ggml_dsv41_dense_half_max_untagged_rows)&&dsv41_grouped_half_enabled());
         if(expert.dense_activation_q8_1&&in.count>8){
             unsigned actual=0;for(int i=0;i<ggml_graph_n_nodes(graph);++i){const auto *node=ggml_graph_node(graph,i);
                 if(node->op==GGML_OP_MUL_MAT&&node->op_params[6]==0x51384131){require(dsv41_original_q8_dense(node),"Original Q8 projection changed weight owner/type");++actual;}}
@@ -1403,7 +1436,7 @@ bool llama_dsv41_tile_executor::run(const request&in,const llama_dsv41_layer_gra
             for(int i=0;i<ggml_graph_n_nodes(graph);++i){auto *node=ggml_graph_node(graph,i);
                 if(ggml_dsv41_dense_half_tag(node)){
                     require(node->src[0]->type==GGML_TYPE_F16&&node->op_params[6]!=0x51384131,"F16 activation product overlaps an original-Q8 MMQ tag");++accepted;
-                }}
+                }else if(ggml_dsv41_grouped_half_requested(node))accepted+=unsigned(node->op_params[2]);}
             const char*refused=llama_dsv41_dense_half_admission(in.count,accepted);require(!refused,refused);
             if(int64_t(in.count)<=ggml_dsv41_dense_half_max_untagged_rows)llama_dsv41_layer_log("DS4PERF_DENSE_HALF_SMALL_ROWS layer=%u start=%u count=%u tagged=0 original_F32_products=1\n",in.layer,in.start,in.count);
         }
@@ -1971,7 +2004,7 @@ bool llama_dsv41_tile_executor::run(const request&in,const llama_dsv41_layer_gra
         }
         if(expert.dense_inputs_f16){
             uint64_t expected=0;
-            for(int i=0;i<ggml_graph_n_nodes(graph);++i)expected+=ggml_dsv41_dense_half_requested(ggml_graph_node(graph,i))?1:0;
+            for(int i=0;i<ggml_graph_n_nodes(graph);++i){const auto*n=ggml_graph_node(graph,i);expected+=ggml_dsv41_dense_half_requested(n)?1:ggml_dsv41_grouped_half_requested(n)?uint64_t(n->op_params[2]):0;}
             const auto after=ggml_backend_cuda_dsv41_dense_half_queued();
             require(after>=dense_before&&after-dense_before==expected,"Actual shared F16/F16/F32 dense dispatch witness differs");
             llama_dsv41_layer_log("DS4PERF_DENSE_HALF_COMPLETE layer=%u start=%u count=%u actual=%llu hc_excluded=1\n",in.layer,in.start,in.count,(unsigned long long)expected);

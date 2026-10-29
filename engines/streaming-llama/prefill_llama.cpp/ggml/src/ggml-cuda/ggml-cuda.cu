@@ -3212,6 +3212,26 @@ static ggml_cuda_dispatch_counter dsv41_dense_half_queued{0};
 static ggml_cuda_dispatch_counter dsv41_hc_half_queued{0};
 extern "C" uint64_t ggml_backend_cuda_dsv41_hc_half_queued(void){return dsv41_hc_half_queued.load(std::memory_order_acquire);}
 extern "C" uint64_t ggml_backend_cuda_dsv41_dense_half_queued(void){return dsv41_dense_half_queued.load(std::memory_order_acquire);}
+#include "ggml-dsv41-grouped-half.h"
+static ggml_cuda_dispatch_counter dsv41_grouped_half_queued{0};
+extern "C" uint64_t ggml_backend_cuda_dsv41_grouped_half_queued(void){return dsv41_grouped_half_queued.load(std::memory_order_acquire);}
+// Same call as the tagged F16 dense MUL_MAT, once per group, into dst slices.
+static void ggml_cuda_op_dsv41_grouped_half(ggml_backend_cuda_context &ctx,ggml_tensor *dst){
+    GGML_ASSERT(ggml_dsv41_grouped_half_valid(dst)&&ggml_cuda_info().devices[ctx.device].cc==1200);
+    const ggml_tensor *x=dst->src[0];const int64_t groups=dst->op_params[2];
+    for(int64_t g=0;g<groups;++g){
+        ggml_tensor w=*dst->src[1+g];
+        ggml_tensor in=*x;in.ne[2]=1;in.ne[3]=1;in.nb[2]=in.nb[1]*in.ne[1];in.nb[3]=in.nb[2];
+        in.data=(char*)x->data+size_t(g)*x->nb[2];in.view_src=nullptr;in.view_offs=0;
+        ggml_tensor out=*dst;out.ne[2]=1;out.ne[3]=1;out.nb[2]=out.nb[1]*out.ne[1];out.nb[3]=out.nb[2];
+        out.data=(char*)dst->data+size_t(g)*dst->nb[2];out.op=GGML_OP_MUL_MAT;
+        std::memset(out.op_params,0,sizeof(out.op_params));out.op_params[0]=GGML_PREC_F32;
+        for(auto *&src:out.src)src=nullptr;out.src[0]=&w;out.src[1]=&in;out.view_src=nullptr;out.view_offs=0;
+        ggml_cuda_mul_mat_batched_cublas_impl<GGML_TYPE_F16>(ctx,&w,&in,&out);
+    }
+    dsv41_grouped_half_queued.fetch_add(1,std::memory_order_release);
+    dsv41_dense_half_queued.fetch_add(uint64_t(groups),std::memory_order_release); // groups F16 dense products
+}
 static void ggml_cuda_mul_mat(ggml_backend_cuda_context & ctx, const ggml_tensor * src0, const ggml_tensor * src1, ggml_tensor * dst) {
     if(ggml_dsv41_split_f32_requested(dst)){
         GGML_ASSERT(ggml_dsv41_split_f32_shape(dst)&&src0==dst->src[0]&&src1==dst->src[1]);
@@ -4002,6 +4022,7 @@ static bool ggml_cuda_compute_forward(ggml_backend_cuda_context & ctx, struct gg
             ggml_cuda_op_dsv4_hc_pre(ctx, dst);
             break;
         case GGML_OP_CUSTOM:
+            if(ggml_dsv41_grouped_half_requested(dst)){ggml_cuda_op_dsv41_grouped_half(ctx,dst);break;}
             if(!ggml_dsv41_native_ffn_requested(dst))return false;
             ggml_cuda_op_dsv41_native_ffn(ctx,dst);
             break;
@@ -7711,7 +7732,7 @@ static bool ggml_backend_cuda_device_supports_op(ggml_backend_dev_t dev, const g
         case GGML_OP_DSV4_HC_PRE:
             return op->src[0]->type == GGML_TYPE_F32 && op->src[1]->type == GGML_TYPE_F32;
         case GGML_OP_CUSTOM:
-            return ggml_cuda_info().devices[dev_ctx->device].cc==1200&&ggml_dsv41_native_ffn_valid(op);
+            return ggml_cuda_info().devices[dev_ctx->device].cc==1200&&(ggml_dsv41_native_ffn_valid(op)||ggml_dsv41_grouped_half_valid(op));
         case GGML_OP_MAP_CUSTOM3:
             return ggml_dsv41_hc_collapse_valid(op)||ggml_dsv41_hc_expand_valid(op)||
                 (ggml_dsv41_hc_sinkhorn_valid(op)&&ggml_cuda_info().devices[dev_ctx->device].cc==1200);
