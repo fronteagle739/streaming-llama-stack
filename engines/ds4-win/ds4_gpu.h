@@ -3908,6 +3908,20 @@ uint64_t ds4_gpu_drop_external_ranges(void);   /* LLAMADECODE keep-open: forget 
 typedef int (*ds4_gpu_external_expert_hook)(void *user, uint32_t layer, const int32_t *ids, uint32_t n,
     int32_t *slots, const char **gate_base, const char **up_base, const char **down_base, uint32_t *n_slots);
 void ds4_gpu_set_external_expert_hook(ds4_gpu_external_expert_hook hook, void *user);
+/* Packed FP4 experts are read in place from the caller's second (victim) tier:
+ * slots[i] < *l1_slots address bases[0..2] at the original expert strides;
+ * slots[i] >= *l1_slots address bases[3..5] at (slot - l1) * l2_stride[k].
+ * No slot copies are needed for a second-tier hit. */
+typedef int (*ds4_gpu_external_expert_hook_l2)(void *user, uint32_t layer, const int32_t *ids, uint32_t n,
+    int32_t *slots, const char **bases, uint64_t *l2_stride, uint32_t *l1_slots, uint32_t *n_slots);
+void ds4_gpu_set_external_expert_hook_l2(ds4_gpu_external_expert_hook_l2 hook, void *user);
+/* The model's routed experts use the kernel-native packed FP4 layout
+ * (deepseek41.expert_layout); the expert cache holds them as slot bytes. */
+void ds4_gpu_set_fp4_packed_experts(int on);
+/* DS4X_STAGE_PROFILE=1: CUDA events at decode stage boundaries on the legacy
+ * stream; flush prints one attribution line per token. */
+int ds4_gpu_stage_mark(int id);
+void ds4_gpu_stage_flush(uint32_t position);
 /* B5: residency of one layer's experts in the caller's cache (tier[e] = 1 resident). */
 typedef int (*ds4_gpu_external_residency_hook)(void *user, uint32_t layer, uint8_t *tier, uint32_t experts);
 void ds4_gpu_set_external_residency_hook(ds4_gpu_external_residency_hook hook, void *user);

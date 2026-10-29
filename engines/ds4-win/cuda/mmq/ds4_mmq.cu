@@ -4965,3 +4965,5 @@ template void mul_mat_q_case<GGML_TYPE_Q4_K>(
     ggml_backend_cuda_context & ctx, const mmq_args & args, cudaStream_t stream);
 template void mul_mat_q_case<GGML_TYPE_MXFP4>(
     ggml_backend_cuda_context & ctx, const mmq_args & args, cudaStream_t stream);
+
+#include "ds4_mmq_fp4_packed.cuh"

@@ -705,6 +705,23 @@ int ds4_mmq_q4_K_moe_down_sum6_vec(
     int             n_expert_used,
     cudaStream_t    stream);
 
+// DSV4.1 kernel-native packed FP4 experts (flashinfer-sm120-mxfp8-mxfp4-v1
+// cache slots: values [N][K/2], then E8M0 scales [K/128][N][4]): fused
+// routed MoE for 1..65535 rows, six slots per row, canonical Q8_1 vector
+// arithmetic. reference=1 relayouts the selected slots and runs the vendored
+// canonical vector kernels instead (single row; exactness check only).
+// Slot ids below l1_slots address W_* at the *_slot_bytes strides; the rest
+// address W_*2 (the second tier, read in place) at (id - l1_slots) * *2_slot_bytes.
+int ds4_mmq_mxfp4_packed_moe(
+    const void * W_gate, const void * W_up, const void * W_down,
+    uint64_t gate_slot_bytes, uint64_t down_slot_bytes,
+    const void * W_gate2, const void * W_up2, const void * W_down2,
+    uint64_t gate2_slot_bytes, uint64_t down2_slot_bytes, int l1_slots,
+    const float * X_f32, const int32_t * ids, const float * weights,
+    float * mid_f32, float * out_f32,
+    int mid_dim, int in_dim, int out_dim, int n_tokens, int n_slots,
+    float clamp, int reference, cudaStream_t stream);
+
 int ds4_mmq_mxfp4_moe_down_sum6_vec(
     const void    * W,
     const float   * X_f32,
