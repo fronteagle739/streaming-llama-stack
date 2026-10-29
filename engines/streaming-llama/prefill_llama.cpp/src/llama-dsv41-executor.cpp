@@ -1,3 +1,4 @@
+#include "llama-dsv41-host-cpu.h"
 #include "llama-dsv41-layer-log.h"
 #include "llama-dsv41-singlepass.h"
 #include "llama-dsv41-yoco.h"
@@ -307,7 +308,12 @@ uint64_t llama_dsv41_allocate_native_graph(ggml_gallocr_t allocation,ggml_cgraph
         "V4.1 live graph plus backend F32 temporary exceeds admitted graph ceiling");
     // reserve_n_size records a valid plan but deliberately creates no buffers;
     // explicitly materialize it after admission before initializing tensors.
-    require(ggml_gallocr_reserve(allocation,graph),"V4.1 admitted lifetime graph reservation failed");
+    const char *materialize=std::getenv("LLAMADECODE_GRAPH_MATERIALIZE_PLAN");
+    require(!materialize||!std::strcmp(materialize,"0")||!std::strcmp(materialize,"1"),
+        "Graph plan materialization requires0/1");
+    const bool reuse_plan=!materialize||!std::strcmp(materialize,"1");
+    require(reuse_plan?ggml_gallocr_materialize_reserved(allocation,graph):ggml_gallocr_reserve(allocation,graph),
+        "V4.1 admitted lifetime graph reservation failed");
     require(ggml_gallocr_alloc_graph(allocation,graph),"V4.1 admitted lifetime graph allocation failed");
     const uint64_t actual=ggml_gallocr_get_buffer_size(allocation,0);
     require(actual<=admitted_graph_bytes-backend_temporary,"V4.1 lifetime allocation exceeded preflight admission");
@@ -954,6 +960,7 @@ bool llama_dsv41_tile_executor::run(const request&in,const llama_dsv41_layer_gra
             expert.dense_inputs_f16=false;
         collect_layer=in.layer;collect_rows=in.count;
         const auto prepare_started=clock_type::now();
+        const double host_cpu_started=tile_timing_enabled()?llama_dsv41_host_thread_cpu_ms():-1;
         const bool merge_rows=merge_attention_selected_rows&&!in.yoco_raw_begin;
         const bool capture_dspark=cache.dspark_ring&&in.layer>=37;
         require(!in.yoco_first || (in.layer>20&&in.start>=in.yoco_first&&in.count<=admitted_tile_tokens),"Invalid YOCO decoder coverage");
@@ -1934,9 +1941,11 @@ bool llama_dsv41_tile_executor::run(const request&in,const llama_dsv41_layer_gra
         if(capture_dspark)cache.dspark_completion.commit(capture_ticket);
         if(tile_timing_enabled())llama_dsv41_layer_log("LLAMADECODE_TILE_TIMING layer=%u tile=%u rows=%u host_prepare_ms=%.3f host_bind_ms=%.3f host_register_ms=%.3f host_graph_ms=%.3f host_reserve_ms=%.3f host_upload_ms=%.3f host_launch_ms=%.3f host_sync_ms=%.3f gpu_ms=%.3f compute_ms=%.3f host_readback_ms=%.3f host_cleanup_ms=%.3f skip_pin=%u prefetch=%u\n",
             in.layer,in.start,in.count,pending.prepare_ms,tile_bind_ms,tile_register_ms,tile_graph_ms,tile_reserve_ms,pending.upload_ms,tile_launch_ms,tile_sync_ms,double(tile_gpu_ms),pending.compute_ms,pending.readback_ms,pending.cleanup_ms,unsigned(skip_tile_pin),unsigned(prefetch_next));
-        llama_dsv41_layer_log("[dsv41-host-timeline] layer=%u start=%u rows=%u begin_epoch_ms=%.6f end_epoch_ms=%.6f\n",
+        const double host_cpu_ended=host_cpu_started>=0?llama_dsv41_host_thread_cpu_ms():-1;
+        llama_dsv41_layer_log("[dsv41-host-timeline] layer=%u start=%u rows=%u begin_epoch_ms=%.6f end_epoch_ms=%.6f thread_cpu_ms=%.6f\n",
             in.layer,in.start,in.count,std::chrono::duration<double,std::milli>(prepare_started.time_since_epoch()).count(),
-            std::chrono::duration<double,std::milli>(clock_type::now().time_since_epoch()).count());
+            std::chrono::duration<double,std::milli>(clock_type::now().time_since_epoch()).count(),
+            host_cpu_ended>=host_cpu_started&&host_cpu_started>=0?host_cpu_ended-host_cpu_started:-1);
         out=std::move(pending);cache.execution_poisoned=false;probe.pre_return_ms=elapsed(prepare_started);probe.complete=true;return true;
     }catch(const std::exception&failure){error=failure.what();return false;}
 }

@@ -43,7 +43,7 @@ def attach_inventory(result, rows):
     """
     result['model_inventory']=rows
     for p in result['passes']:
-        if p['tensors'] or p['expert_tiles']:continue
+        if p['tensors'] or p['expert_tiles'] or p['expert_hints']:continue
         reconstructed=[]
         for fetch in p['fetches']:
             tensors=[dict(t,source='legacy_full_stage_inventory') for t in rows if t['stage']==fetch['stage']]
@@ -81,7 +81,7 @@ def analyze(text):
     engram_reads = []
     for line in text.splitlines():
         if '[dsv41-fetch] stage=0 ' in line:
-            passes.append(dict(fetched_bytes=0, fetch_ms_overlapped=0, layers=[], wall_layers=[], fetches=[], tensors=[], expert_tiles=[]))
+            passes.append(dict(fetched_bytes=0, fetch_ms_overlapped=0, layers=[], wall_layers=[], fetches=[], tensors=[], expert_tiles=[], expert_hints=[]))
         if '[dsv41-fetch]' in line and passes:
             row = fields(line)
             passes[-1]['fetched_bytes'] += int(row['bytes'])
@@ -91,6 +91,11 @@ def analyze(text):
             row = fields(line)
             passes[-1]['expert_tiles'].append(row)
             passes[-1]['fetched_bytes'] += row['bytes']
+            passes[-1]['fetch_ms_overlapped'] += row['fetch_ms']
+        if '[dsv41-prefill-hint]' in line and passes:
+            row = fields(line)
+            passes[-1]['expert_hints'].append(row)
+            passes[-1]['fetched_bytes'] += int(row['bytes'])
             passes[-1]['fetch_ms_overlapped'] += row['fetch_ms']
         if '[dsv41-byte-ledger]' in line and passes:
             row = fields(line)
@@ -124,6 +129,9 @@ def analyze(text):
         p['wall_totals'] = {key: sum(row[key] for row in p['wall_layers'])
                             for key in (p['wall_layers'][0] if p['wall_layers'] else []) if key != 'layer'}
         p['routed_fetch_wait_ms'] = sum(row['fetch_ms'] for row in p['expert_tiles'])
+        p['hint_fetched_bytes'] = sum(int(row['bytes']) for row in p['expert_hints'])
+        p['hint_fetch_ms_overlapped'] = sum(row['fetch_ms'] for row in p['expert_hints'])
+        p['exposed_hint_join_ms'] = sum(row['exposed_join_ms'] for row in p['expert_hints'])
         p['tensor_bytes_by_role'] = {r: sum(t['bytes'] for t in p['tensors'] if t['role']==r)
                                      for r in sorted({t['role'] for t in p['tensors']})}
         p['tensor_bytes'] = sum(p['tensor_bytes_by_role'].values())
@@ -136,7 +144,9 @@ def analyze(text):
                                'GPU node events exclude CPU prepare, transfer, waiting and head startup overhead. '
                                'Attention includes sparse attention, indexer and named attention projections. '
                                'Engram row reads are separate I/O, may precede a pass and are not layer-weight bytes. '
-                               'Routed fetch wait occurs inside executor wall; do not add it again to layer wall.')
+                               'Routed fetch wait occurs inside executor wall; do not add it again to layer wall. '
+                               'Hint transfer time is separate overlapped I/O; only its cumulative release/acquire join is exposed wait. '
+                               'Hint bytes count toward fetched_bytes and native extent reconciliation.')
 
 
 def main():
