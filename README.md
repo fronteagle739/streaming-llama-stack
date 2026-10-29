@@ -20,7 +20,7 @@ dense path measures **32.6 s**. The Q4_K/Q8_0 default model is 483 GiB.
 
 | Prompt tokens | Configuration | Timing | Time | Rate |
 |---:|---|---|---:|---:|
-| 100,000 | FP4 (tensor-core-native layout), single weight pass (default), eager | Prompt-only | **26.307 s** | **3,801.33 tok/s** |
+| 100,000 | FP4 (tensor-core-native layout), single weight pass (default), eager | Prompt-only | **26.307 s** | **3,801.29 tok/s** |
 | 100,000 | FP4 (tensor-core-native layout), single weight pass (default), eager | TTFT | **29.406 s** | — |
 | 100,000 | FP4 (tensor-core-native layout), CUDA graphs, two sweeps | Prompt-only | 32.374 s | 3,088.92 tok/s |
 | 100,000 | FP4 (tensor-core-native layout), CUDA graphs, two sweeps | TTFT | 35.406 s | — |
