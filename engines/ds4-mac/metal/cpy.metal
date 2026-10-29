@@ -129,6 +129,15 @@ kernel void kernel_cpy_contig_f16_f16_bits_4(
     }
 }
 
+// Upstream 1df25c6: bitwise 16-byte transport, no arithmetic conversion.
+kernel void kernel_ds4_copy_u4(
+        constant uint & n,
+        device const uint4 * src,
+        device       uint4 * dst,
+        uint gid [[thread_position_in_grid]]) {
+    if (gid < n) dst[gid] = src[gid];
+}
+
 struct ds4_metal_args_flash_kv_stage_f16 {
     uint raw_cap;
     uint raw_start;

@@ -45,6 +45,16 @@ int ds4_gpu_init(void);
 void ds4_gpu_cleanup(void);
 
 #if defined(__APPLE__)
+/* Set before Metal model views are constructed; allocation/wiring is unchanged. */
+void ds4_gpu_set_model_untracked_default(int on);
+/* Exact DS41 overlap; end closes the concurrent encoder before consumers. */
+int ds4_gpu_dsv41_shared_down_overlap_begin(void);
+void ds4_gpu_dsv41_shared_down_overlap_end(void);
+void ds4_gpu_dsv41_verify_rows(int on);
+int ds4_gpu_parallel_ffn_start_bf16(ds4_gpu_tensor *gate, ds4_gpu_tensor *up,
+        ds4_gpu_tensor *mid, ds4_gpu_tensor *shared, const void *map, uint64_t size,
+        uint64_t gate_offset, uint64_t up_offset, uint64_t down_offset,
+        uint32_t model_dim, uint32_t shared_dim, const ds4_gpu_tensor *x, float clamp);
 ds4_gpu_tensor *ds4_gpu_tensor_alloc_weights(uint64_t bytes);
 int ds4_gpu_weight_residency(ds4_gpu_tensor *const *tensors, uint32_t n);
 int ds4_gpu_matmul_bf16_router_weights(ds4_gpu_tensor *, const ds4_gpu_tensor *, uint64_t, uint64_t, const ds4_gpu_tensor *);

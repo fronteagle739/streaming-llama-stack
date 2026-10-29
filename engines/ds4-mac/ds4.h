@@ -249,6 +249,12 @@ typedef struct {
     int down_tail_pack; /* exact four-row ninth-block packing */
     int router_shared_hc; /* independent producer mixed grid */
     int q8_virtual_down; /* four logical K groups per physical SIMD */
+    int concurrent_down; /* shared down beside resident MXFP4 routed gate/up */
+    int attn_low_static; /* upstream fixed-shape scalar low projection */
+    int verify_mxfp4; /* upstream scalar-ordered MXFP4 DSpark verify kernels */
+    int mxfp4_dedup; /* exact shared expert reads for two to eight rows */
+    int concurrent_ffn; /* upstream full shared/routed FFN schedule */
+    int engram_persistent; /* upstream bounded per-row token reader */
     int q8_virtual_query; /* same mapping inside query/HC grid */
     int kv_prepare; /* exact scalar KV norm/rope/quantize/ring fusion */
     int kv_query_mix; /* independent KV task inside query/HC grid */

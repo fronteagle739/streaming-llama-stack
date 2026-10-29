@@ -91,4 +91,17 @@ bool ds4_engram_fetch_wait(ds4_engram_fetch *fetch);
 /* Joins and releases the worker group. Safe on a zeroed struct. */
 void ds4_engram_fetch_release(ds4_engram_fetch *fetch);
 
+
+/* Upstream persistent per-token reader: 24 bounded workers on Apple, four on
+ * other POSIX hosts. One generation owns both tables and COLS*DIM*2 output
+ * floats until both waits complete. Free joins all workers before returning.
+ * Errors retain the serial reader's lowest failing column; no rows are cached. */
+typedef struct ds4_engram_reader ds4_engram_reader;
+ds4_engram_reader *ds4_engram_reader_create(void);
+bool ds4_engram_reader_start(ds4_engram_reader *, const ds4_engram_table tables[2],
+                             const uint32_t ids[2][DS4_ENGRAM_COLS], float *out);
+bool ds4_engram_reader_wait(ds4_engram_reader *, unsigned table);
+bool ds4_engram_reader_timing(ds4_engram_reader *, unsigned table, uint64_t *issue_ns, uint64_t *done_ns);
+void ds4_engram_reader_free(ds4_engram_reader *);
+
 #endif
