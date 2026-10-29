@@ -68,6 +68,10 @@ Round 8 (OPUS22, default and exact, logits bit-identical at 8K and 100K):
   layers 1-36 read the resident BF16 bank directly, the attention HC expand
   writes BF16, and HC collapse/expand and the fused RMS-norm -> F16 kernel
   read BF16. Sweep GPU 14.56 -> 14.15 s.
+- the exact radix top-k selects each tile's top 512 by an MSB radix select and
+  sorts only those (`LLAMA_DSV41_TOPK_SELECT`, default 1): special-layer GPU
+  5.49 -> 4.94 s (100K 24.28 s at 15.9 GB/s storage).
+200K (two sweeps of 102,400): **50.753 s** prompt-only (3,941 tok/s), TTFT 55.016 s, at 16.0 GB/s storage.
 100K: **24.054 s** prompt-only (4,157 tok/s), TTFT 27.078 s, at 16.9 GB/s storage.
 
 In the new default the 21 sweep layers are compute-bound (21 s wall against
