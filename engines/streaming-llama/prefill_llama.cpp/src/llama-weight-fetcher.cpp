@@ -2475,6 +2475,12 @@ static bool wf_dstorage_init(wf_context * wf, size_t buf_size) {
     }
 
     // --- DirectStorage factory ---
+    // OPUS22 LLAMA_WF_DS_SUBMIT_THREADS=1|2|4 (unset = DirectStorage's own
+    // heuristic): the existing TEST submit-thread profile selected by
+    // setting when the launcher passes none. Same requests and bytes.
+    if(!wf->params.ds_submit_threads){const char*e=std::getenv("LLAMA_WF_DS_SUBMIT_THREADS");
+        if(e&&e[0]){if(std::strcmp(e,"1")&&std::strcmp(e,"2")&&std::strcmp(e,"4")){WF_ERR("LLAMA_WF_DS_SUBMIT_THREADS must be 1, 2 or 4");return false;}
+            wf->params.ds_submit_threads=uint32_t(e[0]-'0');}}
     if(wf->params.ds_submit_threads){
         if(!wf->required_dstorage||(wf->params.ds_submit_threads!=1&&wf->params.ds_submit_threads!=2&&wf->params.ds_submit_threads!=4)){
             WF_ERR("Explicit DirectStorage submit thread profile is outside strict TEST admission");return false;
@@ -2522,6 +2528,18 @@ static bool wf_dstorage_init(wf_context * wf, size_t buf_size) {
             if (mb > 0) {
                 factory_staging_mb = (uint64_t) mb;
             }
+        }
+        // OPUS22 LLAMA_WF_DS_FACTORY_STAGING_MIB=256|512 (default 256): the
+        // DirectStorage factory staging size, typed for the strict producer.
+        // 512 MiB stays inside the producer's existing 512 MiB per-tier
+        // factory allowance on both host and device; larger values refuse.
+        if (const char * typed = std::getenv("LLAMA_WF_DS_FACTORY_STAGING_MIB"); typed && typed[0]) {
+            if (std::strcmp(typed, "256") && std::strcmp(typed, "512")) {
+                WF_ERR("LLAMA_WF_DS_FACTORY_STAGING_MIB must be 256 or 512 (the admitted factory allowance)");
+                return false;
+            }
+            factory_staging_mb = (uint64_t) std::atoi(typed);
+            WF_ERR("[dsv41-dstorage-config] factory_staging_mib=%llu typed_setting=1", (unsigned long long) factory_staging_mb);
         }
         const HRESULT staging_result = wf->ds_factory->SetStagingBufferSize(UINT32(factory_staging_mb * 1024 * 1024));
         if (wf->required_dstorage && FAILED(staging_result)) {
@@ -4453,6 +4471,7 @@ static wf_context * wf_create_impl(const wf_params * params, bool required_dstor
 #endif
     }
 
+    if (std::getenv("LLAMA_WF_DS_REQUEST_MIB")) WF_ERR("[dsv41-dstorage-config] request_bytes=%zu typed_setting=1", params->io_block_size);
     // Typed profile admission happens before context/factory/heap allocation.
     // Ambient tuning still refuses in strict mode; the caller uses explicit
     // source-pinned settings rather than inheriting unbounded environment knobs.

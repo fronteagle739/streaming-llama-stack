@@ -2,6 +2,8 @@
 #include <algorithm>
 #include <cstddef>
 #include <cstdint>
+#include <cstdlib>
+#include <cstring>
 #include <limits>
 #include <stdexcept>
 
@@ -21,6 +23,15 @@ inline uint64_t align(uint64_t value,uint64_t alignment) {
     return add(value,alignment-1)&~(alignment-1);
 }
 inline size_t auto_io_block(size_t maximum_layer_bytes) {
+    // OPUS22 LLAMA_WF_DS_REQUEST_MIB=2|4|8|16|32 (unset = the policy below):
+    // a fixed DirectStorage request size inside the same 512KiB..32MiB
+    // clamp. Planning and both strict profile checks read this one function,
+    // so they stay consistent. Same bytes and destinations, different split.
+    if (const char * fixed = std::getenv("LLAMA_WF_DS_REQUEST_MIB"); fixed && fixed[0]) {
+        for (const char * allowed : {"2", "4", "8", "16", "32"})
+            if (!std::strcmp(fixed, allowed)) return size_t(std::strtoul(fixed, nullptr, 10)) * size_t(mib);
+        throw std::invalid_argument("LLAMA_WF_DS_REQUEST_MIB must be 2, 4, 8, 16 or 32");
+    }
     // Same policy as the established adapter: target1000 requests/layer,
     // round up4KiB, clamp512KiB..32MiB. Avoid max+999 overflow.
     const uint64_t block=align(maximum_layer_bytes/1000+(maximum_layer_bytes%1000!=0),4096);
