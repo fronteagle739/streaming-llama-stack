@@ -64,9 +64,20 @@ Accepted completion witnesses name all three products, one route map and
 input gather, zero runtime weight-repack bytes and zero F32 routed bytes.
 `native_ffn_check.cu` compares all4K/16K token outputs with the independently
 built qualified ABI4 adapter on synthetic data. The16K comparison passes
-83,886,080 bit patterns and compute-sanitizer with zero errors. The64K check
-establishes bounded allocation and full-output finiteness only. These are
-component checks, not native-source or broad full-model quality claims.
+83,886,080 bit patterns and compute-sanitizer with zero errors. Supplying a
+retained pre-optimization ABI1 DLL as the checker's fifth argument additionally
+compares all335,544,320 output bit patterns at64K. This is a differential
+reference; the separate ABI4 oracle remains limited to4K/16K. Append `sparse`
+to exercise six active experts and378 empty experts. These are component
+checks, not native-source or broad full-model quality claims.
+
+The fused bridge now constructs padded scale-row offsets once per route.
+It reuses the late inverse-route allocation: gather and intermediate packing
+finish reading those offsets before inverse routes overwrite them on the
+same CUDA stream. The weight layout, quantization, arithmetic, ABI and arena
+size are unchanged. Alternating control/candidate timing and full-output
+checks are recorded in
+[`COMBINATION_RESULTS.md`](../../../examples/native-fp4/COMBINATION_RESULTS.md).
 
 The bridge is MIT. It reuses the unchanged Apache-2.0 FlashInfer source and
 the pinned CUTLASS DSL runtime documented in `source/manifest.json` and

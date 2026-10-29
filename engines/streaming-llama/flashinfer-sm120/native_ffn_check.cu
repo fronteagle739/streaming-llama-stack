@@ -8,6 +8,7 @@
 #include <cmath>
 #include <cstdio>
 #include <cstdlib>
+#include <cstring>
 #include <vector>
 #define NOMINMAX
 #include <windows.h>
@@ -52,7 +53,8 @@ static __global__ void compare(const float *reference,const float *actual,size_t
     if(reference&&__float_as_uint(reference[i])!=__float_as_uint(actual[i]))atomicAdd(errors,1ull);
 }
 int main(int argc,char **argv){
-    if(argc!=4)return 1;int tokens=std::atoi(argv[3]);if(tokens<1||tokens>65536)return 1;
+    if(argc<4||argc>6||(argc==6&&std::strcmp(argv[5],"sparse")))return 1;
+    int tokens=std::atoi(argv[3]);if(tokens<1||tokens>65536)return 1;
     auto library=LoadLibraryA(argv[1]),legacy=LoadLibraryA(argv[2]);if(!library||!legacy)return 2;
     auto call=reinterpret_cast<slstack_fi_native_ffn_fn>(GetProcAddress(library,"slstack_flashinfer_native_ffn"));
     auto abi=reinterpret_cast<int(*)()>(GetProcAddress(library,"slstack_flashinfer_native_ffn_abi"));
@@ -60,7 +62,7 @@ int main(int argc,char **argv){
     auto old=reinterpret_cast<slstack_flashinfer_mxfp4_fn>(GetProcAddress(legacy,"slstack_flashinfer_mxfp4"));
     if(!call||!size||!old||!abi||abi()!=1)return 2;
     int rows=tokens*6;std::vector<int>routes(rows),gather(rows),bounds(385),expert(rows);
-    for(int r=0;r<rows;++r){routes[r]=r;expert[r]=((r/6)*7+(r%6)*61)%384;}
+    for(int r=0;r<rows;++r){routes[r]=r;expert[r]=argc==6?r%6:((r/6)*7+(r%6)*61)%384;}
     std::stable_sort(routes.begin(),routes.end(),[&](int a,int b){return expert[a]<expert[b];});
     for(int r=0;r<rows;++r){gather[r]=routes[r]/6;bounds[expert[r]+1]++;}
     for(int e=0;e<384;++e)bounds[e+1]+=bounds[e];
@@ -100,10 +102,22 @@ int main(int argc,char **argv){
         check(cudaMalloc(&reference,size_t(tokens)*5120*4));reduce_reference<<<unsigned((size_t(tokens)*5120+255)/256),256>>>(all,reference,tokens);
         compare<<<unsigned((size_t(tokens)*5120+255)/256),256>>>(reference,output,size_t(tokens)*5120,errors);
         check(cudaDeviceSynchronize());check(cudaFree(old_workspace));check(cudaFree(mid));check(cudaFree(all));check(cudaFree(reference));
+    }else if(argc>=5){
+        // Large-batch differential check with the independently retained
+        // pre-optimization ABI1 bridge, reusing the same bounded workspace.
+        auto control_library=LoadLibraryA(argv[4]);if(!control_library)return 2;
+        auto control=reinterpret_cast<slstack_fi_native_ffn_fn>(GetProcAddress(control_library,"slstack_flashinfer_native_ffn"));
+        auto control_abi=reinterpret_cast<int(*)()>(GetProcAddress(control_library,"slstack_flashinfer_native_ffn_abi"));
+        if(!control||!control_abi||control_abi()!=1)return 2;
+        check(cudaMalloc(&reference,size_t(tokens)*5120*4));
+        check(cudaMemset(reference,0xff,size_t(tokens)*5120*4));
+        check(static_cast<cudaError_t>(control(native[0],native[1],native[2],x,rw,dr,db,reference,tokens,10.f,workspace,size(tokens),nullptr)));
+        compare<<<unsigned((size_t(tokens)*5120+255)/256),256>>>(reference,output,size_t(tokens)*5120,errors);
+        check(cudaDeviceSynchronize());check(cudaFree(reference));
     }else compare<<<unsigned((size_t(tokens)*5120+255)/256),256>>>(nullptr,output,size_t(tokens)*5120,errors);
     check(cudaDeviceSynchronize());unsigned long long observed[2];check(cudaMemcpy(observed,errors,16,cudaMemcpyDeviceToHost));
     std::printf("{\"status\":\"%s\",\"tokens\":%d,\"workspace_bytes\":%llu,\"compared_elements\":%llu,\"different_bits\":%llu,\"nonfinite\":%llu,\"runtime_weight_repack_bytes\":0,\"native_ffn_ms\":%.6f,\"effective_tflops\":%.6f,\"timed_repeats\":5}\n",
-        observed[0]||observed[1]?"FAIL":"PASS",tokens,(unsigned long long)size(tokens),tokens<=16384?(unsigned long long)tokens*5120:0,observed[0],observed[1],elapsed_ms,3.*2*2304*5120*rows/elapsed_ms/1.e9);
+        observed[0]||observed[1]?"FAIL":"PASS",tokens,(unsigned long long)size(tokens),(tokens<=16384||argc>=5)?(unsigned long long)tokens*5120:0,observed[0],observed[1],elapsed_ms,3.*2*2304*5120*rows/elapsed_ms/1.e9);
     for(auto*p:native)check(cudaFree(p));check(cudaFree(canonical));if(workspace)check(cudaFree(workspace));
     check(cudaFree(x));check(cudaFree(rw));check(cudaFree(output));check(cudaFree(dr));check(cudaFree(dg));check(cudaFree(db));check(cudaFree(errors));
     return observed[0]||observed[1]?3:0;

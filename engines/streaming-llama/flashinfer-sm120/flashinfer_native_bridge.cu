@@ -35,12 +35,13 @@ static int gemm(const void *weights,void *a,void *sa,void *out,const int32_t *bo
     fi_mxfp4_5120_2304_Tensor_offsets_t offsets{const_cast<int32_t*>(bounds)};
     return cute_dsl_fi_mxfp4_5120_2304_wrapper(&module,&aa,&bb,&as,&bs,&dd,&offsets,stream);
 }
-static __device__ int scale_row(int row,const int32_t *bounds){
-    int low=0,high=384;
-    while(low<high){int mid=(low+high)/2;if(bounds[mid+1]<=row)low=mid+1;else high=mid;}
-    return (bounds[low]+low*3)/4*4+row-bounds[low];
+static __global__ void scale_rows(const int32_t *bounds,int32_t *row_offsets){
+    const int expert=int(blockIdx.x),first=bounds[expert],end=bounds[expert+1];
+    const int aligned=(first+expert*3)/4*4;
+    for(int row=first+int(threadIdx.x);row<end;row+=int(blockDim.x))
+        row_offsets[row]=aligned+row-first;
 }
-static __device__ void quantize(float value,int row,int kb,int k,int sf_rows,const int32_t *bounds,
+static __device__ void quantize(float value,int row,int kb,int k,int sf_rows,const int32_t *row_offsets,
                                __nv_fp8_e4m3 *a,uint8_t *sa){
     if(!isfinite(value))asm("trap;");
     float maximum=fabsf(value);
@@ -51,18 +52,18 @@ static __device__ void quantize(float value,int row,int kb,int k,int sf_rows,con
     exponent=max(-127,min(127,exponent));
     int lane=threadIdx.x%32;
     a[size_t(row)*k+kb*32+lane]=__nv_fp8_e4m3(ldexpf(value,-exponent));
-    if(!lane)sa[(size_t(kb/4)*sf_rows+scale_row(row,bounds))*4+kb%4]=uint8_t(exponent+127);
+    if(!lane)sa[(size_t(kb/4)*sf_rows+row_offsets[row])*4+kb%4]=uint8_t(exponent+127);
 }
-static __global__ void gather(const float *input,const int32_t *routes,const int32_t *bounds,
+static __global__ void gather(const float *input,const int32_t *routes,const int32_t *row_offsets,
                              __nv_fp8_e4m3 *a,uint8_t *sa,int rows,int sf_rows){
     int block=int(blockIdx.x)*8+threadIdx.x/32,lane=threadIdx.x%32;
     if(block>=rows*160)return;
     int row=block/160,kb=block%160;
     float value=input[size_t(routes[row]/6)*5120+kb*32+lane];
-    quantize(value,row,kb,5120,sf_rows,bounds,a,sa);
+    quantize(value,row,kb,5120,sf_rows,row_offsets,a,sa);
 }
 static __global__ void mid_pack(const __nv_bfloat16 *gate,const __nv_bfloat16 *up,const float *weights,
-                               const int32_t *routes,const int32_t *bounds,__nv_fp8_e4m3 *a,uint8_t *sa,
+                               const int32_t *routes,const int32_t *row_offsets,__nv_fp8_e4m3 *a,uint8_t *sa,
                                int rows,int sf_rows,float limit){
     int block=int(blockIdx.x)*8+threadIdx.x/32,lane=threadIdx.x%32;
     if(block>=rows*72)return;
@@ -72,7 +73,7 @@ static __global__ void mid_pack(const __nv_bfloat16 *gate,const __nv_bfloat16 *u
     // Preserve the existing separate SiLU, multiply, weight and F16 store.
     float value=__fmul_rn(__fmul_rn(g/(1.f+expf(-g)),u),weights[routes[row]]);
     value=__half2float(__float2half_rn(value));
-    quantize(value,row,kb,2304,sf_rows,bounds,a,sa);
+    quantize(value,row,kb,2304,sf_rows,row_offsets,a,sa);
 }
 static __global__ void inverse_routes(const int32_t *routes,int32_t *inverse,int rows){
     int row=int(blockIdx.x)*blockDim.x+threadIdx.x;if(row<rows)inverse[routes[row]]=row;
@@ -111,13 +112,18 @@ EXPORT int slstack_flashinfer_native_ffn(const void *gate,const void *up,const v
     auto *result=reinterpret_cast<__nv_bfloat16*>(base+layout.down);
     auto *inverse=reinterpret_cast<int32_t*>(base+layout.bytes);
     #define TRY(call) do{int rc=int(call);if(rc)return rc;}while(0)
+    // Reuse the late inverse-map storage for padded scale rows. Every expert's
+    // interval is disjoint, including empty experts. Both packing kernels use
+    // this map before inverse_routes replaces it on the same CUDA stream.
+    scale_rows<<<384,256,0,stream>>>(bounds,inverse);
+    TRY(cudaGetLastError());
     TRY(cudaMemsetAsync(sa,0,size_t(sf_rows)*160,stream));
-    gather<<<(rows*160+7)/8,256,0,stream>>>(input,routes,bounds,a,sa,rows,sf_rows);
+    gather<<<(rows*160+7)/8,256,0,stream>>>(input,routes,inverse,a,sa,rows,sf_rows);
     TRY(cudaGetLastError());
     TRY(gemm(gate,a,sa,g,bounds,rows,2304,5120,sf_rows,stream));
     TRY(gemm(up,a,sa,u,bounds,rows,2304,5120,sf_rows,stream));
     TRY(cudaMemsetAsync(sa,0,size_t(sf_rows)*72,stream));
-    mid_pack<<<(rows*72+7)/8,256,0,stream>>>(g,u,route_weights,routes,bounds,a,sa,rows,sf_rows,limit);
+    mid_pack<<<(rows*72+7)/8,256,0,stream>>>(g,u,route_weights,routes,inverse,a,sa,rows,sf_rows,limit);
     TRY(cudaGetLastError());
     TRY(gemm(down,a,sa,result,bounds,rows,5120,2304,sf_rows,stream));
     inverse_routes<<<(rows+255)/256,256,0,stream>>>(routes,inverse,rows);
