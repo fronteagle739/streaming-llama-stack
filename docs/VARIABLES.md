@@ -88,10 +88,13 @@ Native controls take effect at token boundaries. The response reports requested 
 | `--llama-dsv41-cast-vector` | rtx-llama: `1` | LLAMA_DSV41_CAST_VECTOR: qualified preset/runtime setting; override for a different memory or arithmetic plan |
 | `--llama-dsv41-engram-prompt-overlap` | rtx-llama: `1` | LLAMA_DSV41_ENGRAM_PROMPT_OVERLAP: qualified preset/runtime setting; override for a different memory or arithmetic plan |
 | `--flashinfer-batch-tokens` | Explicit runtime value | Opt-in ABI4 stored-MXFP4 expert chunk size, default4096. Encoder layers0-19 may widen to8192/16384; layer20 and the cone retain4K. Attention/router GEMMs stay4K; existing fused gather/MXFP8 quantization is reused. Exact provider/graph/physical admission remains mandatory;16K has only adapter qualification. |
+| `--dsv41-fused-hc` | rtx-llama: `2` | SM120 hc=4,20-iteration Sinkhorn:2(default) imports the DeepSeek fused algorithm with bit-exact native arithmetic;0 original graph;1 official rounding experiment. Other HC settings keep the original graph. |
 | `--llama-dsv41-mul-f16-store` | rtx-llama: `1` | LLAMA_DSV41_MUL_F16_STORE: qualified preset/runtime setting; override for a different memory or arithmetic plan |
 | `--llama-dsv41-rope-inplace` | rtx-llama: `1` | LLAMA_DSV41_ROPE_INPLACE: qualified preset/runtime setting; override for a different memory or arithmetic plan |
 | `--llama-dsv41-skip-unused-tile-pin` | rtx-llama: `1` | LLAMA_DSV41_SKIP_UNUSED_TILE_PIN: qualified preset/runtime setting; override for a different memory or arithmetic plan |
+| `--dsv41-tilelang-attention` | rtx-llama: `2` | Sparse attention:2(default) packed-query SM120 TileLang grid with embedded pinned image;0 native control;1 legacy128-row adapter requiring its matching CUBIN. Mode2 stages query/KV once inside the existing768MiB pool. Qualified under owner KL tolerance; make it exact remains on the roadmap. |
 | `--llama-dsv41-topk-radix` | rtx-llama: `1` | LLAMA_DSV41_TOPK_RADIX: qualified preset/runtime setting; override for a different memory or arithmetic plan |
+| `--dsv41-unpadded-cone` | Explicit runtime value | Experimental unpadded2541-row replay;0 preserves qualified tile shapes. Requires full-prefill bit-exact qualification. |
 | `--mem-guard-disable` | image: `0`; video: `0` | MEM_GUARD_DISABLE: qualified preset/runtime setting; override for a different memory or arithmetic plan |
 | `--mem-guard-enforce-proc-cap` | image: `1`; video: `1` | MEM_GUARD_ENFORCE_PROC_CAP: qualified preset/runtime setting; override for a different memory or arithmetic plan |
 | `--mem-guard-max-proc-gb` | image: `{host_budget_decimal_gb}`; video: `{host_budget_decimal_gb}` | In-process image/video memory guard RSS cap in decimal GB; derived from the admitted GiB budget. Overrides cannot weaken the outer guard. |
@@ -57264,7 +57267,7 @@ Source: `engines/streaming-llama/prefill_llama.cpp/src/llama-dsv41-sweep.cpp:271
                 require(previous_lock.owns_lock(),"YOCO prefix is active");
 ```
 
-Source: `engines/streaming-llama/prefill_llama.cpp/src/llama-dsv41-sweep.cpp:304`. Unset read: NULL from getenv; the literal consumer below supplies any fallback.
+Source: `engines/streaming-llama/prefill_llama.cpp/src/llama-dsv41-sweep.cpp:306`. Unset read: NULL from getenv; the literal consumer below supplies any fallback.
 
 ```text
         require(!options.unaligned_append_step_tokens||(options.stateful_chunks&&options.fixed&&options.reuse_graph&&!options.reuse_layer_graph),"Unaligned append policy requires the existing stateful fixed owner");
@@ -57276,7 +57279,7 @@ Source: `engines/streaming-llama/prefill_llama.cpp/src/llama-dsv41-sweep.cpp:304
             "Direct pinned RAM requires native experts, admitted RAM bank and separate64MiB device ceiling");
 ```
 
-Source: `engines/streaming-llama/prefill_llama.cpp/src/llama-dsv41-sweep.cpp:305`. Unset read: NULL from getenv; the literal consumer below supplies any fallback.
+Source: `engines/streaming-llama/prefill_llama.cpp/src/llama-dsv41-sweep.cpp:307`. Unset read: NULL from getenv; the literal consumer below supplies any fallback.
 
 ```text
         require(!options.compute_step_tokens||(options.compute_step_tokens<=options.carry.max_tile_tokens&&(!options.pair_ffn||options.compute_step_tokens==options.carry.max_tile_tokens)),"Logical compute step exceeds its admitted tile or changes paired group alignment");
@@ -62833,7 +62836,7 @@ GGML_CUDA_DISABLE_FUSION: advanced engine setting; built-in default retained
 
 Scope: rtx-llama. Class: advanced.
 
-Source: `engines/streaming-llama/prefill_llama.cpp/ggml/src/ggml-cuda/ggml-cuda.cu:5733`. Unset read: NULL from getenv; the literal consumer below supplies any fallback.
+Source: `engines/streaming-llama/prefill_llama.cpp/ggml/src/ggml-cuda/ggml-cuda.cu:5737`. Unset read: NULL from getenv; the literal consumer below supplies any fallback.
 
 ```text
 
@@ -62887,7 +62890,7 @@ Source: `engines/streaming-llama/prefill_llama.cpp/ggml/src/ggml-cuda/common.cuh
 };
 ```
 
-Source: `engines/streaming-llama/prefill_llama.cpp/ggml/src/ggml-cuda/ggml-cuda.cu:6254`. Unset read: NULL from getenv; the literal consumer below supplies any fallback.
+Source: `engines/streaming-llama/prefill_llama.cpp/ggml/src/ggml-cuda/ggml-cuda.cu:6258`. Unset read: NULL from getenv; the literal consumer below supplies any fallback.
 
 ```text
     // GGML_CUDA_DISABLE_GRAPHS is retained for diagnostics; normal callers should
@@ -62977,7 +62980,7 @@ GGML_CUDA_ENABLE_UNIFIED_MEMORY: advanced engine setting; built-in default retai
 
 Scope: rtx-llama. Class: advanced.
 
-Source: `engines/streaming-llama/prefill_llama.cpp/ggml/src/ggml-cuda/ggml-cuda.cu:842`. Unset read: NULL from getenv; the literal consumer below supplies any fallback.
+Source: `engines/streaming-llama/prefill_llama.cpp/ggml/src/ggml-cuda/ggml-cuda.cu:843`. Unset read: NULL from getenv; the literal consumer below supplies any fallback.
 
 ```text
     ggml_cuda_set_device(device);
@@ -62989,7 +62992,7 @@ Source: `engines/streaming-llama/prefill_llama.cpp/ggml/src/ggml-cuda/ggml-cuda.
             CUDA_CHECK(cudaMemAdvise(*ptr, size, hipMemAdviseSetCoarseGrain, device));
 ```
 
-Source: `engines/streaming-llama/prefill_llama.cpp/ggml/src/ggml-cuda/ggml-cuda.cu:7205`. Unset read: NULL from getenv; the literal consumer below supplies any fallback.
+Source: `engines/streaming-llama/prefill_llama.cpp/ggml/src/ggml-cuda/ggml-cuda.cu:7209`. Unset read: NULL from getenv; the literal consumer below supplies any fallback.
 
 ```text
 
@@ -63019,7 +63022,7 @@ GGML_CUDA_GRAPH_OPT: advanced engine setting; built-in default retained
 
 Scope: rtx-llama. Class: advanced.
 
-Source: `engines/streaming-llama/prefill_llama.cpp/ggml/src/ggml-cuda/ggml-cuda.cu:6323`. Unset read: NULL from getenv; the literal consumer below supplies any fallback.
+Source: `engines/streaming-llama/prefill_llama.cpp/ggml/src/ggml-cuda/ggml-cuda.cu:6327`. Unset read: NULL from getenv; the literal consumer below supplies any fallback.
 
 ```text
 
@@ -63037,7 +63040,7 @@ GGML_CUDA_NO_PINNED: advanced engine setting; built-in default retained
 
 Scope: rtx-llama. Class: advanced.
 
-Source: `engines/streaming-llama/prefill_llama.cpp/ggml/src/ggml-cuda/ggml-cuda.cu:2138`. Unset read: NULL from getenv; the literal consumer below supplies any fallback.
+Source: `engines/streaming-llama/prefill_llama.cpp/ggml/src/ggml-cuda/ggml-cuda.cu:2139`. Unset read: NULL from getenv; the literal consumer below supplies any fallback.
 
 ```text
 
@@ -63049,7 +63052,7 @@ static void * ggml_cuda_host_malloc(size_t size) {
     void * ptr = nullptr;
 ```
 
-Source: `engines/streaming-llama/prefill_llama.cpp/ggml/src/ggml-cuda/ggml-cuda.cu:7237`. Unset read: NULL from getenv; the literal consumer below supplies any fallback.
+Source: `engines/streaming-llama/prefill_llama.cpp/ggml/src/ggml-cuda/ggml-cuda.cu:7241`. Unset read: NULL from getenv; the literal consumer below supplies any fallback.
 
 ```text
     ggml_backend_cuda_device_get_memory(dev, &props->memory_free, &props->memory_total);
@@ -63067,7 +63070,7 @@ GGML_CUDA_NO_VMM: advanced engine setting; built-in default retained
 
 Scope: rtx-llama. Class: advanced.
 
-Source: `engines/streaming-llama/prefill_llama.cpp/ggml/src/ggml-cuda/ggml-cuda.cu:1317`. Unset read: NULL from getenv; the literal consumer below supplies any fallback.
+Source: `engines/streaming-llama/prefill_llama.cpp/ggml/src/ggml-cuda/ggml-cuda.cu:1318`. Unset read: NULL from getenv; the literal consumer below supplies any fallback.
 
 ```text
     // past the initial reserve, blocking dynamic n_ubatch resize. The
@@ -63085,7 +63088,7 @@ GGML_CUDA_REGISTER_HOST: advanced engine setting; built-in default retained
 
 Scope: rtx-llama. Class: advanced.
 
-Source: `engines/streaming-llama/prefill_llama.cpp/ggml/src/ggml-cuda/ggml-cuda.cu:6597`. Unset read: NULL from getenv; the literal consumer below supplies any fallback.
+Source: `engines/streaming-llama/prefill_llama.cpp/ggml/src/ggml-cuda/ggml-cuda.cu:6601`. Unset read: NULL from getenv; the literal consumer below supplies any fallback.
 
 ```text
 
@@ -63097,7 +63100,7 @@ bool ggml_backend_cuda_register_host_buffer(void * buffer, size_t size) {
 #if CUDART_VERSION >= 11010 || defined(GGML_USE_MUSA) || defined(GGML_USE_HIP)
 ```
 
-Source: `engines/streaming-llama/prefill_llama.cpp/ggml/src/ggml-cuda/ggml-cuda.cu:6620`. Unset read: NULL from getenv; the literal consumer below supplies any fallback.
+Source: `engines/streaming-llama/prefill_llama.cpp/ggml/src/ggml-cuda/ggml-cuda.cu:6624`. Unset read: NULL from getenv; the literal consumer below supplies any fallback.
 
 ```text
 
@@ -63727,7 +63730,7 @@ Source: `engines/streaming-llama/prefill_llama.cpp/ggml/src/ggml-cann/ggml-cann.
                 dev_ctx->description                       = aclrtGetSocName();
 ```
 
-Source: `engines/streaming-llama/prefill_llama.cpp/ggml/src/ggml-cuda/ggml-cuda.cu:7928`. Unset read: NULL from getenv; the literal consumer below supplies any fallback.
+Source: `engines/streaming-llama/prefill_llama.cpp/ggml/src/ggml-cuda/ggml-cuda.cu:7933`. Unset read: NULL from getenv; the literal consumer below supplies any fallback.
 
 ```text
         if (!initialized) {
@@ -68325,7 +68328,7 @@ Producer Engram row cache kept in host RAM across turns, in MiB; 0 disables it. 
 
 Scope: rtx-llama. Class: advanced.
 
-Source: `engines/streaming-llama/prefill_llama.cpp/src/llama-dsv41-sweep.cpp:455`. Unset read: NULL from getenv; the literal consumer below supplies any fallback.
+Source: `engines/streaming-llama/prefill_llama.cpp/src/llama-dsv41-sweep.cpp:457`. Unset read: NULL from getenv; the literal consumer below supplies any fallback.
 
 ```text
         const uint64_t row_cache_have=p->provider.engram_row_cache_bytes();uint64_t row_cache_new=0;
@@ -68757,7 +68760,7 @@ bool tile_timing_enabled(){static const bool on=[]{const char*v=std::getenv("LLA
 // check still throws (logged as FATAL). The default (unset) refuses as before.
 ```
 
-Source: `engines/streaming-llama/prefill_llama.cpp/src/llama-dsv41-sweep.cpp:913`. Unset read: NULL from getenv; the literal consumer below supplies any fallback.
+Source: `engines/streaming-llama/prefill_llama.cpp/src/llama-dsv41-sweep.cpp:915`. Unset read: NULL from getenv; the literal consumer below supplies any fallback.
 
 ```text
             // not dump, create events or synchronize here.
@@ -71853,7 +71856,7 @@ LLAMA_CUDA_FUSION_COUNTS: advanced engine setting; built-in default retained
 
 Scope: rtx-llama. Class: advanced.
 
-Source: `engines/streaming-llama/prefill_llama.cpp/ggml/src/ggml-cuda/ggml-cuda.cu:5551`. Unset read: NULL from getenv; the literal consumer below supplies any fallback.
+Source: `engines/streaming-llama/prefill_llama.cpp/ggml/src/ggml-cuda/ggml-cuda.cu:5555`. Unset read: NULL from getenv; the literal consumer below supplies any fallback.
 
 ```text
 static bool ggml_cuda_fusion_counts_enabled() {
@@ -71871,7 +71874,7 @@ LLAMA_CUDA_FUSION_TRACE: advanced engine setting; built-in default retained
 
 Scope: rtx-llama. Class: advanced.
 
-Source: `engines/streaming-llama/prefill_llama.cpp/ggml/src/ggml-cuda/ggml-cuda.cu:5112`. Unset read: NULL from getenv; the literal consumer below supplies any fallback.
+Source: `engines/streaming-llama/prefill_llama.cpp/ggml/src/ggml-cuda/ggml-cuda.cu:5116`. Unset read: NULL from getenv; the literal consumer below supplies any fallback.
 
 ```text
 static bool ggml_cuda_lid_fusion_trace_enabled() {
@@ -71889,7 +71892,7 @@ LLAMA_CUDA_MMQ_TRACE: advanced engine setting; built-in default retained
 
 Scope: rtx-llama. Class: advanced.
 
-Source: `engines/streaming-llama/prefill_llama.cpp/ggml/src/ggml-cuda/ggml-cuda.cu:3292`. Unset read: NULL from getenv; the literal consumer below supplies any fallback.
+Source: `engines/streaming-llama/prefill_llama.cpp/ggml/src/ggml-cuda/ggml-cuda.cu:3293`. Unset read: NULL from getenv; the literal consumer below supplies any fallback.
 
 ```text
     //printf("src1 is contiguous %d, transposed %d, type = %s, name = %s\n", ggml_is_contiguous(src1), ggml_is_transposed(src1), ggml_type_name(src1->type), src1->name);
@@ -71907,7 +71910,7 @@ LLAMA_CUDA_OP_PROFILE: advanced engine setting; built-in default retained
 
 Scope: rtx-llama. Class: advanced.
 
-Source: `engines/streaming-llama/prefill_llama.cpp/ggml/src/ggml-cuda/ggml-cuda.cu:7974`. Unset read: NULL from getenv; the literal consumer below supplies any fallback.
+Source: `engines/streaming-llama/prefill_llama.cpp/ggml/src/ggml-cuda/ggml-cuda.cu:7979`. Unset read: NULL from getenv; the literal consumer below supplies any fallback.
 
 ```text
     static std::once_flag s_profile_init;
@@ -71943,7 +71946,7 @@ LLAMA_CUDA_OP_PROFILE_NODES: advanced engine setting; built-in default retained
 
 Scope: rtx-llama. Class: advanced.
 
-Source: `engines/streaming-llama/prefill_llama.cpp/ggml/src/ggml-cuda/ggml-cuda.cu:7977`. Unset read: NULL from getenv; the literal consumer below supplies any fallback.
+Source: `engines/streaming-llama/prefill_llama.cpp/ggml/src/ggml-cuda/ggml-cuda.cu:7982`. Unset read: NULL from getenv; the literal consumer below supplies any fallback.
 
 ```text
         if (env && env[0] == '1') {
@@ -71967,7 +71970,7 @@ Source: `engines/streaming-llama/prefill_llama.cpp/src/llama-dsv41-executor.cpp:
             auto*joined=concat_balanced(ctx,std::move(row_parts),0);
 ```
 
-Source: `engines/streaming-llama/prefill_llama.cpp/src/llama-dsv41-sweep.cpp:912`. Unset read: NULL from getenv; the literal consumer below supplies any fallback.
+Source: `engines/streaming-llama/prefill_llama.cpp/src/llama-dsv41-sweep.cpp:914`. Unset read: NULL from getenv; the literal consumer below supplies any fallback.
 
 ```text
             // Both existing profiling switches are required; timed runs do
@@ -71985,7 +71988,7 @@ LLAMA_CUDA_PACE_EVERY_N: advanced engine setting; built-in default retained
 
 Scope: rtx-llama. Class: advanced.
 
-Source: `engines/streaming-llama/prefill_llama.cpp/ggml/src/ggml-cuda/ggml-cuda.cu:581`. Unset read: NULL from getenv; the literal consumer below supplies any fallback.
+Source: `engines/streaming-llama/prefill_llama.cpp/ggml/src/ggml-cuda/ggml-cuda.cu:582`. Unset read: NULL from getenv; the literal consumer below supplies any fallback.
 
 ```text
         // stays low and coherence holds. Goal: recover the 533->~685 @20k gap.
@@ -72003,7 +72006,7 @@ LLAMA_CUDA_PACE_SLEEP_US: advanced engine setting; built-in default retained
 
 Scope: rtx-llama. Class: advanced.
 
-Source: `engines/streaming-llama/prefill_llama.cpp/ggml/src/ggml-cuda/ggml-cuda.cu:593`. Unset read: NULL from getenv; the literal consumer below supplies any fallback.
+Source: `engines/streaming-llama/prefill_llama.cpp/ggml/src/ggml-cuda/ggml-cuda.cu:594`. Unset read: NULL from getenv; the literal consumer below supplies any fallback.
 
 ```text
         // ~29.3s -> ~678 @20k. Default 0 = original cudaEventSync behavior.
@@ -72021,7 +72024,7 @@ LLAMA_CUDA_REUSE_EVENTS: advanced engine setting; built-in default retained
 
 Scope: rtx-llama. Class: advanced.
 
-Source: `engines/streaming-llama/prefill_llama.cpp/ggml/src/ggml-cuda/ggml-cuda.cu:537`. Unset read: NULL from getenv; the literal consumer below supplies any fallback.
+Source: `engines/streaming-llama/prefill_llama.cpp/ggml/src/ggml-cuda/ggml-cuda.cu:538`. Unset read: NULL from getenv; the literal consumer below supplies any fallback.
 
 ```text
 // reuses it (eval_cb is single-threaded on the compute thread). Default off.
@@ -72039,7 +72042,7 @@ LLAMA_CUDA_TENSOR_SET_TRACE: advanced engine setting; built-in default retained
 
 Scope: rtx-llama. Class: advanced.
 
-Source: `engines/streaming-llama/prefill_llama.cpp/ggml/src/ggml-cuda/ggml-cuda.cu:1600`. Unset read: NULL from getenv; the literal consumer below supplies any fallback.
+Source: `engines/streaming-llama/prefill_llama.cpp/ggml/src/ggml-cuda/ggml-cuda.cu:1601`. Unset read: NULL from getenv; the literal consumer below supplies any fallback.
 
 ```text
         }
@@ -72057,7 +72060,7 @@ LLAMA_CUDA_TRACE_BUFFER_ALLOC: advanced engine setting; built-in default retaine
 
 Scope: rtx-llama. Class: advanced.
 
-Source: `engines/streaming-llama/prefill_llama.cpp/ggml/src/ggml-cuda/ggml-cuda.cu:1697`. Unset read: NULL from getenv; the literal consumer below supplies any fallback.
+Source: `engines/streaming-llama/prefill_llama.cpp/ggml/src/ggml-cuda/ggml-cuda.cu:1698`. Unset read: NULL from getenv; the literal consumer below supplies any fallback.
 
 ```text
     // to identify per-request leaks. Gated on env to not spam regular runs.
@@ -72075,7 +72078,7 @@ LLAMA_CUDA_TRACE_DEVICE_MALLOC: advanced engine setting; built-in default retain
 
 Scope: rtx-llama. Class: advanced.
 
-Source: `engines/streaming-llama/prefill_llama.cpp/ggml/src/ggml-cuda/ggml-cuda.cu:868`. Unset read: NULL from getenv; the literal consumer below supplies any fallback.
+Source: `engines/streaming-llama/prefill_llama.cpp/ggml/src/ggml-cuda/ggml-cuda.cu:869`. Unset read: NULL from getenv; the literal consumer below supplies any fallback.
 
 ```text
         g_cuda_device_malloc_bytes.fetch_add((int64_t) size, std::memory_order_relaxed);
@@ -72369,7 +72372,7 @@ LLAMA_DLM_REMAINDER_TIMERS: advanced engine setting; built-in default retained
 
 Scope: rtx-llama. Class: advanced.
 
-Source: `engines/streaming-llama/prefill_llama.cpp/ggml/src/ggml-cuda/ggml-cuda.cu:425`. Unset read: NULL from getenv; the literal consumer below supplies any fallback.
+Source: `engines/streaming-llama/prefill_llama.cpp/ggml/src/ggml-cuda/ggml-cuda.cu:426`. Unset read: NULL from getenv; the literal consumer below supplies any fallback.
 
 ```text
 
@@ -72513,7 +72516,7 @@ LLAMA_DSA_KIDX_STORE_DIAG: advanced engine setting; built-in default retained
 
 Scope: rtx-llama. Class: advanced.
 
-Source: `engines/streaming-llama/prefill_llama.cpp/ggml/src/ggml-cuda/ggml-cuda.cu:3623`. Unset read: NULL from getenv; the literal consumer below supplies any fallback.
+Source: `engines/streaming-llama/prefill_llama.cpp/ggml/src/ggml-cuda/ggml-cuda.cu:3624`. Unset read: NULL from getenv; the literal consumer below supplies any fallback.
 
 ```text
 static void ggml_cuda_diag_set_rows(ggml_backend_cuda_context & ctx, const ggml_tensor * dst) {
@@ -72933,7 +72936,7 @@ LLAMA_DSV41_ATTN_G16: advanced engine setting; built-in default retained
 
 Scope: rtx-llama. Class: advanced.
 
-Source: `engines/streaming-llama/prefill_llama.cpp/ggml/src/ggml-cuda/dsv41-ds4-token-tile.cu:1032`. Unset read: NULL from getenv; the literal consumer below supplies any fallback.
+Source: `engines/streaming-llama/prefill_llama.cpp/ggml/src/ggml-cuda/dsv41-ds4-token-tile.cu:1033`. Unset read: NULL from getenv; the literal consumer below supplies any fallback.
 
 ```text
         return;
@@ -73035,6 +73038,66 @@ Source: `engines/streaming-llama/prefill_llama.cpp/src/llama-dsv41-executor.cpp:
         unsigned mul_f16_fused=0;
 ```
 
+### LLAMA_DSV41_DENSE_FP8
+
+Opt-in Q8_0-to-FP8 lossy dense speed proxy, off unless1; requires native BF16 epilogue, prefill-only harness and extra admitted workspace.
+
+Scope: rtx-llama. Class: advanced.
+
+Source: `engines/streaming-llama/prefill_llama.cpp/ggml/include/ggml-dsv41-dense-fp8.h:6`. Unset read: NULL from getenv; the literal consumer below supplies any fallback.
+
+```text
+#include <cstdlib>
+#include <cstring>
+inline bool ggml_dsv41_dense_fp8_requested(){const char *v=std::getenv("LLAMA_DSV41_DENSE_FP8");return v&&!std::strcmp(v,"1");}
+constexpr int32_t ggml_dsv41_dense_fp8_magic=0x46384431;
+inline bool ggml_dsv41_dense_fp8_native_weight(const ggml_tensor *w){
+    return w&&w->op==GGML_OP_NONE&&w->type==GGML_TYPE_Q8_0&&w->op_params[14]==ggml_dsv41_dense_fp8_magic&&w->op_params[15]==1;
+}
+```
+
+Source: `engines/streaming-llama/prefill_llama.cpp/src/llama-dsv41-sweep.cpp:532`. Unset read: NULL from getenv; the literal consumer below supplies any fallback.
+
+```text
+                if(first_request)llama_dsv41_layer_log("DS4COMBO_FIXED_DIRECT_OPEN tokens=%u tile=%u pair=%d warmup_pass=0\n",options.carry.tokens,f.tile,int(options.pair_ffn));
+                require(!warmup&&(first_request||(!options.pair_ffn&&options.carry.tokens==1))&&!f.graph&&!f.hidden&&!f.cache&&f.tokens&&f.tile&&options.admitted_graph_bytes>1024ull*1024*1024,"Fixed allocation must follow provider heaps and precede first stage lease during one-token warmup");
+                const char*dense_fp8=std::getenv("LLAMA_DSV41_DENSE_FP8");
+                const uint64_t dense_reserve=dense_fp8&&!std::strcmp(dense_fp8,"1")?576ull<<20:0;
+                require(f.backend_temporary_reserve_bytes>=dense_reserve,"FP8 reserve exceeds fixed backend admission");
+                const uint64_t base_reserve=f.backend_temporary_reserve_bytes-dense_reserve;
+                const bool flashinfer_reserve=llama_dsv41_flashinfer::requested()&&options.pair_ffn&&f.tile==ggml_dsv41_flashinfer::batch_tokens()&&
+```
+
+Source: `engines/streaming-llama/prefill_llama.cpp/tools/dsv41-prefill/main.cpp:558`. Unset read: NULL from getenv; the literal consumer below supplies any fallback.
+
+```text
+        const bool flashinfer_reserve=llama_dsv41_flashinfer::requested()&&pair_ffn&&
+            std::getenv("LLAMA_DSV41_STORED_MXFP4")&&std::string(std::getenv("LLAMA_DSV41_STORED_MXFP4"))=="1";
+        const char*dense_fp8_env=std::getenv("LLAMA_DSV41_DENSE_FP8");
+        const uint64_t dense_fp8_reserve=dense_fp8_env&&!std::strcmp(dense_fp8_env,"1")?576ull<<20:0;
+        require(backend_reserve>=dense_fp8_reserve,"FP8 reserve exceeds total backend admission");
+        const uint64_t base_backend_reserve=backend_reserve-dense_fp8_reserve;
+        require(base_backend_reserve==gib||(base_backend_reserve==768ull*1024*1024&&pair_ffn)||
+```
+
+### LLAMA_DSV41_DENSE_FP8_DLL
+
+Explicit absolute SM120 FP8 dense AOT bridge; no fallback on missing or mismatched ABI.
+
+Scope: rtx-llama. Class: advanced.
+
+Source: `engines/streaming-llama/prefill_llama.cpp/ggml/src/ggml-cuda/dsv41-dense-fp8.cuh:16`. Unset read: NULL from getenv; the literal consumer below supplies any fallback.
+
+```text
+    static auto call=[](){
+#ifdef _WIN32
+        const char *path=std::getenv("LLAMA_DSV41_DENSE_FP8_DLL");
+        GGML_ASSERT(path&&path[0]&&(path[1]==':'||path[0]=='\\')&&"Explicit absolute dense FP8 DLL required");
+        auto lib=LoadLibraryExA(path,nullptr,LOAD_LIBRARY_SEARCH_DLL_LOAD_DIR|LOAD_LIBRARY_SEARCH_DEFAULT_DIRS);
+        GGML_ASSERT(lib&&"Dense FP8 DLL load failed");
+        auto abi=reinterpret_cast<int(*)()>(GetProcAddress(lib,"slstack_dense_fp8_abi"));
+```
+
 ### LLAMA_DSV41_ENGRAM_EARLY_DIRECT
 
 Producer prefill: Engram table read start policy; built-in default retained.
@@ -73059,7 +73122,7 @@ LLAMA_DSV41_ENGRAM_PROMPT_OVERLAP: qualified preset/runtime setting; override fo
 
 Scope: rtx-llama. Class: preset.
 
-Source: `engines/streaming-llama/prefill_llama.cpp/src/llama-dsv41-sweep.cpp:713`. Unset read: NULL from getenv; the literal consumer below supplies any fallback.
+Source: `engines/streaming-llama/prefill_llama.cpp/src/llama-dsv41-sweep.cpp:715`. Unset read: NULL from getenv; the literal consumer below supplies any fallback.
 
 ```text
         const auto schedule=llama_dsv41_plan_append(p->options.pair_ffn,p->options.carry.max_tile_tokens,p->options.compute_step_tokens,p->position_offset,p->options.unaligned_append_step_tokens);
@@ -73245,6 +73308,66 @@ Source: `engines/streaming-llama/prefill_llama.cpp/ggml/src/ggml-cuda/dsv41-flas
         GGML_ASSERT(library&&"FlashInfer bridge DLL failed to load");
 ```
 
+### LLAMA_DSV41_FLASHINFER_NATIVE_FFN_DLL
+
+Explicit absolute Windows SM120 packed-FP4 fused FFN bridge; prefill-only experiment, rejects canonical/decode mismatch.
+
+Scope: rtx-llama. Class: advanced.
+
+Source: `engines/streaming-llama/prefill_llama.cpp/ggml/src/ggml-cuda/dsv41-native-ffn.cuh:19`. Unset read: NULL from getenv; the literal consumer below supplies any fallback.
+
+```text
+    static auto function=[](){
+#ifdef _WIN32
+        const char *path=std::getenv("LLAMA_DSV41_FLASHINFER_NATIVE_FFN_DLL");
+        GGML_ASSERT(path&&path[0]&&(path[1]==':'||path[0]=='\\')&&"Explicit absolute native FFN DLL required");
+        auto library=LoadLibraryExA(path,nullptr,LOAD_LIBRARY_SEARCH_DLL_LOAD_DIR|LOAD_LIBRARY_SEARCH_DEFAULT_DIRS);
+        GGML_ASSERT(library&&"Native FFN DLL failed to load");
+        auto abi=reinterpret_cast<int(*)()>(GetProcAddress(library,"slstack_flashinfer_native_ffn_abi"));
+```
+
+Source: `engines/streaming-llama/prefill_llama.cpp/src/llama-dsv41-flashinfer-budget.h:8`. Unset read: NULL from getenv; the literal consumer below supplies any fallback.
+
+```text
+namespace llama_dsv41_flashinfer {
+inline uint64_t reserve_bytes(){
+    const char *native=std::getenv("LLAMA_DSV41_FLASHINFER_NATIVE_FFN_DLL");
+    if(native&&*native){const auto rows=ggml_dsv41_flashinfer::batch_tokens();return (rows==16384?3072ull:rows==8192?1792ull:1280ull)<<20;}
+    return ggml_dsv41_flashinfer::selected_reserve_bytes();
+}
+inline bool requested(){const char *v=std::getenv("LLAMA_DSV41_FLASHINFER_MXFP4");return v&&!std::strcmp(v,"1");}
+```
+
+Source: `engines/streaming-llama/prefill_llama.cpp/src/llama-dsv41-weights.cpp:447`. Unset read: NULL from getenv; the literal consumer below supplies any fallback.
+
+```text
+            require(gguf_get_alignment(gguf.get())>=128,"Native FP4 requires128-byte file/tensor alignment");
+            require(!options.decode_layout,"Kernel-native FP4 decode cache is not implemented; prefill-only experiment");
+            const char *bridge=std::getenv("LLAMA_DSV41_FLASHINFER_NATIVE_FFN_DLL");
+            require(bridge&&*bridge,"Kernel-native FP4 requires its explicit native FFN bridge");
+            for(auto&w:layers)w.ffn.native_fp4_layout=true;
+        }
+        const auto arch=gguf_find_key(gguf.get(),"general.architecture");
+```
+
+### LLAMA_DSV41_FUSED_HC
+
+SM120 hc=4,20-iteration Sinkhorn:2(default) imports the DeepSeek fused algorithm with bit-exact native arithmetic;0 original graph;1 official rounding experiment. Other HC settings keep the original graph.
+
+Scope: rtx-llama. Class: advanced.
+
+Source: `engines/streaming-llama/prefill_llama.cpp/src/llama-dsv41-graph.cpp:550`. Unset read: NULL from getenv; the literal consumer below supplies any fallback.
+
+```text
+    if(hc_projection_f16_gemm&&count>8&&fn->type==GGML_TYPE_F16)GGML_ASSERT(ggml_dsv41_hc_half_tag(projected));
+    tagged(projected, "dsv41_hc_mixes");
+    const char *fused_hc=std::getenv("LLAMA_DSV41_FUSED_HC");
+#ifdef GGML_USE_CUDA
+    if(!fused_hc)fused_hc="2";
+#endif
+    if(fused_hc&&(fused_hc[0]=='1'||fused_hc[0]=='2')&&!fused_hc[1]&&sinkhorn_iters==20&&hc_eps==1e-6f&&count<=65536){
+```
+
 ### LLAMA_DSV41_GATHER_HALF
 
 LLAMA_DSV41_GATHER_HALF: advanced engine setting; built-in default retained
@@ -73371,7 +73494,7 @@ LLAMA_DSV41_PV_VIEW_F32: advanced engine setting; built-in default retained
 
 Scope: rtx-llama. Class: advanced.
 
-Source: `engines/streaming-llama/prefill_llama.cpp/src/llama-dsv41-graph.cpp:457`. Unset read: NULL from getenv; the literal consumer below supplies any fallback.
+Source: `engines/streaming-llama/prefill_llama.cpp/src/llama-dsv41-graph.cpp:485`. Unset read: NULL from getenv; the literal consumer below supplies any fallback.
 
 ```text
     probabilities = ggml_permute(ctx, probabilities, 0, 2, 1, 3);
@@ -73487,7 +73610,7 @@ Source: `engines/streaming-llama/prefill_llama.cpp/tools/dsv41-prefill/main.cpp:
 
 ### LLAMA_DSV41_TILELANG_ATTENTION
 
-E6 opt-in SM120 TileLang sparse attention for native token-tile graphs with at most131072 compressed rows. Default0 retains the native kernel. Requires the pinned dynamic16-head/512-dimension image. Query conversion and BF16 softmax probability arithmetic can change logits; full-model quality is an adoption gate.
+Sparse attention:2(default) packed-query SM120 TileLang grid with embedded pinned image;0 native control;1 legacy128-row adapter requiring its matching CUBIN. Mode2 stages query/KV once inside the existing768MiB pool. Qualified under owner KL tolerance; make it exact remains on the roadmap.
 
 Scope: rtx-llama. Class: advanced.
 
@@ -73497,15 +73620,27 @@ Source: `engines/streaming-llama/prefill_llama.cpp/ggml/src/ggml-cuda/dsv41-ds4-
         CUDA_CHECK(cudaGetLastError());ds4_token_union_queued.fetch_add(1,std::memory_order_release);
     }
     const char *tilelang_env=std::getenv("LLAMA_DSV41_TILELANG_ATTENTION");
-    if(tilelang_env&&tilelang_env[0]=='1'&&!tilelang_env[1]&&comp_rows<=131072){
+    if(!tilelang_env)tilelang_env="2";
+    if(tilelang_env&&(tilelang_env[0]=='1'||tilelang_env[0]=='2')&&!tilelang_env[1]&&comp_rows<=131072){
         dsv41_tilelang_attention(ctx,dst,raw_half.get(),comp_ptr+(merge?512:0),raw_rows,raw_min,comp_rows-(merge?1u:0u));
         ds4_token_tile_queued.fetch_add(1,std::memory_order_release);
-        if(direct_f16)ds4_token_f16_table_queued.fetch_add(1,std::memory_order_release);
+```
+
+Source: `engines/streaming-llama/prefill_llama.cpp/ggml/src/ggml-cuda/dsv41-tilelang.cuh:51`. Unset read: NULL from getenv; the literal consumer below supplies any fallback.
+
+```text
+    GGML_ASSERT(ggml_cuda_info().devices[ctx.device].cc==1200&&ctx.device==0);
+    const uint32_t queries=uint32_t(dst->ne[2]);GGML_ASSERT(queries&&queries<=4096&&comp_rows<=131072);
+    const char *variant=std::getenv("LLAMA_DSV41_TILELANG_ATTENTION");
+    if(!variant)variant="2";
+    if(variant&&variant[0]=='2'&&!variant[1]){
+        static CUmodule module=nullptr;static CUfunction function=nullptr;static std::once_flag initialized;
+        std::call_once(initialized,[]{
 ```
 
 ### LLAMA_DSV41_TILELANG_CUBIN
 
-E6 local path to the pinned TileLang sparse-attention CUDA image; required only when enabled. The experiment runner verifies its SHA256 before engine launch. Not model weights.
+Optional ahead-of-time sparse-attention image override. Mode2 defaults to the embedded, digest-pinned SM120 image; mode1 requires the legacy sparse_attn_kernel__kernel image. Overrides must match the selected ABI.
 
 Scope: rtx-llama. Class: advanced.
 
@@ -73519,6 +73654,18 @@ Source: `engines/streaming-llama/prefill_llama.cpp/ggml/src/ggml-cuda/dsv41-tile
         dsv41_tilelang_driver(cuModuleLoad(&module,path),"load pinned SM120 image");
         dsv41_tilelang_driver(cuModuleGetFunction(&function,module,"sparse_attn_kernel__kernel"),"resolve sparse attention");
         dsv41_tilelang_driver(cuFuncSetAttribute(function,CU_FUNC_ATTRIBUTE_MAX_DYNAMIC_SHARED_SIZE_BYTES,86016),"admit86KiB shared memory");
+```
+
+Source: `engines/streaming-llama/prefill_llama.cpp/ggml/src/ggml-cuda/dsv41-tilelang.cuh:56`. Unset read: NULL from getenv; the literal consumer below supplies any fallback.
+
+```text
+        static CUmodule module=nullptr;static CUfunction function=nullptr;static std::once_flag initialized;
+        std::call_once(initialized,[]{
+            const char *path=std::getenv("LLAMA_DSV41_TILELANG_CUBIN");
+            if(path&&*path){
+                dsv41_tilelang_driver(cuModuleLoad(&module,path),"load native-layout SM120 image override");
+            }else{
+                // Pinned, licensed, ahead-of-time image: no runtime compiler,
 ```
 
 ### LLAMA_DSV41_TOPK_RADIX
@@ -73567,6 +73714,24 @@ static bool top_k_shared_keys_enabled(const int tile_size) {
         ggml_cuda_info().devices[ggml_cuda_get_device()].smpbo;
 }
 
+```
+
+### LLAMA_DSV41_UNPADDED_CONE
+
+Experimental unpadded2541-row replay;0 preserves qualified tile shapes. Requires full-prefill bit-exact qualification.
+
+Scope: rtx-llama. Class: advanced.
+
+Source: `engines/streaming-llama/prefill_llama.cpp/src/llama-dsv41-sweep.cpp:284`. Unset read: NULL from getenv; the literal consumer below supplies any fallback.
+
+```text
+                options.yoco_logical_end?options.yoco_logical_begin:begin,end,begin,begin+options.carry.tokens);
+            const auto cone_step=options.compute_step_tokens?options.compute_step_tokens:options.carry.max_tile_tokens;
+            const char *unpadded=std::getenv("LLAMA_DSV41_UNPADDED_CONE");
+            const bool exact_rows=unpadded&&unpadded[0]=='1'&&!unpadded[1];
+            llama_dsv41_yoco::align_exact(p->yoco,llama_dsv41_flashinfer::requested()?std::min(4096u,cone_step):cone_step,!exact_rows);
+            options.carry.yoco_first=p->yoco.first;
+            weights.yoco_encoder_only=p->yoco.encoder_only;
 ```
 
 ### LLAMA_DSV4_AUX_DUMP
@@ -74157,7 +74322,7 @@ LLAMA_DSV4_LID_FUSE: advanced engine setting; built-in default retained
 
 Scope: rtx-llama. Class: advanced.
 
-Source: `engines/streaming-llama/prefill_llama.cpp/ggml/src/ggml-cuda/ggml-cuda.cu:5193`. Unset read: NULL from getenv; the literal consumer below supplies any fallback.
+Source: `engines/streaming-llama/prefill_llama.cpp/ggml/src/ggml-cuda/ggml-cuda.cu:5197`. Unset read: NULL from getenv; the literal consumer below supplies any fallback.
 
 ```text
     // fusion off, CUDA runs the same math Metal does.
@@ -78531,7 +78696,7 @@ LLAMA_MOE_GROUPED_EXPERTS: advanced engine setting; built-in default retained
 
 Scope: rtx-llama. Class: advanced.
 
-Source: `engines/streaming-llama/prefill_llama.cpp/ggml/src/ggml-cuda/ggml-cuda.cu:4692`. Unset read: NULL from getenv; the literal consumer below supplies any fallback.
+Source: `engines/streaming-llama/prefill_llama.cpp/ggml/src/ggml-cuda/ggml-cuda.cu:4696`. Unset read: NULL from getenv; the literal consumer below supplies any fallback.
 
 ```text
 
@@ -82035,7 +82200,7 @@ LLAMA_PREFILL_STAGING_SYNC: advanced engine setting; built-in default retained
 
 Scope: rtx-llama. Class: advanced.
 
-Source: `engines/streaming-llama/prefill_llama.cpp/ggml/src/ggml-cuda/ggml-cuda.cu:6952`. Unset read: NULL from getenv; the literal consumer below supplies any fallback.
+Source: `engines/streaming-llama/prefill_llama.cpp/ggml/src/ggml-cuda/ggml-cuda.cu:6956`. Unset read: NULL from getenv; the literal consumer below supplies any fallback.
 
 ```text
 static bool ggml_cuda_staging_sync_enabled(void) {
@@ -83265,7 +83430,7 @@ Source: `engines/streaming-llama/prefill_llama.cpp/ggml/src/ggml-backend.cpp:172
         }
 ```
 
-Source: `engines/streaming-llama/prefill_llama.cpp/ggml/src/ggml-cuda/ggml-cuda.cu:1129`. Unset read: NULL from getenv; the literal consumer below supplies any fallback.
+Source: `engines/streaming-llama/prefill_llama.cpp/ggml/src/ggml-cuda/ggml-cuda.cu:1130`. Unset read: NULL from getenv; the literal consumer below supplies any fallback.
 
 ```text
         // DIAG: log every cudaMalloc from this pool. Useful to see how many
@@ -83277,7 +83442,7 @@ Source: `engines/streaming-llama/prefill_llama.cpp/ggml/src/ggml-cuda/ggml-cuda.
         }
 ```
 
-Source: `engines/streaming-llama/prefill_llama.cpp/ggml/src/ggml-cuda/ggml-cuda.cu:1227`. Unset read: NULL from getenv; the literal consumer below supplies any fallback.
+Source: `engines/streaming-llama/prefill_llama.cpp/ggml/src/ggml-cuda/ggml-cuda.cu:1228`. Unset read: NULL from getenv; the literal consumer below supplies any fallback.
 
 ```text
             // DIAG: log every VMM pool growth so we can see if warm-up
@@ -101079,106 +101244,4 @@ Source: `vendor/engines/cosmos_windows/weight_streaming/zimage_backend.py:43`. U
         from cosmos_windows import mem_guard
     except Exception:
         mem_guard = None
-```
-
-### LLAMA_DSV41_FLASHINFER_NATIVE_FFN_DLL
-
-Explicit absolute Windows SM120 packed-FP4 fused FFN bridge; prefill-only experiment, rejects canonical/decode mismatch.
-
-Scope: rtx-llama. Class: advanced.
-
-Source: `engines/streaming-llama/prefill_llama.cpp/ggml/src/ggml-cuda/dsv41-native-ffn.cuh:19`. Unset read: NULL from getenv; the literal consumer below supplies any fallback.
-
-```text
-    static auto function=[](){
-#ifdef _WIN32
-        const char *path=std::getenv("LLAMA_DSV41_FLASHINFER_NATIVE_FFN_DLL");
-        GGML_ASSERT(path&&path[0]&&(path[1]==':'||path[0]=='\\')&&"Explicit absolute native FFN DLL required");
-        auto library=LoadLibraryExA(path,nullptr,LOAD_LIBRARY_SEARCH_DLL_LOAD_DIR|LOAD_LIBRARY_SEARCH_DEFAULT_DIRS);
-        GGML_ASSERT(library&&"Native FFN DLL failed to load");
-        auto abi=reinterpret_cast<int(*)()>(GetProcAddress(library,"slstack_flashinfer_native_ffn_abi"));
-```
-
-Source: `engines/streaming-llama/prefill_llama.cpp/src/llama-dsv41-flashinfer-budget.h:8`. Unset read: NULL from getenv; the literal consumer below supplies any fallback.
-
-```text
-namespace llama_dsv41_flashinfer {
-inline uint64_t reserve_bytes(){
-    const char *native=std::getenv("LLAMA_DSV41_FLASHINFER_NATIVE_FFN_DLL");
-    if(native&&*native){const auto rows=ggml_dsv41_flashinfer::batch_tokens();return (rows==16384?3072ull:rows==8192?1792ull:1280ull)<<20;}
-    return ggml_dsv41_flashinfer::selected_reserve_bytes();
-}
-inline bool requested(){const char *v=std::getenv("LLAMA_DSV41_FLASHINFER_MXFP4");return v&&!std::strcmp(v,"1");}
-```
-
-Source: `engines/streaming-llama/prefill_llama.cpp/src/llama-dsv41-weights.cpp:447`. Unset read: NULL from getenv; the literal consumer below supplies any fallback.
-
-```text
-            require(gguf_get_alignment(gguf.get())>=128,"Native FP4 requires128-byte file/tensor alignment");
-            require(!options.decode_layout,"Kernel-native FP4 decode cache is not implemented; prefill-only experiment");
-            const char *bridge=std::getenv("LLAMA_DSV41_FLASHINFER_NATIVE_FFN_DLL");
-            require(bridge&&*bridge,"Kernel-native FP4 requires its explicit native FFN bridge");
-            for(auto&w:layers)w.ffn.native_fp4_layout=true;
-        }
-        const auto arch=gguf_find_key(gguf.get(),"general.architecture");
-```
-
-### LLAMA_DSV41_DENSE_FP8
-
-Opt-in Q8_0-to-FP8 lossy dense speed proxy, off unless1; requires native BF16 epilogue, prefill-only harness and extra admitted workspace.
-
-Scope: rtx-llama. Class: advanced.
-
-Source: `engines/streaming-llama/prefill_llama.cpp/ggml/include/ggml-dsv41-dense-fp8.h:6`. Unset read: NULL from getenv; the literal consumer below supplies any fallback.
-
-```text
-#include <cstdlib>
-#include <cstring>
-inline bool ggml_dsv41_dense_fp8_requested(){const char *v=std::getenv("LLAMA_DSV41_DENSE_FP8");return v&&!std::strcmp(v,"1");}
-constexpr int32_t ggml_dsv41_dense_fp8_magic=0x46384431;
-inline bool ggml_dsv41_dense_fp8_native_weight(const ggml_tensor *w){
-    return w&&w->op==GGML_OP_NONE&&w->type==GGML_TYPE_Q8_0&&w->op_params[14]==ggml_dsv41_dense_fp8_magic&&w->op_params[15]==1;
-}
-```
-
-Source: `engines/streaming-llama/prefill_llama.cpp/src/llama-dsv41-sweep.cpp:530`. Unset read: NULL from getenv; the literal consumer below supplies any fallback.
-
-```text
-                if(first_request)llama_dsv41_layer_log("DS4COMBO_FIXED_DIRECT_OPEN tokens=%u tile=%u pair=%d warmup_pass=0\n",options.carry.tokens,f.tile,int(options.pair_ffn));
-                require(!warmup&&(first_request||(!options.pair_ffn&&options.carry.tokens==1))&&!f.graph&&!f.hidden&&!f.cache&&f.tokens&&f.tile&&options.admitted_graph_bytes>1024ull*1024*1024,"Fixed allocation must follow provider heaps and precede first stage lease during one-token warmup");
-                const char*dense_fp8=std::getenv("LLAMA_DSV41_DENSE_FP8");
-                const uint64_t dense_reserve=dense_fp8&&!std::strcmp(dense_fp8,"1")?576ull<<20:0;
-                require(f.backend_temporary_reserve_bytes>=dense_reserve,"FP8 reserve exceeds fixed backend admission");
-                const uint64_t base_reserve=f.backend_temporary_reserve_bytes-dense_reserve;
-                const bool flashinfer_reserve=llama_dsv41_flashinfer::requested()&&options.pair_ffn&&f.tile==ggml_dsv41_flashinfer::batch_tokens()&&
-```
-
-Source: `engines/streaming-llama/prefill_llama.cpp/tools/dsv41-prefill/main.cpp:558`. Unset read: NULL from getenv; the literal consumer below supplies any fallback.
-
-```text
-        const bool flashinfer_reserve=llama_dsv41_flashinfer::requested()&&pair_ffn&&
-            std::getenv("LLAMA_DSV41_STORED_MXFP4")&&std::string(std::getenv("LLAMA_DSV41_STORED_MXFP4"))=="1";
-        const char*dense_fp8_env=std::getenv("LLAMA_DSV41_DENSE_FP8");
-        const uint64_t dense_fp8_reserve=dense_fp8_env&&!std::strcmp(dense_fp8_env,"1")?576ull<<20:0;
-        require(backend_reserve>=dense_fp8_reserve,"FP8 reserve exceeds total backend admission");
-        const uint64_t base_backend_reserve=backend_reserve-dense_fp8_reserve;
-        require(base_backend_reserve==gib||(base_backend_reserve==768ull*1024*1024&&pair_ffn)||
-```
-
-### LLAMA_DSV41_DENSE_FP8_DLL
-
-Explicit absolute SM120 FP8 dense AOT bridge; no fallback on missing or mismatched ABI.
-
-Scope: rtx-llama. Class: advanced.
-
-Source: `engines/streaming-llama/prefill_llama.cpp/ggml/src/ggml-cuda/dsv41-dense-fp8.cuh:16`. Unset read: NULL from getenv; the literal consumer below supplies any fallback.
-
-```text
-    static auto call=[](){
-#ifdef _WIN32
-        const char *path=std::getenv("LLAMA_DSV41_DENSE_FP8_DLL");
-        GGML_ASSERT(path&&path[0]&&(path[1]==':'||path[0]=='\\')&&"Explicit absolute dense FP8 DLL required");
-        auto lib=LoadLibraryExA(path,nullptr,LOAD_LIBRARY_SEARCH_DLL_LOAD_DIR|LOAD_LIBRARY_SEARCH_DEFAULT_DIRS);
-        GGML_ASSERT(lib&&"Dense FP8 DLL load failed");
-        auto abi=reinterpret_cast<int(*)()>(GetProcAddress(lib,"slstack_dense_fp8_abi"));
 ```

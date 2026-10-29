@@ -8,6 +8,7 @@
 #include "ggml-cuda/dsv41-expert-cublas.cuh"
 #include "ggml-dsv41-hc-expand.h"
 #include "ggml-cuda/dsv41-ds4-hc-expand.cuh"
+#include "ggml-cuda/dsv41-hc-sinkhorn.cuh"
 #include "ggml-cuda/ds4split-native-half-witness.h"
 #include "ggml-cuda/ds4split-q4k-half-mmid.cuh"
 #include "ggml-impl.h"
@@ -3997,6 +3998,9 @@ static bool ggml_cuda_compute_forward(ggml_backend_cuda_context & ctx, struct gg
             ggml_cuda_op_dsv41_native_ffn(ctx,dst);
             break;
         case GGML_OP_MAP_CUSTOM3:
+            if(ggml_dsv41_hc_sinkhorn_requested(dst)){
+                ggml_cuda_op_dsv41_hc_sinkhorn(ctx,dst);break;
+            }
             if(!ggml_dsv41_hc_expand_requested(dst))return false;
             ggml_cuda_op_dsv41_ds4_hc_expand(ctx,dst);
             break;
@@ -7620,7 +7624,8 @@ static bool ggml_backend_cuda_device_supports_op(ggml_backend_dev_t dev, const g
         case GGML_OP_CUSTOM:
             return ggml_cuda_info().devices[dev_ctx->device].cc==1200&&ggml_dsv41_native_ffn_valid(op);
         case GGML_OP_MAP_CUSTOM3:
-            return ggml_dsv41_hc_expand_valid(op);
+            return ggml_dsv41_hc_expand_valid(op)||
+                (ggml_dsv41_hc_sinkhorn_valid(op)&&ggml_cuda_info().devices[dev_ctx->device].cc==1200);
         case GGML_OP_DSV4_ACT_QAT:
             return op->src[0]->type == GGML_TYPE_F32 && ggml_is_contiguous(op->src[0]);
         case GGML_OP_DSV41_ENGRAM_ADD:
