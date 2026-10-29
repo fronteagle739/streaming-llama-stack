@@ -177,3 +177,19 @@ static __global__ void dsv41_act_qat_kernel(
     const float scale = ggml_dsv41_scale(maxima[0], FORMAT);
     if (valid) dst[row * width + column] = ggml_dsv41_quantized(value, scale, FORMAT);
 }
+
+// Eight warps per CTA, each quantizing independent 16/32-value blocks. The
+// shuffle tree uses exactly the reference pairings and all format operations
+// remain shared with the scalar reference. Flattening also avoids grid-y limits.
+template <int BLK, int FORMAT>
+static __global__ void dsv41_act_qat_tiled_kernel(const float *src,float *dst,int64_t total) {
+    const int64_t at=int64_t(blockIdx.x)*blockDim.x+threadIdx.x;
+    const float value=at<total?ggml_dsv41_bf16(src[at]):0.f;
+    float maximum=fabsf(value);
+    #pragma unroll
+    for(int step=BLK/2;step;step>>=1)
+        maximum=fmaxf(maximum,__shfl_down_sync(0xffffffff,maximum,step,BLK));
+    maximum=__shfl_sync(0xffffffff,maximum,0,BLK);
+    const float scale=ggml_dsv41_scale(maximum,FORMAT);
+    if(at<total) dst[at]=ggml_dsv41_quantized(value,scale,FORMAT);
+}

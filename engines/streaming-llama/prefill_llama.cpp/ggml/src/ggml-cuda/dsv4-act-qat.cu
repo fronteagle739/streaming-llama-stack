@@ -1,10 +1,11 @@
+#include "dispatch-counter.cuh"
 #include "dsv4-act-qat.cuh"
 #include "dsv4-act-qat-kernels.cuh"
 #include "ggml-dsv41-bf16-vector.h"
 #include <atomic>
 #include <cstdlib>
 
-static std::atomic<uint64_t> dsv41_bf16_vector_queued{0};
+static ggml_cuda_dispatch_counter dsv41_bf16_vector_queued{0};
 extern "C" uint64_t ggml_backend_cuda_dsv41_bf16_vector_queued(void) {
     return dsv41_bf16_vector_queued.load(std::memory_order_acquire);
 }
@@ -51,6 +52,21 @@ void ggml_cuda_op_dsv4_act_qat(ggml_backend_cuda_context & ctx, ggml_tensor * ds
         }
         const int block = mode == GGML_DSV41_QAT_FP4_E4M3 ? 16 : 32;
         GGML_ASSERT(mode == GGML_DSV41_QAT_BF16 || ne0 % block == 0);
+        const char *tiled=std::getenv("LLAMA_DSV41_QAT_TILED");
+        if(!(tiled && tiled[0]=='0' && tiled[1]=='\0')) {
+            const int64_t total=ggml_nelements(dst);
+            const unsigned blocks=unsigned((total+255)/256);
+            switch(mode) {
+                case GGML_DSV41_QAT_FP4_E8M0:
+                    dsv41_act_qat_tiled_kernel<32,2><<<blocks,256,0,stream>>>(src_d,dst_d,total);break;
+                case GGML_DSV41_QAT_FP4_E4M3:
+                    dsv41_act_qat_tiled_kernel<16,3><<<blocks,256,0,stream>>>(src_d,dst_d,total);break;
+                case GGML_DSV41_QAT_FP8_E8M0:
+                    dsv41_act_qat_tiled_kernel<32,1><<<blocks,256,0,stream>>>(src_d,dst_d,total);break;
+                default:GGML_ABORT("invalid V4.1 QAT mode");
+            }
+            CUDA_CHECK(cudaGetLastError());return;
+        }
         const int64_t max_grid_dim = 65535;
         const unsigned gy = unsigned(nrow < max_grid_dim ? nrow : max_grid_dim);
         const unsigned gz = unsigned((nrow + max_grid_dim - 1) / max_grid_dim);

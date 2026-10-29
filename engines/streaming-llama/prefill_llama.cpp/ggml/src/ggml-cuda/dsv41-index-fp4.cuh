@@ -70,7 +70,21 @@ static __global__ void dsv41_index_fp4_scores(float *out,const uint32_t *query,c
     }
 }
 
-static bool dsv41_index_fp4(ggml_backend_cuda_context&ctx,ggml_tensor*dst){
+static __global__ void dsv41_index_fp4_init_proof(int *proof) {
+    const int i=threadIdx.x;
+    if(i<7)proof[i]=i<3?0:(i<5?INT_MAX:INT_MIN);
+}
+#if CUDART_VERSION >= 12080
+static __global__ void dsv41_index_fp4_condition(const int *proof,cudaGraphConditionalHandle handle,int tokens,int rows) {
+    if(threadIdx.x)return;
+    const bool exact=ggml_dsv41_index_fp4_certified(proof);
+    cudaGraphSetConditional(handle,exact?1:0);
+    printf("PERFEXP_INDEX_FP4_GPU_CONDITIONAL tokens=%d keys=%d exact=%d invalid=%d spans=%d,%d original_bf16_else=1\n",
+        tokens,rows,int(exact),proof[0],proof[1],proof[2]);
+}
+#endif
+template<typename Fallback>
+static bool dsv41_index_fp4(ggml_backend_cuda_context&ctx,ggml_tensor*dst,Fallback fallback){
     if(!ggml_dsv41_index_fp4_enabled(std::getenv("LLAMA_DSV41_INDEX_FP4")))return false;
     GGML_ASSERT(ggml_cuda_info().devices[ctx.device].cc==1200);
     const int tokens=int(dst->ne[1]),rows=int(dst->ne[0]),qrows=tokens*32;
@@ -79,6 +93,56 @@ static bool dsv41_index_fp4(ggml_backend_cuda_context&ctx,ggml_tensor*dst){
     ggml_cuda_pool_alloc<uint32_t>q(ctx.pool(),uint64_t(qrows)*16),k(ctx.pool(),uint64_t(rows)*16),qs(ctx.pool(),qrows),ks(ctx.pool(),rows);
     ggml_cuda_pool_alloc<int>proof(ctx.pool(),7);
     int host[7]={0,0,0,INT_MAX,INT_MAX,INT_MIN,INT_MIN};const auto stream=ctx.stream();
+    cudaStreamCaptureStatus capturing=cudaStreamCaptureStatusNone;
+    CUDA_CHECK(cudaStreamIsCapturing(stream,&capturing));
+    if(capturing==cudaStreamCaptureStatusActive) {
+#if CUDART_VERSION >= 12080
+        // Keep the same representation/integer-sum certificate and both
+        // arithmetic paths. The GPU selects the branch on every replay.
+        dsv41_index_fp4_init_proof<<<1,32,0,stream>>>(proof.get());
+        dsv41_index_fp4_pack<<<(qrows+3)/4,128,0,stream>>>((const float*)dst->src[0]->data,q.get(),qs.get(),qrows,proof.get(),0);
+        dsv41_index_fp4_pack<<<(rows+3)/4,128,0,stream>>>((const float*)dst->src[2]->data,k.get(),ks.get(),rows,proof.get(),1);
+        cudaGraph_t graph=nullptr;cudaGraphConditionalHandle condition;
+        CUDA_CHECK(cudaStreamGetCaptureInfo(stream,&capturing,nullptr,&graph,nullptr,nullptr,nullptr));
+        CUDA_CHECK(cudaGraphConditionalHandleCreate(&condition,graph,0,0));
+        dsv41_index_fp4_condition<<<1,32,0,stream>>>(proof.get(),condition,tokens,rows);
+        const cudaGraphNode_t *dependencies=nullptr;size_t dependency_count=0;
+        CUDA_CHECK(cudaStreamGetCaptureInfo(stream,&capturing,nullptr,&graph,&dependencies,nullptr,&dependency_count));
+        cudaGraphNodeParams params{};params.type=cudaGraphNodeTypeConditional;
+        params.conditional.handle=condition;params.conditional.type=cudaGraphCondTypeIf;params.conditional.size=2;
+        cudaGraphNode_t branch;
+        CUDA_CHECK(cudaGraphAddNode(&branch,graph,dependencies,nullptr,dependency_count,&params));
+        cudaStream_t body;
+        CUDA_CHECK(cudaStreamCreateWithFlags(&body,cudaStreamNonBlocking));
+        for(int arm=0;arm<2;++arm) {
+            CUDA_CHECK(cudaStreamBeginCaptureToGraph(body,params.conditional.phGraph_out[arm],nullptr,nullptr,0,cudaStreamCaptureModeRelaxed));
+            if(arm==0) {
+                dsv41_index_fp4_scores<<<dim3((rows+31)/32,tokens),dim3(32,4),0,body>>>((float*)dst->data,q.get(),k.get(),qs.get(),ks.get(),
+                    (const float*)dst->src[1]->data,(const int32_t*)dst->src[3]->data,dst->src[4]?(const float*)dst->src[4]->data:nullptr,rows);
+                CUDA_CHECK(cudaGetLastError());
+            } else {
+                // The branches are mutually exclusive and depend on the
+                // completed certificate. Reuse the FP4 packing storage for
+                // the original <=64MiB BF16 workspace instead of charging
+                // both branches simultaneously. VMM mappings remain live;
+                // the captured true branch retains its actual addresses.
+                auto release=[](auto &allocation) {
+                    allocation.pool->free(allocation.ptr,allocation.actual_size);
+                    allocation.ptr=nullptr;
+                };
+                release(proof);release(ks);release(qs);release(k);release(q);
+                fallback(body);
+            }
+            CUDA_CHECK(cudaStreamEndCapture(body,nullptr));
+        }
+        CUDA_CHECK(cudaStreamDestroy(body));
+        CUBLAS_CHECK(cublasSetStream(ctx.cublas_handle(),stream));
+        CUDA_CHECK(cudaStreamUpdateCaptureDependencies(stream,&branch,nullptr,1,cudaStreamSetCaptureDependencies));
+        return true;
+#else
+        GGML_ABORT("FP4/BF16 conditional capture requires CUDA 12.8 or newer; use the original eager policy on older toolkits");
+#endif
+    }
     CUDA_CHECK(cudaMemcpyAsync(proof.get(),host,sizeof(host),cudaMemcpyHostToDevice,stream));
     dsv41_index_fp4_pack<<<(qrows+3)/4,128,0,stream>>>((const float*)dst->src[0]->data,q.get(),qs.get(),qrows,proof.get(),0);
     dsv41_index_fp4_pack<<<(rows+3)/4,128,0,stream>>>((const float*)dst->src[2]->data,k.get(),ks.get(),rows,proof.get(),1);

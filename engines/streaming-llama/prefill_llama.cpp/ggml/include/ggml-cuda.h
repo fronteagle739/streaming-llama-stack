@@ -71,6 +71,9 @@ GGML_BACKEND_API int64_t ggml_backend_cuda_graphs_total_created(ggml_backend_t b
 GGML_BACKEND_API void ggml_backend_cuda_graphs_disable_push(ggml_backend_t backend);
 GGML_BACKEND_API void ggml_backend_cuda_graphs_disable_pop(ggml_backend_t backend);
 GGML_BACKEND_API bool ggml_backend_cuda_graphs_are_disabled(ggml_backend_t backend);
+// Pre-map the caller's already-admitted temporary high-water mark before
+// stream capture. No graph, tensor allocation or arithmetic is executed.
+GGML_BACKEND_API bool ggml_backend_cuda_graphs_reserve(ggml_backend_t backend, size_t bytes);
 
 // Phase 304 (2026-05-04): per-process cudaEventCreate / cudaStreamCreate counts
 // from the file-scope Meyers-singleton atomics in common.cuh. Counts only the

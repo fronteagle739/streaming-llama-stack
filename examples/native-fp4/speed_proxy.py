@@ -21,6 +21,12 @@ from slstack.process import OwnedProcess
 
 LABEL = 'Q4\u2192MXFP4 requant (lossy), speed proxy for native FP4'
 
+def graph_witnesses(trace,minimum=1):
+    rows=re.findall(r'OTHER22_CUDA_GRAPH launch=1 captured=(\d+) captures=(\d+) replays=(\d+) ledger_entries=(\d+) bounded_executables=1',trace)
+    if len(rows)<minimum:
+        raise ValueError('Explicit CUDA graph request has insufficient actual launches: '+str(len(rows))+' < '+str(minimum))
+    return dict(cuda_graph_launches=len(rows),cuda_graph_captures=int(rows[-1][1]),cuda_graph_replays=int(rows[-1][2]))
+
 
 def token_ids(path):
     raw = path.read_bytes()
@@ -75,6 +81,7 @@ def run(args, cfg):
                   decode_library_sha256=hashlib.file_digest(
                       (Path(cfg['llama_producer']).parent / 'ds4-decode.dll').open('rb'), 'sha256').hexdigest(),
                   profiled=args.profile_stages,
+                  cuda_graphs_requested=args.cuda_graphs,
                   prefill_only=args.prefill_only,
                   native_ffn_requested=bool(cfg['env_overrides'].get('LLAMA_DSV41_FLASHINFER_NATIVE_FFN_DLL')),
                   dense_fp8_requested=cfg['env_overrides'].get('LLAMA_DSV41_DENSE_FP8')=='1',
@@ -178,8 +185,11 @@ def run(args, cfg):
             record['dense_fp8_completed_products']=sum(int(row[3]) for row in actual)
             if {int(row[0]) for row in actual}!=set(range(40)) or not record['dense_fp8_completed_products']:
                 record.update(status='FAIL',error='Missing FP8 dense completion witnesses for all40 layers')
+        if record['status']=='PASS' and args.cuda_graphs:
+            try:record.update(graph_witnesses(trace.read_text(encoding='utf-8',errors='replace'),max(1,record.get('native_ffn_completed_graphs',0))))
+            except ValueError as error:record.update(status='FAIL',error=str(error))
         args.output.write_text(json.dumps(record, indent=2, default=str), encoding='utf-8')
-        if record['status'] == 'FAIL' and (record.get('dense_fp8_requested') or record.get('flashinfer_requested') or (
+        if record['status'] == 'FAIL' and (args.cuda_graphs or record.get('dense_fp8_requested') or record.get('flashinfer_requested') or (
                 record.get('decode_mma_requested') and 'decode_mma_queued_layers' in record)):
             raise RuntimeError(record['error'])
 
@@ -196,6 +206,7 @@ def main():
     p.add_argument('--calibrate', type=Path)
     p.add_argument('--profile-stages', action='store_true')
     p.add_argument('--prefill-only',action='store_true',help='No decode/quality dial; optional one-token continuation saves only the untouched frontier')
+    p.add_argument('--cuda-graphs',action='store_true',help='Explicit streamed layer capture/update/replay experiment; fail if unsupported')
     p.add_argument('--worker', action='store_true', help=argparse.SUPPRESS)
     args = p.parse_args()
     if not 0 <= args.bias <= 1.36125 or args.decode < 0:
@@ -214,7 +225,12 @@ def main():
         cfg['cache_affinity_spread_file'] = ''
         cfg['env_overrides']['DS4_CACHE_AFFINITY_CALIBRATE'] = str(args.calibrate.resolve())
     if args.arm == 'proxy':
-        cfg['env_overrides'].update(LLAMA_DSV41_STORED_MXFP4='1', GGML_CUDA_DISABLE_GRAPHS='1')
+        cfg['env_overrides']['LLAMA_DSV41_STORED_MXFP4']='1'
+        if not args.cuda_graphs:cfg['env_overrides']['GGML_CUDA_DISABLE_GRAPHS']='1'
+    if args.cuda_graphs:
+        # Explicit CLI selection overrides the harness's inherited eager policy.
+        cfg['env_overrides']['GGML_CUDA_DISABLE_GRAPHS']='0'
+        cfg['env_overrides']['LLAMA_DSV41_CUDA_GRAPHS']='1'
     if args.profile_stages:
         cfg['env_overrides'].update(LLAMA_CUDA_OP_PROFILE='1', LLAMA_CUDA_OP_PROFILE_NODES='1',
                                     LLAMA_CUDA_OP_PROFILE_DUMP_EACH='1', LLAMADECODE_TILE_TIMING='1')

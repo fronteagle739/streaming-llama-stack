@@ -1,8 +1,9 @@
+#include "dispatch-counter.cuh"
 #include "argsort.cuh"
 #include "ggml-dsv41-topk.h"
 #include <atomic>
 
-static std::atomic<uint64_t> dsv41_topk_radix_queued{0};
+static ggml_cuda_dispatch_counter dsv41_topk_radix_queued{0};
 extern "C" uint64_t ggml_backend_cuda_dsv41_topk_radix_queued(void) {
     return dsv41_topk_radix_queued.load(std::memory_order_acquire);
 }

@@ -1,10 +1,11 @@
+#include "dispatch-counter.cuh"
 #include "cpy.cuh"
 #include "dequantize.cuh"
 #include "cpy-utils.cuh"
 #include "dsv41-cast-vector.cuh"
 #include <atomic>
 
-static std::atomic<uint64_t> dsv41_cast_calls{0},dsv41_cast_elements{0},dsv41_cast_nc_calls{0};
+static ggml_cuda_dispatch_counter dsv41_cast_calls{0},dsv41_cast_elements{0},dsv41_cast_nc_calls{0};
 extern "C" void ggml_cuda_dsv41_cast_vector_note(uint64_t n,bool nc){
     dsv41_cast_elements.fetch_add(n,std::memory_order_release);
     if(nc)dsv41_cast_nc_calls.fetch_add(1,std::memory_order_release);

@@ -1,8 +1,9 @@
+#include "dispatch-counter.cuh"
 #include "argsort.cuh"
 #include "top-k.cuh"
 #include "ggml-dsv41-stream-topk.h"
 #include <atomic>
-static std::atomic<uint64_t>dsv41_stream_topk_queued{0};
+static ggml_cuda_dispatch_counter dsv41_stream_topk_queued{0};
 extern "C" uint64_t ggml_backend_cuda_dsv41_stream_topk_queued(void){return dsv41_stream_topk_queued.load(std::memory_order_acquire);}
 
 #ifdef GGML_CUDA_USE_CUB

@@ -1189,6 +1189,7 @@ struct ggml_tensor_extra_gpu {
 #define USE_CUDA_GRAPH
 #endif
 
+#include "dispatch-counter.cuh"
 struct ggml_cuda_graph_node_properties {
     void * node_data;
     ggml_op node_op;
@@ -1226,6 +1227,7 @@ struct ggml_cuda_graph {
     // ref: https://github.com/ggml-org/llama.cpp/pull/18583
     // ref: https://github.com/ggml-org/llama.cpp/pull/19165
     std::vector<ggml_cuda_graph_node_properties> extra;
+    ggml_cuda_dispatch_deltas dispatch_deltas;
 
     void record_update(bool use_graph, bool update_required) {
         if (use_graph && update_required) {
@@ -1233,14 +1235,20 @@ struct ggml_cuda_graph {
         } else {
             number_consecutive_updates = 0;
         }
-        if (number_consecutive_updates >= 4) {
+        // Streamed layers legitimately change tensor bindings on every tile.
+        // Their explicit mode keeps one bounded executable and updates it.
+        const char *streaming=getenv("LLAMA_DSV41_CUDA_GRAPHS");
+        if (number_consecutive_updates >= 4 && !(streaming && streaming[0]=='1' && !streaming[1])) {
             GGML_LOG_DEBUG("%s: disabling CUDA graphs due to too many consecutive updates\n", __func__);
             disable_due_to_too_many_updates = true;
         }
     }
 
     bool is_enabled() const {
-        static const bool disable_cuda_graphs_due_to_env = (getenv("GGML_CUDA_DISABLE_GRAPHS") != nullptr);
+        static const bool disable_cuda_graphs_due_to_env = [] {
+            const char *value=getenv("GGML_CUDA_DISABLE_GRAPHS");
+            return value && std::strcmp(value,"0")!=0;
+        }();
         return !(disable_due_to_gpu_arch || disable_cuda_graphs_due_to_env || disable_due_to_too_many_updates);
     }
 #endif

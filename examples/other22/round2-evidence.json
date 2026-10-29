@@ -1,0 +1,3260 @@
+{
+  "base_commit": "9a247cc5652f4f749de1e01b4b8a5e5b4d75f4b9",
+  "source_capability_reductions": [],
+  "clean_control": {
+    "name": "final-r2-control-nsys",
+    "prompt_seconds": 38.7100633,
+    "clock": "QPC: SQLite startTime + relative nanoseconds; native steady milliseconds",
+    "first_to_last_compute_envelope_seconds": 37.9957955,
+    "kernel_count": 186038,
+    "kernel_busy_union_seconds": 17.987877254,
+    "kernel_duration_sum_seconds": 17.987877254,
+    "copy_busy_union_seconds": 1.624501008,
+    "kernel_or_copy_union_seconds": 19.612374198,
+    "diagnostic_warnings": [
+      [
+        2,
+        "No NVTX events collected. Does the process use NVTX?"
+      ],
+      [
+        2,
+        "Installed CUDA driver version (13.3) is not supported by this build of Nsight Systems. CUDA trace will be collected using libraries for driver version 13.2"
+      ]
+    ],
+    "ranked_kernel_categories": [
+      [
+        "FP16 / Q8 / F32 GEMM incl fixup",
+        3.2044541839999927
+      ],
+      [
+        "Attention",
+        3.184424213999998
+      ],
+      [
+        "Expert incl packing",
+        2.934017183000011
+      ],
+      [
+        "BF16 GEMM / score epilogue",
+        1.8365432529999548
+      ],
+      [
+        "QAT / quantization",
+        1.4095044570000146
+      ],
+      [
+        "Remaining kernels",
+        1.264925921000033
+      ],
+      [
+        "Cast / copy",
+        1.256457901000032
+      ],
+      [
+        "Top K",
+        0.805164299
+      ],
+      [
+        "RoPE",
+        0.6664497960000018
+      ],
+      [
+        "RMS norm",
+        0.570622246000001
+      ],
+      [
+        "HC expand",
+        0.5226916230000015
+      ],
+      [
+        "Concat",
+        0.33262217700000046
+      ]
+    ],
+    "top_kernels": [
+      [
+        "native_sparse_attn_kernel__kernel",
+        2.624644454,
+        563
+      ],
+      [
+        "kernel_cutlass_kernel_flashinferfused_moecute_dslblackwell_sm12xkernel_moe_mxfp8_mxfp4_gemmCuteDslSm120MoeMxfp8Mxfp4Grouped_object_at__Tiled_MMA_Thr_Layout_VMNK_324211321280_Permutation_M_0",
+        2.154811233,
+        1689
+      ],
+      [
+        "void mul_mat_q<(ggml_type)8, (int)128, (bool)0, (bool)0>(const char *, const int *, const int *, const int *, float *, float *, int, int, int, int, int, int, int, int, int, int, int, int, int, int, int, int, int)",
+        1.761847298,
+        3941
+      ],
+      [
+        "void cutlass::Kernel2<cutlass_80_tensorop_s16816gemm_bf16_256x128_32x3_tn_align8>(T1::Params)",
+        1.236189043,
+        39440
+      ],
+      [
+        "void dsv41_act_qat_kernel<(int)256, (int)0>(const float *, float *, long long, long long)",
+        1.190225788,
+        10212
+      ],
+      [
+        "void cutlass::Kernel2<cutlass_80_tensorop_s16816gemm_f16_64x256_32x4_tn_align8>(T1::Params)",
+        0.876928228,
+        5278
+      ],
+      [
+        "dsv41_rope_kernel(float *, const float *, const int *, const float *, long long, long long, long long, bool)",
+        0.666449796,
+        1997
+      ],
+      [
+        "void k_dsv41_topk_radix_tiles<(bool)1>(const float *, const int *, int *, int, int, int, bool)",
+        0.55750351,
+        108
+      ],
+      [
+        "void dsa_accum_scores_from_gemm_kernel<(bool)1, (int)8>(const float *, const float *, float *, int, int, int, int, int, float, int, int)",
+        0.540983738,
+        43800
+      ],
+      [
+        "k_mul_add_bcast_f32(const float *, const float *, const float *, float *, long long, long long, long long, long long, long long, long long, long long, unsigned long long, unsigned long long, unsigned long long, unsigned long long, unsigned long long, unsigned long long, unsigned long long)",
+        0.525176485,
+        3396
+      ],
+      [
+        "void dsv41_hc_channels_kernel<(bool)1>(float *, const float *, const float *, const float *, unsigned int, unsigned int)",
+        0.522691623,
+        1126
+      ],
+      [
+        "void rms_norm_f32<(int)1024, (bool)0, (bool)0>(const float *, float *, int, long long, long long, long long, float, const float *, long long, long long, long long, uint3, uint3, uint3, uint3, const float *, long long, long long, long long, uint3, uint3, uint3, uint3)",
+        0.491750077,
+        1126
+      ],
+      [
+        "void dsv41_cast_vector4<float, __half, (bool)1>(const T1 *, T2 *, long long, long long, long long, long long, long long, long long)",
+        0.402444425,
+        3018
+      ],
+      [
+        "gather(const float *, const int *, const int *, __nv_fp8_e4m3 *, unsigned char *, int, int)",
+        0.380216927,
+        563
+      ],
+      [
+        "void concat_f32_flat<(bool)1>(const float *, const float *, float *, long long, long long, long long)",
+        0.296239763,
+        6453
+      ],
+      [
+        "<unnamed>::validate_kernel(ggml_dsv41_validation, unsigned int *, unsigned long long)",
+        0.28037301,
+        1138
+      ],
+      [
+        "dsv41_tilelang_query_all(__nv_bfloat16 *, const float *, unsigned int)",
+        0.276436893,
+        563
+      ],
+      [
+        "void cutlass::Kernel2<cutlass_80_tensorop_s16816gemm_f16_128x64_64x3_tn_align8>(T1::Params)",
+        0.271231988,
+        295
+      ],
+      [
+        "dsv41_tilelang_indices(int *, unsigned int, unsigned int, unsigned int, unsigned int, unsigned int, unsigned int, const ggml_dsv41_tilelang_record *, const unsigned int *, unsigned int)",
+        0.247377585,
+        563
+      ],
+      [
+        "void dsv41_cast_vector4<float, __half, (bool)0>(const T1 *, T2 *, long long, long long, long long, long long, long long, long long)",
+        0.231167183,
+        4504
+      ],
+      [
+        "mid_pack(const __nv_bfloat16 *, const __nv_bfloat16 *, const float *, const int *, const int *, __nv_fp8_e4m3 *, unsigned char *, int, int, float)",
+        0.216740413,
+        563
+      ],
+      [
+        "void dsv41_cast_vector4<float, __nv_bfloat16, (bool)1>(const T1 *, T2 *, long long, long long, long long, long long, long long, long long)",
+        0.178179288,
+        671
+      ],
+      [
+        "void dsv41_cast_vector4<__nv_bfloat16, float, (bool)1>(const T1 *, T2 *, long long, long long, long long, long long, long long, long long)",
+        0.167050234,
+        646
+      ],
+      [
+        "void cutlass::Kernel2<cutlass_80_simt_sgemm_128x256_8x4_tn_align1>(T1::Params)",
+        0.164217984,
+        523
+      ],
+      [
+        "void quantize_mmq_q8_1<(mmq_q8_1_ds_layout)0>(const float *, const int *, void *, long long, long long, long long, long long, long long, int, int)",
+        0.158828625,
+        3941
+      ],
+      [
+        "void cpy_scalar<&cpy_1_scalar<float, float>>(const char *, char *, long long, long long, long long, long long, long long, long long, long long, long long, long long, long long, long long, long long, long long, long long, long long)",
+        0.131603824,
+        563
+      ],
+      [
+        "void k_bin_bcast<&op_mul, float, float, float, const float *>(const T2 *, const T3 *, T4 *, int, int, int, uint3, uint3, uint3, uint3, uint3, int, int, int, int, int, int, int, int, int, int, int, T5...)",
+        0.115023593,
+        1645
+      ],
+      [
+        "void k_dsv41_topk_radix_tiles<(bool)0>(const float *, const int *, int *, int, int, int, bool)",
+        0.11225424,
+        108
+      ],
+      [
+        "reduce(const __nv_bfloat16 *, const int *, float *, int)",
+        0.110894483,
+        563
+      ],
+      [
+        "void k_bin_bcast<&op_add, float, float, float, const float *>(const T2 *, const T3 *, T4 *, int, int, int, uint3, uint3, uint3, uint3, uint3, int, int, int, int, int, int, int, int, int, int, int, T5...)",
+        0.085545334,
+        2152
+      ],
+      [
+        "void cpy_scalar_contiguous<__nv_bfloat16, __half>(const char *, char *, long long)",
+        0.08405863,
+        513
+      ],
+      [
+        "void k_top_k_f32_i32_tiles<(bool)1, (bool)0>(const float *, const int *, int *, int, int, int, int, bool)",
+        0.077193434,
+        13
+      ],
+      [
+        "void rms_norm_f32<(int)1024, (bool)1, (bool)0>(const float *, float *, int, long long, long long, long long, float, const float *, long long, long long, long long, uint3, uint3, uint3, uint3, const float *, long long, long long, long long, uint3, uint3, uint3, uint3)",
+        0.074399167,
+        1689
+      ],
+      [
+        "void mm_ids_helper<(int)6>(const int *, int *, int *, int *, int, int, int, int, int)",
+        0.070629097,
+        563
+      ],
+      [
+        "void k_argsort_f32_T<(ggml_sort_order)1, store, int>(const float *, T3 *, int, int, int, T2)",
+        0.056973552,
+        563
+      ],
+      [
+        "void cutlass::Kernel2<cutlass_80_wmma_tensorop_s161616gemm_bf16_32x32_64x1_tn_align8>(T1::Params)",
+        0.050797929,
+        3480
+      ],
+      [
+        "dsv41_engram_add_kernel(float *, const float *, const float *, const float *, const float *, const signed char *, long long, long long, float)",
+        0.049995516,
+        50
+      ],
+      [
+        "void mul_mat_q_stream_k_fixup<(ggml_type)8, (int)128, (bool)0, (bool)0>(const int *, const int *, float *, const float *, int, int, int, unsigned long long, int, unsigned long long, int, unsigned long long, int)",
+        0.04114989,
+        3941
+      ],
+      [
+        "void dsv41_act_qat_kernel<(int)32, (int)2>(const float *, float *, long long, long long)",
+        0.038940297,
+        208
+      ],
+      [
+        "void k_top_k_f32_i32<(ggml_sort_order)1>(const float *, int *, int, int, int)",
+        0.036684451,
+        12
+      ],
+      [
+        "dsv41_tilelang_kv(__nv_bfloat16 *, const __half *, const __half *, unsigned long long, unsigned long long)",
+        0.035965282,
+        563
+      ],
+      [
+        "concat_bytes_dim0(const char *, const char *, char *, int, int, unsigned long long)",
+        0.030688089,
+        513
+      ],
+      [
+        "dsv41_index_apply_mask_kernel(float *, const int *, const float *, int, int)",
+        0.028572363,
+        108
+      ],
+      [
+        "void cutlass::Kernel2<cutlass_80_tensorop_s16816gemm_f16_256x128_32x3_tn_align8>(T1::Params)",
+        0.025575559,
+        100
+      ],
+      [
+        "void cutlass::Kernel2<cutlass_80_tensorop_s16816gemm_f16_128x128_32x4_tn_align8>(T1::Params)",
+        0.025356353,
+        330
+      ],
+      [
+        "void cpy_q_f32<&cpy_blck_q8_0_f32, (int)32>(const char *, char *, long long, long long, long long, long long, long long, long long, long long, long long, long long, long long, long long, long long, long long, long long, long long)",
+        0.023525356,
+        488
+      ],
+      [
+        "void op_clamp_kernel<float>(const T1 *, T1 *, T1, T1, int)",
+        0.02272597,
+        2202
+      ],
+      [
+        "void k_top_k_f32_i32_tiles<(bool)0, (bool)0>(const float *, const int *, int *, int, int, int, int, bool)",
+        0.021528664,
+        13
+      ],
+      [
+        "void unary_gated_op_kernel<&op_silu, float>(const T2 *, const T2 *, T2 *, long long, long long, long long, long long)",
+        0.021302356,
+        563
+      ],
+      [
+        "void cutlass::Kernel2<cutlass_80_tensorop_s16816gemm_f16_64x128_64x3_tn_align8>(T1::Params)",
+        0.021054815,
+        176
+      ],
+      [
+        "void dsv41_act_qat_kernel<(int)32, (int)1>(const float *, float *, long long, long long)",
+        0.017553099,
+        563
+      ],
+      [
+        "void cpy_scalar_contiguous<float, int>(const char *, char *, long long)",
+        0.015831445,
+        1126
+      ],
+      [
+        "dsv41_candidate_blocks_kernel(float *, const float *, const int *, long long, long long, long long)",
+        0.015465894,
+        25
+      ],
+      [
+        "void dsv41_cast_vector4<float, __nv_bfloat16, (bool)0>(const T1 *, T2 *, long long, long long, long long, long long, long long, long long)",
+        0.013994332,
+        6624
+      ],
+      [
+        "void k_get_rows_float<float, float, (bool)0, float>(const T1 *, const int *, T2 *, long long, long long, long long, unsigned long long, unsigned long long, unsigned long long, unsigned long long, unsigned long long, unsigned long long, unsigned long long, unsigned long long, unsigned long long, const float *, long long, const T4 *, long long)",
+        0.013415385,
+        1649
+      ],
+      [
+        "void cpy_scalar_contiguous<int, float>(const char *, char *, long long)",
+        0.007852493,
+        513
+      ],
+      [
+        "void cutlass::Kernel2<cutlass_80_tensorop_s16816gemm_bf16_128x256_32x3_tn_align8>(T1::Params)",
+        0.007804722,
+        600
+      ],
+      [
+        "void k_set_rows<float, int, float>(const T1 *, const T2 *, T3 *, long long, long long, long long, long long, long long, long long, long long, long long, long long, long long, long long, long long, long long, long long, uint3, uint3, uint3, uint3, uint3)",
+        0.006793559,
+        32
+      ],
+      [
+        "void dsv41_hc_sinkhorn<(bool)1>(float *, const float *, const float *, const float *, int)",
+        0.006759419,
+        1126
+      ],
+      [
+        "void cutlass::Kernel2<cutlass_80_simt_sgemm_128x128_8x4_tn_align1>(T1::Params)",
+        0.006319496,
+        40
+      ],
+      [
+        "void concat_f32_flat<(bool)0>(const float *, const float *, float *, long long, long long, long long)",
+        0.005694325,
+        2065
+      ],
+      [
+        "dsv41_raw_commit_kernel(float *, const float *, unsigned int, long long)",
+        0.00562595,
+        2252
+      ],
+      [
+        "dsv41_selected_mask_kernel(float *, const int *, const int *, const float *, long long, long long, long long)",
+        0.005468268,
+        513
+      ],
+      [
+        "void cutlass::Kernel2<cutlass_80_tensorop_s16816gemm_f16_256x64_32x4_tn_align8>(T1::Params)",
+        0.00493293,
+        12
+      ],
+      [
+        "void rms_norm_f32<(int)256, (bool)1, (bool)0>(const float *, float *, int, long long, long long, long long, float, const float *, long long, long long, long long, uint3, uint3, uint3, uint3, const float *, long long, long long, long long, uint3, uint3, uint3, uint3)",
+        0.004473002,
+        763
+      ],
+      [
+        "void fill_kernel<float>(T1 *, long long, T1)",
+        0.004471757,
+        3324
+      ],
+      [
+        "void k_bin_bcast<&op_repeat, float, float, float, >(const T2 *, const T3 *, T4 *, int, int, int, uint3, uint3, uint3, uint3, uint3, int, int, int, int, int, int, int, int, int, int, int, T5...)",
+        0.004229985,
+        526
+      ],
+      [
+        "void dsv41_act_qat_kernel<(int)16, (int)3>(const float *, float *, long long, long long)",
+        0.003956648,
+        100
+      ],
+      [
+        "attention_tokentile_raw_mirror_kernel(__half *, const float *, const int *, unsigned int, unsigned int, unsigned int, unsigned int, unsigned int, unsigned int, unsigned int)",
+        0.00371632,
+        563
+      ],
+      [
+        "void cutlass::Kernel2<cutlass_80_tensorop_s16816gemm_f16_128x64_64x4_tn_align8>(T1::Params)",
+        0.003414294,
+        80
+      ],
+      [
+        "scale_f32(const float *, float *, float, float, long long)",
+        0.002938651,
+        1076
+      ],
+      [
+        "void unary_op_kernel<&op_step, float>(const T2 *, T2 *, int)",
+        0.002253759,
+        513
+      ],
+      [
+        "void cublasLt::splitKreduce_kernel<(int)32, (int)16, int, float, float, float, float, (bool)0, float, float, float, (bool)1, (bool)0, (bool)0, (bool)0>(cublasLt::cublasSplitKParams<T6>, const T4 *, const T10 *, T9 *, T5 *, const T6 *, const T6 *, const T11 *, const T4 *, T11 *, void *, long long, T6 *, int *, T6 *, T6 *, const T6 *, const T6 *, const T6 *, const T6 *, const T6 *)",
+        0.002156408,
+        1134
+      ],
+      [
+        "void unary_op_kernel<&op_softplus_sqrt, float>(const T2 *, T2 *, int)",
+        0.002021162,
+        563
+      ],
+      [
+        "void cutlass::Kernel2<cutlass_80_wmma_tensorop_s161616gemm_f16_32x32_128x1_tn_align8>(T1::Params)",
+        0.001944821,
+        100
+      ],
+      [
+        "void reduce_rows_f32<(bool)0>(const float *, float *, int)",
+        0.001359085,
+        563
+      ],
+      [
+        "void k_get_rows_float<__half, float, (bool)0, __half>(const T1 *, const int *, T2 *, long long, long long, long long, unsigned long long, unsigned long long, unsigned long long, unsigned long long, unsigned long long, unsigned long long, unsigned long long, unsigned long long, unsigned long long, const float *, long long, const T4 *, long long)",
+        0.000986426,
+        13
+      ],
+      [
+        "void cutlass::Kernel2<cutlass_80_wmma_tensorop_s161616gemm_bf16_32x32_64x2_tn_align8>(T1::Params)",
+        0.000767821,
+        280
+      ],
+      [
+        "void cpy_scalar<&cpy_1_scalar<int, int>>(const char *, char *, long long, long long, long long, long long, long long, long long, long long, long long, long long, long long, long long, long long, long long, long long, long long)",
+        0.000750691,
+        563
+      ],
+      [
+        "inverse_routes(const int *, int *, int)",
+        0.00072503,
+        563
+      ],
+      [
+        "void k_set_rows<float, long long, __nv_bfloat16>(const T1 *, const T2 *, T3 *, long long, long long, long long, long long, long long, long long, long long, long long, long long, long long, long long, long long, long long, long long, uint3, uint3, uint3, uint3, uint3)",
+        0.000587404,
+        200
+      ],
+      [
+        "void k_bin_bcast<&op_div, float, float, float, const float *>(const T2 *, const T3 *, T4 *, int, int, int, uint3, uint3, uint3, uint3, uint3, int, int, int, int, int, int, int, int, int, int, int, T5...)",
+        0.000501002,
+        563
+      ],
+      [
+        "dsv41_pool2_kernel(float *, const float *, const float *, const float *, const float *, long long, long long)",
+        0.000487308,
+        75
+      ],
+      [
+        "void cutlass::Kernel2<cutlass_80_wmma_tensorop_s161616gemm_f16_32x32_128x2_tn_align8>(T1::Params)",
+        0.000341142,
+        76
+      ],
+      [
+        "void cutlass::Kernel2<cutlass_80_tensorop_s16816gemm_f16_64x64_32x10_tn_align8>(T1::Params)",
+        0.000139386,
+        24
+      ]
+    ],
+    "api_duration_sums": [
+      [
+        "cudaStreamSynchronize_v3020",
+        19.736309962,
+        5996
+      ],
+      [
+        "cudaMemcpyAsync_v3020",
+        0.868090223,
+        11108
+      ],
+      [
+        "cudaHostUnregister_v4000",
+        0.648655915,
+        60
+      ],
+      [
+        "cudaLaunchKernel_v7000",
+        0.577735583,
+        131818
+      ],
+      [
+        "cuLaunchKernel",
+        0.184546926,
+        51397
+      ],
+      [
+        "cudaHostRegister_v4000",
+        0.160985012,
+        59
+      ],
+      [
+        "cuLibraryLoadData",
+        0.152573985,
+        34
+      ],
+      [
+        "cudaMemsetAsync_v3020",
+        0.06128135,
+        7670
+      ],
+      [
+        "cuLibraryGetKernel",
+        0.052919992,
+        92
+      ],
+      [
+        "cudaDeviceSynchronize_v3020",
+        0.04762228,
+        10
+      ],
+      [
+        "cuKernelGetName",
+        0.025853118,
+        133507
+      ],
+      [
+        "cuKernelGetFunction",
+        0.025494114,
+        50834
+      ],
+      [
+        "cudaWaitExternalSemaphoresAsync_v11020",
+        0.024997237,
+        243
+      ],
+      [
+        "cudaMemcpy2DAsync_v3020",
+        0.024275632,
+        10496
+      ],
+      [
+        "cudaEventRecord_v3020",
+        0.022807739,
+        8773
+      ],
+      [
+        "cudaLaunchKernelExC_v11060",
+        0.019918991,
+        2823
+      ],
+      [
+        "cudaStreamDestroy_v5050",
+        0.01808427,
+        1
+      ],
+      [
+        "cudaStreamWaitEvent_v3020",
+        0.006167729,
+        1337
+      ],
+      [
+        "cudaMallocHost_v3020",
+        0.005736825,
+        2
+      ],
+      [
+        "cudaKernelSetAttributeForDevice_v12060",
+        0.005504553,
+        4
+      ]
+    ],
+    "tile_host_seconds": {
+      "host_prepare_seconds": 2.067656,
+      "host_bind_seconds": 0.819196,
+      "host_register_seconds": 0.8162240000000001,
+      "host_graph_seconds": 0.18750299999999998,
+      "host_reserve_seconds": 0.500795,
+      "host_upload_seconds": 3.847023,
+      "host_launch_seconds": 3.798077,
+      "host_sync_seconds": 17.117843,
+      "gpu_seconds": 20.560095,
+      "compute_seconds": 20.932468,
+      "host_readback_seconds": 1.6807,
+      "host_cleanup_seconds": 0.002111
+    },
+    "tile_count": 563,
+    "layer_ledger_seconds": {
+      "wall_seconds": 37.309777800000006,
+      "acquire_seconds": 8.0341751,
+      "carry_begin_seconds": 0.0001451,
+      "executor_wall_seconds": 28.682958600000003,
+      "executor_phase_gap_seconds": 0.138413,
+      "engram_seconds": 0.07309,
+      "carry_read_seconds": 0.0006943,
+      "carry_write_seconds": 0.0010696000000000002,
+      "carry_commit_seconds": 0.0002019,
+      "provider_release_seconds": 0.0006512,
+      "scaffold_seconds": 0.516792
+    },
+    "layer_passes": 61,
+    "fetched_bytes": 456303081592,
+    "qualified_for_clean_ranking": true,
+    "trace_quality": "CLEAN_WITH_RETAINED_WARNINGS"
+  },
+  "clean_fusion": {
+    "name": "r2-fusion-nsys",
+    "prompt_seconds": 40.6409983,
+    "clock": "QPC: SQLite startTime + relative nanoseconds; native steady milliseconds",
+    "first_to_last_compute_envelope_seconds": 39.9185686,
+    "kernel_count": 181534,
+    "kernel_busy_union_seconds": 17.554948792,
+    "kernel_duration_sum_seconds": 17.554948792,
+    "copy_busy_union_seconds": 1.676829125,
+    "kernel_or_copy_union_seconds": 19.231777917,
+    "diagnostic_warnings": [
+      [
+        2,
+        "No NVTX events collected. Does the process use NVTX?"
+      ],
+      [
+        2,
+        "Installed CUDA driver version (13.3) is not supported by this build of Nsight Systems. CUDA trace will be collected using libraries for driver version 13.2"
+      ]
+    ],
+    "ranked_kernel_categories": [
+      [
+        "FP16 / Q8 / F32 GEMM incl fixup",
+        3.2054967540000323
+      ],
+      [
+        "Attention",
+        3.183454169000005
+      ],
+      [
+        "Expert incl packing",
+        2.9341546040000006
+      ],
+      [
+        "BF16 GEMM / score epilogue",
+        1.8365472669999738
+      ],
+      [
+        "QAT / quantization",
+        1.2777016580000016
+      ],
+      [
+        "Cast / copy",
+        1.2608703680000488
+      ],
+      [
+        "Top K",
+        0.80533331
+      ],
+      [
+        "RoPE",
+        0.6674876960000032
+      ],
+      [
+        "Remaining kernels",
+        0.6304334090000194
+      ],
+      [
+        "RMS norm",
+        0.6230118139999986
+      ],
+      [
+        "HC expand",
+        0.5250186160000002
+      ],
+      [
+        "Concat",
+        0.3324949540000009
+      ],
+      [
+        "HC collapse",
+        0.272944173
+      ]
+    ],
+    "top_kernels": [
+      [
+        "native_sparse_attn_kernel__kernel",
+        2.624424771,
+        563
+      ],
+      [
+        "kernel_cutlass_kernel_flashinferfused_moecute_dslblackwell_sm12xkernel_moe_mxfp8_mxfp4_gemmCuteDslSm120MoeMxfp8Mxfp4Grouped_object_at__Tiled_MMA_Thr_Layout_VMNK_324211321280_Permutation_M_0",
+        2.15449141,
+        1689
+      ],
+      [
+        "void mul_mat_q<(ggml_type)8, (int)128, (bool)0, (bool)0>(const char *, const int *, const int *, const int *, float *, float *, int, int, int, int, int, int, int, int, int, int, int, int, int, int, int, int, int)",
+        1.762973597,
+        3941
+      ],
+      [
+        "void cutlass::Kernel2<cutlass_80_tensorop_s16816gemm_bf16_256x128_32x3_tn_align8>(T1::Params)",
+        1.236275091,
+        39440
+      ],
+      [
+        "void dsv41_act_qat_kernel<(int)256, (int)0>(const float *, float *, long long, long long)",
+        1.100816055,
+        9086
+      ],
+      [
+        "void cutlass::Kernel2<cutlass_80_tensorop_s16816gemm_f16_64x256_32x4_tn_align8>(T1::Params)",
+        0.876646481,
+        5278
+      ],
+      [
+        "dsv41_rope_kernel(float *, const float *, const int *, const float *, long long, long long, long long, bool)",
+        0.667487696,
+        1997
+      ],
+      [
+        "void k_dsv41_topk_radix_tiles<(bool)1>(const float *, const int *, int *, int, int, int, bool)",
+        0.557467008,
+        108
+      ],
+      [
+        "void dsa_accum_scores_from_gemm_kernel<(bool)1, (int)8>(const float *, const float *, float *, int, int, int, int, int, float, int, int)",
+        0.540940048,
+        43800
+      ],
+      [
+        "void dsv41_hc_channels_kernel<(bool)1>(float *, const float *, const float *, const float *, unsigned int, unsigned int)",
+        0.525018616,
+        1126
+      ],
+      [
+        "void rms_norm_f32<(int)1024, (bool)0, (bool)0>(const float *, float *, int, long long, long long, long long, float, const float *, long long, long long, long long, uint3, uint3, uint3, uint3, const float *, long long, long long, long long, uint3, uint3, uint3, uint3)",
+        0.494002396,
+        1126
+      ],
+      [
+        "void dsv41_cast_vector4<float, __half, (bool)1>(const T1 *, T2 *, long long, long long, long long, long long, long long, long long)",
+        0.40553489,
+        3018
+      ],
+      [
+        "gather(const float *, const int *, const int *, __nv_fp8_e4m3 *, unsigned char *, int, int)",
+        0.380444429,
+        563
+      ],
+      [
+        "void concat_f32_flat<(bool)1>(const float *, const float *, float *, long long, long long, long long)",
+        0.296106945,
+        6453
+      ],
+      [
+        "<unnamed>::validate_kernel(ggml_dsv41_validation, unsigned int *, unsigned long long)",
+        0.281333996,
+        1138
+      ],
+      [
+        "dsv41_tilelang_query_all(__nv_bfloat16 *, const float *, unsigned int)",
+        0.277011891,
+        563
+      ],
+      [
+        "dsv41_hc_collapse_kernel(const float *, const float *, float *, long long, long long)",
+        0.272944173,
+        1126
+      ],
+      [
+        "void cutlass::Kernel2<cutlass_80_tensorop_s16816gemm_f16_128x64_64x3_tn_align8>(T1::Params)",
+        0.27130132,
+        295
+      ],
+      [
+        "dsv41_tilelang_indices(int *, unsigned int, unsigned int, unsigned int, unsigned int, unsigned int, unsigned int, const ggml_dsv41_tilelang_record *, const unsigned int *, unsigned int)",
+        0.246115028,
+        563
+      ],
+      [
+        "void dsv41_cast_vector4<float, __half, (bool)0>(const T1 *, T2 *, long long, long long, long long, long long, long long, long long)",
+        0.231781448,
+        4504
+      ],
+      [
+        "mid_pack(const __nv_bfloat16 *, const __nv_bfloat16 *, const float *, const int *, const int *, __nv_fp8_e4m3 *, unsigned char *, int, int, float)",
+        0.216627096,
+        563
+      ],
+      [
+        "void dsv41_cast_vector4<float, __nv_bfloat16, (bool)1>(const T1 *, T2 *, long long, long long, long long, long long, long long, long long)",
+        0.178766236,
+        671
+      ],
+      [
+        "void dsv41_cast_vector4<__nv_bfloat16, float, (bool)1>(const T1 *, T2 *, long long, long long, long long, long long, long long, long long)",
+        0.166882557,
+        646
+      ],
+      [
+        "void cutlass::Kernel2<cutlass_80_simt_sgemm_128x256_8x4_tn_align1>(T1::Params)",
+        0.164180267,
+        523
+      ],
+      [
+        "void quantize_mmq_q8_1<(mmq_q8_1_ds_layout)0>(const float *, const int *, void *, long long, long long, long long, long long, long long, int, int)",
+        0.159570953,
+        3941
+      ],
+      [
+        "void cpy_scalar<&cpy_1_scalar<float, float>>(const char *, char *, long long, long long, long long, long long, long long, long long, long long, long long, long long, long long, long long, long long, long long, long long, long long)",
+        0.13177807,
+        563
+      ],
+      [
+        "void rms_norm_f32<(int)1024, (bool)1, (bool)0>(const float *, float *, int, long long, long long, long long, float, const float *, long long, long long, long long, uint3, uint3, uint3, uint3, const float *, long long, long long, long long, uint3, uint3, uint3, uint3)",
+        0.124470951,
+        1689
+      ],
+      [
+        "void k_dsv41_topk_radix_tiles<(bool)0>(const float *, const int *, int *, int, int, int, bool)",
+        0.112334607,
+        108
+      ],
+      [
+        "reduce(const __nv_bfloat16 *, const int *, float *, int)",
+        0.111251289,
+        563
+      ],
+      [
+        "void k_bin_bcast<&op_add, float, float, float, const float *>(const T2 *, const T3 *, T4 *, int, int, int, uint3, uint3, uint3, uint3, uint3, int, int, int, int, int, int, int, int, int, int, int, T5...)",
+        0.085179046,
+        2152
+      ],
+      [
+        "void cpy_scalar_contiguous<__nv_bfloat16, __half>(const char *, char *, long long)",
+        0.084043894,
+        513
+      ],
+      [
+        "void k_top_k_f32_i32_tiles<(bool)1, (bool)0>(const float *, const int *, int *, int, int, int, int, bool)",
+        0.077329811,
+        13
+      ],
+      [
+        "void mm_ids_helper<(int)6>(const int *, int *, int *, int *, int, int, int, int, int)",
+        0.070614201,
+        563
+      ],
+      [
+        "void k_argsort_f32_T<(ggml_sort_order)1, store, int>(const float *, T3 *, int, int, int, T2)",
+        0.056966897,
+        563
+      ],
+      [
+        "void cutlass::Kernel2<cutlass_80_wmma_tensorop_s161616gemm_bf16_32x32_64x1_tn_align8>(T1::Params)",
+        0.050759829,
+        3480
+      ],
+      [
+        "dsv41_engram_add_kernel(float *, const float *, const float *, const float *, const float *, const signed char *, long long, long long, float)",
+        0.050077183,
+        50
+      ],
+      [
+        "void mul_mat_q_stream_k_fixup<(ggml_type)8, (int)128, (bool)0, (bool)0>(const int *, const int *, float *, const float *, int, int, int, unsigned long long, int, unsigned long long, int, unsigned long long, int)",
+        0.041376078,
+        3941
+      ],
+      [
+        "void k_top_k_f32_i32<(ggml_sort_order)1>(const float *, int *, int, int, int)",
+        0.036705378,
+        12
+      ],
+      [
+        "dsv41_tilelang_kv(__nv_bfloat16 *, const __half *, const __half *, unsigned long long, unsigned long long)",
+        0.035902479,
+        563
+      ],
+      [
+        "concat_bytes_dim0(const char *, const char *, char *, int, int, unsigned long long)",
+        0.030694459,
+        513
+      ],
+      [
+        "dsv41_index_apply_mask_kernel(float *, const int *, const float *, int, int)",
+        0.028583052,
+        108
+      ],
+      [
+        "void cutlass::Kernel2<cutlass_80_tensorop_s16816gemm_f16_256x128_32x3_tn_align8>(T1::Params)",
+        0.025542755,
+        100
+      ],
+      [
+        "void cutlass::Kernel2<cutlass_80_tensorop_s16816gemm_f16_128x128_32x4_tn_align8>(T1::Params)",
+        0.02534875,
+        330
+      ],
+      [
+        "void cpy_q_f32<&cpy_blck_q8_0_f32, (int)32>(const char *, char *, long long, long long, long long, long long, long long, long long, long long, long long, long long, long long, long long, long long, long long, long long, long long)",
+        0.023678575,
+        488
+      ],
+      [
+        "void op_clamp_kernel<float>(const T1 *, T1 *, T1, T1, int)",
+        0.022779384,
+        2202
+      ],
+      [
+        "void k_top_k_f32_i32_tiles<(bool)0, (bool)0>(const float *, const int *, int *, int, int, int, int, bool)",
+        0.021496506,
+        13
+      ],
+      [
+        "void unary_gated_op_kernel<&op_silu, float>(const T2 *, const T2 *, T2 *, long long, long long, long long, long long)",
+        0.021391741,
+        563
+      ],
+      [
+        "void cutlass::Kernel2<cutlass_80_tensorop_s16816gemm_f16_64x128_64x3_tn_align8>(T1::Params)",
+        0.021017465,
+        176
+      ],
+      [
+        "void cpy_scalar_contiguous<float, int>(const char *, char *, long long)",
+        0.0158399,
+        1126
+      ],
+      [
+        "dsv41_candidate_blocks_kernel(float *, const float *, const int *, long long, long long, long long)",
+        0.015475655,
+        25
+      ],
+      [
+        "void dsv41_cast_vector4<float, __nv_bfloat16, (bool)0>(const T1 *, T2 *, long long, long long, long long, long long, long long, long long)",
+        0.013988938,
+        6624
+      ],
+      [
+        "void k_get_rows_float<float, float, (bool)0, float>(const T1 *, const int *, T2 *, long long, long long, long long, unsigned long long, unsigned long long, unsigned long long, unsigned long long, unsigned long long, unsigned long long, unsigned long long, unsigned long long, unsigned long long, const float *, long long, const T4 *, long long)",
+        0.013440499,
+        1649
+      ],
+      [
+        "void dsv41_act_qat_tiled_kernel<(int)32, (int)2>(const float *, float *, long long)",
+        0.008261699,
+        208
+      ],
+      [
+        "void dsv41_act_qat_tiled_kernel<(int)32, (int)1>(const float *, float *, long long)",
+        0.00791552,
+        563
+      ],
+      [
+        "void cpy_scalar_contiguous<int, float>(const char *, char *, long long)",
+        0.007854993,
+        513
+      ],
+      [
+        "void cutlass::Kernel2<cutlass_80_tensorop_s16816gemm_bf16_128x256_32x3_tn_align8>(T1::Params)",
+        0.007804135,
+        600
+      ],
+      [
+        "void k_set_rows<float, int, float>(const T1 *, const T2 *, T3 *, long long, long long, long long, long long, long long, long long, long long, long long, long long, long long, long long, long long, long long, long long, uint3, uint3, uint3, uint3, uint3)",
+        0.006808662,
+        32
+      ],
+      [
+        "void dsv41_hc_sinkhorn<(bool)1>(float *, const float *, const float *, const float *, int)",
+        0.006779366,
+        1126
+      ],
+      [
+        "void cutlass::Kernel2<cutlass_80_simt_sgemm_128x128_8x4_tn_align1>(T1::Params)",
+        0.006316809,
+        40
+      ],
+      [
+        "void concat_f32_flat<(bool)0>(const float *, const float *, float *, long long, long long, long long)",
+        0.00569355,
+        2065
+      ],
+      [
+        "dsv41_raw_commit_kernel(float *, const float *, unsigned int, long long)",
+        0.005654017,
+        2252
+      ],
+      [
+        "dsv41_selected_mask_kernel(float *, const int *, const int *, const float *, long long, long long, long long)",
+        0.005433096,
+        513
+      ],
+      [
+        "void cutlass::Kernel2<cutlass_80_tensorop_s16816gemm_f16_256x64_32x4_tn_align8>(T1::Params)",
+        0.004933698,
+        12
+      ],
+      [
+        "void fill_kernel<float>(T1 *, long long, T1)",
+        0.004569396,
+        3324
+      ],
+      [
+        "void rms_norm_f32<(int)256, (bool)1, (bool)0>(const float *, float *, int, long long, long long, long long, float, const float *, long long, long long, long long, uint3, uint3, uint3, uint3, const float *, long long, long long, long long, uint3, uint3, uint3, uint3)",
+        0.004538467,
+        763
+      ],
+      [
+        "void k_bin_bcast<&op_repeat, float, float, float, >(const T2 *, const T3 *, T4 *, int, int, int, uint3, uint3, uint3, uint3, uint3, int, int, int, int, int, int, int, int, int, int, int, T5...)",
+        0.004267738,
+        526
+      ],
+      [
+        "attention_tokentile_raw_mirror_kernel(__half *, const float *, const int *, unsigned int, unsigned int, unsigned int, unsigned int, unsigned int, unsigned int, unsigned int)",
+        0.003723063,
+        563
+      ],
+      [
+        "void cutlass::Kernel2<cutlass_80_tensorop_s16816gemm_f16_128x64_64x4_tn_align8>(T1::Params)",
+        0.003414935,
+        80
+      ],
+      [
+        "scale_f32(const float *, float *, float, float, long long)",
+        0.002900179,
+        1076
+      ],
+      [
+        "void k_bin_bcast<&op_mul, float, float, float, const float *>(const T2 *, const T3 *, T4 *, int, int, int, uint3, uint3, uint3, uint3, uint3, int, int, int, int, int, int, int, int, int, int, int, T5...)",
+        0.002833749,
+        519
+      ],
+      [
+        "void unary_op_kernel<&op_step, float>(const T2 *, T2 *, int)",
+        0.00225521,
+        513
+      ],
+      [
+        "void cublasLt::splitKreduce_kernel<(int)32, (int)16, int, float, float, float, float, (bool)0, float, float, float, (bool)1, (bool)0, (bool)0, (bool)0>(cublasLt::cublasSplitKParams<T6>, const T4 *, const T10 *, T9 *, T5 *, const T6 *, const T6 *, const T11 *, const T4 *, T11 *, void *, long long, T6 *, int *, T6 *, T6 *, const T6 *, const T6 *, const T6 *, const T6 *, const T6 *)",
+        0.002157597,
+        1134
+      ],
+      [
+        "void unary_op_kernel<&op_softplus_sqrt, float>(const T2 *, T2 *, int)",
+        0.002020247,
+        563
+      ],
+      [
+        "void cutlass::Kernel2<cutlass_80_wmma_tensorop_s161616gemm_f16_32x32_128x1_tn_align8>(T1::Params)",
+        0.001963184,
+        100
+      ],
+      [
+        "k_mul_add_bcast_f32(const float *, const float *, const float *, float *, long long, long long, long long, long long, long long, long long, long long, unsigned long long, unsigned long long, unsigned long long, unsigned long long, unsigned long long, unsigned long long, unsigned long long)",
+        0.001863127,
+        18
+      ],
+      [
+        "void reduce_rows_f32<(bool)0>(const float *, float *, int)",
+        0.001371402,
+        563
+      ],
+      [
+        "void dsv41_act_qat_tiled_kernel<(int)16, (int)3>(const float *, float *, long long)",
+        0.001137431,
+        100
+      ],
+      [
+        "void k_get_rows_float<__half, float, (bool)0, __half>(const T1 *, const int *, T2 *, long long, long long, long long, unsigned long long, unsigned long long, unsigned long long, unsigned long long, unsigned long long, unsigned long long, unsigned long long, unsigned long long, unsigned long long, const float *, long long, const T4 *, long long)",
+        0.000986266,
+        13
+      ],
+      [
+        "void cutlass::Kernel2<cutlass_80_wmma_tensorop_s161616gemm_bf16_32x32_64x2_tn_align8>(T1::Params)",
+        0.000768164,
+        280
+      ],
+      [
+        "inverse_routes(const int *, int *, int)",
+        0.000726179,
+        563
+      ],
+      [
+        "void cpy_scalar<&cpy_1_scalar<int, int>>(const char *, char *, long long, long long, long long, long long, long long, long long, long long, long long, long long, long long, long long, long long, long long, long long, long long)",
+        0.000720867,
+        563
+      ],
+      [
+        "void k_set_rows<float, long long, __nv_bfloat16>(const T1 *, const T2 *, T3 *, long long, long long, long long, long long, long long, long long, long long, long long, long long, long long, long long, long long, long long, long long, uint3, uint3, uint3, uint3, uint3)",
+        0.000579043,
+        200
+      ],
+      [
+        "void k_bin_bcast<&op_div, float, float, float, const float *>(const T2 *, const T3 *, T4 *, int, int, int, uint3, uint3, uint3, uint3, uint3, int, int, int, int, int, int, int, int, int, int, int, T5...)",
+        0.000507941,
+        563
+      ],
+      [
+        "dsv41_pool2_kernel(float *, const float *, const float *, const float *, const float *, long long, long long)",
+        0.000495857,
+        75
+      ],
+      [
+        "void cutlass::Kernel2<cutlass_80_wmma_tensorop_s161616gemm_f16_32x32_128x2_tn_align8>(T1::Params)",
+        0.000342255,
+        76
+      ],
+      [
+        "void cutlass::Kernel2<cutlass_80_tensorop_s16816gemm_f16_64x64_32x10_tn_align8>(T1::Params)",
+        0.00013916,
+        24
+      ]
+    ],
+    "api_duration_sums": [
+      [
+        "cudaStreamSynchronize_v3020",
+        19.254542586,
+        5996
+      ],
+      [
+        "cudaMemcpyAsync_v3020",
+        0.933008356,
+        11108
+      ],
+      [
+        "cudaHostUnregister_v4000",
+        0.621833593,
+        60
+      ],
+      [
+        "cudaLaunchKernel_v7000",
+        0.566565759,
+        127314
+      ],
+      [
+        "cuLibraryLoadData",
+        0.292157304,
+        34
+      ],
+      [
+        "cuLaunchKernel",
+        0.186840685,
+        51397
+      ],
+      [
+        "cudaHostRegister_v4000",
+        0.159734461,
+        59
+      ],
+      [
+        "cuLibraryGetKernel",
+        0.108625763,
+        93
+      ],
+      [
+        "cudaMemsetAsync_v3020",
+        0.05634549,
+        7670
+      ],
+      [
+        "cudaDeviceSynchronize_v3020",
+        0.046510539,
+        10
+      ],
+      [
+        "cuKernelGetName",
+        0.026669663,
+        129003
+      ],
+      [
+        "cudaLaunchKernelExC_v11060",
+        0.024837429,
+        2823
+      ],
+      [
+        "cuKernelGetFunction",
+        0.024550155,
+        50834
+      ],
+      [
+        "cudaMemcpy2DAsync_v3020",
+        0.023873509,
+        10496
+      ],
+      [
+        "cudaEventRecord_v3020",
+        0.022710331,
+        8773
+      ],
+      [
+        "cudaWaitExternalSemaphoresAsync_v11020",
+        0.011875965,
+        243
+      ],
+      [
+        "cudaStreamWaitEvent_v3020",
+        0.005968166,
+        1337
+      ],
+      [
+        "cudaMallocHost_v3020",
+        0.005788632,
+        2
+      ],
+      [
+        "cudaStreamDestroy_v5050",
+        0.00563728,
+        1
+      ],
+      [
+        "cudaKernelSetAttributeForDevice_v12060",
+        0.005307479,
+        4
+      ]
+    ],
+    "tile_host_seconds": {
+      "host_prepare_seconds": 2.061727,
+      "host_bind_seconds": 0.789612,
+      "host_register_seconds": 0.786733,
+      "host_graph_seconds": 0.18079900000000002,
+      "host_reserve_seconds": 0.445791,
+      "host_upload_seconds": 3.872058,
+      "host_launch_seconds": 6.321032,
+      "host_sync_seconds": 16.646306,
+      "gpu_seconds": 22.721014999999998,
+      "compute_seconds": 22.983928,
+      "host_readback_seconds": 1.671368,
+      "host_cleanup_seconds": 0.0022480000000000004
+    },
+    "tile_count": 563,
+    "layer_ledger_seconds": {
+      "wall_seconds": 39.1847261,
+      "acquire_seconds": 8.0267768,
+      "carry_begin_seconds": 0.00013419999999999998,
+      "executor_wall_seconds": 30.740675200000002,
+      "executor_phase_gap_seconds": 0.13458250000000002,
+      "engram_seconds": 0.0021497,
+      "carry_read_seconds": 0.0007355,
+      "carry_write_seconds": 0.0011951000000000002,
+      "carry_commit_seconds": 0.00019370000000000002,
+      "provider_release_seconds": 0.0006485999999999999,
+      "scaffold_seconds": 0.41221729999999995
+    },
+    "layer_passes": 61,
+    "fetched_bytes": 456303081592,
+    "qualified_for_clean_ranking": true,
+    "trace_quality": "CLEAN_WITH_RETAINED_WARNINGS"
+  },
+  "diagnostic_graph": {
+    "name": "graph-topology-nsys",
+    "prompt_seconds": 38.857478799999996,
+    "clock": "QPC: SQLite startTime + relative nanoseconds; native steady milliseconds",
+    "first_to_last_compute_envelope_seconds": 38.1569732,
+    "kernel_count": 87634,
+    "kernel_busy_union_seconds": 16.628889594,
+    "kernel_duration_sum_seconds": 16.628889594,
+    "copy_busy_union_seconds": 1.678409438,
+    "kernel_or_copy_union_seconds": 18.307299032,
+    "diagnostic_warnings": [
+      [
+        2,
+        "No NVTX events collected. Does the process use NVTX?"
+      ],
+      [
+        2,
+        "Installed CUDA driver version (13.3) is not supported by this build of Nsight Systems. CUDA trace will be collected using libraries for driver version 13.2"
+      ],
+      [
+        3,
+        "GetGraphId(data.originalGraph, &originalGraphId) returned 1: CUPTI_ERROR_INVALID_PARAMETER"
+      ],
+      [
+        3,
+        "GetGraphNodeId(data.originalNode, &originalNodeId) returned 1: CUPTI_ERROR_INVALID_PARAMETER"
+      ],
+      [
+        3,
+        "GetGraphId(data.originalGraph, &originalGraphId) returned 1: CUPTI_ERROR_INVALID_PARAMETER"
+      ],
+      [
+        3,
+        "GetGraphNodeId(data.originalNode, &originalNodeId) returned 1: CUPTI_ERROR_INVALID_PARAMETER"
+      ],
+      [
+        3,
+        "GetGraphId(data.originalGraph, &originalGraphId) returned 1: CUPTI_ERROR_INVALID_PARAMETER"
+      ],
+      [
+        3,
+        "GetGraphNodeId(data.originalNode, &originalNodeId) returned 1: CUPTI_ERROR_INVALID_PARAMETER"
+      ],
+      [
+        3,
+        "GetGraphId(data.originalGraph, &originalGraphId) returned 1: CUPTI_ERROR_INVALID_PARAMETER"
+      ],
+      [
+        3,
+        "GetGraphNodeId(data.originalNode, &originalNodeId) returned 1: CUPTI_ERROR_INVALID_PARAMETER"
+      ],
+      [
+        3,
+        "GetGraphId(data.originalGraph, &originalGraphId) returned 1: CUPTI_ERROR_INVALID_PARAMETER"
+      ],
+      [
+        3,
+        "GetGraphNodeId(data.originalNode, &originalNodeId) returned 1: CUPTI_ERROR_INVALID_PARAMETER"
+      ],
+      [
+        3,
+        "GetGraphId(data.originalGraph, &originalGraphId) returned 1: CUPTI_ERROR_INVALID_PARAMETER"
+      ],
+      [
+        3,
+        "GetGraphNodeId(data.originalNode, &originalNodeId) returned 1: CUPTI_ERROR_INVALID_PARAMETER"
+      ]
+    ],
+    "ranked_kernel_categories": [
+      [
+        "FP16 / Q8 / F32 GEMM incl fixup",
+        3.1974712749999696
+      ],
+      [
+        "Attention",
+        3.1794403430000044
+      ],
+      [
+        "Expert incl packing",
+        2.9224234169999908
+      ],
+      [
+        "QAT / quantization",
+        1.2697855890000094
+      ],
+      [
+        "Cast / copy",
+        1.2437172129999963
+      ],
+      [
+        "FP4 index score / certificate",
+        1.0051872850000017
+      ],
+      [
+        "Top K",
+        0.8047497699999999
+      ],
+      [
+        "RoPE",
+        0.6508785769999997
+      ],
+      [
+        "RMS norm",
+        0.6198509580000005
+      ],
+      [
+        "Remaining kernels",
+        0.6009706780000023
+      ],
+      [
+        "HC expand",
+        0.5200581449999999
+      ],
+      [
+        "Concat",
+        0.33333662800000097
+      ],
+      [
+        "HC collapse",
+        0.2810197159999998
+      ]
+    ],
+    "top_kernels": [
+      [
+        "native_sparse_attn_kernel__kernel",
+        2.622599161,
+        563
+      ],
+      [
+        "kernel_cutlass_kernel_flashinferfused_moecute_dslblackwell_sm12xkernel_moe_mxfp8_mxfp4_gemmCuteDslSm120MoeMxfp8Mxfp4Grouped_object_at__Tiled_MMA_Thr_Layout_VMNK_324211321280_Permutation_M_0",
+        2.143573675,
+        1689
+      ],
+      [
+        "void mul_mat_q<(ggml_type)8, (int)128, (bool)0, (bool)0>(const char *, const int *, const int *, const int *, float *, float *, int, int, int, int, int, int, int, int, int, int, int, int, int, int, int, int, int)",
+        1.759267185,
+        3941
+      ],
+      [
+        "void dsv41_act_qat_kernel<(int)256, (int)0>(const float *, float *, long long, long long)",
+        1.094795231,
+        9086
+      ],
+      [
+        "dsv41_index_fp4_scores(float *, const unsigned int *, const unsigned int *, const unsigned int *, const unsigned int *, const float *, const int *, const float *, int)",
+        0.974180422,
+        108
+      ],
+      [
+        "void cutlass::Kernel2<cutlass_80_tensorop_s16816gemm_f16_64x256_32x4_tn_align8>(T1::Params)",
+        0.873728366,
+        5278
+      ],
+      [
+        "dsv41_rope_kernel(float *, const float *, const int *, const float *, long long, long long, long long, bool)",
+        0.650878577,
+        1997
+      ],
+      [
+        "void k_dsv41_topk_radix_tiles<(bool)1>(const float *, const int *, int *, int, int, int, bool)",
+        0.556301163,
+        108
+      ],
+      [
+        "void dsv41_hc_channels_kernel<(bool)1>(float *, const float *, const float *, const float *, unsigned int, unsigned int)",
+        0.520058145,
+        1126
+      ],
+      [
+        "void rms_norm_f32<(int)1024, (bool)0, (bool)0>(const float *, float *, int, long long, long long, long long, float, const float *, long long, long long, long long, uint3, uint3, uint3, uint3, const float *, long long, long long, long long, uint3, uint3, uint3, uint3)",
+        0.491035804,
+        1126
+      ],
+      [
+        "void dsv41_cast_vector4<float, __half, (bool)1>(const T1 *, T2 *, long long, long long, long long, long long, long long, long long)",
+        0.404298835,
+        3018
+      ],
+      [
+        "gather(const float *, const int *, const int *, __nv_fp8_e4m3 *, unsigned char *, int, int)",
+        0.380563748,
+        563
+      ],
+      [
+        "void concat_f32_flat<(bool)1>(const float *, const float *, float *, long long, long long, long long)",
+        0.297412966,
+        6453
+      ],
+      [
+        "dsv41_hc_collapse_kernel(const float *, const float *, float *, long long, long long)",
+        0.281019716,
+        1126
+      ],
+      [
+        "<unnamed>::validate_kernel(ggml_dsv41_validation, unsigned int *, unsigned long long)",
+        0.279727167,
+        1138
+      ],
+      [
+        "dsv41_tilelang_query_all(__nv_bfloat16 *, const float *, unsigned int)",
+        0.27435319,
+        563
+      ],
+      [
+        "void cutlass::Kernel2<cutlass_80_tensorop_s16816gemm_f16_128x64_64x3_tn_align8>(T1::Params)",
+        0.271484785,
+        295
+      ],
+      [
+        "dsv41_tilelang_indices(int *, unsigned int, unsigned int, unsigned int, unsigned int, unsigned int, unsigned int, const ggml_dsv41_tilelang_record *, const unsigned int *, unsigned int)",
+        0.246588467,
+        563
+      ],
+      [
+        "void dsv41_cast_vector4<float, __half, (bool)0>(const T1 *, T2 *, long long, long long, long long, long long, long long, long long)",
+        0.231325387,
+        4504
+      ],
+      [
+        "mid_pack(const __nv_bfloat16 *, const __nv_bfloat16 *, const float *, const int *, const int *, __nv_fp8_e4m3 *, unsigned char *, int, int, float)",
+        0.216220958,
+        563
+      ],
+      [
+        "void dsv41_cast_vector4<float, __nv_bfloat16, (bool)1>(const T1 *, T2 *, long long, long long, long long, long long, long long, long long)",
+        0.176989703,
+        563
+      ],
+      [
+        "void dsv41_cast_vector4<__nv_bfloat16, float, (bool)1>(const T1 *, T2 *, long long, long long, long long, long long, long long, long long)",
+        0.168140513,
+        646
+      ],
+      [
+        "void cutlass::Kernel2<cutlass_80_simt_sgemm_128x256_8x4_tn_align1>(T1::Params)",
+        0.163637197,
+        523
+      ],
+      [
+        "void quantize_mmq_q8_1<(mmq_q8_1_ds_layout)0>(const float *, const int *, void *, long long, long long, long long, long long, long long, int, int)",
+        0.158019641,
+        3941
+      ],
+      [
+        "void cpy_scalar<&cpy_1_scalar<float, float>>(const char *, char *, long long, long long, long long, long long, long long, long long, long long, long long, long long, long long, long long, long long, long long, long long, long long)",
+        0.131237948,
+        563
+      ],
+      [
+        "void rms_norm_f32<(int)1024, (bool)1, (bool)0>(const float *, float *, int, long long, long long, long long, float, const float *, long long, long long, long long, uint3, uint3, uint3, uint3, const float *, long long, long long, long long, uint3, uint3, uint3, uint3)",
+        0.124436805,
+        1689
+      ],
+      [
+        "void k_dsv41_topk_radix_tiles<(bool)0>(const float *, const int *, int *, int, int, int, bool)",
+        0.112043661,
+        108
+      ],
+      [
+        "reduce(const __nv_bfloat16 *, const int *, float *, int)",
+        0.110859944,
+        563
+      ],
+      [
+        "void k_bin_bcast<&op_add, float, float, float, const float *>(const T2 *, const T3 *, T4 *, int, int, int, uint3, uint3, uint3, uint3, uint3, int, int, int, int, int, int, int, int, int, int, int, T5...)",
+        0.085228252,
+        2152
+      ],
+      [
+        "void cpy_scalar_contiguous<__nv_bfloat16, __half>(const char *, char *, long long)",
+        0.083997653,
+        513
+      ],
+      [
+        "void k_top_k_f32_i32_tiles<(bool)1, (bool)0>(const float *, const int *, int *, int, int, int, int, bool)",
+        0.076773274,
+        13
+      ],
+      [
+        "void mm_ids_helper<(int)6>(const int *, int *, int *, int *, int, int, int, int, int)",
+        0.070522647,
+        563
+      ],
+      [
+        "void k_argsort_f32_T<(ggml_sort_order)1, store, int>(const float *, T3 *, int, int, int, T2)",
+        0.060761446,
+        563
+      ],
+      [
+        "dsv41_engram_add_kernel(float *, const float *, const float *, const float *, const float *, const signed char *, long long, long long, float)",
+        0.049728518,
+        50
+      ],
+      [
+        "void mul_mat_q_stream_k_fixup<(ggml_type)8, (int)128, (bool)0, (bool)0>(const int *, const int *, float *, const float *, int, int, int, unsigned long long, int, unsigned long long, int, unsigned long long, int)",
+        0.040503987,
+        3941
+      ],
+      [
+        "void k_top_k_f32_i32<(ggml_sort_order)1>(const float *, int *, int, int, int)",
+        0.038269023,
+        12
+      ],
+      [
+        "dsv41_tilelang_kv(__nv_bfloat16 *, const __half *, const __half *, unsigned long long, unsigned long long)",
+        0.035899525,
+        563
+      ],
+      [
+        "concat_bytes_dim0(const char *, const char *, char *, int, int, unsigned long long)",
+        0.030450979,
+        513
+      ],
+      [
+        "dsv41_index_fp4_pack(const float *, unsigned int *, unsigned int *, int, int *, int)",
+        0.026381283,
+        216
+      ],
+      [
+        "void cutlass::Kernel2<cutlass_80_tensorop_s16816gemm_f16_256x128_32x3_tn_align8>(T1::Params)",
+        0.025532578,
+        100
+      ],
+      [
+        "void cutlass::Kernel2<cutlass_80_tensorop_s16816gemm_f16_128x128_32x4_tn_align8>(T1::Params)",
+        0.025327807,
+        330
+      ],
+      [
+        "void cpy_q_f32<&cpy_blck_q8_0_f32, (int)32>(const char *, char *, long long, long long, long long, long long, long long, long long, long long, long long, long long, long long, long long, long long, long long, long long, long long)",
+        0.023742214,
+        488
+      ],
+      [
+        "void op_clamp_kernel<float>(const T1 *, T1 *, T1, T1, int)",
+        0.022456343,
+        2202
+      ],
+      [
+        "void k_top_k_f32_i32_tiles<(bool)0, (bool)0>(const float *, const int *, int *, int, int, int, int, bool)",
+        0.021362649,
+        13
+      ],
+      [
+        "void unary_gated_op_kernel<&op_silu, float>(const T2 *, const T2 *, T2 *, long long, long long, long long, long long)",
+        0.021197119,
+        563
+      ],
+      [
+        "void cutlass::Kernel2<cutlass_80_tensorop_s16816gemm_f16_64x128_64x3_tn_align8>(T1::Params)",
+        0.020976974,
+        176
+      ],
+      [
+        "void cpy_scalar_contiguous<float, int>(const char *, char *, long long)",
+        0.01565433,
+        1126
+      ],
+      [
+        "dsv41_candidate_blocks_kernel(float *, const float *, const int *, long long, long long, long long)",
+        0.015496615,
+        25
+      ],
+      [
+        "void k_get_rows_float<float, float, (bool)0, float>(const T1 *, const int *, T2 *, long long, long long, long long, unsigned long long, unsigned long long, unsigned long long, unsigned long long, unsigned long long, unsigned long long, unsigned long long, unsigned long long, unsigned long long, const float *, long long, const T4 *, long long)",
+        0.013188184,
+        1649
+      ],
+      [
+        "void dsv41_act_qat_tiled_kernel<(int)32, (int)2>(const float *, float *, long long)",
+        0.008028324,
+        208
+      ],
+      [
+        "void dsv41_act_qat_tiled_kernel<(int)32, (int)1>(const float *, float *, long long)",
+        0.007829094,
+        563
+      ],
+      [
+        "void cpy_scalar_contiguous<int, float>(const char *, char *, long long)",
+        0.007703293,
+        513
+      ],
+      [
+        "void k_set_rows<float, int, float>(const T1 *, const T2 *, T3 *, long long, long long, long long, long long, long long, long long, long long, long long, long long, long long, long long, long long, long long, long long, uint3, uint3, uint3, uint3, uint3)",
+        0.006813973,
+        32
+      ],
+      [
+        "void dsv41_hc_sinkhorn<(bool)1>(float *, const float *, const float *, const float *, int)",
+        0.006679914,
+        1126
+      ],
+      [
+        "void cutlass::Kernel2<cutlass_80_simt_sgemm_128x128_8x4_tn_align1>(T1::Params)",
+        0.006306189,
+        40
+      ],
+      [
+        "void concat_f32_flat<(bool)0>(const float *, const float *, float *, long long, long long, long long)",
+        0.005472683,
+        2065
+      ],
+      [
+        "dsv41_selected_mask_kernel(float *, const int *, const int *, const float *, long long, long long, long long)",
+        0.005318024,
+        513
+      ],
+      [
+        "dsv41_raw_commit_kernel(float *, const float *, unsigned int, long long)",
+        0.005185591,
+        2252
+      ],
+      [
+        "void cutlass::Kernel2<cutlass_80_tensorop_s16816gemm_f16_256x64_32x4_tn_align8>(T1::Params)",
+        0.004931776,
+        12
+      ],
+      [
+        "dsv41_index_fp4_condition(const int *, unsigned long long, int, int)",
+        0.004585644,
+        108
+      ],
+      [
+        "void rms_norm_f32<(int)256, (bool)1, (bool)0>(const float *, float *, int, long long, long long, long long, float, const float *, long long, long long, long long, uint3, uint3, uint3, uint3, const float *, long long, long long, long long, uint3, uint3, uint3, uint3)",
+        0.004378349,
+        763
+      ],
+      [
+        "void fill_kernel<float>(T1 *, long long, T1)",
+        0.004326998,
+        3324
+      ],
+      [
+        "void k_bin_bcast<&op_repeat, float, float, float, >(const T2 *, const T3 *, T4 *, int, int, int, uint3, uint3, uint3, uint3, uint3, int, int, int, int, int, int, int, int, int, int, int, T5...)",
+        0.00414903,
+        526
+      ],
+      [
+        "attention_tokentile_raw_mirror_kernel(__half *, const float *, const int *, unsigned int, unsigned int, unsigned int, unsigned int, unsigned int, unsigned int, unsigned int)",
+        0.003606275,
+        563
+      ],
+      [
+        "void cutlass::Kernel2<cutlass_80_tensorop_s16816gemm_f16_128x64_64x4_tn_align8>(T1::Params)",
+        0.003400315,
+        80
+      ],
+      [
+        "scale_f32(const float *, float *, float, float, long long)",
+        0.002770918,
+        1076
+      ],
+      [
+        "void k_bin_bcast<&op_mul, float, float, float, const float *>(const T2 *, const T3 *, T4 *, int, int, int, uint3, uint3, uint3, uint3, uint3, int, int, int, int, int, int, int, int, int, int, int, T5...)",
+        0.002689624,
+        519
+      ],
+      [
+        "void unary_op_kernel<&op_step, float>(const T2 *, T2 *, int)",
+        0.00220444,
+        513
+      ],
+      [
+        "void cublasLt::splitKreduce_kernel<(int)32, (int)16, int, float, float, float, float, (bool)0, float, float, float, (bool)1, (bool)0, (bool)0, (bool)0>(cublasLt::cublasSplitKParams<T6>, const T4 *, const T10 *, T9 *, T5 *, const T6 *, const T6 *, const T11 *, const T4 *, T11 *, void *, long long, T6 *, int *, T6 *, T6 *, const T6 *, const T6 *, const T6 *, const T6 *, const T6 *)",
+        0.001991976,
+        1134
+      ],
+      [
+        "void cutlass::Kernel2<cutlass_80_wmma_tensorop_s161616gemm_f16_32x32_128x1_tn_align8>(T1::Params)",
+        0.001914678,
+        100
+      ],
+      [
+        "k_mul_add_bcast_f32(const float *, const float *, const float *, float *, long long, long long, long long, long long, long long, long long, long long, unsigned long long, unsigned long long, unsigned long long, unsigned long long, unsigned long long, unsigned long long, unsigned long long)",
+        0.001890709,
+        18
+      ],
+      [
+        "void unary_op_kernel<&op_softplus_sqrt, float>(const T2 *, T2 *, int)",
+        0.001882144,
+        563
+      ],
+      [
+        "void reduce_rows_f32<(bool)0>(const float *, float *, int)",
+        0.001204213,
+        563
+      ],
+      [
+        "void dsv41_act_qat_tiled_kernel<(int)16, (int)3>(const float *, float *, long long)",
+        0.001113299,
+        100
+      ],
+      [
+        "void k_get_rows_float<__half, float, (bool)0, __half>(const T1 *, const int *, T2 *, long long, long long, long long, unsigned long long, unsigned long long, unsigned long long, unsigned long long, unsigned long long, unsigned long long, unsigned long long, unsigned long long, unsigned long long, const float *, long long, const T4 *, long long)",
+        0.000985466,
+        13
+      ],
+      [
+        "inverse_routes(const int *, int *, int)",
+        0.000682445,
+        563
+      ],
+      [
+        "void cpy_scalar<&cpy_1_scalar<int, int>>(const char *, char *, long long, long long, long long, long long, long long, long long, long long, long long, long long, long long, long long, long long, long long, long long, long long)",
+        0.000627337,
+        563
+      ],
+      [
+        "void k_set_rows<float, long long, __nv_bfloat16>(const T1 *, const T2 *, T3 *, long long, long long, long long, long long, long long, long long, long long, long long, long long, long long, long long, long long, long long, long long, uint3, uint3, uint3, uint3, uint3)",
+        0.000564485,
+        200
+      ],
+      [
+        "dsv41_pool2_kernel(float *, const float *, const float *, const float *, const float *, long long, long long)",
+        0.000477135,
+        75
+      ],
+      [
+        "void k_bin_bcast<&op_div, float, float, float, const float *>(const T2 *, const T3 *, T4 *, int, int, int, uint3, uint3, uint3, uint3, uint3, int, int, int, int, int, int, int, int, int, int, int, T5...)",
+        0.000446119,
+        563
+      ],
+      [
+        "void cutlass::Kernel2<cutlass_80_wmma_tensorop_s161616gemm_f16_32x32_128x2_tn_align8>(T1::Params)",
+        0.000331282,
+        76
+      ],
+      [
+        "void cutlass::Kernel2<cutlass_80_tensorop_s16816gemm_f16_64x64_32x10_tn_align8>(T1::Params)",
+        0.000128156,
+        24
+      ],
+      [
+        "dsv41_index_fp4_init_proof(int *)",
+        3.9936e-05,
+        108
+      ]
+    ],
+    "api_duration_sums": [
+      [
+        "cudaStreamSynchronize_v3020",
+        20.993905069,
+        5996
+      ],
+      [
+        "cudaGraphInstantiate_v12000",
+        1.451052212,
+        1102
+      ],
+      [
+        "cudaMemcpyAsync_v3020",
+        0.844100761,
+        11097
+      ],
+      [
+        "cudaGraphExecDestroy_v10000",
+        0.708657212,
+        1102
+      ],
+      [
+        "cudaHostUnregister_v4000",
+        0.529736998,
+        60
+      ],
+      [
+        "cudaLaunchKernel_v7000",
+        0.303052112,
+        127799
+      ],
+      [
+        "cudaGraphLaunch_v10000",
+        0.228993124,
+        1114
+      ],
+      [
+        "cudaHostRegister_v4000",
+        0.151259787,
+        59
+      ],
+      [
+        "cudaGraphDestroy_v10000",
+        0.136578793,
+        1103
+      ],
+      [
+        "cuLaunchKernel",
+        0.075338819,
+        51397
+      ],
+      [
+        "cuLibraryLoadData",
+        0.073015639,
+        34
+      ],
+      [
+        "cudaWaitExternalSemaphoresAsync_v11020",
+        0.044324632,
+        243
+      ],
+      [
+        "cudaMemsetAsync_v3020",
+        0.042253027,
+        7670
+      ],
+      [
+        "cuKernelGetName",
+        0.026931831,
+        129488
+      ],
+      [
+        "cudaMallocAsync_v11020",
+        0.023382907,
+        6370
+      ],
+      [
+        "cudaMemcpy2DAsync_v3020",
+        0.02272491,
+        10496
+      ],
+      [
+        "cudaStreamEndCapture_v10000",
+        0.019314419,
+        1319
+      ],
+      [
+        "cuKernelGetFunction",
+        0.018891665,
+        50834
+      ],
+      [
+        "cudaEventRecord_v3020",
+        0.018834448,
+        2403
+      ],
+      [
+        "cudaLaunchKernelExC_v11060",
+        0.011744459,
+        2823
+      ]
+    ],
+    "tile_host_seconds": {
+      "host_prepare_seconds": 2.0123409999999997,
+      "host_bind_seconds": 0.68879,
+      "host_register_seconds": 0.686037,
+      "host_graph_seconds": 0.185667,
+      "host_reserve_seconds": 0.452411,
+      "host_upload_seconds": 4.260865,
+      "host_launch_seconds": 2.6882979999999996,
+      "host_sync_seconds": 18.88379,
+      "gpu_seconds": 17.180822,
+      "compute_seconds": 21.593222,
+      "host_readback_seconds": 1.56539,
+      "host_cleanup_seconds": 0.002366
+    },
+    "tile_count": 563,
+    "layer_ledger_seconds": {
+      "wall_seconds": 37.489619100000006,
+      "acquire_seconds": 7.3570014,
+      "carry_begin_seconds": 0.0001209,
+      "executor_wall_seconds": 29.5891531,
+      "executor_phase_gap_seconds": 0.1408354,
+      "engram_seconds": 0.0272354,
+      "carry_read_seconds": 0.0006927,
+      "carry_write_seconds": 0.0010942,
+      "carry_commit_seconds": 0.0001792,
+      "provider_release_seconds": 0.0006041999999999999,
+      "scaffold_seconds": 0.513538
+    },
+    "layer_passes": 61,
+    "fetched_bytes": 456303081592,
+    "qualified_for_clean_ranking": false,
+    "trace_quality": "DIAGNOSTIC_ONLY_METADATA_ERRORS"
+  },
+  "measurements": [
+    {
+      "name": "final-r2-control-nsys",
+      "prompt_seconds": 38.7100633,
+      "ttft_seconds": 49.20299999997951,
+      "prompt_tok_s": 2583.307581416432,
+      "producer_sha256": "c0a18890daaa0b19e29f9f2ea807311700a057ed79e9bf893061a0af62843e16",
+      "cuda_graph_launches": null,
+      "cuda_graph_captures": null,
+      "cuda_graph_replays": null
+    },
+    {
+      "name": "r2-fusion-nsys",
+      "prompt_seconds": 40.6409983,
+      "ttft_seconds": 49.71899999998277,
+      "prompt_tok_s": 2460.569478678382,
+      "producer_sha256": "c8842c55c208bfe11a9b2a61450687367c33bcd3ec0107d826d21e08d3684bc5",
+      "cuda_graph_launches": null,
+      "cuda_graph_captures": null,
+      "cuda_graph_replays": null
+    },
+    {
+      "name": "graph-complete-100k",
+      "prompt_seconds": 34.9876876,
+      "ttft_seconds": 38.51600000000326,
+      "prompt_tok_s": 2858.1483047196293,
+      "producer_sha256": "89a761ed8a090554f1164aed798cc6238ed67bd5c2586bcf3e161e60cc3b7c92",
+      "cuda_graph_launches": 1126,
+      "cuda_graph_captures": 1104,
+      "cuda_graph_replays": 22
+    },
+    {
+      "name": "eager-rebuilt-100k",
+      "prompt_seconds": 34.5069909,
+      "ttft_seconds": 37.68699999997625,
+      "prompt_tok_s": 2897.9634964345732,
+      "producer_sha256": "89a761ed8a090554f1164aed798cc6238ed67bd5c2586bcf3e161e60cc3b7c92",
+      "cuda_graph_launches": null,
+      "cuda_graph_captures": null,
+      "cuda_graph_replays": null
+    },
+    {
+      "name": "eager-fp8-100k",
+      "prompt_seconds": 33.7836102,
+      "ttft_seconds": 37.06299999996554,
+      "prompt_tok_s": 2960.015208794944,
+      "producer_sha256": "89a761ed8a090554f1164aed798cc6238ed67bd5c2586bcf3e161e60cc3b7c92",
+      "cuda_graph_launches": null,
+      "cuda_graph_captures": null,
+      "cuda_graph_replays": null
+    },
+    {
+      "name": "eager-dense-control-100k",
+      "prompt_seconds": 32.6156554,
+      "ttft_seconds": 35.79699999996228,
+      "prompt_tok_s": 3066.0122807159655,
+      "producer_sha256": "774731b7d7313b5780e6ced604d8bcc82a6ce5405d0def39d4af0c491e731259",
+      "cuda_graph_launches": null,
+      "cuda_graph_captures": null,
+      "cuda_graph_replays": null
+    },
+    {
+      "name": "graph-final-nsys",
+      "prompt_seconds": 38.466298300000005,
+      "ttft_seconds": 42.65700000000652,
+      "prompt_tok_s": 2599.6782747353673,
+      "producer_sha256": "774731b7d7313b5780e6ced604d8bcc82a6ce5405d0def39d4af0c491e731259",
+      "cuda_graph_launches": 1126,
+      "cuda_graph_captures": 1104,
+      "cuda_graph_replays": 22
+    },
+    {
+      "name": "graph-nodes-nsys",
+      "prompt_seconds": 38.207178500000005,
+      "ttft_seconds": 41.71900000004098,
+      "prompt_tok_s": 2617.3092053892433,
+      "producer_sha256": "774731b7d7313b5780e6ced604d8bcc82a6ce5405d0def39d4af0c491e731259",
+      "cuda_graph_launches": 1126,
+      "cuda_graph_captures": 1104,
+      "cuda_graph_replays": 22
+    },
+    {
+      "name": "graph-topology-nsys",
+      "prompt_seconds": 38.857478799999996,
+      "ttft_seconds": 42.45299999997951,
+      "prompt_tok_s": 2573.5071622814603,
+      "producer_sha256": "eb7a4e6abd750cdd860a994c9af88b787eea374f17d0a22f2d0ac8af675bd560",
+      "cuda_graph_launches": 1126,
+      "cuda_graph_captures": 1104,
+      "cuda_graph_replays": 22
+    },
+    {
+      "name": "graph-final-source-100k",
+      "prompt_seconds": 32.3737854,
+      "ttft_seconds": 35.40600000001723,
+      "prompt_tok_s": 3088.9189745478448,
+      "producer_sha256": "db37abbed1202829af7b89d72139f60094b41fb46106b9f35dc234cc8b6fd41a",
+      "cuda_graph_launches": 1126,
+      "cuda_graph_captures": 1104,
+      "cuda_graph_replays": 22
+    }
+  ],
+  "quality": [
+    {
+      "reference": "eager-rebuilt-100k",
+      "candidate": "graph-complete-100k",
+      "values": 129280,
+      "all_bits_equal": true,
+      "top1_equal": true,
+      "max_abs_difference": 0.0,
+      "KL": 0.0,
+      "sha256": "afee483112599c260dc1c05a39ad8bbd6dfb825e01a43260083e5b5114f9574a"
+    },
+    {
+      "reference": "eager-rebuilt-100k",
+      "candidate": "graph-nodes-nsys",
+      "values": 129280,
+      "all_bits_equal": true,
+      "top1_equal": true,
+      "max_abs_difference": 0.0,
+      "KL": 0.0,
+      "sha256": "afee483112599c260dc1c05a39ad8bbd6dfb825e01a43260083e5b5114f9574a"
+    },
+    {
+      "reference": "eager-rebuilt-100k",
+      "candidate": "graph-topology-nsys",
+      "values": 129280,
+      "all_bits_equal": true,
+      "top1_equal": true,
+      "max_abs_difference": 0.0,
+      "KL": 0.0,
+      "sha256": "afee483112599c260dc1c05a39ad8bbd6dfb825e01a43260083e5b5114f9574a"
+    },
+    {
+      "reference": "eager-rebuilt-100k",
+      "candidate": "eager-dense-control-100k",
+      "values": 129280,
+      "all_bits_equal": true,
+      "top1_equal": true,
+      "max_abs_difference": 0.0,
+      "KL": 0.0,
+      "sha256": "afee483112599c260dc1c05a39ad8bbd6dfb825e01a43260083e5b5114f9574a"
+    },
+    {
+      "reference": "eager-rebuilt-100k",
+      "candidate": "eager-fp8-100k",
+      "values": 129280,
+      "all_bits_equal": false,
+      "top1_equal": true,
+      "max_abs_difference": 2.5932059288024902,
+      "KL": 4.277732177986545e-09,
+      "sha256": "d8e97a1e8c45713a438aafd87ef5ddd6b0e4ae0ab2eafef35e843526062e9636"
+    },
+    {
+      "reference": "eager-rebuilt-100k",
+      "candidate": "graph-final-source-100k",
+      "values": 129280,
+      "all_bits_equal": true,
+      "top1_equal": true,
+      "max_abs_difference": 0.0,
+      "KL": 0.0,
+      "sha256": "afee483112599c260dc1c05a39ad8bbd6dfb825e01a43260083e5b5114f9574a"
+    }
+  ],
+  "fusion_quality": [
+    {
+      "reference": "final-r2-control-nsys",
+      "candidate": "r2-fusion-nsys",
+      "values": 129280,
+      "all_bits_equal": true,
+      "top1_equal": true,
+      "max_abs_difference": 0.0,
+      "KL": 0.0,
+      "sha256": "457e90601c434f5ade0afb149595a50d92c3ca0f047f13a8d95d8a9cea1522ee"
+    }
+  ],
+  "guards": [
+    {
+      "name": "clean-control-rerank-0a986c4646a44c5f9171575be92e696f.receipt.json",
+      "exit_code": 0,
+      "reason": null,
+      "peak_tree_rss": 122028032,
+      "min_available": 12878512128,
+      "host_budget_gib": 2,
+      "job_commit_gib": 3,
+      "cleanup_confirmed": true,
+      "forced_kill": false,
+      "shutdown_idle_s": null,
+      "force_reason": null
+    },
+    {
+      "name": "clean-fusion-rerank-2601c6a9cc5c408d93ba725130f45e6d.receipt.json",
+      "exit_code": 0,
+      "reason": null,
+      "peak_tree_rss": 127721472,
+      "min_available": 12893417472,
+      "host_budget_gib": 2,
+      "job_commit_gib": 3,
+      "cleanup_confirmed": true,
+      "forced_kill": false,
+      "shutdown_idle_s": null,
+      "force_reason": null
+    },
+    {
+      "name": "component-graph-8c26a4de53ab4136a6ca1ec0a12fdff2.receipt.json",
+      "exit_code": 0,
+      "reason": null,
+      "peak_tree_rss": 291409920,
+      "min_available": 11893014528,
+      "host_budget_gib": 9,
+      "job_commit_gib": 32,
+      "cleanup_confirmed": true,
+      "forced_kill": false,
+      "shutdown_idle_s": null,
+      "force_reason": null
+    },
+    {
+      "name": "component-graph-alias-memcheck-8390841f604549d18c1c49a49bccdc28.receipt.json",
+      "exit_code": 0,
+      "reason": null,
+      "peak_tree_rss": 514707456,
+      "min_available": 12555829248,
+      "host_budget_gib": 9,
+      "job_commit_gib": 48,
+      "cleanup_confirmed": true,
+      "forced_kill": false,
+      "shutdown_idle_s": null,
+      "force_reason": null
+    },
+    {
+      "name": "component-graph-conditional-75179ec245184e4f851ffb90d7c61b44.receipt.json",
+      "exit_code": 0,
+      "reason": null,
+      "peak_tree_rss": 330133504,
+      "min_available": 11584299008,
+      "host_budget_gib": 9,
+      "job_commit_gib": 48,
+      "cleanup_confirmed": true,
+      "forced_kill": false,
+      "shutdown_idle_s": null,
+      "force_reason": null
+    },
+    {
+      "name": "component-graph-cpu-final-memcheck-bb839157832743dbb114a728ede25f7d.receipt.json",
+      "exit_code": 0,
+      "reason": null,
+      "peak_tree_rss": 495747072,
+      "min_available": 12372406272,
+      "host_budget_gib": 9,
+      "job_commit_gib": 48,
+      "cleanup_confirmed": true,
+      "forced_kill": false,
+      "shutdown_idle_s": null,
+      "force_reason": null
+    },
+    {
+      "name": "component-graph-final-memcheck-0c80f49267f041d393adbab3e1cb9d48.receipt.json",
+      "exit_code": 1,
+      "reason": null,
+      "peak_tree_rss": 514056192,
+      "min_available": 12339716096,
+      "host_budget_gib": 9,
+      "job_commit_gib": 48,
+      "cleanup_confirmed": true,
+      "forced_kill": false,
+      "shutdown_idle_s": null,
+      "force_reason": null
+    },
+    {
+      "name": "component-graph-topology-memcheck-3dc0748c9d67477fb84f21677ec59138.receipt.json",
+      "exit_code": 0,
+      "reason": null,
+      "peak_tree_rss": 495915008,
+      "min_available": 12398329856,
+      "host_budget_gib": 9,
+      "job_commit_gib": 48,
+      "cleanup_confirmed": true,
+      "forced_kill": false,
+      "shutdown_idle_s": null,
+      "force_reason": null
+    },
+    {
+      "name": "component-pdl-01813bd480674ea9a18a268edafe8528.receipt.json",
+      "exit_code": 0,
+      "reason": null,
+      "peak_tree_rss": 29220864,
+      "min_available": 12329558016,
+      "host_budget_gib": 9,
+      "job_commit_gib": 48,
+      "cleanup_confirmed": true,
+      "forced_kill": false,
+      "shutdown_idle_s": null,
+      "force_reason": null
+    },
+    {
+      "name": "component-r2-bc966fb8186b4ee5ae092da52d718190.receipt.json",
+      "exit_code": 0,
+      "reason": null,
+      "peak_tree_rss": 151732224,
+      "min_available": 12398768128,
+      "host_budget_gib": 9,
+      "job_commit_gib": 32,
+      "cleanup_confirmed": true,
+      "forced_kill": false,
+      "shutdown_idle_s": null,
+      "force_reason": null
+    },
+    {
+      "name": "component-r2-final-memcheck-d6206039ba164b40806f02fee27d28ea.receipt.json",
+      "exit_code": 0,
+      "reason": null,
+      "peak_tree_rss": 719659008,
+      "min_available": 11753504768,
+      "host_budget_gib": 9,
+      "job_commit_gib": 48,
+      "cleanup_confirmed": true,
+      "forced_kill": false,
+      "shutdown_idle_s": null,
+      "force_reason": null
+    },
+    {
+      "name": "component-r2-memcheck-a84883467ef546b2ac2f7dfcb370ff5f.receipt.json",
+      "exit_code": 0,
+      "reason": null,
+      "peak_tree_rss": 216297472,
+      "min_available": 11973480448,
+      "host_budget_gib": 9,
+      "job_commit_gib": 32,
+      "cleanup_confirmed": true,
+      "forced_kill": false,
+      "shutdown_idle_s": null,
+      "force_reason": null
+    },
+    {
+      "name": "contract-final-3a45c781feea42be9454e28dd35dd0f1.receipt.json",
+      "exit_code": 0,
+      "reason": null,
+      "peak_tree_rss": 83120128,
+      "min_available": 12295598080,
+      "host_budget_gib": 2,
+      "job_commit_gib": 3,
+      "cleanup_confirmed": true,
+      "forced_kill": false,
+      "shutdown_idle_s": null,
+      "force_reason": null
+    },
+    {
+      "name": "eager-dense-control-100k-17bde53256a74b2695d7c0b3da0c7e5c.receipt.json",
+      "exit_code": 0,
+      "reason": null,
+      "peak_tree_rss": 6334894080,
+      "min_available": 6361735168,
+      "host_budget_gib": 9,
+      "job_commit_gib": 48,
+      "cleanup_confirmed": true,
+      "forced_kill": false,
+      "shutdown_idle_s": null,
+      "force_reason": null
+    },
+    {
+      "name": "eager-fp8-100k-40da88aef283497182cbdb84918c3dc6.receipt.json",
+      "exit_code": 0,
+      "reason": null,
+      "peak_tree_rss": 6357606400,
+      "min_available": 6264102912,
+      "host_budget_gib": 9,
+      "job_commit_gib": 48,
+      "cleanup_confirmed": true,
+      "forced_kill": false,
+      "shutdown_idle_s": null,
+      "force_reason": null
+    },
+    {
+      "name": "eager-rebuilt-100k-50f592cf03934325ba1faf9eb71f0ade.receipt.json",
+      "exit_code": 0,
+      "reason": null,
+      "peak_tree_rss": 6300975104,
+      "min_available": 5999153152,
+      "host_budget_gib": 9,
+      "job_commit_gib": 48,
+      "cleanup_confirmed": true,
+      "forced_kill": false,
+      "shutdown_idle_s": null,
+      "force_reason": null
+    },
+    {
+      "name": "environment-check-bc08ebf577284b8597594a27441d8a7f.receipt.json",
+      "exit_code": 0,
+      "reason": null,
+      "peak_tree_rss": 82849792,
+      "min_available": 11926720512,
+      "host_budget_gib": 2,
+      "job_commit_gib": 3,
+      "cleanup_confirmed": true,
+      "forced_kill": false,
+      "shutdown_idle_s": null,
+      "force_reason": null
+    },
+    {
+      "name": "final-controls-test-fadb7ba8914841b1b390ec27a380b122.receipt.json",
+      "exit_code": 1,
+      "reason": null,
+      "peak_tree_rss": 84217856,
+      "min_available": 12398948352,
+      "host_budget_gib": 2,
+      "job_commit_gib": 3,
+      "cleanup_confirmed": true,
+      "forced_kill": false,
+      "shutdown_idle_s": null,
+      "force_reason": null
+    },
+    {
+      "name": "final-controls-test2-d84c87bc02364223bf00e1a9243006bf.receipt.json",
+      "exit_code": 0,
+      "reason": null,
+      "peak_tree_rss": 84484096,
+      "min_available": 12743229440,
+      "host_budget_gib": 2,
+      "job_commit_gib": 3,
+      "cleanup_confirmed": true,
+      "forced_kill": false,
+      "shutdown_idle_s": null,
+      "force_reason": null
+    },
+    {
+      "name": "final-graph-build-91884094b9f64719a4958ef61b706282.receipt.json",
+      "exit_code": 0,
+      "reason": null,
+      "peak_tree_rss": 349822976,
+      "min_available": 12127600640,
+      "host_budget_gib": 2,
+      "job_commit_gib": 3,
+      "cleanup_confirmed": true,
+      "forced_kill": false,
+      "shutdown_idle_s": null,
+      "force_reason": null
+    },
+    {
+      "name": "final-graph-component-build-1dec20cdcf5e431aa0d7291d8e945c0d.receipt.json",
+      "exit_code": 0,
+      "reason": null,
+      "peak_tree_rss": 469520384,
+      "min_available": 5345132544,
+      "host_budget_gib": 2,
+      "job_commit_gib": 3,
+      "cleanup_confirmed": true,
+      "forced_kill": false,
+      "shutdown_idle_s": null,
+      "force_reason": null
+    },
+    {
+      "name": "final-graph-timeline-fd656df019194efcbb8987eb019641e0.receipt.json",
+      "exit_code": 1,
+      "reason": null,
+      "peak_tree_rss": 28880896,
+      "min_available": 6436716544,
+      "host_budget_gib": 2,
+      "job_commit_gib": 3,
+      "cleanup_confirmed": true,
+      "forced_kill": false,
+      "shutdown_idle_s": null,
+      "force_reason": null
+    },
+    {
+      "name": "final-node-timeline-6e006a30e0224fd58e1138007e92d32e.receipt.json",
+      "exit_code": 0,
+      "reason": null,
+      "peak_tree_rss": 89538560,
+      "min_available": 12748701696,
+      "host_budget_gib": 2,
+      "job_commit_gib": 3,
+      "cleanup_confirmed": true,
+      "forced_kill": false,
+      "shutdown_idle_s": null,
+      "force_reason": null
+    },
+    {
+      "name": "final-r2-control-nsys-a6e8984d843341d3a5930ed17871dd76.receipt.json",
+      "exit_code": 0,
+      "reason": null,
+      "peak_tree_rss": 7050117120,
+      "min_available": 5806194688,
+      "host_budget_gib": 9,
+      "job_commit_gib": 32,
+      "cleanup_confirmed": true,
+      "forced_kill": false,
+      "shutdown_idle_s": null,
+      "force_reason": null
+    },
+    {
+      "name": "fusion-final-test-build-f4214253279a4f60871dea361ae4c669.receipt.json",
+      "exit_code": 0,
+      "reason": null,
+      "peak_tree_rss": 58703872,
+      "min_available": 11777204224,
+      "host_budget_gib": 2,
+      "job_commit_gib": 3,
+      "cleanup_confirmed": true,
+      "forced_kill": false,
+      "shutdown_idle_s": null,
+      "force_reason": null
+    },
+    {
+      "name": "graph-100k-nsys-da92e40b5fb94b9c85f0e6d835888441.receipt.json",
+      "exit_code": 0,
+      "reason": null,
+      "peak_tree_rss": 6994694144,
+      "min_available": 6075514880,
+      "host_budget_gib": 9,
+      "job_commit_gib": 32,
+      "cleanup_confirmed": true,
+      "forced_kill": false,
+      "shutdown_idle_s": null,
+      "force_reason": null
+    },
+    {
+      "name": "graph-alias-check-build-56b3b30cfc404df998393db925771324.receipt.json",
+      "exit_code": 0,
+      "reason": null,
+      "peak_tree_rss": 366391296,
+      "min_available": 12755070976,
+      "host_budget_gib": 2,
+      "job_commit_gib": 3,
+      "cleanup_confirmed": true,
+      "forced_kill": false,
+      "shutdown_idle_s": null,
+      "force_reason": null
+    },
+    {
+      "name": "graph-alias-final-build-16544aab49da4faf8d56a5ec30cbd837.receipt.json",
+      "exit_code": 0,
+      "reason": null,
+      "peak_tree_rss": 368144384,
+      "min_available": 12716224512,
+      "host_budget_gib": 2,
+      "job_commit_gib": 3,
+      "cleanup_confirmed": true,
+      "forced_kill": false,
+      "shutdown_idle_s": null,
+      "force_reason": null
+    },
+    {
+      "name": "graph-budget-100k-nsys-c53b4433aef1408fb6254983b75bc2cd.receipt.json",
+      "exit_code": 3221225786,
+      "reason": "OSError(5, 'owned process paging handle unavailable')",
+      "peak_tree_rss": 6727020544,
+      "min_available": 5698682880,
+      "host_budget_gib": 9,
+      "job_commit_gib": 48,
+      "cleanup_confirmed": true,
+      "forced_kill": false,
+      "shutdown_idle_s": null,
+      "force_reason": null
+    },
+    {
+      "name": "graph-build-b1a178324b1d4b18879db6b961f6aa35.receipt.json",
+      "exit_code": 1,
+      "reason": null,
+      "peak_tree_rss": 560525312,
+      "min_available": 12250415104,
+      "host_budget_gib": 2,
+      "job_commit_gib": 3,
+      "cleanup_confirmed": true,
+      "forced_kill": false,
+      "shutdown_idle_s": null,
+      "force_reason": null
+    },
+    {
+      "name": "graph-build2-19bb3fce357a45e8b7ef273cc978bb68.receipt.json",
+      "exit_code": 1,
+      "reason": null,
+      "peak_tree_rss": 915554304,
+      "min_available": 11638018048,
+      "host_budget_gib": 2,
+      "job_commit_gib": 3,
+      "cleanup_confirmed": true,
+      "forced_kill": false,
+      "shutdown_idle_s": null,
+      "force_reason": null
+    },
+    {
+      "name": "graph-build3-b9d3ebfa4e364894bdb629ad2da90182.receipt.json",
+      "exit_code": 1,
+      "reason": null,
+      "peak_tree_rss": 372428800,
+      "min_available": 12100820992,
+      "host_budget_gib": 2,
+      "job_commit_gib": 3,
+      "cleanup_confirmed": true,
+      "forced_kill": false,
+      "shutdown_idle_s": null,
+      "force_reason": null
+    },
+    {
+      "name": "graph-build4-f74035233b564fe988ef2c50914d85e7.receipt.json",
+      "exit_code": 0,
+      "reason": null,
+      "peak_tree_rss": 851873792,
+      "min_available": 11636731904,
+      "host_budget_gib": 2,
+      "job_commit_gib": 3,
+      "cleanup_confirmed": true,
+      "forced_kill": false,
+      "shutdown_idle_s": null,
+      "force_reason": null
+    },
+    {
+      "name": "graph-build5-821a408076a44f90b5395d0fc1b9269e.receipt.json",
+      "exit_code": 0,
+      "reason": null,
+      "peak_tree_rss": 911822848,
+      "min_available": 10969264128,
+      "host_budget_gib": 2,
+      "job_commit_gib": 3,
+      "cleanup_confirmed": true,
+      "forced_kill": false,
+      "shutdown_idle_s": null,
+      "force_reason": null
+    },
+    {
+      "name": "graph-build6-231ef29462a8410a8f8680dfddd01987.receipt.json",
+      "exit_code": 0,
+      "reason": null,
+      "peak_tree_rss": 910360576,
+      "min_available": 10962366464,
+      "host_budget_gib": 2,
+      "job_commit_gib": 3,
+      "cleanup_confirmed": true,
+      "forced_kill": false,
+      "shutdown_idle_s": null,
+      "force_reason": null
+    },
+    {
+      "name": "graph-check-build-9ec0747d60d04ad4a4f7ebacc4022377.receipt.json",
+      "exit_code": 0,
+      "reason": null,
+      "peak_tree_rss": 355016704,
+      "min_available": 12107051008,
+      "host_budget_gib": 2,
+      "job_commit_gib": 3,
+      "cleanup_confirmed": true,
+      "forced_kill": false,
+      "shutdown_idle_s": null,
+      "force_reason": null
+    },
+    {
+      "name": "graph-check-build-final-a9c07fda90364cdaac66f81cddf7be34.receipt.json",
+      "exit_code": 0,
+      "reason": null,
+      "peak_tree_rss": 395436032,
+      "min_available": 11616755712,
+      "host_budget_gib": 2,
+      "job_commit_gib": 3,
+      "cleanup_confirmed": true,
+      "forced_kill": false,
+      "shutdown_idle_s": null,
+      "force_reason": null
+    },
+    {
+      "name": "graph-clean-100k-aadc4f95c8f848c784632a413b0285d2.receipt.json",
+      "exit_code": 3221225786,
+      "reason": "OSError(5, 'owned process paging handle unavailable')",
+      "peak_tree_rss": 5917065216,
+      "min_available": 6432006144,
+      "host_budget_gib": 9,
+      "job_commit_gib": 48,
+      "cleanup_confirmed": true,
+      "forced_kill": false,
+      "shutdown_idle_s": null,
+      "force_reason": null
+    },
+    {
+      "name": "graph-complete-100k-0e74312964ee46b397e1dbb0e00f1bc2.receipt.json",
+      "exit_code": 0,
+      "reason": null,
+      "peak_tree_rss": 6528401408,
+      "min_available": 5800337408,
+      "host_budget_gib": 9,
+      "job_commit_gib": 48,
+      "cleanup_confirmed": true,
+      "forced_kill": false,
+      "shutdown_idle_s": null,
+      "force_reason": null
+    },
+    {
+      "name": "graph-component-final-build-551ef6d45c9f4795ad446781ea79211e.receipt.json",
+      "exit_code": 0,
+      "reason": null,
+      "peak_tree_rss": 395321344,
+      "min_available": 9533558784,
+      "host_budget_gib": 2,
+      "job_commit_gib": 3,
+      "cleanup_confirmed": true,
+      "forced_kill": false,
+      "shutdown_idle_s": null,
+      "force_reason": null
+    },
+    {
+      "name": "graph-conditional-100k-77b4c1381b8a4c38bb81633d29ad763d.receipt.json",
+      "exit_code": 3221225786,
+      "reason": "OSError(5, 'owned process paging handle unavailable')",
+      "peak_tree_rss": 6355681280,
+      "min_available": 5314744320,
+      "host_budget_gib": 9,
+      "job_commit_gib": 48,
+      "cleanup_confirmed": true,
+      "forced_kill": false,
+      "shutdown_idle_s": null,
+      "force_reason": null
+    },
+    {
+      "name": "graph-conditional-build-209a843e26bf432da7af2bd0d93d421b.receipt.json",
+      "exit_code": 0,
+      "reason": null,
+      "peak_tree_rss": 417644544,
+      "min_available": 11459928064,
+      "host_budget_gib": 2,
+      "job_commit_gib": 3,
+      "cleanup_confirmed": true,
+      "forced_kill": false,
+      "shutdown_idle_s": null,
+      "force_reason": null
+    },
+    {
+      "name": "graph-conditional-build2-0ee4cb6ac7434225a3ff06490e3b84e4.receipt.json",
+      "exit_code": 0,
+      "reason": null,
+      "peak_tree_rss": 417533952,
+      "min_available": 11597381632,
+      "host_budget_gib": 2,
+      "job_commit_gib": 3,
+      "cleanup_confirmed": true,
+      "forced_kill": false,
+      "shutdown_idle_s": null,
+      "force_reason": null
+    },
+    {
+      "name": "graph-conditional-check-build-1a06916dd99041c3824ba7d857bdcded.receipt.json",
+      "exit_code": 0,
+      "reason": null,
+      "peak_tree_rss": 335499264,
+      "min_available": 11700117504,
+      "host_budget_gib": 2,
+      "job_commit_gib": 3,
+      "cleanup_confirmed": true,
+      "forced_kill": false,
+      "shutdown_idle_s": null,
+      "force_reason": null
+    },
+    {
+      "name": "graph-conditional-check-build2-9fa35250974e49c6ac87bc2b8436a275.receipt.json",
+      "exit_code": 0,
+      "reason": null,
+      "peak_tree_rss": 391110656,
+      "min_available": 11591221248,
+      "host_budget_gib": 2,
+      "job_commit_gib": 3,
+      "cleanup_confirmed": true,
+      "forced_kill": false,
+      "shutdown_idle_s": null,
+      "force_reason": null
+    },
+    {
+      "name": "graph-cpu-check-build-3bb1cac791df4cb3b7a004e49a825ce8.receipt.json",
+      "exit_code": 0,
+      "reason": null,
+      "peak_tree_rss": 449794048,
+      "min_available": 12629950464,
+      "host_budget_gib": 2,
+      "job_commit_gib": 3,
+      "cleanup_confirmed": true,
+      "forced_kill": false,
+      "shutdown_idle_s": null,
+      "force_reason": null
+    },
+    {
+      "name": "graph-diagnostic-rerank-ca88d1ffc95547c1bfa915294a05e235.receipt.json",
+      "exit_code": 0,
+      "reason": null,
+      "peak_tree_rss": 83337216,
+      "min_available": 12914507776,
+      "host_budget_gib": 2,
+      "job_commit_gib": 3,
+      "cleanup_confirmed": true,
+      "forced_kill": false,
+      "shutdown_idle_s": null,
+      "force_reason": null
+    },
+    {
+      "name": "graph-executor-build-11ccefde9ead4508aea9de2c2d61bf66.receipt.json",
+      "exit_code": 0,
+      "reason": null,
+      "peak_tree_rss": 364658688,
+      "min_available": 13959303168,
+      "host_budget_gib": 2,
+      "job_commit_gib": 3,
+      "cleanup_confirmed": true,
+      "forced_kill": false,
+      "shutdown_idle_s": null,
+      "force_reason": null
+    },
+    {
+      "name": "graph-final-nsys-af9350a173e645788feb29b64ed6b227.receipt.json",
+      "exit_code": 0,
+      "reason": null,
+      "peak_tree_rss": 7098187776,
+      "min_available": 5403648000,
+      "host_budget_gib": 9,
+      "job_commit_gib": 48,
+      "cleanup_confirmed": true,
+      "forced_kill": false,
+      "shutdown_idle_s": null,
+      "force_reason": null
+    },
+    {
+      "name": "graph-final-source-100k-2d93c0ebc4f14f0080b1f2559c73b04b.receipt.json",
+      "exit_code": 0,
+      "reason": null,
+      "peak_tree_rss": 6447591424,
+      "min_available": 6565441536,
+      "host_budget_gib": 9,
+      "job_commit_gib": 48,
+      "cleanup_confirmed": true,
+      "forced_kill": false,
+      "shutdown_idle_s": null,
+      "force_reason": null
+    },
+    {
+      "name": "graph-main-build-acf69e83b465475493474bb6ee02384a.receipt.json",
+      "exit_code": 0,
+      "reason": null,
+      "peak_tree_rss": 656891904,
+      "min_available": 11935584256,
+      "host_budget_gib": 2,
+      "job_commit_gib": 3,
+      "cleanup_confirmed": true,
+      "forced_kill": false,
+      "shutdown_idle_s": null,
+      "force_reason": null
+    },
+    {
+      "name": "graph-nodes-nsys-97e91bded1e04ec18f5b3ade67005244.receipt.json",
+      "exit_code": 0,
+      "reason": null,
+      "peak_tree_rss": 7276089344,
+      "min_available": 5344858112,
+      "host_budget_gib": 9,
+      "job_commit_gib": 48,
+      "cleanup_confirmed": true,
+      "forced_kill": false,
+      "shutdown_idle_s": null,
+      "force_reason": null
+    },
+    {
+      "name": "graph-premapped-100k-0461f81302b14d0ca9c1f16b1a3125f7.receipt.json",
+      "exit_code": 3221225786,
+      "reason": "OSError(5, 'owned process paging handle unavailable')",
+      "peak_tree_rss": 6355927040,
+      "min_available": 5586919424,
+      "host_budget_gib": 9,
+      "job_commit_gib": 48,
+      "cleanup_confirmed": true,
+      "forced_kill": false,
+      "shutdown_idle_s": null,
+      "force_reason": null
+    },
+    {
+      "name": "graph-real-100k-nsys-f3db1d5c85d1456ba71f19d1f62697a0.receipt.json",
+      "exit_code": 1,
+      "reason": null,
+      "peak_tree_rss": 845824000,
+      "min_available": 11710545920,
+      "host_budget_gib": 9,
+      "job_commit_gib": 32,
+      "cleanup_confirmed": true,
+      "forced_kill": false,
+      "shutdown_idle_s": null,
+      "force_reason": null
+    },
+    {
+      "name": "graph-reserve-build-328c1f749d1c49e387a44be8f7738684.receipt.json",
+      "exit_code": 0,
+      "reason": null,
+      "peak_tree_rss": 557760512,
+      "min_available": 11551637504,
+      "host_budget_gib": 2,
+      "job_commit_gib": 3,
+      "cleanup_confirmed": true,
+      "forced_kill": false,
+      "shutdown_idle_s": null,
+      "force_reason": null
+    },
+    {
+      "name": "graph-reserve-executor-build-62adbdb72c8247969885da3f6bf3c00c.receipt.json",
+      "exit_code": 0,
+      "reason": null,
+      "peak_tree_rss": 397672448,
+      "min_available": 11492417536,
+      "host_budget_gib": 2,
+      "job_commit_gib": 3,
+      "cleanup_confirmed": true,
+      "forced_kill": false,
+      "shutdown_idle_s": null,
+      "force_reason": null
+    },
+    {
+      "name": "graph-resident-100k-nsys-bfac5bd05c1a4f2983d3b6cf5dcce2cd.receipt.json",
+      "exit_code": 1,
+      "reason": null,
+      "peak_tree_rss": 6215573504,
+      "min_available": 6480384000,
+      "host_budget_gib": 9,
+      "job_commit_gib": 32,
+      "cleanup_confirmed": true,
+      "forced_kill": false,
+      "shutdown_idle_s": null,
+      "force_reason": null
+    },
+    {
+      "name": "graph-supported-100k-nsys-499a5a6d0e7e4726ab0204bbffaac945.receipt.json",
+      "exit_code": 3221225786,
+      "reason": "RAM budget breached: RSS=6.372GB commit=35.007GB available=5.427GB",
+      "peak_tree_rss": 6371905536,
+      "min_available": 5273333760,
+      "host_budget_gib": 9,
+      "job_commit_gib": 32,
+      "cleanup_confirmed": true,
+      "forced_kill": false,
+      "shutdown_idle_s": null,
+      "force_reason": null
+    },
+    {
+      "name": "graph-topology-check-build-4fc527fbe88e43e998c46c7ab4662e38.receipt.json",
+      "exit_code": 0,
+      "reason": null,
+      "peak_tree_rss": 390901760,
+      "min_available": 12558147584,
+      "host_budget_gib": 2,
+      "job_commit_gib": 3,
+      "cleanup_confirmed": true,
+      "forced_kill": false,
+      "shutdown_idle_s": null,
+      "force_reason": null
+    },
+    {
+      "name": "graph-topology-final-build-0e92ec85f49e4d728be145a15f679df4.receipt.json",
+      "exit_code": 0,
+      "reason": null,
+      "peak_tree_rss": 561364992,
+      "min_available": 12347879424,
+      "host_budget_gib": 2,
+      "job_commit_gib": 3,
+      "cleanup_confirmed": true,
+      "forced_kill": false,
+      "shutdown_idle_s": null,
+      "force_reason": null
+    },
+    {
+      "name": "graph-topology-nsys-1351481561374b129d238faf27812cb7.receipt.json",
+      "exit_code": 0,
+      "reason": null,
+      "peak_tree_rss": 7275204608,
+      "min_available": 5457973248,
+      "host_budget_gib": 9,
+      "job_commit_gib": 48,
+      "cleanup_confirmed": true,
+      "forced_kill": false,
+      "shutdown_idle_s": null,
+      "force_reason": null
+    },
+    {
+      "name": "graph-witness-test-8680c685bf244dac864dfd95ff76eeed.receipt.json",
+      "exit_code": 0,
+      "reason": null,
+      "peak_tree_rss": 54255616,
+      "min_available": 12792086528,
+      "host_budget_gib": 2,
+      "job_commit_gib": 3,
+      "cleanup_confirmed": true,
+      "forced_kill": false,
+      "shutdown_idle_s": null,
+      "force_reason": null
+    },
+    {
+      "name": "kernel-contract-final-be7f9907ee964c32a5edeb7d81d8a5e3.receipt.json",
+      "exit_code": 0,
+      "reason": null,
+      "peak_tree_rss": 77631488,
+      "min_available": 5468524544,
+      "host_budget_gib": 2,
+      "job_commit_gib": 3,
+      "cleanup_confirmed": true,
+      "forced_kill": false,
+      "shutdown_idle_s": null,
+      "force_reason": null
+    },
+    {
+      "name": "native-fp4-speed-proxy-09378581169f4d3bab16799de20a1ba8.receipt.json",
+      "exit_code": 0,
+      "reason": null,
+      "peak_tree_rss": 6413250560,
+      "min_available": 5835337728,
+      "host_budget_gib": 8.5,
+      "job_commit_gib": 48,
+      "cleanup_confirmed": true,
+      "forced_kill": false,
+      "shutdown_idle_s": null,
+      "force_reason": null
+    },
+    {
+      "name": "native-fp4-speed-proxy-0b72e4e845414341ae21fd81d49d3362.receipt.json",
+      "exit_code": 0,
+      "reason": null,
+      "peak_tree_rss": 7012270080,
+      "min_available": 5490683904,
+      "host_budget_gib": 8.5,
+      "job_commit_gib": 48,
+      "cleanup_confirmed": true,
+      "forced_kill": false,
+      "shutdown_idle_s": null,
+      "force_reason": null
+    },
+    {
+      "name": "native-fp4-speed-proxy-31f6f31b1a2f4825bad2e9659a0b86f4.receipt.json",
+      "exit_code": 0,
+      "reason": null,
+      "peak_tree_rss": 7025356800,
+      "min_available": 5328867328,
+      "host_budget_gib": 8.5,
+      "job_commit_gib": 48,
+      "cleanup_confirmed": true,
+      "forced_kill": false,
+      "shutdown_idle_s": null,
+      "force_reason": null
+    },
+    {
+      "name": "native-fp4-speed-proxy-320f82a1c749472e8280297a55a9e8a6.receipt.json",
+      "exit_code": 0,
+      "reason": null,
+      "peak_tree_rss": 6889144320,
+      "min_available": 5734297600,
+      "host_budget_gib": 8.5,
+      "job_commit_gib": 32,
+      "cleanup_confirmed": true,
+      "forced_kill": false,
+      "shutdown_idle_s": null,
+      "force_reason": null
+    },
+    {
+      "name": "native-fp4-speed-proxy-42ae87bf816f45bea6609ab2620b8f29.receipt.json",
+      "exit_code": 0,
+      "reason": null,
+      "peak_tree_rss": 6881538048,
+      "min_available": 5756887040,
+      "host_budget_gib": 8.5,
+      "job_commit_gib": 32,
+      "cleanup_confirmed": true,
+      "forced_kill": false,
+      "shutdown_idle_s": null,
+      "force_reason": null
+    },
+    {
+      "name": "native-fp4-speed-proxy-4fd0b52a2d1b4fad9cbe3c73de37152a.receipt.json",
+      "exit_code": 0,
+      "reason": null,
+      "peak_tree_rss": 6287998976,
+      "min_available": 6318137344,
+      "host_budget_gib": 8.5,
+      "job_commit_gib": 48,
+      "cleanup_confirmed": true,
+      "forced_kill": false,
+      "shutdown_idle_s": null,
+      "force_reason": null
+    },
+    {
+      "name": "native-fp4-speed-proxy-558a1a2d1159494198a8eb7af8d38a6c.receipt.json",
+      "exit_code": 3221225786,
+      "reason": "RAM budget breached: RSS=6.118GB commit=34.480GB available=5.299GB",
+      "peak_tree_rss": 6117732352,
+      "min_available": 5260029952,
+      "host_budget_gib": 8.5,
+      "job_commit_gib": 32,
+      "cleanup_confirmed": true,
+      "forced_kill": false,
+      "shutdown_idle_s": null,
+      "force_reason": null
+    },
+    {
+      "name": "native-fp4-speed-proxy-5956e387c13146e69213397a71651d46.receipt.json",
+      "exit_code": 0,
+      "reason": null,
+      "peak_tree_rss": 6201704448,
+      "min_available": 6406311936,
+      "host_budget_gib": 8.5,
+      "job_commit_gib": 48,
+      "cleanup_confirmed": true,
+      "forced_kill": false,
+      "shutdown_idle_s": null,
+      "force_reason": null
+    },
+    {
+      "name": "native-fp4-speed-proxy-6500b4aa46f34a488481ea2b24aa0123.receipt.json",
+      "exit_code": 0,
+      "reason": null,
+      "peak_tree_rss": 6872297472,
+      "min_available": 5379309568,
+      "host_budget_gib": 8.5,
+      "job_commit_gib": 48,
+      "cleanup_confirmed": true,
+      "forced_kill": false,
+      "shutdown_idle_s": null,
+      "force_reason": null
+    },
+    {
+      "name": "native-fp4-speed-proxy-6bccb059b6494b9ebcd372a9aad7c186.receipt.json",
+      "exit_code": 0,
+      "reason": null,
+      "peak_tree_rss": 6230843392,
+      "min_available": 5925883904,
+      "host_budget_gib": 8.5,
+      "job_commit_gib": 48,
+      "cleanup_confirmed": true,
+      "forced_kill": false,
+      "shutdown_idle_s": null,
+      "force_reason": null
+    },
+    {
+      "name": "native-fp4-speed-proxy-7329f5b47d544db4a480b3705bc2ae85.receipt.json",
+      "exit_code": 1,
+      "reason": null,
+      "peak_tree_rss": 5970681856,
+      "min_available": 6468907008,
+      "host_budget_gib": 8.5,
+      "job_commit_gib": 32,
+      "cleanup_confirmed": true,
+      "forced_kill": false,
+      "shutdown_idle_s": null,
+      "force_reason": null
+    },
+    {
+      "name": "native-fp4-speed-proxy-8c610cc8ad6f4624bad0f6d84b78c2d3.receipt.json",
+      "exit_code": 0,
+      "reason": null,
+      "peak_tree_rss": 6344376320,
+      "min_available": 6587977728,
+      "host_budget_gib": 8.5,
+      "job_commit_gib": 48,
+      "cleanup_confirmed": true,
+      "forced_kill": false,
+      "shutdown_idle_s": null,
+      "force_reason": null
+    },
+    {
+      "name": "native-fp4-speed-proxy-a80142c778d64023b5c1bab23ac5bcd9.receipt.json",
+      "exit_code": 1,
+      "reason": null,
+      "peak_tree_rss": 634142720,
+      "min_available": 11640320000,
+      "host_budget_gib": 8.5,
+      "job_commit_gib": 32,
+      "cleanup_confirmed": true,
+      "forced_kill": false,
+      "shutdown_idle_s": null,
+      "force_reason": null
+    },
+    {
+      "name": "native-fp4-speed-proxy-a823c2fadc354a68b79f1e664e2179ad.receipt.json",
+      "exit_code": 0,
+      "reason": null,
+      "peak_tree_rss": 6693969920,
+      "min_available": 6070976512,
+      "host_budget_gib": 8.5,
+      "job_commit_gib": 32,
+      "cleanup_confirmed": true,
+      "forced_kill": false,
+      "shutdown_idle_s": null,
+      "force_reason": null
+    },
+    {
+      "name": "native-fp4-speed-proxy-de153d19f1d24171ba5b8eab3efe35f0.receipt.json",
+      "exit_code": 3221225786,
+      "reason": "OSError(5, 'owned process paging handle unavailable')",
+      "peak_tree_rss": 6184665088,
+      "min_available": 5797797888,
+      "host_budget_gib": 8.5,
+      "job_commit_gib": 48,
+      "cleanup_confirmed": true,
+      "forced_kill": false,
+      "shutdown_idle_s": null,
+      "force_reason": null
+    },
+    {
+      "name": "pdl-build-e4de92f17b5c40fca37663ab6638c68b.receipt.json",
+      "exit_code": 0,
+      "reason": null,
+      "peak_tree_rss": 58507264,
+      "min_available": 12119777280,
+      "host_budget_gib": 2,
+      "job_commit_gib": 3,
+      "cleanup_confirmed": true,
+      "forced_kill": false,
+      "shutdown_idle_s": null,
+      "force_reason": null
+    },
+    {
+      "name": "r2-build-c2d02277198e4830ae21a8c8e1d7f0c6.receipt.json",
+      "exit_code": 1,
+      "reason": null,
+      "peak_tree_rss": 597135360,
+      "min_available": 12299010048,
+      "host_budget_gib": 2,
+      "job_commit_gib": 3,
+      "cleanup_confirmed": true,
+      "forced_kill": false,
+      "shutdown_idle_s": null,
+      "force_reason": null
+    },
+    {
+      "name": "r2-build2-ec5f7a17e0dd4f7eae39ea49fab4297a.receipt.json",
+      "exit_code": 0,
+      "reason": null,
+      "peak_tree_rss": 532901888,
+      "min_available": 12095733760,
+      "host_budget_gib": 2,
+      "job_commit_gib": 3,
+      "cleanup_confirmed": true,
+      "forced_kill": false,
+      "shutdown_idle_s": null,
+      "force_reason": null
+    },
+    {
+      "name": "r2-fusion-nsys-e4e7a2b6e08a4473b4b00493fec5d6d5.receipt.json",
+      "exit_code": 0,
+      "reason": null,
+      "peak_tree_rss": 7015596032,
+      "min_available": 5851811840,
+      "host_budget_gib": 9,
+      "job_commit_gib": 32,
+      "cleanup_confirmed": true,
+      "forced_kill": false,
+      "shutdown_idle_s": null,
+      "force_reason": null
+    },
+    {
+      "name": "r2-fusion-timeline-386116322a9c4bde85346140d3630e2e.receipt.json",
+      "exit_code": 0,
+      "reason": null,
+      "peak_tree_rss": 148193280,
+      "min_available": 12580732928,
+      "host_budget_gib": 2,
+      "job_commit_gib": 3,
+      "cleanup_confirmed": true,
+      "forced_kill": false,
+      "shutdown_idle_s": null,
+      "force_reason": null
+    },
+    {
+      "name": "r2-timeline-c978bfabc75f4fbeb938e06f234efd84.receipt.json",
+      "exit_code": 0,
+      "reason": null,
+      "peak_tree_rss": 119410688,
+      "min_available": 12404187136,
+      "host_budget_gib": 2,
+      "job_commit_gib": 3,
+      "cleanup_confirmed": true,
+      "forced_kill": false,
+      "shutdown_idle_s": null,
+      "force_reason": null
+    },
+    {
+      "name": "release-final-pre-34a437aeff4d4c689049a7fd2d5ac48c.receipt.json",
+      "exit_code": 0,
+      "reason": null,
+      "peak_tree_rss": 271962112,
+      "min_available": 5376438272,
+      "host_budget_gib": 2,
+      "job_commit_gib": 3,
+      "cleanup_confirmed": true,
+      "forced_kill": false,
+      "shutdown_idle_s": null,
+      "force_reason": null
+    },
+    {
+      "name": "release-precheck-3d7a376722f34ba8b008b6d43da9187b.receipt.json",
+      "exit_code": 0,
+      "reason": null,
+      "peak_tree_rss": 265879552,
+      "min_available": 6450200576,
+      "host_budget_gib": 2,
+      "job_commit_gib": 3,
+      "cleanup_confirmed": true,
+      "forced_kill": false,
+      "shutdown_idle_s": null,
+      "force_reason": null
+    },
+    {
+      "name": "topology-timeline-45f2d134244e4ecd91ba36971d9087a1.receipt.json",
+      "exit_code": 0,
+      "reason": null,
+      "peak_tree_rss": 83918848,
+      "min_available": 12916482048,
+      "host_budget_gib": 2,
+      "job_commit_gib": 3,
+      "cleanup_confirmed": true,
+      "forced_kill": false,
+      "shutdown_idle_s": null,
+      "force_reason": null
+    }
+  ]
+}

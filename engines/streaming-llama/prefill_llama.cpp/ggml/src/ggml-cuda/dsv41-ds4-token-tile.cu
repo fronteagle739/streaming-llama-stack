@@ -1,3 +1,4 @@
+#include "dispatch-counter.cuh"
 /*
 MIT License
 
@@ -983,10 +984,10 @@ static_assert(64u * kTTStageRows * sizeof(float4) == tt_TokentileLayout<kTTStage
 static_assert(tt_TokentileSmemBudget<kTTStageRows, 16u>::total == 77824ull,
               "G16 aliased score shared-memory budget changed");
 
-static std::atomic<uint64_t> ds4_token_tile_queued{0};
-static std::atomic<uint64_t> ds4_token_union_queued{0};
-static std::atomic<uint64_t> ds4_token_tile_g16_queued{0};
-static std::atomic<uint64_t> ds4_token_f16_table_queued{0};
+static ggml_cuda_dispatch_counter ds4_token_tile_queued{0};
+static ggml_cuda_dispatch_counter ds4_token_union_queued{0};
+static ggml_cuda_dispatch_counter ds4_token_tile_g16_queued{0};
+static ggml_cuda_dispatch_counter ds4_token_f16_table_queued{0};
 extern "C" uint64_t ggml_backend_cuda_dsv41_token_f16_table_queued(void){return ds4_token_f16_table_queued.load(std::memory_order_acquire);}
 extern "C" uint64_t ggml_backend_cuda_dsv41_token_tile_g16_queued(void){return ds4_token_tile_g16_queued.load(std::memory_order_acquire);}
 extern "C" uint64_t ggml_backend_cuda_dsv41_token_union_queued(void){return ds4_token_union_queued.load(std::memory_order_acquire);}

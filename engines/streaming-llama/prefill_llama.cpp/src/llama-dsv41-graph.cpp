@@ -4,6 +4,7 @@
 #include "boundary-capture.h"
 #include "ggml-dsv41-shared-sparse.h"
 #include "ggml-dsv41-hc-expand.h"
+#include "ggml-dsv41-hc-collapse.h"
 #include "ggml-dsv41-hc-half.h"
 #include "ggml-dsv41-hc-sinkhorn.h"
 #include "../ggml/src/ggml-dsv41-ops.h"
@@ -61,6 +62,19 @@ static void dsv41_hc_expand_cpu(ggml_tensor*dst,const ggml_tensor*residual,
         for(int64_t src=0;src<4;++src)acc=ggml_dsv41_add_rn(acc,
             ggml_dsv41_rope_product(r[(t*4+src)*width+d],m[t*20+4+copy+src*4]));
         out[at]=ggml_dsv41_hc_bf16_requested(dst)?ggml_dsv41_bf16(acc):acc;
+    }
+}
+
+static void dsv41_hc_collapse_cpu(ggml_tensor *dst,const ggml_tensor *r,
+        const ggml_tensor *p,const ggml_tensor *,int ith,int nth,void*) {
+    const auto width=r->ne[0];
+    for(int64_t at=ith;at<ggml_nelements(dst);at+=nth) {
+        const auto row=at/width,d=at%width;
+        const auto *res=(const float*)r->data,*pre=(const float*)p->data;
+        float sum=ggml_dsv41_rope_product(res[row*4*width+d],pre[row*4]);
+        for(int c=1;c<4;++c) sum=ggml_dsv41_add_rn(sum,
+            ggml_dsv41_rope_product(res[(row*4+c)*width+d],pre[row*4+c]));
+        ((float*)dst->data)[at]=ggml_dsv41_bf16(sum);
     }
 }
 
@@ -147,6 +161,18 @@ ggml_tensor * llama_dsv41_graph_ops::weighted_sum(ggml_tensor * residual, ggml_t
 
 ggml_tensor * llama_dsv41_graph_ops::collapse(ggml_tensor * residual, ggml_tensor * previous_pre) const {
     llama_dsv41_profile_stage profile_stage(ctx,"hc_pre");
+    const char *fusion=std::getenv("LLAMA_DSV41_HC_COLLAPSE_FUSION");
+    if(!(fusion && !std::strcmp(fusion,"0")) && ggml_is_contiguous(residual) && ggml_is_contiguous(previous_pre)) {
+        auto *out=ggml_map_custom3(ctx,residual,previous_pre,previous_pre,dsv41_hc_collapse_cpu,GGML_N_TASKS_MAX,nullptr);
+        // MAP_CUSTOM3 supplies the portable callback metadata; collapse has
+        // one output channel, so give gallocr its actual compact output shape.
+        out->ne[1]=residual->ne[2];out->ne[2]=out->ne[3]=1;
+        out->nb[1]=out->ne[0]*sizeof(float);
+        out->nb[2]=out->nb[3]=out->nb[1]*out->ne[1];
+        out->op_params[7]=GGML_DSV41_HC_COLLAPSE_MAGIC;
+        GGML_ASSERT(ggml_dsv41_hc_collapse_valid(out));
+        return tagged(out,"dsv41_hc_pre_bf16");
+    }
     return tagged(bf16(weighted_sum(residual, previous_pre)), "dsv41_hc_pre_bf16");
 }
 

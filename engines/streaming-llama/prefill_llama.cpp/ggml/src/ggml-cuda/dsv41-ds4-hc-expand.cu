@@ -1,3 +1,4 @@
+#include "dispatch-counter.cuh"
 /*
 MIT License
 
@@ -33,6 +34,15 @@ SOFTWARE.
 #include "dsv4-act-qat-kernels.cuh"
 #include "dsv41-hc-channels.cuh"
 #include <atomic>
+#include "ggml-dsv41-hc-collapse.h"
+#include "dsv41-hc-collapse.cuh"
+void ggml_cuda_op_dsv41_hc_collapse(ggml_backend_cuda_context&ctx,ggml_tensor*dst) {
+    GGML_ASSERT(ggml_dsv41_hc_collapse_valid(dst));
+    dsv41_hc_collapse_kernel<<<unsigned((ggml_nelements(dst)+255)/256),256,0,ctx.stream()>>>(
+        (const float*)dst->src[0]->data,(const float*)dst->src[1]->data,
+        (float*)dst->data,dst->ne[0],dst->ne[1]);
+    CUDA_CHECK(cudaGetLastError());
+}
 __global__ static void hc_expand_kernel(
         float *out_hc,
         const float *block_out,
@@ -72,7 +82,7 @@ __global__ static void hc_expand_kernel(
 }
 
 
-static std::atomic<uint64_t> hc_expand_queued{0},hc_bf16_queued{0};
+static ggml_cuda_dispatch_counter hc_expand_queued{0},hc_bf16_queued{0};
 extern "C" uint64_t ggml_backend_cuda_dsv41_hc_bf16_queued(void){return hc_bf16_queued.load();}
 extern "C" uint64_t ggml_backend_cuda_dsv41_hc_expand_queued(void){return hc_expand_queued.load();}
 void ggml_cuda_op_dsv41_ds4_hc_expand(ggml_backend_cuda_context&ctx,ggml_tensor*dst){

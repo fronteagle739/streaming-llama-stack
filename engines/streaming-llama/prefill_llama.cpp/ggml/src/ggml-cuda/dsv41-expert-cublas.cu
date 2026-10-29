@@ -1,3 +1,4 @@
+#include "dispatch-counter.cuh"
 // Host-only reuse of the shared MUL_MAT_ID sort/gather/scatter fallback,
 // existing Q4_K -> F16 conversion, and cuBLAS F16/F16/F32 GEMMs.
 // No CUDA kernel bodies or full dequantized expert bank.
@@ -8,7 +9,7 @@
 #include <array>
 #include <atomic>
 #include <vector>
-static std::atomic<uint64_t> expert_cublas_queued{0};
+static ggml_cuda_dispatch_counter expert_cublas_queued{0};
 extern "C" uint64_t ggml_backend_cuda_dsv41_expert_cublas_queued(void){return expert_cublas_queued.load();}
 void ggml_cuda_op_dsv41_expert_cublas(ggml_backend_cuda_context&ctx,ggml_tensor*dst){
  GGML_ASSERT(ggml_dsv41_expert_cublas_requested(dst)&&ggml_dsv41_expert_cublas_valid(dst));

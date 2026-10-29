@@ -11,6 +11,19 @@ from slstack.envvars import apply, validate_table
 
 
 class EnvironmentContractTests(unittest.TestCase):
+    def test_other22_explicit_controls_reach_the_native_child(self):
+        from slstack.config import load
+        cfg=load(overrides={'gpu_uuid':'GPU-test'})
+        chosen={'GGML_CUDA_DISABLE_GRAPHS':'0','LLAMA_DSV41_CUDA_GRAPHS':'1',
+                'LLAMA_DSV41_HC_COLLAPSE_FUSION':'0','LLAMA_DSV41_QAT_TILED':'0'}
+        cfg['env_overrides']=chosen
+        actual=apply({},cfg,'rtx-producer')
+        for name,value in chosen.items():self.assertEqual(actual.get(name),value)
+        cfg['env_overrides']={}
+        self.assertEqual(apply({},cfg,'rtx-producer')['GGML_CUDA_DISABLE_GRAPHS'],'1')
+        for name in chosen:
+            if name!='GGML_CUDA_DISABLE_GRAPHS':self.assertNotIn(name,apply({},cfg,'rtx-producer'))
+
     def test_pinned_external_evidence_is_retained_but_stale_local_reads_fail(self):
         row=dict(var='PATH',doc='Host path',reads=['engines/current.c:1','engines/mlx-serve/pinned.zig:2'])
         with patch('slstack.envvars.rows',return_value=[row]),patch('slstack.envvars.inventory',return_value={'PATH':['engines/current.c:1']}):
