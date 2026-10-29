@@ -140,6 +140,7 @@ Native controls take effect at token boundaries. The response reports requested 
 | `--llama-dsv41-topk-select` | Explicit runtime value | With the exact radix top-k (LLAMA_DSV41_TOPK_RADIX=1), select the top 512 of each 8192-key tile by an MSB radix select on the same packed (value, index) keys and sort only those 512, instead of sorting the whole tile. Identical IDs and order (the key order is total); NaN/subnormal tiles keep the original network. Default 1; 0 keeps the full tile sort. |
 | `--llama-dsv41-stream-topk-defer` | Explicit runtime value | Indexer streaming top-k for more than 131,072 keys: append each 8,192-key window's candidates to one pending buffer and merge only when it would exceed 8,192 columns and once at the end, instead of re-merging after every window. Identical IDs and order (same score-desc/global-ID-asc total order). Default 1; 0 restores the per-window running merge. |
 | `--llama-dsv41-get-rows-scalar` | Explicit runtime value | CUDA GET_ROWS of one-element F32/F16 rows (the indexer's streaming top-k value and ID gathers): one thread per gathered element instead of one 256-thread block per element. Identical values (same index, same cast). Default 1; 0 keeps the generic kernel. |
+| `--llama-dsv41-sparse-hand` | Explicit runtime value | DSV4.1 token-tile sparse attention (TileLang mode 2): hand-written SM120 kernel with 32 heads per CTA, double-buffered 32-key tiles and the F32 query rounded to BF16 on load, instead of the embedded TileLang image (16 heads per CTA, one stage). Same BF16 MMA/F32 softmax arithmetic, different summation order (not bitwise identical). Default 1; 0 keeps the TileLang image. |
 
 Budget placeholders use the admitted child budget: `{host_budget_bytes}`, `{host_budget_mb}`, `{physical_floor_bytes}` (admission) and `{runtime_floor_bytes}` (runtime). `{host_budget_gib}` and `{min_available_gib}` use GiB. User overrides are literal strings, including JSON and braces.
 
@@ -73805,7 +73806,7 @@ Source: `engines/streaming-llama/prefill_llama.cpp/ggml/src/ggml-cuda/dsv41-ds4-
         ds4_token_tile_queued.fetch_add(1,std::memory_order_release);
 ```
 
-Source: `engines/streaming-llama/prefill_llama.cpp/ggml/src/ggml-cuda/dsv41-tilelang.cuh:51`. Unset read: NULL from getenv; the literal consumer below supplies any fallback.
+Source: `engines/streaming-llama/prefill_llama.cpp/ggml/src/ggml-cuda/dsv41-tilelang.cuh:52`. Unset read: NULL from getenv; the literal consumer below supplies any fallback.
 
 ```text
     GGML_ASSERT(ggml_cuda_info().devices[ctx.device].cc==1200&&ctx.device==0);
@@ -73823,7 +73824,7 @@ Optional ahead-of-time sparse-attention image override. Mode2 defaults to the em
 
 Scope: rtx-llama. Class: advanced.
 
-Source: `engines/streaming-llama/prefill_llama.cpp/ggml/src/ggml-cuda/dsv41-tilelang.cuh:14`. Unset read: NULL from getenv; the literal consumer below supplies any fallback.
+Source: `engines/streaming-llama/prefill_llama.cpp/ggml/src/ggml-cuda/dsv41-tilelang.cuh:15`. Unset read: NULL from getenv; the literal consumer below supplies any fallback.
 
 ```text
     static CUmodule module=nullptr;static CUfunction function=nullptr;static std::once_flag initialized;
@@ -73835,7 +73836,7 @@ Source: `engines/streaming-llama/prefill_llama.cpp/ggml/src/ggml-cuda/dsv41-tile
         dsv41_tilelang_driver(cuFuncSetAttribute(function,CU_FUNC_ATTRIBUTE_MAX_DYNAMIC_SHARED_SIZE_BYTES,86016),"admit86KiB shared memory");
 ```
 
-Source: `engines/streaming-llama/prefill_llama.cpp/ggml/src/ggml-cuda/dsv41-tilelang.cuh:56`. Unset read: NULL from getenv; the literal consumer below supplies any fallback.
+Source: `engines/streaming-llama/prefill_llama.cpp/ggml/src/ggml-cuda/dsv41-tilelang.cuh:57`. Unset read: NULL from getenv; the literal consumer below supplies any fallback.
 
 ```text
         static CUmodule module=nullptr;static CUfunction function=nullptr;static std::once_flag initialized;
@@ -101513,4 +101514,22 @@ static bool get_rows_scalar_enabled() {
         return !env || env[0] == '1';
     }();
     return enabled;
+```
+
+### LLAMA_DSV41_SPARSE_HAND
+
+DSV4.1 token-tile sparse attention (TileLang mode 2): hand-written SM120 kernel with 32 heads per CTA, double-buffered 32-key tiles and the F32 query rounded to BF16 on load, instead of the embedded TileLang image (16 heads per CTA, one stage). Same BF16 MMA/F32 softmax arithmetic, different summation order (not bitwise identical). Default 1; 0 keeps the TileLang image.
+
+Scope: rtx-llama. Class: qualified.
+
+Source: `engines/streaming-llama/prefill_llama.cpp/ggml/src/ggml-cuda/dsv41-tilelang.cuh:77`. Unset read: NULL from getenv; the literal consumer below supplies any fallback.
+
+```text
+        // OPUS22 r10: the hand SM120 kernel (32 heads/CTA, double-buffered key tiles)
+        // reads the F32 query and rounds it to BF16 on load, so no staged query copy.
+        static const bool hand=[]{const char *e=std::getenv("LLAMA_DSV41_SPARSE_HAND");
+            const bool on=!e||!(e[0]=='0'&&!e[1]);
+            if(on)CUDA_CHECK(cudaFuncSetAttribute(dsv41_sparse_hand::sparse_attn_hg32,cudaFuncAttributeMaxDynamicSharedMemorySize,dsv41_sparse_hand::SMEM));
+            fprintf(stderr,"OPUS22_SPARSE_HAND active=%d heads_per_cta=32 key_tile=32 stages=2 query_staging=0\n",on?1:0);return on;}();
+        ggml_cuda_pool_alloc<__nv_bfloat16> staged(ctx.pool(),kv_elements+(hand?0:q_elements));
 ```

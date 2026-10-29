@@ -3,6 +3,7 @@
 #include <cuda.h>
 #include <cuda_bf16.h>
 #include <mutex>
+#include "dsv41-sparse-hand.cuh"
 
 static void dsv41_tilelang_driver(CUresult code,const char *operation){
     if(code!=CUDA_SUCCESS){const char *why=nullptr;cuGetErrorString(code,&why);
@@ -71,14 +72,25 @@ static void dsv41_tilelang_attention(ggml_backend_cuda_context &ctx,ggml_tensor 
         const uint64_t kv_elements=uint64_t(raw_rows+comp_rows)*512,q_elements=uint64_t(queries)*64*512;
         // Includes the caller's existing F16 mirrors. Fits the already admitted768MiB pool.
         GGML_ASSERT(kv_elements*4+q_elements*2+uint64_t(queries)*640*4<=640ull*1024*1024);
-        ggml_cuda_pool_alloc<__nv_bfloat16> staged(ctx.pool(),kv_elements+q_elements);
+        // OPUS22 r10: the hand SM120 kernel (32 heads/CTA, double-buffered key tiles)
+        // reads the F32 query and rounds it to BF16 on load, so no staged query copy.
+        static const bool hand=[]{const char *e=std::getenv("LLAMA_DSV41_SPARSE_HAND");
+            const bool on=!e||!(e[0]=='0'&&!e[1]);
+            if(on)CUDA_CHECK(cudaFuncSetAttribute(dsv41_sparse_hand::sparse_attn_hg32,cudaFuncAttributeMaxDynamicSharedMemorySize,dsv41_sparse_hand::SMEM));
+            fprintf(stderr,"OPUS22_SPARSE_HAND active=%d heads_per_cta=32 key_tile=32 stages=2 query_staging=0\n",on?1:0);return on;}();
+        ggml_cuda_pool_alloc<__nv_bfloat16> staged(ctx.pool(),kv_elements+(hand?0:q_elements));
         auto *keys=staged.get(),*q=staged.get()+kv_elements;
         dsv41_tilelang_kv<<<uint32_t((kv_elements+255)/256),256,0,ctx.stream()>>>(keys,raw,comp,uint64_t(raw_rows)*512,kv_elements);
-        dsv41_tilelang_query_all<<<uint32_t((q_elements+255)/256),256,0,ctx.stream()>>>(q,(const float*)dst->src[0]->data,uint32_t(q_elements));
+        if(!hand)dsv41_tilelang_query_all<<<uint32_t((q_elements+255)/256),256,0,ctx.stream()>>>(q,(const float*)dst->src[0]->data,uint32_t(q_elements));
         ggml_cuda_pool_alloc<int32_t> ids(ctx.pool(),uint64_t(queries)*640);
         dsv41_tilelang_indices<<<(queries+127)/128,128,0,ctx.stream()>>>(ids.get(),0,queries,queries,raw_rows,raw_min,comp_rows,
             (const ggml_dsv41_tilelang_record*)dst->src[3]->data,(const uint32_t*)dst->src[4]->data,uint32_t(dst->src[3]->ne[1]));
         const float *sink=(const float*)dst->src[5]->data;
+        if(hand){
+            dsv41_sparse_hand::sparse_attn_hg32<<<queries*2,dsv41_sparse_hand::THREADS,dsv41_sparse_hand::SMEM,ctx.stream()>>>(
+                ids.get(),keys,(float*)dst->data,(const float*)dst->src[0]->data,sink,int(queries));
+            CUDA_CHECK(cudaGetLastError());return;
+        }
         float *out=(float*)dst->data;const auto *selected=ids.get();int m=int(queries),n=int(raw_rows+comp_rows);
         void *args[]={&selected,&keys,&out,&q,&sink,&m,&n};
         dsv41_tilelang_driver(cuLaunchKernel(function,queries,4,1,256,1,1,86016,(CUstream)ctx.stream(),args,nullptr),"launch native-layout sparse attention");

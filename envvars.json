@@ -67095,7 +67095,7 @@
     "doc": "Sparse attention:2(default) packed-query SM120 TileLang grid with embedded pinned image;0 native control;1 legacy128-row adapter requiring its matching CUBIN. Mode2 stages query/KV once inside the existing768MiB pool. Qualified under owner KL tolerance; make it exact remains on the roadmap.",
     "reads": [
       "engines/streaming-llama/prefill_llama.cpp/ggml/src/ggml-cuda/dsv41-ds4-token-tile.cu:1026",
-      "engines/streaming-llama/prefill_llama.cpp/ggml/src/ggml-cuda/dsv41-tilelang.cuh:51"
+      "engines/streaming-llama/prefill_llama.cpp/ggml/src/ggml-cuda/dsv41-tilelang.cuh:52"
     ],
     "code_defaults": [
       {
@@ -67105,7 +67105,7 @@
         "consumer": "        CUDA_CHECK(cudaGetLastError());ds4_token_union_queued.fetch_add(1,std::memory_order_release);\n    }\n    const char *tilelang_env=std::getenv(\"LLAMA_DSV41_TILELANG_ATTENTION\");\n    if(!tilelang_env)tilelang_env=\"2\";\n    if(tilelang_env&&(tilelang_env[0]=='1'||tilelang_env[0]=='2')&&!tilelang_env[1]&&comp_rows<=131072){\n        dsv41_tilelang_attention(ctx,dst,raw_half.get(),comp_ptr+(merge?512:0),raw_rows,raw_min,comp_rows-(merge?1u:0u));\n        ds4_token_tile_queued.fetch_add(1,std::memory_order_release);"
       },
       {
-        "source": "engines/streaming-llama/prefill_llama.cpp/ggml/src/ggml-cuda/dsv41-tilelang.cuh:51",
+        "source": "engines/streaming-llama/prefill_llama.cpp/ggml/src/ggml-cuda/dsv41-tilelang.cuh:52",
         "unset": "NULL from getenv; the literal consumer below supplies any fallback",
         "read": "const char *variant=std::getenv(\"LLAMA_DSV41_TILELANG_ATTENTION\");",
         "consumer": "    GGML_ASSERT(ggml_cuda_info().devices[ctx.device].cc==1200&&ctx.device==0);\n    const uint32_t queries=uint32_t(dst->ne[2]);GGML_ASSERT(queries&&queries<=4096&&comp_rows<=131072);\n    const char *variant=std::getenv(\"LLAMA_DSV41_TILELANG_ATTENTION\");\n    if(!variant)variant=\"2\";\n    if(variant&&variant[0]=='2'&&!variant[1]){\n        static CUmodule module=nullptr;static CUfunction function=nullptr;static std::once_flag initialized;\n        std::call_once(initialized,[]{"
@@ -67131,18 +67131,18 @@
     ],
     "doc": "Optional ahead-of-time sparse-attention image override. Mode2 defaults to the embedded, digest-pinned SM120 image; mode1 requires the legacy sparse_attn_kernel__kernel image. Overrides must match the selected ABI.",
     "reads": [
-      "engines/streaming-llama/prefill_llama.cpp/ggml/src/ggml-cuda/dsv41-tilelang.cuh:14",
-      "engines/streaming-llama/prefill_llama.cpp/ggml/src/ggml-cuda/dsv41-tilelang.cuh:56"
+      "engines/streaming-llama/prefill_llama.cpp/ggml/src/ggml-cuda/dsv41-tilelang.cuh:15",
+      "engines/streaming-llama/prefill_llama.cpp/ggml/src/ggml-cuda/dsv41-tilelang.cuh:57"
     ],
     "code_defaults": [
       {
-        "source": "engines/streaming-llama/prefill_llama.cpp/ggml/src/ggml-cuda/dsv41-tilelang.cuh:14",
+        "source": "engines/streaming-llama/prefill_llama.cpp/ggml/src/ggml-cuda/dsv41-tilelang.cuh:15",
         "unset": "NULL from getenv; the literal consumer below supplies any fallback",
         "read": "const char *path=std::getenv(\"LLAMA_DSV41_TILELANG_CUBIN\");",
         "consumer": "    static CUmodule module=nullptr;static CUfunction function=nullptr;static std::once_flag initialized;\n    std::call_once(initialized,[]{\n        const char *path=std::getenv(\"LLAMA_DSV41_TILELANG_CUBIN\");\n        GGML_ASSERT(path&&*path);\n        dsv41_tilelang_driver(cuModuleLoad(&module,path),\"load pinned SM120 image\");\n        dsv41_tilelang_driver(cuModuleGetFunction(&function,module,\"sparse_attn_kernel__kernel\"),\"resolve sparse attention\");\n        dsv41_tilelang_driver(cuFuncSetAttribute(function,CU_FUNC_ATTRIBUTE_MAX_DYNAMIC_SHARED_SIZE_BYTES,86016),\"admit86KiB shared memory\");"
       },
       {
-        "source": "engines/streaming-llama/prefill_llama.cpp/ggml/src/ggml-cuda/dsv41-tilelang.cuh:56",
+        "source": "engines/streaming-llama/prefill_llama.cpp/ggml/src/ggml-cuda/dsv41-tilelang.cuh:57",
         "unset": "NULL from getenv; the literal consumer below supplies any fallback",
         "read": "const char *path=std::getenv(\"LLAMA_DSV41_TILELANG_CUBIN\");",
         "consumer": "        static CUmodule module=nullptr;static CUfunction function=nullptr;static std::once_flag initialized;\n        std::call_once(initialized,[]{\n            const char *path=std::getenv(\"LLAMA_DSV41_TILELANG_CUBIN\");\n            if(path&&*path){\n                dsv41_tilelang_driver(cuModuleLoad(&module,path),\"load native-layout SM120 image override\");\n            }else{\n                // Pinned, licensed, ahead-of-time image: no runtime compiler,"
@@ -98146,6 +98146,32 @@
         "unset": "NULL from getenv; the literal consumer below supplies any fallback",
         "read": "const char * env = std::getenv(\"LLAMA_DSV41_GET_ROWS_SCALAR\");",
         "consumer": "static bool get_rows_scalar_enabled() {\n    static const bool enabled = [] {\n        const char * env = std::getenv(\"LLAMA_DSV41_GET_ROWS_SCALAR\");\n        if (env && std::strcmp(env, \"0\") && std::strcmp(env, \"1\")) GGML_ABORT(\"LLAMA_DSV41_GET_ROWS_SCALAR must be 0 or 1\");\n        return !env || env[0] == '1';\n    }();\n    return enabled;"
+      }
+    ]
+  },
+  {
+    "var": "LLAMA_DSV41_SPARSE_HAND",
+    "flag": "--llama-dsv41-sparse-hand",
+    "default": null,
+    "code_default": "NULL from getenv; the literal consumer below supplies any fallback",
+    "classification": "qualified",
+    "scopes": [
+      "rtx-llama"
+    ],
+    "doc": "DSV4.1 token-tile sparse attention (TileLang mode 2): hand-written SM120 kernel with 32 heads per CTA, double-buffered 32-key tiles and the F32 query rounded to BF16 on load, instead of the embedded TileLang image (16 heads per CTA, one stage). Same BF16 MMA/F32 softmax arithmetic, different summation order (not bitwise identical). Default 1; 0 keeps the TileLang image.",
+    "reads": [
+      "engines/streaming-llama/prefill_llama.cpp/ggml/src/ggml-cuda/dsv41-tilelang.cuh:77"
+    ],
+    "allowed_values": [
+      "0",
+      "1"
+    ],
+    "code_defaults": [
+      {
+        "source": "engines/streaming-llama/prefill_llama.cpp/ggml/src/ggml-cuda/dsv41-tilelang.cuh:77",
+        "unset": "NULL from getenv; the literal consumer below supplies any fallback",
+        "read": "static const bool hand=[]{const char *e=std::getenv(\"LLAMA_DSV41_SPARSE_HAND\");",
+        "consumer": "        // OPUS22 r10: the hand SM120 kernel (32 heads/CTA, double-buffered key tiles)\n        // reads the F32 query and rounds it to BF16 on load, so no staged query copy.\n        static const bool hand=[]{const char *e=std::getenv(\"LLAMA_DSV41_SPARSE_HAND\");\n            const bool on=!e||!(e[0]=='0'&&!e[1]);\n            if(on)CUDA_CHECK(cudaFuncSetAttribute(dsv41_sparse_hand::sparse_attn_hg32,cudaFuncAttributeMaxDynamicSharedMemorySize,dsv41_sparse_hand::SMEM));\n            fprintf(stderr,\"OPUS22_SPARSE_HAND active=%d heads_per_cta=32 key_tile=32 stages=2 query_staging=0\\n\",on?1:0);return on;}();\n        ggml_cuda_pool_alloc<__nv_bfloat16> staged(ctx.pool(),kv_elements+(hand?0:q_elements));"
       }
     ]
   }
