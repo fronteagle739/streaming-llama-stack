@@ -120,6 +120,52 @@ our server also produce different first continuation tokens. Do not treat
 their rates as a numerical-equivalence proof or as evidence that requantization
 alone explains the remaining backend gap.
 
+An additional explicit upstream `DS4_V41_EXACT=1` serial control measured
+38.145 tokens/s at 8K and 31.950 at 131K. Its first continuation token still
+differs from our server's. The default control's remaining speed advantage
+therefore is not explained solely by its approximate groups. A complete
+attribution of the residual gap is not established by these measurements.
+The benchmark CLI refuses the server's `--exact` spelling; that refused
+attempt is retained, and the documented environment control was used.
+
+## Final paired check and release disposition
+
+After all Mac-only work, the final test waited for the priority RTX prefill
+lease and sufficient physical RAM. It paired cone v2 with `yoco_keep=2541`;
+all three candidate controls, DSpark, vision and the complete existing
+sampler/import contracts remained selected. The native eight-token control
+completed. Paired qualification then returned HTTP 409 with
+`native session configuration/model/build identity rejected`.
+
+The selected Mac SHA is `cf05bdcc…`, while the native import contract still
+requires the original RTX Q4 SHA `2cc6bc25…`. Its explicit model check remains
+in `ds4_native_session_setup.inc`. No RTX prefill/import or paired recall/rate
+is claimed. Both model processes retired cooperatively, the broker/tunnel
+stopped and the RTX lease was released. The setup rebuild used the same
+source/flags and stable server path; its SHA256 was
+`538c47d5ca4b2e05bf0935a0f177b77e8b6b524bb221867b6a9fa765c3670ae7`.
+All 1,312 delivered files still matched the pre-benchmark source manifest.
+
+The exact optional changes and converter were merged into `experimental`
+at `ae85e3346db755b785500f46fe480977c626445a`. Production preset replacement
+and the three-machine runtime rollout are held at the actual paired gate.
+Presets remain intact; no fallback disables paired import or changes it into
+local prefill. The original Q4 remains available, and the verified requants
+have a provenance receipt beside their model files. To release a production
+pair, select matching weights on both ends and qualify the updated identity
+manifest, or specify and separately qualify an approximate cross-quantization
+state protocol. Merely allowing unequal model hashes is not that protocol.
+
+MiMo was restored with its original preset and 460 GiB cap, under a watched
+16 GiB floor, and answered `READY`. The first restore safely refused because
+the new requant's clean file cache left too few immediately free pages.
+The existing bounded per-file cache helper invalidated those two idle files
+without payload reads or file changes; the retry succeeded without changing
+MiMo settings. The RTX selection was restored through the canonical desktop
+launcher and is live with the same preset. All three Studio machines report
+the existing current revision; the MacBook Remote Link remains unavailable.
+This is a restoration check, not a claim that the gated runtime update shipped.
+
 Raw measurements, complete token sequences, logit hashes, model identities
 and memory receipts are in [macdecode-r2](macdecode-r2/summary.json).
 The candidate server SHA256 is

@@ -1,0 +1,34 @@
+{
+  "base": "30d9e0a51667857a911f436541e68be089dacc4d",
+  "feature": "5b8eb9db676d5b4606b04bc2f4f68fdb2fa91f42",
+  "auto_tree": "7fd7660a7636c80be8889171a965c4992b31008e",
+  "worktrees_created": 0,
+  "returncode": 0,
+  "reference": {
+    "returncode": 0,
+    "host_budget_bytes": 1073741824,
+    "physical_floor_bytes": 1073741824,
+    "peak_rss": 224591872,
+    "minimum_available": 4818849792
+  },
+  "release": {
+    "returncode": 0,
+    "host_budget_bytes": 1073741824,
+    "physical_floor_bytes": 1073741824,
+    "peak_rss": 233869312,
+    "minimum_available": 4851347456
+  },
+  "staged": {
+    "returncode": 0,
+    "host_budget_bytes": 1073741824,
+    "physical_floor_bytes": 1073741824,
+    "peak_rss": 225419264,
+    "minimum_available": 4938051584
+  },
+  "tree": "7fd7660a7636c80be8889171a965c4992b31008e",
+  "merge": "ae85e3346db755b785500f46fe480977c626445a",
+  "push_stdout": "",
+  "push_stderr": "To https://github.com/fronteagle739/streaming-llama-stack.git\n   30d9e0a..ae85e33  ae85e3346db755b785500f46fe480977c626445a -> experimental\n",
+  "verified_remote_head": "ae85e3346db755b785500f46fe480977c626445a",
+  "owned_checkout_restored": true
+}
