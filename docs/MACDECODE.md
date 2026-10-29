@@ -117,3 +117,5 @@ failed paired request was retained as a failure. Unchanged features are not
 claimed newly qualified by the token-parity measurements.
 
 Machine-readable candidate measurements: [macdecode-measurements.json](macdecode-measurements.json).
+Pending model validation is tracked in the private Studio repository:
+<https://github.com/fronteagle739/streaming-studio/issues/19>.
