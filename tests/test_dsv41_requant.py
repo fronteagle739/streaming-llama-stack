@@ -21,6 +21,20 @@ LIBRARY=os.environ.get('NATIVEFP4_REQUANT_LIBRARY')
 
 @unittest.skipUnless(np is not None and LIBRARY,'Set NATIVEFP4_REQUANT_LIBRARY to the built CPU adapter')
 class RequantTests(unittest.TestCase):
+    def test_legacy_dspark_metadata_uses_verified_target_configuration(self):
+        values=dict(block_size=5,markov_rank=256,noise_token_id=128799,n_routed_experts=128,num_experts_per_tok=3)
+        meta={'general.architecture':'deepseek41-dspark','general.source.url':'fixture','general.source.revision':'a'*40,'deepseek41.dspark.stage_count':3,'deepseek41.dspark.n_layers':3}
+        meta.update({'deepseek41.dspark.'+k:v for k,v in values.items()})
+        config={'dspark_'+k:v for k,v in values.items()};config.update(dspark_target_layer_ids=[37,38,39],num_hidden_layers=40)
+        target=dict(metadata={'general.architecture':'deepseek41','general.source.url':'fixture','general.source.revision':'a'*40,'deepseek41.config':json.dumps(dict(text_config=config))})
+        fields=rq.dspark_aliases(dict(metadata=meta),target)
+        self.assertEqual(fields['dspark.target_layer_ids'],[37,38,39])
+        self.assertEqual(fields['dspark.n_routed_experts'],128)
+        with self.assertRaisesRegex(ValueError,'matching target'):rq.dspark_aliases(dict(metadata=meta))
+        with self.assertRaisesRegex(ValueError,'Conflicting'):
+            rq.dspark_aliases(dict(metadata=dict(meta,**{'dspark.block_size':99})),target)
+        bad=dict(target['metadata'],**{'general.source.revision':'b'*40})
+        with self.assertRaisesRegex(ValueError,'source identity'):rq.dspark_aliases(dict(metadata=meta),dict(metadata=bad))
     def test_conversion_reservation_filters_only_its_exact_lease(self):
         with tempfile.TemporaryDirectory() as directory:
             path=Path(directory)/'ledger';path.write_text('reservation')
@@ -96,15 +110,29 @@ class RequantTests(unittest.TestCase):
         self.assertEqual(convert(raw.tobytes(),4),expected.tobytes())
         with self.assertRaises(ValueError):convert(b'bad',1)
 
-    def test_durable_resume_and_unchanged_dense_payload(self):
+    def test_dspark_resume_and_unchanged_dense_payload(self):
+        self.test_durable_resume_and_unchanged_dense_payload('deepseek41-dspark')
+
+    def test_dspark_rejects_unknown_fields_and_missing_experts(self):
+        with self.assertRaisesRegex(ValueError,'target architecture'):
+            rq.validate_dspark(dict(metadata={'dspark.target_architecture':'deepseek4'},tensors=[]))
+        h=dict(metadata={'general.architecture':'deepseek41-dspark'},tensors=[
+            dict(name='mtp.0.ffn_gate_exps.weight',type=12,shape=[256,1,1])])
+        with self.assertRaisesRegex(ValueError,'Incomplete'):rq.validate_dspark(h)
+        h['tensors']=[dict(name='mtp.0.unknown.weight',type=0)]
+        with self.assertRaisesRegex(ValueError,'Unsupported'):rq.validate_dspark(h)
+
+    def test_durable_resume_and_unchanged_dense_payload(self,architecture='deepseek41'):
         with tempfile.TemporaryDirectory() as directory:
             root=Path(directory)
             hold=root/'hold';hold.write_text('')
             names=['blk.0.ffn_'+part+'_exps.weight' for part in ('gate','up','down')]+['output.weight']
+            if architecture=='deepseek41-dspark':
+                names=[n.replace('blk.0.','mtp.0.') for n in names[:3]]+['mtp.0.main_proj.weight']
             tensors=[dict(name=name,shape=[256,1,1],type=12,offset=i*16384) for i,name in enumerate(names[:3])]
             tensors+=[dict(name=names[3],shape=[32,1],type=8,offset=3*16384)]
             prefix=b'GGUF'+struct.pack('<IQQ',3,4,2)
-            prefix+=rq.string('general.architecture')+struct.pack('<I',8)+rq.string('deepseek41')
+            prefix+=rq.string('general.architecture')+struct.pack('<I',8)+rq.string(architecture)
             prefix+=rq.string('general.alignment')+struct.pack('<II',4,16384)
             descriptors=b''.join(rq.string(t['name'])+struct.pack('<I',len(t['shape']))+struct.pack('<'+'Q'*len(t['shape']),*t['shape'])+struct.pack('<IQ',t['type'],t['offset']) for t in tensors)
             raw=prefix+descriptors;raw+=bytes(rq.align(len(raw),16384)-len(raw))
@@ -141,6 +169,8 @@ class RequantTests(unittest.TestCase):
             with patch('shutil.disk_usage',return_value=SimpleNamespace(free=10**12)):rq.worker(args)
             h=rq.read_header(args.out)
             self.assertEqual(h['metadata']['deepseek41.speed_proxy'],rq.LABEL)
+            if architecture=='deepseek41-dspark':
+                self.assertEqual(h['metadata']['dspark.target_architecture'],'deepseek41')
             self.assertEqual([t['type'] for t in h['tensors']],[39,39,39,8])
             start=rq.align(h['header_bytes'],16384)+h['tensors'][-1]['offset']
             with args.out.open('rb') as f:f.seek(start);self.assertEqual(f.read(34),bytes(range(34)))

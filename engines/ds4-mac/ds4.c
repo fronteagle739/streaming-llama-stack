@@ -39666,6 +39666,7 @@ static bool ds41_bf16(ds4_gpu_tensor *x, uint32_t width) {
  * ------------------------------------------------------------------------ */
 ds41_levers g_ds41_levers = {
     .decode_chunks = 1,
+    .decode_queue2 = 0,
     .queue_layers = 1,
     .engram_async = 1,
     .round_fuse_norm = 1,
@@ -39767,6 +39768,9 @@ static int ds41_lever_counted(const char *name) {
 
 static const struct { const char *name; size_t off; const char *env; } g_ds41_lever_map[] = {
     { "decode_chunks", offsetof(ds41_levers, decode_chunks), "DS4_DS41_DECODE_CHUNKS" },
+    { "decode_queue2", offsetof(ds41_levers, decode_queue2), "DS4_DS41_DECODE_QUEUE2" },
+    { "narrow_weights", offsetof(ds41_levers, narrow_weights), "DS4_DS41_NARROW_WEIGHTS" },
+    { "mxfp4_fixed_shapes", offsetof(ds41_levers, mxfp4_fixed_shapes), "DS4_DS41_MXFP4_FIXED_SHAPES" },
     { "queue_layers",       offsetof(ds41_levers, queue_layers),       "DS4_DS41_QUEUE_LAYERS" },
     { "engram_async",       offsetof(ds41_levers, engram_async),       "DS4_DS41_ENGRAM_ASYNC" },
     { "round_fuse_norm",    offsetof(ds41_levers, round_fuse_norm),    "DS4_METAL_DISABLE_V41_ROUND_FUSE_NORM" },
@@ -39867,6 +39871,12 @@ static const struct { const char *name; size_t off; const char *env; } g_ds41_le
 void ds41_levers_init_from_env(void) {
     if (g_ds41_levers_ready) return;
     g_ds41_levers.decode_chunks      = ds41_env_enable_form("DS4_DS41_DECODE_CHUNKS");
+    g_ds41_levers.decode_queue2      = getenv("DS4_DS41_DECODE_QUEUE2") &&
+        ds41_env_enable_form("DS4_DS41_DECODE_QUEUE2");
+    g_ds41_levers.mxfp4_fixed_shapes = getenv("DS4_DS41_MXFP4_FIXED_SHAPES") &&
+        ds41_env_enable_form("DS4_DS41_MXFP4_FIXED_SHAPES");
+    g_ds41_levers.narrow_weights = getenv("DS4_DS41_NARROW_WEIGHTS") &&
+        ds41_env_enable_form("DS4_DS41_NARROW_WEIGHTS");
     g_ds41_levers.dspark_capture     = ds41_env_disable_form("DS4_DS41_DSPARK_CAPTURE");
     g_ds41_levers.verify_wide_prefill= ds41_env_optin_form("DS4_DS41_VERIFY_WIDE_PREFILL",
                                                            "DS4_DS41_VERIFY_WIDE_PREFILL_OFF");
@@ -40409,6 +40419,8 @@ static bool ds41_hc_sum_split_bf16(ds4_gpu_tensor *out, const ds4_gpu_tensor *re
            ds41_bf16(out, n_embd);
 }
 
+#include "ds4_deepseek41_narrow.inc"
+
 static bool ds41_norm(ds4_gpu_tensor *out, const ds4_gpu_tensor *in,
                       const ds4_model *m, const ds4_tensor *weight) {
     /* The fused store applies dsv41_bf16() to the same 32-bit words the
@@ -40641,7 +40653,7 @@ static bool ds41_attention_select_published(ds41_gpu_graph *g, const ds4_model *
     const uint32_t owner = il < 8 ? 0u : il < 14 ? 1u : il < 20 ? 2u : 3u;
     const uint32_t n_comp = ratio ? (pos + 1u) / ratio : 0u;
     if (n_comp && ds41_index_source(il)) {
-        if (!ds41_matmul(g->index_q, m, l->indexer_attn_q_b, g->qr, true) ||
+        if ((!ds41_narrow_indexer_mv(g, m, l, il) && !ds41_matmul(g->index_q, m, l->indexer_attn_q_b, g->qr, true)) ||
             !ds41_rope(g->index_q, DS4_N_INDEXER_HEAD, 128, il, pos, false) ||
             !ds4_gpu_dsv41_quantize(g->index_q, 128, DS4_N_INDEXER_HEAD, DS4_V41_FP4_E8M0) ||
             !ds41_matmul(g->index_weights, m, l->indexer_proj, g->norm, true) ||
@@ -40800,7 +40812,7 @@ static bool ds41_moe(ds41_gpu_graph *g, const ds4_model *m,
         l->ffn_up_shexp->abs_offset, DS4_N_HC_SINKHORN_ITER, DS4_HC_EPS,
         DS4_RMS_EPS, DS4_SWIGLU_CLAMP_EXP, g->route_logits, l->ffn_gate_inp->abs_offset))
         return false;
-    if ((!router_shared && !ds41_matmul(g->route_logits, m, l->ffn_gate_inp, g->norm, false)) ||
+    if ((!router_shared && !ds41_narrow_router_mv(g, m, il) && !ds41_matmul(g->route_logits, m, l->ffn_gate_inp, g->norm, false)) ||
         !ds4_gpu_router_select_tensor(g->selected, g->route_weights, g->route_probs,
             m->map, m->size, bias->abs_offset, 0, 0, token,
             DS4_N_EXPERT, DS4_N_EXPERT_USED, DS4_EXPERT_WEIGHT_SCALE, 0, 0, true, false,
@@ -40964,7 +40976,7 @@ static bool ds41_graph_before_attention(ds41_gpu_graph *g, const ds4_model *m,
                                        const ds4_layer_weights *l, uint32_t il) {
     if (ds41_engram_layer(il) && !ds41_image_at(g, g->pos)) {
         const uint32_t i = il == 1 ? 0 : 1;
-        if (!ds41_matmul(g->engram_kv, m, l->engram_kv, ds41_engram_input(g, i), true) ||
+        if ((!ds41_narrow_engram_mv(g, m, l, i) && !ds41_matmul(g->engram_kv, m, l->engram_kv, ds41_engram_input(g, i), true)) ||
             !ds4_gpu_dsv41_engram_add(g->residual, g->engram_kv,
                 g->engram_q_norm[i], g->engram_k_norm[i], NULL, DS4_N_EMBD, 1, DS4_RMS_EPS))
             return false;
@@ -41746,7 +41758,12 @@ static DS4_MAYBE_UNUSED bool ds41_graph_step(ds41_gpu_graph *g, const ds4_model 
          * their mid-stack boundary. On a single host the layer-14 Engram input
          * is a separate buffer, so only the drain that publishes the completed
          * token to the CPU remains. */
-        const bool submit = chunks && (il == 1u || il == 13u);
+        /* Upstream a743c56 queues layer 0 immediately and commits every two
+         * layers thereafter. Join only the Engram buffers this chunk consumes;
+         * their distinct storage and the final drain retain the existing state,
+         * sampler and native-frontier contracts. */
+        const bool submit = chunks && (g_ds41_levers.decode_queue2 ?
+            (il == 0u || (il + 1u) % 2u == 0u) : (il == 1u || il == 13u));
         if (submit && ok) {
             ok = ds41_engram_join_chunk(g, &engram_pending, engram_async, engram_stats);
             if (ok) ok = ds4_gpu_flush_commands() != 0;
@@ -70586,6 +70603,9 @@ void ds4_engine_close(ds4_engine *e) {
     }
 #endif
     ds4_expert_profile_close();
+    #ifdef DS4_HAS_DEEPSEEK41_GPU
+    ds41_narrow_free();
+    #endif
     weights_free(&e->weights);
     vocab_free(&e->vocab);
     ds4_threads_shutdown();
@@ -70791,6 +70811,7 @@ int ds4_session_create(ds4_session **out, ds4_engine *e, int ctx_size) {
         }
         s->ds41_graph_ready = true;
         s->ds41_graph.quality = e->quality;
+        if (!e->tp.active && !e->ssd_streaming && !e->quality) ds41_narrow_build(&e->model, &e->weights);
         /* The drafter's rings are seeded from the last <= 128 captured target
          * hiddens, so capture has to be live for the prefill that precedes
          * the first speculative cycle, not armed after it. */

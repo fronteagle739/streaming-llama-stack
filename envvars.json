@@ -17792,6 +17792,28 @@
     ]
   },
   {
+    "var": "DS4_DS41_DECODE_QUEUE2",
+    "flag": null,
+    "default": null,
+    "code_default": "0 (candidate; explicit opt-in)",
+    "classification": "advanced",
+    "scopes": [
+      "mac-ds4"
+    ],
+    "doc": "Commit V4.1 scalar decode layer 0 early, then every two layers (upstream a743c56). 0 retains the existing cadence.",
+    "reads": [
+      "engines/ds4-mac/ds4.c:39872"
+    ],
+    "code_defaults": [
+      {
+        "source": "engines/ds4-mac/ds4.c:39872",
+        "unset": "0",
+        "read": "getenv(\"DS4_DS41_DECODE_QUEUE2\")",
+        "consumer": "g_ds41_levers.decode_queue2 = getenv(\"DS4_DS41_DECODE_QUEUE2\") && ds41_env_enable_form(\"DS4_DS41_DECODE_QUEUE2\");"
+      }
+    ]
+  },
+  {
     "var": "DS4_DS41_DOWN_TAIL_PACK",
     "flag": null,
     "default": null,
@@ -19066,6 +19088,50 @@
         "unset": "Wrapper/conditional default: see the literal call and consumer below",
         "read": "g_ds41_levers.mv_round           = ds41_env_enable_form(\"DS4_DS41_MV_ROUND\");",
         "consumer": "    g_ds41_levers.hc_tail            = ds41_env_enable_form(\"DS4_DS41_HC_TAIL\");\n    g_ds41_levers.hc_expand_fold     = ds41_env_enable_form(\"DS4_DS41_HC_EXPAND_FOLD\");\n    g_ds41_levers.mv_round           = ds41_env_enable_form(\"DS4_DS41_MV_ROUND\");\n    g_ds41_levers.producer_round     = ds41_env_enable_form(\"DS4_DS41_PRODUCER_ROUND\");\n    g_ds41_levers.ffn_add_fold       = ds41_env_enable_form(\"DS4_DS41_FFN_ADD_FOLD\");\n    g_ds41_levers.kv_stage_f16       = ds41_env_enable_form(\"DS4_DS41_KV_STAGE_F16\");\n    g_ds41_levers.q4_gu_nr1          = getenv(\"DS4_DS41_Q4_GU_NR1\") != NULL &&"
+      }
+    ]
+  },
+  {
+    "var": "DS4_DS41_MXFP4_FIXED_SHAPES",
+    "flag": null,
+    "default": null,
+    "code_default": "0 (candidate; explicit opt-in)",
+    "classification": "advanced",
+    "scopes": [
+      "mac-ds4"
+    ],
+    "doc": "Use the upstream exact V4.1 MXFP4 routed expert shapes (5120/2304,384 experts) on Metal; 0 retains existing kernels. Candidate opt-in, with every existing kernel kill switch preserved.",
+    "reads": [
+      "engines/ds4-mac/ds4.c:39875"
+    ],
+    "code_defaults": [
+      {
+        "source": "engines/ds4-mac/ds4.c:39875",
+        "unset": "0",
+        "read": "getenv(\"DS4_DS41_MXFP4_FIXED_SHAPES\")",
+        "consumer": "g_ds41_levers.mxfp4_fixed_shapes = getenv(\"DS4_DS41_MXFP4_FIXED_SHAPES\") && ds41_env_enable_form(\"DS4_DS41_MXFP4_FIXED_SHAPES\");"
+      }
+    ]
+  },
+  {
+    "var": "DS4_DS41_NARROW_WEIGHTS",
+    "flag": null,
+    "default": null,
+    "code_default": "0 (candidate; explicit opt-in)",
+    "classification": "advanced",
+    "scopes": [
+      "mac-ds4"
+    ],
+    "doc": "Use exact local BF16 router and FP8 Engram/indexer copies on eligible Mac decode paths; 0 selects the original readers. Copies are validated at session allocation, with unchanged wide readers retained for inexact tensors. Opt-in until qualified.",
+    "reads": [
+      "engines/ds4-mac/ds4.c:39878"
+    ],
+    "code_defaults": [
+      {
+        "source": "engines/ds4-mac/ds4.c:39878",
+        "unset": "0",
+        "read": "getenv(\"DS4_DS41_NARROW_WEIGHTS\")",
+        "consumer": "g_ds41_levers.narrow_weights = getenv(\"DS4_DS41_NARROW_WEIGHTS\") && ds41_env_enable_form(\"DS4_DS41_NARROW_WEIGHTS\");"
       }
     ]
   },
@@ -66690,95 +66756,6 @@
     ]
   },
   {
-    "var": "LLAMA_WF_DS_SUBMIT_THREADS",
-    "flag": "--llama-wf-ds-submit-threads",
-    "default": null,
-    "code_default": "NULL from getenv; the literal consumer below supplies any fallback",
-    "classification": "qualified",
-    "scopes": [
-      "rtx-llama"
-    ],
-    "doc": "OPUS22 experiment, unset by default (DirectStorage chooses its submit threads). 1, 2 or 4 selects the existing strict TEST DirectStorage submit-thread profile when the launcher passes none. Same requests and bytes.",
-    "reads": [
-      "engines/streaming-llama/prefill_llama.cpp/src/llama-weight-fetcher.cpp:2481"
-    ],
-    "allowed_values": [
-      "1",
-      "2",
-      "4"
-    ],
-    "code_defaults": [
-      {
-        "source": "engines/streaming-llama/prefill_llama.cpp/src/llama-weight-fetcher.cpp:2481",
-        "unset": "NULL from getenv; the literal consumer below supplies any fallback",
-        "read": "if(!wf->params.ds_submit_threads){const char*e=std::getenv(\"LLAMA_WF_DS_SUBMIT_THREADS\");",
-        "consumer": "    // heuristic): the existing TEST submit-thread profile selected by\n    // setting when the launcher passes none. Same requests and bytes.\n    if(!wf->params.ds_submit_threads){const char*e=std::getenv(\"LLAMA_WF_DS_SUBMIT_THREADS\");\n        if(e&&e[0]){if(std::strcmp(e,\"1\")&&std::strcmp(e,\"2\")&&std::strcmp(e,\"4\")){WF_ERR(\"LLAMA_WF_DS_SUBMIT_THREADS must be 1, 2 or 4\");return false;}\n            wf->params.ds_submit_threads=uint32_t(e[0]-'0');}}\n    if(wf->params.ds_submit_threads){\n        if(!wf->required_dstorage||(wf->params.ds_submit_threads!=1&&wf->params.ds_submit_threads!=2&&wf->params.ds_submit_threads!=4)){"
-      }
-    ]
-  },
-  {
-    "var": "LLAMA_WF_DS_REQUEST_MIB",
-    "flag": "--llama-wf-ds-request-mib",
-    "default": null,
-    "code_default": "NULL from getenv; the literal consumer below supplies any fallback",
-    "classification": "qualified",
-    "scopes": [
-      "rtx-llama"
-    ],
-    "doc": "OPUS22 experiment, unset by default (about layer/1000 bytes per DirectStorage request, clamped 512 KiB..32 MiB). 2, 4, 8, 16 or 32 fixes the request size in MiB for planning and the strict profile checks alike. Same bytes and destinations.",
-    "reads": [
-      "engines/streaming-llama/prefill_llama.cpp/src/llama-weight-fetcher.cpp:4474",
-      "engines/streaming-llama/prefill_llama.cpp/src/llama-wf-bounded-policy.h:30"
-    ],
-    "allowed_values": [
-      "2",
-      "4",
-      "8",
-      "16",
-      "32"
-    ],
-    "code_defaults": [
-      {
-        "source": "engines/streaming-llama/prefill_llama.cpp/src/llama-weight-fetcher.cpp:4474",
-        "unset": "NULL from getenv; the literal consumer below supplies any fallback",
-        "read": "if (std::getenv(\"LLAMA_WF_DS_REQUEST_MIB\")) WF_ERR(\"[dsv41-dstorage-config] request_bytes=%zu typed_setting=1\", params->io_block_size);",
-        "consumer": "    }\n\n    if (std::getenv(\"LLAMA_WF_DS_REQUEST_MIB\")) WF_ERR(\"[dsv41-dstorage-config] request_bytes=%zu typed_setting=1\", params->io_block_size);\n    // Typed profile admission happens before context/factory/heap allocation.\n    // Ambient tuning still refuses in strict mode; the caller uses explicit\n    // source-pinned settings rather than inheriting unbounded environment knobs.\n    if ((params->ds_staging_limit_bytes || params->ds_async_drain) &&"
-      },
-      {
-        "source": "engines/streaming-llama/prefill_llama.cpp/src/llama-wf-bounded-policy.h:30",
-        "unset": "NULL from getenv; the literal consumer below supplies any fallback",
-        "read": "if (const char * fixed = std::getenv(\"LLAMA_WF_DS_REQUEST_MIB\"); fixed && fixed[0]) {",
-        "consumer": "    // clamp. Planning and both strict profile checks read this one function,\n    // so they stay consistent. Same bytes and destinations, different split.\n    if (const char * fixed = std::getenv(\"LLAMA_WF_DS_REQUEST_MIB\"); fixed && fixed[0]) {\n        for (const char * allowed : {\"2\", \"4\", \"8\", \"16\", \"32\"})\n            if (!std::strcmp(fixed, allowed)) return size_t(std::strtoul(fixed, nullptr, 10)) * size_t(mib);\n        throw std::invalid_argument(\"LLAMA_WF_DS_REQUEST_MIB must be 2, 4, 8, 16 or 32\");\n    }"
-      }
-    ]
-  },
-  {
-    "var": "LLAMA_WF_DS_FACTORY_STAGING_MIB",
-    "flag": "--llama-wf-ds-factory-staging-mib",
-    "default": null,
-    "code_default": "NULL from getenv; the literal consumer below supplies any fallback",
-    "classification": "qualified",
-    "scopes": [
-      "rtx-llama"
-    ],
-    "doc": "OPUS22 experiment, default 256. DirectStorage factory staging size in MiB for the strict DSV4.1 producer; 512 stays inside the existing 512 MiB per-tier factory allowance, other values refuse. Same requests and bytes.",
-    "reads": [
-      "engines/streaming-llama/prefill_llama.cpp/src/llama-weight-fetcher.cpp:2536"
-    ],
-    "allowed_values": [
-      "256",
-      "512"
-    ],
-    "code_defaults": [
-      {
-        "source": "engines/streaming-llama/prefill_llama.cpp/src/llama-weight-fetcher.cpp:2536",
-        "unset": "NULL from getenv; the literal consumer below supplies any fallback",
-        "read": "if (const char * typed = std::getenv(\"LLAMA_WF_DS_FACTORY_STAGING_MIB\"); typed && typed[0]) {",
-        "consumer": "        // 512 MiB stays inside the producer's existing 512 MiB per-tier\n        // factory allowance on both host and device; larger values refuse.\n        if (const char * typed = std::getenv(\"LLAMA_WF_DS_FACTORY_STAGING_MIB\"); typed && typed[0]) {\n            if (std::strcmp(typed, \"256\") && std::strcmp(typed, \"512\")) {\n                WF_ERR(\"LLAMA_WF_DS_FACTORY_STAGING_MIB must be 256 or 512 (the admitted factory allowance)\");\n                return false;\n            }"
-      }
-    ]
-  },
-  {
     "var": "LLAMA_DSV41_INDEX_F32_CUBLAS",
     "flag": null,
     "default": null,
@@ -78129,6 +78106,32 @@
     ]
   },
   {
+    "var": "LLAMA_WF_DS_FACTORY_STAGING_MIB",
+    "flag": "--llama-wf-ds-factory-staging-mib",
+    "default": null,
+    "code_default": "NULL from getenv; the literal consumer below supplies any fallback",
+    "classification": "qualified",
+    "scopes": [
+      "rtx-llama"
+    ],
+    "doc": "OPUS22 experiment, default 256. DirectStorage factory staging size in MiB for the strict DSV4.1 producer; 512 stays inside the existing 512 MiB per-tier factory allowance, other values refuse. Same requests and bytes.",
+    "reads": [
+      "engines/streaming-llama/prefill_llama.cpp/src/llama-weight-fetcher.cpp:2536"
+    ],
+    "allowed_values": [
+      "256",
+      "512"
+    ],
+    "code_defaults": [
+      {
+        "source": "engines/streaming-llama/prefill_llama.cpp/src/llama-weight-fetcher.cpp:2536",
+        "unset": "NULL from getenv; the literal consumer below supplies any fallback",
+        "read": "if (const char * typed = std::getenv(\"LLAMA_WF_DS_FACTORY_STAGING_MIB\"); typed && typed[0]) {",
+        "consumer": "        // 512 MiB stays inside the producer's existing 512 MiB per-tier\n        // factory allowance on both host and device; larger values refuse.\n        if (const char * typed = std::getenv(\"LLAMA_WF_DS_FACTORY_STAGING_MIB\"); typed && typed[0]) {\n            if (std::strcmp(typed, \"256\") && std::strcmp(typed, \"512\")) {\n                WF_ERR(\"LLAMA_WF_DS_FACTORY_STAGING_MIB must be 256 or 512 (the admitted factory allowance)\");\n                return false;\n            }"
+      }
+    ]
+  },
+  {
     "var": "LLAMA_WF_DS_PREFETCH_PCT",
     "flag": null,
     "default": null,
@@ -78147,6 +78150,69 @@
         "unset": "NULL from getenv; the literal consumer below supplies any fallback",
         "read": "const char * pfp = std::getenv(\"LLAMA_WF_DS_PREFETCH_PCT\");",
         "consumer": "        // Prefetch heap sized to the full layer (single D2D). If VRAM-tight, LLAMA_WF_DS_PREFETCH_PCT can shrink it.\n        uint64_t pf_bytes = buf_size;\n        const char * pfp = std::getenv(\"LLAMA_WF_DS_PREFETCH_PCT\");\n        if (pfp && pfp[0]) { int pct = std::atoi(pfp); if (pct >= 10 && pct <= 100) pf_bytes = (buf_size * (uint64_t)pct) / 100; }\n        if (!wf_allocate_prefetch_heap(wf, pf_bytes)) {\n            WF_ERR(\"DS-direct: prefetch heap allocation FAILED; falling back to legacy staging path\");\n            wf->ds_direct_mode = false;"
+      }
+    ]
+  },
+  {
+    "var": "LLAMA_WF_DS_REQUEST_MIB",
+    "flag": "--llama-wf-ds-request-mib",
+    "default": null,
+    "code_default": "NULL from getenv; the literal consumer below supplies any fallback",
+    "classification": "qualified",
+    "scopes": [
+      "rtx-llama"
+    ],
+    "doc": "OPUS22 experiment, unset by default (about layer/1000 bytes per DirectStorage request, clamped 512 KiB..32 MiB). 2, 4, 8, 16 or 32 fixes the request size in MiB for planning and the strict profile checks alike. Same bytes and destinations.",
+    "reads": [
+      "engines/streaming-llama/prefill_llama.cpp/src/llama-weight-fetcher.cpp:4474",
+      "engines/streaming-llama/prefill_llama.cpp/src/llama-wf-bounded-policy.h:30"
+    ],
+    "allowed_values": [
+      "2",
+      "4",
+      "8",
+      "16",
+      "32"
+    ],
+    "code_defaults": [
+      {
+        "source": "engines/streaming-llama/prefill_llama.cpp/src/llama-weight-fetcher.cpp:4474",
+        "unset": "NULL from getenv; the literal consumer below supplies any fallback",
+        "read": "if (std::getenv(\"LLAMA_WF_DS_REQUEST_MIB\")) WF_ERR(\"[dsv41-dstorage-config] request_bytes=%zu typed_setting=1\", params->io_block_size);",
+        "consumer": "    }\n\n    if (std::getenv(\"LLAMA_WF_DS_REQUEST_MIB\")) WF_ERR(\"[dsv41-dstorage-config] request_bytes=%zu typed_setting=1\", params->io_block_size);\n    // Typed profile admission happens before context/factory/heap allocation.\n    // Ambient tuning still refuses in strict mode; the caller uses explicit\n    // source-pinned settings rather than inheriting unbounded environment knobs.\n    if ((params->ds_staging_limit_bytes || params->ds_async_drain) &&"
+      },
+      {
+        "source": "engines/streaming-llama/prefill_llama.cpp/src/llama-wf-bounded-policy.h:30",
+        "unset": "NULL from getenv; the literal consumer below supplies any fallback",
+        "read": "if (const char * fixed = std::getenv(\"LLAMA_WF_DS_REQUEST_MIB\"); fixed && fixed[0]) {",
+        "consumer": "    // clamp. Planning and both strict profile checks read this one function,\n    // so they stay consistent. Same bytes and destinations, different split.\n    if (const char * fixed = std::getenv(\"LLAMA_WF_DS_REQUEST_MIB\"); fixed && fixed[0]) {\n        for (const char * allowed : {\"2\", \"4\", \"8\", \"16\", \"32\"})\n            if (!std::strcmp(fixed, allowed)) return size_t(std::strtoul(fixed, nullptr, 10)) * size_t(mib);\n        throw std::invalid_argument(\"LLAMA_WF_DS_REQUEST_MIB must be 2, 4, 8, 16 or 32\");\n    }"
+      }
+    ]
+  },
+  {
+    "var": "LLAMA_WF_DS_SUBMIT_THREADS",
+    "flag": "--llama-wf-ds-submit-threads",
+    "default": null,
+    "code_default": "NULL from getenv; the literal consumer below supplies any fallback",
+    "classification": "qualified",
+    "scopes": [
+      "rtx-llama"
+    ],
+    "doc": "OPUS22 experiment, unset by default (DirectStorage chooses its submit threads). 1, 2 or 4 selects the existing strict TEST DirectStorage submit-thread profile when the launcher passes none. Same requests and bytes.",
+    "reads": [
+      "engines/streaming-llama/prefill_llama.cpp/src/llama-weight-fetcher.cpp:2481"
+    ],
+    "allowed_values": [
+      "1",
+      "2",
+      "4"
+    ],
+    "code_defaults": [
+      {
+        "source": "engines/streaming-llama/prefill_llama.cpp/src/llama-weight-fetcher.cpp:2481",
+        "unset": "NULL from getenv; the literal consumer below supplies any fallback",
+        "read": "if(!wf->params.ds_submit_threads){const char*e=std::getenv(\"LLAMA_WF_DS_SUBMIT_THREADS\");",
+        "consumer": "    // heuristic): the existing TEST submit-thread profile selected by\n    // setting when the launcher passes none. Same requests and bytes.\n    if(!wf->params.ds_submit_threads){const char*e=std::getenv(\"LLAMA_WF_DS_SUBMIT_THREADS\");\n        if(e&&e[0]){if(std::strcmp(e,\"1\")&&std::strcmp(e,\"2\")&&std::strcmp(e,\"4\")){WF_ERR(\"LLAMA_WF_DS_SUBMIT_THREADS must be 1, 2 or 4\");return false;}\n            wf->params.ds_submit_threads=uint32_t(e[0]-'0');}}\n    if(wf->params.ds_submit_threads){\n        if(!wf->required_dstorage||(wf->params.ds_submit_threads!=1&&wf->params.ds_submit_threads!=2&&wf->params.ds_submit_threads!=4)){"
       }
     ]
   },
