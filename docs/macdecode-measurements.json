@@ -1,0 +1,189 @@
+{
+  "studio-measurement": {
+    "means": {
+      "serial-queue0": 33.33945,
+      "dspark-queue0": 32.628
+    },
+    "samples": {
+      "serial-queue0": [
+        33.417,
+        33.2619
+      ],
+      "dspark-queue0": [
+        32.5712,
+        32.6848
+      ]
+    },
+    "token_sha256": {
+      "serial-queue0": [
+        "83b4d495e849539bda6764786f812078b2f233baf16ddfd275f1bd983d5b5015"
+      ],
+      "dspark-queue0": [
+        "83b4d495e849539bda6764786f812078b2f233baf16ddfd275f1bd983d5b5015"
+      ]
+    },
+    "cold_prefill_ms": 28659.234,
+    "context_alloc": 393216,
+    "prompt_tokens": 8192,
+    "generation_tokens": 128
+  },
+  "stack-tracked": {
+    "means": {
+      "serial-queue0": 33.241749999999996,
+      "serial-queue1": 34.0008,
+      "dspark-queue0": 32.4889,
+      "dspark-queue1": 33.28115
+    },
+    "samples": {
+      "serial-queue0": [
+        33.299,
+        33.1845
+      ],
+      "serial-queue1": [
+        33.9707,
+        34.0309
+      ],
+      "dspark-queue0": [
+        32.4969,
+        32.4809
+      ],
+      "dspark-queue1": [
+        33.2765,
+        33.2858
+      ]
+    },
+    "token_sha256": {
+      "serial-queue0": [
+        "83b4d495e849539bda6764786f812078b2f233baf16ddfd275f1bd983d5b5015"
+      ],
+      "serial-queue1": [
+        "83b4d495e849539bda6764786f812078b2f233baf16ddfd275f1bd983d5b5015"
+      ],
+      "dspark-queue0": [
+        "83b4d495e849539bda6764786f812078b2f233baf16ddfd275f1bd983d5b5015"
+      ],
+      "dspark-queue1": [
+        "83b4d495e849539bda6764786f812078b2f233baf16ddfd275f1bd983d5b5015"
+      ]
+    },
+    "cold_prefill_ms": 29080.274,
+    "context_alloc": 393216,
+    "prompt_tokens": 8192,
+    "generation_tokens": 128,
+    "guard": {
+      "host_budget_bytes": 429496729600,
+      "physical_floor_bytes": 17179869184,
+      "peak_rss": 3950985216,
+      "minimum_available": 200467480576,
+      "violation": null,
+      "returncode": 0
+    }
+  },
+  "stack-untracked": {
+    "means": {
+      "serial-queue0": 33.15795,
+      "serial-queue1": 33.8919,
+      "dspark-queue0": 32.5453,
+      "dspark-queue1": 33.31595
+    },
+    "samples": {
+      "serial-queue0": [
+        33.1325,
+        33.1834
+      ],
+      "serial-queue1": [
+        33.8953,
+        33.8885
+      ],
+      "dspark-queue0": [
+        32.5107,
+        32.5799
+      ],
+      "dspark-queue1": [
+        33.3133,
+        33.3186
+      ]
+    },
+    "token_sha256": {
+      "serial-queue0": [
+        "83b4d495e849539bda6764786f812078b2f233baf16ddfd275f1bd983d5b5015"
+      ],
+      "serial-queue1": [
+        "83b4d495e849539bda6764786f812078b2f233baf16ddfd275f1bd983d5b5015"
+      ],
+      "dspark-queue0": [
+        "83b4d495e849539bda6764786f812078b2f233baf16ddfd275f1bd983d5b5015"
+      ],
+      "dspark-queue1": [
+        "83b4d495e849539bda6764786f812078b2f233baf16ddfd275f1bd983d5b5015"
+      ]
+    },
+    "cold_prefill_ms": 29173.017,
+    "context_alloc": 393216,
+    "prompt_tokens": 8192,
+    "generation_tokens": 128,
+    "guard": {
+      "host_budget_bytes": 429496729600,
+      "physical_floor_bytes": 17179869184,
+      "peak_rss": 3951984640,
+      "minimum_available": 201509617664,
+      "violation": null,
+      "returncode": 0
+    }
+  },
+  "stack-depth131k": {
+    "means": {
+      "serial-queue0": 32.616550000000004,
+      "serial-queue1": 33.3534,
+      "dspark-queue0": 31.92305,
+      "dspark-queue1": 32.73505
+    },
+    "samples": {
+      "serial-queue0": [
+        32.6117,
+        32.6214
+      ],
+      "serial-queue1": [
+        33.3536,
+        33.3532
+      ],
+      "dspark-queue0": [
+        31.8784,
+        31.9677
+      ],
+      "dspark-queue1": [
+        32.7275,
+        32.7426
+      ]
+    },
+    "token_sha256": {
+      "serial-queue0": [
+        "882894c5cbee6ba6c1f7013028f8e863b688fd652e5d341d0dc6099d4d7e9adb"
+      ],
+      "serial-queue1": [
+        "882894c5cbee6ba6c1f7013028f8e863b688fd652e5d341d0dc6099d4d7e9adb"
+      ],
+      "dspark-queue0": [
+        "882894c5cbee6ba6c1f7013028f8e863b688fd652e5d341d0dc6099d4d7e9adb"
+      ],
+      "dspark-queue1": [
+        "882894c5cbee6ba6c1f7013028f8e863b688fd652e5d341d0dc6099d4d7e9adb"
+      ]
+    },
+    "cold_prefill_ms": 375513.305,
+    "context_alloc": 393216,
+    "prompt_tokens": 131072,
+    "generation_tokens": 128,
+    "guard": {
+      "host_budget_bytes": 429496729600,
+      "physical_floor_bytes": 17179869184,
+      "peak_rss": 6160056320,
+      "minimum_available": 200349089792,
+      "violation": null,
+      "returncode": 0
+    }
+  },
+  "candidate_binary_sha256": "65e796778c6f711577a07c2061bc643f646d35fdf0f46c35322915287ba83c4a",
+  "upstream_head": "f48c5e2e20b1aaae1c79735a8457225d2469ae73",
+  "upstream_base": "b10cb40c1786d93aa2b4c819635a7b9e84b2b635"
+}

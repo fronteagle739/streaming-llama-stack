@@ -12,3 +12,9 @@ draw retains ds4's64-bit seeded RNG. The Mac MiMo selection-only cache-bias
 policy is preserved for the admitted fully resident expert set: there are no
 uncached candidates to penalize, so nonzero bias leaves its routing unchanged.
 Streaming-expert bias on this DSV4.1 native-session lane is not implemented.
+
+MACDECODE candidate: adapted upstream `a743c56d3c5816811f854f686b1e2919e3077eea`
+command-buffer cadence behind `DS4_DS41_DECODE_QUEUE2=1`; existing cadence is
+retained at zero. Q4 serial decode improves about 2.3% at 8K and 131K with
+identical 128-token outputs. Paired qualification and the MXFP4 comparison are
+pending; this is not an upstream rebase. See `docs/MACDECODE.md` at stack root.

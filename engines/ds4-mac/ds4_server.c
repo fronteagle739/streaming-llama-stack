@@ -5647,10 +5647,26 @@ static bench_fixture *bench_fixture_get(ds4_engine *e, const char *path,
 static char *bench_run(ds4_engine *e, const char *path, int ctx_start,
                        int ctx_alloc, int gen_tokens, bool fresh, bool dspark,
                        const char *bench_ledger_dump, const char *replay_path,
+                       const char *logits_path,
                        char *err, size_t errlen) {
     pthread_mutex_lock(&g_bench_mu);
     char *out = NULL;
     int *replay = NULL;
+    FILE *logits_file = NULL;
+    float *decision_logits = NULL;
+    const int vocab = ds4_engine_vocab_size(e);
+    if (logits_path) {
+        if (dspark || gen_tokens < 1 || gen_tokens > 8192) {
+            snprintf(err, errlen, "logits_path requires serial decode and 1..8192 tokens");
+            goto out;
+        }
+        decision_logits = malloc((size_t)vocab * sizeof(float));
+        logits_file = fopen(logits_path, "wb");
+        if (!decision_logits || !logits_file) {
+            snprintf(err, errlen, "cannot create decision logits artifact");
+            goto out;
+        }
+    }
     if (replay_path) {
         if (dspark || gen_tokens < 1 || gen_tokens > 8192) {
             snprintf(err, errlen, "replay requires serial decode and 1..8192 tokens");
@@ -5731,6 +5747,15 @@ static char *bench_run(ds4_engine *e, const char *path, int ctx_start,
     }
     const double gen_t0 = bench_now_sec_srv();
     while (!dspark && done < gen_tokens) {
+        /* Diagnostic runs are separate from throughput runs. Preserve every
+         * decision's complete float32 row, including non-greedy candidates. */
+        if (logits_file &&
+            (ds4_session_copy_logits(f->session, decision_logits, vocab) != vocab ||
+             fwrite(decision_logits, sizeof(float), (size_t)vocab, logits_file) != (size_t)vocab)) {
+            snprintf(err, errlen, "decision logits artifact write failed");
+            free(toks);
+            goto out;
+        }
         const int predicted = ds4_session_argmax_excluding(f->session, eos);
         const int token = replay ? replay[done] : predicted;
         if (replay && token == predicted) ++replay_matches;
@@ -5843,6 +5868,11 @@ static char *bench_run(ds4_engine *e, const char *path, int ctx_start,
     out = buf_take(&b);
     buf_free(&b);
 out:
+    if (logits_file && fclose(logits_file) != 0) {
+        free(out); out = NULL;
+        snprintf(err, errlen, "decision logits artifact close failed");
+    }
+    free(decision_logits);
     free(replay);
     pthread_mutex_unlock(&g_bench_mu);
     return out;
@@ -15778,7 +15808,7 @@ static void *client_main(void *arg) {
             http_request_free(&hr);
             goto done;
         }
-        char *bpath = NULL, *bledger = NULL, *breplay = NULL, *btarget = NULL;
+        char *bpath = NULL, *bledger = NULL, *breplay = NULL, *btarget = NULL, *blogits = NULL;
         int ctx_start = 8192, ctx_alloc = 0, gen = 512;
         bool fresh = false, dspark = false, cache_create = false;
         if (hr.body) {
@@ -15804,6 +15834,8 @@ static void *client_main(void *arg) {
                         if (!json_string(&p, &breplay)) { free(key); break; }
                     } else if (!strcmp(key, "ledger_dump")) {
                         if (!json_string(&p, &bledger)) { free(key); break; }
+                    } else if (!strcmp(key, "logits_path")) {
+                        if (!json_string(&p, &blogits)) { free(key); break; }
                     } else if (!strcmp(key, "ctx_start")) {
                         if (!json_int(&p, &ctx_start)) { free(key); break; }
                     } else if (!strcmp(key, "ctx_alloc")) {
@@ -15858,12 +15890,14 @@ static void *client_main(void *arg) {
             }
         }
         if (!bpath) {
+            free(blogits);
             free(breplay); free(btarget); free(bledger);
             http_error(fd, s->enable_cors, 400, "missing \"path\"");
             http_request_free(&hr);
             goto done;
         }
         if (lever_reject[0]) {
+            free(blogits);
             http_error(fd, s->enable_cors, 400, lever_reject);
             free(bpath);
             free(bledger);
@@ -15873,10 +15907,17 @@ static void *client_main(void *arg) {
         }
         if (ctx_alloc <= 0) ctx_alloc = s->ctx_size;
         char berr[256] = {0};
+        if (score && blogits) {
+            free(bpath); free(bledger); free(breplay); free(btarget); free(blogits);
+            http_error(fd, s->enable_cors, 400, "logits_path is a serial /debug/bench diagnostic");
+            http_request_free(&hr);
+            goto done;
+        }
         char *body = score
             ? bench_score(s->engine, bpath, btarget, ctx_alloc, cache_create, berr, sizeof(berr))
             : bench_run(s->engine, bpath, ctx_start, ctx_alloc, gen, fresh,
-                        dspark, bledger, breplay, berr, sizeof(berr));
+                        dspark, bledger, breplay, blogits, berr, sizeof(berr));
+        free(blogits);
         free(bpath);
         free(bledger);
         free(breplay);

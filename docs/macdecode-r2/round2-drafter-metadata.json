@@ -1,0 +1,13 @@
+{
+  "status": "COMPLETE",
+  "change": "Add current DSpark metadata aliases from legacy values, with target layers verified against the matching main source configuration; original fields and all checks retained",
+  "bytes": 7904264192,
+  "header_bytes": 16384,
+  "before_sha256": "211032b37778886b2b0ed4a537709c996e179eea7471267a28ef8bcb7f37c230",
+  "sha256": "0e5d28ea5521ce3fcd0a8014ba243e77666a9b72722d292257bd7cc69370e120",
+  "tensor_payloads_unchanged": true,
+  "readback_verified": true,
+  "host_budget_bytes": 2147483648,
+  "physical_floor_bytes": 17179869184,
+  "finished": 1793300669.2860532
+}

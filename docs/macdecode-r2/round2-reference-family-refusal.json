@@ -1,0 +1,69 @@
+{
+  "attempt": {
+    "build": {
+      "pid": 66664,
+      "host_budget_bytes": 4294967296,
+      "physical_floor_bytes": 17179869184,
+      "peak_rss": 871137280,
+      "minimum_available": 534145761280,
+      "violation": null,
+      "returncode": 0,
+      "binary_sha256": "7ec061ceb2d93dbba6ca2397a5a4aaf9e65f4fde5c20a5b97d274d668b28fc77"
+    },
+    "results": [
+      {
+        "tag": "prose8k",
+        "command": [
+          "${UPSTREAM_SOURCE}/ds4-bench",
+          "--metal",
+          "-m",
+          "${MODEL_ROOT}/deepseek-ai/DeepSeek-V4.1-Flash-1017-ds4-MXFP4-requant/DeepSeek-V4.1-Flash-1017-MXFP4-requant.gguf",
+          "--mtp-model",
+          "${MODEL_ROOT}/deepseek-ai/DeepSeek-V4.1-Flash-1017-ds4-MXFP4-requant/DeepSeek-V4.1-Flash-1017-DSpark-MXFP4-requant.gguf",
+          "--prompt-file",
+          "${TASK_ROOT}/promessi_sposi.txt",
+          "--ctx-start",
+          "8192",
+          "--ctx-max",
+          "8192",
+          "--ctx-alloc",
+          "393216",
+          "--prefill-chunk",
+          "8192",
+          "--gen-tokens",
+          "128",
+          "--macdecode-repeat",
+          "3",
+          "--csv",
+          "${TASK_ROOT}/reference-prose8k.csv",
+          "--token-csv",
+          "${TASK_ROOT}/reference-prose8k-tokens.csv"
+        ],
+        "host_budget_bytes": 429496729600,
+        "physical_floor_bytes": 17179869184,
+        "baseline": {
+          "available": 539992178688,
+          "wired": 5654036480,
+          "compressed": 956104704,
+          "swapins": 0,
+          "swapouts": 0
+        },
+        "peak_rss": 57769984,
+        "peak_observed_physical_impact": 262504448,
+        "minimum_available": 539729674240,
+        "violation": null,
+        "pid": 66786,
+        "returncode": 1,
+        "final": {
+          "available": 539781988352,
+          "wired": 5637570560,
+          "compressed": 956104704,
+          "swapins": 0,
+          "swapouts": 0
+        }
+      }
+    ]
+  },
+  "stderr": "ds4: Metal device Apple M3 Ultra, 512.00 GiB RAM\nds4: Metal 4 tensor API disabled for pre-M5/pre-A19 devices\nds4: drift-patch flags hc_stable=on norm_unify=on kv_raw_f32=off rope_exp2_log2=off math_safe=off tensor_matmul=off\nds4: DSpark support model and target checkpoint families differ\n",
+  "cause": "Legacy Q4 drafter omits dspark.target_architecture; general.architecture and source revision identify deepseek41-dspark from the same October checkpoint. Converter now writes the truthful family key and refuses conflicting values; upstream check is unchanged."
+}

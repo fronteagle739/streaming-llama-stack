@@ -1,0 +1,31 @@
+{
+  "command": [
+    "make",
+    "-j4",
+    "ds4-server",
+    "CFLAGS=-O3 -ffast-math -g -mcpu=native -Wall -Wextra -std=c99 -DDS4_NATIVE_FRONTIER_ENABLE=1"
+  ],
+  "host_budget_bytes": 4294967296,
+  "physical_floor_bytes": 17179869184,
+  "baseline": {
+    "available": 539834925056,
+    "wired": 5654315008,
+    "compressed": 965541888,
+    "swapins": 0,
+    "swapouts": 0
+  },
+  "pid": 63091,
+  "peak_rss": 856653824,
+  "minimum_available": 220690939904,
+  "violation": null,
+  "results": [],
+  "binary_sha256": "e299052e39ef3d2410abcbeb33cefda0266df08b1cac9943ae4fb6dfc247ddfd",
+  "returncode": 0,
+  "final": {
+    "available": 221376954368,
+    "wired": 314266173440,
+    "compressed": 965541888,
+    "swapins": 0,
+    "swapouts": 0
+  }
+}

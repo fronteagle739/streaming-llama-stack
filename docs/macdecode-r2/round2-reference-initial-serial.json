@@ -1,0 +1,71 @@
+{
+  "attempt": {
+    "build": {
+      "pid": 66664,
+      "host_budget_bytes": 4294967296,
+      "physical_floor_bytes": 17179869184,
+      "peak_rss": 871137280,
+      "minimum_available": 534145761280,
+      "violation": null,
+      "returncode": 0,
+      "binary_sha256": "7ec061ceb2d93dbba6ca2397a5a4aaf9e65f4fde5c20a5b97d274d668b28fc77"
+    },
+    "results": [
+      {
+        "tag": "prose8k",
+        "command": [
+          "${UPSTREAM_SOURCE}/ds4-bench",
+          "--metal",
+          "-m",
+          "${MODEL_ROOT}/deepseek-ai/DeepSeek-V4.1-Flash-1017-ds4-MXFP4-requant/DeepSeek-V4.1-Flash-1017-MXFP4-requant.gguf",
+          "--mtp-model",
+          "${MODEL_ROOT}/deepseek-ai/DeepSeek-V4.1-Flash-1017-ds4-MXFP4-requant/DeepSeek-V4.1-Flash-1017-DSpark-MXFP4-requant.gguf",
+          "--prompt-file",
+          "${TASK_ROOT}/promessi_sposi.txt",
+          "--ctx-start",
+          "8192",
+          "--ctx-max",
+          "8192",
+          "--ctx-alloc",
+          "393216",
+          "--prefill-chunk",
+          "8192",
+          "--gen-tokens",
+          "128",
+          "--macdecode-repeat",
+          "3",
+          "--csv",
+          "${TASK_ROOT}/reference-prose8k.csv",
+          "--token-csv",
+          "${TASK_ROOT}/reference-prose8k-tokens.csv"
+        ],
+        "host_budget_bytes": 429496729600,
+        "physical_floor_bytes": 17179869184,
+        "baseline": {
+          "available": 539999272960,
+          "wired": 5652938752,
+          "compressed": 955973632,
+          "swapins": 0,
+          "swapouts": 0
+        },
+        "peak_rss": 3623862272,
+        "peak_observed_physical_impact": 314542342144,
+        "minimum_available": 225456930816,
+        "violation": null,
+        "pid": 67071,
+        "returncode": 0,
+        "final": {
+          "available": 231601143808,
+          "wired": 313971998720,
+          "compressed": 955940864,
+          "swapins": 0,
+          "swapouts": 0
+        }
+      }
+    ]
+  },
+  "csv": "ctx_tokens,prefill_tokens,prefill_tps,gen_tokens,gen_tps,gen_first_ms,gen_steady_tokens,gen_steady_tps,kvcache_bytes\n8192,8192,379.88,128,33.90,516.568,127,39.01,63464500\n8192,8192,379.88,128,38.89,25.872,127,38.94,63464500\n8192,8192,379.88,128,38.90,25.605,127,38.95,63464500\n",
+  "stderr": "ds4: Metal device Apple M3 Ultra, 512.00 GiB RAM\nds4: Metal 4 tensor API disabled for pre-M5/pre-A19 devices\nds4: drift-patch flags hc_stable=on norm_unify=on kv_raw_f32=off rope_exp2_log2=off math_safe=off tensor_matmul=off\nds4: DSpark support model detected: ${MODEL_ROOT}/deepseek-ai/DeepSeek-V4.1-Flash-1017-ds4-MXFP4-requant/DeepSeek-V4.1-Flash-1017-DSpark-MXFP4-requant.gguf (stages=3 block=5 markov_rank=256 tensors=78 missing=0 invalid=0 metadata_errors=0); use --dspark to enable experimental runtime decode\nds4: Metal model views created in 5.051 ms, residency requested in 1645.076 ms, warmup 7.144 ms (mapped 285001.05 MiB from offset 5.56 MiB)\nds4: Metal mapped mmaped model as 1 overlapping shared buffers\nds4: metal backend initialized for graph diagnostics\nds4: memory: KV 2.35 GiB (raw 0.01 + compressed 2.34) + buffers 9.68 GiB + resident model 278.32 GiB = 290.36 GiB planned\nds4: memory detail: ctx=393216 prefill_cap=8192 raw_kv_rows=128 compressed_kv_rows=393217 backend=metal\nds4-bench: context buffers 12323.98 MiB (ctx=393216, backend=metal, prefill_chunk=8192, raw_kv_rows=128, compressed_kv_rows=393217)\nds4: V4.1 static context buffers 12323.98 MiB (ctx=393216), Engram disk-only\n",
+  "controller": "REFERENCE START prose8k 67071\nREFERENCE END prose8k 0 None\nTraceback (most recent call last):\n  File \"${TASK_ROOT}/round2_reference_run.py\", line 17, in <module>\n    if base['available']<cap+floor or base['wired']>494*G:raise MemoryError('Reference model memory admission refused '+json.dumps(base))\n                                                          ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^\nMemoryError: Reference model memory admission refused {\"available\": 232608137216, \"wired\": 312965365760, \"compressed\": 955940864, \"swapins\": 0, \"swapouts\": 0}\n",
+  "superseded": "Explicit resident-drafter serial mode added to the harness for matched resource configuration; memory admission now waits for certified retired buffers without reducing the budget"
+}
