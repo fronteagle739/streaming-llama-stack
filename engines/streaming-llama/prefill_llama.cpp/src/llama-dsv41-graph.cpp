@@ -5,6 +5,7 @@
 #include "ggml-dsv41-shared-sparse.h"
 #include "ggml-dsv41-hc-expand.h"
 #include "ggml-dsv41-hc-half.h"
+#include "ggml-dsv41-hc-sinkhorn.h"
 #include "../ggml/src/ggml-dsv41-ops.h"
 #include "llama-dsv41-stream-topk.h"
 #include "ggml-dsv41-index-window.h"
@@ -18,6 +19,33 @@
 #include <cmath>
 #include <algorithm>
 #include <utility>
+
+// CPU fallback for the imported hc=4 Sinkhorn specialization. Output sections
+// are pre[rows,4], post[rows,4], comb[rows,4,4] in one24*rows allocation.
+static void dsv41_hc_sinkhorn_cpu(ggml_tensor *dst,const ggml_tensor *mixes,
+        const ggml_tensor *scale,const ggml_tensor *base,int ith,int nth,void*){
+    const auto rows=mixes->ne[1];auto *out=(float*)dst->data;
+    const auto *m=(const float*)mixes->data,*s=(const float*)scale->data,*b=(const float*)base->data;
+    for(int64_t row=ith;row<rows;row+=nth){
+        for(int j=0;j<4;++j){
+            out[row*4+j]=1.f/(1.f+std::exp(-(m[row*24+j]*s[0]+b[j])))+1e-6f;
+            out[rows*4+row*4+j]=2.f/(1.f+std::exp(-(m[row*24+j+4]*s[1]+b[j+4])));
+        }
+        float v[16];for(int i=0;i<16;++i)v[i]=m[row*24+i+8]*s[2]+b[i+8];
+        for(int r=0;r<4;++r){
+            const auto maximum=*std::max_element(v+r*4,v+r*4+4);float sum=0;
+            for(int c=0;c<4;++c){v[r*4+c]=std::exp(v[r*4+c]-maximum);sum+=v[r*4+c];}
+            for(int c=0;c<4;++c)v[r*4+c]=v[r*4+c]/sum+1e-6f;
+        }
+        auto columns=[&]{for(int c=0;c<4;++c){float sum=1e-6f;for(int r=0;r<4;++r)sum+=v[r*4+c];
+            for(int r=0;r<4;++r)v[r*4+c]/=sum;}};
+        columns();for(int iteration=1;iteration<20;++iteration){
+            for(int r=0;r<4;++r){float sum=1e-6f;for(int c=0;c<4;++c)sum+=v[r*4+c];for(int c=0;c<4;++c)v[r*4+c]/=sum;}
+            columns();
+        }
+        std::copy(v,v+16,out+rows*8+row*16);
+    }
+}
 
 // CPU reference for the same original expansion expression. CUDA recognizes
 // only the explicit private tag and reuses ds4's existing no-FMA body. The
@@ -519,6 +547,21 @@ llama_dsv41_graph_ops::mix llama_dsv41_graph_ops::mixes(
     ggml_mul_mat_set_prec(projected, GGML_PREC_F32);
     if(hc_projection_f16_gemm&&count>8&&fn->type==GGML_TYPE_F16)GGML_ASSERT(ggml_dsv41_hc_half_tag(projected));
     tagged(projected, "dsv41_hc_mixes");
+    const char *fused_hc=std::getenv("LLAMA_DSV41_FUSED_HC");
+#ifdef GGML_USE_CUDA
+    if(!fused_hc)fused_hc="2";
+#endif
+    if(fused_hc&&(fused_hc[0]=='1'||fused_hc[0]=='2')&&!fused_hc[1]&&sinkhorn_iters==20&&hc_eps==1e-6f&&count<=65536){
+        auto *packed=ggml_map_custom3(ctx,projected,scale,base,dsv41_hc_sinkhorn_cpu,GGML_N_TASKS_MAX,nullptr);
+        packed->op_params[7]=GGML_DSV41_HC_SINKHORN_MAGIC;
+        packed->op_params[6]=fused_hc[0]-'0';
+        GGML_ASSERT(ggml_dsv41_hc_sinkhorn_valid(packed));ggml_set_name(packed,"dsv41_fused_hc_sinkhorn");
+        mix fused;
+        fused.pre=tagged(ggml_view_2d(ctx,packed,4,count,4*sizeof(float),0),"dsv41_hc_next_pre");
+        fused.post=tagged(ggml_view_2d(ctx,packed,4,count,4*sizeof(float),count*4*sizeof(float)),"dsv41_hc_post");
+        fused.comb=tagged(ggml_view_3d(ctx,packed,4,4,count,4*sizeof(float),16*sizeof(float),count*8*sizeof(float)),"dsv41_hc_comb");
+        return fused;
+    }
     auto affine = [&](int64_t offset, int64_t length, int64_t scale_index) {
         ggml_tensor * part = ggml_view_2d(ctx, projected, length, count, projected->nb[1], offset * projected->nb[0]);
         ggml_tensor * s = ggml_view_1d(ctx, scale, 1, scale_index * scale->nb[0]);

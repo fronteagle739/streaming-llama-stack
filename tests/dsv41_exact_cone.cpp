@@ -55,6 +55,8 @@ int main(){
     check(llama_dsv41_prefill::tile_count(45056,46000,4096,45056)==944);
     check(!y::may_export(2541)&&!y::may_rewind(2541));
     for(uint32_t n:{2542u,4096u,8192u,49555u}){
+        auto ragged=y::schedule(2541,y::operation::prefill,false,0,n,0,n);
+        y::align_exact(ragged,4096,false);check(ragged.first==n-2541);
         auto p=y::schedule(2541,y::operation::prefill,false,0,n,0,n);y::align_exact(p,4096);
         check(p.first%4096==0&&p.first<=n-2541&&n-p.first<2541+4096);
     }
