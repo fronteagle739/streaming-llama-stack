@@ -139,6 +139,7 @@ Native controls take effect at token boundaries. The response reports requested 
 | `--llama-dsv41-hc-bf16-residual` | Explicit runtime value | Keep the hyper-connection residual in BF16 between layers and between the attention and FFN sublayers (bit-identical: every carried residual is already BF16-rounded). Layers 1-36 read the resident BF16 bank directly and the attention sublayer writes BF16. Default 1; 0 restores the F32 unpack and F32 sublayer residual. |
 | `--llama-dsv41-topk-select` | Explicit runtime value | With the exact radix top-k (LLAMA_DSV41_TOPK_RADIX=1), select the top 512 of each 8192-key tile by an MSB radix select on the same packed (value, index) keys and sort only those 512, instead of sorting the whole tile. Identical IDs and order (the key order is total); NaN/subnormal tiles keep the original network. Default 1; 0 keeps the full tile sort. |
 | `--llama-dsv41-stream-topk-defer` | Explicit runtime value | Indexer streaming top-k for more than 131,072 keys: append each 8,192-key window's candidates to one pending buffer and merge only when it would exceed 8,192 columns and once at the end, instead of re-merging after every window. Identical IDs and order (same score-desc/global-ID-asc total order). Default 1; 0 restores the per-window running merge. |
+| `--llama-dsv41-get-rows-scalar` | Explicit runtime value | CUDA GET_ROWS of one-element F32/F16 rows (the indexer's streaming top-k value and ID gathers): one thread per gathered element instead of one 256-thread block per element. Identical values (same index, same cast). Default 1; 0 keeps the generic kernel. |
 
 Budget placeholders use the admitted child budget: `{host_budget_bytes}`, `{host_budget_mb}`, `{physical_floor_bytes}` (admission) and `{runtime_floor_bytes}` (runtime). `{host_budget_gib}` and `{min_available_gib}` use GiB. User overrides are literal strings, including JSON and braces.
 
@@ -101492,6 +101493,24 @@ inline bool stream_topk_defer_enabled(){
         const char*env=std::getenv("LLAMA_DSV41_STREAM_TOPK_DEFER");
         if(env&&std::strcmp(env,"0")&&std::strcmp(env,"1"))GGML_ABORT("LLAMA_DSV41_STREAM_TOPK_DEFER must be 0 or 1");
         return !env||env[0]=='1';
+    }();
+    return enabled;
+```
+
+### LLAMA_DSV41_GET_ROWS_SCALAR
+
+CUDA GET_ROWS of one-element F32/F16 rows (the indexer's streaming top-k value and ID gathers): one thread per gathered element instead of one 256-thread block per element. Identical values (same index, same cast). Default 1; 0 keeps the generic kernel.
+
+Scope: rtx-llama. Class: qualified.
+
+Source: `engines/streaming-llama/prefill_llama.cpp/ggml/src/ggml-cuda/getrows.cu:343`. Unset read: NULL from getenv; the literal consumer below supplies any fallback.
+
+```text
+static bool get_rows_scalar_enabled() {
+    static const bool enabled = [] {
+        const char * env = std::getenv("LLAMA_DSV41_GET_ROWS_SCALAR");
+        if (env && std::strcmp(env, "0") && std::strcmp(env, "1")) GGML_ABORT("LLAMA_DSV41_GET_ROWS_SCALAR must be 0 or 1");
+        return !env || env[0] == '1';
     }();
     return enabled;
 ```
