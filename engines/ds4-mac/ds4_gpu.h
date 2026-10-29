@@ -44,6 +44,14 @@ typedef struct {
 int ds4_gpu_init(void);
 void ds4_gpu_cleanup(void);
 
+#if defined(__APPLE__)
+ds4_gpu_tensor *ds4_gpu_tensor_alloc_weights(uint64_t bytes);
+int ds4_gpu_weight_residency(ds4_gpu_tensor *const *tensors, uint32_t n);
+int ds4_gpu_matmul_bf16_router_weights(ds4_gpu_tensor *, const ds4_gpu_tensor *, uint64_t, uint64_t, const ds4_gpu_tensor *);
+int ds4_gpu_matmul_engram_fp8_weights(ds4_gpu_tensor *, const ds4_gpu_tensor *, const ds4_gpu_tensor *, uint32_t, uint32_t, const ds4_gpu_tensor *);
+int ds4_gpu_dsv41_project_fp8_bf16_weights(ds4_gpu_tensor *, const ds4_gpu_tensor *, const ds4_gpu_tensor *, uint32_t, uint32_t, const ds4_gpu_tensor *);
+#endif
+
 ds4_gpu_tensor *ds4_gpu_tensor_alloc(uint64_t bytes);
 ds4_gpu_tensor *ds4_gpu_tensor_alloc_managed(uint64_t bytes);
 ds4_gpu_tensor *ds4_gpu_tensor_view(const ds4_gpu_tensor *base, uint64_t offset, uint64_t bytes);
