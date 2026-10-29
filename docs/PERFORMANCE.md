@@ -62,6 +62,14 @@ Round 7 (OPUS22, all default and exact, logits bit-identical at 8K and 100K):
   1.20 -> 0.41 s.
 100K: **25.392 s** prompt-only (3,938 tok/s), TTFT 29.031 s, at 16.4 GB/s storage.
 
+Round 8 (OPUS22, default and exact, logits bit-identical at 8K and 100K):
+- the hyper-connection residual stays BF16 between layers and between the
+  attention and FFN sublayers (`LLAMA_DSV41_HC_BF16_RESIDUAL`, default 1):
+  layers 1-36 read the resident BF16 bank directly, the attention HC expand
+  writes BF16, and HC collapse/expand and the fused RMS-norm -> F16 kernel
+  read BF16. Sweep GPU 14.56 -> 14.15 s.
+100K: **24.054 s** prompt-only (4,157 tok/s), TTFT 27.078 s, at 16.9 GB/s storage.
+
 In the new default the 21 sweep layers are compute-bound (21 s wall against
 10 s of weight reads) and the 19 tail layers are storage-bound (8 s). Details:
 `examples/opus22/RESULTS.md` section 8.
