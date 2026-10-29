@@ -33,6 +33,17 @@ def hash_progress(report, interval=5.0):
     return update
 
 
+def check_packed_layout(cfg):
+    """Kernel-native packed FP4 experts: prefill reads them through the FlashInfer
+    native bridge (full-stage reads); ds4 decode reads the same bytes from the
+    expert cache with its packed FP4 kernels, so decode may stay on."""
+    env=cfg.get('env_overrides',{})
+    if (not env.get('LLAMA_DSV41_FLASHINFER_NATIVE_FFN_DLL') or
+        env.get('LLAMA_DSV41_STORED_MXFP4')!='1' or env.get('LLAMADECODE_PREFILL_ROUTED')!='0' or
+        (cfg.get('native_fp4_prefill_only') is True and env.get('LLAMADECODE_DS4_DECODE')!='0')):
+        raise ValueError('Kernel-native expert layout requires its native bridge, stored MXFP4 and full-stage reads (prefill-only mode also disables ds4 decode)')
+
+
 def model_receipt(cfg, report=None):
     """Reuse a verified original receipt only while all physical identities match.
 
@@ -44,13 +55,7 @@ def model_receipt(cfg, report=None):
     from .gguf_header import read_header, validate_dsv41_types
     header=read_header(model)
     packed=header['metadata'].get('deepseek41.expert_layout')
-    if packed is not None:
-        env=cfg.get('env_overrides',{})
-        if (cfg.get('native_fp4_prefill_only') is not True or
-            not env.get('LLAMA_DSV41_FLASHINFER_NATIVE_FFN_DLL') or
-            env.get('LLAMA_DSV41_STORED_MXFP4')!='1' or
-            env.get('LLAMADECODE_DS4_DECODE')!='0' or env.get('LLAMADECODE_PREFILL_ROUTED')!='0'):
-            raise ValueError('Kernel-native expert layout requires explicit prefill-only mode, its native bridge, full-stage reads and disabled ds4 decode')
+    if packed is not None:check_packed_layout(cfg)
     dense=header['metadata'].get('deepseek41.dense_layout')
     if dense is not None:
         env=cfg.get('env_overrides',{})

@@ -3055,8 +3055,21 @@ static void model_open(ds4_model *m, const char *path, bool metal_mapping,
     if (m->version != 3) ds4_die("only GGUF v3 is supported");
 
     parse_metadata(m, &c);
-    if (model_find_kv(m, "deepseek41.expert_layout") || model_find_kv(m, "deepseek41.dense_layout"))
+    if (model_find_kv(m, "deepseek41.dense_layout"))
+        ds4_die("kernel-native FP8 dense layout requires its matching prefill loader; ds4 decode is not yet supported");
+    if (model_find_kv(m, "deepseek41.expert_layout")) {
+#ifdef DS4_EXTERNAL_DECODE
+        /* Single-engine decode: the producer's expert cache supplies these
+         * experts as packed slots and ds4 runs its packed FP4 decode kernels. */
+        ds4_str layout = {0};
+        if (!model_get_string(m, "deepseek41.expert_layout", &layout) ||
+            !ds4_streq(layout, "flashinfer-sm120-mxfp8-mxfp4-v1"))
+            ds4_die("unknown kernel-native FP4 expert layout");
+        ds4_gpu_set_fp4_packed_experts(1);
+#else
         ds4_die("kernel-native FP4 expert layout requires its matching prefill loader; ds4 decode is not yet supported");
+#endif
+    }
     parse_tensors(m, &c);
     model_unmap_engram(m);
     model_unmap_qwen_ngrams(m, path);
@@ -44958,15 +44971,22 @@ static bool ds41_single_hc_island(ds41_gpu_graph *g, const ds4_model *m,
     return ok;
 }
 
+#ifdef DS4_EXTERNAL_DECODE
+#define DS41_MARK(id) (ds4_gpu_stage_mark(id) != 0)
+#else
+#define DS41_MARK(id) true
+#endif
 static bool ds41_graph_decode_layer(ds41_gpu_graph *g, const ds4_model *m,
                                     const ds4_layer_weights *l, uint32_t il, int token) {
     if (g->tp_world == 1 && !g->streaming && !g->quality && !g->imatrix && !g->image_count &&
         !g_expert_profile.active && !getenv("DS4_CUDA_MOE_PROFILE") &&
         !metal_graph_debug_get_config()->prefix && !getenv("DS4COMBO_V41_DUMP") &&
         !ds41_engram_layer(il) && (ds41_single_hc_graphs_on() || ds41_hc_graph_profile_on()))
-        return ds41_single_hc_island(g, m, l, il) && ds41_attention(g, m, l, il, false) &&
-            ds41_hc_mix(g, m, l, true, g->attn_split) && ds41_moe(g, m, l, il, (uint32_t)token) &&
-            ds41_graph_after_moe(g, m, l, il, il + 1u == DS4_N_LAYER);
+        return DS41_MARK(0) && ds41_single_hc_island(g, m, l, il) && DS41_MARK(1) &&
+            ds41_attention(g, m, l, il, false) && DS41_MARK(2) &&
+            ds41_hc_mix(g, m, l, true, g->attn_split) && DS41_MARK(3) &&
+            ds41_moe(g, m, l, il, (uint32_t)token) && DS41_MARK(4) &&
+            ds41_graph_after_moe(g, m, l, il, il + 1u == DS4_N_LAYER) && DS41_MARK(5);
     if (g->tp_world != 2 || g->streaming || g->quality || g->imatrix ||
         g->image_count || getenv("DS4_METAL_DISABLE_V41_TP_SHARED_OWNER") ||
         g_expert_profile.active || getenv("DS4_CUDA_MOE_PROFILE") ||

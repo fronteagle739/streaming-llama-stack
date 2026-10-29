@@ -1482,6 +1482,10 @@ typedef int (*ds4_gpu_external_expert_hook)(void *user, uint32_t layer, const in
 static int g_ds4x_external_mode;
 static ds4_gpu_external_expert_hook g_ds4x_expert_hook;
 static void *g_ds4x_expert_user;
+typedef int (*ds4_gpu_external_expert_hook_l2)(void *user, uint32_t layer, const int32_t *ids, uint32_t n,
+    int32_t *slots, const char **bases, uint64_t *l2_stride, uint32_t *l1_slots, uint32_t *n_slots);
+static ds4_gpu_external_expert_hook_l2 g_ds4x_expert_hook_l2;
+static void *g_ds4x_expert_user_l2;
 static ds4_gpu_tensor g_ds4x_slot_tensor;
 typedef int (*ds4_gpu_external_residency_hook)(void *user, uint32_t layer, uint8_t *tier, uint32_t experts);
 static ds4_gpu_external_residency_hook g_ds4x_residency_hook;
@@ -30544,19 +30548,24 @@ extern "C" int ds4_gpu_cache_affinity_router_tensor(
             bias, residency, lambda, experts, used, scale, rows, device_metrics);
     }
     if (!cuda_ok(cudaGetLastError(), "cache affinity rerank")) return 0;
-    std::vector<cuda_router_affinity_metrics> metrics(rows);
-    if (!cuda_ok(cudaMemcpyAsync(metrics.data(), device_metrics, rows * sizeof(*device_metrics),
+    static const bool external_log = getenv("LLAMADECODE_DS4X_AFFINITY_LOG") != NULL;
+    /* External decode with no calibration, log or verify consumer: the
+     * metrics have no reader (the host owns admission), so skip their
+     * readback and its per-layer stream synchronization. */
+    const bool metrics_unread = external && !external_log && g_affinity_calibrate_path.empty() &&
+        !hard_verify && !g_affinity_router_confidence;
+    std::vector<cuda_router_affinity_metrics> metrics(metrics_unread ? 0u : rows);
+    if (!metrics_unread && (!cuda_ok(cudaMemcpyAsync(metrics.data(), device_metrics, rows * sizeof(*device_metrics),
             cudaMemcpyDeviceToHost, cuda_decode_stream()), "cache affinity metrics copy") ||
         (!hard_verify && g_affinity_router_confidence && !cuda_ok(cudaMemcpyAsync(confidence_rows.data(),
             device_confidence,rows*sizeof(*device_confidence),cudaMemcpyDeviceToHost,
             cuda_decode_stream()),"router confidence metrics copy")) ||
         (hard_verify && !cuda_ok(cudaMemcpyAsync(hard_rows.data(),device_hard,rows*sizeof(*device_hard),
             cudaMemcpyDeviceToHost,cuda_decode_stream()),"verify hard resident metrics copy")) ||
-        !cuda_ok(cudaStreamSynchronize(cuda_decode_stream()), "cache affinity metrics sync")) return 0;
+        !cuda_ok(cudaStreamSynchronize(cuda_decode_stream()), "cache affinity metrics sync"))) return 0;
     /* External: the host owns admission; ds4's own background promotion has no cache here. */
     if(!external && !cuda_affinity_background_prepare(gate_bytes,down_bytes))return 0;
-    static const bool external_log = getenv("LLAMADECODE_DS4X_AFFINITY_LOG") != NULL;
-    for (uint32_t t = 0; t < rows; t++) {
+    for (uint32_t t = 0; !metrics_unread && t < rows; t++) {
         const auto &m = metrics[t];
         if(!external) cuda_affinity_background_note(m,residency,model_map,model_size,layer,experts,
             gate_offset,up_offset,down_offset,gate_bytes,down_bytes);
@@ -35630,6 +35639,64 @@ __global__ static void moe_round_f16_kernel(float *x, uint64_t n) {
     if (i < n) x[i] = __half2float(__float2half_rn(x[i]));
 }
 
+/* Set at model open when deepseek41.expert_layout names the kernel-native
+ * packed FP4 expert layout (external decode only). */
+static int g_ds4_fp4_packed_experts = 0;
+extern "C" void ds4_gpu_set_fp4_packed_experts(int on) { g_ds4_fp4_packed_experts = on ? 1 : 0; }
+
+/* DS4X_STAGE_PROFILE=1 decode attribution. Marks are CUDA events on the
+ * legacy stream; the interval ending at mark k is charged to stage k, so a
+ * host stall (expert hook, synchronous reads) shows in the stage it delays. */
+static int g_stage_profile = -1;
+static cudaEvent_t g_stage_events[2048];
+static int g_stage_ids[2048];
+static int g_stage_count = 0;
+static double g_stage_total[10];
+static uint64_t g_stage_tokens = 0;
+extern "C" int ds4_gpu_stage_mark(int id) {
+    if (g_stage_profile < 0) {
+        const char *v = getenv("DS4X_STAGE_PROFILE");
+        g_stage_profile = v && v[0] == '1' && !v[1];
+    }
+    if (!g_stage_profile || g_stage_count >= 2048 || id < 0 || id > 9) return 1;
+    if (!g_stage_events[g_stage_count] && cudaEventCreate(&g_stage_events[g_stage_count]) != cudaSuccess) return 1;
+    if (cudaEventRecord(g_stage_events[g_stage_count], 0) != cudaSuccess) return 1;
+    g_stage_ids[g_stage_count++] = id;
+    return 1;
+}
+extern "C" void ds4_pool_call_stats(uint64_t *calls, double *ms);
+static double g_stage_host_ms[3];
+static uint64_t g_stage_pool_calls0 = 0;
+static double g_stage_pool_ms0 = 0.0;
+static double g_stage_launch_ms = 0.0;
+static void ds4_gpu_stage_host(double read_ms, double hook_ms, double write_ms) {
+    if (g_stage_profile != 1) return;
+    g_stage_host_ms[0] += read_ms; g_stage_host_ms[1] += hook_ms; g_stage_host_ms[2] += write_ms;
+}
+extern "C" void ds4_gpu_stage_flush(uint32_t position) {
+    if (g_stage_profile != 1 || g_stage_count < 2) { g_stage_count = 0; return; }
+    (void)cudaEventSynchronize(g_stage_events[g_stage_count - 1]);
+    double per[10] = {};
+    for (int i = 1; i < g_stage_count; ++i) {
+        float ms = 0.0f;
+        if (cudaEventElapsedTime(&ms, g_stage_events[i - 1], g_stage_events[i]) == cudaSuccess) per[g_stage_ids[i]] += ms;
+    }
+    g_stage_count = 0;
+    uint64_t pool_calls = 0; double pool_ms = 0.0;
+    ds4_pool_call_stats(&pool_calls, &pool_ms);
+    double total = 0.0;
+    for (int i = 0; i < 10; ++i) { g_stage_total[i] += per[i]; total += per[i]; }
+    ++g_stage_tokens;
+    fprintf(stderr, "DS4X_STAGE position=%u total_ms=%.3f hc_pre=%.3f attention=%.3f hc_mix=%.3f router_shared=%.3f "
+            "expert_hook=%.3f routed_experts=%.3f after_moe=%.3f between_layers=%.3f head=%.3f "
+            "host_ids_read=%.3f host_cache_hook=%.3f host_slot_write=%.3f host_fp4_launch=%.3f pool_calls=%llu pool_ms=%.3f\n",
+            position, total, per[1], per[2], per[3], per[6], per[7], per[4], per[5], per[0], per[8],
+            g_stage_host_ms[0], g_stage_host_ms[1], g_stage_host_ms[2], g_stage_launch_ms,
+            (unsigned long long) (pool_calls - g_stage_pool_calls0), pool_ms - g_stage_pool_ms0);
+    g_stage_pool_calls0 = pool_calls; g_stage_pool_ms0 = pool_ms;
+    g_stage_host_ms[0] = g_stage_host_ms[1] = g_stage_host_ms[2] = 0.0; g_stage_launch_ms = 0.0;
+}
+
 static int routed_moe_launch(
         ds4_gpu_tensor *out,
         ds4_gpu_tensor *gate,
@@ -35684,6 +35751,9 @@ static int routed_moe_launch(
     if (!q4k_path && !iq2_path && !mxfp4_path) return 0;
 
     const char *external_gate = nullptr, *external_up = nullptr, *external_down = nullptr;
+    const char *external_l2[3] = {nullptr, nullptr, nullptr};
+    uint64_t external_l2_stride[3] = {0, 0, 0};
+    uint32_t external_l1_slots = 0;
 #ifdef DS4_EXTERNAL_DECODE
     if (g_ds4x_expert_hook) {
         /* The caller's expert cache supplies the routed experts' bytes: the
@@ -35693,7 +35763,10 @@ static int routed_moe_launch(
          * call of its own (the id read below orders it after the previous half). */
         const uint32_t assignments = n_tokens * n_expert;
         std::vector<int32_t> ids(assignments), unique, slots;
+        if (n_tokens == 1u) (void)ds4_gpu_stage_mark(6);
+        const auto hook_t0 = std::chrono::steady_clock::now();
         if (!ds4_gpu_tensor_read(selected, 0, ids.data(), (uint64_t)assignments * sizeof(int32_t))) return 0;
+        const auto hook_t1 = std::chrono::steady_clock::now();
         for (const int32_t id : ids) {
             if (id < 0 || (uint32_t)id >= n_total_expert) return 0;
             if (std::find(unique.begin(), unique.end(), id) == unique.end()) unique.push_back(id);
@@ -35723,12 +35796,24 @@ static int routed_moe_launch(
             return ok;
         }
         slots.assign(unique.size(), -1);uint32_t n_slots = 0;
-        if (!g_ds4x_expert_hook(g_ds4x_expert_user, layer_index, unique.data(), (uint32_t)unique.size(), slots.data(),
+        const auto hook_t2 = std::chrono::steady_clock::now();
+        if (g_ds4x_expert_hook_l2 && mxfp4_path && g_ds4_fp4_packed_experts) {
+            const char *bases[6] = {};
+            if (!g_ds4x_expert_hook_l2(g_ds4x_expert_user_l2, layer_index, unique.data(), (uint32_t)unique.size(), slots.data(),
+                                       bases, external_l2_stride, &external_l1_slots, &n_slots) ||
+                external_l1_slots > n_slots || (n_slots > external_l1_slots && (!bases[3] || !bases[4] || !bases[5]))) {
+                fprintf(stderr, "LLAMADECODE_DS4X_EXPERT_HOOK_FAILED layer=%u rows=%u experts=%zu direct_l2=1\n", layer_index, n_tokens, unique.size());
+                return 0;
+            }
+            external_gate = bases[0]; external_up = bases[1]; external_down = bases[2];
+            for (int k = 0; k < 3; ++k) external_l2[k] = bases[3 + k];
+        } else if (!g_ds4x_expert_hook(g_ds4x_expert_user, layer_index, unique.data(), (uint32_t)unique.size(), slots.data(),
                                 &external_gate, &external_up, &external_down, &n_slots) ||
             !external_gate || !external_up || !external_down || !n_slots) {
             fprintf(stderr, "LLAMADECODE_DS4X_EXPERT_HOOK_FAILED layer=%u rows=%u experts=%zu\n", layer_index, n_tokens, unique.size());
             return 0;
         }
+        const auto hook_t3 = std::chrono::steady_clock::now();
         for (const int32_t slot : slots) if (slot < 0 || (uint32_t)slot >= n_slots) return 0;
         for (int32_t &id : ids) id = slots[(size_t)(std::find(unique.begin(), unique.end(), id) - unique.begin())];
         if (g_ds4x_slot_tensor.bytes < (uint64_t)assignments * sizeof(int32_t)) {
@@ -35740,6 +35825,12 @@ static int routed_moe_launch(
             g_ds4x_slot_tensor.owner = 0; g_ds4x_slot_tensor.device_id = -1;
         }
         if (!ds4_gpu_tensor_write(&g_ds4x_slot_tensor, 0, ids.data(), (uint64_t)assignments * sizeof(int32_t))) return 0;
+        if (n_tokens == 1u) {
+            (void)ds4_gpu_stage_mark(7);
+            const auto hook_t4 = std::chrono::steady_clock::now();
+            auto ms = [](auto a, auto b) { return std::chrono::duration<double, std::milli>(b - a).count(); };
+            ds4_gpu_stage_host(ms(hook_t0, hook_t1), ms(hook_t2, hook_t3), ms(hook_t3, hook_t4));
+        }
         selected = &g_ds4x_slot_tensor;
         n_total_expert = n_slots;
         allow_streaming = 0;
@@ -35955,6 +36046,37 @@ static int routed_moe_launch(
      * CUDA devices use the mathematically equivalent DP4A implementation.
      * SSD streaming presents a compact table containing only the selected
      * experts, together with IDs remapped into that table. */
+    if (mxfp4_path && g_ds4_fp4_packed_experts) {
+        /* Kernel-native packed FP4 experts: only the external expert cache
+         * holds them in slot form (values, then scales); no other source of
+         * these bytes is valid. */
+        if (!external_gate || !external_up || !external_down || n_expert != 6u) {
+            fprintf(stderr, "ds4: packed FP4 experts require the external expert cache and top-6 routing\n");
+            return 0;
+        }
+        static const int reference = [] {
+            const char *v = getenv("DS4_FP4_PACKED_REFERENCE");
+            return v && v[0] == '1' && !v[1];
+        }();
+        const cudaStream_t stream = n_tokens == 1u ? cuda_decode_stream() : (cudaStream_t)0;
+        const auto launch_t0 = std::chrono::steady_clock::now();
+        const uint32_t l1_slots = external_l1_slots ? external_l1_slots : n_total_expert;
+        const int rc = ds4_mmq_mxfp4_packed_moe(
+            external_gate, external_up, external_down, gate_expert_bytes, down_expert_bytes,
+            external_l2[0], external_l2[1], external_l2[2], external_l2_stride[0], external_l2_stride[2], (int)l1_slots,
+            (const float *)x->ptr, (const int32_t *)selected->ptr, (const float *)weights->ptr,
+            (float *)mid->ptr, (float *)out->ptr, (int)expert_mid_dim, (int)expert_in_dim, (int)out_dim,
+            (int)n_tokens, (int)n_total_expert, clamp, reference && n_tokens == 1u, stream);
+        if (n_tokens == 1u) g_stage_launch_ms += std::chrono::duration<double, std::milli>(std::chrono::steady_clock::now() - launch_t0).count();
+        static bool witnessed[40] = {};
+        if (rc == 0 && layer_index < 40u && !witnessed[layer_index]) {
+            witnessed[layer_index] = true;
+            fprintf(stderr, "NATIVEFP4_PACKED_DECODE layer=%u rows=%u layout=flashinfer-sm120-mxfp8-mxfp4-v1 arithmetic=%s runtime_weight_conversion=0\n",
+                    layer_index, n_tokens, reference && n_tokens == 1u ? "canonical-vector-reference" : "packed-q8_1");
+        }
+        if (rc != 0) fprintf(stderr, "ds4: packed FP4 routed-MoE returned %d (layer=%u n_tokens=%u)\n", rc, layer_index, n_tokens);
+        return rc == 0;
+    }
     if (mxfp4_path) {
         if (!cuda_use_mxfp4_mmq()) {
             fprintf(stderr, "ds4: CUDA MXFP4 requires the MMQ backend\n");
@@ -46017,6 +46139,9 @@ extern "C" void ds4_gpu_external_decode_mode(int on) {
         (void)ds4_gpu_drop_external_ranges();
         if (g_ds4x_slot_tensor.ptr) { (void)cudaFree(g_ds4x_slot_tensor.ptr); g_ds4x_slot_tensor = {}; }
     }
+}
+extern "C" void ds4_gpu_set_external_expert_hook_l2(ds4_gpu_external_expert_hook_l2 hook, void *user) {
+    g_ds4x_expert_hook_l2 = hook; g_ds4x_expert_user_l2 = user;
 }
 extern "C" void ds4_gpu_set_external_expert_hook(ds4_gpu_external_expert_hook hook, void *user) {
     g_ds4x_expert_hook = hook; g_ds4x_expert_user = user;
