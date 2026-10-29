@@ -190,3 +190,10 @@ visible to Windows. Read rate depends on the block address: about 24 GB/s in som
 15 GB/s in others, stable across sessions, pauses and file copies. The array's own tools (member
 drive health, temperature, firmware, stripe settings, per-drive benchmark) are the next place to
 look. A uniform 24 GB/s would bring today's two-sweep 100K stream from about 28 s to about 19 s.
+
+**After the owner's power change** (primary NVMe idle timeout 0, NOPPME off, ASPM already off),
+the same pause sweep gives the same results: the fast block reads 23.4-24.6 GB/s and the slow block
+14.5-15.1 GB/s for every pause and keep-alive setting. Occasional first reads of 9.7-10.2 GB/s
+remain process cold start. The producer at 100K gives 35.44 s prompt (TTFT 41.05 s), streaming at
+15.55 GB/s, with a bit-identical frontier. That is inside the earlier control range (32.9-38.1 s),
+so the power change has no measurable effect.
