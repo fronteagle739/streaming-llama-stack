@@ -1,0 +1,30 @@
+{
+  "host_budget_bytes": 134217728,
+  "physical_floor_bytes": 17179869184,
+  "binary_sha256": "ad235dded4d183f14b0b723414ce5a135cc242ac60c029b7dcc712e45a0a942a",
+  "before": {
+    "total": 549755813888,
+    "available": 537451233280,
+    "percent": 2.2,
+    "used": 10062102528,
+    "free": 317133946880,
+    "active": 2904014848,
+    "inactive": 220137029632,
+    "wired": 7158087680
+  },
+  "peak_rss": 1523712,
+  "minimum_available": 537449578496,
+  "violation": null,
+  "returncode": 0,
+  "after": {
+    "total": 549755813888,
+    "available": 538212909056,
+    "percent": 2.1,
+    "used": 9299394560,
+    "free": 530458198016,
+    "active": 3600547840,
+    "inactive": 7572242432,
+    "wired": 5698846720
+  },
+  "result": "{\"files\":2,\"bytes_invalidated\":509513400320,\"windows\":30371,\"payload_reads\":0,\"file_mutations\":0}\n"
+}

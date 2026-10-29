@@ -1,0 +1,15 @@
+{
+  "files": 1312,
+  "bad": [],
+  "manifest_sha256": "ac605ecd1be04dd0051c5ead1399be8265cfa0cbb9dfbed7a79a0d7407c97392",
+  "binary_sha256": "538c47d5ca4b2e05bf0935a0f177b77e8b6b524bb221867b6a9fa765c3670ae7",
+  "paired_build": {
+    "backend": "ds4",
+    "ready": true,
+    "binary": "${STACK_SOURCE}/engines/ds4-mac/ds4-server",
+    "binary_sha256": "538c47d5ca4b2e05bf0935a0f177b77e8b6b524bb221867b6a9fa765c3670ae7",
+    "renderer_sha256": "3bf14a3f715520faf0d4feca5011ac6d732a21304c0f7eb08391f7cc4c31dbca",
+    "source_sha256": "106f35b2850cdb2d95168d735ee1b7c5582f4d055184645e95908125744c2369"
+  },
+  "model_files_read": false
+}

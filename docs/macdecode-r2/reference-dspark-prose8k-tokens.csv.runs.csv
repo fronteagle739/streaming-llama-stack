@@ -1,0 +1,4 @@
+frontier,mode,temp,top_p,top_k,min_p,seed,tokens,eos,first_sel0_ns,last_eval1_ns,decode_tps,gen_tps,prefix_fnv64,snapshot_bytes,logits_fnv64
+8192,speculative,0,1,0,0,1,128,0,0,0,0.0000,34.7729,676274b21242e429,71330356,3a5347730ab54007
+8192,speculative,0,1,0,0,1,128,0,0,0,0.0000,37.7306,676274b21242e429,71330356,3a5347730ab54007
+8192,speculative,0,1,0,0,1,128,0,0,0,0.0000,37.7260,676274b21242e429,71330356,3a5347730ab54007

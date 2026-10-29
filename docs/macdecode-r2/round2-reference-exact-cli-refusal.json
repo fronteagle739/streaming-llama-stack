@@ -1,0 +1,68 @@
+{
+  "build": {
+    "pid": 67249,
+    "host_budget_bytes": 4294967296,
+    "physical_floor_bytes": 17179869184,
+    "peak_rss": 94650368,
+    "minimum_available": 537125879808,
+    "violation": null,
+    "returncode": 0,
+    "binary_sha256": "37b51fe8549623257cdc2c3437af5115908bd333f89783f49280705fc02ebc32"
+  },
+  "results": [
+    {
+      "tag": "prose8k",
+      "command": [
+        "${UPSTREAM_SOURCE}/ds4-bench",
+        "--metal",
+        "--exact",
+        "-m",
+        "${MODEL_ROOT}/deepseek-ai/DeepSeek-V4.1-Flash-1017-ds4-MXFP4-requant/DeepSeek-V4.1-Flash-1017-MXFP4-requant.gguf",
+        "--mtp-model",
+        "${MODEL_ROOT}/deepseek-ai/DeepSeek-V4.1-Flash-1017-ds4-MXFP4-requant/DeepSeek-V4.1-Flash-1017-DSpark-MXFP4-requant.gguf",
+        "--macdecode-resident-drafter",
+        "--prompt-file",
+        "${TASK_ROOT}/promessi_sposi.txt",
+        "--ctx-start",
+        "8192",
+        "--ctx-max",
+        "8192",
+        "--ctx-alloc",
+        "393216",
+        "--prefill-chunk",
+        "8192",
+        "--gen-tokens",
+        "128",
+        "--macdecode-repeat",
+        "3",
+        "--csv",
+        "${TASK_ROOT}/reference-exact-prose8k.csv",
+        "--token-csv",
+        "${TASK_ROOT}/reference-exact-prose8k-tokens.csv"
+      ],
+      "host_budget_bytes": 429496729600,
+      "physical_floor_bytes": 17179869184,
+      "baseline": {
+        "available": 539249885184,
+        "wired": 5744967680,
+        "compressed": 953253888,
+        "swapins": 0,
+        "swapouts": 0
+      },
+      "peak_rss": 0,
+      "peak_observed_physical_impact": 0,
+      "minimum_available": 539249885184,
+      "violation": null,
+      "pid": 71064,
+      "returncode": 2,
+      "final": {
+        "available": 539251228672,
+        "wired": 5744967680,
+        "compressed": 953253888,
+        "swapins": 0,
+        "swapouts": 0
+      }
+    }
+  ],
+  "stderr": "ds4-bench: unknown option: --exact\nds4-bench\nMeasure prefill, decode, context growth, and KV-cache size across repeatable context frontiers.\n\nUsage: ds4-bench (--prompt-file FILE | --chat-prompt-file FILE) [options]\n\nModel And Runtime\n  -m, --model FILE               GGUF model path. Default: ds4flash.gguf\n  --metal | --cuda | --cpu       Select the backend explicitly.\n  --backend NAME                 Backend name: metal, cuda, or cpu.\n  --gpu-vram N[,N,...]|auto      CUDA VRAM budgets per device, in GiB, or auto-detect free VRAM.\n  --gpu-devices N[,N,...]        CUDA device indices used by multi-GPU placement.\n  --cuda-tensor-parallel         Enable the paired DeepSeek tensor/expert path on an even multi-GPU CUDA placement.\n  -t, --threads N                CPU helper threads for host-side/reference work.\n  --power N                      GPU duty-cycle target, 1..100. Default: 100\n  --ssd-streaming                Metal/CUDA/ROCm: opt in to SSD-backed model streaming instead of full residency.\n  --ssd-streaming-cold           SSD streaming: skip default popularity-based expert-cache preload.\n  --ssd-streaming-cache-experts N|NGB\n      SSD streaming cache target. N requests dynamic expert slots; NGB also reserves two full prefill layers. Either may be reduced to fit the model, graph, context, and backend working set.\n  --ssd-streaming-full-layers N  GLM Metal streaming: keep the first N routed layers fully resident. Default: auto from NGB expert budget; use 0 to disable.\n  --ssd-streaming-preload-experts N\n      SSD streaming: upfront popularity preload count. DeepSeek auto-seeds by default; GLM demand-fills unless N is explicit.\n  --simulate-used-memory NGB     Diagnostic: lock N GiB before model load to simulate a smaller-memory machine.\n  --prefill-chunk N              Graph prefill chunk size. Default: CUDA TP 2048; PRO long prompts 8192; others 4096.\n\nBenchmark Input\n  --prompt-file FILE             Raw benchmark text; token sequence is sliced at each frontier.\n  --chat-prompt-file FILE        Render FILE as one no-thinking chat user message.\n  -sys, --system TEXT            System prompt used only with --chat-prompt-file.\n\nBenchmark Sweep\n  --ctx-start N                  First measured frontier. Default: 2048\n  --ctx-max N                    Last measured frontier. Default: 32768\n  --ctx-alloc N                  Allocated context. Default: ctx-max + gen-tokens + 1\n  --step-mul F                   Multiplicative step. Default: 1\n  --step-incr N                  Linear step when --step-mul is 1. Default: 2048\n  --gen-tokens N                 Greedy decode tokens per frontier. 0 for pure prefill. Default: 128\n  --teacher-forced-decode        Decode the following prompt tokens instead of each predicted argmax.\n  --temp F                       Sample with temperature F (with --top-p/--top-k/--min-p/--seed); EOS ends a run.\n  --top-p F, --top-k N, --min-p F\n      Sampler settings with --temp. Defaults: 1, 0, 0\n  --seed N                       Sampler RNG seed, reset at each frontier. Default: 1\n  --token-csv PATH               Per-token timings; per-frontier rows with prefix and logit digests go to PATH.runs.csv (with --jobs: per-job rows and counters to PATH.jobs.csv).\n  --jobs FILE                    Resident job runner: save/load/run/quit lines (see ds4_bench.c); needs --token-csv.\n  --csv FILE                     Write CSV there instead of stdout.\n  --dump-frontier-logits-dir DIR Write one full-logit JSON file per frontier.\n\nMore Info\n    Runtime full info:         --help runtime\n    Distributed inference:     --help distributed\n    Benchmark sweep:           --help benchmark\n\nExamples\n  csv                            ./ds4-bench --prompt-file long.txt --ctx-max 32768 --csv speed.csv\n  prefill only                   ./ds4-bench --prompt-file long.txt --gen-tokens 0\n\n"
+}

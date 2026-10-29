@@ -1,0 +1,30 @@
+{
+  "command": [
+    "${STUDIO_ROOT}/streaming-studio/.venv312/bin/python",
+    "-B",
+    "${TASK_ROOT}/receiver_run.py"
+  ],
+  "host_budget_bytes": 429496729600,
+  "physical_floor_bytes": 17179869184,
+  "baseline": {
+    "available": 539954102272,
+    "wired": 5656707072,
+    "compressed": 948027392,
+    "swapins": 0,
+    "swapouts": 0
+  },
+  "pid": 72146,
+  "peak_rss": 121520128,
+  "minimum_available": 203397545984,
+  "violation": null,
+  "results": [],
+  "error": "KeyboardInterrupt('termination requested')",
+  "returncode": -2,
+  "final": {
+    "available": 541174792192,
+    "wired": 5653987328,
+    "compressed": 1433403392,
+    "swapins": 0,
+    "swapouts": 0
+  }
+}

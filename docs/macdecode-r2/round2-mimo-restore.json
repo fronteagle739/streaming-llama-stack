@@ -1,0 +1,180 @@
+{
+  "prior_id": "2fe89871d50b",
+  "host_budget_bytes": 493921239040,
+  "physical_floor_bytes": 17179869184,
+  "baseline": {
+    "available": 540094939136,
+    "wired": 5687427072,
+    "compressed": 1297809408,
+    "swapins": 0,
+    "swapouts": 0
+  },
+  "minimum_available": 62253154304,
+  "peak_physical_impact": 478355947520,
+  "violation": null,
+  "switch_job": {
+    "id": "365ad677ee5b",
+    "kind": "preset_switch",
+    "status": "running",
+    "created": 1793303566.388622,
+    "started": 1793303566.388719,
+    "finished": null,
+    "args": {},
+    "progress": {
+      "type": "switch_step",
+      "step": 2,
+      "total": 6,
+      "text": "clearing any local LLM server state so the RTX stays free"
+    },
+    "log_tail": [],
+    "result": null,
+    "error": null
+  },
+  "active": {
+    "preset": {
+      "id": "2fe89871d50b",
+      "name": "MiMo V2.6 Pro MOPD (Mac ds4, SSD streaming)",
+      "mode": "remote",
+      "rtx": {
+        "model_path": "",
+        "shape": "cosmos-nano",
+        "ctx": 8192,
+        "batch": 2048,
+        "ubatch": 512,
+        "ngl": 99,
+        "bits": 4,
+        "crossover": 1,
+        "backend": "none",
+        "weight_stream": false,
+        "prefetch": true,
+        "jinja": "{% for m in messages %}<|im_start|>{{ m.role }}\n{{ m.content }}<|im_end|>\n{% endfor %}<|im_start|>assistant\n",
+        "external_api_token": "stream",
+        "stream_engine": "",
+        "arch": "",
+        "attn": "gqa",
+        "remote_layers": 0,
+        "fa": "off",
+        "sparse_fa": "on",
+        "ctk": "f16",
+        "ctv": "f16",
+        "wf_gpu_bufs": 2,
+        "mode": "remote"
+      },
+      "mac": {
+        "model_path": "${USER_ROOT}/models/XiaomiMiMo/MiMo-V2.6-Pro-MOPD",
+        "host": "${MAC_IPV4}",
+        "ctx": 8192,
+        "backend": "ds4",
+        "batch": 512,
+        "ubatch": 512,
+        "ngl": 0,
+        "jinja": "{% for m in messages %}<|im_start|>{{ m.role }}\n{{ m.content }}<|im_end|>\n{% endfor %}<|im_start|>assistant\n",
+        "python": "${USER_ROOT}/Documents/GitHub/streaming-studio/.venv312/bin/python",
+        "kv_port": 9100,
+        "token_port": 9101,
+        "max_tokens": 128,
+        "fa": "inherit",
+        "ctk": "f16",
+        "ctv": "f16",
+        "port": 8080,
+        "temperature": 1,
+        "min_p": 0,
+        "rep_pen": 1,
+        "ds4_binary": "${STUDIO_ROOT}/ds4-mimo-20261029-71e942ec1707/ds4-server",
+        "ds4_chdir": "${STUDIO_ROOT}/ds4-mimo-20261029-71e942ec1707",
+        "ds4_bind_address": "${MAC_IPV4}",
+        "ready_timeout": 1200,
+        "ssd_streaming": true,
+        "ssd_streaming_cache_experts": "416GiB",
+        "ds4_env": {
+          "DS4_MIMO_HOST_CAP_GIB": "460",
+          "DS4_MIMO_FREQUENCY": "1",
+          "DS4_MIMO_BIAS": "0",
+          "DS4_MIMO_WARP": "0",
+          "DS4_MIMO_FUSED": "1",
+          "DS4_MIMO_DIRECT_EXPERT": "1",
+          "DS4_MIMO_GRACEFUL_STOP": "1",
+          "DS4_MIMO_FP8_HALF": "1",
+          "DS4_MIMO_ASYNC_ROUTER": "1",
+          "DS4_MIMO_KEEPWARM": "1",
+          "DS4_MIMO_NATIVE_ORDER_ATTENTION": "1",
+          "DS4_MIMO_PREFILL_CHUNK": "0",
+          "DS4_MIMO_STAGED_NORM": "1",
+          "DS4_MIMO_NATIVE_FUSED_PREP": "1",
+          "DS4_MIMO_FP8_PREFETCH": "1",
+          "DS4_MIMO_DOWN_FULL": "1",
+          "DS4_MIMO_DOWN_ONE": "1",
+          "DS4_MIMO_ATTN_HEADS": "4",
+          "DS4_MIMO_SUBMIT_LAYERS": "8",
+          "DS4_MIMO_PYTHON": "${STUDIO_ROOT}/streaming-studio/.venv312/bin/python",
+          "DS4_MIMO_STUDIO_ROOT": "${STUDIO_ROOT}/streaming-studio",
+          "DS4_MIMO_RECLAIM_MODELS": "[[\"${USER_ROOT}/big_models/MiniMax-H3-FL2VA-text_encoder\",14]]",
+          "DS4_MIMO_RESTORE_MATCH": "MiniMax-H3",
+          "DS4_MIMO_RESTORE_READY_GIB": "60",
+          "DS4_MIMO_RESTORE_CAP_GIB": "72"
+        },
+        "layer_split": false,
+        "distributed": false,
+        "ssh_launch": 0,
+        "top_p": 0.95
+      },
+      "created": 1792663138.9537542,
+      "tool_call_format": "native",
+      "rev": 34
+    },
+    "server_live": true,
+    "server_model": "${USER_ROOT}/models/XiaomiMiMo/MiMo-V2.6-Pro-MOPD",
+    "endpoint": "http://${MAC_IPV4}:8080",
+    "mac_live": true,
+    "recovering": false,
+    "last_switch_failure": null,
+    "switch_in_flight": null
+  },
+  "preset_unchanged": true,
+  "models": {
+    "object": "list",
+    "data": [
+      {
+        "id": "${USER_ROOT}/models/XiaomiMiMo/MiMo-V2.6-Pro-MOPD",
+        "object": "model",
+        "owned_by": "local"
+      }
+    ]
+  },
+  "probe": {
+    "id": "chatcmpl-573de0a9fc83401a992a717dfb0a55d7",
+    "object": "chat.completion",
+    "model": "${USER_ROOT}/models/XiaomiMiMo/MiMo-V2.6-Pro-MOPD",
+    "choices": [
+      {
+        "index": 0,
+        "message": {
+          "role": "assistant",
+          "content": "READY"
+        },
+        "finish_reason": "stop"
+      }
+    ],
+    "usage": {
+      "prompt_tokens": 13,
+      "completion_tokens": 1,
+      "total_tokens": 14
+    },
+    "timings": {
+      "prompt_n": 13,
+      "prompt_ms": 18007.15650001075,
+      "predicted_n": 1,
+      "predicted_ms": 714.5428330404684,
+      "predicted_per_second": 1.3994962285813937,
+      "prompt_per_second": 0.7219351928213784
+    }
+  },
+  "verified": true,
+  "final": {
+    "available": 62271569920,
+    "wired": 484041506816,
+    "compressed": 1294630912,
+    "swapins": 0,
+    "swapouts": 0
+  }
+}

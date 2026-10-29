@@ -601,5 +601,82 @@
       "mean_tps": 51.735
     }
   },
-  "reference-exact": {}
+  "reference-exact": {
+    "prose8k": {
+      "rows": [
+        {
+          "ctx_tokens": "8192",
+          "prefill_tokens": "8192",
+          "prefill_tps": "378.10",
+          "gen_tokens": "128",
+          "gen_tps": "38.32",
+          "gen_first_ms": "26.392",
+          "gen_steady_tokens": "127",
+          "gen_steady_tps": "38.36",
+          "kvcache_bytes": "71330356"
+        },
+        {
+          "ctx_tokens": "8192",
+          "prefill_tokens": "8192",
+          "prefill_tps": "378.10",
+          "gen_tokens": "128",
+          "gen_tps": "37.70",
+          "gen_first_ms": "67.167",
+          "gen_steady_tokens": "127",
+          "gen_steady_tps": "38.20",
+          "kvcache_bytes": "71330356"
+        },
+        {
+          "ctx_tokens": "8192",
+          "prefill_tokens": "8192",
+          "prefill_tps": "378.10",
+          "gen_tokens": "128",
+          "gen_tps": "38.05",
+          "gen_first_ms": "25.892",
+          "gen_steady_tokens": "127",
+          "gen_steady_tps": "38.09",
+          "kvcache_bytes": "71330356"
+        }
+      ],
+      "mean_tps": 38.145
+    },
+    "prose131k": {
+      "rows": [
+        {
+          "ctx_tokens": "131072",
+          "prefill_tokens": "131072",
+          "prefill_tps": "446.24",
+          "gen_tokens": "128",
+          "gen_tps": "31.90",
+          "gen_first_ms": "34.322",
+          "gen_steady_tokens": "127",
+          "gen_steady_tps": "31.95",
+          "kvcache_bytes": "858253876"
+        },
+        {
+          "ctx_tokens": "131072",
+          "prefill_tokens": "131072",
+          "prefill_tps": "446.24",
+          "gen_tokens": "128",
+          "gen_tps": "31.89",
+          "gen_first_ms": "31.606",
+          "gen_steady_tokens": "127",
+          "gen_steady_tps": "31.92",
+          "kvcache_bytes": "858253876"
+        },
+        {
+          "ctx_tokens": "131072",
+          "prefill_tokens": "131072",
+          "prefill_tps": "446.24",
+          "gen_tokens": "128",
+          "gen_tps": "31.95",
+          "gen_first_ms": "31.087",
+          "gen_steady_tokens": "127",
+          "gen_steady_tps": "31.98",
+          "kvcache_bytes": "858253876"
+        }
+      ],
+      "mean_tps": 31.950000000000003
+    }
+  }
 }

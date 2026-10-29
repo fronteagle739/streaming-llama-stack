@@ -1,0 +1,112 @@
+{
+  "client_host_budget_bytes": 268435456,
+  "client_floor_bytes": 1073741824,
+  "error": "RuntimeError('HTTP Error 409: Conflict {\"error\": \"Guarded job failed: {\\\\n  \\\\\"exit_code\\\\\": 1,\\\\n  \\\\\"reason\\\\\": null,\\\\n  \\\\\"peak_tree_rss\\\\\": 317418438656,\\\\n  \\\\\"min_available\\\\\": 222365073408,\\\\n  \\\\\"elapsed_s\\\\\": 77.77982429094845,\\\\n  \\\\\"started_monotonic\\\\\": 375303.451052625,\\\\n  \\\\\"no_progress_window_s\\\\\": null,\\\\n  \\\\\"gpu_window_permission_errors\\\\\": 0,\\\\n  \\\\\"gpu_window_stall_seconds\\\\\": null,\\\\n  \\\\\"host_budget_gib\\\\\": 400,\\\\n  \\\\\"floor_gib\\\\\": 16,\\\\n  \\\\\"job_commit_gib\\\\\": 400,\\\\n  \\\\\"child_pid\\\\\": 74475,\\\\n  \\\\\"paging_before\\\\\": {\\\\n    \\\\\"time_ns\\\\\": 1793303327431516000,\\\\n    \\\\\"available_physical_bytes\\\\\": 474250870784,\\\\n    \\\\\"scope\\\\\": \\\\\"system-wide; other processes may contribute\\\\\",\\\\n    \\\\\"vm_stat\\\\\": {\\\\n      \\\\\"Pages free\\\\\": 20624144,\\\\n      \\\\\"Pages active\\\\\": 4115953,\\\\n      \\\\\"Pages inactive\\\\\": 6251787,\\\\n      \\\\\"Pages speculative\\\\\": 2069989,\\\\n      \\\\\"Pages throttled\\\\\": 0,\\\\n      \\\\\"Pages wired down\\\\\": 344416,\\\\n      \\\\\"Pages purgeable\\\\\": 10,\\\\n      \\\\\"\\\\\\\\\\\\\"Translation faults\\\\\\\\\\\\\"\\\\\": 3974660343,\\\\n      \\\\\"Pages copy-on-write\\\\\": 80829596,\\\\n      \\\\\"Pages zero filled\\\\\": 1960918036,\\\\n      \\\\\"Pages reactivated\\\\\": 140047090,\\\\n      \\\\\"Pages purged\\\\\": 4104055,\\\\n      \\\\\"File-backed pages\\\\\": 12411477,\\\\n      \\\\\"Anonymous pages\\\\\": 26252,\\\\n      \\\\\"Pages stored in compressor\\\\\": 294141,\\\\n      \\\\\"Pages occupied by compressor\\\\\": 90321,\\\\n      \\\\\"Decompressions\\\\\": 738318,\\\\n      \\\\\"Compressions\\\\\": 1071432,\\\\n      \\\\\"Pageins\\\\\": 805683463,\\\\n      \\\\\"Pageouts\\\\\": 4095,\\\\n      \\\\\"Swapins\\\\\": 0,\\\\n      \\\\\"Swapouts\\\\\": 0\\\\n    },\\\\n    \\\\\"page_size\\\\\": 16384\\\\n  },\\\\n  \\\\\"paging_after\\\\\": {\\\\n    \\\\\"time_ns\\\\\": 1793303405211481000,\\\\n    \\\\\"available_physical_bytes\\\\\": 496134668288,\\\\n    \\\\\"scope\\\\\": \\\\\"system-wide; other processes may contribute\\\\\",\\\\n    \\\\\"vm_stat\\\\\": {\\\\n      \\\\\"Pages free\\\\\": 19455388,\\\\n      \\\\\"Pages active\\\\\": 169311,\\\\n      \\\\\"Pages inactive\\\\\": 13433643,\\\\n      \\\\\"Pages speculative\\\\\": 5781,\\\\n      \\\\\"Pages throttled\\\\\": 0,\\\\n      \\\\\"Pages wired down\\\\\": 344329,\\\\n      \\\\\"Pages purgeable\\\\\": 8706,\\\\n      \\\\\"\\\\\\\\\\\\\"Translation faults\\\\\\\\\\\\\"\\\\\": 4013914512,\\\\n      \\\\\"Pages copy-on-write\\\\\": 80914292,\\\\n      \\\\\"Pages zero filled\\\\\": 1980445843,\\\\n      \\\\\"Pages reactivated\\\\\": 140077360,\\\\n      \\\\\"Pages purged\\\\\": 4104769,\\\\n      \\\\\"File-backed pages\\\\\": 13566377,\\\\n      \\\\\"Anonymous pages\\\\\": 42358,\\\\n      \\\\\"Pages stored in compressor\\\\\": 286372,\\\\n      \\\\\"Pages occupied by compressor\\\\\": 88200,\\\\n      \\\\\"Decompressions\\\\\": 747011,\\\\n      \\\\\"Compressions\\\\\": 1071432,\\\\n      \\\\\"Pageins\\\\\": 815796659,\\\\n      \\\\\"Pageouts\\\\\": 4110,\\\\n      \\\\\"Swapins\\\\\": 0,\\\\n      \\\\\"Swapouts\\\\\": 0\\\\n    },\\\\n    \\\\\"page_size\\\\\": 16384\\\\n  },\\\\n  \\\\\"system_pagefile_pressure\\\\\": {\\\\n    \\\\\"initial_used_bytes\\\\\": 0,\\\\n    \\\\\"maximum_growth_bytes\\\\\": 0,\\\\n    \\\\\"kill_above_bytes\\\\\": 268435456,\\\\n    \\\\\"warning\\\\\": null,\\\\n    \\\\\"scope\\\\\": \\\\\"system-wide; not per-process attribution\\\\\"\\\\n  },\\\\n  \\\\\"process_memory_counters\\\\\": [\\\\n    {\\\\n      \\\\\"pid\\\\\": 74475,\\\\n      \\\\\"created\\\\\": 1793303327.433844,\\\\n      \\\\\"name\\\\\": \\\\\"ds4-server\\\\\",\\\\n      \\\\\"first_page_faults\\\\\": null,\\\\n      \\\\\"last_page_faults\\\\\": null,\\\\n      \\\\\"peak_private_commit_bytes\\\\\": 0,\\\\n      \\\\\"peak_working_set_bytes\\\\\": 317418438656\\\\n    }\\\\n  ],\\\\n  \\\\\"paging_warnings\\\\\": [\\\\n    \\\\\"[training-memory] WARNING: UNAVAILABLE: pagefile-specific hard-fault events are not available on this platform\\\\\"\\\\n  ],\\\\n  \\\\\"global_paging_growth\\\\\": 0,\\\\n  \\\\\"owned_paged_bytes\\\\\": 0,\\\\n  \\\\\"paged_processes\\\\\": [],\\\\n  \\\\\"paging_scanned_pages\\\\\": 0,\\\\n  \\\\\"paging_completed_scans\\\\\": 0,\\\\n  \\\\\"paging_attribution\\\\\": \\\\\"UNAVAILABLE: Darwin region counter includes compression; physical footprint and global disk-swap guard active\\\\\",\\\\n  \\\\\"paging_policy\\\\\": {\\\\n    \\\\\"owned_paging_limit_bytes\\\\\": 67108864,\\\\n    \\\\\"owned_paging_baseline\\\\\": \\\\\"zero at gated job launch\\\\\",\\\\n    \\\\\"peak_owned_paged_bytes\\\\\": 0,\\\\n    \\\\\"pagefile_hard_fault_rate\\\\\": null,\\\\n    \\\\\"pagefile_hard_fault_attribution\\\\\": \\\\\"UNAVAILABLE: pagefile-specific hard-fault events are not available on this platform\\\\\",\\\\n    \\\\\"pagefile_hard_fault_limit_per_second\\\\\": 100,\\\\n    \\\\\"pagefile_hard_fault_duration_seconds\\\\\": 5,\\\\n    \\\\\"scan_pages\\\\\": 0,\\\\n    \\\\\"last_paged_processes\\\\\": []\\\\n  },\\\\n  \\\\\"cleanup\\\\\": {\\\\n    \\\\\"confirmed\\\\\": true,\\\\n    \\\\\"surviving_owned_pids\\\\\": [],\\\\n    \\\\\"errors\\\\\": [],\\\\n    \\\\\"identities\\\\\": [\\\\n      {\\\\n        \\\\\"pid\\\\\": 74475,\\\\n        \\\\\"created\\\\\": 1793303327.433844,\\\\n        \\\\\"executable\\\\\": \\\\\"${STACK_SOURCE}/engines/ds4-mac/ds4-server\\\\\"\\\\n      }\\\\n    ],\\\\n    \\\\\"retired_identities\\\\\": [],\\\\n    \\\\\"forced_kill\\\\\": false,\\\\n    \\\\\"force_reason\\\\\": null,\\\\n    \\\\\"cooperative\\\\\": true,\\\\n    \\\\\"cooperative_request_errors\\\\\": [],\\\\n    \\\\\"shutdown_elapsed_s\\\\\": 0.00018320902017876506,\\\\n    \\\\\"shutdown_idle_s\\\\\": 0.00018387503223493695\\\\n  },\\\\n  \\\\\"release_allowed\\\\\": true,\\\\n  \\\\\"cleanup_confirmed\\\\\": true,\\\\n  \\\\\"reservation_samples\\\\\": [],\\\\n  \\\\\"paging_interpretation\\\\\": \\\\\"Process faults include soft and hard faults. Private commit/pagefile usage is not disk I/O. System counters include other processes; these counters alone do not prove core/KV residency.\\\\\",\\\\n  \\\\\"paging_telemetry_closed\\\\\": true\\\\n}\\\\n967296/33593344000 bytes\\\\nds4: owned wired model read 8589934592/33593344000 bytes\\\\nds4: owned wired model read 12884901888/33593344000 bytes\\\\nds4: owned wired model read 17179869184/33593344000 bytes\\\\nds4: owned wired model read 21474836480/33593344000 bytes\\\\nds4: owned wired model read 25769803776/33593344000 bytes\\\\nds4: owned wired model read 30064771072/33593344000 bytes\\\\nds4: owned wired model read 33593344000/33593344000 bytes\\\\nds4: owned anonymous wired Metal buffer=33593344000 live=308471250944 source=file-read\\\\nds4: Metal model views created in 64767.547 ms, residency requested in 1684.493 ms, warmup 7.513 ms (mapped 285001.05 MiB from offset 5.56 MiB)\\\\nds4: Metal mapped mmaped model as 5 overlapping shared buffers\\\\nds4: owned wired model read 4294967296/7904247808 bytes\\\\nds4: owned wired model read 7904247808/7904247808 bytes\\\\nds4: owned anonymous wired Metal buffer=7904247808 live=316375498752 source=file-read\\\\nds4: Metal model views created in 2181.920 ms, residency requested in 1741.329 ms, warmup 1.311 ms (mapped 7538.08 MiB from offset 0.02 MiB)\\\\nds4: Metal mapped mmaped model as 6 overlapping shared buffers\\\\nds4: owned wired model read 970555392/970555392 bytes\\\\nds4: owned anonymous wired Metal buffer=970555392 live=317346054144 source=file-read\\\\nds4: Metal model views created in 258.017 ms, residency requested in 2206.342 ms, warmup 1.440 ms (mapped 925.59 MiB from offset 0.02 MiB)\\\\nds4: Metal mapped mmaped model as 7 overlapping shared buffers\\\\nds4: metal backend initialized for graph diagnostics\\\\nds4: memory: KV 5.97 GiB (raw 0.01 + compressed 5.96) + buffers 12.41 GiB + resident model 278.32 GiB = 296.70 GiB planned\\\\nds4: memory detail: ctx=1000001 prefill_cap=8192 raw_kv_rows=128 compressed_kv_rows=1000002 backend=metal\\\\n1029 19:50:00 ds4-server: context buffers 18819.07 MiB (ctx=1000001, backend=metal, prefill_chunk=8192, raw_kv_rows=128, compressed_kv_rows=1000002)\\\\n1029 19:50:00 ds4-server: native frontier: native session configuration/model/build identity rejected\\\\n\"}')",
+  "paired_recall": null,
+  "paired_decode_tps": null,
+  "tunnel_pid": 16692,
+  "health": {
+    "ready": true,
+    "backend": "ds4",
+    "receiver_sha256": "538c47d5ca4b2e05bf0935a0f177b77e8b6b524bb221867b6a9fa765c3670ae7",
+    "paired_producer_sha256": null,
+    "paired_tier": null,
+    "yoco_state_version": 1,
+    "yoco_state_versions": [
+      1,
+      2
+    ],
+    "paired_yoco_keep": 0,
+    "paired_yoco_state_version": 0
+  },
+  "lease": "44a65b0df15244a79308e14cac7a4631",
+  "pair": {
+    "producer_sha256": "27e984cd559529c8cfe2fc78100ea925b20f8b628ee86a8e6f7fff57120a1259",
+    "producer_source_revision": "2cdfc14a23e5eb7e21f2cd87e2570dacba802c3b",
+    "producer_ipv4": "127.0.0.1",
+    "broker_port": 18090,
+    "tier": "ultra",
+    "yoco_keep": 2541,
+    "yoco_state_version": 2,
+    "receiver_sha256": "538c47d5ca4b2e05bf0935a0f177b77e8b6b524bb221867b6a9fa765c3670ae7",
+    "status": "candidate"
+  },
+  "native": {
+    "id": "chatcmpl-0046149e3c9c4d34bfa14983",
+    "object": "chat.completion",
+    "created": 1793303320,
+    "model": "deepseek-v4.1-flash",
+    "choices": [
+      {
+        "index": 0,
+        "message": {
+          "role": "assistant",
+          "content": "",
+          "reasoning_content": "We need answer exactly READY no explanation"
+        },
+        "finish_reason": "length"
+      }
+    ],
+    "usage": {
+      "prompt_tokens": 39,
+      "completion_tokens": 8,
+      "total_tokens": 47,
+      "prompt_tokens_details": {
+        "cached_tokens": 0,
+        "cache_write_tokens": 39
+      }
+    }
+  },
+  "last_http_refusal": {
+    "endpoint": "/pair/qualification",
+    "status": 409,
+    "detail": "{\"error\": \"Guarded job failed: {\\n  \\\"exit_code\\\": 1,\\n  \\\"reason\\\": null,\\n  \\\"peak_tree_rss\\\": 317418438656,\\n  \\\"min_available\\\": 222365073408,\\n  \\\"elapsed_s\\\": 77.77982429094845,\\n  \\\"started_monotonic\\\": 375303.451052625,\\n  \\\"no_progress_window_s\\\": null,\\n  \\\"gpu_window_permission_errors\\\": 0,\\n  \\\"gpu_window_stall_seconds\\\": null,\\n  \\\"host_budget_gib\\\": 400,\\n  \\\"floor_gib\\\": 16,\\n  \\\"job_commit_gib\\\": 400,\\n  \\\"child_pid\\\": 74475,\\n  \\\"paging_before\\\": {\\n    \\\"time_ns\\\": 1793303327431516000,\\n    \\\"available_physical_bytes\\\": 474250870784,\\n    \\\"scope\\\": \\\"system-wide; other processes may contribute\\\",\\n    \\\"vm_stat\\\": {\\n      \\\"Pages free\\\": 20624144,\\n      \\\"Pages active\\\": 4115953,\\n      \\\"Pages inactive\\\": 6251787,\\n      \\\"Pages speculative\\\": 2069989,\\n      \\\"Pages throttled\\\": 0,\\n      \\\"Pages wired down\\\": 344416,\\n      \\\"Pages purgeable\\\": 10,\\n      \\\"\\\\\\\"Translation faults\\\\\\\"\\\": 3974660343,\\n      \\\"Pages copy-on-write\\\": 80829596,\\n      \\\"Pages zero filled\\\": 1960918036,\\n      \\\"Pages reactivated\\\": 140047090,\\n      \\\"Pages purged\\\": 4104055,\\n      \\\"File-backed pages\\\": 12411477,\\n      \\\"Anonymous pages\\\": 26252,\\n      \\\"Pages stored in compressor\\\": 294141,\\n      \\\"Pages occupied by compressor\\\": 90321,\\n      \\\"Decompressions\\\": 738318,\\n      \\\"Compressions\\\": 1071432,\\n      \\\"Pageins\\\": 805683463,\\n      \\\"Pageouts\\\": 4095,\\n      \\\"Swapins\\\": 0,\\n      \\\"Swapouts\\\": 0\\n    },\\n    \\\"page_size\\\": 16384\\n  },\\n  \\\"paging_after\\\": {\\n    \\\"time_ns\\\": 1793303405211481000,\\n    \\\"available_physical_bytes\\\": 496134668288,\\n    \\\"scope\\\": \\\"system-wide; other processes may contribute\\\",\\n    \\\"vm_stat\\\": {\\n      \\\"Pages free\\\": 19455388,\\n      \\\"Pages active\\\": 169311,\\n      \\\"Pages inactive\\\": 13433643,\\n      \\\"Pages speculative\\\": 5781,\\n      \\\"Pages throttled\\\": 0,\\n      \\\"Pages wired down\\\": 344329,\\n      \\\"Pages purgeable\\\": 8706,\\n      \\\"\\\\\\\"Translation faults\\\\\\\"\\\": 4013914512,\\n      \\\"Pages copy-on-write\\\": 80914292,\\n      \\\"Pages zero filled\\\": 1980445843,\\n      \\\"Pages reactivated\\\": 140077360,\\n      \\\"Pages purged\\\": 4104769,\\n      \\\"File-backed pages\\\": 13566377,\\n      \\\"Anonymous pages\\\": 42358,\\n      \\\"Pages stored in compressor\\\": 286372,\\n      \\\"Pages occupied by compressor\\\": 88200,\\n      \\\"Decompressions\\\": 747011,\\n      \\\"Compressions\\\": 1071432,\\n      \\\"Pageins\\\": 815796659,\\n      \\\"Pageouts\\\": 4110,\\n      \\\"Swapins\\\": 0,\\n      \\\"Swapouts\\\": 0\\n    },\\n    \\\"page_size\\\": 16384\\n  },\\n  \\\"system_pagefile_pressure\\\": {\\n    \\\"initial_used_bytes\\\": 0,\\n    \\\"maximum_growth_bytes\\\": 0,\\n    \\\"kill_above_bytes\\\": 268435456,\\n    \\\"warning\\\": null,\\n    \\\"scope\\\": \\\"system-wide; not per-process attribution\\\"\\n  },\\n  \\\"process_memory_counters\\\": [\\n    {\\n      \\\"pid\\\": 74475,\\n      \\\"created\\\": 1793303327.433844,\\n      \\\"name\\\": \\\"ds4-server\\\",\\n      \\\"first_page_faults\\\": null,\\n      \\\"last_page_faults\\\": null,\\n      \\\"peak_private_commit_bytes\\\": 0,\\n      \\\"peak_working_set_bytes\\\": 317418438656\\n    }\\n  ],\\n  \\\"paging_warnings\\\": [\\n    \\\"[training-memory] WARNING: UNAVAILABLE: pagefile-specific hard-fault events are not available on this platform\\\"\\n  ],\\n  \\\"global_paging_growth\\\": 0,\\n  \\\"owned_paged_bytes\\\": 0,\\n  \\\"paged_processes\\\": [],\\n  \\\"paging_scanned_pages\\\": 0,\\n  \\\"paging_completed_scans\\\": 0,\\n  \\\"paging_attribution\\\": \\\"UNAVAILABLE: Darwin region counter includes compression; physical footprint and global disk-swap guard active\\\",\\n  \\\"paging_policy\\\": {\\n    \\\"owned_paging_limit_bytes\\\": 67108864,\\n    \\\"owned_paging_baseline\\\": \\\"zero at gated job launch\\\",\\n    \\\"peak_owned_paged_bytes\\\": 0,\\n    \\\"pagefile_hard_fault_rate\\\": null,\\n    \\\"pagefile_hard_fault_attribution\\\": \\\"UNAVAILABLE: pagefile-specific hard-fault events are not available on this platform\\\",\\n    \\\"pagefile_hard_fault_limit_per_second\\\": 100,\\n    \\\"pagefile_hard_fault_duration_seconds\\\": 5,\\n    \\\"scan_pages\\\": 0,\\n    \\\"last_paged_processes\\\": []\\n  },\\n  \\\"cleanup\\\": {\\n    \\\"confirmed\\\": true,\\n    \\\"surviving_owned_pids\\\": [],\\n    \\\"errors\\\": [],\\n    \\\"identities\\\": [\\n      {\\n        \\\"pid\\\": 74475,\\n        \\\"created\\\": 1793303327.433844,\\n        \\\"executable\\\": \\\"${STACK_SOURCE}/engines/ds4-mac/ds4-server\\\"\\n      }\\n    ],\\n    \\\"retired_identities\\\": [],\\n    \\\"forced_kill\\\": false,\\n    \\\"force_reason\\\": null,\\n    \\\"cooperative\\\": true,\\n    \\\"cooperative_request_errors\\\": [],\\n    \\\"shutdown_elapsed_s\\\": 0.00018320902017876506,\\n    \\\"shutdown_idle_s\\\": 0.00018387503223493695\\n  },\\n  \\\"release_allowed\\\": true,\\n  \\\"cleanup_confirmed\\\": true,\\n  \\\"reservation_samples\\\": [],\\n  \\\"paging_interpretation\\\": \\\"Process faults include soft and hard faults. Private commit/pagefile usage is not disk I/O. System counters include other processes; these counters alone do not prove core/KV residency.\\\",\\n  \\\"paging_telemetry_closed\\\": true\\n}\\n967296/33593344000 bytes\\nds4: owned wired model read 8589934592/33593344000 bytes\\nds4: owned wired model read 12884901888/33593344000 bytes\\nds4: owned wired model read 17179869184/33593344000 bytes\\nds4: owned wired model read 21474836480/33593344000 bytes\\nds4: owned wired model read 25769803776/33593344000 bytes\\nds4: owned wired model read 30064771072/33593344000 bytes\\nds4: owned wired model read 33593344000/33593344000 bytes\\nds4: owned anonymous wired Metal buffer=33593344000 live=308471250944 source=file-read\\nds4: Metal model views created in 64767.547 ms, residency requested in 1684.493 ms, warmup 7.513 ms (mapped 285001.05 MiB from offset 5.56 MiB)\\nds4: Metal mapped mmaped model as 5 overlapping shared buffers\\nds4: owned wired model read 4294967296/7904247808 bytes\\nds4: owned wired model read 7904247808/7904247808 bytes\\nds4: owned anonymous wired Metal buffer=7904247808 live=316375498752 source=file-read\\nds4: Metal model views created in 2181.920 ms, residency requested in 1741.329 ms, warmup 1.311 ms (mapped 7538.08 MiB from offset 0.02 MiB)\\nds4: Metal mapped mmaped model as 6 overlapping shared buffers\\nds4: owned wired model read 970555392/970555392 bytes\\nds4: owned anonymous wired Metal buffer=970555392 live=317346054144 source=file-read\\nds4: Metal model views created in 258.017 ms, residency requested in 2206.342 ms, warmup 1.440 ms (mapped 925.59 MiB from offset 0.02 MiB)\\nds4: Metal mapped mmaped model as 7 overlapping shared buffers\\nds4: metal backend initialized for graph diagnostics\\nds4: memory: KV 5.97 GiB (raw 0.01 + compressed 5.96) + buffers 12.41 GiB + resident model 278.32 GiB = 296.70 GiB planned\\nds4: memory detail: ctx=1000001 prefill_cap=8192 raw_kv_rows=128 compressed_kv_rows=1000002 backend=metal\\n1029 19:50:00 ds4-server: context buffers 18819.07 MiB (ctx=1000001, backend=metal, prefill_chunk=8192, raw_kv_rows=128, compressed_kv_rows=1000002)\\n1029 19:50:00 ds4-server: native frontier: native session configuration/model/build identity rejected\\n\"}"
+  },
+  "eject": {
+    "ejected": true
+  },
+  "broker_guard": {
+    "exit_code": 1,
+    "reason": "RuntimeError('stop requested')",
+    "peak_tree_rss": 93499392,
+    "min_available": 10467708928,
+    "elapsed_s": 157.09400000004098,
+    "host_budget_gib": 8.5,
+    "floor_gib": 0.75,
+    "runtime_min_free_gib": 0.75,
+    "no_progress_window_s": 1140,
+    "job_commit_gib": 48.0,
+    "child_pid": 29788,
+    "shared_guard_commit": "2774636281ab32bf871497f0a8caae23c6b6cdc7",
+    "stack_retirement_policy": "cooperative request, progress-aware grace, logged force fallback",
+    "shared_guard_certificate": "${TASK_ROOT}\\rtx\\jobs\\macdecode-final-broker-63fdd88628de4cac8b65631c1e349d43.receipt.shared.json",
+    "cleanup_confirmed": true,
+    "paging_policy": {
+      "owned_paging_limit_bytes": 67108864,
+      "owned_paging_baseline": "zero at gated job launch",
+      "peak_owned_paged_bytes": 0,
+      "pagefile_hard_fault_rate": null,
+      "pagefile_hard_fault_attribution": "UNAVAILABLE: Windows kernel ETW access refused: [Errno 5] kernel pagefile ETW unavailable",
+      "pagefile_hard_fault_limit_per_second": 100,
+      "pagefile_hard_fault_duration_seconds": 5,
+      "scan_pages": 8762639,
+      "last_paged_processes": []
+    },
+    "owned_paging": {
+      "attribution": "bounded process pagefile observation",
+      "observed_paged_bytes": 0,
+      "observed_processes": [],
+      "scanned_pages": 8762639,
+      "completed_scans": 718
+    },
+    "system_pagefile_pressure": {
+      "maximum_growth_bytes": 0,
+      "kill_above_bytes": 256000000,
+      "scope": "global; not process attribution"
+    },
+    "paging_interpretation": "Owned observation is bounded and incremental. Zero observed pages is not an exhaustive zero-I/O proof. Darwin disk-only process attribution is unavailable."
+  },
+  "cleanup_confirmed": true,
+  "lease_released": true,
+  "tunnel_stopped": true
+}
