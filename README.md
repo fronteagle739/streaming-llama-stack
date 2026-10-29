@@ -15,19 +15,24 @@ RTX 5090 desktop with 32 GB of RAM:
 
 | What | Result |
 |---|---|
-| Prefill, 48,520-token prompt | **1,163 tok/s** |
-| Prefill with YOCO, 103,189-token prompt | **1,635 tok/s** |
-| Prefill time, 1,000,000 tokens in one session | **30 min 8 s** |
-| Prefill rate, same session | **553 tok/s** |
+| Exact-cone prefill, 49,555 tokens | **25.38 s / 1,953 tok/s** |
+| Exact-cone prefill, 100,000 tokens | **45.48 s / 2,199 tok/s** |
+| Exact-cone prefill, 200,000 tokens | **94.08 s / 2,126 tok/s** |
+| Exact-cone prefill, 400,000 tokens | **232.50 s / 1,720 tok/s** |
 | Decode at Max speed, warm, 14,859-token prompt | **19–21 tok/s** |
 | Decode at Max speed, warm, 43,327-token prompt | **18–20 tok/s** |
 | Decode at Max quality (full model), warm | **6.0 tok/s** |
-| Peak engine RAM during the one-million-token run | **5.7 GiB** |
+| Peak engine RAM during the 400,000-token cone run | **6.24 GiB** |
 
 "Warm" means after the first 100 generated tokens, once the expert cache has
 filled. Averaged over the whole reply, including that warm-up, Max speed gives
-12.7–12.9 tok/s for a 500-token answer. The 48K and 103K prefill rates include
-engine startup.
+12.7–12.9 tok/s for a 500-token answer. Prefill figures use the default exact
+cone with routed tail reads, N=1 and growable BF16 cache, including startup.
+The matched 49,555-token full-prefill control took 36.25 s; the cone's logits
+and cache hashes were bit-identical. [Measurements and cache settings](docs/PERFORMANCE.md#prefill).
+The example decode defaults also enable exact LFU admission with a 16-token
+half life: a separate 8K workload improved by 1.5–10.6% in two repetitions.
+[LFU measurements](docs/EXPERIMENT_E8.md).
 
 Add a Mac Studio M3 Ultra (512 GB) for decode:
 
@@ -72,9 +77,11 @@ more on machines with much more RAM; that is untested and listed in the
 
 **Streaming prefill.** Prefill reads each layer's weights once per pass and runs
 the whole prompt chunk through that layer before moving on. The cost of reading
-483 GiB is shared by every token in the pass, so longer prompts run faster per
-token. DirectStorage reads the next layer while the GPU computes the current one.
-DeepSeek V4.1 uses 49,152-token passes.
+the weights is shared by every token in the pass. A complete DeepSeek V4.1 Q4
+pass reads 315.8 GB; Engram rows are gathered separately. DirectStorage reads the
+next layer while the GPU computes the current one. DeepSeek V4.1 uses
+49,152-token passes, with optional RAM-admitted chunk grouping.
+[Routed reads, the exact replay cone and byte accounting](docs/MULTICHUNK_PREFILL.md).
 
 **Expert-cache decode.** Dense weights stay in VRAM. Routed experts live in a VRAM
 cache, and misses are read from NVMe. After the first hundred or so tokens the
@@ -84,6 +91,11 @@ cache holds the experts the conversation uses, and decode speeds up.
 cache instead of fetching from disk. Max quality never does this: it is the full
 model. You set the dial from the web UI, the API or MCP, separately for reasoning,
 tool calls, answers and code. The model can set it itself.
+
+**Exact cone.** The default single-machine presets compute every encoder row
+and the decoder's final 2,541-row dependency cone. Aligned replay preserves
+full-prefill arithmetic; the matched 8K and 49,555-token controls are exact.
+[Design and qualification](docs/MULTICHUNK_PREFILL.md).
 
 **YOCO.** Optional approximate prefill from DeepSeek's
 [DeepInfer](https://github.com/deepseek-ai/DeepInfer/blob/553741557a57df44a46fb3ab72b6aafeaf945337/README.md)
@@ -166,12 +178,15 @@ the model once. The first chat loads the engine.
 Other presets (run one at a time; stop with the same script and `-Stop`):
 
 ```powershell
-powershell -File scripts/start-dsv41-single-1m.ps1 -WebUI             # 1M context
-powershell -File scripts/start-dsv41-single-262k-ultra-yoco.ps1 -WebUI # YOCO
-powershell -File scripts/start-dsv41-single-1m-ultra-yoco.ps1 -WebUI   # 1M + YOCO
+powershell -File scripts/start-dsv41-single-1m.ps1 -WebUI # 1M context, exact cone
+powershell -File scripts/start-dsv41-single-262k-ultra-yoco.ps1 -ApproximateYoco -WebUI
+powershell -File scripts/start-dsv41-single-1m-ultra-yoco.ps1 -ApproximateYoco -WebUI
 ```
 
 Each script accepts `-Config`, `-Model`, `-DryRun` and `-Stop`.
+The legacy `ultra-yoco` filenames also default to exact cone; `-ApproximateYoco`
+selects approximate replay. Paired presets retain YOCO until cone state export
+is negotiated. [Defaults and optional experiments](docs/MERGEPERF.md).
 
 ## Supported models
 

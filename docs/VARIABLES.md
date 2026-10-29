@@ -82,6 +82,9 @@ Native controls take effect at token boundaries. The response reports requested 
 | `--hf-kernels-cache` | ds4-win: `{runtime_root}/cache/hf_kernels_cache`; mac-ds4: `{runtime_root}/cache/hf_kernels_cache`; rtx-llama: `{runtime_root}/cache/hf_kernels_cache`; image: `{runtime_root}/cache/hf_kernels_cache`; video: `{runtime_root}/cache/hf_kernels_cache`; studio: `{runtime_root}/cache/hf_kernels_cache`; mlx-serve: `{runtime_root}/cache/hf_kernels_cache`; mac-mlx: `{runtime_root}/cache/hf_kernels_cache`; mac-llama: `{runtime_root}/cache/hf_kernels_cache`; mac-mference: `{runtime_root}/cache/hf_kernels_cache` | Runtime-local cache/temp directory; no model download is performed. |
 | `--huggingface-hub-cache` | ds4-win: `{runtime_root}/cache/huggingface_hub_cache`; mac-ds4: `{runtime_root}/cache/huggingface_hub_cache`; rtx-llama: `{runtime_root}/cache/huggingface_hub_cache`; image: `{runtime_root}/cache/huggingface_hub_cache`; video: `{runtime_root}/cache/huggingface_hub_cache`; studio: `{runtime_root}/cache/huggingface_hub_cache`; mlx-serve: `{runtime_root}/cache/huggingface_hub_cache`; mac-mlx: `{runtime_root}/cache/huggingface_hub_cache`; mac-llama: `{runtime_root}/cache/huggingface_hub_cache`; mac-mference: `{runtime_root}/cache/huggingface_hub_cache` | Runtime-local cache/temp directory; no model download is performed. |
 | `--kernels-cache` | ds4-win: `{runtime_root}/cache/kernels_cache`; mac-ds4: `{runtime_root}/cache/kernels_cache`; rtx-llama: `{runtime_root}/cache/kernels_cache`; image: `{runtime_root}/cache/kernels_cache`; video: `{runtime_root}/cache/kernels_cache`; studio: `{runtime_root}/cache/kernels_cache`; mlx-serve: `{runtime_root}/cache/kernels_cache`; mac-mlx: `{runtime_root}/cache/kernels_cache`; mac-llama: `{runtime_root}/cache/kernels_cache`; mac-mference: `{runtime_root}/cache/kernels_cache` | Runtime-local cache/temp directory; no model download is performed. |
+| `--llamadecode-engram-read-align` | Explicit runtime value | E13 experiment: Engram direct-read alignment, 4096 bytes (default) or opt-in 512 bytes. The 512-byte arm requires compatible logical sector geometry and preserves all row bytes. |
+| `--llamadecode-lfu-half-life` | Explicit runtime value | E8 experiment: LFU score half life in tokens, 1 (default) or 16. Only used when the opt-in recency-LFU policy is enabled; expert routes and arithmetic are unchanged. |
+| `--llamadecode-recency-lfu` | Explicit runtime value | E8 opt-in L2 expert-cache placement: 0 (default) retains LRU; 1 uses recency-weighted LFU with a 25% admission margin. Configure the score half life separately; routes and arithmetic are unchanged. |
 | `--llama-dsv41-cast-vector` | rtx-llama: `1` | LLAMA_DSV41_CAST_VECTOR: qualified preset/runtime setting; override for a different memory or arithmetic plan |
 | `--llama-dsv41-engram-prompt-overlap` | rtx-llama: `1` | LLAMA_DSV41_ENGRAM_PROMPT_OVERLAP: qualified preset/runtime setting; override for a different memory or arithmetic plan |
 | `--llama-dsv41-mul-f16-store` | rtx-llama: `1` | LLAMA_DSV41_MUL_F16_STORE: qualified preset/runtime setting; override for a different memory or arithmetic plan |
@@ -1006,6 +1009,432 @@ Source: `vendor/engines/cosmos_windows/weight_streaming/anima_backend.py:27`. Un
     if str(device).startswith('cuda'):
 ```
 
+### APC_BLOCK_SIZE
+
+Advanced backend control APC_BLOCK_SIZE. Set explicitly only for the selected backend; its literal read and fallback are documented below.
+
+Scope: mac-mlx. Class: advanced.
+
+Source: `vendor/mac-mlx/mlx_vlm/apc.py:3855`. Unset read: DEFAULT_BLOCK_SIZE.
+
+```text
+    if os.environ.get("APC_ENABLED", "0") not in ("1", "true", "True", "yes"):
+        return None
+    block_size = int(os.environ.get("APC_BLOCK_SIZE", DEFAULT_BLOCK_SIZE))
+    num_blocks = int(os.environ.get("APC_NUM_BLOCKS", DEFAULT_NUM_BLOCKS))
+
+    disk: Optional[DiskBlockStore] = None
+    disk_path = os.environ.get("APC_DISK_PATH")
+```
+
+### APC_DEBUG
+
+Advanced backend control APC_DEBUG. Set explicitly only for the selected backend; its literal read and fallback are documented below.
+
+Scope: mac-mlx. Class: advanced.
+
+Source: `vendor/mac-mlx/mlx_vlm/generate/ar.py:2056`. Unset read: None.
+
+```text
+                    )
+                finalize()
+        if logger.isEnabledFor(logging.DEBUG) and os.environ.get("APC_DEBUG"):
+            c0 = self.prompt_cache[0] if self.prompt_cache else None
+            if c0 is not None:
+                off = getattr(c0, "offset", None)
+                lp = getattr(c0, "left_padding", None)
+```
+
+Source: `vendor/mac-mlx/mlx_vlm/generate/ar.py:2916`. Unset read: None.
+
+```text
+            n = min(self.prefill_batch_size, len(self._unprocessed_sequences))
+            sequences = self._unprocessed_sequences[:n]
+            if logger.isEnabledFor(logging.DEBUG) and os.environ.get("APC_DEBUG"):
+                logger.warning(
+                    "APC admit n=%d (pending=%d)",
+                    n,
+                    len(self._unprocessed_sequences),
+```
+
+### APC_DISK_DIRECT_MAX_OVERREAD_MB
+
+Advanced backend control APC_DISK_DIRECT_MAX_OVERREAD_MB. Set explicitly only for the selected backend; its literal read and fallback are documented below.
+
+Scope: mac-mlx. Class: advanced.
+
+Source: `vendor/mac-mlx/mlx_vlm/apc.py:844`. Unset read: '8'.
+
+```text
+        self._header_cache_max = int(os.environ.get("APC_DISK_HEADER_CACHE", 4))
+        self._direct_max_overread_bytes = int(
+            float(os.environ.get("APC_DISK_DIRECT_MAX_OVERREAD_MB", "8")) * (1 << 20)
+        )
+        # Bound layer-major shard size so disk eviction is segment-granular
+        # instead of one huge all-or-nothing prefix file. A Qwen3-VL-4B block
+        # is ~2.25 MiB, so 256 blocks is roughly a 576 MiB shard before the
+```
+
+### APC_DISK_EVAL_BLOCK_CHUNK
+
+Advanced backend control APC_DISK_EVAL_BLOCK_CHUNK. Set explicitly only for the selected backend; its literal read and fallback are documented below.
+
+Scope: mac-mlx. Class: advanced.
+
+Source: `vendor/mac-mlx/mlx_vlm/apc.py:2853`. Unset read: '8'.
+
+```text
+        # path; raise it on a known-roomy machine to claw back wall time.
+        self._disk_eval_block_chunk = max(
+            1, int(os.environ.get("APC_DISK_EVAL_BLOCK_CHUNK", "8"))
+        )
+        # Number of disk blocks to coalesce into one direct byte-range read.
+        # This is separate from eval chunking: a larger read chunk improves
+        # SSD throughput/readahead while eval still happens in small batches.
+```
+
+### APC_DISK_HEADER_CACHE
+
+Advanced backend control APC_DISK_HEADER_CACHE. Set explicitly only for the selected backend; its literal read and fallback are documented below.
+
+Scope: mac-mlx. Class: advanced.
+
+Source: `vendor/mac-mlx/mlx_vlm/apc.py:842`. Unset read: 4.
+
+```text
+        self._header_cache: "OrderedDict[Path, Tuple[dict, dict, int]]" = OrderedDict()
+        self._header_cache_lock = threading.Lock()
+        self._header_cache_max = int(os.environ.get("APC_DISK_HEADER_CACHE", 4))
+        self._direct_max_overread_bytes = int(
+            float(os.environ.get("APC_DISK_DIRECT_MAX_OVERREAD_MB", "8")) * (1 << 20)
+        )
+        # Bound layer-major shard size so disk eviction is segment-granular
+```
+
+### APC_DISK_LOAD_BLOCK_CHUNK
+
+Advanced backend control APC_DISK_LOAD_BLOCK_CHUNK. Set explicitly only for the selected backend; its literal read and fallback are documented below.
+
+Scope: mac-mlx. Class: advanced.
+
+Source: `vendor/mac-mlx/mlx_vlm/apc.py:2862`. Unset read: '256'.
+
+```text
+        # small relative to the model's recommended Apple-Silicon working set.
+        self._disk_load_block_chunk = max(
+            1, int(os.environ.get("APC_DISK_LOAD_BLOCK_CHUNK", "256"))
+        )
+        # Apple Metal has a per-process resource-count ceiling separate from
+        # byte memory. Qwen3-VL-4B stores 72 MLX tensors per APCBlock, so a
+        # very large pool can hit the ceiling before unified memory is scarce.
+```
+
+### APC_DISK_MAX_GB
+
+Advanced backend control APC_DISK_MAX_GB. Set explicitly only for the selected backend; its literal read and fallback are documented below.
+
+Scope: mac-mlx. Class: advanced.
+
+Source: `vendor/mac-mlx/mlx_vlm/apc.py:3862`. Unset read: 0.
+
+```text
+    if disk_path:
+        ns = model_namespace or os.environ.get("APC_DISK_NAMESPACE", "default")
+        max_gb = float(os.environ.get("APC_DISK_MAX_GB", 0))
+        max_bytes = int(max_gb * (1 << 30)) if max_gb > 0 else None
+        workers = int(os.environ.get("APC_DISK_WORKERS", "1"))
+        try:
+            disk = DiskBlockStore(
+```
+
+### APC_DISK_MIN_FREE_RAM_GB
+
+Advanced backend control APC_DISK_MIN_FREE_RAM_GB. Set explicitly only for the selected backend; its literal read and fallback are documented below.
+
+Scope: mac-mlx. Class: advanced.
+
+Source: `vendor/mac-mlx/mlx_vlm/apc.py:2840`. Unset read: '2.0'.
+
+```text
+        # disk speed-up. Disabled when set to 0.
+        self._disk_min_free_ram_bytes = int(
+            float(os.environ.get("APC_DISK_MIN_FREE_RAM_GB", "2.0")) * (1 << 30)
+        )
+        # Number of disk-loaded blocks to coalesce per ``mx.eval`` during
+        # warm-disk restore. The disk read itself is always serial (no
+        # thread pool, no buffering of mmap views beyond this batch); the
+```
+
+### APC_DISK_MMAP_CACHE
+
+Advanced backend control APC_DISK_MMAP_CACHE. Set explicitly only for the selected backend; its literal read and fallback are documented below.
+
+Scope: mac-mlx. Class: advanced.
+
+Source: `vendor/mac-mlx/mlx_vlm/apc.py:869`. Unset read: 2.
+
+```text
+        self._mmap_cache: "OrderedDict[Path, Tuple[dict, dict]]" = OrderedDict()
+        self._mmap_cache_lock = threading.Lock()
+        self._mmap_cache_max = int(os.environ.get("APC_DISK_MMAP_CACHE", 2))
+
+        n_orphans = self._cleanup_partials()
+        if n_orphans:
+            logger.info(
+```
+
+### APC_DISK_NAMESPACE
+
+Advanced backend control APC_DISK_NAMESPACE. Set explicitly only for the selected backend; its literal read and fallback are documented below.
+
+Scope: mac-mlx. Class: advanced.
+
+Source: `vendor/mac-mlx/mlx_vlm/apc.py:3861`. Unset read: 'default'.
+
+```text
+    disk_path = os.environ.get("APC_DISK_PATH")
+    if disk_path:
+        ns = model_namespace or os.environ.get("APC_DISK_NAMESPACE", "default")
+        max_gb = float(os.environ.get("APC_DISK_MAX_GB", 0))
+        max_bytes = int(max_gb * (1 << 30)) if max_gb > 0 else None
+        workers = int(os.environ.get("APC_DISK_WORKERS", "1"))
+        try:
+```
+
+### APC_DISK_PATH
+
+Advanced backend control APC_DISK_PATH. Set explicitly only for the selected backend; its literal read and fallback are documented below.
+
+Scope: mac-mlx. Class: advanced.
+
+Source: `vendor/mac-mlx/mlx_vlm/apc.py:3859`. Unset read: None.
+
+```text
+
+    disk: Optional[DiskBlockStore] = None
+    disk_path = os.environ.get("APC_DISK_PATH")
+    if disk_path:
+        ns = model_namespace or os.environ.get("APC_DISK_NAMESPACE", "default")
+        max_gb = float(os.environ.get("APC_DISK_MAX_GB", 0))
+        max_bytes = int(max_gb * (1 << 30)) if max_gb > 0 else None
+```
+
+### APC_DISK_READ_MODE
+
+Advanced backend control APC_DISK_READ_MODE. Set explicitly only for the selected backend; its literal read and fallback are documented below.
+
+Scope: mac-mlx. Class: advanced.
+
+Source: `vendor/mac-mlx/mlx_vlm/apc.py:831`. Unset read: 'direct'.
+
+```text
+        # with normal file I/O, then constructs MLX-managed arrays from those
+        # bytes. Keep the old mmap path available for comparison.
+        self._read_mode = os.environ.get("APC_DISK_READ_MODE", "direct").lower()
+        if self._read_mode not in ("direct", "mmap"):
+            logger.warning(
+                "APC disk: unknown APC_DISK_READ_MODE=%r; using direct",
+                self._read_mode,
+```
+
+### APC_DISK_RESTORE_CLEAR_EVERY
+
+Advanced backend control APC_DISK_RESTORE_CLEAR_EVERY. Set explicitly only for the selected backend; its literal read and fallback are documented below.
+
+Scope: mac-mlx. Class: advanced.
+
+Source: `vendor/mac-mlx/mlx_vlm/apc.py:859`. Unset read: '1'.
+
+```text
+        # memory for slightly lower restore overhead.
+        self._restore_clear_every = max(
+            0, int(os.environ.get("APC_DISK_RESTORE_CLEAR_EVERY", "1"))
+        )
+        # Bounded LRU of mmap'd shards: shard_path -> (arrays_dict, file_metadata).
+        # Default capped at 2 — the within-restore working set is typically
+        # one shard, occasionally two (for a multi-shard restore). Larger
+```
+
+### APC_DISK_SHARD_MAX_BLOCKS
+
+Advanced backend control APC_DISK_SHARD_MAX_BLOCKS. Set explicitly only for the selected backend; its literal read and fallback are documented below.
+
+Scope: mac-mlx. Class: advanced.
+
+Source: `vendor/mac-mlx/mlx_vlm/apc.py:851`. Unset read: '256'.
+
+```text
+        # small KV step padding.
+        self._shard_max_blocks = max(
+            1, int(os.environ.get("APC_DISK_SHARD_MAX_BLOCKS", "256"))
+        )
+        # Layer-major warm-disk restore concatenates segment shards one layer
+        # at a time. Clearing MLX's allocator cache after each layer keeps the
+        # temporary segment tensors from coexisting with the fully-restored
+```
+
+### APC_DISK_TRACE
+
+Advanced backend control APC_DISK_TRACE. Set explicitly only for the selected backend; its literal read and fallback are documented below.
+
+Scope: mac-mlx. Class: advanced.
+
+Source: `vendor/mac-mlx/mlx_vlm/apc.py:2049`. Unset read: ''.
+
+```text
+        if not block_hashes:
+            return None
+        trace = os.environ.get("APC_DISK_TRACE", "").lower() in ("1", "true", "yes")
+        trace_t0 = time.perf_counter()
+
+        entries: List[Tuple[Path, int]] = []
+        for h in block_hashes:
+```
+
+### APC_DISK_WORKERS
+
+Advanced backend control APC_DISK_WORKERS. Set explicitly only for the selected backend; its literal read and fallback are documented below.
+
+Scope: mac-mlx. Class: advanced.
+
+Source: `vendor/mac-mlx/mlx_vlm/apc.py:3864`. Unset read: '1'.
+
+```text
+        max_gb = float(os.environ.get("APC_DISK_MAX_GB", 0))
+        max_bytes = int(max_gb * (1 << 30)) if max_gb > 0 else None
+        workers = int(os.environ.get("APC_DISK_WORKERS", "1"))
+        try:
+            disk = DiskBlockStore(
+                Path(disk_path).expanduser(),
+                namespace=ns,
+```
+
+### APC_ENABLED
+
+Advanced backend control APC_ENABLED. Set explicitly only for the selected backend; its literal read and fallback are documented below.
+
+Scope: mac-mlx. Class: advanced.
+
+Source: `vendor/mac-mlx/mlx_vlm/apc.py:3853`. Unset read: '0'.
+
+```text
+    are MLX-owned buffers rather than mmap-backed safetensors views.
+    """
+    if os.environ.get("APC_ENABLED", "0") not in ("1", "true", "True", "yes"):
+        return None
+    block_size = int(os.environ.get("APC_BLOCK_SIZE", DEFAULT_BLOCK_SIZE))
+    num_blocks = int(os.environ.get("APC_NUM_BLOCKS", DEFAULT_NUM_BLOCKS))
+
+```
+
+### APC_EXACT_CACHE_ENTRIES
+
+Advanced backend control APC_EXACT_CACHE_ENTRIES. Set explicitly only for the selected backend; its literal read and fallback are documented below.
+
+Scope: mac-mlx. Class: advanced.
+
+Source: `vendor/mac-mlx/mlx_vlm/apc.py:2830`. Unset read: '2'.
+
+```text
+        self.disk = disk
+        self._exact_cache_max = max(
+            0, int(os.environ.get("APC_EXACT_CACHE_ENTRIES", "2"))
+        )
+        self.exact_cache_guard_tokens = max(
+            1, int(os.environ.get("APC_EXACT_PREFIX_GUARD_TOKENS", "16"))
+        )
+```
+
+### APC_EXACT_PREFIX_GUARD_TOKENS
+
+Advanced backend control APC_EXACT_PREFIX_GUARD_TOKENS. Set explicitly only for the selected backend; its literal read and fallback are documented below.
+
+Scope: mac-mlx. Class: advanced.
+
+Source: `vendor/mac-mlx/mlx_vlm/apc.py:2833`. Unset read: '16'.
+
+```text
+        )
+        self.exact_cache_guard_tokens = max(
+            1, int(os.environ.get("APC_EXACT_PREFIX_GUARD_TOKENS", "16"))
+        )
+        # If free RAM (best-effort reading) drops below this, skip disk
+        # promotion this turn and fall back to memory-only matching. The
+        # request still serves correctly — it just doesn't get the warm-
+```
+
+### APC_HASH
+
+Advanced backend control APC_HASH. Set explicitly only for the selected backend; its literal read and fallback are documented below.
+
+Scope: mac-mlx. Class: advanced.
+
+Source: `vendor/mac-mlx/mlx_vlm/apc.py:67`. Unset read: 'fast'.
+
+```text
+
+def _hash_use_sha256() -> bool:
+    return os.environ.get("APC_HASH", "fast").lower() == "sha256"
+
+
+def _hash_tokens(parent: int, tokens: Tuple[int, ...], extra: int) -> int:
+    """Chain hash for a single block."""
+```
+
+### APC_LAYER_MAJOR_MEMORY_MIN_TOKENS
+
+Advanced backend control APC_LAYER_MAJOR_MEMORY_MIN_TOKENS. Set explicitly only for the selected backend; its literal read and fallback are documented below.
+
+Scope: mac-mlx. Class: advanced.
+
+Source: `vendor/mac-mlx/mlx_vlm/apc.py:2878`. Unset read: '50000'.
+
+```text
+        # warm-memory reuse for repeated long-document prompts.
+        self._layer_major_memory_min_tokens = max(
+            0, int(os.environ.get("APC_LAYER_MAJOR_MEMORY_MIN_TOKENS", "50000"))
+        )
+
+    # ---------- LRU free queue (O(1)) ----------
+    def _free_push(self, b: APCBlock) -> None:
+```
+
+### APC_MAX_POOL_TENSORS
+
+Advanced backend control APC_MAX_POOL_TENSORS. Set explicitly only for the selected backend; its literal read and fallback are documented below.
+
+Scope: mac-mlx. Class: advanced.
+
+Source: `vendor/mac-mlx/mlx_vlm/apc.py:2870`. Unset read: '450000'.
+
+```text
+        # the resource limit. Set to 0 to disable.
+        self._max_pool_tensors = max(
+            0, int(os.environ.get("APC_MAX_POOL_TENSORS", "450000"))
+        )
+        # Optional compact warm-memory tier for long KV-only prefixes. When a
+        # prompt reaches this many full-block tokens, store one layer-major
+        # prompt-cache snapshot instead of thousands of per-block tensors. This
+```
+
+### APC_NUM_BLOCKS
+
+Advanced backend control APC_NUM_BLOCKS. Set explicitly only for the selected backend; its literal read and fallback are documented below.
+
+Scope: mac-mlx. Class: advanced.
+
+Source: `vendor/mac-mlx/mlx_vlm/apc.py:3856`. Unset read: DEFAULT_NUM_BLOCKS.
+
+```text
+        return None
+    block_size = int(os.environ.get("APC_BLOCK_SIZE", DEFAULT_BLOCK_SIZE))
+    num_blocks = int(os.environ.get("APC_NUM_BLOCKS", DEFAULT_NUM_BLOCKS))
+
+    disk: Optional[DiskBlockStore] = None
+    disk_path = os.environ.get("APC_DISK_PATH")
+    if disk_path:
+```
+
 ### ARCHFLAGS
 
 Engine setting; retains its built-in default. The literal source consumer below records its behavior.
@@ -1028,6 +1457,78 @@ Source: `engines/streaming-llama/prefill_llama.cpp/tools/server/bench/bench.py:2
         'run', args.scenario,
         '--no-color',
         '--no-connection-reuse',
+```
+
+### BENCH_LIVE_COMMUNITY
+
+Advanced backend control BENCH_LIVE_COMMUNITY. Set explicitly only for the selected backend; its literal read and fallback are documented below.
+
+Scope: mlx-serve. Class: advanced.
+
+Source: `engines/mlx-serve/app/Tests/MLXCoreTests/BenchmarkRunnerLiveTests.swift:54`. Unset read: Wrapper/conditional default: see the literal call and consumer below.
+
+```text
+final class BenchmarkCommunityLiveTests: XCTestCase {
+    func testEveryLiveRowDecodes() async throws {
+        guard ProcessInfo.processInfo.environment["BENCH_LIVE_COMMUNITY"] == "1" else {
+            throw XCTSkip("set BENCH_LIVE_COMMUNITY=1")
+        }
+        let url = BenchmarkStore.communityFetchURL(limit: 500)!
+        let (data, _) = try await URLSession.shared.data(from: url)
+```
+
+### BENCH_LIVE_MODEL
+
+Advanced backend control BENCH_LIVE_MODEL. Set explicitly only for the selected backend; its literal read and fallback are documented below.
+
+Scope: mlx-serve. Class: advanced.
+
+Source: `engines/mlx-serve/app/Tests/MLXCoreTests/BenchmarkRunnerLiveTests.swift:20`. Unset read: Wrapper/conditional default: see the literal call and consumer below.
+
+```text
+        let api = APIClient()
+        let props = try await api.fetchPropsRaw(port: port)
+        let model = ProcessInfo.processInfo.environment["BENCH_LIVE_MODEL"]
+            ?? ((props["default_generation_settings"] as? [String: Any])?["model"] as? String ?? "")
+        XCTAssertFalse(model.isEmpty, "no model to benchmark")
+
+        let ladder = Array(BenchmarkSuite.ladder.prefix(
+```
+
+### BENCH_LIVE_PORT
+
+Advanced backend control BENCH_LIVE_PORT. Set explicitly only for the selected backend; its literal read and fallback are documented below.
+
+Scope: mlx-serve. Class: advanced.
+
+Source: `engines/mlx-serve/app/Tests/MLXCoreTests/BenchmarkRunnerLiveTests.swift:14`. Unset read: Wrapper/conditional default: see the literal call and consumer below.
+
+```text
+    @MainActor
+    func testTheLadderClimbsAgainstALiveServer() async throws {
+        guard let portText = ProcessInfo.processInfo.environment["BENCH_LIVE_PORT"],
+              let port = UInt16(portText) else {
+            throw XCTSkip("set BENCH_LIVE_PORT to run against a live server")
+        }
+        let api = APIClient()
+```
+
+### BENCH_LIVE_RUNGS
+
+Advanced backend control BENCH_LIVE_RUNGS. Set explicitly only for the selected backend; its literal read and fallback are documented below.
+
+Scope: mlx-serve. Class: advanced.
+
+Source: `engines/mlx-serve/app/Tests/MLXCoreTests/BenchmarkRunnerLiveTests.swift:25`. Unset read: Wrapper/conditional default: see the literal call and consumer below.
+
+```text
+
+        let ladder = Array(BenchmarkSuite.ladder.prefix(
+            Int(ProcessInfo.processInfo.environment["BENCH_LIVE_RUNGS"] ?? "4") ?? 4))
+        let runner = BenchmarkRunner(api: api)
+        let rows = await runner.run(ladder: ladder, modelId: model, port: port)
+
+        XCTAssertEqual(runner.phase, .done, "\(runner.phase)")
 ```
 
 ### BENCH_NLAYERS
@@ -1082,6 +1583,54 @@ def _preflight_resident_ram() -> None:
 
 def _rotate_rope_by_source_id(freqs_cos, freqs_sin, source_id: int, dim_per_head: int, theta: float):
     import torch
+```
+
+### BONSAI_TOKEN
+
+Advanced backend control BONSAI_TOKEN. Set explicitly only for the selected backend; its literal read and fallback are documented below.
+
+Scope: mac-mlx. Class: advanced.
+
+Source: `vendor/mac-mlx/mlx_vlm/models/bonsai/download.py:31`. Unset read: None.
+
+```text
+            snapshot_download(
+                repo_id=spec.repo_id,
+                token=token or os.environ.get("BONSAI_TOKEN") or None,
+                max_workers=max_workers,
+            )
+        )
+    else:
+```
+
+Source: `vendor/mac-mlx/mlx_vlm/models/bonsai/download.py:45`. Unset read: None.
+
+```text
+            repo_id=spec.repo_id,
+            local_dir=str(target),
+            token=token or os.environ.get("BONSAI_TOKEN") or None,
+            max_workers=max_workers,
+        )
+    validate_model_layout(target)
+    return target
+```
+
+### BOOGU_ALLOW_NON_DIRECTSTORAGE
+
+BOOGU_ALLOW_NON_DIRECTSTORAGE: explicit engine setting; inherited values are cleared and the native default is retained.
+
+Scope: image, studio, video. Class: advanced.
+
+Source: `vendor/studio/studio/boogu_krea.py:415`. Unset read: None.
+
+```text
+    sd_keys = set(transformer.state_dict().keys())
+    streamer = DirectStorageStreamer(_BooguMainBlockIndex(idx, num_double), component='', n_gpu_buffers=n_gpu_buffers, device=device)
+    if getattr(streamer, 'mode', None) != 3 and _os.environ.get('BOOGU_ALLOW_NON_DIRECTSTORAGE') != '1':
+        try:
+            streamer.close()
+        finally:
+            raise RuntimeError(f"Boogu DS streamer mode={getattr(streamer, 'mode', '?')} is not DirectStorage(3) â€” R1 requires the optimised NVMe->GPU path. Set BOOGU_ALLOW_NON_DIRECTSTORAGE=1 for diagnostics.")
 ```
 
 ### CC
@@ -1792,6 +2341,60 @@ Source: `engines/mlx-serve/src/diffusion.zig:839`. Unset read: NULL from getenv;
     const io = std.Io.Threaded.global_single_threaded.io();
 ```
 
+### DOCS_RAG_AUTODL_PORT
+
+Advanced backend control DOCS_RAG_AUTODL_PORT. Set explicitly only for the selected backend; its literal read and fallback are documented below.
+
+Scope: mlx-serve. Class: advanced.
+
+Source: `engines/mlx-serve/app/Tests/MLXCoreTests/DocumentIndexTests.swift:529`. Unset read: Wrapper/conditional default: see the literal call and consumer below.
+
+```text
+    @MainActor
+    func testAutoProviderProvisionsEncoderEndToEnd() async throws {
+        guard let portStr = ProcessInfo.processInfo.environment["DOCS_RAG_AUTODL_PORT"],
+              let port = UInt16(portStr) else {
+            throw XCTSkip("DOCS_RAG_AUTODL_PORT not set — live auto-provisioning test skipped")
+        }
+        let embedder = await ServerEmbedding.autoProvider(port: port)()
+```
+
+### DOCS_RAG_FOLDER
+
+Advanced backend control DOCS_RAG_FOLDER. Set explicitly only for the selected backend; its literal read and fallback are documented below.
+
+Scope: mlx-serve. Class: advanced.
+
+Source: `engines/mlx-serve/app/Tests/MLXCoreTests/DocumentIndexRealDataTests.swift:17`. Unset read: Wrapper/conditional default: see the literal call and consumer below.
+
+```text
+
+    private static var folder: URL? {
+        guard let path = ProcessInfo.processInfo.environment["DOCS_RAG_FOLDER"], !path.isEmpty else {
+            return nil
+        }
+        return URL(fileURLWithPath: NSString(string: path).expandingTildeInPath)
+    }
+```
+
+### DOCS_RAG_PORT
+
+Advanced backend control DOCS_RAG_PORT. Set explicitly only for the selected backend; its literal read and fallback are documented below.
+
+Scope: mlx-serve. Class: advanced.
+
+Source: `engines/mlx-serve/app/Tests/MLXCoreTests/DocumentIndexRealDataTests.swift:39`. Unset read: Wrapper/conditional default: see the literal call and consumer below.
+
+```text
+        // otherwise retrieval is lexical-only, which the structural
+        // assertions below are designed to survive.
+        let port = ProcessInfo.processInfo.environment["DOCS_RAG_PORT"].flatMap { UInt16($0) }
+        let index = DocumentIndex(folderURL: folder, embedderProvider: {
+            guard let port else { return nil }
+            return await ServerEmbedding.probe(port: port)()
+        })
+```
+
 ### DS4COMBO_RESTORE_ASYNC
 
 A/B switch for the combo expert-cache restore: 1 (default) issues the restore on the background DirectStorage queue so token 1 does not wait for it (DS4COMBO_EXPERT_RESTORE ... async=1 when it completes); 0 restores the old synchronous restore before token 1 (async=0).
@@ -1918,7 +2521,7 @@ DS4PERF_DIAGNOSTIC_LAYERS: advanced engine setting; built-in default retained
 
 Scope: rtx-llama. Class: advanced.
 
-Source: `engines/streaming-llama/prefill_llama.cpp/src/llama-dsv41-executor.cpp:1300`. Unset read: NULL from getenv; the literal consumer below supplies any fallback.
+Source: `engines/streaming-llama/prefill_llama.cpp/src/llama-dsv41-executor.cpp:1334`. Unset read: NULL from getenv; the literal consumer below supplies any fallback.
 
 ```text
         }
@@ -1930,7 +2533,7 @@ Source: `engines/streaming-llama/prefill_llama.cpp/src/llama-dsv41-executor.cpp:
         const auto buft=ggml_backend_get_default_buffer_type(backend);
 ```
 
-Source: `engines/streaming-llama/prefill_llama.cpp/src/llama-dsv41-executor.cpp:1338`. Unset read: NULL from getenv; the literal consumer below supplies any fallback.
+Source: `engines/streaming-llama/prefill_llama.cpp/src/llama-dsv41-executor.cpp:1372`. Unset read: NULL from getenv; the literal consumer below supplies any fallback.
 
 ```text
             llama_dsv41_layer_log("DS4PERF_BF16_INPLACE_LAYOUT layer=%u start=%u count=%u tagged=%llu actual_aliases=%llu alias_bytes=%llu original_lifetime_checks=1\n",in.layer,in.start,in.count,(unsigned long long)tagged,(unsigned long long)aliases,(unsigned long long)bytes);
@@ -1942,7 +2545,7 @@ Source: `engines/streaming-llama/prefill_llama.cpp/src/llama-dsv41-executor.cpp:
         require(boundary.bytes()<=actual,"Boundary outputs escaped actual graph admission");
 ```
 
-Source: `engines/streaming-llama/prefill_llama.cpp/tools/dsv41-prefill/main.cpp:743`. Unset read: NULL from getenv; the literal consumer below supplies any fallback.
+Source: `engines/streaming-llama/prefill_llama.cpp/tools/dsv41-prefill/main.cpp:745`. Unset read: NULL from getenv; the literal consumer below supplies any fallback.
 
 ```text
         report["resident_hidden_storage"]=options.resident_bf16?"BF16 after validated existing BF16 boundary; layer0 input unchanged F32":"F32";
@@ -1960,7 +2563,7 @@ DS4PERF_EXECUTOR_WALL_PROBE: advanced engine setting; built-in default retained
 
 Scope: rtx-llama. Class: advanced.
 
-Source: `engines/streaming-llama/prefill_llama.cpp/src/llama-dsv41-executor.cpp:884`. Unset read: NULL from getenv; the literal consumer below supplies any fallback.
+Source: `engines/streaming-llama/prefill_llama.cpp/src/llama-dsv41-executor.cpp:908`. Unset read: NULL from getenv; the literal consumer below supplies any fallback.
 
 ```text
                 llama_dsv41_layer_log("DS4PERF_EXECUTOR_WALL_PROBE layer=%u start=%u count=%u wall_ms=%.6f pre_return_ms=%.6f teardown_ms=%.6f prepare_flush_ms=%.6f post_checks_ms=%.6f boundary_ms=%.6f unexplained_ms=%.6f\n",in.layer,in.start,in.count,wall,pre_return_ms,wall-pre_return_ms,prepare_flush_ms,post_checks_ms,boundary_ms,pre_return_ms-phases-prepare_flush_ms-post_checks_ms-boundary_ms);}}
@@ -1978,7 +2581,7 @@ DS4PERF_RING_TRACE: advanced engine setting; built-in default retained
 
 Scope: rtx-llama. Class: advanced.
 
-Source: `engines/streaming-llama/prefill_llama.cpp/src/llama-dsv41-executor.cpp:129`. Unset read: NULL from getenv; the literal consumer below supplies any fallback.
+Source: `engines/streaming-llama/prefill_llama.cpp/src/llama-dsv41-executor.cpp:130`. Unset read: NULL from getenv; the literal consumer below supplies any fallback.
 
 ```text
     if(async_backend)ggml_backend_tensor_set_async(async_backend,t,values.data(),0,values.size()*sizeof(T));
@@ -1990,7 +2593,7 @@ template<typename T>std::vector<T>download(ggml_tensor*t,size_t maximum){
     require(t->type==(std::is_same<T,float>::value?GGML_TYPE_F32:GGML_TYPE_I32),"V4.1 tile readback type changed");
 ```
 
-Source: `engines/streaming-llama/prefill_llama.cpp/src/llama-dsv41-executor.cpp:409`. Unset read: NULL from getenv; the literal consumer below supplies any fallback.
+Source: `engines/streaming-llama/prefill_llama.cpp/src/llama-dsv41-executor.cpp:410`. Unset read: NULL from getenv; the literal consumer below supplies any fallback.
 
 ```text
         ok(cudaStreamSynchronize(compute()),"GPU carry validation did not complete");
@@ -2002,7 +2605,7 @@ Source: `engines/streaming-llama/prefill_llama.cpp/src/llama-dsv41-executor.cpp:
         require(!registered&&lease.base==base&&lease.bytes==bytes&&lease.count(),"Tile pin requires its exact existing RAM lease");
 ```
 
-Source: `engines/streaming-llama/prefill_llama.cpp/src/llama-dsv41-executor.cpp:480`. Unset read: NULL from getenv; the literal consumer below supplies any fallback.
+Source: `engines/streaming-llama/prefill_llama.cpp/src/llama-dsv41-executor.cpp:481`. Unset read: NULL from getenv; the literal consumer below supplies any fallback.
 
 ```text
                 static_cast<char*>(tensor->data)+uint64_t(first)*width,copies)),"Direct pinned 2D carry copy failed");
@@ -2010,8 +2613,8 @@ Source: `engines/streaming-llama/prefill_llama.cpp/src/llama-dsv41-executor.cpp:
         if(std::getenv("DS4PERF_RING_TRACE")&&elapsed(before)>1)llama_dsv41_layer_log("DS4PERF_PINNED_COPY_API to_device=%u bytes=%llu host_ms=%.6f\n",unsigned(to_device),(unsigned long long)(width*lease.count()),elapsed(before));
     }
     void upload_ready(){ok(cudaEventRecord(ready,copies),"Pinned upload fence record failed");ok(cudaStreamWaitEvent(compute(),ready,0),"Compute stream did not accept pinned upload fence");}
-    void readback_ready(){ok(cudaEventRecord(ready,compute()),"Pinned readback fence record failed");ok(cudaStreamWaitEvent(copies,ready,0),"Copy stream did not accept compute fence");}
-    void finish(){ok(cudaStreamSynchronize(copies),"Direct pinned carry readback did not complete");
+    void copy_probe(const llama_dsv41_carry_store::ram_lease&lease,ggml_tensor*hidden){
+        const char*setting=std::getenv("LLAMADECODE_CARRY_COPY_PROBE");
 ```
 
 ### DS4PERF_STDERR_BUFFER_BYTES
@@ -3744,24 +4347,6 @@ Source: `engines/ds4-win/ds4.c:25712`. Unset read: NULL from getenv; the literal
     }
     if (!keep) return 1;
 #endif
-```
-
-### DS4_CUDA_MXFP4_DECODE_MMA
-
-Opt-in DSV4.1 stored MXFP4 single-token W4A4 MMA experiment. Requires DS4_CUDA_DECODE_GRAPHS=0; changes activation precision, and validates three native MMA submissions per routed layer.
-
-Scope: ds4-win, rtx-llama. Class: advanced.
-
-Source: `engines/ds4-win/ds4_cuda.cu:36035`. Unset read: Wrapper/conditional default: see the literal call and consumer below.
-
-```text
-        // W4A4 experiment. FP4 activation rounding changes decode arithmetic.
-        const bool decode_mma = n_tokens == 1u &&
-            cuda_env_flag_enabled("DS4_CUDA_MXFP4_DECODE_MMA", 0);
-        if (decode_mma && (n_expert != 6u || expert_in_dim != 5120u ||
-                           expert_mid_dim != 2304u || out_dim != 5120u ||
-                           ds4_gpu_decode_graphs_supported())) {
-            fprintf(stderr, "ds4: MXFP4 decode MMA requires DSV4.1 top-6 shapes and DS4_CUDA_DECODE_GRAPHS=0\n");
 ```
 
 ### DS4_CUDA_DECODE_GRAPHS
@@ -9612,6 +10197,24 @@ Source: `engines/ds4-win/ds4_cuda.cu:37611`. Unset read: NULL from getenv; the l
     if (resident_expert_base > UINT64_MAX / gate_expert_bytes ||
         resident_expert_count > UINT64_MAX / gate_expert_bytes ||
         resident_expert_base > UINT64_MAX / down_expert_bytes ||
+```
+
+### DS4_CUDA_MXFP4_DECODE_MMA
+
+Opt-in DSV4.1 stored MXFP4 single-token W4A4 MMA experiment. Requires DS4_CUDA_DECODE_GRAPHS=0; changes activation precision, and validates three native MMA submissions per routed layer.
+
+Scope: ds4-win, rtx-llama. Class: advanced.
+
+Source: `engines/ds4-win/ds4_cuda.cu:36035`. Unset read: Wrapper/conditional default: see the literal call and consumer below.
+
+```text
+        // W4A4 experiment. FP4 activation rounding changes decode arithmetic.
+        const bool decode_mma = n_tokens == 1u &&
+            cuda_env_flag_enabled("DS4_CUDA_MXFP4_DECODE_MMA", 0);
+        if (decode_mma && (n_expert != 6u || expert_in_dim != 5120u ||
+                           expert_mid_dim != 2304u || out_dim != 5120u ||
+                           ds4_gpu_decode_graphs_supported())) {
+            fprintf(stderr, "ds4: MXFP4 decode MMA requires DSV4.1 top-6 shapes and DS4_CUDA_DECODE_GRAPHS=0\n");
 ```
 
 ### DS4_CUDA_NO_ATTENTION_OUTPUT_F16_CACHE
@@ -21444,6 +22047,24 @@ static uint32_t ds4_dspark_scheduler_cold_low_confidence_skip_cycles(void) {
 
 static uint32_t ds4_dspark_scheduler_tail_min_tokens(void) {
     return ds4_dspark_env_u32("DS4_DSPARK_SCHEDULER_TAIL_MIN_TOKENS", 10);
+```
+
+### DS4_DSPARK_SCHEDULER_MIN_AVG_MILLI
+
+Retained peer decoder scheduler minimum average acceptance, in thousandths; native fallback1500 retained.
+
+Scope: ds4-peer. Class: advanced.
+
+Source: `engines/ds4-peer/ds4.c:52067`. Unset read: Wrapper/conditional default: see the literal call and consumer below.
+
+```text
+
+static uint32_t ds4_dspark_scheduler_min_avg_milli(void) {
+    return ds4_dspark_env_u32("DS4_DSPARK_SCHEDULER_MIN_AVG_MILLI", 1500);
+}
+
+static uint32_t ds4_dspark_scheduler_max_ms_per_accept_milli(void) {
+    return ds4_dspark_env_u32(
 ```
 
 ### DS4_DSPARK_SCHEDULER_NO_DRAFT_SKIP
@@ -47180,6 +47801,42 @@ static int ds4_ns_setup(ds4_engine*engine,const ds4_engine_options*opt,int conte
        (ds4_nf_env("DS4_NATIVE_FRONTIER")&&strcmp(ds4_nf_env("DS4_NATIVE_FRONTIER"),"0")))
 ```
 
+### DS4_NATIVE_SESSION_ASYNC_DECODE_SYNC
+
+Ordered Mac catch-up worker with verified incremental owner hashes. Native default on; 0 selects blocking diagnosis.
+
+Scope: mac-ds4. Class: advanced.
+
+Source: `engines/ds4-mac/ds4_native_session_setup.inc:26`. Unset read: Wrapper/conditional default: see the literal call and consumer below.
+
+```text
+    c->http.dirfd=-1;uint32_t port;
+    c->async_decode=true;
+    {const char*policy=ds4_nf_env("DS4_NATIVE_SESSION_ASYNC_DECODE_SYNC");
+     if(policy){if(!strcmp(policy,"0"))c->async_decode=false;else if(strcmp(policy,"1"))goto bad;}}
+    {const char*policy=ds4_nf_env("DS4_NATIVE_SESSION_CATCHUP");
+     if(policy){if(!strcmp(policy,"defer"))c->catchup_defer=true;else if(strcmp(policy,"stream"))goto bad;}}
+    c->local_prefill_max=11776;
+```
+
+### DS4_NATIVE_SESSION_CATCHUP
+
+Mac catch-up policy: stream snapshots during decode (default), or defer their transmission until the reply ends. Strict join precedes every RTX operation.
+
+Scope: mac-ds4. Class: advanced.
+
+Source: `engines/ds4-mac/ds4_native_session_setup.inc:28`. Unset read: Wrapper/conditional default: see the literal call and consumer below.
+
+```text
+    {const char*policy=ds4_nf_env("DS4_NATIVE_SESSION_ASYNC_DECODE_SYNC");
+     if(policy){if(!strcmp(policy,"0"))c->async_decode=false;else if(strcmp(policy,"1"))goto bad;}}
+    {const char*policy=ds4_nf_env("DS4_NATIVE_SESSION_CATCHUP");
+     if(policy){if(!strcmp(policy,"defer"))c->catchup_defer=true;else if(strcmp(policy,"stream"))goto bad;}}
+    c->local_prefill_max=11776;
+    if(ds4_nf_env("DS4_NATIVE_SESSION_LOCAL_PREFILL_MAX_TOKENS")&&
+       !ds4_nf_env_uint("DS4_NATIVE_SESSION_LOCAL_PREFILL_MAX_TOKENS",&c->local_prefill_max,0,49152))goto bad;
+```
+
 ### DS4_NATIVE_SESSION_DEADLINE_SECONDS
 
 DS4_NATIVE_SESSION_DEADLINE_SECONDS: qualified Mac native preset setting; override explicitly for another plan
@@ -47250,6 +47907,36 @@ Source: `engines/ds4-mac/ds4_native_session_setup.inc:14`. Unset read: Wrapper/c
     const char*path=ds4_nf_env("DS4_NATIVE_SESSION_QUALIFICATION"),*pin=ds4_nf_env("DS4_NATIVE_SESSION_QUALIFICATION_SHA256");
     const char*renderer=ds4_nf_env("DS4_NATIVE_SESSION_RENDERER_SHA256");
     const char*expected_producer=ds4_nf_env("DS4_NATIVE_SESSION_PRODUCER_SHA256");
+```
+
+### DS4_NATIVE_SESSION_LOCAL_PREFILL_MAX_TOKENS
+
+Paired Mac-local prefill threshold in new tokens. Studio paired preset default 11776; strict less-than; 0 disables. Launcher sets the validated crossover.
+
+Scope: mac-ds4. Class: advanced.
+
+Source: `engines/ds4-mac/ds4_native_session_setup.inc:31`. Unset read: Wrapper/conditional default: see the literal call and consumer below.
+
+```text
+     if(policy){if(!strcmp(policy,"defer"))c->catchup_defer=true;else if(strcmp(policy,"stream"))goto bad;}}
+    c->local_prefill_max=11776;
+    if(ds4_nf_env("DS4_NATIVE_SESSION_LOCAL_PREFILL_MAX_TOKENS")&&
+       !ds4_nf_env_uint("DS4_NATIVE_SESSION_LOCAL_PREFILL_MAX_TOKENS",&c->local_prefill_max,0,49152))goto bad;
+    const char*yoco=ds4_nf_env("DS4_NATIVE_SESSION_YOCO_KEEP");
+    if(yoco&&strcmp(yoco,"0")){if(strcmp(yoco,"140"))goto bad;c->yoco_keep=140;}
+    if(!ds4_nf_pair_token(token,c->http.token)||!ds4_nf_env_uint("DS4_NATIVE_SESSION_PORT",&port,1,65535)||
+```
+
+Source: `engines/ds4-mac/ds4_native_session_setup.inc:32`. Unset read: Wrapper/conditional default: see the literal call and consumer below.
+
+```text
+    c->local_prefill_max=11776;
+    if(ds4_nf_env("DS4_NATIVE_SESSION_LOCAL_PREFILL_MAX_TOKENS")&&
+       !ds4_nf_env_uint("DS4_NATIVE_SESSION_LOCAL_PREFILL_MAX_TOKENS",&c->local_prefill_max,0,49152))goto bad;
+    const char*yoco=ds4_nf_env("DS4_NATIVE_SESSION_YOCO_KEEP");
+    if(yoco&&strcmp(yoco,"0")){if(strcmp(yoco,"140"))goto bad;c->yoco_keep=140;}
+    if(!ds4_nf_pair_token(token,c->http.token)||!ds4_nf_env_uint("DS4_NATIVE_SESSION_PORT",&port,1,65535)||
+       !ds4_nf_env_uint("DS4_NATIVE_SESSION_DEADLINE_SECONDS",&c->http.deadline_seconds,60,7200)||
 ```
 
 ### DS4_NATIVE_SESSION_PAIR_TOKEN_FILE
@@ -47394,6 +48081,24 @@ Source: `engines/ds4-mac/ds4_native_session_setup.inc:15`. Unset read: Wrapper/c
     const char*renderer=ds4_nf_env("DS4_NATIVE_SESSION_RENDERER_SHA256");
     const char*expected_producer=ds4_nf_env("DS4_NATIVE_SESSION_PRODUCER_SHA256");
     if(!host||strlen(host)>15||!token||!tier||!path||!pin||!ds4_nf_hex(pin,64)||!renderer||!ds4_nf_hex(renderer,64)||
+```
+
+### DS4_NATIVE_SESSION_YOCO_KEEP
+
+Negotiated YOCO replay window: 0 or 140; set by the paired preset.
+
+Scope: mac-ds4. Class: advanced.
+
+Source: `engines/ds4-mac/ds4_native_session_setup.inc:33`. Unset read: Wrapper/conditional default: see the literal call and consumer below.
+
+```text
+    if(ds4_nf_env("DS4_NATIVE_SESSION_LOCAL_PREFILL_MAX_TOKENS")&&
+       !ds4_nf_env_uint("DS4_NATIVE_SESSION_LOCAL_PREFILL_MAX_TOKENS",&c->local_prefill_max,0,49152))goto bad;
+    const char*yoco=ds4_nf_env("DS4_NATIVE_SESSION_YOCO_KEEP");
+    if(yoco&&strcmp(yoco,"0")){if(strcmp(yoco,"140"))goto bad;c->yoco_keep=140;}
+    if(!ds4_nf_pair_token(token,c->http.token)||!ds4_nf_env_uint("DS4_NATIVE_SESSION_PORT",&port,1,65535)||
+       !ds4_nf_env_uint("DS4_NATIVE_SESSION_DEADLINE_SECONDS",&c->http.deadline_seconds,60,7200)||
+       inet_pton(AF_INET,host,&c->http.broker.sin_addr)!=1||!ds4_engine_native_frontier_identity(engine,&c->http.model))goto bad;
 ```
 
 ### DS4_NO_BATCHED_ATTN
@@ -55880,6 +56585,24 @@ Source: `engines/ds4-win/ds4.c:31851`. Unset read: NULL from getenv; the literal
                 moe_layer ? lw->ffn_gate_shexp->abs_offset + (uint64_t)g->tp_rank * shared_half * q8_row : 0u,
 ```
 
+### DS4_TP_SUBGATE_PIPELINE
+
+Retained peer Metal tensor-parallel subgate pipeline; native defaultoff retained. Set consistently on both ranks.
+
+Scope: ds4-peer. Class: advanced.
+
+Source: `engines/ds4-peer/ds4.c:29639`. Unset read: NULL from getenv; the literal consumer below supplies any fallback.
+
+```text
+    static int cached = -1;
+    if (cached < 0) {
+        const char *env = getenv("DS4_TP_SUBGATE_PIPELINE");
+        cached = env && env[0] && atoi(env) != 0;
+    }
+    return cached != 0;
+}
+```
+
 ### DS4_TP_TIMEOUT_SEC
 
 DS4_TP_TIMEOUT_SEC: advanced engine setting; built-in default retained
@@ -56282,6 +57005,78 @@ Source: `engines/ds4-win/cuda/mmq/ds4_repack.cu:592`. Unset read: NULL from gete
         unsigned hw = std::thread::hardware_concurrency();
 ```
 
+### DSV41_
+
+Advanced backend control DSV41_. Set explicitly only for the selected backend; its literal read and fallback are documented below.
+
+Scope: mac-mlx. Class: advanced.
+
+Source: `vendor/mac-mlx/mlx_vlm/custom_kernels/deepseek_v41/test_index_fused_cpu.py:428`. Unset read: Wrapper/conditional default: see the literal call and consumer below.
+
+```text
+                 "FFN_FUSED", "FFN_DOWN_BF16", "FFN_EXPERT_PAD16", "FFN_EXPERT_TILES",
+                 "PROMOTE_DECODE_WEIGHTS", "S4_COMPILE_INDEXER", "S4_PRECOMPUTE", "S4_BYPASS"):
+        monkeypatch.setenv("DSV41_" + name, "0")
+    monkeypatch.setenv("DSV41_INDEX_WORKSPACE_MB", "512")
+    ns = _production()
+    calls = []
+    ns["prepare_index_fused"] = lambda layers, skip=False: calls.append(
+```
+
+Source: `vendor/mac-mlx/mlx_vlm/custom_kernels/deepseek_v41/test_index_fused_cpu.py:722`. Unset read: Wrapper/conditional default: see the literal call and consumer below.
+
+```text
+    ns, calls, indexer, model = dispatch
+    monkeypatch.setenv("DSV41_INDEX_FUSED", "1")
+    monkeypatch.setenv("DSV41_" + conflict, "1")
+    with pytest.raises(ValueError, match="cannot combine"):
+        ns["attach"](model, ".")
+    assert not calls and not indexer.index_fused
+    monkeypatch.setenv("DSV41_" + conflict, "0")
+```
+
+Source: `vendor/mac-mlx/mlx_vlm/custom_kernels/deepseek_v41/test_index_fused_cpu.py:726`. Unset read: Wrapper/conditional default: see the literal call and consumer below.
+
+```text
+        ns["attach"](model, ".")
+    assert not calls and not indexer.index_fused
+    monkeypatch.setenv("DSV41_" + conflict, "0")
+    ns["attach"](model, ".")
+    monkeypatch.setenv("DSV41_" + conflict, "1")
+    x = np.ones((1, 64, 4), np.float32)
+    with pytest.raises(ValueError, match="cannot combine"):
+```
+
+Source: `vendor/mac-mlx/mlx_vlm/custom_kernels/deepseek_v41/test_index_fused_cpu.py:728`. Unset read: Wrapper/conditional default: see the literal call and consumer below.
+
+```text
+    monkeypatch.setenv("DSV41_" + conflict, "0")
+    ns["attach"](model, ".")
+    monkeypatch.setenv("DSV41_" + conflict, "1")
+    x = np.ones((1, 64, 4), np.float32)
+    with pytest.raises(ValueError, match="cannot combine"):
+        ns["forward"](indexer, x, x, 0, 128, None, None, None)
+
+```
+
+### DSV41_ASYNC_PREPARE
+
+Advanced backend control DSV41_ASYNC_PREPARE. Set explicitly only for the selected backend; its literal read and fallback are documented below.
+
+Scope: mac-mlx. Class: advanced.
+
+Source: `vendor/mac-mlx/mlx_vlm/models/deepseek_v41/language.py:2232`. Unset read: '0'.
+
+```text
+        # Launch the embedding while the CPU hash/table path prepares its rows.
+        # Kept independently switchable so its contribution can be measured.
+        if os.environ.get("DSV41_ASYNC_PREPARE", "0") == "1":
+            mx.async_eval(h)
+        token_mask = None
+        if cache.engram is not None:
+            if image_mask is not None and os.environ.get("DSV41_COALESCE_HASH_INPUTS", "0") == "1":
+```
+
 ### DSV41_BOUNDARY_CAPTURE
 
 DSV41_BOUNDARY_CAPTURE: advanced engine setting; built-in default retained
@@ -56336,7 +57131,7 @@ capture::capture(uint32_t layer,uint32_t start,uint32_t count,const std::vector<
     p=std::make_unique<implementation>();
 ```
 
-Source: `engines/streaming-llama/prefill_llama.cpp/src/llama-dsv41-executor.cpp:890`. Unset read: NULL from getenv; the literal consumer below supplies any fallback.
+Source: `engines/streaming-llama/prefill_llama.cpp/src/llama-dsv41-executor.cpp:914`. Unset read: NULL from getenv; the literal consumer below supplies any fallback.
 
 ```text
         unsigned mul_f16_fused=0;
@@ -56360,11 +57155,11 @@ Source: `engines/streaming-llama/prefill_llama.cpp/src/llama-dsv41-layer.cpp:48`
     GGML_ASSERT(p.ratio!=0 || compressed_rows==0);
 ```
 
-Source: `engines/streaming-llama/prefill_llama.cpp/src/llama-dsv41-sweep.cpp:251`. Unset read: NULL from getenv; the literal consumer below supplies any fallback.
+Source: `engines/streaming-llama/prefill_llama.cpp/src/llama-dsv41-sweep.cpp:252`. Unset read: NULL from getenv; the literal consumer below supplies any fallback.
 
 ```text
             require(!restored||restored->local_snapshot,"YOCO requires a local snapshot with explicit YOCO provenance");
-            require(options.fixed&&options.carry.resident_ram&&options.carry.direct_ram_tiles&&options.admitted_hidden_bytes&&options.carry.export_hidden_after_head&&options.carry.max_tile_tokens>=140&&(!options.compute_step_tokens||options.compute_step_tokens>=140)&&!options.diagnostic_layers&&!options.diagnostic_carry&&
+            require(options.fixed&&options.carry.resident_ram&&options.carry.direct_ram_tiles&&options.admitted_hidden_bytes&&options.carry.export_hidden_after_head&&options.carry.max_tile_tokens>=options.yoco_keep&&(!options.compute_step_tokens||options.compute_step_tokens>=options.yoco_keep)&&!options.diagnostic_layers&&!options.diagnostic_carry&&
                 !std::getenv("DSV41_BOUNDARY_CAPTURE"),"YOCO requires the single-engine fixed RAM owner without full-row diagnostics");
             if(prefix){
                 require(prefix!=this,"YOCO prefix cannot be its own destination");
@@ -56372,7 +57167,7 @@ Source: `engines/streaming-llama/prefill_llama.cpp/src/llama-dsv41-sweep.cpp:251
                 require(previous_lock.owns_lock(),"YOCO prefix is active");
 ```
 
-Source: `engines/streaming-llama/prefill_llama.cpp/src/llama-dsv41-sweep.cpp:282`. Unset read: NULL from getenv; the literal consumer below supplies any fallback.
+Source: `engines/streaming-llama/prefill_llama.cpp/src/llama-dsv41-sweep.cpp:284`. Unset read: NULL from getenv; the literal consumer below supplies any fallback.
 
 ```text
         require(!options.unaligned_append_step_tokens||(options.stateful_chunks&&options.fixed&&options.reuse_graph&&!options.reuse_layer_graph),"Unaligned append policy requires the existing stateful fixed owner");
@@ -56384,7 +57179,7 @@ Source: `engines/streaming-llama/prefill_llama.cpp/src/llama-dsv41-sweep.cpp:282
             "Direct pinned RAM requires native experts, admitted RAM bank and separate64MiB device ceiling");
 ```
 
-Source: `engines/streaming-llama/prefill_llama.cpp/src/llama-dsv41-sweep.cpp:283`. Unset read: NULL from getenv; the literal consumer below supplies any fallback.
+Source: `engines/streaming-llama/prefill_llama.cpp/src/llama-dsv41-sweep.cpp:285`. Unset read: NULL from getenv; the literal consumer below supplies any fallback.
 
 ```text
         require(!options.compute_step_tokens||(options.compute_step_tokens<=options.carry.max_tile_tokens&&(!options.pair_ffn||options.compute_step_tokens==options.carry.max_tile_tokens)),"Logical compute step exceeds its admitted tile or changes paired group alignment");
@@ -56396,7 +57191,7 @@ Source: `engines/streaming-llama/prefill_llama.cpp/src/llama-dsv41-sweep.cpp:283
         require(!options.admitted_prefetch_device_bytes||(options.admitted_pinned_device_bytes&&options.reuse_graph&&!options.reuse_layer_graph&&
 ```
 
-Source: `engines/streaming-llama/prefill_llama.cpp/tools/dsv41-prefill/main.cpp:392`. Unset read: NULL from getenv; the literal consumer below supplies any fallback.
+Source: `engines/streaming-llama/prefill_llama.cpp/tools/dsv41-prefill/main.cpp:394`. Unset read: NULL from getenv; the literal consumer below supplies any fallback.
 
 ```text
         expert.admitted_pool_bytes=expert_options?number("--expert-workspace-bytes"):0;
@@ -56408,7 +57203,7 @@ Source: `engines/streaming-llama/prefill_llama.cpp/tools/dsv41-prefill/main.cpp:
             using namespace llama_dsv41_native_columns_resource_proof;
 ```
 
-Source: `engines/streaming-llama/prefill_llama.cpp/tools/dsv41-prefill/main.cpp:509`. Unset read: NULL from getenv; the literal consumer below supplies any fallback.
+Source: `engines/streaming-llama/prefill_llama.cpp/tools/dsv41-prefill/main.cpp:511`. Unset read: NULL from getenv; the literal consumer below supplies any fallback.
 
 ```text
         if(fold_plan.tail){std::fprintf(stderr,"LLAMADECODE_PREFILL_FOLD_TAIL tokens=%zu primary_sweep_tokens=%u remainder=%u capacity=%u fold_cap=%u folded_last=%u sweep_tokens=%s\n",
@@ -56420,7 +57215,7 @@ Source: `engines/streaming-llama/prefill_llama.cpp/tools/dsv41-prefill/main.cpp:
         const bool live=args.count("--session-stdio")&&args.at("--session-stdio")=="1";
 ```
 
-Source: `engines/streaming-llama/prefill_llama.cpp/tools/dsv41-prefill/main.cpp:865`. Unset read: NULL from getenv; the literal consumer below supplies any fallback.
+Source: `engines/streaming-llama/prefill_llama.cpp/tools/dsv41-prefill/main.cpp:867`. Unset read: NULL from getenv; the literal consumer below supplies any fallback.
 
 ```text
         uint64_t warm_cublas=0;
@@ -56430,6 +57225,4651 @@ Source: `engines/streaming-llama/prefill_llama.cpp/tools/dsv41-prefill/main.cpp:
             warm_options.yoco_keep=0;warm_options.yoco_remote_state_version=0;warm_options.yoco_logical_end=0;warm_options.carry.tokens=1;warm_options.pair_ffn=false;
             warm_options.carry.max_tile_tokens=std::min(4096u,warm_options.carry.max_tile_tokens);
             warm_options.compute_step_tokens=std::min(warm_options.compute_step_tokens,warm_options.carry.max_tile_tokens);
+```
+
+### DSV41_BOUNDED_CACHE
+
+Advanced backend control DSV41_BOUNDED_CACHE. Set explicitly only for the selected backend; its literal read and fallback are documented below.
+
+Scope: mac-mlx. Class: advanced.
+
+Source: `vendor/mac-mlx/mlx_vlm/runtime_profile.py:143`. Unset read: None.
+
+```text
+                restore.append(lambda limit=old: mx.set_cache_limit(limit))
+            elif experiment == "unbounded_cache":
+                old = os.environ.get("DSV41_BOUNDED_CACHE")
+                os.environ["DSV41_BOUNDED_CACHE"] = "0"
+                restore.append(lambda: os.environ.pop("DSV41_BOUNDED_CACHE", None) if old is None else os.environ.__setitem__("DSV41_BOUNDED_CACHE", old))
+            elif experiment == "fast_rms_norm":
+                old = os.environ.get("DSV41_FAST_RMS_NORM")
+```
+
+Source: `vendor/mac-mlx/mlx_vlm/runtime_profile.py:144`. Unset read: Assigned by the runtime; see literal consumer.
+
+```text
+            elif experiment == "unbounded_cache":
+                old = os.environ.get("DSV41_BOUNDED_CACHE")
+                os.environ["DSV41_BOUNDED_CACHE"] = "0"
+                restore.append(lambda: os.environ.pop("DSV41_BOUNDED_CACHE", None) if old is None else os.environ.__setitem__("DSV41_BOUNDED_CACHE", old))
+            elif experiment == "fast_rms_norm":
+                old = os.environ.get("DSV41_FAST_RMS_NORM")
+                os.environ["DSV41_FAST_RMS_NORM"] = "1"
+```
+
+Source: `vendor/mac-mlx/mlx_vlm/models/deepseek_v41/language.py:1103`. Unset read: '0'.
+
+```text
+        if self.step < 1:
+            raise ValueError("DSV41_CACHE_STEP must be positive")
+        self.bounded = os.environ.get("DSV41_BOUNDED_CACHE", "0") == "1"
+        self.layers = [_LayerCache(self.step, self.bounded) for _ in model.layers]
+        self._offset = 0
+        self.engram = None
+        if model.layout is not None:
+```
+
+Source: `vendor/mac-mlx/mlx_vlm/models/deepseek_v41/test_bounded_cache.py:29`. Unset read: Wrapper/conditional default: see the literal call and consumer below.
+
+```text
+def test_bounded_matches_history(model, monkeypatch, chunk):
+    ids = helper.token_ids()
+    monkeypatch.setenv("DSV41_BOUNDED_CACHE", "0")
+    full = model.make_cache()
+    monkeypatch.setenv("DSV41_BOUNDED_CACHE", "1")
+    bounded = model.make_cache()
+    for start in range(0, ids.shape[1], chunk):
+```
+
+Source: `vendor/mac-mlx/mlx_vlm/models/deepseek_v41/test_bounded_cache.py:31`. Unset read: Wrapper/conditional default: see the literal call and consumer below.
+
+```text
+    monkeypatch.setenv("DSV41_BOUNDED_CACHE", "0")
+    full = model.make_cache()
+    monkeypatch.setenv("DSV41_BOUNDED_CACHE", "1")
+    bounded = model.make_cache()
+    for start in range(0, ids.shape[1], chunk):
+        x = ids[:, start:start + chunk]
+        expected = model(x, cache=full).logits
+```
+
+Source: `vendor/mac-mlx/mlx_vlm/models/deepseek_v41/test_bounded_cache.py:58`. Unset read: Wrapper/conditional default: see the literal call and consumer below.
+
+```text
+
+def test_compressor_missing_history_fails(model, monkeypatch):
+    monkeypatch.setenv("DSV41_BOUNDED_CACHE", "1")
+    cache = model.make_cache()
+    mx.eval(model(helper.token_ids()[:, :17], cache=cache).logits)
+    lc = cache[0].layers[2]
+    with pytest.raises(ValueError, match="no longer retained"):
+```
+
+### DSV41_CACHE_STEP
+
+Advanced backend control DSV41_CACHE_STEP. Set explicitly only for the selected backend; its literal read and fallback are documented below.
+
+Scope: mac-mlx. Class: advanced.
+
+Source: `vendor/mac-mlx/mlx_vlm/models/deepseek_v41/language.py:1098`. Unset read: DSV41_CACHE_STEP.
+
+```text
+        self._attentions = [layer.attn for layer in model.layers]
+        try:
+            self.step = int(os.environ.get("DSV41_CACHE_STEP", DSV41_CACHE_STEP))
+        except ValueError:
+            self.step = DSV41_CACHE_STEP
+        if self.step < 1:
+            raise ValueError("DSV41_CACHE_STEP must be positive")
+```
+
+Source: `vendor/mac-mlx/mlx_vlm/models/deepseek_v41/test_language_dsv41_mac.py:357`. Unset read: Wrapper/conditional default: see the literal call and consumer below.
+
+```text
+    """
+    # Force real doublings in a short test; production defaults to 2048 rows.
+    monkeypatch.setenv("DSV41_CACHE_STEP", "16")
+    model, _ = model_and_ids
+    ids = mx.array(np.random.default_rng(29).integers(3, VOCAB, (1, 301)).astype(np.int32))
+    cache = model.make_cache()
+    pieces = [model(ids[:, :1], cache=cache).logits]
+```
+
+### DSV41_CANDIDATE_LANGUAGE
+
+Advanced backend control DSV41_CANDIDATE_LANGUAGE. Set explicitly only for the selected backend; its literal read and fallback are documented below.
+
+Scope: mac-mlx. Class: advanced.
+
+Source: `vendor/mac-mlx/mlx_vlm/models/deepseek_v41/test_bounded_cache.py:14`. Unset read: None.
+
+```text
+@pytest.fixture
+def model(monkeypatch):
+    candidate = os.environ.get("DSV41_CANDIDATE_LANGUAGE")
+    if candidate:
+        spec = importlib.util.spec_from_file_location(
+            "mlx_vlm.models.deepseek_v41._candidate_language", candidate)
+        module = importlib.util.module_from_spec(spec)
+```
+
+### DSV41_COALESCE_HASH_INPUTS
+
+Advanced backend control DSV41_COALESCE_HASH_INPUTS. Set explicitly only for the selected backend; its literal read and fallback are documented below.
+
+Scope: mac-mlx. Class: advanced.
+
+Source: `vendor/mac-mlx/mlx_vlm/models/deepseek_v41/language.py:2236`. Unset read: '0'.
+
+```text
+        token_mask = None
+        if cache.engram is not None:
+            if image_mask is not None and os.environ.get("DSV41_COALESCE_HASH_INPUTS", "0") == "1":
+                # One device-to-host boundary instead of separate ids/mask waits.
+                packed = np.array(mx.concatenate([inputs, image_mask.astype(inputs.dtype)], axis=0))
+                ids, token_mask = packed[:inputs.shape[0]], ~packed[inputs.shape[0]:].astype(bool)
+            else:
+```
+
+### DSV41_COMPILE_BLOCK
+
+Advanced backend control DSV41_COMPILE_BLOCK. Set explicitly only for the selected backend; its literal read and fallback are documented below.
+
+Scope: mac-mlx. Class: advanced.
+
+Source: `vendor/mac-mlx/mlx_vlm/models/deepseek_v41/language.py:1806`. Unset read: '0'.
+
+```text
+                from .megakernel import decode_block
+                return decode_block(self, h, pre_mix, start_pos, cache, shared, image_mask)
+            if os.environ.get("DSV41_COMPILE_BLOCK", "0") == "1" and h.shape[:2] == (1, 1):
+                from .block_graph import BlockGraphs
+                graph = getattr(self, "_block_graph", None)
+                if graph is None:
+                    graph = BlockGraphs()
+```
+
+Source: `vendor/mac-mlx/mlx_vlm/models/deepseek_v41/language.py:2259`. Unset read: '0'.
+
+```text
+        pre_mix = mx.broadcast_to((mx.arange(hc) == 0).astype(mx.float32), (b, n, hc))
+        capture_set = set(capture_layer_ids) if capture_layer_ids else set()
+        if os.environ.get("DSV41_COMPILE_BLOCK", "0") == "1":
+            from .block_graph import BlockGraphs
+            if getattr(self, "_block_graph", None) is None:
+                object.__setattr__(self, "_block_graph", BlockGraphs())
+                for layer in self.layers:
+```
+
+Source: `vendor/mac-mlx/mlx_vlm/models/deepseek_v41/megakernel.py:138`. Unset read: '0'.
+
+```text
+    """Use incoming pre for attention, attention's pre for FFN (staggered HC)."""
+    _check(h)
+    if os.environ.get("DSV41_COMPILE_BLOCK", "0") == "1":
+        graph = getattr(layer, "_megakernel_graph", None)
+        if graph is None:
+            graph = _MegakernelGraphs()
+            object.__setattr__(layer, "_megakernel_graph", graph)
+```
+
+### DSV41_COMPILE_PRIMITIVES
+
+Advanced backend control DSV41_COMPILE_PRIMITIVES. Set explicitly only for the selected backend; its literal read and fallback are documented below.
+
+Scope: mac-mlx. Class: advanced.
+
+Source: `vendor/mac-mlx/mlx_vlm/runtime_profile.py:174`. Unset read: None.
+
+```text
+                language._v41_expert_select = mx.compile(namespace[node.name])
+                restore.append(lambda f=original_select: setattr(language, "_v41_expert_select", f))
+                old = os.environ.get("DSV41_COMPILE_PRIMITIVES")
+                os.environ["DSV41_COMPILE_PRIMITIVES"] = "1"
+                restore.append(lambda: os.environ.pop("DSV41_COMPILE_PRIMITIVES", None) if old is None else os.environ.__setitem__("DSV41_COMPILE_PRIMITIVES", old))
+            elif experiment == "compile_hc":
+                old = hc.COMPILE_POST
+```
+
+Source: `vendor/mac-mlx/mlx_vlm/runtime_profile.py:175`. Unset read: Assigned by the runtime; see literal consumer.
+
+```text
+                restore.append(lambda f=original_select: setattr(language, "_v41_expert_select", f))
+                old = os.environ.get("DSV41_COMPILE_PRIMITIVES")
+                os.environ["DSV41_COMPILE_PRIMITIVES"] = "1"
+                restore.append(lambda: os.environ.pop("DSV41_COMPILE_PRIMITIVES", None) if old is None else os.environ.__setitem__("DSV41_COMPILE_PRIMITIVES", old))
+            elif experiment == "compile_hc":
+                old = hc.COMPILE_POST
+                hc.COMPILE_POST = True
+```
+
+Source: `vendor/mac-mlx/mlx_vlm/custom_kernels/deepseek_v41/test_grouped_gemm.py:386`. Unset read: Wrapper/conditional default: see the literal call and consumer below.
+
+```text
+@pytest.mark.parametrize("config_name", TEST_CONFIGS)
+def test_composed_moe(monkeypatch, compile_combine, case, config_name):
+    monkeypatch.setenv("DSV41_COMPILE_PRIMITIVES", compile_combine)
+    moe = make_moe(E, D, I)
+    ids, _ = routes(case)
+    indices = mx.array(ids)
+    mx.random.seed(341)
+```
+
+Source: `vendor/mac-mlx/mlx_vlm/models/deepseek_v41/language.py:225`. Unset read: '0'.
+
+```text
+                x.astype(mx.float32), self.weight.astype(mx.float32), self.eps
+            ).astype(x.dtype)
+        if os.environ.get("DSV41_COMPILE_PRIMITIVES", "0") == "1":
+            return _v41_rms_norm(x, self.weight, self.eps)
+        dtype = x.dtype
+        xf = x.astype(mx.float32)
+        var = mx.mean(mx.square(xf), axis=-1, keepdims=True)
+```
+
+Source: `vendor/mac-mlx/mlx_vlm/models/deepseek_v41/language.py:816`. Unset read: '0'.
+
+```text
+            # Inference opt-in: this changes stored parameter dtype/memory.
+            self.weight = self.weight.astype(mx.float32)
+        if os.environ.get("DSV41_COMPILE_PRIMITIVES", "0") == "1":
+            bias = self.e_score_correction_bias
+            if image_mask is not None:
+                bias = mx.where(image_mask[..., None], self.bias_vl, bias)
+            return _v41_expert_select(
+```
+
+Source: `vendor/mac-mlx/mlx_vlm/models/deepseek_v41/language.py:989`. Unset read: '0'.
+
+```text
+                y = (_ffn_down_bf16(self.switch_mlp, xf, indices) if down_bf16
+                     else self.switch_mlp(xf, indices))            # [tokens, topk, dim]
+            if os.environ.get("DSV41_COMPILE_PRIMITIVES", "0") == "1":
+                y = _v41_moe_combine(y, weights)
+            else:
+                y = mx.sum(y.astype(mx.float32) * weights[..., None], axis=-2)
+        y = y + self.shared_experts(xf).astype(mx.float32)
+```
+
+Source: `vendor/mac-mlx/mlx_vlm/models/deepseek_v41/language.py:1408`. Unset read: '0'.
+
+```text
+            shape = (kv.shape[0], stop - first, ratio, kv.shape[-1])
+            score = lc.absolute_slice("score", first * ratio, stop * ratio).reshape(shape)
+            if os.environ.get("DSV41_COMPILE_PRIMITIVES", "0") == "1":
+                kv = _v41_compress_pool(kv.reshape(shape), score)
+            else:
+                kv = mx.sum(kv.reshape(shape) * mx.softmax(score, axis=2), axis=2)
+        return self.norm(kv.astype(dtype))
+```
+
+Source: `vendor/mac-mlx/mlx_vlm/models/deepseek_v41/moe_prefill.py:46`. Unset read: '0'.
+
+```text
+    down = project(hidden, mlp.down_proj, mx.float32)
+    y = down[inverse].reshape(*indices.shape, xf.shape[-1])
+    if os.environ.get("DSV41_COMPILE_PRIMITIVES", "0") == "1":
+        from .language import _v41_moe_combine
+
+        return _v41_moe_combine(y, weights)
+    return mx.sum(y.astype(mx.float32) * weights[..., None], axis=-2)
+```
+
+Source: `vendor/mac-mlx/mlx_vlm/models/deepseek_v41/test_ffn_down_bf16_cpu.py:52`. Unset read: Wrapper/conditional default: see the literal call and consumer below.
+
+```text
+    ns = _load()
+    monkeypatch.setenv("DSV41_PREFILL_GROUPED_MXFP4", "0")
+    monkeypatch.setenv("DSV41_COMPILE_PRIMITIVES", "0")
+    calls = []
+    routed = np.arange(n * 6 * 4, dtype=np.float32).reshape(n, 6, 4) / 100
+    weights = np.full((n, 6), 0.25, np.float32)
+    moe = SimpleNamespace(dim=4, ffn_down_bf16=False,
+```
+
+Source: `vendor/mac-mlx/mlx_vlm/models/deepseek_v41/test_ffn_expert_pad_cpu.py:165`. Unset read: Wrapper/conditional default: see the literal call and consumer below.
+
+```text
+    monkeypatch.setenv("DSV41_PREFILL_GROUPED_MXFP4", "1")
+    monkeypatch.setenv("DSV41_PREFILL_GROUPED_MIN_ROWS", "64")
+    monkeypatch.setenv("DSV41_COMPILE_PRIMITIVES", "0")
+    up = Mock(side_effect=lambda x, ids, **kw: x * (ids[:, None, None] + 1))
+    up.num_experts = 8
+    mlp = SimpleNamespace(training=False, up_proj=up,
+                          gate_proj=lambda x, ids, **kw: np.ones_like(x),
+```
+
+### DSV41_COMPILE_SPARSE_ATTN
+
+Advanced backend control DSV41_COMPILE_SPARSE_ATTN. Set explicitly only for the selected backend; its literal read and fallback are documented below.
+
+Scope: mac-mlx. Class: advanced.
+
+Source: `vendor/mac-mlx/mlx_vlm/custom_kernels/deepseek_v41/validate_sdpa.py:39`. Unset read: Assigned by the runtime; see literal consumer.
+
+```text
+    os.environ['DSV41_SDPA_SPARSE_ATTN'] = '1' if path == 'sdpa' else '0'
+    os.environ['DSV41_METAL_SPARSE_ATTN'] = '1' if path == 'metal' else '0'
+    os.environ['DSV41_COMPILE_SPARSE_ATTN'] = '1' if path == 'compiled' else '0'
+
+
+def metrics(actual, expected):
+    a, e = np.asarray(actual, dtype=np.float64), np.asarray(expected, dtype=np.float64)
+```
+
+Source: `vendor/mac-mlx/mlx_vlm/models/deepseek_v41/language.py:343`. Unset read: '0'.
+
+```text
+
+    attend = partial(_sparse_attn_chunk, sdpa=True) if use_sdpa else _sparse_attn_chunk
+    if not use_sdpa and os.environ.get("DSV41_COMPILE_SPARSE_ATTN", "0") == "1":
+        # Reuse the callable across chunks AND layers; MLX caches by input shape.
+        if not hasattr(sparse_attn, "_compiled_chunk"):
+            sparse_attn._compiled_chunk = mx.compile(_sparse_attn_chunk)
+        attend = sparse_attn._compiled_chunk
+```
+
+### DSV41_COMPRESS_RATIOS
+
+Advanced backend control DSV41_COMPRESS_RATIOS. Set explicitly only for the selected backend; its literal read and fallback are documented below.
+
+Scope: mac-mlx. Class: advanced.
+
+Source: `vendor/mac-mlx/mlx_vlm/models/deepseek_v41/test_kv_selection_width.py:72`. Unset read: Wrapper/conditional default: see the literal call and consumer below.
+
+```text
+    back.
+    """
+    monkeypatch.setenv("DSV41_COMPRESS_RATIOS", "0,0,0,0")
+    cfg = _text_config()
+    assert cfg.compress_ratios[2] == 2
+```
+
+### DSV41_DSPARK
+
+Advanced backend control DSV41_DSPARK. Set explicitly only for the selected backend; its literal read and fallback are documented below.
+
+Scope: mac-mlx. Class: advanced.
+
+Source: `engines/mlx-receiver/mlx_token_stream_server.py:159`. Unset read: '0'.
+
+```text
+    sizes = {'bfloat16': 2, 'float32': 4, 'uint32': 4, 'uint8': 1}
+    specs = expected_parameters(config.text_config, source)
+    resident_specs = {name: spec for name, spec in specs.items() if not (name.startswith('dspark.') and os.environ.get('DSV41_DSPARK', '0') != '1')}
+    parameter_bytes = sum((sizes[dtype] * prod(shape) for dtype, shape in resident_specs.values()))
+    if config.vision_config is not None:
+        parameter_bytes += sum((2 * prod(shape) for _, shape in expected_vision_parameters(config.vision_config, config.text_config.hidden_size).values()))
+    if os.environ.get('DSV41_PROMOTE_DECODE_WEIGHTS', '0') == '1':
+```
+
+Source: `vendor/mac-mlx/mlx_vlm/models/deepseek_v41/dspark_receiver.py:18`. Unset read: '0'.
+
+```text
+
+def enabled():
+    if os.environ.get("DSV41_DSPARK", "0") != "1":
+        return False
+    # Optional local diagnostic control permits A/B on the same loaded weights.
+    # The preset's off switch always wins. No network request controls this file.
+    control = os.environ.get("DSV41_DSPARK_MODE_FILE")
+```
+
+Source: `vendor/mac-mlx/mlx_vlm/models/deepseek_v41/language.py:2005`. Unset read: '0'.
+
+```text
+            "DSV41_PREFILL_CONE will not switch DSV41_PREFILL_LAYER_MAJOR on for you.")
+    tail, tail_set = prefill_cone_tail()
+    if cone and os.environ.get("DSV41_DSPARK", "0") == "1" and not tail_set:
+        raise ValueError(
+            "DSV41_PREFILL_CONE=1 with DSV41_DSPARK=1 needs DSV41_PREFILL_CONE_TAIL=<W> "
+            "set explicitly. The drafter is warmed from the target's rows at the END of "
+            "the prompt -- DSV4.1 DSpark from the capture taps of layers "
+```
+
+Source: `vendor/mac-mlx/mlx_vlm/models/deepseek_v41/test_prefill_cone.py:159`. Unset read: Wrapper/conditional default: see the literal call and consumer below.
+
+```text
+    monkeypatch.setenv("DSV41_PREFILL_CONE", "1")
+    monkeypatch.setenv("DSV41_PREFILL_LAYER_MAJOR", "1")
+    monkeypatch.setenv("DSV41_DSPARK", "1")
+    monkeypatch.delenv("DSV41_PREFILL_CONE_TAIL", raising=False)
+    with pytest.raises(ValueError) as excinfo:
+        _prefill_switches(4096, _Cache(), None)
+    message = str(excinfo.value)
+```
+
+Source: `vendor/mac-mlx/mlx_vlm/models/deepseek_v41/test_prefill_cone.py:172`. Unset read: Wrapper/conditional default: see the literal call and consumer below.
+
+```text
+    monkeypatch.setenv("DSV41_PREFILL_CONE", "1")
+    monkeypatch.setenv("DSV41_PREFILL_LAYER_MAJOR", "1")
+    monkeypatch.delenv("DSV41_DSPARK", raising=False)
+    monkeypatch.delenv("DSV41_PREFILL_CONE_TAIL", raising=False)
+    with pytest.raises(ValueError) as excinfo:
+        _prefill_switches(4096, _Cache(), [37, 38, 39])
+    assert "capture_layer_ids" in str(excinfo.value)
+```
+
+Source: `vendor/mac-mlx/mlx_vlm/models/deepseek_v41/test_prefill_cone.py:996`. Unset read: Wrapper/conditional default: see the literal call and consumer below.
+
+```text
+    monkeypatch.setenv("DSV41_PREFILL_CONE", "1")
+    monkeypatch.setenv("DSV41_PREFILL_LAYER_MAJOR", "1")
+    monkeypatch.setenv("DSV41_DSPARK", "1")
+    monkeypatch.delenv("DSV41_PREFILL_CONE_TAIL", raising=False)
+    with pytest.raises(ValueError) as excinfo:
+        _prefill_switches(4096, _Cache(), None)
+    message = str(excinfo.value)
+```
+
+Source: `vendor/mac-mlx/mlx_vlm/models/deepseek_v41/test_prefill_cone.py:1011`. Unset read: Wrapper/conditional default: see the literal call and consumer below.
+
+```text
+    monkeypatch.setenv("DSV41_PREFILL_CONE", "1")
+    monkeypatch.setenv("DSV41_PREFILL_LAYER_MAJOR", "1")
+    monkeypatch.delenv("DSV41_DSPARK", raising=False)
+    monkeypatch.delenv("DSV41_PREFILL_CONE_TAIL", raising=False)
+    with pytest.raises(ValueError) as excinfo:
+        _prefill_switches(4096, _Cache(), [37, 38, 39])
+    assert "DSV41_PREFILL_CONE_TAIL" in str(excinfo.value)
+```
+
+### DSV41_DSPARK_ADAPTIVE
+
+Advanced backend control DSV41_DSPARK_ADAPTIVE. Set explicitly only for the selected backend; its literal read and fallback are documented below.
+
+Scope: mac-mlx. Class: advanced.
+
+Source: `vendor/mac-mlx/mlx_vlm/speculative/dspark.py:229`. Unset read: '0'.
+
+```text
+    # per round (measured at the walk, which forces the target tokens) and committed counts.
+    controller = None
+    if os.environ.get("DSV41_DSPARK_ADAPTIVE", "0") == "1":
+        from .dspark_controller import DSparkCostController
+        controller = DSparkCostController.from_env()
+        draft_model.cost_controller = controller
+    from time import perf_counter as _clock
+```
+
+### DSV41_DSPARK_COLD_BENCH
+
+Advanced backend control DSV41_DSPARK_COLD_BENCH. Set explicitly only for the selected backend; its literal read and fallback are documented below.
+
+Scope: mac-mlx. Class: advanced.
+
+Source: `engines/mlx-receiver/mlx_token_stream_server.py:1661`. Unset read: '0'.
+
+```text
+            importlib.reload(runtime_profile).run_requested(self.model, prompt_token_ids)
+        is_dsv41 = _is_dsv41(self.model)
+        if is_dsv41 and os.environ.get('DSV41_DSPARK_COLD_BENCH', '0') == '1':
+            self._retained_cache = None
+            self._retained_tokens = []
+        vision_prompt = getattr(self, '_dsv41_vision_prompt', None) if is_dsv41 else None
+        self._dsv41_vision_prompt = None
+```
+
+### DSV41_DSPARK_COMPILE_HEAD
+
+Advanced backend control DSV41_DSPARK_COMPILE_HEAD. Set explicitly only for the selected backend; its literal read and fallback are documented below.
+
+Scope: mac-mlx. Class: advanced.
+
+Source: `vendor/mac-mlx/mlx_vlm/models/deepseek_v41/dspark.py:399`. Unset read: '0'.
+
+```text
+        last._walk_key = key
+        last._walk = (mx.compile(walk, inputs=mx.random.state, outputs=mx.random.state)
+                      if os.environ.get("DSV41_DSPARK_COMPILE_HEAD", "0") == "1"
+                      else walk)
+    ids, corrected, embeds = last._walk(
+        logits, anchor, last.markov_head.embed.weight, last.markov_head.head.weight)
+    confidence = last.confidence_head(hidden, embeds)
+```
+
+### DSV41_DSPARK_MODE_FILE
+
+Advanced backend control DSV41_DSPARK_MODE_FILE. Set explicitly only for the selected backend; its literal read and fallback are documented below.
+
+Scope: mac-mlx. Class: advanced.
+
+Source: `vendor/mac-mlx/mlx_vlm/models/deepseek_v41/dspark_receiver.py:22`. Unset read: None.
+
+```text
+    # Optional local diagnostic control permits A/B on the same loaded weights.
+    # The preset's off switch always wins. No network request controls this file.
+    control = os.environ.get("DSV41_DSPARK_MODE_FILE")
+    return not control or bool(json.loads(Path(control).read_text())["enabled"])
+
+
+class _ReceiverSampler:
+```
+
+Source: `vendor/mac-mlx/mlx_vlm/models/deepseek_v41/dspark_receiver.py:95`. Unset read: None.
+
+```text
+        if self.hidden is None:
+            raise RuntimeError("DSpark requires captures from local prefill")
+        control = os.environ.get("DSV41_DSPARK_MODE_FILE")
+        if control and json.loads(Path(control).read_text()).get("audit", False):
+            self.audit(cache, first)
+        yield first
+        rounds = _dspark_rounds(self.model, self.drafter, cache, self.hidden,
+```
+
+### DSV41_DSPARK_REJECT_LOG
+
+Advanced backend control DSV41_DSPARK_REJECT_LOG. Set explicitly only for the selected backend; its literal read and fallback are documented below.
+
+Scope: mac-mlx. Class: advanced.
+
+Source: `vendor/mac-mlx/mlx_vlm/speculative/dspark.py:161`. Unset read: ''.
+
+```text
+#
+# Off unless DSV41_DSPARK_REJECT_LOG names a file. One short JSON line per round.
+_DSPARK_REJECT_LOG = os.environ.get("DSV41_DSPARK_REJECT_LOG", "")
+
+
+def _dspark_record_round(draft_tokens, target_tokens, accepted):
+    """Append one round: what was drafted, what the target wanted, how many survived."""
+```
+
+### DSV41_DSPARK_STATS
+
+Advanced backend control DSV41_DSPARK_STATS. Set explicitly only for the selected backend; its literal read and fallback are documented below.
+
+Scope: mac-mlx. Class: advanced.
+
+Source: `vendor/mac-mlx/mlx_vlm/models/deepseek_v41/dspark_receiver.py:48`. Unset read: None.
+
+```text
+
+        self._rng_before = (_copy_rng_state()
+                            if os.environ.get("DSV41_DSPARK_STATS") else None)
+        self.model = language_model
+        self.drafter = language_model.make_dspark_drafter()
+        if os.environ.get("DSV41_DSPARK_TIMING", "0") == "1":
+            from ...speculative.dspark_timing import DSparkTiming
+```
+
+Source: `vendor/mac-mlx/mlx_vlm/models/deepseek_v41/dspark_receiver.py:145`. Unset read: '/tmp/dsv41_s1_stats.json'.
+
+```text
+                capture_norm_ratio=float((mx.linalg.norm(actual_h.astype(mx.float32))/mx.linalg.norm(reference_h.astype(mx.float32))).item()),
+                argmax_equal=bool(mx.array_equal(mx.argmax(out.logits,axis=-1),mx.argmax(reference,axis=-1)).item()))
+            destination = os.environ.get('DSV41_DSPARK_STATS','/tmp/dsv41_s1_stats.json')+'.audit.json'
+            Path(destination).write_text(json.dumps(result,indent=2)+'\n')
+        finally:
+            _restore_rng_state(before)
+
+```
+
+Source: `vendor/mac-mlx/mlx_vlm/models/deepseek_v41/dspark_receiver.py:169`. Unset read: None.
+
+```text
+                    target_calls_per_accepted_draft=calls/sum(accepts) if sum(accepts) else None,
+                    target_and_draft_calls_per_committed_token=(calls+self.drafter.draft_calls)/max(1,emitted))
+        destination = os.environ.get("DSV41_DSPARK_STATS")
+        timing = getattr(self.drafter, "phase_timing", None)
+        if timing is not None:
+            result["phase_timing"] = timing.summary()
+        controller = getattr(self.drafter, "cost_controller", None)
+```
+
+### DSV41_DSPARK_TIMING
+
+Advanced backend control DSV41_DSPARK_TIMING. Set explicitly only for the selected backend; its literal read and fallback are documented below.
+
+Scope: mac-mlx. Class: advanced.
+
+Source: `vendor/mac-mlx/mlx_vlm/models/deepseek_v41/dspark_receiver.py:51`. Unset read: '0'.
+
+```text
+        self.model = language_model
+        self.drafter = language_model.make_dspark_drafter()
+        if os.environ.get("DSV41_DSPARK_TIMING", "0") == "1":
+            from ...speculative.dspark_timing import DSparkTiming
+            self.drafter.phase_timing = DSparkTiming()
+        if not getattr(language_model, "_dspark_materialized", False):
+            # Studio's existing loader explicitly materializes backbone layers.
+```
+
+### DSV41_EXPERT_TILES_TEST_RELEASE
+
+Advanced backend control DSV41_EXPERT_TILES_TEST_RELEASE. Set explicitly only for the selected backend; its literal read and fallback are documented below.
+
+Scope: mac-mlx. Class: advanced.
+
+Source: `vendor/mac-mlx/mlx_vlm/custom_kernels/deepseek_v41/test_expert_tiles_qmm.py:31`. Unset read: '0'.
+
+```text
+from mlx_vlm.models.deepseek_v41.language import ClampedSwiGLU
+
+RELEASE = os.environ.get("DSV41_EXPERT_TILES_TEST_RELEASE", "0") == "1"
+D, I = (5120, 2304) if RELEASE else (128, 96)
+CASES = ["probe_a", "balanced32", "8x1536", "singleton_empty", "boundaries"]
+CASES += [f"remainder_{r}" for r in range(16)]
+
+```
+
+### DSV41_FAST_RMS_NORM
+
+Advanced backend control DSV41_FAST_RMS_NORM. Set explicitly only for the selected backend; its literal read and fallback are documented below.
+
+Scope: mac-mlx. Class: advanced.
+
+Source: `vendor/mac-mlx/mlx_vlm/runtime_profile.py:147`. Unset read: None.
+
+```text
+                restore.append(lambda: os.environ.pop("DSV41_BOUNDED_CACHE", None) if old is None else os.environ.__setitem__("DSV41_BOUNDED_CACHE", old))
+            elif experiment == "fast_rms_norm":
+                old = os.environ.get("DSV41_FAST_RMS_NORM")
+                os.environ["DSV41_FAST_RMS_NORM"] = "1"
+                restore.append(lambda: os.environ.pop("DSV41_FAST_RMS_NORM", None) if old is None else os.environ.__setitem__("DSV41_FAST_RMS_NORM", old))
+            elif experiment == "metal_sinkhorn":
+                importlib.reload(hc)
+```
+
+Source: `vendor/mac-mlx/mlx_vlm/runtime_profile.py:148`. Unset read: Assigned by the runtime; see literal consumer.
+
+```text
+            elif experiment == "fast_rms_norm":
+                old = os.environ.get("DSV41_FAST_RMS_NORM")
+                os.environ["DSV41_FAST_RMS_NORM"] = "1"
+                restore.append(lambda: os.environ.pop("DSV41_FAST_RMS_NORM", None) if old is None else os.environ.__setitem__("DSV41_FAST_RMS_NORM", old))
+            elif experiment == "metal_sinkhorn":
+                importlib.reload(hc)
+                original = language._hc_split_sinkhorn_ops
+```
+
+Source: `vendor/mac-mlx/mlx_vlm/models/deepseek_v41/language.py:221`. Unset read: '0'.
+
+```text
+        # fp32 to fast RMSNorm: bf16 inputs AND weights otherwise round the
+        # normalized activation before multiplying the learned weight.
+        if os.environ.get("DSV41_FAST_RMS_NORM", "0") == "1":
+            return mx.fast.rms_norm(
+                x.astype(mx.float32), self.weight.astype(mx.float32), self.eps
+            ).astype(x.dtype)
+        if os.environ.get("DSV41_COMPILE_PRIMITIVES", "0") == "1":
+```
+
+Source: `vendor/mac-mlx/mlx_vlm/models/deepseek_v41/test_sinkhorn_metal.py:34`. Unset read: Wrapper/conditional default: see the literal call and consumer below.
+
+```text
+    norm.weight = 1 + mx.random.normal((width,)) * 0.1
+    x = mx.random.normal((1, 17, width)).astype(dtype)
+    monkeypatch.setenv("DSV41_FAST_RMS_NORM", "0")
+    expected = norm(x)
+    monkeypatch.setenv("DSV41_FAST_RMS_NORM", "1")
+    actual = norm(x)
+    mx.eval(actual, expected)
+```
+
+Source: `vendor/mac-mlx/mlx_vlm/models/deepseek_v41/test_sinkhorn_metal.py:36`. Unset read: Wrapper/conditional default: see the literal call and consumer below.
+
+```text
+    monkeypatch.setenv("DSV41_FAST_RMS_NORM", "0")
+    expected = norm(x)
+    monkeypatch.setenv("DSV41_FAST_RMS_NORM", "1")
+    actual = norm(x)
+    mx.eval(actual, expected)
+    # Native reduction order can put a BF16 result on the adjacent rounding
+    # value. The real QAT model is separately held to the long retrieval gate.
+```
+
+### DSV41_FFN_DOWN_BF16
+
+Advanced backend control DSV41_FFN_DOWN_BF16. Set explicitly only for the selected backend; its literal read and fallback are documented below.
+
+Scope: mac-mlx. Class: advanced.
+
+Source: `vendor/mac-mlx/mlx_vlm/models/deepseek_v41/language.py:2500`. Unset read: '0'.
+
+```text
+            if fused_flag == "1" and (
+                    getattr(self, "_ffn_down_bf16_attached",
+                            os.environ.get("DSV41_FFN_DOWN_BF16", "0") == "1")
+                    or getattr(self, "_ffn_expert_pad16_attached",
+                               os.environ.get("DSV41_FFN_EXPERT_PAD16", "0") == "1")
+                    or getattr(self, "_ffn_expert_tiles_attached",
+                               os.environ.get("DSV41_FFN_EXPERT_TILES", "0") == "1")
+```
+
+Source: `vendor/mac-mlx/mlx_vlm/models/deepseek_v41/language.py:2509`. Unset read: '0'.
+
+```text
+                                 "EXPERT_TILES and PREFILL_GROUPED_MXFP4 to be off")
+        if not hasattr(self, "_ffn_down_bf16_attached"):
+            self._ffn_down_bf16_attached = os.environ.get("DSV41_FFN_DOWN_BF16", "0") == "1"
+            for layer in self.layers:
+                layer.ffn.ffn_down_bf16 = self._ffn_down_bf16_attached
+        if not hasattr(self, "_ffn_expert_pad16_attached"):
+            self._ffn_expert_pad16_attached = os.environ.get("DSV41_FFN_EXPERT_PAD16", "0") == "1"
+```
+
+Source: `vendor/mac-mlx/mlx_vlm/models/deepseek_v41/test_ffn_down_bf16.py:63`. Unset read: Wrapper/conditional default: see the literal call and consumer below.
+
+```text
+    mx.eval(reference)
+    # Exercise the real attach method without needing an Engram checkpoint.
+    monkeypatch.setenv("DSV41_FFN_DOWN_BF16", "1")
+    holder = SimpleNamespace(layers=[SimpleNamespace(ffn=moe, engram=None)],
+                             model=SimpleNamespace(layout=None))
+    lang.LanguageModel.attach_engram_storage(holder, ".")
+    monkeypatch.setenv("DSV41_FFN_DOWN_BF16", "0")  # Latched at attach.
+```
+
+Source: `vendor/mac-mlx/mlx_vlm/models/deepseek_v41/test_ffn_down_bf16.py:67`. Unset read: Wrapper/conditional default: see the literal call and consumer below.
+
+```text
+                             model=SimpleNamespace(layout=None))
+    lang.LanguageModel.attach_engram_storage(holder, ".")
+    monkeypatch.setenv("DSV41_FFN_DOWN_BF16", "0")  # Latched at attach.
+    actual = moe(x)
+    mx.eval(actual)
+    # DSpark verification is excluded even at n=2048.
+    with lang._v41_verification():
+```
+
+Source: `vendor/mac-mlx/mlx_vlm/models/deepseek_v41/test_ffn_down_bf16_cpu.py:37`. Unset read: Wrapper/conditional default: see the literal call and consumer below.
+
+```text
+    monkeypatch.delenv("DSV41_PROMOTE_DECODE_WEIGHTS", raising=False)
+    if flag is None:
+        monkeypatch.delenv("DSV41_FFN_DOWN_BF16", raising=False)
+    else:
+        monkeypatch.setenv("DSV41_FFN_DOWN_BF16", flag)
+    model = SimpleNamespace(layers=[SimpleNamespace(ffn=moe, engram=None)],
+                            model=SimpleNamespace(layout=None))
+```
+
+Source: `vendor/mac-mlx/mlx_vlm/models/deepseek_v41/test_ffn_down_bf16_cpu.py:39`. Unset read: Wrapper/conditional default: see the literal call and consumer below.
+
+```text
+        monkeypatch.delenv("DSV41_FFN_DOWN_BF16", raising=False)
+    else:
+        monkeypatch.setenv("DSV41_FFN_DOWN_BF16", flag)
+    model = SimpleNamespace(layers=[SimpleNamespace(ffn=moe, engram=None)],
+                            model=SimpleNamespace(layout=None))
+    ns["attach"](model, ".")
+    return model
+```
+
+Source: `vendor/mac-mlx/mlx_vlm/models/deepseek_v41/test_ffn_down_bf16_cpu.py:62`. Unset read: Wrapper/conditional default: see the literal call and consumer below.
+
+```text
+    ns["_ffn_down_bf16"] = lambda *a: (calls.append("bf16") or routed)
+    model = _attach(ns, moe, monkeypatch, flag)
+    monkeypatch.setenv("DSV41_FFN_DOWN_BF16", "0" if flag == "1" else "1")
+    ns["attach"](model, ".")  # Environment changes after attach have no effect.
+    ns["_v41_verify_context"].set(verify)
+    actual = ns["forward"](moe, np.ones((1, n, 4), np.float32))
+    assert calls == ["bf16" if flag == "1" and n >= 64 and not verify else "fp32"]
+```
+
+Source: `vendor/mac-mlx/mlx_vlm/models/deepseek_v41/test_ffn_expert_pad.py:152`. Unset read: Wrapper/conditional default: see the literal call and consumer below.
+
+```text
+    mx.eval(reference)
+    monkeypatch.setenv("DSV41_FFN_EXPERT_PAD16", "1")
+    monkeypatch.setenv("DSV41_FFN_DOWN_BF16", "1" if down_bf16 else "0")
+    holder = SimpleNamespace(layers=[SimpleNamespace(ffn=moe, engram=None)],
+                             model=SimpleNamespace(layout=None))
+    lang.LanguageModel.attach_engram_storage(holder, ".")
+    monkeypatch.setenv("DSV41_FFN_EXPERT_PAD16", "0")
+```
+
+Source: `vendor/mac-mlx/mlx_vlm/models/deepseek_v41/test_ffn_expert_pad.py:157`. Unset read: Wrapper/conditional default: see the literal call and consumer below.
+
+```text
+    lang.LanguageModel.attach_engram_storage(holder, ".")
+    monkeypatch.setenv("DSV41_FFN_EXPERT_PAD16", "0")
+    monkeypatch.setenv("DSV41_FFN_DOWN_BF16", "0" if down_bf16 else "1")
+    lang.LanguageModel.attach_engram_storage(holder, ".")
+    assert moe.ffn_expert_pad16 and moe.ffn_down_bf16 == down_bf16
+    # The pad helper must win over grouped prefill, with the down dtype composed.
+    monkeypatch.setenv("DSV41_PREFILL_GROUPED_MXFP4", "1")
+```
+
+Source: `vendor/mac-mlx/mlx_vlm/models/deepseek_v41/test_ffn_expert_pad_cpu.py:160`. Unset read: Wrapper/conditional default: see the literal call and consumer below.
+
+```text
+    monkeypatch.setitem(sys.modules, "mlx_lm.models.switch_layers", switch)
+    monkeypatch.setenv("DSV41_FFN_EXPERT_PAD16", "1")
+    monkeypatch.setenv("DSV41_FFN_DOWN_BF16", "0")
+    monkeypatch.setenv("DSV41_PROMOTE_DECODE_WEIGHTS", "0")
+    # Padding must also take precedence over grouped prefill.
+    monkeypatch.setenv("DSV41_PREFILL_GROUPED_MXFP4", "1")
+    monkeypatch.setenv("DSV41_PREFILL_GROUPED_MIN_ROWS", "64")
+```
+
+### DSV41_FFN_EXPERT_PAD16
+
+Advanced backend control DSV41_FFN_EXPERT_PAD16. Set explicitly only for the selected backend; its literal read and fallback are documented below.
+
+Scope: mac-mlx. Class: advanced.
+
+Source: `vendor/mac-mlx/mlx_vlm/models/deepseek_v41/language.py:2502`. Unset read: '0'.
+
+```text
+                            os.environ.get("DSV41_FFN_DOWN_BF16", "0") == "1")
+                    or getattr(self, "_ffn_expert_pad16_attached",
+                               os.environ.get("DSV41_FFN_EXPERT_PAD16", "0") == "1")
+                    or getattr(self, "_ffn_expert_tiles_attached",
+                               os.environ.get("DSV41_FFN_EXPERT_TILES", "0") == "1")
+                    or os.environ.get("DSV41_PREFILL_GROUPED_MXFP4", "0") == "1"):
+                raise ValueError("DSV41_FFN_FUSED requires DOWN_BF16, EXPERT_PAD16, "
+```
+
+Source: `vendor/mac-mlx/mlx_vlm/models/deepseek_v41/language.py:2513`. Unset read: '0'.
+
+```text
+                layer.ffn.ffn_down_bf16 = self._ffn_down_bf16_attached
+        if not hasattr(self, "_ffn_expert_pad16_attached"):
+            self._ffn_expert_pad16_attached = os.environ.get("DSV41_FFN_EXPERT_PAD16", "0") == "1"
+            for layer in self.layers:
+                layer.ffn.ffn_expert_pad16 = self._ffn_expert_pad16_attached
+        if not hasattr(self, "_ffn_expert_tiles_attached"):
+            flag = os.environ.get("DSV41_FFN_EXPERT_TILES", "0")
+```
+
+Source: `vendor/mac-mlx/mlx_vlm/models/deepseek_v41/test_ffn_down_bf16_cpu.py:34`. Unset read: Wrapper/conditional default: see the literal call and consumer below.
+
+```text
+
+def _attach(ns, moe, monkeypatch, flag):
+    monkeypatch.setenv("DSV41_FFN_EXPERT_PAD16", "0")
+    monkeypatch.delenv("DSV41_PROMOTE_DECODE_WEIGHTS", raising=False)
+    if flag is None:
+        monkeypatch.delenv("DSV41_FFN_DOWN_BF16", raising=False)
+    else:
+```
+
+Source: `vendor/mac-mlx/mlx_vlm/models/deepseek_v41/test_ffn_expert_pad.py:151`. Unset read: Wrapper/conditional default: see the literal call and consumer below.
+
+```text
+    reference = moe(x)
+    mx.eval(reference)
+    monkeypatch.setenv("DSV41_FFN_EXPERT_PAD16", "1")
+    monkeypatch.setenv("DSV41_FFN_DOWN_BF16", "1" if down_bf16 else "0")
+    holder = SimpleNamespace(layers=[SimpleNamespace(ffn=moe, engram=None)],
+                             model=SimpleNamespace(layout=None))
+    lang.LanguageModel.attach_engram_storage(holder, ".")
+```
+
+Source: `vendor/mac-mlx/mlx_vlm/models/deepseek_v41/test_ffn_expert_pad.py:156`. Unset read: Wrapper/conditional default: see the literal call and consumer below.
+
+```text
+                             model=SimpleNamespace(layout=None))
+    lang.LanguageModel.attach_engram_storage(holder, ".")
+    monkeypatch.setenv("DSV41_FFN_EXPERT_PAD16", "0")
+    monkeypatch.setenv("DSV41_FFN_DOWN_BF16", "0" if down_bf16 else "1")
+    lang.LanguageModel.attach_engram_storage(holder, ".")
+    assert moe.ffn_expert_pad16 and moe.ffn_down_bf16 == down_bf16
+    # The pad helper must win over grouped prefill, with the down dtype composed.
+```
+
+Source: `vendor/mac-mlx/mlx_vlm/models/deepseek_v41/test_ffn_expert_pad_cpu.py:159`. Unset read: Wrapper/conditional default: see the literal call and consumer below.
+
+```text
+    switch._scatter_unsort = lambda y, inv, shape: y[inv].reshape(*shape, 1, y.shape[-1])
+    monkeypatch.setitem(sys.modules, "mlx_lm.models.switch_layers", switch)
+    monkeypatch.setenv("DSV41_FFN_EXPERT_PAD16", "1")
+    monkeypatch.setenv("DSV41_FFN_DOWN_BF16", "0")
+    monkeypatch.setenv("DSV41_PROMOTE_DECODE_WEIGHTS", "0")
+    # Padding must also take precedence over grouped prefill.
+    monkeypatch.setenv("DSV41_PREFILL_GROUPED_MXFP4", "1")
+```
+
+Source: `vendor/mac-mlx/mlx_vlm/models/deepseek_v41/test_ffn_expert_pad_cpu.py:177`. Unset read: Wrapper/conditional default: see the literal call and consumer below.
+
+```text
+                             model=SimpleNamespace(layout=None))
+    ns["attach"](holder, ".")
+    monkeypatch.setenv("DSV41_FFN_EXPERT_PAD16", "0")
+    ns["attach"](holder, ".")
+    assert moe.ffn_expert_pad16  # Attached value survives environment changes.
+    rng = np.random.default_rng(41)
+    for forward, n in enumerate((64, 65, 64)):
+```
+
+### DSV41_FFN_EXPERT_TILES
+
+Advanced backend control DSV41_FFN_EXPERT_TILES. Set explicitly only for the selected backend; its literal read and fallback are documented below.
+
+Scope: mac-mlx. Class: advanced.
+
+Source: `vendor/mac-mlx/mlx_vlm/custom_kernels/deepseek_v41/test_expert_tiles_cpu.py:112`. Unset read: Wrapper/conditional default: see the literal call and consumer below.
+
+```text
+    ns, calls, moe, model, dspark = dispatch
+    if flag is None:
+        monkeypatch.delenv("DSV41_FFN_EXPERT_TILES")
+    else:
+        monkeypatch.setenv("DSV41_FFN_EXPERT_TILES", flag)
+    ns["attach"](model, ".")
+    monkeypatch.setenv("DSV41_FFN_EXPERT_TILES", "0" if flag == "1" else "1")
+```
+
+Source: `vendor/mac-mlx/mlx_vlm/custom_kernels/deepseek_v41/test_expert_tiles_cpu.py:114`. Unset read: Wrapper/conditional default: see the literal call and consumer below.
+
+```text
+        monkeypatch.delenv("DSV41_FFN_EXPERT_TILES")
+    else:
+        monkeypatch.setenv("DSV41_FFN_EXPERT_TILES", flag)
+    ns["attach"](model, ".")
+    monkeypatch.setenv("DSV41_FFN_EXPERT_TILES", "0" if flag == "1" else "1")
+    ns["attach"](model, ".")
+    ns["_v41_verify_context"].set(verify)
+```
+
+Source: `vendor/mac-mlx/mlx_vlm/custom_kernels/deepseek_v41/test_expert_tiles_cpu.py:116`. Unset read: Wrapper/conditional default: see the literal call and consumer below.
+
+```text
+        monkeypatch.setenv("DSV41_FFN_EXPERT_TILES", flag)
+    ns["attach"](model, ".")
+    monkeypatch.setenv("DSV41_FFN_EXPERT_TILES", "0" if flag == "1" else "1")
+    ns["attach"](model, ".")
+    ns["_v41_verify_context"].set(verify)
+    result = ns["forward"](moe, np.ones((1, n, 4), np.float32))
+    custom = flag == "1" and n >= 64 and not verify
+```
+
+Source: `vendor/mac-mlx/mlx_vlm/custom_kernels/deepseek_v41/test_expert_tiles_cpu.py:129`. Unset read: Wrapper/conditional default: see the literal call and consumer below.
+
+```text
+def test_attach_compile_failure_is_fatal_and_retryable(dispatch, monkeypatch):
+    ns, calls, moe, model, _ = dispatch
+    monkeypatch.setenv("DSV41_FFN_EXPERT_TILES", "1")
+    def fail(layers):
+        raise RuntimeError("Metal compiler rejected shader")
+    ns["prepare_expert_tiles"] = fail
+    with pytest.raises(RuntimeError, match="Metal compiler"):
+```
+
+Source: `vendor/mac-mlx/mlx_vlm/custom_kernels/deepseek_v41/test_expert_tiles_cpu.py:145`. Unset read: Wrapper/conditional default: see the literal call and consumer below.
+
+```text
+def test_attach_rejects_conflicting_experiments(dispatch, monkeypatch, conflict):
+    ns, calls, _, model, _ = dispatch
+    monkeypatch.setenv("DSV41_FFN_EXPERT_TILES", "1")
+    monkeypatch.setenv(conflict, "1")
+    with pytest.raises(ValueError, match="requires DOWN_BF16"):
+        ns["attach"](model, ".")
+    assert not calls and not hasattr(model, "_ffn_expert_tiles_attached")
+```
+
+Source: `vendor/mac-mlx/mlx_vlm/custom_kernels/deepseek_v41/test_expert_tiles_cpu.py:154`. Unset read: Wrapper/conditional default: see the literal call and consumer below.
+
+```text
+def test_attach_rejects_unknown_flag(dispatch, monkeypatch):
+    ns, _, _, model, _ = dispatch
+    monkeypatch.setenv("DSV41_FFN_EXPERT_TILES", "yes")
+    with pytest.raises(ValueError, match="must be 0 or 1"):
+        ns["attach"](model, ".")
+
+
+```
+
+Source: `vendor/mac-mlx/mlx_vlm/models/deepseek_v41/language.py:2504`. Unset read: '0'.
+
+```text
+                               os.environ.get("DSV41_FFN_EXPERT_PAD16", "0") == "1")
+                    or getattr(self, "_ffn_expert_tiles_attached",
+                               os.environ.get("DSV41_FFN_EXPERT_TILES", "0") == "1")
+                    or os.environ.get("DSV41_PREFILL_GROUPED_MXFP4", "0") == "1"):
+                raise ValueError("DSV41_FFN_FUSED requires DOWN_BF16, EXPERT_PAD16, "
+                                 "EXPERT_TILES and PREFILL_GROUPED_MXFP4 to be off")
+        if not hasattr(self, "_ffn_down_bf16_attached"):
+```
+
+Source: `vendor/mac-mlx/mlx_vlm/models/deepseek_v41/language.py:2517`. Unset read: '0'.
+
+```text
+                layer.ffn.ffn_expert_pad16 = self._ffn_expert_pad16_attached
+        if not hasattr(self, "_ffn_expert_tiles_attached"):
+            flag = os.environ.get("DSV41_FFN_EXPERT_TILES", "0")
+            if flag not in ("0", "1"):
+                raise ValueError("DSV41_FFN_EXPERT_TILES must be 0 or 1")
+            if flag == "1":
+                if (self._ffn_down_bf16_attached or self._ffn_expert_pad16_attached
+```
+
+### DSV41_FFN_FUSED
+
+Advanced backend control DSV41_FFN_FUSED. Set explicitly only for the selected backend; its literal read and fallback are documented below.
+
+Scope: mac-mlx. Class: advanced.
+
+Source: `vendor/mac-mlx/mlx_vlm/custom_kernels/deepseek_v41/test_fused_ffn_cpu.py:84`. Unset read: Wrapper/conditional default: see the literal call and consumer below.
+
+```text
+    ns, calls, moe, model, dspark = dispatch
+    if flag is None:
+        monkeypatch.delenv("DSV41_FFN_FUSED", raising=False)
+    else:
+        monkeypatch.setenv("DSV41_FFN_FUSED", flag)
+    ns["attach"](model, ".")
+    assert calls == (["compile-fused"] if flag == "1" else [])
+```
+
+Source: `vendor/mac-mlx/mlx_vlm/custom_kernels/deepseek_v41/test_fused_ffn_cpu.py:86`. Unset read: Wrapper/conditional default: see the literal call and consumer below.
+
+```text
+        monkeypatch.delenv("DSV41_FFN_FUSED", raising=False)
+    else:
+        monkeypatch.setenv("DSV41_FFN_FUSED", flag)
+    ns["attach"](model, ".")
+    assert calls == (["compile-fused"] if flag == "1" else [])
+    assert model._ffn_fused_attached == moe.ffn_fused == (flag == "1")
+    assert not dspark.ffn_fused
+```
+
+Source: `vendor/mac-mlx/mlx_vlm/custom_kernels/deepseek_v41/test_fused_ffn_cpu.py:92`. Unset read: Wrapper/conditional default: see the literal call and consumer below.
+
+```text
+    assert not dspark.ffn_fused
+    # Later environment changes cannot change a published latch.
+    monkeypatch.setenv("DSV41_FFN_FUSED", "0" if flag == "1" else "1")
+    ns["attach"](model, ".")
+    calls.clear()
+    token = ns["_v41_verify_context"].set(verify)
+    try:
+```
+
+Source: `vendor/mac-mlx/mlx_vlm/custom_kernels/deepseek_v41/test_fused_ffn_cpu.py:109`. Unset read: Wrapper/conditional default: see the literal call and consumer below.
+
+```text
+def test_conflicts_fail_before_compile(dispatch, monkeypatch, other):
+    ns, calls, _, model, _ = dispatch
+    monkeypatch.setenv("DSV41_FFN_FUSED", "1")
+    monkeypatch.setenv(other, "1")
+    with pytest.raises(ValueError, match="FFN_FUSED requires"):
+        ns["attach"](model, ".")
+    assert not calls and not hasattr(model, "_ffn_fused_attached")
+```
+
+Source: `vendor/mac-mlx/mlx_vlm/custom_kernels/deepseek_v41/test_fused_ffn_cpu.py:118`. Unset read: Wrapper/conditional default: see the literal call and consumer below.
+
+```text
+def test_invalid_flag_and_compile_failure_retry(dispatch, monkeypatch):
+    ns, calls, moe, model, _ = dispatch
+    monkeypatch.setenv("DSV41_FFN_FUSED", "yes")
+    with pytest.raises(ValueError, match="must be 0 or 1"):
+        ns["attach"](model, ".")
+    monkeypatch.setenv("DSV41_FFN_FUSED", "1")
+
+```
+
+Source: `vendor/mac-mlx/mlx_vlm/custom_kernels/deepseek_v41/test_fused_ffn_cpu.py:121`. Unset read: Wrapper/conditional default: see the literal call and consumer below.
+
+```text
+    with pytest.raises(ValueError, match="must be 0 or 1"):
+        ns["attach"](model, ".")
+    monkeypatch.setenv("DSV41_FFN_FUSED", "1")
+
+    def fail(layers):
+        raise RuntimeError("shader failed")
+
+```
+
+Source: `vendor/mac-mlx/mlx_vlm/models/deepseek_v41/language.py:2495`. Unset read: '0'.
+
+```text
+                    layer.attn.indexer.index_fused = self._index_fused_attached
+        if not hasattr(self, "_ffn_fused_attached"):
+            fused_flag = os.environ.get("DSV41_FFN_FUSED", "0")
+            if fused_flag not in ("0", "1"):
+                raise ValueError("DSV41_FFN_FUSED must be 0 or 1")
+            if fused_flag == "1" and (
+                    getattr(self, "_ffn_down_bf16_attached",
+```
+
+### DSV41_FFN_FUSED_TEST_RELEASE
+
+Advanced backend control DSV41_FFN_FUSED_TEST_RELEASE. Set explicitly only for the selected backend; its literal read and fallback are documented below.
+
+Scope: mac-mlx. Class: advanced.
+
+Source: `vendor/mac-mlx/mlx_vlm/custom_kernels/deepseek_v41/test_fused_ffn_qmm.py:30`. Unset read: '0'.
+
+```text
+from mlx_vlm.models.deepseek_v41.language import ClampedSwiGLU
+
+D, I = (5120, 2304) if os.environ.get("DSV41_FFN_FUSED_TEST_RELEASE", "0") == "1" else (128, 96)
+CASES = ["probe_a", "balanced32", "8x1536", "singleton_empty", "fused_boundaries"]
+
+
+@pytest.fixture(scope="module", autouse=True)
+```
+
+### DSV41_GATE_FP32
+
+Advanced backend control DSV41_GATE_FP32. Set explicitly only for the selected backend; its literal read and fallback are documented below.
+
+Scope: mac-mlx. Class: advanced.
+
+Source: `vendor/mac-mlx/mlx_vlm/models/deepseek_v41/language.py:811`. Unset read: '0'.
+
+```text
+
+    def __call__(self, x: mx.array, image_mask=None):
+        if os.environ.get("DSV41_GATE_FP32", "0") == "1" and self.weight.dtype != mx.float32:
+            # Promote the parameter itself once, rather than keeping a second
+            # cached array that becomes stale after load_weights/update/casting.
+            # Inference opt-in: this changes stored parameter dtype/memory.
+            self.weight = self.weight.astype(mx.float32)
+```
+
+### DSV41_GRAPH_REPORT
+
+Advanced backend control DSV41_GRAPH_REPORT. Set explicitly only for the selected backend; its literal read and fallback are documented below.
+
+Scope: mac-mlx. Class: advanced.
+
+Source: `vendor/mac-mlx/mlx_vlm/models/deepseek_v41/language.py:2282`. Unset read: '0'.
+
+```text
+            LEDGER["cut_steps"] += 1
+        graph = getattr(self, "_block_graph", None)
+        if graph is not None and n == 1 and os.environ.get("DSV41_GRAPH_REPORT", "0") == "1":
+            graph.report(len(self.layers))
+        h = hc_pre(h, pre_mix)
+        if hidden_sink is not None:
+            hidden_sink.append(h)
+```
+
+### DSV41_GROUPED_TEST_CONFIGS
+
+Advanced backend control DSV41_GROUPED_TEST_CONFIGS. Set explicitly only for the selected backend; its literal read and fallback are documented below.
+
+Scope: mac-mlx. Class: advanced.
+
+Source: `vendor/mac-mlx/mlx_vlm/custom_kernels/deepseek_v41/test_grouped_gemm.py:45`. Unset read: 'fast'.
+
+```text
+D, I = (5120, 2304) if RELEASE else (128, 96)
+CASES = ("balanced32", "random2048", "random8192", "skewed", "empty", "tails")
+_selected = os.environ.get("DSV41_GROUPED_TEST_CONFIGS", "fast")
+TEST_CONFIGS = [None] + list(CONFIGS if _selected == "all" else _selected.split(","))
+
+
+def assert_bits(label, actual, reference):
+```
+
+### DSV41_GROUPED_TEST_RELEASE
+
+Advanced backend control DSV41_GROUPED_TEST_RELEASE. Set explicitly only for the selected backend; its literal read and fallback are documented below.
+
+Scope: mac-mlx. Class: advanced.
+
+Source: `vendor/mac-mlx/mlx_vlm/custom_kernels/deepseek_v41/test_grouped_gemm.py:41`. Unset read: '0'.
+
+```text
+from mlx_vlm.models.deepseek_v41.moe_prefill import moe_prefill_grouped
+
+RELEASE = os.environ.get("DSV41_GROUPED_TEST_RELEASE", "0") == "1"
+E, TOPK = 384, 6
+D, I = (5120, 2304) if RELEASE else (128, 96)
+CASES = ("balanced32", "random2048", "random8192", "skewed", "empty", "tails")
+_selected = os.environ.get("DSV41_GROUPED_TEST_CONFIGS", "fast")
+```
+
+### DSV41_GROUPED_TEST_WORKER
+
+Advanced backend control DSV41_GROUPED_TEST_WORKER. Set explicitly only for the selected backend; its literal read and fallback are documented below.
+
+Scope: mac-mlx. Class: advanced.
+
+Source: `vendor/mac-mlx/mlx_vlm/custom_kernels/deepseek_v41/conftest.py:20`. Unset read: None.
+
+```text
+def pytest_runtest_protocol(item, nextitem):
+    # Intercept BEFORE fixture setup: projection fixtures also submit GPU work.
+    if not _grouped_test(item) or os.environ.get("DSV41_GROUPED_TEST_WORKER") == "1":
+        return None
+    job = Variant("pytest", item.nodeid)
+    env = dict(os.environ, DSV41_GROUPED_TEST_WORKER="1", PYTHONUNBUFFERED="1")
+    import subprocess
+```
+
+Source: `vendor/mac-mlx/mlx_vlm/custom_kernels/deepseek_v41/conftest.py:48`. Unset read: None.
+
+```text
+@pytest.fixture(autouse=True)
+def grouped_test_launch_watchdog(request, monkeypatch):
+    if not _grouped_test(request.node) or os.environ.get("DSV41_GROUPED_TEST_WORKER") != "1":
+        return
+    import mlx.core as mx
+    import mlx_vlm.custom_kernels.deepseek_v41.grouped_gemm as kernel
+    import mlx_vlm.models.deepseek_v41.moe_prefill as adapter
+```
+
+### DSV41_HC_COMPILE_POST
+
+Advanced backend control DSV41_HC_COMPILE_POST. Set explicitly only for the selected backend; its literal read and fallback are documented below.
+
+Scope: mac-mlx. Class: advanced.
+
+Source: `vendor/mac-mlx/mlx_vlm/models/deepseek_v41/hyper_connection.py:28`. Unset read: '0'.
+
+```text
+
+
+COMPILE_POST = os.environ.get("DSV41_HC_COMPILE_POST", "0") == "1"
+SINKHORN_CALLS = 0
+FUSED_CALLS = 0
+POST_CALLS = 0
+
+```
+
+### DSV41_HC_FAST_NORM
+
+Advanced backend control DSV41_HC_FAST_NORM. Set explicitly only for the selected backend; its literal read and fallback are documented below.
+
+Scope: mac-mlx. Class: advanced.
+
+Source: `vendor/mac-mlx/mlx_vlm/models/deepseek_v41/language.py:1670`. Unset read: '0'.
+
+```text
+        # Moving the normalization before GEMM changes FP32 rounding. Keep the
+        # reference's projection-first order unless explicitly opted in.
+        self.fast_norm = os.environ.get("DSV41_HC_FAST_NORM", "0") == "1"
+        size = (2 + self.hc) * self.hc
+        self.fn = mx.zeros((size, self.hc * config.hidden_size), dtype=mx.float32)
+        self.base = mx.zeros((size,), dtype=mx.float32)
+        self.scale = mx.zeros((3,), dtype=mx.float32)
+```
+
+### DSV41_HC_FUSED
+
+Advanced backend control DSV41_HC_FUSED. Set explicitly only for the selected backend; its literal read and fallback are documented below.
+
+Scope: mac-mlx. Class: advanced.
+
+Source: `vendor/mac-mlx/mlx_vlm/models/deepseek_v41/language.py:1677`. Unset read: '0'.
+
+```text
+
+    def __call__(self, x, incoming_pre=None):
+        if os.environ.get("DSV41_HC_FUSED", "0") == "1":
+            from .hyper_connection import fused_staggered_hc
+
+            if incoming_pre is None:
+                raise ValueError("DSV41_HC_FUSED needs incoming_pre; block_graph integration is required")
+```
+
+Source: `vendor/mac-mlx/mlx_vlm/models/deepseek_v41/language.py:1776`. Unset read: '0'.
+
+```text
+            from .megakernel import collapse_norm_rows
+            return collapse_norm_rows(h, pre_mix, self.attn_norm)
+        if os.environ.get("DSV41_HC_FUSED", "0") == "1":
+            x = self.attn_hc(h, pre_mix)[0]
+        else:
+            x = hc_pre(h, pre_mix)
+        return self.attn_norm(x)
+```
+
+Source: `vendor/mac-mlx/mlx_vlm/models/deepseek_v41/language.py:1816`. Unset read: '0'.
+
+```text
+                from .megakernel import prefill_block
+                return prefill_block(self, h, pre_mix, start_pos, cache, shared, image_mask)
+        if os.environ.get("DSV41_HC_FUSED", "0") == "1":
+            x, attn_pre, post, comb = self.attn_hc(h, pre_mix)
+        else:
+            attn_pre, post, comb = self.attn_hc(h)
+            x = hc_pre(h, pre_mix)
+```
+
+Source: `vendor/mac-mlx/mlx_vlm/models/deepseek_v41/language.py:1829`. Unset read: '0'.
+
+```text
+            mx.synchronize()
+            _prefill_layer_add(self.attn.layer_id, "attn_ms", (time.perf_counter() - _t0) * 1000.0)
+        if os.environ.get("DSV41_HC_FUSED", "0") == "1":
+            x, ffn_pre, post, comb = self.ffn_hc(h, attn_pre)
+        else:
+            ffn_pre, post, comb = self.ffn_hc(h)
+            x = hc_pre(h, attn_pre)
+```
+
+### DSV41_HC_FUSED_POST
+
+Advanced backend control DSV41_HC_FUSED_POST. Set explicitly only for the selected backend; its literal read and fallback are documented below.
+
+Scope: mac-mlx. Class: advanced.
+
+Source: `vendor/mac-mlx/mlx_vlm/models/deepseek_v41/language.py:1707`. Unset read: '0'.
+
+```text
+    from .hyper_connection import COMPILE_POST, compiled_hc_post
+
+    if os.environ.get("DSV41_HC_FUSED_POST", "0") == "1":
+        from .hyper_connection import metal_hc_post
+
+        return metal_hc_post(x, residual, post, comb)
+    if COMPILE_POST:
+```
+
+### DSV41_HEAD_BF16
+
+Advanced backend control DSV41_HEAD_BF16. Set explicitly only for the selected backend; its literal read and fallback are documented below.
+
+Scope: mac-mlx. Class: advanced.
+
+Source: `engines/mlx-receiver/mlx_token_stream_server.py:164`. Unset read: '0'.
+
+```text
+        parameter_bytes += sum((2 * prod(shape) for _, shape in expected_vision_parameters(config.vision_config, config.text_config.hidden_size).values()))
+    if os.environ.get('DSV41_PROMOTE_DECODE_WEIGHTS', '0') == '1':
+        parameter_bytes += sum(((4 - sizes[dtype]) * prod(shape) for name, (dtype, shape) in specs.items() if name.endswith('.wo_a.weight') and os.environ.get('DSV41_WO_A_BF16', '0') != '1' or (name == 'lm_head.weight' and os.environ.get('DSV41_HEAD_BF16', '0') != '1')))
+    available, breakdown = _dsv41_wait_for_memory(source, parameter_bytes, _read_vm_stat, timeout_s=float(os.environ.get('DSV41_MEMORY_GUARD_WAIT_S', '90')))
+    required = _dsv41_memory_guard(available, source, parameter_bytes)
+    print(f"[DSV41] memory available={available / (1 << 30):.2f} GiB resident_required={required / (1 << 30):.0f} GiB headroom=20 GiB source={source} QAT={os.environ.get('DSV41_QAT', '1')} [{_dsv41_breakdown_text(breakdown)}]", file=sys.stderr, flush=True)
+    model_dir = Path(model_dir)
+```
+
+Source: `vendor/mac-mlx/mlx_vlm/models/deepseek_v41/language.py:86`. Unset read: '0'.
+
+```text
+# attach time, loudly). Both off: byte-for-byte the previous path.
+_WO_A_BF16 = os.environ.get("DSV41_WO_A_BF16", "0") == "1"
+_HEAD_BF16 = os.environ.get("DSV41_HEAD_BF16", "0") == "1"
+_PREFETCH_POOL = None
+
+
+def _prefetch_pool():
+```
+
+Source: `vendor/mac-mlx/mlx_vlm/models/deepseek_v41/test_decode_bf16_contractions.py:37`. Unset read: Wrapper/conditional default: see the literal call and consumer below.
+
+```text
+
+def test_head_bf16_without_the_kernel_is_refused(monkeypatch):
+    monkeypatch.setenv("DSV41_HEAD_BF16", "1")
+    monkeypatch.delenv("DSV41_OMLX_HEAD", raising=False)
+    import importlib
+    from mlx_vlm.models.deepseek_v41 import language as lang
+    importlib.reload(lang)
+```
+
+Source: `vendor/mac-mlx/mlx_vlm/models/deepseek_v41/test_decode_bf16_contractions.py:47`. Unset read: Wrapper/conditional default: see the literal call and consumer below.
+
+```text
+            lang.LanguageModel.attach_engram_storage(obj, "/nonexistent")
+    finally:
+        monkeypatch.delenv("DSV41_HEAD_BF16", raising=False)
+        importlib.reload(lang)
+```
+
+### DSV41_INDEX_FUSED
+
+Advanced backend control DSV41_INDEX_FUSED. Set explicitly only for the selected backend; its literal read and fallback are documented below.
+
+Scope: mac-mlx. Class: advanced.
+
+Source: `vendor/mac-mlx/mlx_vlm/custom_kernels/deepseek_v41/test_index_fused_cpu.py:476`. Unset read: Wrapper/conditional default: see the literal call and consumer below.
+
+```text
+    ns, calls, indexer, model = dispatch
+    if flag is None:
+        monkeypatch.delenv("DSV41_INDEX_FUSED")
+    else:
+        monkeypatch.setenv("DSV41_INDEX_FUSED", flag)
+    ns["attach"](model, ".")
+    monkeypatch.setenv("DSV41_INDEX_FUSED", "0" if flag == "1" else "1")
+```
+
+Source: `vendor/mac-mlx/mlx_vlm/custom_kernels/deepseek_v41/test_index_fused_cpu.py:478`. Unset read: Wrapper/conditional default: see the literal call and consumer below.
+
+```text
+        monkeypatch.delenv("DSV41_INDEX_FUSED")
+    else:
+        monkeypatch.setenv("DSV41_INDEX_FUSED", flag)
+    ns["attach"](model, ".")
+    monkeypatch.setenv("DSV41_INDEX_FUSED", "0" if flag == "1" else "1")
+    ns["attach"](model, ".")
+    ns["_v41_verify_context"].set(verify)
+```
+
+Source: `vendor/mac-mlx/mlx_vlm/custom_kernels/deepseek_v41/test_index_fused_cpu.py:480`. Unset read: Wrapper/conditional default: see the literal call and consumer below.
+
+```text
+        monkeypatch.setenv("DSV41_INDEX_FUSED", flag)
+    ns["attach"](model, ".")
+    monkeypatch.setenv("DSV41_INDEX_FUSED", "0" if flag == "1" else "1")
+    ns["attach"](model, ".")
+    ns["_v41_verify_context"].set(verify)
+    x = np.ones((1, n, 4), np.float32)
+    out = ns["forward"](indexer, x, x, 0, 128, None,
+```
+
+Source: `vendor/mac-mlx/mlx_vlm/custom_kernels/deepseek_v41/test_index_fused_cpu.py:496`. Unset read: Wrapper/conditional default: see the literal call and consumer below.
+
+```text
+        dispatch, monkeypatch, skip, precompute):
+    ns, calls, indexer, model = dispatch
+    monkeypatch.setenv("DSV41_INDEX_FUSED", "1")
+    monkeypatch.setenv("DSV41_INDEX_SKIP", skip)
+    monkeypatch.setenv("DSV41_S4_PRECOMPUTE", precompute)
+    # 0 = always skip when the switch is on; this nb is far below the shipped
+    # DSV41_INDEX_SKIP_MIN_NB, which is gated on its own below.
+```
+
+Source: `vendor/mac-mlx/mlx_vlm/custom_kernels/deepseek_v41/test_index_fused_cpu.py:527`. Unset read: Wrapper/conditional default: see the literal call and consumer below.
+
+```text
+    block mask at stride block_size, so the kernel takes it as-is."""
+    ns, calls, indexer, model = dispatch
+    monkeypatch.setenv("DSV41_INDEX_FUSED", "1")
+    monkeypatch.setenv("DSV41_INDEX_SKIP", "1")
+    monkeypatch.setenv("DSV41_S4_PRECOMPUTE", "0")
+    monkeypatch.setenv("DSV41_INDEX_SKIP_MIN_NB", "0")
+    indexer.uses_candidates = True
+```
+
+Source: `vendor/mac-mlx/mlx_vlm/custom_kernels/deepseek_v41/test_index_fused_cpu.py:570`. Unset read: Wrapper/conditional default: see the literal call and consumer below.
+
+```text
+    """
+    ns, calls, indexer, model = dispatch
+    monkeypatch.setenv("DSV41_INDEX_FUSED", "1")
+    monkeypatch.setenv("DSV41_INDEX_SKIP", skip)
+    monkeypatch.setenv("DSV41_S4_PRECOMPUTE", precompute)
+    if min_nb is None:
+        monkeypatch.delenv("DSV41_INDEX_SKIP_MIN_NB", raising=False)
+```
+
+Source: `vendor/mac-mlx/mlx_vlm/custom_kernels/deepseek_v41/test_index_fused_cpu.py:638`. Unset read: Wrapper/conditional default: see the literal call and consumer below.
+
+```text
+    decline early and engage later, and each outcome prints once."""
+    ns, calls, indexer, model = dispatch
+    monkeypatch.setenv("DSV41_INDEX_FUSED", "1")
+    monkeypatch.setenv("DSV41_INDEX_SKIP", "1")
+    monkeypatch.setenv("DSV41_S4_PRECOMPUTE", "1")
+    monkeypatch.setenv("DSV41_INDEX_SKIP_MIN_NB", "136")
+    indexer.uses_candidates = True
+```
+
+Source: `vendor/mac-mlx/mlx_vlm/custom_kernels/deepseek_v41/test_index_fused_cpu.py:669`. Unset read: Wrapper/conditional default: see the literal call and consumer below.
+
+```text
+def test_an_invalid_threshold_is_loud_at_attach(dispatch, monkeypatch, value, skip):
+    ns, calls, indexer, model = dispatch
+    monkeypatch.setenv("DSV41_INDEX_FUSED", "1")
+    monkeypatch.setenv("DSV41_INDEX_SKIP", skip)
+    monkeypatch.setenv("DSV41_INDEX_SKIP_MIN_NB", value)
+    with pytest.raises(ValueError, match="must be a non-negative integer"):
+        ns["attach"](model, ".")
+```
+
+Source: `vendor/mac-mlx/mlx_vlm/custom_kernels/deepseek_v41/test_index_fused_cpu.py:683`. Unset read: Wrapper/conditional default: see the literal call and consumer below.
+
+```text
+def test_a_valid_threshold_is_accepted_at_attach(dispatch, monkeypatch, value, expected):
+    ns, calls, indexer, model = dispatch
+    monkeypatch.setenv("DSV41_INDEX_FUSED", "1")
+    monkeypatch.setenv("DSV41_INDEX_SKIP", "1")
+    monkeypatch.setenv("DSV41_INDEX_SKIP_MIN_NB", value)
+    ns["attach"](model, ".")
+    assert calls == ["compile+skip"] and indexer.index_fused
+```
+
+Source: `vendor/mac-mlx/mlx_vlm/custom_kernels/deepseek_v41/test_index_fused_cpu.py:697`. Unset read: Wrapper/conditional default: see the literal call and consumer below.
+
+```text
+def test_skip_switch_is_validated_at_attach(dispatch, monkeypatch, fused, skip, message):
+    ns, calls, indexer, model = dispatch
+    monkeypatch.setenv("DSV41_INDEX_FUSED", fused)
+    monkeypatch.setenv("DSV41_INDEX_SKIP", skip)
+    with pytest.raises(ValueError, match=message):
+        ns["attach"](model, ".")
+    assert not calls and not indexer.index_fused
+```
+
+Source: `vendor/mac-mlx/mlx_vlm/custom_kernels/deepseek_v41/test_index_fused_cpu.py:706`. Unset read: Wrapper/conditional default: see the literal call and consumer below.
+
+```text
+def test_failed_compile_does_not_latch(dispatch, monkeypatch):
+    ns, calls, indexer, model = dispatch
+    monkeypatch.setenv("DSV41_INDEX_FUSED", "1")
+    def fail(layers, skip=False):
+        raise RuntimeError("compile failed")
+    ns["prepare_index_fused"] = fail
+    with pytest.raises(RuntimeError, match="compile failed"):
+```
+
+Source: `vendor/mac-mlx/mlx_vlm/custom_kernels/deepseek_v41/test_index_fused_cpu.py:721`. Unset read: Wrapper/conditional default: see the literal call and consumer below.
+
+```text
+def test_conflicts_at_attach_and_after_attach(dispatch, monkeypatch, conflict):
+    ns, calls, indexer, model = dispatch
+    monkeypatch.setenv("DSV41_INDEX_FUSED", "1")
+    monkeypatch.setenv("DSV41_" + conflict, "1")
+    with pytest.raises(ValueError, match="cannot combine"):
+        ns["attach"](model, ".")
+    assert not calls and not indexer.index_fused
+```
+
+Source: `vendor/mac-mlx/mlx_vlm/custom_kernels/deepseek_v41/test_index_fused_cpu.py:736`. Unset read: Wrapper/conditional default: see the literal call and consumer below.
+
+```text
+def test_invalid_switch(dispatch, monkeypatch):
+    ns, _, _, model = dispatch
+    monkeypatch.setenv("DSV41_INDEX_FUSED", "yes")
+    with pytest.raises(ValueError, match="must be 0 or 1"):
+        ns["attach"](model, ".")
+
+
+```
+
+Source: `vendor/mac-mlx/mlx_vlm/models/deepseek_v41/language.py:2467`. Unset read: '0'.
+
+```text
+                               "fp32 logits); refusing to serve bf16 logits silently")
+        if not hasattr(self, "_index_fused_attached"):
+            index_flag = os.environ.get("DSV41_INDEX_FUSED", "0")
+            if index_flag not in ("0", "1"):
+                raise ValueError("DSV41_INDEX_FUSED must be 0 or 1")
+            skip_flag = os.environ.get("DSV41_INDEX_SKIP", "0")
+            if skip_flag not in ("0", "1"):
+```
+
+### DSV41_INDEX_SKIP
+
+Advanced backend control DSV41_INDEX_SKIP. Set explicitly only for the selected backend; its literal read and fallback are documented below.
+
+Scope: mac-mlx. Class: advanced.
+
+Source: `vendor/mac-mlx/mlx_vlm/custom_kernels/deepseek_v41/test_index_fused.py:448`. Unset read: Wrapper/conditional default: see the literal call and consumer below.
+
+```text
+    eager, fused = _model_paths(64, 1031, candidates=True)
+    expected = eager()
+    monkeypatch.setenv("DSV41_INDEX_SKIP", "1")
+    prewarm_index_skip(8, precompute)
+    actual = fused()
+    mx.eval(*expected, *actual)
+    _same_sets(actual[0], expected[0])
+```
+
+Source: `vendor/mac-mlx/mlx_vlm/custom_kernels/deepseek_v41/test_index_fused.py:469`. Unset read: Wrapper/conditional default: see the literal call and consumer below.
+
+```text
+    """
+    monkeypatch.setenv("DSV41_S4_PRECOMPUTE", str(int(precompute)))
+    monkeypatch.setenv("DSV41_INDEX_SKIP", "1")
+    monkeypatch.setenv("DSV41_INDEX_SKIP_MIN_NB", str(min_nb))
+    prewarm_index_skip(8, precompute)
+    masked = []
+    real = index_fused_module.index_scores_fused
+```
+
+Source: `vendor/mac-mlx/mlx_vlm/custom_kernels/deepseek_v41/test_index_fused_cpu.py:497`. Unset read: Wrapper/conditional default: see the literal call and consumer below.
+
+```text
+    ns, calls, indexer, model = dispatch
+    monkeypatch.setenv("DSV41_INDEX_FUSED", "1")
+    monkeypatch.setenv("DSV41_INDEX_SKIP", skip)
+    monkeypatch.setenv("DSV41_S4_PRECOMPUTE", precompute)
+    # 0 = always skip when the switch is on; this nb is far below the shipped
+    # DSV41_INDEX_SKIP_MIN_NB, which is gated on its own below.
+    monkeypatch.setenv("DSV41_INDEX_SKIP_MIN_NB", "0")
+```
+
+Source: `vendor/mac-mlx/mlx_vlm/custom_kernels/deepseek_v41/test_index_fused_cpu.py:528`. Unset read: Wrapper/conditional default: see the literal call and consumer below.
+
+```text
+    ns, calls, indexer, model = dispatch
+    monkeypatch.setenv("DSV41_INDEX_FUSED", "1")
+    monkeypatch.setenv("DSV41_INDEX_SKIP", "1")
+    monkeypatch.setenv("DSV41_S4_PRECOMPUTE", "0")
+    monkeypatch.setenv("DSV41_INDEX_SKIP_MIN_NB", "0")
+    indexer.uses_candidates = True
+    ns["attach"](model, ".")
+```
+
+Source: `vendor/mac-mlx/mlx_vlm/custom_kernels/deepseek_v41/test_index_fused_cpu.py:571`. Unset read: Wrapper/conditional default: see the literal call and consumer below.
+
+```text
+    ns, calls, indexer, model = dispatch
+    monkeypatch.setenv("DSV41_INDEX_FUSED", "1")
+    monkeypatch.setenv("DSV41_INDEX_SKIP", skip)
+    monkeypatch.setenv("DSV41_S4_PRECOMPUTE", precompute)
+    if min_nb is None:
+        monkeypatch.delenv("DSV41_INDEX_SKIP_MIN_NB", raising=False)
+    else:
+```
+
+Source: `vendor/mac-mlx/mlx_vlm/custom_kernels/deepseek_v41/test_index_fused_cpu.py:639`. Unset read: Wrapper/conditional default: see the literal call and consumer below.
+
+```text
+    ns, calls, indexer, model = dispatch
+    monkeypatch.setenv("DSV41_INDEX_FUSED", "1")
+    monkeypatch.setenv("DSV41_INDEX_SKIP", "1")
+    monkeypatch.setenv("DSV41_S4_PRECOMPUTE", "1")
+    monkeypatch.setenv("DSV41_INDEX_SKIP_MIN_NB", "136")
+    indexer.uses_candidates = True
+    ns["attach"](model, ".")
+```
+
+Source: `vendor/mac-mlx/mlx_vlm/custom_kernels/deepseek_v41/test_index_fused_cpu.py:670`. Unset read: Wrapper/conditional default: see the literal call and consumer below.
+
+```text
+    ns, calls, indexer, model = dispatch
+    monkeypatch.setenv("DSV41_INDEX_FUSED", "1")
+    monkeypatch.setenv("DSV41_INDEX_SKIP", skip)
+    monkeypatch.setenv("DSV41_INDEX_SKIP_MIN_NB", value)
+    with pytest.raises(ValueError, match="must be a non-negative integer"):
+        ns["attach"](model, ".")
+    # Nothing compiled, nothing latched: no silent fallback to the default.
+```
+
+Source: `vendor/mac-mlx/mlx_vlm/custom_kernels/deepseek_v41/test_index_fused_cpu.py:684`. Unset read: Wrapper/conditional default: see the literal call and consumer below.
+
+```text
+    ns, calls, indexer, model = dispatch
+    monkeypatch.setenv("DSV41_INDEX_FUSED", "1")
+    monkeypatch.setenv("DSV41_INDEX_SKIP", "1")
+    monkeypatch.setenv("DSV41_INDEX_SKIP_MIN_NB", value)
+    ns["attach"](model, ".")
+    assert calls == ["compile+skip"] and indexer.index_fused
+    assert ns["_index_skip_min_nb"]() == expected
+```
+
+Source: `vendor/mac-mlx/mlx_vlm/custom_kernels/deepseek_v41/test_index_fused_cpu.py:698`. Unset read: Wrapper/conditional default: see the literal call and consumer below.
+
+```text
+    ns, calls, indexer, model = dispatch
+    monkeypatch.setenv("DSV41_INDEX_FUSED", fused)
+    monkeypatch.setenv("DSV41_INDEX_SKIP", skip)
+    with pytest.raises(ValueError, match=message):
+        ns["attach"](model, ".")
+    assert not calls and not indexer.index_fused
+
+```
+
+Source: `vendor/mac-mlx/mlx_vlm/models/deepseek_v41/language.py:593`. Unset read: '0'.
+
+```text
+        bsz, n, _ = x.shape
+        fused_index = (self.index_fused and n >= 64 and not _v41_verify_context.get())
+        skip_enabled = fused_index and os.environ.get("DSV41_INDEX_SKIP", "0") == "1"
+        if self.index_fused:
+            for name in ("DSV41_PREFILL_TILED_INDEX", "DSV41_PREFILL_V41_INDEX",
+                         "DSV41_METAL_INDEXER"):
+                if os.environ.get(name, "0") == "1":
+```
+
+Source: `vendor/mac-mlx/mlx_vlm/models/deepseek_v41/language.py:2470`. Unset read: '0'.
+
+```text
+            if index_flag not in ("0", "1"):
+                raise ValueError("DSV41_INDEX_FUSED must be 0 or 1")
+            skip_flag = os.environ.get("DSV41_INDEX_SKIP", "0")
+            if skip_flag not in ("0", "1"):
+                raise ValueError("DSV41_INDEX_SKIP must be 0 or 1")
+            if skip_flag == "1" and index_flag != "1":
+                raise ValueError("DSV41_INDEX_SKIP=1 requires DSV41_INDEX_FUSED=1")
+```
+
+### DSV41_INDEX_SKIP_MIN_NB
+
+Advanced backend control DSV41_INDEX_SKIP_MIN_NB. Set explicitly only for the selected backend; its literal read and fallback are documented below.
+
+Scope: mac-mlx. Class: advanced.
+
+Source: `vendor/mac-mlx/mlx_vlm/custom_kernels/deepseek_v41/test_index_fused.py:470`. Unset read: Wrapper/conditional default: see the literal call and consumer below.
+
+```text
+    monkeypatch.setenv("DSV41_S4_PRECOMPUTE", str(int(precompute)))
+    monkeypatch.setenv("DSV41_INDEX_SKIP", "1")
+    monkeypatch.setenv("DSV41_INDEX_SKIP_MIN_NB", str(min_nb))
+    prewarm_index_skip(8, precompute)
+    masked = []
+    real = index_fused_module.index_scores_fused
+
+```
+
+Source: `vendor/mac-mlx/mlx_vlm/custom_kernels/deepseek_v41/test_index_fused_cpu.py:501`. Unset read: Wrapper/conditional default: see the literal call and consumer below.
+
+```text
+    # 0 = always skip when the switch is on; this nb is far below the shipped
+    # DSV41_INDEX_SKIP_MIN_NB, which is gated on its own below.
+    monkeypatch.setenv("DSV41_INDEX_SKIP_MIN_NB", "0")
+    indexer.uses_candidates = True
+    ns["attach"](model, ".")
+    assert calls == ["compile+skip" if skip == "1" else "compile"]
+    n, nb = 64, 136  # 17 blocks of eight: not a multiple of four either.
+```
+
+Source: `vendor/mac-mlx/mlx_vlm/custom_kernels/deepseek_v41/test_index_fused_cpu.py:530`. Unset read: Wrapper/conditional default: see the literal call and consumer below.
+
+```text
+    monkeypatch.setenv("DSV41_INDEX_SKIP", "1")
+    monkeypatch.setenv("DSV41_S4_PRECOMPUTE", "0")
+    monkeypatch.setenv("DSV41_INDEX_SKIP_MIN_NB", "0")
+    indexer.uses_candidates = True
+    ns["attach"](model, ".")
+    n, nb = 64, 136
+    x = np.ones((1, n, 4), np.float32)
+```
+
+Source: `vendor/mac-mlx/mlx_vlm/custom_kernels/deepseek_v41/test_index_fused_cpu.py:574`. Unset read: Wrapper/conditional default: see the literal call and consumer below.
+
+```text
+    monkeypatch.setenv("DSV41_S4_PRECOMPUTE", precompute)
+    if min_nb is None:
+        monkeypatch.delenv("DSV41_INDEX_SKIP_MIN_NB", raising=False)
+    else:
+        monkeypatch.setenv("DSV41_INDEX_SKIP_MIN_NB", str(min_nb))
+    indexer.uses_candidates = True
+    ns["attach"](model, ".")
+```
+
+Source: `vendor/mac-mlx/mlx_vlm/custom_kernels/deepseek_v41/test_index_fused_cpu.py:576`. Unset read: Wrapper/conditional default: see the literal call and consumer below.
+
+```text
+        monkeypatch.delenv("DSV41_INDEX_SKIP_MIN_NB", raising=False)
+    else:
+        monkeypatch.setenv("DSV41_INDEX_SKIP_MIN_NB", str(min_nb))
+    indexer.uses_candidates = True
+    ns["attach"](model, ".")
+    n = 64
+    keep = np.zeros((1, n, -(-nb // 8)), bool)
+```
+
+Source: `vendor/mac-mlx/mlx_vlm/custom_kernels/deepseek_v41/test_index_fused_cpu.py:641`. Unset read: Wrapper/conditional default: see the literal call and consumer below.
+
+```text
+    monkeypatch.setenv("DSV41_INDEX_SKIP", "1")
+    monkeypatch.setenv("DSV41_S4_PRECOMPUTE", "1")
+    monkeypatch.setenv("DSV41_INDEX_SKIP_MIN_NB", "136")
+    indexer.uses_candidates = True
+    ns["attach"](model, ".")
+    capsys.readouterr()
+    n = 64
+```
+
+Source: `vendor/mac-mlx/mlx_vlm/custom_kernels/deepseek_v41/test_index_fused_cpu.py:671`. Unset read: Wrapper/conditional default: see the literal call and consumer below.
+
+```text
+    monkeypatch.setenv("DSV41_INDEX_FUSED", "1")
+    monkeypatch.setenv("DSV41_INDEX_SKIP", skip)
+    monkeypatch.setenv("DSV41_INDEX_SKIP_MIN_NB", value)
+    with pytest.raises(ValueError, match="must be a non-negative integer"):
+        ns["attach"](model, ".")
+    # Nothing compiled, nothing latched: no silent fallback to the default.
+    assert not calls and not indexer.index_fused
+```
+
+Source: `vendor/mac-mlx/mlx_vlm/custom_kernels/deepseek_v41/test_index_fused_cpu.py:685`. Unset read: Wrapper/conditional default: see the literal call and consumer below.
+
+```text
+    monkeypatch.setenv("DSV41_INDEX_FUSED", "1")
+    monkeypatch.setenv("DSV41_INDEX_SKIP", "1")
+    monkeypatch.setenv("DSV41_INDEX_SKIP_MIN_NB", value)
+    ns["attach"](model, ".")
+    assert calls == ["compile+skip"] and indexer.index_fused
+    assert ns["_index_skip_min_nb"]() == expected
+    assert ns["_index_skip_decision"](expected, 24)[0]
+```
+
+Source: `vendor/mac-mlx/mlx_vlm/models/deepseek_v41/language.py:448`. Unset read: '60000'.
+
+```text
+    loud failure here, never a silent fallback to the default.
+    """
+    raw = os.environ.get("DSV41_INDEX_SKIP_MIN_NB", "60000")
+    try:
+        value = int(raw)
+    except (TypeError, ValueError):
+        value = -1
+```
+
+### DSV41_INDEX_TOPK
+
+Advanced backend control DSV41_INDEX_TOPK. Set explicitly only for the selected backend; its literal read and fallback are documented below.
+
+Scope: mac-mlx. Class: advanced.
+
+Source: `vendor/mac-mlx/mlx_vlm/custom_kernels/deepseek_v41/test_index_prefill.py:41`. Unset read: Wrapper/conditional default: see the literal call and consumer below.
+
+```text
+    monkeypatch.setenv("DSV41_QAT", "1")
+    monkeypatch.setenv("DSV41_METAL_QUANT", "0")
+    monkeypatch.setenv("DSV41_INDEX_TOPK", "512")
+
+
+def _inputs(n, context, mask, *, batch=1, dtype=mx.float32, seed=71):
+    mx.random.seed(seed)
+```
+
+Source: `vendor/mac-mlx/mlx_vlm/models/deepseek_v41/test_kv_selection_width.py:31`. Unset read: Wrapper/conditional default: see the literal call and consumer below.
+
+```text
+
+def test_kv_widths_default_to_the_checkpoints_own_values(monkeypatch):
+    monkeypatch.delenv("DSV41_INDEX_TOPK", raising=False)
+    monkeypatch.delenv("DSV41_SLIDING_WINDOW", raising=False)
+    cfg = _text_config()
+    assert cfg.index_topk == 512
+    assert cfg.sliding_window == 128
+```
+
+Source: `vendor/mac-mlx/mlx_vlm/models/deepseek_v41/test_kv_selection_width.py:39`. Unset read: Wrapper/conditional default: see the literal call and consumer below.
+
+```text
+
+def test_kv_widths_can_be_widened_by_environment(monkeypatch):
+    monkeypatch.setenv("DSV41_INDEX_TOPK", "4096")
+    monkeypatch.setenv("DSV41_SLIDING_WINDOW", "1024")
+    cfg = _text_config()
+    assert cfg.index_topk == 4096
+    assert cfg.sliding_window == 1024
+```
+
+Source: `vendor/mac-mlx/mlx_vlm/models/deepseek_v41/test_kv_selection_width.py:48`. Unset read: Wrapper/conditional default: see the literal call and consumer below.
+
+```text
+def test_an_unset_or_blank_override_is_not_a_zero(monkeypatch):
+    """A preset writing an empty string must not collapse the dense window to nothing."""
+    monkeypatch.setenv("DSV41_INDEX_TOPK", "")
+    monkeypatch.setenv("DSV41_SLIDING_WINDOW", "   ")
+    cfg = _text_config()
+    assert cfg.index_topk == 512
+    assert cfg.sliding_window == 128
+```
+
+Source: `vendor/mac-mlx/mlx_vlm/models/deepseek_v41/test_kv_selection_width.py:57`. Unset read: Wrapper/conditional default: see the literal call and consumer below.
+
+```text
+@pytest.mark.parametrize("bad", ["0", "-1", "many"])
+def test_a_nonsense_width_is_refused_rather_than_coerced(monkeypatch, bad):
+    monkeypatch.setenv("DSV41_INDEX_TOPK", bad)
+    monkeypatch.delenv("DSV41_SLIDING_WINDOW", raising=False)
+    with pytest.raises(ValueError, match="DSV41_INDEX_TOPK"):
+        _text_config()
+
+```
+
+### DSV41_INDEX_WORKSPACE_MB
+
+Advanced backend control DSV41_INDEX_WORKSPACE_MB. Set explicitly only for the selected backend; its literal read and fallback are documented below.
+
+Scope: mac-mlx. Class: advanced.
+
+Source: `vendor/mac-mlx/mlx_vlm/custom_kernels/deepseek_v41/test_index_fused_cpu.py:429`. Unset read: Wrapper/conditional default: see the literal call and consumer below.
+
+```text
+                 "PROMOTE_DECODE_WEIGHTS", "S4_COMPILE_INDEXER", "S4_PRECOMPUTE", "S4_BYPASS"):
+        monkeypatch.setenv("DSV41_" + name, "0")
+    monkeypatch.setenv("DSV41_INDEX_WORKSPACE_MB", "512")
+    ns = _production()
+    calls = []
+    ns["prepare_index_fused"] = lambda layers, skip=False: calls.append(
+        "compile+skip" if skip else "compile")
+```
+
+Source: `vendor/mac-mlx/mlx_vlm/models/deepseek_v41/language.py:692`. Unset read: '0'.
+
+```text
+                _index_scores.compiled = mx.compile(partial(_index_scores, matmul=True), shapeless=True)
+            score_fn = _index_scores.compiled
+        workspace_mb = int(os.environ.get("DSV41_INDEX_WORKSPACE_MB", "0"))
+        query_chunk = (max(1, workspace_mb * 1024**2 // (bsz * self.n_heads * nb * 4))
+                       if workspace_mb > 0 else n)
+        masked_by_kernel = False
+        if fused_index:
+```
+
+Source: `vendor/mac-mlx/mlx_vlm/models/deepseek_v41/test_bounded_cache.py:82`. Unset read: Wrapper/conditional default: see the literal call and consumer below.
+
+```text
+
+    monkeypatch.setattr(mx, "einsum", counted)
+    monkeypatch.setenv("DSV41_INDEX_WORKSPACE_MB", "0")
+    a = attn.indexer(x, qr, 8192, 8209, attn.rope, keys, SimpleNamespace(candidates=None))
+    mx.eval(a)
+    assert calls == [17]
+    calls.clear()
+```
+
+Source: `vendor/mac-mlx/mlx_vlm/models/deepseek_v41/test_bounded_cache.py:87`. Unset read: Wrapper/conditional default: see the literal call and consumer below.
+
+```text
+    assert calls == [17]
+    calls.clear()
+    monkeypatch.setenv("DSV41_INDEX_WORKSPACE_MB", "1")
+    b = attn.indexer(x, qr, 8192, 8209, attn.rope, keys, SimpleNamespace(candidates=None))
+    mx.eval(b)
+    assert len(calls) > 1 and sum(calls) == 17
+    assert bool(mx.array_equal(a, b).item())
+```
+
+Source: `vendor/mac-mlx/mlx_vlm/models/deepseek_v41/test_speed_merge_mac.py:29`. Unset read: Wrapper/conditional default: see the literal call and consumer below.
+
+```text
+    mx.eval(indexer.parameters(), x, qr, keys)
+
+    monkeypatch.setenv("DSV41_INDEX_WORKSPACE_MB", "0")
+    expected = indexer(x, qr, width - n, 0, rope, keys,
+                       SimpleNamespace(candidates=None))
+    mx.eval(expected)
+
+```
+
+Source: `vendor/mac-mlx/mlx_vlm/models/deepseek_v41/test_speed_merge_mac.py:46`. Unset read: Wrapper/conditional default: see the literal call and consumer below.
+
+```text
+        counted.compiled = counted_compiled
+    monkeypatch.setattr(language, "_index_scores", counted)
+    monkeypatch.setenv("DSV41_INDEX_WORKSPACE_MB", "1")
+    actual = indexer(x, qr, width - n, 0, rope, keys,
+                     SimpleNamespace(candidates=None))
+    mx.eval(actual)
+    assert calls == [8, 8, 1], "S4 scoring must retain mainline's query tiles"
+```
+
+### DSV41_MEGAKERNEL
+
+Advanced backend control DSV41_MEGAKERNEL. Set explicitly only for the selected backend; its literal read and fallback are documented below.
+
+Scope: mac-mlx. Class: advanced.
+
+Source: `vendor/mac-mlx/mlx_vlm/models/deepseek_v41/language.py:1803`. Unset read: '0'.
+
+```text
+            # default prefill runs when DSV41_PREFILL_MEGAKERNEL is off.
+        else:
+            if os.environ.get("DSV41_MEGAKERNEL", "0") == "1" and h.shape[:2] == (1, 1):
+                from .megakernel import decode_block
+                return decode_block(self, h, pre_mix, start_pos, cache, shared, image_mask)
+            if os.environ.get("DSV41_COMPILE_BLOCK", "0") == "1" and h.shape[:2] == (1, 1):
+                from .block_graph import BlockGraphs
+```
+
+### DSV41_MEMORY_GUARD_WAIT_S
+
+Advanced backend control DSV41_MEMORY_GUARD_WAIT_S. Set explicitly only for the selected backend; its literal read and fallback are documented below.
+
+Scope: mac-mlx. Class: advanced.
+
+Source: `engines/mlx-receiver/mlx_token_stream_server.py:165`. Unset read: '90'.
+
+```text
+    if os.environ.get('DSV41_PROMOTE_DECODE_WEIGHTS', '0') == '1':
+        parameter_bytes += sum(((4 - sizes[dtype]) * prod(shape) for name, (dtype, shape) in specs.items() if name.endswith('.wo_a.weight') and os.environ.get('DSV41_WO_A_BF16', '0') != '1' or (name == 'lm_head.weight' and os.environ.get('DSV41_HEAD_BF16', '0') != '1')))
+    available, breakdown = _dsv41_wait_for_memory(source, parameter_bytes, _read_vm_stat, timeout_s=float(os.environ.get('DSV41_MEMORY_GUARD_WAIT_S', '90')))
+    required = _dsv41_memory_guard(available, source, parameter_bytes)
+    print(f"[DSV41] memory available={available / (1 << 30):.2f} GiB resident_required={required / (1 << 30):.0f} GiB headroom=20 GiB source={source} QAT={os.environ.get('DSV41_QAT', '1')} [{_dsv41_breakdown_text(breakdown)}]", file=sys.stderr, flush=True)
+    model_dir = Path(model_dir)
+    model = Model(config)
+```
+
+### DSV41_METAL_INDEXER
+
+Advanced backend control DSV41_METAL_INDEXER. Set explicitly only for the selected backend; its literal read and fallback are documented below.
+
+Scope: mac-mlx. Class: advanced.
+
+Source: `vendor/mac-mlx/mlx_vlm/custom_kernels/deepseek_v41/test_index_prefill.py:235`. Unset read: Wrapper/conditional default: see the literal call and consumer below.
+
+```text
+    monkeypatch.setenv("DSV41_S4_PRECOMPUTE", str(int(precompute)))
+    monkeypatch.setenv("DSV41_S4_BYPASS", "0")
+    monkeypatch.setenv("DSV41_METAL_INDEXER", "0")
+    monkeypatch.setenv("DSV41_S4_COMPILE_INDEXER", "0")
+    # Exercise the production n>=64 gate, including zero-length geometry.
+    monkeypatch.setenv("DSV41_PREFILL_TILED_MIN_N", "64")
+    monkeypatch.setattr(lang, "_rope", lambda rope, q, pos: q)
+```
+
+Source: `vendor/mac-mlx/mlx_vlm/custom_kernels/deepseek_v41/test_index_prefill.py:292`. Unset read: Wrapper/conditional default: see the literal call and consumer below.
+
+```text
+    monkeypatch.setattr(lang, "_PREFILL_MXFP8_STEEL", False)
+    monkeypatch.setenv("DSV41_S4_BYPASS", "0")
+    monkeypatch.setenv("DSV41_METAL_INDEXER", "0")
+    monkeypatch.setenv("DSV41_S4_COMPILE_INDEXER", "0")
+    indexer = Indexer(TextConfig(hidden_size=64, q_lora_rank=64), 2)
+    monkeypatch.setenv("DSV41_PREFILL_TILED_MIN_N", "64")
+    for n, enabled in [(64, None), (1, "1"), (16, "1"), (63, "1")]:
+```
+
+Source: `vendor/mac-mlx/mlx_vlm/models/deepseek_v41/language.py:677`. Unset read: '0'.
+
+```text
+        # while sharing S4 geometry and allowing its optional compiled scorer.
+        score_fn = _index_scores
+        metal_indexer = os.environ.get("DSV41_METAL_INDEXER", "0") == "1"
+        _s4_count("index_score", self.layer_id)
+        if fused_index:
+            from ...custom_kernels.deepseek_v41.index_fused import index_scores_fused
+        elif v41_index:
+```
+
+### DSV41_METAL_QUANT
+
+Advanced backend control DSV41_METAL_QUANT. Set explicitly only for the selected backend; its literal read and fallback are documented below.
+
+Scope: mac-mlx. Class: advanced.
+
+Source: `vendor/mac-mlx/mlx_vlm/custom_kernels/deepseek_v41/test_index_prefill.py:40`. Unset read: Wrapper/conditional default: see the literal call and consumer below.
+
+```text
+def _reference_environment(monkeypatch):
+    monkeypatch.setenv("DSV41_QAT", "1")
+    monkeypatch.setenv("DSV41_METAL_QUANT", "0")
+    monkeypatch.setenv("DSV41_INDEX_TOPK", "512")
+
+
+def _inputs(n, context, mask, *, batch=1, dtype=mx.float32, seed=71):
+```
+
+Source: `vendor/mac-mlx/mlx_vlm/models/deepseek_v41/language.py:157`. Unset read: '0'.
+
+```text
+    if os.environ.get("DSV41_QAT", "1") == "0":
+        return x
+    if os.environ.get("DSV41_METAL_QUANT", "0") == "1":
+        from .quant_kernels import fake_quant
+        return fake_quant(x, block, "fp8_ue8m0")
+    dtype = x.dtype
+    shape = x.shape
+```
+
+Source: `vendor/mac-mlx/mlx_vlm/models/deepseek_v41/language.py:173`. Unset read: '0'.
+
+```text
+    if os.environ.get("DSV41_QAT", "1") == "0":
+        return x
+    if os.environ.get("DSV41_METAL_QUANT", "0") == "1":
+        from .quant_kernels import fake_quant
+        return fake_quant(x, block, "fp4_ue8m0")
+    dtype = x.dtype
+    shape = x.shape
+```
+
+Source: `vendor/mac-mlx/mlx_vlm/models/deepseek_v41/language.py:189`. Unset read: '0'.
+
+```text
+    if os.environ.get("DSV41_QAT", "1") == "0":
+        return x
+    if os.environ.get("DSV41_METAL_QUANT", "0") == "1":
+        from .quant_kernels import fake_quant
+        return fake_quant(x, block, "fp4_e4m3")
+    dtype = x.dtype
+    shape = x.shape
+```
+
+### DSV41_METAL_SINKHORN
+
+Advanced backend control DSV41_METAL_SINKHORN. Set explicitly only for the selected backend; its literal read and fallback are documented below.
+
+Scope: mac-mlx. Class: advanced.
+
+Source: `vendor/mac-mlx/mlx_vlm/models/deepseek_v41/language.py:1693`. Unset read: '0'.
+
+```text
+            mixes = (xf @ self.fn.astype(mx.float32).T) * rsqrt
+        split = _hc_split_sinkhorn_ops
+        if os.environ.get("DSV41_METAL_SINKHORN", "0") == "1":
+            from .hyper_connection import metal_sinkhorn
+            split = metal_sinkhorn
+        return split(mixes, self.scale, self.base, self.hc, self.iters, self.eps)
+
+```
+
+### DSV41_METAL_SPARSE_ATTN
+
+Advanced backend control DSV41_METAL_SPARSE_ATTN. Set explicitly only for the selected backend; its literal read and fallback are documented below.
+
+Scope: mac-mlx. Class: advanced.
+
+Source: `vendor/mac-mlx/mlx_vlm/custom_kernels/deepseek_v41/test_sparse_attention_prefill.py:202`. Unset read: Wrapper/conditional default: see the literal call and consumer below.
+
+```text
+    assert dispatch.sparse_attention(*case) is marker
+    # The new flag alone reaches the dispatcher through language.sparse_attn.
+    monkeypatch.delenv("DSV41_METAL_SPARSE_ATTN", raising=False)
+    monkeypatch.delenv("DSV41_SDPA_SPARSE_ATTN", raising=False)
+    assert sparse_attn(*case) is marker
+    q, banks, sink, ids, scale = case
+    decode = (q[:, :1], banks, sink, ids[:, :1], scale)
+```
+
+Source: `vendor/mac-mlx/mlx_vlm/custom_kernels/deepseek_v41/test_sparse_attention_prefill.py:241`. Unset read: Wrapper/conditional default: see the literal call and consumer below.
+
+```text
+
+    monkeypatch.setattr(module, "sparse_attn_prefill", forbidden)
+    monkeypatch.setenv("DSV41_METAL_SPARSE_ATTN", metal)
+    monkeypatch.setenv("DSV41_SDPA_SPARSE_ATTN", "0")
+    if threshold is None:
+        monkeypatch.delenv("DSV41_PREFILL_FLASH_MIN_N", raising=False)
+    else:
+```
+
+Source: `vendor/mac-mlx/mlx_vlm/custom_kernels/deepseek_v41/validate_sdpa.py:38`. Unset read: Assigned by the runtime; see literal consumer.
+
+```text
+def select(path):
+    os.environ['DSV41_SDPA_SPARSE_ATTN'] = '1' if path == 'sdpa' else '0'
+    os.environ['DSV41_METAL_SPARSE_ATTN'] = '1' if path == 'metal' else '0'
+    os.environ['DSV41_COMPILE_SPARSE_ATTN'] = '1' if path == 'compiled' else '0'
+
+
+def metrics(actual, expected):
+```
+
+Source: `vendor/mac-mlx/mlx_vlm/custom_kernels/deepseek_v41/validate_sdpa_edges.py:106`. Unset read: Assigned by the runtime; see literal consumer.
+
+```text
+            for m in (1,3,257):
+                os.environ['DSV41_SDPA_SPARSE_ATTN'] = sdpa
+                os.environ['DSV41_METAL_SPARSE_ATTN'] = metal
+                counts.update(sdpa=0,metal=0)
+                qq=mx.broadcast_to(q,(1,m,64,512))
+                ii=mx.broadcast_to(idx,(1,m,1))
+                mx.eval(run(qq,kv,sink,ii,1.))
+```
+
+Source: `vendor/mac-mlx/mlx_vlm/models/deepseek_v41/language.py:317`. Unset read: '0'.
+
+```text
+    if sdpa not in ("0", "1", "decode", "prefill"):
+        raise ValueError("DSV41_SDPA_SPARSE_ATTN must be 0, 1, decode, or prefill")
+    metal = os.environ.get("DSV41_METAL_SPARSE_ATTN", "0")
+    if metal not in ("0", "1", "decode", "prefill"):
+        raise ValueError("DSV41_METAL_SPARSE_ATTN must be 0, 1, decode, or prefill")
+    regime = "decode" if q.shape[1] == 1 else "prefill"
+    use_sdpa = sdpa in ("1", regime)
+```
+
+Source: `vendor/mac-mlx/mlx_vlm/models/deepseek_v41/test_bounded_cache.py:22`. Unset read: Wrapper/conditional default: see the literal call and consumer below.
+
+```text
+        monkeypatch.setattr(helper, "LanguageModel", module.LanguageModel)
+    monkeypatch.setenv("DSV41_QAT", "1")
+    monkeypatch.setenv("DSV41_METAL_SPARSE_ATTN", "0")
+    return helper.random_model()
+
+
+@pytest.mark.parametrize("chunk", [1, 5, 17])
+```
+
+### DSV41_METAL_SPARSE_DECODE
+
+Advanced backend control DSV41_METAL_SPARSE_DECODE. Set explicitly only for the selected backend; its literal read and fallback are documented below.
+
+Scope: mac-mlx. Class: advanced.
+
+Source: `vendor/mac-mlx/mlx_vlm/custom_kernels/deepseek_v41/sparse_attention.py:95`. Unset read: '0'.
+
+```text
+    b, m, h, d = q.shape
+    k = indices.shape[-1]
+    streaming = (os.environ.get("DSV41_METAL_SPARSE_DECODE", "0") == "1"
+                 and m == 1 and d == 512)
+    max_k = 32768 if streaming else 640
+    if d % 32 or not 32 <= d <= 512 or not 1 <= k <= max_k or m < 1:
+        raise ValueError(f"V4.1 Metal requires D=32..512 aligned to 32, 1<=K<={max_k}, M>=1")
+```
+
+### DSV41_META_DIR
+
+Advanced backend control DSV41_META_DIR. Set explicitly only for the selected backend; its literal read and fallback are documented below.
+
+Scope: mac-mlx. Class: advanced.
+
+Source: `vendor/mac-mlx/mlx_vlm/models/deepseek_v41/test_checkpoint_layout_v41.py:31`. Unset read: KeyError unless an earlier assignment supplies the variable.
+
+```text
+@pytest.fixture(scope="module")
+def release():
+    candidates = [os.environ["DSV41_META_DIR"]] if "DSV41_META_DIR" in os.environ else [
+        "~/tmp/dsv41", "./tmp/upstream_dsv41"
+    ]
+    roots = [Path(path).expanduser() for path in candidates]
+    root = next((path for path in roots if all(
+```
+
+Source: `vendor/mac-mlx/mlx_vlm/models/deepseek_v41/test_dspark_dsv41.py:100`. Unset read: KeyError unless an earlier assignment supplies the variable.
+
+```text
+def _release():
+    """(raw config, tensor manifest, TextConfig) or None when absent."""
+    roots = ([Path(os.environ["DSV41_META_DIR"])] if "DSV41_META_DIR" in os.environ
+             else [Path("~/tmp/dsv41").expanduser(), Path("./tmp/upstream_dsv41")])
+    for root in roots:
+        paths = [root / "v41_config.json", root / "v41_tensors.json"]
+        if all(p.is_file() for p in paths):
+```
+
+### DSV41_MLX_COMMIT
+
+Advanced backend control DSV41_MLX_COMMIT. Set explicitly only for the selected backend; its literal read and fallback are documented below.
+
+Scope: mac-mlx. Class: advanced.
+
+Source: `vendor/mac-mlx/mlx_vlm/custom_kernels/deepseek_v41/test_grouped_gemm.py:62`. Unset read: 'unrecorded'.
+
+```text
+def record_runtime():
+    print(json.dumps(dict(mlx=mx.__version__, mlx_path=mx.__file__, release=RELEASE,
+                          mlx_commit=os.environ.get("DSV41_MLX_COMMIT", "unrecorded"),
+                          device=mx.metal.device_info())))
+
+
+def routes(case, experts=E):
+```
+
+Source: `vendor/mac-mlx/mlx_vlm/custom_kernels/deepseek_v41/test_grouped_gemm.py:444`. Unset read: 'unrecorded'.
+
+```text
+    report(worker=label, shapes=shapes, mlx=mx.__version__, mlx_path=mx.__file__,
+           platform=platform.platform(),
+           mlx_commit=os.environ.get("DSV41_MLX_COMMIT", "unrecorded"))
+
+    # This small check runs only after explicit --attribution-unsafe, and only in
+    # the selected MODE. All its GPU work/readback shares a bounded host scope.
+    if job.mode != "full":
+```
+
+### DSV41_OMLX_HEAD
+
+Advanced backend control DSV41_OMLX_HEAD. Set explicitly only for the selected backend; its literal read and fallback are documented below.
+
+Scope: mac-mlx. Class: advanced.
+
+Source: `vendor/mac-mlx/mlx_vlm/models/deepseek_v41/language.py:2382`. Unset read: '0'.
+
+```text
+                # nothing to cut, and a full-width prefill has shape[1] rows here.)
+                head_in = head_in[:, -1:]
+            if (os.environ.get("DSV41_OMLX_HEAD", "0") == "1"
+                    and type(self.lm_head) is nn.Linear and "bias" not in self.lm_head):
+                from .omlx_head import project_logits
+
+                logits = project_logits(head_in, self.lm_head.weight)
+```
+
+Source: `vendor/mac-mlx/mlx_vlm/models/deepseek_v41/language.py:2463`. Unset read: '0'.
+
+```text
+
+    def attach_engram_storage(self, model_dir):
+        if _HEAD_BF16 and os.environ.get("DSV41_OMLX_HEAD", "0") != "1":
+            raise RuntimeError("DSV41_HEAD_BF16=1 needs DSV41_OMLX_HEAD=1 (bf16 head storage with "
+                               "fp32 logits); refusing to serve bf16 logits silently")
+        if not hasattr(self, "_index_fused_attached"):
+            index_flag = os.environ.get("DSV41_INDEX_FUSED", "0")
+```
+
+Source: `vendor/mac-mlx/mlx_vlm/models/deepseek_v41/test_decode_bf16_contractions.py:38`. Unset read: Wrapper/conditional default: see the literal call and consumer below.
+
+```text
+def test_head_bf16_without_the_kernel_is_refused(monkeypatch):
+    monkeypatch.setenv("DSV41_HEAD_BF16", "1")
+    monkeypatch.delenv("DSV41_OMLX_HEAD", raising=False)
+    import importlib
+    from mlx_vlm.models.deepseek_v41 import language as lang
+    importlib.reload(lang)
+    try:
+```
+
+### DSV41_OUR_ENGRAM
+
+Advanced backend control DSV41_OUR_ENGRAM. Set explicitly only for the selected backend; its literal read and fallback are documented below.
+
+Scope: mac-mlx. Class: advanced.
+
+Source: `vendor/mac-mlx/mlx_vlm/models/deepseek_v41/test_engram_hash_parity.py:130`. Unset read: Path(__file__).with_name('engram.py').
+
+```text
+    # Reuse the oracle's env overrides and platform-aware local path defaults.
+    oracle = load(Path(__file__).with_name("reference_cpu_dsv41.py"), "dsv41_hash_paths")
+    ours = Path(os.environ.get("DSV41_OUR_ENGRAM", Path(__file__).with_name("engram.py"))).expanduser()
+    required = [oracle.REF_DIR / "engram.py", ours,
+                oracle.TOKENIZER_DIR / "tokenizer.json", oracle.TOKENIZER_DIR / "tokenizer_config.json"]
+    if not all(path.is_file() for path in required):
+        pytest.skip("Engram parity inputs absent; set DSV41_REF_DIR, DSV41_TOKENIZER_DIR "
+```
+
+### DSV41_PN_DIR
+
+Advanced backend control DSV41_PN_DIR. Set explicitly only for the selected backend; its literal read and fallback are documented below.
+
+Scope: mac-mlx. Class: advanced.
+
+Source: `vendor/mac-mlx/mlx_vlm/models/deepseek_v41/test_language_dsv41_mac.py:506`. Unset read: './tmp/upstream_dsv41/pipenetwork'.
+
+```text
+def test_torch_reference_parity(monkeypatch):
+    torch = pytest.importorskip("torch")
+    root = Path(os.environ.get("DSV41_PN_DIR", "./tmp/upstream_dsv41/pipenetwork"))
+    if not root.is_dir():
+        pytest.skip("Set DSV41_PN_DIR to the PipeNetwork checkout for reference parity")
+    monkeypatch.setenv("DSV41_QAT", "0")
+    old_dtype = torch.get_default_dtype()
+```
+
+### DSV41_PREFILL_CHUNK
+
+Advanced backend control DSV41_PREFILL_CHUNK. Set explicitly only for the selected backend; its literal read and fallback are documented below.
+
+Scope: mac-mlx. Class: advanced.
+
+Source: `engines/mlx-receiver/mlx_token_stream_server.py:1686`. Unset read: '256'.
+
+```text
+            mtp_hidden = None
+            swi_config = None
+            chunk_size = int(os.environ.get('DSV41_PREFILL_CHUNK', '256'))
+            if not 1 <= chunk_size <= 4096:
+                raise ValueError('DSV41_PREFILL_CHUNK must be in 1..4096')
+            if not prompt_token_ids:
+                raise ValueError('[DSV41] Local prefill requires prompt tokens')
+```
+
+Source: `vendor/mac-mlx/mlx_vlm/models/deepseek_v41/language.py:1882`. Unset read: '256'.
+
+```text
+def _prefill_chunk_size():
+    """DSV41_PREFILL_CHUNK, validated exactly as the receiver validates it."""
+    raw = os.environ.get("DSV41_PREFILL_CHUNK", "256")
+    try:
+        value = int(raw)
+    except (TypeError, ValueError):
+        raise ValueError(f"DSV41_PREFILL_CHUNK must be in 1..4096, got {raw!r}") from None
+```
+
+Source: `vendor/mac-mlx/mlx_vlm/models/deepseek_v41/test_prefill_cone.py:439`. Unset read: Wrapper/conditional default: see the literal call and consumer below.
+
+```text
+    monkeypatch.setenv("DSV41_PREFILL_LAYER_MAJOR", "1")
+    monkeypatch.setenv("DSV41_PREFILL_CONE", "1")
+    monkeypatch.setenv("DSV41_PREFILL_CHUNK", str(chunk))
+    if tail is None:
+        monkeypatch.delenv("DSV41_PREFILL_CONE_TAIL", raising=False)
+    else:
+        monkeypatch.setenv("DSV41_PREFILL_CONE_TAIL", str(tail))
+```
+
+Source: `vendor/mac-mlx/mlx_vlm/models/deepseek_v41/test_prefill_cone.py:488`. Unset read: Wrapper/conditional default: see the literal call and consumer below.
+
+```text
+
+    monkeypatch.setenv("DSV41_PREFILL_LAYER_MAJOR", "1")
+    monkeypatch.setenv("DSV41_PREFILL_CHUNK", chunk)
+    arm = _logits(model, ids)
+
+    assert arm.shape == control.shape
+    assert bool(mx.array_equal(arm, control).item()), (
+```
+
+Source: `vendor/mac-mlx/mlx_vlm/models/deepseek_v41/test_prefill_cone.py:506`. Unset read: Wrapper/conditional default: see the literal call and consumer below.
+
+```text
+
+    monkeypatch.setenv("DSV41_PREFILL_LAYER_MAJOR", "1")
+    monkeypatch.setenv("DSV41_PREFILL_CHUNK", str(CHUNK))
+    arm = model.make_cache()
+    model(ids, cache=arm)
+
+    assert arm[0].offset == control[0].offset
+```
+
+Source: `vendor/mac-mlx/mlx_vlm/models/deepseek_v41/test_prefill_cone.py:904`. Unset read: Wrapper/conditional default: see the literal call and consumer below.
+
+```text
+    for name, value in switches.items():
+        monkeypatch.setenv(name, value)
+    monkeypatch.setenv("DSV41_PREFILL_CHUNK", str(CHUNK))
+    arm = _logits(model, ids)
+
+    if switches.get("DSV41_PREFILL_CONE") == "1":
+        assert arm.shape[1] == 1, arm.shape
+```
+
+### DSV41_PREFILL_CONE
+
+Advanced backend control DSV41_PREFILL_CONE. Set explicitly only for the selected backend; its literal read and fallback are documented below.
+
+Scope: mac-mlx. Class: advanced.
+
+Source: `vendor/mac-mlx/mlx_vlm/models/deepseek_v41/language.py:1997`. Unset read: '0'.
+
+```text
+    """
+    layer_major = os.environ.get("DSV41_PREFILL_LAYER_MAJOR", "0") == "1"
+    cone = os.environ.get("DSV41_PREFILL_CONE", "0") == "1"
+    if cone and not layer_major:
+        raise ValueError(
+            "DSV41_PREFILL_CONE=1 requires DSV41_PREFILL_LAYER_MAJOR=1: the cone "
+            "replaces phase two of the layer-major split and there is no phase two "
+```
+
+Source: `vendor/mac-mlx/mlx_vlm/models/deepseek_v41/test_prefill_cone.py:147`. Unset read: Wrapper/conditional default: see the literal call and consumer below.
+
+```text
+
+def test_cone_without_layer_major_raises_and_names_both(monkeypatch):
+    monkeypatch.setenv("DSV41_PREFILL_CONE", "1")
+    monkeypatch.delenv("DSV41_PREFILL_LAYER_MAJOR", raising=False)
+    with pytest.raises(ValueError) as excinfo:
+        _prefill_switches(4096, _Cache(), None)
+    message = str(excinfo.value)
+```
+
+Source: `vendor/mac-mlx/mlx_vlm/models/deepseek_v41/test_prefill_cone.py:157`. Unset read: Wrapper/conditional default: see the literal call and consumer below.
+
+```text
+
+def test_cone_with_dspark_raises_and_names_both(monkeypatch):
+    monkeypatch.setenv("DSV41_PREFILL_CONE", "1")
+    monkeypatch.setenv("DSV41_PREFILL_LAYER_MAJOR", "1")
+    monkeypatch.setenv("DSV41_DSPARK", "1")
+    monkeypatch.delenv("DSV41_PREFILL_CONE_TAIL", raising=False)
+    with pytest.raises(ValueError) as excinfo:
+```
+
+Source: `vendor/mac-mlx/mlx_vlm/models/deepseek_v41/test_prefill_cone.py:170`. Unset read: Wrapper/conditional default: see the literal call and consumer below.
+
+```text
+
+def test_cone_with_capture_layers_raises(monkeypatch):
+    monkeypatch.setenv("DSV41_PREFILL_CONE", "1")
+    monkeypatch.setenv("DSV41_PREFILL_LAYER_MAJOR", "1")
+    monkeypatch.delenv("DSV41_DSPARK", raising=False)
+    monkeypatch.delenv("DSV41_PREFILL_CONE_TAIL", raising=False)
+    with pytest.raises(ValueError) as excinfo:
+```
+
+Source: `vendor/mac-mlx/mlx_vlm/models/deepseek_v41/test_prefill_cone.py:181`. Unset read: Wrapper/conditional default: see the literal call and consumer below.
+
+```text
+def test_layer_major_with_bounded_cache_raises(monkeypatch):
+    monkeypatch.setenv("DSV41_PREFILL_LAYER_MAJOR", "1")
+    monkeypatch.delenv("DSV41_PREFILL_CONE", raising=False)
+
+    class Bounded:
+        bounded = True
+
+```
+
+Source: `vendor/mac-mlx/mlx_vlm/models/deepseek_v41/test_prefill_cone.py:432`. Unset read: Wrapper/conditional default: see the literal call and consumer below.
+
+```text
+def _off(monkeypatch):
+    monkeypatch.delenv("DSV41_PREFILL_LAYER_MAJOR", raising=False)
+    monkeypatch.delenv("DSV41_PREFILL_CONE", raising=False)
+    monkeypatch.delenv("DSV41_PREFILL_CONE_TAIL", raising=False)
+
+
+def _cone_on(monkeypatch, chunk=CHUNK, tail=None):
+```
+
+Source: `vendor/mac-mlx/mlx_vlm/models/deepseek_v41/test_prefill_cone.py:438`. Unset read: Wrapper/conditional default: see the literal call and consumer below.
+
+```text
+def _cone_on(monkeypatch, chunk=CHUNK, tail=None):
+    monkeypatch.setenv("DSV41_PREFILL_LAYER_MAJOR", "1")
+    monkeypatch.setenv("DSV41_PREFILL_CONE", "1")
+    monkeypatch.setenv("DSV41_PREFILL_CHUNK", str(chunk))
+    if tail is None:
+        monkeypatch.delenv("DSV41_PREFILL_CONE_TAIL", raising=False)
+    else:
+```
+
+Source: `vendor/mac-mlx/mlx_vlm/models/deepseek_v41/test_prefill_cone.py:994`. Unset read: Wrapper/conditional default: see the literal call and consumer below.
+
+```text
+
+def test_dspark_refusal_is_present_without_a_tail_and_absent_with_one(monkeypatch):
+    monkeypatch.setenv("DSV41_PREFILL_CONE", "1")
+    monkeypatch.setenv("DSV41_PREFILL_LAYER_MAJOR", "1")
+    monkeypatch.setenv("DSV41_DSPARK", "1")
+    monkeypatch.delenv("DSV41_PREFILL_CONE_TAIL", raising=False)
+    with pytest.raises(ValueError) as excinfo:
+```
+
+Source: `vendor/mac-mlx/mlx_vlm/models/deepseek_v41/test_prefill_cone.py:1009`. Unset read: Wrapper/conditional default: see the literal call and consumer below.
+
+```text
+
+def test_capture_refusal_is_present_without_a_tail_and_absent_with_one(monkeypatch):
+    monkeypatch.setenv("DSV41_PREFILL_CONE", "1")
+    monkeypatch.setenv("DSV41_PREFILL_LAYER_MAJOR", "1")
+    monkeypatch.delenv("DSV41_DSPARK", raising=False)
+    monkeypatch.delenv("DSV41_PREFILL_CONE_TAIL", raising=False)
+    with pytest.raises(ValueError) as excinfo:
+```
+
+Source: `vendor/mac-mlx/mlx_vlm/models/deepseek_v41/test_prefill_cone.py:1031`. Unset read: Wrapper/conditional default: see the literal call and consumer below.
+
+```text
+    # And neither switch sets the tail.
+    monkeypatch.delenv("DSV41_PREFILL_CONE_TAIL", raising=False)
+    monkeypatch.setenv("DSV41_PREFILL_CONE", "1")
+    assert prefill_cone_tail() == (1, False)
+
+
+def _cone_run(model, ids, monkeypatch, tail, **kwargs):
+```
+
+### DSV41_PREFILL_CONE_TAIL
+
+Advanced backend control DSV41_PREFILL_CONE_TAIL. Set explicitly only for the selected backend; its literal read and fallback are documented below.
+
+Scope: mac-mlx. Class: advanced.
+
+Source: `engines/mlx-receiver/mlx_token_stream_server.py:701`. Unset read: None.
+
+```text
+
+def _dsv41_cone_tail_rows():
+    raw = os.environ.get('DSV41_PREFILL_CONE_TAIL')
+    if raw is None:
+        return None
+    tail = int(raw)
+    if tail < 1:
+```
+
+Source: `vendor/mac-mlx/mlx_vlm/models/deepseek_v41/language.py:1974`. Unset read: None.
+
+```text
+    be read as consent to truncate somebody's history.
+    """
+    raw = os.environ.get("DSV41_PREFILL_CONE_TAIL")
+    if raw is None:
+        return 1, False
+    try:
+        tail = int(raw)
+```
+
+Source: `vendor/mac-mlx/mlx_vlm/models/deepseek_v41/test_prefill_cone.py:160`. Unset read: Wrapper/conditional default: see the literal call and consumer below.
+
+```text
+    monkeypatch.setenv("DSV41_PREFILL_LAYER_MAJOR", "1")
+    monkeypatch.setenv("DSV41_DSPARK", "1")
+    monkeypatch.delenv("DSV41_PREFILL_CONE_TAIL", raising=False)
+    with pytest.raises(ValueError) as excinfo:
+        _prefill_switches(4096, _Cache(), None)
+    message = str(excinfo.value)
+    assert "DSV41_PREFILL_CONE" in message
+```
+
+Source: `vendor/mac-mlx/mlx_vlm/models/deepseek_v41/test_prefill_cone.py:173`. Unset read: Wrapper/conditional default: see the literal call and consumer below.
+
+```text
+    monkeypatch.setenv("DSV41_PREFILL_LAYER_MAJOR", "1")
+    monkeypatch.delenv("DSV41_DSPARK", raising=False)
+    monkeypatch.delenv("DSV41_PREFILL_CONE_TAIL", raising=False)
+    with pytest.raises(ValueError) as excinfo:
+        _prefill_switches(4096, _Cache(), [37, 38, 39])
+    assert "capture_layer_ids" in str(excinfo.value)
+
+```
+
+Source: `vendor/mac-mlx/mlx_vlm/models/deepseek_v41/test_prefill_cone.py:433`. Unset read: Wrapper/conditional default: see the literal call and consumer below.
+
+```text
+    monkeypatch.delenv("DSV41_PREFILL_LAYER_MAJOR", raising=False)
+    monkeypatch.delenv("DSV41_PREFILL_CONE", raising=False)
+    monkeypatch.delenv("DSV41_PREFILL_CONE_TAIL", raising=False)
+
+
+def _cone_on(monkeypatch, chunk=CHUNK, tail=None):
+    monkeypatch.setenv("DSV41_PREFILL_LAYER_MAJOR", "1")
+```
+
+Source: `vendor/mac-mlx/mlx_vlm/models/deepseek_v41/test_prefill_cone.py:441`. Unset read: Wrapper/conditional default: see the literal call and consumer below.
+
+```text
+    monkeypatch.setenv("DSV41_PREFILL_CHUNK", str(chunk))
+    if tail is None:
+        monkeypatch.delenv("DSV41_PREFILL_CONE_TAIL", raising=False)
+    else:
+        monkeypatch.setenv("DSV41_PREFILL_CONE_TAIL", str(tail))
+
+
+```
+
+Source: `vendor/mac-mlx/mlx_vlm/models/deepseek_v41/test_prefill_cone.py:443`. Unset read: Wrapper/conditional default: see the literal call and consumer below.
+
+```text
+        monkeypatch.delenv("DSV41_PREFILL_CONE_TAIL", raising=False)
+    else:
+        monkeypatch.setenv("DSV41_PREFILL_CONE_TAIL", str(tail))
+
+
+def test_the_default_path_is_not_chunk_invariant(tiny, monkeypatch):
+    """PINNED, so nobody rediscovers it as a bug in the layer-major or cone code.
+```
+
+Source: `vendor/mac-mlx/mlx_vlm/models/deepseek_v41/test_prefill_cone.py:979`. Unset read: Wrapper/conditional default: see the literal call and consumer below.
+
+```text
+def test_cone_tail_switch_parses(monkeypatch, raw, parsed):
+    if raw is None:
+        monkeypatch.delenv("DSV41_PREFILL_CONE_TAIL", raising=False)
+    else:
+        monkeypatch.setenv("DSV41_PREFILL_CONE_TAIL", raw)
+    assert prefill_cone_tail() == parsed
+
+```
+
+Source: `vendor/mac-mlx/mlx_vlm/models/deepseek_v41/test_prefill_cone.py:981`. Unset read: Wrapper/conditional default: see the literal call and consumer below.
+
+```text
+        monkeypatch.delenv("DSV41_PREFILL_CONE_TAIL", raising=False)
+    else:
+        monkeypatch.setenv("DSV41_PREFILL_CONE_TAIL", raw)
+    assert prefill_cone_tail() == parsed
+
+
+@pytest.mark.parametrize("raw", ["0", "-1", "half", ""])
+```
+
+Source: `vendor/mac-mlx/mlx_vlm/models/deepseek_v41/test_prefill_cone.py:987`. Unset read: Wrapper/conditional default: see the literal call and consumer below.
+
+```text
+@pytest.mark.parametrize("raw", ["0", "-1", "half", ""])
+def test_cone_tail_switch_refuses_nonsense(monkeypatch, raw):
+    monkeypatch.setenv("DSV41_PREFILL_CONE_TAIL", raw)
+    with pytest.raises(ValueError) as excinfo:
+        prefill_cone_tail()
+    assert "DSV41_PREFILL_CONE_TAIL" in str(excinfo.value)
+
+```
+
+Source: `vendor/mac-mlx/mlx_vlm/models/deepseek_v41/test_prefill_cone.py:997`. Unset read: Wrapper/conditional default: see the literal call and consumer below.
+
+```text
+    monkeypatch.setenv("DSV41_PREFILL_LAYER_MAJOR", "1")
+    monkeypatch.setenv("DSV41_DSPARK", "1")
+    monkeypatch.delenv("DSV41_PREFILL_CONE_TAIL", raising=False)
+    with pytest.raises(ValueError) as excinfo:
+        _prefill_switches(4096, _Cache(), None)
+    message = str(excinfo.value)
+    assert "DSV41_PREFILL_CONE_TAIL" in message, message
+```
+
+Source: `vendor/mac-mlx/mlx_vlm/models/deepseek_v41/test_prefill_cone.py:1004`. Unset read: Wrapper/conditional default: see the literal call and consumer below.
+
+```text
+    assert "DSV41_DSPARK" in message, message
+
+    monkeypatch.setenv("DSV41_PREFILL_CONE_TAIL", "512")
+    assert _prefill_switches(4096, _Cache(), None) == (True, True)
+
+
+def test_capture_refusal_is_present_without_a_tail_and_absent_with_one(monkeypatch):
+```
+
+Source: `vendor/mac-mlx/mlx_vlm/models/deepseek_v41/test_prefill_cone.py:1012`. Unset read: Wrapper/conditional default: see the literal call and consumer below.
+
+```text
+    monkeypatch.setenv("DSV41_PREFILL_LAYER_MAJOR", "1")
+    monkeypatch.delenv("DSV41_DSPARK", raising=False)
+    monkeypatch.delenv("DSV41_PREFILL_CONE_TAIL", raising=False)
+    with pytest.raises(ValueError) as excinfo:
+        _prefill_switches(4096, _Cache(), [37, 38, 39])
+    assert "DSV41_PREFILL_CONE_TAIL" in str(excinfo.value)
+
+```
+
+Source: `vendor/mac-mlx/mlx_vlm/models/deepseek_v41/test_prefill_cone.py:1017`. Unset read: Wrapper/conditional default: see the literal call and consumer below.
+
+```text
+    assert "DSV41_PREFILL_CONE_TAIL" in str(excinfo.value)
+
+    monkeypatch.setenv("DSV41_PREFILL_CONE_TAIL", "128")
+    assert _prefill_switches(4096, _Cache(), [37, 38, 39]) == (True, True)
+
+
+def test_the_tail_never_implies_a_switch_and_no_switch_implies_the_tail(monkeypatch):
+```
+
+Source: `vendor/mac-mlx/mlx_vlm/models/deepseek_v41/test_prefill_cone.py:1024`. Unset read: Wrapper/conditional default: see the literal call and consumer below.
+
+```text
+    for name in ("DSV41_PREFILL_LAYER_MAJOR", "DSV41_PREFILL_CONE", "DSV41_DSPARK"):
+        monkeypatch.delenv(name, raising=False)
+    monkeypatch.setenv("DSV41_PREFILL_CONE_TAIL", "512")
+    # A tail on its own switches nothing on.
+    assert _prefill_switches(4096, _Cache(), None) == (False, False)
+    monkeypatch.setenv("DSV41_PREFILL_LAYER_MAJOR", "1")
+    assert _prefill_switches(4096, _Cache(), None) == (True, False)
+```
+
+Source: `vendor/mac-mlx/mlx_vlm/models/deepseek_v41/test_prefill_cone.py:1030`. Unset read: Wrapper/conditional default: see the literal call and consumer below.
+
+```text
+    assert _prefill_switches(4096, _Cache(), None) == (True, False)
+    # And neither switch sets the tail.
+    monkeypatch.delenv("DSV41_PREFILL_CONE_TAIL", raising=False)
+    monkeypatch.setenv("DSV41_PREFILL_CONE", "1")
+    assert prefill_cone_tail() == (1, False)
+
+
+```
+
+### DSV41_PREFILL_FLASH_ATTN
+
+Advanced backend control DSV41_PREFILL_FLASH_ATTN. Set explicitly only for the selected backend; its literal read and fallback are documented below.
+
+Scope: mac-mlx. Class: advanced.
+
+Source: `vendor/mac-mlx/mlx_vlm/custom_kernels/deepseek_v41/sparse_attention.py:24`. Unset read: '0'.
+
+```text
+def prefill_flash_enabled(n):
+    """Opt-in prefill threshold; decode/DSpark batches <=8 are always excluded."""
+    return (n > 8 and os.environ.get("DSV41_PREFILL_FLASH_ATTN", "0") == "1"
+            and n >= max(9, int(os.environ.get("DSV41_PREFILL_FLASH_MIN_N", "64"))))
+
+
+@lru_cache(maxsize=1)
+```
+
+Source: `vendor/mac-mlx/mlx_vlm/custom_kernels/deepseek_v41/test_sparse_attention_prefill.py:195`. Unset read: Wrapper/conditional default: see the literal call and consumer below.
+
+```text
+    monkeypatch.setattr(module, "sparse_attn_prefill", lambda *args: marker)
+    monkeypatch.delenv("DSV41_PREFILL_FLASH_MIN_N", raising=False)
+    monkeypatch.delenv("DSV41_PREFILL_FLASH_ATTN", raising=False)
+    before = dispatch.status()
+    assert dispatch.sparse_attention(*case) is not marker
+    assert dispatch.status()["prefill_flash"] == before["prefill_flash"]
+    monkeypatch.setenv("DSV41_PREFILL_FLASH_ATTN", "1")
+```
+
+Source: `vendor/mac-mlx/mlx_vlm/custom_kernels/deepseek_v41/test_sparse_attention_prefill.py:199`. Unset read: Wrapper/conditional default: see the literal call and consumer below.
+
+```text
+    assert dispatch.sparse_attention(*case) is not marker
+    assert dispatch.status()["prefill_flash"] == before["prefill_flash"]
+    monkeypatch.setenv("DSV41_PREFILL_FLASH_ATTN", "1")
+    assert dispatch.sparse_attention(*case) is marker
+    # The new flag alone reaches the dispatcher through language.sparse_attn.
+    monkeypatch.delenv("DSV41_METAL_SPARSE_ATTN", raising=False)
+    monkeypatch.delenv("DSV41_SDPA_SPARSE_ATTN", raising=False)
+```
+
+Source: `vendor/mac-mlx/mlx_vlm/custom_kernels/deepseek_v41/test_sparse_attention_prefill.py:218`. Unset read: Wrapper/conditional default: see the literal call and consumer below.
+
+```text
+@pytest.mark.parametrize("threshold", [None, "1", "128"])
+def test_prefill_threshold(n, threshold, monkeypatch):
+    monkeypatch.setenv("DSV41_PREFILL_FLASH_ATTN", "1")
+    if threshold is None:
+        monkeypatch.delenv("DSV41_PREFILL_FLASH_MIN_N", raising=False)
+    else:
+        monkeypatch.setenv("DSV41_PREFILL_FLASH_MIN_N", threshold)
+```
+
+Source: `vendor/mac-mlx/mlx_vlm/custom_kernels/deepseek_v41/test_sparse_attention_prefill.py:225`. Unset read: Wrapper/conditional default: see the literal call and consumer below.
+
+```text
+    expected = n > 8 and n >= int(threshold or "64")
+    assert dispatch.prefill_flash_enabled(n) is expected
+    monkeypatch.setenv("DSV41_PREFILL_FLASH_ATTN", "0")
+    assert not dispatch.prefill_flash_enabled(n)
+
+
+@pytest.mark.parametrize("n", [6, 8, 63])
+```
+
+Source: `vendor/mac-mlx/mlx_vlm/models/deepseek_v41/language.py:307`. Unset read: '0'.
+
+```text
+
+        return sparse_attn_v41(q, kv, attn_sink, topk_idxs, softmax_scale)
+    if os.environ.get("DSV41_PREFILL_FLASH_ATTN", "0") == "1":
+        from ...custom_kernels.deepseek_v41.sparse_attention import (
+            prefill_flash_enabled, sparse_attention,
+        )
+
+```
+
+### DSV41_PREFILL_FLASH_MIN_N
+
+Advanced backend control DSV41_PREFILL_FLASH_MIN_N. Set explicitly only for the selected backend; its literal read and fallback are documented below.
+
+Scope: mac-mlx. Class: advanced.
+
+Source: `vendor/mac-mlx/mlx_vlm/custom_kernels/deepseek_v41/sparse_attention.py:25`. Unset read: '64'.
+
+```text
+    """Opt-in prefill threshold; decode/DSpark batches <=8 are always excluded."""
+    return (n > 8 and os.environ.get("DSV41_PREFILL_FLASH_ATTN", "0") == "1"
+            and n >= max(9, int(os.environ.get("DSV41_PREFILL_FLASH_MIN_N", "64"))))
+
+
+@lru_cache(maxsize=1)
+def _kernel():
+```
+
+Source: `vendor/mac-mlx/mlx_vlm/custom_kernels/deepseek_v41/test_sparse_attention_prefill.py:194`. Unset read: Wrapper/conditional default: see the literal call and consumer below.
+
+```text
+
+    monkeypatch.setattr(module, "sparse_attn_prefill", lambda *args: marker)
+    monkeypatch.delenv("DSV41_PREFILL_FLASH_MIN_N", raising=False)
+    monkeypatch.delenv("DSV41_PREFILL_FLASH_ATTN", raising=False)
+    before = dispatch.status()
+    assert dispatch.sparse_attention(*case) is not marker
+    assert dispatch.status()["prefill_flash"] == before["prefill_flash"]
+```
+
+Source: `vendor/mac-mlx/mlx_vlm/custom_kernels/deepseek_v41/test_sparse_attention_prefill.py:220`. Unset read: Wrapper/conditional default: see the literal call and consumer below.
+
+```text
+    monkeypatch.setenv("DSV41_PREFILL_FLASH_ATTN", "1")
+    if threshold is None:
+        monkeypatch.delenv("DSV41_PREFILL_FLASH_MIN_N", raising=False)
+    else:
+        monkeypatch.setenv("DSV41_PREFILL_FLASH_MIN_N", threshold)
+    expected = n > 8 and n >= int(threshold or "64")
+    assert dispatch.prefill_flash_enabled(n) is expected
+```
+
+Source: `vendor/mac-mlx/mlx_vlm/custom_kernels/deepseek_v41/test_sparse_attention_prefill.py:222`. Unset read: Wrapper/conditional default: see the literal call and consumer below.
+
+```text
+        monkeypatch.delenv("DSV41_PREFILL_FLASH_MIN_N", raising=False)
+    else:
+        monkeypatch.setenv("DSV41_PREFILL_FLASH_MIN_N", threshold)
+    expected = n > 8 and n >= int(threshold or "64")
+    assert dispatch.prefill_flash_enabled(n) is expected
+    monkeypatch.setenv("DSV41_PREFILL_FLASH_ATTN", "0")
+    assert not dispatch.prefill_flash_enabled(n)
+```
+
+Source: `vendor/mac-mlx/mlx_vlm/custom_kernels/deepseek_v41/test_sparse_attention_prefill.py:244`. Unset read: Wrapper/conditional default: see the literal call and consumer below.
+
+```text
+    monkeypatch.setenv("DSV41_SDPA_SPARSE_ATTN", "0")
+    if threshold is None:
+        monkeypatch.delenv("DSV41_PREFILL_FLASH_MIN_N", raising=False)
+    else:
+        monkeypatch.setenv("DSV41_PREFILL_FLASH_MIN_N", threshold)
+    case = _case(n, 128, "mixed", h=8)
+    for path in (dispatch.sparse_attention, sparse_attn):
+```
+
+Source: `vendor/mac-mlx/mlx_vlm/custom_kernels/deepseek_v41/test_sparse_attention_prefill.py:246`. Unset read: Wrapper/conditional default: see the literal call and consumer below.
+
+```text
+        monkeypatch.delenv("DSV41_PREFILL_FLASH_MIN_N", raising=False)
+    else:
+        monkeypatch.setenv("DSV41_PREFILL_FLASH_MIN_N", threshold)
+    case = _case(n, 128, "mixed", h=8)
+    for path in (dispatch.sparse_attention, sparse_attn):
+        with _flash_switch("0"):
+            expected = path(*case)
+```
+
+### DSV41_PREFILL_GROUPED_MIN_ROWS
+
+Advanced backend control DSV41_PREFILL_GROUPED_MIN_ROWS. Set explicitly only for the selected backend; its literal read and fallback are documented below.
+
+Scope: mac-mlx. Class: advanced.
+
+Source: `vendor/mac-mlx/mlx_vlm/custom_kernels/deepseek_v41/test_grouped_gemm.py:425`. Unset read: Wrapper/conditional default: see the literal call and consumer below.
+
+```text
+    monkeypatch.setattr(adapter, "moe_prefill_grouped", grouped)
+    monkeypatch.delenv("DSV41_PREFILL_GROUPED_MXFP4", raising=False)
+    monkeypatch.delenv("DSV41_PREFILL_GROUPED_MIN_ROWS", raising=False)
+    MoE.__call__(fake, mx.zeros((1, 256, 32), dtype=mx.bfloat16))
+    monkeypatch.setenv("DSV41_PREFILL_GROUPED_MXFP4", "1")
+    for rows in (1, 255, 256):
+        MoE.__call__(fake, mx.zeros((1, rows, 32), dtype=mx.bfloat16))
+```
+
+Source: `vendor/mac-mlx/mlx_vlm/custom_kernels/deepseek_v41/test_grouped_gemm.py:430`. Unset read: Wrapper/conditional default: see the literal call and consumer below.
+
+```text
+    for rows in (1, 255, 256):
+        MoE.__call__(fake, mx.zeros((1, rows, 32), dtype=mx.bfloat16))
+    monkeypatch.setenv("DSV41_PREFILL_GROUPED_MIN_ROWS", "1")
+    MoE.__call__(fake, mx.zeros((1, 1, 32), dtype=mx.bfloat16))
+    assert calls == ["original", "original", "original", "grouped", "original"]
+
+
+```
+
+Source: `vendor/mac-mlx/mlx_vlm/models/deepseek_v41/language.py:971`. Unset read: '256'.
+
+```text
+                and not fused
+                and xf.shape[0] > 1
+                and xf.shape[0] >= int(os.environ.get("DSV41_PREFILL_GROUPED_MIN_ROWS", "256"))):
+            from .moe_prefill import moe_prefill_grouped
+
+            y = moe_prefill_grouped(self, xf, indices, weights)
+        else:
+```
+
+Source: `vendor/mac-mlx/mlx_vlm/models/deepseek_v41/test_ffn_expert_pad_cpu.py:164`. Unset read: Wrapper/conditional default: see the literal call and consumer below.
+
+```text
+    # Padding must also take precedence over grouped prefill.
+    monkeypatch.setenv("DSV41_PREFILL_GROUPED_MXFP4", "1")
+    monkeypatch.setenv("DSV41_PREFILL_GROUPED_MIN_ROWS", "64")
+    monkeypatch.setenv("DSV41_COMPILE_PRIMITIVES", "0")
+    up = Mock(side_effect=lambda x, ids, **kw: x * (ids[:, None, None] + 1))
+    up.num_experts = 8
+    mlp = SimpleNamespace(training=False, up_proj=up,
+```
+
+### DSV41_PREFILL_GROUPED_MXFP4
+
+Advanced backend control DSV41_PREFILL_GROUPED_MXFP4. Set explicitly only for the selected backend; its literal read and fallback are documented below.
+
+Scope: mac-mlx. Class: advanced.
+
+Source: `vendor/mac-mlx/mlx_vlm/custom_kernels/deepseek_v41/test_grouped_gemm.py:424`. Unset read: Wrapper/conditional default: see the literal call and consumer below.
+
+```text
+        shared_experts=lambda x: mx.zeros_like(x))
+    monkeypatch.setattr(adapter, "moe_prefill_grouped", grouped)
+    monkeypatch.delenv("DSV41_PREFILL_GROUPED_MXFP4", raising=False)
+    monkeypatch.delenv("DSV41_PREFILL_GROUPED_MIN_ROWS", raising=False)
+    MoE.__call__(fake, mx.zeros((1, 256, 32), dtype=mx.bfloat16))
+    monkeypatch.setenv("DSV41_PREFILL_GROUPED_MXFP4", "1")
+    for rows in (1, 255, 256):
+```
+
+Source: `vendor/mac-mlx/mlx_vlm/custom_kernels/deepseek_v41/test_grouped_gemm.py:427`. Unset read: Wrapper/conditional default: see the literal call and consumer below.
+
+```text
+    monkeypatch.delenv("DSV41_PREFILL_GROUPED_MIN_ROWS", raising=False)
+    MoE.__call__(fake, mx.zeros((1, 256, 32), dtype=mx.bfloat16))
+    monkeypatch.setenv("DSV41_PREFILL_GROUPED_MXFP4", "1")
+    for rows in (1, 255, 256):
+        MoE.__call__(fake, mx.zeros((1, rows, 32), dtype=mx.bfloat16))
+    monkeypatch.setenv("DSV41_PREFILL_GROUPED_MIN_ROWS", "1")
+    MoE.__call__(fake, mx.zeros((1, 1, 32), dtype=mx.bfloat16))
+```
+
+Source: `vendor/mac-mlx/mlx_vlm/models/deepseek_v41/language.py:965`. Unset read: '0'.
+
+```text
+        fused = (getattr(self, "ffn_fused", False) and xf.shape[0] >= 64
+                 and not _v41_verify_context.get())
+        if (os.environ.get("DSV41_PREFILL_GROUPED_MXFP4", "0") == "1"
+                and not down_bf16  # Precision trial uses the stock gather_qmm kernels.
+                and not pad16
+                and not expert_tiles
+                and not fused
+```
+
+Source: `vendor/mac-mlx/mlx_vlm/models/deepseek_v41/language.py:2505`. Unset read: '0'.
+
+```text
+                    or getattr(self, "_ffn_expert_tiles_attached",
+                               os.environ.get("DSV41_FFN_EXPERT_TILES", "0") == "1")
+                    or os.environ.get("DSV41_PREFILL_GROUPED_MXFP4", "0") == "1"):
+                raise ValueError("DSV41_FFN_FUSED requires DOWN_BF16, EXPERT_PAD16, "
+                                 "EXPERT_TILES and PREFILL_GROUPED_MXFP4 to be off")
+        if not hasattr(self, "_ffn_down_bf16_attached"):
+            self._ffn_down_bf16_attached = os.environ.get("DSV41_FFN_DOWN_BF16", "0") == "1"
+```
+
+Source: `vendor/mac-mlx/mlx_vlm/models/deepseek_v41/language.py:2522`. Unset read: '0'.
+
+```text
+            if flag == "1":
+                if (self._ffn_down_bf16_attached or self._ffn_expert_pad16_attached
+                        or os.environ.get("DSV41_PREFILL_GROUPED_MXFP4", "0") == "1"):
+                    raise ValueError("DSV41_FFN_EXPERT_TILES requires DOWN_BF16, EXPERT_PAD16 "
+                                     "and PREFILL_GROUPED_MXFP4 to be off")
+                from ...custom_kernels.deepseek_v41.moe_prefill_expert_tiles import prepare_expert_tiles
+
+```
+
+Source: `vendor/mac-mlx/mlx_vlm/models/deepseek_v41/test_ffn_down_bf16_cpu.py:51`. Unset read: Wrapper/conditional default: see the literal call and consumer below.
+
+```text
+def test_dispatch_and_attach_latch(monkeypatch, flag, n, verify):
+    ns = _load()
+    monkeypatch.setenv("DSV41_PREFILL_GROUPED_MXFP4", "0")
+    monkeypatch.setenv("DSV41_COMPILE_PRIMITIVES", "0")
+    calls = []
+    routed = np.arange(n * 6 * 4, dtype=np.float32).reshape(n, 6, 4) / 100
+    weights = np.full((n, 6), 0.25, np.float32)
+```
+
+Source: `vendor/mac-mlx/mlx_vlm/models/deepseek_v41/test_ffn_expert_pad.py:161`. Unset read: Wrapper/conditional default: see the literal call and consumer below.
+
+```text
+    assert moe.ffn_expert_pad16 and moe.ffn_down_bf16 == down_bf16
+    # The pad helper must win over grouped prefill, with the down dtype composed.
+    monkeypatch.setenv("DSV41_PREFILL_GROUPED_MXFP4", "1")
+    pad = Mock(wraps=lang._ffn_expert_pad16)
+    monkeypatch.setattr(lang, "_ffn_expert_pad16", pad)
+    _assert_bits(moe(x), reference)
+    _assert_bits(moe(x), reference)
+```
+
+Source: `vendor/mac-mlx/mlx_vlm/models/deepseek_v41/test_ffn_expert_pad.py:169`. Unset read: Wrapper/conditional default: see the literal call and consumer below.
+
+```text
+    assert all(call.args[3] == down_bf16 for call in pad.call_args_list)
+    assert capsys.readouterr().out.count("FFN_EXPERT_PAD16 engaged") == 1
+    monkeypatch.setenv("DSV41_PREFILL_GROUPED_MXFP4", "0")
+    for n in (1, 63, 64):
+        for verify in (False, True):
+            pad.reset_mock()
+            token = lang._v41_verify_context.set(verify)
+```
+
+Source: `vendor/mac-mlx/mlx_vlm/models/deepseek_v41/test_ffn_expert_pad_cpu.py:163`. Unset read: Wrapper/conditional default: see the literal call and consumer below.
+
+```text
+    monkeypatch.setenv("DSV41_PROMOTE_DECODE_WEIGHTS", "0")
+    # Padding must also take precedence over grouped prefill.
+    monkeypatch.setenv("DSV41_PREFILL_GROUPED_MXFP4", "1")
+    monkeypatch.setenv("DSV41_PREFILL_GROUPED_MIN_ROWS", "64")
+    monkeypatch.setenv("DSV41_COMPILE_PRIMITIVES", "0")
+    up = Mock(side_effect=lambda x, ids, **kw: x * (ids[:, None, None] + 1))
+    up.num_experts = 8
+```
+
+### DSV41_PREFILL_LAST_LOGITS
+
+Advanced backend control DSV41_PREFILL_LAST_LOGITS. Set explicitly only for the selected backend; its literal read and fallback are documented below.
+
+Scope: mac-mlx. Class: advanced.
+
+Source: `engines/mlx-receiver/mlx_token_stream_server.py:1795`. Unset read: '0'.
+
+```text
+        def _forward_token_ids_with_topk(ids_arr, final=True):
+            nonlocal vision_embeds
+            skip_logits = not final and is_dsv41 and (os.environ.get('DSV41_PREFILL_LAST_LOGITS', '0') == '1')
+            with mx.stream(gen_stream):
+                if dspark_runtime is not None:
+                    out = dspark_runtime.capture(ids_arr, cache, skip_logits=skip_logits)
+                    return (out.logits, None, None)
+```
+
+### DSV41_PREFILL_LAYER_MAJOR
+
+Advanced backend control DSV41_PREFILL_LAYER_MAJOR. Set explicitly only for the selected backend; its literal read and fallback are documented below.
+
+Scope: mac-mlx. Class: advanced.
+
+Source: `engines/mlx-receiver/mlx_token_stream_server.py:2212`. Unset read: '0'.
+
+```text
+                    _pl_model = None
+                    _pl_error = type(_plexc).__name__
+            _layer_major = is_dsv41 and os.environ.get('DSV41_PREFILL_LAYER_MAJOR', '0') == '1' and (n_to_prefill > 1)
+            _prefill_bounds = [(0, n_to_prefill)] if _layer_major else [(start, min(start + chunk_size, n_to_prefill)) for start in range(0, n_to_prefill, chunk_size)]
+            if _layer_major:
+                sys.stderr.write(f'[mlx-server] DSV41_PREFILL_LAYER_MAJOR=1: one forward of {n_to_prefill} tok (the model chunks at DSV41_PREFILL_CHUNK)\n')
+                sys.stderr.flush()
+```
+
+Source: `vendor/mac-mlx/mlx_vlm/models/deepseek_v41/language.py:1996`. Unset read: '0'.
+
+```text
+    DSV41_PREFILL_LAYER_MAJOR is refused, never promoted.
+    """
+    layer_major = os.environ.get("DSV41_PREFILL_LAYER_MAJOR", "0") == "1"
+    cone = os.environ.get("DSV41_PREFILL_CONE", "0") == "1"
+    if cone and not layer_major:
+        raise ValueError(
+            "DSV41_PREFILL_CONE=1 requires DSV41_PREFILL_LAYER_MAJOR=1: the cone "
+```
+
+Source: `vendor/mac-mlx/mlx_vlm/models/deepseek_v41/test_prefill_cone.py:148`. Unset read: Wrapper/conditional default: see the literal call and consumer below.
+
+```text
+def test_cone_without_layer_major_raises_and_names_both(monkeypatch):
+    monkeypatch.setenv("DSV41_PREFILL_CONE", "1")
+    monkeypatch.delenv("DSV41_PREFILL_LAYER_MAJOR", raising=False)
+    with pytest.raises(ValueError) as excinfo:
+        _prefill_switches(4096, _Cache(), None)
+    message = str(excinfo.value)
+    assert "DSV41_PREFILL_CONE" in message
+```
+
+Source: `vendor/mac-mlx/mlx_vlm/models/deepseek_v41/test_prefill_cone.py:158`. Unset read: Wrapper/conditional default: see the literal call and consumer below.
+
+```text
+def test_cone_with_dspark_raises_and_names_both(monkeypatch):
+    monkeypatch.setenv("DSV41_PREFILL_CONE", "1")
+    monkeypatch.setenv("DSV41_PREFILL_LAYER_MAJOR", "1")
+    monkeypatch.setenv("DSV41_DSPARK", "1")
+    monkeypatch.delenv("DSV41_PREFILL_CONE_TAIL", raising=False)
+    with pytest.raises(ValueError) as excinfo:
+        _prefill_switches(4096, _Cache(), None)
+```
+
+Source: `vendor/mac-mlx/mlx_vlm/models/deepseek_v41/test_prefill_cone.py:171`. Unset read: Wrapper/conditional default: see the literal call and consumer below.
+
+```text
+def test_cone_with_capture_layers_raises(monkeypatch):
+    monkeypatch.setenv("DSV41_PREFILL_CONE", "1")
+    monkeypatch.setenv("DSV41_PREFILL_LAYER_MAJOR", "1")
+    monkeypatch.delenv("DSV41_DSPARK", raising=False)
+    monkeypatch.delenv("DSV41_PREFILL_CONE_TAIL", raising=False)
+    with pytest.raises(ValueError) as excinfo:
+        _prefill_switches(4096, _Cache(), [37, 38, 39])
+```
+
+Source: `vendor/mac-mlx/mlx_vlm/models/deepseek_v41/test_prefill_cone.py:180`. Unset read: Wrapper/conditional default: see the literal call and consumer below.
+
+```text
+
+def test_layer_major_with_bounded_cache_raises(monkeypatch):
+    monkeypatch.setenv("DSV41_PREFILL_LAYER_MAJOR", "1")
+    monkeypatch.delenv("DSV41_PREFILL_CONE", raising=False)
+
+    class Bounded:
+        bounded = True
+```
+
+Source: `vendor/mac-mlx/mlx_vlm/models/deepseek_v41/test_prefill_cone.py:198`. Unset read: Wrapper/conditional default: see the literal call and consumer below.
+
+```text
+        monkeypatch.delenv(name, raising=False)
+    assert _prefill_switches(4096, _Cache(), None) == (False, False)
+    monkeypatch.setenv("DSV41_PREFILL_LAYER_MAJOR", "1")
+    # LAYER_MAJOR alone must NOT switch the cone on.
+    assert _prefill_switches(4096, _Cache(), None) == (True, False)
+    # A single token is a decode step: neither switch engages.
+    assert _prefill_switches(1, _Cache(), None) == (False, False)
+```
+
+Source: `vendor/mac-mlx/mlx_vlm/models/deepseek_v41/test_prefill_cone.py:431`. Unset read: Wrapper/conditional default: see the literal call and consumer below.
+
+```text
+
+def _off(monkeypatch):
+    monkeypatch.delenv("DSV41_PREFILL_LAYER_MAJOR", raising=False)
+    monkeypatch.delenv("DSV41_PREFILL_CONE", raising=False)
+    monkeypatch.delenv("DSV41_PREFILL_CONE_TAIL", raising=False)
+
+
+```
+
+Source: `vendor/mac-mlx/mlx_vlm/models/deepseek_v41/test_prefill_cone.py:437`. Unset read: Wrapper/conditional default: see the literal call and consumer below.
+
+```text
+
+def _cone_on(monkeypatch, chunk=CHUNK, tail=None):
+    monkeypatch.setenv("DSV41_PREFILL_LAYER_MAJOR", "1")
+    monkeypatch.setenv("DSV41_PREFILL_CONE", "1")
+    monkeypatch.setenv("DSV41_PREFILL_CHUNK", str(chunk))
+    if tail is None:
+        monkeypatch.delenv("DSV41_PREFILL_CONE_TAIL", raising=False)
+```
+
+Source: `vendor/mac-mlx/mlx_vlm/models/deepseek_v41/test_prefill_cone.py:487`. Unset read: Wrapper/conditional default: see the literal call and consumer below.
+
+```text
+    control, _ = _control(model, ids, chunk=int(chunk))
+
+    monkeypatch.setenv("DSV41_PREFILL_LAYER_MAJOR", "1")
+    monkeypatch.setenv("DSV41_PREFILL_CHUNK", chunk)
+    arm = _logits(model, ids)
+
+    assert arm.shape == control.shape
+```
+
+Source: `vendor/mac-mlx/mlx_vlm/models/deepseek_v41/test_prefill_cone.py:505`. Unset read: Wrapper/conditional default: see the literal call and consumer below.
+
+```text
+    _, control = _control(model, ids, chunk=CHUNK)
+
+    monkeypatch.setenv("DSV41_PREFILL_LAYER_MAJOR", "1")
+    monkeypatch.setenv("DSV41_PREFILL_CHUNK", str(CHUNK))
+    arm = model.make_cache()
+    model(ids, cache=arm)
+
+```
+
+Source: `vendor/mac-mlx/mlx_vlm/models/deepseek_v41/test_prefill_cone.py:995`. Unset read: Wrapper/conditional default: see the literal call and consumer below.
+
+```text
+def test_dspark_refusal_is_present_without_a_tail_and_absent_with_one(monkeypatch):
+    monkeypatch.setenv("DSV41_PREFILL_CONE", "1")
+    monkeypatch.setenv("DSV41_PREFILL_LAYER_MAJOR", "1")
+    monkeypatch.setenv("DSV41_DSPARK", "1")
+    monkeypatch.delenv("DSV41_PREFILL_CONE_TAIL", raising=False)
+    with pytest.raises(ValueError) as excinfo:
+        _prefill_switches(4096, _Cache(), None)
+```
+
+Source: `vendor/mac-mlx/mlx_vlm/models/deepseek_v41/test_prefill_cone.py:1010`. Unset read: Wrapper/conditional default: see the literal call and consumer below.
+
+```text
+def test_capture_refusal_is_present_without_a_tail_and_absent_with_one(monkeypatch):
+    monkeypatch.setenv("DSV41_PREFILL_CONE", "1")
+    monkeypatch.setenv("DSV41_PREFILL_LAYER_MAJOR", "1")
+    monkeypatch.delenv("DSV41_DSPARK", raising=False)
+    monkeypatch.delenv("DSV41_PREFILL_CONE_TAIL", raising=False)
+    with pytest.raises(ValueError) as excinfo:
+        _prefill_switches(4096, _Cache(), [37, 38, 39])
+```
+
+Source: `vendor/mac-mlx/mlx_vlm/models/deepseek_v41/test_prefill_cone.py:1027`. Unset read: Wrapper/conditional default: see the literal call and consumer below.
+
+```text
+    # A tail on its own switches nothing on.
+    assert _prefill_switches(4096, _Cache(), None) == (False, False)
+    monkeypatch.setenv("DSV41_PREFILL_LAYER_MAJOR", "1")
+    assert _prefill_switches(4096, _Cache(), None) == (True, False)
+    # And neither switch sets the tail.
+    monkeypatch.delenv("DSV41_PREFILL_CONE_TAIL", raising=False)
+    monkeypatch.setenv("DSV41_PREFILL_CONE", "1")
+```
+
+### DSV41_PREFILL_LEDGER
+
+Advanced backend control DSV41_PREFILL_LEDGER. Set explicitly only for the selected backend; its literal read and fallback are documented below.
+
+Scope: mac-mlx. Class: advanced.
+
+Source: `engines/mlx-receiver/mlx_token_stream_server.py:2201`. Unset read: '0'.
+
+```text
+            _probe = _first_fwd_probe_wrap(lang) if _first_fwd_probe_enabled() else None
+            _t_first_fwd = time.time()
+            _prefill_ledger_on = is_dsv41 and os.environ.get('DSV41_PREFILL_LEDGER', '0') == '1'
+            if _prefill_ledger_on:
+                _pl = {'tokens': 0, 'chunks': 0, 'build_ms': 0.0, 'eval_ms': 0.0}
+                _pl_model = None
+                try:
+```
+
+Source: `vendor/mac-mlx/mlx_vlm/models/deepseek_v41/prefill_ledger.py:14`. Unset read: '0'.
+
+```text
+import os
+
+_PREFILL_LEDGER_ON = os.environ.get("DSV41_PREFILL_LEDGER", "0") == "1"
+_PREFILL_LEDGER_CUTS_LEVEL: int = (
+    {"1": 1, "2": 2}.get(os.environ.get("DSV41_PREFILL_LEDGER_CUTS", "0"), 0)
+    if _PREFILL_LEDGER_ON else 0
+)
+```
+
+### DSV41_PREFILL_LEDGER_CUTS
+
+Advanced backend control DSV41_PREFILL_LEDGER_CUTS. Set explicitly only for the selected backend; its literal read and fallback are documented below.
+
+Scope: mac-mlx. Class: advanced.
+
+Source: `vendor/mac-mlx/mlx_vlm/models/deepseek_v41/prefill_ledger.py:16`. Unset read: '0'.
+
+```text
+_PREFILL_LEDGER_ON = os.environ.get("DSV41_PREFILL_LEDGER", "0") == "1"
+_PREFILL_LEDGER_CUTS_LEVEL: int = (
+    {"1": 1, "2": 2}.get(os.environ.get("DSV41_PREFILL_LEDGER_CUTS", "0"), 0)
+    if _PREFILL_LEDGER_ON else 0
+)
+_PREFILL_LEDGER_CUTS = _PREFILL_LEDGER_CUTS_LEVEL > 0
+PREFILL_LEDGER = {"hash_ms": 0.0, "engram_fetch_ms": 0.0, "tokens": 0, "chunks": 0}
+```
+
+### DSV41_PREFILL_MEGAKERNEL
+
+Advanced backend control DSV41_PREFILL_MEGAKERNEL. Set explicitly only for the selected backend; its literal read and fallback are documented below.
+
+Scope: mac-mlx. Class: advanced.
+
+Source: `vendor/mac-mlx/mlx_vlm/models/deepseek_v41/language.py:1773`. Unset read: '0'.
+
+```text
+        to the eager collapse and must therefore be used by BOTH halves.
+        """
+        if os.environ.get("DSV41_PREFILL_MEGAKERNEL", "0") == "1" and h.shape[1] > 1:
+            from .megakernel import collapse_norm_rows
+            return collapse_norm_rows(h, pre_mix, self.attn_norm)
+        if os.environ.get("DSV41_HC_FUSED", "0") == "1":
+            x = self.attn_hc(h, pre_mix)[0]
+```
+
+Source: `vendor/mac-mlx/mlx_vlm/models/deepseek_v41/language.py:1797`. Unset read: '0'.
+
+```text
+            # single row -- the two single-token DECODE specialisations below are
+            # not that path and are never reachable from the cone.
+            if os.environ.get("DSV41_PREFILL_MEGAKERNEL", "0") == "1":
+                return _prefill_block_prepared(self, h, pre_mix, start_pos, cache,
+                                               shared, image_mask)
+            # Otherwise fall through to the eager path, which is exactly what the
+            # default prefill runs when DSV41_PREFILL_MEGAKERNEL is off.
+```
+
+Source: `vendor/mac-mlx/mlx_vlm/models/deepseek_v41/language.py:1813`. Unset read: '0'.
+
+```text
+                    object.__setattr__(self, "_block_graph", graph)
+                return graph(self, h, pre_mix, start_pos, cache, shared, image_mask)
+            if os.environ.get("DSV41_PREFILL_MEGAKERNEL", "0") == "1" and h.shape[1] > 1:
+                from .megakernel import prefill_block
+                return prefill_block(self, h, pre_mix, start_pos, cache, shared, image_mask)
+        if os.environ.get("DSV41_HC_FUSED", "0") == "1":
+            x, attn_pre, post, comb = self.attn_hc(h, pre_mix)
+```
+
+Source: `vendor/mac-mlx/mlx_vlm/models/deepseek_v41/test_megakernel_prefill.py:204`. Unset read: Wrapper/conditional default: see the literal call and consumer below.
+
+```text
+    monkeypatch.setattr(ledger, "_PREFILL_LEDGER_CUTS", cuts)
+    monkeypatch.setattr(ledger, "PREFILL_LAYER_MS", {})
+    monkeypatch.setenv("DSV41_PREFILL_MEGAKERNEL", "1")
+    # Existing switches must not send a multi-token call into decode/compile or
+    # demand incoming_pre from HyperConnection's separate fused-HC entry point.
+    for flag in ("DSV41_MEGAKERNEL", "DSV41_COMPILE_BLOCK", "DSV41_HC_FUSED"):
+        monkeypatch.setenv(flag, "1")
+```
+
+Source: `vendor/mac-mlx/mlx_vlm/models/deepseek_v41/test_prefill_cone.py:896`. Unset read: Wrapper/conditional default: see the literal call and consumer below.
+
+```text
+    model, ids, _ = tiny
+    monkeypatch.setenv("DSV41_QAT", "1")
+    monkeypatch.setenv("DSV41_PREFILL_MEGAKERNEL", "1")
+    _off(monkeypatch)
+    control, _ = _control(model, ids, chunk=CHUNK)
+    wide, _ = _control(model, ids, chunk=WIDE)
+    noise = _noise(control[0, -1], wide[0, -1])
+```
+
+### DSV41_PREFILL_MXFP8_STEEL
+
+Advanced backend control DSV41_PREFILL_MXFP8_STEEL. Set explicitly only for the selected backend; its literal read and fallback are documented below.
+
+Scope: mac-mlx. Class: advanced.
+
+Source: `vendor/mac-mlx/mlx_vlm/models/deepseek_v41/prefill_linear.py:9`. Unset read: '0'.
+
+```text
+
+
+_PREFILL_MXFP8_STEEL = os.environ.get("DSV41_PREFILL_MXFP8_STEEL", "0") == "1"
+# Ignore the tuning variable entirely on the default path.
+_PREFILL_STEEL_MIN_M = (
+    int(os.environ.get("DSV41_PREFILL_STEEL_MIN_M", "256"))
+    if _PREFILL_MXFP8_STEEL else 256
+```
+
+### DSV41_PREFILL_STEEL_MIN_M
+
+Advanced backend control DSV41_PREFILL_STEEL_MIN_M. Set explicitly only for the selected backend; its literal read and fallback are documented below.
+
+Scope: mac-mlx. Class: advanced.
+
+Source: `vendor/mac-mlx/mlx_vlm/models/deepseek_v41/prefill_linear.py:12`. Unset read: '256'.
+
+```text
+# Ignore the tuning variable entirely on the default path.
+_PREFILL_STEEL_MIN_M = (
+    int(os.environ.get("DSV41_PREFILL_STEEL_MIN_M", "256"))
+    if _PREFILL_MXFP8_STEEL else 256
+)
+STEEL_CALLS = 0
+
+```
+
+### DSV41_PREFILL_TILED_INDEX
+
+Advanced backend control DSV41_PREFILL_TILED_INDEX. Set explicitly only for the selected backend; its literal read and fallback are documented below.
+
+Scope: mac-mlx. Class: advanced.
+
+Source: `vendor/mac-mlx/mlx_vlm/custom_kernels/deepseek_v41/test_index_prefill.py:250`. Unset read: Wrapper/conditional default: see the literal call and consumer below.
+
+```text
+    qr = mx.random.normal((1, n, 64))
+    reference, fused = SimpleNamespace(candidates=None), SimpleNamespace(candidates=None)
+    monkeypatch.setenv("DSV41_PREFILL_TILED_INDEX", "0")
+    e0 = source(x, qr, 0, 128, None, keys, reference)
+    e1 = consumer(x, qr, 0, 128, None, keys, reference)
+    monkeypatch.setenv("DSV41_PREFILL_TILED_INDEX", "1")
+    tiled = importlib.import_module("mlx_vlm.custom_kernels.deepseek_v41.index_prefill")
+```
+
+Source: `vendor/mac-mlx/mlx_vlm/custom_kernels/deepseek_v41/test_index_prefill.py:253`. Unset read: Wrapper/conditional default: see the literal call and consumer below.
+
+```text
+    e0 = source(x, qr, 0, 128, None, keys, reference)
+    e1 = consumer(x, qr, 0, 128, None, keys, reference)
+    monkeypatch.setenv("DSV41_PREFILL_TILED_INDEX", "1")
+    tiled = importlib.import_module("mlx_vlm.custom_kernels.deepseek_v41.index_prefill")
+    calls = []
+
+    def tracked(*args, **kwargs):
+```
+
+Source: `vendor/mac-mlx/mlx_vlm/custom_kernels/deepseek_v41/test_index_prefill.py:298`. Unset read: Wrapper/conditional default: see the literal call and consumer below.
+
+```text
+    for n, enabled in [(64, None), (1, "1"), (16, "1"), (63, "1")]:
+        if enabled is None:
+            monkeypatch.delenv("DSV41_PREFILL_TILED_INDEX", raising=False)
+        else:
+            monkeypatch.setenv("DSV41_PREFILL_TILED_INDEX", enabled)
+        x, _, _, keys, _, _, _ = _inputs(n, 1031, False)
+        mx.eval(indexer(x, x, 2062 - n, 128, None, keys, SimpleNamespace(candidates=None)))
+```
+
+Source: `vendor/mac-mlx/mlx_vlm/custom_kernels/deepseek_v41/test_index_prefill.py:300`. Unset read: Wrapper/conditional default: see the literal call and consumer below.
+
+```text
+            monkeypatch.delenv("DSV41_PREFILL_TILED_INDEX", raising=False)
+        else:
+            monkeypatch.setenv("DSV41_PREFILL_TILED_INDEX", enabled)
+        x, _, _, keys, _, _, _ = _inputs(n, 1031, False)
+        mx.eval(indexer(x, x, 2062 - n, 128, None, keys, SimpleNamespace(candidates=None)))
+
+
+```
+
+Source: `vendor/mac-mlx/mlx_vlm/models/deepseek_v41/language.py:640`. Unset read: '0'.
+
+```text
+        v41_index = _v41_prefill_enabled("INDEX", n)
+        if (not v41_index and n >= int(os.environ.get("DSV41_PREFILL_TILED_MIN_N", "64"))
+                and os.environ.get("DSV41_PREFILL_TILED_INDEX", "0") == "1"):
+            from ...custom_kernels.deepseek_v41.index_prefill import index_scores_topk
+
+            _s4_count("index_score", self.layer_id)
+            need_blocks = self.is_candidate_source and not (precompute and all_candidates)
+```
+
+### DSV41_PREFILL_TILED_MIN_N
+
+Advanced backend control DSV41_PREFILL_TILED_MIN_N. Set explicitly only for the selected backend; its literal read and fallback are documented below.
+
+Scope: mac-mlx. Class: advanced.
+
+Source: `vendor/mac-mlx/mlx_vlm/custom_kernels/deepseek_v41/test_index_prefill.py:238`. Unset read: Wrapper/conditional default: see the literal call and consumer below.
+
+```text
+    monkeypatch.setenv("DSV41_S4_COMPILE_INDEXER", "0")
+    # Exercise the production n>=64 gate, including zero-length geometry.
+    monkeypatch.setenv("DSV41_PREFILL_TILED_MIN_N", "64")
+    monkeypatch.setattr(lang, "_rope", lambda rope, q, pos: q)
+    monkeypatch.setattr(lang, "_PREFILL_MXFP8_STEEL", False)
+    mx.random.seed(71)
+    args = TextConfig(hidden_size=64, q_lora_rank=64, candidate_topk_blocks=256 if all_candidates else 5)
+```
+
+Source: `vendor/mac-mlx/mlx_vlm/custom_kernels/deepseek_v41/test_index_prefill.py:295`. Unset read: Wrapper/conditional default: see the literal call and consumer below.
+
+```text
+    monkeypatch.setenv("DSV41_S4_COMPILE_INDEXER", "0")
+    indexer = Indexer(TextConfig(hidden_size=64, q_lora_rank=64), 2)
+    monkeypatch.setenv("DSV41_PREFILL_TILED_MIN_N", "64")
+    for n, enabled in [(64, None), (1, "1"), (16, "1"), (63, "1")]:
+        if enabled is None:
+            monkeypatch.delenv("DSV41_PREFILL_TILED_INDEX", raising=False)
+        else:
+```
+
+Source: `vendor/mac-mlx/mlx_vlm/models/deepseek_v41/language.py:639`. Unset read: '64'.
+
+```text
+        # kernel is far slower than the eager path at tiny n (2026-09-15 arm: decode 20 -> 7-14 tok/s).
+        v41_index = _v41_prefill_enabled("INDEX", n)
+        if (not v41_index and n >= int(os.environ.get("DSV41_PREFILL_TILED_MIN_N", "64"))
+                and os.environ.get("DSV41_PREFILL_TILED_INDEX", "0") == "1"):
+            from ...custom_kernels.deepseek_v41.index_prefill import index_scores_topk
+
+            _s4_count("index_score", self.layer_id)
+```
+
+### DSV41_PREFILL_V41_
+
+Advanced backend control DSV41_PREFILL_V41_. Set explicitly only for the selected backend; its literal read and fallback are documented below.
+
+Scope: mac-mlx. Class: advanced.
+
+Source: `vendor/mac-mlx/mlx_vlm/custom_kernels/deepseek_v41/v41_dispatch.py:13`. Unset read: Wrapper/conditional default: see the literal call and consumer below.
+
+```text
+def enabled(kind, n):
+    return (n >= 64 and not _VERIFY.get()
+            and os.environ.get("DSV41_PREFILL_V41_" + kind, "0") == "1")
+
+
+@contextmanager
+def verification():
+```
+
+### DSV41_PROMOTE_DECODE_WEIGHTS
+
+Advanced backend control DSV41_PROMOTE_DECODE_WEIGHTS. Set explicitly only for the selected backend; its literal read and fallback are documented below.
+
+Scope: mac-mlx. Class: advanced.
+
+Source: `engines/mlx-receiver/mlx_token_stream_server.py:163`. Unset read: '0'.
+
+```text
+    if config.vision_config is not None:
+        parameter_bytes += sum((2 * prod(shape) for _, shape in expected_vision_parameters(config.vision_config, config.text_config.hidden_size).values()))
+    if os.environ.get('DSV41_PROMOTE_DECODE_WEIGHTS', '0') == '1':
+        parameter_bytes += sum(((4 - sizes[dtype]) * prod(shape) for name, (dtype, shape) in specs.items() if name.endswith('.wo_a.weight') and os.environ.get('DSV41_WO_A_BF16', '0') != '1' or (name == 'lm_head.weight' and os.environ.get('DSV41_HEAD_BF16', '0') != '1')))
+    available, breakdown = _dsv41_wait_for_memory(source, parameter_bytes, _read_vm_stat, timeout_s=float(os.environ.get('DSV41_MEMORY_GUARD_WAIT_S', '90')))
+    required = _dsv41_memory_guard(available, source, parameter_bytes)
+    print(f"[DSV41] memory available={available / (1 << 30):.2f} GiB resident_required={required / (1 << 30):.0f} GiB headroom=20 GiB source={source} QAT={os.environ.get('DSV41_QAT', '1')} [{_dsv41_breakdown_text(breakdown)}]", file=sys.stderr, flush=True)
+```
+
+Source: `vendor/mac-mlx/mlx_vlm/models/deepseek_v41/language.py:2539`. Unset read: '0'.
+
+```text
+            for layer in self.layers:
+                layer.ffn.ffn_fused = self._ffn_fused_attached
+        if os.environ.get("DSV41_PROMOTE_DECODE_WEIGHTS", "0") == "1":
+            # These contractions already execute in FP32. Retaining that exact
+            # representation removes full weight conversions on every token.
+            # This deliberately spends 3.73 GiB for the release checkpoint.
+            # DSV41_WO_A_BF16 / DSV41_HEAD_BF16 leave the weight bf16 and read half the bytes.
+```
+
+Source: `vendor/mac-mlx/mlx_vlm/models/deepseek_v41/test_ffn_down_bf16_cpu.py:35`. Unset read: Wrapper/conditional default: see the literal call and consumer below.
+
+```text
+def _attach(ns, moe, monkeypatch, flag):
+    monkeypatch.setenv("DSV41_FFN_EXPERT_PAD16", "0")
+    monkeypatch.delenv("DSV41_PROMOTE_DECODE_WEIGHTS", raising=False)
+    if flag is None:
+        monkeypatch.delenv("DSV41_FFN_DOWN_BF16", raising=False)
+    else:
+        monkeypatch.setenv("DSV41_FFN_DOWN_BF16", flag)
+```
+
+Source: `vendor/mac-mlx/mlx_vlm/models/deepseek_v41/test_ffn_expert_pad_cpu.py:161`. Unset read: Wrapper/conditional default: see the literal call and consumer below.
+
+```text
+    monkeypatch.setenv("DSV41_FFN_EXPERT_PAD16", "1")
+    monkeypatch.setenv("DSV41_FFN_DOWN_BF16", "0")
+    monkeypatch.setenv("DSV41_PROMOTE_DECODE_WEIGHTS", "0")
+    # Padding must also take precedence over grouped prefill.
+    monkeypatch.setenv("DSV41_PREFILL_GROUPED_MXFP4", "1")
+    monkeypatch.setenv("DSV41_PREFILL_GROUPED_MIN_ROWS", "64")
+    monkeypatch.setenv("DSV41_COMPILE_PRIMITIVES", "0")
+```
+
+### DSV41_QAT
+
+Advanced backend control DSV41_QAT. Set explicitly only for the selected backend; its literal read and fallback are documented below.
+
+Scope: mac-mlx. Class: advanced.
+
+Source: `engines/mlx-receiver/mlx_token_stream_server.py:167`. Unset read: '1'.
+
+```text
+    available, breakdown = _dsv41_wait_for_memory(source, parameter_bytes, _read_vm_stat, timeout_s=float(os.environ.get('DSV41_MEMORY_GUARD_WAIT_S', '90')))
+    required = _dsv41_memory_guard(available, source, parameter_bytes)
+    print(f"[DSV41] memory available={available / (1 << 30):.2f} GiB resident_required={required / (1 << 30):.0f} GiB headroom=20 GiB source={source} QAT={os.environ.get('DSV41_QAT', '1')} [{_dsv41_breakdown_text(breakdown)}]", file=sys.stderr, flush=True)
+    model_dir = Path(model_dir)
+    model = Model(config)
+    weight_map = json.loads((model_dir / 'model.safetensors.index.json').read_text())['weight_map']
+    shards = {}
+```
+
+Source: `vendor/mac-mlx/mlx_vlm/custom_kernels/deepseek_v41/test_index_prefill.py:39`. Unset read: Wrapper/conditional default: see the literal call and consumer below.
+
+```text
+@pytest.fixture(autouse=True)
+def _reference_environment(monkeypatch):
+    monkeypatch.setenv("DSV41_QAT", "1")
+    monkeypatch.setenv("DSV41_METAL_QUANT", "0")
+    monkeypatch.setenv("DSV41_INDEX_TOPK", "512")
+
+
+```
+
+Source: `vendor/mac-mlx/mlx_vlm/models/deepseek_v41/language.py:155`. Unset read: '1'.
+
+```text
+def fake_quant_fp8_ue8m0(x: mx.array, block: int = 32) -> mx.array:
+    """act_quant(..., scale_fmt='ue8m0', inplace=True): fp8 round-trip, pow2 scales."""
+    if os.environ.get("DSV41_QAT", "1") == "0":
+        return x
+    if os.environ.get("DSV41_METAL_QUANT", "0") == "1":
+        from .quant_kernels import fake_quant
+        return fake_quant(x, block, "fp8_ue8m0")
+```
+
+Source: `vendor/mac-mlx/mlx_vlm/models/deepseek_v41/language.py:171`. Unset read: '1'.
+
+```text
+def fake_quant_fp4_ue8m0(x: mx.array, block: int = 32) -> mx.array:
+    """fp4_act_quant(..., scale_dtype=e8m0, inplace=True): the indexer's q/k path."""
+    if os.environ.get("DSV41_QAT", "1") == "0":
+        return x
+    if os.environ.get("DSV41_METAL_QUANT", "0") == "1":
+        from .quant_kernels import fake_quant
+        return fake_quant(x, block, "fp4_ue8m0")
+```
+
+Source: `vendor/mac-mlx/mlx_vlm/models/deepseek_v41/language.py:187`. Unset read: '1'.
+
+```text
+def fake_quant_fp4_e4m3(x: mx.array, block: int = 16) -> mx.array:
+    """fp4_act_quant(..., 16, scale_dtype=e4m3, inplace=True): the compressed-KV path."""
+    if os.environ.get("DSV41_QAT", "1") == "0":
+        return x
+    if os.environ.get("DSV41_METAL_QUANT", "0") == "1":
+        from .quant_kernels import fake_quant
+        return fake_quant(x, block, "fp4_e4m3")
+```
+
+Source: `vendor/mac-mlx/mlx_vlm/models/deepseek_v41/language.py:1122`. Unset read: '1'.
+
+```text
+        from mlx_lm.models import cache as lm_cache
+
+        qat = os.environ.get("DSV41_QAT", "1") != "0"
+        key = (id(model), qat)
+        entry = self._restore_models.get(key)
+        if entry is None or entry[0]() is not model or entry[2] is not token_map:
+            digest = hashlib.sha256(json.dumps(
+```
+
+Source: `vendor/mac-mlx/mlx_vlm/models/deepseek_v41/language.py:1157`. Unset read: '1'.
+
+```text
+        if len(meta_state) != 2 or meta_state[0] != "deepseek_v41_v1":
+            raise ValueError("Unsupported V4.1 cache metadata")
+        qat = os.environ.get("DSV41_QAT", "1") != "0"
+        matches = [(ref(), token_map) for (_, bound_qat), (ref, sig, token_map)
+                   in list(cls._restore_models.items())
+                   if sig == meta_state[1] and bound_qat == qat and ref() is not None]
+        if len(matches) != 1:
+```
+
+Source: `vendor/mac-mlx/mlx_vlm/models/deepseek_v41/language.py:1175`. Unset read: '1'.
+
+```text
+        import copy
+
+        if self._qat != (os.environ.get("DSV41_QAT", "1") != "0"):
+            raise ValueError("V4.1 cache QAT mode changed")
+        out = copy.copy(self)
+        out.layers = []
+        for lc in self.layers:
+```
+
+Source: `vendor/mac-mlx/mlx_vlm/models/deepseek_v41/test_bounded_cache.py:21`. Unset read: Wrapper/conditional default: see the literal call and consumer below.
+
+```text
+        spec.loader.exec_module(module)
+        monkeypatch.setattr(helper, "LanguageModel", module.LanguageModel)
+    monkeypatch.setenv("DSV41_QAT", "1")
+    monkeypatch.setenv("DSV41_METAL_SPARSE_ATTN", "0")
+    return helper.random_model()
+
+
+```
+
+Source: `vendor/mac-mlx/mlx_vlm/models/deepseek_v41/test_language_dsv41_mac.py:279`. Unset read: Wrapper/conditional default: see the literal call and consumer below.
+
+```text
+@pytest.fixture(params=["0", "1"], ids=["qat-off", "qat-on"])
+def model_and_ids(request, monkeypatch):
+    monkeypatch.setenv("DSV41_QAT", request.param)
+    return random_model(), token_ids()
+
+
+def test_prefill_decode_and_chunks(model_and_ids):
+```
+
+Source: `vendor/mac-mlx/mlx_vlm/models/deepseek_v41/test_language_dsv41_mac.py:391`. Unset read: None.
+
+```text
+    assert all(count <= limit for _, count in growth.values())
+    actual = mx.concatenate(pieces, axis=1)
+    if os.environ.get("DSV41_QAT") == "1":
+        reference_cache = model.make_cache()
+        expected = model(ids, cache=reference_cache).logits
+        mx.eval(actual, expected, reference_cache[0].state)
+        actual_np, expected_np = np.asarray(actual), np.asarray(expected)
+```
+
+Source: `vendor/mac-mlx/mlx_vlm/models/deepseek_v41/test_language_dsv41_mac.py:509`. Unset read: Wrapper/conditional default: see the literal call and consumer below.
+
+```text
+    if not root.is_dir():
+        pytest.skip("Set DSV41_PN_DIR to the PipeNetwork checkout for reference parity")
+    monkeypatch.setenv("DSV41_QAT", "0")
+    old_dtype = torch.get_default_dtype()
+    try:
+        torch.set_default_dtype(torch.float32)
+        ref = load_reference(root, monkeypatch, torch)
+```
+
+Source: `vendor/mac-mlx/mlx_vlm/models/deepseek_v41/test_prefill_cone.py:462`. Unset read: Wrapper/conditional default: see the literal call and consumer below.
+
+```text
+    """
+    model, ids, _ = tiny
+    monkeypatch.setenv("DSV41_QAT", "1")
+    _off(monkeypatch)
+    one, _ = _control(model, ids, chunk=WIDE)
+    four, _ = _control(model, ids, chunk=CHUNK)
+    assert one.shape == four.shape
+```
+
+Source: `vendor/mac-mlx/mlx_vlm/models/deepseek_v41/test_prefill_cone.py:483`. Unset read: Wrapper/conditional default: see the literal call and consumer below.
+
+```text
+    """
+    model, ids, _ = tiny
+    monkeypatch.setenv("DSV41_QAT", qat)
+    _off(monkeypatch)
+    control, _ = _control(model, ids, chunk=int(chunk))
+
+    monkeypatch.setenv("DSV41_PREFILL_LAYER_MAJOR", "1")
+```
+
+Source: `vendor/mac-mlx/mlx_vlm/models/deepseek_v41/test_prefill_cone.py:501`. Unset read: Wrapper/conditional default: see the literal call and consumer below.
+
+```text
+def test_layer_major_leaves_the_same_cache(tiny, monkeypatch, qat):
+    model, ids, config = tiny
+    monkeypatch.setenv("DSV41_QAT", qat)
+    _off(monkeypatch)
+    _, control = _control(model, ids, chunk=CHUNK)
+
+    monkeypatch.setenv("DSV41_PREFILL_LAYER_MAJOR", "1")
+```
+
+Source: `vendor/mac-mlx/mlx_vlm/models/deepseek_v41/test_prefill_cone.py:540`. Unset read: Wrapper/conditional default: see the literal call and consumer below.
+
+```text
+        "the tiny prompt must be long enough for the cone to skip rows")
+
+    monkeypatch.setenv("DSV41_QAT", qat)
+    _off(monkeypatch)
+    control, _ = _control(model, ids, chunk=CHUNK)
+    wide, _ = _control(model, ids, chunk=WIDE)
+    noise = _noise(control[0, -1], wide[0, -1])
+```
+
+Source: `vendor/mac-mlx/mlx_vlm/models/deepseek_v41/test_prefill_cone.py:566`. Unset read: Wrapper/conditional default: see the literal call and consumer below.
+
+```text
+    boundary = prefill_boundary_layer(config)
+
+    monkeypatch.setenv("DSV41_QAT", "1")
+    _cone_on(monkeypatch)
+    cache = model.make_cache()
+    model(ids, cache=cache)
+
+```
+
+Source: `vendor/mac-mlx/mlx_vlm/models/deepseek_v41/test_prefill_cone.py:612`. Unset read: Wrapper/conditional default: see the literal call and consumer below.
+
+```text
+    """
+    model, ids, config = tiny
+    monkeypatch.setenv("DSV41_QAT", "1")
+    _cone_on(monkeypatch)
+    cache = model.make_cache()
+    model(ids[:, :PREFIX_LONG], cache=cache)
+    floor = _expected_floor(PREFIX_LONG, config)
+```
+
+Source: `vendor/mac-mlx/mlx_vlm/models/deepseek_v41/test_prefill_cone.py:626`. Unset read: Wrapper/conditional default: see the literal call and consumer below.
+
+```text
+def test_a_fresh_cache_has_no_floor(tiny, monkeypatch):
+    model, ids, _ = tiny
+    monkeypatch.setenv("DSV41_QAT", "1")
+    _off(monkeypatch)
+    _, cache = _control(model, ids, chunk=CHUNK)
+    assert cache[0].is_trimmable() is True
+    assert cache[0].trim_floor() == 0
+```
+
+Source: `vendor/mac-mlx/mlx_vlm/models/deepseek_v41/test_prefill_cone.py:636`. Unset read: Wrapper/conditional default: see the literal call and consumer below.
+
+```text
+def test_a_cone_cache_refuses_a_rewind_below_its_floor(tiny, monkeypatch):
+    model, ids, config = tiny
+    monkeypatch.setenv("DSV41_QAT", "1")
+    _cone_on(monkeypatch)
+    cache = model.make_cache()
+    model(ids[:, :PREFIX_LONG], cache=cache)
+    floor = _expected_floor(PREFIX_LONG, config)
+```
+
+Source: `vendor/mac-mlx/mlx_vlm/models/deepseek_v41/test_prefill_cone.py:656`. Unset read: Wrapper/conditional default: see the literal call and consumer below.
+
+```text
+    model, ids, config = tiny
+    tail = 4
+    monkeypatch.setenv("DSV41_QAT", "1")
+    _cone_on(monkeypatch, tail=tail)
+    cache = model.make_cache()
+    model(ids[:, :PREFIX_LONG], cache=cache)
+
+```
+
+Source: `vendor/mac-mlx/mlx_vlm/models/deepseek_v41/test_prefill_cone.py:677`. Unset read: Wrapper/conditional default: see the literal call and consumer below.
+
+```text
+    """
+    model, ids, _ = tiny
+    monkeypatch.setenv("DSV41_QAT", "1")
+    _cone_on(monkeypatch)
+    cache = model.make_cache()
+    model(ids[:, :PREFIX_LONG], cache=cache)
+
+```
+
+Source: `vendor/mac-mlx/mlx_vlm/models/deepseek_v41/test_prefill_cone.py:739`. Unset read: Wrapper/conditional default: see the literal call and consumer below.
+
+```text
+    model, ids, _ = tiny
+    n = int(ids.shape[1])
+    monkeypatch.setenv("DSV41_QAT", "1")
+    _off(monkeypatch)
+    base_rewind, _, _ = _default_turn_two(model, ids, prefix, rewind=True)
+    base_fresh, _, _ = _default_turn_two(model, ids, prefix, rewind=False)
+    noise = _noise(base_rewind[0, -1], base_fresh[0, -1])
+```
+
+Source: `vendor/mac-mlx/mlx_vlm/models/deepseek_v41/test_prefill_cone.py:766`. Unset read: Wrapper/conditional default: see the literal call and consumer below.
+
+```text
+    """
+    model, ids, _ = tiny
+    monkeypatch.setenv("DSV41_QAT", "1")
+    _off(monkeypatch)
+    _, base_rewind, _ = _default_turn_two(model, ids, prefix, rewind=True, decodes=3)
+    _, base_fresh, _ = _default_turn_two(model, ids, prefix, rewind=False, decodes=3)
+
+```
+
+Source: `vendor/mac-mlx/mlx_vlm/models/deepseek_v41/test_prefill_cone.py:794`. Unset read: Wrapper/conditional default: see the literal call and consumer below.
+
+```text
+    model, ids, _ = tiny
+    assert prefix % CHUNK == 0, "the arm's chunk boundaries must line up with the control"
+    monkeypatch.setenv("DSV41_QAT", "1")
+    _off(monkeypatch)
+    control, _ = _control(model, ids, chunk=CHUNK)
+    base, _, _ = _default_turn_two(model, ids, prefix, rewind=True)
+    noise = _noise(base[0, -1], control[0, -1])
+```
+
+Source: `vendor/mac-mlx/mlx_vlm/models/deepseek_v41/test_prefill_cone.py:819`. Unset read: Wrapper/conditional default: see the literal call and consumer below.
+
+```text
+        "this test needs a delta long enough for turn two to cone as well")
+
+    monkeypatch.setenv("DSV41_QAT", "1")
+    _cone_on(monkeypatch)
+    cache = model.make_cache()
+    model(ids[:, :prefix], cache=cache)
+    first_floor = cache[0].trim_floor()
+```
+
+Source: `vendor/mac-mlx/mlx_vlm/models/deepseek_v41/test_prefill_cone.py:843`. Unset read: Wrapper/conditional default: see the literal call and consumer below.
+
+```text
+        "this test needs a delta short enough that the cone covers all of it")
+
+    monkeypatch.setenv("DSV41_QAT", "1")
+    _cone_on(monkeypatch)
+    cache = model.make_cache()
+    model(ids[:, :prefix], cache=cache)
+    model(ids[:, prefix:], cache=cache)
+```
+
+Source: `vendor/mac-mlx/mlx_vlm/models/deepseek_v41/test_prefill_cone.py:861`. Unset read: Wrapper/conditional default: see the literal call and consumer below.
+
+```text
+    """
+    model, ids, _ = tiny
+    monkeypatch.setenv("DSV41_QAT", "1")
+    _off(monkeypatch)
+    _, control_cache = _control(model, ids, chunk=CHUNK)
+    control = [model(ids[:, -1:], cache=control_cache).logits for _ in range(3)]
+    _, wide_cache = _control(model, ids, chunk=WIDE)
+```
+
+Source: `vendor/mac-mlx/mlx_vlm/models/deepseek_v41/test_prefill_cone.py:895`. Unset read: Wrapper/conditional default: see the literal call and consumer below.
+
+```text
+    """
+    model, ids, _ = tiny
+    monkeypatch.setenv("DSV41_QAT", "1")
+    monkeypatch.setenv("DSV41_PREFILL_MEGAKERNEL", "1")
+    _off(monkeypatch)
+    control, _ = _control(model, ids, chunk=CHUNK)
+    wide, _ = _control(model, ids, chunk=WIDE)
+```
+
+Source: `vendor/mac-mlx/mlx_vlm/models/deepseek_v41/test_prefill_cone.py:1062`. Unset read: Wrapper/conditional default: see the literal call and consumer below.
+
+```text
+        "the tiny prompt must still be longer than the widened boundary cone")
+
+    monkeypatch.setenv("DSV41_QAT", "1")
+    control = _cone_run(model, ids, monkeypatch, 1).logits
+    arm = _cone_run(model, ids, monkeypatch, tail).logits
+    mx.eval(control, arm)
+
+```
+
+Source: `vendor/mac-mlx/mlx_vlm/models/deepseek_v41/test_prefill_cone.py:1084`. Unset read: Wrapper/conditional default: see the literal call and consumer below.
+
+```text
+    """
+    model, ids, _ = tiny
+    monkeypatch.setenv("DSV41_QAT", "1")
+    wide = _cone_run(model, ids, monkeypatch, 2 * tail,
+                     return_hidden=True).hidden_states[-1]
+    arm = _cone_run(model, ids, monkeypatch, tail,
+                    return_hidden=True).hidden_states[-1]
+```
+
+Source: `vendor/mac-mlx/mlx_vlm/models/deepseek_v41/test_prefill_cone.py:1107`. Unset read: Wrapper/conditional default: see the literal call and consumer below.
+
+```text
+    """
+    model, ids, _ = tiny
+    monkeypatch.setenv("DSV41_QAT", "1")
+    _off(monkeypatch)
+    control = _hidden_chunked(model, ids, CHUNK)
+    wide = _hidden_chunked(model, ids, WIDE)
+    noise = _noise(control[:, -tail:], wide[:, -tail:])
+```
+
+Source: `vendor/mac-mlx/mlx_vlm/models/deepseek_v41/test_prefill_cone.py:1133`. Unset read: Wrapper/conditional default: see the literal call and consumer below.
+
+```text
+    taps = [config.num_hidden_layers - 3, config.num_hidden_layers - 2,
+            config.num_hidden_layers - 1]
+    monkeypatch.setenv("DSV41_QAT", "1")
+    _off(monkeypatch)
+    control = _taps_chunked(model, ids, CHUNK, taps)
+    wide_chunk = _taps_chunked(model, ids, WIDE, taps)
+
+```
+
+Source: `vendor/mac-mlx/mlx_vlm/models/deepseek_v41/test_speed_merge_mac.py:18`. Unset read: Wrapper/conditional default: see the literal call and consumer below.
+
+```text
+    monkeypatch.setenv("DSV41_S4_BYPASS", "0")
+    monkeypatch.setenv("DSV41_S4_COMPILE_INDEXER", compiled)
+    monkeypatch.setenv("DSV41_QAT", "1")
+    mx.random.seed(41)
+    cfg = tiny_config()
+    indexer = language.Indexer(cfg, 5)
+    rope = language.Attention(5, cfg).rope
+```
+
+### DSV41_S4_BYPASS
+
+Advanced backend control DSV41_S4_BYPASS. Set explicitly only for the selected backend; its literal read and fallback are documented below.
+
+Scope: mac-mlx. Class: advanced.
+
+Source: `vendor/mac-mlx/mlx_vlm/custom_kernels/deepseek_v41/test_index_prefill.py:234`. Unset read: Wrapper/conditional default: see the literal call and consumer below.
+
+```text
+    lang = importlib.import_module("mlx_vlm.models.deepseek_v41.language")
+    monkeypatch.setenv("DSV41_S4_PRECOMPUTE", str(int(precompute)))
+    monkeypatch.setenv("DSV41_S4_BYPASS", "0")
+    monkeypatch.setenv("DSV41_METAL_INDEXER", "0")
+    monkeypatch.setenv("DSV41_S4_COMPILE_INDEXER", "0")
+    # Exercise the production n>=64 gate, including zero-length geometry.
+    monkeypatch.setenv("DSV41_PREFILL_TILED_MIN_N", "64")
+```
+
+Source: `vendor/mac-mlx/mlx_vlm/custom_kernels/deepseek_v41/test_index_prefill.py:291`. Unset read: Wrapper/conditional default: see the literal call and consumer below.
+
+```text
+    monkeypatch.setattr(lang, "_rope", lambda rope, q, pos: q)
+    monkeypatch.setattr(lang, "_PREFILL_MXFP8_STEEL", False)
+    monkeypatch.setenv("DSV41_S4_BYPASS", "0")
+    monkeypatch.setenv("DSV41_METAL_INDEXER", "0")
+    monkeypatch.setenv("DSV41_S4_COMPILE_INDEXER", "0")
+    indexer = Indexer(TextConfig(hidden_size=64, q_lora_rank=64), 2)
+    monkeypatch.setenv("DSV41_PREFILL_TILED_MIN_N", "64")
+```
+
+Source: `vendor/mac-mlx/mlx_vlm/models/deepseek_v41/language.py:617`. Unset read: '1'.
+
+```text
+            shared.candidates, getattr(shared, "candidates_start", None), start_pos)
+
+        if (os.environ.get("DSV41_S4_BYPASS", "1") == "1"
+                and nb <= self.index_topk and all_candidates
+                and (not self.uses_candidates or shared_candidates is None)):
+            # Sorted top-k of the whole row is the identity, including the
+            # causal -1 lanes in prefill. Key publication still happens above us.
+```
+
+Source: `vendor/mac-mlx/mlx_vlm/models/deepseek_v41/test_speed_merge_mac.py:16`. Unset read: Wrapper/conditional default: see the literal call and consumer below.
+
+```text
+def test_s4_scoring_keeps_workspace_bound_and_selected_positions(monkeypatch, compiled):
+    monkeypatch.setenv("DSV41_S4_PRECOMPUTE", "1")
+    monkeypatch.setenv("DSV41_S4_BYPASS", "0")
+    monkeypatch.setenv("DSV41_S4_COMPILE_INDEXER", compiled)
+    monkeypatch.setenv("DSV41_QAT", "1")
+    mx.random.seed(41)
+    cfg = tiny_config()
+```
+
+### DSV41_S4_COMPILE_INDEXER
+
+Advanced backend control DSV41_S4_COMPILE_INDEXER. Set explicitly only for the selected backend; its literal read and fallback are documented below.
+
+Scope: mac-mlx. Class: advanced.
+
+Source: `vendor/mac-mlx/mlx_vlm/custom_kernels/deepseek_v41/test_index_prefill.py:236`. Unset read: Wrapper/conditional default: see the literal call and consumer below.
+
+```text
+    monkeypatch.setenv("DSV41_S4_BYPASS", "0")
+    monkeypatch.setenv("DSV41_METAL_INDEXER", "0")
+    monkeypatch.setenv("DSV41_S4_COMPILE_INDEXER", "0")
+    # Exercise the production n>=64 gate, including zero-length geometry.
+    monkeypatch.setenv("DSV41_PREFILL_TILED_MIN_N", "64")
+    monkeypatch.setattr(lang, "_rope", lambda rope, q, pos: q)
+    monkeypatch.setattr(lang, "_PREFILL_MXFP8_STEEL", False)
+```
+
+Source: `vendor/mac-mlx/mlx_vlm/custom_kernels/deepseek_v41/test_index_prefill.py:293`. Unset read: Wrapper/conditional default: see the literal call and consumer below.
+
+```text
+    monkeypatch.setenv("DSV41_S4_BYPASS", "0")
+    monkeypatch.setenv("DSV41_METAL_INDEXER", "0")
+    monkeypatch.setenv("DSV41_S4_COMPILE_INDEXER", "0")
+    indexer = Indexer(TextConfig(hidden_size=64, q_lora_rank=64), 2)
+    monkeypatch.setenv("DSV41_PREFILL_TILED_MIN_N", "64")
+    for n, enabled in [(64, None), (1, "1"), (16, "1"), (63, "1")]:
+        if enabled is None:
+```
+
+Source: `vendor/mac-mlx/mlx_vlm/models/deepseek_v41/language.py:688`. Unset read: '0'.
+
+```text
+            from ...custom_kernels.deepseek_v41.indexer import index_scores, index_topk
+            score_fn = index_scores
+        elif os.environ.get("DSV41_S4_COMPILE_INDEXER", "0") == "1":
+            if not hasattr(_index_scores, "compiled"):
+                _index_scores.compiled = mx.compile(partial(_index_scores, matmul=True), shapeless=True)
+            score_fn = _index_scores.compiled
+        workspace_mb = int(os.environ.get("DSV41_INDEX_WORKSPACE_MB", "0"))
+```
+
+Source: `vendor/mac-mlx/mlx_vlm/models/deepseek_v41/test_speed_merge_mac.py:17`. Unset read: Wrapper/conditional default: see the literal call and consumer below.
+
+```text
+    monkeypatch.setenv("DSV41_S4_PRECOMPUTE", "1")
+    monkeypatch.setenv("DSV41_S4_BYPASS", "0")
+    monkeypatch.setenv("DSV41_S4_COMPILE_INDEXER", compiled)
+    monkeypatch.setenv("DSV41_QAT", "1")
+    mx.random.seed(41)
+    cfg = tiny_config()
+    indexer = language.Indexer(cfg, 5)
+```
+
+### DSV41_S4_COUNT
+
+Advanced backend control DSV41_S4_COUNT. Set explicitly only for the selected backend; its literal read and fallback are documented below.
+
+Scope: mac-mlx. Class: advanced.
+
+Source: `vendor/mac-mlx/mlx_vlm/models/deepseek_v41/language.py:364`. Unset read: '0'.
+
+```text
+_SPARSE_TABLES = {}
+_S4_COUNTS = {}
+_S4_COUNT_ENABLED = os.environ.get("DSV41_S4_COUNT", "0") == "1"
+
+
+def _s4_count(name, layer=None, amount=1):
+    if _S4_COUNT_ENABLED:
+```
+
+### DSV41_S4_DENSE
+
+Advanced backend control DSV41_S4_DENSE. Set explicitly only for the selected backend; its literal read and fallback are documented below.
+
+Scope: mac-mlx. Class: advanced.
+
+Source: `vendor/mac-mlx/mlx_vlm/models/deepseek_v41/language.py:1623`. Unset read: '0'.
+
+```text
+            # Window-only and shared-index/KV reuse layers do no index work.
+            _prefill_layer_add(self.layer_id, "attn_index_ms", _index_ms)
+        if (os.environ.get("DSV41_S4_DENSE", "0") == "1" and n == 1
+                and self.ratio and end_pos // self.ratio and shared.dense_compressed):
+            out = _dense_decode_attn(q, kv_all, self.attn_sink,
+                                     self.window_size, self.head_dim ** -0.5)
+        else:
+```
+
+### DSV41_S4_PRECOMPUTE
+
+Advanced backend control DSV41_S4_PRECOMPUTE. Set explicitly only for the selected backend; its literal read and fallback are documented below.
+
+Scope: mac-mlx. Class: advanced.
+
+Source: `vendor/mac-mlx/mlx_vlm/custom_kernels/deepseek_v41/test_index_fused.py:410`. Unset read: KeyError unless an earlier assignment supplies the variable.
+
+```text
+    keys = lang.fake_quant_fp4_ue8m0(mx.random.normal((1, nb, 128)).astype(mx.bfloat16))
+    keep = (mx.random.uniform(shape=(1, n, (nb + 7) // 8)) > 0.4) if candidates else None
+    if keep is not None and os.environ["DSV41_S4_PRECOMPUTE"] == "0":
+        keep = mx.repeat(keep, 8, axis=-1)[..., :nb]
+    rope = lang.DeepseekV4RoPE(config.qk_rope_head_dim, config.compress_rope_theta,
+                             dict(config.rope_scaling))
+    mx.eval(x, qr, keys, indexer.parameters(), rope.parameters())
+```
+
+Source: `vendor/mac-mlx/mlx_vlm/custom_kernels/deepseek_v41/test_index_fused.py:430`. Unset read: Wrapper/conditional default: see the literal call and consumer below.
+
+```text
+@pytest.mark.parametrize("source,candidates", [(False, False), (False, True), (True, False)])
+def test_whole_indexer_and_candidate_source(monkeypatch, precompute, source, candidates):
+    monkeypatch.setenv("DSV41_S4_PRECOMPUTE", str(int(precompute)))
+    eager, fused = _model_paths(64, 1031, candidates=candidates, source=source)
+    expected, actual = eager(), fused()
+    mx.eval(*expected, *actual)
+    _same_sets(actual[0], expected[0])
+```
+
+Source: `vendor/mac-mlx/mlx_vlm/custom_kernels/deepseek_v41/test_index_fused.py:445`. Unset read: Wrapper/conditional default: see the literal call and consumer below.
+
+```text
+    and its per-position mask now reaches the kernel instead of being refused.
+    """
+    monkeypatch.setenv("DSV41_S4_PRECOMPUTE", str(int(precompute)))
+    eager, fused = _model_paths(64, 1031, candidates=True)
+    expected = eager()
+    monkeypatch.setenv("DSV41_INDEX_SKIP", "1")
+    prewarm_index_skip(8, precompute)
+```
+
+Source: `vendor/mac-mlx/mlx_vlm/custom_kernels/deepseek_v41/test_index_fused.py:468`. Unset read: Wrapper/conditional default: see the literal call and consumer below.
+
+```text
+    below, exactly at, and above the gate.
+    """
+    monkeypatch.setenv("DSV41_S4_PRECOMPUTE", str(int(precompute)))
+    monkeypatch.setenv("DSV41_INDEX_SKIP", "1")
+    monkeypatch.setenv("DSV41_INDEX_SKIP_MIN_NB", str(min_nb))
+    prewarm_index_skip(8, precompute)
+    masked = []
+```
+
+Source: `vendor/mac-mlx/mlx_vlm/custom_kernels/deepseek_v41/test_index_fused_cpu.py:498`. Unset read: Wrapper/conditional default: see the literal call and consumer below.
+
+```text
+    monkeypatch.setenv("DSV41_INDEX_FUSED", "1")
+    monkeypatch.setenv("DSV41_INDEX_SKIP", skip)
+    monkeypatch.setenv("DSV41_S4_PRECOMPUTE", precompute)
+    # 0 = always skip when the switch is on; this nb is far below the shipped
+    # DSV41_INDEX_SKIP_MIN_NB, which is gated on its own below.
+    monkeypatch.setenv("DSV41_INDEX_SKIP_MIN_NB", "0")
+    indexer.uses_candidates = True
+```
+
+Source: `vendor/mac-mlx/mlx_vlm/custom_kernels/deepseek_v41/test_index_fused_cpu.py:529`. Unset read: Wrapper/conditional default: see the literal call and consumer below.
+
+```text
+    monkeypatch.setenv("DSV41_INDEX_FUSED", "1")
+    monkeypatch.setenv("DSV41_INDEX_SKIP", "1")
+    monkeypatch.setenv("DSV41_S4_PRECOMPUTE", "0")
+    monkeypatch.setenv("DSV41_INDEX_SKIP_MIN_NB", "0")
+    indexer.uses_candidates = True
+    ns["attach"](model, ".")
+    n, nb = 64, 136
+```
+
+Source: `vendor/mac-mlx/mlx_vlm/custom_kernels/deepseek_v41/test_index_fused_cpu.py:572`. Unset read: Wrapper/conditional default: see the literal call and consumer below.
+
+```text
+    monkeypatch.setenv("DSV41_INDEX_FUSED", "1")
+    monkeypatch.setenv("DSV41_INDEX_SKIP", skip)
+    monkeypatch.setenv("DSV41_S4_PRECOMPUTE", precompute)
+    if min_nb is None:
+        monkeypatch.delenv("DSV41_INDEX_SKIP_MIN_NB", raising=False)
+    else:
+        monkeypatch.setenv("DSV41_INDEX_SKIP_MIN_NB", str(min_nb))
+```
+
+Source: `vendor/mac-mlx/mlx_vlm/custom_kernels/deepseek_v41/test_index_fused_cpu.py:640`. Unset read: Wrapper/conditional default: see the literal call and consumer below.
+
+```text
+    monkeypatch.setenv("DSV41_INDEX_FUSED", "1")
+    monkeypatch.setenv("DSV41_INDEX_SKIP", "1")
+    monkeypatch.setenv("DSV41_S4_PRECOMPUTE", "1")
+    monkeypatch.setenv("DSV41_INDEX_SKIP_MIN_NB", "136")
+    indexer.uses_candidates = True
+    ns["attach"](model, ".")
+    capsys.readouterr()
+```
+
+Source: `vendor/mac-mlx/mlx_vlm/custom_kernels/deepseek_v41/test_index_prefill.py:233`. Unset read: Wrapper/conditional default: see the literal call and consumer below.
+
+```text
+def test_indexer_source_and_consumer_hook(monkeypatch, precompute, all_candidates):
+    lang = importlib.import_module("mlx_vlm.models.deepseek_v41.language")
+    monkeypatch.setenv("DSV41_S4_PRECOMPUTE", str(int(precompute)))
+    monkeypatch.setenv("DSV41_S4_BYPASS", "0")
+    monkeypatch.setenv("DSV41_METAL_INDEXER", "0")
+    monkeypatch.setenv("DSV41_S4_COMPILE_INDEXER", "0")
+    # Exercise the production n>=64 gate, including zero-length geometry.
+```
+
+Source: `vendor/mac-mlx/mlx_vlm/models/deepseek_v41/language.py:602`. Unset read: '1'.
+
+```text
+        ratio = self.ratio
+        nb = index_k.shape[1]
+        precompute = os.environ.get("DSV41_S4_PRECOMPUTE", "1") == "1"
+        # This is a compressed-position threshold, NOT an attention threshold:
+        # even when all candidate blocks fit, index_topk still prunes positions.
+        candidate_limit = self.candidate_topk_blocks * self.candidate_block_size
+        all_candidates = nb <= candidate_limit
+```
+
+Source: `vendor/mac-mlx/mlx_vlm/models/deepseek_v41/test_speed_merge_mac.py:15`. Unset read: Wrapper/conditional default: see the literal call and consumer below.
+
+```text
+@pytest.mark.parametrize("compiled", ["0", "1"])
+def test_s4_scoring_keeps_workspace_bound_and_selected_positions(monkeypatch, compiled):
+    monkeypatch.setenv("DSV41_S4_PRECOMPUTE", "1")
+    monkeypatch.setenv("DSV41_S4_BYPASS", "0")
+    monkeypatch.setenv("DSV41_S4_COMPILE_INDEXER", compiled)
+    monkeypatch.setenv("DSV41_QAT", "1")
+    mx.random.seed(41)
+```
+
+### DSV41_SDPA_SPARSE_ATTN
+
+Advanced backend control DSV41_SDPA_SPARSE_ATTN. Set explicitly only for the selected backend; its literal read and fallback are documented below.
+
+Scope: mac-mlx. Class: advanced.
+
+Source: `vendor/mac-mlx/mlx_vlm/custom_kernels/deepseek_v41/test_sparse_attention_prefill.py:203`. Unset read: Wrapper/conditional default: see the literal call and consumer below.
+
+```text
+    # The new flag alone reaches the dispatcher through language.sparse_attn.
+    monkeypatch.delenv("DSV41_METAL_SPARSE_ATTN", raising=False)
+    monkeypatch.delenv("DSV41_SDPA_SPARSE_ATTN", raising=False)
+    assert sparse_attn(*case) is marker
+    q, banks, sink, ids, scale = case
+    decode = (q[:, :1], banks, sink, ids[:, :1], scale)
+    with _flash_switch("0"):
+```
+
+Source: `vendor/mac-mlx/mlx_vlm/custom_kernels/deepseek_v41/test_sparse_attention_prefill.py:242`. Unset read: Wrapper/conditional default: see the literal call and consumer below.
+
+```text
+    monkeypatch.setattr(module, "sparse_attn_prefill", forbidden)
+    monkeypatch.setenv("DSV41_METAL_SPARSE_ATTN", metal)
+    monkeypatch.setenv("DSV41_SDPA_SPARSE_ATTN", "0")
+    if threshold is None:
+        monkeypatch.delenv("DSV41_PREFILL_FLASH_MIN_N", raising=False)
+    else:
+        monkeypatch.setenv("DSV41_PREFILL_FLASH_MIN_N", threshold)
+```
+
+Source: `vendor/mac-mlx/mlx_vlm/custom_kernels/deepseek_v41/validate_sdpa.py:37`. Unset read: Assigned by the runtime; see literal consumer.
+
+```text
+
+def select(path):
+    os.environ['DSV41_SDPA_SPARSE_ATTN'] = '1' if path == 'sdpa' else '0'
+    os.environ['DSV41_METAL_SPARSE_ATTN'] = '1' if path == 'metal' else '0'
+    os.environ['DSV41_COMPILE_SPARSE_ATTN'] = '1' if path == 'compiled' else '0'
+
+
+```
+
+Source: `vendor/mac-mlx/mlx_vlm/custom_kernels/deepseek_v41/validate_sdpa_edges.py:105`. Unset read: Assigned by the runtime; see literal consumer.
+
+```text
+        for sdpa,metal in [('0','0'),('1','1'),('decode','prefill'),('prefill','decode')]:
+            for m in (1,3,257):
+                os.environ['DSV41_SDPA_SPARSE_ATTN'] = sdpa
+                os.environ['DSV41_METAL_SPARSE_ATTN'] = metal
+                counts.update(sdpa=0,metal=0)
+                qq=mx.broadcast_to(q,(1,m,64,512))
+                ii=mx.broadcast_to(idx,(1,m,1))
+```
+
+Source: `vendor/mac-mlx/mlx_vlm/models/deepseek_v41/language.py:314`. Unset read: '0'.
+
+```text
+        if prefill_flash_enabled(q.shape[1]):
+            return sparse_attention(q, kv, attn_sink, topk_idxs, softmax_scale)
+    sdpa = os.environ.get("DSV41_SDPA_SPARSE_ATTN", "0")
+    if sdpa not in ("0", "1", "decode", "prefill"):
+        raise ValueError("DSV41_SDPA_SPARSE_ATTN must be 0, 1, decode, or prefill")
+    metal = os.environ.get("DSV41_METAL_SPARSE_ATTN", "0")
+    if metal not in ("0", "1", "decode", "prefill"):
+```
+
+### DSV41_SLIDING_WINDOW
+
+Advanced backend control DSV41_SLIDING_WINDOW. Set explicitly only for the selected backend; its literal read and fallback are documented below.
+
+Scope: mac-mlx. Class: advanced.
+
+Source: `vendor/mac-mlx/mlx_vlm/models/deepseek_v41/test_kv_selection_width.py:32`. Unset read: Wrapper/conditional default: see the literal call and consumer below.
+
+```text
+def test_kv_widths_default_to_the_checkpoints_own_values(monkeypatch):
+    monkeypatch.delenv("DSV41_INDEX_TOPK", raising=False)
+    monkeypatch.delenv("DSV41_SLIDING_WINDOW", raising=False)
+    cfg = _text_config()
+    assert cfg.index_topk == 512
+    assert cfg.sliding_window == 128
+
+```
+
+Source: `vendor/mac-mlx/mlx_vlm/models/deepseek_v41/test_kv_selection_width.py:40`. Unset read: Wrapper/conditional default: see the literal call and consumer below.
+
+```text
+def test_kv_widths_can_be_widened_by_environment(monkeypatch):
+    monkeypatch.setenv("DSV41_INDEX_TOPK", "4096")
+    monkeypatch.setenv("DSV41_SLIDING_WINDOW", "1024")
+    cfg = _text_config()
+    assert cfg.index_topk == 4096
+    assert cfg.sliding_window == 1024
+
+```
+
+Source: `vendor/mac-mlx/mlx_vlm/models/deepseek_v41/test_kv_selection_width.py:49`. Unset read: Wrapper/conditional default: see the literal call and consumer below.
+
+```text
+    """A preset writing an empty string must not collapse the dense window to nothing."""
+    monkeypatch.setenv("DSV41_INDEX_TOPK", "")
+    monkeypatch.setenv("DSV41_SLIDING_WINDOW", "   ")
+    cfg = _text_config()
+    assert cfg.index_topk == 512
+    assert cfg.sliding_window == 128
+
+```
+
+Source: `vendor/mac-mlx/mlx_vlm/models/deepseek_v41/test_kv_selection_width.py:58`. Unset read: Wrapper/conditional default: see the literal call and consumer below.
+
+```text
+def test_a_nonsense_width_is_refused_rather_than_coerced(monkeypatch, bad):
+    monkeypatch.setenv("DSV41_INDEX_TOPK", bad)
+    monkeypatch.delenv("DSV41_SLIDING_WINDOW", raising=False)
+    with pytest.raises(ValueError, match="DSV41_INDEX_TOPK"):
+        _text_config()
+
+
+```
+
+### DSV41_STEP_LEDGER
+
+Advanced backend control DSV41_STEP_LEDGER. Set explicitly only for the selected backend; its literal read and fallback are documented below.
+
+Scope: mac-mlx. Class: advanced.
+
+Source: `engines/mlx-receiver/mlx_token_stream_server.py:2387`. Unset read: '0'.
+
+```text
+                _swi_active = False
+        with _wired(self.model):
+            _ledger_on = os.environ.get('DSV41_STEP_LEDGER', '0') == '1'
+            _ledger = {'build_ms': 0.0, 'wait_ms': 0.0, 'emit_ms': 0.0, 'iter_ms': 0.0, 'n': 0}
+            if dspark_runtime is not None:
+                dspark_tokens = dspark_runtime.tokens(cache, first_id, max_tokens)
+                try:
+```
+
+Source: `engines/mlx-receiver/mlx_token_stream_server.py:2870`. Unset read: '0'.
+
+```text
+        decode_dt = time.time() - decode_t0
+        decode_tok_s = tokens_generated / max(decode_dt, 1e-09)
+        if os.environ.get('DSV41_STEP_LEDGER', '0') == '1':
+            try:
+                _lg = locals().get('_ledger') or {}
+                _n = max(1, int(_lg.get('n', 0)))
+                _parts = ['tokens=%d' % _lg.get('n', 0)]
+```
+
+Source: `vendor/mac-mlx/mlx_vlm/models/deepseek_v41/engram.py:51`. Unset read: '0'.
+
+```text
+
+# Phase 0 of the v41 port (2026-09-15): host milliseconds spent fetching Engram rows per decode step.
+_LEDGER_ON = os.environ.get("DSV41_STEP_LEDGER", "0") == "1"
+LEDGER = {"engram_host_ms": 0.0, "engram_calls": 0}
+
+DEAD = -1  # a position that takes no part in an n-gram (an image span)
+ROW_BYTES = 256 + 8  # fp8 row + e8m0 scales
+```
+
+Source: `vendor/mac-mlx/mlx_vlm/models/deepseek_v41/language.py:68`. Unset read: '0'.
+
+```text
+# the host; DSV41_STEP_LEDGER_CUTS=1 additionally evaluates after every layer of a decode step and records
+# per-layer GPU ms (attribution only: it serialises the N+1 pipeline).
+_LEDGER_ON = os.environ.get("DSV41_STEP_LEDGER", "0") == "1"
+_LEDGER_CUTS = _LEDGER_ON and os.environ.get("DSV41_STEP_LEDGER_CUTS", "0") == "1"
+# v41 port lever 1 (2026-09-15): intra-step overlap for decode steps. The ledger showed the DSV4.1
+# step fully serial -- the host builds all 40 layers (with two 3-6 ms Engram memmap fetches inline)
+# and only then does the GPU start. With DSV41_STEP_OVERLAP=1: the rows of every Engram layer after
+```
+
+### DSV41_STEP_LEDGER_CUTS
+
+Advanced backend control DSV41_STEP_LEDGER_CUTS. Set explicitly only for the selected backend; its literal read and fallback are documented below.
+
+Scope: mac-mlx. Class: advanced.
+
+Source: `vendor/mac-mlx/mlx_vlm/models/deepseek_v41/language.py:69`. Unset read: '0'.
+
+```text
+# per-layer GPU ms (attribution only: it serialises the N+1 pipeline).
+_LEDGER_ON = os.environ.get("DSV41_STEP_LEDGER", "0") == "1"
+_LEDGER_CUTS = _LEDGER_ON and os.environ.get("DSV41_STEP_LEDGER_CUTS", "0") == "1"
+# v41 port lever 1 (2026-09-15): intra-step overlap for decode steps. The ledger showed the DSV4.1
+# step fully serial -- the host builds all 40 layers (with two 3-6 ms Engram memmap fetches inline)
+# and only then does the GPU start. With DSV41_STEP_OVERLAP=1: the rows of every Engram layer after
+# the first are fetched on a worker thread as soon as the step's hashes exist, and an async_eval is
+```
+
+### DSV41_STEP_OVERLAP
+
+Advanced backend control DSV41_STEP_OVERLAP. Set explicitly only for the selected backend; its literal read and fallback are documented below.
+
+Scope: mac-mlx. Class: advanced.
+
+Source: `vendor/mac-mlx/mlx_vlm/models/deepseek_v41/language.py:76`. Unset read: '0'.
+
+```text
+# issued right before the second Engram layer so the GPU runs layers 0..13 while the host finishes
+# the fetch and builds 14..39. Numerics are untouched (the same ops in the same order).
+_STEP_OVERLAP = os.environ.get("DSV41_STEP_OVERLAP", "0") == "1"
+# Prefill too (2026-09-15 evening): a 512-token chunk fetches 12,288 Engram rows per Engram layer on the
+# host; with this switch layer 14's fetch runs on the worker while the GPU has layers 0..13.
+_STEP_OVERLAP_PREFILL = _STEP_OVERLAP and os.environ.get("DSV41_STEP_OVERLAP_PREFILL", "0") == "1"
+# v41 port lever 2a (2026-09-15): the promoted fp32 decode weights are half of what a token reads
+```
+
+### DSV41_STEP_OVERLAP_PREFILL
+
+Advanced backend control DSV41_STEP_OVERLAP_PREFILL. Set explicitly only for the selected backend; its literal read and fallback are documented below.
+
+Scope: mac-mlx. Class: advanced.
+
+Source: `vendor/mac-mlx/mlx_vlm/models/deepseek_v41/language.py:79`. Unset read: '0'.
+
+```text
+# Prefill too (2026-09-15 evening): a 512-token chunk fetches 12,288 Engram rows per Engram layer on the
+# host; with this switch layer 14's fetch runs on the worker while the GPU has layers 0..13.
+_STEP_OVERLAP_PREFILL = _STEP_OVERLAP and os.environ.get("DSV41_STEP_OVERLAP_PREFILL", "0") == "1"
+# v41 port lever 2a (2026-09-15): the promoted fp32 decode weights are half of what a token reads
+# (wo_a 134 MB x 40 layers + lm_head 2.65 GB of ~16 GB). DSV41_WO_A_BF16=1 contracts the attention
+# output in bf16 (fp32 accumulation inside the GEMM; wo_b consumes bf16 anyway) from a bf16 weight;
+# DSV41_HEAD_BF16=1 keeps the head bf16 and needs DSV41_OMLX_HEAD=1 for fp32 logits (checked at
+```
+
+### DSV41_TEST_FFN_DIM
+
+Advanced backend control DSV41_TEST_FFN_DIM. Set explicitly only for the selected backend; its literal read and fallback are documented below.
+
+Scope: mac-mlx. Class: advanced.
+
+Source: `vendor/mac-mlx/mlx_vlm/models/deepseek_v41/test_ffn_down_bf16.py:44`. Unset read: '256'.
+
+```text
+    monkeypatch.setattr(lang, "_PREFILL_MXFP8_STEEL", False)
+    monkeypatch.setattr(lang, "_FFN_DOWN_BF16_ENGAGED", False)
+    dim = int(os.environ.get("DSV41_TEST_FFN_DIM", "256"))
+    inter = int(os.environ.get("DSV41_TEST_FFN_INTER", "256"))
+    experts = int(os.environ.get("DSV41_TEST_FFN_EXPERTS", "32"))
+    args = TextConfig(hidden_size=dim, moe_intermediate_size=inter,
+                      n_routed_experts=experts, num_experts_per_tok=6)
+```
+
+Source: `vendor/mac-mlx/mlx_vlm/models/deepseek_v41/test_ffn_expert_pad.py:43`. Unset read: '256'.
+
+```text
+    if not mx.metal.is_available():
+        pytest.skip("Requires Mac Metal")
+    dim = int(os.environ.get("DSV41_TEST_FFN_DIM", "256"))
+    inter = int(os.environ.get("DSV41_TEST_FFN_INTER", "256"))
+    experts = int(os.environ.get("DSV41_TEST_FFN_EXPERTS", "384"))
+    assert experts >= 6
+    routes = _zipf_routing(experts)
+```
+
+### DSV41_TEST_FFN_EXPERTS
+
+Advanced backend control DSV41_TEST_FFN_EXPERTS. Set explicitly only for the selected backend; its literal read and fallback are documented below.
+
+Scope: mac-mlx. Class: advanced.
+
+Source: `vendor/mac-mlx/mlx_vlm/models/deepseek_v41/test_ffn_down_bf16.py:46`. Unset read: '32'.
+
+```text
+    dim = int(os.environ.get("DSV41_TEST_FFN_DIM", "256"))
+    inter = int(os.environ.get("DSV41_TEST_FFN_INTER", "256"))
+    experts = int(os.environ.get("DSV41_TEST_FFN_EXPERTS", "32"))
+    args = TextConfig(hidden_size=dim, moe_intermediate_size=inter,
+                      n_routed_experts=experts, num_experts_per_tok=6)
+    mx.random.seed(41)
+    moe = lang.MoE(args)
+```
+
+Source: `vendor/mac-mlx/mlx_vlm/models/deepseek_v41/test_ffn_expert_pad.py:45`. Unset read: '384'.
+
+```text
+    dim = int(os.environ.get("DSV41_TEST_FFN_DIM", "256"))
+    inter = int(os.environ.get("DSV41_TEST_FFN_INTER", "256"))
+    experts = int(os.environ.get("DSV41_TEST_FFN_EXPERTS", "384"))
+    assert experts >= 6
+    routes = _zipf_routing(experts)
+    assert all(len(set(row)) == 6 for row in routes)
+    counts = np.bincount(routes.ravel(), minlength=experts)
+```
+
+### DSV41_TEST_FFN_INTER
+
+Advanced backend control DSV41_TEST_FFN_INTER. Set explicitly only for the selected backend; its literal read and fallback are documented below.
+
+Scope: mac-mlx. Class: advanced.
+
+Source: `vendor/mac-mlx/mlx_vlm/models/deepseek_v41/test_ffn_down_bf16.py:45`. Unset read: '256'.
+
+```text
+    monkeypatch.setattr(lang, "_FFN_DOWN_BF16_ENGAGED", False)
+    dim = int(os.environ.get("DSV41_TEST_FFN_DIM", "256"))
+    inter = int(os.environ.get("DSV41_TEST_FFN_INTER", "256"))
+    experts = int(os.environ.get("DSV41_TEST_FFN_EXPERTS", "32"))
+    args = TextConfig(hidden_size=dim, moe_intermediate_size=inter,
+                      n_routed_experts=experts, num_experts_per_tok=6)
+    mx.random.seed(41)
+```
+
+Source: `vendor/mac-mlx/mlx_vlm/models/deepseek_v41/test_ffn_expert_pad.py:44`. Unset read: '256'.
+
+```text
+        pytest.skip("Requires Mac Metal")
+    dim = int(os.environ.get("DSV41_TEST_FFN_DIM", "256"))
+    inter = int(os.environ.get("DSV41_TEST_FFN_INTER", "256"))
+    experts = int(os.environ.get("DSV41_TEST_FFN_EXPERTS", "384"))
+    assert experts >= 6
+    routes = _zipf_routing(experts)
+    assert all(len(set(row)) == 6 for row in routes)
+```
+
+### DSV41_WO_A_BF16
+
+Advanced backend control DSV41_WO_A_BF16. Set explicitly only for the selected backend; its literal read and fallback are documented below.
+
+Scope: mac-mlx. Class: advanced.
+
+Source: `engines/mlx-receiver/mlx_token_stream_server.py:164`. Unset read: '0'.
+
+```text
+        parameter_bytes += sum((2 * prod(shape) for _, shape in expected_vision_parameters(config.vision_config, config.text_config.hidden_size).values()))
+    if os.environ.get('DSV41_PROMOTE_DECODE_WEIGHTS', '0') == '1':
+        parameter_bytes += sum(((4 - sizes[dtype]) * prod(shape) for name, (dtype, shape) in specs.items() if name.endswith('.wo_a.weight') and os.environ.get('DSV41_WO_A_BF16', '0') != '1' or (name == 'lm_head.weight' and os.environ.get('DSV41_HEAD_BF16', '0') != '1')))
+    available, breakdown = _dsv41_wait_for_memory(source, parameter_bytes, _read_vm_stat, timeout_s=float(os.environ.get('DSV41_MEMORY_GUARD_WAIT_S', '90')))
+    required = _dsv41_memory_guard(available, source, parameter_bytes)
+    print(f"[DSV41] memory available={available / (1 << 30):.2f} GiB resident_required={required / (1 << 30):.0f} GiB headroom=20 GiB source={source} QAT={os.environ.get('DSV41_QAT', '1')} [{_dsv41_breakdown_text(breakdown)}]", file=sys.stderr, flush=True)
+    model_dir = Path(model_dir)
+```
+
+Source: `vendor/mac-mlx/mlx_vlm/models/deepseek_v41/language.py:85`. Unset read: '0'.
+
+```text
+# DSV41_HEAD_BF16=1 keeps the head bf16 and needs DSV41_OMLX_HEAD=1 for fp32 logits (checked at
+# attach time, loudly). Both off: byte-for-byte the previous path.
+_WO_A_BF16 = os.environ.get("DSV41_WO_A_BF16", "0") == "1"
+_HEAD_BF16 = os.environ.get("DSV41_HEAD_BF16", "0") == "1"
+_PREFETCH_POOL = None
+
+
+```
+
+### DSV4_EXPECTED_WORLD_SIZE
+
+Advanced backend control DSV4_EXPECTED_WORLD_SIZE. Set explicitly only for the selected backend; its literal read and fallback are documented below.
+
+Scope: mac-mlx. Class: advanced.
+
+Source: `vendor/mac-mlx/mlx_vlm/server/cli.py:237`. Unset read: '0'.
+
+```text
+    # handshake confirms BOTH ranks are live past init() before the heavy materialize.
+    try:
+        _expected_world = int(os.environ.get("DSV4_EXPECTED_WORLD_SIZE", "0") or "0")
+    except ValueError:
+        _expected_world = 0
+    if _expected_world > 1:
+        if group.size() != _expected_world:
 ```
 
 ### DSV4_MINI
@@ -57374,7 +62814,7 @@ Source: `engines/streaming-llama/prefill_llama.cpp/src/llama-context.cpp:25212`.
                         "off. Otherwise cudaStreamBeginCapture collides.\n",
 ```
 
-Source: `engines/streaming-llama/prefill_llama.cpp/src/llama-dsv41-executor.cpp:608`. Unset read: NULL from getenv; the literal consumer below supplies any fallback.
+Source: `engines/streaming-llama/prefill_llama.cpp/src/llama-dsv41-executor.cpp:632`. Unset read: NULL from getenv; the literal consumer below supplies any fallback.
 
 ```text
     swiglu_limit(swiglu_limit),expert_scale(expert_scale),sinkhorn_iters(sinkhorn_iters),admitted_tile_tokens(admitted_tile_tokens),resident_bf16(resident_bf16),export_hidden_after_head(export_hidden_after_head),async_inputs(async_inputs),resident_ids(resident_ids),resident_metadata(resident_metadata),defer_hidden_readback(defer_hidden_readback),merge_attention_selected_rows(merge_attention_selected_rows),hc_projection_f16_gemm(hc_projection_f16_gemm),dense_mxfp4(dense_mxfp4),pair_ffn(pair_ffn),fixed(fixed){
@@ -57386,7 +62826,7 @@ Source: `engines/streaming-llama/prefill_llama.cpp/src/llama-dsv41-executor.cpp:
     require(!export_hidden_after_head||defer_hidden_readback,"Post-head export requires full-device hidden retention");
 ```
 
-Source: `engines/streaming-llama/prefill_llama.cpp/src/llama-dsv41-executor.cpp:861`. Unset read: NULL from getenv; the literal consumer below supplies any fallback.
+Source: `engines/streaming-llama/prefill_llama.cpp/src/llama-dsv41-executor.cpp:885`. Unset read: NULL from getenv; the literal consumer below supplies any fallback.
 
 ```text
             require(!expert.expert_mxfp4&&!expert.expert_f16_cublas&&!expert.sorted_expert_routing&&
@@ -57398,7 +62838,7 @@ Source: `engines/streaming-llama/prefill_llama.cpp/src/llama-dsv41-executor.cpp:
         if(w.attention.q_a->type!=GGML_TYPE_Q8_0||w.attention.q_b->type!=GGML_TYPE_Q8_0||w.attention.kv->type!=GGML_TYPE_Q8_0||
 ```
 
-Source: `engines/streaming-llama/prefill_llama.cpp/src/llama-dsv41-executor.cpp:1212`. Unset read: NULL from getenv; the literal consumer below supplies any fallback.
+Source: `engines/streaming-llama/prefill_llama.cpp/src/llama-dsv41-executor.cpp:1236`. Unset read: NULL from getenv; the literal consumer below supplies any fallback.
 
 ```text
         }
@@ -57410,7 +62850,7 @@ Source: `engines/streaming-llama/prefill_llama.cpp/src/llama-dsv41-executor.cpp:
         }
 ```
 
-Source: `engines/streaming-llama/prefill_llama.cpp/src/llama-dsv41-executor.cpp:1217`. Unset read: NULL from getenv; the literal consumer below supplies any fallback.
+Source: `engines/streaming-llama/prefill_llama.cpp/src/llama-dsv41-executor.cpp:1241`. Unset read: NULL from getenv; the literal consumer below supplies any fallback.
 
 ```text
             else llama_dsv41_layer_log("DS4PERF_EXPERT_MXFP4_SMALL_BATCH layer=%u count=%u unchanged_original_weights=1 native_MMA_minimum_rows=5\n",in.layer,in.count);
@@ -57422,7 +62862,7 @@ Source: `engines/streaming-llama/prefill_llama.cpp/src/llama-dsv41-executor.cpp:
         }
 ```
 
-Source: `engines/streaming-llama/prefill_llama.cpp/tools/dsv41-prefill/main.cpp:740`. Unset read: NULL from getenv; the literal consumer below supplies any fallback.
+Source: `engines/streaming-llama/prefill_llama.cpp/tools/dsv41-prefill/main.cpp:742`. Unset read: NULL from getenv; the literal consumer below supplies any fallback.
 
 ```text
         require(!args.count("--resident-hidden-bf16")||args.at("--resident-hidden-bf16")=="0"||args.at("--resident-hidden-bf16")=="1","resident-hidden-bf16 requires0/1");
@@ -57464,7 +62904,7 @@ Source: `engines/streaming-llama/prefill_llama.cpp/ggml/src/ggml-cuda/ggml-cuda.
         // For UMA systems (like DGX Spark), use system memory info
 ```
 
-Source: `engines/streaming-llama/prefill_llama.cpp/src/llama-dsv41-weights.cpp:537`. Unset read: NULL from getenv; the literal consumer below supplies any fallback.
+Source: `engines/streaming-llama/prefill_llama.cpp/src/llama-dsv41-weights.cpp:577`. Unset read: NULL from getenv; the literal consumer below supplies any fallback.
 
 ```text
     require(!options.compute_direct||(options.buffers==2&&options.async_staging_drain&&options.auto_request_size&&!options.ds_gpu_ring_slots),
@@ -61391,6 +66831,24 @@ fn liveModelDir() ?[]const u8 {
 fn testIo() std.Io {
 ```
 
+### KREA2_ALLOW_NON_DIRECTSTORAGE
+
+KREA2_ALLOW_NON_DIRECTSTORAGE: explicit engine setting; inherited values are cleared and the native default is retained.
+
+Scope: image, studio, video. Class: advanced.
+
+Source: `vendor/studio/studio/krea2_diffusion.py:860`. Unset read: None.
+
+```text
+    sd_keys = set(tr.state_dict().keys())
+    streamer = DirectStorageStreamer(_Krea2TBlockIndex(idx), component='', n_gpu_buffers=n_gpu_buffers, device=device, record_compute_done=True)
+    if getattr(streamer, 'mode', None) != 3 and _os.environ.get('KREA2_ALLOW_NON_DIRECTSTORAGE') != '1':
+        try:
+            streamer.close()
+        finally:
+            raise RuntimeError(f"Krea2 DS streamer mode={getattr(streamer, 'mode', '?')} is not DirectStorage(3) â€” R1 requires the optimised NVMe->GPU path. Set KREA2_ALLOW_NON_DIRECTSTORAGE=1 for diagnostics.")
+```
+
 ### KREA2_REF
 
 KREA2_REF: advanced engine setting; built-in default retained
@@ -61803,6 +67261,120 @@ Source: `engines/mlx-serve/src/krea.zig:2989`. Unset read: NULL from getenv; the
     const a = testing.allocator;
     const io = std.Io.Threaded.global_single_threaded.io();
     const imgd = try readF32(io, a, img_p);
+```
+
+### KV_BITS
+
+Advanced backend control KV_BITS. Set explicitly only for the selected backend; its literal read and fallback are documented below.
+
+Scope: mac-mlx. Class: advanced.
+
+Source: `vendor/mac-mlx/mlx_vlm/server/app.py:387`. Unset read: None.
+
+```text
+        logger.info("Pre-loading model: %s", model_path)
+        get_cached_model(model_path, adapter_path)
+        kv_bits = os.environ.get("KV_BITS")
+        kv_scheme = os.environ.get("KV_QUANT_SCHEME", "uniform")
+        if kv_bits:
+            logger.info("KV cache quantization: bits=%s scheme=%s", kv_bits, kv_scheme)
+        logger.info("Model ready, continuous batching enabled.")
+```
+
+Source: `vendor/mac-mlx/mlx_vlm/server/cli.py:203`. Unset read: Assigned by the runtime; see literal consumer.
+
+```text
+    os.environ["MLX_VLM_ENABLE_THINKING"] = "1" if args.enable_thinking else "0"
+    if args.kv_bits is not None:
+        os.environ["KV_BITS"] = str(args.kv_bits)
+    os.environ["KV_GROUP_SIZE"] = str(args.kv_group_size)
+    os.environ["KV_QUANT_SCHEME"] = args.kv_quant_scheme
+    if args.max_kv_size is not None:
+        os.environ["MAX_KV_SIZE"] = str(args.max_kv_size)
+```
+
+Source: `vendor/mac-mlx/mlx_vlm/server/generation.py:218`. Unset read: 0.
+
+```text
+
+def get_quantized_kv_bits(model: str):
+    kv_bits = float(os.environ.get("KV_BITS", 0))
+    if kv_bits == 0:
+        return None
+    if "qat" in model:
+        print(f"Model {model} is quantization aware, KV cache will not be quantized.")
+```
+
+### KV_GROUP_SIZE
+
+Advanced backend control KV_GROUP_SIZE. Set explicitly only for the selected backend; its literal read and fallback are documented below.
+
+Scope: mac-mlx. Class: advanced.
+
+Source: `vendor/mac-mlx/mlx_vlm/server/cli.py:204`. Unset read: Assigned by the runtime; see literal consumer.
+
+```text
+    if args.kv_bits is not None:
+        os.environ["KV_BITS"] = str(args.kv_bits)
+    os.environ["KV_GROUP_SIZE"] = str(args.kv_group_size)
+    os.environ["KV_QUANT_SCHEME"] = args.kv_quant_scheme
+    if args.max_kv_size is not None:
+        os.environ["MAX_KV_SIZE"] = str(args.max_kv_size)
+    os.environ["QUANTIZED_KV_START"] = str(args.quantized_kv_start)
+```
+
+Source: `vendor/mac-mlx/mlx_vlm/server/generation.py:228`. Unset read: DEFAULT_KV_GROUP_SIZE.
+
+```text
+
+def get_kv_group_size():
+    return int(os.environ.get("KV_GROUP_SIZE", DEFAULT_KV_GROUP_SIZE))
+
+
+def get_kv_quant_scheme():
+    return os.environ.get("KV_QUANT_SCHEME", DEFAULT_KV_QUANT_SCHEME)
+```
+
+### KV_QUANT_SCHEME
+
+Advanced backend control KV_QUANT_SCHEME. Set explicitly only for the selected backend; its literal read and fallback are documented below.
+
+Scope: mac-mlx. Class: advanced.
+
+Source: `vendor/mac-mlx/mlx_vlm/server/app.py:388`. Unset read: 'uniform'.
+
+```text
+        get_cached_model(model_path, adapter_path)
+        kv_bits = os.environ.get("KV_BITS")
+        kv_scheme = os.environ.get("KV_QUANT_SCHEME", "uniform")
+        if kv_bits:
+            logger.info("KV cache quantization: bits=%s scheme=%s", kv_bits, kv_scheme)
+        logger.info("Model ready, continuous batching enabled.")
+    yield
+```
+
+Source: `vendor/mac-mlx/mlx_vlm/server/cli.py:205`. Unset read: Assigned by the runtime; see literal consumer.
+
+```text
+        os.environ["KV_BITS"] = str(args.kv_bits)
+    os.environ["KV_GROUP_SIZE"] = str(args.kv_group_size)
+    os.environ["KV_QUANT_SCHEME"] = args.kv_quant_scheme
+    if args.max_kv_size is not None:
+        os.environ["MAX_KV_SIZE"] = str(args.max_kv_size)
+    os.environ["QUANTIZED_KV_START"] = str(args.quantized_kv_start)
+    if args.top_logprobs_k is not None:
+```
+
+Source: `vendor/mac-mlx/mlx_vlm/server/generation.py:232`. Unset read: DEFAULT_KV_QUANT_SCHEME.
+
+```text
+
+def get_kv_quant_scheme():
+    return os.environ.get("KV_QUANT_SCHEME", DEFAULT_KV_QUANT_SCHEME)
+
+
+def get_max_kv_size(model: str):
+    max_kv_tokens = int(os.environ.get("MAX_KV_SIZE", 0))
 ```
 
 ### LAGUNA_FIXTURES
@@ -62327,7 +67899,7 @@ Producer decode: bind the resident decode weights once at the switch to decode (
 
 Scope: rtx-llama. Class: advanced.
 
-Source: `engines/streaming-llama/prefill_llama.cpp/src/llama-dsv41-weights.cpp:84`. Unset read: NULL from getenv; the literal consumer below supplies any fallback.
+Source: `engines/streaming-llama/prefill_llama.cpp/src/llama-dsv41-weights.cpp:89`. Unset read: NULL from getenv; the literal consumer below supplies any fallback.
 
 ```text
     // LLAMADECODE bind-once: set after a complete decode-layout pass; cleared on any layout rebuild.
@@ -62339,13 +67911,49 @@ Source: `engines/streaming-llama/prefill_llama.cpp/src/llama-dsv41-weights.cpp:8
     std::vector<int32_t>l2_key;std::unordered_map<int32_t,int32_t>l2_of;
 ```
 
+### LLAMADECODE_BYTE_LEDGER
+
+Diagnostic per-tensor file extents and byte counts for every acquired weight stage and router-driven expert read. Set 1 to enable; default 0.
+
+Scope: rtx-llama. Class: advanced.
+
+Source: `engines/streaming-llama/prefill_llama.cpp/src/llama-dsv41-weights.cpp:641`. Unset read: NULL from getenv; the literal consumer below supplies any fallback.
+
+```text
+    require(!lazy||!std::strcmp(lazy,"0")||!std::strcmp(lazy,"1")||!std::strcmp(lazy,"tail"),"LLAMADECODE_PREFILL_ROUTED must be0,1 or tail");
+    p->lazy_prefill=lazy&&std::strcmp(lazy,"0");p->lazy_from_layer=lazy&&!std::strcmp(lazy,"tail")?21:0;
+    const char*ledger=std::getenv("LLAMADECODE_BYTE_LEDGER");p->byte_ledger=ledger&&!std::strcmp(ledger,"1");
+    require(!p->lazy_prefill||(p->options.compute_direct&&!p->options.ds_gpu_ring_slots&&!p->options.zero_padding_only),
+        "Routed prefill requires direct compute banks without GPU ring or padding-only mode");
+    wf_params params=wf_params_default();params.model_path=p->options.model_path.c_str();params.gpu_backend=p->options.backend;params.mode=WF_MODE_DSTORAGE;
+    params.n_layers=int(p->stage_count());params.n_gpu_buffers=int(p->options.buffers);params.max_layer_bytes=p->planned.maximum_stage_bytes;params.n_ram_buffers=0;
+```
+
+### LLAMADECODE_CARRY_COPY_PROBE
+
+Diagnostic only: three pinned H2D/D2H seed-lease round trips in the existing graph input, with GPU/host timestamps. Changes timing; no extra carry bank or weight-file writes.
+
+Scope: rtx-llama. Class: advanced.
+
+Source: `engines/streaming-llama/prefill_llama.cpp/src/llama-dsv41-executor.cpp:485`. Unset read: NULL from getenv; the literal consumer below supplies any fallback.
+
+```text
+    void upload_ready(){ok(cudaEventRecord(ready,copies),"Pinned upload fence record failed");ok(cudaStreamWaitEvent(compute(),ready,0),"Compute stream did not accept pinned upload fence");}
+    void copy_probe(const llama_dsv41_carry_store::ram_lease&lease,ggml_tensor*hidden){
+        const char*setting=std::getenv("LLAMADECODE_CARRY_COPY_PROBE");
+        if(!setting||std::strcmp(setting,"1"))return;
+        // Diagnostic only: reuse the live, registered canonical seed lease and
+        // its admitted F32 graph input. Every D2H writes back the exact bytes
+        // just uploaded; no extra RAM bank/device allocation or model mutation.
+```
+
 ### LLAMADECODE_COLLECT_ADMISSION
 
 Diagnostic only: 1 records executor admission figures without changing arithmetic.
 
 Scope: rtx-llama. Class: advanced.
 
-Source: `engines/streaming-llama/prefill_llama.cpp/src/llama-dsv41-executor.cpp:66`. Unset read: NULL from getenv; the literal consumer below supplies any fallback.
+Source: `engines/streaming-llama/prefill_llama.cpp/src/llama-dsv41-executor.cpp:67`. Unset read: NULL from getenv; the literal consumer below supplies any fallback.
 
 ```text
 // check still throws (logged as FATAL). The default (unset) refuses as before.
@@ -62381,7 +67989,7 @@ Producer decode: release prefill-only graph and hidden buffers before decode so 
 
 Scope: rtx-llama. Class: advanced.
 
-Source: `engines/streaming-llama/prefill_llama.cpp/src/llama-dsv41-sweep.cpp:196`. Unset read: NULL from getenv; the literal consumer below supplies any fallback.
+Source: `engines/streaming-llama/prefill_llama.cpp/src/llama-dsv41-sweep.cpp:197`. Unset read: NULL from getenv; the literal consumer below supplies any fallback.
 
 ```text
 // hidden bank; the prefill-sized reservations go back to the device (the
@@ -62555,7 +68163,7 @@ Producer early Engram loader: reads submitted per batch (1-4096, default 256, at
 
 Scope: rtx-llama. Class: advanced.
 
-Source: `engines/streaming-llama/prefill_llama.cpp/src/llama-dsv41-engram-prefetch.cpp:319`. Unset read: Wrapper/conditional default: see the literal call and consumer below.
+Source: `engines/streaming-llama/prefill_llama.cpp/src/llama-dsv41-engram-prefetch.cpp:327`. Unset read: Wrapper/conditional default: see the literal call and consumer below.
 
 ```text
         early_small=uint32_t(std::min<uint64_t>(depth,(per-large_slot)/(small_slot+large_slot/16)));
@@ -62573,7 +68181,7 @@ Producer Engram row cache kept in host RAM across turns, in MiB; 0 disables it. 
 
 Scope: rtx-llama. Class: advanced.
 
-Source: `engines/streaming-llama/prefill_llama.cpp/src/llama-dsv41-sweep.cpp:433`. Unset read: NULL from getenv; the literal consumer below supplies any fallback.
+Source: `engines/streaming-llama/prefill_llama.cpp/src/llama-dsv41-sweep.cpp:435`. Unset read: NULL from getenv; the literal consumer below supplies any fallback.
 
 ```text
         const uint64_t row_cache_have=p->provider.engram_row_cache_bytes();uint64_t row_cache_new=0;
@@ -62591,7 +68199,7 @@ Producer early Engram loader: queue depth per I/O ring (32-4096, default 1024).
 
 Scope: rtx-llama. Class: advanced.
 
-Source: `engines/streaming-llama/prefill_llama.cpp/src/llama-dsv41-engram-prefetch.cpp:308`. Unset read: Wrapper/conditional default: see the literal call and consumer below.
+Source: `engines/streaming-llama/prefill_llama.cpp/src/llama-dsv41-engram-prefetch.cpp:316`. Unset read: Wrapper/conditional default: see the literal call and consumer below.
 
 ```text
         early_mode=true;prior=std::move(prior_cache);
@@ -62609,10 +68217,10 @@ Producer Engram prompt load: auto (default) starts it before the first weight fe
 
 Scope: rtx-llama. Class: advanced.
 
-Source: `engines/streaming-llama/prefill_llama.cpp/src/llama-dsv41-engram-prefetch.cpp:32`. Unset read: NULL from getenv; the literal consumer below supplies any fallback.
+Source: `engines/streaming-llama/prefill_llama.cpp/src/llama-dsv41-engram-prefetch.cpp:40`. Unset read: NULL from getenv; the literal consumer below supplies any fallback.
 
 ```text
-static std::atomic<bool> llama_dsv41_engram_weight_pass{false};
+}
 static llama_dsv41_engram_early::mode llama_dsv41_engram_early_mode(){
     static const auto m=llama_dsv41_engram_early::parse_mode(std::getenv("LLAMADECODE_ENGRAM_EARLY"));return m;
 }
@@ -62627,7 +68235,7 @@ Producer early Engram loader: modelled storage request rate used by the auto dec
 
 Scope: rtx-llama. Class: advanced.
 
-Source: `engines/streaming-llama/prefill_llama.cpp/src/llama-dsv41-engram-prefetch.cpp:38`. Unset read: NULL from getenv; the literal consumer below supplies any fallback.
+Source: `engines/streaming-llama/prefill_llama.cpp/src/llama-dsv41-engram-prefetch.cpp:46`. Unset read: NULL from getenv; the literal consumer below supplies any fallback.
 
 ```text
 bool llama_dsv41_engram_early_pause(){return llama_dsv41_engram_early_mode()==llama_dsv41_engram_early::mode::pause;}
@@ -62645,7 +68253,7 @@ Producer prefill: low sets a low DirectStorage priority hint for Engram table re
 
 Scope: rtx-llama. Class: advanced.
 
-Source: `engines/streaming-llama/prefill_llama.cpp/src/llama-dsv41-engram-prefetch.cpp:177`. Unset read: NULL from getenv; the literal consumer below supplies any fallback.
+Source: `engines/streaming-llama/prefill_llama.cpp/src/llama-dsv41-engram-prefetch.cpp:185`. Unset read: NULL from getenv; the literal consumer below supplies any fallback.
 
 ```text
             // DirectStorage streaming only if LLAMADECODE_ENGRAM_IO_PRIORITY=low (measured: low priority starves
@@ -62657,16 +68265,34 @@ Source: `engines/streaming-llama/prefill_llama.cpp/src/llama-dsv41-engram-prefet
         }
 ```
 
-Source: `engines/streaming-llama/prefill_llama.cpp/src/llama-dsv41-engram-prefetch.cpp:404`. Unset read: NULL from getenv; the literal consumer below supplies any fallback.
+Source: `engines/streaming-llama/prefill_llama.cpp/src/llama-dsv41-engram-prefetch.cpp:420`. Unset read: NULL from getenv; the literal consumer below supplies any fallback.
 
 ```text
-            FILE_FLAG_NO_BUFFERING|FILE_FLAG_OVERLAPPED|FILE_FLAG_RANDOM_ACCESS|FILE_FLAG_OPEN_REPARSE_POINT,nullptr);
-        require(io.file!=INVALID_HANDLE_VALUE,"Cannot open original Engram file for its own IoRings");
+                         engram_read_alignment(),storage.LogicalBytesPerSector,storage.PhysicalBytesPerSectorForPerformance);
+        }
         {   const char*e=std::getenv("LLAMADECODE_ENGRAM_IO_PRIORITY");
             FILE_IO_PRIORITY_HINT_INFO hint{};hint.PriorityHint=e&&!std::strcmp(e,"low")?IoPriorityHintLow:IoPriorityHintNormal;
             const BOOL ok=SetFileInformationByHandle(io.file,FileIoPriorityHintInfo,&hint,sizeof(hint));
             std::fprintf(stderr,"LLAMADECODE_ENGRAM_IO_PRIORITY hint=%s applied=%d early=1\n",hint.PriorityHint==IoPriorityHintLow?"low":"normal",int(ok));
         }
+```
+
+### LLAMADECODE_ENGRAM_READ_ALIGN
+
+E13 experiment: Engram direct-read alignment, 4096 bytes (default) or opt-in 512 bytes. The 512-byte arm requires compatible logical sector geometry and preserves all row bytes.
+
+Scope: rtx-llama. Class: advanced.
+
+Source: `engines/streaming-llama/prefill_llama.cpp/src/llama-dsv41-engram-prefetch.cpp:33`. Unset read: NULL from getenv; the literal consumer below supplies any fallback.
+
+```text
+static uint32_t engram_read_alignment(){
+    static const uint32_t alignment=[]{
+        const char*e=std::getenv("LLAMADECODE_ENGRAM_READ_ALIGN");
+        if(!e||!*e||!std::strcmp(e,"4096"))return 4096u;
+        if(!std::strcmp(e,"512"))return 512u;
+        throw std::invalid_argument("LLAMADECODE_ENGRAM_READ_ALIGN must be 512 or 4096");
+    }();return alignment;
 ```
 
 ### LLAMADECODE_ENGRAM_RINGS
@@ -62675,7 +68301,7 @@ Producer early Engram loader: number of I/O rings (1-8, default 4).
 
 Scope: rtx-llama. Class: advanced.
 
-Source: `engines/streaming-llama/prefill_llama.cpp/src/llama-dsv41-engram-prefetch.cpp:307`. Unset read: Wrapper/conditional default: see the literal call and consumer below.
+Source: `engines/streaming-llama/prefill_llama.cpp/src/llama-dsv41-engram-prefetch.cpp:315`. Unset read: Wrapper/conditional default: see the literal call and consumer below.
 
 ```text
         prepare(layout,tokens,count,offsets,admitted,initial,text_mask); // host_plan holds the fixed 4 MiB IO reserve
@@ -62741,6 +68367,24 @@ inline void llama_dsv41_layer_log(const char *format,...){
     if(!llama_dsv41_layer_log_on())return;
 ```
 
+### LLAMADECODE_LFU_HALF_LIFE
+
+E8 experiment: LFU score half life in tokens, 1 (default) or 16. Only used when the opt-in recency-LFU policy is enabled; expert routes and arithmetic are unchanged.
+
+Scope: rtx-llama. Class: advanced.
+
+Source: `engines/streaming-llama/prefill_llama.cpp/src/llama-dsv41-weights.cpp:106`. Unset read: NULL from getenv; the literal consumer below supplies any fallback.
+
+```text
+    }();return enabled;}
+    static uint32_t recency_lfu_half_life(){static const uint32_t period=[]{
+        const char*value=std::getenv("LLAMADECODE_LFU_HALF_LIFE");
+        const uint32_t n=!value||!std::strcmp(value,"1")?1u:!std::strcmp(value,"16")?16u:0u;
+        if(!n)throw std::invalid_argument("LLAMADECODE_LFU_HALF_LIFE must be 1 or 16");
+        std::fprintf(stderr,"PERFEXP_E8 lfu_half_life_tokens=%u\n",n);return n;
+    }();return period;}
+```
+
 ### LLAMADECODE_OWNER_VERIFY
 
 Owner digest verification mode; full rehashes complete owner state.
@@ -62777,6 +68421,42 @@ Source: `engines/streaming-llama/prefill_llama.cpp/src/llama-weight-fetcher.cpp:
             if(!llama_wf_zero_gaps::plan(layer.total_bytes,owned,gaps,reason)){WF_ERR("Required DirectStorage routed-stage zero refused: %s",reason.c_str());wf->ds_failed.store(true);return false;}
 ```
 
+### LLAMADECODE_PREFILL_ROUTED
+
+Router-driven prefill expert reads: 0 off, 1 all layers, tail layers21-39. The single-engine launcher selects1 automatically for ULTRA prompts through2048 rows and tail with yoco_keep2541; larger full-layer passes retain overlapped eager reads. Explicit overrides win.
+
+Scope: rtx-llama. Class: advanced.
+
+Source: `engines/streaming-llama/prefill_llama.cpp/src/llama-dsv41-weights.cpp:638`. Unset read: NULL from getenv; the literal consumer below supplies any fallback.
+
+```text
+#else
+    auto*p=this;
+    const char*lazy=std::getenv("LLAMADECODE_PREFILL_ROUTED");
+    require(!lazy||!std::strcmp(lazy,"0")||!std::strcmp(lazy,"1")||!std::strcmp(lazy,"tail"),"LLAMADECODE_PREFILL_ROUTED must be0,1 or tail");
+    p->lazy_prefill=lazy&&std::strcmp(lazy,"0");p->lazy_from_layer=lazy&&!std::strcmp(lazy,"tail")?21:0;
+    const char*ledger=std::getenv("LLAMADECODE_BYTE_LEDGER");p->byte_ledger=ledger&&!std::strcmp(ledger,"1");
+    require(!p->lazy_prefill||(p->options.compute_direct&&!p->options.ds_gpu_ring_slots&&!p->options.zero_padding_only),
+```
+
+### LLAMADECODE_RECENCY_LFU
+
+E8 opt-in L2 expert-cache placement: 0 (default) retains LRU; 1 uses recency-weighted LFU with a 25% admission margin. Configure the score half life separately; routes and arithmetic are unchanged.
+
+Scope: rtx-llama. Class: advanced.
+
+Source: `engines/streaming-llama/prefill_llama.cpp/src/llama-dsv41-weights.cpp:98`. Unset read: NULL from getenv; the literal consumer below supplies any fallback.
+
+```text
+    llama_dsv41_recency_lfu::scores lfu_scores;
+    static bool recency_lfu_enabled(){static const bool enabled=[]{
+        const char*value=std::getenv("LLAMADECODE_RECENCY_LFU");
+        if(value&&*value&&std::strcmp(value,"0")&&std::strcmp(value,"1"))
+            throw std::invalid_argument("LLAMADECODE_RECENCY_LFU must be 0 or 1");
+        const bool on=value&&!std::strcmp(value,"1");
+        std::fprintf(stderr,"PERFEXP_E8 recency_lfu=%d admission_margin_percent=25 tier=l2\n",int(on));
+```
+
 ### LLAMADECODE_TEST_FAULT
 
 Producer TEST-ONLY fault injection to prove every abort reaches the client as a reason: <kind>@<layer> with kind main_throw (std::runtime_error on the sweep/session thread), worker_throw (thrown on a std::async worker and marshalled to the sweep thread) or bad_alloc (std::bad_alloc on the sweep thread). Fires once, at the start of that layer in the first multi-token sweep; logs LLAMADECODE_TEST_FAULT_ARMED at startup. Never set in a preset.
@@ -62801,7 +68481,7 @@ Optional native tile timing diagnostics.
 
 Scope: ds4-win, rtx-llama. Class: advanced.
 
-Source: `engines/streaming-llama/prefill_llama.cpp/src/llama-dsv41-executor.cpp:60`. Unset read: NULL from getenv; the literal consumer below supplies any fallback.
+Source: `engines/streaming-llama/prefill_llama.cpp/src/llama-dsv41-executor.cpp:61`. Unset read: NULL from getenv; the literal consumer below supplies any fallback.
 
 ```text
 // LLAMADECODE_TILE_TIMING=1: one diagnostic line per tile (host phase walls plus GPU
@@ -65999,7 +71679,7 @@ Source: `engines/streaming-llama/prefill_llama.cpp/ggml/src/ggml-cuda/ggml-cuda.
         }
 ```
 
-Source: `engines/streaming-llama/prefill_llama.cpp/src/llama-dsv41-executor.cpp:254`. Unset read: NULL from getenv; the literal consumer below supplies any fallback.
+Source: `engines/streaming-llama/prefill_llama.cpp/src/llama-dsv41-executor.cpp:255`. Unset read: NULL from getenv; the literal consumer below supplies any fallback.
 
 ```text
                 auto*product=ggml_mul_mat(ctx,part,group_input);
@@ -66977,7 +72657,7 @@ Source: `engines/streaming-llama/prefill_llama.cpp/ggml/src/ggml-cuda/dsv41-ds4-
     attention_tokentile_hmma_kernel<16u><<<dim3(tiles,4),512,tt_TokentileSmemBudget<kTTStageRows,16u>::total,stream>>>(
 ```
 
-Source: `engines/streaming-llama/prefill_llama.cpp/src/llama-dsv41-executor.cpp:1472`. Unset read: NULL from getenv; the literal consumer below supplies any fallback.
+Source: `engines/streaming-llama/prefill_llama.cpp/src/llama-dsv41-executor.cpp:1509`. Unset read: NULL from getenv; the literal consumer below supplies any fallback.
 
 ```text
         const auto stream_topk_before=expert.index_key_windows?ggml_backend_cuda_dsv41_stream_topk_queued():0;
@@ -67007,7 +72687,7 @@ Source: `engines/streaming-llama/prefill_llama.cpp/ggml/src/ggml-cuda/dsv4-act-q
                     (const float4*)src_d,(float4*)dst_d,vectors);
 ```
 
-Source: `engines/streaming-llama/prefill_llama.cpp/src/llama-dsv41-executor.cpp:1467`. Unset read: NULL from getenv; the literal consumer below supplies any fallback.
+Source: `engines/streaming-llama/prefill_llama.cpp/src/llama-dsv41-executor.cpp:1504`. Unset read: NULL from getenv; the literal consumer below supplies any fallback.
 
 ```text
         const auto cast_elements_before=cast_vector?ggml_backend_cuda_dsv41_cast_vector_elements():0;
@@ -67037,7 +72717,7 @@ Source: `engines/streaming-llama/prefill_llama.cpp/ggml/src/ggml-cuda/dsv41-cast
         const int64_t total=n0*n1*n2*n3;
 ```
 
-Source: `engines/streaming-llama/prefill_llama.cpp/src/llama-dsv41-executor.cpp:1463`. Unset read: NULL from getenv; the literal consumer below supplies any fallback.
+Source: `engines/streaming-llama/prefill_llama.cpp/src/llama-dsv41-executor.cpp:1500`. Unset read: NULL from getenv; the literal consumer below supplies any fallback.
 
 ```text
         const auto dense_bf16_store_before=dense_bf16_store?ggml_backend_cuda_dsv41_dense_bf16_store_queued():0;
@@ -67055,7 +72735,7 @@ LLAMA_DSV41_DENSE_BF16_STORE: advanced engine setting; built-in default retained
 
 Scope: rtx-llama. Class: advanced.
 
-Source: `engines/streaming-llama/prefill_llama.cpp/src/llama-dsv41-executor.cpp:886`. Unset read: NULL from getenv; the literal consumer below supplies any fallback.
+Source: `engines/streaming-llama/prefill_llama.cpp/src/llama-dsv41-executor.cpp:910`. Unset read: NULL from getenv; the literal consumer below supplies any fallback.
 
 ```text
         probe.enabled=std::getenv("DS4PERF_EXECUTOR_WALL_PROBE")&&std::string(std::getenv("DS4PERF_EXECUTOR_WALL_PROBE"))=="1";
@@ -67073,7 +72753,7 @@ Producer prefill: Engram table read start policy; built-in default retained.
 
 Scope: rtx-llama, rtx-producer. Class: advanced.
 
-Source: `engines/streaming-llama/prefill_llama.cpp/tools/dsv41-prefill/main.cpp:928`. Unset read: NULL from getenv; the literal consumer below supplies any fallback.
+Source: `engines/streaming-llama/prefill_llama.cpp/tools/dsv41-prefill/main.cpp:930`. Unset read: NULL from getenv; the literal consumer below supplies any fallback.
 
 ```text
         // load (7.9 s at 43K) left a 7.4 s join wait and prefill fell to 1,052 tok/s,
@@ -67091,7 +72771,7 @@ LLAMA_DSV41_ENGRAM_PROMPT_OVERLAP: qualified preset/runtime setting; override fo
 
 Scope: rtx-llama. Class: preset.
 
-Source: `engines/streaming-llama/prefill_llama.cpp/src/llama-dsv41-sweep.cpp:683`. Unset read: NULL from getenv; the literal consumer below supplies any fallback.
+Source: `engines/streaming-llama/prefill_llama.cpp/src/llama-dsv41-sweep.cpp:685`. Unset read: NULL from getenv; the literal consumer below supplies any fallback.
 
 ```text
         const auto schedule=llama_dsv41_plan_append(p->options.pair_ffn,p->options.carry.max_tile_tokens,p->options.compute_step_tokens,p->position_offset,p->options.unaligned_append_step_tokens);
@@ -67103,7 +72783,7 @@ Source: `engines/streaming-llama/prefill_llama.cpp/src/llama-dsv41-sweep.cpp:683
         if(p->options.images){
 ```
 
-Source: `engines/streaming-llama/prefill_llama.cpp/src/llama-dsv41-weights.cpp:755`. Unset read: NULL from getenv; the literal consumer below supplies any fallback.
+Source: `engines/streaming-llama/prefill_llama.cpp/src/llama-dsv41-weights.cpp:801`. Unset read: NULL from getenv; the literal consumer below supplies any fallback.
 
 ```text
     if(!llama_dsv41_engram_early_enabled()||p->options.engram_early_tokens.empty())return;
@@ -67115,7 +72795,7 @@ Source: `engines/streaming-llama/prefill_llama.cpp/src/llama-dsv41-weights.cpp:7
     const auto&tokens=p->options.engram_early_tokens;const auto&tail=p->options.engram_early_tail;
 ```
 
-Source: `engines/streaming-llama/prefill_llama.cpp/src/llama-dsv41-weights.cpp:780`. Unset read: NULL from getenv; the literal consumer below supplies any fallback.
+Source: `engines/streaming-llama/prefill_llama.cpp/src/llama-dsv41-weights.cpp:826`. Unset read: NULL from getenv; the literal consumer below supplies any fallback.
 
 ```text
 bool llama_dsv41_weight_provider::start_engram_append(const std::vector<int32_t>&tokens,llama_dsv41::engram_history initial,double gap_s,std::string&error){return p->guard([&]{
@@ -67127,7 +72807,7 @@ bool llama_dsv41_weight_provider::start_engram_append(const std::vector<int32_t>
     require(overlap&&std::strcmp(overlap,"1")==0,"LLAMADECODE_ENGRAM_EARLY requires LLAMA_DSV41_ENGRAM_PROMPT_OVERLAP=1 (per-table adoption)");
 ```
 
-Source: `engines/streaming-llama/prefill_llama.cpp/src/llama-dsv41-weights.cpp:801`. Unset read: NULL from getenv; the literal consumer below supplies any fallback.
+Source: `engines/streaming-llama/prefill_llama.cpp/src/llama-dsv41-weights.cpp:847`. Unset read: NULL from getenv; the literal consumer below supplies any fallback.
 
 ```text
 bool llama_dsv41_weight_provider::prepare_engram_prompt(const std::vector<int32_t>&tokens,const std::function<bool()>&stop,std::string&error,llama_dsv41::engram_history initial,const uint8_t* text_mask){return p->guard([&]{
@@ -67139,7 +72819,7 @@ bool llama_dsv41_weight_provider::prepare_engram_prompt(const std::vector<int32_
     if(p->early&&p->early->tokens==tokens){
 ```
 
-Source: `engines/streaming-llama/prefill_llama.cpp/tools/dsv41-prefill/main.cpp:891`. Unset read: NULL from getenv; the literal consumer below supplies any fallback.
+Source: `engines/streaming-llama/prefill_llama.cpp/tools/dsv41-prefill/main.cpp:893`. Unset read: NULL from getenv; the literal consumer below supplies any fallback.
 
 ```text
             // DS4COMBO producer-warm: the prompt's tokens are known now, so its
@@ -67151,7 +72831,7 @@ Source: `engines/streaming-llama/prefill_llama.cpp/tools/dsv41-prefill/main.cpp:
                 std::vector<int32_t> tail;
 ```
 
-Source: `engines/streaming-llama/prefill_llama.cpp/tools/dsv41-prefill/main.cpp:929`. Unset read: NULL from getenv; the literal consumer below supplies any fallback.
+Source: `engines/streaming-llama/prefill_llama.cpp/tools/dsv41-prefill/main.cpp:931`. Unset read: NULL from getenv; the literal consumer below supplies any fallback.
 
 ```text
         // against 1,238 tok/s with the ordinary layer-0 overlapped load. Opt-in only.
@@ -67169,7 +72849,7 @@ LLAMA_DSV41_ENGRAM_SUBMIT_BATCH: advanced engine setting; built-in default retai
 
 Scope: rtx-llama. Class: advanced.
 
-Source: `engines/streaming-llama/prefill_llama.cpp/src/llama-dsv41-engram-prefetch.cpp:227`. Unset read: NULL from getenv; the literal consumer below supplies any fallback.
+Source: `engines/streaming-llama/prefill_llama.cpp/src/llama-dsv41-engram-prefetch.cpp:235`. Unset read: NULL from getenv; the literal consumer below supplies any fallback.
 
 ```text
         size_t next_row=0;uint32_t next_table=0;UINT_PTR sequence=0;
@@ -67199,6 +72879,66 @@ Source: `engines/streaming-llama/prefill_llama.cpp/ggml/src/ggml-cuda/mmq_id_com
         args.nsamples_x==1&&args.nsamples_y==1&&args.ncols_max>0&&args.ncols_max<=16384&&
 ```
 
+### LLAMA_DSV41_FLASHINFER_MXFP4
+
+Opt-in stored MXFP4 expert prefill through the pinned FlashInfer SM120 W4A8 grouped GEMM. Requires the explicit stored-weight path and an ABI2 bridge DLL. BF16 epilogue; quality and speed tradeoff, default off.
+
+Scope: rtx-llama. Class: advanced.
+
+Source: `engines/streaming-llama/prefill_llama.cpp/ggml/src/ggml-cuda/dsv41-flashinfer.cuh:13`. Unset read: NULL from getenv; the literal consumer below supplies any fallback.
+
+```text
+    int,int,int,int64_t,int64_t,int64_t,void*,uint64_t,cudaStream_t);
+static bool dsv41_flashinfer_requested(){
+    const char *value=std::getenv("LLAMA_DSV41_FLASHINFER_MXFP4");
+    return value&&std::strcmp(value,"1")==0;
+}
+static dsv41_flashinfer_fn dsv41_flashinfer_bridge(){
+    static dsv41_flashinfer_fn function=[](){
+```
+
+Source: `engines/streaming-llama/prefill_llama.cpp/src/llama-dsv41-executor.cpp:1514`. Unset read: NULL from getenv; the literal consumer below supplies any fallback.
+
+```text
+        const auto expert_cublas_before=expert.expert_f16_cublas?ggml_backend_cuda_dsv41_expert_cublas_queued():0;
+        const auto expert_fp4_before=(expert.expert_mxfp4||stored_fp4)?ggml_backend_cuda_native_mxfp4_routed_queued():0;
+        const bool flashinfer_fp4=stored_fp4&&std::getenv("LLAMA_DSV41_FLASHINFER_MXFP4")&&std::string(std::getenv("LLAMA_DSV41_FLASHINFER_MXFP4"))=="1";
+        const auto flashinfer_fp4_before=flashinfer_fp4?ggml_backend_cuda_dsv41_flashinfer_queued():0;
+        const auto hc_expand_before=ggml_backend_cuda_dsv41_hc_expand_queued();
+        const auto hc_bf16_before=expert.hc_bf16_epilogue?ggml_backend_cuda_dsv41_hc_bf16_queued():0;
+        const auto hc_half_before=hc_projection_f16_gemm?ggml_backend_cuda_dsv41_hc_half_queued():0;
+```
+
+Source: `engines/streaming-llama/prefill_llama.cpp/src/llama-dsv41-flashinfer-budget.h:8`. Unset read: NULL from getenv; the literal consumer below supplies any fallback.
+
+```text
+namespace llama_dsv41_flashinfer {
+constexpr uint64_t reserve_bytes=3328ull*1024*1024;
+inline bool requested(){const char *v=std::getenv("LLAMA_DSV41_FLASHINFER_MXFP4");return v&&!std::strcmp(v,"1");}
+inline uint64_t workspace_bytes(uint64_t n,uint64_t k,uint64_t rows){
+    (void)n;(void)k;(void)rows;
+    // GGML legacy-pool allocation look-ahead, plus AOT module headroom.
+    return ggml_dsv41_flashinfer::align256((ggml_dsv41_flashinfer::workspace_bytes+255)*105/100+1)+16ull*1024*1024;
+```
+
+### LLAMA_DSV41_FLASHINFER_MXFP4_DLL
+
+Absolute path to the optional ABI2 FlashInfer AOT bridge DLL. Loaded only when the W4A8 experiment is enabled; missing or mismatched bridge fails loudly.
+
+Scope: rtx-llama. Class: advanced.
+
+Source: `engines/streaming-llama/prefill_llama.cpp/ggml/src/ggml-cuda/dsv41-flashinfer.cuh:19`. Unset read: NULL from getenv; the literal consumer below supplies any fallback.
+
+```text
+    static dsv41_flashinfer_fn function=[](){
+#ifdef _WIN32
+        const char *path=std::getenv("LLAMA_DSV41_FLASHINFER_MXFP4_DLL");
+        GGML_ASSERT(path&&path[0]&&"Explicit FlashInfer bridge DLL path required");
+        GGML_ASSERT((path[1]==':'||path[0]=='\\')&&"FlashInfer DLL path must be absolute");
+        HMODULE library=LoadLibraryExA(path,nullptr,LOAD_LIBRARY_SEARCH_DLL_LOAD_DIR|LOAD_LIBRARY_SEARCH_DEFAULT_DIRS);
+        GGML_ASSERT(library&&"FlashInfer bridge DLL failed to load");
+```
+
 ### LLAMA_DSV41_GATHER_HALF
 
 LLAMA_DSV41_GATHER_HALF: advanced engine setting; built-in default retained
@@ -67223,7 +72963,7 @@ LLAMA_DSV41_INDEX_F32_CUBLAS: advanced engine setting; built-in default retained
 
 Scope: rtx-llama. Class: advanced.
 
-Source: `engines/streaming-llama/prefill_llama.cpp/src/llama-dsv41-executor.cpp:92`. Unset read: NULL from getenv; the literal consumer below supplies any fallback.
+Source: `engines/streaming-llama/prefill_llama.cpp/src/llama-dsv41-executor.cpp:93`. Unset read: NULL from getenv; the literal consumer below supplies any fallback.
 
 ```text
 }
@@ -67235,7 +72975,7 @@ bool index_f32_cublas_enabled(){
 bool query_source(uint32_t layer){return layer==2||layer==8||layer==14||layer==20||layer==24||layer==28||layer==32||layer==36;}
 ```
 
-Source: `engines/streaming-llama/prefill_llama.cpp/tools/dsv41-prefill/main.cpp:373`. Unset read: Wrapper/conditional default: see the literal call and consumer below.
+Source: `engines/streaming-llama/prefill_llama.cpp/tools/dsv41-prefill/main.cpp:375`. Unset read: Wrapper/conditional default: see the literal call and consumer below.
 
 ```text
             args.count("--index-cublas-device-bytes")&&integer(args.at("--index-cublas-device-bytes"))>=64ull*1024*1024),
@@ -67253,7 +72993,7 @@ LLAMA_DSV41_MUL_F16_STORE: qualified preset/runtime setting; override for a diff
 
 Scope: rtx-llama. Class: preset.
 
-Source: `engines/streaming-llama/prefill_llama.cpp/src/llama-dsv41-executor.cpp:887`. Unset read: NULL from getenv; the literal consumer below supplies any fallback.
+Source: `engines/streaming-llama/prefill_llama.cpp/src/llama-dsv41-executor.cpp:911`. Unset read: NULL from getenv; the literal consumer below supplies any fallback.
 
 ```text
         const bool rope_inplace=std::getenv("LLAMA_DSV41_ROPE_INPLACE")&&std::string(std::getenv("LLAMA_DSV41_ROPE_INPLACE"))=="1";
@@ -67325,7 +73065,7 @@ LLAMA_DSV41_ROPE_INPLACE: qualified preset/runtime setting; override for a diffe
 
 Scope: rtx-llama. Class: preset.
 
-Source: `engines/streaming-llama/prefill_llama.cpp/src/llama-dsv41-executor.cpp:885`. Unset read: NULL from getenv; the literal consumer below supplies any fallback.
+Source: `engines/streaming-llama/prefill_llama.cpp/src/llama-dsv41-executor.cpp:909`. Unset read: NULL from getenv; the literal consumer below supplies any fallback.
 
 ```text
         } probe{in,out,prepare_started};
@@ -67337,13 +73077,31 @@ Source: `engines/streaming-llama/prefill_llama.cpp/src/llama-dsv41-executor.cpp:
         require(!mul_f16_store||!workspace||!workspace->cache_layouts,"F16 route-weight store fusion requires allocator-only graph mode");
 ```
 
+### LLAMA_DSV41_ROUTE_HISTOGRAM
+
+Diagnostic DSV4.1 per-tile counts for all384 routed experts. Retains and reads the actual top-six ids after synchronization; fresh graph bindings required. Do not mix diagnostic throughput into headline measurements.
+
+Scope: rtx-llama. Class: advanced.
+
+Source: `engines/streaming-llama/prefill_llama.cpp/src/llama-dsv41-executor.cpp:877`. Unset read: NULL from getenv; the literal consumer below supplies any fallback.
+
+```text
+    try{
+        auto expert=requested_expert;
+        const bool route_histogram=std::getenv("LLAMA_DSV41_ROUTE_HISTOGRAM")&&std::string(std::getenv("LLAMA_DSV41_ROUTE_HISTOGRAM"))=="1";
+        require(!route_histogram||!workspace||!workspace->cache_layouts,"Routing histogram requires fresh graph bindings");
+        const bool stored_fp4=std::getenv("LLAMA_DSV41_STORED_MXFP4")&&std::string(std::getenv("LLAMA_DSV41_STORED_MXFP4"))=="1";
+        if(stored_fp4){
+            require(w.ffn.gate->type==GGML_TYPE_MXFP4&&w.ffn.up->type==GGML_TYPE_MXFP4&&w.ffn.down->type==GGML_TYPE_MXFP4,
+```
+
 ### LLAMA_DSV41_SKIP_UNUSED_TILE_PIN
 
 LLAMA_DSV41_SKIP_UNUSED_TILE_PIN: qualified preset/runtime setting; override for a different memory or arithmetic plan
 
 Scope: rtx-llama. Class: preset.
 
-Source: `engines/streaming-llama/prefill_llama.cpp/src/llama-dsv41-executor.cpp:918`. Unset read: NULL from getenv; the literal consumer below supplies any fallback.
+Source: `engines/streaming-llama/prefill_llama.cpp/src/llama-dsv41-executor.cpp:942`. Unset read: NULL from getenv; the literal consumer below supplies any fallback.
 
 ```text
             (void)d.row(0);(void)d.row(in.count-1);
@@ -67353,6 +73111,36 @@ Source: `engines/streaming-llama/prefill_llama.cpp/src/llama-dsv41-executor.cpp:
                 resident->full()&&!resident->spilled(in.start)&&defer_hidden_readback&&export_hidden_after_head&&
                 in.layer>0&&in.layer<40&&!query_source(in.layer)&&in.layer!=20;
             pinned->current_bank_copies_forbidden=skip_tile_pin;
+```
+
+### LLAMA_DSV41_STORED_MXFP4
+
+Opt-in stored MXFP4 routed-expert tensor-core experiment; requires uncaptured dispatch witnesses. Lossy Q4 requants remain speed proxies.
+
+Scope: rtx-llama. Class: advanced.
+
+Source: `engines/streaming-llama/prefill_llama.cpp/src/llama-dsv41-executor.cpp:879`. Unset read: NULL from getenv; the literal consumer below supplies any fallback.
+
+```text
+        const bool route_histogram=std::getenv("LLAMA_DSV41_ROUTE_HISTOGRAM")&&std::string(std::getenv("LLAMA_DSV41_ROUTE_HISTOGRAM"))=="1";
+        require(!route_histogram||!workspace||!workspace->cache_layouts,"Routing histogram requires fresh graph bindings");
+        const bool stored_fp4=std::getenv("LLAMA_DSV41_STORED_MXFP4")&&std::string(std::getenv("LLAMA_DSV41_STORED_MXFP4"))=="1";
+        if(stored_fp4){
+            require(w.ffn.gate->type==GGML_TYPE_MXFP4&&w.ffn.up->type==GGML_TYPE_MXFP4&&w.ffn.down->type==GGML_TYPE_MXFP4,
+                    "Stored FP4 experiment requires the complete MXFP4 expert triplet");
+            require(!expert.expert_mxfp4&&!expert.expert_f16_cublas&&!expert.sorted_expert_routing&&
+```
+
+Source: `engines/streaming-llama/prefill_llama.cpp/tools/dsv41-prefill/main.cpp:555`. Unset read: NULL from getenv; the literal consumer below supplies any fallback.
+
+```text
+        const uint64_t backend_reserve=args.count("--backend-temporary-reserve-bytes")?number("--backend-temporary-reserve-bytes"):gib;
+        const bool flashinfer_reserve=llama_dsv41_flashinfer::requested()&&pair_ffn&&
+            std::getenv("LLAMA_DSV41_STORED_MXFP4")&&std::string(std::getenv("LLAMA_DSV41_STORED_MXFP4"))=="1";
+        require(backend_reserve==gib||(backend_reserve==768ull*1024*1024&&pair_ffn)||
+            (flashinfer_reserve&&backend_reserve==llama_dsv41_flashinfer::reserve_bytes),"Backend reserve must match the explicit arithmetic/workspace plan");
+        require(!flashinfer_reserve||backend_reserve==llama_dsv41_flashinfer::reserve_bytes,"FlashInfer requires its bounded workspace inside the existing graph device cap");
+        const auto output_volume=native_file::volume(path("--payload"));
 ```
 
 ### LLAMA_DSV41_TOPK_RADIX
@@ -67373,7 +73161,7 @@ static bool dsv41_topk_radix_enabled(const int tile_size, const int k) {
 #endif
 ```
 
-Source: `engines/streaming-llama/prefill_llama.cpp/src/llama-dsv41-executor.cpp:1458`. Unset read: NULL from getenv; the literal consumer below supplies any fallback.
+Source: `engines/streaming-llama/prefill_llama.cpp/src/llama-dsv41-executor.cpp:1495`. Unset read: NULL from getenv; the literal consumer below supplies any fallback.
 
 ```text
         const auto dense_before=expert.dense_inputs_f16?ggml_backend_cuda_dsv41_dense_half_queued():0;
@@ -69797,6 +75585,24 @@ Source: `engines/streaming-llama/prefill_llama.cpp/ggml/src/ggml-cuda/fattn.cu:4
         (cc >= GGML_CUDA_CC_BLACKWELL) && (DKQ == 576);
 ```
 
+### LLAMA_FORCE_MLA_STRATEGY_A
+
+Advanced backend control LLAMA_FORCE_MLA_STRATEGY_A. Set explicitly only for the selected backend; its literal read and fallback are documented below.
+
+Scope: mac-llama. Class: advanced.
+
+Source: `engines/streaming-llama/prefill_llama.cpp/tools/decode-receiver/main.cpp:2688`. Unset read: NULL from getenv; the literal consumer below supplies any fallback.
+
+```text
+    const bool is_iswa = (llama_model_n_swa(model) > 0);
+    const bool is_hybrid = llama_model_is_hybrid(model);
+    const char * force_mla_strategy_a_env = std::getenv("LLAMA_FORCE_MLA_STRATEGY_A");
+    const bool force_mla_strategy_a =
+        force_mla_strategy_a_env && force_mla_strategy_a_env[0] != '\0' && force_mla_strategy_a_env[0] != '0';
+    bool use_strategy_b = (!force_mla_strategy_a && is_mla) || is_iswa || is_hybrid;
+    if (sample_from_prefill_logits) {
+```
+
 ### LLAMA_GALLOC_NO_FREE_REUSE
 
 LLAMA_GALLOC_NO_FREE_REUSE: advanced engine setting; built-in default retained
@@ -70065,6 +75871,84 @@ Source: `engines/streaming-llama/prefill_llama.cpp/src/llama-kv-cache.cpp:2643`.
     if (trace) {
         fprintf(stderr, "*** STATE_WRITE: enter seq_id=%d n_stream=%u v_cells.size()=%zu layers=%zu\n",
             (int) seq_id, n_stream, v_cells.size(), layers.size());
+```
+
+### LLAMA_HANDOFF_PREFIX_BACKOFF
+
+Advanced backend control LLAMA_HANDOFF_PREFIX_BACKOFF. Set explicitly only for the selected backend; its literal read and fallback are documented below.
+
+Scope: mac-llama. Class: advanced.
+
+Source: `engines/streaming-llama/prefill_llama.cpp/tools/decode-receiver/main.cpp:1378`. Unset read: NULL from getenv; the literal consumer below supplies any fallback.
+
+```text
+            }
+        }
+        if (const char * env = std::getenv("LLAMA_HANDOFF_PREFIX_BACKOFF")) {
+            const int parsed = std::atoi(env);
+            if (parsed > 0) {
+                const uint32_t backoff = (uint32_t) parsed;
+                const uint32_t adjusted = logical_prefix > backoff ? (logical_prefix - backoff) : 0u;
+```
+
+### LLAMA_HANDOFF_SAMPLE_PREFILL_LOGITS
+
+Advanced backend control LLAMA_HANDOFF_SAMPLE_PREFILL_LOGITS. Set explicitly only for the selected backend; its literal read and fallback are documented below.
+
+Scope: mac-llama. Class: advanced.
+
+Source: `engines/streaming-llama/prefill_llama.cpp/tools/decode-receiver/main.cpp:2651`. Unset read: NULL from getenv; the literal consumer below supplies any fallback.
+
+```text
+    }
+    common_sampler_ptr smpl(common_sampler_init(model, sparams));
+    const char * sample_prefill_logits_env = std::getenv("LLAMA_HANDOFF_SAMPLE_PREFILL_LOGITS");
+    const bool sample_from_prefill_logits =
+        prompt_applied &&
+        sample_prefill_logits_env &&
+        sample_prefill_logits_env[0] != '\0' &&
+```
+
+### LLAMA_HANDOFF_SUFFIX_BATCH
+
+Advanced backend control LLAMA_HANDOFF_SUFFIX_BATCH. Set explicitly only for the selected backend; its literal read and fallback are documented below.
+
+Scope: mac-llama. Class: advanced.
+
+Source: `engines/streaming-llama/prefill_llama.cpp/tools/decode-receiver/main.cpp:1247`. Unset read: NULL from getenv; the literal consumer below supplies any fallback.
+
+```text
+    // 1243-token suffix, costing ~25 s of avoidable Mac prefill latency.
+    int n_batch = std::max(1, (int) llama_n_batch(ctx));
+    if (const char * env = std::getenv("LLAMA_HANDOFF_SUFFIX_BATCH")) {
+        const int parsed = std::atoi(env);
+        if (parsed > 0) {
+            n_batch = parsed;
+        }
+```
+
+Source: `engines/streaming-llama/prefill_llama.cpp/tools/decode-receiver/main.cpp:1477`. Unset read: NULL from getenv; the literal consumer below supplies any fallback.
+
+```text
+        // round-trip count for typical suffix sizes.
+        int n_batch = std::max(1, (int) llama_n_batch(ctx));
+        if (const char * env = std::getenv("LLAMA_HANDOFF_SUFFIX_BATCH")) {
+            const int parsed = std::atoi(env);
+            if (parsed > 0) {
+                n_batch = parsed;
+            }
+```
+
+Source: `engines/streaming-llama/prefill_llama.cpp/tools/decode-receiver/main.cpp:1660`. Unset read: NULL from getenv; the literal consumer below supplies any fallback.
+
+```text
+        // unnecessary round-trip count for typical suffix sizes.
+        int n_batch = std::max(1, (int) llama_n_batch(ctx));
+        if (const char * env = std::getenv("LLAMA_HANDOFF_SUFFIX_BATCH")) {
+            const int parsed = std::atoi(env);
+            if (parsed > 0) {
+                n_batch = parsed;
+            }
 ```
 
 ### LLAMA_IMG_PROMPT_DIRECT
@@ -71543,6 +77427,654 @@ Source: `engines/streaming-llama/prefill_llama.cpp/src/llama-context.cpp:1575`. 
         "LLAMA_MLA_SPARSE_PREFIX",
 ```
 
+### LLAMA_MLX_ALLOW_NO_TAIL
+
+Advanced backend control LLAMA_MLX_ALLOW_NO_TAIL. Set explicitly only for the selected backend; its literal read and fallback are documented below.
+
+Scope: mac-mlx. Class: advanced.
+
+Source: `engines/mlx-receiver/mlx_token_stream_server.py:1721`. Unset read: '0'.
+
+```text
+            _safe_inject_cells = 1000000
+            _max_safe_tail = int(os.environ.get('LLAMA_MLX_MAX_SAFE_TAIL', '2048'))
+            _allow_no_tail = os.environ.get('LLAMA_MLX_ALLOW_NO_TAIL', '0') not in ('', '0')
+            _np = len(prompt_token_ids)
+            _bypass_reason = None
+            if not _enable_streaming:
+                _bypass_reason = 'default-disabled (set LLAMA_MLX_ENABLE_STREAMING_INJECT=1 to opt in)'
+```
+
+### LLAMA_MLX_CACHE_LIMIT_GB
+
+Advanced backend control LLAMA_MLX_CACHE_LIMIT_GB. Set explicitly only for the selected backend; its literal read and fallback are documented below.
+
+Scope: mac-mlx. Class: advanced.
+
+Source: `engines/mlx-receiver/mlx_token_stream_server.py:3282`. Unset read: '24'.
+
+```text
+        del _warmup_cache, _warmup_lang, _warmup_ids, _warmup_out, _warmup_logits
+        mx.clear_cache()
+        _lim_gb = float(os.environ.get('LLAMA_MLX_CACHE_LIMIT_GB', '24') or 24)
+        try:
+            mx.set_cache_limit(int(_lim_gb * (1 << 30)))
+            sys.stderr.write(f"[mlx-server] Metal buffer pool bounded at {_lim_gb:g} GB (per-request clear {('ON' if _clear_cache_per_request() else 'off')})\n")
+            sys.stderr.flush()
+```
+
+### LLAMA_MLX_CLEAR_CACHE_PER_REQUEST
+
+Advanced backend control LLAMA_MLX_CLEAR_CACHE_PER_REQUEST. Set explicitly only for the selected backend; its literal read and fallback are documented below.
+
+Scope: mac-mlx. Class: advanced.
+
+Source: `engines/mlx-receiver/mlx_token_stream_server.py:505`. Unset read: ''.
+
+```text
+
+def _clear_cache_per_request() -> bool:
+    return os.environ.get('LLAMA_MLX_CLEAR_CACHE_PER_REQUEST', '') not in ('', '0')
+
+def _kva_prompt_count_hash(kva_ref) -> Tuple[int, int]:
+    close_after = False
+    if isinstance(kva_ref, (bytes, bytearray, memoryview)):
+```
+
+### LLAMA_MLX_ENABLE_STREAMING_INJECT
+
+Advanced backend control LLAMA_MLX_ENABLE_STREAMING_INJECT. Set explicitly only for the selected backend; its literal read and fallback are documented below.
+
+Scope: mac-mlx. Class: advanced.
+
+Source: `engines/mlx-receiver/mlx_token_stream_server.py:1718`. Unset read: '1'.
+
+```text
+                _img_positions = []
+        if kv_state_bytes:
+            _enable_streaming = os.environ.get('LLAMA_MLX_ENABLE_STREAMING_INJECT', '1') not in ('', '0')
+            _safe_inject_cells = 1000000
+            _max_safe_tail = int(os.environ.get('LLAMA_MLX_MAX_SAFE_TAIL', '2048'))
+            _allow_no_tail = os.environ.get('LLAMA_MLX_ALLOW_NO_TAIL', '0') not in ('', '0')
+            _np = len(prompt_token_ids)
+```
+
+### LLAMA_MLX_ENGRAM_CACHE_FRACTION
+
+Advanced backend control LLAMA_MLX_ENGRAM_CACHE_FRACTION. Set explicitly only for the selected backend; its literal read and fallback are documented below.
+
+Scope: mac-mlx. Class: advanced.
+
+Source: `vendor/mac-mlx/mlx_vlm/models/deepseek_v41/engram.py:834`. Unset read: str(DEFAULT_CACHE_FRACTION).
+
+```text
+        raise ValueError("LLAMA_MLX_ENGRAM_CACHE_GB must be finite and nonnegative")
+    if fraction is None:
+        fraction = float(os.environ.get("LLAMA_MLX_ENGRAM_CACHE_FRACTION",
+                                        str(DEFAULT_CACHE_FRACTION)) or DEFAULT_CACHE_FRACTION)
+    if not 0 <= fraction <= 1:
+        raise ValueError("LLAMA_MLX_ENGRAM_CACHE_FRACTION must be in [0, 1]")
+    if margin_gb is None:
+```
+
+Source: `vendor/mac-mlx/mlx_vlm/models/deepseek_v41/engram.py:988`. Unset read: str(DEFAULT_CACHE_FRACTION).
+
+```text
+                "budget_mode": "auto" if cache_budget_bytes is None else "per_table",
+                "budget_decision": decision, "maps_bytes": self.num_embeddings * 4,
+                "cache_fraction": float(os.environ.get("LLAMA_MLX_ENGRAM_CACHE_FRACTION",
+                                                       str(DEFAULT_CACHE_FRACTION))),
+                "cache_margin_gb": _env_float("LLAMA_MLX_ENGRAM_CACHE_MARGIN_GB", DEFAULT_CACHE_MARGIN_GB),
+                "cache_reserve_gb": _env_float("LLAMA_MLX_ENGRAM_CACHE_RESERVE_GB", DEFAULT_CACHE_RESERVE_GB),
+                "cache_cap_gb": os.environ.get("LLAMA_MLX_ENGRAM_CACHE_GB")}
+```
+
+### LLAMA_MLX_ENGRAM_CACHE_GB
+
+Advanced backend control LLAMA_MLX_ENGRAM_CACHE_GB. Set explicitly only for the selected backend; its literal read and fallback are documented below.
+
+Scope: mac-mlx. Class: advanced.
+
+Source: `vendor/mac-mlx/mlx_vlm/models/deepseek_v41/engram.py:829`. Unset read: ''.
+
+```text
+    fraction near 1.0 from promising memory the box does not have; the wired term is what stops it
+    from promising memory Metal will not map."""
+    env = os.environ.get("LLAMA_MLX_ENGRAM_CACHE_GB", "").strip()
+    cap = float(env) if env else None
+    if cap is not None and (not np.isfinite(cap) or cap < 0):
+        raise ValueError("LLAMA_MLX_ENGRAM_CACHE_GB must be finite and nonnegative")
+    if fraction is None:
+```
+
+Source: `vendor/mac-mlx/mlx_vlm/models/deepseek_v41/engram.py:992`. Unset read: None.
+
+```text
+                "cache_margin_gb": _env_float("LLAMA_MLX_ENGRAM_CACHE_MARGIN_GB", DEFAULT_CACHE_MARGIN_GB),
+                "cache_reserve_gb": _env_float("LLAMA_MLX_ENGRAM_CACHE_RESERVE_GB", DEFAULT_CACHE_RESERVE_GB),
+                "cache_cap_gb": os.environ.get("LLAMA_MLX_ENGRAM_CACHE_GB")}
+
+    def warm(self) -> int:
+        count = self.rows_cache.warm() if self.rows_cache is not None else 0
+        if self._report and self.rows_cache is not None:
+```
+
+### LLAMA_MLX_ENGRAM_CACHE_MARGIN_GB
+
+Advanced backend control LLAMA_MLX_ENGRAM_CACHE_MARGIN_GB. Set explicitly only for the selected backend; its literal read and fallback are documented below.
+
+Scope: mac-mlx. Class: advanced.
+
+Source: `vendor/mac-mlx/mlx_vlm/models/deepseek_v41/engram.py:839`. Unset read: Wrapper/conditional default: see the literal call and consumer below.
+
+```text
+        raise ValueError("LLAMA_MLX_ENGRAM_CACHE_FRACTION must be in [0, 1]")
+    if margin_gb is None:
+        margin_gb = _env_float("LLAMA_MLX_ENGRAM_CACHE_MARGIN_GB", DEFAULT_CACHE_MARGIN_GB)
+    if reserve_gb is None:
+        reserve_gb = _env_float("LLAMA_MLX_ENGRAM_CACHE_RESERVE_GB", DEFAULT_CACHE_RESERVE_GB)
+    limit = 0
+    try:
+```
+
+Source: `vendor/mac-mlx/mlx_vlm/models/deepseek_v41/engram.py:990`. Unset read: Wrapper/conditional default: see the literal call and consumer below.
+
+```text
+                "cache_fraction": float(os.environ.get("LLAMA_MLX_ENGRAM_CACHE_FRACTION",
+                                                       str(DEFAULT_CACHE_FRACTION))),
+                "cache_margin_gb": _env_float("LLAMA_MLX_ENGRAM_CACHE_MARGIN_GB", DEFAULT_CACHE_MARGIN_GB),
+                "cache_reserve_gb": _env_float("LLAMA_MLX_ENGRAM_CACHE_RESERVE_GB", DEFAULT_CACHE_RESERVE_GB),
+                "cache_cap_gb": os.environ.get("LLAMA_MLX_ENGRAM_CACHE_GB")}
+
+    def warm(self) -> int:
+```
+
+### LLAMA_MLX_ENGRAM_CACHE_QUIET
+
+Advanced backend control LLAMA_MLX_ENGRAM_CACHE_QUIET. Set explicitly only for the selected backend; its literal read and fallback are documented below.
+
+Scope: mac-mlx. Class: advanced.
+
+Source: `vendor/mac-mlx/mlx_vlm/models/deepseek_v41/engram.py:909`. Unset read: ''.
+
+```text
+    """Total model cache budget, printing the decision line unless LLAMA_MLX_ENGRAM_CACHE_QUIET."""
+    decision = cache_budget_decision(margin_gb, reserve_gb)
+    if os.environ.get("LLAMA_MLX_ENGRAM_CACHE_QUIET", "").strip() not in ("1", "true", "yes"):
+        print(format_budget_decision(decision), flush=True)
+    return decision["budget_bytes"]
+
+
+```
+
+Source: `vendor/mac-mlx/mlx_vlm/models/deepseek_v41/engram.py:976`. Unset read: ''.
+
+```text
+            if cache_budget_bytes is None:
+                decision = cache_budget_decision()
+                if os.environ.get("LLAMA_MLX_ENGRAM_CACHE_QUIET", "").strip() not in ("1", "true", "yes"):
+                    print(format_budget_decision(decision), flush=True)
+                total = decision["budget_bytes"]
+                budget = total // count
+            else:
+```
+
+### LLAMA_MLX_ENGRAM_CACHE_RESERVE_GB
+
+Advanced backend control LLAMA_MLX_ENGRAM_CACHE_RESERVE_GB. Set explicitly only for the selected backend; its literal read and fallback are documented below.
+
+Scope: mac-mlx. Class: advanced.
+
+Source: `vendor/mac-mlx/mlx_vlm/models/deepseek_v41/engram.py:841`. Unset read: Wrapper/conditional default: see the literal call and consumer below.
+
+```text
+        margin_gb = _env_float("LLAMA_MLX_ENGRAM_CACHE_MARGIN_GB", DEFAULT_CACHE_MARGIN_GB)
+    if reserve_gb is None:
+        reserve_gb = _env_float("LLAMA_MLX_ENGRAM_CACHE_RESERVE_GB", DEFAULT_CACHE_RESERVE_GB)
+    limit = 0
+    try:
+        limit = _sysctl_int("iogpu.wired_limit_mb") * 1024 * 1024
+    except Exception:  # noqa: BLE001
+```
+
+Source: `vendor/mac-mlx/mlx_vlm/models/deepseek_v41/engram.py:991`. Unset read: Wrapper/conditional default: see the literal call and consumer below.
+
+```text
+                                                       str(DEFAULT_CACHE_FRACTION))),
+                "cache_margin_gb": _env_float("LLAMA_MLX_ENGRAM_CACHE_MARGIN_GB", DEFAULT_CACHE_MARGIN_GB),
+                "cache_reserve_gb": _env_float("LLAMA_MLX_ENGRAM_CACHE_RESERVE_GB", DEFAULT_CACHE_RESERVE_GB),
+                "cache_cap_gb": os.environ.get("LLAMA_MLX_ENGRAM_CACHE_GB")}
+
+    def warm(self) -> int:
+        count = self.rows_cache.warm() if self.rows_cache is not None else 0
+```
+
+### LLAMA_MLX_ENGRAM_REPORT
+
+Advanced backend control LLAMA_MLX_ENGRAM_REPORT. Set explicitly only for the selected backend; its literal read and fallback are documented below.
+
+Scope: mac-mlx. Class: advanced.
+
+Source: `vendor/mac-mlx/mlx_vlm/models/deepseek_v41/engram.py:945`. Unset read: ''.
+
+```text
+        self._lookup_tokens = 0
+        self._lookup_rows = 0
+        self._report = os.environ.get("LLAMA_MLX_ENGRAM_REPORT", "") == "1"
+        self._last_phase = None
+        self.wkv = nn.Linear(self.n_cols * self.head_dim, self.dim * (self.hc_mult + 1), bias=False)
+        self.q_weight = mx.ones((self.hc_mult, self.dim), dtype=mx.bfloat16)
+        self.k_weight = mx.ones((self.hc_mult, self.dim), dtype=mx.bfloat16)
+```
+
+### LLAMA_MLX_ENGRAM_RUN_ID
+
+Advanced backend control LLAMA_MLX_ENGRAM_RUN_ID. Set explicitly only for the selected backend; its literal read and fallback are documented below.
+
+Scope: mac-mlx. Class: advanced.
+
+Source: `vendor/mac-mlx/mlx_vlm/models/deepseek_v41/engram.py:1017`. Unset read: None.
+
+```text
+    def _report_snapshot(self, event: str) -> None:
+        """Opt-in diagnostics at load/phase boundaries, never device scalar reads per step."""
+        record = {"event": event, "run_id": os.environ.get("LLAMA_MLX_ENGRAM_RUN_ID"),
+                  **self.stats(), **process_memory_io()}
+        if event == "attached":
+            _, counters, _ = host_available_bytes()
+            record["host_wired_bytes"] = counters.get("wired")
+```
+
+### LLAMA_MLX_ENGRAM_SOURCE
+
+Advanced backend control LLAMA_MLX_ENGRAM_SOURCE. Set explicitly only for the selected backend; its literal read and fallback are documented below.
+
+Scope: mac-mlx. Class: advanced.
+
+Source: `engines/mlx-receiver/mlx_token_stream_server.py:144`. Unset read: None.
+
+```text
+    import mlx.core as mx
+    import mlx.nn as nn
+    source = (os.environ.get('LLAMA_MLX_ENGRAM_SOURCE') or raw.get('engram_source', raw.get('text_config', {}).get('engram_source', 'hybrid'))).strip().lower()
+
+    def _read_vm_stat() -> str:
+        try:
+            return subprocess.check_output(['vm_stat'], text=True)
+```
+
+Source: `vendor/mac-mlx/mlx_vlm/models/deepseek_v41/engram.py:935`. Unset read: None.
+
+```text
+        self.n_cols = layout.n_cols
+        self.num_embeddings = layout.num_embeddings[self.layer_hash_index]
+        self.source = (os.environ.get("LLAMA_MLX_ENGRAM_SOURCE") or getattr(config, "engram_source", "hybrid") or "hybrid").strip().lower()
+        if self.source not in ("ram", "nvme", "hybrid"):
+            raise ValueError(f"engram_source must be ram, nvme or hybrid, got {self.source!r}")
+        n_chunks = int(getattr(config, "engram_ram_chunks", 8) or 8)
+        self.embed = EngramTableRAM(self.num_embeddings, self.head_dim, n_chunks) if self.source == "ram" else None
+```
+
+### LLAMA_MLX_FIRST_FWD_PROBE
+
+Advanced backend control LLAMA_MLX_FIRST_FWD_PROBE. Set explicitly only for the selected backend; its literal read and fallback are documented below.
+
+Scope: mac-mlx. Class: advanced.
+
+Source: `engines/mlx-receiver/mlx_token_stream_server.py:404`. Unset read: ''.
+
+```text
+
+def _first_fwd_probe_enabled() -> bool:
+    if os.environ.get('LLAMA_MLX_FIRST_FWD_PROBE', '') not in ('', '0'):
+        return True
+    try:
+        return os.path.exists(os.path.expanduser('~/.streaming-studio/first_fwd_probe'))
+    except Exception:
+```
+
+### LLAMA_MLX_FULL_KV_LOGIT_TAIL
+
+Advanced backend control LLAMA_MLX_FULL_KV_LOGIT_TAIL. Set explicitly only for the selected backend; its literal read and fallback are documented below.
+
+Scope: mac-mlx. Class: advanced.
+
+Source: `engines/mlx-receiver/mlx_token_stream_server.py:1903`. Unset read: '1'.
+
+```text
+                            _orig_max = getattr(_rope_scaling, 'original_max_position_embeddings', cell_count)
+                        safe_cells = min(cell_count, int(_orig_max))
+                    _force_logit_tail = os.environ.get('LLAMA_MLX_FULL_KV_LOGIT_TAIL', '1') not in ('', '0')
+                    if _force_logit_tail and safe_cells >= n_prompt and (n_prompt > 0):
+                        safe_cells = max(0, n_prompt - max(1, int(os.environ.get('LLAMA_MLX_TAIL_REPREFILL_N', 1))))
+                        sys.stderr.write('[mlx-server] full-KV inject: retaining 1-token MLX tail to compute first generated token logits\n')
+                        sys.stderr.flush()
+```
+
+### LLAMA_MLX_INJECT_DIAG
+
+Advanced backend control LLAMA_MLX_INJECT_DIAG. Set explicitly only for the selected backend; its literal read and fallback are documented below.
+
+Scope: mac-mlx. Class: advanced.
+
+Source: `engines/mlx-receiver/mlx_token_stream_server.py:1934`. Unset read: ''.
+
+```text
+                    _validate_kv_injection_cache(cache, safe_cells)
+                    cell_count = safe_cells
+                    if os.environ.get('LLAMA_MLX_INJECT_DIAG', '') not in ('', '0'):
+                        try:
+                            _c0m = cache[0].caches[0] if hasattr(cache[0], 'caches') else cache[0]
+                            _kl = _c0m.keys
+                            _kp = _c0m.values
+```
+
+### LLAMA_MLX_KEEP_WARM
+
+Advanced backend control LLAMA_MLX_KEEP_WARM. Set explicitly only for the selected backend; its literal read and fallback are documented below.
+
+Scope: mac-mlx. Class: advanced.
+
+Source: `engines/mlx-receiver/kv_handoff.py:141`. Unset read: '1'.
+
+```text
+
+def _keep_warm_enabled() -> bool:
+    return os.environ.get('LLAMA_MLX_KEEP_WARM', '1') not in ('', '0')
+
+def _keep_warm_period_s() -> float:
+    try:
+        return max(0.05, float(os.environ.get('LLAMA_MLX_KEEP_WARM_S', '1.0') or 1.0))
+```
+
+### LLAMA_MLX_KEEP_WARM_S
+
+Advanced backend control LLAMA_MLX_KEEP_WARM_S. Set explicitly only for the selected backend; its literal read and fallback are documented below.
+
+Scope: mac-mlx. Class: advanced.
+
+Source: `engines/mlx-receiver/kv_handoff.py:145`. Unset read: '1.0'.
+
+```text
+def _keep_warm_period_s() -> float:
+    try:
+        return max(0.05, float(os.environ.get('LLAMA_MLX_KEEP_WARM_S', '1.0') or 1.0))
+    except ValueError:
+        return 1.0
+
+def _start_keep_warm_thread() -> None:
+```
+
+### LLAMA_MLX_KIMI_VISION
+
+Advanced backend control LLAMA_MLX_KIMI_VISION. Set explicitly only for the selected backend; its literal read and fallback are documented below.
+
+Scope: mac-mlx. Class: advanced.
+
+Source: `engines/mlx-receiver/mlx_token_stream_server.py:1181`. Unset read: '1'.
+
+```text
+        if not raw_config.get('vision_config') or not vision_weights:
+            return
+        if os.environ.get('LLAMA_MLX_KIMI_VISION', '1') in ('', '0'):
+            self._kimi_vision_error = 'image input disabled (LLAMA_MLX_KIMI_VISION=0)'
+            return
+        try:
+            from kimi_vision import KimiVision
+```
+
+### LLAMA_MLX_KVA_WAIT_S
+
+Advanced backend control LLAMA_MLX_KVA_WAIT_S. Set explicitly only for the selected backend; its literal read and fallback are documented below.
+
+Scope: mac-mlx. Class: advanced.
+
+Source: `engines/mlx-receiver/mlx_token_stream_server.py:3058`. Unset read: '600'.
+
+```text
+        if kva_path_shared is not None and (config_prompt_hash or config_prompt_token_count):
+            import time as _time
+            _wait_s = float(os.environ.get('LLAMA_MLX_KVA_WAIT_S', '600'))
+            _poll_s = 0.05
+            _deadline = _time.monotonic() + _wait_s
+            _last_logged_ref = id(kva_path)
+            sys.stderr.write(f'[mlx-server] waiting up to {_wait_s:.0f}s for KVA matching config_hash=0x{config_prompt_hash:016x} count={config_prompt_token_count}\n')
+```
+
+### LLAMA_MLX_K_PE_SCALE
+
+Advanced backend control LLAMA_MLX_K_PE_SCALE. Set explicitly only for the selected backend; its literal read and fallback are documented below.
+
+Scope: mac-mlx. Class: advanced.
+
+Source: `engines/mlx-receiver/kv_converter.py:210`. Unset read: '1.0'.
+
+```text
+    row_elements_mla = kv_lora_rank + qk_rope_head_dim
+    import os as _os
+    k_pe_undo_scale = float(_os.environ.get('LLAMA_MLX_K_PE_SCALE', '1.0'))
+    mv = payload if isinstance(payload, memoryview) else memoryview(payload)
+    for _il in range(n_layer):
+        k_type = read('<i')
+        k_size_row = read('<Q')
+```
+
+### LLAMA_MLX_LCP_REUSE_MIN
+
+Advanced backend control LLAMA_MLX_LCP_REUSE_MIN. Set explicitly only for the selected backend; its literal read and fallback are documented below.
+
+Scope: mac-mlx. Class: advanced.
+
+Source: `engines/mlx-receiver/mlx_token_stream_server.py:1034`. Unset read: '64'.
+
+```text
+
+class MLXSession:
+    _LCP_REUSE_MIN = int(os.environ.get('LLAMA_MLX_LCP_REUSE_MIN', '64'))
+
+    def __init__(self, model_path: str, mtp_mode: str='off', mtp_sidecar: str='auto', mtp_max_draft: int=1, mtp_quantized_sidecar_policy: str='warn', mtp_debug_windows: int=0, mtp_compute_dtype: str='float16', mtp_recurrent_state: str='raw', mtp_schedule: str='reference', mtp_prompt_history: str='committed', mtp_cache_commit: str='replay', mtp_verify_profile: str='safe', mtp_target_token_eval: str='auto', mtp_verify_forward: str='auto', mtp_verify_hidden_eval: str='auto', mtp_history_materialization: str='auto', mtp_share_topk_source: str='internal', mtp_match_trunk_precision: str='auto', mtp_adaptive_depth: str='off', mtp_token_budget: int=0, adapters: Optional[List[str]]=None, token_sidecars: Optional[List[str]]=None, token_sidecar_scale: float=1.0, sampling_profile: Optional[Dict[str, Any]]=None):
+        self.model_path = model_path
+        self._sampling_profile = _merge_sampling_profiles(sampling_profile)
+```
+
+### LLAMA_MLX_MAX_SAFE_TAIL
+
+Advanced backend control LLAMA_MLX_MAX_SAFE_TAIL. Set explicitly only for the selected backend; its literal read and fallback are documented below.
+
+Scope: mac-mlx. Class: advanced.
+
+Source: `engines/mlx-receiver/mlx_token_stream_server.py:1720`. Unset read: '2048'.
+
+```text
+            _enable_streaming = os.environ.get('LLAMA_MLX_ENABLE_STREAMING_INJECT', '1') not in ('', '0')
+            _safe_inject_cells = 1000000
+            _max_safe_tail = int(os.environ.get('LLAMA_MLX_MAX_SAFE_TAIL', '2048'))
+            _allow_no_tail = os.environ.get('LLAMA_MLX_ALLOW_NO_TAIL', '0') not in ('', '0')
+            _np = len(prompt_token_ids)
+            _bypass_reason = None
+            if not _enable_streaming:
+```
+
+### LLAMA_MLX_NO_YARN_TRUNC
+
+Advanced backend control LLAMA_MLX_NO_YARN_TRUNC. Set explicitly only for the selected backend; its literal read and fallback are documented below.
+
+Scope: mac-mlx. Class: advanced.
+
+Source: `engines/mlx-receiver/mlx_token_stream_server.py:1892`. Unset read: '1'.
+
+```text
+                        raise RuntimeError('KV artifact cells exceed the supplied prompt')
+                    cell_count = _delta_base + _incoming_cells
+                    _no_yarn_trunc = os.environ.get('LLAMA_MLX_NO_YARN_TRUNC', '1') not in ('', '0')
+                    _orig_max = cell_count
+                    if _no_yarn_trunc:
+                        safe_cells = cell_count
+                    else:
+```
+
+### LLAMA_MLX_PROMPT_CACHE_DIR
+
+Advanced backend control LLAMA_MLX_PROMPT_CACHE_DIR. Set explicitly only for the selected backend; its literal read and fallback are documented below.
+
+Scope: mac-mlx. Class: advanced.
+
+Source: `engines/mlx-receiver/mlx_token_stream_server.py:1280`. Unset read: ''.
+
+```text
+
+    def _init_prompt_store(self):
+        cache_dir = os.environ.get('LLAMA_MLX_PROMPT_CACHE_DIR', '').strip()
+        if not cache_dir:
+            self._prompt_store = None
+            return
+        try:
+```
+
+### LLAMA_MLX_PROMPT_CACHE_HOT
+
+Advanced backend control LLAMA_MLX_PROMPT_CACHE_HOT. Set explicitly only for the selected backend; its literal read and fallback are documented below.
+
+Scope: mac-mlx. Class: advanced.
+
+Source: `engines/mlx-receiver/mlx_token_stream_server.py:1295`. Unset read: '8'.
+
+```text
+                mlx_lm_ver = ''
+            mkey = model_key_for(self.model_path, quant_cfg, mlx_lm_ver)
+            hot = int(os.environ.get('LLAMA_MLX_PROMPT_CACHE_HOT', '8'))
+            max_gb = float(os.environ.get('LLAMA_MLX_PROMPT_CACHE_MAX_GB', '500'))
+            self._prompt_store = PromptCacheStore(cache_dir, mkey, hot_size=hot, max_gb=max_gb, lcp_reuse_min=self._LCP_REUSE_MIN)
+            sys.stderr.write(f'[mlx-server] prompt-cache store enabled: dir={cache_dir} model_key={mkey} hot={hot} max_gb={max_gb}\n')
+            sys.stderr.flush()
+```
+
+### LLAMA_MLX_PROMPT_CACHE_MAX_GB
+
+Advanced backend control LLAMA_MLX_PROMPT_CACHE_MAX_GB. Set explicitly only for the selected backend; its literal read and fallback are documented below.
+
+Scope: mac-mlx. Class: advanced.
+
+Source: `engines/mlx-receiver/mlx_token_stream_server.py:1296`. Unset read: '500'.
+
+```text
+            mkey = model_key_for(self.model_path, quant_cfg, mlx_lm_ver)
+            hot = int(os.environ.get('LLAMA_MLX_PROMPT_CACHE_HOT', '8'))
+            max_gb = float(os.environ.get('LLAMA_MLX_PROMPT_CACHE_MAX_GB', '500'))
+            self._prompt_store = PromptCacheStore(cache_dir, mkey, hot_size=hot, max_gb=max_gb, lcp_reuse_min=self._LCP_REUSE_MIN)
+            sys.stderr.write(f'[mlx-server] prompt-cache store enabled: dir={cache_dir} model_key={mkey} hot={hot} max_gb={max_gb}\n')
+            sys.stderr.flush()
+        except Exception as e:
+```
+
+### LLAMA_MLX_SKIP_TAIL
+
+Advanced backend control LLAMA_MLX_SKIP_TAIL. Set explicitly only for the selected backend; its literal read and fallback are documented below.
+
+Scope: mac-mlx. Class: advanced.
+
+Source: `engines/mlx-receiver/mlx_token_stream_server.py:2046`. Unset read: '0'.
+
+```text
+                sys.stderr.write(f'[mlx-server] KV inject done in {inject_dt:.2f}s, cell_count={cell_count}\n')
+                sys.stderr.flush()
+                _skip_tail = os.environ.get('LLAMA_MLX_SKIP_TAIL', '0') not in ('', '0')
+                tail_ids = [] if _skip_tail else prompt_token_ids[cell_count:]
+                if tail_ids:
+                    tail_arr = mx.array(tail_ids)
+                    n_tail = len(tail_ids)
+```
+
+### LLAMA_MLX_SWI_MAX_STEPS
+
+Advanced backend control LLAMA_MLX_SWI_MAX_STEPS. Set explicitly only for the selected backend; its literal read and fallback are documented below.
+
+Scope: mac-mlx. Class: advanced.
+
+Source: `engines/mlx-receiver/mlx_token_stream_server.py:2428`. Unset read: str(max(4 * _swi_n_predict, _swi_n_predict + 2048)).
+
+```text
+                swi = SwiState(cfg=swi_config, endthink_ids=list(swi_embed['endthink_ids']), convergence_ids=list(swi_embed['convergence_ids']), termination_ids=list(swi_embed['termination_ids']))
+                _swi_n_predict = max(1, int(max_tokens))
+                _swi_step_cap = int(os.environ.get('LLAMA_MLX_SWI_MAX_STEPS', str(max(4 * _swi_n_predict, _swi_n_predict + 2048))))
+
+                def _swi_forward_ids(tok_id: int):
+                    with mx.stream(gen_stream):
+                        out = lang_swi(mx.array([[int(tok_id)]]), cache=cache)
+```
+
+### LLAMA_MLX_TAIL_REPREFILL_N
+
+Advanced backend control LLAMA_MLX_TAIL_REPREFILL_N. Set explicitly only for the selected backend; its literal read and fallback are documented below.
+
+Scope: mac-mlx. Class: advanced.
+
+Source: `engines/mlx-receiver/mlx_token_stream_server.py:1905`. Unset read: 1.
+
+```text
+                    _force_logit_tail = os.environ.get('LLAMA_MLX_FULL_KV_LOGIT_TAIL', '1') not in ('', '0')
+                    if _force_logit_tail and safe_cells >= n_prompt and (n_prompt > 0):
+                        safe_cells = max(0, n_prompt - max(1, int(os.environ.get('LLAMA_MLX_TAIL_REPREFILL_N', 1))))
+                        sys.stderr.write('[mlx-server] full-KV inject: retaining 1-token MLX tail to compute first generated token logits\n')
+                        sys.stderr.flush()
+                    if safe_cells < cell_count:
+                        sys.stderr.write(f'[mlx-server] truncating injection to {safe_cells} cells (YaRN boundary at {_orig_max}); {cell_count - safe_cells} cells will be re-prefilled\n')
+```
+
+### LLAMA_MLX_TEXT_LM_LOAD
+
+Advanced backend control LLAMA_MLX_TEXT_LM_LOAD. Set explicitly only for the selected backend; its literal read and fallback are documented below.
+
+Scope: mac-mlx. Class: advanced.
+
+Source: `engines/mlx-receiver/mlx_token_stream_server.py:1116`. Unset read: '1'.
+
+```text
+                raise SystemExit(128 + signum)
+            signal.signal(signal.SIGTERM, terminate)
+        prefer_text_lm_requested = os.environ.get('LLAMA_MLX_TEXT_LM_LOAD', '1') not in ('', '0')
+        prefer_text_lm = not is_dsv41 and prefer_text_lm_requested and _has_vlm_text_config(self.model_path)
+        if prefer_text_lm_requested and (not prefer_text_lm):
+            sys.stderr.write('[mlx-server] text MLX-LM loader skipped: checkpoint has no text_config\n')
+            sys.stderr.flush()
+```
+
+### LLAMA_MLX_TEXT_LM_STRICT
+
+Advanced backend control LLAMA_MLX_TEXT_LM_STRICT. Set explicitly only for the selected backend; its literal read and fallback are documented below.
+
+Scope: mac-mlx. Class: advanced.
+
+Source: `engines/mlx-receiver/mlx_token_stream_server.py:1131`. Unset read: '1'.
+
+```text
+                sys.stderr.flush()
+            except Exception as e_text:
+                strict_text = os.environ.get('LLAMA_MLX_TEXT_LM_STRICT', '1') not in ('', '0')
+                if strict_text:
+                    raise RuntimeError(f'Failed Kimi text MLX-LM load: {e_text}')
+                sys.stderr.write(f'[mlx-server] Kimi text MLX-LM load failed: {e_text}; falling back to mlx_vlm full-KV cache path\n')
+                sys.stderr.flush()
+```
+
+### LLAMA_MLX_WIRED_LIMIT_GB
+
+Advanced backend control LLAMA_MLX_WIRED_LIMIT_GB. Set explicitly only for the selected backend; its literal read and fallback are documented below.
+
+Scope: mac-mlx. Class: advanced.
+
+Source: `engines/mlx-receiver/mlx_token_stream_server.py:1084`. Unset read: ''.
+
+```text
+            max_rec = mx.device_info().get('max_recommended_working_set_size', 0)
+            if max_rec <= 0:
+                _env_gb = os.environ.get('LLAMA_MLX_WIRED_LIMIT_GB', '').strip()
+                if _env_gb:
+                    max_rec = int(float(_env_gb) * 1024 ** 3)
+                else:
+                    try:
+```
+
 ### LLAMA_MMQ_ID_ADAPTIVE
 
 LLAMA_MMQ_ID_ADAPTIVE: advanced engine setting; built-in default retained
@@ -71765,6 +78297,54 @@ Source: `engines/streaming-llama/prefill_llama.cpp/common/arg.cpp:3573`. Unset r
                               " - 0: generic output\n"
 ```
 
+### LLAMA_PD_CACHE_CAPTURE
+
+Advanced backend control LLAMA_PD_CACHE_CAPTURE. Set explicitly only for the selected backend; its literal read and fallback are documented below.
+
+Scope: mac-llama. Class: advanced.
+
+Source: `engines/streaming-llama/prefill_llama.cpp/tools/decode-receiver/main.cpp:632`. Unset read: NULL from getenv; the literal consumer below supplies any fallback.
+
+```text
+#if defined(_WIN32) || defined(_WIN64)
+    static bool warned_once = false;
+    if (const char * cap = std::getenv("LLAMA_PD_CACHE_CAPTURE"); cap && cap[0] == '1' && !warned_once) {
+        fprintf(stderr, "[pd-cache] WARNING: LLAMA_PD_CACHE_CAPTURE=1 is IGNORED on Windows — CUDA KV serialization crashes. Only Mac/Metal receiver supports Phase-2 KV capture.\n");
+        warned_once = true;
+    }
+    return;
+```
+
+Source: `engines/streaming-llama/prefill_llama.cpp/tools/decode-receiver/main.cpp:638`. Unset read: NULL from getenv; the literal consumer below supplies any fallback.
+
+```text
+    return;
+#else
+    if (const char * cap = std::getenv("LLAMA_PD_CACHE_CAPTURE")) {
+        if (cap[0] != '1') { return; }
+    } else {
+        return;  // not set → skip
+    }
+```
+
+### LLAMA_PD_CACHE_DIR
+
+Advanced backend control LLAMA_PD_CACHE_DIR. Set explicitly only for the selected backend; its literal read and fallback are documented below.
+
+Scope: mac-llama. Class: advanced.
+
+Source: `engines/streaming-llama/prefill_llama.cpp/tools/decode-receiver/main.cpp:187`. Unset read: NULL from getenv; the literal consumer below supplies any fallback.
+
+```text
+    if (g_inited) { return; }
+    g_inited = true;
+    const char * dir = std::getenv("LLAMA_PD_CACHE_DIR");
+    if (!dir || dir[0] == '\0') { return; }   // disabled => RAM-only legacy
+    g_dir = dir;
+
+    double max_gb = 50.0;
+```
+
 ### LLAMA_PD_CACHE_DISABLE
 
 LLAMA_PD_CACHE_DISABLE: advanced engine setting; built-in default retained
@@ -71841,6 +78421,78 @@ Source: `engines/streaming-llama/prefill_llama.cpp/tools/server/server-context.c
             *reply = {false, 0, 0};
             return false;
         }
+```
+
+### LLAMA_PD_CACHE_HOT
+
+Advanced backend control LLAMA_PD_CACHE_HOT. Set explicitly only for the selected backend; its literal read and fallback are documented below.
+
+Scope: mac-llama. Class: advanced.
+
+Source: `engines/streaming-llama/prefill_llama.cpp/tools/decode-receiver/main.cpp:89`. Unset read: NULL from getenv; the literal consumer below supplies any fallback.
+
+```text
+static int pd_cache_hot_max() {
+    static const int n = []() {
+        if (const char * e = std::getenv("LLAMA_PD_CACHE_HOT")) {
+            const int v = std::atoi(e);
+            if (v > 0) { return v; }
+        }
+        return 4;
+```
+
+### LLAMA_PD_CACHE_MAX_GB
+
+Advanced backend control LLAMA_PD_CACHE_MAX_GB. Set explicitly only for the selected backend; its literal read and fallback are documented below.
+
+Scope: mac-llama. Class: advanced.
+
+Source: `engines/streaming-llama/prefill_llama.cpp/tools/decode-receiver/main.cpp:192`. Unset read: NULL from getenv; the literal consumer below supplies any fallback.
+
+```text
+
+    double max_gb = 50.0;
+    if (const char * e = std::getenv("LLAMA_PD_CACHE_MAX_GB")) {
+        const double v = std::atof(e);
+        if (v > 0.0) { max_gb = v; }
+    }
+    g_max_bytes = (uint64_t)(max_gb * 1024.0 * 1024.0 * 1024.0);
+```
+
+### LLAMA_PD_RESIDENT_KV_REUSE
+
+Advanced backend control LLAMA_PD_RESIDENT_KV_REUSE. Set explicitly only for the selected backend; its literal read and fallback are documented below.
+
+Scope: mac-llama. Class: advanced.
+
+Source: `engines/streaming-llama/prefill_llama.cpp/tools/decode-receiver/main.cpp:535`. Unset read: NULL from getenv; the literal consumer below supplies any fallback.
+
+```text
+
+static bool resident_kv_reuse_enabled() {
+    const char * e = std::getenv("LLAMA_PD_RESIDENT_KV_REUSE");
+    return e && e[0] == '1';
+}
+// Exact longest-common-prefix length (token-by-token; stops at first divergence
+// so rollback/branch/edit naturally clamp reuse to the divergence point). No hashing.
+```
+
+### LLAMA_PD_RESIDENT_SINGLETOK_MAX
+
+Advanced backend control LLAMA_PD_RESIDENT_SINGLETOK_MAX. Set explicitly only for the selected backend; its literal read and fallback are documented below.
+
+Scope: mac-llama. Class: advanced.
+
+Source: `engines/streaming-llama/prefill_llama.cpp/tools/decode-receiver/main.cpp:1498`. Unset read: NULL from getenv; the literal consumer below supplies any fallback.
+
+```text
+        // residual (~6s) is RTX-SIDE, not the Mac. Keep the knob for experiments only.
+        static const int resident_singletok_max = []() {
+            const char * e = std::getenv("LLAMA_PD_RESIDENT_SINGLETOK_MAX");
+            return (e && e[0]) ? std::max(0, atoi(e)) : 0;
+        }();
+        if (resident_reuse_n > 0 && (int) suffix_tokens > 0 && (int) suffix_tokens <= resident_singletok_max) {
+            n_batch = 1;
 ```
 
 ### LLAMA_PERSIST_GPU_BUFS
@@ -79055,6 +85707,72 @@ test "ltx vaeDecode reproduces reference VideoDecoder" {
     const s = mlx.mlx_default_gpu_stream_new();
 ```
 
+### M3_MLX_SPARSE
+
+Advanced backend control M3_MLX_SPARSE. Set explicitly only for the selected backend; its literal read and fallback are documented below.
+
+Scope: mac-mlx. Class: advanced.
+
+Source: `vendor/mac-mlx/mlx_vlm/models/minimax_m3/minimax_m3.py:221`. Unset read: '1'.
+
+```text
+        # index Q/K are RoPE'd at the query positions (position-aware selection, matches RTX); ik is roped
+        # BEFORE caching so cached prior index-K stays roped at its own positions (decode-consistency holds).
+        if self.sparse and os.getenv("M3_MLX_SPARSE", "1") != "0":
+            a = self.args
+            iq = self.index_q_norm(self.index_q_proj(x).reshape(B, L, a.indexer_n_head, a.indexer_head_size))
+            ik = self.index_k_norm(self.index_k_proj(x).reshape(B, L, a.indexer_head_size))
+            q_offset = (cache.offset - L) if isinstance(cache, M3Cache) else 0  # position of query 0
+```
+
+Source: `vendor/mac-mlx/mlx_vlm/models/minimax_m3/test_mtp.py:29`. Unset read: Assigned by the runtime; see literal consumer.
+
+```text
+
+def main():
+    os.environ["M3_MLX_SPARSE"] = "1"
+    mx.random.seed(0)
+    layer = M3MTPLayer(ARGS)
+    mx.eval(layer.parameters())
+    H, L = ARGS.hidden_size, 6
+```
+
+Source: `vendor/mac-mlx/mlx_vlm/models/minimax_m3/test_synthetic.py:38`. Unset read: Assigned by the runtime; see literal consumer.
+
+```text
+
+def fwd(model, n_tok, sparse):
+    os.environ["M3_MLX_SPARSE"] = "1" if sparse else "0"
+    logits = model(mx.array([_toks(n_tok)]))[0, -1]
+    return int(mx.argmax(logits).item()), round(float(mx.max(logits).item()), 4)
+
+
+```
+
+Source: `vendor/mac-mlx/mlx_vlm/models/minimax_m3/test_synthetic.py:45`. Unset read: Assigned by the runtime; see literal consumer.
+
+```text
+def fwd_incremental(model, n_tok):
+    """Last token's logits via prefill(0..n-2) + decode(1) using the M3Cache (decode-path MSA)."""
+    os.environ["M3_MLX_SPARSE"] = "1"
+    t = _toks(n_tok)
+    cache = model.make_cache()
+    if n_tok > 1:
+        model(mx.array([t[:-1]]), cache=cache)
+```
+
+Source: `vendor/mac-mlx/mlx_vlm/models/minimax_m3/test_synthetic.py:57`. Unset read: Assigned by the runtime; see literal consumer.
+
+```text
+    """B=2 batch of two distinct sequences; each row must equal that sequence's B=1 result (sequences
+    are independent, so batching must not change per-row output)."""
+    os.environ["M3_MLX_SPARSE"] = "1"
+    t0 = [(i * 7 + 1) % ARGS.vocab_size for i in range(n_tok)]
+    t1 = [(i * 5 + 3) % ARGS.vocab_size for i in range(n_tok)]
+    batched = model(mx.array([t0, t1]))[:, -1]
+    a0 = int(mx.argmax(model(mx.array([t0]))[0, -1]).item())
+```
+
 ### MAGEFLOW_DIT_FIXTURE
 
 mageflow dit fixture: engine setting; built-in default retained
@@ -80176,6 +86894,48 @@ DESC = "Write text content to a file on disk."
 # Long, mechanical content: the model emits it as one giant tool-call argument,
 ```
 
+### MAX_KV_SIZE
+
+Advanced backend control MAX_KV_SIZE. Set explicitly only for the selected backend; its literal read and fallback are documented below.
+
+Scope: mac-mlx. Class: advanced.
+
+Source: `vendor/mac-mlx/mlx_vlm/server/cli.py:207`. Unset read: Assigned by the runtime; see literal consumer.
+
+```text
+    os.environ["KV_QUANT_SCHEME"] = args.kv_quant_scheme
+    if args.max_kv_size is not None:
+        os.environ["MAX_KV_SIZE"] = str(args.max_kv_size)
+    os.environ["QUANTIZED_KV_START"] = str(args.quantized_kv_start)
+    if args.top_logprobs_k is not None:
+        os.environ["TOP_LOGPROBS_K"] = str(args.top_logprobs_k)
+
+```
+
+Source: `vendor/mac-mlx/mlx_vlm/server/generation.py:236`. Unset read: 0.
+
+```text
+
+def get_max_kv_size(model: str):
+    max_kv_tokens = int(os.environ.get("MAX_KV_SIZE", 0))
+    if max_kv_tokens == 0:
+        return None
+    if get_quantized_kv_bits(model) is not None:
+        print(f"Model {model} uses QuantizedKVCache, can't set max KV size.")
+```
+
+Source: `vendor/mac-mlx/mlx_vlm/server/generation.py:246`. Unset read: 0.
+
+```text
+
+def get_configured_context_limit():
+    max_kv_tokens = int(os.environ.get("MAX_KV_SIZE", 0))
+    return max_kv_tokens or None
+
+
+def _count_prompt_tokens(raw_inputs: dict) -> int:
+```
+
 ### MAX_TOKENS
 
 MAX_TOKENS: advanced engine setting; built-in default retained
@@ -80192,6 +86952,138 @@ Source: `engines/mlx-serve/tests/test_agent_stop_repro.py:497`. Unset read: '409
     p.add_argument("--runs", type=int, default=1, help="repeat the full run N times")
     p.add_argument("--temperature", type=float, default=0.7)
     p.add_argument("--min-tokens-for-suspicion", type=int, default=100)
+```
+
+### MCP_CONFIG_PATH
+
+Advanced backend control MCP_CONFIG_PATH. Set explicitly only for the selected backend; its literal read and fallback are documented below.
+
+Scope: mlx-serve. Class: advanced.
+
+Source: `engines/mlx-serve/app/Sources/MLXServe/Models/MCPConfig.swift:110`. Unset read: Wrapper/conditional default: see the literal call and consumer below.
+
+```text
+    /// mcp.json with `bogus` and `nopkg` entries.
+    static var path: String {
+        if let p = ProcessInfo.processInfo.environment["MCP_CONFIG_PATH"], !p.isEmpty {
+            return (p as NSString).expandingTildeInPath
+        }
+        let dir = NSString(string: "~/.mlx-serve").expandingTildeInPath
+        try? FileManager.default.createDirectory(atPath: dir, withIntermediateDirectories: true)
+```
+
+Source: `engines/mlx-serve/app/Tests/MLXCoreTests/MCPFailFastTests.swift:25`. Unset read: Wrapper/conditional default: see the literal call and consumer below.
+
+```text
+        try? FileManager.default.createDirectory(atPath: dir, withIntermediateDirectories: true)
+        sandboxPath = (dir as NSString).appendingPathComponent("mcp.json")
+        setenv("MCP_CONFIG_PATH", sandboxPath, 1)
+    }
+
+    override func tearDown() async throws {
+        if let p = sandboxPath {
+```
+
+Source: `engines/mlx-serve/app/Tests/MLXCoreTests/MCPFailFastTests.swift:33`. Unset read: Wrapper/conditional default: see the literal call and consumer below.
+
+```text
+            try? FileManager.default.removeItem(atPath: dir)
+        }
+        unsetenv("MCP_CONFIG_PATH")
+    }
+
+    func testStartEnabledFailsFastWhenServerDiesDuringInit() async throws {
+        try XCTSkipUnless(BuildFeatures.current.hostShell, "spawns a host script; the App Store build routes MCP into the guest")
+```
+
+Source: `engines/mlx-serve/app/Tests/MLXCoreTests/MCPTests.swift:71`. Unset read: Wrapper/conditional default: see the literal call and consumer below.
+
+```text
+    func testMCPConfigPreservesKeyOrderThroughSaveAndLoad() throws {
+        let tmp = NSTemporaryDirectory().appending("mcp-order-\(UUID().uuidString).json")
+        setenv("MCP_CONFIG_PATH", tmp, 1)
+        defer { unsetenv("MCP_CONFIG_PATH"); try? FileManager.default.removeItem(atPath: tmp) }
+
+        // Deliberately non-alphabetical source order — exposes any sort/hash shuffle.
+        let source = #"""
+```
+
+Source: `engines/mlx-serve/app/Tests/MLXCoreTests/MCPTests.swift:72`. Unset read: Wrapper/conditional default: see the literal call and consumer below.
+
+```text
+        let tmp = NSTemporaryDirectory().appending("mcp-order-\(UUID().uuidString).json")
+        setenv("MCP_CONFIG_PATH", tmp, 1)
+        defer { unsetenv("MCP_CONFIG_PATH"); try? FileManager.default.removeItem(atPath: tmp) }
+
+        // Deliberately non-alphabetical source order — exposes any sort/hash shuffle.
+        let source = #"""
+        {
+```
+
+Source: `engines/mlx-serve/app/Tests/MLXCoreTests/MCPTests.swift:199`. Unset read: Wrapper/conditional default: see the literal call and consumer below.
+
+```text
+    func testRemoteEntryHeadersAndTypeSurviveSaveAndLoad() throws {
+        let tmp = NSTemporaryDirectory().appending("mcp-headers-\(UUID().uuidString).json")
+        setenv("MCP_CONFIG_PATH", tmp, 1)
+        defer { unsetenv("MCP_CONFIG_PATH"); try? FileManager.default.removeItem(atPath: tmp) }
+
+        // The reporter's exact shape.
+        let source = #"""
+```
+
+Source: `engines/mlx-serve/app/Tests/MLXCoreTests/MCPTests.swift:200`. Unset read: Wrapper/conditional default: see the literal call and consumer below.
+
+```text
+        let tmp = NSTemporaryDirectory().appending("mcp-headers-\(UUID().uuidString).json")
+        setenv("MCP_CONFIG_PATH", tmp, 1)
+        defer { unsetenv("MCP_CONFIG_PATH"); try? FileManager.default.removeItem(atPath: tmp) }
+
+        // The reporter's exact shape.
+        let source = #"""
+        {
+```
+
+Source: `engines/mlx-serve/app/Tests/MLXCoreTests/MCPTests.swift:544`. Unset read: Wrapper/conditional default: see the literal call and consumer below.
+
+```text
+        let dir = NSTemporaryDirectory().appending("mcp-restart-\(UUID().uuidString)")
+        try FileManager.default.createDirectory(atPath: dir, withIntermediateDirectories: true)
+        setenv("MCP_CONFIG_PATH", (dir as NSString).appendingPathComponent("mcp.json"), 1)
+        defer { unsetenv("MCP_CONFIG_PATH"); try? FileManager.default.removeItem(atPath: dir) }
+        let manager = MCPManager()
+        var config = MCPConfig()
+        config.mcpServers["would-spawn"] = MCPServerEntry(
+```
+
+Source: `engines/mlx-serve/app/Tests/MLXCoreTests/MCPTests.swift:545`. Unset read: Wrapper/conditional default: see the literal call and consumer below.
+
+```text
+        try FileManager.default.createDirectory(atPath: dir, withIntermediateDirectories: true)
+        setenv("MCP_CONFIG_PATH", (dir as NSString).appendingPathComponent("mcp.json"), 1)
+        defer { unsetenv("MCP_CONFIG_PATH"); try? FileManager.default.removeItem(atPath: dir) }
+        let manager = MCPManager()
+        var config = MCPConfig()
+        config.mcpServers["would-spawn"] = MCPServerEntry(
+            command: "/usr/bin/false", args: [], env: nil, disabled: false)
+```
+
+### MCP_TOOL_TIMEOUT
+
+Advanced backend control MCP_TOOL_TIMEOUT. Set explicitly only for the selected backend; its literal read and fallback are documented below.
+
+Scope: mlx-serve. Class: advanced.
+
+Source: `engines/mlx-serve/app/Sources/MLXServe/Services/MCPManager.swift:219`. Unset read: Wrapper/conditional default: see the literal call and consumer below.
+
+```text
+    /// the watchdog without waiting 90s per run.
+    nonisolated static var toolCallTimeoutSeconds: Double {
+        if let raw = ProcessInfo.processInfo.environment["MCP_TOOL_TIMEOUT"],
+           let v = Double(raw), v > 0 {
+            return v
+        }
+        return 90
 ```
 
 ### MEM_GUARD_ABORT_FLOOR_GB
@@ -80313,6 +87205,84 @@ Scope: mlx-serve. Class: advanced.
 Engine setting; retains its built-in default. The literal source consumer below records its behavior.
 
 Scope: mlx-serve. Class: advanced.
+
+### MFERENCE_HOTPATH_METRICS
+
+Advanced backend control MFERENCE_HOTPATH_METRICS. Set explicitly only for the selected backend; its literal read and fallback are documented below.
+
+Scope: mac-mference. Class: advanced.
+
+Source: `engines/mference/Sources/Mference/Runtime/Inference/HotPathInstrumentation.swift:92`. Unset read: Wrapper/conditional default: see the literal call and consumer below.
+
+```text
+    private var cachePlanMisses: UInt64 = 0
+
+    init(enabled: Bool = ProcessInfo.processInfo.environment["MFERENCE_HOTPATH_METRICS"] == "1") {
+        self.enabled = enabled
+    }
+
+    func recordCommandBufferCommit() {
+```
+
+Source: `engines/mference/Sources/MferenceCLI/Run.swift:125`. Unset read: Wrapper/conditional default: see the literal call and consumer below.
+
+```text
+            lines += "  unaccounted (GPU waits): "
+            lines += String(format: "%.1f", total - accounted) + " ms\n"
+            if ProcessInfo.processInfo.environment["MFERENCE_HOTPATH_METRICS"] == "1" {
+                lines += "  " + runner.hotPathMetrics.logDescription + "\n"
+            }
+            stderr.write(Data(lines.utf8))
+        }
+```
+
+Source: `engines/mference/Sources/MferenceServer/Core/ServerInference.swift:348`. Unset read: Wrapper/conditional default: see the literal call and consumer below.
+
+```text
+        let needsToolTemplate = prepared.needsToolTemplate
+        let promptIDs = prepared.promptIDs
+        let hotPathStart = ProcessInfo.processInfo.environment["MFERENCE_HOTPATH_METRICS"] == "1"
+            ? runner.hotPathMetrics
+            : nil
+        var completed = false
+        defer {
+```
+
+### MFERENCE_MODEL
+
+Advanced backend control MFERENCE_MODEL. Set explicitly only for the selected backend; its literal read and fallback are documented below.
+
+Scope: mac-mference. Class: advanced.
+
+Source: `engines/mference/Sources/MferenceApp/Core/Installation/AppModelInstallDescriptor.swift:103`. Unset read: Wrapper/conditional default: see the literal call and consumer below.
+
+```text
+    /// without an environment also select the alternative model.
+    public static var selected: AppModelInstallDescriptor {
+        let environmentValue = ProcessInfo.processInfo.environment["MFERENCE_MODEL"]
+        let preferenceValue = UserDefaults(suiteName: "Mference")?
+            .string(forKey: "model")
+        switch environmentValue ?? preferenceValue {
+        case "qwen36": return .qwen36
+```
+
+### MFERENCE_PHASES
+
+Advanced backend control MFERENCE_PHASES. Set explicitly only for the selected backend; its literal read and fallback are documented below.
+
+Scope: mac-mference. Class: advanced.
+
+Source: `engines/mference/Sources/MferenceCLI/Run.swift:113`. Unset read: Wrapper/conditional default: see the literal call and consumer below.
+
+```text
+            }
+
+        if ProcessInfo.processInfo.environment["MFERENCE_PHASES"] == "1" {
+            let ms = { (n: UInt64) in String(format: "%.1f", Double(n) / 1e6) }
+            let total = stats.decodeSeconds * 1000
+            let accounted = Double(runner.totalCb1Nanos + runner.totalIoNanos
+                                   + runner.totalCb2Nanos) / 1e6
+```
 
 ### MINICPM5_MODEL_DIR
 
@@ -81262,6 +88232,60 @@ Engine setting; retains its built-in default. The literal source consumer below 
 
 Scope: mlx-serve. Class: advanced.
 
+### MLX_DSPARK_BLOCK_FP32
+
+Advanced backend control MLX_DSPARK_BLOCK_FP32. Set explicitly only for the selected backend; its literal read and fallback are documented below.
+
+Scope: mac-mlx. Class: advanced.
+
+Source: `vendor/mac-mlx/mlx_vlm/models/deepseek_v41/dspark.py:156`. Unset read: ''.
+
+```text
+# test whether the drafter is being quietly degraded by bf16 on Metal, which would surface only
+# as acceptance rate. Default off so the production path is unchanged.
+_DSPARK_BLOCK_FP32 = os.environ.get("MLX_DSPARK_BLOCK_FP32", "") not in ("", "0")
+# COUNT INVOCATIONS, do not announce installations. An env var that reaches the process proves
+# nothing about whether the branch ran -- and the first fp32 arm came out FASTER than bf16,
+# which is the wrong direction for real fp32 matmuls and is exactly what a silently-inert
+# flag looks like. This says, once, that the cast actually executed.
+```
+
+### MLX_DSV4_NEEDLE_POS
+
+Advanced backend control MLX_DSV4_NEEDLE_POS. Set explicitly only for the selected backend; its literal read and fallback are documented below.
+
+Scope: mac-mlx. Class: advanced.
+
+Source: `vendor/mac-mlx/mlx_vlm/models/deepseek_v4/language.py:536`. Unset read: '5352'.
+
+```text
+            try:
+                _ratio = int(self.compressor.compress_ratio)
+                _npos = int(os.environ.get("MLX_DSV4_NEEDLE_POS", "5352"))
+                _nrow = (_npos // _ratio) if _ratio else -1
+                if 0 <= _nrow < scores.shape[-1]:
+                    _sd = scores[0, -1]  # last (decode) query token's masked per-pooled-row scores
+                    _nsc = float(_sd[_nrow]); _rank = int((_sd > _sd[_nrow]).sum().item())
+```
+
+### MLX_DSV4_NEEDLE_TRACE
+
+Advanced backend control MLX_DSV4_NEEDLE_TRACE. Set explicitly only for the selected backend; its literal read and fallback are documented below.
+
+Scope: mac-mlx. Class: advanced.
+
+Source: `vendor/mac-mlx/mlx_vlm/models/deepseek_v4/language.py:532`. Unset read: None.
+
+```text
+        # Indexer call (per sparse layer): ratio, needle_row=pos//ratio, n_pooled, k, needle_score, needle_rank
+        # (# pooled rows scoring higher), selected(1/0). Compare needle_rank to the RTX trace (~460-582).
+        _nt = os.environ.get("MLX_DSV4_NEEDLE_TRACE")
+        if _nt:
+            try:
+                _ratio = int(self.compressor.compress_ratio)
+                _npos = int(os.environ.get("MLX_DSV4_NEEDLE_POS", "5352"))
+```
+
 ### MLX_ENABLE_CACHE_THRASHING_CHECK
 
 Engine setting; retains its built-in default. The literal source consumer below records its behavior.
@@ -81286,11 +88310,290 @@ Source: `engines/mlx-serve/src/transformer.zig:4192`. Unset read: NULL from gete
     return v;
 ```
 
+### MLX_GLM_DSA_DECODE_ONLY
+
+Advanced backend control MLX_GLM_DSA_DECODE_ONLY. Set explicitly only for the selected backend; its literal read and fallback are documented below.
+
+Scope: mac-mlx. Class: advanced.
+
+Source: `vendor/mac-mlx/mlx_vlm/models/glm_moe_dsa/glm_moe_dsa.py:156`. Unset read: Wrapper/conditional default: see the literal call and consumer below.
+
+```text
+        if cache is not None:
+            k, _ = cache.update_and_fetch(k, mx.zeros([b, 1, s, 0]))
+        if _env_flag("MLX_GLM_DSA_DECODE_ONLY") and s > 1:
+            return None
+        if k.shape[2] <= self.index_topk:
+            return None
+        if _env_flag("MLX_GLM_DSA_RECENT_TOPK"):
+```
+
+Source: `vendor/mac-mlx/mlx_vlm/models/glm_moe_dsa/glm_moe_dsa.py:396`. Unset read: Wrapper/conditional default: see the literal call and consumer below.
+
+```text
+        "indexer_rope_interleave": getattr(config, "indexer_rope_interleave", None),
+        "recent_topk": _env_flag("MLX_GLM_DSA_RECENT_TOPK"),
+        "decode_only": _env_flag("MLX_GLM_DSA_DECODE_ONLY"),
+    }
+    try:
+        setattr(config, "_glm_dsa_runtime", runtime)
+        setattr(language_model, "_glm_dsa_runtime", runtime)
+```
+
+### MLX_GLM_DSA_NATIVE_KERNELS
+
+Advanced backend control MLX_GLM_DSA_NATIVE_KERNELS. Set explicitly only for the selected backend; its literal read and fallback are documented below.
+
+Scope: mac-mlx. Class: advanced.
+
+Source: `vendor/mac-mlx/mlx_vlm/custom_kernels/glm_moe_dsa/fast.py:23`. Unset read: ''.
+
+```text
+    _ext = None
+    _IMPORT_ERROR = exc
+    if os.environ.get("MLX_GLM_DSA_NATIVE_KERNELS", "").lower() not in {"0", "false", "no", "off"}:
+        logger.critical("GLM NATIVE EXTENSION FAILED admission (load/ABI/Metal): %r. "
+                        "Run glm_moe_dsa/build.py with the serving Python; "
+                        "set MLX_GLM_DSA_NATIVE_KERNELS=0 only for an explicit baseline.", exc)
+else:
+```
+
+Source: `vendor/mac-mlx/mlx_vlm/custom_kernels/glm_moe_dsa/measure_loaded.py:28`. Unset read: None.
+
+```text
+    # This avoids changing the live serving policy after the measurement.
+    saved=[(m,dict(m.__dict__)) for m in modules+[ops]]
+    old=os.environ.get('MLX_GLM_DSA_NATIVE_KERNELS')
+    result=dict(model=str(type(model)),lang=str(type(lang)),runs=[],steps=steps,
+                prompt_tokens=prompt_tokens,policy='separate caches; warm/off/on/on/off; no model reload')
+    ids=(list(prompt_ids)*((prompt_tokens+len(prompt_ids)-1)//len(prompt_ids)))[:prompt_tokens]
+    try:
+```
+
+Source: `vendor/mac-mlx/mlx_vlm/custom_kernels/glm_moe_dsa/measure_loaded.py:33`. Unset read: Assigned by the runtime; see literal consumer.
+
+```text
+    ids=(list(prompt_ids)*((prompt_tokens+len(prompt_ids)-1)//len(prompt_ids)))[:prompt_tokens]
+    try:
+        os.environ['MLX_GLM_DSA_NATIVE_KERNELS']='1'
+        for m in modules+[ops]: importlib.reload(m)
+        if not ops.native_available(): raise RuntimeError(f'Native unavailable: {ops.status()}')
+        result['native_status']=ops.status()
+        counts={}
+```
+
+Source: `vendor/mac-mlx/mlx_vlm/custom_kernels/glm_moe_dsa/measure_loaded.py:47`. Unset read: Assigned by the runtime; see literal consumer.
+
+```text
+            setattr(ops,name,counted)
+        for enabled in (False,True,False,True,True,False):
+            os.environ['MLX_GLM_DSA_NATIVE_KERNELS']='1' if enabled else '0'
+            cache=lang.make_cache() if hasattr(lang,'make_cache') else make_prompt_cache(lang)
+            t=time.perf_counter()
+            for begin in range(0,len(ids),256):
+                out=lang(mx.array([ids[begin:begin+256]],mx.int32),cache=cache)
+```
+
+Source: `vendor/mac-mlx/mlx_vlm/custom_kernels/glm_moe_dsa/measure_loaded.py:77`. Unset read: Assigned by the runtime; see literal consumer.
+
+```text
+            module.__dict__.clear(); module.__dict__.update(state)
+        if old is None: os.environ.pop('MLX_GLM_DSA_NATIVE_KERNELS',None)
+        else: os.environ['MLX_GLM_DSA_NATIVE_KERNELS']=old
+        Path(output).write_text(json.dumps(result,indent=2))
+```
+
+Source: `vendor/mac-mlx/mlx_vlm/models/glm_moe_dsa/native_ops.py:47`. Unset read: ''.
+
+```text
+
+def _native_forced_off() -> bool:
+    return str(os.environ.get("MLX_GLM_DSA_NATIVE_KERNELS", "")).strip().lower() in {
+        "0",
+        "false",
+        "no",
+        "off",
+```
+
+### MLX_GLM_DSA_RECENT_TOPK
+
+Advanced backend control MLX_GLM_DSA_RECENT_TOPK. Set explicitly only for the selected backend; its literal read and fallback are documented below.
+
+Scope: mac-mlx. Class: advanced.
+
+Source: `vendor/mac-mlx/mlx_vlm/models/glm_moe_dsa/glm_moe_dsa.py:160`. Unset read: Wrapper/conditional default: see the literal call and consumer below.
+
+```text
+        if k.shape[2] <= self.index_topk:
+            return None
+        if _env_flag("MLX_GLM_DSA_RECENT_TOPK"):
+            q_pos = mx.arange(offset, offset + s) if not isinstance(offset, mx.array) else offset + mx.arange(s)
+            start = mx.maximum(q_pos - self.index_topk + 1, 0)
+            idx = start[:, None] + mx.arange(self.index_topk)[None, :]
+            idx = mx.minimum(idx, k.shape[2] - 1)
+```
+
+Source: `vendor/mac-mlx/mlx_vlm/models/glm_moe_dsa/glm_moe_dsa.py:395`. Unset read: Wrapper/conditional default: see the literal call and consumer below.
+
+```text
+        "rope_interleave": getattr(config, "rope_interleave", None),
+        "indexer_rope_interleave": getattr(config, "indexer_rope_interleave", None),
+        "recent_topk": _env_flag("MLX_GLM_DSA_RECENT_TOPK"),
+        "decode_only": _env_flag("MLX_GLM_DSA_DECODE_ONLY"),
+    }
+    try:
+        setattr(config, "_glm_dsa_runtime", runtime)
+```
+
+### MLX_GLM_DSA_SHARE_TOPK
+
+Advanced backend control MLX_GLM_DSA_SHARE_TOPK. Set explicitly only for the selected backend; its literal read and fallback are documented below.
+
+Scope: mac-mlx. Class: advanced.
+
+Source: `vendor/mac-mlx/mlx_vlm/models/glm_moe_dsa/glm_moe_dsa.py:349`. Unset read: Wrapper/conditional default: see the literal call and consumer below.
+
+```text
+    disable_shared = (
+        _env_flag("MLX_VLM_GLM_DSA_DISABLE_SHARED")
+        or _env_off("MLX_GLM_DSA_SHARE_TOPK")
+    )
+    layers = getattr(getattr(language_model, "model", None), "layers", []) or []
+    patched_dsa = 0
+    patched_shared = 0
+```
+
+### MLX_GLM_DSA_SPARSE
+
+Advanced backend control MLX_GLM_DSA_SPARSE. Set explicitly only for the selected backend; its literal read and fallback are documented below.
+
+Scope: mac-mlx. Class: advanced.
+
+Source: `vendor/mac-mlx/mlx_vlm/models/glm_moe_dsa/glm_moe_dsa.py:345`. Unset read: Wrapper/conditional default: see the literal call and consumer below.
+
+```text
+    disable_dsa = (
+        _env_flag("MLX_VLM_GLM_DSA_DISABLE")
+        or _env_off("MLX_GLM_DSA_SPARSE")
+    )
+    disable_shared = (
+        _env_flag("MLX_VLM_GLM_DSA_DISABLE_SHARED")
+        or _env_off("MLX_GLM_DSA_SHARE_TOPK")
+```
+
 ### MLX_HOSTFILE
 
 Engine setting; retains its built-in default. The literal source consumer below records its behavior.
 
 Scope: mlx-serve. Class: advanced.
+
+### MLX_INIT_AT
+
+Advanced backend control MLX_INIT_AT. Set explicitly only for the selected backend; its literal read and fallback are documented below.
+
+Scope: mac-mlx. Class: advanced.
+
+Source: `vendor/mac-mlx/mlx_vlm/server/cli.py:219`. Unset read: None.
+
+```text
+    logger.setLevel(log_level)
+
+    init_at = os.environ.get("MLX_INIT_AT")
+    if init_at:
+        try:
+            delay = float(init_at) - time.time()
+            if delay > 0:
+```
+
+### MLX_MIMO_CAPACITY_LIMIT
+
+Advanced backend control MLX_MIMO_CAPACITY_LIMIT. Set explicitly only for the selected backend; its literal read and fallback are documented below.
+
+Scope: mac-mlx. Class: advanced.
+
+Source: `vendor/mac-mlx/mlx_vlm/rpc_pipeline.py:453`. Unset read: '0'.
+
+```text
+                    return _rank0_logits(inner, hidden, cache, [1])
+                probe_capacity(inner, capacity_tokens, capacity_forward,
+                    limit_bytes=int(os.environ.get("MLX_MIMO_CAPACITY_LIMIT", "0")))
+            print("RPC_QUANT_MODULES " + json.dumps({"rank": rank, **_quant_module_summary(inner)}), flush=True)
+            print(f"RPC rank {rank}: materialized native MiMo", flush=True)
+            return loaded, processor, inner.start_idx, inner.end_idx
+
+```
+
+Source: `vendor/mac-mlx/mlx_vlm/rpc_pipeline.py:2385`. Unset read: Assigned by the runtime; see literal consumer.
+
+```text
+    if args.max_context and args.kv_bits == 8:
+        os.environ["MLX_MIMO_CAPACITY_TOKENS"] = str(args.max_context)
+        os.environ["MLX_MIMO_CAPACITY_LIMIT"] = str(int(getattr(args, "wired_limit_mb", 0) or 0) * 2**20)
+    args.func(args)
+
+
+if __name__ == "__main__":
+```
+
+### MLX_MIMO_CAPACITY_TOKENS
+
+Advanced backend control MLX_MIMO_CAPACITY_TOKENS. Set explicitly only for the selected backend; its literal read and fallback are documented below.
+
+Scope: mac-mlx. Class: advanced.
+
+Source: `vendor/mac-mlx/mlx_vlm/rpc_pipeline.py:444`. Unset read: '0'.
+
+```text
+            _assert_gpu_runtime(loaded.language_model, rank=rank, require_gpu=require_gpu)
+            inner = loaded.language_model
+            capacity_tokens = int(os.environ.get("MLX_MIMO_CAPACITY_TOKENS", "0"))
+            if capacity_tokens:
+                from .models.mimo_v2.capacity import probe_capacity
+                def capacity_forward(cache):
+                    if rank == 1:
+```
+
+Source: `vendor/mac-mlx/mlx_vlm/rpc_pipeline.py:2384`. Unset read: Assigned by the runtime; see literal consumer.
+
+```text
+        os.environ["MLX_MIMO_KV_BITS"] = str(args.kv_bits)
+    if args.max_context and args.kv_bits == 8:
+        os.environ["MLX_MIMO_CAPACITY_TOKENS"] = str(args.max_context)
+        os.environ["MLX_MIMO_CAPACITY_LIMIT"] = str(int(getattr(args, "wired_limit_mb", 0) or 0) * 2**20)
+    args.func(args)
+
+
+```
+
+### MLX_MIMO_KV_BITS
+
+Advanced backend control MLX_MIMO_KV_BITS. Set explicitly only for the selected backend; its literal read and fallback are documented below.
+
+Scope: mac-mlx. Class: advanced.
+
+Source: `vendor/mac-mlx/mlx_vlm/rpc_pipeline.py:2382`. Unset read: Assigned by the runtime; see literal consumer.
+
+```text
+    args = parser.parse_args()
+    if args.kv_bits:
+        os.environ["MLX_MIMO_KV_BITS"] = str(args.kv_bits)
+    if args.max_context and args.kv_bits == 8:
+        os.environ["MLX_MIMO_CAPACITY_TOKENS"] = str(args.max_context)
+        os.environ["MLX_MIMO_CAPACITY_LIMIT"] = str(int(getattr(args, "wired_limit_mb", 0) or 0) * 2**20)
+    args.func(args)
+```
+
+Source: `vendor/mac-mlx/mlx_vlm/models/mimo_v2/mimo_v2.py:86`. Unset read: None.
+
+```text
+            else:
+                caches.append(QuantizedKVCache(group_size=64, bits=8)
+                              if os.environ.get("MLX_MIMO_KV_BITS") == "8" else KVCache())
+        return caches
+
+
+class Model(nn.Module):
+```
 
 ### MLX_MPI_LIBNAME
 
@@ -81315,6 +88618,42 @@ Scope: mlx-serve. Class: advanced.
 Engine setting; retains its built-in default. The literal source consumer below records its behavior.
 
 Scope: mlx-serve. Class: advanced.
+
+### MLX_RPC_REQUEST_TIMEOUT
+
+Advanced backend control MLX_RPC_REQUEST_TIMEOUT. Set explicitly only for the selected backend; its literal read and fallback are documented below.
+
+Scope: mac-mlx. Class: advanced.
+
+Source: `vendor/mac-mlx/mlx_vlm/rpc_pipeline.py:2343`. Unset read: '1800'.
+
+```text
+        "--request-timeout",
+        type=float,
+        default=float(os.environ.get("MLX_RPC_REQUEST_TIMEOUT", "1800")),
+        help="Per-request stream timeout in seconds; set 0 to disable the server-side timeout.",
+    )
+    serve_parser.add_argument(
+        "--threaded-stream",
+```
+
+### MLX_RPC_STREAM_PROGRESS_INTERVAL
+
+Advanced backend control MLX_RPC_STREAM_PROGRESS_INTERVAL. Set explicitly only for the selected backend; its literal read and fallback are documented below.
+
+Scope: mac-mlx. Class: advanced.
+
+Source: `vendor/mac-mlx/mlx_vlm/rpc_pipeline.py:2337`. Unset read: '10'.
+
+```text
+        "--stream-progress-interval",
+        type=float,
+        default=float(os.environ.get("MLX_RPC_STREAM_PROGRESS_INTERVAL", "10")),
+        help="Seconds between in-band SSE progress packets while waiting for the first token.",
+    )
+    serve_parser.add_argument(
+        "--request-timeout",
+```
 
 ### MLX_SAVE_CUDA_GRAPHS_DOT_FILE
 
@@ -83042,6 +90381,90 @@ Source: `engines/mlx-serve/src/transformer.zig:32137`. Unset read: NULL from get
         };
     }
     const cap = layer_cap_env.?;
+```
+
+### MLX_SERVE_LIVE_DOWNLOAD
+
+Advanced backend control MLX_SERVE_LIVE_DOWNLOAD. Set explicitly only for the selected backend; its literal read and fallback are documented below.
+
+Scope: mlx-serve. Class: advanced.
+
+Source: `engines/mlx-serve/app/Tests/MLXCoreTests/ChunkedDownloadTests.swift:337`. Unset read: Wrapper/conditional default: see the literal call and consumer below.
+
+```text
+    /// isn't reading line drift as a win.
+    func testLiveHuggingFaceThroughput() async throws {
+        try XCTSkipUnless(ProcessInfo.processInfo.environment["MLX_SERVE_LIVE_DOWNLOAD"] == "1",
+                          "set MLX_SERVE_LIVE_DOWNLOAD=1 to measure against the real CDN")
+        let url = URL(string: "https://huggingface.co/ddalcu/Kokoro-82M-MLX-Serve/resolve/main/model.safetensors")!
+        let size: Int64 = 324_613_768
+
+```
+
+Source: `engines/mlx-serve/app/Tests/MLXCoreTests/ChunkedDownloadTests.swift:394`. Unset read: Wrapper/conditional default: see the literal call and consumer below.
+
+```text
+    /// 302 every time. Same opt-in env var.
+    func testLiveSharedSessionHandshakeCost() async throws {
+        try XCTSkipUnless(ProcessInfo.processInfo.environment["MLX_SERVE_LIVE_DOWNLOAD"] == "1",
+                          "set MLX_SERVE_LIVE_DOWNLOAD=1 to measure against the real CDN")
+        let repo = "mlx-community/Qwen3-8B-4bit"
+        let files = ["config.json", "tokenizer_config.json", "special_tokens_map.json", "added_tokens.json",
+                     "model.safetensors.index.json", "vocab.json", "merges.txt", "README.md",
+```
+
+### MLX_SERVE_LIVE_VARIANT
+
+Advanced backend control MLX_SERVE_LIVE_VARIANT. Set explicitly only for the selected backend; its literal read and fallback are documented below.
+
+Scope: mlx-serve. Class: advanced.
+
+Source: `engines/mlx-serve/app/Tests/MLXCoreTests/MlxVariantTests.swift:388`. Unset read: Wrapper/conditional default: see the literal call and consumer below.
+
+```text
+
+    private func requireLive() throws {
+        try XCTSkipUnless(ProcessInfo.processInfo.environment["MLX_SERVE_LIVE_VARIANT"] == "1")
+    }
+
+    func testTheRealRepoIsDetectedAsAShelf() async throws {
+        try requireLive()
+```
+
+### MLX_SERVE_LIVE_VARIANT_FOLDER
+
+Advanced backend control MLX_SERVE_LIVE_VARIANT_FOLDER. Set explicitly only for the selected backend; its literal read and fallback are documented below.
+
+Scope: mlx-serve. Class: advanced.
+
+Source: `engines/mlx-serve/app/Tests/MLXCoreTests/MlxVariantTests.swift:409`. Unset read: Wrapper/conditional default: see the literal call and consumer below.
+
+```text
+        let root = try XCTUnwrap(ProcessInfo.processInfo.environment["MLX_SERVE_LIVE_VARIANT_ROOT"],
+                                 "set MLX_SERVE_LIVE_VARIANT_ROOT to a models root")
+        let folder = ProcessInfo.processInfo.environment["MLX_SERVE_LIVE_VARIANT_FOLDER"] ?? "mxfp4"
+        try FileManager.default.createDirectory(atPath: root, withIntermediateDirectories: true)
+        let manager = DownloadManager(modelsRoot: root)
+        let dest = MlxVariantScan.localRepoId(repoId: repoId, folder: folder)
+
+```
+
+### MLX_SERVE_LIVE_VARIANT_ROOT
+
+Advanced backend control MLX_SERVE_LIVE_VARIANT_ROOT. Set explicitly only for the selected backend; its literal read and fallback are documented below.
+
+Scope: mlx-serve. Class: advanced.
+
+Source: `engines/mlx-serve/app/Tests/MLXCoreTests/MlxVariantTests.swift:407`. Unset read: Wrapper/conditional default: see the literal call and consumer below.
+
+```text
+    func testDownloadingOneVariantProducesALoadableModelDir() async throws {
+        try requireLive()
+        let root = try XCTUnwrap(ProcessInfo.processInfo.environment["MLX_SERVE_LIVE_VARIANT_ROOT"],
+                                 "set MLX_SERVE_LIVE_VARIANT_ROOT to a models root")
+        let folder = ProcessInfo.processInfo.environment["MLX_SERVE_LIVE_VARIANT_FOLDER"] ?? "mxfp4"
+        try FileManager.default.createDirectory(atPath: root, withIntermediateDirectories: true)
+        let manager = DownloadManager(modelsRoot: root)
 ```
 
 ### MLX_SERVE_LMHEAD_PRUNE
@@ -84952,6 +92375,552 @@ Source: `engines/mlx-serve/src/mlx.zig:709`. Unset read: NULL from getenv; the l
             const target = wiredFitTarget(active, slack_mb << 20, max_rec) orelse
 ```
 
+### MLX_TRUST_REMOTE_CODE
+
+Advanced backend control MLX_TRUST_REMOTE_CODE. Set explicitly only for the selected backend; its literal read and fallback are documented below.
+
+Scope: mac-mlx. Class: advanced.
+
+Source: `vendor/mac-mlx/mlx_vlm/server/cli.py:186`. Unset read: Assigned by the runtime; see literal consumer.
+
+```text
+        os.environ["MLX_VLM_PIPELINE_LAYERS"] = args.pipeline_layers
+    if args.trust_remote_code:
+        os.environ["MLX_TRUST_REMOTE_CODE"] = "true"
+    if args.model:
+        os.environ["MLX_VLM_PRELOAD_MODEL"] = args.model
+        if args.adapter_path:
+            os.environ["MLX_VLM_PRELOAD_ADAPTER"] = args.adapter_path
+```
+
+Source: `vendor/mac-mlx/mlx_vlm/server/generation.py:515`. Unset read: 'false'.
+
+```text
+        # Use the load function from utils.py which handles path resolution and loading
+        trust_remote_code = (
+            os.environ.get("MLX_TRUST_REMOTE_CODE", "false").lower() == "true"
+        )
+        tensor_group, pipeline_group, distributed_group = _distributed_groups_from_env()
+        if distributed_group.size() > 1:
+            if adapter_path:
+```
+
+### MLX_VLM_BATCH_CACHE_EVAL_INTERVAL
+
+Advanced backend control MLX_VLM_BATCH_CACHE_EVAL_INTERVAL. Set explicitly only for the selected backend; its literal read and fallback are documented below.
+
+Scope: mac-mlx. Class: advanced.
+
+Source: `vendor/mac-mlx/mlx_vlm/generate/ar.py:99`. Unset read: None.
+
+```text
+
+def _get_batch_cache_eval_interval() -> int:
+    raw = os.environ.get("MLX_VLM_BATCH_CACHE_EVAL_INTERVAL")
+    if raw is None:
+        return DEFAULT_BATCH_CACHE_EVAL_INTERVAL
+    try:
+        return max(0, int(raw))
+```
+
+### MLX_VLM_CACHE_DIR
+
+Advanced backend control MLX_VLM_CACHE_DIR. Set explicitly only for the selected backend; its literal read and fallback are documented below.
+
+Scope: mac-mlx. Class: advanced.
+
+Source: `vendor/mac-mlx/mlx_vlm/models/deepseek_v41/engram.py:142`. Unset read: Path.home() / '.cache' / 'mlx_vlm'.
+
+```text
+
+def cache_dir() -> Path:
+    return Path(os.environ.get("MLX_VLM_CACHE_DIR", Path.home() / ".cache" / "mlx_vlm"))
+
+
+def load_compressed_token_map(tokenizer_json: str | Path, expected_size: int) -> Tuple[np.ndarray, int]:
+    """The compressed map, cached under ~/.cache/mlx_vlm keyed by the tokenizer file's size+mtime
+```
+
+### MLX_VLM_DISTRIBUTED_BACKEND
+
+Advanced backend control MLX_VLM_DISTRIBUTED_BACKEND. Set explicitly only for the selected backend; its literal read and fallback are documented below.
+
+Scope: mac-mlx. Class: advanced.
+
+Source: `vendor/mac-mlx/mlx_vlm/server/cli.py:46`. Unset read: 'any'.
+
+```text
+        "--distributed-backend",
+        type=str,
+        default=os.environ.get("MLX_VLM_DISTRIBUTED_BACKEND", "any"),
+        choices=["any", "ring", "mpi", "nccl", "jaccl"],
+        help="MLX distributed backend to initialize (default: %(default)s).",
+    )
+    parser.add_argument(
+```
+
+Source: `vendor/mac-mlx/mlx_vlm/server/cli.py:182`. Unset read: Assigned by the runtime; see literal consumer.
+
+```text
+    args = parser.parse_args()
+    os.environ["MLX_VLM_PIPELINE"] = "1" if args.pipeline else "0"
+    os.environ["MLX_VLM_DISTRIBUTED_BACKEND"] = args.distributed_backend
+    if args.pipeline_layers:
+        os.environ["MLX_VLM_PIPELINE_LAYERS"] = args.pipeline_layers
+    if args.trust_remote_code:
+        os.environ["MLX_TRUST_REMOTE_CODE"] = "true"
+```
+
+Source: `vendor/mac-mlx/mlx_vlm/server/generation.py:111`. Unset read: 'any'.
+
+```text
+
+def _distributed_groups_from_env():
+    backend = os.environ.get("MLX_VLM_DISTRIBUTED_BACKEND", "any")
+    group = mx.distributed.init(backend=backend)
+    if group.size() <= 1:
+        return None, None, group
+    if _env_flag("MLX_VLM_PIPELINE"):
+```
+
+Source: `vendor/mac-mlx/mlx_vlm/server/generation.py:791`. Unset read: 'any'.
+
+```text
+        self.requests: Queue = Queue()
+        self._distributed_group = mx.distributed.init(
+            backend=os.environ.get("MLX_VLM_DISTRIBUTED_BACKEND", "any")
+        )
+        self._is_distributed = self._distributed_group.size() > 1
+        self._rank = self._distributed_group.rank()
+        self._stop = False
+```
+
+### MLX_VLM_DRAFT_BLOCK_SIZE
+
+Advanced backend control MLX_VLM_DRAFT_BLOCK_SIZE. Set explicitly only for the selected backend; its literal read and fallback are documented below.
+
+Scope: mac-mlx. Class: advanced.
+
+Source: `vendor/mac-mlx/mlx_vlm/server/cli.py:197`. Unset read: Assigned by the runtime; see literal consumer.
+
+```text
+            os.environ["MLX_VLM_DRAFT_KIND"] = args.draft_kind
+        if args.draft_block_size is not None:
+            os.environ["MLX_VLM_DRAFT_BLOCK_SIZE"] = str(args.draft_block_size)
+    if args.prefill_step_size:
+        os.environ["PREFILL_STEP_SIZE"] = str(args.prefill_step_size)
+    os.environ["MLX_VLM_MAX_TOKENS"] = str(args.max_tokens)
+    os.environ["MLX_VLM_ENABLE_THINKING"] = "1" if args.enable_thinking else "0"
+```
+
+Source: `vendor/mac-mlx/mlx_vlm/server/generation.py:62`. Unset read: None.
+
+```text
+
+def _get_draft_block_size_from_env():
+    draft_block_size_str = os.environ.get("MLX_VLM_DRAFT_BLOCK_SIZE")
+    return int(draft_block_size_str) if draft_block_size_str else None
+
+
+def _notify_queues(queues, *items):
+```
+
+### MLX_VLM_DRAFT_KIND
+
+Advanced backend control MLX_VLM_DRAFT_KIND. Set explicitly only for the selected backend; its literal read and fallback are documented below.
+
+Scope: mac-mlx. Class: advanced.
+
+Source: `vendor/mac-mlx/mlx_vlm/server/cli.py:195`. Unset read: Assigned by the runtime; see literal consumer.
+
+```text
+        os.environ["MLX_VLM_DRAFT_MODEL"] = args.draft_model
+        if args.draft_kind is not None:
+            os.environ["MLX_VLM_DRAFT_KIND"] = args.draft_kind
+        if args.draft_block_size is not None:
+            os.environ["MLX_VLM_DRAFT_BLOCK_SIZE"] = str(args.draft_block_size)
+    if args.prefill_step_size:
+        os.environ["PREFILL_STEP_SIZE"] = str(args.prefill_step_size)
+```
+
+Source: `vendor/mac-mlx/mlx_vlm/server/generation.py:840`. Unset read: None.
+
+```text
+
+        draft_model = None
+        draft_kind = os.environ.get("MLX_VLM_DRAFT_KIND")
+        draft_model_path = os.environ.get("MLX_VLM_DRAFT_MODEL")
+        if self._is_distributed and draft_model_path:
+            raise ValueError("Speculative decoding is not supported in distributed mode.")
+        if draft_model_path:
+```
+
+### MLX_VLM_DRAFT_MODEL
+
+Advanced backend control MLX_VLM_DRAFT_MODEL. Set explicitly only for the selected backend; its literal read and fallback are documented below.
+
+Scope: mac-mlx. Class: advanced.
+
+Source: `vendor/mac-mlx/mlx_vlm/server/cli.py:193`. Unset read: Assigned by the runtime; see literal consumer.
+
+```text
+    os.environ["MLX_VLM_VISION_CACHE_SIZE"] = str(args.vision_cache_size)
+    if args.draft_model:
+        os.environ["MLX_VLM_DRAFT_MODEL"] = args.draft_model
+        if args.draft_kind is not None:
+            os.environ["MLX_VLM_DRAFT_KIND"] = args.draft_kind
+        if args.draft_block_size is not None:
+            os.environ["MLX_VLM_DRAFT_BLOCK_SIZE"] = str(args.draft_block_size)
+```
+
+Source: `vendor/mac-mlx/mlx_vlm/server/generation.py:841`. Unset read: None.
+
+```text
+        draft_model = None
+        draft_kind = os.environ.get("MLX_VLM_DRAFT_KIND")
+        draft_model_path = os.environ.get("MLX_VLM_DRAFT_MODEL")
+        if self._is_distributed and draft_model_path:
+            raise ValueError("Speculative decoding is not supported in distributed mode.")
+        if draft_model_path:
+            from ..speculative.drafters import (
+```
+
+### MLX_VLM_ENABLE_THINKING
+
+Advanced backend control MLX_VLM_ENABLE_THINKING. Set explicitly only for the selected backend; its literal read and fallback are documented below.
+
+Scope: mac-mlx. Class: advanced.
+
+Source: `vendor/mac-mlx/mlx_vlm/server/cli.py:201`. Unset read: Assigned by the runtime; see literal consumer.
+
+```text
+        os.environ["PREFILL_STEP_SIZE"] = str(args.prefill_step_size)
+    os.environ["MLX_VLM_MAX_TOKENS"] = str(args.max_tokens)
+    os.environ["MLX_VLM_ENABLE_THINKING"] = "1" if args.enable_thinking else "0"
+    if args.kv_bits is not None:
+        os.environ["KV_BITS"] = str(args.kv_bits)
+    os.environ["KV_GROUP_SIZE"] = str(args.kv_group_size)
+    os.environ["KV_QUANT_SCHEME"] = args.kv_quant_scheme
+```
+
+Source: `vendor/mac-mlx/mlx_vlm/server/generation.py:211`. Unset read: None.
+
+```text
+
+def get_server_enable_thinking():
+    raw = os.environ.get("MLX_VLM_ENABLE_THINKING")
+    if raw is None:
+        return DEFAULT_ENABLE_THINKING
+    return raw.lower() in ("1", "true", "yes", "on")
+
+```
+
+### MLX_VLM_GLM_DSA_DISABLE
+
+Advanced backend control MLX_VLM_GLM_DSA_DISABLE. Set explicitly only for the selected backend; its literal read and fallback are documented below.
+
+Scope: mac-mlx. Class: advanced.
+
+Source: `vendor/mac-mlx/mlx_vlm/models/glm_moe_dsa/glm_moe_dsa.py:344`. Unset read: Wrapper/conditional default: see the literal call and consumer below.
+
+```text
+    """
+    disable_dsa = (
+        _env_flag("MLX_VLM_GLM_DSA_DISABLE")
+        or _env_off("MLX_GLM_DSA_SPARSE")
+    )
+    disable_shared = (
+        _env_flag("MLX_VLM_GLM_DSA_DISABLE_SHARED")
+```
+
+### MLX_VLM_GLM_DSA_DISABLE_SHARED
+
+Advanced backend control MLX_VLM_GLM_DSA_DISABLE_SHARED. Set explicitly only for the selected backend; its literal read and fallback are documented below.
+
+Scope: mac-mlx. Class: advanced.
+
+Source: `vendor/mac-mlx/mlx_vlm/models/glm_moe_dsa/glm_moe_dsa.py:348`. Unset read: Wrapper/conditional default: see the literal call and consumer below.
+
+```text
+    )
+    disable_shared = (
+        _env_flag("MLX_VLM_GLM_DSA_DISABLE_SHARED")
+        or _env_off("MLX_GLM_DSA_SHARE_TOPK")
+    )
+    layers = getattr(getattr(language_model, "model", None), "layers", []) or []
+    patched_dsa = 0
+```
+
+### MLX_VLM_MAX_TOKENS
+
+Advanced backend control MLX_VLM_MAX_TOKENS. Set explicitly only for the selected backend; its literal read and fallback are documented below.
+
+Scope: mac-mlx. Class: advanced.
+
+Source: `vendor/mac-mlx/mlx_vlm/server/cli.py:200`. Unset read: Assigned by the runtime; see literal consumer.
+
+```text
+    if args.prefill_step_size:
+        os.environ["PREFILL_STEP_SIZE"] = str(args.prefill_step_size)
+    os.environ["MLX_VLM_MAX_TOKENS"] = str(args.max_tokens)
+    os.environ["MLX_VLM_ENABLE_THINKING"] = "1" if args.enable_thinking else "0"
+    if args.kv_bits is not None:
+        os.environ["KV_BITS"] = str(args.kv_bits)
+    os.environ["KV_GROUP_SIZE"] = str(args.kv_group_size)
+```
+
+Source: `vendor/mac-mlx/mlx_vlm/server/generation.py:80`. Unset read: DEFAULT_MAX_TOKENS.
+
+```text
+
+def get_server_max_tokens():
+    return int(os.environ.get("MLX_VLM_MAX_TOKENS", DEFAULT_MAX_TOKENS))
+
+
+def get_token_queue_timeout():
+    raw_timeout = os.environ.get("MLX_VLM_TOKEN_QUEUE_TIMEOUT", "")
+```
+
+Source: `vendor/mac-mlx/mlx_vlm/server/schemas.py:25`. Unset read: DEFAULT_MAX_TOKENS.
+
+```text
+
+def get_server_max_tokens():
+    return int(os.environ.get("MLX_VLM_MAX_TOKENS", DEFAULT_MAX_TOKENS))
+
+
+class FlexibleBaseModel(BaseModel):
+    """Base model that ignores/accepts any unknown OpenAI SDK fields."""
+```
+
+### MLX_VLM_PIPELINE
+
+Advanced backend control MLX_VLM_PIPELINE. Set explicitly only for the selected backend; its literal read and fallback are documented below.
+
+Scope: mac-mlx. Class: advanced.
+
+Source: `vendor/mac-mlx/mlx_vlm/server/cli.py:181`. Unset read: Assigned by the runtime; see literal consumer.
+
+```text
+    )
+    args = parser.parse_args()
+    os.environ["MLX_VLM_PIPELINE"] = "1" if args.pipeline else "0"
+    os.environ["MLX_VLM_DISTRIBUTED_BACKEND"] = args.distributed_backend
+    if args.pipeline_layers:
+        os.environ["MLX_VLM_PIPELINE_LAYERS"] = args.pipeline_layers
+    if args.trust_remote_code:
+```
+
+Source: `vendor/mac-mlx/mlx_vlm/server/generation.py:115`. Unset read: Wrapper/conditional default: see the literal call and consumer below.
+
+```text
+    if group.size() <= 1:
+        return None, None, group
+    if _env_flag("MLX_VLM_PIPELINE"):
+        return None, group, group
+    return group, None, group
+
+
+```
+
+### MLX_VLM_PIPELINE_LAYERS
+
+Advanced backend control MLX_VLM_PIPELINE_LAYERS. Set explicitly only for the selected backend; its literal read and fallback are documented below.
+
+Scope: mac-mlx. Class: advanced.
+
+Source: `vendor/mac-mlx/mlx_vlm/rpc_pipeline.py:421`. Unset read: Assigned by the runtime; see literal consumer.
+
+```text
+    require_gpu: bool,
+):
+    os.environ["MLX_VLM_PIPELINE_LAYERS"] = pipeline_layers
+    model_path = get_model_path(model)
+    group = _PipelineGroup(rank, size)
+
+    raw_config = json.loads((Path(model_path) / "config.json").read_text())
+```
+
+Source: `vendor/mac-mlx/mlx_vlm/models/text_only.py:118`. Unset read: None.
+
+```text
+        self.pipeline_size = group.size()
+        n_layers = len(core.layers)
+        raw_counts = os.environ.get("MLX_VLM_PIPELINE_LAYERS") or os.environ.get(
+            "MLX_PIPELINE_LAYERS", ""
+        )
+        if raw_counts:
+            counts = [int(part.strip()) for part in raw_counts.split(",") if part.strip()]
+```
+
+Source: `vendor/mac-mlx/mlx_vlm/models/deepseek_v4/language.py:951`. Unset read: None.
+
+```text
+        self.pipeline_size = group.size()
+        n_layers = self.args.num_hidden_layers
+        raw_counts = os.environ.get("MLX_VLM_PIPELINE_LAYERS") or os.environ.get(
+            "MLX_PIPELINE_LAYERS", ""
+        )
+        if raw_counts:
+            counts = [int(part.strip()) for part in raw_counts.split(",") if part.strip()]
+```
+
+Source: `vendor/mac-mlx/mlx_vlm/models/mimo_v2/mimo_v2.py:40`. Unset read: None.
+
+```text
+        n_layers = len(self.model.layers)
+
+        raw_counts = os.environ.get("MLX_VLM_PIPELINE_LAYERS") or os.environ.get(
+            "MLX_PIPELINE_LAYERS", ""
+        )
+        if raw_counts:
+            counts = [int(part.strip()) for part in raw_counts.split(",") if part.strip()]
+```
+
+Source: `vendor/mac-mlx/mlx_vlm/server/cli.py:53`. Unset read: ''.
+
+```text
+        "--pipeline-layers",
+        type=str,
+        default=os.environ.get("MLX_VLM_PIPELINE_LAYERS", ""),
+        help=(
+            "Comma-separated layer counts per rank for pipeline mode "
+            "(rank 0 owns the final layers, e.g. 52,9 for a 61-layer model)."
+        ),
+```
+
+Source: `vendor/mac-mlx/mlx_vlm/server/cli.py:184`. Unset read: Assigned by the runtime; see literal consumer.
+
+```text
+    os.environ["MLX_VLM_DISTRIBUTED_BACKEND"] = args.distributed_backend
+    if args.pipeline_layers:
+        os.environ["MLX_VLM_PIPELINE_LAYERS"] = args.pipeline_layers
+    if args.trust_remote_code:
+        os.environ["MLX_TRUST_REMOTE_CODE"] = "true"
+    if args.model:
+        os.environ["MLX_VLM_PRELOAD_MODEL"] = args.model
+```
+
+### MLX_VLM_PRELOAD_ADAPTER
+
+Advanced backend control MLX_VLM_PRELOAD_ADAPTER. Set explicitly only for the selected backend; its literal read and fallback are documented below.
+
+Scope: mac-mlx. Class: advanced.
+
+Source: `vendor/mac-mlx/mlx_vlm/server/cli.py:190`. Unset read: Assigned by the runtime; see literal consumer.
+
+```text
+        os.environ["MLX_VLM_PRELOAD_MODEL"] = args.model
+        if args.adapter_path:
+            os.environ["MLX_VLM_PRELOAD_ADAPTER"] = args.adapter_path
+    os.environ["MLX_VLM_VISION_CACHE_SIZE"] = str(args.vision_cache_size)
+    if args.draft_model:
+        os.environ["MLX_VLM_DRAFT_MODEL"] = args.draft_model
+        if args.draft_kind is not None:
+```
+
+### MLX_VLM_PRELOAD_MODEL
+
+Advanced backend control MLX_VLM_PRELOAD_MODEL. Set explicitly only for the selected backend; its literal read and fallback are documented below.
+
+Scope: mac-mlx. Class: advanced.
+
+Source: `vendor/mac-mlx/mlx_vlm/server/cli.py:188`. Unset read: Assigned by the runtime; see literal consumer.
+
+```text
+        os.environ["MLX_TRUST_REMOTE_CODE"] = "true"
+    if args.model:
+        os.environ["MLX_VLM_PRELOAD_MODEL"] = args.model
+        if args.adapter_path:
+            os.environ["MLX_VLM_PRELOAD_ADAPTER"] = args.adapter_path
+    os.environ["MLX_VLM_VISION_CACHE_SIZE"] = str(args.vision_cache_size)
+    if args.draft_model:
+```
+
+### MLX_VLM_RESPONSE_STORE_LIMIT
+
+Advanced backend control MLX_VLM_RESPONSE_STORE_LIMIT. Set explicitly only for the selected backend; its literal read and fallback are documented below.
+
+Scope: mac-mlx. Class: advanced.
+
+Source: `vendor/mac-mlx/mlx_vlm/server/responses_state.py:12`. Unset read: '1024'.
+
+```text
+from fastapi import HTTPException
+
+RESPONSE_STORE_LIMIT = int(os.environ.get("MLX_VLM_RESPONSE_STORE_LIMIT", "1024"))
+_CONTENT_MARKERS = ("<|START_TEXT|>", "<|END_TEXT|>")
+
+
+def _strip_content_markers(text: str) -> str:
+```
+
+### MLX_VLM_TOKEN_QUEUE_TIMEOUT
+
+Advanced backend control MLX_VLM_TOKEN_QUEUE_TIMEOUT. Set explicitly only for the selected backend; its literal read and fallback are documented below.
+
+Scope: mac-mlx. Class: advanced.
+
+Source: `vendor/mac-mlx/mlx_vlm/server/generation.py:84`. Unset read: ''.
+
+```text
+
+def get_token_queue_timeout():
+    raw_timeout = os.environ.get("MLX_VLM_TOKEN_QUEUE_TIMEOUT", "")
+    if raw_timeout == "":
+        return DEFAULT_TOKEN_QUEUE_TIMEOUT
+    try:
+        timeout = float(raw_timeout)
+```
+
+### MLX_VLM_VISION_CACHE_SIZE
+
+Advanced backend control MLX_VLM_VISION_CACHE_SIZE. Set explicitly only for the selected backend; its literal read and fallback are documented below.
+
+Scope: mac-mlx. Class: advanced.
+
+Source: `vendor/mac-mlx/mlx_vlm/server/app.py:568`. Unset read: '20'.
+
+```text
+        return model, None, config
+
+    vision_cache_size = int(os.environ.get("MLX_VLM_VISION_CACHE_SIZE", "20"))
+    vision_cache = VisionFeatureCache(max_size=vision_cache_size)
+
+    # APC: build a shared block pool if opted in via env var.
+    runtime.apc_manager = _apc.from_env(model_namespace=model_path)
+```
+
+Source: `vendor/mac-mlx/mlx_vlm/server/cli.py:191`. Unset read: Assigned by the runtime; see literal consumer.
+
+```text
+        if args.adapter_path:
+            os.environ["MLX_VLM_PRELOAD_ADAPTER"] = args.adapter_path
+    os.environ["MLX_VLM_VISION_CACHE_SIZE"] = str(args.vision_cache_size)
+    if args.draft_model:
+        os.environ["MLX_VLM_DRAFT_MODEL"] = args.draft_model
+        if args.draft_kind is not None:
+            os.environ["MLX_VLM_DRAFT_KIND"] = args.draft_kind
+```
+
+### MLX_VLM_WEIGHT_SHIP
+
+Advanced backend control MLX_VLM_WEIGHT_SHIP. Set explicitly only for the selected backend; its literal read and fallback are documented below.
+
+Scope: mac-mlx. Class: advanced.
+
+Source: `vendor/mac-mlx/mlx_vlm/utils.py:1074`. Unset read: ''.
+
+```text
+    same-disk / shared-storage setups. Enable with ``MLX_VLM_WEIGHT_SHIP=1`` or the
+    server flag ``--weight-source ship-from-rank0``."""
+    return os.environ.get("MLX_VLM_WEIGHT_SHIP", "").strip().lower() in {
+        "1",
+        "true",
+        "yes",
+        "on",
+```
+
 ### MLX_WORLD_SIZE
 
 Engine setting; retains its built-in default. The literal source consumer below records its behavior.
@@ -85534,6 +93503,36 @@ Source: `engines/mlx-serve/tests/test_agent_stop_repro.py:496`. Unset read: '112
     p.add_argument("--temperature", type=float, default=0.7)
 ```
 
+### PREFILL_STEP_SIZE
+
+Advanced backend control PREFILL_STEP_SIZE. Set explicitly only for the selected backend; its literal read and fallback are documented below.
+
+Scope: mac-mlx. Class: advanced.
+
+Source: `vendor/mac-mlx/mlx_vlm/server/cli.py:199`. Unset read: Assigned by the runtime; see literal consumer.
+
+```text
+            os.environ["MLX_VLM_DRAFT_BLOCK_SIZE"] = str(args.draft_block_size)
+    if args.prefill_step_size:
+        os.environ["PREFILL_STEP_SIZE"] = str(args.prefill_step_size)
+    os.environ["MLX_VLM_MAX_TOKENS"] = str(args.max_tokens)
+    os.environ["MLX_VLM_ENABLE_THINKING"] = "1" if args.enable_thinking else "0"
+    if args.kv_bits is not None:
+        os.environ["KV_BITS"] = str(args.kv_bits)
+```
+
+Source: `vendor/mac-mlx/mlx_vlm/server/generation.py:76`. Unset read: DEFAULT_PREFILL_STEP_SIZE.
+
+```text
+
+def get_prefill_step_size():
+    return int(os.environ.get("PREFILL_STEP_SIZE", DEFAULT_PREFILL_STEP_SIZE))
+
+
+def get_server_max_tokens():
+    return int(os.environ.get("MLX_VLM_MAX_TOKENS", DEFAULT_MAX_TOKENS))
+```
+
 ### PROBE_SECONDS
 
 Engine setting; retains its built-in default. The literal source consumer below records its behavior.
@@ -85682,6 +93681,36 @@ Source: `vendor/engines/cosmos_windows/reasoner_prefill_stream.py:365`. Unset re
         return _export(args.model, args.device, args.prompt, args.out)
     if args.mode == 'decode':
         return _decode(args.model, args.device, args.in_prefix, args.max_new_tokens)
+```
+
+### QUANTIZED_KV_START
+
+Advanced backend control QUANTIZED_KV_START. Set explicitly only for the selected backend; its literal read and fallback are documented below.
+
+Scope: mac-mlx. Class: advanced.
+
+Source: `vendor/mac-mlx/mlx_vlm/server/cli.py:208`. Unset read: Assigned by the runtime; see literal consumer.
+
+```text
+    if args.max_kv_size is not None:
+        os.environ["MAX_KV_SIZE"] = str(args.max_kv_size)
+    os.environ["QUANTIZED_KV_START"] = str(args.quantized_kv_start)
+    if args.top_logprobs_k is not None:
+        os.environ["TOP_LOGPROBS_K"] = str(args.top_logprobs_k)
+
+    log_level = getattr(logging, args.log_level.upper(), logging.INFO)
+```
+
+Source: `vendor/mac-mlx/mlx_vlm/server/generation.py:268`. Unset read: DEFAULT_QUANTIZED_KV_START.
+
+```text
+
+def get_quantized_kv_start():
+    return int(os.environ.get("QUANTIZED_KV_START", DEFAULT_QUANTIZED_KV_START))
+
+
+def get_top_logprobs_k():
+    """Max per-token top_logprobs honored by the server (0 = disabled).
 ```
 
 ### QV_GH
@@ -86302,6 +94331,78 @@ test "tool traffic replay: captured agent traffic survives parse + schema coerci
     var total_calls: usize = 0;
 ```
 
+### SANDBOX_KERNEL
+
+Advanced backend control SANDBOX_KERNEL. Set explicitly only for the selected backend; its literal read and fallback are documented below.
+
+Scope: mlx-serve. Class: advanced.
+
+Source: `engines/mlx-serve/app/Sources/MLXServe/Services/SandboxSmoke.swift:127`. Unset read: Wrapper/conditional default: see the literal call and consumer below.
+
+```text
+                    || env["CONTAIN_SMOKE_REAL_PROVISION"] == "1"
+                if !realProvision {
+                    setenv("SANDBOX_KERNEL", kernel, 1)
+                    setenv("SANDBOX_ROOTFS", rootfs, 1)
+                } else {
+                    log("[smoke] (real provisioning: fetch kernel + pull \(Self.guestArchNote))")
+                }
+```
+
+### SANDBOX_RAM_GB
+
+Advanced backend control SANDBOX_RAM_GB. Set explicitly only for the selected backend; its literal read and fallback are documented below.
+
+Scope: mlx-serve. Class: advanced.
+
+Source: `engines/mlx-serve/app/Sources/MLXServe/Services/AgentSandbox.swift:1221`. Unset read: Wrapper/conditional default: see the literal call and consumer below.
+
+```text
+        // browser-deps `npm install` at ~850 MB RSS (issue #150 follow-up), and
+        // an agent that compiles or runs headless Chromium needs real headroom.
+        let ramGB = ProcessInfo.processInfo.environment["SANDBOX_RAM_GB"].flatMap { UInt64($0) } ?? 4
+        cfg.ramBytes = ramGB * 1024 * 1024 * 1024
+
+        // Guest monitor consumer: every snapshot carries /proc/meminfo (tray RAM
+        // readout — always), and when networked also the guest IP + listening
+```
+
+### SANDBOX_ROOTFS
+
+Advanced backend control SANDBOX_ROOTFS. Set explicitly only for the selected backend; its literal read and fallback are documented below.
+
+Scope: mlx-serve. Class: advanced.
+
+Source: `engines/mlx-serve/app/Sources/MLXServe/Services/SandboxSmoke.swift:128`. Unset read: Wrapper/conditional default: see the literal call and consumer below.
+
+```text
+                if !realProvision {
+                    setenv("SANDBOX_KERNEL", kernel, 1)
+                    setenv("SANDBOX_ROOTFS", rootfs, 1)
+                } else {
+                    log("[smoke] (real provisioning: fetch kernel + pull \(Self.guestArchNote))")
+                }
+                let image = env["SANDBOX_SMOKE_IMAGE"] ?? env["CONTAIN_SMOKE_IMAGE"] ?? ServerOptions.SandboxConfig.baseImage
+```
+
+### SANDBOX_SMOKE_IMAGE
+
+Advanced backend control SANDBOX_SMOKE_IMAGE. Set explicitly only for the selected backend; its literal read and fallback are documented below.
+
+Scope: mlx-serve. Class: advanced.
+
+Source: `engines/mlx-serve/app/Sources/MLXServe/Services/SandboxSmoke.swift:341`. Unset read: Wrapper/conditional default: see the literal call and consumer below.
+
+```text
+
+    static var guestArchNote: String {
+        let img = ProcessInfo.processInfo.environment["SANDBOX_SMOKE_IMAGE"] ?? ServerOptions.SandboxConfig.baseImage
+        return "\(img) (\(AgentSandbox.guestArch))"
+    }
+
+    /// One `/usr/bin/ssh` round-trip into the guest via the loopback mirror —
+```
+
 ### SCAIL2_ALLOW_ATTN_FALLBACK
 
 SCAIL2_ALLOW_ATTN_FALLBACK: advanced engine setting; built-in default retained
@@ -86450,6 +94551,24 @@ _PIPELINE_CACHE: dict = {}
 _SCAIL_BLOCK_RE = re.compile('^blocks\\.(\\d+)\\.')
 _ATTN_BACKEND_CHECKED = False
 
+```
+
+### SHELL
+
+Advanced backend control SHELL. Set explicitly only for the selected backend; its literal read and fallback are documented below.
+
+Scope: mlx-serve. Class: advanced.
+
+Source: `engines/mlx-serve/app/Sources/MLXServe/Services/LoginShellEnv.swift:56`. Unset read: Wrapper/conditional default: see the literal call and consumer below.
+
+```text
+    static func values(of names: [String]) -> [String: String] {
+        guard !names.isEmpty else { return [:] }
+        let shell = ProcessInfo.processInfo.environment["SHELL"] ?? "/bin/zsh"
+
+        let p = Process()
+        p.executableURL = URL(fileURLWithPath: shell)
+        p.arguments = ["-l", "-i", "-c", probeCommand(names)]
 ```
 
 ### SINGLE_MTP_TEST_CONTEXT
@@ -87176,6 +95295,24 @@ Source: `vendor/studio/studio/config.py:146`. Unset read: Wrapper/conditional de
     real_llm: bool = field(default_factory=lambda: _env('STUDIO_REAL_LLM', '1') not in ('', '0', 'false', 'False'))
     real_train: bool = field(default_factory=lambda: _env('STUDIO_REAL_TRAIN', '0') not in ('', '0', 'false', 'False'))
     hunyuan_python: str = field(default_factory=lambda: _resolved('STUDIO_HUNYUAN_PYTHON', 'hunyuan-python\\Scripts\\python.exe', '', want='file'))
+```
+
+### STUDIO_COMFYUI_MODELS
+
+STUDIO_COMFYUI_MODELS: explicit engine setting; inherited values are cleared and the native default is retained.
+
+Scope: image, studio, video. Class: advanced.
+
+Source: `vendor/studio/studio/krea2_diffusion.py:16`. Unset read: None.
+
+```text
+
+def _comfy_models_base() -> Path:
+    env = os.environ.get('STUDIO_COMFYUI_MODELS')
+    if env and Path(env).is_dir():
+        return Path(env)
+    if sys.platform == 'win32':
+        win_mirror = Path(os.environ.get('STUDIO_KREA2_WIN_MIRROR', ''))
 ```
 
 ### STUDIO_COMFYUI_PATH
@@ -87970,6 +96107,42 @@ Source: `vendor/studio/studio/custom_models.py:116`. Unset read: None.
 
 ```
 
+### STUDIO_GLM_DSA_ALLOW_FA_DENSE
+
+Advanced backend control STUDIO_GLM_DSA_ALLOW_FA_DENSE. Set explicitly only for the selected backend; its literal read and fallback are documented below.
+
+Scope: studio. Class: advanced.
+
+Source: `vendor/studio/studio/general_launch.py:95`. Unset read: None.
+
+```text
+        r['dsa_sparse'] = mode != 'dense'
+        if str(r.get('fa') or '').strip().lower() == 'on' and mode == 'dense':
+            if os.environ.get('STUDIO_GLM_DSA_ALLOW_FA_DENSE') == '1':
+                print('studio: glm-dsa dense: KEEPING -fa on because STUDIO_GLM_DSA_ALLOW_FA_DENSE=1 -- this configuration garbles on SM120 (measured 2026-08-27)', flush=True)
+            else:
+                print('studio: glm-dsa dense: forcing -fa off; dense+fa=on garbles on SM120 (measured 2026-08-27). Set STUDIO_GLM_DSA_ALLOW_FA_DENSE=1 to override.', flush=True)
+                r['fa'] = 'off'
+```
+
+### STUDIO_GLM_DSA_MODE
+
+Advanced backend control STUDIO_GLM_DSA_MODE. Set explicitly only for the selected backend; its literal read and fallback are documented below.
+
+Scope: studio. Class: advanced.
+
+Source: `vendor/studio/studio/general_launch.py:87`. Unset read: None.
+
+```text
+    if arch == 'glm-dsa':
+        _default_mode = 'dense' if r.get('dsa_sparse') is False else 'full'
+        mode = str(r.get('dsa_mode') or os.environ.get('STUDIO_GLM_DSA_MODE') or _default_mode).strip().lower()
+        if mode == 'semi':
+            mode = 'full'
+        if mode not in ('dense', 'full'):
+            mode = 'full'
+```
+
 ### STUDIO_GLM_EMIT_BIN
 
 STUDIO_GLM_EMIT_BIN: advanced engine setting; built-in default retained
@@ -88358,6 +96531,42 @@ Source: `vendor/engines/cosmos_windows/weight_streaming/minimax_h3_backend.py:62
     _heads = getattr(_cfg, 'num_attention_heads', 0) or 0
     _head_dim = getattr(_cfg, 'attention_head_dim', 0) or 0
     if _repack_qkv and (not (_heads and _head_dim)):
+```
+
+### STUDIO_H3_CONTINUITY_PROJECTION
+
+STUDIO_H3_CONTINUITY_PROJECTION: explicit engine setting; inherited values are cleared and the native default is retained.
+
+Scope: image, studio, video. Class: advanced.
+
+Source: `vendor/studio/studio/h3_live.py:196`. Unset read: ''.
+
+```text
+        if o.get('reference_native_res'):
+            argv.append('--reference-native-res')
+        projection = '' if o.get('seamless') or choice in ('projection', 'blend', 'latent') else str(os.environ.get('STUDIO_H3_CONTINUITY_PROJECTION', '')).strip().lower()
+        if projection in ('float', 'uint8', 'video'):
+            argv += ['--continuity-projection', projection]
+            alpha = float(os.environ.get('STUDIO_H3_CONTINUITY_PROJECTION_ALPHA', '1'))
+            if not 0 < alpha <= 1:
+```
+
+### STUDIO_H3_CONTINUITY_PROJECTION_ALPHA
+
+STUDIO_H3_CONTINUITY_PROJECTION_ALPHA: explicit engine setting; inherited values are cleared and the native default is retained.
+
+Scope: image, studio, video. Class: advanced.
+
+Source: `vendor/studio/studio/h3_live.py:199`. Unset read: '1'.
+
+```text
+        if projection in ('float', 'uint8', 'video'):
+            argv += ['--continuity-projection', projection]
+            alpha = float(os.environ.get('STUDIO_H3_CONTINUITY_PROJECTION_ALPHA', '1'))
+            if not 0 < alpha <= 1:
+                raise ValueError('H3 projection alpha must be in (0, 1]')
+            argv += ['--continuity-projection-alpha', str(alpha)]
+        if o['resident']:
 ```
 
 ### STUDIO_H3_DEBUG_BIND
@@ -89018,6 +97227,24 @@ Source: `vendor/engines/cosmos_windows/weight_streaming/minimax_h3_pipeline.py:5
     _schedule = os.environ.get('STUDIO_H3_SIGMA_SCHEDULE', 'time_shift') or 'time_shift'
     _sampler = os.environ.get('STUDIO_H3_SAMPLER', 'euler') or 'euler'
     if _sampler not in H3_SAMPLERS:
+```
+
+### STUDIO_H3_STEP_ADAPTERS
+
+STUDIO_H3_STEP_ADAPTERS: explicit engine setting; inherited values are cleared and the native default is retained.
+
+Scope: image, studio, video. Class: advanced.
+
+Source: `vendor/studio/studio/h3_model_profiles.py:51`. Unset read: ''.
+
+```text
+def is_base_distill_adapter(path) -> bool:
+    name = Path(str(path).replace('\\', '/')).name.lower()
+    extra = {n.strip().lower() for n in os.environ.get('STUDIO_H3_STEP_ADAPTERS', '').split(';') if n.strip()}
+    return name in BASE_H3_STEP_ADAPTERS or name in extra
+
+def profile_adapters(profile: H3ModelProfile, requested) -> tuple:
+    kept, removed = ([], [])
 ```
 
 ### STUDIO_HF_CACHE
@@ -89818,6 +98045,24 @@ Source: `vendor/studio/studio/adapter.py:1977`. Unset read: ''.
             from diffusers import AutoencoderKLFlux2, FlowMatchEulerDiscreteScheduler
 ```
 
+### STUDIO_KREA2_DIRECT_MIN_FREE_GB
+
+STUDIO_KREA2_DIRECT_MIN_FREE_GB: explicit engine setting; inherited values are cleared and the native default is retained.
+
+Scope: image, studio, video. Class: advanced.
+
+Source: `vendor/studio/studio/krea2_diffusion.py:1272`. Unset read: raw_need.
+
+```text
+    raw_need = 4.0
+    try:
+        raw_need = float(os.environ.get('STUDIO_KREA2_DIRECT_MIN_FREE_GB', raw_need))
+    except (TypeError, ValueError):
+        pass
+    _require_free_memory(raw_need)
+    stream_layers = offload in ('model', 'stream', 'streaming', 'stream_layers', 'streaming_lazy')
+```
+
 ### STUDIO_KREA2_DISABLE_STAGED
 
 STUDIO_KREA2_DISABLE_STAGED: advanced engine setting; built-in default retained
@@ -89834,6 +98079,150 @@ Source: `vendor/studio/studio/adapter.py:2656`. Unset read: '0'.
         else:
             mode = 'resident' if is_resident else os.environ.get('STUDIO_BOOGU_KREA_OFFLOAD', 'streaming')
         cacheable = is_resident or (mode in ('streaming', 'stream', 'streamed', 'native_streaming') and self._stream_pipeline_cache_enabled() and (not (arch.startswith('boogu') or arch.startswith('krea'))))
+```
+
+### STUDIO_KREA2_DIT
+
+STUDIO_KREA2_DIT: explicit engine setting; inherited values are cleared and the native default is retained.
+
+Scope: image, studio, video. Class: advanced.
+
+Source: `vendor/studio/studio/krea2_diffusion.py:34`. Unset read: None.
+
+```text
+def krea2_files() -> dict:
+    base = _comfy_models_base()
+    return {'dit': os.environ.get('STUDIO_KREA2_DIT') or str(base / 'checkpoints' / 'Krea2_Turbo_int8mixed.safetensors'), 'text_encoder': os.environ.get('STUDIO_KREA2_TEXT_ENCODER') or str(base / 'text_encoders' / 'qwen3vl_4b_int8.safetensors'), 'vae': os.environ.get('STUDIO_KREA2_VAE') or str(base / 'vae' / 'qwen_image_vae.safetensors')}
+
+def krea2_available() -> bool:
+    f = krea2_files()
+    return Path(f['dit']).is_file() and Path(f['text_encoder']).is_file()
+```
+
+### STUDIO_KREA2_DTYPE
+
+STUDIO_KREA2_DTYPE: explicit engine setting; inherited values are cleared and the native default is retained.
+
+Scope: image, studio, video. Class: advanced.
+
+Source: `vendor/studio/studio/krea2_diffusion.py:427`. Unset read: 'float16'.
+
+```text
+def _krea2_resident_dtype():
+    import torch
+    raw = str(os.environ.get('STUDIO_KREA2_DTYPE', 'float16')).strip().lower()
+    if raw in {'bfloat16', 'bf16'}:
+        return torch.bfloat16
+    if raw in {'float16', 'fp16', 'half'}:
+        return torch.float16
+```
+
+### STUDIO_KREA2_EDIT_LORA
+
+STUDIO_KREA2_EDIT_LORA: explicit engine setting; inherited values are cleared and the native default is retained.
+
+Scope: image, studio, video. Class: advanced.
+
+Source: `vendor/studio/studio/krea2_diffusion.py:81`. Unset read: None.
+
+```text
+    configured = str(explicit_path or '').strip()
+    if not configured:
+        configured = str(os.environ.get('STUDIO_KREA2_EDIT_LORA') or '').strip()
+    if configured:
+        path = Path(configured).expanduser().resolve(strict=False)
+        if not path.is_file():
+            raise RuntimeError(f'Krea 2 Edit LoRA not found: {str(path)!r}')
+```
+
+### STUDIO_KREA2_MIN_FREE_GB
+
+STUDIO_KREA2_MIN_FREE_GB: explicit engine setting; inherited values are cleared and the native default is retained.
+
+Scope: image, studio, video. Class: advanced.
+
+Source: `vendor/studio/studio/krea2_diffusion.py:757`. Unset read: need_gb.
+
+```text
+def _require_free_memory(need_gb: float=55.0) -> None:
+    try:
+        need_gb = float(os.environ.get('STUDIO_KREA2_MIN_FREE_GB', need_gb))
+    except (TypeError, ValueError):
+        pass
+    if need_gb <= 0:
+        return
+```
+
+### STUDIO_KREA2_MPS_COMPILE
+
+STUDIO_KREA2_MPS_COMPILE: explicit engine setting; inherited values are cleared and the native default is retained.
+
+Scope: image, studio, video. Class: advanced.
+
+Source: `vendor/studio/studio/krea2_diffusion.py:1235`. Unset read: '1'.
+
+```text
+
+def _configure_krea2_regional_compile(transformer, device: str) -> bool:
+    enabled = str(os.environ.get('STUDIO_KREA2_MPS_COMPILE', '1')).strip().lower() in {'1', 'true', 'yes', 'on'}
+    if not enabled or str(device).split(':', 1)[0].lower() != 'mps':
+        return False
+    compile_repeated = getattr(transformer, 'compile_repeated_blocks', None)
+    if not callable(compile_repeated):
+```
+
+### STUDIO_KREA2_TEXT_ENCODER
+
+STUDIO_KREA2_TEXT_ENCODER: explicit engine setting; inherited values are cleared and the native default is retained.
+
+Scope: image, studio, video. Class: advanced.
+
+Source: `vendor/studio/studio/krea2_diffusion.py:34`. Unset read: None.
+
+```text
+def krea2_files() -> dict:
+    base = _comfy_models_base()
+    return {'dit': os.environ.get('STUDIO_KREA2_DIT') or str(base / 'checkpoints' / 'Krea2_Turbo_int8mixed.safetensors'), 'text_encoder': os.environ.get('STUDIO_KREA2_TEXT_ENCODER') or str(base / 'text_encoders' / 'qwen3vl_4b_int8.safetensors'), 'vae': os.environ.get('STUDIO_KREA2_VAE') or str(base / 'vae' / 'qwen_image_vae.safetensors')}
+
+def krea2_available() -> bool:
+    f = krea2_files()
+    return Path(f['dit']).is_file() and Path(f['text_encoder']).is_file()
+```
+
+### STUDIO_KREA2_VAE
+
+STUDIO_KREA2_VAE: explicit engine setting; inherited values are cleared and the native default is retained.
+
+Scope: image, studio, video. Class: advanced.
+
+Source: `vendor/studio/studio/krea2_diffusion.py:34`. Unset read: None.
+
+```text
+def krea2_files() -> dict:
+    base = _comfy_models_base()
+    return {'dit': os.environ.get('STUDIO_KREA2_DIT') or str(base / 'checkpoints' / 'Krea2_Turbo_int8mixed.safetensors'), 'text_encoder': os.environ.get('STUDIO_KREA2_TEXT_ENCODER') or str(base / 'text_encoders' / 'qwen3vl_4b_int8.safetensors'), 'vae': os.environ.get('STUDIO_KREA2_VAE') or str(base / 'vae' / 'qwen_image_vae.safetensors')}
+
+def krea2_available() -> bool:
+    f = krea2_files()
+    return Path(f['dit']).is_file() and Path(f['text_encoder']).is_file()
+```
+
+### STUDIO_KREA2_WIN_MIRROR
+
+STUDIO_KREA2_WIN_MIRROR: explicit engine setting; inherited values are cleared and the native default is retained.
+
+Scope: image, studio, video. Class: advanced.
+
+Source: `vendor/studio/studio/krea2_diffusion.py:20`. Unset read: ''.
+
+```text
+        return Path(env)
+    if sys.platform == 'win32':
+        win_mirror = Path(os.environ.get('STUDIO_KREA2_WIN_MIRROR', ''))
+        if win_mirror.is_dir():
+            return win_mirror
+    cfg = Path.home() / 'Library' / 'Application Support' / 'Comfy Desktop' / 'settings.json'
+    try:
 ```
 
 ### STUDIO_LORAS_DIR
@@ -90214,6 +98603,204 @@ def build_qwen38_uncensored_preset(*, ctx: int=512000) -> dict:
 
 ```
 
+### STUDIO_QWEN3VL_CACHE
+
+STUDIO_QWEN3VL_CACHE: explicit engine setting; inherited values are cleared and the native default is retained.
+
+Scope: image, studio, video. Class: advanced.
+
+Source: `vendor/studio/studio/krea2_diffusion.py:12`. Unset read: None.
+
+```text
+QWEN_IMAGE_REPO = os.environ.get('STUDIO_QWEN_IMAGE_REPO', 'Qwen/Qwen-Image')
+QWEN3VL_REPO = os.environ.get('STUDIO_QWEN3VL_REPO', 'Qwen/Qwen3-VL-4B-Instruct')
+_QWEN3VL_CACHE = os.environ.get('STUDIO_QWEN3VL_CACHE') or str(Path.home() / '.cache' / 'studio_qwen3vl_4b')
+KREA2_TAP_LAYERS = (2, 5, 8, 11, 14, 17, 20, 23, 26, 29, 32, 35)
+
+def _comfy_models_base() -> Path:
+    env = os.environ.get('STUDIO_COMFYUI_MODELS')
+```
+
+### STUDIO_QWEN3VL_REPO
+
+STUDIO_QWEN3VL_REPO: explicit engine setting; inherited values are cleared and the native default is retained.
+
+Scope: image, studio, video. Class: advanced.
+
+Source: `vendor/studio/studio/krea2_diffusion.py:11`. Unset read: 'Qwen/Qwen3-VL-4B-Instruct'.
+
+```text
+from pathlib import Path
+QWEN_IMAGE_REPO = os.environ.get('STUDIO_QWEN_IMAGE_REPO', 'Qwen/Qwen-Image')
+QWEN3VL_REPO = os.environ.get('STUDIO_QWEN3VL_REPO', 'Qwen/Qwen3-VL-4B-Instruct')
+_QWEN3VL_CACHE = os.environ.get('STUDIO_QWEN3VL_CACHE') or str(Path.home() / '.cache' / 'studio_qwen3vl_4b')
+KREA2_TAP_LAYERS = (2, 5, 8, 11, 14, 17, 20, 23, 26, 29, 32, 35)
+
+def _comfy_models_base() -> Path:
+```
+
+### STUDIO_QWEN_IMAGE21_BASE
+
+STUDIO_QWEN_IMAGE21_BASE: explicit engine setting; inherited values are cleared and the native default is retained.
+
+Scope: image, studio, video. Class: advanced.
+
+Source: `vendor/studio/studio/qwen_comfy_load.py:6`. Unset read: ''.
+
+```text
+import re
+from pathlib import Path
+DEFAULT_BASE_REPO = os.environ.get('STUDIO_QWEN_IMAGE21_BASE', '')
+_BLOCK = re.compile('^transformer_blocks\\.(\\d+)\\.')
+
+def _block_index(target_key: str) -> int | None:
+    match = _BLOCK.match(target_key)
+```
+
+### STUDIO_QWEN_IMAGE21_MODEL
+
+STUDIO_QWEN_IMAGE21_MODEL: explicit engine setting; inherited values are cleared and the native default is retained.
+
+Scope: image, studio, video. Class: advanced.
+
+Source: `vendor/studio/studio/qwen_image21.py:544`. Unset read: DEFAULT_MODEL_DIR.
+
+```text
+    parser.add_argument('--serve', action='store_true', help='Keep weights resident and read JSON requests on stdin')
+    parser.add_argument('--request', help='JSON request manifest')
+    parser.add_argument('--model-dir', default=os.environ.get('STUDIO_QWEN_IMAGE21_MODEL', DEFAULT_MODEL_DIR))
+    parser.add_argument('--offload-dir', default=os.environ.get('STUDIO_QWEN_IMAGE21_OFFLOAD', ''))
+    args = parser.parse_args(argv)
+    if args.serve:
+        pipe = None
+```
+
+### STUDIO_QWEN_IMAGE21_OFFLOAD
+
+STUDIO_QWEN_IMAGE21_OFFLOAD: explicit engine setting; inherited values are cleared and the native default is retained.
+
+Scope: image, studio, video. Class: advanced.
+
+Source: `vendor/studio/studio/qwen_image21.py:545`. Unset read: ''.
+
+```text
+    parser.add_argument('--request', help='JSON request manifest')
+    parser.add_argument('--model-dir', default=os.environ.get('STUDIO_QWEN_IMAGE21_MODEL', DEFAULT_MODEL_DIR))
+    parser.add_argument('--offload-dir', default=os.environ.get('STUDIO_QWEN_IMAGE21_OFFLOAD', ''))
+    args = parser.parse_args(argv)
+    if args.serve:
+        pipe = None
+        for line in sys.stdin:
+```
+
+### STUDIO_QWEN_IMAGE21_PACK_DIR
+
+STUDIO_QWEN_IMAGE21_PACK_DIR: explicit engine setting; inherited values are cleared and the native default is retained.
+
+Scope: image, studio, video. Class: advanced.
+
+Source: `vendor/studio/studio/qwen_block_weights.py:57`. Unset read: ''.
+
+```text
+    identity = [(f, Path(f).stat().st_size, Path(f).stat().st_mtime_ns) for f in files]
+    fingerprint = hashlib.sha256(json.dumps(['qwen-row-int8-v1', identity]).encode()).hexdigest()[:20]
+    root = Path(pack_dir or os.environ.get('STUDIO_QWEN_IMAGE21_PACK_DIR', '')) / fingerprint
+    root.mkdir(parents=True, exist_ok=True)
+    groups = block_groups(index, block_prefix=block_prefix)
+    complete = root / 'complete.json'
+    if complete.is_file() and all(((root / f'block-{i:03}.safetensors').is_file() for i in groups)):
+```
+
+### STUDIO_QWEN_IMAGE21_TEXT_ENCODER_8BIT
+
+STUDIO_QWEN_IMAGE21_TEXT_ENCODER_8BIT: explicit engine setting; inherited values are cleared and the native default is retained.
+
+Scope: image, studio, video. Class: advanced.
+
+Source: `vendor/studio/studio/qwen_image21.py:392`. Unset read: '1'.
+
+```text
+    comp_root = components_root(root)
+    started = time.perf_counter()
+    use_int8 = os.environ.get('STUDIO_QWEN_IMAGE21_TEXT_ENCODER_8BIT', '1') != '0'
+    print(f"[status] Qwen mode: transformer={precision}, streaming={streaming}, text_encoder={('int8' if use_int8 else 'bf16')}", flush=True)
+    if single_file:
+        print(f'[status] Qwen ComfyUI single-file checkpoint {root.name!r}: transformer from the file, other components from {comp_root}', flush=True)
+    print('[status] DirectStorage: loading Qwen text encoder to VRAM', flush=True)
+```
+
+### STUDIO_QWEN_IMAGE21_VRAM_FRACTION
+
+STUDIO_QWEN_IMAGE21_VRAM_FRACTION: explicit engine setting; inherited values are cleared and the native default is retained.
+
+Scope: image, studio, video. Class: advanced.
+
+Source: `vendor/studio/studio/qwen_image21.py:386`. Unset read: '0.92'.
+
+```text
+    from transformers import Qwen3VLProcessor
+    from .qwen_direct_load import bind_component
+    torch.cuda.set_per_process_memory_fraction(float(os.environ.get('STUDIO_QWEN_IMAGE21_VRAM_FRACTION', '0.92')), 0)
+    from .qwen_comfy_load import bind_qwen21_transformer, components_root, is_single_file_checkpoint
+    root = Path(model_dir)
+    single_file = is_single_file_checkpoint(root)
+    comp_root = components_root(root)
+```
+
+### STUDIO_QWEN_IMAGE_REPO
+
+STUDIO_QWEN_IMAGE_REPO: explicit engine setting; inherited values are cleared and the native default is retained.
+
+Scope: image, studio, video. Class: advanced.
+
+Source: `vendor/studio/studio/krea2_diffusion.py:10`. Unset read: 'Qwen/Qwen-Image'.
+
+```text
+from contextlib import contextmanager
+from pathlib import Path
+QWEN_IMAGE_REPO = os.environ.get('STUDIO_QWEN_IMAGE_REPO', 'Qwen/Qwen-Image')
+QWEN3VL_REPO = os.environ.get('STUDIO_QWEN3VL_REPO', 'Qwen/Qwen3-VL-4B-Instruct')
+_QWEN3VL_CACHE = os.environ.get('STUDIO_QWEN3VL_CACHE') or str(Path.home() / '.cache' / 'studio_qwen3vl_4b')
+KREA2_TAP_LAYERS = (2, 5, 8, 11, 14, 17, 20, 23, 26, 29, 32, 35)
+
+```
+
+### STUDIO_RAM_ABORT_FLOOR_GB
+
+STUDIO_RAM_ABORT_FLOOR_GB: explicit engine setting; inherited values are cleared and the native default is retained.
+
+Scope: image, studio, video. Class: advanced.
+
+Source: `vendor/studio/studio/safety.py:11`. Unset read: '1.0'.
+
+```text
+def ram_abort_floor_gb() -> float:
+    try:
+        return max(0.25, float(os.environ.get('STUDIO_RAM_ABORT_FLOOR_GB', '1.0')))
+    except (TypeError, ValueError):
+        return 1.0
+
+def free_ram_gb() -> float:
+```
+
+### STUDIO_RAM_PREFLIGHT_FORCE
+
+STUDIO_RAM_PREFLIGHT_FORCE: explicit engine setting; inherited values are cleared and the native default is retained.
+
+Scope: image, studio, video. Class: advanced.
+
+Source: `vendor/studio/studio/ram_preflight.py:71`. Unset read: ''.
+
+```text
+
+def wait_for_host_ram(min_free_gb: float, *, label: str='launch', timeout_s: float=90.0, poll_s: float=1.0, settle_s: float=4.0, emit=None) -> float:
+    if os.environ.get('STUDIO_SKIP_RAM_PREFLIGHT', '').strip().lower() in _TRUTHY or os.environ.get('STUDIO_RAM_PREFLIGHT_FORCE', '').strip().lower() in _TRUTHY:
+        return free_host_ram_gb()
+    import time as _t
+    deadline = _t.monotonic() + max(0.0, float(timeout_s))
+    last = best = free_host_ram_gb()
+```
+
 ### STUDIO_REAL_LLM
 
 STUDIO_REAL_LLM: advanced engine setting; built-in default retained
@@ -90368,6 +98955,24 @@ def _sdedit_i2i_enabled(backend: str) -> bool:
     if os.environ.get(f'STUDIO_SDEDIT_I2I_{backend.upper()}', '1').strip().lower() in off:
         return False
     return True
+```
+
+### STUDIO_SKIP_RAM_PREFLIGHT
+
+STUDIO_SKIP_RAM_PREFLIGHT: explicit engine setting; inherited values are cleared and the native default is retained.
+
+Scope: image, studio, video. Class: advanced.
+
+Source: `vendor/studio/studio/ram_preflight.py:71`. Unset read: ''.
+
+```text
+
+def wait_for_host_ram(min_free_gb: float, *, label: str='launch', timeout_s: float=90.0, poll_s: float=1.0, settle_s: float=4.0, emit=None) -> float:
+    if os.environ.get('STUDIO_SKIP_RAM_PREFLIGHT', '').strip().lower() in _TRUTHY or os.environ.get('STUDIO_RAM_PREFLIGHT_FORCE', '').strip().lower() in _TRUTHY:
+        return free_host_ram_gb()
+    import time as _t
+    deadline = _t.monotonic() + max(0.0, float(timeout_s))
+    last = best = free_host_ram_gb()
 ```
 
 ### STUDIO_SLOW_MODEL_VOLUMES
@@ -90754,6 +99359,24 @@ Runtime-local cache/temp directory; no model download is performed.
 
 Scope: ds4-win, image, mac-ds4, mlx-serve, rtx-llama, studio, video, mac-mlx, mac-llama, mac-mference. Class: preset.
 
+### TARREADER_REAL_LAYER
+
+Advanced backend control TARREADER_REAL_LAYER. Set explicitly only for the selected backend; its literal read and fallback are documented below.
+
+Scope: mlx-serve. Class: advanced.
+
+Source: `engines/mlx-serve/app/Tests/MLXCoreTests/TarReaderTests.swift:260`. Unset read: Wrapper/conditional default: see the literal call and consumer below.
+
+```text
+
+    func testRealDockerLayerMatchesSystemTar() throws {
+        guard let layer = ProcessInfo.processInfo.environment["TARREADER_REAL_LAYER"] else {
+            throw XCTSkip("set TARREADER_REAL_LAYER to a .tar.gz image layer")
+        }
+        let mine = try tempDir("mine")
+        let theirs = try tempDir("theirs")
+```
+
 ### TEMP
 
 Runtime-local cache/temp directory; no model download is performed.
@@ -90862,6 +99485,24 @@ def _format_diffusion_draft_line(
     response: GenerationResult,
 ```
 
+### TESTING_MODE
+
+Advanced backend control TESTING_MODE. Set explicitly only for the selected backend; its literal read and fallback are documented below.
+
+Scope: mlx-serve. Class: advanced.
+
+Source: `engines/mlx-serve/app/Sources/MLXServe/AppState.swift:604`. Unset read: Wrapper/conditional default: see the literal call and consumer below.
+
+```text
+        TaskNotifier.shared.appState = self
+        taskScheduler.start()
+        if ProcessInfo.processInfo.environment["TESTING_MODE"] != nil {
+            testServer.start(appState: self)
+        }
+        AgentEngine.cleanupOverflowFiles()
+
+```
+
 ### TMP
 
 Runtime-local cache/temp directory; no model download is performed.
@@ -90909,6 +99550,36 @@ Source: `engines/streaming-llama/prefill_llama.cpp/tools/server/server-context.c
 Runtime-local cache/temp directory; no model download is performed.
 
 Scope: ds4-win, image, mac-ds4, mlx-serve, rtx-llama, studio, video, mac-mlx, mac-llama, mac-mference. Class: preset.
+
+### TOP_LOGPROBS_K
+
+Advanced backend control TOP_LOGPROBS_K. Set explicitly only for the selected backend; its literal read and fallback are documented below.
+
+Scope: mac-mlx. Class: advanced.
+
+Source: `vendor/mac-mlx/mlx_vlm/server/cli.py:210`. Unset read: Assigned by the runtime; see literal consumer.
+
+```text
+    os.environ["QUANTIZED_KV_START"] = str(args.quantized_kv_start)
+    if args.top_logprobs_k is not None:
+        os.environ["TOP_LOGPROBS_K"] = str(args.top_logprobs_k)
+
+    log_level = getattr(logging, args.log_level.upper(), logging.INFO)
+    logging.basicConfig(
+        level=log_level,
+```
+
+Source: `vendor/mac-mlx/mlx_vlm/server/generation.py:277`. Unset read: 0.
+
+```text
+    with top_logprobs>0 still succeed but the top_logprobs list stays empty.
+    """
+    k = int(os.environ.get("TOP_LOGPROBS_K", 0))
+    return max(0, min(k, 20))
+
+
+def _token_window_rate(token_times: List[float], window: int) -> Optional[float]:
+```
 
 ### TORCHDYNAMO_DISABLE
 
@@ -91042,6 +99713,24 @@ Runtime-local cache/temp directory; no model download is performed.
 
 Scope: ds4-win, image, mac-ds4, mlx-serve, rtx-llama, studio, video, mac-mlx, mac-llama, mac-mference. Class: preset.
 
+### TRANSFORMERS_NO_ADVISORY_WARNINGS
+
+Advanced backend control TRANSFORMERS_NO_ADVISORY_WARNINGS. Set explicitly only for the selected backend; its literal read and fallback are documented below.
+
+Scope: mac-mlx. Class: advanced.
+
+Source: `vendor/mac-mlx/mlx_vlm/__init__.py:3`. Unset read: Assigned by the runtime; see literal consumer.
+
+```text
+import os
+
+os.environ["TRANSFORMERS_NO_ADVISORY_WARNINGS"] = "1"
+os.environ["TRANSFORMERS_VERBOSITY"] = "error"
+
+from .convert import convert
+from .generate import (
+```
+
 ### TRANSFORMERS_OFFLINE
 
 Keep inference offline and avoid global cache/bytecode writes.
@@ -91058,6 +99747,24 @@ Source: `vendor/engines/cosmos_windows/hunyuan_gen.py:750`. Unset read: '1'.
     mem_guard.preflight(min_free_gb=8.0, label='HunyuanImage-3 (80B) streamed load')
     mem_guard.start_watchdog(max_process_gb=24.0, min_free_gb=3.0, label='HunyuanImage-3 gen')
     try:
+```
+
+### TRANSFORMERS_VERBOSITY
+
+Advanced backend control TRANSFORMERS_VERBOSITY. Set explicitly only for the selected backend; its literal read and fallback are documented below.
+
+Scope: mac-mlx. Class: advanced.
+
+Source: `vendor/mac-mlx/mlx_vlm/__init__.py:4`. Unset read: Assigned by the runtime; see literal consumer.
+
+```text
+
+os.environ["TRANSFORMERS_NO_ADVISORY_WARNINGS"] = "1"
+os.environ["TRANSFORMERS_VERBOSITY"] = "error"
+
+from .convert import convert
+from .generate import (
+    BatchResponse,
 ```
 
 ### TRITON_CACHE_DIR
@@ -91466,6 +100173,54 @@ def attention(q, k, v, q_lens=None, k_lens=None, dropout_p=0.0, softmax_scale=No
         attention_type = 'FLASH_ATTENTION'
     if attention_type == 'SAGE_ATTENTION' and SAGE_ATTENTION_AVAILABLE:
         if q_lens is not None or k_lens is not None:
+```
+
+### VIDEO_MAX_PIXELS
+
+Advanced backend control VIDEO_MAX_PIXELS. Set explicitly only for the selected backend; its literal read and fallback are documented below.
+
+Scope: mac-mlx. Class: advanced.
+
+Source: `vendor/mac-mlx/mlx_vlm/video_generate.py:47`. Unset read: 128000 * 28 * 28 * 0.9.
+
+```text
+# Set the maximum number of video token inputs.
+VIDEO_TOTAL_PIXELS = int(
+    float(os.environ.get("VIDEO_MAX_PIXELS", 128000 * 28 * 28 * 0.9))
+)
+
+
+def round_by_factor(number: int, factor: int) -> int:
+```
+
+### VZ_AGENT_HOST_BIN
+
+Advanced backend control VZ_AGENT_HOST_BIN. Set explicitly only for the selected backend; its literal read and fallback are documented below.
+
+Scope: mlx-serve. Class: advanced.
+
+Source: `engines/mlx-serve/app/Tests/MLXCoreTests/GuestChannelTests.swift:123`. Unset read: Wrapper/conditional default: see the literal call and consumer below.
+
+```text
+
+    override func setUpWithError() throws {
+        guard let binary = ProcessInfo.processInfo.environment["VZ_AGENT_HOST_BIN"],
+              FileManager.default.isExecutableFile(atPath: binary) else {
+            throw XCTSkip("set VZ_AGENT_HOST_BIN (build it with `zig build vz-agent-host`)")
+        }
+        socketPath = NSTemporaryDirectory() + "vz-\(UUID().uuidString.prefix(8)).sock"
+```
+
+Source: `engines/mlx-serve/app/Tests/MLXCoreTests/MCPSpawnerTests.swift:286`. Unset read: Wrapper/conditional default: see the literal call and consumer below.
+
+```text
+
+    override func setUpWithError() throws {
+        guard let binary = ProcessInfo.processInfo.environment["VZ_AGENT_HOST_BIN"],
+              FileManager.default.isExecutableFile(atPath: binary) else {
+            throw XCTSkip("set VZ_AGENT_HOST_BIN (build it with `zig build vz-agent-host`)")
+        }
+        socketPath = NSTemporaryDirectory() + "vzb-\(UUID().uuidString.prefix(8)).sock"
 ```
 
 ### WAN_CFG_ZERO_STAR
@@ -91946,8648 +100701,4 @@ Source: `vendor/engines/cosmos_windows/weight_streaming/zimage_backend.py:43`. U
         from cosmos_windows import mem_guard
     except Exception:
         mem_guard = None
-```
-
-### BOOGU_ALLOW_NON_DIRECTSTORAGE
-
-BOOGU_ALLOW_NON_DIRECTSTORAGE: explicit engine setting; inherited values are cleared and the native default is retained.
-
-Scope: image, studio, video. Class: advanced.
-
-Source: `vendor/studio/studio/boogu_krea.py:415`. Unset read: None.
-
-```text
-    sd_keys = set(transformer.state_dict().keys())
-    streamer = DirectStorageStreamer(_BooguMainBlockIndex(idx, num_double), component='', n_gpu_buffers=n_gpu_buffers, device=device)
-    if getattr(streamer, 'mode', None) != 3 and _os.environ.get('BOOGU_ALLOW_NON_DIRECTSTORAGE') != '1':
-        try:
-            streamer.close()
-        finally:
-            raise RuntimeError(f"Boogu DS streamer mode={getattr(streamer, 'mode', '?')} is not DirectStorage(3) â€” R1 requires the optimised NVMe->GPU path. Set BOOGU_ALLOW_NON_DIRECTSTORAGE=1 for diagnostics.")
-```
-
-### DS4_NATIVE_SESSION_YOCO_KEEP
-
-Negotiated YOCO replay window: 0 or 140; set by the paired preset.
-
-Scope: mac-ds4. Class: advanced.
-
-Source: `engines/ds4-mac/ds4_native_session_setup.inc:33`. Unset read: Wrapper/conditional default: see the literal call and consumer below.
-
-```text
-    if(ds4_nf_env("DS4_NATIVE_SESSION_LOCAL_PREFILL_MAX_TOKENS")&&
-       !ds4_nf_env_uint("DS4_NATIVE_SESSION_LOCAL_PREFILL_MAX_TOKENS",&c->local_prefill_max,0,49152))goto bad;
-    const char*yoco=ds4_nf_env("DS4_NATIVE_SESSION_YOCO_KEEP");
-    if(yoco&&strcmp(yoco,"0")){if(strcmp(yoco,"140"))goto bad;c->yoco_keep=140;}
-    if(!ds4_nf_pair_token(token,c->http.token)||!ds4_nf_env_uint("DS4_NATIVE_SESSION_PORT",&port,1,65535)||
-       !ds4_nf_env_uint("DS4_NATIVE_SESSION_DEADLINE_SECONDS",&c->http.deadline_seconds,60,7200)||
-       inet_pton(AF_INET,host,&c->http.broker.sin_addr)!=1||!ds4_engine_native_frontier_identity(engine,&c->http.model))goto bad;
-```
-
-### KREA2_ALLOW_NON_DIRECTSTORAGE
-
-KREA2_ALLOW_NON_DIRECTSTORAGE: explicit engine setting; inherited values are cleared and the native default is retained.
-
-Scope: image, studio, video. Class: advanced.
-
-Source: `vendor/studio/studio/krea2_diffusion.py:860`. Unset read: None.
-
-```text
-    sd_keys = set(tr.state_dict().keys())
-    streamer = DirectStorageStreamer(_Krea2TBlockIndex(idx), component='', n_gpu_buffers=n_gpu_buffers, device=device, record_compute_done=True)
-    if getattr(streamer, 'mode', None) != 3 and _os.environ.get('KREA2_ALLOW_NON_DIRECTSTORAGE') != '1':
-        try:
-            streamer.close()
-        finally:
-            raise RuntimeError(f"Krea2 DS streamer mode={getattr(streamer, 'mode', '?')} is not DirectStorage(3) â€” R1 requires the optimised NVMe->GPU path. Set KREA2_ALLOW_NON_DIRECTSTORAGE=1 for diagnostics.")
-```
-
-### STUDIO_COMFYUI_MODELS
-
-STUDIO_COMFYUI_MODELS: explicit engine setting; inherited values are cleared and the native default is retained.
-
-Scope: image, studio, video. Class: advanced.
-
-Source: `vendor/studio/studio/krea2_diffusion.py:16`. Unset read: None.
-
-```text
-
-def _comfy_models_base() -> Path:
-    env = os.environ.get('STUDIO_COMFYUI_MODELS')
-    if env and Path(env).is_dir():
-        return Path(env)
-    if sys.platform == 'win32':
-        win_mirror = Path(os.environ.get('STUDIO_KREA2_WIN_MIRROR', ''))
-```
-
-### STUDIO_H3_CONTINUITY_PROJECTION
-
-STUDIO_H3_CONTINUITY_PROJECTION: explicit engine setting; inherited values are cleared and the native default is retained.
-
-Scope: image, studio, video. Class: advanced.
-
-Source: `vendor/studio/studio/h3_live.py:196`. Unset read: ''.
-
-```text
-        if o.get('reference_native_res'):
-            argv.append('--reference-native-res')
-        projection = '' if o.get('seamless') or choice in ('projection', 'blend', 'latent') else str(os.environ.get('STUDIO_H3_CONTINUITY_PROJECTION', '')).strip().lower()
-        if projection in ('float', 'uint8', 'video'):
-            argv += ['--continuity-projection', projection]
-            alpha = float(os.environ.get('STUDIO_H3_CONTINUITY_PROJECTION_ALPHA', '1'))
-            if not 0 < alpha <= 1:
-```
-
-### STUDIO_H3_CONTINUITY_PROJECTION_ALPHA
-
-STUDIO_H3_CONTINUITY_PROJECTION_ALPHA: explicit engine setting; inherited values are cleared and the native default is retained.
-
-Scope: image, studio, video. Class: advanced.
-
-Source: `vendor/studio/studio/h3_live.py:199`. Unset read: '1'.
-
-```text
-        if projection in ('float', 'uint8', 'video'):
-            argv += ['--continuity-projection', projection]
-            alpha = float(os.environ.get('STUDIO_H3_CONTINUITY_PROJECTION_ALPHA', '1'))
-            if not 0 < alpha <= 1:
-                raise ValueError('H3 projection alpha must be in (0, 1]')
-            argv += ['--continuity-projection-alpha', str(alpha)]
-        if o['resident']:
-```
-
-### STUDIO_H3_STEP_ADAPTERS
-
-STUDIO_H3_STEP_ADAPTERS: explicit engine setting; inherited values are cleared and the native default is retained.
-
-Scope: image, studio, video. Class: advanced.
-
-Source: `vendor/studio/studio/h3_model_profiles.py:51`. Unset read: ''.
-
-```text
-def is_base_distill_adapter(path) -> bool:
-    name = Path(str(path).replace('\\', '/')).name.lower()
-    extra = {n.strip().lower() for n in os.environ.get('STUDIO_H3_STEP_ADAPTERS', '').split(';') if n.strip()}
-    return name in BASE_H3_STEP_ADAPTERS or name in extra
-
-def profile_adapters(profile: H3ModelProfile, requested) -> tuple:
-    kept, removed = ([], [])
-```
-
-### STUDIO_KREA2_DIRECT_MIN_FREE_GB
-
-STUDIO_KREA2_DIRECT_MIN_FREE_GB: explicit engine setting; inherited values are cleared and the native default is retained.
-
-Scope: image, studio, video. Class: advanced.
-
-Source: `vendor/studio/studio/krea2_diffusion.py:1272`. Unset read: raw_need.
-
-```text
-    raw_need = 4.0
-    try:
-        raw_need = float(os.environ.get('STUDIO_KREA2_DIRECT_MIN_FREE_GB', raw_need))
-    except (TypeError, ValueError):
-        pass
-    _require_free_memory(raw_need)
-    stream_layers = offload in ('model', 'stream', 'streaming', 'stream_layers', 'streaming_lazy')
-```
-
-### STUDIO_KREA2_DIT
-
-STUDIO_KREA2_DIT: explicit engine setting; inherited values are cleared and the native default is retained.
-
-Scope: image, studio, video. Class: advanced.
-
-Source: `vendor/studio/studio/krea2_diffusion.py:34`. Unset read: None.
-
-```text
-def krea2_files() -> dict:
-    base = _comfy_models_base()
-    return {'dit': os.environ.get('STUDIO_KREA2_DIT') or str(base / 'checkpoints' / 'Krea2_Turbo_int8mixed.safetensors'), 'text_encoder': os.environ.get('STUDIO_KREA2_TEXT_ENCODER') or str(base / 'text_encoders' / 'qwen3vl_4b_int8.safetensors'), 'vae': os.environ.get('STUDIO_KREA2_VAE') or str(base / 'vae' / 'qwen_image_vae.safetensors')}
-
-def krea2_available() -> bool:
-    f = krea2_files()
-    return Path(f['dit']).is_file() and Path(f['text_encoder']).is_file()
-```
-
-### STUDIO_KREA2_DTYPE
-
-STUDIO_KREA2_DTYPE: explicit engine setting; inherited values are cleared and the native default is retained.
-
-Scope: image, studio, video. Class: advanced.
-
-Source: `vendor/studio/studio/krea2_diffusion.py:427`. Unset read: 'float16'.
-
-```text
-def _krea2_resident_dtype():
-    import torch
-    raw = str(os.environ.get('STUDIO_KREA2_DTYPE', 'float16')).strip().lower()
-    if raw in {'bfloat16', 'bf16'}:
-        return torch.bfloat16
-    if raw in {'float16', 'fp16', 'half'}:
-        return torch.float16
-```
-
-### STUDIO_KREA2_EDIT_LORA
-
-STUDIO_KREA2_EDIT_LORA: explicit engine setting; inherited values are cleared and the native default is retained.
-
-Scope: image, studio, video. Class: advanced.
-
-Source: `vendor/studio/studio/krea2_diffusion.py:81`. Unset read: None.
-
-```text
-    configured = str(explicit_path or '').strip()
-    if not configured:
-        configured = str(os.environ.get('STUDIO_KREA2_EDIT_LORA') or '').strip()
-    if configured:
-        path = Path(configured).expanduser().resolve(strict=False)
-        if not path.is_file():
-            raise RuntimeError(f'Krea 2 Edit LoRA not found: {str(path)!r}')
-```
-
-### STUDIO_KREA2_MIN_FREE_GB
-
-STUDIO_KREA2_MIN_FREE_GB: explicit engine setting; inherited values are cleared and the native default is retained.
-
-Scope: image, studio, video. Class: advanced.
-
-Source: `vendor/studio/studio/krea2_diffusion.py:757`. Unset read: need_gb.
-
-```text
-def _require_free_memory(need_gb: float=55.0) -> None:
-    try:
-        need_gb = float(os.environ.get('STUDIO_KREA2_MIN_FREE_GB', need_gb))
-    except (TypeError, ValueError):
-        pass
-    if need_gb <= 0:
-        return
-```
-
-### STUDIO_KREA2_MPS_COMPILE
-
-STUDIO_KREA2_MPS_COMPILE: explicit engine setting; inherited values are cleared and the native default is retained.
-
-Scope: image, studio, video. Class: advanced.
-
-Source: `vendor/studio/studio/krea2_diffusion.py:1235`. Unset read: '1'.
-
-```text
-
-def _configure_krea2_regional_compile(transformer, device: str) -> bool:
-    enabled = str(os.environ.get('STUDIO_KREA2_MPS_COMPILE', '1')).strip().lower() in {'1', 'true', 'yes', 'on'}
-    if not enabled or str(device).split(':', 1)[0].lower() != 'mps':
-        return False
-    compile_repeated = getattr(transformer, 'compile_repeated_blocks', None)
-    if not callable(compile_repeated):
-```
-
-### STUDIO_KREA2_TEXT_ENCODER
-
-STUDIO_KREA2_TEXT_ENCODER: explicit engine setting; inherited values are cleared and the native default is retained.
-
-Scope: image, studio, video. Class: advanced.
-
-Source: `vendor/studio/studio/krea2_diffusion.py:34`. Unset read: None.
-
-```text
-def krea2_files() -> dict:
-    base = _comfy_models_base()
-    return {'dit': os.environ.get('STUDIO_KREA2_DIT') or str(base / 'checkpoints' / 'Krea2_Turbo_int8mixed.safetensors'), 'text_encoder': os.environ.get('STUDIO_KREA2_TEXT_ENCODER') or str(base / 'text_encoders' / 'qwen3vl_4b_int8.safetensors'), 'vae': os.environ.get('STUDIO_KREA2_VAE') or str(base / 'vae' / 'qwen_image_vae.safetensors')}
-
-def krea2_available() -> bool:
-    f = krea2_files()
-    return Path(f['dit']).is_file() and Path(f['text_encoder']).is_file()
-```
-
-### STUDIO_KREA2_VAE
-
-STUDIO_KREA2_VAE: explicit engine setting; inherited values are cleared and the native default is retained.
-
-Scope: image, studio, video. Class: advanced.
-
-Source: `vendor/studio/studio/krea2_diffusion.py:34`. Unset read: None.
-
-```text
-def krea2_files() -> dict:
-    base = _comfy_models_base()
-    return {'dit': os.environ.get('STUDIO_KREA2_DIT') or str(base / 'checkpoints' / 'Krea2_Turbo_int8mixed.safetensors'), 'text_encoder': os.environ.get('STUDIO_KREA2_TEXT_ENCODER') or str(base / 'text_encoders' / 'qwen3vl_4b_int8.safetensors'), 'vae': os.environ.get('STUDIO_KREA2_VAE') or str(base / 'vae' / 'qwen_image_vae.safetensors')}
-
-def krea2_available() -> bool:
-    f = krea2_files()
-    return Path(f['dit']).is_file() and Path(f['text_encoder']).is_file()
-```
-
-### STUDIO_KREA2_WIN_MIRROR
-
-STUDIO_KREA2_WIN_MIRROR: explicit engine setting; inherited values are cleared and the native default is retained.
-
-Scope: image, studio, video. Class: advanced.
-
-Source: `vendor/studio/studio/krea2_diffusion.py:20`. Unset read: ''.
-
-```text
-        return Path(env)
-    if sys.platform == 'win32':
-        win_mirror = Path(os.environ.get('STUDIO_KREA2_WIN_MIRROR', ''))
-        if win_mirror.is_dir():
-            return win_mirror
-    cfg = Path.home() / 'Library' / 'Application Support' / 'Comfy Desktop' / 'settings.json'
-    try:
-```
-
-### STUDIO_QWEN3VL_CACHE
-
-STUDIO_QWEN3VL_CACHE: explicit engine setting; inherited values are cleared and the native default is retained.
-
-Scope: image, studio, video. Class: advanced.
-
-Source: `vendor/studio/studio/krea2_diffusion.py:12`. Unset read: None.
-
-```text
-QWEN_IMAGE_REPO = os.environ.get('STUDIO_QWEN_IMAGE_REPO', 'Qwen/Qwen-Image')
-QWEN3VL_REPO = os.environ.get('STUDIO_QWEN3VL_REPO', 'Qwen/Qwen3-VL-4B-Instruct')
-_QWEN3VL_CACHE = os.environ.get('STUDIO_QWEN3VL_CACHE') or str(Path.home() / '.cache' / 'studio_qwen3vl_4b')
-KREA2_TAP_LAYERS = (2, 5, 8, 11, 14, 17, 20, 23, 26, 29, 32, 35)
-
-def _comfy_models_base() -> Path:
-    env = os.environ.get('STUDIO_COMFYUI_MODELS')
-```
-
-### STUDIO_QWEN3VL_REPO
-
-STUDIO_QWEN3VL_REPO: explicit engine setting; inherited values are cleared and the native default is retained.
-
-Scope: image, studio, video. Class: advanced.
-
-Source: `vendor/studio/studio/krea2_diffusion.py:11`. Unset read: 'Qwen/Qwen3-VL-4B-Instruct'.
-
-```text
-from pathlib import Path
-QWEN_IMAGE_REPO = os.environ.get('STUDIO_QWEN_IMAGE_REPO', 'Qwen/Qwen-Image')
-QWEN3VL_REPO = os.environ.get('STUDIO_QWEN3VL_REPO', 'Qwen/Qwen3-VL-4B-Instruct')
-_QWEN3VL_CACHE = os.environ.get('STUDIO_QWEN3VL_CACHE') or str(Path.home() / '.cache' / 'studio_qwen3vl_4b')
-KREA2_TAP_LAYERS = (2, 5, 8, 11, 14, 17, 20, 23, 26, 29, 32, 35)
-
-def _comfy_models_base() -> Path:
-```
-
-### STUDIO_QWEN_IMAGE21_BASE
-
-STUDIO_QWEN_IMAGE21_BASE: explicit engine setting; inherited values are cleared and the native default is retained.
-
-Scope: image, studio, video. Class: advanced.
-
-Source: `vendor/studio/studio/qwen_comfy_load.py:6`. Unset read: ''.
-
-```text
-import re
-from pathlib import Path
-DEFAULT_BASE_REPO = os.environ.get('STUDIO_QWEN_IMAGE21_BASE', '')
-_BLOCK = re.compile('^transformer_blocks\\.(\\d+)\\.')
-
-def _block_index(target_key: str) -> int | None:
-    match = _BLOCK.match(target_key)
-```
-
-### STUDIO_QWEN_IMAGE21_MODEL
-
-STUDIO_QWEN_IMAGE21_MODEL: explicit engine setting; inherited values are cleared and the native default is retained.
-
-Scope: image, studio, video. Class: advanced.
-
-Source: `vendor/studio/studio/qwen_image21.py:544`. Unset read: DEFAULT_MODEL_DIR.
-
-```text
-    parser.add_argument('--serve', action='store_true', help='Keep weights resident and read JSON requests on stdin')
-    parser.add_argument('--request', help='JSON request manifest')
-    parser.add_argument('--model-dir', default=os.environ.get('STUDIO_QWEN_IMAGE21_MODEL', DEFAULT_MODEL_DIR))
-    parser.add_argument('--offload-dir', default=os.environ.get('STUDIO_QWEN_IMAGE21_OFFLOAD', ''))
-    args = parser.parse_args(argv)
-    if args.serve:
-        pipe = None
-```
-
-### STUDIO_QWEN_IMAGE21_OFFLOAD
-
-STUDIO_QWEN_IMAGE21_OFFLOAD: explicit engine setting; inherited values are cleared and the native default is retained.
-
-Scope: image, studio, video. Class: advanced.
-
-Source: `vendor/studio/studio/qwen_image21.py:545`. Unset read: ''.
-
-```text
-    parser.add_argument('--request', help='JSON request manifest')
-    parser.add_argument('--model-dir', default=os.environ.get('STUDIO_QWEN_IMAGE21_MODEL', DEFAULT_MODEL_DIR))
-    parser.add_argument('--offload-dir', default=os.environ.get('STUDIO_QWEN_IMAGE21_OFFLOAD', ''))
-    args = parser.parse_args(argv)
-    if args.serve:
-        pipe = None
-        for line in sys.stdin:
-```
-
-### STUDIO_QWEN_IMAGE21_PACK_DIR
-
-STUDIO_QWEN_IMAGE21_PACK_DIR: explicit engine setting; inherited values are cleared and the native default is retained.
-
-Scope: image, studio, video. Class: advanced.
-
-Source: `vendor/studio/studio/qwen_block_weights.py:57`. Unset read: ''.
-
-```text
-    identity = [(f, Path(f).stat().st_size, Path(f).stat().st_mtime_ns) for f in files]
-    fingerprint = hashlib.sha256(json.dumps(['qwen-row-int8-v1', identity]).encode()).hexdigest()[:20]
-    root = Path(pack_dir or os.environ.get('STUDIO_QWEN_IMAGE21_PACK_DIR', '')) / fingerprint
-    root.mkdir(parents=True, exist_ok=True)
-    groups = block_groups(index, block_prefix=block_prefix)
-    complete = root / 'complete.json'
-    if complete.is_file() and all(((root / f'block-{i:03}.safetensors').is_file() for i in groups)):
-```
-
-### STUDIO_QWEN_IMAGE21_TEXT_ENCODER_8BIT
-
-STUDIO_QWEN_IMAGE21_TEXT_ENCODER_8BIT: explicit engine setting; inherited values are cleared and the native default is retained.
-
-Scope: image, studio, video. Class: advanced.
-
-Source: `vendor/studio/studio/qwen_image21.py:392`. Unset read: '1'.
-
-```text
-    comp_root = components_root(root)
-    started = time.perf_counter()
-    use_int8 = os.environ.get('STUDIO_QWEN_IMAGE21_TEXT_ENCODER_8BIT', '1') != '0'
-    print(f"[status] Qwen mode: transformer={precision}, streaming={streaming}, text_encoder={('int8' if use_int8 else 'bf16')}", flush=True)
-    if single_file:
-        print(f'[status] Qwen ComfyUI single-file checkpoint {root.name!r}: transformer from the file, other components from {comp_root}', flush=True)
-    print('[status] DirectStorage: loading Qwen text encoder to VRAM', flush=True)
-```
-
-### STUDIO_QWEN_IMAGE21_VRAM_FRACTION
-
-STUDIO_QWEN_IMAGE21_VRAM_FRACTION: explicit engine setting; inherited values are cleared and the native default is retained.
-
-Scope: image, studio, video. Class: advanced.
-
-Source: `vendor/studio/studio/qwen_image21.py:386`. Unset read: '0.92'.
-
-```text
-    from transformers import Qwen3VLProcessor
-    from .qwen_direct_load import bind_component
-    torch.cuda.set_per_process_memory_fraction(float(os.environ.get('STUDIO_QWEN_IMAGE21_VRAM_FRACTION', '0.92')), 0)
-    from .qwen_comfy_load import bind_qwen21_transformer, components_root, is_single_file_checkpoint
-    root = Path(model_dir)
-    single_file = is_single_file_checkpoint(root)
-    comp_root = components_root(root)
-```
-
-### STUDIO_QWEN_IMAGE_REPO
-
-STUDIO_QWEN_IMAGE_REPO: explicit engine setting; inherited values are cleared and the native default is retained.
-
-Scope: image, studio, video. Class: advanced.
-
-Source: `vendor/studio/studio/krea2_diffusion.py:10`. Unset read: 'Qwen/Qwen-Image'.
-
-```text
-from contextlib import contextmanager
-from pathlib import Path
-QWEN_IMAGE_REPO = os.environ.get('STUDIO_QWEN_IMAGE_REPO', 'Qwen/Qwen-Image')
-QWEN3VL_REPO = os.environ.get('STUDIO_QWEN3VL_REPO', 'Qwen/Qwen3-VL-4B-Instruct')
-_QWEN3VL_CACHE = os.environ.get('STUDIO_QWEN3VL_CACHE') or str(Path.home() / '.cache' / 'studio_qwen3vl_4b')
-KREA2_TAP_LAYERS = (2, 5, 8, 11, 14, 17, 20, 23, 26, 29, 32, 35)
-
-```
-
-### STUDIO_RAM_ABORT_FLOOR_GB
-
-STUDIO_RAM_ABORT_FLOOR_GB: explicit engine setting; inherited values are cleared and the native default is retained.
-
-Scope: image, studio, video. Class: advanced.
-
-Source: `vendor/studio/studio/safety.py:11`. Unset read: '1.0'.
-
-```text
-def ram_abort_floor_gb() -> float:
-    try:
-        return max(0.25, float(os.environ.get('STUDIO_RAM_ABORT_FLOOR_GB', '1.0')))
-    except (TypeError, ValueError):
-        return 1.0
-
-def free_ram_gb() -> float:
-```
-
-### STUDIO_RAM_PREFLIGHT_FORCE
-
-STUDIO_RAM_PREFLIGHT_FORCE: explicit engine setting; inherited values are cleared and the native default is retained.
-
-Scope: image, studio, video. Class: advanced.
-
-Source: `vendor/studio/studio/ram_preflight.py:71`. Unset read: ''.
-
-```text
-
-def wait_for_host_ram(min_free_gb: float, *, label: str='launch', timeout_s: float=90.0, poll_s: float=1.0, settle_s: float=4.0, emit=None) -> float:
-    if os.environ.get('STUDIO_SKIP_RAM_PREFLIGHT', '').strip().lower() in _TRUTHY or os.environ.get('STUDIO_RAM_PREFLIGHT_FORCE', '').strip().lower() in _TRUTHY:
-        return free_host_ram_gb()
-    import time as _t
-    deadline = _t.monotonic() + max(0.0, float(timeout_s))
-    last = best = free_host_ram_gb()
-```
-
-### STUDIO_SKIP_RAM_PREFLIGHT
-
-STUDIO_SKIP_RAM_PREFLIGHT: explicit engine setting; inherited values are cleared and the native default is retained.
-
-Scope: image, studio, video. Class: advanced.
-
-Source: `vendor/studio/studio/ram_preflight.py:71`. Unset read: ''.
-
-```text
-
-def wait_for_host_ram(min_free_gb: float, *, label: str='launch', timeout_s: float=90.0, poll_s: float=1.0, settle_s: float=4.0, emit=None) -> float:
-    if os.environ.get('STUDIO_SKIP_RAM_PREFLIGHT', '').strip().lower() in _TRUTHY or os.environ.get('STUDIO_RAM_PREFLIGHT_FORCE', '').strip().lower() in _TRUTHY:
-        return free_host_ram_gb()
-    import time as _t
-    deadline = _t.monotonic() + max(0.0, float(timeout_s))
-    last = best = free_host_ram_gb()
-```
-
-### APC_BLOCK_SIZE
-
-Advanced backend control APC_BLOCK_SIZE. Set explicitly only for the selected backend; its literal read and fallback are documented below.
-
-Scope: mac-mlx. Class: advanced.
-
-Source: `vendor/mac-mlx/mlx_vlm/apc.py:3855`. Unset read: DEFAULT_BLOCK_SIZE.
-
-```text
-    if os.environ.get("APC_ENABLED", "0") not in ("1", "true", "True", "yes"):
-        return None
-    block_size = int(os.environ.get("APC_BLOCK_SIZE", DEFAULT_BLOCK_SIZE))
-    num_blocks = int(os.environ.get("APC_NUM_BLOCKS", DEFAULT_NUM_BLOCKS))
-
-    disk: Optional[DiskBlockStore] = None
-    disk_path = os.environ.get("APC_DISK_PATH")
-```
-
-### APC_DEBUG
-
-Advanced backend control APC_DEBUG. Set explicitly only for the selected backend; its literal read and fallback are documented below.
-
-Scope: mac-mlx. Class: advanced.
-
-Source: `vendor/mac-mlx/mlx_vlm/generate/ar.py:2056`. Unset read: None.
-
-```text
-                    )
-                finalize()
-        if logger.isEnabledFor(logging.DEBUG) and os.environ.get("APC_DEBUG"):
-            c0 = self.prompt_cache[0] if self.prompt_cache else None
-            if c0 is not None:
-                off = getattr(c0, "offset", None)
-                lp = getattr(c0, "left_padding", None)
-```
-
-Source: `vendor/mac-mlx/mlx_vlm/generate/ar.py:2916`. Unset read: None.
-
-```text
-            n = min(self.prefill_batch_size, len(self._unprocessed_sequences))
-            sequences = self._unprocessed_sequences[:n]
-            if logger.isEnabledFor(logging.DEBUG) and os.environ.get("APC_DEBUG"):
-                logger.warning(
-                    "APC admit n=%d (pending=%d)",
-                    n,
-                    len(self._unprocessed_sequences),
-```
-
-### APC_DISK_DIRECT_MAX_OVERREAD_MB
-
-Advanced backend control APC_DISK_DIRECT_MAX_OVERREAD_MB. Set explicitly only for the selected backend; its literal read and fallback are documented below.
-
-Scope: mac-mlx. Class: advanced.
-
-Source: `vendor/mac-mlx/mlx_vlm/apc.py:844`. Unset read: '8'.
-
-```text
-        self._header_cache_max = int(os.environ.get("APC_DISK_HEADER_CACHE", 4))
-        self._direct_max_overread_bytes = int(
-            float(os.environ.get("APC_DISK_DIRECT_MAX_OVERREAD_MB", "8")) * (1 << 20)
-        )
-        # Bound layer-major shard size so disk eviction is segment-granular
-        # instead of one huge all-or-nothing prefix file. A Qwen3-VL-4B block
-        # is ~2.25 MiB, so 256 blocks is roughly a 576 MiB shard before the
-```
-
-### APC_DISK_EVAL_BLOCK_CHUNK
-
-Advanced backend control APC_DISK_EVAL_BLOCK_CHUNK. Set explicitly only for the selected backend; its literal read and fallback are documented below.
-
-Scope: mac-mlx. Class: advanced.
-
-Source: `vendor/mac-mlx/mlx_vlm/apc.py:2853`. Unset read: '8'.
-
-```text
-        # path; raise it on a known-roomy machine to claw back wall time.
-        self._disk_eval_block_chunk = max(
-            1, int(os.environ.get("APC_DISK_EVAL_BLOCK_CHUNK", "8"))
-        )
-        # Number of disk blocks to coalesce into one direct byte-range read.
-        # This is separate from eval chunking: a larger read chunk improves
-        # SSD throughput/readahead while eval still happens in small batches.
-```
-
-### APC_DISK_HEADER_CACHE
-
-Advanced backend control APC_DISK_HEADER_CACHE. Set explicitly only for the selected backend; its literal read and fallback are documented below.
-
-Scope: mac-mlx. Class: advanced.
-
-Source: `vendor/mac-mlx/mlx_vlm/apc.py:842`. Unset read: 4.
-
-```text
-        self._header_cache: "OrderedDict[Path, Tuple[dict, dict, int]]" = OrderedDict()
-        self._header_cache_lock = threading.Lock()
-        self._header_cache_max = int(os.environ.get("APC_DISK_HEADER_CACHE", 4))
-        self._direct_max_overread_bytes = int(
-            float(os.environ.get("APC_DISK_DIRECT_MAX_OVERREAD_MB", "8")) * (1 << 20)
-        )
-        # Bound layer-major shard size so disk eviction is segment-granular
-```
-
-### APC_DISK_LOAD_BLOCK_CHUNK
-
-Advanced backend control APC_DISK_LOAD_BLOCK_CHUNK. Set explicitly only for the selected backend; its literal read and fallback are documented below.
-
-Scope: mac-mlx. Class: advanced.
-
-Source: `vendor/mac-mlx/mlx_vlm/apc.py:2862`. Unset read: '256'.
-
-```text
-        # small relative to the model's recommended Apple-Silicon working set.
-        self._disk_load_block_chunk = max(
-            1, int(os.environ.get("APC_DISK_LOAD_BLOCK_CHUNK", "256"))
-        )
-        # Apple Metal has a per-process resource-count ceiling separate from
-        # byte memory. Qwen3-VL-4B stores 72 MLX tensors per APCBlock, so a
-        # very large pool can hit the ceiling before unified memory is scarce.
-```
-
-### APC_DISK_MAX_GB
-
-Advanced backend control APC_DISK_MAX_GB. Set explicitly only for the selected backend; its literal read and fallback are documented below.
-
-Scope: mac-mlx. Class: advanced.
-
-Source: `vendor/mac-mlx/mlx_vlm/apc.py:3862`. Unset read: 0.
-
-```text
-    if disk_path:
-        ns = model_namespace or os.environ.get("APC_DISK_NAMESPACE", "default")
-        max_gb = float(os.environ.get("APC_DISK_MAX_GB", 0))
-        max_bytes = int(max_gb * (1 << 30)) if max_gb > 0 else None
-        workers = int(os.environ.get("APC_DISK_WORKERS", "1"))
-        try:
-            disk = DiskBlockStore(
-```
-
-### APC_DISK_MIN_FREE_RAM_GB
-
-Advanced backend control APC_DISK_MIN_FREE_RAM_GB. Set explicitly only for the selected backend; its literal read and fallback are documented below.
-
-Scope: mac-mlx. Class: advanced.
-
-Source: `vendor/mac-mlx/mlx_vlm/apc.py:2840`. Unset read: '2.0'.
-
-```text
-        # disk speed-up. Disabled when set to 0.
-        self._disk_min_free_ram_bytes = int(
-            float(os.environ.get("APC_DISK_MIN_FREE_RAM_GB", "2.0")) * (1 << 30)
-        )
-        # Number of disk-loaded blocks to coalesce per ``mx.eval`` during
-        # warm-disk restore. The disk read itself is always serial (no
-        # thread pool, no buffering of mmap views beyond this batch); the
-```
-
-### APC_DISK_MMAP_CACHE
-
-Advanced backend control APC_DISK_MMAP_CACHE. Set explicitly only for the selected backend; its literal read and fallback are documented below.
-
-Scope: mac-mlx. Class: advanced.
-
-Source: `vendor/mac-mlx/mlx_vlm/apc.py:869`. Unset read: 2.
-
-```text
-        self._mmap_cache: "OrderedDict[Path, Tuple[dict, dict]]" = OrderedDict()
-        self._mmap_cache_lock = threading.Lock()
-        self._mmap_cache_max = int(os.environ.get("APC_DISK_MMAP_CACHE", 2))
-
-        n_orphans = self._cleanup_partials()
-        if n_orphans:
-            logger.info(
-```
-
-### APC_DISK_NAMESPACE
-
-Advanced backend control APC_DISK_NAMESPACE. Set explicitly only for the selected backend; its literal read and fallback are documented below.
-
-Scope: mac-mlx. Class: advanced.
-
-Source: `vendor/mac-mlx/mlx_vlm/apc.py:3861`. Unset read: 'default'.
-
-```text
-    disk_path = os.environ.get("APC_DISK_PATH")
-    if disk_path:
-        ns = model_namespace or os.environ.get("APC_DISK_NAMESPACE", "default")
-        max_gb = float(os.environ.get("APC_DISK_MAX_GB", 0))
-        max_bytes = int(max_gb * (1 << 30)) if max_gb > 0 else None
-        workers = int(os.environ.get("APC_DISK_WORKERS", "1"))
-        try:
-```
-
-### APC_DISK_PATH
-
-Advanced backend control APC_DISK_PATH. Set explicitly only for the selected backend; its literal read and fallback are documented below.
-
-Scope: mac-mlx. Class: advanced.
-
-Source: `vendor/mac-mlx/mlx_vlm/apc.py:3859`. Unset read: None.
-
-```text
-
-    disk: Optional[DiskBlockStore] = None
-    disk_path = os.environ.get("APC_DISK_PATH")
-    if disk_path:
-        ns = model_namespace or os.environ.get("APC_DISK_NAMESPACE", "default")
-        max_gb = float(os.environ.get("APC_DISK_MAX_GB", 0))
-        max_bytes = int(max_gb * (1 << 30)) if max_gb > 0 else None
-```
-
-### APC_DISK_READ_MODE
-
-Advanced backend control APC_DISK_READ_MODE. Set explicitly only for the selected backend; its literal read and fallback are documented below.
-
-Scope: mac-mlx. Class: advanced.
-
-Source: `vendor/mac-mlx/mlx_vlm/apc.py:831`. Unset read: 'direct'.
-
-```text
-        # with normal file I/O, then constructs MLX-managed arrays from those
-        # bytes. Keep the old mmap path available for comparison.
-        self._read_mode = os.environ.get("APC_DISK_READ_MODE", "direct").lower()
-        if self._read_mode not in ("direct", "mmap"):
-            logger.warning(
-                "APC disk: unknown APC_DISK_READ_MODE=%r; using direct",
-                self._read_mode,
-```
-
-### APC_DISK_RESTORE_CLEAR_EVERY
-
-Advanced backend control APC_DISK_RESTORE_CLEAR_EVERY. Set explicitly only for the selected backend; its literal read and fallback are documented below.
-
-Scope: mac-mlx. Class: advanced.
-
-Source: `vendor/mac-mlx/mlx_vlm/apc.py:859`. Unset read: '1'.
-
-```text
-        # memory for slightly lower restore overhead.
-        self._restore_clear_every = max(
-            0, int(os.environ.get("APC_DISK_RESTORE_CLEAR_EVERY", "1"))
-        )
-        # Bounded LRU of mmap'd shards: shard_path -> (arrays_dict, file_metadata).
-        # Default capped at 2 — the within-restore working set is typically
-        # one shard, occasionally two (for a multi-shard restore). Larger
-```
-
-### APC_DISK_SHARD_MAX_BLOCKS
-
-Advanced backend control APC_DISK_SHARD_MAX_BLOCKS. Set explicitly only for the selected backend; its literal read and fallback are documented below.
-
-Scope: mac-mlx. Class: advanced.
-
-Source: `vendor/mac-mlx/mlx_vlm/apc.py:851`. Unset read: '256'.
-
-```text
-        # small KV step padding.
-        self._shard_max_blocks = max(
-            1, int(os.environ.get("APC_DISK_SHARD_MAX_BLOCKS", "256"))
-        )
-        # Layer-major warm-disk restore concatenates segment shards one layer
-        # at a time. Clearing MLX's allocator cache after each layer keeps the
-        # temporary segment tensors from coexisting with the fully-restored
-```
-
-### APC_DISK_TRACE
-
-Advanced backend control APC_DISK_TRACE. Set explicitly only for the selected backend; its literal read and fallback are documented below.
-
-Scope: mac-mlx. Class: advanced.
-
-Source: `vendor/mac-mlx/mlx_vlm/apc.py:2049`. Unset read: ''.
-
-```text
-        if not block_hashes:
-            return None
-        trace = os.environ.get("APC_DISK_TRACE", "").lower() in ("1", "true", "yes")
-        trace_t0 = time.perf_counter()
-
-        entries: List[Tuple[Path, int]] = []
-        for h in block_hashes:
-```
-
-### APC_DISK_WORKERS
-
-Advanced backend control APC_DISK_WORKERS. Set explicitly only for the selected backend; its literal read and fallback are documented below.
-
-Scope: mac-mlx. Class: advanced.
-
-Source: `vendor/mac-mlx/mlx_vlm/apc.py:3864`. Unset read: '1'.
-
-```text
-        max_gb = float(os.environ.get("APC_DISK_MAX_GB", 0))
-        max_bytes = int(max_gb * (1 << 30)) if max_gb > 0 else None
-        workers = int(os.environ.get("APC_DISK_WORKERS", "1"))
-        try:
-            disk = DiskBlockStore(
-                Path(disk_path).expanduser(),
-                namespace=ns,
-```
-
-### APC_ENABLED
-
-Advanced backend control APC_ENABLED. Set explicitly only for the selected backend; its literal read and fallback are documented below.
-
-Scope: mac-mlx. Class: advanced.
-
-Source: `vendor/mac-mlx/mlx_vlm/apc.py:3853`. Unset read: '0'.
-
-```text
-    are MLX-owned buffers rather than mmap-backed safetensors views.
-    """
-    if os.environ.get("APC_ENABLED", "0") not in ("1", "true", "True", "yes"):
-        return None
-    block_size = int(os.environ.get("APC_BLOCK_SIZE", DEFAULT_BLOCK_SIZE))
-    num_blocks = int(os.environ.get("APC_NUM_BLOCKS", DEFAULT_NUM_BLOCKS))
-
-```
-
-### APC_EXACT_CACHE_ENTRIES
-
-Advanced backend control APC_EXACT_CACHE_ENTRIES. Set explicitly only for the selected backend; its literal read and fallback are documented below.
-
-Scope: mac-mlx. Class: advanced.
-
-Source: `vendor/mac-mlx/mlx_vlm/apc.py:2830`. Unset read: '2'.
-
-```text
-        self.disk = disk
-        self._exact_cache_max = max(
-            0, int(os.environ.get("APC_EXACT_CACHE_ENTRIES", "2"))
-        )
-        self.exact_cache_guard_tokens = max(
-            1, int(os.environ.get("APC_EXACT_PREFIX_GUARD_TOKENS", "16"))
-        )
-```
-
-### APC_EXACT_PREFIX_GUARD_TOKENS
-
-Advanced backend control APC_EXACT_PREFIX_GUARD_TOKENS. Set explicitly only for the selected backend; its literal read and fallback are documented below.
-
-Scope: mac-mlx. Class: advanced.
-
-Source: `vendor/mac-mlx/mlx_vlm/apc.py:2833`. Unset read: '16'.
-
-```text
-        )
-        self.exact_cache_guard_tokens = max(
-            1, int(os.environ.get("APC_EXACT_PREFIX_GUARD_TOKENS", "16"))
-        )
-        # If free RAM (best-effort reading) drops below this, skip disk
-        # promotion this turn and fall back to memory-only matching. The
-        # request still serves correctly — it just doesn't get the warm-
-```
-
-### APC_HASH
-
-Advanced backend control APC_HASH. Set explicitly only for the selected backend; its literal read and fallback are documented below.
-
-Scope: mac-mlx. Class: advanced.
-
-Source: `vendor/mac-mlx/mlx_vlm/apc.py:67`. Unset read: 'fast'.
-
-```text
-
-def _hash_use_sha256() -> bool:
-    return os.environ.get("APC_HASH", "fast").lower() == "sha256"
-
-
-def _hash_tokens(parent: int, tokens: Tuple[int, ...], extra: int) -> int:
-    """Chain hash for a single block."""
-```
-
-### APC_LAYER_MAJOR_MEMORY_MIN_TOKENS
-
-Advanced backend control APC_LAYER_MAJOR_MEMORY_MIN_TOKENS. Set explicitly only for the selected backend; its literal read and fallback are documented below.
-
-Scope: mac-mlx. Class: advanced.
-
-Source: `vendor/mac-mlx/mlx_vlm/apc.py:2878`. Unset read: '50000'.
-
-```text
-        # warm-memory reuse for repeated long-document prompts.
-        self._layer_major_memory_min_tokens = max(
-            0, int(os.environ.get("APC_LAYER_MAJOR_MEMORY_MIN_TOKENS", "50000"))
-        )
-
-    # ---------- LRU free queue (O(1)) ----------
-    def _free_push(self, b: APCBlock) -> None:
-```
-
-### APC_MAX_POOL_TENSORS
-
-Advanced backend control APC_MAX_POOL_TENSORS. Set explicitly only for the selected backend; its literal read and fallback are documented below.
-
-Scope: mac-mlx. Class: advanced.
-
-Source: `vendor/mac-mlx/mlx_vlm/apc.py:2870`. Unset read: '450000'.
-
-```text
-        # the resource limit. Set to 0 to disable.
-        self._max_pool_tensors = max(
-            0, int(os.environ.get("APC_MAX_POOL_TENSORS", "450000"))
-        )
-        # Optional compact warm-memory tier for long KV-only prefixes. When a
-        # prompt reaches this many full-block tokens, store one layer-major
-        # prompt-cache snapshot instead of thousands of per-block tensors. This
-```
-
-### APC_NUM_BLOCKS
-
-Advanced backend control APC_NUM_BLOCKS. Set explicitly only for the selected backend; its literal read and fallback are documented below.
-
-Scope: mac-mlx. Class: advanced.
-
-Source: `vendor/mac-mlx/mlx_vlm/apc.py:3856`. Unset read: DEFAULT_NUM_BLOCKS.
-
-```text
-        return None
-    block_size = int(os.environ.get("APC_BLOCK_SIZE", DEFAULT_BLOCK_SIZE))
-    num_blocks = int(os.environ.get("APC_NUM_BLOCKS", DEFAULT_NUM_BLOCKS))
-
-    disk: Optional[DiskBlockStore] = None
-    disk_path = os.environ.get("APC_DISK_PATH")
-    if disk_path:
-```
-
-### BENCH_LIVE_COMMUNITY
-
-Advanced backend control BENCH_LIVE_COMMUNITY. Set explicitly only for the selected backend; its literal read and fallback are documented below.
-
-Scope: mlx-serve. Class: advanced.
-
-Source: `engines/mlx-serve/app/Tests/MLXCoreTests/BenchmarkRunnerLiveTests.swift:54`. Unset read: Wrapper/conditional default: see the literal call and consumer below.
-
-```text
-final class BenchmarkCommunityLiveTests: XCTestCase {
-    func testEveryLiveRowDecodes() async throws {
-        guard ProcessInfo.processInfo.environment["BENCH_LIVE_COMMUNITY"] == "1" else {
-            throw XCTSkip("set BENCH_LIVE_COMMUNITY=1")
-        }
-        let url = BenchmarkStore.communityFetchURL(limit: 500)!
-        let (data, _) = try await URLSession.shared.data(from: url)
-```
-
-### BENCH_LIVE_MODEL
-
-Advanced backend control BENCH_LIVE_MODEL. Set explicitly only for the selected backend; its literal read and fallback are documented below.
-
-Scope: mlx-serve. Class: advanced.
-
-Source: `engines/mlx-serve/app/Tests/MLXCoreTests/BenchmarkRunnerLiveTests.swift:20`. Unset read: Wrapper/conditional default: see the literal call and consumer below.
-
-```text
-        let api = APIClient()
-        let props = try await api.fetchPropsRaw(port: port)
-        let model = ProcessInfo.processInfo.environment["BENCH_LIVE_MODEL"]
-            ?? ((props["default_generation_settings"] as? [String: Any])?["model"] as? String ?? "")
-        XCTAssertFalse(model.isEmpty, "no model to benchmark")
-
-        let ladder = Array(BenchmarkSuite.ladder.prefix(
-```
-
-### BENCH_LIVE_PORT
-
-Advanced backend control BENCH_LIVE_PORT. Set explicitly only for the selected backend; its literal read and fallback are documented below.
-
-Scope: mlx-serve. Class: advanced.
-
-Source: `engines/mlx-serve/app/Tests/MLXCoreTests/BenchmarkRunnerLiveTests.swift:14`. Unset read: Wrapper/conditional default: see the literal call and consumer below.
-
-```text
-    @MainActor
-    func testTheLadderClimbsAgainstALiveServer() async throws {
-        guard let portText = ProcessInfo.processInfo.environment["BENCH_LIVE_PORT"],
-              let port = UInt16(portText) else {
-            throw XCTSkip("set BENCH_LIVE_PORT to run against a live server")
-        }
-        let api = APIClient()
-```
-
-### BENCH_LIVE_RUNGS
-
-Advanced backend control BENCH_LIVE_RUNGS. Set explicitly only for the selected backend; its literal read and fallback are documented below.
-
-Scope: mlx-serve. Class: advanced.
-
-Source: `engines/mlx-serve/app/Tests/MLXCoreTests/BenchmarkRunnerLiveTests.swift:25`. Unset read: Wrapper/conditional default: see the literal call and consumer below.
-
-```text
-
-        let ladder = Array(BenchmarkSuite.ladder.prefix(
-            Int(ProcessInfo.processInfo.environment["BENCH_LIVE_RUNGS"] ?? "4") ?? 4))
-        let runner = BenchmarkRunner(api: api)
-        let rows = await runner.run(ladder: ladder, modelId: model, port: port)
-
-        XCTAssertEqual(runner.phase, .done, "\(runner.phase)")
-```
-
-### BONSAI_TOKEN
-
-Advanced backend control BONSAI_TOKEN. Set explicitly only for the selected backend; its literal read and fallback are documented below.
-
-Scope: mac-mlx. Class: advanced.
-
-Source: `vendor/mac-mlx/mlx_vlm/models/bonsai/download.py:31`. Unset read: None.
-
-```text
-            snapshot_download(
-                repo_id=spec.repo_id,
-                token=token or os.environ.get("BONSAI_TOKEN") or None,
-                max_workers=max_workers,
-            )
-        )
-    else:
-```
-
-Source: `vendor/mac-mlx/mlx_vlm/models/bonsai/download.py:45`. Unset read: None.
-
-```text
-            repo_id=spec.repo_id,
-            local_dir=str(target),
-            token=token or os.environ.get("BONSAI_TOKEN") or None,
-            max_workers=max_workers,
-        )
-    validate_model_layout(target)
-    return target
-```
-
-### DOCS_RAG_AUTODL_PORT
-
-Advanced backend control DOCS_RAG_AUTODL_PORT. Set explicitly only for the selected backend; its literal read and fallback are documented below.
-
-Scope: mlx-serve. Class: advanced.
-
-Source: `engines/mlx-serve/app/Tests/MLXCoreTests/DocumentIndexTests.swift:529`. Unset read: Wrapper/conditional default: see the literal call and consumer below.
-
-```text
-    @MainActor
-    func testAutoProviderProvisionsEncoderEndToEnd() async throws {
-        guard let portStr = ProcessInfo.processInfo.environment["DOCS_RAG_AUTODL_PORT"],
-              let port = UInt16(portStr) else {
-            throw XCTSkip("DOCS_RAG_AUTODL_PORT not set — live auto-provisioning test skipped")
-        }
-        let embedder = await ServerEmbedding.autoProvider(port: port)()
-```
-
-### DOCS_RAG_FOLDER
-
-Advanced backend control DOCS_RAG_FOLDER. Set explicitly only for the selected backend; its literal read and fallback are documented below.
-
-Scope: mlx-serve. Class: advanced.
-
-Source: `engines/mlx-serve/app/Tests/MLXCoreTests/DocumentIndexRealDataTests.swift:17`. Unset read: Wrapper/conditional default: see the literal call and consumer below.
-
-```text
-
-    private static var folder: URL? {
-        guard let path = ProcessInfo.processInfo.environment["DOCS_RAG_FOLDER"], !path.isEmpty else {
-            return nil
-        }
-        return URL(fileURLWithPath: NSString(string: path).expandingTildeInPath)
-    }
-```
-
-### DOCS_RAG_PORT
-
-Advanced backend control DOCS_RAG_PORT. Set explicitly only for the selected backend; its literal read and fallback are documented below.
-
-Scope: mlx-serve. Class: advanced.
-
-Source: `engines/mlx-serve/app/Tests/MLXCoreTests/DocumentIndexRealDataTests.swift:39`. Unset read: Wrapper/conditional default: see the literal call and consumer below.
-
-```text
-        // otherwise retrieval is lexical-only, which the structural
-        // assertions below are designed to survive.
-        let port = ProcessInfo.processInfo.environment["DOCS_RAG_PORT"].flatMap { UInt16($0) }
-        let index = DocumentIndex(folderURL: folder, embedderProvider: {
-            guard let port else { return nil }
-            return await ServerEmbedding.probe(port: port)()
-        })
-```
-
-### DSV41_
-
-Advanced backend control DSV41_. Set explicitly only for the selected backend; its literal read and fallback are documented below.
-
-Scope: mac-mlx. Class: advanced.
-
-Source: `vendor/mac-mlx/mlx_vlm/custom_kernels/deepseek_v41/test_index_fused_cpu.py:428`. Unset read: Wrapper/conditional default: see the literal call and consumer below.
-
-```text
-                 "FFN_FUSED", "FFN_DOWN_BF16", "FFN_EXPERT_PAD16", "FFN_EXPERT_TILES",
-                 "PROMOTE_DECODE_WEIGHTS", "S4_COMPILE_INDEXER", "S4_PRECOMPUTE", "S4_BYPASS"):
-        monkeypatch.setenv("DSV41_" + name, "0")
-    monkeypatch.setenv("DSV41_INDEX_WORKSPACE_MB", "512")
-    ns = _production()
-    calls = []
-    ns["prepare_index_fused"] = lambda layers, skip=False: calls.append(
-```
-
-Source: `vendor/mac-mlx/mlx_vlm/custom_kernels/deepseek_v41/test_index_fused_cpu.py:722`. Unset read: Wrapper/conditional default: see the literal call and consumer below.
-
-```text
-    ns, calls, indexer, model = dispatch
-    monkeypatch.setenv("DSV41_INDEX_FUSED", "1")
-    monkeypatch.setenv("DSV41_" + conflict, "1")
-    with pytest.raises(ValueError, match="cannot combine"):
-        ns["attach"](model, ".")
-    assert not calls and not indexer.index_fused
-    monkeypatch.setenv("DSV41_" + conflict, "0")
-```
-
-Source: `vendor/mac-mlx/mlx_vlm/custom_kernels/deepseek_v41/test_index_fused_cpu.py:726`. Unset read: Wrapper/conditional default: see the literal call and consumer below.
-
-```text
-        ns["attach"](model, ".")
-    assert not calls and not indexer.index_fused
-    monkeypatch.setenv("DSV41_" + conflict, "0")
-    ns["attach"](model, ".")
-    monkeypatch.setenv("DSV41_" + conflict, "1")
-    x = np.ones((1, 64, 4), np.float32)
-    with pytest.raises(ValueError, match="cannot combine"):
-```
-
-Source: `vendor/mac-mlx/mlx_vlm/custom_kernels/deepseek_v41/test_index_fused_cpu.py:728`. Unset read: Wrapper/conditional default: see the literal call and consumer below.
-
-```text
-    monkeypatch.setenv("DSV41_" + conflict, "0")
-    ns["attach"](model, ".")
-    monkeypatch.setenv("DSV41_" + conflict, "1")
-    x = np.ones((1, 64, 4), np.float32)
-    with pytest.raises(ValueError, match="cannot combine"):
-        ns["forward"](indexer, x, x, 0, 128, None, None, None)
-
-```
-
-### DSV41_ASYNC_PREPARE
-
-Advanced backend control DSV41_ASYNC_PREPARE. Set explicitly only for the selected backend; its literal read and fallback are documented below.
-
-Scope: mac-mlx. Class: advanced.
-
-Source: `vendor/mac-mlx/mlx_vlm/models/deepseek_v41/language.py:2232`. Unset read: '0'.
-
-```text
-        # Launch the embedding while the CPU hash/table path prepares its rows.
-        # Kept independently switchable so its contribution can be measured.
-        if os.environ.get("DSV41_ASYNC_PREPARE", "0") == "1":
-            mx.async_eval(h)
-        token_mask = None
-        if cache.engram is not None:
-            if image_mask is not None and os.environ.get("DSV41_COALESCE_HASH_INPUTS", "0") == "1":
-```
-
-### DSV41_BOUNDED_CACHE
-
-Advanced backend control DSV41_BOUNDED_CACHE. Set explicitly only for the selected backend; its literal read and fallback are documented below.
-
-Scope: mac-mlx. Class: advanced.
-
-Source: `vendor/mac-mlx/mlx_vlm/runtime_profile.py:143`. Unset read: None.
-
-```text
-                restore.append(lambda limit=old: mx.set_cache_limit(limit))
-            elif experiment == "unbounded_cache":
-                old = os.environ.get("DSV41_BOUNDED_CACHE")
-                os.environ["DSV41_BOUNDED_CACHE"] = "0"
-                restore.append(lambda: os.environ.pop("DSV41_BOUNDED_CACHE", None) if old is None else os.environ.__setitem__("DSV41_BOUNDED_CACHE", old))
-            elif experiment == "fast_rms_norm":
-                old = os.environ.get("DSV41_FAST_RMS_NORM")
-```
-
-Source: `vendor/mac-mlx/mlx_vlm/runtime_profile.py:144`. Unset read: Assigned by the runtime; see literal consumer.
-
-```text
-            elif experiment == "unbounded_cache":
-                old = os.environ.get("DSV41_BOUNDED_CACHE")
-                os.environ["DSV41_BOUNDED_CACHE"] = "0"
-                restore.append(lambda: os.environ.pop("DSV41_BOUNDED_CACHE", None) if old is None else os.environ.__setitem__("DSV41_BOUNDED_CACHE", old))
-            elif experiment == "fast_rms_norm":
-                old = os.environ.get("DSV41_FAST_RMS_NORM")
-                os.environ["DSV41_FAST_RMS_NORM"] = "1"
-```
-
-Source: `vendor/mac-mlx/mlx_vlm/models/deepseek_v41/language.py:1103`. Unset read: '0'.
-
-```text
-        if self.step < 1:
-            raise ValueError("DSV41_CACHE_STEP must be positive")
-        self.bounded = os.environ.get("DSV41_BOUNDED_CACHE", "0") == "1"
-        self.layers = [_LayerCache(self.step, self.bounded) for _ in model.layers]
-        self._offset = 0
-        self.engram = None
-        if model.layout is not None:
-```
-
-Source: `vendor/mac-mlx/mlx_vlm/models/deepseek_v41/test_bounded_cache.py:29`. Unset read: Wrapper/conditional default: see the literal call and consumer below.
-
-```text
-def test_bounded_matches_history(model, monkeypatch, chunk):
-    ids = helper.token_ids()
-    monkeypatch.setenv("DSV41_BOUNDED_CACHE", "0")
-    full = model.make_cache()
-    monkeypatch.setenv("DSV41_BOUNDED_CACHE", "1")
-    bounded = model.make_cache()
-    for start in range(0, ids.shape[1], chunk):
-```
-
-Source: `vendor/mac-mlx/mlx_vlm/models/deepseek_v41/test_bounded_cache.py:31`. Unset read: Wrapper/conditional default: see the literal call and consumer below.
-
-```text
-    monkeypatch.setenv("DSV41_BOUNDED_CACHE", "0")
-    full = model.make_cache()
-    monkeypatch.setenv("DSV41_BOUNDED_CACHE", "1")
-    bounded = model.make_cache()
-    for start in range(0, ids.shape[1], chunk):
-        x = ids[:, start:start + chunk]
-        expected = model(x, cache=full).logits
-```
-
-Source: `vendor/mac-mlx/mlx_vlm/models/deepseek_v41/test_bounded_cache.py:58`. Unset read: Wrapper/conditional default: see the literal call and consumer below.
-
-```text
-
-def test_compressor_missing_history_fails(model, monkeypatch):
-    monkeypatch.setenv("DSV41_BOUNDED_CACHE", "1")
-    cache = model.make_cache()
-    mx.eval(model(helper.token_ids()[:, :17], cache=cache).logits)
-    lc = cache[0].layers[2]
-    with pytest.raises(ValueError, match="no longer retained"):
-```
-
-### DSV41_CACHE_STEP
-
-Advanced backend control DSV41_CACHE_STEP. Set explicitly only for the selected backend; its literal read and fallback are documented below.
-
-Scope: mac-mlx. Class: advanced.
-
-Source: `vendor/mac-mlx/mlx_vlm/models/deepseek_v41/language.py:1098`. Unset read: DSV41_CACHE_STEP.
-
-```text
-        self._attentions = [layer.attn for layer in model.layers]
-        try:
-            self.step = int(os.environ.get("DSV41_CACHE_STEP", DSV41_CACHE_STEP))
-        except ValueError:
-            self.step = DSV41_CACHE_STEP
-        if self.step < 1:
-            raise ValueError("DSV41_CACHE_STEP must be positive")
-```
-
-Source: `vendor/mac-mlx/mlx_vlm/models/deepseek_v41/test_language_dsv41_mac.py:357`. Unset read: Wrapper/conditional default: see the literal call and consumer below.
-
-```text
-    """
-    # Force real doublings in a short test; production defaults to 2048 rows.
-    monkeypatch.setenv("DSV41_CACHE_STEP", "16")
-    model, _ = model_and_ids
-    ids = mx.array(np.random.default_rng(29).integers(3, VOCAB, (1, 301)).astype(np.int32))
-    cache = model.make_cache()
-    pieces = [model(ids[:, :1], cache=cache).logits]
-```
-
-### DSV41_CANDIDATE_LANGUAGE
-
-Advanced backend control DSV41_CANDIDATE_LANGUAGE. Set explicitly only for the selected backend; its literal read and fallback are documented below.
-
-Scope: mac-mlx. Class: advanced.
-
-Source: `vendor/mac-mlx/mlx_vlm/models/deepseek_v41/test_bounded_cache.py:14`. Unset read: None.
-
-```text
-@pytest.fixture
-def model(monkeypatch):
-    candidate = os.environ.get("DSV41_CANDIDATE_LANGUAGE")
-    if candidate:
-        spec = importlib.util.spec_from_file_location(
-            "mlx_vlm.models.deepseek_v41._candidate_language", candidate)
-        module = importlib.util.module_from_spec(spec)
-```
-
-### DSV41_COALESCE_HASH_INPUTS
-
-Advanced backend control DSV41_COALESCE_HASH_INPUTS. Set explicitly only for the selected backend; its literal read and fallback are documented below.
-
-Scope: mac-mlx. Class: advanced.
-
-Source: `vendor/mac-mlx/mlx_vlm/models/deepseek_v41/language.py:2236`. Unset read: '0'.
-
-```text
-        token_mask = None
-        if cache.engram is not None:
-            if image_mask is not None and os.environ.get("DSV41_COALESCE_HASH_INPUTS", "0") == "1":
-                # One device-to-host boundary instead of separate ids/mask waits.
-                packed = np.array(mx.concatenate([inputs, image_mask.astype(inputs.dtype)], axis=0))
-                ids, token_mask = packed[:inputs.shape[0]], ~packed[inputs.shape[0]:].astype(bool)
-            else:
-```
-
-### DSV41_COMPILE_BLOCK
-
-Advanced backend control DSV41_COMPILE_BLOCK. Set explicitly only for the selected backend; its literal read and fallback are documented below.
-
-Scope: mac-mlx. Class: advanced.
-
-Source: `vendor/mac-mlx/mlx_vlm/models/deepseek_v41/language.py:1806`. Unset read: '0'.
-
-```text
-                from .megakernel import decode_block
-                return decode_block(self, h, pre_mix, start_pos, cache, shared, image_mask)
-            if os.environ.get("DSV41_COMPILE_BLOCK", "0") == "1" and h.shape[:2] == (1, 1):
-                from .block_graph import BlockGraphs
-                graph = getattr(self, "_block_graph", None)
-                if graph is None:
-                    graph = BlockGraphs()
-```
-
-Source: `vendor/mac-mlx/mlx_vlm/models/deepseek_v41/language.py:2259`. Unset read: '0'.
-
-```text
-        pre_mix = mx.broadcast_to((mx.arange(hc) == 0).astype(mx.float32), (b, n, hc))
-        capture_set = set(capture_layer_ids) if capture_layer_ids else set()
-        if os.environ.get("DSV41_COMPILE_BLOCK", "0") == "1":
-            from .block_graph import BlockGraphs
-            if getattr(self, "_block_graph", None) is None:
-                object.__setattr__(self, "_block_graph", BlockGraphs())
-                for layer in self.layers:
-```
-
-Source: `vendor/mac-mlx/mlx_vlm/models/deepseek_v41/megakernel.py:138`. Unset read: '0'.
-
-```text
-    """Use incoming pre for attention, attention's pre for FFN (staggered HC)."""
-    _check(h)
-    if os.environ.get("DSV41_COMPILE_BLOCK", "0") == "1":
-        graph = getattr(layer, "_megakernel_graph", None)
-        if graph is None:
-            graph = _MegakernelGraphs()
-            object.__setattr__(layer, "_megakernel_graph", graph)
-```
-
-### DSV41_COMPILE_PRIMITIVES
-
-Advanced backend control DSV41_COMPILE_PRIMITIVES. Set explicitly only for the selected backend; its literal read and fallback are documented below.
-
-Scope: mac-mlx. Class: advanced.
-
-Source: `vendor/mac-mlx/mlx_vlm/runtime_profile.py:174`. Unset read: None.
-
-```text
-                language._v41_expert_select = mx.compile(namespace[node.name])
-                restore.append(lambda f=original_select: setattr(language, "_v41_expert_select", f))
-                old = os.environ.get("DSV41_COMPILE_PRIMITIVES")
-                os.environ["DSV41_COMPILE_PRIMITIVES"] = "1"
-                restore.append(lambda: os.environ.pop("DSV41_COMPILE_PRIMITIVES", None) if old is None else os.environ.__setitem__("DSV41_COMPILE_PRIMITIVES", old))
-            elif experiment == "compile_hc":
-                old = hc.COMPILE_POST
-```
-
-Source: `vendor/mac-mlx/mlx_vlm/runtime_profile.py:175`. Unset read: Assigned by the runtime; see literal consumer.
-
-```text
-                restore.append(lambda f=original_select: setattr(language, "_v41_expert_select", f))
-                old = os.environ.get("DSV41_COMPILE_PRIMITIVES")
-                os.environ["DSV41_COMPILE_PRIMITIVES"] = "1"
-                restore.append(lambda: os.environ.pop("DSV41_COMPILE_PRIMITIVES", None) if old is None else os.environ.__setitem__("DSV41_COMPILE_PRIMITIVES", old))
-            elif experiment == "compile_hc":
-                old = hc.COMPILE_POST
-                hc.COMPILE_POST = True
-```
-
-Source: `vendor/mac-mlx/mlx_vlm/custom_kernels/deepseek_v41/test_grouped_gemm.py:386`. Unset read: Wrapper/conditional default: see the literal call and consumer below.
-
-```text
-@pytest.mark.parametrize("config_name", TEST_CONFIGS)
-def test_composed_moe(monkeypatch, compile_combine, case, config_name):
-    monkeypatch.setenv("DSV41_COMPILE_PRIMITIVES", compile_combine)
-    moe = make_moe(E, D, I)
-    ids, _ = routes(case)
-    indices = mx.array(ids)
-    mx.random.seed(341)
-```
-
-Source: `vendor/mac-mlx/mlx_vlm/models/deepseek_v41/language.py:225`. Unset read: '0'.
-
-```text
-                x.astype(mx.float32), self.weight.astype(mx.float32), self.eps
-            ).astype(x.dtype)
-        if os.environ.get("DSV41_COMPILE_PRIMITIVES", "0") == "1":
-            return _v41_rms_norm(x, self.weight, self.eps)
-        dtype = x.dtype
-        xf = x.astype(mx.float32)
-        var = mx.mean(mx.square(xf), axis=-1, keepdims=True)
-```
-
-Source: `vendor/mac-mlx/mlx_vlm/models/deepseek_v41/language.py:816`. Unset read: '0'.
-
-```text
-            # Inference opt-in: this changes stored parameter dtype/memory.
-            self.weight = self.weight.astype(mx.float32)
-        if os.environ.get("DSV41_COMPILE_PRIMITIVES", "0") == "1":
-            bias = self.e_score_correction_bias
-            if image_mask is not None:
-                bias = mx.where(image_mask[..., None], self.bias_vl, bias)
-            return _v41_expert_select(
-```
-
-Source: `vendor/mac-mlx/mlx_vlm/models/deepseek_v41/language.py:989`. Unset read: '0'.
-
-```text
-                y = (_ffn_down_bf16(self.switch_mlp, xf, indices) if down_bf16
-                     else self.switch_mlp(xf, indices))            # [tokens, topk, dim]
-            if os.environ.get("DSV41_COMPILE_PRIMITIVES", "0") == "1":
-                y = _v41_moe_combine(y, weights)
-            else:
-                y = mx.sum(y.astype(mx.float32) * weights[..., None], axis=-2)
-        y = y + self.shared_experts(xf).astype(mx.float32)
-```
-
-Source: `vendor/mac-mlx/mlx_vlm/models/deepseek_v41/language.py:1408`. Unset read: '0'.
-
-```text
-            shape = (kv.shape[0], stop - first, ratio, kv.shape[-1])
-            score = lc.absolute_slice("score", first * ratio, stop * ratio).reshape(shape)
-            if os.environ.get("DSV41_COMPILE_PRIMITIVES", "0") == "1":
-                kv = _v41_compress_pool(kv.reshape(shape), score)
-            else:
-                kv = mx.sum(kv.reshape(shape) * mx.softmax(score, axis=2), axis=2)
-        return self.norm(kv.astype(dtype))
-```
-
-Source: `vendor/mac-mlx/mlx_vlm/models/deepseek_v41/moe_prefill.py:46`. Unset read: '0'.
-
-```text
-    down = project(hidden, mlp.down_proj, mx.float32)
-    y = down[inverse].reshape(*indices.shape, xf.shape[-1])
-    if os.environ.get("DSV41_COMPILE_PRIMITIVES", "0") == "1":
-        from .language import _v41_moe_combine
-
-        return _v41_moe_combine(y, weights)
-    return mx.sum(y.astype(mx.float32) * weights[..., None], axis=-2)
-```
-
-Source: `vendor/mac-mlx/mlx_vlm/models/deepseek_v41/test_ffn_down_bf16_cpu.py:52`. Unset read: Wrapper/conditional default: see the literal call and consumer below.
-
-```text
-    ns = _load()
-    monkeypatch.setenv("DSV41_PREFILL_GROUPED_MXFP4", "0")
-    monkeypatch.setenv("DSV41_COMPILE_PRIMITIVES", "0")
-    calls = []
-    routed = np.arange(n * 6 * 4, dtype=np.float32).reshape(n, 6, 4) / 100
-    weights = np.full((n, 6), 0.25, np.float32)
-    moe = SimpleNamespace(dim=4, ffn_down_bf16=False,
-```
-
-Source: `vendor/mac-mlx/mlx_vlm/models/deepseek_v41/test_ffn_expert_pad_cpu.py:165`. Unset read: Wrapper/conditional default: see the literal call and consumer below.
-
-```text
-    monkeypatch.setenv("DSV41_PREFILL_GROUPED_MXFP4", "1")
-    monkeypatch.setenv("DSV41_PREFILL_GROUPED_MIN_ROWS", "64")
-    monkeypatch.setenv("DSV41_COMPILE_PRIMITIVES", "0")
-    up = Mock(side_effect=lambda x, ids, **kw: x * (ids[:, None, None] + 1))
-    up.num_experts = 8
-    mlp = SimpleNamespace(training=False, up_proj=up,
-                          gate_proj=lambda x, ids, **kw: np.ones_like(x),
-```
-
-### DSV41_COMPILE_SPARSE_ATTN
-
-Advanced backend control DSV41_COMPILE_SPARSE_ATTN. Set explicitly only for the selected backend; its literal read and fallback are documented below.
-
-Scope: mac-mlx. Class: advanced.
-
-Source: `vendor/mac-mlx/mlx_vlm/custom_kernels/deepseek_v41/validate_sdpa.py:39`. Unset read: Assigned by the runtime; see literal consumer.
-
-```text
-    os.environ['DSV41_SDPA_SPARSE_ATTN'] = '1' if path == 'sdpa' else '0'
-    os.environ['DSV41_METAL_SPARSE_ATTN'] = '1' if path == 'metal' else '0'
-    os.environ['DSV41_COMPILE_SPARSE_ATTN'] = '1' if path == 'compiled' else '0'
-
-
-def metrics(actual, expected):
-    a, e = np.asarray(actual, dtype=np.float64), np.asarray(expected, dtype=np.float64)
-```
-
-Source: `vendor/mac-mlx/mlx_vlm/models/deepseek_v41/language.py:343`. Unset read: '0'.
-
-```text
-
-    attend = partial(_sparse_attn_chunk, sdpa=True) if use_sdpa else _sparse_attn_chunk
-    if not use_sdpa and os.environ.get("DSV41_COMPILE_SPARSE_ATTN", "0") == "1":
-        # Reuse the callable across chunks AND layers; MLX caches by input shape.
-        if not hasattr(sparse_attn, "_compiled_chunk"):
-            sparse_attn._compiled_chunk = mx.compile(_sparse_attn_chunk)
-        attend = sparse_attn._compiled_chunk
-```
-
-### DSV41_COMPRESS_RATIOS
-
-Advanced backend control DSV41_COMPRESS_RATIOS. Set explicitly only for the selected backend; its literal read and fallback are documented below.
-
-Scope: mac-mlx. Class: advanced.
-
-Source: `vendor/mac-mlx/mlx_vlm/models/deepseek_v41/test_kv_selection_width.py:72`. Unset read: Wrapper/conditional default: see the literal call and consumer below.
-
-```text
-    back.
-    """
-    monkeypatch.setenv("DSV41_COMPRESS_RATIOS", "0,0,0,0")
-    cfg = _text_config()
-    assert cfg.compress_ratios[2] == 2
-```
-
-### DSV41_DSPARK
-
-Advanced backend control DSV41_DSPARK. Set explicitly only for the selected backend; its literal read and fallback are documented below.
-
-Scope: mac-mlx. Class: advanced.
-
-Source: `engines/mlx-receiver/mlx_token_stream_server.py:159`. Unset read: '0'.
-
-```text
-    sizes = {'bfloat16': 2, 'float32': 4, 'uint32': 4, 'uint8': 1}
-    specs = expected_parameters(config.text_config, source)
-    resident_specs = {name: spec for name, spec in specs.items() if not (name.startswith('dspark.') and os.environ.get('DSV41_DSPARK', '0') != '1')}
-    parameter_bytes = sum((sizes[dtype] * prod(shape) for dtype, shape in resident_specs.values()))
-    if config.vision_config is not None:
-        parameter_bytes += sum((2 * prod(shape) for _, shape in expected_vision_parameters(config.vision_config, config.text_config.hidden_size).values()))
-    if os.environ.get('DSV41_PROMOTE_DECODE_WEIGHTS', '0') == '1':
-```
-
-Source: `vendor/mac-mlx/mlx_vlm/models/deepseek_v41/dspark_receiver.py:18`. Unset read: '0'.
-
-```text
-
-def enabled():
-    if os.environ.get("DSV41_DSPARK", "0") != "1":
-        return False
-    # Optional local diagnostic control permits A/B on the same loaded weights.
-    # The preset's off switch always wins. No network request controls this file.
-    control = os.environ.get("DSV41_DSPARK_MODE_FILE")
-```
-
-Source: `vendor/mac-mlx/mlx_vlm/models/deepseek_v41/language.py:2005`. Unset read: '0'.
-
-```text
-            "DSV41_PREFILL_CONE will not switch DSV41_PREFILL_LAYER_MAJOR on for you.")
-    tail, tail_set = prefill_cone_tail()
-    if cone and os.environ.get("DSV41_DSPARK", "0") == "1" and not tail_set:
-        raise ValueError(
-            "DSV41_PREFILL_CONE=1 with DSV41_DSPARK=1 needs DSV41_PREFILL_CONE_TAIL=<W> "
-            "set explicitly. The drafter is warmed from the target's rows at the END of "
-            "the prompt -- DSV4.1 DSpark from the capture taps of layers "
-```
-
-Source: `vendor/mac-mlx/mlx_vlm/models/deepseek_v41/test_prefill_cone.py:159`. Unset read: Wrapper/conditional default: see the literal call and consumer below.
-
-```text
-    monkeypatch.setenv("DSV41_PREFILL_CONE", "1")
-    monkeypatch.setenv("DSV41_PREFILL_LAYER_MAJOR", "1")
-    monkeypatch.setenv("DSV41_DSPARK", "1")
-    monkeypatch.delenv("DSV41_PREFILL_CONE_TAIL", raising=False)
-    with pytest.raises(ValueError) as excinfo:
-        _prefill_switches(4096, _Cache(), None)
-    message = str(excinfo.value)
-```
-
-Source: `vendor/mac-mlx/mlx_vlm/models/deepseek_v41/test_prefill_cone.py:172`. Unset read: Wrapper/conditional default: see the literal call and consumer below.
-
-```text
-    monkeypatch.setenv("DSV41_PREFILL_CONE", "1")
-    monkeypatch.setenv("DSV41_PREFILL_LAYER_MAJOR", "1")
-    monkeypatch.delenv("DSV41_DSPARK", raising=False)
-    monkeypatch.delenv("DSV41_PREFILL_CONE_TAIL", raising=False)
-    with pytest.raises(ValueError) as excinfo:
-        _prefill_switches(4096, _Cache(), [37, 38, 39])
-    assert "capture_layer_ids" in str(excinfo.value)
-```
-
-Source: `vendor/mac-mlx/mlx_vlm/models/deepseek_v41/test_prefill_cone.py:996`. Unset read: Wrapper/conditional default: see the literal call and consumer below.
-
-```text
-    monkeypatch.setenv("DSV41_PREFILL_CONE", "1")
-    monkeypatch.setenv("DSV41_PREFILL_LAYER_MAJOR", "1")
-    monkeypatch.setenv("DSV41_DSPARK", "1")
-    monkeypatch.delenv("DSV41_PREFILL_CONE_TAIL", raising=False)
-    with pytest.raises(ValueError) as excinfo:
-        _prefill_switches(4096, _Cache(), None)
-    message = str(excinfo.value)
-```
-
-Source: `vendor/mac-mlx/mlx_vlm/models/deepseek_v41/test_prefill_cone.py:1011`. Unset read: Wrapper/conditional default: see the literal call and consumer below.
-
-```text
-    monkeypatch.setenv("DSV41_PREFILL_CONE", "1")
-    monkeypatch.setenv("DSV41_PREFILL_LAYER_MAJOR", "1")
-    monkeypatch.delenv("DSV41_DSPARK", raising=False)
-    monkeypatch.delenv("DSV41_PREFILL_CONE_TAIL", raising=False)
-    with pytest.raises(ValueError) as excinfo:
-        _prefill_switches(4096, _Cache(), [37, 38, 39])
-    assert "DSV41_PREFILL_CONE_TAIL" in str(excinfo.value)
-```
-
-### DSV41_DSPARK_ADAPTIVE
-
-Advanced backend control DSV41_DSPARK_ADAPTIVE. Set explicitly only for the selected backend; its literal read and fallback are documented below.
-
-Scope: mac-mlx. Class: advanced.
-
-Source: `vendor/mac-mlx/mlx_vlm/speculative/dspark.py:229`. Unset read: '0'.
-
-```text
-    # per round (measured at the walk, which forces the target tokens) and committed counts.
-    controller = None
-    if os.environ.get("DSV41_DSPARK_ADAPTIVE", "0") == "1":
-        from .dspark_controller import DSparkCostController
-        controller = DSparkCostController.from_env()
-        draft_model.cost_controller = controller
-    from time import perf_counter as _clock
-```
-
-### DSV41_DSPARK_COLD_BENCH
-
-Advanced backend control DSV41_DSPARK_COLD_BENCH. Set explicitly only for the selected backend; its literal read and fallback are documented below.
-
-Scope: mac-mlx. Class: advanced.
-
-Source: `engines/mlx-receiver/mlx_token_stream_server.py:1661`. Unset read: '0'.
-
-```text
-            importlib.reload(runtime_profile).run_requested(self.model, prompt_token_ids)
-        is_dsv41 = _is_dsv41(self.model)
-        if is_dsv41 and os.environ.get('DSV41_DSPARK_COLD_BENCH', '0') == '1':
-            self._retained_cache = None
-            self._retained_tokens = []
-        vision_prompt = getattr(self, '_dsv41_vision_prompt', None) if is_dsv41 else None
-        self._dsv41_vision_prompt = None
-```
-
-### DSV41_DSPARK_COMPILE_HEAD
-
-Advanced backend control DSV41_DSPARK_COMPILE_HEAD. Set explicitly only for the selected backend; its literal read and fallback are documented below.
-
-Scope: mac-mlx. Class: advanced.
-
-Source: `vendor/mac-mlx/mlx_vlm/models/deepseek_v41/dspark.py:399`. Unset read: '0'.
-
-```text
-        last._walk_key = key
-        last._walk = (mx.compile(walk, inputs=mx.random.state, outputs=mx.random.state)
-                      if os.environ.get("DSV41_DSPARK_COMPILE_HEAD", "0") == "1"
-                      else walk)
-    ids, corrected, embeds = last._walk(
-        logits, anchor, last.markov_head.embed.weight, last.markov_head.head.weight)
-    confidence = last.confidence_head(hidden, embeds)
-```
-
-### DSV41_DSPARK_MODE_FILE
-
-Advanced backend control DSV41_DSPARK_MODE_FILE. Set explicitly only for the selected backend; its literal read and fallback are documented below.
-
-Scope: mac-mlx. Class: advanced.
-
-Source: `vendor/mac-mlx/mlx_vlm/models/deepseek_v41/dspark_receiver.py:22`. Unset read: None.
-
-```text
-    # Optional local diagnostic control permits A/B on the same loaded weights.
-    # The preset's off switch always wins. No network request controls this file.
-    control = os.environ.get("DSV41_DSPARK_MODE_FILE")
-    return not control or bool(json.loads(Path(control).read_text())["enabled"])
-
-
-class _ReceiverSampler:
-```
-
-Source: `vendor/mac-mlx/mlx_vlm/models/deepseek_v41/dspark_receiver.py:95`. Unset read: None.
-
-```text
-        if self.hidden is None:
-            raise RuntimeError("DSpark requires captures from local prefill")
-        control = os.environ.get("DSV41_DSPARK_MODE_FILE")
-        if control and json.loads(Path(control).read_text()).get("audit", False):
-            self.audit(cache, first)
-        yield first
-        rounds = _dspark_rounds(self.model, self.drafter, cache, self.hidden,
-```
-
-### DSV41_DSPARK_REJECT_LOG
-
-Advanced backend control DSV41_DSPARK_REJECT_LOG. Set explicitly only for the selected backend; its literal read and fallback are documented below.
-
-Scope: mac-mlx. Class: advanced.
-
-Source: `vendor/mac-mlx/mlx_vlm/speculative/dspark.py:161`. Unset read: ''.
-
-```text
-#
-# Off unless DSV41_DSPARK_REJECT_LOG names a file. One short JSON line per round.
-_DSPARK_REJECT_LOG = os.environ.get("DSV41_DSPARK_REJECT_LOG", "")
-
-
-def _dspark_record_round(draft_tokens, target_tokens, accepted):
-    """Append one round: what was drafted, what the target wanted, how many survived."""
-```
-
-### DSV41_DSPARK_STATS
-
-Advanced backend control DSV41_DSPARK_STATS. Set explicitly only for the selected backend; its literal read and fallback are documented below.
-
-Scope: mac-mlx. Class: advanced.
-
-Source: `vendor/mac-mlx/mlx_vlm/models/deepseek_v41/dspark_receiver.py:48`. Unset read: None.
-
-```text
-
-        self._rng_before = (_copy_rng_state()
-                            if os.environ.get("DSV41_DSPARK_STATS") else None)
-        self.model = language_model
-        self.drafter = language_model.make_dspark_drafter()
-        if os.environ.get("DSV41_DSPARK_TIMING", "0") == "1":
-            from ...speculative.dspark_timing import DSparkTiming
-```
-
-Source: `vendor/mac-mlx/mlx_vlm/models/deepseek_v41/dspark_receiver.py:145`. Unset read: '/tmp/dsv41_s1_stats.json'.
-
-```text
-                capture_norm_ratio=float((mx.linalg.norm(actual_h.astype(mx.float32))/mx.linalg.norm(reference_h.astype(mx.float32))).item()),
-                argmax_equal=bool(mx.array_equal(mx.argmax(out.logits,axis=-1),mx.argmax(reference,axis=-1)).item()))
-            destination = os.environ.get('DSV41_DSPARK_STATS','/tmp/dsv41_s1_stats.json')+'.audit.json'
-            Path(destination).write_text(json.dumps(result,indent=2)+'\n')
-        finally:
-            _restore_rng_state(before)
-
-```
-
-Source: `vendor/mac-mlx/mlx_vlm/models/deepseek_v41/dspark_receiver.py:169`. Unset read: None.
-
-```text
-                    target_calls_per_accepted_draft=calls/sum(accepts) if sum(accepts) else None,
-                    target_and_draft_calls_per_committed_token=(calls+self.drafter.draft_calls)/max(1,emitted))
-        destination = os.environ.get("DSV41_DSPARK_STATS")
-        timing = getattr(self.drafter, "phase_timing", None)
-        if timing is not None:
-            result["phase_timing"] = timing.summary()
-        controller = getattr(self.drafter, "cost_controller", None)
-```
-
-### DSV41_DSPARK_TIMING
-
-Advanced backend control DSV41_DSPARK_TIMING. Set explicitly only for the selected backend; its literal read and fallback are documented below.
-
-Scope: mac-mlx. Class: advanced.
-
-Source: `vendor/mac-mlx/mlx_vlm/models/deepseek_v41/dspark_receiver.py:51`. Unset read: '0'.
-
-```text
-        self.model = language_model
-        self.drafter = language_model.make_dspark_drafter()
-        if os.environ.get("DSV41_DSPARK_TIMING", "0") == "1":
-            from ...speculative.dspark_timing import DSparkTiming
-            self.drafter.phase_timing = DSparkTiming()
-        if not getattr(language_model, "_dspark_materialized", False):
-            # Studio's existing loader explicitly materializes backbone layers.
-```
-
-### DSV41_EXPERT_TILES_TEST_RELEASE
-
-Advanced backend control DSV41_EXPERT_TILES_TEST_RELEASE. Set explicitly only for the selected backend; its literal read and fallback are documented below.
-
-Scope: mac-mlx. Class: advanced.
-
-Source: `vendor/mac-mlx/mlx_vlm/custom_kernels/deepseek_v41/test_expert_tiles_qmm.py:31`. Unset read: '0'.
-
-```text
-from mlx_vlm.models.deepseek_v41.language import ClampedSwiGLU
-
-RELEASE = os.environ.get("DSV41_EXPERT_TILES_TEST_RELEASE", "0") == "1"
-D, I = (5120, 2304) if RELEASE else (128, 96)
-CASES = ["probe_a", "balanced32", "8x1536", "singleton_empty", "boundaries"]
-CASES += [f"remainder_{r}" for r in range(16)]
-
-```
-
-### DSV41_FAST_RMS_NORM
-
-Advanced backend control DSV41_FAST_RMS_NORM. Set explicitly only for the selected backend; its literal read and fallback are documented below.
-
-Scope: mac-mlx. Class: advanced.
-
-Source: `vendor/mac-mlx/mlx_vlm/runtime_profile.py:147`. Unset read: None.
-
-```text
-                restore.append(lambda: os.environ.pop("DSV41_BOUNDED_CACHE", None) if old is None else os.environ.__setitem__("DSV41_BOUNDED_CACHE", old))
-            elif experiment == "fast_rms_norm":
-                old = os.environ.get("DSV41_FAST_RMS_NORM")
-                os.environ["DSV41_FAST_RMS_NORM"] = "1"
-                restore.append(lambda: os.environ.pop("DSV41_FAST_RMS_NORM", None) if old is None else os.environ.__setitem__("DSV41_FAST_RMS_NORM", old))
-            elif experiment == "metal_sinkhorn":
-                importlib.reload(hc)
-```
-
-Source: `vendor/mac-mlx/mlx_vlm/runtime_profile.py:148`. Unset read: Assigned by the runtime; see literal consumer.
-
-```text
-            elif experiment == "fast_rms_norm":
-                old = os.environ.get("DSV41_FAST_RMS_NORM")
-                os.environ["DSV41_FAST_RMS_NORM"] = "1"
-                restore.append(lambda: os.environ.pop("DSV41_FAST_RMS_NORM", None) if old is None else os.environ.__setitem__("DSV41_FAST_RMS_NORM", old))
-            elif experiment == "metal_sinkhorn":
-                importlib.reload(hc)
-                original = language._hc_split_sinkhorn_ops
-```
-
-Source: `vendor/mac-mlx/mlx_vlm/models/deepseek_v41/language.py:221`. Unset read: '0'.
-
-```text
-        # fp32 to fast RMSNorm: bf16 inputs AND weights otherwise round the
-        # normalized activation before multiplying the learned weight.
-        if os.environ.get("DSV41_FAST_RMS_NORM", "0") == "1":
-            return mx.fast.rms_norm(
-                x.astype(mx.float32), self.weight.astype(mx.float32), self.eps
-            ).astype(x.dtype)
-        if os.environ.get("DSV41_COMPILE_PRIMITIVES", "0") == "1":
-```
-
-Source: `vendor/mac-mlx/mlx_vlm/models/deepseek_v41/test_sinkhorn_metal.py:34`. Unset read: Wrapper/conditional default: see the literal call and consumer below.
-
-```text
-    norm.weight = 1 + mx.random.normal((width,)) * 0.1
-    x = mx.random.normal((1, 17, width)).astype(dtype)
-    monkeypatch.setenv("DSV41_FAST_RMS_NORM", "0")
-    expected = norm(x)
-    monkeypatch.setenv("DSV41_FAST_RMS_NORM", "1")
-    actual = norm(x)
-    mx.eval(actual, expected)
-```
-
-Source: `vendor/mac-mlx/mlx_vlm/models/deepseek_v41/test_sinkhorn_metal.py:36`. Unset read: Wrapper/conditional default: see the literal call and consumer below.
-
-```text
-    monkeypatch.setenv("DSV41_FAST_RMS_NORM", "0")
-    expected = norm(x)
-    monkeypatch.setenv("DSV41_FAST_RMS_NORM", "1")
-    actual = norm(x)
-    mx.eval(actual, expected)
-    # Native reduction order can put a BF16 result on the adjacent rounding
-    # value. The real QAT model is separately held to the long retrieval gate.
-```
-
-### DSV41_FFN_DOWN_BF16
-
-Advanced backend control DSV41_FFN_DOWN_BF16. Set explicitly only for the selected backend; its literal read and fallback are documented below.
-
-Scope: mac-mlx. Class: advanced.
-
-Source: `vendor/mac-mlx/mlx_vlm/models/deepseek_v41/language.py:2500`. Unset read: '0'.
-
-```text
-            if fused_flag == "1" and (
-                    getattr(self, "_ffn_down_bf16_attached",
-                            os.environ.get("DSV41_FFN_DOWN_BF16", "0") == "1")
-                    or getattr(self, "_ffn_expert_pad16_attached",
-                               os.environ.get("DSV41_FFN_EXPERT_PAD16", "0") == "1")
-                    or getattr(self, "_ffn_expert_tiles_attached",
-                               os.environ.get("DSV41_FFN_EXPERT_TILES", "0") == "1")
-```
-
-Source: `vendor/mac-mlx/mlx_vlm/models/deepseek_v41/language.py:2509`. Unset read: '0'.
-
-```text
-                                 "EXPERT_TILES and PREFILL_GROUPED_MXFP4 to be off")
-        if not hasattr(self, "_ffn_down_bf16_attached"):
-            self._ffn_down_bf16_attached = os.environ.get("DSV41_FFN_DOWN_BF16", "0") == "1"
-            for layer in self.layers:
-                layer.ffn.ffn_down_bf16 = self._ffn_down_bf16_attached
-        if not hasattr(self, "_ffn_expert_pad16_attached"):
-            self._ffn_expert_pad16_attached = os.environ.get("DSV41_FFN_EXPERT_PAD16", "0") == "1"
-```
-
-Source: `vendor/mac-mlx/mlx_vlm/models/deepseek_v41/test_ffn_down_bf16.py:63`. Unset read: Wrapper/conditional default: see the literal call and consumer below.
-
-```text
-    mx.eval(reference)
-    # Exercise the real attach method without needing an Engram checkpoint.
-    monkeypatch.setenv("DSV41_FFN_DOWN_BF16", "1")
-    holder = SimpleNamespace(layers=[SimpleNamespace(ffn=moe, engram=None)],
-                             model=SimpleNamespace(layout=None))
-    lang.LanguageModel.attach_engram_storage(holder, ".")
-    monkeypatch.setenv("DSV41_FFN_DOWN_BF16", "0")  # Latched at attach.
-```
-
-Source: `vendor/mac-mlx/mlx_vlm/models/deepseek_v41/test_ffn_down_bf16.py:67`. Unset read: Wrapper/conditional default: see the literal call and consumer below.
-
-```text
-                             model=SimpleNamespace(layout=None))
-    lang.LanguageModel.attach_engram_storage(holder, ".")
-    monkeypatch.setenv("DSV41_FFN_DOWN_BF16", "0")  # Latched at attach.
-    actual = moe(x)
-    mx.eval(actual)
-    # DSpark verification is excluded even at n=2048.
-    with lang._v41_verification():
-```
-
-Source: `vendor/mac-mlx/mlx_vlm/models/deepseek_v41/test_ffn_down_bf16_cpu.py:37`. Unset read: Wrapper/conditional default: see the literal call and consumer below.
-
-```text
-    monkeypatch.delenv("DSV41_PROMOTE_DECODE_WEIGHTS", raising=False)
-    if flag is None:
-        monkeypatch.delenv("DSV41_FFN_DOWN_BF16", raising=False)
-    else:
-        monkeypatch.setenv("DSV41_FFN_DOWN_BF16", flag)
-    model = SimpleNamespace(layers=[SimpleNamespace(ffn=moe, engram=None)],
-                            model=SimpleNamespace(layout=None))
-```
-
-Source: `vendor/mac-mlx/mlx_vlm/models/deepseek_v41/test_ffn_down_bf16_cpu.py:39`. Unset read: Wrapper/conditional default: see the literal call and consumer below.
-
-```text
-        monkeypatch.delenv("DSV41_FFN_DOWN_BF16", raising=False)
-    else:
-        monkeypatch.setenv("DSV41_FFN_DOWN_BF16", flag)
-    model = SimpleNamespace(layers=[SimpleNamespace(ffn=moe, engram=None)],
-                            model=SimpleNamespace(layout=None))
-    ns["attach"](model, ".")
-    return model
-```
-
-Source: `vendor/mac-mlx/mlx_vlm/models/deepseek_v41/test_ffn_down_bf16_cpu.py:62`. Unset read: Wrapper/conditional default: see the literal call and consumer below.
-
-```text
-    ns["_ffn_down_bf16"] = lambda *a: (calls.append("bf16") or routed)
-    model = _attach(ns, moe, monkeypatch, flag)
-    monkeypatch.setenv("DSV41_FFN_DOWN_BF16", "0" if flag == "1" else "1")
-    ns["attach"](model, ".")  # Environment changes after attach have no effect.
-    ns["_v41_verify_context"].set(verify)
-    actual = ns["forward"](moe, np.ones((1, n, 4), np.float32))
-    assert calls == ["bf16" if flag == "1" and n >= 64 and not verify else "fp32"]
-```
-
-Source: `vendor/mac-mlx/mlx_vlm/models/deepseek_v41/test_ffn_expert_pad.py:152`. Unset read: Wrapper/conditional default: see the literal call and consumer below.
-
-```text
-    mx.eval(reference)
-    monkeypatch.setenv("DSV41_FFN_EXPERT_PAD16", "1")
-    monkeypatch.setenv("DSV41_FFN_DOWN_BF16", "1" if down_bf16 else "0")
-    holder = SimpleNamespace(layers=[SimpleNamespace(ffn=moe, engram=None)],
-                             model=SimpleNamespace(layout=None))
-    lang.LanguageModel.attach_engram_storage(holder, ".")
-    monkeypatch.setenv("DSV41_FFN_EXPERT_PAD16", "0")
-```
-
-Source: `vendor/mac-mlx/mlx_vlm/models/deepseek_v41/test_ffn_expert_pad.py:157`. Unset read: Wrapper/conditional default: see the literal call and consumer below.
-
-```text
-    lang.LanguageModel.attach_engram_storage(holder, ".")
-    monkeypatch.setenv("DSV41_FFN_EXPERT_PAD16", "0")
-    monkeypatch.setenv("DSV41_FFN_DOWN_BF16", "0" if down_bf16 else "1")
-    lang.LanguageModel.attach_engram_storage(holder, ".")
-    assert moe.ffn_expert_pad16 and moe.ffn_down_bf16 == down_bf16
-    # The pad helper must win over grouped prefill, with the down dtype composed.
-    monkeypatch.setenv("DSV41_PREFILL_GROUPED_MXFP4", "1")
-```
-
-Source: `vendor/mac-mlx/mlx_vlm/models/deepseek_v41/test_ffn_expert_pad_cpu.py:160`. Unset read: Wrapper/conditional default: see the literal call and consumer below.
-
-```text
-    monkeypatch.setitem(sys.modules, "mlx_lm.models.switch_layers", switch)
-    monkeypatch.setenv("DSV41_FFN_EXPERT_PAD16", "1")
-    monkeypatch.setenv("DSV41_FFN_DOWN_BF16", "0")
-    monkeypatch.setenv("DSV41_PROMOTE_DECODE_WEIGHTS", "0")
-    # Padding must also take precedence over grouped prefill.
-    monkeypatch.setenv("DSV41_PREFILL_GROUPED_MXFP4", "1")
-    monkeypatch.setenv("DSV41_PREFILL_GROUPED_MIN_ROWS", "64")
-```
-
-### DSV41_FFN_EXPERT_PAD16
-
-Advanced backend control DSV41_FFN_EXPERT_PAD16. Set explicitly only for the selected backend; its literal read and fallback are documented below.
-
-Scope: mac-mlx. Class: advanced.
-
-Source: `vendor/mac-mlx/mlx_vlm/models/deepseek_v41/language.py:2502`. Unset read: '0'.
-
-```text
-                            os.environ.get("DSV41_FFN_DOWN_BF16", "0") == "1")
-                    or getattr(self, "_ffn_expert_pad16_attached",
-                               os.environ.get("DSV41_FFN_EXPERT_PAD16", "0") == "1")
-                    or getattr(self, "_ffn_expert_tiles_attached",
-                               os.environ.get("DSV41_FFN_EXPERT_TILES", "0") == "1")
-                    or os.environ.get("DSV41_PREFILL_GROUPED_MXFP4", "0") == "1"):
-                raise ValueError("DSV41_FFN_FUSED requires DOWN_BF16, EXPERT_PAD16, "
-```
-
-Source: `vendor/mac-mlx/mlx_vlm/models/deepseek_v41/language.py:2513`. Unset read: '0'.
-
-```text
-                layer.ffn.ffn_down_bf16 = self._ffn_down_bf16_attached
-        if not hasattr(self, "_ffn_expert_pad16_attached"):
-            self._ffn_expert_pad16_attached = os.environ.get("DSV41_FFN_EXPERT_PAD16", "0") == "1"
-            for layer in self.layers:
-                layer.ffn.ffn_expert_pad16 = self._ffn_expert_pad16_attached
-        if not hasattr(self, "_ffn_expert_tiles_attached"):
-            flag = os.environ.get("DSV41_FFN_EXPERT_TILES", "0")
-```
-
-Source: `vendor/mac-mlx/mlx_vlm/models/deepseek_v41/test_ffn_down_bf16_cpu.py:34`. Unset read: Wrapper/conditional default: see the literal call and consumer below.
-
-```text
-
-def _attach(ns, moe, monkeypatch, flag):
-    monkeypatch.setenv("DSV41_FFN_EXPERT_PAD16", "0")
-    monkeypatch.delenv("DSV41_PROMOTE_DECODE_WEIGHTS", raising=False)
-    if flag is None:
-        monkeypatch.delenv("DSV41_FFN_DOWN_BF16", raising=False)
-    else:
-```
-
-Source: `vendor/mac-mlx/mlx_vlm/models/deepseek_v41/test_ffn_expert_pad.py:151`. Unset read: Wrapper/conditional default: see the literal call and consumer below.
-
-```text
-    reference = moe(x)
-    mx.eval(reference)
-    monkeypatch.setenv("DSV41_FFN_EXPERT_PAD16", "1")
-    monkeypatch.setenv("DSV41_FFN_DOWN_BF16", "1" if down_bf16 else "0")
-    holder = SimpleNamespace(layers=[SimpleNamespace(ffn=moe, engram=None)],
-                             model=SimpleNamespace(layout=None))
-    lang.LanguageModel.attach_engram_storage(holder, ".")
-```
-
-Source: `vendor/mac-mlx/mlx_vlm/models/deepseek_v41/test_ffn_expert_pad.py:156`. Unset read: Wrapper/conditional default: see the literal call and consumer below.
-
-```text
-                             model=SimpleNamespace(layout=None))
-    lang.LanguageModel.attach_engram_storage(holder, ".")
-    monkeypatch.setenv("DSV41_FFN_EXPERT_PAD16", "0")
-    monkeypatch.setenv("DSV41_FFN_DOWN_BF16", "0" if down_bf16 else "1")
-    lang.LanguageModel.attach_engram_storage(holder, ".")
-    assert moe.ffn_expert_pad16 and moe.ffn_down_bf16 == down_bf16
-    # The pad helper must win over grouped prefill, with the down dtype composed.
-```
-
-Source: `vendor/mac-mlx/mlx_vlm/models/deepseek_v41/test_ffn_expert_pad_cpu.py:159`. Unset read: Wrapper/conditional default: see the literal call and consumer below.
-
-```text
-    switch._scatter_unsort = lambda y, inv, shape: y[inv].reshape(*shape, 1, y.shape[-1])
-    monkeypatch.setitem(sys.modules, "mlx_lm.models.switch_layers", switch)
-    monkeypatch.setenv("DSV41_FFN_EXPERT_PAD16", "1")
-    monkeypatch.setenv("DSV41_FFN_DOWN_BF16", "0")
-    monkeypatch.setenv("DSV41_PROMOTE_DECODE_WEIGHTS", "0")
-    # Padding must also take precedence over grouped prefill.
-    monkeypatch.setenv("DSV41_PREFILL_GROUPED_MXFP4", "1")
-```
-
-Source: `vendor/mac-mlx/mlx_vlm/models/deepseek_v41/test_ffn_expert_pad_cpu.py:177`. Unset read: Wrapper/conditional default: see the literal call and consumer below.
-
-```text
-                             model=SimpleNamespace(layout=None))
-    ns["attach"](holder, ".")
-    monkeypatch.setenv("DSV41_FFN_EXPERT_PAD16", "0")
-    ns["attach"](holder, ".")
-    assert moe.ffn_expert_pad16  # Attached value survives environment changes.
-    rng = np.random.default_rng(41)
-    for forward, n in enumerate((64, 65, 64)):
-```
-
-### DSV41_FFN_EXPERT_TILES
-
-Advanced backend control DSV41_FFN_EXPERT_TILES. Set explicitly only for the selected backend; its literal read and fallback are documented below.
-
-Scope: mac-mlx. Class: advanced.
-
-Source: `vendor/mac-mlx/mlx_vlm/custom_kernels/deepseek_v41/test_expert_tiles_cpu.py:112`. Unset read: Wrapper/conditional default: see the literal call and consumer below.
-
-```text
-    ns, calls, moe, model, dspark = dispatch
-    if flag is None:
-        monkeypatch.delenv("DSV41_FFN_EXPERT_TILES")
-    else:
-        monkeypatch.setenv("DSV41_FFN_EXPERT_TILES", flag)
-    ns["attach"](model, ".")
-    monkeypatch.setenv("DSV41_FFN_EXPERT_TILES", "0" if flag == "1" else "1")
-```
-
-Source: `vendor/mac-mlx/mlx_vlm/custom_kernels/deepseek_v41/test_expert_tiles_cpu.py:114`. Unset read: Wrapper/conditional default: see the literal call and consumer below.
-
-```text
-        monkeypatch.delenv("DSV41_FFN_EXPERT_TILES")
-    else:
-        monkeypatch.setenv("DSV41_FFN_EXPERT_TILES", flag)
-    ns["attach"](model, ".")
-    monkeypatch.setenv("DSV41_FFN_EXPERT_TILES", "0" if flag == "1" else "1")
-    ns["attach"](model, ".")
-    ns["_v41_verify_context"].set(verify)
-```
-
-Source: `vendor/mac-mlx/mlx_vlm/custom_kernels/deepseek_v41/test_expert_tiles_cpu.py:116`. Unset read: Wrapper/conditional default: see the literal call and consumer below.
-
-```text
-        monkeypatch.setenv("DSV41_FFN_EXPERT_TILES", flag)
-    ns["attach"](model, ".")
-    monkeypatch.setenv("DSV41_FFN_EXPERT_TILES", "0" if flag == "1" else "1")
-    ns["attach"](model, ".")
-    ns["_v41_verify_context"].set(verify)
-    result = ns["forward"](moe, np.ones((1, n, 4), np.float32))
-    custom = flag == "1" and n >= 64 and not verify
-```
-
-Source: `vendor/mac-mlx/mlx_vlm/custom_kernels/deepseek_v41/test_expert_tiles_cpu.py:129`. Unset read: Wrapper/conditional default: see the literal call and consumer below.
-
-```text
-def test_attach_compile_failure_is_fatal_and_retryable(dispatch, monkeypatch):
-    ns, calls, moe, model, _ = dispatch
-    monkeypatch.setenv("DSV41_FFN_EXPERT_TILES", "1")
-    def fail(layers):
-        raise RuntimeError("Metal compiler rejected shader")
-    ns["prepare_expert_tiles"] = fail
-    with pytest.raises(RuntimeError, match="Metal compiler"):
-```
-
-Source: `vendor/mac-mlx/mlx_vlm/custom_kernels/deepseek_v41/test_expert_tiles_cpu.py:145`. Unset read: Wrapper/conditional default: see the literal call and consumer below.
-
-```text
-def test_attach_rejects_conflicting_experiments(dispatch, monkeypatch, conflict):
-    ns, calls, _, model, _ = dispatch
-    monkeypatch.setenv("DSV41_FFN_EXPERT_TILES", "1")
-    monkeypatch.setenv(conflict, "1")
-    with pytest.raises(ValueError, match="requires DOWN_BF16"):
-        ns["attach"](model, ".")
-    assert not calls and not hasattr(model, "_ffn_expert_tiles_attached")
-```
-
-Source: `vendor/mac-mlx/mlx_vlm/custom_kernels/deepseek_v41/test_expert_tiles_cpu.py:154`. Unset read: Wrapper/conditional default: see the literal call and consumer below.
-
-```text
-def test_attach_rejects_unknown_flag(dispatch, monkeypatch):
-    ns, _, _, model, _ = dispatch
-    monkeypatch.setenv("DSV41_FFN_EXPERT_TILES", "yes")
-    with pytest.raises(ValueError, match="must be 0 or 1"):
-        ns["attach"](model, ".")
-
-
-```
-
-Source: `vendor/mac-mlx/mlx_vlm/models/deepseek_v41/language.py:2504`. Unset read: '0'.
-
-```text
-                               os.environ.get("DSV41_FFN_EXPERT_PAD16", "0") == "1")
-                    or getattr(self, "_ffn_expert_tiles_attached",
-                               os.environ.get("DSV41_FFN_EXPERT_TILES", "0") == "1")
-                    or os.environ.get("DSV41_PREFILL_GROUPED_MXFP4", "0") == "1"):
-                raise ValueError("DSV41_FFN_FUSED requires DOWN_BF16, EXPERT_PAD16, "
-                                 "EXPERT_TILES and PREFILL_GROUPED_MXFP4 to be off")
-        if not hasattr(self, "_ffn_down_bf16_attached"):
-```
-
-Source: `vendor/mac-mlx/mlx_vlm/models/deepseek_v41/language.py:2517`. Unset read: '0'.
-
-```text
-                layer.ffn.ffn_expert_pad16 = self._ffn_expert_pad16_attached
-        if not hasattr(self, "_ffn_expert_tiles_attached"):
-            flag = os.environ.get("DSV41_FFN_EXPERT_TILES", "0")
-            if flag not in ("0", "1"):
-                raise ValueError("DSV41_FFN_EXPERT_TILES must be 0 or 1")
-            if flag == "1":
-                if (self._ffn_down_bf16_attached or self._ffn_expert_pad16_attached
-```
-
-### DSV41_FFN_FUSED
-
-Advanced backend control DSV41_FFN_FUSED. Set explicitly only for the selected backend; its literal read and fallback are documented below.
-
-Scope: mac-mlx. Class: advanced.
-
-Source: `vendor/mac-mlx/mlx_vlm/custom_kernels/deepseek_v41/test_fused_ffn_cpu.py:84`. Unset read: Wrapper/conditional default: see the literal call and consumer below.
-
-```text
-    ns, calls, moe, model, dspark = dispatch
-    if flag is None:
-        monkeypatch.delenv("DSV41_FFN_FUSED", raising=False)
-    else:
-        monkeypatch.setenv("DSV41_FFN_FUSED", flag)
-    ns["attach"](model, ".")
-    assert calls == (["compile-fused"] if flag == "1" else [])
-```
-
-Source: `vendor/mac-mlx/mlx_vlm/custom_kernels/deepseek_v41/test_fused_ffn_cpu.py:86`. Unset read: Wrapper/conditional default: see the literal call and consumer below.
-
-```text
-        monkeypatch.delenv("DSV41_FFN_FUSED", raising=False)
-    else:
-        monkeypatch.setenv("DSV41_FFN_FUSED", flag)
-    ns["attach"](model, ".")
-    assert calls == (["compile-fused"] if flag == "1" else [])
-    assert model._ffn_fused_attached == moe.ffn_fused == (flag == "1")
-    assert not dspark.ffn_fused
-```
-
-Source: `vendor/mac-mlx/mlx_vlm/custom_kernels/deepseek_v41/test_fused_ffn_cpu.py:92`. Unset read: Wrapper/conditional default: see the literal call and consumer below.
-
-```text
-    assert not dspark.ffn_fused
-    # Later environment changes cannot change a published latch.
-    monkeypatch.setenv("DSV41_FFN_FUSED", "0" if flag == "1" else "1")
-    ns["attach"](model, ".")
-    calls.clear()
-    token = ns["_v41_verify_context"].set(verify)
-    try:
-```
-
-Source: `vendor/mac-mlx/mlx_vlm/custom_kernels/deepseek_v41/test_fused_ffn_cpu.py:109`. Unset read: Wrapper/conditional default: see the literal call and consumer below.
-
-```text
-def test_conflicts_fail_before_compile(dispatch, monkeypatch, other):
-    ns, calls, _, model, _ = dispatch
-    monkeypatch.setenv("DSV41_FFN_FUSED", "1")
-    monkeypatch.setenv(other, "1")
-    with pytest.raises(ValueError, match="FFN_FUSED requires"):
-        ns["attach"](model, ".")
-    assert not calls and not hasattr(model, "_ffn_fused_attached")
-```
-
-Source: `vendor/mac-mlx/mlx_vlm/custom_kernels/deepseek_v41/test_fused_ffn_cpu.py:118`. Unset read: Wrapper/conditional default: see the literal call and consumer below.
-
-```text
-def test_invalid_flag_and_compile_failure_retry(dispatch, monkeypatch):
-    ns, calls, moe, model, _ = dispatch
-    monkeypatch.setenv("DSV41_FFN_FUSED", "yes")
-    with pytest.raises(ValueError, match="must be 0 or 1"):
-        ns["attach"](model, ".")
-    monkeypatch.setenv("DSV41_FFN_FUSED", "1")
-
-```
-
-Source: `vendor/mac-mlx/mlx_vlm/custom_kernels/deepseek_v41/test_fused_ffn_cpu.py:121`. Unset read: Wrapper/conditional default: see the literal call and consumer below.
-
-```text
-    with pytest.raises(ValueError, match="must be 0 or 1"):
-        ns["attach"](model, ".")
-    monkeypatch.setenv("DSV41_FFN_FUSED", "1")
-
-    def fail(layers):
-        raise RuntimeError("shader failed")
-
-```
-
-Source: `vendor/mac-mlx/mlx_vlm/models/deepseek_v41/language.py:2495`. Unset read: '0'.
-
-```text
-                    layer.attn.indexer.index_fused = self._index_fused_attached
-        if not hasattr(self, "_ffn_fused_attached"):
-            fused_flag = os.environ.get("DSV41_FFN_FUSED", "0")
-            if fused_flag not in ("0", "1"):
-                raise ValueError("DSV41_FFN_FUSED must be 0 or 1")
-            if fused_flag == "1" and (
-                    getattr(self, "_ffn_down_bf16_attached",
-```
-
-### DSV41_FFN_FUSED_TEST_RELEASE
-
-Advanced backend control DSV41_FFN_FUSED_TEST_RELEASE. Set explicitly only for the selected backend; its literal read and fallback are documented below.
-
-Scope: mac-mlx. Class: advanced.
-
-Source: `vendor/mac-mlx/mlx_vlm/custom_kernels/deepseek_v41/test_fused_ffn_qmm.py:30`. Unset read: '0'.
-
-```text
-from mlx_vlm.models.deepseek_v41.language import ClampedSwiGLU
-
-D, I = (5120, 2304) if os.environ.get("DSV41_FFN_FUSED_TEST_RELEASE", "0") == "1" else (128, 96)
-CASES = ["probe_a", "balanced32", "8x1536", "singleton_empty", "fused_boundaries"]
-
-
-@pytest.fixture(scope="module", autouse=True)
-```
-
-### DSV41_GATE_FP32
-
-Advanced backend control DSV41_GATE_FP32. Set explicitly only for the selected backend; its literal read and fallback are documented below.
-
-Scope: mac-mlx. Class: advanced.
-
-Source: `vendor/mac-mlx/mlx_vlm/models/deepseek_v41/language.py:811`. Unset read: '0'.
-
-```text
-
-    def __call__(self, x: mx.array, image_mask=None):
-        if os.environ.get("DSV41_GATE_FP32", "0") == "1" and self.weight.dtype != mx.float32:
-            # Promote the parameter itself once, rather than keeping a second
-            # cached array that becomes stale after load_weights/update/casting.
-            # Inference opt-in: this changes stored parameter dtype/memory.
-            self.weight = self.weight.astype(mx.float32)
-```
-
-### DSV41_GRAPH_REPORT
-
-Advanced backend control DSV41_GRAPH_REPORT. Set explicitly only for the selected backend; its literal read and fallback are documented below.
-
-Scope: mac-mlx. Class: advanced.
-
-Source: `vendor/mac-mlx/mlx_vlm/models/deepseek_v41/language.py:2282`. Unset read: '0'.
-
-```text
-            LEDGER["cut_steps"] += 1
-        graph = getattr(self, "_block_graph", None)
-        if graph is not None and n == 1 and os.environ.get("DSV41_GRAPH_REPORT", "0") == "1":
-            graph.report(len(self.layers))
-        h = hc_pre(h, pre_mix)
-        if hidden_sink is not None:
-            hidden_sink.append(h)
-```
-
-### DSV41_GROUPED_TEST_CONFIGS
-
-Advanced backend control DSV41_GROUPED_TEST_CONFIGS. Set explicitly only for the selected backend; its literal read and fallback are documented below.
-
-Scope: mac-mlx. Class: advanced.
-
-Source: `vendor/mac-mlx/mlx_vlm/custom_kernels/deepseek_v41/test_grouped_gemm.py:45`. Unset read: 'fast'.
-
-```text
-D, I = (5120, 2304) if RELEASE else (128, 96)
-CASES = ("balanced32", "random2048", "random8192", "skewed", "empty", "tails")
-_selected = os.environ.get("DSV41_GROUPED_TEST_CONFIGS", "fast")
-TEST_CONFIGS = [None] + list(CONFIGS if _selected == "all" else _selected.split(","))
-
-
-def assert_bits(label, actual, reference):
-```
-
-### DSV41_GROUPED_TEST_RELEASE
-
-Advanced backend control DSV41_GROUPED_TEST_RELEASE. Set explicitly only for the selected backend; its literal read and fallback are documented below.
-
-Scope: mac-mlx. Class: advanced.
-
-Source: `vendor/mac-mlx/mlx_vlm/custom_kernels/deepseek_v41/test_grouped_gemm.py:41`. Unset read: '0'.
-
-```text
-from mlx_vlm.models.deepseek_v41.moe_prefill import moe_prefill_grouped
-
-RELEASE = os.environ.get("DSV41_GROUPED_TEST_RELEASE", "0") == "1"
-E, TOPK = 384, 6
-D, I = (5120, 2304) if RELEASE else (128, 96)
-CASES = ("balanced32", "random2048", "random8192", "skewed", "empty", "tails")
-_selected = os.environ.get("DSV41_GROUPED_TEST_CONFIGS", "fast")
-```
-
-### DSV41_GROUPED_TEST_WORKER
-
-Advanced backend control DSV41_GROUPED_TEST_WORKER. Set explicitly only for the selected backend; its literal read and fallback are documented below.
-
-Scope: mac-mlx. Class: advanced.
-
-Source: `vendor/mac-mlx/mlx_vlm/custom_kernels/deepseek_v41/conftest.py:20`. Unset read: None.
-
-```text
-def pytest_runtest_protocol(item, nextitem):
-    # Intercept BEFORE fixture setup: projection fixtures also submit GPU work.
-    if not _grouped_test(item) or os.environ.get("DSV41_GROUPED_TEST_WORKER") == "1":
-        return None
-    job = Variant("pytest", item.nodeid)
-    env = dict(os.environ, DSV41_GROUPED_TEST_WORKER="1", PYTHONUNBUFFERED="1")
-    import subprocess
-```
-
-Source: `vendor/mac-mlx/mlx_vlm/custom_kernels/deepseek_v41/conftest.py:48`. Unset read: None.
-
-```text
-@pytest.fixture(autouse=True)
-def grouped_test_launch_watchdog(request, monkeypatch):
-    if not _grouped_test(request.node) or os.environ.get("DSV41_GROUPED_TEST_WORKER") != "1":
-        return
-    import mlx.core as mx
-    import mlx_vlm.custom_kernels.deepseek_v41.grouped_gemm as kernel
-    import mlx_vlm.models.deepseek_v41.moe_prefill as adapter
-```
-
-### DSV41_HC_COMPILE_POST
-
-Advanced backend control DSV41_HC_COMPILE_POST. Set explicitly only for the selected backend; its literal read and fallback are documented below.
-
-Scope: mac-mlx. Class: advanced.
-
-Source: `vendor/mac-mlx/mlx_vlm/models/deepseek_v41/hyper_connection.py:28`. Unset read: '0'.
-
-```text
-
-
-COMPILE_POST = os.environ.get("DSV41_HC_COMPILE_POST", "0") == "1"
-SINKHORN_CALLS = 0
-FUSED_CALLS = 0
-POST_CALLS = 0
-
-```
-
-### DSV41_HC_FAST_NORM
-
-Advanced backend control DSV41_HC_FAST_NORM. Set explicitly only for the selected backend; its literal read and fallback are documented below.
-
-Scope: mac-mlx. Class: advanced.
-
-Source: `vendor/mac-mlx/mlx_vlm/models/deepseek_v41/language.py:1670`. Unset read: '0'.
-
-```text
-        # Moving the normalization before GEMM changes FP32 rounding. Keep the
-        # reference's projection-first order unless explicitly opted in.
-        self.fast_norm = os.environ.get("DSV41_HC_FAST_NORM", "0") == "1"
-        size = (2 + self.hc) * self.hc
-        self.fn = mx.zeros((size, self.hc * config.hidden_size), dtype=mx.float32)
-        self.base = mx.zeros((size,), dtype=mx.float32)
-        self.scale = mx.zeros((3,), dtype=mx.float32)
-```
-
-### DSV41_HC_FUSED
-
-Advanced backend control DSV41_HC_FUSED. Set explicitly only for the selected backend; its literal read and fallback are documented below.
-
-Scope: mac-mlx. Class: advanced.
-
-Source: `vendor/mac-mlx/mlx_vlm/models/deepseek_v41/language.py:1677`. Unset read: '0'.
-
-```text
-
-    def __call__(self, x, incoming_pre=None):
-        if os.environ.get("DSV41_HC_FUSED", "0") == "1":
-            from .hyper_connection import fused_staggered_hc
-
-            if incoming_pre is None:
-                raise ValueError("DSV41_HC_FUSED needs incoming_pre; block_graph integration is required")
-```
-
-Source: `vendor/mac-mlx/mlx_vlm/models/deepseek_v41/language.py:1776`. Unset read: '0'.
-
-```text
-            from .megakernel import collapse_norm_rows
-            return collapse_norm_rows(h, pre_mix, self.attn_norm)
-        if os.environ.get("DSV41_HC_FUSED", "0") == "1":
-            x = self.attn_hc(h, pre_mix)[0]
-        else:
-            x = hc_pre(h, pre_mix)
-        return self.attn_norm(x)
-```
-
-Source: `vendor/mac-mlx/mlx_vlm/models/deepseek_v41/language.py:1816`. Unset read: '0'.
-
-```text
-                from .megakernel import prefill_block
-                return prefill_block(self, h, pre_mix, start_pos, cache, shared, image_mask)
-        if os.environ.get("DSV41_HC_FUSED", "0") == "1":
-            x, attn_pre, post, comb = self.attn_hc(h, pre_mix)
-        else:
-            attn_pre, post, comb = self.attn_hc(h)
-            x = hc_pre(h, pre_mix)
-```
-
-Source: `vendor/mac-mlx/mlx_vlm/models/deepseek_v41/language.py:1829`. Unset read: '0'.
-
-```text
-            mx.synchronize()
-            _prefill_layer_add(self.attn.layer_id, "attn_ms", (time.perf_counter() - _t0) * 1000.0)
-        if os.environ.get("DSV41_HC_FUSED", "0") == "1":
-            x, ffn_pre, post, comb = self.ffn_hc(h, attn_pre)
-        else:
-            ffn_pre, post, comb = self.ffn_hc(h)
-            x = hc_pre(h, attn_pre)
-```
-
-### DSV41_HC_FUSED_POST
-
-Advanced backend control DSV41_HC_FUSED_POST. Set explicitly only for the selected backend; its literal read and fallback are documented below.
-
-Scope: mac-mlx. Class: advanced.
-
-Source: `vendor/mac-mlx/mlx_vlm/models/deepseek_v41/language.py:1707`. Unset read: '0'.
-
-```text
-    from .hyper_connection import COMPILE_POST, compiled_hc_post
-
-    if os.environ.get("DSV41_HC_FUSED_POST", "0") == "1":
-        from .hyper_connection import metal_hc_post
-
-        return metal_hc_post(x, residual, post, comb)
-    if COMPILE_POST:
-```
-
-### DSV41_HEAD_BF16
-
-Advanced backend control DSV41_HEAD_BF16. Set explicitly only for the selected backend; its literal read and fallback are documented below.
-
-Scope: mac-mlx. Class: advanced.
-
-Source: `engines/mlx-receiver/mlx_token_stream_server.py:164`. Unset read: '0'.
-
-```text
-        parameter_bytes += sum((2 * prod(shape) for _, shape in expected_vision_parameters(config.vision_config, config.text_config.hidden_size).values()))
-    if os.environ.get('DSV41_PROMOTE_DECODE_WEIGHTS', '0') == '1':
-        parameter_bytes += sum(((4 - sizes[dtype]) * prod(shape) for name, (dtype, shape) in specs.items() if name.endswith('.wo_a.weight') and os.environ.get('DSV41_WO_A_BF16', '0') != '1' or (name == 'lm_head.weight' and os.environ.get('DSV41_HEAD_BF16', '0') != '1')))
-    available, breakdown = _dsv41_wait_for_memory(source, parameter_bytes, _read_vm_stat, timeout_s=float(os.environ.get('DSV41_MEMORY_GUARD_WAIT_S', '90')))
-    required = _dsv41_memory_guard(available, source, parameter_bytes)
-    print(f"[DSV41] memory available={available / (1 << 30):.2f} GiB resident_required={required / (1 << 30):.0f} GiB headroom=20 GiB source={source} QAT={os.environ.get('DSV41_QAT', '1')} [{_dsv41_breakdown_text(breakdown)}]", file=sys.stderr, flush=True)
-    model_dir = Path(model_dir)
-```
-
-Source: `vendor/mac-mlx/mlx_vlm/models/deepseek_v41/language.py:86`. Unset read: '0'.
-
-```text
-# attach time, loudly). Both off: byte-for-byte the previous path.
-_WO_A_BF16 = os.environ.get("DSV41_WO_A_BF16", "0") == "1"
-_HEAD_BF16 = os.environ.get("DSV41_HEAD_BF16", "0") == "1"
-_PREFETCH_POOL = None
-
-
-def _prefetch_pool():
-```
-
-Source: `vendor/mac-mlx/mlx_vlm/models/deepseek_v41/test_decode_bf16_contractions.py:37`. Unset read: Wrapper/conditional default: see the literal call and consumer below.
-
-```text
-
-def test_head_bf16_without_the_kernel_is_refused(monkeypatch):
-    monkeypatch.setenv("DSV41_HEAD_BF16", "1")
-    monkeypatch.delenv("DSV41_OMLX_HEAD", raising=False)
-    import importlib
-    from mlx_vlm.models.deepseek_v41 import language as lang
-    importlib.reload(lang)
-```
-
-Source: `vendor/mac-mlx/mlx_vlm/models/deepseek_v41/test_decode_bf16_contractions.py:47`. Unset read: Wrapper/conditional default: see the literal call and consumer below.
-
-```text
-            lang.LanguageModel.attach_engram_storage(obj, "/nonexistent")
-    finally:
-        monkeypatch.delenv("DSV41_HEAD_BF16", raising=False)
-        importlib.reload(lang)
-```
-
-### DSV41_INDEX_FUSED
-
-Advanced backend control DSV41_INDEX_FUSED. Set explicitly only for the selected backend; its literal read and fallback are documented below.
-
-Scope: mac-mlx. Class: advanced.
-
-Source: `vendor/mac-mlx/mlx_vlm/custom_kernels/deepseek_v41/test_index_fused_cpu.py:476`. Unset read: Wrapper/conditional default: see the literal call and consumer below.
-
-```text
-    ns, calls, indexer, model = dispatch
-    if flag is None:
-        monkeypatch.delenv("DSV41_INDEX_FUSED")
-    else:
-        monkeypatch.setenv("DSV41_INDEX_FUSED", flag)
-    ns["attach"](model, ".")
-    monkeypatch.setenv("DSV41_INDEX_FUSED", "0" if flag == "1" else "1")
-```
-
-Source: `vendor/mac-mlx/mlx_vlm/custom_kernels/deepseek_v41/test_index_fused_cpu.py:478`. Unset read: Wrapper/conditional default: see the literal call and consumer below.
-
-```text
-        monkeypatch.delenv("DSV41_INDEX_FUSED")
-    else:
-        monkeypatch.setenv("DSV41_INDEX_FUSED", flag)
-    ns["attach"](model, ".")
-    monkeypatch.setenv("DSV41_INDEX_FUSED", "0" if flag == "1" else "1")
-    ns["attach"](model, ".")
-    ns["_v41_verify_context"].set(verify)
-```
-
-Source: `vendor/mac-mlx/mlx_vlm/custom_kernels/deepseek_v41/test_index_fused_cpu.py:480`. Unset read: Wrapper/conditional default: see the literal call and consumer below.
-
-```text
-        monkeypatch.setenv("DSV41_INDEX_FUSED", flag)
-    ns["attach"](model, ".")
-    monkeypatch.setenv("DSV41_INDEX_FUSED", "0" if flag == "1" else "1")
-    ns["attach"](model, ".")
-    ns["_v41_verify_context"].set(verify)
-    x = np.ones((1, n, 4), np.float32)
-    out = ns["forward"](indexer, x, x, 0, 128, None,
-```
-
-Source: `vendor/mac-mlx/mlx_vlm/custom_kernels/deepseek_v41/test_index_fused_cpu.py:496`. Unset read: Wrapper/conditional default: see the literal call and consumer below.
-
-```text
-        dispatch, monkeypatch, skip, precompute):
-    ns, calls, indexer, model = dispatch
-    monkeypatch.setenv("DSV41_INDEX_FUSED", "1")
-    monkeypatch.setenv("DSV41_INDEX_SKIP", skip)
-    monkeypatch.setenv("DSV41_S4_PRECOMPUTE", precompute)
-    # 0 = always skip when the switch is on; this nb is far below the shipped
-    # DSV41_INDEX_SKIP_MIN_NB, which is gated on its own below.
-```
-
-Source: `vendor/mac-mlx/mlx_vlm/custom_kernels/deepseek_v41/test_index_fused_cpu.py:527`. Unset read: Wrapper/conditional default: see the literal call and consumer below.
-
-```text
-    block mask at stride block_size, so the kernel takes it as-is."""
-    ns, calls, indexer, model = dispatch
-    monkeypatch.setenv("DSV41_INDEX_FUSED", "1")
-    monkeypatch.setenv("DSV41_INDEX_SKIP", "1")
-    monkeypatch.setenv("DSV41_S4_PRECOMPUTE", "0")
-    monkeypatch.setenv("DSV41_INDEX_SKIP_MIN_NB", "0")
-    indexer.uses_candidates = True
-```
-
-Source: `vendor/mac-mlx/mlx_vlm/custom_kernels/deepseek_v41/test_index_fused_cpu.py:570`. Unset read: Wrapper/conditional default: see the literal call and consumer below.
-
-```text
-    """
-    ns, calls, indexer, model = dispatch
-    monkeypatch.setenv("DSV41_INDEX_FUSED", "1")
-    monkeypatch.setenv("DSV41_INDEX_SKIP", skip)
-    monkeypatch.setenv("DSV41_S4_PRECOMPUTE", precompute)
-    if min_nb is None:
-        monkeypatch.delenv("DSV41_INDEX_SKIP_MIN_NB", raising=False)
-```
-
-Source: `vendor/mac-mlx/mlx_vlm/custom_kernels/deepseek_v41/test_index_fused_cpu.py:638`. Unset read: Wrapper/conditional default: see the literal call and consumer below.
-
-```text
-    decline early and engage later, and each outcome prints once."""
-    ns, calls, indexer, model = dispatch
-    monkeypatch.setenv("DSV41_INDEX_FUSED", "1")
-    monkeypatch.setenv("DSV41_INDEX_SKIP", "1")
-    monkeypatch.setenv("DSV41_S4_PRECOMPUTE", "1")
-    monkeypatch.setenv("DSV41_INDEX_SKIP_MIN_NB", "136")
-    indexer.uses_candidates = True
-```
-
-Source: `vendor/mac-mlx/mlx_vlm/custom_kernels/deepseek_v41/test_index_fused_cpu.py:669`. Unset read: Wrapper/conditional default: see the literal call and consumer below.
-
-```text
-def test_an_invalid_threshold_is_loud_at_attach(dispatch, monkeypatch, value, skip):
-    ns, calls, indexer, model = dispatch
-    monkeypatch.setenv("DSV41_INDEX_FUSED", "1")
-    monkeypatch.setenv("DSV41_INDEX_SKIP", skip)
-    monkeypatch.setenv("DSV41_INDEX_SKIP_MIN_NB", value)
-    with pytest.raises(ValueError, match="must be a non-negative integer"):
-        ns["attach"](model, ".")
-```
-
-Source: `vendor/mac-mlx/mlx_vlm/custom_kernels/deepseek_v41/test_index_fused_cpu.py:683`. Unset read: Wrapper/conditional default: see the literal call and consumer below.
-
-```text
-def test_a_valid_threshold_is_accepted_at_attach(dispatch, monkeypatch, value, expected):
-    ns, calls, indexer, model = dispatch
-    monkeypatch.setenv("DSV41_INDEX_FUSED", "1")
-    monkeypatch.setenv("DSV41_INDEX_SKIP", "1")
-    monkeypatch.setenv("DSV41_INDEX_SKIP_MIN_NB", value)
-    ns["attach"](model, ".")
-    assert calls == ["compile+skip"] and indexer.index_fused
-```
-
-Source: `vendor/mac-mlx/mlx_vlm/custom_kernels/deepseek_v41/test_index_fused_cpu.py:697`. Unset read: Wrapper/conditional default: see the literal call and consumer below.
-
-```text
-def test_skip_switch_is_validated_at_attach(dispatch, monkeypatch, fused, skip, message):
-    ns, calls, indexer, model = dispatch
-    monkeypatch.setenv("DSV41_INDEX_FUSED", fused)
-    monkeypatch.setenv("DSV41_INDEX_SKIP", skip)
-    with pytest.raises(ValueError, match=message):
-        ns["attach"](model, ".")
-    assert not calls and not indexer.index_fused
-```
-
-Source: `vendor/mac-mlx/mlx_vlm/custom_kernels/deepseek_v41/test_index_fused_cpu.py:706`. Unset read: Wrapper/conditional default: see the literal call and consumer below.
-
-```text
-def test_failed_compile_does_not_latch(dispatch, monkeypatch):
-    ns, calls, indexer, model = dispatch
-    monkeypatch.setenv("DSV41_INDEX_FUSED", "1")
-    def fail(layers, skip=False):
-        raise RuntimeError("compile failed")
-    ns["prepare_index_fused"] = fail
-    with pytest.raises(RuntimeError, match="compile failed"):
-```
-
-Source: `vendor/mac-mlx/mlx_vlm/custom_kernels/deepseek_v41/test_index_fused_cpu.py:721`. Unset read: Wrapper/conditional default: see the literal call and consumer below.
-
-```text
-def test_conflicts_at_attach_and_after_attach(dispatch, monkeypatch, conflict):
-    ns, calls, indexer, model = dispatch
-    monkeypatch.setenv("DSV41_INDEX_FUSED", "1")
-    monkeypatch.setenv("DSV41_" + conflict, "1")
-    with pytest.raises(ValueError, match="cannot combine"):
-        ns["attach"](model, ".")
-    assert not calls and not indexer.index_fused
-```
-
-Source: `vendor/mac-mlx/mlx_vlm/custom_kernels/deepseek_v41/test_index_fused_cpu.py:736`. Unset read: Wrapper/conditional default: see the literal call and consumer below.
-
-```text
-def test_invalid_switch(dispatch, monkeypatch):
-    ns, _, _, model = dispatch
-    monkeypatch.setenv("DSV41_INDEX_FUSED", "yes")
-    with pytest.raises(ValueError, match="must be 0 or 1"):
-        ns["attach"](model, ".")
-
-
-```
-
-Source: `vendor/mac-mlx/mlx_vlm/models/deepseek_v41/language.py:2467`. Unset read: '0'.
-
-```text
-                               "fp32 logits); refusing to serve bf16 logits silently")
-        if not hasattr(self, "_index_fused_attached"):
-            index_flag = os.environ.get("DSV41_INDEX_FUSED", "0")
-            if index_flag not in ("0", "1"):
-                raise ValueError("DSV41_INDEX_FUSED must be 0 or 1")
-            skip_flag = os.environ.get("DSV41_INDEX_SKIP", "0")
-            if skip_flag not in ("0", "1"):
-```
-
-### DSV41_INDEX_SKIP
-
-Advanced backend control DSV41_INDEX_SKIP. Set explicitly only for the selected backend; its literal read and fallback are documented below.
-
-Scope: mac-mlx. Class: advanced.
-
-Source: `vendor/mac-mlx/mlx_vlm/custom_kernels/deepseek_v41/test_index_fused.py:448`. Unset read: Wrapper/conditional default: see the literal call and consumer below.
-
-```text
-    eager, fused = _model_paths(64, 1031, candidates=True)
-    expected = eager()
-    monkeypatch.setenv("DSV41_INDEX_SKIP", "1")
-    prewarm_index_skip(8, precompute)
-    actual = fused()
-    mx.eval(*expected, *actual)
-    _same_sets(actual[0], expected[0])
-```
-
-Source: `vendor/mac-mlx/mlx_vlm/custom_kernels/deepseek_v41/test_index_fused.py:469`. Unset read: Wrapper/conditional default: see the literal call and consumer below.
-
-```text
-    """
-    monkeypatch.setenv("DSV41_S4_PRECOMPUTE", str(int(precompute)))
-    monkeypatch.setenv("DSV41_INDEX_SKIP", "1")
-    monkeypatch.setenv("DSV41_INDEX_SKIP_MIN_NB", str(min_nb))
-    prewarm_index_skip(8, precompute)
-    masked = []
-    real = index_fused_module.index_scores_fused
-```
-
-Source: `vendor/mac-mlx/mlx_vlm/custom_kernels/deepseek_v41/test_index_fused_cpu.py:497`. Unset read: Wrapper/conditional default: see the literal call and consumer below.
-
-```text
-    ns, calls, indexer, model = dispatch
-    monkeypatch.setenv("DSV41_INDEX_FUSED", "1")
-    monkeypatch.setenv("DSV41_INDEX_SKIP", skip)
-    monkeypatch.setenv("DSV41_S4_PRECOMPUTE", precompute)
-    # 0 = always skip when the switch is on; this nb is far below the shipped
-    # DSV41_INDEX_SKIP_MIN_NB, which is gated on its own below.
-    monkeypatch.setenv("DSV41_INDEX_SKIP_MIN_NB", "0")
-```
-
-Source: `vendor/mac-mlx/mlx_vlm/custom_kernels/deepseek_v41/test_index_fused_cpu.py:528`. Unset read: Wrapper/conditional default: see the literal call and consumer below.
-
-```text
-    ns, calls, indexer, model = dispatch
-    monkeypatch.setenv("DSV41_INDEX_FUSED", "1")
-    monkeypatch.setenv("DSV41_INDEX_SKIP", "1")
-    monkeypatch.setenv("DSV41_S4_PRECOMPUTE", "0")
-    monkeypatch.setenv("DSV41_INDEX_SKIP_MIN_NB", "0")
-    indexer.uses_candidates = True
-    ns["attach"](model, ".")
-```
-
-Source: `vendor/mac-mlx/mlx_vlm/custom_kernels/deepseek_v41/test_index_fused_cpu.py:571`. Unset read: Wrapper/conditional default: see the literal call and consumer below.
-
-```text
-    ns, calls, indexer, model = dispatch
-    monkeypatch.setenv("DSV41_INDEX_FUSED", "1")
-    monkeypatch.setenv("DSV41_INDEX_SKIP", skip)
-    monkeypatch.setenv("DSV41_S4_PRECOMPUTE", precompute)
-    if min_nb is None:
-        monkeypatch.delenv("DSV41_INDEX_SKIP_MIN_NB", raising=False)
-    else:
-```
-
-Source: `vendor/mac-mlx/mlx_vlm/custom_kernels/deepseek_v41/test_index_fused_cpu.py:639`. Unset read: Wrapper/conditional default: see the literal call and consumer below.
-
-```text
-    ns, calls, indexer, model = dispatch
-    monkeypatch.setenv("DSV41_INDEX_FUSED", "1")
-    monkeypatch.setenv("DSV41_INDEX_SKIP", "1")
-    monkeypatch.setenv("DSV41_S4_PRECOMPUTE", "1")
-    monkeypatch.setenv("DSV41_INDEX_SKIP_MIN_NB", "136")
-    indexer.uses_candidates = True
-    ns["attach"](model, ".")
-```
-
-Source: `vendor/mac-mlx/mlx_vlm/custom_kernels/deepseek_v41/test_index_fused_cpu.py:670`. Unset read: Wrapper/conditional default: see the literal call and consumer below.
-
-```text
-    ns, calls, indexer, model = dispatch
-    monkeypatch.setenv("DSV41_INDEX_FUSED", "1")
-    monkeypatch.setenv("DSV41_INDEX_SKIP", skip)
-    monkeypatch.setenv("DSV41_INDEX_SKIP_MIN_NB", value)
-    with pytest.raises(ValueError, match="must be a non-negative integer"):
-        ns["attach"](model, ".")
-    # Nothing compiled, nothing latched: no silent fallback to the default.
-```
-
-Source: `vendor/mac-mlx/mlx_vlm/custom_kernels/deepseek_v41/test_index_fused_cpu.py:684`. Unset read: Wrapper/conditional default: see the literal call and consumer below.
-
-```text
-    ns, calls, indexer, model = dispatch
-    monkeypatch.setenv("DSV41_INDEX_FUSED", "1")
-    monkeypatch.setenv("DSV41_INDEX_SKIP", "1")
-    monkeypatch.setenv("DSV41_INDEX_SKIP_MIN_NB", value)
-    ns["attach"](model, ".")
-    assert calls == ["compile+skip"] and indexer.index_fused
-    assert ns["_index_skip_min_nb"]() == expected
-```
-
-Source: `vendor/mac-mlx/mlx_vlm/custom_kernels/deepseek_v41/test_index_fused_cpu.py:698`. Unset read: Wrapper/conditional default: see the literal call and consumer below.
-
-```text
-    ns, calls, indexer, model = dispatch
-    monkeypatch.setenv("DSV41_INDEX_FUSED", fused)
-    monkeypatch.setenv("DSV41_INDEX_SKIP", skip)
-    with pytest.raises(ValueError, match=message):
-        ns["attach"](model, ".")
-    assert not calls and not indexer.index_fused
-
-```
-
-Source: `vendor/mac-mlx/mlx_vlm/models/deepseek_v41/language.py:593`. Unset read: '0'.
-
-```text
-        bsz, n, _ = x.shape
-        fused_index = (self.index_fused and n >= 64 and not _v41_verify_context.get())
-        skip_enabled = fused_index and os.environ.get("DSV41_INDEX_SKIP", "0") == "1"
-        if self.index_fused:
-            for name in ("DSV41_PREFILL_TILED_INDEX", "DSV41_PREFILL_V41_INDEX",
-                         "DSV41_METAL_INDEXER"):
-                if os.environ.get(name, "0") == "1":
-```
-
-Source: `vendor/mac-mlx/mlx_vlm/models/deepseek_v41/language.py:2470`. Unset read: '0'.
-
-```text
-            if index_flag not in ("0", "1"):
-                raise ValueError("DSV41_INDEX_FUSED must be 0 or 1")
-            skip_flag = os.environ.get("DSV41_INDEX_SKIP", "0")
-            if skip_flag not in ("0", "1"):
-                raise ValueError("DSV41_INDEX_SKIP must be 0 or 1")
-            if skip_flag == "1" and index_flag != "1":
-                raise ValueError("DSV41_INDEX_SKIP=1 requires DSV41_INDEX_FUSED=1")
-```
-
-### DSV41_INDEX_SKIP_MIN_NB
-
-Advanced backend control DSV41_INDEX_SKIP_MIN_NB. Set explicitly only for the selected backend; its literal read and fallback are documented below.
-
-Scope: mac-mlx. Class: advanced.
-
-Source: `vendor/mac-mlx/mlx_vlm/custom_kernels/deepseek_v41/test_index_fused.py:470`. Unset read: Wrapper/conditional default: see the literal call and consumer below.
-
-```text
-    monkeypatch.setenv("DSV41_S4_PRECOMPUTE", str(int(precompute)))
-    monkeypatch.setenv("DSV41_INDEX_SKIP", "1")
-    monkeypatch.setenv("DSV41_INDEX_SKIP_MIN_NB", str(min_nb))
-    prewarm_index_skip(8, precompute)
-    masked = []
-    real = index_fused_module.index_scores_fused
-
-```
-
-Source: `vendor/mac-mlx/mlx_vlm/custom_kernels/deepseek_v41/test_index_fused_cpu.py:501`. Unset read: Wrapper/conditional default: see the literal call and consumer below.
-
-```text
-    # 0 = always skip when the switch is on; this nb is far below the shipped
-    # DSV41_INDEX_SKIP_MIN_NB, which is gated on its own below.
-    monkeypatch.setenv("DSV41_INDEX_SKIP_MIN_NB", "0")
-    indexer.uses_candidates = True
-    ns["attach"](model, ".")
-    assert calls == ["compile+skip" if skip == "1" else "compile"]
-    n, nb = 64, 136  # 17 blocks of eight: not a multiple of four either.
-```
-
-Source: `vendor/mac-mlx/mlx_vlm/custom_kernels/deepseek_v41/test_index_fused_cpu.py:530`. Unset read: Wrapper/conditional default: see the literal call and consumer below.
-
-```text
-    monkeypatch.setenv("DSV41_INDEX_SKIP", "1")
-    monkeypatch.setenv("DSV41_S4_PRECOMPUTE", "0")
-    monkeypatch.setenv("DSV41_INDEX_SKIP_MIN_NB", "0")
-    indexer.uses_candidates = True
-    ns["attach"](model, ".")
-    n, nb = 64, 136
-    x = np.ones((1, n, 4), np.float32)
-```
-
-Source: `vendor/mac-mlx/mlx_vlm/custom_kernels/deepseek_v41/test_index_fused_cpu.py:574`. Unset read: Wrapper/conditional default: see the literal call and consumer below.
-
-```text
-    monkeypatch.setenv("DSV41_S4_PRECOMPUTE", precompute)
-    if min_nb is None:
-        monkeypatch.delenv("DSV41_INDEX_SKIP_MIN_NB", raising=False)
-    else:
-        monkeypatch.setenv("DSV41_INDEX_SKIP_MIN_NB", str(min_nb))
-    indexer.uses_candidates = True
-    ns["attach"](model, ".")
-```
-
-Source: `vendor/mac-mlx/mlx_vlm/custom_kernels/deepseek_v41/test_index_fused_cpu.py:576`. Unset read: Wrapper/conditional default: see the literal call and consumer below.
-
-```text
-        monkeypatch.delenv("DSV41_INDEX_SKIP_MIN_NB", raising=False)
-    else:
-        monkeypatch.setenv("DSV41_INDEX_SKIP_MIN_NB", str(min_nb))
-    indexer.uses_candidates = True
-    ns["attach"](model, ".")
-    n = 64
-    keep = np.zeros((1, n, -(-nb // 8)), bool)
-```
-
-Source: `vendor/mac-mlx/mlx_vlm/custom_kernels/deepseek_v41/test_index_fused_cpu.py:641`. Unset read: Wrapper/conditional default: see the literal call and consumer below.
-
-```text
-    monkeypatch.setenv("DSV41_INDEX_SKIP", "1")
-    monkeypatch.setenv("DSV41_S4_PRECOMPUTE", "1")
-    monkeypatch.setenv("DSV41_INDEX_SKIP_MIN_NB", "136")
-    indexer.uses_candidates = True
-    ns["attach"](model, ".")
-    capsys.readouterr()
-    n = 64
-```
-
-Source: `vendor/mac-mlx/mlx_vlm/custom_kernels/deepseek_v41/test_index_fused_cpu.py:671`. Unset read: Wrapper/conditional default: see the literal call and consumer below.
-
-```text
-    monkeypatch.setenv("DSV41_INDEX_FUSED", "1")
-    monkeypatch.setenv("DSV41_INDEX_SKIP", skip)
-    monkeypatch.setenv("DSV41_INDEX_SKIP_MIN_NB", value)
-    with pytest.raises(ValueError, match="must be a non-negative integer"):
-        ns["attach"](model, ".")
-    # Nothing compiled, nothing latched: no silent fallback to the default.
-    assert not calls and not indexer.index_fused
-```
-
-Source: `vendor/mac-mlx/mlx_vlm/custom_kernels/deepseek_v41/test_index_fused_cpu.py:685`. Unset read: Wrapper/conditional default: see the literal call and consumer below.
-
-```text
-    monkeypatch.setenv("DSV41_INDEX_FUSED", "1")
-    monkeypatch.setenv("DSV41_INDEX_SKIP", "1")
-    monkeypatch.setenv("DSV41_INDEX_SKIP_MIN_NB", value)
-    ns["attach"](model, ".")
-    assert calls == ["compile+skip"] and indexer.index_fused
-    assert ns["_index_skip_min_nb"]() == expected
-    assert ns["_index_skip_decision"](expected, 24)[0]
-```
-
-Source: `vendor/mac-mlx/mlx_vlm/models/deepseek_v41/language.py:448`. Unset read: '60000'.
-
-```text
-    loud failure here, never a silent fallback to the default.
-    """
-    raw = os.environ.get("DSV41_INDEX_SKIP_MIN_NB", "60000")
-    try:
-        value = int(raw)
-    except (TypeError, ValueError):
-        value = -1
-```
-
-### DSV41_INDEX_TOPK
-
-Advanced backend control DSV41_INDEX_TOPK. Set explicitly only for the selected backend; its literal read and fallback are documented below.
-
-Scope: mac-mlx. Class: advanced.
-
-Source: `vendor/mac-mlx/mlx_vlm/custom_kernels/deepseek_v41/test_index_prefill.py:41`. Unset read: Wrapper/conditional default: see the literal call and consumer below.
-
-```text
-    monkeypatch.setenv("DSV41_QAT", "1")
-    monkeypatch.setenv("DSV41_METAL_QUANT", "0")
-    monkeypatch.setenv("DSV41_INDEX_TOPK", "512")
-
-
-def _inputs(n, context, mask, *, batch=1, dtype=mx.float32, seed=71):
-    mx.random.seed(seed)
-```
-
-Source: `vendor/mac-mlx/mlx_vlm/models/deepseek_v41/test_kv_selection_width.py:31`. Unset read: Wrapper/conditional default: see the literal call and consumer below.
-
-```text
-
-def test_kv_widths_default_to_the_checkpoints_own_values(monkeypatch):
-    monkeypatch.delenv("DSV41_INDEX_TOPK", raising=False)
-    monkeypatch.delenv("DSV41_SLIDING_WINDOW", raising=False)
-    cfg = _text_config()
-    assert cfg.index_topk == 512
-    assert cfg.sliding_window == 128
-```
-
-Source: `vendor/mac-mlx/mlx_vlm/models/deepseek_v41/test_kv_selection_width.py:39`. Unset read: Wrapper/conditional default: see the literal call and consumer below.
-
-```text
-
-def test_kv_widths_can_be_widened_by_environment(monkeypatch):
-    monkeypatch.setenv("DSV41_INDEX_TOPK", "4096")
-    monkeypatch.setenv("DSV41_SLIDING_WINDOW", "1024")
-    cfg = _text_config()
-    assert cfg.index_topk == 4096
-    assert cfg.sliding_window == 1024
-```
-
-Source: `vendor/mac-mlx/mlx_vlm/models/deepseek_v41/test_kv_selection_width.py:48`. Unset read: Wrapper/conditional default: see the literal call and consumer below.
-
-```text
-def test_an_unset_or_blank_override_is_not_a_zero(monkeypatch):
-    """A preset writing an empty string must not collapse the dense window to nothing."""
-    monkeypatch.setenv("DSV41_INDEX_TOPK", "")
-    monkeypatch.setenv("DSV41_SLIDING_WINDOW", "   ")
-    cfg = _text_config()
-    assert cfg.index_topk == 512
-    assert cfg.sliding_window == 128
-```
-
-Source: `vendor/mac-mlx/mlx_vlm/models/deepseek_v41/test_kv_selection_width.py:57`. Unset read: Wrapper/conditional default: see the literal call and consumer below.
-
-```text
-@pytest.mark.parametrize("bad", ["0", "-1", "many"])
-def test_a_nonsense_width_is_refused_rather_than_coerced(monkeypatch, bad):
-    monkeypatch.setenv("DSV41_INDEX_TOPK", bad)
-    monkeypatch.delenv("DSV41_SLIDING_WINDOW", raising=False)
-    with pytest.raises(ValueError, match="DSV41_INDEX_TOPK"):
-        _text_config()
-
-```
-
-### DSV41_INDEX_WORKSPACE_MB
-
-Advanced backend control DSV41_INDEX_WORKSPACE_MB. Set explicitly only for the selected backend; its literal read and fallback are documented below.
-
-Scope: mac-mlx. Class: advanced.
-
-Source: `vendor/mac-mlx/mlx_vlm/custom_kernels/deepseek_v41/test_index_fused_cpu.py:429`. Unset read: Wrapper/conditional default: see the literal call and consumer below.
-
-```text
-                 "PROMOTE_DECODE_WEIGHTS", "S4_COMPILE_INDEXER", "S4_PRECOMPUTE", "S4_BYPASS"):
-        monkeypatch.setenv("DSV41_" + name, "0")
-    monkeypatch.setenv("DSV41_INDEX_WORKSPACE_MB", "512")
-    ns = _production()
-    calls = []
-    ns["prepare_index_fused"] = lambda layers, skip=False: calls.append(
-        "compile+skip" if skip else "compile")
-```
-
-Source: `vendor/mac-mlx/mlx_vlm/models/deepseek_v41/language.py:692`. Unset read: '0'.
-
-```text
-                _index_scores.compiled = mx.compile(partial(_index_scores, matmul=True), shapeless=True)
-            score_fn = _index_scores.compiled
-        workspace_mb = int(os.environ.get("DSV41_INDEX_WORKSPACE_MB", "0"))
-        query_chunk = (max(1, workspace_mb * 1024**2 // (bsz * self.n_heads * nb * 4))
-                       if workspace_mb > 0 else n)
-        masked_by_kernel = False
-        if fused_index:
-```
-
-Source: `vendor/mac-mlx/mlx_vlm/models/deepseek_v41/test_bounded_cache.py:82`. Unset read: Wrapper/conditional default: see the literal call and consumer below.
-
-```text
-
-    monkeypatch.setattr(mx, "einsum", counted)
-    monkeypatch.setenv("DSV41_INDEX_WORKSPACE_MB", "0")
-    a = attn.indexer(x, qr, 8192, 8209, attn.rope, keys, SimpleNamespace(candidates=None))
-    mx.eval(a)
-    assert calls == [17]
-    calls.clear()
-```
-
-Source: `vendor/mac-mlx/mlx_vlm/models/deepseek_v41/test_bounded_cache.py:87`. Unset read: Wrapper/conditional default: see the literal call and consumer below.
-
-```text
-    assert calls == [17]
-    calls.clear()
-    monkeypatch.setenv("DSV41_INDEX_WORKSPACE_MB", "1")
-    b = attn.indexer(x, qr, 8192, 8209, attn.rope, keys, SimpleNamespace(candidates=None))
-    mx.eval(b)
-    assert len(calls) > 1 and sum(calls) == 17
-    assert bool(mx.array_equal(a, b).item())
-```
-
-Source: `vendor/mac-mlx/mlx_vlm/models/deepseek_v41/test_speed_merge_mac.py:29`. Unset read: Wrapper/conditional default: see the literal call and consumer below.
-
-```text
-    mx.eval(indexer.parameters(), x, qr, keys)
-
-    monkeypatch.setenv("DSV41_INDEX_WORKSPACE_MB", "0")
-    expected = indexer(x, qr, width - n, 0, rope, keys,
-                       SimpleNamespace(candidates=None))
-    mx.eval(expected)
-
-```
-
-Source: `vendor/mac-mlx/mlx_vlm/models/deepseek_v41/test_speed_merge_mac.py:46`. Unset read: Wrapper/conditional default: see the literal call and consumer below.
-
-```text
-        counted.compiled = counted_compiled
-    monkeypatch.setattr(language, "_index_scores", counted)
-    monkeypatch.setenv("DSV41_INDEX_WORKSPACE_MB", "1")
-    actual = indexer(x, qr, width - n, 0, rope, keys,
-                     SimpleNamespace(candidates=None))
-    mx.eval(actual)
-    assert calls == [8, 8, 1], "S4 scoring must retain mainline's query tiles"
-```
-
-### DSV41_MEGAKERNEL
-
-Advanced backend control DSV41_MEGAKERNEL. Set explicitly only for the selected backend; its literal read and fallback are documented below.
-
-Scope: mac-mlx. Class: advanced.
-
-Source: `vendor/mac-mlx/mlx_vlm/models/deepseek_v41/language.py:1803`. Unset read: '0'.
-
-```text
-            # default prefill runs when DSV41_PREFILL_MEGAKERNEL is off.
-        else:
-            if os.environ.get("DSV41_MEGAKERNEL", "0") == "1" and h.shape[:2] == (1, 1):
-                from .megakernel import decode_block
-                return decode_block(self, h, pre_mix, start_pos, cache, shared, image_mask)
-            if os.environ.get("DSV41_COMPILE_BLOCK", "0") == "1" and h.shape[:2] == (1, 1):
-                from .block_graph import BlockGraphs
-```
-
-### DSV41_MEMORY_GUARD_WAIT_S
-
-Advanced backend control DSV41_MEMORY_GUARD_WAIT_S. Set explicitly only for the selected backend; its literal read and fallback are documented below.
-
-Scope: mac-mlx. Class: advanced.
-
-Source: `engines/mlx-receiver/mlx_token_stream_server.py:165`. Unset read: '90'.
-
-```text
-    if os.environ.get('DSV41_PROMOTE_DECODE_WEIGHTS', '0') == '1':
-        parameter_bytes += sum(((4 - sizes[dtype]) * prod(shape) for name, (dtype, shape) in specs.items() if name.endswith('.wo_a.weight') and os.environ.get('DSV41_WO_A_BF16', '0') != '1' or (name == 'lm_head.weight' and os.environ.get('DSV41_HEAD_BF16', '0') != '1')))
-    available, breakdown = _dsv41_wait_for_memory(source, parameter_bytes, _read_vm_stat, timeout_s=float(os.environ.get('DSV41_MEMORY_GUARD_WAIT_S', '90')))
-    required = _dsv41_memory_guard(available, source, parameter_bytes)
-    print(f"[DSV41] memory available={available / (1 << 30):.2f} GiB resident_required={required / (1 << 30):.0f} GiB headroom=20 GiB source={source} QAT={os.environ.get('DSV41_QAT', '1')} [{_dsv41_breakdown_text(breakdown)}]", file=sys.stderr, flush=True)
-    model_dir = Path(model_dir)
-    model = Model(config)
-```
-
-### DSV41_METAL_INDEXER
-
-Advanced backend control DSV41_METAL_INDEXER. Set explicitly only for the selected backend; its literal read and fallback are documented below.
-
-Scope: mac-mlx. Class: advanced.
-
-Source: `vendor/mac-mlx/mlx_vlm/custom_kernels/deepseek_v41/test_index_prefill.py:235`. Unset read: Wrapper/conditional default: see the literal call and consumer below.
-
-```text
-    monkeypatch.setenv("DSV41_S4_PRECOMPUTE", str(int(precompute)))
-    monkeypatch.setenv("DSV41_S4_BYPASS", "0")
-    monkeypatch.setenv("DSV41_METAL_INDEXER", "0")
-    monkeypatch.setenv("DSV41_S4_COMPILE_INDEXER", "0")
-    # Exercise the production n>=64 gate, including zero-length geometry.
-    monkeypatch.setenv("DSV41_PREFILL_TILED_MIN_N", "64")
-    monkeypatch.setattr(lang, "_rope", lambda rope, q, pos: q)
-```
-
-Source: `vendor/mac-mlx/mlx_vlm/custom_kernels/deepseek_v41/test_index_prefill.py:292`. Unset read: Wrapper/conditional default: see the literal call and consumer below.
-
-```text
-    monkeypatch.setattr(lang, "_PREFILL_MXFP8_STEEL", False)
-    monkeypatch.setenv("DSV41_S4_BYPASS", "0")
-    monkeypatch.setenv("DSV41_METAL_INDEXER", "0")
-    monkeypatch.setenv("DSV41_S4_COMPILE_INDEXER", "0")
-    indexer = Indexer(TextConfig(hidden_size=64, q_lora_rank=64), 2)
-    monkeypatch.setenv("DSV41_PREFILL_TILED_MIN_N", "64")
-    for n, enabled in [(64, None), (1, "1"), (16, "1"), (63, "1")]:
-```
-
-Source: `vendor/mac-mlx/mlx_vlm/models/deepseek_v41/language.py:677`. Unset read: '0'.
-
-```text
-        # while sharing S4 geometry and allowing its optional compiled scorer.
-        score_fn = _index_scores
-        metal_indexer = os.environ.get("DSV41_METAL_INDEXER", "0") == "1"
-        _s4_count("index_score", self.layer_id)
-        if fused_index:
-            from ...custom_kernels.deepseek_v41.index_fused import index_scores_fused
-        elif v41_index:
-```
-
-### DSV41_METAL_QUANT
-
-Advanced backend control DSV41_METAL_QUANT. Set explicitly only for the selected backend; its literal read and fallback are documented below.
-
-Scope: mac-mlx. Class: advanced.
-
-Source: `vendor/mac-mlx/mlx_vlm/custom_kernels/deepseek_v41/test_index_prefill.py:40`. Unset read: Wrapper/conditional default: see the literal call and consumer below.
-
-```text
-def _reference_environment(monkeypatch):
-    monkeypatch.setenv("DSV41_QAT", "1")
-    monkeypatch.setenv("DSV41_METAL_QUANT", "0")
-    monkeypatch.setenv("DSV41_INDEX_TOPK", "512")
-
-
-def _inputs(n, context, mask, *, batch=1, dtype=mx.float32, seed=71):
-```
-
-Source: `vendor/mac-mlx/mlx_vlm/models/deepseek_v41/language.py:157`. Unset read: '0'.
-
-```text
-    if os.environ.get("DSV41_QAT", "1") == "0":
-        return x
-    if os.environ.get("DSV41_METAL_QUANT", "0") == "1":
-        from .quant_kernels import fake_quant
-        return fake_quant(x, block, "fp8_ue8m0")
-    dtype = x.dtype
-    shape = x.shape
-```
-
-Source: `vendor/mac-mlx/mlx_vlm/models/deepseek_v41/language.py:173`. Unset read: '0'.
-
-```text
-    if os.environ.get("DSV41_QAT", "1") == "0":
-        return x
-    if os.environ.get("DSV41_METAL_QUANT", "0") == "1":
-        from .quant_kernels import fake_quant
-        return fake_quant(x, block, "fp4_ue8m0")
-    dtype = x.dtype
-    shape = x.shape
-```
-
-Source: `vendor/mac-mlx/mlx_vlm/models/deepseek_v41/language.py:189`. Unset read: '0'.
-
-```text
-    if os.environ.get("DSV41_QAT", "1") == "0":
-        return x
-    if os.environ.get("DSV41_METAL_QUANT", "0") == "1":
-        from .quant_kernels import fake_quant
-        return fake_quant(x, block, "fp4_e4m3")
-    dtype = x.dtype
-    shape = x.shape
-```
-
-### DSV41_METAL_SINKHORN
-
-Advanced backend control DSV41_METAL_SINKHORN. Set explicitly only for the selected backend; its literal read and fallback are documented below.
-
-Scope: mac-mlx. Class: advanced.
-
-Source: `vendor/mac-mlx/mlx_vlm/models/deepseek_v41/language.py:1693`. Unset read: '0'.
-
-```text
-            mixes = (xf @ self.fn.astype(mx.float32).T) * rsqrt
-        split = _hc_split_sinkhorn_ops
-        if os.environ.get("DSV41_METAL_SINKHORN", "0") == "1":
-            from .hyper_connection import metal_sinkhorn
-            split = metal_sinkhorn
-        return split(mixes, self.scale, self.base, self.hc, self.iters, self.eps)
-
-```
-
-### DSV41_METAL_SPARSE_ATTN
-
-Advanced backend control DSV41_METAL_SPARSE_ATTN. Set explicitly only for the selected backend; its literal read and fallback are documented below.
-
-Scope: mac-mlx. Class: advanced.
-
-Source: `vendor/mac-mlx/mlx_vlm/custom_kernels/deepseek_v41/test_sparse_attention_prefill.py:202`. Unset read: Wrapper/conditional default: see the literal call and consumer below.
-
-```text
-    assert dispatch.sparse_attention(*case) is marker
-    # The new flag alone reaches the dispatcher through language.sparse_attn.
-    monkeypatch.delenv("DSV41_METAL_SPARSE_ATTN", raising=False)
-    monkeypatch.delenv("DSV41_SDPA_SPARSE_ATTN", raising=False)
-    assert sparse_attn(*case) is marker
-    q, banks, sink, ids, scale = case
-    decode = (q[:, :1], banks, sink, ids[:, :1], scale)
-```
-
-Source: `vendor/mac-mlx/mlx_vlm/custom_kernels/deepseek_v41/test_sparse_attention_prefill.py:241`. Unset read: Wrapper/conditional default: see the literal call and consumer below.
-
-```text
-
-    monkeypatch.setattr(module, "sparse_attn_prefill", forbidden)
-    monkeypatch.setenv("DSV41_METAL_SPARSE_ATTN", metal)
-    monkeypatch.setenv("DSV41_SDPA_SPARSE_ATTN", "0")
-    if threshold is None:
-        monkeypatch.delenv("DSV41_PREFILL_FLASH_MIN_N", raising=False)
-    else:
-```
-
-Source: `vendor/mac-mlx/mlx_vlm/custom_kernels/deepseek_v41/validate_sdpa.py:38`. Unset read: Assigned by the runtime; see literal consumer.
-
-```text
-def select(path):
-    os.environ['DSV41_SDPA_SPARSE_ATTN'] = '1' if path == 'sdpa' else '0'
-    os.environ['DSV41_METAL_SPARSE_ATTN'] = '1' if path == 'metal' else '0'
-    os.environ['DSV41_COMPILE_SPARSE_ATTN'] = '1' if path == 'compiled' else '0'
-
-
-def metrics(actual, expected):
-```
-
-Source: `vendor/mac-mlx/mlx_vlm/custom_kernels/deepseek_v41/validate_sdpa_edges.py:106`. Unset read: Assigned by the runtime; see literal consumer.
-
-```text
-            for m in (1,3,257):
-                os.environ['DSV41_SDPA_SPARSE_ATTN'] = sdpa
-                os.environ['DSV41_METAL_SPARSE_ATTN'] = metal
-                counts.update(sdpa=0,metal=0)
-                qq=mx.broadcast_to(q,(1,m,64,512))
-                ii=mx.broadcast_to(idx,(1,m,1))
-                mx.eval(run(qq,kv,sink,ii,1.))
-```
-
-Source: `vendor/mac-mlx/mlx_vlm/models/deepseek_v41/language.py:317`. Unset read: '0'.
-
-```text
-    if sdpa not in ("0", "1", "decode", "prefill"):
-        raise ValueError("DSV41_SDPA_SPARSE_ATTN must be 0, 1, decode, or prefill")
-    metal = os.environ.get("DSV41_METAL_SPARSE_ATTN", "0")
-    if metal not in ("0", "1", "decode", "prefill"):
-        raise ValueError("DSV41_METAL_SPARSE_ATTN must be 0, 1, decode, or prefill")
-    regime = "decode" if q.shape[1] == 1 else "prefill"
-    use_sdpa = sdpa in ("1", regime)
-```
-
-Source: `vendor/mac-mlx/mlx_vlm/models/deepseek_v41/test_bounded_cache.py:22`. Unset read: Wrapper/conditional default: see the literal call and consumer below.
-
-```text
-        monkeypatch.setattr(helper, "LanguageModel", module.LanguageModel)
-    monkeypatch.setenv("DSV41_QAT", "1")
-    monkeypatch.setenv("DSV41_METAL_SPARSE_ATTN", "0")
-    return helper.random_model()
-
-
-@pytest.mark.parametrize("chunk", [1, 5, 17])
-```
-
-### DSV41_METAL_SPARSE_DECODE
-
-Advanced backend control DSV41_METAL_SPARSE_DECODE. Set explicitly only for the selected backend; its literal read and fallback are documented below.
-
-Scope: mac-mlx. Class: advanced.
-
-Source: `vendor/mac-mlx/mlx_vlm/custom_kernels/deepseek_v41/sparse_attention.py:95`. Unset read: '0'.
-
-```text
-    b, m, h, d = q.shape
-    k = indices.shape[-1]
-    streaming = (os.environ.get("DSV41_METAL_SPARSE_DECODE", "0") == "1"
-                 and m == 1 and d == 512)
-    max_k = 32768 if streaming else 640
-    if d % 32 or not 32 <= d <= 512 or not 1 <= k <= max_k or m < 1:
-        raise ValueError(f"V4.1 Metal requires D=32..512 aligned to 32, 1<=K<={max_k}, M>=1")
-```
-
-### DSV41_META_DIR
-
-Advanced backend control DSV41_META_DIR. Set explicitly only for the selected backend; its literal read and fallback are documented below.
-
-Scope: mac-mlx. Class: advanced.
-
-Source: `vendor/mac-mlx/mlx_vlm/models/deepseek_v41/test_checkpoint_layout_v41.py:31`. Unset read: KeyError unless an earlier assignment supplies the variable.
-
-```text
-@pytest.fixture(scope="module")
-def release():
-    candidates = [os.environ["DSV41_META_DIR"]] if "DSV41_META_DIR" in os.environ else [
-        "~/tmp/dsv41", "./tmp/upstream_dsv41"
-    ]
-    roots = [Path(path).expanduser() for path in candidates]
-    root = next((path for path in roots if all(
-```
-
-Source: `vendor/mac-mlx/mlx_vlm/models/deepseek_v41/test_dspark_dsv41.py:100`. Unset read: KeyError unless an earlier assignment supplies the variable.
-
-```text
-def _release():
-    """(raw config, tensor manifest, TextConfig) or None when absent."""
-    roots = ([Path(os.environ["DSV41_META_DIR"])] if "DSV41_META_DIR" in os.environ
-             else [Path("~/tmp/dsv41").expanduser(), Path("./tmp/upstream_dsv41")])
-    for root in roots:
-        paths = [root / "v41_config.json", root / "v41_tensors.json"]
-        if all(p.is_file() for p in paths):
-```
-
-### DSV41_MLX_COMMIT
-
-Advanced backend control DSV41_MLX_COMMIT. Set explicitly only for the selected backend; its literal read and fallback are documented below.
-
-Scope: mac-mlx. Class: advanced.
-
-Source: `vendor/mac-mlx/mlx_vlm/custom_kernels/deepseek_v41/test_grouped_gemm.py:62`. Unset read: 'unrecorded'.
-
-```text
-def record_runtime():
-    print(json.dumps(dict(mlx=mx.__version__, mlx_path=mx.__file__, release=RELEASE,
-                          mlx_commit=os.environ.get("DSV41_MLX_COMMIT", "unrecorded"),
-                          device=mx.metal.device_info())))
-
-
-def routes(case, experts=E):
-```
-
-Source: `vendor/mac-mlx/mlx_vlm/custom_kernels/deepseek_v41/test_grouped_gemm.py:444`. Unset read: 'unrecorded'.
-
-```text
-    report(worker=label, shapes=shapes, mlx=mx.__version__, mlx_path=mx.__file__,
-           platform=platform.platform(),
-           mlx_commit=os.environ.get("DSV41_MLX_COMMIT", "unrecorded"))
-
-    # This small check runs only after explicit --attribution-unsafe, and only in
-    # the selected MODE. All its GPU work/readback shares a bounded host scope.
-    if job.mode != "full":
-```
-
-### DSV41_OMLX_HEAD
-
-Advanced backend control DSV41_OMLX_HEAD. Set explicitly only for the selected backend; its literal read and fallback are documented below.
-
-Scope: mac-mlx. Class: advanced.
-
-Source: `vendor/mac-mlx/mlx_vlm/models/deepseek_v41/language.py:2382`. Unset read: '0'.
-
-```text
-                # nothing to cut, and a full-width prefill has shape[1] rows here.)
-                head_in = head_in[:, -1:]
-            if (os.environ.get("DSV41_OMLX_HEAD", "0") == "1"
-                    and type(self.lm_head) is nn.Linear and "bias" not in self.lm_head):
-                from .omlx_head import project_logits
-
-                logits = project_logits(head_in, self.lm_head.weight)
-```
-
-Source: `vendor/mac-mlx/mlx_vlm/models/deepseek_v41/language.py:2463`. Unset read: '0'.
-
-```text
-
-    def attach_engram_storage(self, model_dir):
-        if _HEAD_BF16 and os.environ.get("DSV41_OMLX_HEAD", "0") != "1":
-            raise RuntimeError("DSV41_HEAD_BF16=1 needs DSV41_OMLX_HEAD=1 (bf16 head storage with "
-                               "fp32 logits); refusing to serve bf16 logits silently")
-        if not hasattr(self, "_index_fused_attached"):
-            index_flag = os.environ.get("DSV41_INDEX_FUSED", "0")
-```
-
-Source: `vendor/mac-mlx/mlx_vlm/models/deepseek_v41/test_decode_bf16_contractions.py:38`. Unset read: Wrapper/conditional default: see the literal call and consumer below.
-
-```text
-def test_head_bf16_without_the_kernel_is_refused(monkeypatch):
-    monkeypatch.setenv("DSV41_HEAD_BF16", "1")
-    monkeypatch.delenv("DSV41_OMLX_HEAD", raising=False)
-    import importlib
-    from mlx_vlm.models.deepseek_v41 import language as lang
-    importlib.reload(lang)
-    try:
-```
-
-### DSV41_OUR_ENGRAM
-
-Advanced backend control DSV41_OUR_ENGRAM. Set explicitly only for the selected backend; its literal read and fallback are documented below.
-
-Scope: mac-mlx. Class: advanced.
-
-Source: `vendor/mac-mlx/mlx_vlm/models/deepseek_v41/test_engram_hash_parity.py:130`. Unset read: Path(__file__).with_name('engram.py').
-
-```text
-    # Reuse the oracle's env overrides and platform-aware local path defaults.
-    oracle = load(Path(__file__).with_name("reference_cpu_dsv41.py"), "dsv41_hash_paths")
-    ours = Path(os.environ.get("DSV41_OUR_ENGRAM", Path(__file__).with_name("engram.py"))).expanduser()
-    required = [oracle.REF_DIR / "engram.py", ours,
-                oracle.TOKENIZER_DIR / "tokenizer.json", oracle.TOKENIZER_DIR / "tokenizer_config.json"]
-    if not all(path.is_file() for path in required):
-        pytest.skip("Engram parity inputs absent; set DSV41_REF_DIR, DSV41_TOKENIZER_DIR "
-```
-
-### DSV41_PN_DIR
-
-Advanced backend control DSV41_PN_DIR. Set explicitly only for the selected backend; its literal read and fallback are documented below.
-
-Scope: mac-mlx. Class: advanced.
-
-Source: `vendor/mac-mlx/mlx_vlm/models/deepseek_v41/test_language_dsv41_mac.py:506`. Unset read: './tmp/upstream_dsv41/pipenetwork'.
-
-```text
-def test_torch_reference_parity(monkeypatch):
-    torch = pytest.importorskip("torch")
-    root = Path(os.environ.get("DSV41_PN_DIR", "./tmp/upstream_dsv41/pipenetwork"))
-    if not root.is_dir():
-        pytest.skip("Set DSV41_PN_DIR to the PipeNetwork checkout for reference parity")
-    monkeypatch.setenv("DSV41_QAT", "0")
-    old_dtype = torch.get_default_dtype()
-```
-
-### DSV41_PREFILL_CHUNK
-
-Advanced backend control DSV41_PREFILL_CHUNK. Set explicitly only for the selected backend; its literal read and fallback are documented below.
-
-Scope: mac-mlx. Class: advanced.
-
-Source: `engines/mlx-receiver/mlx_token_stream_server.py:1686`. Unset read: '256'.
-
-```text
-            mtp_hidden = None
-            swi_config = None
-            chunk_size = int(os.environ.get('DSV41_PREFILL_CHUNK', '256'))
-            if not 1 <= chunk_size <= 4096:
-                raise ValueError('DSV41_PREFILL_CHUNK must be in 1..4096')
-            if not prompt_token_ids:
-                raise ValueError('[DSV41] Local prefill requires prompt tokens')
-```
-
-Source: `vendor/mac-mlx/mlx_vlm/models/deepseek_v41/language.py:1882`. Unset read: '256'.
-
-```text
-def _prefill_chunk_size():
-    """DSV41_PREFILL_CHUNK, validated exactly as the receiver validates it."""
-    raw = os.environ.get("DSV41_PREFILL_CHUNK", "256")
-    try:
-        value = int(raw)
-    except (TypeError, ValueError):
-        raise ValueError(f"DSV41_PREFILL_CHUNK must be in 1..4096, got {raw!r}") from None
-```
-
-Source: `vendor/mac-mlx/mlx_vlm/models/deepseek_v41/test_prefill_cone.py:439`. Unset read: Wrapper/conditional default: see the literal call and consumer below.
-
-```text
-    monkeypatch.setenv("DSV41_PREFILL_LAYER_MAJOR", "1")
-    monkeypatch.setenv("DSV41_PREFILL_CONE", "1")
-    monkeypatch.setenv("DSV41_PREFILL_CHUNK", str(chunk))
-    if tail is None:
-        monkeypatch.delenv("DSV41_PREFILL_CONE_TAIL", raising=False)
-    else:
-        monkeypatch.setenv("DSV41_PREFILL_CONE_TAIL", str(tail))
-```
-
-Source: `vendor/mac-mlx/mlx_vlm/models/deepseek_v41/test_prefill_cone.py:488`. Unset read: Wrapper/conditional default: see the literal call and consumer below.
-
-```text
-
-    monkeypatch.setenv("DSV41_PREFILL_LAYER_MAJOR", "1")
-    monkeypatch.setenv("DSV41_PREFILL_CHUNK", chunk)
-    arm = _logits(model, ids)
-
-    assert arm.shape == control.shape
-    assert bool(mx.array_equal(arm, control).item()), (
-```
-
-Source: `vendor/mac-mlx/mlx_vlm/models/deepseek_v41/test_prefill_cone.py:506`. Unset read: Wrapper/conditional default: see the literal call and consumer below.
-
-```text
-
-    monkeypatch.setenv("DSV41_PREFILL_LAYER_MAJOR", "1")
-    monkeypatch.setenv("DSV41_PREFILL_CHUNK", str(CHUNK))
-    arm = model.make_cache()
-    model(ids, cache=arm)
-
-    assert arm[0].offset == control[0].offset
-```
-
-Source: `vendor/mac-mlx/mlx_vlm/models/deepseek_v41/test_prefill_cone.py:904`. Unset read: Wrapper/conditional default: see the literal call and consumer below.
-
-```text
-    for name, value in switches.items():
-        monkeypatch.setenv(name, value)
-    monkeypatch.setenv("DSV41_PREFILL_CHUNK", str(CHUNK))
-    arm = _logits(model, ids)
-
-    if switches.get("DSV41_PREFILL_CONE") == "1":
-        assert arm.shape[1] == 1, arm.shape
-```
-
-### DSV41_PREFILL_CONE
-
-Advanced backend control DSV41_PREFILL_CONE. Set explicitly only for the selected backend; its literal read and fallback are documented below.
-
-Scope: mac-mlx. Class: advanced.
-
-Source: `vendor/mac-mlx/mlx_vlm/models/deepseek_v41/language.py:1997`. Unset read: '0'.
-
-```text
-    """
-    layer_major = os.environ.get("DSV41_PREFILL_LAYER_MAJOR", "0") == "1"
-    cone = os.environ.get("DSV41_PREFILL_CONE", "0") == "1"
-    if cone and not layer_major:
-        raise ValueError(
-            "DSV41_PREFILL_CONE=1 requires DSV41_PREFILL_LAYER_MAJOR=1: the cone "
-            "replaces phase two of the layer-major split and there is no phase two "
-```
-
-Source: `vendor/mac-mlx/mlx_vlm/models/deepseek_v41/test_prefill_cone.py:147`. Unset read: Wrapper/conditional default: see the literal call and consumer below.
-
-```text
-
-def test_cone_without_layer_major_raises_and_names_both(monkeypatch):
-    monkeypatch.setenv("DSV41_PREFILL_CONE", "1")
-    monkeypatch.delenv("DSV41_PREFILL_LAYER_MAJOR", raising=False)
-    with pytest.raises(ValueError) as excinfo:
-        _prefill_switches(4096, _Cache(), None)
-    message = str(excinfo.value)
-```
-
-Source: `vendor/mac-mlx/mlx_vlm/models/deepseek_v41/test_prefill_cone.py:157`. Unset read: Wrapper/conditional default: see the literal call and consumer below.
-
-```text
-
-def test_cone_with_dspark_raises_and_names_both(monkeypatch):
-    monkeypatch.setenv("DSV41_PREFILL_CONE", "1")
-    monkeypatch.setenv("DSV41_PREFILL_LAYER_MAJOR", "1")
-    monkeypatch.setenv("DSV41_DSPARK", "1")
-    monkeypatch.delenv("DSV41_PREFILL_CONE_TAIL", raising=False)
-    with pytest.raises(ValueError) as excinfo:
-```
-
-Source: `vendor/mac-mlx/mlx_vlm/models/deepseek_v41/test_prefill_cone.py:170`. Unset read: Wrapper/conditional default: see the literal call and consumer below.
-
-```text
-
-def test_cone_with_capture_layers_raises(monkeypatch):
-    monkeypatch.setenv("DSV41_PREFILL_CONE", "1")
-    monkeypatch.setenv("DSV41_PREFILL_LAYER_MAJOR", "1")
-    monkeypatch.delenv("DSV41_DSPARK", raising=False)
-    monkeypatch.delenv("DSV41_PREFILL_CONE_TAIL", raising=False)
-    with pytest.raises(ValueError) as excinfo:
-```
-
-Source: `vendor/mac-mlx/mlx_vlm/models/deepseek_v41/test_prefill_cone.py:181`. Unset read: Wrapper/conditional default: see the literal call and consumer below.
-
-```text
-def test_layer_major_with_bounded_cache_raises(monkeypatch):
-    monkeypatch.setenv("DSV41_PREFILL_LAYER_MAJOR", "1")
-    monkeypatch.delenv("DSV41_PREFILL_CONE", raising=False)
-
-    class Bounded:
-        bounded = True
-
-```
-
-Source: `vendor/mac-mlx/mlx_vlm/models/deepseek_v41/test_prefill_cone.py:432`. Unset read: Wrapper/conditional default: see the literal call and consumer below.
-
-```text
-def _off(monkeypatch):
-    monkeypatch.delenv("DSV41_PREFILL_LAYER_MAJOR", raising=False)
-    monkeypatch.delenv("DSV41_PREFILL_CONE", raising=False)
-    monkeypatch.delenv("DSV41_PREFILL_CONE_TAIL", raising=False)
-
-
-def _cone_on(monkeypatch, chunk=CHUNK, tail=None):
-```
-
-Source: `vendor/mac-mlx/mlx_vlm/models/deepseek_v41/test_prefill_cone.py:438`. Unset read: Wrapper/conditional default: see the literal call and consumer below.
-
-```text
-def _cone_on(monkeypatch, chunk=CHUNK, tail=None):
-    monkeypatch.setenv("DSV41_PREFILL_LAYER_MAJOR", "1")
-    monkeypatch.setenv("DSV41_PREFILL_CONE", "1")
-    monkeypatch.setenv("DSV41_PREFILL_CHUNK", str(chunk))
-    if tail is None:
-        monkeypatch.delenv("DSV41_PREFILL_CONE_TAIL", raising=False)
-    else:
-```
-
-Source: `vendor/mac-mlx/mlx_vlm/models/deepseek_v41/test_prefill_cone.py:994`. Unset read: Wrapper/conditional default: see the literal call and consumer below.
-
-```text
-
-def test_dspark_refusal_is_present_without_a_tail_and_absent_with_one(monkeypatch):
-    monkeypatch.setenv("DSV41_PREFILL_CONE", "1")
-    monkeypatch.setenv("DSV41_PREFILL_LAYER_MAJOR", "1")
-    monkeypatch.setenv("DSV41_DSPARK", "1")
-    monkeypatch.delenv("DSV41_PREFILL_CONE_TAIL", raising=False)
-    with pytest.raises(ValueError) as excinfo:
-```
-
-Source: `vendor/mac-mlx/mlx_vlm/models/deepseek_v41/test_prefill_cone.py:1009`. Unset read: Wrapper/conditional default: see the literal call and consumer below.
-
-```text
-
-def test_capture_refusal_is_present_without_a_tail_and_absent_with_one(monkeypatch):
-    monkeypatch.setenv("DSV41_PREFILL_CONE", "1")
-    monkeypatch.setenv("DSV41_PREFILL_LAYER_MAJOR", "1")
-    monkeypatch.delenv("DSV41_DSPARK", raising=False)
-    monkeypatch.delenv("DSV41_PREFILL_CONE_TAIL", raising=False)
-    with pytest.raises(ValueError) as excinfo:
-```
-
-Source: `vendor/mac-mlx/mlx_vlm/models/deepseek_v41/test_prefill_cone.py:1031`. Unset read: Wrapper/conditional default: see the literal call and consumer below.
-
-```text
-    # And neither switch sets the tail.
-    monkeypatch.delenv("DSV41_PREFILL_CONE_TAIL", raising=False)
-    monkeypatch.setenv("DSV41_PREFILL_CONE", "1")
-    assert prefill_cone_tail() == (1, False)
-
-
-def _cone_run(model, ids, monkeypatch, tail, **kwargs):
-```
-
-### DSV41_PREFILL_CONE_TAIL
-
-Advanced backend control DSV41_PREFILL_CONE_TAIL. Set explicitly only for the selected backend; its literal read and fallback are documented below.
-
-Scope: mac-mlx. Class: advanced.
-
-Source: `engines/mlx-receiver/mlx_token_stream_server.py:701`. Unset read: None.
-
-```text
-
-def _dsv41_cone_tail_rows():
-    raw = os.environ.get('DSV41_PREFILL_CONE_TAIL')
-    if raw is None:
-        return None
-    tail = int(raw)
-    if tail < 1:
-```
-
-Source: `vendor/mac-mlx/mlx_vlm/models/deepseek_v41/language.py:1974`. Unset read: None.
-
-```text
-    be read as consent to truncate somebody's history.
-    """
-    raw = os.environ.get("DSV41_PREFILL_CONE_TAIL")
-    if raw is None:
-        return 1, False
-    try:
-        tail = int(raw)
-```
-
-Source: `vendor/mac-mlx/mlx_vlm/models/deepseek_v41/test_prefill_cone.py:160`. Unset read: Wrapper/conditional default: see the literal call and consumer below.
-
-```text
-    monkeypatch.setenv("DSV41_PREFILL_LAYER_MAJOR", "1")
-    monkeypatch.setenv("DSV41_DSPARK", "1")
-    monkeypatch.delenv("DSV41_PREFILL_CONE_TAIL", raising=False)
-    with pytest.raises(ValueError) as excinfo:
-        _prefill_switches(4096, _Cache(), None)
-    message = str(excinfo.value)
-    assert "DSV41_PREFILL_CONE" in message
-```
-
-Source: `vendor/mac-mlx/mlx_vlm/models/deepseek_v41/test_prefill_cone.py:173`. Unset read: Wrapper/conditional default: see the literal call and consumer below.
-
-```text
-    monkeypatch.setenv("DSV41_PREFILL_LAYER_MAJOR", "1")
-    monkeypatch.delenv("DSV41_DSPARK", raising=False)
-    monkeypatch.delenv("DSV41_PREFILL_CONE_TAIL", raising=False)
-    with pytest.raises(ValueError) as excinfo:
-        _prefill_switches(4096, _Cache(), [37, 38, 39])
-    assert "capture_layer_ids" in str(excinfo.value)
-
-```
-
-Source: `vendor/mac-mlx/mlx_vlm/models/deepseek_v41/test_prefill_cone.py:433`. Unset read: Wrapper/conditional default: see the literal call and consumer below.
-
-```text
-    monkeypatch.delenv("DSV41_PREFILL_LAYER_MAJOR", raising=False)
-    monkeypatch.delenv("DSV41_PREFILL_CONE", raising=False)
-    monkeypatch.delenv("DSV41_PREFILL_CONE_TAIL", raising=False)
-
-
-def _cone_on(monkeypatch, chunk=CHUNK, tail=None):
-    monkeypatch.setenv("DSV41_PREFILL_LAYER_MAJOR", "1")
-```
-
-Source: `vendor/mac-mlx/mlx_vlm/models/deepseek_v41/test_prefill_cone.py:441`. Unset read: Wrapper/conditional default: see the literal call and consumer below.
-
-```text
-    monkeypatch.setenv("DSV41_PREFILL_CHUNK", str(chunk))
-    if tail is None:
-        monkeypatch.delenv("DSV41_PREFILL_CONE_TAIL", raising=False)
-    else:
-        monkeypatch.setenv("DSV41_PREFILL_CONE_TAIL", str(tail))
-
-
-```
-
-Source: `vendor/mac-mlx/mlx_vlm/models/deepseek_v41/test_prefill_cone.py:443`. Unset read: Wrapper/conditional default: see the literal call and consumer below.
-
-```text
-        monkeypatch.delenv("DSV41_PREFILL_CONE_TAIL", raising=False)
-    else:
-        monkeypatch.setenv("DSV41_PREFILL_CONE_TAIL", str(tail))
-
-
-def test_the_default_path_is_not_chunk_invariant(tiny, monkeypatch):
-    """PINNED, so nobody rediscovers it as a bug in the layer-major or cone code.
-```
-
-Source: `vendor/mac-mlx/mlx_vlm/models/deepseek_v41/test_prefill_cone.py:979`. Unset read: Wrapper/conditional default: see the literal call and consumer below.
-
-```text
-def test_cone_tail_switch_parses(monkeypatch, raw, parsed):
-    if raw is None:
-        monkeypatch.delenv("DSV41_PREFILL_CONE_TAIL", raising=False)
-    else:
-        monkeypatch.setenv("DSV41_PREFILL_CONE_TAIL", raw)
-    assert prefill_cone_tail() == parsed
-
-```
-
-Source: `vendor/mac-mlx/mlx_vlm/models/deepseek_v41/test_prefill_cone.py:981`. Unset read: Wrapper/conditional default: see the literal call and consumer below.
-
-```text
-        monkeypatch.delenv("DSV41_PREFILL_CONE_TAIL", raising=False)
-    else:
-        monkeypatch.setenv("DSV41_PREFILL_CONE_TAIL", raw)
-    assert prefill_cone_tail() == parsed
-
-
-@pytest.mark.parametrize("raw", ["0", "-1", "half", ""])
-```
-
-Source: `vendor/mac-mlx/mlx_vlm/models/deepseek_v41/test_prefill_cone.py:987`. Unset read: Wrapper/conditional default: see the literal call and consumer below.
-
-```text
-@pytest.mark.parametrize("raw", ["0", "-1", "half", ""])
-def test_cone_tail_switch_refuses_nonsense(monkeypatch, raw):
-    monkeypatch.setenv("DSV41_PREFILL_CONE_TAIL", raw)
-    with pytest.raises(ValueError) as excinfo:
-        prefill_cone_tail()
-    assert "DSV41_PREFILL_CONE_TAIL" in str(excinfo.value)
-
-```
-
-Source: `vendor/mac-mlx/mlx_vlm/models/deepseek_v41/test_prefill_cone.py:997`. Unset read: Wrapper/conditional default: see the literal call and consumer below.
-
-```text
-    monkeypatch.setenv("DSV41_PREFILL_LAYER_MAJOR", "1")
-    monkeypatch.setenv("DSV41_DSPARK", "1")
-    monkeypatch.delenv("DSV41_PREFILL_CONE_TAIL", raising=False)
-    with pytest.raises(ValueError) as excinfo:
-        _prefill_switches(4096, _Cache(), None)
-    message = str(excinfo.value)
-    assert "DSV41_PREFILL_CONE_TAIL" in message, message
-```
-
-Source: `vendor/mac-mlx/mlx_vlm/models/deepseek_v41/test_prefill_cone.py:1004`. Unset read: Wrapper/conditional default: see the literal call and consumer below.
-
-```text
-    assert "DSV41_DSPARK" in message, message
-
-    monkeypatch.setenv("DSV41_PREFILL_CONE_TAIL", "512")
-    assert _prefill_switches(4096, _Cache(), None) == (True, True)
-
-
-def test_capture_refusal_is_present_without_a_tail_and_absent_with_one(monkeypatch):
-```
-
-Source: `vendor/mac-mlx/mlx_vlm/models/deepseek_v41/test_prefill_cone.py:1012`. Unset read: Wrapper/conditional default: see the literal call and consumer below.
-
-```text
-    monkeypatch.setenv("DSV41_PREFILL_LAYER_MAJOR", "1")
-    monkeypatch.delenv("DSV41_DSPARK", raising=False)
-    monkeypatch.delenv("DSV41_PREFILL_CONE_TAIL", raising=False)
-    with pytest.raises(ValueError) as excinfo:
-        _prefill_switches(4096, _Cache(), [37, 38, 39])
-    assert "DSV41_PREFILL_CONE_TAIL" in str(excinfo.value)
-
-```
-
-Source: `vendor/mac-mlx/mlx_vlm/models/deepseek_v41/test_prefill_cone.py:1017`. Unset read: Wrapper/conditional default: see the literal call and consumer below.
-
-```text
-    assert "DSV41_PREFILL_CONE_TAIL" in str(excinfo.value)
-
-    monkeypatch.setenv("DSV41_PREFILL_CONE_TAIL", "128")
-    assert _prefill_switches(4096, _Cache(), [37, 38, 39]) == (True, True)
-
-
-def test_the_tail_never_implies_a_switch_and_no_switch_implies_the_tail(monkeypatch):
-```
-
-Source: `vendor/mac-mlx/mlx_vlm/models/deepseek_v41/test_prefill_cone.py:1024`. Unset read: Wrapper/conditional default: see the literal call and consumer below.
-
-```text
-    for name in ("DSV41_PREFILL_LAYER_MAJOR", "DSV41_PREFILL_CONE", "DSV41_DSPARK"):
-        monkeypatch.delenv(name, raising=False)
-    monkeypatch.setenv("DSV41_PREFILL_CONE_TAIL", "512")
-    # A tail on its own switches nothing on.
-    assert _prefill_switches(4096, _Cache(), None) == (False, False)
-    monkeypatch.setenv("DSV41_PREFILL_LAYER_MAJOR", "1")
-    assert _prefill_switches(4096, _Cache(), None) == (True, False)
-```
-
-Source: `vendor/mac-mlx/mlx_vlm/models/deepseek_v41/test_prefill_cone.py:1030`. Unset read: Wrapper/conditional default: see the literal call and consumer below.
-
-```text
-    assert _prefill_switches(4096, _Cache(), None) == (True, False)
-    # And neither switch sets the tail.
-    monkeypatch.delenv("DSV41_PREFILL_CONE_TAIL", raising=False)
-    monkeypatch.setenv("DSV41_PREFILL_CONE", "1")
-    assert prefill_cone_tail() == (1, False)
-
-
-```
-
-### DSV41_PREFILL_FLASH_ATTN
-
-Advanced backend control DSV41_PREFILL_FLASH_ATTN. Set explicitly only for the selected backend; its literal read and fallback are documented below.
-
-Scope: mac-mlx. Class: advanced.
-
-Source: `vendor/mac-mlx/mlx_vlm/custom_kernels/deepseek_v41/sparse_attention.py:24`. Unset read: '0'.
-
-```text
-def prefill_flash_enabled(n):
-    """Opt-in prefill threshold; decode/DSpark batches <=8 are always excluded."""
-    return (n > 8 and os.environ.get("DSV41_PREFILL_FLASH_ATTN", "0") == "1"
-            and n >= max(9, int(os.environ.get("DSV41_PREFILL_FLASH_MIN_N", "64"))))
-
-
-@lru_cache(maxsize=1)
-```
-
-Source: `vendor/mac-mlx/mlx_vlm/custom_kernels/deepseek_v41/test_sparse_attention_prefill.py:195`. Unset read: Wrapper/conditional default: see the literal call and consumer below.
-
-```text
-    monkeypatch.setattr(module, "sparse_attn_prefill", lambda *args: marker)
-    monkeypatch.delenv("DSV41_PREFILL_FLASH_MIN_N", raising=False)
-    monkeypatch.delenv("DSV41_PREFILL_FLASH_ATTN", raising=False)
-    before = dispatch.status()
-    assert dispatch.sparse_attention(*case) is not marker
-    assert dispatch.status()["prefill_flash"] == before["prefill_flash"]
-    monkeypatch.setenv("DSV41_PREFILL_FLASH_ATTN", "1")
-```
-
-Source: `vendor/mac-mlx/mlx_vlm/custom_kernels/deepseek_v41/test_sparse_attention_prefill.py:199`. Unset read: Wrapper/conditional default: see the literal call and consumer below.
-
-```text
-    assert dispatch.sparse_attention(*case) is not marker
-    assert dispatch.status()["prefill_flash"] == before["prefill_flash"]
-    monkeypatch.setenv("DSV41_PREFILL_FLASH_ATTN", "1")
-    assert dispatch.sparse_attention(*case) is marker
-    # The new flag alone reaches the dispatcher through language.sparse_attn.
-    monkeypatch.delenv("DSV41_METAL_SPARSE_ATTN", raising=False)
-    monkeypatch.delenv("DSV41_SDPA_SPARSE_ATTN", raising=False)
-```
-
-Source: `vendor/mac-mlx/mlx_vlm/custom_kernels/deepseek_v41/test_sparse_attention_prefill.py:218`. Unset read: Wrapper/conditional default: see the literal call and consumer below.
-
-```text
-@pytest.mark.parametrize("threshold", [None, "1", "128"])
-def test_prefill_threshold(n, threshold, monkeypatch):
-    monkeypatch.setenv("DSV41_PREFILL_FLASH_ATTN", "1")
-    if threshold is None:
-        monkeypatch.delenv("DSV41_PREFILL_FLASH_MIN_N", raising=False)
-    else:
-        monkeypatch.setenv("DSV41_PREFILL_FLASH_MIN_N", threshold)
-```
-
-Source: `vendor/mac-mlx/mlx_vlm/custom_kernels/deepseek_v41/test_sparse_attention_prefill.py:225`. Unset read: Wrapper/conditional default: see the literal call and consumer below.
-
-```text
-    expected = n > 8 and n >= int(threshold or "64")
-    assert dispatch.prefill_flash_enabled(n) is expected
-    monkeypatch.setenv("DSV41_PREFILL_FLASH_ATTN", "0")
-    assert not dispatch.prefill_flash_enabled(n)
-
-
-@pytest.mark.parametrize("n", [6, 8, 63])
-```
-
-Source: `vendor/mac-mlx/mlx_vlm/models/deepseek_v41/language.py:307`. Unset read: '0'.
-
-```text
-
-        return sparse_attn_v41(q, kv, attn_sink, topk_idxs, softmax_scale)
-    if os.environ.get("DSV41_PREFILL_FLASH_ATTN", "0") == "1":
-        from ...custom_kernels.deepseek_v41.sparse_attention import (
-            prefill_flash_enabled, sparse_attention,
-        )
-
-```
-
-### DSV41_PREFILL_FLASH_MIN_N
-
-Advanced backend control DSV41_PREFILL_FLASH_MIN_N. Set explicitly only for the selected backend; its literal read and fallback are documented below.
-
-Scope: mac-mlx. Class: advanced.
-
-Source: `vendor/mac-mlx/mlx_vlm/custom_kernels/deepseek_v41/sparse_attention.py:25`. Unset read: '64'.
-
-```text
-    """Opt-in prefill threshold; decode/DSpark batches <=8 are always excluded."""
-    return (n > 8 and os.environ.get("DSV41_PREFILL_FLASH_ATTN", "0") == "1"
-            and n >= max(9, int(os.environ.get("DSV41_PREFILL_FLASH_MIN_N", "64"))))
-
-
-@lru_cache(maxsize=1)
-def _kernel():
-```
-
-Source: `vendor/mac-mlx/mlx_vlm/custom_kernels/deepseek_v41/test_sparse_attention_prefill.py:194`. Unset read: Wrapper/conditional default: see the literal call and consumer below.
-
-```text
-
-    monkeypatch.setattr(module, "sparse_attn_prefill", lambda *args: marker)
-    monkeypatch.delenv("DSV41_PREFILL_FLASH_MIN_N", raising=False)
-    monkeypatch.delenv("DSV41_PREFILL_FLASH_ATTN", raising=False)
-    before = dispatch.status()
-    assert dispatch.sparse_attention(*case) is not marker
-    assert dispatch.status()["prefill_flash"] == before["prefill_flash"]
-```
-
-Source: `vendor/mac-mlx/mlx_vlm/custom_kernels/deepseek_v41/test_sparse_attention_prefill.py:220`. Unset read: Wrapper/conditional default: see the literal call and consumer below.
-
-```text
-    monkeypatch.setenv("DSV41_PREFILL_FLASH_ATTN", "1")
-    if threshold is None:
-        monkeypatch.delenv("DSV41_PREFILL_FLASH_MIN_N", raising=False)
-    else:
-        monkeypatch.setenv("DSV41_PREFILL_FLASH_MIN_N", threshold)
-    expected = n > 8 and n >= int(threshold or "64")
-    assert dispatch.prefill_flash_enabled(n) is expected
-```
-
-Source: `vendor/mac-mlx/mlx_vlm/custom_kernels/deepseek_v41/test_sparse_attention_prefill.py:222`. Unset read: Wrapper/conditional default: see the literal call and consumer below.
-
-```text
-        monkeypatch.delenv("DSV41_PREFILL_FLASH_MIN_N", raising=False)
-    else:
-        monkeypatch.setenv("DSV41_PREFILL_FLASH_MIN_N", threshold)
-    expected = n > 8 and n >= int(threshold or "64")
-    assert dispatch.prefill_flash_enabled(n) is expected
-    monkeypatch.setenv("DSV41_PREFILL_FLASH_ATTN", "0")
-    assert not dispatch.prefill_flash_enabled(n)
-```
-
-Source: `vendor/mac-mlx/mlx_vlm/custom_kernels/deepseek_v41/test_sparse_attention_prefill.py:244`. Unset read: Wrapper/conditional default: see the literal call and consumer below.
-
-```text
-    monkeypatch.setenv("DSV41_SDPA_SPARSE_ATTN", "0")
-    if threshold is None:
-        monkeypatch.delenv("DSV41_PREFILL_FLASH_MIN_N", raising=False)
-    else:
-        monkeypatch.setenv("DSV41_PREFILL_FLASH_MIN_N", threshold)
-    case = _case(n, 128, "mixed", h=8)
-    for path in (dispatch.sparse_attention, sparse_attn):
-```
-
-Source: `vendor/mac-mlx/mlx_vlm/custom_kernels/deepseek_v41/test_sparse_attention_prefill.py:246`. Unset read: Wrapper/conditional default: see the literal call and consumer below.
-
-```text
-        monkeypatch.delenv("DSV41_PREFILL_FLASH_MIN_N", raising=False)
-    else:
-        monkeypatch.setenv("DSV41_PREFILL_FLASH_MIN_N", threshold)
-    case = _case(n, 128, "mixed", h=8)
-    for path in (dispatch.sparse_attention, sparse_attn):
-        with _flash_switch("0"):
-            expected = path(*case)
-```
-
-### DSV41_PREFILL_GROUPED_MIN_ROWS
-
-Advanced backend control DSV41_PREFILL_GROUPED_MIN_ROWS. Set explicitly only for the selected backend; its literal read and fallback are documented below.
-
-Scope: mac-mlx. Class: advanced.
-
-Source: `vendor/mac-mlx/mlx_vlm/custom_kernels/deepseek_v41/test_grouped_gemm.py:425`. Unset read: Wrapper/conditional default: see the literal call and consumer below.
-
-```text
-    monkeypatch.setattr(adapter, "moe_prefill_grouped", grouped)
-    monkeypatch.delenv("DSV41_PREFILL_GROUPED_MXFP4", raising=False)
-    monkeypatch.delenv("DSV41_PREFILL_GROUPED_MIN_ROWS", raising=False)
-    MoE.__call__(fake, mx.zeros((1, 256, 32), dtype=mx.bfloat16))
-    monkeypatch.setenv("DSV41_PREFILL_GROUPED_MXFP4", "1")
-    for rows in (1, 255, 256):
-        MoE.__call__(fake, mx.zeros((1, rows, 32), dtype=mx.bfloat16))
-```
-
-Source: `vendor/mac-mlx/mlx_vlm/custom_kernels/deepseek_v41/test_grouped_gemm.py:430`. Unset read: Wrapper/conditional default: see the literal call and consumer below.
-
-```text
-    for rows in (1, 255, 256):
-        MoE.__call__(fake, mx.zeros((1, rows, 32), dtype=mx.bfloat16))
-    monkeypatch.setenv("DSV41_PREFILL_GROUPED_MIN_ROWS", "1")
-    MoE.__call__(fake, mx.zeros((1, 1, 32), dtype=mx.bfloat16))
-    assert calls == ["original", "original", "original", "grouped", "original"]
-
-
-```
-
-Source: `vendor/mac-mlx/mlx_vlm/models/deepseek_v41/language.py:971`. Unset read: '256'.
-
-```text
-                and not fused
-                and xf.shape[0] > 1
-                and xf.shape[0] >= int(os.environ.get("DSV41_PREFILL_GROUPED_MIN_ROWS", "256"))):
-            from .moe_prefill import moe_prefill_grouped
-
-            y = moe_prefill_grouped(self, xf, indices, weights)
-        else:
-```
-
-Source: `vendor/mac-mlx/mlx_vlm/models/deepseek_v41/test_ffn_expert_pad_cpu.py:164`. Unset read: Wrapper/conditional default: see the literal call and consumer below.
-
-```text
-    # Padding must also take precedence over grouped prefill.
-    monkeypatch.setenv("DSV41_PREFILL_GROUPED_MXFP4", "1")
-    monkeypatch.setenv("DSV41_PREFILL_GROUPED_MIN_ROWS", "64")
-    monkeypatch.setenv("DSV41_COMPILE_PRIMITIVES", "0")
-    up = Mock(side_effect=lambda x, ids, **kw: x * (ids[:, None, None] + 1))
-    up.num_experts = 8
-    mlp = SimpleNamespace(training=False, up_proj=up,
-```
-
-### DSV41_PREFILL_GROUPED_MXFP4
-
-Advanced backend control DSV41_PREFILL_GROUPED_MXFP4. Set explicitly only for the selected backend; its literal read and fallback are documented below.
-
-Scope: mac-mlx. Class: advanced.
-
-Source: `vendor/mac-mlx/mlx_vlm/custom_kernels/deepseek_v41/test_grouped_gemm.py:424`. Unset read: Wrapper/conditional default: see the literal call and consumer below.
-
-```text
-        shared_experts=lambda x: mx.zeros_like(x))
-    monkeypatch.setattr(adapter, "moe_prefill_grouped", grouped)
-    monkeypatch.delenv("DSV41_PREFILL_GROUPED_MXFP4", raising=False)
-    monkeypatch.delenv("DSV41_PREFILL_GROUPED_MIN_ROWS", raising=False)
-    MoE.__call__(fake, mx.zeros((1, 256, 32), dtype=mx.bfloat16))
-    monkeypatch.setenv("DSV41_PREFILL_GROUPED_MXFP4", "1")
-    for rows in (1, 255, 256):
-```
-
-Source: `vendor/mac-mlx/mlx_vlm/custom_kernels/deepseek_v41/test_grouped_gemm.py:427`. Unset read: Wrapper/conditional default: see the literal call and consumer below.
-
-```text
-    monkeypatch.delenv("DSV41_PREFILL_GROUPED_MIN_ROWS", raising=False)
-    MoE.__call__(fake, mx.zeros((1, 256, 32), dtype=mx.bfloat16))
-    monkeypatch.setenv("DSV41_PREFILL_GROUPED_MXFP4", "1")
-    for rows in (1, 255, 256):
-        MoE.__call__(fake, mx.zeros((1, rows, 32), dtype=mx.bfloat16))
-    monkeypatch.setenv("DSV41_PREFILL_GROUPED_MIN_ROWS", "1")
-    MoE.__call__(fake, mx.zeros((1, 1, 32), dtype=mx.bfloat16))
-```
-
-Source: `vendor/mac-mlx/mlx_vlm/models/deepseek_v41/language.py:965`. Unset read: '0'.
-
-```text
-        fused = (getattr(self, "ffn_fused", False) and xf.shape[0] >= 64
-                 and not _v41_verify_context.get())
-        if (os.environ.get("DSV41_PREFILL_GROUPED_MXFP4", "0") == "1"
-                and not down_bf16  # Precision trial uses the stock gather_qmm kernels.
-                and not pad16
-                and not expert_tiles
-                and not fused
-```
-
-Source: `vendor/mac-mlx/mlx_vlm/models/deepseek_v41/language.py:2505`. Unset read: '0'.
-
-```text
-                    or getattr(self, "_ffn_expert_tiles_attached",
-                               os.environ.get("DSV41_FFN_EXPERT_TILES", "0") == "1")
-                    or os.environ.get("DSV41_PREFILL_GROUPED_MXFP4", "0") == "1"):
-                raise ValueError("DSV41_FFN_FUSED requires DOWN_BF16, EXPERT_PAD16, "
-                                 "EXPERT_TILES and PREFILL_GROUPED_MXFP4 to be off")
-        if not hasattr(self, "_ffn_down_bf16_attached"):
-            self._ffn_down_bf16_attached = os.environ.get("DSV41_FFN_DOWN_BF16", "0") == "1"
-```
-
-Source: `vendor/mac-mlx/mlx_vlm/models/deepseek_v41/language.py:2522`. Unset read: '0'.
-
-```text
-            if flag == "1":
-                if (self._ffn_down_bf16_attached or self._ffn_expert_pad16_attached
-                        or os.environ.get("DSV41_PREFILL_GROUPED_MXFP4", "0") == "1"):
-                    raise ValueError("DSV41_FFN_EXPERT_TILES requires DOWN_BF16, EXPERT_PAD16 "
-                                     "and PREFILL_GROUPED_MXFP4 to be off")
-                from ...custom_kernels.deepseek_v41.moe_prefill_expert_tiles import prepare_expert_tiles
-
-```
-
-Source: `vendor/mac-mlx/mlx_vlm/models/deepseek_v41/test_ffn_down_bf16_cpu.py:51`. Unset read: Wrapper/conditional default: see the literal call and consumer below.
-
-```text
-def test_dispatch_and_attach_latch(monkeypatch, flag, n, verify):
-    ns = _load()
-    monkeypatch.setenv("DSV41_PREFILL_GROUPED_MXFP4", "0")
-    monkeypatch.setenv("DSV41_COMPILE_PRIMITIVES", "0")
-    calls = []
-    routed = np.arange(n * 6 * 4, dtype=np.float32).reshape(n, 6, 4) / 100
-    weights = np.full((n, 6), 0.25, np.float32)
-```
-
-Source: `vendor/mac-mlx/mlx_vlm/models/deepseek_v41/test_ffn_expert_pad.py:161`. Unset read: Wrapper/conditional default: see the literal call and consumer below.
-
-```text
-    assert moe.ffn_expert_pad16 and moe.ffn_down_bf16 == down_bf16
-    # The pad helper must win over grouped prefill, with the down dtype composed.
-    monkeypatch.setenv("DSV41_PREFILL_GROUPED_MXFP4", "1")
-    pad = Mock(wraps=lang._ffn_expert_pad16)
-    monkeypatch.setattr(lang, "_ffn_expert_pad16", pad)
-    _assert_bits(moe(x), reference)
-    _assert_bits(moe(x), reference)
-```
-
-Source: `vendor/mac-mlx/mlx_vlm/models/deepseek_v41/test_ffn_expert_pad.py:169`. Unset read: Wrapper/conditional default: see the literal call and consumer below.
-
-```text
-    assert all(call.args[3] == down_bf16 for call in pad.call_args_list)
-    assert capsys.readouterr().out.count("FFN_EXPERT_PAD16 engaged") == 1
-    monkeypatch.setenv("DSV41_PREFILL_GROUPED_MXFP4", "0")
-    for n in (1, 63, 64):
-        for verify in (False, True):
-            pad.reset_mock()
-            token = lang._v41_verify_context.set(verify)
-```
-
-Source: `vendor/mac-mlx/mlx_vlm/models/deepseek_v41/test_ffn_expert_pad_cpu.py:163`. Unset read: Wrapper/conditional default: see the literal call and consumer below.
-
-```text
-    monkeypatch.setenv("DSV41_PROMOTE_DECODE_WEIGHTS", "0")
-    # Padding must also take precedence over grouped prefill.
-    monkeypatch.setenv("DSV41_PREFILL_GROUPED_MXFP4", "1")
-    monkeypatch.setenv("DSV41_PREFILL_GROUPED_MIN_ROWS", "64")
-    monkeypatch.setenv("DSV41_COMPILE_PRIMITIVES", "0")
-    up = Mock(side_effect=lambda x, ids, **kw: x * (ids[:, None, None] + 1))
-    up.num_experts = 8
-```
-
-### DSV41_PREFILL_LAST_LOGITS
-
-Advanced backend control DSV41_PREFILL_LAST_LOGITS. Set explicitly only for the selected backend; its literal read and fallback are documented below.
-
-Scope: mac-mlx. Class: advanced.
-
-Source: `engines/mlx-receiver/mlx_token_stream_server.py:1795`. Unset read: '0'.
-
-```text
-        def _forward_token_ids_with_topk(ids_arr, final=True):
-            nonlocal vision_embeds
-            skip_logits = not final and is_dsv41 and (os.environ.get('DSV41_PREFILL_LAST_LOGITS', '0') == '1')
-            with mx.stream(gen_stream):
-                if dspark_runtime is not None:
-                    out = dspark_runtime.capture(ids_arr, cache, skip_logits=skip_logits)
-                    return (out.logits, None, None)
-```
-
-### DSV41_PREFILL_LAYER_MAJOR
-
-Advanced backend control DSV41_PREFILL_LAYER_MAJOR. Set explicitly only for the selected backend; its literal read and fallback are documented below.
-
-Scope: mac-mlx. Class: advanced.
-
-Source: `engines/mlx-receiver/mlx_token_stream_server.py:2212`. Unset read: '0'.
-
-```text
-                    _pl_model = None
-                    _pl_error = type(_plexc).__name__
-            _layer_major = is_dsv41 and os.environ.get('DSV41_PREFILL_LAYER_MAJOR', '0') == '1' and (n_to_prefill > 1)
-            _prefill_bounds = [(0, n_to_prefill)] if _layer_major else [(start, min(start + chunk_size, n_to_prefill)) for start in range(0, n_to_prefill, chunk_size)]
-            if _layer_major:
-                sys.stderr.write(f'[mlx-server] DSV41_PREFILL_LAYER_MAJOR=1: one forward of {n_to_prefill} tok (the model chunks at DSV41_PREFILL_CHUNK)\n')
-                sys.stderr.flush()
-```
-
-Source: `vendor/mac-mlx/mlx_vlm/models/deepseek_v41/language.py:1996`. Unset read: '0'.
-
-```text
-    DSV41_PREFILL_LAYER_MAJOR is refused, never promoted.
-    """
-    layer_major = os.environ.get("DSV41_PREFILL_LAYER_MAJOR", "0") == "1"
-    cone = os.environ.get("DSV41_PREFILL_CONE", "0") == "1"
-    if cone and not layer_major:
-        raise ValueError(
-            "DSV41_PREFILL_CONE=1 requires DSV41_PREFILL_LAYER_MAJOR=1: the cone "
-```
-
-Source: `vendor/mac-mlx/mlx_vlm/models/deepseek_v41/test_prefill_cone.py:148`. Unset read: Wrapper/conditional default: see the literal call and consumer below.
-
-```text
-def test_cone_without_layer_major_raises_and_names_both(monkeypatch):
-    monkeypatch.setenv("DSV41_PREFILL_CONE", "1")
-    monkeypatch.delenv("DSV41_PREFILL_LAYER_MAJOR", raising=False)
-    with pytest.raises(ValueError) as excinfo:
-        _prefill_switches(4096, _Cache(), None)
-    message = str(excinfo.value)
-    assert "DSV41_PREFILL_CONE" in message
-```
-
-Source: `vendor/mac-mlx/mlx_vlm/models/deepseek_v41/test_prefill_cone.py:158`. Unset read: Wrapper/conditional default: see the literal call and consumer below.
-
-```text
-def test_cone_with_dspark_raises_and_names_both(monkeypatch):
-    monkeypatch.setenv("DSV41_PREFILL_CONE", "1")
-    monkeypatch.setenv("DSV41_PREFILL_LAYER_MAJOR", "1")
-    monkeypatch.setenv("DSV41_DSPARK", "1")
-    monkeypatch.delenv("DSV41_PREFILL_CONE_TAIL", raising=False)
-    with pytest.raises(ValueError) as excinfo:
-        _prefill_switches(4096, _Cache(), None)
-```
-
-Source: `vendor/mac-mlx/mlx_vlm/models/deepseek_v41/test_prefill_cone.py:171`. Unset read: Wrapper/conditional default: see the literal call and consumer below.
-
-```text
-def test_cone_with_capture_layers_raises(monkeypatch):
-    monkeypatch.setenv("DSV41_PREFILL_CONE", "1")
-    monkeypatch.setenv("DSV41_PREFILL_LAYER_MAJOR", "1")
-    monkeypatch.delenv("DSV41_DSPARK", raising=False)
-    monkeypatch.delenv("DSV41_PREFILL_CONE_TAIL", raising=False)
-    with pytest.raises(ValueError) as excinfo:
-        _prefill_switches(4096, _Cache(), [37, 38, 39])
-```
-
-Source: `vendor/mac-mlx/mlx_vlm/models/deepseek_v41/test_prefill_cone.py:180`. Unset read: Wrapper/conditional default: see the literal call and consumer below.
-
-```text
-
-def test_layer_major_with_bounded_cache_raises(monkeypatch):
-    monkeypatch.setenv("DSV41_PREFILL_LAYER_MAJOR", "1")
-    monkeypatch.delenv("DSV41_PREFILL_CONE", raising=False)
-
-    class Bounded:
-        bounded = True
-```
-
-Source: `vendor/mac-mlx/mlx_vlm/models/deepseek_v41/test_prefill_cone.py:198`. Unset read: Wrapper/conditional default: see the literal call and consumer below.
-
-```text
-        monkeypatch.delenv(name, raising=False)
-    assert _prefill_switches(4096, _Cache(), None) == (False, False)
-    monkeypatch.setenv("DSV41_PREFILL_LAYER_MAJOR", "1")
-    # LAYER_MAJOR alone must NOT switch the cone on.
-    assert _prefill_switches(4096, _Cache(), None) == (True, False)
-    # A single token is a decode step: neither switch engages.
-    assert _prefill_switches(1, _Cache(), None) == (False, False)
-```
-
-Source: `vendor/mac-mlx/mlx_vlm/models/deepseek_v41/test_prefill_cone.py:431`. Unset read: Wrapper/conditional default: see the literal call and consumer below.
-
-```text
-
-def _off(monkeypatch):
-    monkeypatch.delenv("DSV41_PREFILL_LAYER_MAJOR", raising=False)
-    monkeypatch.delenv("DSV41_PREFILL_CONE", raising=False)
-    monkeypatch.delenv("DSV41_PREFILL_CONE_TAIL", raising=False)
-
-
-```
-
-Source: `vendor/mac-mlx/mlx_vlm/models/deepseek_v41/test_prefill_cone.py:437`. Unset read: Wrapper/conditional default: see the literal call and consumer below.
-
-```text
-
-def _cone_on(monkeypatch, chunk=CHUNK, tail=None):
-    monkeypatch.setenv("DSV41_PREFILL_LAYER_MAJOR", "1")
-    monkeypatch.setenv("DSV41_PREFILL_CONE", "1")
-    monkeypatch.setenv("DSV41_PREFILL_CHUNK", str(chunk))
-    if tail is None:
-        monkeypatch.delenv("DSV41_PREFILL_CONE_TAIL", raising=False)
-```
-
-Source: `vendor/mac-mlx/mlx_vlm/models/deepseek_v41/test_prefill_cone.py:487`. Unset read: Wrapper/conditional default: see the literal call and consumer below.
-
-```text
-    control, _ = _control(model, ids, chunk=int(chunk))
-
-    monkeypatch.setenv("DSV41_PREFILL_LAYER_MAJOR", "1")
-    monkeypatch.setenv("DSV41_PREFILL_CHUNK", chunk)
-    arm = _logits(model, ids)
-
-    assert arm.shape == control.shape
-```
-
-Source: `vendor/mac-mlx/mlx_vlm/models/deepseek_v41/test_prefill_cone.py:505`. Unset read: Wrapper/conditional default: see the literal call and consumer below.
-
-```text
-    _, control = _control(model, ids, chunk=CHUNK)
-
-    monkeypatch.setenv("DSV41_PREFILL_LAYER_MAJOR", "1")
-    monkeypatch.setenv("DSV41_PREFILL_CHUNK", str(CHUNK))
-    arm = model.make_cache()
-    model(ids, cache=arm)
-
-```
-
-Source: `vendor/mac-mlx/mlx_vlm/models/deepseek_v41/test_prefill_cone.py:995`. Unset read: Wrapper/conditional default: see the literal call and consumer below.
-
-```text
-def test_dspark_refusal_is_present_without_a_tail_and_absent_with_one(monkeypatch):
-    monkeypatch.setenv("DSV41_PREFILL_CONE", "1")
-    monkeypatch.setenv("DSV41_PREFILL_LAYER_MAJOR", "1")
-    monkeypatch.setenv("DSV41_DSPARK", "1")
-    monkeypatch.delenv("DSV41_PREFILL_CONE_TAIL", raising=False)
-    with pytest.raises(ValueError) as excinfo:
-        _prefill_switches(4096, _Cache(), None)
-```
-
-Source: `vendor/mac-mlx/mlx_vlm/models/deepseek_v41/test_prefill_cone.py:1010`. Unset read: Wrapper/conditional default: see the literal call and consumer below.
-
-```text
-def test_capture_refusal_is_present_without_a_tail_and_absent_with_one(monkeypatch):
-    monkeypatch.setenv("DSV41_PREFILL_CONE", "1")
-    monkeypatch.setenv("DSV41_PREFILL_LAYER_MAJOR", "1")
-    monkeypatch.delenv("DSV41_DSPARK", raising=False)
-    monkeypatch.delenv("DSV41_PREFILL_CONE_TAIL", raising=False)
-    with pytest.raises(ValueError) as excinfo:
-        _prefill_switches(4096, _Cache(), [37, 38, 39])
-```
-
-Source: `vendor/mac-mlx/mlx_vlm/models/deepseek_v41/test_prefill_cone.py:1027`. Unset read: Wrapper/conditional default: see the literal call and consumer below.
-
-```text
-    # A tail on its own switches nothing on.
-    assert _prefill_switches(4096, _Cache(), None) == (False, False)
-    monkeypatch.setenv("DSV41_PREFILL_LAYER_MAJOR", "1")
-    assert _prefill_switches(4096, _Cache(), None) == (True, False)
-    # And neither switch sets the tail.
-    monkeypatch.delenv("DSV41_PREFILL_CONE_TAIL", raising=False)
-    monkeypatch.setenv("DSV41_PREFILL_CONE", "1")
-```
-
-### DSV41_PREFILL_LEDGER
-
-Advanced backend control DSV41_PREFILL_LEDGER. Set explicitly only for the selected backend; its literal read and fallback are documented below.
-
-Scope: mac-mlx. Class: advanced.
-
-Source: `engines/mlx-receiver/mlx_token_stream_server.py:2201`. Unset read: '0'.
-
-```text
-            _probe = _first_fwd_probe_wrap(lang) if _first_fwd_probe_enabled() else None
-            _t_first_fwd = time.time()
-            _prefill_ledger_on = is_dsv41 and os.environ.get('DSV41_PREFILL_LEDGER', '0') == '1'
-            if _prefill_ledger_on:
-                _pl = {'tokens': 0, 'chunks': 0, 'build_ms': 0.0, 'eval_ms': 0.0}
-                _pl_model = None
-                try:
-```
-
-Source: `vendor/mac-mlx/mlx_vlm/models/deepseek_v41/prefill_ledger.py:14`. Unset read: '0'.
-
-```text
-import os
-
-_PREFILL_LEDGER_ON = os.environ.get("DSV41_PREFILL_LEDGER", "0") == "1"
-_PREFILL_LEDGER_CUTS_LEVEL: int = (
-    {"1": 1, "2": 2}.get(os.environ.get("DSV41_PREFILL_LEDGER_CUTS", "0"), 0)
-    if _PREFILL_LEDGER_ON else 0
-)
-```
-
-### DSV41_PREFILL_LEDGER_CUTS
-
-Advanced backend control DSV41_PREFILL_LEDGER_CUTS. Set explicitly only for the selected backend; its literal read and fallback are documented below.
-
-Scope: mac-mlx. Class: advanced.
-
-Source: `vendor/mac-mlx/mlx_vlm/models/deepseek_v41/prefill_ledger.py:16`. Unset read: '0'.
-
-```text
-_PREFILL_LEDGER_ON = os.environ.get("DSV41_PREFILL_LEDGER", "0") == "1"
-_PREFILL_LEDGER_CUTS_LEVEL: int = (
-    {"1": 1, "2": 2}.get(os.environ.get("DSV41_PREFILL_LEDGER_CUTS", "0"), 0)
-    if _PREFILL_LEDGER_ON else 0
-)
-_PREFILL_LEDGER_CUTS = _PREFILL_LEDGER_CUTS_LEVEL > 0
-PREFILL_LEDGER = {"hash_ms": 0.0, "engram_fetch_ms": 0.0, "tokens": 0, "chunks": 0}
-```
-
-### DSV41_PREFILL_MEGAKERNEL
-
-Advanced backend control DSV41_PREFILL_MEGAKERNEL. Set explicitly only for the selected backend; its literal read and fallback are documented below.
-
-Scope: mac-mlx. Class: advanced.
-
-Source: `vendor/mac-mlx/mlx_vlm/models/deepseek_v41/language.py:1773`. Unset read: '0'.
-
-```text
-        to the eager collapse and must therefore be used by BOTH halves.
-        """
-        if os.environ.get("DSV41_PREFILL_MEGAKERNEL", "0") == "1" and h.shape[1] > 1:
-            from .megakernel import collapse_norm_rows
-            return collapse_norm_rows(h, pre_mix, self.attn_norm)
-        if os.environ.get("DSV41_HC_FUSED", "0") == "1":
-            x = self.attn_hc(h, pre_mix)[0]
-```
-
-Source: `vendor/mac-mlx/mlx_vlm/models/deepseek_v41/language.py:1797`. Unset read: '0'.
-
-```text
-            # single row -- the two single-token DECODE specialisations below are
-            # not that path and are never reachable from the cone.
-            if os.environ.get("DSV41_PREFILL_MEGAKERNEL", "0") == "1":
-                return _prefill_block_prepared(self, h, pre_mix, start_pos, cache,
-                                               shared, image_mask)
-            # Otherwise fall through to the eager path, which is exactly what the
-            # default prefill runs when DSV41_PREFILL_MEGAKERNEL is off.
-```
-
-Source: `vendor/mac-mlx/mlx_vlm/models/deepseek_v41/language.py:1813`. Unset read: '0'.
-
-```text
-                    object.__setattr__(self, "_block_graph", graph)
-                return graph(self, h, pre_mix, start_pos, cache, shared, image_mask)
-            if os.environ.get("DSV41_PREFILL_MEGAKERNEL", "0") == "1" and h.shape[1] > 1:
-                from .megakernel import prefill_block
-                return prefill_block(self, h, pre_mix, start_pos, cache, shared, image_mask)
-        if os.environ.get("DSV41_HC_FUSED", "0") == "1":
-            x, attn_pre, post, comb = self.attn_hc(h, pre_mix)
-```
-
-Source: `vendor/mac-mlx/mlx_vlm/models/deepseek_v41/test_megakernel_prefill.py:204`. Unset read: Wrapper/conditional default: see the literal call and consumer below.
-
-```text
-    monkeypatch.setattr(ledger, "_PREFILL_LEDGER_CUTS", cuts)
-    monkeypatch.setattr(ledger, "PREFILL_LAYER_MS", {})
-    monkeypatch.setenv("DSV41_PREFILL_MEGAKERNEL", "1")
-    # Existing switches must not send a multi-token call into decode/compile or
-    # demand incoming_pre from HyperConnection's separate fused-HC entry point.
-    for flag in ("DSV41_MEGAKERNEL", "DSV41_COMPILE_BLOCK", "DSV41_HC_FUSED"):
-        monkeypatch.setenv(flag, "1")
-```
-
-Source: `vendor/mac-mlx/mlx_vlm/models/deepseek_v41/test_prefill_cone.py:896`. Unset read: Wrapper/conditional default: see the literal call and consumer below.
-
-```text
-    model, ids, _ = tiny
-    monkeypatch.setenv("DSV41_QAT", "1")
-    monkeypatch.setenv("DSV41_PREFILL_MEGAKERNEL", "1")
-    _off(monkeypatch)
-    control, _ = _control(model, ids, chunk=CHUNK)
-    wide, _ = _control(model, ids, chunk=WIDE)
-    noise = _noise(control[0, -1], wide[0, -1])
-```
-
-### DSV41_PREFILL_MXFP8_STEEL
-
-Advanced backend control DSV41_PREFILL_MXFP8_STEEL. Set explicitly only for the selected backend; its literal read and fallback are documented below.
-
-Scope: mac-mlx. Class: advanced.
-
-Source: `vendor/mac-mlx/mlx_vlm/models/deepseek_v41/prefill_linear.py:9`. Unset read: '0'.
-
-```text
-
-
-_PREFILL_MXFP8_STEEL = os.environ.get("DSV41_PREFILL_MXFP8_STEEL", "0") == "1"
-# Ignore the tuning variable entirely on the default path.
-_PREFILL_STEEL_MIN_M = (
-    int(os.environ.get("DSV41_PREFILL_STEEL_MIN_M", "256"))
-    if _PREFILL_MXFP8_STEEL else 256
-```
-
-### DSV41_PREFILL_STEEL_MIN_M
-
-Advanced backend control DSV41_PREFILL_STEEL_MIN_M. Set explicitly only for the selected backend; its literal read and fallback are documented below.
-
-Scope: mac-mlx. Class: advanced.
-
-Source: `vendor/mac-mlx/mlx_vlm/models/deepseek_v41/prefill_linear.py:12`. Unset read: '256'.
-
-```text
-# Ignore the tuning variable entirely on the default path.
-_PREFILL_STEEL_MIN_M = (
-    int(os.environ.get("DSV41_PREFILL_STEEL_MIN_M", "256"))
-    if _PREFILL_MXFP8_STEEL else 256
-)
-STEEL_CALLS = 0
-
-```
-
-### DSV41_PREFILL_TILED_INDEX
-
-Advanced backend control DSV41_PREFILL_TILED_INDEX. Set explicitly only for the selected backend; its literal read and fallback are documented below.
-
-Scope: mac-mlx. Class: advanced.
-
-Source: `vendor/mac-mlx/mlx_vlm/custom_kernels/deepseek_v41/test_index_prefill.py:250`. Unset read: Wrapper/conditional default: see the literal call and consumer below.
-
-```text
-    qr = mx.random.normal((1, n, 64))
-    reference, fused = SimpleNamespace(candidates=None), SimpleNamespace(candidates=None)
-    monkeypatch.setenv("DSV41_PREFILL_TILED_INDEX", "0")
-    e0 = source(x, qr, 0, 128, None, keys, reference)
-    e1 = consumer(x, qr, 0, 128, None, keys, reference)
-    monkeypatch.setenv("DSV41_PREFILL_TILED_INDEX", "1")
-    tiled = importlib.import_module("mlx_vlm.custom_kernels.deepseek_v41.index_prefill")
-```
-
-Source: `vendor/mac-mlx/mlx_vlm/custom_kernels/deepseek_v41/test_index_prefill.py:253`. Unset read: Wrapper/conditional default: see the literal call and consumer below.
-
-```text
-    e0 = source(x, qr, 0, 128, None, keys, reference)
-    e1 = consumer(x, qr, 0, 128, None, keys, reference)
-    monkeypatch.setenv("DSV41_PREFILL_TILED_INDEX", "1")
-    tiled = importlib.import_module("mlx_vlm.custom_kernels.deepseek_v41.index_prefill")
-    calls = []
-
-    def tracked(*args, **kwargs):
-```
-
-Source: `vendor/mac-mlx/mlx_vlm/custom_kernels/deepseek_v41/test_index_prefill.py:298`. Unset read: Wrapper/conditional default: see the literal call and consumer below.
-
-```text
-    for n, enabled in [(64, None), (1, "1"), (16, "1"), (63, "1")]:
-        if enabled is None:
-            monkeypatch.delenv("DSV41_PREFILL_TILED_INDEX", raising=False)
-        else:
-            monkeypatch.setenv("DSV41_PREFILL_TILED_INDEX", enabled)
-        x, _, _, keys, _, _, _ = _inputs(n, 1031, False)
-        mx.eval(indexer(x, x, 2062 - n, 128, None, keys, SimpleNamespace(candidates=None)))
-```
-
-Source: `vendor/mac-mlx/mlx_vlm/custom_kernels/deepseek_v41/test_index_prefill.py:300`. Unset read: Wrapper/conditional default: see the literal call and consumer below.
-
-```text
-            monkeypatch.delenv("DSV41_PREFILL_TILED_INDEX", raising=False)
-        else:
-            monkeypatch.setenv("DSV41_PREFILL_TILED_INDEX", enabled)
-        x, _, _, keys, _, _, _ = _inputs(n, 1031, False)
-        mx.eval(indexer(x, x, 2062 - n, 128, None, keys, SimpleNamespace(candidates=None)))
-
-
-```
-
-Source: `vendor/mac-mlx/mlx_vlm/models/deepseek_v41/language.py:640`. Unset read: '0'.
-
-```text
-        v41_index = _v41_prefill_enabled("INDEX", n)
-        if (not v41_index and n >= int(os.environ.get("DSV41_PREFILL_TILED_MIN_N", "64"))
-                and os.environ.get("DSV41_PREFILL_TILED_INDEX", "0") == "1"):
-            from ...custom_kernels.deepseek_v41.index_prefill import index_scores_topk
-
-            _s4_count("index_score", self.layer_id)
-            need_blocks = self.is_candidate_source and not (precompute and all_candidates)
-```
-
-### DSV41_PREFILL_TILED_MIN_N
-
-Advanced backend control DSV41_PREFILL_TILED_MIN_N. Set explicitly only for the selected backend; its literal read and fallback are documented below.
-
-Scope: mac-mlx. Class: advanced.
-
-Source: `vendor/mac-mlx/mlx_vlm/custom_kernels/deepseek_v41/test_index_prefill.py:238`. Unset read: Wrapper/conditional default: see the literal call and consumer below.
-
-```text
-    monkeypatch.setenv("DSV41_S4_COMPILE_INDEXER", "0")
-    # Exercise the production n>=64 gate, including zero-length geometry.
-    monkeypatch.setenv("DSV41_PREFILL_TILED_MIN_N", "64")
-    monkeypatch.setattr(lang, "_rope", lambda rope, q, pos: q)
-    monkeypatch.setattr(lang, "_PREFILL_MXFP8_STEEL", False)
-    mx.random.seed(71)
-    args = TextConfig(hidden_size=64, q_lora_rank=64, candidate_topk_blocks=256 if all_candidates else 5)
-```
-
-Source: `vendor/mac-mlx/mlx_vlm/custom_kernels/deepseek_v41/test_index_prefill.py:295`. Unset read: Wrapper/conditional default: see the literal call and consumer below.
-
-```text
-    monkeypatch.setenv("DSV41_S4_COMPILE_INDEXER", "0")
-    indexer = Indexer(TextConfig(hidden_size=64, q_lora_rank=64), 2)
-    monkeypatch.setenv("DSV41_PREFILL_TILED_MIN_N", "64")
-    for n, enabled in [(64, None), (1, "1"), (16, "1"), (63, "1")]:
-        if enabled is None:
-            monkeypatch.delenv("DSV41_PREFILL_TILED_INDEX", raising=False)
-        else:
-```
-
-Source: `vendor/mac-mlx/mlx_vlm/models/deepseek_v41/language.py:639`. Unset read: '64'.
-
-```text
-        # kernel is far slower than the eager path at tiny n (2026-09-15 arm: decode 20 -> 7-14 tok/s).
-        v41_index = _v41_prefill_enabled("INDEX", n)
-        if (not v41_index and n >= int(os.environ.get("DSV41_PREFILL_TILED_MIN_N", "64"))
-                and os.environ.get("DSV41_PREFILL_TILED_INDEX", "0") == "1"):
-            from ...custom_kernels.deepseek_v41.index_prefill import index_scores_topk
-
-            _s4_count("index_score", self.layer_id)
-```
-
-### DSV41_PREFILL_V41_
-
-Advanced backend control DSV41_PREFILL_V41_. Set explicitly only for the selected backend; its literal read and fallback are documented below.
-
-Scope: mac-mlx. Class: advanced.
-
-Source: `vendor/mac-mlx/mlx_vlm/custom_kernels/deepseek_v41/v41_dispatch.py:13`. Unset read: Wrapper/conditional default: see the literal call and consumer below.
-
-```text
-def enabled(kind, n):
-    return (n >= 64 and not _VERIFY.get()
-            and os.environ.get("DSV41_PREFILL_V41_" + kind, "0") == "1")
-
-
-@contextmanager
-def verification():
-```
-
-### DSV41_PROMOTE_DECODE_WEIGHTS
-
-Advanced backend control DSV41_PROMOTE_DECODE_WEIGHTS. Set explicitly only for the selected backend; its literal read and fallback are documented below.
-
-Scope: mac-mlx. Class: advanced.
-
-Source: `engines/mlx-receiver/mlx_token_stream_server.py:163`. Unset read: '0'.
-
-```text
-    if config.vision_config is not None:
-        parameter_bytes += sum((2 * prod(shape) for _, shape in expected_vision_parameters(config.vision_config, config.text_config.hidden_size).values()))
-    if os.environ.get('DSV41_PROMOTE_DECODE_WEIGHTS', '0') == '1':
-        parameter_bytes += sum(((4 - sizes[dtype]) * prod(shape) for name, (dtype, shape) in specs.items() if name.endswith('.wo_a.weight') and os.environ.get('DSV41_WO_A_BF16', '0') != '1' or (name == 'lm_head.weight' and os.environ.get('DSV41_HEAD_BF16', '0') != '1')))
-    available, breakdown = _dsv41_wait_for_memory(source, parameter_bytes, _read_vm_stat, timeout_s=float(os.environ.get('DSV41_MEMORY_GUARD_WAIT_S', '90')))
-    required = _dsv41_memory_guard(available, source, parameter_bytes)
-    print(f"[DSV41] memory available={available / (1 << 30):.2f} GiB resident_required={required / (1 << 30):.0f} GiB headroom=20 GiB source={source} QAT={os.environ.get('DSV41_QAT', '1')} [{_dsv41_breakdown_text(breakdown)}]", file=sys.stderr, flush=True)
-```
-
-Source: `vendor/mac-mlx/mlx_vlm/models/deepseek_v41/language.py:2539`. Unset read: '0'.
-
-```text
-            for layer in self.layers:
-                layer.ffn.ffn_fused = self._ffn_fused_attached
-        if os.environ.get("DSV41_PROMOTE_DECODE_WEIGHTS", "0") == "1":
-            # These contractions already execute in FP32. Retaining that exact
-            # representation removes full weight conversions on every token.
-            # This deliberately spends 3.73 GiB for the release checkpoint.
-            # DSV41_WO_A_BF16 / DSV41_HEAD_BF16 leave the weight bf16 and read half the bytes.
-```
-
-Source: `vendor/mac-mlx/mlx_vlm/models/deepseek_v41/test_ffn_down_bf16_cpu.py:35`. Unset read: Wrapper/conditional default: see the literal call and consumer below.
-
-```text
-def _attach(ns, moe, monkeypatch, flag):
-    monkeypatch.setenv("DSV41_FFN_EXPERT_PAD16", "0")
-    monkeypatch.delenv("DSV41_PROMOTE_DECODE_WEIGHTS", raising=False)
-    if flag is None:
-        monkeypatch.delenv("DSV41_FFN_DOWN_BF16", raising=False)
-    else:
-        monkeypatch.setenv("DSV41_FFN_DOWN_BF16", flag)
-```
-
-Source: `vendor/mac-mlx/mlx_vlm/models/deepseek_v41/test_ffn_expert_pad_cpu.py:161`. Unset read: Wrapper/conditional default: see the literal call and consumer below.
-
-```text
-    monkeypatch.setenv("DSV41_FFN_EXPERT_PAD16", "1")
-    monkeypatch.setenv("DSV41_FFN_DOWN_BF16", "0")
-    monkeypatch.setenv("DSV41_PROMOTE_DECODE_WEIGHTS", "0")
-    # Padding must also take precedence over grouped prefill.
-    monkeypatch.setenv("DSV41_PREFILL_GROUPED_MXFP4", "1")
-    monkeypatch.setenv("DSV41_PREFILL_GROUPED_MIN_ROWS", "64")
-    monkeypatch.setenv("DSV41_COMPILE_PRIMITIVES", "0")
-```
-
-### DSV41_QAT
-
-Advanced backend control DSV41_QAT. Set explicitly only for the selected backend; its literal read and fallback are documented below.
-
-Scope: mac-mlx. Class: advanced.
-
-Source: `engines/mlx-receiver/mlx_token_stream_server.py:167`. Unset read: '1'.
-
-```text
-    available, breakdown = _dsv41_wait_for_memory(source, parameter_bytes, _read_vm_stat, timeout_s=float(os.environ.get('DSV41_MEMORY_GUARD_WAIT_S', '90')))
-    required = _dsv41_memory_guard(available, source, parameter_bytes)
-    print(f"[DSV41] memory available={available / (1 << 30):.2f} GiB resident_required={required / (1 << 30):.0f} GiB headroom=20 GiB source={source} QAT={os.environ.get('DSV41_QAT', '1')} [{_dsv41_breakdown_text(breakdown)}]", file=sys.stderr, flush=True)
-    model_dir = Path(model_dir)
-    model = Model(config)
-    weight_map = json.loads((model_dir / 'model.safetensors.index.json').read_text())['weight_map']
-    shards = {}
-```
-
-Source: `vendor/mac-mlx/mlx_vlm/custom_kernels/deepseek_v41/test_index_prefill.py:39`. Unset read: Wrapper/conditional default: see the literal call and consumer below.
-
-```text
-@pytest.fixture(autouse=True)
-def _reference_environment(monkeypatch):
-    monkeypatch.setenv("DSV41_QAT", "1")
-    monkeypatch.setenv("DSV41_METAL_QUANT", "0")
-    monkeypatch.setenv("DSV41_INDEX_TOPK", "512")
-
-
-```
-
-Source: `vendor/mac-mlx/mlx_vlm/models/deepseek_v41/language.py:155`. Unset read: '1'.
-
-```text
-def fake_quant_fp8_ue8m0(x: mx.array, block: int = 32) -> mx.array:
-    """act_quant(..., scale_fmt='ue8m0', inplace=True): fp8 round-trip, pow2 scales."""
-    if os.environ.get("DSV41_QAT", "1") == "0":
-        return x
-    if os.environ.get("DSV41_METAL_QUANT", "0") == "1":
-        from .quant_kernels import fake_quant
-        return fake_quant(x, block, "fp8_ue8m0")
-```
-
-Source: `vendor/mac-mlx/mlx_vlm/models/deepseek_v41/language.py:171`. Unset read: '1'.
-
-```text
-def fake_quant_fp4_ue8m0(x: mx.array, block: int = 32) -> mx.array:
-    """fp4_act_quant(..., scale_dtype=e8m0, inplace=True): the indexer's q/k path."""
-    if os.environ.get("DSV41_QAT", "1") == "0":
-        return x
-    if os.environ.get("DSV41_METAL_QUANT", "0") == "1":
-        from .quant_kernels import fake_quant
-        return fake_quant(x, block, "fp4_ue8m0")
-```
-
-Source: `vendor/mac-mlx/mlx_vlm/models/deepseek_v41/language.py:187`. Unset read: '1'.
-
-```text
-def fake_quant_fp4_e4m3(x: mx.array, block: int = 16) -> mx.array:
-    """fp4_act_quant(..., 16, scale_dtype=e4m3, inplace=True): the compressed-KV path."""
-    if os.environ.get("DSV41_QAT", "1") == "0":
-        return x
-    if os.environ.get("DSV41_METAL_QUANT", "0") == "1":
-        from .quant_kernels import fake_quant
-        return fake_quant(x, block, "fp4_e4m3")
-```
-
-Source: `vendor/mac-mlx/mlx_vlm/models/deepseek_v41/language.py:1122`. Unset read: '1'.
-
-```text
-        from mlx_lm.models import cache as lm_cache
-
-        qat = os.environ.get("DSV41_QAT", "1") != "0"
-        key = (id(model), qat)
-        entry = self._restore_models.get(key)
-        if entry is None or entry[0]() is not model or entry[2] is not token_map:
-            digest = hashlib.sha256(json.dumps(
-```
-
-Source: `vendor/mac-mlx/mlx_vlm/models/deepseek_v41/language.py:1157`. Unset read: '1'.
-
-```text
-        if len(meta_state) != 2 or meta_state[0] != "deepseek_v41_v1":
-            raise ValueError("Unsupported V4.1 cache metadata")
-        qat = os.environ.get("DSV41_QAT", "1") != "0"
-        matches = [(ref(), token_map) for (_, bound_qat), (ref, sig, token_map)
-                   in list(cls._restore_models.items())
-                   if sig == meta_state[1] and bound_qat == qat and ref() is not None]
-        if len(matches) != 1:
-```
-
-Source: `vendor/mac-mlx/mlx_vlm/models/deepseek_v41/language.py:1175`. Unset read: '1'.
-
-```text
-        import copy
-
-        if self._qat != (os.environ.get("DSV41_QAT", "1") != "0"):
-            raise ValueError("V4.1 cache QAT mode changed")
-        out = copy.copy(self)
-        out.layers = []
-        for lc in self.layers:
-```
-
-Source: `vendor/mac-mlx/mlx_vlm/models/deepseek_v41/test_bounded_cache.py:21`. Unset read: Wrapper/conditional default: see the literal call and consumer below.
-
-```text
-        spec.loader.exec_module(module)
-        monkeypatch.setattr(helper, "LanguageModel", module.LanguageModel)
-    monkeypatch.setenv("DSV41_QAT", "1")
-    monkeypatch.setenv("DSV41_METAL_SPARSE_ATTN", "0")
-    return helper.random_model()
-
-
-```
-
-Source: `vendor/mac-mlx/mlx_vlm/models/deepseek_v41/test_language_dsv41_mac.py:279`. Unset read: Wrapper/conditional default: see the literal call and consumer below.
-
-```text
-@pytest.fixture(params=["0", "1"], ids=["qat-off", "qat-on"])
-def model_and_ids(request, monkeypatch):
-    monkeypatch.setenv("DSV41_QAT", request.param)
-    return random_model(), token_ids()
-
-
-def test_prefill_decode_and_chunks(model_and_ids):
-```
-
-Source: `vendor/mac-mlx/mlx_vlm/models/deepseek_v41/test_language_dsv41_mac.py:391`. Unset read: None.
-
-```text
-    assert all(count <= limit for _, count in growth.values())
-    actual = mx.concatenate(pieces, axis=1)
-    if os.environ.get("DSV41_QAT") == "1":
-        reference_cache = model.make_cache()
-        expected = model(ids, cache=reference_cache).logits
-        mx.eval(actual, expected, reference_cache[0].state)
-        actual_np, expected_np = np.asarray(actual), np.asarray(expected)
-```
-
-Source: `vendor/mac-mlx/mlx_vlm/models/deepseek_v41/test_language_dsv41_mac.py:509`. Unset read: Wrapper/conditional default: see the literal call and consumer below.
-
-```text
-    if not root.is_dir():
-        pytest.skip("Set DSV41_PN_DIR to the PipeNetwork checkout for reference parity")
-    monkeypatch.setenv("DSV41_QAT", "0")
-    old_dtype = torch.get_default_dtype()
-    try:
-        torch.set_default_dtype(torch.float32)
-        ref = load_reference(root, monkeypatch, torch)
-```
-
-Source: `vendor/mac-mlx/mlx_vlm/models/deepseek_v41/test_prefill_cone.py:462`. Unset read: Wrapper/conditional default: see the literal call and consumer below.
-
-```text
-    """
-    model, ids, _ = tiny
-    monkeypatch.setenv("DSV41_QAT", "1")
-    _off(monkeypatch)
-    one, _ = _control(model, ids, chunk=WIDE)
-    four, _ = _control(model, ids, chunk=CHUNK)
-    assert one.shape == four.shape
-```
-
-Source: `vendor/mac-mlx/mlx_vlm/models/deepseek_v41/test_prefill_cone.py:483`. Unset read: Wrapper/conditional default: see the literal call and consumer below.
-
-```text
-    """
-    model, ids, _ = tiny
-    monkeypatch.setenv("DSV41_QAT", qat)
-    _off(monkeypatch)
-    control, _ = _control(model, ids, chunk=int(chunk))
-
-    monkeypatch.setenv("DSV41_PREFILL_LAYER_MAJOR", "1")
-```
-
-Source: `vendor/mac-mlx/mlx_vlm/models/deepseek_v41/test_prefill_cone.py:501`. Unset read: Wrapper/conditional default: see the literal call and consumer below.
-
-```text
-def test_layer_major_leaves_the_same_cache(tiny, monkeypatch, qat):
-    model, ids, config = tiny
-    monkeypatch.setenv("DSV41_QAT", qat)
-    _off(monkeypatch)
-    _, control = _control(model, ids, chunk=CHUNK)
-
-    monkeypatch.setenv("DSV41_PREFILL_LAYER_MAJOR", "1")
-```
-
-Source: `vendor/mac-mlx/mlx_vlm/models/deepseek_v41/test_prefill_cone.py:540`. Unset read: Wrapper/conditional default: see the literal call and consumer below.
-
-```text
-        "the tiny prompt must be long enough for the cone to skip rows")
-
-    monkeypatch.setenv("DSV41_QAT", qat)
-    _off(monkeypatch)
-    control, _ = _control(model, ids, chunk=CHUNK)
-    wide, _ = _control(model, ids, chunk=WIDE)
-    noise = _noise(control[0, -1], wide[0, -1])
-```
-
-Source: `vendor/mac-mlx/mlx_vlm/models/deepseek_v41/test_prefill_cone.py:566`. Unset read: Wrapper/conditional default: see the literal call and consumer below.
-
-```text
-    boundary = prefill_boundary_layer(config)
-
-    monkeypatch.setenv("DSV41_QAT", "1")
-    _cone_on(monkeypatch)
-    cache = model.make_cache()
-    model(ids, cache=cache)
-
-```
-
-Source: `vendor/mac-mlx/mlx_vlm/models/deepseek_v41/test_prefill_cone.py:612`. Unset read: Wrapper/conditional default: see the literal call and consumer below.
-
-```text
-    """
-    model, ids, config = tiny
-    monkeypatch.setenv("DSV41_QAT", "1")
-    _cone_on(monkeypatch)
-    cache = model.make_cache()
-    model(ids[:, :PREFIX_LONG], cache=cache)
-    floor = _expected_floor(PREFIX_LONG, config)
-```
-
-Source: `vendor/mac-mlx/mlx_vlm/models/deepseek_v41/test_prefill_cone.py:626`. Unset read: Wrapper/conditional default: see the literal call and consumer below.
-
-```text
-def test_a_fresh_cache_has_no_floor(tiny, monkeypatch):
-    model, ids, _ = tiny
-    monkeypatch.setenv("DSV41_QAT", "1")
-    _off(monkeypatch)
-    _, cache = _control(model, ids, chunk=CHUNK)
-    assert cache[0].is_trimmable() is True
-    assert cache[0].trim_floor() == 0
-```
-
-Source: `vendor/mac-mlx/mlx_vlm/models/deepseek_v41/test_prefill_cone.py:636`. Unset read: Wrapper/conditional default: see the literal call and consumer below.
-
-```text
-def test_a_cone_cache_refuses_a_rewind_below_its_floor(tiny, monkeypatch):
-    model, ids, config = tiny
-    monkeypatch.setenv("DSV41_QAT", "1")
-    _cone_on(monkeypatch)
-    cache = model.make_cache()
-    model(ids[:, :PREFIX_LONG], cache=cache)
-    floor = _expected_floor(PREFIX_LONG, config)
-```
-
-Source: `vendor/mac-mlx/mlx_vlm/models/deepseek_v41/test_prefill_cone.py:656`. Unset read: Wrapper/conditional default: see the literal call and consumer below.
-
-```text
-    model, ids, config = tiny
-    tail = 4
-    monkeypatch.setenv("DSV41_QAT", "1")
-    _cone_on(monkeypatch, tail=tail)
-    cache = model.make_cache()
-    model(ids[:, :PREFIX_LONG], cache=cache)
-
-```
-
-Source: `vendor/mac-mlx/mlx_vlm/models/deepseek_v41/test_prefill_cone.py:677`. Unset read: Wrapper/conditional default: see the literal call and consumer below.
-
-```text
-    """
-    model, ids, _ = tiny
-    monkeypatch.setenv("DSV41_QAT", "1")
-    _cone_on(monkeypatch)
-    cache = model.make_cache()
-    model(ids[:, :PREFIX_LONG], cache=cache)
-
-```
-
-Source: `vendor/mac-mlx/mlx_vlm/models/deepseek_v41/test_prefill_cone.py:739`. Unset read: Wrapper/conditional default: see the literal call and consumer below.
-
-```text
-    model, ids, _ = tiny
-    n = int(ids.shape[1])
-    monkeypatch.setenv("DSV41_QAT", "1")
-    _off(monkeypatch)
-    base_rewind, _, _ = _default_turn_two(model, ids, prefix, rewind=True)
-    base_fresh, _, _ = _default_turn_two(model, ids, prefix, rewind=False)
-    noise = _noise(base_rewind[0, -1], base_fresh[0, -1])
-```
-
-Source: `vendor/mac-mlx/mlx_vlm/models/deepseek_v41/test_prefill_cone.py:766`. Unset read: Wrapper/conditional default: see the literal call and consumer below.
-
-```text
-    """
-    model, ids, _ = tiny
-    monkeypatch.setenv("DSV41_QAT", "1")
-    _off(monkeypatch)
-    _, base_rewind, _ = _default_turn_two(model, ids, prefix, rewind=True, decodes=3)
-    _, base_fresh, _ = _default_turn_two(model, ids, prefix, rewind=False, decodes=3)
-
-```
-
-Source: `vendor/mac-mlx/mlx_vlm/models/deepseek_v41/test_prefill_cone.py:794`. Unset read: Wrapper/conditional default: see the literal call and consumer below.
-
-```text
-    model, ids, _ = tiny
-    assert prefix % CHUNK == 0, "the arm's chunk boundaries must line up with the control"
-    monkeypatch.setenv("DSV41_QAT", "1")
-    _off(monkeypatch)
-    control, _ = _control(model, ids, chunk=CHUNK)
-    base, _, _ = _default_turn_two(model, ids, prefix, rewind=True)
-    noise = _noise(base[0, -1], control[0, -1])
-```
-
-Source: `vendor/mac-mlx/mlx_vlm/models/deepseek_v41/test_prefill_cone.py:819`. Unset read: Wrapper/conditional default: see the literal call and consumer below.
-
-```text
-        "this test needs a delta long enough for turn two to cone as well")
-
-    monkeypatch.setenv("DSV41_QAT", "1")
-    _cone_on(monkeypatch)
-    cache = model.make_cache()
-    model(ids[:, :prefix], cache=cache)
-    first_floor = cache[0].trim_floor()
-```
-
-Source: `vendor/mac-mlx/mlx_vlm/models/deepseek_v41/test_prefill_cone.py:843`. Unset read: Wrapper/conditional default: see the literal call and consumer below.
-
-```text
-        "this test needs a delta short enough that the cone covers all of it")
-
-    monkeypatch.setenv("DSV41_QAT", "1")
-    _cone_on(monkeypatch)
-    cache = model.make_cache()
-    model(ids[:, :prefix], cache=cache)
-    model(ids[:, prefix:], cache=cache)
-```
-
-Source: `vendor/mac-mlx/mlx_vlm/models/deepseek_v41/test_prefill_cone.py:861`. Unset read: Wrapper/conditional default: see the literal call and consumer below.
-
-```text
-    """
-    model, ids, _ = tiny
-    monkeypatch.setenv("DSV41_QAT", "1")
-    _off(monkeypatch)
-    _, control_cache = _control(model, ids, chunk=CHUNK)
-    control = [model(ids[:, -1:], cache=control_cache).logits for _ in range(3)]
-    _, wide_cache = _control(model, ids, chunk=WIDE)
-```
-
-Source: `vendor/mac-mlx/mlx_vlm/models/deepseek_v41/test_prefill_cone.py:895`. Unset read: Wrapper/conditional default: see the literal call and consumer below.
-
-```text
-    """
-    model, ids, _ = tiny
-    monkeypatch.setenv("DSV41_QAT", "1")
-    monkeypatch.setenv("DSV41_PREFILL_MEGAKERNEL", "1")
-    _off(monkeypatch)
-    control, _ = _control(model, ids, chunk=CHUNK)
-    wide, _ = _control(model, ids, chunk=WIDE)
-```
-
-Source: `vendor/mac-mlx/mlx_vlm/models/deepseek_v41/test_prefill_cone.py:1062`. Unset read: Wrapper/conditional default: see the literal call and consumer below.
-
-```text
-        "the tiny prompt must still be longer than the widened boundary cone")
-
-    monkeypatch.setenv("DSV41_QAT", "1")
-    control = _cone_run(model, ids, monkeypatch, 1).logits
-    arm = _cone_run(model, ids, monkeypatch, tail).logits
-    mx.eval(control, arm)
-
-```
-
-Source: `vendor/mac-mlx/mlx_vlm/models/deepseek_v41/test_prefill_cone.py:1084`. Unset read: Wrapper/conditional default: see the literal call and consumer below.
-
-```text
-    """
-    model, ids, _ = tiny
-    monkeypatch.setenv("DSV41_QAT", "1")
-    wide = _cone_run(model, ids, monkeypatch, 2 * tail,
-                     return_hidden=True).hidden_states[-1]
-    arm = _cone_run(model, ids, monkeypatch, tail,
-                    return_hidden=True).hidden_states[-1]
-```
-
-Source: `vendor/mac-mlx/mlx_vlm/models/deepseek_v41/test_prefill_cone.py:1107`. Unset read: Wrapper/conditional default: see the literal call and consumer below.
-
-```text
-    """
-    model, ids, _ = tiny
-    monkeypatch.setenv("DSV41_QAT", "1")
-    _off(monkeypatch)
-    control = _hidden_chunked(model, ids, CHUNK)
-    wide = _hidden_chunked(model, ids, WIDE)
-    noise = _noise(control[:, -tail:], wide[:, -tail:])
-```
-
-Source: `vendor/mac-mlx/mlx_vlm/models/deepseek_v41/test_prefill_cone.py:1133`. Unset read: Wrapper/conditional default: see the literal call and consumer below.
-
-```text
-    taps = [config.num_hidden_layers - 3, config.num_hidden_layers - 2,
-            config.num_hidden_layers - 1]
-    monkeypatch.setenv("DSV41_QAT", "1")
-    _off(monkeypatch)
-    control = _taps_chunked(model, ids, CHUNK, taps)
-    wide_chunk = _taps_chunked(model, ids, WIDE, taps)
-
-```
-
-Source: `vendor/mac-mlx/mlx_vlm/models/deepseek_v41/test_speed_merge_mac.py:18`. Unset read: Wrapper/conditional default: see the literal call and consumer below.
-
-```text
-    monkeypatch.setenv("DSV41_S4_BYPASS", "0")
-    monkeypatch.setenv("DSV41_S4_COMPILE_INDEXER", compiled)
-    monkeypatch.setenv("DSV41_QAT", "1")
-    mx.random.seed(41)
-    cfg = tiny_config()
-    indexer = language.Indexer(cfg, 5)
-    rope = language.Attention(5, cfg).rope
-```
-
-### DSV41_S4_BYPASS
-
-Advanced backend control DSV41_S4_BYPASS. Set explicitly only for the selected backend; its literal read and fallback are documented below.
-
-Scope: mac-mlx. Class: advanced.
-
-Source: `vendor/mac-mlx/mlx_vlm/custom_kernels/deepseek_v41/test_index_prefill.py:234`. Unset read: Wrapper/conditional default: see the literal call and consumer below.
-
-```text
-    lang = importlib.import_module("mlx_vlm.models.deepseek_v41.language")
-    monkeypatch.setenv("DSV41_S4_PRECOMPUTE", str(int(precompute)))
-    monkeypatch.setenv("DSV41_S4_BYPASS", "0")
-    monkeypatch.setenv("DSV41_METAL_INDEXER", "0")
-    monkeypatch.setenv("DSV41_S4_COMPILE_INDEXER", "0")
-    # Exercise the production n>=64 gate, including zero-length geometry.
-    monkeypatch.setenv("DSV41_PREFILL_TILED_MIN_N", "64")
-```
-
-Source: `vendor/mac-mlx/mlx_vlm/custom_kernels/deepseek_v41/test_index_prefill.py:291`. Unset read: Wrapper/conditional default: see the literal call and consumer below.
-
-```text
-    monkeypatch.setattr(lang, "_rope", lambda rope, q, pos: q)
-    monkeypatch.setattr(lang, "_PREFILL_MXFP8_STEEL", False)
-    monkeypatch.setenv("DSV41_S4_BYPASS", "0")
-    monkeypatch.setenv("DSV41_METAL_INDEXER", "0")
-    monkeypatch.setenv("DSV41_S4_COMPILE_INDEXER", "0")
-    indexer = Indexer(TextConfig(hidden_size=64, q_lora_rank=64), 2)
-    monkeypatch.setenv("DSV41_PREFILL_TILED_MIN_N", "64")
-```
-
-Source: `vendor/mac-mlx/mlx_vlm/models/deepseek_v41/language.py:617`. Unset read: '1'.
-
-```text
-            shared.candidates, getattr(shared, "candidates_start", None), start_pos)
-
-        if (os.environ.get("DSV41_S4_BYPASS", "1") == "1"
-                and nb <= self.index_topk and all_candidates
-                and (not self.uses_candidates or shared_candidates is None)):
-            # Sorted top-k of the whole row is the identity, including the
-            # causal -1 lanes in prefill. Key publication still happens above us.
-```
-
-Source: `vendor/mac-mlx/mlx_vlm/models/deepseek_v41/test_speed_merge_mac.py:16`. Unset read: Wrapper/conditional default: see the literal call and consumer below.
-
-```text
-def test_s4_scoring_keeps_workspace_bound_and_selected_positions(monkeypatch, compiled):
-    monkeypatch.setenv("DSV41_S4_PRECOMPUTE", "1")
-    monkeypatch.setenv("DSV41_S4_BYPASS", "0")
-    monkeypatch.setenv("DSV41_S4_COMPILE_INDEXER", compiled)
-    monkeypatch.setenv("DSV41_QAT", "1")
-    mx.random.seed(41)
-    cfg = tiny_config()
-```
-
-### DSV41_S4_COMPILE_INDEXER
-
-Advanced backend control DSV41_S4_COMPILE_INDEXER. Set explicitly only for the selected backend; its literal read and fallback are documented below.
-
-Scope: mac-mlx. Class: advanced.
-
-Source: `vendor/mac-mlx/mlx_vlm/custom_kernels/deepseek_v41/test_index_prefill.py:236`. Unset read: Wrapper/conditional default: see the literal call and consumer below.
-
-```text
-    monkeypatch.setenv("DSV41_S4_BYPASS", "0")
-    monkeypatch.setenv("DSV41_METAL_INDEXER", "0")
-    monkeypatch.setenv("DSV41_S4_COMPILE_INDEXER", "0")
-    # Exercise the production n>=64 gate, including zero-length geometry.
-    monkeypatch.setenv("DSV41_PREFILL_TILED_MIN_N", "64")
-    monkeypatch.setattr(lang, "_rope", lambda rope, q, pos: q)
-    monkeypatch.setattr(lang, "_PREFILL_MXFP8_STEEL", False)
-```
-
-Source: `vendor/mac-mlx/mlx_vlm/custom_kernels/deepseek_v41/test_index_prefill.py:293`. Unset read: Wrapper/conditional default: see the literal call and consumer below.
-
-```text
-    monkeypatch.setenv("DSV41_S4_BYPASS", "0")
-    monkeypatch.setenv("DSV41_METAL_INDEXER", "0")
-    monkeypatch.setenv("DSV41_S4_COMPILE_INDEXER", "0")
-    indexer = Indexer(TextConfig(hidden_size=64, q_lora_rank=64), 2)
-    monkeypatch.setenv("DSV41_PREFILL_TILED_MIN_N", "64")
-    for n, enabled in [(64, None), (1, "1"), (16, "1"), (63, "1")]:
-        if enabled is None:
-```
-
-Source: `vendor/mac-mlx/mlx_vlm/models/deepseek_v41/language.py:688`. Unset read: '0'.
-
-```text
-            from ...custom_kernels.deepseek_v41.indexer import index_scores, index_topk
-            score_fn = index_scores
-        elif os.environ.get("DSV41_S4_COMPILE_INDEXER", "0") == "1":
-            if not hasattr(_index_scores, "compiled"):
-                _index_scores.compiled = mx.compile(partial(_index_scores, matmul=True), shapeless=True)
-            score_fn = _index_scores.compiled
-        workspace_mb = int(os.environ.get("DSV41_INDEX_WORKSPACE_MB", "0"))
-```
-
-Source: `vendor/mac-mlx/mlx_vlm/models/deepseek_v41/test_speed_merge_mac.py:17`. Unset read: Wrapper/conditional default: see the literal call and consumer below.
-
-```text
-    monkeypatch.setenv("DSV41_S4_PRECOMPUTE", "1")
-    monkeypatch.setenv("DSV41_S4_BYPASS", "0")
-    monkeypatch.setenv("DSV41_S4_COMPILE_INDEXER", compiled)
-    monkeypatch.setenv("DSV41_QAT", "1")
-    mx.random.seed(41)
-    cfg = tiny_config()
-    indexer = language.Indexer(cfg, 5)
-```
-
-### DSV41_S4_COUNT
-
-Advanced backend control DSV41_S4_COUNT. Set explicitly only for the selected backend; its literal read and fallback are documented below.
-
-Scope: mac-mlx. Class: advanced.
-
-Source: `vendor/mac-mlx/mlx_vlm/models/deepseek_v41/language.py:364`. Unset read: '0'.
-
-```text
-_SPARSE_TABLES = {}
-_S4_COUNTS = {}
-_S4_COUNT_ENABLED = os.environ.get("DSV41_S4_COUNT", "0") == "1"
-
-
-def _s4_count(name, layer=None, amount=1):
-    if _S4_COUNT_ENABLED:
-```
-
-### DSV41_S4_DENSE
-
-Advanced backend control DSV41_S4_DENSE. Set explicitly only for the selected backend; its literal read and fallback are documented below.
-
-Scope: mac-mlx. Class: advanced.
-
-Source: `vendor/mac-mlx/mlx_vlm/models/deepseek_v41/language.py:1623`. Unset read: '0'.
-
-```text
-            # Window-only and shared-index/KV reuse layers do no index work.
-            _prefill_layer_add(self.layer_id, "attn_index_ms", _index_ms)
-        if (os.environ.get("DSV41_S4_DENSE", "0") == "1" and n == 1
-                and self.ratio and end_pos // self.ratio and shared.dense_compressed):
-            out = _dense_decode_attn(q, kv_all, self.attn_sink,
-                                     self.window_size, self.head_dim ** -0.5)
-        else:
-```
-
-### DSV41_S4_PRECOMPUTE
-
-Advanced backend control DSV41_S4_PRECOMPUTE. Set explicitly only for the selected backend; its literal read and fallback are documented below.
-
-Scope: mac-mlx. Class: advanced.
-
-Source: `vendor/mac-mlx/mlx_vlm/custom_kernels/deepseek_v41/test_index_fused.py:410`. Unset read: KeyError unless an earlier assignment supplies the variable.
-
-```text
-    keys = lang.fake_quant_fp4_ue8m0(mx.random.normal((1, nb, 128)).astype(mx.bfloat16))
-    keep = (mx.random.uniform(shape=(1, n, (nb + 7) // 8)) > 0.4) if candidates else None
-    if keep is not None and os.environ["DSV41_S4_PRECOMPUTE"] == "0":
-        keep = mx.repeat(keep, 8, axis=-1)[..., :nb]
-    rope = lang.DeepseekV4RoPE(config.qk_rope_head_dim, config.compress_rope_theta,
-                             dict(config.rope_scaling))
-    mx.eval(x, qr, keys, indexer.parameters(), rope.parameters())
-```
-
-Source: `vendor/mac-mlx/mlx_vlm/custom_kernels/deepseek_v41/test_index_fused.py:430`. Unset read: Wrapper/conditional default: see the literal call and consumer below.
-
-```text
-@pytest.mark.parametrize("source,candidates", [(False, False), (False, True), (True, False)])
-def test_whole_indexer_and_candidate_source(monkeypatch, precompute, source, candidates):
-    monkeypatch.setenv("DSV41_S4_PRECOMPUTE", str(int(precompute)))
-    eager, fused = _model_paths(64, 1031, candidates=candidates, source=source)
-    expected, actual = eager(), fused()
-    mx.eval(*expected, *actual)
-    _same_sets(actual[0], expected[0])
-```
-
-Source: `vendor/mac-mlx/mlx_vlm/custom_kernels/deepseek_v41/test_index_fused.py:445`. Unset read: Wrapper/conditional default: see the literal call and consumer below.
-
-```text
-    and its per-position mask now reaches the kernel instead of being refused.
-    """
-    monkeypatch.setenv("DSV41_S4_PRECOMPUTE", str(int(precompute)))
-    eager, fused = _model_paths(64, 1031, candidates=True)
-    expected = eager()
-    monkeypatch.setenv("DSV41_INDEX_SKIP", "1")
-    prewarm_index_skip(8, precompute)
-```
-
-Source: `vendor/mac-mlx/mlx_vlm/custom_kernels/deepseek_v41/test_index_fused.py:468`. Unset read: Wrapper/conditional default: see the literal call and consumer below.
-
-```text
-    below, exactly at, and above the gate.
-    """
-    monkeypatch.setenv("DSV41_S4_PRECOMPUTE", str(int(precompute)))
-    monkeypatch.setenv("DSV41_INDEX_SKIP", "1")
-    monkeypatch.setenv("DSV41_INDEX_SKIP_MIN_NB", str(min_nb))
-    prewarm_index_skip(8, precompute)
-    masked = []
-```
-
-Source: `vendor/mac-mlx/mlx_vlm/custom_kernels/deepseek_v41/test_index_fused_cpu.py:498`. Unset read: Wrapper/conditional default: see the literal call and consumer below.
-
-```text
-    monkeypatch.setenv("DSV41_INDEX_FUSED", "1")
-    monkeypatch.setenv("DSV41_INDEX_SKIP", skip)
-    monkeypatch.setenv("DSV41_S4_PRECOMPUTE", precompute)
-    # 0 = always skip when the switch is on; this nb is far below the shipped
-    # DSV41_INDEX_SKIP_MIN_NB, which is gated on its own below.
-    monkeypatch.setenv("DSV41_INDEX_SKIP_MIN_NB", "0")
-    indexer.uses_candidates = True
-```
-
-Source: `vendor/mac-mlx/mlx_vlm/custom_kernels/deepseek_v41/test_index_fused_cpu.py:529`. Unset read: Wrapper/conditional default: see the literal call and consumer below.
-
-```text
-    monkeypatch.setenv("DSV41_INDEX_FUSED", "1")
-    monkeypatch.setenv("DSV41_INDEX_SKIP", "1")
-    monkeypatch.setenv("DSV41_S4_PRECOMPUTE", "0")
-    monkeypatch.setenv("DSV41_INDEX_SKIP_MIN_NB", "0")
-    indexer.uses_candidates = True
-    ns["attach"](model, ".")
-    n, nb = 64, 136
-```
-
-Source: `vendor/mac-mlx/mlx_vlm/custom_kernels/deepseek_v41/test_index_fused_cpu.py:572`. Unset read: Wrapper/conditional default: see the literal call and consumer below.
-
-```text
-    monkeypatch.setenv("DSV41_INDEX_FUSED", "1")
-    monkeypatch.setenv("DSV41_INDEX_SKIP", skip)
-    monkeypatch.setenv("DSV41_S4_PRECOMPUTE", precompute)
-    if min_nb is None:
-        monkeypatch.delenv("DSV41_INDEX_SKIP_MIN_NB", raising=False)
-    else:
-        monkeypatch.setenv("DSV41_INDEX_SKIP_MIN_NB", str(min_nb))
-```
-
-Source: `vendor/mac-mlx/mlx_vlm/custom_kernels/deepseek_v41/test_index_fused_cpu.py:640`. Unset read: Wrapper/conditional default: see the literal call and consumer below.
-
-```text
-    monkeypatch.setenv("DSV41_INDEX_FUSED", "1")
-    monkeypatch.setenv("DSV41_INDEX_SKIP", "1")
-    monkeypatch.setenv("DSV41_S4_PRECOMPUTE", "1")
-    monkeypatch.setenv("DSV41_INDEX_SKIP_MIN_NB", "136")
-    indexer.uses_candidates = True
-    ns["attach"](model, ".")
-    capsys.readouterr()
-```
-
-Source: `vendor/mac-mlx/mlx_vlm/custom_kernels/deepseek_v41/test_index_prefill.py:233`. Unset read: Wrapper/conditional default: see the literal call and consumer below.
-
-```text
-def test_indexer_source_and_consumer_hook(monkeypatch, precompute, all_candidates):
-    lang = importlib.import_module("mlx_vlm.models.deepseek_v41.language")
-    monkeypatch.setenv("DSV41_S4_PRECOMPUTE", str(int(precompute)))
-    monkeypatch.setenv("DSV41_S4_BYPASS", "0")
-    monkeypatch.setenv("DSV41_METAL_INDEXER", "0")
-    monkeypatch.setenv("DSV41_S4_COMPILE_INDEXER", "0")
-    # Exercise the production n>=64 gate, including zero-length geometry.
-```
-
-Source: `vendor/mac-mlx/mlx_vlm/models/deepseek_v41/language.py:602`. Unset read: '1'.
-
-```text
-        ratio = self.ratio
-        nb = index_k.shape[1]
-        precompute = os.environ.get("DSV41_S4_PRECOMPUTE", "1") == "1"
-        # This is a compressed-position threshold, NOT an attention threshold:
-        # even when all candidate blocks fit, index_topk still prunes positions.
-        candidate_limit = self.candidate_topk_blocks * self.candidate_block_size
-        all_candidates = nb <= candidate_limit
-```
-
-Source: `vendor/mac-mlx/mlx_vlm/models/deepseek_v41/test_speed_merge_mac.py:15`. Unset read: Wrapper/conditional default: see the literal call and consumer below.
-
-```text
-@pytest.mark.parametrize("compiled", ["0", "1"])
-def test_s4_scoring_keeps_workspace_bound_and_selected_positions(monkeypatch, compiled):
-    monkeypatch.setenv("DSV41_S4_PRECOMPUTE", "1")
-    monkeypatch.setenv("DSV41_S4_BYPASS", "0")
-    monkeypatch.setenv("DSV41_S4_COMPILE_INDEXER", compiled)
-    monkeypatch.setenv("DSV41_QAT", "1")
-    mx.random.seed(41)
-```
-
-### DSV41_SDPA_SPARSE_ATTN
-
-Advanced backend control DSV41_SDPA_SPARSE_ATTN. Set explicitly only for the selected backend; its literal read and fallback are documented below.
-
-Scope: mac-mlx. Class: advanced.
-
-Source: `vendor/mac-mlx/mlx_vlm/custom_kernels/deepseek_v41/test_sparse_attention_prefill.py:203`. Unset read: Wrapper/conditional default: see the literal call and consumer below.
-
-```text
-    # The new flag alone reaches the dispatcher through language.sparse_attn.
-    monkeypatch.delenv("DSV41_METAL_SPARSE_ATTN", raising=False)
-    monkeypatch.delenv("DSV41_SDPA_SPARSE_ATTN", raising=False)
-    assert sparse_attn(*case) is marker
-    q, banks, sink, ids, scale = case
-    decode = (q[:, :1], banks, sink, ids[:, :1], scale)
-    with _flash_switch("0"):
-```
-
-Source: `vendor/mac-mlx/mlx_vlm/custom_kernels/deepseek_v41/test_sparse_attention_prefill.py:242`. Unset read: Wrapper/conditional default: see the literal call and consumer below.
-
-```text
-    monkeypatch.setattr(module, "sparse_attn_prefill", forbidden)
-    monkeypatch.setenv("DSV41_METAL_SPARSE_ATTN", metal)
-    monkeypatch.setenv("DSV41_SDPA_SPARSE_ATTN", "0")
-    if threshold is None:
-        monkeypatch.delenv("DSV41_PREFILL_FLASH_MIN_N", raising=False)
-    else:
-        monkeypatch.setenv("DSV41_PREFILL_FLASH_MIN_N", threshold)
-```
-
-Source: `vendor/mac-mlx/mlx_vlm/custom_kernels/deepseek_v41/validate_sdpa.py:37`. Unset read: Assigned by the runtime; see literal consumer.
-
-```text
-
-def select(path):
-    os.environ['DSV41_SDPA_SPARSE_ATTN'] = '1' if path == 'sdpa' else '0'
-    os.environ['DSV41_METAL_SPARSE_ATTN'] = '1' if path == 'metal' else '0'
-    os.environ['DSV41_COMPILE_SPARSE_ATTN'] = '1' if path == 'compiled' else '0'
-
-
-```
-
-Source: `vendor/mac-mlx/mlx_vlm/custom_kernels/deepseek_v41/validate_sdpa_edges.py:105`. Unset read: Assigned by the runtime; see literal consumer.
-
-```text
-        for sdpa,metal in [('0','0'),('1','1'),('decode','prefill'),('prefill','decode')]:
-            for m in (1,3,257):
-                os.environ['DSV41_SDPA_SPARSE_ATTN'] = sdpa
-                os.environ['DSV41_METAL_SPARSE_ATTN'] = metal
-                counts.update(sdpa=0,metal=0)
-                qq=mx.broadcast_to(q,(1,m,64,512))
-                ii=mx.broadcast_to(idx,(1,m,1))
-```
-
-Source: `vendor/mac-mlx/mlx_vlm/models/deepseek_v41/language.py:314`. Unset read: '0'.
-
-```text
-        if prefill_flash_enabled(q.shape[1]):
-            return sparse_attention(q, kv, attn_sink, topk_idxs, softmax_scale)
-    sdpa = os.environ.get("DSV41_SDPA_SPARSE_ATTN", "0")
-    if sdpa not in ("0", "1", "decode", "prefill"):
-        raise ValueError("DSV41_SDPA_SPARSE_ATTN must be 0, 1, decode, or prefill")
-    metal = os.environ.get("DSV41_METAL_SPARSE_ATTN", "0")
-    if metal not in ("0", "1", "decode", "prefill"):
-```
-
-### DSV41_SLIDING_WINDOW
-
-Advanced backend control DSV41_SLIDING_WINDOW. Set explicitly only for the selected backend; its literal read and fallback are documented below.
-
-Scope: mac-mlx. Class: advanced.
-
-Source: `vendor/mac-mlx/mlx_vlm/models/deepseek_v41/test_kv_selection_width.py:32`. Unset read: Wrapper/conditional default: see the literal call and consumer below.
-
-```text
-def test_kv_widths_default_to_the_checkpoints_own_values(monkeypatch):
-    monkeypatch.delenv("DSV41_INDEX_TOPK", raising=False)
-    monkeypatch.delenv("DSV41_SLIDING_WINDOW", raising=False)
-    cfg = _text_config()
-    assert cfg.index_topk == 512
-    assert cfg.sliding_window == 128
-
-```
-
-Source: `vendor/mac-mlx/mlx_vlm/models/deepseek_v41/test_kv_selection_width.py:40`. Unset read: Wrapper/conditional default: see the literal call and consumer below.
-
-```text
-def test_kv_widths_can_be_widened_by_environment(monkeypatch):
-    monkeypatch.setenv("DSV41_INDEX_TOPK", "4096")
-    monkeypatch.setenv("DSV41_SLIDING_WINDOW", "1024")
-    cfg = _text_config()
-    assert cfg.index_topk == 4096
-    assert cfg.sliding_window == 1024
-
-```
-
-Source: `vendor/mac-mlx/mlx_vlm/models/deepseek_v41/test_kv_selection_width.py:49`. Unset read: Wrapper/conditional default: see the literal call and consumer below.
-
-```text
-    """A preset writing an empty string must not collapse the dense window to nothing."""
-    monkeypatch.setenv("DSV41_INDEX_TOPK", "")
-    monkeypatch.setenv("DSV41_SLIDING_WINDOW", "   ")
-    cfg = _text_config()
-    assert cfg.index_topk == 512
-    assert cfg.sliding_window == 128
-
-```
-
-Source: `vendor/mac-mlx/mlx_vlm/models/deepseek_v41/test_kv_selection_width.py:58`. Unset read: Wrapper/conditional default: see the literal call and consumer below.
-
-```text
-def test_a_nonsense_width_is_refused_rather_than_coerced(monkeypatch, bad):
-    monkeypatch.setenv("DSV41_INDEX_TOPK", bad)
-    monkeypatch.delenv("DSV41_SLIDING_WINDOW", raising=False)
-    with pytest.raises(ValueError, match="DSV41_INDEX_TOPK"):
-        _text_config()
-
-
-```
-
-### DSV41_STEP_LEDGER
-
-Advanced backend control DSV41_STEP_LEDGER. Set explicitly only for the selected backend; its literal read and fallback are documented below.
-
-Scope: mac-mlx. Class: advanced.
-
-Source: `engines/mlx-receiver/mlx_token_stream_server.py:2387`. Unset read: '0'.
-
-```text
-                _swi_active = False
-        with _wired(self.model):
-            _ledger_on = os.environ.get('DSV41_STEP_LEDGER', '0') == '1'
-            _ledger = {'build_ms': 0.0, 'wait_ms': 0.0, 'emit_ms': 0.0, 'iter_ms': 0.0, 'n': 0}
-            if dspark_runtime is not None:
-                dspark_tokens = dspark_runtime.tokens(cache, first_id, max_tokens)
-                try:
-```
-
-Source: `engines/mlx-receiver/mlx_token_stream_server.py:2870`. Unset read: '0'.
-
-```text
-        decode_dt = time.time() - decode_t0
-        decode_tok_s = tokens_generated / max(decode_dt, 1e-09)
-        if os.environ.get('DSV41_STEP_LEDGER', '0') == '1':
-            try:
-                _lg = locals().get('_ledger') or {}
-                _n = max(1, int(_lg.get('n', 0)))
-                _parts = ['tokens=%d' % _lg.get('n', 0)]
-```
-
-Source: `vendor/mac-mlx/mlx_vlm/models/deepseek_v41/engram.py:51`. Unset read: '0'.
-
-```text
-
-# Phase 0 of the v41 port (2026-09-15): host milliseconds spent fetching Engram rows per decode step.
-_LEDGER_ON = os.environ.get("DSV41_STEP_LEDGER", "0") == "1"
-LEDGER = {"engram_host_ms": 0.0, "engram_calls": 0}
-
-DEAD = -1  # a position that takes no part in an n-gram (an image span)
-ROW_BYTES = 256 + 8  # fp8 row + e8m0 scales
-```
-
-Source: `vendor/mac-mlx/mlx_vlm/models/deepseek_v41/language.py:68`. Unset read: '0'.
-
-```text
-# the host; DSV41_STEP_LEDGER_CUTS=1 additionally evaluates after every layer of a decode step and records
-# per-layer GPU ms (attribution only: it serialises the N+1 pipeline).
-_LEDGER_ON = os.environ.get("DSV41_STEP_LEDGER", "0") == "1"
-_LEDGER_CUTS = _LEDGER_ON and os.environ.get("DSV41_STEP_LEDGER_CUTS", "0") == "1"
-# v41 port lever 1 (2026-09-15): intra-step overlap for decode steps. The ledger showed the DSV4.1
-# step fully serial -- the host builds all 40 layers (with two 3-6 ms Engram memmap fetches inline)
-# and only then does the GPU start. With DSV41_STEP_OVERLAP=1: the rows of every Engram layer after
-```
-
-### DSV41_STEP_LEDGER_CUTS
-
-Advanced backend control DSV41_STEP_LEDGER_CUTS. Set explicitly only for the selected backend; its literal read and fallback are documented below.
-
-Scope: mac-mlx. Class: advanced.
-
-Source: `vendor/mac-mlx/mlx_vlm/models/deepseek_v41/language.py:69`. Unset read: '0'.
-
-```text
-# per-layer GPU ms (attribution only: it serialises the N+1 pipeline).
-_LEDGER_ON = os.environ.get("DSV41_STEP_LEDGER", "0") == "1"
-_LEDGER_CUTS = _LEDGER_ON and os.environ.get("DSV41_STEP_LEDGER_CUTS", "0") == "1"
-# v41 port lever 1 (2026-09-15): intra-step overlap for decode steps. The ledger showed the DSV4.1
-# step fully serial -- the host builds all 40 layers (with two 3-6 ms Engram memmap fetches inline)
-# and only then does the GPU start. With DSV41_STEP_OVERLAP=1: the rows of every Engram layer after
-# the first are fetched on a worker thread as soon as the step's hashes exist, and an async_eval is
-```
-
-### DSV41_STEP_OVERLAP
-
-Advanced backend control DSV41_STEP_OVERLAP. Set explicitly only for the selected backend; its literal read and fallback are documented below.
-
-Scope: mac-mlx. Class: advanced.
-
-Source: `vendor/mac-mlx/mlx_vlm/models/deepseek_v41/language.py:76`. Unset read: '0'.
-
-```text
-# issued right before the second Engram layer so the GPU runs layers 0..13 while the host finishes
-# the fetch and builds 14..39. Numerics are untouched (the same ops in the same order).
-_STEP_OVERLAP = os.environ.get("DSV41_STEP_OVERLAP", "0") == "1"
-# Prefill too (2026-09-15 evening): a 512-token chunk fetches 12,288 Engram rows per Engram layer on the
-# host; with this switch layer 14's fetch runs on the worker while the GPU has layers 0..13.
-_STEP_OVERLAP_PREFILL = _STEP_OVERLAP and os.environ.get("DSV41_STEP_OVERLAP_PREFILL", "0") == "1"
-# v41 port lever 2a (2026-09-15): the promoted fp32 decode weights are half of what a token reads
-```
-
-### DSV41_STEP_OVERLAP_PREFILL
-
-Advanced backend control DSV41_STEP_OVERLAP_PREFILL. Set explicitly only for the selected backend; its literal read and fallback are documented below.
-
-Scope: mac-mlx. Class: advanced.
-
-Source: `vendor/mac-mlx/mlx_vlm/models/deepseek_v41/language.py:79`. Unset read: '0'.
-
-```text
-# Prefill too (2026-09-15 evening): a 512-token chunk fetches 12,288 Engram rows per Engram layer on the
-# host; with this switch layer 14's fetch runs on the worker while the GPU has layers 0..13.
-_STEP_OVERLAP_PREFILL = _STEP_OVERLAP and os.environ.get("DSV41_STEP_OVERLAP_PREFILL", "0") == "1"
-# v41 port lever 2a (2026-09-15): the promoted fp32 decode weights are half of what a token reads
-# (wo_a 134 MB x 40 layers + lm_head 2.65 GB of ~16 GB). DSV41_WO_A_BF16=1 contracts the attention
-# output in bf16 (fp32 accumulation inside the GEMM; wo_b consumes bf16 anyway) from a bf16 weight;
-# DSV41_HEAD_BF16=1 keeps the head bf16 and needs DSV41_OMLX_HEAD=1 for fp32 logits (checked at
-```
-
-### DSV41_TEST_FFN_DIM
-
-Advanced backend control DSV41_TEST_FFN_DIM. Set explicitly only for the selected backend; its literal read and fallback are documented below.
-
-Scope: mac-mlx. Class: advanced.
-
-Source: `vendor/mac-mlx/mlx_vlm/models/deepseek_v41/test_ffn_down_bf16.py:44`. Unset read: '256'.
-
-```text
-    monkeypatch.setattr(lang, "_PREFILL_MXFP8_STEEL", False)
-    monkeypatch.setattr(lang, "_FFN_DOWN_BF16_ENGAGED", False)
-    dim = int(os.environ.get("DSV41_TEST_FFN_DIM", "256"))
-    inter = int(os.environ.get("DSV41_TEST_FFN_INTER", "256"))
-    experts = int(os.environ.get("DSV41_TEST_FFN_EXPERTS", "32"))
-    args = TextConfig(hidden_size=dim, moe_intermediate_size=inter,
-                      n_routed_experts=experts, num_experts_per_tok=6)
-```
-
-Source: `vendor/mac-mlx/mlx_vlm/models/deepseek_v41/test_ffn_expert_pad.py:43`. Unset read: '256'.
-
-```text
-    if not mx.metal.is_available():
-        pytest.skip("Requires Mac Metal")
-    dim = int(os.environ.get("DSV41_TEST_FFN_DIM", "256"))
-    inter = int(os.environ.get("DSV41_TEST_FFN_INTER", "256"))
-    experts = int(os.environ.get("DSV41_TEST_FFN_EXPERTS", "384"))
-    assert experts >= 6
-    routes = _zipf_routing(experts)
-```
-
-### DSV41_TEST_FFN_EXPERTS
-
-Advanced backend control DSV41_TEST_FFN_EXPERTS. Set explicitly only for the selected backend; its literal read and fallback are documented below.
-
-Scope: mac-mlx. Class: advanced.
-
-Source: `vendor/mac-mlx/mlx_vlm/models/deepseek_v41/test_ffn_down_bf16.py:46`. Unset read: '32'.
-
-```text
-    dim = int(os.environ.get("DSV41_TEST_FFN_DIM", "256"))
-    inter = int(os.environ.get("DSV41_TEST_FFN_INTER", "256"))
-    experts = int(os.environ.get("DSV41_TEST_FFN_EXPERTS", "32"))
-    args = TextConfig(hidden_size=dim, moe_intermediate_size=inter,
-                      n_routed_experts=experts, num_experts_per_tok=6)
-    mx.random.seed(41)
-    moe = lang.MoE(args)
-```
-
-Source: `vendor/mac-mlx/mlx_vlm/models/deepseek_v41/test_ffn_expert_pad.py:45`. Unset read: '384'.
-
-```text
-    dim = int(os.environ.get("DSV41_TEST_FFN_DIM", "256"))
-    inter = int(os.environ.get("DSV41_TEST_FFN_INTER", "256"))
-    experts = int(os.environ.get("DSV41_TEST_FFN_EXPERTS", "384"))
-    assert experts >= 6
-    routes = _zipf_routing(experts)
-    assert all(len(set(row)) == 6 for row in routes)
-    counts = np.bincount(routes.ravel(), minlength=experts)
-```
-
-### DSV41_TEST_FFN_INTER
-
-Advanced backend control DSV41_TEST_FFN_INTER. Set explicitly only for the selected backend; its literal read and fallback are documented below.
-
-Scope: mac-mlx. Class: advanced.
-
-Source: `vendor/mac-mlx/mlx_vlm/models/deepseek_v41/test_ffn_down_bf16.py:45`. Unset read: '256'.
-
-```text
-    monkeypatch.setattr(lang, "_FFN_DOWN_BF16_ENGAGED", False)
-    dim = int(os.environ.get("DSV41_TEST_FFN_DIM", "256"))
-    inter = int(os.environ.get("DSV41_TEST_FFN_INTER", "256"))
-    experts = int(os.environ.get("DSV41_TEST_FFN_EXPERTS", "32"))
-    args = TextConfig(hidden_size=dim, moe_intermediate_size=inter,
-                      n_routed_experts=experts, num_experts_per_tok=6)
-    mx.random.seed(41)
-```
-
-Source: `vendor/mac-mlx/mlx_vlm/models/deepseek_v41/test_ffn_expert_pad.py:44`. Unset read: '256'.
-
-```text
-        pytest.skip("Requires Mac Metal")
-    dim = int(os.environ.get("DSV41_TEST_FFN_DIM", "256"))
-    inter = int(os.environ.get("DSV41_TEST_FFN_INTER", "256"))
-    experts = int(os.environ.get("DSV41_TEST_FFN_EXPERTS", "384"))
-    assert experts >= 6
-    routes = _zipf_routing(experts)
-    assert all(len(set(row)) == 6 for row in routes)
-```
-
-### DSV41_WO_A_BF16
-
-Advanced backend control DSV41_WO_A_BF16. Set explicitly only for the selected backend; its literal read and fallback are documented below.
-
-Scope: mac-mlx. Class: advanced.
-
-Source: `engines/mlx-receiver/mlx_token_stream_server.py:164`. Unset read: '0'.
-
-```text
-        parameter_bytes += sum((2 * prod(shape) for _, shape in expected_vision_parameters(config.vision_config, config.text_config.hidden_size).values()))
-    if os.environ.get('DSV41_PROMOTE_DECODE_WEIGHTS', '0') == '1':
-        parameter_bytes += sum(((4 - sizes[dtype]) * prod(shape) for name, (dtype, shape) in specs.items() if name.endswith('.wo_a.weight') and os.environ.get('DSV41_WO_A_BF16', '0') != '1' or (name == 'lm_head.weight' and os.environ.get('DSV41_HEAD_BF16', '0') != '1')))
-    available, breakdown = _dsv41_wait_for_memory(source, parameter_bytes, _read_vm_stat, timeout_s=float(os.environ.get('DSV41_MEMORY_GUARD_WAIT_S', '90')))
-    required = _dsv41_memory_guard(available, source, parameter_bytes)
-    print(f"[DSV41] memory available={available / (1 << 30):.2f} GiB resident_required={required / (1 << 30):.0f} GiB headroom=20 GiB source={source} QAT={os.environ.get('DSV41_QAT', '1')} [{_dsv41_breakdown_text(breakdown)}]", file=sys.stderr, flush=True)
-    model_dir = Path(model_dir)
-```
-
-Source: `vendor/mac-mlx/mlx_vlm/models/deepseek_v41/language.py:85`. Unset read: '0'.
-
-```text
-# DSV41_HEAD_BF16=1 keeps the head bf16 and needs DSV41_OMLX_HEAD=1 for fp32 logits (checked at
-# attach time, loudly). Both off: byte-for-byte the previous path.
-_WO_A_BF16 = os.environ.get("DSV41_WO_A_BF16", "0") == "1"
-_HEAD_BF16 = os.environ.get("DSV41_HEAD_BF16", "0") == "1"
-_PREFETCH_POOL = None
-
-
-```
-
-### DSV4_EXPECTED_WORLD_SIZE
-
-Advanced backend control DSV4_EXPECTED_WORLD_SIZE. Set explicitly only for the selected backend; its literal read and fallback are documented below.
-
-Scope: mac-mlx. Class: advanced.
-
-Source: `vendor/mac-mlx/mlx_vlm/server/cli.py:237`. Unset read: '0'.
-
-```text
-    # handshake confirms BOTH ranks are live past init() before the heavy materialize.
-    try:
-        _expected_world = int(os.environ.get("DSV4_EXPECTED_WORLD_SIZE", "0") or "0")
-    except ValueError:
-        _expected_world = 0
-    if _expected_world > 1:
-        if group.size() != _expected_world:
-```
-
-### KV_BITS
-
-Advanced backend control KV_BITS. Set explicitly only for the selected backend; its literal read and fallback are documented below.
-
-Scope: mac-mlx. Class: advanced.
-
-Source: `vendor/mac-mlx/mlx_vlm/server/app.py:387`. Unset read: None.
-
-```text
-        logger.info("Pre-loading model: %s", model_path)
-        get_cached_model(model_path, adapter_path)
-        kv_bits = os.environ.get("KV_BITS")
-        kv_scheme = os.environ.get("KV_QUANT_SCHEME", "uniform")
-        if kv_bits:
-            logger.info("KV cache quantization: bits=%s scheme=%s", kv_bits, kv_scheme)
-        logger.info("Model ready, continuous batching enabled.")
-```
-
-Source: `vendor/mac-mlx/mlx_vlm/server/cli.py:203`. Unset read: Assigned by the runtime; see literal consumer.
-
-```text
-    os.environ["MLX_VLM_ENABLE_THINKING"] = "1" if args.enable_thinking else "0"
-    if args.kv_bits is not None:
-        os.environ["KV_BITS"] = str(args.kv_bits)
-    os.environ["KV_GROUP_SIZE"] = str(args.kv_group_size)
-    os.environ["KV_QUANT_SCHEME"] = args.kv_quant_scheme
-    if args.max_kv_size is not None:
-        os.environ["MAX_KV_SIZE"] = str(args.max_kv_size)
-```
-
-Source: `vendor/mac-mlx/mlx_vlm/server/generation.py:218`. Unset read: 0.
-
-```text
-
-def get_quantized_kv_bits(model: str):
-    kv_bits = float(os.environ.get("KV_BITS", 0))
-    if kv_bits == 0:
-        return None
-    if "qat" in model:
-        print(f"Model {model} is quantization aware, KV cache will not be quantized.")
-```
-
-### KV_GROUP_SIZE
-
-Advanced backend control KV_GROUP_SIZE. Set explicitly only for the selected backend; its literal read and fallback are documented below.
-
-Scope: mac-mlx. Class: advanced.
-
-Source: `vendor/mac-mlx/mlx_vlm/server/cli.py:204`. Unset read: Assigned by the runtime; see literal consumer.
-
-```text
-    if args.kv_bits is not None:
-        os.environ["KV_BITS"] = str(args.kv_bits)
-    os.environ["KV_GROUP_SIZE"] = str(args.kv_group_size)
-    os.environ["KV_QUANT_SCHEME"] = args.kv_quant_scheme
-    if args.max_kv_size is not None:
-        os.environ["MAX_KV_SIZE"] = str(args.max_kv_size)
-    os.environ["QUANTIZED_KV_START"] = str(args.quantized_kv_start)
-```
-
-Source: `vendor/mac-mlx/mlx_vlm/server/generation.py:228`. Unset read: DEFAULT_KV_GROUP_SIZE.
-
-```text
-
-def get_kv_group_size():
-    return int(os.environ.get("KV_GROUP_SIZE", DEFAULT_KV_GROUP_SIZE))
-
-
-def get_kv_quant_scheme():
-    return os.environ.get("KV_QUANT_SCHEME", DEFAULT_KV_QUANT_SCHEME)
-```
-
-### KV_QUANT_SCHEME
-
-Advanced backend control KV_QUANT_SCHEME. Set explicitly only for the selected backend; its literal read and fallback are documented below.
-
-Scope: mac-mlx. Class: advanced.
-
-Source: `vendor/mac-mlx/mlx_vlm/server/app.py:388`. Unset read: 'uniform'.
-
-```text
-        get_cached_model(model_path, adapter_path)
-        kv_bits = os.environ.get("KV_BITS")
-        kv_scheme = os.environ.get("KV_QUANT_SCHEME", "uniform")
-        if kv_bits:
-            logger.info("KV cache quantization: bits=%s scheme=%s", kv_bits, kv_scheme)
-        logger.info("Model ready, continuous batching enabled.")
-    yield
-```
-
-Source: `vendor/mac-mlx/mlx_vlm/server/cli.py:205`. Unset read: Assigned by the runtime; see literal consumer.
-
-```text
-        os.environ["KV_BITS"] = str(args.kv_bits)
-    os.environ["KV_GROUP_SIZE"] = str(args.kv_group_size)
-    os.environ["KV_QUANT_SCHEME"] = args.kv_quant_scheme
-    if args.max_kv_size is not None:
-        os.environ["MAX_KV_SIZE"] = str(args.max_kv_size)
-    os.environ["QUANTIZED_KV_START"] = str(args.quantized_kv_start)
-    if args.top_logprobs_k is not None:
-```
-
-Source: `vendor/mac-mlx/mlx_vlm/server/generation.py:232`. Unset read: DEFAULT_KV_QUANT_SCHEME.
-
-```text
-
-def get_kv_quant_scheme():
-    return os.environ.get("KV_QUANT_SCHEME", DEFAULT_KV_QUANT_SCHEME)
-
-
-def get_max_kv_size(model: str):
-    max_kv_tokens = int(os.environ.get("MAX_KV_SIZE", 0))
-```
-
-### LLAMA_FORCE_MLA_STRATEGY_A
-
-Advanced backend control LLAMA_FORCE_MLA_STRATEGY_A. Set explicitly only for the selected backend; its literal read and fallback are documented below.
-
-Scope: mac-llama. Class: advanced.
-
-Source: `engines/streaming-llama/prefill_llama.cpp/tools/decode-receiver/main.cpp:2688`. Unset read: NULL from getenv; the literal consumer below supplies any fallback.
-
-```text
-    const bool is_iswa = (llama_model_n_swa(model) > 0);
-    const bool is_hybrid = llama_model_is_hybrid(model);
-    const char * force_mla_strategy_a_env = std::getenv("LLAMA_FORCE_MLA_STRATEGY_A");
-    const bool force_mla_strategy_a =
-        force_mla_strategy_a_env && force_mla_strategy_a_env[0] != '\0' && force_mla_strategy_a_env[0] != '0';
-    bool use_strategy_b = (!force_mla_strategy_a && is_mla) || is_iswa || is_hybrid;
-    if (sample_from_prefill_logits) {
-```
-
-### LLAMA_HANDOFF_PREFIX_BACKOFF
-
-Advanced backend control LLAMA_HANDOFF_PREFIX_BACKOFF. Set explicitly only for the selected backend; its literal read and fallback are documented below.
-
-Scope: mac-llama. Class: advanced.
-
-Source: `engines/streaming-llama/prefill_llama.cpp/tools/decode-receiver/main.cpp:1378`. Unset read: NULL from getenv; the literal consumer below supplies any fallback.
-
-```text
-            }
-        }
-        if (const char * env = std::getenv("LLAMA_HANDOFF_PREFIX_BACKOFF")) {
-            const int parsed = std::atoi(env);
-            if (parsed > 0) {
-                const uint32_t backoff = (uint32_t) parsed;
-                const uint32_t adjusted = logical_prefix > backoff ? (logical_prefix - backoff) : 0u;
-```
-
-### LLAMA_HANDOFF_SAMPLE_PREFILL_LOGITS
-
-Advanced backend control LLAMA_HANDOFF_SAMPLE_PREFILL_LOGITS. Set explicitly only for the selected backend; its literal read and fallback are documented below.
-
-Scope: mac-llama. Class: advanced.
-
-Source: `engines/streaming-llama/prefill_llama.cpp/tools/decode-receiver/main.cpp:2651`. Unset read: NULL from getenv; the literal consumer below supplies any fallback.
-
-```text
-    }
-    common_sampler_ptr smpl(common_sampler_init(model, sparams));
-    const char * sample_prefill_logits_env = std::getenv("LLAMA_HANDOFF_SAMPLE_PREFILL_LOGITS");
-    const bool sample_from_prefill_logits =
-        prompt_applied &&
-        sample_prefill_logits_env &&
-        sample_prefill_logits_env[0] != '\0' &&
-```
-
-### LLAMA_HANDOFF_SUFFIX_BATCH
-
-Advanced backend control LLAMA_HANDOFF_SUFFIX_BATCH. Set explicitly only for the selected backend; its literal read and fallback are documented below.
-
-Scope: mac-llama. Class: advanced.
-
-Source: `engines/streaming-llama/prefill_llama.cpp/tools/decode-receiver/main.cpp:1247`. Unset read: NULL from getenv; the literal consumer below supplies any fallback.
-
-```text
-    // 1243-token suffix, costing ~25 s of avoidable Mac prefill latency.
-    int n_batch = std::max(1, (int) llama_n_batch(ctx));
-    if (const char * env = std::getenv("LLAMA_HANDOFF_SUFFIX_BATCH")) {
-        const int parsed = std::atoi(env);
-        if (parsed > 0) {
-            n_batch = parsed;
-        }
-```
-
-Source: `engines/streaming-llama/prefill_llama.cpp/tools/decode-receiver/main.cpp:1477`. Unset read: NULL from getenv; the literal consumer below supplies any fallback.
-
-```text
-        // round-trip count for typical suffix sizes.
-        int n_batch = std::max(1, (int) llama_n_batch(ctx));
-        if (const char * env = std::getenv("LLAMA_HANDOFF_SUFFIX_BATCH")) {
-            const int parsed = std::atoi(env);
-            if (parsed > 0) {
-                n_batch = parsed;
-            }
-```
-
-Source: `engines/streaming-llama/prefill_llama.cpp/tools/decode-receiver/main.cpp:1660`. Unset read: NULL from getenv; the literal consumer below supplies any fallback.
-
-```text
-        // unnecessary round-trip count for typical suffix sizes.
-        int n_batch = std::max(1, (int) llama_n_batch(ctx));
-        if (const char * env = std::getenv("LLAMA_HANDOFF_SUFFIX_BATCH")) {
-            const int parsed = std::atoi(env);
-            if (parsed > 0) {
-                n_batch = parsed;
-            }
-```
-
-### LLAMA_MLX_ALLOW_NO_TAIL
-
-Advanced backend control LLAMA_MLX_ALLOW_NO_TAIL. Set explicitly only for the selected backend; its literal read and fallback are documented below.
-
-Scope: mac-mlx. Class: advanced.
-
-Source: `engines/mlx-receiver/mlx_token_stream_server.py:1721`. Unset read: '0'.
-
-```text
-            _safe_inject_cells = 1000000
-            _max_safe_tail = int(os.environ.get('LLAMA_MLX_MAX_SAFE_TAIL', '2048'))
-            _allow_no_tail = os.environ.get('LLAMA_MLX_ALLOW_NO_TAIL', '0') not in ('', '0')
-            _np = len(prompt_token_ids)
-            _bypass_reason = None
-            if not _enable_streaming:
-                _bypass_reason = 'default-disabled (set LLAMA_MLX_ENABLE_STREAMING_INJECT=1 to opt in)'
-```
-
-### LLAMA_MLX_CACHE_LIMIT_GB
-
-Advanced backend control LLAMA_MLX_CACHE_LIMIT_GB. Set explicitly only for the selected backend; its literal read and fallback are documented below.
-
-Scope: mac-mlx. Class: advanced.
-
-Source: `engines/mlx-receiver/mlx_token_stream_server.py:3282`. Unset read: '24'.
-
-```text
-        del _warmup_cache, _warmup_lang, _warmup_ids, _warmup_out, _warmup_logits
-        mx.clear_cache()
-        _lim_gb = float(os.environ.get('LLAMA_MLX_CACHE_LIMIT_GB', '24') or 24)
-        try:
-            mx.set_cache_limit(int(_lim_gb * (1 << 30)))
-            sys.stderr.write(f"[mlx-server] Metal buffer pool bounded at {_lim_gb:g} GB (per-request clear {('ON' if _clear_cache_per_request() else 'off')})\n")
-            sys.stderr.flush()
-```
-
-### LLAMA_MLX_CLEAR_CACHE_PER_REQUEST
-
-Advanced backend control LLAMA_MLX_CLEAR_CACHE_PER_REQUEST. Set explicitly only for the selected backend; its literal read and fallback are documented below.
-
-Scope: mac-mlx. Class: advanced.
-
-Source: `engines/mlx-receiver/mlx_token_stream_server.py:505`. Unset read: ''.
-
-```text
-
-def _clear_cache_per_request() -> bool:
-    return os.environ.get('LLAMA_MLX_CLEAR_CACHE_PER_REQUEST', '') not in ('', '0')
-
-def _kva_prompt_count_hash(kva_ref) -> Tuple[int, int]:
-    close_after = False
-    if isinstance(kva_ref, (bytes, bytearray, memoryview)):
-```
-
-### LLAMA_MLX_ENABLE_STREAMING_INJECT
-
-Advanced backend control LLAMA_MLX_ENABLE_STREAMING_INJECT. Set explicitly only for the selected backend; its literal read and fallback are documented below.
-
-Scope: mac-mlx. Class: advanced.
-
-Source: `engines/mlx-receiver/mlx_token_stream_server.py:1718`. Unset read: '1'.
-
-```text
-                _img_positions = []
-        if kv_state_bytes:
-            _enable_streaming = os.environ.get('LLAMA_MLX_ENABLE_STREAMING_INJECT', '1') not in ('', '0')
-            _safe_inject_cells = 1000000
-            _max_safe_tail = int(os.environ.get('LLAMA_MLX_MAX_SAFE_TAIL', '2048'))
-            _allow_no_tail = os.environ.get('LLAMA_MLX_ALLOW_NO_TAIL', '0') not in ('', '0')
-            _np = len(prompt_token_ids)
-```
-
-### LLAMA_MLX_ENGRAM_CACHE_FRACTION
-
-Advanced backend control LLAMA_MLX_ENGRAM_CACHE_FRACTION. Set explicitly only for the selected backend; its literal read and fallback are documented below.
-
-Scope: mac-mlx. Class: advanced.
-
-Source: `vendor/mac-mlx/mlx_vlm/models/deepseek_v41/engram.py:834`. Unset read: str(DEFAULT_CACHE_FRACTION).
-
-```text
-        raise ValueError("LLAMA_MLX_ENGRAM_CACHE_GB must be finite and nonnegative")
-    if fraction is None:
-        fraction = float(os.environ.get("LLAMA_MLX_ENGRAM_CACHE_FRACTION",
-                                        str(DEFAULT_CACHE_FRACTION)) or DEFAULT_CACHE_FRACTION)
-    if not 0 <= fraction <= 1:
-        raise ValueError("LLAMA_MLX_ENGRAM_CACHE_FRACTION must be in [0, 1]")
-    if margin_gb is None:
-```
-
-Source: `vendor/mac-mlx/mlx_vlm/models/deepseek_v41/engram.py:988`. Unset read: str(DEFAULT_CACHE_FRACTION).
-
-```text
-                "budget_mode": "auto" if cache_budget_bytes is None else "per_table",
-                "budget_decision": decision, "maps_bytes": self.num_embeddings * 4,
-                "cache_fraction": float(os.environ.get("LLAMA_MLX_ENGRAM_CACHE_FRACTION",
-                                                       str(DEFAULT_CACHE_FRACTION))),
-                "cache_margin_gb": _env_float("LLAMA_MLX_ENGRAM_CACHE_MARGIN_GB", DEFAULT_CACHE_MARGIN_GB),
-                "cache_reserve_gb": _env_float("LLAMA_MLX_ENGRAM_CACHE_RESERVE_GB", DEFAULT_CACHE_RESERVE_GB),
-                "cache_cap_gb": os.environ.get("LLAMA_MLX_ENGRAM_CACHE_GB")}
-```
-
-### LLAMA_MLX_ENGRAM_CACHE_GB
-
-Advanced backend control LLAMA_MLX_ENGRAM_CACHE_GB. Set explicitly only for the selected backend; its literal read and fallback are documented below.
-
-Scope: mac-mlx. Class: advanced.
-
-Source: `vendor/mac-mlx/mlx_vlm/models/deepseek_v41/engram.py:829`. Unset read: ''.
-
-```text
-    fraction near 1.0 from promising memory the box does not have; the wired term is what stops it
-    from promising memory Metal will not map."""
-    env = os.environ.get("LLAMA_MLX_ENGRAM_CACHE_GB", "").strip()
-    cap = float(env) if env else None
-    if cap is not None and (not np.isfinite(cap) or cap < 0):
-        raise ValueError("LLAMA_MLX_ENGRAM_CACHE_GB must be finite and nonnegative")
-    if fraction is None:
-```
-
-Source: `vendor/mac-mlx/mlx_vlm/models/deepseek_v41/engram.py:992`. Unset read: None.
-
-```text
-                "cache_margin_gb": _env_float("LLAMA_MLX_ENGRAM_CACHE_MARGIN_GB", DEFAULT_CACHE_MARGIN_GB),
-                "cache_reserve_gb": _env_float("LLAMA_MLX_ENGRAM_CACHE_RESERVE_GB", DEFAULT_CACHE_RESERVE_GB),
-                "cache_cap_gb": os.environ.get("LLAMA_MLX_ENGRAM_CACHE_GB")}
-
-    def warm(self) -> int:
-        count = self.rows_cache.warm() if self.rows_cache is not None else 0
-        if self._report and self.rows_cache is not None:
-```
-
-### LLAMA_MLX_ENGRAM_CACHE_MARGIN_GB
-
-Advanced backend control LLAMA_MLX_ENGRAM_CACHE_MARGIN_GB. Set explicitly only for the selected backend; its literal read and fallback are documented below.
-
-Scope: mac-mlx. Class: advanced.
-
-Source: `vendor/mac-mlx/mlx_vlm/models/deepseek_v41/engram.py:839`. Unset read: Wrapper/conditional default: see the literal call and consumer below.
-
-```text
-        raise ValueError("LLAMA_MLX_ENGRAM_CACHE_FRACTION must be in [0, 1]")
-    if margin_gb is None:
-        margin_gb = _env_float("LLAMA_MLX_ENGRAM_CACHE_MARGIN_GB", DEFAULT_CACHE_MARGIN_GB)
-    if reserve_gb is None:
-        reserve_gb = _env_float("LLAMA_MLX_ENGRAM_CACHE_RESERVE_GB", DEFAULT_CACHE_RESERVE_GB)
-    limit = 0
-    try:
-```
-
-Source: `vendor/mac-mlx/mlx_vlm/models/deepseek_v41/engram.py:990`. Unset read: Wrapper/conditional default: see the literal call and consumer below.
-
-```text
-                "cache_fraction": float(os.environ.get("LLAMA_MLX_ENGRAM_CACHE_FRACTION",
-                                                       str(DEFAULT_CACHE_FRACTION))),
-                "cache_margin_gb": _env_float("LLAMA_MLX_ENGRAM_CACHE_MARGIN_GB", DEFAULT_CACHE_MARGIN_GB),
-                "cache_reserve_gb": _env_float("LLAMA_MLX_ENGRAM_CACHE_RESERVE_GB", DEFAULT_CACHE_RESERVE_GB),
-                "cache_cap_gb": os.environ.get("LLAMA_MLX_ENGRAM_CACHE_GB")}
-
-    def warm(self) -> int:
-```
-
-### LLAMA_MLX_ENGRAM_CACHE_QUIET
-
-Advanced backend control LLAMA_MLX_ENGRAM_CACHE_QUIET. Set explicitly only for the selected backend; its literal read and fallback are documented below.
-
-Scope: mac-mlx. Class: advanced.
-
-Source: `vendor/mac-mlx/mlx_vlm/models/deepseek_v41/engram.py:909`. Unset read: ''.
-
-```text
-    """Total model cache budget, printing the decision line unless LLAMA_MLX_ENGRAM_CACHE_QUIET."""
-    decision = cache_budget_decision(margin_gb, reserve_gb)
-    if os.environ.get("LLAMA_MLX_ENGRAM_CACHE_QUIET", "").strip() not in ("1", "true", "yes"):
-        print(format_budget_decision(decision), flush=True)
-    return decision["budget_bytes"]
-
-
-```
-
-Source: `vendor/mac-mlx/mlx_vlm/models/deepseek_v41/engram.py:976`. Unset read: ''.
-
-```text
-            if cache_budget_bytes is None:
-                decision = cache_budget_decision()
-                if os.environ.get("LLAMA_MLX_ENGRAM_CACHE_QUIET", "").strip() not in ("1", "true", "yes"):
-                    print(format_budget_decision(decision), flush=True)
-                total = decision["budget_bytes"]
-                budget = total // count
-            else:
-```
-
-### LLAMA_MLX_ENGRAM_CACHE_RESERVE_GB
-
-Advanced backend control LLAMA_MLX_ENGRAM_CACHE_RESERVE_GB. Set explicitly only for the selected backend; its literal read and fallback are documented below.
-
-Scope: mac-mlx. Class: advanced.
-
-Source: `vendor/mac-mlx/mlx_vlm/models/deepseek_v41/engram.py:841`. Unset read: Wrapper/conditional default: see the literal call and consumer below.
-
-```text
-        margin_gb = _env_float("LLAMA_MLX_ENGRAM_CACHE_MARGIN_GB", DEFAULT_CACHE_MARGIN_GB)
-    if reserve_gb is None:
-        reserve_gb = _env_float("LLAMA_MLX_ENGRAM_CACHE_RESERVE_GB", DEFAULT_CACHE_RESERVE_GB)
-    limit = 0
-    try:
-        limit = _sysctl_int("iogpu.wired_limit_mb") * 1024 * 1024
-    except Exception:  # noqa: BLE001
-```
-
-Source: `vendor/mac-mlx/mlx_vlm/models/deepseek_v41/engram.py:991`. Unset read: Wrapper/conditional default: see the literal call and consumer below.
-
-```text
-                                                       str(DEFAULT_CACHE_FRACTION))),
-                "cache_margin_gb": _env_float("LLAMA_MLX_ENGRAM_CACHE_MARGIN_GB", DEFAULT_CACHE_MARGIN_GB),
-                "cache_reserve_gb": _env_float("LLAMA_MLX_ENGRAM_CACHE_RESERVE_GB", DEFAULT_CACHE_RESERVE_GB),
-                "cache_cap_gb": os.environ.get("LLAMA_MLX_ENGRAM_CACHE_GB")}
-
-    def warm(self) -> int:
-        count = self.rows_cache.warm() if self.rows_cache is not None else 0
-```
-
-### LLAMA_MLX_ENGRAM_REPORT
-
-Advanced backend control LLAMA_MLX_ENGRAM_REPORT. Set explicitly only for the selected backend; its literal read and fallback are documented below.
-
-Scope: mac-mlx. Class: advanced.
-
-Source: `vendor/mac-mlx/mlx_vlm/models/deepseek_v41/engram.py:945`. Unset read: ''.
-
-```text
-        self._lookup_tokens = 0
-        self._lookup_rows = 0
-        self._report = os.environ.get("LLAMA_MLX_ENGRAM_REPORT", "") == "1"
-        self._last_phase = None
-        self.wkv = nn.Linear(self.n_cols * self.head_dim, self.dim * (self.hc_mult + 1), bias=False)
-        self.q_weight = mx.ones((self.hc_mult, self.dim), dtype=mx.bfloat16)
-        self.k_weight = mx.ones((self.hc_mult, self.dim), dtype=mx.bfloat16)
-```
-
-### LLAMA_MLX_ENGRAM_RUN_ID
-
-Advanced backend control LLAMA_MLX_ENGRAM_RUN_ID. Set explicitly only for the selected backend; its literal read and fallback are documented below.
-
-Scope: mac-mlx. Class: advanced.
-
-Source: `vendor/mac-mlx/mlx_vlm/models/deepseek_v41/engram.py:1017`. Unset read: None.
-
-```text
-    def _report_snapshot(self, event: str) -> None:
-        """Opt-in diagnostics at load/phase boundaries, never device scalar reads per step."""
-        record = {"event": event, "run_id": os.environ.get("LLAMA_MLX_ENGRAM_RUN_ID"),
-                  **self.stats(), **process_memory_io()}
-        if event == "attached":
-            _, counters, _ = host_available_bytes()
-            record["host_wired_bytes"] = counters.get("wired")
-```
-
-### LLAMA_MLX_ENGRAM_SOURCE
-
-Advanced backend control LLAMA_MLX_ENGRAM_SOURCE. Set explicitly only for the selected backend; its literal read and fallback are documented below.
-
-Scope: mac-mlx. Class: advanced.
-
-Source: `engines/mlx-receiver/mlx_token_stream_server.py:144`. Unset read: None.
-
-```text
-    import mlx.core as mx
-    import mlx.nn as nn
-    source = (os.environ.get('LLAMA_MLX_ENGRAM_SOURCE') or raw.get('engram_source', raw.get('text_config', {}).get('engram_source', 'hybrid'))).strip().lower()
-
-    def _read_vm_stat() -> str:
-        try:
-            return subprocess.check_output(['vm_stat'], text=True)
-```
-
-Source: `vendor/mac-mlx/mlx_vlm/models/deepseek_v41/engram.py:935`. Unset read: None.
-
-```text
-        self.n_cols = layout.n_cols
-        self.num_embeddings = layout.num_embeddings[self.layer_hash_index]
-        self.source = (os.environ.get("LLAMA_MLX_ENGRAM_SOURCE") or getattr(config, "engram_source", "hybrid") or "hybrid").strip().lower()
-        if self.source not in ("ram", "nvme", "hybrid"):
-            raise ValueError(f"engram_source must be ram, nvme or hybrid, got {self.source!r}")
-        n_chunks = int(getattr(config, "engram_ram_chunks", 8) or 8)
-        self.embed = EngramTableRAM(self.num_embeddings, self.head_dim, n_chunks) if self.source == "ram" else None
-```
-
-### LLAMA_MLX_FIRST_FWD_PROBE
-
-Advanced backend control LLAMA_MLX_FIRST_FWD_PROBE. Set explicitly only for the selected backend; its literal read and fallback are documented below.
-
-Scope: mac-mlx. Class: advanced.
-
-Source: `engines/mlx-receiver/mlx_token_stream_server.py:404`. Unset read: ''.
-
-```text
-
-def _first_fwd_probe_enabled() -> bool:
-    if os.environ.get('LLAMA_MLX_FIRST_FWD_PROBE', '') not in ('', '0'):
-        return True
-    try:
-        return os.path.exists(os.path.expanduser('~/.streaming-studio/first_fwd_probe'))
-    except Exception:
-```
-
-### LLAMA_MLX_FULL_KV_LOGIT_TAIL
-
-Advanced backend control LLAMA_MLX_FULL_KV_LOGIT_TAIL. Set explicitly only for the selected backend; its literal read and fallback are documented below.
-
-Scope: mac-mlx. Class: advanced.
-
-Source: `engines/mlx-receiver/mlx_token_stream_server.py:1903`. Unset read: '1'.
-
-```text
-                            _orig_max = getattr(_rope_scaling, 'original_max_position_embeddings', cell_count)
-                        safe_cells = min(cell_count, int(_orig_max))
-                    _force_logit_tail = os.environ.get('LLAMA_MLX_FULL_KV_LOGIT_TAIL', '1') not in ('', '0')
-                    if _force_logit_tail and safe_cells >= n_prompt and (n_prompt > 0):
-                        safe_cells = max(0, n_prompt - max(1, int(os.environ.get('LLAMA_MLX_TAIL_REPREFILL_N', 1))))
-                        sys.stderr.write('[mlx-server] full-KV inject: retaining 1-token MLX tail to compute first generated token logits\n')
-                        sys.stderr.flush()
-```
-
-### LLAMA_MLX_INJECT_DIAG
-
-Advanced backend control LLAMA_MLX_INJECT_DIAG. Set explicitly only for the selected backend; its literal read and fallback are documented below.
-
-Scope: mac-mlx. Class: advanced.
-
-Source: `engines/mlx-receiver/mlx_token_stream_server.py:1934`. Unset read: ''.
-
-```text
-                    _validate_kv_injection_cache(cache, safe_cells)
-                    cell_count = safe_cells
-                    if os.environ.get('LLAMA_MLX_INJECT_DIAG', '') not in ('', '0'):
-                        try:
-                            _c0m = cache[0].caches[0] if hasattr(cache[0], 'caches') else cache[0]
-                            _kl = _c0m.keys
-                            _kp = _c0m.values
-```
-
-### LLAMA_MLX_KEEP_WARM
-
-Advanced backend control LLAMA_MLX_KEEP_WARM. Set explicitly only for the selected backend; its literal read and fallback are documented below.
-
-Scope: mac-mlx. Class: advanced.
-
-Source: `engines/mlx-receiver/kv_handoff.py:141`. Unset read: '1'.
-
-```text
-
-def _keep_warm_enabled() -> bool:
-    return os.environ.get('LLAMA_MLX_KEEP_WARM', '1') not in ('', '0')
-
-def _keep_warm_period_s() -> float:
-    try:
-        return max(0.05, float(os.environ.get('LLAMA_MLX_KEEP_WARM_S', '1.0') or 1.0))
-```
-
-### LLAMA_MLX_KEEP_WARM_S
-
-Advanced backend control LLAMA_MLX_KEEP_WARM_S. Set explicitly only for the selected backend; its literal read and fallback are documented below.
-
-Scope: mac-mlx. Class: advanced.
-
-Source: `engines/mlx-receiver/kv_handoff.py:145`. Unset read: '1.0'.
-
-```text
-def _keep_warm_period_s() -> float:
-    try:
-        return max(0.05, float(os.environ.get('LLAMA_MLX_KEEP_WARM_S', '1.0') or 1.0))
-    except ValueError:
-        return 1.0
-
-def _start_keep_warm_thread() -> None:
-```
-
-### LLAMA_MLX_KIMI_VISION
-
-Advanced backend control LLAMA_MLX_KIMI_VISION. Set explicitly only for the selected backend; its literal read and fallback are documented below.
-
-Scope: mac-mlx. Class: advanced.
-
-Source: `engines/mlx-receiver/mlx_token_stream_server.py:1181`. Unset read: '1'.
-
-```text
-        if not raw_config.get('vision_config') or not vision_weights:
-            return
-        if os.environ.get('LLAMA_MLX_KIMI_VISION', '1') in ('', '0'):
-            self._kimi_vision_error = 'image input disabled (LLAMA_MLX_KIMI_VISION=0)'
-            return
-        try:
-            from kimi_vision import KimiVision
-```
-
-### LLAMA_MLX_KVA_WAIT_S
-
-Advanced backend control LLAMA_MLX_KVA_WAIT_S. Set explicitly only for the selected backend; its literal read and fallback are documented below.
-
-Scope: mac-mlx. Class: advanced.
-
-Source: `engines/mlx-receiver/mlx_token_stream_server.py:3058`. Unset read: '600'.
-
-```text
-        if kva_path_shared is not None and (config_prompt_hash or config_prompt_token_count):
-            import time as _time
-            _wait_s = float(os.environ.get('LLAMA_MLX_KVA_WAIT_S', '600'))
-            _poll_s = 0.05
-            _deadline = _time.monotonic() + _wait_s
-            _last_logged_ref = id(kva_path)
-            sys.stderr.write(f'[mlx-server] waiting up to {_wait_s:.0f}s for KVA matching config_hash=0x{config_prompt_hash:016x} count={config_prompt_token_count}\n')
-```
-
-### LLAMA_MLX_K_PE_SCALE
-
-Advanced backend control LLAMA_MLX_K_PE_SCALE. Set explicitly only for the selected backend; its literal read and fallback are documented below.
-
-Scope: mac-mlx. Class: advanced.
-
-Source: `engines/mlx-receiver/kv_converter.py:210`. Unset read: '1.0'.
-
-```text
-    row_elements_mla = kv_lora_rank + qk_rope_head_dim
-    import os as _os
-    k_pe_undo_scale = float(_os.environ.get('LLAMA_MLX_K_PE_SCALE', '1.0'))
-    mv = payload if isinstance(payload, memoryview) else memoryview(payload)
-    for _il in range(n_layer):
-        k_type = read('<i')
-        k_size_row = read('<Q')
-```
-
-### LLAMA_MLX_LCP_REUSE_MIN
-
-Advanced backend control LLAMA_MLX_LCP_REUSE_MIN. Set explicitly only for the selected backend; its literal read and fallback are documented below.
-
-Scope: mac-mlx. Class: advanced.
-
-Source: `engines/mlx-receiver/mlx_token_stream_server.py:1034`. Unset read: '64'.
-
-```text
-
-class MLXSession:
-    _LCP_REUSE_MIN = int(os.environ.get('LLAMA_MLX_LCP_REUSE_MIN', '64'))
-
-    def __init__(self, model_path: str, mtp_mode: str='off', mtp_sidecar: str='auto', mtp_max_draft: int=1, mtp_quantized_sidecar_policy: str='warn', mtp_debug_windows: int=0, mtp_compute_dtype: str='float16', mtp_recurrent_state: str='raw', mtp_schedule: str='reference', mtp_prompt_history: str='committed', mtp_cache_commit: str='replay', mtp_verify_profile: str='safe', mtp_target_token_eval: str='auto', mtp_verify_forward: str='auto', mtp_verify_hidden_eval: str='auto', mtp_history_materialization: str='auto', mtp_share_topk_source: str='internal', mtp_match_trunk_precision: str='auto', mtp_adaptive_depth: str='off', mtp_token_budget: int=0, adapters: Optional[List[str]]=None, token_sidecars: Optional[List[str]]=None, token_sidecar_scale: float=1.0, sampling_profile: Optional[Dict[str, Any]]=None):
-        self.model_path = model_path
-        self._sampling_profile = _merge_sampling_profiles(sampling_profile)
-```
-
-### LLAMA_MLX_MAX_SAFE_TAIL
-
-Advanced backend control LLAMA_MLX_MAX_SAFE_TAIL. Set explicitly only for the selected backend; its literal read and fallback are documented below.
-
-Scope: mac-mlx. Class: advanced.
-
-Source: `engines/mlx-receiver/mlx_token_stream_server.py:1720`. Unset read: '2048'.
-
-```text
-            _enable_streaming = os.environ.get('LLAMA_MLX_ENABLE_STREAMING_INJECT', '1') not in ('', '0')
-            _safe_inject_cells = 1000000
-            _max_safe_tail = int(os.environ.get('LLAMA_MLX_MAX_SAFE_TAIL', '2048'))
-            _allow_no_tail = os.environ.get('LLAMA_MLX_ALLOW_NO_TAIL', '0') not in ('', '0')
-            _np = len(prompt_token_ids)
-            _bypass_reason = None
-            if not _enable_streaming:
-```
-
-### LLAMA_MLX_NO_YARN_TRUNC
-
-Advanced backend control LLAMA_MLX_NO_YARN_TRUNC. Set explicitly only for the selected backend; its literal read and fallback are documented below.
-
-Scope: mac-mlx. Class: advanced.
-
-Source: `engines/mlx-receiver/mlx_token_stream_server.py:1892`. Unset read: '1'.
-
-```text
-                        raise RuntimeError('KV artifact cells exceed the supplied prompt')
-                    cell_count = _delta_base + _incoming_cells
-                    _no_yarn_trunc = os.environ.get('LLAMA_MLX_NO_YARN_TRUNC', '1') not in ('', '0')
-                    _orig_max = cell_count
-                    if _no_yarn_trunc:
-                        safe_cells = cell_count
-                    else:
-```
-
-### LLAMA_MLX_PROMPT_CACHE_DIR
-
-Advanced backend control LLAMA_MLX_PROMPT_CACHE_DIR. Set explicitly only for the selected backend; its literal read and fallback are documented below.
-
-Scope: mac-mlx. Class: advanced.
-
-Source: `engines/mlx-receiver/mlx_token_stream_server.py:1280`. Unset read: ''.
-
-```text
-
-    def _init_prompt_store(self):
-        cache_dir = os.environ.get('LLAMA_MLX_PROMPT_CACHE_DIR', '').strip()
-        if not cache_dir:
-            self._prompt_store = None
-            return
-        try:
-```
-
-### LLAMA_MLX_PROMPT_CACHE_HOT
-
-Advanced backend control LLAMA_MLX_PROMPT_CACHE_HOT. Set explicitly only for the selected backend; its literal read and fallback are documented below.
-
-Scope: mac-mlx. Class: advanced.
-
-Source: `engines/mlx-receiver/mlx_token_stream_server.py:1295`. Unset read: '8'.
-
-```text
-                mlx_lm_ver = ''
-            mkey = model_key_for(self.model_path, quant_cfg, mlx_lm_ver)
-            hot = int(os.environ.get('LLAMA_MLX_PROMPT_CACHE_HOT', '8'))
-            max_gb = float(os.environ.get('LLAMA_MLX_PROMPT_CACHE_MAX_GB', '500'))
-            self._prompt_store = PromptCacheStore(cache_dir, mkey, hot_size=hot, max_gb=max_gb, lcp_reuse_min=self._LCP_REUSE_MIN)
-            sys.stderr.write(f'[mlx-server] prompt-cache store enabled: dir={cache_dir} model_key={mkey} hot={hot} max_gb={max_gb}\n')
-            sys.stderr.flush()
-```
-
-### LLAMA_MLX_PROMPT_CACHE_MAX_GB
-
-Advanced backend control LLAMA_MLX_PROMPT_CACHE_MAX_GB. Set explicitly only for the selected backend; its literal read and fallback are documented below.
-
-Scope: mac-mlx. Class: advanced.
-
-Source: `engines/mlx-receiver/mlx_token_stream_server.py:1296`. Unset read: '500'.
-
-```text
-            mkey = model_key_for(self.model_path, quant_cfg, mlx_lm_ver)
-            hot = int(os.environ.get('LLAMA_MLX_PROMPT_CACHE_HOT', '8'))
-            max_gb = float(os.environ.get('LLAMA_MLX_PROMPT_CACHE_MAX_GB', '500'))
-            self._prompt_store = PromptCacheStore(cache_dir, mkey, hot_size=hot, max_gb=max_gb, lcp_reuse_min=self._LCP_REUSE_MIN)
-            sys.stderr.write(f'[mlx-server] prompt-cache store enabled: dir={cache_dir} model_key={mkey} hot={hot} max_gb={max_gb}\n')
-            sys.stderr.flush()
-        except Exception as e:
-```
-
-### LLAMA_MLX_SKIP_TAIL
-
-Advanced backend control LLAMA_MLX_SKIP_TAIL. Set explicitly only for the selected backend; its literal read and fallback are documented below.
-
-Scope: mac-mlx. Class: advanced.
-
-Source: `engines/mlx-receiver/mlx_token_stream_server.py:2046`. Unset read: '0'.
-
-```text
-                sys.stderr.write(f'[mlx-server] KV inject done in {inject_dt:.2f}s, cell_count={cell_count}\n')
-                sys.stderr.flush()
-                _skip_tail = os.environ.get('LLAMA_MLX_SKIP_TAIL', '0') not in ('', '0')
-                tail_ids = [] if _skip_tail else prompt_token_ids[cell_count:]
-                if tail_ids:
-                    tail_arr = mx.array(tail_ids)
-                    n_tail = len(tail_ids)
-```
-
-### LLAMA_MLX_SWI_MAX_STEPS
-
-Advanced backend control LLAMA_MLX_SWI_MAX_STEPS. Set explicitly only for the selected backend; its literal read and fallback are documented below.
-
-Scope: mac-mlx. Class: advanced.
-
-Source: `engines/mlx-receiver/mlx_token_stream_server.py:2428`. Unset read: str(max(4 * _swi_n_predict, _swi_n_predict + 2048)).
-
-```text
-                swi = SwiState(cfg=swi_config, endthink_ids=list(swi_embed['endthink_ids']), convergence_ids=list(swi_embed['convergence_ids']), termination_ids=list(swi_embed['termination_ids']))
-                _swi_n_predict = max(1, int(max_tokens))
-                _swi_step_cap = int(os.environ.get('LLAMA_MLX_SWI_MAX_STEPS', str(max(4 * _swi_n_predict, _swi_n_predict + 2048))))
-
-                def _swi_forward_ids(tok_id: int):
-                    with mx.stream(gen_stream):
-                        out = lang_swi(mx.array([[int(tok_id)]]), cache=cache)
-```
-
-### LLAMA_MLX_TAIL_REPREFILL_N
-
-Advanced backend control LLAMA_MLX_TAIL_REPREFILL_N. Set explicitly only for the selected backend; its literal read and fallback are documented below.
-
-Scope: mac-mlx. Class: advanced.
-
-Source: `engines/mlx-receiver/mlx_token_stream_server.py:1905`. Unset read: 1.
-
-```text
-                    _force_logit_tail = os.environ.get('LLAMA_MLX_FULL_KV_LOGIT_TAIL', '1') not in ('', '0')
-                    if _force_logit_tail and safe_cells >= n_prompt and (n_prompt > 0):
-                        safe_cells = max(0, n_prompt - max(1, int(os.environ.get('LLAMA_MLX_TAIL_REPREFILL_N', 1))))
-                        sys.stderr.write('[mlx-server] full-KV inject: retaining 1-token MLX tail to compute first generated token logits\n')
-                        sys.stderr.flush()
-                    if safe_cells < cell_count:
-                        sys.stderr.write(f'[mlx-server] truncating injection to {safe_cells} cells (YaRN boundary at {_orig_max}); {cell_count - safe_cells} cells will be re-prefilled\n')
-```
-
-### LLAMA_MLX_TEXT_LM_LOAD
-
-Advanced backend control LLAMA_MLX_TEXT_LM_LOAD. Set explicitly only for the selected backend; its literal read and fallback are documented below.
-
-Scope: mac-mlx. Class: advanced.
-
-Source: `engines/mlx-receiver/mlx_token_stream_server.py:1116`. Unset read: '1'.
-
-```text
-                raise SystemExit(128 + signum)
-            signal.signal(signal.SIGTERM, terminate)
-        prefer_text_lm_requested = os.environ.get('LLAMA_MLX_TEXT_LM_LOAD', '1') not in ('', '0')
-        prefer_text_lm = not is_dsv41 and prefer_text_lm_requested and _has_vlm_text_config(self.model_path)
-        if prefer_text_lm_requested and (not prefer_text_lm):
-            sys.stderr.write('[mlx-server] text MLX-LM loader skipped: checkpoint has no text_config\n')
-            sys.stderr.flush()
-```
-
-### LLAMA_MLX_TEXT_LM_STRICT
-
-Advanced backend control LLAMA_MLX_TEXT_LM_STRICT. Set explicitly only for the selected backend; its literal read and fallback are documented below.
-
-Scope: mac-mlx. Class: advanced.
-
-Source: `engines/mlx-receiver/mlx_token_stream_server.py:1131`. Unset read: '1'.
-
-```text
-                sys.stderr.flush()
-            except Exception as e_text:
-                strict_text = os.environ.get('LLAMA_MLX_TEXT_LM_STRICT', '1') not in ('', '0')
-                if strict_text:
-                    raise RuntimeError(f'Failed Kimi text MLX-LM load: {e_text}')
-                sys.stderr.write(f'[mlx-server] Kimi text MLX-LM load failed: {e_text}; falling back to mlx_vlm full-KV cache path\n')
-                sys.stderr.flush()
-```
-
-### LLAMA_MLX_WIRED_LIMIT_GB
-
-Advanced backend control LLAMA_MLX_WIRED_LIMIT_GB. Set explicitly only for the selected backend; its literal read and fallback are documented below.
-
-Scope: mac-mlx. Class: advanced.
-
-Source: `engines/mlx-receiver/mlx_token_stream_server.py:1084`. Unset read: ''.
-
-```text
-            max_rec = mx.device_info().get('max_recommended_working_set_size', 0)
-            if max_rec <= 0:
-                _env_gb = os.environ.get('LLAMA_MLX_WIRED_LIMIT_GB', '').strip()
-                if _env_gb:
-                    max_rec = int(float(_env_gb) * 1024 ** 3)
-                else:
-                    try:
-```
-
-### LLAMA_PD_CACHE_CAPTURE
-
-Advanced backend control LLAMA_PD_CACHE_CAPTURE. Set explicitly only for the selected backend; its literal read and fallback are documented below.
-
-Scope: mac-llama. Class: advanced.
-
-Source: `engines/streaming-llama/prefill_llama.cpp/tools/decode-receiver/main.cpp:632`. Unset read: NULL from getenv; the literal consumer below supplies any fallback.
-
-```text
-#if defined(_WIN32) || defined(_WIN64)
-    static bool warned_once = false;
-    if (const char * cap = std::getenv("LLAMA_PD_CACHE_CAPTURE"); cap && cap[0] == '1' && !warned_once) {
-        fprintf(stderr, "[pd-cache] WARNING: LLAMA_PD_CACHE_CAPTURE=1 is IGNORED on Windows — CUDA KV serialization crashes. Only Mac/Metal receiver supports Phase-2 KV capture.\n");
-        warned_once = true;
-    }
-    return;
-```
-
-Source: `engines/streaming-llama/prefill_llama.cpp/tools/decode-receiver/main.cpp:638`. Unset read: NULL from getenv; the literal consumer below supplies any fallback.
-
-```text
-    return;
-#else
-    if (const char * cap = std::getenv("LLAMA_PD_CACHE_CAPTURE")) {
-        if (cap[0] != '1') { return; }
-    } else {
-        return;  // not set → skip
-    }
-```
-
-### LLAMA_PD_CACHE_DIR
-
-Advanced backend control LLAMA_PD_CACHE_DIR. Set explicitly only for the selected backend; its literal read and fallback are documented below.
-
-Scope: mac-llama. Class: advanced.
-
-Source: `engines/streaming-llama/prefill_llama.cpp/tools/decode-receiver/main.cpp:187`. Unset read: NULL from getenv; the literal consumer below supplies any fallback.
-
-```text
-    if (g_inited) { return; }
-    g_inited = true;
-    const char * dir = std::getenv("LLAMA_PD_CACHE_DIR");
-    if (!dir || dir[0] == '\0') { return; }   // disabled => RAM-only legacy
-    g_dir = dir;
-
-    double max_gb = 50.0;
-```
-
-### LLAMA_PD_CACHE_HOT
-
-Advanced backend control LLAMA_PD_CACHE_HOT. Set explicitly only for the selected backend; its literal read and fallback are documented below.
-
-Scope: mac-llama. Class: advanced.
-
-Source: `engines/streaming-llama/prefill_llama.cpp/tools/decode-receiver/main.cpp:89`. Unset read: NULL from getenv; the literal consumer below supplies any fallback.
-
-```text
-static int pd_cache_hot_max() {
-    static const int n = []() {
-        if (const char * e = std::getenv("LLAMA_PD_CACHE_HOT")) {
-            const int v = std::atoi(e);
-            if (v > 0) { return v; }
-        }
-        return 4;
-```
-
-### LLAMA_PD_CACHE_MAX_GB
-
-Advanced backend control LLAMA_PD_CACHE_MAX_GB. Set explicitly only for the selected backend; its literal read and fallback are documented below.
-
-Scope: mac-llama. Class: advanced.
-
-Source: `engines/streaming-llama/prefill_llama.cpp/tools/decode-receiver/main.cpp:192`. Unset read: NULL from getenv; the literal consumer below supplies any fallback.
-
-```text
-
-    double max_gb = 50.0;
-    if (const char * e = std::getenv("LLAMA_PD_CACHE_MAX_GB")) {
-        const double v = std::atof(e);
-        if (v > 0.0) { max_gb = v; }
-    }
-    g_max_bytes = (uint64_t)(max_gb * 1024.0 * 1024.0 * 1024.0);
-```
-
-### LLAMA_PD_RESIDENT_KV_REUSE
-
-Advanced backend control LLAMA_PD_RESIDENT_KV_REUSE. Set explicitly only for the selected backend; its literal read and fallback are documented below.
-
-Scope: mac-llama. Class: advanced.
-
-Source: `engines/streaming-llama/prefill_llama.cpp/tools/decode-receiver/main.cpp:535`. Unset read: NULL from getenv; the literal consumer below supplies any fallback.
-
-```text
-
-static bool resident_kv_reuse_enabled() {
-    const char * e = std::getenv("LLAMA_PD_RESIDENT_KV_REUSE");
-    return e && e[0] == '1';
-}
-// Exact longest-common-prefix length (token-by-token; stops at first divergence
-// so rollback/branch/edit naturally clamp reuse to the divergence point). No hashing.
-```
-
-### LLAMA_PD_RESIDENT_SINGLETOK_MAX
-
-Advanced backend control LLAMA_PD_RESIDENT_SINGLETOK_MAX. Set explicitly only for the selected backend; its literal read and fallback are documented below.
-
-Scope: mac-llama. Class: advanced.
-
-Source: `engines/streaming-llama/prefill_llama.cpp/tools/decode-receiver/main.cpp:1498`. Unset read: NULL from getenv; the literal consumer below supplies any fallback.
-
-```text
-        // residual (~6s) is RTX-SIDE, not the Mac. Keep the knob for experiments only.
-        static const int resident_singletok_max = []() {
-            const char * e = std::getenv("LLAMA_PD_RESIDENT_SINGLETOK_MAX");
-            return (e && e[0]) ? std::max(0, atoi(e)) : 0;
-        }();
-        if (resident_reuse_n > 0 && (int) suffix_tokens > 0 && (int) suffix_tokens <= resident_singletok_max) {
-            n_batch = 1;
-```
-
-### M3_MLX_SPARSE
-
-Advanced backend control M3_MLX_SPARSE. Set explicitly only for the selected backend; its literal read and fallback are documented below.
-
-Scope: mac-mlx. Class: advanced.
-
-Source: `vendor/mac-mlx/mlx_vlm/models/minimax_m3/minimax_m3.py:221`. Unset read: '1'.
-
-```text
-        # index Q/K are RoPE'd at the query positions (position-aware selection, matches RTX); ik is roped
-        # BEFORE caching so cached prior index-K stays roped at its own positions (decode-consistency holds).
-        if self.sparse and os.getenv("M3_MLX_SPARSE", "1") != "0":
-            a = self.args
-            iq = self.index_q_norm(self.index_q_proj(x).reshape(B, L, a.indexer_n_head, a.indexer_head_size))
-            ik = self.index_k_norm(self.index_k_proj(x).reshape(B, L, a.indexer_head_size))
-            q_offset = (cache.offset - L) if isinstance(cache, M3Cache) else 0  # position of query 0
-```
-
-Source: `vendor/mac-mlx/mlx_vlm/models/minimax_m3/test_mtp.py:29`. Unset read: Assigned by the runtime; see literal consumer.
-
-```text
-
-def main():
-    os.environ["M3_MLX_SPARSE"] = "1"
-    mx.random.seed(0)
-    layer = M3MTPLayer(ARGS)
-    mx.eval(layer.parameters())
-    H, L = ARGS.hidden_size, 6
-```
-
-Source: `vendor/mac-mlx/mlx_vlm/models/minimax_m3/test_synthetic.py:38`. Unset read: Assigned by the runtime; see literal consumer.
-
-```text
-
-def fwd(model, n_tok, sparse):
-    os.environ["M3_MLX_SPARSE"] = "1" if sparse else "0"
-    logits = model(mx.array([_toks(n_tok)]))[0, -1]
-    return int(mx.argmax(logits).item()), round(float(mx.max(logits).item()), 4)
-
-
-```
-
-Source: `vendor/mac-mlx/mlx_vlm/models/minimax_m3/test_synthetic.py:45`. Unset read: Assigned by the runtime; see literal consumer.
-
-```text
-def fwd_incremental(model, n_tok):
-    """Last token's logits via prefill(0..n-2) + decode(1) using the M3Cache (decode-path MSA)."""
-    os.environ["M3_MLX_SPARSE"] = "1"
-    t = _toks(n_tok)
-    cache = model.make_cache()
-    if n_tok > 1:
-        model(mx.array([t[:-1]]), cache=cache)
-```
-
-Source: `vendor/mac-mlx/mlx_vlm/models/minimax_m3/test_synthetic.py:57`. Unset read: Assigned by the runtime; see literal consumer.
-
-```text
-    """B=2 batch of two distinct sequences; each row must equal that sequence's B=1 result (sequences
-    are independent, so batching must not change per-row output)."""
-    os.environ["M3_MLX_SPARSE"] = "1"
-    t0 = [(i * 7 + 1) % ARGS.vocab_size for i in range(n_tok)]
-    t1 = [(i * 5 + 3) % ARGS.vocab_size for i in range(n_tok)]
-    batched = model(mx.array([t0, t1]))[:, -1]
-    a0 = int(mx.argmax(model(mx.array([t0]))[0, -1]).item())
-```
-
-### MAX_KV_SIZE
-
-Advanced backend control MAX_KV_SIZE. Set explicitly only for the selected backend; its literal read and fallback are documented below.
-
-Scope: mac-mlx. Class: advanced.
-
-Source: `vendor/mac-mlx/mlx_vlm/server/cli.py:207`. Unset read: Assigned by the runtime; see literal consumer.
-
-```text
-    os.environ["KV_QUANT_SCHEME"] = args.kv_quant_scheme
-    if args.max_kv_size is not None:
-        os.environ["MAX_KV_SIZE"] = str(args.max_kv_size)
-    os.environ["QUANTIZED_KV_START"] = str(args.quantized_kv_start)
-    if args.top_logprobs_k is not None:
-        os.environ["TOP_LOGPROBS_K"] = str(args.top_logprobs_k)
-
-```
-
-Source: `vendor/mac-mlx/mlx_vlm/server/generation.py:236`. Unset read: 0.
-
-```text
-
-def get_max_kv_size(model: str):
-    max_kv_tokens = int(os.environ.get("MAX_KV_SIZE", 0))
-    if max_kv_tokens == 0:
-        return None
-    if get_quantized_kv_bits(model) is not None:
-        print(f"Model {model} uses QuantizedKVCache, can't set max KV size.")
-```
-
-Source: `vendor/mac-mlx/mlx_vlm/server/generation.py:246`. Unset read: 0.
-
-```text
-
-def get_configured_context_limit():
-    max_kv_tokens = int(os.environ.get("MAX_KV_SIZE", 0))
-    return max_kv_tokens or None
-
-
-def _count_prompt_tokens(raw_inputs: dict) -> int:
-```
-
-### MCP_CONFIG_PATH
-
-Advanced backend control MCP_CONFIG_PATH. Set explicitly only for the selected backend; its literal read and fallback are documented below.
-
-Scope: mlx-serve. Class: advanced.
-
-Source: `engines/mlx-serve/app/Sources/MLXServe/Models/MCPConfig.swift:110`. Unset read: Wrapper/conditional default: see the literal call and consumer below.
-
-```text
-    /// mcp.json with `bogus` and `nopkg` entries.
-    static var path: String {
-        if let p = ProcessInfo.processInfo.environment["MCP_CONFIG_PATH"], !p.isEmpty {
-            return (p as NSString).expandingTildeInPath
-        }
-        let dir = NSString(string: "~/.mlx-serve").expandingTildeInPath
-        try? FileManager.default.createDirectory(atPath: dir, withIntermediateDirectories: true)
-```
-
-Source: `engines/mlx-serve/app/Tests/MLXCoreTests/MCPFailFastTests.swift:25`. Unset read: Wrapper/conditional default: see the literal call and consumer below.
-
-```text
-        try? FileManager.default.createDirectory(atPath: dir, withIntermediateDirectories: true)
-        sandboxPath = (dir as NSString).appendingPathComponent("mcp.json")
-        setenv("MCP_CONFIG_PATH", sandboxPath, 1)
-    }
-
-    override func tearDown() async throws {
-        if let p = sandboxPath {
-```
-
-Source: `engines/mlx-serve/app/Tests/MLXCoreTests/MCPFailFastTests.swift:33`. Unset read: Wrapper/conditional default: see the literal call and consumer below.
-
-```text
-            try? FileManager.default.removeItem(atPath: dir)
-        }
-        unsetenv("MCP_CONFIG_PATH")
-    }
-
-    func testStartEnabledFailsFastWhenServerDiesDuringInit() async throws {
-        try XCTSkipUnless(BuildFeatures.current.hostShell, "spawns a host script; the App Store build routes MCP into the guest")
-```
-
-Source: `engines/mlx-serve/app/Tests/MLXCoreTests/MCPTests.swift:71`. Unset read: Wrapper/conditional default: see the literal call and consumer below.
-
-```text
-    func testMCPConfigPreservesKeyOrderThroughSaveAndLoad() throws {
-        let tmp = NSTemporaryDirectory().appending("mcp-order-\(UUID().uuidString).json")
-        setenv("MCP_CONFIG_PATH", tmp, 1)
-        defer { unsetenv("MCP_CONFIG_PATH"); try? FileManager.default.removeItem(atPath: tmp) }
-
-        // Deliberately non-alphabetical source order — exposes any sort/hash shuffle.
-        let source = #"""
-```
-
-Source: `engines/mlx-serve/app/Tests/MLXCoreTests/MCPTests.swift:72`. Unset read: Wrapper/conditional default: see the literal call and consumer below.
-
-```text
-        let tmp = NSTemporaryDirectory().appending("mcp-order-\(UUID().uuidString).json")
-        setenv("MCP_CONFIG_PATH", tmp, 1)
-        defer { unsetenv("MCP_CONFIG_PATH"); try? FileManager.default.removeItem(atPath: tmp) }
-
-        // Deliberately non-alphabetical source order — exposes any sort/hash shuffle.
-        let source = #"""
-        {
-```
-
-Source: `engines/mlx-serve/app/Tests/MLXCoreTests/MCPTests.swift:199`. Unset read: Wrapper/conditional default: see the literal call and consumer below.
-
-```text
-    func testRemoteEntryHeadersAndTypeSurviveSaveAndLoad() throws {
-        let tmp = NSTemporaryDirectory().appending("mcp-headers-\(UUID().uuidString).json")
-        setenv("MCP_CONFIG_PATH", tmp, 1)
-        defer { unsetenv("MCP_CONFIG_PATH"); try? FileManager.default.removeItem(atPath: tmp) }
-
-        // The reporter's exact shape.
-        let source = #"""
-```
-
-Source: `engines/mlx-serve/app/Tests/MLXCoreTests/MCPTests.swift:200`. Unset read: Wrapper/conditional default: see the literal call and consumer below.
-
-```text
-        let tmp = NSTemporaryDirectory().appending("mcp-headers-\(UUID().uuidString).json")
-        setenv("MCP_CONFIG_PATH", tmp, 1)
-        defer { unsetenv("MCP_CONFIG_PATH"); try? FileManager.default.removeItem(atPath: tmp) }
-
-        // The reporter's exact shape.
-        let source = #"""
-        {
-```
-
-Source: `engines/mlx-serve/app/Tests/MLXCoreTests/MCPTests.swift:544`. Unset read: Wrapper/conditional default: see the literal call and consumer below.
-
-```text
-        let dir = NSTemporaryDirectory().appending("mcp-restart-\(UUID().uuidString)")
-        try FileManager.default.createDirectory(atPath: dir, withIntermediateDirectories: true)
-        setenv("MCP_CONFIG_PATH", (dir as NSString).appendingPathComponent("mcp.json"), 1)
-        defer { unsetenv("MCP_CONFIG_PATH"); try? FileManager.default.removeItem(atPath: dir) }
-        let manager = MCPManager()
-        var config = MCPConfig()
-        config.mcpServers["would-spawn"] = MCPServerEntry(
-```
-
-Source: `engines/mlx-serve/app/Tests/MLXCoreTests/MCPTests.swift:545`. Unset read: Wrapper/conditional default: see the literal call and consumer below.
-
-```text
-        try FileManager.default.createDirectory(atPath: dir, withIntermediateDirectories: true)
-        setenv("MCP_CONFIG_PATH", (dir as NSString).appendingPathComponent("mcp.json"), 1)
-        defer { unsetenv("MCP_CONFIG_PATH"); try? FileManager.default.removeItem(atPath: dir) }
-        let manager = MCPManager()
-        var config = MCPConfig()
-        config.mcpServers["would-spawn"] = MCPServerEntry(
-            command: "/usr/bin/false", args: [], env: nil, disabled: false)
-```
-
-### MCP_TOOL_TIMEOUT
-
-Advanced backend control MCP_TOOL_TIMEOUT. Set explicitly only for the selected backend; its literal read and fallback are documented below.
-
-Scope: mlx-serve. Class: advanced.
-
-Source: `engines/mlx-serve/app/Sources/MLXServe/Services/MCPManager.swift:219`. Unset read: Wrapper/conditional default: see the literal call and consumer below.
-
-```text
-    /// the watchdog without waiting 90s per run.
-    nonisolated static var toolCallTimeoutSeconds: Double {
-        if let raw = ProcessInfo.processInfo.environment["MCP_TOOL_TIMEOUT"],
-           let v = Double(raw), v > 0 {
-            return v
-        }
-        return 90
-```
-
-### MFERENCE_HOTPATH_METRICS
-
-Advanced backend control MFERENCE_HOTPATH_METRICS. Set explicitly only for the selected backend; its literal read and fallback are documented below.
-
-Scope: mac-mference. Class: advanced.
-
-Source: `engines/mference/Sources/Mference/Runtime/Inference/HotPathInstrumentation.swift:92`. Unset read: Wrapper/conditional default: see the literal call and consumer below.
-
-```text
-    private var cachePlanMisses: UInt64 = 0
-
-    init(enabled: Bool = ProcessInfo.processInfo.environment["MFERENCE_HOTPATH_METRICS"] == "1") {
-        self.enabled = enabled
-    }
-
-    func recordCommandBufferCommit() {
-```
-
-Source: `engines/mference/Sources/MferenceCLI/Run.swift:125`. Unset read: Wrapper/conditional default: see the literal call and consumer below.
-
-```text
-            lines += "  unaccounted (GPU waits): "
-            lines += String(format: "%.1f", total - accounted) + " ms\n"
-            if ProcessInfo.processInfo.environment["MFERENCE_HOTPATH_METRICS"] == "1" {
-                lines += "  " + runner.hotPathMetrics.logDescription + "\n"
-            }
-            stderr.write(Data(lines.utf8))
-        }
-```
-
-Source: `engines/mference/Sources/MferenceServer/Core/ServerInference.swift:348`. Unset read: Wrapper/conditional default: see the literal call and consumer below.
-
-```text
-        let needsToolTemplate = prepared.needsToolTemplate
-        let promptIDs = prepared.promptIDs
-        let hotPathStart = ProcessInfo.processInfo.environment["MFERENCE_HOTPATH_METRICS"] == "1"
-            ? runner.hotPathMetrics
-            : nil
-        var completed = false
-        defer {
-```
-
-### MFERENCE_MODEL
-
-Advanced backend control MFERENCE_MODEL. Set explicitly only for the selected backend; its literal read and fallback are documented below.
-
-Scope: mac-mference. Class: advanced.
-
-Source: `engines/mference/Sources/MferenceApp/Core/Installation/AppModelInstallDescriptor.swift:103`. Unset read: Wrapper/conditional default: see the literal call and consumer below.
-
-```text
-    /// without an environment also select the alternative model.
-    public static var selected: AppModelInstallDescriptor {
-        let environmentValue = ProcessInfo.processInfo.environment["MFERENCE_MODEL"]
-        let preferenceValue = UserDefaults(suiteName: "Mference")?
-            .string(forKey: "model")
-        switch environmentValue ?? preferenceValue {
-        case "qwen36": return .qwen36
-```
-
-### MFERENCE_PHASES
-
-Advanced backend control MFERENCE_PHASES. Set explicitly only for the selected backend; its literal read and fallback are documented below.
-
-Scope: mac-mference. Class: advanced.
-
-Source: `engines/mference/Sources/MferenceCLI/Run.swift:113`. Unset read: Wrapper/conditional default: see the literal call and consumer below.
-
-```text
-            }
-
-        if ProcessInfo.processInfo.environment["MFERENCE_PHASES"] == "1" {
-            let ms = { (n: UInt64) in String(format: "%.1f", Double(n) / 1e6) }
-            let total = stats.decodeSeconds * 1000
-            let accounted = Double(runner.totalCb1Nanos + runner.totalIoNanos
-                                   + runner.totalCb2Nanos) / 1e6
-```
-
-### MLX_DSPARK_BLOCK_FP32
-
-Advanced backend control MLX_DSPARK_BLOCK_FP32. Set explicitly only for the selected backend; its literal read and fallback are documented below.
-
-Scope: mac-mlx. Class: advanced.
-
-Source: `vendor/mac-mlx/mlx_vlm/models/deepseek_v41/dspark.py:156`. Unset read: ''.
-
-```text
-# test whether the drafter is being quietly degraded by bf16 on Metal, which would surface only
-# as acceptance rate. Default off so the production path is unchanged.
-_DSPARK_BLOCK_FP32 = os.environ.get("MLX_DSPARK_BLOCK_FP32", "") not in ("", "0")
-# COUNT INVOCATIONS, do not announce installations. An env var that reaches the process proves
-# nothing about whether the branch ran -- and the first fp32 arm came out FASTER than bf16,
-# which is the wrong direction for real fp32 matmuls and is exactly what a silently-inert
-# flag looks like. This says, once, that the cast actually executed.
-```
-
-### MLX_DSV4_NEEDLE_POS
-
-Advanced backend control MLX_DSV4_NEEDLE_POS. Set explicitly only for the selected backend; its literal read and fallback are documented below.
-
-Scope: mac-mlx. Class: advanced.
-
-Source: `vendor/mac-mlx/mlx_vlm/models/deepseek_v4/language.py:536`. Unset read: '5352'.
-
-```text
-            try:
-                _ratio = int(self.compressor.compress_ratio)
-                _npos = int(os.environ.get("MLX_DSV4_NEEDLE_POS", "5352"))
-                _nrow = (_npos // _ratio) if _ratio else -1
-                if 0 <= _nrow < scores.shape[-1]:
-                    _sd = scores[0, -1]  # last (decode) query token's masked per-pooled-row scores
-                    _nsc = float(_sd[_nrow]); _rank = int((_sd > _sd[_nrow]).sum().item())
-```
-
-### MLX_DSV4_NEEDLE_TRACE
-
-Advanced backend control MLX_DSV4_NEEDLE_TRACE. Set explicitly only for the selected backend; its literal read and fallback are documented below.
-
-Scope: mac-mlx. Class: advanced.
-
-Source: `vendor/mac-mlx/mlx_vlm/models/deepseek_v4/language.py:532`. Unset read: None.
-
-```text
-        # Indexer call (per sparse layer): ratio, needle_row=pos//ratio, n_pooled, k, needle_score, needle_rank
-        # (# pooled rows scoring higher), selected(1/0). Compare needle_rank to the RTX trace (~460-582).
-        _nt = os.environ.get("MLX_DSV4_NEEDLE_TRACE")
-        if _nt:
-            try:
-                _ratio = int(self.compressor.compress_ratio)
-                _npos = int(os.environ.get("MLX_DSV4_NEEDLE_POS", "5352"))
-```
-
-### MLX_GLM_DSA_DECODE_ONLY
-
-Advanced backend control MLX_GLM_DSA_DECODE_ONLY. Set explicitly only for the selected backend; its literal read and fallback are documented below.
-
-Scope: mac-mlx. Class: advanced.
-
-Source: `vendor/mac-mlx/mlx_vlm/models/glm_moe_dsa/glm_moe_dsa.py:156`. Unset read: Wrapper/conditional default: see the literal call and consumer below.
-
-```text
-        if cache is not None:
-            k, _ = cache.update_and_fetch(k, mx.zeros([b, 1, s, 0]))
-        if _env_flag("MLX_GLM_DSA_DECODE_ONLY") and s > 1:
-            return None
-        if k.shape[2] <= self.index_topk:
-            return None
-        if _env_flag("MLX_GLM_DSA_RECENT_TOPK"):
-```
-
-Source: `vendor/mac-mlx/mlx_vlm/models/glm_moe_dsa/glm_moe_dsa.py:396`. Unset read: Wrapper/conditional default: see the literal call and consumer below.
-
-```text
-        "indexer_rope_interleave": getattr(config, "indexer_rope_interleave", None),
-        "recent_topk": _env_flag("MLX_GLM_DSA_RECENT_TOPK"),
-        "decode_only": _env_flag("MLX_GLM_DSA_DECODE_ONLY"),
-    }
-    try:
-        setattr(config, "_glm_dsa_runtime", runtime)
-        setattr(language_model, "_glm_dsa_runtime", runtime)
-```
-
-### MLX_GLM_DSA_NATIVE_KERNELS
-
-Advanced backend control MLX_GLM_DSA_NATIVE_KERNELS. Set explicitly only for the selected backend; its literal read and fallback are documented below.
-
-Scope: mac-mlx. Class: advanced.
-
-Source: `vendor/mac-mlx/mlx_vlm/custom_kernels/glm_moe_dsa/fast.py:23`. Unset read: ''.
-
-```text
-    _ext = None
-    _IMPORT_ERROR = exc
-    if os.environ.get("MLX_GLM_DSA_NATIVE_KERNELS", "").lower() not in {"0", "false", "no", "off"}:
-        logger.critical("GLM NATIVE EXTENSION FAILED admission (load/ABI/Metal): %r. "
-                        "Run glm_moe_dsa/build.py with the serving Python; "
-                        "set MLX_GLM_DSA_NATIVE_KERNELS=0 only for an explicit baseline.", exc)
-else:
-```
-
-Source: `vendor/mac-mlx/mlx_vlm/custom_kernels/glm_moe_dsa/measure_loaded.py:28`. Unset read: None.
-
-```text
-    # This avoids changing the live serving policy after the measurement.
-    saved=[(m,dict(m.__dict__)) for m in modules+[ops]]
-    old=os.environ.get('MLX_GLM_DSA_NATIVE_KERNELS')
-    result=dict(model=str(type(model)),lang=str(type(lang)),runs=[],steps=steps,
-                prompt_tokens=prompt_tokens,policy='separate caches; warm/off/on/on/off; no model reload')
-    ids=(list(prompt_ids)*((prompt_tokens+len(prompt_ids)-1)//len(prompt_ids)))[:prompt_tokens]
-    try:
-```
-
-Source: `vendor/mac-mlx/mlx_vlm/custom_kernels/glm_moe_dsa/measure_loaded.py:33`. Unset read: Assigned by the runtime; see literal consumer.
-
-```text
-    ids=(list(prompt_ids)*((prompt_tokens+len(prompt_ids)-1)//len(prompt_ids)))[:prompt_tokens]
-    try:
-        os.environ['MLX_GLM_DSA_NATIVE_KERNELS']='1'
-        for m in modules+[ops]: importlib.reload(m)
-        if not ops.native_available(): raise RuntimeError(f'Native unavailable: {ops.status()}')
-        result['native_status']=ops.status()
-        counts={}
-```
-
-Source: `vendor/mac-mlx/mlx_vlm/custom_kernels/glm_moe_dsa/measure_loaded.py:47`. Unset read: Assigned by the runtime; see literal consumer.
-
-```text
-            setattr(ops,name,counted)
-        for enabled in (False,True,False,True,True,False):
-            os.environ['MLX_GLM_DSA_NATIVE_KERNELS']='1' if enabled else '0'
-            cache=lang.make_cache() if hasattr(lang,'make_cache') else make_prompt_cache(lang)
-            t=time.perf_counter()
-            for begin in range(0,len(ids),256):
-                out=lang(mx.array([ids[begin:begin+256]],mx.int32),cache=cache)
-```
-
-Source: `vendor/mac-mlx/mlx_vlm/custom_kernels/glm_moe_dsa/measure_loaded.py:77`. Unset read: Assigned by the runtime; see literal consumer.
-
-```text
-            module.__dict__.clear(); module.__dict__.update(state)
-        if old is None: os.environ.pop('MLX_GLM_DSA_NATIVE_KERNELS',None)
-        else: os.environ['MLX_GLM_DSA_NATIVE_KERNELS']=old
-        Path(output).write_text(json.dumps(result,indent=2))
-```
-
-Source: `vendor/mac-mlx/mlx_vlm/models/glm_moe_dsa/native_ops.py:47`. Unset read: ''.
-
-```text
-
-def _native_forced_off() -> bool:
-    return str(os.environ.get("MLX_GLM_DSA_NATIVE_KERNELS", "")).strip().lower() in {
-        "0",
-        "false",
-        "no",
-        "off",
-```
-
-### MLX_GLM_DSA_RECENT_TOPK
-
-Advanced backend control MLX_GLM_DSA_RECENT_TOPK. Set explicitly only for the selected backend; its literal read and fallback are documented below.
-
-Scope: mac-mlx. Class: advanced.
-
-Source: `vendor/mac-mlx/mlx_vlm/models/glm_moe_dsa/glm_moe_dsa.py:160`. Unset read: Wrapper/conditional default: see the literal call and consumer below.
-
-```text
-        if k.shape[2] <= self.index_topk:
-            return None
-        if _env_flag("MLX_GLM_DSA_RECENT_TOPK"):
-            q_pos = mx.arange(offset, offset + s) if not isinstance(offset, mx.array) else offset + mx.arange(s)
-            start = mx.maximum(q_pos - self.index_topk + 1, 0)
-            idx = start[:, None] + mx.arange(self.index_topk)[None, :]
-            idx = mx.minimum(idx, k.shape[2] - 1)
-```
-
-Source: `vendor/mac-mlx/mlx_vlm/models/glm_moe_dsa/glm_moe_dsa.py:395`. Unset read: Wrapper/conditional default: see the literal call and consumer below.
-
-```text
-        "rope_interleave": getattr(config, "rope_interleave", None),
-        "indexer_rope_interleave": getattr(config, "indexer_rope_interleave", None),
-        "recent_topk": _env_flag("MLX_GLM_DSA_RECENT_TOPK"),
-        "decode_only": _env_flag("MLX_GLM_DSA_DECODE_ONLY"),
-    }
-    try:
-        setattr(config, "_glm_dsa_runtime", runtime)
-```
-
-### MLX_GLM_DSA_SHARE_TOPK
-
-Advanced backend control MLX_GLM_DSA_SHARE_TOPK. Set explicitly only for the selected backend; its literal read and fallback are documented below.
-
-Scope: mac-mlx. Class: advanced.
-
-Source: `vendor/mac-mlx/mlx_vlm/models/glm_moe_dsa/glm_moe_dsa.py:349`. Unset read: Wrapper/conditional default: see the literal call and consumer below.
-
-```text
-    disable_shared = (
-        _env_flag("MLX_VLM_GLM_DSA_DISABLE_SHARED")
-        or _env_off("MLX_GLM_DSA_SHARE_TOPK")
-    )
-    layers = getattr(getattr(language_model, "model", None), "layers", []) or []
-    patched_dsa = 0
-    patched_shared = 0
-```
-
-### MLX_GLM_DSA_SPARSE
-
-Advanced backend control MLX_GLM_DSA_SPARSE. Set explicitly only for the selected backend; its literal read and fallback are documented below.
-
-Scope: mac-mlx. Class: advanced.
-
-Source: `vendor/mac-mlx/mlx_vlm/models/glm_moe_dsa/glm_moe_dsa.py:345`. Unset read: Wrapper/conditional default: see the literal call and consumer below.
-
-```text
-    disable_dsa = (
-        _env_flag("MLX_VLM_GLM_DSA_DISABLE")
-        or _env_off("MLX_GLM_DSA_SPARSE")
-    )
-    disable_shared = (
-        _env_flag("MLX_VLM_GLM_DSA_DISABLE_SHARED")
-        or _env_off("MLX_GLM_DSA_SHARE_TOPK")
-```
-
-### MLX_INIT_AT
-
-Advanced backend control MLX_INIT_AT. Set explicitly only for the selected backend; its literal read and fallback are documented below.
-
-Scope: mac-mlx. Class: advanced.
-
-Source: `vendor/mac-mlx/mlx_vlm/server/cli.py:219`. Unset read: None.
-
-```text
-    logger.setLevel(log_level)
-
-    init_at = os.environ.get("MLX_INIT_AT")
-    if init_at:
-        try:
-            delay = float(init_at) - time.time()
-            if delay > 0:
-```
-
-### MLX_MIMO_CAPACITY_LIMIT
-
-Advanced backend control MLX_MIMO_CAPACITY_LIMIT. Set explicitly only for the selected backend; its literal read and fallback are documented below.
-
-Scope: mac-mlx. Class: advanced.
-
-Source: `vendor/mac-mlx/mlx_vlm/rpc_pipeline.py:453`. Unset read: '0'.
-
-```text
-                    return _rank0_logits(inner, hidden, cache, [1])
-                probe_capacity(inner, capacity_tokens, capacity_forward,
-                    limit_bytes=int(os.environ.get("MLX_MIMO_CAPACITY_LIMIT", "0")))
-            print("RPC_QUANT_MODULES " + json.dumps({"rank": rank, **_quant_module_summary(inner)}), flush=True)
-            print(f"RPC rank {rank}: materialized native MiMo", flush=True)
-            return loaded, processor, inner.start_idx, inner.end_idx
-
-```
-
-Source: `vendor/mac-mlx/mlx_vlm/rpc_pipeline.py:2385`. Unset read: Assigned by the runtime; see literal consumer.
-
-```text
-    if args.max_context and args.kv_bits == 8:
-        os.environ["MLX_MIMO_CAPACITY_TOKENS"] = str(args.max_context)
-        os.environ["MLX_MIMO_CAPACITY_LIMIT"] = str(int(getattr(args, "wired_limit_mb", 0) or 0) * 2**20)
-    args.func(args)
-
-
-if __name__ == "__main__":
-```
-
-### MLX_MIMO_CAPACITY_TOKENS
-
-Advanced backend control MLX_MIMO_CAPACITY_TOKENS. Set explicitly only for the selected backend; its literal read and fallback are documented below.
-
-Scope: mac-mlx. Class: advanced.
-
-Source: `vendor/mac-mlx/mlx_vlm/rpc_pipeline.py:444`. Unset read: '0'.
-
-```text
-            _assert_gpu_runtime(loaded.language_model, rank=rank, require_gpu=require_gpu)
-            inner = loaded.language_model
-            capacity_tokens = int(os.environ.get("MLX_MIMO_CAPACITY_TOKENS", "0"))
-            if capacity_tokens:
-                from .models.mimo_v2.capacity import probe_capacity
-                def capacity_forward(cache):
-                    if rank == 1:
-```
-
-Source: `vendor/mac-mlx/mlx_vlm/rpc_pipeline.py:2384`. Unset read: Assigned by the runtime; see literal consumer.
-
-```text
-        os.environ["MLX_MIMO_KV_BITS"] = str(args.kv_bits)
-    if args.max_context and args.kv_bits == 8:
-        os.environ["MLX_MIMO_CAPACITY_TOKENS"] = str(args.max_context)
-        os.environ["MLX_MIMO_CAPACITY_LIMIT"] = str(int(getattr(args, "wired_limit_mb", 0) or 0) * 2**20)
-    args.func(args)
-
-
-```
-
-### MLX_MIMO_KV_BITS
-
-Advanced backend control MLX_MIMO_KV_BITS. Set explicitly only for the selected backend; its literal read and fallback are documented below.
-
-Scope: mac-mlx. Class: advanced.
-
-Source: `vendor/mac-mlx/mlx_vlm/rpc_pipeline.py:2382`. Unset read: Assigned by the runtime; see literal consumer.
-
-```text
-    args = parser.parse_args()
-    if args.kv_bits:
-        os.environ["MLX_MIMO_KV_BITS"] = str(args.kv_bits)
-    if args.max_context and args.kv_bits == 8:
-        os.environ["MLX_MIMO_CAPACITY_TOKENS"] = str(args.max_context)
-        os.environ["MLX_MIMO_CAPACITY_LIMIT"] = str(int(getattr(args, "wired_limit_mb", 0) or 0) * 2**20)
-    args.func(args)
-```
-
-Source: `vendor/mac-mlx/mlx_vlm/models/mimo_v2/mimo_v2.py:86`. Unset read: None.
-
-```text
-            else:
-                caches.append(QuantizedKVCache(group_size=64, bits=8)
-                              if os.environ.get("MLX_MIMO_KV_BITS") == "8" else KVCache())
-        return caches
-
-
-class Model(nn.Module):
-```
-
-### MLX_RPC_REQUEST_TIMEOUT
-
-Advanced backend control MLX_RPC_REQUEST_TIMEOUT. Set explicitly only for the selected backend; its literal read and fallback are documented below.
-
-Scope: mac-mlx. Class: advanced.
-
-Source: `vendor/mac-mlx/mlx_vlm/rpc_pipeline.py:2343`. Unset read: '1800'.
-
-```text
-        "--request-timeout",
-        type=float,
-        default=float(os.environ.get("MLX_RPC_REQUEST_TIMEOUT", "1800")),
-        help="Per-request stream timeout in seconds; set 0 to disable the server-side timeout.",
-    )
-    serve_parser.add_argument(
-        "--threaded-stream",
-```
-
-### MLX_RPC_STREAM_PROGRESS_INTERVAL
-
-Advanced backend control MLX_RPC_STREAM_PROGRESS_INTERVAL. Set explicitly only for the selected backend; its literal read and fallback are documented below.
-
-Scope: mac-mlx. Class: advanced.
-
-Source: `vendor/mac-mlx/mlx_vlm/rpc_pipeline.py:2337`. Unset read: '10'.
-
-```text
-        "--stream-progress-interval",
-        type=float,
-        default=float(os.environ.get("MLX_RPC_STREAM_PROGRESS_INTERVAL", "10")),
-        help="Seconds between in-band SSE progress packets while waiting for the first token.",
-    )
-    serve_parser.add_argument(
-        "--request-timeout",
-```
-
-### MLX_SERVE_LIVE_DOWNLOAD
-
-Advanced backend control MLX_SERVE_LIVE_DOWNLOAD. Set explicitly only for the selected backend; its literal read and fallback are documented below.
-
-Scope: mlx-serve. Class: advanced.
-
-Source: `engines/mlx-serve/app/Tests/MLXCoreTests/ChunkedDownloadTests.swift:337`. Unset read: Wrapper/conditional default: see the literal call and consumer below.
-
-```text
-    /// isn't reading line drift as a win.
-    func testLiveHuggingFaceThroughput() async throws {
-        try XCTSkipUnless(ProcessInfo.processInfo.environment["MLX_SERVE_LIVE_DOWNLOAD"] == "1",
-                          "set MLX_SERVE_LIVE_DOWNLOAD=1 to measure against the real CDN")
-        let url = URL(string: "https://huggingface.co/ddalcu/Kokoro-82M-MLX-Serve/resolve/main/model.safetensors")!
-        let size: Int64 = 324_613_768
-
-```
-
-Source: `engines/mlx-serve/app/Tests/MLXCoreTests/ChunkedDownloadTests.swift:394`. Unset read: Wrapper/conditional default: see the literal call and consumer below.
-
-```text
-    /// 302 every time. Same opt-in env var.
-    func testLiveSharedSessionHandshakeCost() async throws {
-        try XCTSkipUnless(ProcessInfo.processInfo.environment["MLX_SERVE_LIVE_DOWNLOAD"] == "1",
-                          "set MLX_SERVE_LIVE_DOWNLOAD=1 to measure against the real CDN")
-        let repo = "mlx-community/Qwen3-8B-4bit"
-        let files = ["config.json", "tokenizer_config.json", "special_tokens_map.json", "added_tokens.json",
-                     "model.safetensors.index.json", "vocab.json", "merges.txt", "README.md",
-```
-
-### MLX_SERVE_LIVE_VARIANT
-
-Advanced backend control MLX_SERVE_LIVE_VARIANT. Set explicitly only for the selected backend; its literal read and fallback are documented below.
-
-Scope: mlx-serve. Class: advanced.
-
-Source: `engines/mlx-serve/app/Tests/MLXCoreTests/MlxVariantTests.swift:388`. Unset read: Wrapper/conditional default: see the literal call and consumer below.
-
-```text
-
-    private func requireLive() throws {
-        try XCTSkipUnless(ProcessInfo.processInfo.environment["MLX_SERVE_LIVE_VARIANT"] == "1")
-    }
-
-    func testTheRealRepoIsDetectedAsAShelf() async throws {
-        try requireLive()
-```
-
-### MLX_SERVE_LIVE_VARIANT_FOLDER
-
-Advanced backend control MLX_SERVE_LIVE_VARIANT_FOLDER. Set explicitly only for the selected backend; its literal read and fallback are documented below.
-
-Scope: mlx-serve. Class: advanced.
-
-Source: `engines/mlx-serve/app/Tests/MLXCoreTests/MlxVariantTests.swift:409`. Unset read: Wrapper/conditional default: see the literal call and consumer below.
-
-```text
-        let root = try XCTUnwrap(ProcessInfo.processInfo.environment["MLX_SERVE_LIVE_VARIANT_ROOT"],
-                                 "set MLX_SERVE_LIVE_VARIANT_ROOT to a models root")
-        let folder = ProcessInfo.processInfo.environment["MLX_SERVE_LIVE_VARIANT_FOLDER"] ?? "mxfp4"
-        try FileManager.default.createDirectory(atPath: root, withIntermediateDirectories: true)
-        let manager = DownloadManager(modelsRoot: root)
-        let dest = MlxVariantScan.localRepoId(repoId: repoId, folder: folder)
-
-```
-
-### MLX_SERVE_LIVE_VARIANT_ROOT
-
-Advanced backend control MLX_SERVE_LIVE_VARIANT_ROOT. Set explicitly only for the selected backend; its literal read and fallback are documented below.
-
-Scope: mlx-serve. Class: advanced.
-
-Source: `engines/mlx-serve/app/Tests/MLXCoreTests/MlxVariantTests.swift:407`. Unset read: Wrapper/conditional default: see the literal call and consumer below.
-
-```text
-    func testDownloadingOneVariantProducesALoadableModelDir() async throws {
-        try requireLive()
-        let root = try XCTUnwrap(ProcessInfo.processInfo.environment["MLX_SERVE_LIVE_VARIANT_ROOT"],
-                                 "set MLX_SERVE_LIVE_VARIANT_ROOT to a models root")
-        let folder = ProcessInfo.processInfo.environment["MLX_SERVE_LIVE_VARIANT_FOLDER"] ?? "mxfp4"
-        try FileManager.default.createDirectory(atPath: root, withIntermediateDirectories: true)
-        let manager = DownloadManager(modelsRoot: root)
-```
-
-### MLX_TRUST_REMOTE_CODE
-
-Advanced backend control MLX_TRUST_REMOTE_CODE. Set explicitly only for the selected backend; its literal read and fallback are documented below.
-
-Scope: mac-mlx. Class: advanced.
-
-Source: `vendor/mac-mlx/mlx_vlm/server/cli.py:186`. Unset read: Assigned by the runtime; see literal consumer.
-
-```text
-        os.environ["MLX_VLM_PIPELINE_LAYERS"] = args.pipeline_layers
-    if args.trust_remote_code:
-        os.environ["MLX_TRUST_REMOTE_CODE"] = "true"
-    if args.model:
-        os.environ["MLX_VLM_PRELOAD_MODEL"] = args.model
-        if args.adapter_path:
-            os.environ["MLX_VLM_PRELOAD_ADAPTER"] = args.adapter_path
-```
-
-Source: `vendor/mac-mlx/mlx_vlm/server/generation.py:515`. Unset read: 'false'.
-
-```text
-        # Use the load function from utils.py which handles path resolution and loading
-        trust_remote_code = (
-            os.environ.get("MLX_TRUST_REMOTE_CODE", "false").lower() == "true"
-        )
-        tensor_group, pipeline_group, distributed_group = _distributed_groups_from_env()
-        if distributed_group.size() > 1:
-            if adapter_path:
-```
-
-### MLX_VLM_BATCH_CACHE_EVAL_INTERVAL
-
-Advanced backend control MLX_VLM_BATCH_CACHE_EVAL_INTERVAL. Set explicitly only for the selected backend; its literal read and fallback are documented below.
-
-Scope: mac-mlx. Class: advanced.
-
-Source: `vendor/mac-mlx/mlx_vlm/generate/ar.py:99`. Unset read: None.
-
-```text
-
-def _get_batch_cache_eval_interval() -> int:
-    raw = os.environ.get("MLX_VLM_BATCH_CACHE_EVAL_INTERVAL")
-    if raw is None:
-        return DEFAULT_BATCH_CACHE_EVAL_INTERVAL
-    try:
-        return max(0, int(raw))
-```
-
-### MLX_VLM_CACHE_DIR
-
-Advanced backend control MLX_VLM_CACHE_DIR. Set explicitly only for the selected backend; its literal read and fallback are documented below.
-
-Scope: mac-mlx. Class: advanced.
-
-Source: `vendor/mac-mlx/mlx_vlm/models/deepseek_v41/engram.py:142`. Unset read: Path.home() / '.cache' / 'mlx_vlm'.
-
-```text
-
-def cache_dir() -> Path:
-    return Path(os.environ.get("MLX_VLM_CACHE_DIR", Path.home() / ".cache" / "mlx_vlm"))
-
-
-def load_compressed_token_map(tokenizer_json: str | Path, expected_size: int) -> Tuple[np.ndarray, int]:
-    """The compressed map, cached under ~/.cache/mlx_vlm keyed by the tokenizer file's size+mtime
-```
-
-### MLX_VLM_DISTRIBUTED_BACKEND
-
-Advanced backend control MLX_VLM_DISTRIBUTED_BACKEND. Set explicitly only for the selected backend; its literal read and fallback are documented below.
-
-Scope: mac-mlx. Class: advanced.
-
-Source: `vendor/mac-mlx/mlx_vlm/server/cli.py:46`. Unset read: 'any'.
-
-```text
-        "--distributed-backend",
-        type=str,
-        default=os.environ.get("MLX_VLM_DISTRIBUTED_BACKEND", "any"),
-        choices=["any", "ring", "mpi", "nccl", "jaccl"],
-        help="MLX distributed backend to initialize (default: %(default)s).",
-    )
-    parser.add_argument(
-```
-
-Source: `vendor/mac-mlx/mlx_vlm/server/cli.py:182`. Unset read: Assigned by the runtime; see literal consumer.
-
-```text
-    args = parser.parse_args()
-    os.environ["MLX_VLM_PIPELINE"] = "1" if args.pipeline else "0"
-    os.environ["MLX_VLM_DISTRIBUTED_BACKEND"] = args.distributed_backend
-    if args.pipeline_layers:
-        os.environ["MLX_VLM_PIPELINE_LAYERS"] = args.pipeline_layers
-    if args.trust_remote_code:
-        os.environ["MLX_TRUST_REMOTE_CODE"] = "true"
-```
-
-Source: `vendor/mac-mlx/mlx_vlm/server/generation.py:111`. Unset read: 'any'.
-
-```text
-
-def _distributed_groups_from_env():
-    backend = os.environ.get("MLX_VLM_DISTRIBUTED_BACKEND", "any")
-    group = mx.distributed.init(backend=backend)
-    if group.size() <= 1:
-        return None, None, group
-    if _env_flag("MLX_VLM_PIPELINE"):
-```
-
-Source: `vendor/mac-mlx/mlx_vlm/server/generation.py:791`. Unset read: 'any'.
-
-```text
-        self.requests: Queue = Queue()
-        self._distributed_group = mx.distributed.init(
-            backend=os.environ.get("MLX_VLM_DISTRIBUTED_BACKEND", "any")
-        )
-        self._is_distributed = self._distributed_group.size() > 1
-        self._rank = self._distributed_group.rank()
-        self._stop = False
-```
-
-### MLX_VLM_DRAFT_BLOCK_SIZE
-
-Advanced backend control MLX_VLM_DRAFT_BLOCK_SIZE. Set explicitly only for the selected backend; its literal read and fallback are documented below.
-
-Scope: mac-mlx. Class: advanced.
-
-Source: `vendor/mac-mlx/mlx_vlm/server/cli.py:197`. Unset read: Assigned by the runtime; see literal consumer.
-
-```text
-            os.environ["MLX_VLM_DRAFT_KIND"] = args.draft_kind
-        if args.draft_block_size is not None:
-            os.environ["MLX_VLM_DRAFT_BLOCK_SIZE"] = str(args.draft_block_size)
-    if args.prefill_step_size:
-        os.environ["PREFILL_STEP_SIZE"] = str(args.prefill_step_size)
-    os.environ["MLX_VLM_MAX_TOKENS"] = str(args.max_tokens)
-    os.environ["MLX_VLM_ENABLE_THINKING"] = "1" if args.enable_thinking else "0"
-```
-
-Source: `vendor/mac-mlx/mlx_vlm/server/generation.py:62`. Unset read: None.
-
-```text
-
-def _get_draft_block_size_from_env():
-    draft_block_size_str = os.environ.get("MLX_VLM_DRAFT_BLOCK_SIZE")
-    return int(draft_block_size_str) if draft_block_size_str else None
-
-
-def _notify_queues(queues, *items):
-```
-
-### MLX_VLM_DRAFT_KIND
-
-Advanced backend control MLX_VLM_DRAFT_KIND. Set explicitly only for the selected backend; its literal read and fallback are documented below.
-
-Scope: mac-mlx. Class: advanced.
-
-Source: `vendor/mac-mlx/mlx_vlm/server/cli.py:195`. Unset read: Assigned by the runtime; see literal consumer.
-
-```text
-        os.environ["MLX_VLM_DRAFT_MODEL"] = args.draft_model
-        if args.draft_kind is not None:
-            os.environ["MLX_VLM_DRAFT_KIND"] = args.draft_kind
-        if args.draft_block_size is not None:
-            os.environ["MLX_VLM_DRAFT_BLOCK_SIZE"] = str(args.draft_block_size)
-    if args.prefill_step_size:
-        os.environ["PREFILL_STEP_SIZE"] = str(args.prefill_step_size)
-```
-
-Source: `vendor/mac-mlx/mlx_vlm/server/generation.py:840`. Unset read: None.
-
-```text
-
-        draft_model = None
-        draft_kind = os.environ.get("MLX_VLM_DRAFT_KIND")
-        draft_model_path = os.environ.get("MLX_VLM_DRAFT_MODEL")
-        if self._is_distributed and draft_model_path:
-            raise ValueError("Speculative decoding is not supported in distributed mode.")
-        if draft_model_path:
-```
-
-### MLX_VLM_DRAFT_MODEL
-
-Advanced backend control MLX_VLM_DRAFT_MODEL. Set explicitly only for the selected backend; its literal read and fallback are documented below.
-
-Scope: mac-mlx. Class: advanced.
-
-Source: `vendor/mac-mlx/mlx_vlm/server/cli.py:193`. Unset read: Assigned by the runtime; see literal consumer.
-
-```text
-    os.environ["MLX_VLM_VISION_CACHE_SIZE"] = str(args.vision_cache_size)
-    if args.draft_model:
-        os.environ["MLX_VLM_DRAFT_MODEL"] = args.draft_model
-        if args.draft_kind is not None:
-            os.environ["MLX_VLM_DRAFT_KIND"] = args.draft_kind
-        if args.draft_block_size is not None:
-            os.environ["MLX_VLM_DRAFT_BLOCK_SIZE"] = str(args.draft_block_size)
-```
-
-Source: `vendor/mac-mlx/mlx_vlm/server/generation.py:841`. Unset read: None.
-
-```text
-        draft_model = None
-        draft_kind = os.environ.get("MLX_VLM_DRAFT_KIND")
-        draft_model_path = os.environ.get("MLX_VLM_DRAFT_MODEL")
-        if self._is_distributed and draft_model_path:
-            raise ValueError("Speculative decoding is not supported in distributed mode.")
-        if draft_model_path:
-            from ..speculative.drafters import (
-```
-
-### MLX_VLM_ENABLE_THINKING
-
-Advanced backend control MLX_VLM_ENABLE_THINKING. Set explicitly only for the selected backend; its literal read and fallback are documented below.
-
-Scope: mac-mlx. Class: advanced.
-
-Source: `vendor/mac-mlx/mlx_vlm/server/cli.py:201`. Unset read: Assigned by the runtime; see literal consumer.
-
-```text
-        os.environ["PREFILL_STEP_SIZE"] = str(args.prefill_step_size)
-    os.environ["MLX_VLM_MAX_TOKENS"] = str(args.max_tokens)
-    os.environ["MLX_VLM_ENABLE_THINKING"] = "1" if args.enable_thinking else "0"
-    if args.kv_bits is not None:
-        os.environ["KV_BITS"] = str(args.kv_bits)
-    os.environ["KV_GROUP_SIZE"] = str(args.kv_group_size)
-    os.environ["KV_QUANT_SCHEME"] = args.kv_quant_scheme
-```
-
-Source: `vendor/mac-mlx/mlx_vlm/server/generation.py:211`. Unset read: None.
-
-```text
-
-def get_server_enable_thinking():
-    raw = os.environ.get("MLX_VLM_ENABLE_THINKING")
-    if raw is None:
-        return DEFAULT_ENABLE_THINKING
-    return raw.lower() in ("1", "true", "yes", "on")
-
-```
-
-### MLX_VLM_GLM_DSA_DISABLE
-
-Advanced backend control MLX_VLM_GLM_DSA_DISABLE. Set explicitly only for the selected backend; its literal read and fallback are documented below.
-
-Scope: mac-mlx. Class: advanced.
-
-Source: `vendor/mac-mlx/mlx_vlm/models/glm_moe_dsa/glm_moe_dsa.py:344`. Unset read: Wrapper/conditional default: see the literal call and consumer below.
-
-```text
-    """
-    disable_dsa = (
-        _env_flag("MLX_VLM_GLM_DSA_DISABLE")
-        or _env_off("MLX_GLM_DSA_SPARSE")
-    )
-    disable_shared = (
-        _env_flag("MLX_VLM_GLM_DSA_DISABLE_SHARED")
-```
-
-### MLX_VLM_GLM_DSA_DISABLE_SHARED
-
-Advanced backend control MLX_VLM_GLM_DSA_DISABLE_SHARED. Set explicitly only for the selected backend; its literal read and fallback are documented below.
-
-Scope: mac-mlx. Class: advanced.
-
-Source: `vendor/mac-mlx/mlx_vlm/models/glm_moe_dsa/glm_moe_dsa.py:348`. Unset read: Wrapper/conditional default: see the literal call and consumer below.
-
-```text
-    )
-    disable_shared = (
-        _env_flag("MLX_VLM_GLM_DSA_DISABLE_SHARED")
-        or _env_off("MLX_GLM_DSA_SHARE_TOPK")
-    )
-    layers = getattr(getattr(language_model, "model", None), "layers", []) or []
-    patched_dsa = 0
-```
-
-### MLX_VLM_MAX_TOKENS
-
-Advanced backend control MLX_VLM_MAX_TOKENS. Set explicitly only for the selected backend; its literal read and fallback are documented below.
-
-Scope: mac-mlx. Class: advanced.
-
-Source: `vendor/mac-mlx/mlx_vlm/server/cli.py:200`. Unset read: Assigned by the runtime; see literal consumer.
-
-```text
-    if args.prefill_step_size:
-        os.environ["PREFILL_STEP_SIZE"] = str(args.prefill_step_size)
-    os.environ["MLX_VLM_MAX_TOKENS"] = str(args.max_tokens)
-    os.environ["MLX_VLM_ENABLE_THINKING"] = "1" if args.enable_thinking else "0"
-    if args.kv_bits is not None:
-        os.environ["KV_BITS"] = str(args.kv_bits)
-    os.environ["KV_GROUP_SIZE"] = str(args.kv_group_size)
-```
-
-Source: `vendor/mac-mlx/mlx_vlm/server/generation.py:80`. Unset read: DEFAULT_MAX_TOKENS.
-
-```text
-
-def get_server_max_tokens():
-    return int(os.environ.get("MLX_VLM_MAX_TOKENS", DEFAULT_MAX_TOKENS))
-
-
-def get_token_queue_timeout():
-    raw_timeout = os.environ.get("MLX_VLM_TOKEN_QUEUE_TIMEOUT", "")
-```
-
-Source: `vendor/mac-mlx/mlx_vlm/server/schemas.py:25`. Unset read: DEFAULT_MAX_TOKENS.
-
-```text
-
-def get_server_max_tokens():
-    return int(os.environ.get("MLX_VLM_MAX_TOKENS", DEFAULT_MAX_TOKENS))
-
-
-class FlexibleBaseModel(BaseModel):
-    """Base model that ignores/accepts any unknown OpenAI SDK fields."""
-```
-
-### MLX_VLM_PIPELINE
-
-Advanced backend control MLX_VLM_PIPELINE. Set explicitly only for the selected backend; its literal read and fallback are documented below.
-
-Scope: mac-mlx. Class: advanced.
-
-Source: `vendor/mac-mlx/mlx_vlm/server/cli.py:181`. Unset read: Assigned by the runtime; see literal consumer.
-
-```text
-    )
-    args = parser.parse_args()
-    os.environ["MLX_VLM_PIPELINE"] = "1" if args.pipeline else "0"
-    os.environ["MLX_VLM_DISTRIBUTED_BACKEND"] = args.distributed_backend
-    if args.pipeline_layers:
-        os.environ["MLX_VLM_PIPELINE_LAYERS"] = args.pipeline_layers
-    if args.trust_remote_code:
-```
-
-Source: `vendor/mac-mlx/mlx_vlm/server/generation.py:115`. Unset read: Wrapper/conditional default: see the literal call and consumer below.
-
-```text
-    if group.size() <= 1:
-        return None, None, group
-    if _env_flag("MLX_VLM_PIPELINE"):
-        return None, group, group
-    return group, None, group
-
-
-```
-
-### MLX_VLM_PIPELINE_LAYERS
-
-Advanced backend control MLX_VLM_PIPELINE_LAYERS. Set explicitly only for the selected backend; its literal read and fallback are documented below.
-
-Scope: mac-mlx. Class: advanced.
-
-Source: `vendor/mac-mlx/mlx_vlm/rpc_pipeline.py:421`. Unset read: Assigned by the runtime; see literal consumer.
-
-```text
-    require_gpu: bool,
-):
-    os.environ["MLX_VLM_PIPELINE_LAYERS"] = pipeline_layers
-    model_path = get_model_path(model)
-    group = _PipelineGroup(rank, size)
-
-    raw_config = json.loads((Path(model_path) / "config.json").read_text())
-```
-
-Source: `vendor/mac-mlx/mlx_vlm/models/text_only.py:118`. Unset read: None.
-
-```text
-        self.pipeline_size = group.size()
-        n_layers = len(core.layers)
-        raw_counts = os.environ.get("MLX_VLM_PIPELINE_LAYERS") or os.environ.get(
-            "MLX_PIPELINE_LAYERS", ""
-        )
-        if raw_counts:
-            counts = [int(part.strip()) for part in raw_counts.split(",") if part.strip()]
-```
-
-Source: `vendor/mac-mlx/mlx_vlm/models/deepseek_v4/language.py:951`. Unset read: None.
-
-```text
-        self.pipeline_size = group.size()
-        n_layers = self.args.num_hidden_layers
-        raw_counts = os.environ.get("MLX_VLM_PIPELINE_LAYERS") or os.environ.get(
-            "MLX_PIPELINE_LAYERS", ""
-        )
-        if raw_counts:
-            counts = [int(part.strip()) for part in raw_counts.split(",") if part.strip()]
-```
-
-Source: `vendor/mac-mlx/mlx_vlm/models/mimo_v2/mimo_v2.py:40`. Unset read: None.
-
-```text
-        n_layers = len(self.model.layers)
-
-        raw_counts = os.environ.get("MLX_VLM_PIPELINE_LAYERS") or os.environ.get(
-            "MLX_PIPELINE_LAYERS", ""
-        )
-        if raw_counts:
-            counts = [int(part.strip()) for part in raw_counts.split(",") if part.strip()]
-```
-
-Source: `vendor/mac-mlx/mlx_vlm/server/cli.py:53`. Unset read: ''.
-
-```text
-        "--pipeline-layers",
-        type=str,
-        default=os.environ.get("MLX_VLM_PIPELINE_LAYERS", ""),
-        help=(
-            "Comma-separated layer counts per rank for pipeline mode "
-            "(rank 0 owns the final layers, e.g. 52,9 for a 61-layer model)."
-        ),
-```
-
-Source: `vendor/mac-mlx/mlx_vlm/server/cli.py:184`. Unset read: Assigned by the runtime; see literal consumer.
-
-```text
-    os.environ["MLX_VLM_DISTRIBUTED_BACKEND"] = args.distributed_backend
-    if args.pipeline_layers:
-        os.environ["MLX_VLM_PIPELINE_LAYERS"] = args.pipeline_layers
-    if args.trust_remote_code:
-        os.environ["MLX_TRUST_REMOTE_CODE"] = "true"
-    if args.model:
-        os.environ["MLX_VLM_PRELOAD_MODEL"] = args.model
-```
-
-### MLX_VLM_PRELOAD_ADAPTER
-
-Advanced backend control MLX_VLM_PRELOAD_ADAPTER. Set explicitly only for the selected backend; its literal read and fallback are documented below.
-
-Scope: mac-mlx. Class: advanced.
-
-Source: `vendor/mac-mlx/mlx_vlm/server/cli.py:190`. Unset read: Assigned by the runtime; see literal consumer.
-
-```text
-        os.environ["MLX_VLM_PRELOAD_MODEL"] = args.model
-        if args.adapter_path:
-            os.environ["MLX_VLM_PRELOAD_ADAPTER"] = args.adapter_path
-    os.environ["MLX_VLM_VISION_CACHE_SIZE"] = str(args.vision_cache_size)
-    if args.draft_model:
-        os.environ["MLX_VLM_DRAFT_MODEL"] = args.draft_model
-        if args.draft_kind is not None:
-```
-
-### MLX_VLM_PRELOAD_MODEL
-
-Advanced backend control MLX_VLM_PRELOAD_MODEL. Set explicitly only for the selected backend; its literal read and fallback are documented below.
-
-Scope: mac-mlx. Class: advanced.
-
-Source: `vendor/mac-mlx/mlx_vlm/server/cli.py:188`. Unset read: Assigned by the runtime; see literal consumer.
-
-```text
-        os.environ["MLX_TRUST_REMOTE_CODE"] = "true"
-    if args.model:
-        os.environ["MLX_VLM_PRELOAD_MODEL"] = args.model
-        if args.adapter_path:
-            os.environ["MLX_VLM_PRELOAD_ADAPTER"] = args.adapter_path
-    os.environ["MLX_VLM_VISION_CACHE_SIZE"] = str(args.vision_cache_size)
-    if args.draft_model:
-```
-
-### MLX_VLM_RESPONSE_STORE_LIMIT
-
-Advanced backend control MLX_VLM_RESPONSE_STORE_LIMIT. Set explicitly only for the selected backend; its literal read and fallback are documented below.
-
-Scope: mac-mlx. Class: advanced.
-
-Source: `vendor/mac-mlx/mlx_vlm/server/responses_state.py:12`. Unset read: '1024'.
-
-```text
-from fastapi import HTTPException
-
-RESPONSE_STORE_LIMIT = int(os.environ.get("MLX_VLM_RESPONSE_STORE_LIMIT", "1024"))
-_CONTENT_MARKERS = ("<|START_TEXT|>", "<|END_TEXT|>")
-
-
-def _strip_content_markers(text: str) -> str:
-```
-
-### MLX_VLM_TOKEN_QUEUE_TIMEOUT
-
-Advanced backend control MLX_VLM_TOKEN_QUEUE_TIMEOUT. Set explicitly only for the selected backend; its literal read and fallback are documented below.
-
-Scope: mac-mlx. Class: advanced.
-
-Source: `vendor/mac-mlx/mlx_vlm/server/generation.py:84`. Unset read: ''.
-
-```text
-
-def get_token_queue_timeout():
-    raw_timeout = os.environ.get("MLX_VLM_TOKEN_QUEUE_TIMEOUT", "")
-    if raw_timeout == "":
-        return DEFAULT_TOKEN_QUEUE_TIMEOUT
-    try:
-        timeout = float(raw_timeout)
-```
-
-### MLX_VLM_VISION_CACHE_SIZE
-
-Advanced backend control MLX_VLM_VISION_CACHE_SIZE. Set explicitly only for the selected backend; its literal read and fallback are documented below.
-
-Scope: mac-mlx. Class: advanced.
-
-Source: `vendor/mac-mlx/mlx_vlm/server/app.py:568`. Unset read: '20'.
-
-```text
-        return model, None, config
-
-    vision_cache_size = int(os.environ.get("MLX_VLM_VISION_CACHE_SIZE", "20"))
-    vision_cache = VisionFeatureCache(max_size=vision_cache_size)
-
-    # APC: build a shared block pool if opted in via env var.
-    runtime.apc_manager = _apc.from_env(model_namespace=model_path)
-```
-
-Source: `vendor/mac-mlx/mlx_vlm/server/cli.py:191`. Unset read: Assigned by the runtime; see literal consumer.
-
-```text
-        if args.adapter_path:
-            os.environ["MLX_VLM_PRELOAD_ADAPTER"] = args.adapter_path
-    os.environ["MLX_VLM_VISION_CACHE_SIZE"] = str(args.vision_cache_size)
-    if args.draft_model:
-        os.environ["MLX_VLM_DRAFT_MODEL"] = args.draft_model
-        if args.draft_kind is not None:
-            os.environ["MLX_VLM_DRAFT_KIND"] = args.draft_kind
-```
-
-### MLX_VLM_WEIGHT_SHIP
-
-Advanced backend control MLX_VLM_WEIGHT_SHIP. Set explicitly only for the selected backend; its literal read and fallback are documented below.
-
-Scope: mac-mlx. Class: advanced.
-
-Source: `vendor/mac-mlx/mlx_vlm/utils.py:1074`. Unset read: ''.
-
-```text
-    same-disk / shared-storage setups. Enable with ``MLX_VLM_WEIGHT_SHIP=1`` or the
-    server flag ``--weight-source ship-from-rank0``."""
-    return os.environ.get("MLX_VLM_WEIGHT_SHIP", "").strip().lower() in {
-        "1",
-        "true",
-        "yes",
-        "on",
-```
-
-### PREFILL_STEP_SIZE
-
-Advanced backend control PREFILL_STEP_SIZE. Set explicitly only for the selected backend; its literal read and fallback are documented below.
-
-Scope: mac-mlx. Class: advanced.
-
-Source: `vendor/mac-mlx/mlx_vlm/server/cli.py:199`. Unset read: Assigned by the runtime; see literal consumer.
-
-```text
-            os.environ["MLX_VLM_DRAFT_BLOCK_SIZE"] = str(args.draft_block_size)
-    if args.prefill_step_size:
-        os.environ["PREFILL_STEP_SIZE"] = str(args.prefill_step_size)
-    os.environ["MLX_VLM_MAX_TOKENS"] = str(args.max_tokens)
-    os.environ["MLX_VLM_ENABLE_THINKING"] = "1" if args.enable_thinking else "0"
-    if args.kv_bits is not None:
-        os.environ["KV_BITS"] = str(args.kv_bits)
-```
-
-Source: `vendor/mac-mlx/mlx_vlm/server/generation.py:76`. Unset read: DEFAULT_PREFILL_STEP_SIZE.
-
-```text
-
-def get_prefill_step_size():
-    return int(os.environ.get("PREFILL_STEP_SIZE", DEFAULT_PREFILL_STEP_SIZE))
-
-
-def get_server_max_tokens():
-    return int(os.environ.get("MLX_VLM_MAX_TOKENS", DEFAULT_MAX_TOKENS))
-```
-
-### QUANTIZED_KV_START
-
-Advanced backend control QUANTIZED_KV_START. Set explicitly only for the selected backend; its literal read and fallback are documented below.
-
-Scope: mac-mlx. Class: advanced.
-
-Source: `vendor/mac-mlx/mlx_vlm/server/cli.py:208`. Unset read: Assigned by the runtime; see literal consumer.
-
-```text
-    if args.max_kv_size is not None:
-        os.environ["MAX_KV_SIZE"] = str(args.max_kv_size)
-    os.environ["QUANTIZED_KV_START"] = str(args.quantized_kv_start)
-    if args.top_logprobs_k is not None:
-        os.environ["TOP_LOGPROBS_K"] = str(args.top_logprobs_k)
-
-    log_level = getattr(logging, args.log_level.upper(), logging.INFO)
-```
-
-Source: `vendor/mac-mlx/mlx_vlm/server/generation.py:268`. Unset read: DEFAULT_QUANTIZED_KV_START.
-
-```text
-
-def get_quantized_kv_start():
-    return int(os.environ.get("QUANTIZED_KV_START", DEFAULT_QUANTIZED_KV_START))
-
-
-def get_top_logprobs_k():
-    """Max per-token top_logprobs honored by the server (0 = disabled).
-```
-
-### SANDBOX_KERNEL
-
-Advanced backend control SANDBOX_KERNEL. Set explicitly only for the selected backend; its literal read and fallback are documented below.
-
-Scope: mlx-serve. Class: advanced.
-
-Source: `engines/mlx-serve/app/Sources/MLXServe/Services/SandboxSmoke.swift:127`. Unset read: Wrapper/conditional default: see the literal call and consumer below.
-
-```text
-                    || env["CONTAIN_SMOKE_REAL_PROVISION"] == "1"
-                if !realProvision {
-                    setenv("SANDBOX_KERNEL", kernel, 1)
-                    setenv("SANDBOX_ROOTFS", rootfs, 1)
-                } else {
-                    log("[smoke] (real provisioning: fetch kernel + pull \(Self.guestArchNote))")
-                }
-```
-
-### SANDBOX_RAM_GB
-
-Advanced backend control SANDBOX_RAM_GB. Set explicitly only for the selected backend; its literal read and fallback are documented below.
-
-Scope: mlx-serve. Class: advanced.
-
-Source: `engines/mlx-serve/app/Sources/MLXServe/Services/AgentSandbox.swift:1221`. Unset read: Wrapper/conditional default: see the literal call and consumer below.
-
-```text
-        // browser-deps `npm install` at ~850 MB RSS (issue #150 follow-up), and
-        // an agent that compiles or runs headless Chromium needs real headroom.
-        let ramGB = ProcessInfo.processInfo.environment["SANDBOX_RAM_GB"].flatMap { UInt64($0) } ?? 4
-        cfg.ramBytes = ramGB * 1024 * 1024 * 1024
-
-        // Guest monitor consumer: every snapshot carries /proc/meminfo (tray RAM
-        // readout — always), and when networked also the guest IP + listening
-```
-
-### SANDBOX_ROOTFS
-
-Advanced backend control SANDBOX_ROOTFS. Set explicitly only for the selected backend; its literal read and fallback are documented below.
-
-Scope: mlx-serve. Class: advanced.
-
-Source: `engines/mlx-serve/app/Sources/MLXServe/Services/SandboxSmoke.swift:128`. Unset read: Wrapper/conditional default: see the literal call and consumer below.
-
-```text
-                if !realProvision {
-                    setenv("SANDBOX_KERNEL", kernel, 1)
-                    setenv("SANDBOX_ROOTFS", rootfs, 1)
-                } else {
-                    log("[smoke] (real provisioning: fetch kernel + pull \(Self.guestArchNote))")
-                }
-                let image = env["SANDBOX_SMOKE_IMAGE"] ?? env["CONTAIN_SMOKE_IMAGE"] ?? ServerOptions.SandboxConfig.baseImage
-```
-
-### SANDBOX_SMOKE_IMAGE
-
-Advanced backend control SANDBOX_SMOKE_IMAGE. Set explicitly only for the selected backend; its literal read and fallback are documented below.
-
-Scope: mlx-serve. Class: advanced.
-
-Source: `engines/mlx-serve/app/Sources/MLXServe/Services/SandboxSmoke.swift:341`. Unset read: Wrapper/conditional default: see the literal call and consumer below.
-
-```text
-
-    static var guestArchNote: String {
-        let img = ProcessInfo.processInfo.environment["SANDBOX_SMOKE_IMAGE"] ?? ServerOptions.SandboxConfig.baseImage
-        return "\(img) (\(AgentSandbox.guestArch))"
-    }
-
-    /// One `/usr/bin/ssh` round-trip into the guest via the loopback mirror —
-```
-
-### SHELL
-
-Advanced backend control SHELL. Set explicitly only for the selected backend; its literal read and fallback are documented below.
-
-Scope: mlx-serve. Class: advanced.
-
-Source: `engines/mlx-serve/app/Sources/MLXServe/Services/LoginShellEnv.swift:56`. Unset read: Wrapper/conditional default: see the literal call and consumer below.
-
-```text
-    static func values(of names: [String]) -> [String: String] {
-        guard !names.isEmpty else { return [:] }
-        let shell = ProcessInfo.processInfo.environment["SHELL"] ?? "/bin/zsh"
-
-        let p = Process()
-        p.executableURL = URL(fileURLWithPath: shell)
-        p.arguments = ["-l", "-i", "-c", probeCommand(names)]
-```
-
-### STUDIO_GLM_DSA_ALLOW_FA_DENSE
-
-Advanced backend control STUDIO_GLM_DSA_ALLOW_FA_DENSE. Set explicitly only for the selected backend; its literal read and fallback are documented below.
-
-Scope: studio. Class: advanced.
-
-Source: `vendor/studio/studio/general_launch.py:95`. Unset read: None.
-
-```text
-        r['dsa_sparse'] = mode != 'dense'
-        if str(r.get('fa') or '').strip().lower() == 'on' and mode == 'dense':
-            if os.environ.get('STUDIO_GLM_DSA_ALLOW_FA_DENSE') == '1':
-                print('studio: glm-dsa dense: KEEPING -fa on because STUDIO_GLM_DSA_ALLOW_FA_DENSE=1 -- this configuration garbles on SM120 (measured 2026-08-27)', flush=True)
-            else:
-                print('studio: glm-dsa dense: forcing -fa off; dense+fa=on garbles on SM120 (measured 2026-08-27). Set STUDIO_GLM_DSA_ALLOW_FA_DENSE=1 to override.', flush=True)
-                r['fa'] = 'off'
-```
-
-### STUDIO_GLM_DSA_MODE
-
-Advanced backend control STUDIO_GLM_DSA_MODE. Set explicitly only for the selected backend; its literal read and fallback are documented below.
-
-Scope: studio. Class: advanced.
-
-Source: `vendor/studio/studio/general_launch.py:87`. Unset read: None.
-
-```text
-    if arch == 'glm-dsa':
-        _default_mode = 'dense' if r.get('dsa_sparse') is False else 'full'
-        mode = str(r.get('dsa_mode') or os.environ.get('STUDIO_GLM_DSA_MODE') or _default_mode).strip().lower()
-        if mode == 'semi':
-            mode = 'full'
-        if mode not in ('dense', 'full'):
-            mode = 'full'
-```
-
-### TARREADER_REAL_LAYER
-
-Advanced backend control TARREADER_REAL_LAYER. Set explicitly only for the selected backend; its literal read and fallback are documented below.
-
-Scope: mlx-serve. Class: advanced.
-
-Source: `engines/mlx-serve/app/Tests/MLXCoreTests/TarReaderTests.swift:260`. Unset read: Wrapper/conditional default: see the literal call and consumer below.
-
-```text
-
-    func testRealDockerLayerMatchesSystemTar() throws {
-        guard let layer = ProcessInfo.processInfo.environment["TARREADER_REAL_LAYER"] else {
-            throw XCTSkip("set TARREADER_REAL_LAYER to a .tar.gz image layer")
-        }
-        let mine = try tempDir("mine")
-        let theirs = try tempDir("theirs")
-```
-
-### TESTING_MODE
-
-Advanced backend control TESTING_MODE. Set explicitly only for the selected backend; its literal read and fallback are documented below.
-
-Scope: mlx-serve. Class: advanced.
-
-Source: `engines/mlx-serve/app/Sources/MLXServe/AppState.swift:604`. Unset read: Wrapper/conditional default: see the literal call and consumer below.
-
-```text
-        TaskNotifier.shared.appState = self
-        taskScheduler.start()
-        if ProcessInfo.processInfo.environment["TESTING_MODE"] != nil {
-            testServer.start(appState: self)
-        }
-        AgentEngine.cleanupOverflowFiles()
-
-```
-
-### TOP_LOGPROBS_K
-
-Advanced backend control TOP_LOGPROBS_K. Set explicitly only for the selected backend; its literal read and fallback are documented below.
-
-Scope: mac-mlx. Class: advanced.
-
-Source: `vendor/mac-mlx/mlx_vlm/server/cli.py:210`. Unset read: Assigned by the runtime; see literal consumer.
-
-```text
-    os.environ["QUANTIZED_KV_START"] = str(args.quantized_kv_start)
-    if args.top_logprobs_k is not None:
-        os.environ["TOP_LOGPROBS_K"] = str(args.top_logprobs_k)
-
-    log_level = getattr(logging, args.log_level.upper(), logging.INFO)
-    logging.basicConfig(
-        level=log_level,
-```
-
-Source: `vendor/mac-mlx/mlx_vlm/server/generation.py:277`. Unset read: 0.
-
-```text
-    with top_logprobs>0 still succeed but the top_logprobs list stays empty.
-    """
-    k = int(os.environ.get("TOP_LOGPROBS_K", 0))
-    return max(0, min(k, 20))
-
-
-def _token_window_rate(token_times: List[float], window: int) -> Optional[float]:
-```
-
-### TRANSFORMERS_NO_ADVISORY_WARNINGS
-
-Advanced backend control TRANSFORMERS_NO_ADVISORY_WARNINGS. Set explicitly only for the selected backend; its literal read and fallback are documented below.
-
-Scope: mac-mlx. Class: advanced.
-
-Source: `vendor/mac-mlx/mlx_vlm/__init__.py:3`. Unset read: Assigned by the runtime; see literal consumer.
-
-```text
-import os
-
-os.environ["TRANSFORMERS_NO_ADVISORY_WARNINGS"] = "1"
-os.environ["TRANSFORMERS_VERBOSITY"] = "error"
-
-from .convert import convert
-from .generate import (
-```
-
-### TRANSFORMERS_VERBOSITY
-
-Advanced backend control TRANSFORMERS_VERBOSITY. Set explicitly only for the selected backend; its literal read and fallback are documented below.
-
-Scope: mac-mlx. Class: advanced.
-
-Source: `vendor/mac-mlx/mlx_vlm/__init__.py:4`. Unset read: Assigned by the runtime; see literal consumer.
-
-```text
-
-os.environ["TRANSFORMERS_NO_ADVISORY_WARNINGS"] = "1"
-os.environ["TRANSFORMERS_VERBOSITY"] = "error"
-
-from .convert import convert
-from .generate import (
-    BatchResponse,
-```
-
-### VIDEO_MAX_PIXELS
-
-Advanced backend control VIDEO_MAX_PIXELS. Set explicitly only for the selected backend; its literal read and fallback are documented below.
-
-Scope: mac-mlx. Class: advanced.
-
-Source: `vendor/mac-mlx/mlx_vlm/video_generate.py:47`. Unset read: 128000 * 28 * 28 * 0.9.
-
-```text
-# Set the maximum number of video token inputs.
-VIDEO_TOTAL_PIXELS = int(
-    float(os.environ.get("VIDEO_MAX_PIXELS", 128000 * 28 * 28 * 0.9))
-)
-
-
-def round_by_factor(number: int, factor: int) -> int:
-```
-
-### VZ_AGENT_HOST_BIN
-
-Advanced backend control VZ_AGENT_HOST_BIN. Set explicitly only for the selected backend; its literal read and fallback are documented below.
-
-Scope: mlx-serve. Class: advanced.
-
-Source: `engines/mlx-serve/app/Tests/MLXCoreTests/GuestChannelTests.swift:123`. Unset read: Wrapper/conditional default: see the literal call and consumer below.
-
-```text
-
-    override func setUpWithError() throws {
-        guard let binary = ProcessInfo.processInfo.environment["VZ_AGENT_HOST_BIN"],
-              FileManager.default.isExecutableFile(atPath: binary) else {
-            throw XCTSkip("set VZ_AGENT_HOST_BIN (build it with `zig build vz-agent-host`)")
-        }
-        socketPath = NSTemporaryDirectory() + "vz-\(UUID().uuidString.prefix(8)).sock"
-```
-
-Source: `engines/mlx-serve/app/Tests/MLXCoreTests/MCPSpawnerTests.swift:286`. Unset read: Wrapper/conditional default: see the literal call and consumer below.
-
-```text
-
-    override func setUpWithError() throws {
-        guard let binary = ProcessInfo.processInfo.environment["VZ_AGENT_HOST_BIN"],
-              FileManager.default.isExecutableFile(atPath: binary) else {
-            throw XCTSkip("set VZ_AGENT_HOST_BIN (build it with `zig build vz-agent-host`)")
-        }
-        socketPath = NSTemporaryDirectory() + "vzb-\(UUID().uuidString.prefix(8)).sock"
-```
-
-### DS4_DSPARK_SCHEDULER_MIN_AVG_MILLI
-
-Retained peer decoder scheduler minimum average acceptance, in thousandths; native fallback1500 retained.
-
-Scope: ds4-peer. Class: advanced.
-
-Source: `engines/ds4-peer/ds4.c:52067`. Unset read: Wrapper/conditional default: see the literal call and consumer below.
-
-```text
-
-static uint32_t ds4_dspark_scheduler_min_avg_milli(void) {
-    return ds4_dspark_env_u32("DS4_DSPARK_SCHEDULER_MIN_AVG_MILLI", 1500);
-}
-
-static uint32_t ds4_dspark_scheduler_max_ms_per_accept_milli(void) {
-    return ds4_dspark_env_u32(
-```
-
-### DS4_TP_SUBGATE_PIPELINE
-
-Retained peer Metal tensor-parallel subgate pipeline; native defaultoff retained. Set consistently on both ranks.
-
-Scope: ds4-peer. Class: advanced.
-
-Source: `engines/ds4-peer/ds4.c:29639`. Unset read: NULL from getenv; the literal consumer below supplies any fallback.
-
-```text
-    static int cached = -1;
-    if (cached < 0) {
-        const char *env = getenv("DS4_TP_SUBGATE_PIPELINE");
-        cached = env && env[0] && atoi(env) != 0;
-    }
-    return cached != 0;
-}
-```
-
-### DS4_NATIVE_SESSION_LOCAL_PREFILL_MAX_TOKENS
-
-Paired Mac-local prefill threshold in new tokens. Studio paired preset default 11776; strict less-than; 0 disables. Launcher sets the validated crossover.
-
-Scope: mac-ds4. Class: advanced.
-
-Source: `engines/ds4-mac/ds4_native_session_setup.inc:31`. Unset read: Wrapper/conditional default: see the literal call and consumer below.
-
-```text
-     if(policy){if(!strcmp(policy,"defer"))c->catchup_defer=true;else if(strcmp(policy,"stream"))goto bad;}}
-    c->local_prefill_max=11776;
-    if(ds4_nf_env("DS4_NATIVE_SESSION_LOCAL_PREFILL_MAX_TOKENS")&&
-       !ds4_nf_env_uint("DS4_NATIVE_SESSION_LOCAL_PREFILL_MAX_TOKENS",&c->local_prefill_max,0,49152))goto bad;
-    const char*yoco=ds4_nf_env("DS4_NATIVE_SESSION_YOCO_KEEP");
-    if(yoco&&strcmp(yoco,"0")){if(strcmp(yoco,"140"))goto bad;c->yoco_keep=140;}
-    if(!ds4_nf_pair_token(token,c->http.token)||!ds4_nf_env_uint("DS4_NATIVE_SESSION_PORT",&port,1,65535)||
-```
-
-Source: `engines/ds4-mac/ds4_native_session_setup.inc:32`. Unset read: Wrapper/conditional default: see the literal call and consumer below.
-
-```text
-    c->local_prefill_max=11776;
-    if(ds4_nf_env("DS4_NATIVE_SESSION_LOCAL_PREFILL_MAX_TOKENS")&&
-       !ds4_nf_env_uint("DS4_NATIVE_SESSION_LOCAL_PREFILL_MAX_TOKENS",&c->local_prefill_max,0,49152))goto bad;
-    const char*yoco=ds4_nf_env("DS4_NATIVE_SESSION_YOCO_KEEP");
-    if(yoco&&strcmp(yoco,"0")){if(strcmp(yoco,"140"))goto bad;c->yoco_keep=140;}
-    if(!ds4_nf_pair_token(token,c->http.token)||!ds4_nf_env_uint("DS4_NATIVE_SESSION_PORT",&port,1,65535)||
-       !ds4_nf_env_uint("DS4_NATIVE_SESSION_DEADLINE_SECONDS",&c->http.deadline_seconds,60,7200)||
-```
-
-### DS4_NATIVE_SESSION_ASYNC_DECODE_SYNC
-
-Ordered Mac catch-up worker with verified incremental owner hashes. Native default on; 0 selects blocking diagnosis.
-
-Scope: mac-ds4. Class: advanced.
-
-Source: `engines/ds4-mac/ds4_native_session_setup.inc:26`. Unset read: Wrapper/conditional default: see the literal call and consumer below.
-
-```text
-    c->http.dirfd=-1;uint32_t port;
-    c->async_decode=true;
-    {const char*policy=ds4_nf_env("DS4_NATIVE_SESSION_ASYNC_DECODE_SYNC");
-     if(policy){if(!strcmp(policy,"0"))c->async_decode=false;else if(strcmp(policy,"1"))goto bad;}}
-    {const char*policy=ds4_nf_env("DS4_NATIVE_SESSION_CATCHUP");
-     if(policy){if(!strcmp(policy,"defer"))c->catchup_defer=true;else if(strcmp(policy,"stream"))goto bad;}}
-    c->local_prefill_max=11776;
-```
-
-### DS4_NATIVE_SESSION_CATCHUP
-
-Mac catch-up policy: stream snapshots during decode (default), or defer their transmission until the reply ends. Strict join precedes every RTX operation.
-
-Scope: mac-ds4. Class: advanced.
-
-Source: `engines/ds4-mac/ds4_native_session_setup.inc:28`. Unset read: Wrapper/conditional default: see the literal call and consumer below.
-
-```text
-    {const char*policy=ds4_nf_env("DS4_NATIVE_SESSION_ASYNC_DECODE_SYNC");
-     if(policy){if(!strcmp(policy,"0"))c->async_decode=false;else if(strcmp(policy,"1"))goto bad;}}
-    {const char*policy=ds4_nf_env("DS4_NATIVE_SESSION_CATCHUP");
-     if(policy){if(!strcmp(policy,"defer"))c->catchup_defer=true;else if(strcmp(policy,"stream"))goto bad;}}
-    c->local_prefill_max=11776;
-    if(ds4_nf_env("DS4_NATIVE_SESSION_LOCAL_PREFILL_MAX_TOKENS")&&
-       !ds4_nf_env_uint("DS4_NATIVE_SESSION_LOCAL_PREFILL_MAX_TOKENS",&c->local_prefill_max,0,49152))goto bad;
-```
-
-### LLAMA_DSV41_STORED_MXFP4
-
-Opt-in stored MXFP4 routed-expert tensor-core experiment; requires uncaptured dispatch witnesses. Lossy Q4 requants remain speed proxies.
-
-Scope: rtx-llama. Class: advanced.
-
-Source: `engines/streaming-llama/prefill_llama.cpp/src/llama-dsv41-executor.cpp:855`. Unset read: NULL from getenv; the literal consumer below supplies any fallback.
-
-```text
-        const bool route_histogram=std::getenv("LLAMA_DSV41_ROUTE_HISTOGRAM")&&std::string(std::getenv("LLAMA_DSV41_ROUTE_HISTOGRAM"))=="1";
-        require(!route_histogram||!workspace||!workspace->cache_layouts,"Routing histogram requires fresh graph bindings");
-        const bool stored_fp4=std::getenv("LLAMA_DSV41_STORED_MXFP4")&&std::string(std::getenv("LLAMA_DSV41_STORED_MXFP4"))=="1";
-        if(stored_fp4){
-            require(w.ffn.gate->type==GGML_TYPE_MXFP4&&w.ffn.up->type==GGML_TYPE_MXFP4&&w.ffn.down->type==GGML_TYPE_MXFP4,
-                    "Stored FP4 experiment requires the complete MXFP4 expert triplet");
-            require(!expert.expert_mxfp4&&!expert.expert_f16_cublas&&!expert.sorted_expert_routing&&
-```
-
-Source: `engines/streaming-llama/prefill_llama.cpp/tools/dsv41-prefill/main.cpp:553`. Unset read: NULL from getenv; the literal consumer below supplies any fallback.
-
-```text
-        const uint64_t backend_reserve=args.count("--backend-temporary-reserve-bytes")?number("--backend-temporary-reserve-bytes"):gib;
-        const bool flashinfer_reserve=llama_dsv41_flashinfer::requested()&&pair_ffn&&
-            std::getenv("LLAMA_DSV41_STORED_MXFP4")&&std::string(std::getenv("LLAMA_DSV41_STORED_MXFP4"))=="1";
-        require(backend_reserve==gib||(backend_reserve==768ull*1024*1024&&pair_ffn)||
-            (flashinfer_reserve&&backend_reserve==llama_dsv41_flashinfer::reserve_bytes),"Backend reserve must match the explicit arithmetic/workspace plan");
-        require(!flashinfer_reserve||backend_reserve==llama_dsv41_flashinfer::reserve_bytes,"FlashInfer requires its bounded workspace inside the existing graph device cap");
-        const auto output_volume=native_file::volume(path("--payload"));
-```
-
-### LLAMA_DSV41_ROUTE_HISTOGRAM
-
-Diagnostic DSV4.1 per-tile counts for all384 routed experts. Retains and reads the actual top-six ids after synchronization; fresh graph bindings required. Do not mix diagnostic throughput into headline measurements.
-
-Scope: rtx-llama. Class: advanced.
-
-Source: `engines/streaming-llama/prefill_llama.cpp/src/llama-dsv41-executor.cpp:853`. Unset read: NULL from getenv; the literal consumer below supplies any fallback.
-
-```text
-    try{
-        auto expert=requested_expert;
-        const bool route_histogram=std::getenv("LLAMA_DSV41_ROUTE_HISTOGRAM")&&std::string(std::getenv("LLAMA_DSV41_ROUTE_HISTOGRAM"))=="1";
-        require(!route_histogram||!workspace||!workspace->cache_layouts,"Routing histogram requires fresh graph bindings");
-        const bool stored_fp4=std::getenv("LLAMA_DSV41_STORED_MXFP4")&&std::string(std::getenv("LLAMA_DSV41_STORED_MXFP4"))=="1";
-        if(stored_fp4){
-            require(w.ffn.gate->type==GGML_TYPE_MXFP4&&w.ffn.up->type==GGML_TYPE_MXFP4&&w.ffn.down->type==GGML_TYPE_MXFP4,
-```
-
-### LLAMA_DSV41_FLASHINFER_MXFP4
-
-Opt-in stored MXFP4 expert prefill through the pinned FlashInfer SM120 W4A8 grouped GEMM. Requires the explicit stored-weight path and an ABI2 bridge DLL. BF16 epilogue; quality and speed tradeoff, default off.
-
-Scope: rtx-llama. Class: advanced.
-
-Source: `engines/streaming-llama/prefill_llama.cpp/ggml/src/ggml-cuda/dsv41-flashinfer.cuh:13`. Unset read: NULL from getenv; the literal consumer below supplies any fallback.
-
-```text
-    int,int,int,int64_t,int64_t,int64_t,void*,uint64_t,cudaStream_t);
-static bool dsv41_flashinfer_requested(){
-    const char *value=std::getenv("LLAMA_DSV41_FLASHINFER_MXFP4");
-    return value&&std::strcmp(value,"1")==0;
-}
-static dsv41_flashinfer_fn dsv41_flashinfer_bridge(){
-    static dsv41_flashinfer_fn function=[](){
-```
-
-Source: `engines/streaming-llama/prefill_llama.cpp/src/llama-dsv41-executor.cpp:1477`. Unset read: NULL from getenv; the literal consumer below supplies any fallback.
-
-```text
-        const auto expert_cublas_before=expert.expert_f16_cublas?ggml_backend_cuda_dsv41_expert_cublas_queued():0;
-        const auto expert_fp4_before=(expert.expert_mxfp4||stored_fp4)?ggml_backend_cuda_native_mxfp4_routed_queued():0;
-        const bool flashinfer_fp4=stored_fp4&&std::getenv("LLAMA_DSV41_FLASHINFER_MXFP4")&&std::string(std::getenv("LLAMA_DSV41_FLASHINFER_MXFP4"))=="1";
-        const auto flashinfer_fp4_before=flashinfer_fp4?ggml_backend_cuda_dsv41_flashinfer_queued():0;
-        const auto hc_expand_before=ggml_backend_cuda_dsv41_hc_expand_queued();
-        const auto hc_bf16_before=expert.hc_bf16_epilogue?ggml_backend_cuda_dsv41_hc_bf16_queued():0;
-        const auto hc_half_before=hc_projection_f16_gemm?ggml_backend_cuda_dsv41_hc_half_queued():0;
-```
-
-Source: `engines/streaming-llama/prefill_llama.cpp/src/llama-dsv41-flashinfer-budget.h:8`. Unset read: NULL from getenv; the literal consumer below supplies any fallback.
-
-```text
-namespace llama_dsv41_flashinfer {
-constexpr uint64_t reserve_bytes=3328ull*1024*1024;
-inline bool requested(){const char *v=std::getenv("LLAMA_DSV41_FLASHINFER_MXFP4");return v&&!std::strcmp(v,"1");}
-inline uint64_t workspace_bytes(uint64_t n,uint64_t k,uint64_t rows){
-    (void)n;(void)k;(void)rows;
-    // GGML legacy-pool allocation look-ahead, plus AOT module headroom.
-    return ggml_dsv41_flashinfer::align256((ggml_dsv41_flashinfer::workspace_bytes+255)*105/100+1)+16ull*1024*1024;
-```
-
-### LLAMA_DSV41_FLASHINFER_MXFP4_DLL
-
-Absolute path to the optional ABI2 FlashInfer AOT bridge DLL. Loaded only when the W4A8 experiment is enabled; missing or mismatched bridge fails loudly.
-
-Scope: rtx-llama. Class: advanced.
-
-Source: `engines/streaming-llama/prefill_llama.cpp/ggml/src/ggml-cuda/dsv41-flashinfer.cuh:19`. Unset read: NULL from getenv; the literal consumer below supplies any fallback.
-
-```text
-    static dsv41_flashinfer_fn function=[](){
-#ifdef _WIN32
-        const char *path=std::getenv("LLAMA_DSV41_FLASHINFER_MXFP4_DLL");
-        GGML_ASSERT(path&&path[0]&&"Explicit FlashInfer bridge DLL path required");
-        GGML_ASSERT((path[1]==':'||path[0]=='\\')&&"FlashInfer DLL path must be absolute");
-        HMODULE library=LoadLibraryExA(path,nullptr,LOAD_LIBRARY_SEARCH_DLL_LOAD_DIR|LOAD_LIBRARY_SEARCH_DEFAULT_DIRS);
-        GGML_ASSERT(library&&"FlashInfer bridge DLL failed to load");
 ```

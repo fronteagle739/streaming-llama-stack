@@ -100,6 +100,10 @@ def prefill_plan(cfg,prompt_tokens,available=None):
     sweeps with the remainder folded into the last (fold_sweeps), C = the largest sweep (at least
     49152), the same host raise for C; when the folded sweep cannot fit the cap, or exceeds the fold
     cap producer_prefill_fold_cap_tokens (default 61440), the remainder is its own sweep."""
+    from .multichunk import selection, plan as multichunk_plan
+    chunks = selection(cfg.get('producer_chunks_per_pass', 1))
+    if chunks != 1:
+        return multichunk_plan(cfg,prompt_tokens,available)
     base=int(cfg.get('producer_host_budget_gib',8)*(1<<30))
     top=int(cfg.get('producer_host_max_gib',cfg.get('producer_host_budget_gib',8))*(1<<30))
     if top<base:raise ValueError('producer_host_max_gib is below producer_host_budget_gib')
@@ -176,13 +180,27 @@ def stall_seconds(cfg):
 
 def yoco_keep(cfg):
     keep=cfg.get('yoco_keep',0)
-    if type(keep) is not int or keep not in (0,140):
-        raise ValueError('yoco_keep must be 0 or 140')
+    if type(keep) is not int or keep not in (0,140,2541):
+        raise ValueError('yoco_keep must be 0, 140 or 2541')
     if keep and cfg.get('serving_mode',cfg.get('serving'))!='single_engine':
         # The paired route uses native_broker and negotiates mode3 state v1.
         # ComboProducer's local snapshot/restore contract is a different route.
         raise ValueError('ComboProducer YOCO requires local single_engine; paired YOCO uses the negotiated native broker')
     return keep
+
+
+def routed_prefill_choice(cfg, count):
+    """Matched ULTRA controls favour demand reads through 2K, not at 32K.
+
+    Explicit native 0/1/tail overrides remain available for experiments. Larger
+    prompts retain overlapped full-stage prefetch until separately qualified.
+    """
+    value=cfg.get('env_overrides',{}).get('LLAMADECODE_PREFILL_ROUTED')
+    if value is not None:
+        if value not in ('0','1','tail'):raise ValueError('LLAMADECODE_PREFILL_ROUTED must be 0, 1 or tail')
+        return value
+    if cfg.get('producer_profile','ultra')=='ultra' and cfg.get('yoco_keep')==2541:return '1' if count<=2048 else 'tail'
+    return '1' if count<=2048 and cfg.get('producer_profile','ultra')=='ultra' else '0'
 
 
 def prefill_arguments(cfg, count, available, *, export_state=False, techniques=None):
@@ -228,7 +246,8 @@ def prefill_arguments(cfg, count, available, *, export_state=False, techniques=N
     if cfg.get('producer_fixed_direct_open', True) and arguments.get('--fixed-resident-plan') != '1':
         arguments.update({'--warmup-one-token': '0', '--fixed-direct-open': '1'})
     keep = cfg.get('yoco_keep', 0)
-    if type(keep) is not int or keep not in (0, 140):raise ValueError('yoco_keep must be 0 or 140')
+    if type(keep) is not int or keep not in (0, 140, 2541):raise ValueError('yoco_keep must be 0, 140 or 2541')
+    if keep==2541 and export_state:raise ValueError('The dependency cone has no negotiated remote state version')
     if keep:
         arguments['--yoco-keep'] = str(keep)
         if export_state:arguments['--yoco-remote-state-version'] = '1'
@@ -312,6 +331,7 @@ class ComboProducer:
                         write(ram.read(offset,min(65536,size-offset)))
         argv=[str(binary),*[str(v) for item in args.items() for v in item]]
         env=environment(cfg,'rtx-producer')
+        env['LLAMADECODE_PREFILL_ROUTED']=routed_prefill_choice(cfg,len(tokens))
         if not env.get('LLAMADECODE_ABORT_FILE'):env['LLAMADECODE_ABORT_FILE']=str(self.directory/'guard.abort')
         if cfg.get('cache_affinity_spread_file') and not env.get('LLAMADECODE_DS4_SPREAD'):
             env['LLAMADECODE_DS4_SPREAD']=str(path(cfg['cache_affinity_spread_file']))   # B5 calibration (native's file)
@@ -350,7 +370,8 @@ class ComboProducer:
                 producer_sha256=cfg['producer_sha256'],owner_epoch=epoch,host_bytes=host_bytes,
                 resident_admission=getattr(self.process,'resume_admission',None),
                 full_snapshot_bootstrap=base is None,weights_copied=False,profile=tier,compressed_cache_bf16=precision=='bf16',
-                ctx_cache_precision=precision,ctx_cache_growable=growable,prefill_plan=plan,yoco_keep=keep))
+                ctx_cache_precision=precision,ctx_cache_growable=growable,prefill_plan=plan,yoco_keep=keep,
+                routed_prefill=env['LLAMADECODE_PREFILL_ROUTED']))
         except BaseException as exc:
             self.failure_cleanup=getattr(exc,'owned_cleanup',None)
             if self.process is not None:

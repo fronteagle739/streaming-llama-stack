@@ -8,7 +8,8 @@ the same single engine: streaming-llama prefill followed by modified ds4 decode.
 | `dsv41-accurate*.ps1` | Accurate arithmetic; YOCO off |
 | `dsv41-fast*.ps1` | Fast arithmetic; YOCO off |
 | `dsv41-ultra*.ps1` | ULTRA arithmetic; YOCO off |
-| `dsv41-ultra-yoco*.ps1` | ULTRA plus approximate YOCO, keep 140 |
+| `dsv41-ultra-cone*.ps1` | Recommended: exact ULTRA dependency cone, keep 2541 |
+| `dsv41-ultra-yoco*.ps1` | Exact cone by default; `-ApproximateYoco` selects approximate keep 140 |
 
 Copy `config.example.json` to `rtx.local.json` and replace the model placeholder
 with the original supported DSV4.1 1017 Q4 GGUF. Set paths for the built producer
@@ -19,8 +20,8 @@ replacement quantisations.
 From the stack root:
 
 ```powershell
-.\examples\single-machine\dsv41-ultra-webui.ps1 -Config .\rtx.local.json -DryRun
-.\examples\single-machine\dsv41-ultra-webui.ps1 -Config .\rtx.local.json
+.\examples\single-machine\dsv41-ultra-cone-webui.ps1 -Config .\rtx.local.json -DryRun
+.\examples\single-machine\dsv41-ultra-cone-webui.ps1 -Config .\rtx.local.json
 .\examples\single-machine\dsv41-accurate.ps1 -Config .\rtx.local.json
 ```
 
@@ -29,7 +30,20 @@ with the growable BF16 context cache; this is capacity, not a measured one-milli
 token prefill result. `-DryRun` starts nothing and writes nothing. Stop a running
 foreground launcher with Ctrl+C; its existing guardian owns the engine tree.
 
-YOCO is approximate and its long-prompt measurements are text-only. Use an
+The exact cone is the default for `scripts/start-dsv41-single-*.ps1` and the
+legacy YOCO examples. Select `--single ultra-yoco` in `examples/run_preset.py`
+or add `-ApproximateYoco` to a legacy launcher to opt into approximate replay.
+The cone is bit-exact against the same full-prefill control at 8K and 49,555
+text tokens. Real-image numerical qualification remains separate.
+
+YOCO is approximate. Use an
 appropriate vision-enabled local config and producer for image prompts; do not
 advertise the text-only YOCO speed as image throughput. Prefill quality is separate
 from the live decode bias slider and phase sampler controls.
+
+Short resident follow-ups (about 4x faster first output on a short follow-up
+turn, with a small logit difference) are on in the default `ultra-cone` profile
+and off in the other profiles. Set `env_overrides.LLAMADECODE_APPEND_DECODE_MAX`
+to `"0"` to turn them off, or `"96"` to turn them on elsewhere. [Measurements and other toggles](../../docs/MERGEPERF.md).
+Exact LFU admission defaults to `LLAMADECODE_RECENCY_LFU=1` with
+`LLAMADECODE_LFU_HALF_LIFE=16`; set LFU to `"0"` for the earlier LRU policy.

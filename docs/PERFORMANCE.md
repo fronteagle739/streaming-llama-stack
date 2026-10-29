@@ -14,7 +14,24 @@ the rest), so "Max quality" below is the full model.
 
 ### Prefill
 
-ULTRA prefill, YOCO off. Times include engine startup.
+The single-machine default is ULTRA exact cone with routed tail reads and one
+chunk per weight pass. These measured text runs use growable BF16 cache and
+include engine startup:
+
+| Prompt tokens | Prefill time | Prefill tok/s | Peak engine RAM |
+|---:|---:|---:|---:|
+| 49,555 | 25.375 s | 1,952.91 | — |
+| 100,000 | 45.484 s | 2,198.58 | 5.79 GiB |
+| 200,000 | 94.079 s | 2,125.87 | 5.94 GiB |
+| 400,000 | 232.500 s | 1,720.43 | 6.24 GiB |
+
+At 49,555 tokens, the same-build full eager control took 36.250 s
+(1,367.03 tok/s); the cone preserved every logit and cache checkpoint hash.
+The 262K launcher retains growable F32 cache; the 1M launcher uses BF16.
+Cone image throughput and one-million-token throughput have not been measured.
+[Receipts](MULTICHUNK_QUALIFICATION.json) · [Defaults and toggles](MERGEPERF.md).
+
+Earlier full ULTRA prefill, YOCO off, including startup:
 
 | Prompt tokens | Prefill time | Prefill tok/s |
 |---:|---:|---:|
@@ -26,7 +43,7 @@ ULTRA prefill, YOCO off. Times include engine startup.
 
 With the engine already loaded, one 49,152-token pass runs at **1,920 tok/s**.
 
-**One million tokens.** A single session prefilled 1,000,000 tokens in
+**Earlier full-prefill one-million-token run.** A single session prefilled 1,000,000 tokens in
 1,808 s (**553 tok/s**), in 49,152-token passes, without resetting the
 context. Peak engine RAM was 5.7 GiB.
 
@@ -51,12 +68,76 @@ On a fixed 384-token continuation, YOCO raised perplexity by 0.56% and agreed
 with full prefill on 381 of 384 top-1 tokens. A 93,668-token recall test
 returned the correct phrase. [Details](ULTRAYOCO_QUALIFICATION.md).
 
+### Routed reads and exact replay
+
+The complete weight stream is 315.83 GB: 305.76 GB of routed experts and
+10.06 GB of other weights. Engram tables are already read on demand.
+[Per-tensor inventory and settings](MULTICHUNK_PREFILL.md).
+
+Matched Q4_K/Q8_0 controls on the same 49,555-token recall prompt, including
+startup, with a 1 GiB prefill device admission reserve, the 512 MiB decode-cache
+reserve, and a 0.5 GiB physical RAM floor:
+
+| Configuration | Startup + prefill | Prompt tok/s |
+|---|---:|---:|
+| Full prefill, eager weight stream | 36.25 s | 1,367 |
+| Padded exact cone, routed reads in layers 21–39 | 25.38 s | 1,953 |
+
+Logits and cache checkpoint hashes were bit-identical. A separate cone run
+returned the hidden recall key. An isolated 8K comparison with routed reads
+in every layer was 14.94 s full versus 13.52 s cone, also bit-identical.
+
+A later eager-cone control took 131.45 s, including an 89.33 s
+inspect/admit/allocation startup outlier and 40.63 s prompt processing. Its
+logits and cache also matched exactly. That run is retained in the receipts;
+its elapsed-time difference cannot be attributed solely to replay. The adopted
+cone profile uses routed tail reads, rather than this eager-cone combination.
+
+On the repeated recall body, routed reads reduced 2K startup plus prefill from
+25.06 to 10.34 s and 8K from 21.23 to 15.59 s. At 32K they streamed fewer bytes
+but took 30.83 s versus 24.53 s, because they lost useful transfer overlap.
+The automatic ULTRA policy therefore limits whole-pass demand reads to 2K and
+uses eager encoder reads for longer prompts. On varied source text, 2K improved
+from 19.17 to 15.23 s; 8K regressed from 20.58 to 21.39 s. This is why the
+automatic range is narrower than the recall-body win.
+
+
+### More chunks per weight pass
+
+Routed exact-cone configuration throughout. Startup is included. Each cell is
+prompt tok/s; the default remains N=1 because grouping was slower.
+
+| Prompt tokens | N=1 | N=2 | N=3 | N=4 |
+|---:|---:|---:|---:|---:|
+| 100,000 | 2,199 | 1,892 | 1,882 | 1,892 |
+| 200,000 | 2,126 | 1,844 | RAM refused | RAM refused |
+| 400,000 | 1,720 | 1,500 | RAM refused | RAM refused |
+
+At 100K, N=2?4 use the same one-pass 100K geometry. They were run separately.
+At 200K and 400K, N=3?4 were refused before engine launch because the measured
+available physical RAM could not admit the worker, controller and reserve.
+
+Peak producer RSS was 5.79 / 5.94 / 6.24 GiB for N=1 at 100K / 200K / 400K,
+and 10.03 / 10.17 / 10.47 GiB for N=2. Board VRAM peaks were 27,211 / 27,513 /
+28,123 MiB for both. Every completed grouped run had bit-identical logits and
+cache checkpoint hashes against N=1. Grouping remains opt-in.
+
+[Exact byte, memory and quality receipts](MULTICHUNK_QUALIFICATION.json).
+
 ### Decode
+
+Single-machine examples enable recency LFU with a 16-token half life. On the
+matched 8K F32-cache workload, warm decode improved 5.7624 → 6.3731 and
+5.8081 → 5.8944 tok/s (+10.6% and +1.5%). Logits and generated prefixes were
+exact, KL 0; expert-miss bytes fell 11.7% in both repetitions. These separate
+controls do not establish the combined cone/LFU speed or a general 10.6% gain.
+Set `LLAMADECODE_RECENCY_LFU=0` for the earlier LRU policy.
+[E8 conditions](EXPERIMENT_E8.md).
 
 Decode speed depends on how many routed experts are already in VRAM. The first
 100 tokens fill the cache; after that the rate settles.
 
-Single engine, 500-token replies, rate per 100-token window:
+Earlier LRU single-engine controls, 500-token replies, rate per 100-token window:
 
 | Prompt | Setting | Tokens 1–100 | 101–200 | 201–300 | 301–400 | 401–500 | Whole reply |
 |---:|---|---:|---:|---:|---:|---:|---:|

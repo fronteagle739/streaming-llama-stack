@@ -258,7 +258,7 @@ const char*usage=
 "Optional --native-rhs-pack 0|1 (default0; qualified native half RHS packing,384MiB expert workspace).\n"
 "Optional --pv-strided-probabilities 0|1 (default0; native F32 PV without probability copy).\n"
 "Optional --reuse-child-raw-metadata 0|1 (default0; omit unused grouped child arrays).\n"
-"Optional --yoco-keep 0|140 (default0; approximate local-only prefill; remote export refused).\n"
+"Optional --yoco-keep 0|140|2541 (default0; 140 approximate, 2541 dependency cone; local only).\n"
 "Optional --unaligned-append-step-tokens 0|2048 (default0; explicit bounded continuation after Mac decode, unchanged fixed owners).\n"
 "Optional --resident-pageable-copies 0|1 (default0; resident paired RAM mirrors use existing bounded backend vector copies).\n"
 "Optional --tile-host-registration 0|1 (default0; paired full-resident plan registers only its current RAM lease).\n"
@@ -312,8 +312,10 @@ int wmain(int argc,wchar_t**argv){
         require(llama_dsv41_host_memory::configure_runtime_min_free_gib(args.count("--runtime-min-free-gib")?args.at("--runtime-min-free-gib").c_str():"0.5"),
             "--runtime-min-free-gib must be finite and nonnegative (<2**34); 0 disables it");
         const auto yoco_keep=args.count("--yoco-keep")?integer(args.at("--yoco-keep")):0;
-        require(yoco_keep==0||yoco_keep==140,"--yoco-keep must be 0 or 140");
-        report["yoco_keep"]=yoco_keep;report["yoco_approximate"]=yoco_keep!=0;
+        llama_dsv41_yoco::validate(uint32_t(yoco_keep));
+        require(yoco_keep<=llama_dsv41_yoco::exact_keep,"--yoco-keep exceeds its bounded cone");
+        report["yoco_keep"]=yoco_keep;report["yoco_approximate"]=yoco_keep==140;
+        report["yoco_dependency_cone"]=yoco_keep==llama_dsv41_yoco::exact_keep;
         const auto storage=args.count("--carry-storage")?args.at("--carry-storage"):"file";
         require(storage=="file"||storage=="ram"||storage=="hybrid","Expected explicit carry-storage file, ram or hybrid");
         const bool resident_ram=storage=="ram";
@@ -965,7 +967,8 @@ int wmain(int argc,wchar_t**argv){
         auto scheduled_graphs=[&](uint32_t step,bool compressed_only=false){
             uint64_t n=0;
             for(const auto&e:sweep_extents){
-                const auto q=llama_dsv41_yoco::schedule(uint32_t(yoco_keep),llama_dsv41_yoco::operation::prefill,options.images,base_tokens,base_tokens+uint32_t(tokens.size()),base_tokens+e.first,base_tokens+e.first+e.count);
+                auto q=llama_dsv41_yoco::schedule(uint32_t(yoco_keep),llama_dsv41_yoco::operation::prefill,options.images,base_tokens,base_tokens+uint32_t(tokens.size()),base_tokens+e.first,base_tokens+e.first+e.count);
+                llama_dsv41_yoco::align_exact(q,uint32_t(compute_step));
                 n+=uint64_t(compressed_only?19:21)*((uint64_t(e.count)+step-1)/step);
                 if(!q.encoder_only)n+=19*((uint64_t(e.count-q.first)+step-1)/step);
             }
@@ -1086,7 +1089,7 @@ int wmain(int argc,wchar_t**argv){
         const auto payload_sha=payload_hash.finish();started=clock_type::now();if(payload)payload->finalize_read_only(payload_sha);
         report["phase_ms"]["payload_close_readonly_rehash"]=ms(started);report["payload"]["sha256"]=payload_sha;
         report["payload"]["written_bytes"]=hash_only?0:written;report["payload"]["canonical_hashed_bytes"]=written;report["payload"]["identity"]=payload?describe(payload->current()):json(nullptr);
-        report["status"]="complete";report["runtime_qualified"]=false;report["claim"]=yoco_keep?"Approximate YOCO local state hash; not a native-equivalence or receiver-parity claim":hash_only?"Completed canonical frontier SHA; no payload file created or receiver parity claimed":"One measured offline producer artifact; independent receiver/output parity qualification is still required";
+        report["status"]="complete";report["runtime_qualified"]=false;report["claim"]=yoco_keep?"Bounded replay local state hash; independent numerical and receiver qualification required":hash_only?"Completed canonical frontier SHA; no payload file created or receiver parity claimed":"One measured offline producer artifact; independent receiver/output parity qualification is still required";
         report["residency_limit"]="Free-memory admission and allocation ceilings do not independently prove physicalVRAM residency under WDDM";
         report["host_memory_runtime"]=host_memory_runtime();
         const auto text=report.dump(2)+"\n";require(text.size()<=receipt_limit,"Producer receipt exceeds its bounded admission");receipt->write(text.data(),text.size());receipt->flush();stop();

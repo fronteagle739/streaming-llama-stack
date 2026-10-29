@@ -3,15 +3,23 @@
 #include <cstdint>
 #include <stdexcept>
 
-// Approximate bounded replay. Positions refer to the logical call, never a tile.
+// Bounded replay. Positions refer to the logical call, never a tile.
 namespace llama_dsv41_yoco {
+// Layers21..39 introduce only private128-row windows; compressed KV and
+// candidate/index keys come from layer20 over EVERY row. A rectangular replay
+// loses at most127 valid outputs per layer at its left edge. After19 layers,
+// 128+19*127 rows retain every final window and the final logits. The triangular
+// cone can skip that warm-up FFN work later; this deliberately reuses the
+// existing contiguous carry/DSpark ownership and keeps the larger rectangle.
+constexpr uint32_t exact_keep = 128 + 19 * 127;
 enum class operation { prefill, decode, verify, append_decode, all_logits };
 inline void validate(uint32_t keep) {
-    if(keep!=0 && keep!=140) throw std::runtime_error("yoco_keep must be 0 or 140");
+    if(keep!=0 && keep!=140 && keep!=exact_keep) throw std::runtime_error("yoco_keep must be 0, 140 or 2541");
 }
 struct plan {
     uint32_t first=0, count=0, layers=40;
     bool approximate=false, encoder_only=false;
+    bool exact_cone=false;
 };
 inline plan schedule(uint32_t keep,operation op,bool /*images*/,uint32_t logical_begin,
                      uint32_t logical_end,uint32_t sweep_begin,uint32_t sweep_end) {
@@ -31,10 +39,17 @@ inline plan schedule(uint32_t keep,operation op,bool /*images*/,uint32_t logical
         if(sweep_end>replay) throw std::runtime_error("YOCO tail crosses a sweep boundary; re-plan the logical prefill");
         p.layers=21;p.encoder_only=true;
     } else p.first=std::max(sweep_begin,replay)-sweep_begin;
-    p.approximate=true;
+    p.approximate=keep==140;p.exact_cone=keep==exact_keep;
     return p;
 }
 inline uint32_t first_row(const plan&p,uint32_t layer) { return layer>20?p.first:0; }
+// Keep the full prefill's GEMM row shapes. A ragged 2541-row rectangle is
+// structurally sufficient but changes shape-dependent floating-point kernels.
+// Padding its left edge to an existing tile only adds redundant warm-up work.
+inline void align_exact(plan&p,uint32_t tile){
+    if(!tile)throw std::runtime_error("Exact cone tile cannot be zero");
+    if(p.exact_cone&&!p.encoder_only)p.first-=p.first%tile;
+}
 inline bool may_export(uint32_t keep) {validate(keep);return keep==0;}
 inline bool may_rewind(uint32_t keep) {return may_export(keep);}
 }

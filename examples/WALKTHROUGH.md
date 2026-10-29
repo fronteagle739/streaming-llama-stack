@@ -23,7 +23,7 @@ powershell -File scripts/start-dsv41-single-262k.ps1 -WebUI
 
 Open the printed router URL. The first prompt loads the producer. Full-file hashing runs once when the model identity is first recorded and reports progress. Ask a short question, append a document, then ask a follow-up: the producer retains the conversation and processes new tokens. Appended prefill shows processing progress; completed replies show decode tok/s.
 
-The preset uses growable f32 context at 262,144 tokens, 49,152-token sweeps with a 61,440 fold cap, DirectStorage read parts 8 and a 512 MiB expert-tier reserve. The 1M script admits 999,424 tokens with bf16 context. `-DryRun` prints resolved settings without starting an engine.
+The preset uses the exact ULTRA dependency cone, growable f32 context at 262,144 tokens, 49,152-token sweeps with a 61,440 fold cap, DirectStorage read parts 8 and a 512 MiB expert-tier reserve. The 1M script admits 999,424 tokens with bf16 context. `-DryRun` prints resolved settings without starting an engine.
 
 Ask the model to switch itself to Max speed using its quality/speed tool. The tool reports requested/applied settings. For precise code, select Max quality or Balanced. [Live controls](../docs/LIVE_GENERATION.md)
 
@@ -44,4 +44,4 @@ powershell -File scripts/start-dsv41-single-1m.ps1 -Stop
 
 Each launcher accepts `-Config`, `-Model`, `-DryRun`, `-WebUI` and `-Stop`. Use the same config to stop. Foreground launchers stop with Ctrl-C. Native shutdown drains storage work and releases host/GPU memory.
 
-For approximate YOCO use the corresponding `*-ultra-yoco.ps1` launcher. [Quality and timing](../docs/ULTRAYOCO_QUALIFICATION.md). For optional Mac decode, follow [two-machine setup](../docs/TWO_MACHINE.md).
+For approximate YOCO use the corresponding `*-ultra-yoco.ps1` launcher with `-ApproximateYoco`; without that switch it uses exact cone. [Quality and timing](../docs/ULTRAYOCO_QUALIFICATION.md). Short resident follow-ups are also an explicit local toggle: [defaults and experiments](../docs/MERGEPERF.md). For optional Mac decode, follow [two-machine setup](../docs/TWO_MACHINE.md).

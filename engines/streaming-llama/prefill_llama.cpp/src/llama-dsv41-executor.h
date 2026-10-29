@@ -70,6 +70,8 @@ public:
         // ids: router-selected experts [6*tokens]; slots (out): the cache pool
         // slot of each id, uploaded as the routed products' ids.
         std::function<bool(const std::vector<int32_t>&,std::vector<int32_t>&,std::string&)> route_hook;
+        // Retains the existing layer bank, IDs and kernels; no slot remapping.
+        std::function<bool(const std::vector<int32_t>&,std::string&)> prefill_route_hook;
         const void *dense_bank=nullptr,*routed_bank=nullptr;
     };
     struct result {

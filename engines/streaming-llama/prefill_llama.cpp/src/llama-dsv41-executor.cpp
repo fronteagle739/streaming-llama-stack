@@ -1,4 +1,5 @@
 #include "llama-dsv41-layer-log.h"
+#include "llama-dsv41-yoco.h"
 #include "llama-dsv41-compact-proof.h"
 #include "ggml-dsv41-bf16-inplace.h"
 #include "llama-dsv41-weight-casts.h"
@@ -480,6 +481,29 @@ struct llama_dsv41_tile_executor::pinned_storage {
         if(std::getenv("DS4PERF_RING_TRACE")&&elapsed(before)>1)llama_dsv41_layer_log("DS4PERF_PINNED_COPY_API to_device=%u bytes=%llu host_ms=%.6f\n",unsigned(to_device),(unsigned long long)(width*lease.count()),elapsed(before));
     }
     void upload_ready(){ok(cudaEventRecord(ready,copies),"Pinned upload fence record failed");ok(cudaStreamWaitEvent(compute(),ready,0),"Compute stream did not accept pinned upload fence");}
+    void copy_probe(const llama_dsv41_carry_store::ram_lease&lease,ggml_tensor*hidden){
+        const char*setting=std::getenv("LLAMADECODE_CARRY_COPY_PROBE");
+        if(!setting||std::strcmp(setting,"1"))return;
+        // Diagnostic only: reuse the live, registered canonical seed lease and
+        // its admitted F32 graph input. Every D2H writes back the exact bytes
+        // just uploaded; no extra RAM bank/device allocation or model mutation.
+        require(hidden&&hidden->type==GGML_TYPE_F32&&ggml_nbytes(hidden)==uint64_t(lease.count())*81920,
+            "Carry copy probe requires the original F32 seed input");
+        cudaEvent_t events[2]={};
+        struct cleanup_events {cudaEvent_t*e;~cleanup_events(){for(int i=0;i<2;++i)if(e[i])pinned_storage::cleanup(cudaEventDestroy(e[i]));}} guard{events};
+        for(auto&e:events)ok(cudaEventCreate(&e),"Copy probe event creation failed");
+        for(unsigned round=0;round<3;++round)for(bool h2d:{true,false}){
+            const auto begin=clock_type::now();
+            ok(cudaEventRecord(events[0],copies),"Copy probe start failed");
+            queue(h2d,lease,0,81920,hidden);
+            ok(cudaEventRecord(events[1],copies),"Copy probe end failed");finish();
+            float gpu_ms=0;ok(cudaEventElapsedTime(&gpu_ms,events[0],events[1]),"Copy probe timestamp failed");
+            const auto end=clock_type::now();
+            llama_dsv41_layer_log("MULTICHUNK_COPY_PROBE round=%u h2d=%u rows=%u bytes=%llu gpu_ms=%.6f host_ms=%.6f begin_epoch_ms=%.6f end_epoch_ms=%.6f existing_registered_RAM=1\n",
+                round,unsigned(h2d),lease.count(),(unsigned long long)ggml_nbytes(hidden),double(gpu_ms),elapsed(begin),
+                std::chrono::duration<double,std::milli>(begin.time_since_epoch()).count(),std::chrono::duration<double,std::milli>(end.time_since_epoch()).count());
+        }
+    }
     void readback_ready(){ok(cudaEventRecord(ready,compute()),"Pinned readback fence record failed");ok(cudaStreamWaitEvent(copies,ready,0),"Copy stream did not accept compute fence");}
     void finish(){ok(cudaStreamSynchronize(copies),"Direct pinned carry readback did not complete");
         if(pageable_copies&&!pending_host_uploads.empty()){ggml_backend_synchronize(backend);pending_host_uploads.clear();}
@@ -870,7 +894,7 @@ bool llama_dsv41_tile_executor::run(const request&in,const llama_dsv41_layer_gra
         const auto prepare_started=clock_type::now();
         const bool merge_rows=merge_attention_selected_rows&&!in.yoco_raw_begin;
         const bool capture_dspark=cache.dspark_ring&&in.layer>=37;
-        require(!in.yoco_first || (in.layer>20&&in.start>=in.yoco_first&&in.count<=140),"Invalid YOCO decoder coverage");
+        require(!in.yoco_first || (in.layer>20&&in.start>=in.yoco_first&&in.count<=admitted_tile_tokens),"Invalid YOCO decoder coverage");
         llama_dsv41_dspark_capture::completion::ticket capture_ticket;
         require(!capture_dspark||!workspace||!workspace->cache_layouts,"DSpark ring writes require fresh graph bindings");
 
@@ -1267,6 +1291,16 @@ bool llama_dsv41_tile_executor::run(const request&in,const llama_dsv41_layer_gra
         if(llama_dsv41_hash_dump_enabled()||route_histogram){ // diagnostic: keep routed ids readable after compute
             for(int i=0;i<ggml_graph_n_nodes(graph);++i)if(!std::strcmp(ggml_get_name(ggml_graph_node(graph,i)),"dsv41_ffn_selected_experts")){hash_experts=ggml_graph_node(graph,i);ggml_set_output(hash_experts);}
         }
+        if(in.prefill_route_hook){
+            require(!in.route_hook&&(!workspace||!workspace->cache_layouts)&&!expert.expert_mxfp4,
+                "Routed prefill requires allocator-only graphs without expert conversion or decode slot hook");
+            int selected=-1,first_product=-1;
+            for(int i=0;i<ggml_graph_n_nodes(graph);++i){auto*n=ggml_graph_node(graph,i);
+                if(!std::strcmp(n->name,"dsv41_ffn_selected_experts")){require(selected<0,"Duplicate prefill router IDs");selected=i;ggml_set_output(n);}
+                if(n->op==GGML_OP_MUL_MAT_ID&&first_product<0)first_product=i;
+            }
+            require(selected>=0&&first_product>selected,"Prefill router must precede all expert products");
+        }
         if(in.route_hook){
             // LLAMADECODE B1: the graph keeps its original node order (the same
             // allocation plan and kernel sequence as the unrouted step); it is
@@ -1349,6 +1383,9 @@ bool llama_dsv41_tile_executor::run(const request&in,const llama_dsv41_layer_gra
         std::fflush(stderr);
         if(probe.enabled)probe.prepare_flush_ms=elapsed(flush_started);
         const auto upload_start=clock_type::now();
+#ifdef GGML_USE_CUDA
+        if(pinned&&in.layer==0&&in.start==0)pinned->copy_probe(*in.direct,input.residual);
+#endif
         // These host vectors outlive every queued async transfer. In
         // particular, frequencies and publication IDs are no longer temporaries.
         const auto raw=llama_dsv41_rope_frequencies(false),compressed=llama_dsv41_rope_frequencies(true);
@@ -1504,14 +1541,27 @@ bool llama_dsv41_tile_executor::run(const request&in,const llama_dsv41_layer_gra
             pinned_storage*storage;ggml_backend_t backend;bool live=false;
             ~async_prefetch_guard(){if(live){pinned_storage::cleanup(cudaStreamSynchronize(storage->copies));ggml_backend_synchronize(backend);llama_dsv41_layer_log("DS4PERF_PREFETCH_ASYNC_GUARD_DRAINED copies=1 compute=1 graph_resources_live=1\n");}}
         } asynchronous{pinned.get(),backend,false};
-        prefetch_next=pinned&&pinned->prefetch_buffer&&in.lookahead&&(in.layer==0||!resident||in.lookahead->start()>=resident->tokens);
+        prefetch_next=!in.prefill_route_hook&&pinned&&pinned->prefetch_buffer&&in.lookahead&&(in.layer==0||!resident||in.lookahead->start()>=resident->tokens);
         if(prefetch_next){
             asynchronous.live=true;pinned->prefetch_begin_compute();
             require(ggml_backend_graph_compute_async(backend,compute_graph)==GGML_STATUS_SUCCESS,"V4.1 asynchronous tile backend computation failed");
             pinned->prefetch_queue_next(*in.lookahead,in.layer);
         }else
 #endif
-        if(in.route_hook){
+        if(in.prefill_route_hook){
+            const int nodes=ggml_graph_n_nodes(compute_graph);int split=-1;ggml_tensor*selected=nullptr;
+            for(int i=0;i<nodes;++i){auto*n=ggml_graph_node(compute_graph,i);if(!std::strcmp(n->name,"dsv41_ffn_selected_experts")){split=i;selected=n;break;}}
+            require(selected&&split+1<nodes&&selected->type==GGML_TYPE_I32&&ggml_nelements(selected)==6*int64_t(in.count),"Prefill router split lost");
+            auto reads_expert=[&](const ggml_tensor*n){for(const auto*src:n->src){if(!src)continue;while(src->view_src)src=src->view_src;
+                if(src==w.ffn.gate||src==w.ffn.up||src==w.ffn.down)return true;}return false;};
+            for(int i=0;i<=split;++i)require(!reads_expert(ggml_graph_node(compute_graph,i)),"Pre-router operation reads unfetched experts");
+            auto before=ggml_graph_view(compute_graph,0,split+1);
+            require(ggml_backend_graph_compute_async(backend,&before)==GGML_STATUS_SUCCESS,"Prefill router graph failed");ggml_backend_synchronize(backend);
+            std::vector<int32_t>ids(size_t(ggml_nelements(selected)));ggml_backend_tensor_get(selected,ids.data(),0,ids.size()*4);
+            std::string why;const bool fetched=in.prefill_route_hook(ids,why);require(fetched,why.c_str());
+            auto after=ggml_graph_view(compute_graph,split+1,nodes);
+            require(ggml_backend_graph_compute_async(backend,&after)==GGML_STATUS_SUCCESS,"Prefill expert graph failed");
+        }else if(in.route_hook){
             require(!prefetch_next&&in.dense_bank&&in.routed_bank&&in.dense_bank!=in.routed_bank,"Routed decode split requires its two banks and no lookahead");
             const int nodes=ggml_graph_n_nodes(compute_graph);const int offset=compute_graph==graph?0:ggml_graph_n_nodes(graph)-nodes;
             const int split=routed_split-1-offset; // the slot copy (last node before the hook)

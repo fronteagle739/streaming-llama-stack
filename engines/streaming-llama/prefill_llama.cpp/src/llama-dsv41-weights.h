@@ -167,6 +167,10 @@ public:
     bool decode_residency(uint32_t layer,uint8_t *tier,uint32_t experts) const;
     expert_cache_stats cache_stats() const;
     bool decode_layout() const;
+    bool routed_prefill(uint32_t layer) const;
+    // Prefill retains the complete layer bank until release. Fetch only IDs
+    // selected by real router rows; a per-layer bitmap prevents repeat reads.
+    bool prefill_experts(uint32_t layer,const std::vector<int32_t>&ids,std::string&error);
     // DirectStorage bytes and transfer milliseconds of the stages acquired since start_request.
     void fetch_totals(uint64_t &bytes,double &milliseconds) const;
     // The ggml buffers holding a decode layer's dense and routed stages.
