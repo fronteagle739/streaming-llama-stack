@@ -35648,23 +35648,48 @@ extern "C" void ds4_gpu_set_fp4_packed_experts(int on) { g_ds4_fp4_packed_expert
  * legacy stream; the interval ending at mark k is charged to stage k, so a
  * host stall (expert hook, synchronous reads) shows in the stage it delays. */
 static int g_stage_profile = -1;
-static cudaEvent_t g_stage_events[2048];
-static int g_stage_ids[2048];
+static cudaEvent_t g_stage_events[4096];
+static int g_stage_ids[4096];
 static int g_stage_count = 0;
-static double g_stage_total[10];
+static double g_stage_total[16];
 static uint64_t g_stage_tokens = 0;
 extern "C" int ds4_gpu_stage_mark(int id) {
     if (g_stage_profile < 0) {
         const char *v = getenv("DS4X_STAGE_PROFILE");
         g_stage_profile = v && v[0] == '1' && !v[1];
     }
-    if (!g_stage_profile || g_stage_count >= 2048 || id < 0 || id > 9) return 1;
+    if (!g_stage_profile || g_stage_count >= 4096 || id < 0 || id > 15) return 1;
     if (!g_stage_events[g_stage_count] && cudaEventCreate(&g_stage_events[g_stage_count]) != cudaSuccess) return 1;
     if (cudaEventRecord(g_stage_events[g_stage_count], 0) != cudaSuccess) return 1;
     g_stage_ids[g_stage_count++] = id;
     return 1;
 }
 extern "C" void ds4_pool_call_stats(uint64_t *calls, double *ms);
+/* Prefetched router selection (ds4_gpu_prefetch_selected). */
+static int32_t *g_prefetch_ids = nullptr;
+static cudaEvent_t g_prefetch_event = nullptr;
+static const void *g_prefetch_src = nullptr;
+static uint32_t g_prefetch_count = 0;
+extern "C" int ds4_gpu_prefetch_selected(const ds4_gpu_tensor *selected, uint32_t count) {
+    g_prefetch_src = nullptr;
+#ifndef DS4_EXTERNAL_DECODE
+    (void)selected; (void)count; return 1;
+#else
+    static const bool on = [] { const char *v = getenv("DS4X_PREFETCH_SELECTED"); return v && v[0] == '1' && !v[1]; }();
+    if (!on || !g_ds4x_expert_hook || !selected || !selected->ptr || !count || count > 64u ||
+        selected->bytes < (uint64_t)count * sizeof(int32_t)) return 1;
+    if (!g_prefetch_ids) {
+        if (cudaHostAlloc((void **)&g_prefetch_ids, 64u * sizeof(int32_t), cudaHostAllocDefault) != cudaSuccess ||
+            cudaEventCreateWithFlags(&g_prefetch_event, cudaEventDisableTiming) != cudaSuccess) {
+            fprintf(stderr, "ds4: router selection prefetch setup failed\n"); return 0;
+        }
+    }
+    if (cudaMemcpyAsync(g_prefetch_ids, selected->ptr, (size_t)count * sizeof(int32_t), cudaMemcpyDeviceToHost, cuda_decode_stream()) != cudaSuccess ||
+        cudaEventRecord(g_prefetch_event, cuda_decode_stream()) != cudaSuccess) return 0;
+    g_prefetch_src = selected->ptr; g_prefetch_count = count;
+    return 1;
+#endif
+}
 static double g_stage_host_ms[3];
 static uint64_t g_stage_pool_calls0 = 0;
 static double g_stage_pool_ms0 = 0.0;
@@ -35676,7 +35701,7 @@ static void ds4_gpu_stage_host(double read_ms, double hook_ms, double write_ms) 
 extern "C" void ds4_gpu_stage_flush(uint32_t position) {
     if (g_stage_profile != 1 || g_stage_count < 2) { g_stage_count = 0; return; }
     (void)cudaEventSynchronize(g_stage_events[g_stage_count - 1]);
-    double per[10] = {};
+    double per[16] = {};
     for (int i = 1; i < g_stage_count; ++i) {
         float ms = 0.0f;
         if (cudaEventElapsedTime(&ms, g_stage_events[i - 1], g_stage_events[i]) == cudaSuccess) per[g_stage_ids[i]] += ms;
@@ -35685,14 +35710,16 @@ extern "C" void ds4_gpu_stage_flush(uint32_t position) {
     uint64_t pool_calls = 0; double pool_ms = 0.0;
     ds4_pool_call_stats(&pool_calls, &pool_ms);
     double total = 0.0;
-    for (int i = 0; i < 10; ++i) { g_stage_total[i] += per[i]; total += per[i]; }
+    for (int i = 0; i < 16; ++i) { g_stage_total[i] += per[i]; total += per[i]; }
     ++g_stage_tokens;
     fprintf(stderr, "DS4X_STAGE position=%u total_ms=%.3f hc_pre=%.3f attention=%.3f hc_mix=%.3f router_shared=%.3f "
             "expert_hook=%.3f routed_experts=%.3f after_moe=%.3f between_layers=%.3f head=%.3f "
-            "host_ids_read=%.3f host_cache_hook=%.3f host_slot_write=%.3f host_fp4_launch=%.3f pool_calls=%llu pool_ms=%.3f\n",
+            "host_ids_read=%.3f host_cache_hook=%.3f host_slot_write=%.3f host_fp4_launch=%.3f pool_calls=%llu pool_ms=%.3f "
+            "attn_project=%.3f attn_rope_store=%.3f attn_select=%.3f attn_core=%.3f\n",
             position, total, per[1], per[2], per[3], per[6], per[7], per[4], per[5], per[0], per[8],
             g_stage_host_ms[0], g_stage_host_ms[1], g_stage_host_ms[2], g_stage_launch_ms,
-            (unsigned long long) (pool_calls - g_stage_pool_calls0), pool_ms - g_stage_pool_ms0);
+            (unsigned long long) (pool_calls - g_stage_pool_calls0), pool_ms - g_stage_pool_ms0,
+            per[10], per[11], per[12], per[13]);
     g_stage_pool_calls0 = pool_calls; g_stage_pool_ms0 = pool_ms;
     g_stage_host_ms[0] = g_stage_host_ms[1] = g_stage_host_ms[2] = 0.0; g_stage_launch_ms = 0.0;
 }
@@ -35765,7 +35792,11 @@ static int routed_moe_launch(
         std::vector<int32_t> ids(assignments), unique, slots;
         if (n_tokens == 1u) (void)ds4_gpu_stage_mark(6);
         const auto hook_t0 = std::chrono::steady_clock::now();
-        if (!ds4_gpu_tensor_read(selected, 0, ids.data(), (uint64_t)assignments * sizeof(int32_t))) return 0;
+        if (g_prefetch_src && g_prefetch_src == selected->ptr && g_prefetch_count == assignments) {
+            g_prefetch_src = nullptr;
+            if (cudaEventSynchronize(g_prefetch_event) != cudaSuccess) return 0;
+            std::memcpy(ids.data(), g_prefetch_ids, (size_t)assignments * sizeof(int32_t));
+        } else if (!ds4_gpu_tensor_read(selected, 0, ids.data(), (uint64_t)assignments * sizeof(int32_t))) return 0;
         const auto hook_t1 = std::chrono::steady_clock::now();
         for (const int32_t id : ids) {
             if (id < 0 || (uint32_t)id >= n_total_expert) return 0;
