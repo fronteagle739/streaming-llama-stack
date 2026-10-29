@@ -9,7 +9,7 @@ inline bool ggml_dsv41_native_fp4_valid(const ggml_tensor *t){
     const auto*w=t->src[0],*x=t->src[1],*ids=t->src[2];
     return w&&x&&ids&&w->type==GGML_TYPE_MXFP4&&x->type==GGML_TYPE_F32&&ids->type==GGML_TYPE_I32&&
         ((w->ne[0]==5120&&w->ne[1]==2304)||(w->ne[0]==2304&&w->ne[1]==5120))&&w->ne[2]==384&&w->ne[3]==1&&
-        x->ne[0]==w->ne[0]&&(x->ne[1]==1||x->ne[1]==6)&&x->ne[2]>4&&x->ne[2]<=4096&&x->ne[3]==1&&
+        x->ne[0]==w->ne[0]&&(x->ne[1]==1||x->ne[1]==6)&&x->ne[2]>4&&x->ne[2]<=16384&&x->ne[3]==1&&
         ids->ne[0]==6&&ids->ne[1]==x->ne[2]&&ids->ne[2]==1&&ids->ne[3]==1&&
         t->ne[0]==w->ne[1]&&t->ne[1]==6&&t->ne[2]==x->ne[2]&&t->ne[3]==1&&
         ggml_is_contiguous(w)&&ggml_is_contiguous(x)&&ggml_is_contiguous(ids)&&ggml_is_contiguous(t);

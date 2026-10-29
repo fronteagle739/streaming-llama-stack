@@ -1211,10 +1211,10 @@ bool llama_dsv41_tile_executor::run(const request&in,const llama_dsv41_layer_gra
             for(int i=0;i<ggml_graph_n_nodes(graph);++i){auto*node=ggml_graph_node(graph,i);
                   if(node->op==GGML_OP_DSV41_INDEX_SCORE){
                       uint32_t score_start=p.start;
-                      if(native_pair){
+                      if(pair_ffn){
                           uint32_t offset=0;
                           require(llama_dsv41_index_query_offset(node,input.visible,in.count,attention_rows,offset),
-                              "Native pair index visibility lost its query owner, partition or exact key-window expression");
+                              "Paired index visibility lost its query owner, partition or exact key-window expression");
                           score_start+=offset;
                       }
                       require(index_f32_cublas_enabled()?ggml_dsv41_index_f32_tag(node):(expert.index_bf16?ggml_dsv41_index_bf16_tag(node):ggml_dsv41_index_cublas_tag(node)),"Index score exceeds explicit bounded GLM shape admission");
@@ -1223,6 +1223,7 @@ bool llama_dsv41_tile_executor::run(const request&in,const llama_dsv41_layer_gra
                   }}}
         if(workspace&&workspace->casts)graph=workspace->casts->prepare(ctx.get(),graph,in.layer,&backend_temporary);
         if(stored_fp4&&in.count>4){
+            require(in.count<=4096||llama_dsv41_flashinfer::requested(),"Wide stored-FP4 expert batches require FlashInfer");
             unsigned tagged=0;
             for(int i=0;i<ggml_graph_n_nodes(graph);++i){auto *node=ggml_graph_node(graph,i);
                 if(node->op!=GGML_OP_MUL_MAT_ID)continue;

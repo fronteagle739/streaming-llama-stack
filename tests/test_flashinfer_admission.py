@@ -45,4 +45,36 @@ class FlashInferAdmissionTests(unittest.TestCase):
         with self.assertRaisesRegex(ValueError,'paired ULTRA'):
             prefill_arguments(cfg,2048,24<<30)
 
+    def test_larger_expert_chunks_preserve_total_device_and_host_ceilings(self):
+        base,plan=prefill_arguments(self.config('1'),100000,24<<30)
+        for rows,reserve in [('8192',4096),('16384',5120)]:
+            cfg=self.config('1');cfg['yoco_keep']=2541
+            cfg['env_overrides']['LLAMA_DSV41_FLASHINFER_BATCH_TOKENS']=rows
+            candidate,actual_plan=prefill_arguments(cfg,100000,24<<30)
+            self.assertEqual(plan,actual_plan)
+            self.assertEqual(candidate['--compute-tile'],rows)
+            self.assertEqual(candidate['--yoco-keep'],'2541')
+            self.assertEqual(int(candidate['--backend-temporary-reserve-bytes']),reserve<<20)
+            for key in ['--job-device-bytes','--job-host-bytes','--cache-bytes']:
+                self.assertEqual(candidate[key],base[key])
+            # A larger legacy expert pool borrows exactly the same graph bytes.
+            self.assertEqual(sum(int(candidate[k]) for k in ['--graph-bytes','--expert-workspace-bytes','--provider-device-bytes']),
+                             sum(int(base[k]) for k in ['--graph-bytes','--expert-workspace-bytes','--provider-device-bytes']))
+            self.assertGreater(int(candidate['--graph-bytes']),reserve<<20)
+
+    def test_unbounded_or_malformed_chunk_is_rejected_before_engine_creation(self):
+        for value in ['0','49152','16385','8192.0','bad']:
+            cfg=self.config('1');cfg['env_overrides']['LLAMA_DSV41_FLASHINFER_BATCH_TOKENS']=value
+            with self.assertRaisesRegex(ValueError,'expert batch'):
+                prefill_arguments(cfg,100000,24<<30)
+
+    def test_small_context_preserves_the_cache_and_hidden_bank_allowances(self):
+        cfg=self.config('1');cfg['context']=131072
+        original,_=prefill_arguments(cfg,100000,24<<30)
+        cfg['env_overrides']['LLAMA_DSV41_FLASHINFER_BATCH_TOKENS']='8192'
+        candidate,_=prefill_arguments(cfg,100000,24<<30)
+        for key in ['--cache-bytes','--hidden-device-bytes']:
+            self.assertEqual(candidate[key],original[key])
+        self.assertEqual(candidate['--job-device-bytes'],original['--job-device-bytes'])
+
 if __name__=='__main__':unittest.main()

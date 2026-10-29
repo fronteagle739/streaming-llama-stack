@@ -10,3 +10,11 @@ Apache-2.0. Its manifest records the original paths and SHA-256 hashes; its
 LICENSE is retained. The engine adapter and AOT export script are local MIT
 changes. The external NVIDIA CUTLASS DSL compiler/runtime remains a separately
 installed dependency under its own licence and is not vendored here.
+
+ABI4 extends the same pinned FlashInfer adapter to bounded wider expert chunks.
+The gather still quantizes directly from original F32 rows into MXFP8/E8M0;
+no new quantization formula or separately materialized gather is introduced.
+The graph preserves 4K attention/router products and limits layer20/replay
+execution to4K. All paired causal indexer tags now recover the child query
+offset, including the shared Q8_1/ULTRA path. See the native-fp4 sweep report
+for kernel oracles, full-model numerical checks and measured limitations.

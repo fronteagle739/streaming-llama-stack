@@ -554,8 +554,8 @@ int wmain(int argc,wchar_t**argv){
         const bool flashinfer_reserve=llama_dsv41_flashinfer::requested()&&pair_ffn&&
             std::getenv("LLAMA_DSV41_STORED_MXFP4")&&std::string(std::getenv("LLAMA_DSV41_STORED_MXFP4"))=="1";
         require(backend_reserve==gib||(backend_reserve==768ull*1024*1024&&pair_ffn)||
-            (flashinfer_reserve&&backend_reserve==llama_dsv41_flashinfer::reserve_bytes),"Backend reserve must match the explicit arithmetic/workspace plan");
-        require(!flashinfer_reserve||backend_reserve==llama_dsv41_flashinfer::reserve_bytes,"FlashInfer requires its bounded workspace inside the existing graph device cap");
+            (flashinfer_reserve&&backend_reserve==llama_dsv41_flashinfer::reserve_bytes()),"Backend reserve must match the explicit arithmetic/workspace plan");
+        require(!flashinfer_reserve||backend_reserve==llama_dsv41_flashinfer::reserve_bytes(),"FlashInfer requires its bounded workspace inside the existing graph device cap");
         const auto output_volume=native_file::volume(path("--payload"));
         require(!hybrid||(path("--carry").root_name()==L"D:"&&llama_dsv41_expert_profile::native(expert)&&disk_reserve==1024ull*1024*1024),
             "Hybrid TEST requires D: overflow, native experts and explicit1GiB disk reserve");
@@ -968,7 +968,7 @@ int wmain(int argc,wchar_t**argv){
             uint64_t n=0;
             for(const auto&e:sweep_extents){
                 auto q=llama_dsv41_yoco::schedule(uint32_t(yoco_keep),llama_dsv41_yoco::operation::prefill,options.images,base_tokens,base_tokens+uint32_t(tokens.size()),base_tokens+e.first,base_tokens+e.first+e.count);
-                llama_dsv41_yoco::align_exact(q,uint32_t(compute_step));
+                llama_dsv41_yoco::align_exact(q,llama_dsv41_flashinfer::requested()?std::min(4096u,uint32_t(compute_step)):uint32_t(compute_step));
                 n+=uint64_t(compressed_only?19:21)*((uint64_t(e.count)+step-1)/step);
                 if(!q.encoder_only)n+=19*((uint64_t(e.count-q.first)+step-1)/step);
             }

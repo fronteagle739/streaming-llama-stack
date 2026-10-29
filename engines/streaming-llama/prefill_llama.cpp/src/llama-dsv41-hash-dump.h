@@ -19,7 +19,7 @@
 #include <algorithm>
 
 inline bool llama_dsv41_hash_dump_enabled(){
-    static const bool on=[]{const char*e=std::getenv("LLAMADECODE_HASH_DUMP");return e&&e[0]=='1'&&!e[1];}();
+    static const bool on=[]{const char*e=std::getenv("LLAMADECODE_HASH_DUMP");return e&&(!std::strcmp(e,"1")||!std::strcmp(e,"outputs"));}();
     return on;
 }
 inline uint64_t llama_dsv41_hash_bytes(const void *data,size_t bytes,uint64_t h=1469598103934665603ull){
@@ -45,7 +45,12 @@ inline bool llama_dsv41_hash_is_weight(const ggml_tensor *t){return !std::strncm
 inline void llama_dsv41_hash_phase(const char *phase,uint32_t layer,uint32_t position,uint32_t count,ggml_cgraph *graph,
         const std::vector<ggml_tensor*> &outputs,const std::vector<ggml_tensor*> &routed,const std::vector<int32_t> &experts){
     std::vector<unsigned char>scratch;const size_t cap=64ull*1024*1024;
+    const char *mode=std::getenv("LLAMADECODE_HASH_DUMP");
+    const bool outputs_only=mode&&!std::strcmp(mode,"outputs");
     for(auto*t:llama_dsv41_hash_leaves(graph)){
+        // A growable cache leaf includes unmapped VMM pages. The outputs-only
+        // mode reads completed graph outputs, never its virtual cache extent.
+        if(outputs_only)break;
         const bool weight=llama_dsv41_hash_is_weight(t);
         if(!std::strcmp(phase,"in")&&weight)continue;
         if(weight){
@@ -66,9 +71,20 @@ inline void llama_dsv41_hash_phase(const char *phase,uint32_t layer,uint32_t pos
             weight?"weight":"leaf",t->name[0]?t->name:"(unnamed)",bytes,(unsigned long long)llama_dsv41_hash_tensor(t,0,bytes,scratch));
     }
     for(size_t i=0;i<outputs.size();++i)if(outputs[i]&&outputs[i]->buffer&&outputs[i]->data){
+        if(outputs_only&&std::strcmp(phase,"out"))continue;
         const size_t bytes=std::min(ggml_nbytes(outputs[i]),cap);
         std::fprintf(stderr,"LLAMADECODE_HASH %s pos=%u count=%u layer=%u kind=output index=%zu name=%s bytes=%zu hash=%016llx\n",phase,position,count,layer,i,
             outputs[i]->name,bytes,(unsigned long long)llama_dsv41_hash_tensor(outputs[i],0,bytes,scratch));
+        if(outputs_only&&i==0&&outputs[i]->ne[2]==count){
+            for(uint32_t first=0;first<count;first+=4096){
+                const uint32_t rows=std::min(4096u,count-first);
+                const size_t stride=outputs[i]->nb[2],part=std::min(cap,size_t(rows)*stride);
+                const auto prefix=llama_dsv41_hash_tensor(outputs[i],size_t(first)*stride,part,scratch);
+                const auto last=llama_dsv41_hash_tensor(outputs[i],size_t(first+rows-1)*stride,stride,scratch);
+                std::fprintf(stderr,"LLAMADECODE_RESIDUAL_SLICE pos=%u rows=%u layer=%u prefix_bytes=%zu prefix=%016llx last=%016llx\n",
+                    position+first,rows,layer,part,(unsigned long long)prefix,(unsigned long long)last);
+            }
+        }
     }
     std::fflush(stderr);
 }

@@ -23,7 +23,7 @@ static dsv41_flashinfer_fn dsv41_flashinfer_bridge(){
         GGML_ASSERT(library&&"FlashInfer bridge DLL failed to load");
         auto abi=reinterpret_cast<int(*)()>(GetProcAddress(library,"slstack_flashinfer_mxfp4_abi"));
         auto call=reinterpret_cast<dsv41_flashinfer_fn>(GetProcAddress(library,"slstack_flashinfer_mxfp4"));
-        GGML_ASSERT(abi&&abi()==3&&call&&"FlashInfer bridge ABI mismatch");
+        GGML_ASSERT(abi&&abi()==4&&call&&"FlashInfer bridge ABI mismatch");
         return call;
 #else
         GGML_ABORT("This optional FlashInfer AOT bridge is currently qualified on Windows only");
