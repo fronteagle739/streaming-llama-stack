@@ -98096,5 +98096,31 @@
         "consumer": "static bool dsv41_topk_select_enabled() {\n    static const bool enabled = [] {\n        const char *env = std::getenv(\"LLAMA_DSV41_TOPK_SELECT\");\n        if (env && std::strcmp(env, \"0\") && std::strcmp(env, \"1\")) GGML_ABORT(\"LLAMA_DSV41_TOPK_SELECT must be 0 or 1\");\n        return !env || env[0] == '1';\n    }();\n    return enabled;"
       }
     ]
+  },
+  {
+    "var": "LLAMA_DSV41_STREAM_TOPK_DEFER",
+    "flag": "--llama-dsv41-stream-topk-defer",
+    "default": null,
+    "code_default": "NULL from getenv; the literal consumer below supplies any fallback",
+    "classification": "qualified",
+    "scopes": [
+      "rtx-llama"
+    ],
+    "doc": "Indexer streaming top-k for more than 131,072 keys: append each 8,192-key window's candidates to one pending buffer and merge only when it would exceed 8,192 columns and once at the end, instead of re-merging after every window. Identical IDs and order (same score-desc/global-ID-asc total order). Default 1; 0 restores the per-window running merge.",
+    "reads": [
+      "engines/streaming-llama/prefill_llama.cpp/src/llama-dsv41-stream-topk.h:22"
+    ],
+    "allowed_values": [
+      "0",
+      "1"
+    ],
+    "code_defaults": [
+      {
+        "source": "engines/streaming-llama/prefill_llama.cpp/src/llama-dsv41-stream-topk.h:22",
+        "unset": "NULL from getenv; the literal consumer below supplies any fallback",
+        "read": "const char*env=std::getenv(\"LLAMA_DSV41_STREAM_TOPK_DEFER\");",
+        "consumer": "inline bool stream_topk_defer_enabled(){\n    static const bool enabled=[]{\n        const char*env=std::getenv(\"LLAMA_DSV41_STREAM_TOPK_DEFER\");\n        if(env&&std::strcmp(env,\"0\")&&std::strcmp(env,\"1\"))GGML_ABORT(\"LLAMA_DSV41_STREAM_TOPK_DEFER must be 0 or 1\");\n        return !env||env[0]=='1';\n    }();\n    return enabled;"
+      }
+    ]
   }
 ]
