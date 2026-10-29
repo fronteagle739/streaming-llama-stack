@@ -448,7 +448,7 @@ struct llama_dsv41_tile_executor::pinned_storage {
         // and3,584B padding after each32-record physical page.
         auto *first=lease.row(0);
         const uint64_t offset=uint64_t(first-static_cast<uint8_t*>(base));
-        const uint64_t size=uint64_t(last-first)+llama_dsv41_carry_store::ram_record_bytes;
+        const uint64_t size=uint64_t(last-first)+lease.layout().record;
         require(offset<=bytes&&size<=bytes-offset&&size<=2ull*1024*1024*1024,"Tile pin escaped admitted RAM bank or2GiB bound");
         void *ptr=first;uint64_t pin_size=size;
         const char *window=std::getenv("LLAMADECODE_SINGLEPASS_PIN");
@@ -459,9 +459,9 @@ struct llama_dsv41_tile_executor::pinned_storage {
             constexpr uint64_t window_rows=16384;
             const uint64_t first_row=uint64_t(lease.start())/window_rows*window_rows;
             const uint64_t begin=llama_dsv41_carry_store::ram_header_bytes+
-                first_row/32*llama_dsv41_carry_store::ram_page_bytes;
+                first_row/32*lease.layout().page;
             const uint64_t end=std::min(bytes,llama_dsv41_carry_store::ram_header_bytes+
-                (first_row+window_rows)/32*llama_dsv41_carry_store::ram_page_bytes);
+                (first_row+window_rows)/32*lease.layout().page);
             require(begin<=offset&&offset+size<=bytes&&end>begin,"Pin window escaped its existing RAM allocation");
             ptr=static_cast<uint8_t*>(base)+begin;pin_size=std::max(end,offset+size)-begin;
             require(pin_size<=2ull*1024*1024*1024,"Pin window exceeds the existing2GiB bound");
@@ -486,7 +486,7 @@ struct llama_dsv41_tile_executor::pinned_storage {
         if(host_copy_staging){
             require(tile_registration&&!registered&&!registered_tile&&!pageable_copies&&!prefetch_buffer&&
                 lease.base==base&&lease.bytes==bytes&&lease.count()&&width&&width<=host_copy_staging_bytes&&
-                offset<=llama_dsv41_carry_store::ram_record_bytes&&width<=llama_dsv41_carry_store::ram_record_bytes-offset&&
+                offset<=lease.layout().record&&width<=lease.layout().record-offset&&
                 tensor&&tensor->data&&ggml_is_contiguous(tensor)&&ggml_nbytes(tensor)==width*lease.count(),
                 "Persistent host staging escaped its exact admitted carry/tensor");
             (void)lease.row(0);(void)lease.row(lease.count()-1);
@@ -513,7 +513,7 @@ struct llama_dsv41_tile_executor::pinned_storage {
             return;
         }
         if(pageable_copies){
-            require(!registered&&!tile_registration&&!prefetch_buffer&&lease.base==base&&lease.bytes==bytes&&width&&offset<=llama_dsv41_carry_store::ram_record_bytes&&width<=llama_dsv41_carry_store::ram_record_bytes-offset&&tensor&&tensor->data&&ggml_is_contiguous(tensor)&&ggml_nbytes(tensor)==width*lease.count(),"Pageable vector copy escaped its exact resident lease/tensor");
+            require(!registered&&!tile_registration&&!prefetch_buffer&&lease.base==base&&lease.bytes==bytes&&width&&offset<=lease.layout().record&&width<=lease.layout().record-offset&&tensor&&tensor->data&&ggml_is_contiguous(tensor)&&ggml_nbytes(tensor)==width*lease.count(),"Pageable vector copy escaped its exact resident lease/tensor");
             (void)lease.row(0);(void)lease.row(lease.count()-1);
             std::vector<uint8_t> values(size_t(width*lease.count()));
             if(to_device){
@@ -533,15 +533,15 @@ struct llama_dsv41_tile_executor::pinned_storage {
         }
         if(tile_registration){
             const uintptr_t begin=reinterpret_cast<uintptr_t>(registered_tile),at=reinterpret_cast<uintptr_t>(lease.row(0));
-            const uint64_t extent=uint64_t(lease.row(lease.count()-1)-lease.row(0))+llama_dsv41_carry_store::ram_record_bytes;
+            const uint64_t extent=uint64_t(lease.row(lease.count()-1)-lease.row(0))+lease.layout().record;
             require(lease.base==base&&lease.bytes==bytes&&registered_tile&&at>=begin&&at-begin<=registered_tile_bytes&&extent<=registered_tile_bytes-(at-begin),"Copy uses an unregistered/foreign current or lookahead span");
         }
         const auto before=clock_type::now();
-        require(width&&offset<=llama_dsv41_carry_store::ram_record_bytes&&
-            width<=llama_dsv41_carry_store::ram_record_bytes-offset&&tensor&&tensor->data&&
+        require(width&&offset<=lease.layout().record&&
+            width<=lease.layout().record-offset&&tensor&&tensor->data&&
             ggml_is_contiguous(tensor)&&ggml_nbytes(tensor)==width*lease.count(),"Direct pinned tensor/record geometry changed");
         for(uint32_t first=0;first<lease.count();first+=4096){
-            const ggml_dsv41_ram_slice slice{base,bytes,lease.start()+first,std::min(4096u,lease.count()-first)};
+            const ggml_dsv41_ram_slice slice{base,bytes,lease.start()+first,std::min(4096u,lease.count()-first),lease.layout().record,lease.layout().page};
             ok(static_cast<cudaError_t>(llama_dsv41_cuda_copy_ram(to_device,slice,offset,width,
                 static_cast<char*>(tensor->data)+uint64_t(first)*width,copies)),"Direct pinned 2D carry copy failed");
         }
@@ -554,8 +554,8 @@ struct llama_dsv41_tile_executor::pinned_storage {
         // Diagnostic only: reuse the live, registered canonical seed lease and
         // its admitted F32 graph input. Every D2H writes back the exact bytes
         // just uploaded; no extra RAM bank/device allocation or model mutation.
-        require(hidden&&hidden->type==GGML_TYPE_F32&&ggml_nbytes(hidden)==uint64_t(lease.count())*81920,
-            "Carry copy probe requires the original F32 seed input");
+        require(!lease.compact_record()&&hidden&&hidden->type==GGML_TYPE_F32&&ggml_nbytes(hidden)==uint64_t(lease.count())*81920,
+            "Carry copy probe requires the original F32 seed input (legacy carry record)");
         cudaEvent_t events[2]={};
         struct cleanup_events {cudaEvent_t*e;~cleanup_events(){for(int i=0;i<2;++i)if(e[i])pinned_storage::cleanup(cudaEventDestroy(e[i]));}} guard{events};
         for(auto&e:events)ok(cudaEventCreate(&e),"Copy probe event creation failed");
@@ -665,10 +665,17 @@ bool llama_dsv41_tile_executor::seed_ram(ggml_tensor *embedding,const std::vecto
         auto *tokens=ggml_new_tensor_1d(ctx.get(),GGML_TYPE_I32,lease.rows);
         llama_dsv41_graph_ops ops(ctx.get(),norm_eps,hc_eps,sinkhorn_iters);
         require(!projected||(lease.rows<=128&&projected->size()==size_t(5120)*lease.rows),"Projected image seed exceeds bounded input rows");
+        const bool compact=lease.compact_record();
+        // Compact record: store the exact F16 embedding row (10240 B); layer 0
+        // re-expands it on the GPU (F16->F32 widening + 4x repeat, bit-exact).
+        require(!compact||(!projected&&embedding->type==GGML_TYPE_F16),"Compact seed requires the F16 text token embedding");
         auto*rows=projected?ggml_new_tensor_2d(ctx.get(),GGML_TYPE_F32,5120,lease.rows):ggml_get_rows(ctx.get(),embedding,tokens);
         auto values=ops.seed_embeddings(rows);
+        ggml_tensor*seed16=compact?ggml_cast(ctx.get(),rows,GGML_TYPE_F16):nullptr;
         auto *graph=ggml_new_graph_custom(ctx.get(),8192,false);
-        ggml_build_forward_expand(graph,values.residual);ggml_build_forward_expand(graph,values.pre);
+        if(compact){ggml_set_output(rows);ggml_set_output(seed16);ggml_set_output(values.pre);ggml_build_forward_expand(graph,rows);ggml_build_forward_expand(graph,seed16);}
+        else ggml_build_forward_expand(graph,values.residual);
+        ggml_build_forward_expand(graph,values.pre);
         backend_buffers(backend,graph);
         const auto scratch=llama_dsv41_allocate_native_graph(workspace->value,graph,0,admitted_graph_bytes);
         if(projected)ggml_backend_tensor_set(rows,projected->data(),0,projected->size()*4);
@@ -676,13 +683,16 @@ bool llama_dsv41_tile_executor::seed_ram(ggml_tensor *embedding,const std::vecto
         // The existing GPU validator below synchronizes this same stream
         // before publishing initialization credit or queuing the RAM mirror.
         require(ggml_backend_graph_compute_async(backend,graph)==GGML_STATUS_SUCCESS,"Direct seed graph failed");
-        llama_dsv41_validation check;check.residual=static_cast<const float*>(values.residual->data);
-        check.residual_n=uint64_t(5120)*4*lease.rows;check.pre=static_cast<const float*>(values.pre->data);check.pre_n=uint64_t(4)*lease.rows;
+        llama_dsv41_validation check;check.residual=static_cast<const float*>(compact?rows->data:values.residual->data);
+        check.residual_n=uint64_t(5120)*(compact?1:4)*lease.rows;check.pre=static_cast<const float*>(values.pre->data);check.pre_n=uint64_t(4)*lease.rows;
         pinned->validate(check);pinned->readback_ready();
-        pinned->queue(false,lease,0,81920,values.residual);pinned->queue(false,lease,81920,16,values.pre);pinned->finish();
+        const auto &g=lease.layout();
+        if(compact)pinned->queue(false,lease,0,10240,seed16);
+        else pinned->queue(false,lease,0,81920,values.residual);
+        pinned->queue(false,lease,g.pre,16,values.pre);pinned->finish();
         completion=llama_dsv41_carry_store::ram_completion(lease,true,true,true);
-        llama_dsv41_layer_log("DS4PERF_SEED_RAM_COMPLETE start=%u count=%u mirrored_host_bytes=%llu scratch_bytes=%llu validated=1\n",
-            lease.first,lease.rows,(unsigned long long)(uint64_t(lease.rows)*81936),(unsigned long long)scratch);
+        llama_dsv41_layer_log("DS4PERF_SEED_RAM_COMPLETE start=%u count=%u mirrored_host_bytes=%llu scratch_bytes=%llu validated=1 compact_f16_seed=%u\n",
+            lease.first,lease.rows,(unsigned long long)(uint64_t(lease.rows)*(compact?10256:81936)),(unsigned long long)scratch,unsigned(compact));
         cache.execution_poisoned=false;return true;
 #else
         (void)embedding;(void)ids;(void)lease;throw std::runtime_error("Direct seed requires CUDA");
@@ -912,11 +922,13 @@ bool llama_dsv41_tile_executor::export_hidden_tile(const llama_dsv41_carry_store
             ggml_backend_tensor_alloc(resident->buffer,pre,(char*)resident->pre->data+uint64_t(at)*16)==GGML_STATUS_SUCCESS,
             "Final hidden export source view escaped its resident allocation");
         cache.execution_poisoned=true;
+        const auto &g=lease.layout();ggml_tensor*const stored=hidden;
+        require(!lease.compact_record()||(resident_bf16&&stored->type==GGML_TYPE_BF16),"Compact export requires the BF16 resident bank");
         if(resident->spilled(lease.first)){
             // Bring the spilled rows' exact layer-39 BF16/pre bytes back into the slot;
             // the unchanged cast/validate/F32 export below then overwrites the record.
             require(resident_bf16,"Spilled export requires the BF16 bank");
-            pinned->queue(true,lease,0,40960,hidden);pinned->queue(true,lease,81920,16,pre);pinned->upload_ready();
+            pinned->queue(true,lease,0,40960,hidden);pinned->queue(true,lease,g.pre,16,pre);pinned->upload_ready();
             resident->slot_logical=lease.first;resident->spill_h2d_bytes+=uint64_t(lease.rows)*40976;
         }
         if(resident_bf16){
@@ -931,7 +943,11 @@ bool llama_dsv41_tile_executor::export_hidden_tile(const llama_dsv41_carry_store
         llama_dsv41_validation check;check.residual=static_cast<const float*>(hidden->data);check.residual_n=uint64_t(5120)*4*lease.rows;
         check.pre=static_cast<const float*>(pre->data);check.pre_n=uint64_t(4)*lease.rows;
         pinned->validate(check);pinned->readback_ready();
-        pinned->queue(false,lease,0,81920,hidden);pinned->queue(false,lease,81920,16,pre);pinned->finish();
+        // Compact: the validated F32 cast is exactly the BF16 bank widened, so
+        // the record keeps the BF16 bytes (readers widen bit-exactly).
+        if(lease.compact_record())pinned->queue(false,lease,0,40960,stored);
+        else pinned->queue(false,lease,0,81920,hidden);
+        pinned->queue(false,lease,g.pre,16,pre);pinned->finish();
         resident->export_cursor+=lease.rows;completion=llama_dsv41_carry_store::ram_completion(lease,true,true,true);
         cache.execution_poisoned=false;
         llama_dsv41_layer_log("DS4PERF_EXPORT_HIDDEN_COMPLETE start=%u count=%u copied_host_bytes=%llu after_required_head=1 validated=1\n",
@@ -1159,6 +1175,11 @@ bool llama_dsv41_tile_executor::run(const request&in,const llama_dsv41_layer_gra
         auto &backend_temporary=compiled->backend_temporary;
         auto &rounded_matrices=compiled->rounded_matrices;auto &split_matrices=compiled->split_matrices;
         ggml_tensor *spill_slot=nullptr;   // LLAMADECODE single sweep: the slot's BF16 view (spilled tiles)
+        // OPUS22 compact carry record: layer 0 expands the exact F16 seed on the GPU.
+        const bool compact_seed=direct_input&&in.direct->compact_record()&&in.layer==0;
+        require(!direct_input||!in.direct->compact_record()||(resident_bf16&&device_hidden&&!pinned->prefetch_buffer&&!in.lookahead),
+            "Compact carry records require the BF16-resident device bank without copy prefetch");
+        ggml_tensor *seed16=nullptr;uint32_t seed_nodes=0;
         const auto graph_prepare_started=tile_timing_enabled()?clock_type::now():clock_type::time_point{};
         if(graph_cache_hit)compiled->bindings.restore(in.start,in.count);
         else {
@@ -1170,7 +1191,10 @@ bool llama_dsv41_tile_executor::run(const request&in,const llama_dsv41_layer_gra
         auto ids=[&](ggml_type type,int64_t a,int64_t b=1){return input_tensor(ggml_new_tensor_2d(ctx.get(),type,a,b));};
         // Later BF16-resident layers bind their actual F32 cast below. Do not
         // keep an unused original F32 leaf alive in uploaded_inputs as well.
-        input.residual=(device_hidden&&resident_bf16&&in.layer)?nullptr:f32(5120,4,in.count);
+        // Compact record layer 0: the exact F16 seed row is the uploaded leaf.
+        seed16=compact_seed?input_tensor(ggml_new_tensor_2d(ctx.get(),GGML_TYPE_F16,5120,in.count)):nullptr;
+        input.residual=(device_hidden&&resident_bf16&&in.layer)||compact_seed?nullptr:f32(5120,4,in.count);
+        if(compact_seed)input.residual=ggml_repeat_4d(ctx.get(),ggml_reshape_3d(ctx.get(),ggml_cast(ctx.get(),seed16,GGML_TYPE_F32),5120,1,in.count),5120,4,in.count,1);
         input.previous_pre=f32(4,in.count);input.positions=ids(GGML_TYPE_I32,in.count);
         ggml_tensor *bf16_destination=nullptr;
         if(device_hidden){
@@ -1229,6 +1253,7 @@ bool llama_dsv41_tile_executor::run(const request&in,const llama_dsv41_layer_gra
             ratio?cache.index(in.layer):nullptr,nullptr,nullptr};
         if(pooled){state.previous_pool_kv=cache.pool_kv(in.layer);state.previous_pool_score=cache.pool_score(in.layer);}
         graph=ggml_new_graph_custom(ctx.get(),long_index?16384:8192,false);
+        if(compact_seed){ggml_build_forward_expand(graph,input.residual);seed_nodes=uint32_t(ggml_graph_n_nodes(graph));}
         const bool attribution=llama_dsv41_attribution_active(in.position_offset+in.start,in.count);
         unsigned attribution_expands=0;
         llama_dsv41_graph_ops::observer boundary_observer;
@@ -1582,7 +1607,9 @@ bool llama_dsv41_tile_executor::run(const request&in,const llama_dsv41_layer_gra
             // The admitted GPU prefix already holds the prior layer's exact outputs.
             // Other rows and the first layer still copy the validated RAM lease.
             if(!device_hidden||in.layer==0){
-                if(pinned->prefetch_buffer&&in.start)pinned->prefetch_take(*in.direct,in.layer,input.residual,input.previous_pre);
+                const auto &g=in.direct->layout();
+                if(compact_seed){pinned->queue(true,*in.direct,0,10240,seed16);pinned->queue(true,*in.direct,g.pre,16,input.previous_pre);}
+                else if(pinned->prefetch_buffer&&in.start)pinned->prefetch_take(*in.direct,in.layer,input.residual,input.previous_pre);
                 else{pinned->queue(true,*in.direct,0,81920,input.residual);pinned->queue(true,*in.direct,81920,16,input.previous_pre);}
             }else if(pinned->prefetch_buffer)require(!pinned->prefetch_valid,"Resident input unexpectedly retained a prefetched tile");
 #endif
@@ -1595,8 +1622,8 @@ bool llama_dsv41_tile_executor::run(const request&in,const llama_dsv41_layer_gra
         if(p.published_count){upload_input(input.publication_ids,publication_rows);upload_input(input.publication_positions,p.compressed_positions);}
         if(direct_input){
 #ifdef GGML_USE_CUDA
-            if(reuse&&!resident_ids)pinned->queue(true,*in.direct,81936,uint64_t(selected_width)*4,input.previous_selected);
-            if(candidates&&!resident_ids)pinned->queue(true,*in.direct,83984,uint64_t(candidate_width)*4,input.candidate_ids);
+            if(reuse&&!resident_ids)pinned->queue(true,*in.direct,in.direct->layout().selected,uint64_t(selected_width)*4,input.previous_selected);
+            if(candidates&&!resident_ids)pinned->queue(true,*in.direct,in.direct->layout().candidates,uint64_t(candidate_width)*4,input.candidate_ids);
 #endif
         }else{if(reuse)upload_input(input.previous_selected,in.selected);if(candidates)upload_input(input.candidate_ids,in.candidates);}
 #ifdef GGML_USE_CUDA
@@ -1606,10 +1633,11 @@ bool llama_dsv41_tile_executor::run(const request&in,const llama_dsv41_layer_gra
             // layer (BF16 hidden at 0, pre at 81920) and the mirrored compact IDs.
             const auto spill_started=clock_type::now();
             require(spill_slot&&resident_ids,"Spilled tile requires the BF16 slot and resident IDs");
-            pinned->queue(true,*in.direct,0,40960,spill_slot);pinned->queue(true,*in.direct,81920,16,input.previous_pre);
+            const auto &g=in.direct->layout();
+            pinned->queue(true,*in.direct,0,40960,spill_slot);pinned->queue(true,*in.direct,g.pre,16,input.previous_pre);
             uint64_t ids=0;
-            if(reuse){pinned->queue(true,*in.direct,81936,uint64_t(selected_width)*4,input.previous_selected);ids+=uint64_t(selected_width)*4;}
-            if(candidates){pinned->queue(true,*in.direct,83984,uint64_t(candidate_width)*4,input.candidate_ids);ids+=uint64_t(candidate_width)*4;}
+            if(reuse){pinned->queue(true,*in.direct,g.selected,uint64_t(selected_width)*4,input.previous_selected);ids+=uint64_t(selected_width)*4;}
+            if(candidates){pinned->queue(true,*in.direct,g.candidates,uint64_t(candidate_width)*4,input.candidate_ids);ids+=uint64_t(candidate_width)*4;}
             pinned->upload_ready();   // the BF16 unpack below runs on the compute stream
             resident->spill_h2d_bytes+=uint64_t(in.count)*(40976+ids);spill_in_ms=elapsed(spill_started);
         }
@@ -1618,6 +1646,17 @@ bool llama_dsv41_tile_executor::run(const request&in,const llama_dsv41_layer_gra
         if(!zero_kinds)upload_input(input.token_kinds,in.token_kinds);
         boundary.upload_replacements();
         ggml_cgraph compute_view{};ggml_cgraph *compute_graph=graph;
+        if(compact_seed){
+            // Same contract as the BF16 unpack below: run the exact seed
+            // expansion prefix, validate its F32 output, then the layer suffix.
+            require(seed_nodes>0&&ggml_graph_n_nodes(graph)>int(seed_nodes)&&ggml_graph_node(graph,int(seed_nodes)-1)==input.residual&&
+                ggml_graph_node(graph,0)->op==GGML_OP_CPY&&ggml_graph_node(graph,0)->src[0]==seed16,
+                "Compact F16 seed expansion must be the first exact graph dependency");
+            pinned->upload_ready();
+            auto expand=ggml_graph_view(graph,0,int(seed_nodes));
+            require(ggml_backend_graph_compute_async(backend,&expand)==GGML_STATUS_SUCCESS,"Compact F16 seed expansion failed");
+            compute_view=ggml_graph_view(graph,int(seed_nodes),ggml_graph_n_nodes(graph));compute_graph=&compute_view;
+        }
         if(resident_bf16&&in.layer){
             require(ggml_graph_n_nodes(graph)>1&&ggml_graph_node(graph,0)==input.residual&&
                 input.residual->op==GGML_OP_CPY&&input.residual->src[0]&&input.residual->src[0]->type==GGML_TYPE_BF16,
@@ -1957,12 +1996,13 @@ bool llama_dsv41_tile_executor::run(const request&in,const llama_dsv41_layer_gra
             if(values.dspark_mean){check.mean=static_cast<const float*>(values.dspark_mean->data);check.mean_n=uint64_t(5120)*in.count;}
             pinned->validate(check);pinned->readback_ready();
             if(!defer_hidden_readback||(in.layer==39&&!export_hidden_after_head)){
+                require(!in.direct->compact_record(),"Compact carry records hold no F32 per-layer hidden mirror");
                 pinned->queue(false,*in.direct,0,81920,values.residual);pinned->queue(false,*in.direct,81920,16,values.next_pre);
             }
             // Reader IDs remain physically unchanged. Their graph output must
             // be a pure CONT copy of the exact input, in addition to GPU bounds.
-            if(query_source(in.layer)&&selected_width)pinned->queue(false,*in.direct,81936,uint64_t(selected_width)*4,values.selected);
-            if(in.layer==20&&candidate_width)pinned->queue(false,*in.direct,83984,uint64_t(candidate_width)*4,values.candidates);
+            if(query_source(in.layer)&&selected_width)pinned->queue(false,*in.direct,in.direct->layout().selected,uint64_t(selected_width)*4,values.selected);
+            if(in.layer==20&&candidate_width)pinned->queue(false,*in.direct,in.direct->layout().candidates,uint64_t(candidate_width)*4,values.candidates);
 #endif
         }else{
         pending.residual=download<float>(values.residual,size_t(5120)*4*in.count);
@@ -2003,7 +2043,7 @@ bool llama_dsv41_tile_executor::run(const request&in,const llama_dsv41_layer_gra
                 // The slot's new BF16 hidden and pre go back to this tile's own RAM
                 // records (finished by pinned->finish below); IDs were mirrored above.
                 const auto spill_started=clock_type::now();
-                pinned->queue(false,*in.direct,0,40960,spill_slot);pinned->queue(false,*in.direct,81920,16,input.previous_pre);
+                pinned->queue(false,*in.direct,0,40960,spill_slot);pinned->queue(false,*in.direct,in.direct->layout().pre,16,input.previous_pre);
                 resident->spill_d2h_bytes+=uint64_t(in.count)*40976;resident->slot_logical=in.start;
                 pinned->finish();
                 llama_dsv41_layer_log("LLAMADECODE_PREFILL_SPILL_TILE layer=%u start=%u count=%u slot_row=%u h2d_ms=%.3f d2h_ms=%.3f\n",in.layer,in.start,in.count,bank_start,spill_in_ms,elapsed(spill_started));

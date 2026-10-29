@@ -16,6 +16,8 @@ def load(path=None, overrides=None):
     selection(cfg.get('producer_chunks_per_pass', 1))
     from .singlepass import registration
     registration(cfg.get('producer_carry_registration', 'tile'))
+    from .combo_producer import carry_compact
+    carry_compact(cfg)
     from .combo_ram import runtime_min_free_gib
     cfg['runtime_min_free_gib'] = runtime_min_free_gib(cfg)
     if cfg.get('mac'):

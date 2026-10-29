@@ -4,12 +4,18 @@
 #include <cstdint>
 namespace ggml_dsv41_copy {
 constexpr uint64_t record_bytes=92176,page_bytes=2953216,header_bytes=4096;
+// Opt-in compact record (OPUS22): BF16/F16 hidden field 40960 B instead of the
+// F32 81920 B field; pre, selected and candidate IDs follow unchanged in size.
+constexpr uint64_t compact_record_bytes=51216,compact_page_bytes=1642496;
+constexpr bool known_geometry(uint64_t record,uint64_t page){
+    return (record==record_bytes&&page==page_bytes)||(record==compact_record_bytes&&page==compact_page_bytes);}
 constexpr uint32_t page_rows=32,maximum_rows=1048576,maximum_tile_rows=4096;
 }
 struct ggml_dsv41_ram_slice {
     void *base=nullptr;
     uint64_t bytes=0;
     uint32_t start=0,count=0;
+    uint64_t record_bytes=ggml_dsv41_copy::record_bytes,page_bytes=ggml_dsv41_copy::page_bytes;
 };
 struct ggml_dsv41_validation {
     const float *residual=nullptr,*pre=nullptr,*mean=nullptr,*engram=nullptr;

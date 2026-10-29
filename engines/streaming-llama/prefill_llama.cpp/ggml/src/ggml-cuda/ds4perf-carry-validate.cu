@@ -42,6 +42,8 @@ int ggml_dsv41_cuda_validate(const ggml_dsv41_validation &p,void *device_flags,v
 int ggml_dsv41_cuda_copy_ram(bool to_device,const ggml_dsv41_ram_slice &slice,
         uint64_t offset,uint64_t width,void *device,void *stream){
     using namespace ggml_dsv41_copy;
+    if(!known_geometry(slice.record_bytes,slice.page_bytes))return int(cudaErrorInvalidValue);
+    const uint64_t record_bytes=slice.record_bytes,page_bytes=slice.page_bytes;
     if(!slice.base||!device||!slice.count||slice.count>maximum_tile_rows||slice.start>maximum_rows||slice.count>maximum_rows-slice.start||
        !width||offset>record_bytes||width>record_bytes-offset)return int(cudaErrorInvalidValue);
     auto address=[&](uint32_t relative){const uint64_t row=uint64_t(slice.start)+relative;return header_bytes+(row/page_rows)*page_bytes+(row%page_rows)*record_bytes;};

@@ -54,9 +54,16 @@ def ctx_cache(cfg):
     return precision,growable
 
 LEGACY_SWEEP=49152
-def carry_bank_bytes(rows):
-    """Locked RAM carry bank for `rows` (llama_dsv41_prefill::carry_bank_bytes): 4 KiB header + 32-row pages."""
-    return 4096+(rows+31)//32*2953216
+def carry_bank_bytes(rows,compact=False):
+    """Locked RAM carry bank for `rows` (llama_dsv41_prefill::carry_bank_bytes): 4 KiB header + 32-row pages.
+    compact: the opt-in 51216 B record (producer_carry_compact_record, --carry-compact-record) in 1642496 B pages."""
+    return 4096+(rows+31)//32*(1642496 if compact else 2953216)
+
+def carry_compact(cfg):
+    """producer_carry_compact_record (default false): exact F16 seed + BF16 hidden host carry record."""
+    value=cfg.get('producer_carry_compact_record',False)
+    if type(value) is not bool:raise ValueError('producer_carry_compact_record must be true or false')
+    return value
 
 def engram_prompt_bytes(rows):
     """Whole-prompt Engram row cache admission (llama_dsv41_prefill::engram_prompt_bytes)."""
@@ -116,7 +123,8 @@ def prefill_plan(cfg,prompt_tokens,available=None):
         reserve=max(float(cfg.get('producer_host_reserve_gib',.5)),float(cfg.get('producer_desktop_reserve_gib',.5)))
         room=int(available)-int(reserve*(1<<30))
         if room<top:top=max(base,room);capped_by='desktop_reserve' if reserve>float(cfg.get('producer_host_reserve_gib',.5)) else 'available_ram'
-    extra=lambda c:(carry_bank_bytes(c)-carry_bank_bytes(LEGACY_SWEEP),engram_prompt_bytes(c)-engram_prompt_bytes(LEGACY_SWEEP))
+    compact=carry_compact(cfg)
+    extra=lambda c:(carry_bank_bytes(c,compact)-carry_bank_bytes(LEGACY_SWEEP),engram_prompt_bytes(c)-engram_prompt_bytes(LEGACY_SWEEP))
     limit=min(1<<20,int(cfg['context'])-1)
     want=min(max(LEGACY_SWEEP,int(prompt_tokens)),limit)
     fold=cfg.get('producer_prefill_sweep_tokens')
@@ -222,6 +230,8 @@ def prefill_arguments(cfg, count, available, *, export_state=False, techniques=N
                        ('--provider-host-bytes', plan['engram_delta']),
                        ('--engram-prefetch-bytes', plan['engram_delta'])):
         arguments[key] = str(int(arguments[key]) + delta)
+    if carry_compact(cfg):
+        arguments['--carry-compact-record'] = '1'
     arguments['--prefill-sweep-tokens'] = str(plan['sweep_tokens'])
     arguments['--prefill-fold-cap-tokens'] = str(plan['fold_cap'])
     precision, growable = ctx_cache(cfg)

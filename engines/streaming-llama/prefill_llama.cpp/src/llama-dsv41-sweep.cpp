@@ -345,6 +345,9 @@ bool llama_dsv41_sweep::open(const llama_dsv41_weight_provider::config &input_we
         require(options.carry.max_tile_tokens<=4096||options.pair_ffn,"8192 groups require paired attention/FFN construction");
         require(!options.batch_seed_ram||(options.carry.resident_ram&&options.carry.direct_ram_tiles&&options.admitted_pinned_device_bytes&&options.reuse_graph&&!options.reuse_layer_graph),
             "Batched seed requires the existing direct pinned RAM and allocator-only workspace");
+        require(!options.carry.compact_record||(options.batch_seed_ram&&options.resident_bf16&&options.resident_ids&&!options.images&&
+            !options.admitted_prefetch_device_bytes&&!options.diagnostic_carry&&options.carry.export_hidden_after_head),
+            "Compact carry records require the batched GPU seed, BF16-resident hidden and IDs, text-only input, no copy prefetch and post-head export");
         require(!options.engram_tile_lookahead||weights.engram_prefetch_host_bytes,
             "Engram tile lookahead requires the existing immutable whole-prompt cache");
         require(!options.carry.export_hidden_after_head||options.carry.defer_hidden_readback,"Post-head hidden export requires full-device retention");
@@ -362,7 +365,7 @@ bool llama_dsv41_sweep::open(const llama_dsv41_weight_provider::config &input_we
             "V4.1 sweep canonical cache exceeds admission");
         llama_dsv41_carry_store::budget carry_budget;
         success(options.carry.resident_ram ?
-            (options.carry.direct_ram_tiles?llama_dsv41_carry_store::plan_resident_ram_direct(options.carry.tokens,carry_budget,error,options.carry.max_tile_tokens):llama_dsv41_carry_store::plan_resident_ram(options.carry.tokens,carry_budget,error,options.carry.max_tile_tokens)) :
+            (options.carry.direct_ram_tiles?llama_dsv41_carry_store::plan_resident_ram_direct(options.carry.tokens,carry_budget,error,options.carry.max_tile_tokens,options.carry.compact_record):llama_dsv41_carry_store::plan_resident_ram(options.carry.tokens,carry_budget,error,options.carry.max_tile_tokens)) :
             options.carry.ram_prefix_tokens?llama_dsv41_carry_store::plan_hybrid(options.carry.tokens,options.carry.ram_prefix_tokens,options.carry.max_tile_tokens,
                 options.carry.outstanding_bytes,options.carry.disk_reserve_bytes,carry_budget,error):
             llama_dsv41_carry_store::plan(options.carry.tokens,options.carry.outstanding_bytes,carry_budget,error),error);
@@ -441,7 +444,7 @@ bool llama_dsv41_sweep::open(const llama_dsv41_weight_provider::config &input_we
         const uint64_t long_metadata=options.expert.index_key_windows&&options.context>131072?8ull*1024*1024:0;
         uint64_t carry_host=carry_budget.bounded_host_bytes;
         if(options.fixed){llama_dsv41_carry_store::budget fixed_host;std::string why;
-            require(llama_dsv41_carry_store::plan_resident_ram_direct(options.fixed->tokens,fixed_host,why,options.fixed->tile),"Fixed carry host plan failed");
+            require(llama_dsv41_carry_store::plan_resident_ram_direct(options.fixed->tokens,fixed_host,why,options.fixed->tile,options.carry.compact_record),"Fixed carry host plan failed");
             carry_host=std::max(carry_host,fixed_host.bounded_host_bytes);
         }
         // Owner-digest read staging (pinned, llama-dsv41-owner-digest.h): 8 workers x 2 slots x 2 MiB.
@@ -501,7 +504,7 @@ bool llama_dsv41_sweep::open(const llama_dsv41_weight_provider::config &input_we
             auto&f=*options.fixed;
             const bool first_request=f.direct_open&&!warmup&&!prefix&&(options.carry.tokens==f.tokens||(options.stateful_chunks&&options.carry.tokens<=f.tokens));
             require(!warmup&&(first_request||(!options.pair_ffn&&options.carry.tokens==1))&&!f.ram&&!f.ram_registration,"Fixed RAM must be allocated/registered once before imports");
-            f.ram=llama_dsv41_carry_store::reserve_ram(f.tokens,options.carry.admitted_host_bytes,f.tile);
+            f.ram=llama_dsv41_carry_store::reserve_ram(f.tokens,options.carry.admitted_host_bytes,f.tile,options.carry.compact_record);
             if(f.tile_registration||f.pageable_copies){
                 const bool full_resident=f.bf16&&f.ids&&f.metadata&&!options.admitted_prefetch_device_bytes;
                 const bool ram_lookahead=!f.bf16&&!f.ids&&!f.metadata&&options.admitted_prefetch_device_bytes;
