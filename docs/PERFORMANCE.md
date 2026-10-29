@@ -84,6 +84,22 @@ to RAM for a single pass; at 128K one pass took 30.54 s against 28.65 s for two 
 17,408 rows spilled), so two sweeps stay the default.
 100K: **24.054 s** prompt-only (4,157 tok/s), TTFT 27.078 s, at 16.9 GB/s storage.
 
+Round 10 (OPUS22, default, within tolerance, not bitwise):
+- token-tile sparse attention runs a hand-written SM120 kernel
+  (`LLAMA_DSV41_SPARSE_HAND`, default 1; 0 keeps the TileLang image): 32 heads
+  per CTA instead of 16, so each of a query's 640 key rows is gathered twice
+  instead of four times; cp.async double-buffered 32-key tiles; the F32 query
+  rounded to BF16 on load (no staged copy). Same BF16 MMA / F32 online softmax,
+  different summation order. Microbenchmark per 4096-query tile: 5.35 -> 2.45 ms;
+  closer to an fp64 reference than the TileLang image (relative RMS 1.19e-3 vs
+  2.05e-3; BF16 probabilities dominate both). The cost per tile is flat in
+  context length (5.89 ms at 100K, 6.01 ms at 200K): 200K costs twice 100K
+  because it has twice the tiles. Quality: frontier KL 4.6e-9 at 200K; on the
+  100K retrieval prompt KL 1.1e-7 at the answer start and 1.1e-8 mid-answer,
+  top-1 is the planted key token in both.
+200K: **39.066 s** prompt-only (5,120 tok/s), TTFT 45.83 s (RAM was ~9.6 GiB free), 17.4 GB/s;
+sweep GPU 28.8 -> 26.8 s. 100K retrieval prompt: 22.24 s against 24.14 s with the TileLang image.
+
 In the new default the 21 sweep layers are compute-bound (21 s wall against
 10 s of weight reads) and the 19 tail layers are storage-bound (8 s). Details:
 `examples/opus22/RESULTS.md` section 8.

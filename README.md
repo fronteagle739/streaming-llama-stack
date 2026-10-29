@@ -288,6 +288,8 @@ configuration.
 - TileLang attention is the selected default but is numerically different from
   native attention. The tested retrieval answer matches; later forced continuations
   can diverge. Set `LLAMA_DSV41_TILELANG_ATTENTION=0` for native attention.
+  Mode 2 now runs a hand-written SM120 kernel with the same arithmetic in a
+  different summation order (`LLAMA_DSV41_SPARSE_HAND=0` restores the TileLang image).
   [Quality measurements](examples/kernels2/PERFORMANCE.md).
 - The first prompt includes engine startup, and decode is slower until the expert
   cache warms up (about 100 tokens).
