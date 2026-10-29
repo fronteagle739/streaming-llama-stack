@@ -389,6 +389,141 @@ static __global__ void __launch_bounds__(512, 1) k_dsv41_topk_radix_tiles(
     }
 }
 
+
+// OPUS22 round 8: the same packed keys (value desc, index asc: a total order,
+// so the top-512 set and its sorted order are unique) selected without sorting
+// all 8192. MSB radix select finds the 512th key in <=8 histogram passes over
+// the register-resident keys, the selected keys are compacted and only those
+// 512 are sorted. NaN/subnormal tiles keep the original comparison network.
+template<bool implicit_iota>
+static __global__ void __launch_bounds__(512, 1) k_dsv41_topk_select_tiles(
+        const float *x, const int *src_candidates, int *dst,
+        const int ncols, const int width, const int ntop, const bool reject_nan) {
+    constexpr int tile_size = 8192, items = 16, top = 512;
+    const int tile = blockIdx.x, row = blockIdx.y, tid = threadIdx.x;
+    const int begin = tile * tile_size, tile_width = min(tile_size, width - begin);
+    const int padded = 1 << (32 - __clz(tile_width - 1));
+    const int ntiles = (width + tile_size - 1) / tile_size;
+    const float *x_row = x + size_t(row) * ncols;
+    extern __shared__ __align__(16) unsigned char radix_smem[];
+    __shared__ unsigned has_nan;
+    __shared__ unsigned hist[256];
+    __shared__ uint64_t selected[top];
+    __shared__ int s_bin, s_above, s_count;
+    if (tid == 0) { has_nan = 0; s_count = 0; }
+    __syncthreads();
+    uint64_t keys[items];
+#pragma unroll
+    for (int item = 0; item < items; ++item) {
+        const int i = tid * items + item;
+        int id = -1;
+        if (i < tile_width) {
+            if constexpr (implicit_iota) id = begin + i;
+            else id = src_candidates[size_t(row) * width + begin + i];
+        }
+        const float value = id < 0 ? 0.0f : x_row[id];
+        const uint32_t magnitude = __float_as_uint(value) & 0x7fffffffu;
+        if (id < -1 || (id >= 0 && magnitude > 0x7f800000u)) atomicOr(&has_nan, 1u);
+        if (id >= 0 && magnitude && magnitude < 0x00800000u) atomicOr(&has_nan, 2u);
+        keys[item] = dsv41_topk_pack_key(value, id);
+    }
+    __syncthreads();
+    if(reject_nan&&(has_nan&1u)){
+        if(tid==0)printf("DSV41_STREAM_TOPK_NAN_REFUSED row=%d tile=%d\n",row,tile);
+        __syncthreads();
+        __trap();
+    }
+    if (has_nan) {
+        int *candidates = reinterpret_cast<int *>(radix_smem);
+#pragma unroll
+        for (int item = 0; item < items; ++item) {
+            const int i = tid * items + item;
+            int id = -1;
+            if (i < tile_width) {
+                if constexpr (implicit_iota) id = begin + i;
+                else id = src_candidates[size_t(row) * width + begin + i];
+            }
+            candidates[i] = id;
+        }
+        __syncthreads();
+        top_k_sort_candidates_strided(padded, x_row, candidates);
+        for (int i = tid; i < ntop; i += blockDim.x)
+            dst[size_t(row) * ntiles * ntop + tile * ntop + i] = i < padded ? candidates[i] : -1;
+        return;
+    }
+    uint64_t prefix = 0, mask = 0;
+    int remaining = top;
+    bool all_matching = false;
+    for (int shift = 56; shift >= 0; shift -= 8) {
+        if (tid < 256) hist[tid] = 0;
+        __syncthreads();
+#pragma unroll
+        for (int item = 0; item < items; ++item)
+            if ((keys[item] & mask) == prefix) atomicAdd(&hist[unsigned(keys[item] >> shift) & 255u], 1u);
+        __syncthreads();
+        if (tid < 32) {
+            // Lane l owns bins 255-8l .. 248-8l (descending).
+            unsigned counts[8], lane_sum = 0;
+#pragma unroll
+            for (int j = 0; j < 8; ++j) { counts[j] = hist[255 - (tid * 8 + j)]; lane_sum += counts[j]; }
+            unsigned inclusive = lane_sum;
+#pragma unroll
+            for (int offset = 1; offset < 32; offset <<= 1) {
+                const unsigned v = __shfl_up_sync(0xffffffffu, inclusive, offset);
+                if (tid >= offset) inclusive += v;
+            }
+            unsigned before = inclusive - lane_sum;
+            if (before < unsigned(remaining) && unsigned(remaining) <= inclusive) {
+#pragma unroll
+                for (int j = 0; j < 8; ++j) {
+                    if (before < unsigned(remaining) && unsigned(remaining) <= before + counts[j]) {
+                        s_bin = 255 - (tid * 8 + j); s_above = int(before);
+                    }
+                    before += counts[j];
+                }
+            }
+        }
+        __syncthreads();
+        const int bin = s_bin;
+        remaining -= s_above;
+        prefix |= uint64_t(bin) << shift;
+        mask |= uint64_t(255) << shift;
+        const bool done = int(hist[bin]) == remaining;
+        __syncthreads();
+        if (done) { all_matching = true; break; }
+    }
+    // Keys strictly above the threshold prefix, plus every key on it when the
+    // bin is taken whole; otherwise `remaining` copies of the exact 512th key.
+#pragma unroll
+    for (int item = 0; item < items; ++item) {
+        const uint64_t masked = keys[item] & mask;
+        if (masked > prefix || (all_matching && masked == prefix)) selected[atomicAdd(&s_count, 1)] = keys[item];
+    }
+    __syncthreads();
+    const int count = s_count;
+    if (tid >= count && tid < top) selected[tid] = prefix;
+    __syncthreads();
+    for (int k = 2; k <= top; k <<= 1) {
+        for (int j = k >> 1; j > 0; j >>= 1) {
+            const int peer = tid ^ j;
+            if (peer > tid) {
+                const uint64_t a = selected[tid], b = selected[peer];
+                if (((tid & k) == 0) ? (a < b) : (a > b)) { selected[tid] = b; selected[peer] = a; }
+            }
+            __syncthreads();
+        }
+    }
+    if (tid < ntop) dst[size_t(row) * ntiles * ntop + tile * ntop + tid] = int(0xffffffffu - uint32_t(selected[tid]));
+}
+static bool dsv41_topk_select_enabled() {
+    static const bool enabled = [] {
+        const char *env = std::getenv("LLAMA_DSV41_TOPK_SELECT");
+        if (env && std::strcmp(env, "0") && std::strcmp(env, "1")) GGML_ABORT("LLAMA_DSV41_TOPK_SELECT must be 0 or 1");
+        return !env || env[0] == '1';
+    }();
+    return enabled;
+}
+
 static constexpr size_t dsv41_topk_radix_smem =
     sizeof(dsv41_TopKBlockSort::TempStorage) > 8192 * sizeof(int) ?
     sizeof(dsv41_TopKBlockSort::TempStorage) : 8192 * sizeof(int);
@@ -699,6 +834,11 @@ void top_k_f32_i32_cuda_bitonic_tiles_guarded(const float * x,
 
 #ifdef GGML_CUDA_USE_CUB
     if (dsv41_topk_radix_enabled(tile_size, k)) {
+        if (dsv41_topk_select_enabled()) {
+            CUDA_SET_SHARED_MEMORY_LIMIT(k_dsv41_topk_select_tiles<true>, dsv41_topk_radix_smem);
+            k_dsv41_topk_select_tiles<true><<<dim3(ntiles, nrows), 512, dsv41_topk_radix_smem, stream>>>(x, nullptr, dst, ncols, ncols, k,reject_nan);
+            dsv41_topk_radix_queued.fetch_add(1, std::memory_order_release);return;
+        }
         CUDA_SET_SHARED_MEMORY_LIMIT(k_dsv41_topk_radix_tiles<true>, dsv41_topk_radix_smem);
         k_dsv41_topk_radix_tiles<true><<<dim3(ntiles, nrows), 512, dsv41_topk_radix_smem, stream>>>(x, nullptr, dst, ncols, ncols, k,reject_nan);
         dsv41_topk_radix_queued.fetch_add(1, std::memory_order_release);return;
@@ -735,6 +875,11 @@ void top_k_f32_i32_cuda_bitonic_candidates(const float * x,
 
 #ifdef GGML_CUDA_USE_CUB
     if (dsv41_topk_radix_enabled(tile_size, k)) {
+        if (dsv41_topk_select_enabled()) {
+            CUDA_SET_SHARED_MEMORY_LIMIT(k_dsv41_topk_select_tiles<false>, dsv41_topk_radix_smem);
+            k_dsv41_topk_select_tiles<false><<<dim3(ntiles, nrows), 512, dsv41_topk_radix_smem, stream>>>(x, candidates, dst, ncols, width, k,false);
+            dsv41_topk_radix_queued.fetch_add(1, std::memory_order_release);return;
+        }
         CUDA_SET_SHARED_MEMORY_LIMIT(k_dsv41_topk_radix_tiles<false>, dsv41_topk_radix_smem);
         k_dsv41_topk_radix_tiles<false><<<dim3(ntiles, nrows), 512, dsv41_topk_radix_smem, stream>>>(x, candidates, dst, ncols, width, k,false);
         dsv41_topk_radix_queued.fetch_add(1, std::memory_order_release);return;

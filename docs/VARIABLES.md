@@ -137,6 +137,7 @@ Native controls take effect at token boundaries. The response reports requested 
 | `--zig-local-cache-dir` | ds4-win: `{runtime_root}/cache/zig_local_cache_dir`; mac-ds4: `{runtime_root}/cache/zig_local_cache_dir`; rtx-llama: `{runtime_root}/cache/zig_local_cache_dir`; image: `{runtime_root}/cache/zig_local_cache_dir`; video: `{runtime_root}/cache/zig_local_cache_dir`; studio: `{runtime_root}/cache/zig_local_cache_dir`; mlx-serve: `{runtime_root}/cache/zig_local_cache_dir`; mac-mlx: `{runtime_root}/cache/zig_local_cache_dir`; mac-llama: `{runtime_root}/cache/zig_local_cache_dir`; mac-mference: `{runtime_root}/cache/zig_local_cache_dir` | Runtime-local cache/temp directory; no model download is performed. |
 | `--llama-dsv41-engram-gpu-decode` | Explicit runtime value | Upload the original 264-byte Engram rows and decode them on the GPU (bit-identical to the host decode, checked by the tile finite validator). Default enabled on the direct pinned tile path; 0 keeps the host decode and F32 upload. |
 | `--llama-dsv41-hc-bf16-residual` | Explicit runtime value | Keep the hyper-connection residual in BF16 between layers and between the attention and FFN sublayers (bit-identical: every carried residual is already BF16-rounded). Layers 1-36 read the resident BF16 bank directly and the attention sublayer writes BF16. Default 1; 0 restores the F32 unpack and F32 sublayer residual. |
+| `--llama-dsv41-topk-select` | Explicit runtime value | With the exact radix top-k (LLAMA_DSV41_TOPK_RADIX=1), select the top 512 of each 8192-key tile by an MSB radix select on the same packed (value, index) keys and sort only those 512, instead of sorting the whole tile. Identical IDs and order (the key order is total); NaN/subnormal tiles keep the original network. Default 1; 0 keeps the full tile sort. |
 
 Budget placeholders use the admitted child budget: `{host_budget_bytes}`, `{host_budget_mb}`, `{physical_floor_bytes}` (admission) and `{runtime_floor_bytes}` (runtime). `{host_budget_gib}` and `{min_available_gib}` use GiB. User overrides are literal strings, including JSON and braces.
 
@@ -73850,7 +73851,7 @@ LLAMA_DSV41_TOPK_RADIX: qualified preset/runtime setting; override for a differe
 
 Scope: rtx-llama. Class: preset.
 
-Source: `engines/streaming-llama/prefill_llama.cpp/ggml/src/ggml-cuda/argsort.cu:396`. Unset read: NULL from getenv; the literal consumer below supplies any fallback.
+Source: `engines/streaming-llama/prefill_llama.cpp/ggml/src/ggml-cuda/argsort.cu:531`. Unset read: NULL from getenv; the literal consumer below supplies any fallback.
 
 ```text
     sizeof(dsv41_TopKBlockSort::TempStorage) : 8192 * sizeof(int);
@@ -73880,7 +73881,7 @@ LLAMA_DSV41_TOPK_SHARED_KEYS: advanced engine setting; built-in default retained
 
 Scope: rtx-llama. Class: advanced.
 
-Source: `engines/streaming-llama/prefill_llama.cpp/ggml/src/ggml-cuda/argsort.cu:684`. Unset read: NULL from getenv; the literal consumer below supplies any fallback.
+Source: `engines/streaming-llama/prefill_llama.cpp/ggml/src/ggml-cuda/argsort.cu:819`. Unset read: NULL from getenv; the literal consumer below supplies any fallback.
 
 ```text
 
@@ -101456,4 +101457,22 @@ Source: `engines/streaming-llama/prefill_llama.cpp/src/llama-dsv41-executor.cpp:
         const bool hc_bf16_carry=hc_bf16_residual_option&&expert.hc_bf16_epilogue&&!boundary.active()&&
             !llama_dsv41_attribution_active(in.position_offset+in.start,in.count);
         const bool bf16_residual_input=hc_bf16_carry&&device_hidden&&resident_bf16&&in.layer&&in.layer<37&&!compact_seed&&direct_input;
+```
+
+### LLAMA_DSV41_TOPK_SELECT
+
+With the exact radix top-k (LLAMA_DSV41_TOPK_RADIX=1), select the top 512 of each 8192-key tile by an MSB radix select on the same packed (value, index) keys and sort only those 512, instead of sorting the whole tile. Identical IDs and order (the key order is total); NaN/subnormal tiles keep the original network. Default 1; 0 keeps the full tile sort.
+
+Scope: rtx-llama. Class: qualified.
+
+Source: `engines/streaming-llama/prefill_llama.cpp/ggml/src/ggml-cuda/argsort.cu:520`. Unset read: NULL from getenv; the literal consumer below supplies any fallback.
+
+```text
+static bool dsv41_topk_select_enabled() {
+    static const bool enabled = [] {
+        const char *env = std::getenv("LLAMA_DSV41_TOPK_SELECT");
+        if (env && std::strcmp(env, "0") && std::strcmp(env, "1")) GGML_ABORT("LLAMA_DSV41_TOPK_SELECT must be 0 or 1");
+        return !env || env[0] == '1';
+    }();
+    return enabled;
 ```
