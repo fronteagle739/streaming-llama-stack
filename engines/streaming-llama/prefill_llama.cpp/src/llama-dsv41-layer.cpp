@@ -33,7 +33,10 @@ ggml_tensor * llama_dsv41_layer_graph::keep(ggml_tensor * value) const {
     if(value){
         // Pin a materialized result, not just a reshape/view whose base can be
         // recycled before the executor's bounded GPU/SSD carry transfer.
-        value=ggml_cont(ctx,value);ggml_set_output(value);ggml_build_forward_expand(graph,value);
+        // OPUS22: an already materialized contiguous result needs no copy (exact; it is pinned as an output).
+        const bool view=value->view_src||value->op==GGML_OP_VIEW||value->op==GGML_OP_RESHAPE||value->op==GGML_OP_PERMUTE||value->op==GGML_OP_TRANSPOSE;
+        if(view||!ggml_is_contiguous(value))value=ggml_cont(ctx,value);
+        ggml_set_output(value);ggml_build_forward_expand(graph,value);
     }
     return value;
 }
