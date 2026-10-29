@@ -197,3 +197,30 @@ the same pause sweep gives the same results: the fast block reads 23.4-24.6 GB/s
 remain process cold start. The producer at 100K gives 35.44 s prompt (TTFT 41.05 s), streaming at
 15.55 GB/s, with a bit-identical frontier. That is inside the earlier control range (32.9-38.1 s),
 so the power change has no measurable effect.
+
+## 7. GPU path versus host path (owner: drives on a different PCIe root complex from the GPU)
+
+Same 7.4 GB blocks, three repeats each. "DS" is DirectStorage through `dsbench`: "gpu" means a D3D12
+GPU buffer destination, "host" a 512 MiB host-memory ring (`DSTORAGE_REQUEST_DESTINATION_MEMORY`).
+"ReadFile" is unbuffered overlapped I/O through `ovread.cpp`, queue depth 32.
+
+| Block | DS gpu 8 MiB | DS host 8 MiB | DS gpu 1 MiB | DS host 1 MiB | DS gpu 1 MiB, 4 queues | ReadFile 1 MiB Q32 | ReadFile 8 MiB Q32 |
+|---|---:|---:|---:|---:|---:|---:|---:|
+| Q4 @137.4 GB (slow) | 12.5-13.1 | 10.6-12.5 | 10.9-13.0 | 10.9-12.2 | 14.9-15.7 | 9.9 | 12.2 |
+| Q4 @152.2 GB (fast) | 19.7-20.1 | 13.2-14.5 | 19.4-19.8 | 10.2-11.5 | 17.4-19.3 | 23.9 | 22.5 |
+| FP4 @120 GB | 17.1-17.2 | 13.6-15.5 | 11.8-13.0 | 10.3-11.4 | 11.0-11.9 | 4.7 | 11.3 |
+| Q4 130-162 GB (32 GB span) | | | | | | 4.0 (Q64: 5.0) | |
+
+- The GPU destination is never slower than host memory; it is equal or faster everywhere. The
+  cross-root-complex GPU path does not cause the loss.
+- Plain host-side unbuffered reads show the same region effect: 9.9 against 23.9 GB/s for the slow
+  and fast blocks. Over a 32 GB span of the model file they reach only 4-5 GB/s at 1 MiB Q32/Q64,
+  against CrystalDiskMark's 30.5 GB/s (SEQ1M Q32T1) on its freshly written 8 GB test file.
+  The model files read much slower than freshly written data with the same pattern.
+- CrystalDiskMark's best pattern (1 MiB requests, deep queue) does not help the GPU path:
+  it is equal to or slower than 8 MiB. Four queues gain about 2.5 GB/s in the slow Q4 block but
+  lose in the fast block and in the FP4 file. No producer change is justified.
+- Conclusion: the loss is in how fast the array returns these files' existing data, on every
+  read path. The candidates are the drive or array state of old data. The volume is 99% full, so there is little
+  free space for the drives' internal housekeeping; old-data read slowdown or read-retry on the members
+  is another candidate. Freshly written data reads faster, though not uniformly (section 6).
