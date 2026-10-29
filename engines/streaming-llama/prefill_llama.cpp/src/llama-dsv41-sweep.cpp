@@ -281,7 +281,9 @@ bool llama_dsv41_sweep::open(const llama_dsv41_weight_provider::config &input_we
             p->yoco=llama_dsv41_yoco::schedule(options.yoco_keep,options.operation,options.images,
                 options.yoco_logical_end?options.yoco_logical_begin:begin,end,begin,begin+options.carry.tokens);
             const auto cone_step=options.compute_step_tokens?options.compute_step_tokens:options.carry.max_tile_tokens;
-            llama_dsv41_yoco::align_exact(p->yoco,llama_dsv41_flashinfer::requested()?std::min(4096u,cone_step):cone_step);
+            const char *unpadded=std::getenv("LLAMA_DSV41_UNPADDED_CONE");
+            const bool exact_rows=unpadded&&unpadded[0]=='1'&&!unpadded[1];
+            llama_dsv41_yoco::align_exact(p->yoco,llama_dsv41_flashinfer::requested()?std::min(4096u,cone_step):cone_step,!exact_rows);
             options.carry.yoco_first=p->yoco.first;
             weights.yoco_encoder_only=p->yoco.encoder_only;
         }

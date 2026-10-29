@@ -1023,7 +1023,8 @@ void ggml_cuda_op_dsv41_ds4_token_tile(ggml_backend_cuda_context &ctx,ggml_tenso
         CUDA_CHECK(cudaGetLastError());ds4_token_union_queued.fetch_add(1,std::memory_order_release);
     }
     const char *tilelang_env=std::getenv("LLAMA_DSV41_TILELANG_ATTENTION");
-    if(tilelang_env&&tilelang_env[0]=='1'&&!tilelang_env[1]&&comp_rows<=131072){
+    if(!tilelang_env)tilelang_env="2";
+    if(tilelang_env&&(tilelang_env[0]=='1'||tilelang_env[0]=='2')&&!tilelang_env[1]&&comp_rows<=131072){
         dsv41_tilelang_attention(ctx,dst,raw_half.get(),comp_ptr+(merge?512:0),raw_rows,raw_min,comp_rows-(merge?1u:0u));
         ds4_token_tile_queued.fetch_add(1,std::memory_order_release);
         if(direct_f16)ds4_token_f16_table_queued.fetch_add(1,std::memory_order_release);

@@ -55,9 +55,9 @@ inline uint32_t first_row(const plan&p,uint32_t layer) { return layer>20?p.first
 // Keep the full prefill's GEMM row shapes. A ragged 2541-row rectangle is
 // structurally sufficient but changes shape-dependent floating-point kernels.
 // Padding its left edge to an existing tile only adds redundant warm-up work.
-inline void align_exact(plan&p,uint32_t tile){
+inline void align_exact(plan&p,uint32_t tile,bool padding=true){
     if(!tile)throw std::runtime_error("Exact cone tile cannot be zero");
-    if(p.exact_cone&&!p.encoder_only)p.first-=p.first%tile;
+    if(padding&&p.exact_cone&&!p.encoder_only)p.first-=p.first%tile;
 }
 inline bool may_export(uint32_t keep) {validate(keep);return keep==0;}
 inline bool may_rewind(uint32_t keep) {return may_export(keep);}

@@ -1,0 +1,35 @@
+{
+  "source_revision": "1bae0e1088993b9b82de08f59de5be5a34e42170",
+  "adapted_source_sha256": "a99cf52819dec5f3d1959899c6af6de6ee127e088e8b6f57ae88b28f9ecf340d",
+  "generated_cuda_sha256": "2201bfd599ca996e05b0c526f5ff056ee5c9ea558e25b6dae8216a1e0fb38b26",
+  "cubin_sha256": "30bbd5acf05fe2b46dd8655d71e6fc6a92f2e37aed5fc7ff910138baa2514181",
+  "cubin_bytes": 165784,
+  "entry": "native_sparse_attn_kernel__kernel",
+  "architecture": "sm_120",
+  "threads": 256,
+  "dynamic_shared_bytes": 86016,
+  "head_group": 16,
+  "num_stages": 1,
+  "arguments": [
+    "ids:i32*",
+    "kv:bf16*",
+    "output:f32*",
+    "query:bf16*",
+    "sinks:f32*",
+    "query_rows:i32",
+    "kv_rows:i32"
+  ],
+  "grid": [
+    "query_rows",
+    4,
+    1
+  ],
+  "tilelang": "0.1.15",
+  "torch": "2.11.0+cu128",
+  "nvcc": "13.2",
+  "compile_options": [
+    "-std=c++20",
+    "-O3",
+    "-Xcompiler /Zc:preprocessor"
+  ]
+}
