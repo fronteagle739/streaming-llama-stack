@@ -125,15 +125,27 @@ def prefill_plan(cfg,prompt_tokens,available=None):
     if chunks != 1:
         return multichunk_plan(cfg,prompt_tokens,available)
     base=int(cfg.get('producer_host_budget_gib',8)*(1<<30))
-    top=int(cfg.get('producer_host_max_gib',cfg.get('producer_host_budget_gib',8))*(1<<30))
+    cap=cfg.get('producer_host_max_gib',cfg.get('producer_host_budget_gib',8))
+    if cap=='auto':
+        # OPUS22 r9: the carry cap follows physical RAM. The available-RAM/desktop reserve below
+        # bounds it; the enclosing process budget (host_budget_gib less 0.25 GiB for the worker,
+        # as in multichunk) bounds it too. Without a RAM reading it stays at the base budget.
+        outer=cfg.get('host_budget_gib')
+        top=int((float(outer)-.25)*(1<<30)) if outer is not None else (1<<62 if available is not None else base)
+        top=max(base,top)
+    else:
+        top=int(float(cap)*(1<<30))
     if top<base:raise ValueError('producer_host_max_gib is below producer_host_budget_gib')
-    capped_by='producer_host_max_gib'
+    capped_by='producer_host_max_gib' if cap!='auto' else 'host_budget_gib'
     if available is not None:
         # Owner 2026-10-25 ("every run makes you freeze like the computer's run out of RAM"): locked producer
         # pages cannot be paged out, so admission keeps a DESKTOP RESERVE free for Windows, Claude Code and the
         # desktop: the producer's raised budget is at most available - producer_desktop_reserve_gib (per
         # machine, default 0.5 GiB). The separate runtime_min_free_gib stop defaults to 0.5 GiB.
         reserve=max(float(cfg.get('producer_host_reserve_gib',.5)),float(cfg.get('producer_desktop_reserve_gib',.5)))
+        # 'auto' plans right up to the producer's own admission (tools/dsv41-prefill ram_admission: job host
+        # <= available - 1 GiB), plus 0.25 GiB for the producer's footprint before it admits.
+        if cap=='auto':reserve=max(reserve,1.25)
         room=int(available)-int(reserve*(1<<30))
         if room<top:top=max(base,room);capped_by='desktop_reserve' if reserve>float(cfg.get('producer_host_reserve_gib',.5)) else 'available_ram'
     compact=carry_compact(cfg)
@@ -187,6 +199,13 @@ def fold_plan(cfg,prompt_tokens,available,sweep,base,top,capped_by,extra,limit):
         raise ValueError('producer_prefill_sweep_tokens %d exceeds the largest capacity %d under the cap (%s)'%(sweep,cap,capped_by))
     sweeps,tail,rebalance=fold_sweeps(n,sweep,cap,fold_cap)
     want=max(LEGACY_SWEEP,max(sweeps))
+    if n>want and want<sweep:
+        # OPUS22 r9: a rebalanced prompt whose passes are all below the primary sweep (e.g. 140K under
+        # a ~106K cap -> 73,728 + 66,272) sent --prefill-sweep-tokens above the capacity, which the
+        # producer refuses. Send the largest pass as the sweep when it yields the identical split.
+        if fold_sweeps(n,want,want,fold_cap)[0]!=sweeps:
+            raise ValueError('fold plan %s cannot be expressed with capacity %d'%(sweeps,want))
+        sweep=want
     carry,engram=extra(want)
     host=base+carry+engram
     if host!=base:host=-(-host//65536)*65536   # whole pages (64 KiB) for the hard-minimum working set
