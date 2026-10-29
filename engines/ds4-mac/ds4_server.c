@@ -14484,6 +14484,13 @@ decode_again:
             const ds4_tokens *history=ds4_session_tokens(slot->session);
             if(!history || ds4_session_copy_logits(slot->session,paired_scores,paired_vocab)!=paired_vocab)token=-1;
             else {
+                const char *qualification_logits=getenv("DS4_NATIVE_QUALIFICATION_LOGITS");
+                if(qualification_logits && !strncmp(j->req.native_conversation,"slstack-qualification-",22)) {
+                    FILE *qf=fopen(qualification_logits,completion?"ab":"wb");
+                    bool written=qf && fwrite(paired_scores,sizeof(float),(size_t)paired_vocab,qf)==(size_t)paired_vocab;
+                    if(qf && fclose(qf))written=false;
+                    if(!written){finish="error";snprintf(err,sizeof(err),"qualification raw logits write failed");break;}
+                }
                 ds4_paired_logits(&j->req.paired,paired_scores,paired_vocab,history->v,history->len,paired_counts);
                 if(j->req.ignore_eos)paired_scores[eos_token]=-INFINITY;
                 token=paired_chain?ds4_chain_sample(paired_chain,paired_scores,paired_vocab,temperature,top_k,top_p,min_p,&rng):
@@ -16134,7 +16141,8 @@ static void *client_main(void *arg) {
         goto done;
     }
 #if DS4_NATIVE_FRONTIER_ENABLE && defined(__APPLE__)
-    if(ok && s->native_session && (!ds4_ns_conversation(hr.body,req.native_conversation) ||
+    if(ok && (s->native_session || (getenv("DS4_NATIVE_QUALIFICATION_LOGITS") &&
+        strstr(hr.body,"slstack-qualification-"))) && (!ds4_ns_conversation(hr.body,req.native_conversation) ||
         !ds4_ns_history_policy(hr.body,&req.native_include_previous_reasoning))) {
         request_free(&req);ok=false;
         snprintf(err,sizeof(err),"Native streaming requires a unique prompt_cache_key and boolean reasoning-history policy");

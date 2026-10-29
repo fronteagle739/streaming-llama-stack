@@ -219,7 +219,7 @@ class Receiver:
             self.engine_budget = None
 
     def pair(self, row, client_ip):
-        allowed = {'producer_sha256', 'producer_source_revision', 'producer_ipv4', 'broker_port', 'tier'}
+        allowed = {'model_compatibility', 'producer_sha256', 'producer_source_revision', 'producer_ipv4', 'broker_port', 'tier'}
         keep=row.get('yoco_keep',0);version=row.get('yoco_state_version',0)
         from .yoco import require_state
         require_state(keep,version)
@@ -231,7 +231,12 @@ class Receiver:
         if type(row['broker_port']) is not int or not 1 <= row['broker_port'] <= 65535 or row['tier'] not in ('accurate', 'fast', 'ultra', 'hyper'):
             raise ValueError('Invalid broker port or native tier')
         self.close()
-        self.peer = {**row, 'receiver_sha256': self.build['binary_sha256'], 'status': 'candidate'}
+        from .native_broker import model_digest, model_receipt
+        from .model_compatibility import model_description, require_compatible
+        local = model_description(path(self.cfg['model']), model_digest(self.cfg, model_receipt(self.cfg)), keep)
+        mixed = require_compatible(local, row['model_compatibility'])
+        print('NATIVE_MODEL_COMPATIBILITY '+json.dumps(dict(producer=row['model_compatibility'], receiver=local, cross_quant=mixed)), flush=True)
+        self.peer = {**row, 'receiver_model_compatibility': local, 'cross_quant': mixed, 'receiver_sha256': self.build['binary_sha256'], 'status': 'candidate'}
         self.qualification = {}
         return self.peer
 
@@ -280,9 +285,16 @@ class Receiver:
             if native:
                 if not self.peer:
                     raise ValueError('Pair the RTX producer first')
+                from .model_compatibility import model_description, require_compatible
+                local = model_description(model, verified_model, self.peer.get('yoco_keep',0))
+                require_compatible(local, self.peer['model_compatibility'])
+                if local != self.peer['receiver_model_compatibility']:
+                    raise ValueError('Receiver model changed since pairing')
                 model_stat = model.stat()
                 qualification = {'schema': 'dsv41-native-session-qualification-v2',
-                    'model_sha256': verified_model,
+                    'model_sha256': self.peer['model_compatibility']['model_sha256'],
+                    'receiver_model_sha256': verified_model,
+                    'compatibility_sha256': self.peer['model_compatibility']['compatibility_sha256'],
                     'mode': 3, 'wire_version': 2, 'tokenization': 'native-final-token-ids-le32-v1',
                     'producer_binary_sha256': self.peer['producer_sha256'],
                     'producer_source_revision': self.peer['producer_source_revision'],
@@ -296,6 +308,9 @@ class Receiver:
                 dynamic = dict(DS4_NATIVE_SESSION_IPV4=self.peer['producer_ipv4'], DS4_NATIVE_SESSION_PORT=str(self.peer['broker_port']),
                     DS4_NATIVE_SESSION_TIER=self.peer['tier'], DS4_NATIVE_SESSION_PAIR_TOKEN_FILE=str(self.token_file),
                     DS4_NATIVE_SESSION_QUALIFICATION=str(artifact), DS4_NATIVE_SESSION_QUALIFICATION_SHA256=sha256(artifact),
+                    DS4_NATIVE_SESSION_COMPATIBILITY_SHA256=local['compatibility_sha256'],
+                    DS4_NATIVE_SESSION_RECEIVER_MODEL_SHA256=verified_model,
+                    DS4_NATIVE_SESSION_MODEL_SHA256=self.peer['model_compatibility']['model_sha256'],
                     DS4_NATIVE_SESSION_RENDERER_SHA256=self.build['renderer_sha256'],
                     DS4_NATIVE_SESSION_PRODUCER_SHA256=self.peer['producer_sha256'], DS4_NATIVE_SESSION_DEADLINE_SECONDS='600',
                     DS4_NATIVE_SESSION_HOST_BYTES=str(int(cfg['host_budget_gib'] * (1 << 30))),
@@ -305,6 +320,8 @@ class Receiver:
                 env['DS4_NATIVE_SESSION_YOCO_KEEP']=str(self.peer.get('yoco_keep',0))
                 from .combo_crossover import paired_threshold
                 env['DS4_NATIVE_SESSION_LOCAL_PREFILL_MAX_TOKENS']=str(paired_threshold(cfg))
+        if self.backend == 'ds4' and self.peer and self.peer.get('cross_quant'):
+            env['DS4_NATIVE_QUALIFICATION_LOGITS'] = str(Path(cfg['runtime_root'])/'state/qualification-current.f32')
         cfg['env_overrides'] = env
         # DS4COMBO2 liveness: the Mac engine has no lifetime cap; the guard's memory limits stay.
         self.engine = OwnedProcess(cfg, command, 'mac-' + self.backend, cwd=Path(cfg['runtime_root']),
@@ -340,6 +357,11 @@ class Receiver:
         body.setdefault('include_previous_reasoning', True)
         response = http_json(f'http://127.0.0.1:{self.cfg.get("mac_engine_port", 8181)}/v1/chat/completions',
                              body, timeout=None)   # silent until done (stream=False); the owned engine bounds it
+        if qualification and self.peer.get('cross_quant'):
+            logits = Path(self.cfg['runtime_root'])/'state'/('qualification-'+qualification+'.f32')
+            raw = (Path(self.cfg['runtime_root'])/'state/qualification-current.f32').read_bytes()
+            if len(raw) != 8*129280*4:raise ValueError('Incomplete cross-quant continuation observation')
+            logits.write_bytes(raw)
         if qualification:
             message = response['choices'][0]['message']
             logprobs = response['choices'][0].get('logprobs') or {}
@@ -353,7 +375,17 @@ class Receiver:
     def accept(self):
         if self.backend == 'ds4':
             if set(self.qualification) != {'native', 'paired'} or self.qualification['native'] != self.qualification['paired']:
-                raise ValueError('Native/paired greedy decisions differ; pair remains unqualified')
+                raise ValueError('Native/paired continuation decisions differ; pair remains unqualified')
+            if self.peer.get('cross_quant'):
+                from .model_compatibility import continuation_kl
+                state=Path(self.cfg['runtime_root'])/'state'
+                evidence=continuation_kl((state/'qualification-native.f32').read_bytes(), (state/'qualification-paired.f32').read_bytes())
+                # Explicit numerical qualification, never a byte-identity bypass.
+                evidence.update(mean_limit_nats=.1, max_limit_nats=.5, continuation_token=42)
+                atomic_json(state/'qualification-kl.json', evidence)
+                if evidence['rows'] != 8 or evidence['mean_nats'] > .1 or evidence['max_nats'] > .5:
+                    raise ValueError('Cross-quant continuation KL exceeds qualification limits: '+json.dumps(evidence))
+                self.peer['continuation_kl']=evidence
         if not self.peer:
             raise ValueError('No candidate peer')
         self.peer['status'] = 'qualified'
@@ -453,6 +485,8 @@ def serve(cfg, backend, build):
                         fixed = {'messages': [{'role': 'user', 'content': 'Repeat exactly READY, with no explanation.'}],
                                  'max_tokens': 8, 'temperature': 0, 'logprobs': True, 'top_logprobs': 1,
                                  'prompt_cache_key': 'slstack-qualification-' + secrets.token_hex(16)}
+                        if receiver.peer and receiver.peer.get('cross_quant'):
+                            fixed['logit_bias']={'42':100}
                         result = receiver.chat(fixed, qualification=body['mode'])
                     elif self.path == '/pair/accept':
                         result = receiver.accept()
