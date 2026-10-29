@@ -4,6 +4,7 @@
 #include "ggml-dsv41-ops.h"
 #include "ggml-dsv41-index-window.h"
 #include "ggml-dsv41-gather-half.h"
+#include "ggml-dsv41-rope-inplace.h"
 #include <algorithm>
 
 void ggml_compute_forward_dsv41_engram_add(
@@ -68,14 +69,18 @@ void ggml_compute_forward_dsv41_rope(const ggml_compute_params * params, ggml_te
     const float * frequencies = (const float *) dst->src[2]->data;
     float * output = (float *) dst->data;
     const bool inverse = ggml_get_op_params_i32(dst, 0) != 0;
+    const bool round_input = ggml_get_op_params_i32(dst, 1) == GGML_DSV41_ROPE_ROUND_INPUT;
     for (int64_t row = params->ith; row < rows; row += params->nth) {
         const int32_t pos = positions[row / heads];
         GGML_ASSERT(pos >= 0 && pos < 1048576);
-        if (output != input) memcpy(output + row * width, input + row * width, (width - 64) * sizeof(float));
+        if (round_input) for (int64_t i = 0; i < width - 64; ++i) output[row * width + i] = ggml_dsv41_bf16(input[row * width + i]);
+        else if (output != input) memcpy(output + row * width, input + row * width, (width - 64) * sizeof(float));
         for (int i = 0; i < 32; ++i) {
             const int64_t offset = row * width + width - 64 + 2 * i;
             const float theta = float(pos) * frequencies[i];
-            const auto result = ggml_dsv41_rope_pair(input[offset], input[offset + 1], theta, inverse);
+            const float re = round_input ? ggml_dsv41_bf16(input[offset]) : input[offset];
+            const float im = round_input ? ggml_dsv41_bf16(input[offset + 1]) : input[offset + 1];
+            const auto result = ggml_dsv41_rope_pair(re, im, theta, inverse);
             output[offset] = result.re; output[offset + 1] = result.im;
         }
     }

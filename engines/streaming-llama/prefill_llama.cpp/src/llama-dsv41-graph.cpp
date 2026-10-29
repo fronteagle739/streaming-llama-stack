@@ -15,6 +15,7 @@
 #include <cstring>
 #include "ggml-dsv41-masked-half-inplace.h"
 #include "ggml-dsv41-gather-half.h"
+#include "ggml-dsv41-rope-inplace.h"
 #include "ggml-dsv41-split-f32.h"
 
 #include <cmath>
@@ -186,6 +187,20 @@ ggml_tensor * llama_dsv41_graph_ops::rope(
         ggml_tensor * input, ggml_tensor * positions, ggml_tensor * native_frequencies, bool inverse) const {
     return tagged(ggml_dsv41_rope(ctx, input, positions, native_frequencies, inverse),
                   inverse ? "dsv41_inverse_rope_bf16_tail" : "dsv41_rope_bf16_tail");
+}
+
+ggml_tensor * llama_dsv41_graph_ops::rope_bf16_input(
+        ggml_tensor * input, ggml_tensor * positions, ggml_tensor * native_frequencies, bool inverse) const {
+    // Same value as rope(bf16(input)): when bf16() would add its contiguous
+    // QAT_BF16 round trip, the rope kernel applies that identical rounding
+    // while it reads, so the F32 tensor is not written and re-read once more.
+    // Already-rounded and strided inputs keep the original two operations.
+    ggml_tensor * rounded = bf16(input);
+    if (rounded == input || rounded->op != GGML_OP_DSV4_ACT_QAT || rounded->src[0] != input ||
+        !ggml_is_contiguous(input)) return rope(rounded, positions, native_frequencies, inverse);
+    ggml_tensor * result = ggml_dsv41_rope(ctx, input, positions, native_frequencies, inverse);
+    result->op_params[1] = GGML_DSV41_ROPE_ROUND_INPUT;
+    return tagged(result, inverse ? "dsv41_inverse_rope_bf16_tail" : "dsv41_rope_bf16_tail");
 }
 
 ggml_tensor * llama_dsv41_graph_ops::gather_per_query(ggml_tensor * table, ggml_tensor * ids) const {

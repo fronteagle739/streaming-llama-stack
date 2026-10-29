@@ -35,6 +35,8 @@ public:
     ggml_tensor * mean_for_capture(ggml_tensor * residual) const;
     ggml_tensor * rope(ggml_tensor * input, ggml_tensor * positions,
                       ggml_tensor * native_frequencies, bool inverse = false) const;
+    ggml_tensor * rope_bf16_input(ggml_tensor * input, ggml_tensor * positions,
+                      ggml_tensor * native_frequencies, bool inverse = false) const;
     // At most4096 admitted queries /128 raw +512 selected rows per query. Tables remain
       // F32 and only selected rows are gathered. Bounded Q/gathered KV round
       // through native F16; probabilities/sinks remain F32. No context-sized

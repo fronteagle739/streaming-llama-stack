@@ -4,6 +4,9 @@
 // Private permission for the V4.1 tail-pair operator only. The allocator still
 // owns the last-reader, output, view, buffer and layout lifetime proof.
 #define GGML_DSV41_ROPE_INPLACE_MAGIC 0x49525031
+// op_params[1]: round every input element to BF16 first, exactly as a
+// preceding QAT_BF16 round trip would (rope(bf16(x)) in one pass).
+#define GGML_DSV41_ROPE_ROUND_INPUT 0x52424631
 static inline bool ggml_dsv41_rope_inplace_requested(const struct ggml_tensor *t) {
     if (!(t && t->op == GGML_OP_DSV41_ROPE && t->op_params[7] == GGML_DSV41_ROPE_INPLACE_MAGIC &&
           t->src[0] && t->src[1] && t->src[2] && t->type == GGML_TYPE_F32 &&
