@@ -44043,6 +44043,11 @@ static bool ds41_attention_project(ds41_gpu_graph *g, const ds4_model *m,
     return ds41_matmul_rows(g->q, m, l->attn_q_b, g->qr, g->tp_rank * q_dim, q_dim);
 }
 
+#ifdef DS4_EXTERNAL_DECODE
+#define DS41_MARK(id) (ds4_gpu_stage_mark(id) != 0)
+#else
+#define DS41_MARK(id) true
+#endif
 static bool ds41_attention(ds41_gpu_graph *g, const ds4_model *m,
                            const ds4_layer_weights *l, uint32_t il, bool projected) {
     const uint32_t pos = g->pos, ratio = ds4_layer_compress_ratio(il);
@@ -44052,13 +44057,16 @@ static bool ds41_attention(ds41_gpu_graph *g, const ds4_model *m,
     const uint32_t head0 = g->tp_rank * heads;
     bool q_roped = false;
     if (!projected && !ds41_attention_project(g, m, l, (int)il, &q_roped)) return false;
+    (void)DS41_MARK(10);
     if ((!q_roped && !ds41_rope(g->q, heads, DS4_N_HEAD_DIM, il, pos, false)) ||
         !ds41_rope_store(g->kv, g->window[il], (uint64_t)(pos % 128u) * 512u * 4u,
                          DS4_N_HEAD_DIM, il, pos, DS4_V41_FP8_E8M0)) return false;
     if (g->tp_world == 1 && ds41_dump_pos(pos) &&
         (!ds41_dump_put(g->q, 0, heads * DS4_N_HEAD_DIM, il, pos, 7) ||
          !ds41_dump_put(g->window[il], pos % 128u, DS4_N_HEAD_DIM, il, pos, 8))) return false;
+    (void)DS41_MARK(11);
     if (!ds41_attention_select(g, m, l, il)) return false;
+    (void)DS41_MARK(12);
     const uint32_t attended = n_comp < DS4_N_INDEXER_TOP_K ? n_comp : DS4_N_INDEXER_TOP_K;
     const uint32_t n_raw = pos + 1u < 128u ? pos + 1u : 128u;
     const uint64_t sinks = l->attn_sinks->abs_offset + (uint64_t)head0 * sizeof(float);
@@ -44073,6 +44081,7 @@ static bool ds41_attention(ds41_gpu_graph *g, const ds4_model *m,
             g->q, g->window[il], n_raw, 128, (pos + 1u - n_raw) % 128u,
             g->selected_kv, 0, attended, NULL, 0,
             heads, DS4_N_HEAD_DIM))) return false;
+    (void)DS41_MARK(13);
     /* a caller that projects the heads itself gets them roped */
     if (projected)
         return ds4_gpu_dsv41_rope_bf16(g->heads, DS4_N_HEAD_DIM, heads, 1, pos,
@@ -44164,6 +44173,9 @@ static bool ds41_moe_partial(ds41_gpu_graph *g, const ds4_model *m,
             l->ffn_up_exps->abs_offset, l->ffn_down_exps->abs_offset,
             gate_row * DS4_N_FF_EXP, down_row * DS4_N_EMBD,
             DS4_EXPERT_WEIGHT_SCALE, g_cache_affinity_bias)) return false;
+#endif
+#ifdef DS4_EXTERNAL_DECODE
+    if (g->tp_world == 1 && !ds4_gpu_prefetch_selected(g->selected, DS4_N_EXPERT_USED)) return false;
 #endif
     const bool shared_split = shared_owner && shared_down && ds41_tp_shared_split() &&
         l->ffn_gate_shexp->type == DS4_TENSOR_Q8_0 && l->ffn_up_shexp->type == DS4_TENSOR_Q8_0 &&
@@ -44971,11 +44983,6 @@ static bool ds41_single_hc_island(ds41_gpu_graph *g, const ds4_model *m,
     return ok;
 }
 
-#ifdef DS4_EXTERNAL_DECODE
-#define DS41_MARK(id) (ds4_gpu_stage_mark(id) != 0)
-#else
-#define DS41_MARK(id) true
-#endif
 static bool ds41_graph_decode_layer(ds41_gpu_graph *g, const ds4_model *m,
                                     const ds4_layer_weights *l, uint32_t il, int token) {
     if (g->tp_world == 1 && !g->streaming && !g->quality && !g->imatrix && !g->image_count &&

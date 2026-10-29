@@ -3918,6 +3918,10 @@ void ds4_gpu_set_external_expert_hook_l2(ds4_gpu_external_expert_hook_l2 hook, v
 /* The model's routed experts use the kernel-native packed FP4 layout
  * (deepseek41.expert_layout); the expert cache holds them as slot bytes. */
 void ds4_gpu_set_fp4_packed_experts(int on);
+/* One-token decode: copy the router's selection to the host as soon as it is
+ * final, so the expert-cache hook need not wait for the work queued after it
+ * (the shared expert), which then overlaps the hook's expert reads. */
+int ds4_gpu_prefetch_selected(const ds4_gpu_tensor *selected, uint32_t count);
 /* DS4X_STAGE_PROFILE=1: CUDA events at decode stage boundaries on the legacy
  * stream; flush prints one attribution line per token. */
 int ds4_gpu_stage_mark(int id);
