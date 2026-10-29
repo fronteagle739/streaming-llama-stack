@@ -70,6 +70,46 @@ static __global__ void dsv41_index_fp4_scores(float *out,const uint32_t *query,c
     }
 }
 
+// OPUS22: same packed FP4 MMA tiles, scales and ordered head epilogue as
+// dsv41_index_fp4_scores, bit for bit, but one warp keeps its token's query
+// fragments in registers across a 2048-key chunk (no per-8-key query reload),
+// all 32 lanes run the epilogue for 32 keys at a time, and key groups past the
+// token's visible prefix are written -inf without MMA work.
+static __global__ void dsv41_index_fp4_scores_tiled(float *out,const uint32_t *query,const uint32_t *keys,
+        const uint32_t *qs,const uint32_t *ks,const float *weights,const int32_t *visible,
+        const float *mask,int rows,int tokens){
+    using namespace ggml_cuda_mma;
+    constexpr int warps=4,chunk=2048;
+    const int lane=threadIdx.x,warp=threadIdx.y,token=blockIdx.y*warps+warp;
+    if(token>=tokens)return;   // no block-level barriers below
+    __shared__ float dots[warps][32][33];
+    tile<16,8,int>a[2][2];uint32_t as[2][2];
+    for(int hi=0;hi<2;++hi)for(int k=0;k<2;++k){const int head=hi*16;
+        for(int l=0;l<a[hi][k].ne;++l)a[hi][k].x[l]=int(query[(uint64_t(token)*32+head+(l%2)*8+lane/4)*16+k*8+(l/2)*4+lane%4]);
+        as[hi][k]=(qs[token*32+head+lane/4+(lane%2)*8]>>(k*16))&65535;}
+    const int seen=visible[token],begin=blockIdx.x*chunk,end=min(rows,begin+chunk);
+    for(int group=begin;group<end;group+=32){
+        const int key=group+lane;
+        if(group>=seen){if(key<end)out[uint64_t(token)*rows+key]=-CUDART_INF_F;continue;}
+        for(int n=0;n<4;++n){const int first=group+n*8;
+            for(int hi=0;hi<2;++hi){tile<16,8,float> c;
+                for(int k=0;k<2;++k){tile<8,8,int>b;
+                    for(int l=0;l<b.ne;++l){const int bk=first+b.get_i(l);
+                        b.x[l]=bk<rows?int(keys[uint64_t(bk)*16+k*8+b.get_j(l)]):0;}
+                    const int sk=first+lane/4;
+                    const uint32_t bs=sk<rows?(ks[sk]>>(k*16))&65535:0;
+                    mma_block_scaled(c,a[hi][k],b,as[hi][k],bs);}
+                for(int l=0;l<c.ne;++l)dots[warp][hi*16+c.get_i(l)][n*8+c.get_j(l)]=c.x[l];}
+        }
+        __syncwarp();
+        if(key<end){float result=0;
+            if(key>=seen||(mask&&mask[uint64_t(token)*((rows+7)/8)+key/8]!=0.f))result=-CUDART_INF_F;
+            else for(int h=0;h<32;++h)result=__fmaf_rn(fmaxf(__fmul_rn(dots[warp][h][lane],1.f/64.f),0.f),weights[token*32+h],result);
+            out[uint64_t(token)*rows+key]=result;}
+        __syncwarp();
+    }
+}
+
 static __global__ void dsv41_index_fp4_init_proof(int *proof) {
     const int i=threadIdx.x;
     if(i<7)proof[i]=i<3?0:(i<5?INT_MAX:INT_MIN);
@@ -117,8 +157,8 @@ static bool dsv41_index_fp4(ggml_backend_cuda_context&ctx,ggml_tensor*dst,Fallba
         for(int arm=0;arm<2;++arm) {
             CUDA_CHECK(cudaStreamBeginCaptureToGraph(body,params.conditional.phGraph_out[arm],nullptr,nullptr,0,cudaStreamCaptureModeRelaxed));
             if(arm==0) {
-                dsv41_index_fp4_scores<<<dim3((rows+31)/32,tokens),dim3(32,4),0,body>>>((float*)dst->data,q.get(),k.get(),qs.get(),ks.get(),
-                    (const float*)dst->src[1]->data,(const int32_t*)dst->src[3]->data,dst->src[4]?(const float*)dst->src[4]->data:nullptr,rows);
+                dsv41_index_fp4_scores_tiled<<<dim3((rows+2047)/2048,(tokens+3)/4),dim3(32,4),0,body>>>((float*)dst->data,q.get(),k.get(),qs.get(),ks.get(),
+                    (const float*)dst->src[1]->data,(const int32_t*)dst->src[3]->data,dst->src[4]?(const float*)dst->src[4]->data:nullptr,rows,tokens);
                 CUDA_CHECK(cudaGetLastError());
             } else {
                 // The branches are mutually exclusive and depend on the
@@ -150,8 +190,8 @@ static bool dsv41_index_fp4(ggml_backend_cuda_context&ctx,ggml_tensor*dst,Fallba
     CUDA_CHECK(cudaStreamSynchronize(stream));
     const bool exact=ggml_dsv41_index_fp4_certified(host);
     if(!exact){fprintf(stderr,"PERFEXP_INDEX_FP4_FALLBACK tokens=%d keys=%d invalid=%d spans=%d,%d original_bf16=1\n",tokens,rows,host[0],host[1],host[2]);return false;}
-    dsv41_index_fp4_scores<<<dim3((rows+31)/32,tokens),dim3(32,4),0,stream>>>((float*)dst->data,q.get(),k.get(),qs.get(),ks.get(),
-        (const float*)dst->src[1]->data,(const int32_t*)dst->src[3]->data,dst->src[4]?(const float*)dst->src[4]->data:nullptr,rows);
+    dsv41_index_fp4_scores_tiled<<<dim3((rows+2047)/2048,(tokens+3)/4),dim3(32,4),0,stream>>>((float*)dst->data,q.get(),k.get(),qs.get(),ks.get(),
+        (const float*)dst->src[1]->data,(const int32_t*)dst->src[3]->data,dst->src[4]?(const float*)dst->src[4]->data:nullptr,rows,tokens);
     CUDA_CHECK(cudaGetLastError());
     fprintf(stderr,"PERFEXP_INDEX_FP4_MMA tokens=%d keys=%d spans=%d,%d packed_bytes=%llu certificate=exact_integer_sum original_epilogue=1\n",tokens,rows,host[1],host[2],(unsigned long long)bytes);
     return true;
