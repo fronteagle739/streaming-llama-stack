@@ -71,7 +71,17 @@ Round 8 (OPUS22, default and exact, logits bit-identical at 8K and 100K):
 - the exact radix top-k selects each tile's top 512 by an MSB radix select and
   sorts only those (`LLAMA_DSV41_TOPK_SELECT`, default 1): special-layer GPU
   5.49 -> 4.94 s (100K 24.28 s at 15.9 GB/s storage).
-200K (two sweeps of 102,400): **50.753 s** prompt-only (3,941 tok/s), TTFT 55.016 s, at 16.0 GB/s storage.
+- above 131,072 keys the indexer's streaming top-k merges its window
+  candidates once per 8,192 columns and at the end instead of after every
+  window (`LLAMA_DSV41_STREAM_TOPK_DEFER`, default 1), and one-element-row
+  GET_ROWS uses one thread per element (`LLAMA_DSV41_GET_ROWS_SCALAR`,
+  default 1). 200K: 50.75 -> 43.26 -> 40.60 s, bit-identical.
+200K (two sweeps of 102,400): **40.605 s** prompt-only (4,925 tok/s), TTFT 44.172 s, at 17.5 GB/s storage
+(50.753 s before the two top-k changes).
+Prompts of 106K-200K that rebalance below the primary sweep (e.g. 140K) were refused by the producer
+before a8f163c; 140K now runs in 33.42 s. `producer_host_max_gib: "auto"` (opt-in) sizes the carry cap
+to RAM for a single pass; at 128K one pass took 30.54 s against 28.65 s for two sweeps (compute-bound,
+17,408 rows spilled), so two sweeps stay the default.
 100K: **24.054 s** prompt-only (4,157 tok/s), TTFT 27.078 s, at 16.9 GB/s storage.
 
 In the new default the 21 sweep layers are compute-bound (21 s wall against

@@ -1,3 +1,5 @@
+#include <cstring>
+#include <cstdlib>
 #include "dispatch-counter.cuh"
 #include "getrows.cuh"
 #include "dequantize.cuh"
@@ -319,6 +321,32 @@ static void get_rows_cuda_q(
         s10, s11, s12/*, s13*/);
 }
 
+// OPUS22 r9: one-element rows (the indexer's scalar top-k gathers, [1,N,Q] by [K,Q]) ran one
+// 256-thread block per element with one active lane. One thread per gathered element instead;
+// the same index and the same cast, so the result is identical.
+template<typename src0_t, typename dst_t>
+static __global__ void k_get_rows_scalar(
+        const src0_t * __restrict__ src0, const int32_t * __restrict__ src1, dst_t * __restrict__ dst,
+        const int64_t ne10, const int64_t ne11, const int64_t ne12,
+        const size_t s1, const size_t s2, const size_t s3, const size_t nb01, const size_t nb02, const size_t nb03,
+        const size_t s10, const size_t s11, const size_t s12) {
+    const int64_t total = ne10*ne11*ne12;
+    for (int64_t i = int64_t(blockIdx.x)*blockDim.x + threadIdx.x; i < total; i += int64_t(gridDim.x)*blockDim.x) {
+        const int64_t i10 = i % ne10, z = i / ne10, i11 = z / ne12, i12 = z % ne12;
+        const int i01 = src1[i10*s10 + i11*s11 + i12*s12];
+        dst[i10*s1 + i11*s2 + i12*s3] = ggml_cuda_cast<dst_t>(*(const src0_t *)((const char *)src0 + i01*nb01 + i11*nb02 + i12*nb03));
+    }
+}
+
+static bool get_rows_scalar_enabled() {
+    static const bool enabled = [] {
+        const char * env = std::getenv("LLAMA_DSV41_GET_ROWS_SCALAR");
+        if (env && std::strcmp(env, "0") && std::strcmp(env, "1")) GGML_ABORT("LLAMA_DSV41_GET_ROWS_SCALAR must be 0 or 1");
+        return !env || env[0] == '1';
+    }();
+    return enabled;
+}
+
 template<typename src0_t, typename dst_t, bool masked_half = false, typename extra_t = src0_t>
 static void get_rows_cuda_float(
         const src0_t * src0_d, const int32_t * src1_d, dst_t * dst_d,
@@ -341,6 +369,16 @@ static void get_rows_cuda_float(
     const size_t s11 = nb11 / sizeof(int32_t);
     const size_t s12 = nb12 / sizeof(int32_t);
     // const size_t s13 = nb13 / sizeof(int32_t);
+
+    if constexpr (!masked_half) {
+        if (ne00 == 1 && extra == nullptr && get_rows_scalar_enabled()) {
+            const int64_t total = ne10*ne11*ne12;
+            const int blocks = int(std::min<int64_t>((total + 255)/256, 1 << 20));
+            k_get_rows_scalar<src0_t,dst_t><<<blocks, 256, 0, stream>>>(src0_d, src1_d, dst_d, ne10, ne11, ne12,
+                s1, s2, s3, nb01, nb02, nb03, s10, s11, s12);
+            return;
+        }
+    }
 
     k_get_rows_float<src0_t,dst_t,masked_half,extra_t><<<block_nums, block_dims, 0, stream>>>(
         src0_d, src1_d, dst_d,

@@ -98122,5 +98122,31 @@
         "consumer": "inline bool stream_topk_defer_enabled(){\n    static const bool enabled=[]{\n        const char*env=std::getenv(\"LLAMA_DSV41_STREAM_TOPK_DEFER\");\n        if(env&&std::strcmp(env,\"0\")&&std::strcmp(env,\"1\"))GGML_ABORT(\"LLAMA_DSV41_STREAM_TOPK_DEFER must be 0 or 1\");\n        return !env||env[0]=='1';\n    }();\n    return enabled;"
       }
     ]
+  },
+  {
+    "var": "LLAMA_DSV41_GET_ROWS_SCALAR",
+    "flag": "--llama-dsv41-get-rows-scalar",
+    "default": null,
+    "code_default": "NULL from getenv; the literal consumer below supplies any fallback",
+    "classification": "qualified",
+    "scopes": [
+      "rtx-llama"
+    ],
+    "doc": "CUDA GET_ROWS of one-element F32/F16 rows (the indexer's streaming top-k value and ID gathers): one thread per gathered element instead of one 256-thread block per element. Identical values (same index, same cast). Default 1; 0 keeps the generic kernel.",
+    "reads": [
+      "engines/streaming-llama/prefill_llama.cpp/ggml/src/ggml-cuda/getrows.cu:343"
+    ],
+    "allowed_values": [
+      "0",
+      "1"
+    ],
+    "code_defaults": [
+      {
+        "source": "engines/streaming-llama/prefill_llama.cpp/ggml/src/ggml-cuda/getrows.cu:343",
+        "unset": "NULL from getenv; the literal consumer below supplies any fallback",
+        "read": "const char * env = std::getenv(\"LLAMA_DSV41_GET_ROWS_SCALAR\");",
+        "consumer": "static bool get_rows_scalar_enabled() {\n    static const bool enabled = [] {\n        const char * env = std::getenv(\"LLAMA_DSV41_GET_ROWS_SCALAR\");\n        if (env && std::strcmp(env, \"0\") && std::strcmp(env, \"1\")) GGML_ABORT(\"LLAMA_DSV41_GET_ROWS_SCALAR must be 0 or 1\");\n        return !env || env[0] == '1';\n    }();\n    return enabled;"
+      }
+    ]
   }
 ]
