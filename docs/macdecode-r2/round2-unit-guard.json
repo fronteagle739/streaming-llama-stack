@@ -1,0 +1,8 @@
+{
+  "exit_code": 0,
+  "host_budget_bytes": 2147483648,
+  "physical_floor_bytes": 17179869184,
+  "peak_rss_bytes": 201572352,
+  "minimum_available_bytes": 536691015680,
+  "violation": null
+}

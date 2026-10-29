@@ -9,6 +9,7 @@ import hashlib
 import json
 import math
 import os
+import re
 from pathlib import Path
 import struct
 import sys
@@ -35,9 +36,67 @@ def nbytes(t):
     if count%block:raise ValueError('Unaligned tensor '+t['name'])
     return count//block*size
 
-def layout(source,expert_layout=CANONICAL):
+def dspark_aliases(header,target=None):
+    """Publish current names from actual legacy values, preserving every old key."""
+    meta=header['metadata'];fields={}
+    def add(key,value):
+        if key in meta:
+            if meta[key]!=value:raise ValueError('Conflicting DSpark metadata '+key)
+        else:fields[key]=value
+    add('dspark.target_architecture','deepseek41')
+    names=('block_size','markov_rank','noise_token_id','n_routed_experts','num_experts_per_tok')
+    legacy=[name for name in names if 'deepseek41.dspark.'+name in meta]
+    if not legacy:return fields
+    if len(legacy)!=len(names):raise ValueError('Incomplete legacy DSpark metadata')
+    for name in names:add('dspark.'+name,meta['deepseek41.dspark.'+name])
+    if target is None:raise ValueError('Legacy DSpark target layers require a matching target GGUF')
+    tm=target['metadata']
+    if tm.get('general.architecture')!='deepseek41' or any(not meta.get(k) or meta[k]!=tm.get(k) for k in ('general.source.url','general.source.revision')):
+        raise ValueError('DSpark target source identity differs')
+    config=json.loads(tm['deepseek41.config'])['text_config']
+    for name in names:
+        if config.get('dspark_'+name)!=meta['deepseek41.dspark.'+name]:
+            raise ValueError('DSpark target configuration differs: '+name)
+    layers=config['dspark_target_layer_ids'];stages=meta.get('deepseek41.dspark.stage_count',meta.get('deepseek41.dspark.n_layers'))
+    if (type(layers) is not list or len(layers)!=stages or len(set(layers))!=len(layers) or
+        any(type(n) is not int or not 0<=n<config['num_hidden_layers'] for n in layers) or
+        meta.get('deepseek41.dspark.n_layers',stages)!=stages):raise ValueError('Invalid DSpark target layer list')
+    add('dspark.target_layer_ids',layers)
+    return fields
+
+
+def dspark_target(source,header,explicit=None):
+    if not any(k.startswith('deepseek41.dspark.') for k in header['metadata']):return None
+    if explicit is not None:return read_header(explicit)
+    candidates=[]
+    for p in source.parent.glob('*.gguf'):
+        if p==source:continue
+        h=read_header(p);m=h['metadata']
+        if m.get('general.architecture')=='deepseek41' and all(m.get(k)==header['metadata'].get(k) for k in ('general.source.url','general.source.revision')):candidates.append(h)
+    if len(candidates)!=1:raise ValueError('Set --requant-target-gguf: require one matching source target GGUF')
+    return candidates[0]
+
+
+def metadata_entry(key,value):
+    if isinstance(value,str):payload=struct.pack('<I',8)+string(value)
+    elif type(value) is int and 0<=value<2**32:payload=struct.pack('<II',4,value)
+    elif type(value) is list and all(type(n) is int and 0<=n<2**32 for n in value):
+        payload=struct.pack('<IIQ',9,4,len(value))+struct.pack('<'+'I'*len(value),*value)
+    else:raise ValueError('Unsupported added metadata value '+key)
+    return string(key)+payload
+
+
+def layout(source,expert_layout=CANONICAL,target_source=None):
     validate_layout(expert_layout)
-    h=validate_dsv41_types(read_header(source))
+    h=read_header(source)
+    fields={}
+    if h['metadata'].get('general.architecture')=='deepseek41-dspark':
+        if expert_layout!=CANONICAL:
+            raise ValueError('DSpark requires the standard GGML MXFP4 layout')
+        validate_dspark(h)
+        fields=dspark_aliases(h,dspark_target(source,h,target_source))
+    else:
+        validate_dsv41_types(h)
     a=h['metadata'].get('general.alignment',32)
     if a<32 or a>65536 or a&(a-1):raise ValueError('Unsupported alignment')
     tensors=[];offset=0
@@ -52,8 +111,9 @@ def layout(source,expert_layout=CANONICAL):
     key='deepseek41.speed_proxy'
     if key in h['metadata']:raise ValueError('Input already has speed-proxy marker')
     if KEY in h['metadata']:raise ValueError('Source already has a kernel-native expert layout')
-    prefix=prefix[:16]+struct.pack('<Q',len(h['metadata'])+1+(expert_layout!=CANONICAL))+prefix[24:]
+    prefix=prefix[:16]+struct.pack('<Q',len(h['metadata'])+1+(expert_layout!=CANONICAL)+len(fields))+prefix[24:]
     prefix+=string(key)+struct.pack('<I',8)+string(LABEL)
+    for name,value in fields.items():prefix+=metadata_entry(name,value)
     if expert_layout!=CANONICAL:
         if a<128:raise ValueError('Kernel-native FP4 requires alignment>=128')
         prefix+=string(KEY)+struct.pack('<I',8)+string(expert_layout)
@@ -63,6 +123,37 @@ def layout(source,expert_layout=CANONICAL):
     raw=prefix+desc
     raw+=bytes(align(len(raw),a)-len(raw))
     return h,tensors,raw,offset+len(raw),align(h['header_bytes'],a),a
+
+
+def validate_dspark(header):
+    """Validate the distinct MTP inventory without weakening main-model checks."""
+    meta=header['metadata']
+    if meta.get('dspark.target_architecture','deepseek41')!='deepseek41':
+        raise ValueError('DSpark target architecture differs from deepseek41')
+    if meta.get('split.count',1)!=1 or KEY in meta or 'deepseek41.dense_layout' in meta:
+        raise ValueError('DSpark requires a single standard-layout GGUF')
+    dense={'attn_q_a.weight','attn_q_b.weight','attn_kv.weight',
+           'attn_output_a.weight','attn_output_b.weight','ffn_gate_shexp.weight',
+           'ffn_up_shexp.weight','ffn_down_shexp.weight','main_proj.weight',
+           'markov_head.markov_w1.weight','markov_head.markov_w2.weight'}
+    f32={'hc_attn_base.weight','hc_attn_scale.weight','attn_norm.weight',
+         'hc_ffn_base.weight','hc_ffn_scale.weight','ffn_norm.weight',
+         'attn_sinks.weight','attn_q_a_norm.weight','attn_kv_a_norm.weight',
+         'ffn_gate_inp.weight','exp_probs_b.bias','exp_probs_b_vl.bias',
+         'main_norm.weight','norm.weight','confidence_head.proj.weight'}
+    by_name={t['name']:t for t in header['tensors']}
+    for t in header['tensors']:
+        match=re.fullmatch(r'mtp\.(\d+)\.(.+)',t['name'])
+        if not match:raise ValueError('Unknown DSpark tensor '+t['name'])
+        role=match[2]
+        allowed=(12,) if role in ('ffn_gate_exps.weight','ffn_up_exps.weight','ffn_down_exps.weight') else (8,) if role in dense else (1,) if role in ('hc_attn_fn.weight','hc_ffn_fn.weight') else (0,) if role in f32 else ()
+        if t['type'] not in allowed:raise ValueError('Unsupported DSpark tensor/type '+t['name'])
+        if role=='ffn_gate_exps.weight':
+            prefix='mtp.'+match[1]+'.'
+            for part in ('gate','up','down'):
+                item=by_name.get(prefix+'ffn_'+part+'_exps.weight')
+                if item is None or item['type']!=12 or len(item['shape'])!=3:
+                    raise ValueError('Incomplete Q4 DSpark expert triplet '+prefix)
 
 def converter(library):
     lib=ctypes.CDLL(str(library))
@@ -118,7 +209,7 @@ def worker(args):
         if not waiting:print('WAIT_GPU: no source reads until the shared GPU ledger is clear',flush=True);waiting=True
         time.sleep(.25)
     expert_layout=getattr(args,'expert_layout',CANONICAL)
-    h,tensors,header,total,data_start,a=layout(args.requant_gguf,expert_layout)
+    h,tensors,header,total,data_start,a=layout(args.requant_gguf,expert_layout,getattr(args,'requant_target_gguf',None))
     src_stat=args.requant_gguf.stat()
     identity=dict(path=str(args.requant_gguf.resolve()),size=src_stat.st_size,mtime_ns=src_stat.st_mtime_ns,
                   header_sha256=hashlib.sha256(json.dumps(h,sort_keys=True).encode()).hexdigest(),
@@ -227,6 +318,7 @@ def worker(args):
 def main():
     p=argparse.ArgumentParser(description=__doc__)
     p.add_argument('--requant-gguf',type=Path,required=True)
+    p.add_argument('--requant-target-gguf',type=Path,help='Matching source main GGUF for legacy DSpark target-layer metadata; otherwise discover a unique matching sibling')
     p.add_argument('--out',type=Path,required=True)
     p.add_argument('--runtime-root',type=Path,required=True)
     p.add_argument('--hold-file',type=Path,required=True)

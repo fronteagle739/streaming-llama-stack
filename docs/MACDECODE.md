@@ -1,5 +1,8 @@
 # Mac decode comparison, 2026-10-29
 
+The local requant follow-up is documented in [Round 2](MACDECODE_ROUND2.md).
+The measurements and provisioning notes below describe the original Q4 run.
+
 This is a measured Q4 candidate, not a completed upstream performance match or
 a production release. The candidate is opt-in while paired qualification and
 the exact-model comparison remain incomplete. No preset was changed.

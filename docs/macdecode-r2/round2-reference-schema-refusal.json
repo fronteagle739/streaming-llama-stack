@@ -1,0 +1,82 @@
+{
+  "attempt": {
+    "build": {
+      "pid": 66664,
+      "host_budget_bytes": 4294967296,
+      "physical_floor_bytes": 17179869184,
+      "peak_rss": 871137280,
+      "minimum_available": 534145761280,
+      "violation": null,
+      "returncode": 0,
+      "binary_sha256": "7ec061ceb2d93dbba6ca2397a5a4aaf9e65f4fde5c20a5b97d274d668b28fc77"
+    },
+    "results": [
+      {
+        "tag": "prose8k",
+        "command": [
+          "${UPSTREAM_SOURCE}/ds4-bench",
+          "--metal",
+          "-m",
+          "${MODEL_ROOT}/deepseek-ai/DeepSeek-V4.1-Flash-1017-ds4-MXFP4-requant/DeepSeek-V4.1-Flash-1017-MXFP4-requant.gguf",
+          "--mtp-model",
+          "${MODEL_ROOT}/deepseek-ai/DeepSeek-V4.1-Flash-1017-ds4-MXFP4-requant/DeepSeek-V4.1-Flash-1017-DSpark-MXFP4-requant.gguf",
+          "--prompt-file",
+          "${TASK_ROOT}/promessi_sposi.txt",
+          "--ctx-start",
+          "8192",
+          "--ctx-max",
+          "8192",
+          "--ctx-alloc",
+          "393216",
+          "--prefill-chunk",
+          "8192",
+          "--gen-tokens",
+          "128",
+          "--macdecode-repeat",
+          "3",
+          "--csv",
+          "${TASK_ROOT}/reference-prose8k.csv",
+          "--token-csv",
+          "${TASK_ROOT}/reference-prose8k-tokens.csv"
+        ],
+        "host_budget_bytes": 429496729600,
+        "physical_floor_bytes": 17179869184,
+        "baseline": {
+          "available": 540003696640,
+          "wired": 5652545536,
+          "compressed": 956055552,
+          "swapins": 0,
+          "swapouts": 0
+        },
+        "peak_rss": 0,
+        "peak_observed_physical_impact": 0,
+        "minimum_available": 540003696640,
+        "violation": null,
+        "pid": 66913,
+        "returncode": 1,
+        "final": {
+          "available": 540020457472,
+          "wired": 5635604480,
+          "compressed": 956055552,
+          "swapins": 0,
+          "swapouts": 0
+        }
+      }
+    ]
+  },
+  "stderr": "ds4: Metal device Apple M3 Ultra, 512.00 GiB RAM\nds4: Metal 4 tensor API disabled for pre-M5/pre-A19 devices\nds4: drift-patch flags hc_stable=on norm_unify=on kv_raw_f32=off rope_exp2_log2=off math_safe=off tensor_matmul=off\nds4: DSpark metadata error: unsupported V4.1 drafter dimensions\nds4: DSpark metadata error: unsupported V4.1 target layers\nds4: DSpark metadata error: missing or zero block size\nds4: DSpark metadata error: missing or zero Markov rank\nds4: DSpark metadata error: missing or out-of-range noise token\nds4: DSpark metadata error: missing target layer list\nds4: DSpark tensor mtp.0.ffn_gate_inp.weight (ffn_gate_inp) has dim[1]=128, expected 384\nds4: DSpark tensor mtp.0.exp_probs_b.bias (exp_probs_b) has dim[0]=128, expected 384\nds4: DSpark tensor mtp.0.ffn_gate_exps.weight (ffn_gate_exps) has dim[2]=128, expected 384\nds4: DSpark tensor mtp.0.ffn_up_exps.weight (ffn_up_exps) has dim[2]=128, expected 384\nds4: DSpark tensor mtp.0.ffn_down_exps.weight (ffn_down_exps) has dim[2]=128, expected 384\nds4: DSpark tensor mtp.0.main_proj.weight (main_proj) has dim[0]=15360, expected 0\nds4: DSpark tensor mtp.1.ffn_gate_inp.weight (ffn_gate_inp) has dim[1]=128, expected 384\nds4: DSpark tensor mtp.1.exp_probs_b.bias (exp_probs_b) has dim[0]=128, expected 384\nds4: DSpark tensor mtp.1.ffn_gate_exps.weight (ffn_gate_exps) has dim[2]=128, expected 384\nds4: DSpark tensor mtp.1.ffn_up_exps.weight (ffn_up_exps) has dim[2]=128, expected 384\nds4: DSpark tensor mtp.1.ffn_down_exps.weight (ffn_down_exps) has dim[2]=128, expected 384\nds4: DSpark tensor mtp.2.ffn_gate_inp.weight (ffn_gate_inp) has dim[1]=128, expected 384\nds4: DSpark tensor mtp.2.exp_probs_b.bias (exp_probs_b) has dim[0]=128, expected 384\nds4: DSpark tensor mtp.2.ffn_gate_exps.weight (ffn_gate_exps) has dim[2]=128, expected 384\nds4: DSpark tensor mtp.2.ffn_up_exps.weight (ffn_up_exps) has dim[2]=128, expected 384\nds4: DSpark tensor mtp.2.ffn_down_exps.weight (ffn_down_exps) has dim[2]=128, expected 384\nds4: DSpark tensor mtp.2.markov_head.markov_w1.weight (markov_w1) has dim[0]=256, expected 0\nds4: DSpark tensor mtp.2.markov_head.markov_w2.weight (markov_w2) has dim[0]=256, expected 0\nds4: DSpark tensor mtp.2.confidence_head.proj.weight (confidence_proj) has dim[0]=5376, expected 5120\nds4: invalid V4.1 DSpark weights\n",
+  "metadata_before": {
+    "status": "COMPLETE",
+    "change": "Add truthful target-architecture metadata derived from the validated deepseek41-dspark source; family checks stay enabled",
+    "bytes": 7904264192,
+    "header_bytes": 16384,
+    "before_sha256": "e4e812f70167cef9b78951ca9dcd37c7accbc7288946ba1a479bd67c453a2fb5",
+    "sha256": "211032b37778886b2b0ed4a537709c996e179eea7471267a28ef8bcb7f37c230",
+    "tensor_payloads_unchanged": true,
+    "readback_verified": true,
+    "host_budget_bytes": 2147483648,
+    "physical_floor_bytes": 17179869184,
+    "finished": 1793300110.1967402
+  },
+  "cause": "Current reader requires dspark.* aliases. All five original values exist under deepseek41.dspark.*, while the matching source main configuration supplies the target layers. No tensor change or validation bypass."
+}

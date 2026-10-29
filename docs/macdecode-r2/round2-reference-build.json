@@ -1,0 +1,10 @@
+{
+  "pid": 67249,
+  "host_budget_bytes": 4294967296,
+  "physical_floor_bytes": 17179869184,
+  "peak_rss": 94650368,
+  "minimum_available": 537125879808,
+  "violation": null,
+  "returncode": 0,
+  "binary_sha256": "37b51fe8549623257cdc2c3437af5115908bd333f89783f49280705fc02ebc32"
+}

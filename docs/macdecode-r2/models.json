@@ -1,0 +1,49 @@
+{
+  "target": {
+    "status": "COMPLETE",
+    "readback_verified": true,
+    "sha256": "cf05bdccb86b823ce794eab2ca033a649b6a2f5c03cee8a4b177d86de017ae44",
+    "identity": {
+      "path": "${MODEL_ROOT}/deepseek-ai/DeepSeek-V4.1-Flash-1017-ds4-Q4/DeepSeek-V4.1-Flash-1017-Q4-v41.gguf",
+      "size": 518596067328,
+      "mtime_ns": 1792258598308904323,
+      "header_sha256": "34cafe7f195194999b24d7aa719a144e9999442d4a69cb1a8cbce2e57359482f",
+      "library_sha256": "357336df743a62299b3bd81a8988bde3a39120566d0627087de4afa71621a0b7",
+      "output": "${MODEL_ROOT}/deepseek-ai/DeepSeek-V4.1-Flash-1017-ds4-MXFP4-requant/DeepSeek-V4.1-Flash-1017-MXFP4-requant.gguf",
+      "expected_bytes": 501609136128
+    },
+    "completed_tensors": null,
+    "started": 1793295830.954505,
+    "finished": 1793297756.7618701
+  },
+  "drafter": {
+    "status": "COMPLETE",
+    "readback_verified": true,
+    "sha256": "e4e812f70167cef9b78951ca9dcd37c7accbc7288946ba1a479bd67c453a2fb5",
+    "identity": {
+      "path": "${MODEL_ROOT}/deepseek-ai/DeepSeek-V4.1-Flash-1017-ds4-Q4/DeepSeek-V4.1-Flash-1017-DSpark-Q4.gguf",
+      "size": 8328937472,
+      "mtime_ns": 1792258699647539598,
+      "header_sha256": "8483d14593ca04e69337de2b514ae5362486ad1e842c76999a4266eac8c4ee20",
+      "library_sha256": "357336df743a62299b3bd81a8988bde3a39120566d0627087de4afa71621a0b7",
+      "output": "${MODEL_ROOT}/deepseek-ai/DeepSeek-V4.1-Flash-1017-ds4-MXFP4-requant/DeepSeek-V4.1-Flash-1017-DSpark-MXFP4-requant.gguf",
+      "expected_bytes": 7904264192
+    },
+    "completed_tensors": null,
+    "started": 1793297757.106158,
+    "finished": 1793297786.582423
+  },
+  "drafter_final_metadata": {
+    "status": "COMPLETE",
+    "change": "Add current DSpark metadata aliases from legacy values, with target layers verified against the matching main source configuration; original fields and all checks retained",
+    "bytes": 7904264192,
+    "header_bytes": 16384,
+    "before_sha256": "211032b37778886b2b0ed4a537709c996e179eea7471267a28ef8bcb7f37c230",
+    "sha256": "0e5d28ea5521ce3fcd0a8014ba243e77666a9b72722d292257bd7cc69370e120",
+    "tensor_payloads_unchanged": true,
+    "readback_verified": true,
+    "host_budget_bytes": 2147483648,
+    "physical_floor_bytes": 17179869184,
+    "finished": 1793300669.2860532
+  }
+}
