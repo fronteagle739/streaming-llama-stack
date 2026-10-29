@@ -26,6 +26,7 @@ def plan(cfg, prompt_tokens, available):
     if cfg.get('serving_mode', cfg.get('serving', 'single_engine')) != 'single_engine':
         raise ValueError('Multichunk requires single_engine')
     primary = cfg.get('producer_prefill_sweep_tokens', LEGACY_SWEEP)
+    if primary == 'auto':primary = LEGACY_SWEEP   # the single-stream default; multichunk keeps its 49152 primary
     fold_cap = cfg.get('producer_prefill_fold_cap_tokens', 61440)
     if primary != LEGACY_SWEEP or type(fold_cap) is not int or not primary <= fold_cap < 2 * primary:
         raise ValueError('Multichunk requires the 49152-token primary and a fold cap below two chunks')

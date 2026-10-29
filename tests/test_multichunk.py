@@ -60,9 +60,10 @@ class Multichunk(TestCase):
             prefill_plan(dict(CFG, producer_chunks_per_pass=2, producer_prefill_sweep_tokens=65536), 100000, 30*GIB)
 
     def test_native_graph_and_working_buffers_stay_fixed(self):
-        a, _ = prefill_arguments(dict(CFG, ctx_cache_precision='bf16', ctx_cache_growable=True), 200000, 30*GIB)
-        b, p = prefill_arguments(dict(CFG, ctx_cache_precision='bf16', ctx_cache_growable=True,
-                                     producer_chunks_per_pass=2), 200000, 30*GIB)
+        # The all-rows hidden bank (OPUS22 default) sizes VRAM by capacity; pin it off to compare buffers.
+        fixed = dict(CFG, ctx_cache_precision='bf16', ctx_cache_growable=True, producer_hidden_all_rows=False)
+        a, _ = prefill_arguments(fixed, 200000, 30*GIB)
+        b, p = prefill_arguments(dict(fixed, producer_chunks_per_pass=2), 200000, 30*GIB)
         changed = {'--prefill-chunk-tokens','--job-host-bytes','--carry-host-bytes','--provider-host-bytes',
                    '--engram-prefetch-bytes','--prefill-sweep-tokens','--prefill-fold-cap-tokens'}
         self.assertEqual({k:v for k,v in a.items() if k not in changed}, {k:v for k,v in b.items() if k not in changed})

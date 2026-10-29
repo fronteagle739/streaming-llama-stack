@@ -11,6 +11,22 @@ SS = dict(CFG, producer_host_max_gib=12.0)
 
 
 class PrefillPlan(unittest.TestCase):
+    def test_single_stream_default_keeps_all_rows_resident(self):
+        # OPUS22 round 6 defaults: one 100K sweep with the compact record and an all-rows hidden bank.
+        from slstack.combo_producer import prefill_arguments, RESIDENT_ROW_BYTES
+        cfg = dict(context=131072, producer_profile='ultra', yoco_keep=2541, native_fp4_prefill_only=True,
+                   ctx_cache_precision='bf16', ctx_cache_growable=True,
+                   env_overrides={'LLAMA_DSV41_FLASHINFER_MXFP4': '1', 'LLAMA_DSV41_FLASHINFER_NATIVE_FFN_DLL': 'x.dll'})
+        args, plan = prefill_arguments(cfg, 100000, 12 << 30)
+        self.assertTrue(plan['single_sweep'])
+        self.assertEqual(args['--carry-compact-record'], '1')
+        self.assertGreaterEqual(int(args['--hidden-device-bytes']), RESIDENT_ROW_BYTES * 100000)
+        legacy, _ = prefill_arguments(dict(cfg, producer_hidden_all_rows=False, producer_carry_compact_record=False), 100000, 12 << 30)
+        self.assertNotIn('--carry-compact-record', legacy)
+        self.assertEqual(int(args['--graph-bytes']) + int(args['--hidden-device-bytes']),
+                         int(legacy['--graph-bytes']) + int(legacy['--hidden-device-bytes']))
+        self.assertEqual(args['--job-device-bytes'], legacy['--job-device-bytes'])
+
     def test_compact_carry_record_shrinks_the_bank(self):
         # OPUS22: 51216 B records in 1642496 B pages, against today's 92176 B / 2953216 B.
         self.assertEqual(carry_bank_bytes(100000, True), 4096 + 3125 * 1642496)

@@ -5,7 +5,7 @@ from slstack.combo_producer import prefill_arguments
 class FlashInferAdmissionTests(unittest.TestCase):
     def config(self,setting=None):
         return dict(context=1000001,producer_profile='ultra',producer_host_budget_gib=6.25,
-            producer_host_max_gib=7.75,ctx_cache_precision='bf16',ctx_cache_growable=True,
+            producer_host_max_gib=7.75,producer_hidden_all_rows=False,ctx_cache_precision='bf16',ctx_cache_growable=True,
             yoco_keep=140,env_overrides={} if setting is None else {'LLAMA_DSV41_FLASHINFER_MXFP4':setting})
 
     def test_explicit_off_preserves_the_entire_existing_plan(self):

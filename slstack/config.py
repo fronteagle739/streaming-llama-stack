@@ -18,6 +18,8 @@ def load(path=None, overrides=None):
     registration(cfg.get('producer_carry_registration', 'tile'))
     from .combo_producer import carry_compact
     carry_compact(cfg)
+    if type(cfg.get('producer_hidden_all_rows', False)) is not bool:
+        raise ValueError('producer_hidden_all_rows must be true or false')
     from .combo_ram import runtime_min_free_gib
     cfg['runtime_min_free_gib'] = runtime_min_free_gib(cfg)
     if cfg.get('mac'):
