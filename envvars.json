@@ -67163,7 +67163,7 @@
     ],
     "doc": "LLAMA_DSV41_TOPK_RADIX: qualified preset/runtime setting; override for a different memory or arithmetic plan",
     "reads": [
-      "engines/streaming-llama/prefill_llama.cpp/ggml/src/ggml-cuda/argsort.cu:396",
+      "engines/streaming-llama/prefill_llama.cpp/ggml/src/ggml-cuda/argsort.cu:531",
       "engines/streaming-llama/prefill_llama.cpp/src/llama-dsv41-executor.cpp:1757"
     ],
     "defaults_by_scope": {
@@ -67171,7 +67171,7 @@
     },
     "code_defaults": [
       {
-        "source": "engines/streaming-llama/prefill_llama.cpp/ggml/src/ggml-cuda/argsort.cu:396",
+        "source": "engines/streaming-llama/prefill_llama.cpp/ggml/src/ggml-cuda/argsort.cu:531",
         "unset": "NULL from getenv; the literal consumer below supplies any fallback",
         "read": "const char *env = std::getenv(\"LLAMA_DSV41_TOPK_RADIX\");",
         "consumer": "    sizeof(dsv41_TopKBlockSort::TempStorage) : 8192 * sizeof(int);\nstatic bool dsv41_topk_radix_enabled(const int tile_size, const int k) {\n    const char *env = std::getenv(\"LLAMA_DSV41_TOPK_RADIX\");\n    return env && env[0] == '1' && tile_size == 8192 && k == 512 &&\n        dsv41_topk_radix_smem + sizeof(unsigned) <= ggml_cuda_info().devices[ggml_cuda_get_device()].smpbo;\n}\n#endif"
@@ -67195,11 +67195,11 @@
     ],
     "doc": "LLAMA_DSV41_TOPK_SHARED_KEYS: advanced engine setting; built-in default retained",
     "reads": [
-      "engines/streaming-llama/prefill_llama.cpp/ggml/src/ggml-cuda/argsort.cu:684"
+      "engines/streaming-llama/prefill_llama.cpp/ggml/src/ggml-cuda/argsort.cu:819"
     ],
     "code_defaults": [
       {
-        "source": "engines/streaming-llama/prefill_llama.cpp/ggml/src/ggml-cuda/argsort.cu:684",
+        "source": "engines/streaming-llama/prefill_llama.cpp/ggml/src/ggml-cuda/argsort.cu:819",
         "unset": "NULL from getenv; the literal consumer below supplies any fallback",
         "read": "const char * env = std::getenv(\"LLAMA_DSV41_TOPK_SHARED_KEYS\");",
         "consumer": "\nstatic bool top_k_shared_keys_enabled(const int tile_size) {\n    const char * env = std::getenv(\"LLAMA_DSV41_TOPK_SHARED_KEYS\");\n    return env && env[0] == '1' && tile_size * (sizeof(int) + sizeof(float)) <=\n        ggml_cuda_info().devices[ggml_cuda_get_device()].smpbo;\n}\n"
@@ -98068,6 +98068,32 @@
         "unset": "NULL from getenv; the literal consumer below supplies any fallback",
         "read": "static const bool hc_bf16_residual_option=[]{const char*v=std::getenv(\"LLAMA_DSV41_HC_BF16_RESIDUAL\");",
         "consumer": "        // already BF16-rounded). LLAMA_DSV41_HC_BF16_RESIDUAL=0 restores the F32 path.\n        // Layers 37-39 keep the F32 unpack: their DSpark mean also reads the input.\n        static const bool hc_bf16_residual_option=[]{const char*v=std::getenv(\"LLAMA_DSV41_HC_BF16_RESIDUAL\");\n            require(!v||!std::strcmp(v,\"0\")||!std::strcmp(v,\"1\"),\"LLAMA_DSV41_HC_BF16_RESIDUAL must be 0 or 1\");return !v||v[0]=='1';}();\n        const bool hc_bf16_carry=hc_bf16_residual_option&&expert.hc_bf16_epilogue&&!boundary.active()&&\n            !llama_dsv41_attribution_active(in.position_offset+in.start,in.count);\n        const bool bf16_residual_input=hc_bf16_carry&&device_hidden&&resident_bf16&&in.layer&&in.layer<37&&!compact_seed&&direct_input;"
+      }
+    ]
+  },
+  {
+    "var": "LLAMA_DSV41_TOPK_SELECT",
+    "flag": "--llama-dsv41-topk-select",
+    "default": null,
+    "code_default": "NULL from getenv; the literal consumer below supplies any fallback",
+    "classification": "qualified",
+    "scopes": [
+      "rtx-llama"
+    ],
+    "doc": "With the exact radix top-k (LLAMA_DSV41_TOPK_RADIX=1), select the top 512 of each 8192-key tile by an MSB radix select on the same packed (value, index) keys and sort only those 512, instead of sorting the whole tile. Identical IDs and order (the key order is total); NaN/subnormal tiles keep the original network. Default 1; 0 keeps the full tile sort.",
+    "reads": [
+      "engines/streaming-llama/prefill_llama.cpp/ggml/src/ggml-cuda/argsort.cu:520"
+    ],
+    "allowed_values": [
+      "0",
+      "1"
+    ],
+    "code_defaults": [
+      {
+        "source": "engines/streaming-llama/prefill_llama.cpp/ggml/src/ggml-cuda/argsort.cu:520",
+        "unset": "NULL from getenv; the literal consumer below supplies any fallback",
+        "read": "const char *env = std::getenv(\"LLAMA_DSV41_TOPK_SELECT\");",
+        "consumer": "static bool dsv41_topk_select_enabled() {\n    static const bool enabled = [] {\n        const char *env = std::getenv(\"LLAMA_DSV41_TOPK_SELECT\");\n        if (env && std::strcmp(env, \"0\") && std::strcmp(env, \"1\")) GGML_ABORT(\"LLAMA_DSV41_TOPK_SELECT must be 0 or 1\");\n        return !env || env[0] == '1';\n    }();\n    return enabled;"
       }
     ]
   }
