@@ -1,0 +1,72 @@
+{
+  "experiment": "tail-r2",
+  "arm": "candidate",
+  "producer_sha256": "b1fdc370504783ee67651d2eac48f87bc2be9bddfa9a75ef7657aef33a446a5c",
+  "clock": "CSV positions are milliseconds relative to first fetch submission. Absolute clock origin omitted.",
+  "counter": "Native GetThreadTimes user+kernel CPU time on the executor calling thread across each host tile envelope. Excludes blocked/descheduled wait and provider/other worker threads. Active CUDA/driver polling during synchronization can consume CPU and is counted. This is not scheduler-slice tracing, graph-preparation time or total-process CPU busy.",
+  "passes": [
+    {
+      "sweep": 0,
+      "window_ms": 16622.312799990177,
+      "fetch_envelope_busy_ms": 9510.51390004158,
+      "stream_utilization_percent": 57.21534671184386,
+      "stream_idle_intervals": 22,
+      "routed_timestamps_complete": true,
+      "fetched_bytes": 166382548664,
+      "exposed_acquire_ms": 2.281,
+      "routed_fetch_wait_ms": 0,
+      "hint_fetched_bytes": 0,
+      "exposed_hint_join_ms": 0,
+      "totals": {
+        "wall_ms": 15984.5381,
+        "acquire_ms": 2.281,
+        "upload_ms": 1232.0163,
+        "compute_ms": 12882.6666,
+        "readback_ms": 151.9134,
+        "engram_ms": 0.9365,
+        "prepare_ms": 1570.9984,
+        "cleanup_ms": 0.2197,
+        "carry_read_ms": 0.1291,
+        "carry_write_ms": 0.1638,
+        "weight_cache_ms": 3.3829000000000002
+      },
+      "host_thread_cpu_ms": 15296.875,
+      "host_tile_envelope_ms": 15860.034400165081,
+      "executed_layers": 21
+    },
+    {
+      "sweep": 1,
+      "window_ms": 23252.990999996662,
+      "fetch_envelope_busy_ms": 13219.390199959278,
+      "stream_utilization_percent": 56.850278744619025,
+      "stream_idle_intervals": 83,
+      "routed_timestamps_complete": true,
+      "fetched_bytes": 239185347008,
+      "exposed_acquire_ms": 4.5428,
+      "routed_fetch_wait_ms": 2907.0117,
+      "hint_fetched_bytes": 6290472960,
+      "exposed_hint_join_ms": 0.10250000000000001,
+      "totals": {
+        "wall_ms": 22683.997,
+        "acquire_ms": 4.5428,
+        "upload_ms": 1396.2617,
+        "compute_ms": 19088.9301,
+        "readback_ms": 177.7517,
+        "engram_ms": 0.8712,
+        "prepare_ms": 1852.4695,
+        "cleanup_ms": 0.3095,
+        "carry_read_ms": 0.1711,
+        "carry_write_ms": 0.2298,
+        "weight_cache_ms": 6.2474
+      },
+      "host_thread_cpu_ms": 18765.625,
+      "host_tile_envelope_ms": 22545.261799514294,
+      "executed_layers": 40
+    }
+  ],
+  "totals": {
+    "host_thread_cpu_ms": 34062.5,
+    "host_tile_envelope_ms": 38405.296199679375
+  },
+  "window": "First stage submission through last layer dispatch/head fetch fence; excludes model open, bulk export, final head compute and inter-pass admission. Exact prompt timing is reported separately."
+}

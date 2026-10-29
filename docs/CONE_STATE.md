@@ -82,3 +82,7 @@ was restored with exactly its saved command, environment, working directory
 and binary; its model endpoint returns 200 and has no task-scratch dependency.
 [Restoration receipt](../examples/dual-machine/dsv41-ultra-cone/proof/mac-restoration.json).
 Studio restoration and final scratch retirement are recorded in CONEALL_RESULT.
+
+Measured allocation and streaming results, the relative Nsight timeline and
+remaining performance targets are documented in the
+[performance evidence](../examples/dual-machine/dsv41-ultra-cone/proof/PERFORMANCE.md).
