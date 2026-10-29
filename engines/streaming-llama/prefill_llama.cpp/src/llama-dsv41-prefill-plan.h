@@ -28,7 +28,8 @@ constexpr uint32_t sweep_align = 4096;   // paired attention tiles: absolute 409
 // Host bytes that scale with the capacity (same formulas as
 // llama_dsv41_carry_store::plan_resident_ram_direct and the provider's
 // whole-prompt Engram admission). Per row beyond 49152: 92288 + 12864 B.
-constexpr uint64_t carry_bank_bytes(uint32_t rows) { return 4096ull + uint64_t((rows + 31) / 32) * 2953216ull; }
+// compact: the opt-in 51216 B record (OPUS22 --carry-compact-record), 1642496 B pages.
+constexpr uint64_t carry_bank_bytes(uint32_t rows, bool compact = false) { return 4096ull + uint64_t((rows + 31) / 32) * (compact ? 1642496ull : 2953216ull); }
 constexpr uint64_t engram_prompt_bytes(uint32_t rows) { return (4ull << 20) + uint64_t(rows) * 48ull * (4 + 264); }
 
 struct sweeps { uint32_t count = 0, chunk = 0; };

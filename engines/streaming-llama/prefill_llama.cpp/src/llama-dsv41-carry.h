@@ -22,6 +22,18 @@ public:
     static constexpr uint64_t ram_record_bytes = ggml_dsv41_copy::record_bytes;
     static constexpr uint64_t ram_page_bytes = ggml_dsv41_copy::page_bytes;
     static constexpr uint64_t ram_header_bytes = ggml_dsv41_copy::header_bytes;
+    // Physical RAM record layout. The legacy layout holds an F32 hidden field
+    // (81920 B). The opt-in compact layout (OPUS22, --carry-compact-record)
+    // holds a 40960 B hidden field: BF16 for layers >= 1 and the final export
+    // (the resident bank is BF16), and the exact F16 token embedding row for
+    // the layer-0 seed. Pre, selected and candidate IDs are unchanged.
+    struct ram_geometry {
+        uint64_t record, page, hidden, pre, selected, candidates;
+        bool compact;
+    };
+    static constexpr ram_geometry legacy_geometry{ggml_dsv41_copy::record_bytes,ggml_dsv41_copy::page_bytes,81920,81920,81936,83984,false};
+    static constexpr ram_geometry compact_geometry{ggml_dsv41_copy::compact_record_bytes,ggml_dsv41_copy::compact_page_bytes,40960,40960,40976,43024,true};
+    static const ram_geometry &geometry(bool compact){return compact?compact_geometry:legacy_geometry;}
 
     // A bounded borrowed slice of the existing single RAM bank. It may be used
     // only until its exact lease is completed/invalidated. The executor owns
@@ -33,11 +45,14 @@ public:
         uint32_t input_selected()const{return sw;} uint32_t input_candidates()const{return cw;}
         uint32_t output_selected()const{return next_sw;} uint32_t output_candidates()const{return next_cw;}
         uint8_t * row(uint32_t relative)const;
+        const ram_geometry &layout()const{return geometry(compact);}
+        bool compact_record()const{return compact;}
     private:
         uint8_t *base=nullptr;
         uint64_t bytes=0,store_id=0,generation=0;
         uint32_t first=0,rows=0,sw=0,cw=0,next_sw=0,next_cw=0;
         bool seeding=false;
+        bool compact=false;
         friend class llama_dsv41_carry_store;
         friend class llama_dsv41_tile_executor;
 #ifdef DS4PERF_DIRECT_CARRY_TEST
@@ -135,6 +150,9 @@ public:
         // Full device bank only: restore final hidden rows after the required
         // head. Host reads/publication remain forbidden until every row is copied.
         bool export_hidden_after_head = false;
+        // Opt-in compact physical record (direct RAM bank, BF16-resident,
+        // batched seed and post-head export only). See ram_geometry.
+        bool compact_record = false;
     };
     struct tile {
         uint32_t start = 0, count = 0;
@@ -153,14 +171,14 @@ public:
     // Includes aligned physical pages, header, other pending payloads and the
     // fixed 30 GiB floor. No hidden second bank or temporary file is created.
     static bool plan(uint32_t tokens, uint64_t outstanding_bytes,
-                     budget & result, std::string & error);
+                     budget & result, std::string & error, bool compact = false);
     static bool plan_resident_ram(uint32_t tokens, budget & result, std::string & error,
-                                  uint32_t max_tile_tokens = 32);
+                                  uint32_t max_tile_tokens = 32, bool compact = false);
     static bool plan_resident_ram_direct(uint32_t tokens,budget &result,std::string &error,
-                                         uint32_t max_tile_tokens=32);
+                                         uint32_t max_tile_tokens=32,bool compact=false);
     static bool plan_hybrid(uint32_t tokens,uint32_t prefix_tokens,uint32_t max_tile_tokens,
                             uint64_t outstanding,uint64_t disk_reserve,budget &result,std::string &error);
-    static std::shared_ptr<ram_backing> reserve_ram(uint32_t tokens,uint64_t admitted_host_bytes,uint32_t tile);
+    static std::shared_ptr<ram_backing> reserve_ram(uint32_t tokens,uint64_t admitted_host_bytes,uint32_t tile,bool compact=false);
     bool create(const config & options, std::string & error);
     // Retire a completed one-token view before reusing its pre-registered bank.
     // Invalidate it first; live/seeding/incomplete leases cannot release credit.

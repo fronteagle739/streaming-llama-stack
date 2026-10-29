@@ -27,13 +27,15 @@
 
 namespace {
 constexpr uint64_t alignment = 4096;
-constexpr uint64_t record_bytes = 81920 + 16 + 512 * 4 + 2048 * 4;
-constexpr uint64_t selected_offset = 81920 + 16;
-constexpr uint64_t candidate_offset = selected_offset + 512 * 4;
-constexpr uint64_t page_bytes = ((32 * record_bytes + alignment - 1) / alignment) * alignment;
-static_assert(record_bytes==llama_dsv41_carry_store::ram_record_bytes&&
-    page_bytes==llama_dsv41_carry_store::ram_page_bytes&&alignment==llama_dsv41_carry_store::ram_header_bytes,
+using geometry_t = llama_dsv41_carry_store::ram_geometry;
+constexpr bool exact_geometry(const geometry_t &g,uint64_t hidden){
+    return g.hidden==hidden&&g.pre==hidden&&g.selected==hidden+16&&g.candidates==g.selected+512*4&&
+        g.record==g.candidates+2048*4&&g.page==((32*g.record+alignment-1)/alignment)*alignment;}
+static_assert(exact_geometry(llama_dsv41_carry_store::legacy_geometry,81920)&&
+    llama_dsv41_carry_store::legacy_geometry.record==llama_dsv41_carry_store::ram_record_bytes&&
+    llama_dsv41_carry_store::legacy_geometry.page==llama_dsv41_carry_store::ram_page_bytes&&alignment==llama_dsv41_carry_store::ram_header_bytes,
     "Direct RAM geometry must remain the original physical carry layout");
+static_assert(exact_geometry(llama_dsv41_carry_store::compact_geometry,40960),"Compact RAM geometry must be the 40960 B hidden layout");
 std::atomic<uint64_t> next_ram_store_identity{1};
 static_assert(sizeof(float) == 4 && sizeof(int32_t) == 4, "Native carry requires F32/I32");
 
@@ -67,6 +69,16 @@ struct llama_dsv41_carry_store::implementation {
     phase state = fresh;
     config options;
     budget capacity;
+    // Physical record geometry, fixed at create(): legacy F32 or opt-in compact.
+    uint64_t record_bytes = llama_dsv41_carry_store::legacy_geometry.record;
+    uint64_t page_bytes = llama_dsv41_carry_store::legacy_geometry.page;
+    uint64_t selected_offset = llama_dsv41_carry_store::legacy_geometry.selected;
+    uint64_t candidate_offset = llama_dsv41_carry_store::legacy_geometry.candidates;
+    bool compact = false;
+    void set_geometry(bool value) {
+        const auto &g = llama_dsv41_carry_store::geometry(value);
+        record_bytes = g.record; page_bytes = g.page; selected_offset = g.selected; candidate_offset = g.candidates; compact = value;
+    }
     std::filesystem::path path;
     std::vector<std::filesystem::path> parent_paths;
     std::shared_ptr<uint8_t[]> locked_page;
@@ -340,8 +352,20 @@ struct llama_dsv41_carry_store::implementation {
         result.candidates.resize(size_t(candidate_width) * count);
         for (uint32_t i = 0; i < count; ++i) {
             const auto r = row(start + i);
-            std::memcpy(result.residual.data() + size_t(i) * hidden_floats, r, 81920);
-            std::memcpy(result.previous_pre.data() + size_t(i) * pre_floats, r + 81920, 16);
+            if (compact) {
+                // Compact rows hold the exact BF16 hidden (final export of the
+                // BF16-resident bank); widening is bit-exact (bits << 16).
+                require(state == awaiting_head || state == sealed, "Compact records expose F32 hidden only after the final BF16 export");
+                for (uint32_t k = 0; k < hidden_floats; ++k) {
+                    uint16_t half_bits; std::memcpy(&half_bits, r + uint64_t(k) * 2, 2);
+                    const uint32_t bits = uint32_t(half_bits) << 16;
+                    std::memcpy(result.residual.data() + size_t(i) * hidden_floats + k, &bits, 4);
+                }
+                std::memcpy(result.previous_pre.data() + size_t(i) * pre_floats, r + 40960, 16);
+            } else {
+                std::memcpy(result.residual.data() + size_t(i) * hidden_floats, r, 81920);
+                std::memcpy(result.previous_pre.data() + size_t(i) * pre_floats, r + 81920, 16);
+            }
             if (selected_width) { std::memcpy(result.selected.data() + size_t(i) * selected_width, r + selected_offset, selected_width * 4); }
             if (candidate_width) { std::memcpy(result.candidates.data() + size_t(i) * candidate_width, r + candidate_offset, candidate_width * 4); }
         }
@@ -349,6 +373,7 @@ struct llama_dsv41_carry_store::implementation {
         output = std::move(result);
     }
     void pack(const tile & value, bool initializing) {
+        require(!compact, "Compact carry records have no host F32 vector write path");
         for (uint32_t i = 0; i < value.count; ++i) {
             auto r = row(value.start + i);
             if (!initializing && !selected_source(layers) && selected_width) {
@@ -371,8 +396,9 @@ struct llama_dsv41_carry_store::implementation {
 llama_dsv41_carry_store::llama_dsv41_carry_store() : p(new implementation) {}
 llama_dsv41_carry_store::~llama_dsv41_carry_store() = default;
 
-bool llama_dsv41_carry_store::plan(uint32_t tokens, uint64_t outstanding, budget & result, std::string & error) {
+bool llama_dsv41_carry_store::plan(uint32_t tokens, uint64_t outstanding, budget & result, std::string & error, bool compact) {
     try {
+        const uint64_t page_bytes = geometry(compact).page, record_bytes = geometry(compact).record;
         require(tokens > 0 && tokens <= max_tokens, "Carry context must be within 1..1048576 tokens");
         budget next;
         next.file_bytes = alignment + ((uint64_t(tokens) + page_tokens - 1) / page_tokens) * page_bytes;
@@ -384,9 +410,10 @@ bool llama_dsv41_carry_store::plan(uint32_t tokens, uint64_t outstanding, budget
     } catch (const std::exception & e) { result = {}; error = e.what(); return false; }
 }
 
-bool llama_dsv41_carry_store::plan_resident_ram(uint32_t tokens, budget & result, std::string & error, uint32_t max_tile_tokens) {
+bool llama_dsv41_carry_store::plan_resident_ram(uint32_t tokens, budget & result, std::string & error, uint32_t max_tile_tokens, bool compact) {
     budget next;
-    if (!plan(tokens, 0, next, error)) { result = {}; return false; }
+    if (!plan(tokens, 0, next, error, compact)) { result = {}; return false; }
+    const uint64_t record_bytes = geometry(compact).record;
     try {
         next.resident_bytes = next.file_bytes;
         next.disk_bytes = 0;
@@ -399,17 +426,18 @@ bool llama_dsv41_carry_store::plan_resident_ram(uint32_t tokens, budget & result
     } catch (const std::exception & e) { result = {}; error = e.what(); return false; }
 }
 
-bool llama_dsv41_carry_store::plan_resident_ram_direct(uint32_t tokens,budget &result,std::string &error,uint32_t tile){
+bool llama_dsv41_carry_store::plan_resident_ram_direct(uint32_t tokens,budget &result,std::string &error,uint32_t tile,bool compact){
     // Identical bank/page geometry. This mode enforces page-sized vector reads
     // below; wide tiles are borrowed slices only and allocate no tile vectors.
-    budget next;if(!plan_resident_ram(tokens,next,error,tile)){result={};return false;}
-    next.bounded_host_bytes-=2ull*(tile-page_tokens)*record_bytes;
+    budget next;if(!plan_resident_ram(tokens,next,error,tile,compact)){result={};return false;}
+    next.bounded_host_bytes-=2ull*(tile-page_tokens)*geometry(compact).record;
     result=next;return true;
 }
 
 bool llama_dsv41_carry_store::plan_hybrid(uint32_t tokens,uint32_t prefix,uint32_t tile,
         uint64_t outstanding,uint64_t disk_reserve,budget &result,std::string &error){
     budget next;if(!plan_resident_ram(tokens,next,error,tile)){result={};return false;}
+    const uint64_t page_bytes=legacy_geometry.page,record_bytes=legacy_geometry.record;
     try{
         require(prefix>0&&prefix<tokens&&prefix%page_tokens==0,"Hybrid RAM prefix must be whole pages and leave actual overflow");
         require(disk_reserve>=1024ull*1024*1024,"Hybrid disk reserve must be at least1GiB");
@@ -422,9 +450,9 @@ bool llama_dsv41_carry_store::plan_hybrid(uint32_t tokens,uint32_t prefix,uint32
     }catch(const std::exception&e){result={};error=e.what();return false;}
 }
 
-std::shared_ptr<llama_dsv41_carry_store::ram_backing> llama_dsv41_carry_store::reserve_ram(uint32_t tokens,uint64_t admission,uint32_t tile){
+std::shared_ptr<llama_dsv41_carry_store::ram_backing> llama_dsv41_carry_store::reserve_ram(uint32_t tokens,uint64_t admission,uint32_t tile,bool compact){
     budget plan;std::string error;
-    require(plan_resident_ram_direct(tokens,plan,error,tile)&&plan.bounded_host_bytes<=admission&&plan.resident_bytes<=SIZE_MAX,"Fixed carry RAM exceeds its explicit host admission");
+    require(plan_resident_ram_direct(tokens,plan,error,tile,compact)&&plan.bounded_host_bytes<=admission&&plan.resident_bytes<=SIZE_MAX,"Fixed carry RAM exceeds its explicit host admission");
     auto bank=std::shared_ptr<ram_backing>(new ram_backing);
     bank->bytes=plan.resident_bytes;bank->storage=llama_dsv41_locked_ram::allocate(bank->bytes,admission);return bank;
 }
@@ -477,8 +505,12 @@ bool llama_dsv41_carry_store::create(const config & options, std::string & error
             "Deferred hidden readback requires direct-only resident RAM accounting");
         require(options.resident_ram||options.ram_prefix_tokens||options.max_tile_tokens==page_tokens,"Larger file tiles require explicit hybrid carry");
         require(options.ram_prefix_tokens||options.disk_reserve_bytes==reserve_bytes,"Legacy carry retains its30GiB reserve");
+        require(!options.compact_record||(options.resident_ram&&options.direct_ram_tiles&&!options.ram_prefix_tokens&&
+            options.defer_hidden_readback&&options.export_hidden_after_head),
+            "Compact carry records require the direct RAM bank, full-device deferred readback and post-head export");
+        p->set_geometry(options.compact_record);
         std::string why;
-        require(options.resident_ram ? (options.direct_ram_tiles?plan_resident_ram_direct(options.tokens,p->capacity,why,options.max_tile_tokens):plan_resident_ram(options.tokens, p->capacity, why, options.max_tile_tokens)) :
+        require(options.resident_ram ? (options.direct_ram_tiles?plan_resident_ram_direct(options.tokens,p->capacity,why,options.max_tile_tokens,options.compact_record):plan_resident_ram(options.tokens, p->capacity, why, options.max_tile_tokens)) :
                 options.ram_prefix_tokens?plan_hybrid(options.tokens,options.ram_prefix_tokens,options.max_tile_tokens,options.outstanding_bytes,options.disk_reserve_bytes,p->capacity,why):
                 plan(options.tokens, options.outstanding_bytes, p->capacity, why), "Invalid carry capacity plan");
         require((options.resident_ram || options.admitted_file_bytes >= p->capacity.disk_bytes) &&
@@ -491,7 +523,7 @@ bool llama_dsv41_carry_store::create(const config & options, std::string & error
             require(p->capacity.resident_bytes <= SIZE_MAX,
                     "Resident carry bank exceeds addressable host allocation");
             p->actual_budget(); // Full bank + page/tile scratch charged BEFORE allocating.
-            p->locked_page=llama_dsv41_locked_ram::allocate(page_bytes,options.admitted_host_bytes);
+            p->locked_page=llama_dsv41_locked_ram::allocate(p->page_bytes,options.admitted_host_bytes);
             p->page=p->locked_page.get();
             require(p->page != nullptr, "Resident carry aligned page allocation failed");
             if(options.shared_ram){
@@ -597,12 +629,13 @@ bool llama_dsv41_carry_store::create(const config & options, std::string & error
 bool llama_dsv41_carry_store::seed(const tile & input, std::string & error) {
     return p->guarded([&] {
         require(p->state == implementation::seeding && !p->lease && input.start == p->cursor, "Noncontiguous, leased or repeated carry seed");
+        require(!p->compact, "Compact carry records require the batched GPU seed");
         p->validate(input, 0, 0);
         const auto offset = p->page_offset(input.start);
         p->buffer_offset=offset;
-        if (offset == p->length) { std::memset(p->page, 0, page_bytes); }
-        else { p->io(false, offset, page_bytes); }
-        p->pack(input, true); p->io(true, offset, page_bytes); p->cursor += input.count;
+        if (offset == p->length) { std::memset(p->page, 0, p->page_bytes); }
+        else { p->io(false, offset, p->page_bytes); }
+        p->pack(input, true); p->io(true, offset, p->page_bytes); p->cursor += input.count;
     }, error);
 }
 bool llama_dsv41_carry_store::finish_seed(std::string & error) {
@@ -634,7 +667,7 @@ bool llama_dsv41_carry_store::read_tile(uint32_t start, uint32_t count, tile & i
         p->range(start, count);
         p->direct_rows=p->options.resident_ram&&count>page_tokens;
         p->buffer_offset=p->page_offset(start);
-        const auto extent=uint64_t((start%page_tokens+count+page_tokens-1)/page_tokens)*page_bytes;
+        const auto extent=uint64_t((start%page_tokens+count+page_tokens-1)/page_tokens)*p->page_bytes;
         if(!p->direct_rows)p->io(false, p->buffer_offset, size_t(extent));
         p->unpack(start, count, input);
         p->lease_start = start; p->lease_count = count; p->lease = true;
@@ -646,7 +679,7 @@ bool llama_dsv41_carry_store::write_tile(const tile & output, std::string & erro
                 "Carry write does not own the exact consumed input lease");
         p->validate(output, p->next_selected, p->next_candidates);
         p->pack(output, false);
-        if(!p->direct_rows)p->io(true, p->page_offset(output.start), size_t((output.start%page_tokens+output.count+page_tokens-1)/page_tokens)*page_bytes);
+        if(!p->direct_rows)p->io(true, p->page_offset(output.start), size_t((output.start%page_tokens+output.count+page_tokens-1)/page_tokens)*p->page_bytes);
         p->cursor += output.count; p->lease = false;p->direct_rows=false;
     }, error);
 }
@@ -654,8 +687,9 @@ bool llama_dsv41_carry_store::write_tile(const tile & output, std::string & erro
 uint8_t *llama_dsv41_carry_store::ram_lease::row(uint32_t relative)const{
     require(base&&relative<rows,"RAM lease row is outside its borrowed range");
     const uint64_t token=uint64_t(first)+relative;
-    const uint64_t at=ram_header_bytes+(token/page_tokens)*ram_page_bytes+(token%page_tokens)*ram_record_bytes;
-    require(at<=bytes&&ram_record_bytes<=bytes-at,"RAM lease row exceeds the admitted physical bank");
+    const auto &g=layout();
+    const uint64_t at=ram_header_bytes+(token/page_tokens)*g.page+(token%page_tokens)*g.record;
+    require(at<=bytes&&g.record<=bytes-at,"RAM lease row exceeds the admitted physical bank");
     return base+at;
 }
 
@@ -677,7 +711,7 @@ bool llama_dsv41_carry_store::acquire_ram_tile(uint32_t start,uint32_t count,ram
         require(p->ram_identity&&p->ram_generation<UINT64_MAX,"Direct RAM lease identity exhausted");
         ram_lease value;value.base=p->resident.get();value.bytes=p->resident_bytes;
         value.store_id=p->ram_identity;value.generation=++p->ram_generation;
-        value.first=start;value.rows=count;value.sw=p->selected_width;value.cw=p->candidate_width;
+        value.first=start;value.rows=count;value.compact=p->compact;value.sw=p->selected_width;value.cw=p->candidate_width;
         value.next_sw=p->next_selected;value.next_cw=p->next_candidates;
         (void)value.row(0);(void)value.row(count-1);
         p->lease_start=start;p->lease_count=count;p->lease=true;p->ram_direct_lease=true;out=value;
@@ -692,11 +726,11 @@ bool llama_dsv41_carry_store::acquire_ram_seed(uint32_t start,uint32_t count,ram
         require(p->ram_identity&&p->ram_generation<UINT64_MAX,"Direct RAM seed identity exhausted");
         ram_lease value;value.base=p->resident.get();value.bytes=p->resident_bytes;
         value.store_id=p->ram_identity;value.generation=++p->ram_generation;
-        value.first=start;value.rows=count;value.seeding=true;
+        value.first=start;value.rows=count;value.seeding=true;value.compact=p->compact;
         (void)value.row(0);(void)value.row(count-1);
         // The ordinary seed initializes unused compact-ID slots to -1. Keep
         // those exact bytes even though their initial logical widths are zero.
-        for(uint32_t row=0;row<count;++row)std::memset(value.row(row)+selected_offset,0xff,(max_selected+max_candidates)*4);
+        for(uint32_t row=0;row<count;++row)std::memset(value.row(row)+p->selected_offset,0xff,(max_selected+max_candidates)*4);
         p->lease_start=start;p->lease_count=count;p->lease=true;p->ram_direct_lease=true;out=value;
     },error);
 }
@@ -712,7 +746,7 @@ bool llama_dsv41_carry_store::complete_ram_seed(const ram_lease &value,const ram
             "Direct RAM seed lacks exact completed validation/copy proof");
         p->check_identity();p->actual_budget();
         p->cursor+=value.rows;
-        p->length=std::max(p->length,alignment+uint64_t((p->cursor+page_tokens-1)/page_tokens)*page_bytes);
+        p->length=std::max(p->length,alignment+uint64_t((p->cursor+page_tokens-1)/page_tokens)*p->page_bytes);
         require(p->length<=p->capacity.file_bytes,"Direct RAM seed extent exceeds its bank");
         p->lease=false;p->ram_direct_lease=false;
     },error);
@@ -761,7 +795,7 @@ bool llama_dsv41_carry_store::acquire_ram_export(uint32_t start,uint32_t count,r
         p->range(start,count,true);require(count<=p->options.max_tile_tokens,"Final hidden export exceeds admitted tile");
         require(p->ram_identity&&p->ram_generation<UINT64_MAX,"Final hidden export identity exhausted");
         p->check_identity();p->actual_budget();ram_lease x;x.base=p->resident.get();x.bytes=p->resident_bytes;
-        x.store_id=p->ram_identity;x.generation=++p->ram_generation;x.first=start;x.rows=count;
+        x.store_id=p->ram_identity;x.generation=++p->ram_generation;x.first=start;x.rows=count;x.compact=p->compact;
         x.sw=x.next_sw=p->selected_width;x.cw=x.next_cw=p->candidate_width;
         (void)x.row(0);(void)x.row(count-1);p->lease_start=start;p->lease_count=count;
         p->lease=true;p->ram_direct_lease=true;out=x;
@@ -799,7 +833,7 @@ bool llama_dsv41_carry_store::read_final_tile(uint32_t start, uint32_t count, ti
         require(!p->options.direct_ram_tiles||count<=page_tokens,"Direct RAM mode refuses head vectors larger than one page before allocation");
         require(start>=p->options.yoco_first,"Head requested skipped YOCO rows");
         p->range(start, count);p->direct_rows=p->options.resident_ram&&count>page_tokens;p->buffer_offset=p->page_offset(start);
-        if(!p->direct_rows)p->io(false,p->buffer_offset,size_t((start%page_tokens+count+page_tokens-1)/page_tokens)*page_bytes);
+        if(!p->direct_rows)p->io(false,p->buffer_offset,size_t((start%page_tokens+count+page_tokens-1)/page_tokens)*p->page_bytes);
         p->unpack(start,count,output);p->direct_rows=false;
     }, error);
 }

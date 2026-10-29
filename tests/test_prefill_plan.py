@@ -11,6 +11,17 @@ SS = dict(CFG, producer_host_max_gib=12.0)
 
 
 class PrefillPlan(unittest.TestCase):
+    def test_compact_carry_record_shrinks_the_bank(self):
+        # OPUS22: 51216 B records in 1642496 B pages, against today's 92176 B / 2953216 B.
+        self.assertEqual(carry_bank_bytes(100000, True), 4096 + 3125 * 1642496)
+        legacy = prefill_plan(dict(SS, producer_host_max_gib=7.75), 100000)
+        compact = prefill_plan(dict(SS, producer_host_max_gib=7.75, producer_carry_compact_record=True), 100000)
+        self.assertFalse(legacy['single_sweep'])
+        self.assertTrue(compact['single_sweep'])
+        self.assertEqual(compact['carry_delta'], carry_bank_bytes(100000, True) - carry_bank_bytes(49152))
+        with self.assertRaises(ValueError):
+            prefill_plan(dict(SS, producer_carry_compact_record=1), 100000)
+
     def test_no_raise_without_cap_keeps_today(self):
         for n in (14859, 43327, 49152, 103319):
             p = prefill_plan(CFG, n)
