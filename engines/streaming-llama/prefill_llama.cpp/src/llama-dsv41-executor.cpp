@@ -60,6 +60,11 @@
 #include <type_traits>
 
 namespace {
+bool witnessed_cuda_dispatch() {
+    const char *graphs=std::getenv("LLAMA_DSV41_CUDA_GRAPHS");
+    const char *eager=std::getenv("GGML_CUDA_DISABLE_GRAPHS");
+    return (graphs&&std::string(graphs)=="1")||(eager&&std::string(eager)=="1");
+}
 using clock_type=std::chrono::steady_clock;
 double elapsed(clock_type::time_point start){return std::chrono::duration<double,std::milli>(clock_type::now()-start).count();}
 // LLAMADECODE_TILE_TIMING=1: one diagnostic line per tile (host phase walls plus GPU
@@ -691,7 +696,10 @@ llama_dsv41_tile_executor::llama_dsv41_tile_executor(ggml_backend_t backend,llam
     backend(backend),cache(cache),admitted_graph_bytes(admitted_graph_bytes),norm_eps(norm_eps),hc_eps(hc_eps),
     swiglu_limit(swiglu_limit),expert_scale(expert_scale),sinkhorn_iters(sinkhorn_iters),admitted_tile_tokens(admitted_tile_tokens),resident_bf16(resident_bf16),export_hidden_after_head(export_hidden_after_head),async_inputs(async_inputs),resident_ids(resident_ids),resident_metadata(resident_metadata),defer_hidden_readback(defer_hidden_readback),merge_attention_selected_rows(merge_attention_selected_rows),hc_projection_f16_gemm(hc_projection_f16_gemm),dense_mxfp4(dense_mxfp4),pair_ffn(pair_ffn),fixed(fixed){
 #ifdef GGML_USE_CUDA
-    require(!async_inputs||(direct&&ggml_backend_is_cuda(backend)&&std::getenv("GGML_CUDA_DISABLE_GRAPHS")&&std::string(std::getenv("GGML_CUDA_DISABLE_GRAPHS"))=="1"),"Async inputs require actual pinned CUDA and disabled capture");
+    // The input validator drains metadata copies before compute capture starts.
+    // Pinned leases remain live through the existing post-compute synchronization.
+    require(!async_inputs||(direct&&ggml_backend_is_cuda(backend)&&witnessed_cuda_dispatch()),
+            "Async inputs require actual pinned CUDA and an explicit witnessed dispatch policy");
 #else
     require(!async_inputs,"Async inputs require the CUDA backend");
 #endif
@@ -972,8 +980,7 @@ bool llama_dsv41_tile_executor::run(const request&in,const llama_dsv41_layer_gra
                     "Stored FP4 experiment requires the complete MXFP4 expert triplet");
             require(!expert.expert_mxfp4&&!expert.expert_f16_cublas&&!expert.sorted_expert_routing&&
                     !llama_dsv41_expert_profile::natural_half(expert),"Stored FP4 excludes alternate routed arithmetic");
-            require(std::getenv("GGML_CUDA_DISABLE_GRAPHS")&&std::string(std::getenv("GGML_CUDA_DISABLE_GRAPHS"))=="1",
-                    "Stored FP4 experiment requires uncaptured dispatch witnesses");
+            require(witnessed_cuda_dispatch(),"Stored FP4 requires eager witnesses or the capture/replay dispatch ledger");
         }
         expert.generic_weights=w.ffn.gate->type!=GGML_TYPE_Q4_K||w.ffn.up->type!=GGML_TYPE_Q4_K||w.ffn.down->type!=GGML_TYPE_Q4_K;
         if(w.attention.q_a->type!=GGML_TYPE_Q8_0||w.attention.q_b->type!=GGML_TYPE_Q8_0||w.attention.kv->type!=GGML_TYPE_Q8_0||
@@ -1506,6 +1513,13 @@ bool llama_dsv41_tile_executor::run(const request&in,const llama_dsv41_layer_gra
             backend_temporary,admitted_graph_bytes);
         if(tile_timing_enabled())tile_reserve_ms=elapsed(graph_reserve_started);
         const uint64_t actual=scratch-backend_temporary;
+#ifdef GGML_USE_CUDA
+        const char *streamed_graph_mode=std::getenv("LLAMA_DSV41_CUDA_GRAPHS");
+        if(streamed_graph_mode&&std::string(streamed_graph_mode)=="1") {
+            require(ggml_backend_cuda_graphs_reserve(backend,backend_temporary),
+                "Streamed CUDA capture requires a pre-mapped temporary pool within the admitted graph ceiling");
+        }
+#endif
         uint64_t rope_aliases=0,rope_alias_bytes=0,rope_tagged=0;
         if(rope_inplace){
             for(int i=0;i<ggml_graph_n_nodes(graph);++i){const auto*t=ggml_graph_node(graph,i);

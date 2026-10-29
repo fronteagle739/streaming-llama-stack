@@ -1,3 +1,4 @@
+#include "dispatch-counter.cuh"
 #include "dsv41-ops.cuh"
 #include "dsv41-ops-kernels.cuh"
 #include "ggml-dsv41-rope-inplace.h"
@@ -6,8 +7,8 @@
 #include "getrows.cuh"
 #include <atomic>
 
-static std::atomic<uint64_t> dsv41_rope_inplace_queued{0};
-static std::atomic<uint64_t> dsv41_candidate_window_queued{0};
+static ggml_cuda_dispatch_counter dsv41_rope_inplace_queued{0};
+static ggml_cuda_dispatch_counter dsv41_candidate_window_queued{0};
 extern "C" uint64_t ggml_backend_cuda_dsv41_candidate_window_queued(void){return dsv41_candidate_window_queued.load(std::memory_order_acquire);}
 extern "C" uint64_t ggml_backend_cuda_dsv41_rope_inplace_queued(void) {
     return dsv41_rope_inplace_queued.load(std::memory_order_acquire);

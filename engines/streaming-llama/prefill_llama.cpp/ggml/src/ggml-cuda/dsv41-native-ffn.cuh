@@ -1,3 +1,4 @@
+#include "dispatch-counter.cuh"
 // SPDX-License-Identifier: MIT
 #pragma once
 #include "ggml-dsv41-native-ffn.h"
@@ -11,7 +12,7 @@
 #endif
 #include <windows.h>
 #endif
-static std::atomic<uint64_t> dsv41_native_ffn_calls{0};
+static ggml_cuda_dispatch_counter dsv41_native_ffn_calls{0};
 extern "C" uint64_t ggml_backend_cuda_dsv41_native_ffn_queued(){return dsv41_native_ffn_calls.load(std::memory_order_acquire);}
 static slstack_fi_native_ffn_fn dsv41_native_ffn_bridge(){
     static auto function=[](){

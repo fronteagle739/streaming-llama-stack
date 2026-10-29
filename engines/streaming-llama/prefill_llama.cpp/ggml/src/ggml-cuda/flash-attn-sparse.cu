@@ -1,3 +1,4 @@
+#include "dispatch-counter.cuh"
 // Sparse flash-attention over full K/V caches plus per-query top-k indices.
 // v4/v5: custom scalar WMMA kernels (scalar gather, no tensor cores)
 // v6:    patched dense MMA kernel with per-row indices gather (tensor cores preserved)
@@ -1238,7 +1239,7 @@ void ggml_cuda_op_flash_attn_ext_sparse_v6(
 
 // Isolated native same-input replay only. The production graph never calls it.
 // Reuse GLM v5 WMMA QK plus F32 online P/V; canonical KV remains F32.
-static std::atomic<uint64_t> dsv41_sparse_replay_queued{0};
+static ggml_cuda_dispatch_counter dsv41_sparse_replay_queued{0};
 extern "C" uint64_t ggml_dsv41_cuda_sparse_f32_replay_queued() { return dsv41_sparse_replay_queued.load(); }
 extern "C" bool ggml_dsv41_cuda_sparse_f32_replay(const float * q, const float * kv,
         const int32_t * ids, const float * mask, const float * sinks, float * out,

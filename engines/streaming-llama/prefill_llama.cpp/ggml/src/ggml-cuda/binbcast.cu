@@ -1,3 +1,4 @@
+#include "dispatch-counter.cuh"
 #include "binbcast.cuh"
 #include "convert.cuh"
 #include "ggml-dsv41-mul-f16-store.h"
@@ -25,7 +26,7 @@ static __device__ __forceinline__ float op_mul(const float a, const float b) {
 static __device__ __forceinline__ float op_mul_f16_store(const float a,const float b){
     return ggml_cuda_cast<float>(ggml_cuda_cast<half>(a*b));
 }
-static std::atomic<uint64_t>dsv41_mul_f16_store_queued{0};
+static ggml_cuda_dispatch_counter dsv41_mul_f16_store_queued{0};
 extern "C" uint64_t ggml_backend_cuda_dsv41_mul_f16_store_queued(void){
     return dsv41_mul_f16_store_queued.load(std::memory_order_acquire);
 }

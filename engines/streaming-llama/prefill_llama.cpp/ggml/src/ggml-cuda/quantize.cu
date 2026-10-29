@@ -1,3 +1,4 @@
+#include "dispatch-counter.cuh"
 #include "quantize.cuh"
 #include "convert.cuh"
 #include "ggml-dsv41-native-fp4.h"
@@ -385,7 +386,7 @@ void quantize_mmq_mxfp4_cuda(const float *                    x,
     quantize_mmq_mxfp4<false><<<num_blocks, block_size, 0, stream>>>(x, ids, vy, ne00, s01, s02, s03, ne0, ne1, ne2);
 }
 
-static std::atomic<uint64_t> dsv41_mxfp4_weight_packs{0};
+static ggml_cuda_dispatch_counter dsv41_mxfp4_weight_packs{0};
 extern "C" uint64_t ggml_backend_cuda_dsv41_mxfp4_weight_packs_queued(void){return dsv41_mxfp4_weight_packs.load(std::memory_order_acquire);}
 extern "C" int ggml_backend_cuda_dsv41_pack_weights_mxfp4(
         const ggml_tensor *source,ggml_tensor *destination,void *scratch,size_t scratch_bytes,void *stream_ptr){

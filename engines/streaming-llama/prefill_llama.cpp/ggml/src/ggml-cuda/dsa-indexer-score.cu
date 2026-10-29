@@ -1,3 +1,4 @@
+#include "dispatch-counter.cuh"
 // DSA fused indexer-scoring kernel — replaces the HEAD_CHUNK loop in
 // src/models/deepseek2.cpp:504-558 (~50 ggml ops × 78 layers × 22 ubatches
 // at 40k = tens of thousands of kernel launches → 281 s of GPU time on
@@ -821,7 +822,7 @@ static __global__ void dsv41_index_apply_mask_kernel(float*out,const int32_t*vis
         if(row>=visible[token]||(mask&&mask[uint64_t(token)*((rows+7)/8)+row/8]!=0.f))out[i]=-CUDART_INF_F;
     }
 }
-static std::atomic<uint64_t> dsv41_index_cublas_queued{0};
+static ggml_cuda_dispatch_counter dsv41_index_cublas_queued{0};
 extern "C" uint64_t ggml_backend_cuda_dsv41_index_cublas_queued(void){return dsv41_index_cublas_queued.load(std::memory_order_acquire);}
 void ggml_cuda_op_dsv41_index_score_cublas(ggml_backend_cuda_context&ctx,ggml_tensor*dst){
     GGML_ASSERT(ggml_dsv41_index_cublas_requested(dst)&&ggml_dsv41_index_cublas_shape(dst));
@@ -863,7 +864,7 @@ void ggml_cuda_op_dsv41_index_score_cublas(ggml_backend_cuda_context&ctx,ggml_te
         CUDA_CHECK(cudaGetLastError());dsv41_index_cublas_queued.fetch_add(1,std::memory_order_release);return;
     }
     if(ggml_dsv41_index_bf16_requested(dst)){
-        if(dsv41_index_fp4(ctx,dst)){dsv41_index_cublas_queued.fetch_add(1,std::memory_order_release);return;}
+        auto bf16_fallback=[&](cudaStream_t stream){
         // Host-only adapter: reuse ggml's BF16 conversion, cuBLAS GEMM and
         // GLM's existing ordered accumulation/mask kernels. No new GPU kernel.
         constexpr int D=128,H=32,q_slab=256,Hc=DSA_INDEXER_GEMM_HEAD_CHUNK;
@@ -917,7 +918,10 @@ void ggml_cuda_op_dsv41_index_score_cublas(ggml_backend_cuda_context&ctx,ggml_te
         const auto blocks=unsigned(std::min<uint64_t>(65535,(uint64_t(rows)*tokens+255)/256));
         dsv41_index_apply_mask_kernel<<<blocks,256,0,stream>>>((float*)dst->data,(const int32_t*)visible->data,
             mask?(const float*)mask->data:nullptr,rows,tokens);
-        CUDA_CHECK(cudaGetLastError());dsv41_index_cublas_queued.fetch_add(1,std::memory_order_release);return;
+        CUDA_CHECK(cudaGetLastError());
+        };
+        if(!dsv41_index_fp4(ctx,dst,bf16_fallback))bf16_fallback(stream);
+        dsv41_index_cublas_queued.fetch_add(1,std::memory_order_release);return;
     }
     ggml_cuda_pool_alloc<uint32_t> flag(ctx.pool(),1);
     CUDA_CHECK(cudaMemsetAsync(flag.get(),0,4,stream));

@@ -1,3 +1,4 @@
+#include "dispatch-counter.cuh"
 #include "out-prod.cuh"
 
 #include <cstdint>
@@ -5,7 +6,7 @@
 #include "ggml-dsv41-pv-view-f32.h"
 #include "ggml-dsv41-split-f32.h"
 #include "dsv41-split-f32.cuh"
-static std::atomic<uint64_t> dsv41_pv_view_queued{0}, dsv41_pv_strided_queued{0};
+static ggml_cuda_dispatch_counter dsv41_pv_view_queued{0}, dsv41_pv_strided_queued{0};
 extern "C" uint64_t ggml_backend_cuda_dsv41_pv_strided_queued(void){return dsv41_pv_strided_queued.load(std::memory_order_acquire);}
 extern "C" uint64_t ggml_backend_cuda_dsv41_pv_view_queued(void){return dsv41_pv_view_queued.load(std::memory_order_acquire);}
 

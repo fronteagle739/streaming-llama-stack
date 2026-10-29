@@ -1,3 +1,4 @@
+#include "dispatch-counter.cuh"
 // SPDX-License-Identifier: MIT
 #pragma once
 #include "ggml-dsv41-dense-fp8.h"
@@ -8,7 +9,7 @@
 #endif
 #include <windows.h>
 #endif
-static std::atomic<uint64_t> dense_fp8_calls{0};
+static ggml_cuda_dispatch_counter dense_fp8_calls{0};
 extern "C" uint64_t ggml_backend_cuda_dsv41_dense_fp8_queued(){return dense_fp8_calls.load(std::memory_order_acquire);}
 static slstack_dense_fp8_fn dsv41_dense_fp8_bridge(){
     static auto call=[](){

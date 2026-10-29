@@ -7,6 +7,7 @@
 #include "ggml-dsv41-expert-cublas.h"
 #include "ggml-cuda/dsv41-expert-cublas.cuh"
 #include "ggml-dsv41-hc-expand.h"
+#include "ggml-dsv41-hc-collapse.h"
 #include "ggml-cuda/dsv41-ds4-hc-expand.cuh"
 #include "ggml-cuda/dsv41-hc-sinkhorn.cuh"
 #include "ggml-cuda/ds4split-native-half-witness.h"
@@ -17,6 +18,12 @@
 #include <chrono>
 
 #include "ggml-cuda/common.cuh"
+thread_local ggml_cuda_dispatch_deltas *ggml_cuda_capturing_dispatch=nullptr;
+
+static bool ggml_cuda_streamed_graphs() {
+    const char *mode=std::getenv("LLAMA_DSV41_CUDA_GRAPHS");
+    return mode && mode[0]=='1' && !mode[1];
+}
 #include "ggml-cuda/acc.cuh"
 #include "ggml-cuda/add-id.cuh"
 #include "ggml-cuda/arange.cuh"
@@ -1216,6 +1223,7 @@ struct ggml_cuda_pool_vmm : public ggml_cuda_pool {
         size_t avail = pool_size - pool_used;
 
         if (size > avail) {
+            GGML_ASSERT(!ggml_cuda_capturing_dispatch && "CUDA graph temporary admission exceeded; reserve the VMM pool before capture");
             ds4_switch::require_resident("vmm_pool_grow");
             // round up to the next multiple of the granularity
             size_t reserve_size = size - avail;
@@ -3197,11 +3205,11 @@ static bool ggml_cuda_should_fuse_mul_mat_vec_q(const ggml_tensor * tensor) {
 
 #include "ggml-dsv41-split-f32.h"
 #include "dsv41-split-f32.cuh"
-static std::atomic<uint64_t> dsv41_split_f32_queued{0};
+static ggml_cuda_dispatch_counter dsv41_split_f32_queued{0};
 void ggml_cuda_dsv41_split_f32_record_queued(){dsv41_split_f32_queued.fetch_add(1,std::memory_order_release);}
 extern "C" uint64_t ggml_backend_cuda_dsv41_split_f32_queued(void){return dsv41_split_f32_queued.load(std::memory_order_acquire);}
-static std::atomic<uint64_t> dsv41_dense_half_queued{0};
-static std::atomic<uint64_t> dsv41_hc_half_queued{0};
+static ggml_cuda_dispatch_counter dsv41_dense_half_queued{0};
+static ggml_cuda_dispatch_counter dsv41_hc_half_queued{0};
 extern "C" uint64_t ggml_backend_cuda_dsv41_hc_half_queued(void){return dsv41_hc_half_queued.load(std::memory_order_acquire);}
 extern "C" uint64_t ggml_backend_cuda_dsv41_dense_half_queued(void){return dsv41_dense_half_queued.load(std::memory_order_acquire);}
 static void ggml_cuda_mul_mat(ggml_backend_cuda_context & ctx, const ggml_tensor * src0, const ggml_tensor * src1, ggml_tensor * dst) {
@@ -3998,6 +4006,9 @@ static bool ggml_cuda_compute_forward(ggml_backend_cuda_context & ctx, struct gg
             ggml_cuda_op_dsv41_native_ffn(ctx,dst);
             break;
         case GGML_OP_MAP_CUSTOM3:
+            if(ggml_dsv41_hc_collapse_requested(dst)) {
+                ggml_cuda_op_dsv41_hc_collapse(ctx,dst);break;
+            }
             if(ggml_dsv41_hc_sinkhorn_requested(dst)){
                 ggml_cuda_op_dsv41_hc_sinkhorn(ctx,dst);break;
             }
@@ -4251,7 +4262,7 @@ static bool ggml_cuda_graph_check_compability(ggml_cgraph * cgraph) {
 #endif
         }
 
-        if (node->op == GGML_OP_ADD &&
+        if (!ggml_cuda_streamed_graphs() && node->op == GGML_OP_ADD &&
             node->src[1] && node->src[1]->ne[1] > 1 &&
             (node->src[0] ? node->src[0]->name != gemma3n_per_layer_proj_src0_name : true) &&
             (node->src[1] ? node->src[1]->name != gemma3n_per_layer_proj_src1_name : true) &&
@@ -4348,6 +4359,11 @@ static bool ggml_cuda_graph_node_properties_match(ggml_tensor * node, ggml_cuda_
 }
 
 static const void * ggml_cuda_graph_get_key(ggml_cgraph * cgraph) {
+    // Streamed ggml metadata is ephemeral. Bound the backend to one executable
+    // instead of retaining one CUDA graph per dead tensor address. Full node,
+    // input pointer, stride, shape and op-param snapshots still force updates.
+    static const char streamed_key=0;
+    if(ggml_cuda_streamed_graphs())return &streamed_key;
     return cgraph->nodes[0];
 }
 
@@ -4415,6 +4431,17 @@ static bool ggml_cuda_graph_update_required(ggml_backend_cuda_context * cuda_ctx
 
 static void ggml_cuda_graph_update_executable(ggml_backend_cuda_context * cuda_ctx, const void * graph_key) {
     ggml_cuda_graph * graph = cuda_ctx->cuda_graph(graph_key);
+    size_t node_count=0;
+    CUDA_CHECK(cudaGraphGetNodes(graph->graph,nullptr,&node_count));
+    if(graph->num_nodes && graph->num_nodes!=node_count) {
+        // A changed node count proves the topology cannot be updated. Create
+        // the new executable directly rather than issuing an invalid update.
+        CUDA_CHECK(cudaGraphExecDestroy(graph->instance));graph->instance=nullptr;
+        CUDA_CHECK(cudaGraphInstantiate(&graph->instance,graph->graph,nullptr,nullptr,0));
+        graph->num_nodes=node_count;
+        return;
+    }
+    graph->num_nodes=node_count;
 
 #if CUDART_VERSION >= 12000
     cudaGraphExecUpdateResultInfo result_info;
@@ -6203,6 +6230,15 @@ static void ggml_cuda_graph_evaluate_and_capture(ggml_backend_cuda_context * cud
         }
         // Launch graph
         CUDA_CHECK(cudaGraphLaunch(graph->instance, cuda_ctx->stream()));
+        if(!cuda_graph_update_required)for(const auto &delta:graph->dispatch_deltas)
+            delta.first->fetch_add(delta.second,std::memory_order_release);
+        if(ggml_cuda_streamed_graphs()) {
+            static std::atomic<uint64_t> captures{0},replays{0};
+            const auto c=captures.fetch_add(cuda_graph_update_required?1:0)+(cuda_graph_update_required?1:0);
+            const auto r=replays.fetch_add(cuda_graph_update_required?0:1)+(cuda_graph_update_required?0:1);
+            std::fprintf(stderr,"OTHER22_CUDA_GRAPH launch=1 captured=%u captures=%llu replays=%llu ledger_entries=%zu bounded_executables=1\n",
+                unsigned(cuda_graph_update_required),(unsigned long long)c,(unsigned long long)r,graph->dispatch_deltas.size());
+        }
     }
 #else
     GGML_UNUSED(graph_key);
@@ -6255,7 +6291,10 @@ static enum ggml_status ggml_backend_cuda_graph_compute(ggml_backend_t backend, 
     // Runtime kill-switches force the node-by-node eval path.
     // GGML_CUDA_DISABLE_GRAPHS is retained for diagnostics; normal callers should
     // use ggml_backend_cuda_graphs_disable_push/pop for scoped runtime control.
-    static const bool cuda_graphs_disabled = (std::getenv("GGML_CUDA_DISABLE_GRAPHS") != nullptr);
+    static const bool cuda_graphs_disabled = [] {
+        const char *value=std::getenv("GGML_CUDA_DISABLE_GRAPHS");
+        return value && std::strcmp(value,"0")!=0;
+    }();
     if (cuda_graphs_disabled || cuda_graphs_forced_disabled) {
         use_cuda_graph = false;
     }
@@ -6263,6 +6302,8 @@ static enum ggml_status ggml_backend_cuda_graph_compute(ggml_backend_t backend, 
 
     if (use_cuda_graph && cuda_graph_update_required) {
         // Start CUDA graph capture
+        // cuBLAS handle initialization may synchronize and must precede capture.
+        (void)cuda_ctx->cublas_handle();
         {
             std::lock_guard<std::mutex> lock(ggml_cuda_lock);
             ggml_cuda_lock_counter.fetch_add(1, std::memory_order_relaxed);
@@ -6271,7 +6312,23 @@ static enum ggml_status ggml_backend_cuda_graph_compute(ggml_backend_t backend, 
         CUDA_CHECK(cudaStreamBeginCapture(cuda_ctx->stream(), cudaStreamCaptureModeRelaxed));
     }
 
+#ifdef USE_CUDA_GRAPH
+    struct dispatch_capture_scope {
+        ggml_cuda_dispatch_deltas *previous=ggml_cuda_capturing_dispatch;
+        explicit dispatch_capture_scope(ggml_cuda_dispatch_deltas *deltas) {
+            if(deltas)deltas->clear();ggml_cuda_capturing_dispatch=deltas;
+        }
+        ~dispatch_capture_scope(){ggml_cuda_capturing_dispatch=previous;}
+    } dispatch_scope(use_cuda_graph && cuda_graph_update_required?&cuda_ctx->cuda_graph(graph_key)->dispatch_deltas:nullptr);
+#else
+    GGML_ASSERT(!ggml_cuda_streamed_graphs() && "Streamed graph mode requires GGML_CUDA_USE_GRAPHS");
+#endif
     ggml_cuda_graph_evaluate_and_capture(cuda_ctx, cgraph, use_cuda_graph, cuda_graph_update_required, graph_key);
+#ifdef USE_CUDA_GRAPH
+    if(ggml_cuda_streamed_graphs() && !cuda_graphs_forced_disabled && !use_cuda_graph) {
+        GGML_ABORT("Explicit streamed CUDA graph request could not capture this graph; no eager fallback");
+    }
+#endif
     ggml_cuda_fusion_counts_maybe_dump();
 
     return GGML_STATUS_SUCCESS;
@@ -6696,6 +6753,23 @@ size_t ggml_backend_cuda_pool_clear(ggml_backend_t backend) {
 // Phase 302 (2026-05-04): cuda_graphs counter via Meyers-singleton atomic
 // in common.cuh. No class member changes, no concurrency races on the counter
 // itself (the map insertion is still racy but that was already so).
+bool ggml_backend_cuda_graphs_reserve(ggml_backend_t backend,size_t bytes) {
+#if defined(GGML_USE_VMM)
+    if(!ggml_backend_is_cuda(backend))return false;
+    auto *ctx=(ggml_backend_cuda_context*)backend->context;
+    const char *no_vmm=std::getenv("GGML_CUDA_NO_VMM");
+    if(!ggml_cuda_info().devices[ctx->device].vmm || (no_vmm&&no_vmm[0]!='0'&&no_vmm[0]))return false;
+    ggml_cuda_set_device(ctx->device);
+    if(bytes && ctx->pool().pool_size_bytes()<bytes) {
+        size_t actual=0;void *ptr=ctx->pool().alloc(bytes,&actual);ctx->pool().free(ptr,actual);
+        CUDA_CHECK(cudaGetLastError());
+    }
+    return ctx->pool().pool_size_bytes()>=bytes;
+#else
+    GGML_UNUSED(backend);GGML_UNUSED(bytes);return false;
+#endif
+}
+
 size_t ggml_backend_cuda_graphs_count(ggml_backend_t backend) {
     if (!ggml_backend_is_cuda(backend)) return 0;
     auto * cuda_ctx = static_cast<ggml_backend_cuda_context *>(backend->context);
@@ -7624,7 +7698,7 @@ static bool ggml_backend_cuda_device_supports_op(ggml_backend_dev_t dev, const g
         case GGML_OP_CUSTOM:
             return ggml_cuda_info().devices[dev_ctx->device].cc==1200&&ggml_dsv41_native_ffn_valid(op);
         case GGML_OP_MAP_CUSTOM3:
-            return ggml_dsv41_hc_expand_valid(op)||
+            return ggml_dsv41_hc_collapse_valid(op)||ggml_dsv41_hc_expand_valid(op)||
                 (ggml_dsv41_hc_sinkhorn_valid(op)&&ggml_cuda_info().devices[dev_ctx->device].cc==1200);
         case GGML_OP_DSV4_ACT_QAT:
             return op->src[0]->type == GGML_TYPE_F32 && ggml_is_contiguous(op->src[0]);

@@ -39,6 +39,8 @@ if any(bisect_left(starts,a)==len(starts) or starts[bisect_left(starts,a)]>b for
     raise ValueError('At least one native compute tile has no CUDA kernel coverage')
 groups={}
 def family(s):
+    if 'hc_collapse' in s:return 'HC collapse'
+    if 'dsv41_index_fp4' in s:return 'FP4 index score / certificate'
     if 'native_sparse_attn' in s or 'tilelang_' in s:return 'Attention'
     if any(v in s for v in ['moecute','gather(','mid_pack(','reduce(','mm_ids_helper','inverse','scale_rows']):return 'Expert incl packing'
     if 'gemm_bf16_' in s or 'dsa_accum_scores' in s:return 'BF16 GEMM / score epilogue'
@@ -74,6 +76,8 @@ result=dict(name=name,prompt_seconds=measurement['prompt_prefill_seconds'],
     layer_passes=len(layer_rows),fetched_bytes=fetched_bytes)
 if any('dropped' in text.lower() or 'lost event' in text.lower() for severity,text in result['diagnostic_warnings']):
     raise ValueError('Nsight reports incomplete event collection')
+result['qualified_for_clean_ranking']=not any(severity>=3 for severity,message in result['diagnostic_warnings'])
+result['trace_quality']='CLEAN_WITH_RETAINED_WARNINGS' if result['qualified_for_clean_ranking'] else 'DIAGNOSTIC_ONLY_METADATA_ERRORS'
 args.output.write_text(json.dumps(result,indent=2)+'\n')
 db.close()
 print(json.dumps({k:v for k,v in result.items() if k not in ('top_kernels','api_duration_sums')},indent=2))

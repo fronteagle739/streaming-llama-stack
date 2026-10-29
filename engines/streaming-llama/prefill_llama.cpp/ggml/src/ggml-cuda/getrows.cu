@@ -1,3 +1,4 @@
+#include "dispatch-counter.cuh"
 #include "getrows.cuh"
 #include "dequantize.cuh"
 #include "convert.cuh"
@@ -350,8 +351,8 @@ static void get_rows_cuda_float(
         s10, s11, s12/*, s13*/, mask, source_rows, extra, first_rows);
 }
 
-static std::atomic<uint64_t> dsv41_gather_half_queued{0};
-static std::atomic<uint64_t> dsv41_gather_half_split_queued{0};
+static ggml_cuda_dispatch_counter dsv41_gather_half_queued{0};
+static ggml_cuda_dispatch_counter dsv41_gather_half_split_queued{0};
 extern "C" uint64_t ggml_backend_cuda_dsv41_gather_half_split_queued(void) {
     return dsv41_gather_half_split_queued.load(std::memory_order_acquire);
 }

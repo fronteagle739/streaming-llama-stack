@@ -1,18 +1,19 @@
+#include "dispatch-counter.cuh"
 #include "ggml-dsv41-dense-bf16-store.h"
 #include "common.cuh"
 #include "mmq.cuh"
 #include "ggml-dsv41-native-fp4.h"
 #include <atomic>
-static std::atomic<uint64_t> native_mxfp4_routed_queued{0};
+static ggml_cuda_dispatch_counter native_mxfp4_routed_queued{0};
 extern "C" uint64_t ggml_backend_cuda_native_mxfp4_routed_queued(void){return native_mxfp4_routed_queued.load(std::memory_order_acquire);}
-static std::atomic<uint64_t> native_mxfp4_dense_queued{0};
+static ggml_cuda_dispatch_counter native_mxfp4_dense_queued{0};
 extern "C" uint64_t ggml_backend_cuda_native_mxfp4_dense_queued(void){return native_mxfp4_dense_queued.load(std::memory_order_acquire);}
 #include "quantize.cuh"
 #include "mmid.cuh"
 #include "dsv41-flashinfer.cuh"
 #include "dsv41-dense-fp8.cuh"
-static std::atomic<uint64_t> dsv41_flashinfer_queued{0};
-static std::atomic<uint64_t> runtime_fp4_repacks_queued{0};
+static ggml_cuda_dispatch_counter dsv41_flashinfer_queued{0};
+static ggml_cuda_dispatch_counter runtime_fp4_repacks_queued{0};
 extern "C" uint64_t ggml_backend_cuda_dsv41_flashinfer_queued(void){return dsv41_flashinfer_queued.load(std::memory_order_acquire);}
 extern "C" uint64_t ggml_backend_cuda_dsv41_runtime_fp4_repacks_queued(void){return runtime_fp4_repacks_queued.load(std::memory_order_acquire);}
 
@@ -81,7 +82,7 @@ static void ggml_cuda_mul_mat_q_switch_type(ggml_backend_cuda_context & ctx, con
     }
 }
 
-static std::atomic<uint64_t> dsv41_dense_bf16_store_queued{0};
+static ggml_cuda_dispatch_counter dsv41_dense_bf16_store_queued{0};
 extern "C" uint64_t ggml_backend_cuda_dsv41_dense_bf16_store_queued(void) {
     return dsv41_dense_bf16_store_queued.load(std::memory_order_acquire);
 }
