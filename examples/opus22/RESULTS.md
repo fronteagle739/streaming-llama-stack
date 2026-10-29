@@ -120,3 +120,35 @@ per-tier factory allowance.
    add DirectStorage contention while doing so.
 3. Kernel work outside the special passes does not shorten the prompt until
    items 1 and 2 are done.
+
+## 5. Why the stream runs at 14-17 GB/s (standalone DirectStorage bench)
+
+`examples/opus22/dsbench.cpp` reads 7.4 GB (one stage) from a file offset into a GPU buffer with one
+DirectStorage queue (capacity 8192, priority HIGH, 256 MiB factory staging, fixed request size, one
+fence), which is the producer's stage pattern without the producer. GPU leased, nothing else running.
+
+| File | Offset GB | 1 queue, 8 MiB, GB/s (repeat 0 / 1, two sessions) | 2 queues | 4 queues |
+|---|---:|---|---:|---:|
+| Q4 GGUF (2,207 NTFS extents) | 50 | 15.2/15.5, 15.2/15.5 | | |
+| Q4 GGUF | 120 | 21.6/22.4 | | |
+| Q4 GGUF | 150 / 250 / 350 | 10.3-12.7 / 14.6-15.4 | | |
+| Q4 GGUF | 420 | 24.1/23.6, 24.2/24.5 | | |
+| Q4 GGUF | 200 | | 8.7-12.3 | 11.5-11.7 |
+| FP4 proxy (93,776 NTFS extents) | 50-420 | 12.9-16.2 (second repeat 14.9-16.2) | 11.1-11.4 | 7.8-10.8 |
+
+- The producer's settings match the qualified path. A plain sequential DirectStorage read with the same pattern gets
+  the same 14-17 GB/s, so neither the request pattern nor the provider is the limiter. 2 MiB and 32 MiB
+  requests are slower than 8 MiB, and more queues are slower.
+- The rate depends on where the data is. The same file, request size and queue give 24 GB/s at one offset
+  and 15 GB/s at another, and each region repeats its own rate across sessions. NTFS fragmentation
+  does not explain it: the 420 GB region (24 GB/s) and the 250/350 GB regions (15 GB/s) each lie in a
+  single 16-37 GB extent. The FP4 file's 93,776 extents cost little: it reads like the slow Q4 regions.
+  The likely cause is the drives' internal placement from how the data was written. A fresh
+  sequential rewrite might restore the fast rate, but there is no room on the volume to test that.
+- The first 7.4 GB burst after an idle gap is 15-25% slower than an immediate repeat. That points at a
+  drive or link power-state wake-up between stage reads, which the stage pipeline incurs after every
+  wait for a free bank.
+- With no prefill job running, D: showed 0 MB/s read and 0.1 MB/s write from other processes
+  (5 two-second samples). Region rates repeat across sessions, so other-process contention does not
+  explain them. A per-process log during the bench runs was attempted but recorded nothing, so
+  contention during the runs themselves is not ruled out.
