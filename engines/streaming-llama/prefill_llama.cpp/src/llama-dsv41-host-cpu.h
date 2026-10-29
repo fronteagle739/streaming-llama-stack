@@ -1,7 +1,8 @@
 #pragma once
 
 // Diagnostic counter for the dispatch thread, not elapsed wall time. A delta
-// excludes GPU/fence waits but does not count the provider's separate workers.
+// excludes blocked/descheduled time, but includes active driver polling during
+// synchronization. It does not count the provider's separate workers.
 #if defined(_WIN32)
 #ifndef NOMINMAX
 #define NOMINMAX
