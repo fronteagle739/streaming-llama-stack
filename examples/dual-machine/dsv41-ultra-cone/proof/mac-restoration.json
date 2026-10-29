@@ -1,0 +1,16 @@
+{
+  "status": "RESTORED",
+  "pid": 48663,
+  "binary_sha256": "2256c6940ac98e49fa05af31d8265af62f1c4a690ed5e14287de3f0a9c3bad4b",
+  "command_exact": true,
+  "environment_exact": true,
+  "cwd_exact": true,
+  "model_endpoint_status": 200,
+  "host_budget_bytes": 429496729600,
+  "runtime_floor_bytes": 536870912,
+  "peak_observed_allocation": 327497940992,
+  "min_available": 210615009280,
+  "forced_kill": false,
+  "task_scratch_dependency": false,
+  "stdout_stderr": "/dev/null"
+}

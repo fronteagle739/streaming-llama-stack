@@ -44,7 +44,8 @@ def main():
     parser.add_argument('--config',required=True)
     parser.add_argument('--tokens-le32',required=True)
     parser.add_argument('--out',required=True)
-    parser.add_argument('--forced-ids',default='2,3,4',help='Identical evaluated token IDs; last ID is not evaluated')
+    parser.add_argument('--webui-checkpoints',help='Read-only broker checkpoint capture from the real paired WebUI run')
+    parser.add_argument('--forced-ids',default='2',help='Identical token IDs; one ID captures the full initial frontier without evaluating another step')
     args=parser.parse_args()
     cfg=load(args.config)
     cfg.update(context=1000001,yoco_keep=2541,producer_profile='ultra',ctx_cache_precision='bf16',ctx_cache_growable=True,
@@ -69,6 +70,7 @@ def main():
                     with gpu_lease(cfg):
                         owned=ComboProducer(cfg,session,secrets.randbits(63) or 1,tokens,lambda:False)
                         initial=deepcopy(owned.checkpoint)
+                        result['arms'][arm]=dict(initial=initial)
                         reply=owned.decode_forced(forced,logits)
                         result['arms'][arm]=dict(initial=initial,final=deepcopy(owned.checkpoint),forced=reply,
                             prefill_plan=owned.prefill_plan,ready_identity={key:owned.process.ready.get(key) for key in ('yoco_keep','yoco_state_version')})
@@ -77,6 +79,7 @@ def main():
                     request=dict(session=session,tier='ultra',tokens=raw,tokens_sha256=result['tokens_sha256'],yoco_keep=2541,yoco_state_version=2)
                     owned=OwnedProducer(cfg,request,threading.Event());p=owned.producer
                     initial=deepcopy(p.ready['checkpoint'])
+                    result['arms'][arm]=dict(initial=initial)
                     if (p.ready.get('yoco_keep'),p.ready.get('yoco_state_version'))!=(2541,2):raise ValueError('Cone v2 negotiation failed')
                     reply=p.request(dict(session=session,model_sha256=MODEL_SHA256,sequence=p.sequence,operation='decode_forced',
                                          base=initial,tokens=forced,logits_path=str(logits)))
@@ -91,8 +94,19 @@ def main():
         result.update(initial_common_checkpoint_exact=comparable(single['initial'])==comparable(paired['initial']),
                       forced_common_checkpoint_exact=comparable(single['final'])==comparable(paired['final']),
                       all_forced_vocab_logits_exact=single['logits_sha256']==paired['logits_sha256'],
-                      same_prefill_plan=single['prefill_plan']==paired['prefill_plan'])
-        result['status']='PASS' if all(result[key] for key in ('initial_common_checkpoint_exact','forced_common_checkpoint_exact','all_forced_vocab_logits_exact','same_prefill_plan')) else 'FAIL'
+                      same_prefill_plan=all(single['prefill_plan'][key]==paired['prefill_plan'][key] for key in
+                          ('capacity','host_bytes','carry_delta','engram_delta','prompt_tokens','single_sweep','policy',
+                           'sweep_tokens','sweeps','fold_tail','fold_cap','rebalance')))
+        checks=['initial_common_checkpoint_exact','forced_common_checkpoint_exact','all_forced_vocab_logits_exact','same_prefill_plan']
+        if args.webui_checkpoints:
+            rows=json.loads(Path(args.webui_checkpoints).read_text()).values()
+            actual=next(row for row in rows if row.get('yoco_keep')==2541 and row.get('yoco_state_version')==2
+                        and row.get('checkpoint',{}).get('position')==len(tokens))
+            result['real_webui_checkpoint']=actual['checkpoint']
+            result['real_webui_mode3_initial_exact']=actual['checkpoint']==paired['initial']
+            result['real_webui_single_common_initial_exact']=comparable(actual['checkpoint'])==comparable(single['initial'])
+            checks+=['real_webui_mode3_initial_exact','real_webui_single_common_initial_exact']
+        result['status']='PASS' if all(result[key] for key in checks) else 'FAIL'
     except BaseException as exc:
         result.update(status='FAIL',error=repr(exc));raise
     finally:

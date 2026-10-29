@@ -1,0 +1,72 @@
+{
+  "status": "PASS",
+  "scope": "actual stack WebUI exact-cone recall",
+  "prompt_sha256": "14c7eddf2c43518628a2a2c012aff8a1a9d4e0056fc74f0c5591c9d19707772a",
+  "deterministic_samplers": {
+    "temperature": 0,
+    "top_p": 1,
+    "top_k": 1,
+    "min_p": 0,
+    "quality_speed": 0.22,
+    "seed": 123456,
+    "max_tokens": 64
+  },
+  "turns": [
+    {
+      "label": "recall",
+      "answer": "AMBER OTTER 731",
+      "timings": {
+        "cache_n": 0,
+        "prompt_n": 105054,
+        "prompt_ms": 59004.765,
+        "prompt_per_token_ms": 0.561661,
+        "prompt_per_second": 1780.432479,
+        "predicted_n": 6,
+        "predicted_ms": 218.191,
+        "predicted_per_token_ms": 36.365167,
+        "predicted_per_second": 27.498843
+      },
+      "stats": "Context: 105060/1000001 (10.51%)\nOutput: 6/64 (9%)\n27.5 tokens/sec",
+      "content_events": 6,
+      "stream_span_ms": 155.5
+    },
+    {
+      "label": "followup",
+      "answer": "AMBER OTTER 731",
+      "timings": {
+        "cache_n": 105060,
+        "prompt_n": 20,
+        "prompt_ms": 610.356,
+        "prompt_per_token_ms": 30.5178,
+        "prompt_per_second": 32.767762,
+        "predicted_n": 6,
+        "predicted_ms": 187.94,
+        "predicted_per_token_ms": 31.323333,
+        "predicted_per_second": 31.925082
+      },
+      "stats": "Context: 105086/1000001 (10.51%)\nOutput: 6/64 (9%)\n31.9 tokens/sec",
+      "content_events": 6,
+      "stream_span_ms": 136
+    },
+    {
+      "label": "number",
+      "answer": "731",
+      "timings": {
+        "cache_n": 105086,
+        "prompt_n": 19,
+        "prompt_ms": 582.028,
+        "prompt_per_token_ms": 30.633053,
+        "prompt_per_second": 32.644478,
+        "predicted_n": 1,
+        "predicted_ms": 34.788,
+        "predicted_per_token_ms": 34.788,
+        "predicted_per_second": 28.745544
+      },
+      "stats": "Context: 105106/1000001 (10.51%)\nOutput: 1/64 (2%)\n28.7 tokens/sec",
+      "content_events": 1,
+      "stream_span_ms": 0
+    }
+  ],
+  "exact_reference_answers": null,
+  "errors": []
+}
