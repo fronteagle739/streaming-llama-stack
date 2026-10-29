@@ -49,6 +49,19 @@ consumer, the F32->F16 cast, run as one CUDA kernel, and a layer result that is
 already materialized is no longer copied by `keep()`. 100K: **26.307 s**
 prompt-only (3,801 tok/s), TTFT 29.406 s, at 16.9 GB/s storage; bit-identical.
 
+Round 7 (OPUS22, all default and exact, logits bit-identical at 8K and 100K):
+- the tail RoPE of q and of the attention heads applies the preceding BF16
+  rounding itself (`GGML_DSV41_ROPE_ROUND_INPUT`), one pass instead of QAT then
+  RoPE: sweep GPU -0.4 s;
+- Engram rows are uploaded as the original 264-byte rows and decoded on the GPU
+  (integer-exact; invalid rows decode to NaN/Inf and fail the tile finite
+  validator); `LLAMA_DSV41_ENGRAM_GPU_DECODE=0` keeps the host decode.
+  Special-layer host time 1.46 -> 0.91 s;
+- the FP4 MMA indexer keeps each token's query fragments in registers across a
+  2048-key chunk and skips key groups past the visible prefix: index scoring
+  1.20 -> 0.41 s.
+100K: **25.392 s** prompt-only (3,938 tok/s), TTFT 29.031 s, at 16.4 GB/s storage.
+
 In the new default the 21 sweep layers are compute-bound (21 s wall against
 10 s of weight reads) and the 19 tail layers are storage-bound (8 s). Details:
 `examples/opus22/RESULTS.md` section 8.
