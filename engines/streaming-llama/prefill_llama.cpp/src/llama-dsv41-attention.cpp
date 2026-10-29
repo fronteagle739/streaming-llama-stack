@@ -26,8 +26,8 @@ llama_dsv41_attention_graph::projected llama_dsv41_attention_graph::project(
     GGML_ASSERT(heads>0 && heads<=64 && count>0 && count<=4096);
     auto * qr=ops.norm(mm(w.q_a,input,true),w.q_norm);
     // V4.1 has no V4 post-q_b RMS norm and no Hadamard on either stream.
-    auto * q=ggml_reshape_3d(ctx,mm(w.q_b,qr,true),512,heads,count);
-    q=ops.rope(q,positions,frequencies);
+    auto * q=ggml_reshape_3d(ctx,mm(w.q_b,qr,false),512,heads,count);
+    q=ops.rope_bf16_input(q,positions,frequencies); // == rope(bf16(q))
     dsv41_boundary::stage(q,"q_after_rope_f32");
     // Identical production operations; capture observes existing boundaries.
     auto * kv_projection=mm(w.kv,input,false);
@@ -105,7 +105,7 @@ ggml_tensor * llama_dsv41_attention_graph::finish(
     GGML_ASSERT(groups>0 && heads->ne[1]%groups==0 && w.out_a->ne[1]%groups==0);
     const int64_t rank=w.out_a->ne[1]/groups;
     auto * out_a=ggml_reshape_3d(ctx,w.out_a,w.out_a->ne[0],rank,groups);
-    auto * rotated=ops.rope(ops.bf16(heads),positions,frequencies,true);
+    auto * rotated=ops.rope_bf16_input(heads,positions,frequencies,true); // == rope(bf16(heads))
     auto * grouped=ggml_reshape_3d(ctx,rotated,w.out_a->ne[0],groups,count);
     grouped=ggml_permute(ctx,grouped,0,2,1,3);
     auto * low=mm(out_a,grouped,true); // native out_a has its own BF16 store

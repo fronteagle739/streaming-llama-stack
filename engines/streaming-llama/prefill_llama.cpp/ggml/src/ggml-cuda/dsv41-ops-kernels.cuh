@@ -62,15 +62,22 @@ static __global__ void dsv41_pool2_kernel(
 
 static __global__ void dsv41_rope_kernel(
         float * out, const float * input, const int32_t * positions,
-        const float * frequencies, int64_t width, int64_t heads, int64_t rows, bool inverse) {
+        const float * frequencies, int64_t width, int64_t heads, int64_t rows, bool inverse, bool round_input) {
     const int64_t row = blockIdx.x;
     if (row >= rows) return;
     const int lane = threadIdx.x;
-    if (out != input)
+    // round_input folds the preceding exact BF16 round trip into this pass:
+    // every element is read once, rounded with the same ggml_dsv41_bf16 as
+    // the QAT_BF16 operator, and only then copied or rotated.
+    if (round_input)
+        for (int64_t i = lane; i < width - 64; i += 32) out[row * width + i] = ggml_dsv41_bf16(input[row * width + i]);
+    else if (out != input)
         for (int64_t i = lane; i < width - 64; i += 32) out[row * width + i] = input[row * width + i];
     const int64_t offset = row * width + width - 64 + 2 * lane;
     const float theta = ggml_dsv41_rope_product(float(positions[row / heads]), frequencies[lane]);
-    const auto result = ggml_dsv41_rope_pair(input[offset], input[offset + 1], theta, inverse);
+    const float re = round_input ? ggml_dsv41_bf16(input[offset]) : input[offset];
+    const float im = round_input ? ggml_dsv41_bf16(input[offset + 1]) : input[offset + 1];
+    const auto result = ggml_dsv41_rope_pair(re, im, theta, inverse);
     out[offset] = result.re; out[offset + 1] = result.im;
 }
 

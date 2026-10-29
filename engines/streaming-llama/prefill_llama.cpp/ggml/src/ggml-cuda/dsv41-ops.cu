@@ -41,7 +41,8 @@ void ggml_cuda_op_dsv41_rope(ggml_backend_cuda_context & ctx, ggml_tensor * dst)
     dsv41_rope_kernel<<<unsigned(rows), 32, 0, ctx.stream()>>>(
         (float *) dst->data, (const float *) dst->src[0]->data,
         (const int32_t *) dst->src[1]->data, (const float *) dst->src[2]->data,
-        dst->ne[0], dst->ne[1], rows, ggml_get_op_params_i32(dst, 0) != 0);
+        dst->ne[0], dst->ne[1], rows, ggml_get_op_params_i32(dst, 0) != 0,
+        ggml_get_op_params_i32(dst, 1) == GGML_DSV41_ROPE_ROUND_INPUT);
     CUDA_CHECK(cudaGetLastError());
     if (inplace) dsv41_rope_inplace_queued.fetch_add(1, std::memory_order_release);
 }
