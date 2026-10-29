@@ -1,3 +1,4 @@
+#include "llama-dsv41-profile-stage.h"
 #include "llama-dsv41-ffn.h"
 #include "boundary-capture.h"
 #include "ggml-ds4-native-half.h"
@@ -12,6 +13,7 @@ ggml_tensor * llama_dsv41_ffn_graph::mm(ggml_tensor * w,ggml_tensor * input,bool
     auto * out=ggml_mul_mat(ctx,w,input);ggml_mul_mat_set_prec(out,GGML_PREC_F32);return round?ops.bf16(out):out;
 }
 ggml_tensor * llama_dsv41_ffn_graph::swiglu(ggml_tensor * gate,ggml_tensor * up) const {
+    llama_dsv41_profile_stage profile_stage(ctx,"ffn_swiglu");
     // Native clamps the gate BEFORE SiLU, only above; up is clamped on both
     // sides. Clamping SiLU itself is a different operation for negative gates.
     gate=ggml_clamp(ctx,gate,-INFINITY,limit);up=ggml_clamp(ctx,up,-limit,limit);
@@ -28,6 +30,8 @@ llama_dsv41_ffn_graph::result llama_dsv41_ffn_graph::build_native_half(
 }
 llama_dsv41_ffn_graph::result llama_dsv41_ffn_graph::routed_impl(
         const weights & w,ggml_tensor * input,ggml_tensor * token_kinds,bool native_half,bool native_router_partitions) const {
+    llama_dsv41_profile_stage profile_stage(ctx,"routed_ffn");
+    llama_dsv41_profile_stage router_stage(ctx,"router");
     const int64_t count=input->ne[1],width=input->ne[0],experts=w.router->ne[1];
     constexpr int64_t used=6;
     GGML_ASSERT(input->type==GGML_TYPE_F32 && input->ne[2]==1 && input->ne[3]==1 && count>0 && count<=(native_half?4096:16384));
@@ -66,6 +70,7 @@ llama_dsv41_ffn_graph::result llama_dsv41_ffn_graph::routed_impl(
     weights=dsv41_boundary::replacement(ctx,weights,"route_weights");
     dsv41_boundary::stage(selected,"route_ids");
     dsv41_boundary::stage(weights,"route_weights");
+    router_stage.finish();
     auto * x=ggml_reshape_3d(ctx,input,width,1,count);
     ggml_tensor * product_ids=selected;
     if(w.expert_slots){
@@ -95,6 +100,7 @@ llama_dsv41_ffn_graph::result llama_dsv41_ffn_graph::routed_impl(
 }
 
 ggml_tensor *llama_dsv41_ffn_graph::build_shared(const weights &w,ggml_tensor *input) const {
+    llama_dsv41_profile_stage profile_stage(ctx,"shared_ffn");
     GGML_ASSERT(input->ne[1]>0&&input->ne[1]<=4096);
     auto * shared_gate=mm(w.shared_gate,input,true);
     auto * shared_up=mm(w.shared_up,input,true);
@@ -110,6 +116,7 @@ llama_dsv41_ffn_graph::result llama_dsv41_ffn_graph::build_routed_pair(
 
 llama_dsv41_ffn_graph::result llama_dsv41_ffn_graph::build_impl(
         const weights &w,ggml_tensor *input,ggml_tensor *kinds,bool native_half)const{
+    llama_dsv41_profile_stage profile_stage(ctx,"ffn_combine");
     GGML_ASSERT(input->ne[1]>0&&input->ne[1]<=4096);
     const auto routed=routed_impl(w,input,kinds,native_half);
     auto *shared=build_shared(w,input);

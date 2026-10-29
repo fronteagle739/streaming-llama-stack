@@ -14,6 +14,7 @@ from slstack.config import load
 from slstack.native_broker import OwnedProducer,vendor
 from slstack.ds4_render import Tokenizer,render
 from slstack.combo_contract import owner_layout
+from slstack.yoco import state_version
 vendor()
 from studio.dsv41_session_contract import MODEL_SHA256
 
@@ -25,13 +26,14 @@ def main():
     tokenizer=Tokenizer.from_gguf(cfg['model'])
     _,tokens,_=render(dict(messages=[dict(role='user',content='Transfer the original YOCO state. '*80)],reasoning_effort='none'),tokenizer)
     raw=struct.pack('<'+'I'*len(tokens),*tokens);session=secrets.token_hex(16)
-    request=dict(session=session,tier='ultra',tokens=raw,tokens_sha256=hashlib.sha256(raw).hexdigest(),yoco_keep=140,yoco_state_version=1)
-    result=dict(tokens=len(tokens),yoco_keep=140);owned=None
+    keep=cfg.get('yoco_keep',2541);version=state_version(keep)
+    request=dict(session=session,tier='ultra',tokens=raw,tokens_sha256=hashlib.sha256(raw).hexdigest(),yoco_keep=keep,yoco_state_version=version)
+    result=dict(tokens=len(tokens),yoco_keep=keep,yoco_state_version=version);owned=None
     try:
         owned=OwnedProducer(cfg,request,threading.Event());p=owned.producer
         def command(op,**values):return dict(session=session,model_sha256=MODEL_SHA256,sequence=p.sequence,operation=op,**values)
         cp=deepcopy(p.ready['checkpoint'])
-        assert p.ready['yoco_state_version']==1 and cp['mode']==3
+        assert p.ready['yoco_state_version']==version and cp['mode']==3
         def export(op,checkpoint):
             meta=p.begin_export(command(op,base=checkpoint));path=Path(cfg['runtime_root'])/(op+'-'+secrets.token_hex(4)+'.kv')
             with path.open('xb') as out:

@@ -1,0 +1,30 @@
+{
+  "upstream": "https://huggingface.co/deepseek-ai/DeepSeek-V4.1-Flash-1017/blob/1bae0e1088993b9b82de08f59de5be5a34e42170/inference/kernel.py",
+  "source_revision": "1bae0e1088993b9b82de08f59de5be5a34e42170",
+  "upstream_kernel_sha256": "1236c3507019ed176f5dba5e04bcea58867cf654818c6cf138ed4845398c2455",
+  "adapted_source_sha256": "57c849db308d8e10296e330ba68c6eee88d68fe541831208a52aee7fa02d5f2e",
+  "generated_cuda_sha256": "35948ec482d9e31ce2f5f2a9218d6739a91b629ff3a6584993f231e448657ac5",
+  "cubin_sha256": "de813133ad3d5bf7eaff3462ee25338b9c23c784d6fd5b9af6e05c9165703c8b",
+  "cubin_bytes": 163056,
+  "entry": "sparse_attn_kernel__kernel",
+  "architecture": "sm_120",
+  "threads": 256,
+  "dynamic_shared_bytes": 86016,
+  "arguments": [
+    "sink:f32*",
+    "kv:bf16*",
+    "output:bf16*",
+    "query:bf16*",
+    "ids:i32*",
+    "batch:i32",
+    "query_rows:i32",
+    "kv_rows:i32",
+    "selected_rows:i32"
+  ],
+  "tilelang": "0.1.15",
+  "torch": "2.11.0+cu128",
+  "python": "3.13",
+  "nvcc": "13.2",
+  "default_enabled": false,
+  "verdict": "reject: slower and numerically different"
+}

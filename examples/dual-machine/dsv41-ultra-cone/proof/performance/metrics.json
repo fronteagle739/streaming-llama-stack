@@ -1,0 +1,794 @@
+{
+  "default_prompt_tokens": 100000,
+  "comparison_scope": "Matched exact-cone comparisons, not uniformly uninstrumented. Materialize r1/r2 and geometry r1 use light native host timestamps without TILE_TIMING=1. Geometry r3/r4, v6 tail and largest-safe runs use TILE_TIMING=1 CUDA events and host-thread counters. Nsight capture is separate. Seconds unless stated; GB decimal.",
+  "experiments": {
+    "materialize-r1": {
+      "exact": {
+        "frontier": true,
+        "logits_sha": true,
+        "first": true,
+        "recall_tokens": true,
+        "recall_checkpoint": true
+      },
+      "prompt_tokens": 100000,
+      "arms": [
+        {
+          "arm": "control",
+          "status": "PASS",
+          "prompt_s": 40.539956100000005,
+          "ttft_s": 45.34399999998277,
+          "acquire_ms": 6.9912,
+          "routed_ms": 3003.1884,
+          "fetch_bytes": 402084247672,
+          "totals": {
+            "compute_ms": 31912.5644,
+            "prepare_ms": 4467.2477,
+            "upload_ms": 2293.5408,
+            "readback_ms": 331.2509
+          },
+          "producer_sha256": "8b98ac17278299931ff23c67e7bfef38d1dd9a1a8e385be6d6b2e7a701235a6b",
+          "source_revision_as_reported": "fc79ff19a94ae8d73d605f5ec31d4e19dd4cce9a",
+          "forced_vocab_vectors": 16,
+          "forced_logits_file_sha256": "b418be5713282d8849339c5ea3fbed67ab08e33ffd23019a50aa028230d4a7ae",
+          "frontier_logits_sha256": "82a500a0fcd587cfb0d0be3422f3893129b82567a3a6ddb97259587ec88ba8f1",
+          "frontier_owner_count": 48,
+          "frontier_owner_digest_sha256": "db933782a269491c1ae53d136f1e4289a79190765e286e7df2e44dc3ba7000f4",
+          "sweeps": [
+            49152,
+            50848
+          ],
+          "host_plan_bytes": 6889275392
+        },
+        {
+          "arm": "candidate",
+          "status": "PASS",
+          "prompt_s": 39.818652300000004,
+          "ttft_s": 43.40599999995902,
+          "acquire_ms": 25.4686,
+          "routed_ms": 3028.5227,
+          "fetch_bytes": 402084247672,
+          "totals": {
+            "compute_ms": 31945.6483,
+            "prepare_ms": 3361.3261,
+            "upload_ms": 2587.1578,
+            "readback_ms": 330.06500000000005
+          },
+          "producer_sha256": "8b98ac17278299931ff23c67e7bfef38d1dd9a1a8e385be6d6b2e7a701235a6b",
+          "source_revision_as_reported": "fc79ff19a94ae8d73d605f5ec31d4e19dd4cce9a",
+          "forced_vocab_vectors": 16,
+          "forced_logits_file_sha256": "b418be5713282d8849339c5ea3fbed67ab08e33ffd23019a50aa028230d4a7ae",
+          "frontier_logits_sha256": "82a500a0fcd587cfb0d0be3422f3893129b82567a3a6ddb97259587ec88ba8f1",
+          "frontier_owner_count": 48,
+          "frontier_owner_digest_sha256": "db933782a269491c1ae53d136f1e4289a79190765e286e7df2e44dc3ba7000f4",
+          "sweeps": [
+            49152,
+            50848
+          ],
+          "host_plan_bytes": 6889275392
+        }
+      ],
+      "measured_order": [
+        "control",
+        "candidate"
+      ]
+    },
+    "materialize-r2": {
+      "exact": {
+        "frontier": true,
+        "logits_sha": true,
+        "first": true,
+        "recall_tokens": true,
+        "recall_checkpoint": true
+      },
+      "prompt_tokens": 100000,
+      "arms": [
+        {
+          "arm": "control",
+          "status": "PASS",
+          "prompt_s": 40.3516935,
+          "ttft_s": 43.85999999998603,
+          "acquire_ms": 10.992,
+          "routed_ms": 2963.0721,
+          "fetch_bytes": 402084247672,
+          "totals": {
+            "compute_ms": 31891.240299999998,
+            "prepare_ms": 4378.257799999999,
+            "upload_ms": 2220.4633000000003,
+            "readback_ms": 327.55899999999997
+          },
+          "producer_sha256": "8b98ac17278299931ff23c67e7bfef38d1dd9a1a8e385be6d6b2e7a701235a6b",
+          "source_revision_as_reported": "fc79ff19a94ae8d73d605f5ec31d4e19dd4cce9a",
+          "forced_vocab_vectors": 16,
+          "forced_logits_file_sha256": "b418be5713282d8849339c5ea3fbed67ab08e33ffd23019a50aa028230d4a7ae",
+          "frontier_logits_sha256": "82a500a0fcd587cfb0d0be3422f3893129b82567a3a6ddb97259587ec88ba8f1",
+          "frontier_owner_count": 48,
+          "frontier_owner_digest_sha256": "db933782a269491c1ae53d136f1e4289a79190765e286e7df2e44dc3ba7000f4",
+          "sweeps": [
+            49152,
+            50848
+          ],
+          "host_plan_bytes": 6889275392
+        },
+        {
+          "arm": "candidate",
+          "status": "PASS",
+          "prompt_s": 39.7960359,
+          "ttft_s": 43.31300000002375,
+          "acquire_ms": 15.8388,
+          "routed_ms": 2959.4366,
+          "fetch_bytes": 402084247672,
+          "totals": {
+            "compute_ms": 31793.5576,
+            "prepare_ms": 3429.5119999999997,
+            "upload_ms": 2700.886,
+            "readback_ms": 327.2075
+          },
+          "producer_sha256": "8b98ac17278299931ff23c67e7bfef38d1dd9a1a8e385be6d6b2e7a701235a6b",
+          "source_revision_as_reported": "fc79ff19a94ae8d73d605f5ec31d4e19dd4cce9a",
+          "forced_vocab_vectors": 16,
+          "forced_logits_file_sha256": "b418be5713282d8849339c5ea3fbed67ab08e33ffd23019a50aa028230d4a7ae",
+          "frontier_logits_sha256": "82a500a0fcd587cfb0d0be3422f3893129b82567a3a6ddb97259587ec88ba8f1",
+          "frontier_owner_count": 48,
+          "frontier_owner_digest_sha256": "db933782a269491c1ae53d136f1e4289a79190765e286e7df2e44dc3ba7000f4",
+          "sweeps": [
+            49152,
+            50848
+          ],
+          "host_plan_bytes": 6889275392
+        }
+      ],
+      "measured_order": [
+        "candidate",
+        "control"
+      ]
+    },
+    "geometry-r1": {
+      "exact": {
+        "frontier": true,
+        "logits_sha": true,
+        "first": true,
+        "recall_tokens": true,
+        "recall_checkpoint": true
+      },
+      "prompt_tokens": 100000,
+      "arms": [
+        {
+          "arm": "control",
+          "status": "PASS",
+          "prompt_s": 40.0961578,
+          "ttft_s": 45.17099999997299,
+          "acquire_ms": 6.616300000000001,
+          "routed_ms": 3053.8283,
+          "fetch_bytes": 402084247672,
+          "totals": {
+            "compute_ms": 31925.5702,
+            "prepare_ms": 3511.0933999999997,
+            "upload_ms": 2590.9034,
+            "readback_ms": 330.4987
+          },
+          "producer_sha256": "1b8220a3f0d3ead40dfe4ce53882154177eb15e2c69bcf2a32a28d278e8dfce2",
+          "source_revision_as_reported": "fc79ff19a94ae8d73d605f5ec31d4e19dd4cce9a",
+          "forced_vocab_vectors": 16,
+          "forced_logits_file_sha256": "b418be5713282d8849339c5ea3fbed67ab08e33ffd23019a50aa028230d4a7ae",
+          "frontier_logits_sha256": "82a500a0fcd587cfb0d0be3422f3893129b82567a3a6ddb97259587ec88ba8f1",
+          "frontier_owner_count": 48,
+          "frontier_owner_digest_sha256": "db933782a269491c1ae53d136f1e4289a79190765e286e7df2e44dc3ba7000f4",
+          "sweeps": [
+            49152,
+            50848
+          ],
+          "host_plan_bytes": 6889275392
+        },
+        {
+          "arm": "candidate",
+          "status": "PASS",
+          "prompt_s": 40.1315316,
+          "ttft_s": 45.48499999998603,
+          "acquire_ms": 8.911,
+          "routed_ms": 2988.9223,
+          "fetch_bytes": 235701699008,
+          "totals": {
+            "compute_ms": 32187.105,
+            "prepare_ms": 3541.3544,
+            "upload_ms": 2537.2814,
+            "readback_ms": 324.3874
+          },
+          "producer_sha256": "1b8220a3f0d3ead40dfe4ce53882154177eb15e2c69bcf2a32a28d278e8dfce2",
+          "source_revision_as_reported": "fc79ff19a94ae8d73d605f5ec31d4e19dd4cce9a",
+          "forced_vocab_vectors": 16,
+          "forced_logits_file_sha256": "b418be5713282d8849339c5ea3fbed67ab08e33ffd23019a50aa028230d4a7ae",
+          "frontier_logits_sha256": "82a500a0fcd587cfb0d0be3422f3893129b82567a3a6ddb97259587ec88ba8f1",
+          "frontier_owner_count": 48,
+          "frontier_owner_digest_sha256": "db933782a269491c1ae53d136f1e4289a79190765e286e7df2e44dc3ba7000f4",
+          "sweeps": [
+            100000
+          ],
+          "host_plan_bytes": 12057706496
+        }
+      ],
+      "measured_order": [
+        "control",
+        "candidate"
+      ]
+    },
+    "geometry-r3": {
+      "exact": {
+        "frontier": true,
+        "logits_sha": true,
+        "first": true,
+        "recall_tokens": true,
+        "recall_checkpoint": true
+      },
+      "prompt_tokens": 100000,
+      "arms": [
+        {
+          "arm": "control",
+          "status": "PASS",
+          "prompt_s": 40.386438000000005,
+          "ttft_s": 44.06300000002375,
+          "acquire_ms": 119.29879999999999,
+          "routed_ms": 3188.6833,
+          "fetch_bytes": 402084247672,
+          "totals": {
+            "compute_ms": 32209.8499,
+            "prepare_ms": 3446.641,
+            "upload_ms": 2653.6031,
+            "readback_ms": 330.5864
+          },
+          "producer_sha256": "b1fdc370504783ee67651d2eac48f87bc2be9bddfa9a75ef7657aef33a446a5c",
+          "source_revision_as_reported": "fc79ff19a94ae8d73d605f5ec31d4e19dd4cce9a",
+          "forced_vocab_vectors": 16,
+          "forced_logits_file_sha256": "b418be5713282d8849339c5ea3fbed67ab08e33ffd23019a50aa028230d4a7ae",
+          "frontier_logits_sha256": "82a500a0fcd587cfb0d0be3422f3893129b82567a3a6ddb97259587ec88ba8f1",
+          "frontier_owner_count": 48,
+          "frontier_owner_digest_sha256": "db933782a269491c1ae53d136f1e4289a79190765e286e7df2e44dc3ba7000f4",
+          "sweeps": [
+            49152,
+            50848
+          ],
+          "host_plan_bytes": 6889275392
+        },
+        {
+          "arm": "candidate",
+          "status": "PASS",
+          "prompt_s": 41.3306503,
+          "ttft_s": 46.20300000003772,
+          "acquire_ms": 4.3102,
+          "routed_ms": 4209.5451,
+          "fetch_bytes": 235701699008,
+          "totals": {
+            "compute_ms": 33406.8783,
+            "prepare_ms": 3437.0425,
+            "upload_ms": 2489.7281,
+            "readback_ms": 328.2541
+          },
+          "producer_sha256": "b1fdc370504783ee67651d2eac48f87bc2be9bddfa9a75ef7657aef33a446a5c",
+          "source_revision_as_reported": "fc79ff19a94ae8d73d605f5ec31d4e19dd4cce9a",
+          "forced_vocab_vectors": 16,
+          "forced_logits_file_sha256": "b418be5713282d8849339c5ea3fbed67ab08e33ffd23019a50aa028230d4a7ae",
+          "frontier_logits_sha256": "82a500a0fcd587cfb0d0be3422f3893129b82567a3a6ddb97259587ec88ba8f1",
+          "frontier_owner_count": 48,
+          "frontier_owner_digest_sha256": "db933782a269491c1ae53d136f1e4289a79190765e286e7df2e44dc3ba7000f4",
+          "sweeps": [
+            100000
+          ],
+          "host_plan_bytes": 12057706496
+        }
+      ],
+      "measured_order": [
+        "candidate",
+        "control"
+      ],
+      "candidate_caps_gib": {
+        "native_host": 12.35,
+        "outer_rss": 12.6
+      }
+    },
+    "geometry-r4": {
+      "exact": {
+        "frontier": true,
+        "logits_sha": true,
+        "first": true,
+        "recall_tokens": true,
+        "recall_checkpoint": true
+      },
+      "prompt_tokens": 100000,
+      "arms": [
+        {
+          "arm": "control",
+          "status": "PASS",
+          "prompt_s": 40.008618999999996,
+          "ttft_s": 43.73499999998603,
+          "acquire_ms": 88.0532,
+          "routed_ms": 2986.9159,
+          "fetch_bytes": 402084247672,
+          "totals": {
+            "compute_ms": 32053.388400000003,
+            "prepare_ms": 3424.5216,
+            "upload_ms": 2594.1136,
+            "readback_ms": 326.4374
+          },
+          "producer_sha256": "b1fdc370504783ee67651d2eac48f87bc2be9bddfa9a75ef7657aef33a446a5c",
+          "source_revision_as_reported": "fc79ff19a94ae8d73d605f5ec31d4e19dd4cce9a",
+          "forced_vocab_vectors": 16,
+          "forced_logits_file_sha256": "b418be5713282d8849339c5ea3fbed67ab08e33ffd23019a50aa028230d4a7ae",
+          "frontier_logits_sha256": "82a500a0fcd587cfb0d0be3422f3893129b82567a3a6ddb97259587ec88ba8f1",
+          "frontier_owner_count": 48,
+          "frontier_owner_digest_sha256": "db933782a269491c1ae53d136f1e4289a79190765e286e7df2e44dc3ba7000f4",
+          "sweeps": [
+            49152,
+            50848
+          ],
+          "host_plan_bytes": 6889275392
+        },
+        {
+          "arm": "candidate",
+          "status": "PASS",
+          "prompt_s": 40.213657999999995,
+          "ttft_s": 45.20300000003772,
+          "acquire_ms": 13.5032,
+          "routed_ms": 3022.6022,
+          "fetch_bytes": 235701699008,
+          "totals": {
+            "compute_ms": 32374.013600000002,
+            "prepare_ms": 3474.2116,
+            "upload_ms": 2514.917,
+            "readback_ms": 320.3091
+          },
+          "producer_sha256": "b1fdc370504783ee67651d2eac48f87bc2be9bddfa9a75ef7657aef33a446a5c",
+          "source_revision_as_reported": "fc79ff19a94ae8d73d605f5ec31d4e19dd4cce9a",
+          "forced_vocab_vectors": 16,
+          "forced_logits_file_sha256": "b418be5713282d8849339c5ea3fbed67ab08e33ffd23019a50aa028230d4a7ae",
+          "frontier_logits_sha256": "82a500a0fcd587cfb0d0be3422f3893129b82567a3a6ddb97259587ec88ba8f1",
+          "frontier_owner_count": 48,
+          "frontier_owner_digest_sha256": "db933782a269491c1ae53d136f1e4289a79190765e286e7df2e44dc3ba7000f4",
+          "sweeps": [
+            100000
+          ],
+          "host_plan_bytes": 12057706496
+        }
+      ],
+      "measured_order": [
+        "candidate",
+        "control"
+      ],
+      "candidate_caps_gib": {
+        "native_host": 12,
+        "outer_rss": 12.25
+      }
+    },
+    "cone-route-r2": {
+      "exact": {
+        "frontier": true,
+        "logits_sha": true,
+        "first": true,
+        "recall_tokens": true,
+        "recall_checkpoint": true
+      },
+      "prompt_tokens": 100000,
+      "arms": [
+        {
+          "arm": "control",
+          "status": "PASS",
+          "prompt_s": 51.6759553,
+          "ttft_s": 93.03100000001723,
+          "acquire_ms": 20.8951,
+          "routed_ms": 3026.1931,
+          "fetch_bytes": 402084247672,
+          "totals": {
+            "compute_ms": 41666.7435,
+            "prepare_ms": 4678.3982,
+            "upload_ms": 2281.8202,
+            "readback_ms": 328.8564
+          },
+          "producer_sha256": "9340f48854df8969d9388ce2d3e9e584e888d4f419590d29df4b7cc9344a17a7",
+          "source_revision_as_reported": "272deb09",
+          "forced_vocab_vectors": 16,
+          "forced_logits_file_sha256": "b418be5713282d8849339c5ea3fbed67ab08e33ffd23019a50aa028230d4a7ae",
+          "frontier_logits_sha256": "82a500a0fcd587cfb0d0be3422f3893129b82567a3a6ddb97259587ec88ba8f1",
+          "frontier_owner_count": 48,
+          "frontier_owner_digest_sha256": "db933782a269491c1ae53d136f1e4289a79190765e286e7df2e44dc3ba7000f4",
+          "sweeps": [
+            49152,
+            50848
+          ],
+          "host_plan_bytes": 6889275392
+        },
+        {
+          "arm": "candidate",
+          "status": "PASS",
+          "prompt_s": 44.539754,
+          "ttft_s": 48.57799999997951,
+          "acquire_ms": 6747.8004,
+          "routed_ms": 0,
+          "fetch_bytes": 482208151672,
+          "totals": {
+            "compute_ms": 28899.3833,
+            "prepare_ms": 4530.7732,
+            "upload_ms": 2324.983,
+            "readback_ms": 332.4603
+          },
+          "producer_sha256": "9340f48854df8969d9388ce2d3e9e584e888d4f419590d29df4b7cc9344a17a7",
+          "source_revision_as_reported": "272deb09",
+          "forced_vocab_vectors": 16,
+          "forced_logits_file_sha256": "b418be5713282d8849339c5ea3fbed67ab08e33ffd23019a50aa028230d4a7ae",
+          "frontier_logits_sha256": "82a500a0fcd587cfb0d0be3422f3893129b82567a3a6ddb97259587ec88ba8f1",
+          "frontier_owner_count": 48,
+          "frontier_owner_digest_sha256": "db933782a269491c1ae53d136f1e4289a79190765e286e7df2e44dc3ba7000f4",
+          "sweeps": [
+            49152,
+            50848
+          ],
+          "host_plan_bytes": 6889275392
+        }
+      ],
+      "measured_order": [
+        "control",
+        "candidate"
+      ]
+    },
+    "tail-r1": {
+      "exact": {
+        "frontier": true,
+        "logits_sha": true,
+        "first": true,
+        "recall_tokens": true,
+        "recall_checkpoint": true
+      },
+      "prompt_tokens": 100000,
+      "arms": [
+        {
+          "arm": "control",
+          "status": "PASS",
+          "prompt_s": 41.142502300000004,
+          "ttft_s": 46.09299999999348,
+          "acquire_ms": 536.0432,
+          "routed_ms": 3139.6563,
+          "fetch_bytes": 402084247672,
+          "totals": {
+            "compute_ms": 32092.167,
+            "prepare_ms": 3520.4274,
+            "upload_ms": 2608.8458,
+            "readback_ms": 336.4287
+          },
+          "producer_sha256": "b1fdc370504783ee67651d2eac48f87bc2be9bddfa9a75ef7657aef33a446a5c",
+          "source_revision_as_reported": "fc79ff19a94ae8d73d605f5ec31d4e19dd4cce9a",
+          "forced_vocab_vectors": 16,
+          "forced_logits_file_sha256": "b418be5713282d8849339c5ea3fbed67ab08e33ffd23019a50aa028230d4a7ae",
+          "frontier_logits_sha256": "82a500a0fcd587cfb0d0be3422f3893129b82567a3a6ddb97259587ec88ba8f1",
+          "frontier_owner_count": 48,
+          "frontier_owner_digest_sha256": "db933782a269491c1ae53d136f1e4289a79190765e286e7df2e44dc3ba7000f4",
+          "sweeps": [
+            49152,
+            50848
+          ],
+          "host_plan_bytes": 6889275392,
+          "hint_count": 0,
+          "hint_fetched_bytes": 0,
+          "hint_fetch_ms_overlapped": 0,
+          "exposed_hint_join_ms": 0
+        },
+        {
+          "arm": "candidate",
+          "status": "PASS",
+          "prompt_s": 40.0707965,
+          "ttft_s": 43.71799999999348,
+          "acquire_ms": 35.1837,
+          "routed_ms": 2989.4226,
+          "fetch_bytes": 405567895672,
+          "totals": {
+            "compute_ms": 32026.770299999996,
+            "prepare_ms": 3483.6471,
+            "upload_ms": 2618.5358,
+            "readback_ms": 332.1047
+          },
+          "producer_sha256": "b1fdc370504783ee67651d2eac48f87bc2be9bddfa9a75ef7657aef33a446a5c",
+          "source_revision_as_reported": "fc79ff19a94ae8d73d605f5ec31d4e19dd4cce9a",
+          "forced_vocab_vectors": 16,
+          "forced_logits_file_sha256": "b418be5713282d8849339c5ea3fbed67ab08e33ffd23019a50aa028230d4a7ae",
+          "frontier_logits_sha256": "82a500a0fcd587cfb0d0be3422f3893129b82567a3a6ddb97259587ec88ba8f1",
+          "frontier_owner_count": 48,
+          "frontier_owner_digest_sha256": "db933782a269491c1ae53d136f1e4289a79190765e286e7df2e44dc3ba7000f4",
+          "sweeps": [
+            49152,
+            50848
+          ],
+          "host_plan_bytes": 6889275392,
+          "hint_count": 18,
+          "hint_fetched_bytes": 6290472960,
+          "hint_fetch_ms_overlapped": 292.5085,
+          "exposed_hint_join_ms": 0.1099
+        }
+      ],
+      "measured_order": [
+        "control",
+        "candidate"
+      ]
+    },
+    "tail-r2": {
+      "exact": {
+        "frontier": true,
+        "logits_sha": true,
+        "first": true,
+        "recall_tokens": true,
+        "recall_checkpoint": true
+      },
+      "prompt_tokens": 100000,
+      "arms": [
+        {
+          "arm": "control",
+          "status": "PASS",
+          "prompt_s": 39.91169099999999,
+          "ttft_s": 43.46799999999348,
+          "acquire_ms": 15.7472,
+          "routed_ms": 2939.617,
+          "fetch_bytes": 402084247672,
+          "totals": {
+            "compute_ms": 31971.626,
+            "prepare_ms": 3438.1314,
+            "upload_ms": 2636.0899,
+            "readback_ms": 326.0848
+          },
+          "producer_sha256": "b1fdc370504783ee67651d2eac48f87bc2be9bddfa9a75ef7657aef33a446a5c",
+          "source_revision_as_reported": "fc79ff19a94ae8d73d605f5ec31d4e19dd4cce9a",
+          "forced_vocab_vectors": 16,
+          "forced_logits_file_sha256": "b418be5713282d8849339c5ea3fbed67ab08e33ffd23019a50aa028230d4a7ae",
+          "frontier_logits_sha256": "82a500a0fcd587cfb0d0be3422f3893129b82567a3a6ddb97259587ec88ba8f1",
+          "frontier_owner_count": 48,
+          "frontier_owner_digest_sha256": "db933782a269491c1ae53d136f1e4289a79190765e286e7df2e44dc3ba7000f4",
+          "sweeps": [
+            49152,
+            50848
+          ],
+          "host_plan_bytes": 6889275392,
+          "hint_count": 0,
+          "hint_fetched_bytes": 0,
+          "hint_fetch_ms_overlapped": 0,
+          "exposed_hint_join_ms": 0
+        },
+        {
+          "arm": "candidate",
+          "status": "PASS",
+          "prompt_s": 39.913101000000005,
+          "ttft_s": 43.45299999997951,
+          "acquire_ms": 6.8238,
+          "routed_ms": 2907.0117,
+          "fetch_bytes": 405567895672,
+          "totals": {
+            "compute_ms": 31971.596700000002,
+            "prepare_ms": 3423.4678999999996,
+            "upload_ms": 2628.2780000000002,
+            "readback_ms": 329.6651
+          },
+          "producer_sha256": "b1fdc370504783ee67651d2eac48f87bc2be9bddfa9a75ef7657aef33a446a5c",
+          "source_revision_as_reported": "fc79ff19a94ae8d73d605f5ec31d4e19dd4cce9a",
+          "forced_vocab_vectors": 16,
+          "forced_logits_file_sha256": "b418be5713282d8849339c5ea3fbed67ab08e33ffd23019a50aa028230d4a7ae",
+          "frontier_logits_sha256": "82a500a0fcd587cfb0d0be3422f3893129b82567a3a6ddb97259587ec88ba8f1",
+          "frontier_owner_count": 48,
+          "frontier_owner_digest_sha256": "db933782a269491c1ae53d136f1e4289a79190765e286e7df2e44dc3ba7000f4",
+          "sweeps": [
+            49152,
+            50848
+          ],
+          "host_plan_bytes": 6889275392,
+          "hint_count": 18,
+          "hint_fetched_bytes": 6290472960,
+          "hint_fetch_ms_overlapped": 291.8607,
+          "exposed_hint_join_ms": 0.10250000000000001
+        }
+      ],
+      "measured_order": [
+        "candidate",
+        "control"
+      ]
+    },
+    "largest-safe-r1": {
+      "exact": {
+        "frontier": true,
+        "logits_sha": true,
+        "first": true,
+        "recall_tokens": true,
+        "recall_checkpoint": true
+      },
+      "prompt_tokens": 105824,
+      "arms": [
+        {
+          "arm": "control",
+          "status": "PASS",
+          "prompt_s": 40.91403749999999,
+          "ttft_s": 44.60899999999674,
+          "acquire_ms": 49.4542,
+          "routed_ms": 2754.9343,
+          "fetch_bytes": 397903870072,
+          "totals": {
+            "compute_ms": 32739.9655,
+            "prepare_ms": 3487.6798,
+            "upload_ms": 2706.6641,
+            "readback_ms": 332.4679
+          },
+          "producer_sha256": "b1fdc370504783ee67651d2eac48f87bc2be9bddfa9a75ef7657aef33a446a5c",
+          "source_revision_as_reported": "fc79ff19a94ae8d73d605f5ec31d4e19dd4cce9a",
+          "forced_vocab_vectors": 16,
+          "forced_logits_file_sha256": "2fdddada36ee467c192ccc8d8c344d6eb488273656bb3019b7e60b9d2fc4a0e7",
+          "frontier_logits_sha256": "6dffb41f479ddb503953a87536648576b277bf6c2f8a39347c852f14b0cc3952",
+          "frontier_owner_count": 48,
+          "frontier_owner_digest_sha256": "30c3ff2b17974f557c112620e707a208f84f85bd9d1cde5055107401148b0ab2",
+          "sweeps": [
+            49152,
+            56672
+          ],
+          "host_plan_bytes": 7501643776,
+          "outer_guard": {
+            "exit_code": 0,
+            "peak_tree_rss": 6858448896,
+            "min_available": 8690966528,
+            "cleanup_confirmed": true,
+            "global_pagefile_growth_bytes": 0,
+            "owned_observed_paged_bytes": 0,
+            "owned_observation_scope": "Bounded and incremental, not exhaustive."
+          }
+        },
+        {
+          "arm": "candidate",
+          "status": "PASS",
+          "prompt_s": 40.0619143,
+          "ttft_s": 45.78200000000652,
+          "acquire_ms": 10.4326,
+          "routed_ms": 2710.5078,
+          "fetch_bytes": 231521321408,
+          "totals": {
+            "compute_ms": 32871.986899999996,
+            "prepare_ms": 2131.5625999999997,
+            "upload_ms": 2502.7619,
+            "readback_ms": 1112.5804
+          },
+          "producer_sha256": "b1fdc370504783ee67651d2eac48f87bc2be9bddfa9a75ef7657aef33a446a5c",
+          "source_revision_as_reported": "fc79ff19a94ae8d73d605f5ec31d4e19dd4cce9a",
+          "forced_vocab_vectors": 16,
+          "forced_logits_file_sha256": "2fdddada36ee467c192ccc8d8c344d6eb488273656bb3019b7e60b9d2fc4a0e7",
+          "frontier_logits_sha256": "6dffb41f479ddb503953a87536648576b277bf6c2f8a39347c852f14b0cc3952",
+          "frontier_owner_count": 48,
+          "frontier_owner_digest_sha256": "30c3ff2b17974f557c112620e707a208f84f85bd9d1cde5055107401148b0ab2",
+          "sweeps": [
+            105824
+          ],
+          "host_plan_bytes": 12670074880,
+          "outer_guard": {
+            "exit_code": 0,
+            "peak_tree_rss": 11410141184,
+            "min_available": 3883589632,
+            "cleanup_confirmed": true,
+            "global_pagefile_growth_bytes": 0,
+            "owned_observed_paged_bytes": 0,
+            "owned_observation_scope": "Bounded and incremental, not exhaustive."
+          }
+        }
+      ],
+      "measured_order": [
+        "candidate",
+        "control"
+      ]
+    }
+  },
+  "nsight_r3": {
+    "scope": "Diagnostic CUDA-only timeline with sampling/context-switch collection disabled. All published event positions are relative to the first fetch submission.",
+    "graph_ceiling_reduction_bytes": 134217728,
+    "native_gpu_reserve_bytes": 1073741824,
+    "prompt_s": 40.7067411,
+    "ttft_s": 44.70299999997951,
+    "producer_sha256": "8b98ac17278299931ff23c67e7bfef38d1dd9a1a8e385be6d6b2e7a701235a6b",
+    "source_revision_as_reported": "fc79ff19a94ae8d73d605f5ec31d4e19dd4cce9a",
+    "passes": [
+      {
+        "sweep": 0,
+        "window_ms": 17000.67910003662,
+        "fetch_envelope_busy_ms": 9743.882100045681,
+        "stream_utilization_percent": 57.31466397730366,
+        "stream_idle_intervals": 22,
+        "routed_timestamps_complete": true,
+        "fetched_bytes": 166382548664,
+        "exposed_acquire_ms": 2.2808,
+        "routed_fetch_wait_ms": 0,
+        "totals": {
+          "wall_ms": 16350.0509,
+          "acquire_ms": 2.2808,
+          "upload_ms": 1273.0326,
+          "compute_ms": 12961.5486,
+          "readback_ms": 183.7254,
+          "engram_ms": 0.844,
+          "prepare_ms": 1640.1097,
+          "cleanup_ms": 0.7274,
+          "carry_read_ms": 0.379,
+          "carry_write_ms": 0.4511,
+          "weight_cache_ms": 4.5717
+        },
+        "begin_ms": 0.0,
+        "end_ms": 17000.6791,
+        "gpu_kernel_busy_ms": 12508.406804084778,
+        "gpu_copy_busy_ms": 599.0033425688744,
+        "gpu_kernel_utilization_percent": 73.57592441150092
+      },
+      {
+        "sweep": 1,
+        "window_ms": 23675.78630000353,
+        "fetch_envelope_busy_ms": 13229.468100011349,
+        "stream_utilization_percent": 55.877629289166954,
+        "stream_idle_intervals": 72,
+        "routed_timestamps_complete": true,
+        "fetched_bytes": 235701699008,
+        "exposed_acquire_ms": 9.268699999999999,
+        "routed_fetch_wait_ms": 3059.0972,
+        "totals": {
+          "wall_ms": 23104.4049,
+          "acquire_ms": 9.268699999999999,
+          "upload_ms": 1423.2177000000001,
+          "compute_ms": 19315.9394,
+          "readback_ms": 213.9554,
+          "engram_ms": 1.0278,
+          "prepare_ms": 1868.4074,
+          "cleanup_ms": 0.8497,
+          "carry_read_ms": 0.4392,
+          "carry_write_ms": 0.5615,
+          "weight_cache_ms": 8.8325
+        },
+        "begin_ms": 17098.7592,
+        "end_ms": 40774.5455,
+        "gpu_kernel_busy_ms": 15782.832865417004,
+        "gpu_copy_busy_ms": 645.9556686878204,
+        "gpu_kernel_utilization_percent": 66.66233875161582
+      }
+    ],
+    "diagnostic_warnings": [
+      "No NVTX events collected. Does the process use NVTX?",
+      "Installed CUDA driver version (13.3) is not supported by this build of Nsight Systems. CUDA trace will be collected using libraries for driver version 13.2"
+    ],
+    "window": "First stage submission through last layer dispatch/head fetch fence; excludes model open, bulk export, final head compute and inter-pass admission. Exact prompt timing is reported separately.",
+    "actual_host_thread_cpu_busy_measured": false,
+    "cpu_sampling": false,
+    "context_switch_tracing": false,
+    "top_kernel_duration_sums": [
+      {
+        "name": "void mul_mat_q_id<(ggml_type)12, (int)128, (bool)0>(const char *, const int *, const int *, const int *, float *, float *, int, int, int, int, int, int, int, int, int, int, int, int, int, int, int, int, int)",
+        "total_ms": 9054.178943,
+        "count": 1689
+      },
+      {
+        "name": "void attention_tokentile_hmma_kernel<(unsigned int)8>(float *, const float *, const float *, const __half *, const __half *, const int2 *, const unsigned int *, unsigned int, unsigned int, unsigned int, unsigned int)",
+        "total_ms": 4683.502916,
+        "count": 563
+      },
+      {
+        "name": "void mul_mat_q<(ggml_type)8, (int)128, (bool)0, (bool)0>(const char *, const int *, const int *, const int *, float *, float *, int, int, int, int, int, int, int, int, int, int, int, int, int, int, int, int, int)",
+        "total_ms": 1783.948163,
+        "count": 3941
+      }
+    ],
+    "top_kernel_scope": "Whole captured process trace, including activity outside the published prefill windows. Per-name duration sums, not unions or SM occupancy."
+  },
+  "largest_r1_failure": {
+    "prompt_tokens": 107840,
+    "qualified_result": false,
+    "reason": "Global pagefile pressure guard refused the run; no job attribution established.",
+    "global_pagefile_growth_bytes": 988192768,
+    "owned_observed_paged_bytes": 0,
+    "owned_observation_scope": "Bounded and incremental, not exhaustive zero-paging proof.",
+    "minimum_available_bytes": 3364130816,
+    "cleanup_confirmed": true,
+    "exit_code": 1
+  },
+  "largest_safe_boundary_plan": {
+    "prompt_tokens": 105824,
+    "qualified_live_result": "PASS: largest-safe-r1, matched exact comparison under stated caps; not hardware maximum.",
+    "native_host_cap_gib": 11.8,
+    "outer_rss_cap_gib": 12.05,
+    "planned_host_bytes": 12670074880,
+    "sweeps": [
+      105824
+    ],
+    "next_prompt_tokens": 105825,
+    "next_requested_host_bytes": 12673089536,
+    "native_ceiling_bytes": 12670140416,
+    "next_refused_preflight": true
+  }
+}

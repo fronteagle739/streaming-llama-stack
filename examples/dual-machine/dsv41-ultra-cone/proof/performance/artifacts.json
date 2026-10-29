@@ -1,0 +1,85 @@
+{
+  "algorithm": "SHA256",
+  "files": [
+    {
+      "path": "performance/events.csv",
+      "sha256": "0a82a54d0daf20bbe5e619c08bced68431723bfe3048da2d1de5d1b978206794",
+      "bytes": 70543
+    },
+    {
+      "path": "performance/histogram.csv",
+      "sha256": "34d0a84767165d6cdb7fc3b036fe374619bd9c8420a12dc8dd234a778a24c928",
+      "bytes": 10795
+    },
+    {
+      "path": "performance/host-cpu-summary.json",
+      "sha256": "f97ba32565b3f76acd86ed97bcb69947ed7391230edcbd87cc224689db6f7155",
+      "bytes": 6392
+    },
+    {
+      "path": "performance/idle_intervals.csv",
+      "sha256": "bf8327fcea9e527d33329983acdd6d3a1273845e900427d831e47e57f81473ef",
+      "bytes": 4114
+    },
+    {
+      "path": "performance/metrics.json",
+      "sha256": "ab4e1f66c84237ec75c3160aafa5c642210fd08c67477264f0882126ef518e40",
+      "bytes": 31283
+    },
+    {
+      "path": "performance/native-source-hashes.json",
+      "sha256": "c628879cae4b27e651b2beb1228f9d9141e64577b2b9c5f54126e4272f6e0038",
+      "bytes": 36945
+    },
+    {
+      "path": "performance/native-source-notes.json",
+      "sha256": "0854509ae6c012a39a5044da433df297c6f67ba7c35a16d4b4d15243db1c8b97",
+      "bytes": 715
+    },
+    {
+      "path": "performance/sources.json",
+      "sha256": "0a2b7ee8373d8c5f7294012fdcf5f42d36f2b570493e036d675a672322e21752",
+      "bytes": 8161
+    },
+    {
+      "path": "performance/tail-r2-candidate-histogram.csv",
+      "sha256": "4122aeb43b9aab8e3262ca5eea2f908f8eaf41b619440d96e2b0316c6779e45e",
+      "bytes": 9672
+    },
+    {
+      "path": "performance/tail-r2-candidate-idle_intervals.csv",
+      "sha256": "1674a20d5ec19981c5c76125eab821dd81abf8c9374173b4d0d0bebf23da3060",
+      "bytes": 4588
+    },
+    {
+      "path": "performance/tail-r2-candidate-summary.json",
+      "sha256": "606332ab76f4320032db54abc2beb3c08beacd4d4fd62b8b18cb92f5ed4402c0",
+      "bytes": 2899
+    },
+    {
+      "path": "performance/tail-r2-control-histogram.csv",
+      "sha256": "4f2b8433bce708dbef89dd42a8343038fa754113e3a183a9466c50d13e1f5d6a",
+      "bytes": 9530
+    },
+    {
+      "path": "performance/tail-r2-control-idle_intervals.csv",
+      "sha256": "d1325c85936f02e2ab680a088eda7a3da2ad1917d7f1ad83b4180cba4e54db50",
+      "bytes": 3790
+    },
+    {
+      "path": "performance/tail-r2-control-summary.json",
+      "sha256": "4c0f5e4665ef5618000c69adfad20058919ca84b86b4e6471f73410120f8fa16",
+      "bytes": 2864
+    },
+    {
+      "path": "performance/timeline.svg",
+      "sha256": "d40690bc36bc4c03660bd3525c03db7eb3b2be1a188498e24f3b2dd4f57da5e5",
+      "bytes": 501192
+    },
+    {
+      "path": "PERFORMANCE.md",
+      "sha256": "4cf5de1c825653551c0ff9476da22ce41662410f8d33f5d4cfb4039317364878",
+      "bytes": 12856
+    }
+  ]
+}

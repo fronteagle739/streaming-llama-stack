@@ -194,12 +194,25 @@ bool llama_dsv41_cache_storage::ensure_tokens(uint32_t tokens, const char * phas
     return ensure_tokens_locked(tokens, phase, grew, error);
 }
 
+void llama_dsv41_cache_storage::prefill_ceiling(uint32_t tokens,uint64_t physical_bytes){
+    std::lock_guard<std::mutex>lock(execution_mutex);
+    if(tokens){
+        if(!grow_step||tokens>context||tokens<grow_tokens)throw std::runtime_error("Carry loan requires a bounded growable cache frontier");
+        const auto target=llama_dsv41_ctx_cache::round_tokens(context,grow_step,tokens);
+        const auto need=ggml_backend_buffer_get_size(buffer.get())+
+            llama_dsv41_ctx_cache::mapped_bytes(context,target,compressed_bf16,grow_granularity);
+        if(need>physical_bytes)throw std::runtime_error("Carry loan/cache physical sum exceeds original admission");
+        transient_ceiling=target;
+    }else transient_ceiling=0;
+}
+
 bool llama_dsv41_cache_storage::ensure_tokens_locked(uint32_t tokens, const char * phase, bool * grew, std::string & error) {
     if (grew) { *grew = false; }
     error.clear();
     if (!grow_step) { return true; }
     if (tokens > context) { error = "growable cache: " + std::to_string(tokens) + " positions exceed the context " + std::to_string(context); return false; }
     const uint32_t target = llama_dsv41_ctx_cache::round_tokens(context, grow_step, tokens);
+    if(transient_ceiling&&target>transient_ceiling){error="Cache growth crossed the live prefill carry loan ceiling";return false;}
     if (target <= grow_tokens) { return true; }
 #ifdef GGML_USE_CUDA
     const uint64_t before = allocated_bytes();

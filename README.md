@@ -15,9 +15,9 @@ RTX 5090 desktop with 32 GB of RAM:
 
 | What | Result |
 |---|---|
-| Exact-cone prefill, 49,555 tokens | **25.38 s / 1,953 tok/s** |
-| Exact-cone prefill, 100,000 tokens | **45.48 s / 2,199 tok/s** |
-| Exact-cone prefill, 200,000 tokens | **94.08 s / 2,126 tok/s** |
+| Exact-cone prefill, 50,000 tokens | **24.20 s / 2,066 tok/s** |
+| Exact-cone prefill, 100,000 tokens | **43.06 s / 2,322 tok/s** |
+| Exact-cone prefill, 200,000 tokens | **92.41 s / 2,164 tok/s** |
 | Exact-cone prefill, 400,000 tokens | **232.50 s / 1,720 tok/s** |
 | Decode at Max speed, warm, 14,859-token prompt | **19–21 tok/s** |
 | Decode at Max speed, warm, 43,327-token prompt | **18–20 tok/s** |
@@ -28,6 +28,8 @@ RTX 5090 desktop with 32 GB of RAM:
 filled. Averaged over the whole reply, including that warm-up, Max speed gives
 12.7–12.9 tok/s for a 500-token answer. Prefill figures use the default exact
 cone with routed tail reads, N=1 and growable BF16 cache, including startup.
+The 50K–200K runs use the new VRAM carry policy; 100K is the mean of two
+runs. The 400K result predates that policy. [Carry measurements](docs/SINGLEPASS_PREFILL.md).
 The matched 49,555-token full-prefill control took 36.25 s; the cone's logits
 and cache hashes were bit-identical. [Measurements and cache settings](docs/PERFORMANCE.md#prefill).
 The example decode defaults also enable exact LFU admission with a 16-token
@@ -222,8 +224,10 @@ With YOCO, the 198,287-token image prompt prefills at **1,670 tok/s**
 and Mac decode reaches **31.0 tok/s**. The matched 49,787-token image prompt
 prefills at **1,477 tok/s** with YOCO and **1,197 tok/s** without it.
 [Pairing, routing and measured speeds](docs/TWO_MACHINE.md).
-Use the [ULTRA + YOCO paired preset](examples/dual-machine/dsv41-ultra-yoco/preset.json)
-with the [example launchers](examples/dual-machine/README.md) to enable YOCO.
+Use the [ULTRA exact-cone paired preset](examples/dual-machine/dsv41-ultra-cone/preset.json)
+with the [example launchers](examples/dual-machine/README.md). ULTRA paired defaults
+now use keep2541 and negotiated state v2; the rates above are historical
+approximate140/v1 measurements. [Cone state protocol](docs/CONE_STATE.md).
 
 For a Windows/Linux second machine with enough RAM to hold the model, see the
 [large-RAM ds4-win untested example](examples/dual-machine/dsv41-large-ram-untested/README.md).

@@ -1,0 +1,412 @@
+{
+  "experiment": "E6-semantic-profile",
+  "count": 100000,
+  "producer_sha256": "5783ecf12d30ebdec37136a2cdddbe9a21ed26ca68179b86aeff24790f02bc53",
+  "source_log_sha256": "386a1261c61dc120df6e4e85208a8b37f95a58f230f7f359498cb4b9fc74c38e",
+  "total_recorded_gpu_s": 53.12502967479896,
+  "other_gpu_s": 20.540090239254987,
+  "semantic_seconds": {
+    "routed_expert_GEMM": 18.89629594755297,
+    "sparse_attention_core": 8.805661188781,
+    "index_score_core": 4.882982299210001,
+    "attention_output": 4.732220768598993,
+    "attention_projection": 2.2976342406109986,
+    "HC_post_expand": 2.0010929272699998,
+    "copies_layout_unassigned_owner": 1.8221759660079986,
+    "index_selection": 1.805746529492,
+    "shared_expert": 1.1796709438029989,
+    "routed_expert_non_GEMM": 1.0535440004569996,
+    "FFN_activation": 1.0392100796719999,
+    "HC_projection_mix": 0.884378912063,
+    "HC_flat_normalization": 0.8810189119429999,
+    "rotary_positioning": 0.7752269440760001,
+    "router": 0.5000399033000001,
+    "Engram": 0.43128796753399995,
+    "HC_pre_collapse": 0.4137105923700001,
+    "index_projection": 0.15510131200399999,
+    "FFN_combine": 0.14037295995600002,
+    "HC_block_rounding": 0.13607958401700002,
+    "normalization": 0.11627212806399999,
+    "unassigned": 0.04810473593,
+    "compressor": 0.03961964797999999,
+    "HC_combination": 0.034884384033,
+    "cache_publication": 0.023620287986,
+    "initialization_unassigned_owner": 0.017132256083000008,
+    "embedding_seed": 0.0074839359970000005,
+    "head": 0.004460320007
+  },
+  "semantic_by_operation_seconds": {
+    "sparse_attention_core": {
+      "FLASH_ATTN_EXT_SPARSE": 8.805661188781
+    },
+    "index_score_core": {
+      "DSV41_INDEX_SCORE": 4.882982299210001
+    },
+    "attention_projection": {
+      "DSV4_ACT_QAT": 0.739495807607,
+      "MUL_MAT": 1.5456653770189985,
+      "CONT": 0.012473055985
+    },
+    "attention_output": {
+      "DSV4_ACT_QAT": 0.8524006084930001,
+      "DSV41_ROPE": 0.42965795197999995,
+      "CONT": 0.24361471984500002,
+      "CONCAT": 0.17331801595499993,
+      "MUL_MAT": 3.0332294723259934
+    },
+    "rotary_positioning": {
+      "DSV41_ROPE": 0.7752269440760001
+    },
+    "HC_projection_mix": {
+      "CPY": 0.632082656086,
+      "UNARY": 0.013309919948,
+      "MUL_MAT": 0.18998540796799998,
+      "FILL": 0.005500224021999999,
+      "MUL": 0.022018336025000005,
+      "ADD": 0.02148236801400004
+    },
+    "HC_post_expand": {
+      "MAP_CUSTOM3": 1.2453536638919998,
+      "CONT": 0.424383935854,
+      "CPY": 0.31468063953599995,
+      "CONCAT": 0.009357504023,
+      "SCALE": 0.007317183965
+    },
+    "index_selection": {
+      "TOP_K": 1.628505313633,
+      "SET_ROWS": 0.077592991947,
+      "FILL": 0.04117859207999999,
+      "DSV41_SELECTED_MASK": 0.018845087998,
+      "DSV41_CANDIDATE_BLOCKS": 0.015303071797,
+      "CONT": 0.019003360034999993,
+      "CPY": 0.0053181120020000016
+    },
+    "HC_flat_normalization": {
+      "RMS_NORM": 0.8810189119429999
+    },
+    "FFN_activation": {
+      "GLU": 0.47099919982899996,
+      "CLAMP": 0.5682108798429999
+    },
+    "copies_layout_unassigned_owner": {
+      "CONCAT": 1.2639495018149989,
+      "CPY": 0.49987123226999974,
+      "CONT": 0.058355231922999976
+    },
+    "routed_expert_non_GEMM": {
+      "MUL": 0.298392384187,
+      "ADD": 0.7551516162699996
+    },
+    "routed_expert_GEMM": {
+      "MUL_MAT_ID": 18.89629594755297
+    },
+    "FFN_combine": {
+      "ADD": 0.14037295995600002
+    },
+    "HC_pre_collapse": {
+      "MUL": 0.24115830399600002,
+      "DSV4_ACT_QAT": 0.16258387240600003,
+      "ADD": 0.006513727989,
+      "CONT": 0.003454687979
+    },
+    "router": {
+      "ARGSORT": 0.1064691839,
+      "MUL_MAT": 0.3318623034550001,
+      "GET_ROWS": 0.03140412801700001,
+      "ADD": 0.006783807975,
+      "SUM_ROWS": 0.004975840002,
+      "CONT": 0.004055200007,
+      "SCALE": 0.00360604798,
+      "DIV": 0.003278239997,
+      "CLAMP": 0.003174847997,
+      "CONCAT": 0.0044303039700000005
+    },
+    "normalization": {
+      "DSV4_ACT_QAT": 0.11627212806399999
+    },
+    "index_projection": {
+      "DSV4_ACT_QAT": 0.081342624159,
+      "MUL_MAT": 0.07375868784499999
+    },
+    "HC_block_rounding": {
+      "DSV4_ACT_QAT": 0.13607958401700002
+    },
+    "shared_expert": {
+      "DSV4_ACT_QAT": 0.120270815927,
+      "MUL_MAT": 1.0594001278759988
+    },
+    "Engram": {
+      "DSV41_ENGRAM_ADD": 0.049885855763999995,
+      "CONCAT": 0.027020288110000002,
+      "DSV4_ACT_QAT": 0.034019584001,
+      "MUL_MAT": 0.32036223965899996
+    },
+    "HC_combination": {
+      "SOFT_MAX": 0.021817792004,
+      "ADD": 0.0068464,
+      "FILL": 0.006220192029000001
+    },
+    "embedding_seed": {
+      "REPEAT": 0.0074839359970000005
+    },
+    "unassigned": {
+      "SCALE": 0.007257984002999999,
+      "GET_ROWS": 0.003266143985,
+      "ADD": 0.014848127967000004,
+      "CLAMP": 0.0066148800010000005,
+      "MUL": 0.006620479994000001,
+      "UNARY": 0.006542367988,
+      "REPEAT": 0.002954751992
+    },
+    "compressor": {
+      "MUL_MAT": 0.033306751968999994,
+      "DSV4_ACT_QAT": 0.005616864013000001,
+      "DSV41_POOL2": 0.0006960319980000001
+    },
+    "head": {
+      "MUL_MAT": 0.004460320007
+    },
+    "initialization_unassigned_owner": {
+      "FILL": 0.017132256083000008
+    },
+    "cache_publication": {
+      "DSV41_RAW_COMMIT": 0.017707967987,
+      "SET_ROWS": 0.0012574079990000002,
+      "GET_ROWS": 0.004654911999999999
+    }
+  },
+  "operation_seconds": {
+    "MUL_MAT_ID": 18.89629594755297,
+    "FLASH_ATTN_EXT_SPARSE": 8.805661188781,
+    "MUL_MAT": 6.5920306881240585,
+    "DSV41_INDEX_SCORE": 4.882982299210001,
+    "DSV4_ACT_QAT": 2.2480818886870004,
+    "TOP_K": 1.628505313633,
+    "CONCAT": 1.4780756138729991,
+    "CPY": 1.4519526398939997,
+    "MAP_CUSTOM3": 1.2453536638919998,
+    "DSV41_ROPE": 1.2048848960560004,
+    "ADD": 0.9519990081710006,
+    "RMS_NORM": 0.8810189119429999,
+    "CONT": 0.7653401916279999,
+    "CLAMP": 0.578000607841,
+    "MUL": 0.5681895042020014,
+    "GLU": 0.47099919982899996,
+    "ARGSORT": 0.1064691839,
+    "SET_ROWS": 0.07885039994600002,
+    "FILL": 0.07003126421399998,
+    "DSV41_ENGRAM_ADD": 0.049885855763999995,
+    "GET_ROWS": 0.03932518400200001,
+    "SOFT_MAX": 0.021817792004,
+    "UNARY": 0.019852287936000003,
+    "DSV41_SELECTED_MASK": 0.018845087998,
+    "SCALE": 0.018181215948,
+    "DSV41_RAW_COMMIT": 0.017707967987,
+    "DSV41_CANDIDATE_BLOCKS": 0.015303071797,
+    "REPEAT": 0.010438687988999999,
+    "SUM_ROWS": 0.004975840002,
+    "DIV": 0.003278239997,
+    "DSV41_POOL2": 0.0006960319980000001
+  },
+  "note": "Every profiled node occupies exactly one semantic/operation cell. Known weight names and constructor labels identify roles; unassigned owners remain explicit. Operation totals and semantic totals are two views of the same GPU events, not additive tables. Synchronized diagnostics only.",
+  "wall_accounting": [
+    {
+      "experiment": "E6-semantic-profile",
+      "arm": "control",
+      "wall_s": 81.51600000000326,
+      "recorded_gpu_s": 53.09045308919795,
+      "wall_less_gpu_s": 28.42554691080531,
+      "additive_wall_less_gpu_seconds": {
+        "exposed_acquire": 0.7261096000000001,
+        "host_prepare_interval": 7.733690299999998,
+        "host_upload_interval": 4.545462900000001,
+        "host_readback_interval": 0.7497581999999999,
+        "weight_cache_interval": 0.0109523,
+        "allocator_cleanup_interval": 0.0008489,
+        "compute_wall_less_recorded_gpu": 7.757549710802074,
+        "executor_phase_gap": 0.18151889999995774,
+        "other_layer_scaffold_carry": 0.19241920000001833,
+        "outside_layers": 6.52723690000326
+      },
+      "partition_error_s": 0.0,
+      "outside_layer_partition_seconds": {
+        "final_hidden_export_preparation": 0.7936373,
+        "input_identity_hash_budget_preflight": 0.26657990000000004,
+        "inspect_admit_allocate": 3.2846999,
+        "native_payload_export_flush": 0.3451191,
+        "payload_close_readonly_rehash": 2.0000000000000002e-07,
+        "run_dispatch_bookkeeping": 0.0001193999999981088,
+        "embedding_head_and_dispatch_outside_layer_intervals": 1.3868204000000048,
+        "harness_wall_less_additive_native_phases": 0.45026070000325547
+      },
+      "nested_native_prompt_subclocks_seconds": {
+        "append_owner_admission": 0.0947201,
+        "chunk_token_preparation": 4.5700000000000006e-05
+      },
+      "nested_tile_clocks_seconds": {
+        "host_prepare_ms": 7.733689999999993,
+        "host_bind_ms": 2.983774000000002,
+        "host_register_ms": 2.9772060000000007,
+        "host_graph_ms": 0.4502499999999993,
+        "host_reserve_ms": 3.7787900000000016,
+        "host_upload_ms": 4.545452000000009,
+        "host_launch_ms": 60.797521,
+        "host_sync_ms": 0.035773000000000055,
+        "gpu_ms": 60.79168800000011,
+        "compute_ms": 60.84799300000005,
+        "host_readback_ms": 0.7497529999999993,
+        "host_cleanup_ms": 0.0010370000000000112
+      },
+      "tiles": 1000,
+      "note": "An interval partition, not CPU-cycle attribution. The compute-minus-GPU bucket includes host dispatch, synchronizing profiler overhead, copy/queue waits and unrecorded GPU work; it is not a measured production launch-only cost. Registration/bind and graph/reserve are subsets of prepare and are not added again."
+    },
+    {
+      "experiment": "E6-semantic-profile",
+      "arm": "candidate",
+      "wall_s": 80.26600000000326,
+      "recorded_gpu_s": 53.125029674798874,
+      "wall_less_gpu_s": 27.140970325204385,
+      "additive_wall_less_gpu_seconds": {
+        "exposed_acquire": 1.0743351999999997,
+        "host_prepare_interval": 7.698736300000003,
+        "host_upload_interval": 4.443288599999999,
+        "host_readback_interval": 0.7508589000000002,
+        "weight_cache_interval": 0.011144799999999995,
+        "allocator_cleanup_interval": 0.0008855000000000002,
+        "compute_wall_less_recorded_gpu": 7.772193425201124,
+        "executor_phase_gap": 0.18868519999996636,
+        "other_layer_scaffold_carry": 0.18939010000001888,
+        "outside_layers": 5.0114523000032705
+      },
+      "partition_error_s": 3.552713678800501e-15,
+      "outside_layer_partition_seconds": {
+        "final_hidden_export_preparation": 0.7949286,
+        "input_identity_hash_budget_preflight": 0.2684334,
+        "inspect_admit_allocate": 1.9115925999999999,
+        "native_payload_export_flush": 0.3467779,
+        "payload_close_readonly_rehash": 1.0000000000000001e-07,
+        "run_dispatch_bookkeeping": 9.589999999957399e-05,
+        "embedding_head_and_dispatch_outside_layer_intervals": 1.3764255000000247,
+        "harness_wall_less_additive_native_phases": 0.31319830000325055
+      },
+      "nested_native_prompt_subclocks_seconds": {
+        "append_owner_admission": 0.0905068,
+        "chunk_token_preparation": 6.24e-05
+      },
+      "nested_tile_clocks_seconds": {
+        "host_prepare_ms": 7.698724000000006,
+        "host_bind_ms": 2.9324079999999997,
+        "host_register_ms": 2.925416999999998,
+        "host_graph_ms": 0.48701299999999964,
+        "host_reserve_ms": 3.762799,
+        "host_upload_ms": 4.443285000000003,
+        "host_launch_ms": 60.84754400000008,
+        "host_sync_ms": 0.034993000000000045,
+        "gpu_ms": 60.8396989999999,
+        "compute_ms": 60.89722499999994,
+        "host_readback_ms": 0.7508500000000005,
+        "host_cleanup_ms": 0.0010780000000000076
+      },
+      "tiles": 1000,
+      "note": "An interval partition, not CPU-cycle attribution. The compute-minus-GPU bucket includes host dispatch, synchronizing profiler overhead, copy/queue waits and unrecorded GPU work; it is not a measured production launch-only cost. Registration/bind and graph/reserve are subsets of prepare and are not added again."
+    }
+  ],
+  "original_profile_wall_accounting": [
+    {
+      "experiment": "E6-index-profile",
+      "arm": "control",
+      "wall_s": 79.57799999997951,
+      "recorded_gpu_s": 53.07337464848877,
+      "wall_less_gpu_s": 26.504625351490738,
+      "additive_wall_less_gpu_seconds": {
+        "exposed_acquire": 0.9121344000000006,
+        "host_prepare_interval": 7.6744485000000005,
+        "host_upload_interval": 4.459183499999999,
+        "host_readback_interval": 0.7488499,
+        "weight_cache_interval": 0.011017499999999996,
+        "allocator_cleanup_interval": 0.0008100000000000003,
+        "compute_wall_less_recorded_gpu": 7.641112951511232,
+        "executor_phase_gap": 0.17263289999998221,
+        "other_layer_scaffold_carry": 0.18559630000002747,
+        "outside_layers": 4.698839399979491
+      },
+      "partition_error_s": 3.552713678800501e-15,
+      "outside_layer_partition_seconds": {
+        "final_hidden_export_preparation": 0.7652445999999999,
+        "input_identity_hash_budget_preflight": 0.24197069999999998,
+        "inspect_admit_allocate": 1.7858744999999998,
+        "native_payload_export_flush": 0.3449264,
+        "payload_close_readonly_rehash": 0.0,
+        "run_dispatch_bookkeeping": 0.00011649999999463034,
+        "embedding_head_and_dispatch_outside_layer_intervals": 1.2902123999999873,
+        "harness_wall_less_additive_native_phases": 0.2704942999795037
+      },
+      "nested_native_prompt_subclocks_seconds": {
+        "append_owner_admission": 0.09405759999999999,
+        "chunk_token_preparation": 4.2300000000000005e-05
+      },
+      "nested_tile_clocks_seconds": {
+        "host_prepare_ms": 7.674444999999999,
+        "host_bind_ms": 2.9545119999999994,
+        "host_register_ms": 2.947864000000001,
+        "host_upload_ms": 4.4591599999999945,
+        "host_launch_ms": 60.665861000000014,
+        "host_sync_ms": 0.033967000000000025,
+        "gpu_ms": 60.657774999999994,
+        "compute_ms": 60.71449800000004,
+        "host_readback_ms": 0.7488669999999997,
+        "host_cleanup_ms": 0.0010190000000000136
+      },
+      "tiles": 1000,
+      "note": "An interval partition, not CPU-cycle attribution. The compute-minus-GPU bucket includes host dispatch, synchronizing profiler overhead, copy/queue waits and unrecorded GPU work; it is not a measured production launch-only cost. Registration/bind and graph/reserve are subsets of prepare and are not added again."
+    },
+    {
+      "experiment": "E6-index-profile",
+      "arm": "candidate",
+      "wall_s": 76.93800000002375,
+      "recorded_gpu_s": 50.265215011088706,
+      "wall_less_gpu_s": 26.672784988935042,
+      "additive_wall_less_gpu_seconds": {
+        "exposed_acquire": 0.877225,
+        "host_prepare_interval": 7.745609200000001,
+        "host_upload_interval": 4.5393517,
+        "host_readback_interval": 0.7518111000000001,
+        "weight_cache_interval": 0.010691199999999994,
+        "allocator_cleanup_interval": 0.0007957999999999997,
+        "compute_wall_less_recorded_gpu": 7.680108888911278,
+        "executor_phase_gap": 0.17718329999999582,
+        "other_layer_scaffold_carry": 0.18471969999999793,
+        "outside_layers": 4.705289100023776
+      },
+      "partition_error_s": -7.105427357601002e-15,
+      "outside_layer_partition_seconds": {
+        "final_hidden_export_preparation": 0.7991203,
+        "input_identity_hash_budget_preflight": 0.238347,
+        "inspect_admit_allocate": 1.7760582999999999,
+        "native_payload_export_flush": 0.34416559999999996,
+        "payload_close_readonly_rehash": 1.0000000000000001e-07,
+        "run_dispatch_bookkeeping": 0.00010200000000850196,
+        "embedding_head_and_dispatch_outside_layer_intervals": 1.281090400000025,
+        "harness_wall_less_additive_native_phases": 0.2664054000237428
+      },
+      "nested_native_prompt_subclocks_seconds": {
+        "append_owner_admission": 0.0953525,
+        "chunk_token_preparation": 4.73e-05
+      },
+      "nested_tile_clocks_seconds": {
+        "host_prepare_ms": 7.745611999999999,
+        "host_bind_ms": 3.0190539999999997,
+        "host_register_ms": 3.0125849999999996,
+        "host_upload_ms": 4.539345000000001,
+        "host_launch_ms": 57.89660500000002,
+        "host_sync_ms": 0.034114999999999965,
+        "gpu_ms": 57.88722200000004,
+        "compute_ms": 57.94532100000004,
+        "host_readback_ms": 0.7518080000000009,
+        "host_cleanup_ms": 0.0010190000000000136
+      },
+      "tiles": 1000,
+      "note": "An interval partition, not CPU-cycle attribution. The compute-minus-GPU bucket includes host dispatch, synchronizing profiler overhead, copy/queue waits and unrecorded GPU work; it is not a measured production launch-only cost. Registration/bind and graph/reserve are subsets of prepare and are not added again."
+    }
+  ]
+}

@@ -1,0 +1,96 @@
+{
+  "status": "PASS",
+  "prompt_sha256": "14c7eddf2c43518628a2a2c012aff8a1a9d4e0056fc74f0c5591c9d19707772a",
+  "prompt_tokens": 105054,
+  "producer_source_revision": "fc79ff19a94ae8d73d605f5ec31d4e19dd4cce9a",
+  "producer_sha256": "c97cc9de2f505366bbb1c4907a3942768a968d23867f3250e00aad7b14037715",
+  "mac_binary_sha256": "5734ca0ffdfb970e92c366d410338774970a0e905cf6f03aed391a4e022ffcdb",
+  "yoco_keep": 2541,
+  "yoco_state_version": 2,
+  "exact_answers": true,
+  "answers": [
+    "AMBER OTTER 731",
+    "AMBER OTTER 731",
+    "731"
+  ],
+  "paired_prompt_seconds": 59.004765,
+  "single_prompt_seconds": 46.28200000000652,
+  "single_prompt_tokens_per_second": 2269.8673350327385,
+  "paired_prompt_tokens_per_second": 1780.432479,
+  "actual_transfer": {
+    "bytes": 691633076,
+    "seconds": 3.065621,
+    "includes": "network/import/all-owner-and-logit-hash/acknowledgment"
+  },
+  "paired_phases": [
+    {
+      "operation": "startup_and_initial_prefill",
+      "tokens": 105054,
+      "seconds": 49.14100000000326
+    },
+    {
+      "operation": "export_prepare",
+      "tokens": 0,
+      "bytes": 691633076,
+      "seconds": 2.25
+    },
+    {
+      "operation": "acknowledge",
+      "tokens": 0,
+      "seconds": 0.01600000000325963
+    },
+    {
+      "operation": "save_rewind",
+      "tokens": 0,
+      "seconds": 2.4540000000270084
+    },
+    {
+      "operation": "close",
+      "tokens": 0,
+      "seconds": 0.0
+    }
+  ],
+  "observation": "One matched observation per route; native Mac pairing/reloads precede the recorded prompt interval; no paired TTFT claim.",
+  "restoration": {
+    "status": "RESTORED",
+    "pid": 48663,
+    "binary_sha256": "2256c6940ac98e49fa05af31d8265af62f1c4a690ed5e14287de3f0a9c3bad4b",
+    "command_exact": true,
+    "environment_exact": true,
+    "cwd_exact": true,
+    "model_endpoint_status": 200,
+    "host_budget_bytes": 429496729600,
+    "runtime_floor_bytes": 536870912,
+    "peak_observed_allocation": 327497940992,
+    "min_available": 210615009280,
+    "forced_kill": false,
+    "task_scratch_dependency": false,
+    "stdout_stderr": "/dev/null"
+  },
+  "retained_failed_attempts": [
+    "initial browser observer zombie-race; no inference",
+    "missing recovered reverse broker forward; failed qualification, no state accepted",
+    "supplemental3-forced-ID streaming decode refused exact-radix dispatch coverage; r2 captures initial frontier only"
+  ],
+  "state_parity": "state-parity.json",
+  "state_checks": {
+    "initial_common_checkpoint_exact": true,
+    "forced_common_checkpoint_exact": true,
+    "all_forced_vocab_logits_exact": true,
+    "same_prefill_plan": true,
+    "real_webui_mode3_initial_exact": true,
+    "real_webui_single_common_initial_exact": true
+  },
+  "forced_scope": "One full-vocabulary initial frontier row per arm; no additional token evaluated; multi-step streaming decode refusal retained separately.",
+  "initial_logits_sha256": "ae6f051f883ff5ed22ad386cf71dd1f83111e4b976ebf835a133fbf678922bee",
+  "common_owner_count": 48,
+  "mode3_owner_count": 49,
+  "validation": {
+    "focused_python_tests": 44,
+    "shared_profile_checks": 6,
+    "focused_peak_tree_rss": 157003776,
+    "mac_native_negotiation_checks": 15,
+    "mac_exact_cone_oracle": "PASS",
+    "proof_secret_private_path_ip_auth_scan": "PASS"
+  }
+}

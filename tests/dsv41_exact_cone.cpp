@@ -31,6 +31,8 @@ static result run(uint32_t n,uint32_t keep,bool image){
 }
 int main(){
     check(y::exact_keep==2541);
+    check(y::remote_compatible(2541,2)&&y::remote_compatible(140,1)&&y::remote_compatible(0,0));
+    check(!y::remote_compatible(2541,1)&&!y::remote_compatible(140,2)&&!y::remote_compatible(2541,0));
     for(uint32_t n:{128u,2541u,2542u,4097u,8193u})for(bool image:{false,true}){
         auto full=run(n,0,image),cone=run(n,y::exact_keep,image);
         check(full.raw==cone.raw);

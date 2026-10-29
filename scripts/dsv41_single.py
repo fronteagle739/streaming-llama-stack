@@ -36,6 +36,10 @@ DEFAULT_ENV = {
     'LLAMADECODE_APPEND_DECODE_MAX': '0',     # E2c resident appends change logits; explicit toggle only
     'LLAMADECODE_RECENCY_LFU': '1',          # E8 exact placement policy, faster in both measured repetitions
     'LLAMADECODE_LFU_HALF_LIFE': '16',       # qualified cadence; one-token decay was effectively neutral
+    'LLAMADECODE_APPEND_RESIDENT_SWEEP': '1',
+    'LLAMADECODE_HOST_COPY_STAGING': 'auto',
+    'DS4_CUDA_SINGLE_GPU_HC_GRAPHS': '1',
+    'LLAMA_DSV41_INDEX_FP4': '1',
 }
 PRESETS = {
     '262k': dict(context=262144, ctx_cache_precision='f32', ctx_cache_growable=True,
@@ -63,7 +67,6 @@ def overlay(preset, local=None, model=None, yoco_keep=None, vision=None, profile
     if model:
         result['model'] = model
     env = dict(result.get('env_overrides') or {})
-    explicit_append = 'LLAMADECODE_APPEND_DECODE_MAX' in env
     env.update(COMMON_ENV)
     for key,value in DEFAULT_ENV.items():env.setdefault(key,value)
     result.update(PRESETS[preset], serving='single_engine', producer_host_reserve_gib=.5, env_overrides=env, **FOLD)
@@ -80,13 +83,18 @@ def overlay(preset, local=None, model=None, yoco_keep=None, vision=None, profile
         if yoco_keep is not None and yoco_keep!=expected:raise ValueError('YOCO selection conflicts with the quality profile')
         yoco_keep=expected
         result['preset_name']='DSV4.1 single engine / '+profile+' / '+preset
-        if profile=='ultra-cone' and not explicit_append:
-            env['LLAMADECODE_APPEND_DECODE_MAX']='96'   # owner: resident follow-ups on in the ultra-cone preset (KL ~0.001-0.011 toggle)
-            result['env_overrides']=env
     if yoco_keep is not None:
         if type(yoco_keep) is not int or yoco_keep not in (0,140,2541):raise ValueError('yoco_keep must be 0, 140 or 2541')
         result['yoco_keep']=yoco_keep
     if vision:result['vision_bridge_version']=1
+    # Qualified Q4 exact-cone carry lifetime: use the unused growable-cache
+    # reservation during initial prefill, then restore it before cache growth.
+    # Keep N=1: the optimized two-sweep control is faster than grouped N=2.
+    if (preset=='1m' and result.get('producer_profile','ultra')=='ultra' and
+            result.get('yoco_keep')==2541 and not result.get('vision_bridge_version') and
+            result.get('producer_fixed_direct_open',True) and
+            env.get('LLAMADECODE_DECODE_COMPACT','1')!='0'):
+        env.setdefault('LLAMADECODE_SINGLEPASS_VRAM','1')
     return result
 
 
@@ -119,7 +127,7 @@ def resolved(cfg):
     keep_yoco=yoco_keep(single)
     if keep_yoco:flags['--yoco-keep']=str(keep_yoco)
     env = apply({}, single, 'rtx-producer')
-    keep = ('LLAMADECODE_', 'DS4_DS_READ_PARTS', 'LLAMA_DSV41_')
+    keep = ('LLAMADECODE_', 'DS4_DS_READ_PARTS', 'LLAMA_DSV41_', 'DS4_CUDA_SINGLE_GPU_HC_GRAPHS')
     return dict(
         serving=merged.get('serving'), model=merged.get('model') or '(set "model" in your config or pass -Model)',
         router=f"http://{merged['host']}:{merged['port']}", engine=merged['ds4_url'],

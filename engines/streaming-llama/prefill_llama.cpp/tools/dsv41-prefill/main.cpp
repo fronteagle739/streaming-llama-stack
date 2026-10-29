@@ -16,6 +16,8 @@ extern "C" uint64_t ggml_backend_cuda_dsv41_pv_view_queued(void);
 #include "llama-dsv41-flashinfer-budget.h"
 #include "profile-check.h"
 #include "llama-dsv41-ctx-cache-plan.h"
+#include "llama-dsv41-device-admission.h"
+#include "llama-dsv41-singlepass.h"
 #include "llama-dsv41-prefill-plan.h"
 #include "llama-dsv41-engram-prefetch.h"
 #include "llama-weight-fetcher.h"
@@ -258,7 +260,7 @@ const char*usage=
 "Optional --native-rhs-pack 0|1 (default0; qualified native half RHS packing,384MiB expert workspace).\n"
 "Optional --pv-strided-probabilities 0|1 (default0; native F32 PV without probability copy).\n"
 "Optional --reuse-child-raw-metadata 0|1 (default0; omit unused grouped child arrays).\n"
-"Optional --yoco-keep 0|140|2541 (default0; 140 approximate, 2541 dependency cone; local only).\n"
+"Optional --yoco-keep 0|140|2541 (default0; 140 approximate, 2541 exact dependency cone).\n"
 "Optional --unaligned-append-step-tokens 0|2048 (default0; explicit bounded continuation after Mac decode, unchanged fixed owners).\n"
 "Optional --resident-pageable-copies 0|1 (default0; resident paired RAM mirrors use existing bounded backend vector copies).\n"
 "Optional --tile-host-registration 0|1 (default0; paired full-resident plan registers only its current RAM lease).\n"
@@ -668,8 +670,10 @@ int wmain(int argc,wchar_t**argv){
         require(!ctx_cache.growable||!switch_arena,"ctx-cache-growable is not covered by the switch arena's suspend/resume");
         report["compressed_cache_bf16"]={{"enabled",options.compressed_cache_bf16},{"lossless_existing_QAT_BF16_values",true},{"canonical_wire_F32",true},{"raw_and_pool_tails_F32",true}};
         options.context=uint32_t(context);options.yoco_keep=uint32_t(yoco_keep);
-        options.yoco_remote_state_version=args.count("--yoco-remote-state-version")?uint32_t(integer(args.at("--yoco-remote-state-version"))):0;
-        require(options.yoco_remote_state_version<=1,"Unsupported YOCO remote state version");
+        const auto remote_state_version=args.count("--yoco-remote-state-version")?integer(args.at("--yoco-remote-state-version")):0;
+        require(remote_state_version<=2,"Unsupported YOCO remote state version");
+        options.yoco_remote_state_version=uint32_t(remote_state_version);
+        require(options.yoco_remote_state_version==0||llama_dsv41_yoco::remote_compatible(uint32_t(yoco_keep),options.yoco_remote_state_version),"Unsupported or mismatched YOCO remote state version");
         if(args.count("--vision-spans-file")){
             options.image_spans=studio_vision_spans(args.at("--vision-spans-file"),options.context);options.images=true;
             report["vision"]={{"images",options.image_spans.size()},{"embedding_width",5120},{"native_image_token",129264},{"image_router_bias",true},{"seed_host_tile_rows",128}};
@@ -840,9 +844,34 @@ int wmain(int argc,wchar_t**argv){
             options.fixed->unpaired_resident=fixed_resident;options.fixed->direct_open=direct_open;
             options.fixed->backend_temporary_reserve_bytes=backend_reserve;report["backend_temporary_reserve_bytes"]=backend_reserve;
             options.fixed->tokens=reserved_chunk;options.fixed->tile=options.carry.max_tile_tokens;options.fixed->context=options.context;
+            uint64_t hidden_budget=options.admitted_hidden_bytes;
+            const char *carry_loan=std::getenv("LLAMADECODE_SINGLEPASS_VRAM");
+            if(carry_loan&&std::strcmp(carry_loan,"1")==0&&reserved_chunk>49152&&!restored){
+                const char *compact=std::getenv("LLAMADECODE_DECODE_COMPACT");
+                require(direct_open&&!warm&&options.yoco_keep==2541&&options.ctx_cache_grow_step&&
+                    options.resident_bf16&&options.resident_ids&&options.resident_metadata&&
+                    options.carry.defer_hidden_readback&&options.carry.export_hidden_after_head&&
+                    !(compact&&std::strcmp(compact,"0")==0),"Carry VRAM loan requires direct-open exact cone, growable BF16 and decode compaction");
+                const uint32_t ceiling=llama_dsv41_ctx_cache::round_tokens(options.context,options.ctx_cache_grow_step,uint32_t(tokens.size()));
+                const uint64_t full=llama_dsv41_device_admission::cache_charge(options.admitted_cache_bytes,
+                    llama_dsv41_cache_storage::required_bytes(options.context,true,options.capture_dspark));
+                const uint64_t active=llama_dsv41_ctx_cache::fixed_bytes()+
+                    llama_dsv41_ctx_cache::mapped_bytes(options.context,ceiling,true,2ull<<20)+(1ull<<20);
+                if(full>active){
+                    auto bytes=[&](uint32_t n){return llama_dsv41_tile_executor::resident_layout_bytes(backend.get(),n,options.carry.max_tile_tokens,true,true,true);};
+                    const auto original=llama_dsv41_prefill::plan_bank(reserved_chunk,options.carry.max_tile_tokens,hidden_budget,bytes);
+                    require(original.fits,"Original hidden bank must fit before a cache loan");
+                    auto&f=*options.fixed;f.restore_hidden_rows=original.spill?original.rows:0;
+                    f.restore_hidden_bytes=bytes(original.rows);
+                    hidden_budget=llama_dsv41_singlepass::hidden_budget(hidden_budget,full,active,bytes(reserved_chunk));
+                    f.prefill_hidden_bytes=hidden_budget;f.prefill_cache_ceiling=ceiling;
+                    std::fprintf(stderr,"SINGLEPASS_VRAM_LOAN cache_ceiling=%u base_hidden=%llu temporary_hidden=%llu full_cache_charge=%llu active_cache_charge=%llu job_bound_unchanged=1\n",
+                        ceiling,(unsigned long long)options.admitted_hidden_bytes,(unsigned long long)hidden_budget,(unsigned long long)full,(unsigned long long)active);
+                }
+            }
             // LLAMADECODE single sweep: the CUDA hidden bank keeps its admitted bytes; when it cannot
             // hold the whole capacity, its last tile becomes the spill slot for the rows past it.
-            {const auto bank=llama_dsv41_prefill::plan_bank(reserved_chunk,options.carry.max_tile_tokens,options.admitted_hidden_bytes,[&](uint32_t n){
+            {const auto bank=llama_dsv41_prefill::plan_bank(reserved_chunk,options.carry.max_tile_tokens,hidden_budget,[&](uint32_t n){
                     return options.admitted_hidden_bytes?llama_dsv41_tile_executor::resident_layout_bytes(backend.get(),n,options.carry.max_tile_tokens,options.resident_bf16,options.resident_ids,options.resident_metadata):0;});
              const bool spill_plan=options.resident_bf16&&options.resident_ids&&options.resident_metadata&&options.carry.defer_hidden_readback&&options.carry.export_hidden_after_head;
              require(!options.admitted_hidden_bytes||(bank.fits&&(!bank.spill||spill_plan)),"Prefill capacity cannot fit the admitted hidden bank (and this plan cannot spill)");

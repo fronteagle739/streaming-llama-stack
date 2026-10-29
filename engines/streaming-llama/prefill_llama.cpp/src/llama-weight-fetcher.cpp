@@ -206,6 +206,7 @@ struct wf_layer {
 
     // Pipeline tracking
     std::atomic<wf_layer_stage>   stage{WF_STAGE_IDLE};
+    std::atomic<uint64_t>         direct_generation{0};
     int                           gpu_buf_idx = -1;    // which ping-pong buffer (-1 = none)
     int                           ram_buf_idx = -1;    // which RAM staging buffer (-1 = none)
 
@@ -230,7 +231,7 @@ struct wf_layer {
     wf_layer() = default;
     wf_layer(wf_layer && o) noexcept
         : spans(std::move(o.spans)), total_bytes(o.total_bytes),
-          stage(o.stage.load()), gpu_buf_idx(o.gpu_buf_idx), ram_buf_idx(o.ram_buf_idx),
+          stage(o.stage.load()), direct_generation(o.direct_generation.load()), gpu_buf_idx(o.gpu_buf_idx), ram_buf_idx(o.ram_buf_idx),
           active_experts(std::move(o.active_experts)), expert_filter_set(o.expert_filter_set),
           skipped(o.skipped), persistent(o.persistent), persistent_loaded(o.persistent_loaded.load()),
           cache_inserted(o.cache_inserted), cache_hits(std::move(o.cache_hits)),
@@ -356,6 +357,7 @@ struct wf_chunk_pool {
 // ---------------------------------------------------------------------------
 
 struct wf_context {
+    std::atomic<uint64_t> direct_generation{0}; // never reset between passes
     wf_params                     params;
     wf_transfer_mode              effective_mode = WF_MODE_MMAP;
     // Common lifecycle/query code reads this gate on every platform. The
@@ -4060,6 +4062,7 @@ static void wf_dma_thread_fn(wf_context * wf) {
                     const auto now = std::chrono::high_resolution_clock::now();
                     wf->dma_timing_log.push_back({layer_idx, bi, 0, now, now});
                 }
+                wf->layers[layer_idx].direct_generation.store(wf->direct_generation.fetch_add(1)+1);
                 wf->layers[layer_idx].stage.store(WF_STAGE_GPU_READY);
                 wf->pipeline_cv.notify_one();
                 did_work = true;
@@ -4132,6 +4135,7 @@ static void wf_dma_thread_fn(wf_context * wf) {
                             std::chrono::duration<double,std::milli>(last.t_fence.time_since_epoch()).count());
                 }
             }
+            wf->layers[layer_idx].direct_generation.store(wf->direct_generation.fetch_add(1)+1);
             wf->layers[layer_idx].stage.store(WF_STAGE_GPU_READY);
             wf->stats.layers_fetched++;
             wf->dma_in_flight_buf.store(-1);
@@ -6596,21 +6600,42 @@ int wf_persist_shutdown(const char * why) {
 #endif
 }
 
-// LLAMADECODE: expert-miss fetch timing split (one producer thread calls the extent fetch).
+// Demand and one optional tail-hint worker share this accounting and DS slot.
+static std::mutex g_wf_extent_stats_mutex;
 static struct { double submit_ms, fence_ms, verify_ms, cuda_ms; uint64_t requests, batches; } g_wf_extent_stats = {};
 void wf_extent_fetch_stats(double * out4, uint64_t * requests, uint64_t * batches) {
+    std::lock_guard<std::mutex> lock(g_wf_extent_stats_mutex);
     if (out4) { out4[0] = g_wf_extent_stats.submit_ms; out4[1] = g_wf_extent_stats.fence_ms; out4[2] = g_wf_extent_stats.verify_ms; out4[3] = g_wf_extent_stats.cuda_ms; }
     if (requests) *requests = g_wf_extent_stats.requests;
     if (batches) *batches = g_wf_extent_stats.batches;
 }
-bool wf_fetch_extents_direct(wf_context * wf, int bank, const wf_extent * extents, int n,
-                             void * cuda_stream, uint64_t * bytes, double * milliseconds) {
+bool wf_ready_direct_bank(wf_context * wf, int stage, int bank, uint64_t * generation) {
+    if (generation) *generation=0;
+    if (!wf || !generation || !wf->required_dstorage || !wf->params.ds_compute_direct ||
+        wf->params.n_gpu_buffers!=2 || wf->params.ds_gpu_ring_slots ||
+        stage<0 || stage>=int(wf->layers.size()) || bank<0 || bank>=2) return false;
+    const auto&layer=wf->layers[stage];
+    // The caller pins this ready stage until its worker has joined. Its DMA
+    // publisher has released all ownership/generation fields via stage.store.
+    if(layer.stage.load(std::memory_order_acquire)!=WF_STAGE_GPU_READY || layer.gpu_buf_idx!=bank) return false;
+    *generation=layer.direct_generation.load(std::memory_order_acquire);
+    return *generation!=0;
+}
+static bool wf_ready_generation(wf_context*wf,int stage,int bank,uint64_t generation){
+    uint64_t live=0;return generation&&wf_ready_direct_bank(wf,stage,bank,&live)&&live==generation;
+}
+static bool wf_fetch_extents_impl(wf_context * wf, int bank, const wf_extent * extents, int n,
+                             void * cuda_stream, uint64_t * bytes, double * milliseconds,
+                             int ready_stage, uint64_t generation, uint64_t * deferred_fence) {
+    std::lock_guard<std::mutex> stats_lock(g_wf_extent_stats_mutex);
+    if(deferred_fence)*deferred_fence=0;
     if (bytes) *bytes = 0;
     if (milliseconds) *milliseconds = 0;
 #if defined(WF_HAS_DSTORAGE) && defined(WF_HAS_CUDA)
     if (!wf || !wf->required_dstorage || !wf->params.ds_compute_direct || !wf->ds_queue || !wf->ds_fence ||
             bank < 0 || bank >= (int) wf->ds_compute_banks.size() || n < 0 || (n && !extents) ||
             wf->ds_failed.load(std::memory_order_acquire)) return false;
+    if (ready_stage>=0&&!wf_ready_generation(wf,ready_stage,bank,generation)) return false;
     if (n == 0) return true;
     const auto & target = wf->ds_compute_banks[bank];
     const uint64_t quarter = target.quarter_bytes, capacity = quarter * target.quarters.size();
@@ -6636,6 +6661,7 @@ bool wf_fetch_extents_direct(wf_context * wf, int bank, const wf_extent * extent
         std::this_thread::sleep_for(std::chrono::microseconds(20));
     }
     struct release_slot { wf_context * wf; ~release_slot() { wf->dma_in_flight_buf.store(-1); } } slot{wf};
+    if (ready_stage>=0&&!wf_ready_generation(wf,ready_stage,bank,generation)) return false;
     uint64_t total = 0; int submitted = 0;
     const int drain_threshold = std::max(1, wf->ds_queue_cap / 2);
     for (int i = 0; i < n; ++i) {
@@ -6644,6 +6670,14 @@ bool wf_fetch_extents_direct(wf_context * wf, int bank, const wf_extent * extent
                 e.bank_offset > capacity || e.nbytes > capacity - e.bank_offset) {
             WF_ERR("Required DirectStorage extent fetch refused: invalid extent %d", i);
             wf->ds_failed.store(true, std::memory_order_release); return false;
+        }
+        if(ready_stage>=0)for(const auto&span:wf->layers[ready_stage].spans){
+            // Ready-bank hints may write only the omitted tail. Never overwrite
+            // a registered dense/shared tensor while the stage is ready.
+            if(e.bank_offset<span.gpu_offset+span.nbytes&&span.gpu_offset<e.bank_offset+e.nbytes){
+                WF_ERR("Required DirectStorage tail hint overlaps registered stage=%d span",ready_stage);
+                wf->ds_failed.store(true,std::memory_order_release);return false;
+            }
         }
         uint64_t source = e.file_offset, destination = e.bank_offset, remaining = e.nbytes;
         while (remaining) {
@@ -6689,14 +6723,41 @@ bool wf_fetch_extents_direct(wf_context * wf, int bank, const wf_extent * extent
     const auto fenced_at = wf_clock::now(); g_wf_extent_stats.fence_ms += std::chrono::duration<double, std::milli>(fenced_at - submitted_at).count();
     if (!wf_dstorage_wave_succeeded(wf, wf->ds_queue, -1, -1)) return false;
     const auto verified_at = wf_clock::now(); g_wf_extent_stats.verify_ms += std::chrono::duration<double, std::milli>(verified_at - fenced_at).count();
-    if (!wf_cuda_wait_ds_fence(wf, fence, (cudaStream_t) cuda_stream)) return false;
-    g_wf_extent_stats.cuda_ms += ms_since(verified_at); ++g_wf_extent_stats.batches;
+    if (deferred_fence) {
+        if(!wf_ready_generation(wf,ready_stage,bank,generation))return false;
+        *deferred_fence=fence;
+    } else if (!wf_cuda_wait_ds_fence(wf, fence, (cudaStream_t) cuda_stream)) return false;
+    if(!deferred_fence)g_wf_extent_stats.cuda_ms += ms_since(verified_at);
+    ++g_wf_extent_stats.batches;
     wf->stat_bytes_read_nvme.fetch_add(total);
     if (bytes) *bytes = total;
     if (milliseconds) *milliseconds = std::chrono::duration<double, std::milli>(std::chrono::high_resolution_clock::now() - started).count();
     return true;
 #else
     (void) wf; (void) bank; (void) extents; (void) n; (void) cuda_stream;
+    (void) ready_stage; (void) generation;
     return false;
+#endif
+}
+
+bool wf_fetch_extents_direct(wf_context * wf,int bank,const wf_extent * extents,int n,
+        void * stream,uint64_t * bytes,double * milliseconds){
+    return wf_fetch_extents_impl(wf,bank,extents,n,stream,bytes,milliseconds,-1,0,nullptr);
+}
+bool wf_fetch_ready_extents(wf_context * wf,int stage,int bank,uint64_t generation,
+        const wf_extent * extents,int n,uint64_t * fence,uint64_t * bytes,double * milliseconds){
+    if(!fence)return false;
+    return wf_fetch_extents_impl(wf,bank,extents,n,nullptr,bytes,milliseconds,stage,generation,fence);
+}
+bool wf_wait_ready_extents(wf_context * wf,int stage,int bank,uint64_t generation,uint64_t fence,void * stream){
+#if defined(WF_HAS_DSTORAGE) && defined(WF_HAS_CUDA)
+    if(!wf_ready_generation(wf,stage,bank,generation)||!fence||wf_has_failed(wf))return false;
+    std::lock_guard<std::mutex> lock(g_wf_extent_stats_mutex);
+    const auto begun=std::chrono::high_resolution_clock::now();
+    const bool ok=wf_cuda_wait_ds_fence(wf,fence,(cudaStream_t)stream);
+    g_wf_extent_stats.cuda_ms+=std::chrono::duration<double,std::milli>(std::chrono::high_resolution_clock::now()-begun).count();
+    return ok;
+#else
+    (void)wf;(void)stage;(void)bank;(void)generation;(void)fence;(void)stream;return false;
 #endif
 }

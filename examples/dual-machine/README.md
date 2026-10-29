@@ -8,21 +8,30 @@ and start nothing. Normal launches refuse unresolved placeholders.
 
 | Preset directories | Route |
 | --- | --- |
-| `dsv41-accurate`, `dsv41-fast`, `dsv41-ultra`, `dsv41-ultra-yoco` | Original DSV4.1 GGUF: RTX streaming producer and native Mac ds4 state receiver. The selected directory fixes the RTX prefill tier and YOCO choice. |
+| `dsv41-accurate`, `dsv41-fast`, `dsv41-ultra`, `dsv41-ultra-cone`, `dsv41-ultra-yoco` | Original DSV4.1 GGUF: RTX streaming producer and native Mac ds4 state receiver. The selected directory fixes the RTX prefill tier and YOCO choice. |
 | `dsv4-flash-peer-streaming`, `dsv4-flash-153g-peer-streaming` | Earlier DS4P peer protocol: RTX streams GGUF weights and prefills, Mac decodes. These use `ds4-peer`, distinct from the DSV4.1 native state broker. |
 | `kimi-k2.7-streaming` | Studio's optimised Kimi K2.7 streaming settings: RTX GGUF prefill and Mac MLX receiver, 65,536 RTX / 262,144 Mac configured context, 24,576 batch, 2,048 microbatch, F16 KV, MTP off. |
 | `kimi-k2.7-standard-streaming` | Standard Kimi K2.7 settings, using the same weights and receiver with a 512-token RTX microbatch. Replaces the retired Kimi K2.6 weight selection. |
 | `glm-5.1-streaming`, `glm-5.2-streaming`, `glm-5.3-streaming` | Full GLM DSA route: RTX GGUF prefill and Mac MLX receiver, 262,144 configured context, full sparse DSA, 512 microbatch, F16 KV, MTP off. |
 
-The `dsv41-ultra-yoco` route is integrated and measured with negotiated YOCO v1
+The historical `dsv41-ultra-yoco` route was measured with negotiated approximate YOCO v1
 and mode3 state. Round 4 reached 1,670 prefill tok/s on a 198,287-token image
 prompt and 31.0 Mac decode tok/s. The matched 49,787-token image prompt reached
 1,477 prefill tok/s with YOCO and 1,197 without it.
 [Timings and conditions](../../docs/YOCO_PAIRED_QUALIFICATION.md).
 
-Paired presets retain YOCO keep 140. The single-machine exact cone (keep 2541)
-has no negotiated remote state version: its export is refused before launch.
-The same gap applies to the large-RAM preview. [Defaults and limits](../../docs/MERGEPERF.md).
+DSV4.1 ULTRA paired presets, including the legacy `ultra-yoco` filename, now
+default to exact cone keep2541 with negotiated state v2. The complete mode3
+owner layout is unchanged: all token history, compressed/index owners, final
+raw windows, DSpark rings and logits are checked by the existing transport.
+A v1-only receiver refuses cone pairing. Use `-ApproximateYoco` on the RTX
+PowerShell wrapper, or `--approximate-yoco` with `examples/run_preset.py`, to
+select approximate keep140/v1 explicitly. Accurate/fast profiles retain their
+explicit full-prefill controls. The large-RAM preview requests cone/v2 too.
+[Negotiation and live proof](../../docs/CONE_STATE.md): the matched 105,054-token
+WebUI recall and both follow-ups pass against single-machine cone, with exact
+common-owner and full-vocabulary initial-logit parity. Paired prompt 59.005 s,
+1,780.432 tok/s; initial Mac decode 27.499 tok/s, first follow-up 31.925 tok/s.
 
 The [large-RAM ds4-win untested example](dsv41-large-ram-untested/README.md)
 contains a portable preview launcher and config pair for a Windows/Linux

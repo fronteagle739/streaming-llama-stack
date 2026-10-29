@@ -3,6 +3,12 @@
 Each quality setting has an API-only launcher and a `-webui` launcher. Both run
 the same single engine: streaming-llama prefill followed by modified ds4 decode.
 
+Short follow-ups reuse resident experts through the sweep graph by default.
+The measured32-token append took2.7-2.9s, with small numerical differences
+(KL0.0000235-0.00250 at2K-32K; recall/top-1 passed). Set
+`"LLAMADECODE_APPEND_RESIDENT_SWEEP": "0"` in `env_overrides` to use full sweeps.
+See the [measured tradeoff](../../docs/EXPERIMENT_E2C.md).
+
 | Scripts | Prefill setting |
 | --- | --- |
 | `dsv41-accurate*.ps1` | Accurate arithmetic; YOCO off |
@@ -41,9 +47,10 @@ appropriate vision-enabled local config and producer for image prompts; do not
 advertise the text-only YOCO speed as image throughput. Prefill quality is separate
 from the live decode bias slider and phase sampler controls.
 
-Short resident follow-ups (about 4x faster first output on a short follow-up
-turn, with a small logit difference) are on in the default `ultra-cone` profile
-and off in the other profiles. Set `env_overrides.LLAMADECODE_APPEND_DECODE_MAX`
-to `"0"` to turn them off, or `"96"` to turn them on elsewhere. [Measurements and other toggles](../../docs/MERGEPERF.md).
-Exact LFU admission defaults to `LLAMADECODE_RECENCY_LFU=1` with
-`LLAMADECODE_LFU_HALF_LIFE=16`; set LFU to `"0"` for the earlier LRU policy.
+Exact resident sweep follow-ups are enabled with `LLAMADECODE_APPEND_RESIDENT_SWEEP=1`.
+The per-token append path changes logits and remains opt-in (`LLAMADECODE_APPEND_DECODE_MAX=96`).
+LFU admission defaults to 1 with half life 16; explicit 0 keeps LRU.
+Certified FP4 index scoring is enabled by default on supported SM120 BF16-index
+paths. The100K comparison is bit-identical and faster; unsupported inputs use
+the existing BF16 scorer. Set `LLAMA_DSV41_INDEX_FP4` to `"0"` in local
+`env_overrides` to disable it. See [E6 measurements](../../docs/EXPERIMENT_E6.md).

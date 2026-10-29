@@ -1,0 +1,9 @@
+{
+  "exit_code": 0,
+  "reason": "STOP_REQUESTED",
+  "host_budget_bytes": 2147483648,
+  "runtime_floor_bytes": 536870912,
+  "peak_tree_rss": 1481949184,
+  "min_available": 92856041472,
+  "forced_kill": false
+}

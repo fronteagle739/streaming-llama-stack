@@ -118,7 +118,9 @@ def command(row, session, sequence, mode=3, prefill_max=MAX_PREFILL, model_sha25
              # LLAMADECODE B0: in-process greedy RTX decode (no peer).
              'decode': ['base', 'max_tokens', 'stop_tokens'], 'decode_forced': ['base', 'tokens', 'logits_path'],
              # LLAMADECODE B5: live quality-speed control of the in-process decode bias.
-             'quality_speed': ['value'], 'generation_start': ['settings'], 'export_local': ['base']}
+             'quality_speed': ['value'], 'generation_start': ['settings'], 'export_local': ['base'],
+             # Local bounded E17 diagnostic; native endpoint additionally requires its explicit off-by-default setting.
+             'perfexp_kv_samples': ['base', 'path']}
     require(type(op) is str and op in extra, 'Unknown session operation')
     owned_vision = op=='prefill' and 'vision_spans_file' in row
     keys(row, common + extra[op] + (['vision_spans_file'] if owned_vision else []))
@@ -164,6 +166,8 @@ def command(row, session, sequence, mode=3, prefill_max=MAX_PREFILL, model_sha25
         from slstack.generation import SAMPLERS, number
         require(type(settings['overrides']) is dict and set(settings['overrides']) <= set(SAMPLERS), 'Unknown sampler')
         for name,value in settings['overrides'].items():number(value, *SAMPLERS[name], name == 'top_k')
+    if op == 'perfexp_kv_samples':
+        require(type(row['path']) is str and 0 < len(row['path']) <= 1024, 'KV sample output path')
     if op == 'decode_forced':
         tokens = row['tokens']
         require(type(tokens) is list and 0 < len(tokens) <= 4096, 'Forced decode token extent')
@@ -210,8 +214,8 @@ def initial_request(session, headers, body):
     require(tier in ['accurate', 'fast', 'ultra', 'hyper'], 'Explicit qualified tier required')
     result = dict(session=session, context=CONTEXT, tier=tier, tokens=body, tokens_sha256=h['x-dsv41-tokens-sha256'])
     keep=h.get('x-dsv41-yoco-keep','0');version=h.get('x-dsv41-yoco-state-version','0')
-    require((keep,version) in (('0','0'),('140','1')), 'YOCO state requires matching explicit keep/version')
-    if keep!='0':result.update(yoco_keep=140,yoco_state_version=1)
+    require((keep,version) in (('0','0'),('140','1'),('2541','2')), 'YOCO state requires matching explicit keep/version')
+    if keep!='0':result.update(yoco_keep=int(keep),yoco_state_version=int(version))
     if 'x-dsv41-techniques' in h:
         wire = h['x-dsv41-techniques'].encode('utf-8')
         require(len(wire) <= 4096, 'Technique header too large')

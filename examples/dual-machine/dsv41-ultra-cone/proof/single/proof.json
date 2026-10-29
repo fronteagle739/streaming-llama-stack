@@ -1,0 +1,60 @@
+{
+  "status": "PASS",
+  "scope": "actual stack WebUI exact-cone recall",
+  "prompt_sha256": "14c7eddf2c43518628a2a2c012aff8a1a9d4e0056fc74f0c5591c9d19707772a",
+  "deterministic_samplers": {
+    "temperature": 0,
+    "top_p": 1,
+    "top_k": 1,
+    "min_p": 0,
+    "quality_speed": 0.22,
+    "seed": 123456,
+    "max_tokens": 64
+  },
+  "turns": [
+    {
+      "label": "recall",
+      "answer": "AMBER OTTER 731",
+      "timings": {
+        "cache_n": 0,
+        "prompt_n": 105054,
+        "prompt_ms": 46282.00000000652,
+        "predicted_n": 6,
+        "predicted_ms": 2659.3208
+      },
+      "stats": "Context: 105060/1000001 (10.51%)\nOutput: 6/64 (9%)\n2.3 tokens/sec",
+      "content_events": 5,
+      "stream_span_ms": 857.8000000119209
+    },
+    {
+      "label": "followup",
+      "answer": "AMBER OTTER 731",
+      "timings": {
+        "cache_n": 105060,
+        "prompt_n": 20,
+        "prompt_ms": 2858.9999999967404,
+        "predicted_n": 6,
+        "predicted_ms": 1226.7554999999998
+      },
+      "stats": "Context: 105086/1000001 (10.51%)\nOutput: 6/64 (9%)\n4.9 tokens/sec",
+      "content_events": 5,
+      "stream_span_ms": 812.1000000238419
+    },
+    {
+      "label": "number",
+      "answer": "731",
+      "timings": {
+        "cache_n": 105086,
+        "prompt_n": 19,
+        "prompt_ms": 2718.9999999827705,
+        "predicted_n": 1,
+        "predicted_ms": 368.7074
+      },
+      "stats": "Context: 105106/1000001 (10.51%)\nOutput: 1/64 (2%)\n2.7 tokens/sec",
+      "content_events": 1,
+      "stream_span_ms": 0
+    }
+  ],
+  "exact_reference_answers": true,
+  "errors": []
+}

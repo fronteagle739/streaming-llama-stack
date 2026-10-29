@@ -1,0 +1,14 @@
+{
+  "native_implementation_commit": "ee868e3a480922f2dba9466c75f6f8468673af0e",
+  "frozen_v6_manifest_sha256": "c628879cae4b27e651b2beb1228f9d9141e64577b2b9c5f54126e4272f6e0038",
+  "checked_files": 192,
+  "functional_native_source_matches_v6_snapshot": true,
+  "post_build_differences": [
+    {
+      "path": "engines/streaming-llama/prefill_llama.cpp/src/llama-dsv41-host-cpu.h",
+      "v6_build_snapshot_sha256": "fecab5778b4220ec3df6db8bb747cba7fa90a47c42038c913da87f16fd7eac9f",
+      "comment_clarification_sha256": "ef6eeb60afa37cd28c6214556eb2f0f59f6429e9c9e5f0a17cba599bfd91446a",
+      "change": "Comment only: clarify blocked-wait exclusion and active driver polling inclusion."
+    }
+  ]
+}

@@ -1,0 +1,417 @@
+{
+  "verdict": "adopt",
+  "scope": "CUDA single-GPU V4.1 HC input graph islands only; no full decode graph or PDL",
+  "pairs": [
+    {
+      "experiment": "E10-hc-fixed1",
+      "rows": [
+        {
+          "arm": "control",
+          "prompt_prefill_seconds": 17.962859,
+          "ttft_seconds": 20.969000000040978,
+          "decode": {
+            "tok_s": 5.841747331576065,
+            "seconds": 21.7400707,
+            "evaluated_tokens": 127
+          },
+          "hc_encode_ms": 252.8633,
+          "hc_median_encode_ms": 1.9764,
+          "witness": {
+            "tokens": 127,
+            "calls_per_token": 38,
+            "replays_per_token": 0
+          },
+          "ledger": {
+            "ds_bytes": 333693665280,
+            "ds_ms": 16205.17,
+            "l1_hits": 6661,
+            "l2_hits": 7056,
+            "misses": 16763,
+            "decode_ms": 21693.605
+          },
+          "producer_sha256": "c26ac911a076b52df820109df4feab07012c7ce116ca7897471776f1c9b51dae",
+          "decode_dll_sha256": "c8254e7998cf30694ed50f9a16748cfc075741aebe82df0d1506edeb74f027f4"
+        },
+        {
+          "arm": "candidate",
+          "prompt_prefill_seconds": 16.8597083,
+          "ttft_seconds": 19.64100000000326,
+          "decode": {
+            "tok_s": 5.959057325366646,
+            "seconds": 21.3120957,
+            "evaluated_tokens": 127
+          },
+          "hc_encode_ms": 72.4751,
+          "hc_median_encode_ms": 0.5713,
+          "witness": {
+            "tokens": 127,
+            "calls_per_token": 38,
+            "replays_per_token": 38
+          },
+          "ledger": {
+            "ds_bytes": 333693665280,
+            "ds_ms": 15931.773,
+            "l1_hits": 6661,
+            "l2_hits": 7056,
+            "misses": 16763,
+            "decode_ms": 21265.531
+          },
+          "producer_sha256": "c26ac911a076b52df820109df4feab07012c7ce116ca7897471776f1c9b51dae",
+          "decode_dll_sha256": "c8254e7998cf30694ed50f9a16748cfc075741aebe82df0d1506edeb74f027f4"
+        }
+      ],
+      "gates": {
+        "frontier": {
+          "rows": 1,
+          "bit_exact": true,
+          "mean_kl": 0.0,
+          "max_kl": 0,
+          "top1": 1.0
+        },
+        "forced": {
+          "rows": 16,
+          "bit_exact": true,
+          "mean_kl": 0.0,
+          "max_kl": 0,
+          "top1": 1.0
+        }
+      },
+      "decode_throughput_ratio": 1.0200813193608174,
+      "hc_encode_saved_ms": 180.3882,
+      "decode_saved_ms": 428.0740000000005
+    },
+    {
+      "experiment": "E10-hc-fixed3",
+      "rows": [
+        {
+          "arm": "control",
+          "prompt_prefill_seconds": 17.0462603,
+          "ttft_seconds": 19.79699999996228,
+          "decode": {
+            "tok_s": 5.846415412867205,
+            "seconds": 21.722712299999998,
+            "evaluated_tokens": 127
+          },
+          "hc_encode_ms": 257.4791,
+          "hc_median_encode_ms": 1.9901,
+          "witness": {
+            "tokens": 127,
+            "calls_per_token": 38,
+            "replays_per_token": 0
+          },
+          "ledger": {
+            "ds_bytes": 333693665280,
+            "ds_ms": 16175.56,
+            "l1_hits": 6661,
+            "l2_hits": 7056,
+            "misses": 16763,
+            "decode_ms": 21675.738
+          },
+          "producer_sha256": "c26ac911a076b52df820109df4feab07012c7ce116ca7897471776f1c9b51dae",
+          "decode_dll_sha256": "c8254e7998cf30694ed50f9a16748cfc075741aebe82df0d1506edeb74f027f4"
+        },
+        {
+          "arm": "candidate",
+          "prompt_prefill_seconds": 17.7467274,
+          "ttft_seconds": 20.57799999997951,
+          "decode": {
+            "tok_s": 5.948570365563912,
+            "seconds": 21.3496676,
+            "evaluated_tokens": 127
+          },
+          "hc_encode_ms": 73.3345,
+          "hc_median_encode_ms": 0.5752,
+          "witness": {
+            "tokens": 127,
+            "calls_per_token": 38,
+            "replays_per_token": 38
+          },
+          "ledger": {
+            "ds_bytes": 333693665280,
+            "ds_ms": 15975.169,
+            "l1_hits": 6661,
+            "l2_hits": 7056,
+            "misses": 16763,
+            "decode_ms": 21303.696
+          },
+          "producer_sha256": "c26ac911a076b52df820109df4feab07012c7ce116ca7897471776f1c9b51dae",
+          "decode_dll_sha256": "c8254e7998cf30694ed50f9a16748cfc075741aebe82df0d1506edeb74f027f4"
+        }
+      ],
+      "gates": {
+        "frontier": {
+          "rows": 1,
+          "bit_exact": true,
+          "mean_kl": 0.0,
+          "max_kl": 0,
+          "top1": 1.0
+        },
+        "forced": {
+          "rows": 16,
+          "bit_exact": true,
+          "mean_kl": 0.0,
+          "max_kl": 0,
+          "top1": 1.0
+        }
+      },
+      "decode_throughput_ratio": 1.0174730917122101,
+      "hc_encode_saved_ms": 184.14460000000003,
+      "decode_saved_ms": 372.0420000000013
+    }
+  ],
+  "guards": [
+    {
+      "experiment": "E10-hc-fixed1",
+      "arm": "control",
+      "exit_code": 0,
+      "reason": null,
+      "peak_tree_rss": 5998768128,
+      "min_available": 8910499840,
+      "elapsed_s": 63.93800000002375,
+      "host_budget_gib": 6.5,
+      "floor_gib": 0.5,
+      "runtime_min_free_gib": 0.5,
+      "no_progress_window_s": 600,
+      "job_commit_gib": 32.0,
+      "child_pid": 11452,
+      "shared_guard_commit": "2774636281ab32bf871497f0a8caae23c6b6cdc7",
+      "stack_retirement_policy": "cooperative request, progress-aware grace, logged force fallback",
+      "shared_guard_certificate": "L:\\scratch\\perfexp\\runtime\\jobs\\E10-hc-fixed1-control-8a83807ccacf40448f3e19c82f94b410.receipt.shared.json",
+      "cleanup_confirmed": true,
+      "paging_policy": {
+        "owned_paging_limit_bytes": 67108864,
+        "owned_paging_baseline": "zero at gated job launch",
+        "peak_owned_paged_bytes": 0,
+        "pagefile_hard_fault_rate": null,
+        "pagefile_hard_fault_attribution": "UNAVAILABLE: Windows kernel ETW access refused: [Errno 5] kernel pagefile ETW unavailable",
+        "pagefile_hard_fault_limit_per_second": 100,
+        "pagefile_hard_fault_duration_seconds": 5,
+        "scan_pages": 2566396,
+        "last_paged_processes": []
+      },
+      "owned_paging": {
+        "attribution": "bounded process pagefile observation",
+        "observed_paged_bytes": 0,
+        "observed_processes": [],
+        "scanned_pages": 2566396,
+        "completed_scans": 131
+      },
+      "system_pagefile_pressure": {
+        "maximum_growth_bytes": 0,
+        "kill_above_bytes": 256000000,
+        "scope": "global; not process attribution"
+      },
+      "paging_interpretation": "Owned observation is bounded and incremental. Zero observed pages is not an exhaustive zero-I/O proof. Darwin disk-only process attribution is unavailable."
+    },
+    {
+      "experiment": "E10-hc-fixed1",
+      "arm": "candidate",
+      "exit_code": 0,
+      "reason": null,
+      "peak_tree_rss": 6016929792,
+      "min_available": 8923262976,
+      "elapsed_s": 61.84399999998277,
+      "host_budget_gib": 6.5,
+      "floor_gib": 0.5,
+      "runtime_min_free_gib": 0.5,
+      "no_progress_window_s": 600,
+      "job_commit_gib": 32.0,
+      "child_pid": 19504,
+      "shared_guard_commit": "2774636281ab32bf871497f0a8caae23c6b6cdc7",
+      "stack_retirement_policy": "cooperative request, progress-aware grace, logged force fallback",
+      "shared_guard_certificate": "L:\\scratch\\perfexp\\runtime\\jobs\\E10-hc-fixed1-candidate-5792e11cb97b4dc0833f2965ca28c119.receipt.shared.json",
+      "cleanup_confirmed": true,
+      "paging_policy": {
+        "owned_paging_limit_bytes": 67108864,
+        "owned_paging_baseline": "zero at gated job launch",
+        "peak_owned_paged_bytes": 0,
+        "pagefile_hard_fault_rate": null,
+        "pagefile_hard_fault_attribution": "UNAVAILABLE: Windows kernel ETW access refused: [Errno 5] kernel pagefile ETW unavailable",
+        "pagefile_hard_fault_limit_per_second": 100,
+        "pagefile_hard_fault_duration_seconds": 5,
+        "scan_pages": 2442951,
+        "last_paged_processes": []
+      },
+      "owned_paging": {
+        "attribution": "bounded process pagefile observation",
+        "observed_paged_bytes": 0,
+        "observed_processes": [],
+        "scanned_pages": 2442951,
+        "completed_scans": 124
+      },
+      "system_pagefile_pressure": {
+        "maximum_growth_bytes": 0,
+        "kill_above_bytes": 256000000,
+        "scope": "global; not process attribution"
+      },
+      "paging_interpretation": "Owned observation is bounded and incremental. Zero observed pages is not an exhaustive zero-I/O proof. Darwin disk-only process attribution is unavailable."
+    },
+    {
+      "experiment": "E10-hc-fixed3",
+      "arm": "control",
+      "exit_code": 0,
+      "reason": null,
+      "peak_tree_rss": 5997428736,
+      "min_available": 8733335552,
+      "elapsed_s": 62.84299999999348,
+      "host_budget_gib": 6.5,
+      "floor_gib": 0.5,
+      "runtime_min_free_gib": 0.5,
+      "no_progress_window_s": 600,
+      "job_commit_gib": 32.0,
+      "child_pid": 6204,
+      "shared_guard_commit": "2774636281ab32bf871497f0a8caae23c6b6cdc7",
+      "stack_retirement_policy": "cooperative request, progress-aware grace, logged force fallback",
+      "shared_guard_certificate": "L:\\scratch\\perfexp\\runtime\\jobs\\E10-hc-fixed3-control-86e5e77c8d6d43c681be6f2f7af57cdd.receipt.shared.json",
+      "cleanup_confirmed": true,
+      "paging_policy": {
+        "owned_paging_limit_bytes": 67108864,
+        "owned_paging_baseline": "zero at gated job launch",
+        "peak_owned_paged_bytes": 0,
+        "pagefile_hard_fault_rate": null,
+        "pagefile_hard_fault_attribution": "UNAVAILABLE: Windows kernel ETW access refused: [Errno 5] kernel pagefile ETW unavailable",
+        "pagefile_hard_fault_limit_per_second": 100,
+        "pagefile_hard_fault_duration_seconds": 5,
+        "scan_pages": 2494778,
+        "last_paged_processes": []
+      },
+      "owned_paging": {
+        "attribution": "bounded process pagefile observation",
+        "observed_paged_bytes": 0,
+        "observed_processes": [],
+        "scanned_pages": 2494778,
+        "completed_scans": 128
+      },
+      "system_pagefile_pressure": {
+        "maximum_growth_bytes": 0,
+        "kill_above_bytes": 256000000,
+        "scope": "global; not process attribution"
+      },
+      "paging_interpretation": "Owned observation is bounded and incremental. Zero observed pages is not an exhaustive zero-I/O proof. Darwin disk-only process attribution is unavailable."
+    },
+    {
+      "experiment": "E10-hc-fixed3",
+      "arm": "candidate",
+      "exit_code": 0,
+      "reason": null,
+      "peak_tree_rss": 6018158592,
+      "min_available": 8819449856,
+      "elapsed_s": 62.625,
+      "host_budget_gib": 6.5,
+      "floor_gib": 0.5,
+      "runtime_min_free_gib": 0.5,
+      "no_progress_window_s": 600,
+      "job_commit_gib": 32.0,
+      "child_pid": 21328,
+      "shared_guard_commit": "2774636281ab32bf871497f0a8caae23c6b6cdc7",
+      "stack_retirement_policy": "cooperative request, progress-aware grace, logged force fallback",
+      "shared_guard_certificate": "L:\\scratch\\perfexp\\runtime\\jobs\\E10-hc-fixed3-candidate-4213ba85206743db8ab1e88ffe3e78a6.receipt.shared.json",
+      "cleanup_confirmed": true,
+      "paging_policy": {
+        "owned_paging_limit_bytes": 67108864,
+        "owned_paging_baseline": "zero at gated job launch",
+        "peak_owned_paged_bytes": 0,
+        "pagefile_hard_fault_rate": null,
+        "pagefile_hard_fault_attribution": "UNAVAILABLE: Windows kernel ETW access refused: [Errno 5] kernel pagefile ETW unavailable",
+        "pagefile_hard_fault_limit_per_second": 100,
+        "pagefile_hard_fault_duration_seconds": 5,
+        "scan_pages": 2571180,
+        "last_paged_processes": []
+      },
+      "owned_paging": {
+        "attribution": "bounded process pagefile observation",
+        "observed_paged_bytes": 0,
+        "observed_processes": [],
+        "scanned_pages": 2571180,
+        "completed_scans": 131
+      },
+      "system_pagefile_pressure": {
+        "maximum_growth_bytes": 0,
+        "kill_above_bytes": 256000000,
+        "scope": "global; not process attribution"
+      },
+      "paging_interpretation": "Owned observation is bounded and incremental. Zero observed pages is not an exhaustive zero-I/O proof. Darwin disk-only process attribution is unavailable."
+    }
+  ],
+  "excluded": [
+    "E10-hc-native: presence-only flag enabled both arms",
+    "E10-hc-fixed2: report-parser failure in control"
+  ],
+  "final_default_qualification": {
+    "binary_sha256": "126bc6e529ae522025875127d1f59a8d9c092ea40a276a35a3ea62f9d7079478",
+    "gates": {
+      "frontier": {
+        "rows": 1,
+        "bit_exact": true,
+        "mean_kl": 0.0,
+        "max_kl": 0,
+        "top1": 1.0
+      },
+      "forced": {
+        "rows": 16,
+        "bit_exact": true,
+        "mean_kl": 0.0,
+        "max_kl": 0,
+        "top1": 1.0
+      }
+    },
+    "arms": [
+      {
+        "arm": "control",
+        "prompt_prefill_seconds": 16.7172861,
+        "prompt_tok_s": 122.50792310122635,
+        "ttft_seconds": 19.46899999998277,
+        "cleanup": {
+          "session": "c4d54449c625cbd9bd4c49a045fb1d36",
+          "host_budget": 6710886400,
+          "physical_floor": 536870912,
+          "runtime_min_free_gib": 0.5,
+          "peak_rss": 5887930368,
+          "minimum_available_ram": 8792608768,
+          "paging_growth": 0,
+          "budget_breaches": 0,
+          "first_budget_breach": null,
+          "failure": null,
+          "owned_pid": 16568,
+          "owned_job_empty": true,
+          "owned_process_signaled": true,
+          "exit_code": 0,
+          "forced_kill": false,
+          "force_reason": null,
+          "owned_pid_gone": true,
+          "producer_shutdown_path": "graceful",
+          "producer_shutdown_seconds": 0.9070000000065193,
+          "producer_shutdown_detail": "DS4COMBO_PRODUCER_GRACEFUL_SHUTDOWN_COMPLETE sweep_release_ms=162.2 wf_persist_released=1"
+        }
+      },
+      {
+        "arm": "candidate",
+        "prompt_prefill_seconds": 17.5665857,
+        "prompt_tok_s": 116.58497758047541,
+        "ttft_seconds": 20.35999999998603,
+        "cleanup": {
+          "session": "7df07a83bbbebc8dc2e7402292268ffb",
+          "host_budget": 6710886400,
+          "physical_floor": 536870912,
+          "runtime_min_free_gib": 0.5,
+          "peak_rss": 5868154880,
+          "minimum_available_ram": 8724135936,
+          "paging_growth": 0,
+          "budget_breaches": 0,
+          "first_budget_breach": null,
+          "failure": null,
+          "owned_pid": 8088,
+          "owned_job_empty": true,
+          "owned_process_signaled": true,
+          "exit_code": 0,
+          "forced_kill": false,
+          "force_reason": null,
+          "owned_pid_gone": true,
+          "producer_shutdown_path": "graceful",
+          "producer_shutdown_seconds": 0.8910000000032596,
+          "producer_shutdown_detail": "DS4COMBO_PRODUCER_GRACEFUL_SHUTDOWN_COMPLETE sweep_release_ms=163.9 wf_persist_released=1"
+        }
+      }
+    ]
+  }
+}

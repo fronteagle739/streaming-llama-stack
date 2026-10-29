@@ -1,0 +1,780 @@
+{
+  "qualification": "Current source snapshot for the qualified manual native build. Registered base is not a claim of a clean source tree or a full CUDA/CMake rebuild. Qualified prebuilt CUDA/link dependencies are not vendored in this proof.",
+  "registered_source_base": "fc79ff19a94ae8d73d605f5ec31d4e19dd4cce9a",
+  "registration_is_complete_source_identity": false,
+  "qualified_producer_basename": "coneall-producer-v6.exe",
+  "producer_sha256_as_measured": "b1fdc370504783ee67651d2eac48f87bc2be9bddfa9a75ef7657aef33a446a5c",
+  "decode_dll_sha256_as_measured": "3f37f47b1d8785db59580427b6358fb72fb9289af64205fad087741fd7806142",
+  "build_recipe_source_sha256": "f86432ab0bde2a4fc4ce0428f3a7d5fd5088a553e68dd22c91f4ee0fa8aca738",
+  "scope": "V4.1 native source units, weight fetcher/artifact/boundary units, top-level native and ggml headers, allocator, CLI and sampler.",
+  "files": [
+    {
+      "path": "engines/streaming-llama/prefill_llama.cpp/ggml/include/ggml-alloc.h",
+      "sha256": "a6ceff2e9ab5a8c59e8fdb9694f0cab2da217976e5ca366d1faef876fe5726eb"
+    },
+    {
+      "path": "engines/streaming-llama/prefill_llama.cpp/ggml/include/ggml-backend.h",
+      "sha256": "4f74c092128a7971f87a911ad8cd1a24d8e9cba113b7cf527c8f7c6ca8a14662"
+    },
+    {
+      "path": "engines/streaming-llama/prefill_llama.cpp/ggml/include/ggml-blas.h",
+      "sha256": "5c66d6623eb45490416981b0a5df2ee91122c092d0c79c20e12139f9f3383381"
+    },
+    {
+      "path": "engines/streaming-llama/prefill_llama.cpp/ggml/include/ggml-cann.h",
+      "sha256": "a98a64355b8408ce880944961b58078255101f14c6d86078bf9cca6167765e5b"
+    },
+    {
+      "path": "engines/streaming-llama/prefill_llama.cpp/ggml/include/ggml-cpp.h",
+      "sha256": "eed1bbcace14aafadee9a27bb740a0a1f203ce65a295cbf533c7e7def0fac9de"
+    },
+    {
+      "path": "engines/streaming-llama/prefill_llama.cpp/ggml/include/ggml-cpu.h",
+      "sha256": "2e5ca434b8a85dfc8e6fe42a97d3dcbb38e195270e4adef1ec2664d4c75b1a76"
+    },
+    {
+      "path": "engines/streaming-llama/prefill_llama.cpp/ggml/include/ggml-cuda.h",
+      "sha256": "2cfd9a695c010d9ffb6978c052726ddd4a544e8385c2a5003b0377da9cb71c02"
+    },
+    {
+      "path": "engines/streaming-llama/prefill_llama.cpp/ggml/include/ggml-ds4-native-half-stats.h",
+      "sha256": "8f25bf792afd70597ed35f256a02ac475e8255f744ebd302801937065450f2ac"
+    },
+    {
+      "path": "engines/streaming-llama/prefill_llama.cpp/ggml/include/ggml-ds4-native-half.h",
+      "sha256": "2a152509682d0ffe82308d796b79c231829c94a6241d2b63688a721e6fe6dc48"
+    },
+    {
+      "path": "engines/streaming-llama/prefill_llama.cpp/ggml/include/ggml-dsv41-attention-g16.h",
+      "sha256": "de17c66d770fa5f57e00b257b43eb6813faa1c74047bf95101b27501ea35bbd9"
+    },
+    {
+      "path": "engines/streaming-llama/prefill_llama.cpp/ggml/include/ggml-dsv41-bf16-inplace.h",
+      "sha256": "cc43c758a3d4d1dbd8a258dbfd649cc0d45fd41a8fcbcd669e06c7fd0d7e6d27"
+    },
+    {
+      "path": "engines/streaming-llama/prefill_llama.cpp/ggml/include/ggml-dsv41-bf16-vector.h",
+      "sha256": "c2ab132d4da25437d7c7aa903710788a553db057dc55c46cf9ce746e64a8779a"
+    },
+    {
+      "path": "engines/streaming-llama/prefill_llama.cpp/ggml/include/ggml-dsv41-carry-copy.h",
+      "sha256": "af2634cc87ea17877817e62c272b19e4cde8d15b75e3c2867d4a4a238c9516b4"
+    },
+    {
+      "path": "engines/streaming-llama/prefill_llama.cpp/ggml/include/ggml-dsv41-cast-vector.h",
+      "sha256": "7f0c25c56c72081ee4ef49f6aef1a24cb8d32e284af099012e273bbd8c080728"
+    },
+    {
+      "path": "engines/streaming-llama/prefill_llama.cpp/ggml/include/ggml-dsv41-dense-bf16-store.h",
+      "sha256": "05ba4647733dd59a97f15dd688e1abe6e0a4b9408c9bab799791fdfb55e09e33"
+    },
+    {
+      "path": "engines/streaming-llama/prefill_llama.cpp/ggml/include/ggml-dsv41-dense-half.h",
+      "sha256": "ca1b66433d39322912ee622fcf93826b7f133c23acc51f4b2576a9e4bfad2288"
+    },
+    {
+      "path": "engines/streaming-llama/prefill_llama.cpp/ggml/include/ggml-dsv41-expert-cublas.h",
+      "sha256": "aaf5cc776c4997f8bd2d2c8a55e0f8779838f3d501a53c7bf8c91f163ecee12a"
+    },
+    {
+      "path": "engines/streaming-llama/prefill_llama.cpp/ggml/include/ggml-dsv41-expert-routing.h",
+      "sha256": "c76b707bdb4c72d9dd42ff37af8d3558c566cf48f1fe0c73d5f5e6b484d4a2e3"
+    },
+    {
+      "path": "engines/streaming-llama/prefill_llama.cpp/ggml/include/ggml-dsv41-gather-half.h",
+      "sha256": "9cb9170f0ee4ac672e2976c4ddad09af20468bd2ba2ebf7e3d2ddef272afe4ec"
+    },
+    {
+      "path": "engines/streaming-llama/prefill_llama.cpp/ggml/include/ggml-dsv41-hc-expand.h",
+      "sha256": "3f071c8570e3f2c7353a611f4981eaaa2af353954eb7833c6d4783b943924928"
+    },
+    {
+      "path": "engines/streaming-llama/prefill_llama.cpp/ggml/include/ggml-dsv41-hc-half.h",
+      "sha256": "c50d6d32e48d3cb230a20187a4320c5514e649ef72b209e9d060e918d2d590e5"
+    },
+    {
+      "path": "engines/streaming-llama/prefill_llama.cpp/ggml/include/ggml-dsv41-index-cublas.h",
+      "sha256": "691a11098266f052c425ca8cca01a01838c239c43c21c9fd1baabeb4f0aba61e"
+    },
+    {
+      "path": "engines/streaming-llama/prefill_llama.cpp/ggml/include/ggml-dsv41-index-fp4-policy.h",
+      "sha256": "ab6cb02a8fa0e7191b35d0615447453e0f50e581900b654c62900482f3569ac6"
+    },
+    {
+      "path": "engines/streaming-llama/prefill_llama.cpp/ggml/include/ggml-dsv41-index-window.h",
+      "sha256": "308542bc4fdf9d86b616b19828c863f9af98f74853f730dfe39ed0ff2c7849a5"
+    },
+    {
+      "path": "engines/streaming-llama/prefill_llama.cpp/ggml/include/ggml-dsv41-masked-half-inplace.h",
+      "sha256": "c5c5bb35cb7f06a4865245bff513626641d358838d51d77c53c9560c5d162bbc"
+    },
+    {
+      "path": "engines/streaming-llama/prefill_llama.cpp/ggml/include/ggml-dsv41-mul-f16-store.h",
+      "sha256": "7acbac3e8a6bdc1393988135408d1f70a687a8c34d5fcee6945c04cbb8030a7a"
+    },
+    {
+      "path": "engines/streaming-llama/prefill_llama.cpp/ggml/include/ggml-dsv41-native-fp4.h",
+      "sha256": "dcac883d2a2e3289e3985c880417d3435b5ec28ab3f5b6e857bd7432193a1185"
+    },
+    {
+      "path": "engines/streaming-llama/prefill_llama.cpp/ggml/include/ggml-dsv41-pv-view-f32.h",
+      "sha256": "22fecbae3a1dcc4980b2d34eccd254891bf847c168e88c80e1e21899d262f5a3"
+    },
+    {
+      "path": "engines/streaming-llama/prefill_llama.cpp/ggml/include/ggml-dsv41-rope-inplace.h",
+      "sha256": "b1d4e19ac3e8f0d5b4473dd9ea395c05c70cd85c2080a2cf7f0757f667dcfc31"
+    },
+    {
+      "path": "engines/streaming-llama/prefill_llama.cpp/ggml/include/ggml-dsv41-shared-sparse.h",
+      "sha256": "8b95fbf580b569839bf1af3a77f1def6ef4e4d8c57f2bdf2b86035197d9dc51e"
+    },
+    {
+      "path": "engines/streaming-llama/prefill_llama.cpp/ggml/include/ggml-dsv41-sparse-replay.h",
+      "sha256": "3366d1d2301c2d6080eacf4dc9eb39c27b870ee4d93206614d6b2689f57a3c1a"
+    },
+    {
+      "path": "engines/streaming-llama/prefill_llama.cpp/ggml/include/ggml-dsv41-split-f32.h",
+      "sha256": "4fa9f173c735902afcbf331da754ecf0254962d2708965847eec567f96093036"
+    },
+    {
+      "path": "engines/streaming-llama/prefill_llama.cpp/ggml/include/ggml-dsv41-stream-topk.h",
+      "sha256": "f20e42dfba71f7888cde3c447ce86e46a09ef4892f9bede9be5dd8366968ae9d"
+    },
+    {
+      "path": "engines/streaming-llama/prefill_llama.cpp/ggml/include/ggml-dsv41-tilelang-layout.h",
+      "sha256": "79d81bd6e28aaffc4312a25b0fdaf62b6905264e6ce57b76a930234fc6812a20"
+    },
+    {
+      "path": "engines/streaming-llama/prefill_llama.cpp/ggml/include/ggml-dsv41-topk.h",
+      "sha256": "36a99bf2d7ac987c656eed697617ca03689580f2cdf758d454a10befc3fd540e"
+    },
+    {
+      "path": "engines/streaming-llama/prefill_llama.cpp/ggml/include/ggml-hexagon.h",
+      "sha256": "a95c5eab087487e408313b187af90d8f1840c631c2f5535f7c562eccbdd66941"
+    },
+    {
+      "path": "engines/streaming-llama/prefill_llama.cpp/ggml/include/ggml-metal.h",
+      "sha256": "ef4b446af82d3a3133df15c9ba185ac3fd9e3a184596fe27b492b95c87fb7b1f"
+    },
+    {
+      "path": "engines/streaming-llama/prefill_llama.cpp/ggml/include/ggml-opencl.h",
+      "sha256": "7a8369f9dbbb91d2202f397d9ba72a6cd3c97f7e6447840c117b44f6c5b837f8"
+    },
+    {
+      "path": "engines/streaming-llama/prefill_llama.cpp/ggml/include/ggml-opt.h",
+      "sha256": "a93a43692599aa7222f0929c30a1193615e614f26e09c958eb3332f01e7a9f0d"
+    },
+    {
+      "path": "engines/streaming-llama/prefill_llama.cpp/ggml/include/ggml-rpc.h",
+      "sha256": "8df196d4f4c617faeaf3979d37159f9bf2c1e0ab5727f0c8667ea7e13aa5ac1a"
+    },
+    {
+      "path": "engines/streaming-llama/prefill_llama.cpp/ggml/include/ggml-sycl.h",
+      "sha256": "5895be4a4ea9a065dc3265eec0f09c9a9246ddf272e6ecb1e1b075da8347acaa"
+    },
+    {
+      "path": "engines/streaming-llama/prefill_llama.cpp/ggml/include/ggml-virtgpu.h",
+      "sha256": "2065d2b480ea7f2ade9033a7c79297aead0497a7a0979ac349e676e2732d728d"
+    },
+    {
+      "path": "engines/streaming-llama/prefill_llama.cpp/ggml/include/ggml-vulkan.h",
+      "sha256": "0b6f625021b047907d24b60b3ca441e8a97d44235f0d32abeb2665112c35418e"
+    },
+    {
+      "path": "engines/streaming-llama/prefill_llama.cpp/ggml/include/ggml-webgpu.h",
+      "sha256": "628c5737629824ec3326620a5c4480de8955cbf82c352beed8e46e02514fb392"
+    },
+    {
+      "path": "engines/streaming-llama/prefill_llama.cpp/ggml/include/ggml-zdnn.h",
+      "sha256": "71a9f2af2192c3de178c1cfd3d7630cd6b98114eb555d53691763c12f6fabf37"
+    },
+    {
+      "path": "engines/streaming-llama/prefill_llama.cpp/ggml/include/ggml-zendnn.h",
+      "sha256": "ae55fb1e392a680a2bcb6368c6941255980f8c49d91d9e9d2a340038b2bff251"
+    },
+    {
+      "path": "engines/streaming-llama/prefill_llama.cpp/ggml/include/ggml.h",
+      "sha256": "64fcb3ff228668d1e2371b6e3ea767de54c4c7d01b0630c156bac798ffb215ba"
+    },
+    {
+      "path": "engines/streaming-llama/prefill_llama.cpp/ggml/include/gguf.h",
+      "sha256": "7469a2cdd52d306d9d0736c48aed1e6d97c5d806f3e6c989b825ee1293054e87"
+    },
+    {
+      "path": "engines/streaming-llama/prefill_llama.cpp/ggml/src/ggml-alloc.c",
+      "sha256": "2b6c39a3ece01e4381a92050dd8ed5f63e7e325bfec505ee6fcf201732ec7f4c"
+    },
+    {
+      "path": "engines/streaming-llama/prefill_llama.cpp/ggml/src/ggml-backend-dl.h",
+      "sha256": "dfc39e45ce22781da4cbe2d3ef83e9674c74d9113c277d1003f069407b9632de"
+    },
+    {
+      "path": "engines/streaming-llama/prefill_llama.cpp/ggml/src/ggml-backend-impl.h",
+      "sha256": "890d3e8fa6ccf12b8920594a5b4a797540c7e506120aa73411ff9d44b7290927"
+    },
+    {
+      "path": "engines/streaming-llama/prefill_llama.cpp/ggml/src/ggml-common.h",
+      "sha256": "01fc6f1e37f65e08e717fdbdc00713dc22a10bd3e69f49e72cca2e4f8e04e58a"
+    },
+    {
+      "path": "engines/streaming-llama/prefill_llama.cpp/ggml/src/ggml-dsv41-ops.h",
+      "sha256": "03fe4637dbec56a84dea72c5fab5eb4645001ee30cb53aaaf87f430ea6742297"
+    },
+    {
+      "path": "engines/streaming-llama/prefill_llama.cpp/ggml/src/ggml-dsv41-quant.h",
+      "sha256": "992555257080a8a57c4768548f53f204371874f0220dabc40290ead3a8d942b3"
+    },
+    {
+      "path": "engines/streaming-llama/prefill_llama.cpp/ggml/src/ggml-impl.h",
+      "sha256": "5bc793ede9bb9e254a0669e65a46a0c3fc892c60e5f145d8c5f1238d4f87d332"
+    },
+    {
+      "path": "engines/streaming-llama/prefill_llama.cpp/ggml/src/ggml-quants.h",
+      "sha256": "dd9aed868a204d6ca354c901ff36ec40088b1fac564585e390f45c2ed9fa9695"
+    },
+    {
+      "path": "engines/streaming-llama/prefill_llama.cpp/ggml/src/ggml-threading.h",
+      "sha256": "bb15a1c3c50da305353f8471da96053b5aa7eb7582e4b353a4cc5ff1b1a8fef7"
+    },
+    {
+      "path": "engines/streaming-llama/prefill_llama.cpp/src/boundary-capture.cpp",
+      "sha256": "a214ffa9221632f5191e578dcdbbbd34dda9652e24173b648fd7e6138977b66f"
+    },
+    {
+      "path": "engines/streaming-llama/prefill_llama.cpp/src/boundary-capture.h",
+      "sha256": "8780d1bad604cae894563fae45936cdfc2dfdf0b5145a860b5dd3aa5c044f5fc"
+    },
+    {
+      "path": "engines/streaming-llama/prefill_llama.cpp/src/llama-adapter.h",
+      "sha256": "6bd85cdcc815d5d0bd20003d8dd65eec10bf815bf1e3b747743b6769d3c5aef3"
+    },
+    {
+      "path": "engines/streaming-llama/prefill_llama.cpp/src/llama-arch.h",
+      "sha256": "6c6f98b7c4399f4e63b924b5533b6d283eaf3abb07ab9a394cfdf5663598df61"
+    },
+    {
+      "path": "engines/streaming-llama/prefill_llama.cpp/src/llama-batch.h",
+      "sha256": "10652c466c9fa00c4e5c9456c4798379ef9ae53d8f1bf889c1ceed46a48c5c51"
+    },
+    {
+      "path": "engines/streaming-llama/prefill_llama.cpp/src/llama-chat.h",
+      "sha256": "154e9fd20cebac84cf5bfb2b32c083051b5be09513138e61169f43b0e161bfdb"
+    },
+    {
+      "path": "engines/streaming-llama/prefill_llama.cpp/src/llama-context.h",
+      "sha256": "155ed2be4da10ea68e4a96ba799d1a8b4dcedc45e8ef098290fd1e63a6550957"
+    },
+    {
+      "path": "engines/streaming-llama/prefill_llama.cpp/src/llama-cparams.h",
+      "sha256": "7933fcf7b5173a0e698f61853f9c633e6b920f38e9c548da2c4dd01671bd2d9c"
+    },
+    {
+      "path": "engines/streaming-llama/prefill_llama.cpp/src/llama-decode-handoff.h",
+      "sha256": "8826e010def7b8a6919b2c9ea71e3c287b8932dd7a8f68b78f2180d8030424db"
+    },
+    {
+      "path": "engines/streaming-llama/prefill_llama.cpp/src/llama-dsv41-append-schedule.h",
+      "sha256": "d06298b0dc93d18e77952905ede4020dd3a2efba03ab155485da2d315943ed23"
+    },
+    {
+      "path": "engines/streaming-llama/prefill_llama.cpp/src/llama-dsv41-artifact.cpp",
+      "sha256": "dcb7671cfb6b28ad269d58d2d3bcaebdc5c5556252575c34f804bd1afc0260a6"
+    },
+    {
+      "path": "engines/streaming-llama/prefill_llama.cpp/src/llama-dsv41-artifact.h",
+      "sha256": "65a4ab3abace46ed7594e9cfd9d10a91a8df4321c4e2ea91c8d78ca032ad6c5e"
+    },
+    {
+      "path": "engines/streaming-llama/prefill_llama.cpp/src/llama-dsv41-attention.cpp",
+      "sha256": "b1a1342d823ae9c447d9dabad7e46a3579a4101f1a997648e7b229a0ea38b176"
+    },
+    {
+      "path": "engines/streaming-llama/prefill_llama.cpp/src/llama-dsv41-attention.h",
+      "sha256": "c7956f7fd387473034485a1495156d3a1b61791ee8864d78e8f2ee43fa7154d5"
+    },
+    {
+      "path": "engines/streaming-llama/prefill_llama.cpp/src/llama-dsv41-attribution.h",
+      "sha256": "8480712b59c6a597b2074db8fcea35b88329255fe7cf55665faebc4f16d0f4ee"
+    },
+    {
+      "path": "engines/streaming-llama/prefill_llama.cpp/src/llama-dsv41-cache-import.cpp",
+      "sha256": "84f5dd21ff9de3d707eb349e32914118053c5c02636bd1b694fbe7d4dab353a9"
+    },
+    {
+      "path": "engines/streaming-llama/prefill_llama.cpp/src/llama-dsv41-cache.cpp",
+      "sha256": "6588446f12e381c2529ced5145b16e9eb4afb096e6846990f270e61d98cb6492"
+    },
+    {
+      "path": "engines/streaming-llama/prefill_llama.cpp/src/llama-dsv41-cache.h",
+      "sha256": "481822334a69d8757ee5159182e33773bbb9f3dd005fb78ef5cef2521b6d5bb2"
+    },
+    {
+      "path": "engines/streaming-llama/prefill_llama.cpp/src/llama-dsv41-carry.cpp",
+      "sha256": "d113d3b6c880f7f529a6356bbabdaef47139a6c73e9aed56a7239e19309bbba0"
+    },
+    {
+      "path": "engines/streaming-llama/prefill_llama.cpp/src/llama-dsv41-carry.h",
+      "sha256": "c037fdcfb79acdd29442ac6b965b825eafcf20f34b7fd891d21fc5428d14d614"
+    },
+    {
+      "path": "engines/streaming-llama/prefill_llama.cpp/src/llama-dsv41-compact-proof.h",
+      "sha256": "c685e6507cd688cd04046a0d7b6df75ca42e5500d7f6e42edebb4d7450c709d4"
+    },
+    {
+      "path": "engines/streaming-llama/prefill_llama.cpp/src/llama-dsv41-ctx-cache-plan.h",
+      "sha256": "7554889a526773e048202afc4ee9973f7886a03f1a52e3b7d89e8257ea8acc33"
+    },
+    {
+      "path": "engines/streaming-llama/prefill_llama.cpp/src/llama-dsv41-delta.cpp",
+      "sha256": "570e86e864c6fbe7ea76e37596567e3ad6726b867d33262162cc3702f36617d3"
+    },
+    {
+      "path": "engines/streaming-llama/prefill_llama.cpp/src/llama-dsv41-delta.h",
+      "sha256": "12fd4b524d662692e347a5664c0616860dc7c13e95ad3b74ee8908bba5cffe64"
+    },
+    {
+      "path": "engines/streaming-llama/prefill_llama.cpp/src/llama-dsv41-dense-half-admission.h",
+      "sha256": "fc4251e414c075b52f4acce75099073a4300688f315287819ec2e1d341bbc392"
+    },
+    {
+      "path": "engines/streaming-llama/prefill_llama.cpp/src/llama-dsv41-dense-residual.h",
+      "sha256": "7656db31be2dbec86a1ff794ad476972ff4fc2d8e604438d3660963483245ad1"
+    },
+    {
+      "path": "engines/streaming-llama/prefill_llama.cpp/src/llama-dsv41-device-admission.h",
+      "sha256": "3864664e0f421cc637fd63af7b937fd1809a4ff8fa7a8c8ac1b6f2be3777179c"
+    },
+    {
+      "path": "engines/streaming-llama/prefill_llama.cpp/src/llama-dsv41-direct.h",
+      "sha256": "6307d6a9216890e12cb43bcb54a9f8ba99d14dac137a52ade47347a1dba2d108"
+    },
+    {
+      "path": "engines/streaming-llama/prefill_llama.cpp/src/llama-dsv41-ds4x-keep.h",
+      "sha256": "119465f7f604d1b13f775f01b0748bb816cd2cf63ff91e6d86c1d507446a4b01"
+    },
+    {
+      "path": "engines/streaming-llama/prefill_llama.cpp/src/llama-dsv41-dspark-capture.h",
+      "sha256": "6ef0ab6c97500d17c3c870f88f3a9cecec318f135b0fb207aed4748370e71ce6"
+    },
+    {
+      "path": "engines/streaming-llama/prefill_llama.cpp/src/llama-dsv41-engram-early-decision.h",
+      "sha256": "74dab167d928418bbe1662f23a7997d9801d1e58bf44bacd970a4b9056e6d3e4"
+    },
+    {
+      "path": "engines/streaming-llama/prefill_llama.cpp/src/llama-dsv41-engram-plan.h",
+      "sha256": "f916315a3423244802a17d9e19e3ef09734e0905b6cfb5a5c42e7f5cb0329a8b"
+    },
+    {
+      "path": "engines/streaming-llama/prefill_llama.cpp/src/llama-dsv41-engram-prefetch.cpp",
+      "sha256": "fd96947b85199d406c25b03a9b1393c58e2698561a272e5256077f4702a16611"
+    },
+    {
+      "path": "engines/streaming-llama/prefill_llama.cpp/src/llama-dsv41-engram-prefetch.h",
+      "sha256": "fa867666a25ecedd4c1da26023c8a86dd52d88c1adb0ecef9794e931dff7874d"
+    },
+    {
+      "path": "engines/streaming-llama/prefill_llama.cpp/src/llama-dsv41-engram-row-cache.h",
+      "sha256": "49dbede1307d3e14cf837da9ecfbaa1e5628e7ba8c35b3a84995a81f30702cca"
+    },
+    {
+      "path": "engines/streaming-llama/prefill_llama.cpp/src/llama-dsv41-engram.cpp",
+      "sha256": "7564cc5811dcb963a474626cc40a2d85505de8803fe67419af5e132bae9dd93c"
+    },
+    {
+      "path": "engines/streaming-llama/prefill_llama.cpp/src/llama-dsv41-engram.h",
+      "sha256": "c186c035dc580a6e60497d6679be0066c4e4f8321a79577b8a470bc667c8f1bf"
+    },
+    {
+      "path": "engines/streaming-llama/prefill_llama.cpp/src/llama-dsv41-executor.cpp",
+      "sha256": "2e410200527a477c87124de6fcb2283d23bf64f61df68be102581d646a74f4ca"
+    },
+    {
+      "path": "engines/streaming-llama/prefill_llama.cpp/src/llama-dsv41-executor.h",
+      "sha256": "455aa76ed74df76fd19fc72ef75eed9f66ff2c49ba7c5096c5a5229090586da6"
+    },
+    {
+      "path": "engines/streaming-llama/prefill_llama.cpp/src/llama-dsv41-expert-fp4-pack.h",
+      "sha256": "da910f4bb2081e074e25bd947a0cdde9e429ab0e6b30d0bb673e16e897dba84b"
+    },
+    {
+      "path": "engines/streaming-llama/prefill_llama.cpp/src/llama-dsv41-expert-profile.h",
+      "sha256": "39ef0db4708c72adb5c2fc4b380831309d179d3a58ce5da114d44ec22023f187"
+    },
+    {
+      "path": "engines/streaming-llama/prefill_llama.cpp/src/llama-dsv41-ffn.cpp",
+      "sha256": "e8ddce75e782cc8378ee8aa1835015311b61e6643bf2b3bb5f6b2962a08b136b"
+    },
+    {
+      "path": "engines/streaming-llama/prefill_llama.cpp/src/llama-dsv41-ffn.h",
+      "sha256": "f8bbab115bb945eaad7a3510713984ac1e1094b3a197d885f2b4a62abe94ced9"
+    },
+    {
+      "path": "engines/streaming-llama/prefill_llama.cpp/src/llama-dsv41-graph-bindings.h",
+      "sha256": "8f6f8bdd9449aca675d364a760ed3c48065ca0f42ec5fd5018afb36887dda47f"
+    },
+    {
+      "path": "engines/streaming-llama/prefill_llama.cpp/src/llama-dsv41-graph-digest.h",
+      "sha256": "1767f6955cd117ed767d90abb8e67850c023beac269d40b461f4daed8b13e026"
+    },
+    {
+      "path": "engines/streaming-llama/prefill_llama.cpp/src/llama-dsv41-graph.cpp",
+      "sha256": "925fcfb1772fda783f5b3a53b93a90aecd313e99a58f7b5a4c8f55533aa7c01c"
+    },
+    {
+      "path": "engines/streaming-llama/prefill_llama.cpp/src/llama-dsv41-graph.h",
+      "sha256": "42e6ac98281bcf26939697ba444b1123c1d8f016a86b5e1c25dea8edb616df0b"
+    },
+    {
+      "path": "engines/streaming-llama/prefill_llama.cpp/src/llama-dsv41-hash-dump.h",
+      "sha256": "3c79d82355a9c14886c33ebf0ecca9acbfba51a8443d2f90b1f43b824f659923"
+    },
+    {
+      "path": "engines/streaming-llama/prefill_llama.cpp/src/llama-dsv41-host-cpu.h",
+      "sha256": "fecab5778b4220ec3df6db8bb747cba7fa90a47c42038c913da87f16fd7eac9f"
+    },
+    {
+      "path": "engines/streaming-llama/prefill_llama.cpp/src/llama-dsv41-host-memory.h",
+      "sha256": "de98c4f3f51d352d2976cf5565129bfecd0e05fe8d697ab24ceaa156ce5bae95"
+    },
+    {
+      "path": "engines/streaming-llama/prefill_llama.cpp/src/llama-dsv41-host-plan-log.h",
+      "sha256": "6ded698d5af10dd28592244e37aa267e69119791fdaf2e46503689aec095eb6a"
+    },
+    {
+      "path": "engines/streaming-llama/prefill_llama.cpp/src/llama-dsv41-index-visible-proof.h",
+      "sha256": "1c57ddb028539a6c747321ebd6df5d933537b416978ccd969007e610a8483460"
+    },
+    {
+      "path": "engines/streaming-llama/prefill_llama.cpp/src/llama-dsv41-kv-fp4-codec.h",
+      "sha256": "c1284b118df2132e05ef412410cd1b27308e7c0ef3389dbc75d3245954f82599"
+    },
+    {
+      "path": "engines/streaming-llama/prefill_llama.cpp/src/llama-dsv41-layer-log.h",
+      "sha256": "998b08dfb17b9f06a678a19f00dfb52bf4ed3aeda8cd78494470ab1f62aabab1"
+    },
+    {
+      "path": "engines/streaming-llama/prefill_llama.cpp/src/llama-dsv41-layer.cpp",
+      "sha256": "b4fee860192e9bc420e40f80e527a2e473c50cabf8c45f3c0f77c82f77dac416"
+    },
+    {
+      "path": "engines/streaming-llama/prefill_llama.cpp/src/llama-dsv41-layer.h",
+      "sha256": "adbc0938686cd2273ec3215e47007d16193ee57331b35983de48e4c28986afad"
+    },
+    {
+      "path": "engines/streaming-llama/prefill_llama.cpp/src/llama-dsv41-locked-ram.h",
+      "sha256": "a268bca2b92f8ed197c0163c57858e2e1e76bacebc7bb8c2bc83a0451a91d724"
+    },
+    {
+      "path": "engines/streaming-llama/prefill_llama.cpp/src/llama-dsv41-native-columns-resource-proof.h",
+      "sha256": "bb2c9b1634a8ef5b8c4a9f8a8d257286cd4f233dfadefc9585d8392b580a152c"
+    },
+    {
+      "path": "engines/streaming-llama/prefill_llama.cpp/src/llama-dsv41-native-half-perf-resource-proof.h",
+      "sha256": "2ba19bc2cb8539eda419abdfdd1434b0dce383ae5968310be1ec0901ca976e61"
+    },
+    {
+      "path": "engines/streaming-llama/prefill_llama.cpp/src/llama-dsv41-native-half-resource-proof.h",
+      "sha256": "55f58d8e10e18aac6260b3f0d90264a64c7cbba7aacd29fcc6d9ce9afa6aaaa0"
+    },
+    {
+      "path": "engines/streaming-llama/prefill_llama.cpp/src/llama-dsv41-native-loader-resource-proof.h",
+      "sha256": "dd61af295eff6812c971c7a1f264e168b85a8fac9de249124c5290325bd2a09d"
+    },
+    {
+      "path": "engines/streaming-llama/prefill_llama.cpp/src/llama-dsv41-native-rhs-pack-proof.h",
+      "sha256": "498e1069822a6cc236b64a830578e29929620659852a4c04b3c20209a8202906"
+    },
+    {
+      "path": "engines/streaming-llama/prefill_llama.cpp/src/llama-dsv41-owner-digest.h",
+      "sha256": "98e301b7fe8000e19c91e6fd30b2a1842f4ff83c8e3f302dae3db6c7c400764a"
+    },
+    {
+      "path": "engines/streaming-llama/prefill_llama.cpp/src/llama-dsv41-plan.cpp",
+      "sha256": "d59f0050b63f1d9fa0e715532fe79151fc54251073c6c2e756ffd2f42c4ef4f1"
+    },
+    {
+      "path": "engines/streaming-llama/prefill_llama.cpp/src/llama-dsv41-plan.h",
+      "sha256": "2cf6423bb90ef7458e4de78142ff81fa47963bcfafa3fe95861ee2c6a72b1154"
+    },
+    {
+      "path": "engines/streaming-llama/prefill_llama.cpp/src/llama-dsv41-prefill-plan.h",
+      "sha256": "9a5d28266b9a1f96f2be358fba3e43070a2f5acf42fc4d1bcc72360a57f588fa"
+    },
+    {
+      "path": "engines/streaming-llama/prefill_llama.cpp/src/llama-dsv41-prefill-routes.h",
+      "sha256": "b73793dba20b0b8cc65251e550d36573613bd0313f9ed572283fddab59e34dc1"
+    },
+    {
+      "path": "engines/streaming-llama/prefill_llama.cpp/src/llama-dsv41-profile-stage.h",
+      "sha256": "b2f31131ce330bff658cec26c7d7f9e84a9eb877eb84a40076052fe77a3818ee"
+    },
+    {
+      "path": "engines/streaming-llama/prefill_llama.cpp/src/llama-dsv41-quant-types.h",
+      "sha256": "46ee85e6b9facb98c0d375ba968c3dd17d21c5e7c72ffed9ad2ec591bc95cc51"
+    },
+    {
+      "path": "engines/streaming-llama/prefill_llama.cpp/src/llama-dsv41-recency-lfu.h",
+      "sha256": "2d0f45273b03da355f1468239ea50c59441df0d9e2d91b8aa4cf1ae06b4cd704"
+    },
+    {
+      "path": "engines/streaming-llama/prefill_llama.cpp/src/llama-dsv41-resident-append.h",
+      "sha256": "4e4d862fb4262db9bccaaaddd0541ede102bf282e5e699fcad1114da61c8fd7e"
+    },
+    {
+      "path": "engines/streaming-llama/prefill_llama.cpp/src/llama-dsv41-rope.cpp",
+      "sha256": "deb996ef6569fd6387c4c19b07d21176286e7265a5131d35c8738ee76196f140"
+    },
+    {
+      "path": "engines/streaming-llama/prefill_llama.cpp/src/llama-dsv41-rope.h",
+      "sha256": "00234dcb5ce5b2f284b6a7c8b8b964d30cc4976d8c3da5027cf9daabe28287a7"
+    },
+    {
+      "path": "engines/streaming-llama/prefill_llama.cpp/src/llama-dsv41-route-split.h",
+      "sha256": "b7105f1fe91fb9c766fc9a719c1d076ba1ab789c88c5f0f2f473e83d49b13286"
+    },
+    {
+      "path": "engines/streaming-llama/prefill_llama.cpp/src/llama-dsv41-singlepass.h",
+      "sha256": "0f473b112ebc559c64df42eb0dbd7ecdbad1b9a6d7b34454878124fa8f756620"
+    },
+    {
+      "path": "engines/streaming-llama/prefill_llama.cpp/src/llama-dsv41-stream-topk.h",
+      "sha256": "78892cc8d814789844d0854ceca9c8bb9b0936fca93f5ad626014dc31ccb44f3"
+    },
+    {
+      "path": "engines/streaming-llama/prefill_llama.cpp/src/llama-dsv41-sweep.cpp",
+      "sha256": "f3f1b4fb51f861aaa736a9eadc84fbdc1325370e9871d94670d3523080d31944"
+    },
+    {
+      "path": "engines/streaming-llama/prefill_llama.cpp/src/llama-dsv41-sweep.h",
+      "sha256": "a3f1603e961743953ff1950e3f91c5d65c64b8bdc6ebf28d41cf9c8f0f7d0063"
+    },
+    {
+      "path": "engines/streaming-llama/prefill_llama.cpp/src/llama-dsv41-tail-hint.h",
+      "sha256": "c96517b71596db7814dd94944439d9d0cd0ea39c81aeec7d0a83c6ed916047d3"
+    },
+    {
+      "path": "engines/streaming-llama/prefill_llama.cpp/src/llama-dsv41-test-fault.h",
+      "sha256": "c071743054388183a1879bce4cb6d4ccb047401e5b6fd5a5bcc1a11f7cfabe52"
+    },
+    {
+      "path": "engines/streaming-llama/prefill_llama.cpp/src/llama-dsv41-vision.h",
+      "sha256": "5cbae662f2e6cadf29be67e6f5328f8d7c712defde710228c27246327e22b6f1"
+    },
+    {
+      "path": "engines/streaming-llama/prefill_llama.cpp/src/llama-dsv41-weight-casts.h",
+      "sha256": "866eed419b82c951009ccfb92f0865a5bbc1e25b9b92681274edf649bd030601"
+    },
+    {
+      "path": "engines/streaming-llama/prefill_llama.cpp/src/llama-dsv41-weights.cpp",
+      "sha256": "9ea29b37343e606da40193a1db8e61bb6c2de274cf63581ea89d4f3632271c61"
+    },
+    {
+      "path": "engines/streaming-llama/prefill_llama.cpp/src/llama-dsv41-weights.h",
+      "sha256": "c07e18038be4f8d9c4754137a0b0e29a347c05e9c93e5fa3dda47c559d961205"
+    },
+    {
+      "path": "engines/streaming-llama/prefill_llama.cpp/src/llama-dsv41-wire.cpp",
+      "sha256": "e7177956b54914f167eda72956d8380356703dda8ba18156e6c91f9274aec434"
+    },
+    {
+      "path": "engines/streaming-llama/prefill_llama.cpp/src/llama-dsv41-wire.h",
+      "sha256": "869b8a26891700a2e86bd3cd4e6e84300ea8582a9187fff7ac2fa7dbb0e40cb8"
+    },
+    {
+      "path": "engines/streaming-llama/prefill_llama.cpp/src/llama-dsv41-yoco.h",
+      "sha256": "c35ed812ab20c1ee3b2051638f955429d46a0739b79857fadf805519665031a1"
+    },
+    {
+      "path": "engines/streaming-llama/prefill_llama.cpp/src/llama-expert-index.h",
+      "sha256": "e2e81573fd010bf560779cef50fc09057de9837c7c203a3159b1e0296be44a45"
+    },
+    {
+      "path": "engines/streaming-llama/prefill_llama.cpp/src/llama-expert-lru-cache.h",
+      "sha256": "ac065ba640a803fb767b8c9630199ce792179316e9b127a52e0bac7fd4eefc12"
+    },
+    {
+      "path": "engines/streaming-llama/prefill_llama.cpp/src/llama-grammar.h",
+      "sha256": "13a43d878735d7d8211cab371b325359dd122f57db17cbe86d03b74bb64bbb98"
+    },
+    {
+      "path": "engines/streaming-llama/prefill_llama.cpp/src/llama-graph.h",
+      "sha256": "1e7fa145a2bb94c6c83ce2f082d82047bd691332d3a0d5ac9ab110c51d6e965d"
+    },
+    {
+      "path": "engines/streaming-llama/prefill_llama.cpp/src/llama-hparams.h",
+      "sha256": "4fa5a92b1624b3b6ce91a8b955c4eae7033b41da84373588c285ef3064f1b587"
+    },
+    {
+      "path": "engines/streaming-llama/prefill_llama.cpp/src/llama-impl.h",
+      "sha256": "2ec35a954cf2b7957b220bdb593920e0d6f313b69ec82f1bcdfa1e7ac048381e"
+    },
+    {
+      "path": "engines/streaming-llama/prefill_llama.cpp/src/llama-io.h",
+      "sha256": "f5c42bf99fd20eda988eb9390a61ae9604248f37d5c7c0b3c80f2a2f188cdbd3"
+    },
+    {
+      "path": "engines/streaming-llama/prefill_llama.cpp/src/llama-kv-artifact.cpp",
+      "sha256": "408b2d0ec3ac6c79df649b2a866edf0f1c4e0a827922083abf45f170cb4c0124"
+    },
+    {
+      "path": "engines/streaming-llama/prefill_llama.cpp/src/llama-kv-artifact.h",
+      "sha256": "6f5d5008769c480a3e96255fe22ea81f1ccc92c3f803459bea3bf4ba5cbf4f8d"
+    },
+    {
+      "path": "engines/streaming-llama/prefill_llama.cpp/src/llama-kv-cache-dsv4.h",
+      "sha256": "ae148387ca3bb59a446f2cb5ef23a057498ab7d241829584f81aee297addd9c6"
+    },
+    {
+      "path": "engines/streaming-llama/prefill_llama.cpp/src/llama-kv-cache-iswa.h",
+      "sha256": "05dba337fe27feef3b544a8749c83be2d4ca442dc3b404d708f4c8911665347e"
+    },
+    {
+      "path": "engines/streaming-llama/prefill_llama.cpp/src/llama-kv-cache.h",
+      "sha256": "90adcc22d3f8c9cd7d9471f69d634d545220dd621be9207a30f2a99a0781b4fc"
+    },
+    {
+      "path": "engines/streaming-llama/prefill_llama.cpp/src/llama-kv-cells.h",
+      "sha256": "739714b154c25d879794ee20cf8e0f9fede8cb4a2116aac60cc68dfa9e08663c"
+    },
+    {
+      "path": "engines/streaming-llama/prefill_llama.cpp/src/llama-kv-import.h",
+      "sha256": "16ed5ccbb04895eefdcfff6e91bf079faed40ac250be7c85e1dc14d4b1db5377"
+    },
+    {
+      "path": "engines/streaming-llama/prefill_llama.cpp/src/llama-kv-receiver.h",
+      "sha256": "ef283d9998d26e2299a2d787ba071949de62f7e1f0812366762d477967018643"
+    },
+    {
+      "path": "engines/streaming-llama/prefill_llama.cpp/src/llama-kv-store.h",
+      "sha256": "e36953ae997e0af1e8ffd160dfba51ebfdb09cc179ce981034c6bc0da26f948a"
+    },
+    {
+      "path": "engines/streaming-llama/prefill_llama.cpp/src/llama-kv-tier-export.h",
+      "sha256": "8a9fdd63ed78d07e7cc645aa50803ab378222c57aa861bc99dd64204ccf4828e"
+    },
+    {
+      "path": "engines/streaming-llama/prefill_llama.cpp/src/llama-kv-tier.h",
+      "sha256": "2a913a538a32ed3d04bdef1779d82a34a332751768b2102509e4c2981718d90d"
+    },
+    {
+      "path": "engines/streaming-llama/prefill_llama.cpp/src/llama-memory-hybrid-iswa.h",
+      "sha256": "f6b86779d33b3c3c2805084bc84a6be803644843d44ff1988e090599b18868cd"
+    },
+    {
+      "path": "engines/streaming-llama/prefill_llama.cpp/src/llama-memory-hybrid.h",
+      "sha256": "5e98bf8f67e806a293e7e6a925b2a091157ca0591aace73ac942bc4668498503"
+    },
+    {
+      "path": "engines/streaming-llama/prefill_llama.cpp/src/llama-memory-recurrent.h",
+      "sha256": "3df9863dcfe2fd489302bfeaf5f0bb2a10f9c99e14d4dc85dd739ed6e0227b96"
+    },
+    {
+      "path": "engines/streaming-llama/prefill_llama.cpp/src/llama-memory.h",
+      "sha256": "f7972c6a48653ee03ecd9d99c7462f255125c461a31779e2770405bf3e97fb71"
+    },
+    {
+      "path": "engines/streaming-llama/prefill_llama.cpp/src/llama-mmap.h",
+      "sha256": "07acc32f55f3bc05e02440d06668694362e0f21ac5774fe0dd19a6067e1c1c7d"
+    },
+    {
+      "path": "engines/streaming-llama/prefill_llama.cpp/src/llama-model-loader.h",
+      "sha256": "f6b81191facd18be1b963f892b7d47d974ca8e3ae52ea337d59044194d31b46e"
+    },
+    {
+      "path": "engines/streaming-llama/prefill_llama.cpp/src/llama-model-saver.h",
+      "sha256": "d0c038e3eb2f10a349f36b910bbf3075322dd85607a9d8546095ac72f91bd6dc"
+    },
+    {
+      "path": "engines/streaming-llama/prefill_llama.cpp/src/llama-model.h",
+      "sha256": "a8a48ccb4b5a393a35ef914e41254b748c04f5be4715d21f280d84e53241aa33"
+    },
+    {
+      "path": "engines/streaming-llama/prefill_llama.cpp/src/llama-mtp-policy.h",
+      "sha256": "c6eb878580f3deab71122c4b399a1c154cfc75f474002a55b773b4c4f0aa6e8e"
+    },
+    {
+      "path": "engines/streaming-llama/prefill_llama.cpp/src/llama-prefill-strategy.h",
+      "sha256": "82e2da04c986e23e9bb476720be10b3317e59c9728db9800a2c1314c30405270"
+    },
+    {
+      "path": "engines/streaming-llama/prefill_llama.cpp/src/llama-prefill-stream.h",
+      "sha256": "11bf3d79576e60142a2d1ce1ece462de9503e3846a96c0e80ea7167c03b192bf"
+    },
+    {
+      "path": "engines/streaming-llama/prefill_llama.cpp/src/llama-prefill-telemetry.h",
+      "sha256": "820c8fce6f76e7f285287a8e91aefd2720caf21a82534491e9ad73a10c68495b"
+    },
+    {
+      "path": "engines/streaming-llama/prefill_llama.cpp/src/llama-quant.h",
+      "sha256": "aecb9819eb04bf5ad6cd2535cfac9b1bed5ef7946e551eff2224759862e16294"
+    },
+    {
+      "path": "engines/streaming-llama/prefill_llama.cpp/src/llama-retained-route.h",
+      "sha256": "db7b1282101cb02e86faae6273cbeeb6256e27e34721f0dbf000412ffa916da6"
+    },
+    {
+      "path": "engines/streaming-llama/prefill_llama.cpp/src/llama-sampler.h",
+      "sha256": "c27ce8666d8cabd12c9486ede632426feb4a298b8ecb26945b9635c45b138132"
+    },
+    {
+      "path": "engines/streaming-llama/prefill_llama.cpp/src/llama-streaming-local-decode.h",
+      "sha256": "6530648a7b1b1e7cb31fd0af45d657c760f2dd6e08d87f8e99d5860ce8941f4b"
+    },
+    {
+      "path": "engines/streaming-llama/prefill_llama.cpp/src/llama-tb-transport.h",
+      "sha256": "1ba2a5eb34caa194b48ea333c53d5ce740d2c933b78ab43287692ba27e4cafa8"
+    },
+    {
+      "path": "engines/streaming-llama/prefill_llama.cpp/src/llama-token-stream.h",
+      "sha256": "aac3c8548c4f719dbf34918cc2e785678f707314048de9f025c69600e25b3ff3"
+    },
+    {
+      "path": "engines/streaming-llama/prefill_llama.cpp/src/llama-upstream-dsa-wire.h",
+      "sha256": "0c1d7d8b4ae628d3e0fa78fd49057c77a9fcba54ae379b6499b9fc6ccb81cc96"
+    },
+    {
+      "path": "engines/streaming-llama/prefill_llama.cpp/src/llama-vocab.h",
+      "sha256": "342638a59735c6b22d98cfbfcee16736bbbd287ec94ca499e6c933c7e1ac7d52"
+    },
+    {
+      "path": "engines/streaming-llama/prefill_llama.cpp/src/llama-weight-fetcher-adapter.h",
+      "sha256": "168ed5319c13469eb92d0b8331bd46846d64d266902680768999effdfb25073a"
+    },
+    {
+      "path": "engines/streaming-llama/prefill_llama.cpp/src/llama-weight-fetcher.cpp",
+      "sha256": "46c35a07ebd2c2a2912e0774fa40ce11acee60f8e739fd7b4d9a438d4d8a86e2"
+    },
+    {
+      "path": "engines/streaming-llama/prefill_llama.cpp/src/llama-weight-fetcher.h",
+      "sha256": "f66a39c4638c0cd06cf97784e47b68bb13fbc2e7e4ceb448ad5e11675775b158"
+    },
+    {
+      "path": "engines/streaming-llama/prefill_llama.cpp/src/llama-wf-bounded-policy.h",
+      "sha256": "90b24ef4a34424b74345d1c32635a1ca60ec881c3f43f144d4d5b1d546e19020"
+    },
+    {
+      "path": "engines/streaming-llama/prefill_llama.cpp/src/llama-wf-zero-gaps.h",
+      "sha256": "3fee8d98f0eb8ae55ceafdceba1022baa42a8ebd18bdbe40532c7f4d01b7aab9"
+    },
+    {
+      "path": "engines/streaming-llama/prefill_llama.cpp/src/llama-wir.h",
+      "sha256": "a49cd4aaf135e9b03fe9585d9a8cfc1de7a62f802d0a71c07b6ce514cb8cc442"
+    },
+    {
+      "path": "engines/streaming-llama/prefill_llama.cpp/src/unicode-data.h",
+      "sha256": "cc289e2861089c6255a2c88f3aaaa55db28e26a98637e3737e27270bb5bf8372"
+    },
+    {
+      "path": "engines/streaming-llama/prefill_llama.cpp/src/unicode.h",
+      "sha256": "e551333b9f04b5f6ccc699c3da9600826818d5569ea6bcc645431432f40a407f"
+    },
+    {
+      "path": "engines/streaming-llama/prefill_llama.cpp/tools/dsv41-prefill/main.cpp",
+      "sha256": "22bb18cd19a82aa0fa34994713ce2eb752ff2931182ff1621364fbffe842da0e"
+    },
+    {
+      "path": "engines/streaming-llama/prefill_llama.cpp/tools/dsv41-prefill/studio-sampling.c",
+      "sha256": "7cf1be03c00609810944cd75f734860d79b82c1a883f31961cd740f6401d3b6b"
+    }
+  ]
+}

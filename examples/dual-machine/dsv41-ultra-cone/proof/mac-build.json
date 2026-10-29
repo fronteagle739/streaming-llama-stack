@@ -1,0 +1,7 @@
+{
+  "status": "BUILT_AND_CPU_VERIFIED",
+  "binary_sha256": "5734ca0ffdfb970e92c366d410338774970a0e905cf6f03aed391a4e022ffcdb",
+  "binary_bytes": 3200552,
+  "native_source_sha256": "95b6b55a667a20a2c329252348a52f61ca6bfde777fca49369904aefbf85b8e7",
+  "scratch_bytes": 48516321
+}

@@ -1,0 +1,26 @@
+{
+  "samples": 45,
+  "utilization_ge80_samples": 27,
+  "settings_changed": false,
+  "limits": [
+    [
+      "575.00",
+      "575.00",
+      "575.00"
+    ]
+  ],
+  "active_sm_mhz": {
+    "min": 2737,
+    "median": 2760,
+    "max": 2797
+  },
+  "active_power_w": {
+    "min": 423.37,
+    "median": 495.52,
+    "max": 516.89
+  },
+  "sw_power_cap_active": 16,
+  "hw_thermal_active": 0,
+  "sw_thermal_active": 0,
+  "note": "Independent one-second NVML observations during the original-Q4 indexer campaign; not synchronized per-kernel evidence. Software power capping can occur at the maximum supported575W limit even when sampled average draw is lower. No supported power-limit increase exists; no clock intervention or speed benefit claimed."
+}

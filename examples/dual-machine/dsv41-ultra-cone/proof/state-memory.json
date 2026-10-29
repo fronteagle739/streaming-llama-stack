@@ -1,0 +1,13 @@
+{
+  "exit_code": 0,
+  "reason": null,
+  "peak_tree_rss": 6788411392,
+  "min_available": 7851573248,
+  "host_budget_gib": 8.5,
+  "floor_gib": 0.5,
+  "cleanup_confirmed": true,
+  "global_paging_growth": 0,
+  "owned_paged_bytes": 0,
+  "forced_kill": false,
+  "paging_scope": "bounded owned pagefile scanner plus global growth; ETW attribution unavailable"
+}

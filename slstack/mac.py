@@ -221,8 +221,8 @@ class Receiver:
     def pair(self, row, client_ip):
         allowed = {'producer_sha256', 'producer_source_revision', 'producer_ipv4', 'broker_port', 'tier'}
         keep=row.get('yoco_keep',0);version=row.get('yoco_state_version',0)
-        if type(keep) is not int or type(version) is not int or (keep,version) not in ((0,0),(140,1)):
-            raise ValueError('Unsupported paired YOCO state provenance')
+        from .yoco import require_state
+        require_state(keep,version)
         if keep:allowed|={'yoco_keep','yoco_state_version'}
         if set(row) != allowed or not re.fullmatch('[0-9a-f]{64}', row['producer_sha256']) or not re.fullmatch('[0-9a-f]{40}', row['producer_source_revision']):
             raise ValueError('Invalid producer identity')
@@ -427,7 +427,9 @@ def serve(cfg, backend, build):
                 self.reply(200, {'ready': True, 'backend': backend, 'receiver_sha256': build['binary_sha256'],
                                  'paired_producer_sha256': peer.get('producer_sha256'),
                                  'paired_tier': peer.get('tier'), 'yoco_state_version':1,
-                                 'paired_yoco_keep':peer.get('yoco_keep',0)})
+                                 'yoco_state_versions':[1,2],
+                                 'paired_yoco_keep':peer.get('yoco_keep',0),
+                                 'paired_yoco_state_version':peer.get('yoco_state_version',0)})
             elif self.path == '/v1/models' and self.authorized():
                 self.reply(200, {'object': 'list', 'data': [{'id': cfg['model_name'], 'object': 'model'}]})
             else:
