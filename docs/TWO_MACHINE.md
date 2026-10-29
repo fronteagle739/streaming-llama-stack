@@ -68,6 +68,6 @@ receiver on the Mac. Presets are in
 The [large-RAM ds4-win example](../examples/dual-machine/dsv41-large-ram-untested/README.md)
 pairs the existing ULTRA + YOCO export plan with a Windows/Linux RAM-rich host,
 such as a DDR4 server. **Untested example:** ds4-win imports native GPU session
-snapshots, but its CPU RAM-resident backend lacks the mode3/DSpark and YOCO v1
+snapshots, but its CPU RAM-resident backend lacks the mode3/DSpark and negotiated cone v2
 receiver used by the Mac. The example launcher prints config/argv and refuses
 to start. No speed or residency measurement is claimed for this route.

@@ -175,13 +175,15 @@ class OwnedProducer:
             if request.get('vision'):
                 args['--vision-spans-file']=stage_vision(request['vision'],0)
             keep=cfg.get('yoco_keep',0)
-            require(type(keep) is int and keep in (0,140), 'Unsupported paired YOCO window')
-            require(request.get('yoco_keep',0)==keep and request.get('yoco_state_version',0)==(1 if keep else 0),
+            from .yoco import state_version
+            version=state_version(keep)
+            require(type(request.get('yoco_keep',0)) is int and type(request.get('yoco_state_version',0)) is int
+                    and request.get('yoco_keep',0)==keep and request.get('yoco_state_version',0)==version,
                     'Peer YOCO provenance differs from the paired preset')
             if keep:
                 require(args['--capture-dspark']=='1' and (args['--fixed-resident-plan']=='1' or args['--pair-ffn-tiles']=='1'),
                         'YOCO transfer requires a fixed mode3 producer')
-                args.update({'--yoco-keep':str(keep),'--yoco-remote-state-version':'1'})
+                args.update({'--yoco-keep':str(keep),'--yoco-remote-state-version':str(version)})
             from .combo_ram import runtime_min_free_gib
             runtime_floor = runtime_min_free_gib(cfg)
             host_bytes = self.prefill_plan['host_bytes']
@@ -249,7 +251,7 @@ class OwnedProducer:
             self.producer.begin_export=timed_export
             cp = self.producer.ready['checkpoint']
             self.producer.stage_vision=stage_vision
-            require(self.producer.ready.get('yoco_keep',0)==keep and self.producer.ready.get('yoco_state_version',0)==(1 if keep else 0),
+            require(self.producer.ready.get('yoco_keep',0)==keep and self.producer.ready.get('yoco_state_version',0)==version,
                     'Producer did not negotiate the requested YOCO state version')
             require(cp['context'] == CONTEXT and cp['position'] == len(request['tokens']) // 4
                     and cp['tokens_sha256'] == request['tokens_sha256'], 'Initial producer checkpoint differs')

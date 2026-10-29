@@ -8,7 +8,16 @@
     "yoco_keep": 0,
     "mac": "http://MAC_HOST:8180",
     "pair_token": "SET_SHARED_PAIRING_TOKEN",
-    "producer_desktop_reserve_gib": 0.5
+    "producer_desktop_reserve_gib": 0.5,
+    "env_overrides": {
+      "LLAMADECODE_APPEND_RESIDENT_SWEEP": "1",
+      "LLAMADECODE_APPEND_DECODE_MAX": "0",
+      "LLAMA_DSV41_INDEX_FP4": "1",
+      "DS4_CUDA_SINGLE_GPU_HC_GRAPHS": "1",
+      "LLAMADECODE_HOST_COPY_STAGING": "auto",
+      "LLAMADECODE_RECENCY_LFU": "1",
+      "LLAMADECODE_LFU_HALF_LIFE": "16"
+    }
   },
   "mac": {
     "model": "SET_MAC_GGUF_PATH",

@@ -12,6 +12,7 @@ from slstack.config import load
 from slstack.guard import admit
 from slstack.native_broker import OwnedProducer,vendor
 from slstack.ds4_render import Tokenizer
+from slstack.yoco import state_version
 vendor()
 from studio.dsv41_session_contract import MODEL_SHA256
 
@@ -20,7 +21,7 @@ def frontier(cfg,raw,images,keep):
     admit(cfg['host_budget_gib'],cfg['min_available_gib'])
     session=secrets.token_hex(16)
     request=dict(session=session,tier='ultra',tokens=raw,tokens_sha256=hashlib.sha256(raw).hexdigest(),
-                 yoco_keep=keep,yoco_state_version=1 if keep else 0,vision=images)
+                 yoco_keep=keep,yoco_state_version=state_version(keep),vision=images)
     owned=OwnedProducer(dict(cfg,yoco_keep=keep),request,threading.Event())
     try:
         p=owned.producer;cp=p.ready['checkpoint']
@@ -56,7 +57,9 @@ def compare(full,yoco):
 def main():
     parser=argparse.ArgumentParser();parser.add_argument('--config',required=True)
     parser.add_argument('--fixture',required=True);parser.add_argument('--out',required=True)
+    parser.add_argument('--approximate-yoco',action='store_true',help='Opt into legacy approximate140 probability-drift qualification')
     args=parser.parse_args();cfg=load(args.config);fixture=Path(args.fixture)
+    keep=140 if args.approximate_yoco else 2541
     cfg.pop('_gpu_parent_lease',None)  # the live GUI pair has been gracefully ejected
     os.environ['CUDA_VISIBLE_DEVICES']=cfg['gpu_uuid'];os.environ['CUDA_DEVICE_ORDER']='PCI_BUS_ID'
     original=(fixture/'initial.tokens.le32').read_bytes()
@@ -66,21 +69,21 @@ def main():
     assert len(images)==1,'Use the one-image GUI fixture'
     image=images[0];image_end=image['position']+image['count']
     tok=Tokenizer.from_gguf(cfg['model']);filler=tok.rendered(' The weather is clear today.'*100)
+    filler=filler*(-(-keep//len(filler))+1)
     ids=list(struct.unpack('<%dI'%(len(original)//4),original))
     assert all(t==129264 for t in ids[image['position']:image_end]),'Fixture image span must cover its marker IDs'
     assert sum(t==129264 for t in ids)==image['count'],'Fixture has unbound image markers'
-    result=dict(status='INCOMPLETE',scope='RTX full evaluation vs YOCO image frontier',cases={})
+    result=dict(status='INCOMPLETE',scope='RTX full evaluation vs bounded image frontier',yoco_keep=keep,yoco_state_version=state_version(keep),cases={})
     try:
         for name,extra in [('intersects_tail',[]),('before_tail',filler)]:
             tokens=ids[:image_end]+extra+ids[image_end:]
-            assert (image_end>len(tokens)-140) if not extra else (image_end<=len(tokens)-140)
+            assert (image_end>len(tokens)-keep) if not extra else (image_end<=len(tokens)-keep)
             raw=struct.pack('<%dI'%len(tokens),*tokens)
             full,full_meta=frontier(cfg,raw,images,0)
-            yoco,yoco_meta=frontier(cfg,raw,images,140)
+            yoco,yoco_meta=frontier(cfg,raw,images,keep)
             comparison=compare(full,yoco)
-            # Approximate YOCO: qualify probability drift and preservation of
-            # the full-evaluation leading decision, alongside real GUI recall.
-            comparison['pass']=comparison['kl_full_to_yoco']<=.1 and comparison['full_argmax_in_yoco_top10']
+            comparison['logits_exact']=full_meta['logits_sha256']==yoco_meta['logits_sha256']
+            comparison['pass']=(comparison['kl_full_to_yoco']<=.1 and comparison['full_argmax_in_yoco_top10']) if keep==140 else comparison['logits_exact']
             result['cases'][name]=dict(tokens=len(tokens),image_start=image['position'],image_end=image_end,
                                       full=full_meta,yoco=yoco_meta,**comparison)
             print(name,json.dumps(result['cases'][name]),flush=True)

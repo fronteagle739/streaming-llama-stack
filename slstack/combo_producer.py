@@ -183,7 +183,7 @@ def yoco_keep(cfg):
     if type(keep) is not int or keep not in (0,140,2541):
         raise ValueError('yoco_keep must be 0, 140 or 2541')
     if keep and cfg.get('serving_mode',cfg.get('serving'))!='single_engine':
-        # The paired route uses native_broker and negotiates mode3 state v1.
+        # The paired route uses native_broker and negotiates mode3 state v1/v2.
         # ComboProducer's local snapshot/restore contract is a different route.
         raise ValueError('ComboProducer YOCO requires local single_engine; paired YOCO uses the negotiated native broker')
     return keep
@@ -247,10 +247,11 @@ def prefill_arguments(cfg, count, available, *, export_state=False, techniques=N
         arguments.update({'--warmup-one-token': '0', '--fixed-direct-open': '1'})
     keep = cfg.get('yoco_keep', 0)
     if type(keep) is not int or keep not in (0, 140, 2541):raise ValueError('yoco_keep must be 0, 140 or 2541')
-    if keep==2541 and export_state:raise ValueError('The dependency cone has no negotiated remote state version')
     if keep:
         arguments['--yoco-keep'] = str(keep)
-        if export_state:arguments['--yoco-remote-state-version'] = '1'
+        if export_state:
+            from .yoco import state_version
+            arguments['--yoco-remote-state-version'] = str(state_version(keep))
     if cfg.get('env_overrides',{}).get('LLAMA_DSV41_FLASHINFER_MXFP4')=='1':
         if cfg.get('producer_profile','ultra')!='ultra' or arguments.get('--pair-ffn-tiles')!='1':
             raise ValueError('FlashInfer stored MXFP4 requires the bounded paired ULTRA workspace')
@@ -267,6 +268,8 @@ def prefill_arguments(cfg, count, available, *, export_state=False, techniques=N
         if batch=='16384':
             arguments['--expert-workspace-bytes']=str(640<<20)
             arguments['--graph-bytes']=str(int(arguments['--graph-bytes'])-(320<<20))
+    from .singlepass import arguments as carry_arguments
+    carry_arguments(cfg, arguments)
     return arguments, plan
 
 

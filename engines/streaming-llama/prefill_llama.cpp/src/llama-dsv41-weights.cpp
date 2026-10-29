@@ -1,6 +1,7 @@
 #include "llama-dsv41-layer-log.h"
 #include "llama-dsv41-weights.h"
 #include "llama-dsv41-prefill-routes.h"
+#include "llama-dsv41-tail-hint.h"
 #include "llama-dsv41-quant-types.h"
 #include <tuple>
 #include "llama-dsv41-engram-prefetch.h"
@@ -74,6 +75,78 @@ struct llama_dsv41_weight_provider::implementation {
     bool lazy_prefill=false,byte_ledger=false;
     uint32_t lazy_from_layer=0;
     std::array<bool,384>prefill_loaded{};
+    bool tail_prefetch=false;
+    using tail_hint=llama_dsv41_tail_hint::job;
+    std::unique_ptr<tail_hint>tail;
+    // The worker never takes the provider mutex or touches provider state. A
+    // completed job stays pending until the matching next acquire adopts it.
+    void join_tail(){
+        if(!tail)return;
+        const auto begun=std::chrono::steady_clock::now();
+        auto account=[&]{tail->exposed_join_ms+=std::chrono::duration<double,std::milli>(std::chrono::steady_clock::now()-begun).count();};
+        try{tail->finish();}catch(...){account();throw;}
+        account();
+    }
+    void discard_tail()noexcept{
+        tail.reset();
+    }
+    std::vector<wf_extent>tail_extents(uint32_t layer,const llama_dsv41_prefill_routes::reads&reads)const{
+        std::vector<wf_extent>extents;
+        for(const auto&e:stages[layer+1].entries)if(routed_tensor(e.t)){
+            require(e.t->ne[2]==384&&ggml_nbytes(e.t)==384*e.t->nb[2],"Prefill expert stride differs");
+            for(const auto&range:reads.ranges){
+                const uint64_t offset=uint64_t(range.first)*e.t->nb[2],bytes=uint64_t(range.count)*e.t->nb[2];
+                extents.push_back({e.file_offset+offset,e.gpu_offset+offset,bytes,0});
+            }
+        }
+        return extents;
+    }
+    void queue_tail(uint32_t layer,const std::vector<int32_t>&ids){
+        if(!tail_prefetch||tail||layer>=39||layer+1<21||options.yoco_encoder_only)return;
+        const uint32_t stage=layer+2,bank=stage%2;
+        uint64_t generation=0;
+        if(!wf_ready_direct_bank(fetcher,int(stage),int(bank),&generation))return;
+        require(bank!=next%2,"Tail hint must use the other compute bank");
+        auto hint=std::make_unique<tail_hint>();
+        hint->prediction=llama_dsv41_tail_hint::plan({stage,bank,generation},ids);
+        auto extents=tail_extents(layer+1,hint->prediction.reads);
+        require(!extents.empty()&&extents.size()<=72,"Tail hint extent admission differs");
+        tail=std::move(hint);auto*wf=fetcher;
+        tail->start([wf,stage,bank,generation,extents=std::move(extents)](tail_hint&job){
+                auto epoch_ms=[]{return std::chrono::duration<double,std::milli>(std::chrono::steady_clock::now().time_since_epoch()).count();};
+                job.begin_epoch_ms=epoch_ms();
+                struct end_clock { tail_hint&job;~end_clock(){job.end_epoch_ms=std::chrono::duration<double,std::milli>(std::chrono::steady_clock::now().time_since_epoch()).count();} } ended{job};
+                require(wf_fetch_ready_extents(wf,int(stage),int(bank),generation,extents.data(),int(extents.size()),
+                    &job.fence,&job.bytes,&job.milliseconds)&&!wf_has_failed(wf),"Next-tail hint transfer failed");
+        });
+        llama_dsv41_layer_log("DS4PERF_TAIL_HINT_QUEUED stage=%u bank=%u generation=%llu experts=%u max_experts=24 host_admission_bytes=8388608\n",
+            stage,bank,(unsigned long long)generation,tail->prediction.reads.additional);
+    }
+    std::array<bool,384>adopt_tail(uint32_t stage){
+        std::array<bool,384>loaded{};
+        if(!tail)return loaded;
+        join_tail();
+        const auto target=tail->prediction.target;uint64_t generation=0;
+        require(target.stage==stage&&wf_ready_direct_bank(fetcher,int(stage),int(target.bank),&generation)&&
+            llama_dsv41_tail_hint::matches(target,{stage,stage%2,generation}),"Next-tail hint bank generation changed before acquire");
+#ifdef GGML_USE_CUDA
+        require(wf_wait_ready_extents(fetcher,int(stage),int(target.bank),generation,tail->fence,
+            ggml_backend_cuda_get_stream(options.backend)),"Next-tail hint CUDA fence wait failed");
+#else
+        throw std::runtime_error("Tail hint requires CUDA");
+#endif
+        require(tail->prediction.adopt({stage,stage%2,generation},loaded),"Next-tail hint publication refused");
+        fetched_total+=tail->bytes;fetch_ms_total+=tail->milliseconds;
+        llama_dsv41_layer_log("DS4PERF_TAIL_HINT_ADOPTED stage=%u bank=%u generation=%llu bytes=%llu fetch_ms=%.6f experts=%u\n",
+            stage,target.bank,(unsigned long long)generation,(unsigned long long)tail->bytes,tail->milliseconds,tail->prediction.reads.additional);
+        llama_dsv41_layer_log("[dsv41-prefill-hint] stage=%u bytes=%llu fetch_ms=%.6f begin_epoch_ms=%.6f end_epoch_ms=%.6f exposed_join_ms=%.6f\n",
+            stage,(unsigned long long)tail->bytes,tail->milliseconds,tail->begin_epoch_ms,tail->end_epoch_ms,tail->exposed_join_ms);
+        if(byte_ledger)for(const auto&e:stages[stage].entries)if(routed_tensor(e.t))for(const auto&range:tail->prediction.reads.ranges)
+            llama_dsv41_layer_log("[dsv41-byte-ledger] stage=%u tensor=%s file_offset=%llu bytes=%llu source=tail_hint first=%u count=%u\n",
+                stage,e.t->name,(unsigned long long)(e.file_offset+uint64_t(range.first)*e.t->nb[2]),
+                (unsigned long long)(uint64_t(range.count)*e.t->nb[2]),range.first,range.count);
+        tail.reset();return loaded;
+    }
     std::array<ggml_tensor*,40*3>routed{};std::array<ggml_tensor*,40*3>shared{};
     bool shared_tensor(const ggml_tensor*t)const{return std::find(shared.begin(),shared.end(),t)!=shared.end();}
     // LLAMADECODE B2: decode expert cache. Bank 0 = [embedding | shared experts |
@@ -309,6 +382,7 @@ struct llama_dsv41_weight_provider::implementation {
     }
     void invalidate(){
         poisoned=true;
+        discard_tail();
         join_early();
         engram_prompt.reset();
         if(options.backend&&allocated)ggml_backend_synchronize(options.backend);
@@ -500,6 +574,7 @@ struct llama_dsv41_weight_provider::implementation {
         }
         require(requests<=UINT64_MAX/(4*512)&&waves<=UINT64_MAX/512,"V4.1 DS request metadata budget overflow");
         planned.host_bytes=add(metadata_allowance+factory_allowance,add(requests*(4*512),waves*512));
+        if(tail_prefetch)planned.host_bytes=add(planned.host_bytes,8*mib); // one worker stack + bounded hint metadata
         if(options.ds_gpu_ring_slots)planned.host_bytes=add(planned.host_bytes,128*mib);
         if(options.zero_padding_only)planned.host_bytes=add(planned.host_bytes,mib); // bounded8192-span complement/request metadata
         if(options.engram_prefetch_host_bytes){
@@ -523,6 +598,7 @@ struct llama_dsv41_weight_provider::implementation {
             if(prebound)experts_prebound=false;
             leased=true;return;
         }
+        const auto hinted=adopt_tail(id);
         auto*base=wf_wait_layer_gpu(fetcher,int(id));require(base,"Required DirectStorage layer transfer failed");
         wf_cuda_wait_upload(fetcher,int(id));
         require(!wf_has_failed(fetcher),"Required DirectStorage upload synchronization failed");
@@ -536,7 +612,7 @@ struct llama_dsv41_weight_provider::implementation {
         }
         if(prebound_routed)experts_prebound=false;
         ggml_backend_synchronize(options.backend);leased=true;
-        prefill_loaded.fill(false);
+        prefill_loaded=hinted;
         uint64_t fetched=0;double fetch_ms=0;
         require(wf_get_required_layer_fetch(fetcher,int(id),&fetched,&fetch_ms),"Completed strict DirectStorage timing unavailable");
         fetched_total+=fetched;fetch_ms_total+=fetch_ms;
@@ -579,6 +655,9 @@ bool llama_dsv41_weight_provider::inspect(const config&options,std::string&error
     require(options.verified_sha256.size()==64&&options.verified_sha256.find_first_not_of("0123456789abcdef")==std::string::npos&&options.verified_file_bytes>0,"Completed file SHA256/identity receipt required");
     const char*device=ggml_backend_dev_description(ggml_backend_get_device(options.backend));
     require(device&&*device,"V4.1 streaming producer requires the explicitly admitted CUDA backend");
+    const char*tail=std::getenv("LLAMADECODE_CONE_TAIL_PREFETCH");
+    require(!tail||!std::strcmp(tail,"0")||!std::strcmp(tail,"1"),"LLAMADECODE_CONE_TAIL_PREFETCH must be0 or1");
+    p->tail_prefetch=tail&&!std::strcmp(tail,"1");
     p->options=options;p->path=std::filesystem::u8path(options.model_path);
     require(p->path.is_absolute()&&p->path==p->path.lexically_normal()&&p->path.has_filename()&&p->path.filename().wstring().find(L':')==std::wstring::npos,"Model path must be a physical absolute file");
     require(GetDriveTypeW(p->path.root_path().c_str())==DRIVE_FIXED,"Model must reside on a fixed local volume");
@@ -615,6 +694,7 @@ bool llama_dsv41_weight_provider::allocate(std::string&error){return p->guard([&
 // Engram state; resume rebuilds the identical pipeline through the same path.
 bool llama_dsv41_weight_provider::suspend_device(std::string&error){return p->guard([&]{
     require(p->allocated&&!p->leased&&!p->device_suspended&&(p->next==0||p->next==p->stage_count()),"Device suspend requires an allocated idle provider between passes");
+    p->join_tail();p->tail.reset();
     ggml_backend_synchronize(p->options.backend);
     wf_stop(p->fetcher);wf_quiesce(p->fetcher);require(!wf_has_failed(p->fetcher),"Provider could not quiesce before device suspend");
     wf_destroy(p->fetcher);p->fetcher=nullptr;
@@ -638,6 +718,8 @@ void llama_dsv41_weight_provider::implementation::create_pipeline(){
     const char*lazy=std::getenv("LLAMADECODE_PREFILL_ROUTED");
     require(!lazy||!std::strcmp(lazy,"0")||!std::strcmp(lazy,"1")||!std::strcmp(lazy,"tail"),"LLAMADECODE_PREFILL_ROUTED must be0,1 or tail");
     p->lazy_prefill=lazy&&std::strcmp(lazy,"0");p->lazy_from_layer=lazy&&!std::strcmp(lazy,"tail")?21:0;
+    require(!p->tail_prefetch||(p->lazy_prefill&&p->options.compute_direct&&p->options.buffers==2&&
+        !p->options.ds_gpu_ring_slots&&!p->options.zero_padding_only),"Tail prefetch requires routed strict two-bank prefill");
     const char*ledger=std::getenv("LLAMADECODE_BYTE_LEDGER");p->byte_ledger=ledger&&!std::strcmp(ledger,"1");
     require(!p->lazy_prefill||(p->options.compute_direct&&!p->options.ds_gpu_ring_slots&&!p->options.zero_padding_only),
         "Routed prefill requires direct compute banks without GPU ring or padding-only mode");
@@ -696,6 +778,7 @@ bool llama_dsv41_weight_provider::restart_prompt(const config&options,std::strin
     require(binding(options)==binding(p->options),"Persistent provider cannot change model/backend/geometry/admission");
     require(!options.engram_prefetch_host_bytes||(options.engram_prefetch_tokens&&
         4ull*1024*1024+uint64_t(options.engram_prefetch_tokens)*48*(4+264)<=options.engram_prefetch_host_bytes),"Restarted prompt exceeds admitted immutable row-cache capacity");
+    p->join_tail();p->tail.reset();
     p->identity();wf_stop(p->fetcher);wf_quiesce(p->fetcher);p->mark_weight_stream(false);require(!wf_has_failed(p->fetcher),"Completed provider could not quiesce before request reuse");
     require(!options.yoco_encoder_only||(!options.decode_layout&&!options.ds_gpu_ring_slots),"YOCO encoder cannot use decode/ring fetch layout");
     if(!p->decode_layout && options.decode_layout==p->decode_layout && options.yoco_encoder_only!=p->options.yoco_encoder_only)
@@ -723,6 +806,7 @@ bool llama_dsv41_weight_provider::restart_prompt(const config&options,std::strin
 bool llama_dsv41_weight_provider::finish_yoco_encoder(std::string&error){return p->guard([&]{
     require(p->options.yoco_encoder_only&&!p->decode_layout&&!p->leased&&p->next==22,
         "YOCO encoder completion requires exactly released layers 0..20");
+    p->join_tail();p->tail.reset();
     // The DMA thread skips these stages without submitting their requests.
     wf_stop(p->fetcher);wf_quiesce(p->fetcher);
     require(!wf_has_failed(p->fetcher),"YOCO encoder fetch quiescence failed");
@@ -953,15 +1037,9 @@ bool llama_dsv41_weight_provider::prefill_experts(uint32_t layer,const std::vect
     require(p->lazy_prefill&&!p->decode_layout&&layer>=p->lazy_from_layer&&layer<40&&p->leased&&p->next==layer+1,
         "Routed prefill requires its leased layer bank");
     const auto reads=llama_dsv41_prefill_routes::plan(p->prefill_loaded,ids);
-    std::vector<wf_extent>extents;
-    for(const auto&e:p->stages[layer+1].entries)if(p->routed_tensor(e.t)){
-        require(e.t->ne[2]==384&&ggml_nbytes(e.t)==384*e.t->nb[2],"Prefill expert stride differs");
-        for(const auto&range:reads.ranges){const auto first=range.first,end=first+range.count;
-            const uint64_t offset=uint64_t(first)*e.t->nb[2],bytes=uint64_t(end-first)*e.t->nb[2];
-            extents.push_back({e.file_offset+offset,e.gpu_offset+offset,bytes,0});
-        }
-    }
+    const auto extents=p->tail_extents(layer,reads);
     uint64_t bytes=0;double ms=0;
+    const auto fetch_started=std::chrono::steady_clock::now();
 #ifdef GGML_USE_CUDA
     if(!extents.empty())require(wf_fetch_extents_direct(p->fetcher,int((layer+1)%p->options.buffers),extents.data(),int(extents.size()),
         ggml_backend_cuda_get_stream(p->options.backend),&bytes,&ms)&&!wf_has_failed(p->fetcher),"Prefill routed expert transfer failed");
@@ -969,13 +1047,16 @@ bool llama_dsv41_weight_provider::prefill_experts(uint32_t layer,const std::vect
     require(extents.empty(),"Routed prefill requires CUDA");
 #endif
     llama_dsv41_prefill_routes::commit(p->prefill_loaded,reads);
+    p->queue_tail(layer,ids);
     p->fetched_total+=bytes;p->fetch_ms_total+=ms;
     if(p->byte_ledger)for(const auto&e:p->stages[layer+1].entries)if(p->routed_tensor(e.t))for(const auto&range:reads.ranges)
         llama_dsv41_layer_log("[dsv41-byte-ledger] stage=%u tensor=%s file_offset=%llu bytes=%llu source=experts first=%u count=%u\n",
             layer+1,e.t->name,(unsigned long long)(e.file_offset+uint64_t(range.first)*e.t->nb[2]),
             (unsigned long long)(uint64_t(range.count)*e.t->nb[2]),range.first,range.count);
-    llama_dsv41_layer_log("[dsv41-prefill-experts] stage=%u rows=%zu active=%u new=%u resident=%u bytes=%llu fetch_ms=%.6f\n",
-        layer+1,ids.size()/6,reads.active,reads.additional,unsigned(std::count(p->prefill_loaded.begin(),p->prefill_loaded.end(),true)),(unsigned long long)bytes,ms);
+    llama_dsv41_layer_log("[dsv41-prefill-experts] stage=%u rows=%zu active=%u new=%u resident=%u bytes=%llu fetch_ms=%.6f begin_epoch_ms=%.6f end_epoch_ms=%.6f\n",
+        layer+1,ids.size()/6,reads.active,reads.additional,unsigned(std::count(p->prefill_loaded.begin(),p->prefill_loaded.end(),true)),(unsigned long long)bytes,ms,
+        std::chrono::duration<double,std::milli>(fetch_started.time_since_epoch()).count(),
+        std::chrono::duration<double,std::milli>(std::chrono::steady_clock::now().time_since_epoch()).count());
 },error);}
 void llama_dsv41_weight_provider::fetch_totals(uint64_t&bytes,double&milliseconds)const{std::lock_guard<std::mutex>lock(p->mutex);bytes=p->fetched_total;milliseconds=p->fetch_ms_total;}
 bool llama_dsv41_weight_provider::decode_banks(uint32_t layer,const void*&dense,const void*&routed)const{
@@ -1076,6 +1157,7 @@ bool llama_dsv41_weight_provider::grow_decode_cache(uint64_t bytes,uint32_t*slot
 bool llama_dsv41_weight_provider::release_decode_cache(std::string&error){return p->guard([&]{
     require(p->decode_layout&&!p->leased,"Expert L2 release requires an idle decode-layout provider");p->release_l2();},error);}
 bool llama_dsv41_weight_provider::release(std::string&error){return p->guard([&]{require(p->leased&&p->next<p->stage_count(),"No physical weight lease to release");ggml_backend_synchronize(p->options.backend);
+    p->join_tail(); // no outstanding write may survive any bank release
     if(p->dense_held>=0){ // LLAMADECODE B1: release the held dense stage first (stage order)
         for(auto&e:p->decode_stages[size_t(p->dense_held)].entries){e.t->data=nullptr;e.t->buffer=nullptr;}
         if(!p->bound())wf_release_layer(p->fetcher,p->dense_held);require(!wf_has_failed(p->fetcher),"Dense stage release failed");p->dense_held=-1;}for(auto&e:p->stage_at(p->next).entries){e.t->data=nullptr;e.t->buffer=nullptr;}if(!p->bound())wf_release_layer(p->fetcher,int(p->next));require(!wf_has_failed(p->fetcher),"Required DirectStorage compute release failed");p->leased=false;++p->next;

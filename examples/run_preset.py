@@ -32,6 +32,7 @@ def prepare(args,local):
         result['webui']=True
         for key in ('native_tier','yoco_keep'):
             if key in data:result[key]=data[key]
+        if getattr(args,'approximate_yoco',False):result['yoco_keep']=140
         return result,'rtx'
     return result,'mac' if result.get('backend')=='ds4' else 'decode'
 
@@ -51,6 +52,7 @@ def main(argv=None):
     parser.add_argument('--machine',choices=('mac','rtx'))
     parser.add_argument('--context',choices=('262k','1m'),default='262k')
     parser.add_argument('--webui',action='store_true')
+    parser.add_argument('--approximate-yoco',action='store_true',help='Explicitly opt into paired approximate keep140/v1 instead of exact cone/v2')
     parser.add_argument('--config',required=True,help='Your private config; never a file containing model weights')
     parser.add_argument('--dry-run',action='store_true',help='Show the generated config; start nothing and write nothing')
     parser.add_argument('--setup',action='store_true',help='Prepare the Mac MLX or native DS4 backend')
@@ -60,6 +62,8 @@ def main(argv=None):
     parser.add_argument('--build-only',action='store_true',help='Compile without GPU verification')
     args=parser.parse_args(argv)
     if args.preset and not args.machine:parser.error('--machine is required with --preset')
+    if args.approximate_yoco and (args.preset not in ('dsv41-ultra','dsv41-ultra-yoco','dsv41-ultra-cone') or args.machine!='rtx'):
+        parser.error('--approximate-yoco requires an RTX DSV4.1 ULTRA paired preset')
     if args.setup and (args.single or args.machine!='mac'):parser.error('--setup applies to a Mac dual-machine preset')
     local=json.loads(Path(args.config).read_text(encoding='utf-8-sig'))
     cfg,command=prepare(args,local)

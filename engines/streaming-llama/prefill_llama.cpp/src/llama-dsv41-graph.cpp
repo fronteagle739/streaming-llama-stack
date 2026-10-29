@@ -1,3 +1,4 @@
+#include "llama-dsv41-profile-stage.h"
 #include "ggml-dsv41-pv-view-f32.h"
 #include "llama-dsv41-graph.h"
 #include "boundary-capture.h"
@@ -69,6 +70,7 @@ ggml_tensor * llama_dsv41_graph_ops::bf16(ggml_tensor * input) const {
 }
 
 ggml_tensor * llama_dsv41_graph_ops::norm(ggml_tensor * input, ggml_tensor * weight) const {
+    llama_dsv41_profile_stage profile_stage(ctx,"norm");
     ggml_tensor * result = ggml_mul(ctx, ggml_rms_norm(ctx, input, norm_eps), weight);
     if (observe) observe(result, "dsv41_weighted_norm_f32");
     return tagged(bf16(result), "dsv41_weighted_norm_bf16");
@@ -101,6 +103,7 @@ ggml_tensor * llama_dsv41_graph_ops::logits(ggml_tensor * residual, ggml_tensor 
 }
 
 ggml_tensor * llama_dsv41_graph_ops::weighted_sum(ggml_tensor * residual, ggml_tensor * weights) const {
+    llama_dsv41_profile_stage profile_stage(ctx,"hc_pre");
     GGML_ASSERT(residual->type == GGML_TYPE_F32 && residual->ne[1] == 4 && residual->ne[3] == 1);
     const int64_t width = residual->ne[0], count = residual->ne[2];
     GGML_ASSERT(weights->type == GGML_TYPE_F32 && weights->ne[0] == 4 && weights->ne[1] == count);
@@ -115,6 +118,7 @@ ggml_tensor * llama_dsv41_graph_ops::weighted_sum(ggml_tensor * residual, ggml_t
 }
 
 ggml_tensor * llama_dsv41_graph_ops::collapse(ggml_tensor * residual, ggml_tensor * previous_pre) const {
+    llama_dsv41_profile_stage profile_stage(ctx,"hc_pre");
     return tagged(bf16(weighted_sum(residual, previous_pre)), "dsv41_hc_pre_bf16");
 }
 
@@ -131,6 +135,7 @@ ggml_tensor * llama_dsv41_graph_ops::rope(
 }
 
 ggml_tensor * llama_dsv41_graph_ops::gather_per_query(ggml_tensor * table, ggml_tensor * ids) const {
+    llama_dsv41_profile_stage profile_stage(ctx,"attention_gather");
     GGML_ASSERT(table->type == GGML_TYPE_F32 && table->ne[2] == 1 && table->ne[3] == 1);
     GGML_ASSERT(ids->type == GGML_TYPE_I32 && ids->ne[2] == 1 && ids->ne[3] == 1);
     GGML_ASSERT(ids->ne[0] > 0 && ids->ne[1] > 0 && ids->ne[1] <= 4096);
@@ -140,6 +145,7 @@ ggml_tensor * llama_dsv41_graph_ops::gather_per_query(ggml_tensor * table, ggml_
 
 ggml_tensor * llama_dsv41_graph_ops::raw_snapshot(
         ggml_tensor * ring, ggml_tensor * current, ggml_tensor * history_ids) const {
+    llama_dsv41_profile_stage profile_stage(ctx,"cache_publish");
     GGML_ASSERT(ring->type == GGML_TYPE_F32 && ring->ne[0] == 512 && ring->ne[1] == 128);
     GGML_ASSERT(current->type == GGML_TYPE_F32 && current->ne[0] == 512 && current->ne[1] > 0 && current->ne[1] <= 4096);
     GGML_ASSERT(ring->ne[2] == 1 && ring->ne[3] == 1 && current->ne[2] == 1 && current->ne[3] == 1);
@@ -154,6 +160,7 @@ ggml_tensor * llama_dsv41_graph_ops::raw_snapshot(
 
 ggml_tensor * llama_dsv41_graph_ops::raw_commit(
         ggml_tensor * ring, ggml_tensor * current, ggml_tensor * attention_complete, uint32_t start) const {
+    llama_dsv41_profile_stage profile_stage(ctx,"cache_publish");
     if(current->ne[1]<=32)
         return tagged(ggml_dsv41_raw_commit(ctx, ring, current, attention_complete, start), "dsv41_raw_ring_commit");
     // Attention consumed the chronological snapshot. Only the final128 rows
@@ -170,6 +177,7 @@ ggml_tensor * llama_dsv41_graph_ops::raw_commit(
 }
 
 ggml_tensor * llama_dsv41_graph_ops::candidate_mask(ggml_tensor * candidates, int64_t blocks) const {
+    llama_dsv41_profile_stage profile_stage(ctx,"index_select");
     GGML_ASSERT(candidates->type==GGML_TYPE_I32 && candidates->ne[0]>0 && candidates->ne[0]<=2048 && candidates->ne[1]>0 && candidates->ne[1]<=4096);
     GGML_ASSERT(candidates->ne[2]==1 && candidates->ne[3]==1 && blocks>0 && blocks<=131072);
     const int64_t queries=candidates->ne[1],top=candidates->ne[0];
@@ -183,6 +191,7 @@ ggml_tensor * llama_dsv41_graph_ops::candidate_mask(ggml_tensor * candidates, in
 llama_dsv41_graph_ops::selection llama_dsv41_graph_ops::index_select(
         ggml_tensor * q,ggml_tensor * weights,ggml_tensor * keys,ggml_tensor * visible,
         uint32_t source_layer,ggml_tensor * prior_candidates,ggml_cgraph * stream_graph) const {
+    llama_dsv41_profile_stage profile_stage(ctx,"index_select");
     GGML_ASSERT(source_layer==2 || source_layer==8 || source_layer==14 || source_layer==20 ||
                 source_layer==24 || source_layer==28 || source_layer==32 || source_layer==36);
     GGML_ASSERT((source_layer>20)==(prior_candidates!=nullptr));
@@ -467,6 +476,7 @@ ggml_tensor * llama_dsv41_graph_ops::attention_heads(
 }
 
 ggml_tensor * llama_dsv41_graph_ops::sinkhorn(ggml_tensor * comb) const {
+    llama_dsv41_profile_stage profile_stage(ctx,"hc_comb");
     comb = ggml_soft_max(ctx, comb);
     ggml_tensor * eps = ggml_fill(ctx, ggml_new_tensor_1d(ctx, GGML_TYPE_F32, 1), hc_eps);
     comb = ggml_add(ctx, comb, eps);
@@ -485,6 +495,7 @@ ggml_tensor * llama_dsv41_graph_ops::sinkhorn(ggml_tensor * comb) const {
 
 llama_dsv41_graph_ops::mix llama_dsv41_graph_ops::mixes(
         ggml_tensor * residual, ggml_tensor * fn, ggml_tensor * scale, ggml_tensor * base) const {
+    llama_dsv41_profile_stage profile_stage(ctx,"hc_mix");
     GGML_ASSERT(residual->ne[1] == 4 && residual->ne[3] == 1 && ggml_is_contiguous(residual));
     const int64_t count = residual->ne[2], width = residual->ne[0];
     GGML_ASSERT(fn->ne[0] == 4 * width && fn->ne[1] == 24);
@@ -524,6 +535,7 @@ llama_dsv41_graph_ops::mix llama_dsv41_graph_ops::mixes(
 
 ggml_tensor * llama_dsv41_graph_ops::expand(
         ggml_tensor * block, ggml_tensor * residual, const mix & current) const {
+    llama_dsv41_profile_stage profile_stage(ctx,"hc_post");
     const int64_t width = residual->ne[0], count = residual->ne[2];
     GGML_ASSERT(residual->ne[1] == 4 && residual->ne[3] == 1);
     GGML_ASSERT(block->ne[0] == width && block->ne[1] == count && block->ne[2] == 1 && block->ne[3] == 1);
@@ -558,6 +570,7 @@ ggml_tensor * llama_dsv41_graph_ops::expand(
 llama_dsv41_graph_ops::sublayer llama_dsv41_graph_ops::prepare(
         ggml_tensor * residual, ggml_tensor * previous_pre,
         ggml_tensor * fn, ggml_tensor * scale, ggml_tensor * base, ggml_tensor * norm_weight) const {
+    llama_dsv41_profile_stage profile_stage(ctx,"hc_prepare");
     residual=dsv41_boundary::replacement(ctx,residual,"dsv41_hc_input_residual");
     mix next = mixes(residual, fn, scale, base);
     ggml_tensor * input = norm(collapse(residual, previous_pre), norm_weight);
@@ -571,6 +584,7 @@ ggml_tensor * llama_dsv41_graph_ops::complete(ggml_tensor * block, const sublaye
 ggml_tensor * llama_dsv41_graph_ops::engram(
         ggml_tensor * residual, ggml_tensor * gathered_rows, ggml_tensor * wkv,
         ggml_tensor * q_weight, ggml_tensor * k_weight, ggml_tensor * text_mask) const {
+    llama_dsv41_profile_stage profile_stage(ctx,"engram");
     GGML_ASSERT(gathered_rows->ne[1] == residual->ne[2] && gathered_rows->ne[2] == 1 && gathered_rows->ne[3] == 1);
     GGML_ASSERT(wkv->ne[0] == gathered_rows->ne[0] && wkv->ne[1] == residual->ne[0] * 5);
     ggml_tensor * input = tagged(bf16(gathered_rows), "dsv41_engram_rows_bf16");

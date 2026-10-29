@@ -1,13 +1,13 @@
 # RTX prefill and a large-RAM decode box — UNTESTED example
 
-Use a fast RTX machine for streaming-llama ULTRA + YOCO prefill, then keep the
+Use a fast RTX machine for streaming-llama ULTRA exact-cone prefill, then keep the
 model in RAM on a second Windows/Linux machine running ds4-win decode. A DDR4
 server is one possible host. **UNTESTED example: the required CPU receiver is
 missing. The launcher prints a proposal and refuses to start either machine.**
 
 The RTX uses the same streaming producer as the single-engine route, with the
 existing paired state export enabled. It exports one completed mode3 state,
-including the DSpark ring and YOCO v1 provenance. The decode box would import
+including the DSpark ring and exact-cone v2 provenance. The decode box would import
 that state and retain the session for replies and short follow-ups. This reuses
 the [RTX-to-Mac design](../../../docs/YOCO_PAIRED_QUALIFICATION.md); no second
 export format or conversion is proposed.
@@ -16,7 +16,7 @@ export format or conversion is proposed.
 
 - RTX: Windows, RTX 50-series and fast DirectStorage NVMe, as in the existing
   single-machine setup. The example keeps the paired 8.5 GiB outer RAM budget,
-  6.25–7.75 GiB producer allowance, 512 MiB admission reserve and 4 GiB runtime
+  6.25–7.75 GiB producer allowance, 512 MiB admission reserve and 0.5 GiB runtime
   free-RAM floor.
 - Decode: enough physical RAM for the complete GGUF, session state, runtime
   and operating system. The measured Q4/Q8 file alone is 483 GiB. A 768 GiB
@@ -57,11 +57,11 @@ accept V4.1 GPU snapshots with mode 1 (target only) or mode 2 (draft). Its
 [`ds4_session_native_restore`](../../../engines/ds4-win/ds4_native_session.inc)
 adapter requires a local CUDA V4.1 graph and mode1 geometry.
 
-The qualified Mac path instead accepts mode3 DSpark capture, negotiates YOCO v1,
+The qualified Mac path instead accepts mode3 DSpark capture, supports negotiated exact-cone v2,
 and verifies the authenticated state contract through its
 [native session transport](../../../engines/ds4-mac/ds4_native_session_transport.inc).
 The RTX [existing argument builder](../../../slstack/combo_producer.py)
-enables `--capture-dspark 1` and `--yoco-remote-state-version 1` for that export.
+enables `--capture-dspark 1` and `--yoco-remote-state-version 2` for that export.
 
 The Windows/Linux CPU RAM-resident decode backend does not implement this
 mode3/YOCO receiver and broker integration. Existing ds4-win import is therefore

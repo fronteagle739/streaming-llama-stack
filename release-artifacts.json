@@ -426,6 +426,66 @@
       "sha256": "bc7613d7a1ca772cf7b2a2530ada3b022d719b876851476d5c54cc3de9db2d8e",
       "media_type": "image/png",
       "review": "Visually inspected actual isolated WebUI in headless Chromium. Synthetic recall and weather-station prompts only; no personal paths, credentials, network addresses or owner data. PNG pixels only, no text or EXIF metadata."
+    },
+    {
+      "path": "examples/dual-machine/dsv41-ultra-cone/proof/paired/followup-final.png",
+      "sha256": "b7e71ac08353176df3f2920c3217d23e57e929439113dd4bfbc6b3cbe8e51b7d",
+      "media_type": "image/png",
+      "review": "Visually inspected actual isolated stack WebUI: synthetic Cedarlight recall and sampler controls only. No personal paths, network addresses, credentials or owner data; PNG is pixels only with no text/EXIF metadata."
+    },
+    {
+      "path": "examples/dual-machine/dsv41-ultra-cone/proof/paired/number-final.png",
+      "sha256": "8d9764a7e0387ee8704c8f0a91b0d12be910f7c4aebd56c8102d65d3e45431d7",
+      "media_type": "image/png",
+      "review": "Visually inspected actual isolated stack WebUI: synthetic Cedarlight recall and sampler controls only. No personal paths, network addresses, credentials or owner data; PNG is pixels only with no text/EXIF metadata."
+    },
+    {
+      "path": "examples/dual-machine/dsv41-ultra-cone/proof/paired/recall-final.png",
+      "sha256": "1bbc051670736be51112f94b6a2ce8723192c09d6dc3f6caee5a04a71eb02b83",
+      "media_type": "image/png",
+      "review": "Visually inspected actual isolated stack WebUI: synthetic Cedarlight recall and sampler controls only. No personal paths, network addresses, credentials or owner data; PNG is pixels only with no text/EXIF metadata."
+    },
+    {
+      "path": "examples/dual-machine/dsv41-ultra-cone/proof/paired/recall-progress-2.png",
+      "sha256": "c3c08f5dd3f13ed33706cfc31d5932b25a3ae11212ae07c4da590ababadda909",
+      "media_type": "image/png",
+      "review": "Visually inspected actual isolated stack WebUI: synthetic Cedarlight recall and sampler controls only. No personal paths, network addresses, credentials or owner data; PNG is pixels only with no text/EXIF metadata."
+    },
+    {
+      "path": "examples/dual-machine/dsv41-ultra-cone/proof/paired/samplers.png",
+      "sha256": "17473f735f485ab749d3455fab231ff328b1d71a3909431b4cd70adeb0b5ee28",
+      "media_type": "image/png",
+      "review": "Visually inspected actual isolated stack WebUI: synthetic Cedarlight recall and sampler controls only. No personal paths, network addresses, credentials or owner data; PNG is pixels only with no text/EXIF metadata."
+    },
+    {
+      "path": "examples/dual-machine/dsv41-ultra-cone/proof/single/followup-final.png",
+      "sha256": "00c46cfcc41e6362bc8e1c56aaab553b17f29a3d702b1e5563b4e7271c523ffa",
+      "media_type": "image/png",
+      "review": "Visually inspected actual isolated stack WebUI: synthetic Cedarlight recall and sampler controls only. No personal paths, network addresses, credentials or owner data; PNG is pixels only with no text/EXIF metadata."
+    },
+    {
+      "path": "examples/dual-machine/dsv41-ultra-cone/proof/single/number-final.png",
+      "sha256": "65b795ff66fa71709976261cd6f9e08c474187bdf9e1a790600713972d2d4087",
+      "media_type": "image/png",
+      "review": "Visually inspected actual isolated stack WebUI: synthetic Cedarlight recall and sampler controls only. No personal paths, network addresses, credentials or owner data; PNG is pixels only with no text/EXIF metadata."
+    },
+    {
+      "path": "examples/dual-machine/dsv41-ultra-cone/proof/single/recall-final.png",
+      "sha256": "1fbef9ba136feb851968618651a7b040cc38e6c08c4c7ded336d5a38b979e7ef",
+      "media_type": "image/png",
+      "review": "Visually inspected actual isolated stack WebUI: synthetic Cedarlight recall and sampler controls only. No personal paths, network addresses, credentials or owner data; PNG is pixels only with no text/EXIF metadata."
+    },
+    {
+      "path": "examples/dual-machine/dsv41-ultra-cone/proof/single/recall-progress-2.png",
+      "sha256": "37d4b44f03446f4731a94962326e14b7893a61357e440ce87e0725e4c075e0ca",
+      "media_type": "image/png",
+      "review": "Visually inspected actual isolated stack WebUI: synthetic Cedarlight recall and sampler controls only. No personal paths, network addresses, credentials or owner data; PNG is pixels only with no text/EXIF metadata."
+    },
+    {
+      "path": "examples/dual-machine/dsv41-ultra-cone/proof/single/samplers.png",
+      "sha256": "fa862a70e341a2360a4fd102963e69df4219ae49e5dbcecbbd4e15068e3626a6",
+      "media_type": "image/png",
+      "review": "Visually inspected actual isolated stack WebUI: synthetic Cedarlight recall and sampler controls only. No personal paths, network addresses, credentials or owner data; PNG is pixels only with no text/EXIF metadata."
     }
   ]
 }
