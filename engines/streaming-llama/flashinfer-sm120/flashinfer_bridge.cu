@@ -74,11 +74,11 @@ struct workspace_view { void *data; };
 #else
 #define BRIDGE_EXPORT extern "C" __attribute__((visibility("default")))
 #endif
-BRIDGE_EXPORT int slstack_flashinfer_mxfp4_abi(){return 3;}
+BRIDGE_EXPORT int slstack_flashinfer_mxfp4_abi(){return 4;}
 BRIDGE_EXPORT int slstack_flashinfer_mxfp4(const void *weights,const float *input,
     const int32_t *gather,const int32_t *scatter,const int32_t *bounds,float *output,
     int rows,int n,int k,int64_t input_stride,int64_t slot_stride,int64_t token_stride,void *workspace,uint64_t workspace_bytes,cudaStream_t stream) {
-    if(rows<=0||rows>4096*6||!((n==2304&&k==5120)||(n==5120&&k==2304)))return int(cudaErrorInvalidValue);
+    if(rows<=0||rows>16384*6||!((n==2304&&k==5120)||(n==5120&&k==2304)))return int(cudaErrorInvalidValue);
     int device;cudaDeviceProp properties;
     auto error=cudaGetDevice(&device);if(error!=cudaSuccess)return int(error);
     error=cudaGetDeviceProperties(&properties,device);if(error!=cudaSuccess)return int(error);
@@ -86,7 +86,7 @@ BRIDGE_EXPORT int slstack_flashinfer_mxfp4(const void *weights,const float *inpu
     const int sf_rows=(rows+384*3+127)/128*128;
     const auto offsets=ggml_dsv41_flashinfer::layout(rows,n,k);
     const size_t sa=size_t(sf_rows)*k/32;
-    if(!workspace||(reinterpret_cast<uintptr_t>(workspace)&255)||workspace_bytes>(3328ull<<20)||workspace_bytes<offsets.bytes){
+    if(!workspace||(reinterpret_cast<uintptr_t>(workspace)&255)||workspace_bytes>(5120ull<<20)||workspace_bytes<offsets.bytes){
         std::fprintf(stderr,"FlashInfer caller workspace admission failed: bytes=%llu required=%llu\n",static_cast<unsigned long long>(workspace_bytes),static_cast<unsigned long long>(offsets.bytes));
         return int(cudaErrorMemoryAllocation);
     }

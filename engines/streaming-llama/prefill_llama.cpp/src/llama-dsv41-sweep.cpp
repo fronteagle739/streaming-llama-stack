@@ -261,7 +261,8 @@ bool llama_dsv41_sweep::open(const llama_dsv41_weight_provider::config &input_we
             const uint32_t end=options.yoco_logical_end?options.yoco_logical_end:begin+options.carry.tokens;
             p->yoco=llama_dsv41_yoco::schedule(options.yoco_keep,options.operation,options.images,
                 options.yoco_logical_end?options.yoco_logical_begin:begin,end,begin,begin+options.carry.tokens);
-            llama_dsv41_yoco::align_exact(p->yoco,options.compute_step_tokens?options.compute_step_tokens:options.carry.max_tile_tokens);
+            const auto cone_step=options.compute_step_tokens?options.compute_step_tokens:options.carry.max_tile_tokens;
+            llama_dsv41_yoco::align_exact(p->yoco,llama_dsv41_flashinfer::requested()?std::min(4096u,cone_step):cone_step);
             options.carry.yoco_first=p->yoco.first;
             weights.yoco_encoder_only=p->yoco.encoder_only;
         }
@@ -507,8 +508,8 @@ bool llama_dsv41_sweep::open(const llama_dsv41_weight_provider::config &input_we
                 const bool first_request=f.direct_open&&!warmup&&!prefix&&(options.carry.tokens==f.tokens||(options.stateful_chunks&&options.carry.tokens<=f.tokens));
                 if(first_request)llama_dsv41_layer_log("DS4COMBO_FIXED_DIRECT_OPEN tokens=%u tile=%u pair=%d warmup_pass=0\n",options.carry.tokens,f.tile,int(options.pair_ffn));
                 require(!warmup&&(first_request||(!options.pair_ffn&&options.carry.tokens==1))&&!f.graph&&!f.hidden&&!f.cache&&f.tokens&&f.tile&&options.admitted_graph_bytes>1024ull*1024*1024,"Fixed allocation must follow provider heaps and precede first stage lease during one-token warmup");
-                const bool flashinfer_reserve=llama_dsv41_flashinfer::requested()&&options.pair_ffn&&f.tile<=4096&&
-                    f.backend_temporary_reserve_bytes==llama_dsv41_flashinfer::reserve_bytes;
+                const bool flashinfer_reserve=llama_dsv41_flashinfer::requested()&&options.pair_ffn&&f.tile==ggml_dsv41_flashinfer::batch_tokens()&&
+                    f.backend_temporary_reserve_bytes==llama_dsv41_flashinfer::reserve_bytes();
                 require((f.backend_temporary_reserve_bytes==1024ull*1024*1024||f.backend_temporary_reserve_bytes==768ull*1024*1024||flashinfer_reserve)&&f.backend_temporary_reserve_bytes<options.admitted_graph_bytes,"Unsupported fixed backend temporary reserve");
                 require(flashinfer_reserve||f.backend_temporary_reserve_bytes==1024ull*1024*1024||(options.expert.attention_kv_f16_table&&options.expert.index_key_windows&&options.expert.token_tile_attention&&f.tile<=8192),"Reduced backend reserve requires direct-F16/window profile and<=8K groups");
                 f.backend=weights.backend;
@@ -783,7 +784,11 @@ bool llama_dsv41_sweep::run(const std::vector<int32_t>&tokens,const cancelled&st
             llama_dsv41::engram_history history=p->initial_engram;
             if(p->options.engram_tile_lookahead&&(layer==0||layer==13))queue_engram(layer+1,0,p->initial_engram);
             for(uint32_t start=llama_dsv41_yoco::first_row(p->yoco,layer);start<owned.size();){
-                p->check_stop(stop);const uint32_t count=llama_dsv41_prefill::tile_count(start,uint32_t(owned.size()),compute_step,resident_prefix);
+                // The full layer20 indexer and the short replay suffix retain
+                // the established 4K graph envelope. Encoder expert batches
+                // widen independently, while attention children stay at4K.
+                const uint32_t layer_step=llama_dsv41_flashinfer::requested()&&layer>=20?std::min(4096u,compute_step):compute_step;
+                p->check_stop(stop);const uint32_t count=llama_dsv41_prefill::tile_count(start,uint32_t(owned.size()),layer_step,resident_prefix);
                 const auto carry_read_started=std::chrono::steady_clock::now();
                 llama_dsv41_carry_store::tile input;llama_dsv41_carry_store::ram_lease direct;
                 if(p->options.admitted_pinned_device_bytes)success(p->carry.acquire_ram_tile(start,count,direct,error),error);

@@ -233,3 +233,42 @@ The CUDA13.2/MSVC18 build without `/Zc:__cplusplus` runs initialization, then fa
 Both vector DLLs match all eight full-vocabulary logit rows bit for bit. All three paths have identical untouched prefill logits. The MMA arm completes eight forced rows and decode64, with launch witnesses for all40 layers. The report separates seven forced-row quality comparisons from the untouched frontier. These are narrow functional checks; the 63 returned decode step intervals do not discard100warmup steps and are not a qualified warm-decode benchmark. The candidate remains off; no100K or broad quality/speed adoption claim follows.
 
 On the seven forced rows, vector-to-MMA mean KL is 0.165582 (maximum 0.933429); top-1 agrees on all seven. The two candidate-DLL arms take 11.811 and 11.851 seconds for their 63 returned decode intervals. This short sample demonstrates no speed gain and has a numerical cost, so it does not justify adopting the candidate. Native-source and broader quality/warm-decode checks remain outstanding.
+
+
+## 100K exact-cone expert batching
+
+[`sweep-batch-comparison.json`](sweep-batch-comparison.json) records the ABI4
+experiment. Both rows are **Q4→MXFP4 requant (lossy), speed proxy for native FP4**.
+Matched 100000 tokens, ULTRA, exact cone keep2541, context1000001, bias0,
+49152/50848-token sweeps; common producer, model, bridge and decode library.
+
+| Expert chunk | Prompt-only s | Prompt-only tokens/s | TTFT s | Expert s (profile) | Effective expert TFLOPS |
+|---|---:|---:|---:|---:|---:|
+| 4096 | 38.142 | 2621.76 | 41.187 | 5.646 | 166.24 |
+| 8192 | 41.396 | 2415.72 | 44.469 | 4.994 | 187.95 |
+
+The 8K encoder chunks reduce completed expert products from1689 to969.
+Attention and router products retain their original4K shapes; layer20 and
+the short replay suffix remain4K to bound scratch. Gather already writes
+MXFP8 values/scales directly, and that fusion is reused. The larger graph and
+its RAM spill cost outweigh the expert saving. Keep4096 as the default.
+
+All8×129280logit bit patterns match exactly after fixing the paired causal
+indexer's query origin. The original 8K experiment diverged at layer2's
+second attention child because the correct offset was applied only to
+native-half pairs. The checked visibility-owner offset now applies to every
+paired graph. The initial rejected comparison remains in
+[`sweep-batch-before-causal-fix.json`](sweep-batch-before-causal-fix.json).
+
+Four synthetic8K/16K adapter checks pass sampled independent double/BF16
+references and full-output finiteness. Both16K projections and actual stored
+gate/up/down matrices pass compute-sanitizer with zero errors. These kernel
+oracles do not establish broad model accuracy. The16K model attempt refuses
+allocation:7.483GB graph plus4.622GB temporary exceeds its7.709GB graph cap.
+No16K throughput or full49K expert-batch claim follows.
+
+Reproduce the clean pair with `sweep_batch.py --config <config> --tokens
+<100k.le32> --output-prefix <scratch>/batch --continuation <fixed.le32>`;
+repeat with a new prefix and `--profile-stages` for separate synchronized
+diagnostics. Use the ABI4 build, verified proxy receipt and explicit host
+headroom described in the bridge README. No production model path changes.

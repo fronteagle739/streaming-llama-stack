@@ -255,7 +255,18 @@ def prefill_arguments(cfg, count, available, *, export_state=False, techniques=N
         if cfg.get('producer_profile','ultra')!='ultra' or arguments.get('--pair-ffn-tiles')!='1':
             raise ValueError('FlashInfer stored MXFP4 requires the bounded paired ULTRA workspace')
         # Repartition the existing graph cap; neither job nor device ceiling grows.
-        arguments['--backend-temporary-reserve-bytes']=str(3328<<20)
+        batch=cfg['env_overrides'].get('LLAMA_DSV41_FLASHINFER_BATCH_TOKENS','4096')
+        if batch not in ('4096','8192','16384'):
+            raise ValueError('FlashInfer expert batch must be 4096, 8192 or 16384 rows')
+        arguments['--compute-tile']=batch
+        arguments['--backend-temporary-reserve-bytes']=str({'4096':3328,'8192':4096,'16384':5120}[batch]<<20)
+        if batch!='4096':
+            transfer=512<<20
+            arguments['--provider-device-bytes']=str(int(arguments['--provider-device-bytes'])-transfer)
+            arguments['--graph-bytes']=str(int(arguments['--graph-bytes'])+transfer)
+        if batch=='16384':
+            arguments['--expert-workspace-bytes']=str(640<<20)
+            arguments['--graph-bytes']=str(int(arguments['--graph-bytes'])-(320<<20))
     return arguments, plan
 
 

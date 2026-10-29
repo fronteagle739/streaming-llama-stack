@@ -125,6 +125,7 @@ Native controls take effect at token boundaries. The response reports requested 
 | `--xdg-cache-home` | ds4-win: `{runtime_root}/cache/xdg_cache_home`; mac-ds4: `{runtime_root}/cache/xdg_cache_home`; rtx-llama: `{runtime_root}/cache/xdg_cache_home`; image: `{runtime_root}/cache/xdg_cache_home`; video: `{runtime_root}/cache/xdg_cache_home`; studio: `{runtime_root}/cache/xdg_cache_home`; mlx-serve: `{runtime_root}/cache/xdg_cache_home`; mac-mlx: `{runtime_root}/cache/xdg_cache_home`; mac-llama: `{runtime_root}/cache/xdg_cache_home`; mac-mference: `{runtime_root}/cache/xdg_cache_home` | Runtime-local cache/temp directory; no model download is performed. |
 | `--zig-global-cache-dir` | ds4-win: `{runtime_root}/cache/zig_global_cache_dir`; mac-ds4: `{runtime_root}/cache/zig_global_cache_dir`; rtx-llama: `{runtime_root}/cache/zig_global_cache_dir`; image: `{runtime_root}/cache/zig_global_cache_dir`; video: `{runtime_root}/cache/zig_global_cache_dir`; studio: `{runtime_root}/cache/zig_global_cache_dir`; mlx-serve: `{runtime_root}/cache/zig_global_cache_dir`; mac-mlx: `{runtime_root}/cache/zig_global_cache_dir`; mac-llama: `{runtime_root}/cache/zig_global_cache_dir`; mac-mference: `{runtime_root}/cache/zig_global_cache_dir` | Runtime-local cache/temp directory; no model download is performed. |
 | `--zig-local-cache-dir` | ds4-win: `{runtime_root}/cache/zig_local_cache_dir`; mac-ds4: `{runtime_root}/cache/zig_local_cache_dir`; rtx-llama: `{runtime_root}/cache/zig_local_cache_dir`; image: `{runtime_root}/cache/zig_local_cache_dir`; video: `{runtime_root}/cache/zig_local_cache_dir`; studio: `{runtime_root}/cache/zig_local_cache_dir`; mlx-serve: `{runtime_root}/cache/zig_local_cache_dir`; mac-mlx: `{runtime_root}/cache/zig_local_cache_dir`; mac-llama: `{runtime_root}/cache/zig_local_cache_dir`; mac-mference: `{runtime_root}/cache/zig_local_cache_dir` | Runtime-local cache/temp directory; no model download is performed. |
+| `--flashinfer-batch-tokens` | Explicit runtime value | Opt-in ABI4 stored-MXFP4 expert chunk size, default4096. Encoder layers0-19 may widen to8192/16384; layer20 and the cone retain4K. Attention/router GEMMs stay4K; existing fused gather/MXFP8 quantization is reused. Exact provider/graph/physical admission remains mandatory;16K has only adapter qualification. |
 
 Budget placeholders use the admitted child budget: `{host_budget_bytes}`, `{host_budget_mb}`, `{physical_floor_bytes}` (admission) and `{runtime_floor_bytes}` (runtime). `{host_budget_gib}` and `{min_available_gib}` use GiB. User overrides are literal strings, including JSON and braces.
 
@@ -2521,7 +2522,7 @@ DS4PERF_DIAGNOSTIC_LAYERS: advanced engine setting; built-in default retained
 
 Scope: rtx-llama. Class: advanced.
 
-Source: `engines/streaming-llama/prefill_llama.cpp/src/llama-dsv41-executor.cpp:1334`. Unset read: NULL from getenv; the literal consumer below supplies any fallback.
+Source: `engines/streaming-llama/prefill_llama.cpp/src/llama-dsv41-executor.cpp:1335`. Unset read: NULL from getenv; the literal consumer below supplies any fallback.
 
 ```text
         }
@@ -2533,7 +2534,7 @@ Source: `engines/streaming-llama/prefill_llama.cpp/src/llama-dsv41-executor.cpp:
         const auto buft=ggml_backend_get_default_buffer_type(backend);
 ```
 
-Source: `engines/streaming-llama/prefill_llama.cpp/src/llama-dsv41-executor.cpp:1372`. Unset read: NULL from getenv; the literal consumer below supplies any fallback.
+Source: `engines/streaming-llama/prefill_llama.cpp/src/llama-dsv41-executor.cpp:1373`. Unset read: NULL from getenv; the literal consumer below supplies any fallback.
 
 ```text
             llama_dsv41_layer_log("DS4PERF_BF16_INPLACE_LAYOUT layer=%u start=%u count=%u tagged=%llu actual_aliases=%llu alias_bytes=%llu original_lifetime_checks=1\n",in.layer,in.start,in.count,(unsigned long long)tagged,(unsigned long long)aliases,(unsigned long long)bytes);
@@ -57167,7 +57168,7 @@ Source: `engines/streaming-llama/prefill_llama.cpp/src/llama-dsv41-sweep.cpp:252
                 require(previous_lock.owns_lock(),"YOCO prefix is active");
 ```
 
-Source: `engines/streaming-llama/prefill_llama.cpp/src/llama-dsv41-sweep.cpp:284`. Unset read: NULL from getenv; the literal consumer below supplies any fallback.
+Source: `engines/streaming-llama/prefill_llama.cpp/src/llama-dsv41-sweep.cpp:285`. Unset read: NULL from getenv; the literal consumer below supplies any fallback.
 
 ```text
         require(!options.unaligned_append_step_tokens||(options.stateful_chunks&&options.fixed&&options.reuse_graph&&!options.reuse_layer_graph),"Unaligned append policy requires the existing stateful fixed owner");
@@ -57179,7 +57180,7 @@ Source: `engines/streaming-llama/prefill_llama.cpp/src/llama-dsv41-sweep.cpp:284
             "Direct pinned RAM requires native experts, admitted RAM bank and separate64MiB device ceiling");
 ```
 
-Source: `engines/streaming-llama/prefill_llama.cpp/src/llama-dsv41-sweep.cpp:285`. Unset read: NULL from getenv; the literal consumer below supplies any fallback.
+Source: `engines/streaming-llama/prefill_llama.cpp/src/llama-dsv41-sweep.cpp:286`. Unset read: NULL from getenv; the literal consumer below supplies any fallback.
 
 ```text
         require(!options.compute_step_tokens||(options.compute_step_tokens<=options.carry.max_tile_tokens&&(!options.pair_ffn||options.compute_step_tokens==options.carry.max_tile_tokens)),"Logical compute step exceeds its admitted tile or changes paired group alignment");
@@ -62838,7 +62839,7 @@ Source: `engines/streaming-llama/prefill_llama.cpp/src/llama-dsv41-executor.cpp:
         if(w.attention.q_a->type!=GGML_TYPE_Q8_0||w.attention.q_b->type!=GGML_TYPE_Q8_0||w.attention.kv->type!=GGML_TYPE_Q8_0||
 ```
 
-Source: `engines/streaming-llama/prefill_llama.cpp/src/llama-dsv41-executor.cpp:1236`. Unset read: NULL from getenv; the literal consumer below supplies any fallback.
+Source: `engines/streaming-llama/prefill_llama.cpp/src/llama-dsv41-executor.cpp:1237`. Unset read: NULL from getenv; the literal consumer below supplies any fallback.
 
 ```text
         }
@@ -62850,7 +62851,7 @@ Source: `engines/streaming-llama/prefill_llama.cpp/src/llama-dsv41-executor.cpp:
         }
 ```
 
-Source: `engines/streaming-llama/prefill_llama.cpp/src/llama-dsv41-executor.cpp:1241`. Unset read: NULL from getenv; the literal consumer below supplies any fallback.
+Source: `engines/streaming-llama/prefill_llama.cpp/src/llama-dsv41-executor.cpp:1242`. Unset read: NULL from getenv; the literal consumer below supplies any fallback.
 
 ```text
             else llama_dsv41_layer_log("DS4PERF_EXPERT_MXFP4_SMALL_BATCH layer=%u count=%u unchanged_original_weights=1 native_MMA_minimum_rows=5\n",in.layer,in.count);
@@ -68181,7 +68182,7 @@ Producer Engram row cache kept in host RAM across turns, in MiB; 0 disables it. 
 
 Scope: rtx-llama. Class: advanced.
 
-Source: `engines/streaming-llama/prefill_llama.cpp/src/llama-dsv41-sweep.cpp:435`. Unset read: NULL from getenv; the literal consumer below supplies any fallback.
+Source: `engines/streaming-llama/prefill_llama.cpp/src/llama-dsv41-sweep.cpp:436`. Unset read: NULL from getenv; the literal consumer below supplies any fallback.
 
 ```text
         const uint64_t row_cache_have=p->provider.engram_row_cache_bytes();uint64_t row_cache_new=0;
@@ -68315,7 +68316,7 @@ Source: `engines/streaming-llama/prefill_llama.cpp/src/llama-dsv41-engram-prefet
 
 ### LLAMADECODE_HASH_DUMP
 
-Diagnostic only: 1 dumps per-layer tensor hashes for nondeterminism checks.
+Diagnostic hashes: 1 reads leaves and outputs (incompatible with unmapped growable-cache extents); outputs reads completed outputs only and reports aligned4K residual slices without reading cache virtual holes.
 
 Scope: rtx-llama. Class: advanced.
 
@@ -68324,11 +68325,23 @@ Source: `engines/streaming-llama/prefill_llama.cpp/src/llama-dsv41-hash-dump.h:2
 ```text
 
 inline bool llama_dsv41_hash_dump_enabled(){
-    static const bool on=[]{const char*e=std::getenv("LLAMADECODE_HASH_DUMP");return e&&e[0]=='1'&&!e[1];}();
+    static const bool on=[]{const char*e=std::getenv("LLAMADECODE_HASH_DUMP");return e&&(!std::strcmp(e,"1")||!std::strcmp(e,"outputs"));}();
     return on;
 }
 inline uint64_t llama_dsv41_hash_bytes(const void *data,size_t bytes,uint64_t h=1469598103934665603ull){
     const auto *p=static_cast<const unsigned char*>(data);size_t i=0;
+```
+
+Source: `engines/streaming-llama/prefill_llama.cpp/src/llama-dsv41-hash-dump.h:48`. Unset read: NULL from getenv; the literal consumer below supplies any fallback.
+
+```text
+        const std::vector<ggml_tensor*> &outputs,const std::vector<ggml_tensor*> &routed,const std::vector<int32_t> &experts){
+    std::vector<unsigned char>scratch;const size_t cap=64ull*1024*1024;
+    const char *mode=std::getenv("LLAMADECODE_HASH_DUMP");
+    const bool outputs_only=mode&&!std::strcmp(mode,"outputs");
+    for(auto*t:llama_dsv41_hash_leaves(graph)){
+        // A growable cache leaf includes unmapped VMM pages. The outputs-only
+        // mode reads completed graph outputs, never its virtual cache extent.
 ```
 
 ### LLAMADECODE_L2
@@ -72657,7 +72670,7 @@ Source: `engines/streaming-llama/prefill_llama.cpp/ggml/src/ggml-cuda/dsv41-ds4-
     attention_tokentile_hmma_kernel<16u><<<dim3(tiles,4),512,tt_TokentileSmemBudget<kTTStageRows,16u>::total,stream>>>(
 ```
 
-Source: `engines/streaming-llama/prefill_llama.cpp/src/llama-dsv41-executor.cpp:1509`. Unset read: NULL from getenv; the literal consumer below supplies any fallback.
+Source: `engines/streaming-llama/prefill_llama.cpp/src/llama-dsv41-executor.cpp:1510`. Unset read: NULL from getenv; the literal consumer below supplies any fallback.
 
 ```text
         const auto stream_topk_before=expert.index_key_windows?ggml_backend_cuda_dsv41_stream_topk_queued():0;
@@ -72687,7 +72700,7 @@ Source: `engines/streaming-llama/prefill_llama.cpp/ggml/src/ggml-cuda/dsv4-act-q
                     (const float4*)src_d,(float4*)dst_d,vectors);
 ```
 
-Source: `engines/streaming-llama/prefill_llama.cpp/src/llama-dsv41-executor.cpp:1504`. Unset read: NULL from getenv; the literal consumer below supplies any fallback.
+Source: `engines/streaming-llama/prefill_llama.cpp/src/llama-dsv41-executor.cpp:1505`. Unset read: NULL from getenv; the literal consumer below supplies any fallback.
 
 ```text
         const auto cast_elements_before=cast_vector?ggml_backend_cuda_dsv41_cast_vector_elements():0;
@@ -72717,7 +72730,7 @@ Source: `engines/streaming-llama/prefill_llama.cpp/ggml/src/ggml-cuda/dsv41-cast
         const int64_t total=n0*n1*n2*n3;
 ```
 
-Source: `engines/streaming-llama/prefill_llama.cpp/src/llama-dsv41-executor.cpp:1500`. Unset read: NULL from getenv; the literal consumer below supplies any fallback.
+Source: `engines/streaming-llama/prefill_llama.cpp/src/llama-dsv41-executor.cpp:1501`. Unset read: NULL from getenv; the literal consumer below supplies any fallback.
 
 ```text
         const auto dense_bf16_store_before=dense_bf16_store?ggml_backend_cuda_dsv41_dense_bf16_store_queued():0;
@@ -72771,7 +72784,7 @@ LLAMA_DSV41_ENGRAM_PROMPT_OVERLAP: qualified preset/runtime setting; override fo
 
 Scope: rtx-llama. Class: preset.
 
-Source: `engines/streaming-llama/prefill_llama.cpp/src/llama-dsv41-sweep.cpp:685`. Unset read: NULL from getenv; the literal consumer below supplies any fallback.
+Source: `engines/streaming-llama/prefill_llama.cpp/src/llama-dsv41-sweep.cpp:686`. Unset read: NULL from getenv; the literal consumer below supplies any fallback.
 
 ```text
         const auto schedule=llama_dsv41_plan_append(p->options.pair_ffn,p->options.carry.max_tile_tokens,p->options.compute_step_tokens,p->position_offset,p->options.unaligned_append_step_tokens);
@@ -72897,7 +72910,7 @@ static dsv41_flashinfer_fn dsv41_flashinfer_bridge(){
     static dsv41_flashinfer_fn function=[](){
 ```
 
-Source: `engines/streaming-llama/prefill_llama.cpp/src/llama-dsv41-executor.cpp:1514`. Unset read: NULL from getenv; the literal consumer below supplies any fallback.
+Source: `engines/streaming-llama/prefill_llama.cpp/src/llama-dsv41-executor.cpp:1515`. Unset read: NULL from getenv; the literal consumer below supplies any fallback.
 
 ```text
         const auto expert_cublas_before=expert.expert_f16_cublas?ggml_backend_cuda_dsv41_expert_cublas_queued():0;
@@ -72913,12 +72926,12 @@ Source: `engines/streaming-llama/prefill_llama.cpp/src/llama-dsv41-flashinfer-bu
 
 ```text
 namespace llama_dsv41_flashinfer {
-constexpr uint64_t reserve_bytes=3328ull*1024*1024;
+inline uint64_t reserve_bytes(){return ggml_dsv41_flashinfer::selected_reserve_bytes();}
 inline bool requested(){const char *v=std::getenv("LLAMA_DSV41_FLASHINFER_MXFP4");return v&&!std::strcmp(v,"1");}
 inline uint64_t workspace_bytes(uint64_t n,uint64_t k,uint64_t rows){
     (void)n;(void)k;(void)rows;
     // GGML legacy-pool allocation look-ahead, plus AOT module headroom.
-    return ggml_dsv41_flashinfer::align256((ggml_dsv41_flashinfer::workspace_bytes+255)*105/100+1)+16ull*1024*1024;
+    return ggml_dsv41_flashinfer::align256((ggml_dsv41_flashinfer::selected_workspace_bytes()+255)*105/100+1)+16ull*1024*1024;
 ```
 
 ### LLAMA_DSV41_FLASHINFER_MXFP4_DLL
@@ -73138,8 +73151,8 @@ Source: `engines/streaming-llama/prefill_llama.cpp/tools/dsv41-prefill/main.cpp:
         const bool flashinfer_reserve=llama_dsv41_flashinfer::requested()&&pair_ffn&&
             std::getenv("LLAMA_DSV41_STORED_MXFP4")&&std::string(std::getenv("LLAMA_DSV41_STORED_MXFP4"))=="1";
         require(backend_reserve==gib||(backend_reserve==768ull*1024*1024&&pair_ffn)||
-            (flashinfer_reserve&&backend_reserve==llama_dsv41_flashinfer::reserve_bytes),"Backend reserve must match the explicit arithmetic/workspace plan");
-        require(!flashinfer_reserve||backend_reserve==llama_dsv41_flashinfer::reserve_bytes,"FlashInfer requires its bounded workspace inside the existing graph device cap");
+            (flashinfer_reserve&&backend_reserve==llama_dsv41_flashinfer::reserve_bytes()),"Backend reserve must match the explicit arithmetic/workspace plan");
+        require(!flashinfer_reserve||backend_reserve==llama_dsv41_flashinfer::reserve_bytes(),"FlashInfer requires its bounded workspace inside the existing graph device cap");
         const auto output_volume=native_file::volume(path("--payload"));
 ```
 
@@ -73161,7 +73174,7 @@ static bool dsv41_topk_radix_enabled(const int tile_size, const int k) {
 #endif
 ```
 
-Source: `engines/streaming-llama/prefill_llama.cpp/src/llama-dsv41-executor.cpp:1495`. Unset read: NULL from getenv; the literal consumer below supplies any fallback.
+Source: `engines/streaming-llama/prefill_llama.cpp/src/llama-dsv41-executor.cpp:1496`. Unset read: NULL from getenv; the literal consumer below supplies any fallback.
 
 ```text
         const auto dense_before=expert.dense_inputs_f16?ggml_backend_cuda_dsv41_dense_half_queued():0;
@@ -100701,4 +100714,22 @@ Source: `vendor/engines/cosmos_windows/weight_streaming/zimage_backend.py:43`. U
         from cosmos_windows import mem_guard
     except Exception:
         mem_guard = None
+```
+
+### LLAMA_DSV41_FLASHINFER_BATCH_TOKENS
+
+Opt-in ABI4 stored-MXFP4 expert chunk size, default4096. Encoder layers0-19 may widen to8192/16384; layer20 and the cone retain4K. Attention/router GEMMs stay4K; existing fused gather/MXFP8 quantization is reused. Exact provider/graph/physical admission remains mandatory;16K has only adapter qualification.
+
+Scope: rtx-llama. Class: advanced.
+
+Source: `engines/streaming-llama/prefill_llama.cpp/ggml/src/ggml-dsv41-flashinfer-workspace.h:29`. Unset read: NULL from getenv; the literal consumer below supplies any fallback.
+
+```text
+// A fixed allocation per selected chunk prevents legacy-pool accumulation.
+inline uint64_t batch_tokens() {
+    const char *value=std::getenv("LLAMA_DSV41_FLASHINFER_BATCH_TOKENS");
+    if(!value||!std::strcmp(value,"4096"))return 4096;
+    if(!std::strcmp(value,"8192"))return 8192;
+    if(!std::strcmp(value,"16384"))return 16384;
+    throw std::runtime_error("FlashInfer expert batch must be 4096, 8192 or 16384 rows");
 ```

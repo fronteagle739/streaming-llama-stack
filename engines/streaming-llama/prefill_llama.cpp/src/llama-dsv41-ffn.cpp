@@ -1,6 +1,7 @@
 #include "llama-dsv41-ffn.h"
 #include "boundary-capture.h"
 #include "ggml-ds4-native-half.h"
+#include "llama-dsv41-flashinfer-budget.h"
 #include <cmath>
 
 llama_dsv41_ffn_graph::llama_dsv41_ffn_graph(ggml_context * ctx,llama_dsv41_graph_ops & ops,float limit,float route_scale) :
@@ -41,10 +42,11 @@ llama_dsv41_ffn_graph::result llama_dsv41_ffn_graph::routed_impl(
     // Expert grouping must not implicitly widen the sensitive router GEMM.
     // Reuse the original attention-sized F32 products before joining logits.
     ggml_tensor * router_logits=nullptr;
-    if(native_router_partitions&&count>2048){
-        GGML_ASSERT(native_half&&count<=4096);
-        for(int64_t first=0;first<count;first+=2048){
-            const int64_t rows=std::min<int64_t>(2048,count-first);
+    const int64_t router_rows=native_router_partitions?2048:4096;
+    if((native_router_partitions||llama_dsv41_flashinfer::requested())&&count>router_rows){
+        GGML_ASSERT(!native_router_partitions||(native_half&&count<=4096));
+        for(int64_t first=0;first<count;first+=router_rows){
+            const int64_t rows=std::min<int64_t>(router_rows,count-first);
             auto * part=ggml_view_2d(ctx,input,width,rows,input->nb[1],size_t(first)*input->nb[1]);
             auto * logits=mm(w.router,part,false);
             router_logits=router_logits?ggml_concat(ctx,router_logits,logits,1):logits;

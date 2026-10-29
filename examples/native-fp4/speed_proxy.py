@@ -76,6 +76,8 @@ def run(args, cfg):
                       (Path(cfg['llama_producer']).parent / 'ds4-decode.dll').open('rb'), 'sha256').hexdigest(),
                   profiled=args.profile_stages,
                   flashinfer_requested=cfg['env_overrides'].get('LLAMA_DSV41_FLASHINFER_MXFP4') == '1',
+                  flashinfer_batch_tokens=int(cfg['env_overrides'].get('LLAMA_DSV41_FLASHINFER_BATCH_TOKENS','4096')),
+                  configured_context=cfg['context'],
                   decode_mma_requested=cfg['env_overrides'].get('DS4_CUDA_MXFP4_DECODE_MMA') == '1',
                   route_histogram_requested=cfg['env_overrides'].get('LLAMA_DSV41_ROUTE_HISTOGRAM') == '1',
                   affinity_warmup_tokens=int(cfg['env_overrides'].get('DS4_CACHE_AFFINITY_WARMUP_TOKENS','100')),

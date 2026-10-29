@@ -37,13 +37,14 @@ int main(int argc,char **argv){
     if(!((n==2304&&k==5120)||(n==5120&&k==2304)))return 1;
     std::vector<int> counts(384),bounds(385,0);std::ifstream file(argv[4],std::ios::binary);
     if(!file.read(reinterpret_cast<char*>(counts.data()),384*4)||file.peek()!=std::char_traits<char>::eof())return 1;
-    for(int e=0;e<384;++e){if(counts[e]<0||counts[e]>4096)return 1;bounds[e+1]=bounds[e]+counts[e];}
-    int rows=bounds.back();if(rows<1||rows>4096*6||rows%6)return 1;
+    for(int e=0;e<384;++e){if(counts[e]<0||counts[e]>16384)return 1;bounds[e+1]=bounds[e]+counts[e];}
+    int rows=bounds.back();if(rows<1||rows>16384*6||rows%6)return 1;
     auto library=LoadLibraryA(argv[1]);if(!library){std::fprintf(stderr,"LoadLibrary failed: %lu\n",GetLastError());return 2;}
     auto call=reinterpret_cast<slstack_flashinfer_mxfp4_fn>(GetProcAddress(library,"slstack_flashinfer_mxfp4"));if(!call)return 2;
-    auto abi=reinterpret_cast<int(*)()>(GetProcAddress(library,"slstack_flashinfer_mxfp4_abi"));if(!abi||abi()!=3)return 2;
+    auto abi=reinterpret_cast<int(*)()>(GetProcAddress(library,"slstack_flashinfer_mxfp4_abi"));if(!abi||abi()!=4)return 2;
+    const auto workspace_bytes=ggml_dsv41_flashinfer::layout(rows,5120,2304).bytes;
     native_block *weights;float *input,*output;int *gather,*scatter,*gpu_bounds;void *workspace;
-    check(cudaMalloc(&workspace,ggml_dsv41_flashinfer::workspace_bytes));
+    check(cudaMalloc(&workspace,workspace_bytes));
     size_t blocks=size_t(384)*n*k/32;
     check(cudaMalloc(&weights,blocks*sizeof(native_block)));check(cudaMalloc(&input,size_t(rows)*k*4));check(cudaMalloc(&output,size_t(rows)*n*4));
     check(cudaMalloc(&gather,rows*4));check(cudaMalloc(&scatter,rows*4));check(cudaMalloc(&gpu_bounds,385*4));
@@ -53,7 +54,7 @@ int main(int argc,char **argv){
     fill_weights<<<unsigned((blocks+255)/256),256>>>(weights,blocks,n,k);
     fill_input<<<unsigned((size_t(rows)*k+255)/256),256>>>(input,rows,k,gpu_bounds);
     check(cudaMemset(output,0xff,size_t(rows)*n*4));check(cudaDeviceSynchronize());
-    check(static_cast<cudaError_t>(call(weights,input,gather,scatter,gpu_bounds,output,rows,n,k,k,n,n*6,workspace,ggml_dsv41_flashinfer::workspace_bytes,nullptr)));
+    check(static_cast<cudaError_t>(call(weights,input,gather,scatter,gpu_bounds,output,rows,n,k,k,n,n*6,workspace,workspace_bytes,nullptr)));
     check(cudaDeviceSynchronize());
     std::vector<float> actual(size_t(rows)*n);check(cudaMemcpy(actual.data(),output,actual.size()*4,cudaMemcpyDeviceToHost));
     for(float value:actual)if(!std::isfinite(value)){std::fprintf(stderr,"Nonfinite/unwritten output\n");return 3;}
