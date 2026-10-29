@@ -423,15 +423,18 @@ struct llama_dsv41_tile_executor::pinned_storage {
         ok(cudaError_t(ggml_dsv41_cuda_engram_decode(engram_raw_device,static_cast<float*>(out->data),raw.size()/264,compute())),"Engram GPU decode");
     }
     void validate(const llama_dsv41_validation &p){
-        if(p.residual_n>uint64_t(5120)*4*4096){
-            require(p.residual_n%(5120*4)==0,"Grouped validation residual row geometry changed");
-            const uint64_t rows=p.residual_n/(5120*4);require(rows<=16384&&p.pre_n==rows*4,"Grouped validation admission changed");
+        require(!(p.residual_n&&p.residual_bf16_n),"Validation carries one residual storage");
+        if(p.residual_n+p.residual_bf16_n>uint64_t(5120)*4*4096){
+            const uint64_t residual_total=p.residual_n+p.residual_bf16_n;
+            require(residual_total%(5120*4)==0,"Grouped validation residual row geometry changed");
+            const uint64_t rows=residual_total/(5120*4);require(rows<=16384&&p.pre_n==rows*4,"Grouped validation admission changed");
             require(p.mean_n%rows==0&&p.engram_n%rows==0&&p.selected_n%rows==0&&p.candidates_n%rows==0&&
                 p.mean_n/rows<=5120&&p.engram_n/rows<=6144&&p.selected_n/rows<=512&&p.candidates_n/rows<=2048,
                 "Grouped validation compact widths changed");
             for(uint64_t start=0;start<rows;start+=4096){const uint64_t count=std::min<uint64_t>(4096,rows-start);auto q=p;
                 auto part=[&](auto ptr,uint64_t total){return ptr?ptr+start*(total/rows):nullptr;};
                 q.residual=part(p.residual,p.residual_n);q.residual_n=count*(p.residual_n/rows);
+                q.residual_bf16=part(p.residual_bf16,p.residual_bf16_n);q.residual_bf16_n=count*(p.residual_bf16_n/rows);
                 q.pre=part(p.pre,p.pre_n);q.pre_n=count*(p.pre_n/rows);
                 q.mean=part(p.mean,p.mean_n);q.mean_n=count*(p.mean_n/rows);
                 q.engram=part(p.engram,p.engram_n);q.engram_n=count*(p.engram_n/rows);
@@ -1202,6 +1205,14 @@ bool llama_dsv41_tile_executor::run(const request&in,const llama_dsv41_layer_gra
         require(!direct_input||!in.direct->compact_record()||(resident_bf16&&device_hidden&&!pinned->prefetch_buffer&&!in.lookahead),
             "Compact carry records require the BF16-resident device bank without copy prefetch");
         ggml_tensor *seed16=nullptr;uint32_t seed_nodes=0;
+        // OPUS22 round 8: HC residual kept as BF16 (exact; every carried residual is
+        // already BF16-rounded). LLAMA_DSV41_HC_BF16_RESIDUAL=0 restores the F32 path.
+        // Layers 37-39 keep the F32 unpack: their DSpark mean also reads the input.
+        static const bool hc_bf16_residual_option=[]{const char*v=std::getenv("LLAMA_DSV41_HC_BF16_RESIDUAL");
+            require(!v||!std::strcmp(v,"0")||!std::strcmp(v,"1"),"LLAMA_DSV41_HC_BF16_RESIDUAL must be 0 or 1");return !v||v[0]=='1';}();
+        const bool hc_bf16_carry=hc_bf16_residual_option&&expert.hc_bf16_epilogue&&!boundary.active()&&
+            !llama_dsv41_attribution_active(in.position_offset+in.start,in.count);
+        const bool bf16_residual_input=hc_bf16_carry&&device_hidden&&resident_bf16&&in.layer&&in.layer<37&&!compact_seed&&direct_input;
         const auto graph_prepare_started=tile_timing_enabled()?clock_type::now():clock_type::time_point{};
         if(graph_cache_hit)compiled->bindings.restore(in.start,in.count);
         else {
@@ -1227,7 +1238,7 @@ bool llama_dsv41_tile_executor::run(const request&in,const llama_dsv41_layer_gra
                     "Resident BF16 hidden tile binding failed");
                 // Embeddings are not assumed BF16. Layer0 uses the ordinary
                 // F32 graph input, uploaded unchanged from the seed RAM bank.
-                if(in.layer)input.residual=ggml_cast(ctx.get(),bf16_destination,GGML_TYPE_F32);
+                if(in.layer)input.residual=bf16_residual_input?bf16_destination:ggml_cast(ctx.get(),bf16_destination,GGML_TYPE_F32);
                 if(spilled)spill_slot=bf16_destination;
             }else require(ggml_backend_tensor_alloc(resident->buffer,input.residual,
                 (char*)resident->hidden->data+uint64_t(bank_start)*5120*4*sizeof(float))==GGML_STATUS_SUCCESS,
@@ -1305,7 +1316,7 @@ bool llama_dsv41_tile_executor::run(const request&in,const llama_dsv41_layer_gra
 
         llama_dsv41_graph_ops ops(ctx.get(),norm_eps,hc_eps,sinkhorn_iters,boundary_observer);
         ops.merge_attention_selected_rows(merge_rows,ratio);
-        ops.use_hc_projection_f16_gemm(hc_projection_f16_gemm);ops.use_hc_bf16_epilogue(expert.hc_bf16_epilogue);
+        ops.use_hc_projection_f16_gemm(hc_projection_f16_gemm);ops.use_hc_bf16_epilogue(expert.hc_bf16_epilogue);ops.use_hc_bf16_carry(hc_bf16_carry);
         require(!merge_attention_selected_rows||expert.token_tile_attention,"Selected-row union requires explicit token-tile attention");
         llama_dsv41_layer_graph factory(ctx.get(),graph,ops,swiglu_limit,expert_scale);
         auto routed_weights=w;expert_slot_input=nullptr;
@@ -1690,7 +1701,7 @@ bool llama_dsv41_tile_executor::run(const request&in,const llama_dsv41_layer_gra
             require(ggml_backend_graph_compute_async(backend,&expand)==GGML_STATUS_SUCCESS,"Compact F16 seed expansion failed");
             compute_view=ggml_graph_view(graph,int(seed_nodes),ggml_graph_n_nodes(graph));compute_graph=&compute_view;
         }
-        if(resident_bf16&&in.layer){
+        if(resident_bf16&&in.layer&&!bf16_residual_input){
             require(ggml_graph_n_nodes(graph)>1&&ggml_graph_node(graph,0)==input.residual&&
                 input.residual->op==GGML_OP_CPY&&input.residual->src[0]&&input.residual->src[0]->type==GGML_TYPE_BF16,
                 "Resident BF16 unpack must be the first exact graph dependency");
@@ -1704,7 +1715,10 @@ bool llama_dsv41_tile_executor::run(const request&in,const llama_dsv41_layer_gra
         if(direct_input){
 #ifdef GGML_USE_CUDA
             pinned->upload_ready();llama_dsv41_validation check;
-            check.residual=static_cast<const float*>(input.residual->data);check.residual_n=uint64_t(5120)*4*in.count;
+            if(bf16_residual_input){
+                require(input.residual->type==GGML_TYPE_BF16&&ggml_is_contiguous(input.residual),"BF16 residual input binding changed");
+                check.residual_bf16=static_cast<const uint16_t*>(input.residual->data);check.residual_bf16_n=uint64_t(5120)*4*in.count;
+            }else{check.residual=static_cast<const float*>(input.residual->data);check.residual_n=uint64_t(5120)*4*in.count;}
             check.pre=static_cast<const float*>(input.previous_pre->data);check.pre_n=uint64_t(4)*in.count;
             check.compressed_rows=in.compressed_rows;
             if(reuse){check.selected=static_cast<const int32_t*>(input.previous_selected->data);check.selected_n=uint64_t(selected_width)*in.count;}

@@ -22,6 +22,8 @@ struct ggml_dsv41_validation {
     const int32_t *selected=nullptr,*candidates=nullptr;
     uint64_t residual_n=0,pre_n=0,mean_n=0,engram_n=0,selected_n=0,candidates_n=0;
     uint32_t compressed_rows=0;
+    // OPUS22 round 8: a BF16 residual (bit patterns) validated in place.
+    const uint16_t *residual_bf16=nullptr;uint64_t residual_bf16_n=0;
 };
 GGML_BACKEND_API int ggml_dsv41_cuda_validate(const ggml_dsv41_validation &,void *device_flags,void *stream);
 GGML_BACKEND_API int ggml_dsv41_cuda_copy_ram(bool to_device,const ggml_dsv41_ram_slice &,
