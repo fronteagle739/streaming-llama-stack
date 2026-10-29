@@ -18,6 +18,9 @@ struct ggml_dsv41_validation {
     uint32_t compressed_rows=0;
 };
 GGML_BACKEND_API int ggml_dsv41_cuda_validate(const ggml_dsv41_validation &,void *device_flags,void *stream);
+// The same complete validator followed by a device-side failure gate. Invalid
+// data fails the CUDA job before a later kernel can consume invalid row IDs.
+GGML_BACKEND_API int ggml_dsv41_cuda_validate_async(const ggml_dsv41_validation &,void *device_flags,void *stream);
 GGML_BACKEND_API int ggml_dsv41_cuda_copy_ram(bool to_device,const ggml_dsv41_ram_slice &,
     uint64_t record_offset,uint64_t row_bytes,void *device,void *stream);
 // Explicit offline TEST scheduling experiment. No kernel or precision change.

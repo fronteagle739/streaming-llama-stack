@@ -117,6 +117,8 @@ public:
     bool run(const request &,const llama_dsv41_layer_graph::weights &,result &,std::string &,
              const llama_dsv41_expert_profile::policy &);
     void clear();
+    // Certify queued tiles before the carry layer or weight lease can commit.
+    bool finish_layer(std::string &error);
 private:
     ggml_backend_t backend;
     llama_dsv41_cache_storage &cache;
@@ -125,6 +127,7 @@ private:
     uint32_t sinkhorn_iters;
     uint32_t admitted_tile_tokens;
     bool index_cublas=false;
+    bool async_layer=false,async_failed=false;
     bool resident_bf16=false,export_hidden_after_head=false,async_inputs=false,resident_ids=false,resident_metadata=false;
     bool defer_hidden_readback=false,merge_attention_selected_rows=false,hc_projection_f16_gemm=false,dense_mxfp4=false,pair_ffn=false;
     std::shared_ptr<llama_dsv41_fixed_storage> fixed;

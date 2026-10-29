@@ -61,9 +61,9 @@ public:
         friend struct ds4perf_direct_carry_fixture;
 #endif
     };
-    // Constructible only by the executor after actual zero GPU validation flags
-    // and completed D2H transfers, or explicit full-residency retention. No
-    // public boolean can certify a live copy or a device-resident generation.
+    // Constructible only by the executor after validation/copies or explicit
+    // full-residency retention. A queued completion carries a private fence;
+    // commit_layer rejects it until actual GPU validation/copies are certified.
     class ram_completion {
     public:
         ram_completion(const ram_completion&)=default;
@@ -75,6 +75,9 @@ public:
         ram_lease lease;
         bool selected_unchanged=false,candidates_unchanged=false;
         bool hidden_mirrored=true;
+        // A queued tile is provisional. Only the executor can certify this
+        // fence after both CUDA streams finish; commit_layer checks every fence.
+        std::shared_ptr<const bool> deferred;
         friend class llama_dsv41_carry_store;
         friend class llama_dsv41_tile_executor;
 #ifdef DS4PERF_DIRECT_CARRY_TEST

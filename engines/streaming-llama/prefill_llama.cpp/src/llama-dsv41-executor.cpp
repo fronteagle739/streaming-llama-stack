@@ -9,6 +9,7 @@
 #include "llama-dsv41-graph-digest.h"
 #include "llama-dsv41-graph-bindings.h"
 #include <array>
+#include <deque>
 #include "llama-dsv41-executor.h"
 #include "llama-dsv41-flashinfer-budget.h"
 #include "ggml-dsv41-native-ffn.h"
@@ -63,7 +64,9 @@ namespace {
 bool witnessed_cuda_dispatch() {
     const char *graphs=std::getenv("LLAMA_DSV41_CUDA_GRAPHS");
     const char *eager=std::getenv("GGML_CUDA_DISABLE_GRAPHS");
-    return (graphs&&std::string(graphs)=="1")||(eager&&std::string(eager)=="1");
+    const char *binding=std::getenv("LLAMA_DSV41_LAYER_FUSION");
+    return (graphs&&std::string(graphs)=="1")||(eager&&std::string(eager)=="1")||
+        (binding&&!std::strcmp(binding,"2")&&eager&&!std::strcmp(eager,"0"));
 }
 using clock_type=std::chrono::steady_clock;
 double elapsed(clock_type::time_point start){return std::chrono::duration<double,std::milli>(clock_type::now()-start).count();}
@@ -388,6 +391,79 @@ struct llama_dsv41_tile_executor::pinned_storage {
     cudaStream_t copies=nullptr;
     cudaEvent_t ready=nullptr;
     uint32_t *flags_device=nullptr,*flags_host=nullptr;
+    bool async_layer=false;
+    uint32_t async_layer_id=UINT32_MAX;
+    clock_type::time_point async_layer_begin;
+    std::shared_ptr<bool> layer_certificate;
+    struct flight {
+        cudaEvent_t done=nullptr,start=nullptr,end=nullptr;
+        uint32_t layer=0,first=0,rows=0;
+        void *registration=nullptr;uint64_t registration_bytes=0;
+        std::shared_ptr<void> graph;
+        uint64_t graph_bytes=0;
+        std::vector<std::vector<uint8_t>> uploads;
+    };
+    std::deque<flight> flights;
+    std::vector<std::vector<uint8_t>> async_uploads;
+    uint64_t retained_upload_bytes=0;
+    uint64_t retained_graph_bytes=0;
+    uint64_t retained_registration_bytes=0;
+    void reap(){
+        while(!flights.empty()){
+            auto &f=flights.front();const auto status=cudaEventQuery(f.done);
+            if(status==cudaErrorNotReady)break;
+            ok(status,"Asynchronous tile validation or copies failed");
+            float gpu_ms=-1;
+            if(f.start)ok(cudaEventElapsedTime(&gpu_ms,f.start,f.end),"Asynchronous tile timing failed");
+            llama_dsv41_layer_log("OTHER22_ASYNC_TILE_CERTIFIED layer=%u start=%u count=%u gpu_ms=%.6f\n",f.layer,f.first,f.rows,double(gpu_ms));
+            for(const auto &v:f.uploads)retained_upload_bytes-=v.size();
+            retained_graph_bytes-=f.graph_bytes;
+            if(f.registration){cleanup(cudaHostUnregister(f.registration));retained_registration_bytes-=f.registration_bytes;}
+            cleanup(cudaEventDestroy(f.done));if(f.start)cleanup(cudaEventDestroy(f.start));if(f.end)cleanup(cudaEventDestroy(f.end));
+            flights.pop_front();
+        }
+    }
+    void begin_layer(uint32_t layer){
+        reap();if(async_layer_id==layer)return;
+        require(flights.empty()&&(!layer_certificate||*layer_certificate),"Asynchronous layer crossed an uncertified predecessor");
+        async_layer_id=layer;async_layer_begin=clock_type::now();layer_certificate=std::make_shared<bool>(false);
+    }
+    void retain_upload(ggml_tensor *t,const void *source,size_t bytes){
+        require(t&&source&&ggml_nbytes(t)==bytes,"Asynchronous input geometry changed");
+        require(bytes<=1536ull*1024*1024-retained_upload_bytes,"Asynchronous upload retention exceeded its1536MiB host ceiling");
+        async_uploads.emplace_back(bytes);std::memcpy(async_uploads.back().data(),source,bytes);retained_upload_bytes+=bytes;
+        ggml_backend_tensor_set_async(backend,t,async_uploads.back().data(),0,bytes);
+    }
+    void retire_tile(uint32_t layer,uint32_t first,uint32_t rows,std::shared_ptr<void> graph,uint64_t graph_bytes,cudaEvent_t start,cudaEvent_t end){
+        require(flights.size()<16,"Asynchronous graph metadata exceeded its128MiB host ceiling");
+        require(graph_bytes<=128ull*1024*1024-retained_graph_bytes,"Asynchronous graph metadata exceeded its128MiB byte admission");
+        flight f;f.layer=layer;f.first=first;f.rows=rows;f.graph=std::move(graph);f.uploads=std::move(async_uploads);f.start=start;f.end=end;
+        f.graph_bytes=graph_bytes;
+        try{
+            ok(cudaEventCreateWithFlags(&f.done,cudaEventDisableTiming),"Asynchronous completion event allocation failed");
+            // The next compute may reuse graph scratch only after the copy
+            // stream finishes reading this tile's outputs. This is a GPU wait.
+            ok(cudaEventRecord(f.done,copies),"Asynchronous copy completion record failed");
+            ok(cudaStreamWaitEvent(compute(),f.done,0),"Asynchronous scratch-reuse dependency failed");
+            flights.push_back(std::move(f));
+            retained_graph_bytes+=graph_bytes;
+        }catch(...){
+            // Keep f's host uploads and metadata alive through failure drains.
+            cleanup(cudaStreamSynchronize(copies));ggml_backend_synchronize(backend);
+            if(f.done)cleanup(cudaEventDestroy(f.done));if(f.start)cleanup(cudaEventDestroy(f.start));if(f.end)cleanup(cudaEventDestroy(f.end));
+            throw;
+        }
+    }
+    void certify_layer(){
+        if(!async_layer||!layer_certificate||*layer_certificate)return;
+        ok(cudaStreamSynchronize(compute()),"Asynchronous GPU layer validation/compute failed; carry remains uncommitted");
+        ok(cudaStreamSynchronize(copies),"Asynchronous layer RAM mirrors did not complete");
+        reap();require(flights.empty()&&async_uploads.empty(),"Asynchronous layer retained incomplete resources");
+        *layer_certificate=true;
+        llama_dsv41_layer_log("OTHER22_ASYNC_LAYER_CERTIFIED layer=%u begin_epoch_ms=%.6f end_epoch_ms=%.6f validation_on_GPU=1 carry_commit_allowed=1\n",async_layer_id,
+            std::chrono::duration<double,std::milli>(async_layer_begin.time_since_epoch()).count(),
+            std::chrono::duration<double,std::milli>(clock_type::now().time_since_epoch()).count());
+    }
     double last_register_ms=0; // LLAMADECODE_TILE_TIMING: host wall of the last bind_lease unregister+register
 #include "llama-dsv41-copy-prefetch.inl"
     static void ok(cudaError_t e,const char *message){if(e!=cudaSuccess)throw std::runtime_error(std::string(message)+": "+cudaGetErrorString(e));}
@@ -397,6 +473,8 @@ struct llama_dsv41_tile_executor::pinned_storage {
             (unsigned long long)staging_copies,(unsigned long long)staging_bytes,(unsigned long long)host_copy_staging_bytes);
         if(copies)cleanup(cudaStreamSynchronize(copies));
         if(backend)ggml_backend_synchronize(backend);
+        for(auto &f:flights){if(f.registration)cleanup(cudaHostUnregister(f.registration));if(f.done)cleanup(cudaEventDestroy(f.done));if(f.start)cleanup(cudaEventDestroy(f.start));if(f.end)cleanup(cudaEventDestroy(f.end));}
+        flights.clear();
         if(registered_tile)cleanup(cudaHostUnregister(registered_tile));
         if(registered)cleanup(cudaHostUnregister(base));
         prefetch_destroy_events();
@@ -425,6 +503,10 @@ struct llama_dsv41_tile_executor::pinned_storage {
             return;
         }
         const auto before=clock_type::now();
+        if(async_layer){
+            ok(static_cast<cudaError_t>(ggml_dsv41_cuda_validate_async(p,flags_device,compute())),"Asynchronous GPU carry validator failed");
+            return;
+        }
         ok(static_cast<cudaError_t>(llama_dsv41_cuda_validate(p,flags_device,compute())),"GPU carry validator launch failed");
         ok(cudaMemcpyAsync(flags_host,flags_device,4,cudaMemcpyDeviceToHost,compute()),"GPU carry flags readback failed");
         ok(cudaStreamSynchronize(compute()),"GPU carry validation did not complete");
@@ -470,7 +552,15 @@ struct llama_dsv41_tile_executor::pinned_storage {
         }else if(registered_tile==ptr&&registered_tile_bytes==size)return;
         // Original copy stream completion protects the old registration. No
         // new host buffer or stream; the bank/lease ownership stays unchanged.
-        ok(cudaStreamSynchronize(copies),"Previous tile copies did not complete before pin rebinding");
+        if(async_layer){
+            reap();
+            if(registered_tile&&!flights.empty()){
+                auto &last=flights.back();require(!last.registration,"Asynchronous registration already retired");
+                last.registration=registered_tile;last.registration_bytes=registered_tile_bytes;
+                retained_registration_bytes+=registered_tile_bytes;registered_tile=nullptr;registered_tile_bytes=0;
+            }
+            require(pin_size<=bytes-retained_registration_bytes,"Asynchronous registrations exceed the existing locked RAM bank");
+        }else ok(cudaStreamSynchronize(copies),"Previous tile copies did not complete before pin rebinding");
         const auto register_started=clock_type::now();
         if(registered_tile){ok(cudaHostUnregister(registered_tile),"Previous tile RAM unregister failed");registered_tile=nullptr;registered_tile_bytes=0;}
         size_t free_before=0,total=0,free_after=0;ok(cudaMemGetInfo(&free_before,&total),"Cannot inspect GPU memory before tile registration");
@@ -491,6 +581,39 @@ struct llama_dsv41_tile_executor::pinned_storage {
                 "Persistent host staging escaped its exact admitted carry/tensor");
             (void)lease.row(0);(void)lease.row(lease.count()-1);
             auto*stage=static_cast<uint8_t*>(host_copy_staging.get());
+            if(async_layer){
+                // CUDA host functions perform only bounded CPU memcpy. The
+                // copy stream orders pack -> H2D, or D2H -> scatter, before
+                // reusing the same admitted64MiB slot. No host waits and no
+                // extra carry bank; callbacks are drained before certification.
+                struct stage_job {
+                    uint8_t *stage,*base;uint64_t offset,width;uint32_t start,first,rows;bool upload;
+                    static void CUDART_CB run(void *opaque){
+                        std::unique_ptr<stage_job> job(static_cast<stage_job*>(opaque));
+                        for(uint32_t i=0;i<job->rows;++i){
+                            const uint64_t row=uint64_t(job->start)+job->first+i;
+                            auto *record=job->base+ggml_dsv41_copy::header_bytes+
+                                (row/32)*ggml_dsv41_copy::page_bytes+(row%32)*ggml_dsv41_copy::record_bytes+job->offset;
+                            auto *packed=job->stage+uint64_t(i)*job->width;
+                            if(job->upload)std::memcpy(packed,record,size_t(job->width));
+                            else std::memcpy(record,packed,size_t(job->width));
+                        }
+                    }
+                };
+                const uint32_t capacity=uint32_t(host_copy_staging_bytes/width);
+                for(uint32_t first=0;first<lease.count();first+=capacity){
+                    const uint32_t rows=std::min(capacity,lease.count()-first);const uint64_t count=uint64_t(rows)*width;
+                    auto job=std::make_unique<stage_job>(stage_job{stage,static_cast<uint8_t*>(base),offset,width,lease.start(),first,rows,to_device});
+                    auto enqueue_cpu=[&]{ok(cudaLaunchHostFunc(copies,stage_job::run,job.get()),"Asynchronous carry staging callback failed");job.release();};
+                    if(to_device)enqueue_cpu();
+                    auto *device=static_cast<char*>(tensor->data)+uint64_t(first)*width;
+                    ok(cudaMemcpyAsync(to_device?static_cast<void*>(device):stage,to_device?static_cast<const void*>(stage):device,
+                        size_t(count),to_device?cudaMemcpyHostToDevice:cudaMemcpyDeviceToHost,copies),"Asynchronous staged carry transfer failed");
+                    if(!to_device)enqueue_cpu();
+                    ++staging_copies;staging_bytes+=count;
+                }
+                return;
+            }
             // Retire every prior consumer before overwriting the one host slot.
             // D2H waits on readback_ready's original compute event. No carry
             // generation can commit until finish() and the original validation.
@@ -695,6 +818,12 @@ llama_dsv41_tile_executor::llama_dsv41_tile_executor(ggml_backend_t backend,llam
     uint32_t resident_hidden_tokens,uint64_t admitted_hidden_bytes,const pinned_span *direct,bool reuse_graph,bool reuse_layer_graph,uint64_t admitted_cast_bytes,bool audit_casts,uint64_t admitted_index_bytes,uint64_t admitted_prefetch_bytes,bool coalesce_dense,bool defer_hidden_readback,bool merge_attention_selected_rows,bool hc_projection_f16_gemm,bool dense_mxfp4,bool resident_bf16,bool export_hidden_after_head,bool async_inputs,bool resident_ids,bool resident_metadata,bool pair_ffn,std::shared_ptr<llama_dsv41_fixed_storage> fixed):
     backend(backend),cache(cache),admitted_graph_bytes(admitted_graph_bytes),norm_eps(norm_eps),hc_eps(hc_eps),
     swiglu_limit(swiglu_limit),expert_scale(expert_scale),sinkhorn_iters(sinkhorn_iters),admitted_tile_tokens(admitted_tile_tokens),resident_bf16(resident_bf16),export_hidden_after_head(export_hidden_after_head),async_inputs(async_inputs),resident_ids(resident_ids),resident_metadata(resident_metadata),defer_hidden_readback(defer_hidden_readback),merge_attention_selected_rows(merge_attention_selected_rows),hc_projection_f16_gemm(hc_projection_f16_gemm),dense_mxfp4(dense_mxfp4),pair_ffn(pair_ffn),fixed(fixed){
+    const char *queued=std::getenv("LLAMA_DSV41_ASYNC_LAYER");
+    require(!queued||!std::strcmp(queued,"0")||!std::strcmp(queued,"1"),"LLAMA_DSV41_ASYNC_LAYER requires0/1");
+    async_layer=queued&&!std::strcmp(queued,"1");
+    require(!async_layer||(direct&&reuse_graph&&!reuse_layer_graph&&resident_bf16&&resident_ids&&resident_metadata&&
+        defer_hidden_readback&&export_hidden_after_head&&async_inputs&&!admitted_prefetch_bytes),
+        "Asynchronous layers require persistent full-resident BF16/IDs/metadata, retained async inputs and post-head export");
 #ifdef GGML_USE_CUDA
     // The input validator drains metadata copies before compute capture starts.
     // Pinned leases remain live through the existing post-compute synchronization.
@@ -775,6 +904,7 @@ llama_dsv41_tile_executor::llama_dsv41_tile_executor(ggml_backend_t backend,llam
         pinned_storage::ok(cudaMallocHost(reinterpret_cast<void**>(&pinned->flags_host),4),"Pinned carry flag host allocation failed");
         pinned_storage::ok(cudaMemsetAsync(pinned->flags_device,0,8,pinned->compute()),"GPU carry validation warmup initialization failed");
         llama_dsv41_validation warm;warm.residual=reinterpret_cast<float*>(pinned->flags_device+1);warm.residual_n=1;pinned->validate(warm);
+        pinned->async_layer=async_layer;
         pinned_storage::ok(cudaMemGetInfo(&after,&total),"Cannot inspect post-registration GPU memory");
         const uint64_t delta=before>after?before-after:0;require(delta<=direct->admitted_device_bytes,"Pinned bank/validator global device delta exceeds explicit admission");
         llama_dsv41_layer_log("[dsv41-pinned-carry] bank_bytes=%llu observed_global_device_delta=%llu device_admission=%llu owned_delta_proof=0 direct_page_rows=32 validation_flag_bytes=4 inter_tile_overlap=0\n",
@@ -949,6 +1079,14 @@ void llama_dsv41_tile_executor::clear(){
     if(pinned){pinned->finish();pinned->prefetch_valid=false;}
 #endif
     cache.clear();
+#ifdef GGML_USE_CUDA
+    if(pinned&&async_layer){
+        pinned->reap();
+        for(const auto &v:pinned->async_uploads)pinned->retained_upload_bytes-=v.size();
+        pinned->async_uploads.clear();pinned->retained_upload_bytes=0;pinned->layer_certificate.reset();pinned->async_layer_id=UINT32_MAX;
+    }
+#endif
+    async_failed=false;
     if(workspace){workspace->variants.clear();workspace->layer=UINT32_MAX;}
     if(resident){resident->layer=0;resident->cursor=0;resident->export_cursor=0;resident->selected_source=UINT32_MAX;resident->candidate_source=UINT32_MAX;resident->selected_width=0;resident->candidate_width=0;}
 }
@@ -962,7 +1100,12 @@ bool llama_dsv41_tile_executor::run(const request&in,const llama_dsv41_layer_gra
     std::unique_lock<std::mutex>lock(cache.execution_mutex,std::try_to_lock);
     out={};error.clear();
     if(!lock.owns_lock()){error="V4.1 tile executor is already computing";return false;}
-    if(cache.execution_poisoned){error="V4.1 tile cache requires clear after an incomplete computation";return false;}
+    bool queued_predecessor=false;
+#ifdef GGML_USE_CUDA
+    queued_predecessor=async_layer&&!async_failed&&pinned&&pinned->layer_certificate&&
+        !*pinned->layer_certificate&&pinned->async_layer_id==in.layer;
+#endif
+    if(cache.execution_poisoned&&!queued_predecessor){error="V4.1 tile cache requires clear after an incomplete computation";return false;}
     try{
         auto expert=requested_expert;
         const bool route_histogram=std::getenv("LLAMA_DSV41_ROUTE_HISTOGRAM")&&std::string(std::getenv("LLAMA_DSV41_ROUTE_HISTOGRAM"))=="1";
@@ -1039,6 +1182,7 @@ bool llama_dsv41_tile_executor::run(const request&in,const llama_dsv41_layer_gra
                 "Direct pinned carry requires exact native-expert resident-bank lease");
             (void)d.row(0);(void)d.row(in.count-1);
 #ifdef GGML_USE_CUDA
+            if(async_layer)pinned->begin_layer(in.layer);
             skip_tile_pin=std::getenv("LLAMA_DSV41_SKIP_UNUSED_TILE_PIN")&&std::string(std::getenv("LLAMA_DSV41_SKIP_UNUSED_TILE_PIN"))=="1"&&
                 pinned->tile_registration&&!pinned->prefetch_buffer&&!in.lookahead&&resident&&resident_bf16&&resident_ids&&resident_metadata&&
                 resident->full()&&!resident->spilled(in.start)&&defer_hidden_readback&&export_hidden_after_head&&
@@ -1128,6 +1272,17 @@ bool llama_dsv41_tile_executor::run(const request&in,const llama_dsv41_layer_gra
         if(boundary.active())require(std::all_of(in.token_kinds.begin(),in.token_kinds.end(),
             [](int32_t value){return value==0;}),"Boundary capture requires original text rows");
         dsv41_boundary::scope boundary_scope(&boundary);
+        const bool host_observer=boundary.active()||llama_dsv41_hash_dump_enabled()||
+            llama_dsv41_attribution_active(in.position_offset+in.start,in.count)||route_histogram;
+        if(async_layer&&host_observer){
+            // A requested host observer retains its original synchronization
+            // semantics. Never read a speculative RAM/scratch generation.
+            ggml_backend_synchronize(backend);
+#ifdef GGML_USE_CUDA
+            pinned->finish();
+#endif
+            llama_dsv41_layer_log("OTHER22_HOST_OBSERVER_BARRIER layer=%u start=%u requested_diagnostics_preserved=1\n",in.layer,in.start);
+        }
 
         const bool pooled=in.layer==2||in.layer==8||in.layer==14;
         graph_storage::variant transient;
@@ -1495,14 +1650,16 @@ bool llama_dsv41_tile_executor::run(const request&in,const llama_dsv41_layer_gra
                 (unsigned long long)llama_dsv41_graph_digest(ctx.get(),graph));std::fputc(10,stderr);std::fflush(stderr);
         }}
         const auto buft=ggml_backend_get_default_buffer_type(backend);
-        struct allocator_owner{ggml_gallocr_t value=nullptr;ggml_backend_t backend=nullptr;void *pending_copies=nullptr;bool owned=true;
+        struct allocator_owner{ggml_gallocr_t value=nullptr;ggml_backend_t backend=nullptr;void *pending_copies=nullptr;bool owned=true,deferred=false;
             void release(){if(value){
+                if(deferred&&!owned){value=nullptr;return;}
 #ifdef GGML_USE_CUDA
                 if(pending_copies)pinned_storage::cleanup(cudaStreamSynchronize(static_cast<cudaStream_t>(pending_copies)));
 #endif
                 if(backend)ggml_backend_synchronize(backend);if(owned)ggml_gallocr_free(value);value=nullptr;}}
             ~allocator_owner(){release();}} allocation;
         allocation.backend=backend;
+        allocation.deferred=async_layer;
 #ifdef GGML_USE_CUDA
         allocation.pending_copies=pinned?pinned->copies:nullptr;
 #endif
@@ -1515,7 +1672,7 @@ bool llama_dsv41_tile_executor::run(const request&in,const llama_dsv41_layer_gra
         const uint64_t actual=scratch-backend_temporary;
 #ifdef GGML_USE_CUDA
         const char *streamed_graph_mode=std::getenv("LLAMA_DSV41_CUDA_GRAPHS");
-        if(streamed_graph_mode&&std::string(streamed_graph_mode)=="1") {
+        if(async_layer||(streamed_graph_mode&&std::string(streamed_graph_mode)=="1")) {
             require(ggml_backend_cuda_graphs_reserve(backend,backend_temporary),
                 "Streamed CUDA capture requires a pre-mapped temporary pool within the admitted graph ceiling");
         }
@@ -1574,6 +1731,10 @@ bool llama_dsv41_tile_executor::run(const request&in,const llama_dsv41_layer_gra
         } input_guard{backend,pinned.get(),async_inputs};
         uint64_t async_copies=0,async_bytes=0;
         auto upload_input=[&](ggml_tensor*t,const auto &values){
+#ifdef GGML_USE_CUDA
+            if(async_layer){pinned->retain_upload(t,values.data(),values.size()*sizeof(typename std::decay_t<decltype(values)>::value_type));
+                ++async_copies;async_bytes+=values.size()*sizeof(typename std::decay_t<decltype(values)>::value_type);return;}
+#endif
             upload(t,values,async_inputs?backend:nullptr);
             if(async_inputs){++async_copies;async_bytes+=values.size()*sizeof(typename std::decay_t<decltype(values)>::value_type);}
         };
@@ -1645,8 +1806,8 @@ bool llama_dsv41_tile_executor::run(const request&in,const llama_dsv41_layer_gra
         // after all metadata copies and its upload_ready wait. Only now may the
         // host lifetime guard disarm; any earlier error drains before unwind.
         input_guard.live=false;
-        if(async_inputs)llama_dsv41_layer_log("DS4PERF_ASYNC_INPUTS_COMPLETE layer=%u start=%u count=%u copies=%llu bytes=%llu existing_CUDA_async_API=1 host_vectors_retained=1 validator_complete=1\n",
-            in.layer,in.start,in.count,(unsigned long long)async_copies,(unsigned long long)async_bytes);
+        if(async_inputs)llama_dsv41_layer_log("DS4PERF_ASYNC_INPUTS_COMPLETE layer=%u start=%u count=%u copies=%llu bytes=%llu existing_CUDA_async_API=1 host_vectors_retained=1 validator_complete=%u validator_queued=%u\n",
+            in.layer,in.start,in.count,(unsigned long long)async_copies,(unsigned long long)async_bytes,unsigned(!async_layer),unsigned(async_layer));
         if(resident_metadata)llama_dsv41_layer_log("DS4PERF_RESIDENT_METADATA_COMPLETE layer=%u start=%u count=%u raw_template=%u zero_kinds=%u all_text=%u avoided_H2D_bytes=%llu exact_initialized_templates=1\n",in.layer,in.start,in.count,unsigned(raw_template),unsigned(zero_kinds),unsigned(all_text),
             (unsigned long long)(256+(raw_template?uint64_t(in.count)*128*8+127*4:0)+(zero_kinds?uint64_t(in.count)*4:0)+(all_text?in.count:0)));
         pending.upload_ms=elapsed(upload_start);
@@ -1698,7 +1859,9 @@ bool llama_dsv41_tile_executor::run(const request&in,const llama_dsv41_layer_gra
         // LLAMADECODE_TILE_TIMING: two timing events, created once per process, recorded on the
         // ggml CUDA backend's compute stream immediately before the tile graph launch and
         // immediately after the last launch (before the existing synchronize).
-        static cudaEvent_t tile_events[2]={nullptr,nullptr};
+        static cudaEvent_t eager_tile_events[2]={nullptr,nullptr};
+        cudaEvent_t async_tile_events[2]={nullptr,nullptr};
+        auto *tile_events=async_layer?async_tile_events:eager_tile_events;
         cudaStream_t tile_stream=nullptr;
         if(tile_timing_enabled()&&ggml_backend_is_cuda(backend)){
             if(!tile_events[0]){pinned_storage::ok(cudaEventCreate(&tile_events[0]),"Tile timing event creation failed");
@@ -1771,10 +1934,11 @@ bool llama_dsv41_tile_executor::run(const request&in,const llama_dsv41_layer_gra
         if(tile_stream)pinned_storage::ok(cudaEventRecord(tile_events[1],tile_stream),"Tile timing end event record failed");
 #endif
         const auto sync_start=clock_type::now();
-        ggml_backend_synchronize(backend);pending.compute_ms=elapsed(compute_start);tile_sync_ms=elapsed(sync_start);
+        if(!async_layer||host_observer)ggml_backend_synchronize(backend);
+        pending.compute_ms=elapsed(compute_start);tile_sync_ms=elapsed(sync_start);
 #ifdef GGML_USE_CUDA
         // Both events precede the synchronize on the same stream, so they are complete here.
-        if(tile_stream)pinned_storage::ok(cudaEventElapsedTime(&tile_gpu_ms,tile_events[0],tile_events[1]),"Tile timing elapsed read failed");
+        if(tile_stream&&!async_layer)pinned_storage::ok(cudaEventElapsedTime(&tile_gpu_ms,tile_events[0],tile_events[1]),"Tile timing elapsed read failed");
 #endif
         if(route_histogram){
             require(hash_experts&&hash_experts->type==GGML_TYPE_I32&&
@@ -1809,9 +1973,16 @@ bool llama_dsv41_tile_executor::run(const request&in,const llama_dsv41_layer_gra
 #if defined(GGML_USE_CUDA)
         if(topk_radix){
             uint64_t expected=0;
+            const char *cub=std::getenv("LLAMA_DSV4_TOPK_CUB_1ROW"),*force=std::getenv("LLAMA_DSV4_TOPK_FORCE_BITONIC");
+            const bool cub_single=cub&&cub[0]=='1'&&!cub[1];
+            const bool force_single=force&&force[0]&&force[0]!='0';
             for(int i=0;i<ggml_graph_n_nodes(compute_graph);++i){const auto *node=ggml_graph_node(compute_graph,i);
                 if(ggml_dsv41_stream_topk_requested(node)){require(ggml_dsv41_stream_topk_shape(node),"Private selector lost bounded shape");expected+=node->ne[0]==512;continue;}
-                if(node->op!=GGML_OP_TOP_K||node->ne[0]!=512||!node->src[0]||node->src[0]->ne[0]<=8192||ggml_nrows(node->src[0])<=1)continue;
+                if(node->op!=GGML_OP_TOP_K||node->ne[0]!=512||!node->src[0]||node->src[0]->ne[0]<=8192)continue;
+                // The backend's deterministic default also uses the exact
+                // tiled network for a one-row odd tail. Count its real radix
+                // stages; only the explicit unforced CUB arm bypasses them.
+                if(ggml_nrows(node->src[0])==1&&cub_single&&!force_single)continue;
                 uint64_t width=(uint64_t(node->src[0]->ne[0])+8191)/8192*512;expected+=2;
                 while(width>8192){width=(width+8191)/8192*512;++expected;}
             }
@@ -1928,7 +2099,7 @@ bool llama_dsv41_tile_executor::run(const request&in,const llama_dsv41_layer_gra
 #endif
         const auto cache_started=clock_type::now();
         if(probe.enabled)probe.post_checks_ms=elapsed(post_started);
-        if(workspace&&workspace->casts)workspace->casts->complete();
+        if(workspace&&workspace->casts)workspace->casts->complete(async_layer);
         pending.weight_cache_ms=elapsed(cache_started);
         const auto boundary_started=clock_type::now();boundary.write(backend,w.attention.kv,w.attn_norm,w.attention.kv_norm);
         if(probe.enabled)probe.boundary_ms=elapsed(boundary_started);
@@ -1983,11 +2154,27 @@ bool llama_dsv41_tile_executor::run(const request&in,const llama_dsv41_layer_gra
         pending.selected_width=selected_width;pending.candidate_width=in.layer>=20?candidate_width:0;
         if(pooled&&p.next_pool_tail){
             require(values.next_pool_kv&&values.next_pool_score,"V4.1 odd pool tail was not produced");
+#ifdef GGML_USE_CUDA
+            if(async_layer){
+                require(values.next_pool_kv->type==GGML_TYPE_F32&&values.next_pool_score->type==GGML_TYPE_F32&&
+                    ggml_nbytes(values.next_pool_kv)==512*4&&ggml_nbytes(values.next_pool_score)==512*4&&
+                    state.previous_pool_kv&&state.previous_pool_score&&state.previous_pool_kv->type==GGML_TYPE_F32&&
+                    state.previous_pool_score->type==GGML_TYPE_F32&&ggml_nbytes(state.previous_pool_kv)==512*4&&ggml_nbytes(state.previous_pool_score)==512*4,
+                    "Asynchronous odd pool tail geometry changed");
+                llama_dsv41_validation check;check.residual=(const float*)values.next_pool_kv->data;check.residual_n=512;
+                check.pre=(const float*)values.next_pool_score->data;check.pre_n=512;pinned->validate(check);
+                const auto stream=ggml_backend_cuda_get_stream(backend);
+                ggml_backend_cuda_memcpy_d2d_async(state.previous_pool_kv->data,values.next_pool_kv->data,512*4,stream);
+                ggml_backend_cuda_memcpy_d2d_async(state.previous_pool_score->data,values.next_pool_score->data,512*4,stream);
+            }else
+#endif
+            {
             const auto next_kv=download<float>(values.next_pool_kv,512),next_score=download<float>(values.next_pool_score,512);
             require(next_kv.size()==512&&next_score.size()==512,"V4.1 completed odd pool tail dimensions changed");
             finite(next_kv);finite(next_score);
             upload(state.previous_pool_kv,next_kv);upload(state.previous_pool_score,next_score);
             ggml_backend_synchronize(backend);
+            }
         }
         if(device_hidden){
 #ifdef GGML_USE_CUDA
@@ -1998,27 +2185,29 @@ bool llama_dsv41_tile_executor::run(const request&in,const llama_dsv41_layer_gra
                 ggml_nbytes(input.residual),stream);
             ggml_backend_cuda_memcpy_d2d_async(input.previous_pre->data,values.next_pre->data,
                 ggml_nbytes(input.previous_pre),stream);
-            ggml_backend_synchronize(backend);
+            if(!async_layer)ggml_backend_synchronize(backend);
             if(spilled){
                 // The slot's new BF16 hidden and pre go back to this tile's own RAM
                 // records (finished by pinned->finish below); IDs were mirrored above.
                 const auto spill_started=clock_type::now();
+                if(async_layer)pinned->readback_ready(); // includes the resident pre D2D above
                 pinned->queue(false,*in.direct,0,40960,spill_slot);pinned->queue(false,*in.direct,81920,16,input.previous_pre);
                 resident->spill_d2h_bytes+=uint64_t(in.count)*40976;resident->slot_logical=in.start;
-                pinned->finish();
+                if(!async_layer)pinned->finish();
                 llama_dsv41_layer_log("LLAMADECODE_PREFILL_SPILL_TILE layer=%u start=%u count=%u slot_row=%u h2d_ms=%.3f d2h_ms=%.3f\n",in.layer,in.start,in.count,bank_start,spill_in_ms,elapsed(spill_started));
             }
 #endif
         }
         if(direct_input){
 #ifdef GGML_USE_CUDA
-            pinned->finish();
+            if(!async_layer)pinned->finish();
             if(prefetch_next){pinned->prefetch_measure(in.layer,in.start);asynchronous.live=false;}
             const bool mirrored=!defer_hidden_readback||(in.layer==39&&!export_hidden_after_head);
             if(defer_hidden_readback)llama_dsv41_layer_log("DS4PERF_RESIDENT_HIDDEN_COMPLETE layer=%u start=%u count=%u retained_device_bytes=%llu mirrored_host_bytes=%llu final_restore=%u\n",
                 in.layer,in.start,in.count,(unsigned long long)(uint64_t(in.count)*81936),
                 (unsigned long long)(mirrored?uint64_t(in.count)*81936:0),unsigned(in.layer==39&&mirrored));
             pending.direct_completion=llama_dsv41_carry_store::ram_completion(*in.direct,selected_unchanged,candidates_unchanged,mirrored);
+            if(async_layer)pending.direct_completion->deferred=pinned->layer_certificate;
             if(skip_tile_pin)llama_dsv41_layer_log("DS4PERF_TILE_PIN_NOT_NEEDED layer=%u start=%u count=%u no_RAM_bank_copies=1 resident_hidden_and_IDs=1 final_export_after_head=1 copy_attempts_forbidden=1\n",in.layer,in.start,in.count);
 #endif
         }
@@ -2033,15 +2222,23 @@ bool llama_dsv41_tile_executor::run(const request&in,const llama_dsv41_layer_gra
                 if(resident->layer==40)resident->export_cursor=resident->yoco_first;
             }
         }
-        if(resident_ids)llama_dsv41_layer_log("DS4PERF_RESIDENT_IDS_COMPLETE layer=%u start=%u count=%u selected_width=%u candidate_width=%u avoided_H2D_bytes=%llu source_copy_bytes=%llu validated=1 RAM_mirror=1 existing_buffer=1\n",
+        if(resident_ids)llama_dsv41_layer_log("DS4PERF_RESIDENT_IDS_COMPLETE layer=%u start=%u count=%u selected_width=%u candidate_width=%u avoided_H2D_bytes=%llu source_copy_bytes=%llu validated=%u validation_pending=%u RAM_mirror=%u RAM_mirror_queued=%u existing_buffer=1\n",
             in.layer,in.start,in.count,selected_width,candidate_width,
             (unsigned long long)(uint64_t(in.count)*4*((reuse?selected_width:0)+(candidates?candidate_width:0))),
-            (unsigned long long)(uint64_t(in.count)*4*((query_source(in.layer)?selected_width:0)+(in.layer==20?candidate_width:0))));
+            (unsigned long long)(uint64_t(in.count)*4*((query_source(in.layer)?selected_width:0)+(in.layer==20?candidate_width:0))),
+            unsigned(!async_layer),unsigned(async_layer),unsigned(!async_layer),unsigned(async_layer));
         if(in.single_attention_append)llama_dsv41_layer_log("DS4PERF_UNALIGNED_APPEND_COMPLETE layer=%u start=%u absolute_start=%u count=%u attention_tiles=1 fixed_owner_unchanged=1 original_pool_tail_guard=1\n",in.layer,in.start,absolute_start,in.count);
-        if(pair_ffn)llama_dsv41_layer_log("DS4PERF_PAIRED_FFN_COMPLETE layer=%u start=%u count=%u attention_tiles=%u expert_products=3 original_attention_max_rows=%u native_pair=%u completed_graph_and_copies=1\n",in.layer,in.start,in.count,attention_tiles,attention_rows,unsigned(native_pair));
+        if(pair_ffn)llama_dsv41_layer_log("DS4PERF_PAIRED_FFN_COMPLETE layer=%u start=%u count=%u attention_tiles=%u expert_products=3 original_attention_max_rows=%u native_pair=%u completed_graph_and_copies=%u queued_layer_certification=%u\n",in.layer,in.start,in.count,attention_tiles,attention_rows,unsigned(native_pair),unsigned(!async_layer),unsigned(async_layer));
         pending.readback_ms=elapsed(readback_start);
         const auto cleanup_started=clock_type::now();allocation.release();pending.cleanup_ms=elapsed(cleanup_started);
-        if(capture_dspark)cache.dspark_completion.commit(capture_ticket);
+        if(capture_dspark){
+            if(async_layer){ggml_backend_synchronize(backend);
+#ifdef GGML_USE_CUDA
+                pinned->finish();
+#endif
+            }
+            cache.dspark_completion.commit(capture_ticket);
+        }
         if(tile_timing_enabled())llama_dsv41_layer_log("LLAMADECODE_TILE_TIMING layer=%u tile=%u rows=%u host_prepare_ms=%.3f host_bind_ms=%.3f host_register_ms=%.3f host_graph_ms=%.3f host_reserve_ms=%.3f host_upload_ms=%.3f host_launch_ms=%.3f host_sync_ms=%.3f gpu_ms=%.3f compute_ms=%.3f host_readback_ms=%.3f host_cleanup_ms=%.3f skip_pin=%u prefetch=%u\n",
             in.layer,in.start,in.count,pending.prepare_ms,tile_bind_ms,tile_register_ms,tile_graph_ms,tile_reserve_ms,pending.upload_ms,tile_launch_ms,tile_sync_ms,double(tile_gpu_ms),pending.compute_ms,pending.readback_ms,pending.cleanup_ms,unsigned(skip_tile_pin),unsigned(prefetch_next));
         const double host_cpu_ended=host_cpu_started>=0?llama_dsv41_host_thread_cpu_ms():-1;
@@ -2049,6 +2246,25 @@ bool llama_dsv41_tile_executor::run(const request&in,const llama_dsv41_layer_gra
             in.layer,in.start,in.count,std::chrono::duration<double,std::milli>(prepare_started.time_since_epoch()).count(),
             std::chrono::duration<double,std::milli>(clock_type::now().time_since_epoch()).count(),
             host_cpu_ended>=host_cpu_started&&host_cpu_started>=0?host_cpu_ended-host_cpu_started:-1);
-        out=std::move(pending);cache.execution_poisoned=false;probe.pre_return_ms=elapsed(prepare_started);probe.complete=true;return true;
-    }catch(const std::exception&failure){error=failure.what();return false;}
+#ifdef GGML_USE_CUDA
+        if(async_layer){
+            auto retained=std::make_shared<graph_storage::variant>(std::move(transient));
+            const uint64_t graph_bytes=ggml_get_mem_size(retained->ctx.get());
+            pinned->retire_tile(in.layer,in.start,in.count,std::move(retained),graph_bytes,async_tile_events[0],async_tile_events[1]);
+        }
+#endif
+        out=std::move(pending);if(!async_layer)cache.execution_poisoned=false;probe.pre_return_ms=elapsed(prepare_started);probe.complete=true;return true;
+    }catch(const std::exception&failure){async_failed=cache.execution_poisoned;error=failure.what();return false;}
+}
+
+bool llama_dsv41_tile_executor::finish_layer(std::string &error){
+    std::unique_lock<std::mutex>lock(cache.execution_mutex,std::try_to_lock);
+    if(!lock.owns_lock()){error="Cannot certify a CUDA layer while its tile is still being submitted";return false;}
+    try{
+        require(!async_failed,"Cannot certify an asynchronous layer after a failed tile");
+#ifdef GGML_USE_CUDA
+        if(async_layer)pinned->certify_layer();
+#endif
+        cache.execution_poisoned=false;return true;
+    }catch(const std::exception &e){cache.execution_poisoned=true;error=e.what();return false;}
 }

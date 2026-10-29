@@ -8,6 +8,7 @@
 #include "ggml-cuda/dsv41-expert-cublas.cuh"
 #include "ggml-dsv41-hc-expand.h"
 #include "ggml-dsv41-hc-collapse.h"
+#include "ggml-cuda/dsv41-layer-fusion.cuh"
 #include "ggml-cuda/dsv41-ds4-hc-expand.cuh"
 #include "ggml-cuda/dsv41-hc-sinkhorn.cuh"
 #include "ggml-cuda/ds4split-native-half-witness.h"
@@ -1343,6 +1344,10 @@ static std::condition_variable ggml_cuda_lock_cv;
 static std::atomic<int> ggml_cuda_lock_counter;
 
 ggml_backend_cuda_context::~ggml_backend_cuda_context() {
+    dsv41_layer_graph.reset();
+#if CUDART_VERSION >= 12080 && !defined(GGML_USE_HIP) && !defined(GGML_USE_MUSA)
+    if(!dsv41_deferred_graphs.empty()){CUDA_CHECK(cudaStreamSynchronize(stream()));reap_dsv41_graphs();}
+#endif
     std::unique_lock<std::mutex> lock(ggml_cuda_lock);
     ggml_cuda_lock_cv.wait(lock, []{ return ggml_cuda_lock_counter.load(std::memory_order_relaxed) == 0; });
 
@@ -1366,6 +1371,8 @@ ggml_backend_cuda_context::~ggml_backend_cuda_context() {
         }
     }
 }
+
+size_t ggml_cuda_context_abi_size(){return sizeof(ggml_backend_cuda_context);}
 
 
 // cuda buffer
@@ -6146,6 +6153,9 @@ static void ggml_cuda_graph_evaluate_and_capture(ggml_backend_cuda_context * cud
                         continue;
                     }
 
+                    if (ggml_cuda_dsv41_layer_norm_match(cgraph,i)) {
+                        ggml_cuda_dsv41_layer_norm(*cuda_ctx,cgraph,i);i+=3;continue;
+                    }
                     if (ggml_cuda_can_fuse(cgraph, i, { GGML_OP_RMS_NORM, GGML_OP_MUL, GGML_OP_ADD}, {})) {
                         ggml_cuda_op_rms_norm_fused_add(*cuda_ctx, node, cgraph->nodes[i+1], cgraph->nodes[i+2]);
                         ggml_cuda_fusion_count(GGML_CUDA_FUSION_RMS_NORM_MUL_ADD);
@@ -6274,8 +6284,11 @@ static enum ggml_status ggml_backend_cuda_graph_compute(ggml_backend_t backend, 
 #ifdef USE_CUDA_GRAPH
     const bool cuda_graphs_forced_disabled =
         cuda_ctx->cuda_graph_disable_depth.load(std::memory_order_acquire) > 0;
+    const char *layer_graph_mode=std::getenv("LLAMA_DSV41_LAYER_FUSION");
+    const bool binding_graph_plan=layer_graph_mode&&!std::strcmp(layer_graph_mode,"2");
+    GGML_ASSERT((!binding_graph_plan||!ggml_cuda_streamed_graphs())&&"Pointer-table and outer streamed graph plans are distinct explicit experiments");
 
-    if (!cuda_graphs_forced_disabled) {
+    if (!cuda_graphs_forced_disabled && !binding_graph_plan) {
         graph_key = ggml_cuda_graph_get_key(cgraph);
 
         use_cuda_graph = ggml_cuda_graph_set_enabled(cuda_ctx, graph_key);
@@ -6298,6 +6311,9 @@ static enum ggml_status ggml_backend_cuda_graph_compute(ggml_backend_t backend, 
     if (cuda_graphs_disabled || cuda_graphs_forced_disabled) {
         use_cuda_graph = false;
     }
+    GGML_ASSERT((!binding_graph_plan||!cuda_graphs_disabled)&&"Pointer-table mode requires CUDA graphs enabled explicitly");
+    if(binding_graph_plan){static bool reported=false;if(!reported){
+        std::fprintf(stderr,"OTHER22_BINDING_POLICY outer_templates=0 per_norm_graph=1 explicit_graph_enable=1\n");reported=true;}}
 #endif // USE_CUDA_GRAPH
 
     if (use_cuda_graph && cuda_graph_update_required) {
@@ -6773,12 +6789,15 @@ bool ggml_backend_cuda_graphs_reserve(ggml_backend_t backend,size_t bytes) {
 size_t ggml_backend_cuda_graphs_count(ggml_backend_t backend) {
     if (!ggml_backend_is_cuda(backend)) return 0;
     auto * cuda_ctx = static_cast<ggml_backend_cuda_context *>(backend->context);
-#ifdef USE_CUDA_GRAPH
-    return cuda_ctx ? cuda_ctx->cuda_graphs.size() : 0;
-#else
-    (void)cuda_ctx;
-    return 0;
+    if(!cuda_ctx)return 0;
+    size_t n=cuda_ctx->dsv41_layer_graph?cuda_ctx->dsv41_layer_graph->executable_count():0;
+#if CUDART_VERSION >= 12080 && !defined(GGML_USE_HIP) && !defined(GGML_USE_MUSA)
+    n+=cuda_ctx->dsv41_deferred_graphs.size();
 #endif
+#ifdef USE_CUDA_GRAPH
+    n+=cuda_ctx->cuda_graphs.size();
+#endif
+    return n;
 }
 size_t ggml_backend_cuda_graphs_clear(ggml_backend_t backend) {
     if (!ggml_backend_is_cuda(backend)) return 0;
@@ -6794,12 +6813,21 @@ size_t ggml_backend_cuda_graphs_clear(ggml_backend_t backend) {
     ggml_cuda_set_device(cuda_ctx->device);
     cudaDeviceSynchronize();
     size_t n = cuda_ctx->cuda_graphs.size();
+    n+=cuda_ctx->dsv41_layer_graph?cuda_ctx->dsv41_layer_graph->executable_count():0;
     cuda_ctx->cuda_graphs.clear();
+    cuda_ctx->dsv41_layer_graph.reset();
+#if CUDART_VERSION >= 12080 && !defined(GGML_USE_HIP) && !defined(GGML_USE_MUSA)
+    n+=cuda_ctx->dsv41_deferred_graphs.size();cuda_ctx->reap_dsv41_graphs();
+#endif
     fprintf(stderr, "*** GRAPHS_CLEAR: dropped %zu stale entries\n", n);
     fflush(stderr);
     return n;
 #else
-    return 0;
+    size_t n=ggml_backend_cuda_graphs_count(backend);
+#if CUDART_VERSION >= 12080 && !defined(GGML_USE_HIP) && !defined(GGML_USE_MUSA)
+    if(!cuda_ctx->dsv41_deferred_graphs.empty()){CUDA_CHECK(cudaStreamSynchronize(cuda_ctx->stream()));cuda_ctx->reap_dsv41_graphs();}
+#endif
+    cuda_ctx->dsv41_layer_graph.reset();return n;
 #endif
 }
 int64_t ggml_backend_cuda_graphs_total_created(ggml_backend_t /*backend*/) {
@@ -6810,18 +6838,13 @@ void ggml_backend_cuda_graphs_disable_push(ggml_backend_t backend) {
     if (!ggml_backend_is_cuda(backend)) return;
     auto * cuda_ctx = static_cast<ggml_backend_cuda_context *>(backend->context);
     if (!cuda_ctx) return;
-#ifdef USE_CUDA_GRAPH
     cuda_ctx->cuda_graph_disable_depth.fetch_add(1, std::memory_order_acq_rel);
-#else
-    (void) cuda_ctx;
-#endif
 }
 
 void ggml_backend_cuda_graphs_disable_pop(ggml_backend_t backend) {
     if (!ggml_backend_is_cuda(backend)) return;
     auto * cuda_ctx = static_cast<ggml_backend_cuda_context *>(backend->context);
     if (!cuda_ctx) return;
-#ifdef USE_CUDA_GRAPH
     int prev = cuda_ctx->cuda_graph_disable_depth.load(std::memory_order_acquire);
     while (prev > 0 && !cuda_ctx->cuda_graph_disable_depth.compare_exchange_weak(
                prev, prev - 1, std::memory_order_acq_rel, std::memory_order_acquire)) {
@@ -6829,21 +6852,13 @@ void ggml_backend_cuda_graphs_disable_pop(ggml_backend_t backend) {
     if (prev <= 0) {
         GGML_LOG_WARN("%s: CUDA graph disable pop without matching push\n", __func__);
     }
-#else
-    (void) cuda_ctx;
-#endif
 }
 
 bool ggml_backend_cuda_graphs_are_disabled(ggml_backend_t backend) {
     if (!ggml_backend_is_cuda(backend)) return false;
     auto * cuda_ctx = static_cast<ggml_backend_cuda_context *>(backend->context);
     if (!cuda_ctx) return false;
-#ifdef USE_CUDA_GRAPH
     return cuda_ctx->cuda_graph_disable_depth.load(std::memory_order_acquire) > 0;
-#else
-    (void) cuda_ctx;
-    return false;
-#endif
 }
 
 int64_t ggml_cuda_event_create_total() {

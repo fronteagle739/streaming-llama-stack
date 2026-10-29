@@ -72,6 +72,14 @@ int main() {
             ggml_backend_tensor_get(out,actual.data(),0,actual.size()*4);
             require(ggml_backend_cuda_dsv41_index_cublas_queued()==(queued+=2),"conditional index dispatch accounting");
             require(!std::memcmp(reference.data(),actual.data(),actual.size()*4),"both conditional branches match full eager output");
+            _putenv_s("LLAMA_DSV41_ASYNC_LAYER","1");
+            ggml_backend_cuda_graphs_disable_push(backend);
+            require(ggml_backend_graph_compute(backend,graph)==GGML_STATUS_SUCCESS,"local GPU-conditional index in queued eager mode");
+            ggml_backend_cuda_graphs_disable_pop(backend);
+            ggml_backend_tensor_get(out,actual.data(),0,actual.size()*4);
+            require(ggml_backend_cuda_dsv41_index_cublas_queued()==++queued,"local conditional index dispatch accounting");
+            require(!std::memcmp(reference.data(),actual.data(),actual.size()*4),"local GPU conditional preserves both full numerical branches");
+            _putenv_s("LLAMA_DSV41_ASYNC_LAYER","0");
         }
         ggml_backend_buffer_free(buffer);ggml_free(ctx);
     }
@@ -99,5 +107,5 @@ int main() {
         require(!std::memcmp(reference.data(),actual.data(),actual.size()*4),"CPU custom callback matches original graph, all output values");
     }
     ggml_backend_free(cpu);
-    std::puts("PASS 18 graph/counter checks, 4 FP4/BF16 conditional cases and 4 threaded CPU fallback graph comparisons");return 0;
+    std::puts("PASS18 graph/counter checks,8 FP4/BF16 conditional cases and4 threaded CPU fallback graph comparisons");return 0;
 }
