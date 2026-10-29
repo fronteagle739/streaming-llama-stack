@@ -38,7 +38,10 @@ SOFTWARE.
 #include "dsv41-hc-collapse.cuh"
 void ggml_cuda_op_dsv41_hc_collapse(ggml_backend_cuda_context&ctx,ggml_tensor*dst) {
     GGML_ASSERT(ggml_dsv41_hc_collapse_valid(dst));
-    dsv41_hc_collapse_kernel<<<unsigned((ggml_nelements(dst)+255)/256),256,0,ctx.stream()>>>(
+    const unsigned blocks=unsigned((ggml_nelements(dst)+255)/256);
+    if(dst->src[0]->type==GGML_TYPE_BF16)dsv41_hc_collapse_kernel<uint16_t><<<blocks,256,0,ctx.stream()>>>(
+        (const uint16_t*)dst->src[0]->data,(const float*)dst->src[1]->data,(float*)dst->data,dst->ne[0],dst->ne[1]);
+    else dsv41_hc_collapse_kernel<float><<<blocks,256,0,ctx.stream()>>>(
         (const float*)dst->src[0]->data,(const float*)dst->src[1]->data,
         (float*)dst->data,dst->ne[0],dst->ne[1]);
     CUDA_CHECK(cudaGetLastError());
@@ -90,10 +93,15 @@ void ggml_cuda_op_dsv41_ds4_hc_expand(ggml_backend_cuda_context&ctx,ggml_tensor*
  const uint32_t width=uint32_t(dst->ne[0]),tokens=uint32_t(dst->ne[2]);
  const auto*mix=(const float*)dst->src[2]->data;
   if(ggml_dsv41_hc_bf16_requested(dst)){
-   dsv41_hc_channels_kernel<true><<<unsigned((uint64_t(width)*tokens+255)/256),256,0,ctx.stream()>>>(
-    (float*)dst->data,(const float*)dst->src[1]->data,(const float*)dst->src[0]->data,mix,width,tokens);
+   const unsigned blocks=unsigned((uint64_t(width)*tokens+255)/256);const auto*block=(const float*)dst->src[1]->data;
+   const bool r16=dst->src[0]->type==GGML_TYPE_BF16,o16=dst->type==GGML_TYPE_BF16;
+   if(r16&&o16)dsv41_hc_channels_kernel<true,uint16_t,uint16_t><<<blocks,256,0,ctx.stream()>>>((uint16_t*)dst->data,block,(const uint16_t*)dst->src[0]->data,mix,width,tokens);
+   else if(r16)dsv41_hc_channels_kernel<true,uint16_t,float><<<blocks,256,0,ctx.stream()>>>((float*)dst->data,block,(const uint16_t*)dst->src[0]->data,mix,width,tokens);
+   else if(o16)dsv41_hc_channels_kernel<true,float,uint16_t><<<blocks,256,0,ctx.stream()>>>((uint16_t*)dst->data,block,(const float*)dst->src[0]->data,mix,width,tokens);
+   else dsv41_hc_channels_kernel<true><<<blocks,256,0,ctx.stream()>>>((float*)dst->data,block,(const float*)dst->src[0]->data,mix,width,tokens);
    hc_bf16_queued.fetch_add(1);
   }else{
+ GGML_ASSERT(dst->type==GGML_TYPE_F32&&dst->src[0]->type==GGML_TYPE_F32);
  hc_expand_kernel<<<unsigned((uint64_t(width)*4*tokens+255)/256),256,0,ctx.stream()>>>(
   (float*)dst->data,(const float*)dst->src[1]->data,nullptr,nullptr,(const float*)dst->src[0]->data,
   mix,mix+4,width,4,tokens,20,20,0,0);

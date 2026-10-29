@@ -107,7 +107,7 @@ llama_dsv41_layer_graph::attention_part llama_dsv41_layer_graph::build_attention
     // This exact head result is the dependency protecting the old raw ring.
     auto *committed=ops.raw_commit(state.raw,projected.raw,heads,p.start);
     ggml_build_forward_expand(graph,committed);
-    auto * after_attn=ops.complete(attention.finish(w.attention,heads,in.positions,frequencies),attn);
+    auto * after_attn=ops.complete_attention(attention.finish(w.attention,heads,in.positions,frequencies),attn);
     const auto ffn=ops.prepare(after_attn,attn.next.pre,w.ffn_fn,w.ffn_scale,w.ffn_base,w.ffn_norm);
     cache after{committed,compressed,index,state.previous_pool_kv,state.previous_pool_score};
     return {ffn,selected,selected_mask,candidates,next_kv,next_score,capture,after};

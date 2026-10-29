@@ -5905,7 +5905,7 @@ static void ggml_cuda_graph_evaluate_and_capture(ggml_backend_cuda_context * cud
                     if (node->op == GGML_OP_RMS_NORM && i + 1 < cgraph->n_nodes &&
                         cgraph->nodes[i + 1]->op == GGML_OP_CPY && cgraph->nodes[i + 1]->src[0] == node &&
                         cgraph->nodes[i + 1]->src[1] == cgraph->nodes[i + 1] && cgraph->nodes[i + 1]->type == GGML_TYPE_F16 &&
-                        node->type == GGML_TYPE_F32 && node->src[0]->type == GGML_TYPE_F32 &&
+                        node->type == GGML_TYPE_F32 && (node->src[0]->type == GGML_TYPE_F32 || node->src[0]->type == GGML_TYPE_BF16) &&
                         ggml_is_contiguous(cgraph->nodes[i + 1]) && ggml_are_same_shape(node, cgraph->nodes[i + 1]) &&
                         ggml_can_fuse_subgraph(cgraph, i, { GGML_OP_RMS_NORM, GGML_OP_CPY }, { i + 1 })) {
                         ggml_cuda_op_rms_norm_to_f16(*cuda_ctx, node, cgraph->nodes[i + 1]);

@@ -47,6 +47,7 @@ __global__ void validate_kernel(ggml_dsv41_validation p,uint32_t *flags,uint64_t
     if(i>=maximum)return;
     uint32_t bad=0;
     if(i<p.residual_n&&nonfinite(p.residual[i]))bad|=1;
+    if(i<p.residual_bf16_n&&(p.residual_bf16[i]&0x7f80u)==0x7f80u)bad|=1;
     if(i<p.pre_n&&nonfinite(p.pre[i]))bad|=2;
     if(i<p.mean_n&&nonfinite(p.mean[i]))bad|=4;
     if(i<p.engram_n&&nonfinite(p.engram[i]))bad|=8;
@@ -57,9 +58,9 @@ __global__ void validate_kernel(ggml_dsv41_validation p,uint32_t *flags,uint64_t
 }
 int ggml_dsv41_cuda_validate(const ggml_dsv41_validation &p,void *device_flags,void *stream){
     constexpr uint64_t limit=uint64_t(5120)*4*4096;
-    const uint64_t maximum=std::max({p.residual_n,p.pre_n,p.mean_n,p.engram_n,p.selected_n,p.candidates_n});
+    const uint64_t maximum=std::max({p.residual_n,p.residual_bf16_n,p.pre_n,p.mean_n,p.engram_n,p.selected_n,p.candidates_n});
     if(!device_flags||!maximum||maximum>limit||p.compressed_rows>1048576||
-       (p.residual_n&&!p.residual)||(p.pre_n&&!p.pre)||(p.mean_n&&!p.mean)||(p.engram_n&&!p.engram)||
+       (p.residual_n&&!p.residual)||(p.residual_bf16_n&&!p.residual_bf16)||(p.pre_n&&!p.pre)||(p.mean_n&&!p.mean)||(p.engram_n&&!p.engram)||
        (p.selected_n&&!p.selected)||(p.candidates_n&&!p.candidates))return int(cudaErrorInvalidValue);
     const auto s=static_cast<cudaStream_t>(stream);
     const auto status=cudaMemsetAsync(device_flags,0,4,s);if(status!=cudaSuccess)return int(status);

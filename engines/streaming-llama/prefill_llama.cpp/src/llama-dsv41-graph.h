@@ -19,6 +19,10 @@ public:
     void merge_attention_selected_rows(bool enabled,uint32_t ratio){merge_selected_rows=enabled;merge_ratio=ratio;}
     void use_hc_projection_f16_gemm(bool enabled){hc_projection_f16_gemm=enabled;}
     void use_hc_bf16_epilogue(bool enabled){hc_bf16_epilogue=enabled;}
+    // OPUS22 round 8: the attention sublayer's HC output stays BF16 (exact: the
+    // BF16 epilogue already rounds it). Consumers accept BF16 residuals.
+    void use_hc_bf16_carry(bool enabled){hc_bf16_carry=enabled;}
+    bool hc_bf16_carry_enabled()const{return hc_bf16_carry&&hc_bf16_epilogue;}
 
     ggml_tensor * bf16(ggml_tensor * input) const;
     ggml_tensor * norm(ggml_tensor * input, ggml_tensor * weight) const;
@@ -31,7 +35,7 @@ public:
     mix mixes(ggml_tensor * residual, ggml_tensor * fn, ggml_tensor * scale, ggml_tensor * base) const;
     ggml_tensor * collapse(ggml_tensor * residual, ggml_tensor * previous_pre) const;
     // Includes the block's own BF16 boundary before applying post/comb.
-    ggml_tensor * expand(ggml_tensor * block, ggml_tensor * residual, const mix & current) const;
+    ggml_tensor * expand(ggml_tensor * block, ggml_tensor * residual, const mix & current, bool bf16_output = false) const;
     ggml_tensor * mean_for_capture(ggml_tensor * residual) const;
     ggml_tensor * rope(ggml_tensor * input, ggml_tensor * positions,
                       ggml_tensor * native_frequencies, bool inverse = false) const;
@@ -69,6 +73,8 @@ public:
                      ggml_tensor * fn, ggml_tensor * scale, ggml_tensor * base,
                      ggml_tensor * norm_weight) const;
     ggml_tensor * complete(ggml_tensor * block, const sublayer & layer) const;
+    // Attention sublayer: BF16 output when hc_bf16_carry_enabled().
+    ggml_tensor * complete_attention(ggml_tensor * block, const sublayer & layer) const;
 
     ggml_tensor * engram(ggml_tensor * residual, ggml_tensor * gathered_rows,
                          ggml_tensor * wkv, ggml_tensor * q_weight,
@@ -79,7 +85,8 @@ private:
     float norm_eps, hc_eps;
     uint32_t sinkhorn_iters;
     bool merge_selected_rows=false;
-    bool hc_projection_f16_gemm=false,hc_bf16_epilogue=false;
+    bool hc_projection_f16_gemm=false,hc_bf16_epilogue=false,hc_bf16_carry=false;
+    ggml_tensor * widen(ggml_tensor * residual) const;
     uint32_t merge_ratio=0;
     observer observe;
     ggml_tensor * tagged(ggml_tensor * tensor, const char * name) const;

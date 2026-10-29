@@ -54,6 +54,7 @@ static void dsv41_hc_sinkhorn_cpu(ggml_tensor *dst,const ggml_tensor *mixes,
 // ordinary MAP_CUSTOM3 API keeps the graph valid on CPU without a new op enum.
 static void dsv41_hc_expand_cpu(ggml_tensor*dst,const ggml_tensor*residual,
         const ggml_tensor*block,const ggml_tensor*mixes,int ith,int nth,void*){
+    GGML_ASSERT(residual->type==GGML_TYPE_F32&&dst->type==GGML_TYPE_F32);
     const auto width=residual->ne[0],total=ggml_nelements(dst);
     const auto*r=(const float*)residual->data,*b=(const float*)block->data,*m=(const float*)mixes->data;
     auto*out=(float*)dst->data;
@@ -68,6 +69,7 @@ static void dsv41_hc_expand_cpu(ggml_tensor*dst,const ggml_tensor*residual,
 
 static void dsv41_hc_collapse_cpu(ggml_tensor *dst,const ggml_tensor *r,
         const ggml_tensor *p,const ggml_tensor *,int ith,int nth,void*) {
+    GGML_ASSERT(r->type==GGML_TYPE_F32);
     const auto width=r->ne[0];
     for(int64_t at=ith;at<ggml_nelements(dst);at+=nth) {
         const auto row=at/width,d=at%width;
@@ -145,8 +147,14 @@ ggml_tensor * llama_dsv41_graph_ops::logits(ggml_tensor * residual, ggml_tensor 
     return tagged(result, "dsv41_head_logits_f32");
 }
 
+// OPUS22 round 8: exact BF16 -> F32 widening for the consumers without a BF16 path.
+ggml_tensor * llama_dsv41_graph_ops::widen(ggml_tensor * residual) const {
+    return residual->type == GGML_TYPE_BF16 ? ggml_cast(ctx, residual, GGML_TYPE_F32) : residual;
+}
+
 ggml_tensor * llama_dsv41_graph_ops::weighted_sum(ggml_tensor * residual, ggml_tensor * weights) const {
     llama_dsv41_profile_stage profile_stage(ctx,"hc_pre");
+    residual = widen(residual);
     GGML_ASSERT(residual->type == GGML_TYPE_F32 && residual->ne[1] == 4 && residual->ne[3] == 1);
     const int64_t width = residual->ne[0], count = residual->ne[2];
     GGML_ASSERT(weights->type == GGML_TYPE_F32 && weights->ne[0] == 4 && weights->ne[1] == count);
@@ -167,6 +175,7 @@ ggml_tensor * llama_dsv41_graph_ops::collapse(ggml_tensor * residual, ggml_tenso
         auto *out=ggml_map_custom3(ctx,residual,previous_pre,previous_pre,dsv41_hc_collapse_cpu,GGML_N_TASKS_MAX,nullptr);
         // MAP_CUSTOM3 supplies the portable callback metadata; collapse has
         // one output channel, so give gallocr its actual compact output shape.
+        out->type=GGML_TYPE_F32;out->nb[0]=sizeof(float);
         out->ne[1]=residual->ne[2];out->ne[2]=out->ne[3]=1;
         out->nb[1]=out->ne[0]*sizeof(float);
         out->nb[2]=out->nb[3]=out->nb[1]*out->ne[1];
@@ -569,9 +578,19 @@ llama_dsv41_graph_ops::mix llama_dsv41_graph_ops::mixes(
     const int64_t count = residual->ne[2], width = residual->ne[0];
     GGML_ASSERT(fn->ne[0] == 4 * width && fn->ne[1] == 24);
     GGML_ASSERT(ggml_nelements(scale) == 3 && ggml_nelements(base) == 24);
-    ggml_tensor * flat = tagged(ggml_reshape_2d(ctx, residual, 4 * width, count), "dsv41_hc_flat");
+    // OPUS22 round 8: a BF16 residual feeds the fused RMS norm -> F16 kernel directly
+    // (it widens each value exactly); any other consumer path widens it first.
+    const bool bf16_norm = residual->type == GGML_TYPE_BF16 && count > 8 && fn->type == GGML_TYPE_F16;
+    ggml_tensor * flat = tagged(ggml_reshape_2d(ctx, bf16_norm ? residual : widen(residual), 4 * width, count), "dsv41_hc_flat");
     // Native HC projection consumes a F32 plain RMS norm, not a BF16-rounded one.
-    ggml_tensor * flat_norm = tagged(ggml_rms_norm(ctx, flat, norm_eps), "dsv41_hc_flat_norm");
+    ggml_tensor * flat_norm = ggml_rms_norm(ctx, flat, norm_eps);
+    if (bf16_norm) {
+        // F32 result of the BF16 input: only the fused F16 store consumes it.
+        flat_norm->type = GGML_TYPE_F32;
+        flat_norm->nb[0] = sizeof(float);
+        for (int i = 1; i < GGML_MAX_DIMS; ++i) flat_norm->nb[i] = flat_norm->nb[i - 1] * flat_norm->ne[i - 1];
+    }
+    flat_norm = tagged(flat_norm, "dsv41_hc_flat_norm");
     ggml_tensor * projection_input = flat_norm;
     // Native ds4.c::ds41_hc_mix_batch selects the F16 matrix path only for
     // count > DS4_TP_BATCH_MAX_ROWS (8) and F16 HC weights. Its Metal
@@ -618,7 +637,7 @@ llama_dsv41_graph_ops::mix llama_dsv41_graph_ops::mixes(
 }
 
 ggml_tensor * llama_dsv41_graph_ops::expand(
-        ggml_tensor * block, ggml_tensor * residual, const mix & current) const {
+        ggml_tensor * block, ggml_tensor * residual, const mix & current, bool bf16_output) const {
     llama_dsv41_profile_stage profile_stage(ctx,"hc_post");
     const int64_t width = residual->ne[0], count = residual->ne[2];
     GGML_ASSERT(residual->ne[1] == 4 && residual->ne[3] == 1);
@@ -629,12 +648,21 @@ ggml_tensor * llama_dsv41_graph_ops::expand(
     if(ggml_is_contiguous(block)&&ggml_is_contiguous(residual)&&ggml_is_contiguous(current.post)&&ggml_is_contiguous(current.comb)){
         static_assert(sizeof(void*)==8&&GGML_MAX_OP_PARAMS>=32,"Private HC tag follows the24-byte custom3 callback parameters");
         auto*mixes=ggml_concat(ctx,current.post,ggml_reshape_2d(ctx,current.comb,16,count),0);
+        if(!hc_bf16_epilogue)residual=widen(residual);
         auto*out=ggml_map_custom3(ctx,residual,block,mixes,dsv41_hc_expand_cpu,GGML_N_TASKS_MAX,nullptr);
         out->op_params[7]=GGML_DSV41_HC_EXPAND_MAGIC;
+        if(hc_bf16_epilogue){
+            out->op_params[6]=GGML_DSV41_HC_BF16_MAGIC;
+            // OPUS22 round 8: output storage follows the request, not the residual.
+            out->type=bf16_output?GGML_TYPE_BF16:GGML_TYPE_F32;out->nb[0]=ggml_type_size(out->type);
+            for(int i=1;i<GGML_MAX_DIMS;++i)out->nb[i]=out->nb[i-1]*out->ne[i-1];
+            GGML_ASSERT(ggml_dsv41_hc_expand_valid(out));
+            return tagged(out,"dsv41_hc_expand_bf16");
+        }
         GGML_ASSERT(ggml_dsv41_hc_expand_valid(out));
-        if(hc_bf16_epilogue){out->op_params[6]=GGML_DSV41_HC_BF16_MAGIC;return tagged(out,"dsv41_hc_expand_bf16");}
         return tagged(bf16(out),"dsv41_hc_expand_bf16");
     }
+    residual = widen(residual);
     ggml_tensor * out = nullptr;
     for (int64_t dst = 0; dst < 4; ++dst) {
         ggml_tensor * post = ggml_view_2d(ctx, current.post, 1, count, current.post->nb[1], dst * current.post->nb[0]);
@@ -665,12 +693,17 @@ ggml_tensor * llama_dsv41_graph_ops::complete(ggml_tensor * block, const sublaye
     return expand(block, layer.residual, layer.next);
 }
 
+ggml_tensor * llama_dsv41_graph_ops::complete_attention(ggml_tensor * block, const sublayer & layer) const {
+    return expand(block, layer.residual, layer.next, hc_bf16_carry_enabled());
+}
+
 ggml_tensor * llama_dsv41_graph_ops::engram(
         ggml_tensor * residual, ggml_tensor * gathered_rows, ggml_tensor * wkv,
         ggml_tensor * q_weight, ggml_tensor * k_weight, ggml_tensor * text_mask) const {
     llama_dsv41_profile_stage profile_stage(ctx,"engram");
     GGML_ASSERT(gathered_rows->ne[1] == residual->ne[2] && gathered_rows->ne[2] == 1 && gathered_rows->ne[3] == 1);
     GGML_ASSERT(wkv->ne[0] == gathered_rows->ne[0] && wkv->ne[1] == residual->ne[0] * 5);
+    residual = widen(residual);
     ggml_tensor * input = tagged(bf16(gathered_rows), "dsv41_engram_rows_bf16");
     ggml_tensor * projected = ggml_mul_mat(ctx, wkv, input);
     ggml_mul_mat_set_prec(projected, GGML_PREC_F32);

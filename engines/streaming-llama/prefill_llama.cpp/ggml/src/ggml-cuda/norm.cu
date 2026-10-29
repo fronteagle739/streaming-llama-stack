@@ -153,8 +153,11 @@ static __global__ void rms_norm_f32(const float * x,
 // OPUS22 round 6: RMS_NORM followed by its only consumer CPY F32->F16, fused.
 // Same reduction and scale as rms_norm_f32<block_size, false>; the store is the
 // cpy kernel's __float2half of the identical F32 value, so the result is bit-exact.
-template <int block_size>
-static __global__ void rms_norm_f32_to_f16(const float * x, half * dst, const int ncols,
+static __device__ __forceinline__ float rms_norm_f16_load(float v) { return v; }
+static __device__ __forceinline__ float rms_norm_f16_load(uint16_t v) { return __uint_as_float(uint32_t(v) << 16); }
+// OPUS22 round 8: T = float or uint16_t (BF16 bits, widened exactly to the same F32 values).
+template <int block_size, typename T = float>
+static __global__ void rms_norm_f32_to_f16(const T * x, half * dst, const int ncols,
         const int64_t stride_row, const int64_t stride_channel, const int64_t stride_sample, const float eps) {
     const int nrows     = gridDim.x;
     const int nchannels = gridDim.y;
@@ -166,7 +169,7 @@ static __global__ void rms_norm_f32_to_f16(const float * x, half * dst, const in
     dst += ((sample*nchannels + channel)*nrows + row)*ncols;
     float tmp = 0.0f;
     for (int col = tid; col < ncols; col += block_size) {
-        const float xi = x[col];
+        const float xi = rms_norm_f16_load(x[col]);
         tmp += xi * xi;
     }
     extern __shared__ float s_sum[];
@@ -174,14 +177,14 @@ static __global__ void rms_norm_f32_to_f16(const float * x, half * dst, const in
     const float mean = tmp / ncols;
     const float scale = rsqrtf(mean + eps);
     for (int col = tid; col < ncols; col += block_size) {
-        const float value = scale * x[col];
+        const float value = scale * rms_norm_f16_load(x[col]);
         dst[col] = __float2half(value);
     }
 }
 
 void ggml_cuda_op_rms_norm_to_f16(ggml_backend_cuda_context & ctx, ggml_tensor * norm, ggml_tensor * cpy) {
     const ggml_tensor * src0 = norm->src[0];
-    GGML_ASSERT(src0->type == GGML_TYPE_F32 && norm->type == GGML_TYPE_F32 && cpy->type == GGML_TYPE_F16);
+    GGML_ASSERT((src0->type == GGML_TYPE_F32 || src0->type == GGML_TYPE_BF16) && norm->type == GGML_TYPE_F32 && cpy->type == GGML_TYPE_F16);
     GGML_ASSERT(cpy->src[0] == norm && ggml_is_contiguous(cpy) && ggml_are_same_shape(norm, cpy));
     float eps;
     memcpy(&eps, norm->op_params, sizeof(float));
@@ -191,9 +194,18 @@ void ggml_cuda_op_rms_norm_to_f16(ggml_backend_cuda_context & ctx, ggml_tensor *
     const int64_t s01 = src0->nb[1] / ts0, s02 = src0->nb[2] / ts0, s03 = src0->nb[3] / ts0;
     const dim3 blocks_num(src0->ne[1], src0->ne[2], src0->ne[3]);
     cudaStream_t stream = ctx.stream();
-    const float * x = (const float *) src0->data;
     half * dst = (half *) cpy->data;
     const int ncols = src0->ne[0];
+    if (src0->type == GGML_TYPE_BF16) {
+        const uint16_t * xb = (const uint16_t *) src0->data;
+        if (ncols < 1024) {
+            rms_norm_f32_to_f16<256, uint16_t><<<blocks_num, dim3(256, 1, 1), 32 * sizeof(float), stream>>>(xb, dst, ncols, s01, s02, s03, eps);
+        } else {
+            rms_norm_f32_to_f16<1024, uint16_t><<<blocks_num, dim3(1024, 1, 1), 32 * sizeof(float), stream>>>(xb, dst, ncols, s01, s02, s03, eps);
+        }
+        return;
+    }
+    const float * x = (const float *) src0->data;
     if (ncols < 1024) {
         const dim3 block_dims(256, 1, 1);
         rms_norm_f32_to_f16<256><<<blocks_num, block_dims, block_dims.x > WARP_SIZE ? 32 * sizeof(float): 0, stream>>>(x, dst, ncols, s01, s02, s03, eps);
