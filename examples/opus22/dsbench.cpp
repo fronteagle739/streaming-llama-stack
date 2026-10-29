@@ -1,6 +1,6 @@
 ﻿// OPUS22 standalone DirectStorage read bench: file -> GPU buffer, fixed request size,
 // all requests of a span enqueued then one fence (or a fence every N bytes).
-// usage: dsbench FILE OFFSET_GB SPAN_GB REQUEST_MB REPEATS [FENCE_MB(unused)] [QUEUES]
+// usage: dsbench FILE OFFSET_GB SPAN_GB REQUEST_MB REPEATS [FENCE_MB(unused)] [QUEUES] [PAUSE_MS] [KEEPALIVE_MS]
 // Build: cl /O2 /EHsc /std:c++17 /I<directstorage include> dsbench.cpp dstorage.lib d3d12.lib dxgi.lib
 #define NOMINMAX
 #include <windows.h>
@@ -23,6 +23,7 @@ int main(int argc,char**argv){
     const int repeats=std::atoi(argv[5]);
     const uint64_t fence_every=argc>6?uint64_t(std::atof(argv[6])*1048576):0;
     const int nq=argc>7?std::atoi(argv[7]):1;
+    const int pause_ms=argc>8?std::atoi(argv[8]):0,keep_ms=argc>9?std::atoi(argv[9]):0;
     ComPtr<IDXGIFactory4> dxgi;check(CreateDXGIFactory1(IID_PPV_ARGS(&dxgi)),"dxgi");
     ComPtr<IDXGIAdapter1> adapter,best;SIZE_T bestmem=0;
     for(UINT i=0;dxgi->EnumAdapters1(i,&adapter)!=DXGI_ERROR_NOT_FOUND;++i){DXGI_ADAPTER_DESC1 d;adapter->GetDesc1(&d);if(d.DedicatedVideoMemory>bestmem){bestmem=d.DedicatedVideoMemory;best=adapter;}}
@@ -37,7 +38,13 @@ int main(int argc,char**argv){
     ComPtr<IDStorageQueue> qs[8];for(int i=0;i<nq;++i)check(f->CreateQueue(&qd,IID_PPV_ARGS(&qs[i])),"queue");
     ComPtr<ID3D12Fence> fences[8];for(int i=0;i<nq;++i)check(dev->CreateFence(0,D3D12_FENCE_FLAG_NONE,IID_PPV_ARGS(&fences[i])),"fence");
     HANDLE ev=CreateEvent(nullptr,FALSE,FALSE,nullptr);uint64_t fv=0;
+    auto tiny=[&](){DSTORAGE_REQUEST rq{};rq.Options.SourceType=DSTORAGE_REQUEST_SOURCE_FILE;rq.Options.DestinationType=DSTORAGE_REQUEST_DESTINATION_BUFFER;
+        rq.Source.File.Source=file.Get();rq.Source.File.Offset=offset;rq.Source.File.Size=4096;rq.Destination.Buffer.Resource=buf.Get();rq.Destination.Buffer.Offset=0;rq.Destination.Buffer.Size=4096;rq.UncompressedSize=4096;
+        qs[0]->EnqueueRequest(&rq);qs[0]->EnqueueSignal(fences[0].Get(),++fv);qs[0]->Submit();HANDLE e=CreateEvent(nullptr,FALSE,FALSE,nullptr);fences[0]->SetEventOnCompletion(fv,e);WaitForSingleObject(e,INFINITE);CloseHandle(e);};
     for(int r=0;r<repeats;++r){
+        if(r&&pause_ms){auto p0=std::chrono::steady_clock::now();
+            while(std::chrono::duration<double,std::milli>(std::chrono::steady_clock::now()-p0).count()<pause_ms){
+                if(keep_ms){tiny();Sleep(DWORD(keep_ms));}else Sleep(DWORD(pause_ms));}}
         auto t0=std::chrono::steady_clock::now();uint64_t since=0;int n=0;
         ++fv;
         for(uint64_t at=0,k=0;at<span;at+=req,++k){
@@ -52,7 +59,7 @@ int main(int argc,char**argv){
         auto&q=qs[0];
         DSTORAGE_ERROR_RECORD er{};q->RetrieveErrorRecord(&er);
         const double s=std::chrono::duration<double>(std::chrono::steady_clock::now()-t0).count();
-        std::printf("queues=%d repeat=%d requests=%d bytes=%llu seconds=%.4f GBps=%.2f failures=%u\n",nq,r,n,(unsigned long long)span,s,span/s/1e9,er.FailureCount);
+        std::printf("pause_ms=%d keep_ms=%d queues=%d repeat=%d requests=%d bytes=%llu seconds=%.4f GBps=%.2f failures=%u\n",pause_ms,keep_ms,nq,r,n,(unsigned long long)span,s,span/s/1e9,er.FailureCount);
     }
     return 0;
 }

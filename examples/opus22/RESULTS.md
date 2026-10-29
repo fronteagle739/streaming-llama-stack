@@ -152,3 +152,41 @@ fence), which is the producer's stage pattern without the producer. GPU leased, 
   (5 two-second samples). Region rates repeat across sessions, so other-process contention does not
   explain them. A per-process log during the bench runs was attempted but recorded nothing, so
   contention during the runs themselves is not ruled out.
+
+## 6. Placement and power-management tests
+
+**Sequential copy.** Bytes 130-180 GB of the Q4 GGUF were copied into a new file on the same
+array with one unbuffered sequential write (9 extents), then benched in the same session.
+Each cell is the second read of a block; the first read in each pair is the process cold start.
+
+| Block | Original GB/s | Copy GB/s |
+|---|---:|---:|
+| +0 GB | 17.5-18.2 | 16.6 |
+| +7.4 GB | 14.9 | 20.2 |
+| +14.8 GB | 14.7 | 23.7-24.0 |
+| +22.2 GB | 23.1-24.2 | 20.7-20.8 |
+| +29.6 GB | 13.9-14.2 | 14.7-14.8 |
+| +37.0 GB | 12.0 | 14.5-14.6 |
+
+The copy is not uniformly fast. The rate follows the physical region the data lands in, whether
+it is original or rewritten. A sequential rewrite on its own does not give 24 GB/s.
+
+**Pause sweep and keep-alive.** The same 7.4 GB block was read four times with 0, 10, 50, 200 or
+1000 ms idle pauses between reads, then again with a 4 KB DirectStorage keep-alive read every
+3 ms during 200 and 1000 ms pauses:
+
+- Fast block (offset 152.2 GB): 23.0-24.5 GB/s after every pause length, with or without keep-alive.
+- Slow block (offset 137.4 GB): 14.4-15.1 GB/s after every pause length, with or without keep-alive.
+- The only slow read is the first read of each process (8.8-11 GB/s at pause 0 and 10). That is
+  DirectStorage or D3D12 cold start, not an idle penalty.
+
+Power management therefore does not cause the gap. Read-only `powercfg` for the active
+"High performance" plan (AC values): PCI Express Link State Power Management 0 (off), primary NVMe
+idle timeout 200 ms, secondary NVMe idle timeout 2000 ms, both NVMe latency tolerances 0, NOPPME 1,
+AHCI link power management 0, turn off hard disk after 1200 s.
+
+**Conclusion.** D: is one AMD RAID volume ("AMD-RAID Array 1", 4 TB); its member drives are not
+visible to Windows. Read rate depends on the block address: about 24 GB/s in some regions and about
+15 GB/s in others, stable across sessions, pauses and file copies. The array's own tools (member
+drive health, temperature, firmware, stripe settings, per-drive benchmark) are the next place to
+look. A uniform 24 GB/s would bring today's two-sweep 100K stream from about 28 s to about 19 s.
