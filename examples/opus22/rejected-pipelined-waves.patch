@@ -1,0 +1,52 @@
+--- a/engines/streaming-llama/prefill_llama.cpp/src/llama-weight-fetcher.cpp
++++ b/engines/streaming-llama/prefill_llama.cpp/src/llama-weight-fetcher.cpp
+@@ -3475,6 +3475,20 @@
+     auto interval_ms=[](auto a,auto b){return std::chrono::duration<double,std::milli>(b-a).count();};
+     const double initialize_ms=interval_ms(t0,std::chrono::high_resolution_clock::now());
+     double staging_drain_ms=0,enqueue_ms=0,storage_fence_ms=0,cuda_handoff_api_ms=0;
++    // OPUS22 LLAMA_WF_DS_PIPELINED_WAVES=1 (default 0): in the compute-direct
++    // layout every wave writes its own bank quarter and no staging D2D or
++    // cache copy follows it, so the host need not wait each wave's fence
++    // before enqueuing the next. Each wave keeps its own Submit and fence
++    // (one destination resource per Submit, as before); only the LAST
++    // fence is waited, error-checked and handed to CUDA. DS fences signal
++    // after all earlier requests of the queue complete, so the final wait
++    // covers every wave. Same requests, bytes and destinations.
++    static const bool pipelined_waves_requested=[]{const char*e=std::getenv("LLAMA_WF_DS_PIPELINED_WAVES");
++        if(e&&e[0]&&std::strcmp(e,"0")&&std::strcmp(e,"1")){WF_ERR("LLAMA_WF_DS_PIPELINED_WAVES must be 0 or 1");std::abort();}
++        return e&&!std::strcmp(e,"1");}();
++    const bool pipelined_waves=pipelined_waves_requested&&wf->params.ds_compute_direct&&wf->ds_direct_mode&&
++        wf_s&&!cache_bytes&&!wf->use_layer_files&&!dest_buf&&!dest_offset;
++    int pipelined_unwaited=0,pipelined_inflight=0;
+     for (int w = ws; w < we; w++) {
+         auto & wave = waves[w];
+         if (wave.reqs.empty()) continue;
+@@ -3496,7 +3510,7 @@
+         queue->Submit();
+ 
+         // Enqueue all requests for this wave
+-        int submitted = 0;
++        int submitted = pipelined_waves ? pipelined_inflight : 0;
+         int wave_enqueued = 0;   // total this wave (submitted resets at drain boundaries)
+         for (int ri = 0; ri < (int)wave.reqs.size(); ++ri) {
+             auto & req = wave.reqs[ri];
+@@ -3530,6 +3544,11 @@
+         queue->Submit();
+         const auto storage_started=std::chrono::high_resolution_clock::now();
+         enqueue_ms+=interval_ms(enqueue_started,storage_started);
++        if (pipelined_waves) {
++            int later = 0;
++            for (int x = w + 1; x < we; ++x) later += waves[x].reqs.empty() ? 0 : 1;
++            if (later) { pipelined_inflight = submitted; ++pipelined_unwaited; continue; }
++        }
+         if (!wf_ds_fence_wait(wf, fence_val)) return false;
+         const auto handoff_started=std::chrono::high_resolution_clock::now();
+         storage_fence_ms+=interval_ms(storage_started,handoff_started);
+@@ -3661,6 +3680,7 @@
+     // directly to the tensor's final data pointer.
+ 
+     if(wf->params.ds_compute_direct)if(llama_dsv41_layer_log_on())WF_ERR("DS4PERF_DIRECT_FILLED stage=%d bank=%d waves=%d staging_D2D_bytes=0",layer_idx,gpu_idx,we-ws);
++    if(pipelined_waves)if(llama_dsv41_layer_log_on())WF_ERR("OPUS22_DS_PIPELINED_WAVES stage=%d waves=%d unwaited_wave_fences=%d final_fence_waited=1 error_checked=1",layer_idx,we-ws,pipelined_unwaited);
+     auto t1 = std::chrono::high_resolution_clock::now();
+     layer.nvme_read_ms = std::chrono::duration<float, std::milli>(t1 - t0).count();
+     if(wf->required_dstorage)if(llama_dsv41_layer_log_on())WF_ERR("[dsv41-fetch-parts] stage=%d initialize_ms=%.6f staging_drain_ms=%.6f enqueue_ms=%.6f storage_fence_ms=%.6f cuda_handoff_api_ms=%.6f final_visibility_ms=%.6f total_ms=%.6f waves=%d",
