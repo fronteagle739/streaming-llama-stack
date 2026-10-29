@@ -31,7 +31,9 @@ def plan(cfg, prompt_tokens, available):
     if primary != LEGACY_SWEEP or type(fold_cap) is not int or not primary <= fold_cap < 2 * primary:
         raise ValueError('Multichunk requires the 49152-token primary and a fold cap below two chunks')
     base = int(cfg.get('producer_host_budget_gib', 6.25) * GiB)
-    maximum = float(cfg.get('producer_host_max_gib', cfg.get('producer_host_budget_gib', 6.25)))
+    maximum = cfg.get('producer_host_max_gib', cfg.get('producer_host_budget_gib', 6.25))
+    # 'auto' (OPUS22 r9): bounded below by the outer process budget and the RAM reserve.
+    maximum = float(cfg.get('host_budget_gib', 1e6)) if maximum == 'auto' else float(maximum)
     # Include the enclosing worker/controller in admission. An explicit chunk
     # count never silently exceeds the user's process budget or gets reduced.
     outer = float(cfg.get('host_budget_gib', maximum + .25)) - .25
