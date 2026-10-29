@@ -1,7 +1,8 @@
 # Native-format kernel and stored-weight experiments
 
-Latest direct-packed FP4 and SM120 dense FP8 results, layout contracts and
-remaining limits: [PACKED_LAYOUT_RESULTS.md](PACKED_LAYOUT_RESULTS.md).
+Latest matched100K runs after the KERNELS2 defaults and the16K/64K fused-FFN
+follow-up: [COMBINATION_RESULTS.md](COMBINATION_RESULTS.md). Earlier packed-layout
+and dense-FP8 qualification: [PACKED_LAYOUT_RESULTS.md](PACKED_LAYOUT_RESULTS.md).
 
 Timing fields now report prompt-only prefill and launch-to-ready TTFT separately. Older startup-inclusive fields retain that meaning; see the primary 100K tables below.
 
