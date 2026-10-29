@@ -13,6 +13,34 @@ int ggml_dsv41_cuda_blocking_sync(int ordinal,uint32_t *before,uint32_t *after){
 }
 
 namespace {
+// Integer-exact form of engram_decode_row: the value M*2^E (M<=15) rounded to
+// F32 (round-half-even, including subnormals) and then to BF16, with no
+// floating arithmetic that -use_fast_math could flush.
+__device__ __forceinline__ uint32_t engram_value_bits(uint32_t code,uint32_t scale){
+    if((code&127u)==127u||scale==255u)return 0x7fc00000u;
+    const uint32_t exponent=(code>>3)&15u,mantissa=code&7u;
+    const uint32_t m=exponent?8u+mantissa:mantissa;
+    const int e=(exponent?int(exponent)-10:-9)+int(scale)-127;
+    uint32_t bits=0;
+    if(m){
+        const int top=31-__clz(m),x=top+e;
+        if(x>127)bits=0x7f800000u;
+        else if(x>=-126)bits=(uint32_t(x+127)<<23)|((m<<(23-top))&0x7fffffu);
+        else{const int shift=e+149;
+            if(shift>=0)bits=m<<shift;
+            else{const int s=-shift;
+                if(s<5){const uint32_t q=m>>s,r=m&((1u<<s)-1u),h=1u<<(s-1);bits=q+((r>h||(r==h&&(q&1u)))?1u:0u);}}}
+    }
+    if(code&128u)bits|=0x80000000u;
+    if((bits&0x7f800000u)!=0x7f800000u)bits=(bits+0x7fffu+((bits>>16)&1u))&0xffff0000u;
+    return bits;
+}
+__global__ void engram_decode_kernel(const uint8_t *raw,uint32_t *output,uint64_t n){
+    const uint64_t i=uint64_t(blockIdx.x)*blockDim.x+threadIdx.x;
+    if(i>=n)return;
+    const uint8_t *row=raw+(i>>8)*264;const uint32_t j=uint32_t(i&255u);
+    output[i]=engram_value_bits(row[j],row[256+(j>>5)]);
+}
 __device__ bool nonfinite(float x){return (__float_as_uint(x)&0x7f800000u)==0x7f800000u;}
 __global__ void validate_kernel(ggml_dsv41_validation p,uint32_t *flags,uint64_t maximum){
     const uint64_t i=uint64_t(blockIdx.x)*blockDim.x+threadIdx.x;
@@ -58,4 +86,12 @@ int ggml_dsv41_cuda_copy_ram(bool to_device,const ggml_dsv41_ram_slice &slice,
         if(status!=cudaSuccess)return int(status);done+=rows;
     }
     return int(cudaSuccess);
+}
+
+int ggml_dsv41_cuda_engram_decode(const void *raw,float *output,uint64_t rows,void *stream){
+    if(!raw||!output||!rows||rows>uint64_t(4096)*24)return int(cudaErrorInvalidValue);
+    const uint64_t n=rows*256;
+    engram_decode_kernel<<<unsigned((n+255)/256),256,0,static_cast<cudaStream_t>(stream)>>>(
+        static_cast<const uint8_t*>(raw),reinterpret_cast<uint32_t*>(output),n);
+    return int(cudaGetLastError());
 }

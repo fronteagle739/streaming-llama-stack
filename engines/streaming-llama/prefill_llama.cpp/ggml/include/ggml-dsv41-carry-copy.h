@@ -26,5 +26,10 @@ struct ggml_dsv41_validation {
 GGML_BACKEND_API int ggml_dsv41_cuda_validate(const ggml_dsv41_validation &,void *device_flags,void *stream);
 GGML_BACKEND_API int ggml_dsv41_cuda_copy_ram(bool to_device,const ggml_dsv41_ram_slice &,
     uint64_t record_offset,uint64_t row_bytes,void *device,void *stream);
+// OPUS22: decode original Engram rows (256 E4M3 codes + 8 E8M0 scales, 264 B)
+// on the GPU, bit-identical to llama_dsv41::engram_decode_row. An invalid code
+// or scale writes NaN and an overflow writes Inf, so the existing finite
+// validator of the same tile rejects it before any layer compute.
+GGML_BACKEND_API int ggml_dsv41_cuda_engram_decode(const void *raw,float *output,uint64_t rows,void *stream);
 // Explicit offline TEST scheduling experiment. No kernel or precision change.
 GGML_BACKEND_API int ggml_dsv41_cuda_blocking_sync(int ordinal,uint32_t *before,uint32_t *after);

@@ -1254,3 +1254,29 @@ bool llama_dsv41_weight_provider::engram_tile(uint32_t index,llama_dsv41::engram
     }else require(llama_dsv41::engram_read_batch(read,p->options.verified_file_bytes,p->engram_offsets[index],p->engram.rows[index],ids.data(),count,24,result.data(),why),"Original Engram row read/decode failed");
     p->identity();out=std::move(result);history=pending;
 },error);}
+bool llama_dsv41_weight_provider::engram_tile_raw(uint32_t index,llama_dsv41::engram_history&history,const int32_t*tokens,const uint8_t*mask,size_t count,std::vector<uint8_t>&out,std::string&error){out.clear();return p->guard([&]{
+    // Same lease, hash and reads as engram_tile below; only the decode moves.
+    const uint32_t engram_layer=index==0?1u:14u,engram_stage=p->decode_layout?1u+2u*engram_layer:engram_layer+1u;
+    require(p->allocated&&index<2&&count&&count<=4096&&
+        ((p->engram_prompt&&p->next<=engram_stage)||
+         (p->leased&&p->next==engram_stage)),"Engram read has no prepared prompt cache or physical layer lease");p->identity();
+    auto pending=history;std::vector<llama_dsv41::engram_rows>rows(count);std::string why;require(llama_dsv41::engram_hash(p->engram,pending,tokens,mask,count,rows.data(),why),"Native Engram hash failed");
+    std::vector<uint32_t>ids(count*24);for(size_t t=0;t<count;++t)std::copy(rows[t][index].begin(),rows[t][index].end(),ids.begin()+t*24);
+    std::vector<uint8_t>result(count*24*llama_dsv41::engram_row_bytes);
+    auto read=[&](uint64_t offset,void*dst,size_t bytes){
+        if(p->options.engram_prefetch_host_bytes)return p->engram_prompt&&p->engram_prompt->read(index,offset,dst,bytes);
+#ifdef _WIN32
+        if(!bytes||bytes>264)return false;
+        const uint64_t begin=offset&~uint64_t(4095),skip=offset-begin,extent=align(skip+bytes,4096);
+        if(extent>8192||begin>p->options.verified_file_bytes||extent>p->options.verified_file_bytes-begin)return false;
+        LARGE_INTEGER where;where.QuadPart=LONGLONG(begin);DWORD done=0;
+        if(!SetFilePointerEx(p->engram_file,where,nullptr,FILE_BEGIN)||!ReadFile(p->engram_file,p->engram_page,DWORD(extent),&done,nullptr)||done!=extent)return false;
+        std::memcpy(dst,p->engram_page+skip,bytes);return true;
+#else
+        (void)offset;(void)dst;(void)bytes;return false;
+#endif
+    };
+    // Same reader and row ids as engram_tile; the decode runs on the GPU.
+    require(llama_dsv41::engram_read_raw_batch(read,p->options.verified_file_bytes,p->engram_offsets[index],p->engram.rows[index],ids.data(),count,24,result.data(),why),"Original Engram row read failed");
+    p->identity();out=std::move(result);history=pending;
+},error);}

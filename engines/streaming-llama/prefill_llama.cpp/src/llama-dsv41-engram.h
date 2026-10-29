@@ -53,4 +53,11 @@ bool engram_read_batch(const engram_read_at & read_at, uint64_t file_bytes,
                        const uint32_t * rows, size_t tokens, size_t row_stride,
                        float * output, std::string & error);
 
+// Same validation and reads as engram_read_batch, but store the original
+// 264-byte rows (token-major, row_stride columns) for a GPU decode.
+bool engram_read_raw_batch(const engram_read_at & read_at, uint64_t file_bytes,
+                           uint64_t table_offset, uint32_t table_rows,
+                           const uint32_t * rows, size_t tokens, size_t row_stride,
+                           uint8_t * output, std::string & error);
+
 } // namespace llama_dsv41
