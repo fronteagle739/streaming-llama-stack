@@ -89,6 +89,11 @@ def run_child(args, cfg, arm, label):
         raw=seed[:256*4]+(body*(n//len(body)+1))[:n]+seed[-128*4:]
     tokens=list(struct.unpack('<'+'I'*args.count,raw))
     forced=tokens[-min(16,len(tokens)):]
+    if args.probe_answer is not None:
+        meta=read_header(Path(cfg['model']))['metadata']
+        tokenizer=Tokenizer(meta['tokenizer.ggml.tokens'],meta['tokenizer.ggml.merges'])
+        forced=tokenizer.text(args.probe_answer)+[tokenizer.eos]
+        if not 1<=len(forced)<=128:raise ValueError('Answer probe must fit128 forced tokens')
     model=Path(cfg['model']);identity=model.stat()
     dll=Path(cfg['llama_producer']).parent/'ds4-decode.dll'
     dll_hash=hashlib.file_digest(dll.open('rb'),'sha256').hexdigest()
@@ -105,7 +110,7 @@ def run_child(args, cfg, arm, label):
                 model=str(model),model_bytes=identity.st_size,model_mtime_ns=identity.st_mtime_ns,
                 prompt_tokens=len(tokens),input_sha256=hashlib.sha256(raw).hexdigest(),
                 seed_sha256=hashlib.sha256(seed).hexdigest(),
-                recall_fixture=True,producer_sha256=cfg['producer_sha256'],
+                recall_fixture=bool(args.recall_key),producer_sha256=cfg['producer_sha256'],
                 config_sha256=cfg['_pair_config_sha256'],
                 source_revision=cfg['producer_source_revision'],status='RUNNING',
                 candidate_setting=args.candidate)
@@ -152,9 +157,22 @@ def run_child(args, cfg, arm, label):
         # The final sampled token is not evaluated. Read this same untouched
         # frontier after timing first output, so the quality probe adds no TTFT.
         result['frontier']=producer.decode_forced([0],root/(label+'.frontier.f32'))
-        result['recall']=producer.decode(63)
+        result['probe_answer']=args.probe_answer
+        result['recall']=(dict(tokens=[],skipped_for_answer_probe=True) if args.probe_answer is not None else
+            producer.decode(63,stop_tokens=(() if args.recall_stop_token is None else (args.recall_stop_token,))))
+        result['recall_stop_token']=args.recall_stop_token
+        if args.recall_key:
+            meta=read_header(model)['metadata']
+            tokenizer=Tokenizer(meta['tokenizer.ggml.tokens'],meta['tokenizer.ggml.merges'])
+            answer_tokens=result['recall']['tokens']
+            if args.recall_stop_token in answer_tokens:
+                answer_tokens=answer_tokens[:answer_tokens.index(args.recall_stop_token)]
+            answer=tokenizer.detokenize(answer_tokens).decode('utf-8','replace').strip()
+            result['recall_answer']=answer
+            result['recall_correct']=answer==args.recall_key
+            if not result['recall_correct']:raise ValueError('Retrieval answer differs from the explicit oracle')
         result['first_token']=first['tokens']
-        result['recall_before_forced']=True
+        result['recall_before_forced']=args.probe_answer is None
         result['turns']=[]
         if args.engram_turns:
             meta=read_header(model)['metadata']
@@ -240,12 +258,19 @@ def main():
     p.add_argument('--seed-file',type=Path)
     p.add_argument('--config-name',default='config.json')
     p.add_argument('--decode-before-forced',action='store_true')
+    p.add_argument('--recall-stop-token',type=int,help='Stop natural continuation at this EOS token before forced probes')
+    p.add_argument('--recall-key',help='Exact retrieval answer oracle; requires an EOS stop token')
+    p.add_argument('--probe-answer',help='Teacher-force this answer plus EOS directly from the prompt, skipping natural continuation')
     p.add_argument('--child',choices=('control','candidate'))
     p.add_argument('--lease')
     args=p.parse_args()
     if not re.fullmatch('[A-Za-z][A-Za-z0-9_-]{0,63}',args.experiment):raise ValueError('Use a bounded experiment label')
     if not 1<=args.count<=200000 or not 1<=args.decode<=128 or not 0<=args.warmup<=128:raise ValueError('Unbounded experiment')
     if not 0<=args.append<=256:raise ValueError('Unbounded append experiment')
+    if args.recall_key and args.recall_stop_token is None:
+        raise ValueError('--recall-key requires --recall-stop-token')
+    if args.probe_answer is not None and (args.recall_key or args.engram_turns or args.decode_before_forced):
+        raise ValueError('Answer probe must precede any natural decode or appended turn')
     if args.trace_append and (not args.append or args.engram_turns or args.decode_before_forced):
         raise ValueError('Attribution requires the canonical append sequence')
     if args.decode_before_forced and (args.append or args.engram_turns):
@@ -283,7 +308,11 @@ def main():
                     and row.get('candidate_setting')==list(args.candidate)
                     and len(row.get('turns',[]))==args.engram_turns
                     and row.get('trace_append',False)==args.trace_append
-                    and row.get('append_tokens',0)==args.append):
+                    and row.get('append_tokens',0)==args.append
+                    and row.get('recall_stop_token')==args.recall_stop_token
+                    and row.get('probe_answer')==args.probe_answer
+                    and (args.recall_key is None or (row.get('recall_correct') is True and row.get('recall_answer')==args.recall_key))
+                    and row.get('recall_fixture',False)==bool(args.recall_key)):
                 # A completed arm may have stopped at the external health gate.
                 # Preserve its original failure receipt, and require recovery
                 # before reusing its numerical evidence or admitting another arm.

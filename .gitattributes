@@ -1,4 +1,6 @@
 docs/evidence/** -text
+# E19 upstream and evidence manifests bind exact bytes across Windows checkouts.
+examples/kernels2/** -text whitespace=blank-at-eol,blank-at-eof,space-before-tab,cr-at-eol
 # Performance evidence digests bind exact bytes, including recorded newlines.
 examples/dual-machine/dsv41-ultra-cone/proof/performance/** -text
 examples/dual-machine/dsv41-ultra-cone/proof/PERFORMANCE.md -text
