@@ -174,7 +174,10 @@ class Pair:
                     if time.monotonic() >= ready_until:
                         raise TimeoutError('Owned broker did not become ready')
                     time.sleep(.2)
-            identity = {'producer_sha256': pin, 'producer_source_revision': revision,
+            from .native_broker import model_receipt, model_digest
+            from .model_compatibility import model_description
+            producer_model = model_description(path(cfg['model']), model_digest(cfg, model_receipt(cfg)), cfg.get('yoco_keep',0))
+            identity = {'model_compatibility': producer_model, 'producer_sha256': pin, 'producer_source_revision': revision,
                         'producer_ipv4': local_ip, 'broker_port': cfg['broker_port'],
                         'tier': cfg.get('native_tier', 'accurate')}
             keep=cfg.get('yoco_keep',0)

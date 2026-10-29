@@ -16,6 +16,12 @@ static int ds4_ns_setup(ds4_engine*engine,const ds4_engine_options*opt,int conte
     const char*path=ds4_nf_env("DS4_NATIVE_SESSION_QUALIFICATION"),*pin=ds4_nf_env("DS4_NATIVE_SESSION_QUALIFICATION_SHA256");
     const char*renderer=ds4_nf_env("DS4_NATIVE_SESSION_RENDERER_SHA256");
     const char*expected_producer=ds4_nf_env("DS4_NATIVE_SESSION_PRODUCER_SHA256");
+    const char*producer_model=ds4_nf_env("DS4_NATIVE_SESSION_MODEL_SHA256");
+    const char*receiver_model=ds4_nf_env("DS4_NATIVE_SESSION_RECEIVER_MODEL_SHA256");
+    const char*compatibility=ds4_nf_env("DS4_NATIVE_SESSION_COMPATIBILITY_SHA256");
+    if(!producer_model||!ds4_nf_hex(producer_model,64)||!receiver_model||!ds4_nf_hex(receiver_model,64)||
+       !compatibility||!ds4_nf_hex(compatibility,64))
+        return ds4_nf_error(err,cap,"missing architecture/tokenizer/state compatibility qualification");
     if(!host||strlen(host)>15||!token||!tier||!path||!pin||!ds4_nf_hex(pin,64)||!renderer||!ds4_nf_hex(renderer,64)||
        !expected_producer||!ds4_nf_hex(expected_producer,64)||
        (strcmp(tier,"accurate")&&strcmp(tier,"fast")&&strcmp(tier,"ultra")&&strcmp(tier,"hyper")))
@@ -52,7 +58,9 @@ static int ds4_ns_setup(ds4_engine*engine,const ds4_engine_options*opt,int conte
     free(text);if(fd>=0)close(fd);
     const uint64_t required=(UINT64_C(1)<<0)|(UINT64_C(1)<<3)|(UINT64_C(1)<<6)|(UINT64_C(1)<<7)|
         (UINT64_C(1)<<11)|(UINT64_C(1)<<12)|(((UINT64_C(1)<<21)-1)&~((UINT64_C(1)<<14)-1));
-    if(!ok||!ds4_nf_have(&f,required)||strcmp(f.schema,"dsv41-native-session-qualification-v2")||strcmp(f.model_sha256,DS4_NF_MODEL_SHA)||
+    if(!ok||!ds4_nf_have(&f,required)||strcmp(f.schema,"dsv41-native-session-qualification-v2")||strcmp(f.model_sha256,producer_model)||
+       !ds4_nf_have(&f,(UINT64_C(1)<<23)|(UINT64_C(1)<<24))||
+       strcmp(f.receiver_model_sha256,receiver_model)||strcmp(f.compatibility_sha256,compatibility)||
        f.mode!=3||f.wire_version!=2||strcmp(f.tokenization,"native-final-token-ids-le32-v1")||
        strcmp(f.producer_binary_sha256,expected_producer)||
        !ds4_nf_hex(f.producer_source_revision,40)||!ds4_nf_hex(f.receiver_binary_sha256,64)||strcmp(f.renderer_sha256,renderer)||
@@ -61,6 +69,8 @@ static int ds4_ns_setup(ds4_engine*engine,const ds4_engine_options*opt,int conte
     char executable[PATH_MAX];uint32_t length=sizeof(executable);if(_NSGetExecutablePath(executable,&length))goto bad;
     fd=open(executable,O_RDONLY|O_CLOEXEC);ok=fd>=0&&ds4_nf_hash_file(fd,128ull<<20,sha,NULL)&&!strcmp(sha,f.receiver_binary_sha256);
     if(fd>=0)close(fd);if(!ok)goto bad;
+    strcpy(c->producer_model_sha256,producer_model);
+    fprintf(stderr,"native session architecture/config compatible digest=%s producer_weights=%s receiver_weights=%s cross_quant=%d\n",compatibility,producer_model,receiver_model,strcmp(producer_model,receiver_model)!=0);
     strcpy(c->http.producer_binary_sha256,f.producer_binary_sha256);strcpy(c->http.producer_source_revision,f.producer_source_revision);
     *out=c;ds4_ns_preserve_history_reasoning=true;fprintf(stderr,"native session enabled tier=%s context=1000001 chunk=49152 decode_delta_batch=32 custom_techniques=%s\n",tier,techniques?"explicit":"default");return 0;
 bad:ds4_ns_config_free(c);return ds4_nf_error(err,cap,"native session configuration/model/build identity rejected");

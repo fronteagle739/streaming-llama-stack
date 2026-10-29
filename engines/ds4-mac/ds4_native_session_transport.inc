@@ -6,7 +6,7 @@
 #include "ds4_native_session_route.h"
 #include <pthread.h>
 #include <stdatomic.h>
-typedef struct {ds4_nf_config http;char tier[9],techniques[4097];uint32_t yoco_keep,local_prefill_max;bool async_decode,catchup_defer;} ds4_ns_config;
+typedef struct {ds4_nf_config http;char tier[9],techniques[4097],producer_model_sha256[65];uint32_t yoco_keep,local_prefill_max;bool async_decode,catchup_defer;} ds4_ns_config;
 typedef struct {
     ds4_native_checkpoint identity;
     float *logits;unsigned char *state;size_t bytes,cursor;
@@ -77,7 +77,7 @@ static bool ds4_ns_body(ds4_nf_io*io,int expected,ds4_ns_reply*r){
 }
 static void ds4_ns_disconnect(ds4_nf_io*io){if(io->fd>=0)close(io->fd);io->fd=-1;}
 static bool ds4_ns_identity(ds4_ns_session*s,const ds4_ns_reply*r){
-    return !strcmp(s->id,r->session)&&!strcmp(DS4_NF_MODEL_SHA,r->model_sha256);
+    return !strcmp(s->id,r->session)&&!strcmp(s->config->producer_model_sha256,r->model_sha256);
 }
 /* See ds4_native_session_negotiate.h (bits 20 / 11: the reply carried the field). */
 static bool ds4_ns_negotiate_decode(const ds4_ns_reply*r,uint32_t*effective){
@@ -117,7 +117,7 @@ static bool ds4_ns_poll(ds4_ns_session*s,ds4_nf_io*io,const char*suffix,bool sta
 }
 static void ds4_ns_command_prefix(ds4_ns_text*b,ds4_ns_session*s,const char*op){
     ds4_ns_put(b,"{\"session\":\"%s\",\"model_sha256\":\"%s\",\"sequence\":%llu,\"operation\":\"%s\"",
-        s->id,DS4_NF_MODEL_SHA,(unsigned long long)s->sequence,op);
+        s->id,s->config->producer_model_sha256,(unsigned long long)s->sequence,op);
 }
 static bool ds4_ns_command(ds4_ns_session*s,ds4_nf_io*io,const char*body,size_t n,ds4_ns_reply*r){
     ds4_ns_reply queued;char suffix[80];
@@ -270,7 +270,7 @@ static bool ds4_ns_import(ds4_ns_session*s,ds4_session*session,ds4_nf_io*io,cons
     }else{
         int32_t*ids=malloc(49152*4);float*logits=malloc(129280*4);dsv41_c_plan plan;
         if(ids&&logits&&dsv41_c_read_delta_prefix(1000001,s->synced.position,49152,n,ds4_ns_fingerprint(s->id),
-             ds4_ns_fingerprint(DS4_NF_MODEL_SHA),ds4_ns_read,&stream,ids,logits,&plan)&&plan.target==meta->target.position)
+             ds4_ns_fingerprint(s->config->producer_model_sha256),ds4_ns_read,&stream,ids,logits,&plan)&&plan.target==meta->target.position)
             ok=!ds4_session_native_apply_delta(session,plan.base,plan.target,ids,logits,ds4_ns_read,&stream,
                 ds4_ns_verify,&s->synced,ds4_ns_verify,(void*)&meta->target,err,cap)&&!stream.remaining;
         free(ids);free(logits);
@@ -375,7 +375,7 @@ static bool ds4_ns_chain_init(ds4_ns_session*,ds4_session*,char*,size_t);
 static bool ds4_ns_start_remote(ds4_ns_session*s,ds4_nf_io*io,const ds4_tokens*first,const ds4_vision_span*images,size_t image_count,ds4_ns_reply*r){
     char hash[65],extra[4608];if(!ds4_nf_token_hash(first,hash)){fprintf(stderr,"native session initial token hash refused count=%d\n",first->len);return false;}
     ds4_ns_text b={extra,sizeof(extra),true};
-    ds4_ns_put(&b,"X-DSV41-Model-SHA256: %s\r\nX-DSV41-Tokens-SHA256: %s\r\nX-DSV41-Context: 1000001\r\nX-DSV41-Mode: 3\r\nX-DSV41-Tokens: %d\r\nX-DSV41-Tier: %s\r\n",DS4_NF_MODEL_SHA,hash,first->len,s->config->tier);
+    ds4_ns_put(&b,"X-DSV41-Model-SHA256: %s\r\nX-DSV41-Tokens-SHA256: %s\r\nX-DSV41-Context: 1000001\r\nX-DSV41-Mode: 3\r\nX-DSV41-Tokens: %d\r\nX-DSV41-Tier: %s\r\n",s->config->producer_model_sha256,hash,first->len,s->config->tier);
     if(*s->config->techniques)ds4_ns_put(&b,"X-DSV41-Techniques: %s\r\n",s->config->techniques);
     if(s->config->yoco_keep)ds4_ns_put(&b,"X-DSV41-Yoco-Keep: %u\r\nX-DSV41-Yoco-State-Version: %u\r\n",s->config->yoco_keep,ds4_ns_yoco_version(s->config->yoco_keep));
     ds4_ns_vision_body wire={0};
@@ -513,7 +513,7 @@ static int ds4_ns_decode_visit(void*ud,const ds4_native_view*v,char*err,size_t c
     ds4_ns_put(&b,",\"target\":");ds4_ns_checkpoint_text(&b,&target);ds4_ns_put(&b,",\"bytes\":%llu}\r\n",(unsigned long long)plan.artifact_bytes);
     if(!b.ok||!ds4_ns_open(s,w->io,"POST","/delta","application/octet-stream",extra,plan.artifact_bytes))return 0;
     ds4_ns_stream stream={w->io,plan.artifact_bytes};
-    if(!dsv41_c_write_delta(&plan,ds4_ns_fingerprint(s->id),ds4_ns_fingerprint(DS4_NF_MODEL_SHA),v->tokens+s->synced.position,
+    if(!dsv41_c_write_delta(&plan,ds4_ns_fingerprint(s->id),ds4_ns_fingerprint(s->config->producer_model_sha256),v->tokens+s->synced.position,
        v->logits,v->read_span,v->state,ds4_ns_write,&stream)||stream.remaining||!ds4_ns_body(w->io,200,&w->reply))return 0;
     ds4_ns_reply*r=&w->reply;
     if(!ds4_ns_identity(s,r)||r->sequence!=s->sequence||strcmp(r->status,"complete")||!r->peer_synchronized||r->rtx_decode||
@@ -628,7 +628,7 @@ static bool ds4_ns_send_batch(ds4_ns_session*s,ds4_ns_batch*b,char*err,size_t ca
     ds4_ns_put(&t,",\"target\":");ds4_ns_checkpoint_text(&t,&target);ds4_ns_put(&t,",\"bytes\":%llu}\r\n",(unsigned long long)plan.artifact_bytes);
     ds4_ns_stream stream={&io,plan.artifact_bytes};
     bool ok=t.ok&&ds4_ns_open(s,&io,"POST","/delta","application/octet-stream",extra,plan.artifact_bytes)&&
-        dsv41_c_write_delta(&plan,ds4_ns_fingerprint(s->id),ds4_ns_fingerprint(DS4_NF_MODEL_SHA),b->tokens,b->logits,
+        dsv41_c_write_delta(&plan,ds4_ns_fingerprint(s->id),ds4_ns_fingerprint(s->config->producer_model_sha256),b->tokens,b->logits,
             ds4_ns_batch_span,b,ds4_ns_write,&stream)&&!stream.remaining;
     if(ok){const double sent=ds4_nf_now();ok=ds4_ns_await_reply(s,&io,ds4_ns_reply_window(s,b->target));
         if(ok)ds4_ns_note_verify(s,b->target,ds4_nf_now()-sent);

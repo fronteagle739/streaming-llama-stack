@@ -18,6 +18,7 @@ typedef struct {
     char tokens_sha256[65], payload_sha256[65], producer_binary_sha256[65];
     char producer_source_revision[41], qualification_sha256[65];
     char receiver_binary_sha256[65], renderer_sha256[65], tokenization[64];
+    char receiver_model_sha256[65], compatibility_sha256[65];
     uint64_t context, position, mode, wire_version, payload_bytes;
     uint64_t receiver_model_size, receiver_model_device;
     uint64_t receiver_model_inode, receiver_model_mtime_ns;
@@ -113,6 +114,8 @@ static bool ds4_nf_parse_bounded(const char *text,size_t len,ds4_nf_fields *out,
         else NF_UINT(receiver_model_mtime_ns, 20)
         else NF_BOOL(native_parity_passed, 21)
         else NF_BOOL(performance_passed, 22)
+        else NF_STRING(receiver_model_sha256, 23)
+        else NF_STRING(compatibility_sha256, 24)
         else ok = json_skip_value(&p);
 #undef NF_STRING
 #undef NF_UINT
