@@ -1,0 +1,3869 @@
+{
+  "base_revision": "1fc2d08201355ab57b98c9bf7fe9939262f865f2",
+  "branch": "agent/other22",
+  "scope": "100000 tokens, cone2541, bias0, context131072, 49152/50848 sweeps; packed FP4 lossy proxy",
+  "input_sha256": "4ffeee4837f76e364da2cc241938e3e79f61901d6d4c0824d5f6cddba8db4320",
+  "model_sha256": "0ba5ae3bdeea8c38501d2a69e6394436b6f99c07b5a531226a3f93249c45e572",
+  "timings": [
+    {
+      "name": "baseline-clean",
+      "prompt_seconds": 39.9413891,
+      "prompt_tok_s": 2503.668556685225,
+      "ttft_seconds": 61.875,
+      "diagnostic_capture": false,
+      "producer_sha256": "e66aad656c0b2b0202281bd4fe94b92a5c50d88e7db7e8abd095a10959e9e7aa",
+      "logits_sha256": "457e90601c434f5ade0afb149595a50d92c3ca0f047f13a8d95d8a9cea1522ee",
+      "peak_host_RSS": 6414757888,
+      "minimum_available_RAM": 7534182400
+    },
+    {
+      "name": "baseline-nsys",
+      "prompt_seconds": 36.457880100000004,
+      "prompt_tok_s": 2742.89124122716,
+      "ttft_seconds": 41.03100000001723,
+      "diagnostic_capture": true,
+      "producer_sha256": "e66aad656c0b2b0202281bd4fe94b92a5c50d88e7db7e8abd095a10959e9e7aa",
+      "logits_sha256": "457e90601c434f5ade0afb149595a50d92c3ca0f047f13a8d95d8a9cea1522ee",
+      "peak_host_RSS": 7125643264,
+      "minimum_available_RAM": 6776647680
+    },
+    {
+      "name": "dense-control-1",
+      "prompt_seconds": 35.4892523,
+      "prompt_tok_s": 2817.754489575426,
+      "ttft_seconds": 38.68700000003446,
+      "diagnostic_capture": false,
+      "producer_sha256": "e66aad656c0b2b0202281bd4fe94b92a5c50d88e7db7e8abd095a10959e9e7aa",
+      "logits_sha256": "457e90601c434f5ade0afb149595a50d92c3ca0f047f13a8d95d8a9cea1522ee",
+      "peak_host_RSS": 6501212160,
+      "minimum_available_RAM": 7503974400
+    },
+    {
+      "name": "fp8-1",
+      "prompt_seconds": 36.555444800000004,
+      "prompt_tok_s": 2735.570598227271,
+      "ttft_seconds": 39.70400000002701,
+      "diagnostic_capture": false,
+      "producer_sha256": "e66aad656c0b2b0202281bd4fe94b92a5c50d88e7db7e8abd095a10959e9e7aa",
+      "logits_sha256": "b71ea8bf08bffa269ab63aebcda9c37878de4056b755102e9896a3adf905b054",
+      "peak_host_RSS": 6428377088,
+      "minimum_available_RAM": 6998700032
+    },
+    {
+      "name": "fp8-2",
+      "prompt_seconds": 36.14316229999999,
+      "prompt_tok_s": 2766.7750588608574,
+      "ttft_seconds": 39.21799999999348,
+      "diagnostic_capture": false,
+      "producer_sha256": "e66aad656c0b2b0202281bd4fe94b92a5c50d88e7db7e8abd095a10959e9e7aa",
+      "logits_sha256": "b71ea8bf08bffa269ab63aebcda9c37878de4056b755102e9896a3adf905b054",
+      "peak_host_RSS": 6402101248,
+      "minimum_available_RAM": 7286116352
+    },
+    {
+      "name": "dense-control-2",
+      "prompt_seconds": 33.9792337,
+      "prompt_tok_s": 2942.973961181473,
+      "ttft_seconds": 37.04700000002049,
+      "diagnostic_capture": false,
+      "producer_sha256": "e66aad656c0b2b0202281bd4fe94b92a5c50d88e7db7e8abd095a10959e9e7aa",
+      "logits_sha256": "457e90601c434f5ade0afb149595a50d92c3ca0f047f13a8d95d8a9cea1522ee",
+      "peak_host_RSS": 6508756992,
+      "minimum_available_RAM": 7450320896
+    },
+    {
+      "name": "pin-1",
+      "prompt_seconds": 34.260683300000004,
+      "prompt_tok_s": 2918.7975944426066,
+      "ttft_seconds": 37.29700000002049,
+      "diagnostic_capture": false,
+      "producer_sha256": "e66aad656c0b2b0202281bd4fe94b92a5c50d88e7db7e8abd095a10959e9e7aa",
+      "logits_sha256": "457e90601c434f5ade0afb149595a50d92c3ca0f047f13a8d95d8a9cea1522ee",
+      "peak_host_RSS": 6412800000,
+      "minimum_available_RAM": 7537373184
+    },
+    {
+      "name": "hc-1",
+      "prompt_seconds": 33.892430399999995,
+      "prompt_tok_s": 2950.511333055655,
+      "ttft_seconds": 42.06199999997625,
+      "diagnostic_capture": false,
+      "producer_sha256": "1bbad4239eb958c8d2e3325ba65b67dc9ccaea04ce1329f133143c29938b7984",
+      "logits_sha256": "457e90601c434f5ade0afb149595a50d92c3ca0f047f13a8d95d8a9cea1522ee",
+      "peak_host_RSS": 6453092352,
+      "minimum_available_RAM": 7638863872
+    },
+    {
+      "name": "baseline-repeat",
+      "prompt_seconds": 35.801223500000006,
+      "prompt_tok_s": 2793.200629023195,
+      "ttft_seconds": 38.875,
+      "diagnostic_capture": false,
+      "producer_sha256": "e66aad656c0b2b0202281bd4fe94b92a5c50d88e7db7e8abd095a10959e9e7aa",
+      "logits_sha256": "457e90601c434f5ade0afb149595a50d92c3ca0f047f13a8d95d8a9cea1522ee",
+      "peak_host_RSS": 6439747584,
+      "minimum_available_RAM": 7261892608
+    },
+    {
+      "name": "hc-2",
+      "prompt_seconds": 37.872280399999994,
+      "prompt_tok_s": 2640.4536231729003,
+      "ttft_seconds": 40.98499999998603,
+      "diagnostic_capture": false,
+      "producer_sha256": "1bbad4239eb958c8d2e3325ba65b67dc9ccaea04ce1329f133143c29938b7984",
+      "logits_sha256": "457e90601c434f5ade0afb149595a50d92c3ca0f047f13a8d95d8a9cea1522ee",
+      "peak_host_RSS": 6463250432,
+      "minimum_available_RAM": 6038380544
+    },
+    {
+      "name": "hc-nsys-verified",
+      "prompt_seconds": 43.41545849999999,
+      "prompt_tok_s": 2303.327051123968,
+      "ttft_seconds": 47.375,
+      "diagnostic_capture": true,
+      "producer_sha256": "1bbad4239eb958c8d2e3325ba65b67dc9ccaea04ce1329f133143c29938b7984",
+      "logits_sha256": "457e90601c434f5ade0afb149595a50d92c3ca0f047f13a8d95d8a9cea1522ee",
+      "peak_host_RSS": 7050125312,
+      "minimum_available_RAM": 3517661184
+    },
+    {
+      "name": "concat-1",
+      "prompt_seconds": 34.901002,
+      "prompt_tok_s": 2865.2472499213636,
+      "ttft_seconds": 42.92200000002049,
+      "diagnostic_capture": false,
+      "producer_sha256": "475ea208ac16536ba05e528f8b57469a827070d19b2f03a0cf7fef622fa380b1",
+      "logits_sha256": "457e90601c434f5ade0afb149595a50d92c3ca0f047f13a8d95d8a9cea1522ee",
+      "peak_host_RSS": 6432018432,
+      "minimum_available_RAM": 5099687936
+    },
+    {
+      "name": "concat-nsys",
+      "prompt_seconds": 35.0892897,
+      "prompt_tok_s": 2849.8724498261927,
+      "ttft_seconds": 38.54699999996228,
+      "diagnostic_capture": true,
+      "producer_sha256": "475ea208ac16536ba05e528f8b57469a827070d19b2f03a0cf7fef622fa380b1",
+      "logits_sha256": "457e90601c434f5ade0afb149595a50d92c3ca0f047f13a8d95d8a9cea1522ee",
+      "peak_host_RSS": 7108186112,
+      "minimum_available_RAM": 6782328832
+    },
+    {
+      "name": "concat-2",
+      "prompt_seconds": 35.30625320000001,
+      "prompt_tok_s": 2832.3594529707834,
+      "ttft_seconds": 38.42200000002049,
+      "diagnostic_capture": false,
+      "producer_sha256": "475ea208ac16536ba05e528f8b57469a827070d19b2f03a0cf7fef622fa380b1",
+      "logits_sha256": "457e90601c434f5ade0afb149595a50d92c3ca0f047f13a8d95d8a9cea1522ee",
+      "peak_host_RSS": 6412369920,
+      "minimum_available_RAM": 7425069056
+    },
+    {
+      "name": "final-1",
+      "prompt_seconds": 36.705570800000004,
+      "prompt_tok_s": 2724.382098425234,
+      "ttft_seconds": 42.92199999996228,
+      "diagnostic_capture": false,
+      "producer_sha256": "c0a18890daaa0b19e29f9f2ea807311700a057ed79e9bf893061a0af62843e16",
+      "logits_sha256": "457e90601c434f5ade0afb149595a50d92c3ca0f047f13a8d95d8a9cea1522ee",
+      "peak_host_RSS": 6509371392,
+      "minimum_available_RAM": 7030714368
+    },
+    {
+      "name": "baseline-final-control",
+      "prompt_seconds": 36.066110099999996,
+      "prompt_tok_s": 2772.6860402392,
+      "ttft_seconds": 39.70300000003772,
+      "diagnostic_capture": false,
+      "producer_sha256": "e66aad656c0b2b0202281bd4fe94b92a5c50d88e7db7e8abd095a10959e9e7aa",
+      "logits_sha256": "457e90601c434f5ade0afb149595a50d92c3ca0f047f13a8d95d8a9cea1522ee",
+      "peak_host_RSS": 6467547136,
+      "minimum_available_RAM": 6855553024
+    },
+    {
+      "name": "final-2",
+      "prompt_seconds": 40.0083582,
+      "prompt_tok_s": 2499.477721632676,
+      "ttft_seconds": 43.17200000002049,
+      "diagnostic_capture": false,
+      "producer_sha256": "c0a18890daaa0b19e29f9f2ea807311700a057ed79e9bf893061a0af62843e16",
+      "logits_sha256": "457e90601c434f5ade0afb149595a50d92c3ca0f047f13a8d95d8a9cea1522ee",
+      "peak_host_RSS": 6431928320,
+      "minimum_available_RAM": 6658543616
+    },
+    {
+      "name": "final-nsys",
+      "prompt_seconds": 37.26574419999999,
+      "prompt_tok_s": 2683.429571762048,
+      "ttft_seconds": 40.93700000003446,
+      "diagnostic_capture": true,
+      "producer_sha256": "c0a18890daaa0b19e29f9f2ea807311700a057ed79e9bf893061a0af62843e16",
+      "logits_sha256": "457e90601c434f5ade0afb149595a50d92c3ca0f047f13a8d95d8a9cea1522ee",
+      "peak_host_RSS": 7100911616,
+      "minimum_available_RAM": 6271033344
+    },
+    {
+      "name": "pin-2",
+      "prompt_seconds": 41.6906816,
+      "prompt_tok_s": 2398.6175366343737,
+      "ttft_seconds": 45.03100000001723,
+      "diagnostic_capture": false,
+      "producer_sha256": "e66aad656c0b2b0202281bd4fe94b92a5c50d88e7db7e8abd095a10959e9e7aa",
+      "logits_sha256": "457e90601c434f5ade0afb149595a50d92c3ca0f047f13a8d95d8a9cea1522ee",
+      "peak_host_RSS": 6414495744,
+      "minimum_available_RAM": 4089487360
+    },
+    {
+      "name": "stage-1",
+      "prompt_seconds": 33.1617828,
+      "prompt_tok_s": 3015.519418937875,
+      "ttft_seconds": 36.18800000002375,
+      "diagnostic_capture": false,
+      "producer_sha256": "e66aad656c0b2b0202281bd4fe94b92a5c50d88e7db7e8abd095a10959e9e7aa",
+      "logits_sha256": "457e90601c434f5ade0afb149595a50d92c3ca0f047f13a8d95d8a9cea1522ee",
+      "peak_host_RSS": 6412677120,
+      "minimum_available_RAM": 7122923520
+    },
+    {
+      "name": "stage-2",
+      "prompt_seconds": 35.4916232,
+      "prompt_tok_s": 2817.5662588461155,
+      "ttft_seconds": 38.64100000000326,
+      "diagnostic_capture": false,
+      "producer_sha256": "e66aad656c0b2b0202281bd4fe94b92a5c50d88e7db7e8abd095a10959e9e7aa",
+      "logits_sha256": "457e90601c434f5ade0afb149595a50d92c3ca0f047f13a8d95d8a9cea1522ee",
+      "peak_host_RSS": 6421012480,
+      "minimum_available_RAM": 6805282816
+    },
+    {
+      "name": "baseline-last",
+      "prompt_seconds": 34.2970269,
+      "prompt_tok_s": 2915.7046262805948,
+      "ttft_seconds": 37.31199999997625,
+      "diagnostic_capture": false,
+      "producer_sha256": "e66aad656c0b2b0202281bd4fe94b92a5c50d88e7db7e8abd095a10959e9e7aa",
+      "logits_sha256": "457e90601c434f5ade0afb149595a50d92c3ca0f047f13a8d95d8a9cea1522ee",
+      "peak_host_RSS": 6418554880,
+      "minimum_available_RAM": 7042015232
+    },
+    {
+      "name": "stage-3",
+      "prompt_seconds": 33.376120900000004,
+      "prompt_tok_s": 2996.154055757869,
+      "ttft_seconds": 36.5,
+      "diagnostic_capture": false,
+      "producer_sha256": "e66aad656c0b2b0202281bd4fe94b92a5c50d88e7db7e8abd095a10959e9e7aa",
+      "logits_sha256": "457e90601c434f5ade0afb149595a50d92c3ca0f047f13a8d95d8a9cea1522ee",
+      "peak_host_RSS": 6421999616,
+      "minimum_available_RAM": 6978748416
+    }
+  ],
+  "profiles": {
+    "baseline": {
+      "name": "baseline-nsys",
+      "prompt_seconds": 36.457880100000004,
+      "clock": "QPC: SQLite startTime + relative nanoseconds; native steady milliseconds",
+      "first_to_last_compute_envelope_seconds": 35.7419573,
+      "kernel_count": 186038,
+      "kernel_busy_union_seconds": 18.653676612,
+      "kernel_duration_sum_seconds": 18.653676612,
+      "copy_busy_union_seconds": 1.638908004,
+      "kernel_or_copy_union_seconds": 20.292584616,
+      "diagnostic_warnings": [
+        [
+          2,
+          "No NVTX events collected. Does the process use NVTX?"
+        ],
+        [
+          2,
+          "Installed CUDA driver version (13.3) is not supported by this build of Nsight Systems. CUDA trace will be collected using libraries for driver version 13.2"
+        ]
+      ],
+      "ranked_kernel_categories": [
+        [
+          "FP16 / Q8 / F32 GEMM incl fixup",
+          3.2238889670000273
+        ],
+        [
+          "Attention",
+          3.188808044999993
+        ],
+        [
+          "Expert incl packing",
+          2.9637499849999975
+        ],
+        [
+          "BF16 GEMM / score epilogue",
+          1.8403572090000144
+        ],
+        [
+          "QAT / quantization",
+          1.4013030750000184
+        ],
+        [
+          "Remaining kernels",
+          1.254107505000015
+        ],
+        [
+          "Cast / copy",
+          1.2496636260000313
+        ],
+        [
+          "Top K",
+          0.8079889250000004
+        ],
+        [
+          "Concat",
+          0.7961291140000121
+        ],
+        [
+          "HC expand",
+          0.6938328989999992
+        ],
+        [
+          "RoPE",
+          0.665613085000001
+        ],
+        [
+          "RMS norm",
+          0.5682341769999986
+        ]
+      ],
+      "top_kernels": [
+        [
+          "native_sparse_attn_kernel__kernel",
+          2.630609083,
+          563
+        ],
+        [
+          "kernel_cutlass_kernel_flashinferfused_moecute_dslblackwell_sm12xkernel_moe_mxfp8_mxfp4_gemmCuteDslSm120MoeMxfp8Mxfp4Grouped_object_at__Tiled_MMA_Thr_Layout_VMNK_324211321280_Permutation_M_0",
+          2.184072677,
+          1689
+        ],
+        [
+          "void mul_mat_q<(ggml_type)8, (int)128, (bool)0, (bool)0>(const char *, const int *, const int *, const int *, float *, float *, int, int, int, int, int, int, int, int, int, int, int, int, int, int, int, int, int)",
+          1.777662883,
+          3941
+        ],
+        [
+          "void cutlass::Kernel2<cutlass_80_tensorop_s16816gemm_bf16_256x128_32x3_tn_align8>(T1::Params)",
+          1.238838539,
+          39440
+        ],
+        [
+          "void dsv41_act_qat_kernel<(int)256, (int)0>(const float *, float *, long long, long long)",
+          1.18272539,
+          10212
+        ],
+        [
+          "void cutlass::Kernel2<cutlass_80_tensorop_s16816gemm_f16_64x256_32x4_tn_align8>(T1::Params)",
+          0.878057582,
+          5278
+        ],
+        [
+          "hc_expand_bf16_kernel(float *, const float *, const float *, const float *, const float *, const float *, const float *, unsigned int, unsigned int, unsigned int, unsigned int, unsigned int, int, int)",
+          0.693832899,
+          1126
+        ],
+        [
+          "dsv41_rope_kernel(float *, const float *, const int *, const float *, long long, long long, long long, bool)",
+          0.665613085,
+          1997
+        ],
+        [
+          "void k_dsv41_topk_radix_tiles<(bool)1>(const float *, const int *, int *, int, int, int, bool)",
+          0.559652854,
+          108
+        ],
+        [
+          "void dsa_accum_scores_from_gemm_kernel<(bool)1, (int)8>(const float *, const float *, float *, int, int, int, int, int, float, int, int)",
+          0.542000338,
+          43800
+        ],
+        [
+          "concat_f32_dim0(const float *, const float *, float *, int, int)",
+          0.536306598,
+          1952
+        ],
+        [
+          "k_mul_add_bcast_f32(const float *, const float *, const float *, float *, long long, long long, long long, long long, long long, long long, long long, unsigned long long, unsigned long long, unsigned long long, unsigned long long, unsigned long long, unsigned long long, unsigned long long)",
+          0.516634208,
+          3396
+        ],
+        [
+          "void rms_norm_f32<(int)1024, (bool)0, (bool)0>(const float *, float *, int, long long, long long, long long, float, const float *, long long, long long, long long, uint3, uint3, uint3, uint3, const float *, long long, long long, long long, uint3, uint3, uint3, uint3)",
+          0.489321717,
+          1126
+        ],
+        [
+          "void dsv41_cast_vector4<float, __half, (bool)1>(const T1 *, T2 *, long long, long long, long long, long long, long long, long long)",
+          0.40123647,
+          3018
+        ],
+        [
+          "gather(const float *, const int *, const int *, __nv_fp8_e4m3 *, unsigned char *, int, int)",
+          0.380652815,
+          563
+        ],
+        [
+          "<unnamed>::validate_kernel(ggml_dsv41_validation, unsigned int *, unsigned long long)",
+          0.279664422,
+          1138
+        ],
+        [
+          "dsv41_tilelang_query_all(__nv_bfloat16 *, const float *, unsigned int)",
+          0.275196399,
+          563
+        ],
+        [
+          "void cutlass::Kernel2<cutlass_80_tensorop_s16816gemm_f16_128x64_64x3_tn_align8>(T1::Params)",
+          0.272679274,
+          295
+        ],
+        [
+          "dsv41_tilelang_indices(int *, unsigned int, unsigned int, unsigned int, unsigned int, unsigned int, unsigned int, const ggml_dsv41_tilelang_record *, const unsigned int *, unsigned int)",
+          0.24708271,
+          563
+        ],
+        [
+          "void dsv41_cast_vector4<float, __half, (bool)0>(const T1 *, T2 *, long long, long long, long long, long long, long long, long long)",
+          0.225515231,
+          4504
+        ],
+        [
+          "concat_f32_dim2(const float *, const float *, float *, int, int)",
+          0.22263461,
+          3941
+        ],
+        [
+          "mid_pack(const __nv_bfloat16 *, const __nv_bfloat16 *, const float *, const int *, const int *, __nv_fp8_e4m3 *, unsigned char *, int, int, float)",
+          0.217136765,
+          563
+        ],
+        [
+          "void dsv41_cast_vector4<float, __nv_bfloat16, (bool)1>(const T1 *, T2 *, long long, long long, long long, long long, long long, long long)",
+          0.177654543,
+          671
+        ],
+        [
+          "void dsv41_cast_vector4<__nv_bfloat16, float, (bool)1>(const T1 *, T2 *, long long, long long, long long, long long, long long, long long)",
+          0.167359496,
+          646
+        ],
+        [
+          "void cutlass::Kernel2<cutlass_80_simt_sgemm_128x256_8x4_tn_align1>(T1::Params)",
+          0.164895124,
+          523
+        ],
+        [
+          "void quantize_mmq_q8_1<(mmq_q8_1_ds_layout)0>(const float *, const int *, void *, long long, long long, long long, long long, long long, int, int)",
+          0.158004561,
+          3941
+        ],
+        [
+          "void cpy_scalar<&cpy_1_scalar<float, float>>(const char *, char *, long long, long long, long long, long long, long long, long long, long long, long long, long long, long long, long long, long long, long long, long long, long long)",
+          0.131777826,
+          563
+        ],
+        [
+          "void k_bin_bcast<&op_mul, float, float, float, const float *>(const T2 *, const T3 *, T4 *, int, int, int, uint3, uint3, uint3, uint3, uint3, int, int, int, int, int, int, int, int, int, int, int, T5...)",
+          0.113144792,
+          1645
+        ],
+        [
+          "void k_dsv41_topk_radix_tiles<(bool)0>(const float *, const int *, int *, int, int, int, bool)",
+          0.112608761,
+          108
+        ],
+        [
+          "reduce(const __nv_bfloat16 *, const int *, float *, int)",
+          0.110321243,
+          563
+        ],
+        [
+          "void k_bin_bcast<&op_add, float, float, float, const float *>(const T2 *, const T3 *, T4 *, int, int, int, uint3, uint3, uint3, uint3, uint3, int, int, int, int, int, int, int, int, int, int, int, T5...)",
+          0.085090053,
+          2152
+        ],
+        [
+          "void cpy_scalar_contiguous<__nv_bfloat16, __half>(const char *, char *, long long)",
+          0.084207455,
+          513
+        ],
+        [
+          "void k_top_k_f32_i32_tiles<(bool)1, (bool)0>(const float *, const int *, int *, int, int, int, int, bool)",
+          0.077491548,
+          13
+        ],
+        [
+          "void rms_norm_f32<(int)1024, (bool)1, (bool)0>(const float *, float *, int, long long, long long, long long, float, const float *, long long, long long, long long, uint3, uint3, uint3, uint3, const float *, long long, long long, long long, uint3, uint3, uint3, uint3)",
+          0.074442971,
+          1689
+        ],
+        [
+          "void mm_ids_helper<(int)6>(const int *, int *, int *, int *, int, int, int, int, int)",
+          0.070832975,
+          563
+        ],
+        [
+          "void k_argsort_f32_T<(ggml_sort_order)1, store, int>(const float *, T3 *, int, int, int, T2)",
+          0.057202407,
+          563
+        ],
+        [
+          "void cutlass::Kernel2<cutlass_80_wmma_tensorop_s161616gemm_bf16_32x32_64x1_tn_align8>(T1::Params)",
+          0.05091589,
+          3480
+        ],
+        [
+          "dsv41_engram_add_kernel(float *, const float *, const float *, const float *, const float *, const signed char *, long long, long long, float)",
+          0.05009797,
+          50
+        ],
+        [
+          "void mul_mat_q_stream_k_fixup<(ggml_type)8, (int)128, (bool)0, (bool)0>(const int *, const int *, float *, const float *, int, int, int, unsigned long long, int, unsigned long long, int, unsigned long long, int)",
+          0.041289846,
+          3941
+        ],
+        [
+          "void dsv41_act_qat_kernel<(int)32, (int)2>(const float *, float *, long long, long long)",
+          0.039013849,
+          208
+        ],
+        [
+          "void k_top_k_f32_i32<(ggml_sort_order)1>(const float *, int *, int, int, int)",
+          0.036726365,
+          12
+        ],
+        [
+          "dsv41_tilelang_kv(__nv_bfloat16 *, const __half *, const __half *, unsigned long long, unsigned long long)",
+          0.035919853,
+          563
+        ],
+        [
+          "concat_bytes_dim0(const char *, const char *, char *, int, int, unsigned long long)",
+          0.030755888,
+          513
+        ],
+        [
+          "dsv41_index_apply_mask_kernel(float *, const int *, const float *, int, int)",
+          0.028709741,
+          108
+        ],
+        [
+          "void cutlass::Kernel2<cutlass_80_tensorop_s16816gemm_f16_256x128_32x3_tn_align8>(T1::Params)",
+          0.025663946,
+          100
+        ],
+        [
+          "void cutlass::Kernel2<cutlass_80_tensorop_s16816gemm_f16_128x128_32x4_tn_align8>(T1::Params)",
+          0.025405311,
+          330
+        ],
+        [
+          "void cpy_q_f32<&cpy_blck_q8_0_f32, (int)32>(const char *, char *, long long, long long, long long, long long, long long, long long, long long, long long, long long, long long, long long, long long, long long, long long, long long)",
+          0.023440662,
+          488
+        ],
+        [
+          "void op_clamp_kernel<float>(const T1 *, T1 *, T1, T1, int)",
+          0.022804528,
+          2202
+        ],
+        [
+          "void k_top_k_f32_i32_tiles<(bool)0, (bool)0>(const float *, const int *, int *, int, int, int, int, bool)",
+          0.021509397,
+          13
+        ],
+        [
+          "void unary_gated_op_kernel<&op_silu, float>(const T2 *, const T2 *, T2 *, long long, long long, long long, long long)",
+          0.021284131,
+          563
+        ],
+        [
+          "void cutlass::Kernel2<cutlass_80_tensorop_s16816gemm_f16_64x128_64x3_tn_align8>(T1::Params)",
+          0.021106145,
+          176
+        ],
+        [
+          "void dsv41_act_qat_kernel<(int)32, (int)1>(const float *, float *, long long, long long)",
+          0.01759357,
+          563
+        ],
+        [
+          "void cpy_scalar_contiguous<float, int>(const char *, char *, long long)",
+          0.015831692,
+          1126
+        ],
+        [
+          "dsv41_candidate_blocks_kernel(float *, const float *, const int *, long long, long long, long long)",
+          0.015453805,
+          25
+        ],
+        [
+          "void dsv41_cast_vector4<float, __nv_bfloat16, (bool)0>(const T1 *, T2 *, long long, long long, long long, long long, long long, long long)",
+          0.014035726,
+          6624
+        ],
+        [
+          "void k_get_rows_float<float, float, (bool)0, float>(const T1 *, const int *, T2 *, long long, long long, long long, unsigned long long, unsigned long long, unsigned long long, unsigned long long, unsigned long long, unsigned long long, unsigned long long, unsigned long long, unsigned long long, const float *, long long, const T4 *, long long)",
+          0.013420733,
+          1649
+        ],
+        [
+          "void cpy_scalar_contiguous<int, float>(const char *, char *, long long)",
+          0.00787077,
+          513
+        ],
+        [
+          "void cutlass::Kernel2<cutlass_80_tensorop_s16816gemm_bf16_128x256_32x3_tn_align8>(T1::Params)",
+          0.007832107,
+          600
+        ],
+        [
+          "void k_set_rows<float, int, float>(const T1 *, const T2 *, T3 *, long long, long long, long long, long long, long long, long long, long long, long long, long long, long long, long long, long long, long long, long long, uint3, uint3, uint3, uint3, uint3)",
+          0.006820398,
+          32
+        ],
+        [
+          "void dsv41_hc_sinkhorn<(bool)1>(float *, const float *, const float *, const float *, int)",
+          0.006749049,
+          1126
+        ],
+        [
+          "concat_f32_dim1(const float *, const float *, float *, int, int)",
+          0.006432018,
+          2625
+        ],
+        [
+          "void cutlass::Kernel2<cutlass_80_simt_sgemm_128x128_8x4_tn_align1>(T1::Params)",
+          0.006328129,
+          40
+        ],
+        [
+          "dsv41_raw_commit_kernel(float *, const float *, unsigned int, long long)",
+          0.005577607,
+          2252
+        ],
+        [
+          "dsv41_selected_mask_kernel(float *, const int *, const int *, const float *, long long, long long, long long)",
+          0.005471602,
+          513
+        ],
+        [
+          "void cutlass::Kernel2<cutlass_80_tensorop_s16816gemm_f16_256x64_32x4_tn_align8>(T1::Params)",
+          0.004941694,
+          12
+        ],
+        [
+          "void fill_kernel<float>(T1 *, long long, T1)",
+          0.004634494,
+          3324
+        ],
+        [
+          "void rms_norm_f32<(int)256, (bool)1, (bool)0>(const float *, float *, int, long long, long long, long long, float, const float *, long long, long long, long long, uint3, uint3, uint3, uint3, const float *, long long, long long, long long, uint3, uint3, uint3, uint3)",
+          0.004469489,
+          763
+        ],
+        [
+          "void k_bin_bcast<&op_repeat, float, float, float, >(const T2 *, const T3 *, T4 *, int, int, int, uint3, uint3, uint3, uint3, uint3, int, int, int, int, int, int, int, int, int, int, int, T5...)",
+          0.004277872,
+          526
+        ],
+        [
+          "void dsv41_act_qat_kernel<(int)16, (int)3>(const float *, float *, long long, long long)",
+          0.003965705,
+          100
+        ],
+        [
+          "attention_tokentile_raw_mirror_kernel(__half *, const float *, const int *, unsigned int, unsigned int, unsigned int, unsigned int, unsigned int, unsigned int, unsigned int)",
+          0.003714578,
+          563
+        ],
+        [
+          "void cutlass::Kernel2<cutlass_80_tensorop_s16816gemm_f16_128x64_64x4_tn_align8>(T1::Params)",
+          0.003426073,
+          80
+        ],
+        [
+          "scale_f32(const float *, float *, float, float, long long)",
+          0.002942191,
+          1076
+        ],
+        [
+          "void unary_op_kernel<&op_step, float>(const T2 *, T2 *, int)",
+          0.00225342,
+          513
+        ],
+        [
+          "void cublasLt::splitKreduce_kernel<(int)32, (int)16, int, float, float, float, float, (bool)0, float, float, float, (bool)1, (bool)0, (bool)0, (bool)0>(cublasLt::cublasSplitKParams<T6>, const T4 *, const T10 *, T9 *, T5 *, const T6 *, const T6 *, const T11 *, const T4 *, T11 *, void *, long long, T6 *, int *, T6 *, T6 *, const T6 *, const T6 *, const T6 *, const T6 *, const T6 *)",
+          0.002203173,
+          1134
+        ],
+        [
+          "void unary_op_kernel<&op_softplus_sqrt, float>(const T2 *, T2 *, int)",
+          0.002019829,
+          563
+        ],
+        [
+          "void cutlass::Kernel2<cutlass_80_wmma_tensorop_s161616gemm_f16_32x32_128x1_tn_align8>(T1::Params)",
+          0.001952373,
+          100
+        ],
+        [
+          "void reduce_rows_f32<(bool)0>(const float *, float *, int)",
+          0.001360809,
+          563
+        ],
+        [
+          "void k_get_rows_float<__half, float, (bool)0, __half>(const T1 *, const int *, T2 *, long long, long long, long long, unsigned long long, unsigned long long, unsigned long long, unsigned long long, unsigned long long, unsigned long long, unsigned long long, unsigned long long, unsigned long long, const float *, long long, const T4 *, long long)",
+          0.000990008,
+          13
+        ],
+        [
+          "void cutlass::Kernel2<cutlass_80_wmma_tensorop_s161616gemm_bf16_32x32_64x2_tn_align8>(T1::Params)",
+          0.000770335,
+          280
+        ],
+        [
+          "void cpy_scalar<&cpy_1_scalar<int, int>>(const char *, char *, long long, long long, long long, long long, long long, long long, long long, long long, long long, long long, long long, long long, long long, long long, long long)",
+          0.000733755,
+          563
+        ],
+        [
+          "inverse_routes(const int *, int *, int)",
+          0.00073351,
+          563
+        ],
+        [
+          "void k_set_rows<float, long long, __nv_bfloat16>(const T1 *, const T2 *, T3 *, long long, long long, long long, long long, long long, long long, long long, long long, long long, long long, long long, long long, long long, long long, uint3, uint3, uint3, uint3, uint3)",
+          0.000583962,
+          200
+        ],
+        [
+          "void k_bin_bcast<&op_div, float, float, float, const float *>(const T2 *, const T3 *, T4 *, int, int, int, uint3, uint3, uint3, uint3, uint3, int, int, int, int, int, int, int, int, int, int, int, T5...)",
+          0.000507858,
+          563
+        ],
+        [
+          "dsv41_pool2_kernel(float *, const float *, const float *, const float *, const float *, long long, long long)",
+          0.000493865,
+          75
+        ],
+        [
+          "void cutlass::Kernel2<cutlass_80_wmma_tensorop_s161616gemm_f16_32x32_128x2_tn_align8>(T1::Params)",
+          0.000341422,
+          76
+        ],
+        [
+          "void cutlass::Kernel2<cutlass_80_tensorop_s16816gemm_f16_64x64_32x10_tn_align8>(T1::Params)",
+          0.000139165,
+          24
+        ]
+      ],
+      "api_duration_sums": [
+        [
+          "cudaStreamSynchronize_v3020",
+          20.40932159,
+          5996
+        ],
+        [
+          "cudaMemcpyAsync_v3020",
+          0.883936104,
+          11108
+        ],
+        [
+          "cudaLaunchKernel_v7000",
+          0.5982466,
+          131818
+        ],
+        [
+          "cudaHostUnregister_v4000",
+          0.56935246,
+          60
+        ],
+        [
+          "cuLaunchKernel",
+          0.205099313,
+          51397
+        ],
+        [
+          "cudaHostRegister_v4000",
+          0.162762243,
+          59
+        ],
+        [
+          "cuLibraryLoadData",
+          0.09737762,
+          34
+        ],
+        [
+          "cudaMemsetAsync_v3020",
+          0.048075822,
+          7670
+        ],
+        [
+          "cudaDeviceSynchronize_v3020",
+          0.047960097,
+          10
+        ],
+        [
+          "cudaMemcpy2DAsync_v3020",
+          0.02778868,
+          10496
+        ],
+        [
+          "cuKernelGetName",
+          0.027658758,
+          133507
+        ],
+        [
+          "cuKernelGetFunction",
+          0.023343632,
+          50834
+        ],
+        [
+          "cudaEventRecord_v3020",
+          0.022789555,
+          8773
+        ],
+        [
+          "cudaLaunchKernelExC_v11060",
+          0.020379211,
+          2823
+        ],
+        [
+          "cudaWaitExternalSemaphoresAsync_v11020",
+          0.011345207,
+          243
+        ],
+        [
+          "cudaMallocHost_v3020",
+          0.005959775,
+          2
+        ],
+        [
+          "cudaStreamWaitEvent_v3020",
+          0.00594299,
+          1337
+        ],
+        [
+          "cudaKernelSetAttributeForDevice_v12060",
+          0.004657414,
+          4
+        ],
+        [
+          "cuStreamGetCaptureInfo_v2",
+          0.004068097,
+          32984
+        ],
+        [
+          "cudaStreamIsCapturing_v10000",
+          0.002858708,
+          1938
+        ]
+      ],
+      "tile_host_seconds": {
+        "host_prepare_seconds": 1.973314,
+        "host_bind_seconds": 0.742346,
+        "host_register_seconds": 0.739337,
+        "host_graph_seconds": 0.189871,
+        "host_reserve_seconds": 0.496019,
+        "host_upload_seconds": 3.901357,
+        "host_launch_seconds": 1.6890239999999999,
+        "host_sync_seconds": 17.708044,
+        "gpu_seconds": 19.278375,
+        "compute_seconds": 19.413647,
+        "host_readback_seconds": 1.594608,
+        "host_cleanup_seconds": 0.002163
+      },
+      "tile_count": 563,
+      "layer_ledger_seconds": {
+        "wall_seconds": 35.125158000000006,
+        "acquire_seconds": 7.5775584,
+        "carry_begin_seconds": 0.00013289999999999998,
+        "executor_wall_seconds": 27.0347355,
+        "executor_phase_gap_seconds": 0.1356525,
+        "engram_seconds": 0.0118401,
+        "carry_read_seconds": 0.0007051999999999999,
+        "carry_write_seconds": 0.0011228,
+        "carry_commit_seconds": 0.0002002,
+        "provider_release_seconds": 0.0006331,
+        "scaffold_seconds": 0.4982298
+      },
+      "layer_passes": 61,
+      "fetched_bytes": 456303081592
+    },
+    "hc": {
+      "name": "hc-nsys-verified",
+      "prompt_seconds": 43.41545849999999,
+      "clock": "QPC: SQLite startTime + relative nanoseconds; native steady milliseconds",
+      "first_to_last_compute_envelope_seconds": 42.6395536,
+      "kernel_count": 186038,
+      "kernel_busy_union_seconds": 18.469110648,
+      "kernel_duration_sum_seconds": 18.469110648,
+      "copy_busy_union_seconds": 1.614887735,
+      "kernel_or_copy_union_seconds": 20.083997519,
+      "diagnostic_warnings": [
+        [
+          2,
+          "No NVTX events collected. Does the process use NVTX?"
+        ],
+        [
+          2,
+          "Installed CUDA driver version (13.3) is not supported by this build of Nsight Systems. CUDA trace will be collected using libraries for driver version 13.2"
+        ]
+      ],
+      "ranked_kernel_categories": [
+        [
+          "FP16 / Q8 / F32 GEMM incl fixup",
+          3.224778003000044
+        ],
+        [
+          "Attention",
+          3.1938869279999995
+        ],
+        [
+          "Expert incl packing",
+          2.968616269999996
+        ],
+        [
+          "BF16 GEMM / score epilogue",
+          1.8413631610000218
+        ],
+        [
+          "QAT / quantization",
+          1.395030574000012
+        ],
+        [
+          "Remaining kernels",
+          1.2560741540000155
+        ],
+        [
+          "Cast / copy",
+          1.2426778740000293
+        ],
+        [
+          "Top K",
+          0.8089217859999993
+        ],
+        [
+          "Concat",
+          0.7940905820000138
+        ],
+        [
+          "RoPE",
+          0.6631164690000013
+        ],
+        [
+          "RMS norm",
+          0.5632683110000007
+        ],
+        [
+          "HC expand",
+          0.5172865359999993
+        ]
+      ],
+      "top_kernels": [
+        [
+          "native_sparse_attn_kernel__kernel",
+          2.636499393,
+          563
+        ],
+        [
+          "kernel_cutlass_kernel_flashinferfused_moecute_dslblackwell_sm12xkernel_moe_mxfp8_mxfp4_gemmCuteDslSm120MoeMxfp8Mxfp4Grouped_object_at__Tiled_MMA_Thr_Layout_VMNK_324211321280_Permutation_M_0",
+          2.190788266,
+          1689
+        ],
+        [
+          "void mul_mat_q<(ggml_type)8, (int)128, (bool)0, (bool)0>(const char *, const int *, const int *, const int *, float *, float *, int, int, int, int, int, int, int, int, int, int, int, int, int, int, int, int, int)",
+          1.780275273,
+          3941
+        ],
+        [
+          "void cutlass::Kernel2<cutlass_80_tensorop_s16816gemm_bf16_256x128_32x3_tn_align8>(T1::Params)",
+          1.239489288,
+          39440
+        ],
+        [
+          "void dsv41_act_qat_kernel<(int)256, (int)0>(const float *, float *, long long, long long)",
+          1.176941909,
+          10212
+        ],
+        [
+          "void cutlass::Kernel2<cutlass_80_tensorop_s16816gemm_f16_64x256_32x4_tn_align8>(T1::Params)",
+          0.875736556,
+          5278
+        ],
+        [
+          "dsv41_rope_kernel(float *, const float *, const int *, const float *, long long, long long, long long, bool)",
+          0.663116469,
+          1997
+        ],
+        [
+          "void k_dsv41_topk_radix_tiles<(bool)1>(const float *, const int *, int *, int, int, int, bool)",
+          0.560246346,
+          108
+        ],
+        [
+          "void dsa_accum_scores_from_gemm_kernel<(bool)1, (int)8>(const float *, const float *, float *, int, int, int, int, int, float, int, int)",
+          0.542292927,
+          43800
+        ],
+        [
+          "concat_f32_dim0(const float *, const float *, float *, int, int)",
+          0.53677913,
+          1952
+        ],
+        [
+          "k_mul_add_bcast_f32(const float *, const float *, const float *, float *, long long, long long, long long, long long, long long, long long, long long, unsigned long long, unsigned long long, unsigned long long, unsigned long long, unsigned long long, unsigned long long, unsigned long long)",
+          0.520046974,
+          3396
+        ],
+        [
+          "void dsv41_hc_channels_kernel<(bool)1>(float *, const float *, const float *, const float *, unsigned int, unsigned int)",
+          0.517286536,
+          1126
+        ],
+        [
+          "void rms_norm_f32<(int)1024, (bool)0, (bool)0>(const float *, float *, int, long long, long long, long long, float, const float *, long long, long long, long long, uint3, uint3, uint3, uint3, const float *, long long, long long, long long, uint3, uint3, uint3, uint3)",
+          0.485163357,
+          1126
+        ],
+        [
+          "void dsv41_cast_vector4<float, __half, (bool)1>(const T1 *, T2 *, long long, long long, long long, long long, long long, long long)",
+          0.399168789,
+          3018
+        ],
+        [
+          "gather(const float *, const int *, const int *, __nv_fp8_e4m3 *, unsigned char *, int, int)",
+          0.379803407,
+          563
+        ],
+        [
+          "<unnamed>::validate_kernel(ggml_dsv41_validation, unsigned int *, unsigned long long)",
+          0.278879648,
+          1138
+        ],
+        [
+          "dsv41_tilelang_query_all(__nv_bfloat16 *, const float *, unsigned int)",
+          0.273170585,
+          563
+        ],
+        [
+          "void cutlass::Kernel2<cutlass_80_tensorop_s16816gemm_f16_128x64_64x3_tn_align8>(T1::Params)",
+          0.273005718,
+          295
+        ],
+        [
+          "dsv41_tilelang_indices(int *, unsigned int, unsigned int, unsigned int, unsigned int, unsigned int, unsigned int, const ggml_dsv41_tilelang_record *, const unsigned int *, unsigned int)",
+          0.248453352,
+          563
+        ],
+        [
+          "void dsv41_cast_vector4<float, __half, (bool)0>(const T1 *, T2 *, long long, long long, long long, long long, long long, long long)",
+          0.224207794,
+          4504
+        ],
+        [
+          "concat_f32_dim2(const float *, const float *, float *, int, int)",
+          0.220178601,
+          3941
+        ],
+        [
+          "mid_pack(const __nv_bfloat16 *, const __nv_bfloat16 *, const float *, const int *, const int *, __nv_fp8_e4m3 *, unsigned char *, int, int, float)",
+          0.217070928,
+          563
+        ],
+        [
+          "void dsv41_cast_vector4<float, __nv_bfloat16, (bool)1>(const T1 *, T2 *, long long, long long, long long, long long, long long, long long)",
+          0.176380725,
+          671
+        ],
+        [
+          "void cutlass::Kernel2<cutlass_80_simt_sgemm_128x256_8x4_tn_align1>(T1::Params)",
+          0.165191464,
+          523
+        ],
+        [
+          "void dsv41_cast_vector4<__nv_bfloat16, float, (bool)1>(const T1 *, T2 *, long long, long long, long long, long long, long long, long long)",
+          0.164926372,
+          646
+        ],
+        [
+          "void quantize_mmq_q8_1<(mmq_q8_1_ds_layout)0>(const float *, const int *, void *, long long, long long, long long, long long, long long, int, int)",
+          0.157469831,
+          3941
+        ],
+        [
+          "void cpy_scalar<&cpy_1_scalar<float, float>>(const char *, char *, long long, long long, long long, long long, long long, long long, long long, long long, long long, long long, long long, long long, long long, long long, long long)",
+          0.131898032,
+          563
+        ],
+        [
+          "void k_bin_bcast<&op_mul, float, float, float, const float *>(const T2 *, const T3 *, T4 *, int, int, int, uint3, uint3, uint3, uint3, uint3, int, int, int, int, int, int, int, int, int, int, int, T5...)",
+          0.113891604,
+          1645
+        ],
+        [
+          "void k_dsv41_topk_radix_tiles<(bool)0>(const float *, const int *, int *, int, int, int, bool)",
+          0.112628403,
+          108
+        ],
+        [
+          "reduce(const __nv_bfloat16 *, const int *, float *, int)",
+          0.109403998,
+          563
+        ],
+        [
+          "void k_bin_bcast<&op_add, float, float, float, const float *>(const T2 *, const T3 *, T4 *, int, int, int, uint3, uint3, uint3, uint3, uint3, int, int, int, int, int, int, int, int, int, int, int, T5...)",
+          0.084291033,
+          2152
+        ],
+        [
+          "void cpy_scalar_contiguous<__nv_bfloat16, __half>(const char *, char *, long long)",
+          0.084259998,
+          513
+        ],
+        [
+          "void k_top_k_f32_i32_tiles<(bool)1, (bool)0>(const float *, const int *, int *, int, int, int, int, bool)",
+          0.077619226,
+          13
+        ],
+        [
+          "void rms_norm_f32<(int)1024, (bool)1, (bool)0>(const float *, float *, int, long long, long long, long long, float, const float *, long long, long long, long long, uint3, uint3, uint3, uint3, const float *, long long, long long, long long, uint3, uint3, uint3, uint3)",
+          0.073616985,
+          1689
+        ],
+        [
+          "void mm_ids_helper<(int)6>(const int *, int *, int *, int *, int, int, int, int, int)",
+          0.070832419,
+          563
+        ],
+        [
+          "void k_argsort_f32_T<(ggml_sort_order)1, store, int>(const float *, T3 *, int, int, int, T2)",
+          0.057207409,
+          563
+        ],
+        [
+          "void cutlass::Kernel2<cutlass_80_wmma_tensorop_s161616gemm_bf16_32x32_64x1_tn_align8>(T1::Params)",
+          0.050980127,
+          3480
+        ],
+        [
+          "dsv41_engram_add_kernel(float *, const float *, const float *, const float *, const float *, const signed char *, long long, long long, float)",
+          0.049953419,
+          50
+        ],
+        [
+          "void mul_mat_q_stream_k_fixup<(ggml_type)8, (int)128, (bool)0, (bool)0>(const int *, const int *, float *, const float *, int, int, int, unsigned long long, int, unsigned long long, int, unsigned long long, int)",
+          0.041119445,
+          3941
+        ],
+        [
+          "void dsv41_act_qat_kernel<(int)32, (int)2>(const float *, float *, long long, long long)",
+          0.039043579,
+          208
+        ],
+        [
+          "void k_top_k_f32_i32<(ggml_sort_order)1>(const float *, int *, int, int, int)",
+          0.036847929,
+          12
+        ],
+        [
+          "dsv41_tilelang_kv(__nv_bfloat16 *, const __half *, const __half *, unsigned long long, unsigned long long)",
+          0.035763598,
+          563
+        ],
+        [
+          "concat_bytes_dim0(const char *, const char *, char *, int, int, unsigned long long)",
+          0.030682498,
+          513
+        ],
+        [
+          "dsv41_index_apply_mask_kernel(float *, const int *, const float *, int, int)",
+          0.028485951,
+          108
+        ],
+        [
+          "void cutlass::Kernel2<cutlass_80_tensorop_s16816gemm_f16_256x128_32x3_tn_align8>(T1::Params)",
+          0.02569792,
+          100
+        ],
+        [
+          "void cutlass::Kernel2<cutlass_80_tensorop_s16816gemm_f16_128x128_32x4_tn_align8>(T1::Params)",
+          0.025469716,
+          330
+        ],
+        [
+          "void cpy_q_f32<&cpy_blck_q8_0_f32, (int)32>(const char *, char *, long long, long long, long long, long long, long long, long long, long long, long long, long long, long long, long long, long long, long long, long long, long long)",
+          0.02334619,
+          488
+        ],
+        [
+          "void op_clamp_kernel<float>(const T1 *, T1 *, T1, T1, int)",
+          0.022783858,
+          2202
+        ],
+        [
+          "void k_top_k_f32_i32_tiles<(bool)0, (bool)0>(const float *, const int *, int *, int, int, int, int, bool)",
+          0.021579882,
+          13
+        ],
+        [
+          "void unary_gated_op_kernel<&op_silu, float>(const T2 *, const T2 *, T2 *, long long, long long, long long, long long)",
+          0.021279987,
+          563
+        ],
+        [
+          "void cutlass::Kernel2<cutlass_80_tensorop_s16816gemm_f16_64x128_64x3_tn_align8>(T1::Params)",
+          0.021124577,
+          176
+        ],
+        [
+          "void dsv41_act_qat_kernel<(int)32, (int)1>(const float *, float *, long long, long long)",
+          0.017605499,
+          563
+        ],
+        [
+          "void cpy_scalar_contiguous<float, int>(const char *, char *, long long)",
+          0.015848962,
+          1126
+        ],
+        [
+          "dsv41_candidate_blocks_kernel(float *, const float *, const int *, long long, long long, long long)",
+          0.015539475,
+          25
+        ],
+        [
+          "void dsv41_cast_vector4<float, __nv_bfloat16, (bool)0>(const T1 *, T2 *, long long, long long, long long, long long, long long, long long)",
+          0.014031575,
+          6624
+        ],
+        [
+          "void k_get_rows_float<float, float, (bool)0, float>(const T1 *, const int *, T2 *, long long, long long, long long, unsigned long long, unsigned long long, unsigned long long, unsigned long long, unsigned long long, unsigned long long, unsigned long long, unsigned long long, unsigned long long, const float *, long long, const T4 *, long long)",
+          0.01344932,
+          1649
+        ],
+        [
+          "void cpy_scalar_contiguous<int, float>(const char *, char *, long long)",
+          0.007884085,
+          513
+        ],
+        [
+          "void cutlass::Kernel2<cutlass_80_tensorop_s16816gemm_bf16_128x256_32x3_tn_align8>(T1::Params)",
+          0.007829069,
+          600
+        ],
+        [
+          "void dsv41_hc_sinkhorn<(bool)1>(float *, const float *, const float *, const float *, int)",
+          0.00676473,
+          1126
+        ],
+        [
+          "void k_set_rows<float, int, float>(const T1 *, const T2 *, T3 *, long long, long long, long long, long long, long long, long long, long long, long long, long long, long long, long long, long long, long long, long long, uint3, uint3, uint3, uint3, uint3)",
+          0.006681989,
+          32
+        ],
+        [
+          "concat_f32_dim1(const float *, const float *, float *, int, int)",
+          0.006450353,
+          2625
+        ],
+        [
+          "void cutlass::Kernel2<cutlass_80_simt_sgemm_128x128_8x4_tn_align1>(T1::Params)",
+          0.006348468,
+          40
+        ],
+        [
+          "dsv41_raw_commit_kernel(float *, const float *, unsigned int, long long)",
+          0.005604589,
+          2252
+        ],
+        [
+          "dsv41_selected_mask_kernel(float *, const int *, const int *, const float *, long long, long long, long long)",
+          0.005441277,
+          513
+        ],
+        [
+          "void cutlass::Kernel2<cutlass_80_tensorop_s16816gemm_f16_256x64_32x4_tn_align8>(T1::Params)",
+          0.004954323,
+          12
+        ],
+        [
+          "void rms_norm_f32<(int)256, (bool)1, (bool)0>(const float *, float *, int, long long, long long, long long, float, const float *, long long, long long, long long, uint3, uint3, uint3, uint3, const float *, long long, long long, long long, uint3, uint3, uint3, uint3)",
+          0.004487969,
+          763
+        ],
+        [
+          "void fill_kernel<float>(T1 *, long long, T1)",
+          0.00438493,
+          3324
+        ],
+        [
+          "void k_bin_bcast<&op_repeat, float, float, float, >(const T2 *, const T3 *, T4 *, int, int, int, uint3, uint3, uint3, uint3, uint3, int, int, int, int, int, int, int, int, int, int, int, T5...)",
+          0.004245911,
+          526
+        ],
+        [
+          "void dsv41_act_qat_kernel<(int)16, (int)3>(const float *, float *, long long, long long)",
+          0.003969756,
+          100
+        ],
+        [
+          "attention_tokentile_raw_mirror_kernel(__half *, const float *, const int *, unsigned int, unsigned int, unsigned int, unsigned int, unsigned int, unsigned int, unsigned int)",
+          0.003723628,
+          563
+        ],
+        [
+          "void cutlass::Kernel2<cutlass_80_tensorop_s16816gemm_f16_128x64_64x4_tn_align8>(T1::Params)",
+          0.003429425,
+          80
+        ],
+        [
+          "scale_f32(const float *, float *, float, float, long long)",
+          0.002955657,
+          1076
+        ],
+        [
+          "void unary_op_kernel<&op_step, float>(const T2 *, T2 *, int)",
+          0.002285843,
+          513
+        ],
+        [
+          "void cublasLt::splitKreduce_kernel<(int)32, (int)16, int, float, float, float, float, (bool)0, float, float, float, (bool)1, (bool)0, (bool)0, (bool)0>(cublasLt::cublasSplitKParams<T6>, const T4 *, const T10 *, T9 *, T5 *, const T6 *, const T6 *, const T11 *, const T4 *, T11 *, void *, long long, T6 *, int *, T6 *, T6 *, const T6 *, const T6 *, const T6 *, const T6 *, const T6 *)",
+          0.002207058,
+          1134
+        ],
+        [
+          "void unary_op_kernel<&op_softplus_sqrt, float>(const T2 *, T2 *, int)",
+          0.002017926,
+          563
+        ],
+        [
+          "void cutlass::Kernel2<cutlass_80_wmma_tensorop_s161616gemm_f16_32x32_128x1_tn_align8>(T1::Params)",
+          0.001944592,
+          100
+        ],
+        [
+          "void reduce_rows_f32<(bool)0>(const float *, float *, int)",
+          0.001372104,
+          563
+        ],
+        [
+          "void k_get_rows_float<__half, float, (bool)0, __half>(const T1 *, const int *, T2 *, long long, long long, long long, unsigned long long, unsigned long long, unsigned long long, unsigned long long, unsigned long long, unsigned long long, unsigned long long, unsigned long long, unsigned long long, const float *, long long, const T4 *, long long)",
+          0.000989938,
+          13
+        ],
+        [
+          "void cutlass::Kernel2<cutlass_80_wmma_tensorop_s161616gemm_bf16_32x32_64x2_tn_align8>(T1::Params)",
+          0.00077175,
+          280
+        ],
+        [
+          "void cpy_scalar<&cpy_1_scalar<int, int>>(const char *, char *, long long, long long, long long, long long, long long, long long, long long, long long, long long, long long, long long, long long, long long, long long, long long)",
+          0.000725352,
+          563
+        ],
+        [
+          "inverse_routes(const int *, int *, int)",
+          0.000717252,
+          563
+        ],
+        [
+          "void k_set_rows<float, long long, __nv_bfloat16>(const T1 *, const T2 *, T3 *, long long, long long, long long, long long, long long, long long, long long, long long, long long, long long, long long, long long, long long, long long, uint3, uint3, uint3, uint3, uint3)",
+          0.000589329,
+          200
+        ],
+        [
+          "void k_bin_bcast<&op_div, float, float, float, const float *>(const T2 *, const T3 *, T4 *, int, int, int, uint3, uint3, uint3, uint3, uint3, int, int, int, int, int, int, int, int, int, int, int, T5...)",
+          0.000504271,
+          563
+        ],
+        [
+          "dsv41_pool2_kernel(float *, const float *, const float *, const float *, const float *, long long, long long)",
+          0.000496296,
+          75
+        ],
+        [
+          "void cutlass::Kernel2<cutlass_80_wmma_tensorop_s161616gemm_f16_32x32_128x2_tn_align8>(T1::Params)",
+          0.000340052,
+          76
+        ],
+        [
+          "void cutlass::Kernel2<cutlass_80_tensorop_s16816gemm_f16_64x64_32x10_tn_align8>(T1::Params)",
+          0.000140474,
+          24
+        ]
+      ],
+      "api_duration_sums": [
+        [
+          "cudaStreamSynchronize_v3020",
+          20.326923504,
+          5994
+        ],
+        [
+          "cudaMemcpyAsync_v3020",
+          0.905619834,
+          11107
+        ],
+        [
+          "cudaLaunchKernel_v7000",
+          0.591876278,
+          131818
+        ],
+        [
+          "cudaHostUnregister_v4000",
+          0.556560661,
+          60
+        ],
+        [
+          "cuLaunchKernel",
+          0.182570332,
+          51397
+        ],
+        [
+          "cudaHostRegister_v4000",
+          0.162847385,
+          59
+        ],
+        [
+          "cuLibraryLoadData",
+          0.098389457,
+          34
+        ],
+        [
+          "cudaMemsetAsync_v3020",
+          0.050990268,
+          7670
+        ],
+        [
+          "cudaDeviceSynchronize_v3020",
+          0.046461951,
+          10
+        ],
+        [
+          "cudaMemcpy2DAsync_v3020",
+          0.027167086,
+          10496
+        ],
+        [
+          "cuKernelGetName",
+          0.025878086,
+          133507
+        ],
+        [
+          "cudaEventRecord_v3020",
+          0.024159179,
+          8772
+        ],
+        [
+          "cuKernelGetFunction",
+          0.022497043,
+          50834
+        ],
+        [
+          "cudaLaunchKernelExC_v11060",
+          0.020325542,
+          2823
+        ],
+        [
+          "cudaWaitExternalSemaphoresAsync_v11020",
+          0.019262203,
+          242
+        ],
+        [
+          "cudaMallocHost_v3020",
+          0.007248886,
+          2
+        ],
+        [
+          "cudaStreamWaitEvent_v3020",
+          0.006212173,
+          1337
+        ],
+        [
+          "cudaKernelSetAttributeForDevice_v12060",
+          0.004292213,
+          4
+        ],
+        [
+          "cuStreamGetCaptureInfo_v2",
+          0.003991208,
+          32984
+        ],
+        [
+          "cudaStreamIsCapturing_v10000",
+          0.003063485,
+          1938
+        ]
+      ],
+      "tile_host_seconds": {
+        "host_prepare_seconds": 2.041834,
+        "host_bind_seconds": 0.728693,
+        "host_register_seconds": 0.7254299999999999,
+        "host_graph_seconds": 0.19554,
+        "host_reserve_seconds": 0.5224500000000001,
+        "host_upload_seconds": 3.859143,
+        "host_launch_seconds": 1.625533,
+        "host_sync_seconds": 17.581945,
+        "gpu_seconds": 19.085559,
+        "compute_seconds": 19.225416000000003,
+        "host_readback_seconds": 1.5354,
+        "host_cleanup_seconds": 0.002137
+      },
+      "tile_count": 563,
+      "layer_ledger_seconds": {
+        "wall_seconds": 41.939337200000004,
+        "acquire_seconds": 14.5367436,
+        "carry_begin_seconds": 0.00016869999999999998,
+        "executor_wall_seconds": 26.831096000000002,
+        "executor_phase_gap_seconds": 0.15260059999999998,
+        "engram_seconds": 0.0848341,
+        "carry_read_seconds": 0.0006891,
+        "carry_write_seconds": 0.0010287999999999999,
+        "carry_commit_seconds": 0.0001964,
+        "provider_release_seconds": 0.0005741,
+        "scaffold_seconds": 0.4840064
+      },
+      "layer_passes": 61,
+      "fetched_bytes": 456303081592
+    },
+    "concat": {
+      "name": "concat-nsys",
+      "prompt_seconds": 35.0892897,
+      "clock": "QPC: SQLite startTime + relative nanoseconds; native steady milliseconds",
+      "first_to_last_compute_envelope_seconds": 34.0565671,
+      "kernel_count": 186038,
+      "kernel_busy_union_seconds": 18.106017951,
+      "kernel_duration_sum_seconds": 18.106017951,
+      "copy_busy_union_seconds": 1.59155496,
+      "kernel_or_copy_union_seconds": 19.697571599,
+      "diagnostic_warnings": [
+        [
+          2,
+          "No NVTX events collected. Does the process use NVTX?"
+        ],
+        [
+          2,
+          "Installed CUDA driver version (13.3) is not supported by this build of Nsight Systems. CUDA trace will be collected using libraries for driver version 13.2"
+        ]
+      ],
+      "ranked_kernel_categories": [
+        [
+          "FP16 / Q8 / F32 GEMM incl fixup",
+          3.243106510000045
+        ],
+        [
+          "Attention",
+          3.200821765999993
+        ],
+        [
+          "Expert incl packing",
+          2.990656503000008
+        ],
+        [
+          "BF16 GEMM / score epilogue",
+          1.8430338150000753
+        ],
+        [
+          "QAT / quantization",
+          1.4081061700000048
+        ],
+        [
+          "Remaining kernels",
+          1.2641275240000143
+        ],
+        [
+          "Cast / copy",
+          1.2568798860000283
+        ],
+        [
+          "Top K",
+          0.8093451440000001
+        ],
+        [
+          "RoPE",
+          0.6671549339999995
+        ],
+        [
+          "RMS norm",
+          0.5688281130000016
+        ],
+        [
+          "HC expand",
+          0.521604612
+        ],
+        [
+          "Concat",
+          0.33235297400000186
+        ]
+      ],
+      "top_kernels": [
+        [
+          "native_sparse_attn_kernel__kernel",
+          2.640684587,
+          563
+        ],
+        [
+          "kernel_cutlass_kernel_flashinferfused_moecute_dslblackwell_sm12xkernel_moe_mxfp8_mxfp4_gemmCuteDslSm120MoeMxfp8Mxfp4Grouped_object_at__Tiled_MMA_Thr_Layout_VMNK_324211321280_Permutation_M_0",
+          2.208679528,
+          1689
+        ],
+        [
+          "void mul_mat_q<(ggml_type)8, (int)128, (bool)0, (bool)0>(const char *, const int *, const int *, const int *, float *, float *, int, int, int, int, int, int, int, int, int, int, int, int, int, int, int, int, int)",
+          1.791446769,
+          3941
+        ],
+        [
+          "void cutlass::Kernel2<cutlass_80_tensorop_s16816gemm_bf16_256x128_32x3_tn_align8>(T1::Params)",
+          1.240574721,
+          39440
+        ],
+        [
+          "void dsv41_act_qat_kernel<(int)256, (int)0>(const float *, float *, long long, long long)",
+          1.188928357,
+          10212
+        ],
+        [
+          "void cutlass::Kernel2<cutlass_80_tensorop_s16816gemm_f16_64x256_32x4_tn_align8>(T1::Params)",
+          0.8816019,
+          5278
+        ],
+        [
+          "dsv41_rope_kernel(float *, const float *, const int *, const float *, long long, long long, long long, bool)",
+          0.667154934,
+          1997
+        ],
+        [
+          "void k_dsv41_topk_radix_tiles<(bool)1>(const float *, const int *, int *, int, int, int, bool)",
+          0.56065573,
+          108
+        ],
+        [
+          "void dsa_accum_scores_from_gemm_kernel<(bool)1, (int)8>(const float *, const float *, float *, int, int, int, int, int, float, int, int)",
+          0.542816237,
+          43800
+        ],
+        [
+          "k_mul_add_bcast_f32(const float *, const float *, const float *, float *, long long, long long, long long, long long, long long, long long, long long, unsigned long long, unsigned long long, unsigned long long, unsigned long long, unsigned long long, unsigned long long, unsigned long long)",
+          0.524214101,
+          3396
+        ],
+        [
+          "void dsv41_hc_channels_kernel<(bool)1>(float *, const float *, const float *, const float *, unsigned int, unsigned int)",
+          0.521604612,
+          1126
+        ],
+        [
+          "void rms_norm_f32<(int)1024, (bool)0, (bool)0>(const float *, float *, int, long long, long long, long long, float, const float *, long long, long long, long long, uint3, uint3, uint3, uint3, const float *, long long, long long, long long, uint3, uint3, uint3, uint3)",
+          0.489945962,
+          1126
+        ],
+        [
+          "void dsv41_cast_vector4<float, __half, (bool)1>(const T1 *, T2 *, long long, long long, long long, long long, long long, long long)",
+          0.402161144,
+          3018
+        ],
+        [
+          "gather(const float *, const int *, const int *, __nv_fp8_e4m3 *, unsigned char *, int, int)",
+          0.381497247,
+          563
+        ],
+        [
+          "void concat_f32_flat<(bool)1>(const float *, const float *, float *, long long, long long, long long)",
+          0.29580296,
+          6453
+        ],
+        [
+          "<unnamed>::validate_kernel(ggml_dsv41_validation, unsigned int *, unsigned long long)",
+          0.279954513,
+          1138
+        ],
+        [
+          "dsv41_tilelang_query_all(__nv_bfloat16 *, const float *, unsigned int)",
+          0.275788507,
+          563
+        ],
+        [
+          "void cutlass::Kernel2<cutlass_80_tensorop_s16816gemm_f16_128x64_64x3_tn_align8>(T1::Params)",
+          0.273513978,
+          295
+        ],
+        [
+          "dsv41_tilelang_indices(int *, unsigned int, unsigned int, unsigned int, unsigned int, unsigned int, unsigned int, const ggml_dsv41_tilelang_record *, const unsigned int *, unsigned int)",
+          0.248315476,
+          563
+        ],
+        [
+          "void dsv41_cast_vector4<float, __half, (bool)0>(const T1 *, T2 *, long long, long long, long long, long long, long long, long long)",
+          0.230355177,
+          4504
+        ],
+        [
+          "mid_pack(const __nv_bfloat16 *, const __nv_bfloat16 *, const float *, const int *, const int *, __nv_fp8_e4m3 *, unsigned char *, int, int, float)",
+          0.218133323,
+          563
+        ],
+        [
+          "void dsv41_cast_vector4<float, __nv_bfloat16, (bool)1>(const T1 *, T2 *, long long, long long, long long, long long, long long, long long)",
+          0.178017713,
+          671
+        ],
+        [
+          "void dsv41_cast_vector4<__nv_bfloat16, float, (bool)1>(const T1 *, T2 *, long long, long long, long long, long long, long long, long long)",
+          0.167864828,
+          646
+        ],
+        [
+          "void cutlass::Kernel2<cutlass_80_simt_sgemm_128x256_8x4_tn_align1>(T1::Params)",
+          0.165648201,
+          523
+        ],
+        [
+          "void quantize_mmq_q8_1<(mmq_q8_1_ds_layout)0>(const float *, const int *, void *, long long, long long, long long, long long, long long, int, int)",
+          0.158542717,
+          3941
+        ],
+        [
+          "void cpy_scalar<&cpy_1_scalar<float, float>>(const char *, char *, long long, long long, long long, long long, long long, long long, long long, long long, long long, long long, long long, long long, long long, long long, long long)",
+          0.131962658,
+          563
+        ],
+        [
+          "void k_bin_bcast<&op_mul, float, float, float, const float *>(const T2 *, const T3 *, T4 *, int, int, int, uint3, uint3, uint3, uint3, uint3, int, int, int, int, int, int, int, int, int, int, int, T5...)",
+          0.115139836,
+          1645
+        ],
+        [
+          "void k_dsv41_topk_radix_tiles<(bool)0>(const float *, const int *, int *, int, int, int, bool)",
+          0.112749,
+          108
+        ],
+        [
+          "reduce(const __nv_bfloat16 *, const int *, float *, int)",
+          0.110688014,
+          563
+        ],
+        [
+          "void k_bin_bcast<&op_add, float, float, float, const float *>(const T2 *, const T3 *, T4 *, int, int, int, uint3, uint3, uint3, uint3, uint3, int, int, int, int, int, int, int, int, int, int, int, T5...)",
+          0.085232207,
+          2152
+        ],
+        [
+          "void cpy_scalar_contiguous<__nv_bfloat16, __half>(const char *, char *, long long)",
+          0.084307453,
+          513
+        ],
+        [
+          "void k_top_k_f32_i32_tiles<(bool)1, (bool)0>(const float *, const int *, int *, int, int, int, int, bool)",
+          0.077516622,
+          13
+        ],
+        [
+          "void rms_norm_f32<(int)1024, (bool)1, (bool)0>(const float *, float *, int, long long, long long, long long, float, const float *, long long, long long, long long, uint3, uint3, uint3, uint3, const float *, long long, long long, long long, uint3, uint3, uint3, uint3)",
+          0.074377907,
+          1689
+        ],
+        [
+          "void mm_ids_helper<(int)6>(const int *, int *, int *, int *, int, int, int, int, int)",
+          0.070921577,
+          563
+        ],
+        [
+          "void k_argsort_f32_T<(ggml_sort_order)1, store, int>(const float *, T3 *, int, int, int, T2)",
+          0.057298849,
+          563
+        ],
+        [
+          "void cutlass::Kernel2<cutlass_80_wmma_tensorop_s161616gemm_bf16_32x32_64x1_tn_align8>(T1::Params)",
+          0.051037917,
+          3480
+        ],
+        [
+          "dsv41_engram_add_kernel(float *, const float *, const float *, const float *, const float *, const signed char *, long long, long long, float)",
+          0.05007826,
+          50
+        ],
+        [
+          "void mul_mat_q_stream_k_fixup<(ggml_type)8, (int)128, (bool)0, (bool)0>(const int *, const int *, float *, const float *, int, int, int, unsigned long long, int, unsigned long long, int, unsigned long long, int)",
+          0.041334696,
+          3941
+        ],
+        [
+          "void dsv41_act_qat_kernel<(int)32, (int)2>(const float *, float *, long long, long long)",
+          0.039053448,
+          208
+        ],
+        [
+          "void k_top_k_f32_i32<(ggml_sort_order)1>(const float *, int *, int, int, int)",
+          0.036841363,
+          12
+        ],
+        [
+          "dsv41_tilelang_kv(__nv_bfloat16 *, const __half *, const __half *, unsigned long long, unsigned long long)",
+          0.036033196,
+          563
+        ],
+        [
+          "concat_bytes_dim0(const char *, const char *, char *, int, int, unsigned long long)",
+          0.030839731,
+          513
+        ],
+        [
+          "dsv41_index_apply_mask_kernel(float *, const int *, const float *, int, int)",
+          0.028691855,
+          108
+        ],
+        [
+          "void cutlass::Kernel2<cutlass_80_tensorop_s16816gemm_f16_256x128_32x3_tn_align8>(T1::Params)",
+          0.025728183,
+          100
+        ],
+        [
+          "void cutlass::Kernel2<cutlass_80_tensorop_s16816gemm_f16_128x128_32x4_tn_align8>(T1::Params)",
+          0.025477514,
+          330
+        ],
+        [
+          "void cpy_q_f32<&cpy_blck_q8_0_f32, (int)32>(const char *, char *, long long, long long, long long, long long, long long, long long, long long, long long, long long, long long, long long, long long, long long, long long, long long)",
+          0.023634083,
+          488
+        ],
+        [
+          "void op_clamp_kernel<float>(const T1 *, T1 *, T1, T1, int)",
+          0.02290357,
+          2202
+        ],
+        [
+          "void k_top_k_f32_i32_tiles<(bool)0, (bool)0>(const float *, const int *, int *, int, int, int, int, bool)",
+          0.021582429,
+          13
+        ],
+        [
+          "void unary_gated_op_kernel<&op_silu, float>(const T2 *, const T2 *, T2 *, long long, long long, long long, long long)",
+          0.021277225,
+          563
+        ],
+        [
+          "void cutlass::Kernel2<cutlass_80_tensorop_s16816gemm_f16_64x128_64x3_tn_align8>(T1::Params)",
+          0.021151892,
+          176
+        ],
+        [
+          "void dsv41_act_qat_kernel<(int)32, (int)1>(const float *, float *, long long, long long)",
+          0.017612924,
+          563
+        ],
+        [
+          "void cpy_scalar_contiguous<float, int>(const char *, char *, long long)",
+          0.01588417,
+          1126
+        ],
+        [
+          "dsv41_candidate_blocks_kernel(float *, const float *, const int *, long long, long long, long long)",
+          0.015397072,
+          25
+        ],
+        [
+          "void dsv41_cast_vector4<float, __nv_bfloat16, (bool)0>(const T1 *, T2 *, long long, long long, long long, long long, long long, long long)",
+          0.014057513,
+          6624
+        ],
+        [
+          "void k_get_rows_float<float, float, (bool)0, float>(const T1 *, const int *, T2 *, long long, long long, long long, unsigned long long, unsigned long long, unsigned long long, unsigned long long, unsigned long long, unsigned long long, unsigned long long, unsigned long long, unsigned long long, const float *, long long, const T4 *, long long)",
+          0.013465444,
+          1649
+        ],
+        [
+          "void cpy_scalar_contiguous<int, float>(const char *, char *, long long)",
+          0.007881988,
+          513
+        ],
+        [
+          "void cutlass::Kernel2<cutlass_80_tensorop_s16816gemm_bf16_128x256_32x3_tn_align8>(T1::Params)",
+          0.007834706,
+          600
+        ],
+        [
+          "void dsv41_hc_sinkhorn<(bool)1>(float *, const float *, const float *, const float *, int)",
+          0.006787976,
+          1126
+        ],
+        [
+          "void k_set_rows<float, int, float>(const T1 *, const T2 *, T3 *, long long, long long, long long, long long, long long, long long, long long, long long, long long, long long, long long, long long, long long, long long, uint3, uint3, uint3, uint3, uint3)",
+          0.006759391,
+          32
+        ],
+        [
+          "void cutlass::Kernel2<cutlass_80_simt_sgemm_128x128_8x4_tn_align1>(T1::Params)",
+          0.006357904,
+          40
+        ],
+        [
+          "void concat_f32_flat<(bool)0>(const float *, const float *, float *, long long, long long, long long)",
+          0.005710283,
+          2065
+        ],
+        [
+          "dsv41_raw_commit_kernel(float *, const float *, unsigned int, long long)",
+          0.005647246,
+          2252
+        ],
+        [
+          "dsv41_selected_mask_kernel(float *, const int *, const int *, const float *, long long, long long, long long)",
+          0.005483607,
+          513
+        ],
+        [
+          "void cutlass::Kernel2<cutlass_80_tensorop_s16816gemm_f16_256x64_32x4_tn_align8>(T1::Params)",
+          0.004973554,
+          12
+        ],
+        [
+          "void fill_kernel<float>(T1 *, long long, T1)",
+          0.004510912,
+          3324
+        ],
+        [
+          "void rms_norm_f32<(int)256, (bool)1, (bool)0>(const float *, float *, int, long long, long long, long long, float, const float *, long long, long long, long long, uint3, uint3, uint3, uint3, const float *, long long, long long, long long, uint3, uint3, uint3, uint3)",
+          0.004504244,
+          763
+        ],
+        [
+          "void k_bin_bcast<&op_repeat, float, float, float, >(const T2 *, const T3 *, T4 *, int, int, int, uint3, uint3, uint3, uint3, uint3, int, int, int, int, int, int, int, int, int, int, int, T5...)",
+          0.004232819,
+          526
+        ],
+        [
+          "void dsv41_act_qat_kernel<(int)16, (int)3>(const float *, float *, long long, long long)",
+          0.003968724,
+          100
+        ],
+        [
+          "attention_tokentile_raw_mirror_kernel(__half *, const float *, const int *, unsigned int, unsigned int, unsigned int, unsigned int, unsigned int, unsigned int, unsigned int)",
+          0.00372433,
+          563
+        ],
+        [
+          "void cutlass::Kernel2<cutlass_80_tensorop_s16816gemm_f16_128x64_64x4_tn_align8>(T1::Params)",
+          0.003434508,
+          80
+        ],
+        [
+          "scale_f32(const float *, float *, float, float, long long)",
+          0.002951187,
+          1076
+        ],
+        [
+          "void unary_op_kernel<&op_step, float>(const T2 *, T2 *, int)",
+          0.002258948,
+          513
+        ],
+        [
+          "void cublasLt::splitKreduce_kernel<(int)32, (int)16, int, float, float, float, float, (bool)0, float, float, float, (bool)1, (bool)0, (bool)0, (bool)0>(cublasLt::cublasSplitKParams<T6>, const T4 *, const T10 *, T9 *, T5 *, const T6 *, const T6 *, const T11 *, const T4 *, T11 *, void *, long long, T6 *, int *, T6 *, T6 *, const T6 *, const T6 *, const T6 *, const T6 *, const T6 *)",
+          0.002160127,
+          1134
+        ],
+        [
+          "void unary_op_kernel<&op_softplus_sqrt, float>(const T2 *, T2 *, int)",
+          0.002026342,
+          563
+        ],
+        [
+          "void cutlass::Kernel2<cutlass_80_wmma_tensorop_s161616gemm_f16_32x32_128x1_tn_align8>(T1::Params)",
+          0.00195432,
+          100
+        ],
+        [
+          "void reduce_rows_f32<(bool)0>(const float *, float *, int)",
+          0.001362664,
+          563
+        ],
+        [
+          "void k_get_rows_float<__half, float, (bool)0, __half>(const T1 *, const int *, T2 *, long long, long long, long long, unsigned long long, unsigned long long, unsigned long long, unsigned long long, unsigned long long, unsigned long long, unsigned long long, unsigned long long, unsigned long long, const float *, long long, const T4 *, long long)",
+          0.000989369,
+          13
+        ],
+        [
+          "void cutlass::Kernel2<cutlass_80_wmma_tensorop_s161616gemm_bf16_32x32_64x2_tn_align8>(T1::Params)",
+          0.000770234,
+          280
+        ],
+        [
+          "void cpy_scalar<&cpy_1_scalar<int, int>>(const char *, char *, long long, long long, long long, long long, long long, long long, long long, long long, long long, long long, long long, long long, long long, long long, long long)",
+          0.000753159,
+          563
+        ],
+        [
+          "inverse_routes(const int *, int *, int)",
+          0.000736814,
+          563
+        ],
+        [
+          "void k_set_rows<float, long long, __nv_bfloat16>(const T1 *, const T2 *, T3 *, long long, long long, long long, long long, long long, long long, long long, long long, long long, long long, long long, long long, long long, long long, uint3, uint3, uint3, uint3, uint3)",
+          0.000587984,
+          200
+        ],
+        [
+          "void k_bin_bcast<&op_div, float, float, float, const float *>(const T2 *, const T3 *, T4 *, int, int, int, uint3, uint3, uint3, uint3, uint3, int, int, int, int, int, int, int, int, int, int, int, T5...)",
+          0.000501277,
+          563
+        ],
+        [
+          "dsv41_pool2_kernel(float *, const float *, const float *, const float *, const float *, long long, long long)",
+          0.000490413,
+          75
+        ],
+        [
+          "void cutlass::Kernel2<cutlass_80_wmma_tensorop_s161616gemm_f16_32x32_128x2_tn_align8>(T1::Params)",
+          0.00034335,
+          76
+        ],
+        [
+          "void cutlass::Kernel2<cutlass_80_tensorop_s16816gemm_f16_64x64_32x10_tn_align8>(T1::Params)",
+          0.000139741,
+          24
+        ]
+      ],
+      "api_duration_sums": [
+        [
+          "cudaStreamSynchronize_v3020",
+          19.911672522,
+          5996
+        ],
+        [
+          "cudaMemcpyAsync_v3020",
+          0.863691123,
+          11108
+        ],
+        [
+          "cudaLaunchKernel_v7000",
+          0.587128547,
+          131818
+        ],
+        [
+          "cudaHostUnregister_v4000",
+          0.538876145,
+          60
+        ],
+        [
+          "cuLaunchKernel",
+          0.176442214,
+          51397
+        ],
+        [
+          "cudaHostRegister_v4000",
+          0.15577025,
+          59
+        ],
+        [
+          "cuLibraryLoadData",
+          0.079674416,
+          34
+        ],
+        [
+          "cudaMemsetAsync_v3020",
+          0.057485053,
+          7670
+        ],
+        [
+          "cudaDeviceSynchronize_v3020",
+          0.047382709,
+          10
+        ],
+        [
+          "cudaWaitExternalSemaphoresAsync_v11020",
+          0.038177908,
+          243
+        ],
+        [
+          "cuKernelGetName",
+          0.025824654,
+          133507
+        ],
+        [
+          "cudaMemcpy2DAsync_v3020",
+          0.024835959,
+          10496
+        ],
+        [
+          "cuKernelGetFunction",
+          0.023105511,
+          50834
+        ],
+        [
+          "cudaEventRecord_v3020",
+          0.022071433,
+          8773
+        ],
+        [
+          "cudaLaunchKernelExC_v11060",
+          0.01895924,
+          2823
+        ],
+        [
+          "cudaMallocHost_v3020",
+          0.007388303,
+          2
+        ],
+        [
+          "cudaStreamWaitEvent_v3020",
+          0.005932551,
+          1337
+        ],
+        [
+          "cudaKernelSetAttributeForDevice_v12060",
+          0.004363749,
+          4
+        ],
+        [
+          "cuStreamGetCaptureInfo_v2",
+          0.003841808,
+          32984
+        ],
+        [
+          "cudaStreamIsCapturing_v10000",
+          0.002791104,
+          1938
+        ]
+      ],
+      "tile_host_seconds": {
+        "host_prepare_seconds": 1.912131,
+        "host_bind_seconds": 0.704894,
+        "host_register_seconds": 0.701962,
+        "host_graph_seconds": 0.190172,
+        "host_reserve_seconds": 0.504188,
+        "host_upload_seconds": 3.797903,
+        "host_launch_seconds": 1.558083,
+        "host_sync_seconds": 17.270842000000002,
+        "gpu_seconds": 18.711376,
+        "compute_seconds": 18.845138,
+        "host_readback_seconds": 1.575667,
+        "host_cleanup_seconds": 0.002148
+      },
+      "tile_count": 563,
+      "layer_ledger_seconds": {
+        "wall_seconds": 33.626905,
+        "acquire_seconds": 6.8400925,
+        "carry_begin_seconds": 0.0001181,
+        "executor_wall_seconds": 26.2855819,
+        "executor_phase_gap_seconds": 0.1390345,
+        "engram_seconds": 0.0057667000000000005,
+        "carry_read_seconds": 0.0007056,
+        "carry_write_seconds": 0.0012027000000000001,
+        "carry_commit_seconds": 0.0002046,
+        "provider_release_seconds": 0.0005605,
+        "scaffold_seconds": 0.49267239999999995
+      },
+      "layer_passes": 61,
+      "fetched_bytes": 456303081592
+    },
+    "final": {
+      "name": "final-nsys",
+      "prompt_seconds": 37.26574419999999,
+      "clock": "QPC: SQLite startTime + relative nanoseconds; native steady milliseconds",
+      "first_to_last_compute_envelope_seconds": 36.4483655,
+      "kernel_count": 186038,
+      "kernel_busy_union_seconds": 18.118048743,
+      "kernel_duration_sum_seconds": 18.118048743,
+      "copy_busy_union_seconds": 1.6208943,
+      "kernel_or_copy_union_seconds": 19.738943043,
+      "diagnostic_warnings": [
+        [
+          2,
+          "No NVTX events collected. Does the process use NVTX?"
+        ],
+        [
+          2,
+          "Installed CUDA driver version (13.3) is not supported by this build of Nsight Systems. CUDA trace will be collected using libraries for driver version 13.2"
+        ]
+      ],
+      "ranked_kernel_categories": [
+        [
+          "FP16 / Q8 / F32 GEMM incl fixup",
+          3.251013421000013
+        ],
+        [
+          "Attention",
+          3.202366813999999
+        ],
+        [
+          "Expert incl packing",
+          3.004016241000014
+        ],
+        [
+          "BF16 GEMM / score epilogue",
+          1.8443715340000983
+        ],
+        [
+          "QAT / quantization",
+          1.4036880250000086
+        ],
+        [
+          "Remaining kernels",
+          1.2618751020000072
+        ],
+        [
+          "Cast / copy",
+          1.2540402340000323
+        ],
+        [
+          "Top K",
+          0.8107461459999997
+        ],
+        [
+          "RoPE",
+          0.6663397630000013
+        ],
+        [
+          "RMS norm",
+          0.5675246380000016
+        ],
+        [
+          "HC expand",
+          0.5202138360000006
+        ],
+        [
+          "Concat",
+          0.3318529890000004
+        ]
+      ],
+      "top_kernels": [
+        [
+          "native_sparse_attn_kernel__kernel",
+          2.643246815,
+          563
+        ],
+        [
+          "kernel_cutlass_kernel_flashinferfused_moecute_dslblackwell_sm12xkernel_moe_mxfp8_mxfp4_gemmCuteDslSm120MoeMxfp8Mxfp4Grouped_object_at__Tiled_MMA_Thr_Layout_VMNK_324211321280_Permutation_M_0",
+          2.221796956,
+          1689
+        ],
+        [
+          "void mul_mat_q<(ggml_type)8, (int)128, (bool)0, (bool)0>(const char *, const int *, const int *, const int *, float *, float *, int, int, int, int, int, int, int, int, int, int, int, int, int, int, int, int, int)",
+          1.798534797,
+          3941
+        ],
+        [
+          "void cutlass::Kernel2<cutlass_80_tensorop_s16816gemm_bf16_256x128_32x3_tn_align8>(T1::Params)",
+          1.241558008,
+          39440
+        ],
+        [
+          "void dsv41_act_qat_kernel<(int)256, (int)0>(const float *, float *, long long, long long)",
+          1.184985155,
+          10212
+        ],
+        [
+          "void cutlass::Kernel2<cutlass_80_tensorop_s16816gemm_f16_64x256_32x4_tn_align8>(T1::Params)",
+          0.881259259,
+          5278
+        ],
+        [
+          "dsv41_rope_kernel(float *, const float *, const int *, const float *, long long, long long, long long, bool)",
+          0.666339763,
+          1997
+        ],
+        [
+          "void k_dsv41_topk_radix_tiles<(bool)1>(const float *, const int *, int *, int, int, int, bool)",
+          0.561500221,
+          108
+        ],
+        [
+          "void dsa_accum_scores_from_gemm_kernel<(bool)1, (int)8>(const float *, const float *, float *, int, int, int, int, int, float, int, int)",
+          0.543095255,
+          43800
+        ],
+        [
+          "k_mul_add_bcast_f32(const float *, const float *, const float *, float *, long long, long long, long long, long long, long long, long long, long long, unsigned long long, unsigned long long, unsigned long long, unsigned long long, unsigned long long, unsigned long long, unsigned long long)",
+          0.522741264,
+          3396
+        ],
+        [
+          "void dsv41_hc_channels_kernel<(bool)1>(float *, const float *, const float *, const float *, unsigned int, unsigned int)",
+          0.520213836,
+          1126
+        ],
+        [
+          "void rms_norm_f32<(int)1024, (bool)0, (bool)0>(const float *, float *, int, long long, long long, long long, float, const float *, long long, long long, long long, uint3, uint3, uint3, uint3, const float *, long long, long long, long long, uint3, uint3, uint3, uint3)",
+          0.488591027,
+          1126
+        ],
+        [
+          "void dsv41_cast_vector4<float, __half, (bool)1>(const T1 *, T2 *, long long, long long, long long, long long, long long, long long)",
+          0.401162084,
+          3018
+        ],
+        [
+          "gather(const float *, const int *, const int *, __nv_fp8_e4m3 *, unsigned char *, int, int)",
+          0.381469161,
+          563
+        ],
+        [
+          "void concat_f32_flat<(bool)1>(const float *, const float *, float *, long long, long long, long long)",
+          0.295323666,
+          6453
+        ],
+        [
+          "<unnamed>::validate_kernel(ggml_dsv41_validation, unsigned int *, unsigned long long)",
+          0.279699253,
+          1138
+        ],
+        [
+          "dsv41_tilelang_query_all(__nv_bfloat16 *, const float *, unsigned int)",
+          0.275312259,
+          563
+        ],
+        [
+          "void cutlass::Kernel2<cutlass_80_tensorop_s16816gemm_f16_128x64_64x3_tn_align8>(T1::Params)",
+          0.274223927,
+          295
+        ],
+        [
+          "dsv41_tilelang_indices(int *, unsigned int, unsigned int, unsigned int, unsigned int, unsigned int, unsigned int, const ggml_dsv41_tilelang_record *, const unsigned int *, unsigned int)",
+          0.247856909,
+          563
+        ],
+        [
+          "void dsv41_cast_vector4<float, __half, (bool)0>(const T1 *, T2 *, long long, long long, long long, long long, long long, long long)",
+          0.229735065,
+          4504
+        ],
+        [
+          "mid_pack(const __nv_bfloat16 *, const __nv_bfloat16 *, const float *, const int *, const int *, __nv_fp8_e4m3 *, unsigned char *, int, int, float)",
+          0.218599246,
+          563
+        ],
+        [
+          "void dsv41_cast_vector4<float, __nv_bfloat16, (bool)1>(const T1 *, T2 *, long long, long long, long long, long long, long long, long long)",
+          0.177402706,
+          671
+        ],
+        [
+          "void dsv41_cast_vector4<__nv_bfloat16, float, (bool)1>(const T1 *, T2 *, long long, long long, long long, long long, long long, long long)",
+          0.167079516,
+          646
+        ],
+        [
+          "void cutlass::Kernel2<cutlass_80_simt_sgemm_128x256_8x4_tn_align1>(T1::Params)",
+          0.165996779,
+          523
+        ],
+        [
+          "void quantize_mmq_q8_1<(mmq_q8_1_ds_layout)0>(const float *, const int *, void *, long long, long long, long long, long long, long long, int, int)",
+          0.158022603,
+          3941
+        ],
+        [
+          "void cpy_scalar<&cpy_1_scalar<float, float>>(const char *, char *, long long, long long, long long, long long, long long, long long, long long, long long, long long, long long, long long, long long, long long, long long, long long)",
+          0.132083462,
+          563
+        ],
+        [
+          "void k_bin_bcast<&op_mul, float, float, float, const float *>(const T2 *, const T3 *, T4 *, int, int, int, uint3, uint3, uint3, uint3, uint3, int, int, int, int, int, int, int, int, int, int, int, T5...)",
+          0.114697187,
+          1645
+        ],
+        [
+          "void k_dsv41_topk_radix_tiles<(bool)0>(const float *, const int *, int *, int, int, int, bool)",
+          0.112835167,
+          108
+        ],
+        [
+          "reduce(const __nv_bfloat16 *, const int *, float *, int)",
+          0.11041855,
+          563
+        ],
+        [
+          "void k_bin_bcast<&op_add, float, float, float, const float *>(const T2 *, const T3 *, T4 *, int, int, int, uint3, uint3, uint3, uint3, uint3, int, int, int, int, int, int, int, int, int, int, int, T5...)",
+          0.084879393,
+          2152
+        ],
+        [
+          "void cpy_scalar_contiguous<__nv_bfloat16, __half>(const char *, char *, long long)",
+          0.084356564,
+          513
+        ],
+        [
+          "void k_top_k_f32_i32_tiles<(bool)1, (bool)0>(const float *, const int *, int *, int, int, int, int, bool)",
+          0.077903751,
+          13
+        ],
+        [
+          "void rms_norm_f32<(int)1024, (bool)1, (bool)0>(const float *, float *, int, long long, long long, long long, float, const float *, long long, long long, long long, uint3, uint3, uint3, uint3, const float *, long long, long long, long long, uint3, uint3, uint3, uint3)",
+          0.074424201,
+          1689
+        ],
+        [
+          "void mm_ids_helper<(int)6>(const int *, int *, int *, int *, int, int, int, int, int)",
+          0.07099707,
+          563
+        ],
+        [
+          "void k_argsort_f32_T<(ggml_sort_order)1, store, int>(const float *, T3 *, int, int, int, T2)",
+          0.057369174,
+          563
+        ],
+        [
+          "void cutlass::Kernel2<cutlass_80_wmma_tensorop_s161616gemm_bf16_32x32_64x1_tn_align8>(T1::Params)",
+          0.051098635,
+          3480
+        ],
+        [
+          "dsv41_engram_add_kernel(float *, const float *, const float *, const float *, const float *, const signed char *, long long, long long, float)",
+          0.050205423,
+          50
+        ],
+        [
+          "void mul_mat_q_stream_k_fixup<(ggml_type)8, (int)128, (bool)0, (bool)0>(const int *, const int *, float *, const float *, int, int, int, unsigned long long, int, unsigned long long, int, unsigned long long, int)",
+          0.041333405,
+          3941
+        ],
+        [
+          "void dsv41_act_qat_kernel<(int)32, (int)2>(const float *, float *, long long, long long)",
+          0.039084501,
+          208
+        ],
+        [
+          "void k_top_k_f32_i32<(ggml_sort_order)1>(const float *, int *, int, int, int)",
+          0.036840062,
+          12
+        ],
+        [
+          "dsv41_tilelang_kv(__nv_bfloat16 *, const __half *, const __half *, unsigned long long, unsigned long long)",
+          0.035950831,
+          563
+        ],
+        [
+          "concat_bytes_dim0(const char *, const char *, char *, int, int, unsigned long long)",
+          0.030812581,
+          513
+        ],
+        [
+          "dsv41_index_apply_mask_kernel(float *, const int *, const float *, int, int)",
+          0.028589778,
+          108
+        ],
+        [
+          "void cutlass::Kernel2<cutlass_80_tensorop_s16816gemm_f16_256x128_32x3_tn_align8>(T1::Params)",
+          0.02577957,
+          100
+        ],
+        [
+          "void cutlass::Kernel2<cutlass_80_tensorop_s16816gemm_f16_128x128_32x4_tn_align8>(T1::Params)",
+          0.025483241,
+          330
+        ],
+        [
+          "void cpy_q_f32<&cpy_blck_q8_0_f32, (int)32>(const char *, char *, long long, long long, long long, long long, long long, long long, long long, long long, long long, long long, long long, long long, long long, long long, long long)",
+          0.023641613,
+          488
+        ],
+        [
+          "void op_clamp_kernel<float>(const T1 *, T1 *, T1, T1, int)",
+          0.022956317,
+          2202
+        ],
+        [
+          "void k_top_k_f32_i32_tiles<(bool)0, (bool)0>(const float *, const int *, int *, int, int, int, int, bool)",
+          0.021666945,
+          13
+        ],
+        [
+          "void unary_gated_op_kernel<&op_silu, float>(const T2 *, const T2 *, T2 *, long long, long long, long long, long long)",
+          0.021276786,
+          563
+        ],
+        [
+          "void cutlass::Kernel2<cutlass_80_tensorop_s16816gemm_f16_64x128_64x3_tn_align8>(T1::Params)",
+          0.021199707,
+          176
+        ],
+        [
+          "void dsv41_act_qat_kernel<(int)32, (int)1>(const float *, float *, long long, long long)",
+          0.017624071,
+          563
+        ],
+        [
+          "void cpy_scalar_contiguous<float, int>(const char *, char *, long long)",
+          0.015892234,
+          1126
+        ],
+        [
+          "dsv41_candidate_blocks_kernel(float *, const float *, const int *, long long, long long, long long)",
+          0.015440029,
+          25
+        ],
+        [
+          "void dsv41_cast_vector4<float, __nv_bfloat16, (bool)0>(const T1 *, T2 *, long long, long long, long long, long long, long long, long long)",
+          0.014047418,
+          6624
+        ],
+        [
+          "void k_get_rows_float<float, float, (bool)0, float>(const T1 *, const int *, T2 *, long long, long long, long long, unsigned long long, unsigned long long, unsigned long long, unsigned long long, unsigned long long, unsigned long long, unsigned long long, unsigned long long, unsigned long long, const float *, long long, const T4 *, long long)",
+          0.013466891,
+          1649
+        ],
+        [
+          "void cpy_scalar_contiguous<int, float>(const char *, char *, long long)",
+          0.007886995,
+          513
+        ],
+        [
+          "void cutlass::Kernel2<cutlass_80_tensorop_s16816gemm_bf16_128x256_32x3_tn_align8>(T1::Params)",
+          0.007847961,
+          600
+        ],
+        [
+          "void k_set_rows<float, int, float>(const T1 *, const T2 *, T3 *, long long, long long, long long, long long, long long, long long, long long, long long, long long, long long, long long, long long, long long, long long, uint3, uint3, uint3, uint3, uint3)",
+          0.006806934,
+          32
+        ],
+        [
+          "void dsv41_hc_sinkhorn<(bool)1>(float *, const float *, const float *, const float *, int)",
+          0.006797899,
+          1126
+        ],
+        [
+          "void cutlass::Kernel2<cutlass_80_simt_sgemm_128x128_8x4_tn_align1>(T1::Params)",
+          0.006362411,
+          40
+        ],
+        [
+          "void concat_f32_flat<(bool)0>(const float *, const float *, float *, long long, long long, long long)",
+          0.005716742,
+          2065
+        ],
+        [
+          "dsv41_raw_commit_kernel(float *, const float *, unsigned int, long long)",
+          0.005604358,
+          2252
+        ],
+        [
+          "dsv41_selected_mask_kernel(float *, const int *, const int *, const float *, long long, long long, long long)",
+          0.005473683,
+          513
+        ],
+        [
+          "void cutlass::Kernel2<cutlass_80_tensorop_s16816gemm_f16_256x64_32x4_tn_align8>(T1::Params)",
+          0.004973321,
+          12
+        ],
+        [
+          "void rms_norm_f32<(int)256, (bool)1, (bool)0>(const float *, float *, int, long long, long long, long long, float, const float *, long long, long long, long long, uint3, uint3, uint3, uint3, const float *, long long, long long, long long, uint3, uint3, uint3, uint3)",
+          0.00450941,
+          763
+        ],
+        [
+          "void fill_kernel<float>(T1 *, long long, T1)",
+          0.004487267,
+          3324
+        ],
+        [
+          "void k_bin_bcast<&op_repeat, float, float, float, >(const T2 *, const T3 *, T4 *, int, int, int, uint3, uint3, uint3, uint3, uint3, int, int, int, int, int, int, int, int, int, int, int, T5...)",
+          0.004326088,
+          526
+        ],
+        [
+          "void dsv41_act_qat_kernel<(int)16, (int)3>(const float *, float *, long long, long long)",
+          0.003971695,
+          100
+        ],
+        [
+          "attention_tokentile_raw_mirror_kernel(__half *, const float *, const int *, unsigned int, unsigned int, unsigned int, unsigned int, unsigned int, unsigned int, unsigned int)",
+          0.003706262,
+          563
+        ],
+        [
+          "void cutlass::Kernel2<cutlass_80_tensorop_s16816gemm_f16_128x64_64x4_tn_align8>(T1::Params)",
+          0.003439243,
+          80
+        ],
+        [
+          "scale_f32(const float *, float *, float, float, long long)",
+          0.002953727,
+          1076
+        ],
+        [
+          "void unary_op_kernel<&op_step, float>(const T2 *, T2 *, int)",
+          0.00226199,
+          513
+        ],
+        [
+          "void cublasLt::splitKreduce_kernel<(int)32, (int)16, int, float, float, float, float, (bool)0, float, float, float, (bool)1, (bool)0, (bool)0, (bool)0>(cublasLt::cublasSplitKParams<T6>, const T4 *, const T10 *, T9 *, T5 *, const T6 *, const T6 *, const T11 *, const T4 *, T11 *, void *, long long, T6 *, int *, T6 *, T6 *, const T6 *, const T6 *, const T6 *, const T6 *, const T6 *)",
+          0.002163422,
+          1134
+        ],
+        [
+          "void unary_op_kernel<&op_softplus_sqrt, float>(const T2 *, T2 *, int)",
+          0.002027536,
+          563
+        ],
+        [
+          "void cutlass::Kernel2<cutlass_80_wmma_tensorop_s161616gemm_f16_32x32_128x1_tn_align8>(T1::Params)",
+          0.001946216,
+          100
+        ],
+        [
+          "void reduce_rows_f32<(bool)0>(const float *, float *, int)",
+          0.001363615,
+          563
+        ],
+        [
+          "void k_get_rows_float<__half, float, (bool)0, __half>(const T1 *, const int *, T2 *, long long, long long, long long, unsigned long long, unsigned long long, unsigned long long, unsigned long long, unsigned long long, unsigned long long, unsigned long long, unsigned long long, unsigned long long, const float *, long long, const T4 *, long long)",
+          0.000994582,
+          13
+        ],
+        [
+          "void cutlass::Kernel2<cutlass_80_wmma_tensorop_s161616gemm_bf16_32x32_64x2_tn_align8>(T1::Params)",
+          0.000771675,
+          280
+        ],
+        [
+          "void cpy_scalar<&cpy_1_scalar<int, int>>(const char *, char *, long long, long long, long long, long long, long long, long long, long long, long long, long long, long long, long long, long long, long long, long long, long long)",
+          0.000752577,
+          563
+        ],
+        [
+          "inverse_routes(const int *, int *, int)",
+          0.000735258,
+          563
+        ],
+        [
+          "void k_set_rows<float, long long, __nv_bfloat16>(const T1 *, const T2 *, T3 *, long long, long long, long long, long long, long long, long long, long long, long long, long long, long long, long long, long long, long long, long long, uint3, uint3, uint3, uint3, uint3)",
+          0.00059182,
+          200
+        ],
+        [
+          "void k_bin_bcast<&op_div, float, float, float, const float *>(const T2 *, const T3 *, T4 *, int, int, int, uint3, uint3, uint3, uint3, uint3, int, int, int, int, int, int, int, int, int, int, int, T5...)",
+          0.000501324,
+          563
+        ],
+        [
+          "dsv41_pool2_kernel(float *, const float *, const float *, const float *, const float *, long long, long long)",
+          0.0004931,
+          75
+        ],
+        [
+          "void cutlass::Kernel2<cutlass_80_wmma_tensorop_s161616gemm_f16_32x32_128x2_tn_align8>(T1::Params)",
+          0.000342252,
+          76
+        ],
+        [
+          "void cutlass::Kernel2<cutlass_80_tensorop_s16816gemm_f16_64x64_32x10_tn_align8>(T1::Params)",
+          0.000139293,
+          24
+        ]
+      ],
+      "api_duration_sums": [
+        [
+          "cudaStreamSynchronize_v3020",
+          19.997829449,
+          5996
+        ],
+        [
+          "cudaMemcpyAsync_v3020",
+          0.860688761,
+          11108
+        ],
+        [
+          "cudaLaunchKernel_v7000",
+          0.583531924,
+          131818
+        ],
+        [
+          "cudaHostUnregister_v4000",
+          0.572761964,
+          60
+        ],
+        [
+          "cuLaunchKernel",
+          0.17492366,
+          51397
+        ],
+        [
+          "cudaHostRegister_v4000",
+          0.157766171,
+          59
+        ],
+        [
+          "cuLibraryLoadData",
+          0.109059626,
+          34
+        ],
+        [
+          "cudaMemsetAsync_v3020",
+          0.048595096,
+          7670
+        ],
+        [
+          "cudaDeviceSynchronize_v3020",
+          0.04663103,
+          10
+        ],
+        [
+          "cudaWaitExternalSemaphoresAsync_v11020",
+          0.026529024,
+          243
+        ],
+        [
+          "cudaMemcpy2DAsync_v3020",
+          0.025386651,
+          10496
+        ],
+        [
+          "cuKernelGetName",
+          0.025184354,
+          133507
+        ],
+        [
+          "cuKernelGetFunction",
+          0.024126701,
+          50834
+        ],
+        [
+          "cudaEventRecord_v3020",
+          0.023739223,
+          8773
+        ],
+        [
+          "cudaLaunchKernelExC_v11060",
+          0.021002026,
+          2823
+        ],
+        [
+          "cudaStreamWaitEvent_v3020",
+          0.006104306,
+          1337
+        ],
+        [
+          "cudaMallocHost_v3020",
+          0.005805417,
+          2
+        ],
+        [
+          "cudaKernelSetAttributeForDevice_v12060",
+          0.004383759,
+          4
+        ],
+        [
+          "cuStreamGetCaptureInfo_v2",
+          0.00416543,
+          32984
+        ],
+        [
+          "cudaStreamIsCapturing_v10000",
+          0.002905032,
+          1938
+        ]
+      ],
+      "tile_host_seconds": {
+        "host_prepare_seconds": 2.002639,
+        "host_bind_seconds": 0.743272,
+        "host_register_seconds": 0.740253,
+        "host_graph_seconds": 0.197148,
+        "host_reserve_seconds": 0.519694,
+        "host_upload_seconds": 3.8335079999999997,
+        "host_launch_seconds": 1.626037,
+        "host_sync_seconds": 17.269669,
+        "gpu_seconds": 18.767523,
+        "compute_seconds": 18.912957,
+        "host_readback_seconds": 1.672546,
+        "host_cleanup_seconds": 0.00215
+      },
+      "tile_count": 563,
+      "layer_ledger_seconds": {
+        "wall_seconds": 35.901387199999995,
+        "acquire_seconds": 8.864378,
+        "carry_begin_seconds": 0.0001418,
+        "executor_wall_seconds": 26.5777508,
+        "executor_phase_gap_seconds": 0.1397063,
+        "engram_seconds": 0.0341784,
+        "carry_read_seconds": 0.0007097,
+        "carry_write_seconds": 0.0010711,
+        "carry_commit_seconds": 0.0002028,
+        "provider_release_seconds": 0.0006152999999999999,
+        "scaffold_seconds": 0.4223393
+      },
+      "layer_passes": 61,
+      "fetched_bytes": 456303081592
+    }
+  },
+  "frontier_quality": [
+    {
+      "name": "hc-1",
+      "all_float_bits_equal": true,
+      "values": 129280,
+      "top1_equal": true,
+      "max_abs_difference": 0.0,
+      "sha256": "457e90601c434f5ade0afb149595a50d92c3ca0f047f13a8d95d8a9cea1522ee",
+      "KL_reference_to_candidate": 0
+    },
+    {
+      "name": "hc-2",
+      "all_float_bits_equal": true,
+      "values": 129280,
+      "top1_equal": true,
+      "max_abs_difference": 0.0,
+      "sha256": "457e90601c434f5ade0afb149595a50d92c3ca0f047f13a8d95d8a9cea1522ee",
+      "KL_reference_to_candidate": 0
+    },
+    {
+      "name": "hc-nsys-verified",
+      "all_float_bits_equal": true,
+      "values": 129280,
+      "top1_equal": true,
+      "max_abs_difference": 0.0,
+      "sha256": "457e90601c434f5ade0afb149595a50d92c3ca0f047f13a8d95d8a9cea1522ee",
+      "KL_reference_to_candidate": 0
+    },
+    {
+      "name": "concat-1",
+      "all_float_bits_equal": true,
+      "values": 129280,
+      "top1_equal": true,
+      "max_abs_difference": 0.0,
+      "sha256": "457e90601c434f5ade0afb149595a50d92c3ca0f047f13a8d95d8a9cea1522ee",
+      "KL_reference_to_candidate": 0
+    },
+    {
+      "name": "concat-nsys",
+      "all_float_bits_equal": true,
+      "values": 129280,
+      "top1_equal": true,
+      "max_abs_difference": 0.0,
+      "sha256": "457e90601c434f5ade0afb149595a50d92c3ca0f047f13a8d95d8a9cea1522ee",
+      "KL_reference_to_candidate": 0
+    },
+    {
+      "name": "concat-2",
+      "all_float_bits_equal": true,
+      "values": 129280,
+      "top1_equal": true,
+      "max_abs_difference": 0.0,
+      "sha256": "457e90601c434f5ade0afb149595a50d92c3ca0f047f13a8d95d8a9cea1522ee",
+      "KL_reference_to_candidate": 0
+    },
+    {
+      "name": "final-1",
+      "all_float_bits_equal": true,
+      "values": 129280,
+      "top1_equal": true,
+      "max_abs_difference": 0.0,
+      "sha256": "457e90601c434f5ade0afb149595a50d92c3ca0f047f13a8d95d8a9cea1522ee",
+      "KL_reference_to_candidate": 0
+    },
+    {
+      "name": "final-2",
+      "all_float_bits_equal": true,
+      "values": 129280,
+      "top1_equal": true,
+      "max_abs_difference": 0.0,
+      "sha256": "457e90601c434f5ade0afb149595a50d92c3ca0f047f13a8d95d8a9cea1522ee",
+      "KL_reference_to_candidate": 0
+    },
+    {
+      "name": "final-nsys",
+      "all_float_bits_equal": true,
+      "values": 129280,
+      "top1_equal": true,
+      "max_abs_difference": 0.0,
+      "sha256": "457e90601c434f5ade0afb149595a50d92c3ca0f047f13a8d95d8a9cea1522ee",
+      "KL_reference_to_candidate": 0
+    },
+    {
+      "name": "dense-control-1",
+      "all_float_bits_equal": true,
+      "values": 129280,
+      "top1_equal": true,
+      "max_abs_difference": 0.0,
+      "sha256": "457e90601c434f5ade0afb149595a50d92c3ca0f047f13a8d95d8a9cea1522ee",
+      "KL_reference_to_candidate": 0
+    },
+    {
+      "name": "dense-control-2",
+      "all_float_bits_equal": true,
+      "values": 129280,
+      "top1_equal": true,
+      "max_abs_difference": 0.0,
+      "sha256": "457e90601c434f5ade0afb149595a50d92c3ca0f047f13a8d95d8a9cea1522ee",
+      "KL_reference_to_candidate": 0
+    },
+    {
+      "name": "fp8-1",
+      "all_float_bits_equal": false,
+      "values": 129280,
+      "top1_equal": true,
+      "max_abs_difference": 2.0141186714172363,
+      "sha256": "b71ea8bf08bffa269ab63aebcda9c37878de4056b755102e9896a3adf905b054",
+      "KL_reference_to_candidate": 2.0219472974060422e-09
+    },
+    {
+      "name": "fp8-2",
+      "all_float_bits_equal": false,
+      "values": 129280,
+      "top1_equal": true,
+      "max_abs_difference": 2.0141186714172363,
+      "sha256": "b71ea8bf08bffa269ab63aebcda9c37878de4056b755102e9896a3adf905b054",
+      "KL_reference_to_candidate": 2.0219472974060422e-09
+    },
+    {
+      "name": "pin-1",
+      "all_float_bits_equal": true,
+      "values": 129280,
+      "top1_equal": true,
+      "max_abs_difference": 0.0,
+      "sha256": "457e90601c434f5ade0afb149595a50d92c3ca0f047f13a8d95d8a9cea1522ee",
+      "KL_reference_to_candidate": 0
+    },
+    {
+      "name": "pin-2",
+      "all_float_bits_equal": true,
+      "values": 129280,
+      "top1_equal": true,
+      "max_abs_difference": 0.0,
+      "sha256": "457e90601c434f5ade0afb149595a50d92c3ca0f047f13a8d95d8a9cea1522ee",
+      "KL_reference_to_candidate": 0
+    },
+    {
+      "name": "stage-1",
+      "all_float_bits_equal": true,
+      "values": 129280,
+      "top1_equal": true,
+      "max_abs_difference": 0.0,
+      "sha256": "457e90601c434f5ade0afb149595a50d92c3ca0f047f13a8d95d8a9cea1522ee",
+      "KL_reference_to_candidate": 0
+    },
+    {
+      "name": "stage-2",
+      "all_float_bits_equal": true,
+      "values": 129280,
+      "top1_equal": true,
+      "max_abs_difference": 0.0,
+      "sha256": "457e90601c434f5ade0afb149595a50d92c3ca0f047f13a8d95d8a9cea1522ee",
+      "KL_reference_to_candidate": 0
+    },
+    {
+      "name": "stage-3",
+      "all_float_bits_equal": true,
+      "values": 129280,
+      "top1_equal": true,
+      "max_abs_difference": 0.0,
+      "sha256": "457e90601c434f5ade0afb149595a50d92c3ca0f047f13a8d95d8a9cea1522ee",
+      "KL_reference_to_candidate": 0
+    }
+  ],
+  "guard_receipts": [
+    {
+      "name": "analyze-baseline-75b4742d89fa4135add371a60cfea597.receipt.json",
+      "exit_code": 0,
+      "reason": null,
+      "cleanup_confirmed": true,
+      "forced_kill": false,
+      "peak_host_RSS": 122437632,
+      "minimum_available_RAM": 7031447552,
+      "owned_paged_bytes": null,
+      "global_pagefile_growth": null
+    },
+    {
+      "name": "analyze-concat-1874ba8d2f334ceab905beec3ca6de68.receipt.json",
+      "exit_code": 0,
+      "reason": null,
+      "cleanup_confirmed": true,
+      "forced_kill": false,
+      "peak_host_RSS": 135553024,
+      "minimum_available_RAM": 7192637440,
+      "owned_paged_bytes": null,
+      "global_pagefile_growth": null
+    },
+    {
+      "name": "analyze-concat-fixed-a2a60cffbca140a683b8d38af3814858.receipt.json",
+      "exit_code": 0,
+      "reason": null,
+      "cleanup_confirmed": true,
+      "forced_kill": false,
+      "peak_host_RSS": 123420672,
+      "minimum_available_RAM": 7064035328,
+      "owned_paged_bytes": null,
+      "global_pagefile_growth": null
+    },
+    {
+      "name": "asymmetric-build-bb75a352825844d2ba85d775f393d4f4.receipt.json",
+      "exit_code": 1,
+      "reason": null,
+      "cleanup_confirmed": true,
+      "forced_kill": false,
+      "peak_host_RSS": 28975104,
+      "minimum_available_RAM": 12641968128,
+      "owned_paged_bytes": null,
+      "global_pagefile_growth": null
+    },
+    {
+      "name": "baseline-7e599b75e66e49b9a992815ef27ddcbe.receipt.json",
+      "exit_code": 1,
+      "reason": null,
+      "cleanup_confirmed": true,
+      "forced_kill": false,
+      "peak_host_RSS": 28659712,
+      "minimum_available_RAM": 12823973888,
+      "owned_paged_bytes": 0,
+      "global_pagefile_growth": 0
+    },
+    {
+      "name": "baseline-clean-b604efdb0e804338a62d97769e692083.receipt.json",
+      "exit_code": 0,
+      "reason": null,
+      "cleanup_confirmed": true,
+      "forced_kill": false,
+      "peak_host_RSS": 6414757888,
+      "minimum_available_RAM": 7534182400,
+      "owned_paged_bytes": 4096,
+      "global_pagefile_growth": 0
+    },
+    {
+      "name": "baseline-final-control-2415f3e68bb3400ab27bad635ceacd4a.receipt.json",
+      "exit_code": 0,
+      "reason": null,
+      "cleanup_confirmed": true,
+      "forced_kill": false,
+      "peak_host_RSS": 6467547136,
+      "minimum_available_RAM": 6855553024,
+      "owned_paged_bytes": 0,
+      "global_pagefile_growth": 0
+    },
+    {
+      "name": "baseline-last-ecebcf87ec884a93811aaf5ece19f241.receipt.json",
+      "exit_code": 0,
+      "reason": null,
+      "cleanup_confirmed": true,
+      "forced_kill": false,
+      "peak_host_RSS": 6418554880,
+      "minimum_available_RAM": 7042015232,
+      "owned_paged_bytes": 0,
+      "global_pagefile_growth": 0
+    },
+    {
+      "name": "baseline-nsys-a1a4c25b716746fb89b11b7ef585d1f6.receipt.json",
+      "exit_code": 0,
+      "reason": null,
+      "cleanup_confirmed": true,
+      "forced_kill": false,
+      "peak_host_RSS": 7125643264,
+      "minimum_available_RAM": 6776647680,
+      "owned_paged_bytes": 0,
+      "global_pagefile_growth": 0
+    },
+    {
+      "name": "baseline-repeat-0dbc90bbb0c34f1e98750a8c9d175547.receipt.json",
+      "exit_code": 0,
+      "reason": null,
+      "cleanup_confirmed": true,
+      "forced_kill": false,
+      "peak_host_RSS": 6439747584,
+      "minimum_available_RAM": 7261892608,
+      "owned_paged_bytes": 0,
+      "global_pagefile_growth": 0
+    },
+    {
+      "name": "baseline-retry-a8bb61f3c10f4bbfa3a03c7dc071f476.receipt.json",
+      "exit_code": 1,
+      "reason": null,
+      "cleanup_confirmed": true,
+      "forced_kill": false,
+      "peak_host_RSS": 28385280,
+      "minimum_available_RAM": 12823756800,
+      "owned_paged_bytes": 0,
+      "global_pagefile_growth": 0
+    },
+    {
+      "name": "checked-tests-build-d543b6e213e44d81af7a8298fe87a28b.receipt.json",
+      "exit_code": 0,
+      "reason": null,
+      "cleanup_confirmed": true,
+      "forced_kill": true,
+      "peak_host_RSS": 224038912,
+      "minimum_available_RAM": 12464766976,
+      "owned_paged_bytes": null,
+      "global_pagefile_growth": null
+    },
+    {
+      "name": "component-1-1ea0704a058e4850ad0fff119bb9e500.receipt.json",
+      "exit_code": 0,
+      "reason": null,
+      "cleanup_confirmed": true,
+      "forced_kill": false,
+      "peak_host_RSS": 1241907200,
+      "minimum_available_RAM": 12610904064,
+      "owned_paged_bytes": 0,
+      "global_pagefile_growth": 0
+    },
+    {
+      "name": "component-checked-concat-01538d7c3ea84dbb8fcf0a6d467ccfe8.receipt.json",
+      "exit_code": 0,
+      "reason": null,
+      "cleanup_confirmed": true,
+      "forced_kill": false,
+      "peak_host_RSS": 310910976,
+      "minimum_available_RAM": 12147261440,
+      "owned_paged_bytes": 0,
+      "global_pagefile_growth": 0
+    },
+    {
+      "name": "component-checked-concat-memcheck-9eb165620ab44ec084e5a981f24fbef9.receipt.json",
+      "exit_code": 0,
+      "reason": null,
+      "cleanup_confirmed": true,
+      "forced_kill": false,
+      "peak_host_RSS": 372035584,
+      "minimum_available_RAM": 12135546880,
+      "owned_paged_bytes": 0,
+      "global_pagefile_growth": 0
+    },
+    {
+      "name": "component-checked-hc-bd0c023b5ae04ee8a2bed96b37cda0ea.receipt.json",
+      "exit_code": 0,
+      "reason": null,
+      "cleanup_confirmed": true,
+      "forced_kill": false,
+      "peak_host_RSS": 1241284608,
+      "minimum_available_RAM": 11228385280,
+      "owned_paged_bytes": 0,
+      "global_pagefile_growth": 0
+    },
+    {
+      "name": "component-checked-hc-memcheck-b5cadfac372048c1965bb1b9d594f6cc.receipt.json",
+      "exit_code": 0,
+      "reason": null,
+      "cleanup_confirmed": true,
+      "forced_kill": false,
+      "peak_host_RSS": 1306447872,
+      "minimum_available_RAM": 11083706368,
+      "owned_paged_bytes": 0,
+      "global_pagefile_growth": 0
+    },
+    {
+      "name": "component-concat-asymmetric-99903ff389ca4ecc995f7caec4b143dc.receipt.json",
+      "exit_code": 0,
+      "reason": null,
+      "cleanup_confirmed": true,
+      "forced_kill": false,
+      "peak_host_RSS": 114417664,
+      "minimum_available_RAM": 12546002944,
+      "owned_paged_bytes": 0,
+      "global_pagefile_growth": 0
+    },
+    {
+      "name": "component-concat-asymmetric-memcheck-297ac6fd596348a98087def1c7225825.receipt.json",
+      "exit_code": 0,
+      "reason": null,
+      "cleanup_confirmed": true,
+      "forced_kill": false,
+      "peak_host_RSS": 322052096,
+      "minimum_available_RAM": 12372434944,
+      "owned_paged_bytes": 0,
+      "global_pagefile_growth": 0
+    },
+    {
+      "name": "component-concat-c5203ed2be28470d8dc40fb7c781fcb6.receipt.json",
+      "exit_code": 0,
+      "reason": null,
+      "cleanup_confirmed": true,
+      "forced_kill": false,
+      "peak_host_RSS": 257413120,
+      "minimum_available_RAM": 12300201984,
+      "owned_paged_bytes": 0,
+      "global_pagefile_growth": 0
+    },
+    {
+      "name": "component-concat-memcheck-0578d01b95ff4f65a7a61e07dd7ba1d4.receipt.json",
+      "exit_code": 0,
+      "reason": null,
+      "cleanup_confirmed": true,
+      "forced_kill": false,
+      "peak_host_RSS": 215470080,
+      "minimum_available_RAM": 11715342336,
+      "owned_paged_bytes": 0,
+      "global_pagefile_growth": 0
+    },
+    {
+      "name": "component-final-fdab13e0d7734b2fa2244f734745fbbd.receipt.json",
+      "exit_code": 0,
+      "reason": null,
+      "cleanup_confirmed": true,
+      "forced_kill": false,
+      "peak_host_RSS": 1241067520,
+      "minimum_available_RAM": 12353314816,
+      "owned_paged_bytes": 0,
+      "global_pagefile_growth": 0
+    },
+    {
+      "name": "component-final-memcheck-e5f220fe438640b3a0359a1d8e23517f.receipt.json",
+      "exit_code": 0,
+      "reason": null,
+      "cleanup_confirmed": true,
+      "forced_kill": false,
+      "peak_host_RSS": 1306595328,
+      "minimum_available_RAM": 11745382400,
+      "owned_paged_bytes": 0,
+      "global_pagefile_growth": 0
+    },
+    {
+      "name": "component-memcheck-58215dba550a473cb16bf074c86b6d12.receipt.json",
+      "exit_code": 1,
+      "reason": null,
+      "cleanup_confirmed": true,
+      "forced_kill": false,
+      "peak_host_RSS": 28839936,
+      "minimum_available_RAM": 13765263360,
+      "owned_paged_bytes": 0,
+      "global_pagefile_growth": 0
+    },
+    {
+      "name": "component-memcheck-fixed-6cd339df044d45bc8c872b5d1f4d2dab.receipt.json",
+      "exit_code": 0,
+      "reason": null,
+      "cleanup_confirmed": true,
+      "forced_kill": false,
+      "peak_host_RSS": 1306464256,
+      "minimum_available_RAM": 12636241920,
+      "owned_paged_bytes": 0,
+      "global_pagefile_growth": 0
+    },
+    {
+      "name": "concat-1-5b048ca379fb4ff895ea045c8c4c9cfa.receipt.json",
+      "exit_code": 0,
+      "reason": null,
+      "cleanup_confirmed": true,
+      "forced_kill": false,
+      "peak_host_RSS": 6432018432,
+      "minimum_available_RAM": 5099687936,
+      "owned_paged_bytes": 0,
+      "global_pagefile_growth": 0
+    },
+    {
+      "name": "concat-2-5e1d42d1d26a4c90837f9183ac0c6387.receipt.json",
+      "exit_code": 0,
+      "reason": null,
+      "cleanup_confirmed": true,
+      "forced_kill": false,
+      "peak_host_RSS": 6412369920,
+      "minimum_available_RAM": 7425069056,
+      "owned_paged_bytes": 0,
+      "global_pagefile_growth": 0
+    },
+    {
+      "name": "concat-build-984c647963f54517bcb7961e0655f865.receipt.json",
+      "exit_code": 0,
+      "reason": null,
+      "cleanup_confirmed": true,
+      "forced_kill": false,
+      "peak_host_RSS": 415846400,
+      "minimum_available_RAM": 7134625792,
+      "owned_paged_bytes": null,
+      "global_pagefile_growth": null
+    },
+    {
+      "name": "concat-nsys-ced8d837ff564426be0b353bfc046cdf.receipt.json",
+      "exit_code": 0,
+      "reason": null,
+      "cleanup_confirmed": true,
+      "forced_kill": false,
+      "peak_host_RSS": 7108186112,
+      "minimum_available_RAM": 6782328832,
+      "owned_paged_bytes": 0,
+      "global_pagefile_growth": 0
+    },
+    {
+      "name": "dense-control-1-6a80c46425ab452d8002b977b33bab6e.receipt.json",
+      "exit_code": 0,
+      "reason": null,
+      "cleanup_confirmed": true,
+      "forced_kill": false,
+      "peak_host_RSS": 6501212160,
+      "minimum_available_RAM": 7503974400,
+      "owned_paged_bytes": 0,
+      "global_pagefile_growth": 0
+    },
+    {
+      "name": "dense-control-2-24d7ded4761a43b593bfae7d783fd0b8.receipt.json",
+      "exit_code": 0,
+      "reason": null,
+      "cleanup_confirmed": true,
+      "forced_kill": false,
+      "peak_host_RSS": 6508756992,
+      "minimum_available_RAM": 7450320896,
+      "owned_paged_bytes": 0,
+      "global_pagefile_growth": 0
+    },
+    {
+      "name": "evidence-final-f82017e33d1446fea0d33e38893c2d6b.receipt.json",
+      "exit_code": 0,
+      "reason": null,
+      "cleanup_confirmed": true,
+      "forced_kill": false,
+      "peak_host_RSS": 147914752,
+      "minimum_available_RAM": 12752302080,
+      "owned_paged_bytes": null,
+      "global_pagefile_growth": null
+    },
+    {
+      "name": "final-1-44a907fcd49b45f7b546529388ddb220.receipt.json",
+      "exit_code": 0,
+      "reason": null,
+      "cleanup_confirmed": true,
+      "forced_kill": false,
+      "peak_host_RSS": 6509371392,
+      "minimum_available_RAM": 7030714368,
+      "owned_paged_bytes": 0,
+      "global_pagefile_growth": 0
+    },
+    {
+      "name": "final-2-7568e4ac416b455b83fbf4cb844a676c.receipt.json",
+      "exit_code": 0,
+      "reason": null,
+      "cleanup_confirmed": true,
+      "forced_kill": false,
+      "peak_host_RSS": 6431928320,
+      "minimum_available_RAM": 6658543616,
+      "owned_paged_bytes": 0,
+      "global_pagefile_growth": 0
+    },
+    {
+      "name": "final-build-bbb3f278037c4149897a46ed8e4f6fb9.receipt.json",
+      "exit_code": 0,
+      "reason": null,
+      "cleanup_confirmed": true,
+      "forced_kill": false,
+      "peak_host_RSS": 415019008,
+      "minimum_available_RAM": 13313114112,
+      "owned_paged_bytes": null,
+      "global_pagefile_growth": null
+    },
+    {
+      "name": "final-nsys-f5ceeb40dc374ad7bcfe3a91d1eb907e.receipt.json",
+      "exit_code": 0,
+      "reason": null,
+      "cleanup_confirmed": true,
+      "forced_kill": false,
+      "peak_host_RSS": 7100911616,
+      "minimum_available_RAM": 6271033344,
+      "owned_paged_bytes": 0,
+      "global_pagefile_growth": 0
+    },
+    {
+      "name": "final-quality-13d100dc3d53435c928b0a743989fb3f.receipt.json",
+      "exit_code": 0,
+      "reason": null,
+      "cleanup_confirmed": true,
+      "forced_kill": false,
+      "peak_host_RSS": 74268672,
+      "minimum_available_RAM": 12652294144,
+      "owned_paged_bytes": null,
+      "global_pagefile_growth": null
+    },
+    {
+      "name": "fp8-1-5c02d494f9f243d5ba00cd9d0025ea1e.receipt.json",
+      "exit_code": 0,
+      "reason": null,
+      "cleanup_confirmed": true,
+      "forced_kill": false,
+      "peak_host_RSS": 6428377088,
+      "minimum_available_RAM": 6998700032,
+      "owned_paged_bytes": 0,
+      "global_pagefile_growth": 0
+    },
+    {
+      "name": "fp8-2-e18b729fa5ca4df2b12be3c3661af6f5.receipt.json",
+      "exit_code": 0,
+      "reason": null,
+      "cleanup_confirmed": true,
+      "forced_kill": false,
+      "peak_host_RSS": 6402101248,
+      "minimum_available_RAM": 7286116352,
+      "owned_paged_bytes": 0,
+      "global_pagefile_growth": 0
+    },
+    {
+      "name": "hc-1-788b4fe98e6b4a16bd837fe90c11e40c.receipt.json",
+      "exit_code": 0,
+      "reason": null,
+      "cleanup_confirmed": true,
+      "forced_kill": false,
+      "peak_host_RSS": 6453092352,
+      "minimum_available_RAM": 7638863872,
+      "owned_paged_bytes": 0,
+      "global_pagefile_growth": 0
+    },
+    {
+      "name": "hc-2-dd5a973e5c084dde985de3269b67ed15.receipt.json",
+      "exit_code": 0,
+      "reason": null,
+      "cleanup_confirmed": true,
+      "forced_kill": false,
+      "peak_host_RSS": 6463250432,
+      "minimum_available_RAM": 6038380544,
+      "owned_paged_bytes": 0,
+      "global_pagefile_growth": 0
+    },
+    {
+      "name": "hc-build-c3781c70fb58432c9372d7c77fc4130c.receipt.json",
+      "exit_code": 0,
+      "reason": null,
+      "cleanup_confirmed": true,
+      "forced_kill": false,
+      "peak_host_RSS": 485908480,
+      "minimum_available_RAM": 6984339456,
+      "owned_paged_bytes": null,
+      "global_pagefile_growth": null
+    },
+    {
+      "name": "hc-nsys-0b031b745ecf4574b2ab7e89201db62b.receipt.json",
+      "exit_code": 3221225786,
+      "reason": "GPU hold ledger unavailable for1second: [Errno 13] Permission denied",
+      "cleanup_confirmed": true,
+      "forced_kill": false,
+      "peak_host_RSS": 7081517056,
+      "minimum_available_RAM": 6716227584,
+      "owned_paged_bytes": 0,
+      "global_pagefile_growth": 0
+    },
+    {
+      "name": "hc-nsys-verified-772f1e94629044318a3f731908eac896.receipt.json",
+      "exit_code": 0,
+      "reason": null,
+      "cleanup_confirmed": true,
+      "forced_kill": false,
+      "peak_host_RSS": 7050125312,
+      "minimum_available_RAM": 3517661184,
+      "owned_paged_bytes": 0,
+      "global_pagefile_growth": 0
+    },
+    {
+      "name": "inspect-b3e14435ef7e4a5889746887742ceb55.receipt.json",
+      "exit_code": 0,
+      "reason": null,
+      "cleanup_confirmed": true,
+      "forced_kill": false,
+      "peak_host_RSS": 41345024,
+      "minimum_available_RAM": 13876367360,
+      "owned_paged_bytes": null,
+      "global_pagefile_growth": null
+    },
+    {
+      "name": "native-fp4-speed-proxy-1a86905f9bb3446cb66e415b62f08c6b.receipt.json",
+      "exit_code": 0,
+      "reason": null,
+      "cleanup_confirmed": true,
+      "forced_kill": false,
+      "peak_host_RSS": 6399143936,
+      "minimum_available_RAM": 7018295296,
+      "owned_paged_bytes": 0,
+      "global_pagefile_growth": 0
+    },
+    {
+      "name": "native-fp4-speed-proxy-3c4e5af4f4ae4eb4aed01805fbaca2f3.receipt.json",
+      "exit_code": 0,
+      "reason": null,
+      "cleanup_confirmed": true,
+      "forced_kill": false,
+      "peak_host_RSS": 6806441984,
+      "minimum_available_RAM": 3411017728,
+      "owned_paged_bytes": 0,
+      "global_pagefile_growth": 0
+    },
+    {
+      "name": "native-fp4-speed-proxy-41c40b4f604444afb20149c1d253e8e9.receipt.json",
+      "exit_code": 0,
+      "reason": null,
+      "cleanup_confirmed": true,
+      "forced_kill": false,
+      "peak_host_RSS": 6311235584,
+      "minimum_available_RAM": 6870691840,
+      "owned_paged_bytes": 0,
+      "global_pagefile_growth": 0
+    },
+    {
+      "name": "native-fp4-speed-proxy-44228aa0978343c7a4315feff78ca69e.receipt.json",
+      "exit_code": 0,
+      "reason": null,
+      "cleanup_confirmed": true,
+      "forced_kill": false,
+      "peak_host_RSS": 6795411456,
+      "minimum_available_RAM": 6709964800,
+      "owned_paged_bytes": 0,
+      "global_pagefile_growth": 0
+    },
+    {
+      "name": "native-fp4-speed-proxy-5157d76950cf4587a8f3b02dfa8f47cb.receipt.json",
+      "exit_code": 0,
+      "reason": null,
+      "cleanup_confirmed": true,
+      "forced_kill": false,
+      "peak_host_RSS": 6315204608,
+      "minimum_available_RAM": 6657654784,
+      "owned_paged_bytes": 0,
+      "global_pagefile_growth": 0
+    },
+    {
+      "name": "native-fp4-speed-proxy-5584b9b34ada45779391e08104dd98f2.receipt.json",
+      "exit_code": 0,
+      "reason": null,
+      "cleanup_confirmed": true,
+      "forced_kill": false,
+      "peak_host_RSS": 6397485056,
+      "minimum_available_RAM": 7478730752,
+      "owned_paged_bytes": 0,
+      "global_pagefile_growth": 0
+    },
+    {
+      "name": "native-fp4-speed-proxy-568f96ee41df401d98f3c7e4f1fb7671.receipt.json",
+      "exit_code": 0,
+      "reason": null,
+      "cleanup_confirmed": true,
+      "forced_kill": false,
+      "peak_host_RSS": 6338375680,
+      "minimum_available_RAM": 7245729792,
+      "owned_paged_bytes": 0,
+      "global_pagefile_growth": 0
+    },
+    {
+      "name": "native-fp4-speed-proxy-5adeae11a7444d149bcd0629fe576494.receipt.json",
+      "exit_code": 0,
+      "reason": null,
+      "cleanup_confirmed": true,
+      "forced_kill": false,
+      "peak_host_RSS": 6332424192,
+      "minimum_available_RAM": 7545126912,
+      "owned_paged_bytes": 0,
+      "global_pagefile_growth": 0
+    },
+    {
+      "name": "native-fp4-speed-proxy-5aed9a158e4d49b387c53bb9775b53c2.receipt.json",
+      "exit_code": 0,
+      "reason": null,
+      "cleanup_confirmed": true,
+      "forced_kill": false,
+      "peak_host_RSS": 6833643520,
+      "minimum_available_RAM": 6784565248,
+      "owned_paged_bytes": 0,
+      "global_pagefile_growth": 0
+    },
+    {
+      "name": "native-fp4-speed-proxy-774f0c2548e146d8a434b5802fef1b76.receipt.json",
+      "exit_code": 0,
+      "reason": null,
+      "cleanup_confirmed": true,
+      "forced_kill": false,
+      "peak_host_RSS": 6311153664,
+      "minimum_available_RAM": 6953029632,
+      "owned_paged_bytes": 0,
+      "global_pagefile_growth": 0
+    },
+    {
+      "name": "native-fp4-speed-proxy-811fc1caebcd43048053ba8f3f94fec5.receipt.json",
+      "exit_code": 0,
+      "reason": null,
+      "cleanup_confirmed": true,
+      "forced_kill": false,
+      "peak_host_RSS": 6331736064,
+      "minimum_available_RAM": 7308976128,
+      "owned_paged_bytes": 0,
+      "global_pagefile_growth": 0
+    },
+    {
+      "name": "native-fp4-speed-proxy-82122d76e61a412990b0beb09ab40733.receipt.json",
+      "exit_code": 0,
+      "reason": null,
+      "cleanup_confirmed": true,
+      "forced_kill": false,
+      "peak_host_RSS": 6817296384,
+      "minimum_available_RAM": 6828355584,
+      "owned_paged_bytes": 0,
+      "global_pagefile_growth": 0
+    },
+    {
+      "name": "native-fp4-speed-proxy-8f14f81e93a74d8b9892080af11d1de5.receipt.json",
+      "exit_code": 0,
+      "reason": null,
+      "cleanup_confirmed": true,
+      "forced_kill": false,
+      "peak_host_RSS": 6380306432,
+      "minimum_available_RAM": 7091888128,
+      "owned_paged_bytes": 0,
+      "global_pagefile_growth": 0
+    },
+    {
+      "name": "native-fp4-speed-proxy-9155b92291884361880c289c69f4cc0e.receipt.json",
+      "exit_code": 0,
+      "reason": null,
+      "cleanup_confirmed": true,
+      "forced_kill": false,
+      "peak_host_RSS": 6384201728,
+      "minimum_available_RAM": 6743805952,
+      "owned_paged_bytes": 0,
+      "global_pagefile_growth": 0
+    },
+    {
+      "name": "native-fp4-speed-proxy-98808b6af6a9423a8c20e5718c55d6b4.receipt.json",
+      "exit_code": 0,
+      "reason": null,
+      "cleanup_confirmed": true,
+      "forced_kill": false,
+      "peak_host_RSS": 6410428416,
+      "minimum_available_RAM": 7565496320,
+      "owned_paged_bytes": 0,
+      "global_pagefile_growth": 0
+    },
+    {
+      "name": "native-fp4-speed-proxy-9f44143aea2949d788abcb51d9852b7c.receipt.json",
+      "exit_code": 0,
+      "reason": null,
+      "cleanup_confirmed": true,
+      "forced_kill": false,
+      "peak_host_RSS": 6345895936,
+      "minimum_available_RAM": 7373709312,
+      "owned_paged_bytes": 0,
+      "global_pagefile_growth": 0
+    },
+    {
+      "name": "native-fp4-speed-proxy-a445d4e646ef4a0daad8ce21833acb00.receipt.json",
+      "exit_code": 0,
+      "reason": null,
+      "cleanup_confirmed": true,
+      "forced_kill": false,
+      "peak_host_RSS": 6377988096,
+      "minimum_available_RAM": 4088434688,
+      "owned_paged_bytes": 0,
+      "global_pagefile_growth": 17162240
+    },
+    {
+      "name": "native-fp4-speed-proxy-a586d6254d0a4bf68fccf63689ec122e.receipt.json",
+      "exit_code": 0,
+      "reason": null,
+      "cleanup_confirmed": true,
+      "forced_kill": false,
+      "peak_host_RSS": 6405079040,
+      "minimum_available_RAM": 7503847424,
+      "owned_paged_bytes": 0,
+      "global_pagefile_growth": 0
+    },
+    {
+      "name": "native-fp4-speed-proxy-be33046d55a64964b000fb11d9ad8cd0.receipt.json",
+      "exit_code": 0,
+      "reason": null,
+      "cleanup_confirmed": true,
+      "forced_kill": false,
+      "peak_host_RSS": 6330793984,
+      "minimum_available_RAM": 5027491840,
+      "owned_paged_bytes": 0,
+      "global_pagefile_growth": 0
+    },
+    {
+      "name": "native-fp4-speed-proxy-c79a348b223146f7828db586301a8baf.receipt.json",
+      "exit_code": 0,
+      "reason": null,
+      "cleanup_confirmed": true,
+      "forced_kill": false,
+      "peak_host_RSS": 6391529472,
+      "minimum_available_RAM": 7450841088,
+      "owned_paged_bytes": 0,
+      "global_pagefile_growth": 0
+    },
+    {
+      "name": "native-fp4-speed-proxy-cfeb5807e38a426495e58e18c34be33f.receipt.json",
+      "exit_code": 0,
+      "reason": null,
+      "cleanup_confirmed": true,
+      "forced_kill": false,
+      "peak_host_RSS": 6379884544,
+      "minimum_available_RAM": 6983847936,
+      "owned_paged_bytes": 0,
+      "global_pagefile_growth": 0
+    },
+    {
+      "name": "native-fp4-speed-proxy-e736452c5d8f4810aa974bb0fca0026e.receipt.json",
+      "exit_code": 0,
+      "reason": null,
+      "cleanup_confirmed": true,
+      "forced_kill": false,
+      "peak_host_RSS": 6859796480,
+      "minimum_available_RAM": 6233419776,
+      "owned_paged_bytes": 0,
+      "global_pagefile_growth": 0
+    },
+    {
+      "name": "native-fp4-speed-proxy-efd500077101482b8b01f6da84fc118a.receipt.json",
+      "exit_code": 0,
+      "reason": null,
+      "cleanup_confirmed": true,
+      "forced_kill": false,
+      "peak_host_RSS": 6348398592,
+      "minimum_available_RAM": 6044389376,
+      "owned_paged_bytes": 0,
+      "global_pagefile_growth": 0
+    },
+    {
+      "name": "native-fp4-speed-proxy-f9fa58f8bfa343ba9076243854faf2da.receipt.json",
+      "exit_code": 0,
+      "reason": null,
+      "cleanup_confirmed": true,
+      "forced_kill": false,
+      "peak_host_RSS": 6340124672,
+      "minimum_available_RAM": 7018745856,
+      "owned_paged_bytes": 0,
+      "global_pagefile_growth": 0
+    },
+    {
+      "name": "pin-1-29168ec5d3934b36815249756837b2f0.receipt.json",
+      "exit_code": 0,
+      "reason": null,
+      "cleanup_confirmed": true,
+      "forced_kill": false,
+      "peak_host_RSS": 6412800000,
+      "minimum_available_RAM": 7537373184,
+      "owned_paged_bytes": 0,
+      "global_pagefile_growth": 0
+    },
+    {
+      "name": "pin-2-aaf4e428ef8c45f78e3cf649cd4f6d46.receipt.json",
+      "exit_code": 0,
+      "reason": null,
+      "cleanup_confirmed": true,
+      "forced_kill": false,
+      "peak_host_RSS": 6414495744,
+      "minimum_available_RAM": 4089487360,
+      "owned_paged_bytes": 0,
+      "global_pagefile_growth": 15110144
+    },
+    {
+      "name": "quality-initial-839ed2ad2faf412db264fc98f39223c5.receipt.json",
+      "exit_code": 0,
+      "reason": null,
+      "cleanup_confirmed": true,
+      "forced_kill": false,
+      "peak_host_RSS": 65839104,
+      "minimum_available_RAM": 7511715840,
+      "owned_paged_bytes": null,
+      "global_pagefile_growth": null
+    },
+    {
+      "name": "release-final-cb5e274b7f0a40b69364479d368b0d50.receipt.json",
+      "exit_code": 1,
+      "reason": null,
+      "cleanup_confirmed": true,
+      "forced_kill": false,
+      "peak_host_RSS": 254517248,
+      "minimum_available_RAM": 12608892928,
+      "owned_paged_bytes": null,
+      "global_pagefile_growth": null
+    },
+    {
+      "name": "release-first-0189e5c5d96548b18a1ab016b445fee3.receipt.json",
+      "exit_code": 0,
+      "reason": null,
+      "cleanup_confirmed": true,
+      "forced_kill": false,
+      "peak_host_RSS": 257794048,
+      "minimum_available_RAM": 6275469312,
+      "owned_paged_bytes": null,
+      "global_pagefile_growth": null
+    },
+    {
+      "name": "stage-1-0cd478e7daa248e9b21425ffd36dd285.receipt.json",
+      "exit_code": 0,
+      "reason": null,
+      "cleanup_confirmed": true,
+      "forced_kill": false,
+      "peak_host_RSS": 6412677120,
+      "minimum_available_RAM": 7122923520,
+      "owned_paged_bytes": 0,
+      "global_pagefile_growth": 0
+    },
+    {
+      "name": "stage-2-146103fe7eff46618652a098a2d68e83.receipt.json",
+      "exit_code": 0,
+      "reason": null,
+      "cleanup_confirmed": true,
+      "forced_kill": false,
+      "peak_host_RSS": 6421012480,
+      "minimum_available_RAM": 6805282816,
+      "owned_paged_bytes": 0,
+      "global_pagefile_growth": 0
+    },
+    {
+      "name": "stage-3-23764fc660834257a882744e8d326ca0.receipt.json",
+      "exit_code": 0,
+      "reason": null,
+      "cleanup_confirmed": true,
+      "forced_kill": false,
+      "peak_host_RSS": 6421999616,
+      "minimum_available_RAM": 6978748416,
+      "owned_paged_bytes": 0,
+      "global_pagefile_growth": 0
+    },
+    {
+      "name": "summarize-c92c6f7dc88c4e5eb49995118825d1b2.receipt.json",
+      "exit_code": 0,
+      "reason": null,
+      "cleanup_confirmed": true,
+      "forced_kill": false,
+      "peak_host_RSS": 118530048,
+      "minimum_available_RAM": 13849108480,
+      "owned_paged_bytes": null,
+      "global_pagefile_growth": null
+    },
+    {
+      "name": "timeline-baseline-final-2552484e7ac34a97a315584467865236.receipt.json",
+      "exit_code": 0,
+      "reason": null,
+      "cleanup_confirmed": true,
+      "forced_kill": false,
+      "peak_host_RSS": 142000128,
+      "minimum_available_RAM": 4076015616,
+      "owned_paged_bytes": null,
+      "global_pagefile_growth": null
+    },
+    {
+      "name": "timeline-concat-final-c0c7026e71d147cd89429b9afea0cff0.receipt.json",
+      "exit_code": 0,
+      "reason": null,
+      "cleanup_confirmed": true,
+      "forced_kill": false,
+      "peak_host_RSS": 120983552,
+      "minimum_available_RAM": 4072800256,
+      "owned_paged_bytes": null,
+      "global_pagefile_growth": null
+    },
+    {
+      "name": "timeline-final-1b5765d318bc4e989dc1a13fbe862e46.receipt.json",
+      "exit_code": 0,
+      "reason": null,
+      "cleanup_confirmed": true,
+      "forced_kill": false,
+      "peak_host_RSS": 121303040,
+      "minimum_available_RAM": 4554465280,
+      "owned_paged_bytes": null,
+      "global_pagefile_growth": null
+    },
+    {
+      "name": "timeline-hc-fa1e971e650141b195e434362d657d15.receipt.json",
+      "exit_code": 0,
+      "reason": null,
+      "cleanup_confirmed": true,
+      "forced_kill": false,
+      "peak_host_RSS": 145539072,
+      "minimum_available_RAM": 6853984256,
+      "owned_paged_bytes": null,
+      "global_pagefile_growth": null
+    }
+  ],
+  "source_capability_reductions": [],
+  "benchmark_scope": [
+    "Existing packed FP4 proxy is lossy and remains opt-in.",
+    "Existing harness disables CUDA graphs in the proxy arm; no whole-layer graph replay claim.",
+    "Requested prompt-only mode evaluates no decode steps; one untouched frontier is saved.",
+    "Bias is the requested zero; no feature field or sampler was removed."
+  ]
+}

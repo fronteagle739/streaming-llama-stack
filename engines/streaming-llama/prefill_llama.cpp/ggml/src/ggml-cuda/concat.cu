@@ -1,96 +1,18 @@
 #include "concat.cuh"
+#include "concat-flat.cuh"
 
-// contiguous kernels
-static __global__ void concat_f32_dim0(const float * x, const float * y, float * dst, const int ne0, const int ne00) {
-    int nidx = threadIdx.x + blockIdx.x * blockDim.x;
-    if (nidx >= ne0) {
-        return;
-    }
-
-    int offset_dst =
-        nidx +
-        blockIdx.y * ne0 +
-        blockIdx.z * ne0 * gridDim.y;
-
-    if (nidx < ne00) { // src0
-        int offset_src =
-            nidx +
-            blockIdx.y * ne00 +
-            blockIdx.z * ne00 * gridDim.y;
-        dst[offset_dst] = x[offset_src];
-    } else {
-        int offset_src =
-            (nidx - ne00) +
-            blockIdx.y * (ne0 - ne00) +
-            blockIdx.z * (ne0 - ne00) * gridDim.y;
-        dst[offset_dst] = y[offset_src];
-    }
-}
-
-static __global__ void concat_f32_dim1(const float * x, const float * y, float * dst, const int ne0, const int ne01) {
-    int nidx = threadIdx.x + blockIdx.x * blockDim.x;
-    if (nidx >= ne0) {
-        return;
-    }
-
-    int offset_dst =
-        nidx +
-        blockIdx.y * ne0 +
-        blockIdx.z * ne0 * gridDim.y;
-
-    if (blockIdx.y < (unsigned)ne01) { // src0
-        int offset_src =
-            nidx +
-            blockIdx.y * ne0 +
-            blockIdx.z * ne0 * ne01;
-        dst[offset_dst] = x[offset_src];
-    } else {
-        int offset_src =
-            nidx +
-            (blockIdx.y - ne01) * ne0 +
-            blockIdx.z * ne0 * (gridDim.y - ne01);
-        dst[offset_dst] = y[offset_src];
-    }
-}
-
-static __global__ void concat_f32_dim2(const float * x, const float * y, float * dst, const int ne0, const int ne02) {
-    int nidx = threadIdx.x + blockIdx.x * blockDim.x;
-    if (nidx >= ne0) {
-        return;
-    }
-
-    int offset_dst =
-        nidx +
-        blockIdx.y * ne0 +
-        blockIdx.z * ne0 * gridDim.y;
-
-    if (blockIdx.z < (unsigned)ne02) { // src0
-        int offset_src =
-            nidx +
-            blockIdx.y * ne0 +
-            blockIdx.z * ne0 * gridDim.y;
-        dst[offset_dst] = x[offset_src];
-    } else {
-        int offset_src =
-            nidx +
-            blockIdx.y * ne0 +
-            (blockIdx.z - ne02) * ne0 *  gridDim.y;
-        dst[offset_dst] = y[offset_src];
-    }
-}
-
+// Contiguous F32 path. Other types and strided tensors retain their copy kernels.
 static void concat_f32_cuda(const float * x, const float * y, float * dst, int ne00, int ne01, int ne02, int ne0, int ne1, int ne2, int dim, cudaStream_t stream) {
-    int num_blocks = (ne0 + CUDA_CONCAT_BLOCK_SIZE - 1) / CUDA_CONCAT_BLOCK_SIZE;
-    dim3 gridDim(num_blocks, ne1, ne2);
-    if (dim == 0) {
-        concat_f32_dim0<<<gridDim, CUDA_CONCAT_BLOCK_SIZE, 0, stream>>>(x, y, dst, ne0, ne00);
-        return;
-    }
-    if (dim == 1) {
-        concat_f32_dim1<<<gridDim, CUDA_CONCAT_BLOCK_SIZE, 0, stream>>>(x, y, dst, ne0, ne01);
-        return;
-    }
-    concat_f32_dim2<<<gridDim, CUDA_CONCAT_BLOCK_SIZE, 0, stream>>>(x, y, dst, ne0, ne02);
+    // All three contiguous dimensions have the same repeated two-span copy.
+    // Preserve the existing generic/noncontiguous and non-F32 implementations.
+    const int64_t inner = dim == 0 ? 1 : dim == 1 ? ne0 : int64_t(ne0) * ne1;
+    const int64_t xspan = inner * (dim == 0 ? ne00 : dim == 1 ? ne01 : ne02);
+    const int64_t span = inner * (dim == 0 ? ne0 : dim == 1 ? ne1 : ne2);
+    const int64_t yspan = span - xspan, count = int64_t(ne0) * ne1 * ne2;
+    const bool vector = xspan % 4 == 0 && yspan % 4 == 0 &&
+        (reinterpret_cast<uintptr_t>(x) | reinterpret_cast<uintptr_t>(y) | reinterpret_cast<uintptr_t>(dst)) % 16 == 0;
+    if (vector) concat_f32_flat<true><<<unsigned((count + 1023) / 1024),256,0,stream>>>(x,y,dst,xspan,yspan,count);
+    else concat_f32_flat<false><<<unsigned((count + 255) / 256),256,0,stream>>>(x,y,dst,xspan,yspan,count);
 }
 
 // Generic contiguous kernels for non-block types. The F32 kernels above remain
