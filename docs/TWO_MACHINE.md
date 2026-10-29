@@ -7,7 +7,22 @@ memory. They share one live session.
 ## Speed
 
 DeepSeek V4.1 Flash, RTX 5090 desktop plus M3 Ultra (512 GB), measured in the
-stack's web UI:
+stack's web UI. Paired ULTRA defaults use exact cone keep2541 with
+negotiated state v2 and the existing mode3 export/import checks:
+
+| Prompt tokens | Route | WebUI prompt interval | Initial decode |
+|---:|---|---:|---:|
+| 105,054 | RTX → Mac, exact cone v2 | **59.005 s** | **27.499 tok/s** |
+| 105,054 | Single RTX, exact cone | 46.282 s | 2.256 tok/s |
+
+The paired interval includes startup, prefill, export and handoff. It is
+separate from native prompt-only timing and TTFT. Mode3 handoff transferred
+691,633,076 bytes in 3.066 s including verification/import acknowledgment.
+Both routes and follow-ups returned the same retrieval answers.
+[State protocol and live proof](CONE_STATE.md).
+
+Earlier image measurements, approximate YOCO140/v1 or full prefill. Prompt time
+includes startup and handoff:
 
 | Prompt | YOCO | Prompt time | Prefill tok/s | Mac decode tok/s |
 |---|---|---:|---:|---:|
@@ -66,8 +81,16 @@ receiver on the Mac. Presets are in
 ## A large-RAM decode box — untested example
 
 The [large-RAM ds4-win example](../examples/dual-machine/dsv41-large-ram-untested/README.md)
-pairs the existing ULTRA + YOCO export plan with a Windows/Linux RAM-rich host,
+pairs the ULTRA exact-cone export plan with a Windows/Linux RAM-rich host,
 such as a DDR4 server. **Untested example:** ds4-win imports native GPU session
 snapshots, but its CPU RAM-resident backend lacks the mode3/DSpark and negotiated cone v2
 receiver used by the Mac. The example launcher prints config/argv and refuses
 to start. No speed or residency measurement is claimed for this route.
+
+
+## Limitations
+
+Exact-cone paired proof covers the initial frontier and one forced row plus
+actual three-turn WebUI recall; multi-row continuation equivalence remains
+unmeasured. The older image rates use approximate YOCO140/v1, which remains
+explicit opt-in. Exact-cone 200K image throughput has not been remeasured.

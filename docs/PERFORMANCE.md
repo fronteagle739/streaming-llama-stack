@@ -4,23 +4,50 @@ All RTX numbers come from one desktop: RTX 5090 (32 GB VRAM), 32 GB of system
 RAM, Windows, NVMe RAID-0 at about 25 GB/s. The Mac is an M3 Ultra with 512 GB.
 Every figure below was measured; each says what was timed.
 
-[Any-GGUF Q4_K/Q8_0 smoke](ANYGGUF_GPU_SMOKE.md): 49.6K-token recall at **1,592 tok/s**; warm decode **6.8 tok/s** (Max quality) / **18.2 tok/s** (Max speed).
-
 ## DeepSeek V4.1 Flash on one RTX 5090
 
 Model: DeepSeek V4.1 Flash GGUF, Q4_K routed experts and Q8_0 for the rest
-(483 GiB). That matches DeepSeek's release precision (low-bit experts, FP8 for
-the rest), so "Max quality" below is the full model.
+(483 GiB). Max quality uses unbiased routing on that GGUF. Experimental
+packed FP4 and dense FP8 measurements use separately labelled model proxies.
 
 ### Prefill
 
-The single-machine default is ULTRA exact cone with routed tail reads and one
-chunk per weight pass. The 1M text preset keeps prefill carry in unused
+Single-machine and paired ULTRA defaults use the exact 2,541-row dependency
+cone. The current kernel stack includes certified FP4 index scoring, native-parity
+fused Sinkhorn, TileLang attention, E18 automatic transfer staging, allocation-plan
+reuse and the exact OTHER22 HC/CONCAT/QAT improvements. N=1 remains the default.
+
+Latest 100,000-token measurements. The OTHER22 rows use exact cone, zero
+quality bias, 131,072 context and 49,152/50,848-token sweeps. KERNELS2 supplies
+a separate earlier Q4 default-retrieval control. Prompt-only covers embeddings through the frontier
+head/synchronization, including inter-sweep admission. TTFT also includes
+launch, model open, allocation and frontier certification; lease queue and
+harness preparation are excluded.
+
+| Build / configuration | Prompt-only time | Prompt-only rate | TTFT |
+|---|---:|---:|---:|
+| OTHER22 final source, packed FP4 proxy, graphs | **32.373785 s** | **3,088.92 tok/s** | **35.406 s** |
+| OTHER22 rebuilt eager, packed FP4 proxy | 34.506991 s | 2,897.96 tok/s | 37.687 s |
+| OTHER22 eager dense control, packed FP4 proxy | 32.615655 s | 3,066.01 tok/s | 35.797 s |
+| OTHER22 eager FP8 dense proxy, packed FP4 proxy | 33.783610 s | 2,960.02 tok/s | 37.063 s |
+| KERNELS2 default retrieval, Q4_K/Q8_0 | 38.368 s | 2,606.32 tok/s | 42.000 s |
+
+[OTHER22 timing and graph conditions](../examples/other22/ROUND2_RESULTS.md) ·
+[KERNELS2 Q4 default retrieval](../examples/kernels2/PERFORMANCE.md).
+
+The 32.4 s result is the latest opt-in observation on the current kernel stack.
+The graph experiment preserves the complete indexer certificate and BF16 fallback.
+The production prefill preset retains `GGML_CUDA_DISABLE_GRAPHS=1`.
+
+Earlier exact-cone defaults, before the combined FP4-index/fusion/attention/
+allocation updates:
+
+The 1M text preset keeps prefill carry in unused
 physical space from the growable cache's original reservation, then returns
 that space before decode or cache growth. Total device admission is unchanged.
 These frozen recall-fixture runs use BF16 cache and include engine startup:
 
-| Prompt tokens | Prefill time | Prefill tok/s | Peak guarded process-tree RAM |
+| Prompt tokens | Startup + prefill | Rate including startup | Peak guarded process-tree RAM |
 |---:|---:|---:|---:|
 | 50,000 | 24.203 s | 2,065.86 | 5.72 GiB |
 | 100,000 | 43.063 s | 2,322.18 | 5.85 GiB |
@@ -38,8 +65,20 @@ The earlier carry policy measured 25.375 s at 49,555 tokens, 45.484 s at 100K,
 At 49,555 tokens, the same-build full eager control took 36.250 s
 (1,367.03 tok/s); the cone preserved every logit and cache checkpoint hash.
 The 400K result has not been remeasured with the carry policy. The 262K launcher
-retains growable F32 cache; the 1M launcher uses BF16. Cone image throughput and
-one-million-token throughput have not been measured.
+retains growable F32 cache; the 1M launcher uses BF16. The paired cone image
+and exact-cone one-million-token throughput remain unmeasured.
+
+Earlier single-engine Q4_K/Q8_0, approximate YOCO140 controls from NATIVEFP4:
+
+| Prompt tokens | Startup + prefill | Rate including startup |
+|---:|---:|---:|
+| 49,555 | 29.265 s | 1,693.32 tok/s |
+| 200,000 | 96.984 s | 2,062.20 tok/s |
+| 1,000,000 | 956.734 s | 1,045.22 tok/s |
+
+The 1M run retained one session across twenty 49,152-token sweeps and a
+16,960-token tail. [Frozen Q4 baseline receipts](../examples/native-fp4/q4-baselines.json).
+These startup-inclusive rates are separate from the prompt-only 100K table.
 [Earlier receipts](MULTICHUNK_QUALIFICATION.json) · [Defaults and toggles](MERGEPERF.md).
 
 Earlier full ULTRA prefill, YOCO off, including startup:
@@ -66,7 +105,8 @@ correct hidden phrase.
 
 ### YOCO
 
-YOCO skips the decoder layers' reads and compute on every pass except the last.
+Approximate YOCO140 is opt-in; exact cone is the default. These earlier matched single-engine
+controls report startup-inclusive prefill rates. YOCO skips the decoder layers' reads and compute on every pass except the last.
 Each pair below is the same prompt with YOCO off and on.
 
 | Prompt | YOCO off | YOCO on | Speed-up |
@@ -130,8 +170,8 @@ Each cell is prompt tok/s:
 | 200,000 | 2,126 | 1,844 | RAM refused | RAM refused |
 | 400,000 | 1,720 | 1,500 | RAM refused | RAM refused |
 
-At 100K, N=2?4 use the same one-pass 100K geometry. They were run separately.
-At 200K and 400K, N=3?4 were refused before engine launch because the measured
+At 100K, N=2–4 use the same one-pass 100K geometry. They were run separately.
+At 200K and 400K, N=3–4 were refused before engine launch because the measured
 available physical RAM could not admit the worker, controller and reserve.
 
 Peak producer RSS was 5.79 / 5.94 / 6.24 GiB for N=1 at 100K / 200K / 400K,
@@ -142,6 +182,29 @@ cache checkpoint hashes against N=1. Grouping remains opt-in.
 [Exact byte, memory and quality receipts](MULTICHUNK_QUALIFICATION.json).
 
 ### Decode
+
+Latest calibrated Q4_K/Q8_0 controls at 49,555 prompt tokens. The warm rate
+discards the first 100 evaluated steps and times the next 899:
+
+| Setting | Bias | Warm decode |
+|---|---:|---:|
+| Max quality | 0 | **6.136593 tok/s** |
+| Max speed, calibrated | 1.36125 | **20.657235 tok/s** |
+
+[Frozen model/library and warm-window receipts](../examples/native-fp4/proxy-speed-comparison.json).
+These controls use the earlier approximate YOCO140 prefill configuration.
+
+E10 enables bounded CUDA HC input graph islands by default, with
+`DS4_CUDA_SINGLE_GPU_HC_GRAPHS=0` retaining eager encoding. Matched 8K runs:
+
+| Run order | Eager decode | HC graph decode | Gain |
+|---|---:|---:|---:|
+| Control first | 5.841747 tok/s | 5.959057 tok/s | 2.01% |
+| Candidate first | 5.846415 tok/s | 5.948570 tok/s | 1.75% |
+
+Both comparisons have exact full-vocabulary rows and generated tokens; each
+candidate records 38 HC graph replays per measured token.
+[E10 conditions and witnesses](EXPERIMENT_E10.md).
 
 Single-machine examples enable recency LFU with a 16-token half life. On the
 matched 8K F32-cache workload, warm decode improved 5.7624 → 6.3731 and
@@ -169,20 +232,53 @@ about 19.7 tok/s (51 ms per token).
 Decode in the 1M-context preset, after a 237,703-token prompt: 5.2 tok/s at Max
 quality over a 52-token reply.
 
+### Experimental FP4 and FP8
+
+The packed tensor-core-native FP4 prefill layout stores adjacent-nibble E2M1
+weights as `[expert,N,K/2]`, followed by E8M0 scales in
+`[expert,K/128,N,4]` order. The FlashInfer SM120 W4A8 path consumes those
+bytes directly with MXFP8 activations. It retains the ordered expert combine
+and avoids runtime expert-weight requantization or repacking.
+
+Opt-in 100,000-token observations on their respective builds:
+
+| Build / arm | Prompt-only time | Prompt-only rate | TTFT |
+|---|---:|---:|---:|
+| Packed layout, native-4k-matched | 36.490374 s | 2,740.45 tok/s | 39.797 s |
+| KERNELS2 combination, native-4k-candidate-repeat | 34.934263 s | 2,862.52 tok/s | 38.313 s |
+| Dense FP8 experiment, Q8 control | 43.308110 s | 2,309.04 tok/s | 46.594 s |
+| Dense FP8 experiment, Q8-to-FP8 proxy | 43.821171 s | 2,282.00 tok/s | 47.063 s |
+
+[Packed layout](../examples/native-fp4/PACKED_LAYOUT_RESULTS.md) ·
+[Combined kernels](../examples/native-fp4/COMBINATION_RESULTS.md).
+
+The FP4 timing model is a **lossy Q4-to-FP4 requant speed proxy**. It is
+not shipped as a default. Conversion from the official safetensors at native
+precision is coming; the converter and loader support exist, while complete
+source-native model conversion and qualification remain unfinished.
+
+Dense FP8 is also experimental and opt-in. Its native format accepts E4M3
+weights and E8M0 scales in 32×32 blocks; timing above uses a lossy Q8-to-FP8
+proxy. Explicit toggles retain the original paths.
+
 ### Host-RAM expert tier
 
-An experimental host-RAM expert tier was evaluated and is not in this release:
-it gave no gain on this machine. Warm decode after the first 100 tokens, about
-50K context, RTX 5090 and 32 GB RAM:
+The separate host-RAM tier experiment remains off by default and is not in
+this release. Latest accepted Q4 measurements use a 49,553-token prompt and
+reused-prefix follow-up; warm decode times 899 evaluated steps after discarding
+the first 100:
 
-| Run | Max quality | Max speed |
-|---|---:|---:|
-| Tier off | 7.16 tok/s | 18.54 tok/s |
-| 3.5 GiB, upload to GPU | 7.16 tok/s | 18.18 tok/s |
-| 3.5 GiB, CPU compute | 6.86 tok/s | 15.87 tok/s |
-| 10 GiB, upload to GPU | 6.49 tok/s | 15.23 tok/s |
-| 10 GiB, CPU compute | 6.93 tok/s | 13.22 tok/s |
-| 10 GiB, mix of both | 6.94 tok/s | 12.08 tok/s |
+| Run | RAM setting | Max quality | Max speed |
+|---|---:|---:|---:|
+| Tier off | 0 GiB | 6.87 tok/s | 18.26 tok/s |
+| Upload to GPU | 3.49 GiB | 6.79 tok/s | 17.34 tok/s |
+| CPU compute | 3.49 GiB | 6.81 tok/s | 14.58 tok/s |
+| Mix of both | 3.49 GiB | 6.84 tok/s | 15.80 tok/s |
+| Upload to GPU | 10 GiB | 6.49 tok/s | 15.23 tok/s |
+| CPU compute | 10 GiB | 6.93 tok/s | 13.22 tok/s |
+| Mix of both | 10 GiB | 6.94 tok/s | 12.08 tok/s |
+
+[Round 3 results](https://github.com/fronteagle739/streaming-llama-stack/blob/a2371b6e84a09c8ef5f64ab67fc5230fc24aa95e/docs/RAMTIER_R3.md).
 
 The speed settings already favour VRAM-resident experts, misses are spread
 thinly, and at Max speed the GPU waits for the CPU. It is expected to matter
@@ -193,8 +289,9 @@ more on machines with much more RAM; that is untested and listed in the
 
 The dial adds a bias toward experts already in VRAM. At 0 (Max quality) the
 model routes exactly as released. Higher settings reroute some experts that
-would otherwise be read from NVMe. The table compares each setting with the
-full model, over 384 generated tokens on a short prompt. Speeds are after the
+would otherwise be read from NVMe. This earlier sweep compares each setting
+with unbiased routing on the same GGUF, over 384 generated tokens on a short
+prompt. Speeds are after the
 first 100 tokens, with the native ds4 decoder.
 
 | Setting | Bias | Warm decode tok/s | KL vs full model | Top-1 agreement |
@@ -204,9 +301,6 @@ first 100 tokens, with the native ds4 decoder.
 | Fast | 0.65 | 13.1 | 0.258 | 90.1% |
 | Faster | 0.9 | 14.9 | 0.359 | 87.2% |
 | Max speed | 1.36125 | 16.6 | 0.479 | 84.1% |
-
-As a rough guide, quality runs from about Q8-quant-like at Max quality to about
-IQ1-quant-like at Max speed.
 
 The same sweep shows the VRAM hit rate rising with the bias, and the cost in
 quality rising with it:
@@ -255,8 +349,23 @@ rate and KL columns show the same trend.
 
 ## RTX prefill, Mac decode
 
-The RTX runs the same single-engine prefill (ULTRA, 49,152-token passes) and
-hands the finished state to the Mac once.
+Paired ULTRA defaults now use exact cone keep2541 and negotiated state v2.
+The existing mode3 export/import retains owner hashes, token history and
+compatibility checks. A matched actual-WebUI prompt contains 105,054 tokens:
+
+| Route | WebUI prompt interval | Displayed prompt rate | Initial decode |
+|---|---:|---:|---:|
+| Single RTX exact cone | 46.282 s | 2,269.867 tok/s | 2.256 tok/s |
+| RTX → Mac exact cone v2 | 59.005 s | 1,780.432 tok/s | 27.499 tok/s |
+
+The paired interval includes startup, prefill, export and handoff; it is
+separate from native prompt-only timing and TTFT. The measured mode3 transfer
+is 691,633,076 bytes in 3.066 s, including verification/import acknowledgment.
+Both routes and the follow-ups return the same retrieval answers.
+[Live proof and timing components](CONE_STATE.md).
+
+Earlier image measurements, approximate YOCO140/v1 or full prefill, with
+startup and handoff included in the WebUI prompt interval:
 
 | Prompt | YOCO | Prompt time | Prefill tok/s | Mac decode tok/s |
 |---|---|---:|---:|---:|
@@ -281,8 +390,9 @@ about 350–390 tok/s. Mac decode runs at about 31 tok/s at 9K and 24K tokens.
 | Single engine, engine and controller | 9.25 GiB | — |
 | RTX side of the two-machine setup | 8.5 GiB | 6.3 GiB |
 
-The launchers keep a 512 MiB desktop reserve and stop cleanly if free RAM falls
-below 4 GiB. The model is never loaded into system RAM.
+The single-engine example uses a 9.25 GiB host budget, 4 GiB admission floor,
+512 MiB desktop reserve and 0.5 GiB runtime free-RAM floor. Experimental runs
+declare their own host ceilings and retain paging stops. The model is never loaded into system RAM.
 
 ## Other models
 
@@ -307,3 +417,28 @@ prefill rates timed by the engine; decode ran on the Mac.
 
 Kimi K2.6 also reached about 690 tok/s with a 4,096-token microbatch; the
 shipping Kimi settings use 2,048, which gave 576 tok/s at 23K.
+
+
+## Limitations
+
+- No 50K or 200K measurement uses the final OTHER22 100K build and options.
+  The 1M figure and latest ~50K warm-decode controls use earlier YOCO140 defaults.
+- The 32.373785 s headline is one opt-in proxy/graph observation. Same-build
+  graph/eager frontier values match, but run variance prevents a reliable graph
+  speedup claim. Binding-independent layer/sweep replay and CPU-loop removal
+  remain unfinished; prefill graphs stay opt-in.
+- The lossy FP4/FP8 proxies are not source-native model qualification. Packed
+  FP4 measurements are prefill-only and do not establish decode or broad recall
+  quality. Dense FP8 has no demonstrated repeatable whole-prompt speed gain.
+- TileLang attention is not bit-exact. The tested retrieval answer matches;
+  later forced continuations can diverge. Native attention remains selectable
+  with `LLAMA_DSV41_TILELANG_ATTENTION=0`. [Quality evidence](../examples/kernels2/PERFORMANCE.md).
+- The separate host-RAM tier has no consistent gain across dial settings.
+  Its CPU/mix continuations can differ and fail strict sequence-equivalence checks.
+- Historical dial sweeps, current warm-decode controls and E8/E10 comparisons
+  use different fixtures and builds; their gains cannot be combined. HC graph
+  islands are not full-step decode graphs or PDL.
+- Paired cone validation covers the initial frontier and one forced row, plus
+  actual three-turn WebUI recall. Multi-row continuation equivalence has not
+  been established, and the older image speeds are approximate YOCO140 results.
+- The 10,000 tok/s target at 100K remains unmet. [Remaining work](ROADMAP.md).

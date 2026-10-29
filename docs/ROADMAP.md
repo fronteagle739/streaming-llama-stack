@@ -6,13 +6,36 @@
 - The single-engine DeepSeek V4.1 path supports the [listed tensor layouts](DSV41_GGUF.md); split GGUFs require lossless assembly first.
 - The faster quality/speed settings cost quality. Max speed introduced syntax
   errors in C++ tests; use Max quality or Balanced for code.
-- YOCO is approximate and opt-in.
+- Approximate YOCO140 is opt-in. Exact cone keep2541 is the single-machine
+  and paired ULTRA default, with negotiated state v2 for paired use.
+- Packed FP4 and dense FP8 remain experimental. Their timing models are lossy
+  requant proxies, not the official source-native model; neither is defaulted.
+- TileLang attention is numerically different from native attention. Retrieval
+  matches on the tested fixture, but later continuations can diverge; the native
+  off toggle remains available. [Evidence](../examples/kernels2/PERFORMANCE.md).
 - The first prompt includes engine startup, and decode is slower until the expert
   cache warms up (about 100 tokens). The first check hashes the model once.
 - GLM-5.3 Flash and Qwen3.8 Flash Next are not yet in the streaming engine.
 - Media generation and LoRA are experimental.
 
 ## Planned
+
+- Reach **10,000 prompt-only tok/s at 100K tokens**. The latest opt-in packed
+  FP4/graph observation is 3,088.92 tok/s in 32.373785 s, with 35.406 s TTFT;
+  the target remains unmet. [Measured configurations](PERFORMANCE.md#prefill).
+- Remove host/device synchronization from the tile loop while preserving GPU
+  checks, transaction boundaries, streamed-weight and carry lifetimes.
+- Complete the fused layer path: separate routing/attention/FFN lifetimes,
+  retain larger expert batches and fuse remaining projection and small-op work.
+  Exact HC collapse, QAT batching and CONCAT improvements are already present.
+- Build binding-independent layer/sweep graph templates. Actual streamed CUDA
+  graph launches are implemented and opt-in; changing layer/tile bindings still
+  require CPU dispatch and capture/update work. [Current support](../examples/other22/ROUND2_RESULTS.md).
+- Finish verified official-safetensors download and native FP4/FP8 conversion,
+  then qualify source-native full-model logits, recall, decode and long context.
+  Keep the lossy requant proxies separate from those results.
+- Make TileLang attention exact against native arithmetic; retain the existing
+  native path and the current default's published numerical caveats.
 
 - Make resident follow-ups exact (the original resident decoder's observed
   layer-boundary divergence starts after attention, before routing). The current
