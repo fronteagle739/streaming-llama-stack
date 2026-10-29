@@ -7,6 +7,36 @@ module = importlib.util.module_from_spec(spec);spec.loader.exec_module(module)
 
 
 class Breakdown(unittest.TestCase):
+    def test_hint_io_counts_bytes_without_becoming_demand_wait(self):
+        log='''[dsv41-fetch] stage=0 bytes=100 fetch_ms=10
+[dsv41-prefill-experts] stage=22 rows=6 bytes=20 fetch_ms=2
+[dsv41-byte-ledger] stage=0 tensor=token_embd.weight file_offset=0 bytes=100 source=stage
+[dsv41-byte-ledger] stage=22 tensor=blk.21.ffn_up_exps.weight file_offset=100 bytes=20 source=experts
+[dsv41-prefill-hint] stage=23 bytes=30 fetch_ms=3.5 begin_epoch_ms=110.5 end_epoch_ms=114.5 exposed_join_ms=0.75
+[dsv41-byte-ledger] stage=23 tensor=blk.22.ffn_up_exps.weight file_offset=9007199254740993 bytes=30 source=tail_hint
+[dsv41-perf] layer=21 wall_ms=40 acquire_ms=1 compute_ms=30
+[dsv41-fetch] stage=0 bytes=100 fetch_ms=10
+'''
+        result=module.analyze(log);p=result['passes'][0]
+        self.assertEqual(p['fetched_bytes'],150)
+        self.assertEqual(p['fetch_ms_overlapped'],15.5)
+        self.assertEqual(p['routed_fetch_wait_ms'],2)
+        self.assertEqual(p['hint_fetched_bytes'],30)
+        self.assertEqual(p['hint_fetch_ms_overlapped'],3.5)
+        self.assertEqual(p['exposed_hint_join_ms'],0.75)
+        self.assertEqual(p['expert_hints'][0]['begin_epoch_ms'],110.5)
+        self.assertEqual(p['expert_hints'][0]['end_epoch_ms'],114.5)
+        self.assertEqual(p['exposed_acquire_ms'],1)
+        self.assertTrue(p['tensor_ledger_reconciles'])
+        self.assertEqual(p['tensor_bytes_by_role']['routed_experts'],50)
+        self.assertEqual(result['passes'][1]['hint_fetched_bytes'],0)
+        self.assertEqual(result['passes'][1]['expert_hints'],[])
+        # A partial hinted pass cannot be reconstructed as legacy full stages.
+        hinted=module.analyze('[dsv41-fetch] stage=0 bytes=100 fetch_ms=10\n[dsv41-prefill-hint] stage=23 bytes=30 fetch_ms=3 begin_epoch_ms=1 end_epoch_ms=4 exposed_join_ms=0\n')
+        module.attach_inventory(hinted,[])
+        self.assertEqual(hinted['passes'][0]['fetched_bytes'],130)
+        self.assertIsNone(hinted['passes'][0]['tensor_ledger_reconciles'])
+
     def test_demand_read_default_uses_measured_short_prompt_range(self):
         from slstack.combo_producer import routed_prefill_choice
         for n in (1,2048):self.assertEqual(routed_prefill_choice({},n),'1')

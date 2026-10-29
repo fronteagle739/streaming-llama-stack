@@ -61,6 +61,11 @@ GGML_API void ggml_gallocr_reserve_n_size(
     const int * node_buffer_ids,
     const int * leaf_buffer_ids,
     size_t * sizes);
+// Materialize the last size-only lifetime plan without planning it again.
+// Call once, immediately after reserve_n_size and caller admission, with the
+// same unmodified graph/allocator. Allocation, consumption and reserved-range
+// mutation invalidate the plan. Ordinary reserve_n does not publish a plan.
+GGML_API bool ggml_gallocr_materialize_reserved(ggml_gallocr_t galloc, struct ggml_cgraph * graph);
 GGML_API bool ggml_gallocr_reserve_n(
     ggml_gallocr_t galloc,
     struct ggml_cgraph * graph,

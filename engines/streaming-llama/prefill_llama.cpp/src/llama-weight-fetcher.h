@@ -310,6 +310,16 @@ WF_API // LLAMADECODE: cumulative expert-miss fetch split: submit, DS fence, ver
 void wf_extent_fetch_stats(double * out4, uint64_t * requests, uint64_t * batches);
 bool wf_fetch_extents_direct(wf_context * wf, int bank, const wf_extent * extents, int n,
                                     void * cuda_stream, uint64_t * bytes, double * milliseconds);
+// Next-tail hints only target an already-ready strict direct bank. The caller
+// must join the hint before acquiring/releasing/restarting that stage/fetcher.
+// A generation is never reused within one fetcher, including across wf_start.
+WF_API bool wf_ready_direct_bank(wf_context * wf, int stage, int bank, uint64_t * generation);
+// CPU submit/fence/error verification only: no compute-stream wait is inserted
+// by the worker. The main consumer must call wf_wait_ready_extents before use.
+WF_API bool wf_fetch_ready_extents(wf_context * wf, int stage, int bank, uint64_t generation,
+    const wf_extent * extents, int n, uint64_t * fence, uint64_t * bytes, double * milliseconds);
+WF_API bool wf_wait_ready_extents(wf_context * wf, int stage, int bank, uint64_t generation,
+    uint64_t fence, void * cuda_stream);
 WF_API void wf_set_active_experts(wf_context * wf,
                            int          layer_idx,
                            const int *  expert_ids,
