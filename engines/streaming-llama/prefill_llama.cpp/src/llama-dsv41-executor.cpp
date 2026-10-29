@@ -760,7 +760,9 @@ llama_dsv41_tile_executor::llama_dsv41_tile_executor(ggml_backend_t backend,llam
                 const bool stage_auto=!staging||!std::strcmp(staging,"auto");
                 const bool stage_supported=fixed->tile_registration&&!fixed->pageable_copies&&!admitted_prefetch_bytes;
                 const bool stage_spill=resident_hidden_tokens>fixed->bank_rows();
-                const bool stage_on=stage_supported&&((staging&&!std::strcmp(staging,"1"))||(stage_auto&&stage_spill));
+                // auto: on for spill and (OPUS22 round 6, measured -0.9 s at 100K) for the full-resident
+                // plan, where the only bank copies left are the layer-0 seed and the source-layer ID mirrors.
+                const bool stage_on=stage_supported&&((staging&&!std::strcmp(staging,"1"))||(stage_auto&&(stage_spill||full_resident)));
                 require(!(staging&&!std::strcmp(staging,"1"))||stage_supported,"Forced host staging requires fixed tile-registration without async lookahead");
                 llama_dsv41_layer_log("PERFEXP_HOST_STAGING_POLICY requested=%s enabled=%u logical_rows=%u bank_rows=%u spill=%u supported=%u\n",
                     staging?staging:"auto",unsigned(stage_on),resident_hidden_tokens,fixed->bank_rows(),unsigned(stage_spill),unsigned(stage_supported));
@@ -1142,7 +1144,9 @@ bool llama_dsv41_tile_executor::run(const request&in,const llama_dsv41_layer_gra
         require(in.engram_rows.size()==size_t(row_width)*in.count,"V4.1 tile gathered Engram rows differ from staged WKV input");
         require(in.text_mask.size()==(engram?in.count:0)&&std::all_of(in.text_mask.begin(),in.text_mask.end(),[](int8_t v){return v==0||v==1;}),
                 "V4.1 tile requires an explicit Engram text mask");
-        finite(in.residual);finite(in.previous_pre);finite(in.engram_rows);
+        const auto finite_started=clock_type::now();
+        finite(in.residual);finite(in.previous_pre);if(!in.engram_rows_finite)finite(in.engram_rows);
+        const double host_finite_ms=elapsed(finite_started);
         dsv41_boundary::capture boundary(in.layer,in.start,in.count,in.residual,in.previous_pre);
         if(boundary.active())require(std::all_of(in.token_kinds.begin(),in.token_kinds.end(),
             [](int32_t value){return value==0;}),"Boundary capture requires original text rows");
@@ -1645,9 +1649,12 @@ bool llama_dsv41_tile_executor::run(const request&in,const llama_dsv41_layer_gra
             resident->spill_h2d_bytes+=uint64_t(in.count)*(40976+ids);spill_in_ms=elapsed(spill_started);
         }
 #endif
+        const double up_before_engram_ms=elapsed(upload_start);
         if(engram){upload_input(input.engram_rows,in.engram_rows);if(!all_text)upload_input(input.text_mask,in.text_mask);}
+        const double up_engram_ms=elapsed(upload_start)-up_before_engram_ms;
         if(!zero_kinds)upload_input(input.token_kinds,in.token_kinds);
         boundary.upload_replacements();
+        const double up_before_unpack_ms=elapsed(upload_start);double up_validate_started_ms=-1;
         ggml_cgraph compute_view{};ggml_cgraph *compute_graph=graph;
         if(compact_seed){
             // Same contract as the BF16 unpack below: run the exact seed
@@ -1680,9 +1687,12 @@ bool llama_dsv41_tile_executor::run(const request&in,const llama_dsv41_layer_gra
             if(reuse){check.selected=static_cast<const int32_t*>(input.previous_selected->data);check.selected_n=uint64_t(selected_width)*in.count;}
             if(candidates){check.candidates=static_cast<const int32_t*>(input.candidate_ids->data);check.candidates_n=uint64_t(candidate_width)*in.count;}
             if(engram){check.engram=static_cast<const float*>(input.engram_rows->data);check.engram_n=uint64_t(row_width)*in.count;}
+            up_validate_started_ms=elapsed(upload_start);
             pinned->validate(check);
 #endif
         }
+        if(tile_timing_enabled())llama_dsv41_layer_log("LLAMADECODE_TILE_UPLOAD host_finite_ms=%.3f layer=%u tile=%u before_engram_ms=%.3f engram_ms=%.3f before_unpack_ms=%.3f before_validate_ms=%.3f total_ms=%.3f\n",
+            host_finite_ms,in.layer,in.start,up_before_engram_ms,up_engram_ms,up_before_unpack_ms,up_validate_started_ms,elapsed(upload_start));
         // The existing direct-input validator synchronized this compute stream
         // after all metadata copies and its upload_ready wait. Only now may the
         // host lifetime guard disarm; any earlier error drains before unwind.
