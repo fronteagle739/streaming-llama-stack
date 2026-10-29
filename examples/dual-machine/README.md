@@ -28,7 +28,10 @@ A v1-only receiver refuses cone pairing. Use `-ApproximateYoco` on the RTX
 PowerShell wrapper, or `--approximate-yoco` with `examples/run_preset.py`, to
 select approximate keep140/v1 explicitly. Accurate/fast profiles retain their
 explicit full-prefill controls. The large-RAM preview requests cone/v2 too.
-[Negotiation and proof requirements](../../docs/CONE_STATE.md).
+[Negotiation and live proof](../../docs/CONE_STATE.md): the matched 105,054-token
+WebUI recall and both follow-ups pass against single-machine cone, with exact
+common-owner and full-vocabulary initial-logit parity. Paired prompt 59.005 s,
+1,780.432 tok/s; initial Mac decode 27.499 tok/s, first follow-up 31.925 tok/s.
 
 The [large-RAM ds4-win untested example](dsv41-large-ram-untested/README.md)
 contains a portable preview launcher and config pair for a Windows/Linux
