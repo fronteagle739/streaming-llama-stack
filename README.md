@@ -10,39 +10,44 @@ DeepSeek V4.1 Flash, an OpenAI-compatible API, MCP tools and the llama.cpp web U
 
 ## Results
 
-DeepSeek V4.1 Flash (Q4_K experts, Q8_0 everything else, 483 GiB) on one
-RTX 5090 desktop with 32 GB of RAM:
+DeepSeek V4.1 Flash on one RTX 5090 desktop with 32 GB of RAM.
+The latest 100K experiment measures **32.4 s prompt-only**, about **3,090 tok/s**,
+with the opt-in packed FP4 speed proxy and CUDA graphs. The Q4_K/Q8_0 default
+model is 483 GiB.
 
-| What | Result |
-|---|---|
-| Exact-cone prefill, 50,000 tokens | **24.20 s / 2,066 tok/s** |
-| Exact-cone prefill, 100,000 tokens | **43.06 s / 2,322 tok/s** |
-| Exact-cone prefill, 200,000 tokens | **92.41 s / 2,164 tok/s** |
-| Exact-cone prefill, 400,000 tokens | **232.50 s / 1,720 tok/s** |
-| Decode at Max speed, warm, 14,859-token prompt | **19–21 tok/s** |
-| Decode at Max speed, warm, 43,327-token prompt | **18–20 tok/s** |
-| Decode at Max quality (full model), warm | **6.0 tok/s** |
-| Peak engine RAM during the 400,000-token cone run | **6.24 GiB** |
+| Prompt tokens | Configuration | Timing | Time | Rate |
+|---:|---|---|---:|---:|
+| 100,000 | Packed FP4 proxy, graph experiment | Prompt-only | **32.374 s** | **3,088.92 tok/s** |
+| 100,000 | Packed FP4 proxy, graph experiment | TTFT | **35.406 s** | — |
+| 100,000 | Q4 default path, KERNELS2 build | Prompt-only | 38.368 s | 2,606.32 tok/s |
+| 100,000 | Q4 default path, KERNELS2 build | TTFT | 42.000 s | — |
+| 50,000 | Earlier exact-cone defaults | Startup + prefill | 24.203 s | 2,065.86 tok/s |
+| 200,000 | Earlier exact-cone defaults | Startup + prefill | 92.407 s | 2,164.34 tok/s |
+| 1,000,000 | Earlier approximate YOCO140 defaults | Startup + prefill | 956.734 s | 1,045.22 tok/s |
 
-"Warm" means after the first 100 generated tokens, once the expert cache has
-filled. Averaged over the whole reply, including that warm-up, Max speed gives
-12.7–12.9 tok/s for a 500-token answer. Prefill figures use the default exact
-cone with routed tail reads, N=1 and growable BF16 cache, including startup.
-The 50K–200K runs use the new VRAM carry policy; 100K is the mean of two
-runs. The 400K result predates that policy. [Carry measurements](docs/SINGLEPASS_PREFILL.md).
-The matched 49,555-token full-prefill control took 36.25 s; the cone's logits
-and cache hashes were bit-identical. [Measurements and cache settings](docs/PERFORMANCE.md#prefill).
-The example decode defaults also enable exact LFU admission with a 16-token
-half life: a separate 8K workload improved by 1.5–10.6% in two repetitions.
-[LFU measurements](docs/EXPERIMENT_E8.md).
+The current kernel stack combines the exact dependency cone, certified FP4
+index scoring, fused Sinkhorn, TileLang attention, E18 transfer staging and
+allocation-plan reuse. Packed FP4 model weights and prefill CUDA graphs are
+separate opt-in experiments. [Timing, builds and measurements](docs/PERFORMANCE.md#prefill).
+
+Latest calibrated Q4 decode controls at 49,555 prompt tokens, with the first
+100 evaluated steps discarded and the next 899 timed:
+
+| Setting | Warm decode |
+|---|---:|
+| Max quality | **6.14 tok/s** |
+| Max speed | **20.66 tok/s** |
+
+[Decode controls, E8 residency and E10 graph islands](docs/PERFORMANCE.md#decode).
 
 Add a Mac Studio M3 Ultra (512 GB) for decode:
 
-| What | Result |
-|---|---|
-| Prefill time, 198,287-token image prompt, YOCO | **118.8 s** |
-| Prefill rate, same prompt | **1,670 tok/s** |
-| Mac decode after that prompt | **31.0 tok/s** |
+| Prompt tokens | Prefill mode | WebUI prompt interval | Mac decode |
+|---:|---|---:|---:|
+| 105,054 | Exact cone, state v2 | **59.005 s** | **27.50 tok/s** |
+| 198,287 | Earlier approximate YOCO140, image | 118.8 s | 31.0 tok/s |
+
+[Paired measurements and timing scope](docs/PERFORMANCE.md#rtx-prefill-mac-decode).
 
 Other models on the same streaming engine and RTX 5090:
 
@@ -57,18 +62,22 @@ Other models on the same streaming engine and RTX 5090:
 
 ### Host-RAM expert tier
 
-An experimental host-RAM expert tier was evaluated and is not in this release:
-it gave no gain on this machine. Warm decode after the first 100 tokens, about
-50K context, RTX 5090 and 32 GB RAM:
+The separate host-RAM tier experiment remains off by default and is not in
+this release. Latest accepted Q4 measurements use a 49,553-token prompt and
+reused-prefix follow-up; warm decode times 899 evaluated steps after discarding
+the first 100:
 
-| Run | Max quality | Max speed |
-|---|---:|---:|
-| Tier off | 7.16 tok/s | 18.54 tok/s |
-| 3.5 GiB, upload to GPU | 7.16 tok/s | 18.18 tok/s |
-| 3.5 GiB, CPU compute | 6.86 tok/s | 15.87 tok/s |
-| 10 GiB, upload to GPU | 6.49 tok/s | 15.23 tok/s |
-| 10 GiB, CPU compute | 6.93 tok/s | 13.22 tok/s |
-| 10 GiB, mix of both | 6.94 tok/s | 12.08 tok/s |
+| Run | RAM setting | Max quality | Max speed |
+|---|---:|---:|---:|
+| Tier off | 0 GiB | 6.87 tok/s | 18.26 tok/s |
+| Upload to GPU | 3.49 GiB | 6.79 tok/s | 17.34 tok/s |
+| CPU compute | 3.49 GiB | 6.81 tok/s | 14.58 tok/s |
+| Mix of both | 3.49 GiB | 6.84 tok/s | 15.80 tok/s |
+| Upload to GPU | 10 GiB | 6.49 tok/s | 15.23 tok/s |
+| CPU compute | 10 GiB | 6.93 tok/s | 13.22 tok/s |
+| Mix of both | 10 GiB | 6.94 tok/s | 12.08 tok/s |
+
+[Round 3 results](https://github.com/fronteagle739/streaming-llama-stack/blob/a2371b6e84a09c8ef5f64ab67fc5230fc24aa95e/docs/RAMTIER_R3.md).
 
 The speed settings already favour VRAM-resident experts, misses are spread
 thinly, and at Max speed the GPU waits for the CPU. It is expected to matter
@@ -94,10 +103,12 @@ cache instead of fetching from disk. Max quality never does this: it is the full
 model. You set the dial from the web UI, the API or MCP, separately for reasoning,
 tool calls, answers and code. The model can set it itself.
 
-**Exact cone.** The default single-machine presets compute every encoder row
+**Exact cone.** Single-machine and paired ULTRA defaults compute every encoder row
 and the decoder's final 2,541-row dependency cone. Aligned replay preserves
 full-prefill arithmetic; the matched 8K and 49,555-token controls are exact.
-[Design and qualification](docs/MULTICHUNK_PREFILL.md).
+Paired mode negotiates state v2 and retains the mode3 export/import payload,
+owner hashes and compatibility checks. [Design](docs/MULTICHUNK_PREFILL.md) ·
+[Paired state and live proof](docs/CONE_STATE.md).
 
 **YOCO.** Optional approximate prefill from DeepSeek's
 [DeepInfer](https://github.com/deepseek-ai/DeepInfer/blob/553741557a57df44a46fb3ab72b6aafeaf945337/README.md)
@@ -138,8 +149,11 @@ one DeepSeek V4.1-specific part.
 A native DeepSeek V4.1 Flash GGUF using supported tensor types:
 Q4_K, IQ2_XXS/Q2_K or MXFP4 routed experts, with Q8_0, Q4_K or Q4_0 dense
 matrices. The measured file uses Q4_K experts and Q8_0 dense matrices (483 GiB).
-Our Q4_K/Q8_0 build is GPU-tested. IQ2_XXS/Q2_K and MXFP4 builds are
-CPU-tested only. Public MXFP4 shards must first be merged with antirez's
+Our Q4_K/Q8_0 build is GPU-tested; IQ2_XXS/Q2_K remains CPU-tested.
+MXFP4 has opt-in GPU proxy measurements, including a separate tensor-core-native
+packed prefill layout. An experimental dense FP8 path is also available.
+The native-precision conversion from official safetensors is coming.
+[FP4/FP8 layouts and measurements](docs/PERFORMANCE.md#experimental-fp4-and-fp8). Public MXFP4 shards must first be merged with antirez's
 `merge_deepseek41_shards.py` tool. “Any-GGUF” covers these supported V4.1 Flash
 layouts and geometry, rather than arbitrary GGUF architectures.
 [Layouts and assembly instructions](docs/DSV41_GGUF.md) and the
@@ -187,8 +201,8 @@ powershell -File scripts/start-dsv41-single-1m-ultra-yoco.ps1 -ApproximateYoco -
 
 Each script accepts `-Config`, `-Model`, `-DryRun` and `-Stop`.
 The legacy `ultra-yoco` filenames also default to exact cone; `-ApproximateYoco`
-selects approximate replay. Paired presets retain YOCO until cone state export
-is negotiated. [Defaults and optional experiments](docs/MERGEPERF.md).
+selects approximate replay. Paired ULTRA presets also default to exact cone
+with negotiated state v2; approximate YOCO140/v1 remains explicit opt-in. [Defaults and optional experiments](docs/MERGEPERF.md).
 
 ## Supported models
 
@@ -220,14 +234,13 @@ It prints an endpoint, a pairing token and the Windows command:
 ./slstack.ps1 rtx --config my.local.json --mac <mac-endpoint> --pair-token <printed-token> --webui
 ```
 
-With YOCO, the 198,287-token image prompt prefills at **1,670 tok/s**
-and Mac decode reaches **31.0 tok/s**. The matched 49,787-token image prompt
-prefills at **1,477 tok/s** with YOCO and **1,197 tok/s** without it.
-[Pairing, routing and measured speeds](docs/TWO_MACHINE.md).
+The current exact-cone WebUI proof processes **105,054 tokens** in a
+**59.005 s** prompt interval; initial Mac decode measures **27.50 tok/s**.
+The same prompt on one RTX takes **46.282 s**. Historical image-prompt results
+remain in the [paired measurements](docs/TWO_MACHINE.md).
 Use the [ULTRA exact-cone paired preset](examples/dual-machine/dsv41-ultra-cone/preset.json)
-with the [example launchers](examples/dual-machine/README.md). ULTRA paired defaults
-now use keep2541 and negotiated state v2; the rates above are historical
-approximate140/v1 measurements. [Cone state protocol](docs/CONE_STATE.md).
+with the [example launchers](examples/dual-machine/README.md).
+[Cone state protocol](docs/CONE_STATE.md).
 
 For a Windows/Linux second machine with enough RAM to hold the model, see the
 [large-RAM ds4-win untested example](examples/dual-machine/dsv41-large-ram-untested/README.md).
@@ -256,9 +269,22 @@ configuration.
 - The single-engine DeepSeek V4.1 path accepts the [supported GGUF layouts](docs/DSV41_GGUF.md); split files require assembly first.
 - The faster dial settings cost quality. Max speed introduced syntax errors in C++
   tests; use Max quality or Balanced for code.
-- YOCO is approximate and opt-in.
+- Approximate YOCO140 is opt-in; the default dependency cone keeps 2,541 rows.
+- The latest 100K headline uses a lossy Q4-to-FP4 proxy and experimental prefill
+  graphs. Neither is shipped as a default. Its graph run does not establish a
+  repeatable graph speedup. No 50K or 200K run on that same final build is recorded.
+- The 1M result and the 49,555-token warm-decode controls use earlier YOCO140
+  prefill defaults. Warm decode has not been remeasured on the final OTHER22 build.
+- Packed FP4 and dense FP8 are experimental; source-native model conversion and
+  broad quality qualification remain unfinished. FP8 has no demonstrated prompt gain.
+- TileLang attention is the selected default but is numerically different from
+  native attention. The tested retrieval answer matches; later forced continuations
+  can diverge. Set `LLAMA_DSV41_TILELANG_ATTENTION=0` for native attention.
+  [Quality measurements](examples/kernels2/PERFORMANCE.md).
 - The first prompt includes engine startup, and decode is slower until the expert
   cache warms up (about 100 tokens).
+- The separate host-RAM tier has no consistent gain across dial settings.
+  CPU/mix continuations can differ and fail strict sequence-equivalence checks.
 - Media generation and LoRA are experimental.
 
 ## Credits and licence
