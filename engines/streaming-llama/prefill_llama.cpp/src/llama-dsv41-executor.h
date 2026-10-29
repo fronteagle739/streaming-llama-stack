@@ -64,6 +64,8 @@ public:
         uint32_t yoco_first=0; // local decoder coverage, explicit at every tile
         uint32_t yoco_raw_begin=0; // absolute lower bound for raw attention
         std::vector<float> residual,previous_pre,engram_rows;
+        // OPUS22: the Engram lookahead worker already ran the same finite check off the critical path.
+        bool engram_rows_finite=false;
         std::vector<int32_t> selected,candidates,token_kinds;
         std::vector<int8_t> text_mask;
         std::optional<llama_dsv41_carry_store::ram_lease> direct;

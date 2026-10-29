@@ -38,6 +38,12 @@ two-sweep plan at 8K and 100K. FP4 proxy, exact cone, 131,072 context, eager:
 | One sweep, compact record, 54,944 rows spilled to RAM | 38.074 s | 2,626.46 tok/s | 77.906 s | 8.41 GiB |
 | **One sweep, compact record, all rows resident (new default)** | **29.646 s** | **3,373.13 tok/s** | **32.906 s** | 7.41 GiB |
 
+Round 6 step 4 (also default): the persistent pinned host-copy slot
+(`LLAMADECODE_HOST_COPY_STAGING=auto`) now also serves the full-resident plan,
+so the layer-0 seed and source-layer ID mirrors no longer register carry pages
+per tile (special-layer host time 3.2 -> 1.5 s), and the Engram rows' finite
+check runs on the Engram lookahead worker. 100K: 28.6-29.1 s, bit-identical.
+
 In the new default the 21 sweep layers are compute-bound (21 s wall against
 10 s of weight reads) and the 19 tail layers are storage-bound (8 s). Details:
 `examples/opus22/RESULTS.md` section 8.
