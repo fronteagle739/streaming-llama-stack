@@ -36,7 +36,7 @@ def validate_contract(row):
     validate(standard, local=True)
     if not isinstance(local, dict) or set(local) != {'version', 'yoco_keep', 'cache_precision', 'producer_sha256'}:
         raise ValueError('Malformed local snapshot provenance')
-    if local['version'] != VERSION or type(local['yoco_keep']) is not int or local['yoco_keep'] not in (0, 140):
+    if local['version'] != VERSION or type(local['yoco_keep']) is not int or local['yoco_keep'] not in (0, 140, 2541):
         raise ValueError('Unsupported local snapshot/YOCO version')
     if local['cache_precision'] not in ('f32', 'bf16') or not isinstance(local['producer_sha256'], str) or len(local['producer_sha256']) != 64:
         raise ValueError('Malformed local snapshot build/precision')

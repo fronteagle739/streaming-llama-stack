@@ -1,4 +1,4 @@
-# Start the DSV4.1 single engine (streaming-llama ULTRA prefill + ds4-decode.dll decode) through
+# Start the DSV4.1 single engine (ULTRA exact-cone prefill + ds4-decode.dll decode) through
 # `slstack start`, detached, with one of the gated configurations in scripts/dsv41_single.py.
 # Use scripts/start-dsv41-single-262k.ps1 or scripts/start-dsv41-single-1m.ps1; they call this file.
 #
@@ -11,7 +11,7 @@ param(
     [Parameter(Mandatory = $true)][ValidateSet('262k', '1m')][string]$Preset,
     [string]$Config = '',
     [string]$Model = '',
-    [ValidateSet(0,140)][int]$YocoKeep = 0,
+    [ValidateSet(0,140,2541)][int]$YocoKeep = 2541,
     [switch]$WebUI,
     [switch]$Vision,
     [switch]$DryRun,
@@ -26,10 +26,11 @@ if (-not $Config) {
 }
 if ($Config) { $Config = (Resolve-Path -LiteralPath $Config).Path }
 
-$ModeSuffix = if ($YocoKeep) { "-ultra-yoco" } else { "" }
+$ModeSuffix = if ($YocoKeep -eq 2541) { "-ultra-cone" } elseif ($YocoKeep -eq 140) { "-ultra-yoco" } else { "" }
 $StartConfig = Join-Path $Root "runtime\dsv41-single-$Preset$ModeSuffix.local.json"
 $genArgs = @('-B', (Join-Path $Root 'scripts\dsv41_single.py'), '--preset', $Preset, '--write', $StartConfig)
-if ($YocoKeep) { $genArgs += @('--yoco-keep', [string]$YocoKeep) }
+$profile = if ($YocoKeep -eq 2541) { 'ultra-cone' } elseif ($YocoKeep -eq 140) { 'ultra-yoco' } else { 'ultra' }
+$genArgs += @('--profile', $profile)
 if ($Vision) { $genArgs += '--vision' }
 if ($Config) { $genArgs += @('--config', $Config) }
 if ($Model) { $genArgs += @('--model', $Model) }
