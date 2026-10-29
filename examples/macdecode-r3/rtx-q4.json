@@ -1,0 +1,20 @@
+{
+  "model": "D:\\models\\big_models\\deepseek-ai\\DeepSeek-V4.1-Flash-1017-ds4-Q4\\DeepSeek-V4.1-Flash-1017-Q4-v41.gguf",
+  "model_receipt": "D:\\StreamingStudio\\runtime\\dsv41-native-session\\b7e3fdc746c09b01\\original-model-copy.json",
+  "model_name": "DSV4.1-1017",
+  "host_budget_gib": 8.5,
+  "min_available_gib": 0.75,
+  "runtime_min_free_gib": 0.75,
+  "producer_desktop_reserve_gib": 0.75,
+  "job_commit_gib": 48,
+  "yoco_keep": 2541,
+  "hold_file": "<ABSOLUTE_EXISTING_SHARED_GPU_LEDGER>",
+  "gpu_uuid": "GPU-a176a537-1065-92ce-6cbb-e1db40371cdf",
+  "gpu_wait_seconds": 0,
+  "runtime_root": "runtime",
+  "mac": "http://127.0.0.1:18081",
+  "broker_host": "127.0.0.1",
+  "broker_port": 18090,
+  "native_tier": "ultra",
+  "serving": "native"
+}

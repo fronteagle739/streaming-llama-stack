@@ -1,0 +1,24 @@
+{
+  "model": "/Volumes/4TB/models/deepseek-ai/DeepSeek-V4.1-Flash-1017-ds4-MXFP4-requant/DeepSeek-V4.1-Flash-1017-MXFP4-requant.gguf",
+  "model_name": "DeepSeek-V4.1-1017 MXFP4 requant (lossy speed proxy)",
+  "mac_bind": "127.0.0.1",
+  "mac_port": 18081,
+  "mac_engine_port": 18080,
+  "mac_host_budget_gib": 400,
+  "host_budget_gib": 400,
+  "min_available_gib": 16,
+  "runtime_min_free_gib": 16,
+  "job_commit_gib": 400,
+  "yoco_keep": 2541,
+  "paired_local_prefill_max_tokens": 0,
+  "vision_bridge_version": 1,
+  "vision_encoder": "/Volumes/4TB/models/deepseek-ai/DeepSeek-V4.1-Flash-1017-ds4-Q4/DeepSeek-V4.1-Flash-1017-Vision.gguf",
+  "mtp_model": "/Volumes/4TB/models/deepseek-ai/DeepSeek-V4.1-Flash-1017-ds4-MXFP4-requant/DeepSeek-V4.1-Flash-1017-DSpark-MXFP4-requant.gguf",
+  "env_overrides": {
+    "DS4_DS41_DECODE_QUEUE2": "1",
+    "DS4_DEBUG_LEVERS": "1",
+    "DS4_DS41_MXFP4_FIXED_SHAPES": "1",
+    "DS4_DS41_NARROW_WEIGHTS": "1"
+  },
+  "runtime_root": "~/Library/Application Support/streaming-llama-stack/dsv41-requant"
+}

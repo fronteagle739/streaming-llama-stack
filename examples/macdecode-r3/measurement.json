@@ -1,0 +1,200 @@
+{
+  "schema": "macdecode-round3-measurement-v1",
+  "source_revision": "e0442804c05e9dd16202de747466f354a00c1a8b",
+  "upstream_revision": "f48c5e2e20b1aaae1c79735a8457225d2469ae73",
+  "producer_revision": "8e78f530d9c392ca512c986b0dbe27bf9555abed",
+  "producer_binary_sha256": "0822075d76ca6195ea081e9031ec54935f7d25975e3d02a15b0e9535e6358153",
+  "paired_receiver_binary_sha256": "90756b687a5560e6600a936ebeb3aff0128e0eac226bc159ddb9bf2c282d8a45",
+  "producer_model": {
+    "contract": {
+      "schema": "dsv41-state-compatibility-v1",
+      "config_sha256": "4cfe1320f453806e7b44160327b3e6ff0cc2191883de9e0f2ac44022aafcb1ec",
+      "tokenizer_sha256": "72232d496132561d6fe17ba4bb7e00586ae583c0ed97a169e2cc969e3d5f70b2",
+      "shapes_sha256": "ab6af198abb839af36a83dd9b4cbad9602ace55a601456a08568c78200001a81",
+      "state_format": "dsv41-native-c-v2.1",
+      "wire_version": 2,
+      "mode": 3,
+      "context": 1000001,
+      "yoco_keep": 2541,
+      "yoco_state_version": 2
+    },
+    "compatibility_sha256": "31ab2d9b4b69b23b16176f46918e83296b4561d65fdec639c6529a4c155ebd5f",
+    "model_sha256": "2cc6bc254f22a0238020e61e931c0cac865218aada1eed9c0036d9f4031c6e5f",
+    "quant": {
+      "F16": 110,
+      "F32": 493,
+      "I8": 2,
+      "Q4_K": 120,
+      "Q8_0": 321
+    }
+  },
+  "receiver_model": {
+    "contract": {
+      "schema": "dsv41-state-compatibility-v1",
+      "config_sha256": "4cfe1320f453806e7b44160327b3e6ff0cc2191883de9e0f2ac44022aafcb1ec",
+      "tokenizer_sha256": "72232d496132561d6fe17ba4bb7e00586ae583c0ed97a169e2cc969e3d5f70b2",
+      "shapes_sha256": "ab6af198abb839af36a83dd9b4cbad9602ace55a601456a08568c78200001a81",
+      "state_format": "dsv41-native-c-v2.1",
+      "wire_version": 2,
+      "mode": 3,
+      "context": 1000001,
+      "yoco_keep": 2541,
+      "yoco_state_version": 2
+    },
+    "compatibility_sha256": "31ab2d9b4b69b23b16176f46918e83296b4561d65fdec639c6529a4c155ebd5f",
+    "model_sha256": "cf05bdccb86b823ce794eab2ca033a649b6a2f5c03cee8a4b177d86de017ae44",
+    "quant": {
+      "F16": 110,
+      "F32": 493,
+      "I8": 2,
+      "MXFP4": 120,
+      "Q8_0": 321
+    }
+  },
+  "paired_recall": true,
+  "paired_prompt_tokens": 8941,
+  "paired_generated_tokens": 128,
+  "paired_decode_tokens_per_second": 34.15,
+  "timing_scope": {
+    "log": "mac-ds4-c4036fc478ac4491bd9d100da5a9069c.log",
+    "line": "1029 21:08:01 ds4-server: chat ctx=9041..9069:28 gen=128 THINKING decoding chunk=34.32 t/s avg=34.15 t/s 3.748s",
+    "scope": "Mac decoder complete 128-token decode clock, including token-boundary queue submission; prefill/initial transfer excluded"
+  },
+  "recall_scope": "Exact planted password observed in the 128-token reasoning continuation; response reached max_tokens before final answer",
+  "qualification": {
+    "model_compatibility": {
+      "contract": {
+        "schema": "dsv41-state-compatibility-v1",
+        "config_sha256": "4cfe1320f453806e7b44160327b3e6ff0cc2191883de9e0f2ac44022aafcb1ec",
+        "tokenizer_sha256": "72232d496132561d6fe17ba4bb7e00586ae583c0ed97a169e2cc969e3d5f70b2",
+        "shapes_sha256": "ab6af198abb839af36a83dd9b4cbad9602ace55a601456a08568c78200001a81",
+        "state_format": "dsv41-native-c-v2.1",
+        "wire_version": 2,
+        "mode": 3,
+        "context": 1000001,
+        "yoco_keep": 2541,
+        "yoco_state_version": 2
+      },
+      "compatibility_sha256": "31ab2d9b4b69b23b16176f46918e83296b4561d65fdec639c6529a4c155ebd5f",
+      "model_sha256": "2cc6bc254f22a0238020e61e931c0cac865218aada1eed9c0036d9f4031c6e5f",
+      "quant": {
+        "F16": 110,
+        "F32": 493,
+        "I8": 2,
+        "Q4_K": 120,
+        "Q8_0": 321
+      }
+    },
+    "producer_sha256": "0822075d76ca6195ea081e9031ec54935f7d25975e3d02a15b0e9535e6358153",
+    "producer_source_revision": "8e78f530d9c392ca512c986b0dbe27bf9555abed",
+    "broker_port": 18090,
+    "tier": "ultra",
+    "yoco_keep": 2541,
+    "yoco_state_version": 2,
+    "receiver_model_compatibility": {
+      "contract": {
+        "schema": "dsv41-state-compatibility-v1",
+        "config_sha256": "4cfe1320f453806e7b44160327b3e6ff0cc2191883de9e0f2ac44022aafcb1ec",
+        "tokenizer_sha256": "72232d496132561d6fe17ba4bb7e00586ae583c0ed97a169e2cc969e3d5f70b2",
+        "shapes_sha256": "ab6af198abb839af36a83dd9b4cbad9602ace55a601456a08568c78200001a81",
+        "state_format": "dsv41-native-c-v2.1",
+        "wire_version": 2,
+        "mode": 3,
+        "context": 1000001,
+        "yoco_keep": 2541,
+        "yoco_state_version": 2
+      },
+      "compatibility_sha256": "31ab2d9b4b69b23b16176f46918e83296b4561d65fdec639c6529a4c155ebd5f",
+      "model_sha256": "cf05bdccb86b823ce794eab2ca033a649b6a2f5c03cee8a4b177d86de017ae44",
+      "quant": {
+        "F16": 110,
+        "F32": 493,
+        "I8": 2,
+        "MXFP4": 120,
+        "Q8_0": 321
+      }
+    },
+    "cross_quant": true,
+    "receiver_sha256": "90756b687a5560e6600a936ebeb3aff0128e0eac226bc159ddb9bf2c282d8a45",
+    "status": "qualified",
+    "continuation_kl": {
+      "direction": "KL(Mac-only || paired)",
+      "rows": 8,
+      "vocab": 129280,
+      "mean_nats": 0.041016902808656774,
+      "max_nats": 0.10055817395467846,
+      "per_token_nats": [
+        0.002413950153233122,
+        4.338368598328326e-07,
+        0.005397479351521451,
+        0.09113606409035228,
+        0.05457204763240179,
+        0.10055817395467846,
+        0.04215057222062445,
+        0.0319065012295828
+      ],
+      "mean_limit_nats": 0.1,
+      "max_limit_nats": 0.5,
+      "continuation_token": 42
+    },
+    "tiny_parity_sha256": "b677be214b53a5e6b502e04e3c40c7f54d2ab2edc2858afff1f435e0207f61d2"
+  },
+  "cleanup": {
+    "cleanup_confirmed": true,
+    "lease_released": true,
+    "tunnel_stopped": true
+  },
+  "producer_guard": {
+    "host_budget_bytes": 9126805504.0,
+    "physical_floor_bytes": 805306368.0,
+    "windows_gpu_commit_allowance_gib": 48
+  },
+  "installed_receiver": {
+    "binary_sha256": "1f171f9896209907f502d6f2cb4278c410d9bf65de296b56f9e22442b4be0469",
+    "renderer_sha256": "9e6d47cffecd6f034222c1302b5bd696eb97a2bfbee0ccb3a3cfeddd8d299190",
+    "source_revision": "e0442804c05e9dd16202de747466f354a00c1a8b",
+    "status": "PASS",
+    "note": "Independent full rebuild; live preset rollout and qualification of this new binary hash remain pending."
+  },
+  "install_guard": {
+    "status": "PASS",
+    "peak_rss": 1231208448,
+    "minimum_available": 537528778752,
+    "global_paging_growth": 0,
+    "owned_paged_bytes": 0
+  },
+  "round2_default_decode_tps": {
+    "prose_8k_serial": {
+      "published_native_precision": 41.4,
+      "upstream_same_requant": 38.9,
+      "installed_same_requant": 32.963,
+      "candidate": 34.638
+    },
+    "prose_131k_serial": {
+      "published_native_precision": 40.5,
+      "upstream_same_requant": 38.59,
+      "installed_same_requant": 32.157,
+      "candidate": 33.851
+    },
+    "prose_8k_dspark": {
+      "published_native_precision": 40.1,
+      "upstream_same_requant": 37.73,
+      "installed_same_requant": 32.298,
+      "candidate": 34.258
+    },
+    "code_8k_dspark": {
+      "published_native_precision": 58.8,
+      "upstream_same_requant": 51.735,
+      "installed_same_requant": 46.188,
+      "candidate": 45.749
+    }
+  },
+  "capability_reductions": [
+    "Owner-selected Q4 to MXFP4 target and drafter requantization is lossy; speed proxy only."
+  ],
+  "comparison_limitations": [
+    "Upstream CLI lacks vision loading; ours retains vision.",
+    "Published native-precision weights differ from this requant.",
+    "No new standalone Mac performance sweep or remaining upstream port was performed in this round yet."
+  ]
+}
