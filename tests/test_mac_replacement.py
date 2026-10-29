@@ -14,7 +14,7 @@ from slstack.mac import Receiver, budget, check_backend_port, replacement_budget
 
 class MacReplacementTests(unittest.TestCase):
     def test_shipping_admission_reserves_512mib_and_runtime_floor_half(self):
-        with patch('psutil.virtual_memory',return_value=SimpleNamespace(available=16*2**30)):
+        with patch('slstack.memory_counters.available_physical_bytes',return_value=16*2**30):
             self.assertEqual(budget(dict(mac_host_budget_gib=15.5))['min_available_gib'],.5)
             with self.assertRaises(MemoryError):budget(dict(mac_host_budget_gib=15.51))
             with self.assertRaises(MemoryError):budget(dict(mac_host_budget_gib=9,producer_desktop_reserve_gib=8))
@@ -45,9 +45,9 @@ class MacReplacementTests(unittest.TestCase):
 
     def test_retired_memory_must_recover_without_shrinking_the_cap(self):
         # Each failed attempt reads RAM twice: budget() and the no-progress window's signal.
-        memory = [SimpleNamespace(available=n*2**30) for n in (80, 80, 200, 200, 450)]
+        memory = [n*2**30 for n in (80, 80, 200, 200, 450)]
         cfg = {'min_available_gib':32}
-        with patch('psutil.virtual_memory',side_effect=memory), \
+        with patch('slstack.memory_counters.available_physical_bytes',side_effect=memory), \
              patch('slstack.mac.time.sleep') as sleep, redirect_stdout(io.StringIO()):
             result = replacement_budget(cfg,400,384)
         self.assertEqual(result['host_budget_gib'],384)
@@ -57,7 +57,7 @@ class MacReplacementTests(unittest.TestCase):
 
     def test_replacement_wait_stops_when_memory_stops_recovering(self):
         # Owner rule: 60 s is a NO-PROGRESS window (renewed while available RAM rises), not a cap.
-        with patch('psutil.virtual_memory',return_value=SimpleNamespace(available=80*2**30)), \
+        with patch('slstack.memory_counters.available_physical_bytes',return_value=80*2**30), \
              patch('slstack.mac.time.monotonic',side_effect=[10,10,71,71,71]), \
              patch('slstack.mac.time.sleep') as sleep:
             with self.assertRaisesRegex(MemoryError,'stopped recovering for 61s'):
@@ -66,9 +66,9 @@ class MacReplacementTests(unittest.TestCase):
 
     def test_replacement_wait_lives_while_memory_keeps_recovering(self):
         now = [0.]
-        readings = iter([SimpleNamespace(available=(80+n//2)*2**30) for n in range(1000)])   # +1 GiB every 2 reads
+        readings = iter([(80+n//2)*2**30 for n in range(1000)])   # +1 GiB every 2 reads
         def sleep(seconds): now[0] += 30   # 30 s between attempts: 300 s total, far past 60 s
-        with patch('psutil.virtual_memory',side_effect=lambda: next(readings)), \
+        with patch('slstack.memory_counters.available_physical_bytes',side_effect=lambda: next(readings)), \
              patch('slstack.mac.time.monotonic',side_effect=lambda: now[0]), \
              patch('slstack.mac.time.sleep',side_effect=sleep), redirect_stdout(io.StringIO()):
             result = replacement_budget({'min_available_gib':32},400,90-32)

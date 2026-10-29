@@ -41338,6 +41338,28 @@
     ]
   },
   {
+    "var": "DS4_NATIVE_QUALIFICATION_LOGITS",
+    "flag": null,
+    "default": null,
+    "code_default": "Wrapper/conditional default: see the literal call and consumer below",
+    "classification": "runtime",
+    "scopes": [
+      "mac-ds4"
+    ],
+    "doc": "Explicit diagnostic path for raw full-vocabulary logits on slstack-qualification requests; does not change sampling.",
+    "reads": [
+      "engines/ds4-mac/ds4_server.c:14487"
+    ],
+    "code_defaults": [
+      {
+        "source": "engines/ds4-mac/ds4_server.c:14487",
+        "unset": "Explicit pairing or qualification only; absent otherwise",
+        "read": "const char *qualification_logits=getenv(\"DS4_NATIVE_QUALIFICATION_LOGITS\");",
+        "consumer": "            if(!history || ds4_session_copy_logits(slot->session,paired_scores,paired_vocab)!=paired_vocab)token=-1;\n            else {\n                const char *qualification_logits=getenv(\"DS4_NATIVE_QUALIFICATION_LOGITS\");\n                if(qualification_logits && !strncmp(j->req.native_conversation,\"slstack-qualification-\",22)) {\n                    FILE *qf=fopen(qualification_logits,completion?\"ab\":\"wb\");\n                    bool written=qf && fwrite(paired_scores,sizeof(float),(size_t)paired_vocab,qf)==(size_t)paired_vocab;"
+      }
+    ]
+  },
+  {
     "var": "DS4_NATIVE_SESSION",
     "flag": "--ds4-native-session",
     "default": null,
@@ -41415,6 +41437,28 @@
         "unset": "Wrapper/conditional default: see the literal call and consumer below",
         "read": "{const char*policy=ds4_nf_env(\"DS4_NATIVE_SESSION_CATCHUP\");",
         "consumer": "    {const char*policy=ds4_nf_env(\"DS4_NATIVE_SESSION_ASYNC_DECODE_SYNC\");\n     if(policy){if(!strcmp(policy,\"0\"))c->async_decode=false;else if(strcmp(policy,\"1\"))goto bad;}}\n    {const char*policy=ds4_nf_env(\"DS4_NATIVE_SESSION_CATCHUP\");\n     if(policy){if(!strcmp(policy,\"defer\"))c->catchup_defer=true;else if(strcmp(policy,\"stream\"))goto bad;}}\n    c->local_prefill_max=11776;\n    if(ds4_nf_env(\"DS4_NATIVE_SESSION_LOCAL_PREFILL_MAX_TOKENS\")&&\n       !ds4_nf_env_uint(\"DS4_NATIVE_SESSION_LOCAL_PREFILL_MAX_TOKENS\",&c->local_prefill_max,0,49152))goto bad;"
+      }
+    ]
+  },
+  {
+    "var": "DS4_NATIVE_SESSION_COMPATIBILITY_SHA256",
+    "flag": null,
+    "default": null,
+    "code_default": "Wrapper/conditional default: see the literal call and consumer below",
+    "classification": "runtime",
+    "scopes": [
+      "mac-ds4"
+    ],
+    "doc": "Architecture, tokenizer, tensor-shape and state-config compatibility digest from both verified endpoint GGUF headers.",
+    "reads": [
+      "engines/ds4-mac/ds4_native_session_setup.inc:21"
+    ],
+    "code_defaults": [
+      {
+        "source": "engines/ds4-mac/ds4_native_session_setup.inc:21",
+        "unset": "Explicit pairing or qualification only; absent otherwise",
+        "read": "const char*compatibility=ds4_nf_env(\"DS4_NATIVE_SESSION_COMPATIBILITY_SHA256\");",
+        "consumer": "    const char*producer_model=ds4_nf_env(\"DS4_NATIVE_SESSION_MODEL_SHA256\");\n    const char*receiver_model=ds4_nf_env(\"DS4_NATIVE_SESSION_RECEIVER_MODEL_SHA256\");\n    const char*compatibility=ds4_nf_env(\"DS4_NATIVE_SESSION_COMPATIBILITY_SHA256\");\n    if(!producer_model||!ds4_nf_hex(producer_model,64)||!receiver_model||!ds4_nf_hex(receiver_model,64)||\n       !compatibility||!ds4_nf_hex(compatibility,64))\n        return ds4_nf_error(err,cap,\"missing architecture/tokenizer/state compatibility qualification\");"
       }
     ]
   },
@@ -41548,6 +41592,28 @@
     ]
   },
   {
+    "var": "DS4_NATIVE_SESSION_MODEL_SHA256",
+    "flag": null,
+    "default": null,
+    "code_default": "Wrapper/conditional default: see the literal call and consumer below",
+    "classification": "runtime",
+    "scopes": [
+      "mac-ds4"
+    ],
+    "doc": "Pinned producer weight identity; separate from the compatible receiver weight identity.",
+    "reads": [
+      "engines/ds4-mac/ds4_native_session_setup.inc:19"
+    ],
+    "code_defaults": [
+      {
+        "source": "engines/ds4-mac/ds4_native_session_setup.inc:19",
+        "unset": "Explicit pairing or qualification only; absent otherwise",
+        "read": "const char*producer_model=ds4_nf_env(\"DS4_NATIVE_SESSION_MODEL_SHA256\");",
+        "consumer": "    const char*renderer=ds4_nf_env(\"DS4_NATIVE_SESSION_RENDERER_SHA256\");\n    const char*expected_producer=ds4_nf_env(\"DS4_NATIVE_SESSION_PRODUCER_SHA256\");\n    const char*producer_model=ds4_nf_env(\"DS4_NATIVE_SESSION_MODEL_SHA256\");\n    const char*receiver_model=ds4_nf_env(\"DS4_NATIVE_SESSION_RECEIVER_MODEL_SHA256\");\n    const char*compatibility=ds4_nf_env(\"DS4_NATIVE_SESSION_COMPATIBILITY_SHA256\");\n    if(!producer_model||!ds4_nf_hex(producer_model,64)||!receiver_model||!ds4_nf_hex(receiver_model,64)||"
+      }
+    ]
+  },
+  {
     "var": "DS4_NATIVE_SESSION_PAIR_TOKEN_FILE",
     "flag": "--ds4-native-session-pair-token-file",
     "default": null,
@@ -41657,6 +41723,28 @@
         "unset": "Wrapper/conditional default: see the literal call and consumer below",
         "read": "const char*path=ds4_nf_env(\"DS4_NATIVE_SESSION_QUALIFICATION\"),*pin=ds4_nf_env(\"DS4_NATIVE_SESSION_QUALIFICATION_SHA256\");",
         "consumer": "    const char*host=ds4_nf_env(\"DS4_NATIVE_SESSION_IPV4\"),*token=ds4_nf_env(\"DS4_NATIVE_SESSION_PAIR_TOKEN_FILE\");\n    const char*tier=ds4_nf_env(\"DS4_NATIVE_SESSION_TIER\"),*techniques=ds4_nf_env(\"DS4_NATIVE_SESSION_TECHNIQUES\");\n    const char*path=ds4_nf_env(\"DS4_NATIVE_SESSION_QUALIFICATION\"),*pin=ds4_nf_env(\"DS4_NATIVE_SESSION_QUALIFICATION_SHA256\");\n    const char*renderer=ds4_nf_env(\"DS4_NATIVE_SESSION_RENDERER_SHA256\");\n    const char*expected_producer=ds4_nf_env(\"DS4_NATIVE_SESSION_PRODUCER_SHA256\");\n    if(!host||strlen(host)>15||!token||!tier||!path||!pin||!ds4_nf_hex(pin,64)||!renderer||!ds4_nf_hex(renderer,64)||\n       !expected_producer||!ds4_nf_hex(expected_producer,64)||"
+      }
+    ]
+  },
+  {
+    "var": "DS4_NATIVE_SESSION_RECEIVER_MODEL_SHA256",
+    "flag": null,
+    "default": null,
+    "code_default": "Wrapper/conditional default: see the literal call and consumer below",
+    "classification": "runtime",
+    "scopes": [
+      "mac-ds4"
+    ],
+    "doc": "Pinned receiver weight SHA, checked against the qualification and physical file identity.",
+    "reads": [
+      "engines/ds4-mac/ds4_native_session_setup.inc:20"
+    ],
+    "code_defaults": [
+      {
+        "source": "engines/ds4-mac/ds4_native_session_setup.inc:20",
+        "unset": "Explicit pairing or qualification only; absent otherwise",
+        "read": "const char*receiver_model=ds4_nf_env(\"DS4_NATIVE_SESSION_RECEIVER_MODEL_SHA256\");",
+        "consumer": "    const char*expected_producer=ds4_nf_env(\"DS4_NATIVE_SESSION_PRODUCER_SHA256\");\n    const char*producer_model=ds4_nf_env(\"DS4_NATIVE_SESSION_MODEL_SHA256\");\n    const char*receiver_model=ds4_nf_env(\"DS4_NATIVE_SESSION_RECEIVER_MODEL_SHA256\");\n    const char*compatibility=ds4_nf_env(\"DS4_NATIVE_SESSION_COMPATIBILITY_SHA256\");\n    if(!producer_model||!ds4_nf_hex(producer_model,64)||!receiver_model||!ds4_nf_hex(receiver_model,64)||\n       !compatibility||!ds4_nf_hex(compatibility,64))"
       }
     ]
   },
@@ -66453,6 +66541,32 @@
     "code_default": "NULL from getenv; the literal consumer below supplies any fallback"
   },
   {
+    "var": "LLAMA_DSV41_ENGRAM_GPU_DECODE",
+    "flag": "--llama-dsv41-engram-gpu-decode",
+    "default": null,
+    "code_default": "NULL from getenv; the literal consumer below supplies any fallback",
+    "classification": "qualified",
+    "scopes": [
+      "rtx-llama"
+    ],
+    "doc": "Upload the original 264-byte Engram rows and decode them on the GPU (bit-identical to the host decode, checked by the tile finite validator). Default enabled on the direct pinned tile path; 0 keeps the host decode and F32 upload.",
+    "reads": [
+      "engines/streaming-llama/prefill_llama.cpp/src/llama-dsv41-sweep.cpp:776"
+    ],
+    "allowed_values": [
+      "0",
+      "1"
+    ],
+    "code_defaults": [
+      {
+        "source": "engines/streaming-llama/prefill_llama.cpp/src/llama-dsv41-sweep.cpp:776",
+        "unset": "NULL from getenv; the literal consumer below supplies any fallback",
+        "read": "const char *engram_gpu_env=std::getenv(\"LLAMA_DSV41_ENGRAM_GPU_DECODE\");",
+        "consumer": "        // OPUS22: with the direct (pinned, GPU-validated) tile path, decode Engram\n        // rows on the GPU. LLAMA_DSV41_ENGRAM_GPU_DECODE=0 keeps the host decode.\n        const char *engram_gpu_env=std::getenv(\"LLAMA_DSV41_ENGRAM_GPU_DECODE\");\n        const bool engram_gpu_decode=p->options.admitted_pinned_device_bytes&&!(engram_gpu_env&&!std::strcmp(engram_gpu_env,\"0\"));\n        auto queue_engram=[&](uint32_t layer,uint32_t start,const llama_dsv41::engram_history &history){\n            require(!engram_next.valid(),\"Engram lookahead cannot overwrite unconsumed rows\");\n            engram_next=std::async(std::launch::async,[&,layer,start,history]{"
+      }
+    ]
+  },
+  {
     "var": "LLAMA_DSV41_ENGRAM_PROMPT_OVERLAP",
     "flag": "--llama-dsv41-engram-prompt-overlap",
     "default": "1",
@@ -66726,6 +66840,84 @@
         "unset": "NULL from getenv; the literal consumer below supplies any fallback",
         "read": "const char * gather_half=std::getenv(\"LLAMA_DSV41_GATHER_HALF\");",
         "consumer": "    }\n    auto * raw=ops.raw_snapshot(state.raw,projected.raw,in.history_ids);\n    const char * gather_half=std::getenv(\"LLAMA_DSV41_GATHER_HALF\");\n    const bool preserve_gather_storage=gather_half&&!std::strcmp(gather_half,\"1\");\n    auto * heads=ops.attention_heads(projected.q,raw,in.raw_ids,in.raw_mask,\n        compressed_rows?prefix(compressed,compressed_rows,expert.attention_kv_f16_table||preserve_gather_storage):nullptr,selected,selected_mask,w.attention.attn_sinks,\n        llama_dsv41_expert_profile::shared_sparse(expert),llama_dsv41_expert_profile::shared_flash_attention(expert),"
+      }
+    ]
+  },
+  {
+    "var": "LLAMA_DSV41_GET_ROWS_SCALAR",
+    "flag": "--llama-dsv41-get-rows-scalar",
+    "default": null,
+    "code_default": "NULL from getenv; the literal consumer below supplies any fallback",
+    "classification": "qualified",
+    "scopes": [
+      "rtx-llama"
+    ],
+    "doc": "CUDA GET_ROWS of one-element F32/F16 rows (the indexer's streaming top-k value and ID gathers): one thread per gathered element instead of one 256-thread block per element. Identical values (same index, same cast). Default 1; 0 keeps the generic kernel.",
+    "reads": [
+      "engines/streaming-llama/prefill_llama.cpp/ggml/src/ggml-cuda/getrows.cu:343"
+    ],
+    "allowed_values": [
+      "0",
+      "1"
+    ],
+    "code_defaults": [
+      {
+        "source": "engines/streaming-llama/prefill_llama.cpp/ggml/src/ggml-cuda/getrows.cu:343",
+        "unset": "NULL from getenv; the literal consumer below supplies any fallback",
+        "read": "const char * env = std::getenv(\"LLAMA_DSV41_GET_ROWS_SCALAR\");",
+        "consumer": "static bool get_rows_scalar_enabled() {\n    static const bool enabled = [] {\n        const char * env = std::getenv(\"LLAMA_DSV41_GET_ROWS_SCALAR\");\n        if (env && std::strcmp(env, \"0\") && std::strcmp(env, \"1\")) GGML_ABORT(\"LLAMA_DSV41_GET_ROWS_SCALAR must be 0 or 1\");\n        return !env || env[0] == '1';\n    }();\n    return enabled;"
+      }
+    ]
+  },
+  {
+    "var": "LLAMA_DSV41_GROUPED_HALF",
+    "flag": "--llama-dsv41-grouped-half",
+    "default": null,
+    "code_default": "NULL from getenv; the literal consumer below supplies any fallback",
+    "classification": "qualified",
+    "scopes": [
+      "rtx-llama"
+    ],
+    "doc": "Grouped F16 dense projection (attn_output_a, 8 groups) as one graph node: per group the same F16 weight casts and the same cuBLAS call as the tagged F16 dense product, written into that group's slice of the output, so the result is bit-identical and the group concat tree is removed. Default 1; 0 keeps one product per group plus the concats.",
+    "reads": [
+      "engines/streaming-llama/prefill_llama.cpp/src/llama-dsv41-executor.cpp:218"
+    ],
+    "allowed_values": [
+      "0",
+      "1"
+    ],
+    "code_defaults": [
+      {
+        "source": "engines/streaming-llama/prefill_llama.cpp/src/llama-dsv41-executor.cpp:218",
+        "unset": "NULL from getenv; the literal consumer below supplies any fallback",
+        "read": "static const bool on=[]{const char *e=std::getenv(\"LLAMA_DSV41_GROUPED_HALF\");return !e||!(e[0]=='0'&&!e[1]);}();",
+        "consumer": "}\nstatic bool dsv41_grouped_half_enabled(){\n    static const bool on=[]{const char *e=std::getenv(\"LLAMA_DSV41_GROUPED_HALF\");return !e||!(e[0]=='0'&&!e[1]);}();\n    return on;\n}\nstatic ggml_cgraph *llama_dsv41_native_batch_graph_ex(ggml_context *ctx,ggml_cgraph *original,\n        uint32_t count,uint64_t operation_limit,uint64_t *backend_temporary,"
+      }
+    ]
+  },
+  {
+    "var": "LLAMA_DSV41_HC_BF16_RESIDUAL",
+    "flag": "--llama-dsv41-hc-bf16-residual",
+    "default": null,
+    "code_default": "NULL from getenv; the literal consumer below supplies any fallback",
+    "classification": "qualified",
+    "scopes": [
+      "rtx-llama"
+    ],
+    "doc": "Keep the hyper-connection residual in BF16 between layers and between the attention and FFN sublayers (bit-identical: every carried residual is already BF16-rounded). Layers 1-36 read the resident BF16 bank directly and the attention sublayer writes BF16. Default 1; 0 restores the F32 unpack and F32 sublayer residual.",
+    "reads": [
+      "engines/streaming-llama/prefill_llama.cpp/src/llama-dsv41-executor.cpp:1243"
+    ],
+    "allowed_values": [
+      "0",
+      "1"
+    ],
+    "code_defaults": [
+      {
+        "source": "engines/streaming-llama/prefill_llama.cpp/src/llama-dsv41-executor.cpp:1243",
+        "unset": "NULL from getenv; the literal consumer below supplies any fallback",
+        "read": "static const bool hc_bf16_residual_option=[]{const char*v=std::getenv(\"LLAMA_DSV41_HC_BF16_RESIDUAL\");",
+        "consumer": "        // already BF16-rounded). LLAMA_DSV41_HC_BF16_RESIDUAL=0 restores the F32 path.\n        // Layers 37-39 keep the F32 unpack: their DSpark mean also reads the input.\n        static const bool hc_bf16_residual_option=[]{const char*v=std::getenv(\"LLAMA_DSV41_HC_BF16_RESIDUAL\");\n            require(!v||!std::strcmp(v,\"0\")||!std::strcmp(v,\"1\"),\"LLAMA_DSV41_HC_BF16_RESIDUAL must be 0 or 1\");return !v||v[0]=='1';}();\n        const bool hc_bf16_carry=hc_bf16_residual_option&&expert.hc_bf16_epilogue&&!boundary.active()&&\n            !llama_dsv41_attribution_active(in.position_offset+in.start,in.count);\n        const bool bf16_residual_input=hc_bf16_carry&&device_hidden&&resident_bf16&&in.layer&&in.layer<37&&!compact_seed&&direct_input;"
       }
     ]
   },
@@ -67032,6 +67224,32 @@
     ]
   },
   {
+    "var": "LLAMA_DSV41_SPARSE_HAND",
+    "flag": "--llama-dsv41-sparse-hand",
+    "default": null,
+    "code_default": "NULL from getenv; the literal consumer below supplies any fallback",
+    "classification": "qualified",
+    "scopes": [
+      "rtx-llama"
+    ],
+    "doc": "DSV4.1 token-tile sparse attention (TileLang mode 2): hand-written SM120 kernel with 32 heads per CTA, double-buffered 32-key tiles and the F32 query rounded to BF16 on load, instead of the embedded TileLang image (16 heads per CTA, one stage). Same BF16 MMA/F32 softmax arithmetic, different summation order (not bitwise identical). Default 1; 0 keeps the TileLang image.",
+    "reads": [
+      "engines/streaming-llama/prefill_llama.cpp/ggml/src/ggml-cuda/dsv41-tilelang.cuh:77"
+    ],
+    "allowed_values": [
+      "0",
+      "1"
+    ],
+    "code_defaults": [
+      {
+        "source": "engines/streaming-llama/prefill_llama.cpp/ggml/src/ggml-cuda/dsv41-tilelang.cuh:77",
+        "unset": "NULL from getenv; the literal consumer below supplies any fallback",
+        "read": "static const bool hand=[]{const char *e=std::getenv(\"LLAMA_DSV41_SPARSE_HAND\");",
+        "consumer": "        // OPUS22 r10: the hand SM120 kernel (32 heads/CTA, double-buffered key tiles)\n        // reads the F32 query and rounds it to BF16 on load, so no staged query copy.\n        static const bool hand=[]{const char *e=std::getenv(\"LLAMA_DSV41_SPARSE_HAND\");\n            const bool on=!e||!(e[0]=='0'&&!e[1]);\n            if(on)CUDA_CHECK(cudaFuncSetAttribute(dsv41_sparse_hand::sparse_attn_hg32,cudaFuncAttributeMaxDynamicSharedMemorySize,dsv41_sparse_hand::SMEM));\n            fprintf(stderr,\"OPUS22_SPARSE_HAND active=%d heads_per_cta=32 key_tile=32 stages=2 query_staging=0\\n\",on?1:0);return on;}();\n        ggml_cuda_pool_alloc<__nv_bfloat16> staged(ctx.pool(),kv_elements+(hand?0:q_elements));"
+      }
+    ]
+  },
+  {
     "var": "LLAMA_DSV41_STORED_MXFP4",
     "flag": null,
     "default": null,
@@ -67057,6 +67275,32 @@
         "unset": "NULL from getenv; the literal consumer below supplies any fallback",
         "read": "std::getenv(\"LLAMA_DSV41_STORED_MXFP4\")&&std::string(std::getenv(\"LLAMA_DSV41_STORED_MXFP4\"))==\"1\";",
         "consumer": "        const uint64_t backend_reserve=args.count(\"--backend-temporary-reserve-bytes\")?number(\"--backend-temporary-reserve-bytes\"):gib;\n        const bool flashinfer_reserve=llama_dsv41_flashinfer::requested()&&pair_ffn&&\n            std::getenv(\"LLAMA_DSV41_STORED_MXFP4\")&&std::string(std::getenv(\"LLAMA_DSV41_STORED_MXFP4\"))==\"1\";\n        const char*dense_fp8_env=std::getenv(\"LLAMA_DSV41_DENSE_FP8\");\n        const uint64_t dense_fp8_reserve=dense_fp8_env&&!std::strcmp(dense_fp8_env,\"1\")?576ull<<20:0;\n        require(backend_reserve>=dense_fp8_reserve,\"FP8 reserve exceeds total backend admission\");\n        const uint64_t base_backend_reserve=backend_reserve-dense_fp8_reserve;"
+      }
+    ]
+  },
+  {
+    "var": "LLAMA_DSV41_STREAM_TOPK_DEFER",
+    "flag": "--llama-dsv41-stream-topk-defer",
+    "default": null,
+    "code_default": "NULL from getenv; the literal consumer below supplies any fallback",
+    "classification": "qualified",
+    "scopes": [
+      "rtx-llama"
+    ],
+    "doc": "Indexer streaming top-k for more than 131,072 keys: append each 8,192-key window's candidates to one pending buffer and merge only when it would exceed 8,192 columns and once at the end, instead of re-merging after every window. Identical IDs and order (same score-desc/global-ID-asc total order). Default 1; 0 restores the per-window running merge.",
+    "reads": [
+      "engines/streaming-llama/prefill_llama.cpp/src/llama-dsv41-stream-topk.h:22"
+    ],
+    "allowed_values": [
+      "0",
+      "1"
+    ],
+    "code_defaults": [
+      {
+        "source": "engines/streaming-llama/prefill_llama.cpp/src/llama-dsv41-stream-topk.h:22",
+        "unset": "NULL from getenv; the literal consumer below supplies any fallback",
+        "read": "const char*env=std::getenv(\"LLAMA_DSV41_STREAM_TOPK_DEFER\");",
+        "consumer": "inline bool stream_topk_defer_enabled(){\n    static const bool enabled=[]{\n        const char*env=std::getenv(\"LLAMA_DSV41_STREAM_TOPK_DEFER\");\n        if(env&&std::strcmp(env,\"0\")&&std::strcmp(env,\"1\"))GGML_ABORT(\"LLAMA_DSV41_STREAM_TOPK_DEFER must be 0 or 1\");\n        return !env||env[0]=='1';\n    }();\n    return enabled;"
       }
     ]
   },
@@ -67158,6 +67402,32 @@
         "unset": "NULL from getenv; the literal consumer below supplies any fallback",
         "read": "const bool topk_radix=std::getenv(\"LLAMA_DSV41_TOPK_RADIX\")&&std::string(std::getenv(\"LLAMA_DSV41_TOPK_RADIX\"))==\"1\";",
         "consumer": "        const auto dense_before=expert.dense_inputs_f16?ggml_backend_cuda_dsv41_dense_half_queued():0;\n        const auto dense_fp4_before=dense_mxfp4?ggml_backend_cuda_native_mxfp4_dense_queued():0;\n        const bool topk_radix=std::getenv(\"LLAMA_DSV41_TOPK_RADIX\")&&std::string(std::getenv(\"LLAMA_DSV41_TOPK_RADIX\"))==\"1\";\n        const auto topk_radix_before=topk_radix?ggml_backend_cuda_dsv41_topk_radix_queued():0;\n        const auto rope_inplace_before=rope_inplace?ggml_backend_cuda_dsv41_rope_inplace_queued():0;\n        const auto dense_bf16_store_before=dense_bf16_store?ggml_backend_cuda_dsv41_dense_bf16_store_queued():0;\n        const auto dense_fp8_before=dense_fp8?ggml_backend_cuda_dsv41_dense_fp8_queued():0;"
+      }
+    ]
+  },
+  {
+    "var": "LLAMA_DSV41_TOPK_SELECT",
+    "flag": "--llama-dsv41-topk-select",
+    "default": null,
+    "code_default": "NULL from getenv; the literal consumer below supplies any fallback",
+    "classification": "qualified",
+    "scopes": [
+      "rtx-llama"
+    ],
+    "doc": "With the exact radix top-k (LLAMA_DSV41_TOPK_RADIX=1), select the top 512 of each 8192-key tile by an MSB radix select on the same packed (value, index) keys and sort only those 512, instead of sorting the whole tile. Identical IDs and order (the key order is total); NaN/subnormal tiles keep the original network. Default 1; 0 keeps the full tile sort.",
+    "reads": [
+      "engines/streaming-llama/prefill_llama.cpp/ggml/src/ggml-cuda/argsort.cu:520"
+    ],
+    "allowed_values": [
+      "0",
+      "1"
+    ],
+    "code_defaults": [
+      {
+        "source": "engines/streaming-llama/prefill_llama.cpp/ggml/src/ggml-cuda/argsort.cu:520",
+        "unset": "NULL from getenv; the literal consumer below supplies any fallback",
+        "read": "const char *env = std::getenv(\"LLAMA_DSV41_TOPK_SELECT\");",
+        "consumer": "static bool dsv41_topk_select_enabled() {\n    static const bool enabled = [] {\n        const char *env = std::getenv(\"LLAMA_DSV41_TOPK_SELECT\");\n        if (env && std::strcmp(env, \"0\") && std::strcmp(env, \"1\")) GGML_ABORT(\"LLAMA_DSV41_TOPK_SELECT must be 0 or 1\");\n        return !env || env[0] == '1';\n    }();\n    return enabled;"
       }
     ]
   },
@@ -98082,188 +98352,6 @@
         "unset": "4.0",
         "read": "os.environ.get('ZIMAGE_WATCHDOG_MIN_FREE_GB', 4.0)",
         "consumer": "    ram_guard.preflight_host_ram(floor, label, skip_env='ZIMAGE_SKIP_RAM_PREFLIGHT', force_env='ZIMAGE_FORCE_RESIDENT', advice='Use the Z-Image per-block streamer (stream_weights=True) on a RAM-constrained box.')\n    max_proc = float(os.environ.get('ZIMAGE_MAX_PROC_RAM_GB', 14.0))\n    min_free = float(os.environ.get('ZIMAGE_WATCHDOG_MIN_FREE_GB', 4.0))\n    try:\n        from cosmos_windows import mem_guard\n    except Exception:\n        mem_guard = None"
-      }
-    ]
-  },
-  {
-    "var": "LLAMA_DSV41_ENGRAM_GPU_DECODE",
-    "flag": "--llama-dsv41-engram-gpu-decode",
-    "default": null,
-    "code_default": "NULL from getenv; the literal consumer below supplies any fallback",
-    "classification": "qualified",
-    "scopes": [
-      "rtx-llama"
-    ],
-    "doc": "Upload the original 264-byte Engram rows and decode them on the GPU (bit-identical to the host decode, checked by the tile finite validator). Default enabled on the direct pinned tile path; 0 keeps the host decode and F32 upload.",
-    "reads": [
-      "engines/streaming-llama/prefill_llama.cpp/src/llama-dsv41-sweep.cpp:776"
-    ],
-    "allowed_values": [
-      "0",
-      "1"
-    ],
-    "code_defaults": [
-      {
-        "source": "engines/streaming-llama/prefill_llama.cpp/src/llama-dsv41-sweep.cpp:776",
-        "unset": "NULL from getenv; the literal consumer below supplies any fallback",
-        "read": "const char *engram_gpu_env=std::getenv(\"LLAMA_DSV41_ENGRAM_GPU_DECODE\");",
-        "consumer": "        // OPUS22: with the direct (pinned, GPU-validated) tile path, decode Engram\n        // rows on the GPU. LLAMA_DSV41_ENGRAM_GPU_DECODE=0 keeps the host decode.\n        const char *engram_gpu_env=std::getenv(\"LLAMA_DSV41_ENGRAM_GPU_DECODE\");\n        const bool engram_gpu_decode=p->options.admitted_pinned_device_bytes&&!(engram_gpu_env&&!std::strcmp(engram_gpu_env,\"0\"));\n        auto queue_engram=[&](uint32_t layer,uint32_t start,const llama_dsv41::engram_history &history){\n            require(!engram_next.valid(),\"Engram lookahead cannot overwrite unconsumed rows\");\n            engram_next=std::async(std::launch::async,[&,layer,start,history]{"
-      }
-    ]
-  },
-  {
-    "var": "LLAMA_DSV41_HC_BF16_RESIDUAL",
-    "flag": "--llama-dsv41-hc-bf16-residual",
-    "default": null,
-    "code_default": "NULL from getenv; the literal consumer below supplies any fallback",
-    "classification": "qualified",
-    "scopes": [
-      "rtx-llama"
-    ],
-    "doc": "Keep the hyper-connection residual in BF16 between layers and between the attention and FFN sublayers (bit-identical: every carried residual is already BF16-rounded). Layers 1-36 read the resident BF16 bank directly and the attention sublayer writes BF16. Default 1; 0 restores the F32 unpack and F32 sublayer residual.",
-    "reads": [
-      "engines/streaming-llama/prefill_llama.cpp/src/llama-dsv41-executor.cpp:1243"
-    ],
-    "allowed_values": [
-      "0",
-      "1"
-    ],
-    "code_defaults": [
-      {
-        "source": "engines/streaming-llama/prefill_llama.cpp/src/llama-dsv41-executor.cpp:1243",
-        "unset": "NULL from getenv; the literal consumer below supplies any fallback",
-        "read": "static const bool hc_bf16_residual_option=[]{const char*v=std::getenv(\"LLAMA_DSV41_HC_BF16_RESIDUAL\");",
-        "consumer": "        // already BF16-rounded). LLAMA_DSV41_HC_BF16_RESIDUAL=0 restores the F32 path.\n        // Layers 37-39 keep the F32 unpack: their DSpark mean also reads the input.\n        static const bool hc_bf16_residual_option=[]{const char*v=std::getenv(\"LLAMA_DSV41_HC_BF16_RESIDUAL\");\n            require(!v||!std::strcmp(v,\"0\")||!std::strcmp(v,\"1\"),\"LLAMA_DSV41_HC_BF16_RESIDUAL must be 0 or 1\");return !v||v[0]=='1';}();\n        const bool hc_bf16_carry=hc_bf16_residual_option&&expert.hc_bf16_epilogue&&!boundary.active()&&\n            !llama_dsv41_attribution_active(in.position_offset+in.start,in.count);\n        const bool bf16_residual_input=hc_bf16_carry&&device_hidden&&resident_bf16&&in.layer&&in.layer<37&&!compact_seed&&direct_input;"
-      }
-    ]
-  },
-  {
-    "var": "LLAMA_DSV41_TOPK_SELECT",
-    "flag": "--llama-dsv41-topk-select",
-    "default": null,
-    "code_default": "NULL from getenv; the literal consumer below supplies any fallback",
-    "classification": "qualified",
-    "scopes": [
-      "rtx-llama"
-    ],
-    "doc": "With the exact radix top-k (LLAMA_DSV41_TOPK_RADIX=1), select the top 512 of each 8192-key tile by an MSB radix select on the same packed (value, index) keys and sort only those 512, instead of sorting the whole tile. Identical IDs and order (the key order is total); NaN/subnormal tiles keep the original network. Default 1; 0 keeps the full tile sort.",
-    "reads": [
-      "engines/streaming-llama/prefill_llama.cpp/ggml/src/ggml-cuda/argsort.cu:520"
-    ],
-    "allowed_values": [
-      "0",
-      "1"
-    ],
-    "code_defaults": [
-      {
-        "source": "engines/streaming-llama/prefill_llama.cpp/ggml/src/ggml-cuda/argsort.cu:520",
-        "unset": "NULL from getenv; the literal consumer below supplies any fallback",
-        "read": "const char *env = std::getenv(\"LLAMA_DSV41_TOPK_SELECT\");",
-        "consumer": "static bool dsv41_topk_select_enabled() {\n    static const bool enabled = [] {\n        const char *env = std::getenv(\"LLAMA_DSV41_TOPK_SELECT\");\n        if (env && std::strcmp(env, \"0\") && std::strcmp(env, \"1\")) GGML_ABORT(\"LLAMA_DSV41_TOPK_SELECT must be 0 or 1\");\n        return !env || env[0] == '1';\n    }();\n    return enabled;"
-      }
-    ]
-  },
-  {
-    "var": "LLAMA_DSV41_STREAM_TOPK_DEFER",
-    "flag": "--llama-dsv41-stream-topk-defer",
-    "default": null,
-    "code_default": "NULL from getenv; the literal consumer below supplies any fallback",
-    "classification": "qualified",
-    "scopes": [
-      "rtx-llama"
-    ],
-    "doc": "Indexer streaming top-k for more than 131,072 keys: append each 8,192-key window's candidates to one pending buffer and merge only when it would exceed 8,192 columns and once at the end, instead of re-merging after every window. Identical IDs and order (same score-desc/global-ID-asc total order). Default 1; 0 restores the per-window running merge.",
-    "reads": [
-      "engines/streaming-llama/prefill_llama.cpp/src/llama-dsv41-stream-topk.h:22"
-    ],
-    "allowed_values": [
-      "0",
-      "1"
-    ],
-    "code_defaults": [
-      {
-        "source": "engines/streaming-llama/prefill_llama.cpp/src/llama-dsv41-stream-topk.h:22",
-        "unset": "NULL from getenv; the literal consumer below supplies any fallback",
-        "read": "const char*env=std::getenv(\"LLAMA_DSV41_STREAM_TOPK_DEFER\");",
-        "consumer": "inline bool stream_topk_defer_enabled(){\n    static const bool enabled=[]{\n        const char*env=std::getenv(\"LLAMA_DSV41_STREAM_TOPK_DEFER\");\n        if(env&&std::strcmp(env,\"0\")&&std::strcmp(env,\"1\"))GGML_ABORT(\"LLAMA_DSV41_STREAM_TOPK_DEFER must be 0 or 1\");\n        return !env||env[0]=='1';\n    }();\n    return enabled;"
-      }
-    ]
-  },
-  {
-    "var": "LLAMA_DSV41_GET_ROWS_SCALAR",
-    "flag": "--llama-dsv41-get-rows-scalar",
-    "default": null,
-    "code_default": "NULL from getenv; the literal consumer below supplies any fallback",
-    "classification": "qualified",
-    "scopes": [
-      "rtx-llama"
-    ],
-    "doc": "CUDA GET_ROWS of one-element F32/F16 rows (the indexer's streaming top-k value and ID gathers): one thread per gathered element instead of one 256-thread block per element. Identical values (same index, same cast). Default 1; 0 keeps the generic kernel.",
-    "reads": [
-      "engines/streaming-llama/prefill_llama.cpp/ggml/src/ggml-cuda/getrows.cu:343"
-    ],
-    "allowed_values": [
-      "0",
-      "1"
-    ],
-    "code_defaults": [
-      {
-        "source": "engines/streaming-llama/prefill_llama.cpp/ggml/src/ggml-cuda/getrows.cu:343",
-        "unset": "NULL from getenv; the literal consumer below supplies any fallback",
-        "read": "const char * env = std::getenv(\"LLAMA_DSV41_GET_ROWS_SCALAR\");",
-        "consumer": "static bool get_rows_scalar_enabled() {\n    static const bool enabled = [] {\n        const char * env = std::getenv(\"LLAMA_DSV41_GET_ROWS_SCALAR\");\n        if (env && std::strcmp(env, \"0\") && std::strcmp(env, \"1\")) GGML_ABORT(\"LLAMA_DSV41_GET_ROWS_SCALAR must be 0 or 1\");\n        return !env || env[0] == '1';\n    }();\n    return enabled;"
-      }
-    ]
-  },
-  {
-    "var": "LLAMA_DSV41_SPARSE_HAND",
-    "flag": "--llama-dsv41-sparse-hand",
-    "default": null,
-    "code_default": "NULL from getenv; the literal consumer below supplies any fallback",
-    "classification": "qualified",
-    "scopes": [
-      "rtx-llama"
-    ],
-    "doc": "DSV4.1 token-tile sparse attention (TileLang mode 2): hand-written SM120 kernel with 32 heads per CTA, double-buffered 32-key tiles and the F32 query rounded to BF16 on load, instead of the embedded TileLang image (16 heads per CTA, one stage). Same BF16 MMA/F32 softmax arithmetic, different summation order (not bitwise identical). Default 1; 0 keeps the TileLang image.",
-    "reads": [
-      "engines/streaming-llama/prefill_llama.cpp/ggml/src/ggml-cuda/dsv41-tilelang.cuh:77"
-    ],
-    "allowed_values": [
-      "0",
-      "1"
-    ],
-    "code_defaults": [
-      {
-        "source": "engines/streaming-llama/prefill_llama.cpp/ggml/src/ggml-cuda/dsv41-tilelang.cuh:77",
-        "unset": "NULL from getenv; the literal consumer below supplies any fallback",
-        "read": "static const bool hand=[]{const char *e=std::getenv(\"LLAMA_DSV41_SPARSE_HAND\");",
-        "consumer": "        // OPUS22 r10: the hand SM120 kernel (32 heads/CTA, double-buffered key tiles)\n        // reads the F32 query and rounds it to BF16 on load, so no staged query copy.\n        static const bool hand=[]{const char *e=std::getenv(\"LLAMA_DSV41_SPARSE_HAND\");\n            const bool on=!e||!(e[0]=='0'&&!e[1]);\n            if(on)CUDA_CHECK(cudaFuncSetAttribute(dsv41_sparse_hand::sparse_attn_hg32,cudaFuncAttributeMaxDynamicSharedMemorySize,dsv41_sparse_hand::SMEM));\n            fprintf(stderr,\"OPUS22_SPARSE_HAND active=%d heads_per_cta=32 key_tile=32 stages=2 query_staging=0\\n\",on?1:0);return on;}();\n        ggml_cuda_pool_alloc<__nv_bfloat16> staged(ctx.pool(),kv_elements+(hand?0:q_elements));"
-      }
-    ]
-  },
-  {
-    "var": "LLAMA_DSV41_GROUPED_HALF",
-    "flag": "--llama-dsv41-grouped-half",
-    "default": null,
-    "code_default": "NULL from getenv; the literal consumer below supplies any fallback",
-    "classification": "qualified",
-    "scopes": [
-      "rtx-llama"
-    ],
-    "doc": "Grouped F16 dense projection (attn_output_a, 8 groups) as one graph node: per group the same F16 weight casts and the same cuBLAS call as the tagged F16 dense product, written into that group's slice of the output, so the result is bit-identical and the group concat tree is removed. Default 1; 0 keeps one product per group plus the concats.",
-    "reads": [
-      "engines/streaming-llama/prefill_llama.cpp/src/llama-dsv41-executor.cpp:218"
-    ],
-    "allowed_values": [
-      "0",
-      "1"
-    ],
-    "code_defaults": [
-      {
-        "source": "engines/streaming-llama/prefill_llama.cpp/src/llama-dsv41-executor.cpp:218",
-        "unset": "NULL from getenv; the literal consumer below supplies any fallback",
-        "read": "static const bool on=[]{const char *e=std::getenv(\"LLAMA_DSV41_GROUPED_HALF\");return !e||!(e[0]=='0'&&!e[1]);}();",
-        "consumer": "}\nstatic bool dsv41_grouped_half_enabled(){\n    static const bool on=[]{const char *e=std::getenv(\"LLAMA_DSV41_GROUPED_HALF\");return !e||!(e[0]=='0'&&!e[1]);}();\n    return on;\n}\nstatic ggml_cgraph *llama_dsv41_native_batch_graph_ex(ggml_context *ctx,ggml_cgraph *original,\n        uint32_t count,uint64_t operation_limit,uint64_t *backend_temporary,"
       }
     ]
   }

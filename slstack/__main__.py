@@ -190,7 +190,7 @@ def main():
         peer = Pair(cfg)
         try:
             peer.start()
-            print('Pairing and native top-1 handshake passed', flush=True)
+            print('Pairing and native state qualification passed', flush=True)
         finally:
             peer.close()
         return 0

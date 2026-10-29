@@ -87,16 +87,23 @@ Native controls take effect at token boundaries. The response reports requested 
 | `--llamadecode-recency-lfu` | Explicit runtime value | E8 experiment: recency-weighted LFU admission for the L2 expert victim cache; 0 (default) preserves LRU, 1 decays scores per token and requires a 25% admission margin. |
 | `--llama-dsv41-cast-vector` | rtx-llama: `1` | LLAMA_DSV41_CAST_VECTOR: qualified preset/runtime setting; override for a different memory or arithmetic plan |
 | `--llama-dsv41-cuda-graphs` | Explicit runtime value | Explicit streamed layer CUDA capture/update/replay experiment; requires compiled graph support and GGML_CUDA_DISABLE_GRAPHS=0; bounded one executable, no unsupported eager fallback. Production default remains eager. |
+| `--llama-dsv41-engram-gpu-decode` | Explicit runtime value | Upload the original 264-byte Engram rows and decode them on the GPU (bit-identical to the host decode, checked by the tile finite validator). Default enabled on the direct pinned tile path; 0 keeps the host decode and F32 upload. |
 | `--llama-dsv41-engram-prompt-overlap` | rtx-llama: `1` | LLAMA_DSV41_ENGRAM_PROMPT_OVERLAP: qualified preset/runtime setting; override for a different memory or arithmetic plan |
 | `--flashinfer-batch-tokens` | Explicit runtime value | Opt-in ABI4 stored-MXFP4 expert chunk size, default4096. Encoder layers0-19 may widen to8192/16384; layer20 and the cone retain4K. Attention/router GEMMs stay4K; existing fused gather/MXFP8 quantization is reused. Exact provider/graph/physical admission remains mandatory;16K has only adapter qualification. |
 | `--dsv41-fused-hc` | rtx-llama: `2` | SM120 hc=4,20-iteration Sinkhorn:2(default) imports the DeepSeek fused algorithm with bit-exact native arithmetic;0 original graph;1 official rounding experiment. Other HC settings keep the original graph. |
+| `--llama-dsv41-get-rows-scalar` | Explicit runtime value | CUDA GET_ROWS of one-element F32/F16 rows (the indexer's streaming top-k value and ID gathers): one thread per gathered element instead of one 256-thread block per element. Identical values (same index, same cast). Default 1; 0 keeps the generic kernel. |
+| `--llama-dsv41-grouped-half` | Explicit runtime value | Grouped F16 dense projection (attn_output_a, 8 groups) as one graph node: per group the same F16 weight casts and the same cuBLAS call as the tagged F16 dense product, written into that group's slice of the output, so the result is bit-identical and the group concat tree is removed. Default 1; 0 keeps one product per group plus the concats. |
+| `--llama-dsv41-hc-bf16-residual` | Explicit runtime value | Keep the hyper-connection residual in BF16 between layers and between the attention and FFN sublayers (bit-identical: every carried residual is already BF16-rounded). Layers 1-36 read the resident BF16 bank directly and the attention sublayer writes BF16. Default 1; 0 restores the F32 unpack and F32 sublayer residual. |
 | `--llama-dsv41-hc-collapse-fusion` | Explicit runtime value | Fuse four HC products, three left-associated RN sums and the unchanged BF16 boundary. Default enabled; 0 selects the original portable decomposition. |
 | `--llama-dsv41-mul-f16-store` | rtx-llama: `1` | LLAMA_DSV41_MUL_F16_STORE: qualified preset/runtime setting; override for a different memory or arithmetic plan |
 | `--llama-dsv41-qat-tiled` | Explicit runtime value | Batch independent V4.1 quantization groups into 256-thread CTAs using the original exact scale/format helpers. Default enabled; 0 selects the original per-group kernel. |
 | `--llama-dsv41-rope-inplace` | rtx-llama: `1` | LLAMA_DSV41_ROPE_INPLACE: qualified preset/runtime setting; override for a different memory or arithmetic plan |
 | `--llama-dsv41-skip-unused-tile-pin` | rtx-llama: `1` | LLAMA_DSV41_SKIP_UNUSED_TILE_PIN: qualified preset/runtime setting; override for a different memory or arithmetic plan |
+| `--llama-dsv41-sparse-hand` | Explicit runtime value | DSV4.1 token-tile sparse attention (TileLang mode 2): hand-written SM120 kernel with 32 heads per CTA, double-buffered 32-key tiles and the F32 query rounded to BF16 on load, instead of the embedded TileLang image (16 heads per CTA, one stage). Same BF16 MMA/F32 softmax arithmetic, different summation order (not bitwise identical). Default 1; 0 keeps the TileLang image. |
+| `--llama-dsv41-stream-topk-defer` | Explicit runtime value | Indexer streaming top-k for more than 131,072 keys: append each 8,192-key window's candidates to one pending buffer and merge only when it would exceed 8,192 columns and once at the end, instead of re-merging after every window. Identical IDs and order (same score-desc/global-ID-asc total order). Default 1; 0 restores the per-window running merge. |
 | `--dsv41-tilelang-attention` | rtx-llama: `2` | Sparse attention:2(default) packed-query SM120 TileLang grid with embedded pinned image;0 native control;1 legacy128-row adapter requiring its matching CUBIN. Mode2 stages query/KV once inside the existing768MiB pool. Qualified under owner KL tolerance; make it exact remains on the roadmap. |
 | `--llama-dsv41-topk-radix` | rtx-llama: `1` | LLAMA_DSV41_TOPK_RADIX: qualified preset/runtime setting; override for a different memory or arithmetic plan |
+| `--llama-dsv41-topk-select` | Explicit runtime value | With the exact radix top-k (LLAMA_DSV41_TOPK_RADIX=1), select the top 512 of each 8192-key tile by an MSB radix select on the same packed (value, index) keys and sort only those 512, instead of sorting the whole tile. Identical IDs and order (the key order is total); NaN/subnormal tiles keep the original network. Default 1; 0 keeps the full tile sort. |
 | `--dsv41-unpadded-cone` | Explicit runtime value | Experimental unpadded2541-row replay;0 preserves qualified tile shapes. Requires full-prefill bit-exact qualification. |
 | `--llama-wf-ds-factory-staging-mib` | Explicit runtime value | OPUS22 experiment, default 256. DirectStorage factory staging size in MiB for the strict DSV4.1 producer; 512 stays inside the existing 512 MiB per-tier factory allowance, other values refuse. Same requests and bytes. |
 | `--llama-wf-ds-request-mib` | Explicit runtime value | OPUS22 experiment, unset by default (about layer/1000 bytes per DirectStorage request, clamped 512 KiB..32 MiB). 2, 4, 8, 16 or 32 fixes the request size in MiB for planning and the strict profile checks alike. Same bytes and destinations. |
@@ -135,13 +142,6 @@ Native controls take effect at token boundaries. The response reports requested 
 | `--xdg-cache-home` | ds4-win: `{runtime_root}/cache/xdg_cache_home`; mac-ds4: `{runtime_root}/cache/xdg_cache_home`; rtx-llama: `{runtime_root}/cache/xdg_cache_home`; image: `{runtime_root}/cache/xdg_cache_home`; video: `{runtime_root}/cache/xdg_cache_home`; studio: `{runtime_root}/cache/xdg_cache_home`; mlx-serve: `{runtime_root}/cache/xdg_cache_home`; mac-mlx: `{runtime_root}/cache/xdg_cache_home`; mac-llama: `{runtime_root}/cache/xdg_cache_home`; mac-mference: `{runtime_root}/cache/xdg_cache_home` | Runtime-local cache/temp directory; no model download is performed. |
 | `--zig-global-cache-dir` | ds4-win: `{runtime_root}/cache/zig_global_cache_dir`; mac-ds4: `{runtime_root}/cache/zig_global_cache_dir`; rtx-llama: `{runtime_root}/cache/zig_global_cache_dir`; image: `{runtime_root}/cache/zig_global_cache_dir`; video: `{runtime_root}/cache/zig_global_cache_dir`; studio: `{runtime_root}/cache/zig_global_cache_dir`; mlx-serve: `{runtime_root}/cache/zig_global_cache_dir`; mac-mlx: `{runtime_root}/cache/zig_global_cache_dir`; mac-llama: `{runtime_root}/cache/zig_global_cache_dir`; mac-mference: `{runtime_root}/cache/zig_global_cache_dir` | Runtime-local cache/temp directory; no model download is performed. |
 | `--zig-local-cache-dir` | ds4-win: `{runtime_root}/cache/zig_local_cache_dir`; mac-ds4: `{runtime_root}/cache/zig_local_cache_dir`; rtx-llama: `{runtime_root}/cache/zig_local_cache_dir`; image: `{runtime_root}/cache/zig_local_cache_dir`; video: `{runtime_root}/cache/zig_local_cache_dir`; studio: `{runtime_root}/cache/zig_local_cache_dir`; mlx-serve: `{runtime_root}/cache/zig_local_cache_dir`; mac-mlx: `{runtime_root}/cache/zig_local_cache_dir`; mac-llama: `{runtime_root}/cache/zig_local_cache_dir`; mac-mference: `{runtime_root}/cache/zig_local_cache_dir` | Runtime-local cache/temp directory; no model download is performed. |
-| `--llama-dsv41-engram-gpu-decode` | Explicit runtime value | Upload the original 264-byte Engram rows and decode them on the GPU (bit-identical to the host decode, checked by the tile finite validator). Default enabled on the direct pinned tile path; 0 keeps the host decode and F32 upload. |
-| `--llama-dsv41-hc-bf16-residual` | Explicit runtime value | Keep the hyper-connection residual in BF16 between layers and between the attention and FFN sublayers (bit-identical: every carried residual is already BF16-rounded). Layers 1-36 read the resident BF16 bank directly and the attention sublayer writes BF16. Default 1; 0 restores the F32 unpack and F32 sublayer residual. |
-| `--llama-dsv41-topk-select` | Explicit runtime value | With the exact radix top-k (LLAMA_DSV41_TOPK_RADIX=1), select the top 512 of each 8192-key tile by an MSB radix select on the same packed (value, index) keys and sort only those 512, instead of sorting the whole tile. Identical IDs and order (the key order is total); NaN/subnormal tiles keep the original network. Default 1; 0 keeps the full tile sort. |
-| `--llama-dsv41-stream-topk-defer` | Explicit runtime value | Indexer streaming top-k for more than 131,072 keys: append each 8,192-key window's candidates to one pending buffer and merge only when it would exceed 8,192 columns and once at the end, instead of re-merging after every window. Identical IDs and order (same score-desc/global-ID-asc total order). Default 1; 0 restores the per-window running merge. |
-| `--llama-dsv41-get-rows-scalar` | Explicit runtime value | CUDA GET_ROWS of one-element F32/F16 rows (the indexer's streaming top-k value and ID gathers): one thread per gathered element instead of one 256-thread block per element. Identical values (same index, same cast). Default 1; 0 keeps the generic kernel. |
-| `--llama-dsv41-sparse-hand` | Explicit runtime value | DSV4.1 token-tile sparse attention (TileLang mode 2): hand-written SM120 kernel with 32 heads per CTA, double-buffered 32-key tiles and the F32 query rounded to BF16 on load, instead of the embedded TileLang image (16 heads per CTA, one stage). Same BF16 MMA/F32 softmax arithmetic, different summation order (not bitwise identical). Default 1; 0 keeps the TileLang image. |
-| `--llama-dsv41-grouped-half` | Explicit runtime value | Grouped F16 dense projection (attn_output_a, 8 groups) as one graph node: per group the same F16 weight casts and the same cuBLAS call as the tagged F16 dense product, written into that group's slice of the output, so the result is bit-identical and the group concat tree is removed. Default 1; 0 keeps one product per group plus the concats. |
 
 Budget placeholders use the admitted child budget: `{host_budget_bytes}`, `{host_budget_mb}`, `{physical_floor_bytes}` (admission) and `{runtime_floor_bytes}` (runtime). `{host_budget_gib}` and `{min_available_gib}` use GiB. User overrides are literal strings, including JSON and braces.
 
@@ -2994,7 +2994,7 @@ DS4_BENCH_REQUIRE_CACHED_API: advanced engine setting; built-in default retained
 
 Scope: mac-ds4. Class: advanced.
 
-Source: `engines/ds4-mac/ds4_server.c:14066`. Unset read: NULL from getenv; the literal consumer below supplies any fallback.
+Source: `engines/ds4-mac/ds4_server.c:14071`. Unset read: NULL from getenv; the literal consumer below supplies any fallback.
 
 ```text
      * Small ordinary API prompts still exercise the real serving path. This is
@@ -18538,7 +18538,7 @@ DS4_DEBUG_LEVERS: advanced engine setting; built-in default retained
 
 Scope: mac-ds4. Class: advanced.
 
-Source: `engines/ds4-mac/ds4_server.c:16794`. Unset read: NULL from getenv; the literal consumer below supplies any fallback.
+Source: `engines/ds4-mac/ds4_server.c:16807`. Unset read: NULL from getenv; the literal consumer below supplies any fallback.
 
 ```text
     g_bench_snap_dir = cfg.kv_disk_dir;
@@ -18556,7 +18556,7 @@ DS4_DEBUG_LEVERS_FILE: advanced engine setting; built-in default retained
 
 Scope: mac-ds4. Class: advanced.
 
-Source: `engines/ds4-mac/ds4_server.c:15780`. Unset read: NULL from getenv; the literal consumer below supplies any fallback.
+Source: `engines/ds4-mac/ds4_server.c:15792`. Unset read: NULL from getenv; the literal consumer below supplies any fallback.
 
 ```text
 static bool server_debug_levers_enabled(const server *s) {
@@ -27472,7 +27472,7 @@ static bool kv_cache_reason_is_chain_waypoint(uint8_t reason) {
     return reason == DS4_KVSTORE_REASON_CONTINUED ||
 ```
 
-Source: `engines/ds4-mac/ds4_server.c:21633`. Unset read: NULL from getenv; the literal consumer below supplies any fallback.
+Source: `engines/ds4-mac/ds4_server.c:21646`. Unset read: NULL from getenv; the literal consumer below supplies any fallback.
 
 ```text
      * without the guard and fails it under its own default (V4.1 port,
@@ -27484,7 +27484,7 @@ Source: `engines/ds4-mac/ds4_server.c:21633`. Unset read: NULL from getenv; the 
     TEST_ASSERT(dir != NULL);
 ```
 
-Source: `engines/ds4-mac/ds4_server.c:21634`. Unset read: Wrapper/conditional default: see the literal call and consumer below.
+Source: `engines/ds4-mac/ds4_server.c:21647`. Unset read: Wrapper/conditional default: see the literal call and consumer below.
 
 ```text
      * 2026-09-14). */
@@ -27496,7 +27496,7 @@ Source: `engines/ds4-mac/ds4_server.c:21634`. Unset read: Wrapper/conditional de
     if (!dir) { if (ladder_prev) setenv("DS4_KV_LADDER", ladder_prev, 1); else unsetenv("DS4_KV_LADDER"); return; }
 ```
 
-Source: `engines/ds4-mac/ds4_server.c:21638`. Unset read: Wrapper/conditional default: see the literal call and consumer below.
+Source: `engines/ds4-mac/ds4_server.c:21651`. Unset read: Wrapper/conditional default: see the literal call and consumer below.
 
 ```text
     char *dir = mkdtemp(tmpl);
@@ -27508,7 +27508,7 @@ Source: `engines/ds4-mac/ds4_server.c:21638`. Unset read: Wrapper/conditional de
     const char *incoming_text = "system: hello world\nuser: prompt";
 ```
 
-Source: `engines/ds4-mac/ds4_server.c:21682`. Unset read: Wrapper/conditional default: see the literal call and consumer below.
+Source: `engines/ds4-mac/ds4_server.c:21695`. Unset read: Wrapper/conditional default: see the literal call and consumer below.
 
 ```text
     free(cold_path);
@@ -27520,7 +27520,7 @@ Source: `engines/ds4-mac/ds4_server.c:21682`. Unset read: Wrapper/conditional de
 static void test_kv_cache_eviction_keeps_smaller_context_prefix(void) {
 ```
 
-Source: `engines/ds4-mac/ds4_server.c:21683`. Unset read: Wrapper/conditional default: see the literal call and consumer below.
+Source: `engines/ds4-mac/ds4_server.c:21696`. Unset read: Wrapper/conditional default: see the literal call and consumer below.
 
 ```text
     rmdir(dir);
@@ -47338,7 +47338,7 @@ Source: `engines/ds4-mac/ds4_cli.c:1630`. Unset read: NULL from getenv; the lite
                 ds4_token_eos(engine), cfg->gen.temperature, 0,
 ```
 
-Source: `engines/ds4-mac/ds4_server.c:14512`. Unset read: NULL from getenv; the literal consumer below supplies any fallback.
+Source: `engines/ds4-mac/ds4_server.c:14524`. Unset read: NULL from getenv; the literal consumer below supplies any fallback.
 
 ```text
         if (!paired_serial && !s->batched_mode &&
@@ -47782,7 +47782,7 @@ DS4_NATIVE_FRONTIER: advanced engine setting; built-in default retained
 
 Scope: mac-ds4. Class: advanced.
 
-Source: `engines/ds4-mac/ds4_native_frontier.inc:513`. Unset read: Wrapper/conditional default: see the literal call and consumer below.
+Source: `engines/ds4-mac/ds4_native_frontier.inc:516`. Unset read: Wrapper/conditional default: see the literal call and consumer below.
 
 ```text
                         ds4_nf_config **out, char *err, size_t cap) {
@@ -47794,7 +47794,7 @@ Source: `engines/ds4-mac/ds4_native_frontier.inc:513`. Unset read: Wrapper/condi
         ds4_engine_has_mtp(engine) || opt->directional_steering_file || opt->load_slice ||
 ```
 
-Source: `engines/ds4-mac/ds4_native_frontier.inc:690`. Unset read: NULL from getenv; the literal consumer below supplies any fallback.
+Source: `engines/ds4-mac/ds4_native_frontier.inc:693`. Unset read: NULL from getenv; the literal consumer below supplies any fallback.
 
 ```text
                         ds4_nf_config **out,char *err,size_t cap) {
@@ -47812,10 +47812,10 @@ Source: `engines/ds4-mac/ds4_native_session_setup.inc:12`. Unset read: Wrapper/c
        !ds4_engine_is_deepseek41(engine)||opt->backend!=DS4_BACKEND_METAL||!opt->dspark||!opt->mtp_path||ds4_engine_mtp_draft_tokens(engine)<=1||
        opt->directional_steering_file||opt->load_slice||opt->tp.role!=DS4_TP_NONE||opt->distributed.role!=DS4_DISTRIBUTED_NONE||
        (ds4_nf_env("DS4_NATIVE_FRONTIER")&&strcmp(ds4_nf_env("DS4_NATIVE_FRONTIER"),"0")))
-        return ds4_nf_error(err,cap,"session requires original local Metal DSpark, one1M slot, and no disk-cache restore");
+        return ds4_nf_error(err,cap,"session requires local Metal DSpark and one1M slot");
+    fprintf(stderr,"native session disk KV configured=%d policy=seed-before-remote-start; active checkpoints use verified rewind/import\n",disk_cache&&*disk_cache?1:0);
     const char*host=ds4_nf_env("DS4_NATIVE_SESSION_IPV4"),*token=ds4_nf_env("DS4_NATIVE_SESSION_PAIR_TOKEN_FILE");
     const char*tier=ds4_nf_env("DS4_NATIVE_SESSION_TIER"),*techniques=ds4_nf_env("DS4_NATIVE_SESSION_TECHNIQUES");
-    const char*path=ds4_nf_env("DS4_NATIVE_SESSION_QUALIFICATION"),*pin=ds4_nf_env("DS4_NATIVE_SESSION_QUALIFICATION_SHA256");
 ```
 
 ### DS4_NATIVE_FRONTIER_DEADLINE_SECONDS
@@ -47824,7 +47824,7 @@ DS4_NATIVE_FRONTIER_DEADLINE_SECONDS: advanced engine setting; built-in default 
 
 Scope: mac-ds4. Class: advanced.
 
-Source: `engines/ds4-mac/ds4_native_frontier.inc:538`. Unset read: Wrapper/conditional default: see the literal call and consumer below.
+Source: `engines/ds4-mac/ds4_native_frontier.inc:541`. Unset read: Wrapper/conditional default: see the literal call and consumer below.
 
 ```text
         !ds4_nf_env_uint("DS4_NATIVE_FRONTIER_MIN_TOKENS",&c->minimum_tokens,1,1048575) ||
@@ -47842,7 +47842,7 @@ DS4_NATIVE_FRONTIER_DIRECTORY: advanced engine setting; built-in default retaine
 
 Scope: mac-ds4. Class: advanced.
 
-Source: `engines/ds4-mac/ds4_native_frontier.inc:524`. Unset read: Wrapper/conditional default: see the literal call and consumer below.
+Source: `engines/ds4-mac/ds4_native_frontier.inc:527`. Unset read: Wrapper/conditional default: see the literal call and consumer below.
 
 ```text
      * file; never infer that this Mac's local install token is accepted there. */
@@ -47860,7 +47860,7 @@ DS4_NATIVE_FRONTIER_IPV4: advanced engine setting; built-in default retained
 
 Scope: mac-ds4. Class: advanced.
 
-Source: `engines/ds4-mac/ds4_native_frontier.inc:520`. Unset read: Wrapper/conditional default: see the literal call and consumer below.
+Source: `engines/ds4-mac/ds4_native_frontier.inc:523`. Unset read: Wrapper/conditional default: see the literal call and consumer below.
 
 ```text
         opt->tp.role != DS4_TP_NONE || opt->distributed.role != DS4_DISTRIBUTED_NONE)
@@ -47878,7 +47878,7 @@ DS4_NATIVE_FRONTIER_MAX_TOKENS: advanced engine setting; built-in default retain
 
 Scope: mac-ds4. Class: advanced.
 
-Source: `engines/ds4-mac/ds4_native_frontier.inc:537`. Unset read: Wrapper/conditional default: see the literal call and consumer below.
+Source: `engines/ds4-mac/ds4_native_frontier.inc:540`. Unset read: Wrapper/conditional default: see the literal call and consumer below.
 
 ```text
         !ds4_nf_env_uint("DS4_NATIVE_FRONTIER_PORT",&port,1,65535) ||
@@ -47896,7 +47896,7 @@ DS4_NATIVE_FRONTIER_MIN_TOKENS: advanced engine setting; built-in default retain
 
 Scope: mac-ds4. Class: advanced.
 
-Source: `engines/ds4-mac/ds4_native_frontier.inc:536`. Unset read: Wrapper/conditional default: see the literal call and consumer below.
+Source: `engines/ds4-mac/ds4_native_frontier.inc:539`. Unset read: Wrapper/conditional default: see the literal call and consumer below.
 
 ```text
     if (!ds4_nf_pair_token(token_file,c->token) ||
@@ -47914,7 +47914,7 @@ DS4_NATIVE_FRONTIER_PAIR_TOKEN_FILE: advanced engine setting; built-in default r
 
 Scope: mac-ds4. Class: advanced.
 
-Source: `engines/ds4-mac/ds4_native_frontier.inc:523`. Unset read: Wrapper/conditional default: see the literal call and consumer below.
+Source: `engines/ds4-mac/ds4_native_frontier.inc:526`. Unset read: Wrapper/conditional default: see the literal call and consumer below.
 
 ```text
     /* Activation may provision the already paired RTX credential in a private
@@ -47932,7 +47932,7 @@ DS4_NATIVE_FRONTIER_PORT: advanced engine setting; built-in default retained
 
 Scope: mac-ds4. Class: advanced.
 
-Source: `engines/ds4-mac/ds4_native_frontier.inc:535`. Unset read: Wrapper/conditional default: see the literal call and consumer below.
+Source: `engines/ds4-mac/ds4_native_frontier.inc:538`. Unset read: Wrapper/conditional default: see the literal call and consumer below.
 
 ```text
     c->dirfd=-1; uint32_t port;
@@ -47950,7 +47950,7 @@ DS4_NATIVE_FRONTIER_QUALIFICATION: advanced engine setting; built-in default ret
 
 Scope: mac-ds4. Class: advanced.
 
-Source: `engines/ds4-mac/ds4_native_frontier.inc:525`. Unset read: Wrapper/conditional default: see the literal call and consumer below.
+Source: `engines/ds4-mac/ds4_native_frontier.inc:528`. Unset read: Wrapper/conditional default: see the literal call and consumer below.
 
 ```text
     const char *token_file=ds4_nf_env("DS4_NATIVE_FRONTIER_PAIR_TOKEN_FILE");
@@ -47968,7 +47968,7 @@ DS4_NATIVE_FRONTIER_QUALIFICATION_SHA256: advanced engine setting; built-in defa
 
 Scope: mac-ds4. Class: advanced.
 
-Source: `engines/ds4-mac/ds4_native_frontier.inc:526`. Unset read: Wrapper/conditional default: see the literal call and consumer below.
+Source: `engines/ds4-mac/ds4_native_frontier.inc:529`. Unset read: Wrapper/conditional default: see the literal call and consumer below.
 
 ```text
     const char *directory=ds4_nf_env("DS4_NATIVE_FRONTIER_DIRECTORY");
@@ -47986,7 +47986,7 @@ DS4_NATIVE_FRONTIER_RENDERER_SHA256: advanced engine setting; built-in default r
 
 Scope: mac-ds4. Class: advanced.
 
-Source: `engines/ds4-mac/ds4_native_frontier.inc:527`. Unset read: Wrapper/conditional default: see the literal call and consumer below.
+Source: `engines/ds4-mac/ds4_native_frontier.inc:530`. Unset read: Wrapper/conditional default: see the literal call and consumer below.
 
 ```text
     const char *qualification=ds4_nf_env("DS4_NATIVE_FRONTIER_QUALIFICATION");
@@ -47996,6 +47996,36 @@ Source: `engines/ds4-mac/ds4_native_frontier.inc:527`. Unset read: Wrapper/condi
         !renderer || !ds4_nf_hex(renderer,64) ||
         strlen(host)>15 || !ds4_nf_hex(pin,64))
         return ds4_nf_error(err,cap,"missing fixed broker/auth/qualification configuration");
+```
+
+### DS4_NATIVE_QUALIFICATION_LOGITS
+
+Explicit diagnostic path for raw full-vocabulary logits on slstack-qualification requests; does not change sampling.
+
+Scope: mac-ds4. Class: runtime.
+
+Source: `engines/ds4-mac/ds4_server.c:14492`. Unset read: NULL from getenv; the literal consumer below supplies any fallback.
+
+```text
+            if(!history || ds4_session_copy_logits(slot->session,paired_scores,paired_vocab)!=paired_vocab)token=-1;
+            else {
+                const char *qualification_logits=getenv("DS4_NATIVE_QUALIFICATION_LOGITS");
+                if(qualification_logits && !strncmp(j->req.native_conversation,"slstack-qualification-",22)) {
+                    FILE *qf=fopen(qualification_logits,completion?"ab":"wb");
+                    bool written=qf && fwrite(paired_scores,sizeof(float),(size_t)paired_vocab,qf)==(size_t)paired_vocab;
+                    if(qf && fclose(qf))written=false;
+```
+
+Source: `engines/ds4-mac/ds4_server.c:16149`. Unset read: NULL from getenv; the literal consumer below supplies any fallback.
+
+```text
+    }
+#if DS4_NATIVE_FRONTIER_ENABLE && defined(__APPLE__)
+    if(ok && (s->native_session || (getenv("DS4_NATIVE_QUALIFICATION_LOGITS") &&
+        strstr(hr.body,"slstack-qualification-"))) && (!ds4_ns_conversation(hr.body,req.native_conversation) ||
+        !ds4_ns_history_policy(hr.body,&req.native_include_previous_reasoning))) {
+        request_free(&req);ok=false;
+        snprintf(err,sizeof(err),"Native streaming requires a unique prompt_cache_key and boolean reasoning-history policy");
 ```
 
 ### DS4_NATIVE_SESSION
@@ -48022,7 +48052,7 @@ Source: `engines/ds4-mac/ds4_native_session_setup.inc:8`. Unset read: Wrapper/co
 static int ds4_ns_setup(ds4_engine*engine,const ds4_engine_options*opt,int context,int slots,
                          const char*disk_cache,ds4_ns_config**out,char*err,size_t cap){
     *out=NULL;const char*enabled=ds4_nf_env("DS4_NATIVE_SESSION");if(!enabled||!strcmp(enabled,"0"))return 0;
-    if(strcmp(enabled,"1")||context!=1000001||slots!=1||(disk_cache&&*disk_cache)||
+    if(strcmp(enabled,"1")||context!=1000001||slots!=1||
        !ds4_engine_is_deepseek41(engine)||opt->backend!=DS4_BACKEND_METAL||!opt->dspark||!opt->mtp_path||ds4_engine_mtp_draft_tokens(engine)<=1||
        opt->directional_steering_file||opt->load_slice||opt->tp.role!=DS4_TP_NONE||opt->distributed.role!=DS4_DISTRIBUTED_NONE||
        (ds4_nf_env("DS4_NATIVE_FRONTIER")&&strcmp(ds4_nf_env("DS4_NATIVE_FRONTIER"),"0")))
@@ -48034,7 +48064,7 @@ Ordered Mac catch-up worker with verified incremental owner hashes. Native defau
 
 Scope: mac-ds4. Class: advanced.
 
-Source: `engines/ds4-mac/ds4_native_session_setup.inc:26`. Unset read: Wrapper/conditional default: see the literal call and consumer below.
+Source: `engines/ds4-mac/ds4_native_session_setup.inc:33`. Unset read: Wrapper/conditional default: see the literal call and consumer below.
 
 ```text
     c->http.dirfd=-1;uint32_t port;
@@ -48052,7 +48082,7 @@ Mac catch-up policy: stream snapshots during decode (default), or defer their tr
 
 Scope: mac-ds4. Class: advanced.
 
-Source: `engines/ds4-mac/ds4_native_session_setup.inc:28`. Unset read: Wrapper/conditional default: see the literal call and consumer below.
+Source: `engines/ds4-mac/ds4_native_session_setup.inc:35`. Unset read: Wrapper/conditional default: see the literal call and consumer below.
 
 ```text
     {const char*policy=ds4_nf_env("DS4_NATIVE_SESSION_ASYNC_DECODE_SYNC");
@@ -48064,13 +48094,31 @@ Source: `engines/ds4-mac/ds4_native_session_setup.inc:28`. Unset read: Wrapper/c
        !ds4_nf_env_uint("DS4_NATIVE_SESSION_LOCAL_PREFILL_MAX_TOKENS",&c->local_prefill_max,0,49152))goto bad;
 ```
 
+### DS4_NATIVE_SESSION_COMPATIBILITY_SHA256
+
+Architecture, tokenizer, tensor-shape and state-config compatibility digest from both verified endpoint GGUF headers.
+
+Scope: mac-ds4. Class: runtime.
+
+Source: `engines/ds4-mac/ds4_native_session_setup.inc:22`. Unset read: Wrapper/conditional default: see the literal call and consumer below.
+
+```text
+    const char*producer_model=ds4_nf_env("DS4_NATIVE_SESSION_MODEL_SHA256");
+    const char*receiver_model=ds4_nf_env("DS4_NATIVE_SESSION_RECEIVER_MODEL_SHA256");
+    const char*compatibility=ds4_nf_env("DS4_NATIVE_SESSION_COMPATIBILITY_SHA256");
+    if(!producer_model||!ds4_nf_hex(producer_model,64)||!receiver_model||!ds4_nf_hex(receiver_model,64)||
+       !compatibility||!ds4_nf_hex(compatibility,64))
+        return ds4_nf_error(err,cap,"missing architecture/tokenizer/state compatibility qualification");
+    if(!host||strlen(host)>15||!token||!tier||!path||!pin||!ds4_nf_hex(pin,64)||!renderer||!ds4_nf_hex(renderer,64)||
+```
+
 ### DS4_NATIVE_SESSION_DEADLINE_SECONDS
 
 DS4_NATIVE_SESSION_DEADLINE_SECONDS: qualified Mac native preset setting; override explicitly for another plan
 
 Scope: mac-ds4. Class: preset.
 
-Source: `engines/ds4-mac/ds4_native_session_setup.inc:40`. Unset read: Wrapper/conditional default: see the literal call and consumer below.
+Source: `engines/ds4-mac/ds4_native_session_setup.inc:47`. Unset read: Wrapper/conditional default: see the literal call and consumer below.
 
 ```text
     }
@@ -48124,11 +48172,11 @@ DS4_NATIVE_SESSION_IPV4: qualified Mac native preset setting; override explicitl
 
 Scope: mac-ds4. Class: preset.
 
-Source: `engines/ds4-mac/ds4_native_session_setup.inc:14`. Unset read: Wrapper/conditional default: see the literal call and consumer below.
+Source: `engines/ds4-mac/ds4_native_session_setup.inc:15`. Unset read: Wrapper/conditional default: see the literal call and consumer below.
 
 ```text
-       (ds4_nf_env("DS4_NATIVE_FRONTIER")&&strcmp(ds4_nf_env("DS4_NATIVE_FRONTIER"),"0")))
-        return ds4_nf_error(err,cap,"session requires original local Metal DSpark, one1M slot, and no disk-cache restore");
+        return ds4_nf_error(err,cap,"session requires local Metal DSpark and one1M slot");
+    fprintf(stderr,"native session disk KV configured=%d policy=seed-before-remote-start; active checkpoints use verified rewind/import\n",disk_cache&&*disk_cache?1:0);
     const char*host=ds4_nf_env("DS4_NATIVE_SESSION_IPV4"),*token=ds4_nf_env("DS4_NATIVE_SESSION_PAIR_TOKEN_FILE");
     const char*tier=ds4_nf_env("DS4_NATIVE_SESSION_TIER"),*techniques=ds4_nf_env("DS4_NATIVE_SESSION_TECHNIQUES");
     const char*path=ds4_nf_env("DS4_NATIVE_SESSION_QUALIFICATION"),*pin=ds4_nf_env("DS4_NATIVE_SESSION_QUALIFICATION_SHA256");
@@ -48142,7 +48190,7 @@ Paired Mac-local prefill threshold in new tokens. Studio paired preset default 1
 
 Scope: mac-ds4. Class: advanced.
 
-Source: `engines/ds4-mac/ds4_native_session_setup.inc:31`. Unset read: Wrapper/conditional default: see the literal call and consumer below.
+Source: `engines/ds4-mac/ds4_native_session_setup.inc:38`. Unset read: Wrapper/conditional default: see the literal call and consumer below.
 
 ```text
      if(policy){if(!strcmp(policy,"defer"))c->catchup_defer=true;else if(strcmp(policy,"stream"))goto bad;}}
@@ -48154,7 +48202,7 @@ Source: `engines/ds4-mac/ds4_native_session_setup.inc:31`. Unset read: Wrapper/c
         if(!strcmp(yoco,"140"))c->yoco_keep=140;
 ```
 
-Source: `engines/ds4-mac/ds4_native_session_setup.inc:32`. Unset read: Wrapper/conditional default: see the literal call and consumer below.
+Source: `engines/ds4-mac/ds4_native_session_setup.inc:39`. Unset read: Wrapper/conditional default: see the literal call and consumer below.
 
 ```text
     c->local_prefill_max=11776;
@@ -48166,17 +48214,35 @@ Source: `engines/ds4-mac/ds4_native_session_setup.inc:32`. Unset read: Wrapper/c
         else if(!strcmp(yoco,"2541"))c->yoco_keep=2541;
 ```
 
+### DS4_NATIVE_SESSION_MODEL_SHA256
+
+Pinned producer weight identity; separate from the compatible receiver weight identity.
+
+Scope: mac-ds4. Class: runtime.
+
+Source: `engines/ds4-mac/ds4_native_session_setup.inc:20`. Unset read: Wrapper/conditional default: see the literal call and consumer below.
+
+```text
+    const char*renderer=ds4_nf_env("DS4_NATIVE_SESSION_RENDERER_SHA256");
+    const char*expected_producer=ds4_nf_env("DS4_NATIVE_SESSION_PRODUCER_SHA256");
+    const char*producer_model=ds4_nf_env("DS4_NATIVE_SESSION_MODEL_SHA256");
+    const char*receiver_model=ds4_nf_env("DS4_NATIVE_SESSION_RECEIVER_MODEL_SHA256");
+    const char*compatibility=ds4_nf_env("DS4_NATIVE_SESSION_COMPATIBILITY_SHA256");
+    if(!producer_model||!ds4_nf_hex(producer_model,64)||!receiver_model||!ds4_nf_hex(receiver_model,64)||
+       !compatibility||!ds4_nf_hex(compatibility,64))
+```
+
 ### DS4_NATIVE_SESSION_PAIR_TOKEN_FILE
 
 ds4 native session pair token file: supplied by authenticated native pairing; an inconsistent override refuses the handshake.
 
 Scope: mac-ds4. Class: runtime.
 
-Source: `engines/ds4-mac/ds4_native_session_setup.inc:14`. Unset read: Wrapper/conditional default: see the literal call and consumer below.
+Source: `engines/ds4-mac/ds4_native_session_setup.inc:15`. Unset read: Wrapper/conditional default: see the literal call and consumer below.
 
 ```text
-       (ds4_nf_env("DS4_NATIVE_FRONTIER")&&strcmp(ds4_nf_env("DS4_NATIVE_FRONTIER"),"0")))
-        return ds4_nf_error(err,cap,"session requires original local Metal DSpark, one1M slot, and no disk-cache restore");
+        return ds4_nf_error(err,cap,"session requires local Metal DSpark and one1M slot");
+    fprintf(stderr,"native session disk KV configured=%d policy=seed-before-remote-start; active checkpoints use verified rewind/import\n",disk_cache&&*disk_cache?1:0);
     const char*host=ds4_nf_env("DS4_NATIVE_SESSION_IPV4"),*token=ds4_nf_env("DS4_NATIVE_SESSION_PAIR_TOKEN_FILE");
     const char*tier=ds4_nf_env("DS4_NATIVE_SESSION_TIER"),*techniques=ds4_nf_env("DS4_NATIVE_SESSION_TECHNIQUES");
     const char*path=ds4_nf_env("DS4_NATIVE_SESSION_QUALIFICATION"),*pin=ds4_nf_env("DS4_NATIVE_SESSION_QUALIFICATION_SHA256");
@@ -48190,7 +48256,7 @@ DS4_NATIVE_SESSION_PORT: qualified Mac native preset setting; override explicitl
 
 Scope: mac-ds4. Class: preset.
 
-Source: `engines/ds4-mac/ds4_native_session_setup.inc:39`. Unset read: Wrapper/conditional default: see the literal call and consumer below.
+Source: `engines/ds4-mac/ds4_native_session_setup.inc:46`. Unset read: Wrapper/conditional default: see the literal call and consumer below.
 
 ```text
         else goto bad;
@@ -48208,16 +48274,16 @@ ds4 native session producer sha256: supplied by authenticated native pairing; an
 
 Scope: mac-ds4. Class: runtime.
 
-Source: `engines/ds4-mac/ds4_native_session_setup.inc:18`. Unset read: Wrapper/conditional default: see the literal call and consumer below.
+Source: `engines/ds4-mac/ds4_native_session_setup.inc:19`. Unset read: Wrapper/conditional default: see the literal call and consumer below.
 
 ```text
     const char*path=ds4_nf_env("DS4_NATIVE_SESSION_QUALIFICATION"),*pin=ds4_nf_env("DS4_NATIVE_SESSION_QUALIFICATION_SHA256");
     const char*renderer=ds4_nf_env("DS4_NATIVE_SESSION_RENDERER_SHA256");
     const char*expected_producer=ds4_nf_env("DS4_NATIVE_SESSION_PRODUCER_SHA256");
-    if(!host||strlen(host)>15||!token||!tier||!path||!pin||!ds4_nf_hex(pin,64)||!renderer||!ds4_nf_hex(renderer,64)||
-       !expected_producer||!ds4_nf_hex(expected_producer,64)||
-       (strcmp(tier,"accurate")&&strcmp(tier,"fast")&&strcmp(tier,"ultra")&&strcmp(tier,"hyper")))
-        return ds4_nf_error(err,cap,"missing pinned native session configuration");
+    const char*producer_model=ds4_nf_env("DS4_NATIVE_SESSION_MODEL_SHA256");
+    const char*receiver_model=ds4_nf_env("DS4_NATIVE_SESSION_RECEIVER_MODEL_SHA256");
+    const char*compatibility=ds4_nf_env("DS4_NATIVE_SESSION_COMPATIBILITY_SHA256");
+    if(!producer_model||!ds4_nf_hex(producer_model,64)||!receiver_model||!ds4_nf_hex(receiver_model,64)||
 ```
 
 ### DS4_NATIVE_SESSION_QUALIFICATION
@@ -48226,7 +48292,7 @@ ds4 native session qualification: supplied by authenticated native pairing; an i
 
 Scope: mac-ds4. Class: runtime.
 
-Source: `engines/ds4-mac/ds4_native_session_setup.inc:16`. Unset read: Wrapper/conditional default: see the literal call and consumer below.
+Source: `engines/ds4-mac/ds4_native_session_setup.inc:17`. Unset read: Wrapper/conditional default: see the literal call and consumer below.
 
 ```text
     const char*host=ds4_nf_env("DS4_NATIVE_SESSION_IPV4"),*token=ds4_nf_env("DS4_NATIVE_SESSION_PAIR_TOKEN_FILE");
@@ -48234,8 +48300,8 @@ Source: `engines/ds4-mac/ds4_native_session_setup.inc:16`. Unset read: Wrapper/c
     const char*path=ds4_nf_env("DS4_NATIVE_SESSION_QUALIFICATION"),*pin=ds4_nf_env("DS4_NATIVE_SESSION_QUALIFICATION_SHA256");
     const char*renderer=ds4_nf_env("DS4_NATIVE_SESSION_RENDERER_SHA256");
     const char*expected_producer=ds4_nf_env("DS4_NATIVE_SESSION_PRODUCER_SHA256");
-    if(!host||strlen(host)>15||!token||!tier||!path||!pin||!ds4_nf_hex(pin,64)||!renderer||!ds4_nf_hex(renderer,64)||
-       !expected_producer||!ds4_nf_hex(expected_producer,64)||
+    const char*producer_model=ds4_nf_env("DS4_NATIVE_SESSION_MODEL_SHA256");
+    const char*receiver_model=ds4_nf_env("DS4_NATIVE_SESSION_RECEIVER_MODEL_SHA256");
 ```
 
 ### DS4_NATIVE_SESSION_QUALIFICATION_SHA256
@@ -48244,7 +48310,7 @@ ds4 native session qualification sha256: supplied by authenticated native pairin
 
 Scope: mac-ds4. Class: runtime.
 
-Source: `engines/ds4-mac/ds4_native_session_setup.inc:16`. Unset read: Wrapper/conditional default: see the literal call and consumer below.
+Source: `engines/ds4-mac/ds4_native_session_setup.inc:17`. Unset read: Wrapper/conditional default: see the literal call and consumer below.
 
 ```text
     const char*host=ds4_nf_env("DS4_NATIVE_SESSION_IPV4"),*token=ds4_nf_env("DS4_NATIVE_SESSION_PAIR_TOKEN_FILE");
@@ -48252,8 +48318,26 @@ Source: `engines/ds4-mac/ds4_native_session_setup.inc:16`. Unset read: Wrapper/c
     const char*path=ds4_nf_env("DS4_NATIVE_SESSION_QUALIFICATION"),*pin=ds4_nf_env("DS4_NATIVE_SESSION_QUALIFICATION_SHA256");
     const char*renderer=ds4_nf_env("DS4_NATIVE_SESSION_RENDERER_SHA256");
     const char*expected_producer=ds4_nf_env("DS4_NATIVE_SESSION_PRODUCER_SHA256");
-    if(!host||strlen(host)>15||!token||!tier||!path||!pin||!ds4_nf_hex(pin,64)||!renderer||!ds4_nf_hex(renderer,64)||
-       !expected_producer||!ds4_nf_hex(expected_producer,64)||
+    const char*producer_model=ds4_nf_env("DS4_NATIVE_SESSION_MODEL_SHA256");
+    const char*receiver_model=ds4_nf_env("DS4_NATIVE_SESSION_RECEIVER_MODEL_SHA256");
+```
+
+### DS4_NATIVE_SESSION_RECEIVER_MODEL_SHA256
+
+Pinned receiver weight SHA, checked against the qualification and physical file identity.
+
+Scope: mac-ds4. Class: runtime.
+
+Source: `engines/ds4-mac/ds4_native_session_setup.inc:21`. Unset read: Wrapper/conditional default: see the literal call and consumer below.
+
+```text
+    const char*expected_producer=ds4_nf_env("DS4_NATIVE_SESSION_PRODUCER_SHA256");
+    const char*producer_model=ds4_nf_env("DS4_NATIVE_SESSION_MODEL_SHA256");
+    const char*receiver_model=ds4_nf_env("DS4_NATIVE_SESSION_RECEIVER_MODEL_SHA256");
+    const char*compatibility=ds4_nf_env("DS4_NATIVE_SESSION_COMPATIBILITY_SHA256");
+    if(!producer_model||!ds4_nf_hex(producer_model,64)||!receiver_model||!ds4_nf_hex(receiver_model,64)||
+       !compatibility||!ds4_nf_hex(compatibility,64))
+        return ds4_nf_error(err,cap,"missing architecture/tokenizer/state compatibility qualification");
 ```
 
 ### DS4_NATIVE_SESSION_RENDERER_SHA256
@@ -48262,16 +48346,16 @@ ds4 native session renderer sha256: supplied by authenticated native pairing; an
 
 Scope: mac-ds4. Class: runtime.
 
-Source: `engines/ds4-mac/ds4_native_session_setup.inc:17`. Unset read: Wrapper/conditional default: see the literal call and consumer below.
+Source: `engines/ds4-mac/ds4_native_session_setup.inc:18`. Unset read: Wrapper/conditional default: see the literal call and consumer below.
 
 ```text
     const char*tier=ds4_nf_env("DS4_NATIVE_SESSION_TIER"),*techniques=ds4_nf_env("DS4_NATIVE_SESSION_TECHNIQUES");
     const char*path=ds4_nf_env("DS4_NATIVE_SESSION_QUALIFICATION"),*pin=ds4_nf_env("DS4_NATIVE_SESSION_QUALIFICATION_SHA256");
     const char*renderer=ds4_nf_env("DS4_NATIVE_SESSION_RENDERER_SHA256");
     const char*expected_producer=ds4_nf_env("DS4_NATIVE_SESSION_PRODUCER_SHA256");
-    if(!host||strlen(host)>15||!token||!tier||!path||!pin||!ds4_nf_hex(pin,64)||!renderer||!ds4_nf_hex(renderer,64)||
-       !expected_producer||!ds4_nf_hex(expected_producer,64)||
-       (strcmp(tier,"accurate")&&strcmp(tier,"fast")&&strcmp(tier,"ultra")&&strcmp(tier,"hyper")))
+    const char*producer_model=ds4_nf_env("DS4_NATIVE_SESSION_MODEL_SHA256");
+    const char*receiver_model=ds4_nf_env("DS4_NATIVE_SESSION_RECEIVER_MODEL_SHA256");
+    const char*compatibility=ds4_nf_env("DS4_NATIVE_SESSION_COMPATIBILITY_SHA256");
 ```
 
 ### DS4_NATIVE_SESSION_TECHNIQUES
@@ -48280,16 +48364,16 @@ DS4_NATIVE_SESSION_TECHNIQUES: advanced engine setting; built-in default retaine
 
 Scope: mac-ds4. Class: advanced.
 
-Source: `engines/ds4-mac/ds4_native_session_setup.inc:15`. Unset read: Wrapper/conditional default: see the literal call and consumer below.
+Source: `engines/ds4-mac/ds4_native_session_setup.inc:16`. Unset read: Wrapper/conditional default: see the literal call and consumer below.
 
 ```text
-        return ds4_nf_error(err,cap,"session requires original local Metal DSpark, one1M slot, and no disk-cache restore");
+    fprintf(stderr,"native session disk KV configured=%d policy=seed-before-remote-start; active checkpoints use verified rewind/import\n",disk_cache&&*disk_cache?1:0);
     const char*host=ds4_nf_env("DS4_NATIVE_SESSION_IPV4"),*token=ds4_nf_env("DS4_NATIVE_SESSION_PAIR_TOKEN_FILE");
     const char*tier=ds4_nf_env("DS4_NATIVE_SESSION_TIER"),*techniques=ds4_nf_env("DS4_NATIVE_SESSION_TECHNIQUES");
     const char*path=ds4_nf_env("DS4_NATIVE_SESSION_QUALIFICATION"),*pin=ds4_nf_env("DS4_NATIVE_SESSION_QUALIFICATION_SHA256");
     const char*renderer=ds4_nf_env("DS4_NATIVE_SESSION_RENDERER_SHA256");
     const char*expected_producer=ds4_nf_env("DS4_NATIVE_SESSION_PRODUCER_SHA256");
-    if(!host||strlen(host)>15||!token||!tier||!path||!pin||!ds4_nf_hex(pin,64)||!renderer||!ds4_nf_hex(renderer,64)||
+    const char*producer_model=ds4_nf_env("DS4_NATIVE_SESSION_MODEL_SHA256");
 ```
 
 ### DS4_NATIVE_SESSION_TIER
@@ -48298,16 +48382,16 @@ ds4 native session tier: supplied by authenticated native pairing; an inconsiste
 
 Scope: mac-ds4. Class: runtime.
 
-Source: `engines/ds4-mac/ds4_native_session_setup.inc:15`. Unset read: Wrapper/conditional default: see the literal call and consumer below.
+Source: `engines/ds4-mac/ds4_native_session_setup.inc:16`. Unset read: Wrapper/conditional default: see the literal call and consumer below.
 
 ```text
-        return ds4_nf_error(err,cap,"session requires original local Metal DSpark, one1M slot, and no disk-cache restore");
+    fprintf(stderr,"native session disk KV configured=%d policy=seed-before-remote-start; active checkpoints use verified rewind/import\n",disk_cache&&*disk_cache?1:0);
     const char*host=ds4_nf_env("DS4_NATIVE_SESSION_IPV4"),*token=ds4_nf_env("DS4_NATIVE_SESSION_PAIR_TOKEN_FILE");
     const char*tier=ds4_nf_env("DS4_NATIVE_SESSION_TIER"),*techniques=ds4_nf_env("DS4_NATIVE_SESSION_TECHNIQUES");
     const char*path=ds4_nf_env("DS4_NATIVE_SESSION_QUALIFICATION"),*pin=ds4_nf_env("DS4_NATIVE_SESSION_QUALIFICATION_SHA256");
     const char*renderer=ds4_nf_env("DS4_NATIVE_SESSION_RENDERER_SHA256");
     const char*expected_producer=ds4_nf_env("DS4_NATIVE_SESSION_PRODUCER_SHA256");
-    if(!host||strlen(host)>15||!token||!tier||!path||!pin||!ds4_nf_hex(pin,64)||!renderer||!ds4_nf_hex(renderer,64)||
+    const char*producer_model=ds4_nf_env("DS4_NATIVE_SESSION_MODEL_SHA256");
 ```
 
 ### DS4_NATIVE_SESSION_YOCO_KEEP
@@ -48316,7 +48400,7 @@ Negotiated replay window: 0, approximate 140/v1, or exact cone 2541/v2; supplied
 
 Scope: mac-ds4. Class: advanced.
 
-Source: `engines/ds4-mac/ds4_native_session_setup.inc:33`. Unset read: Wrapper/conditional default: see the literal call and consumer below.
+Source: `engines/ds4-mac/ds4_native_session_setup.inc:40`. Unset read: Wrapper/conditional default: see the literal call and consumer below.
 
 ```text
     if(ds4_nf_env("DS4_NATIVE_SESSION_LOCAL_PREFILL_MAX_TOKENS")&&
@@ -73309,6 +73393,24 @@ Source: `engines/streaming-llama/prefill_llama.cpp/tools/dsv41-prefill/main.cpp:
                 success(sweep->start_next_engram(first,early_tail,error),error);
 ```
 
+### LLAMA_DSV41_ENGRAM_GPU_DECODE
+
+Upload the original 264-byte Engram rows and decode them on the GPU (bit-identical to the host decode, checked by the tile finite validator). Default enabled on the direct pinned tile path; 0 keeps the host decode and F32 upload.
+
+Scope: rtx-llama. Class: qualified.
+
+Source: `engines/streaming-llama/prefill_llama.cpp/src/llama-dsv41-sweep.cpp:776`. Unset read: NULL from getenv; the literal consumer below supplies any fallback.
+
+```text
+        // OPUS22: with the direct (pinned, GPU-validated) tile path, decode Engram
+        // rows on the GPU. LLAMA_DSV41_ENGRAM_GPU_DECODE=0 keeps the host decode.
+        const char *engram_gpu_env=std::getenv("LLAMA_DSV41_ENGRAM_GPU_DECODE");
+        const bool engram_gpu_decode=p->options.admitted_pinned_device_bytes&&!(engram_gpu_env&&!std::strcmp(engram_gpu_env,"0"));
+        auto queue_engram=[&](uint32_t layer,uint32_t start,const llama_dsv41::engram_history &history){
+            require(!engram_next.valid(),"Engram lookahead cannot overwrite unconsumed rows");
+            engram_next=std::async(std::launch::async,[&,layer,start,history]{
+```
+
 ### LLAMA_DSV41_ENGRAM_PROMPT_OVERLAP
 
 LLAMA_DSV41_ENGRAM_PROMPT_OVERLAP: qualified preset/runtime setting; override for a different memory or arithmetic plan
@@ -73579,6 +73681,60 @@ Source: `engines/streaming-llama/prefill_llama.cpp/src/llama-dsv41-layer.cpp:101
         llama_dsv41_expert_profile::shared_sparse(expert),llama_dsv41_expert_profile::shared_flash_attention(expert),
 ```
 
+### LLAMA_DSV41_GET_ROWS_SCALAR
+
+CUDA GET_ROWS of one-element F32/F16 rows (the indexer's streaming top-k value and ID gathers): one thread per gathered element instead of one 256-thread block per element. Identical values (same index, same cast). Default 1; 0 keeps the generic kernel.
+
+Scope: rtx-llama. Class: qualified.
+
+Source: `engines/streaming-llama/prefill_llama.cpp/ggml/src/ggml-cuda/getrows.cu:343`. Unset read: NULL from getenv; the literal consumer below supplies any fallback.
+
+```text
+static bool get_rows_scalar_enabled() {
+    static const bool enabled = [] {
+        const char * env = std::getenv("LLAMA_DSV41_GET_ROWS_SCALAR");
+        if (env && std::strcmp(env, "0") && std::strcmp(env, "1")) GGML_ABORT("LLAMA_DSV41_GET_ROWS_SCALAR must be 0 or 1");
+        return !env || env[0] == '1';
+    }();
+    return enabled;
+```
+
+### LLAMA_DSV41_GROUPED_HALF
+
+Grouped F16 dense projection (attn_output_a, 8 groups) as one graph node: per group the same F16 weight casts and the same cuBLAS call as the tagged F16 dense product, written into that group's slice of the output, so the result is bit-identical and the group concat tree is removed. Default 1; 0 keeps one product per group plus the concats.
+
+Scope: rtx-llama. Class: qualified.
+
+Source: `engines/streaming-llama/prefill_llama.cpp/src/llama-dsv41-executor.cpp:218`. Unset read: NULL from getenv; the literal consumer below supplies any fallback.
+
+```text
+}
+static bool dsv41_grouped_half_enabled(){
+    static const bool on=[]{const char *e=std::getenv("LLAMA_DSV41_GROUPED_HALF");return !e||!(e[0]=='0'&&!e[1]);}();
+    return on;
+}
+static ggml_cgraph *llama_dsv41_native_batch_graph_ex(ggml_context *ctx,ggml_cgraph *original,
+        uint32_t count,uint64_t operation_limit,uint64_t *backend_temporary,
+```
+
+### LLAMA_DSV41_HC_BF16_RESIDUAL
+
+Keep the hyper-connection residual in BF16 between layers and between the attention and FFN sublayers (bit-identical: every carried residual is already BF16-rounded). Layers 1-36 read the resident BF16 bank directly and the attention sublayer writes BF16. Default 1; 0 restores the F32 unpack and F32 sublayer residual.
+
+Scope: rtx-llama. Class: qualified.
+
+Source: `engines/streaming-llama/prefill_llama.cpp/src/llama-dsv41-executor.cpp:1243`. Unset read: NULL from getenv; the literal consumer below supplies any fallback.
+
+```text
+        // already BF16-rounded). LLAMA_DSV41_HC_BF16_RESIDUAL=0 restores the F32 path.
+        // Layers 37-39 keep the F32 unpack: their DSpark mean also reads the input.
+        static const bool hc_bf16_residual_option=[]{const char*v=std::getenv("LLAMA_DSV41_HC_BF16_RESIDUAL");
+            require(!v||!std::strcmp(v,"0")||!std::strcmp(v,"1"),"LLAMA_DSV41_HC_BF16_RESIDUAL must be 0 or 1");return !v||v[0]=='1';}();
+        const bool hc_bf16_carry=hc_bf16_residual_option&&expert.hc_bf16_epilogue&&!boundary.active()&&
+            !llama_dsv41_attribution_active(in.position_offset+in.start,in.count);
+        const bool bf16_residual_input=hc_bf16_carry&&device_hidden&&resident_bf16&&in.layer&&in.layer<37&&!compact_seed&&direct_input;
+```
+
 ### LLAMA_DSV41_HC_COLLAPSE_FUSION
 
 Fuse four HC products, three left-associated RN sums and the unchanged BF16 boundary. Default enabled; 0 selects the original portable decomposition.
@@ -73807,6 +73963,24 @@ Source: `engines/streaming-llama/prefill_llama.cpp/src/llama-dsv41-executor.cpp:
             pinned->current_bank_copies_forbidden=skip_tile_pin;
 ```
 
+### LLAMA_DSV41_SPARSE_HAND
+
+DSV4.1 token-tile sparse attention (TileLang mode 2): hand-written SM120 kernel with 32 heads per CTA, double-buffered 32-key tiles and the F32 query rounded to BF16 on load, instead of the embedded TileLang image (16 heads per CTA, one stage). Same BF16 MMA/F32 softmax arithmetic, different summation order (not bitwise identical). Default 1; 0 keeps the TileLang image.
+
+Scope: rtx-llama. Class: qualified.
+
+Source: `engines/streaming-llama/prefill_llama.cpp/ggml/src/ggml-cuda/dsv41-tilelang.cuh:77`. Unset read: NULL from getenv; the literal consumer below supplies any fallback.
+
+```text
+        // OPUS22 r10: the hand SM120 kernel (32 heads/CTA, double-buffered key tiles)
+        // reads the F32 query and rounds it to BF16 on load, so no staged query copy.
+        static const bool hand=[]{const char *e=std::getenv("LLAMA_DSV41_SPARSE_HAND");
+            const bool on=!e||!(e[0]=='0'&&!e[1]);
+            if(on)CUDA_CHECK(cudaFuncSetAttribute(dsv41_sparse_hand::sparse_attn_hg32,cudaFuncAttributeMaxDynamicSharedMemorySize,dsv41_sparse_hand::SMEM));
+            fprintf(stderr,"OPUS22_SPARSE_HAND active=%d heads_per_cta=32 key_tile=32 stages=2 query_staging=0\n",on?1:0);return on;}();
+        ggml_cuda_pool_alloc<__nv_bfloat16> staged(ctx.pool(),kv_elements+(hand?0:q_elements));
+```
+
 ### LLAMA_DSV41_STORED_MXFP4
 
 Opt-in stored MXFP4 routed-expert tensor-core experiment; requires uncaptured dispatch witnesses. Lossy Q4 requants remain speed proxies.
@@ -73835,6 +74009,24 @@ Source: `engines/streaming-llama/prefill_llama.cpp/tools/dsv41-prefill/main.cpp:
         const uint64_t dense_fp8_reserve=dense_fp8_env&&!std::strcmp(dense_fp8_env,"1")?576ull<<20:0;
         require(backend_reserve>=dense_fp8_reserve,"FP8 reserve exceeds total backend admission");
         const uint64_t base_backend_reserve=backend_reserve-dense_fp8_reserve;
+```
+
+### LLAMA_DSV41_STREAM_TOPK_DEFER
+
+Indexer streaming top-k for more than 131,072 keys: append each 8,192-key window's candidates to one pending buffer and merge only when it would exceed 8,192 columns and once at the end, instead of re-merging after every window. Identical IDs and order (same score-desc/global-ID-asc total order). Default 1; 0 restores the per-window running merge.
+
+Scope: rtx-llama. Class: qualified.
+
+Source: `engines/streaming-llama/prefill_llama.cpp/src/llama-dsv41-stream-topk.h:22`. Unset read: NULL from getenv; the literal consumer below supplies any fallback.
+
+```text
+inline bool stream_topk_defer_enabled(){
+    static const bool enabled=[]{
+        const char*env=std::getenv("LLAMA_DSV41_STREAM_TOPK_DEFER");
+        if(env&&std::strcmp(env,"0")&&std::strcmp(env,"1"))GGML_ABORT("LLAMA_DSV41_STREAM_TOPK_DEFER must be 0 or 1");
+        return !env||env[0]=='1';
+    }();
+    return enabled;
 ```
 
 ### LLAMA_DSV41_TILELANG_ATTENTION
@@ -73925,6 +74117,24 @@ Source: `engines/streaming-llama/prefill_llama.cpp/src/llama-dsv41-executor.cpp:
         const auto rope_inplace_before=rope_inplace?ggml_backend_cuda_dsv41_rope_inplace_queued():0;
         const auto dense_bf16_store_before=dense_bf16_store?ggml_backend_cuda_dsv41_dense_bf16_store_queued():0;
         const auto dense_fp8_before=dense_fp8?ggml_backend_cuda_dsv41_dense_fp8_queued():0;
+```
+
+### LLAMA_DSV41_TOPK_SELECT
+
+With the exact radix top-k (LLAMA_DSV41_TOPK_RADIX=1), select the top 512 of each 8192-key tile by an MSB radix select on the same packed (value, index) keys and sort only those 512, instead of sorting the whole tile. Identical IDs and order (the key order is total); NaN/subnormal tiles keep the original network. Default 1; 0 keeps the full tile sort.
+
+Scope: rtx-llama. Class: qualified.
+
+Source: `engines/streaming-llama/prefill_llama.cpp/ggml/src/ggml-cuda/argsort.cu:520`. Unset read: NULL from getenv; the literal consumer below supplies any fallback.
+
+```text
+static bool dsv41_topk_select_enabled() {
+    static const bool enabled = [] {
+        const char *env = std::getenv("LLAMA_DSV41_TOPK_SELECT");
+        if (env && std::strcmp(env, "0") && std::strcmp(env, "1")) GGML_ABORT("LLAMA_DSV41_TOPK_SELECT must be 0 or 1");
+        return !env || env[0] == '1';
+    }();
+    return enabled;
 ```
 
 ### LLAMA_DSV41_TOPK_SHARED_KEYS
@@ -101539,130 +101749,4 @@ Source: `vendor/engines/cosmos_windows/weight_streaming/zimage_backend.py:43`. U
         from cosmos_windows import mem_guard
     except Exception:
         mem_guard = None
-```
-
-### LLAMA_DSV41_ENGRAM_GPU_DECODE
-
-Upload the original 264-byte Engram rows and decode them on the GPU (bit-identical to the host decode, checked by the tile finite validator). Default enabled on the direct pinned tile path; 0 keeps the host decode and F32 upload.
-
-Scope: rtx-llama. Class: qualified.
-
-Source: `engines/streaming-llama/prefill_llama.cpp/src/llama-dsv41-sweep.cpp:776`. Unset read: NULL from getenv; the literal consumer below supplies any fallback.
-
-```text
-        // OPUS22: with the direct (pinned, GPU-validated) tile path, decode Engram
-        // rows on the GPU. LLAMA_DSV41_ENGRAM_GPU_DECODE=0 keeps the host decode.
-        const char *engram_gpu_env=std::getenv("LLAMA_DSV41_ENGRAM_GPU_DECODE");
-        const bool engram_gpu_decode=p->options.admitted_pinned_device_bytes&&!(engram_gpu_env&&!std::strcmp(engram_gpu_env,"0"));
-        auto queue_engram=[&](uint32_t layer,uint32_t start,const llama_dsv41::engram_history &history){
-            require(!engram_next.valid(),"Engram lookahead cannot overwrite unconsumed rows");
-            engram_next=std::async(std::launch::async,[&,layer,start,history]{
-```
-
-### LLAMA_DSV41_HC_BF16_RESIDUAL
-
-Keep the hyper-connection residual in BF16 between layers and between the attention and FFN sublayers (bit-identical: every carried residual is already BF16-rounded). Layers 1-36 read the resident BF16 bank directly and the attention sublayer writes BF16. Default 1; 0 restores the F32 unpack and F32 sublayer residual.
-
-Scope: rtx-llama. Class: qualified.
-
-Source: `engines/streaming-llama/prefill_llama.cpp/src/llama-dsv41-executor.cpp:1243`. Unset read: NULL from getenv; the literal consumer below supplies any fallback.
-
-```text
-        // already BF16-rounded). LLAMA_DSV41_HC_BF16_RESIDUAL=0 restores the F32 path.
-        // Layers 37-39 keep the F32 unpack: their DSpark mean also reads the input.
-        static const bool hc_bf16_residual_option=[]{const char*v=std::getenv("LLAMA_DSV41_HC_BF16_RESIDUAL");
-            require(!v||!std::strcmp(v,"0")||!std::strcmp(v,"1"),"LLAMA_DSV41_HC_BF16_RESIDUAL must be 0 or 1");return !v||v[0]=='1';}();
-        const bool hc_bf16_carry=hc_bf16_residual_option&&expert.hc_bf16_epilogue&&!boundary.active()&&
-            !llama_dsv41_attribution_active(in.position_offset+in.start,in.count);
-        const bool bf16_residual_input=hc_bf16_carry&&device_hidden&&resident_bf16&&in.layer&&in.layer<37&&!compact_seed&&direct_input;
-```
-
-### LLAMA_DSV41_TOPK_SELECT
-
-With the exact radix top-k (LLAMA_DSV41_TOPK_RADIX=1), select the top 512 of each 8192-key tile by an MSB radix select on the same packed (value, index) keys and sort only those 512, instead of sorting the whole tile. Identical IDs and order (the key order is total); NaN/subnormal tiles keep the original network. Default 1; 0 keeps the full tile sort.
-
-Scope: rtx-llama. Class: qualified.
-
-Source: `engines/streaming-llama/prefill_llama.cpp/ggml/src/ggml-cuda/argsort.cu:520`. Unset read: NULL from getenv; the literal consumer below supplies any fallback.
-
-```text
-static bool dsv41_topk_select_enabled() {
-    static const bool enabled = [] {
-        const char *env = std::getenv("LLAMA_DSV41_TOPK_SELECT");
-        if (env && std::strcmp(env, "0") && std::strcmp(env, "1")) GGML_ABORT("LLAMA_DSV41_TOPK_SELECT must be 0 or 1");
-        return !env || env[0] == '1';
-    }();
-    return enabled;
-```
-
-### LLAMA_DSV41_STREAM_TOPK_DEFER
-
-Indexer streaming top-k for more than 131,072 keys: append each 8,192-key window's candidates to one pending buffer and merge only when it would exceed 8,192 columns and once at the end, instead of re-merging after every window. Identical IDs and order (same score-desc/global-ID-asc total order). Default 1; 0 restores the per-window running merge.
-
-Scope: rtx-llama. Class: qualified.
-
-Source: `engines/streaming-llama/prefill_llama.cpp/src/llama-dsv41-stream-topk.h:22`. Unset read: NULL from getenv; the literal consumer below supplies any fallback.
-
-```text
-inline bool stream_topk_defer_enabled(){
-    static const bool enabled=[]{
-        const char*env=std::getenv("LLAMA_DSV41_STREAM_TOPK_DEFER");
-        if(env&&std::strcmp(env,"0")&&std::strcmp(env,"1"))GGML_ABORT("LLAMA_DSV41_STREAM_TOPK_DEFER must be 0 or 1");
-        return !env||env[0]=='1';
-    }();
-    return enabled;
-```
-
-### LLAMA_DSV41_GET_ROWS_SCALAR
-
-CUDA GET_ROWS of one-element F32/F16 rows (the indexer's streaming top-k value and ID gathers): one thread per gathered element instead of one 256-thread block per element. Identical values (same index, same cast). Default 1; 0 keeps the generic kernel.
-
-Scope: rtx-llama. Class: qualified.
-
-Source: `engines/streaming-llama/prefill_llama.cpp/ggml/src/ggml-cuda/getrows.cu:343`. Unset read: NULL from getenv; the literal consumer below supplies any fallback.
-
-```text
-static bool get_rows_scalar_enabled() {
-    static const bool enabled = [] {
-        const char * env = std::getenv("LLAMA_DSV41_GET_ROWS_SCALAR");
-        if (env && std::strcmp(env, "0") && std::strcmp(env, "1")) GGML_ABORT("LLAMA_DSV41_GET_ROWS_SCALAR must be 0 or 1");
-        return !env || env[0] == '1';
-    }();
-    return enabled;
-```
-
-### LLAMA_DSV41_SPARSE_HAND
-
-DSV4.1 token-tile sparse attention (TileLang mode 2): hand-written SM120 kernel with 32 heads per CTA, double-buffered 32-key tiles and the F32 query rounded to BF16 on load, instead of the embedded TileLang image (16 heads per CTA, one stage). Same BF16 MMA/F32 softmax arithmetic, different summation order (not bitwise identical). Default 1; 0 keeps the TileLang image.
-
-Scope: rtx-llama. Class: qualified.
-
-Source: `engines/streaming-llama/prefill_llama.cpp/ggml/src/ggml-cuda/dsv41-tilelang.cuh:77`. Unset read: NULL from getenv; the literal consumer below supplies any fallback.
-
-```text
-        // OPUS22 r10: the hand SM120 kernel (32 heads/CTA, double-buffered key tiles)
-        // reads the F32 query and rounds it to BF16 on load, so no staged query copy.
-        static const bool hand=[]{const char *e=std::getenv("LLAMA_DSV41_SPARSE_HAND");
-            const bool on=!e||!(e[0]=='0'&&!e[1]);
-            if(on)CUDA_CHECK(cudaFuncSetAttribute(dsv41_sparse_hand::sparse_attn_hg32,cudaFuncAttributeMaxDynamicSharedMemorySize,dsv41_sparse_hand::SMEM));
-            fprintf(stderr,"OPUS22_SPARSE_HAND active=%d heads_per_cta=32 key_tile=32 stages=2 query_staging=0\n",on?1:0);return on;}();
-        ggml_cuda_pool_alloc<__nv_bfloat16> staged(ctx.pool(),kv_elements+(hand?0:q_elements));
-```
-
-### LLAMA_DSV41_GROUPED_HALF
-
-Grouped F16 dense projection (attn_output_a, 8 groups) as one graph node: per group the same F16 weight casts and the same cuBLAS call as the tagged F16 dense product, written into that group's slice of the output, so the result is bit-identical and the group concat tree is removed. Default 1; 0 keeps one product per group plus the concats.
-
-Scope: rtx-llama. Class: qualified.
-
-Source: `engines/streaming-llama/prefill_llama.cpp/src/llama-dsv41-executor.cpp:218`. Unset read: NULL from getenv; the literal consumer below supplies any fallback.
-
-```text
-}
-static bool dsv41_grouped_half_enabled(){
-    static const bool on=[]{const char *e=std::getenv("LLAMA_DSV41_GROUPED_HALF");return !e||!(e[0]=='0'&&!e[1]);}();
-    return on;
-}
-static ggml_cgraph *llama_dsv41_native_batch_graph_ex(ggml_context *ctx,ggml_cgraph *original,
-        uint32_t count,uint64_t operation_limit,uint64_t *backend_temporary,
 ```

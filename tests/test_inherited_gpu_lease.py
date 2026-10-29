@@ -2,6 +2,7 @@ import json
 import os
 from pathlib import Path
 import sys
+import subprocess
 import unittest
 from unittest.mock import MagicMock, Mock, patch
 import uuid
@@ -22,8 +23,11 @@ class InheritedLeaseTests(unittest.TestCase):
         self.hold = self.directory / 'holds.txt'
         self.hold.write_text('', encoding='utf-8')
         self.cfg.update(runtime_root=str(self.directory), hold_file=str(self.hold))
-        self.probe = patch('slstack.lease.subprocess.run',
-                           return_value=Mock(returncode=0, stdout='0, 32000, 0'))
+        original_run=subprocess.run
+        def gpu_only(command,*args,**kwargs):
+            if command[0]=='nvidia-smi':return Mock(returncode=0,stdout='0, 32000, 0')
+            return original_run(command,*args,**kwargs)
+        self.probe = patch('slstack.lease.subprocess.run',side_effect=gpu_only)
 
     def reference(self, identity):
         return self.directory / 'state/leases' / (identity + '.json')
@@ -84,6 +88,21 @@ class InheritedLeaseTests(unittest.TestCase):
             record.write_text(json.dumps({**row, 'expires': '2000-01-01T00:00:00+00:00'}))
             with gpu_lease({**self.cfg, '_gpu_parent_lease': str(record)}) as child:
                 self.assertEqual(child, identity)
+
+    def test_inherited_admission_retries_a_short_foreign_ledger_lock(self):
+        with self.probe, gpu_lease(self.cfg) as identity:
+            original_read=Path.read_text
+            remaining=[2]
+            def transient(path,*args,**kwargs):
+                if path == self.hold and remaining[0]:
+                    remaining[0]-=1
+                    raise PermissionError('another admission holds the first byte')
+                return original_read(path,*args,**kwargs)
+            cfg={**self.cfg,'_gpu_parent_lease':str(self.reference(identity))}
+            with patch.object(Path,'read_text',new=transient), patch('slstack.lease.time.sleep') as pause:
+                with gpu_lease(cfg) as child:self.assertEqual(child,identity)
+            self.assertEqual(pause.call_count,2)
+            self.assertEqual(len(active_holds(self.hold.read_text())),1)
 
     def test_pair_keeps_reservation_when_broker_cleanup_is_uncertain(self):
         pair = Pair.__new__(Pair)
