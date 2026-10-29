@@ -11,24 +11,26 @@ DeepSeek V4.1 Flash, an OpenAI-compatible API, MCP tools and the llama.cpp web U
 ## Results
 
 DeepSeek V4.1 Flash on one RTX 5090 desktop with 32 GB of RAM.
-The latest 100K experiment measures **32.4 s prompt-only**, about **3,090 tok/s**,
-with the opt-in packed FP4 speed proxy and CUDA graphs. The Q4_K/Q8_0 default
-model is 483 GiB.
+**FP4 (tensor-core-native layout)** measures **32.4 s prompt-only** at 100K,
+about **3,090 tok/s**. The matched eager control for the Q4 shipping-default
+dense path measures **32.6 s**. The Q4_K/Q8_0 default model is 483 GiB.
 
 | Prompt tokens | Configuration | Timing | Time | Rate |
 |---:|---|---|---:|---:|
-| 100,000 | Packed FP4 proxy, graph experiment | Prompt-only | **32.374 s** | **3,088.92 tok/s** |
-| 100,000 | Packed FP4 proxy, graph experiment | TTFT | **35.406 s** | — |
-| 100,000 | Q4 default path, KERNELS2 build | Prompt-only | 38.368 s | 2,606.32 tok/s |
-| 100,000 | Q4 default path, KERNELS2 build | TTFT | 42.000 s | — |
+| 100,000 | FP4 (tensor-core-native layout), CUDA graphs | Prompt-only | **32.374 s** | **3,088.92 tok/s** |
+| 100,000 | FP4 (tensor-core-native layout), CUDA graphs | TTFT | **35.406 s** | — |
+| 100,000 | Q4 shipping-default dense path, matched eager control | Prompt-only | 32.616 s | 3,066.01 tok/s |
+| 100,000 | Q4 shipping-default dense path, matched eager control | TTFT | 35.797 s | — |
+| 100,000 | Earlier Q4_K/Q8_0 default, KERNELS2 build | Prompt-only | 38.368 s | 2,606.32 tok/s |
+| 100,000 | Earlier Q4_K/Q8_0 default, KERNELS2 build | TTFT | 42.000 s | — |
 | 50,000 | Earlier exact-cone defaults | Startup + prefill | 24.203 s | 2,065.86 tok/s |
 | 200,000 | Earlier exact-cone defaults | Startup + prefill | 92.407 s | 2,164.34 tok/s |
 | 1,000,000 | Earlier approximate YOCO140 defaults | Startup + prefill | 956.734 s | 1,045.22 tok/s |
 
 The current kernel stack combines the exact dependency cone, certified FP4
 index scoring, fused Sinkhorn, TileLang attention, E18 transfer staging and
-allocation-plan reuse. Packed FP4 model weights and prefill CUDA graphs are
-separate opt-in experiments. [Timing, builds and measurements](docs/PERFORMANCE.md#prefill).
+allocation-plan reuse. Packed FP4 weights are an available prefill option;
+CUDA graphs remain opt-in. [Timing, builds and measurements](docs/PERFORMANCE.md#prefill).
 
 Latest calibrated Q4 decode controls at 49,555 prompt tokens, with the first
 100 evaluated steps discarded and the next 899 timed:
@@ -150,10 +152,9 @@ A native DeepSeek V4.1 Flash GGUF using supported tensor types:
 Q4_K, IQ2_XXS/Q2_K or MXFP4 routed experts, with Q8_0, Q4_K or Q4_0 dense
 matrices. The measured file uses Q4_K experts and Q8_0 dense matrices (483 GiB).
 Our Q4_K/Q8_0 build is GPU-tested; IQ2_XXS/Q2_K remains CPU-tested.
-MXFP4 has opt-in GPU proxy measurements, including a separate tensor-core-native
-packed prefill layout. An experimental dense FP8 path is also available.
-The native-precision conversion from official safetensors is coming.
-[FP4/FP8 layouts and measurements](docs/PERFORMANCE.md#experimental-fp4-and-fp8). Public MXFP4 shards must first be merged with antirez's
+MXFP4 has measured GPU prefill results with a separate tensor-core-native
+packed layout. An experimental dense FP8 path is also available.
+[FP4/FP8 layouts and measurements](docs/PERFORMANCE.md#fp4-and-experimental-fp8). Public MXFP4 shards must first be merged with antirez's
 `merge_deepseek41_shards.py` tool. “Any-GGUF” covers these supported V4.1 Flash
 layouts and geometry, rather than arbitrary GGUF architectures.
 [Layouts and assembly instructions](docs/DSV41_GGUF.md) and the
@@ -270,13 +271,15 @@ configuration.
 - The faster dial settings cost quality. Max speed introduced syntax errors in C++
   tests; use Max quality or Balanced for code.
 - Approximate YOCO140 is opt-in; the default dependency cone keeps 2,541 rows.
-- The latest 100K headline uses a lossy Q4-to-FP4 proxy and experimental prefill
-  graphs. Neither is shipped as a default. Its graph run does not establish a
-  repeatable graph speedup. No 50K or 200K run on that same final build is recorded.
+- The measured FP4 file was requantised from Q4; native-precision FP4 conversion from the official weights is coming, with the same layout and expected speed.
+- The matched eager control uses the Q4 shipping-default Q8 dense path with
+  stored FP4 experts; the earlier KERNELS2 row measures the full Q4_K/Q8_0 file.
+- The latest 100K FP4 run uses experimental prefill graphs and does not establish
+  a repeatable graph speedup. No 50K or 200K run on that same final build is recorded.
 - The 1M result and the 49,555-token warm-decode controls use earlier YOCO140
   prefill defaults. Warm decode has not been remeasured on the final OTHER22 build.
-- Packed FP4 and dense FP8 are experimental; source-native model conversion and
-  broad quality qualification remain unfinished. FP8 has no demonstrated prompt gain.
+- FP4 prefill timing does not qualify decode or broad recall quality. Dense FP8
+  remains experimental and has no demonstrated prompt gain.
 - TileLang attention is the selected default but is numerically different from
   native attention. The tested retrieval answer matches; later forced continuations
   can diverge. Set `LLAMA_DSV41_TILELANG_ATTENTION=0` for native attention.

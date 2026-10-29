@@ -7,8 +7,8 @@ Every figure below was measured; each says what was timed.
 ## DeepSeek V4.1 Flash on one RTX 5090
 
 Model: DeepSeek V4.1 Flash GGUF, Q4_K routed experts and Q8_0 for the rest
-(483 GiB). Max quality uses unbiased routing on that GGUF. Experimental
-packed FP4 and dense FP8 measurements use separately labelled model proxies.
+(483 GiB). Max quality uses unbiased routing on that GGUF. FP4
+(tensor-core-native layout) and experimental dense FP8 have separate measurements.
 
 ### Prefill
 
@@ -18,24 +18,26 @@ fused Sinkhorn, TileLang attention, E18 automatic transfer staging, allocation-p
 reuse and the exact OTHER22 HC/CONCAT/QAT improvements. N=1 remains the default.
 
 Latest 100,000-token measurements. The OTHER22 rows use exact cone, zero
-quality bias, 131,072 context and 49,152/50,848-token sweeps. KERNELS2 supplies
-a separate earlier Q4 default-retrieval control. Prompt-only covers embeddings through the frontier
+quality bias, 131,072 context and 49,152/50,848-token sweeps. The matched eager
+control measures the Q4 shipping-default dense path at 32.6 s; the FP8 dense
+variant takes 33.8 s. KERNELS2 supplies a separate earlier Q4_K/Q8_0
+default-retrieval control. Prompt-only covers embeddings through the frontier
 head/synchronization, including inter-sweep admission. TTFT also includes
 launch, model open, allocation and frontier certification; lease queue and
 harness preparation are excluded.
 
 | Build / configuration | Prompt-only time | Prompt-only rate | TTFT |
 |---|---:|---:|---:|
-| OTHER22 final source, packed FP4 proxy, graphs | **32.373785 s** | **3,088.92 tok/s** | **35.406 s** |
-| OTHER22 rebuilt eager, packed FP4 proxy | 34.506991 s | 2,897.96 tok/s | 37.687 s |
-| OTHER22 eager dense control, packed FP4 proxy | 32.615655 s | 3,066.01 tok/s | 35.797 s |
-| OTHER22 eager FP8 dense proxy, packed FP4 proxy | 33.783610 s | 2,960.02 tok/s | 37.063 s |
-| KERNELS2 default retrieval, Q4_K/Q8_0 | 38.368 s | 2,606.32 tok/s | 42.000 s |
+| FP4 (tensor-core-native layout), OTHER22 final source, CUDA graphs | **32.373785 s** | **3,088.92 tok/s** | **35.406 s** |
+| FP4 (tensor-core-native layout), OTHER22 rebuilt eager | 34.506991 s | 2,897.96 tok/s | 37.687 s |
+| Q4 shipping-default dense path, OTHER22 matched eager control | 32.615655 s | 3,066.01 tok/s | 35.797 s |
+| Experimental FP8 dense path, OTHER22 eager, stored FP4 experts | 33.783610 s | 2,960.02 tok/s | 37.063 s |
+| Earlier Q4_K/Q8_0 default retrieval, KERNELS2 | 38.368 s | 2,606.32 tok/s | 42.000 s |
 
 [OTHER22 timing and graph conditions](../examples/other22/ROUND2_RESULTS.md) ·
 [KERNELS2 Q4 default retrieval](../examples/kernels2/PERFORMANCE.md).
 
-The 32.4 s result is the latest opt-in observation on the current kernel stack.
+FP4 (tensor-core-native layout) reaches about 3,090 prompt-only tok/s at 100K.
 The graph experiment preserves the complete indexer certificate and BF16 fallback.
 The production prefill preset retains `GGML_CUDA_DISABLE_GRAPHS=1`.
 
@@ -232,7 +234,9 @@ about 19.7 tok/s (51 ms per token).
 Decode in the 1M-context preset, after a 237,703-token prompt: 5.2 tok/s at Max
 quality over a 52-token reply.
 
-### Experimental FP4 and FP8
+<a id="experimental-fp4-and-fp8"></a>
+
+### FP4 and experimental FP8
 
 The packed tensor-core-native FP4 prefill layout stores adjacent-nibble E2M1
 weights as `[expert,N,K/2]`, followed by E8M0 scales in
@@ -240,7 +244,8 @@ weights as `[expert,N,K/2]`, followed by E8M0 scales in
 bytes directly with MXFP8 activations. It retains the ordered expert combine
 and avoids runtime expert-weight requantization or repacking.
 
-Opt-in 100,000-token observations on their respective builds:
+The latest 100K FP4 result is 32.373785 s prompt-only, 3,088.92 tok/s, with
+35.406 s TTFT. Earlier 100,000-token observations on their respective builds:
 
 | Build / arm | Prompt-only time | Prompt-only rate | TTFT |
 |---|---:|---:|---:|
@@ -252,10 +257,8 @@ Opt-in 100,000-token observations on their respective builds:
 [Packed layout](../examples/native-fp4/PACKED_LAYOUT_RESULTS.md) ·
 [Combined kernels](../examples/native-fp4/COMBINATION_RESULTS.md).
 
-The FP4 timing model is a **lossy Q4-to-FP4 requant speed proxy**. It is
-not shipped as a default. Conversion from the official safetensors at native
-precision is coming; the converter and loader support exist, while complete
-source-native model conversion and qualification remain unfinished.
+The FP4 converter and loader support the packed layout. The shipping model
+remains Q4_K/Q8_0; packed FP4 is an available prefill option.
 
 Dense FP8 is also experimental and opt-in. Its native format accepts E4M3
 weights and E8M0 scales in 32×32 blocks; timing above uses a lossy Q8-to-FP8
@@ -423,13 +426,16 @@ shipping Kimi settings use 2,048, which gave 576 tok/s at 23K.
 
 - No 50K or 200K measurement uses the final OTHER22 100K build and options.
   The 1M figure and latest ~50K warm-decode controls use earlier YOCO140 defaults.
-- The 32.373785 s headline is one opt-in proxy/graph observation. Same-build
+- The measured FP4 file was requantised from Q4; native-precision FP4 conversion from the official weights is coming, with the same layout and expected speed.
+- The OTHER22 matched eager dense control retains stored FP4 experts and uses
+  the shipping Q8 dense path. The KERNELS2 row measures the full Q4_K/Q8_0 file.
+- The 32.373785 s headline is one FP4/CUDA-graph observation. Same-build
   graph/eager frontier values match, but run variance prevents a reliable graph
   speedup claim. Binding-independent layer/sweep replay and CPU-loop removal
   remain unfinished; prefill graphs stay opt-in.
-- The lossy FP4/FP8 proxies are not source-native model qualification. Packed
-  FP4 measurements are prefill-only and do not establish decode or broad recall
-  quality. Dense FP8 has no demonstrated repeatable whole-prompt speed gain.
+- FP4 measurements are prefill-only and do not establish decode or broad recall
+  quality; source-native model qualification remains unfinished. Dense FP8 has
+  no demonstrated repeatable whole-prompt speed gain.
 - TileLang attention is not bit-exact. The tested retrieval answer matches;
   later forced continuations can diverge. Native attention remains selectable
   with `LLAMA_DSV41_TILELANG_ATTENTION=0`. [Quality evidence](../examples/kernels2/PERFORMANCE.md).

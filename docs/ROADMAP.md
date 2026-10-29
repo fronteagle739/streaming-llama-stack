@@ -8,8 +8,8 @@
   errors in C++ tests; use Max quality or Balanced for code.
 - Approximate YOCO140 is opt-in. Exact cone keep2541 is the single-machine
   and paired ULTRA default, with negotiated state v2 for paired use.
-- Packed FP4 and dense FP8 remain experimental. Their timing models are lossy
-  requant proxies, not the official source-native model; neither is defaulted.
+- The measured FP4 file was requantised from Q4; native-precision FP4 conversion from the official weights is coming, with the same layout and expected speed.
+- Dense FP8 remains experimental. The shipping model remains Q4_K/Q8_0.
 - TileLang attention is numerically different from native attention. Retrieval
   matches on the tested fixture, but later continuations can diverge; the native
   off toggle remains available. [Evidence](../examples/kernels2/PERFORMANCE.md).
@@ -20,8 +20,8 @@
 
 ## Planned
 
-- Reach **10,000 prompt-only tok/s at 100K tokens**. The latest opt-in packed
-  FP4/graph observation is 3,088.92 tok/s in 32.373785 s, with 35.406 s TTFT;
+- Reach **10,000 prompt-only tok/s at 100K tokens**. FP4 (tensor-core-native
+  layout) measures 3,088.92 tok/s in 32.373785 s, with 35.406 s TTFT;
   the target remains unmet. [Measured configurations](PERFORMANCE.md#prefill).
 - Remove host/device synchronization from the tile loop while preserving GPU
   checks, transaction boundaries, streamed-weight and carry lifetimes.
