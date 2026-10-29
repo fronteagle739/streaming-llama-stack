@@ -11,6 +11,9 @@
 #include <array>
 #include "llama-dsv41-executor.h"
 #include "llama-dsv41-flashinfer-budget.h"
+#include "ggml-dsv41-native-ffn.h"
+#include "ggml-dsv41-dense-fp8.h"
+#include "../../flashinfer-sm120/native_ffn_workspace.h"
 #include "llama-dsv41-dense-half-admission.h"
 #include "llama-dsv41-route-split.h"
 #include "llama-dsv41-hash-dump.h"
@@ -957,6 +960,13 @@ bool llama_dsv41_tile_executor::run(const request&in,const llama_dsv41_layer_gra
         const bool route_histogram=std::getenv("LLAMA_DSV41_ROUTE_HISTOGRAM")&&std::string(std::getenv("LLAMA_DSV41_ROUTE_HISTOGRAM"))=="1";
         require(!route_histogram||!workspace||!workspace->cache_layouts,"Routing histogram requires fresh graph bindings");
         const bool stored_fp4=std::getenv("LLAMA_DSV41_STORED_MXFP4")&&std::string(std::getenv("LLAMA_DSV41_STORED_MXFP4"))=="1";
+        const bool native_ffn=w.ffn.native_fp4_layout;
+        const bool native_dense_weights=ggml_dsv41_dense_fp8_native_weight(w.attention.q_a);
+#ifdef GGML_USE_CUDA
+        const auto native_repack_before=native_ffn?ggml_backend_cuda_dsv41_runtime_fp4_repacks_queued():0;
+        const auto native_weight_quant_before=native_ffn?ggml_backend_cuda_dsv41_mxfp4_weight_packs_queued():0;
+#endif
+        require(!native_ffn||stored_fp4,"Packed FP4 weights require explicit stored-FP4 admission");
         if(stored_fp4){
             require(w.ffn.gate->type==GGML_TYPE_MXFP4&&w.ffn.up->type==GGML_TYPE_MXFP4&&w.ffn.down->type==GGML_TYPE_MXFP4,
                     "Stored FP4 experiment requires the complete MXFP4 expert triplet");
@@ -989,6 +999,8 @@ bool llama_dsv41_tile_executor::run(const request&in,const llama_dsv41_layer_gra
         probe.enabled=std::getenv("DS4PERF_EXECUTOR_WALL_PROBE")&&std::string(std::getenv("DS4PERF_EXECUTOR_WALL_PROBE"))=="1";
         const bool rope_inplace=std::getenv("LLAMA_DSV41_ROPE_INPLACE")&&std::string(std::getenv("LLAMA_DSV41_ROPE_INPLACE"))=="1";
         const bool dense_bf16_store=expert.dense_activation_q8_1&&std::getenv("LLAMA_DSV41_DENSE_BF16_STORE")&&std::string(std::getenv("LLAMA_DSV41_DENSE_BF16_STORE"))=="1";
+        const bool dense_fp8=ggml_dsv41_dense_fp8_requested();
+        require(!dense_fp8||dense_bf16_store,"Dense FP8 speed proxy requires the explicit original-Q8 BF16-store profile");
         const bool mul_f16_store=std::getenv("LLAMA_DSV41_MUL_F16_STORE")&&std::string(std::getenv("LLAMA_DSV41_MUL_F16_STORE"))=="1";
         unsigned mul_f16_fused=0;
         require(!mul_f16_store||!workspace||!workspace->cache_layouts,"F16 route-weight store fusion requires allocator-only graph mode");
@@ -1345,7 +1357,7 @@ bool llama_dsv41_tile_executor::run(const request&in,const llama_dsv41_layer_gra
                        if(index_f32_cublas_enabled())require(ggml_dsv41_index_f32_causal_tag(node,score_start,ratio),"F32 index causal slab proof exceeds contiguous position contract");
                   }}}
         if(workspace&&workspace->casts)graph=workspace->casts->prepare(ctx.get(),graph,in.layer,&backend_temporary);
-        if(stored_fp4&&in.count>4){
+        if(stored_fp4&&in.count>4&&!native_ffn){
             require(in.count<=4096||llama_dsv41_flashinfer::requested(),"Wide stored-FP4 expert batches require FlashInfer");
             unsigned tagged=0;
             for(int i=0;i<ggml_graph_n_nodes(graph);++i){auto *node=ggml_graph_node(graph,i);
@@ -1372,7 +1384,7 @@ bool llama_dsv41_tile_executor::run(const request&in,const llama_dsv41_layer_gra
             for(int i=0;i<ggml_graph_n_nodes(graph);++i)tagged+=ggml_dsv41_tag_bf16_inplace(ggml_graph_node(graph,i))?1:0;
             require(tagged>0,"Paired graph has no exact BF16 lifetime reuse candidates");
         }
-        if(mul_f16_store){
+        if(mul_f16_store&&!native_ffn){
 #if defined(GGML_USE_CUDA)
             require(ggml_backend_is_cuda(backend),"F16 route-weight store fusion requires CUDA");
 #else
@@ -1382,6 +1394,14 @@ bool llama_dsv41_tile_executor::run(const request&in,const llama_dsv41_layer_gra
             require(mul_f16_fused==1,"F16 route-weight store fusion must match exactly one expert roundtrip");
         }
         if(dense_bf16_store)require(ggml_dsv41_fuse_dense_bf16_stores(graph)>0,"No single-reader original-Q8 BF16 stores to fuse");
+        if(native_dense_weights)for(int i=0;i<ggml_graph_n_nodes(graph);++i){auto*node=ggml_graph_node(graph,i);
+            for(unsigned source=0;source<GGML_MAX_SRC;++source){auto*w=node->src[source];if(!w)continue;
+                auto*root=w;while(root->view_src)root=root->view_src;
+                if(!ggml_dsv41_dense_fp8_native_weight(root))continue;
+                require(dense_fp8&&source==0&&w==root&&ggml_dsv41_dense_fp8_eligible(node),
+                    "Native FP8 weight cannot enter a canonical, sliced or unsupported projection");
+                node->op_params[5]=ggml_dsv41_dense_fp8_magic;
+            }}
         if(rope_inplace){
             unsigned tagged=0;for(int i=0;i<ggml_graph_n_nodes(graph);++i)tagged+=ggml_dsv41_tag_rope_inplace(ggml_graph_node(graph,i))?1:0;
             require(tagged>0,"No bounded exact tail RoPE reuse candidates");
@@ -1397,11 +1417,18 @@ bool llama_dsv41_tile_executor::run(const request&in,const llama_dsv41_layer_gra
             backend_temporary+=raw_mirror;
         }else if(expert.token_tile_attention)backend_temporary+=256ull*1024*1024;
         if(pair_ffn&&!native_pair)backend_temporary+=(in.count>8192?640ull:320ull)*1024*1024; // explicit8192-row MMQ activation/maps/pool temporary
-        if(stored_fp4&&llama_dsv41_flashinfer::requested()&&in.count>4){
+        if(native_ffn){
+            unsigned fused=0;for(int i=0;i<ggml_graph_n_nodes(graph);++i)fused+=ggml_dsv41_native_ffn_valid(ggml_graph_node(graph,i))?1:0;
+            require(fused==1,"Packed FP4 requires exactly one fused routed FFN");
+            const uint64_t maximum=ggml_dsv41_flashinfer::batch_tokens();
+            const uint64_t raw=slstack_fi_native::layout(maximum).bytes+slstack_fi_native::aligned(maximum*24)+255;
+            backend_temporary+=slstack_fi_native::aligned((raw*105+99)/100)+(16ull<<20)+maximum*56+4096;
+        }else if(stored_fp4&&llama_dsv41_flashinfer::requested()&&in.count>4){
             const uint64_t rows=uint64_t(in.count)*6;
             const uint64_t extra=std::max(llama_dsv41_flashinfer::workspace_bytes(2304,5120,rows),llama_dsv41_flashinfer::workspace_bytes(5120,2304,rows));
             backend_temporary+=extra;
         }
+        if(dense_fp8)backend_temporary+=(554ull<<20); // fixed512MiB pool +5% lookahead +module/alignment
         if(fixed&&backend_temporary>fixed->backend_temporary_reserve_bytes)
             std::fprintf(stderr,"LLAMADECODE_RESERVE layer=%u rows=%u backend_temporary=%llu declared_reserve=%llu rounded=%u split=%u\n",in.layer,in.count,
                 (unsigned long long)backend_temporary,(unsigned long long)fixed->backend_temporary_reserve_bytes,rounded_matrices,split_matrices);
@@ -1628,6 +1655,7 @@ bool llama_dsv41_tile_executor::run(const request&in,const llama_dsv41_layer_gra
         const auto topk_radix_before=topk_radix?ggml_backend_cuda_dsv41_topk_radix_queued():0;
         const auto rope_inplace_before=rope_inplace?ggml_backend_cuda_dsv41_rope_inplace_queued():0;
         const auto dense_bf16_store_before=dense_bf16_store?ggml_backend_cuda_dsv41_dense_bf16_store_queued():0;
+        const auto dense_fp8_before=dense_fp8?ggml_backend_cuda_dsv41_dense_fp8_queued():0;
         const auto mul_f16_store_before=mul_f16_store?ggml_backend_cuda_dsv41_mul_f16_store_queued():0;
         const bool cast_vector=std::getenv("LLAMA_DSV41_CAST_VECTOR")&&std::string(std::getenv("LLAMA_DSV41_CAST_VECTOR"))=="1";
         const auto cast_vector_before=cast_vector?ggml_backend_cuda_dsv41_cast_vector_queued():0;
@@ -1642,6 +1670,7 @@ bool llama_dsv41_tile_executor::run(const request&in,const llama_dsv41_layer_gra
         const auto attention_g16_before=attention_g16?ggml_backend_cuda_dsv41_token_tile_g16_queued():0;
         const auto union_before=merge_rows?ggml_backend_cuda_dsv41_token_union_queued():0;
         const auto expert_cublas_before=expert.expert_f16_cublas?ggml_backend_cuda_dsv41_expert_cublas_queued():0;
+        const auto native_ffn_before=native_ffn?ggml_backend_cuda_dsv41_native_ffn_queued():0;
         const auto expert_fp4_before=(expert.expert_mxfp4||stored_fp4)?ggml_backend_cuda_native_mxfp4_routed_queued():0;
         const bool flashinfer_fp4=stored_fp4&&std::getenv("LLAMA_DSV41_FLASHINFER_MXFP4")&&std::string(std::getenv("LLAMA_DSV41_FLASHINFER_MXFP4"))=="1";
         const auto flashinfer_fp4_before=flashinfer_fp4?ggml_backend_cuda_dsv41_flashinfer_queued():0;
@@ -1790,10 +1819,18 @@ bool llama_dsv41_tile_executor::run(const request&in,const llama_dsv41_layer_gra
             require(ggml_backend_cuda_dsv41_bf16_vector_queued()==bf16_vector_before+expected,"Actual exact vector BF16 dispatch coverage differs");
             llama_dsv41_layer_log("DS4PERF_BF16_VECTOR_COMPLETE layer=%u start=%u count=%u actual=%llu exact_helper=1 aligned_vector4=1 scalar_fallback=1\n",in.layer,in.start,in.count,(unsigned long long)expected);
         }
+        if(dense_fp8){
+            uint64_t expected=0;for(int i=0;i<ggml_graph_n_nodes(compute_graph);++i)expected+=ggml_dsv41_dense_fp8_eligible(ggml_graph_node(compute_graph,i))?1:0;
+            require(ggml_backend_cuda_dsv41_dense_fp8_queued()==dense_fp8_before+expected,"Dense FP8 completed dispatch count differs");
+            uint64_t native=0;for(int i=0;i<ggml_graph_n_nodes(compute_graph);++i){const auto*t=ggml_graph_node(compute_graph,i);native+=ggml_dsv41_dense_fp8_eligible(t)&&ggml_dsv41_dense_fp8_native_weight(t->src[0])?1:0;}
+            require(!native||native==expected,"Native FP8 dense file mixed incompatible projection formats");
+            llama_dsv41_layer_log("NATIVEFP4_DENSE_FP8_COMPLETE layer=%u start=%u count=%u actual=%llu source=%s weight_scale=E8M0_32x32 activation=MXFP8 lossy_speed_proxy=%u\n",in.layer,in.start,in.count,(unsigned long long)expected,native?"native_FP8":"Q8_0",unsigned(!native));
+        }
         if(dense_bf16_store){
             uint64_t expected=0;for(int i=0;i<ggml_graph_n_nodes(compute_graph);++i)expected+=ggml_dsv41_dense_bf16_store_requested(ggml_graph_node(compute_graph,i))?1:0;
             require(expected>0&&ggml_backend_cuda_dsv41_dense_bf16_store_queued()==dense_bf16_store_before+expected,"Actual completed original-Q8 BF16 final stores differ");
-            llama_dsv41_layer_log("DS4PERF_DENSE_BF16_STORE_COMPLETE layer=%u start=%u count=%u actual=%llu unchanged_StreamK_partials=1 final_fixup_round=1 original_Q8_weights=1\n",in.layer,in.start,in.count,(unsigned long long)expected);
+            if(dense_fp8)llama_dsv41_layer_log("NATIVEFP4_DENSE_FINAL_BF16_COMPLETE layer=%u start=%u count=%u actual=%llu mixed_Q8_and_FP8_speed_proxy=1\n",in.layer,in.start,in.count,(unsigned long long)expected);
+            else llama_dsv41_layer_log("DS4PERF_DENSE_BF16_STORE_COMPLETE layer=%u start=%u count=%u actual=%llu unchanged_StreamK_partials=1 final_fixup_round=1 original_Q8_weights=1\n",in.layer,in.start,in.count,(unsigned long long)expected);
         }
         if(mul_f16_store){
             require(ggml_backend_cuda_dsv41_mul_f16_store_queued()==mul_f16_store_before+mul_f16_fused,"Actual F16 route-weight store coverage differs");
@@ -1809,7 +1846,13 @@ bool llama_dsv41_tile_executor::run(const request&in,const llama_dsv41_layer_gra
                 (calls||(!elements&&!nc)),"Actual completed vector cast counters are empty/inconsistent");
             llama_dsv41_layer_log("DS4PERF_CAST_VECTOR_COMPLETE layer=%u start=%u count=%u calls=%llu elements=%llu strided_calls=%llu original_cast_helper=1 alignment_tail_overlap_guards=1\n",in.layer,in.start,in.count,(unsigned long long)calls,(unsigned long long)elements,(unsigned long long)nc);
         }
-        if(expert.expert_mxfp4||stored_fp4){const uint64_t expected=in.count>4?3:0;
+        if(native_ffn){
+            require(ggml_backend_cuda_dsv41_native_ffn_queued()==native_ffn_before+1,"Native FFN completed launch witness differs");
+            require(ggml_backend_cuda_dsv41_runtime_fp4_repacks_queued()==native_repack_before&&
+                ggml_backend_cuda_dsv41_mxfp4_weight_packs_queued()==native_weight_quant_before,
+                "Kernel-native weights unexpectedly entered a runtime repack/requant path");
+            llama_dsv41_layer_log("NATIVEFP4_NATIVE_FFN_COMPLETE layer=%u start=%u count=%u actual=1 products=3 routing_maps=1 input_gathers=1 runtime_weight_repack_bytes=0 routed_F32_bytes=0 epilogue_BF16=1\n",in.layer,in.start,in.count);
+        }else if(expert.expert_mxfp4||stored_fp4){const uint64_t expected=in.count>4?3:0;
             require(ggml_backend_cuda_native_mxfp4_routed_queued()==expert_fp4_before+expected,"Actual expert native FP4 activation/MMA witness differs");
             if(flashinfer_fp4){
                 require(ggml_backend_cuda_dsv41_flashinfer_queued()==flashinfer_fp4_before+expected,"Actual FlashInfer W4A8 launch count differs");

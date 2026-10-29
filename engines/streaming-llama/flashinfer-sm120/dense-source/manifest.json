@@ -1,0 +1,25 @@
+{
+  "upstream": "https://github.com/flashinfer-ai/flashinfer",
+  "commit": "1d622fdb1b053fc532069914bc9a6b498bd5f722",
+  "modifications": "None; byte-identical primary-source verification",
+  "files": [
+    {
+      "upstream": "flashinfer/gemm/kernels/dense_blockscaled_gemm_sm120_b12x.py",
+      "vendored": "dense_blockscaled_gemm_sm120_b12x.py",
+      "sha256": "6739702e27afad21767b71024678b35c6892e3f9c74aaff375fb3f6734399f86",
+      "license": "BSD-3-Clause"
+    },
+    {
+      "upstream": "flashinfer/cute_dsl/utils.py",
+      "vendored": "utils.py.source",
+      "sha256": "df35130f8c8c867a440d7ff3392ac23b19c8628429a7b65177c80bd0410c75cf",
+      "license": "Apache-2.0"
+    },
+    {
+      "upstream": "flashinfer/cute_dsl/availability.py",
+      "vendored": "availability.py.source",
+      "sha256": "39d47171f5dc1c92d73290a5dfdc7c018da7fd2bcdee498b16547e6ea08bc024",
+      "license": "Apache-2.0"
+    }
+  ]
+}

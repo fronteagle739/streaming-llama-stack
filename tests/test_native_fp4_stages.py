@@ -11,6 +11,21 @@ spec.loader.exec_module(stages)
 
 
 class StageAccounting(unittest.TestCase):
+    def test_fused_ffn_counts_three_expert_products_and_one_token_output(self):
+        with tempfile.TemporaryDirectory() as directory:
+            measurement=Path(directory)/'measurement.json';trace=Path(directory)/'trace.log'
+            measurement.write_text(json.dumps(dict(status='PASS',profiled=True,decode=None,prefill_seconds=10,
+                arm='proxy',label='fixture',prompt_tokens=16,plan={'sweeps':[16]},producer_sha256='p',
+                decode_library_sha256='d',model_sha256='m',input_sha256='i')))
+            trace.write_text('DS4PERF_NODE_PROFILE_HEADER\tcolumns\n'
+                'DS4PERF_NODE_PROFILE\t2\t2000\tCUSTOM|node=dsv41_native_fp4_fused_ffn|dst=5120,16,1,1\n'
+                'DS4PERF_NODE_PROFILE_END\trows=1\n'
+                'DS4PERF_LAYER_WALL_LEDGER layer=0 acquire_ms=1000\n')
+            result=stages.summarize(measurement,trace)
+            self.assertEqual(result['routed_expert_flops'],2*16*6*3*2*5120*2304)
+            self.assertEqual(result['stage_seconds']['expert_gemm'],2)
+            self.assertEqual(result['stage_seconds']['other_wall'],7)
+
     def test_cumulative_tables_and_nested_host_clocks(self):
         with tempfile.TemporaryDirectory() as directory:
             measurement = Path(directory) / 'measurement.json'
@@ -27,16 +42,21 @@ class StageAccounting(unittest.TestCase):
                 f'DS4PERF_NODE_PROFILE\t2\t2000\t{expert}\n'
                 'DS4PERF_NODE_PROFILE\t1\t500\tCPY|node=dsv41_hc_flat_norm\n'
                 'DS4PERF_NODE_PROFILE\t1\t250\tMUL_MAT|a=blk.0.attn_compressor_kv.weight\n'
-                'DS4PERF_NODE_PROFILE_END\trows=3\n'
+                'DS4PERF_NODE_PROFILE\t3\t300\tMUL_MAT|a=blk.0.attn_q_a.weight|dst=1280,16,1,1|ashape=5120,1280,1,1\n'
+                'DS4PERF_NODE_PROFILE_END\trows=4\n'
                 'DS4PERF_LAYER_WALL_LEDGER layer=0 acquire_ms=1000\n'
                 'LLAMADECODE_TILE_TIMING layer=0 tile=0 rows=8 host_prepare_ms=100 host_bind_ms=70 host_register_ms=60 host_upload_ms=200 host_launch_ms=900 host_sync_ms=100 gpu_ms=950 compute_ms=1000 host_readback_ms=30 host_cleanup_ms=10\n')
             result = stages.summarize(measurement, trace)
             self.assertEqual(result['stage_seconds']['expert_gemm'], 2)
             self.assertEqual(result['routed_expert_flops'], 2 * 2 * 5120 * 2304 * 6 * 8)
             self.assertEqual(result['stage_seconds']['other_wall'], 7)
-            self.assertEqual(result['gpu_seconds']['other_gpu'], .75)
+            self.assertEqual(result['gpu_seconds']['other_gpu'], 1.05)
             self.assertEqual(result['other_gpu_by_named_origin_seconds'],
-                {'named_hc': .5, 'named_compressor_and_pool': .25})
+                {'named_hc': .5, 'named_compressor_and_pool': .25, 'remaining': .3})
+            dense=result['selected_dense_subset']
+            self.assertEqual(dense['seconds'],.3)
+            self.assertEqual(dense['products'],3)
+            self.assertEqual(dense['useful_flops'],3*2*5120*1280*16)
             self.assertAlmostEqual(sum(result['tile_phase_seconds'].values()), 1.34)
             self.assertEqual(result['tile_nested_seconds']['host_register'], .06)
             self.assertEqual(result['tile_count'], 1)

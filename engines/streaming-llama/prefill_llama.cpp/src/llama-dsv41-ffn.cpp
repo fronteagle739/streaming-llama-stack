@@ -3,6 +3,7 @@
 #include "boundary-capture.h"
 #include "ggml-ds4-native-half.h"
 #include "llama-dsv41-flashinfer-budget.h"
+#include "ggml-dsv41-native-ffn.h"
 #include <cmath>
 
 llama_dsv41_ffn_graph::llama_dsv41_ffn_graph(ggml_context * ctx,llama_dsv41_graph_ops & ops,float limit,float route_scale) :
@@ -71,6 +72,18 @@ llama_dsv41_ffn_graph::result llama_dsv41_ffn_graph::routed_impl(
     dsv41_boundary::stage(selected,"route_ids");
     dsv41_boundary::stage(weights,"route_weights");
     router_stage.finish();
+    if(w.native_fp4_layout){
+        GGML_ASSERT(!native_half&&!w.expert_slots);
+        auto *routed=ggml_new_tensor_2d(ctx,GGML_TYPE_F32,width,count);
+        routed->op=GGML_OP_CUSTOM;routed->op_params[0]=0x46494e31;routed->op_params[1]=1;
+        std::memcpy(routed->op_params+2,&limit,sizeof(limit));
+        routed->src[0]=input;routed->src[1]=weights;routed->src[2]=selected;
+        routed->src[3]=w.gate;routed->src[4]=w.up;routed->src[5]=w.down;
+        GGML_ASSERT(ggml_dsv41_native_ffn_valid(routed));
+        ggml_set_name(routed,"dsv41_native_fp4_fused_ffn");
+        dsv41_boundary::stage(routed,"routed_ffn_f32");
+        return {routed,selected,weights};
+    }
     auto * x=ggml_reshape_3d(ctx,input,width,1,count);
     ggml_tensor * product_ids=selected;
     if(w.expert_slots){

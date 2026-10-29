@@ -15,6 +15,8 @@ public:
         // ids into it ("dsv41_expert_slot_copy"); the decode hook then
         // rewrites it with expert-cache slots. Route weights keep router ids.
         ggml_tensor * expert_slots = nullptr;
+        // Set only by the metadata-validated DirectStorage provider.
+        bool native_fp4_layout = false;
     };
     struct result { ggml_tensor * output; ggml_tensor * selected; ggml_tensor * route_weights; };
     llama_dsv41_ffn_graph(ggml_context * ctx,llama_dsv41_graph_ops & ops,float limit,float route_scale);

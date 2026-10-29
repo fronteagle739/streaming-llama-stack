@@ -541,6 +541,9 @@ llama_model_loader::llama_model_loader(
     if (!meta) {
         throw std::runtime_error(format("%s: failed to load model from %s", __func__, fname.c_str()));
     }
+    if (gguf_find_key(meta.get(), "deepseek41.expert_layout") >= 0 || gguf_find_key(meta.get(), "deepseek41.dense_layout") >= 0) {
+        throw std::runtime_error("Kernel-native FP4 requires its matching dsv41 streaming prefill loader; canonical GGML loading refused");
+    }
 
     get_key(llm_kv(LLM_KV_GENERAL_ARCHITECTURE), arch_name, false);
     llm_kv = LLM_KV(llm_arch_from_string(arch_name));

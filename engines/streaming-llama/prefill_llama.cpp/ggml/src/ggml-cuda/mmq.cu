@@ -10,8 +10,11 @@ extern "C" uint64_t ggml_backend_cuda_native_mxfp4_dense_queued(void){return nat
 #include "quantize.cuh"
 #include "mmid.cuh"
 #include "dsv41-flashinfer.cuh"
+#include "dsv41-dense-fp8.cuh"
 static std::atomic<uint64_t> dsv41_flashinfer_queued{0};
+static std::atomic<uint64_t> runtime_fp4_repacks_queued{0};
 extern "C" uint64_t ggml_backend_cuda_dsv41_flashinfer_queued(void){return dsv41_flashinfer_queued.load(std::memory_order_acquire);}
+extern "C" uint64_t ggml_backend_cuda_dsv41_runtime_fp4_repacks_queued(void){return runtime_fp4_repacks_queued.load(std::memory_order_acquire);}
 
 static void ggml_cuda_mul_mat_q_switch_type(ggml_backend_cuda_context & ctx, const mmq_args & args, cudaStream_t stream) {
     switch (args.type_x) {
@@ -92,6 +95,10 @@ void ggml_cuda_mul_mat_q(
     GGML_TENSOR_BINARY_OP_LOCALS;
 
     cudaStream_t stream = ctx.stream();
+    if(!ids&&ggml_dsv41_dense_fp8_requested()&&ggml_dsv41_dense_fp8_eligible(dst)){
+        ggml_cuda_dsv41_dense_fp8(ctx,dst);
+        dsv41_dense_bf16_store_queued.fetch_add(1,std::memory_order_release);return;
+    }
     const int cc = ggml_cuda_info().devices[ggml_cuda_get_device()].cc;
 
     const size_t ts_src0 = ggml_type_size(src0->type);
@@ -211,6 +218,7 @@ void ggml_cuda_mul_mat_q(
         CUDA_CHECK(static_cast<cudaError_t>(dsv41_flashinfer_bridge()(src0_d,src1_d,ids_src1.get(),ids_dst.get(),expert_bounds.get(),dst_d,
             int(ne_get_rows),int(ne01),int(ne00),nb11/ts_src1,s1,s2,aligned_workspace,workspace_bytes,stream)));
         CUDA_CHECK(cudaGetLastError());
+        runtime_fp4_repacks_queued.fetch_add(1,std::memory_order_release);
         native_mxfp4_routed_queued.fetch_add(1,std::memory_order_release);
         dsv41_flashinfer_queued.fetch_add(1,std::memory_order_release);
         return;

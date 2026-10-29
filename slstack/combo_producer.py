@@ -239,7 +239,15 @@ def prefill_arguments(cfg, count, available, *, export_state=False, techniques=N
         fixed=40*128*512*4+3*2*512*4
         mapped=sum(-(-(((context+1)//2 if owner<3 else context)*width*element)//granularity)*granularity
                    for owner in range(4) for width in (512,128))
-        extra=max(0,fixed+mapped-int(arguments['--cache-bytes']))
+        required=fixed+mapped
+        extra=max(0,required-int(arguments['--cache-bytes']))
+        if cfg.get('native_fp4_prefill_only') and (
+                cfg.get('env_overrides',{}).get('LLAMA_DSV41_FLASHINFER_NATIVE_FFN_DLL') or
+                cfg.get('env_overrides',{}).get('LLAMA_DSV41_DENSE_FP8')=='1'):
+            # A bounded prefill experiment can return the unreachable part of
+            # the default million-position cache to graph storage. Preserve
+            # the exact VMM-rounded charge for every admitted context row.
+            extra=required-int(arguments['--cache-bytes'])
         arguments['--cache-bytes']=str(int(arguments['--cache-bytes'])+extra)
         arguments['--graph-bytes']=str(int(arguments['--graph-bytes'])-extra)
         if int(arguments['--graph-bytes'])<=0:raise MemoryError('Context cache leaves no admitted graph budget')
@@ -261,6 +269,8 @@ def prefill_arguments(cfg, count, available, *, export_state=False, techniques=N
             raise ValueError('FlashInfer expert batch must be 4096, 8192 or 16384 rows')
         arguments['--compute-tile']=batch
         arguments['--backend-temporary-reserve-bytes']=str({'4096':3328,'8192':4096,'16384':5120}[batch]<<20)
+        if cfg['env_overrides'].get('LLAMA_DSV41_FLASHINFER_NATIVE_FFN_DLL'):
+            arguments['--backend-temporary-reserve-bytes']=str({'4096':1280,'8192':1792,'16384':3072}[batch]<<20)
         if batch!='4096':
             transfer=512<<20
             arguments['--provider-device-bytes']=str(int(arguments['--provider-device-bytes'])-transfer)
@@ -270,6 +280,8 @@ def prefill_arguments(cfg, count, available, *, export_state=False, techniques=N
             arguments['--graph-bytes']=str(int(arguments['--graph-bytes'])-(320<<20))
     from .singlepass import arguments as carry_arguments
     carry_arguments(cfg, arguments)
+    if cfg.get('env_overrides',{}).get('LLAMA_DSV41_DENSE_FP8')=='1':
+        arguments['--backend-temporary-reserve-bytes']=str(int(arguments['--backend-temporary-reserve-bytes'])+(576<<20))
     return arguments, plan
 
 

@@ -555,9 +555,13 @@ int wmain(int argc,wchar_t**argv){
         const uint64_t backend_reserve=args.count("--backend-temporary-reserve-bytes")?number("--backend-temporary-reserve-bytes"):gib;
         const bool flashinfer_reserve=llama_dsv41_flashinfer::requested()&&pair_ffn&&
             std::getenv("LLAMA_DSV41_STORED_MXFP4")&&std::string(std::getenv("LLAMA_DSV41_STORED_MXFP4"))=="1";
-        require(backend_reserve==gib||(backend_reserve==768ull*1024*1024&&pair_ffn)||
-            (flashinfer_reserve&&backend_reserve==llama_dsv41_flashinfer::reserve_bytes()),"Backend reserve must match the explicit arithmetic/workspace plan");
-        require(!flashinfer_reserve||backend_reserve==llama_dsv41_flashinfer::reserve_bytes(),"FlashInfer requires its bounded workspace inside the existing graph device cap");
+        const char*dense_fp8_env=std::getenv("LLAMA_DSV41_DENSE_FP8");
+        const uint64_t dense_fp8_reserve=dense_fp8_env&&!std::strcmp(dense_fp8_env,"1")?576ull<<20:0;
+        require(backend_reserve>=dense_fp8_reserve,"FP8 reserve exceeds total backend admission");
+        const uint64_t base_backend_reserve=backend_reserve-dense_fp8_reserve;
+        require(base_backend_reserve==gib||(base_backend_reserve==768ull*1024*1024&&pair_ffn)||
+            (flashinfer_reserve&&base_backend_reserve==llama_dsv41_flashinfer::reserve_bytes()),"Backend reserve must match the explicit arithmetic/workspace plan");
+        require(!flashinfer_reserve||base_backend_reserve==llama_dsv41_flashinfer::reserve_bytes(),"FlashInfer requires its bounded workspace inside the existing graph device cap");
         const auto output_volume=native_file::volume(path("--payload"));
         require(!hybrid||(path("--carry").root_name()==L"D:"&&llama_dsv41_expert_profile::native(expert)&&disk_reserve==1024ull*1024*1024),
             "Hybrid TEST requires D: overflow, native experts and explicit1GiB disk reserve");

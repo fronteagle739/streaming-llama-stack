@@ -1,5 +1,13 @@
 # Optional stored MXFP4 prefill adapter
 
+The new opt-in fused FFN and its direct-packed GGUF layout are documented in
+[`NATIVE_LAYOUT.md`](NATIVE_LAYOUT.md). Its loader and ABI are separate from
+the historical canonical ABI4 adapter below. Full-model qualification remains
+in progress; no production default changes follow from its component checks.
+
+The separate opt-in [FP8 dense experiment](DENSE_FP8.md) keeps the model file
+unchanged and explicitly labels Q8_0 requantization as a lossy speed proxy.
+
 This adapter calls FlashInfer's pinned SM120a W4A8 grouped GEMM from the existing
 GGML routed-expert operator. It is an experiment, off by default. Its source
 manifest and Apache-2.0 licence are in `source/`. The adapter is MIT.

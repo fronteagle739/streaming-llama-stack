@@ -4,7 +4,11 @@
 #include <cstring>
 #include "ggml-dsv41-flashinfer-workspace.h"
 namespace llama_dsv41_flashinfer {
-inline uint64_t reserve_bytes(){return ggml_dsv41_flashinfer::selected_reserve_bytes();}
+inline uint64_t reserve_bytes(){
+    const char *native=std::getenv("LLAMA_DSV41_FLASHINFER_NATIVE_FFN_DLL");
+    if(native&&*native){const auto rows=ggml_dsv41_flashinfer::batch_tokens();return (rows==16384?3072ull:rows==8192?1792ull:1280ull)<<20;}
+    return ggml_dsv41_flashinfer::selected_reserve_bytes();
+}
 inline bool requested(){const char *v=std::getenv("LLAMA_DSV41_FLASHINFER_MXFP4");return v&&!std::strcmp(v,"1");}
 inline uint64_t workspace_bytes(uint64_t n,uint64_t k,uint64_t rows){
     (void)n;(void)k;(void)rows;

@@ -527,10 +527,14 @@ bool llama_dsv41_sweep::open(const llama_dsv41_weight_provider::config &input_we
                 const bool first_request=f.direct_open&&!warmup&&!prefix&&(options.carry.tokens==f.tokens||(options.stateful_chunks&&options.carry.tokens<=f.tokens));
                 if(first_request)llama_dsv41_layer_log("DS4COMBO_FIXED_DIRECT_OPEN tokens=%u tile=%u pair=%d warmup_pass=0\n",options.carry.tokens,f.tile,int(options.pair_ffn));
                 require(!warmup&&(first_request||(!options.pair_ffn&&options.carry.tokens==1))&&!f.graph&&!f.hidden&&!f.cache&&f.tokens&&f.tile&&options.admitted_graph_bytes>1024ull*1024*1024,"Fixed allocation must follow provider heaps and precede first stage lease during one-token warmup");
+                const char*dense_fp8=std::getenv("LLAMA_DSV41_DENSE_FP8");
+                const uint64_t dense_reserve=dense_fp8&&!std::strcmp(dense_fp8,"1")?576ull<<20:0;
+                require(f.backend_temporary_reserve_bytes>=dense_reserve,"FP8 reserve exceeds fixed backend admission");
+                const uint64_t base_reserve=f.backend_temporary_reserve_bytes-dense_reserve;
                 const bool flashinfer_reserve=llama_dsv41_flashinfer::requested()&&options.pair_ffn&&f.tile==ggml_dsv41_flashinfer::batch_tokens()&&
-                    f.backend_temporary_reserve_bytes==llama_dsv41_flashinfer::reserve_bytes();
-                require((f.backend_temporary_reserve_bytes==1024ull*1024*1024||f.backend_temporary_reserve_bytes==768ull*1024*1024||flashinfer_reserve)&&f.backend_temporary_reserve_bytes<options.admitted_graph_bytes,"Unsupported fixed backend temporary reserve");
-                require(flashinfer_reserve||f.backend_temporary_reserve_bytes==1024ull*1024*1024||(options.expert.attention_kv_f16_table&&options.expert.index_key_windows&&options.expert.token_tile_attention&&f.tile<=8192),"Reduced backend reserve requires direct-F16/window profile and<=8K groups");
+                    base_reserve==llama_dsv41_flashinfer::reserve_bytes();
+                require((base_reserve==1024ull*1024*1024||base_reserve==768ull*1024*1024||flashinfer_reserve)&&f.backend_temporary_reserve_bytes<options.admitted_graph_bytes,"Unsupported fixed backend temporary reserve");
+                require(flashinfer_reserve||base_reserve==1024ull*1024*1024||(options.expert.attention_kv_f16_table&&options.expert.index_key_windows&&options.expert.token_tile_attention&&f.tile<=8192),"Reduced backend reserve requires direct-F16/window profile and<=8K groups");
                 f.backend=weights.backend;
                 f.graph=std::shared_ptr<ggml_gallocr>(ggml_gallocr_new(ggml_backend_get_default_buffer_type(f.backend)),ggml_gallocr_free);
                 require(bool(f.graph),"Fixed graph allocator creation failed");

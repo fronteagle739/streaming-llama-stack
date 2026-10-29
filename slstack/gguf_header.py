@@ -51,9 +51,19 @@ def tensor_map(header):
     return {t['name']:dict(type=t['type'],shape=t['shape']) for t in header['tensors']}
 
 
-def validate_dsv41_types(header):
+def validate_dsv41_types(header,*,expert_layout=None,dense_layout=None):
     """Reject unsupported types before hashing or starting a CUDA process."""
     meta=header['metadata']
+    packed=meta.get('deepseek41.expert_layout')
+    native_dense=meta.get('deepseek41.dense_layout')
+    if native_dense is not None and (native_dense!='fp8-e4m3-e8m0-32x32-v1' or native_dense!=dense_layout or packed is None):
+        raise ValueError('Native FP8 dense requires the explicit matching prefill-only loader and native expert bundle')
+    if packed is not None:
+        if packed!='flashinfer-sm120-mxfp8-mxfp4-v1' or packed!=expert_layout:
+            raise ValueError('Kernel-native expert layout requires its explicit matching prefill loader; canonical/decode paths refused')
+        alignment=meta.get('general.alignment',32)
+        if type(alignment) is not int or alignment<128 or alignment>65536 or alignment&(alignment-1):
+            raise ValueError('Kernel-native expert alignment must be a power of two >=128')
     if meta.get('general.architecture')!='deepseek41':raise ValueError('Expected native deepseek41 GGUF')
     if meta.get('split.count',1)!=1:
         raise ValueError('Split GGUF: losslessly assemble the local shards with antirez/ds4 merge_deepseek41_shards.py first; no requantization')
@@ -70,6 +80,14 @@ def validate_dsv41_types(header):
         else:allowed=(0,)
         if kind not in allowed:
             raise ValueError(f'Unsupported DSV4.1 tensor {name} type {TYPE_NAMES.get(kind,"unknown")} ({kind}); no common prefill/decode kernel')
+        if packed and role in ('ffn_gate_exps.weight','ffn_up_exps.weight','ffn_down_exps.weight'):
+            expected_shape=[2304,5120,384] if role=='ffn_down_exps.weight' else [5120,2304,384]
+            if kind!=39 or tensor['shape']!=expected_shape or tensor['offset']%128:
+                raise ValueError('Kernel-native expert tensor type/shape/alignment mismatch: '+name)
+        if native_dense and role in ('attn_q_a.weight','attn_q_b.weight','attn_kv.weight','attn_output_b.weight',
+                                      'ffn_gate_shexp.weight','ffn_up_shexp.weight','ffn_down_shexp.weight'):
+            if kind!=8 or len(tensor['shape'])!=2 or any(n%128 for n in tensor['shape']) or tensor['offset']%128:
+                raise ValueError('Native FP8 dense tensor type/geometry mismatch: '+name)
     for name,t in by_name.items():
         if name.endswith('ffn_gate_exps.weight'):
             prefix=name.removesuffix('ffn_gate_exps.weight')
