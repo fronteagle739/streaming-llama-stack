@@ -226,6 +226,7 @@ typedef struct {
  * ------------------------------------------------------------------------ */
 typedef struct {
     int decode_chunks; /* DS4_DS41_DECODE_CHUNKS=0 restores one-stack-CB path */
+    int decode_queue2; /* upstream a743c56: commit layer 0, then every two layers */
     int queue_layers;
     int engram_async;
     int round_fuse_norm;

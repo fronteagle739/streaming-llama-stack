@@ -17792,6 +17792,28 @@
     ]
   },
   {
+    "var": "DS4_DS41_DECODE_QUEUE2",
+    "flag": null,
+    "default": null,
+    "code_default": "0 (candidate; explicit opt-in)",
+    "classification": "advanced",
+    "scopes": [
+      "mac-ds4"
+    ],
+    "doc": "Commit V4.1 scalar decode layer 0 early, then every two layers (upstream a743c56). 0 retains the existing cadence.",
+    "reads": [
+      "engines/ds4-mac/ds4.c:39872"
+    ],
+    "code_defaults": [
+      {
+        "source": "engines/ds4-mac/ds4.c:39872",
+        "unset": "0",
+        "read": "getenv(\"DS4_DS41_DECODE_QUEUE2\")",
+        "consumer": "g_ds41_levers.decode_queue2 = getenv(\"DS4_DS41_DECODE_QUEUE2\") && ds41_env_enable_form(\"DS4_DS41_DECODE_QUEUE2\");"
+      }
+    ]
+  },
+  {
     "var": "DS4_DS41_DOWN_TAIL_PACK",
     "flag": null,
     "default": null,

@@ -39666,6 +39666,7 @@ static bool ds41_bf16(ds4_gpu_tensor *x, uint32_t width) {
  * ------------------------------------------------------------------------ */
 ds41_levers g_ds41_levers = {
     .decode_chunks = 1,
+    .decode_queue2 = 0,
     .queue_layers = 1,
     .engram_async = 1,
     .round_fuse_norm = 1,
@@ -39767,6 +39768,7 @@ static int ds41_lever_counted(const char *name) {
 
 static const struct { const char *name; size_t off; const char *env; } g_ds41_lever_map[] = {
     { "decode_chunks", offsetof(ds41_levers, decode_chunks), "DS4_DS41_DECODE_CHUNKS" },
+    { "decode_queue2", offsetof(ds41_levers, decode_queue2), "DS4_DS41_DECODE_QUEUE2" },
     { "queue_layers",       offsetof(ds41_levers, queue_layers),       "DS4_DS41_QUEUE_LAYERS" },
     { "engram_async",       offsetof(ds41_levers, engram_async),       "DS4_DS41_ENGRAM_ASYNC" },
     { "round_fuse_norm",    offsetof(ds41_levers, round_fuse_norm),    "DS4_METAL_DISABLE_V41_ROUND_FUSE_NORM" },
@@ -39867,6 +39869,8 @@ static const struct { const char *name; size_t off; const char *env; } g_ds41_le
 void ds41_levers_init_from_env(void) {
     if (g_ds41_levers_ready) return;
     g_ds41_levers.decode_chunks      = ds41_env_enable_form("DS4_DS41_DECODE_CHUNKS");
+    g_ds41_levers.decode_queue2      = getenv("DS4_DS41_DECODE_QUEUE2") &&
+        ds41_env_enable_form("DS4_DS41_DECODE_QUEUE2");
     g_ds41_levers.dspark_capture     = ds41_env_disable_form("DS4_DS41_DSPARK_CAPTURE");
     g_ds41_levers.verify_wide_prefill= ds41_env_optin_form("DS4_DS41_VERIFY_WIDE_PREFILL",
                                                            "DS4_DS41_VERIFY_WIDE_PREFILL_OFF");
@@ -41746,7 +41750,12 @@ static DS4_MAYBE_UNUSED bool ds41_graph_step(ds41_gpu_graph *g, const ds4_model 
          * their mid-stack boundary. On a single host the layer-14 Engram input
          * is a separate buffer, so only the drain that publishes the completed
          * token to the CPU remains. */
-        const bool submit = chunks && (il == 1u || il == 13u);
+        /* Upstream a743c56 queues layer 0 immediately and commits every two
+         * layers thereafter. Join only the Engram buffers this chunk consumes;
+         * their distinct storage and the final drain retain the existing state,
+         * sampler and native-frontier contracts. */
+        const bool submit = chunks && (g_ds41_levers.decode_queue2 ?
+            (il == 0u || (il + 1u) % 2u == 0u) : (il == 1u || il == 13u));
         if (submit && ok) {
             ok = ds41_engram_join_chunk(g, &engram_pending, engram_async, engram_stats);
             if (ok) ok = ds4_gpu_flush_commands() != 0;
