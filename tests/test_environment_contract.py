@@ -15,7 +15,8 @@ class EnvironmentContractTests(unittest.TestCase):
         from slstack.config import load
         cfg=load(overrides={'gpu_uuid':'GPU-test'})
         chosen={'GGML_CUDA_DISABLE_GRAPHS':'0','LLAMA_DSV41_CUDA_GRAPHS':'1',
-                'LLAMA_DSV41_HC_COLLAPSE_FUSION':'0','LLAMA_DSV41_QAT_TILED':'0'}
+                'LLAMA_DSV41_HC_COLLAPSE_FUSION':'0','LLAMA_DSV41_QAT_TILED':'0',
+                'LLAMA_DSV41_ASYNC_LAYER':'1','LLAMA_DSV41_LAYER_FUSION':'2'}
         cfg['env_overrides']=chosen
         actual=apply({},cfg,'rtx-producer')
         for name,value in chosen.items():self.assertEqual(actual.get(name),value)

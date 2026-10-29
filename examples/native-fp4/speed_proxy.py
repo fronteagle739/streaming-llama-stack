@@ -28,6 +28,29 @@ def graph_witnesses(trace,minimum=1):
     return dict(cuda_graph_launches=len(rows),cuda_graph_captures=int(rows[-1][1]),cuda_graph_replays=int(rows[-1][2]))
 
 
+def layer_witnesses(trace,tiles,queued=False,fusion=0):
+    record={}
+    if tiles<=0:raise ValueError('Layer experiments require positive native FFN coverage witnesses')
+    if queued:
+        certified=re.findall(r'OTHER22_ASYNC_TILE_CERTIFIED layer=(\d+) start=(\d+) count=(\d+)',trace)
+        layers=re.findall(r'OTHER22_ASYNC_LAYER_CERTIFIED layer=(\d+) ',trace)
+        if len(certified)!=tiles or set(map(int,layers))!=set(range(40)):
+            raise ValueError('Queued layer request lacks complete tile/layer certification')
+        record.update(asynchronous_certified_tiles=len(certified),asynchronous_certified_layers=len(layers))
+    if fusion:
+        calls=re.findall(r'OTHER22_LAYER_FUSION rows=(\d+) width=(\d+) HC_BF16_RMS_weight_BF16=1',trace)
+        if len(calls)<tiles*2:
+            raise ValueError('Layer fusion request lacks both sublayer norm launches for every tile')
+        record['layer_fusion_launches']=len(calls)
+        if fusion==2:
+            graphs=re.findall(r'OTHER22_BINDING_GRAPH launches=(\d+) captures=(\d+) pointer_table=1 mutable_rows=1',trace)
+            if len(graphs)<tiles*2 or len(graphs)>len(calls) or int(graphs[-1][0])!=len(graphs) or int(graphs[-1][1])!=1:
+                raise ValueError('Pointer-table request did not replay one binding-independent norm graph')
+            record.update(binding_graph_launches=len(graphs),binding_graph_captures=int(graphs[-1][1]),
+                scoped_eager_fusions=len(calls)-len(graphs))
+    return record
+
+
 def token_ids(path):
     raw = path.read_bytes()
     if not raw or len(raw) % 4:
@@ -82,6 +105,9 @@ def run(args, cfg):
                       (Path(cfg['llama_producer']).parent / 'ds4-decode.dll').open('rb'), 'sha256').hexdigest(),
                   profiled=args.profile_stages,
                   cuda_graphs_requested=args.cuda_graphs,
+                  asynchronous_layers_requested=cfg['env_overrides'].get('LLAMA_DSV41_ASYNC_LAYER')=='1',
+                  layer_fusion_requested=int(cfg['env_overrides'].get('LLAMA_DSV41_LAYER_FUSION','0')),
+                  native_graph_disable_policy=cfg['env_overrides'].get('GGML_CUDA_DISABLE_GRAPHS'),
                   prefill_only=args.prefill_only,
                   native_ffn_requested=bool(cfg['env_overrides'].get('LLAMA_DSV41_FLASHINFER_NATIVE_FFN_DLL')),
                   dense_fp8_requested=cfg['env_overrides'].get('LLAMA_DSV41_DENSE_FP8')=='1',
@@ -188,8 +214,12 @@ def run(args, cfg):
         if record['status']=='PASS' and args.cuda_graphs:
             try:record.update(graph_witnesses(trace.read_text(encoding='utf-8',errors='replace'),max(1,record.get('native_ffn_completed_graphs',0))))
             except ValueError as error:record.update(status='FAIL',error=str(error))
+        if record['status']=='PASS' and (record['asynchronous_layers_requested'] or record['layer_fusion_requested']):
+            try:record.update(layer_witnesses(trace.read_text(encoding='utf-8',errors='replace'),record.get('native_ffn_completed_graphs',0),
+                record['asynchronous_layers_requested'],record['layer_fusion_requested']))
+            except ValueError as error:record.update(status='FAIL',error=str(error))
         args.output.write_text(json.dumps(record, indent=2, default=str), encoding='utf-8')
-        if record['status'] == 'FAIL' and (args.cuda_graphs or record.get('dense_fp8_requested') or record.get('flashinfer_requested') or (
+        if record['status'] == 'FAIL' and (record['asynchronous_layers_requested'] or record['layer_fusion_requested'] or args.cuda_graphs or record.get('dense_fp8_requested') or record.get('flashinfer_requested') or (
                 record.get('decode_mma_requested') and 'decode_mma_queued_layers' in record)):
             raise RuntimeError(record['error'])
 
@@ -231,6 +261,13 @@ def main():
         # Explicit CLI selection overrides the harness's inherited eager policy.
         cfg['env_overrides']['GGML_CUDA_DISABLE_GRAPHS']='0'
         cfg['env_overrides']['LLAMA_DSV41_CUDA_GRAPHS']='1'
+    if cfg['env_overrides'].get('LLAMA_DSV41_LAYER_FUSION')=='2':
+        if args.cuda_graphs:p.error('Select the pointer-table plan or the outer streamed-graph plan')
+        # Explicit pointer-table selection overrides the inherited eager preset.
+        # The native backend records its specialized graph plan in the trace.
+        if cfg['env_overrides'].get('GGML_CUDA_DISABLE_GRAPHS')!='0':
+            print('Explicit pointer-table plan enables CUDA graphs; replacing the inherited eager preset.',file=sys.stderr)
+        cfg['env_overrides']['GGML_CUDA_DISABLE_GRAPHS']='0'
     if args.profile_stages:
         cfg['env_overrides'].update(LLAMA_CUDA_OP_PROFILE='1', LLAMA_CUDA_OP_PROFILE_NODES='1',
                                     LLAMA_CUDA_OP_PROFILE_DUMP_EACH='1', LLAMADECODE_TILE_TIMING='1')

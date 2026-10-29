@@ -749,8 +749,10 @@ int wmain(int argc,wchar_t**argv){
         options.resident_bf16=args.count("--resident-hidden-bf16")&&args.at("--resident-hidden-bf16")=="1";
         const char *streamed_graphs=std::getenv("LLAMA_DSV41_CUDA_GRAPHS");
         const bool streamed_graph_support=streamed_graphs&&std::string(streamed_graphs)=="1";
+        const char *binding_mode=std::getenv("LLAMA_DSV41_LAYER_FUSION"),*graph_policy=std::getenv("GGML_CUDA_DISABLE_GRAPHS");
+        const bool binding_graph_support=binding_mode&&!std::strcmp(binding_mode,"2")&&graph_policy&&!std::strcmp(graph_policy,"0");
         require(!options.resident_bf16||(options.carry.defer_hidden_readback&&
-            (streamed_graph_support||(std::getenv("GGML_CUDA_DISABLE_GRAPHS")&&std::string(std::getenv("GGML_CUDA_DISABLE_GRAPHS"))=="1"))),
+            (binding_graph_support||streamed_graph_support||(std::getenv("GGML_CUDA_DISABLE_GRAPHS")&&std::string(std::getenv("GGML_CUDA_DISABLE_GRAPHS"))=="1"))),
             "Resident BF16 requires full resident readback and either explicit streamed-graph support or eager capture policy");
         report["resident_hidden_storage"]=options.resident_bf16?"BF16 after validated existing BF16 boundary; layer0 input unchanged F32":"F32";
         options.carry.ram_prefix_tokens=uint32_t(ram_prefix);options.carry.disk_reserve_bytes=disk_reserve;

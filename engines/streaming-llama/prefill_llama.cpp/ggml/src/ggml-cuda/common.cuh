@@ -1405,6 +1405,10 @@ struct ggml_cuda_stream_context {
     }
 };
 
+struct ggml_cuda_layer_graph_cache {
+    virtual ~ggml_cuda_layer_graph_cache()=default;
+    virtual size_t executable_count()const=0;
+};
 struct ggml_backend_cuda_context {
     int device;
     std::string name;
@@ -1546,7 +1550,30 @@ struct ggml_backend_cuda_context {
         }
         return total_before - total_after;
     }
+    // Appended to retain existing CUDA context member offsets. Retired before
+    // streams in the context destructor; owns only a small pointer-table graph.
+#ifndef USE_CUDA_GRAPH
+    std::atomic<int> cuda_graph_disable_depth{0};
+#endif
+    std::shared_ptr<ggml_cuda_layer_graph_cache> dsv41_layer_graph;
+#if CUDART_VERSION >= 12080 && !defined(GGML_USE_HIP) && !defined(GGML_USE_MUSA)
+    struct deferred_graph {cudaGraph_t graph;cudaGraphExec_t executable;cudaEvent_t done;};
+    std::vector<deferred_graph> dsv41_deferred_graphs;
+    void reap_dsv41_graphs(){
+        auto &v=dsv41_deferred_graphs;
+        for(auto it=v.begin();it!=v.end();){
+            const auto status=cudaEventQuery(it->done);
+            if(status==cudaErrorNotReady){++it;continue;}
+            CUDA_CHECK(status);CUDA_CHECK(cudaGraphExecDestroy(it->executable));
+            CUDA_CHECK(cudaGraphDestroy(it->graph));CUDA_CHECK(cudaEventDestroy(it->done));it=v.erase(it);
+        }
+    }
+#endif
 };
+
+// Internal modules using the appended streaming state must agree on the
+// graph-enabled context layout, including in incremental external builds.
+size_t ggml_cuda_context_abi_size();
 
 struct ggml_cuda_mm_fusion_args_host {
     const ggml_tensor * x_bias = nullptr;

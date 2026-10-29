@@ -239,13 +239,13 @@ public:
         std::fprintf(stderr,"[dsv41-cast-cache] layer=%u reused_parts=%zu removed_F32_casts=%zu",layer,nodes.size(),removed.size());std::fputc(10,stderr);
         return replacement;
     }
-    void complete(){
+    void complete(bool asynchronous=false){
         if(pending.empty())return;
 #ifdef GGML_USE_CUDA
         auto *stream=ggml_backend_cuda_get_stream(backend);
         for(const auto &p:pending){need(p.source->data&&p.destination->data&&ggml_nbytes(p.source)==ggml_nbytes(p.destination),"Completed cast-cache tensor geometry changed");
             ggml_backend_cuda_memcpy_d2d_async(p.destination->data,p.source->data,ggml_nbytes(p.source),stream);}
-        ggml_backend_synchronize(backend);
+        if(!asynchronous||audit)ggml_backend_synchronize(backend);
         if(audit)for(const auto &p:pending){const auto bytes=ggml_nbytes(p.source);need(bytes<=16ull*1024*1024,"Cast-cache audit exceeds32MiB host workspace");
             std::vector<uint8_t> a(bytes),b(bytes);ggml_backend_tensor_get(p.source,a.data(),0,bytes);ggml_backend_tensor_get(p.destination,b.data(),0,bytes);
             need(a==b,"Actual GPU cached half-weight bytes differ from original graph cast");}

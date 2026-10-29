@@ -88,6 +88,24 @@ static bool dsv41_index_fp4(ggml_backend_cuda_context&ctx,ggml_tensor*dst,Fallba
     if(!ggml_dsv41_index_fp4_enabled(std::getenv("LLAMA_DSV41_INDEX_FP4")))return false;
     GGML_ASSERT(ggml_cuda_info().devices[ctx.device].cc==1200);
     const int tokens=int(dst->ne[1]),rows=int(dst->ne[0]),qrows=tokens*32;
+    cudaStreamCaptureStatus entering=cudaStreamCaptureStatusNone;
+    CUDA_CHECK(cudaStreamIsCapturing(ctx.stream(),&entering));
+    const char *queued=std::getenv("LLAMA_DSV41_ASYNC_LAYER");
+    const bool local_capture=entering==cudaStreamCaptureStatusNone&&queued&&queued[0]=='1'&&!queued[1];
+    if(local_capture){
+#if CUDART_VERSION >= 12080
+        GGML_ASSERT(ggml_cuda_context_abi_size()==sizeof(ctx)&&"CUDA context layout mismatch; rebuild with consistent graph flags");
+        ctx.reap_dsv41_graphs();
+        GGML_ASSERT(ctx.dsv41_deferred_graphs.size()<128&&"Conditional index graph metadata exceeded its bounded queue");
+        // Eager queued layers need the same GPU certificate/IF-ELSE decision
+        // as outer capture. Capture only this index operation, not the whole
+        // changing layer graph. Both numerical branches remain executable.
+        (void)ctx.cublas_handle();
+        CUDA_CHECK(cudaStreamBeginCapture(ctx.stream(),cudaStreamCaptureModeRelaxed));
+#else
+        GGML_ABORT("Asynchronous FP4/BF16 selection requires CUDA12.8 or newer");
+#endif
+    }
     const uint64_t bytes=uint64_t(qrows+rows)*68+7*4;
     GGML_ASSERT(bytes<=64ull*1024*1024&&"FP4 index workspace exceeds existing64MiB reserve");
     ggml_cuda_pool_alloc<uint32_t>q(ctx.pool(),uint64_t(qrows)*16),k(ctx.pool(),uint64_t(rows)*16),qs(ctx.pool(),qrows),ks(ctx.pool(),rows);
@@ -138,6 +156,16 @@ static bool dsv41_index_fp4(ggml_backend_cuda_context&ctx,ggml_tensor*dst,Fallba
         CUDA_CHECK(cudaStreamDestroy(body));
         CUBLAS_CHECK(cublasSetStream(ctx.cublas_handle(),stream));
         CUDA_CHECK(cudaStreamUpdateCaptureDependencies(stream,&branch,nullptr,1,cudaStreamSetCaptureDependencies));
+        if(local_capture){
+            cudaGraph_t captured=nullptr;cudaGraphExec_t executable=nullptr;
+            CUDA_CHECK(cudaStreamEndCapture(stream,&captured));
+            CUDA_CHECK(cudaGraphInstantiate(&executable,captured,nullptr,nullptr,0));
+            CUDA_CHECK(cudaGraphLaunch(executable,stream));
+            // WDDM graph destruction can wait for an in-flight execution.
+            // Retire handles only after an event query proves completion.
+            cudaEvent_t done;CUDA_CHECK(cudaEventCreateWithFlags(&done,cudaEventDisableTiming));
+            CUDA_CHECK(cudaEventRecord(done,stream));ctx.dsv41_deferred_graphs.push_back({captured,executable,done});
+        }
         return true;
 #else
         GGML_ABORT("FP4/BF16 conditional capture requires CUDA 12.8 or newer; use the original eager policy on older toolkits");

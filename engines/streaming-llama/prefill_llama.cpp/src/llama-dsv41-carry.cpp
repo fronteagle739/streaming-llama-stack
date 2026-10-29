@@ -85,6 +85,7 @@ struct llama_dsv41_carry_store::implementation {
     bool lease = false;
     bool ram_direct_lease = false;
     uint64_t ram_generation=0,ram_identity=next_ram_store_identity.fetch_add(1);
+    std::vector<std::shared_ptr<const bool>> deferred_tiles;
 #ifdef _WIN32
     HANDLE file = INVALID_HANDLE_VALUE;
     std::vector<HANDLE> parents;
@@ -751,6 +752,7 @@ bool llama_dsv41_carry_store::complete_ram_tile(const ram_lease &value,const ram
             "Reader-layer compact IDs lack unchanged graph-source proof");
         p->check_identity();p->actual_budget();
         p->cursor+=value.rows;p->lease=false;p->ram_direct_lease=false;p->direct_rows=false;
+        if(done.deferred)p->deferred_tiles.push_back(done.deferred);
     },error);
 }
 bool llama_dsv41_carry_store::acquire_ram_export(uint32_t start,uint32_t count,ram_lease &out,std::string &error){
@@ -784,6 +786,9 @@ bool llama_dsv41_carry_store::commit_layer(std::string & error) {
     return p->guarded([&] {
         require(p->state == implementation::running_layer && !p->lease && p->cursor == p->options.tokens,
                 "Cannot commit an incomplete/leased carry layer");
+        for(const auto &fence:p->deferred_tiles)
+            require(fence&&*fence,"Cannot commit carry with uncertified asynchronous CUDA tiles");
+        p->deferred_tiles.clear();
         p->flush(); ++p->layers; p->selected_width = p->next_selected; p->candidate_width = p->next_candidates;
         p->state = p->layers == 40 ? implementation::awaiting_head : implementation::between_layers;
         if(p->layers==40)p->export_cursor=p->options.yoco_first;

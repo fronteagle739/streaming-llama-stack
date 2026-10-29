@@ -1,6 +1,6 @@
 # OTHER22 measured partial result
 
-Round2 continuation: [latest results and graph support](ROUND2_RESULTS.md). The following records round1.
+Round3 continuation: [queued CUDA, exact norm fusion and pointer-table graph results](ROUND3_RESULTS.md). Round2: [streamed graph support](ROUND2_RESULTS.md). The following records round1; its historical status is superseded by the later reports.
 
 **BLOCKED-OWNER: the 10,000 tok/s objective and whole-sweep graph replay are unfinished.** Two exact CUDA kernel improvements are implemented and qualified. No reliable full-prompt speedup is established. Source base `1fc2d08201355ab57b98c9bf7fe9939262f865f2`; publication branch `agent/other22`, for orchestrator merge only.
 

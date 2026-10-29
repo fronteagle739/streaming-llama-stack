@@ -430,9 +430,14 @@ bool llama_dsv41_sweep::open(const llama_dsv41_weight_provider::config &input_we
         const uint64_t device=add(options.admitted_prefetch_device_bytes,add(add(add(add(add(provider.device_bytes,cache_charge),options.admitted_graph_bytes),options.admitted_hidden_bytes),options.admitted_pinned_device_bytes),add(llama_dsv41_expert_profile::extra_device(options.expert),add(options.admitted_cast_device_bytes,options.admitted_index_device_bytes))));
         // Deliberately conservative: includes both input/output tile vectors,
         // lease copy, graph metadata, bounded Engram and serialization scratch.
-        const uint64_t tile_host=options.carry.direct_ram_tiles?
+        uint64_t tile_host=options.carry.direct_ram_tiles?
             3ull*tile_limit*(width*copies*4+copies*4+(512+2048)*4)+uint64_t(options.carry.max_tile_tokens)*(6144ull*4+128ull*8)+32ull*1024*1024:
             3ull*options.carry.max_tile_tokens*(width*copies*4+copies*4+(512+2048)*4)+options.carry.max_tile_tokens*6144ull*4;
+        const char *queued_layers=std::getenv("LLAMA_DSV41_ASYNC_LAYER");
+        if(queued_layers&&!std::strcmp(queued_layers,"1")){
+            require(!options.diagnostic_carry,"Queued layers cannot publish a live diagnostic RAM view; use the original eager diagnostic path");
+            tile_host=add(tile_host,1664ull*1024*1024);
+        }
         const uint64_t pair_host=options.pair_ffn?128ull*1024*1024:0;
         const uint64_t pinned_metadata=(options.admitted_prefetch_device_bytes?16ull*1024*1024:0)+(options.admitted_pinned_device_bytes?16ull*1024*1024:0)+(options.admitted_cast_device_bytes?64ull*1024*1024:0);
         require(!options.diagnostic_layers||(options.carry.resident_ram&&options.diagnostic_layers<40&&bool(options.diagnostic_carry)),
@@ -893,6 +898,7 @@ bool llama_dsv41_sweep::run(const std::vector<int32_t>&tokens,const cancelled&st
             }
             if(layer==1)p->final_engram=history;
             if(layer==14)require(history.tail==p->final_engram.tail,"Engram layers disagreed on the completed chunk history");
+            success(p->executor->finish_layer(error),error);
             ledger_started=std::chrono::steady_clock::now();success(p->carry.commit_layer(error),error);
             const double carry_commit_ms=elapsed(ledger_started);
             ledger_started=std::chrono::steady_clock::now();success(p->provider.release(error),error);

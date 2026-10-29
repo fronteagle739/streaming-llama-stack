@@ -14,6 +14,14 @@ int ggml_dsv41_cuda_blocking_sync(int ordinal,uint32_t *before,uint32_t *after){
 
 namespace {
 __device__ bool nonfinite(float x){return (__float_as_uint(x)&0x7f800000u)==0x7f800000u;}
+__global__ void validation_failure_gate(const uint32_t *flags){
+    if (*flags) {
+        printf("OTHER22_GPU_VALIDATION_FAILED flags=%u; nonfinite carry or invalid compact IDs\n",*flags);
+        // This path is a terminal producer error, never a sanitized input or
+        // a successful completion. Do not let consumers see invalid indices.
+        asm volatile("trap;");
+    }
+}
 __global__ void validate_kernel(ggml_dsv41_validation p,uint32_t *flags,uint64_t maximum){
     const uint64_t i=uint64_t(blockIdx.x)*blockDim.x+threadIdx.x;
     if(i>=maximum)return;
@@ -36,6 +44,13 @@ int ggml_dsv41_cuda_validate(const ggml_dsv41_validation &p,void *device_flags,v
     const auto s=static_cast<cudaStream_t>(stream);
     const auto status=cudaMemsetAsync(device_flags,0,4,s);if(status!=cudaSuccess)return int(status);
     validate_kernel<<<unsigned((maximum+255)/256),256,0,s>>>(p,static_cast<uint32_t*>(device_flags),maximum);
+    return int(cudaGetLastError());
+}
+
+int ggml_dsv41_cuda_validate_async(const ggml_dsv41_validation &p,void *flags,void *stream){
+    const int status=ggml_dsv41_cuda_validate(p,flags,stream);
+    if(status)return status;
+    validation_failure_gate<<<1,1,0,static_cast<cudaStream_t>(stream)>>>(static_cast<const uint32_t*>(flags));
     return int(cudaGetLastError());
 }
 

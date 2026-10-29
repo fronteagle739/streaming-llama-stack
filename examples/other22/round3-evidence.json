@@ -1,0 +1,994 @@
+{
+  "schema": 1,
+  "base": "450c6dfe3bb726be828676ccd6d54cd605cc4933",
+  "measurement_policy": "single 100K samples; no medians or statistical speedup claim",
+  "scope": "prompt-only FP4 speed proxy, cone2541, bias0, context131072, sweeps49152/50848",
+  "measurements": [
+    {
+      "status": "PASS",
+      "prompt_tokens": 100000,
+      "input_sha256": "4ffeee4837f76e364da2cc241938e3e79f61901d6d4c0824d5f6cddba8db4320",
+      "model_sha256": "0ba5ae3bdeea8c38501d2a69e6394436b6f99c07b5a531226a3f93249c45e572",
+      "producer_sha256": "db37abbed1202829af7b89d72139f60094b41fb46106b9f35dc234cc8b6fd41a",
+      "prompt_prefill_seconds": 32.78846120000001,
+      "ttft_seconds": 36.31300000002375,
+      "asynchronous_layers_requested": false,
+      "layer_fusion_requested": 0,
+      "native_graph_disable_policy": "1",
+      "name": "eager-r3-baseline-nsys",
+      "logits_sha256": "afee483112599c260dc1c05a39ad8bbd6dfb825e01a43260083e5b5114f9574a",
+      "timeline": {
+        "name": "eager-r3-baseline-nsys",
+        "prompt_seconds": 32.78846120000001,
+        "clock": "QPC: SQLite startTime + relative nanoseconds; native steady milliseconds",
+        "first_to_last_compute_envelope_seconds": 32.2141879,
+        "kernel_count": 87420,
+        "kernel_busy_union_seconds": 16.661567599,
+        "kernel_duration_sum_seconds": 16.661567599,
+        "copy_busy_union_seconds": 1.649704319,
+        "kernel_or_copy_union_seconds": 18.311271918,
+        "diagnostic_warnings": [
+          [
+            2,
+            "No NVTX events collected. Does the process use NVTX?"
+          ],
+          [
+            2,
+            "Installed CUDA driver version (13.3) is not supported by this build of Nsight Systems. CUDA trace will be collected using libraries for driver version 13.2"
+          ]
+        ],
+        "ranked_kernel_categories": [
+          [
+            "FP16 / Q8 / F32 GEMM incl fixup",
+            3.20996517700004
+          ],
+          [
+            "Attention",
+            3.1847025619999965
+          ],
+          [
+            "Expert incl packing",
+            2.9373079560000117
+          ],
+          [
+            "QAT / quantization",
+            1.2722018149999939
+          ],
+          [
+            "Cast / copy",
+            1.2405047210000075
+          ],
+          [
+            "FP4 index score / certificate",
+            1.0047080740000003
+          ],
+          [
+            "Top K",
+            0.8078756450000002
+          ],
+          [
+            "RoPE",
+            0.6533499849999994
+          ],
+          [
+            "RMS norm",
+            0.620154460000002
+          ],
+          [
+            "Remaining kernels",
+            0.6041136900000189
+          ],
+          [
+            "HC expand",
+            0.5224558669999997
+          ],
+          [
+            "Concat",
+            0.3318861770000034
+          ],
+          [
+            "HC collapse",
+            0.27234146999999975
+          ]
+        ],
+        "tile_host_seconds": {
+          "host_prepare_seconds": 1.911003,
+          "host_bind_seconds": 0.674765,
+          "host_register_seconds": 0.671957,
+          "host_graph_seconds": 0.178864,
+          "host_reserve_seconds": 0.432564,
+          "host_upload_seconds": 3.742949,
+          "host_launch_seconds": 1.808885,
+          "host_sync_seconds": 15.281366,
+          "gpu_seconds": 16.969630000000002,
+          "compute_seconds": 17.106542,
+          "host_readback_seconds": 1.535794,
+          "host_cleanup_seconds": 0.002124
+        },
+        "tile_count": 563,
+        "layer_ledger_seconds": {
+          "wall_seconds": 31.4269713,
+          "acquire_seconds": 6.5583177,
+          "carry_begin_seconds": 0.00010889999999999999,
+          "executor_wall_seconds": 24.444839199999997,
+          "executor_phase_gap_seconds": 0.1334554,
+          "engram_seconds": 0.0019167000000000001,
+          "carry_read_seconds": 0.0007108,
+          "carry_write_seconds": 0.0011342000000000001,
+          "carry_commit_seconds": 0.0001838,
+          "provider_release_seconds": 0.0005807,
+          "scaffold_seconds": 0.41917930000000003
+        },
+        "layer_passes": 61,
+        "fetched_bytes": 456303081592,
+        "gpu_idle_seconds": 13.902915982,
+        "envelope_scope": "first tile host preparation to last tile completion, including deferred layer certification when enabled",
+        "copy_kind_totals": [
+          [
+            "Host-to-Device",
+            5948,
+            23857562496,
+            1.054022067
+          ],
+          [
+            "Device-to-Host",
+            9431,
+            15345458048,
+            0.323662889
+          ],
+          [
+            "Device-to-Device",
+            6706,
+            212940406784,
+            0.272092351
+          ]
+        ],
+        "host_wait_apis": [
+          [
+            "cudaStreamSynchronize_v3020",
+            6118,
+            17.890835545
+          ],
+          [
+            "cudaDeviceSynchronize_v3020",
+            10,
+            0.03471183
+          ]
+        ],
+        "qualified_for_clean_ranking": true,
+        "trace_quality": "CLEAN_WITH_RETAINED_WARNINGS"
+      }
+    },
+    {
+      "status": "PASS",
+      "prompt_tokens": 100000,
+      "input_sha256": "4ffeee4837f76e364da2cc241938e3e79f61901d6d4c0824d5f6cddba8db4320",
+      "model_sha256": "0ba5ae3bdeea8c38501d2a69e6394436b6f99c07b5a531226a3f93249c45e572",
+      "producer_sha256": "2ea7e4f14c746d1379166d3033437ec8aa7d562d17b49362388be8b4bfb5a659",
+      "prompt_prefill_seconds": 33.8292529,
+      "ttft_seconds": 37.42200000002049,
+      "asynchronous_layers_requested": false,
+      "layer_fusion_requested": 0,
+      "native_graph_disable_policy": "1",
+      "name": "eager-async-control-final-nsys",
+      "logits_sha256": "afee483112599c260dc1c05a39ad8bbd6dfb825e01a43260083e5b5114f9574a",
+      "timeline": {
+        "name": "eager-async-control-final-nsys",
+        "prompt_seconds": 33.8292529,
+        "clock": "QPC: SQLite startTime + relative nanoseconds; native steady milliseconds",
+        "first_to_last_compute_envelope_seconds": 32.8956164,
+        "kernel_count": 87420,
+        "kernel_busy_union_seconds": 16.651084149,
+        "kernel_duration_sum_seconds": 16.651084149,
+        "copy_busy_union_seconds": 1.637710685,
+        "kernel_or_copy_union_seconds": 18.288794834,
+        "diagnostic_warnings": [
+          [
+            2,
+            "No NVTX events collected. Does the process use NVTX?"
+          ],
+          [
+            2,
+            "Installed CUDA driver version (13.3) is not supported by this build of Nsight Systems. CUDA trace will be collected using libraries for driver version 13.2"
+          ]
+        ],
+        "ranked_kernel_categories": [
+          [
+            "FP16 / Q8 / F32 GEMM incl fixup",
+            3.208164292000027
+          ],
+          [
+            "Attention",
+            3.1857735429999994
+          ],
+          [
+            "Expert incl packing",
+            2.934453371000023
+          ],
+          [
+            "QAT / quantization",
+            1.272390639999999
+          ],
+          [
+            "Cast / copy",
+            1.238972237000007
+          ],
+          [
+            "FP4 index score / certificate",
+            1.0028791940000006
+          ],
+          [
+            "Top K",
+            0.8070999959999999
+          ],
+          [
+            "RoPE",
+            0.6533155049999999
+          ],
+          [
+            "RMS norm",
+            0.617759352000002
+          ],
+          [
+            "Remaining kernels",
+            0.6046588060000198
+          ],
+          [
+            "HC expand",
+            0.5220249160000001
+          ],
+          [
+            "Concat",
+            0.33130208400000194
+          ],
+          [
+            "HC collapse",
+            0.2722902130000001
+          ]
+        ],
+        "tile_host_seconds": {
+          "host_prepare_seconds": 1.863732,
+          "host_bind_seconds": 0.737439,
+          "host_register_seconds": 0.7342029999999999,
+          "host_graph_seconds": 0.18018,
+          "host_reserve_seconds": 0.434663,
+          "host_upload_seconds": 3.870867,
+          "host_launch_seconds": 1.9295419999999999,
+          "host_sync_seconds": 15.117503000000001,
+          "gpu_seconds": 16.908136,
+          "compute_seconds": 17.062776999999997,
+          "host_readback_seconds": 1.5720429999999999,
+          "host_cleanup_seconds": 0.002003
+        },
+        "tile_count": 563,
+        "layer_ledger_seconds": {
+          "wall_seconds": 32.5326234,
+          "acquire_seconds": 7.6453198,
+          "carry_begin_seconds": 0.0001245,
+          "executor_wall_seconds": 24.521914099999996,
+          "executor_phase_gap_seconds": 0.1372114,
+          "engram_seconds": 0.002024,
+          "carry_read_seconds": 0.0007879,
+          "carry_write_seconds": 0.0012157,
+          "carry_commit_seconds": 0.00018329999999999998,
+          "provider_release_seconds": 0.0005436999999999999,
+          "scaffold_seconds": 0.3605104
+        },
+        "layer_passes": 61,
+        "fetched_bytes": 456303081592,
+        "gpu_idle_seconds": 14.606821566,
+        "envelope_scope": "first tile host preparation to last tile completion, including deferred layer certification when enabled",
+        "copy_kind_totals": [
+          [
+            "Host-to-Device",
+            5948,
+            23857562496,
+            1.034282471
+          ],
+          [
+            "Device-to-Host",
+            9431,
+            15345458048,
+            0.331377055
+          ],
+          [
+            "Device-to-Device",
+            6706,
+            212940406784,
+            0.272129815
+          ]
+        ],
+        "host_wait_apis": [
+          [
+            "cudaStreamSynchronize_v3020",
+            6118,
+            17.845724764
+          ],
+          [
+            "cudaDeviceSynchronize_v3020",
+            10,
+            0.034735087
+          ]
+        ],
+        "qualified_for_clean_ranking": true,
+        "trace_quality": "CLEAN_WITH_RETAINED_WARNINGS"
+      }
+    },
+    {
+      "status": "PASS",
+      "prompt_tokens": 100000,
+      "input_sha256": "4ffeee4837f76e364da2cc241938e3e79f61901d6d4c0824d5f6cddba8db4320",
+      "model_sha256": "0ba5ae3bdeea8c38501d2a69e6394436b6f99c07b5a531226a3f93249c45e572",
+      "producer_sha256": "2ea7e4f14c746d1379166d3033437ec8aa7d562d17b49362388be8b4bfb5a659",
+      "prompt_prefill_seconds": 37.993648300000004,
+      "ttft_seconds": 41.32799999997951,
+      "asynchronous_layers_requested": true,
+      "layer_fusion_requested": 0,
+      "native_graph_disable_policy": "1",
+      "name": "eager-async-final-nsys",
+      "logits_sha256": "afee483112599c260dc1c05a39ad8bbd6dfb825e01a43260083e5b5114f9574a",
+      "timeline": {
+        "name": "eager-async-final-nsys",
+        "prompt_seconds": 37.993648300000004,
+        "clock": "QPC: SQLite startTime + relative nanoseconds; native steady milliseconds",
+        "first_to_last_compute_envelope_seconds": 37.4500269,
+        "kernel_count": 88775,
+        "kernel_busy_union_seconds": 16.626430908,
+        "kernel_duration_sum_seconds": 16.626430908,
+        "copy_busy_union_seconds": 1.535585172,
+        "kernel_or_copy_union_seconds": 18.162015056,
+        "diagnostic_warnings": [
+          [
+            2,
+            "No NVTX events collected. Does the process use NVTX?"
+          ],
+          [
+            2,
+            "Installed CUDA driver version (13.3) is not supported by this build of Nsight Systems. CUDA trace will be collected using libraries for driver version 13.2"
+          ]
+        ],
+        "ranked_kernel_categories": [
+          [
+            "FP16 / Q8 / F32 GEMM incl fixup",
+            3.211704441000058
+          ],
+          [
+            "Attention",
+            3.1862196640000024
+          ],
+          [
+            "Expert incl packing",
+            2.9437427520000186
+          ],
+          [
+            "QAT / quantization",
+            1.2633767329999965
+          ],
+          [
+            "Cast / copy",
+            1.2247748680000001
+          ],
+          [
+            "FP4 index score / certificate",
+            1.0074401950000011
+          ],
+          [
+            "Top K",
+            0.8065645480000002
+          ],
+          [
+            "RoPE",
+            0.6497091150000007
+          ],
+          [
+            "RMS norm",
+            0.6111369540000005
+          ],
+          [
+            "Remaining kernels",
+            0.6067213730000045
+          ],
+          [
+            "HC expand",
+            0.5182287439999999
+          ],
+          [
+            "Concat",
+            0.32942356099999975
+          ],
+          [
+            "HC collapse",
+            0.2673879600000002
+          ]
+        ],
+        "tile_host_seconds": {
+          "host_prepare_seconds": 3.095652,
+          "host_bind_seconds": 0.435553,
+          "host_register_seconds": 0.433368,
+          "host_graph_seconds": 0.152868,
+          "host_reserve_seconds": 0.415861,
+          "host_upload_seconds": 2.811915,
+          "host_launch_seconds": 6.58209,
+          "host_sync_seconds": 1.7e-05,
+          "compute_seconds": 6.597335,
+          "host_readback_seconds": 0.151712,
+          "host_cleanup_seconds": 4e-06
+        },
+        "tile_count": 563,
+        "layer_ledger_seconds": {
+          "wall_seconds": 36.7222626,
+          "acquire_seconds": 11.1907536,
+          "carry_begin_seconds": 0.0001428,
+          "executor_wall_seconds": 12.7599324,
+          "executor_phase_gap_seconds": 0.1008427,
+          "engram_seconds": 0.0054127,
+          "carry_read_seconds": 0.000425,
+          "carry_write_seconds": 0.0009996,
+          "carry_commit_seconds": 0.0003858,
+          "provider_release_seconds": 0.0009789,
+          "scaffold_seconds": 12.7632318
+        },
+        "layer_passes": 61,
+        "fetched_bytes": 456303081592,
+        "gpu_idle_seconds": 19.288011843999996,
+        "envelope_scope": "first tile host preparation to last tile completion, including deferred layer certification when enabled",
+        "copy_kind_totals": [
+          [
+            "Host-to-Device",
+            5840,
+            23857559472,
+            0.934911446
+          ],
+          [
+            "Device-to-Host",
+            8184,
+            15345450468,
+            0.331122717
+          ],
+          [
+            "Device-to-Device",
+            6706,
+            212940406784,
+            0.2695768
+          ]
+        ],
+        "host_wait_apis": [
+          [
+            "cudaStreamSynchronize_v3020",
+            539,
+            13.122941806
+          ],
+          [
+            "cudaGraphExecDestroy_v10000",
+            106,
+            2.57389628
+          ],
+          [
+            "cudaGraphInstantiate_v12000",
+            108,
+            1.694033911
+          ],
+          [
+            "cudaGraphDestroy_v10000",
+            106,
+            0.030286168
+          ],
+          [
+            "cudaDeviceSynchronize_v3020",
+            5,
+            0.001585641
+          ]
+        ],
+        "asynchronous_certified_tiles": 563,
+        "asynchronous_tile_gpu_event_seconds": 18.157864824,
+        "qualified_for_clean_ranking": true,
+        "trace_quality": "CLEAN_WITH_RETAINED_WARNINGS"
+      }
+    },
+    {
+      "status": "PASS",
+      "prompt_tokens": 100000,
+      "input_sha256": "4ffeee4837f76e364da2cc241938e3e79f61901d6d4c0824d5f6cddba8db4320",
+      "model_sha256": "0ba5ae3bdeea8c38501d2a69e6394436b6f99c07b5a531226a3f93249c45e572",
+      "producer_sha256": "2ea7e4f14c746d1379166d3033437ec8aa7d562d17b49362388be8b4bfb5a659",
+      "prompt_prefill_seconds": 37.7499763,
+      "ttft_seconds": 41.10999999998603,
+      "asynchronous_layers_requested": true,
+      "layer_fusion_requested": 1,
+      "native_graph_disable_policy": "1",
+      "name": "eager-async-fused-final-nsys",
+      "logits_sha256": "afee483112599c260dc1c05a39ad8bbd6dfb825e01a43260083e5b5114f9574a",
+      "timeline": {
+        "name": "eager-async-fused-final-nsys",
+        "prompt_seconds": 37.7499763,
+        "clock": "QPC: SQLite startTime + relative nanoseconds; native steady milliseconds",
+        "first_to_last_compute_envelope_seconds": 37.1868716,
+        "kernel_count": 86523,
+        "kernel_busy_union_seconds": 16.523937408,
+        "kernel_duration_sum_seconds": 16.523937408,
+        "copy_busy_union_seconds": 1.504741432,
+        "kernel_or_copy_union_seconds": 18.02867884,
+        "diagnostic_warnings": [
+          [
+            2,
+            "No NVTX events collected. Does the process use NVTX?"
+          ],
+          [
+            2,
+            "Installed CUDA driver version (13.3) is not supported by this build of Nsight Systems. CUDA trace will be collected using libraries for driver version 13.2"
+          ]
+        ],
+        "ranked_kernel_categories": [
+          [
+            "FP16 / Q8 / F32 GEMM incl fixup",
+            3.2256746990000553
+          ],
+          [
+            "Attention",
+            3.190808975000005
+          ],
+          [
+            "Expert incl packing",
+            2.9562086760000144
+          ],
+          [
+            "Cast / copy",
+            1.225408581999998
+          ],
+          [
+            "QAT / quantization",
+            1.2230728439999914
+          ],
+          [
+            "FP4 index score / certificate",
+            1.0088884810000007
+          ],
+          [
+            "Top K",
+            0.8070046649999999
+          ],
+          [
+            "RoPE",
+            0.6505168910000003
+          ],
+          [
+            "Remaining kernels",
+            0.6078559740000008
+          ],
+          [
+            "HC expand",
+            0.5190188210000001
+          ],
+          [
+            "RMS norm",
+            0.5078862709999984
+          ],
+          [
+            "Concat",
+            0.32973815999999945
+          ],
+          [
+            "Fused HC collapse / RMS / weight / BF16",
+            0.27185436899999976
+          ]
+        ],
+        "tile_host_seconds": {
+          "host_prepare_seconds": 3.18309,
+          "host_bind_seconds": 0.470189,
+          "host_register_seconds": 0.445655,
+          "host_graph_seconds": 0.148416,
+          "host_reserve_seconds": 0.41486,
+          "host_upload_seconds": 2.3602950000000003,
+          "host_launch_seconds": 6.326366,
+          "host_sync_seconds": 1.4999999999999999e-05,
+          "compute_seconds": 6.340821,
+          "host_readback_seconds": 0.042795,
+          "host_cleanup_seconds": 7e-06
+        },
+        "tile_count": 563,
+        "layer_ledger_seconds": {
+          "wall_seconds": 36.5254026,
+          "acquire_seconds": 11.394433300000001,
+          "carry_begin_seconds": 0.0001417,
+          "executor_wall_seconds": 12.0450355,
+          "executor_phase_gap_seconds": 0.1154934,
+          "engram_seconds": 0.020101300000000002,
+          "carry_read_seconds": 0.0004094,
+          "carry_write_seconds": 0.0005995,
+          "carry_commit_seconds": 0.0003153,
+          "provider_release_seconds": 0.0009669,
+          "scaffold_seconds": 13.0633997
+        },
+        "layer_passes": 61,
+        "fetched_bytes": 456303081592,
+        "gpu_idle_seconds": 19.158192760000002,
+        "envelope_scope": "first tile host preparation to last tile completion, including deferred layer certification when enabled",
+        "copy_kind_totals": [
+          [
+            "Host-to-Device",
+            5840,
+            23857559472,
+            0.91335828
+          ],
+          [
+            "Device-to-Host",
+            8184,
+            15345450468,
+            0.321675694
+          ],
+          [
+            "Device-to-Device",
+            6706,
+            212940406784,
+            0.26973869
+          ]
+        ],
+        "host_wait_apis": [
+          [
+            "cudaStreamSynchronize_v3020",
+            538,
+            13.50009661
+          ],
+          [
+            "cudaGraphExecDestroy_v10000",
+            106,
+            2.58653541
+          ],
+          [
+            "cudaGraphInstantiate_v12000",
+            108,
+            1.680127937
+          ],
+          [
+            "cudaGraphDestroy_v10000",
+            106,
+            0.029121301
+          ],
+          [
+            "cudaDeviceSynchronize_v3020",
+            5,
+            0.0009856
+          ]
+        ],
+        "asynchronous_certified_tiles": 563,
+        "asynchronous_tile_gpu_event_seconds": 17.933743175,
+        "qualified_for_clean_ranking": true,
+        "trace_quality": "CLEAN_WITH_RETAINED_WARNINGS"
+      }
+    },
+    {
+      "status": "PASS",
+      "prompt_tokens": 100000,
+      "input_sha256": "4ffeee4837f76e364da2cc241938e3e79f61901d6d4c0824d5f6cddba8db4320",
+      "model_sha256": "0ba5ae3bdeea8c38501d2a69e6394436b6f99c07b5a531226a3f93249c45e572",
+      "producer_sha256": "26246daddb9e4dab0624fd915d47d1725513a99d87639784ef981bb0e8013610",
+      "prompt_prefill_seconds": 41.1140487,
+      "ttft_seconds": 44.625,
+      "asynchronous_layers_requested": true,
+      "layer_fusion_requested": 2,
+      "native_graph_disable_policy": "0",
+      "name": "eager-async-table-policy4-nsys",
+      "logits_sha256": "afee483112599c260dc1c05a39ad8bbd6dfb825e01a43260083e5b5114f9574a",
+      "timeline": {
+        "name": "eager-async-table-policy4-nsys",
+        "prompt_seconds": 41.1140487,
+        "clock": "QPC: SQLite startTime + relative nanoseconds; native steady milliseconds",
+        "first_to_last_compute_envelope_seconds": 40.4412139,
+        "kernel_count": 86523,
+        "kernel_busy_union_seconds": 16.430082058,
+        "kernel_duration_sum_seconds": 16.430082058,
+        "copy_busy_union_seconds": 1.488418045,
+        "kernel_or_copy_union_seconds": 17.918498759,
+        "diagnostic_warnings": [
+          [
+            2,
+            "No NVTX events collected. Does the process use NVTX?"
+          ],
+          [
+            2,
+            "Installed CUDA driver version (13.3) is not supported by this build of Nsight Systems. CUDA trace will be collected using libraries for driver version 13.2"
+          ]
+        ],
+        "ranked_kernel_categories": [
+          [
+            "FP16 / Q8 / F32 GEMM incl fixup",
+            3.200684988000041
+          ],
+          [
+            "Attention",
+            3.1775989640000013
+          ],
+          [
+            "Expert incl packing",
+            2.9167455380000167
+          ],
+          [
+            "Cast / copy",
+            1.2220433099999901
+          ],
+          [
+            "QAT / quantization",
+            1.2194957289999915
+          ],
+          [
+            "FP4 index score / certificate",
+            1.0052964600000007
+          ],
+          [
+            "Top K",
+            0.805053298
+          ],
+          [
+            "RoPE",
+            0.6484513029999994
+          ],
+          [
+            "Remaining kernels",
+            0.605731015000003
+          ],
+          [
+            "HC expand",
+            0.5173120159999998
+          ],
+          [
+            "RMS norm",
+            0.5069208390000003
+          ],
+          [
+            "Concat",
+            0.3283983399999989
+          ],
+          [
+            "Fused HC collapse / RMS / weight / BF16",
+            0.2763502580000001
+          ]
+        ],
+        "tile_host_seconds": {
+          "host_prepare_seconds": 3.616644,
+          "host_bind_seconds": 0.40539600000000003,
+          "host_register_seconds": 0.393475,
+          "host_graph_seconds": 0.303535,
+          "host_reserve_seconds": 0.489928,
+          "host_upload_seconds": 2.962574,
+          "host_launch_seconds": 6.644546,
+          "host_sync_seconds": 4e-06,
+          "compute_seconds": 6.661695,
+          "host_readback_seconds": 0.110169,
+          "host_cleanup_seconds": 0.0
+        },
+        "tile_count": 563,
+        "layer_ledger_seconds": {
+          "wall_seconds": 39.898593399999996,
+          "acquire_seconds": 13.431891499999999,
+          "carry_begin_seconds": 0.0001786,
+          "executor_wall_seconds": 13.4578133,
+          "executor_phase_gap_seconds": 0.1038275,
+          "engram_seconds": 0.0592855,
+          "carry_read_seconds": 0.0004328,
+          "carry_write_seconds": 0.0006459,
+          "carry_commit_seconds": 0.0003006,
+          "provider_release_seconds": 0.0008624,
+          "scaffold_seconds": 12.9471828
+        },
+        "layer_passes": 61,
+        "fetched_bytes": 456303081592,
+        "gpu_idle_seconds": 22.522715141000003,
+        "envelope_scope": "first tile host preparation to last tile completion, including deferred layer certification when enabled",
+        "copy_kind_totals": [
+          [
+            "Host-to-Device",
+            6966,
+            23857613520,
+            0.896529625
+          ],
+          [
+            "Device-to-Host",
+            8184,
+            15345450468,
+            0.322692931
+          ],
+          [
+            "Device-to-Device",
+            6706,
+            212940406784,
+            0.269216288
+          ]
+        ],
+        "host_wait_apis": [
+          [
+            "cudaStreamSynchronize_v3020",
+            538,
+            13.374682754
+          ],
+          [
+            "cudaGraphExecDestroy_v10000",
+            106,
+            2.795912932
+          ],
+          [
+            "cudaGraphInstantiate_v12000",
+            109,
+            1.930617626
+          ],
+          [
+            "cudaGraphDestroy_v10000",
+            107,
+            0.038182655
+          ],
+          [
+            "cudaDeviceSynchronize_v3020",
+            5,
+            0.001417411
+          ]
+        ],
+        "asynchronous_certified_tiles": 563,
+        "asynchronous_tile_gpu_event_seconds": 18.298149300000002,
+        "qualified_for_clean_ranking": true,
+        "trace_quality": "CLEAN_WITH_RETAINED_WARNINGS"
+      }
+    }
+  ],
+  "additional_qualification": [
+    {
+      "name": "eager-async-control-odd-qualified",
+      "status": "PASS",
+      "prompt_tokens": 8193,
+      "producer_sha256": "4d45b697a58d7851915196d746c7e2dc5bb7900beb9773217b105edbcca4cc1e",
+      "prompt_seconds": 18.529901,
+      "ttft_seconds": 20.85899999999674,
+      "logits_sha256": "86985e3b559e55b31f18c1c636860e1c6fda559271fb853ecbdf0caa2ca0a524",
+      "error": null,
+      "witnesses": {
+        "native_ffn_completed_graphs": 101
+      },
+      "host_observer_barriers": 0,
+      "routing_histograms": 0
+    },
+    {
+      "name": "eager-async-table-odd-hist-qualified",
+      "status": "PASS",
+      "prompt_tokens": 8193,
+      "producer_sha256": "4d45b697a58d7851915196d746c7e2dc5bb7900beb9773217b105edbcca4cc1e",
+      "prompt_seconds": 17.6270636,
+      "ttft_seconds": 19.68800000002375,
+      "logits_sha256": "86985e3b559e55b31f18c1c636860e1c6fda559271fb853ecbdf0caa2ca0a524",
+      "error": null,
+      "witnesses": {
+        "native_ffn_completed_graphs": 101,
+        "asynchronous_certified_tiles": 101,
+        "asynchronous_certified_layers": 40,
+        "layer_fusion_launches": 234,
+        "binding_graph_launches": 202,
+        "binding_graph_captures": 1,
+        "scoped_eager_fusions": 32
+      },
+      "host_observer_barriers": 101,
+      "routing_histograms": 101
+    },
+    {
+      "name": "eager-async-control-clean-final-100k",
+      "status": "PASS",
+      "prompt_tokens": 100000,
+      "producer_sha256": "4d45b697a58d7851915196d746c7e2dc5bb7900beb9773217b105edbcca4cc1e",
+      "prompt_seconds": 32.911997500000005,
+      "ttft_seconds": 35.75,
+      "logits_sha256": "afee483112599c260dc1c05a39ad8bbd6dfb825e01a43260083e5b5114f9574a",
+      "error": null,
+      "witnesses": {
+        "native_ffn_completed_graphs": 563
+      },
+      "host_observer_barriers": 0,
+      "routing_histograms": 0
+    },
+    {
+      "name": "eager-async-control-fused-only-final-100k",
+      "status": "PASS",
+      "prompt_tokens": 100000,
+      "producer_sha256": "4d45b697a58d7851915196d746c7e2dc5bb7900beb9773217b105edbcca4cc1e",
+      "prompt_seconds": 33.6275401,
+      "ttft_seconds": 36.53200000000652,
+      "logits_sha256": "afee483112599c260dc1c05a39ad8bbd6dfb825e01a43260083e5b5114f9574a",
+      "error": null,
+      "witnesses": {
+        "native_ffn_completed_graphs": 563,
+        "layer_fusion_launches": 1158
+      },
+      "host_observer_barriers": 0,
+      "routing_histograms": 0
+    },
+    {
+      "name": "eager-async-table-source-final-100k",
+      "status": "PASS",
+      "prompt_tokens": 100000,
+      "producer_sha256": "4d45b697a58d7851915196d746c7e2dc5bb7900beb9773217b105edbcca4cc1e",
+      "prompt_seconds": 37.899513899999995,
+      "ttft_seconds": 40.84400000004098,
+      "logits_sha256": "afee483112599c260dc1c05a39ad8bbd6dfb825e01a43260083e5b5114f9574a",
+      "error": null,
+      "witnesses": {
+        "native_ffn_completed_graphs": 563,
+        "asynchronous_certified_tiles": 563,
+        "asynchronous_certified_layers": 61,
+        "layer_fusion_launches": 1158,
+        "binding_graph_launches": 1126,
+        "binding_graph_captures": 1,
+        "scoped_eager_fusions": 32
+      },
+      "host_observer_barriers": 0,
+      "routing_histograms": 0
+    }
+  ],
+  "resource_audit": {
+    "receipt_count": 93,
+    "unconfirmed": [],
+    "peak_tree_rss": 7390420992,
+    "minimum_available": 3311620096,
+    "forced_retirements": [
+      {
+        "name": "build-async-spill-217fa31ce0be49689cbf1e7524f1f747.receipt.json",
+        "reason": "shutdown made no progress for 60.0s after cooperative request (log, RSS and owned members unchanged); owned retirement requested",
+        "forced_process_count": 1,
+        "forced_process_names": [
+          "vctip.exe"
+        ]
+      },
+      {
+        "name": "build-async-stage-8efdc088d68147378cd46bf2090fda0d.receipt.json",
+        "reason": "shutdown made no progress for 60.0s after cooperative request (log, RSS and owned members unchanged); owned retirement requested",
+        "forced_process_count": 1,
+        "forced_process_names": [
+          "vctip.exe"
+        ]
+      },
+      {
+        "name": "build-async2-3106ff89335d42d5b5abdc916dad4dfc.receipt.json",
+        "reason": "shutdown made no progress for 60.0s after cooperative request (log, RSS and owned members unchanged); owned retirement requested",
+        "forced_process_count": 1,
+        "forced_process_names": [
+          "vctip.exe"
+        ]
+      },
+      {
+        "name": "build-async3-75c05a9d465d4812b998e2df922f7310.receipt.json",
+        "reason": "shutdown made no progress for 60.0s after cooperative request (log, RSS and owned members unchanged); owned retirement requested",
+        "forced_process_count": 1,
+        "forced_process_names": [
+          "vctip.exe"
+        ]
+      },
+      {
+        "name": "build-executor-final-acf421ffcc6c4162ba540288bf78e7e2.receipt.json",
+        "reason": "shutdown made no progress for 60.0s after cooperative request (log, RSS and owned members unchanged); owned retirement requested",
+        "forced_process_count": 1,
+        "forced_process_names": [
+          "vctip.exe"
+        ]
+      },
+      {
+        "name": "build-executor-odd-qualified-229230f23fde4db4bc52e81b50ba81f2.receipt.json",
+        "reason": "shutdown made no progress for 60.0s after cooperative request (log, RSS and owned members unchanged); owned retirement requested",
+        "forced_process_count": 1,
+        "forced_process_names": [
+          "vctip.exe"
+        ]
+      },
+      {
+        "name": "build-layer-65e2398dde74490c97e25970c9d551c7.receipt.json",
+        "reason": "shutdown made no progress for 60.0s after cooperative request (log, RSS and owned members unchanged); owned retirement requested",
+        "forced_process_count": 1,
+        "forced_process_names": [
+          "vctip.exe"
+        ]
+      }
+    ]
+  },
+  "source_capability_reductions": [],
+  "benchmark_restrictions": [
+    "inherited lossy Q4-to-FP4 proxy",
+    "LLAMADECODE_DS4_DECODE=0",
+    "LLAMADECODE_PREFILL_ROUTED=0",
+    "no sampled generation, decode or recall qualification",
+    "fixed frontier only; cone2541 and bias0"
+  ],
+  "target_achieved": false
+}
