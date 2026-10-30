@@ -54,10 +54,12 @@ def port_open(host, port, timeout=1.0):
 
 
 class Keys:
-    """Single-key console input without blocking the progress loop."""
+    """Key input without blocking the progress loop: single keys in a Windows console,
+    otherwise lines from stdin (macOS Terminal, or a script driving the launcher)."""
     def __init__(self):
         self.pending = []
-        if not WINDOWS:
+        self.console = WINDOWS and sys.stdin is not None and sys.stdin.isatty()
+        if not self.console:
             threading.Thread(target=self._reader, daemon=True).start()
 
     def _reader(self):
@@ -65,14 +67,14 @@ class Keys:
             self.pending.append((line.strip() or '\n')[0].lower())
 
     def get(self):
-        if WINDOWS:
+        if self.console:
             import msvcrt
             while msvcrt.kbhit():
                 self.pending.append(msvcrt.getwch().lower())
         return self.pending.pop(0) if self.pending else None
 
     def ask(self, prompt, choices):
-        say(prompt + ('' if WINDOWS else '   (type the letter, then Enter)'))
+        say(prompt + ('' if self.console else '   (type the letter, then Enter)'))
         self.pending.clear()
         while True:
             key = self.get()
@@ -344,7 +346,7 @@ class Launcher:
 
     def watch(self):
         say('Press Q to stop DSV4.1 (graceful).  Press O to open the web UI again.'
-            + ('' if WINDOWS else '  (letter, then Enter)'))
+            + ('' if self.keys.console else '  (letter, then Enter)'))
         while all(child.alive() for child in self.children):
             key = self.keys.get()
             if key == 'q':
@@ -384,7 +386,7 @@ def main():
             say('Stop interrupted; the stack keeps shutting down on its own.')
     say('Done. Press Enter to close this window.')
     try:
-        if WINDOWS:
+        if launcher.keys.console:
             input()
         else:  # the key reader thread owns stdin
             while launcher.keys.get() is None:
