@@ -61909,7 +61909,7 @@
     "doc": "Producer prefill: low sets a low DirectStorage priority hint for Engram table reads; the default normal priority is measured faster (low priority starves the reads).",
     "reads": [
       "engines/streaming-llama/prefill_llama.cpp/src/llama-dsv41-engram-prefetch.cpp:198",
-      "engines/streaming-llama/prefill_llama.cpp/src/llama-dsv41-engram-prefetch.cpp:489"
+      "engines/streaming-llama/prefill_llama.cpp/src/llama-dsv41-engram-prefetch.cpp:491"
     ],
     "code_defaults": [
       {
@@ -61919,7 +61919,7 @@
         "consumer": "            // DirectStorage streaming only if LLAMADECODE_ENGRAM_IO_PRIORITY=low (measured: low priority starves\n            // the reads, 43K layers 123 s vs 33 s; default stays normal).\n            const char*e=std::getenv(\"LLAMADECODE_ENGRAM_IO_PRIORITY\");\n            FILE_IO_PRIORITY_HINT_INFO hint{};hint.PriorityHint=e&&!std::strcmp(e,\"low\")?IoPriorityHintLow:IoPriorityHintNormal; /* low measured 123 s vs 33 s (starved); normal is the default */\n            const BOOL ok=SetFileInformationByHandle(io.file,FileIoPriorityHintInfo,&hint,sizeof(hint));\n            static bool logged=false;if(!logged){logged=true;std::fprintf(stderr,\"LLAMADECODE_ENGRAM_IO_PRIORITY hint=%s applied=%d\\n\",hint.PriorityHint==IoPriorityHintLow?\"low\":\"normal\",int(ok));}\n        }"
       },
       {
-        "source": "engines/streaming-llama/prefill_llama.cpp/src/llama-dsv41-engram-prefetch.cpp:489",
+        "source": "engines/streaming-llama/prefill_llama.cpp/src/llama-dsv41-engram-prefetch.cpp:491",
         "unset": "NULL from getenv; the literal consumer below supplies any fallback",
         "read": "{   const char*e=std::getenv(\"LLAMADECODE_ENGRAM_IO_PRIORITY\");",
         "consumer": "                         engram_read_alignment(),storage.LogicalBytesPerSector,storage.PhysicalBytesPerSectorForPerformance);\n        }\n        {   const char*e=std::getenv(\"LLAMADECODE_ENGRAM_IO_PRIORITY\");\n            FILE_IO_PRIORITY_HINT_INFO hint{};hint.PriorityHint=e&&!std::strcmp(e,\"low\")?IoPriorityHintLow:IoPriorityHintNormal;\n            const BOOL ok=SetFileInformationByHandle(io.file,FileIoPriorityHintInfo,&hint,sizeof(hint));\n            std::fprintf(stderr,\"LLAMADECODE_ENGRAM_IO_PRIORITY hint=%s applied=%d early=1\\n\",hint.PriorityHint==IoPriorityHintLow?\"low\":\"normal\",int(ok));\n        }"
@@ -62012,16 +62012,16 @@
     "scopes": [
       "rtx-llama"
     ],
-    "doc": "PAIRFIX: large read slots per Engram scan ring (default 16, 2-256); reduced to fit the Engram host admission, never silently (LLAMADECODE_ENGRAM_GEOMETRY reports it).",
+    "doc": "PAIRFIX: read slots per Engram scan ring (default 64, 2-256); reduced to fit the Engram host admission, never silently (LLAMADECODE_ENGRAM_GEOMETRY reports it).",
     "reads": [
-      "engines/streaming-llama/prefill_llama.cpp/src/llama-dsv41-engram-prefetch.cpp:384"
+      "engines/streaming-llama/prefill_llama.cpp/src/llama-dsv41-engram-prefetch.cpp:386"
     ],
     "code_defaults": [
       {
-        "source": "engines/streaming-llama/prefill_llama.cpp/src/llama-dsv41-engram-prefetch.cpp:384",
+        "source": "engines/streaming-llama/prefill_llama.cpp/src/llama-dsv41-engram-prefetch.cpp:386",
         "unset": "Wrapper/conditional default: see the literal call and consumer below",
         "read": "uint32_t slots=env_u32(\"LLAMADECODE_ENGRAM_SCAN_DEPTH\",64,2,256);",
-        "consumer": "        const bool want=forced||geometry_scan_s<geometry_random_s;\n        const uint32_t rings=env_u32(\"LLAMADECODE_ENGRAM_SCAN_RINGS\",4,1,8);\n        uint32_t slots=env_u32(\"LLAMADECODE_ENGRAM_SCAN_DEPTH\",64,2,256);\n        constexpr uint32_t scan_small=64;\n        auto arena=[&](uint32_t n){return uint64_t(rings)*(uint64_t(scan_small)*small_slot+uint64_t(n)*scan_cap);};\n        // Fit the admission; never silently: the geometry line reports it.\n        while(want&&slots>2&&add(without,add(meta,arena(slots)))>admitted)--slots;"
+        "consumer": "        const bool want=forced||geometry_scan_s<geometry_random_s;\n        const uint32_t rings=env_u32(\"LLAMADECODE_ENGRAM_SCAN_RINGS\",1,1,8);\n        uint32_t slots=env_u32(\"LLAMADECODE_ENGRAM_SCAN_DEPTH\",64,2,256);\n        constexpr uint32_t scan_small=64;\n        auto arena=[&](uint32_t n){return uint64_t(rings)*(uint64_t(scan_small)*small_slot+uint64_t(n)*scan_cap);};\n        // Fit the admission; never silently: the geometry line reports it.\n        while(want&&slots>2&&add(without,add(meta,arena(slots)))>admitted)--slots;"
       }
     ],
     "code_default": "Wrapper/conditional default: see the literal call and consumer below",
@@ -62035,16 +62035,16 @@
     "scopes": [
       "rtx-llama"
     ],
-    "doc": "PAIRFIX: Engram scan merge tolerance in KiB (default: the extent size, reading straight through); a gap wider than this starts a new read.",
+    "doc": "PAIRFIX: Engram scan merge tolerance in KiB (default 64): rows whose sectors are at most this far apart share one read; measured 200K real text 120 GB read vs 201 GB straight through, 2 s faster.",
     "reads": [
-      "engines/streaming-llama/prefill_llama.cpp/src/llama-dsv41-engram-prefetch.cpp:372"
+      "engines/streaming-llama/prefill_llama.cpp/src/llama-dsv41-engram-prefetch.cpp:374"
     ],
     "code_defaults": [
       {
-        "source": "engines/streaming-llama/prefill_llama.cpp/src/llama-dsv41-engram-prefetch.cpp:372",
+        "source": "engines/streaming-llama/prefill_llama.cpp/src/llama-dsv41-engram-prefetch.cpp:374",
         "unset": "Wrapper/conditional default: see the literal call and consumer below",
         "read": "const uint64_t scan_gap=uint64_t(env_u32(\"LLAMADECODE_ENGRAM_SCAN_GAP_KIB\",64,4,32768))*1024;",
-        "consumer": "        // cand4): 8 MiB straight-through extents read 200.8 GB, prompt 46.57 s;\n        // 1 MiB extents with a 64 KiB gap read 119.9 GB, prompt 44.44 s.\n        const uint64_t scan_gap=uint64_t(env_u32(\"LLAMADECODE_ENGRAM_SCAN_GAP_KIB\",64,4,32768))*1024;\n        const char*g=std::getenv(\"LLAMADECODE_ENGRAM_SCAN_GBPS\");\n        double gbps=15.0;\n        if(g&&*g){char*end=nullptr;gbps=std::strtod(g,&end);require(end&&!*end&&gbps>=0.5&&gbps<=100,\"LLAMADECODE_ENGRAM_SCAN_GBPS must be 0.5-100\");}\n        uint64_t random_bytes=0;"
+        "consumer": "        // of 64 slots (cand6, 43.17 s) matches the bench optimum: on this RAID one\n        // queue at QD64 beats several queues for 256 KiB+ random reads.\n        const uint64_t scan_gap=uint64_t(env_u32(\"LLAMADECODE_ENGRAM_SCAN_GAP_KIB\",64,4,32768))*1024;\n        const char*g=std::getenv(\"LLAMADECODE_ENGRAM_SCAN_GBPS\");\n        double gbps=15.0;\n        if(g&&*g){char*end=nullptr;gbps=std::strtod(g,&end);require(end&&!*end&&gbps>=0.5&&gbps<=100,\"LLAMADECODE_ENGRAM_SCAN_GBPS must be 0.5-100\");}\n        uint64_t random_bytes=0;"
       }
     ],
     "code_default": "Wrapper/conditional default: see the literal call and consumer below",
@@ -62060,14 +62060,14 @@
     ],
     "doc": "PAIRFIX: sequential read rate the Engram scan decision assumes, GB/s (default 15; measured 15-22 on the RTX model volume).",
     "reads": [
-      "engines/streaming-llama/prefill_llama.cpp/src/llama-dsv41-engram-prefetch.cpp:373"
+      "engines/streaming-llama/prefill_llama.cpp/src/llama-dsv41-engram-prefetch.cpp:375"
     ],
     "code_defaults": [
       {
-        "source": "engines/streaming-llama/prefill_llama.cpp/src/llama-dsv41-engram-prefetch.cpp:373",
+        "source": "engines/streaming-llama/prefill_llama.cpp/src/llama-dsv41-engram-prefetch.cpp:375",
         "unset": "NULL from getenv; the literal consumer below supplies any fallback",
         "read": "const char*g=std::getenv(\"LLAMADECODE_ENGRAM_SCAN_GBPS\");",
-        "consumer": "        // 1 MiB extents with a 64 KiB gap read 119.9 GB, prompt 44.44 s.\n        const uint64_t scan_gap=uint64_t(env_u32(\"LLAMADECODE_ENGRAM_SCAN_GAP_KIB\",64,4,32768))*1024;\n        const char*g=std::getenv(\"LLAMADECODE_ENGRAM_SCAN_GBPS\");\n        double gbps=15.0;\n        if(g&&*g){char*end=nullptr;gbps=std::strtod(g,&end);require(end&&!*end&&gbps>=0.5&&gbps<=100,\"LLAMADECODE_ENGRAM_SCAN_GBPS must be 0.5-100\");}\n        uint64_t random_bytes=0;\n        plan_geometry(llama_dsv41_engram_plan::default_merge_cap,0,geometry_random_requests,random_bytes);"
+        "consumer": "        // queue at QD64 beats several queues for 256 KiB+ random reads.\n        const uint64_t scan_gap=uint64_t(env_u32(\"LLAMADECODE_ENGRAM_SCAN_GAP_KIB\",64,4,32768))*1024;\n        const char*g=std::getenv(\"LLAMADECODE_ENGRAM_SCAN_GBPS\");\n        double gbps=15.0;\n        if(g&&*g){char*end=nullptr;gbps=std::strtod(g,&end);require(end&&!*end&&gbps>=0.5&&gbps<=100,\"LLAMADECODE_ENGRAM_SCAN_GBPS must be 0.5-100\");}\n        uint64_t random_bytes=0;\n        plan_geometry(llama_dsv41_engram_plan::default_merge_cap,0,geometry_random_requests,random_bytes);"
       }
     ],
     "code_default": "NULL from getenv; the literal consumer below supplies any fallback",
@@ -62081,7 +62081,7 @@
     "scopes": [
       "rtx-llama"
     ],
-    "doc": "PAIRFIX: largest Engram scan extent in KiB (default 8192, 256-32768, multiple of 4).",
+    "doc": "PAIRFIX: largest Engram scan extent in KiB (default 1024, 256-32768, multiple of 4).",
     "reads": [
       "engines/streaming-llama/prefill_llama.cpp/src/llama-dsv41-engram-prefetch.cpp:366"
     ],
@@ -62104,16 +62104,16 @@
     "scopes": [
       "rtx-llama"
     ],
-    "doc": "PAIRFIX: IoRings used by the Engram scan (default 2, 1-8).",
+    "doc": "PAIRFIX: IoRings used by the Engram scan (default 1, 1-8); one queue at QD64 measured fastest for 256 KiB+ random reads on the RTX model volume.",
     "reads": [
-      "engines/streaming-llama/prefill_llama.cpp/src/llama-dsv41-engram-prefetch.cpp:383"
+      "engines/streaming-llama/prefill_llama.cpp/src/llama-dsv41-engram-prefetch.cpp:385"
     ],
     "code_defaults": [
       {
-        "source": "engines/streaming-llama/prefill_llama.cpp/src/llama-dsv41-engram-prefetch.cpp:383",
+        "source": "engines/streaming-llama/prefill_llama.cpp/src/llama-dsv41-engram-prefetch.cpp:385",
         "unset": "Wrapper/conditional default: see the literal call and consumer below",
-        "read": "const uint32_t rings=env_u32(\"LLAMADECODE_ENGRAM_SCAN_RINGS\",4,1,8);",
-        "consumer": "        geometry_scan_s=std::max(double(geometry_scan_bytes)/(gbps*1e9),double(geometry_scan_requests)/llama_dsv41_engram_early_iops());\n        const bool want=forced||geometry_scan_s<geometry_random_s;\n        const uint32_t rings=env_u32(\"LLAMADECODE_ENGRAM_SCAN_RINGS\",4,1,8);\n        uint32_t slots=env_u32(\"LLAMADECODE_ENGRAM_SCAN_DEPTH\",64,2,256);\n        constexpr uint32_t scan_small=64;\n        auto arena=[&](uint32_t n){return uint64_t(rings)*(uint64_t(scan_small)*small_slot+uint64_t(n)*scan_cap);};\n        // Fit the admission; never silently: the geometry line reports it."
+        "read": "const uint32_t rings=env_u32(\"LLAMADECODE_ENGRAM_SCAN_RINGS\",1,1,8);",
+        "consumer": "        geometry_scan_s=std::max(double(geometry_scan_bytes)/(gbps*1e9),double(geometry_scan_requests)/llama_dsv41_engram_early_iops());\n        const bool want=forced||geometry_scan_s<geometry_random_s;\n        const uint32_t rings=env_u32(\"LLAMADECODE_ENGRAM_SCAN_RINGS\",1,1,8);\n        uint32_t slots=env_u32(\"LLAMADECODE_ENGRAM_SCAN_DEPTH\",64,2,256);\n        constexpr uint32_t scan_small=64;\n        auto arena=[&](uint32_t n){return uint64_t(rings)*(uint64_t(scan_small)*small_slot+uint64_t(n)*scan_cap);};\n        // Fit the admission; never silently: the geometry line reports it."
       }
     ],
     "code_default": "Wrapper/conditional default: see the literal call and consumer below",
