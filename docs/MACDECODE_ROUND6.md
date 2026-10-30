@@ -148,12 +148,49 @@ pass under explicit 2 GiB/16 GiB guards. Model runs use 400 GiB/16 GiB guards,
 with no guard violation or swap. Source and exact reports are in
 [the Round6 evidence directory](macdecode-r6/summary.json).
 
-Optimized FP4-to-FP4 paired proof, Studio deployment, fleet/live GUI checks,
-MiMo restoration and final scratch recycling remain pending.
+The pinned optimized packed-FP4 producer from experimental 44928ad and the
+canonical receiver cdeb1d1d pass the eight-row full-vocabulary KL gate (mean
+0.0238444, max 0.0530931 nats; limits 0.1/0.5). A fresh 199952-token release
+prompt recalls the planted password. Primary FP4-to-FP4 results:
+
+| Configuration | End-to-end prefill tok/s | Decode tok/s |
+|---|---:|---:|
+| Original 5 GiB graph floor | 1905.762325 | 36.305599 |
+| 3.5 GiB graph floor, one requested followup | 1962.500875 | 35.146325 |
+
+The graph-floor option moves 1.5 GiB within the existing device budget to the
+exact hidden bank. Its graph allocator still refuses any measured graph that
+does not fit; host limits, 1M context and DSpark capture remain. RTX prompt work
+fell from 79.215 to 75.354 seconds. This single trial does not establish a stable
+percentage gain. The ULTRA cone example uses it and the current automatic fold
+policy; other profiles keep the 5 GiB floor unless explicitly selected.
+
+The followup's engine initialization plus prompt was 81.812 s; export preparation
+4.360 s; transfer/import/hash/ack 6.366 s; rewind save 5.015 s; other request work
+4.333 s, totaling 101.886 s. Transfer and Mac import share one streamed interval;
+they are not independently timed. RTX prompt work itself was 75.354 s, rather
+than the target 38 s. Both runs use the same optimized producer and native FFN
+bridge, packed FP4, exact cone2541/v2 and single-stream policy, with RAM tier and
+CPU lane off. The 1M native path has fewer resident hidden rows than the 200K
+prefill-only control. Two sweeps remain: a full 200K single sweep needs 13.39 GiB
+of host workspace before the physical floor; current free RAM is about 12.8 GiB.
+The reservation improvement does not close the remaining native-path gap.
+
+DSpark is enabled at 200K. Its unchanged upstream confidence/controller policy
+accepted one five-token block; 122 cycles had no draft. The measured prose
+continuation therefore remains mostly serial. No forced confidence, sampler or
+quality reduction is used. **The 5240 prefill / 40-60 decode release targets are
+not met**, despite Mac-only upstream parity and the passing import/recall gate.
+
+Studio adapter 483405fcfb is merged to the Studio integration branch and deployed to RTX,
+Mac Studio and MacBook. Final GUI/restore/cleanup receipts are in the task RESULT.
+
 
 ## Capability reductions
 
 The 98 explicitly listed tuning controls are retired by owner decision.
+Obsolete preset-only gates DS4_V41_DSPARK_DECODE_READY and DS4_KV_TURN_FRONTIER
+are removed from presets; their DSpark and checkpoint capabilities remain.
 No user-facing sampler, bias, tools, vision, checkpoints, native save, cone,
 descriptor identity, wired allocation, DSpark, KV/state import or Studio adapter
 capability is authorized for removal.

@@ -11,6 +11,24 @@ SS = dict(CFG, producer_host_max_gib=12.0)
 
 
 class PrefillPlan(unittest.TestCase):
+    def test_explicit_graph_floor_preserves_device_and_context_budgets(self):
+        from slstack.combo_producer import prefill_arguments
+        cfg = dict(context=1000001, producer_profile='ultra', yoco_keep=2541,
+                   ctx_cache_precision='bf16', ctx_cache_growable=True,
+                   env_overrides={'LLAMA_DSV41_FLASHINFER_MXFP4':'1',
+                                  'LLAMA_DSV41_FLASHINFER_NATIVE_FFN_DLL':'x.dll'})
+        old, before = prefill_arguments(cfg, 199952, 14 << 30, export_state=True)
+        new, after = prefill_arguments(dict(cfg, producer_graph_floor_gib=3.5), 199952, 14 << 30, export_state=True)
+        self.assertEqual(before, after)
+        self.assertGreater(int(new['--hidden-device-bytes']), int(old['--hidden-device-bytes']))
+        self.assertEqual(sum(int(new[k]) for k in ('--hidden-device-bytes','--graph-bytes')),
+                         sum(int(old[k]) for k in ('--hidden-device-bytes','--graph-bytes')))
+        for key in ('--context','--job-device-bytes','--cache-bytes','--capture-dspark','--job-host-bytes'):
+            self.assertEqual(new[key], old[key])
+        for value in (True, 0, -1, float('nan'), float('inf'), '3.5'):
+            with self.assertRaises(ValueError):
+                prefill_arguments(dict(cfg, producer_graph_floor_gib=value), 199952, 14 << 30, export_state=True)
+
     def test_single_stream_default_keeps_all_rows_resident(self):
         # OPUS22 round 6 defaults: one 100K sweep with the compact record and an all-rows hidden bank.
         from slstack.combo_producer import prefill_arguments, RESIDENT_ROW_BYTES

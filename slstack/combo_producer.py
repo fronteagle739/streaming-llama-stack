@@ -254,7 +254,13 @@ def resident_all_rows(cfg,arguments,capacity):
     if need<=have:return arguments
     # Whole 2 MiB units keep the fixed graph reservation at its exact allocator granularity.
     unit=2<<20
-    spare=int(arguments['--graph-bytes'])-int(arguments.get('--backend-temporary-reserve-bytes',1<<30))-GRAPH_FLOOR_BYTES
+    graph_floor=cfg.get('producer_graph_floor_gib',GRAPH_FLOOR_BYTES/(1<<30))
+    if type(graph_floor) not in (int,float) or not math.isfinite(graph_floor) or graph_floor<=0:
+        raise ValueError('producer_graph_floor_gib must be finite and positive')
+    # The graph allocator still admits its measured peak against the remaining
+    # graph cap. This only redistributes the existing device bill to the exact
+    # hidden bank; it cannot increase the job ceiling or discard context rows.
+    spare=int(arguments['--graph-bytes'])-int(arguments.get('--backend-temporary-reserve-bytes',1<<30))-int(graph_floor*(1<<30))
     moved=min(-(-(need-have)//unit)*unit,max(0,spare)//unit*unit)
     if not moved:return arguments
     arguments['--hidden-device-bytes']=str(have+moved);arguments['--graph-bytes']=str(int(arguments['--graph-bytes'])-moved)

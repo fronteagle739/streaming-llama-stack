@@ -1,0 +1,46 @@
+{
+  "schema": "macdecode-round6-paired-summary-v1",
+  "producer_source": "44928adb60f7e8d2566ee80abf464bd2ebd6bb7e",
+  "producer_sha256": "d9ef79a7dbc3a8f44924d9229c602933e792f38775ff3577f8fde2756887c3ef",
+  "receiver_sha256": "cdeb1d1d314994123f2209189b49b6fc960d95a2c916f894d89bf97515551e91",
+  "lossy_speed_proxy": true,
+  "kl": {
+    "direction": "KL(Mac-only || paired)",
+    "rows": 8,
+    "vocab": 129280,
+    "mean_nats": 0.02384441575765927,
+    "max_nats": 0.05309305035754748,
+    "per_token_nats": [
+      8.724918085508868e-07,
+      0.0006910821176872442,
+      0.011319332187058604,
+      0.03720735754902596,
+      0.03261564735266894,
+      0.027694499687211917,
+      0.05309305035754748,
+      0.028133484318265463
+    ],
+    "mean_limit_nats": 0.1,
+    "max_limit_nats": 0.5,
+    "continuation_token": 42
+  },
+  "baseline": {
+    "paired_prompt_tokens": 199952,
+    "paired_prefill_tps": 1905.762325,
+    "paired_decode_tps": 36.305599,
+    "paired_recall": true,
+    "cleanup_confirmed": true,
+    "lease_released": true
+  },
+  "followup": {
+    "paired_prompt_tokens": 199952,
+    "paired_prefill_tps": 1962.500875,
+    "paired_decode_tps": 35.146325,
+    "paired_recall": true,
+    "cleanup_confirmed": true,
+    "lease_released": true
+  },
+  "followup_graph_floor_gib": 3.5,
+  "dspark": "DSpark cycles=123; proposed=5; accepted_draft=5; no_draft=122; verifier errors=0",
+  "release_target_met": false
+}

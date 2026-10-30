@@ -14,7 +14,7 @@
     "producer_host_budget_gib": 6.25,
     "producer_host_max_gib": 7.75,
     "producer_host_reserve_gib": 0.5,
-    "producer_prefill_sweep_tokens": 49152,
+    "producer_prefill_sweep_tokens": "auto",
     "producer_prefill_fold_cap_tokens": 61440,
     "ctx_cache_precision": "bf16",
     "ctx_cache_growable": true,
@@ -27,7 +27,8 @@
       "LLAMADECODE_HOST_COPY_STAGING": "auto",
       "LLAMADECODE_RECENCY_LFU": "1",
       "LLAMADECODE_LFU_HALF_LIFE": "16"
-    }
+    },
+    "producer_graph_floor_gib": 3.5
   },
   "mac": {
     "model": "SET_MAC_GGUF_PATH",
