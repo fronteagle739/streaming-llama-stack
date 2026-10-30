@@ -45,8 +45,8 @@ so each sweep loaded its own rows: still exact, but slower.
 
 | Model file | Prompt | Prefill | Decode | Notes |
 |---|---:|---:|---:|---|
-| MXFP4 requant | 200K | 384 tok/s (521 s) | 36.6 tok/s serial | Metal layer prefill |
-| MXFP4 requant + DSpark | 200K | 311 tok/s (643 s) | 36.8 tok/s (prose; DSpark rarely drafts on prose) | |
+| Mac decode FP4 | 200K | 384 tok/s (521 s) | 36.6 tok/s serial | Metal layer prefill |
+| Mac decode FP4 + DSpark | 200K | 311 tok/s (643 s) | 36.8 tok/s (prose; DSpark rarely drafts on prose) | |
 
 The Mac-only engine must keep Metal layer prefill on. The paired receiver preset
 disables it, and with it disabled the Mac prefills one token at a time (~37 tok/s); the
@@ -54,7 +54,7 @@ stack's Mac receiver now unsets it for Mac-only runs.
 
 ### Two machines: RTX prefill, Mac decode
 
-200K real text: packed FP4 on the RTX, MXFP4 requant on the Mac.
+200K real text: packed FP4 on the RTX, Mac decode FP4 on the Mac.
 
 | Prefill figure | Value |
 |---|---:|
@@ -111,7 +111,7 @@ negotiates at 5 Gb/s, not 10.
 - RTX single machine: `examples/single-machine/dsv41-ultra-cone.ps1 -Context 1m`
   (packed FP4 file in your config; Max quality or Max speed is the live quality-speed
   control).
-- Mac single machine: `slstack mac` with the MXFP4 requant and its DSpark support
+- Mac single machine: `slstack mac` with the Mac decode FP4 file and its DSpark support
   model. Metal layer prefill is on for Mac-only requests.
 - Two machines: `examples/dual-machine/dsv41-ultra-cone-fp4/preset.json`
   (`python examples/run_preset.py --preset dsv41-ultra-cone-fp4 --machine mac|rtx`). The
@@ -445,7 +445,6 @@ configuration.
 - The faster dial settings cost quality. Max speed introduced syntax errors in C++
   tests; use Max quality or Balanced for code.
 - Approximate YOCO140 is opt-in; the default dependency cone keeps 2,541 rows.
-- The measured FP4 file was requantised from Q4; native-precision FP4 conversion from the official weights is coming, with the same layout and expected speed.
 - The matched eager control uses the Q4 shipping-default Q8 dense path with
   stored FP4 experts; the earlier KERNELS2 row measures the full Q4_K/Q8_0 file.
 - The latest 100K FP4 run uses experimental prefill graphs and does not establish
