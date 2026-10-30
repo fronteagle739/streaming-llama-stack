@@ -3404,3 +3404,101 @@ kernel void kernel_dsv41_engram_add_tg256(
     for (uint j = 0; j < J; j++)
         hp[32u * j] = dsv41_bf16(fma(gate, dsv41_bf16(v[j]), h[j]));
 }
+
+// Upstream QKV_FUSION RoPE writer adapted to retained exact HC/KV producers.
+static inline float ds41_q8_virtual40_value(
+        constant ds4_metal_args_mul_mv &args,
+        device const char *weights, device const char *input,
+        uint3 group, ushort lane, ushort simd) {
+    const uint row = group.x*4 + simd;
+    device const block_q8_0 *w = (device const block_q8_0 *)(weights + row*args.nb01);
+    device const float *x = (device const float *)input;
+    const short ix = lane/4, il = lane%4;
+    float partial[4] = {0.f, 0.f, 0.f, 0.f};
+    FOR_UNROLL (short tile=0; tile<40/8; ++tile) {
+        const short ib = tile*8 + ix;
+        float yl[8];
+        FOR_UNROLL (short i=0; i<8; ++i) yl[i] = x[ib*32+il*8+i];
+        device const int8_t *q = w[ib].qs + il*8;
+        float sumq=0.f;
+        FOR_UNROLL (short i=0; i<8; ++i) sumq += q[i]*yl[i];
+        partial[tile%4] += sumq*w[ib].d;
+    }
+    FOR_UNROLL (short s=0; s<4; ++s) partial[s] = simd_sum(partial[s]);
+    // The original second reduction reads slots 0..3 and 28 zero slots.
+    const float logical_slot = lane<4 ? partial[lane] : 0.f;
+    const float result = simd_sum(logical_slot);
+    return dsv41_bf16(result);
+}
+kernel void kernel_dsv41_query_hc_kv_rope(
+        constant ds4_metal_args_hc_norm_mix &hc_args,
+        constant ds4_metal_args_mul_mv &mv_args,
+        constant ds4_metal_args_dsv41_hc_tail &tail_args,
+        device const char *residual, device const char *hc_weight,
+        device char *mix, device const float *scale, device const float *base,
+        device float *split, device atomic_uint *counter,
+        device const char *weight, device const char *up,
+        device const char *input, device char *output,
+        constant uint &shared_stream, constant float &clamp_value,
+        constant float &alpha,
+        constant ds41_kv_prepare_norm_args &kv_args [[buffer(17)]],
+        constant ds4_metal_args_dsv41_rope &rope_args [[buffer(18)]],
+        device const float4 *kv_input [[buffer(19)]],
+        device const float4 *kv_weight [[buffer(20)]],
+        device float *kv_output [[buffer(21)]],
+        device float *window [[buffer(22)]],
+        threadgroup char *shmem [[threadgroup(0)]],
+        threadgroup uint *elected [[threadgroup(1)]],
+        uint3 tgpig [[threadgroup_position_in_grid]],
+        ushort tid [[thread_index_in_threadgroup]],
+        ushort tiisg [[thread_index_in_simdgroup]],
+        ushort sgitg [[simdgroup_index_in_threadgroup]],
+        uint3 threads [[threads_per_threadgroup]]) {
+    if (tgpig.x == 4108u) {
+        ds41_kv_prepare_group(kv_args, rope_args, kv_input, kv_weight,
+            kv_output, window, tid, threads, tiisg, sgitg,
+            (threadgroup float *)shmem, (threadgroup float *)shmem+32u);
+        return;
+    }
+    if (tgpig.x >= 12u) {
+        // Eight independent output rows, one physical SIMD per row.
+        // The helper retains all four logical K accumulators and both trees.
+        const uint3 rows = uint3((tgpig.x-12u)*2u, 0, 0);
+        const float value=ds41_q8_virtual40_value(mv_args,weight,input,rows,tiisg,sgitg);
+        threadgroup float *pairs=(threadgroup float *)shmem;
+        if(tiisg==0)pairs[sgitg]=value;
+        threadgroup_barrier(mem_flags::mem_threadgroup);
+        if(tiisg==0 && (sgitg&1u)==0) {
+            const uint row=(tgpig.x-12u)*8u+sgitg,col=row%512u;
+            const float re=pairs[sgitg],im=pairs[sgitg+1u];
+            device float *q=(device float *)output;
+            if(col>=448u) {
+                const float theta=float(rope_args.start)*rope_args.frequencies[(col-448u)/2u];
+                const float c=precise::cos(theta),sn=precise::sin(theta);
+                q[row]=dsv41_bf16(fma(re,c,-(im*sn)));
+                q[row+1u]=dsv41_bf16(fma(im,c,re*sn));
+            } else { q[row]=re;q[row+1u]=im; }
+        }
+        return;
+    }
+    dsv41_arch_hc_mix(hc_args, residual, hc_weight, mix, shmem,
+                      tgpig, tiisg, sgitg);
+    threadgroup_barrier(mem_flags::mem_threadgroup);
+    threadgroup_barrier(mem_flags::mem_device);
+    atomic_thread_fence(mem_flags::mem_device, memory_order_seq_cst, thread_scope_device);
+    if (tid == 0) {
+        const uint ticket = atomic_fetch_add_explicit(counter, 1u, memory_order_relaxed);
+        elected[0] = ticket == 11u;
+    }
+    threadgroup_barrier(mem_flags::mem_threadgroup);
+    if (!elected[0]) return;
+    atomic_thread_fence(mem_flags::mem_device, memory_order_seq_cst, thread_scope_device);
+    if (tid == 0) {
+        float4 local4[6];
+        thread float *local = (thread float *)local4;
+        for (uint i = 0; i < 24u; ++i)
+            local[i] = as_type<float>(atomic_load_explicit(
+                (device atomic_uint *)mix + i, memory_order_relaxed));
+        dsv41_arch_sinkhorn(tail_args, local, scale, base, split);
+    }
+}
