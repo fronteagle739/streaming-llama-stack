@@ -64,17 +64,28 @@ def require_compatible(local, remote):
 
 
 def continuation_kl(control, candidate, vocab=129280):
-    """Full-vocabulary KL(Mac-only || paired), on an identical forced prefix."""
-    import numpy as np
-    a = np.frombuffer(control, dtype='<f4').astype(np.float64)
-    b = np.frombuffer(candidate, dtype='<f4').astype(np.float64)
-    if not len(a) or len(a) != len(b) or len(a) % vocab or not np.isfinite(a).all() or not np.isfinite(b).all():
+    """Full-vocabulary KL(Mac-only || paired), on an identical forced prefix.
+
+    Standard library only: the stack's core runtime (requirements.txt) has no numpy, and
+    the receiver runs this at pairing (8 rows), where it takes about a second."""
+    import array, math, sys
+    a, b = array.array('f'), array.array('f')
+    a.frombytes(control); b.frombytes(candidate)
+    if sys.byteorder != 'little':
+        a.byteswap(); b.byteswap()
+    if (not len(a) or len(a) != len(b) or len(a) % vocab
+            or not all(map(math.isfinite, a)) or not all(map(math.isfinite, b))):
         raise ValueError('Missing/incomplete/nonfinite continuation logits')
-    a, b = a.reshape(-1,vocab), b.reshape(-1,vocab)
-    def logsoftmax(x):
-        x = x - x.max(axis=1,keepdims=True)
-        return x - np.log(np.exp(x).sum(axis=1,keepdims=True))
-    a, b = logsoftmax(a), logsoftmax(b)
-    rows = (np.exp(a)*(a-b)).sum(axis=1)
+
+    def logsoftmax(row):
+        top = max(row)
+        total = math.fsum(math.exp(x - top) for x in row)
+        shift = top + math.log(total)
+        return [x - shift for x in row]
+    rows = []
+    for start in range(0, len(a), vocab):
+        p = logsoftmax(a[start:start + vocab])
+        q = logsoftmax(b[start:start + vocab])
+        rows.append(math.fsum(math.exp(x) * (x - y) for x, y in zip(p, q)))
     return dict(direction='KL(Mac-only || paired)', rows=len(rows), vocab=vocab,
-                mean_nats=float(rows.mean()), max_nats=float(rows.max()), per_token_nats=rows.tolist())
+                mean_nats=math.fsum(rows) / len(rows), max_nats=max(rows), per_token_nats=rows)
