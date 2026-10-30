@@ -1,7 +1,7 @@
 #!/bin/sh
 # Build a one-click DSV4.1 launcher app (and its .dmg) for this Mac.
 #
-#   sh launcher/pack_macos.sh single|dual [--out <folder>] [--python <python3.12>] [--stack-root <dir>] [--dock]
+#   sh launcher/pack_macos.sh single|dual [--out <folder>] [--python <python3.12>] [--stack-root <dir>] [--dock] [--icon-python <python with Pillow>]
 #
 # Reads launcher/config/<mode>.json plus your private launcher/config/<mode>.local.json,
 # bakes the Mac section into "<out>/DSV41 Single.app" (or "DSV41 Dual.app"), signs it
@@ -12,10 +12,11 @@ set -eu
 here=$(cd "$(dirname "$0")" && pwd)
 mode=${1:?usage: pack_macos.sh single|dual [--out DIR] [--python PY] [--stack-root DIR] [--dock]}
 shift
-out="$here/dist"; python=""; stack=""; dock=0
+out="$here/dist"; python=""; stack=""; dock=0; iconpy=""
 while [ $# -gt 0 ]; do
   case "$1" in
     --out) out=$2; shift 2 ;;
+    --icon-python) iconpy=$2; shift 2 ;;
     --python) python=$2; shift 2 ;;
     --stack-root) stack=$2; shift 2 ;;
     --dock) dock=1; shift ;;
@@ -35,6 +36,12 @@ set -- --mode "$mode" --side mac --python "$python" --out "$res/launcher.json"
 [ -z "$stack" ] || set -- "$@" --stack-root "$stack"
 "$python" -B "$here/app/bake.py" "$@"
 cp "$here/app/dsv41_launcher.py" "$res/dsv41_launcher.py"
+if [ ! -f "$here/icons/built/$mode.icns" ]; then
+  # Quick Look renders the SVG; Pillow writes the .icns (the stack's core venv has it).
+  [ -n "$iconpy" ] || iconpy="$here/dist/runtime/core-venv/bin/python"
+  [ -x "$iconpy" ] || iconpy="$python"
+  "$iconpy" -B "$here/icons/build_icons.py" "$mode"
+fi
 cp "$here/icons/built/$mode.icns" "$res/AppIcon.icns"
 cat > "$res/run.command" <<EOF
 #!/bin/sh
