@@ -39803,7 +39803,7 @@ static int ds41_lever_counted(const char *name) {
     return !strcmp(name, "mtp_q8_trio_mask") || !strcmp(name, "hc_stream_layout") || !strcmp(name, "engram_readers") || !strcmp(name, "attn_diag") ||
            !strcmp(name, "attn_geom") || !strcmp(name, "gather_wide") ||
            !strcmp(name, "hc_expand_nth") || !strcmp(name, "mtp_q8_stream6_mask") ||
-           !strcmp(name, "dspark_verify_rows") || !strcmp(name,"verify_batch_core") || !strcmp(name,"verify_output") || !strcmp(name,"index_schedule");
+           !strcmp(name, "dspark_verify_rows") || !strcmp(name,"verify_batch_core") || !strcmp(name,"verify_output") || !strcmp(name,"index_schedule") || !strcmp(name,"concurrent_ffn");
 }
 
 static const struct { const char *name; size_t off; const char *env; } g_ds41_lever_map[] = {
@@ -39885,6 +39885,8 @@ static const struct { const char *name; size_t off; const char *env; } g_ds41_le
     { "mtp_q8_swizzle", offsetof(ds41_levers, mtp_q8_swizzle), "DS4_DS41_MTP_Q8_SWIZZLE" },
     { "mtp_gu_swizzle", offsetof(ds41_levers, mtp_gu_swizzle), "DS4_DS41_MTP_GU_SWIZZLE" },
     { "index_score_stream", offsetof(ds41_levers, index_score_stream), "DS4_DS41_INDEX_SCORE_STREAM" },
+    { "hc_join_static", offsetof(ds41_levers, hc_join_static), "DS4_DS41_HC_JOIN_STATIC" },
+    { "topk_short", offsetof(ds41_levers, topk_short), "DS4_DS41_TOPK_SHORT" },
     { "index_schedule", offsetof(ds41_levers, index_schedule), "DS4_DS41_INDEX_SCHEDULE" },
     { "index_mask_score", offsetof(ds41_levers, index_mask_score), "DS4_DS41_INDEX_MASK_SCORE" },
     { "stage_gather",       offsetof(ds41_levers, stage_gather),       "DS4_DS41_STAGE_GATHER" },
@@ -39994,8 +39996,9 @@ void ds41_levers_init_from_env(void) {
         ds41_env_enable_form("DS4_DS41_VERIFY_MXFP4");
     g_ds41_levers.mxfp4_dedup = getenv("DS4_DS41_MXFP4_DEDUP") &&
         ds41_env_enable_form("DS4_DS41_MXFP4_DEDUP");
-    g_ds41_levers.concurrent_ffn = getenv("DS4_DS41_CONCURRENT_FFN") &&
-        ds41_env_enable_form("DS4_DS41_CONCURRENT_FFN");
+    { const char *v=getenv("DS4_DS41_CONCURRENT_FFN");
+      /* Retain historical boolean values; explicit2 also overlaps deferred HC. */
+      g_ds41_levers.concurrent_ffn=v && !strcmp(v,"2") ? 2 : v && v[0]!='0'; }
     g_ds41_levers.engram_persistent = getenv("DS4_DS41_ENGRAM_PERSISTENT") &&
         ds41_env_enable_form("DS4_DS41_ENGRAM_PERSISTENT");
     g_ds41_levers.engram_lookup = ds41_env_enable_form("DS4_DS41_ENGRAM_LOOKUP");
@@ -40114,6 +40117,8 @@ void ds41_levers_init_from_env(void) {
     g_ds41_levers.index_topk_radix = ds41_env_enable_form("DS4_DS41_INDEX_TOPK_RADIX");
     g_ds41_levers.index_compact_score = ds41_env_enable_form("DS4_DS41_INDEX_COMPACT_SCORE");
     g_ds41_levers.index_score_stream = ds41_env_enable_form("DS4_DS41_INDEX_SCORE_STREAM");
+    g_ds41_levers.topk_short=getenv("DS4_DS41_TOPK_SHORT") && ds41_env_enable_form("DS4_DS41_TOPK_SHORT");
+    g_ds41_levers.hc_join_static=getenv("DS4_DS41_HC_JOIN_STATIC") && ds41_env_enable_form("DS4_DS41_HC_JOIN_STATIC");
     { const char *v=getenv("DS4_DS41_INDEX_SCHEDULE");
       if(v) { char *end=NULL;long n=strtol(v,&end,10);
         if(!*v || *end || n<0 || n>2) { fprintf(stderr,"ds4: invalid DS4_DS41_INDEX_SCHEDULE (expected 0..2)\n");abort(); }
@@ -40186,9 +40191,9 @@ int ds41_levers_set(const char *name, int value) {
             if (ds41_lever_counted(name)) {
                 const int lo = !strcmp(name, "mtp_q8_trio_mask") || !strcmp(name, "hc_stream_layout") || !strcmp(name, "attn_diag") ||
                                !strcmp(name, "gather_wide") ||
-                               !strcmp(name, "dspark_verify_rows") || !strcmp(name,"verify_batch_core") || !strcmp(name,"verify_output") || !strcmp(name,"index_schedule") ||
+                               !strcmp(name, "dspark_verify_rows") || !strcmp(name,"verify_batch_core") || !strcmp(name,"verify_output") || !strcmp(name,"index_schedule") || !strcmp(name,"concurrent_ffn") ||
                                !strcmp(name, "mtp_q8_stream6_mask") ? 0 : 1;
-                const int hi = (!strcmp(name,"verify_batch_core") || !strcmp(name,"verify_output") || !strcmp(name,"index_schedule")) ? 2 : !strcmp(name, "mtp_q8_trio_mask") ? 127 : !strcmp(name, "hc_stream_layout") ? 3 :
+                const int hi = (!strcmp(name,"verify_batch_core") || !strcmp(name,"verify_output") || !strcmp(name,"index_schedule") || !strcmp(name,"concurrent_ffn")) ? 2 : !strcmp(name, "mtp_q8_trio_mask") ? 127 : !strcmp(name, "hc_stream_layout") ? 3 :
                                !strcmp(name, "mtp_q8_stream6_mask") ? 127 :
                                !strcmp(name, "attn_diag") ? 9 :
                                !strcmp(name, "dspark_verify_rows") ? 6 : 256;
@@ -40988,13 +40993,23 @@ static bool ds41_moe(ds41_gpu_graph *g, const ds4_model *m,
         /* The upstream schedule separates the retained HC and shared kernels
          * so the shared gate/up can overlap the routed gate/up. Every HC/router
          * value is still computed, with its existing controls and rounding. */
-        if (g->hc_ffn_deferred) {
+        if (g->hc_ffn_deferred && g_ds41_levers.concurrent_ffn!=2) {
             if (!ds41_hc_mix(g, m, l, true, true)) return false;
             g->hc_ffn_deferred = 0;
         }
         full_queued = ds4_gpu_parallel_ffn_start_bf16(g->shared_gate,g->shared_up,g->shared_mid,
             g->shared,m->map,m->size,l->ffn_gate_shexp->abs_offset,l->ffn_up_shexp->abs_offset,
             l->ffn_down_shexp->abs_offset,DS4_N_EMBD,DS4_N_FF_EXP,g->norm,DS4_SWIGLU_CLAMP_EXP) != 0;
+        if(full_queued && g->hc_ffn_deferred) {
+            /* The norm is already collapsed. HC coefficients are independent
+             * of both expert products and join before the serial epilogue. */
+            if(!ds4_gpu_dsv41_mtp_hc_tensor(g->mix,g->ffn_split,g->hc_counter,g->after_attn,
+                m->map,m->size,l->hc_ffn_fn->abs_offset,l->hc_ffn_scale->abs_offset,
+                l->hc_ffn_base->abs_offset,DS4_N_HC_SINKHORN_ITER,DS4_HC_EPS,DS4_RMS_EPS)) {
+                ds4_gpu_parallel_ffn_abort();return false;
+            }
+            g->hc_ffn_deferred=0;
+        }
     }
 #endif
     if (!full_queued && (!shared_owner || g->tp_rank == (il & 1u)) &&

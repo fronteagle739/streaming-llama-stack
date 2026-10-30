@@ -62,3 +62,10 @@ and the all-eligible block mask shortcut, plus QKV_FUSION's query-store RoPE
 adapted to the existing HC/KV producer. Original schedules and authoritative
 F32 state remain. See `docs/MACDECODE_ROUND5.md` for measurement scope,
 full-logit/forced-continuation checks and remaining release qualification.
+
+Round5 also queues the retained deferred HC producer alongside complete
+shared/routed FFN products (`concurrent_ffn=2`), imports the upstream scalar
+shuffle/prefix top512 sort below16384 keys (`topk_short`), and specializes
+the5120x4 FFN HC join (`hc_join_static`). Every original output, ordered
+FMA, generic shape, optional add, disable control and original schedule is
+retained. Sources are adapted from the same pinned upstream `f48c5e2e`.

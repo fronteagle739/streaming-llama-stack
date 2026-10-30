@@ -253,7 +253,7 @@ typedef struct {
     int attn_low_static; /* upstream fixed-shape scalar low projection */
     int verify_mxfp4; /* upstream scalar-ordered MXFP4 DSpark verify kernels */
     int mxfp4_dedup; /* exact shared expert reads for two to eight rows */
-    int concurrent_ffn; /* upstream full shared/routed FFN schedule */
+    int concurrent_ffn; /* 0 retained producer; 1 shared/routed overlap; 2 also deferred HC. */ /* upstream full shared/routed FFN schedule */
     int engram_lookup; /* exact 128 KiB code/scale format table */
     int verify_output; /* upstream shared weight pass for DSpark attention projections */
     int rows_mma; /* DSpark-only Q8 simdgroup matrices, upstream reduction */
@@ -313,6 +313,8 @@ typedef struct {
     int mtp_gu_expert_sort; /* Group independent verifier GU jobs by expert ID. */
     int mtp_q8_swizzle; /* Exact pair6 Q8 job ordering; default on, =0 restores parent. */
     int mtp_gu_swizzle; /* Exact six-row Q4 GU job ordering; default on, =0 restores parent. */
+    int hc_join_static; /* Literal scalar FFN HC join, preserving block output. */
+    int topk_short; /* Upstream short decode shuffle/staged/fused ladder; original at0. */
     int index_schedule; /* 0 original; 1 omit all-eligible block plans; 2 additionally upstream wide/BF16 scalar scoring. */
     int index_score_stream; /* Exact decode scorer; default on, =0 restores direct scorer. */
     int index_mask_score; /* Exact masked scorer, candidate default off. */
