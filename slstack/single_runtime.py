@@ -31,6 +31,7 @@ import sys
 SOURCE = Path(__file__).resolve().parents[1]
 PRESET_NAME = 'DSV4.1 1017 (RTX: streaming-llama ULTRA prefill + ds4 decode, single engine)'
 PRODUCER_FILES = ('ds4-decode.dll', 'dstorage.dll', 'dstoragecore.dll')
+NATIVE_EXTENSIONS = ('LLAMA_DSV41_FLASHINFER_NATIVE_FFN_DLL', 'LLAMA_DSV41_DENSE_FP8_DLL')
 DECODE_ENV = {'LLAMADECODE_DS4_DECODE': '1'}
 KEPT = ('generation_control_file', 'stack_preferences_file', 'vision_encoder', 'vision_bridge_version', 'ds4_vision', 'yoco_keep', 'gpu_uuid', 'gpu_idle_max_mib', 'hold_file', 'task', 'lease_minutes', 'request_timeout_s', 'host_budget_gib',
         'min_available_gib', 'job_commit_gib', 'context', 'model', 'model_name', 'model_sha256', 'producer_host_budget_gib',
@@ -77,8 +78,33 @@ def single_config(cfg, installed, revision):
                                           if 'scratch' not in str(p).replace('\\', '/').lower()]],
         spread_file=installed / 'qualification/affinity-spreads.txt',
         model_receipt=installed / 'qualification/original-model.json', revision=revision)
+    for key, source in extension_files(cfg).items():
+        result['env_overrides'][key] = str(installed / source.name)
+    for key, directory in (('TEMP', 'temp'), ('TMP', 'temp'), ('TMPDIR', 'temp'), ('CUDA_CACHE_PATH', 'cuda-cache')):
+        if key in result['env_overrides']:
+            result['env_overrides'][key] = str(installed / 'runtime' / directory)
     if 'scratch' in json.dumps(result).replace('\\\\', '/').lower():
         raise ValueError('Installed configuration still depends on task scratch')
+    return result
+
+
+def extension_files(cfg):
+    """Carry selected native layouts with their actual pinned DLLs."""
+    result = {}
+    names = {}
+    for key in NATIVE_EXTENSIONS:
+        value = cfg.get('env_overrides', {}).get(key)
+        if value is None:
+            continue
+        if not isinstance(value, str) or not value:
+            raise ValueError('Native extension requires its DLL path: ' + key)
+        source = Path(value)
+        if source.suffix.lower() != '.dll':
+            raise ValueError('Native extension must be a DLL: ' + key)
+        if source.name.lower() in names and names[source.name.lower()] != source:
+            raise ValueError('Native extension filename collision: ' + source.name)
+        names[source.name.lower()] = source
+        result[key] = source
     return result
 
 
@@ -192,6 +218,8 @@ def stage(args):
             copy(SOURCE / relative, relative)
     copy(args.launcher, 'ds4-server.exe');copy(producer, producer.name)
     for name in PRODUCER_FILES:copy(producer.parent / name, name)
+    for source in extension_files(cfg).values():copy(source, source.name)
+    for directory in ('temp', 'cuda-cache'):(target / 'runtime' / directory).mkdir(parents=True, exist_ok=True)
     media_library=Path(cfg.get('weight_fetcher') or producer.parent/'slstack-weight-fetcher.dll')
     if media_library.is_file():copy(media_library,'slstack-weight-fetcher.dll')
     copy(cfg['cache_affinity_spread_file'], 'qualification/affinity-spreads.txt')
