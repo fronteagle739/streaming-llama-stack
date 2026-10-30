@@ -6,13 +6,18 @@
     "runtime_root": "SET_LAUNCHER_RUNTIME_DIR",
     "ui_url": "http://127.0.0.1:8088",
     "studio_url": "http://127.0.0.1:8765",
-    "gpu_busy_mib": 2048,
-    "ports": ["192.168.3.3:8090"],
+    "gpu_busy_mib": 3072,
+    "ports": [
+      "192.168.3.3:8090"
+    ],
     "stack": {
       "model": "SET_RTX_PACKED_FP4_GGUF_PATH",
       "gpu_uuid": "SET_GPU_UUID",
+      "gpu_idle_max_mib": 4096,
       "mac": "http://192.168.3.1:8180",
-      "env_overrides": {"LLAMA_DSV41_FLASHINFER_NATIVE_FFN_DLL": "SET_RTX_NATIVE_FFN_DLL_PATH"}
+      "env_overrides": {
+        "LLAMA_DSV41_FLASHINFER_NATIVE_FFN_DLL": "SET_RTX_NATIVE_FFN_DLL_PATH"
+      }
     }
   },
   "mac": {
@@ -23,7 +28,10 @@
     "studio_url": "http://127.0.0.1:8765",
     "engine_url": "http://192.168.3.1:8180",
     "rtx_broker": "192.168.3.3:8090",
-    "ports": ["192.168.3.1:8180", "127.0.0.1:8181"],
+    "ports": [
+      "192.168.3.1:8180",
+      "127.0.0.1:8181"
+    ],
     "stack": {
       "model": "SET_MAC_GGUF_PATH",
       "mtp_model": "SET_MAC_DSPARK_GGUF_PATH",
@@ -34,7 +42,14 @@
       "host": "127.0.0.1",
       "port": 8088,
       "webui": true,
-      "general": {"mode": "remote", "endpoint": "http://192.168.3.1:8180", "mac": {"backend": "ds4", "ctx": 1000001}}
+      "general": {
+        "mode": "remote",
+        "endpoint": "http://192.168.3.1:8180",
+        "mac": {
+          "backend": "ds4",
+          "ctx": 1000001
+        }
+      }
     }
   }
 }
