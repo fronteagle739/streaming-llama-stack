@@ -26,6 +26,8 @@ typedef enum {
     DS4_THINK_NONE,
     DS4_THINK_HIGH,
     DS4_THINK_MAX,
+    DS4_THINK_LOW,      /* Qwen3.8 reasoning_effort low/medium; other models render them as HIGH */
+    DS4_THINK_MEDIUM,
 } ds4_think_mode;
 /* Explicit numeric effort lives outside the stable named-mode values. */
 #define DS4_THINK_LEVEL_BASE 1000
@@ -126,6 +128,8 @@ typedef struct {
     int debug_hash;             /* cross-check hidden state every N tokens */
 } ds4_tp_options;
 
+#define DS4_V41_SIDECAR_MAX 3
+
 typedef struct {
     const char *model_path;
     const char *mtp_path;
@@ -174,308 +178,13 @@ typedef struct {
     bool load_output;
     ds4_distributed_options distributed;
     ds4_tp_options tp;
+    /* --v41-sidecar FILE (up to one per family): optional DeepSeek V4.1 decode sidecars, told apart by their
+     * general.architecture (router BF16, Engram FP8, indexer FP8). Without them the narrow copies are built at load. */
+    const char *v41_sidecar[DS4_V41_SIDECAR_MAX];
 } ds4_engine_options;
 
-/* ---------------------------------------------------------------------------
- * DeepSeek V4.1 decode campaign levers.
- *
- * One struct holding every kill switch the campaign toggles, so that a resident
- * server can flip them between requests instead of an A/B costing a full weight
- * load and prefill.  Every field is 1 for the production default.  Historical
- * environment variables still work and still mean exactly what they meant:
- *
- *   queue_layers         DS4_DS41_QUEUE_LAYERS=0 disables          (L1)
- *   engram_async         DS4_DS41_ENGRAM_ASYNC=0 disables          (L2)
- *   round_fuse_norm      DS4_METAL_DISABLE_V41_ROUND_FUSE_NORM=1 disables     (L3/D1)
- *   round_fuse_hcsum     DS4_METAL_DISABLE_V41_ROUND_FUSE_HCSUM=1 disables    (L3/D1)
- *   round_fuse_hcexpand  DS4_METAL_DISABLE_V41_ROUND_FUSE_HCEXPAND=1 disables (L3/D1)
- *
- * Opt-in levers (default 0, the environment variable enables):
- *
- *   q4_grouped   DS4_METAL_ENABLE_Q4_GROUPED_EXPERTS        (L3/W1)
- *   q4_group8    DS4_METAL_ENABLE_Q4_GROUP8_EXPERT_TABLE    (L3/W1)
- *   q4_group24   DS4_METAL_ENABLE_Q4_GROUP24_EXPERT_TABLE   (L3/W1)
- *
- * and one default-on:
- *
- *   q4_group6    DS4_METAL_DISABLE_Q4_GROUP6_EXPERT_TABLE=1 disables (L3/W1)
- *   q4_wide      DS4_DS41_Q4_WIDE=0 disables                          (L3/W2a)
- *   q4_gu_nr1    DS4_DS41_Q4_GU_NR1 enables (default off)             (L3/W2b)
- *   router_fused DS4_DS41_ROUTER_FUSED=0 disables                     (L3/W2/D2)
- *   router_fused_w DS4_DS41_ROUTER_FUSED_W=0 keeps the 5-dispatch tail (L3/W2/D2)
- *   shared_swiglu DS4_DS41_SHARED_SWIGLU=0 disables                   (L3/R9)
- *   hc_norm_mix  DS4_DS41_HC_NORM_MIX=0 disables                     (L3/R1a)
- *   hc_tail      DS4_DS41_HC_TAIL=0 disables                          (L3/R1a)
- *   hc_expand_fold DS4_DS41_HC_EXPAND_FOLD=0 disables                 (L3/R1b)
- *   mv_round     DS4_DS41_MV_ROUND=0 disables                         (L3/R2)
- *   producer_round DS4_DS41_PRODUCER_ROUND=0 disables                  (L3/R8')
- *   ffn_producer DS4_DS41_FFN_PRODUCER=0 restores separate expansion
- *   ffn_add_fold DS4_DS41_FFN_ADD_FOLD=0 disables                      (L3/R8')
- *   kv_stage_f16 DS4_DS41_KV_STAGE_F16=0 disables                      (L3/R3a)
- *
- * Prefill cost-map levers (prefill/PLAN.md Phase 1; the whole cost map runs
- * inside ONE resident server instead of ~8 process starts):
- *
- *   prefill_8k_chunk       DS4_METAL_DISABLE_V41_8K_CHUNK=1 disables
- *   prefill_decoder_suffix DS4_METAL_DISABLE_V41_DECODER_SUFFIX=1 disables
- *   prefill_stage_profile  DS4_METAL_V41_STAGE_PROFILE=1 enables (default off)
- *   q8_prefill_profile     DS4_METAL_Q8_PREFILL_PROFILE=1 enables (default off)
- *
- * The graph reads g_ds41_levers with plain global loads.  ds41_levers_set() is
- * only ever called between requests, by ds4-server's --debug-levers endpoint.
- * ------------------------------------------------------------------------ */
-typedef struct {
-    int decode_chunks; /* DS4_DS41_DECODE_CHUNKS=0 restores one-stack-CB path */
-    int decode_queue2; /* upstream a743c56: commit layer 0, then every two layers */
-    int narrow_weights; /* exact BF16/FP8 copies of selected local weights */
-    int mxfp4_fixed_shapes; /* upstream exact V4.1 routed-MoE shapes; opt-in */
-    int queue_layers;
-    int engram_async;
-    int round_fuse_norm;
-    int round_fuse_hcsum;
-    int round_fuse_hcexpand;
-    int q4_grouped;
-    int q4_group6;
-    int q4_group8;
-    int q4_group24;
-    int q4_wide;
-    int q4_gu_nr1;
-    int router_fused;
-    int router_fused_w;
-    int shared_swiglu;
-    int hc_norm_mix;
-    int mtp_down_tail_pack; /* exact six-row ninth-block packing */
-    int mtp_hc_epilogue; /* exact two/six-row residual epilogue */
-    int down_tail_pack; /* exact four-row ninth-block packing */
-    int router_shared_hc; /* independent producer mixed grid */
-    int q8_virtual_down; /* four logical K groups per physical SIMD */
-    int concurrent_down; /* shared down beside resident MXFP4 routed gate/up */
-    int attn_low_static; /* upstream fixed-shape scalar low projection */
-    int verify_mxfp4; /* upstream scalar-ordered MXFP4 DSpark verify kernels */
-    int mxfp4_dedup; /* exact shared expert reads for two to eight rows */
-    int concurrent_ffn; /* 0 retained producer; 1 shared/routed overlap; 2 also deferred HC. */ /* upstream full shared/routed FFN schedule */
-    int engram_lookup; /* exact 128 KiB code/scale format table */
-    int verify_output; /* upstream shared weight pass for DSpark attention projections */
-    int rows_mma; /* DSpark-only Q8 simdgroup matrices, upstream reduction */
-    int row_matmuls; /* exact 2-8 Q8 rows sharing weight cache */
-    int engram_gate; /* exact segmented 256-thread Engram gate */
-    int shared_down_hc; /* exact short72 shared/block/HC/pre producer */
-    int fixed_dense; /* exact literal QA/KV and attention-output dimensions */
-    int query_norm_pair; /* Exact paired QA/KV norms before the query writer. */
-    int query_rope; /* Exact query-store RoPE in the existing HC/KV producer. */
-    int heads_rope; /* exact per-step RoPE table and attention writer */
-    int preencode; /* hold next token layer 0 during the current terminal wait */
-    int engram_persistent; /* upstream bounded per-row token reader */
-    int q8_virtual_query; /* same mapping inside query/HC grid */
-    int kv_prepare; /* exact scalar KV norm/rope/quantize/ring fusion */
-    int kv_query_mix; /* independent KV task inside query/HC grid */
-    int attn_out_hc; /* serial attention producer fusion */
-    int ffn_producer; /* DS4_DS41_FFN_PRODUCER=0 restores separate HC expansion */
-    int qa_kv_flat; /* DS4_DS41_QA_KV_FLAT=0 restores separate projections */
-    int hc_stream_layout; /* 0=original, 2=validated four-channel query cohorts */
-    int hc_stream; /* DS4_DS41_HC_STREAM=0 restores pre-wave-A sequence */
-    int hc_tail;
-    int hc_expand_fold;
-    int mv_round;
-    int producer_round;
-    int ffn_add_fold;
-    int kv_stage_f16;
-    /* Prefill cost map.  prefill_8k_chunk moves the ENCODER CHUNK only: the
-     * graph's batch buffers are sized from the startup value of the same
-     * switch, so flipping it at runtime shrinks the chunk without shrinking
-     * the allocation (see ds41_encoder_chunk_cap). */
-    int prefill_8k_chunk;
-    int prefill_decoder_suffix;
-    int prefill_stage_profile;  /* default off */
-    int q8_prefill_profile;     /* default off */
-    int attn_cohort4;      /* DS4_DS41_ATTN_COHORT4=1 arms R6 (opt-in) */
-    /* Decode pass 2, C1: elements-per-thread (in packed_float4 units) for the
-     * selected-KV gather.  0 = the scalar kernel_get_rows_f32_f16 the wave
-     * inherited; 1, 2 or 4 = the wide twin.  Bit-identical at every setting. */
-    int gather_wide;
-    /* Decode pass 2, C2: perform the selected-row gather inside the contiguous
-     * KV staging dispatch.  DS4_DS41_STAGE_GATHER=0 restores the standalone
-     * kernel_get_rows gather and its intermediate half buffer. */
-    int stage_gather;
-    int index_topk_radix; /* Selector stage 3: exact conditional token selector. */
-    int index_compact_score; /* Selector stage 2, independent of stage 1. */
-    int mtp_q8_trio_mask; /* Exact three-row Q8 reuse; default mask80 (outB/shared down). */
-    int markov_cache; /* Exact 64-entry per-drafter bias memoization. */
-    int markov_profile; /* Diagnostic timing only; default off. */
-    int router_simd; /* Exact batch top-six selection with bitonic tie fallback. */
-    int router_hier; /* Exact hierarchical serial-router selection. */
-    int mtp_down_wide; /* Validated exact scheduling/load variant; default on, =0 restores parent. */
-    int mtp_gu_sort_simd; /* Validated exact scheduling/load variant; default on, =0 restores parent. */
-    int mtp_swiglu_round; /* Exact shared activation store fold; default on. */
-    int mtp_q8_round; /* Exact BF16 store for decode batches; default on. */
-    int mtp_f32_rows; /* Exact router matvec rows in one launch; default on. */
-    int mtp_pointwise_batch; /* Batch independent verifier RoPE/KV quantization only. */
-    int mtp_f16_trio; /* Exact three-row reuse for six-row Engram projections. */
-    int mtp_gu_expert_sort; /* Group independent verifier GU jobs by expert ID. */
-    int mtp_q8_swizzle; /* Exact pair6 Q8 job ordering; default on, =0 restores parent. */
-    int mtp_gu_swizzle; /* Exact six-row Q4 GU job ordering; default on, =0 restores parent. */
-    int hc_join_static; /* Literal scalar FFN HC join, preserving block output. */
-    int topk_short; /* Upstream short decode shuffle/staged/fused ladder; original at0. */
-    int index_candidates; /* Compact checked masked selection; complete chronological scores retained. */
-    int index_schedule; /* 0 original; 1 omit all-eligible block plans; 2 additionally upstream wide/BF16 scalar scoring. */
-    int index_score_stream; /* Exact decode scorer; default on, =0 restores direct scorer. */
-    int index_mask_score; /* Exact masked scorer, candidate default off. */
-    /* Decode pass 2, D1: routed DOWN leg at NR0 = 1 (2,560 threadgroups).
-     * DS4_DS41_Q4_DN_NR1=0 restores the two-rows-per-simdgroup grid. */
-    int q4_dn_nr1;
-    /* Decode pass 2, D2: threadgroup width of kernel_dsv41_hc_round_expand4.
-     * 256 (the inherited value) puts 5,120 threads on 20 of this GPU's 80
-     * cores; 32/64/128 spread the same threads wider.  Elementwise, so every
-     * width is bit-identical. */
-    int hc_expand_nth;
-    /* Prefill wave 1, bundle item (i): CULL_TAIL_SIMDGROUPS for the Q4_K
-     * routed matmuls.  Production default; DS4_METAL_DISABLE_V41_ROUTED_TAIL_CULL=1
-     * restores the uncculled kernels. */
-    int routed_tail_cull;
-    /* Prefill wave 2, lever 1: absorb a sub-2048 remainder into the sweep that
-     * precedes it instead of leaving a separate full-depth tail sweep.
-     * 62,000 tokens split 32,768 + 28,672 + 560 today; the 560-row sweep
-     * re-reads all 40 layers and costs 4.5 % against the prompt's own 32k
-     * trend (prefill/phase1/COSTMAP.md S1).  Host-only; no per-row arithmetic
-     * changes, but the decoder suffix then approximates over different rows and
-     * the frontier logits move -- Tier 2, opt-in with DS4_DS41_PREFILL_TAIL_ABSORB=1
-     * until the four-manifest gate passes. */
-    int prefill_tail_absorb;
-    /* Prefill wave 2, lever 2: concurrent readers in ds4_engram_read_batch.
-     * 16 is the historical value; the SSD saturates at 32 (ds4_engram.c).
-     * Timing only -- same rows, same order, same values. */
-    int engram_readers;
-    /* Prefill wave 2, lever 3: stage sixteen K/V rows at a time in the prefill
-     * attention core instead of one, by dispatching the existing
-     * kernel_dsv4_indexed_mixed_attention_heads8_rb16 (the decode path's
-     * production kernel) for multi-token chunks.  Same rows, same order, same
-     * online-softmax updates, same dot and reduction trees -- only the gather
-     * width and the threadgroup-barrier count change.
-     * DS4_METAL_DISABLE_V41_PREFILL_ATTN_RB16=1 restores the one-row kernel. */
-    int prefill_attn_rb16;
-    int prefill_hc_sum_round; /* wave 3, ADOPTED: default 1, =0 is the kill switch */
-    int prefill_hc_expand_round; /* wave 3, ADOPTED: default 1, =0 is the kill switch */
-    int prefill_hc_norm_round; /* wave 3, ADOPTED: default 1, =0 is the kill switch */
-    int prefill_ffn_add_round; /* wave 3, ADOPTED: default 1, =0 is the kill switch */
-    int prefill_embed_init; /* wave 3, ADOPTED: default 1, DS4_DS41_PREFILL_EMBED_INIT=0 kills it */
-    int mtp_async_chunks; /* F2: submit every four verifier layers. ADOPTED: default 1, =0 kills it. */
-    int mtp_engram_rows6; /* Six private asynchronous Engram rows. ADOPTED: default 1, =0 kills it. */
-    int dspark_excl_eos; /* Match the serial control's argmax_excluding(eos) rule. */
-    int mtp_capture_warmup; /* Complete target capture from decoder warmup inputs. */
-    int mtp_state_fix; /* Capture undo, truthful snapshots, seed generation. */
-    int mtp_q8_stream6; /* H1: six accumulators, one logical Q8 weight stream. ADOPTED: default 1, =0 kills it. */
-    int mtp_q8_stream6_mask; /* family bits0..6, ADOPTED default 2 (q_b only); cleared bits use pair6, out of range reads as 0. */
-    int mtp_q8_pair6; /* Six rows as three independent weight-sharing pairs. ADOPTED: default 1, =0 kills it. */
-    int prefill_f16_rows2; /* wave 3, ADOPTED: default 1, DS4_DS41_PREFILL_F16_ROWS2=0 kills it */
-    /* Wave 3, task B.  DIAGNOSTIC ONLY, never adopted: an ablation arm of the
-     * prefill attention core.  0 = production kernel; 1..5 select a variant
-     * that deletes one stage (pv, exp, gather) or keeps only the gather, plus
-     * an unablated control that shares the arms' clamped row scan.  Every
-     * non-zero value makes the attention output deliberately WRONG, so no
-     * speed or identity claim may ever be made from a run with it set.
-     * DS4_DS41_ATTN_DIAG=N, counted lever, per request. */
-    int attn_diag;
-    /* Wave 3: the register-lean selected-id form of the prefill attention
-     * core.  The wave-3 decomposition measured the kernel to be
-     * register/occupancy bound; deleting the sixteen-word `uint rows[16]`
-     * private array while keeping every row, every order and every arithmetic
-     * operation took the 8,192-row call 100.26 -> 84.13 ms.  Same rows, same
-     * order, same online-softmax updates -- a sixteen-bit mask replaces the
-     * array.  DS4_METAL_DISABLE_V41_PREFILL_ATTN_LEAN_ROWS=1 is the kill
-     * switch.  Prefill only: the decode path keeps the wave-2 kernel until
-     * the decode gate has seen this. */
-    int prefill_attn_lean_rows;
-    /* Wave 4, lever 1: bounded cross-sweep Engram prefetch.  A 62,000-token
-     * prompt runs three sweeps; wave 3's stage profile shows the layer-1
-     * Engram wait exposed 639.0 ms in sweep 2 and 64.7 + 65.2 ms in the 560-row
-     * sweep 3, because each sweep starts its module-0 disk delivery only at its
-     * own layer 0.  With this on, the tail of a sweep (after its module-1 rows
-     * have been consumed and the reader joined at layer 14) starts the NEXT
-     * sweep's delivery into the already-owned prefetch slab, using a PRIVATE
-     * copy of the hash history seeded from the current sweep's end and a
-     * PRIVATE id buffer, so the live history is not advanced early and the
-     * reader never shares the id array the next sweep recomputes.  The next
-     * sweep adopts the carried rows only after byte-comparing its own freshly
-     * hashed ids against the ids the reader actually used; any mismatch joins
-     * the carried reader and falls back to the ordinary in-sweep read.  Same
-     * rows, same values, same order -- Tier 1 by construction.
-     * DS4_DS41_PREFILL_ENGRAM_XSWEEP=0 is the kill switch. */
-    int prefill_engram_xsweep;
-    /* Wave 4, lever 2: attention-core geometry on the landed lean kernel.
-     * 0 = production (8 heads per threadgroup, 16 staged K/V rows, 16 KiB).
-     * Every non-zero value selects a different (cohort, staged rows) pair of
-     * the SAME kernel: each head still runs its own rows in the same order
-     * through the same dot, reduction and online-softmax trees, so the output
-     * is byte-identical and the arm is Tier 1 by construction.  Only how many
-     * heads share a threadgroup, how many rows are staged per barrier and how
-     * much threadgroup memory the dispatch asks for change.  Counted lever,
-     * per request: DS4_DS41_ATTN_GEOM=N. */
-    int attn_geom;
-    /* Stage 5.  dspark_capture = 0 suppresses the target-hidden capture on an
-     * armed session, which is the identity A/B for it; verify_wide_prefill
-     * relaxes the five count > DS4_TP_BATCH_MAX_ROWS prefill gates so a 6-row
-     * verify pass can reach them (VERIFY-COST.md section 5). */
-    int dspark_capture;
-    int verify_wide_prefill;
-    /* dspark_verify_rows = 0 verifies the whole block (1 committed + 5 draft
-     * rows); 2..6 selects a prefix of the proposal. 1 and out-of-range
-     * widths are invalid; use serial generation for the one-row control.
-     * dspark_expert_union = 1 reads the routed selection back per layer. */
-    int dspark_verify_rows;
-    int dspark_loss_budget; /* DS4_DS41_DSPARK_LOSS_BUDGET=0 restores zero-tolerance windows */
-    /* Windowed cost-feedback admission, ported from GLM DFlash2.  ADOPTED:
-     * default 1; DS4_DS41_DSPARK_ADAPTIVE=0 proposes at every eligible
-     * position and never backs off, which is the fixed-width control. */
-    int dspark_adaptive;
-    int dspark_reasoning_serial; /* <think> decodes serially; default 1, =0 lifts it */
-    int dspark_serve;      /* D: the serving loop drafts; =0 forces serial. */
-    int dspark_expert_union;
-    /* verify_batch_core: 0 retains per-row attention; 1 retains the generic
-     * batch core; 2 uses upstream indexed verification, small-row split
-     * attention and exact BF16 derived-key scoring. Batch reductions may
-     * differ from serial. All modes retain chronological rollback state.
-     * dspark_force_reject = 1 rejects every draft, which commits one token per
-     * cycle and exercises the maximal rollback on every cycle. */
-    int verify_batch_core;
-    int dspark_force_reject;
-    /* dspark_draft_trace = 1 prints one line per cycle naming the drafter's
-     * block-5 proposal and every verified row's argmax, so per-position
-     * agreement can be read paired against the target's own next tokens
-     * (ACCEPTANCE.md).  Diagnostic only: it runs `rows` extra host argmaxes
-     * and writes to stderr, outside the phase timers. */
-    int dspark_draft_trace;
-} ds41_levers;
-
-/* One text for the verify-width guard, so the session path and the debug
- * lever paths refuse width 1 with the same message and cannot drift. */
-#define DS41_DSPARK_ROWS_MSG \
-    "dspark: verify rows must be 0 (full block) or 2..6; use serial for width 1"
-
-extern ds41_levers g_ds41_levers;
-
-void        ds41_levers_init_from_env(void);
-size_t      ds41_levers_count(void);
-const char *ds41_levers_name(size_t i);
-const char *ds41_levers_env_name(size_t i);
-int         ds41_levers_get(const char *name, int *out);
-int         ds41_levers_set(const char *name, int value);
-
-/* DS4_KERNEL_LEDGER, per request.  The MODE is process-level: it installs
- * Objective-C swizzles and (mode 2) a counter sample buffer before any
- * pipeline is built, and mode 2 additionally disables encoder batching, so it
- * cannot be changed after ds4_gpu_init().  Reset and dump, however, are free
- * to run per request, which is what lets one resident server produce a
- * separate prefill ledger for every arm of the cost map.
- *   ds4_gpu_kernel_ledger_mode()      0 when the ledger is off.
- *   ds4_gpu_kernel_ledger_reset()     zero every accumulator, keep the
- *                                     pipeline-object -> kernel-name map.
- *   ds4_gpu_kernel_ledger_dump_path() write the ledger to a path (NULL or ""
- *                                     = the DS4_KERNEL_LEDGER_DUMP default);
- *                                     1 on success, 0 when off or unwritable.
- * All three are no-ops returning 0 on non-Metal builds. */
-int  ds4_gpu_kernel_ledger_mode(void);
-void ds4_gpu_kernel_ledger_reset(void);
-int  ds4_gpu_kernel_ledger_dump_path(const char *path);
+/* Record one --v41-sidecar FILE in list (DS4_V41_SIDECAR_MAX slots); false when the list is full. */
+bool ds4_v41_sidecar_add(const char *list[DS4_V41_SIDECAR_MAX], const char *path);
 
 typedef struct {
     float *data;
@@ -543,11 +252,71 @@ int ds4_engine_create_with_gpu_config(ds4_engine **out,
                                        const struct ds4_gpu_config *gpu_cfg);
 void ds4_engine_close(ds4_engine *e);
 void ds4_engine_summary(ds4_engine *e);
-int ds4_engine_vocab_size(ds4_engine *e);
-/* Selection-only cache affinity has no missing candidates on this policy. */
 bool ds4_engine_quality_speed_resident(ds4_engine *e);
+/* Retained control API. Implementations must preserve each admitted control;
+ * an upstream rebase is not permission to accept an inert setting. */
+/* V4.1 DSpark speculative decode (campaign Stage 5).  Greedy only: the emitted
+ * continuation is identical to serial greedy by construction.  `out_tokens`
+ * must hold at least `gen_tokens` ints; `eos_id` < 0 disables the stop check. */
+typedef struct {
+    uint32_t cycles;        /* draft + verify passes                       */
+    uint32_t committed;     /* all processed target rows, including serial */
+    uint32_t serial_rows;   /* serial fallback/cooldown rows within committed */
+    uint32_t verified_rows; /* rows evaluated by the verify passes         */
+    uint32_t accept_hist[8];/* accepted drafts per cycle, 0..block         */
+    double   propose_ms, verify_ms, commit_ms, total_ms;
+    uint64_t controller_attempts;  /* verify cycles the controller admitted    */
+    uint64_t controller_declines;  /* serial steps the cooldown skipped        */
+    uint64_t controller_serial;    /* serial steps of any kind                 */
+    uint64_t controller_windows, controller_backoffs, controller_losing;
+    uint64_t controller_confidence_declines; /* proposals refused before verify */
+    double controller_serial_ms;   /* median measured serial token, ms         */
+    double controller_cycle_ms;    /* EMA verify cycle, ms                     */
+    double controller_paid_ms;     /* request-cumulative wall minus rows*serial */
+    double   expert_union;  /* mean routed experts read per layer per pass */
+    uint32_t union_layers;  /* layers sampled (0 unless DS4_DS41_EXPERT_UNION) */
+} ds4_dspark_decode_stats;
+
+int ds4_session_ds41_dspark_usage(const ds4_session *s, uint64_t out[5]);
+/* One served request is one admission ledger: begin it at the top of the
+ * request's decode, read it back with the usage extension.
+ * out = {attempts, serial steps, skipped steps, windows, backoffs, losing
+ * cycles}; ms = {median serial token, EMA cycle, request net}. */
+void ds4_session_ds41_dspark_request_begin(ds4_session *s);
+/* 0 no session, 1 drafter healthy, 2 latched; out = requests, attempts,
+ * failures, skips. */
+int ds4_session_ds41_dspark_fault_stats(const ds4_session *s, uint64_t out[4]);
+int ds4_session_ds41_dspark_adaptive_stats(const ds4_session *s, uint64_t out[7],
+                                           double ms[3]);
+int ds4_session_dspark_verify_artifact_failed(const ds4_session *s);
+int ds4_session_dspark_decode_stats_snapshot(const ds4_session *s, ds4_dspark_decode_stats *out);
+int ds4_session_dspark_generate(ds4_session *s, int gen_tokens, int eos_id,
+                                int *out_tokens, int *n_out,
+                                ds4_dspark_decode_stats *st,
+                                char *err, size_t errlen);
+
+int ds4_gpu_kernel_ledger_mode(void);
+void ds4_gpu_kernel_ledger_reset(void);
+int ds4_gpu_kernel_ledger_dump_path(const char *path);
+
+#define DS41_DSPARK_ROWS_MSG \
+    "dspark: verify rows must be 0 (full block) or 2..6; use serial for width 1"
+size_t ds41_levers_count(void);
+const char *ds41_levers_name(size_t i);
+const char *ds41_levers_status(const char *name);
+int ds41_levers_get(const char *name,int *value);
+int ds41_levers_set(const char *name,int value);
+int ds41_levers_validate_environment(char *err,size_t cap);
+int ds41_levers_require_supported(char *err,size_t cap);
+int ds41_upstream_control_value(const char *name,int upstream_default);
+uint64_t ds41_upstream_control_groups(uint64_t upstream_off);
 int ds4_session_quality_speed_set(ds4_session *s,float value);
 float ds4_session_quality_speed_get(const ds4_session *s);
+typedef struct { uint64_t device, inode, size, mtime_ns; } ds4_native_frontier_model_identity;
+bool ds4_engine_native_frontier_identity(ds4_engine *e,ds4_native_frontier_model_identity *out);
+size_t ds4_session_vision_identity_count(const ds4_session *s);
+bool ds4_session_vision_identity_at(const ds4_session *s,size_t index,uint32_t *start,uint32_t *count,uint8_t fingerprint[32]);
+int ds4_engine_vocab_size(ds4_engine *e);
 uint32_t ds4_engine_prefill_chunk(ds4_engine *e);
 int ds4_engine_power(ds4_engine *e);
 int ds4_engine_set_power(ds4_engine *e, int power_percent);
@@ -564,14 +333,6 @@ uint32_t ds4_engine_layer_compress_ratio(ds4_engine *e, uint32_t layer);
 uint64_t ds4_engine_hidden_f32_values(ds4_engine *e);
 int ds4_engine_embd_dim(ds4_engine *e);
 uint64_t ds4_engine_model_bytes(ds4_engine *e);
-/* Identity of the descriptor actually mapped by this engine. This is a
- * read-only binding for an externally qualified native-frontier receipt; it
- * does not hash or reopen the configured model path. */
-typedef struct {
-    uint64_t device, inode, size, mtime_ns;
-} ds4_native_frontier_model_identity;
-bool ds4_engine_native_frontier_identity(
-    ds4_engine *e, ds4_native_frontier_model_identity *out);
 bool ds4_engine_has_vision(ds4_engine *e);
 int ds4_engine_vision_encode_file(ds4_engine *e,
                                   const char *path,
@@ -584,6 +345,22 @@ int ds4_engine_vision_encode_memory(ds4_engine *e,
                                     ds4_vision_embedding *out,
                                     char *error,
                                     size_t error_cap);
+/* V4.1 only: the embedding of an image without running the encoder (data NULL;
+ * fingerprint, rows and layout filled). ds4_prompt_append_vision accepts it, and
+ * ds4_vision_span_fill adds the rows from the encoder output when a prefill needs
+ * them. Returns 0 for other models, which must encode. */
+int ds4_engine_vision_describe_memory(ds4_engine *e,
+                                      const uint8_t *encoded,
+                                      size_t encoded_len,
+                                      ds4_vision_embedding *out,
+                                      char *error,
+                                      size_t error_cap);
+/* Fill a described span's rows from the same image's encoder output (consumed). */
+int ds4_vision_span_fill(ds4_engine *e,
+                         ds4_vision_span *span,
+                         ds4_vision_embedding *encoded,
+                         char *error,
+                         size_t error_cap);
 void ds4_vision_embedding_free(ds4_vision_embedding *embedding);
 int ds4_prompt_append_vision(ds4_engine *e,
                              ds4_tokens *tokens,
@@ -618,6 +395,9 @@ bool ds4_engine_glm_layer_payload_bytes(ds4_engine *e,
 int ds4_engine_model_id(ds4_engine *e);
 bool ds4_engine_is_glm_dsa(ds4_engine *e);
 bool ds4_engine_is_glm53(ds4_engine *e);
+bool ds4_engine_is_qwen4(ds4_engine *e);
+/* Qwen3.8 reasoning-effort system instruction for a think mode (NULL when none) */
+const char *ds4_qwen4_reasoning_effort_text(ds4_think_mode mode);
 const char *ds4_backend_name(ds4_backend backend);
 bool ds4_think_mode_enabled(ds4_think_mode mode);
 int ds4_think_mode_level(ds4_think_mode mode);
@@ -707,6 +487,9 @@ int ds4_token_assistant(ds4_engine *e);
  * with the caller. */
 struct ds4_tp;
 int ds4_engine_tp_bind(ds4_engine *e, struct ds4_tp *tp, char *err, size_t errlen);
+/* Release gate resources before freeing a bound transport. Sessions must
+ * already be closed. Also called by ds4_engine_close(). */
+void ds4_engine_tp_unbind(ds4_engine *e);
 
 int ds4_session_create(ds4_session **out, ds4_engine *e, int ctx_size);
 void ds4_session_free(ds4_session *s);
@@ -744,6 +527,10 @@ typedef enum {
  * state is refilled from scratch. */
 #define DS4_SESSION_SYNC_INTERRUPTED 2
 int ds4_session_sync(ds4_session *s, const ds4_tokens *prompt, char *err, size_t errlen);
+/* The first prompt position a sync would prefill (the kept prefix length). An
+ * image span ending at or before it needs no rows; images may pass data NULL. */
+int ds4_session_prefill_start(const ds4_session *s, const ds4_tokens *prompt,
+                              const ds4_vision_span *images, size_t image_count);
 int ds4_session_sync_multimodal(ds4_session *s,
                                 const ds4_tokens *prompt,
                                 const ds4_vision_span *images,
@@ -760,6 +547,13 @@ bool ds4_session_vision_prefix_matches(const ds4_session *s,
 bool ds4_session_vision_state_matches(const ds4_session *s,
                                       const ds4_vision_span *images,
                                       size_t image_count);
+/* Fingerprint-only image prefix: every historical image matches by row count
+ * and fingerprint, ignoring token positions (which rebase repairs) and
+ * allowing appended request images.  Lets the server routing probe admit
+ * image-append continuations while still rejecting pixel mismatches. */
+bool ds4_session_vision_fingerprint_prefix_matches(const ds4_session *s,
+                                                   const ds4_vision_span *images,
+                                                   size_t image_count);
 /* Restore image positions from an independently authenticated live continuation
  * (for example, matching tool-call IDs). Checks every fingerprint and row count;
  * on failure, leaves spans unchanged. This does not verify the text history. */
@@ -768,73 +562,58 @@ bool ds4_session_rebase_vision_state(const ds4_session *s,
 /* True while a session contains, or is actively syncing, image-conditioned
  * state. Such state must not be written to the text-keyed disk KV cache. */
 bool ds4_session_has_vision_state(const ds4_session *s);
-/* Image identities currently conditioning the session: the in-flight sync
- * spans while a multimodal prefill is running, otherwise the retained
- * checkpoint identities.  Used to key image-conditioned disk checkpoints by
- * image fingerprint (KV1). */
-size_t ds4_session_vision_identity_count(const ds4_session *s);
-bool ds4_session_vision_identity_at(const ds4_session *s, size_t index,
-                                    uint32_t *token_start,
-                                    uint32_t *token_count,
-                                    uint8_t fingerprint[32]);
-/* After restoring a disk checkpoint whose key authenticated the fingerprint
- * of every image inside it, record those identities as the checkpoint's image
- * state.  Every span must end at or before the checkpoint length.  Returns
- * false and leaves the session unchanged otherwise. */
+/* The checkpoint's image identities for the disk KV cache: token_start, row
+ * count and fingerprint per image (embedding data stays NULL). Returns the
+ * count, or -1 when the state cannot be persisted by identity: no valid
+ * checkpoint, a sync still conditioning on images, more than cap images, or
+ * a backend whose image state is more than its payload rows. */
+int ds4_session_vision_identities(const ds4_session *s, ds4_vision_span *out, int cap);
+/* Attach the identities stored with a disk payload just loaded into s, so a
+ * multimodal sync can extend it. Spans must cover image placeholder tokens in
+ * order; false leaves the checkpoint's identities unchanged. n = 0 clears them. */
 bool ds4_session_restore_vision_identities(ds4_session *s,
-                                           const ds4_vision_span *images,
-                                           size_t image_count);
+                                           const ds4_vision_span *images, size_t n);
 bool ds4_session_rewrite_requires_rebuild(int live_len, int canonical_len, int common);
 ds4_session_rewrite_result ds4_session_rewrite_from_common(
         ds4_session *s, const ds4_tokens *prompt, int common,
         char *err, size_t errlen);
 int ds4_session_common_prefix(ds4_session *s, const ds4_tokens *prompt);
+bool ds4_session_checkpoint_valid(const ds4_session *s);
+/* Test helpers (ds4-test): allocate a session shell holding only the given
+ * checkpoint tokens, for server-side routing/probe unit tests.  Not usable
+ * for inference; free with ds4_session_free_test_checkpoint(). */
+ds4_session *ds4_session_new_test_checkpoint(const int *tokens, int n);
+void ds4_session_free_test_checkpoint(ds4_session *s);
+/* Attach synthetic image identities to a test checkpoint (copies
+ * token_start/row-count/fingerprint per span).  Not usable for inference. */
+void ds4_session_set_test_images(ds4_session *s,
+                                 const ds4_vision_span *images, size_t n);
 int ds4_session_argmax(ds4_session *s);
-
-/* V4.1 DSpark speculative decode (campaign Stage 5).  Greedy only: the emitted
- * continuation is identical to serial greedy by construction.  `out_tokens`
- * must hold at least `gen_tokens` ints; `eos_id` < 0 disables the stop check. */
-typedef struct {
-    uint32_t cycles;        /* draft + verify passes                       */
-    uint32_t committed;     /* all processed target rows, including serial */
-    uint32_t serial_rows;   /* serial fallback/cooldown rows within committed */
-    uint32_t verified_rows; /* rows evaluated by the verify passes         */
-    uint32_t accept_hist[8];/* accepted drafts per cycle, 0..block         */
-    double   propose_ms, verify_ms, commit_ms, total_ms;
-    uint64_t controller_attempts;  /* verify cycles the controller admitted    */
-    uint64_t controller_declines;  /* serial steps the cooldown skipped        */
-    uint64_t controller_serial;    /* serial steps of any kind                 */
-    uint64_t controller_windows, controller_backoffs, controller_losing;
-    uint64_t controller_confidence_declines; /* proposals refused before verify */
-    double controller_serial_ms;   /* median measured serial token, ms         */
-    double controller_cycle_ms;    /* EMA verify cycle, ms                     */
-    double controller_paid_ms;     /* request-cumulative wall minus rows*serial */
-    double   expert_union;  /* mean routed experts read per layer per pass */
-    uint32_t union_layers;  /* layers sampled (0 unless DS4_DS41_EXPERT_UNION) */
-} ds4_dspark_decode_stats;
-
-int ds4_session_ds41_dspark_usage(const ds4_session *s, uint64_t out[5]);
-/* One served request is one admission ledger: begin it at the top of the
- * request's decode, read it back with the usage extension.
- * out = {attempts, serial steps, skipped steps, windows, backoffs, losing
- * cycles}; ms = {median serial token, EMA cycle, request net}. */
-void ds4_session_ds41_dspark_request_begin(ds4_session *s);
-/* 0 no session, 1 drafter healthy, 2 latched; out = requests, attempts,
- * failures, skips. */
-int ds4_session_ds41_dspark_fault_stats(const ds4_session *s, uint64_t out[4]);
-int ds4_session_ds41_dspark_adaptive_stats(const ds4_session *s, uint64_t out[7],
-                                           double ms[3]);
-int ds4_session_dspark_generate(ds4_session *s, int gen_tokens, int eos_id,
-                                int *out_tokens, int *n_out,
-                                ds4_dspark_decode_stats *st,
-                                char *err, size_t errlen);
 int ds4_session_argmax_excluding(ds4_session *s, int excluded_id);
 int ds4_session_argmax_ignoring_eos(ds4_session *s,
                                     ds4_think_mode think_mode);
 int ds4_sample_logits(const float *logits, int n_vocab, float temperature,
                       int top_k, float top_p, float min_p, uint64_t *rng);
 int ds4_session_sample(ds4_session *s, float temperature, int top_k, float top_p, float min_p, uint64_t *rng);
+/* The V4.1 GPU top-p selector's sampling outcomes since process start: 0 decided, 1 heap mass short, 2 ambiguous,
+ * 3 overflow, 4 invalid, 5 zero finite, 6 unbound, 7 settings outside temp 1 / top_k 0 / top_p 0.95 / min_p 0,
+ * 8 stale (paths 1-8 fell back to the CPU sampler); and the decode steps that encoded it. */
+void ds4_sampler_gpu_counts(uint64_t out[9]);
+/* KEYED_GPU outcomes: 0 decode steps decided on the GPU, 1 unbound or stale, 2 overflow, 3 invalid */
+void ds4_keyed_gpu_counts(uint64_t out[4]);
+/* PQ_GPU outcomes: 0 draft draws decided on the GPU, 1 drawn on the CPU from the GPU's q, 2 residual draws decided on
+ * the GPU, 3 on the CPU, 4 verify blocks whose p was built on the GPU */
+void ds4_pq_gpu_counts(uint64_t out[5]);
+uint64_t ds4_sampler_gpu_encoded_count(void);
 #ifdef DS4_TEST_HOOKS
+/* the selector's reference and production consumers on one summary (HDR: 64-byte header, P: 505 partials,
+ * CAND: 2048 {float logit; uint32_t id}); the summary they leave is {int id; float logit, prob}[2048] */
+int ds4_test_selector_consume(const void *hdr, const float *P, const void *cand, const float *lg, uint64_t *rng, int *token);
+int ds4_test_selector_consume_fast(const void *hdr, const float *P, const void *cand, const float *lg, uint64_t *rng, int *token);
+const void *ds4_test_selector_summary(void);
+/* Teacher-force a V4.1 verification block, returning logits after each token. */
+int ds4_test_ds41_verify_tokens(ds4_session *s, const int *tokens, int count,
+                                float *logits, char *err, size_t errlen);
 int ds4_test_sample_logits(const float *logits, uint32_t n_vocab,
                            float temperature, int top_k,
                            float top_p, float min_p, uint64_t *rng,
@@ -852,6 +631,12 @@ int ds4_test_speculative_sample(const float *target_logits,
                                 uint64_t *rng,
                                 float *target_probs,
                                 float *draft_probs);
+int ds4_test_sample_keyed(const float *logits, uint32_t n_vocab, float temperature, int top_k, float top_p,
+                          float min_p, uint64_t seed, uint32_t pos, float *probs);
+int ds4_test_keyed_finish(const void *row, const float *logits, float temperature, uint64_t seed, uint32_t pos,
+                          int *token);
+int ds4_test_pq_draw_finish(const void *row, const float *logits, float temperature, uint64_t key, int *token);
+int ds4_test_pq_residual_finish(const void *row, const float *p, const float *q, uint64_t key, int *token);
 int ds4_test_speculative_delta_sample(const float *target_logits,
                                       uint32_t n_vocab,
                                       int draft_token,
@@ -864,6 +649,7 @@ int ds4_test_speculative_delta_sample(const float *target_logits,
 int ds4_test_argmax_excluding_logits(const float *logits, uint32_t n_vocab,
                                      int excluded_id);
 uint64_t ds4_test_mixed_native_count(void);
+uint64_t ds4_test_ds41_batch_count(void);
 #endif
 int ds4_session_top_logprobs(ds4_session *s, ds4_token_score *out, int k);
 int ds4_session_token_logprob(ds4_session *s, int token, ds4_token_score *out);
@@ -884,6 +670,16 @@ typedef struct {
  * sequential fallback. */
 int ds4_sessions_eval_batch(ds4_decode_item *items, int count,
                             char *err, size_t errlen);
+/* One speculative cycle for a batch of sessions (greedy acceptance, Qwen3.8
+ * with --mtp): each item feeds its token; a pending draft rides along as a
+ * second row and is committed when it is the target's argmax.  accepted[i]
+ * lists the tokens committed for item i (the fed token, then the draft) and
+ * n_accepted[i] how many; the session's logits then follow its last
+ * committed token.  Engines without native batching run one cycle per
+ * session in turn. */
+int ds4_sessions_eval_batch_speculative_argmax(ds4_decode_item *items, int count,
+                                               int (*accepted)[2], int *n_accepted,
+                                               char *err, size_t errlen);
 /* Advance one resumed prefill suffix and an independent decode batch as one
  * scheduling step. Unsupported combinations use the ordinary serialized
  * session operations. */
@@ -911,14 +707,28 @@ int ds4_session_eval_speculative(ds4_session *s, int first_token,
                                  char *err, size_t errlen);
 /* TP worker side of a mirrored speculative-verify block: run its half of the
  * batch verify for KV side effects, then obey the leader's commit frame
- * (keep, or roll back and replay). Only called from ds4_tp_worker_run. */
+ * (keep, or roll back and replay). flags are the VERIFY frame's
+ * DS4_TP_VERIFY_* bits. Only called from ds4_tp_worker_run. */
 int ds4_session_tp_spec_cycle(ds4_session *s, const int *drafts, int draft_n,
-                              char *err, size_t errlen);
+                              uint32_t flags, char *err, size_t errlen);
 int ds4_session_glm_tp_spec_cycle(ds4_session *s, int token, int limit,
                                  char *err, size_t errlen);
+/* TP worker side of a lockstep DSpark DRAFT/MAINTAIN frame (mode is a
+ * DS4_TP_DSPARK_* value).  Only called from ds4_tp_worker_run. */
+int ds4_session_tp_dspark_draft(ds4_session *s, int token, int pos,
+                                uint32_t mode, char *err, size_t errlen);
+/* Internal TP restore: no collectives and no logits exchange. Return 0 after
+ * restoring a recent verifier prefix, 1 if unavailable, -1 on copy failure.
+ * Logits are valid only at the block start; otherwise replay before sampling. */
+int ds4_session_restore_speculative_prefix(ds4_session *s, int pos);
 void ds4_session_invalidate(ds4_session *s);
-/* Keep the token prefix, restoring recurrent state where possible. Otherwise
- * the checkpoint becomes invalid: sync the retained prefix before eval.
+/* Try a recent speculative rewind, including valid next-token logits. False
+ * means the caller must use ordinary rewind/sync before continuing; a failed
+ * restore may have invalidated the checkpoint. */
+bool ds4_session_rewind_speculative(ds4_session *s, int pos);
+/* Keep the token prefix, restoring recurrent state where possible. This may
+ * copy GPU state and replay a bounded speculative suffix on both TP ranks.
+ * Otherwise the checkpoint becomes invalid: sync the retained prefix before eval.
  * Callers retaining images must use sync_multimodal for that rebuild. */
 void ds4_session_rewind(ds4_session *s, int pos);
 int ds4_session_pos(ds4_session *s);
@@ -974,6 +784,16 @@ int ds4_session_write_staged_payload(const ds4_session_payload_file *payload,
 void ds4_session_payload_file_free(ds4_session_payload_file *payload);
 int ds4_session_save_payload(ds4_session *s, FILE *fp, char *err, size_t errlen);
 int ds4_session_load_payload(ds4_session *s, FILE *fp, uint64_t payload_bytes, char *err, size_t errlen);
+/* FNV-1a of the GGUF header region (metadata + tensor table); which 0 main, 1 drafter, 2 vision. */
+uint64_t ds4_engine_model_fingerprint(ds4_engine *e, int which);
+/* Identity of the numerics that build image state: the vision GGUF's fingerprint, tagged when the encoder's
+ * output is not the exact one (V4.1 flash attention on Metal) and when image prompts prefill with IMAGE_CED.
+ * 0 without a vision model. */
+uint64_t ds4_engine_vision_encoder_identity(ds4_engine *e);
+/* Weight representation consumed by prefill; part of the persisted-state identity. */
+const char *ds4_engine_prefill_repr(ds4_engine *e);
+/* Value source of the narrow copies prefill reads: none | public | src:<sha256-16>. */
+const char *ds4_engine_prefill_values(ds4_engine *e);
 int ds4_session_save_snapshot(ds4_session *s, ds4_session_snapshot *snap, char *err, size_t errlen);
 int ds4_session_load_snapshot(ds4_session *s, const ds4_session_snapshot *snap, char *err, size_t errlen);
 void ds4_session_snapshot_free(ds4_session_snapshot *snap);

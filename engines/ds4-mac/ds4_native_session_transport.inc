@@ -390,6 +390,15 @@ static bool ds4_ns_start_remote(ds4_ns_session*s,ds4_nf_io*io,const ds4_tokens*f
     s->remote_accepted=true;
     return ds4_ns_poll(s,io,"",true,r)&&r->checkpoint.context==1000001&&r->checkpoint.position==(uint32_t)first->len&&!strcmp(r->checkpoint.tokens_sha256,hash);
 }
+static bool ds4_ns_local_continuation(ds4_ns_session*s,ds4_session*session,
+        const ds4_tokens*tokens,const ds4_vision_span*images,size_t image_count){
+    if(!s||!s->started||!s->include_history_reasoning||!s->anchor.state||!tokens)return false;
+    const ds4_tokens*now=ds4_session_tokens(session);
+    uint32_t live=now&&now->len>0?(uint32_t)now->len:0;
+    bool extends=live&&(uint32_t)tokens->len>=live&&!memcmp(tokens->v,now->v,(size_t)live*4);
+    return (!image_count||ds4_session_vision_prefix_matches(session,images,image_count))&&
+        ds4_ns_local_work(s->config->local_prefill_max,live,(uint32_t)tokens->len,extends);
+}
 static int ds4_ns_prefill(ds4_ns_session*s,ds4_session*session,const ds4_tokens*tokens,
                            const ds4_vision_span*images,size_t image_count,
                            ds4_nf_cancel_fn cancel,void*ud,char*err,size_t cap){
@@ -401,8 +410,7 @@ static int ds4_ns_prefill(ds4_ns_session*s,ds4_session*session,const ds4_tokens*
     if(s->started){
         const ds4_tokens*now=ds4_session_tokens(session);uint32_t live=now&&now->len>0?(uint32_t)now->len:0;
         bool extends=live&&(uint32_t)tokens->len>=live&&!memcmp(tokens->v,now->v,(size_t)live*4);
-        bool images_known=!image_count||ds4_session_vision_prefix_matches(session,images,image_count);
-        if(s->include_history_reasoning&&s->anchor.state&&images_known&&ds4_ns_local_work(s->config->local_prefill_max,live,(uint32_t)tokens->len,extends)){
+        if(ds4_ns_local_continuation(s,session,tokens,images,image_count)){
             phase="local continuation prefill";
             if(ds4_ns_local_prefill(s,session,tokens,images,image_count,cancel,ud,err,cap))goto done;
             ok=true;goto done;

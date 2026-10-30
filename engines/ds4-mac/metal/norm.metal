@@ -16,7 +16,7 @@ struct ds4_metal_args_norm {
 // RMSNorm over one activation row, optionally fusing the learned weight
 // multiply. DS4 calls this before attention, before the FFN, and for plain
 // diagnostics that need normalized but unweighted rows.
-template <typename T, short F>
+template <typename T, short F, bool R = false>
 kernel void kernel_rms_norm_fuse_impl(
         constant ds4_metal_args_norm & args,
         device const char * src0,
@@ -66,25 +66,10 @@ kernel void kernel_rms_norm_fuse_impl(
 
     device T * y = (device T *) (dst + i03*args.nb3 + i02*args.nb2 + i01*args.nb1);
     for (int i00 = tpitg.x; i00 < args.ne00_t; i00 += ntg.x) {
-        if (F == 1) {
-            y[i00] = (x[i00]*scale);
-        }
-        if (F == 2) {
-            y[i00] = (x[i00]*scale)*f0[i00];
-        }
-        if (F == 3) {
-            y[i00] = (x[i00]*scale)*f0[i00] + f1[i00];
-        }
-        /* F == 4: identical to F == 2, then DeepSeek V4.1's BF16 re-rounding
-         * applied on the store path.  The value written is the same 32-bit
-         * pattern kernel_dsv41_bf16_linear would have produced in a second
-         * pass over this buffer, because dsv41_bf16() is a pure function of
-         * the stored word.  See ds41_norm() in ds4.c. */
-        if (F == 4) {
-            const float4 v = (x[i00]*scale)*f0[i00];
-            y[i00] = float4(dsv41_bf16(v.x), dsv41_bf16(v.y),
-                            dsv41_bf16(v.z), dsv41_bf16(v.w));
-        }
+        T v = x[i00]*scale;
+        if (F == 2) v = v*f0[i00];
+        if (F == 3) v = v*f0[i00] + f1[i00];
+        y[i00] = R ? ds4_bf16_round(v) : v;
     }
 }
 
@@ -93,7 +78,7 @@ typedef decltype(kernel_rms_norm_fuse_impl<float4, 1>) kernel_rms_norm_fuse_t;
 // Host-visible RMSNorm variants: plain norm and norm multiplied by weight.
 template [[host_name("kernel_rms_norm_f32_4")]]     kernel kernel_rms_norm_fuse_t kernel_rms_norm_fuse_impl<float4, 1>;
 template [[host_name("kernel_rms_norm_mul_f32_4")]] kernel kernel_rms_norm_fuse_t kernel_rms_norm_fuse_impl<float4, 2>;
-template [[host_name("kernel_rms_norm_mul_bf16_f32_4")]] kernel kernel_rms_norm_fuse_t kernel_rms_norm_fuse_impl<float4, 4>;
+template [[host_name("kernel_rms_norm_mul_f32_4_bf16")]] kernel kernel_rms_norm_fuse_t kernel_rms_norm_fuse_impl<float4, 2, true>;
 
 kernel void kernel_add_rms_norm_mul_f32_4(
         constant ds4_metal_args_norm & args,

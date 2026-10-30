@@ -7,10 +7,21 @@
 #include <stdlib.h>
 #include <string.h>
 
+#ifdef __APPLE__
+#include <CommonCrypto/CommonDigest.h>
+#include <dispatch/dispatch.h>
+#endif
+
 #define JPEG_IMPLEMENTATION
 #define PNG_IMPLEMENTATION
 #include "third_party/iris/jpeg.h"
 #include "third_party/iris/png.h"
+
+#ifdef __APPLE__
+#include <CoreFoundation/CoreFoundation.h>
+#include <CoreGraphics/CoreGraphics.h>
+#include <ImageIO/ImageIO.h>
+#endif
 
 typedef struct {
     uint32_t state[8];
@@ -131,6 +142,54 @@ static void ds4_image_error(char *error, size_t cap, const char *message) {
     snprintf(error, cap, "%s", message);
 }
 
+/* VISION_HOST_PREP (default on; DS4_METAL_DISABLE_V41_VISION_HOST_PREP=1 restores
+ * the serial path): image rows are independent, so decode copies, the bicubic
+ * resize, normalization and patching split across cores with the same per-pixel
+ * arithmetic, and the pixel fingerprint uses the system SHA-256 (same digest). */
+static int ds4_image_host_prep_on(void) {
+    return getenv("DS4_METAL_DISABLE_V41_VISION_HOST_PREP") == NULL;
+}
+
+typedef void (*ds4_image_rows_fn)(void *ctx, size_t first, size_t end);
+
+typedef struct {
+    ds4_image_rows_fn fn;
+    void *ctx;
+    size_t count;
+    size_t chunk;
+} ds4_image_rows_job;
+
+#ifdef __APPLE__
+static void ds4_image_rows_chunk(void *ctx, size_t index) {
+    const ds4_image_rows_job *job = ctx;
+    const size_t first = index * job->chunk;
+    size_t end = first + job->chunk;
+    if (end > job->count) end = job->count;
+    if (first < end) job->fn(job->ctx, first, end);
+}
+#endif
+
+static void ds4_image_rows(size_t count, size_t min_chunk, ds4_image_rows_fn fn, void *ctx) {
+    if (count == 0) return;
+#ifdef __APPLE__
+    if (ds4_image_host_prep_on() && count > min_chunk) {
+        size_t chunks = (count + min_chunk - 1) / min_chunk;
+        if (chunks > 64) chunks = 64;
+        ds4_image_rows_job job = {fn, ctx, count, (count + chunks - 1) / chunks};
+        dispatch_apply_f((count + job.chunk - 1) / job.chunk,
+                         dispatch_get_global_queue(QOS_CLASS_USER_INITIATED, 0),
+                         &job, ds4_image_rows_chunk);
+        return;
+    }
+#else
+    (void)min_chunk;
+#endif
+    fn(ctx, 0, count);
+}
+
+static void ds4_image_fingerprint(uint8_t out[32], uint32_t width, uint32_t height,
+                                  const uint8_t *rgb, size_t bytes);
+
 static uint16_t ds4_exif_u16(const uint8_t *p, int little) {
     return little ? (uint16_t)(p[0] | (p[1] << 8))
                   : (uint16_t)((p[0] << 8) | p[1]);
@@ -183,6 +242,15 @@ static int ds4_jpeg_orientation(const uint8_t *data, size_t len) {
     return 1;
 }
 
+typedef struct {
+    const uint8_t *pixels;
+    uint8_t *rgb;
+    uint32_t width, height, channels, out_width;
+    int orientation;
+} ds4_oriented_rows;
+
+static void ds4_oriented_rgb_rows(void *opaque, size_t first, size_t end);
+
 static int ds4_oriented_rgb(
         ds4_image *out,
         const uint8_t *pixels,
@@ -196,7 +264,24 @@ static int ds4_oriented_rgb(
     uint8_t *rgb = malloc(bytes);
     if (!rgb) return 0;
 
-    for (uint32_t y = 0; y < height; y++) {
+    ds4_oriented_rows ctx = {pixels, rgb, width, height, channels, out_width, orientation};
+    ds4_image_rows(height, 32, ds4_oriented_rgb_rows, &ctx);
+
+    out->width = out_width;
+    out->height = out_height;
+    out->rgb = rgb;
+    ds4_image_fingerprint(out->fingerprint, out_width, out_height, rgb, bytes);
+    return 1;
+}
+
+static void ds4_oriented_rgb_rows(void *opaque, size_t first, size_t end) {
+    const ds4_oriented_rows *c = opaque;
+    const uint8_t *pixels = c->pixels;
+    uint8_t *rgb = c->rgb;
+    const uint32_t width = c->width, height = c->height, channels = c->channels;
+    const uint32_t out_width = c->out_width;
+    const int orientation = c->orientation;
+    for (uint32_t y = (uint32_t)first; y < (uint32_t)end; y++) {
         for (uint32_t x = 0; x < width; x++) {
             uint32_t ox = x, oy = y;
             switch (orientation) {
@@ -218,18 +303,98 @@ static int ds4_oriented_rgb(
             }
         }
     }
+}
 
-    out->width = out_width;
-    out->height = out_height;
-    out->rgb = rgb;
+static void ds4_image_fingerprint(uint8_t out[32], uint32_t width, uint32_t height,
+                                  const uint8_t *rgb, size_t bytes) {
+#ifdef __APPLE__
+    if (ds4_image_host_prep_on()) {
+        CC_SHA256_CTX ctx;
+        CC_SHA256_Init(&ctx);
+        CC_SHA256_Update(&ctx, &width, sizeof(width));
+        CC_SHA256_Update(&ctx, &height, sizeof(height));
+        for (size_t done = 0; done < bytes;) {
+            size_t take = bytes - done < (1u << 30) ? bytes - done : (1u << 30);
+            CC_SHA256_Update(&ctx, rgb + done, (CC_LONG)take);
+            done += take;
+        }
+        CC_SHA256_Final(out, &ctx);
+        return;
+    }
+#endif
     ds4_sha256 sha;
     ds4_sha256_init(&sha);
-    ds4_sha256_update(&sha, &out_width, sizeof(out_width));
-    ds4_sha256_update(&sha, &out_height, sizeof(out_height));
+    ds4_sha256_update(&sha, &width, sizeof(width));
+    ds4_sha256_update(&sha, &height, sizeof(height));
     ds4_sha256_update(&sha, rgb, bytes);
-    ds4_sha256_final(&sha, out->fingerprint);
-    return 1;
+    ds4_sha256_final(&sha, out);
 }
+
+/* Pasted screenshots and clipboard images frequently arrive as WebP. macOS
+ * ImageIO decodes it with no new dependency: draw into RGBA8, premultiplied,
+ * over white so transparent pixels match what a JPEG viewer would show, then
+ * reuse the shared oriented-RGB path. */
+#ifdef __APPLE__
+static int ds4_decode_webp_imageio(
+        ds4_image *out,
+        const uint8_t *encoded,
+        size_t encoded_len,
+        char *error,
+        size_t error_cap) {
+    int ok = 0;
+    CFDataRef data = NULL;
+    CGImageSourceRef source = NULL;
+    CGImageRef image = NULL;
+    CGContextRef context = NULL;
+    CGColorSpaceRef space = NULL;
+    data = CFDataCreate(NULL, encoded, (CFIndex)encoded_len);
+    if (data) source = CGImageSourceCreateWithData(data, NULL);
+    if (source) image = CGImageSourceCreateImageAtIndex(source, 0, NULL);
+    if (!image) {
+        ds4_image_error(error, error_cap, "invalid or unsupported WebP image");
+        goto webp_done;
+    }
+    size_t width = CGImageGetWidth(image);
+    size_t height = CGImageGetHeight(image);
+    if (width == 0 || height == 0 ||
+        width > DS4_IMAGE_MAX_DIMENSION || height > DS4_IMAGE_MAX_DIMENSION ||
+        width * height > DS4_IMAGE_MAX_PIXELS) {
+        ds4_image_error(error, error_cap, "WebP image exceeds the decoded image limits");
+        goto webp_done;
+    }
+    space = CGColorSpaceCreateDeviceRGB();
+    /* Packed rows: ds4_oriented_rgb reads width * 4 bytes per row, while a
+     * bytesPerRow of 0 lets Core Graphics pad each row (2541 px wide skewed). */
+    if (space)
+        context = CGBitmapContextCreate(NULL, width, height, 8, width * 4, space,
+                                        (CGBitmapInfo)(kCGImageAlphaPremultipliedLast |
+                                                       kCGBitmapByteOrder32Big));
+    if (!context) {
+        ds4_image_error(error, error_cap, "unable to allocate decoded WebP pixels");
+        goto webp_done;
+    }
+    CGContextSetRGBFillColor(context, 1.0, 1.0, 1.0, 1.0);
+    CGContextFillRect(context, CGRectMake(0, 0, (CGFloat)width, (CGFloat)height));
+    /* A plain draw already lands the image top row in buffer row 0: the
+     * context stores top-down memory, so the classic Cocoa flip idiom here
+     * would invert the picture. Verified pixel-exact against the PNG path. */
+    CGContextDrawImage(context, CGRectMake(0, 0, (CGFloat)width, (CGFloat)height), image);
+    const uint8_t *pixels = (const uint8_t *)CGBitmapContextGetData(context);
+    if (!pixels) {
+        ds4_image_error(error, error_cap, "unable to read decoded WebP pixels");
+        goto webp_done;
+    }
+    ok = ds4_oriented_rgb(out, pixels, (uint32_t)width, (uint32_t)height, 4, 1);
+    if (!ok) ds4_image_error(error, error_cap, "unable to allocate decoded WebP pixels");
+webp_done:
+    if (context) CFRelease(context);
+    if (space) CFRelease(space);
+    if (image) CFRelease(image);
+    if (source) CFRelease(source);
+    if (data) CFRelease(data);
+    return ok;
+}
+#endif
 
 int ds4_image_decode_memory(
         ds4_image *out,
@@ -273,6 +438,17 @@ int ds4_image_decode_memory(
         jpeg_free(decoded);
         if (!ok) ds4_image_error(error, error_cap, "unable to allocate decoded JPEG pixels");
         return ok;
+    }
+
+    if (encoded_len >= 12 &&
+        memcmp(encoded, "RIFF", 4) == 0 &&
+        memcmp(encoded + 8, "WEBP", 4) == 0) {
+#ifdef __APPLE__
+        return ds4_decode_webp_imageio(out, encoded, encoded_len, error, error_cap);
+#else
+        ds4_image_error(error, error_cap, "WebP images require the macOS ImageIO decoder");
+        return 0;
+#endif
     }
 
     ds4_image_error(error, error_cap, "image must be JPEG or PNG");
@@ -388,6 +564,16 @@ static double ds4_cubic(double x, double a) {
     return 0.0;
 }
 
+typedef struct {
+    const uint8_t *src;
+    uint32_t src_width, src_height;
+    float *dst;
+    uint32_t dst_width, dst_stride;
+    double scale_x, scale_y, filter_x, filter_y, support_x, support_y;
+} ds4_resize_rows;
+
+static void ds4_resize_rgb_bicubic_rows(void *opaque, size_t first, size_t end);
+
 static void ds4_resize_rgb_bicubic(
         const uint8_t *src,
         uint32_t src_width,
@@ -402,8 +588,21 @@ static void ds4_resize_rgb_bicubic(
     double filter_y = scale_y >= 1.0 ? 1.0 / scale_y : 1.0;
     double support_x = scale_x >= 1.0 ? 2.0 * scale_x : 2.0;
     double support_y = scale_y >= 1.0 ? 2.0 * scale_y : 2.0;
+    ds4_resize_rows ctx = {src, src_width, src_height, dst, dst_width, dst_stride,
+                           scale_x, scale_y, filter_x, filter_y, support_x, support_y};
+    ds4_image_rows(dst_height, 4, ds4_resize_rgb_bicubic_rows, &ctx);
+}
 
-    for (uint32_t dy = 0; dy < dst_height; dy++) {
+static void ds4_resize_rgb_bicubic_rows(void *opaque, size_t first, size_t end) {
+    const ds4_resize_rows *c = opaque;
+    const uint8_t *src = c->src;
+    const uint32_t src_width = c->src_width, src_height = c->src_height;
+    float *dst = c->dst;
+    const uint32_t dst_width = c->dst_width, dst_stride = c->dst_stride;
+    const double scale_x = c->scale_x, scale_y = c->scale_y;
+    const double filter_x = c->filter_x, filter_y = c->filter_y;
+    const double support_x = c->support_x, support_y = c->support_y;
+    for (uint32_t dy = (uint32_t)first; dy < (uint32_t)end; dy++) {
         double center_y = scale_y * ((double)dy + 0.5);
         int y0 = (int)(center_y - support_y + 0.5);
         int y1 = (int)(center_y + support_y + 0.5);
@@ -564,6 +763,100 @@ int ds4_image_preprocess_glm53(
     return 1;
 }
 
+int ds4_image_preprocess_qwen4(
+        ds4_image_patches *out,
+        const ds4_image *image,
+        uint32_t min_image_tokens,
+        uint32_t max_image_tokens,
+        char *error,
+        size_t error_cap) {
+    const uint32_t patch = 16, factor = 32;
+    if (!out) return 0;
+    memset(out, 0, sizeof(*out));
+    if (!image || !image->rgb || image->width == 0 || image->height == 0 ||
+        min_image_tokens == 0 || max_image_tokens < min_image_tokens) {
+        ds4_image_error(error, error_cap, "invalid Qwen3.8 image preprocessing parameters");
+        return 0;
+    }
+    const double h = image->height, w = image->width;
+    if (fmax(h, w) / fmin(h, w) > 200.0) {
+        ds4_image_error(error, error_cap, "image aspect ratio must be below 200");
+        return 0;
+    }
+    /* Qwen2VL smart_resize: round to the factor, then scale into [min, max] pixels */
+    const double min_pixels = (double)min_image_tokens * factor * factor;
+    const double max_pixels = (double)max_image_tokens * factor * factor;
+    double h_bar = fmax(factor, round(h / factor) * factor);
+    double w_bar = fmax(factor, round(w / factor) * factor);
+    if (h_bar * w_bar > max_pixels) {
+        const double beta = sqrt(h * w / max_pixels);
+        h_bar = fmax(factor, floor(h / beta / factor) * factor);
+        w_bar = fmax(factor, floor(w / beta / factor) * factor);
+    } else if (h_bar * w_bar < min_pixels) {
+        const double beta = sqrt(min_pixels / (h * w));
+        h_bar = ceil(h * beta / factor) * factor;
+        w_bar = ceil(w * beta / factor) * factor;
+    }
+    const uint32_t target_height = (uint32_t)h_bar, target_width = (uint32_t)w_bar;
+    if (target_width > DS4_IMAGE_MAX_DIMENSION || target_height > DS4_IMAGE_MAX_DIMENSION ||
+        (uint64_t)target_width * target_height > DS4_IMAGE_MAX_PIXELS) {
+        ds4_image_error(error, error_cap, "resized image is too large");
+        return 0;
+    }
+    float *canvas = malloc((size_t)target_height * target_width * 3 * sizeof(float));
+    if (!canvas) {
+        ds4_image_error(error, error_cap, "unable to allocate resized image");
+        return 0;
+    }
+    if (target_width == image->width && target_height == image->height) {
+        for (size_t i = 0; i < (size_t)target_height * target_width * 3; i++) canvas[i] = image->rgb[i];
+    } else {
+        ds4_resize_rgb_bicubic(image->rgb, image->width, image->height,
+                               canvas, target_width, target_height, target_width);
+    }
+    for (size_t i = 0; i < (size_t)target_height * target_width * 3; i++) {
+        canvas[i] = (canvas[i] / 255.0f - 0.5f) / 0.5f;
+    }
+    const uint32_t grid_height = target_height / patch, grid_width = target_width / patch;
+    const uint32_t patch_count = grid_height * grid_width;
+    const size_t patch_values = (size_t)patch_count * 3 * patch * patch;
+    float *patches = malloc(patch_values * sizeof(float));
+    if (!patches) {
+        free(canvas);
+        ds4_image_error(error, error_cap, "unable to allocate vision patches");
+        return 0;
+    }
+    size_t index = 0;
+    for (uint32_t block_y = 0; block_y < grid_height / 2; block_y++) {
+        for (uint32_t block_x = 0; block_x < grid_width / 2; block_x++) {
+            for (uint32_t merge_y = 0; merge_y < 2; merge_y++) {
+                for (uint32_t merge_x = 0; merge_x < 2; merge_x++) {
+                    const uint32_t patch_y = block_y * 2 + merge_y, patch_x = block_x * 2 + merge_x;
+                    for (uint32_t channel = 0; channel < 3; channel++) {
+                        for (uint32_t y = 0; y < patch; y++) {
+                            for (uint32_t x = 0; x < patch; x++) {
+                                patches[index++] = canvas[((size_t)(patch_y * patch + y) * target_width +
+                                                           patch_x * patch + x) * 3 + channel];
+                            }
+                        }
+                    }
+                }
+            }
+        }
+    }
+    free(canvas);
+    out->content_width = target_width;
+    out->content_height = target_height;
+    out->padded_width = target_width;
+    out->padded_height = target_height;
+    out->grid_width = grid_width;
+    out->grid_height = grid_height;
+    out->patch_count = patch_count;
+    out->image_token_count = patch_count / 4;
+    out->patches = patches;
+    return 1;
+}
+
 void ds4_image_patches_free(ds4_image_patches *patches) {
     if (!patches) return;
     free(patches->patches);
@@ -650,6 +943,36 @@ static int ds4_deepseek4_safe_resize(
     return 1;
 }
 
+static void ds4_deepseek_normalize_rows(void *opaque, size_t first, size_t end) {
+    float *canvas = opaque;
+    for (size_t i = first; i < end; i++) canvas[i] = canvas[i] / 127.5f - 1.0f;
+}
+
+typedef struct {
+    const float *canvas;
+    float *patches;
+    uint32_t best_width, grid_width;
+} ds4_deepseek_patch_ctx;
+
+static void ds4_deepseek_patch_rows(void *opaque, size_t first, size_t end) {
+    const ds4_deepseek_patch_ctx *c = opaque;
+    for (uint32_t patch_y = (uint32_t)first; patch_y < (uint32_t)end; patch_y++) {
+        size_t index = (size_t)patch_y * c->grid_width * 3u * 14u * 14u;
+        for (uint32_t patch_x = 0; patch_x < c->grid_width; patch_x++) {
+            for (uint32_t channel = 0; channel < 3u; channel++) {
+                for (uint32_t y = 0; y < 14u; y++) {
+                    for (uint32_t x = 0; x < 14u; x++) {
+                        const float *pixel = c->canvas +
+                            ((size_t)(patch_y * 14u + y) * c->best_width +
+                             patch_x * 14u + x) * 3u;
+                        c->patches[index++] = pixel[channel];
+                    }
+                }
+            }
+        }
+    }
+}
+
 static int ds4_image_preprocess_deepseek(
         ds4_deepseek4_image_patches *out,
         const ds4_image *image,
@@ -727,9 +1050,7 @@ static int ds4_image_preprocess_deepseek(
     float *resized = canvas + ((size_t)offset_y * best_width + offset_x) * 3u;
     ds4_resize_rgb_bicubic(image->rgb, image->width, image->height,
                            resized, content_width, content_height, best_width);
-    for (size_t i = 0; i < canvas_values; i++) {
-        canvas[i] = canvas[i] / 127.5f - 1.0f;
-    }
+    ds4_image_rows(canvas_values, 1u << 18, ds4_deepseek_normalize_rows, canvas);
 
     const uint32_t grid_height = best_height / 14u;
     const uint32_t grid_width = best_width / 14u;
@@ -741,21 +1062,9 @@ static int ds4_image_preprocess_deepseek(
         ds4_image_error(error, error_cap, "unable to allocate vision patches");
         return 0;
     }
-    size_t index = 0;
-    for (uint32_t patch_y = 0; patch_y < grid_height; patch_y++) {
-        for (uint32_t patch_x = 0; patch_x < grid_width; patch_x++) {
-            for (uint32_t channel = 0; channel < 3u; channel++) {
-                for (uint32_t y = 0; y < 14u; y++) {
-                    for (uint32_t x = 0; x < 14u; x++) {
-                        const float *pixel = canvas +
-                            ((size_t)(patch_y * 14u + y) * best_width +
-                             patch_x * 14u + x) * 3u;
-                        patches[index++] = pixel[channel];
-                    }
-                }
-            }
-        }
-    }
+    ds4_deepseek_patch_ctx pctx = {canvas, patches, best_width, grid_width};
+    ds4_image_rows(grid_height, 1, ds4_deepseek_patch_rows, &pctx);
+    const size_t index = (size_t)grid_height * grid_width * 3u * 14u * 14u;
     free(canvas);
     if (index != patch_values) {
         free(patches);
