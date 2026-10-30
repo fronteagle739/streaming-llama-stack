@@ -254,6 +254,14 @@ typedef struct {
     int verify_mxfp4; /* upstream scalar-ordered MXFP4 DSpark verify kernels */
     int mxfp4_dedup; /* exact shared expert reads for two to eight rows */
     int concurrent_ffn; /* upstream full shared/routed FFN schedule */
+    int engram_lookup; /* exact 128 KiB code/scale format table */
+    int rows_mma; /* DSpark-only Q8 simdgroup matrices, upstream reduction */
+    int row_matmuls; /* exact 2-8 Q8 rows sharing weight cache */
+    int engram_gate; /* exact segmented 256-thread Engram gate */
+    int shared_down_hc; /* exact short72 shared/block/HC/pre producer */
+    int fixed_dense; /* exact literal QA/KV and attention-output dimensions */
+    int heads_rope; /* exact per-step RoPE table and attention writer */
+    int preencode; /* hold next token layer 0 during the current terminal wait */
     int engram_persistent; /* upstream bounded per-row token reader */
     int q8_virtual_query; /* same mapping inside query/HC grid */
     int kv_prepare; /* exact scalar KV norm/rope/quantize/ring fusion */

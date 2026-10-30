@@ -39333,7 +39333,7 @@ static uint32_t ds41_carry_cap(uint32_t ctx) {
     X(residual, DS4_N_HC * DS4_N_EMBD) \
     X(after_attn, DS4_N_HC * DS4_N_EMBD) \
     X(flat_norm, DS4_N_HC * DS4_N_EMBD) \
-    X(hc_counter, 33) X(mix, 24) X(attn_split, 24) X(ffn_split, 24) X(pre, 4) \
+    X(rope_tab,128) X(hc_counter, 33) X(mix, 24) X(attn_split, 24) X(ffn_split, 24) X(pre, 4) \
     X(x, DS4_N_EMBD) X(norm, DS4_N_EMBD) X(block, DS4_N_EMBD) \
     X(qr, DS4_N_LORA_Q) X(q, DS4_N_HEAD * DS4_N_HEAD_DIM) \
     X(kv, DS4_N_HEAD_DIM) X(latent, DS4_N_HEAD_DIM) \
@@ -39408,6 +39408,7 @@ typedef struct {
     ds4_gpu_tensor *prefill_tokens;
     /* R8': set by ds41_moe when the routed+shared add is deferred into the HC
      * expansion that follows it, cleared by that expansion. */
+    uint32_t rope_tab_pos;
     int arch_scalar_step; /* never inherited as enabled by prefill row views */
     int hc_attn_deferred, hc_ffn_deferred;
     int attn_out_expanded; /* set only by the scalar attention producer */
@@ -39442,6 +39443,9 @@ static bool ds41_read_array(const ds4_model *m, const char *key, uint32_t type,
 }
 
 static void ds41_graph_free(ds41_gpu_graph *g) {
+#if defined(__APPLE__) && !defined(DS4_NO_GPU)
+    ds4_gpu_pe_drop();
+#endif
     if (!g) return;
     ds4_engram_reader_free(g->token_reader);
     g->token_reader = NULL;
@@ -39531,6 +39535,9 @@ static ds4_context_memory ds41_graph_memory(uint32_t ctx) {
 }
 
 static void ds41_graph_reset(ds41_gpu_graph *g) {
+#if defined(__APPLE__) && !defined(DS4_NO_GPU)
+    ds4_gpu_pe_drop();
+#endif
     if (g->token_reader_active) {
         (void)ds4_engram_reader_wait(g->token_reader, 1);
         g->token_reader_active = false;
@@ -39701,6 +39708,14 @@ ds41_levers g_ds41_levers = {
     .verify_mxfp4 = 0,
     .mxfp4_dedup = 0,
     .concurrent_ffn = 0,
+    .engram_lookup = 1,
+    .rows_mma = 0,
+    .row_matmuls = 0,
+    .engram_gate = 0,
+    .shared_down_hc = 0,
+    .fixed_dense = 0,
+    .heads_rope = 0,
+    .preencode = 0,
     .engram_persistent = 0,
     .q8_virtual_query = 1,
     .kv_prepare = 1,
@@ -39811,6 +39826,14 @@ static const struct { const char *name; size_t off; const char *env; } g_ds41_le
     { "verify_mxfp4", offsetof(ds41_levers, verify_mxfp4), "DS4_DS41_VERIFY_MXFP4" },
     { "mxfp4_dedup", offsetof(ds41_levers, mxfp4_dedup), "DS4_DS41_MXFP4_DEDUP" },
     { "concurrent_ffn", offsetof(ds41_levers, concurrent_ffn), "DS4_DS41_CONCURRENT_FFN" },
+    { "engram_lookup", offsetof(ds41_levers, engram_lookup), "DS4_DS41_ENGRAM_LOOKUP" },
+    { "rows_mma", offsetof(ds41_levers, rows_mma), "DS4_DS41_ROWS_MMA" },
+    { "row_matmuls", offsetof(ds41_levers, row_matmuls), "DS4_DS41_ROW_MATMULS" },
+    { "engram_gate", offsetof(ds41_levers, engram_gate), "DS4_DS41_ENGRAM_GATE" },
+    { "shared_down_hc", offsetof(ds41_levers, shared_down_hc), "DS4_DS41_SHARED_DOWN_HC" },
+    { "fixed_dense", offsetof(ds41_levers, fixed_dense), "DS4_DS41_FIXED_DENSE" },
+    { "heads_rope", offsetof(ds41_levers, heads_rope), "DS4_DS41_HEADS_ROPE" },
+    { "preencode", offsetof(ds41_levers, preencode), "DS4_DS41_PREENCODE" },
     { "engram_persistent", offsetof(ds41_levers, engram_persistent), "DS4_DS41_ENGRAM_PERSISTENT" },
     { "q8_virtual_query", offsetof(ds41_levers, q8_virtual_query), "DS4_DS41_Q8_VIRTUAL_QUERY" },
     { "kv_prepare", offsetof(ds41_levers, kv_prepare), "DS4_DS41_KV_PREPARE" },
@@ -39960,6 +39983,15 @@ void ds41_levers_init_from_env(void) {
         ds41_env_enable_form("DS4_DS41_CONCURRENT_FFN");
     g_ds41_levers.engram_persistent = getenv("DS4_DS41_ENGRAM_PERSISTENT") &&
         ds41_env_enable_form("DS4_DS41_ENGRAM_PERSISTENT");
+    g_ds41_levers.engram_lookup = ds41_env_enable_form("DS4_DS41_ENGRAM_LOOKUP");
+    ds4_engram_set_format_lookup(g_ds41_levers.engram_lookup);
+    g_ds41_levers.rows_mma = getenv("DS4_DS41_ROWS_MMA") && atoi(getenv("DS4_DS41_ROWS_MMA")) != 0;
+    g_ds41_levers.row_matmuls = getenv("DS4_DS41_ROW_MATMULS") && atoi(getenv("DS4_DS41_ROW_MATMULS")) != 0;
+    g_ds41_levers.engram_gate = getenv("DS4_DS41_ENGRAM_GATE") && atoi(getenv("DS4_DS41_ENGRAM_GATE")) != 0;
+    g_ds41_levers.shared_down_hc = getenv("DS4_DS41_SHARED_DOWN_HC") && atoi(getenv("DS4_DS41_SHARED_DOWN_HC")) != 0;
+    g_ds41_levers.fixed_dense = getenv("DS4_DS41_FIXED_DENSE") && atoi(getenv("DS4_DS41_FIXED_DENSE")) != 0;
+    g_ds41_levers.heads_rope = getenv("DS4_DS41_HEADS_ROPE") && atoi(getenv("DS4_DS41_HEADS_ROPE")) != 0;
+    g_ds41_levers.preencode = getenv("DS4_DS41_PREENCODE") && atoi(getenv("DS4_DS41_PREENCODE")) != 0;
     g_ds41_levers.q8_virtual_query = ds41_env_enable_form("DS4_DS41_Q8_VIRTUAL_QUERY");
     g_ds41_levers.kv_prepare = ds41_env_enable_form("DS4_DS41_KV_PREPARE");
     g_ds41_levers.kv_query_mix = ds41_env_enable_form("DS4_DS41_KV_QUERY_MIX");
@@ -40687,8 +40719,16 @@ static bool ds41_attention_select_published(ds41_gpu_graph *g, const ds4_model *
     const uint32_t n_comp = ratio ? (pos + 1u) / ratio : 0u;
     if (n_comp && ds41_index_source(il)) {
         if ((!ds41_narrow_indexer_mv(g, m, l, il) && !ds41_matmul(g->index_q, m, l->indexer_attn_q_b, g->qr, true)) ||
+#ifdef __APPLE__
+            !(g_ds41_levers.heads_rope && g->arch_scalar_step && g->rope_tab_pos==pos+1u ?
+                ds4_gpu_dsv41_rope_quantize_heads_tab(g->index_q,128,DS4_N_INDEXER_HEAD,pos,
+                    ratio!=0,DS4_V41_FP4_E8M0,g->rope_tab) :
+                (ds41_rope(g->index_q,DS4_N_INDEXER_HEAD,128,il,pos,false) &&
+                 ds4_gpu_dsv41_quantize(g->index_q,128,DS4_N_INDEXER_HEAD,DS4_V41_FP4_E8M0))) ||
+#else
             !ds41_rope(g->index_q, DS4_N_INDEXER_HEAD, 128, il, pos, false) ||
             !ds4_gpu_dsv41_quantize(g->index_q, 128, DS4_N_INDEXER_HEAD, DS4_V41_FP4_E8M0) ||
+#endif
             !ds41_matmul(g->index_weights, m, l->indexer_proj, g->norm, true) ||
             !(il > 20u && (g_ds41_levers.index_mask_score || g_ds41_levers.index_compact_score) && DS4_N_INDEXER_HEAD == 32u ?
                 ds4_gpu_dsv41_indexer_score_masked(g->index_scores, g->index_q, g->index_weights,
@@ -40779,18 +40819,28 @@ static bool ds41_attention(ds41_gpu_graph *g, const ds4_model *m,
     /* R8': the BF16 re-round of the heads deferred onto the split-K reduce's
      * store.  The encoder reports whether it consumed the arm; the paths that
      * do not (the raw-only encoder on the ratio-0 layers) keep the pass. */
+#ifdef __APPLE__
+    const bool heads_arm=!projected && g->tp_world==1 && g->arch_scalar_step &&
+        g_ds41_levers.heads_rope && g_ds41_levers.producer_round && g->rope_tab_pos==pos+1u;
+    if(heads_arm)ds4_gpu_dsv41_heads_once_arm(g->rope_tab,ratio!=0);
+#endif
     ds4_gpu_set_decode_attn_round_fuse(g_ds41_levers.producer_round ? 1 : 0);
     const bool heads_ok = ds4_gpu_attention_decode_heads_tensor(g->heads, m->map, m->size,
             l->attn_sinks->abs_offset + (uint64_t)head0 * sizeof(float),
             g->q, g->window[il], n_raw, 128, (pos + 1u - n_raw) % 128u,
             g->selected_kv, (uint32_t)kv_f16, attended, NULL, 0,
             heads, DS4_N_HEAD_DIM) != 0;
-    const bool heads_rounded = heads_ok && ds4_gpu_decode_attn_round_fuse_used() != 0;
+#ifdef __APPLE__
+    const bool transformed=heads_arm && ds4_gpu_dsv41_heads_once_take();
+#else
+    const bool transformed=false;
+#endif
+    const bool heads_rounded = heads_ok && (transformed || ds4_gpu_decode_attn_round_fuse_used() != 0);
     ds4_gpu_set_decode_attn_round_fuse(0);
     ds4_gpu_set_dsv41_stage_gather(NULL, NULL);
     if (!heads_ok ||
         (!heads_rounded && !ds41_bf16(g->heads, heads * DS4_N_HEAD_DIM)) ||
-        (!batch_pointwise && !ds41_rope(g->heads, heads, DS4_N_HEAD_DIM, il, pos, true))) return false;
+        (!transformed && !batch_pointwise && !ds41_rope(g->heads, heads, DS4_N_HEAD_DIM, il, pos, true))) return false;
     if (projected) return true;
     return ds41_attention_output(g, m, l) &&
            ds41_sum_partial(g, g->block, il, DS4_TP_GATE_ATTN) &&
@@ -40892,7 +40942,20 @@ static bool ds41_moe(ds41_gpu_graph *g, const ds4_model *m,
         l->ffn_down_shexp->dim[0] == 2304 && l->ffn_down_shexp->dim[1] == 5120 &&
         ds4_gpu_dsv41_shared_down_overlap_begin();
 #endif
-    const bool virtual_down = full_queued || (g_ds41_levers.q8_virtual_down &&
+
+#ifdef __APPLE__
+    const bool shared_join=g_ds41_levers.shared_down_hc && !full_queued && !overlap_down &&
+        !shared_owner && g->arch_scalar_step && !g->streaming && !g->quality && !g->imatrix &&
+        g_ds41_levers.q8_virtual_down && g_ds41_levers.mv_round && g_ds41_levers.ffn_producer &&
+        g_ds41_levers.ffn_add_fold && ds41_hc_expand_fold(g) &&
+        l->ffn_gate_exps->type==DS4_TENSOR_MXFP4 && l->ffn_down_exps->type==DS4_TENSOR_MXFP4 &&
+        l->ffn_down_shexp->type==DS4_TENSOR_Q8_0 &&
+        l->ffn_down_shexp->dim[0]==2304 && l->ffn_down_shexp->dim[1]==5120 &&
+        ds4_gpu_dsv41_shared_down_hc_available();
+#else
+    const bool shared_join=false;
+#endif
+    const bool virtual_down = shared_join || full_queued || (g_ds41_levers.q8_virtual_down &&
         g->arch_scalar_step && g->tp_world == 1 && !g->streaming && !g->quality &&
         !g->imatrix && g_ds41_levers.mv_round &&
         l->ffn_down_shexp->type == DS4_TENSOR_Q8_0 &&
@@ -40905,7 +40968,7 @@ static bool ds41_moe(ds41_gpu_graph *g, const ds4_model *m,
     if (!virtual_down && (!shared_owner || g->tp_rank == (il & 1u)) &&
         !ds41_matmul(g->shared, m, l->ffn_down_shexp, g->shared_mid, true)) return false;
     g->ffn_expand_done = 0;
-    const bool fold = !full_queued && g->arch_scalar_step && g->tp_world != 2 && !g->streaming &&
+    const bool fold = !shared_join && !full_queued && g->arch_scalar_step && g->tp_world != 2 && !g->streaming &&
         g_ds41_levers.ffn_producer && g_ds41_levers.ffn_add_fold && ds41_hc_expand_fold(g);
     if (fold) (void)ds4_gpu_dsv41_arch_ffn_begin(routed, g->shared, g->after_attn,
         g->ffn_split, g->block, g->residual, g->pre);
@@ -40925,6 +40988,13 @@ static bool ds41_moe(ds41_gpu_graph *g, const ds4_model *m,
     }
 #endif
     if (!routed_ok) return false;
+#ifdef __APPLE__
+    if(shared_join) {
+        if(!ds4_gpu_dsv41_shared_down_hc(g->residual,g->pre,g->block,g->shared,routed,
+            g->after_attn,g->ffn_split,g->shared_mid,m->map,m->size,l->ffn_down_shexp->abs_offset))return false;
+        g->ffn_expand_done=1;g->ffn_add_pending=0;return true;
+    }
+#endif
     if (expanded) {
         g->ffn_expand_done = 1;
         g->ffn_add_pending = 0;
@@ -41783,12 +41853,104 @@ static bool ds41_engram_join_chunk(ds41_gpu_graph *g, unsigned *pending,
     return ok;
 }
 
+
+#if defined(__APPLE__) && !defined(DS4_NO_GPU)
+/* Adapted from upstream 67dcb001. No GPU operation for the next token is
+ * submitted before its real sampled id is published. All host latches are
+ * restored while the slot is held. Generation and the full lever image also
+ * prevent a restored session or changed dispatch policy from taking a slot. */
+typedef struct {
+    int scalar, attn, ffn, expanded, ffn_done, add;
+    uint32_t rope;
+} ds41_pe_host;
+static struct {
+    const ds41_gpu_graph *g;
+    uint32_t pos;
+    uint64_t generation;
+    ds41_pe_host before, after;
+    ds41_levers levers;
+} g_ds41_slot;
+static ds41_pe_host ds41_pe_save(const ds41_gpu_graph *g) {
+    return (ds41_pe_host){g->arch_scalar_step,g->hc_attn_deferred,g->hc_ffn_deferred,
+        g->attn_out_expanded,g->ffn_expand_done,g->ffn_add_pending,g->rope_tab_pos};
+}
+static void ds41_pe_load(ds41_gpu_graph *g, ds41_pe_host h) {
+    g->arch_scalar_step=h.scalar;g->hc_attn_deferred=h.attn;g->hc_ffn_deferred=h.ffn;
+    g->rope_tab_pos=h.rope;
+    g->attn_out_expanded=h.expanded;g->ffn_expand_done=h.ffn_done;g->ffn_add_pending=h.add;
+}
+static bool ds41_pe_eligible(const ds41_gpu_graph *g, const float *logits) {
+    return logits && g_ds41_levers.preencode && ds4_gpu_pe_supported() &&
+        g_ds41_levers.decode_chunks && g_ds41_levers.decode_queue2 &&
+        ds41_queue_layers_enabled() && !getenv("DS4_DS41_ARCH_FFN_DUMP") &&
+        g->tp_world==1 && !g->streaming && !g->quality && !g->imatrix && !g->image_count;
+}
+static bool ds41_slot_take(ds41_gpu_graph *g,int token,bool eligible,bool *taken) {
+    *taken=false;
+    if (!ds4_gpu_pe_pending()) return true;
+    ds41_pe_host before=ds41_pe_save(g);
+    bool use=eligible && g_ds41_slot.g==g && g_ds41_slot.pos==g->pos &&
+        g_ds41_slot.generation==g->state_generation &&
+        memcmp(&before,&g_ds41_slot.before,sizeof(before))==0 &&
+        memcmp(&g_ds41_levers,&g_ds41_slot.levers,sizeof(g_ds41_levers))==0;
+    g_ds41_slot.g=NULL;
+    if (!use) { ds4_gpu_pe_drop();return true; }
+    const float initial_pre[]={1,0,0,0};
+    if (!ds4_gpu_tensor_write(g->pre,0,initial_pre,sizeof(initial_pre))) {
+        ds4_gpu_pe_drop();return false;
+    }
+    ds41_pe_load(g,g_ds41_slot.after);
+    *taken=true;
+    return ds4_gpu_pe_commit(token)!=0;
+}
+static bool ds41_slot_drain(ds41_gpu_graph *g,const ds4_model *m,const ds4_weights *w,bool ok) {
+    if (!ds4_gpu_end_commands_commit(true)) return false;
+    g_ds41_slot.g=NULL;
+    if (ok && g->pos+1u<g->ctx) {
+        uint32_t pos=g->pos;
+        ds41_pe_host saved=ds41_pe_save(g);
+        g->arch_scalar_step=0;g->rope_tab_pos=0;
+        g_ds41_slot.before=ds41_pe_save(g);
+        g_ds41_slot.levers=g_ds41_levers;
+        g_ds41_slot.generation=g->state_generation;
+        g->pos=pos+1u;
+        if (ds4_gpu_pe_begin()) {
+            ds4_gpu_pe_embed_word(1);
+            bool encoded=ds41_embed(g,m,w,g->residual,g->x,0,g->pos);
+            ds4_gpu_pe_embed_word(0);
+            g->arch_scalar_step=1;
+            if(encoded && g_ds41_levers.heads_rope) {
+                encoded=ds4_gpu_dsv41_step_rope_table(g->rope_tab,g->pos);
+                if(encoded)g->rope_tab_pos=g->pos+1u;
+            }
+            if (encoded) encoded=ds41_graph_layer(g,m,&w->layer[0],0,0);
+            g_ds41_slot.after=ds41_pe_save(g);
+            g_ds41_slot.g=ds4_gpu_pe_end(encoded)?g:NULL;
+            g_ds41_slot.pos=g->pos;
+        }
+        ds41_pe_load(g,saved);g->pos=pos;
+    }
+    return ds4_gpu_end_commands_wait() && ok;
+}
+#else
+static bool ds41_pe_eligible(const ds41_gpu_graph *g,const float *l) { (void)g;(void)l;return false; }
+static bool ds41_slot_take(ds41_gpu_graph *g,int token,bool pe,bool *taken) { (void)g;(void)token;(void)pe;*taken=false;return true; }
+static bool ds41_slot_drain(ds41_gpu_graph *g,const ds4_model *m,const ds4_weights *w,bool ok) { (void)g;(void)m;(void)w;(void)ok;return false; }
+#endif
+
 static DS4_MAYBE_UNUSED bool ds41_graph_step(ds41_gpu_graph *g, const ds4_model *m,
                                              const ds4_weights *w, int token, float *logits) {
     if (!g || !g->valid || g->pos >= g->ctx || token < 0 || (uint32_t)token >= DS4_N_VOCAB) return false;
+    const bool pe=ds41_pe_eligible(g,logits);
+    bool slot=false;
+    if (!ds41_slot_take(g,token,pe,&slot)) { g->valid=false;return false; }
+    ds4_engram_set_format_lookup(g_ds41_levers.engram_lookup);
     uint32_t ids[2][DS4_ENGRAM_COLS];
     ds4_engram_history next_history = g->history;
-    if (!ds41_hash_tokens(g, &next_history, &token, 1, &ids[0][0])) return false;
+    if (!ds41_hash_tokens(g, &next_history, &token, 1, &ids[0][0])) {
+        if (slot) { (void)ds4_gpu_end_commands();g->valid=false; }
+        return false;
+    }
     /* Both tables are issued as soon as this step's ids are known; layer 1 joins
      * its module and layer 14 may finish behind the intervening layers. */
     const bool engram_step = !ds41_image_at(g, g->pos);
@@ -41796,7 +41958,10 @@ static DS4_MAYBE_UNUSED bool ds41_graph_step(ds41_gpu_graph *g, const ds4_model 
     const bool engram_stats = engram_step && ds41_engram_stats_enabled();
     const double engram_t0 = engram_stats ? ds41_now_us() : 0.0;
     if (g->token_reader_active) {
-        if (!ds4_engram_reader_wait(g->token_reader, 1)) return false;
+        if (!ds4_engram_reader_wait(g->token_reader, 1)) {
+            if (slot) { (void)ds4_gpu_end_commands();g->valid=false; }
+            return false;
+        }
         g->token_reader_active = false;
     }
     const bool persistent = engram_async && g_ds41_levers.engram_persistent;
@@ -41807,6 +41972,7 @@ static DS4_MAYBE_UNUSED bool ds41_graph_step(ds41_gpu_graph *g, const ds4_model 
         }
         if (!g->token_reader || !ds4_engram_reader_start(g->token_reader,g->table,ids,(float *)g->rows)) {
             fprintf(stderr,"ds4: persistent Engram reader failed: %s\n",strerror(errno));
+            if (slot) { (void)ds4_gpu_end_commands();g->valid=false; }
             return false;
         }
         g->token_reader_active = true;
@@ -41818,6 +41984,7 @@ static DS4_MAYBE_UNUSED bool ds41_graph_step(ds41_gpu_graph *g, const ds4_model 
                 !ds4_engram_read(&g->table[i], ids[i], DS4_ENGRAM_COLS, g->rows[i])) {
             for (uint32_t j = 0; engram_async && j < 2; j++)
                 (void)ds4_engram_fetch_wait(&g->fetch[j]);
+            if (slot) { (void)ds4_gpu_end_commands();g->valid=false; }
             return false;
         }
         /* The synchronous path has no worker to stamp the completion, and its
@@ -41830,8 +41997,8 @@ static DS4_MAYBE_UNUSED bool ds41_graph_step(ds41_gpu_graph *g, const ds4_model 
         ds41_engram_stats_arm();
     }
     const float initial_pre[] = {1, 0, 0, 0};
-    if (!ds4_gpu_tensor_write(g->pre, 0, initial_pre, sizeof(initial_pre)) ||
-        !ds4_gpu_begin_commands()) {
+    if (!slot && (!ds4_gpu_tensor_write(g->pre, 0, initial_pre, sizeof(initial_pre)) ||
+        !ds4_gpu_begin_commands())) {
         if (g->token_reader_active) {
             (void)ds4_engram_reader_wait(g->token_reader, 1);
             g->token_reader_active = false;
@@ -41839,7 +42006,16 @@ static DS4_MAYBE_UNUSED bool ds41_graph_step(ds41_gpu_graph *g, const ds4_model 
         return false;
     }
     g->arch_scalar_step = 1;
-    bool ok = ds41_embed(g, m, w, g->residual, g->x, token, g->pos);
+    bool ok = slot || ds41_embed(g, m, w, g->residual, g->x, token, g->pos);
+    if(!slot) {
+        g->rope_tab_pos=0;
+        if(ok && g_ds41_levers.heads_rope) {
+#ifdef __APPLE__
+            ok=ds4_gpu_dsv41_step_rope_table(g->rope_tab,g->pos);
+            if(ok)g->rope_tab_pos=g->pos+1u;
+#endif
+        }
+    }
     /* Unfused quality kernels bind whole expert tensors. Keep just the current
      * layer mapped, using the same admitted reserve as layer-major prefill. */
     const bool layer_resident = g->streaming && g->quality;
@@ -41859,7 +42035,7 @@ static DS4_MAYBE_UNUSED bool ds41_graph_step(ds41_gpu_graph *g, const ds4_model 
     const bool chunks = g_ds41_levers.decode_chunks && queue_layers &&
         g->tp_world != 2 && !g->streaming && !g->imatrix;
     unsigned engram_pending = 0;
-    for (uint32_t il = 0; ok && il < DS4_N_LAYER; il++) {
+    for (uint32_t il = slot ? 1u : 0u; ok && il < DS4_N_LAYER; il++) {
         const ds4_layer_weights *l = &w->layer[il];
         if (layer_resident)
             ok = metal_graph_stream_map_layer(m, w, il) && ds4_gpu_begin_commands();
@@ -41907,18 +42083,24 @@ static DS4_MAYBE_UNUSED bool ds41_graph_step(ds41_gpu_graph *g, const ds4_model 
         if (!ds41_engram_join_chunk(g, &engram_pending, engram_async, engram_stats)) ok = false;
         if (ok && logits) ok = ds41_graph_logits_encode(g, m, w);
     }
-    if (ds4_gpu_commands_active() && !ds4_gpu_end_commands()) ok = false;
+    if (ds4_gpu_commands_active()) {
+        if (pe && ok) ok=ds41_slot_drain(g,m,w,ok);
+        else if (!ds4_gpu_end_commands()) ok=false;
+    }
     if (layer_resident && !metal_graph_stream_map_decode_static_all(m, w)) ok = false;
     if (g->tp_world == 2 && ds4_gpu_tp_failed()) ok = false;
     if (ok && logits) ok = chunks ?
         ds4_gpu_tensor_read(g->logits, 0, logits, (uint64_t)DS4_N_VOCAB*sizeof(float)) != 0 :
         ds41_graph_logits(g, m, w, logits);
-    g->arch_scalar_step = 0;
+    g->arch_scalar_step = 0;g->rope_tab_pos=0;
     if (g->token_reader_active) {
         if (!ds4_engram_reader_wait(g->token_reader, 1)) ok = false;
         g->token_reader_active = false;
     }
     if (!ok) {
+#if defined(__APPLE__) && !defined(DS4_NO_GPU)
+        ds4_gpu_pe_drop();
+#endif
         for (uint32_t i = 0; engram_async && i < 2; i++)
             (void)ds4_engram_fetch_wait(&g->fetch[i]);
         g->valid = false;
@@ -44847,23 +45029,138 @@ static void bpe_tokenize_text_glm4(const ds4_vocab *vocab, const char *text, tok
     }
 }
 
-/*
- * DeepSeek V4 Flash declares tokenizer.ggml.pre = "joyai-llm".  The split
- * below mirrors the JoyAI BPE pre-tokenizer for the cases this model
- * uses in normal text and source-code prompts:
+#include "ds4_deepseek_unicode.inc"
+
+static uint32_t deepseek_uclass(uint32_t cp) {
+    size_t lo = 0, hi = sizeof(ds4_deepseek_uranges) / sizeof(ds4_deepseek_uranges[0]);
+    while (lo < hi) {
+        const size_t mid = (lo + hi) / 2;
+        if (cp < ds4_deepseek_uranges[mid].lo) hi = mid;
+        else if (cp > ds4_deepseek_uranges[mid].hi) lo = mid + 1;
+        else return ds4_deepseek_uranges[mid].mask;
+    }
+    return 0;
+}
+
+typedef struct {
+    uint32_t cp, cls;
+    uint64_t next;
+} deepseek_char;
+
+static deepseek_char deepseek_char_at(const char *s, uint64_t end, uint64_t pos) {
+    deepseek_char c;
+    c.cp = utf8_peek_one(s, end, pos, &c.next);
+    c.cls = deepseek_uclass(c.cp);
+    return c;
+}
+
+static uint64_t deepseek_run(const char *s, uint64_t pos, uint64_t end, uint32_t mask) {
+    while (pos < end) {
+        const deepseek_char c = deepseek_char_at(s, end, pos);
+        if (!(c.cls & mask)) break;
+        pos = c.next;
+    }
+    return pos;
+}
+
+static uint64_t deepseek_run_newlines(const char *s, uint64_t pos, uint64_t end) {
+    while (pos < end && ascii_newline((uint8_t)s[pos])) pos++;
+    return pos;
+}
+
+/* End of the regex match starting at pos within [pos, end), or pos when no
+ * alternative matches there. The alternatives, tried in order:
  *
- *   \p{N}{1,3}
- *   [CJK/Hiragana/Katakana]+
- *   [P/S][A-Za-z]+
+ *   [!"#$%&'()*+,\-./:;<=>?@\[\\\]^_`{|}~][A-Za-z]+
  *   [^\r\n\p{L}\p{P}\p{S}]?[\p{L}\p{M}]+
  *    ?[\p{P}\p{S}]+[\r\n]*
  *   \s*[\r\n]+
  *   \s+(?!\S)
  *   \s+
  *
- * The punctuation rule intentionally keeps trailing newlines in the same BPE
- * word (for example ">;\n").  Splitting those newlines separately changes the
- * token stream for code prompts and produces wrong long-context logits.
+ * The punctuation rule keeps trailing newlines in the same BPE word (for
+ * example ">;\n"), as code prompts need. */
+static uint64_t deepseek_match(const char *s, uint64_t pos, uint64_t end) {
+    const uint32_t LM = DS4_UCLASS_L | DS4_UCLASS_M, PS = DS4_UCLASS_P | DS4_UCLASS_S;
+    const deepseek_char c = deepseek_char_at(s, end, pos);
+    const bool more = c.next < end;
+    const deepseek_char n = more ? deepseek_char_at(s, end, c.next) : (deepseek_char){0};
+
+    if (c.cp < 128 && joyai_ascii_punct_symbol((uint8_t)c.cp) && more &&
+        n.cp < 128 && ascii_alpha((uint8_t)n.cp)) {
+        uint64_t p = n.next;
+        while (p < end && ascii_alpha((uint8_t)s[p])) p++;
+        return p;
+    }
+    if (c.cp != '\r' && c.cp != '\n' && !(c.cls & (DS4_UCLASS_L | PS)) && more && (n.cls & LM))
+        return deepseek_run(s, n.next, end, LM);
+    if (c.cls & LM) return deepseek_run(s, c.next, end, LM);
+    if (c.cp == ' ' && more && (n.cls & PS))
+        return deepseek_run_newlines(s, deepseek_run(s, n.next, end, PS), end);
+    if (c.cls & PS) return deepseek_run_newlines(s, deepseek_run(s, c.next, end, PS), end);
+    if (!(c.cls & DS4_UCLASS_WS)) return pos;
+    uint64_t p = pos, last = pos, newline_end = 0;
+    int count = 0;
+    while (p < end) {
+        const deepseek_char w = deepseek_char_at(s, end, p);
+        if (!(w.cls & DS4_UCLASS_WS)) break;
+        if (w.cp == '\r' || w.cp == '\n') newline_end = w.next;
+        last = p;
+        p = w.next;
+        count++;
+    }
+    if (newline_end) return newline_end;  /* \s*[\r\n]+ */
+    if (p < end && count > 1) return last; /* \s+(?!\S) leaves one space to the word */
+    return p;                              /* \s+(?!\S) at the end, or \s+ */
+}
+
+/* An isolating split emits each match and each run between matches. */
+static void deepseek_split_regex(const ds4_vocab *vocab, const char *s,
+                                 uint64_t pos, uint64_t end, token_vec *out) {
+    uint64_t gap = pos;
+    while (pos < end) {
+        const uint64_t m = deepseek_match(s, pos, end);
+        if (m == pos) {
+            pos = deepseek_char_at(s, end, pos).next;
+            continue;
+        }
+        if (gap < pos) bpe_emit_piece(vocab, (ds4_str){ s + gap, pos - gap }, out);
+        bpe_emit_piece(vocab, (ds4_str){ s + pos, m - pos }, out);
+        gap = pos = m;
+    }
+    if (gap < end) bpe_emit_piece(vocab, (ds4_str){ s + gap, end - gap }, out);
+}
+
+static void deepseek_split_cjk(const ds4_vocab *vocab, const char *s,
+                               uint64_t pos, uint64_t end, token_vec *out) {
+    uint64_t gap = pos;
+    while (pos < end) {
+        deepseek_char c = deepseek_char_at(s, end, pos);
+        if (!utf8_is_cjk_hira_kata(c.cp)) {
+            pos = c.next;
+            continue;
+        }
+        const uint64_t start = pos;
+        while (pos < end && utf8_is_cjk_hira_kata((c = deepseek_char_at(s, end, pos)).cp))
+            pos = c.next;
+        deepseek_split_regex(vocab, s, gap, start, out);
+        deepseek_split_regex(vocab, s, start, pos, out);
+        gap = pos;
+    }
+    deepseek_split_regex(vocab, s, gap, end, out);
+}
+
+/*
+ * DeepSeek V4 and V4.1 pre-tokenization (tokenizer.json, ggml pre
+ * "joyai-llm"): a sequence of three isolating splits, each applied to the
+ * pieces of the one before,
+ *
+ *   \p{N}{1,3}
+ *   [一-龥぀-ゟ゠-ヿ]+
+ *   the alternation in deepseek_match()
+ *
+ * with Unicode classes generated from the Hugging Face tokenizers regex
+ * engine (ds4_deepseek_unicode.inc).
  */
 static void bpe_tokenize_text(const ds4_vocab *vocab, const char *text, token_vec *out) {
     if (DS4_MODEL_FAMILY == DS4_MODEL_FAMILY_GLM_DSA) {
@@ -44872,72 +45169,22 @@ static void bpe_tokenize_text(const ds4_vocab *vocab, const char *text, token_ve
     }
 
     const uint64_t len = strlen(text);
-    uint64_t pos = 0;
-
+    uint64_t pos = 0, gap = 0;
     while (pos < len) {
-        uint64_t start = pos;
-        uint8_t c = (uint8_t)text[pos];
-
-        if (ascii_digit(c)) {
-            int ndigits = 0;
-            while (pos < len && ascii_digit((uint8_t)text[pos]) && ndigits < 3) {
-                pos++;
-                ndigits++;
-            }
-        } else if (joyai_cjk_at(text, len, pos)) {
-            do {
-                pos = next_utf8_char(text, len, pos);
-            } while (pos < len && joyai_cjk_at(text, len, pos));
-        } else if (joyai_ascii_punct_symbol(c) &&
-                   pos + 1 < len &&
-                   ascii_alpha((uint8_t)text[pos + 1])) {
-            pos++;
-            while (pos < len && ascii_alpha((uint8_t)text[pos])) pos++;
-        } else if (joyai_letter_like_at(text, len, pos)) {
-            pos = joyai_consume_letters(text, len, pos);
-        } else if (!ascii_newline(c) &&
-                   !joyai_ascii_punct_symbol(c) &&
-                   pos + 1 < len &&
-                   joyai_letter_like_at(text, len, pos + 1)) {
-            pos++;
-            pos = joyai_consume_letters(text, len, pos);
-        } else if (c == ' ' &&
-                   pos + 1 < len &&
-                   joyai_ascii_punct_symbol((uint8_t)text[pos + 1])) {
-            pos++;
-            while (pos < len && joyai_ascii_punct_symbol((uint8_t)text[pos])) pos++;
-            while (pos < len && ascii_newline((uint8_t)text[pos])) pos++;
-        } else if (joyai_ascii_punct_symbol(c)) {
-            while (pos < len && joyai_ascii_punct_symbol((uint8_t)text[pos])) pos++;
-            while (pos < len && ascii_newline((uint8_t)text[pos])) pos++;
-        } else if (ascii_space(c)) {
-            uint64_t p = pos;
-            uint64_t last_newline_end = 0;
-            while (p < len && ascii_space((uint8_t)text[p])) {
-                uint8_t sc = (uint8_t)text[p++];
-                if (ascii_newline(sc)) last_newline_end = p;
-            }
-            if (last_newline_end) {
-                pos = last_newline_end;
-            } else if (p < len && p > pos + 1 &&
-                       (joyai_letter_like_at(text, len, p) ||
-                        joyai_ascii_punct_symbol((uint8_t)text[p]))) {
-                /*
-                 * JoyAI lets a single leading space join the following word or
-                 * punctuation run.  For "    int", the pre-tokenizer therefore emits
-                 * "   " then " int", not "    " then "int".
-                 */
-                pos = p - 1;
-            } else {
-                pos = p;
-            }
-        } else {
-            pos = next_utf8_char(text, len, pos);
+        deepseek_char c = deepseek_char_at(text, len, pos);
+        if (!(c.cls & DS4_UCLASS_N)) {
+            pos = c.next;
+            continue;
         }
-
-        if (pos == start) pos = next_utf8_char(text, len, pos);
-        bpe_emit_piece(vocab, (ds4_str){ text + start, pos - start }, out);
+        deepseek_split_cjk(vocab, text, gap, pos, out);
+        const uint64_t start = pos;
+        for (int k = 0; k < 3 && pos < len &&
+                        ((c = deepseek_char_at(text, len, pos)).cls & DS4_UCLASS_N); k++)
+            pos = c.next;
+        deepseek_split_cjk(vocab, text, start, pos, out);
+        gap = pos;
     }
+    deepseek_split_cjk(vocab, text, gap, len, out);
 }
 
 static int vocab_lookup(const ds4_vocab *vocab, const char *text) {
@@ -62558,6 +62805,9 @@ int ds4_session_save_payload(ds4_session *s, FILE *fp, char *err, size_t errlen)
 }
 
 int ds4_session_load_payload(ds4_session *s, FILE *fp, uint64_t payload_bytes, char *err, size_t errlen) {
+#if defined(__APPLE__) && !defined(DS4_NO_GPU)
+    ds4_gpu_pe_drop(); /* A restored prefix never inherits another prefix's held work. */
+#endif
     if (!s || !fp) {
         payload_set_err(err, errlen, "invalid session payload load");
         return 1;
@@ -74349,7 +74599,7 @@ static ds41_dspark_decode *ds41_dspark_ready(ds4_session *s,
  * The step is also the controller's unit of measurement: its wall time and the
  * rows it produced are what the windowed ledger judges, a serial step supplying
  * the serial-cost sample and a verify cycle the window net. */
-static int ds41_dspark_step_core(ds4_session *s, ds41_dspark_decode *dd,
+static int ds41_dspark_step_core_impl(ds4_session *s, ds41_dspark_decode *dd,
                                  bool serving, int feeding, int excluded, int stop_token,
                                  uint32_t remaining, const ds41_sample_policy *pol,
                                  int *emitted, uint32_t *produced,
@@ -74415,6 +74665,18 @@ static int ds41_dspark_step_core(ds4_session *s, ds41_dspark_decode *dd,
     ds41_adapt_reasoning(&dd->adapt, dd->control.thinking);
     dd->control_end = g->pos; dd->control_generation = g->state_generation;
     return 0;
+}
+
+static int ds41_dspark_step_core(ds4_session *s, ds41_dspark_decode *dd,
+                                 bool serving, int feeding, int excluded, int stop_token,
+                                 uint32_t remaining, const ds41_sample_policy *pol,
+                                 int *emitted, uint32_t *produced,
+                                 bool *serial, char *err, size_t errlen) {
+    const int previous=ds4_gpu_dsv41_dspark_rows(1);
+    const int result=ds41_dspark_step_core_impl(s,dd,serving,feeding,excluded,stop_token,
+        remaining,pol,emitted,produced,serial,err,errlen);
+    ds4_gpu_dsv41_dspark_rows(previous);
+    return result;
 }
 
 #endif
@@ -82177,6 +82439,9 @@ int ds4_session_eval_speculative(ds4_session *s, int first_token,
 }
 
 void ds4_session_invalidate(ds4_session *s) {
+#if defined(__APPLE__) && !defined(DS4_NO_GPU)
+    ds4_gpu_pe_drop();
+#endif
     if (!s) return;
     if (ds4_session_tp_leader(s) &&
         !ds4_tp_failed(s->engine->tp.ctx)) {
@@ -82198,6 +82463,9 @@ void ds4_session_invalidate(ds4_session *s) {
 }
 
 void ds4_session_rewind(ds4_session *s, int pos) {
+#if defined(__APPLE__) && !defined(DS4_NO_GPU)
+    ds4_gpu_pe_drop();
+#endif
     if (!s) return;
     if (pos < 0) pos = 0;
     if (pos >= s->checkpoint.len) return;
