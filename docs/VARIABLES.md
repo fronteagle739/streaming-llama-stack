@@ -85,7 +85,7 @@ Native controls take effect at token boundaries. The response reports requested 
 | `--llamadecode-engram-read-align` | Explicit runtime value | E13 experiment: Engram direct-read alignment, 4096 bytes (default) or opt-in 512 bytes. The 512-byte arm requires compatible logical sector geometry and preserves all row bytes. |
 | `--llamadecode-lfu-half-life` | Explicit runtime value | E8 experiment: LFU score half life in tokens, 1 (default) or 16. Only used when the opt-in recency-LFU policy is enabled; expert routes and arithmetic are unchanged. |
 | `--llamadecode-recency-lfu` | Explicit runtime value | E8 experiment: recency-weighted LFU admission for the L2 expert victim cache; 0 (default) preserves LRU, 1 decays scores per token and requires a 25% admission margin. |
-| `--llamadecode-vram-margin-mib` | Explicit runtime value | Single-engine decode: VRAM growth margin kept free beside LLAMADECODE_VRAM_RESERVE_MIB when the L2 expert tier is sized (0-8192 MiB). The reserve's runtime guard still refuses loudly if physical free VRAM falls below the reserve. |
+| `--llamadecode-vram-margin-mib` | Explicit runtime value | Single-engine decode: VRAM growth margin kept free beside LLAMADECODE_VRAM_RESERVE_MIB when the L2 expert tier is sized (default 64, 0-8192 MiB; 128 MiB reserve with 0 margin breached the reserve in every measured run). The reserve's runtime guard still refuses loudly if physical free VRAM falls below the reserve. |
 | `--llama-dsv41-cast-vector` | rtx-llama: `1` | LLAMA_DSV41_CAST_VECTOR: qualified preset/runtime setting; override for a different memory or arithmetic plan |
 | `--llama-dsv41-cuda-graphs` | Explicit runtime value | Explicit streamed layer CUDA capture/update/replay experiment; requires compiled graph support and GGML_CUDA_DISABLE_GRAPHS=0; bounded one executable, no unsupported eager fallback. Production default remains eager. |
 | `--llama-dsv41-engram-gpu-decode` | Explicit runtime value | Upload the original 264-byte Engram rows and decode them on the GPU (bit-identical to the host decode, checked by the tile finite validator). Default enabled on the direct pinned tile path; 0 keeps the host decode and F32 upload. |
@@ -3364,7 +3364,7 @@ Source: `engines/ds4-win/ds4.c:76427`. Unset read: NULL from getenv; the literal
         fprintf(stderr,"ds4: invalid cache affinity token/rate limit\n");*out=NULL;return 1;
 ```
 
-Source: `engines/streaming-llama/prefill_llama.cpp/tools/dsv41-prefill/live-session.inc:381`. Unset read: NULL from getenv; the literal consumer below supplies any fallback.
+Source: `engines/streaming-llama/prefill_llama.cpp/tools/dsv41-prefill/live-session.inc:383`. Unset read: NULL from getenv; the literal consumer below supplies any fallback.
 
 ```text
         if(quality>=0.f||b){
@@ -3430,7 +3430,7 @@ Source: `engines/ds4-win/ds4.c:76427`. Unset read: NULL from getenv; the literal
         fprintf(stderr,"ds4: invalid cache affinity token/rate limit\n");*out=NULL;return 1;
 ```
 
-Source: `engines/streaming-llama/prefill_llama.cpp/tools/dsv41-prefill/live-session.inc:381`. Unset read: NULL from getenv; the literal consumer below supplies any fallback.
+Source: `engines/streaming-llama/prefill_llama.cpp/tools/dsv41-prefill/live-session.inc:383`. Unset read: NULL from getenv; the literal consumer below supplies any fallback.
 
 ```text
         if(quality>=0.f||b){
@@ -68298,7 +68298,7 @@ Producer resident append toggle: 0 (default) keeps full sweeps. Opt in with 96 f
 
 Scope: rtx-llama. Class: preset.
 
-Source: `engines/streaming-llama/prefill_llama.cpp/tools/dsv41-prefill/live-session.inc:191`. Unset read: NULL from getenv; the literal consumer below supplies any fallback.
+Source: `engines/streaming-llama/prefill_llama.cpp/tools/dsv41-prefill/live-session.inc:193`. Unset read: NULL from getenv; the literal consumer below supplies any fallback.
 
 ```text
 // most LLAMADECODE_APPEND_DECODE_MAX tokens (default 0 = off; opt-in 96) is appended
@@ -68316,7 +68316,7 @@ Producer small appends: 1 runs a 2..LLAMADECODE_APPEND_DECODE_MAX-row append as 
 
 Scope: rtx-llama. Class: advanced.
 
-Source: `engines/streaming-llama/prefill_llama.cpp/tools/dsv41-prefill/live-session.inc:201`. Unset read: NULL from getenv; the literal consumer below supplies any fallback.
+Source: `engines/streaming-llama/prefill_llama.cpp/tools/dsv41-prefill/live-session.inc:203`. Unset read: NULL from getenv; the literal consumer below supplies any fallback.
 
 ```text
 // (ds4x_prefill, native ds41_graph_prefill on a small workspace) instead of one ds4
@@ -68441,7 +68441,7 @@ Set by ComboProducer to <producer dir>/decode.cancel. The single-engine server c
 
 Scope: rtx-llama. Class: runtime.
 
-Source: `engines/streaming-llama/prefill_llama.cpp/tools/dsv41-prefill/live-session.inc:207`. Unset read: NULL from getenv; the literal consumer below supplies any fallback.
+Source: `engines/streaming-llama/prefill_llama.cpp/tools/dsv41-prefill/live-session.inc:209`. Unset read: NULL from getenv; the literal consumer below supplies any fallback.
 
 ```text
 bool ds4x_keep_open(){static const bool on=[]{const char*e=std::getenv("LLAMADECODE_DS4X_KEEP_OPEN");const bool v=llama_dsv41_ds4x_keep::keep_open_from_env(e);
@@ -68489,7 +68489,7 @@ Producer decode: routed decode-sized weight layout (default on); 0 is a diagnost
 
 Scope: rtx-llama. Class: advanced.
 
-Source: `engines/streaming-llama/prefill_llama.cpp/tools/dsv41-prefill/live-session.inc:446`. Unset read: NULL from getenv; the literal consumer below supplies any fallback.
+Source: `engines/streaming-llama/prefill_llama.cpp/tools/dsv41-prefill/live-session.inc:448`. Unset read: NULL from getenv; the literal consumer below supplies any fallback.
 
 ```text
 // LLAMADECODE: decode steps use the routed-expert layout (B1). The explicit
@@ -68507,7 +68507,7 @@ Packed FP4 decode: the decoder reads second-tier (L2) expert-cache hits in place
 
 Scope: rtx-llama. Class: advanced.
 
-Source: `engines/streaming-llama/prefill_llama.cpp/tools/dsv41-prefill/live-session.inc:373`. Unset read: NULL from getenv; the literal consumer below supplies any fallback.
+Source: `engines/streaming-llama/prefill_llama.cpp/tools/dsv41-prefill/live-session.inc:375`. Unset read: NULL from getenv; the literal consumer below supplies any fallback.
 
 ```text
         // Packed FP4 experts: the decoder reads second-tier (L2) hits in place.
@@ -68543,7 +68543,7 @@ Keep the decoder open across appended turns; 0 restores close/reopen.
 
 Scope: ds4-win, rtx-llama. Class: advanced.
 
-Source: `engines/streaming-llama/prefill_llama.cpp/tools/dsv41-prefill/live-session.inc:205`. Unset read: NULL from getenv; the literal consumer below supplies any fallback.
+Source: `engines/streaming-llama/prefill_llama.cpp/tools/dsv41-prefill/live-session.inc:207`. Unset read: NULL from getenv; the literal consumer below supplies any fallback.
 
 ```text
 // decoder stays open and only the moved resident weights are re-registered
@@ -68579,7 +68579,7 @@ Producer decode: initial quality/speed router bias (0..1.36125) for the ds4 deco
 
 Scope: rtx-llama. Class: advanced.
 
-Source: `engines/streaming-llama/prefill_llama.cpp/tools/dsv41-prefill/live-session.inc:378`. Unset read: NULL from getenv; the literal consumer below supplies any fallback.
+Source: `engines/streaming-llama/prefill_llama.cpp/tools/dsv41-prefill/live-session.inc:380`. Unset read: NULL from getenv; the literal consumer below supplies any fallback.
 
 ```text
         // cache-affinity bias on this cache (selection only). Spread file and
@@ -68597,7 +68597,7 @@ Producer decode engine: 1 (default) decodes with ds4-win's kernels in ds4-decode
 
 Scope: rtx-llama. Class: preset.
 
-Source: `engines/streaming-llama/prefill_llama.cpp/tools/dsv41-prefill/live-session.inc:187`. Unset read: NULL from getenv; the literal consumer below supplies any fallback.
+Source: `engines/streaming-llama/prefill_llama.cpp/tools/dsv41-prefill/live-session.inc:189`. Unset read: NULL from getenv; the literal consumer below supplies any fallback.
 
 ```text
         provider->cache_stats().l2_slots,(unsigned long long)sweep.context_next_step_bytes());std::fflush(stderr);
@@ -68615,7 +68615,7 @@ Producer decode: path of the per-model routing calibration (affinity spreads) us
 
 Scope: rtx-llama. Class: advanced.
 
-Source: `engines/streaming-llama/prefill_llama.cpp/tools/dsv41-prefill/live-session.inc:380`. Unset read: NULL from getenv; the literal consumer below supplies any fallback.
+Source: `engines/streaming-llama/prefill_llama.cpp/tools/dsv41-prefill/live-session.inc:382`. Unset read: NULL from getenv; the literal consumer below supplies any fallback.
 
 ```text
         const char*b=std::getenv("LLAMADECODE_DS4_BIAS");
@@ -68627,7 +68627,7 @@ Source: `engines/streaming-llama/prefill_llama.cpp/tools/dsv41-prefill/live-sess
         }
 ```
 
-Source: `engines/streaming-llama/prefill_llama.cpp/tools/dsv41-prefill/live-session.inc:472`. Unset read: NULL from getenv; the literal consumer below supplies any fallback.
+Source: `engines/streaming-llama/prefill_llama.cpp/tools/dsv41-prefill/live-session.inc:474`. Unset read: NULL from getenv; the literal consumer below supplies any fallback.
 
 ```text
             // token. No restarted warmup/ramp may defer a live slider update.
@@ -68885,7 +68885,7 @@ Producer decode: use free VRAM, less the reserve, as a second expert-cache tier 
 
 Scope: rtx-llama. Class: advanced.
 
-Source: `engines/streaming-llama/prefill_llama.cpp/tools/dsv41-prefill/live-session.inc:144`. Unset read: NULL from getenv; the literal consumer below supplies any fallback.
+Source: `engines/streaming-llama/prefill_llama.cpp/tools/dsv41-prefill/live-session.inc:146`. Unset read: NULL from getenv; the literal consumer below supplies any fallback.
 
 ```text
 }
@@ -68957,7 +68957,7 @@ E17 experiment diagnostic only: 1 allows bounded KV sampling over the private pr
 
 Scope: rtx-llama. Class: advanced.
 
-Source: `engines/streaming-llama/prefill_llama.cpp/tools/dsv41-prefill/live-session.inc:693`. Unset read: NULL from getenv; the literal consumer below supplies any fallback.
+Source: `engines/streaming-llama/prefill_llama.cpp/tools/dsv41-prefill/live-session.inc:695`. Unset read: NULL from getenv; the literal consumer below supplies any fallback.
 
 ```text
         }else if(operation=="perfexp_kv_samples"){
@@ -69127,35 +69127,35 @@ Source: `engines/streaming-llama/prefill_llama.cpp/src/llama-dsv41-sweep.cpp:945
 
 ### LLAMADECODE_VRAM_RESERVE_MIB
 
-Producer decode: physical VRAM kept free beside the L2 expert tier, in MiB (default 512).
+Producer decode: physical VRAM kept free beside the L2 expert tier, in MiB (default 128, clamp 128-8192). The runtime guard refuses loudly if free VRAM falls below it.
 
 Scope: rtx-llama. Class: advanced.
 
-Source: `engines/streaming-llama/prefill_llama.cpp/tools/dsv41-prefill/live-session.inc:107`. Unset read: NULL from getenv; the literal consumer below supplies any fallback.
+Source: `engines/streaming-llama/prefill_llama.cpp/tools/dsv41-prefill/live-session.inc:108`. Unset read: NULL from getenv; the literal consumer below supplies any fallback.
 
 ```text
-}
-// Physical VRAM reserve kept free beside the L2 (LLAMADECODE_VRAM_RESERVE_MIB, default 512 MiB).
+// Physical VRAM reserve kept free beside the L2 (LLAMADECODE_VRAM_RESERVE_MIB, default 128 MiB;
+// owner 2026-10-30: 128 MiB reserve + 64 MiB growth margin, 8/8 runs at 50K-200K without a breach).
 uint64_t decode_vram_reserve(){static const uint64_t r=[]{const char*e=std::getenv("LLAMADECODE_VRAM_RESERVE_MIB");
-    const long v=e&&*e?std::strtol(e,nullptr,10):512; /* measured: no transient dip below the post-L2 steady free (5 ms NVML, 43K run) */return uint64_t(std::max<long>(128,std::min<long>(v,8192)))<<20;}();return r;}
-// Decode-graph growth margin beside the reserve (LLAMADECODE_VRAM_MARGIN_MIB, default 768 MiB).
+    const long v=e&&*e?std::strtol(e,nullptr,10):128; /* measured: no transient dip below the post-L2 steady free (5 ms NVML, 43K run) */return uint64_t(std::max<long>(128,std::min<long>(v,8192)))<<20;}();return r;}
+// Decode-graph growth margin beside the reserve (LLAMADECODE_VRAM_MARGIN_MIB, default 64 MiB; the
+// measured post-L2 transient is ~25-30 MiB, and 128+0 breached the reserve in every run).
 // Owner 2026-10-29: the safety margin may be cut but not zeroed; reserve+margin >= 128 MiB.
-uint64_t decode_vram_margin(){static const uint64_t r=[]{const char*e=std::getenv("LLAMADECODE_VRAM_MARGIN_MIB");
 ```
 
 ### LLAMADECODE_VRAM_MARGIN_MIB
 
-Single-engine decode: VRAM growth margin kept free beside LLAMADECODE_VRAM_RESERVE_MIB when the L2 expert tier is sized (0-8192 MiB). The reserve's runtime guard still refuses loudly if physical free VRAM falls below the reserve.
+Single-engine decode: VRAM growth margin kept free beside LLAMADECODE_VRAM_RESERVE_MIB when the L2 expert tier is sized (default 64, 0-8192 MiB; 128 MiB reserve with 0 margin breached the reserve in every measured run). The reserve's runtime guard still refuses loudly if physical free VRAM falls below the reserve.
 
 Scope: rtx-llama. Class: advanced.
 
-Source: `engines/streaming-llama/prefill_llama.cpp/tools/dsv41-prefill/live-session.inc:111`. Unset read: NULL from getenv; the literal consumer below supplies any fallback.
+Source: `engines/streaming-llama/prefill_llama.cpp/tools/dsv41-prefill/live-session.inc:113`. Unset read: NULL from getenv; the literal consumer below supplies any fallback.
 
 ```text
-// Decode-graph growth margin beside the reserve (LLAMADECODE_VRAM_MARGIN_MIB, default 768 MiB).
+// measured post-L2 transient is ~25-30 MiB, and 128+0 breached the reserve in every run).
 // Owner 2026-10-29: the safety margin may be cut but not zeroed; reserve+margin >= 128 MiB.
 uint64_t decode_vram_margin(){static const uint64_t r=[]{const char*e=std::getenv("LLAMADECODE_VRAM_MARGIN_MIB");
-    const long v=e&&*e?std::strtol(e,nullptr,10):768;return uint64_t(std::max<long>(0,std::min<long>(v,8192)))<<20;}();return r;}
+    const long v=e&&*e?std::strtol(e,nullptr,10):64;return uint64_t(std::max<long>(0,std::min<long>(v,8192)))<<20;}();return r;}
 // Headroom measurement: a 5 ms NVML sampler records the minimum free VRAM
 // (transient cuBLAS/graph/WDDM/other-process use) once the L2 is filled.
 struct vram_sampler{
@@ -101929,7 +101929,7 @@ Source: `engines/streaming-llama/prefill_llama.cpp/src/llama-dsv41-weights.cpp:1
     uint64_t requested=UINT64_MAX;
 ```
 
-Source: `engines/streaming-llama/prefill_llama.cpp/tools/dsv41-prefill/live-session.inc:280`. Unset read: NULL from getenv; the literal consumer below supplies any fallback.
+Source: `engines/streaming-llama/prefill_llama.cpp/tools/dsv41-prefill/live-session.inc:282`. Unset read: NULL from getenv; the literal consumer below supplies any fallback.
 
 ```text
         bind(x_hook,"ds4x_set_expert_hook");bind(x_decode,"ds4x_decode");bind(x_close,"ds4x_close");bind(x_affinity,"ds4x_set_affinity");
@@ -101959,7 +101959,7 @@ static int external_cpu_mode(){
  * Its gate result is unused and the existing down sum skips it. */
 ```
 
-Source: `engines/streaming-llama/prefill_llama.cpp/tools/dsv41-prefill/live-session.inc:286`. Unset read: NULL from getenv; the literal consumer below supplies any fallback.
+Source: `engines/streaming-llama/prefill_llama.cpp/tools/dsv41-prefill/live-session.inc:288`. Unset read: NULL from getenv; the literal consumer below supplies any fallback.
 
 ```text
             int(*api2)(ds4_external_host_cache_v2*)=reinterpret_cast<int(*)(ds4_external_host_cache_v2*)>(GetProcAddress(module,"ds4x_host_cache_v2"));
@@ -102049,7 +102049,7 @@ Optional local binary correctness trace: position, input token and vocabulary si
 
 Scope: rtx-llama. Class: advanced.
 
-Source: `engines/streaming-llama/prefill_llama.cpp/tools/dsv41-prefill/live-session.inc:409`. Unset read: NULL from getenv; the literal consumer below supplies any fallback.
+Source: `engines/streaming-llama/prefill_llama.cpp/tools/dsv41-prefill/live-session.inc:411`. Unset read: NULL from getenv; the literal consumer below supplies any fallback.
 
 ```text
         // 32 positions; the caller supplies a scratch path and compares only

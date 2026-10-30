@@ -103,13 +103,15 @@ bool nvml_free_bytes(uint64_t&free_bytes,uint64_t&total_bytes){
     if(by_uuid(uuid,&device)!=0||info(device,&m)!=0)return false;
     free_bytes=m.free;total_bytes=m.total;return true;
 }
-// Physical VRAM reserve kept free beside the L2 (LLAMADECODE_VRAM_RESERVE_MIB, default 512 MiB).
+// Physical VRAM reserve kept free beside the L2 (LLAMADECODE_VRAM_RESERVE_MIB, default 128 MiB;
+// owner 2026-10-30: 128 MiB reserve + 64 MiB growth margin, 8/8 runs at 50K-200K without a breach).
 uint64_t decode_vram_reserve(){static const uint64_t r=[]{const char*e=std::getenv("LLAMADECODE_VRAM_RESERVE_MIB");
-    const long v=e&&*e?std::strtol(e,nullptr,10):512; /* measured: no transient dip below the post-L2 steady free (5 ms NVML, 43K run) */return uint64_t(std::max<long>(128,std::min<long>(v,8192)))<<20;}();return r;}
-// Decode-graph growth margin beside the reserve (LLAMADECODE_VRAM_MARGIN_MIB, default 768 MiB).
+    const long v=e&&*e?std::strtol(e,nullptr,10):128; /* measured: no transient dip below the post-L2 steady free (5 ms NVML, 43K run) */return uint64_t(std::max<long>(128,std::min<long>(v,8192)))<<20;}();return r;}
+// Decode-graph growth margin beside the reserve (LLAMADECODE_VRAM_MARGIN_MIB, default 64 MiB; the
+// measured post-L2 transient is ~25-30 MiB, and 128+0 breached the reserve in every run).
 // Owner 2026-10-29: the safety margin may be cut but not zeroed; reserve+margin >= 128 MiB.
 uint64_t decode_vram_margin(){static const uint64_t r=[]{const char*e=std::getenv("LLAMADECODE_VRAM_MARGIN_MIB");
-    const long v=e&&*e?std::strtol(e,nullptr,10):768;return uint64_t(std::max<long>(0,std::min<long>(v,8192)))<<20;}();return r;}
+    const long v=e&&*e?std::strtol(e,nullptr,10):64;return uint64_t(std::max<long>(0,std::min<long>(v,8192)))<<20;}();return r;}
 // Headroom measurement: a 5 ms NVML sampler records the minimum free VRAM
 // (transient cuBLAS/graph/WDDM/other-process use) once the L2 is filled.
 struct vram_sampler{
