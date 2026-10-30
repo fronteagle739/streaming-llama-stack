@@ -154,12 +154,14 @@ $cliObjects = $cliSources | ForEach-Object { [IO.Path]::ChangeExtension($_, ".ob
 $benchObjects = $benchSources | ForEach-Object { [IO.Path]::ChangeExtension($_, ".obj") }
 $serverObjects = $serverSources | ForEach-Object { [IO.Path]::ChangeExtension($_, ".obj") }
 $agentObjects = $agentSources | ForEach-Object { [IO.Path]::ChangeExtension($_, ".obj") }
-$backendObjects = @("ds4_lora.obj", "ds4_engram_ioring.obj")
+$backendObjects = @("ds4_lora.obj", "ds4_engram_ioring.obj", "ds4_cpu_fp4.obj")
 $win32Link = " ws2_32.lib bcrypt.lib"
 
 $loraCommand = "cl " + ((@("/nologo", "/std:c++17", "/EHsc", "/O2", "/W3") + $defines + "/c" + "ds4_lora.cpp") -join " ")
 # Engram raw-row reads through IoRing (ds4_engram.c calls it on Windows); APIs resolved at runtime.
 $engramIoringCommand = "cl " + ((@("/nologo", "/std:c++17", "/EHsc", "/O2", "/W3") + $defines + "/c" + "ds4_engram_ioring.cpp") -join " ")
+# RAM-tier packed FP4 experts on the CPU (AVX-512 VNNI); its own unit so only it gets /arch:AVX512.
+$engramIoringCommand += "`nif errorlevel 1 exit /b %errorlevel%`ncl " + ((@("/nologo", "/std:c++17", "/EHsc", "/O2", "/W3", "/arch:AVX512") + $defines + "/c" + "ds4_cpu_fp4.cpp") -join " ")
 $cudaCommand = ""
 $dstorageCommand = "rem no DirectStorage transport in this target"
 $cudaLink = ""

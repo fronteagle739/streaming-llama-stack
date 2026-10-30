@@ -35740,6 +35740,17 @@ extern "C" void ds4_gpu_stage_flush(uint32_t position) {
     g_stage_host_ms[0] = g_stage_host_ms[1] = g_stage_host_ms[2] = 0.0; g_stage_launch_ms = 0.0;
 }
 #include "ds4_external_host_compute.inc"
+#ifdef DS4_EXTERNAL_DECODE
+/* FP4 CPU lane (ds4_external_host_compute_wrapper.inc): ids read together
+ * with the activation, CPU experts marked -2 for the packed kernels, and the
+ * join callback that the packed launcher runs before the down projection. */
+static const void *g_fp4_pre_ids_src = nullptr;
+static int32_t g_fp4_pre_ids[6];
+static bool g_fp4_cpu_active = false;
+static float *g_fp4_cpu_acc_dev = nullptr;
+static int external_fp4_cpu_join(void *ctx, cudaStream_t stream);
+static double g_last_hook_ms = 0.0;
+#endif
 
 static int routed_moe_launch(
         ds4_gpu_tensor *out,
@@ -35840,7 +35851,10 @@ static int routed_moe_launch_impl(
         std::vector<int32_t> ids(assignments), unique, slots;
         if (n_tokens == 1u) (void)ds4_gpu_stage_mark(6);
         const auto hook_t0 = std::chrono::steady_clock::now();
-        if (g_prefetch_src && g_prefetch_src == selected->ptr && g_prefetch_count == assignments) {
+        if (g_fp4_pre_ids_src && g_fp4_pre_ids_src == selected->ptr && assignments == 6u) {
+            g_fp4_pre_ids_src = nullptr;
+            std::memcpy(ids.data(), g_fp4_pre_ids, 6u * sizeof(int32_t));
+        } else if (g_prefetch_src && g_prefetch_src == selected->ptr && g_prefetch_count == assignments) {
             g_prefetch_src = nullptr;
             if (cudaEventSynchronize(g_prefetch_event) != cudaSuccess) return 0;
             std::memcpy(ids.data(), g_prefetch_ids, (size_t)assignments * sizeof(int32_t));
@@ -35894,10 +35908,11 @@ static int routed_moe_launch_impl(
             return 0;
         }
         const auto hook_t3 = std::chrono::steady_clock::now();
+        if (n_tokens == 1u) g_last_hook_ms = std::chrono::duration<double, std::milli>(hook_t3 - hook_t2).count();
         for (const int32_t slot : slots) if (slot < 0 || (uint32_t)slot >= n_slots) return 0;
         for (int32_t &id : ids){
             const auto at=std::find(unique.begin(),unique.end(),id);
-            id=at==unique.end()?-1:slots[size_t(at-unique.begin())];
+            id=at==unique.end()?(g_fp4_cpu_active?-2:-1):slots[size_t(at-unique.begin())];
         }
         if (g_ds4x_slot_tensor.bytes < (uint64_t)assignments * sizeof(int32_t)) {
             if (g_ds4x_slot_tensor.ptr) { (void)cudaFree(g_ds4x_slot_tensor.ptr); g_ds4x_slot_tensor = {}; }
@@ -36149,7 +36164,12 @@ static int routed_moe_launch_impl(
             external_l2[0], external_l2[1], external_l2[2], external_l2_stride[0], external_l2_stride[2], (int)l1_slots,
             (const float *)x->ptr, (const int32_t *)selected->ptr, (const float *)weights->ptr,
             (float *)mid->ptr, (float *)out->ptr, (int)expert_mid_dim, (int)expert_in_dim, (int)out_dim,
-            (int)n_tokens, (int)n_total_expert, clamp, reference && n_tokens == 1u, stream);
+            (int)n_tokens, (int)n_total_expert, clamp, reference && n_tokens == 1u, stream,
+#ifdef DS4_EXTERNAL_DECODE
+            g_fp4_cpu_active ? g_fp4_cpu_acc_dev : nullptr, g_fp4_cpu_active ? external_fp4_cpu_join : nullptr, nullptr);
+#else
+            nullptr, nullptr, nullptr);
+#endif
         if (n_tokens == 1u) g_stage_launch_ms += std::chrono::duration<double, std::milli>(std::chrono::steady_clock::now() - launch_t0).count();
         static bool witnessed[40] = {};
         if (rc == 0 && layer_index < 40u && !witnessed[layer_index]) {

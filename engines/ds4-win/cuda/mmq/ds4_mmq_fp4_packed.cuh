@@ -153,7 +153,8 @@ static __global__ void __launch_bounds__(256) ds4_fp4p_down_sum6_kernel(
         const int32_t    * __restrict__ ids,
         float            * __restrict__ out,
         const uint32_t                  N,
-        const uint32_t                  n_slots) {
+        const uint32_t                  n_slots,
+        const float      * __restrict__ cpu_acc) {
     constexpr int NB = K / 32, NG = K / 128, TOT = 6 * NB, R = 16;
     __shared__ int sx[TOT * 8];
     __shared__ float sd[TOT];
@@ -162,7 +163,9 @@ static __global__ void __launch_bounds__(256) ds4_fp4p_down_sum6_kernel(
     const uint32_t tok = blockIdx.y, n0 = blockIdx.x * R;
     if (threadIdx.x < 6) {
         const int32_t id = ids[tok * 6u + threadIdx.x];
-        sid[threadIdx.x] = id < 0 || (uint32_t) id >= n_slots ? -1 : id;
+        // -2 = expert computed on the CPU (RAM tier): its per-row sum is in
+        // cpu_acc[slot position][row] and is added in the same slot order.
+        sid[threadIdx.x] = (id == -2 && cpu_acc) ? -2 : id < 0 || (uint32_t) id >= n_slots ? -1 : id;
     }
     for (int i = threadIdx.x; i < TOT * 8; i += 256) {
         const int a = i / (NB * 8), rem = i - a * (NB * 8);
@@ -199,6 +202,7 @@ static __global__ void __launch_bounds__(256) ds4_fp4p_down_sum6_kernel(
         }
         acc = ds4_fp4p_half_warp_sum(acc);
         if (lane == 0) {
+            if (id == -2) acc = cpu_acc[(uint64_t) a * N + row];
             if (!isfinite(acc)) acc = 0.0f;
             total += acc;
         }
@@ -245,8 +249,13 @@ extern "C" int ds4_mmq_mxfp4_packed_moe(
         const float * X_f32, const int32_t * ids, const float * weights,
         float * mid_f32, float * out_f32,
         int mid_dim, int in_dim, int out_dim, int n_tokens, int n_slots,
-        float clamp, int reference, cudaStream_t stream) {
+        float clamp, int reference, cudaStream_t stream,
+        const float * cpu_acc, int (*cpu_join)(void *, cudaStream_t), void * cpu_join_ctx) {
     const char *tag = "ds4_mmq_mxfp4_packed_moe";
+    if (cpu_acc && (reference || n_tokens != 1 || !cpu_join)) {
+        fprintf(stderr, "%s: CPU expert merge is single-row, non-reference only\n", tag);
+        return -1;
+    }
     if (!W_gate || !W_up || !W_down || !X_f32 || !ids || !weights || !mid_f32 || !out_f32 ||
         mid_dim != 2304 || in_dim != 5120 || out_dim != 5120 || n_tokens < 1 || n_tokens > 65535 || n_slots <= 0 ||
         gate_slot_bytes != (uint64_t) mid_dim * in_dim / 32u * 17u ||
@@ -264,7 +273,7 @@ extern "C" int ds4_mmq_mxfp4_packed_moe(
         static int calls = 0;
         const int rc = ds4_mmq_mxfp4_packed_moe(W_gate, W_up, W_down, gate_slot_bytes, down_slot_bytes, W_gate2, W_up2, W_down2,
                                                 gate2_slot_bytes, down2_slot_bytes, l1_slots, X_f32, ids, weights,
-                                                mid_f32, out_f32, mid_dim, in_dim, out_dim, 1, n_slots, clamp, 0, stream);
+                                                mid_f32, out_f32, mid_dim, in_dim, out_dim, 1, n_slots, clamp, 0, stream, nullptr, nullptr, nullptr);
         in_check = false;
         if (rc) return rc;
         std::vector<float> mp((size_t) 6 * mid_dim), op(out_dim), mr((size_t) 6 * mid_dim), orf(out_dim);
@@ -272,7 +281,7 @@ extern "C" int ds4_mmq_mxfp4_packed_moe(
         cudaMemcpyAsync(op.data(), out_f32, op.size() * 4, cudaMemcpyDeviceToHost, stream);
         const int rr = ds4_mmq_mxfp4_packed_moe(W_gate, W_up, W_down, gate_slot_bytes, down_slot_bytes, W_gate2, W_up2, W_down2,
                                                 gate2_slot_bytes, down2_slot_bytes, l1_slots, X_f32, ids, weights,
-                                                mid_f32, out_f32, mid_dim, in_dim, out_dim, 1, n_slots, clamp, 1, stream);
+                                                mid_f32, out_f32, mid_dim, in_dim, out_dim, 1, n_slots, clamp, 1, stream, nullptr, nullptr, nullptr);
         if (rr) return rr;
         cudaMemcpyAsync(mr.data(), mid_f32, mr.size() * 4, cudaMemcpyDeviceToHost, stream);
         cudaMemcpyAsync(orf.data(), out_f32, orf.size() * 4, cudaMemcpyDeviceToHost, stream);
@@ -354,9 +363,13 @@ extern "C" int ds4_mmq_mxfp4_packed_moe(
         (uint32_t) (x_pad / QK8_1), ids, weights, mid_f32, (uint32_t) mid_dim, (uint32_t) n_slots, clamp);
     quantize_row_q8_1_cuda(mid_f32, nullptr, (void *) mq, GGML_TYPE_MXFP4, mid_dim,
                            mid_dim, mid_dim, (int64_t) mid_dim * n_assign, m_pad, 1, n_assign, 1, stream);
+    // Join the CPU lane (RAM-tier experts) at the layer dependency: the gate/up
+    // work above is already queued; the callback waits for the CPU job only if
+    // it is still running and queues the upload of its per-row sums.
+    if (cpu_acc && !cpu_join(cpu_join_ctx, stream)) { fprintf(stderr, "%s: CPU expert join failed\n", tag); return -4; }
     ds4_fp4p_down_sum6_kernel<2304><<<dim3((unsigned) out_dim / 16u, (unsigned) n_tokens), 256, 0, stream>>>(
         Td, (const block_q8_1 *) mq, (uint32_t) (m_pad / QK8_1),
-        ids, out_f32, (uint32_t) out_dim, (uint32_t) n_slots);
+        ids, out_f32, (uint32_t) out_dim, (uint32_t) n_slots, cpu_acc);
     const cudaError_t err = cudaGetLastError();
     if (err != cudaSuccess) { fprintf(stderr, "%s: launch failed: %s\n", tag, cudaGetErrorString(err)); return -3; }
     return 0;

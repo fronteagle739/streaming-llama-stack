@@ -720,7 +720,10 @@ int ds4_mmq_mxfp4_packed_moe(
     const float * X_f32, const int32_t * ids, const float * weights,
     float * mid_f32, float * out_f32,
     int mid_dim, int in_dim, int out_dim, int n_tokens, int n_slots,
-    float clamp, int reference, cudaStream_t stream);
+    float clamp, int reference, cudaStream_t stream,
+    /* Optional CPU lane: slots marked -2 take cpu_acc[position][row]; cpu_join
+     * runs before the down projection is queued (it makes cpu_acc ready). */
+    const float * cpu_acc, int (*cpu_join)(void *, cudaStream_t), void * cpu_join_ctx);
 
 int ds4_mmq_mxfp4_moe_down_sum6_vec(
     const void    * W,
