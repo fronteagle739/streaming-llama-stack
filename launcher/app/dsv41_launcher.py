@@ -78,7 +78,7 @@ class Keys:
         self.pending.clear()
         while True:
             key = self.get()
-            if key in choices:
+            if key and key in choices:
                 return key
             time.sleep(.1)
 
@@ -174,7 +174,7 @@ class Launcher:
     def busy(self):
         """Reasons another engine holds the GPU or the ports; empty when free."""
         reasons, cfg = [], self.cfg
-        studio = try_http(cfg.get('studio_url', 'http://127.0.0.1:8765') + '/presets/active')
+        studio = try_http(cfg['studio_url'] + '/presets/active') if cfg.get('studio_url') else None
         if studio and (studio.get('server_live') or studio.get('mac_live')) and cfg['side'] == 'rtx':
             name = (studio.get('preset') or {}).get('name', 'an LLM preset')
             reasons.append(f'Studio has "{name}" loaded (eject it in Studio to free the GPU).')
@@ -214,9 +214,12 @@ class Launcher:
             say('The GPU or an engine is already in use:')
             for reason in reasons:
                 say('  - ' + reason)
-            studio = self.cfg.get('studio_url', 'http://127.0.0.1:8765')
-            key = self.keys.ask(f'  [U] use the running one (open Studio, {studio})   [W] wait until it is free\n'
-                                '  [C] start anyway (the stack still refuses if GPU/RAM do not fit)   [Q] quit', 'uwcq')
+            studio = self.cfg.get('studio_url')
+            held = studio and any(reason.startswith('Studio has') for reason in reasons)
+            use = f'[U] use the running one (open {studio})   ' if held else ''
+            key = self.keys.ask(f'  {use}[W] wait until it is free\n'
+                                '  [C] start anyway (the stack still refuses if GPU/RAM do not fit)   [Q] quit',
+                                ('u' if held else '') + 'wcq')
             if key == 'u':
                 webbrowser.open(studio)
                 return False
