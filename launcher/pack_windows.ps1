@@ -36,6 +36,10 @@ Copy-Item -LiteralPath (Join-Path $here 'app\dsv41_launcher.py') -Destination (J
 
 $exe = Join-Path $OutDir "$name.exe"
 $icon = Join-Path $here "icons\built\$Mode.ico"
+if (-not (Test-Path -LiteralPath $icon)) {
+    & $Python -B (Join-Path $here 'icons\build_icons.py') $Mode   # needs Pillow and Chrome or Edge
+    if ($LASTEXITCODE -ne 0) { throw "Icon build failed ($LASTEXITCODE)" }
+}
 $cscArgs = @('/nologo', '/target:exe', '/optimize+', "/out:$exe", "/win32icon:$icon",
              "/resource:$(Join-Path $stage 'dsv41_launcher.py'),dsv41_launcher.py",
              "/resource:$(Join-Path $stage 'launcher.json'),launcher.json",

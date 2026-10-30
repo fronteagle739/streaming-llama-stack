@@ -13,8 +13,9 @@ waits until it is ready and opens the stack's web UI.
 | **DSV41 Dual.app** | Mac | `examples/run_preset.py --preset dsv41-ultra-cone-fp4 --machine mac`: Mac decode and the receiver's direct-TCP relay |
 
 For two machines, start **DSV41 Dual** on both, in either order. Each waits for the
-other: the RTX pairs with the Mac receiver (`192.168.3.1:8180`), and the Mac waits for
-that pairing and for the RTX prefill broker (`192.168.3.3:8090`). The RTX opens the web
+other: the RTX pairs with the Mac receiver (`<mac_link>:8180`), and the Mac waits for
+that pairing and for the RTX prefill broker (`<rtx_link>:8090`). `mac_link` and `rtx_link`
+are the two machines' addresses on the dual-machine link, set in `config/dual.local.json`. The RTX opens the web
 UI at `http://127.0.0.1:8088`. The Mac also opens one there: the stack router in
 `general.mode=remote`, sending its chats to the paired receiver.
 
@@ -106,8 +107,12 @@ The stack must be set up on each machine as in the main README:
 ### Icons
 
 `icons/single.svg` shows one robot riding a river, and `icons/dual.svg` shows two.
-`python -B launcher/icons/build_icons.py` renders them with a headless Chromium browser
-and writes `icons/built/*.ico` (16-256 px) and `*.icns`.
+A packer renders the missing icons with `icons/build_icons.py` and writes them to
+`icons/built/`, which Git ignores:
+- **Windows:** a headless Chromium browser renders the SVG, and Pillow writes the `.ico`
+  (16-256 px).
+- **macOS:** Quick Look renders the SVG, and Pillow writes the `.icns`. By default the packer
+  uses Pillow from the stack's core venv; `--icon-python` picks another Python that has it.
 
 ### First launch on a new machine
 

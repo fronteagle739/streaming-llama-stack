@@ -5,6 +5,7 @@ machine side and write the JSON that a packer bakes into the launcher. Python 3.
 """
 import argparse
 import json
+import re
 from pathlib import Path
 
 LAUNCHER = Path(__file__).resolve().parents[1]
@@ -32,7 +33,11 @@ def bake(mode, side, python, stack_root=None):
     if local.is_file():
         data = merge(data, json.loads(local.read_text(encoding='utf-8-sig')))
     shared = {k: v for k, v in data.items() if k not in ('rtx', 'mac')}
-    cfg = merge(data[side], {k: v for k, v in shared.items() if k != 'pair_token'})
+    # Top-level strings (for example mac_link, rtx_link) fill {name} references in the section.
+    links = {k: v for k, v in shared.items() if isinstance(v, str) and k != 'pair_token'}
+    section = json.loads(re.sub(r'\{(%s)\}' % '|'.join(map(re.escape, links)) if links else r'(?!x)x',
+                                lambda m: links[m.group(1)], json.dumps(data[side])))
+    cfg = merge(section, {k: v for k, v in shared.items() if k not in links and k != 'pair_token'})
     if 'pair_token' in shared:
         cfg['stack']['pair_token'] = shared['pair_token']
     cfg.update(mode=mode, side=side, python=python,
@@ -43,7 +48,7 @@ def bake(mode, side, python, stack_root=None):
         cfg['ui'].setdefault('runtime_root', root)
         if mode == 'dual':
             cfg['ui']['general'].setdefault('api_key', cfg['stack']['pair_token'])
-    missing = placeholders(cfg)
+    missing = placeholders(cfg) + [k for k, v in links.items() if v.startswith('SET_')]
     if missing:
         raise SystemExit('Set these in launcher/config/%s.local.json: %s' % (mode, ', '.join(missing)))
     return cfg
