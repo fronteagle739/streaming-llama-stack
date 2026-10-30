@@ -261,6 +261,7 @@ typedef struct {
     int engram_gate; /* exact segmented 256-thread Engram gate */
     int shared_down_hc; /* exact short72 shared/block/HC/pre producer */
     int fixed_dense; /* exact literal QA/KV and attention-output dimensions */
+    int query_norm_pair; /* Exact paired QA/KV norms before the query writer. */
     int query_rope; /* Exact query-store RoPE in the existing HC/KV producer. */
     int heads_rope; /* exact per-step RoPE table and attention writer */
     int preencode; /* hold next token layer 0 during the current terminal wait */
@@ -315,6 +316,7 @@ typedef struct {
     int mtp_gu_swizzle; /* Exact six-row Q4 GU job ordering; default on, =0 restores parent. */
     int hc_join_static; /* Literal scalar FFN HC join, preserving block output. */
     int topk_short; /* Upstream short decode shuffle/staged/fused ladder; original at0. */
+    int index_candidates; /* Compact checked masked selection; complete chronological scores retained. */
     int index_schedule; /* 0 original; 1 omit all-eligible block plans; 2 additionally upstream wide/BF16 scalar scoring. */
     int index_score_stream; /* Exact decode scorer; default on, =0 restores direct scorer. */
     int index_mask_score; /* Exact masked scorer, candidate default off. */

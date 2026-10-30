@@ -69,3 +69,11 @@ shuffle/prefix top512 sort below16384 keys (`topk_short`), and specializes
 the5120x4 FFN HC join (`hc_join_static`). Every original output, ordered
 FMA, generic shape, optional add, disable control and original schedule is
 retained. Sources are adapted from the same pinned upstream `f48c5e2e`.
+
+Round5 also retains the original HC carry words in the static join and
+adapts upstream independent QA/KV normalization to the retained query writer.
+Every original reduction, state/output word and shape/control alternative
+remains. Compact masked candidate scoring/selection stays opt-in diagnostic:
+components pass but long full-model equality fails, so the release uses the
+original selector. Final exact six-artifact qualification, failed experiments
+and normal same-proxy rates are recorded in docs/MACDECODE_ROUND5.md.

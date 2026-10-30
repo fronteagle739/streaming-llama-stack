@@ -7,6 +7,15 @@ vendor()
 from studio.dsv41_session_contract import initial_request,MODEL_SHA256,command
 
 class PairedVisionTests(unittest.TestCase):
+    def test_projected_vision_preserves_explicit_fp4_identity(self):
+        wire=self.wire();headers=self.headers(wire)
+        identity='0ba5ae3bdeea8c38501d2a69e6394436b6f99c07b5a531226a3f93249c45e572'
+        headers['x-dsv41-model-sha256']=identity
+        row=initial_request('1234567890abcdef1234567890abcdef',headers,wire,identity)
+        self.assertEqual(row['model_sha256'],identity)
+        self.assertEqual(row['vision'][0]['position'],1)
+        self.assertEqual(row['yoco_state_version'],1)
+
     def test_whole_long_initial_prompt_can_carry_projected_image(self):
         ids = [11] * 198287;ids[198045] = 129264
         wire = self.wire(position=198045, ids=ids)
@@ -79,7 +88,7 @@ class PairedVisionTests(unittest.TestCase):
         from studio.dsv41_session_broker import create_router
         def authorize(x_studio_token:str=Header(default='')):
             if x_studio_token!='test-only-token':raise HTTPException(401)
-        broker=Mock();broker.start.return_value={'state':'starting'};broker.enqueue.return_value={'state':'running'}
+        broker=Mock(model_sha256=MODEL_SHA256);broker.start.return_value={'state':'starting'};broker.enqueue.return_value={'state':'running'}
         app=FastAPI();app.include_router(create_router(broker,authorize));client=TestClient(app)
         wire=self.wire();headers=self.headers(wire)
         url='/dsv41-native-offload/sessions/'+'a'*32

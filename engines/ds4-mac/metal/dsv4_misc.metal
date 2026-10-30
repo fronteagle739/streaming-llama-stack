@@ -8061,3 +8061,135 @@ kernel void kernel_glm_indexer_score_one_wide(
     FOR_UNROLL (uint h = 0; h < 32u; h++) score += max(acc[h] * args.scale, 0.0f) * ws[h];
     scores[row] = score;
 }
+
+// Preserve the complete original chronological score array alongside compact scores.
+template <bool B>
+kernel void kernel_dsv41_candidates_score_publish(
+        constant ds4_metal_args_glm_indexer_score_one & args,
+        device const float *qf,
+        device const float *weights,
+        device const void *keys,
+        device float *scores,
+        device const uint *list,
+        device float *full_scores [[buffer(6)]],
+        threadgroup float *shared [[threadgroup(0)]],
+        uint3 tgpig [[threadgroup_position_in_grid]],
+        ushort tid [[thread_index_in_threadgroup]],
+        uint3 ntg_u [[threads_per_threadgroup]]) {
+    if(list[2049]!=1u)return;
+    constexpr uint S=2u;
+    const uint ntg = ntg_u.x;
+    threadgroup float *qs = shared;           /* [32][128] */
+    threadgroup float *ws = shared + 4096u;   /* [32] */
+    for (uint i = tid; i < 4096u; i += ntg) qs[i] = qf[i];
+    if (tid < 32u) ws[tid] = weights[tid];
+    threadgroup_barrier(mem_flags::mem_threadgroup);
+    if (args.n_head != 32u || args.head_dim != 128u) return;
+    constexpr uint HS = 32u / S;
+    const uint part = tid % S, lanes = ntg / S;
+    uint slot[2], row[2];
+    FOR_UNROLL (uint r = 0; r < 2u; r++) {
+        slot[r] = tgpig.x * lanes * 2u + r * lanes + tid / S;
+        const uint s = min(slot[r], args.n_rows - 1u);
+        row[r] = list[s >> 3] * 8u + (s & 7u);
+    }
+    float acc[2][HS];
+    FOR_UNROLL (uint r = 0; r < 2u; r++) FOR_UNROLL (uint i = 0; i < HS; i++) acc[r][i] = 0.0f;
+    for (uint d0 = 0; d0 < 128u; d0 += 16u) {
+        float4 k[2][4];
+        FOR_UNROLL (uint r = 0; r < 2u; r++) {
+            if (B) {
+                device const ushort4 *kb = (device const ushort4 *)keys + (((uint64_t)row[r] * 128u + d0) >> 2);
+                FOR_UNROLL (uint i = 0; i < 4u; i++) k[r][i] = as_type<float4>(uint4(kb[i]) << 16);
+            } else {
+                device const float4 *kf = (device const float4 *)keys + (((uint64_t)row[r] * 128u + d0) >> 2);
+                FOR_UNROLL (uint i = 0; i < 4u; i++) k[r][i] = kf[i];
+            }
+        }
+        FOR_UNROLL (uint i = 0; i < HS; i++) {
+            threadgroup const float4 *q4 = (threadgroup const float4 *)(qs + (part * HS + i) * 128u + d0);
+            FOR_UNROLL (uint r = 0; r < 2u; r++)
+                acc[r][i] += dot(q4[0], k[r][0]) + dot(q4[1], k[r][1]) + dot(q4[2], k[r][2]) + dot(q4[3], k[r][3]);
+        }
+    }
+    FOR_UNROLL (uint r = 0; r < 2u; r++) {
+        float score = 0.0f;
+        FOR_UNROLL (uint p = 0; p < S; p++) {
+            if (p) score = simd_shuffle_up(score, (ushort)1);
+            if (part == p) {
+                FOR_UNROLL (uint i = 0; i < HS; i++) score += max(acc[r][i] * args.scale, 0.0f) * ws[p * HS + i];
+            }
+        }
+        if (part == S - 1u && slot[r] < args.n_rows) {scores[slot[r]]=score;full_scores[row[r]]=score;}
+    }
+}
+#define DS41_CAND_PUBLISH(NAME,B) template [[host_name(NAME)]] kernel void kernel_dsv41_candidates_score_publish<B>( \
+    constant ds4_metal_args_glm_indexer_score_one &,device const float *,device const float *,device const void *, \
+    device float *,device const uint *,device float *,threadgroup float *,uint3,ushort,uint3);
+DS41_CAND_PUBLISH("kernel_dsv41_candidates_score_publish_bf16",true)
+DS41_CAND_PUBLISH("kernel_dsv41_candidates_score_publish_f32",false)
+#undef DS41_CAND_PUBLISH
+
+// Compact candidates with the retained stream scorer's exact lane dot,
+// SIMD reduction and separately rounded product, including nonexact F32 keys.
+template<bool BF16>
+kernel void kernel_dsv41_candidates_stream_publish(
+        constant ds4_metal_args_glm_indexer_score_one &args,
+        device const char *q,device const float *weights,device const char *keys,
+        device float *compact,device const uint *list,device float *full,
+        constant uint &n,threadgroup float *qtg [[threadgroup(0)]],
+        uint tgid [[threadgroup_position_in_grid]],ushort tid [[thread_index_in_threadgroup]],
+        ushort ntg [[threads_per_threadgroup]],ushort lane [[thread_index_in_simdgroup]],
+        ushort sg [[simdgroup_index_in_threadgroup]]) {
+    if(list[2049]!=1u || args.n_head!=32u || args.head_dim!=128u)return;
+    const uint jobs=args.n_rows;
+    if(tgid*32u>=jobs)return;
+    threadgroup float4 *q4tg=(threadgroup float4 *)qtg;
+    device const float4 *q4src=(device const float4 *)q;
+    for(uint i=tid;i<1024u;i+=ntg)q4tg[i]=q4src[i];
+    threadgroup_barrier(mem_flags::mem_threadgroup);
+    const uint job=(tgid*(uint(ntg)/32u)+uint(sg))*4u;
+    if(job>=jobs)return;
+    const uint row0=list[job/8u]*8u+job%8u;
+    if(row0>=n)return;
+    const uint last=n-1u,r1=min(row0+1u,last),r2=min(row0+2u,last),r3=min(row0+3u,last);
+    float4 k0,k1,k2,k3;
+    if(BF16) {
+        device const ushort4 *k=(device const ushort4 *)keys;
+        k0=as_type<float4>(uint4(k[(uint64_t)row0*32u+lane])<<16);
+        k1=as_type<float4>(uint4(k[(uint64_t)r1*32u+lane])<<16);
+        k2=as_type<float4>(uint4(k[(uint64_t)r2*32u+lane])<<16);
+        k3=as_type<float4>(uint4(k[(uint64_t)r3*32u+lane])<<16);
+    }else {
+        device const float4 *k=(device const float4 *)keys;
+        k0=k[(uint64_t)row0*32u+lane];k1=k[(uint64_t)r1*32u+lane];
+        k2=k[(uint64_t)r2*32u+lane];k3=k[(uint64_t)r3*32u+lane];
+    }
+    float a0=0.f,a1=0.f,a2=0.f,a3=0.f;
+    for(uint h=0;h<32u;h++) {
+        const float4 qv=q4tg[h*32u+lane];const float w=weights[h];
+        a0=a0+fma(max(simd_sum(dot(qv,k0))*args.scale,0.f),w,0.f);
+        a1=a1+fma(max(simd_sum(dot(qv,k1))*args.scale,0.f),w,0.f);
+        a2=a2+fma(max(simd_sum(dot(qv,k2))*args.scale,0.f),w,0.f);
+        a3=a3+fma(max(simd_sum(dot(qv,k3))*args.scale,0.f),w,0.f);
+    }
+    if(!lane) {
+        full[row0]=compact[job]=a0;
+        if(row0+1u<n)full[row0+1u]=compact[job+1u]=a1;
+        if(row0+2u<n)full[row0+2u]=compact[job+2u]=a2;
+        if(row0+3u<n)full[row0+3u]=compact[job+3u]=a3;
+    }
+}
+#define DS41_CAND_STREAM(NAME,B) template [[host_name(NAME)]] kernel void kernel_dsv41_candidates_stream_publish<B>( \
+    constant ds4_metal_args_glm_indexer_score_one &,device const char *,device const float *,device const char *, \
+    device float *,device const uint *,device float *,constant uint &,threadgroup float *,uint,ushort,ushort,ushort,ushort);
+DS41_CAND_STREAM("kernel_dsv41_candidates_stream_publish_bf16",true)
+DS41_CAND_STREAM("kernel_dsv41_candidates_stream_publish_f32",false)
+#undef DS41_CAND_STREAM
+
+// Selection-only compact gather. The original scorer owns every score word.
+kernel void kernel_dsv41_candidates_gather(
+ constant uint &count,device const float *full,device const uint *list,
+ device float *compact,uint job [[thread_position_in_grid]]) {
+ if(job<count && list[2049]==1u)compact[job]=full[list[job/8u]*8u+job%8u];
+}

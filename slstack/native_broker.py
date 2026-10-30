@@ -147,6 +147,9 @@ class OwnedProducer:
             if pin != cfg['producer_sha256']:
                 raise ValueError('Trusted producer binary pin changed')
             receipt = model_receipt(cfg)
+            selected_model_sha256=model_digest(cfg,receipt)
+            require(request.get('model_sha256',selected_model_sha256)==selected_model_sha256,
+                    'HTTP session model differs from verified producer weights')
             identity = self.stack.enter_context(gpu_lease(cfg))
             watcher = HoldWatcher(cfg.get('hold_file') or Path(cfg['runtime_root']) / 'state' / 'gpu.holds', identity, task=cfg.get('task', 'DS4STACK'))
             def cancelled():
@@ -242,6 +245,7 @@ class OwnedProducer:
                     try:return super()._initialize(*a,**kw)
                     finally:owner.loading_process=None
             self.producer = PublishingProducer(request['session'], argv, env, directory, host_bytes=host_bytes,
+                                     model_sha256=selected_model_sha256,
                                      runtime_min_free_gib=runtime_floor,
                                      physical_floor=floor, operation_seconds=min(600, cfg['request_timeout_s']), stall_seconds=stall_seconds(cfg),
                                      idle_seconds=cfg['lease_minutes'] * 60, native=native,
@@ -350,7 +354,7 @@ def serve(cfg):
                 row.update(prefill_processed=progress['tokens_done'],prefill_total=progress['tokens_total'],
                            prefill_elapsed_ms=int(progress['elapsed_s']*1000))
             return row
-    broker = ProgressBroker(factory)
+    broker = ProgressBroker(factory,model_sha256=model_digest(cfg))
 
     @asynccontextmanager
     async def lifespan(app):
