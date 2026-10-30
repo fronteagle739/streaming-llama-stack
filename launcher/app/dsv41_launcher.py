@@ -188,7 +188,7 @@ class Launcher:
             except (OSError, ValueError, subprocess.SubprocessError):
                 pass
         if cfg['side'] == 'mac':
-            running = subprocess.run(['pgrep', '-fl', 'ds4-server'], capture_output=True, text=True).stdout.strip()
+            running = subprocess.run(['pgrep', '-lx', 'ds4-server'], capture_output=True, text=True).stdout.strip()
             if running:
                 reasons.append('A ds4-server engine is already running on this Mac (probably Studio):\n    '
                                + running.splitlines()[0][:160])
