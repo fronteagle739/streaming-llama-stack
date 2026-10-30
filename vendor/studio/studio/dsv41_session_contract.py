@@ -123,7 +123,11 @@ def command(row, session, sequence, mode=3, prefill_max=MAX_PREFILL, model_sha25
              'perfexp_kv_samples': ['base', 'path']}
     require(type(op) is str and op in extra, 'Unknown session operation')
     owned_vision = op=='prefill' and 'vision_spans_file' in row
-    keys(row, common + extra[op] + (['vision_spans_file'] if owned_vision else []))
+    # PAIRFIX: optional initial-export wire encoding (BF16 bits of the BF16-stored owners).
+    encoded = op=='export_initial' and 'wire_encoding' in row
+    if encoded:
+        require(row['wire_encoding'] == 'bf16-compressed-index-v1', 'Unknown native wire encoding')
+    keys(row, common + extra[op] + (['vision_spans_file'] if owned_vision else []) + (['wire_encoding'] if encoded else []))
     if owned_vision:
         require(type(row['vision_spans_file']) is str and 0<len(row['vision_spans_file'])<=1024,'Invalid owned vision descriptor')
     if 'base' in row:
