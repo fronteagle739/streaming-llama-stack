@@ -208,6 +208,7 @@ class Receiver:
         self.engine_mode = None
         self.engine_budget = None
         self.peer = None
+        self.relay = None
         self.qualification = {}
         self.token_file = Path(cfg['runtime_root']) / 'state' / 'pair.token'
         self.token_file.parent.mkdir(parents=True, exist_ok=True)
@@ -326,7 +327,20 @@ class Receiver:
                     'qualification_state': self.peer['status']}
                 artifact = self.token_file.with_name('native-qualification.json')
                 atomic_json(artifact, qualification)
-                dynamic = dict(DS4_NATIVE_SESSION_IPV4=self.peer['producer_ipv4'], DS4_NATIVE_SESSION_PORT=str(self.peer['broker_port']),
+                host, broker_port = self.peer['producer_ipv4'], self.peer['broker_port']
+                if not ipaddress.IPv4Address(host).is_loopback:
+                    # Direct TCP over the RTX-Mac link through the receiver's relay
+                    # (slstack.native_relay); a loopback producer address is the
+                    # explicit SSH-tunnel route.
+                    from .native_relay import Relay
+                    if self.relay is None or self.relay.target != (host, int(broker_port)):
+                        if self.relay is not None:
+                            self.relay.close()
+                        self.relay = Relay(host, broker_port, log=lambda line: print(line, flush=True))
+                    host, broker_port = '127.0.0.1', self.relay.port
+                else:
+                    print('NATIVE_TRANSPORT route=loopback-tunnel producer=%s:%s (explicit SSH fallback)' % (host, broker_port), flush=True)
+                dynamic = dict(DS4_NATIVE_SESSION_IPV4=host, DS4_NATIVE_SESSION_PORT=str(broker_port),
                     DS4_NATIVE_SESSION_TIER=self.peer['tier'], DS4_NATIVE_SESSION_PAIR_TOKEN_FILE=str(self.token_file),
                     DS4_NATIVE_SESSION_QUALIFICATION=str(artifact), DS4_NATIVE_SESSION_QUALIFICATION_SHA256=sha256(artifact),
                     DS4_NATIVE_SESSION_COMPATIBILITY_SHA256=local['compatibility_sha256'],
@@ -540,3 +554,5 @@ def serve(cfg, backend, build):
     finally:
         server.server_close()
         receiver.close()
+        if receiver.relay is not None:
+            receiver.relay.close()
