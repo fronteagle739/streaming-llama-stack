@@ -157,7 +157,7 @@ struct llama_dsv41_weight_provider::implementation {
     uint32_t pool_slots=0;
     std::vector<int32_t>slot_key;std::unordered_map<int32_t,int32_t>key_slot;
     std::list<int32_t>lru;std::vector<std::list<int32_t>::iterator>lru_pos;
-    uint64_t cache_hits=0,cache_misses=0,cache_bytes=0;double cache_ms=0;
+    uint64_t cache_hits=0,cache_misses=0,cache_bytes=0;double cache_ms=0,assign_ms=0,copy_sync_ms=0;
     // LLAMADECODE bind-once: set after a complete decode-layout pass; cleared on any layout rebuild.
     bool resident_bound=false;
     static bool bind_once_enabled(){static const bool on=[]{const char*e=std::getenv("LLAMADECODE_BIND_ONCE");return !(e&&e[0]=='0'&&!e[1]);}();return on;}
@@ -200,7 +200,12 @@ struct llama_dsv41_weight_provider::implementation {
     // LLAMADECODE B2: LRU over (layer, expert). Hits move to the front first,
     // so a miss never evicts an expert this same request needs. Only misses
     // are fetched (explicit DirectStorage extents into bank 0).
-    std::unordered_map<int32_t,int32_t> assign_expert_slots(uint32_t layer,const int32_t*ids,size_t count,void*stream){
+    // direct: second-tier (L2) hits are returned in place as pool_slots + l2 slot
+    // (kernels that read both tiers); no L2->L1 copy and no L1 victim for them.
+    std::unordered_map<int32_t,int32_t> assign_expert_slots(uint32_t layer,const int32_t*ids,size_t count,void*stream,bool direct=false){
+        const auto assign_started=std::chrono::steady_clock::now();
+        struct assign_timer{double&total;std::chrono::steady_clock::time_point t0;~assign_timer(){
+            total+=std::chrono::duration<double,std::milli>(std::chrono::steady_clock::now()-t0).count();}}timing{assign_ms,assign_started};
         select_pool(layer);
         std::vector<int32_t>unique;for(size_t i=0;i<count;++i){const auto id=ids[i];require(id>=0&&id<384,"Routed expert id out of range");if(std::find(unique.begin(),unique.end(),id)==unique.end())unique.push_back(id);}
         require(unique.size()<=pool_slots,"Routed experts exceed the cache pool");
@@ -208,10 +213,14 @@ struct llama_dsv41_weight_provider::implementation {
             if(layer==0)lfu_scores.tick(recency_lfu_half_life());
             for(const auto e:unique)lfu_scores.touch(int32_t(layer)*384+e);
         }
-        std::vector<int32_t>missing;std::unordered_map<int32_t,int32_t>slot_of;
+        std::vector<int32_t>missing;std::unordered_map<int32_t,int32_t>slot_of;std::vector<int32_t>in_use_l2;
         for(const auto e:unique){const int32_t key=int32_t(layer)*384+e;auto it=key_slot.find(key);
-            if(it!=key_slot.end()){slot_of[e]=it->second;lru.splice(lru.begin(),lru,lru_pos[size_t(it->second)]);++cache_hits;}
-            else missing.push_back(e);}
+            if(it!=key_slot.end()){slot_of[e]=it->second;lru.splice(lru.begin(),lru,lru_pos[size_t(it->second)]);++cache_hits;continue;}
+            if(direct&&l2_slots){auto l2=l2_of.find(key);
+                if(l2!=l2_of.end()){const int32_t t=l2->second;slot_of[e]=int32_t(pool_slots)+t;in_use_l2.push_back(t);
+                    l2_lru.splice(l2_lru.begin(),l2_lru,l2_pos[size_t(t)]);++l2_hits;continue;}}
+            missing.push_back(e);}
+        auto l2_in_use=[&](int32_t t){return std::find(in_use_l2.begin(),in_use_l2.end(),t)!=in_use_l2.end();};
         std::vector<wf_extent>extents;bool copied=false;
         char*const l1[3]={static_cast<char*>(pool[0]->data),static_cast<char*>(pool[1]->data),static_cast<char*>(pool[2]->data)};
         for(const auto e:missing){
@@ -222,12 +231,14 @@ struct llama_dsv41_weight_provider::implementation {
             const int32_t victim=slot_key[size_t(slot)];
             if(victim>=0){key_slot.erase(victim);
                 if(l2_slots>=2){   // keep the evicted expert in L2 (its least-recent slot; never the one read below)
-                    int32_t t=l2_lru.back();
+                    int32_t t=-1;   // least recent, never an L2 slot read in place by this request
+                    for(auto it=l2_lru.rbegin();it!=l2_lru.rend();++it)if(*it!=from_l2&&!l2_in_use(*it)){t=*it;break;}
+                    require(t>=0,"Expert L2 has no free victim slot");
                     if(recency_lfu_enabled()){
                         for(auto it=l2_lru.rbegin();it!=l2_lru.rend();++it)
-                            if(*it!=from_l2&&lfu_scores.get(l2_key[size_t(*it)])<lfu_scores.get(l2_key[size_t(t)]))t=*it;
+                            if(*it!=from_l2&&!l2_in_use(*it)&&lfu_scores.get(l2_key[size_t(*it)])<lfu_scores.get(l2_key[size_t(t)]))t=*it;
                     }
-                    require(t!=from_l2,"Expert L2 victim slot collides with its source");
+                    require(t!=from_l2&&!l2_in_use(t),"Expert L2 victim slot collides with its source");
                     if(!recency_lfu_enabled()||lfu_scores.admit(victim,l2_key[size_t(t)])){
                     l2_lru.splice(l2_lru.begin(),l2_lru,l2_pos[size_t(t)]);
                     if(l2_key[size_t(t)]>=0)l2_of.erase(l2_key[size_t(t)]);
@@ -244,13 +255,24 @@ struct llama_dsv41_weight_provider::implementation {
             for(uint32_t k=0;k<3;++k){
                 uint64_t file=0;for(const auto&entry:stages[layer+1].entries)if(entry.t==routed[layer*3+k])file=entry.file_offset;
                 require(file,"Routed expert file extent missing");
-                extents.push_back({add(file,uint64_t(e)*pool_stride[k]),add(pool_offset[k],uint64_t(slot)*pool_stride[k]),pool_stride[k],0});
+                const uint64_t dst=add(pool_offset[k],uint64_t(slot)*pool_stride[k]);
+                if(layers[layer].ffn.native_fp4_layout){
+                    // Kernel-native packed FP4: the tensor holds all experts' values [384][N][K/2],
+                    // then all their E8M0 scales [384][K/128][N][4]. A slot is one expert's
+                    // values followed by its scales (the decode kernels' layout), byte for byte.
+                    const auto*t=routed[layer*3+k];const uint64_t values=uint64_t(t->ne[0])*uint64_t(t->ne[1])/2,scales=values/16;
+                    require(values+scales==pool_stride[k],"Packed FP4 expert size differs from its slot");
+                    extents.push_back({add(file,uint64_t(e)*values),dst,values,0});
+                    extents.push_back({add(add(file,384*values),uint64_t(e)*scales),add(dst,values),scales,0});
+                }else extents.push_back({add(file,uint64_t(e)*pool_stride[k]),dst,pool_stride[k],0});
             }
         }
 #ifdef GGML_USE_CUDA
         // Slot copies complete before DirectStorage overwrites any copied-from L1 slot
         // and before an external decoder (own stream) reads the copied-in slots.
-        if(copied)require(cudaStreamSynchronize(static_cast<cudaStream_t>(stream))==cudaSuccess,"Expert L2 copy synchronization failed");
+        if(copied){const auto copy_wait=std::chrono::steady_clock::now();
+            require(cudaStreamSynchronize(static_cast<cudaStream_t>(stream))==cudaSuccess,"Expert L2 copy synchronization failed");
+            copy_sync_ms+=std::chrono::duration<double,std::milli>(std::chrono::steady_clock::now()-copy_wait).count();}
 #endif
         if(!extents.empty()){
             uint64_t bytes=0;double fetch_ms=0;
@@ -443,7 +465,6 @@ struct llama_dsv41_weight_provider::implementation {
                 !std::strcmp(gguf_get_val_str(gguf.get(),layout_key),"flashinfer-sm120-mxfp8-mxfp4-v1"),
                 "Unknown or mismatched native FP4 expert layout");
             require(gguf_get_alignment(gguf.get())>=128,"Native FP4 requires128-byte file/tensor alignment");
-            require(!options.decode_layout,"Kernel-native FP4 decode cache is not implemented; prefill-only experiment");
             const char *bridge=std::getenv("LLAMA_DSV41_FLASHINFER_NATIVE_FFN_DLL");
             require(bridge&&*bridge,"Kernel-native FP4 requires its explicit native FFN bridge");
             for(auto&w:layers)w.ffn.native_fp4_layout=true;
@@ -813,8 +834,6 @@ bool llama_dsv41_weight_provider::restart_prompt(const config&options,std::strin
         for(uint32_t i=22;i<42;++i)require(wf_set_layer_skipped(p->fetcher,int(i),options.yoco_encoder_only),"YOCO pass fetch mask change refused");
     p->options.yoco_encoder_only=options.yoco_encoder_only;
     if(options.decode_layout!=p->decode_layout){
-        require(!p->layers[0].ffn.native_fp4_layout||!options.decode_layout,
-            "Kernel-native FP4 decode cache is not implemented; prefill-only experiment");
         // LLAMADECODE B1: rebuild the same admitted pipeline with the other stage
         // layout. Same banks/staging/admission; only stage registration differs.
         require(!options.decode_layout||(p->options.compute_direct&&p->options.buffers==2&&!p->options.zero_padding_only),
@@ -1113,6 +1132,7 @@ bool llama_dsv41_weight_provider::acquire_layer_experts(uint32_t layer,const std
     throw std::runtime_error("V4.1 physical expert cache requires Windows CUDA/DirectStorage");
 #else
     require(layer<40&&p->decode_layout&&p->leased&&p->next==1+2*layer&&p->experts_prebound,"Routed experts require their leased dense stage");
+    require(!p->layers[layer].ffn.native_fp4_layout,"Packed FP4 expert slots are read only by the external decoder's packed kernels");
     require(!ids.empty()&&ids.size()<=6*4096,"Routed expert set size invalid");
     const auto slot_of=p->assign_expert_slots(layer,ids.data(),ids.size(),ggml_backend_cuda_get_stream(p->options.backend));
     // The shared-expert stage (resident) is held with the dense stage through the layer.
@@ -1148,6 +1168,17 @@ bool llama_dsv41_weight_provider::decode_resident_tensors(const std::function<bo
         return true;
     }catch(const std::exception&failure){error=failure.what();return false;}
 }
+bool llama_dsv41_weight_provider::external_expert_slots_l2(uint32_t layer,const int32_t*ids,uint32_t n,int32_t*slots,
+        const char**bases,uint64_t*l2_stride,uint32_t*l1_slots,uint32_t*slot_count,void*stream,std::string&error){return p->guard([&]{
+    require(layer<40&&p->decode_layout&&!p->leased&&p->next==p->stage_count()&&ids&&slots&&n&&n<=384&&bases&&l2_stride&&l1_slots&&slot_count,
+        "External expert slots require an idle decode-layout provider");
+    require(p->layers[layer].ffn.native_fp4_layout,"In-place second-tier reads are for the packed FP4 decode kernels only");
+    const auto slot_of=p->assign_expert_slots(layer,ids,n,stream,true);
+    for(uint32_t i=0;i<n;++i)slots[i]=slot_of.at(ids[i]);
+    for(uint32_t k=0;k<3;++k){bases[k]=static_cast<const char*>(p->pool[k]->data);
+        bases[3+k]=p->l2_slots?p->l2_base[k]:nullptr;l2_stride[k]=p->pool_max_stride[k];}
+    *l1_slots=p->pool_slots;*slot_count=p->pool_slots+p->l2_slots;
+},error);}
 bool llama_dsv41_weight_provider::external_expert_slots(uint32_t layer,const int32_t*ids,uint32_t n,int32_t*slots,
         const char**gate,const char**up,const char**down,uint32_t*slot_count,void*stream,std::string&error){return p->guard([&]{
     require(layer<40&&p->decode_layout&&!p->leased&&p->next==p->stage_count()&&ids&&slots&&n&&n<=384,"External expert slots require an idle decode-layout provider");
@@ -1158,7 +1189,7 @@ bool llama_dsv41_weight_provider::external_expert_slots(uint32_t layer,const int
 },error);}
 llama_dsv41_weight_provider::expert_cache_stats llama_dsv41_weight_provider::cache_stats()const{std::lock_guard<std::mutex>lock(p->mutex);
     expert_cache_stats s;s.slots=p->pool_slots;s.hits=p->cache_hits;s.misses=p->cache_misses;s.fetched_bytes=p->cache_bytes;s.fetch_ms=p->cache_ms;
-    s.l2_slots=p->l2_slots;s.l2_hits=p->l2_hits;s.l2_stored=p->l2_stored;return s;}
+    s.l2_slots=p->l2_slots;s.l2_hits=p->l2_hits;s.l2_stored=p->l2_stored;s.assign_ms=p->assign_ms;s.copy_sync_ms=p->copy_sync_ms;return s;}
 bool llama_dsv41_weight_provider::decode_residency(uint32_t layer,uint8_t*tier,uint32_t experts)const{
     std::lock_guard<std::mutex>lock(p->mutex);
     if(!tier||experts!=384||layer>=40||!p->decode_layout)return false;

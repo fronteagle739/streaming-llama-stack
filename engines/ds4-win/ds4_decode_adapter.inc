@@ -204,6 +204,11 @@ DS4X_EXPORT void ds4x_set_expert_hook(ds4_gpu_external_expert_hook hook, void *u
     ds4_gpu_set_external_expert_hook(hook, user);
 }
 
+/* Optional: in-place second-tier reads for kernel-native packed FP4 experts. */
+DS4X_EXPORT void ds4x_set_expert_hook_l2(ds4_gpu_external_expert_hook_l2 hook, void *user) {
+    ds4_gpu_set_external_expert_hook_l2(hook, user);
+}
+
 /* B5: ds4-win's cache-affinity bias (selection only; original combine weights) on
  * the caller's cache residency. mean 0 disables bias; calibration can observe.
  * Same configure call, warmup,
@@ -235,7 +240,10 @@ DS4X_EXPORT int ds4x_decode(int token, uint32_t position, const int32_t *history
     g->valid = true;
     for (uint32_t i = 0; i < DS4_ENGRAM_NGRAM - 1; i++) g->history.tail[i] = history_tail[i];
     g_ds41_hc_encode_s = 0.0; g_ds41_hc_calls = g_ds41_hc_replays = 0;
+    (void)ds4_gpu_stage_mark(9);
     const bool ok = ds41_graph_step(g, &g_ds4x.model, &g_ds4x.weights, token, logits);
+    (void)ds4_gpu_stage_mark(8);
+    ds4_gpu_stage_flush(position);
     if (ds41_hc_graph_profile_on()) {
         fprintf(stderr, "PERFEXP_HC_GRAPH_TOKEN position=%u calls=%u replays=%u encode_ms=%.6f enabled=%d\n",
                 position, g_ds41_hc_calls, g_ds41_hc_replays, g_ds41_hc_encode_s * 1000.0,

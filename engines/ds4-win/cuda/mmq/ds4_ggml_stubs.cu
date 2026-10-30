@@ -138,6 +138,14 @@ extern "C" void ds4_pool_set_stream(cudaStream_t stream) {
     t_ds4_pool_stream = stream;
 }
 
+/* Decode attribution (DS4X_STAGE_PROFILE): MMQ pool calls and their host time. */
+static uint64_t g_ds4_pool_calls = 0;
+static double g_ds4_pool_ms = 0.0;
+extern "C" void ds4_pool_call_stats(uint64_t *calls, double *ms) {
+    if (calls) *calls = g_ds4_pool_calls;
+    if (ms) *ms = g_ds4_pool_ms;
+}
+
 extern "C" cudaStream_t ds4_pool_get_stream(void) {
     return t_ds4_pool_stream;
 }
@@ -246,6 +254,9 @@ struct ds4_naive_pool : public ggml_cuda_pool {
         return ptr;
 #else
         void * ptr = nullptr;
+        const auto pool_t0 = std::chrono::steady_clock::now();
+        struct pool_timer { std::chrono::steady_clock::time_point t0; ~pool_timer() {
+            ++g_ds4_pool_calls; g_ds4_pool_ms += std::chrono::duration<double, std::milli>(std::chrono::steady_clock::now() - t0).count(); } } pool_timing{pool_t0};
         ds4_pool_trace("MMQ-alloc-before", device, t_ds4_pool_stream, ptr, size, 0, cudaSuccess);
 #if defined(_WIN32)
         if (!ds4_win32_host_memory_check_commit(size, "MMQ cudaMallocAsync backing store")) {
@@ -276,6 +287,9 @@ struct ds4_naive_pool : public ggml_cuda_pool {
         std::lock_guard<std::mutex> guard(mutex);
         available.push_back({ptr, size, t_ds4_pool_stream});
 #else
+        const auto pool_t0 = std::chrono::steady_clock::now();
+        struct pool_timer { std::chrono::steady_clock::time_point t0; ~pool_timer() {
+            ++g_ds4_pool_calls; g_ds4_pool_ms += std::chrono::duration<double, std::milli>(std::chrono::steady_clock::now() - t0).count(); } } pool_timing{pool_t0};
         ds4_pool_trace("MMQ-free-before", device, t_ds4_pool_stream, ptr, size, size, cudaSuccess);
         const cudaError_t result = cudaFreeAsync(ptr, t_ds4_pool_stream);
         ds4_pool_trace("MMQ-free-after", device, t_ds4_pool_stream, ptr, size, size, result);

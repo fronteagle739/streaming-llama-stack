@@ -154,10 +154,14 @@ public:
     // The expert-cache slots of one token's routed ids (only misses are
     // fetched), the pool bases, and the slot count. cuda_stream receives the
     // DirectStorage fence wait (the external decoder's stream).
+    // Packed FP4 decode: as external_expert_slots, but a second-tier hit is
+    // read in place (slot >= *l1_slots addresses bases[3..5] at l2_stride).
+    bool external_expert_slots_l2(uint32_t layer,const int32_t *ids,uint32_t n,int32_t *slots,
+        const char **bases,uint64_t *l2_stride,uint32_t *l1_slots,uint32_t *slot_count,void *stream,std::string &error);
     bool external_expert_slots(uint32_t layer,const int32_t *ids,uint32_t n,int32_t *slots,
         const char **gate,const char **up,const char **down,uint32_t *slot_count,void *cuda_stream,std::string &error);
     struct expert_cache_stats{uint32_t slots=0;uint64_t hits=0,misses=0,fetched_bytes=0;double fetch_ms=0;
-        uint32_t l2_slots=0;uint64_t l2_hits=0,l2_stored=0;};
+        uint32_t l2_slots=0;uint64_t l2_hits=0,l2_stored=0;double assign_ms=0,copy_sync_ms=0;};
     // LLAMADECODE cache growth: an exclusive VRAM L2 behind the bank-0 pool
     // (decode layout only). L1 victims are copied into it; an L1 miss found
     // in L2 is copied back instead of fetched. Released when the provider

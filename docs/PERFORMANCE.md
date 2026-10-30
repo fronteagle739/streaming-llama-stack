@@ -277,7 +277,33 @@ cache checkpoint hashes against N=1. Grouping remains opt-in.
 
 ### Decode
 
-Latest calibrated Q4_K/Q8_0 controls at 49,555 prompt tokens. The warm rate
+Single-engine warm decode on experimental (OPUS22 decode check, 2026-10-29),
+natural-text prompts (repository documents in the chat template), first 100
+evaluated steps discarded, next 899 timed:
+
+| Model file | Prompt | Max quality | Max speed |
+|---|---:|---:|---:|
+| Packed FP4 (tensor-core-native layout) | 49,555 | **7.20 tok/s** | **23.86 tok/s** |
+| Packed FP4 (tensor-core-native layout) | 100,000 | **7.39 tok/s** | **24.11 tok/s** |
+| Q4_K/Q8_0 | 49,555 | 6.02-7.23 tok/s (6.94 final) | 18.78 tok/s |
+| Q4_K/Q8_0 | 100,000 | 7.11 tok/s | 18.39 tok/s |
+
+Packed FP4 decode reads the same tensor-core-native expert bytes the prefill
+streams, with the canonical MXFP4 vector arithmetic (logits bit-identical to a
+relayout-to-canonical reference). Max quality is bound by expert reads from
+NVMe (about 100 of 136 ms per token, ~17 GB/s); Q4 Max-quality repeats vary
+6.0-7.3 tok/s with storage speed on identical misses.
+
+What changed for decode in that round (all exact): packed FP4 decode kernels in
+ds4-decode.dll (previously the packed file could not decode, and the canonical
+FP4 proxy ran at 4.8 / 11.3 tok/s); persistent activation scratch instead of a
+per-layer pool allocation (about 37 ms per token); second-tier expert-cache
+hits read in place instead of copied back into the first tier
+(`LLAMADECODE_DIRECT_L2=0` restores the copies); the unread cache-affinity
+metrics readback and its per-layer synchronization are skipped. Per-token
+stage attribution: `DS4X_STAGE_PROFILE=1`.
+
+Earlier calibrated Q4_K/Q8_0 controls at 49,555 prompt tokens. The warm rate
 discards the first 100 evaluated steps and times the next 899:
 
 | Setting | Bias | Warm decode |
@@ -350,7 +376,7 @@ The latest 100K FP4 result is 32.373785 s prompt-only, 3,088.92 tok/s, with
 [Combined kernels](../examples/native-fp4/COMBINATION_RESULTS.md).
 
 The FP4 converter and loader support the packed layout. The shipping model
-remains Q4_K/Q8_0; packed FP4 is an available prefill option.
+remains Q4_K/Q8_0; packed FP4 is an available prefill and single-engine decode option (see [Decode](#decode)).
 
 Dense FP8 is also experimental and opt-in. Its native format accepts E4M3
 weights and E8M0 scales in 32×32 blocks; timing above uses a lossy Q8-to-FP8
@@ -525,8 +551,9 @@ shipping Kimi settings use 2,048, which gave 576 tok/s at 23K.
   graph/eager frontier values match, but run variance prevents a reliable graph
   speedup claim. Binding-independent layer/sweep replay and CPU-loop removal
   remain unfinished; prefill graphs stay opt-in.
-- FP4 measurements are prefill-only and do not establish decode or broad recall
-  quality; source-native model qualification remains unfinished. Dense FP8 has
+- The FP4 file is a lossy Q4-to-FP4 requant (speed proxy). Its decode is exact
+  against the canonical FP4 vector arithmetic, not against Q4; broad recall
+  quality and source-native model qualification remain unfinished. Dense FP8 has
   no demonstrated repeatable whole-prompt speed gain.
 - TileLang attention is not bit-exact. The tested retrieval answer matches;
   later forced continuations can diverge. Native attention remains selectable
