@@ -96,6 +96,9 @@ class Child:
             flags['creationflags'] = subprocess.CREATE_NEW_PROCESS_GROUP | 0x08000000  # CREATE_NO_WINDOW
         else:
             flags['start_new_session'] = True
+            # A launcher started from a background shell inherits SIGINT ignored; the stack's
+            # graceful Ctrl+C stop path needs the default handler in its processes.
+            flags['preexec_fn'] = lambda: signal.signal(signal.SIGINT, signal.SIG_DFL)
         env = dict(os.environ, PYTHONDONTWRITEBYTECODE='1', PYTHONUNBUFFERED='1')
         self.proc = subprocess.Popen(argv, cwd=str(cwd), stdout=stream, stderr=subprocess.STDOUT,
                                      stdin=subprocess.DEVNULL, env=env, **flags)
