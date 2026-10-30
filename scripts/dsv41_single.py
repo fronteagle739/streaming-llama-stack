@@ -28,7 +28,8 @@ sys.path.insert(0, str(ROOT))
 
 COMMON_ENV = {
     'DS4_DS_READ_PARTS': '8',                 # DirectStorage split reads (the engines' default)
-    'LLAMADECODE_VRAM_RESERVE_MIB': '512',    # physical VRAM kept free beside the L2 tier (default)
+    'LLAMADECODE_VRAM_RESERVE_MIB': '128',    # physical VRAM kept free beside the L2 tier (default)
+    'LLAMADECODE_VRAM_MARGIN_MIB': '64',      # L2 growth margin beside the reserve (default; 128+0 breached)
 }
 DEFAULT_ENV = {
     'LLAMADECODE_ENGRAM_EARLY': 'auto',       # default
