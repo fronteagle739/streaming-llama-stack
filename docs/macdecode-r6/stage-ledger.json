@@ -1,0 +1,95 @@
+{
+  "baseline": {
+    "ledger_rows": 61,
+    "perf_rows": 61,
+    "ledger_seconds": {
+      "wall_ms": 78.6533998,
+      "acquire_ms": 14.0514712,
+      "executor_wall_ms": 45.5206564,
+      "engram_ms": 18.8420148,
+      "scaffold_ms": 0.235446
+    },
+    "executor_seconds": {
+      "upload_ms": 8.4459403,
+      "compute_ms": 28.280716899999998,
+      "readback_ms": 7.2725276999999995,
+      "prepare_ms": 1.2709645
+    },
+    "engram_table_rows": [
+      {
+        "table": 0.0,
+        "rows": 1664863.0,
+        "wall_ms": 11115.0,
+        "early": 1.0
+      },
+      {
+        "table": 0.0,
+        "rows": 1588096.0,
+        "wall_ms": 10798.0,
+        "early": 1.0
+      }
+    ]
+  },
+  "followup": {
+    "ledger_rows": 61,
+    "perf_rows": 61,
+    "ledger_seconds": {
+      "wall_ms": 74.6783527,
+      "acquire_ms": 19.7044123,
+      "executor_wall_ms": 36.8218209,
+      "engram_ms": 17.9160127,
+      "scaffold_ms": 0.2323376
+    },
+    "executor_seconds": {
+      "upload_ms": 2.9831204,
+      "compute_ms": 29.8155759,
+      "readback_ms": 2.5382211999999997,
+      "prepare_ms": 1.2379196
+    },
+    "engram_table_rows": [
+      {
+        "table": 0.0,
+        "rows": 1664863.0,
+        "wall_ms": 11296.0,
+        "early": 1.0
+      },
+      {
+        "table": 0.0,
+        "rows": 1588096.0,
+        "wall_ms": 10841.0,
+        "early": 1.0
+      }
+    ]
+  },
+  "prior_5242_control": {
+    "ledger_rows": 61,
+    "perf_rows": 61,
+    "ledger_seconds": {
+      "wall_ms": 37.5170366,
+      "acquire_ms": 7.9555668,
+      "executor_wall_ms": 29.295750499999997,
+      "engram_ms": 0.0032251,
+      "scaffold_ms": 0.260646
+    },
+    "executor_seconds": {
+      "upload_ms": 1.0191966,
+      "compute_ms": 26.128083,
+      "readback_ms": 0.8163251,
+      "prepare_ms": 1.1483764
+    },
+    "engram_table_rows": [
+      {
+        "table": 0.0,
+        "rows": 1200.0,
+        "wall_ms": 1653.0,
+        "early": 1.0
+      },
+      {
+        "table": 0.0,
+        "rows": 1128.0,
+        "wall_ms": 56.0,
+        "early": 1.0
+      }
+    ]
+  }
+}

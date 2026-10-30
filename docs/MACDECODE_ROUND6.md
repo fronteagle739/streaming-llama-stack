@@ -176,6 +176,29 @@ prefill-only control. Two sweeps remain: a full 200K single sweep needs 13.39 Gi
 of host workspace before the physical floor; current free RAM is about 12.8 GiB.
 The reservation improvement does not close the remaining native-path gap.
 
+The retained 61-layer-pass ledgers provide the specific attribution below.
+The prior 5242 control is a different repetitive prompt, an older producer build
+and a 200K prefill-only context; these are diagnostic receipts, not a matched
+new A/B or another speed qualification.
+
+| Exposed layer time (s) | Real prompt before | Real prompt followup | Prior repetitive control |
+|---|---:|---:|---:|
+| Engram wait | 18.842 | 17.916 | 0.003 |
+| Weight acquire | 14.051 | 19.704 | 7.956 |
+| Executor total | 45.521 | 36.822 | 29.296 |
+| of which GPU compute | 28.281 | 29.816 | 26.128 |
+| of which hidden upload + readback | 15.718 | 5.521 | 1.836 |
+
+The real prompt's two table-0 loads contain 1664863 and 1588096 Engram rows;
+the repetitive control contains 1200 and 1128. The 17.913 s extra Engram wait,
+11.749 s extra weight wait and 7.526 s extra executor work explain the 37.161 s
+layer-wall difference. Their non-overlapping outer ledger categories sum to
+the observed layer wall; executor subcategories must not be added again.
+The graph reservation change removes most hidden-state copy cost, but this
+representative cold prose workload cannot inherit the repetitive control's
+5242 tok/s claim. No fresh measurement is hidden or replaced by the control.
+
+
 DSpark is enabled at 200K. Its unchanged upstream confidence/controller policy
 accepted one five-token block; 122 cycles had no draft. The measured prose
 continuation therefore remains mostly serial. No forced confidence, sampler or
@@ -184,6 +207,14 @@ not met**, despite Mac-only upstream parity and the passing import/recall gate.
 
 Studio adapter 483405fcfb is merged to the Studio integration branch and deployed to RTX,
 Mac Studio and MacBook. Final GUI/restore/cleanup receipts are in the task RESULT.
+The recorded production Connect -> native tools panel -> TEST chat flow returns
+READY and recycles its fixture. A separate final desktop/phone check displays
+the complete recording and measured rates in the evidence chat with original
+MiMo live. The original MiMo preset is byte-for-field unchanged, returns READY,
+and its 460 GiB budget/16 GiB floor guard records no swap or violation. An initial
+load refusal was resolved by read-only clean-cache invalidation of this task's
+MXFP4 model and drafter; no weight data, cache size or preset field was altered.
+
 
 
 ## Capability reductions
