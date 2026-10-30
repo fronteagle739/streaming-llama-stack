@@ -301,6 +301,12 @@ class Receiver:
                 kv_cache_continued_interval_tokens=preset.get('kv_cache_continued_interval_tokens'),
                 vision=native_vision_path(cfg))
             env['DS4_NATIVE_SESSION'] = '1' if native else '0'
+            if not native:
+                # The paired receiver keeps Metal layer prefill off (the RTX prefills); a
+                # Mac-only engine must prefill in layers (measured 200K: ~37 tok/s token
+                # by token against 311-384 tok/s). ds4 tests this variable by presence.
+                env.pop('DS4_METAL_DISABLE_V41_LAYER_PREFILL', None)
+                cfg['env_unset'] = ['DS4_METAL_DISABLE_V41_LAYER_PREFILL']
             env['DS4_NATIVE_SESSION_HOST_BYTES'] = str(int(cfg['host_budget_gib'] * (1 << 30)))
             from .combo_ram import runtime_min_free_gib
             env['DS4_NATIVE_SESSION_HOST_FLOOR_BYTES'] = str(int(runtime_min_free_gib(cfg) * (1 << 30)))

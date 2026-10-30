@@ -37,6 +37,9 @@ class OwnedProcess:
         # Secret values never reach the spec file; the guard gets them through its own environment.
         from .envvars import split_secrets
         public_env, secrets = split_secrets(environment(cfg, scope))
+        # Variables an engine tests by presence (a value cannot switch them off).
+        for name in cfg.get('env_unset', ()):
+            public_env.pop(name, None);secrets.pop(name, None)
         spec = {'command': command, 'cwd': str(cwd), 'env': public_env, 'secret_env': sorted(secrets),
                 'runtime_root': cfg['runtime_root'], 'gpu_uuid':cfg.get('gpu_uuid'),
                 'host_budget_gib': cfg['host_budget_gib'], 'min_available_gib': cfg['min_available_gib'],

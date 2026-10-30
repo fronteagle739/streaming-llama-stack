@@ -45,7 +45,9 @@ DEFAULT_ENV = {
 PRESETS = {
     '262k': dict(context=262144, ctx_cache_precision='f32', ctx_cache_growable=True,
                  preset_name='DSV4.1 1017 (RTX: streaming-llama ULTRA prefill + ds4 decode, single engine, 262K)'),
-    '1m': dict(context=999424, ctx_cache_precision='bf16', ctx_cache_growable=True,
+    # producer_graph_floor_gib 3.0 (PAIRFIX): measured planned graph peak 3.244 GiB at 200K;
+    # the hidden bank then holds every 102,400-row sweep at 1M context (no spill).
+    '1m': dict(context=999424, ctx_cache_precision='bf16', ctx_cache_growable=True, producer_graph_floor_gib=3.0,
                preset_name='DSV4.1 1017 (RTX: streaming-llama ULTRA prefill + ds4 decode, single engine, 1M)'),
 }
 # Keys that would change the gated configuration; a local config may not set them for these presets.
