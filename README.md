@@ -99,9 +99,7 @@ negotiates at 5 Gb/s, not 10.
 
 **Known limits.**
 - Cross-machine KL is mean 0.028, max 0.054 nats over 8 rows (qualification limit 0.1
-  mean / 0.5 max). The gap comes from the cross quants: the RTX packed FP4 proxy and
-  the Mac MXFP4 requant are both made from Q4. It closes once both machines run the
-  same native-FP4 weights.
+  mean / 0.5 max).
 - The RTX-Mac link runs at 5 Gb/s.
 - About 3 s of RTX startup sits inside prompt_ms.
 - About 3 s of Mac-side verification is serial.
@@ -250,164 +248,92 @@ with a header-only dry run. The installer never downloads weights.
 
 ## Making the model files
 
-DeepSeek V4.1 Flash uses four GGUF files. The two FP4 files hold the **same expert
-values in two different byte layouts** and are not interchangeable. The RTX file
-carries the flag `deepseek41.expert_layout = flashinfer-sm120-mxfp8-mxfp4-v1`, and
-ds4 on the Mac refuses to load it. The Mac file has no layout flag, which means
-canonical `ggml-mxfp4`. The RTX FlashInfer prefill needs the flagged layout, and a canonical file is not the tested RTX file.
+DeepSeek V4.1 Flash uses four GGUF files, all produced from the original
+[DeepSeek-V4.1-Flash-1017 safetensors checkpoint](https://huggingface.co/deepseek-ai/DeepSeek-V4.1-Flash-1017/tree/1bae0e1088993b9b82de08f59de5be5a34e42170)
+(revision `1bae0e10…`, about 475 GiB) with `scripts/convert_dsv41_gguf.py`. The two
+FP4 files keep DeepSeek's released E2M1/E8M0 expert values in two different byte
+layouts and are not interchangeable: the RTX file carries
+`deepseek41.expert_layout = flashinfer-sm120-mxfp8-mxfp4-v1`, which ds4 on the Mac
+refuses to load, and the Mac file has no layout flag (canonical `ggml-mxfp4`).
+
+Status: this native safetensors path has not yet been run end to end and qualified on this stack.
 
 ### Which file is which
 
-| File | Purpose | Runs on | Used by | Expert layout (`--expert-layout`) | Released file name |
-|---|---|---|---|---|---|
-| **RTX packed FP4** | RTX prefill (single machine and the prefill side of two machines) and RTX single-machine decode | Windows RTX 5090 | `examples/single-machine/dsv41-ultra-cone.ps1`, the `rtx.model` of `examples/dual-machine/dsv41-ultra-cone-fp4/preset.json` | `flashinfer-sm120-mxfp8-mxfp4-v1` (FlashInfer-native) | `DeepSeek-V4.1-Flash-1017-Q4-FI-native-FP4-speed-proxy.gguf` (501,609,136,128 B, SHA-256 `0ba5ae3b…c45e572`) |
-| **Mac decode MXFP4** | Mac decode with ds4: Mac single machine, and the decode side of two machines | Mac Studio M3 Ultra | `slstack mac --model …`, the `mac.model` of `dsv41-ultra-cone-fp4/preset.json` and `dsv41-ultra-cone/preset.json` | `ggml-mxfp4` (canonical, no flag) | `DeepSeek-V4.1-Flash-1017-MXFP4-requant.gguf` (501,609,136,128 B, SHA-256 `cf05bdcc…de017ae44`) |
-| **DSpark drafter** | Speculative drafts for Mac decode | Mac Studio | `mac.mtp_model` in the paired presets; the DSpark support model for `slstack mac` | `ggml-mxfp4` only (packed DSpark output is refused) | `DeepSeek-V4.1-Flash-1017-DSpark-MXFP4-requant.gguf` (7,904,264,192 B, SHA-256 `0e5d28ea…69370e120`); made from `DeepSeek-V4.1-Flash-1017-DSpark-Q4.gguf` |
-| **Q4 GGUF** | The source of all three files above, and the supported Q4_K/Q8_0 alternative on the RTX (also Q4 RTX → Mac MXFP4 pairing) | Windows RTX (also loads on the Mac) | `scripts/start-dsv41-single-262k.ps1` / `-1m.ps1` with the Q4 path in your config, `rtx.model` of `dsv41-ultra-cone/preset.json` | Q4_K experts, no FP4 layout | `DeepSeek-V4.1-Flash-1017-Q4-v41.gguf` (518,596,067,328 B, 483 GiB) |
+| File | Purpose | Runs on | Preset or script | Command (after the plan step below) |
+|---|---|---|---|---|
+| **RTX packed FP4** | RTX prefill (single machine and the prefill side of two machines) and RTX single-machine decode | Windows RTX 5090 | `examples/single-machine/dsv41-ultra-cone.ps1`; `rtx.model` of `examples/dual-machine/dsv41-ultra-cone-fp4/preset.json` | `--expert-format native-fp4 --expert-layout flashinfer-sm120-mxfp8-mxfp4-v1 --dense-format q8` |
+| **Mac decode FP4** | Mac decode with ds4: Mac single machine and the decode side of two machines | Mac Studio M3 Ultra | `slstack mac --model …`; `mac.model` of `dsv41-ultra-cone-fp4/preset.json` and `dsv41-ultra-cone/preset.json` | `--expert-format native-fp4 --expert-layout ggml-mxfp4 --dense-format q8` |
+| **DSpark drafter** | Speculative drafts for Mac decode | Mac Studio M3 Ultra | `mac.mtp_model` in the paired presets; the DSpark support model for `slstack mac` | `--component dspark` (Q4_K experts, Q8_0 attention/shared/projections; no `--expert-format`/`--expert-layout`) |
+| **Q4** | The Q4_K/Q8_0 alternative on the RTX | Windows RTX 5090 (also loads on the Mac) | `scripts/start-dsv41-single-262k.ps1` / `-1m.ps1` with the Q4 path in your config; `rtx.model` of `dsv41-ultra-cone/preset.json` | `--expert-format q4` (the default) |
 
-Rule of thumb: **MXFP4 experts with the layout flag = RTX; MXFP4 experts with no flag = Mac; Q4_K experts = the Q4 source.** You can check a file without
-reading its payload:
-
-```powershell
-python -B -c "import sys; sys.path.insert(0,'.'); from slstack.gguf_header import read_header, TYPE_NAMES; h=read_header(sys.argv[1]); m=h['metadata']; t=[x for x in h['tensors'] if x['name'].endswith('_exps.weight')][0]; print('experts', TYPE_NAMES.get(t['type']), '| layout', m.get('deepseek41.expert_layout', 'none = ggml-mxfp4 if MXFP4'), '| proxy', ascii(m.get('deepseek41.speed_proxy', 'no')))" <file.gguf>
-```
-
-### How the released files were made: requant from the Q4 GGUF
-
-The released RTX packed FP4, Mac MXFP4 and MXFP4 DSpark files were **not** made from
-safetensors. They were requantised from the Q4 GGUF with the `--requant-gguf` path
-(`scripts/convert_dsv41_gguf.py` hands it to `scripts/dsv41_requant.py`). This path
-converts only the routed experts, Q4_K to MXFP4, and it is lossy. Every file it writes
-carries `deepseek41.speed_proxy = "Q4→MXFP4 requant (lossy), speed proxy for native FP4"`.
-Dense, Engram and metadata bytes are copied unchanged. Both released FP4 files
-therefore keep the Q4 file's **Q8_0 dense** matrices: their headers list 321 Q8_0
-tensors and 120 MXFP4 expert tensors. The packed layout is a lossless reordering of
-the same E2M1 codes and E8M0 scales.
-
-**1. Build the requant adapter** (CPU, no GPU), `scripts/dsv41/requant_q4_mxfp4.cpp`:
-
-```bat
-:: Windows, from a VS 2022 x64 developer prompt (the released RTX file used this AVX2 build)
-cl /nologo /O2 /fp:strict /arch:AVX2 /openmp /LD /std:c++17 scripts\dsv41\requant_q4_mxfp4.cpp /link /OUT:<scratch>\requant-avx2.dll
-```
-
-```sh
-# Mac, Apple clang with the installed libomp. The documented flags are precise FP and OpenMP;
-# the exact Mac compile line used for the release was not recorded.
-clang++ -O2 -std=c++17 -shared -fPIC -ffp-contract=off -fno-fast-math \
-  -Xpreprocessor -fopenmp -I"$(brew --prefix libomp)/include" -L"$(brew --prefix libomp)/lib" -lomp \
-  scripts/dsv41/requant_q4_mxfp4.cpp -o "$SCRATCH/requant_q4_mxfp4.dylib"
-```
-
-To check the library, set `NATIVEFP4_REQUANT_LIBRARY=<library>` and run
-`python -m pytest tests/test_dsv41_requant.py`.
-
-**2. Run the conversion.** Required flags: `--requant-gguf`, `--out`, `--runtime-root`
-(journal, logs and memory receipt), `--hold-file`, `--quants-library` and
-`--host-budget-gib` (at most 8). The hold file is a shared GPU ledger: conversion
-pauses while it lists an active hold. Point it at an existing, empty text file if you
-have no ledger, because a missing file pauses conversion indefinitely. Other limits
-are `--threads 1..16` and `--runtime-floor-gib` of at least 0.5. `--resume` continues
-an interrupted run after re-verifying its hashes. Use a separate `--runtime-root` for
-each output.
-
-RTX packed FP4, the command that produced the released file:
+Rule of thumb: **MXFP4 experts with the layout flag = RTX; MXFP4 experts with no flag
+= Mac; Q4_K experts = Q4.** You can check a file without reading its payload:
 
 ```powershell
-python -B scripts/convert_dsv41_gguf.py `
-  --requant-gguf <model_dir>\DeepSeek-V4.1-Flash-1017-ds4-Q4\DeepSeek-V4.1-Flash-1017-Q4-v41.gguf `
-  --out <model_dir>\DeepSeek-V4.1-Flash-1017-mxfp4-requant-test\DeepSeek-V4.1-Flash-1017-Q4-FI-native-FP4-speed-proxy.gguf `
-  --expert-layout flashinfer-sm120-mxfp8-mxfp4-v1 `
-  --runtime-root <scratch>\rtx-fp4 --hold-file <ledger.md> `
-  --quants-library <scratch>\requant-avx2.dll `
-  --threads 4 --host-budget-gib 2 --runtime-floor-gib 0.75
+python -B -c "import sys; sys.path.insert(0,'.'); from slstack.gguf_header import read_header, TYPE_NAMES; h=read_header(sys.argv[1]); m=h['metadata']; t=[x for x in h['tensors'] if x['name'].endswith('_exps.weight')][0]; print('experts', TYPE_NAMES.get(t['type']), '| layout', m.get('deepseek41.expert_layout', 'none = ggml-mxfp4 if MXFP4'))" <file.gguf>
 ```
 
-(The release run also passed `--conversion-lease <lease.json>`. That flag keeps a
-benchmark reservation held through the run and is optional.)
+### Commands
 
-Mac decode MXFP4 (the documented Round 2 command, which produced `cf05bdcc…`), run on the Mac:
+Inputs: the downloaded checkpoint directory (`--source`; nothing downloads weights)
+and a directory for the pinned antirez/ds4 `gguf-tools` sources (`--ds4-tools`).
+`--fetch-tools` fills that directory with the hash-pinned source files only, never
+weights. `--execute` also needs `--out`, `--host-budget-gib` and, for main and
+DSpark, `--quants-library`: a built `libds4quants` (`make -C <ds4-tools>
+quants-shared`, C compiler and pthreads required).
+
+**1. Plan** (opens only `config.json` and the index, never the shards; `--plan` must be a new file):
 
 ```sh
-python scripts/convert_dsv41_gguf.py \
-  --requant-gguf "$MODEL_ROOT/deepseek-ai/DeepSeek-V4.1-Flash-1017-ds4-Q4/DeepSeek-V4.1-Flash-1017-Q4-v41.gguf" \
-  --out "$MODEL_ROOT/deepseek-ai/DeepSeek-V4.1-Flash-1017-ds4-MXFP4-requant/DeepSeek-V4.1-Flash-1017-MXFP4-requant.gguf" \
-  --expert-layout ggml-mxfp4 \
-  --runtime-root "$SCRATCH/main" --hold-file "$SCRATCH/model-read-ledger.md" \
-  --quants-library "$SCRATCH/requant_q4_mxfp4.dylib" \
-  --threads 16 --host-budget-gib 4 --runtime-floor-gib 16
+python -B scripts/convert_dsv41_gguf.py --source <HF checkpoint dir> --ds4-tools <ds4-tools> --fetch-tools \
+  --expert-format native-fp4 --expert-layout flashinfer-sm120-mxfp8-mxfp4-v1 --dense-format q8 \
+  --dry-run --plan <new-plan.json>
 ```
 
-DSpark drafter. Use the same command with the drafter as input and the main Q4 file
-as its target, so its `dspark.*` metadata is written and checked:
+**2. Convert**, with the same file flags as the plan:
 
 ```sh
-python scripts/convert_dsv41_gguf.py \
-  --requant-gguf "$MODEL_ROOT/deepseek-ai/DeepSeek-V4.1-Flash-1017-ds4-Q4/DeepSeek-V4.1-Flash-1017-DSpark-Q4.gguf" \
-  --requant-target-gguf "$MODEL_ROOT/deepseek-ai/DeepSeek-V4.1-Flash-1017-ds4-Q4/DeepSeek-V4.1-Flash-1017-Q4-v41.gguf" \
-  --out "$MODEL_ROOT/deepseek-ai/DeepSeek-V4.1-Flash-1017-ds4-MXFP4-requant/DeepSeek-V4.1-Flash-1017-DSpark-MXFP4-requant.gguf" \
-  --expert-layout ggml-mxfp4 \
-  --runtime-root "$SCRATCH/dspark" --hold-file "$SCRATCH/model-read-ledger.md" \
-  --quants-library "$SCRATCH/requant_q4_mxfp4.dylib" \
-  --threads 16 --host-budget-gib 4 --runtime-floor-gib 16
+# RTX packed FP4
+python -B scripts/convert_dsv41_gguf.py --source <HF checkpoint dir> --ds4-tools <ds4-tools> \
+  --expert-format native-fp4 --expert-layout flashinfer-sm120-mxfp8-mxfp4-v1 --dense-format q8 \
+  --execute --out <rtx-fp4.gguf> --quants-library <libds4quants> --threads 8 --host-budget-gib 8
+
+# Mac decode FP4
+python -B scripts/convert_dsv41_gguf.py --source <HF checkpoint dir> --ds4-tools <ds4-tools> \
+  --expert-format native-fp4 --expert-layout ggml-mxfp4 --dense-format q8 \
+  --execute --out <mac-fp4.gguf> --quants-library <libds4quants> --threads 8 --host-budget-gib 8
+
+# DSpark drafter
+python -B scripts/convert_dsv41_gguf.py --source <HF checkpoint dir> --ds4-tools <ds4-tools> \
+  --component dspark --execute --out <dspark.gguf> --quants-library <libds4quants> --threads 8 --host-budget-gib 8
+
+# Q4
+python -B scripts/convert_dsv41_gguf.py --source <HF checkpoint dir> --ds4-tools <ds4-tools> \
+  --expert-format q4 --execute --out <q4.gguf> --quants-library <libds4quants> --threads 8 --host-budget-gib 8
 ```
 
-The released drafter got its current `dspark.*` metadata keys in a later
-header-only pass (`0e5d28ea…`). The converter now writes them during conversion.
-Do not use `--defer-readback` on a file you will time straight away.
+- **Both machines' files must use the same `--dense-format`.** The code accepts
+  `--dense-format native-fp8` only with the RTX layout, so a matched RTX/Mac pair
+  uses `q8` on both.
+- `--threads` is 1..32. `--host-budget-gib` is required with `--execute` and must
+  fit in physical RAM above `--runtime-floor-gib` (default and minimum 4).
+- `--resume` continues an interrupted run from its journal. Existing outputs are
+  never overwritten. Use a distinct `--out` for each file; logs and the memory
+  receipt go beside it (or under `--runtime-root`).
+- The header is checked against the plan before success is reported.
 
-### Native path from safetensors: NOT YET QUALIFIED end to end
+### Disk and memory
 
-This path keeps DeepSeek's released E2M1/E8M0 expert values, with no Q4 step. Its
-recipe and small-file writer are CPU-tested. No full-size file has yet been
-converted, timed or quality-checked with it. The input is an already-downloaded
-[DeepSeek-V4.1-Flash-1017 checkpoint](https://huggingface.co/deepseek-ai/DeepSeek-V4.1-Flash-1017/tree/1bae0e1088993b9b82de08f59de5be5a34e42170)
-(revision `1bae0e10…`, about 475 GiB). The pinned antirez/ds4 converter sources come
-from `--fetch-tools`, which fetches source files only, never weights. `--execute`
-also needs `--out`, `--quants-library` (a built `libds4quants`:
-`make -C <ds4-tools> quants-shared`, which still quantises the Q8 dense matrices) and
-`--host-budget-gib`. Without `--host-budget-gib`, `--execute` fails.
+| File | Output size | Free disk needed | Host RAM |
+|---|---:|---|---|
+| RTX packed FP4 (`q8` dense) | ~502 GB | output + 32 GiB reserve, checked by the writer | `--host-budget-gib` |
+| Mac decode FP4 (`q8` dense) | ~502 GB | output + 32 GiB reserve | `--host-budget-gib` |
+| DSpark drafter | ~7.8 GiB | output + 32 GiB reserve | `--host-budget-gib` |
+| Q4 | ~483 GiB | output + 32 GiB reserve | `--host-budget-gib` |
 
-```sh
-# 1. Plan: opens only config.json and the index, never the shards
-python -B scripts/convert_dsv41_gguf.py --source <HF checkpoint> --ds4-tools <ds4-tools> --fetch-tools \
-  --expert-format native-fp4 --expert-layout {flashinfer-sm120-mxfp8-mxfp4-v1 | ggml-mxfp4} \
-  --dense-format {q8 | native-fp8} --dry-run --plan <new-plan.json>
-
-# 2. Convert
-python -B scripts/convert_dsv41_gguf.py --source <HF checkpoint> --ds4-tools <ds4-tools> \
-  --expert-format native-fp4 --expert-layout {flashinfer-sm120-mxfp8-mxfp4-v1 | ggml-mxfp4} \
-  --dense-format {q8 | native-fp8} --execute --out <new.gguf> \
-  --quants-library <libds4quants> --host-budget-gib 8 --threads 1
-```
-
-- RTX file: `--expert-layout flashinfer-sm120-mxfp8-mxfp4-v1`. Mac file:
-  `--expert-layout ggml-mxfp4`.
-- `--dense-format native-fp8` is accepted only with the FlashInfer layout, so it
-  makes an RTX-only file. The Mac file is always `q8`.
-- **For two machines, both files must use the same `--dense-format` and the same
-  native expert values**, which today means `q8` on both. Otherwise the two engines
-  are not running the same model and the cross-machine KL will not match. The released
-  requant pair measures a cross-machine KL of 0.028 nats mean (0.054 max) and is
-  still a lossy proxy pair.
-- `--threads` is 1..32 and `--runtime-floor-gib` is at least 4. `--resume` continues
-  an interrupted run. Existing outputs are never overwritten.
-- The DSpark drafter and Vision come from the same checkpoint with `--component
-  dspark` or `--component vision` (no `--expert-format`/`--expert-layout`). DSpark
-  is written as Q4 and then needs the `--requant-gguf … --expert-layout ggml-mxfp4`
-  step above for the Mac. Vision needs no `--quants-library`.
-
-### Disk, memory and time
-
-| Step | Output size | Free disk needed | Host RAM | Measured time |
-|---|---:|---|---|---|
-| RTX packed FP4 requant | 501,609,136,128 B (~502 GB) | output + 20 GiB reserve (checked before each chunk) | `--host-budget-gib 2`, about 135 MiB of scales held per tensor | 47 min on the RTX (4 threads, AVX2), including full readback |
-| Mac MXFP4 requant | 501,609,136,128 B (~502 GB) | output + 20 GiB reserve | `--host-budget-gib 4` | 32 min on the M3 Ultra (16 threads) |
-| DSpark MXFP4 requant | 7,904,264,192 B | output + 20 GiB reserve | `--host-budget-gib 4` | 30 s on the M3 Ultra |
-| Native from safetensors (unqualified) | ~502 GB main with `q8` dense (same tensor types); `native-fp8` size not measured; DSpark ~7.8 GiB, Vision ~0.91 GiB | ~475 GiB source + outputs + upstream reserve | `--host-budget-gib` (8 in the example) | not measured (CPU only, long) |
-
-The Q4 source (483 GiB) stays read-only and is kept: the requant refuses to write
-over its input or over an existing output.
+The ~475 GiB checkpoint stays read-only and is needed in addition to the outputs.
+Conversion is CPU-only.
 
 ## Quickstart
 
