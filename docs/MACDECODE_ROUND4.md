@@ -140,6 +140,41 @@ See [measurements.json](macdecode-r4/measurements.json) for binary hashes,
 applied levers, individual runs, guards and proof hashes. Later batched-attention
 ports and final release qualification are still in progress.
 
+Indexed verification (`verify_batch_core=2`) adds the upstream 12-split
+small-row attention schedule and BF16 derived index-key views, with explicit
+RAM admission. Native payloads still store the original F32 keys. Import
+rebuilds the derived views and checks every lower half; a nonrepresentable
+cache keeps its complete F32 scoring path. Historical environment presence
+(including the string `0`) still selects the old generic batch mode; absence
+selects serial rows. Explicit `2` selects the new mode. Synthetic checks cover
+2–17 score rows, masks and visibility bounds, signed zero, nonrepresentable
+restored keys, and complete attention equality against chronological rows.
+The quiet full-model code fixture improves from 46.172 to 48.987 tok/s.
+
+Verification output batching (`verify_output=1`) shares the attention low and
+output weight passes while retaining the intermediate low and block tensors.
+With indexed verification and optional DSpark Q8 matrices, code reaches
+52.227 tok/s (two timed runs after warmup). Matrices alone remain slower; the
+surrounding batch schedule matters. All four full serial decision-logit proofs
+match, and every component low-row word matches independent scalar rows;
+matrix rows meet the upstream numerical bound. These remain comparative
+engine measurements, not a paired or live Studio acceptance result.
+
+Mode `verify_output=2` also joins projection/HC and shared-down/routed-add/HC
+tails. It writes every original projection, shared, block and HC word, retaining
+the fork's ordered FMA expansion. Component checks compare every word with
+the retained projection plus epilogue chain at rows 2/6 and K 2304/8192, scalar
+and matrix reductions, with and without routed addition, plus invalid ranges.
+The quiet full-model matrix comparison reaches 51.833 without the tail and
+52.375 tok/s with it; continuation token IDs match. The scalar verification
+comparison regresses from 50.556 to 48.449, so mode 2 is selected only with
+matrix rows. All four full serial decision-logit proofs match, and the isolated
+40 compatibility/environment/build/guard regressions plus native routing and
+disk-seed fixture pass. Peak RSS is 356194844672 bytes, physical impact
+357554061312, minimum available 182228434944; no paging or budget violation.
+Stable executable SHA256:
+`4fd81af6cd509f15e003c2bd812b9ec94fe2c01897e0d9190c7eb7699847a620`.
+
 ## Capability reductions
 
 The owner-selected target/drafter requants are lossy speed proxies. No other

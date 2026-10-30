@@ -255,6 +255,7 @@ typedef struct {
     int mxfp4_dedup; /* exact shared expert reads for two to eight rows */
     int concurrent_ffn; /* upstream full shared/routed FFN schedule */
     int engram_lookup; /* exact 128 KiB code/scale format table */
+    int verify_output; /* upstream shared weight pass for DSpark attention projections */
     int rows_mma; /* DSpark-only Q8 simdgroup matrices, upstream reduction */
     int row_matmuls; /* exact 2-8 Q8 rows sharing weight cache */
     int engram_gate; /* exact segmented 256-thread Engram gate */
@@ -423,9 +424,10 @@ typedef struct {
     int dspark_reasoning_serial; /* <think> decodes serially; default 1, =0 lifts it */
     int dspark_serve;      /* D: the serving loop drafts; =0 forces serial. */
     int dspark_expert_union;
-    /* verify_batch_core = 1 runs the verify pass's attention through the
-     * prefill batch core instead of six per-row decode passes: faster, but a
-     * different attention kernel and therefore not byte-identical to serial.
+    /* verify_batch_core: 0 retains per-row attention; 1 retains the generic
+     * batch core; 2 uses upstream indexed verification, small-row split
+     * attention and exact BF16 derived-key scoring. Batch reductions may
+     * differ from serial. All modes retain chronological rollback state.
      * dspark_force_reject = 1 rejects every draft, which commits one token per
      * cycle and exercises the maximal rollback on every cycle. */
     int verify_batch_core;
