@@ -4937,8 +4937,8 @@ static int g_host_cache_pinned = 1;
 static void cuda_stream_host_expert_cache_free_buffers(
         char *gate_ptr,
         char *up_ptr,
-        char *down_ptr) {
-    if (g_host_cache_pinned) {
+        char *down_ptr, int pinned = g_host_cache_pinned) {
+    if (pinned) {
         if (gate_ptr) cudaFreeHost(gate_ptr);
         if (up_ptr)   cudaFreeHost(up_ptr);
         if (down_ptr) cudaFreeHost(down_ptr);
@@ -4980,12 +4980,12 @@ static void cuda_stream_host_expert_cache_update_peak(
 }
 
 static void cuda_stream_host_expert_cache_release(
-        cuda_stream_host_expert_cache *cache) {
+        cuda_stream_host_expert_cache *cache, int pinned = g_host_cache_pinned) {
     if (!cache) return;
     /* [2026-08-16] cudaFreeHost: these are cudaMallocHost'd (pinned) now. free() here would be
      * heap corruption. */
     cuda_stream_host_expert_cache_free_buffers(
-        cache->gate_ptr, cache->up_ptr, cache->down_ptr);
+        cache->gate_ptr, cache->up_ptr, cache->down_ptr, pinned);
     cache->slots.clear();
     cache->slots.shrink_to_fit();
     /* memset would blow away the std::vector header; clear the POD fields by hand. */
@@ -6839,6 +6839,12 @@ static int cuda_stream_host_expert_cache_load_slot(
     return 1;
 }
 
+static bool cuda_stream_host_expert_cache_admit(const cuda_stream_host_expert_cache_slot &resident,
+        uint32_t layer, uint32_t expert) {
+    return !((cuda_stream_cache_lfu_enabled() || (g_affinity_cap && g_affinity_current_biased)) && resident.valid &&
+        cuda_affinity_cache_priority(layer, expert) < cuda_affinity_cache_priority(resident.layer, resident.expert));
+}
+
 static int cuda_stream_host_expert_cache_get_slot(
         cuda_stream_host_expert_cache *cache,
         const void *model_map,
@@ -6874,9 +6880,7 @@ static int cuda_stream_host_expert_cache_get_slot(
 
     const uint32_t load_slot = cuda_stream_host_expert_cache_lru_slot(cache);
     const auto &resident = cache->slots[load_slot];
-    if ((cuda_stream_cache_lfu_enabled() || (g_affinity_cap && g_affinity_current_biased)) && resident.valid &&
-        cuda_affinity_cache_priority(layer, expert) <
-        cuda_affinity_cache_priority(resident.layer, resident.expert)) return -1;
+    if (!cuda_stream_host_expert_cache_admit(resident, layer, expert)) return -1;
     const int append = !cache->slots[load_slot].valid;
     if (!cuda_stream_host_expert_cache_load_slot(cache,
                                                  model_map,
@@ -6920,6 +6924,8 @@ static int cuda_stream_host_expert_cache_copy_to_device(
                               cudaMemcpyHostToDevice),
                    "RAM cached down expert upload");
 }
+
+#include "ds4_external_host_cache.inc"
 
 /* [2026-08-16] Merged-run variant of the copy above.
  *
@@ -30317,7 +30323,7 @@ extern "C" int ds4_gpu_directional_steering_project_tensor(
 
 #include "ds4_cache_affinity.h"
 #include "ds4_cache_affinity_cuda.cuh"
-struct cuda_router_residency { uint8_t tier[384]; };
+struct cuda_router_residency { uint8_t tier[384]; float ram_cost; };
 struct cuda_router_affinity_metrics {
     uint32_t vram, ram, changed, selections, displaced_count;
     int32_t displaced[6], original[6], selected_ids[6];
@@ -30333,8 +30339,8 @@ __global__ static void cache_affinity_rerank_kernel(
     int32_t original[6];
     for (uint32_t j = 0; j < used; j++) original[j] = sel[j];
     if (lambda > 0.0f)
-        ds4_cache_affinity_select(sel, weights + (uint64_t)t * used,
-            probs + (uint64_t)t * experts, bias, residency.tier, lambda, experts, used, scale);
+        ds4_cache_affinity_select_tiered(sel, weights + (uint64_t)t * used,
+            probs + (uint64_t)t * experts, bias, residency.tier, lambda, experts, used, scale, residency.ram_cost);
     cuda_router_affinity_metrics m = {};
     m.selections=used;
     const float *p=probs+(uint64_t)t*experts;
@@ -30365,7 +30371,7 @@ __global__ static void cache_affinity_warp_kernel(
     int32_t original[6];
     if(threadIdx.x==0) for (uint32_t j = 0; j < used; j++) original[j] = sel[j];
     ds4_cache_affinity_select_warp(sel, weights + (uint64_t)t * used,
-        probs + (uint64_t)t * experts, bias, residency.tier, lambda, experts, used, scale);
+        probs + (uint64_t)t * experts, bias, residency.tier, lambda, experts, used, scale, residency.ram_cost);
     if(threadIdx.x)return;
     cuda_router_affinity_metrics m = {};
     m.selections=used;
@@ -30486,6 +30492,16 @@ extern "C" int ds4_gpu_cache_affinity_router_tensor(
     const int tier = ds4_tensor_device_idx(selected);
     cuda_router_residency residency = {};
 #ifdef DS4_EXTERNAL_DECODE
+    /* RAMFIX: external decode prices a RAM-resident expert between VRAM and storage.
+     * LLAMADECODE_RAM_ROUTE_COST in [0,1] is its share of the miss penalty (0 = old
+     * boolean residency). Selection only; combine weights stay the original probabilities. */
+    static const float ram_route_cost = [] {
+        const char *v = getenv("LLAMADECODE_RAM_ROUTE_COST"); char *end = nullptr;
+        const float c = v && *v ? strtof(v, &end) : 0.5f;
+        if (v && *v && (!end || *end || !(c >= 0.0f && c <= 1.0f))) { fprintf(stderr, "ds4: LLAMADECODE_RAM_ROUTE_COST must be in [0,1]\n"); return -1.0f; }
+        fprintf(stderr, "LLAMADECODE_RAM_ROUTE_COST=%.3f\n", c); return c; }();
+    if (ram_route_cost < 0.0f) return 0;
+    if (external) residency.ram_cost = ram_route_cost;
     if (external) {
         if (!g_ds4x_residency_hook || !g_ds4x_residency_hook(g_ds4x_residency_user, layer, residency.tier, experts)) {
             fprintf(stderr, "LLAMADECODE_DS4X_RESIDENCY_FAILED layer=%u\n", layer); return 0;
@@ -35723,8 +35739,40 @@ extern "C" void ds4_gpu_stage_flush(uint32_t position) {
     g_stage_pool_calls0 = pool_calls; g_stage_pool_ms0 = pool_ms;
     g_stage_host_ms[0] = g_stage_host_ms[1] = g_stage_host_ms[2] = 0.0; g_stage_launch_ms = 0.0;
 }
+#include "ds4_external_host_compute.inc"
 
 static int routed_moe_launch(
+        ds4_gpu_tensor *out,
+        ds4_gpu_tensor *gate,
+        ds4_gpu_tensor *up,
+        ds4_gpu_tensor *mid,
+        ds4_gpu_tensor *down,
+        const void *model_map,
+        uint64_t model_size,
+        uint64_t gate_offset,
+        uint64_t up_offset,
+        uint64_t down_offset,
+        uint32_t gate_type,
+        uint32_t down_type,
+        uint64_t gate_expert_bytes,
+        uint64_t gate_row_bytes,
+        uint64_t down_expert_bytes,
+        uint64_t down_row_bytes,
+        uint32_t expert_in_dim,
+        uint32_t expert_mid_dim,
+        uint32_t out_dim,
+        const ds4_gpu_tensor *selected,
+        const ds4_gpu_tensor *weights,
+        uint32_t n_total_expert,
+        uint32_t n_expert,
+        float clamp,
+        const ds4_gpu_tensor *x,
+        uint32_t layer_index,
+        uint32_t n_tokens,
+        int allow_streaming,
+        int owned_filtered);
+
+static int routed_moe_launch_impl(
         ds4_gpu_tensor *out,
         ds4_gpu_tensor *gate,
         ds4_gpu_tensor *up,
@@ -35800,6 +35848,7 @@ static int routed_moe_launch(
         const auto hook_t1 = std::chrono::steady_clock::now();
         for (const int32_t id : ids) {
             if (id < 0 || (uint32_t)id >= n_total_expert) return 0;
+            if(std::find(g_external_cpu_ids.begin(),g_external_cpu_ids.end(),id)!=g_external_cpu_ids.end())continue;
             if (std::find(unique.begin(), unique.end(), id) == unique.end()) unique.push_back(id);
         }
         static const uint32_t group_cap = [] {
@@ -35846,7 +35895,10 @@ static int routed_moe_launch(
         }
         const auto hook_t3 = std::chrono::steady_clock::now();
         for (const int32_t slot : slots) if (slot < 0 || (uint32_t)slot >= n_slots) return 0;
-        for (int32_t &id : ids) id = slots[(size_t)(std::find(unique.begin(), unique.end(), id) - unique.begin())];
+        for (int32_t &id : ids){
+            const auto at=std::find(unique.begin(),unique.end(),id);
+            id=at==unique.end()?-1:slots[size_t(at-unique.begin())];
+        }
         if (g_ds4x_slot_tensor.bytes < (uint64_t)assignments * sizeof(int32_t)) {
             if (g_ds4x_slot_tensor.ptr) { (void)cudaFree(g_ds4x_slot_tensor.ptr); g_ds4x_slot_tensor = {}; }
             const uint64_t bytes = (uint64_t)(assignments > 64u ? assignments : 64u) * sizeof(int32_t);
@@ -37695,6 +37747,8 @@ static int routed_moe_launch(
     }
     return ok;
 }
+
+#include "ds4_external_host_compute_wrapper.inc"
 
 extern "C" int ds4_gpu_routed_moe_one_owned_tensor(
         ds4_gpu_tensor *out,

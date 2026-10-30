@@ -86,26 +86,42 @@ Other models on the same streaming engine and RTX 5090:
 
 ### Host-RAM expert tier
 
-The separate host-RAM tier experiment remains off by default and is not in
-this release. Latest accepted Q4 measurements use a 49,553-token prompt and
-reused-prefix follow-up; warm decode times 899 evaluated steps after discarding
-the first 100:
+The host-RAM tier stays **off by default** (`LLAMADECODE_HOST_CACHE_MB=0`). Round 4
+(2026-10-30) moved its data movement off the critical path: the VRAM-to-RAM copy-in
+runs on its own stream with one event, the DirectStorage batch is submitted first and
+RAM hits upload on a separate H2D stream while it reads, and Max-speed routing prices
+a RAM expert at half a miss (`LLAMADECODE_RAM_ROUTE_COST=0.5`). On this 32 GB box the
+tier is a small gain only at FP4 Max quality and still a loss elsewhere: Windows refuses
+to CUDA-register the locked tier in-process, so each hit is copied through pinned
+staging (about 1 ms of CPU per expert), and a 6.6 GB tier holds 351 experts, removing
+only 6% of misses.
 
-| Run | RAM setting | Max quality | Max speed |
-|---|---:|---:|---:|
-| Tier off | 0 GiB | 6.87 tok/s | 18.26 tok/s |
-| Upload to GPU | 3.49 GiB | 6.79 tok/s | 17.34 tok/s |
-| CPU compute | 3.49 GiB | 6.81 tok/s | 14.58 tok/s |
-| Mix of both | 3.49 GiB | 6.84 tok/s | 15.80 tok/s |
-| Upload to GPU | 10 GiB | 6.49 tok/s | 15.23 tok/s |
-| CPU compute | 10 GiB | 6.93 tok/s | 13.22 tok/s |
-| Mix of both | 10 GiB | 6.94 tok/s | 12.08 tok/s |
+Packed FP4 unless marked Q4, 899 warm steps, VRAM headroom 128 + 64 MiB, 6.6 GB tier:
 
-[Round 3 results](https://github.com/fronteagle739/streaming-llama-stack/blob/a2371b6e84a09c8ef5f64ab67fc5230fc24aa95e/docs/RAMTIER_R3.md).
+| Context, endpoint | Tier off | Tier on |
+|---|---:|---:|
+| 50K Max quality | 7.30 tok/s | 7.27 / 7.39 tok/s |
+| 100K Max quality | 7.36 tok/s | 7.48 tok/s |
+| 50K Max speed | 23.88 tok/s | 22.94 tok/s |
+| 100K Max speed | 23.27 tok/s | 22.71 tok/s |
+| Q4 50K Max quality | 7.26 tok/s | 6.94 tok/s |
+| Q4 100K Max quality | 7.34 tok/s | 6.97 tok/s |
 
-The speed settings already favour VRAM-resident experts, misses are spread
-thinly, and at Max speed the GPU waits for the CPU. It is expected to matter
-more on machines with much more RAM; that is untested and listed in the
+The earlier synchronous tier (`LLAMADECODE_HOST_ASYNC=0`) measured 7.06 tok/s on the
+same 50K Max quality run. Max-speed routing that counts RAM as VRAM
+(`LLAMADECODE_RAM_ROUTE_COST=0`) measured 21.58 tok/s against 22.85 at 0.5.
+Free-RAM sizing has a practical limit: an 8.7 GB tier left 2.2 GB available and the
+pagefile guard stopped the run.
+
+**Decode VRAM headroom** is now 128 MiB reserve plus a 64 MiB L2 growth margin
+(was 512 + 768 MiB), about 60 more cached experts. 128 MiB with no margin breached
+the reserve in every run. If the planned L2 allocation is refused, it steps down
+256 MiB at a time (`LLAMADECODE_L2_ALLOC_REFUSED`, at most 2 GiB) and the reserve
+guard still refuses on a real shortfall. Packed FP4 Max quality with the new headroom:
+50K 7.05-7.30, 100K 7.20-7.36, 200K 8.29-8.83 tok/s.
+
+It is expected to matter more on machines with much more RAM, or where the tier can be
+CUDA-registered; that is untested and listed in the
 [roadmap](docs/ROADMAP.md).
 
 ## How it works
@@ -200,7 +216,7 @@ model path and GPU UUID. `*.local.*` files are ignored by Git.
   "model": "<model_dir>/<deepseek-v4.1-flash>.gguf",
   "gpu_uuid": "<GPU-UUID>",
   "host_budget_gib": 9.25,
-  "min_available_gib": 4,
+  "min_available_gib": 0.5,
   "runtime_min_free_gib": 0.5
 }
 ```

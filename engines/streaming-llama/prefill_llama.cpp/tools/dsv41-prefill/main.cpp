@@ -6,6 +6,7 @@ extern "C" unsigned long long ggml_backend_cuda_dsv41_pv_strided_queued(void);
 #include <bcrypt.h>
 #include <dxgi1_4.h>
 #include "ggml-cuda.h"
+#include "ggml-cpu.h"
 #include <cuda.h>
 #include "ggml-dsv41-gather-half.h"
 #include "ggml-dsv41-split-f32.h"
@@ -247,7 +248,7 @@ const char*usage=
 " --model --copy-receipt --tokens-le32 --cuda-device --context --build-sha\n"
 " --provider-device-bytes --provider-host-bytes --cache-bytes --graph-bytes\n"
 " --job-device-bytes --job-host-bytes --gpu-reserve-bytes --carry --carry-file-bytes --carry-host-bytes\n"
-" --runtime-min-free-gib (default 4.0; 0 disables the runtime RAM floor; paging stop remains)\n"
+" --runtime-min-free-gib (default 0.5; 0 disables the runtime RAM floor; paging stop remains)\n"
 " --carry-outstanding-bytes --output-outstanding-bytes --payload --receipt\n"
 "Optional --carry-storage file|ram|hybrid (default file; no automatic fallback).\n"
 "Hybrid requires --carry-ram-prefix-tokens and --carry-disk-reserve-bytes; exclusive-new D: overflow, batched unbuffered tiles.\n"
@@ -734,6 +735,7 @@ int wmain(int argc,wchar_t**argv){
         options.admitted_device_bytes=job_device;options.measured_device_free=measured_device_free;options.device_reserve=gpu_reserve;
         report["budgets_measured_device"]={{"job_device_bound",job_device},{"measured_device_free",measured_device_free},{"device_reserve",gpu_reserve},
             {"admitted_device",std::min<uint64_t>(job_device,measured_device_free-gpu_reserve)}};
+        weights.job_host_bytes=job_host;
         options.admitted_host_bytes=job_host-cli_host_bytes-control_host;options.carry.path=args.at("--carry");options.carry.tokens=first_sweep_tokens;options.stateful_chunks=chunk_option!=0;
         options.carry.resident_ram=resident_ram;
         require(!args.count("--resident-hidden-final-readback")||args.at("--resident-hidden-final-readback")=="0"||args.at("--resident-hidden-final-readback")=="1","resident-hidden-final-readback requires0/1");

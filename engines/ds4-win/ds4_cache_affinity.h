@@ -8,18 +8,23 @@
 #else
 #define DS4_AFFINITY_FN
 #endif
-static DS4_AFFINITY_FN void ds4_cache_affinity_select(
+/* RAMFIX tier cost: tier 1 (VRAM) pays nothing, tier 2 (RAM) pays ram_cost of the miss
+ * penalty, anything else (storage) pays all of it. ram_cost 0 is the old boolean rule. */
+static DS4_AFFINITY_FN float ds4_affinity_tier_penalty(uint8_t tier, float lambda, float ram_cost) {
+    return tier == 1 ? 0.0f : tier == 2 ? lambda * ram_cost : (tier ? 0.0f : lambda);
+}
+static DS4_AFFINITY_FN void ds4_cache_affinity_select_tiered(
         int32_t *selected, float *weights, const float *probs,
         const float *bias, const uint8_t *resident, float lambda,
-        uint32_t experts, uint32_t used, float scale) {
+        uint32_t experts, uint32_t used, float scale, float ram_cost) {
     for (uint32_t j = 0; j < used; j++) selected[j] = -1;
     for (uint32_t e = 0; e < experts; e++) {
-        const float score = probs[e] + (bias ? bias[e] : 0.0f) +
-                            -(resident[e] ? 0.0f : lambda);
+        const float score = probs[e] + (bias ? bias[e] : 0.0f) -
+                            ds4_affinity_tier_penalty(resident[e], lambda, ram_cost);
         for (uint32_t j = 0; j < used; j++) {
             const int32_t old = selected[j];
-            if (old < 0 || score > probs[old] + (bias ? bias[old] : 0.0f) +
-                                  -(resident[old] ? 0.0f : lambda)) {
+            if (old < 0 || score > probs[old] + (bias ? bias[old] : 0.0f) -
+                                  ds4_affinity_tier_penalty(resident[old], lambda, ram_cost)) {
                 for (uint32_t k = used - 1; k > j; k--) selected[k] = selected[k-1];
                 selected[j] = (int32_t)e;
                 break;
@@ -30,6 +35,12 @@ static DS4_AFFINITY_FN void ds4_cache_affinity_select(
     for (uint32_t j = 0; j < used; j++) { weights[j] = probs[selected[j]]; sum += weights[j]; }
     sum = fmaxf(sum, 6.103515625e-5f);
     for (uint32_t j = 0; j < used; j++) weights[j] = weights[j] / sum * scale;
+}
+static DS4_AFFINITY_FN void ds4_cache_affinity_select(
+        int32_t *selected, float *weights, const float *probs,
+        const float *bias, const uint8_t *resident, float lambda,
+        uint32_t experts, uint32_t used, float scale) {
+    ds4_cache_affinity_select_tiered(selected, weights, probs, bias, resident, lambda, experts, used, scale, 0.0f);
 }
 typedef struct ds4_affinity_confidence {
     float replacement, width, min_delta, max_delta;

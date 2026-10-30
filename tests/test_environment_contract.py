@@ -23,6 +23,18 @@ class EnvironmentContractTests(unittest.TestCase):
         self.assertEqual(apply({},cfg,'rtx-producer')['GGML_CUDA_DISABLE_GRAPHS'],'1')
         for name in chosen:
             if name!='GGML_CUDA_DISABLE_GRAPHS':self.assertNotIn(name,apply({},cfg,'rtx-producer'))
+    def test_ramtier_controls_reach_only_the_producer(self):
+        from slstack.config import load, environment
+        values={'LLAMADECODE_HOST_MODE':'cpu','LLAMADECODE_HOST_CACHE_ADMIT':'0',
+                'LLAMADECODE_L2_MAX_SLOTS':'640','LLAMADECODE_LOGITS_TRACE':'trace.bin','DS4_THREADS':'8'}
+        cfg=load(overrides={'env_overrides':values})
+        with contextlib.redirect_stderr(io.StringIO()):
+            producer=environment(cfg,'rtx-producer')
+            other=environment(cfg,'build')
+        for key,value in values.items():
+            with self.subTest(key=key):
+                self.assertEqual(producer[key],value)
+                self.assertNotIn(key,other)
 
     def test_pinned_external_evidence_is_retained_but_stale_local_reads_fail(self):
         row=dict(var='PATH',doc='Host path',reads=['engines/current.c:1','engines/mlx-serve/pinned.zig:2'])
