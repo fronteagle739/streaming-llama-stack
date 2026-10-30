@@ -6,7 +6,9 @@
     "ui_url": "http://127.0.0.1:8088",
     "studio_url": "http://127.0.0.1:8765",
     "gpu_busy_mib": 2048,
-    "ports": ["127.0.0.1:8089"],
+    "ports": [
+      "127.0.0.1:8089"
+    ],
     "stack": {
       "model": "SET_RTX_PACKED_FP4_GGUF_PATH",
       "gpu_uuid": "SET_GPU_UUID",
@@ -21,7 +23,8 @@
         "LLAMA_DSV41_FLASHINFER_BATCH_TOKENS": "4096",
         "LLAMADECODE_PREFILL_ROUTED": "0",
         "GGML_CUDA_DISABLE_GRAPHS": "1"
-      }
+      },
+      "cache_affinity_spread_file": "presets/dsv41-fp4-affinity-spreads.txt"
     }
   },
   "mac": {
@@ -30,7 +33,9 @@
     "ui_url": "http://127.0.0.1:8088",
     "studio_url": "http://127.0.0.1:8765",
     "engine_url": "http://127.0.0.1:8181",
-    "ports": ["127.0.0.1:8181"],
+    "ports": [
+      "127.0.0.1:8181"
+    ],
     "stack": {
       "mac_host_budget_gib": 400,
       "min_available_gib": 0.5,
@@ -48,7 +53,14 @@
       "host": "127.0.0.1",
       "port": 8088,
       "webui": true,
-      "general": {"mode": "remote", "endpoint": "http://127.0.0.1:8181", "mac": {"backend": "ds4", "ctx": 1000001}}
+      "general": {
+        "mode": "remote",
+        "endpoint": "http://127.0.0.1:8181",
+        "mac": {
+          "backend": "ds4",
+          "ctx": 1000001
+        }
+      }
     }
   }
 }
