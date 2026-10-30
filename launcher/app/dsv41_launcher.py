@@ -258,11 +258,13 @@ class Launcher:
         rows = (try_http(self.ui + '/v1/models') or {}).get('data') or []
         if not rows:
             raise RuntimeError('The router lists no model')
-        failure = []
+        failure, done = [], []
 
         def load():
+            # Returns only once the engine (or the pairing) is ready; the stack owns its liveness.
             try:
                 http(self.ui + '/models/load', {'model': rows[0]['id']}, timeout=None)
+                done.append(True)
             except urllib.error.HTTPError as exc:
                 failure.append(exc.read().decode(errors='replace'))
             except OSError as exc:
@@ -272,10 +274,9 @@ class Launcher:
         def ready():
             if failure:
                 raise RuntimeError('Engine start failed: ' + failure[0])
-            health = try_http(self.ui + '/health') or {}
-            if health.get('model_ready'):
+            if done:
                 return True
-            return health.get('model_status')
+            return (try_http(self.ui + '/health') or {}).get('model_status')
         self.until(ready, 'the engine was ready', children)
 
     # ---------- the four launch shapes ----------
