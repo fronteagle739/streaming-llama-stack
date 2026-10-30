@@ -1004,6 +1004,11 @@ int ds4_gpu_dsv41_hc_round_expand4_tensor(
         uint32_t              n_embd,
         uint32_t              n_hc);
 
+/* Literal scalar join plus bit-exact split[0:4] carry publication. */
+int ds4_gpu_dsv41_hc_round_expand4_carry_tensor(ds4_gpu_tensor *out_hc,ds4_gpu_tensor *block_out,
+        const ds4_gpu_tensor *block_in,const ds4_gpu_tensor *block_add,
+        const ds4_gpu_tensor *residual_hc,const ds4_gpu_tensor *split,ds4_gpu_tensor *carry);
+
 int ds4_gpu_dsv41_mtp_qa_kv_pairs(ds4_gpu_tensor *qa, ds4_gpu_tensor *kv,
         const ds4_gpu_tensor *input, const void *model_map, uint64_t model_size,
         uint64_t qa_offset, uint64_t kv_offset, uint32_t rows);
@@ -1037,6 +1042,15 @@ int ds4_gpu_dsv41_query_hc_kv_rope_tensor(ds4_gpu_tensor *output,
     uint32_t sinkhorn_iters, float hc_eps, float norm_eps,
     ds4_gpu_tensor *kv, ds4_gpu_tensor *window, uint64_t kv_norm_offset,
     uint32_t position, bool compressed);
+int ds4_gpu_dsv41_query_hc_kv_pairnorm_tensor(ds4_gpu_tensor *output,
+    ds4_gpu_tensor *mix, ds4_gpu_tensor *split, ds4_gpu_tensor *counter,
+    const ds4_gpu_tensor *residual, const ds4_gpu_tensor *input,
+    const void *model_map, uint64_t model_size, uint64_t hc_offset,
+    uint64_t scale_offset, uint64_t base_offset, uint64_t weight_offset,
+    uint32_t sinkhorn_iters, float hc_eps, float norm_eps,
+    ds4_gpu_tensor *kv, ds4_gpu_tensor *window, uint64_t kv_norm_offset,
+    uint32_t position, bool compressed);
+
 /* Scoped target GU selection: 0=parent, 1=scalar oracle, 6=verifier.
  * Returns the previous scope; the caller restores it after synchronous encode. */
 
@@ -3728,6 +3742,23 @@ int ds4_gpu_dsv41_shared_down_hc(ds4_gpu_tensor *hc,ds4_gpu_tensor *pre,ds4_gpu_
 int ds4_gpu_dsv41_step_rope_table(ds4_gpu_tensor *tab,uint32_t pos);
 void ds4_gpu_dsv41_heads_once_arm(const ds4_gpu_tensor *tab,bool compressed);
 int ds4_gpu_dsv41_heads_once_take(void);
+
+int ds4_gpu_dsv41_candidates_check(void);
+int ds4_gpu_dsv41_indexer_candidates_tensor(ds4_gpu_tensor *selected,ds4_gpu_tensor *scores,
+        const ds4_gpu_tensor *q,const ds4_gpu_tensor *weights,const ds4_gpu_tensor *keys,
+        const ds4_gpu_tensor *view,const ds4_gpu_tensor *mask,uint32_t n_comp);
+
+int ds4_gpu_dsv41_indexer_candidates_select_tensor(ds4_gpu_tensor *selected,ds4_gpu_tensor *scores,
+        const ds4_gpu_tensor *q,const ds4_gpu_tensor *weights,const ds4_gpu_tensor *keys,
+        const ds4_gpu_tensor *mask,uint32_t n_comp);
+int ds4_gpu_dsv41_indexer_candidates_wide_tensor(ds4_gpu_tensor *selected,ds4_gpu_tensor *scores,
+        const ds4_gpu_tensor *q,const ds4_gpu_tensor *weights,const ds4_gpu_tensor *keys,
+        const ds4_gpu_tensor *view,const ds4_gpu_tensor *mask,uint32_t n_comp);
+
+/* Exact upstream independent weighted norms; row geometry is unchanged. */
+int ds4_gpu_dsv41_norm_pair_rows(ds4_gpu_tensor *out0,const ds4_gpu_tensor *x0,uint64_t offset0,uint32_t n0,
+        ds4_gpu_tensor *out1,const ds4_gpu_tensor *x1,uint64_t offset1,uint32_t n1,
+        const void *model_map,uint64_t model_size,float eps,uint32_t rows);
 
 #ifdef __cplusplus
 }

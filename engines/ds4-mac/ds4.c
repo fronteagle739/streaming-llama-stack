@@ -39723,6 +39723,7 @@ ds41_levers g_ds41_levers = {
     .engram_gate = 0,
     .shared_down_hc = 0,
     .fixed_dense = 0,
+    .query_norm_pair = 0,
     .query_rope = 0,
     .heads_rope = 0,
     .preencode = 0,
@@ -39843,6 +39844,7 @@ static const struct { const char *name; size_t off; const char *env; } g_ds41_le
     { "engram_gate", offsetof(ds41_levers, engram_gate), "DS4_DS41_ENGRAM_GATE" },
     { "shared_down_hc", offsetof(ds41_levers, shared_down_hc), "DS4_DS41_SHARED_DOWN_HC" },
     { "fixed_dense", offsetof(ds41_levers, fixed_dense), "DS4_DS41_FIXED_DENSE" },
+    { "query_norm_pair", offsetof(ds41_levers, query_norm_pair), "DS4_DS41_QUERY_NORM_PAIR" },
     { "query_rope", offsetof(ds41_levers, query_rope), "DS4_DS41_QUERY_ROPE" },
     { "heads_rope", offsetof(ds41_levers, heads_rope), "DS4_DS41_HEADS_ROPE" },
     { "preencode", offsetof(ds41_levers, preencode), "DS4_DS41_PREENCODE" },
@@ -39887,6 +39889,7 @@ static const struct { const char *name; size_t off; const char *env; } g_ds41_le
     { "index_score_stream", offsetof(ds41_levers, index_score_stream), "DS4_DS41_INDEX_SCORE_STREAM" },
     { "hc_join_static", offsetof(ds41_levers, hc_join_static), "DS4_DS41_HC_JOIN_STATIC" },
     { "topk_short", offsetof(ds41_levers, topk_short), "DS4_DS41_TOPK_SHORT" },
+    { "index_candidates", offsetof(ds41_levers, index_candidates), "DS4_DS41_INDEX_CANDIDATES" },
     { "index_schedule", offsetof(ds41_levers, index_schedule), "DS4_DS41_INDEX_SCHEDULE" },
     { "index_mask_score", offsetof(ds41_levers, index_mask_score), "DS4_DS41_INDEX_MASK_SCORE" },
     { "stage_gather",       offsetof(ds41_levers, stage_gather),       "DS4_DS41_STAGE_GATHER" },
@@ -40010,6 +40013,7 @@ void ds41_levers_init_from_env(void) {
     g_ds41_levers.engram_gate = getenv("DS4_DS41_ENGRAM_GATE") && atoi(getenv("DS4_DS41_ENGRAM_GATE")) != 0;
     g_ds41_levers.shared_down_hc = getenv("DS4_DS41_SHARED_DOWN_HC") && atoi(getenv("DS4_DS41_SHARED_DOWN_HC")) != 0;
     g_ds41_levers.fixed_dense = getenv("DS4_DS41_FIXED_DENSE") && atoi(getenv("DS4_DS41_FIXED_DENSE")) != 0;
+    g_ds41_levers.query_norm_pair = getenv("DS4_DS41_QUERY_NORM_PAIR") && atoi(getenv("DS4_DS41_QUERY_NORM_PAIR")) != 0;
     g_ds41_levers.query_rope = getenv("DS4_DS41_QUERY_ROPE") && atoi(getenv("DS4_DS41_QUERY_ROPE")) != 0;
     g_ds41_levers.heads_rope = getenv("DS4_DS41_HEADS_ROPE") && atoi(getenv("DS4_DS41_HEADS_ROPE")) != 0;
     g_ds41_levers.preencode = getenv("DS4_DS41_PREENCODE") && atoi(getenv("DS4_DS41_PREENCODE")) != 0;
@@ -40119,6 +40123,7 @@ void ds41_levers_init_from_env(void) {
     g_ds41_levers.index_score_stream = ds41_env_enable_form("DS4_DS41_INDEX_SCORE_STREAM");
     g_ds41_levers.topk_short=getenv("DS4_DS41_TOPK_SHORT") && ds41_env_enable_form("DS4_DS41_TOPK_SHORT");
     g_ds41_levers.hc_join_static=getenv("DS4_DS41_HC_JOIN_STATIC") && ds41_env_enable_form("DS4_DS41_HC_JOIN_STATIC");
+    g_ds41_levers.index_candidates=getenv("DS4_DS41_INDEX_CANDIDATES") && ds41_env_enable_form("DS4_DS41_INDEX_CANDIDATES");
     { const char *v=getenv("DS4_DS41_INDEX_SCHEDULE");
       if(v) { char *end=NULL;long n=strtol(v,&end,10);
         if(!*v || *end || n<0 || n>2) { fprintf(stderr,"ds4: invalid DS4_DS41_INDEX_SCHEDULE (expected 0..2)\n");abort(); }
@@ -40610,8 +40615,8 @@ static bool ds41_hc_stream(ds41_gpu_graph *g, const ds4_model *m,
 }
 
 static bool ds41_hc_query_kv(ds41_gpu_graph *g, const ds4_model *m,
-                           const ds4_layer_weights *l, uint32_t il, bool rope) {
-    return (rope ? ds4_gpu_dsv41_query_hc_kv_rope_tensor : ds4_gpu_dsv41_query_hc_kv_tensor)(g->q, g->mix, g->attn_split,
+                           const ds4_layer_weights *l, uint32_t il, bool rope, bool pairnorm) {
+    return (pairnorm ? ds4_gpu_dsv41_query_hc_kv_pairnorm_tensor : rope ? ds4_gpu_dsv41_query_hc_kv_rope_tensor : ds4_gpu_dsv41_query_hc_kv_tensor)(g->q, g->mix, g->attn_split,
         g->hc_counter, g->residual, g->qr, m->map, m->size,
         l->hc_attn_fn->abs_offset, l->hc_attn_scale->abs_offset,
         l->hc_attn_base->abs_offset, l->attn_q_b->abs_offset,
@@ -40793,8 +40798,17 @@ static bool ds41_attention_select_published(ds41_gpu_graph *g, const ds4_model *
             !ds41_rope(g->index_q, DS4_N_INDEXER_HEAD, 128, il, pos, false) ||
             !ds4_gpu_dsv41_quantize(g->index_q, 128, DS4_N_INDEXER_HEAD, DS4_V41_FP4_E8M0) ||
 #endif
-            !ds41_matmul(g->index_weights, m, l->indexer_proj, g->norm, true) ||
-            !(il > 20u && (!g_ds41_levers.index_schedule || (n_comp+7u)/8u>2048u) &&
+            !ds41_matmul(g->index_weights, m, l->indexer_proj, g->norm, true))return false;
+#ifdef __APPLE__
+        if(g_ds41_levers.index_candidates && g_ds41_levers.index_schedule &&
+           g_ds41_levers.index_topk_radix && g_ds41_levers.index_compact_score && g_ds41_levers.index_score_stream &&
+           il>20u && (n_comp+7u)/8u>2048u &&
+           g->arch_scalar_step && g->tp_world==1 && !g->quality && !g->streaming && DS4_N_INDEXER_HEAD==32u) {
+            return ds4_gpu_dsv41_indexer_candidates_select_tensor(g->selected_comp,g->index_scores,g->index_q,
+                g->index_weights,g->index_cache[owner],g->block_mask,n_comp)!=0;
+        }
+#endif
+        if(!(il > 20u && (!g_ds41_levers.index_schedule || (n_comp+7u)/8u>2048u) &&
               (g_ds41_levers.index_mask_score || g_ds41_levers.index_compact_score) && DS4_N_INDEXER_HEAD == 32u ?
                 ds4_gpu_dsv41_indexer_score_masked(g->index_scores, g->index_q, g->index_weights,
                     g->index_cache[owner], g->block_mask, n_comp, g_ds41_levers.index_compact_score) :
@@ -40840,11 +40854,19 @@ static bool ds41_attention(ds41_gpu_graph *g, const ds4_model *m,
         g_ds41_levers.kv_query_mix && g_ds41_levers.q8_virtual_query &&
         (g_ds41_levers.hc_stream_layout == 0 || g_ds41_levers.hc_stream_layout == 2);
     const bool query_rope=query_kv && g_ds41_levers.query_rope && ds4_gpu_dsv41_query_rope_available();
+    const bool pairnorm=query_rope && g_ds41_levers.query_norm_pair &&
+        l->attn_q_a_norm->type==DS4_TENSOR_F32 && l->attn_q_a_norm->dim[0]==1280u;
     if (flat) {
         if (!ds4_gpu_dsv41_arch_qa_kv_tensor(g->qr, g->kv, g->norm, m->map, m->size,
                 l->attn_q_a->abs_offset, l->attn_kv->abs_offset) ||
+#ifdef __APPLE__
+            !(pairnorm ? ds4_gpu_dsv41_norm_pair_rows(g->qr,g->qr,l->attn_q_a_norm->abs_offset,1280,
+                g->kv,g->kv,l->attn_kv_a_norm->abs_offset,512,m->map,m->size,DS4_RMS_EPS,1) :
+                ds41_norm(g->qr,g->qr,m,l->attn_q_a_norm)) ||
+#else
             !ds41_norm(g->qr, g->qr, m, l->attn_q_a_norm) ||
-            !(query_kv ? ds41_hc_query_kv(g, m, l, il, query_rope) :
+#endif
+            !(query_kv ? ds41_hc_query_kv(g, m, l, il, query_rope, pairnorm) :
               g->hc_attn_deferred ? ds41_hc_stream(g, m, l, false) :
                 ds41_matmul_rows(g->q, m, l->attn_q_b, g->qr, head0*512u, heads*512u)) ||
             (!prepare_kv && !ds41_norm(g->kv, g->kv, m, l->attn_kv_a_norm))) return false;
@@ -41746,6 +41768,15 @@ static bool ds41_graph_after_moe(ds41_gpu_graph *g) {
     }
     const bool add_pending = g->ffn_add_pending != 0;
     g->ffn_add_pending = 0;
+#ifdef __APPLE__
+    if(g_ds41_levers.hc_join_static && g->arch_scalar_step && ds41_hc_expand_fold(g) &&
+       DS4_N_EMBD==5120u) {
+        ds4_gpu_set_dsv41_hc_expand_nth(g_ds41_levers.hc_expand_nth);
+        return ds4_gpu_dsv41_hc_round_expand4_carry_tensor(g->residual,g->block,
+            add_pending ? g->routed : g->block,add_pending ? g->shared : NULL,
+            g->after_attn,g->ffn_split,g->pre)!=0;
+    }
+#endif
     return (ds41_hc_expand_fold(g) ?
             ds41_hc_round_expand(g->residual, g->block,
                                  add_pending ? g->routed : g->block,
@@ -42185,6 +42216,35 @@ static DS4_MAYBE_UNUSED bool ds41_graph_step(ds41_gpu_graph *g, const ds4_model 
         if (pe && ok) ok=ds41_slot_drain(g,m,w,ok);
         else if (!ds4_gpu_end_commands()) ok=false;
     }
+#ifdef __APPLE__
+    if(ok && g_ds41_levers.index_candidates && !ds4_gpu_dsv41_candidates_check())ok=false;
+    /* Explicit one-shot score/index diagnostic; never changes the live state. */
+    static bool candidate_captured=false;
+    const char *candidate_capture=getenv("DS4_DS41_INDEX_CANDIDATE_CAPTURE");
+    if(ok && g_ds41_levers.index_candidates && candidate_capture && !candidate_captured && g->pos>=131072u) {
+        const uint32_t n=(g->pos+1u)/ds4_layer_compress_ratio(36u),blocks=(n+7u)/8u;
+        ds4_gpu_tensor *reference=ds4_gpu_tensor_alloc(512u*4u);
+        uint32_t actual[512],expected[512];
+        float *values=malloc((uint64_t)n*4u),*mask=malloc((uint64_t)blocks*4u);
+        ok=reference && values && mask && ds4_gpu_dsv41_indexer_topk_radix(reference,g->index_scores,n,true) &&
+            ds4_gpu_tensor_read(reference,0,expected,sizeof(expected)) &&
+            ds4_gpu_tensor_read(g->selected_comp,0,actual,sizeof(actual)) &&
+            ds4_gpu_tensor_read(g->index_scores,0,values,(uint64_t)n*4u) &&
+            ds4_gpu_tensor_read(g->block_mask,0,mask,(uint64_t)blocks*4u);
+        if(ok) {
+            char file[2048];const void *ptrs[]={values,mask,actual,expected};
+            const size_t bytes[]={(size_t)n*4u,(size_t)blocks*4u,sizeof(actual),sizeof(expected)};
+            const char *names[]={"scores.f32","mask.f32","actual.i32","reference.i32"};
+            for(unsigned i=0;i<4 && ok;i++) {
+                snprintf(file,sizeof(file),"%s/%s",candidate_capture,names[i]);FILE *out=fopen(file,"wb");
+                if(!out)ok=false;else {ok=fwrite(ptrs[i],1,bytes[i],out)==bytes[i];if(fclose(out))ok=false;}
+            }
+            fprintf(stderr,"INDEX_CANDIDATE_CAPTURE n=%u match=%d status=%d\n",n,!memcmp(actual,expected,sizeof(actual)),ok);
+        }
+        if(reference)ds4_gpu_tensor_free(reference);free(values);free(mask);candidate_captured=true;
+    }
+
+#endif
     if (layer_resident && !metal_graph_stream_map_decode_static_all(m, w)) ok = false;
     if (g->tp_world == 2 && ds4_gpu_tp_failed()) ok = false;
     if (ok && logits) ok = chunks ?

@@ -183,7 +183,7 @@ def command(row, session, sequence, mode=3, prefill_max=MAX_PREFILL, model_sha25
         integer(row['bytes'], (264 if mode == 3 else 256) + 4 + 129280 * 4, (64 << 20) + (extent * 6404 if extent > MAX_DECODE else 0))
     return row
 
-def initial_request(session, headers, body):
+def initial_request(session, headers, body, model_sha256=None):
     # Authenticated SLVP carries exact native projected spans, including spans
     # beyond the first49152-token sweep. No sender-supplied filesystem paths.
     if isinstance(headers,dict) and any(k.lower()=='content-type' and v=='application/vnd.studio.dsv41.projected-v1' for k,v in headers.items()):
@@ -194,7 +194,7 @@ def initial_request(session, headers, body):
         try:tokens,images=unpack(body)
         except (ValueError,TypeError,struct.error) as exc:raise Refused(str(exc)) from exc
         h.update({'content-type':'application/vnd.studio.dsv41.tokens-le32','content-length':str(len(tokens))})
-        result=initial_request(session,h,tokens)
+        result=initial_request(session,h,tokens,model_sha256)
         result['vision']=images
         return result
     session_identity(session)
@@ -204,7 +204,8 @@ def initial_request(session, headers, body):
     require(type(headers) is dict and all((type(k) is str and type(v) is str for k, v in headers.items())), 'Invalid request headers')
     h = {k.lower(): v for k, v in headers.items()}
     require(len(h) == len(headers), 'Duplicate request header')
-    require(h.get('content-type') == 'application/vnd.studio.dsv41.tokens-le32' and h.get('x-dsv41-model-sha256') == MODEL_SHA256 and (h.get('x-dsv41-mode') == '3'), 'Native model/mode/media mismatch')
+    expected=MODEL_SHA256 if model_sha256 is None else hex_value(model_sha256,64)
+    require(h.get('content-type') == 'application/vnd.studio.dsv41.tokens-le32' and h.get('x-dsv41-model-sha256') == expected and (h.get('x-dsv41-mode') == '3'), 'Native model/mode/media mismatch')
     for key in ['content-length', 'x-dsv41-context', 'x-dsv41-tokens']:
         require(re.fullmatch('[1-9][0-9]{0,9}', h.get(key, '')) is not None, 'Invalid request length')
     require(int(h['x-dsv41-context']) == CONTEXT and int(h['x-dsv41-tokens']) * 4 == len(body) == int(h['content-length']), 'Native capacity/length mismatch')
@@ -212,7 +213,7 @@ def initial_request(session, headers, body):
     require(all((t[0] < 129280 for t in struct.iter_unpack('<I', body))), 'Token outside native vocabulary')
     tier = h.get('x-dsv41-tier')
     require(tier in ['accurate', 'fast', 'ultra', 'hyper'], 'Explicit qualified tier required')
-    result = dict(session=session, context=CONTEXT, tier=tier, tokens=body, tokens_sha256=h['x-dsv41-tokens-sha256'])
+    result = dict(session=session, context=CONTEXT, tier=tier, tokens=body, tokens_sha256=h['x-dsv41-tokens-sha256'],model_sha256=expected)
     keep=h.get('x-dsv41-yoco-keep','0');version=h.get('x-dsv41-yoco-state-version','0')
     require((keep,version) in (('0','0'),('140','1'),('2541','2')), 'YOCO state requires matching explicit keep/version')
     if keep!='0':result.update(yoco_keep=int(keep),yoco_state_version=int(version))

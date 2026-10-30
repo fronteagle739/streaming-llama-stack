@@ -26,6 +26,22 @@ STUDIO_NATIVE = ROOT.parent / 'front-eagle-stack/backend/studio/ds4_native.py'
 
 
 class RuntimeTests(unittest.TestCase):
+    def test_packed_fp4_extension_and_temp_paths_survive_scratch_retirement(self):
+        env=dict(BASE['env_overrides'], LLAMA_DSV41_FLASHINFER_NATIVE_FFN_DLL=str(FIXTURE/'scratch/bin/native.dll'),
+                 LLAMA_DSV41_STORED_MXFP4='1', LLAMADECODE_PREFILL_ROUTED='0',
+                 TEMP=str(FIXTURE/'scratch'), TMP=str(FIXTURE/'scratch'), TMPDIR=str(FIXTURE/'scratch'),
+                 CUDA_CACHE_PATH=str(FIXTURE/'scratch/cache'))
+        cfg=sr.single_config(dict(BASE,env_overrides=env),INSTALLED,'rev')
+        self.assertEqual(Path(cfg['env_overrides']['LLAMA_DSV41_FLASHINFER_NATIVE_FFN_DLL']),INSTALLED/'native.dll')
+        self.assertEqual(cfg['env_overrides']['LLAMA_DSV41_STORED_MXFP4'],'1')
+        self.assertEqual(cfg['env_overrides']['LLAMADECODE_PREFILL_ROUTED'],'0')
+        self.assertEqual(set(cfg['env_overrides']),set(env)|{'LLAMADECODE_DS4_DECODE'})
+        self.assertTrue(all(Path(cfg['env_overrides'][k])==INSTALLED/'runtime/temp' for k in ('TEMP','TMP','TMPDIR')))
+        self.assertEqual(sr.extension_files(dict(env_overrides=env)),
+                         {'LLAMA_DSV41_FLASHINFER_NATIVE_FFN_DLL':Path(env['LLAMA_DSV41_FLASHINFER_NATIVE_FFN_DLL'])})
+        with self.assertRaises(ValueError):sr.extension_files({'env_overrides':{'LLAMA_DSV41_FLASHINFER_NATIVE_FFN_DLL':''}})
+        with self.assertRaises(ValueError):sr.extension_files({'env_overrides':{'LLAMA_DSV41_DENSE_FP8_DLL':'wrong.exe'}})
+
     def test_runtime_floor_config_default_and_cli_override(self):
         from slstack.config import load
         from slstack.__main__ import main

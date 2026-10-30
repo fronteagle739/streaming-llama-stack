@@ -24,6 +24,28 @@ from .process import OwnedProcess
 from .progress import Window, activity, readiness_seconds
 
 
+def qualification_request(row):
+    """The unchanged eight-row gate, optionally at a real long prompt."""
+    if not isinstance(row, dict) or set(row) not in ({'mode'}, {'mode', 'messages'}) or row['mode'] not in ('native', 'paired'):
+        raise ValueError('Unknown qualification mode or fields')
+    messages = row.get('messages', [{'role': 'user', 'content': 'Repeat exactly READY, with no explanation.'}])
+    if not isinstance(messages, list) or not 0 < len(messages) <= 128 or any(
+            not isinstance(m, dict) or set(m) != {'role', 'content'} or
+            m['role'] not in ('system', 'user', 'assistant') or not isinstance(m['content'], str)
+            for m in messages):
+        raise ValueError('Qualification requires bounded text messages')
+    if sum(len(m['content'].encode('utf-8')) for m in messages) > 8 * 1024**2:
+        raise ValueError('Qualification prompt exceeds byte budget')
+    return dict(messages=messages, max_tokens=8, temperature=0, logprobs=True, top_logprobs=1,
+                prompt_cache_key='slstack-qualification-' + secrets.token_hex(16))
+
+
+def qualification_request_digest(body):
+    # Cache routing identities may differ; every semantic request field is bound.
+    semantic = {k: v for k, v in body.items() if k != 'prompt_cache_key'}
+    return hashlib.sha256(json.dumps(semantic, sort_keys=True, separators=(',', ':'), allow_nan=False).encode()).hexdigest()
+
+
 def budget(cfg, maximum=400):
     from .memory_counters import available_physical_bytes
     free = available_physical_bytes() / (1 << 30)
@@ -366,8 +388,9 @@ class Receiver:
             logprobs = response['choices'][0].get('logprobs') or {}
             self.qualification[qualification] = {'content': message.get('content'),
                                                 'reasoning_content': message.get('reasoning_content'),
-                                                'greedy_tokens': [x.get('token') for x in logprobs.get('content', [])]}
-            if not any(self.qualification[qualification].values()):
+                                                'greedy_tokens': [x.get('token') for x in logprobs.get('content', [])],
+                                                'request_sha256': qualification_request_digest(body)}
+            if not any(self.qualification[qualification][key] for key in ('content', 'reasoning_content', 'greedy_tokens')):
                 raise ValueError('No observed greedy decisions; parity cannot be established')
         return response
 
@@ -480,11 +503,7 @@ def serve(cfg, backend, build):
                     if self.path == '/pair':
                         result = receiver.pair(body, self.client_address[0])
                     elif self.path == '/pair/qualification':
-                        if body['mode'] not in ('native', 'paired'):
-                            raise ValueError('Unknown qualification mode')
-                        fixed = {'messages': [{'role': 'user', 'content': 'Repeat exactly READY, with no explanation.'}],
-                                 'max_tokens': 8, 'temperature': 0, 'logprobs': True, 'top_logprobs': 1,
-                                 'prompt_cache_key': 'slstack-qualification-' + secrets.token_hex(16)}
+                        fixed = qualification_request(body)
                         if receiver.peer and receiver.peer.get('cross_quant'):
                             fixed['logit_bias']={'42':100}
                         result = receiver.chat(fixed, qualification=body['mode'])

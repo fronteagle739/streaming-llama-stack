@@ -18,7 +18,7 @@ launcher=importlib.util.module_from_spec(spec);spec.loader.exec_module(launcher)
 class Launchers(unittest.TestCase):
     def test_paired_ultra_presets_default_exact_and_approximation_is_explicit(self):
         from argparse import Namespace
-        for name in ('dsv41-ultra','dsv41-ultra-yoco','dsv41-ultra-cone'):
+        for name in ('dsv41-ultra','dsv41-ultra-yoco','dsv41-ultra-cone','dsv41-ultra-cone-fp4'):
             args=Namespace(single=None,preset=name,machine='rtx',approximate_yoco=False)
             cfg,command=launcher.prepare(args,{'yoco_keep':140})
             self.assertEqual((command,cfg['yoco_keep']),('rtx',2541))

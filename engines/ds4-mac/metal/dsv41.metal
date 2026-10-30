@@ -3551,3 +3551,262 @@ kernel void kernel_dsv41_hc_round_expand4_static(
         *((device float *) (dst + d*4u + dst_hc*20480u + t*81920u)) = dsv41_bf16(acc);
     }
 }
+
+// Preserve the exact16-byte HC carry inside the same elementwise join.
+kernel void kernel_dsv41_hc_round_expand4_static_carry(
+        constant ds4_metal_args_dsv4_hc_expand & args,
+        device  const char * block_in,
+        device  const char * residual,
+        device  const char * post,
+        device  const char * comb,
+        device  const char * block_add,
+        device        char * block_out,
+        device        char * dst,
+        device uint *carry [[buffer(8)]],
+        device const uint *coefficients [[buffer(9)]],
+        uint gid [[thread_position_in_grid]]) {
+    if(gid<4u)carry[gid]=coefficients[gid];
+    if (4u != 4) {
+        return;
+    }
+
+    const int64_t n_elem = 5120u * 1u;
+    if ((int64_t) gid >= n_elem) {
+        return;
+    }
+
+    const int64_t d = ((int64_t) gid) % 5120u;
+    const int64_t t = ((int64_t) gid) / 5120u;
+
+    float block_v = *((device const float *) (block_in + d*4u + t*20480u));
+    if (args.has_add) {
+        block_v += *((device const float *) (block_add + d*4u + t*20480u));
+    }
+    block_v = dsv41_bf16(block_v);
+    *((device float *) (block_out + d*4u + t*20480u)) = block_v;
+
+    const float r0 = *((device const float *) (residual + d*4u + 0*20480u + t*81920u));
+    const float r1 = *((device const float *) (residual + d*4u + 1*20480u + t*81920u));
+    const float r2 = *((device const float *) (residual + d*4u + 2*20480u + t*81920u));
+    const float r3 = *((device const float *) (residual + d*4u + 3*20480u + t*81920u));
+
+    for (int64_t dst_hc = 0; dst_hc < 4; ++dst_hc) {
+        const float acc = dsv41_hc_expand_acc(
+            block_v,
+            *((device const float *) (post + dst_hc*4u + t*96u)),
+            *((device const float *) (comb + dst_hc*4u + 0*16u + t*96u)),
+            *((device const float *) (comb + dst_hc*4u + 1*16u + t*96u)),
+            *((device const float *) (comb + dst_hc*4u + 2*16u + t*96u)),
+            *((device const float *) (comb + dst_hc*4u + 3*16u + t*96u)),
+            r0, r1, r2, r3);
+
+        *((device float *) (dst + d*4u + dst_hc*20480u + t*81920u)) = dsv41_bf16(acc);
+    }
+}
+
+// Upstream exact independent weighted RMS norms in one dispatch.
+struct ds4_metal_args_dsv41_norm_pair { uint n0,n1,ntg0,ntg1;float eps; };
+kernel void kernel_dsv41_norm_pair(
+        constant ds4_metal_args_dsv41_norm_pair &args,
+        device const float4 *x0,
+        device const float4 *w0,
+        device float4 *y0,
+        device const float4 *x1,
+        device const float4 *w1,
+        device float4 *y1,
+        threadgroup float *shmem [[threadgroup(0)]],
+        uint2 tg [[threadgroup_position_in_grid]],
+        ushort2 tpos [[thread_position_in_threadgroup]],
+        ushort sgitg [[simdgroup_index_in_threadgroup]],
+        ushort tiisg [[thread_index_in_simdgroup]]) {
+    const ushort tid = tpos.x;
+    const bool second = tid >= args.ntg0;
+    const uint ntg = second ? args.ntg1 : args.ntg0;
+    const uint t = second ? tid - args.ntg0 : tid;
+    const uint sg = second ? sgitg - args.ntg0 / 32u : sgitg;
+    const int n = int(second ? args.n1 : args.n0);
+    const int ne00_t = n / 4;
+    const uint row = tg.y;   /* grid row = activation row */
+    device const float4 *x = (second ? x1 : x0) + (ulong)row * ne00_t;
+    device const float4 *w = second ? w1 : w0;
+    device float4 *y = (second ? y1 : y0) + (ulong)row * ne00_t;
+    threadgroup float *sh = shmem + (second ? 32u : 0u);
+    if (sg == 0) {
+        sh[tiisg] = 0.0f;
+    }
+    float sumf = 0.0f;
+    for (int i = int(t); i < ne00_t; i += int(ntg)) {
+        sumf += dot(x[i], x[i]);
+    }
+    sumf = simd_sum(sumf);
+    threadgroup_barrier(mem_flags::mem_threadgroup);
+    if (tiisg == 0) {
+        sh[sg] = sumf;
+    }
+    threadgroup_barrier(mem_flags::mem_threadgroup);
+    sumf = sh[tiisg];
+    sumf = simd_sum(sumf);
+    const float mean  = sumf/n;
+    const float scale = 1.0f/sqrt(mean + args.eps);
+    for (int i = int(t); i < ne00_t; i += int(ntg)) {
+        float4 v = x[i]*scale;
+        v = v*w[i];
+        y[i] = float4(dsv41_bf16(v.x),dsv41_bf16(v.y),dsv41_bf16(v.z),dsv41_bf16(v.w));
+    }
+}
+
+static inline void ds41_kv_prepare_group_normalized(
+        constant ds41_kv_prepare_norm_args &args,
+        constant ds4_metal_args_dsv41_rope &rope,
+        device const float4 *input,
+        device const float4 *weight,
+        device float *output,
+        device float *window,
+        uint tid,
+        uint3 threads,
+        ushort lane,
+        ushort sg, threadgroup float *partial, threadgroup float *values) {
+    // Both weighted norms have already been computed with their original
+    // per-row thread counts and BF16 stores. Preserve those exact words.
+    for(int i=tid;i<args.ne00_t;i+=threads.x) {
+        const float4 v=input[i];
+        values[i*4]=v.x;values[i*4+1]=v.y;values[i*4+2]=v.z;values[i*4+3]=v.w;
+    }
+    threadgroup_barrier(mem_flags::mem_threadgroup);
+    if (sg == 0) {
+        const float theta = float(rope.start) * rope.frequencies[lane];
+        const float c = precise::cos(theta);
+        const float s = precise::sin(theta);
+        const uint i = 448u + 2u*lane;
+        const float re = values[i], im = values[i+1];
+        values[i] = dsv41_bf16(re*c - im*s);
+        values[i+1] = dsv41_bf16(re*s + im*c);
+    }
+    threadgroup_barrier(mem_flags::mem_threadgroup);
+    for (uint block = sg; block < 16u; block += threads.x/32u) {
+        const uint i = block*32u + lane;
+        const float value = dsv41_bf16(values[i]);
+        const float amax = simd_max(abs(value));
+        const float qs = dsv41_pow2_ceil(max(amax, 1.0e-4f)*(1.0f/448.0f));
+        const float result = copysign(dsv4_e4m3fn_dequant(abs(value)/qs), value)*qs;
+        const float rounded = dsv41_bf16(result);
+        output[i] = rounded;
+        window[(rope.start % 128u)*512u+i] = rounded;
+    }
+}
+kernel void kernel_dsv41_query_hc_kv_pairnorm(
+        constant ds4_metal_args_hc_norm_mix &hc_args,
+        constant ds4_metal_args_mul_mv &mv_args,
+        constant ds4_metal_args_dsv41_hc_tail &tail_args,
+        device const char *residual, device const char *hc_weight,
+        device char *mix, device const float *scale, device const float *base,
+        device float *split, device atomic_uint *counter,
+        device const char *weight, device const char *up,
+        device const char *input, device char *output,
+        constant uint &shared_stream, constant float &clamp_value,
+        constant float &alpha,
+        constant ds41_kv_prepare_norm_args &kv_args [[buffer(17)]],
+        constant ds4_metal_args_dsv41_rope &rope_args [[buffer(18)]],
+        device const float4 *kv_input [[buffer(19)]],
+        device const float4 *kv_weight [[buffer(20)]],
+        device float *kv_output [[buffer(21)]],
+        device float *window [[buffer(22)]],
+        threadgroup char *shmem [[threadgroup(0)]],
+        threadgroup uint *elected [[threadgroup(1)]],
+        uint3 tgpig [[threadgroup_position_in_grid]],
+        ushort tid [[thread_index_in_threadgroup]],
+        ushort tiisg [[thread_index_in_simdgroup]],
+        ushort sgitg [[simdgroup_index_in_threadgroup]],
+        uint3 threads [[threads_per_threadgroup]]) {
+    if (tgpig.x == 4108u) {
+        ds41_kv_prepare_group_normalized(kv_args, rope_args, kv_input, kv_weight,
+            kv_output, window, tid, threads, tiisg, sgitg,
+            (threadgroup float *)shmem, (threadgroup float *)shmem+32u);
+        return;
+    }
+    if (tgpig.x >= 12u) {
+        // Eight independent output rows, one physical SIMD per row.
+        // The helper retains all four logical K accumulators and both trees.
+        const uint3 rows = uint3((tgpig.x-12u)*2u, 0, 0);
+        const float value=ds41_q8_virtual40_value(mv_args,weight,input,rows,tiisg,sgitg);
+        threadgroup float *pairs=(threadgroup float *)shmem;
+        if(tiisg==0)pairs[sgitg]=value;
+        threadgroup_barrier(mem_flags::mem_threadgroup);
+        if(tiisg==0 && (sgitg&1u)==0) {
+            const uint row=(tgpig.x-12u)*8u+sgitg,col=row%512u;
+            const float re=pairs[sgitg],im=pairs[sgitg+1u];
+            device float *q=(device float *)output;
+            if(col>=448u) {
+                const float theta=float(rope_args.start)*rope_args.frequencies[(col-448u)/2u];
+                const float c=precise::cos(theta),sn=precise::sin(theta);
+                q[row]=dsv41_bf16(fma(re,c,-(im*sn)));
+                q[row+1u]=dsv41_bf16(fma(im,c,re*sn));
+            } else { q[row]=re;q[row+1u]=im; }
+        }
+        return;
+    }
+    dsv41_arch_hc_mix(hc_args, residual, hc_weight, mix, shmem,
+                      tgpig, tiisg, sgitg);
+    threadgroup_barrier(mem_flags::mem_threadgroup);
+    threadgroup_barrier(mem_flags::mem_device);
+    atomic_thread_fence(mem_flags::mem_device, memory_order_seq_cst, thread_scope_device);
+    if (tid == 0) {
+        const uint ticket = atomic_fetch_add_explicit(counter, 1u, memory_order_relaxed);
+        elected[0] = ticket == 11u;
+    }
+    threadgroup_barrier(mem_flags::mem_threadgroup);
+    if (!elected[0]) return;
+    atomic_thread_fence(mem_flags::mem_device, memory_order_seq_cst, thread_scope_device);
+    if (tid == 0) {
+        float4 local4[6];
+        thread float *local = (thread float *)local4;
+        for (uint i = 0; i < 24u; ++i)
+            local[i] = as_type<float>(atomic_load_explicit(
+                (device atomic_uint *)mix + i, memory_order_relaxed));
+        dsv41_arch_sinkhorn(tail_args, local, scale, base, split);
+    }
+}
+
+kernel void kernel_dsv41_candidate_list(
+        constant uint &blocks,
+        device const float *mask,
+        device uint *list,
+        uint tid [[thread_index_in_threadgroup]],
+        uint lane [[thread_index_in_simdgroup]],
+        uint simd [[simdgroup_index_in_threadgroup]]) {
+    for(uint i=tid;i<2048u;i+=1024u)list[i]=0;
+    threadgroup_barrier(mem_flags::mem_device);
+    threadgroup uint part[33];
+    uint base = 0u;
+    for (uint b0 = 0u; b0 < blocks; b0 += 4096u) {
+        const uint b = b0 + tid * 4u;
+        bool keep[4];
+        uint count = 0u;
+        for (uint j = 0u; j < 4u; j++) {
+            keep[j] = b + j < blocks && mask[b + j] == 0.0f;
+            count += keep[j] ? 1u : 0u;
+        }
+        const uint before = simd_prefix_exclusive_sum(count);
+        if (lane == 31u) part[simd] = before + count;
+        threadgroup_barrier(mem_flags::mem_threadgroup);
+        if (simd == 0u) {
+            const uint c = part[lane], c_before = simd_prefix_exclusive_sum(c);
+            part[lane] = c_before;
+            if (lane == 31u) part[32] = c_before + c;
+        }
+        threadgroup_barrier(mem_flags::mem_threadgroup);
+        uint at = base + part[simd] + before;
+        for (uint j = 0u; j < 4u; j++) {
+            if (keep[j] && at < 2048u) list[at] = b + j;
+            at += keep[j] ? 1u : 0u;
+        }
+        base += part[32];
+        threadgroup_barrier(mem_flags::mem_threadgroup);
+    }
+    threadgroup_barrier(mem_flags::mem_device);
+    if(tid==0) {
+        list[2048]=base;
+        list[2049]=base==2048u && list[2047]==blocks-1u;
+        if(!list[2049])atomic_fetch_or_explicit((device atomic_uint *)(list+2050),1u,memory_order_relaxed);
+    }
+}
