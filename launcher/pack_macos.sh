@@ -23,7 +23,7 @@ while [ $# -gt 0 ]; do
   esac
 done
 case "$mode" in single) name="DSV41 Single" ;; dual) name="DSV41 Dual" ;; *) echo "mode must be single or dual" >&2; exit 2 ;; esac
-[ -n "$python" ] || python=$(command -v python3.12 || true)
+[ -n "$python" ] || python=$(command -v python3.12 || ls /opt/homebrew/bin/python3.12 /usr/local/bin/python3.12 2>/dev/null | head -n 1 || true)
 [ -x "$python" ] || { echo "Python 3.12 not found; pass --python" >&2; exit 1; }
 mkdir -p "$out"
 out=$(cd "$out" && pwd)
