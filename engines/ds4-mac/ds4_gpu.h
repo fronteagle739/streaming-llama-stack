@@ -152,6 +152,17 @@ int ds4_gpu_dsv41_candidate_filter(ds4_gpu_tensor *scores,
                                   uint32_t start, uint32_t ratio);
 /* Causal index scores over ratio-1/2 compressed keys, without an extra cast
  * of the already quantized FP4 queries/keys. Scores have source_rows stride. */
+int ds4_gpu_dsv41_index_keys_bf16(ds4_gpu_tensor *view,const ds4_gpu_tensor *cache,
+    uint32_t first,uint32_t rows,ds4_gpu_tensor *flag);
+int ds4_gpu_dsv41_indexer_scores_rows_bf16(ds4_gpu_tensor *scores,const ds4_gpu_tensor *q,
+    const ds4_gpu_tensor *weights,const ds4_gpu_tensor *view,const ds4_gpu_tensor *mask,
+    uint32_t mask_stride,uint32_t mask_first,uint32_t source_rows,uint32_t rows,uint32_t start,uint32_t ratio);
+int ds4_gpu_attention_output_low_q8_rows_exact_tensor(ds4_gpu_tensor *low,const void *map,
+    uint64_t model_size,uint64_t offset,uint64_t group_dim,uint64_t rank,uint32_t groups,
+    uint32_t group0,uint32_t group_count,const ds4_gpu_tensor *heads,uint32_t rows);
+int ds4_gpu_dsv41_projection_hc_rows(ds4_gpu_tensor *hc,ds4_gpu_tensor *block,ds4_gpu_tensor *projection,
+    const ds4_gpu_tensor *input,const ds4_gpu_tensor *add,const ds4_gpu_tensor *residual,
+    const ds4_gpu_tensor *split,const void *map,uint64_t size,uint64_t offset,uint32_t K,uint32_t N,uint32_t rows);
 int ds4_gpu_dsv41_indexer_scores_batch(ds4_gpu_tensor *scores,
                                      const ds4_gpu_tensor *q,
                                      const ds4_gpu_tensor *weights,

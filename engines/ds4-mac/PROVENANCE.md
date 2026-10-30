@@ -47,3 +47,12 @@ index-query table RoPE/quantization (`b1ba3164`), the shared-down/HC/carry join
 and Q8 row weight reuse (`7924b68a`). Optional DSpark Q8 matrix rows
 (`f8e36424`) preserve the upstream changed reduction order, bounded to DSpark
 steps with failure-safe scope restoration; original row reductions remain.
+
+Later verification ports adapt indexed batch attention and small-row scoring
+(`74d56235`), exact derived BF16 index-key views (`18439adb`), and attention
+low/output weight reuse with projection/HC and shared-down/HC row joins
+(`fbbe5c10`). Derived views are budgeted, rebuilt after native import and
+checked for exact representability; original F32 keys remain authoritative.
+Every low, projection, shared, block and carry output is retained. The new
+`verify_batch_core=2` and `verify_output=1/2` schedules are optional; historical
+values and all quality, streaming, TP, sampler and native-state paths remain.
