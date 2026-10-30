@@ -26,7 +26,7 @@ $OutDir = (Resolve-Path -LiteralPath $OutDir).Path
 $stage = Join-Path $here "dist\stage-$Mode"   # overwritten on every pack
 New-Item -ItemType Directory -Force -Path $stage | Out-Null
 
-$bakeArgs = @('-B', (Join-Path $here 'runtime\bake.py'), '--mode', $Mode, '--side', 'rtx', '--python', $Python,
+$bakeArgs = @('-B', (Join-Path $here 'app\bake.py'), '--mode', $Mode, '--side', 'rtx', '--python', $Python,
               '--out', (Join-Path $stage 'launcher.json'))
 if ($StackRoot) { $bakeArgs += @('--stack-root', $StackRoot) }
 & $Python @bakeArgs
@@ -35,7 +35,7 @@ Copy-Item -LiteralPath (Join-Path $here 'app\dsv41_launcher.py') -Destination (J
 [System.IO.File]::WriteAllText((Join-Path $stage 'python.txt'), $Python, (New-Object System.Text.UTF8Encoding $false))
 
 $exe = Join-Path $OutDir "$name.exe"
-$icon = Join-Path $here "icons\build\$Mode.ico"
+$icon = Join-Path $here "icons\built\$Mode.ico"
 $cscArgs = @('/nologo', '/target:exe', '/optimize+', "/out:$exe", "/win32icon:$icon",
              "/resource:$(Join-Path $stage 'dsv41_launcher.py'),dsv41_launcher.py",
              "/resource:$(Join-Path $stage 'launcher.json'),launcher.json",
