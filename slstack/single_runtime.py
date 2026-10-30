@@ -122,6 +122,9 @@ def receipt_config(cfg):
     result = {'model': cfg.get('model'), 'runtime_root': str(Path(cfg['runtime_root']).resolve() / 'single-engine')}
     if cfg.get('model_receipt'):result['model_receipt'] = str(path(cfg['model_receipt']))
     if cfg.get('model_sha256'):result['model_sha256'] = cfg['model_sha256']
+    # The packed FP4 layout check (native_broker.check_packed_layout) reads these.
+    for key in ('env_overrides', 'native_fp4_prefill_only'):
+        if key in cfg:result[key] = cfg[key]
     return result
 
 

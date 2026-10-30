@@ -21,3 +21,6 @@ engines/streaming-llama/prefill_llama.cpp/tools/server/webui/**/*.md text eol=lf
 engines/streaming-llama/prefill_llama.cpp/tools/server/public/loading.html text eol=lf
 
 examples/kernels2/** -text whitespace=blank-at-eol,blank-at-eof,space-before-tab,cr-at-eol
+# Calibration files bind exact bytes.
+presets/*affinity-spreads.txt -text
+launcher/**/*.sh text eol=lf

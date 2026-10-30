@@ -1,0 +1,57 @@
+{
+  "pair_token": "SET_SHARED_PAIRING_TOKEN",
+  "mac_link": "SET_MAC_LINK_ADDRESS",
+  "rtx_link": "SET_RTX_LINK_ADDRESS",
+  "rtx": {
+    "title": "DSV4.1 Dual (RTX prefill)",
+    "preset": "dsv41-ultra-cone-fp4",
+    "runtime_root": "SET_LAUNCHER_RUNTIME_DIR",
+    "ui_url": "http://127.0.0.1:8088",
+    "studio_url": "http://127.0.0.1:8765",
+    "gpu_busy_mib": 3072,
+    "ports": [
+      "{rtx_link}:8090"
+    ],
+    "stack": {
+      "model": "SET_RTX_PACKED_FP4_GGUF_PATH",
+      "gpu_uuid": "SET_GPU_UUID",
+      "gpu_idle_max_mib": 4096,
+      "mac": "http://{mac_link}:8180",
+      "env_overrides": {
+        "LLAMA_DSV41_FLASHINFER_NATIVE_FFN_DLL": "SET_RTX_NATIVE_FFN_DLL_PATH"
+      }
+    }
+  },
+  "mac": {
+    "title": "DSV4.1 Dual (Mac decode)",
+    "preset": "dsv41-ultra-cone-fp4",
+    "runtime_root": "SET_LAUNCHER_RUNTIME_DIR",
+    "ui_url": "http://127.0.0.1:8088",
+    "studio_url": "http://127.0.0.1:8765",
+    "engine_url": "http://{mac_link}:8180",
+    "rtx_broker": "{rtx_link}:8090",
+    "ports": [
+      "{mac_link}:8180",
+      "127.0.0.1:8181"
+    ],
+    "stack": {
+      "model": "SET_MAC_GGUF_PATH",
+      "mtp_model": "SET_MAC_DSPARK_GGUF_PATH",
+      "vision_encoder": "SET_MAC_VISION_GGUF_PATH",
+      "mac_bind": "{mac_link}"
+    },
+    "ui": {
+      "host": "127.0.0.1",
+      "port": 8088,
+      "webui": true,
+      "general": {
+        "mode": "remote",
+        "endpoint": "http://{mac_link}:8180",
+        "mac": {
+          "backend": "ds4",
+          "ctx": 1000001
+        }
+      }
+    }
+  }
+}

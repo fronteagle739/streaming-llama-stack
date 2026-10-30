@@ -1,0 +1,38 @@
+<svg xmlns="http://www.w3.org/2000/svg" width="1024" height="1024" viewBox="0 0 256 256">
+  <!-- DSV4.1 dual-machine launcher: two robots riding a stylised river. Drawn for this repo. -->
+  <defs>
+    <linearGradient id="sky" x1="0" y1="0" x2="0" y2="1">
+      <stop offset="0" stop-color="#173a66"/>
+      <stop offset="1" stop-color="#0b1f3a"/>
+    </linearGradient>
+    <clipPath id="tile"><rect x="8" y="8" width="240" height="240" rx="52"/></clipPath>
+  </defs>
+  <g clip-path="url(#tile)">
+  <rect x="8" y="8" width="240" height="240" rx="52" fill="url(#sky)"/>
+  <!-- river: one broad band flowing from top-left to bottom-right -->
+  <path d="M8 120 C56 104 92 150 140 140 S214 150 248 176 L248 248 L8 248 Z" fill="#1f9fe0"/>
+  <path d="M8 156 C56 138 96 186 146 174 S214 186 248 208 L248 248 L8 248 Z" fill="#46c3f2"/>
+  <path d="M26 200 C66 182 100 218 146 204 S206 204 230 220" fill="none" stroke="#c8f1ff"
+        stroke-width="9" stroke-linecap="round"/>
+  <!-- upstream robot (left, higher) -->
+  <path d="M22 128 L104 128 L95 142 L31 142 Z" fill="#ff8a3d" stroke="#0b1f3a" stroke-width="5"
+        stroke-linejoin="round"/>
+  <line x1="63" y1="52" x2="63" y2="38" stroke="#e8edf5" stroke-width="6" stroke-linecap="round"/>
+  <circle cx="63" cy="34" r="8" fill="#ff8a3d" stroke="#0b1f3a" stroke-width="3.5"/>
+  <rect x="36" y="50" width="54" height="44" rx="12" fill="#f4f7fb" stroke="#0b1f3a" stroke-width="5"/>
+  <circle cx="52" cy="72" r="7" fill="#1f9fe0"/>
+  <circle cx="74" cy="72" r="7" fill="#1f9fe0"/>
+  <rect x="44" y="94" width="38" height="34" rx="8" fill="#dfe6f0" stroke="#0b1f3a" stroke-width="5"/>
+  <rect x="55" y="103" width="16" height="11" rx="3" fill="#ff8a3d"/>
+  <!-- downstream robot (right, lower) -->
+  <path d="M146 164 L232 164 L222 179 L156 179 Z" fill="#ff8a3d" stroke="#0b1f3a" stroke-width="5"
+        stroke-linejoin="round"/>
+  <line x1="189" y1="86" x2="189" y2="72" stroke="#e8edf5" stroke-width="6" stroke-linecap="round"/>
+  <circle cx="189" cy="68" r="8" fill="#ff8a3d" stroke="#0b1f3a" stroke-width="3.5"/>
+  <rect x="162" y="84" width="54" height="44" rx="12" fill="#f4f7fb" stroke="#0b1f3a" stroke-width="5"/>
+  <circle cx="178" cy="106" r="7" fill="#1f9fe0"/>
+  <circle cx="200" cy="106" r="7" fill="#1f9fe0"/>
+  <rect x="170" y="128" width="38" height="36" rx="8" fill="#dfe6f0" stroke="#0b1f3a" stroke-width="5"/>
+  <rect x="181" y="138" width="16" height="11" rx="3" fill="#ff8a3d"/>
+  </g>
+</svg>
