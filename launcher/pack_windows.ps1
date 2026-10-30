@@ -31,7 +31,7 @@ $bakeArgs = @('-B', (Join-Path $here 'runtime\bake.py'), '--mode', $Mode, '--sid
 if ($StackRoot) { $bakeArgs += @('--stack-root', $StackRoot) }
 & $Python @bakeArgs
 if ($LASTEXITCODE -ne 0) { throw "Config bake failed ($LASTEXITCODE)" }
-Copy-Item -LiteralPath (Join-Path $here 'runtime\dsv41_launcher.py') -Destination (Join-Path $stage 'dsv41_launcher.py') -Force
+Copy-Item -LiteralPath (Join-Path $here 'app\dsv41_launcher.py') -Destination (Join-Path $stage 'dsv41_launcher.py') -Force
 [System.IO.File]::WriteAllText((Join-Path $stage 'python.txt'), $Python, (New-Object System.Text.UTF8Encoding $false))
 
 $exe = Join-Path $OutDir "$name.exe"
@@ -40,7 +40,7 @@ $cscArgs = @('/nologo', '/target:exe', '/optimize+', "/out:$exe", "/win32icon:$i
              "/resource:$(Join-Path $stage 'dsv41_launcher.py'),dsv41_launcher.py",
              "/resource:$(Join-Path $stage 'launcher.json'),launcher.json",
              "/resource:$(Join-Path $stage 'python.txt'),python.txt",
-             (Join-Path $here 'runtime\LauncherStub.cs'))
+             (Join-Path $here 'app\LauncherStub.cs'))
 & $csc @cscArgs
 if ($LASTEXITCODE -ne 0) { throw "csc failed ($LASTEXITCODE)" }
 "Built $exe"

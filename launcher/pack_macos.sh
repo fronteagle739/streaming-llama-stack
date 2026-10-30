@@ -33,9 +33,9 @@ res="$app/Contents/Resources"
 
 set -- --mode "$mode" --side mac --python "$python" --out "$res/launcher.json"
 [ -z "$stack" ] || set -- "$@" --stack-root "$stack"
-"$python" -B "$here/runtime/bake.py" "$@"
-cp "$here/runtime/dsv41_launcher.py" "$res/dsv41_launcher.py"
-cp "$here/icons/build/$mode.icns" "$res/AppIcon.icns"
+"$python" -B "$here/app/bake.py" "$@"
+cp "$here/app/dsv41_launcher.py" "$res/dsv41_launcher.py"
+cp "$here/icons/built/$mode.icns" "$res/AppIcon.icns"
 cat > "$res/run.command" <<EOF
 #!/bin/sh
 # Status console for $name (opened in Terminal by the app).
