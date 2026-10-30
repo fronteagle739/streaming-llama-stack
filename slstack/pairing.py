@@ -45,13 +45,26 @@ def conversation_key(body):
                                                 separators=(',', ':')).encode()).hexdigest()[:48]
 
 
-def producer_revision():
-    """Use the actual CMake build identity, refusing source edits since that build."""
+def producer_revision(cfg=None):
+    """Use the actual CMake build identity, refusing source edits since that build.
+
+    An installed producer outside this checkout's build tree (``llama_producer`` set to
+    another path) has no CMake build here; its recorded ``producer_source_revision`` is the
+    identity instead, under the same check that this checkout's producer source matches it.
+    """
+    cfg = cfg or {}
     info = ROOT / 'build/llama/common/build-info.cpp'
-    match = re.search(r'LLAMA_COMMIT\s*=\s*"([0-9a-f]{7,40})"', info.read_text())
-    if not match:
-        raise ValueError('Producer build identity missing; run install --all')
-    revision = subprocess.check_output(['git', 'rev-parse', '--verify', match[1] + '^{commit}'],
+    producer = path(cfg['llama_producer']) if cfg.get('llama_producer') else None
+    installed = producer is not None and not producer.resolve().is_relative_to((ROOT / 'build').resolve())
+    if installed and cfg.get('producer_source_revision'):
+        commit = str(cfg['producer_source_revision'])
+    else:
+        match = re.search(r'LLAMA_COMMIT\s*=\s*"([0-9a-f]{7,40})"', info.read_text()) if info.is_file() else None
+        if not match:
+            raise ValueError('Producer build identity missing; run install --all (or set producer_source_revision '
+                             'for an installed llama_producer)')
+        commit = match[1]
+    revision = subprocess.check_output(['git', 'rev-parse', '--verify', commit + '^{commit}'],
                                        cwd=ROOT, text=True, timeout=10).strip()
     result = subprocess.run(['git', 'diff', '--quiet', revision, '--', 'engines/streaming-llama',
                              ':(exclude)engines/streaming-llama/prefill_llama.cpp/tools/server/public'],
@@ -106,7 +119,7 @@ class Pair:
         if not producer.is_file():
             raise ValueError('Build the streaming producer with install --all before pairing')
         pin = sha256(producer)
-        revision = producer_revision()
+        revision = producer_revision(self.cfg)
         deadline = time.monotonic() + self.cfg.get('pair_wait_seconds', 7200)
         while True:
             try:
