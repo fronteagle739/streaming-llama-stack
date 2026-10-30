@@ -1,0 +1,28 @@
+{
+  "rates": [
+    {
+      "workload": "prose8k",
+      "upstream": 39.1842,
+      "ours": 39.0665,
+      "percent": -0.30037617202851585,
+      "binary_sha256": "e3efa4455f7429c56645e278ed7b485fbf2d155bd1a732aa4cdff05b3969ad6f"
+    },
+    {
+      "workload": "prose131k",
+      "upstream": 37.7922,
+      "ours": 37.8919,
+      "percent": 0.2638110509576075,
+      "binary_sha256": "e3efa4455f7429c56645e278ed7b485fbf2d155bd1a732aa4cdff05b3969ad6f"
+    },
+    {
+      "workload": "code8k",
+      "upstream": 52.3186,
+      "ours": 52.6538,
+      "percent": 0.6406899267182187,
+      "binary_sha256": "ac55f925806fd67507d0de01f088b5d59ecb5fa8184c477c59e0c3a2d30249ae"
+    }
+  ],
+  "exact_proofs": 3,
+  "dspark_frames": 3,
+  "control_revision": "f48c5e2e20b1aaae1c79735a8457225d2469ae73"
+}

@@ -188,14 +188,18 @@ static void print_model_runtime(FILE *fp, const help_colors *c,
             opt(fp, c, "--mtp-margin F", "Verifier confidence margin for fast MTP acceptance. Default: 3");
             opt(fp, c, "--mtp-timing", "Enable embedded MTP and print acceptance/timing counters.");
             opt(fp, c, "--dspark", "Enable DSpark using the support GGUF passed with --mtp-model.");
-            opt(fp, c, "--dspark-confidence F", "Enable DSpark with confidence pruning threshold 0..1. Greedy/opportunistic default: Metal 0.6, CUDA/ROCm 0.7; exact sampling: 0.8");
+            opt(fp, c, "--dspark-confidence F", "Enable DSpark with confidence pruning threshold 0..1. Greedy/opportunistic default: resident Spark Q2 0.4, two-Spark Flash Q2/MXFP4 0, Metal 0.6, other CUDA/ROCm 0.7; exact sampling: 0.8");
             opt(fp, c, "--mtp-exact-sampling", "Preserve the ordinary temperature distribution instead of accepting target-matching greedy drafts directly.");
             opt(fp, c, "--dspark-strict", "Load DSpark support but keep target-only decode.");
         } else if (tool == DS4_HELP_BENCH) {
             opt(fp, c, "--dspark", "Benchmark greedy DSpark using the support GGUF passed with --mtp-model.");
             opt(fp, c, "--dspark-confidence F", "DSpark confidence pruning threshold 0..1.");
         }
+        opt(fp, c, "--v41-sidecar FILE", "DeepSeek V4.1 on Metal: an optional router BF16, Engram FP8 or indexer FP8 sidecar GGUF (one per family, repeat for each). Default: none; the narrow decode copies are built at load.");
         opt(fp, c, "--quality", "Prefer exact kernels where faster approximate paths exist.");
+        if (tool == DS4_HELP_DS4 || tool == DS4_HELP_SERVER) {
+            opt(fp, c, "--exact", "DeepSeek V4.1 on Metal: output bit-identical to main's serial decode; turns off the speed groups that are not, and DSpark drafting (same as DS4_V41_EXACT=1). Default: off");
+        }
         opt(fp, c, "--warm-weights", "Touch resident weights at startup to reduce first-use stalls.");
         if (tool == DS4_HELP_DS4 || tool == DS4_HELP_BENCH) {
             opt(fp, c, "--expert-profile FILE", "Metal-only: write routed expert locality/cache simulation JSON.");
@@ -350,6 +354,8 @@ static void print_server_api(FILE *fp, const help_colors *c) {
     opt(fp, c, "--trace FILE", "Write prompts, cache decisions, output, and tool calls.");
     opt(fp, c, "--batched-session N", "Keep N resident sessions and batch decode-ready requests.");
     opt(fp, c, "--mixed-prefill-quantum N", "Prefill chunk while generations are active. Default: 128; GLM-5.3 minimum: 1024");
+    opt(fp, c, "--utility-ctx N", "Side session of N tokens for \"ds4_utility\":true requests; no thinking, DSpark/MTP, or disk KV. Not with --batched-session. Default: 0 (off)");
+    opt(fp, c, "--serial-reasoning", "DeepSeek V4.1: decode reasoning serially and draft (DSpark/MTP) only answers and tool calls. Default: off");
     para(fp, c, "Endpoints: /v1/chat/completions, /v1/responses, /v1/completions, and /v1/messages.");
     para(fp, c, "Model endpoint aliases include deepseek-v4-flash and deepseek-v4-pro; both serve the loaded GGUF.");
     fputc('\n', fp);
@@ -358,6 +364,8 @@ static void print_server_api(FILE *fp, const help_colors *c) {
 static void print_server_thinking(FILE *fp, const help_colors *c) {
     title(fp, c, "Server Thinking Defaults");
     para(fp, c, "DeepSeek-compatible chat requests default to high-effort thinking.");
+    opt(fp, c, "--default-reasoning-effort E", "Effort of a thinking request that names none: low, medium, high or max. Default: high");
+    opt(fp, c, "--default-top-p F, --default-min-p F", "Server sampler defaults for requests that set none. Defaults: 1, 0.05");
     para(fp, c, "reasoning_effort=max or output_config.effort=max requests Think Max.");
     para(fp, c, "Think Max requires --ctx >= 393216; smaller contexts use high.");
     para(fp, c, "thinking={type:disabled}, think=false, or model=deepseek-chat selects non-thinking mode.");
@@ -394,6 +402,12 @@ static void print_bench_specific(FILE *fp, const help_colors *c) {
     opt(fp, c, "--step-incr N", "Linear step when --step-mul is 1. Default: 2048");
     opt(fp, c, "--gen-tokens N", "Greedy decode tokens per frontier. 0 for pure prefill. Default: 128");
     opt(fp, c, "--teacher-forced-decode", "Decode the following prompt tokens instead of each predicted argmax.");
+    opt(fp, c, "--temp F", "Sample with temperature F (with --top-p/--top-k/--min-p/--seed); EOS ends a run.");
+    opt(fp, c, "--top-p F, --top-k N, --min-p F", "Sampler settings with --temp. Defaults: 1, 0, 0");
+    opt(fp, c, "--seed N", "Sampler RNG seed, reset at each frontier. Default: 1");
+    opt(fp, c, "--token-csv PATH", "Per-token timings; per-frontier rows with prefix and logit digests go to PATH.runs.csv"
+                                   " (with --jobs: per-job rows and counters to PATH.jobs.csv).");
+    opt(fp, c, "--jobs FILE", "Resident job runner: save/load/run/quit lines (see ds4_bench.c); needs --token-csv.");
     opt(fp, c, "--csv FILE", "Write CSV there instead of stdout.");
     opt(fp, c, "--dump-frontier-logits-dir DIR", "Write one full-logit JSON file per frontier.");
     fputc('\n', fp);
@@ -487,7 +501,7 @@ static void print_more_info(FILE *fp, const help_colors *c, ds4_help_tool tool) 
 static void print_examples(FILE *fp, const help_colors *c, ds4_help_tool tool, const char *topic) {
     title(fp, c, "Examples");
     if (topic_is(topic, "distributed")) {
-        opt(fp, c, "worker", "./ds4 --role worker --layers 21:output --coordinator <peer-ip> 9000 -m ds4flash.gguf");
+        opt(fp, c, "worker", "./ds4 --role worker --layers 21:output --coordinator COORDINATOR_IP 9000 -m ds4flash.gguf");
         opt(fp, c, "coordinator", "./ds4 --role coordinator --layers 0:20 --listen 0.0.0.0 9000 -p \"Hello\" -m ds4flash.gguf");
     } else if (topic_is(topic, "runtime")) {
         if (tool == DS4_HELP_SERVER) {

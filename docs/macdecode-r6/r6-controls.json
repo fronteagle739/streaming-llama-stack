@@ -1,0 +1,605 @@
+{
+  "decision": "ROUND 6 DECISION in MACDECODE_sol.md",
+  "controls": [
+    {
+      "name": "decode_chunks",
+      "env": "DS4_DS41_DECODE_CHUNKS",
+      "status": "upstream_adapter"
+    },
+    {
+      "name": "decode_queue2",
+      "env": "DS4_DS41_DECODE_QUEUE2",
+      "status": "upstream_adapter"
+    },
+    {
+      "name": "narrow_weights",
+      "env": "DS4_DS41_NARROW_WEIGHTS",
+      "status": "retired_round6"
+    },
+    {
+      "name": "mxfp4_fixed_shapes",
+      "env": "DS4_DS41_MXFP4_FIXED_SHAPES",
+      "status": "upstream_adapter"
+    },
+    {
+      "name": "queue_layers",
+      "env": "DS4_DS41_QUEUE_LAYERS",
+      "status": "upstream_adapter"
+    },
+    {
+      "name": "engram_async",
+      "env": "DS4_DS41_ENGRAM_ASYNC",
+      "status": "retired_round6"
+    },
+    {
+      "name": "round_fuse_norm",
+      "env": "DS4_METAL_DISABLE_V41_ROUND_FUSE_NORM",
+      "status": "retired_round6"
+    },
+    {
+      "name": "round_fuse_hcsum",
+      "env": "DS4_METAL_DISABLE_V41_ROUND_FUSE_HCSUM",
+      "status": "retired_round6"
+    },
+    {
+      "name": "round_fuse_hcexpand",
+      "env": "DS4_METAL_DISABLE_V41_ROUND_FUSE_HCEXPAND",
+      "status": "retired_round6"
+    },
+    {
+      "name": "q4_grouped",
+      "env": "DS4_METAL_ENABLE_Q4_GROUPED_EXPERTS",
+      "status": "upstream_adapter"
+    },
+    {
+      "name": "q4_group6",
+      "env": "DS4_METAL_DISABLE_Q4_GROUP6_EXPERT_TABLE",
+      "status": "upstream_adapter"
+    },
+    {
+      "name": "q4_group8",
+      "env": "DS4_METAL_ENABLE_Q4_GROUP8_EXPERT_TABLE",
+      "status": "upstream_adapter"
+    },
+    {
+      "name": "q4_group24",
+      "env": "DS4_METAL_ENABLE_Q4_GROUP24_EXPERT_TABLE",
+      "status": "upstream_adapter"
+    },
+    {
+      "name": "q4_wide",
+      "env": "DS4_DS41_Q4_WIDE",
+      "status": "retired_round6"
+    },
+    {
+      "name": "q4_gu_nr1",
+      "env": "DS4_DS41_Q4_GU_NR1",
+      "status": "retired_round6"
+    },
+    {
+      "name": "router_fused",
+      "env": "DS4_DS41_ROUTER_FUSED",
+      "status": "retired_round6"
+    },
+    {
+      "name": "router_fused_w",
+      "env": "DS4_DS41_ROUTER_FUSED_W",
+      "status": "retired_round6"
+    },
+    {
+      "name": "shared_swiglu",
+      "env": "DS4_DS41_SHARED_SWIGLU",
+      "status": "retired_round6"
+    },
+    {
+      "name": "hc_norm_mix",
+      "env": "DS4_DS41_HC_NORM_MIX",
+      "status": "retired_round6"
+    },
+    {
+      "name": "mtp_down_tail_pack",
+      "env": "DS4_DS41_MTP_DOWN_TAIL_PACK",
+      "status": "retired_round6"
+    },
+    {
+      "name": "mtp_hc_epilogue",
+      "env": "DS4_DS41_MTP_HC_EPILOGUE",
+      "status": "retired_round6"
+    },
+    {
+      "name": "down_tail_pack",
+      "env": "DS4_DS41_DOWN_TAIL_PACK",
+      "status": "retired_round6"
+    },
+    {
+      "name": "router_shared_hc",
+      "env": "DS4_DS41_ROUTER_SHARED_HC",
+      "status": "retired_round6"
+    },
+    {
+      "name": "q8_virtual_down",
+      "env": "DS4_DS41_Q8_VIRTUAL_DOWN",
+      "status": "retired_round6"
+    },
+    {
+      "name": "concurrent_down",
+      "env": "DS4_DS41_CONCURRENT_DOWN",
+      "status": "retired_round6"
+    },
+    {
+      "name": "attn_low_static",
+      "env": "DS4_DS41_ATTN_LOW_STATIC",
+      "status": "retired_round6"
+    },
+    {
+      "name": "verify_mxfp4",
+      "env": "DS4_DS41_VERIFY_MXFP4",
+      "status": "retired_round6"
+    },
+    {
+      "name": "mxfp4_dedup",
+      "env": "DS4_DS41_MXFP4_DEDUP",
+      "status": "upstream_adapter"
+    },
+    {
+      "name": "concurrent_ffn",
+      "env": "DS4_DS41_CONCURRENT_FFN",
+      "status": "retired_round6"
+    },
+    {
+      "name": "engram_lookup",
+      "env": "DS4_DS41_ENGRAM_LOOKUP",
+      "status": "retired_round6"
+    },
+    {
+      "name": "verify_output",
+      "env": "DS4_DS41_VERIFY_OUTPUT",
+      "status": "retired_round6"
+    },
+    {
+      "name": "rows_mma",
+      "env": "DS4_DS41_ROWS_MMA",
+      "status": "upstream_adapter"
+    },
+    {
+      "name": "row_matmuls",
+      "env": "DS4_DS41_ROW_MATMULS",
+      "status": "upstream_adapter"
+    },
+    {
+      "name": "engram_gate",
+      "env": "DS4_DS41_ENGRAM_GATE",
+      "status": "retired_round6"
+    },
+    {
+      "name": "shared_down_hc",
+      "env": "DS4_DS41_SHARED_DOWN_HC",
+      "status": "retired_round6"
+    },
+    {
+      "name": "fixed_dense",
+      "env": "DS4_DS41_FIXED_DENSE",
+      "status": "retired_round6"
+    },
+    {
+      "name": "query_norm_pair",
+      "env": "DS4_DS41_QUERY_NORM_PAIR",
+      "status": "retired_round6"
+    },
+    {
+      "name": "query_rope",
+      "env": "DS4_DS41_QUERY_ROPE",
+      "status": "retired_round6"
+    },
+    {
+      "name": "heads_rope",
+      "env": "DS4_DS41_HEADS_ROPE",
+      "status": "retired_round6"
+    },
+    {
+      "name": "preencode",
+      "env": "DS4_DS41_PREENCODE",
+      "status": "upstream_adapter"
+    },
+    {
+      "name": "engram_persistent",
+      "env": "DS4_DS41_ENGRAM_PERSISTENT",
+      "status": "retired_round6"
+    },
+    {
+      "name": "q8_virtual_query",
+      "env": "DS4_DS41_Q8_VIRTUAL_QUERY",
+      "status": "retired_round6"
+    },
+    {
+      "name": "kv_prepare",
+      "env": "DS4_DS41_KV_PREPARE",
+      "status": "retired_round6"
+    },
+    {
+      "name": "kv_query_mix",
+      "env": "DS4_DS41_KV_QUERY_MIX",
+      "status": "retired_round6"
+    },
+    {
+      "name": "attn_out_hc",
+      "env": "DS4_DS41_ATTN_OUT_HC",
+      "status": "retired_round6"
+    },
+    {
+      "name": "ffn_producer",
+      "env": "DS4_DS41_FFN_PRODUCER",
+      "status": "retired_round6"
+    },
+    {
+      "name": "qa_kv_flat",
+      "env": "DS4_DS41_QA_KV_FLAT",
+      "status": "retired_round6"
+    },
+    {
+      "name": "hc_stream_layout",
+      "env": "DS4_DS41_HC_STREAM_LAYOUT",
+      "status": "retired_round6"
+    },
+    {
+      "name": "hc_stream",
+      "env": "DS4_DS41_HC_STREAM",
+      "status": "retired_round6"
+    },
+    {
+      "name": "hc_tail",
+      "env": "DS4_DS41_HC_TAIL",
+      "status": "retired_round6"
+    },
+    {
+      "name": "hc_expand_fold",
+      "env": "DS4_DS41_HC_EXPAND_FOLD",
+      "status": "retired_round6"
+    },
+    {
+      "name": "mv_round",
+      "env": "DS4_DS41_MV_ROUND",
+      "status": "retired_round6"
+    },
+    {
+      "name": "producer_round",
+      "env": "DS4_DS41_PRODUCER_ROUND",
+      "status": "retired_round6"
+    },
+    {
+      "name": "ffn_add_fold",
+      "env": "DS4_DS41_FFN_ADD_FOLD",
+      "status": "retired_round6"
+    },
+    {
+      "name": "kv_stage_f16",
+      "env": "DS4_DS41_KV_STAGE_F16",
+      "status": "retired_round6"
+    },
+    {
+      "name": "prefill_8k_chunk",
+      "env": "DS4_METAL_DISABLE_V41_8K_CHUNK",
+      "status": "upstream_adapter"
+    },
+    {
+      "name": "prefill_decoder_suffix",
+      "env": "DS4_METAL_DISABLE_V41_DECODER_SUFFIX",
+      "status": "upstream_adapter"
+    },
+    {
+      "name": "prefill_stage_profile",
+      "env": "DS4_METAL_V41_STAGE_PROFILE",
+      "status": "upstream_adapter"
+    },
+    {
+      "name": "q8_prefill_profile",
+      "env": "DS4_METAL_Q8_PREFILL_PROFILE",
+      "status": "upstream_adapter"
+    },
+    {
+      "name": "attn_cohort4",
+      "env": "DS4_DS41_ATTN_COHORT4",
+      "status": "retired_round6"
+    },
+    {
+      "name": "gather_wide",
+      "env": "DS4_DS41_GATHER_WIDE",
+      "status": "retired_round6"
+    },
+    {
+      "name": "index_topk_radix",
+      "env": "DS4_DS41_INDEX_TOPK_RADIX",
+      "status": "retired_round6"
+    },
+    {
+      "name": "index_compact_score",
+      "env": "DS4_DS41_INDEX_COMPACT_SCORE",
+      "status": "retired_round6"
+    },
+    {
+      "name": "mtp_q8_trio_mask",
+      "env": "DS4_DS41_MTP_Q8_TRIO_MASK",
+      "status": "retired_round6"
+    },
+    {
+      "name": "markov_cache",
+      "env": "DS4_DS41_MARKOV_CACHE",
+      "status": "retired_round6"
+    },
+    {
+      "name": "markov_profile",
+      "env": "DS4_DS41_MARKOV_PROFILE",
+      "status": "upstream_adapter"
+    },
+    {
+      "name": "router_simd",
+      "env": "DS4_DS41_ROUTER_SIMD",
+      "status": "retired_round6"
+    },
+    {
+      "name": "router_hier",
+      "env": "DS4_DS41_ROUTER_HIER",
+      "status": "retired_round6"
+    },
+    {
+      "name": "mtp_down_wide",
+      "env": "DS4_DS41_MTP_DOWN_WIDE",
+      "status": "retired_round6"
+    },
+    {
+      "name": "mtp_gu_sort_simd",
+      "env": "DS4_DS41_MTP_GU_SORT_SIMD",
+      "status": "retired_round6"
+    },
+    {
+      "name": "mtp_swiglu_round",
+      "env": "DS4_DS41_MTP_SWIGLU_ROUND",
+      "status": "retired_round6"
+    },
+    {
+      "name": "mtp_q8_round",
+      "env": "DS4_DS41_MTP_Q8_ROUND",
+      "status": "retired_round6"
+    },
+    {
+      "name": "mtp_f32_rows",
+      "env": "DS4_DS41_MTP_F32_ROWS",
+      "status": "retired_round6"
+    },
+    {
+      "name": "mtp_pointwise_batch",
+      "env": "DS4_DS41_MTP_POINTWISE_BATCH",
+      "status": "retired_round6"
+    },
+    {
+      "name": "mtp_f16_trio",
+      "env": "DS4_DS41_MTP_F16_TRIO",
+      "status": "retired_round6"
+    },
+    {
+      "name": "mtp_gu_expert_sort",
+      "env": "DS4_DS41_MTP_GU_EXPERT_SORT",
+      "status": "retired_round6"
+    },
+    {
+      "name": "mtp_q8_swizzle",
+      "env": "DS4_DS41_MTP_Q8_SWIZZLE",
+      "status": "retired_round6"
+    },
+    {
+      "name": "mtp_gu_swizzle",
+      "env": "DS4_DS41_MTP_GU_SWIZZLE",
+      "status": "retired_round6"
+    },
+    {
+      "name": "index_score_stream",
+      "env": "DS4_DS41_INDEX_SCORE_STREAM",
+      "status": "retired_round6"
+    },
+    {
+      "name": "hc_join_static",
+      "env": "DS4_DS41_HC_JOIN_STATIC",
+      "status": "retired_round6"
+    },
+    {
+      "name": "topk_short",
+      "env": "DS4_DS41_TOPK_SHORT",
+      "status": "retired_round6"
+    },
+    {
+      "name": "index_candidates",
+      "env": "DS4_DS41_INDEX_CANDIDATES",
+      "status": "retired_round6"
+    },
+    {
+      "name": "index_schedule",
+      "env": "DS4_DS41_INDEX_SCHEDULE",
+      "status": "retired_round6"
+    },
+    {
+      "name": "index_mask_score",
+      "env": "DS4_DS41_INDEX_MASK_SCORE",
+      "status": "retired_round6"
+    },
+    {
+      "name": "stage_gather",
+      "env": "DS4_DS41_STAGE_GATHER",
+      "status": "retired_round6"
+    },
+    {
+      "name": "q4_dn_nr1",
+      "env": "DS4_DS41_Q4_DN_NR1",
+      "status": "retired_round6"
+    },
+    {
+      "name": "hc_expand_nth",
+      "env": "DS4_DS41_HC_EXPAND_NTH",
+      "status": "retired_round6"
+    },
+    {
+      "name": "routed_tail_cull",
+      "env": "DS4_METAL_DISABLE_V41_ROUTED_TAIL_CULL",
+      "status": "retired_round6"
+    },
+    {
+      "name": "prefill_tail_absorb",
+      "env": "DS4_DS41_PREFILL_TAIL_ABSORB",
+      "status": "retired_round6"
+    },
+    {
+      "name": "engram_readers",
+      "env": "DS4_DS41_ENGRAM_READERS",
+      "status": "retired_round6"
+    },
+    {
+      "name": "prefill_attn_rb16",
+      "env": "DS4_METAL_DISABLE_V41_PREFILL_ATTN_RB16",
+      "status": "retired_round6"
+    },
+    {
+      "name": "mtp_async_chunks",
+      "env": "DS4_DS41_MTP_ASYNC_CHUNKS",
+      "status": "retired_round6"
+    },
+    {
+      "name": "mtp_engram_rows6",
+      "env": "DS4_DS41_MTP_ENGRAM_ROWS6",
+      "status": "retired_round6"
+    },
+    {
+      "name": "dspark_excl_eos",
+      "env": "DS4_DS41_DSPARK_EXCL_EOS",
+      "status": "upstream_adapter"
+    },
+    {
+      "name": "mtp_capture_warmup",
+      "env": "DS4_DS41_MTP_CAPTURE_WARMUP",
+      "status": "retired_round6"
+    },
+    {
+      "name": "mtp_state_fix",
+      "env": "DS4_DS41_MTP_STATE_FIX",
+      "status": "retired_round6"
+    },
+    {
+      "name": "mtp_q8_stream6",
+      "env": "DS4_DS41_MTP_Q8_STREAM6",
+      "status": "retired_round6"
+    },
+    {
+      "name": "mtp_q8_stream6_mask",
+      "env": "DS4_DS41_MTP_Q8_STREAM6_MASK",
+      "status": "retired_round6"
+    },
+    {
+      "name": "mtp_q8_pair6",
+      "env": "DS4_DS41_MTP_Q8_PAIR6",
+      "status": "retired_round6"
+    },
+    {
+      "name": "prefill_f16_rows2",
+      "env": "DS4_DS41_PREFILL_F16_ROWS2",
+      "status": "retired_round6"
+    },
+    {
+      "name": "prefill_embed_init",
+      "env": "DS4_DS41_PREFILL_EMBED_INIT",
+      "status": "retired_round6"
+    },
+    {
+      "name": "prefill_hc_sum_round",
+      "env": "DS4_DS41_PREFILL_HC_SUM_ROUND",
+      "status": "retired_round6"
+    },
+    {
+      "name": "prefill_hc_expand_round",
+      "env": "DS4_DS41_PREFILL_HC_EXPAND_ROUND",
+      "status": "retired_round6"
+    },
+    {
+      "name": "prefill_hc_norm_round",
+      "env": "DS4_DS41_PREFILL_HC_NORM_ROUND",
+      "status": "retired_round6"
+    },
+    {
+      "name": "prefill_ffn_add_round",
+      "env": "DS4_DS41_PREFILL_FFN_ADD_ROUND",
+      "status": "retired_round6"
+    },
+    {
+      "name": "attn_diag",
+      "env": "DS4_DS41_ATTN_DIAG",
+      "status": "retired_round6"
+    },
+    {
+      "name": "prefill_attn_lean_rows",
+      "env": "DS4_METAL_DISABLE_V41_PREFILL_ATTN_LEAN_ROWS",
+      "status": "retired_round6"
+    },
+    {
+      "name": "prefill_engram_xsweep",
+      "env": "DS4_DS41_PREFILL_ENGRAM_XSWEEP",
+      "status": "retired_round6"
+    },
+    {
+      "name": "attn_geom",
+      "env": "DS4_DS41_ATTN_GEOM",
+      "status": "retired_round6"
+    },
+    {
+      "name": "dspark_capture",
+      "env": "DS4_DS41_DSPARK_CAPTURE",
+      "status": "retired_round6"
+    },
+    {
+      "name": "verify_wide_prefill",
+      "env": "DS4_DS41_VERIFY_WIDE_PREFILL",
+      "status": "retired_round6"
+    },
+    {
+      "name": "dspark_verify_rows",
+      "env": "DS4_V41_DSPARK_VERIFY_ROWS",
+      "status": "upstream_adapter"
+    },
+    {
+      "name": "dspark_loss_budget",
+      "env": "DS4_DS41_DSPARK_LOSS_BUDGET",
+      "status": "retired_round6"
+    },
+    {
+      "name": "dspark_adaptive",
+      "env": "DS4_DS41_DSPARK_ADAPTIVE",
+      "status": "retired_round6"
+    },
+    {
+      "name": "dspark_serve",
+      "env": "DS4_DS41_DSPARK_SERVE",
+      "status": "retired_round6"
+    },
+    {
+      "name": "dspark_reasoning_serial",
+      "env": "DS4_DS41_DSPARK_REASONING_SERIAL",
+      "status": "retired_round6"
+    },
+    {
+      "name": "dspark_expert_union",
+      "env": "DS4_DS41_EXPERT_UNION",
+      "status": "upstream_adapter"
+    },
+    {
+      "name": "verify_batch_core",
+      "env": "DS4_DS41_VERIFY_BATCH_CORE",
+      "status": "retired_round6"
+    },
+    {
+      "name": "dspark_force_reject",
+      "env": "DS4_DS41_DSPARK_FORCE_REJECT",
+      "status": "upstream_adapter"
+    },
+    {
+      "name": "dspark_draft_trace",
+      "env": "DS4_DS41_DSPARK_DRAFT_TRACE",
+      "status": "upstream_adapter"
+    }
+  ]
+}

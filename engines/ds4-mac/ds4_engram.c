@@ -11,8 +11,10 @@
 #include <stdlib.h>
 #include <string.h>
 #include <sys/stat.h>
-#include <time.h>
 #include <unistd.h>
+#ifdef __APPLE__
+#include <dispatch/dispatch.h>
+#endif
 #ifdef __APPLE__
 #include <dispatch/dispatch.h>
 #endif
@@ -105,6 +107,10 @@ bool ds4_engram_table_open(ds4_engram_table *t, const char *path,
     }
 #ifdef __APPLE__
     if (fcntl(fd, F_NOCACHE, 1) != 0 || fcntl(fd, F_RDAHEAD, 0) != 0) goto fail;
+#elif defined(POSIX_FADV_RANDOM)
+    /* Hashed rows are scattered across the table. Read-ahead fetches unused
+     * pages and competes with the model's limited memory headroom. */
+    (void)posix_fadvise(fd, (off_t)offset, (off_t)bytes, POSIX_FADV_RANDOM);
 #endif
     *t = (ds4_engram_table){.fd = fd, .offset = offset, .rows = rows};
     return true;
@@ -165,36 +171,6 @@ static void init_engram_bf16(void) {
     }
 }
 
-
-static int engram_format_lookup=1;
-void ds4_engram_set_format_lookup(int on) {
-    __atomic_store_n(&engram_format_lookup,on!=0,__ATOMIC_RELEASE);
-}
-/* Shared by uncached disk readers and bounded in-memory row consumers. The
- * original arithmetic remains selectable and is the exhaustive reference. */
-bool ds4_engram_decode_row(const uint8_t raw[DS4_ENGRAM_ROW_BYTES],float out[DS4_ENGRAM_DIM]) {
-    if(!raw || !out) { errno=EINVAL;return false; }
-    const int lookup=__atomic_load_n(&engram_format_lookup,__ATOMIC_ACQUIRE);
-    if(lookup)pthread_once(&engram_bf16_once,init_engram_bf16);
-    for(int j=0;j<DS4_ENGRAM_DIM;j++) {
-        uint8_t code=raw[j],scale=raw[DS4_ENGRAM_DIM+j/32];
-        if(lookup) {
-            uint16_t value=engram_bf16[scale][code];
-            if(value==UINT16_MAX) { errno=EDOM;return false; }
-            uint32_t bits=(uint32_t)value<<16;memcpy(out+j,&bits,sizeof(bits));
-        } else {
-            if((code&127)==127 || scale==255) { errno=EDOM;return false; }
-            float value=ldexpf(e4m3(code),(int)scale-127);
-            uint32_t bits;memcpy(&bits,&value,sizeof(bits));
-            bits=(bits+0x7fffu+((bits>>16)&1u))&0xffff0000u;
-            memcpy(&value,&bits,sizeof(value));
-            if(!isfinite(value)) { errno=EDOM;return false; }
-            out[j]=value;
-        }
-    }
-    return true;
-}
-
 bool ds4_engram_read(const ds4_engram_table *t, const uint32_t *rows,
                      size_t count, float *out) {
     if (!t || t->fd < 0 || (count && (!rows || !out)) ||
@@ -208,10 +184,19 @@ bool ds4_engram_read(const ds4_engram_table *t, const uint32_t *rows,
             return false;
         }
     }
+    pthread_once(&engram_bf16_once, init_engram_bf16);
     uint8_t raw[DS4_ENGRAM_ROW_BYTES];
     for (size_t i = 0; i < count; i++) {
         if (!read_row(t->fd, t->offset + (uint64_t)rows[i] * sizeof(raw), raw)) return false;
-        if(!ds4_engram_decode_row(raw,out+i*DS4_ENGRAM_DIM))return false;
+        for (int j = 0; j < DS4_ENGRAM_DIM; j++) {
+            const uint16_t value = engram_bf16[raw[DS4_ENGRAM_DIM + j / 32]][raw[j]];
+            if (value == UINT16_MAX) {
+                errno = EDOM;
+                return false;
+            }
+            const uint32_t bits = (uint32_t)value << 16;
+            memcpy(out + i * DS4_ENGRAM_DIM + j, &bits, sizeof(bits));
+        }
     }
     return true;
 }
@@ -225,20 +210,13 @@ static int request_order(const void *a, const void *b) {
     return (x->row > y->row) - (x->row < y->row);
 }
 
-/* Prefill wave 2, lever `engram_readers`.  The reader count is the only
- * tunable here: a 264-byte uncached pread costs ~113 us on this SSD, so the
- * batch's wall time is latency/concurrency, not bandwidth.  Measured on the
- * real table (offset 315838021632, 384,006,168 rows), 2,048 tokens = 49,152
- * rows per batch: 1 reader 8.8k rows/s, 8 70.5k, 16 121.8k, 32 202.0k, 64
- * 202.4k, 128 205.4k -- linear to 32, flat above it.  Nothing about the bytes,
- * the row order or the e4m3 -> BF16-rounded F32 conversion changes with it. */
-enum { ENGRAM_READERS = 16, ENGRAM_READERS_MAX = 256 };
-
-static unsigned g_engram_readers = ENGRAM_READERS;
-
-void ds4_engram_set_readers(unsigned readers) {
-    if (readers >= 1u && readers <= ENGRAM_READERS_MAX) g_engram_readers = readers;
-}
+enum { ENGRAM_READERS = 16, ENGRAM_READERS_MAX = 32 };
+#ifdef __APPLE__
+enum { ENGRAM_PARALLEL_MIN_ROWS = 8 };
+#else
+/* Unlike dispatch's shared pool, this path creates threads for each batch. */
+enum { ENGRAM_PARALLEL_MIN_ROWS = 256 };
+#endif
 
 typedef struct {
     const ds4_engram_table *table;
@@ -268,9 +246,28 @@ static void read_batch_part(void *context, size_t part) {
     }
 }
 
+#ifndef __APPLE__
+typedef struct {
+    engram_batch *batch;
+    size_t part;
+} engram_reader;
+
+static void *read_batch_thread(void *context) {
+    engram_reader *reader = context;
+    read_batch_part(reader->batch, reader->part);
+    return NULL;
+}
+#endif
+
 bool ds4_engram_read_batch(const ds4_engram_table *t, const uint32_t *rows,
                            size_t tokens, size_t stride, float *out) {
-    if (!t || t->fd < 0 || (tokens && (!rows || !out || stride < DS4_ENGRAM_COLS)) ||
+    return ds4_engram_read_batch_readers(t, rows, tokens, stride, out, ENGRAM_READERS);
+}
+
+bool ds4_engram_read_batch_readers(const ds4_engram_table *t, const uint32_t *rows,
+                                   size_t tokens, size_t stride, float *out, unsigned readers) {
+    if (!t || t->fd < 0 || readers < 1 || readers > ENGRAM_READERS_MAX ||
+        (tokens && (!rows || !out || stride < DS4_ENGRAM_COLS)) ||
         tokens > SIZE_MAX / (DS4_ENGRAM_COLS * DS4_ENGRAM_DIM * sizeof(*out)) ||
         (tokens && tokens - 1 > (SIZE_MAX / sizeof(*rows) - DS4_ENGRAM_COLS) / stride)) {
         errno = EINVAL;
@@ -302,15 +299,31 @@ bool ds4_engram_read_batch(const ds4_engram_table *t, const uint32_t *rows,
         qsort(request, count, sizeof(*request), request_order);
         engram_batch batch = {.table = t, .request = request, .count = count,
             .out = out + start * DS4_ENGRAM_COLS * DS4_ENGRAM_DIM, .readers = 1};
-#ifdef __APPLE__
         /* Fixed concurrency hides random-read latency without caching the table.
          * Each worker owns disjoint output rows; all finish before GPU use. */
-        if (count >= 256) {
-            batch.readers = g_engram_readers;
+        if (count >= ENGRAM_PARALLEL_MIN_ROWS) {
+            batch.readers = readers;
+#ifdef __APPLE__
             dispatch_apply_f(batch.readers,
                 dispatch_get_global_queue(QOS_CLASS_USER_INITIATED, 0), &batch, read_batch_part);
-        } else
+#else
+            pthread_t threads[ENGRAM_READERS_MAX - 1];
+            engram_reader workers[ENGRAM_READERS_MAX - 1];
+            size_t started = 0;
+            for (size_t part = 1; part < batch.readers; part++) {
+                workers[started] = (engram_reader){&batch, part};
+                if (pthread_create(&threads[started], NULL, read_batch_thread,
+                                   &workers[started])) break;
+                started++;
+            }
+            read_batch_part(&batch, 0);
+            /* Thread exhaustion only reduces concurrency, not correctness. */
+            for (size_t part = started + 1; part < batch.readers; part++)
+                read_batch_part(&batch, part);
+            for (size_t part = 0; part < started; part++)
+                if (pthread_join(threads[part], NULL)) abort();
 #endif
+        } else
         read_batch_part(&batch, 0);
         for (size_t i = 0; i < batch.readers; i++) {
             if (batch.error[i]) {
@@ -326,94 +339,63 @@ bool ds4_engram_read_batch(const ds4_engram_table *t, const uint32_t *rows,
     return ok;
 }
 
-static uint64_t engram_now_ns(void) {
-    struct timespec ts;
-    clock_gettime(CLOCK_MONOTONIC, &ts);
-    return (uint64_t)ts.tv_sec * UINT64_C(1000000000) + (uint64_t)ts.tv_nsec;
-}
-
-static void engram_fetch_rows(ds4_engram_fetch *f, size_t begin, size_t end) {
-    for (size_t i = begin; i < end; i++) {
-        if (!ds4_engram_read(f->table, &f->ids[i], 1,
-                             f->out + i * DS4_ENGRAM_DIM))
-            f->error[i] = errno ? errno : EIO;
-    }
-}
-
+struct ds4_engram_prefetch {
+    const ds4_engram_table *table;
+    const uint32_t *rows;
+    size_t tokens, stride;
+    float *out;
+    bool ok;
+    int error;
 #ifdef __APPLE__
-/* Same fixed-width partition as the prefill batch reader: each worker owns
- * disjoint output rows, so no row is written twice and none is shared. */
-static void engram_fetch_part(void *context, size_t part) {
-    ds4_engram_fetch *f = context;
-    engram_fetch_rows(f, DS4_ENGRAM_COLS * part / ENGRAM_READERS,
-                         DS4_ENGRAM_COLS * (part + 1) / ENGRAM_READERS);
+    dispatch_group_t group;
+#else
+    pthread_t thread;
+    bool threaded;
+#endif
+};
+
+static void prefetch_run(void *context) {
+    ds4_engram_prefetch *p = context;
+    p->ok = ds4_engram_read_batch(p->table, p->rows, p->tokens, p->stride, p->out);
+    if (!p->ok) p->error = errno ? errno : EIO;
 }
 
-static void engram_fetch_run(void *context) {
-    ds4_engram_fetch *f = context;
-    dispatch_apply_f(ENGRAM_READERS,
-        dispatch_get_global_queue(QOS_CLASS_USER_INITIATED, 0), f, engram_fetch_part);
-    f->done_ns = engram_now_ns();
+#ifndef __APPLE__
+static void *prefetch_thread(void *context) {
+    prefetch_run(context);
+    return NULL;
 }
 #endif
 
-bool ds4_engram_fetch_begin(ds4_engram_fetch *f, const ds4_engram_table *t,
-                            const uint32_t *rows, float *out) {
-    if (!f || !t || t->fd < 0 || !rows || !out) {
-        errno = EINVAL;
-        return false;
-    }
-    (void)ds4_engram_fetch_wait(f);
-    f->table = t;
-    f->out = out;
-    memcpy(f->ids, rows, sizeof(f->ids));
-    memset(f->error, 0, sizeof(f->error));
-    f->issue_ns = engram_now_ns();
-    f->done_ns = 0;
+ds4_engram_prefetch *ds4_engram_read_batch_start(const ds4_engram_table *table, const uint32_t *rows,
+                                                 size_t tokens, size_t stride, float *out) {
+    ds4_engram_prefetch *p = calloc(1, sizeof(*p));
+    if (!p) return NULL;
+    *p = (ds4_engram_prefetch){.table = table, .rows = rows, .tokens = tokens, .stride = stride, .out = out};
 #ifdef __APPLE__
-    if (!f->group) f->group = dispatch_group_create();
-    if (f->group) {
-        dispatch_group_async_f((dispatch_group_t)f->group,
-            dispatch_get_global_queue(QOS_CLASS_USER_INITIATED, 0), f, engram_fetch_run);
-        f->inflight = true;
-        return true;
-    }
+    p->group = dispatch_group_create();
+    dispatch_group_async_f(p->group, dispatch_get_global_queue(QOS_CLASS_USER_INITIATED, 0), p, prefetch_run);
+#else
+    p->threaded = pthread_create(&p->thread, NULL, prefetch_thread, p) == 0;
+    if (!p->threaded) prefetch_run(p);
 #endif
-    engram_fetch_rows(f, 0, DS4_ENGRAM_COLS);
-    f->done_ns = engram_now_ns();
-    return true;
+    return p;
 }
 
-bool ds4_engram_fetch_wait(ds4_engram_fetch *f) {
-    if (!f) {
-        errno = EINVAL;
-        return false;
-    }
+bool ds4_engram_read_batch_finish(ds4_engram_prefetch *p) {
+    if (!p) return false;
 #ifdef __APPLE__
-    if (f->inflight) {
-        dispatch_group_wait((dispatch_group_t)f->group, DISPATCH_TIME_FOREVER);
-        f->inflight = false;
-    }
+    dispatch_group_wait(p->group, DISPATCH_TIME_FOREVER);
+    dispatch_release(p->group);
+#else
+    if (p->threaded && pthread_join(p->thread, NULL)) abort();
 #endif
-    for (size_t i = 0; i < DS4_ENGRAM_COLS; i++) {
-        if (f->error[i]) {
-            errno = f->error[i];
-            return false;
-        }
-    }
-    return true;
+    const bool ok = p->ok;
+    if (!ok) errno = p->error;
+    free(p);
+    return ok;
 }
 
-void ds4_engram_fetch_release(ds4_engram_fetch *f) {
-    if (!f) return;
-    (void)ds4_engram_fetch_wait(f);
-#ifdef __APPLE__
-    if (f->group) dispatch_release((dispatch_group_t)f->group);
-#endif
-    memset(f, 0, sizeof(*f));
-}
-
-/* MACDECODE: upstream persistent reader, with ordered row errors and real completion timestamps. */
 /* Each table's rows are needed one layer after the step starts. On Apple every row has its own worker, so a table
  * is ready after one disk read instead of six in a row. */
 #ifdef __APPLE__
@@ -436,8 +418,7 @@ struct ds4_engram_reader {
     bool active, shutdown;
     uint64_t generation;
     unsigned completed[2];
-    int errors[2][DS4_ENGRAM_COLS];
-    uint64_t issue_ns, done_ns[2];
+    int errors[2];
     ds4_engram_table tables[2];
     uint32_t ids[2][DS4_ENGRAM_COLS];
     float *out;
@@ -457,16 +438,12 @@ static void *read_token_thread(void *context) {
         for (unsigned table = 0; table < 2; table++) {
             const unsigned first = index * DS4_ENGRAM_COLS / TOKEN_READERS;
             const unsigned end = (index + 1u) * DS4_ENGRAM_COLS / TOKEN_READERS;
-            int errors[DS4_ENGRAM_COLS] = {0};
-            for (unsigned col = first; col < end; ++col) {
-                if (!ds4_engram_read(&r->tables[table], &r->ids[table][col], 1,
-                    r->out + (table * DS4_ENGRAM_COLS + col) * DS4_ENGRAM_DIM))
-                    errors[col] = errno ? errno : EIO;
-            }
+            const bool ok = ds4_engram_read(&r->tables[table], r->ids[table] + first,
+                end - first, r->out + (table * DS4_ENGRAM_COLS + first) * DS4_ENGRAM_DIM);
+            const int error = ok ? 0 : errno ? errno : EIO;
             pthread_mutex_lock(&r->mutex);
-            for (unsigned col = first; col < end; ++col) r->errors[table][col] = errors[col];
+            if (!r->errors[table]) r->errors[table] = error;
             if (++r->completed[table] == TOKEN_READERS) {
-                r->done_ns[table] = engram_now_ns();
                 if (table == 1) r->active = false;
                 pthread_cond_broadcast(&r->done);
             }
@@ -531,8 +508,6 @@ bool ds4_engram_reader_start(ds4_engram_reader *r,
     memset(r->errors, 0, sizeof(r->errors));
     r->out = out;
     memset(r->completed, 0, sizeof(r->completed));
-    r->issue_ns = engram_now_ns();
-    r->done_ns[0] = r->done_ns[1] = 0;
     r->generation++;
     r->active = true;
     pthread_cond_broadcast(&r->work);
@@ -549,9 +524,7 @@ bool ds4_engram_reader_wait(ds4_engram_reader *r, unsigned table) {
         return false;
     }
     while (r->completed[table] < TOKEN_READERS) pthread_cond_wait(&r->done, &r->mutex);
-    int error = 0;
-    for (unsigned col = 0; col < DS4_ENGRAM_COLS; ++col)
-        if (r->errors[table][col]) { error = r->errors[table][col]; break; }
+    const int error = r->errors[table];
     pthread_mutex_unlock(&r->mutex);
     if (error) errno = error;
     return !error;
@@ -569,14 +542,4 @@ void ds4_engram_reader_free(ds4_engram_reader *r) {
     pthread_cond_destroy(&r->work);
     pthread_mutex_destroy(&r->mutex);
     free(r);
-}
-
-bool ds4_engram_reader_timing(ds4_engram_reader *r, unsigned table,
-                               uint64_t *issue_ns, uint64_t *done_ns) {
-    if (!r || table >= 2 || !issue_ns || !done_ns) { errno = EINVAL; return false; }
-    pthread_mutex_lock(&r->mutex);
-    const bool ready = r->done_ns[table] != 0;
-    if (ready) { *issue_ns = r->issue_ns; *done_ns = r->done_ns[table]; }
-    pthread_mutex_unlock(&r->mutex);
-    return ready;
 }

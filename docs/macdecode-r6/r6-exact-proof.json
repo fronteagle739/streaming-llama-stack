@@ -1,0 +1,172 @@
+{
+  "schema": "macdecode-round6-exact-proof-v1",
+  "results": [
+    {
+      "workload": "prose8k",
+      "upstream_sha256": "fcbf35a31b40f452f45f525946bcb25a29d65c3473ff056ba560b01fbd3ce311",
+      "ours_sha256": "fcbf35a31b40f452f45f525946bcb25a29d65c3473ff056ba560b01fbd3ce311",
+      "bit_exact": true,
+      "words": 1034240,
+      "different_words": 0,
+      "first_difference": null,
+      "max_abs": 0.0,
+      "argmax_equal": true
+    },
+    {
+      "workload": "prose131k",
+      "upstream_sha256": "092e428524d73e4335127183f5360026c57bdc5e5aa1b6569d0f5456f852411c",
+      "ours_sha256": "092e428524d73e4335127183f5360026c57bdc5e5aa1b6569d0f5456f852411c",
+      "bit_exact": true,
+      "words": 1034240,
+      "different_words": 0,
+      "first_difference": null,
+      "max_abs": 0.0,
+      "argmax_equal": true
+    },
+    {
+      "workload": "DSpark-code8k",
+      "upstream_sha256": "ce6b03061f69b5762919d56869a12ac2a16d7ee1b5d3725483776abd7b62014d",
+      "ours_sha256": "ce6b03061f69b5762919d56869a12ac2a16d7ee1b5d3725483776abd7b62014d",
+      "upstream_frames": 3,
+      "ours_frames": 3,
+      "frames": [
+        {
+          "frame": 0,
+          "upstream": {
+            "start": 8208,
+            "count": 6,
+            "vocab": 129280,
+            "flags": 1,
+            "tokens": [
+              80,
+              24814,
+              7038,
+              65,
+              26650,
+              438
+            ]
+          },
+          "ours": {
+            "start": 8208,
+            "count": 6,
+            "vocab": 129280,
+            "flags": 1,
+            "tokens": [
+              80,
+              24814,
+              7038,
+              65,
+              26650,
+              438
+            ]
+          },
+          "metadata_equal": true,
+          "rows": {
+            "words": 775680,
+            "different_words": 0,
+            "first_difference": null,
+            "max_abs": 0.0,
+            "argmax_equal": true
+          },
+          "frontier": {
+            "words": 129280,
+            "different_words": 0,
+            "first_difference": null,
+            "max_abs": 0.0,
+            "argmax_equal": true
+          }
+        },
+        {
+          "frame": 1,
+          "upstream": {
+            "start": 8214,
+            "count": 6,
+            "vocab": 129280,
+            "flags": 1,
+            "tokens": [
+              223,
+              19,
+              989,
+              361,
+              1204,
+              80
+            ]
+          },
+          "ours": {
+            "start": 8214,
+            "count": 6,
+            "vocab": 129280,
+            "flags": 1,
+            "tokens": [
+              223,
+              19,
+              989,
+              361,
+              1204,
+              80
+            ]
+          },
+          "metadata_equal": true,
+          "rows": {
+            "words": 775680,
+            "different_words": 0,
+            "first_difference": null,
+            "max_abs": 0.0,
+            "argmax_equal": true
+          },
+          "frontier": {
+            "words": 129280,
+            "different_words": 0,
+            "first_difference": null,
+            "max_abs": 0.0,
+            "argmax_equal": true
+          }
+        },
+        {
+          "frame": 2,
+          "upstream": {
+            "start": 8220,
+            "count": 4,
+            "vocab": 129280,
+            "flags": 1,
+            "tokens": [
+              65,
+              617,
+              87386,
+              438
+            ]
+          },
+          "ours": {
+            "start": 8220,
+            "count": 4,
+            "vocab": 129280,
+            "flags": 1,
+            "tokens": [
+              65,
+              617,
+              87386,
+              438
+            ]
+          },
+          "metadata_equal": true,
+          "rows": {
+            "words": 517120,
+            "different_words": 0,
+            "first_difference": null,
+            "max_abs": 0.0,
+            "argmax_equal": true
+          },
+          "frontier": {
+            "words": 129280,
+            "different_words": 0,
+            "first_difference": null,
+            "max_abs": 0.0,
+            "argmax_equal": true
+          }
+        }
+      ],
+      "bit_exact": true
+    }
+  ],
+  "pass": true
+}
