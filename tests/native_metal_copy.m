@@ -209,17 +209,39 @@ static void check_verify_kernels(void) {
     assert(ds4_gpu_dsv41_shared_mid_swiglu_q8_0_tensor(smref,qm,qbytes,0,qb,D,FF,x,10.0f,1.0f));
     assert(ds4_gpu_dsv41_q8_virtual_down_tensor(soref,qm,qbytes,2*qb,smref));
     assert(ds4_gpu_end_commands());
-    for(int fixed=0;fixed<=1;fixed++) {
+    const uint64_t hbytes=20480ull*24*2+16+96,hs=20480ull*24*2,hb=hs+16;
+    id<MTLBuffer> hbuffer=ds4_metal_owned_wired_buffer(g_device,hbytes,ds4_gpu_model_resource_options(),NULL);
+    assert(hbuffer&&g_model_view_count<DS4_METAL_MAX_MODEL_VIEWS);unsigned char *hm=hbuffer.contents;
+    uint16_t *hw=(uint16_t *)hm;for(unsigned i=0;i<hs/2;i++)hw[i]=(i&1)?0x1c00:0x9c00;
+    float *hv=(float *)(hm+hs);for(unsigned i=0;i<4;i++)hv[i]=.05f;
+    hv=(float *)(hm+hb);for(unsigned i=0;i<24;i++)hv[i]=(float)((int)(i%7)-3)/32.f;
+    g_model_views[g_model_view_count++]=(ds4_gpu_model_view){.buffer=hbuffer,.model_map=hm,.model_size=hbytes,.model_offset=0,.bytes=hbytes};
+    ds4_gpu_tensor *hmix[2],*hsplit[2],*hcounter=ds4_gpu_tensor_alloc(4);assert(hcounter);
+    for(unsigned i=0;i<2;i++) {hmix[i]=ds4_gpu_tensor_alloc(96);hsplit[i]=ds4_gpu_tensor_alloc(96);assert(hmix[i]&&hsplit[i]);}
+    uint32_t hz=0;assert(ds4_gpu_tensor_write(hcounter,0,&hz,4)&&ds4_gpu_begin_commands());
+    assert(ds4_gpu_dsv41_mtp_hc_tensor(hmix[0],hsplit[0],hcounter,x,hm,hbytes,0,hs,hb,20,1.e-6f,1.e-6f));
+    assert(ds4_gpu_end_commands());
+    for(int fixed=0;fixed<=1;fixed++)for(int hc=0;hc<=1;hc++) {
         g_ds41_levers.mxfp4_fixed_shapes=fixed;
+        assert(ds4_gpu_tensor_write(hcounter,0,&hz,4));
         assert(ds4_gpu_begin_commands());
         assert(ds4_gpu_parallel_ffn_start_bf16(sg,su,sm,so,qm,qbytes,0,qb,2*qb,D,FF,x,10.0f));
+        if(hc) {
+            assert(ds4_gpu_dsv41_mtp_hc_tensor(hmix[1],hsplit[1],hcounter,x,hm,hbytes,0,hs,hb,20,1.e-6f,1.e-6f));
+            assert(g_batch_encoder_concurrent && g_batch_enc.dispatchType==MTLDispatchTypeConcurrent);
+        }
         assert(ds4_gpu_routed_moe_one_tensor(got,gate,up,mid,experts,map,bytes,eg,eu,ed,MXFP4,MXFP4,eb,gr,eb,dr,D,FF,D,sel,w,NE,NU,10.0f,x,NULL,3,true));
         assert(ds4_gpu_parallel_ffn_finish());
         assert(ds4_gpu_end_commands());
         assert(!memcmp(ds4_gpu_tensor_contents(ref),ds4_gpu_tensor_contents(got),D*4));
         assert(!memcmp(ds4_gpu_tensor_contents(smref),ds4_gpu_tensor_contents(sm),FF*4));
         assert(!memcmp(ds4_gpu_tensor_contents(soref),ds4_gpu_tensor_contents(so),D*4));
+        if(hc) { assert(!memcmp(ds4_gpu_tensor_contents(hmix[0]),ds4_gpu_tensor_contents(hmix[1]),96));
+            assert(!memcmp(ds4_gpu_tensor_contents(hsplit[0]),ds4_gpu_tensor_contents(hsplit[1]),96)); }
     }
+    for(unsigned i=0;i<2;i++) {ds4_gpu_tensor_free(hmix[i]);ds4_gpu_tensor_free(hsplit[i]);}ds4_gpu_tensor_free(hcounter);
+    assert(ds41_levers_set("concurrent_ffn",2));assert(!ds41_levers_set("concurrent_ffn",3));assert(ds41_levers_set("concurrent_ffn",0));
+    puts("PASS: deferred HC mix/split concurrent with complete BF16 shared/routed FFN, every word exact and actual concurrent dispatch witnessed in both fixed-shape modes");
     assert(ds4_gpu_begin_commands());
     assert(ds4_gpu_parallel_ffn_start_bf16(sg,su,sm,so,qm,qbytes,0,qb,2*qb,D,FF,x,10.0f));
     assert(!ds4_gpu_routed_moe_one_tensor(NULL,gate,up,mid,experts,map,bytes,eg,eu,ed,MXFP4,MXFP4,eb,gr,eb,dr,D,FF,D,sel,w,NE,NU,10.0f,x,NULL,3,true));
@@ -740,6 +762,68 @@ static void check_query_rope_writer(void) {
     puts("PASS: fused query-store RoPE all query/mix/split/KV/ring words equal retained producer+rotation at 0/8K/131K/1M-1, both frequencies; position refusal");
 }
 
+
+static void check_short_topk(void) {
+    enum { N=16384,K=512 };
+    ds4_gpu_tensor *scores=ds4_gpu_tensor_alloc(2*N*4),*ref=ds4_gpu_tensor_alloc(4096*4),*got=ds4_gpu_tensor_alloc(4096*4);
+    assert(scores&&ref&&got);float *sv=ds4_gpu_tensor_contents(scores);
+    const unsigned sizes[]={512,513,1023,1024,1025,4095,8192,8193,16383,16384};
+    for(unsigned pattern=0;pattern<4;pattern++) {
+        for(unsigned i=0;i<2*N;i++) {
+            float v=(float)((int)((i*8191u+17u)%32749u)-16374)/128.f;
+            if(pattern==1)v=(float)(i%13);
+            if(pattern==2)v=(i&1)?0.f:-0.f;
+            if(pattern==3) { if(i%5==0)v=-INFINITY;if(i%997==0)v=INFINITY; }
+            sv[i]=v;
+        }
+        for(unsigned c=0;c<sizeof(sizes)/sizeof(*sizes);c++) {
+            unsigned n=sizes[c];
+            g_ds41_levers.topk_short=0;assert(ds4_gpu_dsv41_indexer_topk_radix(ref,scores,n,false));
+            g_ds41_levers.topk_short=1;assert(ds4_gpu_dsv41_indexer_topk_radix(got,scores,n,false));
+            assert(!memcmp(ds4_gpu_tensor_contents(ref),ds4_gpu_tensor_contents(got),K*4));
+        }
+        for(unsigned arm=0;arm<2;arm++) {
+            g_ds41_levers.topk_short=arm;
+            assert(ds4_gpu_indexer_topk_tensor(arm?got:ref,scores,8192,1,2048));
+        }
+        assert(!memcmp(ds4_gpu_tensor_contents(ref),ds4_gpu_tensor_contents(got),2048*4));
+        for(unsigned arm=0;arm<2;arm++) {
+            g_ds41_levers.topk_short=arm;
+            assert(ds4_gpu_dsv41_indexer_topk_batch(arm?got:ref,scores,4096,2,4096,2));
+        }
+        assert(!memcmp(ds4_gpu_tensor_contents(ref),ds4_gpu_tensor_contents(got),2*K*4));
+    }
+    for(unsigned i=0;i<3;i++)assert(g_dsv41_short_topk_dispatches[i]>0);
+    assert(!ds4_gpu_dsv41_indexer_topk_radix(got,scores,511,false));
+    g_ds41_levers.topk_short=0;ds4_gpu_tensor_free(scores);ds4_gpu_tensor_free(ref);ds4_gpu_tensor_free(got);
+    puts("PASS: short top512 every selected index exact at512/1024/4096/8192/16384 boundaries and tails, unique/ties/signedzero/infinite; all3dispatches witnessed; longradix/blocktop2048/causalbatch retain original words; bounds");
+}
+
+
+static void check_literal_hc_join(void) {
+    enum { N=5120 };
+    ds4_gpu_tensor *in=ds4_gpu_tensor_alloc(N*4),*add=ds4_gpu_tensor_alloc(N*4),*res=ds4_gpu_tensor_alloc(4*N*4),*split=ds4_gpu_tensor_alloc(96),
+        *hc[2],*block[2];assert(in&&add&&res&&split);
+    for(unsigned j=0;j<2;j++) {hc[j]=ds4_gpu_tensor_alloc(4*N*4);block[j]=ds4_gpu_tensor_alloc(N*4);assert(hc[j]&&block[j]);}
+    float *v=ds4_gpu_tensor_contents(in);for(unsigned i=0;i<N;i++)v[i]=(float)((int)(i*17%997)-498)/257.f;
+    v=ds4_gpu_tensor_contents(add);for(unsigned i=0;i<N;i++)v[i]=(float)((int)(i*31%991)-495)/513.f;
+    v=ds4_gpu_tensor_contents(split);for(unsigned i=0;i<24;i++)v[i]=(float)((int)(i%29)-14)/33.f;
+    for(unsigned plus=0;plus<2;plus++)for(unsigned alias=0;alias<2;alias++) {
+        for(unsigned arm=0;arm<2;arm++) {
+            v=ds4_gpu_tensor_contents(res);for(unsigned i=0;i<4*N;i++)v[i]=(float)((int)(i*13%733)-366)/511.f;
+            g_ds41_levers.hc_join_static=arm;
+            assert(ds4_gpu_dsv41_hc_round_expand4_tensor(alias?res:hc[arm],block[arm],in,plus?add:NULL,res,split,N,4));
+            if(alias)assert(ds4_gpu_tensor_read(res,0,ds4_gpu_tensor_contents(hc[arm]),4*N*4));
+        }
+        assert(!memcmp(ds4_gpu_tensor_contents(hc[0]),ds4_gpu_tensor_contents(hc[1]),4*N*4));
+        assert(!memcmp(ds4_gpu_tensor_contents(block[0]),ds4_gpu_tensor_contents(block[1]),N*4));
+    }
+    assert(g_dsv41_hc_literal_dispatches>0);g_ds41_levers.hc_join_static=0;
+    for(unsigned i=0;i<2;i++){ds4_gpu_tensor_free(hc[i]);ds4_gpu_tensor_free(block[i]);}
+    ds4_gpu_tensor_free(in);ds4_gpu_tensor_free(add);ds4_gpu_tensor_free(res);ds4_gpu_tensor_free(split);
+    puts("PASS: literal HC FFN join every HC/block word exact, add/noadd, separate/inplace residual; actual static dispatch witnessed");
+}
+
 int main(void) {
     @autoreleasepool {
         check_engram_format();
@@ -788,6 +872,9 @@ int main(void) {
         assert(!ds4_gpu_tensor_copy(b,0,a,16384,1));
         assert(!ds4_gpu_tensor_copy(b,0,a,0,16)); /* no command batch */
         ds4_gpu_tensor_free(av); ds4_gpu_tensor_free(a); ds4_gpu_tensor_free(b);
+        ds41_levers_init_from_env();
+        check_literal_hc_join();
+        check_short_topk();
         check_query_rope_writer();
         check_scalar_upstream_index();
         check_verify_projection_tail();

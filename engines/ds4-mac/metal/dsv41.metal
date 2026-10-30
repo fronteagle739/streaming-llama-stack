@@ -3502,3 +3502,52 @@ kernel void kernel_dsv41_query_hc_kv_rope(
         dsv41_arch_sinkhorn(tail_args, local, scale, base, split);
     }
 }
+
+// Upstream FIXED_SHAPES FFN join, retaining the fork block output and FMA order.
+kernel void kernel_dsv41_hc_round_expand4_static(
+        constant ds4_metal_args_dsv4_hc_expand & args,
+        device  const char * block_in,
+        device  const char * residual,
+        device  const char * post,
+        device  const char * comb,
+        device  const char * block_add,
+        device        char * block_out,
+        device        char * dst,
+        uint gid [[thread_position_in_grid]]) {
+    if (4u != 4) {
+        return;
+    }
+
+    const int64_t n_elem = 5120u * 1u;
+    if ((int64_t) gid >= n_elem) {
+        return;
+    }
+
+    const int64_t d = ((int64_t) gid) % 5120u;
+    const int64_t t = ((int64_t) gid) / 5120u;
+
+    float block_v = *((device const float *) (block_in + d*4u + t*20480u));
+    if (args.has_add) {
+        block_v += *((device const float *) (block_add + d*4u + t*20480u));
+    }
+    block_v = dsv41_bf16(block_v);
+    *((device float *) (block_out + d*4u + t*20480u)) = block_v;
+
+    const float r0 = *((device const float *) (residual + d*4u + 0*20480u + t*81920u));
+    const float r1 = *((device const float *) (residual + d*4u + 1*20480u + t*81920u));
+    const float r2 = *((device const float *) (residual + d*4u + 2*20480u + t*81920u));
+    const float r3 = *((device const float *) (residual + d*4u + 3*20480u + t*81920u));
+
+    for (int64_t dst_hc = 0; dst_hc < 4; ++dst_hc) {
+        const float acc = dsv41_hc_expand_acc(
+            block_v,
+            *((device const float *) (post + dst_hc*4u + t*96u)),
+            *((device const float *) (comb + dst_hc*4u + 0*16u + t*96u)),
+            *((device const float *) (comb + dst_hc*4u + 1*16u + t*96u)),
+            *((device const float *) (comb + dst_hc*4u + 2*16u + t*96u)),
+            *((device const float *) (comb + dst_hc*4u + 3*16u + t*96u)),
+            r0, r1, r2, r3);
+
+        *((device float *) (dst + d*4u + dst_hc*20480u + t*81920u)) = dsv41_bf16(acc);
+    }
+}
