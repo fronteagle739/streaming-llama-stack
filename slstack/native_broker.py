@@ -143,14 +143,15 @@ class OwnedProducer:
         self._progress_cleanup=on_start(self) if on_start else None
         try:
             binary = path(cfg['llama_producer'])
-            pin = sha256(binary)
+            startup=[('created',time.monotonic())]
+            pin = sha256(binary);startup.append(('binary_sha256',time.monotonic()))
             if pin != cfg['producer_sha256']:
                 raise ValueError('Trusted producer binary pin changed')
-            receipt = model_receipt(cfg)
+            receipt = model_receipt(cfg);startup.append(('model_receipt',time.monotonic()))
             selected_model_sha256=model_digest(cfg,receipt)
             require(request.get('model_sha256',selected_model_sha256)==selected_model_sha256,
                     'HTTP session model differs from verified producer weights')
-            identity = self.stack.enter_context(gpu_lease(cfg))
+            identity = self.stack.enter_context(gpu_lease(cfg));startup.append(('gpu_lease',time.monotonic()))
             watcher = HoldWatcher(cfg.get('hold_file') or Path(cfg['runtime_root']) / 'state' / 'gpu.holds', identity, task=cfg.get('task', 'DS4STACK'))
             def cancelled():
                 if cancel.is_set() or watcher.reason():
@@ -237,7 +238,7 @@ class OwnedProducer:
                 return protect_working_set(job, working_minimum, floor, int(cfg['host_budget_gib']*(1<<30)),
                                            receipt=directory / 'working-set.json')
             self.attempted = True
-            prefill_started=time.monotonic()
+            prefill_started=time.monotonic();startup.append(('admission_and_arguments',prefill_started))
             owner=self
             class PublishingProducer(Producer):
                 def _initialize(process,*a,**kw):
@@ -254,6 +255,8 @@ class OwnedProducer:
             # import / acknowledgment intervals. Initial time includes startup.
             self.prefill_timings=[dict(operation='startup_and_initial_prefill',
                 tokens=len(request['tokens'])//4,seconds=time.monotonic()-prefill_started)]
+            # PAIRFIX: broker-side startup steps before the producer process (seconds).
+            self.prefill_timings[0]['broker_steps_seconds']={name:round(t-startup[k][1],4) for k,(name,t) in enumerate(startup[1:])}
             timing_file=directory/'prefill-timings.json'
             atomic_json(timing_file,self.prefill_timings)
             native_request=self.producer.request
