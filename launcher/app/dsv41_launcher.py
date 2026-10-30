@@ -75,7 +75,7 @@ class Keys:
 
     def ask(self, prompt, choices):
         say(prompt + ('' if self.console else '   (type the letter, then Enter)'))
-        self.pending.clear()
+        # Keys typed before the prompt still count (lets a script answer ahead).
         while True:
             key = self.get()
             if key and key in choices:
