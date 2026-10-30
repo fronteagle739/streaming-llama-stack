@@ -1,0 +1,54 @@
+{
+  "rtx": {
+    "title": "DSV4.1 Single (RTX)",
+    "context": "1m",
+    "runtime_root": "SET_LAUNCHER_RUNTIME_DIR",
+    "ui_url": "http://127.0.0.1:8088",
+    "studio_url": "http://127.0.0.1:8765",
+    "gpu_busy_mib": 2048,
+    "ports": ["127.0.0.1:8089"],
+    "stack": {
+      "model": "SET_RTX_PACKED_FP4_GGUF_PATH",
+      "gpu_uuid": "SET_GPU_UUID",
+      "host_budget_gib": 9.25,
+      "min_available_gib": 0.5,
+      "runtime_min_free_gib": 0.5,
+      "producer_desktop_reserve_gib": 0.5,
+      "env_overrides": {
+        "LLAMA_DSV41_FLASHINFER_NATIVE_FFN_DLL": "SET_RTX_NATIVE_FFN_DLL_PATH",
+        "LLAMA_DSV41_STORED_MXFP4": "1",
+        "LLAMA_DSV41_FLASHINFER_MXFP4": "1",
+        "LLAMA_DSV41_FLASHINFER_BATCH_TOKENS": "4096",
+        "LLAMADECODE_PREFILL_ROUTED": "0",
+        "GGML_CUDA_DISABLE_GRAPHS": "1"
+      }
+    }
+  },
+  "mac": {
+    "title": "DSV4.1 Single (Mac)",
+    "runtime_root": "SET_LAUNCHER_RUNTIME_DIR",
+    "ui_url": "http://127.0.0.1:8088",
+    "studio_url": "http://127.0.0.1:8765",
+    "engine_url": "http://127.0.0.1:8181",
+    "ports": ["127.0.0.1:8181"],
+    "stack": {
+      "mac_host_budget_gib": 400,
+      "min_available_gib": 0.5,
+      "runtime_min_free_gib": 0.5,
+      "decode": {
+        "backend": "ds4",
+        "model_path": "SET_MAC_GGUF_PATH",
+        "mtp_model": "SET_MAC_DSPARK_GGUF_PATH",
+        "dspark": true,
+        "ctx": 1000001,
+        "port": 8181
+      }
+    },
+    "ui": {
+      "host": "127.0.0.1",
+      "port": 8088,
+      "webui": true,
+      "general": {"mode": "remote", "endpoint": "http://127.0.0.1:8181", "mac": {"backend": "ds4", "ctx": 1000001}}
+    }
+  }
+}
