@@ -128,7 +128,11 @@ static bool ds4_ns_command(ds4_ns_session*s,ds4_nf_io*io,const char*body,size_t 
 }
 static bool ds4_ns_simple(ds4_ns_session*s,ds4_nf_io*io,const char*op,const ds4_native_checkpoint*base,ds4_ns_reply*r){
     char text[8192];ds4_ns_text b={text,sizeof(text),true};ds4_ns_command_prefix(&b,s,op);
-    if(base){ds4_ns_put(&b,",\"base\":");ds4_ns_checkpoint_text(&b,base);}ds4_ns_put(&b,"}");
+    if(base){ds4_ns_put(&b,",\"base\":");ds4_ns_checkpoint_text(&b,base);}
+    /* PAIRFIX: ask for the BF16-stored compressed/index owners as BF16 bits; the
+     * import widens them back to the canonical F32 bytes before loading/verifying. */
+    if(!strcmp(op,"export_initial"))ds4_ns_put(&b,",\"wire_encoding\":\"bf16-compressed-index-v1\"");
+    ds4_ns_put(&b,"}");
     if(!b.ok||!ds4_ns_command(s,io,text,(size_t)(b.p-text),r))return false;
     s->sequence++;return true;
 }
@@ -252,6 +256,26 @@ static int ds4_ns_file_read(void*ud,char*dst,int n){
     size_t want=(uint64_t)n<s->remaining?(size_t)n:(size_t)s->remaining;if(want>65536)want=65536;
     return ds4_ns_read(ud,dst,want)?(int)want:-1;
 }
+/* PAIRFIX BF16 wire: canonical-F32 reader over a stream whose BF16-stored owner
+ * spans carry only their upper 16 bits. Regions are canonical byte ranges. */
+typedef struct {ds4_ns_stream*wire;uint64_t at;uint32_t count;uint64_t begin[64],end[64];unsigned char half[32768];} ds4_ns_bf16_stream;
+static int ds4_ns_bf16_file_read(void*ud,char*dst,int n){
+    ds4_ns_bf16_stream*b=ud;if(n<=0)return 0;
+    size_t want=(size_t)n>65536?65536:(size_t)n;uint32_t i=0;
+    while(i<b->count&&b->at>=b->end[i])i++;
+    if(i<b->count&&b->at>=b->begin[i]){ /* inside a BF16 region: whole F32 values only */
+        uint64_t left=b->end[i]-b->at;if(want>left)want=(size_t)left;if(want>2*sizeof(b->half))want=2*sizeof(b->half);want&=~(size_t)3;
+        if(!want||(b->at-b->begin[i])%4)return -1;
+        if(!ds4_ns_read(b->wire,b->half,want/2))return -1;
+        for(size_t k=0;k<want/4;k++){uint16_t h;memcpy(&h,b->half+2*k,2);uint32_t v=(uint32_t)h<<16;memcpy(dst+4*k,&v,4);}
+    }else{
+        if(i<b->count&&b->at+want>b->begin[i])want=(size_t)(b->begin[i]-b->at);
+        if(!want){if(!b->wire->remaining)return 0;return -1;}
+        if(want>b->wire->remaining)want=(size_t)b->wire->remaining;if(!want)return 0;
+        if(!ds4_ns_read(b->wire,dst,want))return -1;
+    }
+    b->at+=want;return (int)want;
+}
 static bool ds4_ns_import(ds4_ns_session*s,ds4_session*session,ds4_nf_io*io,const ds4_ns_reply*meta,bool initial,char*err,size_t cap){
     const double started=ds4_nf_now();
     int status;uint64_t n;bool ok=false;
@@ -259,14 +283,29 @@ static bool ds4_ns_import(ds4_ns_session*s,ds4_session*session,ds4_nf_io*io,cons
        strcmp(meta->kind,initial?"native_initial":"artifact_delta_v2_1")||
        (initial?meta->have_base:(!meta->have_base||!ds4_ns_checkpoint_same(&meta->base,&s->synced))))return false;
     if(!ds4_ns_open(s,io,"GET","/payload",NULL,NULL,0)||!ds4_nf_response(io,&status,&n)||status!=200||n!=meta->bytes)return false;
-    ds4_ns_stream stream={io,n};
+    ds4_ns_stream stream={io,n};ds4_ns_bf16_stream bf16={0};
     if(initial){
-        dsv41_c_span spans[55];uint32_t count=0;uint64_t bytes=60+(uint64_t)meta->target.position*4+129280*4;
+        const bool narrow=!strcmp(meta->wire_encoding,"bf16-compressed-index-v1");
+        if(meta->wire_encoding[0]&&!narrow&&strcmp(meta->wire_encoding,"f32"))goto done;
+        dsv41_c_span spans[55];uint32_t count=0;uint64_t bytes=60+(uint64_t)meta->target.position*4+129280*4,wire=0;
         if(!dsv41_c_layout(1000001,meta->target.position,spans,&count))goto done;
-        for(uint32_t i=0;i<count;i++)bytes+=spans[i].bytes;if(bytes!=n)goto done;
-        FILE*f=funopen(&stream,ds4_ns_file_read,NULL,NULL,NULL);if(!f)goto done;
+        for(uint32_t i=0;i<count;i++){
+            if(narrow&&(spans[i].kind==DSV41_C_COMPRESSED||spans[i].kind==DSV41_C_INDEX)&&spans[i].bytes){
+                if(bf16.count>=64||spans[i].bytes%4)goto done;
+                bf16.begin[bf16.count]=bytes;bf16.end[bf16.count]=bytes+spans[i].bytes;bf16.count++;wire+=spans[i].bytes/2;
+            }else wire+=spans[i].bytes;
+            bytes+=spans[i].bytes;}
+        wire+=60+(uint64_t)meta->target.position*4+129280*4;
+        if((narrow?wire:bytes)!=n)goto done;
+        bf16.wire=&stream;
+        FILE*f=narrow?funopen(&bf16,ds4_ns_bf16_file_read,NULL,NULL,NULL):funopen(&stream,ds4_ns_file_read,NULL,NULL,NULL);if(!f)goto done;
+        if(narrow)n=bytes; /* the loader consumes canonical F32 bytes */
+        const double load_started=ds4_nf_now();
         int rc=ds4_session_load_payload(session,f,n,err,cap);fclose(f);
+        const double verify_started=ds4_nf_now();
         ok=!rc&&!stream.remaining&&!ds4_session_native_visit(session,ds4_ns_verify,(void*)&meta->target,err,cap);
+        fprintf(stderr,"NATIVE_SESSION_IMPORT_MS open_ms=%.3f stream_load_ms=%.3f verify_ms=%.3f bytes=%llu\n",(load_started-started)*1000,
+            (verify_started-load_started)*1000,(ds4_nf_now()-verify_started)*1000,(unsigned long long)n);
     }else{
         int32_t*ids=malloc(49152*4);float*logits=malloc(129280*4);dsv41_c_plan plan;
         if(ids&&logits&&dsv41_c_read_delta_prefix(1000001,s->synced.position,49152,n,ds4_ns_fingerprint(s->id),
@@ -399,19 +438,21 @@ static bool ds4_ns_local_continuation(ds4_ns_session*s,ds4_session*session,
     return (!image_count||ds4_session_vision_prefix_matches(session,images,image_count))&&
         ds4_ns_local_work(s->config->local_prefill_max,live,(uint32_t)tokens->len,extends);
 }
+/* PAIRFIX: millisecond phase ledger for the paired prefill (diagnostic log only). */
+#define DS4_NS_PHASE(name) do{const double phase_now=ds4_nf_now();fprintf(stderr,"NATIVE_SESSION_PHASE_MS phase=\"%s\" ms=%.3f\n",phase,(phase_now-phase_t)*1000);phase_t=phase_now;phase=(name);}while(0)
 static int ds4_ns_prefill(ds4_ns_session*s,ds4_session*session,const ds4_tokens*tokens,
                            const ds4_vision_span*images,size_t image_count,
                            ds4_nf_cancel_fn cancel,void*ud,char*err,size_t cap){
     if(!s||s->poisoned||!tokens||tokens->len<1||tokens->len>=1000001)return ds4_nf_error(err,cap,"invalid persistent prefill request");
     ds4_nf_io io={.fd=-1,.deadline=ds4_nf_now()+s->config->http.deadline_seconds,.progress_window=s->config->http.deadline_seconds,.cancelled=cancel,.cancel_ud=ud,
         .progress_session=session,.progress_total=(uint64_t)tokens->len};
-    ds4_ns_reply r,meta;bool ok=false;const char*phase="initial identity";
+    ds4_ns_reply r,meta;bool ok=false;const char*phase="initial identity";double phase_t=ds4_nf_now(),phase_t0=phase_t;
     ds4_session_report_progress(session,"prefill_chunk",s->started?ds4_session_pos(session):0,tokens->len);
     if(s->started){
         const ds4_tokens*now=ds4_session_tokens(session);uint32_t live=now&&now->len>0?(uint32_t)now->len:0;
         bool extends=live&&(uint32_t)tokens->len>=live&&!memcmp(tokens->v,now->v,(size_t)live*4);
         if(ds4_ns_local_continuation(s,session,tokens,images,image_count)){
-            phase="local continuation prefill";
+            DS4_NS_PHASE("local continuation prefill");
             if(ds4_ns_local_prefill(s,session,tokens,images,image_count,cancel,ud,err,cap))goto done;
             ok=true;goto done;
         }
@@ -422,7 +463,7 @@ static int ds4_ns_prefill(ds4_ns_session*s,ds4_session*session,const ds4_tokens*
          * the Mac had imported them. Short appends keep the existing reuse path. */
         const uint32_t added=extends?(uint32_t)tokens->len-live:(uint32_t)tokens->len;
         if(added>(s->prefill_sweep_max?s->prefill_sweep_max:49152)){
-            phase="retire before full logical replay";
+            DS4_NS_PHASE("retire before full logical replay");
             if(!ds4_ns_shutdown(s)||s->poisoned)goto done;
             memset(&s->synced,0,sizeof(s->synced));s->chain_valid=false;
             fprintf(stderr,"NATIVE_SESSION_PREFILL_REPLAY tokens=%d new_rows=%u final_handoff_only=1\n",tokens->len,added);
@@ -433,45 +474,46 @@ static int ds4_ns_prefill(ds4_ns_session*s,ds4_session*session,const ds4_tokens*
         for(unsigned i=0;i<16;i++)snprintf(s->id+i*2,3,"%02x",nonce[i]);if(!ds4_ns_fingerprint(s->id))goto done;
         s->sequence=1;s->started=true;s->remote_accepted=false;
         ds4_tokens first=*tokens; /* one logical prefill, then one final handoff */
-        phase="initial HTTP startup";if(!ds4_ns_start_remote(s,&io,&first,images,image_count,&r))goto done;
+        DS4_NS_PHASE("initial HTTP startup");if(!ds4_ns_start_remote(s,&io,&first,images,image_count,&r))goto done;
         s->prefill_sweep_max=(uint32_t)r.maximum_prefill_sweep_tokens;
-        phase="initial export/import";
+        DS4_NS_PHASE("initial export/import");
         if(!ds4_ns_simple(s,&io,"export_initial",&r.checkpoint,&meta)||!ds4_ns_checkpoint_same(&meta.target,&r.checkpoint)||
            !ds4_ns_import(s,session,&io,&meta,true,err,cap))goto done;
         s->prefill_batches++;
         ds4_session_report_progress(session,"prefill_chunk",(int)s->synced.position,tokens->len);
     }
-    phase="catch-up join before RTX prefill";
+    DS4_NS_PHASE("catch-up join before RTX prefill");
     if(!ds4_ns_q_join(s,err,cap))goto done;
     s->chain_valid=false;
-    phase="reasoning-history rewind";
+    DS4_NS_PHASE("reasoning-history rewind");
     const ds4_tokens*live=ds4_session_tokens(session);
     if(live&&live->len>0&&(tokens->len<live->len||memcmp(tokens->v,live->v,(size_t)live->len*4))){
         if(!ds4_ns_rewind(s,session,tokens,&io,err,cap))goto done;
     }
-    phase="actual prefix verification";ds4_ns_prefix prefix={tokens,{0},false};
+    DS4_NS_PHASE("actual prefix verification");ds4_ns_prefix prefix={tokens,{0},false};
     if(ds4_session_native_visit(session,ds4_ns_prefix_check,&prefix,err,cap)||!ds4_ns_checkpoint_same(&prefix.actual,&s->synced))goto done;
     while(s->synced.position<(uint32_t)tokens->len){
-        phase="remote checkpoint";if(!ds4_ns_simple(s,&io,"checkpoint",NULL,&r)||!r.have_checkpoint||!r.peer_synchronized||!ds4_ns_checkpoint_same(&r.checkpoint,&s->synced))goto done;
+        DS4_NS_PHASE("remote checkpoint");if(!ds4_ns_simple(s,&io,"checkpoint",NULL,&r)||!r.have_checkpoint||!r.peer_synchronized||!ds4_ns_checkpoint_same(&r.checkpoint,&s->synced))goto done;
         uint32_t count=(uint32_t)tokens->len-s->synced.position;if(count>49152)count=49152;
         char*text=malloc(1u<<20);if(!text)goto done;ds4_ns_text b={text,1u<<20,true};
         ds4_ns_command_prefix(&b,s,"prefill");ds4_ns_put(&b,",\"base\":");ds4_ns_checkpoint_text(&b,&s->synced);ds4_ns_put(&b,",\"tokens\":[");
         for(uint32_t i=0;i<count;i++)ds4_ns_put(&b,"%s%d",i?",":"",tokens->v[s->synced.position+i]);ds4_ns_put(&b,"]}");
         ds4_tokens chunk={(int32_t*)tokens->v+s->synced.position,(int)count,(int)count};
-        phase="incremental prefill";bool sent=image_count?ds4_ns_vision_command(s,&io,&chunk,images,image_count,&r):
+        DS4_NS_PHASE("incremental prefill");bool sent=image_count?ds4_ns_vision_command(s,&io,&chunk,images,image_count,&r):
             b.ok&&ds4_ns_command(s,&io,text,(size_t)(b.p-text),&r);free(text);
         if(!sent||!r.have_checkpoint||r.peer_synchronized||r.checkpoint.position!=s->synced.position+count)goto done;s->sequence++;
-        phase="incremental export/import";if(!ds4_ns_simple(s,&io,"export_delta",&r.checkpoint,&meta)||!ds4_ns_checkpoint_same(&meta.target,&r.checkpoint)||
+        DS4_NS_PHASE("incremental export/import");if(!ds4_ns_simple(s,&io,"export_delta",&r.checkpoint,&meta)||!ds4_ns_checkpoint_same(&meta.target,&r.checkpoint)||
            !ds4_ns_import(s,session,&io,&meta,false,err,cap))goto done;s->prefill_batches++;
         ds4_session_report_progress(session,"prefill_chunk",(int)s->synced.position,tokens->len);
     }
-    phase="projected image identities";
+    DS4_NS_PHASE("projected image identities");
     if(image_count && !ds4_session_restore_vision_identities(session,images,image_count))goto done;
-    phase="saved pre-reasoning frontier";
+    DS4_NS_PHASE("saved pre-reasoning frontier");
     if((!s->include_history_reasoning||!s->anchor.state)&&!ds4_ns_save_rewind(s,session,&io,err,cap))goto done;
-    phase="catch-up hash chain";if(s->config->async_decode&&!ds4_ns_chain_init(s,session,err,cap))goto done;
+    DS4_NS_PHASE("catch-up hash chain");if(s->config->async_decode&&!ds4_ns_chain_init(s,session,err,cap))goto done;
     ok=true;
 done:
+    {const double now=ds4_nf_now();fprintf(stderr,"NATIVE_SESSION_PHASE_MS phase=\"%s\" ms=%.3f total_ms=%.3f ok=%d\n",phase,(now-phase_t)*1000,(now-phase_t0)*1000,(int)ok);}
     ds4_ns_disconnect(&io);if(!ok){fprintf(stderr,"native session failure phase=%s detail=%s\n",phase,err);ds4_ns_abort(s);ds4_session_invalidate(session);return ds4_nf_error(err,cap,"persistent prefill/hash/transport failed; no refill fallback");}return 0;
 }
 static void ds4_ns_renew(ds4_nf_io*io,double window){double d=ds4_nf_now()+window;if(io->deadline<d)io->deadline=d;}

@@ -594,7 +594,16 @@ void run_live_session(std::unique_ptr<llama_dsv41_sweep>&sweep,
             }catch(const std::exception&e){why=e.what();return false;}},error),error);
             std::fprintf(stderr,"LLAMADECODE_LOCAL_SNAPSHOT yoco_keep=%u bytes=%llu milliseconds=%.3f\n",options.yoco_keep,(unsigned long long)sent,ms(started));
         }else if(operation=="export_initial"||operation=="export_delta"){
-            dsv41_live::keys(command,{"session","model_sha256","sequence","operation","base"});same_base();
+            // PAIRFIX wire encoding (optional, initial export only): the receiver may
+            // ask for the BF16-stored compressed/index owners as their BF16 bits.
+            // Lossless by construction (the cache holds BF16); every value is still
+            // checked, and owner hashes stay defined over the canonical F32 bytes.
+            const bool wants_bf16=operation=="export_initial"&&command.contains("wire_encoding");
+            if(wants_bf16){dsv41_live::keys(command,{"session","model_sha256","sequence","operation","base","wire_encoding"});
+                require(command.at("wire_encoding")=="bf16-compressed-index-v1","Unknown native wire encoding");}
+            else dsv41_live::keys(command,{"session","model_sha256","sequence","operation","base"});
+            same_base();
+            const bool bf16_wire=wants_bf16&&options.compressed_cache_bf16;
             require(llama_dsv41_yoco::remote_compatible(options.yoco_keep,options.yoco_remote_state_version),"YOCO remote export requires matching keep/version peer negotiation");
             const bool initial=operation=="export_initial";
             require(!awaiting_ack,"Previous state transfer awaits an exact acknowledgement");
@@ -612,24 +621,41 @@ void run_live_session(std::unique_ptr<llama_dsv41_sweep>&sweep,
                 else require(dsv41_live::capture(r,[]{return should_stop();}).describe()==current.describe(),"Export checkpoint changed");
                 delta_artifact_sender delta;if(!initial)success(delta.init(remote.frontier,current.frontier,session_route,model_route,r,why),why);
                 const uint64_t bytes=initial?r.bytes():delta.bytes();
-                send({{"status","payload"},{"sequence",sequence},{"session",session},{"model_sha256",model_sha},
-                    {"kind",initial?"native_initial":"artifact_delta_v2_1"},{"bytes",bytes},{"base",initial?json(nullptr):remote.describe()},{"target",current.describe()}});
                 // Owner span boundaries in payload order (header, tokens, logits, spans).
-                std::vector<uint64_t> span_begin;std::vector<dsv41_boundary::sha256_native> span_hash;size_t span_at=0;
+                std::vector<uint64_t> span_begin;std::vector<dsv41_boundary::sha256_native> span_hash;std::vector<bool> span_bf16;size_t span_at=0;
+                uint64_t wire_bytes=bytes;
                 if(initial){llama_dsv41::wire_plan plan;std::string plan_error;require(llama_dsv41::make_wire_plan(current.frontier,plan,plan_error),plan_error.c_str());
                     uint64_t at=(current.frontier.mode==3?60:52)+uint64_t(current.frontier.position)*4+uint64_t(129280)*4;
-                    for(const auto&s:plan.spans){span_begin.push_back(at);at+=s.bytes;}span_begin.push_back(at);
+                    for(const auto&s:plan.spans){span_begin.push_back(at);at+=s.bytes;
+                        const bool narrow=bf16_wire&&(s.kind==llama_dsv41::state_kind::compressed||s.kind==llama_dsv41::state_kind::index);
+                        span_bf16.push_back(narrow);if(narrow)wire_bytes-=s.bytes/2;}
+                    span_begin.push_back(at);
                     require(at==bytes&&span_begin.size()==current.owners.size()+1,"Export owner span plan differs from the payload");
                     span_hash.resize(current.owners.size());}
+                json meta={{"status","payload"},{"sequence",sequence},{"session",session},{"model_sha256",model_sha},
+                    {"kind",initial?"native_initial":"artifact_delta_v2_1"},{"bytes",wire_bytes},{"base",initial?json(nullptr):remote.describe()},{"target",current.describe()}};
+                if(wants_bf16){meta["wire_encoding"]=bf16_wire?"bf16-compressed-index-v1":"f32";meta["canonical_bytes"]=bytes;}
+                send(meta);
+                std::vector<unsigned char> narrowed(page.size()/2);uint64_t wire_sent=0;
                 while(sent<bytes){size_t n=size_t(std::min<uint64_t>(page.size(),bytes-sent));
                     // Never let one page straddle an owner boundary, so each span hashes exactly its bytes.
                     if(initial){while(span_at+1<span_begin.size()&&sent>=span_begin[span_at+1])++span_at;
                         if(sent>=span_begin[0]&&span_at+1<span_begin.size())n=size_t(std::min<uint64_t>(n,span_begin[span_at+1]-sent));
                         else if(sent<span_begin[0])n=size_t(std::min<uint64_t>(n,span_begin[0]-sent));}
                     success(initial?r.read(sent,page.data(),n,why):delta.read(sent,page.data(),n,why),why);
-                    if(initial&&sent>=span_begin[0])span_hash[span_at].update(page.data(),n);
-                    io.write(page.data(),n);sent+=n;}
+                    const bool in_span=initial&&sent>=span_begin[0];
+                    if(in_span)span_hash[span_at].update(page.data(),n);
+                    if(in_span&&span_bf16[span_at]){
+                        require(n%4==0,"BF16 wire page is not whole F32 values");
+                        for(size_t k=0;k<n/4;++k){uint32_t v;std::memcpy(&v,page.data()+4*k,4);
+                            require((v&0xffffu)==0,"BF16 wire encoding would lose bits of an owner value");
+                            const uint16_t h=uint16_t(v>>16);std::memcpy(narrowed.data()+2*k,&h,2);}
+                        io.write(narrowed.data(),n/2);wire_sent+=n/2;
+                    }else{io.write(page.data(),n);wire_sent+=n;}
+                    sent+=n;}
+                require(wire_sent==wire_bytes,"Native export wire length differs from its metadata");
                 if(initial)for(size_t i=0;i<span_hash.size();++i)require(span_hash[i].hex()==current.owners[i],"Exported owner bytes differ from the verified checkpoint");
+                if(initial)std::fprintf(stderr,"DS4PERF_LIVE_EXPORT_WIRE encoding=%s canonical_bytes=%llu wire_bytes=%llu\n",bf16_wire?"bf16-compressed-index-v1":"f32",(unsigned long long)bytes,(unsigned long long)wire_bytes);
                 return true;
             }catch(const std::exception&e){why=e.what();return false;}},error),error);
             initial_sent=true;awaiting_ack=true;

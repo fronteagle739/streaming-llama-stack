@@ -47,7 +47,7 @@ static bool ds4_ns_checkpoint_parse(const char**p,ds4_native_checkpoint*out){
     *out=c;return true;
 }
 typedef struct {
-    char session[33],model_sha256[65],state[24],status[24],kind[32],error[1024];
+    char session[33],model_sha256[65],state[24],status[24],kind[32],error[1024],wire_encoding[32];
     uint64_t sequence,next_sequence,bytes,received_bytes,maximum_prefill_tokens,maximum_decode_tokens,control_host_bytes,maximum_decode_delta_tokens;
     uint64_t yoco_keep,yoco_state_version;
     uint64_t maximum_prefill_sweep_tokens,prefill_processed,prefill_total,prefill_elapsed_ms;
@@ -85,6 +85,7 @@ static bool ds4_ns_reply_parse(const char*text,size_t n,ds4_ns_reply*out){
         else NS_UINT(yoco_keep,21) else NS_UINT(yoco_state_version,22)
         else NS_UINT(maximum_prefill_sweep_tokens,23)
         else NS_UINT(prefill_processed,24) else NS_UINT(prefill_total,25) else NS_UINT(prefill_elapsed_ms,26)
+        else NS_STR(wire_encoding,27)
         else if(!strcmp(key,"RTX_decode")){bit=15;ok=json_bool(&p,&r.rtx_decode);}
         else if(!strcmp(key,"checkpoint")){bit=16;ok=ds4_ns_checkpoint_parse(&p,&r.checkpoint);r.have_checkpoint=ok;}
         else if(!strcmp(key,"base")){bit=17;json_ws(&p);if(!strncmp(p,"null",4))p+=4;else{ok=ds4_ns_checkpoint_parse(&p,&r.base);r.have_base=ok;}}
