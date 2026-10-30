@@ -251,14 +251,14 @@ struct llama_dsv41_weight_provider::implementation {
         std::fprintf(stderr,"LLAMADECODE_HOST_ASYNC level=%d\n",n);return n;}();return level;}
     ds4_external_host_cache_v2 host2{};bool host_v2=false;
     double host_overlap_ms=0;uint64_t host_async_hits=0,host_dropped=0,host_direct_hits=0;
-    static constexpr uint32_t upload_ring_slots=4,store_ring_slots=2;
+    uint32_t upload_ring_slots=4,store_ring_slots=2;bool rings_ready=false;
     uint64_t ring_width=0;std::array<uint64_t,3> ring_offset{};
 #ifdef GGML_USE_CUDA
     struct ring_slot{char*p=nullptr;cudaEvent_t done=nullptr;};
     std::vector<ring_slot> up_ring,in_ring;uint32_t up_next=0;
     cudaStream_t h2d_stream=nullptr,d2h_stream=nullptr;cudaEvent_t ev_main=nullptr,ev_d2h=nullptr,ev_h2d=nullptr;
 #endif
-    bool host_async()const{return host_v2&&host_slots&&host_async_level()>=1;}
+    bool host_async()const{return host_v2&&rings_ready&&host_slots&&host_async_level()>=1;}
     uint64_t host_ring_bytes()const{return uint64_t(upload_ring_slots+store_ring_slots)*ring_width;}
     void allocate_host_rings(){
 #ifdef GGML_USE_CUDA
@@ -266,10 +266,19 @@ struct llama_dsv41_weight_provider::implementation {
         ok(cudaStreamCreateWithFlags(&h2d_stream,cudaStreamNonBlocking),"RAM tier H2D stream");
         ok(cudaStreamCreateWithFlags(&d2h_stream,cudaStreamNonBlocking),"RAM tier D2H stream");
         for(auto*e:{&ev_main,&ev_d2h,&ev_h2d})ok(cudaEventCreateWithFlags(e,cudaEventDisableTiming),"RAM tier event");
-        up_ring.resize(upload_ring_slots);in_ring.resize(store_ring_slots);
-        for(auto*ring:{&up_ring,&in_ring})for(auto&r:*ring){
-            ok(cudaHostAlloc(reinterpret_cast<void**>(&r.p),size_t(ring_width),cudaHostAllocDefault),"RAM tier pinned staging");
-            ok(cudaEventCreateWithFlags(&r.done,cudaEventDisableTiming),"RAM tier staging event");}
+        // WDDM limits pinned memory per process; step the rings down, then fall back loudly to
+        // the synchronous tier path (level 0) instead of refusing the tier.
+        for(const auto sizes:{std::pair<uint32_t,uint32_t>{4,2},std::pair<uint32_t,uint32_t>{2,1}}){
+            upload_ring_slots=sizes.first;store_ring_slots=sizes.second;rings_ready=true;
+            up_ring.assign(upload_ring_slots,{});in_ring.assign(store_ring_slots,{});
+            for(auto*ring:{&up_ring,&in_ring})for(auto&r:*ring){
+                if(rings_ready&&cudaHostAlloc(reinterpret_cast<void**>(&r.p),size_t(ring_width),cudaHostAllocDefault)!=cudaSuccess){r.p=nullptr;rings_ready=false;(void)cudaGetLastError();}
+                if(rings_ready)ok(cudaEventCreateWithFlags(&r.done,cudaEventDisableTiming),"RAM tier staging event");}
+            if(rings_ready)break;
+            for(auto*ring:{&up_ring,&in_ring}){for(auto&r:*ring){if(r.p)cudaFreeHost(r.p);if(r.done)cudaEventDestroy(r.done);}ring->clear();}
+            std::fprintf(stderr,"LLAMADECODE_HOST_STAGING_REFUSED upload_slots=%u store_slots=%u bytes=%llu\n",upload_ring_slots,store_ring_slots,(unsigned long long)host_ring_bytes());
+        }
+        if(!rings_ready)std::fprintf(stderr,"LLAMADECODE_HOST_ASYNC_UNAVAILABLE reason=pinned_staging_refused path=synchronous_level0\n");
 #endif
     }
     void release_host_rings(){
@@ -1482,7 +1491,16 @@ bool llama_dsv41_weight_provider::grow_decode_cache(uint64_t bytes,uint32_t*slot
     }
     if(n<2){std::fprintf(stderr,"LLAMADECODE_L2 slots=0 offered_bytes=%llu\n",(unsigned long long)bytes);return;}
     const auto buft=ggml_backend_get_default_buffer_type(p->options.backend);
-    auto*buffer=ggml_backend_buft_alloc_buffer(buft,size_t(uint64_t(n)*slot_bytes));
+    // With the small owner-approved VRAM margin, WDDM can refuse the planned size while other
+    // desktop allocations come and go. Step down 256 MiB at a time (at most 2 GiB, loudly logged);
+    // the runtime reserve guard still refuses if free VRAM later falls below the reserve.
+    const uint32_t step=uint32_t(std::max<uint64_t>(1,(256ull<<20)/slot_bytes));
+    ggml_backend_buffer_t buffer=nullptr;
+    for(uint32_t attempt=0;attempt<=8&&n>=2;++attempt,n=n>step?n-step:0){
+        buffer=ggml_backend_buft_alloc_buffer(buft,size_t(uint64_t(n)*slot_bytes));
+        if(buffer)break;
+        std::fprintf(stderr,"LLAMADECODE_L2_ALLOC_REFUSED slots=%u bytes=%llu attempt=%u next_slots=%u\n",n,(unsigned long long)(uint64_t(n)*slot_bytes),attempt,n>step?n-step:0u);
+    }
     require(buffer,"Expert L2 VRAM allocation failed");p->l2_buffer.reset(buffer);
     auto*base=static_cast<char*>(ggml_backend_buffer_get_base(buffer));
     p->l2_base={base,base+uint64_t(n)*p->pool_max_stride[0],base+uint64_t(n)*(p->pool_max_stride[0]+p->pool_max_stride[1])};
