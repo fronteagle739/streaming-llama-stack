@@ -1112,13 +1112,23 @@ bool llama_dsv41_sweep::capture_rewind_anchor(rewind_anchor&out,std::string&erro
         out.tokens_sha256=dsv41_boundary::sha256(p->tokens.data(),p->tokens.size()*4);
         out.logits_sha256=dsv41_boundary::sha256(out.logits.data(),out.logits.size()*4);
         out.mutable_owners.resize(plan.spans.size());
+        // PAIRFIX: the append-only compressed/index owners take the cache's
+        // verified owner digests (the incremental memo the session's checkpoint
+        // inspection just refreshed) instead of a second full read+hash of the
+        // ~1.3 GB cache; the small mutable owners are still read, copied and
+        // hashed, and must equal the same verified digests.
+        std::vector<std::string> verified;
+        success(p->cache->owner_digests(out.frontier,verified,nullptr,error),error);
+        require(verified.size()==plan.spans.size(),"Rewind anchor verified owner digests differ from the plan");
         for(size_t i=0;i<plan.spans.size();++i){const auto&s=plan.spans[i];
             const bool mutable_owner=s.kind!=llama_dsv41::state_kind::compressed&&s.kind!=llama_dsv41::state_kind::index;
-            if(mutable_owner)out.mutable_owners[i].resize(size_t(s.bytes));
+            if(!mutable_owner){out.owner_sha256.push_back(verified[i]);continue;}
+            out.mutable_owners[i].resize(size_t(s.bytes));
             out.owner_sha256.push_back(dsv41_boundary::sha256_stream(s.bytes,[&](uint64_t off,void*dst,size_t n){
                 p->check_stop();if(!p->cache->read_native_span(s,off,dst,n,error))return false;
-                if(mutable_owner)std::memcpy(out.mutable_owners[i].data()+off,dst,n);return true;
+                std::memcpy(out.mutable_owners[i].data()+off,dst,n);return true;
             }));
+            require(out.owner_sha256.back()==verified[i],"Rewind anchor mutable owner differs from its verified digest");
         }
         llama_dsv41_layer_log("DS4PERF_REWIND_ANCHOR position=%u bytes=%llu full_cache_copy=0\n",pos,(unsigned long long)bytes);
         return true;
