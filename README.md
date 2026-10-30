@@ -10,68 +10,117 @@ DeepSeek V4.1 Flash, an OpenAI-compatible API, MCP tools and the llama.cpp web U
 
 ## Results
 
-DeepSeek V4.1 Flash on one RTX 5090 desktop with 32 GB of RAM.
-**FP4 (tensor-core-native layout)** measures **24.1 s prompt-only** at 100K,
-about **4,160 tok/s** (16.9 GB/s storage; 25.4 s before the round-8 BF16 HC residual, 26.3 s before the round-7 RoPE,
-Engram and indexer steps, 29.6 s before the round-6 host and HC-fusion steps), now in one weight pass by default (OPUS22 round 6: the
-compact host carry record and an all-rows VRAM hidden bank; logits bit-identical
-to the two-sweep plan). The earlier two-sweep FP4 run measured 32.4 s. The matched eager control for the Q4 shipping-default
-dense path measures **32.6 s**. The Q4_K/Q8_0 default model is 483 GiB.
+DeepSeek V4.1 Flash on one RTX 5090 desktop with 32 GB of RAM, plus an optional
+512 GB Mac Studio M3 Ultra for decode. Every figure below is **real text**: *I Promessi
+Sposi* with a password at the start and a recall question at the end, 199,952 tokens
+(the 100K rows use its first 100,000 tokens). Every run below answered the password
+correctly. Logits are bit-identical to the
+previous build. Earlier README figures (for example 5,240 tok/s) were measured on
+100,000 *identical* tokens. That file needs about 1,200 Engram rows per table, against
+1.66M on real text, so it hid about 37 s of Engram and spill cost at 200K. Those
+figures are retired.
 
-| Prompt tokens | Configuration | Timing | Time | Rate |
-|---:|---|---|---:|---:|
-| 100,000 | FP4 (tensor-core-native layout), single weight pass (default), eager | Prompt-only | **24.054 s** | **4,157.33 tok/s** |
-| 100,000 | FP4 (tensor-core-native layout), single weight pass (default), eager | TTFT | **27.078 s** | — |
-| 100,000 | FP4 (tensor-core-native layout), CUDA graphs, two sweeps | Prompt-only | 32.374 s | 3,088.92 tok/s |
-| 100,000 | FP4 (tensor-core-native layout), CUDA graphs, two sweeps | TTFT | 35.406 s | — |
-| 100,000 | Q4 shipping-default dense path, matched eager control | Prompt-only | 32.616 s | 3,066.01 tok/s |
-| 100,000 | Q4 shipping-default dense path, matched eager control | TTFT | 35.797 s | — |
-| 100,000 | Earlier Q4_K/Q8_0 default, KERNELS2 build | Prompt-only | 38.368 s | 2,606.32 tok/s |
-| 100,000 | Earlier Q4_K/Q8_0 default, KERNELS2 build | TTFT | 42.000 s | — |
-| 50,000 | Earlier exact-cone defaults | Startup + prefill | 24.203 s | 2,065.86 tok/s |
-| 200,000 | Earlier exact-cone defaults | Startup + prefill | 92.407 s | 2,164.34 tok/s |
-| 1,000,000 | Earlier approximate YOCO140 defaults | Startup + prefill | 956.734 s | 1,045.22 tok/s |
+### Single machine: RTX 5090
 
-The current kernel stack combines the exact dependency cone, certified FP4
-index scoring, fused Sinkhorn, TileLang attention, E18 transfer staging and
-allocation-plan reuse. Packed FP4 weights are an available prefill option;
-CUDA graphs remain opt-in. [Timing, builds and measurements](docs/PERFORMANCE.md#prefill).
+| Model file | Prompt | Prefill (prompt clock) | Launch to first token | Decode, Max quality | Decode, Max speed |
+|---|---:|---:|---:|---:|---:|
+| Packed FP4 (tensor-core-native layout) | 200K | **43.2 s = 4,632 tok/s** | 47.2 s | **7.6-7.9 tok/s** | **22.7 tok/s** |
+| Packed FP4 | 100K | **25.5 s = 3,917 tok/s** | 28.7 s | - | - |
+| Q4_K/Q8_0 | 200K | 59.6 s = 3,356 tok/s | 63.9 s | 7.5 tok/s | 17.8 tok/s |
 
-Single-engine warm decode on experimental (OPUS22 decode check, 2026-10-29),
-natural-text prompts (repository documents in the chat template), first 100
-evaluated steps discarded, next 899 timed:
+Before this release the same FP4 200K prompt took 76.2 s (2,623 tok/s), and 100K took
+40.3 s. Three changes made the difference:
+- Engram rows are read as 1 MiB extents through one queue at QD64, instead of about 3M
+  random 4-8 KiB reads per sweep. This volume caps 4 KiB random reads at ~280K IOPS.
+- One early load at open holds every sweep's rows.
+- The 1M-context hidden bank holds the whole sweep, so no rows spill (graph floor 3.0 GiB).
 
-| Model file | Prompt | Max quality | Max speed |
-|---|---:|---:|---:|
-| Packed FP4 (tensor-core-native layout) | 49,555 | **7.20 tok/s** | **23.86 tok/s** |
-| Packed FP4 (tensor-core-native layout) | 100,000 | **7.39 tok/s** | **24.11 tok/s** |
-| Q4_K/Q8_0 | 49,555 | 6.02-7.23 tok/s (6.94 final) | 18.78 tok/s |
-| Q4_K/Q8_0 | 100,000 | 7.11 tok/s | 18.39 tok/s |
+The remaining gap to the synthetic figure is real-text expert diversity in the
+executor (31.1 s against 29.3 s), the tail weight stream (6.8 s) and an Engram wait
+(about 2.5 s). Q4 Max speed was measured with the owner's desktop apps open. The
+planner then refused the whole-prompt Engram admission (9.37 GB needed, 9.30 GB room),
+so each sweep loaded its own rows: still exact, but slower.
 
-Packed FP4 decode reads the same tensor-core-native expert bytes the prefill
-streams, with the canonical MXFP4 vector arithmetic (logits bit-identical to a
-relayout-to-canonical reference). Max quality is bound by expert reads from
-NVMe (about 100 of 136 ms per token, ~17 GB/s); Q4 Max-quality repeats vary
-6.0-7.3 tok/s with storage speed on identical misses.
+### Single machine: Mac Studio M3 Ultra (512 GB)
 
-Earlier calibrated Q4 decode controls at 49,555 synthetic prompt tokens, with the first
-100 evaluated steps discarded and the next 899 timed:
+| Model file | Prompt | Prefill | Decode | Notes |
+|---|---:|---:|---:|---|
+| MXFP4 requant | 200K | 384 tok/s (521 s) | 36.6 tok/s serial | Metal layer prefill |
+| MXFP4 requant + DSpark | 200K | 311 tok/s (643 s) | 36.8 tok/s (prose; DSpark rarely drafts on prose) | |
 
-| Setting | Warm decode |
+The Mac-only engine must keep Metal layer prefill on. The paired receiver preset
+disables it, and with it disabled the Mac prefills one token at a time (~37 tok/s); the
+stack's Mac receiver now unsets it for Mac-only runs.
+
+### Two machines: RTX prefill, Mac decode
+
+200K real text: packed FP4 on the RTX, MXFP4 requant on the Mac.
+
+| Prefill figure | Value |
 |---|---:|
-| Max quality | **6.14 tok/s** |
-| Max speed | **20.66 tok/s** |
+| (1) RTX prefill rate alone (single-machine prompt clock) | **43.2 s = 4,632 tok/s** |
+| (1) RTX producer prompt clock inside the paired run | 44.4 s |
+| (2) Effective end-to-end prefill on the current 5 Gb/s link, measured | **55.4 s = 3,610 tok/s** |
+| (3) Estimate: 10 GbE, transfer link-bound | ~52.3 s = ~3,830 tok/s |
+| (3) Estimate: Thunderbolt 4/5 bridge, transfer link-bound | ~51.8-52.0 s = ~3,850 tok/s |
 
-[Decode controls, E8 residency and E10 graph islands](docs/PERFORMANCE.md#decode).
+Time to first token is 56.3 s from the client's request, with the Mac engine already
+loaded at pairing or preset start. Decode runs at **37.0 tok/s**.
 
-Add a Mac Studio M3 Ultra (512 GB) for decode:
+Measured stage breakdown of (2). The sum is prompt_ms on the Mac clock:
 
-| Prompt tokens | Prefill mode | WebUI prompt interval | Mac decode |
-|---:|---|---:|---:|
-| 105,054 | Exact cone, state v2 | **59.005 s** | **27.50 tok/s** |
-| 198,287 | Earlier approximate YOCO140, image | 118.8 s | 31.0 tok/s |
+| Stage | Seconds |
+|---|---:|
+| RTX producer startup, admission and allocation, prefill, until ready | 48.35 |
+| Export of 0.66 GB BF16 wire (1.30 GB canonical), streaming over direct TCP and Mac load | 3.73 |
+| Mac owner-hash verification | 0.88 |
+| Mac prefix verification | 0.88 |
+| Rewind anchor (Mac capture plus RTX save) | 1.00 |
+| Mac catch-up hash chain | 0.44 |
+| **prompt_ms** | **55.39** |
+
+Before this release the same 200K paired run took 101.9 s (1,962 tok/s), with about
+183 s to first token. The changes since: real-text Engram, an F32-to-BF16 wire,
+in-stream owner hashing, no rewind re-hash, and a direct TCP stream in place of the
+SSH tunnel. That stream goes through a small relay in the Mac receiver, because macOS
+Local Network privacy blocks an unapproved ds4-server from dialling the RTX. The SSH
+tunnel remains the explicit fallback.
+
+Assumptions for the estimates in (3):
+- Only the transfer stage is rescaled, to payload / achievable link rate.
+- Payload is the BF16 wire, 0.66 GB at 200K.
+- Achievable rates: 5 GbE ~550 MB/s (1.2 s), 10 GbE ~1.1 GB/s (0.6 s), Thunderbolt 4
+  bridge ~2 GB/s (0.33 s), Thunderbolt 5 bridge ~4 GB/s (0.17 s).
+
+Today the stream runs at ~178 MB/s of wire bytes, and it is bound by the RTX export
+loop (GPU readback, BF16 narrowing and per-owner SHA-256), not by the 5 Gb/s link. A
+faster link therefore helps only after that loop is overlapped. The link itself
+negotiates at 5 Gb/s, not 10.
+
+**Known limits.**
+- Cross-machine KL is mean 0.028, max 0.054 nats over 8 rows (qualification limit 0.1
+  mean / 0.5 max). The gap comes from the cross quants: the RTX packed FP4 proxy and
+  the Mac MXFP4 requant are both made from Q4. It closes once both machines run the
+  same native-FP4 weights.
+- The RTX-Mac link runs at 5 Gb/s.
+- About 3 s of RTX startup sits inside prompt_ms.
+- About 3 s of Mac-side verification is serial.
 
 [Paired measurements and timing scope](docs/PERFORMANCE.md#rtx-prefill-mac-decode).
+
+### Presets and scripts (fastest defaults)
+
+- RTX single machine: `examples/single-machine/dsv41-ultra-cone.ps1 -Context 1m`
+  (packed FP4 file in your config; Max quality or Max speed is the live quality-speed
+  control).
+- Mac single machine: `slstack mac` with the MXFP4 requant and its DSpark support
+  model. Metal layer prefill is on for Mac-only requests.
+- Two machines: `examples/dual-machine/dsv41-ultra-cone-fp4/preset.json`
+  (`python examples/run_preset.py --preset dsv41-ultra-cone-fp4 --machine mac|rtx`). The
+  Mac receiver relays the producer stream over direct TCP; `host_budget_gib` 9.25 admits
+  the whole-prompt Engram rows.
+
+The host-RAM expert tier and the CPU expert lane stay opt-in toggles.
 
 Other models on the same streaming engine and RTX 5090:
 
