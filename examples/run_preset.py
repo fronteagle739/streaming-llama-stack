@@ -62,7 +62,7 @@ def main(argv=None):
     parser.add_argument('--build-only',action='store_true',help='Compile without GPU verification')
     args=parser.parse_args(argv)
     if args.preset and not args.machine:parser.error('--machine is required with --preset')
-    if args.approximate_yoco and (args.preset not in ('dsv41-ultra','dsv41-ultra-yoco','dsv41-ultra-cone') or args.machine!='rtx'):
+    if args.approximate_yoco and (args.preset not in ('dsv41-ultra','dsv41-ultra-yoco','dsv41-ultra-cone','dsv41-ultra-cone-fp4') or args.machine!='rtx'):
         parser.error('--approximate-yoco requires an RTX DSV4.1 ULTRA paired preset')
     if args.setup and (args.single or args.machine!='mac'):parser.error('--setup applies to a Mac dual-machine preset')
     local=json.loads(Path(args.config).read_text(encoding='utf-8-sig'))

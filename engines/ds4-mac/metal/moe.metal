@@ -3406,9 +3406,9 @@ kernel void kernel_mul_mv_q4_K_dense_f32(
 // Q8_0 dot kernel but removes the id-buffer load and the CPU-side id table.
 /* R8': the shared body, so the plain projection and the one that folds V4.1's
  * BF16 re-round onto the store are the same code with the same reduction. */
-template<bool ROUND>
+template<bool ROUND, typename args_t = constant ds4_metal_args_mul_mv_id &>
 static inline void ds4_attn_out_low_q8_0_body(
-        constant ds4_metal_args_mul_mv_id & args,
+        args_t args,
         device const char * src0s,
         device const char * src1,
         device       char * dst,
@@ -3752,6 +3752,28 @@ kernel void kernel_dsv4_attn_out_low_q8_0_f32_bf16(
     (void)tiitg;
     ds4_attn_out_low_q8_0_body<true>(args, src0s, src1, dst, shmem, tgpig, tiisg, sgitg);
 }
+
+/* Upstream e06a0b7 FIXED_SHAPES, retaining this fork's exact BF16 twin.
+ * Literal arguments specialize the original reduction without reordering it. */
+#define DS41_ATTN_LOW_STATIC(NAME, ROUND) \
+kernel void NAME(constant ds4_metal_args_mul_mv_id &args, \
+        device const char *w, device const char *x, device char *out, \
+        threadgroup char *shmem [[threadgroup(0)]], \
+        uint3 tg [[threadgroup_position_in_grid]], \
+        ushort lane [[thread_index_in_simdgroup]], ushort sg [[simdgroup_index_in_threadgroup]]) { \
+    (void)args; \
+    ds4_metal_args_mul_mv_id sa = {}; \
+    sa.nei0=8; sa.nei1=1; sa.nbi1=0; \
+    sa.ne00=4096; sa.ne01=1024; sa.ne02=8; \
+    sa.nb00=34; sa.nb01=4352; sa.nb02=4456448; \
+    sa.ne10=4096; sa.ne11=8; sa.ne12=1; sa.ne13=1; \
+    sa.nb10=4; sa.nb11=16384; sa.nb12=131072; \
+    sa.ne0=1024; sa.ne1=8; sa.nb1=4096; sa.nr0=2; \
+    ds4_attn_out_low_q8_0_body<ROUND, thread ds4_metal_args_mul_mv_id &>(sa,w,x,out,shmem,tg,lane,sg); \
+}
+DS41_ATTN_LOW_STATIC(kernel_dsv41_attn_low_static, false)
+DS41_ATTN_LOW_STATIC(kernel_dsv41_attn_low_static_bf16, true)
+#undef DS41_ATTN_LOW_STATIC
 
 kernel void kernel_dsv4_attn_out_low_q4_K_f32(
         constant ds4_metal_args_mul_mv_id & args,
@@ -5052,7 +5074,7 @@ kernel void kernel_dsv41_gu_sorted(
 // Exact-intent gate/up union for TWO target rows only.
 
 template<typename args_t>
-void kernel_mul_mv_mxfp4_pair_swiglu_impl(
+static inline void ds4_mxfp4_pair_swiglu_walk(
         args_t args,
         constant ds4_metal_dsv4_moe_swiglu_weight_args &act,
         device const char *src0_gate,
@@ -5062,20 +5084,13 @@ void kernel_mul_mv_mxfp4_pair_swiglu_impl(
         device char *dst_up,
         device char *dst_mid,
         float route_weight,
-        threadgroup char *shmem,
-        uint3 tgpig,
-        ushort tiisg,
-        ushort sgitg) {
-    const short NSG = FC_mul_mv_nsg;
-    const int first_row = (tgpig.x * NSG + sgitg) * N_R0_MXFP4;
+        threadgroup float *lut,
+        const int first_row,
+        ushort tiisg) {
     const int nb = args.ne00 / QK_MXFP4;
     const int row_blocks = (int)(args.nb01 / sizeof(block_mxfp4));
     const short ix = tiisg / 2;
     const short it = tiisg & 1;
-
-    threadgroup float *lut = (threadgroup float *)shmem;
-    if (sgitg == 0) lut[tiisg] = ds4_metal_mxfp4_values[tiisg & 15];
-    threadgroup_barrier(mem_flags::mem_threadgroup);
 
     device const block_mxfp4 *xg =
         (device const block_mxfp4 *)(src0_gate + (uint64_t)first_row * args.nb01);
@@ -5147,6 +5162,30 @@ void kernel_mul_mv_mxfp4_pair_swiglu_impl(
     }
 }
 
+template<typename args_t>
+void kernel_mul_mv_mxfp4_pair_swiglu_impl(
+        args_t args,
+        constant ds4_metal_dsv4_moe_swiglu_weight_args &act,
+        device const char *src0_gate,
+        device const char *src0_up,
+        device const char *src1,
+        device char *dst_gate,
+        device char *dst_up,
+        device char *dst_mid,
+        float route_weight,
+        threadgroup char *shmem,
+        uint3 tgpig,
+        ushort tiisg,
+        ushort sgitg) {
+    const short NSG = FC_mul_mv_nsg;
+    const int first_row = (tgpig.x * NSG + sgitg) * N_R0_MXFP4;
+    threadgroup float *lut = (threadgroup float *)shmem;
+    if (sgitg == 0) lut[tiisg] = ds4_metal_mxfp4_values[tiisg & 15];
+    threadgroup_barrier(mem_flags::mem_threadgroup);
+    ds4_mxfp4_pair_swiglu_walk(args,act,src0_gate,src0_up,src1,dst_gate,dst_up,dst_mid,
+                              route_weight,lut,first_row,tiisg);
+}
+
 kernel void kernel_mul_mv_id_mxfp4_pair_swiglu_f32(
         constant ds4_metal_args_mul_mv_id &args,
         constant ds4_metal_dsv4_moe_swiglu_weight_args &act,
@@ -5185,6 +5224,79 @@ kernel void kernel_mul_mv_id_mxfp4_pair_swiglu_f32(
                                          x_cur, gate_cur, up_cur, mid_cur,
                                          route[0], shmem, tgpig, tiisg, sgitg);
     (void)tiitg;
+}
+
+/* MOE_DEDUP: a few rows' pair/SwiGLU with every distinct expert read once: threadgroup z
+ * handles one distinct expert and simdgroup s its s-th (row, slot) pair, each
+ * pair with the single-simdgroup walk above.  The plan lists the distinct
+ * experts in first-use order. */
+struct ds4_metal_dsv41_moe_plan {
+    uint n_distinct;
+    uint expert[64];
+    uint count[64];
+    uint pair[64 * 8];
+};
+
+kernel void kernel_dsv41_moe_dedup_plan(
+        constant ds4_metal_args_mul_mv_id &args,
+        device const char *ids,
+        device ds4_metal_dsv41_moe_plan *plan,
+        uint tid [[thread_position_in_grid]]) {
+    if (tid != 0) return;
+    uint n = 0;
+    for (int row = 0; row < args.nei1; row++) {
+        device const int32_t *sel = (device const int32_t *)(ids + (uint64_t)row * args.nbi1);
+        for (int idx = 0; idx < args.nei0; idx++) {
+            const uint e = (uint)sel[idx];
+            uint d = 0;
+            while (d < n && plan->expert[d] != e) d++;
+            if (d == n) { plan->expert[n] = e; plan->count[n] = 0; n++; }
+            plan->pair[d * 8 + plan->count[d]] = (uint)(row * args.nei0 + idx);
+            plan->count[d]++;
+        }
+    }
+    plan->n_distinct = n;
+}
+
+kernel void kernel_mul_mv_id_mxfp4_pair_swiglu_dedup_f32(
+        constant ds4_metal_args_mul_mv_id &args,
+        constant ds4_metal_dsv4_moe_swiglu_weight_args &act,
+        device const char *src0_gate,
+        device const char *src0_up,
+        device const char *src1,
+        device char *dst_gate,
+        device char *dst_up,
+        device char *dst_mid,
+        device const char *ids,
+        device const char *weights,
+        device const ds4_metal_dsv41_moe_plan *plan,
+        threadgroup char *shmem [[threadgroup(0)]],
+        uint3 tgpig [[threadgroup_position_in_grid]],
+        ushort tiisg [[thread_index_in_simdgroup]],
+        ushort sgitg [[simdgroup_index_in_threadgroup]]) {
+    threadgroup float *lut = (threadgroup float *)shmem;
+    if (sgitg == 0) lut[tiisg] = ds4_metal_mxfp4_values[tiisg & 15];
+    threadgroup_barrier(mem_flags::mem_threadgroup);
+    const uint d = tgpig.z;
+    if (d >= plan->n_distinct || sgitg >= plan->count[d]) return;
+    const int32_t expert = (int32_t)plan->expert[d];
+    if (!ds4_tp_owns_expert(expert, args.ne02, args.tp_rank, args.tp_world)) return;
+    const uint pair_row = plan->pair[d * 8 + sgitg];
+    const int iid1 = (int)(pair_row / (uint)args.nei0);
+    const int idx = (int)(pair_row % (uint)args.nei0);
+    device const float *route =
+        (device const float *)(weights + (uint64_t)pair_row * act.weight_stride);
+    device char *gate_cur = dst_gate + (uint64_t)pair_row * args.ne0 * sizeof(float);
+    device char *up_cur = dst_up + (uint64_t)pair_row * args.ne0 * sizeof(float);
+    device char *mid_cur = dst_mid + (uint64_t)pair_row * act.mid_row_stride;
+    device const char *x_cur = src1 + (uint64_t)(idx % args.ne11) * args.nb11 +
+        (uint64_t)iid1 * args.nb12;
+    device const char *gate_expert = src0_gate +
+        (int64_t)(expert - args.tp_expert_base) * args.nb02;
+    device const char *up_expert = src0_up +
+        (int64_t)(expert - args.tp_expert_base) * args.nb02;
+    ds4_mxfp4_pair_swiglu_walk(args, act, gate_expert, up_expert, x_cur, gate_cur, up_cur, mid_cur,
+                               route[0], lut, (int)tgpig.x * N_R0_MXFP4, tiisg);
 }
 
 kernel void kernel_mul_mv_id_mxfp4_pair_swiglu_fixed_route_f32(
@@ -10458,3 +10570,95 @@ kernel void kernel_dsv41_gu_sorted_simd(
 #undef N_R0_Q5_K
 #undef N_R0_Q6_K
 #undef N_R0_IQ2_XXS
+
+/* VERIFY_BATCH: the low projection of a few consecutive tokens: grid z is the group and
+ * the threadgroup holds one simdgroup group per token. */
+kernel void kernel_dsv4_attn_out_low_q8_0_f32_rows(
+        constant ds4_metal_args_mul_mv_id & args,
+        device const char * src0s,
+        device const char * src1,
+        device       char * dst,
+        threadgroup  char * shmem [[threadgroup(0)]],
+        uint3  tgpig[[threadgroup_position_in_grid]],
+        ushort tiisg[[thread_index_in_simdgroup]],
+        ushort sgitg[[simdgroup_index_in_threadgroup]]) {
+    const int idx = tgpig.z;
+
+    tgpig.z = 0;
+
+    device const char * src0_cur = src0s + idx*args.nb02;
+    device const char * src1_cur = src1  + idx*args.nb11;
+    device       char * dst_cur  = dst   + idx*args.ne0*sizeof(float);
+
+    ds4_metal_args_mul_mv args0 = {
+        /*.ne00 =*/ args.ne00,
+        /*.ne01 =*/ args.ne01,
+        /*.ne02 =*/ 1,
+        /*.nb00 =*/ args.nb00,
+        /*.nb01 =*/ args.nb01,
+        /*.nb02 =*/ args.nb02,
+        /*.nb03 =*/ args.nb02,
+        /*.ne10 =*/ args.ne10,
+        /*.ne11 =*/ 1,
+        /*.ne12 =*/ 1,
+        /*.nb10 =*/ args.nb10,
+        /*.nb11 =*/ args.nb12,
+        /*.nb12 =*/ args.nb12,
+        /*.nb13 =*/ args.nb12,
+        /*.ne0  =*/ args.ne1*args.ne0,
+        /*.ne1  =*/ 1,
+        /*.nr0  =*/ args.nr0,
+        /*.r2   =*/ 1,
+        /*.r3   =*/ 1,
+    };
+
+    kernel_mul_mv_q8_0_f32_rows_impl<N_R0_Q8_0, thread ds4_metal_args_mul_mv &>(
+        args0,
+        src0_cur,
+        src1_cur,
+        dst_cur,
+        shmem,
+        tgpig,
+        tiisg,
+        sgitg);
+}
+
+/* The matrix rows form: grid z is the group, ne12 carries the token count. */
+kernel void kernel_dsv4_attn_out_low_q8_0_f32_mma_rows8(
+        constant ds4_metal_args_mul_mv_id & args,
+        device const char * src0s,
+        device const char * src1,
+        device       char * dst,
+        threadgroup  char * shmem [[threadgroup(0)]],
+        uint3  tgpig[[threadgroup_position_in_grid]],
+        ushort tiisg[[thread_index_in_simdgroup]],
+        ushort sgitg[[simdgroup_index_in_threadgroup]]) {
+    const int idx = tgpig.z;
+    tgpig.z = 0;
+    device const char * src0_cur = src0s + idx*args.nb02;
+    device const char * src1_cur = src1  + idx*args.nb11;
+    device       char * dst_cur  = dst   + idx*args.ne0*sizeof(float);
+    ds4_metal_args_mul_mv args0 = {
+        /*.ne00 =*/ args.ne00,
+        /*.ne01 =*/ args.ne01,
+        /*.ne02 =*/ 1,
+        /*.nb00 =*/ args.nb00,
+        /*.nb01 =*/ args.nb01,
+        /*.nb02 =*/ args.nb02,
+        /*.nb03 =*/ args.nb02,
+        /*.ne10 =*/ args.ne10,
+        /*.ne11 =*/ args.ne12,
+        /*.ne12 =*/ 1,
+        /*.nb10 =*/ args.nb10,
+        /*.nb11 =*/ args.nb12,
+        /*.nb12 =*/ args.nb12,
+        /*.nb13 =*/ args.nb12,
+        /*.ne0  =*/ args.ne1*args.ne0,
+        /*.ne1  =*/ 1,
+        /*.nr0  =*/ args.nr0,
+        /*.r2   =*/ 1,
+        /*.r3   =*/ 1,
+    };
+    kernel_mul_mv_q8_0_f32_mma_rows_impl<false, 8, thread ds4_metal_args_mul_mv &>(
+        args0, src0_cur, src1_cur, dst_cur, shmem, tgpig, tiisg, sgitg);
+}

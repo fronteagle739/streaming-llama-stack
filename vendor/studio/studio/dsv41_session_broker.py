@@ -4,7 +4,7 @@ from __future__ import annotations
 import asyncio, threading, time
 from dataclasses import dataclass, field
 from starlette.requests import Request as HTTPRequest
-from .dsv41_session_contract import MAX_CONTROL, Refused, command, control, initial_request, require
+from .dsv41_session_contract import MODEL_SHA256, MAX_CONTROL, Refused, command, control, initial_request, require, hex_value
 
 @dataclass
 class Record:
@@ -23,14 +23,16 @@ class Record:
 
 class Broker:
 
-    def __init__(self, factory):
+    def __init__(self, factory, *, model_sha256=MODEL_SHA256):
         require(callable(factory), 'Trusted session factory required')
+        self.model_sha256=hex_value(model_sha256,64)
         self.factory = factory
         self.lock = threading.Lock()
         self.records = {}
         self.active = None
 
     def start(self, request):
+        require(request.get('model_sha256',MODEL_SHA256)==self.model_sha256,'Session model differs from trusted broker configuration')
         sid = request['session']
         with self.lock:
             require(self.active is None, 'Another native session owns the producer')
@@ -108,7 +110,7 @@ class Broker:
             r = self._get(sid)
             require(r.state == 'ready' and r.producer is not None and (not r.cancel.is_set()), 'Native session not ready')
             require(not r.busy and r.payload is None, 'Another native command or payload is active')
-            command(row, sid, r.producer.sequence)
+            command(row, sid, r.producer.sequence,model_sha256=self.model_sha256)
             r.busy = True
             r.operations[row['sequence']] = {'state': 'running', 'sequence': row['sequence']}
             while len(r.operations) > 32:
@@ -247,7 +249,7 @@ def create_router(broker, authorize):
     async def start(sid: str, request: HTTPRequest):
         try:
             from slstack.paired_vision import MAX_BODY
-            return JSONResponse(broker.start(initial_request(sid, headers(request), await body(request, MAX_BODY))), status_code=202)
+            return JSONResponse(broker.start(initial_request(sid, headers(request), await body(request, MAX_BODY),broker.model_sha256)), status_code=202)
         except Refused as exc:
             raise rejected(exc) from None
 

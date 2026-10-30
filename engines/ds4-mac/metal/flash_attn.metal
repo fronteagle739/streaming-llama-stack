@@ -1621,7 +1621,7 @@ constant int32_t FC_flash_attn_ext_vec_reduce_NWG [[function_constant(FC_FLASH_A
  * calls this same body, which is what keeps the fusion bit-exact. */
 static inline float dsv41_bf16(float x);
 
-template<bool ROUND>
+template<bool ROUND, bool HEADS=false>
 static __attribute__((noinline)) void ds4_flash_attn_vec_reduce_row_impl(
         constant ds4_metal_args_flash_attn_ext_vec_reduce & args,
         device  const char * htmp,
@@ -1630,7 +1630,7 @@ static __attribute__((noinline)) void ds4_flash_attn_vec_reduce_row_impl(
         ushort tiisg,
         ushort sgitg,
         short  NWG_,
-        short  DV_) {
+        short  DV_, device const float2 *rope_tab=nullptr) {
     const uint64_t rid = tgpig;
 
     const short iwg = tiisg;
@@ -1656,8 +1656,18 @@ static __attribute__((noinline)) void ds4_flash_attn_vec_reduce_row_impl(
 
         if (iwg == 0) {
             const float4 o = v*S;
-            dst4[i] = ROUND ? float4(dsv41_bf16(o.x), dsv41_bf16(o.y),
-                                     dsv41_bf16(o.z), dsv41_bf16(o.w)) : o;
+
+            float4 r=ROUND ? float4(dsv41_bf16(o.x),dsv41_bf16(o.y),dsv41_bf16(o.z),dsv41_bf16(o.w)) : o;
+            if(HEADS && i>=DV4-16) {
+                short p=2*(i-(DV4-16));float2 a=rope_tab[p],b=rope_tab[p+1];
+                float sx=-a.y,sy=-b.y;
+                float re0=r.x,im0=r.y,re1=r.z,im1=r.w;
+                r.x=dsv41_bf16(fma(re0,a.x,-(im0*sx)));
+                r.y=dsv41_bf16(fma(im0,a.x,re0*sx));
+                r.z=dsv41_bf16(fma(re1,b.x,-(im1*sy)));
+                r.w=dsv41_bf16(fma(im1,b.x,re1*sy));
+            }
+            dst4[i]=r;
         }
     }
 }

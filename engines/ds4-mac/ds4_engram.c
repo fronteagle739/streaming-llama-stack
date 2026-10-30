@@ -7,6 +7,7 @@
 #include <fcntl.h>
 #include <limits.h>
 #include <math.h>
+#include <pthread.h>
 #include <stdlib.h>
 #include <string.h>
 #include <sys/stat.h>
@@ -143,6 +144,57 @@ static float e4m3(uint8_t byte) {
     return byte & 128 ? -value : value;
 }
 
+/* All code/scale pairs fit in 128 KiB; this is a format lookup, not a cache
+ * of model rows. Preserve the reference's F32 scaling and BF16 rounding. */
+static uint16_t engram_bf16[256][256];
+static pthread_once_t engram_bf16_once = PTHREAD_ONCE_INIT;
+
+static void init_engram_bf16(void) {
+    for (unsigned scale = 0; scale < 256; scale++) {
+        for (unsigned code = 0; code < 256; code++) {
+            uint16_t result = UINT16_MAX;
+            if ((code & 127u) != 127u && scale != 255u) {
+                float value = ldexpf(e4m3((uint8_t)code), (int)scale - 127);
+                uint32_t bits;
+                memcpy(&bits, &value, sizeof(bits));
+                bits = (bits + 0x7fffu + ((bits >> 16) & 1u)) & 0xffff0000u;
+                if ((bits & 0x7f800000u) != 0x7f800000u) result = (uint16_t)(bits >> 16);
+            }
+            engram_bf16[scale][code] = result;
+        }
+    }
+}
+
+
+static int engram_format_lookup=1;
+void ds4_engram_set_format_lookup(int on) {
+    __atomic_store_n(&engram_format_lookup,on!=0,__ATOMIC_RELEASE);
+}
+/* Shared by uncached disk readers and bounded in-memory row consumers. The
+ * original arithmetic remains selectable and is the exhaustive reference. */
+bool ds4_engram_decode_row(const uint8_t raw[DS4_ENGRAM_ROW_BYTES],float out[DS4_ENGRAM_DIM]) {
+    if(!raw || !out) { errno=EINVAL;return false; }
+    const int lookup=__atomic_load_n(&engram_format_lookup,__ATOMIC_ACQUIRE);
+    if(lookup)pthread_once(&engram_bf16_once,init_engram_bf16);
+    for(int j=0;j<DS4_ENGRAM_DIM;j++) {
+        uint8_t code=raw[j],scale=raw[DS4_ENGRAM_DIM+j/32];
+        if(lookup) {
+            uint16_t value=engram_bf16[scale][code];
+            if(value==UINT16_MAX) { errno=EDOM;return false; }
+            uint32_t bits=(uint32_t)value<<16;memcpy(out+j,&bits,sizeof(bits));
+        } else {
+            if((code&127)==127 || scale==255) { errno=EDOM;return false; }
+            float value=ldexpf(e4m3(code),(int)scale-127);
+            uint32_t bits;memcpy(&bits,&value,sizeof(bits));
+            bits=(bits+0x7fffu+((bits>>16)&1u))&0xffff0000u;
+            memcpy(&value,&bits,sizeof(value));
+            if(!isfinite(value)) { errno=EDOM;return false; }
+            out[j]=value;
+        }
+    }
+    return true;
+}
+
 bool ds4_engram_read(const ds4_engram_table *t, const uint32_t *rows,
                      size_t count, float *out) {
     if (!t || t->fd < 0 || (count && (!rows || !out)) ||
@@ -159,23 +211,7 @@ bool ds4_engram_read(const ds4_engram_table *t, const uint32_t *rows,
     uint8_t raw[DS4_ENGRAM_ROW_BYTES];
     for (size_t i = 0; i < count; i++) {
         if (!read_row(t->fd, t->offset + (uint64_t)rows[i] * sizeof(raw), raw)) return false;
-        for (int j = 0; j < DS4_ENGRAM_DIM; j++) {
-            uint8_t code = raw[j], scale = raw[DS4_ENGRAM_DIM + j / 32];
-            if ((code & 127) == 127 || scale == 255) {
-                errno = EDOM;
-                return false;
-            }
-            float value = ldexpf(e4m3(code), (int)scale - 127);
-            uint32_t bits;
-            memcpy(&bits, &value, sizeof(bits));
-            bits = (bits + 0x7fffu + ((bits >> 16) & 1u)) & 0xffff0000u;
-            memcpy(&value, &bits, sizeof(value));
-            if (!isfinite(value)) {
-                errno = EDOM;
-                return false;
-            }
-            out[i * DS4_ENGRAM_DIM + j] = value;
-        }
+        if(!ds4_engram_decode_row(raw,out+i*DS4_ENGRAM_DIM))return false;
     }
     return true;
 }
@@ -375,4 +411,172 @@ void ds4_engram_fetch_release(ds4_engram_fetch *f) {
     if (f->group) dispatch_release((dispatch_group_t)f->group);
 #endif
     memset(f, 0, sizeof(*f));
+}
+
+/* MACDECODE: upstream persistent reader, with ordered row errors and real completion timestamps. */
+/* Each table's rows are needed one layer after the step starts. On Apple every row has its own worker, so a table
+ * is ready after one disk read instead of six in a row. */
+#ifdef __APPLE__
+enum { TOKEN_READERS = DS4_ENGRAM_COLS };
+#else
+enum { TOKEN_READERS = 4 };
+#endif
+
+typedef struct {
+    pthread_t thread;
+    ds4_engram_reader *reader;
+    unsigned index;
+} engram_read_worker;
+
+struct ds4_engram_reader {
+    engram_read_worker workers[TOKEN_READERS];
+    unsigned threads;
+    pthread_mutex_t mutex;
+    pthread_cond_t work, done;
+    bool active, shutdown;
+    uint64_t generation;
+    unsigned completed[2];
+    int errors[2][DS4_ENGRAM_COLS];
+    uint64_t issue_ns, done_ns[2];
+    ds4_engram_table tables[2];
+    uint32_t ids[2][DS4_ENGRAM_COLS];
+    float *out;
+};
+
+static void *read_token_thread(void *context) {
+    const engram_read_worker *worker = context;
+    ds4_engram_reader *r = worker->reader;
+    const unsigned index = worker->index;
+    uint64_t seen = 0;
+    pthread_mutex_lock(&r->mutex);
+    for (;;) {
+        while (r->generation == seen && !r->shutdown) pthread_cond_wait(&r->work, &r->mutex);
+        if (r->shutdown) break;
+        seen = r->generation;
+        pthread_mutex_unlock(&r->mutex);
+        for (unsigned table = 0; table < 2; table++) {
+            const unsigned first = index * DS4_ENGRAM_COLS / TOKEN_READERS;
+            const unsigned end = (index + 1u) * DS4_ENGRAM_COLS / TOKEN_READERS;
+            int errors[DS4_ENGRAM_COLS] = {0};
+            for (unsigned col = first; col < end; ++col) {
+                if (!ds4_engram_read(&r->tables[table], &r->ids[table][col], 1,
+                    r->out + (table * DS4_ENGRAM_COLS + col) * DS4_ENGRAM_DIM))
+                    errors[col] = errno ? errno : EIO;
+            }
+            pthread_mutex_lock(&r->mutex);
+            for (unsigned col = first; col < end; ++col) r->errors[table][col] = errors[col];
+            if (++r->completed[table] == TOKEN_READERS) {
+                r->done_ns[table] = engram_now_ns();
+                if (table == 1) r->active = false;
+                pthread_cond_broadcast(&r->done);
+            }
+            pthread_mutex_unlock(&r->mutex);
+        }
+        pthread_mutex_lock(&r->mutex);
+    }
+    pthread_mutex_unlock(&r->mutex);
+    return NULL;
+}
+
+ds4_engram_reader *ds4_engram_reader_create(void) {
+    ds4_engram_reader *r = calloc(1, sizeof(*r));
+    if (!r) return NULL;
+    int error = pthread_mutex_init(&r->mutex, NULL);
+    if (error) goto fail;
+    error = pthread_cond_init(&r->work, NULL);
+    if (error) goto mutex;
+    error = pthread_cond_init(&r->done, NULL);
+    if (error) goto work;
+    for (unsigned i = 0; i < TOKEN_READERS; i++) {
+        r->workers[i].reader = r;
+        r->workers[i].index = i;
+        error = pthread_create(&r->workers[i].thread, NULL, read_token_thread, &r->workers[i]);
+        if (error) break;
+        r->threads++;
+    }
+    if (!error) return r;
+    pthread_mutex_lock(&r->mutex);
+    r->shutdown = true;
+    pthread_cond_broadcast(&r->work);
+    pthread_mutex_unlock(&r->mutex);
+    for (unsigned i = 0; i < r->threads; i++)
+        if (pthread_join(r->workers[i].thread, NULL)) abort();
+    pthread_cond_destroy(&r->done);
+work:
+    pthread_cond_destroy(&r->work);
+mutex:
+    pthread_mutex_destroy(&r->mutex);
+fail:
+    free(r);
+    errno = error;
+    return NULL;
+}
+
+bool ds4_engram_reader_start(ds4_engram_reader *r,
+    const ds4_engram_table tables[2], const uint32_t ids[2][DS4_ENGRAM_COLS], float *out) {
+    if (!r || !tables || !ids || !out) { errno = EINVAL; return false; }
+    for (unsigned t = 0; t < 2; t++) {
+        if (tables[t].fd < 0) { errno = EINVAL; return false; }
+        for (unsigned col = 0; col < DS4_ENGRAM_COLS; col++)
+            if (ids[t][col] >= tables[t].rows) { errno = EINVAL; return false; }
+    }
+    pthread_mutex_lock(&r->mutex);
+    if (r->active || r->shutdown) {
+        pthread_mutex_unlock(&r->mutex);
+        errno = EBUSY;
+        return false;
+    }
+    memcpy(r->tables, tables, sizeof(r->tables));
+    memcpy(r->ids, ids, sizeof(r->ids));
+    memset(r->errors, 0, sizeof(r->errors));
+    r->out = out;
+    memset(r->completed, 0, sizeof(r->completed));
+    r->issue_ns = engram_now_ns();
+    r->done_ns[0] = r->done_ns[1] = 0;
+    r->generation++;
+    r->active = true;
+    pthread_cond_broadcast(&r->work);
+    pthread_mutex_unlock(&r->mutex);
+    return true;
+}
+
+bool ds4_engram_reader_wait(ds4_engram_reader *r, unsigned table) {
+    if (!r || table >= 2) { errno = EINVAL; return false; }
+    pthread_mutex_lock(&r->mutex);
+    if (!r->active && !r->completed[1]) {
+        pthread_mutex_unlock(&r->mutex);
+        errno = EINVAL;
+        return false;
+    }
+    while (r->completed[table] < TOKEN_READERS) pthread_cond_wait(&r->done, &r->mutex);
+    int error = 0;
+    for (unsigned col = 0; col < DS4_ENGRAM_COLS; ++col)
+        if (r->errors[table][col]) { error = r->errors[table][col]; break; }
+    pthread_mutex_unlock(&r->mutex);
+    if (error) errno = error;
+    return !error;
+}
+
+void ds4_engram_reader_free(ds4_engram_reader *r) {
+    if (!r) return;
+    pthread_mutex_lock(&r->mutex);
+    r->shutdown = true;
+    pthread_cond_broadcast(&r->work);
+    pthread_mutex_unlock(&r->mutex);
+    for (unsigned i = 0; i < r->threads; i++)
+        if (pthread_join(r->workers[i].thread, NULL)) abort();
+    pthread_cond_destroy(&r->done);
+    pthread_cond_destroy(&r->work);
+    pthread_mutex_destroy(&r->mutex);
+    free(r);
+}
+
+bool ds4_engram_reader_timing(ds4_engram_reader *r, unsigned table,
+                               uint64_t *issue_ns, uint64_t *done_ns) {
+    if (!r || table >= 2 || !issue_ns || !done_ns) { errno = EINVAL; return false; }
+    pthread_mutex_lock(&r->mutex);
+    const bool ready = r->done_ns[table] != 0;
+    if (ready) { *issue_ns = r->issue_ns; *done_ns = r->done_ns[table]; }
+    pthread_mutex_unlock(&r->mutex);
+    return ready;
 }

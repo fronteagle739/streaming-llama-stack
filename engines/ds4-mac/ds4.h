@@ -249,6 +249,23 @@ typedef struct {
     int down_tail_pack; /* exact four-row ninth-block packing */
     int router_shared_hc; /* independent producer mixed grid */
     int q8_virtual_down; /* four logical K groups per physical SIMD */
+    int concurrent_down; /* shared down beside resident MXFP4 routed gate/up */
+    int attn_low_static; /* upstream fixed-shape scalar low projection */
+    int verify_mxfp4; /* upstream scalar-ordered MXFP4 DSpark verify kernels */
+    int mxfp4_dedup; /* exact shared expert reads for two to eight rows */
+    int concurrent_ffn; /* 0 retained producer; 1 shared/routed overlap; 2 also deferred HC. */ /* upstream full shared/routed FFN schedule */
+    int engram_lookup; /* exact 128 KiB code/scale format table */
+    int verify_output; /* upstream shared weight pass for DSpark attention projections */
+    int rows_mma; /* DSpark-only Q8 simdgroup matrices, upstream reduction */
+    int row_matmuls; /* exact 2-8 Q8 rows sharing weight cache */
+    int engram_gate; /* exact segmented 256-thread Engram gate */
+    int shared_down_hc; /* exact short72 shared/block/HC/pre producer */
+    int fixed_dense; /* exact literal QA/KV and attention-output dimensions */
+    int query_norm_pair; /* Exact paired QA/KV norms before the query writer. */
+    int query_rope; /* Exact query-store RoPE in the existing HC/KV producer. */
+    int heads_rope; /* exact per-step RoPE table and attention writer */
+    int preencode; /* hold next token layer 0 during the current terminal wait */
+    int engram_persistent; /* upstream bounded per-row token reader */
     int q8_virtual_query; /* same mapping inside query/HC grid */
     int kv_prepare; /* exact scalar KV norm/rope/quantize/ring fusion */
     int kv_query_mix; /* independent KV task inside query/HC grid */
@@ -297,6 +314,10 @@ typedef struct {
     int mtp_gu_expert_sort; /* Group independent verifier GU jobs by expert ID. */
     int mtp_q8_swizzle; /* Exact pair6 Q8 job ordering; default on, =0 restores parent. */
     int mtp_gu_swizzle; /* Exact six-row Q4 GU job ordering; default on, =0 restores parent. */
+    int hc_join_static; /* Literal scalar FFN HC join, preserving block output. */
+    int topk_short; /* Upstream short decode shuffle/staged/fused ladder; original at0. */
+    int index_candidates; /* Compact checked masked selection; complete chronological scores retained. */
+    int index_schedule; /* 0 original; 1 omit all-eligible block plans; 2 additionally upstream wide/BF16 scalar scoring. */
     int index_score_stream; /* Exact decode scorer; default on, =0 restores direct scorer. */
     int index_mask_score; /* Exact masked scorer, candidate default off. */
     /* Decode pass 2, D1: routed DOWN leg at NR0 = 1 (2,560 threadgroups).
@@ -409,9 +430,10 @@ typedef struct {
     int dspark_reasoning_serial; /* <think> decodes serially; default 1, =0 lifts it */
     int dspark_serve;      /* D: the serving loop drafts; =0 forces serial. */
     int dspark_expert_union;
-    /* verify_batch_core = 1 runs the verify pass's attention through the
-     * prefill batch core instead of six per-row decode passes: faster, but a
-     * different attention kernel and therefore not byte-identical to serial.
+    /* verify_batch_core: 0 retains per-row attention; 1 retains the generic
+     * batch core; 2 uses upstream indexed verification, small-row split
+     * attention and exact BF16 derived-key scoring. Batch reductions may
+     * differ from serial. All modes retain chronological rollback state.
      * dspark_force_reject = 1 rejects every draft, which commits one token per
      * cycle and exercises the maximal rollback on every cycle. */
     int verify_batch_core;
