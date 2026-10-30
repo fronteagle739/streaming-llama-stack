@@ -37,7 +37,24 @@ index scoring, fused Sinkhorn, TileLang attention, E18 transfer staging and
 allocation-plan reuse. Packed FP4 weights are an available prefill option;
 CUDA graphs remain opt-in. [Timing, builds and measurements](docs/PERFORMANCE.md#prefill).
 
-Latest calibrated Q4 decode controls at 49,555 prompt tokens, with the first
+Single-engine warm decode on experimental (OPUS22 decode check, 2026-10-29),
+natural-text prompts (repository documents in the chat template), first 100
+evaluated steps discarded, next 899 timed:
+
+| Model file | Prompt | Max quality | Max speed |
+|---|---:|---:|---:|
+| Packed FP4 (tensor-core-native layout) | 49,555 | **7.20 tok/s** | **23.86 tok/s** |
+| Packed FP4 (tensor-core-native layout) | 100,000 | **7.39 tok/s** | **24.11 tok/s** |
+| Q4_K/Q8_0 | 49,555 | 6.02-7.23 tok/s (6.94 final) | 18.78 tok/s |
+| Q4_K/Q8_0 | 100,000 | 7.11 tok/s | 18.39 tok/s |
+
+Packed FP4 decode reads the same tensor-core-native expert bytes the prefill
+streams, with the canonical MXFP4 vector arithmetic (logits bit-identical to a
+relayout-to-canonical reference). Max quality is bound by expert reads from
+NVMe (about 100 of 136 ms per token, ~17 GB/s); Q4 Max-quality repeats vary
+6.0-7.3 tok/s with storage speed on identical misses.
+
+Earlier calibrated Q4 decode controls at 49,555 synthetic prompt tokens, with the first
 100 evaluated steps discarded and the next 899 timed:
 
 | Setting | Warm decode |

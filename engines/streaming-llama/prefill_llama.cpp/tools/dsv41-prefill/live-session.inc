@@ -211,6 +211,7 @@ struct ds4_external {
     int(*x_bind)(void*const*,void*const*,void*const*,const uint32_t*,void*const*,void*const*)=nullptr;
     int(*x_bind_ex)(void*const*,void*const*,void*const*,const uint32_t*,void*const*,void*const*,uint32_t)=nullptr; // bf16 owners (optional export)
     void(*x_hook)(int(*)(void*,uint32_t,const int32_t*,uint32_t,int32_t*,const char**,const char**,const char**,uint32_t*),void*)=nullptr;
+    void(*x_hook_l2)(int(*)(void*,uint32_t,const int32_t*,uint32_t,int32_t*,const char**,uint64_t*,uint32_t*,uint32_t*),void*)=nullptr; // optional export
     int(*x_decode)(int,uint32_t,const int32_t*,uint32_t,float*)=nullptr;void(*x_close)()=nullptr;
     int(*x_affinity)(float,uint32_t,uint32_t,const char*,int(*)(void*,uint32_t,uint8_t*,uint32_t),void*)=nullptr;
     int(*x_prefill_ws)(uint32_t,char*,size_t)=nullptr;int(*x_prefill)(const int32_t*,uint32_t,uint32_t,const int32_t*,uint32_t,float*)=nullptr;
@@ -252,6 +253,12 @@ struct ds4_external {
             std::fprintf(stderr,"LLAMADECODE_DS4X_SLOTS_FAILED layer=%u reason=%s\n",layer,why.c_str());return 0;}
         return 1;
     }
+    static int expert_hook_l2(void*user,uint32_t layer,const int32_t*ids,uint32_t n,int32_t*slots,const char**bases,uint64_t*l2_stride,uint32_t*l1,uint32_t*count){
+        auto*self=static_cast<ds4_external*>(user);std::string why;
+        if(!self->provider||!self->provider->external_expert_slots_l2(layer,ids,n,slots,bases,l2_stride,l1,count,nullptr,why)){
+            std::fprintf(stderr,"LLAMADECODE_DS4X_SLOTS_FAILED layer=%u direct_l2=1 reason=%s\n",layer,why.c_str());return 0;}
+        return 1;
+    }
     template<class F>void bind(F&f,const char*name){f=reinterpret_cast<F>(GetProcAddress(module,name));require(f,"ds4-decode.dll export missing");}
     void load(){
         if(module)return;
@@ -264,6 +271,7 @@ struct ds4_external {
         x_bind_ex=reinterpret_cast<decltype(x_bind_ex)>(GetProcAddress(module,"ds4x_bind_state_ex"));
         x_replace=reinterpret_cast<decltype(x_replace)>(GetProcAddress(module,"ds4x_replace_weight"));
         x_drop=reinterpret_cast<decltype(x_drop)>(GetProcAddress(module,"ds4x_drop_weights"));
+        x_hook_l2=reinterpret_cast<decltype(x_hook_l2)>(GetProcAddress(module,"ds4x_set_expert_hook_l2"));
         if(ds4x_keep_open()&&(!x_replace||!x_drop)){std::fprintf(stderr,"LLAMADECODE_DS4X_KEEP_OPEN unavailable reason=ds4-decode.dll lacks ds4x_replace_weight/ds4x_drop_weights; x_close+x_open\n");std::fflush(stderr);}
     }
     bool can_keep()const{return ds4x_keep_open()&&x_replace&&x_drop;}
@@ -314,6 +322,10 @@ struct ds4_external {
         }else require(x_bind(state.raw.data(),state.compressed.data(),state.index.data(),state.rows.data(),state.pool_kv.data(),state.pool_score.data())==1,
             "ds4x_bind_state refused the canonical state");
         x_hook(&expert_hook,this);
+        // Packed FP4 experts: the decoder reads second-tier (L2) hits in place.
+        // LLAMADECODE_DIRECT_L2=0 keeps the copy-into-L1 path.
+        if(x_hook_l2){static const bool direct=[]{const char*e=std::getenv("LLAMADECODE_DIRECT_L2");return !(e&&e[0]=='0'&&!e[1]);}();
+            x_hook_l2(direct?&expert_hook_l2:nullptr,this);}
         // B5: LLAMADECODE_DS4_BIAS=<quality-speed mean> enables ds4-win's own
         // cache-affinity bias on this cache (selection only). Spread file and
         // warmup/ramp follow the native engine (DS4_CACHE_AFFINITY_*).
@@ -338,10 +350,11 @@ struct ds4_external {
         const double decode_ms=std::chrono::duration<double,std::milli>(std::chrono::steady_clock::now()-started).count();
         success(sweep.commit_external_token(token,logits,error),error);
         const auto after=provider->cache_stats();double f1[4]{};uint64_t r1=0,b1=0;wf_extent_fetch_stats(f1,&r1,&b1);
-        std::fprintf(stderr,"LLAMADECODE_DS4X_TOKEN position=%u decode_ms=%.3f ds_bytes=%llu ds_ms=%.3f l1_hits=%llu l2_hits=%llu misses=%llu l1_slots=%u l2_slots=%u ds_submit_ms=%.3f ds_fence_ms=%.3f ds_verify_ms=%.3f ds_cuda_ms=%.3f ds_requests=%llu ds_batches=%llu\n",position,decode_ms,
+        std::fprintf(stderr,"LLAMADECODE_DS4X_TOKEN position=%u decode_ms=%.3f ds_bytes=%llu ds_ms=%.3f l1_hits=%llu l2_hits=%llu misses=%llu l1_slots=%u l2_slots=%u ds_submit_ms=%.3f ds_fence_ms=%.3f ds_verify_ms=%.3f ds_cuda_ms=%.3f ds_requests=%llu ds_batches=%llu assign_ms=%.3f copy_sync_ms=%.3f l2_stored=%llu\n",position,decode_ms,
             (unsigned long long)(after.fetched_bytes-before.fetched_bytes),after.fetch_ms-before.fetch_ms,(unsigned long long)(after.hits-before.hits),
             (unsigned long long)(after.l2_hits-before.l2_hits),(unsigned long long)(after.misses-before.misses),after.slots,after.l2_slots,
-            f1[0]-f0[0],f1[1]-f0[1],f1[2]-f0[2],f1[3]-f0[3],(unsigned long long)(r1-r0),(unsigned long long)(b1-b0));
+            f1[0]-f0[0],f1[1]-f0[1],f1[2]-f0[2],f1[3]-f0[3],(unsigned long long)(r1-r0),(unsigned long long)(b1-b0),
+            after.assign_ms-before.assign_ms,after.copy_sync_ms-before.copy_sync_ms,(unsigned long long)(after.l2_stored-before.l2_stored));
     }
     // Multi-row append: `count` tokens at `position` in one ds4 prefill; the producer
     // commits them with the frontier logits (the per-token path's final state).
