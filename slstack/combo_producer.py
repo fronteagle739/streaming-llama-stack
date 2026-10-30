@@ -234,6 +234,33 @@ def fold_plan(cfg,prompt_tokens,available,sweep,base,top,capped_by,extra,limit):
                     'fold: last sweep %d exceeds the largest capacity %d (%s); rebalanced into %s'%(
                     sum(sweeps[n//sweep-1:]),cap,capped_by,'+'.join(map(str,sweeps[n//sweep-1:]))) if rebalance else None)
 
+def whole_prompt_engram(cfg,plan,count,available):
+    """PAIRFIX: a multi-sweep prompt admits its whole prompt's Engram rows once. The producer's
+    early load (LLAMADECODE_ENGRAM_WHOLE_PROMPT, default 1) reads every sweep's rows in one
+    pass before the weight stream starts, and later sweeps reuse them, so the admission grows
+    from one sweep's rows to the whole prompt's (same per-row formula). It is added outside the
+    sweep-capacity search (it never shrinks a sweep) and only when it fits physical RAM less
+    max(desktop reserve, 1.25 GiB); otherwise it is refused and recorded in the plan, and each
+    sweep loads its own rows as before. Mutates and returns plan."""
+    plan['whole_prompt_engram_bytes']=0
+    if plan.get('single_sweep',True):return plan
+    if cfg.get('env_overrides',{}).get('LLAMADECODE_ENGRAM_WHOLE_PROMPT','1')=='0':
+        plan['whole_prompt_engram_refused']='LLAMADECODE_ENGRAM_WHOLE_PROMPT=0';return plan
+    extra=engram_prompt_bytes(int(count))-engram_prompt_bytes(int(plan['capacity']))
+    extra=-(-extra//65536)*65536
+    if extra<=0:return plan
+    if available is not None:
+        reserve=max(float(cfg.get('producer_host_reserve_gib',.5)),float(cfg.get('producer_desktop_reserve_gib',.5)),1.25)
+        room=int(available)-int(reserve*(1<<30))
+        if plan['host_bytes']+extra>room:
+            plan['whole_prompt_engram_refused']='needs %d host bytes; physical room %d'%(plan['host_bytes']+extra,room);return plan
+    outer=cfg.get('host_budget_gib')
+    if outer is not None and plan['host_bytes']+extra+(1<<29)>float(outer)*(1<<30):
+        # The producer and its controller must stay inside the enclosing guard's budget.
+        plan['whole_prompt_engram_refused']='needs %d host bytes plus 512 MiB inside host_budget_gib %.2f'%(plan['host_bytes']+extra,float(outer));return plan
+    plan['whole_prompt_engram_bytes']=extra;plan['engram_delta']+=extra;plan['host_bytes']+=extra
+    return plan
+
 RESIDENT_ROW_BYTES=40960+16+512*4+2048*4   # resident BF16 hidden + pre + compact IDs (llama-dsv41-executor layout)
 RESIDENT_FIXED_BYTES=16<<20                 # per-tile metadata rows and tensor alignment
 GRAPH_FLOOR_BYTES=5<<30                     # measured 100K planned graph peak 3.71 GB (OPUS22 round 6), plus margin
@@ -310,7 +337,7 @@ def prefill_arguments(cfg, count, available, *, export_state=False, techniques=N
                            producer_prefill_sweep_tokens='auto',
                            producer_prefill_fold_cap_tokens=61440, **compact_default(cfg, arguments)).items():
         selected.setdefault(key, value)
-    plan = prefill_plan(selected, count, available)
+    plan = whole_prompt_engram(selected, prefill_plan(selected, count, available), count, available)
     arguments['--prefill-chunk-tokens'] = str(plan['capacity'])
     arguments['--job-host-bytes'] = str(plan['host_bytes'])
     for key, delta in (('--carry-host-bytes', plan['carry_delta']),

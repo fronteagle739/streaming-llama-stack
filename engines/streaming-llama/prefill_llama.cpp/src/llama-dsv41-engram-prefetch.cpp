@@ -39,6 +39,11 @@ static uint32_t engram_read_alignment(){
 static llama_dsv41_engram_early::mode llama_dsv41_engram_early_mode(){
     static const auto m=llama_dsv41_engram_early::parse_mode(std::getenv("LLAMADECODE_ENGRAM_EARLY"));return m;
 }
+bool llama_dsv41_engram_whole_prompt(){
+    static const bool v=[]{const char*e=std::getenv("LLAMADECODE_ENGRAM_WHOLE_PROMPT");
+        if(!e||!*e||!std::strcmp(e,"1"))return true;if(!std::strcmp(e,"0"))return false;
+        throw std::invalid_argument("LLAMADECODE_ENGRAM_WHOLE_PROMPT must be 0 or 1");}();return v;
+}
 bool llama_dsv41_engram_early_enabled(){return llama_dsv41_engram_early_mode()!=llama_dsv41_engram_early::mode::off;}
 bool llama_dsv41_engram_early_auto(){return llama_dsv41_engram_early_mode()==llama_dsv41_engram_early::mode::automatic;}
 bool llama_dsv41_engram_early_pause(){return llama_dsv41_engram_early_mode()==llama_dsv41_engram_early::mode::pause;}
@@ -63,6 +68,13 @@ struct llama_dsv41_engram_prompt_cache::implementation {
     // LLAMADECODE_ENGRAM_EARLY only.
     bool early_mode=false;
     uint32_t early_rings=0,early_small=0,early_large=0,early_batch=0;
+    // PAIRFIX scan geometry (LLAMADECODE_ENGRAM_SCAN=auto|0|1): a dense row set
+    // is read as large sequential extents (gap-tolerant merge) instead of one
+    // random 4-8 KiB read per row. Same rows, same bytes copied, same order of
+    // table publication; only the read requests differ.
+    bool scan=false;uint32_t large_bytes=0;uint64_t merge_gap=0;
+    uint64_t geometry_random_requests=0,geometry_scan_requests=0,geometry_scan_bytes=0;
+    double geometry_random_s=0,geometry_scan_s=0;
     uint64_t early_arena=0;
     std::shared_ptr<const llama_dsv41_engram_prompt_cache> prior;
     // LLAMADECODE_ENGRAM_CACHE_MB (early loader only).
@@ -168,7 +180,8 @@ public:
                 for(size_t i=0;i<tables[t].ids.size();++i)if(row_cache->contains(uint32_t(t),tables[t].ids[i]))held[i>>3]|=uint8_t(1u<<(i&7));
             }
             size_t pos=0;llama_dsv41_engram_plan::extent e;
-            while(llama_dsv41_engram_plan::next_extent(tables[t].ids.data(),tables[t].ids.size(),held.empty()?nullptr:held.data(),pos,bases[t],row_bytes,llama_dsv41_engram_plan::default_merge_cap,e,engram_read_alignment()))++n;
+            while(llama_dsv41_engram_plan::next_extent(tables[t].ids.data(),tables[t].ids.size(),held.empty()?nullptr:held.data(),pos,bases[t],row_bytes,
+                  large_bytes?large_bytes:llama_dsv41_engram_plan::default_merge_cap,e,engram_read_alignment(),merge_gap))++n;
         }
         return n;
     }
@@ -326,9 +339,65 @@ public:
         early_large=std::max(1u,early_small/16);
         early_batch=std::min(env_u32("LLAMADECODE_ENGRAM_BATCH",256,1,4096),std::max(1u,early_small/2));
         early_arena=uint64_t(early_rings)*(uint64_t(early_small)*small_slot+uint64_t(early_large)*large_slot);
+        large_bytes=large_slot;merge_gap=0;
+        choose_scan(admitted,without,meta);
         host_plan=add(without,add(meta,early_arena));
         require(host_plan<=admitted,"Early Engram rows and IO arena exceed explicit host admission");
     }
+    // Extents and bytes for one geometry (cap, gap), both tables, no hits.
+    void plan_geometry(uint32_t cap,uint64_t gap,uint64_t& requests,uint64_t& bytes)const{
+        requests=bytes=0;
+        for(size_t t=0;t<2;++t){
+            size_t pos=0;llama_dsv41_engram_plan::extent e;
+            while(llama_dsv41_engram_plan::next_extent(tables[t].ids.data(),tables[t].ids.size(),nullptr,pos,bases[t],row_bytes,cap,e,engram_read_alignment(),gap)){++requests;bytes+=e.bytes;}
+        }
+    }
+    // LLAMADECODE_ENGRAM_SCAN: auto (default) reads by large extents when the
+    // predicted sequential time (bytes / LLAMADECODE_ENGRAM_SCAN_GBPS, default
+    // 15 GB/s, measured 15-22 on D:) beats the random-read prediction
+    // (requests / LLAMADECODE_ENGRAM_IOPS). Measured on D: (PAIRFIX iobench):
+    // random 264 B rows saturate at 150-285K IOPS, so a 200K prompt's ~3M row
+    // reads take 26 s, while both 101 GB tables stream in ~10-13 s.
+    void choose_scan(uint64_t admitted,uint64_t without,uint64_t meta){
+        const char*e=std::getenv("LLAMADECODE_ENGRAM_SCAN");
+        const bool off=e&&!std::strcmp(e,"0"),forced=e&&!std::strcmp(e,"1");
+        require(!e||!*e||off||forced||!std::strcmp(e,"auto"),"LLAMADECODE_ENGRAM_SCAN must be 0, 1 or auto");
+        if(off)return;
+        const uint32_t kib=env_u32("LLAMADECODE_ENGRAM_SCAN_KIB",1024,256,32768);
+        require(kib%4==0,"LLAMADECODE_ENGRAM_SCAN_KIB must be a multiple of 4");
+        const uint32_t scan_cap=kib*1024;
+        // Merge tolerance. Defaults measured at 200K real text (PAIRFIX cand3 vs
+        // cand4): 8 MiB straight-through extents read 200.8 GB, prompt 46.57 s;
+        // 1 MiB extents with a 64 KiB gap read 119.9 GB, prompt 44.44 s.
+        const uint64_t scan_gap=uint64_t(env_u32("LLAMADECODE_ENGRAM_SCAN_GAP_KIB",64,4,32768))*1024;
+        const char*g=std::getenv("LLAMADECODE_ENGRAM_SCAN_GBPS");
+        double gbps=15.0;
+        if(g&&*g){char*end=nullptr;gbps=std::strtod(g,&end);require(end&&!*end&&gbps>=0.5&&gbps<=100,"LLAMADECODE_ENGRAM_SCAN_GBPS must be 0.5-100");}
+        uint64_t random_bytes=0;
+        plan_geometry(llama_dsv41_engram_plan::default_merge_cap,0,geometry_random_requests,random_bytes);
+        plan_geometry(scan_cap,scan_gap,geometry_scan_requests,geometry_scan_bytes);
+        geometry_random_s=double(geometry_random_requests)/llama_dsv41_engram_early_iops();
+        // A scan is bound by bytes or by its own request rate, whichever is slower.
+        geometry_scan_s=std::max(double(geometry_scan_bytes)/(gbps*1e9),double(geometry_scan_requests)/llama_dsv41_engram_early_iops());
+        const bool want=forced||geometry_scan_s<geometry_random_s;
+        const uint32_t rings=env_u32("LLAMADECODE_ENGRAM_SCAN_RINGS",4,1,8);
+        uint32_t slots=env_u32("LLAMADECODE_ENGRAM_SCAN_DEPTH",64,2,256);
+        constexpr uint32_t scan_small=64;
+        auto arena=[&](uint32_t n){return uint64_t(rings)*(uint64_t(scan_small)*small_slot+uint64_t(n)*scan_cap);};
+        // Fit the admission; never silently: the geometry line reports it.
+        while(want&&slots>2&&add(without,add(meta,arena(slots)))>admitted)--slots;
+        const bool fits=add(without,add(meta,arena(slots)))<=admitted;
+        llama_dsv41_layer_log("LLAMADECODE_ENGRAM_GEOMETRY chosen=%s forced=%d random_requests=%llu random_bytes=%llu random_predicted_s=%.3f scan_requests=%llu scan_bytes=%llu "
+            "scan_predicted_s=%.3f scan_kib=%u scan_gbps=%.2f rings=%u slots=%u fits=%d\n",want&&fits?"scan":"random",int(forced),
+            (unsigned long long)geometry_random_requests,(unsigned long long)random_bytes,geometry_random_s,(unsigned long long)geometry_scan_requests,
+            (unsigned long long)geometry_scan_bytes,geometry_scan_s,kib,gbps,rings,slots,int(fits));
+        require(!forced||fits,"LLAMADECODE_ENGRAM_SCAN=1 arena exceeds the explicit Engram host admission");
+        if(!want||!fits)return;
+        scan=true;large_bytes=scan_cap;merge_gap=scan_gap;early_rings=rings;early_small=scan_small;early_large=slots;
+        early_batch=std::max(1u,(scan_small+slots)/4);early_arena=arena(slots);
+    }
+    bool scan_geometry()const{return scan;}
+    double predicted_seconds()const{return scan?geometry_scan_s:geometry_random_s;}
     struct early_slot {uint64_t file_offset=0;uint32_t bytes=0,table=0,first=0,last=0,rows=0;UINT_PTR id=0;bool live=false;};
     struct early_ring {
         HIORING ring=nullptr;HANDLE event=nullptr;uint8_t* arena=nullptr;uint32_t submitted=0,staged=0;
@@ -428,9 +497,9 @@ public:
                 a.VolumeSerialNumber==b.VolumeSerialNumber&&!std::memcmp(a.FileId.Identifier,b.FileId.Identifier,16),
                 "Engram IoRing descriptor differs from the verified model");
         const uint32_t slots_per_ring=early_small+early_large;
-        const uint64_t ring_arena=uint64_t(early_small)*small_slot+uint64_t(early_large)*large_slot;
+        const uint64_t ring_arena=uint64_t(early_small)*small_slot+uint64_t(early_large)*large_bytes;
         require(ring_arena<=UINT32_MAX,"Early Engram ring arena exceeds one registered buffer");
-        auto slot_offset=[&](uint32_t s){return s<early_small?uint64_t(s)*small_slot:uint64_t(early_small)*small_slot+uint64_t(s-early_small)*large_slot;};
+        auto slot_offset=[&](uint32_t s){return s<early_small?uint64_t(s)*small_slot:uint64_t(early_small)*small_slot+uint64_t(s-early_small)*large_bytes;};
         io.rings.resize(early_rings);
         for(auto& r:io.rings){
             IORING_CREATE_FLAGS flags{};
@@ -474,7 +543,7 @@ public:
             if(have_pending)return true;
             while(cur_table<2){
                 const auto& t=tables[cur_table];
-                if(ep::next_extent(t.ids.data(),t.ids.size(),hits[cur_table].empty()?nullptr:hits[cur_table].data(),cur_pos,bases[cur_table],row_bytes,large_slot,pending,engram_read_alignment())){
+                if(ep::next_extent(t.ids.data(),t.ids.size(),hits[cur_table].empty()?nullptr:hits[cur_table].data(),cur_pos,bases[cur_table],row_bytes,large_bytes,pending,engram_read_alignment(),merge_gap)){
                     pending_table=cur_table;have_pending=true;return true;}
                 ++cur_table;cur_pos=0;
             }
@@ -488,7 +557,7 @@ public:
                     // has a quarter of its slots in flight; otherwise re-plan
                     // the same rows from the same index at the small-slot cap
                     // (same rows land, more requests) instead of starving.
-                    if(r.submitted+r.staged>=early_small/4)return;
+                    if(scan||r.submitted+r.staged>=early_small/4)return; // scan: always wait for a large slot
                     const auto& t=tables[pending_table];cur_pos=pending.first;
                     require(ep::next_extent(t.ids.data(),t.ids.size(),hits[pending_table].empty()?nullptr:hits[pending_table].data(),cur_pos,bases[pending_table],row_bytes,small_slot,pending,engram_read_alignment()),"Engram re-plan lost its rows");
                     ++replanned;
@@ -569,11 +638,11 @@ public:
         const uint64_t rows=tables[0].ids.size()+tables[1].ids.size();
         llama_dsv41_layer_log("LLAMADECODE_ENGRAM_EARLY_LOAD table0_rows=%zu table1_rows=%zu hit_rows=%llu reuse=%d extents=%llu merged_rows=%llu requests=%llu submits=%llu "
             "read_bytes=%llu useful_bytes=%llu rings=%u slots=%u large_slots=%u batch=%u replanned=%llu arena_bytes=%llu host_plan_bytes=%llu max_inflight=%llu "
-            "setup_ms=%.3f table0_ms=%.3f wall_ms=%.3f weight_pass_at_start=%d weight_pass_overlap_ms=%.3f overlap_frac=%.3f\n",
+            "setup_ms=%.3f table0_ms=%.3f wall_ms=%.3f weight_pass_at_start=%d weight_pass_overlap_ms=%.3f overlap_frac=%.3f geometry=%s slot_bytes=%u\n",
             tables[0].ids.size(),tables[1].ids.size(),(unsigned long long)(hit_rows[0]+hit_rows[1]),reuse,(unsigned long long)requests,
             (unsigned long long)(useful_rows-requests),(unsigned long long)requests,(unsigned long long)submits,(unsigned long long)read_bytes,
             (unsigned long long)(rows*row_bytes),early_rings,early_small,early_large,early_batch,(unsigned long long)replanned,(unsigned long long)early_arena,(unsigned long long)host_plan,
-            (unsigned long long)max_inflight,setup_ms,table0_ms,wall,int(weight_at_start),overlap_ms,wall>0?overlap_ms/wall:0.0);
+            (unsigned long long)max_inflight,setup_ms,table0_ms,wall,int(weight_at_start),overlap_ms,wall>0?overlap_ms/wall:0.0,scan?"scan":"random",large_bytes);
         llama_dsv41_layer_log("[dsv41-engram-prefetch] table0_rows=%zu table1_rows=%zu host_plan_bytes=%llu read_bytes=%llu requests=%llu submits=%llu wall_ms=%llu early=1\n",
             tables[0].ids.size(),tables[1].ids.size(),(unsigned long long)host_plan,(unsigned long long)read_bytes,
             (unsigned long long)requests,(unsigned long long)submits,(unsigned long long)wall);
@@ -633,6 +702,20 @@ void llama_dsv41_engram_prompt_cache::set_row_cache(std::shared_ptr<llama_dsv41_
  p->row_cache=std::move(c);
 #else
  (void)c;
+#endif
+}
+bool llama_dsv41_engram_prompt_cache::scan_geometry()const{
+#ifdef _WIN32
+ return p->scan_geometry();
+#else
+ return false;
+#endif
+}
+double llama_dsv41_engram_prompt_cache::predicted_seconds()const{
+#ifdef _WIN32
+ return p->predicted_seconds();
+#else
+ return 0;
 #endif
 }
 uint64_t llama_dsv41_engram_prompt_cache::planned_requests()const{

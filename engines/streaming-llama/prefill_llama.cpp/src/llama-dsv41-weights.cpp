@@ -561,6 +561,14 @@ struct llama_dsv41_weight_provider::implementation {
         bool adopted=false;
     };
     std::shared_ptr<early_engram>early;
+    // PAIRFIX whole-prompt Engram: the early cache built for every sweep of the
+    // request, its tokens, and the tokens earlier sweeps already adopted. Rows
+    // are content-addressed by id, so a later sweep reads exactly the same
+    // bytes; a missing row fails the read loudly (never a substitute).
+    std::shared_ptr<llama_dsv41_engram_prompt_cache>whole;std::vector<int32_t>whole_tokens;size_t whole_used=0;
+    bool whole_covers(const std::vector<int32_t>&t)const{
+        return whole&&whole_used+t.size()<=whole_tokens.size()&&std::equal(t.begin(),t.end(),whole_tokens.begin()+whole_used);
+    }
     std::shared_ptr<llama_dsv41_engram_row_cache>row_cache;
     bool device_suspended=false;
     void create_pipeline();
@@ -636,7 +644,7 @@ struct llama_dsv41_weight_provider::implementation {
         poisoned=true;
         discard_tail();
         join_early();
-        engram_prompt.reset();
+        engram_prompt.reset();whole.reset();whole_tokens.clear();whole_used=0;
         if(options.backend&&allocated)ggml_backend_synchronize(options.backend);
         release_host();release_l2();
         if(fetcher){wf_stop(fetcher);wf_quiesce(fetcher);wf_destroy(fetcher);fetcher=nullptr;}
@@ -1118,10 +1126,17 @@ bool llama_dsv41_weight_provider::implementation::launch_early(const std::vector
         catch(const std::exception&failure){
             // =1 would fail this request at adoption; auto keeps the ordinary path, which applies its own admission.
             llama_dsv41_layer_log("LLAMADECODE_ENGRAM_EARLY_DECISION at=%s tokens=%zu early=0 reason=plan_failed what=\"%s\"\n",at,tokens.size(),failure.what());return false;}
-        const auto d=llama_dsv41_engram_early::decide(e->cache->planned_requests(),llama_dsv41_engram_early_iops(),gap_s);
-        llama_dsv41_layer_log("LLAMADECODE_ENGRAM_EARLY_DECISION at=%s tokens=%zu requests=%llu iops=%.0f predicted_s=%.3f gap_s=%.3f plan_ms=%.3f early=%d fits=%d arm=%s\n",
+        auto d=llama_dsv41_engram_early::decide(e->cache->planned_requests(),llama_dsv41_engram_early_iops(),gap_s);
+        // PAIRFIX: a scan-geometry load is sequential, so starting it before the
+        // weight stream only moves bytes out of the contended window: start it
+        // now even when it does not fit the gap (the sweep-start arm would read
+        // the same bytes later, entirely against the weight stream).
+        const bool scan=e->cache->scan_geometry();
+        if(scan){d.predicted_s=e->cache->predicted_seconds();d.chosen=llama_dsv41_engram_early::arm::early;}
+        llama_dsv41_layer_log("LLAMADECODE_ENGRAM_EARLY_DECISION at=%s tokens=%zu requests=%llu iops=%.0f predicted_s=%.3f gap_s=%.3f plan_ms=%.3f early=%d fits=%d arm=%s geometry=%s\n",
             at,tokens.size(),(unsigned long long)d.requests,llama_dsv41_engram_early_iops(),d.predicted_s,d.gap_s,
-            std::chrono::duration<double,std::milli>(std::chrono::steady_clock::now()-planning).count(),int(d.early),int(d.early),llama_dsv41_engram_early::arm_name(d.chosen));
+            std::chrono::duration<double,std::milli>(std::chrono::steady_clock::now()-planning).count(),int(d.chosen==llama_dsv41_engram_early::arm::early),int(d.early),
+            llama_dsv41_engram_early::arm_name(d.chosen),scan?"scan":"random");
         if(d.chosen!=llama_dsv41_engram_early::arm::early)return false;
         pause=false;
     }
@@ -1173,8 +1188,12 @@ bool llama_dsv41_weight_provider::start_engram_cold(std::string&error){return p-
     }
     // Same charge rule as start_engram_prompt_early: the current pass's own
     // worst case unless this cache is for the very request that runs next.
-    const uint64_t worst=add(4*mib,uint64_t(tokens.size())*48*(4+264));
-    const bool next_request=p->options.engram_early_is_next_request&&p->options.engram_prefetch_tokens==tokens.size();
+    // PAIRFIX whole prompt: tokens cover every sweep; prepare_early admits the
+    // actual rows and IO arena against the same admission (plan_failed is logged
+    // and the sweeps load their own rows as before).
+    const bool whole_prompt=tokens.size()>p->options.engram_prefetch_tokens;
+    const uint64_t worst=whole_prompt?0:add(4*mib,uint64_t(tokens.size())*48*(4+264));
+    const bool next_request=p->options.engram_early_is_next_request&&(p->options.engram_prefetch_tokens==tokens.size()||whole_prompt);
     const uint64_t current=next_request?0:add(4*mib,uint64_t(p->options.engram_prefetch_tokens)*48*(4+264));
     if(add(worst,current)>p->options.engram_prefetch_host_bytes){
         llama_dsv41_layer_log("LLAMADECODE_ENGRAM_EARLY_SKIPPED at=cold tokens=%zu worst_bytes=%llu current_bytes=%llu admitted_bytes=%llu reason=host_admission\n",tokens.size(),
@@ -1210,6 +1229,22 @@ bool llama_dsv41_weight_provider::prepare_engram_prompt(const std::vector<int32_
     const bool during_layer_zero=overlap&&std::strcmp(overlap,"1")==0&&p->leased&&p->next==1;
     require(p->allocated&&((!p->leased&&p->next==0)||during_layer_zero)&&!p->engram_prompt&&tokens.size()==p->options.engram_prefetch_tokens,
         "Engram whole-prompt cache requires its initial or explicitly overlapped layer-zero lease");p->identity();
+    if(p->whole_covers(tokens)&&!text_mask){
+        // A later sweep of the same request: every row was loaded by the whole-prompt load.
+        p->engram_prompt=p->whole;p->whole_used+=tokens.size();
+        const size_t used=p->whole_used,of=p->whole_tokens.size();const uint64_t plan=p->whole->budget();
+        if(used==of){p->whole.reset();p->whole_tokens.clear();p->whole_used=0;} // last sweep: the pass keeps its own reference
+        llama_dsv41_layer_log("DS4PERF_ENGRAM_WHOLE_PROMPT_REUSED tokens=%zu used=%zu of=%zu host_plan_bytes=%llu reads=0\n",tokens.size(),used,of,(unsigned long long)plan);
+        return;
+    }
+    if(p->early&&!text_mask&&p->early->text_mask.empty()&&p->early->tokens.size()>tokens.size()&&p->early->initial.tail==initial.tail&&
+       std::equal(tokens.begin(),tokens.end(),p->early->tokens.begin())&&overlap&&std::strcmp(overlap,"1")==0){
+        require(!p->early->adopted,"Early Engram prompt cache was adopted twice");
+        p->engram_prompt=p->early->cache;p->early->adopted=true;
+        p->whole=p->early->cache;p->whole_tokens=p->early->tokens;p->whole_used=tokens.size();
+        llama_dsv41_layer_log("DS4PERF_ENGRAM_EARLY_ADOPTED tokens=%zu deferred=1 per_table_ready=1 same_rows=1 whole_prompt_tokens=%zu\n",tokens.size(),p->whole_tokens.size());
+        return;
+    }
     if(p->early&&p->early->tokens==tokens){
         const auto&mask=p->early->text_mask;
         require(text_mask?mask.size()==tokens.size()&&std::equal(mask.begin(),mask.end(),text_mask):mask.empty(),
@@ -1256,6 +1291,9 @@ bool llama_dsv41_weight_provider::start_engram_prompt_early(const std::vector<in
         const bool same_mask=text_mask?mask.size()==tokens.size()&&std::equal(mask.begin(),mask.end(),text_mask):mask.empty();
         if((p->early->tokens==tokens&&(p->early->initial.tail!=initial.tail||!same_mask))||
            (text_mask&&p->early->tokens!=tokens))p->join_early();
+    }
+    if(current_request&&!text_mask&&p->whole_covers(tokens)){
+        llama_dsv41_layer_log("DS4PERF_ENGRAM_WHOLE_PROMPT_COVERS tokens=%zu at=%zu of=%zu queued=0\n",tokens.size(),p->whole_used,p->whole_tokens.size());return;
     }
     if(current_request&&p->early){
         // A producer-warm build for a request is already queued; prepare adopts

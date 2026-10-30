@@ -4,6 +4,10 @@
 // optionally 512 B). Rows on the same or adjacent aligned sectors merge up to
 // a byte cap (64 KiB).
 // Rows marked in an optional hit bitmap are already resident and are skipped.
+// PAIRFIX scan geometry: a nonzero `gap` also merges rows whose aligned
+// sectors are up to `gap` bytes apart (the gap bytes are read and ignored), so
+// a dense row set becomes a few large sequential reads instead of one random
+// read per row. gap 0 is the original same-or-adjacent-sector rule.
 // No IO, no allocation in next_extent; build() materialises a plan for tests.
 #include <algorithm>
 #include <cstddef>
@@ -37,7 +41,7 @@ inline uint32_t row_offset(const extent &e, const uint32_t *ids, size_t i, uint6
 // they map to the same bytes). Returns false when every remaining row is a hit.
 inline bool next_extent(const uint32_t *ids, size_t n, const uint8_t *hits, size_t &pos,
                         uint64_t base, uint32_t row_bytes, uint32_t cap, extent &out,
-                        uint32_t read_alignment = page_bytes) {
+                        uint32_t read_alignment = page_bytes, uint64_t gap = 0) {
     if ((read_alignment != 512 && read_alignment != page_bytes) || row_bytes == 0 ||
         row_bytes > read_alignment || cap < 2 * read_alignment || cap % read_alignment)
         throw std::invalid_argument("Engram plan geometry");
@@ -64,7 +68,7 @@ inline bool next_extent(const uint32_t *ids, size_t n, const uint8_t *hits, size
         }
         uint64_t b = 0, e = 0;
         span(pos, b, e);
-        if (b > end) break;                       // a gap: not the same or adjacent page
+        if (b > end + gap) break;                 // a gap wider than the merge tolerance
         const uint64_t grown = std::max(end, e);
         if (grown - begin > cap) break;           // merge cap
         end = grown;
@@ -84,11 +88,11 @@ struct plan {
 };
 
 inline plan build(const uint32_t *ids, size_t n, const uint8_t *hits, uint64_t base, uint32_t row_bytes,
-                  uint32_t cap = default_merge_cap, uint32_t read_alignment = page_bytes) {
+                  uint32_t cap = default_merge_cap, uint32_t read_alignment = page_bytes, uint64_t gap = 0) {
     plan p;
     size_t pos = 0;
     extent e;
-    while (next_extent(ids, n, hits, pos, base, row_bytes, cap, e, read_alignment)) {
+    while (next_extent(ids, n, hits, pos, base, row_bytes, cap, e, read_alignment, gap)) {
         p.extents.push_back(e);
         p.bytes += e.bytes;
         for (size_t i = e.first; i <= e.last; ++i)
