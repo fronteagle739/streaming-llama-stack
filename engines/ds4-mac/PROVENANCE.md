@@ -32,3 +32,18 @@ remain. The new graph levers are opt-in; weight views and eligible aligned
 copies adopt upstream defaults with explicit controls. The owned anonymous
 wired allocation/admission policy is unchanged. See `docs/MACDECODE_ROUND4.md`
 for exactness checks, measured scope and remaining release qualification.
+
+Further Round 4 ports: next-token first-buffer pre-encoding (`67dcb001`),
+exact per-step RoPE tables and transforming attention stores (`b1ba3164`),
+literal QA/KV and attention/HC dimensions (`e06a0b7f`), and Unicode JoyAI
+pre-tokenization (`1d28e1ff`, including its generated Unicode class table).
+Held buffers retain generation/position/host-state/lever checks; the fork's
+producer epilogues and numerical controls are preserved. The tokenizer's
+three splits are checked directly against the existing released tokenizer JSON.
+
+Further exact ports include Engram code/scale format lookup (`962ac191`),
+index-query table RoPE/quantization (`b1ba3164`), the shared-down/HC/carry join
+(`0ba56e9c`, `73f1bdb1`, `e06a0b7f`), segmented Engram gating (`dbe5d51d`)
+and Q8 row weight reuse (`7924b68a`). Optional DSpark Q8 matrix rows
+(`f8e36424`) preserve the upstream changed reduction order, bounded to DSpark
+steps with failure-safe scope restoration; original row reductions remain.

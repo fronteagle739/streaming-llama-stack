@@ -3100,3 +3100,307 @@ kernel void kernel_dsv41_query_hc_kv(
         dsv41_arch_sinkhorn(tail_args, local, scale, base, split);
     }
 }
+
+// Upstream b1ba3164: one exact table per token, and the same split reduction
+// with BF16/inverse RoPE in its writer. Argument layout matches ds41_rope_args.
+kernel void kernel_dsv41_step_rope_table(
+    constant ds4_metal_args_dsv41_rope &raw,
+    constant ds4_metal_args_dsv41_rope &comp,
+    device float2 *table,uint tid [[thread_position_in_grid]]) {
+    if(tid>=64u)return;
+    constant ds4_metal_args_dsv41_rope *a=tid<32u?&raw:&comp;
+    float theta=float(a->start)*a->frequencies[tid&31u];
+    float c;float s=precise::sincos(theta,c);table[tid]=float2(c,s);
+}
+kernel void kernel_dsv41_flash_attn_vec_reduce_heads(
+    constant ds4_metal_args_flash_attn_ext_vec_reduce &args,
+    device const char *htmp,device char *dst,device const float2 *table,
+    uint group [[threadgroup_position_in_grid]],
+    ushort lane [[thread_index_in_simdgroup]],ushort sg [[simdgroup_index_in_threadgroup]]) {
+    ds4_flash_attn_vec_reduce_row_impl<true,true>(args,htmp,dst,group,lane,sg,
+        (short)FC_flash_attn_ext_vec_reduce_NWG,(short)FC_flash_attn_ext_vec_reduce_DV,table);
+}
+
+
+// Upstream e06a0b7f literal shapes, adapted to the retained producer epilogues.
+static inline ds4_metal_args_mul_mv ds41_literal_q8_args(int in,int out) {
+    ulong row=(ulong)(in/32)*34;
+    return ds4_metal_args_mul_mv{in,out,1,34,row,row*out,row*out,in,1,1,4,
+        (ulong)in*4,(ulong)in*4,(ulong)in*4,out,1,2,1,1};
+}
+kernel void kernel_dsv41_arch_qa_kv_flat_static(
+        constant ds4_metal_args_mul_mv &qa_args,
+        constant ds4_metal_args_mul_mv &kv_args,
+        device const char *qa_weight, device const char *kv_weight,
+        device const char *input, device char *qa, device char *kv,
+        threadgroup char *shmem [[threadgroup(0)]],
+        uint3 tgpig [[threadgroup_position_in_grid]],
+        ushort tiisg [[thread_index_in_simdgroup]],
+        ushort sgitg [[simdgroup_index_in_threadgroup]]) {
+    (void)qa_args;(void)kv_args;
+    ds4_metal_args_mul_mv sa=ds41_literal_q8_args(5120,1280);
+    ds4_metal_args_mul_mv sb=ds41_literal_q8_args(5120,512);
+    if (tgpig.x < 640u)
+        kernel_mul_mv_q8_0_f32_impl<2, thread ds4_metal_args_mul_mv &, true>(
+            sa, qa_weight, input, qa, shmem, tgpig, tiisg, sgitg);
+    else {
+        tgpig.x -= 640u;
+        kernel_mul_mv_q8_0_f32_impl<2, thread ds4_metal_args_mul_mv &, true>(
+            sb, kv_weight, input, kv, shmem, tgpig, tiisg, sgitg);
+    }
+}
+kernel void kernel_dsv41_attn_out_hc_static(
+        constant ds4_metal_args_mul_mv &args [[buffer(0)]],
+        device const char *src0 [[buffer(1)]],
+        device const char *src1 [[buffer(2)]],
+        device float *block [[buffer(3)]],
+        device const float *residual [[buffer(4)]],
+        device const float *split [[buffer(5)]],
+        device float *out [[buffer(6)]],
+        threadgroup char *shmem [[threadgroup(0)]],
+        uint3 tgpig [[threadgroup_position_in_grid]],
+        ushort tiisg [[thread_index_in_simdgroup]],
+        ushort sgitg [[simdgroup_index_in_threadgroup]]) {
+    (void)args;
+    ds4_metal_args_mul_mv sa=ds41_literal_q8_args(8192,5120);
+
+    constexpr short NR0 = N_R0_Q8_0;
+    const short NSG = FC_mul_mv_nsg;
+
+    constexpr short NW = N_SIMDWIDTH;
+    constexpr short NQ = 8;
+
+    const int nb = sa.ne00/QK8_0;
+
+    const int r0 = tgpig.x*NR0;
+    const int r1 = tgpig.y;
+    const int im = tgpig.z;
+
+    const uint i12 = im%sa.ne12;
+    const uint i13 = im/sa.ne12;
+
+    const uint64_t offset1 = r1*sa.nb11 + (i12)*sa.nb12 + (i13)*sa.nb13;
+
+    device const float * y = (device const float *) (src1 + offset1);
+
+    device const block_q8_0 * ax[NR0];
+    FOR_UNROLL (short row = 0; row < NR0; ++row) {
+        const uint64_t offset0 = (r0 + row)*sa.nb01 + (i12/sa.r2)*sa.nb02 + (i13/sa.r3)*sa.nb03;
+
+        ax[row] = (device const block_q8_0 *) ((device char *) src0 + offset0);
+    }
+
+    float sumf[NR0] = { 0.f };
+
+    const short ix = tiisg/(NW/NQ);
+    const short il = tiisg%(NW/NQ);
+
+    const int ib0 = sgitg*NQ + ix;
+
+    float yl[NQ];
+
+    device const float * yb = y + ib0*QK8_0 + il*NQ;
+
+    for (int ib = ib0; ib < nb; ib += NSG*NQ) {
+        for (short i = 0; i < NQ; ++i) {
+            yl[i] = yb[i];
+        }
+
+        for (short row = 0; row < NR0; row++) {
+            device const int8_t * qs = ax[row][ib].qs + il*NQ;
+
+            float sumq = 0.f;
+            FOR_UNROLL (short i = 0; i < NQ; ++i) {
+                sumq += qs[i] * yl[i];
+            }
+
+            sumf[row] += sumq*ax[row][ib].d;
+        }
+
+        yb += NSG*NQ*QK8_0;
+    }
+
+
+    threadgroup float * shmem_f32[NR0];
+
+    for (short row = 0; row < NR0; ++row) {
+        shmem_f32[row] = (threadgroup float *) shmem + NW*row;
+
+        if (sgitg == 0) {
+            shmem_f32[row][tiisg] = 0.0f;
+        }
+
+        sumf[row] = simd_sum(sumf[row]);
+    }
+
+    threadgroup_barrier(mem_flags::mem_threadgroup);
+
+    for (short row = 0; row < NR0; ++row) {
+        if (tiisg == 0) {
+            shmem_f32[row][sgitg] = sumf[row];
+        }
+    }
+
+    threadgroup_barrier(mem_flags::mem_threadgroup);
+
+    for (short row = 0; row < NR0 && r0 + row < sa.ne01; ++row) {
+        float tot = simd_sum(shmem_f32[row][tiisg]);
+
+        if (tiisg == 0 && sgitg == 0) {
+            const int d = r0 + row, n = sa.ne01;
+            const float v = dsv41_bf16(tot);
+            block[d] = v;
+            const float r0v = residual[d], r1v = residual[n+d];
+            const float r2v = residual[2*n+d], r3v = residual[3*n+d];
+            for (int h = 0; h < 4; ++h) {
+                const float acc = dsv41_hc_expand_acc_exact(v, split[4+h],
+                    split[8+h], split[12+h], split[16+h], split[20+h],
+                    r0v, r1v, r2v, r3v);
+                out[h*n+d] = dsv41_bf16(acc);
+            }
+        }
+    }
+}
+
+struct ds4_metal_args_dsv41_rope_quantize { uint width,start,inverse,mode;float frequencies[32]; };
+kernel void kernel_dsv41_rope_quantize_heads_tab(
+        constant ds4_metal_args_dsv41_rope_quantize &args,
+        device float *x,
+        device const float2 *tab,
+        uint2 group [[threadgroup_position_in_grid]],
+        uint lane [[thread_index_in_simdgroup]]) {
+    device float *row = x + (ulong)group.y * args.width;
+    const uint block = args.mode == 3u ? 16u : 32u;
+    const uint column = group.x * block + lane;
+    const bool valid = lane < block && column < args.width;
+    float value = valid ? row[column] : 0.0f;
+    const float other = simd_shuffle_xor(value, 1u);
+    const uint rotary = args.width - 64u;
+    if (valid && column >= rotary) {
+        const float2 cs = tab[(column - rotary) >> 1u];
+        const float c = cs.x;
+        const float s = args.inverse ? -cs.y : cs.y;
+        const float re = (column & 1u) ? other : value;
+        const float im = (column & 1u) ? value : other;
+        /* the contraction kernel_dsv41_rope compiles to */
+        value = (column & 1u) ? dsv41_bf16(fma(im, c, re * s)) : dsv41_bf16(fma(re, c, -(im * s)));
+    }
+    value = dsv41_bf16(value);
+    const float amax = simd_max(abs(value));
+    float result = value;
+    if (args.mode == 1u) {
+        const float scale = dsv41_pow2_ceil(max(amax, 1.0e-4f) * (1.0f / 448.0f));
+        result = copysign(dsv4_e4m3fn_dequant(abs(value) / scale), value) * scale;
+    } else if (args.mode == 2u || args.mode == 3u) {
+        const float scale = args.mode == 3u
+            ? dsv4_e4m3fn_dequant(max(amax, 0.01171875f) / 6.0f)
+            : dsv41_pow2_ceil(max(amax, 7.052966104933725e-38f) * (1.0f / 6.0f));
+        result = copysign(dsv4_e2m1fn_dequant(abs(value) / scale), value) * scale;
+    }
+    if (valid) row[column] = dsv41_bf16(result);
+}
+
+// Upstream shared-down/HC join, retaining the fork's exact FMA epilogue.
+kernel void kernel_dsv41_shared_down_hc(
+    constant ds4_metal_args_mul_mv &args,device const char *weights,device const char *input,
+    device float *shared,device const float *routed,device const float *residual,
+    device const float *split,device float *block,device float *hc,device float *pre,
+    uint3 group [[threadgroup_position_in_grid]],ushort lane [[thread_index_in_simdgroup]],
+    ushort simd [[simdgroup_index_in_threadgroup]]) {
+    const uint row = group.x*4 + simd;
+    device const block_q8_0 *w = (device const block_q8_0 *)(weights + row*args.nb01);
+    device const float *x = (device const float *)input;
+    const short ix = lane/4, il = lane%4;
+    float partial[4] = {0.f, 0.f, 0.f, 0.f};
+    FOR_UNROLL (short tile=0; tile<72/8; ++tile) {
+        const short ib = tile*8 + ix;
+        float yl[8];
+        FOR_UNROLL (short i=0; i<8; ++i) yl[i] = x[ib*32+il*8+i];
+        device const int8_t *q = w[ib].qs + il*8;
+        float sumq=0.f;
+        FOR_UNROLL (short i=0; i<8; ++i) sumq += q[i]*yl[i];
+        partial[tile%4] += sumq*w[ib].d;
+    }
+    FOR_UNROLL (short s=0; s<4; ++s) partial[s] = simd_sum(partial[s]);
+    // The original second reduction reads slots 0..3 and 28 zero slots.
+    const float logical_slot = lane<4 ? partial[lane] : 0.f;
+    const float result = simd_sum(logical_slot);
+
+    if(lane==0) {
+        float value=dsv41_bf16(result);shared[row]=value;
+        float v=dsv41_bf16(routed[row]+value);block[row]=v;
+        float r0=residual[row],r1=residual[5120u+row],r2=residual[10240u+row],r3=residual[15360u+row];
+        for(uint h=0;h<4;h++)hc[h*5120u+row]=dsv41_bf16(dsv41_hc_expand_acc_exact(v,split[4+h],
+            split[8+h],split[12+h],split[16+h],split[20+h],r0,r1,r2,r3));
+        if(row==0u)for(uint h=0;h<4;h++)pre[h]=split[h];
+    }
+}
+
+// Upstream dbe5d51d exact segmented Engram gate.
+/* A single product, rounded as written: fast math may not reassociate it into a neighbouring product. */
+static inline float dsv41_engram_mul(float a, float b) {
+#pragma METAL fp math_mode(safe)
+    return a * b;
+}
+
+/* The decode Engram gate with one 256-thread group per stream instead of one 32-lane SIMD group, with
+ * kernel_dsv41_engram_add's bits. Lane l of the 32-lane kernel accumulates elements l, l + 32, ..., l + 32 * 159
+ * (j = 0..159) in that order. Under fast math its `h2 += h * h; k2 += k * k; dot += h * (q * w) * k` compiles
+ * to fma(h, h, h2), fma(k, k, k2) and fma((h * q) * w, k, dot) (each product rounded), and its residual update
+ * to fma(gate, v, h); they are written out here so the different structure cannot change them. Simdgroup s loads segment j = 20 s .. 20 s + 19 of every
+ * lane's chain into registers (all loads issued up front), and the segments run in order: simdgroup s takes the
+ * three accumulators from s - 1 through threadgroup memory, adds its 20 steps per lane, and hands them on.
+ * Simdgroup 7 then does the same simd_sums, norms and gate; every thread updates its own 20 elements of the
+ * residual from registers. Width 5120 only, 512 bytes of threadgroup memory. */
+kernel void kernel_dsv41_engram_add_tg256(
+        constant ds4_metal_args_dsv41_engram &args,
+        device float *residual,
+        device const float *kv,
+        device const float *q_weight,
+        device const float *k_weight,
+        device const uchar *mask,
+        threadgroup float *sh [[threadgroup(0)]],
+        uint2 group [[threadgroup_position_in_grid]],
+        uint lane [[thread_index_in_simdgroup]],
+        uint sg [[simdgroup_index_in_threadgroup]]) {
+    if (args.masked && !mask[group.x]) return;
+    constexpr uint W = 5120u, J = W / 256u;
+    const uint e0 = sg * 32u * J + lane;
+    device float *hp = residual + ((ulong)group.x * 4u + group.y) * W + e0;
+    device const float *kp = kv + ((ulong)group.x * 5u + group.y) * W + e0;
+    device const float *vp = kv + ((ulong)group.x * 5u + 4u) * W + e0;
+    device const float *qp = q_weight + (ulong)group.y * W + e0;
+    device const float *wp = k_weight + (ulong)group.y * W + e0;
+    float h[J], k[J], p[J], v[J];
+    for (uint j = 0; j < J; j++) {
+        h[j] = hp[32u * j];
+        k[j] = dsv41_bf16(kp[32u * j]);
+        p[j] = dsv41_engram_mul(dsv41_engram_mul(h[j], qp[32u * j]), wp[32u * j]);
+        v[j] = vp[32u * j];
+    }
+    float h2 = 0.0f, k2 = 0.0f, dot = 0.0f;
+    for (uint s = 0; s < 8u; s++) {
+        if (sg == s) {
+            if (s) { h2 = sh[lane]; k2 = sh[32u + lane]; dot = sh[64u + lane]; }
+            for (uint j = 0; j < J; j++) {
+                h2 = fma(h[j], h[j], h2);
+                k2 = fma(k[j], k[j], k2);
+                dot = fma(p[j], k[j], dot);
+            }
+            if (s < 7u) { sh[lane] = h2; sh[32u + lane] = k2; sh[64u + lane] = dot; }
+        }
+        if (s < 7u) threadgroup_barrier(mem_flags::mem_threadgroup);
+    }
+    if (sg == 7u) {
+        h2 = simd_sum(h2);
+        k2 = simd_sum(k2);
+        dot = simd_sum(dot) * rsqrt(h2 / args.width + args.eps) *
+              rsqrt(k2 / args.width + args.eps) * rsqrt(float(args.width));
+        const float gate = 1.0f / (1.0f + exp(-copysign(sqrt(max(abs(dot), 1.0e-6f)), dot)));
+        if (lane == 0u) sh[96] = gate;
+    }
+    threadgroup_barrier(mem_flags::mem_threadgroup);
+    const float gate = sh[96];
+    for (uint j = 0; j < J; j++)
+        hp[32u * j] = dsv41_bf16(fma(gate, dsv41_bf16(v[j]), h[j]));
+}

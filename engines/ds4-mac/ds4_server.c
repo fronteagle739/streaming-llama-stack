@@ -5778,6 +5778,11 @@ static char *bench_run(ds4_engine *e, const char *path, int ctx_start,
 
     buf b = {0};
     buf_printf(&b, "{\"prompt_tokens\":%d,\"gen_tokens\":%d", ctx_start, done);
+    uint64_t prefix_fnv=UINT64_C(1469598103934665603);
+    for(int ti=0;ti<ctx_start;ti++) {
+        prefix_fnv^=(uint32_t)f->prompt.v[ti];prefix_fnv*=UINT64_C(1099511628211);
+    }
+    buf_printf(&b,",\"prefix_fnv64\":\"%016llx\"",(unsigned long long)prefix_fnv);
     buf_printf(&b, ",\"ledger_mode\":%d,\"ledger_written\":%s", bench_ledger_mode,
                bench_ledger_written ? "true" : "false");
     buf_printf(&b, ",\"prefilled_now\":%s", (created && !f->from_disk) ? "true" : "false");
