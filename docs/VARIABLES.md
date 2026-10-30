@@ -86,11 +86,11 @@ Native controls take effect at token boundaries. The response reports requested 
 | `--llamadecode-cpu-fp4-threads` | rtx-llama: `12` | Worker threads of the packed FP4 CPU expert pool (LLAMADECODE_HOST_MODE=cpu\|mix), 1-32. Default 12: weights are read once from the locked RAM tier, so the pool is memory-bandwidth bound (measured 0.34 ms per expert at 12 threads, 0.30 at 16, 0.43 at 6 on dual-channel DDR5). |
 | `--llamadecode-engram-read-align` | Explicit runtime value | E13 experiment: Engram direct-read alignment, 4096 bytes (default) or opt-in 512 bytes. The 512-byte arm requires compatible logical sector geometry and preserves all row bytes. |
 | `--llamadecode-engram-scan` | Explicit runtime value | PAIRFIX: Engram read geometry. auto (default) reads a dense prompt row set as large sequential extents (gap-tolerant merge, the same rows and bytes copied) when bytes / LLAMADECODE_ENGRAM_SCAN_GBPS beats requests / LLAMADECODE_ENGRAM_IOPS; 0 keeps one random read per row; 1 forces the scan. Measured 200K real text: 2.97M random reads in 26.7 s -> 24K x 8 MiB reads in 17 s, logits bit-identical. |
-| `--llamadecode-engram-scan-depth` | Explicit runtime value | PAIRFIX: large read slots per Engram scan ring (default 16, 2-256); reduced to fit the Engram host admission, never silently (LLAMADECODE_ENGRAM_GEOMETRY reports it). |
-| `--llamadecode-engram-scan-gap-kib` | Explicit runtime value | PAIRFIX: Engram scan merge tolerance in KiB (default: the extent size, reading straight through); a gap wider than this starts a new read. |
+| `--llamadecode-engram-scan-depth` | Explicit runtime value | PAIRFIX: read slots per Engram scan ring (default 64, 2-256); reduced to fit the Engram host admission, never silently (LLAMADECODE_ENGRAM_GEOMETRY reports it). |
+| `--llamadecode-engram-scan-gap-kib` | Explicit runtime value | PAIRFIX: Engram scan merge tolerance in KiB (default 64): rows whose sectors are at most this far apart share one read; measured 200K real text 120 GB read vs 201 GB straight through, 2 s faster. |
 | `--llamadecode-engram-scan-gbps` | Explicit runtime value | PAIRFIX: sequential read rate the Engram scan decision assumes, GB/s (default 15; measured 15-22 on the RTX model volume). |
-| `--llamadecode-engram-scan-kib` | Explicit runtime value | PAIRFIX: largest Engram scan extent in KiB (default 8192, 256-32768, multiple of 4). |
-| `--llamadecode-engram-scan-rings` | Explicit runtime value | PAIRFIX: IoRings used by the Engram scan (default 2, 1-8). |
+| `--llamadecode-engram-scan-kib` | Explicit runtime value | PAIRFIX: largest Engram scan extent in KiB (default 1024, 256-32768, multiple of 4). |
+| `--llamadecode-engram-scan-rings` | Explicit runtime value | PAIRFIX: IoRings used by the Engram scan (default 1, 1-8); one queue at QD64 measured fastest for 256 KiB+ random reads on the RTX model volume. |
 | `--llamadecode-engram-whole-prompt` | Explicit runtime value | PAIRFIX: 1 (default) makes the early Engram load cover every sweep of a multi-sweep prompt; later sweeps reuse those rows (no Engram reads). The slstack planner admits the whole prompt's rows outside the sweep-capacity search, within physical RAM. 0 restores one load per sweep. |
 | `--llamadecode-host-async` | Explicit runtime value | Single-engine RAM expert tier data movement. 0 = original synchronous copies (stream drain per expert, uploads finish before the DirectStorage batch); 1 = VRAM-to-RAM copy-in on its own non-blocking stream with batched D2H and one event; 2 = also submit the DirectStorage batch first and upload RAM hits on a separate H2D stream while it is in flight (per-expert wait); 3 = as 2 with one event per stream. Byte-identical expert data in every level. |
 | `--llamadecode-host-cache-admit` | rtx-llama: `1` | Single-engine bounded RAM admission. Observe 32 scalar layer passes, select frequently evicted experts, then fill at most one payload per selected key until the next prefill. 0 retains an empty admitted tier for zero-hit overhead qualification; it never changes router scores at quality bias 0. |
@@ -69494,7 +69494,7 @@ Source: `engines/streaming-llama/prefill_llama.cpp/src/llama-dsv41-engram-prefet
         }
 ```
 
-Source: `engines/streaming-llama/prefill_llama.cpp/src/llama-dsv41-engram-prefetch.cpp:489`. Unset read: NULL from getenv; the literal consumer below supplies any fallback.
+Source: `engines/streaming-llama/prefill_llama.cpp/src/llama-dsv41-engram-prefetch.cpp:491`. Unset read: NULL from getenv; the literal consumer below supplies any fallback.
 
 ```text
                          engram_read_alignment(),storage.LogicalBytesPerSector,storage.PhysicalBytesPerSectorForPerformance);
@@ -69562,15 +69562,15 @@ Source: `engines/streaming-llama/prefill_llama.cpp/src/llama-dsv41-engram-prefet
 
 ### LLAMADECODE_ENGRAM_SCAN_DEPTH
 
-PAIRFIX: large read slots per Engram scan ring (default 16, 2-256); reduced to fit the Engram host admission, never silently (LLAMADECODE_ENGRAM_GEOMETRY reports it).
+PAIRFIX: read slots per Engram scan ring (default 64, 2-256); reduced to fit the Engram host admission, never silently (LLAMADECODE_ENGRAM_GEOMETRY reports it).
 
 Scope: rtx-llama. Class: advanced.
 
-Source: `engines/streaming-llama/prefill_llama.cpp/src/llama-dsv41-engram-prefetch.cpp:384`. Unset read: Wrapper/conditional default: see the literal call and consumer below.
+Source: `engines/streaming-llama/prefill_llama.cpp/src/llama-dsv41-engram-prefetch.cpp:386`. Unset read: Wrapper/conditional default: see the literal call and consumer below.
 
 ```text
         const bool want=forced||geometry_scan_s<geometry_random_s;
-        const uint32_t rings=env_u32("LLAMADECODE_ENGRAM_SCAN_RINGS",4,1,8);
+        const uint32_t rings=env_u32("LLAMADECODE_ENGRAM_SCAN_RINGS",1,1,8);
         uint32_t slots=env_u32("LLAMADECODE_ENGRAM_SCAN_DEPTH",64,2,256);
         constexpr uint32_t scan_small=64;
         auto arena=[&](uint32_t n){return uint64_t(rings)*(uint64_t(scan_small)*small_slot+uint64_t(n)*scan_cap);};
@@ -69580,15 +69580,15 @@ Source: `engines/streaming-llama/prefill_llama.cpp/src/llama-dsv41-engram-prefet
 
 ### LLAMADECODE_ENGRAM_SCAN_GAP_KIB
 
-PAIRFIX: Engram scan merge tolerance in KiB (default: the extent size, reading straight through); a gap wider than this starts a new read.
+PAIRFIX: Engram scan merge tolerance in KiB (default 64): rows whose sectors are at most this far apart share one read; measured 200K real text 120 GB read vs 201 GB straight through, 2 s faster.
 
 Scope: rtx-llama. Class: advanced.
 
-Source: `engines/streaming-llama/prefill_llama.cpp/src/llama-dsv41-engram-prefetch.cpp:372`. Unset read: Wrapper/conditional default: see the literal call and consumer below.
+Source: `engines/streaming-llama/prefill_llama.cpp/src/llama-dsv41-engram-prefetch.cpp:374`. Unset read: Wrapper/conditional default: see the literal call and consumer below.
 
 ```text
-        // cand4): 8 MiB straight-through extents read 200.8 GB, prompt 46.57 s;
-        // 1 MiB extents with a 64 KiB gap read 119.9 GB, prompt 44.44 s.
+        // of 64 slots (cand6, 43.17 s) matches the bench optimum: on this RAID one
+        // queue at QD64 beats several queues for 256 KiB+ random reads.
         const uint64_t scan_gap=uint64_t(env_u32("LLAMADECODE_ENGRAM_SCAN_GAP_KIB",64,4,32768))*1024;
         const char*g=std::getenv("LLAMADECODE_ENGRAM_SCAN_GBPS");
         double gbps=15.0;
@@ -69602,10 +69602,10 @@ PAIRFIX: sequential read rate the Engram scan decision assumes, GB/s (default 15
 
 Scope: rtx-llama. Class: advanced.
 
-Source: `engines/streaming-llama/prefill_llama.cpp/src/llama-dsv41-engram-prefetch.cpp:373`. Unset read: NULL from getenv; the literal consumer below supplies any fallback.
+Source: `engines/streaming-llama/prefill_llama.cpp/src/llama-dsv41-engram-prefetch.cpp:375`. Unset read: NULL from getenv; the literal consumer below supplies any fallback.
 
 ```text
-        // 1 MiB extents with a 64 KiB gap read 119.9 GB, prompt 44.44 s.
+        // queue at QD64 beats several queues for 256 KiB+ random reads.
         const uint64_t scan_gap=uint64_t(env_u32("LLAMADECODE_ENGRAM_SCAN_GAP_KIB",64,4,32768))*1024;
         const char*g=std::getenv("LLAMADECODE_ENGRAM_SCAN_GBPS");
         double gbps=15.0;
@@ -69616,7 +69616,7 @@ Source: `engines/streaming-llama/prefill_llama.cpp/src/llama-dsv41-engram-prefet
 
 ### LLAMADECODE_ENGRAM_SCAN_KIB
 
-PAIRFIX: largest Engram scan extent in KiB (default 8192, 256-32768, multiple of 4).
+PAIRFIX: largest Engram scan extent in KiB (default 1024, 256-32768, multiple of 4).
 
 Scope: rtx-llama. Class: advanced.
 
@@ -69634,16 +69634,16 @@ Source: `engines/streaming-llama/prefill_llama.cpp/src/llama-dsv41-engram-prefet
 
 ### LLAMADECODE_ENGRAM_SCAN_RINGS
 
-PAIRFIX: IoRings used by the Engram scan (default 2, 1-8).
+PAIRFIX: IoRings used by the Engram scan (default 1, 1-8); one queue at QD64 measured fastest for 256 KiB+ random reads on the RTX model volume.
 
 Scope: rtx-llama. Class: advanced.
 
-Source: `engines/streaming-llama/prefill_llama.cpp/src/llama-dsv41-engram-prefetch.cpp:383`. Unset read: Wrapper/conditional default: see the literal call and consumer below.
+Source: `engines/streaming-llama/prefill_llama.cpp/src/llama-dsv41-engram-prefetch.cpp:385`. Unset read: Wrapper/conditional default: see the literal call and consumer below.
 
 ```text
         geometry_scan_s=std::max(double(geometry_scan_bytes)/(gbps*1e9),double(geometry_scan_requests)/llama_dsv41_engram_early_iops());
         const bool want=forced||geometry_scan_s<geometry_random_s;
-        const uint32_t rings=env_u32("LLAMADECODE_ENGRAM_SCAN_RINGS",4,1,8);
+        const uint32_t rings=env_u32("LLAMADECODE_ENGRAM_SCAN_RINGS",1,1,8);
         uint32_t slots=env_u32("LLAMADECODE_ENGRAM_SCAN_DEPTH",64,2,256);
         constexpr uint32_t scan_small=64;
         auto arena=[&](uint32_t n){return uint64_t(rings)*(uint64_t(scan_small)*small_slot+uint64_t(n)*scan_cap);};

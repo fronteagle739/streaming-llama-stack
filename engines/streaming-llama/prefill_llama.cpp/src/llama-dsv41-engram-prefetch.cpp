@@ -368,7 +368,9 @@ public:
         const uint32_t scan_cap=kib*1024;
         // Merge tolerance. Defaults measured at 200K real text (PAIRFIX cand3 vs
         // cand4): 8 MiB straight-through extents read 200.8 GB, prompt 46.57 s;
-        // 1 MiB extents with a 64 KiB gap read 119.9 GB, prompt 44.44 s.
+        // 1 MiB extents with a 64 KiB gap read 119.9 GB, prompt 44.44 s. One ring
+        // of 64 slots (cand6, 43.17 s) matches the bench optimum: on this RAID one
+        // queue at QD64 beats several queues for 256 KiB+ random reads.
         const uint64_t scan_gap=uint64_t(env_u32("LLAMADECODE_ENGRAM_SCAN_GAP_KIB",64,4,32768))*1024;
         const char*g=std::getenv("LLAMADECODE_ENGRAM_SCAN_GBPS");
         double gbps=15.0;
@@ -380,7 +382,7 @@ public:
         // A scan is bound by bytes or by its own request rate, whichever is slower.
         geometry_scan_s=std::max(double(geometry_scan_bytes)/(gbps*1e9),double(geometry_scan_requests)/llama_dsv41_engram_early_iops());
         const bool want=forced||geometry_scan_s<geometry_random_s;
-        const uint32_t rings=env_u32("LLAMADECODE_ENGRAM_SCAN_RINGS",4,1,8);
+        const uint32_t rings=env_u32("LLAMADECODE_ENGRAM_SCAN_RINGS",1,1,8);
         uint32_t slots=env_u32("LLAMADECODE_ENGRAM_SCAN_DEPTH",64,2,256);
         constexpr uint32_t scan_small=64;
         auto arena=[&](uint32_t n){return uint64_t(rings)*(uint64_t(scan_small)*small_slot+uint64_t(n)*scan_cap);};
