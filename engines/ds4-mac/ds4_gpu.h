@@ -152,6 +152,8 @@ int ds4_gpu_dsv41_candidate_filter(ds4_gpu_tensor *scores,
                                   uint32_t start, uint32_t ratio);
 /* Causal index scores over ratio-1/2 compressed keys, without an extra cast
  * of the already quantized FP4 queries/keys. Scores have source_rows stride. */
+int ds4_gpu_dsv41_indexer_score_row_upstream(ds4_gpu_tensor *scores,const ds4_gpu_tensor *q,
+    const ds4_gpu_tensor *weights,const ds4_gpu_tensor *cache,const ds4_gpu_tensor *view,uint32_t rows);
 int ds4_gpu_dsv41_index_keys_bf16(ds4_gpu_tensor *view,const ds4_gpu_tensor *cache,
     uint32_t first,uint32_t rows,ds4_gpu_tensor *flag);
 int ds4_gpu_dsv41_indexer_scores_rows_bf16(ds4_gpu_tensor *scores,const ds4_gpu_tensor *q,
@@ -1019,6 +1021,15 @@ int ds4_gpu_dsv41_kv_prepare_tensor(ds4_gpu_tensor *kv, ds4_gpu_tensor *window,
     const void *model_map, uint64_t model_size, uint64_t norm_offset,
     uint32_t position, bool compressed, float eps);
 int ds4_gpu_dsv41_query_hc_kv_tensor(ds4_gpu_tensor *output,
+    ds4_gpu_tensor *mix, ds4_gpu_tensor *split, ds4_gpu_tensor *counter,
+    const ds4_gpu_tensor *residual, const ds4_gpu_tensor *input,
+    const void *model_map, uint64_t model_size, uint64_t hc_offset,
+    uint64_t scale_offset, uint64_t base_offset, uint64_t weight_offset,
+    uint32_t sinkhorn_iters, float hc_eps, float norm_eps,
+    ds4_gpu_tensor *kv, ds4_gpu_tensor *window, uint64_t kv_norm_offset,
+    uint32_t position, bool compressed);
+int ds4_gpu_dsv41_query_rope_available(void);
+int ds4_gpu_dsv41_query_hc_kv_rope_tensor(ds4_gpu_tensor *output,
     ds4_gpu_tensor *mix, ds4_gpu_tensor *split, ds4_gpu_tensor *counter,
     const ds4_gpu_tensor *residual, const ds4_gpu_tensor *input,
     const void *model_map, uint64_t model_size, uint64_t hc_offset,

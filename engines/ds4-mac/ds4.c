@@ -39723,6 +39723,7 @@ ds41_levers g_ds41_levers = {
     .engram_gate = 0,
     .shared_down_hc = 0,
     .fixed_dense = 0,
+    .query_rope = 0,
     .heads_rope = 0,
     .preencode = 0,
     .engram_persistent = 0,
@@ -39802,7 +39803,7 @@ static int ds41_lever_counted(const char *name) {
     return !strcmp(name, "mtp_q8_trio_mask") || !strcmp(name, "hc_stream_layout") || !strcmp(name, "engram_readers") || !strcmp(name, "attn_diag") ||
            !strcmp(name, "attn_geom") || !strcmp(name, "gather_wide") ||
            !strcmp(name, "hc_expand_nth") || !strcmp(name, "mtp_q8_stream6_mask") ||
-           !strcmp(name, "dspark_verify_rows") || !strcmp(name,"verify_batch_core") || !strcmp(name,"verify_output");
+           !strcmp(name, "dspark_verify_rows") || !strcmp(name,"verify_batch_core") || !strcmp(name,"verify_output") || !strcmp(name,"index_schedule");
 }
 
 static const struct { const char *name; size_t off; const char *env; } g_ds41_lever_map[] = {
@@ -39842,6 +39843,7 @@ static const struct { const char *name; size_t off; const char *env; } g_ds41_le
     { "engram_gate", offsetof(ds41_levers, engram_gate), "DS4_DS41_ENGRAM_GATE" },
     { "shared_down_hc", offsetof(ds41_levers, shared_down_hc), "DS4_DS41_SHARED_DOWN_HC" },
     { "fixed_dense", offsetof(ds41_levers, fixed_dense), "DS4_DS41_FIXED_DENSE" },
+    { "query_rope", offsetof(ds41_levers, query_rope), "DS4_DS41_QUERY_ROPE" },
     { "heads_rope", offsetof(ds41_levers, heads_rope), "DS4_DS41_HEADS_ROPE" },
     { "preencode", offsetof(ds41_levers, preencode), "DS4_DS41_PREENCODE" },
     { "engram_persistent", offsetof(ds41_levers, engram_persistent), "DS4_DS41_ENGRAM_PERSISTENT" },
@@ -39883,6 +39885,7 @@ static const struct { const char *name; size_t off; const char *env; } g_ds41_le
     { "mtp_q8_swizzle", offsetof(ds41_levers, mtp_q8_swizzle), "DS4_DS41_MTP_Q8_SWIZZLE" },
     { "mtp_gu_swizzle", offsetof(ds41_levers, mtp_gu_swizzle), "DS4_DS41_MTP_GU_SWIZZLE" },
     { "index_score_stream", offsetof(ds41_levers, index_score_stream), "DS4_DS41_INDEX_SCORE_STREAM" },
+    { "index_schedule", offsetof(ds41_levers, index_schedule), "DS4_DS41_INDEX_SCHEDULE" },
     { "index_mask_score", offsetof(ds41_levers, index_mask_score), "DS4_DS41_INDEX_MASK_SCORE" },
     { "stage_gather",       offsetof(ds41_levers, stage_gather),       "DS4_DS41_STAGE_GATHER" },
     { "q4_dn_nr1",          offsetof(ds41_levers, q4_dn_nr1),          "DS4_DS41_Q4_DN_NR1" },
@@ -40004,6 +40007,7 @@ void ds41_levers_init_from_env(void) {
     g_ds41_levers.engram_gate = getenv("DS4_DS41_ENGRAM_GATE") && atoi(getenv("DS4_DS41_ENGRAM_GATE")) != 0;
     g_ds41_levers.shared_down_hc = getenv("DS4_DS41_SHARED_DOWN_HC") && atoi(getenv("DS4_DS41_SHARED_DOWN_HC")) != 0;
     g_ds41_levers.fixed_dense = getenv("DS4_DS41_FIXED_DENSE") && atoi(getenv("DS4_DS41_FIXED_DENSE")) != 0;
+    g_ds41_levers.query_rope = getenv("DS4_DS41_QUERY_ROPE") && atoi(getenv("DS4_DS41_QUERY_ROPE")) != 0;
     g_ds41_levers.heads_rope = getenv("DS4_DS41_HEADS_ROPE") && atoi(getenv("DS4_DS41_HEADS_ROPE")) != 0;
     g_ds41_levers.preencode = getenv("DS4_DS41_PREENCODE") && atoi(getenv("DS4_DS41_PREENCODE")) != 0;
     g_ds41_levers.q8_virtual_query = ds41_env_enable_form("DS4_DS41_Q8_VIRTUAL_QUERY");
@@ -40110,6 +40114,10 @@ void ds41_levers_init_from_env(void) {
     g_ds41_levers.index_topk_radix = ds41_env_enable_form("DS4_DS41_INDEX_TOPK_RADIX");
     g_ds41_levers.index_compact_score = ds41_env_enable_form("DS4_DS41_INDEX_COMPACT_SCORE");
     g_ds41_levers.index_score_stream = ds41_env_enable_form("DS4_DS41_INDEX_SCORE_STREAM");
+    { const char *v=getenv("DS4_DS41_INDEX_SCHEDULE");
+      if(v) { char *end=NULL;long n=strtol(v,&end,10);
+        if(!*v || *end || n<0 || n>2) { fprintf(stderr,"ds4: invalid DS4_DS41_INDEX_SCHEDULE (expected 0..2)\n");abort(); }
+        g_ds41_levers.index_schedule=(int)n; } }
     g_ds41_levers.mtp_gu_swizzle = ds41_env_enable_form("DS4_DS41_MTP_GU_SWIZZLE");
     { const char *v = getenv("DS4_DS41_MTP_Q8_TRIO_MASK");
       const int mask = v ? atoi(v) : 80;
@@ -40178,9 +40186,9 @@ int ds41_levers_set(const char *name, int value) {
             if (ds41_lever_counted(name)) {
                 const int lo = !strcmp(name, "mtp_q8_trio_mask") || !strcmp(name, "hc_stream_layout") || !strcmp(name, "attn_diag") ||
                                !strcmp(name, "gather_wide") ||
-                               !strcmp(name, "dspark_verify_rows") || !strcmp(name,"verify_batch_core") || !strcmp(name,"verify_output") ||
+                               !strcmp(name, "dspark_verify_rows") || !strcmp(name,"verify_batch_core") || !strcmp(name,"verify_output") || !strcmp(name,"index_schedule") ||
                                !strcmp(name, "mtp_q8_stream6_mask") ? 0 : 1;
-                const int hi = (!strcmp(name,"verify_batch_core") || !strcmp(name,"verify_output")) ? 2 : !strcmp(name, "mtp_q8_trio_mask") ? 127 : !strcmp(name, "hc_stream_layout") ? 3 :
+                const int hi = (!strcmp(name,"verify_batch_core") || !strcmp(name,"verify_output") || !strcmp(name,"index_schedule")) ? 2 : !strcmp(name, "mtp_q8_trio_mask") ? 127 : !strcmp(name, "hc_stream_layout") ? 3 :
                                !strcmp(name, "mtp_q8_stream6_mask") ? 127 :
                                !strcmp(name, "attn_diag") ? 9 :
                                !strcmp(name, "dspark_verify_rows") ? 6 : 256;
@@ -40597,8 +40605,8 @@ static bool ds41_hc_stream(ds41_gpu_graph *g, const ds4_model *m,
 }
 
 static bool ds41_hc_query_kv(ds41_gpu_graph *g, const ds4_model *m,
-                           const ds4_layer_weights *l, uint32_t il) {
-    return ds4_gpu_dsv41_query_hc_kv_tensor(g->q, g->mix, g->attn_split,
+                           const ds4_layer_weights *l, uint32_t il, bool rope) {
+    return (rope ? ds4_gpu_dsv41_query_hc_kv_rope_tensor : ds4_gpu_dsv41_query_hc_kv_tensor)(g->q, g->mix, g->attn_split,
         g->hc_counter, g->residual, g->qr, m->map, m->size,
         l->hc_attn_fn->abs_offset, l->hc_attn_scale->abs_offset,
         l->hc_attn_base->abs_offset, l->attn_q_b->abs_offset,
@@ -40741,6 +40749,9 @@ static bool ds41_attention_candidates(ds41_gpu_graph *g, uint32_t il) {
     if (n_comp && ds41_index_source(il)) {
         if (il == 20) {
             const uint32_t blocks = (n_comp + 7u) / 8u, top = blocks < 2048u ? blocks : 2048u;
+            /* Upstream: every block is admitted, so the consumed mask is all zero. */
+            if(g_ds41_levers.index_schedule && top==blocks)
+                return ds4_gpu_tensor_fill_f32(g->block_mask,0,blocks) != 0;
             if (!ds4_gpu_dsv41_candidate_blocks(g->block_scores, g->index_scores, n_comp, 1, pos, ratio) ||
                 !ds4_gpu_indexer_topk_tensor(g->block_selected, g->block_scores, blocks, 1, top) ||
                 !ds4_gpu_dsv4_topk_mask_tensor(g->block_mask, g->block_selected, blocks, 1, top)) return false;
@@ -40778,11 +40789,22 @@ static bool ds41_attention_select_published(ds41_gpu_graph *g, const ds4_model *
             !ds4_gpu_dsv41_quantize(g->index_q, 128, DS4_N_INDEXER_HEAD, DS4_V41_FP4_E8M0) ||
 #endif
             !ds41_matmul(g->index_weights, m, l->indexer_proj, g->norm, true) ||
-            !(il > 20u && (g_ds41_levers.index_mask_score || g_ds41_levers.index_compact_score) && DS4_N_INDEXER_HEAD == 32u ?
+            !(il > 20u && (!g_ds41_levers.index_schedule || (n_comp+7u)/8u>2048u) &&
+              (g_ds41_levers.index_mask_score || g_ds41_levers.index_compact_score) && DS4_N_INDEXER_HEAD == 32u ?
                 ds4_gpu_dsv41_indexer_score_masked(g->index_scores, g->index_q, g->index_weights,
                     g->index_cache[owner], g->block_mask, n_comp, g_ds41_levers.index_compact_score) :
-                ds4_gpu_dsv41_indexer_score_one_tensor(g->index_scores, g->index_q, g->index_weights,
-                    g->index_cache[owner], n_comp, DS4_N_INDEXER_HEAD, 128, 1.0f / 64.0f, false))) return false;
+#ifdef __APPLE__
+                (g_ds41_levers.index_schedule==2 && DS4_N_INDEXER_HEAD==32u &&
+                 DS4_N_INDEXER_HEAD_DIM==128u && g->arch_scalar_step && g->tp_world==1 && !g->quality ?
+                 ds4_gpu_dsv41_indexer_score_row_upstream(g->index_scores,g->index_q,g->index_weights,
+                    g->index_cache[owner],g->index_bf16_ok?g->index_bf16[owner]:NULL,n_comp) :
+#endif
+                 ds4_gpu_dsv41_indexer_score_one_tensor(g->index_scores, g->index_q, g->index_weights,
+                    g->index_cache[owner], n_comp, DS4_N_INDEXER_HEAD, 128, 1.0f / 64.0f, false)
+#ifdef __APPLE__
+                )
+#endif
+                )) return false;
     }
     return ds41_attention_pick(g, il);
 }
@@ -40812,11 +40834,12 @@ static bool ds41_attention(ds41_gpu_graph *g, const ds4_model *m,
     const bool query_kv = prepare_kv && g->hc_attn_deferred &&
         g_ds41_levers.kv_query_mix && g_ds41_levers.q8_virtual_query &&
         (g_ds41_levers.hc_stream_layout == 0 || g_ds41_levers.hc_stream_layout == 2);
+    const bool query_rope=query_kv && g_ds41_levers.query_rope && ds4_gpu_dsv41_query_rope_available();
     if (flat) {
         if (!ds4_gpu_dsv41_arch_qa_kv_tensor(g->qr, g->kv, g->norm, m->map, m->size,
                 l->attn_q_a->abs_offset, l->attn_kv->abs_offset) ||
             !ds41_norm(g->qr, g->qr, m, l->attn_q_a_norm) ||
-            !(query_kv ? ds41_hc_query_kv(g, m, l, il) :
+            !(query_kv ? ds41_hc_query_kv(g, m, l, il, query_rope) :
               g->hc_attn_deferred ? ds41_hc_stream(g, m, l, false) :
                 ds41_matmul_rows(g->q, m, l->attn_q_b, g->qr, head0*512u, heads*512u)) ||
             (!prepare_kv && !ds41_norm(g->kv, g->kv, m, l->attn_kv_a_norm))) return false;
@@ -40829,7 +40852,7 @@ static bool ds41_attention(ds41_gpu_graph *g, const ds4_model *m,
         !ds41_norm(g->kv, g->kv, m, l->attn_kv_a_norm))) return false;
     }
     if ((!batch_pointwise &&
-        (!ds41_rope(g->q, heads, DS4_N_HEAD_DIM, il, pos, false) ||
+        ((!query_rope && !ds41_rope(g->q, heads, DS4_N_HEAD_DIM, il, pos, false)) ||
          (prepare_kv ?
           (!query_kv && !ds4_gpu_dsv41_kv_prepare_tensor(g->kv, g->window[il], m->map, m->size,
               l->attn_kv_a_norm->abs_offset, pos, ratio != 0, DS4_RMS_EPS)) :

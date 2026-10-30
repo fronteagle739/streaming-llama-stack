@@ -56,3 +56,9 @@ checked for exact representability; original F32 keys remain authoritative.
 Every low, projection, shared, block and carry output is retained. The new
 `verify_batch_core=2` and `verify_output=1/2` schedules are optional; historical
 values and all quality, streaming, TP, sampler and native-state paths remain.
+
+Round5 adds optional scalar index schedules from upstream's wide/BF16 family
+and the all-eligible block mask shortcut, plus QKV_FUSION's query-store RoPE
+adapted to the existing HC/KV producer. Original schedules and authoritative
+F32 state remain. See `docs/MACDECODE_ROUND5.md` for measurement scope,
+full-logit/forced-continuation checks and remaining release qualification.
