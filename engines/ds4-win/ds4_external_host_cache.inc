@@ -15,6 +15,9 @@ static void external_host_unregister(void) {
 }
 static std::vector<int32_t> g_external_host_index;
 static bool g_external_host_busy=false;
+/* Slots whose payload the FP4 CPU lane is reading: never chosen as victims. */
+static std::vector<uint8_t> g_external_host_borrowed;
+static uint64_t g_external_host_borrow_skips=0;
 static double g_external_upload_cost_ms=0;
 static uint32_t g_external_upload_samples=0;
 static void external_cpu_shutdown();
@@ -64,10 +67,12 @@ static uint32_t external_host_resize(uint64_t bytes, uint64_t gate, uint64_t dow
      * Reuse ds4's pageable allocator for the payload, but VirtualLock every
      * page: this tier is never swappable. One expert's existing pinned cache
      * buffers stage both directions. No pageable pointer reaches CUDA. */
-    if(!external_host_allocate(&g_external_host_stage,1,gate,down,1))return 0;
+    if(!external_host_allocate(&g_external_host_stage,1,gate,down,1)){
+        fprintf(stderr,"LLAMADECODE_HOST_RESIZE_REFUSED reason=pinned_one_expert_stage wanted=%u error=%s\n",wanted,cudaGetErrorString(cudaGetLastError()));
+        return 0;}
     for (uint32_t n = wanted; n; n = cuda_stream_host_expert_cache_shrunken_cap(n)) {
         std::vector<cuda_stream_host_expert_cache_slot> slots(n);
-        if (!external_host_allocate(cache,n,gate,down,0)) continue;
+        if (!external_host_allocate(cache,n,gate,down,0)) {fprintf(stderr,"LLAMADECODE_HOST_RESIZE_STEP reason=allocation slots=%u\n",n);continue;}
         char *p[3]={cache->gate_ptr,cache->up_ptr,cache->down_ptr};
         uint64_t sizes[3]={cache->gate_capacity,cache->up_capacity,cache->down_capacity};
         /* RAMFIX: register the payload with CUDA first (the driver pins it, so no VirtualLock;
@@ -98,7 +103,7 @@ static uint32_t external_host_resize(uint64_t bytes, uint64_t gate, uint64_t dow
             if(!VirtualLock(p[k],size_t(sizes[k]))){locked=false;break;}
             g_external_host_locked[k]=true;
         }}
-        if(!locked){external_host_release_payload();continue;}
+        if(!locked){fprintf(stderr,"LLAMADECODE_HOST_RESIZE_STEP reason=virtual_lock slots=%u error=%lu\n",n,(unsigned long)GetLastError());external_host_release_payload();continue;}
 
         cache->slots.swap(slots);
         return n;
@@ -148,6 +153,7 @@ static int external_host_store(uint32_t layer, uint32_t expert, const char *cons
         sizes[0] > cache->gate_expert_bytes || sizes[2] > cache->down_expert_bytes) return 0;
     if (external_host_find(layer, expert) >= 0) return 1;
     const uint32_t index = cuda_stream_host_expert_cache_lru_slot(cache);
+    if(index<g_external_host_borrowed.size()&&g_external_host_borrowed[index]){++g_external_host_borrow_skips;return 1;}
     auto &slot = cache->slots[index];
     if (!cuda_stream_host_expert_cache_admit(slot, layer, expert)) return 1;
     /* Each copy completes before publishing the key or reusing either slot. */
@@ -189,6 +195,7 @@ static int external_host_store_host(uint32_t layer, uint32_t expert, const char 
         sizes[0] > cache->gate_expert_bytes || sizes[2] > cache->down_expert_bytes) return 0;
     if (external_host_find(layer, expert) >= 0) return 1;
     const uint32_t index = cuda_stream_host_expert_cache_lru_slot(cache);
+    if(index<g_external_host_borrowed.size()&&g_external_host_borrowed[index]){++g_external_host_borrow_skips;return 1;}
     auto &slot = cache->slots[index];
     if (!cuda_stream_host_expert_cache_admit(slot, layer, expert)) return 1;
     char *dst[3] = {cache->gate_ptr + uint64_t(index)*cache->gate_expert_bytes,

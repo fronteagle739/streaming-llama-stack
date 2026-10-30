@@ -1,3 +1,251 @@
+#ifdef DS4_EXTERNAL_DECODE
+/* RAM-tier packed FP4 experts computed on the CPU (LLAMADECODE_HOST_MODE=cpu|mix).
+ *
+ * Per layer: the router ids, weights and FFN input come back in one D2H (the
+ * same single sync the id read already cost). RAM-resident experts chosen for
+ * the CPU are handed to a persistent AVX-512 pool and computed in place from
+ * the locked tier, while this thread runs the expert hook (DirectStorage
+ * misses, uploads) and queues the GPU experts. The packed launcher joins the
+ * CPU lane just before the down projection: it waits only if the CPU job is
+ * still running, uploads each CPU expert's per-row sums, and the down kernel
+ * adds them in slot order (the GPU's own summation order). No per-expert
+ * waits on the critical path; one join per layer. */
+extern "C" int ds4_cpu_fp4_init(int threads);
+extern "C" int ds4_cpu_fp4_submit(const float *x, const uint8_t *const *gate, const uint8_t *const *up,
+                                  const uint8_t *const *down, const float *w, int k, float clamp, float *const *acc);
+extern "C" double ds4_cpu_fp4_wait(void);
+struct external_fp4_pinned { int32_t ids[8]; float w[8]; float x[5120]; float acc[6][5120]; };
+static external_fp4_pinned *g_fp4_pin = nullptr;
+static int g_fp4_state = 0;               // 0 unset, 1 ready, -1 refused
+static uint32_t g_fp4_positions[6], g_fp4_count = 0;
+static uint32_t g_fp4_borrowed[6];
+static double g_fp4_wait_last = 0;
+/* Mix cost model (ms per expert, exponential averages measured in place). */
+static double g_fp4_t_cpu = 0.35, g_fp4_t_ds = 1.0, g_fp4_t_up = 1.0;
+static uint64_t g_fp4_calls = 0, g_fp4_cpu_experts = 0, g_fp4_up_experts = 0, g_fp4_cpu_layers = 0, g_fp4_explore = 0;
+static double g_fp4_service_ms = 0, g_fp4_wait_ms = 0, g_fp4_read_ms = 0, g_fp4_join_ms = 0;
+extern "C" void ds4_cpu_fp4_set_epilogue(int (*fn)(void *, const float *, const float *, int, float, float *), void *ctx);
+
+/* SwiGLU epilogue of ds4_fp4p_gate_up_kernel, same source expression: the
+ * CPU's raw gate/up rows get the GPU's own expf (ex2.approx), so the CPU
+ * lane's mid, and hence its output, matches the GPU bit for bit. */
+struct fp4_lane_weights { float w[6]; };
+__global__ static void fp4_lane_epilogue_kernel(const float *__restrict__ gu, float *__restrict__ mid,
+                                                uint32_t n, float clamp, fp4_lane_weights weights) {
+    const uint32_t i = blockIdx.x * blockDim.x + threadIdx.x;
+    if (i >= n) return;
+    const uint32_t e = i / 2304u, row = i - e * 2304u;
+    float gate = gu[(uint64_t)e * 4608u + row], up = gu[(uint64_t)e * 4608u + 2304u + row];
+    if (!isfinite(gate)) gate = 0.0f;
+    if (!isfinite(up)) up = 0.0f;
+    if (clamp > 1.0e-6f) {
+        if (gate > clamp) gate = clamp;
+        if (up > clamp) up = clamp;
+        if (up < -clamp) up = -clamp;
+    }
+    const float silu = gate / (1.0f + expf(-gate));
+    mid[i] = silu * up * weights.w[e];
+}
+struct fp4_lane_epi { cudaStream_t stream; float *gu_h, *mid_h, *gu_d, *mid_d; };
+static fp4_lane_epi g_fp4_epi = {};
+/* Runs on CPU worker 0 while the decode thread is in the expert hook: its own
+ * non-blocking stream, so it neither waits for nor delays the decode stream. */
+static int fp4_lane_epilogue(void *, const float *gu, const float *w, int k, float clamp, float *mid) {
+    auto &E = g_fp4_epi;
+    const uint32_t n = (uint32_t)k * 2304u;
+    std::memcpy(E.gu_h, gu, (size_t)k * 4608u * sizeof(float));
+    fp4_lane_weights weights{};
+    for (int e = 0; e < k; ++e) weights.w[e] = w[e];
+    if (cudaMemcpyAsync(E.gu_d, E.gu_h, (size_t)k * 4608u * sizeof(float), cudaMemcpyHostToDevice, E.stream) != cudaSuccess) return 0;
+    fp4_lane_epilogue_kernel<<<(n + 255u) / 256u, 256, 0, E.stream>>>(E.gu_d, E.mid_d, n, clamp, weights);
+    if (cudaGetLastError() != cudaSuccess ||
+        cudaMemcpyAsync(E.mid_h, E.mid_d, (size_t)n * sizeof(float), cudaMemcpyDeviceToHost, E.stream) != cudaSuccess ||
+        cudaStreamSynchronize(E.stream) != cudaSuccess) return 0;
+    std::memcpy(mid, E.mid_h, (size_t)n * sizeof(float));
+    return 1;
+}
+static bool fp4_lane_epilogue_init() {
+    const char *v = getenv("LLAMADECODE_CPU_FP4_SILU");
+    if (v && !strcmp(v, "cpu")) { fprintf(stderr, "LLAMADECODE_CPU_FP4 silu=cpu (diagnostic: differs from the GPU in expf rounding)\n"); return true; }
+    auto &E = g_fp4_epi;
+    const size_t gu = 6u * 4608u * sizeof(float), md = 6u * 2304u * sizeof(float);
+    if (cudaStreamCreateWithFlags(&E.stream, cudaStreamNonBlocking) != cudaSuccess ||
+        cudaHostAlloc((void **)&E.gu_h, gu, cudaHostAllocDefault) != cudaSuccess ||
+        cudaHostAlloc((void **)&E.mid_h, md, cudaHostAllocDefault) != cudaSuccess ||
+        cudaMalloc((void **)&E.gu_d, gu) != cudaSuccess || cudaMalloc((void **)&E.mid_d, md) != cudaSuccess) {
+        fprintf(stderr, "LLAMADECODE_CPU_FP4 epilogue setup refused: %s\n", cudaGetErrorString(cudaGetLastError()));
+        return false;
+    }
+    ds4_cpu_fp4_set_epilogue(fp4_lane_epilogue, nullptr);
+    return true;
+}
+
+static int external_fp4_cpu_join(void *, cudaStream_t stream) {
+    const auto t = std::chrono::steady_clock::now();
+    const double service = ds4_cpu_fp4_wait();
+    g_fp4_wait_last = external_ms(t);
+    if (service < 0) return 0;
+    g_fp4_service_ms += service;
+    if (g_fp4_count) g_fp4_t_cpu += 0.05 * (service / g_fp4_count - g_fp4_t_cpu);
+    for (uint32_t i = 0; i < g_fp4_count; ++i) {
+        const uint32_t a = g_fp4_positions[i];
+        if (!cuda_ok(cudaMemcpyAsync(g_fp4_cpu_acc_dev + (size_t)a * 5120u, g_fp4_pin->acc[a], 5120u * sizeof(float),
+                                     cudaMemcpyHostToDevice, stream), "CPU expert sums upload")) return 0;
+    }
+    g_fp4_join_ms += external_ms(t);
+    return 1;
+}
+
+static int external_fp4_threads() {
+    const char *v = getenv("LLAMADECODE_CPU_FP4_THREADS");
+    const long n = v && *v ? strtol(v, nullptr, 10) : 12;
+    return (int)(n < 1 ? 1 : n > 32 ? 32 : n);
+}
+
+/* Returns -1 when this call is not for the CPU lane (caller runs the GPU path). */
+static int external_fp4_cpu_launch(
+        ds4_gpu_tensor *out, ds4_gpu_tensor *gate, ds4_gpu_tensor *up, ds4_gpu_tensor *mid, ds4_gpu_tensor *down,
+        const void *model_map, uint64_t model_size, uint64_t gate_offset, uint64_t up_offset, uint64_t down_offset,
+        uint32_t gate_type, uint32_t down_type, uint64_t gate_expert_bytes, uint64_t gate_row_bytes,
+        uint64_t down_expert_bytes, uint64_t down_row_bytes, uint32_t expert_in_dim, uint32_t expert_mid_dim,
+        uint32_t out_dim, const ds4_gpu_tensor *selected, const ds4_gpu_tensor *weights, uint32_t n_total_expert,
+        uint32_t n_expert, float clamp, const ds4_gpu_tensor *x, uint32_t layer_index, uint32_t n_tokens,
+        int allow_streaming, int owned_filtered) {
+    const int mode = external_cpu_mode();
+    if (!mode || !g_ds4_fp4_packed_experts || gate_type != 39u || down_type != 39u || n_tokens != 1u || n_expert != 6u ||
+        expert_in_dim != 5120u || expert_mid_dim != 2304u || out_dim != 5120u || layer_index >= 40u ||
+        !g_ds4x_expert_hook || !g_ds4x_residency_hook || !g_external_host_cache.valid ||
+        gate_expert_bytes != 2304ull * 5120ull / 32ull * 17ull || down_expert_bytes != 5120ull * 2304ull / 32ull * 17ull)
+        return -1;
+    if (g_fp4_state == 0) {
+        const int threads = external_fp4_threads();
+        g_fp4_state = (ds4_cpu_fp4_init(threads) > 0 &&
+                       cudaHostAlloc((void **)&g_fp4_pin, sizeof(external_fp4_pinned), cudaHostAllocDefault) == cudaSuccess &&
+                       cudaMalloc((void **)&g_fp4_cpu_acc_dev, 6u * 5120u * sizeof(float)) == cudaSuccess &&
+                       fp4_lane_epilogue_init()) ? 1 : -1;
+        fprintf(stderr, "LLAMADECODE_CPU_FP4 %s threads=%d mode=%s arithmetic=packed-q8_1-replica+gpu-swiglu tier_slots=%u\n",
+                g_fp4_state > 0 ? "ready" : "REFUSED", threads, mode == 1 ? "cpu" : "mix", (unsigned)g_external_host_cache.capacity);
+        if (g_fp4_state < 0) fprintf(stderr, "LLAMADECODE_CPU_FP4 refused: RAM-tier experts stay on the upload path\n");
+    }
+    if (g_fp4_state < 0) return -1;
+    if (g_external_host_borrowed.size() != g_external_host_cache.capacity) g_external_host_borrowed.assign(g_external_host_cache.capacity, 0);
+    const cudaStream_t stream = cuda_decode_stream();
+    const auto t_read = std::chrono::steady_clock::now();
+    // One sync: ids, weights and the FFN input (the id read alone cost the same sync).
+    if (!cuda_ok(cudaMemcpyAsync(g_fp4_pin->ids, selected->ptr, 6u * sizeof(int32_t), cudaMemcpyDeviceToHost, stream), "fp4 ids") ||
+        !cuda_ok(cudaMemcpyAsync(g_fp4_pin->w, weights->ptr, 6u * sizeof(float), cudaMemcpyDeviceToHost, stream), "fp4 weights") ||
+        !cuda_ok(cudaMemcpyAsync(g_fp4_pin->x, x->ptr, 5120u * sizeof(float), cudaMemcpyDeviceToHost, stream), "fp4 x") ||
+        !cuda_ok(cudaStreamSynchronize(stream), "fp4 router readback")) return 0;
+    g_fp4_read_ms += external_ms(t_read);
+    ++g_fp4_calls;
+    const int32_t *ids = g_fp4_pin->ids;
+    std::memcpy(g_fp4_pre_ids, ids, sizeof(g_fp4_pre_ids));
+    g_fp4_pre_ids_src = selected->ptr;
+    bool any = false;
+    for (uint32_t i = 0; i < 6u; ++i) {
+        if (ids[i] < 0 || ids[i] >= 384) { g_fp4_pre_ids_src = nullptr; return -1; }
+        if (external_host_find(layer_index, (uint32_t)ids[i]) >= 0) any = true;
+    }
+#define FP4_ARGS out,gate,up,mid,down,model_map,model_size,gate_offset,up_offset,down_offset,gate_type,down_type,gate_expert_bytes,gate_row_bytes,down_expert_bytes,down_row_bytes,expert_in_dim,expert_mid_dim,out_dim,selected,weights,n_total_expert,n_expert,clamp,x,layer_index,n_tokens,allow_streaming,owned_filtered
+    std::array<uint8_t, 384> tier{};
+    uint32_t cand[6], n_cand = 0, n_ssd = 0;
+    if (any) {
+        if (!g_ds4x_residency_hook(g_ds4x_residency_user, layer_index, tier.data(), 384u)) return 0;
+        for (uint32_t i = 0; i < 6u; ++i) {
+            if (tier[ids[i]] == 2) cand[n_cand++] = i;
+            else if (tier[ids[i]] == 0) ++n_ssd;
+        }
+    }
+    // The hook always serves at least one expert (an empty request is not a
+    // provider case), so six RAM hits keep one on the upload path.
+    uint32_t n_cpu = n_cand > 5u ? 5u : n_cand;
+    if (mode == 2 && n_cpu) {
+        // Choose how many RAM hits the CPU takes: minimize the later of the two
+        // lanes, CPU (n_cpu * t_cpu) vs hook (misses * t_ds + uploads * t_up).
+        // 1 in 16 such layers explores (all CPU or all upload) to keep both measured.
+        if ((g_fp4_calls & 15u) == 0) { n_cpu = (g_fp4_explore++ & 1u) ? 0u : n_cpu; }
+        else {
+            uint32_t best = 0; double best_t = 1e30;
+            for (uint32_t c = 0; c <= n_cpu; ++c) {
+                const double tc = c * g_fp4_t_cpu, th = n_ssd * g_fp4_t_ds + (n_cand - c) * g_fp4_t_up;
+                const double t = tc > th ? tc : th;
+                if (t < best_t - 1e-9) { best_t = t; best = c; }
+            }
+            n_cpu = best;
+        }
+    }
+    if (!n_cpu) {
+        const int ok = routed_moe_launch_impl(FP4_ARGS);
+        // Misses and uploads are measured from layers without a CPU lane.
+        if (n_cand == 0 && n_ssd) g_fp4_t_ds += 0.05 * (g_last_hook_ms / n_ssd - g_fp4_t_ds);
+        else if (n_cand) { const double r = (g_last_hook_ms - n_ssd * g_fp4_t_ds) / n_cand; if (r > 0) g_fp4_t_up += 0.05 * (r - g_fp4_t_up); }
+        g_fp4_up_experts += n_cand;
+        return ok;
+    }
+    const uint8_t *pg[6], *pu[6], *pd[6]; float w[6]; float *acc[6];
+    g_external_cpu_ids.clear();
+    for (uint32_t c = 0; c < n_cpu; ++c) {
+        const uint32_t a = cand[c];
+        const int slot = external_host_find(layer_index, (uint32_t)ids[a]);
+        if (slot < 0) return 0;
+        pg[c] = (const uint8_t *)external_host_payload((uint32_t)slot, 0);
+        pu[c] = (const uint8_t *)external_host_payload((uint32_t)slot, 1);
+        pd[c] = (const uint8_t *)external_host_payload((uint32_t)slot, 2);
+        if (!pg[c] || !pu[c] || !pd[c]) return 0;
+        g_external_host_borrowed[(uint32_t)slot] = 1; g_fp4_borrowed[c] = (uint32_t)slot;
+        w[c] = g_fp4_pin->w[a]; acc[c] = g_fp4_pin->acc[a]; g_fp4_positions[c] = a;
+        g_external_cpu_ids.push_back(ids[a]);
+    }
+    g_fp4_count = n_cpu;
+    if (!ds4_cpu_fp4_submit(g_fp4_pin->x, pg, pu, pd, w, (int)n_cpu, clamp, acc)) {
+        for (uint32_t c = 0; c < n_cpu; ++c) g_external_host_borrowed[g_fp4_borrowed[c]] = 0;
+        g_external_cpu_ids.clear(); g_fp4_count = 0; return 0;
+    }
+    g_fp4_cpu_active = true;
+    g_fp4_wait_last = 0;
+    int ok = routed_moe_launch_impl(FP4_ARGS);
+    g_fp4_cpu_active = false;
+    (void)ds4_cpu_fp4_wait();            // no-op after the join; covers a failed launch
+    for (uint32_t c = 0; c < n_cpu; ++c) g_external_host_borrowed[g_fp4_borrowed[c]] = 0;
+    g_external_cpu_ids.clear();
+    g_fp4_wait_ms += g_fp4_wait_last;
+    g_fp4_cpu_experts += n_cpu; g_fp4_up_experts += n_cand - n_cpu; ++g_fp4_cpu_layers;
+    g_external_cpu_ms = g_fp4_service_ms; g_external_wait_ms = g_fp4_wait_ms;
+    g_external_transfer_ms = g_fp4_read_ms; g_external_merge_ms = g_fp4_join_ms;
+    g_external_cpu_experts = g_fp4_cpu_experts; g_external_cpu_layers = g_fp4_cpu_layers;
+    if ((g_fp4_cpu_layers & 1023u) == 1u)
+        fprintf(stderr, "LLAMADECODE_CPU_FP4_STATS calls=%llu cpu_layers=%llu cpu_experts=%llu upload_experts=%llu t_cpu=%.3f t_ds=%.3f t_up=%.3f service_ms=%.1f wait_ms=%.1f read_ms=%.1f join_ms=%.1f borrow_skips=%llu\n",
+                (unsigned long long)g_fp4_calls, (unsigned long long)g_fp4_cpu_layers, (unsigned long long)g_fp4_cpu_experts,
+                (unsigned long long)g_fp4_up_experts, g_fp4_t_cpu, g_fp4_t_ds, g_fp4_t_up, g_fp4_service_ms, g_fp4_wait_ms,
+                g_fp4_read_ms, g_fp4_join_ms, (unsigned long long)g_external_host_borrow_skips);
+    if (!ok) return 0;
+    // Diagnostic (LLAMADECODE_HOST_CPU_VERIFY=1|all): rerun this layer with every
+    // expert on the GPU (RAM hits uploaded) on the same activation and compare;
+    // the hybrid result is kept.
+    static const char *verify = getenv("LLAMADECODE_HOST_CPU_VERIFY");
+    static unsigned verify_count = 0;
+    if (verify && *verify && strcmp(verify, "0") && (!strcmp(verify, "all") || verify_count < 64u)) {
+        ++verify_count;
+        std::vector<float> hybrid(5120), reference(5120);
+        if (!cuda_ok(cudaStreamSynchronize(stream), "fp4 verify") ||
+            !ds4_gpu_tensor_read(out, 0, hybrid.data(), 5120u * sizeof(float))) return 0;
+        std::memcpy(g_fp4_pre_ids, ids, sizeof(g_fp4_pre_ids)); g_fp4_pre_ids_src = selected->ptr;
+        if (!routed_moe_launch_impl(FP4_ARGS) || !cuda_ok(cudaStreamSynchronize(stream), "fp4 verify ref") ||
+            !ds4_gpu_tensor_read(out, 0, reference.data(), 5120u * sizeof(float))) return 0;
+        double diff = 0, norm = 0, mx = 0; unsigned same = 0;
+        for (uint32_t i = 0; i < 5120u; ++i) {
+            const double d = (double)hybrid[i] - reference[i];
+            diff += d * d; norm += (double)reference[i] * reference[i]; mx = std::max(mx, std::abs(d));
+            same += std::memcmp(&hybrid[i], &reference[i], 4) == 0;
+        }
+        fprintf(stderr, "LLAMADECODE_CPU_FP4_VERIFY n=%u layer=%u cpu_experts=%u bit_identical=%u/5120 relative_rms=%.3e max_abs=%.3e\n",
+                verify_count, layer_index, n_cpu, same, sqrt(diff / std::max(norm, 1e-30)), mx);
+        if (!ds4_gpu_tensor_write(out, 0, hybrid.data(), 5120u * sizeof(float))) return 0;
+    }
+    return 1;
+#undef FP4_ARGS
+}
+#endif
 /* Called only on the external Q4_K scalar decode path. Other formats and
  * multi-row prefills retain their existing GPU dispatch. */
 static int routed_moe_launch(
@@ -14,6 +262,7 @@ static int routed_moe_launch(
         int allow_streaming, int owned_filtered) {
 #define DS4_EXTERNAL_MOE_ARGS out,gate,up,mid,down,model_map,model_size,gate_offset,up_offset,down_offset,gate_type,down_type,gate_expert_bytes,gate_row_bytes,down_expert_bytes,down_row_bytes,expert_in_dim,expert_mid_dim,out_dim,selected,weights,n_total_expert,n_expert,clamp,x,layer_index,n_tokens,allow_streaming,owned_filtered
 #ifdef DS4_EXTERNAL_DECODE
+    {const int fp4=external_fp4_cpu_launch(DS4_EXTERNAL_MOE_ARGS);if(fp4>=0)return fp4;}
     const bool eligible=g_ds4x_expert_hook&&g_ds4x_residency_hook&&external_cpu_mode()&&
         n_tokens==1u&&(n_expert==6u||n_expert==3u)&&gate_type==12u&&down_type==12u&&
         expert_in_dim==5120u&&expert_mid_dim==2304u&&out_dim==5120u&&

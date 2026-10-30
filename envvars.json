@@ -2553,11 +2553,11 @@
     ],
     "doc": "Diagnostic: 1 makes each borrowed layer-major DirectStorage expert wave wait on the shared D3D12 fence (CUDA external semaphore) before its arena copies.",
     "reads": [
-      "engines/ds4-win/ds4_cuda.cu:38950"
+      "engines/ds4-win/ds4_cuda.cu:38970"
     ],
     "code_defaults": [
       {
-        "source": "engines/ds4-win/ds4_cuda.cu:38950",
+        "source": "engines/ds4-win/ds4_cuda.cu:38970",
         "unset": "NULL from getenv; the literal consumer below supplies any fallback",
         "read": "const char *e = getenv(\"DS4COMBO_V41_DS_FENCE\");",
         "consumer": "    static int v = -1;\n    if (v < 0) {\n        const char *e = getenv(\"DS4COMBO_V41_DS_FENCE\");\n        v = e && e[0] && strcmp(e, \"0\") != 0 ? 1 : 0;\n        if (v) fprintf(stderr, \"DS4COMBO_V41_DS_FENCE on: layer expert waves wait on the D3D12 fence \"\n                               \"before their arena copies\\n\");\n    }"
@@ -2649,18 +2649,18 @@
     ],
     "doc": "Diagnostic: comma-separated layers (<64) whose borrowed layer-major expert slots are compared once with a plain GGUF read, plus the slot remap; prints DS4COMBO_V41_LOADER_CHECK lines.",
     "reads": [
-      "engines/ds4-win/ds4_cuda.cu:38944",
-      "engines/ds4-win/ds4_cuda.cu:39078"
+      "engines/ds4-win/ds4_cuda.cu:38964",
+      "engines/ds4-win/ds4_cuda.cu:39098"
     ],
     "code_defaults": [
       {
-        "source": "engines/ds4-win/ds4_cuda.cu:38944",
+        "source": "engines/ds4-win/ds4_cuda.cu:38964",
         "unset": "NULL from getenv; the literal consumer below supplies any fallback",
         "read": "if (v < 0) { const char *e = getenv(\"DS4COMBO_V41_LOADER_CHECK\"); v = e && e[0] ? 1 : 0; }",
         "consumer": "static int cuda_loader_check_enabled(void) {\n    static int v = -1;\n    if (v < 0) { const char *e = getenv(\"DS4COMBO_V41_LOADER_CHECK\"); v = e && e[0] ? 1 : 0; }\n    return v;\n}\nstatic int cuda_ds_fence_enabled(void) {\n    static int v = -1;"
       },
       {
-        "source": "engines/ds4-win/ds4_cuda.cu:39078",
+        "source": "engines/ds4-win/ds4_cuda.cu:39098",
         "unset": "NULL from getenv; the literal consumer below supplies any fallback",
         "read": "const char *env = getenv(\"DS4COMBO_V41_LOADER_CHECK\");",
         "consumer": "    if (!parsed) {\n        parsed = 1;\n        const char *env = getenv(\"DS4COMBO_V41_LOADER_CHECK\");\n        for (const char *c = env; c && *c;) {\n            char *end = NULL;\n            const unsigned long v = strtoul(c, &end, 10);\n            if (end == c) break;"
@@ -4461,7 +4461,7 @@
       "engines/ds4-mac/ds4_cuda.cu:3798",
       "engines/ds4-mac/ds4_cuda.cu:32519",
       "engines/ds4-win/ds4_cuda.cu:8880",
-      "engines/ds4-win/ds4_cuda.cu:45497"
+      "engines/ds4-win/ds4_cuda.cu:45517"
     ],
     "code_defaults": [
       {
@@ -4483,7 +4483,7 @@
         "consumer": "    (void)max_tensor_bytes;\n    if (!ds4_gpu_register_model_map_no_copy(model_map, model_size)) return 0;\n    if (getenv(\"DS4_CUDA_COPY_MODEL_CHUNKED\") != NULL &&\n        !cuda_model_copy_chunked(model_map, model_size, map_offset, map_size)) {\n        (void)cuda_model_prefetch_range(model_map, model_size, map_offset, map_size);\n    }\n    return 1;"
       },
       {
-        "source": "engines/ds4-win/ds4_cuda.cu:45497",
+        "source": "engines/ds4-win/ds4_cuda.cu:45517",
         "unset": "NULL from getenv; the literal consumer below supplies any fallback",
         "read": "if (getenv(\"DS4_CUDA_COPY_MODEL_CHUNKED\") != NULL) {",
         "consumer": "     * Registering a whole read-only mapping is pointless when the design is to STREAM it. */\n    if (!cuda_model_set_host_map(model_map, model_size)) return 0;\n    if (getenv(\"DS4_CUDA_COPY_MODEL_CHUNKED\") != NULL) {\n        for (uint32_t i = 0; i < count; i++) {\n            (void)cuda_model_prefetch_range(model_map, model_size,\n                                            offsets[i], sizes[i]);\n        }"
@@ -4855,7 +4855,7 @@
     "doc": "DS4_CUDA_DISABLE_HC_SPLIT_NORM_FUSED: advanced engine setting; built-in default retained",
     "reads": [
       "engines/ds4-mac/ds4_cuda.cu:26175",
-      "engines/ds4-win/ds4_cuda.cu:38363"
+      "engines/ds4-win/ds4_cuda.cu:38383"
     ],
     "code_defaults": [
       {
@@ -4865,7 +4865,7 @@
         "consumer": "        float                   eps,\n        float                   norm_eps) {\n    if (getenv(\"DS4_CUDA_DISABLE_HC_SPLIT_NORM_FUSED\") == NULL) {\n        if (!out || !norm_out || !split || !mix || !residual_hc || !model_map ||\n            n_embd == 0 || n_hc != 4) {\n            return 0;\n        }"
       },
       {
-        "source": "engines/ds4-win/ds4_cuda.cu:38363",
+        "source": "engines/ds4-win/ds4_cuda.cu:38383",
         "unset": "NULL from getenv; the literal consumer below supplies any fallback",
         "read": "if (getenv(\"DS4_CUDA_DISABLE_HC_SPLIT_NORM_FUSED\") == NULL) {",
         "consumer": "        float                   eps,\n        float                   norm_eps) {\n    if (getenv(\"DS4_CUDA_DISABLE_HC_SPLIT_NORM_FUSED\") == NULL) {\n        if (!out || !norm_out || !split || !mix || !residual_hc || !model_map ||\n            n_embd == 0 || n_hc != 4) {\n            return 0;\n        }"
@@ -4924,10 +4924,10 @@
       "engines/ds4-mac/ds4_cuda.cu:26403",
       "engines/ds4-mac/ds4_cuda.cu:26442",
       "engines/ds4-mac/ds4_cuda.cu:26478",
-      "engines/ds4-win/ds4_cuda.cu:38555",
-      "engines/ds4-win/ds4_cuda.cu:38591",
-      "engines/ds4-win/ds4_cuda.cu:38630",
-      "engines/ds4-win/ds4_cuda.cu:38666"
+      "engines/ds4-win/ds4_cuda.cu:38575",
+      "engines/ds4-win/ds4_cuda.cu:38611",
+      "engines/ds4-win/ds4_cuda.cu:38650",
+      "engines/ds4-win/ds4_cuda.cu:38686"
     ],
     "code_defaults": [
       {
@@ -4955,25 +4955,25 @@
         "consumer": "        uint32_t                n_embd,\n        uint32_t                n_hc) {\n    if (getenv(\"DS4_CUDA_DISABLE_Q8_HC_EXPAND_FUSED\") == NULL) {\n        return cuda_matmul_q8_0_hc_expand_tensor_labeled(out_hc, block_out,\n                                                        model_map, model_size,\n                                                        weight_offset,\n                                                        in_dim, out_dim,"
       },
       {
-        "source": "engines/ds4-win/ds4_cuda.cu:38555",
+        "source": "engines/ds4-win/ds4_cuda.cu:38575",
         "unset": "NULL from getenv; the literal consumer below supplies any fallback",
         "read": "if (getenv(\"DS4_CUDA_DISABLE_Q8_HC_EXPAND_FUSED\") == NULL) {",
         "consumer": "        uint32_t                n_embd,\n        uint32_t                n_hc) {\n    if (getenv(\"DS4_CUDA_DISABLE_Q8_HC_EXPAND_FUSED\") == NULL) {\n        return cuda_matmul_q8_0_hc_expand_tensor_labeled(out_hc, shared_out,\n                                                        model_map, model_size,\n                                                        weight_offset,\n                                                        in_dim, out_dim,"
       },
       {
-        "source": "engines/ds4-win/ds4_cuda.cu:38591",
+        "source": "engines/ds4-win/ds4_cuda.cu:38611",
         "unset": "NULL from getenv; the literal consumer below supplies any fallback",
         "read": "if (getenv(\"DS4_CUDA_DISABLE_Q8_HC_EXPAND_FUSED\") == NULL) {",
         "consumer": "        uint32_t                n_embd,\n        uint32_t                n_hc) {\n    if (getenv(\"DS4_CUDA_DISABLE_Q8_HC_EXPAND_FUSED\") == NULL) {\n        return cuda_matmul_q8_0_hc_expand_tensor_labeled(out_hc, shared_out,\n                                                        model_map, model_size,\n                                                        weight_offset,\n                                                        in_dim, out_dim,"
       },
       {
-        "source": "engines/ds4-win/ds4_cuda.cu:38630",
+        "source": "engines/ds4-win/ds4_cuda.cu:38650",
         "unset": "NULL from getenv; the literal consumer below supplies any fallback",
         "read": "if (getenv(\"DS4_CUDA_DISABLE_Q8_HC_EXPAND_FUSED\") != NULL) return 0;",
         "consumer": "        uint32_t n_embd,\n        uint32_t n_hc) {\n    if (getenv(\"DS4_CUDA_DISABLE_Q8_HC_EXPAND_FUSED\") != NULL) return 0;\n    return cuda_matmul_q8_0_hc_expand_tensor_labeled(\n            out_hc,\n            shared_out,\n            model_map,"
       },
       {
-        "source": "engines/ds4-win/ds4_cuda.cu:38666",
+        "source": "engines/ds4-win/ds4_cuda.cu:38686",
         "unset": "NULL from getenv; the literal consumer below supplies any fallback",
         "read": "if (getenv(\"DS4_CUDA_DISABLE_Q8_HC_EXPAND_FUSED\") == NULL) {",
         "consumer": "        uint32_t                n_embd,\n        uint32_t                n_hc) {\n    if (getenv(\"DS4_CUDA_DISABLE_Q8_HC_EXPAND_FUSED\") == NULL) {\n        return cuda_matmul_q8_0_hc_expand_tensor_labeled(out_hc, block_out,\n                                                        model_map, model_size,\n                                                        weight_offset,\n                                                        in_dim, out_dim,"
@@ -5095,8 +5095,8 @@
     "doc": "DS4_CUDA_DISABLE_SSD_PREFETCH: advanced engine setting; built-in default retained",
     "reads": [
       "engines/ds4-win/ds4.c:81834",
-      "engines/ds4-win/ds4_cuda.cu:39684",
-      "engines/ds4-win/ds4_cuda.cu:39703"
+      "engines/ds4-win/ds4_cuda.cu:39704",
+      "engines/ds4-win/ds4_cuda.cu:39723"
     ],
     "code_defaults": [
       {
@@ -5106,13 +5106,13 @@
         "consumer": "static bool ds41_prefill_borrow(ds41_gpu_graph *g, const ds4_weights *w, uint32_t count,\n                                bool *refused) {\n    const uint32_t want = count >= 2048u && !getenv(\"DS4_CUDA_DISABLE_SSD_PREFETCH\") ? 2u : 1u;\n    if (g->prefill_borrow_layers >= want) return true;\n    const ds4_layer_weights *l = &w->layer[0];\n    const uint64_t gate = routed_expert_row_bytes(l->ffn_gate_exps) * DS4_N_FF_EXP;\n    const uint64_t down = routed_expert_row_bytes(l->ffn_down_exps) * DS4_N_EMBD;"
       },
       {
-        "source": "engines/ds4-win/ds4_cuda.cu:39684",
+        "source": "engines/ds4-win/ds4_cuda.cu:39704",
         "unset": "NULL from getenv; the literal consumer below supplies any fallback",
         "read": "if (!current || !next || getenv(\"DS4_CUDA_DISABLE_SSD_PREFETCH\")) return 0;",
         "consumer": "        ds4_gpu_stream_expert_cache_prefetch_finish(false);\n        cuda_stream_prefetch_drop_pending();\n        if (!current || !next || getenv(\"DS4_CUDA_DISABLE_SSD_PREFETCH\")) return 0;\n        g_stream_prefetch_pending.current = *current;\n        g_stream_prefetch_pending.next = *next;\n        g_stream_prefetch_pending.valid = true;\n        static int notice = 0;"
       },
       {
-        "source": "engines/ds4-win/ds4_cuda.cu:39703",
+        "source": "engines/ds4-win/ds4_cuda.cu:39723",
         "unset": "NULL from getenv; the literal consumer below supplies any fallback",
         "read": "getenv(\"DS4_CUDA_DISABLE_SSD_PREFETCH\") || g_model_fd < 0 ||",
         "consumer": "    auto &cache = g_stream_selected_cache;\n    if (!g_ssd_streaming_mode || g_n_gpus != 1 || !g_stream_expert_budget ||\n        getenv(\"DS4_CUDA_DISABLE_SSD_PREFETCH\") || g_model_fd < 0 ||\n        !cuda_stream_selected_ranges_valid(current) || !cuda_stream_selected_ranges_valid(next) ||\n        current->model_map != next->model_map || current->model_map != cache.model_map ||\n        current->model_map != g_model_fd_host_base || current->model_size != next->model_size ||\n        current->gate_offset == next->gate_offset ||"
@@ -5404,8 +5404,8 @@
       "engines/ds4-win/ds4_cuda.cu:3607",
       "engines/ds4-win/ds4_cuda.cu:14555",
       "engines/ds4-win/ds4_cuda.cu:14556",
-      "engines/ds4-win/ds4_cuda.cu:35923",
-      "engines/ds4-win/ds4_cuda.cu:35947"
+      "engines/ds4-win/ds4_cuda.cu:35938",
+      "engines/ds4-win/ds4_cuda.cu:35962"
     ],
     "code_defaults": [
       {
@@ -5469,13 +5469,13 @@
         "consumer": "            g_stream_expert_cache_phase_decode && n_tokens<=16u && n_total_expert==384u &&\n                model_map!=g_support_host_base && getenv(\"DS4_CUDA_DSPARK_RESIDENT\") &&\n                !strcmp(getenv(\"DS4_CUDA_DSPARK_RESIDENT\"),\"1\"),\n            table->expert_tiers,\n            table->expert_ranks);\n}\n"
       },
       {
-        "source": "engines/ds4-win/ds4_cuda.cu:35923",
+        "source": "engines/ds4-win/ds4_cuda.cu:35938",
         "unset": "NULL from getenv; the literal consumer below supplies any fallback",
         "read": "getenv(\"DS4_CUDA_DSPARK_RESIDENT\") && !strcmp(getenv(\"DS4_CUDA_DSPARK_RESIDENT\"),\"1\");",
         "consumer": "#endif\n    const bool resident_draft=g_ssd_streaming_mode && model_map==g_support_host_base &&\n        getenv(\"DS4_CUDA_DSPARK_RESIDENT\") && !strcmp(getenv(\"DS4_CUDA_DSPARK_RESIDENT\"),\"1\");\n    if(resident_draft)allow_streaming=0;\n    if (g_ssd_streaming_mode && !owned_filtered && !resident_draft) {\n        const ds4_gpu_stream_expert_table table = {\n            model_map, model_size, 0u, layer_index, n_total_expert,"
       },
       {
-        "source": "engines/ds4-win/ds4_cuda.cu:35947",
+        "source": "engines/ds4-win/ds4_cuda.cu:35962",
         "unset": "NULL from getenv; the literal consumer below supplies any fallback",
         "read": "getenv(\"DS4_CUDA_DSPARK_RESIDENT\") && !strcmp(getenv(\"DS4_CUDA_DSPARK_RESIDENT\"),\"1\")) {",
         "consumer": "        } else if(allow_streaming && n_tokens>1u && n_total_expert==384u &&\n            expert_in_dim==5120u && expert_mid_dim==2304u &&\n            getenv(\"DS4_CUDA_DSPARK_RESIDENT\") && !strcmp(getenv(\"DS4_CUDA_DSPARK_RESIDENT\"),\"1\")) {\n            std::vector<int32_t> ids((size_t)n_tokens*n_expert);\n            if(!ds4_gpu_tensor_read(selected,0,ids.data(),ids.size()*sizeof(int32_t)) ||\n               !ds4_gpu_stream_expert_cache_prepare_selected_batch(&table,ids.data(),n_tokens,n_expert))return 0;\n        } else"
@@ -8078,7 +8078,7 @@
     "doc": "DS4_CUDA_MOE_DIRECT_MIDQ: advanced engine setting; built-in default retained",
     "reads": [
       "engines/ds4-mac/ds4_cuda.cu:24629",
-      "engines/ds4-win/ds4_cuda.cu:36779"
+      "engines/ds4-win/ds4_cuda.cu:36799"
     ],
     "code_defaults": [
       {
@@ -8088,7 +8088,7 @@
         "consumer": "        const uint32_t use_direct_midq =\n            q4k_path && use_direct_down_sum && !write_gate_up &&\n            getenv(\"DS4_CUDA_MOE_DIRECT_MIDQ\") != NULL &&\n            getenv(\"DS4_CUDA_MOE_NO_DIRECT_MIDQ\") == NULL;\n        const uint32_t use_q4_gate_h16r8 =\n            q4k_path && !use_direct_midq &&\n            getenv(\"DS4_CUDA_MOE_Q4_GATE_H16R8\") != NULL &&"
       },
       {
-        "source": "engines/ds4-win/ds4_cuda.cu:36779",
+        "source": "engines/ds4-win/ds4_cuda.cu:36799",
         "unset": "NULL from getenv; the literal consumer below supplies any fallback",
         "read": "getenv(\"DS4_CUDA_MOE_DIRECT_MIDQ\") != NULL &&",
         "consumer": "        const uint32_t use_direct_midq =\n            q4k_path && use_direct_down_sum && !write_gate_up &&\n            getenv(\"DS4_CUDA_MOE_DIRECT_MIDQ\") != NULL &&\n            getenv(\"DS4_CUDA_MOE_NO_DIRECT_MIDQ\") == NULL;\n        const uint32_t use_q4_gate_h16r8 =\n            q4k_path && !use_direct_midq &&\n            getenv(\"DS4_CUDA_MOE_Q4_GATE_H16R8\") != NULL &&"
@@ -8109,8 +8109,8 @@
     "reads": [
       "engines/ds4-mac/ds4_cuda.cu:24598",
       "engines/ds4-mac/ds4_cuda.cu:24613",
-      "engines/ds4-win/ds4_cuda.cu:36748",
-      "engines/ds4-win/ds4_cuda.cu:36763"
+      "engines/ds4-win/ds4_cuda.cu:36768",
+      "engines/ds4-win/ds4_cuda.cu:36783"
     ],
     "code_defaults": [
       {
@@ -8126,13 +8126,13 @@
         "consumer": "            getenv(\"DS4_CUDA_MOE_DOWN_ROW512\") != NULL ? 512u :\n            getenv(\"DS4_CUDA_MOE_DOWN_ROW2048\") != NULL ? 2048u :\n            getenv(\"DS4_CUDA_MOE_DOWN_ROW1024\") != NULL ? 1024u : 512u;\n        const uint32_t use_down_row2048 = !q4k_path && use_atomic_down && expert_tile_m == 8u &&\n            (getenv(\"DS4_CUDA_MOE_DOWN_ROW2048\") != NULL ||\n             getenv(\"DS4_CUDA_MOE_DOWN_ROW256\") != NULL ||\n             getenv(\"DS4_CUDA_MOE_DOWN_ROW128\") != NULL ||"
       },
       {
-        "source": "engines/ds4-win/ds4_cuda.cu:36748",
+        "source": "engines/ds4-win/ds4_cuda.cu:36768",
         "unset": "NULL from getenv; the literal consumer below supplies any fallback",
         "read": "getenv(\"DS4_CUDA_MOE_DOWN_ROW1024\") != NULL ||",
         "consumer": "        const uint32_t force_q4_down_rowspan =\n            getenv(\"DS4_CUDA_MOE_DOWN_ROW512\") != NULL ||\n            getenv(\"DS4_CUDA_MOE_DOWN_ROW1024\") != NULL ||\n            getenv(\"DS4_CUDA_MOE_DOWN_ROW2048\") != NULL;\n        const uint32_t use_q4_down_rowspan =\n            q4k_path && use_expert_tiles && expert_tile_m == 8u &&\n            (q4_owned_batch || n_tokens >= 128u || force_q4_down_rowspan) &&"
       },
       {
-        "source": "engines/ds4-win/ds4_cuda.cu:36763",
+        "source": "engines/ds4-win/ds4_cuda.cu:36783",
         "unset": "NULL from getenv; the literal consumer below supplies any fallback",
         "read": "getenv(\"DS4_CUDA_MOE_DOWN_ROW1024\") != NULL ? 1024u : 512u;",
         "consumer": "            getenv(\"DS4_CUDA_MOE_DOWN_ROW512\") != NULL ? 512u :\n            getenv(\"DS4_CUDA_MOE_DOWN_ROW2048\") != NULL ? 2048u :\n            getenv(\"DS4_CUDA_MOE_DOWN_ROW1024\") != NULL ? 1024u : 512u;\n        const uint32_t use_down_row2048 = !q4k_path && use_atomic_down && expert_tile_m == 8u &&\n            (getenv(\"DS4_CUDA_MOE_DOWN_ROW2048\") != NULL ||\n             getenv(\"DS4_CUDA_MOE_DOWN_ROW256\") != NULL ||\n             getenv(\"DS4_CUDA_MOE_DOWN_ROW128\") != NULL ||"
@@ -8152,7 +8152,7 @@
     "doc": "DS4_CUDA_MOE_DOWN_ROW128: advanced engine setting; built-in default retained",
     "reads": [
       "engines/ds4-mac/ds4_cuda.cu:24617",
-      "engines/ds4-win/ds4_cuda.cu:36767"
+      "engines/ds4-win/ds4_cuda.cu:36787"
     ],
     "code_defaults": [
       {
@@ -8162,7 +8162,7 @@
         "consumer": "            (getenv(\"DS4_CUDA_MOE_DOWN_ROW2048\") != NULL ||\n             getenv(\"DS4_CUDA_MOE_DOWN_ROW256\") != NULL ||\n             getenv(\"DS4_CUDA_MOE_DOWN_ROW128\") != NULL ||\n             getenv(\"DS4_CUDA_MOE_DOWN_ROW64\") != NULL ||\n             (use_down_tile16 &&\n              getenv(\"DS4_CUDA_MOE_NO_DOWN_ROW2048\") == NULL &&\n              getenv(\"DS4_CUDA_MOE_NO_DOWN_ROW256\") == NULL &&"
       },
       {
-        "source": "engines/ds4-win/ds4_cuda.cu:36767",
+        "source": "engines/ds4-win/ds4_cuda.cu:36787",
         "unset": "NULL from getenv; the literal consumer below supplies any fallback",
         "read": "getenv(\"DS4_CUDA_MOE_DOWN_ROW128\") != NULL ||",
         "consumer": "            (getenv(\"DS4_CUDA_MOE_DOWN_ROW2048\") != NULL ||\n             getenv(\"DS4_CUDA_MOE_DOWN_ROW256\") != NULL ||\n             getenv(\"DS4_CUDA_MOE_DOWN_ROW128\") != NULL ||\n             getenv(\"DS4_CUDA_MOE_DOWN_ROW64\") != NULL ||\n             (use_down_tile16 &&\n              getenv(\"DS4_CUDA_MOE_NO_DOWN_ROW2048\") == NULL &&\n              getenv(\"DS4_CUDA_MOE_NO_DOWN_ROW256\") == NULL &&"
@@ -8184,9 +8184,9 @@
       "engines/ds4-mac/ds4_cuda.cu:24599",
       "engines/ds4-mac/ds4_cuda.cu:24612",
       "engines/ds4-mac/ds4_cuda.cu:24615",
-      "engines/ds4-win/ds4_cuda.cu:36749",
-      "engines/ds4-win/ds4_cuda.cu:36762",
-      "engines/ds4-win/ds4_cuda.cu:36765"
+      "engines/ds4-win/ds4_cuda.cu:36769",
+      "engines/ds4-win/ds4_cuda.cu:36782",
+      "engines/ds4-win/ds4_cuda.cu:36785"
     ],
     "code_defaults": [
       {
@@ -8208,19 +8208,19 @@
         "consumer": "            getenv(\"DS4_CUDA_MOE_DOWN_ROW1024\") != NULL ? 1024u : 512u;\n        const uint32_t use_down_row2048 = !q4k_path && use_atomic_down && expert_tile_m == 8u &&\n            (getenv(\"DS4_CUDA_MOE_DOWN_ROW2048\") != NULL ||\n             getenv(\"DS4_CUDA_MOE_DOWN_ROW256\") != NULL ||\n             getenv(\"DS4_CUDA_MOE_DOWN_ROW128\") != NULL ||\n             getenv(\"DS4_CUDA_MOE_DOWN_ROW64\") != NULL ||\n             (use_down_tile16 &&"
       },
       {
-        "source": "engines/ds4-win/ds4_cuda.cu:36749",
+        "source": "engines/ds4-win/ds4_cuda.cu:36769",
         "unset": "NULL from getenv; the literal consumer below supplies any fallback",
         "read": "getenv(\"DS4_CUDA_MOE_DOWN_ROW2048\") != NULL;",
         "consumer": "            getenv(\"DS4_CUDA_MOE_DOWN_ROW512\") != NULL ||\n            getenv(\"DS4_CUDA_MOE_DOWN_ROW1024\") != NULL ||\n            getenv(\"DS4_CUDA_MOE_DOWN_ROW2048\") != NULL;\n        const uint32_t use_q4_down_rowspan =\n            q4k_path && use_expert_tiles && expert_tile_m == 8u &&\n            (q4_owned_batch || n_tokens >= 128u || force_q4_down_rowspan) &&\n            getenv(\"DS4_CUDA_MOE_NO_Q4_DOWN_ROWSPAN\") == NULL;"
       },
       {
-        "source": "engines/ds4-win/ds4_cuda.cu:36762",
+        "source": "engines/ds4-win/ds4_cuda.cu:36782",
         "unset": "NULL from getenv; the literal consumer below supplies any fallback",
         "read": "getenv(\"DS4_CUDA_MOE_DOWN_ROW2048\") != NULL ? 2048u :",
         "consumer": "        const uint32_t down_row_span =\n            getenv(\"DS4_CUDA_MOE_DOWN_ROW512\") != NULL ? 512u :\n            getenv(\"DS4_CUDA_MOE_DOWN_ROW2048\") != NULL ? 2048u :\n            getenv(\"DS4_CUDA_MOE_DOWN_ROW1024\") != NULL ? 1024u : 512u;\n        const uint32_t use_down_row2048 = !q4k_path && use_atomic_down && expert_tile_m == 8u &&\n            (getenv(\"DS4_CUDA_MOE_DOWN_ROW2048\") != NULL ||\n             getenv(\"DS4_CUDA_MOE_DOWN_ROW256\") != NULL ||"
       },
       {
-        "source": "engines/ds4-win/ds4_cuda.cu:36765",
+        "source": "engines/ds4-win/ds4_cuda.cu:36785",
         "unset": "NULL from getenv; the literal consumer below supplies any fallback",
         "read": "(getenv(\"DS4_CUDA_MOE_DOWN_ROW2048\") != NULL ||",
         "consumer": "            getenv(\"DS4_CUDA_MOE_DOWN_ROW1024\") != NULL ? 1024u : 512u;\n        const uint32_t use_down_row2048 = !q4k_path && use_atomic_down && expert_tile_m == 8u &&\n            (getenv(\"DS4_CUDA_MOE_DOWN_ROW2048\") != NULL ||\n             getenv(\"DS4_CUDA_MOE_DOWN_ROW256\") != NULL ||\n             getenv(\"DS4_CUDA_MOE_DOWN_ROW128\") != NULL ||\n             getenv(\"DS4_CUDA_MOE_DOWN_ROW64\") != NULL ||\n             (use_down_tile16 &&"
@@ -8240,7 +8240,7 @@
     "doc": "DS4_CUDA_MOE_DOWN_ROW256: advanced engine setting; built-in default retained",
     "reads": [
       "engines/ds4-mac/ds4_cuda.cu:24616",
-      "engines/ds4-win/ds4_cuda.cu:36766"
+      "engines/ds4-win/ds4_cuda.cu:36786"
     ],
     "code_defaults": [
       {
@@ -8250,7 +8250,7 @@
         "consumer": "        const uint32_t use_down_row2048 = !q4k_path && use_atomic_down && expert_tile_m == 8u &&\n            (getenv(\"DS4_CUDA_MOE_DOWN_ROW2048\") != NULL ||\n             getenv(\"DS4_CUDA_MOE_DOWN_ROW256\") != NULL ||\n             getenv(\"DS4_CUDA_MOE_DOWN_ROW128\") != NULL ||\n             getenv(\"DS4_CUDA_MOE_DOWN_ROW64\") != NULL ||\n             (use_down_tile16 &&\n              getenv(\"DS4_CUDA_MOE_NO_DOWN_ROW2048\") == NULL &&"
       },
       {
-        "source": "engines/ds4-win/ds4_cuda.cu:36766",
+        "source": "engines/ds4-win/ds4_cuda.cu:36786",
         "unset": "NULL from getenv; the literal consumer below supplies any fallback",
         "read": "getenv(\"DS4_CUDA_MOE_DOWN_ROW256\") != NULL ||",
         "consumer": "        const uint32_t use_down_row2048 = !q4k_path && use_atomic_down && expert_tile_m == 8u &&\n            (getenv(\"DS4_CUDA_MOE_DOWN_ROW2048\") != NULL ||\n             getenv(\"DS4_CUDA_MOE_DOWN_ROW256\") != NULL ||\n             getenv(\"DS4_CUDA_MOE_DOWN_ROW128\") != NULL ||\n             getenv(\"DS4_CUDA_MOE_DOWN_ROW64\") != NULL ||\n             (use_down_tile16 &&\n              getenv(\"DS4_CUDA_MOE_NO_DOWN_ROW2048\") == NULL &&"
@@ -8271,8 +8271,8 @@
     "reads": [
       "engines/ds4-mac/ds4_cuda.cu:24597",
       "engines/ds4-mac/ds4_cuda.cu:24611",
-      "engines/ds4-win/ds4_cuda.cu:36747",
-      "engines/ds4-win/ds4_cuda.cu:36761"
+      "engines/ds4-win/ds4_cuda.cu:36767",
+      "engines/ds4-win/ds4_cuda.cu:36781"
     ],
     "code_defaults": [
       {
@@ -8288,13 +8288,13 @@
         "consumer": "            getenv(\"DS4_CUDA_MOE_GATE_ROW1024\") != NULL ? 1024u : 512u;\n        const uint32_t down_row_span =\n            getenv(\"DS4_CUDA_MOE_DOWN_ROW512\") != NULL ? 512u :\n            getenv(\"DS4_CUDA_MOE_DOWN_ROW2048\") != NULL ? 2048u :\n            getenv(\"DS4_CUDA_MOE_DOWN_ROW1024\") != NULL ? 1024u : 512u;\n        const uint32_t use_down_row2048 = !q4k_path && use_atomic_down && expert_tile_m == 8u &&\n            (getenv(\"DS4_CUDA_MOE_DOWN_ROW2048\") != NULL ||"
       },
       {
-        "source": "engines/ds4-win/ds4_cuda.cu:36747",
+        "source": "engines/ds4-win/ds4_cuda.cu:36767",
         "unset": "NULL from getenv; the literal consumer below supplies any fallback",
         "read": "getenv(\"DS4_CUDA_MOE_DOWN_ROW512\") != NULL ||",
         "consumer": "            getenv(\"DS4_CUDA_MOE_NO_SMALL_SORTED_PREP\") == NULL;\n        const uint32_t force_q4_down_rowspan =\n            getenv(\"DS4_CUDA_MOE_DOWN_ROW512\") != NULL ||\n            getenv(\"DS4_CUDA_MOE_DOWN_ROW1024\") != NULL ||\n            getenv(\"DS4_CUDA_MOE_DOWN_ROW2048\") != NULL;\n        const uint32_t use_q4_down_rowspan =\n            q4k_path && use_expert_tiles && expert_tile_m == 8u &&"
       },
       {
-        "source": "engines/ds4-win/ds4_cuda.cu:36761",
+        "source": "engines/ds4-win/ds4_cuda.cu:36781",
         "unset": "NULL from getenv; the literal consumer below supplies any fallback",
         "read": "getenv(\"DS4_CUDA_MOE_DOWN_ROW512\") != NULL ? 512u :",
         "consumer": "            getenv(\"DS4_CUDA_MOE_GATE_ROW1024\") != NULL ? 1024u : 512u;\n        const uint32_t down_row_span =\n            getenv(\"DS4_CUDA_MOE_DOWN_ROW512\") != NULL ? 512u :\n            getenv(\"DS4_CUDA_MOE_DOWN_ROW2048\") != NULL ? 2048u :\n            getenv(\"DS4_CUDA_MOE_DOWN_ROW1024\") != NULL ? 1024u : 512u;\n        const uint32_t use_down_row2048 = !q4k_path && use_atomic_down && expert_tile_m == 8u &&\n            (getenv(\"DS4_CUDA_MOE_DOWN_ROW2048\") != NULL ||"
@@ -8314,7 +8314,7 @@
     "doc": "DS4_CUDA_MOE_DOWN_ROW64: advanced engine setting; built-in default retained",
     "reads": [
       "engines/ds4-mac/ds4_cuda.cu:24618",
-      "engines/ds4-win/ds4_cuda.cu:36768"
+      "engines/ds4-win/ds4_cuda.cu:36788"
     ],
     "code_defaults": [
       {
@@ -8324,7 +8324,7 @@
         "consumer": "             getenv(\"DS4_CUDA_MOE_DOWN_ROW256\") != NULL ||\n             getenv(\"DS4_CUDA_MOE_DOWN_ROW128\") != NULL ||\n             getenv(\"DS4_CUDA_MOE_DOWN_ROW64\") != NULL ||\n             (use_down_tile16 &&\n              getenv(\"DS4_CUDA_MOE_NO_DOWN_ROW2048\") == NULL &&\n              getenv(\"DS4_CUDA_MOE_NO_DOWN_ROW256\") == NULL &&\n              getenv(\"DS4_CUDA_MOE_NO_DOWN_ROW128\") == NULL &&"
       },
       {
-        "source": "engines/ds4-win/ds4_cuda.cu:36768",
+        "source": "engines/ds4-win/ds4_cuda.cu:36788",
         "unset": "NULL from getenv; the literal consumer below supplies any fallback",
         "read": "getenv(\"DS4_CUDA_MOE_DOWN_ROW64\") != NULL ||",
         "consumer": "             getenv(\"DS4_CUDA_MOE_DOWN_ROW256\") != NULL ||\n             getenv(\"DS4_CUDA_MOE_DOWN_ROW128\") != NULL ||\n             getenv(\"DS4_CUDA_MOE_DOWN_ROW64\") != NULL ||\n             (use_down_tile16 &&\n              getenv(\"DS4_CUDA_MOE_NO_DOWN_ROW2048\") == NULL &&\n              getenv(\"DS4_CUDA_MOE_NO_DOWN_ROW256\") == NULL &&\n              getenv(\"DS4_CUDA_MOE_NO_DOWN_ROW128\") == NULL &&"
@@ -8344,7 +8344,7 @@
     "doc": "DS4_CUDA_MOE_GATE_ROW1024: advanced engine setting; built-in default retained",
     "reads": [
       "engines/ds4-mac/ds4_cuda.cu:24609",
-      "engines/ds4-win/ds4_cuda.cu:36759"
+      "engines/ds4-win/ds4_cuda.cu:36779"
     ],
     "code_defaults": [
       {
@@ -8354,7 +8354,7 @@
         "consumer": "        const uint32_t gate_row_span =\n            getenv(\"DS4_CUDA_MOE_GATE_ROW2048\") != NULL ? 2048u :\n            getenv(\"DS4_CUDA_MOE_GATE_ROW1024\") != NULL ? 1024u : 512u;\n        const uint32_t down_row_span =\n            getenv(\"DS4_CUDA_MOE_DOWN_ROW512\") != NULL ? 512u :\n            getenv(\"DS4_CUDA_MOE_DOWN_ROW2048\") != NULL ? 2048u :\n            getenv(\"DS4_CUDA_MOE_DOWN_ROW1024\") != NULL ? 1024u : 512u;"
       },
       {
-        "source": "engines/ds4-win/ds4_cuda.cu:36759",
+        "source": "engines/ds4-win/ds4_cuda.cu:36779",
         "unset": "NULL from getenv; the literal consumer below supplies any fallback",
         "read": "getenv(\"DS4_CUDA_MOE_GATE_ROW1024\") != NULL ? 1024u : 512u;",
         "consumer": "        const uint32_t gate_row_span =\n            getenv(\"DS4_CUDA_MOE_GATE_ROW2048\") != NULL ? 2048u :\n            getenv(\"DS4_CUDA_MOE_GATE_ROW1024\") != NULL ? 1024u : 512u;\n        const uint32_t down_row_span =\n            getenv(\"DS4_CUDA_MOE_DOWN_ROW512\") != NULL ? 512u :\n            getenv(\"DS4_CUDA_MOE_DOWN_ROW2048\") != NULL ? 2048u :\n            getenv(\"DS4_CUDA_MOE_DOWN_ROW1024\") != NULL ? 1024u : 512u;"
@@ -8374,7 +8374,7 @@
     "doc": "DS4_CUDA_MOE_GATE_ROW128: advanced engine setting; built-in default retained",
     "reads": [
       "engines/ds4-mac/ds4_cuda.cu:24582",
-      "engines/ds4-win/ds4_cuda.cu:36732"
+      "engines/ds4-win/ds4_cuda.cu:36752"
     ],
     "code_defaults": [
       {
@@ -8384,7 +8384,7 @@
         "consumer": "            (getenv(\"DS4_CUDA_MOE_GATE_ROW2048\") != NULL ||\n             getenv(\"DS4_CUDA_MOE_GATE_ROW256\") != NULL ||\n             getenv(\"DS4_CUDA_MOE_GATE_ROW128\") != NULL ||\n             ((q4_owned_batch || n_tokens >= 128u) &&\n              getenv(\"DS4_CUDA_MOE_NO_GATE_ROW2048\") == NULL &&\n              getenv(\"DS4_CUDA_MOE_NO_GATE_ROW256\") == NULL &&\n              getenv(\"DS4_CUDA_MOE_NO_GATE_ROW128\") == NULL));"
       },
       {
-        "source": "engines/ds4-win/ds4_cuda.cu:36732",
+        "source": "engines/ds4-win/ds4_cuda.cu:36752",
         "unset": "NULL from getenv; the literal consumer below supplies any fallback",
         "read": "getenv(\"DS4_CUDA_MOE_GATE_ROW128\") != NULL ||",
         "consumer": "            (getenv(\"DS4_CUDA_MOE_GATE_ROW2048\") != NULL ||\n             getenv(\"DS4_CUDA_MOE_GATE_ROW256\") != NULL ||\n             getenv(\"DS4_CUDA_MOE_GATE_ROW128\") != NULL ||\n             ((q4_owned_batch || n_tokens >= 128u) &&\n              getenv(\"DS4_CUDA_MOE_NO_GATE_ROW2048\") == NULL &&\n              getenv(\"DS4_CUDA_MOE_NO_GATE_ROW256\") == NULL &&\n              getenv(\"DS4_CUDA_MOE_NO_GATE_ROW128\") == NULL));"
@@ -8405,8 +8405,8 @@
     "reads": [
       "engines/ds4-mac/ds4_cuda.cu:24580",
       "engines/ds4-mac/ds4_cuda.cu:24608",
-      "engines/ds4-win/ds4_cuda.cu:36730",
-      "engines/ds4-win/ds4_cuda.cu:36758"
+      "engines/ds4-win/ds4_cuda.cu:36750",
+      "engines/ds4-win/ds4_cuda.cu:36778"
     ],
     "code_defaults": [
       {
@@ -8422,13 +8422,13 @@
         "consumer": "            getenv(\"DS4_CUDA_MOE_NO_DECODE_LUT_GATE\") == NULL;\n        const uint32_t gate_row_span =\n            getenv(\"DS4_CUDA_MOE_GATE_ROW2048\") != NULL ? 2048u :\n            getenv(\"DS4_CUDA_MOE_GATE_ROW1024\") != NULL ? 1024u : 512u;\n        const uint32_t down_row_span =\n            getenv(\"DS4_CUDA_MOE_DOWN_ROW512\") != NULL ? 512u :\n            getenv(\"DS4_CUDA_MOE_DOWN_ROW2048\") != NULL ? 2048u :"
       },
       {
-        "source": "engines/ds4-win/ds4_cuda.cu:36730",
+        "source": "engines/ds4-win/ds4_cuda.cu:36750",
         "unset": "NULL from getenv; the literal consumer below supplies any fallback",
         "read": "(getenv(\"DS4_CUDA_MOE_GATE_ROW2048\") != NULL ||",
         "consumer": "            getenv(\"DS4_CUDA_MOE_NO_OWNED_SPARSE_BUFFERS\") == NULL;\n        const uint32_t use_gate_row2048 = use_expert_tiles && expert_tile_m == 8u &&\n            (getenv(\"DS4_CUDA_MOE_GATE_ROW2048\") != NULL ||\n             getenv(\"DS4_CUDA_MOE_GATE_ROW256\") != NULL ||\n             getenv(\"DS4_CUDA_MOE_GATE_ROW128\") != NULL ||\n             ((q4_owned_batch || n_tokens >= 128u) &&\n              getenv(\"DS4_CUDA_MOE_NO_GATE_ROW2048\") == NULL &&"
       },
       {
-        "source": "engines/ds4-win/ds4_cuda.cu:36758",
+        "source": "engines/ds4-win/ds4_cuda.cu:36778",
         "unset": "NULL from getenv; the literal consumer below supplies any fallback",
         "read": "getenv(\"DS4_CUDA_MOE_GATE_ROW2048\") != NULL ? 2048u :",
         "consumer": "            getenv(\"DS4_CUDA_MOE_NO_DECODE_LUT_GATE\") == NULL;\n        const uint32_t gate_row_span =\n            getenv(\"DS4_CUDA_MOE_GATE_ROW2048\") != NULL ? 2048u :\n            getenv(\"DS4_CUDA_MOE_GATE_ROW1024\") != NULL ? 1024u : 512u;\n        const uint32_t down_row_span =\n            getenv(\"DS4_CUDA_MOE_DOWN_ROW512\") != NULL ? 512u :\n            getenv(\"DS4_CUDA_MOE_DOWN_ROW2048\") != NULL ? 2048u :"
@@ -8448,7 +8448,7 @@
     "doc": "DS4_CUDA_MOE_GATE_ROW256: advanced engine setting; built-in default retained",
     "reads": [
       "engines/ds4-mac/ds4_cuda.cu:24581",
-      "engines/ds4-win/ds4_cuda.cu:36731"
+      "engines/ds4-win/ds4_cuda.cu:36751"
     ],
     "code_defaults": [
       {
@@ -8458,7 +8458,7 @@
         "consumer": "        const uint32_t use_gate_row2048 = use_expert_tiles && expert_tile_m == 8u &&\n            (getenv(\"DS4_CUDA_MOE_GATE_ROW2048\") != NULL ||\n             getenv(\"DS4_CUDA_MOE_GATE_ROW256\") != NULL ||\n             getenv(\"DS4_CUDA_MOE_GATE_ROW128\") != NULL ||\n             ((q4_owned_batch || n_tokens >= 128u) &&\n              getenv(\"DS4_CUDA_MOE_NO_GATE_ROW2048\") == NULL &&\n              getenv(\"DS4_CUDA_MOE_NO_GATE_ROW256\") == NULL &&"
       },
       {
-        "source": "engines/ds4-win/ds4_cuda.cu:36731",
+        "source": "engines/ds4-win/ds4_cuda.cu:36751",
         "unset": "NULL from getenv; the literal consumer below supplies any fallback",
         "read": "getenv(\"DS4_CUDA_MOE_GATE_ROW256\") != NULL ||",
         "consumer": "        const uint32_t use_gate_row2048 = use_expert_tiles && expert_tile_m == 8u &&\n            (getenv(\"DS4_CUDA_MOE_GATE_ROW2048\") != NULL ||\n             getenv(\"DS4_CUDA_MOE_GATE_ROW256\") != NULL ||\n             getenv(\"DS4_CUDA_MOE_GATE_ROW128\") != NULL ||\n             ((q4_owned_batch || n_tokens >= 128u) &&\n              getenv(\"DS4_CUDA_MOE_NO_GATE_ROW2048\") == NULL &&\n              getenv(\"DS4_CUDA_MOE_NO_GATE_ROW256\") == NULL &&"
@@ -8478,7 +8478,7 @@
     "doc": "DS4_CUDA_MOE_MIDQ_SIDECAR: advanced engine setting; built-in default retained",
     "reads": [
       "engines/ds4-mac/ds4_cuda.cu:24658",
-      "engines/ds4-win/ds4_cuda.cu:36808"
+      "engines/ds4-win/ds4_cuda.cu:36828"
     ],
     "code_defaults": [
       {
@@ -8488,7 +8488,7 @@
         "consumer": "            !use_direct_midq && !write_gate_up &&\n            (expert_mid_dim % CUDA_QK_K) == 0u &&\n            getenv(\"DS4_CUDA_MOE_MIDQ_SIDECAR\") != NULL &&\n            getenv(\"DS4_CUDA_MOE_NO_MIDQ_SIDECAR\") == NULL;\n        float *midq_sidecar = use_q4_midq_sidecar ? (float *)up->ptr : NULL;\n        if (g_cuda_moe_decode_graph &&\n            !owned_filtered &&"
       },
       {
-        "source": "engines/ds4-win/ds4_cuda.cu:36808",
+        "source": "engines/ds4-win/ds4_cuda.cu:36828",
         "unset": "NULL from getenv; the literal consumer below supplies any fallback",
         "read": "getenv(\"DS4_CUDA_MOE_MIDQ_SIDECAR\") != NULL &&",
         "consumer": "            !use_direct_midq && !write_gate_up &&\n            (expert_mid_dim % CUDA_QK_K) == 0u &&\n            getenv(\"DS4_CUDA_MOE_MIDQ_SIDECAR\") != NULL &&\n            getenv(\"DS4_CUDA_MOE_NO_MIDQ_SIDECAR\") == NULL;\n        float *midq_sidecar = use_q4_midq_sidecar ? (float *)up->ptr : NULL;\n        if (g_cuda_moe_decode_graph && !g_stream_prefill_borrow_slots &&\n            !owned_filtered &&"
@@ -8531,8 +8531,8 @@
     "reads": [
       "engines/ds4-mac/ds4_cuda.cu:24606",
       "engines/ds4-mac/ds4_cuda.cu:25629",
-      "engines/ds4-win/ds4_cuda.cu:36756",
-      "engines/ds4-win/ds4_cuda.cu:37812"
+      "engines/ds4-win/ds4_cuda.cu:36776",
+      "engines/ds4-win/ds4_cuda.cu:37832"
     ],
     "code_defaults": [
       {
@@ -8548,13 +8548,13 @@
         "consumer": "    }\n    if (!q4k_path && !mxfp4_path &&\n        getenv(\"DS4_CUDA_MOE_NO_DECODE_LUT_GATE\") != NULL) {\n        fprintf(stderr, \"ds4: CUDA owned IQ2 decode requires the LUT gate path\\n\");\n        return 0;\n    }\n    const bool write_aux ="
       },
       {
-        "source": "engines/ds4-win/ds4_cuda.cu:36756",
+        "source": "engines/ds4-win/ds4_cuda.cu:36776",
         "unset": "NULL from getenv; the literal consumer below supplies any fallback",
         "read": "getenv(\"DS4_CUDA_MOE_NO_DECODE_LUT_GATE\") == NULL;",
         "consumer": "        const uint32_t use_decode_lut_gate =\n            (n_tokens == 1u || small_exact_batch) &&\n            getenv(\"DS4_CUDA_MOE_NO_DECODE_LUT_GATE\") == NULL;\n        const uint32_t gate_row_span =\n            getenv(\"DS4_CUDA_MOE_GATE_ROW2048\") != NULL ? 2048u :\n            getenv(\"DS4_CUDA_MOE_GATE_ROW1024\") != NULL ? 1024u : 512u;\n        const uint32_t down_row_span ="
       },
       {
-        "source": "engines/ds4-win/ds4_cuda.cu:37812",
+        "source": "engines/ds4-win/ds4_cuda.cu:37832",
         "unset": "NULL from getenv; the literal consumer below supplies any fallback",
         "read": "getenv(\"DS4_CUDA_MOE_NO_DECODE_LUT_GATE\") != NULL) {",
         "consumer": "    }\n    if (!q4k_path && !mxfp4_path &&\n        getenv(\"DS4_CUDA_MOE_NO_DECODE_LUT_GATE\") != NULL) {\n        fprintf(stderr, \"ds4: CUDA owned IQ2 decode requires the LUT gate path\\n\");\n        return 0;\n    }\n    const bool write_aux ="
@@ -8575,9 +8575,9 @@
     "reads": [
       "engines/ds4-mac/ds4_cuda.cu:24626",
       "engines/ds4-win/ds4.c:46545",
-      "engines/ds4-win/ds4_cuda.cu:36468",
-      "engines/ds4-win/ds4_cuda.cu:36776",
-      "engines/ds4-win/ds4_external_host_compute_wrapper.inc:20"
+      "engines/ds4-win/ds4_cuda.cu:36488",
+      "engines/ds4-win/ds4_cuda.cu:36796",
+      "engines/ds4-win/ds4_external_host_compute_wrapper.inc:269"
     ],
     "code_defaults": [
       {
@@ -8593,19 +8593,19 @@
         "consumer": "    if (!placement || g->quality || g->imatrix || g->image_count ||\n        !metal_graph_tp_env_flag(\"DS4_CUDA_SESSION_BATCH_MOE\", true) ||\n        getenv(\"DS4_CUDA_MOE_NO_DIRECT_DOWN_SUM6\")) return false;\n    for (uint32_t il = 0; il < DS4_N_LAYER; il++) {\n        const ds4_layer_weights *l = &w->layer[il];\n        if (l->ffn_gate_exps->type != DS4_TENSOR_IQ2_XXS ||\n            l->ffn_up_exps->type != DS4_TENSOR_IQ2_XXS ||"
       },
       {
-        "source": "engines/ds4-win/ds4_cuda.cu:36468",
+        "source": "engines/ds4-win/ds4_cuda.cu:36488",
         "unset": "NULL from getenv; the literal consumer below supplies any fallback",
         "read": "getenv(\"DS4_CUDA_MOE_NO_DIRECT_DOWN_SUM6\") == NULL;",
         "consumer": "    const bool small_exact_batch = iq2_path && (use_stream_selected_cache || exact_owned_rows) &&\n        n_tokens <= 8u && (n_expert == 3u || n_expert == 6u) &&\n        getenv(\"DS4_CUDA_MOE_NO_DIRECT_DOWN_SUM6\") == NULL;\n\n    /* mmq routed-MoE prefill tier (ported from the Entrpi/ds4 fork).\n     * IQ2_XXS gate/up pair (one shared activation quantize + routing\n     * pass) -> SwiGLU + clamp + router weight -> Q2_K down, treating"
       },
       {
-        "source": "engines/ds4-win/ds4_cuda.cu:36776",
+        "source": "engines/ds4-win/ds4_cuda.cu:36796",
         "unset": "NULL from getenv; the literal consumer below supplies any fallback",
         "read": "getenv(\"DS4_CUDA_MOE_NO_DIRECT_DOWN_SUM6\") == NULL;",
         "consumer": "        const uint32_t use_direct_down_sum =\n            (n_tokens == 1u || small_exact_batch) && (n_expert == 6u || n_expert == 3u) &&\n            getenv(\"DS4_CUDA_MOE_NO_DIRECT_DOWN_SUM6\") == NULL;\n        const uint32_t use_direct_midq =\n            q4k_path && use_direct_down_sum && !write_gate_up &&\n            getenv(\"DS4_CUDA_MOE_DIRECT_MIDQ\") != NULL &&\n            getenv(\"DS4_CUDA_MOE_NO_DIRECT_MIDQ\") == NULL;"
       },
       {
-        "source": "engines/ds4-win/ds4_external_host_compute_wrapper.inc:20",
+        "source": "engines/ds4-win/ds4_external_host_compute_wrapper.inc:269",
         "unset": "NULL from getenv; the literal consumer below supplies any fallback",
         "read": "!getenv(\"DS4_CUDA_MOE_NO_DIRECT_DOWN_SUM6\");",
         "consumer": "        n_tokens==1u&&(n_expert==6u||n_expert==3u)&&gate_type==12u&&down_type==12u&&\n        expert_in_dim==5120u&&expert_mid_dim==2304u&&out_dim==5120u&&\n        !getenv(\"DS4_CUDA_MOE_NO_DIRECT_DOWN_SUM6\");\n    if(!eligible)return routed_moe_launch_impl(DS4_EXTERNAL_MOE_ARGS);\n    std::array<int32_t,6>ids{};std::array<float,6>w{};std::array<uint8_t,384>tier{};\n    if(!ds4_gpu_tensor_read(selected,0,ids.data(),n_expert*sizeof(int32_t)))return 0;\n    bool found=false;"
@@ -8625,7 +8625,7 @@
     "doc": "DS4_CUDA_MOE_NO_DIRECT_MIDQ: advanced engine setting; built-in default retained",
     "reads": [
       "engines/ds4-mac/ds4_cuda.cu:24630",
-      "engines/ds4-win/ds4_cuda.cu:36780"
+      "engines/ds4-win/ds4_cuda.cu:36800"
     ],
     "code_defaults": [
       {
@@ -8635,7 +8635,7 @@
         "consumer": "            q4k_path && use_direct_down_sum && !write_gate_up &&\n            getenv(\"DS4_CUDA_MOE_DIRECT_MIDQ\") != NULL &&\n            getenv(\"DS4_CUDA_MOE_NO_DIRECT_MIDQ\") == NULL;\n        const uint32_t use_q4_gate_h16r8 =\n            q4k_path && !use_direct_midq &&\n            getenv(\"DS4_CUDA_MOE_Q4_GATE_H16R8\") != NULL &&\n            getenv(\"DS4_CUDA_MOE_NO_Q4_GATE_H16R8\") == NULL;"
       },
       {
-        "source": "engines/ds4-win/ds4_cuda.cu:36780",
+        "source": "engines/ds4-win/ds4_cuda.cu:36800",
         "unset": "NULL from getenv; the literal consumer below supplies any fallback",
         "read": "getenv(\"DS4_CUDA_MOE_NO_DIRECT_MIDQ\") == NULL;",
         "consumer": "            q4k_path && use_direct_down_sum && !write_gate_up &&\n            getenv(\"DS4_CUDA_MOE_DIRECT_MIDQ\") != NULL &&\n            getenv(\"DS4_CUDA_MOE_NO_DIRECT_MIDQ\") == NULL;\n        const uint32_t use_q4_gate_h16r8 =\n            q4k_path && !use_direct_midq &&\n            getenv(\"DS4_CUDA_MOE_Q4_GATE_H16R8\") != NULL &&\n            getenv(\"DS4_CUDA_MOE_NO_Q4_GATE_H16R8\") == NULL;"
@@ -8655,7 +8655,7 @@
     "doc": "DS4_CUDA_MOE_NO_DOWN_ROW128: advanced engine setting; built-in default retained",
     "reads": [
       "engines/ds4-mac/ds4_cuda.cu:24622",
-      "engines/ds4-win/ds4_cuda.cu:36772"
+      "engines/ds4-win/ds4_cuda.cu:36792"
     ],
     "code_defaults": [
       {
@@ -8665,7 +8665,7 @@
         "consumer": "              getenv(\"DS4_CUDA_MOE_NO_DOWN_ROW2048\") == NULL &&\n              getenv(\"DS4_CUDA_MOE_NO_DOWN_ROW256\") == NULL &&\n              getenv(\"DS4_CUDA_MOE_NO_DOWN_ROW128\") == NULL &&\n              getenv(\"DS4_CUDA_MOE_NO_DOWN_ROW64\") == NULL));\n        const uint32_t use_direct_down_sum =\n            n_tokens == 1u && (n_expert == 6u || n_expert == 3u) &&\n            getenv(\"DS4_CUDA_MOE_NO_DIRECT_DOWN_SUM6\") == NULL;"
       },
       {
-        "source": "engines/ds4-win/ds4_cuda.cu:36772",
+        "source": "engines/ds4-win/ds4_cuda.cu:36792",
         "unset": "NULL from getenv; the literal consumer below supplies any fallback",
         "read": "getenv(\"DS4_CUDA_MOE_NO_DOWN_ROW128\") == NULL &&",
         "consumer": "              getenv(\"DS4_CUDA_MOE_NO_DOWN_ROW2048\") == NULL &&\n              getenv(\"DS4_CUDA_MOE_NO_DOWN_ROW256\") == NULL &&\n              getenv(\"DS4_CUDA_MOE_NO_DOWN_ROW128\") == NULL &&\n              getenv(\"DS4_CUDA_MOE_NO_DOWN_ROW64\") == NULL));\n        const uint32_t use_direct_down_sum =\n            (n_tokens == 1u || small_exact_batch) && (n_expert == 6u || n_expert == 3u) &&\n            getenv(\"DS4_CUDA_MOE_NO_DIRECT_DOWN_SUM6\") == NULL;"
@@ -8685,7 +8685,7 @@
     "doc": "DS4_CUDA_MOE_NO_DOWN_ROW2048: advanced engine setting; built-in default retained",
     "reads": [
       "engines/ds4-mac/ds4_cuda.cu:24620",
-      "engines/ds4-win/ds4_cuda.cu:36770"
+      "engines/ds4-win/ds4_cuda.cu:36790"
     ],
     "code_defaults": [
       {
@@ -8695,7 +8695,7 @@
         "consumer": "             getenv(\"DS4_CUDA_MOE_DOWN_ROW64\") != NULL ||\n             (use_down_tile16 &&\n              getenv(\"DS4_CUDA_MOE_NO_DOWN_ROW2048\") == NULL &&\n              getenv(\"DS4_CUDA_MOE_NO_DOWN_ROW256\") == NULL &&\n              getenv(\"DS4_CUDA_MOE_NO_DOWN_ROW128\") == NULL &&\n              getenv(\"DS4_CUDA_MOE_NO_DOWN_ROW64\") == NULL));\n        const uint32_t use_direct_down_sum ="
       },
       {
-        "source": "engines/ds4-win/ds4_cuda.cu:36770",
+        "source": "engines/ds4-win/ds4_cuda.cu:36790",
         "unset": "NULL from getenv; the literal consumer below supplies any fallback",
         "read": "getenv(\"DS4_CUDA_MOE_NO_DOWN_ROW2048\") == NULL &&",
         "consumer": "             getenv(\"DS4_CUDA_MOE_DOWN_ROW64\") != NULL ||\n             (use_down_tile16 &&\n              getenv(\"DS4_CUDA_MOE_NO_DOWN_ROW2048\") == NULL &&\n              getenv(\"DS4_CUDA_MOE_NO_DOWN_ROW256\") == NULL &&\n              getenv(\"DS4_CUDA_MOE_NO_DOWN_ROW128\") == NULL &&\n              getenv(\"DS4_CUDA_MOE_NO_DOWN_ROW64\") == NULL));\n        const uint32_t use_direct_down_sum ="
@@ -8715,7 +8715,7 @@
     "doc": "DS4_CUDA_MOE_NO_DOWN_ROW256: advanced engine setting; built-in default retained",
     "reads": [
       "engines/ds4-mac/ds4_cuda.cu:24621",
-      "engines/ds4-win/ds4_cuda.cu:36771"
+      "engines/ds4-win/ds4_cuda.cu:36791"
     ],
     "code_defaults": [
       {
@@ -8725,7 +8725,7 @@
         "consumer": "             (use_down_tile16 &&\n              getenv(\"DS4_CUDA_MOE_NO_DOWN_ROW2048\") == NULL &&\n              getenv(\"DS4_CUDA_MOE_NO_DOWN_ROW256\") == NULL &&\n              getenv(\"DS4_CUDA_MOE_NO_DOWN_ROW128\") == NULL &&\n              getenv(\"DS4_CUDA_MOE_NO_DOWN_ROW64\") == NULL));\n        const uint32_t use_direct_down_sum =\n            n_tokens == 1u && (n_expert == 6u || n_expert == 3u) &&"
       },
       {
-        "source": "engines/ds4-win/ds4_cuda.cu:36771",
+        "source": "engines/ds4-win/ds4_cuda.cu:36791",
         "unset": "NULL from getenv; the literal consumer below supplies any fallback",
         "read": "getenv(\"DS4_CUDA_MOE_NO_DOWN_ROW256\") == NULL &&",
         "consumer": "             (use_down_tile16 &&\n              getenv(\"DS4_CUDA_MOE_NO_DOWN_ROW2048\") == NULL &&\n              getenv(\"DS4_CUDA_MOE_NO_DOWN_ROW256\") == NULL &&\n              getenv(\"DS4_CUDA_MOE_NO_DOWN_ROW128\") == NULL &&\n              getenv(\"DS4_CUDA_MOE_NO_DOWN_ROW64\") == NULL));\n        const uint32_t use_direct_down_sum =\n            (n_tokens == 1u || small_exact_batch) && (n_expert == 6u || n_expert == 3u) &&"
@@ -8745,7 +8745,7 @@
     "doc": "DS4_CUDA_MOE_NO_DOWN_ROW64: advanced engine setting; built-in default retained",
     "reads": [
       "engines/ds4-mac/ds4_cuda.cu:24623",
-      "engines/ds4-win/ds4_cuda.cu:36773"
+      "engines/ds4-win/ds4_cuda.cu:36793"
     ],
     "code_defaults": [
       {
@@ -8755,7 +8755,7 @@
         "consumer": "              getenv(\"DS4_CUDA_MOE_NO_DOWN_ROW256\") == NULL &&\n              getenv(\"DS4_CUDA_MOE_NO_DOWN_ROW128\") == NULL &&\n              getenv(\"DS4_CUDA_MOE_NO_DOWN_ROW64\") == NULL));\n        const uint32_t use_direct_down_sum =\n            n_tokens == 1u && (n_expert == 6u || n_expert == 3u) &&\n            getenv(\"DS4_CUDA_MOE_NO_DIRECT_DOWN_SUM6\") == NULL;\n        const uint32_t use_direct_midq ="
       },
       {
-        "source": "engines/ds4-win/ds4_cuda.cu:36773",
+        "source": "engines/ds4-win/ds4_cuda.cu:36793",
         "unset": "NULL from getenv; the literal consumer below supplies any fallback",
         "read": "getenv(\"DS4_CUDA_MOE_NO_DOWN_ROW64\") == NULL));",
         "consumer": "              getenv(\"DS4_CUDA_MOE_NO_DOWN_ROW256\") == NULL &&\n              getenv(\"DS4_CUDA_MOE_NO_DOWN_ROW128\") == NULL &&\n              getenv(\"DS4_CUDA_MOE_NO_DOWN_ROW64\") == NULL));\n        const uint32_t use_direct_down_sum =\n            (n_tokens == 1u || small_exact_batch) && (n_expert == 6u || n_expert == 3u) &&\n            getenv(\"DS4_CUDA_MOE_NO_DIRECT_DOWN_SUM6\") == NULL;\n        const uint32_t use_direct_midq ="
@@ -8775,7 +8775,7 @@
     "doc": "DS4_CUDA_MOE_NO_DOWN_TILE16: advanced engine setting; built-in default retained",
     "reads": [
       "engines/ds4-mac/ds4_cuda.cu:24591",
-      "engines/ds4-win/ds4_cuda.cu:36741"
+      "engines/ds4-win/ds4_cuda.cu:36761"
     ],
     "code_defaults": [
       {
@@ -8785,7 +8785,7 @@
         "consumer": "            getenv(\"DS4_CUDA_MOE_NO_Q4_MMA_TILE16\") == NULL;\n        const uint32_t use_down_tile16 = !q4k_path && use_atomic_down && expert_tile_m == 8u &&\n            n_tokens >= 128u && getenv(\"DS4_CUDA_MOE_NO_DOWN_TILE16\") == NULL;\n        const uint32_t use_small_sorted_prep =\n            owned_filtered && q4k_path && n_tokens <= 16u && pair_count <= 96u &&\n            n_total_expert <= 128u && use_sorted_pairs && use_expert_tiles &&\n            getenv(\"DS4_CUDA_MOE_NO_SMALL_SORTED_PREP\") == NULL;"
       },
       {
-        "source": "engines/ds4-win/ds4_cuda.cu:36741",
+        "source": "engines/ds4-win/ds4_cuda.cu:36761",
         "unset": "NULL from getenv; the literal consumer below supplies any fallback",
         "read": "n_tokens >= 128u && getenv(\"DS4_CUDA_MOE_NO_DOWN_TILE16\") == NULL;",
         "consumer": "            getenv(\"DS4_CUDA_MOE_NO_Q4_MMA_TILE16\") == NULL;\n        const uint32_t use_down_tile16 = !q4k_path && use_atomic_down && expert_tile_m == 8u &&\n            n_tokens >= 128u && getenv(\"DS4_CUDA_MOE_NO_DOWN_TILE16\") == NULL;\n        const uint32_t use_small_sorted_prep =\n            owned_filtered && q4k_path && n_tokens <= 16u && pair_count <= 96u &&\n            n_total_expert <= 128u && use_sorted_pairs && use_expert_tiles &&\n            getenv(\"DS4_CUDA_MOE_NO_SMALL_SORTED_PREP\") == NULL;"
@@ -8806,8 +8806,8 @@
     "reads": [
       "engines/ds4-mac/ds4_cuda.cu:24551",
       "engines/ds4-mac/ds4_cuda.cu:24558",
-      "engines/ds4-win/ds4_cuda.cu:36687",
-      "engines/ds4-win/ds4_cuda.cu:36694"
+      "engines/ds4-win/ds4_cuda.cu:36707",
+      "engines/ds4-win/ds4_cuda.cu:36714"
     ],
     "code_defaults": [
       {
@@ -8823,13 +8823,13 @@
         "consumer": "        const uint32_t use_expert_tiles =\n            use_sorted_pairs &&\n            (owned_filtered || getenv(\"DS4_CUDA_MOE_NO_EXPERT_TILES\") == NULL);\n        const uint32_t q4_owned_batch =\n            owned_filtered && q4k_path && n_tokens >= 4u && n_tokens <= 16u;\n        /* Small batches (DSpark stage chain / verify, n<=8) leave most of an\n         * 8-slot expert tile empty (1-2 rows per expert): tile4 halves the"
       },
       {
-        "source": "engines/ds4-win/ds4_cuda.cu:36687",
+        "source": "engines/ds4-win/ds4_cuda.cu:36707",
         "unset": "NULL from getenv; the literal consumer below supplies any fallback",
         "read": "getenv(\"DS4_CUDA_MOE_NO_EXPERT_TILES\") == NULL &&",
         "consumer": "            (owned_filtered ||\n             (getenv(\"DS4_CUDA_MOE_NO_Q4_SORTED\") == NULL &&\n              getenv(\"DS4_CUDA_MOE_NO_EXPERT_TILES\") == NULL &&\n              getenv(\"DS4_CUDA_MOE_TILE4\") == NULL));\n        const uint32_t use_sorted_pairs =\n            n_tokens > 1u && !small_exact_batch &&\n            (owned_filtered || !q4k_path || use_q4_sorted_pairs);"
       },
       {
-        "source": "engines/ds4-win/ds4_cuda.cu:36694",
+        "source": "engines/ds4-win/ds4_cuda.cu:36714",
         "unset": "NULL from getenv; the literal consumer below supplies any fallback",
         "read": "(owned_filtered || getenv(\"DS4_CUDA_MOE_NO_EXPERT_TILES\") == NULL);",
         "consumer": "        const uint32_t use_expert_tiles =\n            use_sorted_pairs &&\n            (owned_filtered || getenv(\"DS4_CUDA_MOE_NO_EXPERT_TILES\") == NULL);\n        const uint32_t q4_owned_batch =\n            owned_filtered && q4k_path && n_tokens >= 4u && n_tokens <= 16u;\n        /* Small batches (DSpark stage chain / verify, n<=8) leave most of an\n         * 8-slot expert tile empty (1-2 rows per expert): tile4 halves the"
@@ -8849,7 +8849,7 @@
     "doc": "DS4_CUDA_MOE_NO_GATE_ROW128: advanced engine setting; built-in default retained",
     "reads": [
       "engines/ds4-mac/ds4_cuda.cu:24586",
-      "engines/ds4-win/ds4_cuda.cu:36736"
+      "engines/ds4-win/ds4_cuda.cu:36756"
     ],
     "code_defaults": [
       {
@@ -8859,7 +8859,7 @@
         "consumer": "              getenv(\"DS4_CUDA_MOE_NO_GATE_ROW2048\") == NULL &&\n              getenv(\"DS4_CUDA_MOE_NO_GATE_ROW256\") == NULL &&\n              getenv(\"DS4_CUDA_MOE_NO_GATE_ROW128\") == NULL));\n        const uint32_t use_q4_mma_tiles16 = q4k_path && use_expert_tiles &&\n            expert_tile_m == 8u && cuda_q4_mma_ok() &&\n            getenv(\"DS4_CUDA_MOE_NO_Q4_MMA_TILE16\") == NULL;\n        const uint32_t use_down_tile16 = !q4k_path && use_atomic_down && expert_tile_m == 8u &&"
       },
       {
-        "source": "engines/ds4-win/ds4_cuda.cu:36736",
+        "source": "engines/ds4-win/ds4_cuda.cu:36756",
         "unset": "NULL from getenv; the literal consumer below supplies any fallback",
         "read": "getenv(\"DS4_CUDA_MOE_NO_GATE_ROW128\") == NULL));",
         "consumer": "              getenv(\"DS4_CUDA_MOE_NO_GATE_ROW2048\") == NULL &&\n              getenv(\"DS4_CUDA_MOE_NO_GATE_ROW256\") == NULL &&\n              getenv(\"DS4_CUDA_MOE_NO_GATE_ROW128\") == NULL));\n        const uint32_t use_q4_mma_tiles16 = q4k_path && use_expert_tiles &&\n            expert_tile_m == 8u && cuda_q4_mma_ok() &&\n            getenv(\"DS4_CUDA_MOE_NO_Q4_MMA_TILE16\") == NULL;\n        const uint32_t use_down_tile16 = !q4k_path && use_atomic_down && expert_tile_m == 8u &&"
@@ -8879,7 +8879,7 @@
     "doc": "DS4_CUDA_MOE_NO_GATE_ROW2048: advanced engine setting; built-in default retained",
     "reads": [
       "engines/ds4-mac/ds4_cuda.cu:24584",
-      "engines/ds4-win/ds4_cuda.cu:36734"
+      "engines/ds4-win/ds4_cuda.cu:36754"
     ],
     "code_defaults": [
       {
@@ -8889,7 +8889,7 @@
         "consumer": "             getenv(\"DS4_CUDA_MOE_GATE_ROW128\") != NULL ||\n             ((q4_owned_batch || n_tokens >= 128u) &&\n              getenv(\"DS4_CUDA_MOE_NO_GATE_ROW2048\") == NULL &&\n              getenv(\"DS4_CUDA_MOE_NO_GATE_ROW256\") == NULL &&\n              getenv(\"DS4_CUDA_MOE_NO_GATE_ROW128\") == NULL));\n        const uint32_t use_q4_mma_tiles16 = q4k_path && use_expert_tiles &&\n            expert_tile_m == 8u && cuda_q4_mma_ok() &&"
       },
       {
-        "source": "engines/ds4-win/ds4_cuda.cu:36734",
+        "source": "engines/ds4-win/ds4_cuda.cu:36754",
         "unset": "NULL from getenv; the literal consumer below supplies any fallback",
         "read": "getenv(\"DS4_CUDA_MOE_NO_GATE_ROW2048\") == NULL &&",
         "consumer": "             getenv(\"DS4_CUDA_MOE_GATE_ROW128\") != NULL ||\n             ((q4_owned_batch || n_tokens >= 128u) &&\n              getenv(\"DS4_CUDA_MOE_NO_GATE_ROW2048\") == NULL &&\n              getenv(\"DS4_CUDA_MOE_NO_GATE_ROW256\") == NULL &&\n              getenv(\"DS4_CUDA_MOE_NO_GATE_ROW128\") == NULL));\n        const uint32_t use_q4_mma_tiles16 = q4k_path && use_expert_tiles &&\n            expert_tile_m == 8u && cuda_q4_mma_ok() &&"
@@ -8909,7 +8909,7 @@
     "doc": "DS4_CUDA_MOE_NO_GATE_ROW256: advanced engine setting; built-in default retained",
     "reads": [
       "engines/ds4-mac/ds4_cuda.cu:24585",
-      "engines/ds4-win/ds4_cuda.cu:36735"
+      "engines/ds4-win/ds4_cuda.cu:36755"
     ],
     "code_defaults": [
       {
@@ -8919,7 +8919,7 @@
         "consumer": "             ((q4_owned_batch || n_tokens >= 128u) &&\n              getenv(\"DS4_CUDA_MOE_NO_GATE_ROW2048\") == NULL &&\n              getenv(\"DS4_CUDA_MOE_NO_GATE_ROW256\") == NULL &&\n              getenv(\"DS4_CUDA_MOE_NO_GATE_ROW128\") == NULL));\n        const uint32_t use_q4_mma_tiles16 = q4k_path && use_expert_tiles &&\n            expert_tile_m == 8u && cuda_q4_mma_ok() &&\n            getenv(\"DS4_CUDA_MOE_NO_Q4_MMA_TILE16\") == NULL;"
       },
       {
-        "source": "engines/ds4-win/ds4_cuda.cu:36735",
+        "source": "engines/ds4-win/ds4_cuda.cu:36755",
         "unset": "NULL from getenv; the literal consumer below supplies any fallback",
         "read": "getenv(\"DS4_CUDA_MOE_NO_GATE_ROW256\") == NULL &&",
         "consumer": "             ((q4_owned_batch || n_tokens >= 128u) &&\n              getenv(\"DS4_CUDA_MOE_NO_GATE_ROW2048\") == NULL &&\n              getenv(\"DS4_CUDA_MOE_NO_GATE_ROW256\") == NULL &&\n              getenv(\"DS4_CUDA_MOE_NO_GATE_ROW128\") == NULL));\n        const uint32_t use_q4_mma_tiles16 = q4k_path && use_expert_tiles &&\n            expert_tile_m == 8u && cuda_q4_mma_ok() &&\n            getenv(\"DS4_CUDA_MOE_NO_Q4_MMA_TILE16\") == NULL;"
@@ -8969,7 +8969,7 @@
     "doc": "DS4_CUDA_MOE_NO_MIDQ_SIDECAR: advanced engine setting; built-in default retained",
     "reads": [
       "engines/ds4-mac/ds4_cuda.cu:24659",
-      "engines/ds4-win/ds4_cuda.cu:36809"
+      "engines/ds4-win/ds4_cuda.cu:36829"
     ],
     "code_defaults": [
       {
@@ -8979,7 +8979,7 @@
         "consumer": "            (expert_mid_dim % CUDA_QK_K) == 0u &&\n            getenv(\"DS4_CUDA_MOE_MIDQ_SIDECAR\") != NULL &&\n            getenv(\"DS4_CUDA_MOE_NO_MIDQ_SIDECAR\") == NULL;\n        float *midq_sidecar = use_q4_midq_sidecar ? (float *)up->ptr : NULL;\n        if (g_cuda_moe_decode_graph &&\n            !owned_filtered &&\n            !profile_moe &&"
       },
       {
-        "source": "engines/ds4-win/ds4_cuda.cu:36809",
+        "source": "engines/ds4-win/ds4_cuda.cu:36829",
         "unset": "NULL from getenv; the literal consumer below supplies any fallback",
         "read": "getenv(\"DS4_CUDA_MOE_NO_MIDQ_SIDECAR\") == NULL;",
         "consumer": "            (expert_mid_dim % CUDA_QK_K) == 0u &&\n            getenv(\"DS4_CUDA_MOE_MIDQ_SIDECAR\") != NULL &&\n            getenv(\"DS4_CUDA_MOE_NO_MIDQ_SIDECAR\") == NULL;\n        float *midq_sidecar = use_q4_midq_sidecar ? (float *)up->ptr : NULL;\n        if (g_cuda_moe_decode_graph && !g_stream_prefill_borrow_slots &&\n            !owned_filtered &&\n            !profile_moe &&"
@@ -8997,11 +8997,11 @@
     ],
     "doc": "DS4_CUDA_MOE_NO_OWNED_MMQ: advanced engine setting; built-in default retained",
     "reads": [
-      "engines/ds4-win/ds4_cuda.cu:36480"
+      "engines/ds4-win/ds4_cuda.cu:36500"
     ],
     "code_defaults": [
       {
-        "source": "engines/ds4-win/ds4_cuda.cu:36480",
+        "source": "engines/ds4-win/ds4_cuda.cu:36500",
         "unset": "NULL from getenv; the literal consumer below supplies any fallback",
         "read": "getenv(\"DS4_CUDA_MOE_NO_OWNED_MMQ\") == NULL;",
         "consumer": "     * and remapped IDs as the other routed kernels. */\n    const bool owned_mmq = owned_filtered && n_tokens >= 128u && n_total_expert >= n_expert &&\n        getenv(\"DS4_CUDA_MOE_NO_OWNED_MMQ\") == NULL;\n    if (iq2_path && n_tokens > 1u && (!owned_filtered || owned_mmq) &&\n        !small_exact_batch && cuda_use_mmq()) {\n        const uint64_t n_assignments = (uint64_t)n_tokens * n_expert;\n        const char *mmq_gate = gate_w, *mmq_up = up_w, *mmq_down = down_w;"
@@ -9021,7 +9021,7 @@
     "doc": "DS4_CUDA_MOE_NO_OWNED_SPARSE_BUFFERS: advanced engine setting; built-in default retained",
     "reads": [
       "engines/ds4-mac/ds4_cuda.cu:24578",
-      "engines/ds4-win/ds4_cuda.cu:36728"
+      "engines/ds4-win/ds4_cuda.cu:36748"
     ],
     "code_defaults": [
       {
@@ -9031,7 +9031,7 @@
         "consumer": "             (n_tokens >= 128u && getenv(\"DS4_CUDA_MOE_NO_ATOMIC_DOWN\") == NULL));\n        const uint32_t use_owned_sparse_buffers = owned_filtered &&\n            getenv(\"DS4_CUDA_MOE_NO_OWNED_SPARSE_BUFFERS\") == NULL;\n        const uint32_t use_gate_row2048 = use_expert_tiles && expert_tile_m == 8u &&\n            (getenv(\"DS4_CUDA_MOE_GATE_ROW2048\") != NULL ||\n             getenv(\"DS4_CUDA_MOE_GATE_ROW256\") != NULL ||\n             getenv(\"DS4_CUDA_MOE_GATE_ROW128\") != NULL ||"
       },
       {
-        "source": "engines/ds4-win/ds4_cuda.cu:36728",
+        "source": "engines/ds4-win/ds4_cuda.cu:36748",
         "unset": "NULL from getenv; the literal consumer below supplies any fallback",
         "read": "getenv(\"DS4_CUDA_MOE_NO_OWNED_SPARSE_BUFFERS\") == NULL;",
         "consumer": "        }\n        const uint32_t use_owned_sparse_buffers = owned_filtered &&\n            getenv(\"DS4_CUDA_MOE_NO_OWNED_SPARSE_BUFFERS\") == NULL;\n        const uint32_t use_gate_row2048 = use_expert_tiles && expert_tile_m == 8u &&\n            (getenv(\"DS4_CUDA_MOE_GATE_ROW2048\") != NULL ||\n             getenv(\"DS4_CUDA_MOE_GATE_ROW256\") != NULL ||\n             getenv(\"DS4_CUDA_MOE_GATE_ROW128\") != NULL ||"
@@ -9051,7 +9051,7 @@
     "doc": "DS4_CUDA_MOE_NO_P2: advanced engine setting; built-in default retained",
     "reads": [
       "engines/ds4-mac/ds4_cuda.cu:24573",
-      "engines/ds4-win/ds4_cuda.cu:36709"
+      "engines/ds4-win/ds4_cuda.cu:36729"
     ],
     "code_defaults": [
       {
@@ -9061,7 +9061,7 @@
         "consumer": "        const uint32_t use_p2_sorted =\n            use_sorted_pairs && !owned_filtered &&\n            getenv(\"DS4_CUDA_MOE_NO_P2\") == NULL;\n        const uint32_t use_atomic_down = !q4k_path && use_expert_tiles &&\n            (getenv(\"DS4_CUDA_MOE_ATOMIC_DOWN\") != NULL ||\n             (n_tokens >= 128u && getenv(\"DS4_CUDA_MOE_NO_ATOMIC_DOWN\") == NULL));\n        const uint32_t use_owned_sparse_buffers = owned_filtered &&"
       },
       {
-        "source": "engines/ds4-win/ds4_cuda.cu:36709",
+        "source": "engines/ds4-win/ds4_cuda.cu:36729",
         "unset": "NULL from getenv; the literal consumer below supplies any fallback",
         "read": "getenv(\"DS4_CUDA_MOE_NO_P2\") == NULL;",
         "consumer": "        const uint32_t use_p2_sorted =\n            use_sorted_pairs && !owned_filtered &&\n            getenv(\"DS4_CUDA_MOE_NO_P2\") == NULL;\n        /* R4 deterministic MoE down ordering.\n         *\n         * The former large-prefill fast path had independent expert tiles\n         * atomicAdd() directly into each token row.  The order in which those"
@@ -9111,7 +9111,7 @@
     "doc": "DS4_CUDA_MOE_NO_Q4_DOWN_ROWSPAN: advanced engine setting; built-in default retained",
     "reads": [
       "engines/ds4-mac/ds4_cuda.cu:24603",
-      "engines/ds4-win/ds4_cuda.cu:36753"
+      "engines/ds4-win/ds4_cuda.cu:36773"
     ],
     "code_defaults": [
       {
@@ -9121,7 +9121,7 @@
         "consumer": "            q4k_path && use_expert_tiles && expert_tile_m == 8u &&\n            (q4_owned_batch || n_tokens >= 128u || force_q4_down_rowspan) &&\n            getenv(\"DS4_CUDA_MOE_NO_Q4_DOWN_ROWSPAN\") == NULL;\n        const uint32_t use_decode_lut_gate =\n            n_tokens == 1u && xq_blocks <= 16u &&\n            getenv(\"DS4_CUDA_MOE_NO_DECODE_LUT_GATE\") == NULL;\n        const uint32_t gate_row_span ="
       },
       {
-        "source": "engines/ds4-win/ds4_cuda.cu:36753",
+        "source": "engines/ds4-win/ds4_cuda.cu:36773",
         "unset": "NULL from getenv; the literal consumer below supplies any fallback",
         "read": "getenv(\"DS4_CUDA_MOE_NO_Q4_DOWN_ROWSPAN\") == NULL;",
         "consumer": "            q4k_path && use_expert_tiles && expert_tile_m == 8u &&\n            (q4_owned_batch || n_tokens >= 128u || force_q4_down_rowspan) &&\n            getenv(\"DS4_CUDA_MOE_NO_Q4_DOWN_ROWSPAN\") == NULL;\n        const uint32_t use_decode_lut_gate =\n            (n_tokens == 1u || small_exact_batch) &&\n            getenv(\"DS4_CUDA_MOE_NO_DECODE_LUT_GATE\") == NULL;\n        const uint32_t gate_row_span ="
@@ -9141,7 +9141,7 @@
     "doc": "DS4_CUDA_MOE_NO_Q4_DOWN_SLOT3: advanced engine setting; built-in default retained",
     "reads": [
       "engines/ds4-mac/ds4_cuda.cu:24653",
-      "engines/ds4-win/ds4_cuda.cu:36803"
+      "engines/ds4-win/ds4_cuda.cu:36823"
     ],
     "code_defaults": [
       {
@@ -9151,7 +9151,7 @@
         "consumer": "            q4k_path && use_direct_down_sum && n_expert == 3u &&\n            getenv(\"DS4_CUDA_MOE_Q4_DOWN_SLOT3\") != NULL &&\n            getenv(\"DS4_CUDA_MOE_NO_Q4_DOWN_SLOT3\") == NULL;\n        const uint32_t use_q4_midq_sidecar =\n            q4k_path && use_direct_down_sum && use_q4_gate_w32_noaux &&\n            !use_direct_midq && !write_gate_up &&\n            (expert_mid_dim % CUDA_QK_K) == 0u &&"
       },
       {
-        "source": "engines/ds4-win/ds4_cuda.cu:36803",
+        "source": "engines/ds4-win/ds4_cuda.cu:36823",
         "unset": "NULL from getenv; the literal consumer below supplies any fallback",
         "read": "getenv(\"DS4_CUDA_MOE_NO_Q4_DOWN_SLOT3\") == NULL;",
         "consumer": "            q4k_path && use_direct_down_sum && n_expert == 3u &&\n            getenv(\"DS4_CUDA_MOE_Q4_DOWN_SLOT3\") != NULL &&\n            getenv(\"DS4_CUDA_MOE_NO_Q4_DOWN_SLOT3\") == NULL;\n        const uint32_t use_q4_midq_sidecar =\n            q4k_path && use_direct_down_sum && use_q4_gate_w32_noaux &&\n            !use_direct_midq && !write_gate_up &&\n            (expert_mid_dim % CUDA_QK_K) == 0u &&"
@@ -9171,7 +9171,7 @@
     "doc": "DS4_CUDA_MOE_NO_Q4_GATE_H16: advanced engine setting; built-in default retained",
     "reads": [
       "engines/ds4-mac/ds4_cuda.cu:24638",
-      "engines/ds4-win/ds4_cuda.cu:36788"
+      "engines/ds4-win/ds4_cuda.cu:36808"
     ],
     "code_defaults": [
       {
@@ -9181,7 +9181,7 @@
         "consumer": "            q4k_path && !use_direct_midq && !use_q4_gate_h16r8 &&\n            getenv(\"DS4_CUDA_MOE_Q4_GATE_H16\") != NULL &&\n            getenv(\"DS4_CUDA_MOE_NO_Q4_GATE_H16\") == NULL;\n        const uint32_t use_q4_gate_w32r16 =\n            q4k_path && !use_direct_midq && !use_q4_gate_h16r8 && !use_q4_gate_h16 &&\n            getenv(\"DS4_CUDA_MOE_Q4_GATE_W32R16\") != NULL &&\n            getenv(\"DS4_CUDA_MOE_NO_Q4_GATE_W32R16\") == NULL;"
       },
       {
-        "source": "engines/ds4-win/ds4_cuda.cu:36788",
+        "source": "engines/ds4-win/ds4_cuda.cu:36808",
         "unset": "NULL from getenv; the literal consumer below supplies any fallback",
         "read": "getenv(\"DS4_CUDA_MOE_NO_Q4_GATE_H16\") == NULL;",
         "consumer": "            q4k_path && !use_direct_midq && !use_q4_gate_h16r8 &&\n            getenv(\"DS4_CUDA_MOE_Q4_GATE_H16\") != NULL &&\n            getenv(\"DS4_CUDA_MOE_NO_Q4_GATE_H16\") == NULL;\n        const uint32_t use_q4_gate_w32r16 =\n            q4k_path && !use_direct_midq && !use_q4_gate_h16r8 && !use_q4_gate_h16 &&\n            getenv(\"DS4_CUDA_MOE_Q4_GATE_W32R16\") != NULL &&\n            getenv(\"DS4_CUDA_MOE_NO_Q4_GATE_W32R16\") == NULL;"
@@ -9201,7 +9201,7 @@
     "doc": "DS4_CUDA_MOE_NO_Q4_GATE_H16R8: advanced engine setting; built-in default retained",
     "reads": [
       "engines/ds4-mac/ds4_cuda.cu:24634",
-      "engines/ds4-win/ds4_cuda.cu:36784"
+      "engines/ds4-win/ds4_cuda.cu:36804"
     ],
     "code_defaults": [
       {
@@ -9211,7 +9211,7 @@
         "consumer": "            q4k_path && !use_direct_midq &&\n            getenv(\"DS4_CUDA_MOE_Q4_GATE_H16R8\") != NULL &&\n            getenv(\"DS4_CUDA_MOE_NO_Q4_GATE_H16R8\") == NULL;\n        const uint32_t use_q4_gate_h16 =\n            q4k_path && !use_direct_midq && !use_q4_gate_h16r8 &&\n            getenv(\"DS4_CUDA_MOE_Q4_GATE_H16\") != NULL &&\n            getenv(\"DS4_CUDA_MOE_NO_Q4_GATE_H16\") == NULL;"
       },
       {
-        "source": "engines/ds4-win/ds4_cuda.cu:36784",
+        "source": "engines/ds4-win/ds4_cuda.cu:36804",
         "unset": "NULL from getenv; the literal consumer below supplies any fallback",
         "read": "getenv(\"DS4_CUDA_MOE_NO_Q4_GATE_H16R8\") == NULL;",
         "consumer": "            q4k_path && !use_direct_midq &&\n            getenv(\"DS4_CUDA_MOE_Q4_GATE_H16R8\") != NULL &&\n            getenv(\"DS4_CUDA_MOE_NO_Q4_GATE_H16R8\") == NULL;\n        const uint32_t use_q4_gate_h16 =\n            q4k_path && !use_direct_midq && !use_q4_gate_h16r8 &&\n            getenv(\"DS4_CUDA_MOE_Q4_GATE_H16\") != NULL &&\n            getenv(\"DS4_CUDA_MOE_NO_Q4_GATE_H16\") == NULL;"
@@ -9231,7 +9231,7 @@
     "doc": "DS4_CUDA_MOE_NO_Q4_GATE_W32: advanced engine setting; built-in default retained",
     "reads": [
       "engines/ds4-mac/ds4_cuda.cu:24646",
-      "engines/ds4-win/ds4_cuda.cu:36796"
+      "engines/ds4-win/ds4_cuda.cu:36816"
     ],
     "code_defaults": [
       {
@@ -9241,7 +9241,7 @@
         "consumer": "            q4k_path && !use_direct_midq && !use_q4_gate_h16r8 && !use_q4_gate_h16 &&\n            !use_q4_gate_w32r16 &&\n            getenv(\"DS4_CUDA_MOE_NO_Q4_GATE_W32\") == NULL;\n        const uint32_t use_q4_gate_w32_noaux =\n            use_q4_gate_w32 && !write_gate_up &&\n            getenv(\"DS4_CUDA_MOE_NO_Q4_GATE_W32_NOAUX\") == NULL;\n        const uint32_t use_q4_down_slot3 ="
       },
       {
-        "source": "engines/ds4-win/ds4_cuda.cu:36796",
+        "source": "engines/ds4-win/ds4_cuda.cu:36816",
         "unset": "NULL from getenv; the literal consumer below supplies any fallback",
         "read": "getenv(\"DS4_CUDA_MOE_NO_Q4_GATE_W32\") == NULL;",
         "consumer": "            q4k_path && !use_direct_midq && !use_q4_gate_h16r8 && !use_q4_gate_h16 &&\n            !use_q4_gate_w32r16 &&\n            getenv(\"DS4_CUDA_MOE_NO_Q4_GATE_W32\") == NULL;\n        const uint32_t use_q4_gate_w32_noaux =\n            use_q4_gate_w32 && !write_gate_up &&\n            getenv(\"DS4_CUDA_MOE_NO_Q4_GATE_W32_NOAUX\") == NULL;\n        const uint32_t use_q4_down_slot3 ="
@@ -9261,7 +9261,7 @@
     "doc": "DS4_CUDA_MOE_NO_Q4_GATE_W32R16: advanced engine setting; built-in default retained",
     "reads": [
       "engines/ds4-mac/ds4_cuda.cu:24642",
-      "engines/ds4-win/ds4_cuda.cu:36792"
+      "engines/ds4-win/ds4_cuda.cu:36812"
     ],
     "code_defaults": [
       {
@@ -9271,7 +9271,7 @@
         "consumer": "            q4k_path && !use_direct_midq && !use_q4_gate_h16r8 && !use_q4_gate_h16 &&\n            getenv(\"DS4_CUDA_MOE_Q4_GATE_W32R16\") != NULL &&\n            getenv(\"DS4_CUDA_MOE_NO_Q4_GATE_W32R16\") == NULL;\n        const uint32_t use_q4_gate_w32 =\n            q4k_path && !use_direct_midq && !use_q4_gate_h16r8 && !use_q4_gate_h16 &&\n            !use_q4_gate_w32r16 &&\n            getenv(\"DS4_CUDA_MOE_NO_Q4_GATE_W32\") == NULL;"
       },
       {
-        "source": "engines/ds4-win/ds4_cuda.cu:36792",
+        "source": "engines/ds4-win/ds4_cuda.cu:36812",
         "unset": "NULL from getenv; the literal consumer below supplies any fallback",
         "read": "getenv(\"DS4_CUDA_MOE_NO_Q4_GATE_W32R16\") == NULL;",
         "consumer": "            q4k_path && !use_direct_midq && !use_q4_gate_h16r8 && !use_q4_gate_h16 &&\n            getenv(\"DS4_CUDA_MOE_Q4_GATE_W32R16\") != NULL &&\n            getenv(\"DS4_CUDA_MOE_NO_Q4_GATE_W32R16\") == NULL;\n        const uint32_t use_q4_gate_w32 =\n            q4k_path && !use_direct_midq && !use_q4_gate_h16r8 && !use_q4_gate_h16 &&\n            !use_q4_gate_w32r16 &&\n            getenv(\"DS4_CUDA_MOE_NO_Q4_GATE_W32\") == NULL;"
@@ -9291,7 +9291,7 @@
     "doc": "DS4_CUDA_MOE_NO_Q4_GATE_W32_NOAUX: advanced engine setting; built-in default retained",
     "reads": [
       "engines/ds4-mac/ds4_cuda.cu:24649",
-      "engines/ds4-win/ds4_cuda.cu:36799"
+      "engines/ds4-win/ds4_cuda.cu:36819"
     ],
     "code_defaults": [
       {
@@ -9301,7 +9301,7 @@
         "consumer": "        const uint32_t use_q4_gate_w32_noaux =\n            use_q4_gate_w32 && !write_gate_up &&\n            getenv(\"DS4_CUDA_MOE_NO_Q4_GATE_W32_NOAUX\") == NULL;\n        const uint32_t use_q4_down_slot3 =\n            q4k_path && use_direct_down_sum && n_expert == 3u &&\n            getenv(\"DS4_CUDA_MOE_Q4_DOWN_SLOT3\") != NULL &&\n            getenv(\"DS4_CUDA_MOE_NO_Q4_DOWN_SLOT3\") == NULL;"
       },
       {
-        "source": "engines/ds4-win/ds4_cuda.cu:36799",
+        "source": "engines/ds4-win/ds4_cuda.cu:36819",
         "unset": "NULL from getenv; the literal consumer below supplies any fallback",
         "read": "getenv(\"DS4_CUDA_MOE_NO_Q4_GATE_W32_NOAUX\") == NULL;",
         "consumer": "        const uint32_t use_q4_gate_w32_noaux =\n            use_q4_gate_w32 && !write_gate_up &&\n            getenv(\"DS4_CUDA_MOE_NO_Q4_GATE_W32_NOAUX\") == NULL;\n        const uint32_t use_q4_down_slot3 =\n            q4k_path && use_direct_down_sum && n_expert == 3u &&\n            getenv(\"DS4_CUDA_MOE_Q4_DOWN_SLOT3\") != NULL &&\n            getenv(\"DS4_CUDA_MOE_NO_Q4_DOWN_SLOT3\") == NULL;"
@@ -9351,7 +9351,7 @@
     "doc": "DS4_CUDA_MOE_NO_Q4_MMA_TILE16: advanced engine setting; built-in default retained",
     "reads": [
       "engines/ds4-mac/ds4_cuda.cu:24589",
-      "engines/ds4-win/ds4_cuda.cu:36739"
+      "engines/ds4-win/ds4_cuda.cu:36759"
     ],
     "code_defaults": [
       {
@@ -9361,7 +9361,7 @@
         "consumer": "        const uint32_t use_q4_mma_tiles16 = q4k_path && use_expert_tiles &&\n            expert_tile_m == 8u && cuda_q4_mma_ok() &&\n            getenv(\"DS4_CUDA_MOE_NO_Q4_MMA_TILE16\") == NULL;\n        const uint32_t use_down_tile16 = !q4k_path && use_atomic_down && expert_tile_m == 8u &&\n            n_tokens >= 128u && getenv(\"DS4_CUDA_MOE_NO_DOWN_TILE16\") == NULL;\n        const uint32_t use_small_sorted_prep =\n            owned_filtered && q4k_path && n_tokens <= 16u && pair_count <= 96u &&"
       },
       {
-        "source": "engines/ds4-win/ds4_cuda.cu:36739",
+        "source": "engines/ds4-win/ds4_cuda.cu:36759",
         "unset": "NULL from getenv; the literal consumer below supplies any fallback",
         "read": "getenv(\"DS4_CUDA_MOE_NO_Q4_MMA_TILE16\") == NULL;",
         "consumer": "        const uint32_t use_q4_mma_tiles16 = q4k_path && use_expert_tiles &&\n            expert_tile_m == 8u && cuda_q4_mma_ok() &&\n            getenv(\"DS4_CUDA_MOE_NO_Q4_MMA_TILE16\") == NULL;\n        const uint32_t use_down_tile16 = !q4k_path && use_atomic_down && expert_tile_m == 8u &&\n            n_tokens >= 128u && getenv(\"DS4_CUDA_MOE_NO_DOWN_TILE16\") == NULL;\n        const uint32_t use_small_sorted_prep =\n            owned_filtered && q4k_path && n_tokens <= 16u && pair_count <= 96u &&"
@@ -9381,7 +9381,7 @@
     "doc": "DS4_CUDA_MOE_NO_Q4_SORTED: advanced engine setting; built-in default retained",
     "reads": [
       "engines/ds4-mac/ds4_cuda.cu:24550",
-      "engines/ds4-win/ds4_cuda.cu:36686"
+      "engines/ds4-win/ds4_cuda.cu:36706"
     ],
     "code_defaults": [
       {
@@ -9391,7 +9391,7 @@
         "consumer": "            q4k_path && n_tokens > 1u &&\n            (owned_filtered ||\n             (getenv(\"DS4_CUDA_MOE_NO_Q4_SORTED\") == NULL &&\n              getenv(\"DS4_CUDA_MOE_NO_EXPERT_TILES\") == NULL &&\n              getenv(\"DS4_CUDA_MOE_TILE4\") == NULL));\n        const uint32_t use_sorted_pairs =\n            n_tokens > 1u &&"
       },
       {
-        "source": "engines/ds4-win/ds4_cuda.cu:36686",
+        "source": "engines/ds4-win/ds4_cuda.cu:36706",
         "unset": "NULL from getenv; the literal consumer below supplies any fallback",
         "read": "(getenv(\"DS4_CUDA_MOE_NO_Q4_SORTED\") == NULL &&",
         "consumer": "            q4k_path && n_tokens > 1u &&\n            (owned_filtered ||\n             (getenv(\"DS4_CUDA_MOE_NO_Q4_SORTED\") == NULL &&\n              getenv(\"DS4_CUDA_MOE_NO_EXPERT_TILES\") == NULL &&\n              getenv(\"DS4_CUDA_MOE_TILE4\") == NULL));\n        const uint32_t use_sorted_pairs =\n            n_tokens > 1u && !small_exact_batch &&"
@@ -9411,7 +9411,7 @@
     "doc": "DS4_CUDA_MOE_NO_SMALL_SORTED_PREP: advanced engine setting; built-in default retained",
     "reads": [
       "engines/ds4-mac/ds4_cuda.cu:24595",
-      "engines/ds4-win/ds4_cuda.cu:36745"
+      "engines/ds4-win/ds4_cuda.cu:36765"
     ],
     "code_defaults": [
       {
@@ -9421,7 +9421,7 @@
         "consumer": "            owned_filtered && q4k_path && n_tokens <= 16u && pair_count <= 96u &&\n            n_total_expert <= 128u && use_sorted_pairs && use_expert_tiles &&\n            getenv(\"DS4_CUDA_MOE_NO_SMALL_SORTED_PREP\") == NULL;\n        const uint32_t force_q4_down_rowspan =\n            getenv(\"DS4_CUDA_MOE_DOWN_ROW512\") != NULL ||\n            getenv(\"DS4_CUDA_MOE_DOWN_ROW1024\") != NULL ||\n            getenv(\"DS4_CUDA_MOE_DOWN_ROW2048\") != NULL;"
       },
       {
-        "source": "engines/ds4-win/ds4_cuda.cu:36745",
+        "source": "engines/ds4-win/ds4_cuda.cu:36765",
         "unset": "NULL from getenv; the literal consumer below supplies any fallback",
         "read": "getenv(\"DS4_CUDA_MOE_NO_SMALL_SORTED_PREP\") == NULL;",
         "consumer": "            owned_filtered && q4k_path && n_tokens <= 16u && pair_count <= 96u &&\n            n_total_expert <= 128u && use_sorted_pairs && use_expert_tiles &&\n            getenv(\"DS4_CUDA_MOE_NO_SMALL_SORTED_PREP\") == NULL;\n        const uint32_t force_q4_down_rowspan =\n            getenv(\"DS4_CUDA_MOE_DOWN_ROW512\") != NULL ||\n            getenv(\"DS4_CUDA_MOE_DOWN_ROW1024\") != NULL ||\n            getenv(\"DS4_CUDA_MOE_DOWN_ROW2048\") != NULL;"
@@ -9443,7 +9443,7 @@
       "engines/ds4-mac/ds4_cuda.cu:24534",
       "engines/ds4-win/ds4.c:45008",
       "engines/ds4-win/ds4.c:45018",
-      "engines/ds4-win/ds4_cuda.cu:36670"
+      "engines/ds4-win/ds4_cuda.cu:36690"
     ],
     "code_defaults": [
       {
@@ -9465,7 +9465,7 @@
         "consumer": "    if (g->tp_world != 2 || g->streaming || g->quality || g->imatrix ||\n        g->image_count || getenv(\"DS4_METAL_DISABLE_V41_TP_SHARED_OWNER\") ||\n        g_expert_profile.active || getenv(\"DS4_CUDA_MOE_PROFILE\") ||\n        metal_graph_debug_get_config()->prefix ||\n        !ds4_gpu_decode_graphs_supported())\n        return ds41_graph_layer(g, m, l, il, token);\n    return ds41_decode_island(g, m, l, il, 0) &&"
       },
       {
-        "source": "engines/ds4-win/ds4_cuda.cu:36670",
+        "source": "engines/ds4-win/ds4_cuda.cu:36690",
         "unset": "NULL from getenv; the literal consumer below supplies any fallback",
         "read": "const uint32_t profile_moe = getenv(\"DS4_CUDA_MOE_PROFILE\") != NULL;",
         "consumer": "        cuda_block_q8_K *xq = (cuda_block_q8_K *)down->ptr;\n        cuda_block_q8_K *midq = (cuda_block_q8_K *)gate->ptr;\n        const uint32_t profile_moe = getenv(\"DS4_CUDA_MOE_PROFILE\") != NULL;\n        cudaEvent_t prof_ev[7] = {NULL, NULL, NULL, NULL, NULL, NULL, NULL};\n        if (profile_moe) {\n            for (uint32_t i = 0; i < 7u; i++) {\n                if (cudaEventCreate(&prof_ev[i]) != cudaSuccess) {"
@@ -9485,7 +9485,7 @@
     "doc": "DS4_CUDA_MOE_Q4_DOWN_SLOT3: advanced engine setting; built-in default retained",
     "reads": [
       "engines/ds4-mac/ds4_cuda.cu:24652",
-      "engines/ds4-win/ds4_cuda.cu:36802"
+      "engines/ds4-win/ds4_cuda.cu:36822"
     ],
     "code_defaults": [
       {
@@ -9495,7 +9495,7 @@
         "consumer": "        const uint32_t use_q4_down_slot3 =\n            q4k_path && use_direct_down_sum && n_expert == 3u &&\n            getenv(\"DS4_CUDA_MOE_Q4_DOWN_SLOT3\") != NULL &&\n            getenv(\"DS4_CUDA_MOE_NO_Q4_DOWN_SLOT3\") == NULL;\n        const uint32_t use_q4_midq_sidecar =\n            q4k_path && use_direct_down_sum && use_q4_gate_w32_noaux &&\n            !use_direct_midq && !write_gate_up &&"
       },
       {
-        "source": "engines/ds4-win/ds4_cuda.cu:36802",
+        "source": "engines/ds4-win/ds4_cuda.cu:36822",
         "unset": "NULL from getenv; the literal consumer below supplies any fallback",
         "read": "getenv(\"DS4_CUDA_MOE_Q4_DOWN_SLOT3\") != NULL &&",
         "consumer": "        const uint32_t use_q4_down_slot3 =\n            q4k_path && use_direct_down_sum && n_expert == 3u &&\n            getenv(\"DS4_CUDA_MOE_Q4_DOWN_SLOT3\") != NULL &&\n            getenv(\"DS4_CUDA_MOE_NO_Q4_DOWN_SLOT3\") == NULL;\n        const uint32_t use_q4_midq_sidecar =\n            q4k_path && use_direct_down_sum && use_q4_gate_w32_noaux &&\n            !use_direct_midq && !write_gate_up &&"
@@ -9515,7 +9515,7 @@
     "doc": "DS4_CUDA_MOE_Q4_GATE_H16: advanced engine setting; built-in default retained",
     "reads": [
       "engines/ds4-mac/ds4_cuda.cu:24637",
-      "engines/ds4-win/ds4_cuda.cu:36787"
+      "engines/ds4-win/ds4_cuda.cu:36807"
     ],
     "code_defaults": [
       {
@@ -9525,7 +9525,7 @@
         "consumer": "        const uint32_t use_q4_gate_h16 =\n            q4k_path && !use_direct_midq && !use_q4_gate_h16r8 &&\n            getenv(\"DS4_CUDA_MOE_Q4_GATE_H16\") != NULL &&\n            getenv(\"DS4_CUDA_MOE_NO_Q4_GATE_H16\") == NULL;\n        const uint32_t use_q4_gate_w32r16 =\n            q4k_path && !use_direct_midq && !use_q4_gate_h16r8 && !use_q4_gate_h16 &&\n            getenv(\"DS4_CUDA_MOE_Q4_GATE_W32R16\") != NULL &&"
       },
       {
-        "source": "engines/ds4-win/ds4_cuda.cu:36787",
+        "source": "engines/ds4-win/ds4_cuda.cu:36807",
         "unset": "NULL from getenv; the literal consumer below supplies any fallback",
         "read": "getenv(\"DS4_CUDA_MOE_Q4_GATE_H16\") != NULL &&",
         "consumer": "        const uint32_t use_q4_gate_h16 =\n            q4k_path && !use_direct_midq && !use_q4_gate_h16r8 &&\n            getenv(\"DS4_CUDA_MOE_Q4_GATE_H16\") != NULL &&\n            getenv(\"DS4_CUDA_MOE_NO_Q4_GATE_H16\") == NULL;\n        const uint32_t use_q4_gate_w32r16 =\n            q4k_path && !use_direct_midq && !use_q4_gate_h16r8 && !use_q4_gate_h16 &&\n            getenv(\"DS4_CUDA_MOE_Q4_GATE_W32R16\") != NULL &&"
@@ -9545,7 +9545,7 @@
     "doc": "DS4_CUDA_MOE_Q4_GATE_H16R8: advanced engine setting; built-in default retained",
     "reads": [
       "engines/ds4-mac/ds4_cuda.cu:24633",
-      "engines/ds4-win/ds4_cuda.cu:36783"
+      "engines/ds4-win/ds4_cuda.cu:36803"
     ],
     "code_defaults": [
       {
@@ -9555,7 +9555,7 @@
         "consumer": "        const uint32_t use_q4_gate_h16r8 =\n            q4k_path && !use_direct_midq &&\n            getenv(\"DS4_CUDA_MOE_Q4_GATE_H16R8\") != NULL &&\n            getenv(\"DS4_CUDA_MOE_NO_Q4_GATE_H16R8\") == NULL;\n        const uint32_t use_q4_gate_h16 =\n            q4k_path && !use_direct_midq && !use_q4_gate_h16r8 &&\n            getenv(\"DS4_CUDA_MOE_Q4_GATE_H16\") != NULL &&"
       },
       {
-        "source": "engines/ds4-win/ds4_cuda.cu:36783",
+        "source": "engines/ds4-win/ds4_cuda.cu:36803",
         "unset": "NULL from getenv; the literal consumer below supplies any fallback",
         "read": "getenv(\"DS4_CUDA_MOE_Q4_GATE_H16R8\") != NULL &&",
         "consumer": "        const uint32_t use_q4_gate_h16r8 =\n            q4k_path && !use_direct_midq &&\n            getenv(\"DS4_CUDA_MOE_Q4_GATE_H16R8\") != NULL &&\n            getenv(\"DS4_CUDA_MOE_NO_Q4_GATE_H16R8\") == NULL;\n        const uint32_t use_q4_gate_h16 =\n            q4k_path && !use_direct_midq && !use_q4_gate_h16r8 &&\n            getenv(\"DS4_CUDA_MOE_Q4_GATE_H16\") != NULL &&"
@@ -9575,7 +9575,7 @@
     "doc": "DS4_CUDA_MOE_Q4_GATE_W32R16: advanced engine setting; built-in default retained",
     "reads": [
       "engines/ds4-mac/ds4_cuda.cu:24641",
-      "engines/ds4-win/ds4_cuda.cu:36791"
+      "engines/ds4-win/ds4_cuda.cu:36811"
     ],
     "code_defaults": [
       {
@@ -9585,7 +9585,7 @@
         "consumer": "        const uint32_t use_q4_gate_w32r16 =\n            q4k_path && !use_direct_midq && !use_q4_gate_h16r8 && !use_q4_gate_h16 &&\n            getenv(\"DS4_CUDA_MOE_Q4_GATE_W32R16\") != NULL &&\n            getenv(\"DS4_CUDA_MOE_NO_Q4_GATE_W32R16\") == NULL;\n        const uint32_t use_q4_gate_w32 =\n            q4k_path && !use_direct_midq && !use_q4_gate_h16r8 && !use_q4_gate_h16 &&\n            !use_q4_gate_w32r16 &&"
       },
       {
-        "source": "engines/ds4-win/ds4_cuda.cu:36791",
+        "source": "engines/ds4-win/ds4_cuda.cu:36811",
         "unset": "NULL from getenv; the literal consumer below supplies any fallback",
         "read": "getenv(\"DS4_CUDA_MOE_Q4_GATE_W32R16\") != NULL &&",
         "consumer": "        const uint32_t use_q4_gate_w32r16 =\n            q4k_path && !use_direct_midq && !use_q4_gate_h16r8 && !use_q4_gate_h16 &&\n            getenv(\"DS4_CUDA_MOE_Q4_GATE_W32R16\") != NULL &&\n            getenv(\"DS4_CUDA_MOE_NO_Q4_GATE_W32R16\") == NULL;\n        const uint32_t use_q4_gate_w32 =\n            q4k_path && !use_direct_midq && !use_q4_gate_h16r8 && !use_q4_gate_h16 &&\n            !use_q4_gate_w32r16 &&"
@@ -9606,8 +9606,8 @@
     "reads": [
       "engines/ds4-mac/ds4_cuda.cu:24552",
       "engines/ds4-mac/ds4_cuda.cu:24567",
-      "engines/ds4-win/ds4_cuda.cu:36688",
-      "engines/ds4-win/ds4_cuda.cu:36703"
+      "engines/ds4-win/ds4_cuda.cu:36708",
+      "engines/ds4-win/ds4_cuda.cu:36723"
     ],
     "code_defaults": [
       {
@@ -9623,13 +9623,13 @@
         "consumer": "         * than the empty slots cost. Large prefill also keeps tile8. */\n        const uint32_t expert_tile_m =\n            getenv(\"DS4_CUDA_MOE_TILE4\") ? 4u :\n            (getenv(\"DS4_CUDA_MOE_TILE8\") ? 8u :\n             (q4_owned_batch || n_tokens > 8u ? 8u : 4u));\n        const uint32_t write_gate_up = getenv(\"DS4_CUDA_MOE_WRITE_GATE_UP\") != NULL;\n        const uint32_t use_p2_sorted ="
       },
       {
-        "source": "engines/ds4-win/ds4_cuda.cu:36688",
+        "source": "engines/ds4-win/ds4_cuda.cu:36708",
         "unset": "NULL from getenv; the literal consumer below supplies any fallback",
         "read": "getenv(\"DS4_CUDA_MOE_TILE4\") == NULL));",
         "consumer": "             (getenv(\"DS4_CUDA_MOE_NO_Q4_SORTED\") == NULL &&\n              getenv(\"DS4_CUDA_MOE_NO_EXPERT_TILES\") == NULL &&\n              getenv(\"DS4_CUDA_MOE_TILE4\") == NULL));\n        const uint32_t use_sorted_pairs =\n            n_tokens > 1u && !small_exact_batch &&\n            (owned_filtered || !q4k_path || use_q4_sorted_pairs);\n        const uint32_t use_expert_tiles ="
       },
       {
-        "source": "engines/ds4-win/ds4_cuda.cu:36703",
+        "source": "engines/ds4-win/ds4_cuda.cu:36723",
         "unset": "NULL from getenv; the literal consumer below supplies any fallback",
         "read": "getenv(\"DS4_CUDA_MOE_TILE4\") ? 4u :",
         "consumer": "         * than the empty slots cost. Large prefill also keeps tile8. */\n        const uint32_t expert_tile_m =\n            getenv(\"DS4_CUDA_MOE_TILE4\") ? 4u :\n            (getenv(\"DS4_CUDA_MOE_TILE8\") ? 8u :\n             (q4_owned_batch || n_tokens > 8u ? 8u : 4u));\n        const uint32_t write_gate_up = getenv(\"DS4_CUDA_MOE_WRITE_GATE_UP\") != NULL;\n        const uint32_t use_p2_sorted ="
@@ -9649,7 +9649,7 @@
     "doc": "DS4_CUDA_MOE_TILE8: advanced engine setting; built-in default retained",
     "reads": [
       "engines/ds4-mac/ds4_cuda.cu:24568",
-      "engines/ds4-win/ds4_cuda.cu:36704"
+      "engines/ds4-win/ds4_cuda.cu:36724"
     ],
     "code_defaults": [
       {
@@ -9659,7 +9659,7 @@
         "consumer": "        const uint32_t expert_tile_m =\n            getenv(\"DS4_CUDA_MOE_TILE4\") ? 4u :\n            (getenv(\"DS4_CUDA_MOE_TILE8\") ? 8u :\n             (q4_owned_batch || n_tokens > 8u ? 8u : 4u));\n        const uint32_t write_gate_up = getenv(\"DS4_CUDA_MOE_WRITE_GATE_UP\") != NULL;\n        const uint32_t use_p2_sorted =\n            use_sorted_pairs && !owned_filtered &&"
       },
       {
-        "source": "engines/ds4-win/ds4_cuda.cu:36704",
+        "source": "engines/ds4-win/ds4_cuda.cu:36724",
         "unset": "NULL from getenv; the literal consumer below supplies any fallback",
         "read": "(getenv(\"DS4_CUDA_MOE_TILE8\") ? 8u :",
         "consumer": "        const uint32_t expert_tile_m =\n            getenv(\"DS4_CUDA_MOE_TILE4\") ? 4u :\n            (getenv(\"DS4_CUDA_MOE_TILE8\") ? 8u :\n             (q4_owned_batch || n_tokens > 8u ? 8u : 4u));\n        const uint32_t write_gate_up = getenv(\"DS4_CUDA_MOE_WRITE_GATE_UP\") != NULL;\n        const uint32_t use_p2_sorted =\n            use_sorted_pairs && !owned_filtered &&"
@@ -9681,9 +9681,9 @@
       "engines/ds4-mac/ds4_cuda.cu:24570",
       "engines/ds4-mac/ds4_cuda.cu:25624",
       "engines/ds4-mac/ds4_cuda.cu:25635",
-      "engines/ds4-win/ds4_cuda.cu:36706",
-      "engines/ds4-win/ds4_cuda.cu:37807",
-      "engines/ds4-win/ds4_cuda.cu:37818"
+      "engines/ds4-win/ds4_cuda.cu:36726",
+      "engines/ds4-win/ds4_cuda.cu:37827",
+      "engines/ds4-win/ds4_cuda.cu:37838"
     ],
     "code_defaults": [
       {
@@ -9705,19 +9705,19 @@
         "consumer": "    const bool write_aux =\n        !q4k_path && !mxfp4_path &&\n        getenv(\"DS4_CUDA_MOE_WRITE_GATE_UP\") != NULL;\n\n    if (resident_expert_base > UINT64_MAX / gate_expert_bytes ||\n        resident_expert_count > UINT64_MAX / gate_expert_bytes ||\n        resident_expert_base > UINT64_MAX / down_expert_bytes ||"
       },
       {
-        "source": "engines/ds4-win/ds4_cuda.cu:36706",
+        "source": "engines/ds4-win/ds4_cuda.cu:36726",
         "unset": "NULL from getenv; the literal consumer below supplies any fallback",
         "read": "const uint32_t write_gate_up = getenv(\"DS4_CUDA_MOE_WRITE_GATE_UP\") != NULL;",
         "consumer": "            (getenv(\"DS4_CUDA_MOE_TILE8\") ? 8u :\n             (q4_owned_batch || n_tokens > 8u ? 8u : 4u));\n        const uint32_t write_gate_up = getenv(\"DS4_CUDA_MOE_WRITE_GATE_UP\") != NULL;\n        const uint32_t use_p2_sorted =\n            use_sorted_pairs && !owned_filtered &&\n            getenv(\"DS4_CUDA_MOE_NO_P2\") == NULL;\n        /* R4 deterministic MoE down ordering."
       },
       {
-        "source": "engines/ds4-win/ds4_cuda.cu:37807",
+        "source": "engines/ds4-win/ds4_cuda.cu:37827",
         "unset": "NULL from getenv; the literal consumer below supplies any fallback",
         "read": "if (q4k_path && getenv(\"DS4_CUDA_MOE_WRITE_GATE_UP\") != NULL) {",
         "consumer": "        return 0;\n    }\n    if (q4k_path && getenv(\"DS4_CUDA_MOE_WRITE_GATE_UP\") != NULL) {\n        fprintf(stderr, \"ds4: CUDA owned Q4 decode does not support gate/up auxiliary output\\n\");\n        return 0;\n    }\n    if (!q4k_path && !mxfp4_path &&"
       },
       {
-        "source": "engines/ds4-win/ds4_cuda.cu:37818",
+        "source": "engines/ds4-win/ds4_cuda.cu:37838",
         "unset": "NULL from getenv; the literal consumer below supplies any fallback",
         "read": "getenv(\"DS4_CUDA_MOE_WRITE_GATE_UP\") != NULL;",
         "consumer": "    const bool write_aux =\n        !q4k_path && !mxfp4_path &&\n        getenv(\"DS4_CUDA_MOE_WRITE_GATE_UP\") != NULL;\n\n    if (resident_expert_base > UINT64_MAX / gate_expert_bytes ||\n        resident_expert_count > UINT64_MAX / gate_expert_bytes ||\n        resident_expert_base > UINT64_MAX / down_expert_bytes ||"
@@ -9736,11 +9736,11 @@
     ],
     "doc": "Opt-in DSV4.1 stored MXFP4 single-token W4A4 MMA experiment. Requires DS4_CUDA_DECODE_GRAPHS=0; changes activation precision, and validates three native MMA submissions per routed layer.",
     "reads": [
-      "engines/ds4-win/ds4_cuda.cu:36240"
+      "engines/ds4-win/ds4_cuda.cu:36260"
     ],
     "code_defaults": [
       {
-        "source": "engines/ds4-win/ds4_cuda.cu:36240",
+        "source": "engines/ds4-win/ds4_cuda.cu:36260",
         "unset": "Wrapper/conditional default: see the literal call and consumer below",
         "read": "cuda_env_flag_enabled(\"DS4_CUDA_MXFP4_DECODE_MMA\", 0);",
         "consumer": "        // W4A4 experiment. FP4 activation rounding changes decode arithmetic.\n        const bool decode_mma = n_tokens == 1u &&\n            cuda_env_flag_enabled(\"DS4_CUDA_MXFP4_DECODE_MMA\", 0);\n        if (decode_mma && (n_expert != 6u || expert_in_dim != 5120u ||\n                           expert_mid_dim != 2304u || out_dim != 5120u ||\n                           ds4_gpu_decode_graphs_supported())) {\n            fprintf(stderr, \"ds4: MXFP4 decode MMA requires DSV4.1 top-6 shapes and DS4_CUDA_DECODE_GRAPHS=0\\n\");"
@@ -12938,11 +12938,11 @@
     ],
     "doc": "A/B switch for the Q4_K routed-MoE prefill: 1 (default) runs batches of >= 32 rows through the vendored ggml MMQ (expert-sorted, q8_1 activations, int8 MMA; DS4_Q4K_MOE_MMQ on); 0 keeps the sorted-pairs Q4_K kernels (Q8_K activations).",
     "reads": [
-      "engines/ds4-win/ds4_cuda.cu:36612"
+      "engines/ds4-win/ds4_cuda.cu:36632"
     ],
     "code_defaults": [
       {
-        "source": "engines/ds4-win/ds4_cuda.cu:36612",
+        "source": "engines/ds4-win/ds4_cuda.cu:36632",
         "unset": "NULL from getenv; the literal consumer below supplies any fallback",
         "read": "const char *v = getenv(\"DS4_CUDA_Q4K_MOE_MMQ\");",
         "consumer": "    static int q4k_moe_mmq = -1;\n    if (q4k_moe_mmq < 0) {\n        const char *v = getenv(\"DS4_CUDA_Q4K_MOE_MMQ\");\n        q4k_moe_mmq = !(v && strcmp(v, \"0\") == 0);\n        fprintf(stderr, \"DS4_Q4K_MOE_MMQ %s\\n\", q4k_moe_mmq ?\n                \"on (DS4_CUDA_Q4K_MOE_MMQ=0 selects the sorted-pairs kernels)\" :\n                \"off (DS4_CUDA_Q4K_MOE_MMQ=0)\");"
@@ -12960,11 +12960,11 @@
     ],
     "doc": "1 runs Q4_K routed-MoE prefill batches through streaming-llama's native-half MMID kernel (cuda/mmq/ds4_q4k_half.cu: Q4_K weights to F16 on the fly, F16 activations, F16 MMA, F32 accumulate; mid rounded to F16; DS4_Q4K_MOE_NATIVE_HALF on). It serves every batched prefill call or fails loudly (no fallback); one-layer loader (<= 384 slots) only.",
     "reads": [
-      "engines/ds4-win/ds4_cuda.cu:36566"
+      "engines/ds4-win/ds4_cuda.cu:36586"
     ],
     "code_defaults": [
       {
-        "source": "engines/ds4-win/ds4_cuda.cu:36566",
+        "source": "engines/ds4-win/ds4_cuda.cu:36586",
         "unset": "NULL from getenv; the literal consumer below supplies any fallback",
         "read": "const char *v = getenv(\"DS4_CUDA_Q4K_MOE_NATIVE_HALF\");",
         "consumer": "    static int q4k_native_half = -1;\n    if (q4k_native_half < 0) {\n        const char *v = getenv(\"DS4_CUDA_Q4K_MOE_NATIVE_HALF\");\n        q4k_native_half = v && strcmp(v, \"1\") == 0;\n        if (q4k_native_half) fprintf(stderr, \"DS4_Q4K_MOE_NATIVE_HALF on (streaming-llama native-half experts)\\n\");\n    }\n    if (q4k_path && q4k_native_half && n_tokens > 1u && !owned_filtered) {"
@@ -14787,11 +14787,11 @@
     ],
     "doc": "DS4_CUDA_SSD_PREFETCH_PROFILE: advanced engine setting; built-in default retained",
     "reads": [
-      "engines/ds4-win/ds4_cuda.cu:39632"
+      "engines/ds4-win/ds4_cuda.cu:39652"
     ],
     "code_defaults": [
       {
-        "source": "engines/ds4-win/ds4_cuda.cu:39632",
+        "source": "engines/ds4-win/ds4_cuda.cu:39652",
         "unset": "NULL from getenv; the literal consumer below supplies any fallback",
         "read": "if (!p.slots.empty() && getenv(\"DS4_CUDA_SSD_PREFETCH_PROFILE\"))",
         "consumer": "        }\n    }\n    if (!p.slots.empty() && getenv(\"DS4_CUDA_SSD_PREFETCH_PROFILE\"))\n        fprintf(stderr, \"ds4: CUDA SSD prefetch layer=%u experts=%zu bytes=%llu \"\n            \"read=%.3f wait=%.3f ms published=%u\\n\", p.table.layer, p.slots.size(),\n            (unsigned long long)p.bytes, p.elapsed * 1000,\n            (cuda_wall_sec() - start) * 1000, publish);"
@@ -21920,11 +21920,11 @@
     ],
     "doc": "Packed FP4 decode diagnostic: 1 runs the packed kernels and the canonical reference on the same slots, keeps the reference result and prints their differences (single row)",
     "reads": [
-      "engines/ds4-win/cuda/mmq/ds4_mmq_fp4_packed.cuh:258"
+      "engines/ds4-win/cuda/mmq/ds4_mmq_fp4_packed.cuh:267"
     ],
     "code_defaults": [
       {
-        "source": "engines/ds4-win/cuda/mmq/ds4_mmq_fp4_packed.cuh:258",
+        "source": "engines/ds4-win/cuda/mmq/ds4_mmq_fp4_packed.cuh:267",
         "unset": "NULL from getenv; the literal consumer below supplies any fallback",
         "read": "static const int check = [] { const char *v = getenv(\"DS4_FP4_PACKED_CHECK\"); return v && v[0] == '1' && !v[1]; }();",
         "consumer": "        return -1;\n    }\n    static const int check = [] { const char *v = getenv(\"DS4_FP4_PACKED_CHECK\"); return v && v[0] == '1' && !v[1]; }();\n    static bool in_check = false;\n    if (check && !reference && n_tokens == 1 && !in_check) {\n        in_check = true;\n        // Diagnostic: packed kernels and the canonical reference on the same"
@@ -21943,11 +21943,11 @@
     ],
     "doc": "Packed FP4 sensitivity diagnostic: with DS4_FP4_PACKED_REFERENCE=1, 1 scales each routed-MoE output by 1+1e-6 to measure how far a rounding-level change propagates",
     "reads": [
-      "engines/ds4-win/cuda/mmq/ds4_mmq_fp4_packed.cuh:321"
+      "engines/ds4-win/cuda/mmq/ds4_mmq_fp4_packed.cuh:330"
     ],
     "code_defaults": [
       {
-        "source": "engines/ds4-win/cuda/mmq/ds4_mmq_fp4_packed.cuh:321",
+        "source": "engines/ds4-win/cuda/mmq/ds4_mmq_fp4_packed.cuh:330",
         "unset": "NULL from getenv; the literal consumer below supplies any fallback",
         "read": "static const int perturb = [] { const char *v = getenv(\"DS4_FP4_PACKED_PERTURB\"); return v && v[0] == '1' && !v[1]; }();",
         "consumer": "        if (rc == 0) rc = ds4_mmq_mxfp4_moe_down_sum6_vec(canon + 2u * gb, mid_f32, iota, out_f32,\n                                                          out_dim, mid_dim, 1, 6, 6, stream);\n        static const int perturb = [] { const char *v = getenv(\"DS4_FP4_PACKED_PERTURB\"); return v && v[0] == '1' && !v[1]; }();\n        if (rc == 0 && perturb) ds4_fp4p_scale_kernel<<<(out_dim + 255) / 256, 256, 0, stream>>>(out_f32, (uint32_t) out_dim, 1.0f + 1.0e-6f);\n        return rc;\n    }\n    const int64_t x_pad = GGML_PAD((int64_t) in_dim, MATRIX_ROW_PADDING);"
@@ -21966,11 +21966,11 @@
     ],
     "doc": "Packed FP4 decode check: 1 relayouts the selected kernel-native FP4 expert slots and runs the canonical MXFP4 vector kernels (single row, slow; exactness reference only)",
     "reads": [
-      "engines/ds4-win/ds4_cuda.cu:36141"
+      "engines/ds4-win/ds4_cuda.cu:36156"
     ],
     "code_defaults": [
       {
-        "source": "engines/ds4-win/ds4_cuda.cu:36141",
+        "source": "engines/ds4-win/ds4_cuda.cu:36156",
         "unset": "NULL from getenv; the literal consumer below supplies any fallback",
         "read": "const char *v = getenv(\"DS4_FP4_PACKED_REFERENCE\");",
         "consumer": "        }\n        static const int reference = [] {\n            const char *v = getenv(\"DS4_FP4_PACKED_REFERENCE\");\n            return v && v[0] == '1' && !v[1];\n        }();\n        const cudaStream_t stream = n_tokens == 1u ? cuda_decode_stream() : (cudaStream_t)0;\n        const auto launch_t0 = std::chrono::steady_clock::now();"
@@ -22088,8 +22088,8 @@
     "reads": [
       "engines/ds4-mac/ds4_cuda.cu:29100",
       "engines/ds4-mac/ds4_cuda.cu:29270",
-      "engines/ds4-win/ds4_cuda.cu:42096",
-      "engines/ds4-win/ds4_cuda.cu:42266"
+      "engines/ds4-win/ds4_cuda.cu:42116",
+      "engines/ds4-win/ds4_cuda.cu:42286"
     ],
     "code_defaults": [
       {
@@ -22105,13 +22105,13 @@
         "consumer": "                       \"glm staged decode value launch\");\n    }\n    const bool lora_vec2 = getenv(\"DS4_GLM_ATTN_NO_LORA_VEC2\") == NULL;\n    const uint32_t shmem =\n        (256u + n_selected + kv_lora_dim) * (uint32_t)sizeof(float);\n    if (cache_f16) {\n        glm_attention_indexed_decode_kernel<__half><<<n_head, 256, shmem>>>("
       },
       {
-        "source": "engines/ds4-win/ds4_cuda.cu:42096",
+        "source": "engines/ds4-win/ds4_cuda.cu:42116",
         "unset": "NULL from getenv; the literal consumer below supplies any fallback",
         "read": "getenv(\"DS4_GLM_ATTN_NO_LORA_VEC2\") == NULL;",
         "consumer": "    if (range_tok2 && n_selected < 512u) {\n        const bool lora_vec2 =\n            getenv(\"DS4_GLM_ATTN_NO_LORA_VEC2\") == NULL;\n        const uint32_t shmem =\n            (256u + n_selected + 1u + kv_lora_dim) *\n            (uint32_t)sizeof(float);\n        const dim3 grid(n_head, 2u, 1u);"
       },
       {
-        "source": "engines/ds4-win/ds4_cuda.cu:42266",
+        "source": "engines/ds4-win/ds4_cuda.cu:42286",
         "unset": "NULL from getenv; the literal consumer below supplies any fallback",
         "read": "const bool lora_vec2 = getenv(\"DS4_GLM_ATTN_NO_LORA_VEC2\") == NULL;",
         "consumer": "                       \"glm staged decode value launch\");\n    }\n    const bool lora_vec2 = getenv(\"DS4_GLM_ATTN_NO_LORA_VEC2\") == NULL;\n    const uint32_t shmem =\n        (256u + n_selected + kv_lora_dim) * (uint32_t)sizeof(float);\n    if (cache_f16) {\n        glm_attention_indexed_decode_kernel<__half><<<n_head, 256, shmem>>>("
@@ -22131,7 +22131,7 @@
     "doc": "DS4_GLM_ATTN_NO_SCORE_VEC2: advanced engine setting; built-in default retained",
     "reads": [
       "engines/ds4-mac/ds4_cuda.cu:29089",
-      "engines/ds4-win/ds4_cuda.cu:42085"
+      "engines/ds4-win/ds4_cuda.cu:42105"
     ],
     "code_defaults": [
       {
@@ -22141,7 +22141,7 @@
         "consumer": "    if (!vw) return 0;\n    const float scale = 1.0f / sqrtf((float)qk_dim);\n    const bool score_vec2 = getenv(\"DS4_GLM_ATTN_NO_SCORE_VEC2\") == NULL;\n    const bool range_tok2 =\n        g_glm_mtp_verify_mode &&\n        getenv(\"DS4_GLM_MTP_NO_ATTN_TOK2\") == NULL &&\n        n_selected < cache_cap &&"
       },
       {
-        "source": "engines/ds4-win/ds4_cuda.cu:42085",
+        "source": "engines/ds4-win/ds4_cuda.cu:42105",
         "unset": "NULL from getenv; the literal consumer below supplies any fallback",
         "read": "const bool score_vec2 = getenv(\"DS4_GLM_ATTN_NO_SCORE_VEC2\") == NULL;",
         "consumer": "    if (!vw) return 0;\n    const float scale = 1.0f / sqrtf((float)qk_dim);\n    const bool score_vec2 = getenv(\"DS4_GLM_ATTN_NO_SCORE_VEC2\") == NULL;\n    const bool range_tok2 =\n        g_glm_mtp_verify_mode &&\n        getenv(\"DS4_GLM_MTP_NO_ATTN_TOK2\") == NULL &&\n        n_selected < cache_cap &&"
@@ -22161,7 +22161,7 @@
     "doc": "DS4_GLM_ATTN_NO_STAGED_DECODE: advanced engine setting; built-in default retained",
     "reads": [
       "engines/ds4-mac/ds4_cuda.cu:29138",
-      "engines/ds4-win/ds4_cuda.cu:42134"
+      "engines/ds4-win/ds4_cuda.cu:42154"
     ],
     "code_defaults": [
       {
@@ -22171,7 +22171,7 @@
         "consumer": "    }\n    if (n_selected >= 512u &&\n        getenv(\"DS4_GLM_ATTN_NO_STAGED_DECODE\") == NULL) {\n        const uint32_t token_count = range_tok2 ? 2u : 1u;\n        const uint32_t score_stride = n_selected + (range_tok2 ? 1u : 0u);\n        const uint64_t head_count = (uint64_t)token_count * n_head;\n        if (head_count > UINT64_MAX / score_stride ||"
       },
       {
-        "source": "engines/ds4-win/ds4_cuda.cu:42134",
+        "source": "engines/ds4-win/ds4_cuda.cu:42154",
         "unset": "NULL from getenv; the literal consumer below supplies any fallback",
         "read": "getenv(\"DS4_GLM_ATTN_NO_STAGED_DECODE\") == NULL) {",
         "consumer": "    }\n    if (n_selected >= 512u &&\n        getenv(\"DS4_GLM_ATTN_NO_STAGED_DECODE\") == NULL) {\n        const uint32_t token_count = range_tok2 ? 2u : 1u;\n        const uint32_t score_stride = n_selected + (range_tok2 ? 1u : 0u);\n        const uint64_t head_count = (uint64_t)token_count * n_head;\n        if (head_count > UINT64_MAX / score_stride ||"
@@ -22751,7 +22751,7 @@
     "doc": "DS4_GLM_MOE_EXPERT_MAJOR: advanced engine setting; built-in default retained",
     "reads": [
       "engines/ds4-mac/ds4_cuda.cu:31455",
-      "engines/ds4-win/ds4_cuda.cu:44434"
+      "engines/ds4-win/ds4_cuda.cu:44454"
     ],
     "code_defaults": [
       {
@@ -22761,7 +22761,7 @@
         "consumer": "        n_tokens >= 128u && !getenv(\"DS4_GLM_MOE_NO_EXPERT_TILE8\");\n    const bool use_expert_major =\n        n_tokens >= 16u && getenv(\"DS4_GLM_MOE_EXPERT_MAJOR\");\n    if (use_expert_tile8 || use_expert_major) {\n        const uint32_t cap = n_tokens;\n        const uint32_t n_pairs = n_tokens * n_expert;\n        const uint64_t counts_bytes = 256u * sizeof(int32_t);"
       },
       {
-        "source": "engines/ds4-win/ds4_cuda.cu:44434",
+        "source": "engines/ds4-win/ds4_cuda.cu:44454",
         "unset": "NULL from getenv; the literal consumer below supplies any fallback",
         "read": "n_tokens >= 16u && getenv(\"DS4_GLM_MOE_EXPERT_MAJOR\");",
         "consumer": "        n_tokens >= 128u && !getenv(\"DS4_GLM_MOE_NO_EXPERT_TILE8\");\n    const bool use_expert_major =\n        n_tokens >= 16u && getenv(\"DS4_GLM_MOE_EXPERT_MAJOR\");\n    if (use_expert_tile8 || use_expert_major) {\n        const uint32_t cap = n_tokens;\n        const uint32_t n_pairs = n_tokens * n_expert;\n        const uint64_t counts_bytes = 256u * sizeof(int32_t);"
@@ -22781,7 +22781,7 @@
     "doc": "DS4_GLM_MOE_NO_DOWN_TILE8_EXACT: advanced engine setting; built-in default retained",
     "reads": [
       "engines/ds4-mac/ds4_cuda.cu:31510",
-      "engines/ds4-win/ds4_cuda.cu:44489"
+      "engines/ds4-win/ds4_cuda.cu:44509"
     ],
     "code_defaults": [
       {
@@ -22791,7 +22791,7 @@
         "consumer": "                        mid_work,\n                        expert_mid_dim, n_tokens * n_expert);\n                if (getenv(\"DS4_GLM_MOE_NO_DOWN_TILE8_EXACT\") == NULL) {\n                    const uint32_t max_chunk_tokens = 512u;\n                    const uint32_t scratch_tokens =\n                        n_tokens < max_chunk_tokens ? n_tokens : max_chunk_tokens;\n                    const uint64_t term_count ="
       },
       {
-        "source": "engines/ds4-win/ds4_cuda.cu:44489",
+        "source": "engines/ds4-win/ds4_cuda.cu:44509",
         "unset": "NULL from getenv; the literal consumer below supplies any fallback",
         "read": "if (getenv(\"DS4_GLM_MOE_NO_DOWN_TILE8_EXACT\") == NULL) {",
         "consumer": "                        mid_work,\n                        expert_mid_dim, n_tokens * n_expert);\n                if (getenv(\"DS4_GLM_MOE_NO_DOWN_TILE8_EXACT\") == NULL) {\n                    const uint32_t max_chunk_tokens = 512u;\n                    const uint32_t scratch_tokens =\n                        n_tokens < max_chunk_tokens ? n_tokens : max_chunk_tokens;\n                    const uint64_t term_count ="
@@ -22811,7 +22811,7 @@
     "doc": "DS4_GLM_MOE_NO_EXPERT_TILE8: advanced engine setting; built-in default retained",
     "reads": [
       "engines/ds4-mac/ds4_cuda.cu:31453",
-      "engines/ds4-win/ds4_cuda.cu:44432"
+      "engines/ds4-win/ds4_cuda.cu:44452"
     ],
     "code_defaults": [
       {
@@ -22821,7 +22821,7 @@
         "consumer": "    static ds4_gpu_tensor *down_terms_scratch[DS4_MAX_GPUS] = {0};\n    const bool use_expert_tile8 =\n        n_tokens >= 128u && !getenv(\"DS4_GLM_MOE_NO_EXPERT_TILE8\");\n    const bool use_expert_major =\n        n_tokens >= 16u && getenv(\"DS4_GLM_MOE_EXPERT_MAJOR\");\n    if (use_expert_tile8 || use_expert_major) {\n        const uint32_t cap = n_tokens;"
       },
       {
-        "source": "engines/ds4-win/ds4_cuda.cu:44432",
+        "source": "engines/ds4-win/ds4_cuda.cu:44452",
         "unset": "NULL from getenv; the literal consumer below supplies any fallback",
         "read": "n_tokens >= 128u && !getenv(\"DS4_GLM_MOE_NO_EXPERT_TILE8\");",
         "consumer": "    static ds4_gpu_tensor *down_terms_scratch[DS4_MAX_GPUS] = {0};\n    const bool use_expert_tile8 =\n        n_tokens >= 128u && !getenv(\"DS4_GLM_MOE_NO_EXPERT_TILE8\");\n    const bool use_expert_major =\n        n_tokens >= 16u && getenv(\"DS4_GLM_MOE_EXPERT_MAJOR\");\n    if (use_expert_tile8 || use_expert_major) {\n        const uint32_t cap = n_tokens;"
@@ -22841,7 +22841,7 @@
     "doc": "DS4_GLM_MOE_NO_LOCAL_BATCH_IO: advanced engine setting; built-in default retained",
     "reads": [
       "engines/ds4-mac/ds4_cuda.cu:31424",
-      "engines/ds4-win/ds4_cuda.cu:44403"
+      "engines/ds4-win/ds4_cuda.cu:44423"
     ],
     "code_defaults": [
       {
@@ -22851,7 +22851,7 @@
         "consumer": "    float *out_work = (float *)out->ptr;\n    const bool use_local_batch_io =\n        n_tokens >= 128u && !getenv(\"DS4_GLM_MOE_NO_LOCAL_BATCH_IO\");\n    if (use_local_batch_io && ds4_tensor_device_idx(mid) != dev) {\n        if (!mid_local[dev] || mid_local[dev]->bytes < mid_work_bytes) {\n            if (mid_local[dev]) ds4_gpu_tensor_free(mid_local[dev]);\n            mid_local[dev] ="
       },
       {
-        "source": "engines/ds4-win/ds4_cuda.cu:44403",
+        "source": "engines/ds4-win/ds4_cuda.cu:44423",
         "unset": "NULL from getenv; the literal consumer below supplies any fallback",
         "read": "n_tokens >= 128u && !getenv(\"DS4_GLM_MOE_NO_LOCAL_BATCH_IO\");",
         "consumer": "    float *out_work = (float *)out->ptr;\n    const bool use_local_batch_io =\n        n_tokens >= 128u && !getenv(\"DS4_GLM_MOE_NO_LOCAL_BATCH_IO\");\n    if (use_local_batch_io && ds4_tensor_device_idx(mid) != dev) {\n        if (!mid_local[dev] || mid_local[dev]->bytes < mid_work_bytes) {\n            if (mid_local[dev]) ds4_gpu_tensor_free(mid_local[dev]);\n            mid_local[dev] ="
@@ -22872,8 +22872,8 @@
     "reads": [
       "engines/ds4-mac/ds4_cuda.cu:31636",
       "engines/ds4-mac/ds4_cuda.cu:31663",
-      "engines/ds4-win/ds4_cuda.cu:44615",
-      "engines/ds4-win/ds4_cuda.cu:44642"
+      "engines/ds4-win/ds4_cuda.cu:44635",
+      "engines/ds4-win/ds4_cuda.cu:44662"
     ],
     "code_defaults": [
       {
@@ -22889,13 +22889,13 @@
         "consumer": "    }\n\n    if (getenv(\"DS4_GLM_MOE_SCALAR\")) {\n        dim3 g2((out_dim + 127u) / 128u, n_tokens, 1);\n        glm_routed_moe_batch_q2K_down_kernel<<<g2, 128>>>(\n                out_work, dw,\n                (const cuda_block_q8_K *)midq_scratch[dev]->ptr,"
       },
       {
-        "source": "engines/ds4-win/ds4_cuda.cu:44615",
+        "source": "engines/ds4-win/ds4_cuda.cu:44635",
         "unset": "NULL from getenv; the literal consumer below supplies any fallback",
         "read": "} else if (getenv(\"DS4_GLM_MOE_SCALAR\")) {",
         "consumer": "                up_expert_bytes, up_row_bytes,\n                xq_blocks, expert_mid_dim, n_expert);\n    } else if (getenv(\"DS4_GLM_MOE_SCALAR\")) {\n        dim3 g1(n_tokens, n_expert, 1);\n        glm_routed_moe_batch_q2K_gateup_kernel<<<g1, 128>>>(\n                mid_work, gw, uw,\n                (const cuda_block_q8_K *)xq_scratch[dev]->ptr,"
       },
       {
-        "source": "engines/ds4-win/ds4_cuda.cu:44642",
+        "source": "engines/ds4-win/ds4_cuda.cu:44662",
         "unset": "NULL from getenv; the literal consumer below supplies any fallback",
         "read": "if (getenv(\"DS4_GLM_MOE_SCALAR\")) {",
         "consumer": "    }\n\n    if (getenv(\"DS4_GLM_MOE_SCALAR\")) {\n        dim3 g2((out_dim + 127u) / 128u, n_tokens, 1);\n        glm_routed_moe_batch_q2K_down_kernel<<<g2, 128>>>(\n                out_work, dw,\n                (const cuda_block_q8_K *)midq_scratch[dev]->ptr,"
@@ -22915,7 +22915,7 @@
     "doc": "DS4_GLM_MOE_SCRATCH_TIER0: advanced engine setting; built-in default retained",
     "reads": [
       "engines/ds4-mac/ds4_cuda.cu:31400",
-      "engines/ds4-win/ds4_cuda.cu:44379"
+      "engines/ds4-win/ds4_cuda.cu:44399"
     ],
     "code_defaults": [
       {
@@ -22925,7 +22925,7 @@
         "consumer": "    static ds4_gpu_tensor *midq_scratch[DS4_MAX_GPUS] = {0};\n    int dev = logical_tier;\n    const int scratch_tier = getenv(\"DS4_GLM_MOE_SCRATCH_TIER0\") ? 0 : dev;\n    const uint64_t xq_bytes = (uint64_t)n_tokens * xq_blocks *\n                              sizeof(cuda_block_q8_K);\n    const uint64_t midq_bytes = (uint64_t)n_tokens * n_expert * midq_blocks *\n                                sizeof(cuda_block_q8_K);"
       },
       {
-        "source": "engines/ds4-win/ds4_cuda.cu:44379",
+        "source": "engines/ds4-win/ds4_cuda.cu:44399",
         "unset": "NULL from getenv; the literal consumer below supplies any fallback",
         "read": "const int scratch_tier = getenv(\"DS4_GLM_MOE_SCRATCH_TIER0\") ? 0 : dev;",
         "consumer": "    static ds4_gpu_tensor *midq_scratch[DS4_MAX_GPUS] = {0};\n    int dev = logical_tier;\n    const int scratch_tier = getenv(\"DS4_GLM_MOE_SCRATCH_TIER0\") ? 0 : dev;\n    const uint64_t xq_bytes = (uint64_t)n_tokens * xq_blocks *\n                              sizeof(cuda_block_q8_K);\n    const uint64_t midq_bytes = (uint64_t)n_tokens * n_expert * midq_blocks *\n                                sizeof(cuda_block_q8_K);"
@@ -22945,7 +22945,7 @@
     "doc": "DS4_GLM_MTP_NO_ATTN_TOK2: advanced engine setting; built-in default retained",
     "reads": [
       "engines/ds4-mac/ds4_cuda.cu:29092",
-      "engines/ds4-win/ds4_cuda.cu:42088"
+      "engines/ds4-win/ds4_cuda.cu:42108"
     ],
     "code_defaults": [
       {
@@ -22955,7 +22955,7 @@
         "consumer": "    const bool range_tok2 =\n        g_glm_mtp_verify_mode &&\n        getenv(\"DS4_GLM_MTP_NO_ATTN_TOK2\") == NULL &&\n        n_selected < cache_cap &&\n        heads->bytes >= 2u * (uint64_t)n_head * value_dim * sizeof(float) &&\n        q->bytes >= 2u * (uint64_t)n_head * qk_dim * sizeof(float) &&\n        qk_low->bytes >="
       },
       {
-        "source": "engines/ds4-win/ds4_cuda.cu:42088",
+        "source": "engines/ds4-win/ds4_cuda.cu:42108",
         "unset": "NULL from getenv; the literal consumer below supplies any fallback",
         "read": "getenv(\"DS4_GLM_MTP_NO_ATTN_TOK2\") == NULL &&",
         "consumer": "    const bool range_tok2 =\n        g_glm_mtp_verify_mode &&\n        getenv(\"DS4_GLM_MTP_NO_ATTN_TOK2\") == NULL &&\n        n_selected < cache_cap &&\n        heads->bytes >= 2u * (uint64_t)n_head * value_dim * sizeof(float) &&\n        q->bytes >= 2u * (uint64_t)n_head * qk_dim * sizeof(float) &&\n        qk_low->bytes >="
@@ -22975,7 +22975,7 @@
     "doc": "DS4_GLM_MTP_NO_MOE_TOK2: advanced engine setting; built-in default retained",
     "reads": [
       "engines/ds4-mac/ds4_cuda.cu:31622",
-      "engines/ds4-win/ds4_cuda.cu:44601"
+      "engines/ds4-win/ds4_cuda.cu:44621"
     ],
     "code_defaults": [
       {
@@ -22985,7 +22985,7 @@
         "consumer": "    if (n_tokens == 2u &&\n        g_glm_mtp_verify_mode &&\n        getenv(\"DS4_GLM_MTP_NO_MOE_TOK2\") == NULL) {\n        const uint32_t warps = 8u;\n        dim3 g1((expert_mid_dim + warps - 1u) / warps,\n                2u * n_expert, 1u);\n        const uint32_t sh1 = 2u * xq_blocks *"
       },
       {
-        "source": "engines/ds4-win/ds4_cuda.cu:44601",
+        "source": "engines/ds4-win/ds4_cuda.cu:44621",
         "unset": "NULL from getenv; the literal consumer below supplies any fallback",
         "read": "getenv(\"DS4_GLM_MTP_NO_MOE_TOK2\") == NULL) {",
         "consumer": "    if (n_tokens == 2u &&\n        g_glm_mtp_verify_mode &&\n        getenv(\"DS4_GLM_MTP_NO_MOE_TOK2\") == NULL) {\n        const uint32_t warps = 8u;\n        dim3 g1((expert_mid_dim + warps - 1u) / warps,\n                2u * n_expert, 1u);\n        const uint32_t sh1 = 2u * xq_blocks *"
@@ -23005,7 +23005,7 @@
     "doc": "DS4_GLM_MTP_NO_SHARED_TOK2: advanced engine setting; built-in default retained",
     "reads": [
       "engines/ds4-mac/ds4_cuda.cu:32719",
-      "engines/ds4-win/ds4_cuda.cu:45697"
+      "engines/ds4-win/ds4_cuda.cu:45717"
     ],
     "code_defaults": [
       {
@@ -23015,7 +23015,7 @@
         "consumer": "    if (n_tok == 2 && (in_dim & 31u) == 0u &&\n        g_glm_mtp_verify_mode &&\n        getenv(\"DS4_GLM_MTP_NO_SHARED_TOK2\") == NULL &&\n        mid->bytes >= 2u * out_dim * sizeof(float) &&\n        x->bytes >= 2u * in_dim * sizeof(float)) {\n        const uint64_t row_bytes = (in_dim / 32u) * 34u;\n        const uint64_t wb = out_dim * row_bytes;"
       },
       {
-        "source": "engines/ds4-win/ds4_cuda.cu:45697",
+        "source": "engines/ds4-win/ds4_cuda.cu:45717",
         "unset": "NULL from getenv; the literal consumer below supplies any fallback",
         "read": "getenv(\"DS4_GLM_MTP_NO_SHARED_TOK2\") == NULL &&",
         "consumer": "    if (n_tok == 2 && (in_dim & 31u) == 0u &&\n        g_glm_mtp_verify_mode &&\n        getenv(\"DS4_GLM_MTP_NO_SHARED_TOK2\") == NULL &&\n        mid->bytes >= 2u * out_dim * sizeof(float) &&\n        x->bytes >= 2u * in_dim * sizeof(float)) {\n        const uint64_t row_bytes = (in_dim / 32u) * 34u;\n        const uint64_t wb = out_dim * row_bytes;"
@@ -23195,7 +23195,7 @@
     "doc": "DS4_GLM_ROUTER_SCALAR: advanced engine setting; built-in default retained",
     "reads": [
       "engines/ds4-mac/ds4_cuda.cu:31882",
-      "engines/ds4-win/ds4_cuda.cu:44861"
+      "engines/ds4-win/ds4_cuda.cu:44881"
     ],
     "code_defaults": [
       {
@@ -23205,7 +23205,7 @@
         "consumer": "            model_map, bias_offset, bb, logical_tier, \"glm_exp_probs_b\");\n    if (!bias) return 0;\n    if (!getenv(\"DS4_GLM_ROUTER_SCALAR\")) {\n        glm_router_select_parallel_kernel<<<n_tokens, 256, 0,\n                                             cuda_decode_stream()>>>(\n                (int32_t *)selected->ptr,\n                (float *)weights->ptr,"
       },
       {
-        "source": "engines/ds4-win/ds4_cuda.cu:44861",
+        "source": "engines/ds4-win/ds4_cuda.cu:44881",
         "unset": "NULL from getenv; the literal consumer below supplies any fallback",
         "read": "if (!getenv(\"DS4_GLM_ROUTER_SCALAR\")) {",
         "consumer": "            model_map, bias_offset, bb, logical_tier, \"glm_exp_probs_b\");\n    if (!bias) return 0;\n    if (!getenv(\"DS4_GLM_ROUTER_SCALAR\")) {\n        glm_router_select_parallel_kernel<<<n_tokens, 256, 0,\n                                             cuda_decode_stream()>>>(\n                (int32_t *)selected->ptr,\n                (float *)weights->ptr,"
@@ -23225,7 +23225,7 @@
     "doc": "DS4_GLM_SHARED_SPLIT: advanced engine setting; built-in default retained",
     "reads": [
       "engines/ds4-mac/ds4_cuda.cu:32752",
-      "engines/ds4-win/ds4_cuda.cu:45730"
+      "engines/ds4-win/ds4_cuda.cu:45750"
     ],
     "code_defaults": [
       {
@@ -23235,7 +23235,7 @@
         "consumer": "    }\n    if (n_tok == 1 && (in_dim & 31u) == 0u &&\n        !getenv(\"DS4_GLM_SHARED_SPLIT\") &&\n        mid->bytes >= out_dim * sizeof(float) &&\n        x->bytes >= in_dim * sizeof(float)) {\n        const uint64_t row_bytes = (in_dim / 32u) * 34u;\n        const uint64_t wb = out_dim * row_bytes;"
       },
       {
-        "source": "engines/ds4-win/ds4_cuda.cu:45730",
+        "source": "engines/ds4-win/ds4_cuda.cu:45750",
         "unset": "NULL from getenv; the literal consumer below supplies any fallback",
         "read": "!getenv(\"DS4_GLM_SHARED_SPLIT\") &&",
         "consumer": "    }\n    if (n_tok == 1 && (in_dim & 31u) == 0u &&\n        !getenv(\"DS4_GLM_SHARED_SPLIT\") &&\n        mid->bytes >= out_dim * sizeof(float) &&\n        x->bytes >= in_dim * sizeof(float)) {\n        const uint64_t row_bytes = (in_dim / 32u) * 34u;\n        const uint64_t wb = out_dim * row_bytes;"
@@ -24538,7 +24538,7 @@
     "doc": "DS4_GLM_VALUE_NO_TILE16: advanced engine setting; built-in default retained",
     "reads": [
       "engines/ds4-mac/ds4_cuda.cu:32321",
-      "engines/ds4-win/ds4_cuda.cu:45300"
+      "engines/ds4-win/ds4_cuda.cu:45320"
     ],
     "code_defaults": [
       {
@@ -24548,7 +24548,7 @@
         "consumer": "            model_map, weight_offset, wbytes, logical_tier, \"glm_v_b\");\n    if (!w) return 0;\n    if (n_tokens >= 16u && getenv(\"DS4_GLM_VALUE_NO_TILE16\") == NULL) {\n        dim3 grid(n_head, (n_tokens + 15u) / 16u, 1);\n        const size_t shmem = 16ull * kv_lora_dim * sizeof(float);\n        glm_value_project_q8_0_batch_heads_tiled_kernel<16><<<grid, 128, shmem>>>(\n                (float *)heads->ptr, w, (const float *)lora->ptr,"
       },
       {
-        "source": "engines/ds4-win/ds4_cuda.cu:45300",
+        "source": "engines/ds4-win/ds4_cuda.cu:45320",
         "unset": "NULL from getenv; the literal consumer below supplies any fallback",
         "read": "if (n_tokens >= 16u && getenv(\"DS4_GLM_VALUE_NO_TILE16\") == NULL) {",
         "consumer": "            model_map, weight_offset, wbytes, logical_tier, \"glm_v_b\");\n    if (!w) return 0;\n    if (n_tokens >= 16u && getenv(\"DS4_GLM_VALUE_NO_TILE16\") == NULL) {\n        dim3 grid(n_head, (n_tokens + 15u) / 16u, 1);\n        const size_t shmem = 16ull * kv_lora_dim * sizeof(float);\n        glm_value_project_q8_0_batch_heads_tiled_kernel<16><<<grid, 128, shmem>>>(\n                (float *)heads->ptr, w, (const float *)lora->ptr,"
@@ -57748,18 +57748,18 @@
       "engines/streaming-llama/prefill_llama.cpp/common/common.cpp:945",
       "engines/streaming-llama/prefill_llama.cpp/common/common.cpp:946",
       "engines/streaming-llama/prefill_llama.cpp/common/common.cpp:961",
+      "engines/mlx-serve/src/arch/ds4.zig:139",
       "engines/mlx-serve/src/cli.zig:199",
       "engines/mlx-serve/src/gen.zig:1747",
       "engines/mlx-serve/src/gen.zig:3996",
       "engines/mlx-serve/src/kv_disk_cache.zig:3301",
       "engines/mlx-serve/src/launch.zig:538",
-      "engines/mlx-serve/src/main.zig:992",
       "engines/mlx-serve/src/main.zig:1014",
+      "engines/mlx-serve/src/main.zig:992",
       "engines/mlx-serve/src/model_settings.zig:94",
       "engines/mlx-serve/src/round_cost.zig:1026",
       "engines/mlx-serve/src/server.zig:1798",
-      "engines/mlx-serve/src/server.zig:2903",
-      "engines/mlx-serve/src/arch/ds4.zig:139"
+      "engines/mlx-serve/src/server.zig:2903"
     ],
     "code_defaults": [
       {
@@ -57871,6 +57871,12 @@
         "consumer": "        }\n#elif defined(__APPLE__)\n        cache_directory = std::getenv(\"HOME\") + std::string(\"/Library/Caches/\");\n#elif defined(_WIN32)\n        cache_directory = std::getenv(\"LOCALAPPDATA\");\n#elif defined(__EMSCRIPTEN__)\n        GGML_ABORT(\"not implemented on this platform\");"
       },
       {
+        "source": "engines/mlx-serve/src/arch/ds4.zig:139",
+        "unset": "NULL from getenv; the literal consumer below supplies any fallback",
+        "read": "const home_z = std.c.getenv(\"HOME\");",
+        "consumer": "    if (kernels_extracted.load(.acquire)) return;\n\n    const home_z = std.c.getenv(\"HOME\");\n    if (home_z == null) {\n        log.err(\"[ds4] HOME not set; cannot stage Metal kernels\\n\", .{});\n        return Error.KernelExtractionFailed;\n    }"
+      },
+      {
         "source": "engines/mlx-serve/src/cli.zig:199",
         "unset": "NULL from getenv; the literal consumer below supplies any fallback",
         "read": "return std.mem.span(std.c.getenv(\"HOME\") orelse return \"/tmp\");",
@@ -57901,16 +57907,16 @@
         "consumer": "\nfn homeDir() []const u8 {\n    return std.mem.span(std.c.getenv(\"HOME\") orelse return \"/tmp\");\n}\n\nfn curlGet(allocator: std.mem.Allocator, io: std.Io, url: []const u8) ![]u8 {\n    // Plain fetch, no HF token header \u2014 this talks to OUR server, never HF."
       },
       {
-        "source": "engines/mlx-serve/src/main.zig:992",
-        "unset": "NULL from getenv; the literal consumer below supplies any fallback",
-        "read": "const home = std.mem.span(std.c.getenv(\"HOME\") orelse \"/tmp\");",
-        "consumer": "        .has_explicit_model = model_dir.len > 0,\n    })) {\n        const home = std.mem.span(std.c.getenv(\"HOME\") orelse \"/tmp\");\n        default_models_root_storage = try cli_mod.modelsRootPath(allocator, home);\n        models_root = default_models_root_storage;\n    }\n"
-      },
-      {
         "source": "engines/mlx-serve/src/main.zig:1014",
         "unset": "NULL from getenv; the literal consumer below supplies any fallback",
         "read": "else if (std.c.getenv(\"HOME\")) |h|",
         "consumer": "        const chosen: ?[]const u8 = if (log_file_arg) |a|\n            (if (std.mem.eql(u8, a, \"off\") or std.mem.eql(u8, a, \"none\")) null else a)\n        else if (std.c.getenv(\"HOME\")) |h|\n            log.defaultLogPath(&log_path_buf, std.mem.span(h), port) catch null\n        else\n            null;\n        if (chosen) |p| {"
+      },
+      {
+        "source": "engines/mlx-serve/src/main.zig:992",
+        "unset": "NULL from getenv; the literal consumer below supplies any fallback",
+        "read": "const home = std.mem.span(std.c.getenv(\"HOME\") orelse \"/tmp\");",
+        "consumer": "        .has_explicit_model = model_dir.len > 0,\n    })) {\n        const home = std.mem.span(std.c.getenv(\"HOME\") orelse \"/tmp\");\n        default_models_root_storage = try cli_mod.modelsRootPath(allocator, home);\n        models_root = default_models_root_storage;\n    }\n"
       },
       {
         "source": "engines/mlx-serve/src/model_settings.zig:94",
@@ -57935,12 +57941,6 @@
         "unset": "NULL from getenv; the literal consumer below supplies any fallback",
         "read": "const home = std.mem.span(std.c.getenv(\"HOME\") orelse \"/tmp\");",
         "consumer": "        return;\n    };\n    const home = std.mem.span(std.c.getenv(\"HOME\") orelse \"/tmp\");\n    const dest = try cli_mod.modelDestPath(allocator, home, resolved.repo);\n    defer allocator.free(dest);\n\n    log.info(\"POST /api/pull {s} -> {s}\\n\", .{ requested, dest });"
-      },
-      {
-        "source": "engines/mlx-serve/src/arch/ds4.zig:139",
-        "unset": "NULL from getenv; the literal consumer below supplies any fallback",
-        "read": "const home_z = std.c.getenv(\"HOME\");",
-        "consumer": "    if (kernels_extracted.load(.acquire)) return;\n\n    const home_z = std.c.getenv(\"HOME\");\n    if (home_z == null) {\n        log.err(\"[ds4] HOME not set; cannot stage Metal kernels\\n\", .{});\n        return Error.KernelExtractionFailed;\n    }"
       }
     ]
   },
@@ -60801,11 +60801,11 @@
     ],
     "doc": "ds4-decode.dll multi-row MoE: most unique experts gathered per group (16-384, default 192).",
     "reads": [
-      "engines/ds4-win/ds4_cuda.cu:35855"
+      "engines/ds4-win/ds4_cuda.cu:35869"
     ],
     "code_defaults": [
       {
-        "source": "engines/ds4-win/ds4_cuda.cu:35855",
+        "source": "engines/ds4-win/ds4_cuda.cu:35869",
         "unset": "NULL from getenv; the literal consumer below supplies any fallback",
         "read": "const char *v = getenv(\"LLAMADECODE_DS4X_MOE_GROUP_EXPERTS\");",
         "consumer": "        }\n        static const uint32_t group_cap = [] {\n            const char *v = getenv(\"LLAMADECODE_DS4X_MOE_GROUP_EXPERTS\");\n            const long n = v && *v ? strtol(v, nullptr, 10) : 192;\n            return (uint32_t)(n < 16 ? 16 : n > 384 ? 384 : n);\n        }();\n        if (n_tokens > 1u && unique.size() > group_cap) {"
@@ -98613,7 +98613,7 @@
     "scopes": [
       "rtx-llama"
     ],
-    "doc": "Single-engine RAM expert service: upload (pinned staging), cpu (Q4_K FFN on the existing ds4 worker pool with dispatched llama CPU dot kernels), or mix (measured per-expert CPU/upload cost). CPU work overlaps the GPU experts and merges the output row. Other quantization and multi-row calls use upload. Requires a matching producer and decode library. CPU and mix are experimental: local FFN roundoff is small, but strict full-sequence KL/top-1 screening did not pass; upload remains the opt-in service default.",
+    "doc": "Single-engine RAM expert service: upload (pinned staging), cpu, or mix (per layer, the cheaper of CPU and upload by measured cost). Packed FP4 experts: cpu computes RAM-tier experts in place on a persistent AVX-512 pool (exact replica of the GPU packed kernels: Q8_1 activations, per-lane FMA order, slot-order merge) concurrently with the expert hook and GPU experts, joined once per layer before the down projection; verified bit-identical per layer. Q4_K: cpu uses the ds4 worker pool with llama CPU dot kernels (experimental, not exact). Other formats and multi-row calls use upload. Requires a matching producer and decode library.",
     "reads": [
       "engines/ds4-win/ds4_external_host_compute.inc:40",
       "engines/streaming-llama/prefill_llama.cpp/tools/dsv41-prefill/live-session.inc:288"
@@ -98633,6 +98633,56 @@
         "unset": "NULL from getenv; the literal consumer below supplies any fallback",
         "read": "const char*mode=std::getenv(\"LLAMADECODE_HOST_MODE\");",
         "consumer": "            int(*api2)(ds4_external_host_cache_v2*)=reinterpret_cast<int(*)(ds4_external_host_cache_v2*)>(GetProcAddress(module,\"ds4x_host_cache_v2\"));\n            have_host2=api2&&api2(&host_cache2)==1;\n            const char*mode=std::getenv(\"LLAMADECODE_HOST_MODE\");\n            require(!mode||!std::strcmp(mode,\"upload\")||!std::strcmp(mode,\"cpu\")||!std::strcmp(mode,\"mix\"),\"LLAMADECODE_HOST_MODE must be upload, cpu or mix\");\n            if(mode&&std::strcmp(mode,\"upload\")){\n                int(*cpu)(ds4_external_dot)=nullptr;bind(cpu,\"ds4x_host_cpu_v1\");\n                // The GPU producer does not otherwise initialize the CPU"
+      }
+    ],
+    "code_default": "NULL from getenv; the literal consumer below supplies any fallback"
+  },
+  {
+    "var": "LLAMADECODE_CPU_FP4_THREADS",
+    "flag": "--llamadecode-cpu-fp4-threads",
+    "default": "12",
+    "classification": "advanced",
+    "scopes": [
+      "rtx-llama"
+    ],
+    "doc": "Worker threads of the packed FP4 CPU expert pool (LLAMADECODE_HOST_MODE=cpu|mix), 1-32. Default 12: weights are read once from the locked RAM tier, so the pool is memory-bandwidth bound (measured 0.34 ms per expert at 12 threads, 0.30 at 16, 0.43 at 6 on dual-channel DDR5).",
+    "reads": [
+      "engines/ds4-win/ds4_external_host_compute_wrapper.inc:100"
+    ],
+    "defaults_by_scope": {
+      "rtx-llama": "12"
+    },
+    "code_defaults": [
+      {
+        "source": "engines/ds4-win/ds4_external_host_compute_wrapper.inc:100",
+        "unset": "NULL from getenv; the literal consumer below supplies any fallback",
+        "read": "const char *v = getenv(\"LLAMADECODE_CPU_FP4_THREADS\");",
+        "consumer": "\nstatic int external_fp4_threads() {\n    const char *v = getenv(\"LLAMADECODE_CPU_FP4_THREADS\");\n    const long n = v && *v ? strtol(v, nullptr, 10) : 12;\n    return (int)(n < 1 ? 1 : n > 32 ? 32 : n);\n}\n"
+      }
+    ],
+    "code_default": "NULL from getenv; the literal consumer below supplies any fallback"
+  },
+  {
+    "var": "LLAMADECODE_CPU_FP4_SILU",
+    "flag": "--llamadecode-cpu-fp4-silu",
+    "default": "gpu",
+    "classification": "advanced",
+    "scopes": [
+      "rtx-llama"
+    ],
+    "doc": "Diagnostic for the packed FP4 CPU expert lane. Default (unset): the SwiGLU epilogue of CPU-computed experts runs as a small kernel on a non-blocking side stream, so the GPU expf (ex2.approx) is used and the result is bit-identical to the GPU kernels. cpu: compute SwiGLU on the CPU (exact except expf rounding; measured 57/64 identical forced rows, KL mean 2.8e-3).",
+    "reads": [
+      "engines/ds4-win/ds4_external_host_compute_wrapper.inc:68"
+    ],
+    "defaults_by_scope": {
+      "rtx-llama": "gpu"
+    },
+    "code_defaults": [
+      {
+        "source": "engines/ds4-win/ds4_external_host_compute_wrapper.inc:68",
+        "unset": "NULL from getenv; the literal consumer below supplies any fallback",
+        "read": "const char *v = getenv(\"LLAMADECODE_CPU_FP4_SILU\");",
+        "consumer": "}\nstatic bool fp4_lane_epilogue_init() {\n    const char *v = getenv(\"LLAMADECODE_CPU_FP4_SILU\");\n    if (v && !strcmp(v, \"cpu\")) { fprintf(stderr, \"LLAMADECODE_CPU_FP4 silu=cpu (diagnostic: differs from the GPU in expf rounding)\\n\"); return true; }\n    auto &E = g_fp4_epi;\n    const size_t gu = 6u * 4608u * sizeof(float), md = 6u * 2304u * sizeof(float);\n    if (cudaStreamCreateWithFlags(&E.stream, cudaStreamNonBlocking) != cudaSuccess ||"
       }
     ],
     "code_default": "NULL from getenv; the literal consumer below supplies any fallback"
@@ -98669,11 +98719,11 @@
     ],
     "doc": "Single-engine RAM expert tier: try to CUDA-register the tier payload (slot-aligned 512 MiB chunks, all or nothing) so RAM hits DMA straight from it; 0 skips the attempt. On refusal (WDDM reported out of memory on the RTX in every run so far) the tier stays VirtualLocked and hits are staged through pinned buffers.",
     "reads": [
-      "engines/ds4-win/ds4_external_host_cache.inc:77"
+      "engines/ds4-win/ds4_external_host_cache.inc:82"
     ],
     "code_defaults": [
       {
-        "source": "engines/ds4-win/ds4_external_host_cache.inc:77",
+        "source": "engines/ds4-win/ds4_external_host_cache.inc:82",
         "unset": "NULL from getenv; the literal consumer below supplies any fallback",
         "read": "{static const bool want=[]{const char*v=getenv(\"LLAMADECODE_HOST_REGISTER\");return !(v&&v[0]=='0'&&!v[1]);}();",
         "consumer": "         * with no CPU staging copy. Any refusal keeps the locked, staged path. */\n        bool registered_all=false;\n        {static const bool want=[]{const char*v=getenv(\"LLAMADECODE_HOST_REGISTER\");return !(v&&v[0]=='0'&&!v[1]);}();\n         /* Bounded, slot-aligned chunks: no expert copy spans two registrations. */\n         cudaError_t why=cudaSuccess;uint64_t prefix_slots=n;\n         for(int k=0;k<3&&want;++k){g_external_host_chunks[k].clear();\n             const uint64_t unit=k==2?cache->down_expert_bytes:cache->gate_expert_bytes,step=std::max<uint64_t>(1,(512ull<<20)/unit)*unit;"
@@ -98788,7 +98838,8 @@
     },
     "reads": [
       "engines/ds4-win/ds4_decode_adapter.inc:39",
-      "engines/ds4-win/ds4_external_host_compute_wrapper.inc:66"
+      "engines/ds4-win/ds4_external_host_compute_wrapper.inc:225",
+      "engines/ds4-win/ds4_external_host_compute_wrapper.inc:315"
     ],
     "code_defaults": [
       {
@@ -98798,7 +98849,13 @@
         "consumer": "    if(!dot)return 0;\n    g_external_cpu_dot=dot;\n    const char*verify=getenv(\"LLAMADECODE_HOST_CPU_VERIFY\");\n    g_external_cpu_verify=verify&&*verify&&strcmp(verify,\"0\");\n    ds4_threads_init();\n    fprintf(stderr,\"LLAMADECODE_HOST_CPU threads=%u quant=Q4_K activation=Q8_K dispatched_ggml_dot=1\\n\",g_pool.n_threads);\n    return 1;"
       },
       {
-        "source": "engines/ds4-win/ds4_external_host_compute_wrapper.inc:66",
+        "source": "engines/ds4-win/ds4_external_host_compute_wrapper.inc:225",
+        "unset": "NULL from getenv; the literal consumer below supplies any fallback",
+        "read": "static const char *verify = getenv(\"LLAMADECODE_HOST_CPU_VERIFY\");",
+        "consumer": "    // expert on the GPU (RAM hits uploaded) on the same activation and compare;\n    // the hybrid result is kept.\n    static const char *verify = getenv(\"LLAMADECODE_HOST_CPU_VERIFY\");\n    static unsigned verify_count = 0;\n    if (verify && *verify && strcmp(verify, \"0\") && (!strcmp(verify, \"all\") || verify_count < 64u)) {\n        ++verify_count;\n        std::vector<float> hybrid(5120), reference(5120);"
+      },
+      {
+        "source": "engines/ds4-win/ds4_external_host_compute_wrapper.inc:315",
         "unset": "NULL from getenv; the literal consumer below supplies any fallback",
         "read": "const char*verify=getenv(\"LLAMADECODE_HOST_CPU_VERIFY\");",
         "consumer": "    if(!cuda_ok(cudaStreamSynchronize(cuda_decode_stream()),\"CPU expert scratch retirement\"))return 0;\n    static unsigned verify_count=0;\n    const char*verify=getenv(\"LLAMADECODE_HOST_CPU_VERIFY\");\n    const bool verify_all=verify&&(!strcmp(verify,\"all\")||!strcmp(verify,\"reference\"));\n    if(verify&&*verify&&strcmp(verify,\"0\")&&(verify_all||verify_count<16u)){\n        ++verify_count;\n        std::array<float,5120>hybrid{},reference{};"
