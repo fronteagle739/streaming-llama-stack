@@ -5,7 +5,7 @@
 # Reads launcher/config/<Mode>.json plus your private launcher/config/<Mode>.local.json,
 # bakes the RTX section into the .exe (with the launcher runtime and the Python path) and
 # writes "<OutDir>/DSV41 Single.exe" or "DSV41 Dual.exe", overwriting it in place.
-# -Shortcuts adds Start-menu and Desktop shortcuts with the launcher icon.
+# -Shortcuts adds Start-menu and Desktop shortcuts (and one beside the .exe) with the launcher icon.
 # Uses only the C# compiler that ships with Windows (.NET Framework csc.exe).
 param(
     [Parameter(Mandatory = $true)][ValidateSet('single', 'dual')][string]$Mode,
@@ -47,7 +47,7 @@ if ($LASTEXITCODE -ne 0) { throw "csc failed ($LASTEXITCODE)" }
 
 if ($Shortcuts) {
     $shell = New-Object -ComObject WScript.Shell
-    $places = @([Environment]::GetFolderPath('Programs'), [Environment]::GetFolderPath('Desktop'))
+    $places = @([Environment]::GetFolderPath('Programs'), [Environment]::GetFolderPath('Desktop'), $OutDir)
     foreach ($place in $places) {
         $link = $shell.CreateShortcut((Join-Path $place "$name.lnk"))
         $link.TargetPath = $exe
