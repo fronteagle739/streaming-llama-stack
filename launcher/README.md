@@ -42,23 +42,23 @@ On a Mac, type the letter and press Enter.
 
 Before it starts anything, the launcher checks for:
 - a DSV4.1 stack already answering on its web UI port;
-- a Studio LLM preset loaded (`/presets/active` on port 8765);
+- another app's LLM already loaded (optional `studio_url`: a Streaming Studio daemon's `/presets/active`);
 - RTX VRAM in use (`nvidia-smi`), or a running `ds4-server` on the Mac;
 - its stack ports already taken.
 
 It then explains what it found and offers these choices:
-- **U**: use the running one. This opens that stack's web UI, or Studio.
+- **U**: use the running one. This opens that stack's web UI, or the other app's page (`studio_url`).
 - **W**: wait until it is free.
 - **C**: start anyway. The stack's own GPU and RAM admission still refuses if it does not fit.
 - **Q**: quit.
 
-It never stops another program. To free the GPU from Studio, eject the model in Studio.
+It never stops another program; free the GPU in the program that holds it. Nothing else in the launcher depends on Studio.
 
 ## Build
 
 The settings live in `config/single.json` and `config/dual.json`. Each has an `rtx` and
 a `mac` section. Put your own paths, GPU UUID and pairing token in
-`config/single.local.json` and `config/dual.local.json`, which Git ignores. They are
+`config/single.local.json` and `config/dual.local.json`, which Git ignores. Set `runtime_root` there too (for example `launcher/dist/runtime` in this checkout; logs, the stack's core Python environment and pairing state live there). They are
 merged over the defaults, and the packer refuses while any `SET_...` placeholder is left.
 `pair_token` at the top of `dual.local.json` must be the same on both machines: a random
 16-128 character URL-safe string.
@@ -66,8 +66,8 @@ merged over the defaults, and the packer refuses while any `SET_...` placeholder
 Windows (uses the C# compiler that ships with Windows):
 
 ```powershell
-powershell -File launcher/pack_windows.ps1 -Mode single -OutDir D:/StreamingStudio/launchers -Shortcuts
-powershell -File launcher/pack_windows.ps1 -Mode dual   -OutDir D:/StreamingStudio/launchers -Shortcuts
+powershell -File launcher/pack_windows.ps1 -Mode single -Shortcuts   # -> launcher/dist/DSV41 Single.exe
+powershell -File launcher/pack_windows.ps1 -Mode dual   -Shortcuts   # -> launcher/dist/DSV41 Dual.exe
 ```
 
 macOS (uses `codesign`, `hdiutil` and the Dock defaults, which ship with macOS):
