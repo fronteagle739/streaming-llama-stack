@@ -15341,7 +15341,7 @@
     "doc": "Expert-count upper bound for the host cache. On the single engine it optionally caps LLAMADECODE_HOST_CACHE_MB; unset leaves byte/physical admission authoritative.",
     "reads": [
       "engines/ds4-win/ds4_cuda.cu:5055",
-      "engines/streaming-llama/prefill_llama.cpp/src/llama-dsv41-weights.cpp:1465"
+      "engines/streaming-llama/prefill_llama.cpp/src/llama-dsv41-weights.cpp:1503"
     ],
     "defaults_by_scope": {
       "ds4-win": "0"
@@ -15354,7 +15354,7 @@
         "consumer": "static uint32_t cuda_stream_host_expert_cache_requested_budget(void) {\n    uint32_t cap = g_stream_host_expert_budget_override;\n    const char *env = getenv(\"DS4_CUDA_STREAMING_HOST_CACHE_N\");\n    if (env && env[0]) {\n        char *end = NULL;\n        errno = 0;\n        unsigned long v = strtoul(env, &end, 10);"
       },
       {
-        "source": "engines/streaming-llama/prefill_llama.cpp/src/llama-dsv41-weights.cpp:1465",
+        "source": "engines/streaming-llama/prefill_llama.cpp/src/llama-dsv41-weights.cpp:1503",
         "unset": "NULL from getenv; the literal consumer below supplies any fallback",
         "read": "const char*n=std::getenv(\"DS4_CUDA_STREAMING_HOST_CACHE_N\");",
         "consumer": "    require(p->pool_max_stride[0]==p->pool_max_stride[1],\"RAM expert gate/up geometry mismatch\");\n    const auto width=p->pool_max_stride[0]+p->pool_max_stride[1]+p->pool_max_stride[2];\n    const char*n=std::getenv(\"DS4_CUDA_STREAMING_HOST_CACHE_N\");\n    p->ring_width=width;p->ring_offset={0,p->pool_max_stride[0],p->pool_max_stride[0]+p->pool_max_stride[1]};\n    const bool rings=p->host_v2&&p->host_async_level()>=1;\n    // The pinned staging rings come out of the same admitted RAM as the tier.\n    uint64_t capped=rings?(offer>p->host_ring_bytes()?offer-p->host_ring_bytes():0):offer;"
@@ -56042,7 +56042,7 @@
     "reads": [
       "engines/streaming-llama/prefill_llama.cpp/ggml/src/ggml-cuda/ggml-cuda.cu:850",
       "engines/streaming-llama/prefill_llama.cpp/ggml/src/ggml-cuda/ggml-cuda.cu:7319",
-      "engines/streaming-llama/prefill_llama.cpp/src/llama-dsv41-weights.cpp:931"
+      "engines/streaming-llama/prefill_llama.cpp/src/llama-dsv41-weights.cpp:939"
     ],
     "code_defaults": [
       {
@@ -56058,7 +56058,7 @@
         "consumer": "\n    // Check if UMA is explicitly enabled via environment variable\n    bool uma_env = getenv(\"GGML_CUDA_ENABLE_UNIFIED_MEMORY\") != nullptr;\n    bool is_uma = prop.integrated > 0 || uma_env;\n\n    if (is_uma) {\n        // For UMA systems (like DGX Spark), use system memory info"
       },
       {
-        "source": "engines/streaming-llama/prefill_llama.cpp/src/llama-dsv41-weights.cpp:931",
+        "source": "engines/streaming-llama/prefill_llama.cpp/src/llama-dsv41-weights.cpp:939",
         "unset": "NULL from getenv; the literal consumer below supplies any fallback",
         "read": "require(!std::getenv(\"GGML_CUDA_ENABLE_UNIFIED_MEMORY\"),\"Unified CUDA memory is outside strict physical weight admission (including env value zero)\");",
         "consumer": "    require(!options.compute_direct||(options.buffers==2&&options.async_staging_drain&&options.auto_request_size&&!options.ds_gpu_ring_slots),\n        \"Direct compute requires two typed async banks without a ring\");\n    require(!std::getenv(\"GGML_CUDA_ENABLE_UNIFIED_MEMORY\"),\"Unified CUDA memory is outside strict physical weight admission (including env value zero)\");\n    require(ggml_backend_is_cuda(options.backend),\"V4.1 physical provider requires an actual CUDA backend\");\n    require(options.verified_sha256.size()==64&&options.verified_sha256.find_first_not_of(\"0123456789abcdef\")==std::string::npos&&options.verified_file_bytes>0,\"Completed file SHA256/identity receipt required\");\n    const char*device=ggml_backend_dev_description(ggml_backend_get_device(options.backend));\n    require(device&&*device,\"V4.1 streaming producer requires the explicitly admitted CUDA backend\");"
@@ -61392,11 +61392,11 @@
     ],
     "doc": "Diagnostic per-tensor file extents and byte counts for every acquired weight stage and router-driven expert read. Set 1 to enable; default 0.",
     "reads": [
-      "engines/streaming-llama/prefill_llama.cpp/src/llama-dsv41-weights.cpp:1001"
+      "engines/streaming-llama/prefill_llama.cpp/src/llama-dsv41-weights.cpp:1009"
     ],
     "code_defaults": [
       {
-        "source": "engines/streaming-llama/prefill_llama.cpp/src/llama-dsv41-weights.cpp:1001",
+        "source": "engines/streaming-llama/prefill_llama.cpp/src/llama-dsv41-weights.cpp:1009",
         "unset": "NULL from getenv; the literal consumer below supplies any fallback",
         "read": "const char*ledger=std::getenv(\"LLAMADECODE_BYTE_LEDGER\");p->byte_ledger=ledger&&!std::strcmp(ledger,\"1\");",
         "consumer": "    require(!p->tail_prefetch||(p->lazy_prefill&&p->options.compute_direct&&p->options.buffers==2&&\n        !p->options.ds_gpu_ring_slots&&!p->options.zero_padding_only),\"Tail prefetch requires routed strict two-bank prefill\");\n    const char*ledger=std::getenv(\"LLAMADECODE_BYTE_LEDGER\");p->byte_ledger=ledger&&!std::strcmp(ledger,\"1\");\n    require(!p->lazy_prefill||(p->options.compute_direct&&!p->options.ds_gpu_ring_slots&&!p->options.zero_padding_only),\n        \"Routed prefill requires direct compute banks without GPU ring or padding-only mode\");\n    wf_params params=wf_params_default();params.model_path=p->options.model_path.c_str();params.gpu_backend=p->options.backend;params.mode=WF_MODE_DSTORAGE;\n    params.n_layers=int(p->stage_count());params.n_gpu_buffers=int(p->options.buffers);params.max_layer_bytes=p->planned.maximum_stage_bytes;params.n_ram_buffers=0;"
@@ -61464,11 +61464,11 @@
     ],
     "doc": "Opt-in exact next-layer routed-tail hint. Default0. When1, one worker predicts at most24 experts from the first four current routing rows, only into the next layer>=21 already-ready other compute bank. Uses the existing two weight banks and adds8MiB host admission for its stack and bounded metadata. A matching stage/bank/pass generation and completed CPU storage/error checks plus a consumer CUDA fence are required before adoption; actual routing still fetches every missing expert. No arithmetic, token, raw-history or checkpoint changes. Failed hints fail the request; release/restart/destruction join the worker.",
     "reads": [
-      "engines/streaming-llama/prefill_llama.cpp/src/llama-dsv41-weights.cpp:936"
+      "engines/streaming-llama/prefill_llama.cpp/src/llama-dsv41-weights.cpp:944"
     ],
     "code_defaults": [
       {
-        "source": "engines/streaming-llama/prefill_llama.cpp/src/llama-dsv41-weights.cpp:936",
+        "source": "engines/streaming-llama/prefill_llama.cpp/src/llama-dsv41-weights.cpp:944",
         "unset": "NULL from getenv; the literal consumer below supplies any fallback",
         "read": "const char*tail=std::getenv(\"LLAMADECODE_CONE_TAIL_PREFETCH\");",
         "consumer": "    const char*device=ggml_backend_dev_description(ggml_backend_get_device(options.backend));\n    require(device&&*device,\"V4.1 streaming producer requires the explicitly admitted CUDA backend\");\n    const char*tail=std::getenv(\"LLAMADECODE_CONE_TAIL_PREFETCH\");\n    require(!tail||!std::strcmp(tail,\"0\")||!std::strcmp(tail,\"1\"),\"LLAMADECODE_CONE_TAIL_PREFETCH must be0 or1\");\n    p->tail_prefetch=tail&&!std::strcmp(tail,\"1\");\n    p->options=options;p->path=std::filesystem::u8path(options.model_path);\n    require(p->path.is_absolute()&&p->path==p->path.lexically_normal()&&p->path.has_filename()&&p->path.filename().wstring().find(L':')==std::wstring::npos,\"Model path must be a physical absolute file\");"
@@ -61798,14 +61798,14 @@
     ],
     "doc": "Producer early Engram loader: reads submitted per batch (1-4096, default 256, at most half the small-read budget).",
     "reads": [
-      "engines/streaming-llama/prefill_llama.cpp/src/llama-dsv41-engram-prefetch.cpp:327"
+      "engines/streaming-llama/prefill_llama.cpp/src/llama-dsv41-engram-prefetch.cpp:340"
     ],
     "code_defaults": [
       {
-        "source": "engines/streaming-llama/prefill_llama.cpp/src/llama-dsv41-engram-prefetch.cpp:327",
+        "source": "engines/streaming-llama/prefill_llama.cpp/src/llama-dsv41-engram-prefetch.cpp:340",
         "unset": "Wrapper/conditional default: see the literal call and consumer below",
         "read": "early_batch=std::min(env_u32(\"LLAMADECODE_ENGRAM_BATCH\",256,1,4096),std::max(1u,early_small/2));",
-        "consumer": "        early_small=uint32_t(std::min<uint64_t>(depth,(per-large_slot)/(small_slot+large_slot/16)));\n        early_large=std::max(1u,early_small/16);\n        early_batch=std::min(env_u32(\"LLAMADECODE_ENGRAM_BATCH\",256,1,4096),std::max(1u,early_small/2));\n        early_arena=uint64_t(early_rings)*(uint64_t(early_small)*small_slot+uint64_t(early_large)*large_slot);\n        host_plan=add(without,add(meta,early_arena));\n        require(host_plan<=admitted,\"Early Engram rows and IO arena exceed explicit host admission\");\n    }"
+        "consumer": "        early_small=uint32_t(std::min<uint64_t>(depth,(per-large_slot)/(small_slot+large_slot/16)));\n        early_large=std::max(1u,early_small/16);\n        early_batch=std::min(env_u32(\"LLAMADECODE_ENGRAM_BATCH\",256,1,4096),std::max(1u,early_small/2));\n        early_arena=uint64_t(early_rings)*(uint64_t(early_small)*small_slot+uint64_t(early_large)*large_slot);\n        large_bytes=large_slot;merge_gap=0;\n        choose_scan(admitted,without,meta);\n        host_plan=add(without,add(meta,early_arena));"
       }
     ],
     "code_default": "Wrapper/conditional default: see the literal call and consumer below"
@@ -61842,11 +61842,11 @@
     ],
     "doc": "Producer early Engram loader: queue depth per I/O ring (32-4096, default 1024).",
     "reads": [
-      "engines/streaming-llama/prefill_llama.cpp/src/llama-dsv41-engram-prefetch.cpp:316"
+      "engines/streaming-llama/prefill_llama.cpp/src/llama-dsv41-engram-prefetch.cpp:329"
     ],
     "code_defaults": [
       {
-        "source": "engines/streaming-llama/prefill_llama.cpp/src/llama-dsv41-engram-prefetch.cpp:316",
+        "source": "engines/streaming-llama/prefill_llama.cpp/src/llama-dsv41-engram-prefetch.cpp:329",
         "unset": "Wrapper/conditional default: see the literal call and consumer below",
         "read": "const uint32_t depth=env_u32(\"LLAMADECODE_ENGRAM_DEPTH\",1024,32,4096);",
         "consumer": "        early_mode=true;prior=std::move(prior_cache);\n        early_rings=env_u32(\"LLAMADECODE_ENGRAM_RINGS\",4,1,8);\n        const uint32_t depth=env_u32(\"LLAMADECODE_ENGRAM_DEPTH\",1024,32,4096);\n        const uint64_t rows=uint64_t(tables[0].ids.size())+tables[1].ids.size();\n        const uint64_t without=host_plan-4*1024*1024;\n        // Slot tables, plan state and (with a prior cache) the hit bitmaps.\n        const uint64_t meta=add(256*1024,add(uint64_t(early_rings)*(depth+depth/16+1)*64,prior||row_cache?rows/8+64:0));"
@@ -61871,7 +61871,7 @@
         "source": "engines/streaming-llama/prefill_llama.cpp/src/llama-dsv41-engram-prefetch.cpp:40",
         "unset": "NULL from getenv; the literal consumer below supplies any fallback",
         "read": "static const auto m=llama_dsv41_engram_early::parse_mode(std::getenv(\"LLAMADECODE_ENGRAM_EARLY\"));return m;",
-        "consumer": "}\nstatic llama_dsv41_engram_early::mode llama_dsv41_engram_early_mode(){\n    static const auto m=llama_dsv41_engram_early::parse_mode(std::getenv(\"LLAMADECODE_ENGRAM_EARLY\"));return m;\n}\nbool llama_dsv41_engram_early_enabled(){return llama_dsv41_engram_early_mode()!=llama_dsv41_engram_early::mode::off;}\nbool llama_dsv41_engram_early_auto(){return llama_dsv41_engram_early_mode()==llama_dsv41_engram_early::mode::automatic;}\nbool llama_dsv41_engram_early_pause(){return llama_dsv41_engram_early_mode()==llama_dsv41_engram_early::mode::pause;}"
+        "consumer": "}\nstatic llama_dsv41_engram_early::mode llama_dsv41_engram_early_mode(){\n    static const auto m=llama_dsv41_engram_early::parse_mode(std::getenv(\"LLAMADECODE_ENGRAM_EARLY\"));return m;\n}\nbool llama_dsv41_engram_whole_prompt(){\n    static const bool v=[]{const char*e=std::getenv(\"LLAMADECODE_ENGRAM_WHOLE_PROMPT\");\n        if(!e||!*e||!std::strcmp(e,\"1\"))return true;if(!std::strcmp(e,\"0\"))return false;"
       }
     ],
     "code_default": "NULL from getenv; the literal consumer below supplies any fallback"
@@ -61886,11 +61886,11 @@
     ],
     "doc": "Producer early Engram loader: modelled storage request rate used by the auto decision, requests/s in [1000, 1e8].",
     "reads": [
-      "engines/streaming-llama/prefill_llama.cpp/src/llama-dsv41-engram-prefetch.cpp:46"
+      "engines/streaming-llama/prefill_llama.cpp/src/llama-dsv41-engram-prefetch.cpp:51"
     ],
     "code_defaults": [
       {
-        "source": "engines/streaming-llama/prefill_llama.cpp/src/llama-dsv41-engram-prefetch.cpp:46",
+        "source": "engines/streaming-llama/prefill_llama.cpp/src/llama-dsv41-engram-prefetch.cpp:51",
         "unset": "NULL from getenv; the literal consumer below supplies any fallback",
         "read": "static const double v=llama_dsv41_engram_early::parse_iops(std::getenv(\"LLAMADECODE_ENGRAM_IOPS\"));return v;",
         "consumer": "bool llama_dsv41_engram_early_pause(){return llama_dsv41_engram_early_mode()==llama_dsv41_engram_early::mode::pause;}\ndouble llama_dsv41_engram_early_iops(){\n    static const double v=llama_dsv41_engram_early::parse_iops(std::getenv(\"LLAMADECODE_ENGRAM_IOPS\"));return v;\n}\nvoid llama_dsv41_engram_weight_stream(bool active){llama_dsv41_engram_weight_pass.store(active,std::memory_order_relaxed);}\n#ifdef _WIN32\n// Submit/cleanup contracts: https://learn.microsoft.com/windows/win32/api/ioringapi/nf-ioringapi-submitioring"
@@ -61908,18 +61908,18 @@
     ],
     "doc": "Producer prefill: low sets a low DirectStorage priority hint for Engram table reads; the default normal priority is measured faster (low priority starves the reads).",
     "reads": [
-      "engines/streaming-llama/prefill_llama.cpp/src/llama-dsv41-engram-prefetch.cpp:185",
-      "engines/streaming-llama/prefill_llama.cpp/src/llama-dsv41-engram-prefetch.cpp:420"
+      "engines/streaming-llama/prefill_llama.cpp/src/llama-dsv41-engram-prefetch.cpp:198",
+      "engines/streaming-llama/prefill_llama.cpp/src/llama-dsv41-engram-prefetch.cpp:489"
     ],
     "code_defaults": [
       {
-        "source": "engines/streaming-llama/prefill_llama.cpp/src/llama-dsv41-engram-prefetch.cpp:185",
+        "source": "engines/streaming-llama/prefill_llama.cpp/src/llama-dsv41-engram-prefetch.cpp:198",
         "unset": "NULL from getenv; the literal consumer below supplies any fallback",
         "read": "const char*e=std::getenv(\"LLAMADECODE_ENGRAM_IO_PRIORITY\");",
         "consumer": "            // DirectStorage streaming only if LLAMADECODE_ENGRAM_IO_PRIORITY=low (measured: low priority starves\n            // the reads, 43K layers 123 s vs 33 s; default stays normal).\n            const char*e=std::getenv(\"LLAMADECODE_ENGRAM_IO_PRIORITY\");\n            FILE_IO_PRIORITY_HINT_INFO hint{};hint.PriorityHint=e&&!std::strcmp(e,\"low\")?IoPriorityHintLow:IoPriorityHintNormal; /* low measured 123 s vs 33 s (starved); normal is the default */\n            const BOOL ok=SetFileInformationByHandle(io.file,FileIoPriorityHintInfo,&hint,sizeof(hint));\n            static bool logged=false;if(!logged){logged=true;std::fprintf(stderr,\"LLAMADECODE_ENGRAM_IO_PRIORITY hint=%s applied=%d\\n\",hint.PriorityHint==IoPriorityHintLow?\"low\":\"normal\",int(ok));}\n        }"
       },
       {
-        "source": "engines/streaming-llama/prefill_llama.cpp/src/llama-dsv41-engram-prefetch.cpp:420",
+        "source": "engines/streaming-llama/prefill_llama.cpp/src/llama-dsv41-engram-prefetch.cpp:489",
         "unset": "NULL from getenv; the literal consumer below supplies any fallback",
         "read": "{   const char*e=std::getenv(\"LLAMADECODE_ENGRAM_IO_PRIORITY\");",
         "consumer": "                         engram_read_alignment(),storage.LogicalBytesPerSector,storage.PhysicalBytesPerSectorForPerformance);\n        }\n        {   const char*e=std::getenv(\"LLAMADECODE_ENGRAM_IO_PRIORITY\");\n            FILE_IO_PRIORITY_HINT_INFO hint{};hint.PriorityHint=e&&!std::strcmp(e,\"low\")?IoPriorityHintLow:IoPriorityHintNormal;\n            const BOOL ok=SetFileInformationByHandle(io.file,FileIoPriorityHintInfo,&hint,sizeof(hint));\n            std::fprintf(stderr,\"LLAMADECODE_ENGRAM_IO_PRIORITY hint=%s applied=%d early=1\\n\",hint.PriorityHint==IoPriorityHintLow?\"low\":\"normal\",int(ok));\n        }"
@@ -61964,17 +61964,187 @@
     ],
     "doc": "Producer early Engram loader: number of I/O rings (1-8, default 4).",
     "reads": [
-      "engines/streaming-llama/prefill_llama.cpp/src/llama-dsv41-engram-prefetch.cpp:315"
+      "engines/streaming-llama/prefill_llama.cpp/src/llama-dsv41-engram-prefetch.cpp:328"
     ],
     "code_defaults": [
       {
-        "source": "engines/streaming-llama/prefill_llama.cpp/src/llama-dsv41-engram-prefetch.cpp:315",
+        "source": "engines/streaming-llama/prefill_llama.cpp/src/llama-dsv41-engram-prefetch.cpp:328",
         "unset": "Wrapper/conditional default: see the literal call and consumer below",
         "read": "early_rings=env_u32(\"LLAMADECODE_ENGRAM_RINGS\",4,1,8);",
         "consumer": "        prepare(layout,tokens,count,offsets,admitted,initial,text_mask); // host_plan holds the fixed 4 MiB IO reserve\n        early_mode=true;prior=std::move(prior_cache);\n        early_rings=env_u32(\"LLAMADECODE_ENGRAM_RINGS\",4,1,8);\n        const uint32_t depth=env_u32(\"LLAMADECODE_ENGRAM_DEPTH\",1024,32,4096);\n        const uint64_t rows=uint64_t(tables[0].ids.size())+tables[1].ids.size();\n        const uint64_t without=host_plan-4*1024*1024;\n        // Slot tables, plan state and (with a prior cache) the hit bitmaps."
       }
     ],
     "code_default": "Wrapper/conditional default: see the literal call and consumer below"
+  },
+  {
+    "var": "LLAMADECODE_ENGRAM_SCAN",
+    "flag": "--llamadecode-engram-scan",
+    "default": null,
+    "classification": "advanced",
+    "scopes": [
+      "rtx-llama"
+    ],
+    "doc": "PAIRFIX: Engram read geometry. auto (default) reads a dense prompt row set as large sequential extents (gap-tolerant merge, the same rows and bytes copied) when bytes / LLAMADECODE_ENGRAM_SCAN_GBPS beats requests / LLAMADECODE_ENGRAM_IOPS; 0 keeps one random read per row; 1 forces the scan. Measured 200K real text: 2.97M random reads in 26.7 s -> 24K x 8 MiB reads in 17 s, logits bit-identical.",
+    "reads": [
+      "engines/streaming-llama/prefill_llama.cpp/src/llama-dsv41-engram-prefetch.cpp:362"
+    ],
+    "code_defaults": [
+      {
+        "source": "engines/streaming-llama/prefill_llama.cpp/src/llama-dsv41-engram-prefetch.cpp:362",
+        "unset": "NULL from getenv; the literal consumer below supplies any fallback",
+        "read": "const char*e=std::getenv(\"LLAMADECODE_ENGRAM_SCAN\");",
+        "consumer": "    // reads take 26 s, while both 101 GB tables stream in ~10-13 s.\n    void choose_scan(uint64_t admitted,uint64_t without,uint64_t meta){\n        const char*e=std::getenv(\"LLAMADECODE_ENGRAM_SCAN\");\n        const bool off=e&&!std::strcmp(e,\"0\"),forced=e&&!std::strcmp(e,\"1\");\n        require(!e||!*e||off||forced||!std::strcmp(e,\"auto\"),\"LLAMADECODE_ENGRAM_SCAN must be 0, 1 or auto\");\n        if(off)return;\n        const uint32_t kib=env_u32(\"LLAMADECODE_ENGRAM_SCAN_KIB\",1024,256,32768);"
+      }
+    ],
+    "code_default": "NULL from getenv; the literal consumer below supplies any fallback",
+    "defaults_by_scope": {},
+    "allowed_values": [
+      "auto",
+      "0",
+      "1"
+    ]
+  },
+  {
+    "var": "LLAMADECODE_ENGRAM_SCAN_DEPTH",
+    "flag": "--llamadecode-engram-scan-depth",
+    "default": null,
+    "classification": "advanced",
+    "scopes": [
+      "rtx-llama"
+    ],
+    "doc": "PAIRFIX: large read slots per Engram scan ring (default 16, 2-256); reduced to fit the Engram host admission, never silently (LLAMADECODE_ENGRAM_GEOMETRY reports it).",
+    "reads": [
+      "engines/streaming-llama/prefill_llama.cpp/src/llama-dsv41-engram-prefetch.cpp:384"
+    ],
+    "code_defaults": [
+      {
+        "source": "engines/streaming-llama/prefill_llama.cpp/src/llama-dsv41-engram-prefetch.cpp:384",
+        "unset": "Wrapper/conditional default: see the literal call and consumer below",
+        "read": "uint32_t slots=env_u32(\"LLAMADECODE_ENGRAM_SCAN_DEPTH\",64,2,256);",
+        "consumer": "        const bool want=forced||geometry_scan_s<geometry_random_s;\n        const uint32_t rings=env_u32(\"LLAMADECODE_ENGRAM_SCAN_RINGS\",4,1,8);\n        uint32_t slots=env_u32(\"LLAMADECODE_ENGRAM_SCAN_DEPTH\",64,2,256);\n        constexpr uint32_t scan_small=64;\n        auto arena=[&](uint32_t n){return uint64_t(rings)*(uint64_t(scan_small)*small_slot+uint64_t(n)*scan_cap);};\n        // Fit the admission; never silently: the geometry line reports it.\n        while(want&&slots>2&&add(without,add(meta,arena(slots)))>admitted)--slots;"
+      }
+    ],
+    "code_default": "Wrapper/conditional default: see the literal call and consumer below",
+    "defaults_by_scope": {}
+  },
+  {
+    "var": "LLAMADECODE_ENGRAM_SCAN_GAP_KIB",
+    "flag": "--llamadecode-engram-scan-gap-kib",
+    "default": null,
+    "classification": "advanced",
+    "scopes": [
+      "rtx-llama"
+    ],
+    "doc": "PAIRFIX: Engram scan merge tolerance in KiB (default: the extent size, reading straight through); a gap wider than this starts a new read.",
+    "reads": [
+      "engines/streaming-llama/prefill_llama.cpp/src/llama-dsv41-engram-prefetch.cpp:372"
+    ],
+    "code_defaults": [
+      {
+        "source": "engines/streaming-llama/prefill_llama.cpp/src/llama-dsv41-engram-prefetch.cpp:372",
+        "unset": "Wrapper/conditional default: see the literal call and consumer below",
+        "read": "const uint64_t scan_gap=uint64_t(env_u32(\"LLAMADECODE_ENGRAM_SCAN_GAP_KIB\",64,4,32768))*1024;",
+        "consumer": "        // cand4): 8 MiB straight-through extents read 200.8 GB, prompt 46.57 s;\n        // 1 MiB extents with a 64 KiB gap read 119.9 GB, prompt 44.44 s.\n        const uint64_t scan_gap=uint64_t(env_u32(\"LLAMADECODE_ENGRAM_SCAN_GAP_KIB\",64,4,32768))*1024;\n        const char*g=std::getenv(\"LLAMADECODE_ENGRAM_SCAN_GBPS\");\n        double gbps=15.0;\n        if(g&&*g){char*end=nullptr;gbps=std::strtod(g,&end);require(end&&!*end&&gbps>=0.5&&gbps<=100,\"LLAMADECODE_ENGRAM_SCAN_GBPS must be 0.5-100\");}\n        uint64_t random_bytes=0;"
+      }
+    ],
+    "code_default": "Wrapper/conditional default: see the literal call and consumer below",
+    "defaults_by_scope": {}
+  },
+  {
+    "var": "LLAMADECODE_ENGRAM_SCAN_GBPS",
+    "flag": "--llamadecode-engram-scan-gbps",
+    "default": null,
+    "classification": "advanced",
+    "scopes": [
+      "rtx-llama"
+    ],
+    "doc": "PAIRFIX: sequential read rate the Engram scan decision assumes, GB/s (default 15; measured 15-22 on the RTX model volume).",
+    "reads": [
+      "engines/streaming-llama/prefill_llama.cpp/src/llama-dsv41-engram-prefetch.cpp:373"
+    ],
+    "code_defaults": [
+      {
+        "source": "engines/streaming-llama/prefill_llama.cpp/src/llama-dsv41-engram-prefetch.cpp:373",
+        "unset": "NULL from getenv; the literal consumer below supplies any fallback",
+        "read": "const char*g=std::getenv(\"LLAMADECODE_ENGRAM_SCAN_GBPS\");",
+        "consumer": "        // 1 MiB extents with a 64 KiB gap read 119.9 GB, prompt 44.44 s.\n        const uint64_t scan_gap=uint64_t(env_u32(\"LLAMADECODE_ENGRAM_SCAN_GAP_KIB\",64,4,32768))*1024;\n        const char*g=std::getenv(\"LLAMADECODE_ENGRAM_SCAN_GBPS\");\n        double gbps=15.0;\n        if(g&&*g){char*end=nullptr;gbps=std::strtod(g,&end);require(end&&!*end&&gbps>=0.5&&gbps<=100,\"LLAMADECODE_ENGRAM_SCAN_GBPS must be 0.5-100\");}\n        uint64_t random_bytes=0;\n        plan_geometry(llama_dsv41_engram_plan::default_merge_cap,0,geometry_random_requests,random_bytes);"
+      }
+    ],
+    "code_default": "NULL from getenv; the literal consumer below supplies any fallback",
+    "defaults_by_scope": {}
+  },
+  {
+    "var": "LLAMADECODE_ENGRAM_SCAN_KIB",
+    "flag": "--llamadecode-engram-scan-kib",
+    "default": null,
+    "classification": "advanced",
+    "scopes": [
+      "rtx-llama"
+    ],
+    "doc": "PAIRFIX: largest Engram scan extent in KiB (default 8192, 256-32768, multiple of 4).",
+    "reads": [
+      "engines/streaming-llama/prefill_llama.cpp/src/llama-dsv41-engram-prefetch.cpp:366"
+    ],
+    "code_defaults": [
+      {
+        "source": "engines/streaming-llama/prefill_llama.cpp/src/llama-dsv41-engram-prefetch.cpp:366",
+        "unset": "Wrapper/conditional default: see the literal call and consumer below",
+        "read": "const uint32_t kib=env_u32(\"LLAMADECODE_ENGRAM_SCAN_KIB\",1024,256,32768);",
+        "consumer": "        require(!e||!*e||off||forced||!std::strcmp(e,\"auto\"),\"LLAMADECODE_ENGRAM_SCAN must be 0, 1 or auto\");\n        if(off)return;\n        const uint32_t kib=env_u32(\"LLAMADECODE_ENGRAM_SCAN_KIB\",1024,256,32768);\n        require(kib%4==0,\"LLAMADECODE_ENGRAM_SCAN_KIB must be a multiple of 4\");\n        const uint32_t scan_cap=kib*1024;\n        // Merge tolerance. Defaults measured at 200K real text (PAIRFIX cand3 vs\n        // cand4): 8 MiB straight-through extents read 200.8 GB, prompt 46.57 s;"
+      }
+    ],
+    "code_default": "Wrapper/conditional default: see the literal call and consumer below",
+    "defaults_by_scope": {}
+  },
+  {
+    "var": "LLAMADECODE_ENGRAM_SCAN_RINGS",
+    "flag": "--llamadecode-engram-scan-rings",
+    "default": null,
+    "classification": "advanced",
+    "scopes": [
+      "rtx-llama"
+    ],
+    "doc": "PAIRFIX: IoRings used by the Engram scan (default 2, 1-8).",
+    "reads": [
+      "engines/streaming-llama/prefill_llama.cpp/src/llama-dsv41-engram-prefetch.cpp:383"
+    ],
+    "code_defaults": [
+      {
+        "source": "engines/streaming-llama/prefill_llama.cpp/src/llama-dsv41-engram-prefetch.cpp:383",
+        "unset": "Wrapper/conditional default: see the literal call and consumer below",
+        "read": "const uint32_t rings=env_u32(\"LLAMADECODE_ENGRAM_SCAN_RINGS\",4,1,8);",
+        "consumer": "        geometry_scan_s=std::max(double(geometry_scan_bytes)/(gbps*1e9),double(geometry_scan_requests)/llama_dsv41_engram_early_iops());\n        const bool want=forced||geometry_scan_s<geometry_random_s;\n        const uint32_t rings=env_u32(\"LLAMADECODE_ENGRAM_SCAN_RINGS\",4,1,8);\n        uint32_t slots=env_u32(\"LLAMADECODE_ENGRAM_SCAN_DEPTH\",64,2,256);\n        constexpr uint32_t scan_small=64;\n        auto arena=[&](uint32_t n){return uint64_t(rings)*(uint64_t(scan_small)*small_slot+uint64_t(n)*scan_cap);};\n        // Fit the admission; never silently: the geometry line reports it."
+      }
+    ],
+    "code_default": "Wrapper/conditional default: see the literal call and consumer below",
+    "defaults_by_scope": {}
+  },
+  {
+    "var": "LLAMADECODE_ENGRAM_WHOLE_PROMPT",
+    "flag": "--llamadecode-engram-whole-prompt",
+    "default": null,
+    "classification": "advanced",
+    "scopes": [
+      "rtx-llama"
+    ],
+    "doc": "PAIRFIX: 1 (default) makes the early Engram load cover every sweep of a multi-sweep prompt; later sweeps reuse those rows (no Engram reads). The slstack planner admits the whole prompt's rows outside the sweep-capacity search, within physical RAM. 0 restores one load per sweep.",
+    "reads": [
+      "engines/streaming-llama/prefill_llama.cpp/src/llama-dsv41-engram-prefetch.cpp:43"
+    ],
+    "code_defaults": [
+      {
+        "source": "engines/streaming-llama/prefill_llama.cpp/src/llama-dsv41-engram-prefetch.cpp:43",
+        "unset": "NULL from getenv; the literal consumer below supplies any fallback",
+        "read": "static const bool v=[]{const char*e=std::getenv(\"LLAMADECODE_ENGRAM_WHOLE_PROMPT\");",
+        "consumer": "}\nbool llama_dsv41_engram_whole_prompt(){\n    static const bool v=[]{const char*e=std::getenv(\"LLAMADECODE_ENGRAM_WHOLE_PROMPT\");\n        if(!e||!*e||!std::strcmp(e,\"1\"))return true;if(!std::strcmp(e,\"0\"))return false;\n        throw std::invalid_argument(\"LLAMADECODE_ENGRAM_WHOLE_PROMPT must be 0 or 1\");}();return v;\n}\nbool llama_dsv41_engram_early_enabled(){return llama_dsv41_engram_early_mode()!=llama_dsv41_engram_early::mode::off;}"
+      }
+    ],
+    "code_default": "NULL from getenv; the literal consumer below supplies any fallback",
+    "defaults_by_scope": {},
+    "allowed_values": [
+      "1",
+      "0"
+    ]
   },
   {
     "var": "LLAMADECODE_GRAPH_MATERIALIZE_PLAN",
@@ -62091,7 +62261,7 @@
     ],
     "doc": "Single-engine locked RAM expert tier after VRAM L1/L2. 0 disables; auto uses admitted physical/process headroom; integer MiB is an upper bound. Bounded hot-set admission avoids continuous GPU victim writeback. Keeps the runtime floor plus 512 MiB desktop reserve and 256 MiB margin; drops before append prefill. See LLAMADECODE_HOST_MODE for upload/CPU service.",
     "reads": [
-      "engines/streaming-llama/prefill_llama.cpp/src/llama-dsv41-weights.cpp:1446",
+      "engines/streaming-llama/prefill_llama.cpp/src/llama-dsv41-weights.cpp:1484",
       "engines/streaming-llama/prefill_llama.cpp/tools/dsv41-prefill/live-session.inc:282"
     ],
     "defaults_by_scope": {
@@ -62099,7 +62269,7 @@
     },
     "code_defaults": [
       {
-        "source": "engines/streaming-llama/prefill_llama.cpp/src/llama-dsv41-weights.cpp:1446",
+        "source": "engines/streaming-llama/prefill_llama.cpp/src/llama-dsv41-weights.cpp:1484",
         "unset": "NULL from getenv; the literal consumer below supplies any fallback",
         "read": "const char*e=std::getenv(\"LLAMADECODE_HOST_CACHE_MB\");",
         "consumer": "    p->host=api;if(api2&&api2->payload&&api2->store_host){p->host2=*api2;p->host_v2=true;}if(p->host_slots)return;\n#ifdef _WIN32\n    const char*e=std::getenv(\"LLAMADECODE_HOST_CACHE_MB\");\n    // Qualification decides the shipping default. An explicit auto uses all\n    // admitted headroom, an integer is an exact upper bound, and 0 is off.\n    if(!e||!e[0]||!std::strcmp(e,\"0\"))return;\n    uint64_t requested=UINT64_MAX;"
@@ -62268,12 +62438,12 @@
     ],
     "doc": "Optional single-engine VRAM L2 slot upper bound. Useful for reproducible tier comparisons; physical VRAM admission remains authoritative. Unset uses all admitted slots.",
     "reads": [
-      "engines/streaming-llama/prefill_llama.cpp/src/llama-dsv41-weights.cpp:1487"
+      "engines/streaming-llama/prefill_llama.cpp/src/llama-dsv41-weights.cpp:1525"
     ],
     "defaults_by_scope": {},
     "code_defaults": [
       {
-        "source": "engines/streaming-llama/prefill_llama.cpp/src/llama-dsv41-weights.cpp:1487",
+        "source": "engines/streaming-llama/prefill_llama.cpp/src/llama-dsv41-weights.cpp:1525",
         "unset": "NULL from getenv; the literal consumer below supplies any fallback",
         "read": "if(const char*e=std::getenv(\"LLAMADECODE_L2_MAX_SLOTS\")){",
         "consumer": "    const uint64_t slot_bytes=p->pool_max_stride[0]+p->pool_max_stride[1]+p->pool_max_stride[2];\n    uint32_t n=uint32_t(std::min<uint64_t>(bytes/slot_bytes,40ull*384-p->pool_slots));*slots=0;\n    if(const char*e=std::getenv(\"LLAMADECODE_L2_MAX_SLOTS\")){\n        char*end=nullptr;errno=0;const auto cap=std::strtoul(e,&end,10);\n        require(*e&&*e!='-'&&!errno&&end!=e&&!*end&&cap<=40u*384u,\"Invalid LLAMADECODE_L2_MAX_SLOTS\");\n        n=std::min(n,uint32_t(cap));\n    }"
@@ -62436,11 +62606,11 @@
     ],
     "doc": "Router-driven prefill expert reads: 0 off, 1 all layers, tail layers21-39. The single-engine launcher selects1 automatically for ULTRA prompts through2048 rows and tail with yoco_keep2541; larger full-layer passes retain overlapped eager reads. Explicit overrides win.",
     "reads": [
-      "engines/streaming-llama/prefill_llama.cpp/src/llama-dsv41-weights.cpp:996"
+      "engines/streaming-llama/prefill_llama.cpp/src/llama-dsv41-weights.cpp:1004"
     ],
     "code_defaults": [
       {
-        "source": "engines/streaming-llama/prefill_llama.cpp/src/llama-dsv41-weights.cpp:996",
+        "source": "engines/streaming-llama/prefill_llama.cpp/src/llama-dsv41-weights.cpp:1004",
         "unset": "NULL from getenv; the literal consumer below supplies any fallback",
         "read": "const char*lazy=std::getenv(\"LLAMADECODE_PREFILL_ROUTED\");",
         "consumer": "#else\n    auto*p=this;\n    const char*lazy=std::getenv(\"LLAMADECODE_PREFILL_ROUTED\");\n    require(!lazy||!std::strcmp(lazy,\"0\")||!std::strcmp(lazy,\"1\")||!std::strcmp(lazy,\"tail\"),\"LLAMADECODE_PREFILL_ROUTED must be0,1 or tail\");\n    p->lazy_prefill=lazy&&std::strcmp(lazy,\"0\");p->lazy_from_layer=lazy&&!std::strcmp(lazy,\"tail\")?21:0;\n    require(!p->tail_prefetch||(p->lazy_prefill&&p->options.compute_direct&&p->options.buffers==2&&\n        !p->options.ds_gpu_ring_slots&&!p->options.zero_padding_only),\"Tail prefetch requires routed strict two-bank prefill\");"
@@ -67862,11 +68032,11 @@
     ],
     "doc": "Producer prefill: Engram table read start policy; built-in default retained.",
     "reads": [
-      "engines/streaming-llama/prefill_llama.cpp/tools/dsv41-prefill/main.cpp:974"
+      "engines/streaming-llama/prefill_llama.cpp/tools/dsv41-prefill/main.cpp:976"
     ],
     "code_defaults": [
       {
-        "source": "engines/streaming-llama/prefill_llama.cpp/tools/dsv41-prefill/main.cpp:974",
+        "source": "engines/streaming-llama/prefill_llama.cpp/tools/dsv41-prefill/main.cpp:976",
         "unset": "NULL from getenv; the literal consumer below supplies any fallback",
         "read": "const char*early_direct=std::getenv(\"LLAMA_DSV41_ENGRAM_EARLY_DIRECT\");",
         "consumer": "        // load (7.9 s at 43K) left a 7.4 s join wait and prefill fell to 1,052 tok/s,\n        // against 1,238 tok/s with the ordinary layer-0 overlapped load. Opt-in only.\n        const char*early_direct=std::getenv(\"LLAMA_DSV41_ENGRAM_EARLY_DIRECT\");\n        if(!(engram_early_cold&&sweep->early_engram_queued())&&direct_open&&early_direct&&std::strcmp(early_direct,\"1\")==0){const char*overlap=std::getenv(\"LLAMA_DSV41_ENGRAM_PROMPT_OVERLAP\");\n            if(weights.engram_prefetch_host_bytes&&options.engram_tile_lookahead&&overlap&&std::strcmp(overlap,\"1\")==0){\n                const std::vector<int32_t> first(tokens.begin(),tokens.begin()+first_sweep_tokens);\n                success(sweep->start_next_engram(first,early_tail,error),error);"
@@ -67912,11 +68082,11 @@
     "doc": "LLAMA_DSV41_ENGRAM_PROMPT_OVERLAP: qualified preset/runtime setting; override for a different memory or arithmetic plan",
     "reads": [
       "engines/streaming-llama/prefill_llama.cpp/src/llama-dsv41-sweep.cpp:731",
-      "engines/streaming-llama/prefill_llama.cpp/src/llama-dsv41-weights.cpp:1163",
-      "engines/streaming-llama/prefill_llama.cpp/src/llama-dsv41-weights.cpp:1188",
-      "engines/streaming-llama/prefill_llama.cpp/src/llama-dsv41-weights.cpp:1209",
+      "engines/streaming-llama/prefill_llama.cpp/src/llama-dsv41-weights.cpp:1178",
+      "engines/streaming-llama/prefill_llama.cpp/src/llama-dsv41-weights.cpp:1207",
+      "engines/streaming-llama/prefill_llama.cpp/src/llama-dsv41-weights.cpp:1228",
       "engines/streaming-llama/prefill_llama.cpp/tools/dsv41-prefill/main.cpp:937",
-      "engines/streaming-llama/prefill_llama.cpp/tools/dsv41-prefill/main.cpp:975"
+      "engines/streaming-llama/prefill_llama.cpp/tools/dsv41-prefill/main.cpp:977"
     ],
     "defaults_by_scope": {
       "rtx-llama": "1"
@@ -67929,22 +68099,22 @@
         "consumer": "        const auto schedule=llama_dsv41_plan_append(p->options.pair_ffn,p->options.carry.max_tile_tokens,p->options.compute_step_tokens,p->position_offset,p->options.unaligned_append_step_tokens);\n        const uint32_t compute_step=schedule.step;\n        const char*engram_overlap_env=std::getenv(\"LLAMA_DSV41_ENGRAM_PROMPT_OVERLAP\");\n        const bool engram_overlap=(!p->options.images||p->options.engram_tile_lookahead)&&engram_overlap_env&&std::strcmp(engram_overlap_env,\"1\")==0;\n        require(!engram_overlap||p->options.engram_tile_lookahead,\"Engram prompt overlap requires the existing lookahead worker\");\n        std::vector<uint8_t>text_mask;\n        if(p->options.images){"
       },
       {
-        "source": "engines/streaming-llama/prefill_llama.cpp/src/llama-dsv41-weights.cpp:1163",
+        "source": "engines/streaming-llama/prefill_llama.cpp/src/llama-dsv41-weights.cpp:1178",
         "unset": "NULL from getenv; the literal consumer below supplies any fallback",
         "read": "const char*overlap=std::getenv(\"LLAMA_DSV41_ENGRAM_PROMPT_OVERLAP\");",
         "consumer": "    if(!llama_dsv41_engram_early_enabled()||p->options.engram_early_tokens.empty())return;\n    require(p->options.engram_prefetch_host_bytes&&p->inspected&&!p->allocated&&!p->early,\"Cold early Engram start requires an inspected, admitted, unallocated provider\");\n    const char*overlap=std::getenv(\"LLAMA_DSV41_ENGRAM_PROMPT_OVERLAP\");\n    if(llama_dsv41_engram_early_auto()&&!(overlap&&std::strcmp(overlap,\"1\")==0)){\n        llama_dsv41_layer_log(\"LLAMADECODE_ENGRAM_EARLY_DECISION at=cold_before_wf_start tokens=%zu early=0 reason=prompt_overlap_off\\n\",p->options.engram_early_tokens.size());return;}\n    require(overlap&&std::strcmp(overlap,\"1\")==0,\"LLAMADECODE_ENGRAM_EARLY requires LLAMA_DSV41_ENGRAM_PROMPT_OVERLAP=1 (per-table adoption)\");\n    const auto&tokens=p->options.engram_early_tokens;const auto&tail=p->options.engram_early_tail;"
       },
       {
-        "source": "engines/streaming-llama/prefill_llama.cpp/src/llama-dsv41-weights.cpp:1188",
+        "source": "engines/streaming-llama/prefill_llama.cpp/src/llama-dsv41-weights.cpp:1207",
         "unset": "NULL from getenv; the literal consumer below supplies any fallback",
         "read": "const char*overlap=std::getenv(\"LLAMA_DSV41_ENGRAM_PROMPT_OVERLAP\");",
         "consumer": "bool llama_dsv41_weight_provider::start_engram_append(const std::vector<int32_t>&tokens,llama_dsv41::engram_history initial,double gap_s,std::string&error){return p->guard([&]{\n    require(llama_dsv41_engram_early_enabled(),\"Append early Engram start requires LLAMADECODE_ENGRAM_EARLY=1 or auto\");\n    const char*overlap=std::getenv(\"LLAMA_DSV41_ENGRAM_PROMPT_OVERLAP\");\n    if(llama_dsv41_engram_early_auto()&&(!(overlap&&std::strcmp(overlap,\"1\")==0)||!p->options.engram_prefetch_host_bytes)){\n        llama_dsv41_layer_log(\"LLAMADECODE_ENGRAM_EARLY_DECISION at=append_tokens_arrived tokens=%zu early=0 reason=%s\\n\",tokens.size(),\n            p->options.engram_prefetch_host_bytes?\"prompt_overlap_off\":\"no_engram_prefetch\");return;}\n    require(overlap&&std::strcmp(overlap,\"1\")==0,\"LLAMADECODE_ENGRAM_EARLY requires LLAMA_DSV41_ENGRAM_PROMPT_OVERLAP=1 (per-table adoption)\");"
       },
       {
-        "source": "engines/streaming-llama/prefill_llama.cpp/src/llama-dsv41-weights.cpp:1209",
+        "source": "engines/streaming-llama/prefill_llama.cpp/src/llama-dsv41-weights.cpp:1228",
         "unset": "NULL from getenv; the literal consumer below supplies any fallback",
         "read": "const char*overlap=std::getenv(\"LLAMA_DSV41_ENGRAM_PROMPT_OVERLAP\");",
-        "consumer": "bool llama_dsv41_weight_provider::prepare_engram_prompt(const std::vector<int32_t>&tokens,const std::function<bool()>&stop,std::string&error,llama_dsv41::engram_history initial,const uint8_t* text_mask){return p->guard([&]{\n    if(!p->options.engram_prefetch_host_bytes)return;\n    const char*overlap=std::getenv(\"LLAMA_DSV41_ENGRAM_PROMPT_OVERLAP\");\n    const bool during_layer_zero=overlap&&std::strcmp(overlap,\"1\")==0&&p->leased&&p->next==1;\n    require(p->allocated&&((!p->leased&&p->next==0)||during_layer_zero)&&!p->engram_prompt&&tokens.size()==p->options.engram_prefetch_tokens,\n        \"Engram whole-prompt cache requires its initial or explicitly overlapped layer-zero lease\");p->identity();\n    if(p->early&&p->early->tokens==tokens){"
+        "consumer": "bool llama_dsv41_weight_provider::prepare_engram_prompt(const std::vector<int32_t>&tokens,const std::function<bool()>&stop,std::string&error,llama_dsv41::engram_history initial,const uint8_t* text_mask){return p->guard([&]{\n    if(!p->options.engram_prefetch_host_bytes)return;\n    const char*overlap=std::getenv(\"LLAMA_DSV41_ENGRAM_PROMPT_OVERLAP\");\n    const bool during_layer_zero=overlap&&std::strcmp(overlap,\"1\")==0&&p->leased&&p->next==1;\n    require(p->allocated&&((!p->leased&&p->next==0)||during_layer_zero)&&!p->engram_prompt&&tokens.size()==p->options.engram_prefetch_tokens,\n        \"Engram whole-prompt cache requires its initial or explicitly overlapped layer-zero lease\");p->identity();\n    if(p->whole_covers(tokens)&&!text_mask){"
       },
       {
         "source": "engines/streaming-llama/prefill_llama.cpp/tools/dsv41-prefill/main.cpp:937",
@@ -67953,7 +68123,7 @@
         "consumer": "            // DS4COMBO producer-warm: the prompt's tokens are known now, so its\n            // Engram rows load on their own IoRing during this warmup pass.\n            {const char*overlap=std::getenv(\"LLAMA_DSV41_ENGRAM_PROMPT_OVERLAP\");\n             // Auto (or a skipped =1 start) that queued nothing: the ordinary producer-warm start.\n             if(!(engram_early&&warm_request->early_engram_queued())&&weights.engram_prefetch_host_bytes&&options.engram_tile_lookahead&&overlap&&std::strcmp(overlap,\"1\")==0){\n                const std::vector<int32_t> first(tokens.begin(),tokens.begin()+first_sweep_tokens);\n                std::vector<int32_t> tail;"
       },
       {
-        "source": "engines/streaming-llama/prefill_llama.cpp/tools/dsv41-prefill/main.cpp:975",
+        "source": "engines/streaming-llama/prefill_llama.cpp/tools/dsv41-prefill/main.cpp:977",
         "unset": "NULL from getenv; the literal consumer below supplies any fallback",
         "read": "if(!(engram_early_cold&&sweep->early_engram_queued())&&direct_open&&early_direct&&std::strcmp(early_direct,\"1\")==0){const char*overlap=std::getenv(\"LLAMA_DSV41_ENGRAM_PROMPT_OVERLAP\");",
         "consumer": "        // against 1,238 tok/s with the ordinary layer-0 overlapped load. Opt-in only.\n        const char*early_direct=std::getenv(\"LLAMA_DSV41_ENGRAM_EARLY_DIRECT\");\n        if(!(engram_early_cold&&sweep->early_engram_queued())&&direct_open&&early_direct&&std::strcmp(early_direct,\"1\")==0){const char*overlap=std::getenv(\"LLAMA_DSV41_ENGRAM_PROMPT_OVERLAP\");\n            if(weights.engram_prefetch_host_bytes&&options.engram_tile_lookahead&&overlap&&std::strcmp(overlap,\"1\")==0){\n                const std::vector<int32_t> first(tokens.begin(),tokens.begin()+first_sweep_tokens);\n                success(sweep->start_next_engram(first,early_tail,error),error);\n            }}"
@@ -67971,11 +68141,11 @@
     ],
     "doc": "LLAMA_DSV41_ENGRAM_SUBMIT_BATCH: advanced engine setting; built-in default retained",
     "reads": [
-      "engines/streaming-llama/prefill_llama.cpp/src/llama-dsv41-engram-prefetch.cpp:235"
+      "engines/streaming-llama/prefill_llama.cpp/src/llama-dsv41-engram-prefetch.cpp:248"
     ],
     "code_defaults": [
       {
-        "source": "engines/streaming-llama/prefill_llama.cpp/src/llama-dsv41-engram-prefetch.cpp:235",
+        "source": "engines/streaming-llama/prefill_llama.cpp/src/llama-dsv41-engram-prefetch.cpp:248",
         "unset": "NULL from getenv; the literal consumer below supplies any fallback",
         "read": "const char*batch_env=std::getenv(\"LLAMA_DSV41_ENGRAM_SUBMIT_BATCH\");",
         "consumer": "        size_t next_row=0;uint32_t next_table=0;UINT_PTR sequence=0;\n        uint64_t read_bytes=0,read_requests=0,submits=0;size_t table0_done=0;\n        const char*batch_env=std::getenv(\"LLAMA_DSV41_ENGRAM_SUBMIT_BATCH\");\n        const bool batch_submits=batch_env&&std::strcmp(batch_env,\"1\")==0;\n        auto issue=[&](uint32_t i){\n            while(next_table<2&&next_row==tables[next_table].ids.size()){++next_table;next_row=0;}\n            if(next_table==2)return false;"
@@ -68101,7 +68271,7 @@
     "reads": [
       "engines/streaming-llama/prefill_llama.cpp/ggml/src/ggml-cuda/dsv41-native-ffn.cuh:20",
       "engines/streaming-llama/prefill_llama.cpp/src/llama-dsv41-flashinfer-budget.h:8",
-      "engines/streaming-llama/prefill_llama.cpp/src/llama-dsv41-weights.cpp:697"
+      "engines/streaming-llama/prefill_llama.cpp/src/llama-dsv41-weights.cpp:705"
     ],
     "code_defaults": [
       {
@@ -68117,7 +68287,7 @@
         "consumer": "namespace llama_dsv41_flashinfer {\ninline uint64_t reserve_bytes(){\n    const char *native=std::getenv(\"LLAMA_DSV41_FLASHINFER_NATIVE_FFN_DLL\");\n    if(native&&*native){const auto rows=ggml_dsv41_flashinfer::batch_tokens();return (rows==16384?3072ull:rows==8192?1792ull:1280ull)<<20;}\n    return ggml_dsv41_flashinfer::selected_reserve_bytes();\n}\ninline bool requested(){const char *v=std::getenv(\"LLAMA_DSV41_FLASHINFER_MXFP4\");return v&&!std::strcmp(v,\"1\");}"
       },
       {
-        "source": "engines/streaming-llama/prefill_llama.cpp/src/llama-dsv41-weights.cpp:697",
+        "source": "engines/streaming-llama/prefill_llama.cpp/src/llama-dsv41-weights.cpp:705",
         "unset": "NULL from getenv; the literal consumer below supplies any fallback",
         "read": "const char *bridge=std::getenv(\"LLAMA_DSV41_FLASHINFER_NATIVE_FFN_DLL\");",
         "consumer": "                \"Unknown or mismatched native FP4 expert layout\");\n            require(gguf_get_alignment(gguf.get())>=128,\"Native FP4 requires128-byte file/tensor alignment\");\n            const char *bridge=std::getenv(\"LLAMA_DSV41_FLASHINFER_NATIVE_FFN_DLL\");\n            require(bridge&&*bridge,\"Kernel-native FP4 requires its explicit native FFN bridge\");\n            for(auto&w:layers)w.ffn.native_fp4_layout=true;\n        }\n        const auto arch=gguf_find_key(gguf.get(),\"general.architecture\");"

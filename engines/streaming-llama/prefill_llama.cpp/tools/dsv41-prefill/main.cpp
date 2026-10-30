@@ -928,7 +928,7 @@ int wmain(int argc,wchar_t**argv){
             if(engram_early){
                 // The warmup pass builds its own one-token cache first: charge it.
                 warm_weights.engram_early_is_next_request=false;
-                warm_weights.engram_early_tokens.assign(tokens.begin(),tokens.begin()+first_sweep_tokens);
+                warm_weights.engram_early_tokens.assign(tokens.begin(),tokens.begin()+(llama_dsv41_engram_whole_prompt()?tokens.size():first_sweep_tokens));
                 if(restored){const auto&bt=restored->base.tokens;warm_weights.engram_early_tail.assign(bt.end()-std::min<size_t>(bt.size(),3),bt.end());}
             }
             success(warm_request->open(warm_weights,warm_options,error),error);
@@ -963,7 +963,9 @@ int wmain(int argc,wchar_t**argv){
         // rows after admission, before allocate's first weight fetch.
         const bool engram_early_cold=!options.images&&!warm&&llama_dsv41_engram_early_enabled()&&weights.engram_prefetch_host_bytes&&options.engram_tile_lookahead;
         auto open_weights=weights;
-        if(engram_early_cold){open_weights.engram_early_tokens.assign(tokens.begin(),tokens.begin()+first_sweep_tokens);open_weights.engram_early_tail=early_tail;}
+        // PAIRFIX: LLAMADECODE_ENGRAM_WHOLE_PROMPT (default 1): one early load holds
+        // every sweep's rows; later sweeps reuse it instead of loading again.
+        if(engram_early_cold){open_weights.engram_early_tokens.assign(tokens.begin(),tokens.begin()+(llama_dsv41_engram_whole_prompt()?tokens.size():first_sweep_tokens));open_weights.engram_early_tail=early_tail;}
         auto started=clock_type::now();const bool opened=sweep->open(open_weights,options,error,warm_request.get(),nullptr,restored?&restored->base:nullptr);report["phase_ms"]["inspect_admit_allocate"]=ms(started);success(opened,error);if(restored){restored->finish();restored.reset();}warm_request.reset();stop();
         require(!chunk_option||options.reuse_graph&&!options.reuse_layer_graph,"Stateful CLI requires allocator-only graph mode");
         // No-warm-up start: the early Engram row load (otherwise hidden behind the

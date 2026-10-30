@@ -73,6 +73,24 @@ int main() {
                "duplicate ids across a page boundary share one extent and offset");
         expect(recover(file, ids, nullptr, base, 65536, extents, bytes, geometry) && geometry, "duplicate rows recovered exactly");
     }
+    {   // PAIRFIX scan geometry: a gap tolerance merges rows across unread pages.
+        const std::vector<uint32_t> ids{0, 100, 2000, 3000};   // ~pages 0, 6, 129, 193 past the base
+        const auto strict = ep::build(ids.data(), ids.size(), nullptr, base, rb, 1 << 20);
+        const auto merged = ep::build(ids.data(), ids.size(), nullptr, base, rb, 1 << 20, ep::page_bytes, 64 * 1024);
+        bool exact = merged.rows.size() == ids.size();
+        size_t r = 0;
+        for (const auto &e : merged.extents) {
+            exact = exact && e.file_offset % 4096 == 0 && e.bytes % 4096 == 0 && e.bytes <= (1u << 20);
+            for (uint32_t k = 0; k < e.rows; ++k, ++r) {
+                const auto &row = merged.rows[r];
+                exact = exact && std::memcmp(file.data() + e.file_offset + row.offset, file.data() + base + uint64_t(ids[row.index]) * rb, rb) == 0;
+            }
+        }
+        expect(strict.extents.size() == 4, "gap 0 keeps one extent per separated row");
+        expect(merged.extents.size() == 3 && exact, "64 KiB gap merges nearby rows; far rows stay separate; bytes exact");
+        const auto through = ep::build(ids.data(), ids.size(), nullptr, base, rb, 1 << 20, ep::page_bytes, 1 << 20);
+        expect(through.extents.size() == 1 && through.rows.size() == ids.size(), "1 MiB gap reads straight through up to the cap");
+    }
     {   // Adjacent pages merge; a gap does not.
         const std::vector<uint32_t> adjacent{0, 16};   // 0..264 page 0, 4224..4488 page 1
         const auto a = ep::build(adjacent.data(), adjacent.size(), nullptr, 0, rb);

@@ -10,6 +10,9 @@
 // early multi-ring loader (prepare_early/load_early), so the row cache is
 // consulted on every load; the single-ring load() is no longer called.
 bool llama_dsv41_engram_early_enabled();
+// PAIRFIX LLAMADECODE_ENGRAM_WHOLE_PROMPT=1|0 (default 1): the early load covers
+// the whole request (all sweeps); each later sweep adopts the same row cache.
+bool llama_dsv41_engram_whole_prompt();
 bool llama_dsv41_engram_early_auto();
 // LLAMADECODE_ENGRAM_EARLY=pause (forced pause arm).
 bool llama_dsv41_engram_early_pause();
@@ -44,6 +47,11 @@ public:
     // Requests the early loader would issue for the prepared rows (rows held by
     // the row cache, when set, are excluded; prior-cache hits are not).
     uint64_t planned_requests()const;
+    // LLAMADECODE_ENGRAM_SCAN (prepare_early): whether the prepared load reads
+    // large sequential extents, and its predicted wall (scan bytes / rate or
+    // requests / IOPS).
+    bool scan_geometry()const;
+    double predicted_seconds()const;
     // LLAMADECODE_ENGRAM_CACHE_MB: set before prepare_early; load_early copies
     // the cached rows, reads only the missing ones, then inserts them.
     void set_row_cache(std::shared_ptr<llama_dsv41_engram_row_cache>);

@@ -206,6 +206,49 @@ class Negotiation(unittest.TestCase):
         command(row, session, 1, 1, prefill_max=103319)
 
 
+class WholePromptEngram(unittest.TestCase):
+    """PAIRFIX: a multi-sweep prompt admits its whole prompt's Engram rows once, outside the sweep search."""
+    def plan(self, **extra):
+        from slstack.combo_producer import prefill_arguments
+        cfg = dict(context=1000001, producer_profile='ultra', yoco_keep=2541, ctx_cache_precision='bf16',
+                   ctx_cache_growable=True, host_budget_gib=10.25,
+                   env_overrides={'LLAMA_DSV41_FLASHINFER_MXFP4':'1','LLAMA_DSV41_FLASHINFER_NATIVE_FFN_DLL':'x.dll'})
+        cfg.update(extra)
+        return prefill_arguments(cfg, 199952, 14 << 30, export_state=True)
+
+    def test_whole_prompt_rows_admitted_without_shrinking_sweeps(self):
+        args, plan = self.plan()
+        _, off = self.plan(env_overrides={'LLAMA_DSV41_FLASHINFER_MXFP4':'1','LLAMA_DSV41_FLASHINFER_NATIVE_FFN_DLL':'x.dll',
+                                          'LLAMADECODE_ENGRAM_WHOLE_PROMPT':'0'})
+        self.assertEqual(plan['sweeps'], off['sweeps'])
+        self.assertEqual(plan['capacity'], off['capacity'])
+        extra = engram_prompt_bytes(199952) - engram_prompt_bytes(plan['capacity'])
+        self.assertEqual(plan['whole_prompt_engram_bytes'], -(-extra // 65536) * 65536)
+        self.assertEqual(plan['host_bytes'] - off['host_bytes'], plan['whole_prompt_engram_bytes'])
+        self.assertEqual(off['whole_prompt_engram_bytes'], 0)
+        self.assertIn('WHOLE_PROMPT=0', off['whole_prompt_engram_refused'])
+
+    def test_refused_inside_host_budget_or_physical_ram(self):
+        _, tight = self.plan(host_budget_gib=8.75)
+        self.assertEqual(tight['whole_prompt_engram_bytes'], 0)
+        self.assertIn('host_budget_gib', tight['whole_prompt_engram_refused'])
+        from slstack.combo_producer import prefill_arguments
+        cfg = dict(context=1000001, producer_profile='ultra', yoco_keep=2541, ctx_cache_precision='bf16',
+                   ctx_cache_growable=True, host_budget_gib=10.25,
+                   env_overrides={'LLAMA_DSV41_FLASHINFER_MXFP4':'1','LLAMA_DSV41_FLASHINFER_NATIVE_FFN_DLL':'x.dll'})
+        _, low = prefill_arguments(cfg, 199952, 9 << 30, export_state=True)
+        self.assertEqual(low['whole_prompt_engram_bytes'], 0)
+
+    def test_single_sweep_unchanged(self):
+        from slstack.combo_producer import prefill_arguments
+        cfg = dict(context=1000001, producer_profile='ultra', yoco_keep=2541, ctx_cache_precision='bf16',
+                   ctx_cache_growable=True, host_budget_gib=10.25,
+                   env_overrides={'LLAMA_DSV41_FLASHINFER_MXFP4':'1','LLAMA_DSV41_FLASHINFER_NATIVE_FFN_DLL':'x.dll'})
+        _, plan = prefill_arguments(cfg, 100000, 14 << 30, export_state=True)
+        self.assertTrue(plan['single_sweep'])
+        self.assertEqual(plan['whole_prompt_engram_bytes'], 0)
+
+
 class Split(unittest.TestCase):
     def test_matches_producer_split(self):
         self.assertEqual(split_prefill(103319, 107840), 103319)
