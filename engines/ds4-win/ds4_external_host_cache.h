@@ -14,6 +14,20 @@ struct ds4_external_host_cache_v1 {
     void (*clear)(void);
 };
 
+/* v2 (RAMFIX): the caller owns the transfer streams and pinned staging, so
+ * RAM traffic can run beside DirectStorage instead of in front of it.
+ * payload() returns a published slot's locked host bytes for projection k
+ * (0 gate, 1 up, 2 down) and refreshes its age; NULL when invalid.
+ * store_host() publishes an expert from caller-owned host bytes (a completed
+ * D2H staging copy); same admission and LRU as store(). */
+struct ds4_external_host_cache_v2 {
+    struct ds4_external_host_cache_v1 v1;
+    const char *(*payload)(uint32_t slot, int k);
+    int (*store_host)(uint32_t layer, uint32_t expert, const char *const *src, const uint64_t *sizes);
+    /* Slots [0, registered()) are CUDA-registered: their payload() pointers are DMA sources. */
+    int (*registered)(void);
+};
+
 /* ggml's dispatch-selected CPU dot kernel (including AVX2/AVX-512 builds).
  * All weights retain their original quantization; no expanded weight copy. */
 typedef void (*ds4_external_dot)(int, float *, size_t, const void *, size_t,

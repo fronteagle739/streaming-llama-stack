@@ -10,7 +10,7 @@ template<uint32_t EXPERTS>
 __device__ __forceinline__ void ds4_cache_affinity_select_warp_width(
         int32_t *selected, float *weights, const float *probs,
         const float *bias, const uint8_t *resident, float lambda,
-        uint32_t used, float scale) {
+        uint32_t used, float scale, float ram_cost) {
     const uint32_t lane=threadIdx.x;
     float local_prob[EXPERTS/32],local_score[EXPERTS/32];
     bool valid[EXPERTS/32];
@@ -18,7 +18,7 @@ __device__ __forceinline__ void ds4_cache_affinity_select_warp_width(
     for(uint32_t j=0;j<EXPERTS/32;j++) {
         const uint32_t e=lane+j*32u;
         local_prob[j]=probs[e];
-        local_score[j]=probs[e]+(bias?bias[e]:0.0f)+-(resident[e]?0.0f:lambda);
+        local_score[j]=probs[e]+(bias?bias[e]:0.0f)-ds4_affinity_tier_penalty(resident[e],lambda,ram_cost);
         valid[j]=true;
     }
     float out_prob[6];uint32_t out_idx[6];
@@ -58,8 +58,8 @@ __device__ __forceinline__ void ds4_cache_affinity_select_warp_width(
 __device__ __forceinline__ void ds4_cache_affinity_select_warp(
         int32_t *selected, float *weights, const float *probs,
         const float *bias, const uint8_t *resident, float lambda,
-        uint32_t experts, uint32_t used, float scale) {
-    if(experts==384u)ds4_cache_affinity_select_warp_width<384>(selected,weights,probs,bias,resident,lambda,used,scale);
-    else ds4_cache_affinity_select_warp_width<256>(selected,weights,probs,bias,resident,lambda,used,scale);
+        uint32_t experts, uint32_t used, float scale, float ram_cost = 0.0f) {
+    if(experts==384u)ds4_cache_affinity_select_warp_width<384>(selected,weights,probs,bias,resident,lambda,used,scale,ram_cost);
+    else ds4_cache_affinity_select_warp_width<256>(selected,weights,probs,bias,resident,lambda,used,scale,ram_cost);
 }
 #endif
