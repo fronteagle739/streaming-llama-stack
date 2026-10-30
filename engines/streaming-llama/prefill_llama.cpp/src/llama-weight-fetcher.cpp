@@ -6645,7 +6645,8 @@ static bool wf_ready_generation(wf_context*wf,int stage,int bank,uint64_t genera
 }
 static bool wf_fetch_extents_impl(wf_context * wf, int bank, const wf_extent * extents, int n,
                              void * cuda_stream, uint64_t * bytes, double * milliseconds,
-                             int ready_stage, uint64_t generation, uint64_t * deferred_fence) {
+                             int ready_stage, uint64_t generation, uint64_t * deferred_fence,
+                             void (*overlap)(void *) = nullptr, void * overlap_user = nullptr) {
     std::lock_guard<std::mutex> stats_lock(g_wf_extent_stats_mutex);
     if(deferred_fence)*deferred_fence=0;
     if (bytes) *bytes = 0;
@@ -6738,8 +6739,11 @@ static bool wf_fetch_extents_impl(wf_context * wf, int bank, const wf_extent * e
     using wf_clock = std::chrono::high_resolution_clock;
     auto ms_since = [](wf_clock::time_point t) { return std::chrono::duration<double, std::milli>(wf_clock::now() - t).count(); };
     const auto submitted_at = wf_clock::now(); g_wf_extent_stats.submit_ms += std::chrono::duration<double, std::milli>(submitted_at - started).count();
+    // RAMFIX: caller work (RAM-tier uploads on its own CUDA stream) runs while this batch is in flight.
+    if (overlap) overlap(overlap_user);
+    const auto overlapped_at = wf_clock::now();
     if (!wf_ds_fence_wait(wf, fence)) return false;
-    const auto fenced_at = wf_clock::now(); g_wf_extent_stats.fence_ms += std::chrono::duration<double, std::milli>(fenced_at - submitted_at).count();
+    const auto fenced_at = wf_clock::now(); g_wf_extent_stats.fence_ms += std::chrono::duration<double, std::milli>(fenced_at - overlapped_at).count();
     if (!wf_dstorage_wave_succeeded(wf, wf->ds_queue, -1, -1)) return false;
     const auto verified_at = wf_clock::now(); g_wf_extent_stats.verify_ms += std::chrono::duration<double, std::milli>(verified_at - fenced_at).count();
     if (deferred_fence) {
@@ -6754,7 +6758,7 @@ static bool wf_fetch_extents_impl(wf_context * wf, int bank, const wf_extent * e
     return true;
 #else
     (void) wf; (void) bank; (void) extents; (void) n; (void) cuda_stream;
-    (void) ready_stage; (void) generation;
+    (void) ready_stage; (void) generation; (void) overlap; (void) overlap_user;
     return false;
 #endif
 }
@@ -6762,6 +6766,10 @@ static bool wf_fetch_extents_impl(wf_context * wf, int bank, const wf_extent * e
 bool wf_fetch_extents_direct(wf_context * wf,int bank,const wf_extent * extents,int n,
         void * stream,uint64_t * bytes,double * milliseconds){
     return wf_fetch_extents_impl(wf,bank,extents,n,stream,bytes,milliseconds,-1,0,nullptr);
+}
+bool wf_fetch_extents_direct_overlap(wf_context * wf,int bank,const wf_extent * extents,int n,
+        void * stream,uint64_t * bytes,double * milliseconds,void (*overlap)(void *),void * overlap_user){
+    return wf_fetch_extents_impl(wf,bank,extents,n,stream,bytes,milliseconds,-1,0,nullptr,overlap,overlap_user);
 }
 bool wf_fetch_ready_extents(wf_context * wf,int stage,int bank,uint64_t generation,
         const wf_extent * extents,int n,uint64_t * fence,uint64_t * bytes,double * milliseconds){

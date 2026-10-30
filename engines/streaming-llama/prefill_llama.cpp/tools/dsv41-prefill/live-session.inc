@@ -105,7 +105,11 @@ bool nvml_free_bytes(uint64_t&free_bytes,uint64_t&total_bytes){
 }
 // Physical VRAM reserve kept free beside the L2 (LLAMADECODE_VRAM_RESERVE_MIB, default 512 MiB).
 uint64_t decode_vram_reserve(){static const uint64_t r=[]{const char*e=std::getenv("LLAMADECODE_VRAM_RESERVE_MIB");
-    const long v=e&&*e?std::strtol(e,nullptr,10):512; /* measured: no transient dip below the post-L2 steady free (5 ms NVML, 43K run) */return uint64_t(std::max<long>(256,std::min<long>(v,8192)))<<20;}();return r;}
+    const long v=e&&*e?std::strtol(e,nullptr,10):512; /* measured: no transient dip below the post-L2 steady free (5 ms NVML, 43K run) */return uint64_t(std::max<long>(128,std::min<long>(v,8192)))<<20;}();return r;}
+// Decode-graph growth margin beside the reserve (LLAMADECODE_VRAM_MARGIN_MIB, default 768 MiB).
+// Owner 2026-10-29: the safety margin may be cut but not zeroed; reserve+margin >= 128 MiB.
+uint64_t decode_vram_margin(){static const uint64_t r=[]{const char*e=std::getenv("LLAMADECODE_VRAM_MARGIN_MIB");
+    const long v=e&&*e?std::strtol(e,nullptr,10):768;return uint64_t(std::max<long>(0,std::min<long>(v,8192)))<<20;}();return r;}
 // Headroom measurement: a 5 ms NVML sampler records the minimum free VRAM
 // (transient cuBLAS/graph/WDDM/other-process use) once the L2 is filled.
 struct vram_sampler{
@@ -143,7 +147,7 @@ void grow_decode_l2(llama_dsv41_sweep&sweep,const llama_dsv41_fixed_storage*fixe
     if(!provider->decode_layout()||provider->cache_stats().l2_slots)return;
     // Owner rule: keep a 2 GiB physical reserve (NVML free already excludes
     // Studio's idle context) plus a decode-graph growth margin.
-    const uint64_t margin=768ull<<20,floor=decode_vram_reserve();
+    const uint64_t margin=decode_vram_margin(),floor=decode_vram_reserve();
     const uint64_t freed=fixed->full_graph_reserve+fixed->full_hidden_bytes;
     const uint64_t now=ggml_gallocr_get_buffer_size(fixed->graph.get(),0)+fixed->hidden_bytes;
     (void)freed;(void)now;uint64_t offer=~0ull;
@@ -216,11 +220,11 @@ struct ds4_external {
     int(*x_affinity)(float,uint32_t,uint32_t,const char*,int(*)(void*,uint32_t,uint8_t*,uint32_t),void*)=nullptr;
     int(*x_prefill_ws)(uint32_t,char*,size_t)=nullptr;int(*x_prefill)(const int32_t*,uint32_t,uint32_t,const int32_t*,uint32_t,float*)=nullptr;
     int(*x_replace)(uint64_t,uint64_t,void*)=nullptr;uint64_t(*x_drop)()=nullptr; // keep-open (optional exports)
-    ds4_external_host_cache_v1 host_cache{};
+    ds4_external_host_cache_v1 host_cache{};ds4_external_host_cache_v2 host_cache2{};bool have_host2=false;
     void(*x_host_timing)(double*,uint64_t*)=nullptr;
     uint64_t host_limit=0;
     void grow_host(){if(host_cache.resize){std::string error;
-        success(provider->configure_host_cache(host_cache,host_limit,llama_dsv41_host_memory::runtime_min_free_bytes,error),error);}}
+        success(provider->configure_host_cache(host_cache,host_limit,llama_dsv41_host_memory::runtime_min_free_bytes,error,have_host2?&host_cache2:nullptr),error);}}
     uint32_t prefill_rows=0; // multi-row workspace rows (0 = per-token appends)
     llama_dsv41_weight_provider*provider=nullptr;uint64_t registered=0,registered_bytes=0;
     using resident=llama_dsv41_ds4x_keep::resident;std::vector<resident>table; // what ds4 holds registered
@@ -277,6 +281,8 @@ struct ds4_external {
         if(ram&&*ram&&std::strcmp(ram,"0")){
             int(*api)(ds4_external_host_cache_v1*)=nullptr;bind(api,"ds4x_host_cache_v1");
             require(api(&host_cache)==1,"ds4-decode RAM cache ABI refused");
+            int(*api2)(ds4_external_host_cache_v2*)=reinterpret_cast<int(*)(ds4_external_host_cache_v2*)>(GetProcAddress(module,"ds4x_host_cache_v2"));
+            have_host2=api2&&api2(&host_cache2)==1;
             const char*mode=std::getenv("LLAMADECODE_HOST_MODE");
             require(!mode||!std::strcmp(mode,"upload")||!std::strcmp(mode,"cpu")||!std::strcmp(mode,"mix"),"LLAMADECODE_HOST_MODE must be upload, cpu or mix");
             if(mode&&std::strcmp(mode,"upload")){
@@ -392,9 +398,10 @@ struct ds4_external {
         success(sweep.commit_external_token(token,logits,error),error);
         const auto after=provider->cache_stats();double f1[4]{};uint64_t r1=0,b1=0;wf_extent_fetch_stats(f1,&r1,&b1);
         double cpu1[4]{};uint64_t count1[2]{};if(x_host_timing)x_host_timing(cpu1,count1);
-        std::fprintf(stderr,"LLAMADECODE_TIER_TIME position=%u hook_ms=%.4f store_ms=%.4f victim_sync_ms=%.4f upload_ms=%.4f residency_ms=%.4f cpu_ms=%.4f cpu_wait_ms=%.4f cpu_transfer_ms=%.4f cpu_merge_ms=%.4f cpu_experts=%llu\n",position,
+        std::fprintf(stderr,"LLAMADECODE_TIER_TIME position=%u hook_ms=%.4f store_ms=%.4f victim_sync_ms=%.4f upload_ms=%.4f overlap_ms=%.4f async_hits=%llu direct_hits=%llu dropped=%llu residency_ms=%.4f cpu_ms=%.4f cpu_wait_ms=%.4f cpu_transfer_ms=%.4f cpu_merge_ms=%.4f cpu_experts=%llu\n",position,
             after.hook_ms-before.hook_ms,after.host_store_ms-before.host_store_ms,after.host_sync_ms-before.host_sync_ms,
-            after.host_upload_ms-before.host_upload_ms,after.residency_ms-before.residency_ms,
+            after.host_upload_ms-before.host_upload_ms,after.host_overlap_ms-before.host_overlap_ms,
+            (unsigned long long)(after.host_async_hits-before.host_async_hits),(unsigned long long)(after.host_direct_hits-before.host_direct_hits),(unsigned long long)(after.host_dropped-before.host_dropped),after.residency_ms-before.residency_ms,
             cpu1[0]-cpu0[0],cpu1[1]-cpu0[1],cpu1[2]-cpu0[2],cpu1[3]-cpu0[3],(unsigned long long)(count1[0]-count0[0]));
         // Opt-in bounded correctness trace. Original logits, sampled once per
         // 32 positions; the caller supplies a scratch path and compares only

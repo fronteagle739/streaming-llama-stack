@@ -6,6 +6,13 @@
 static cuda_stream_host_expert_cache g_external_host_cache;
 static cuda_stream_host_expert_cache g_external_host_stage;
 static bool g_external_host_locked[3];
+static bool g_external_host_registered[3];
+static uint32_t g_external_host_registered_slots=0;
+static std::vector<char *> g_external_host_chunks[3];
+static void external_host_unregister(void) {
+    for(int k=0;k<3;++k){for(char *c:g_external_host_chunks[k])(void)cudaHostUnregister(c);g_external_host_chunks[k].clear();g_external_host_registered[k]=false;}
+    g_external_host_registered_slots=0;
+}
 static std::vector<int32_t> g_external_host_index;
 static bool g_external_host_busy=false;
 static double g_external_upload_cost_ms=0;
@@ -16,6 +23,7 @@ static void external_host_release_payload(void) {
     auto *c = &g_external_host_cache;
     char *p[3] = {c->gate_ptr,c->up_ptr,c->down_ptr};
     uint64_t n[3] = {c->gate_capacity,c->up_capacity,c->down_capacity};
+    external_host_unregister();
     for(int k=0;k<3;++k) {
         if(g_external_host_locked[k]) VirtualUnlock(p[k],size_t(n[k]));
         g_external_host_locked[k]=false;
@@ -62,12 +70,36 @@ static uint32_t external_host_resize(uint64_t bytes, uint64_t gate, uint64_t dow
         if (!external_host_allocate(cache,n,gate,down,0)) continue;
         char *p[3]={cache->gate_ptr,cache->up_ptr,cache->down_ptr};
         uint64_t sizes[3]={cache->gate_capacity,cache->up_capacity,cache->down_capacity};
+        /* RAMFIX: register the payload with CUDA first (the driver pins it, so no VirtualLock;
+         * WDDM refuses to register already-locked pages). RAM hits then DMA straight from it,
+         * with no CPU staging copy. Any refusal keeps the locked, staged path. */
+        bool registered_all=false;
+        {static const bool want=[]{const char*v=getenv("LLAMADECODE_HOST_REGISTER");return !(v&&v[0]=='0'&&!v[1]);}();
+         /* Bounded, slot-aligned chunks: no expert copy spans two registrations. */
+         cudaError_t why=cudaSuccess;uint64_t prefix_slots=n;
+         for(int k=0;k<3&&want;++k){g_external_host_chunks[k].clear();
+             const uint64_t unit=k==2?cache->down_expert_bytes:cache->gate_expert_bytes,step=std::max<uint64_t>(1,(512ull<<20)/unit)*unit;
+             uint64_t done=0;
+             for(uint64_t at=0;at<sizes[k];at+=step){const uint64_t len=std::min<uint64_t>(step,sizes[k]-at);
+                 if(at/unit>=prefix_slots)break;
+                 why=cudaHostRegister(p[k]+at,size_t(len),cudaHostRegisterDefault);
+                 if(why!=cudaSuccess){(void)cudaGetLastError();break;}
+                 g_external_host_chunks[k].push_back(p[k]+at);done=at+len;}
+             g_external_host_registered[k]=done>0;prefix_slots=std::min<uint64_t>(prefix_slots,done/unit);}
+         g_external_host_registered_slots=want?uint32_t(prefix_slots):0u;
+         const bool all=want&&g_external_host_registered_slots==n;
+         if(want&&!all)external_host_unregister();   /* all or nothing: otherwise the locked, staged path */
+         if(want&&!all)fprintf(stderr,"LLAMADECODE_HOST_REGISTER_PARTIAL error=%s registered_slots=%u of=%u\n",cudaGetErrorString(why),g_external_host_registered_slots,n);
+         registered_all=all;
+         fprintf(stderr,"LLAMADECODE_HOST_REGISTER requested=%d registered=%d slots=%u bytes=%llu\n",int(want),int(all),n,(unsigned long long)(sizes[0]+sizes[1]+sizes[2]));}
         bool locked=true;
-        for(int k=0;k<3;++k){
+        if(!registered_all)
+        {for(int k=0;k<3;++k){
             if(!VirtualLock(p[k],size_t(sizes[k]))){locked=false;break;}
             g_external_host_locked[k]=true;
-        }
+        }}
         if(!locked){external_host_release_payload();continue;}
+
         cache->slots.swap(slots);
         return n;
     }
@@ -134,6 +166,50 @@ static int external_host_store(uint32_t layer, uint32_t expert, const char *cons
     slot.gate_expert_bytes = sizes[0]; slot.down_expert_bytes = sizes[2]; slot.age = ++cache->tick;
     g_external_host_index[layer*384u+expert]=int32_t(index);
     if (append) ++cache->count;
+    return 1;
+}
+
+static const char *external_host_payload(uint32_t index, int k) {
+    auto *cache = &g_external_host_cache;
+    if (!cache->valid || index >= cache->capacity || !cache->slots[index].valid || k < 0 || k > 2) return nullptr;
+    auto &slot = cache->slots[index];
+    slot.age = ++cache->tick;
+    return k == 0 ? cache->gate_ptr + uint64_t(index)*cache->gate_expert_bytes :
+           k == 1 ? cache->up_ptr + uint64_t(index)*cache->gate_expert_bytes :
+                    cache->down_ptr + uint64_t(index)*cache->down_expert_bytes;
+}
+
+/* Same admission/LRU as external_host_store, but the source is host memory
+ * the caller has already copied off the GPU (its own stream and event). */
+static int external_host_store_host(uint32_t layer, uint32_t expert, const char *const *src, const uint64_t *sizes) {
+    if(layer>=40u||expert>=384u)return 0;
+    auto *cache = &g_external_host_cache;
+    if(g_external_host_busy)return 1;
+    if (!cache->valid || !src || !sizes || sizes[0] != sizes[1] ||
+        sizes[0] > cache->gate_expert_bytes || sizes[2] > cache->down_expert_bytes) return 0;
+    if (external_host_find(layer, expert) >= 0) return 1;
+    const uint32_t index = cuda_stream_host_expert_cache_lru_slot(cache);
+    auto &slot = cache->slots[index];
+    if (!cuda_stream_host_expert_cache_admit(slot, layer, expert)) return 1;
+    char *dst[3] = {cache->gate_ptr + uint64_t(index)*cache->gate_expert_bytes,
+        cache->up_ptr + uint64_t(index)*cache->gate_expert_bytes,
+        cache->down_ptr + uint64_t(index)*cache->down_expert_bytes};
+    const bool append = !slot.valid;
+    if(slot.valid)g_external_host_index[slot.layer*384u+slot.expert]=-1;
+    slot.valid = 0;
+    for (int k = 0; k < 3; ++k) memcpy(dst[k], src[k], size_t(sizes[k]));
+    slot = {}; slot.valid = 1; slot.layer = layer; slot.expert = expert;
+    slot.gate_expert_bytes = sizes[0]; slot.down_expert_bytes = sizes[2]; slot.age = ++cache->tick;
+    g_external_host_index[layer*384u+expert]=int32_t(index);
+    if (append) ++cache->count;
+    return 1;
+}
+
+extern "C" __declspec(dllexport) int ds4x_host_cache_v2(ds4_external_host_cache_v2 *api) {
+    if (!api) return 0;
+    api->v1 = {external_host_resize, external_host_find, external_host_upload, external_host_store, external_host_clear};
+    api->payload = external_host_payload; api->store_host = external_host_store_host;
+    api->registered = [](void) -> int { return int(g_external_host_registered_slots); };
     return 1;
 }
 

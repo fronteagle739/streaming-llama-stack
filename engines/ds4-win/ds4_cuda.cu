@@ -30323,7 +30323,7 @@ extern "C" int ds4_gpu_directional_steering_project_tensor(
 
 #include "ds4_cache_affinity.h"
 #include "ds4_cache_affinity_cuda.cuh"
-struct cuda_router_residency { uint8_t tier[384]; };
+struct cuda_router_residency { uint8_t tier[384]; float ram_cost; };
 struct cuda_router_affinity_metrics {
     uint32_t vram, ram, changed, selections, displaced_count;
     int32_t displaced[6], original[6], selected_ids[6];
@@ -30339,8 +30339,8 @@ __global__ static void cache_affinity_rerank_kernel(
     int32_t original[6];
     for (uint32_t j = 0; j < used; j++) original[j] = sel[j];
     if (lambda > 0.0f)
-        ds4_cache_affinity_select(sel, weights + (uint64_t)t * used,
-            probs + (uint64_t)t * experts, bias, residency.tier, lambda, experts, used, scale);
+        ds4_cache_affinity_select_tiered(sel, weights + (uint64_t)t * used,
+            probs + (uint64_t)t * experts, bias, residency.tier, lambda, experts, used, scale, residency.ram_cost);
     cuda_router_affinity_metrics m = {};
     m.selections=used;
     const float *p=probs+(uint64_t)t*experts;
@@ -30371,7 +30371,7 @@ __global__ static void cache_affinity_warp_kernel(
     int32_t original[6];
     if(threadIdx.x==0) for (uint32_t j = 0; j < used; j++) original[j] = sel[j];
     ds4_cache_affinity_select_warp(sel, weights + (uint64_t)t * used,
-        probs + (uint64_t)t * experts, bias, residency.tier, lambda, experts, used, scale);
+        probs + (uint64_t)t * experts, bias, residency.tier, lambda, experts, used, scale, residency.ram_cost);
     if(threadIdx.x)return;
     cuda_router_affinity_metrics m = {};
     m.selections=used;
@@ -30492,6 +30492,16 @@ extern "C" int ds4_gpu_cache_affinity_router_tensor(
     const int tier = ds4_tensor_device_idx(selected);
     cuda_router_residency residency = {};
 #ifdef DS4_EXTERNAL_DECODE
+    /* RAMFIX: external decode prices a RAM-resident expert between VRAM and storage.
+     * LLAMADECODE_RAM_ROUTE_COST in [0,1] is its share of the miss penalty (0 = old
+     * boolean residency). Selection only; combine weights stay the original probabilities. */
+    static const float ram_route_cost = [] {
+        const char *v = getenv("LLAMADECODE_RAM_ROUTE_COST"); char *end = nullptr;
+        const float c = v && *v ? strtof(v, &end) : 0.5f;
+        if (v && *v && (!end || *end || !(c >= 0.0f && c <= 1.0f))) { fprintf(stderr, "ds4: LLAMADECODE_RAM_ROUTE_COST must be in [0,1]\n"); return -1.0f; }
+        fprintf(stderr, "LLAMADECODE_RAM_ROUTE_COST=%.3f\n", c); return c; }();
+    if (ram_route_cost < 0.0f) return 0;
+    if (external) residency.ram_cost = ram_route_cost;
     if (external) {
         if (!g_ds4x_residency_hook || !g_ds4x_residency_hook(g_ds4x_residency_user, layer, residency.tier, experts)) {
             fprintf(stderr, "LLAMADECODE_DS4X_RESIDENCY_FAILED layer=%u\n", layer); return 0;

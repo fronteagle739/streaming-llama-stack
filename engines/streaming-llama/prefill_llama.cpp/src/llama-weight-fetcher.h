@@ -310,6 +310,10 @@ WF_API // LLAMADECODE: cumulative expert-miss fetch split: submit, DS fence, ver
 void wf_extent_fetch_stats(double * out4, uint64_t * requests, uint64_t * batches);
 bool wf_fetch_extents_direct(wf_context * wf, int bank, const wf_extent * extents, int n,
                                     void * cuda_stream, uint64_t * bytes, double * milliseconds);
+// Same, but overlap(overlap_user) runs on this thread after the batch is submitted and
+// before the host waits on its fence (RAM-tier uploads beside the storage reads).
+bool wf_fetch_extents_direct_overlap(wf_context * wf, int bank, const wf_extent * extents, int n,
+        void * cuda_stream, uint64_t * bytes, double * milliseconds, void (*overlap)(void *), void * overlap_user);
 // Next-tail hints only target an already-ready strict direct bank. The caller
 // must join the hint before acquiring/releasing/restarting that stage/fetcher.
 // A generation is never reused within one fetcher, including across wf_start.
