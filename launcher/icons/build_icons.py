@@ -14,7 +14,7 @@ import tempfile
 from PIL import Image
 
 HERE = Path(__file__).resolve().parent
-OUT = HERE / 'build'
+OUT = HERE / 'built'
 CANDIDATES = (r'C:\Program Files\Google\Chrome\Application\chrome.exe',
               r'C:\Program Files (x86)\Microsoft\Edge\Application\msedge.exe',
               '/Applications/Google Chrome.app/Contents/MacOS/Google Chrome')
