@@ -34,6 +34,7 @@
 #define NOMINMAX
 #endif
 #include <windows.h>
+#include <psapi.h>
 #include <malloc.h>
 #if defined(LLAMA_DIRECTSTORAGE) && defined(GGML_USE_CUDA)
 #include <dstorage.h>
@@ -182,7 +183,120 @@ struct llama_dsv41_weight_provider::implementation {
         if(!n)throw std::invalid_argument("LLAMADECODE_LFU_HALF_LIFE must be 1 or 16");
         std::fprintf(stderr,"PERFEXP_E8 lfu_half_life_tokens=%u\n",n);return n;
     }();return period;}
+    ds4_external_host_cache_v1 host{};
+    uint32_t host_slots=0;uint64_t host_hits=0,host_stored=0,host_bytes=0;
+    double host_store_ms=0,host_sync_ms=0,host_upload_ms=0,hook_ms=0;
+    mutable double residency_ms=0;
+    // Observe evictions without moving payloads, then admit one bounded hot
+    // working set. Rewriting an LRU on every L2 eviction streams gigabytes
+    // backwards over PCIe even when the RAM tier never produces a hit.
+    std::array<uint32_t,40*384> host_frequency{};
+    std::array<uint8_t,40*384> host_admitted{};
+    uint32_t host_observations=0;bool host_selected=false;
+    void select_host_working_set(uint32_t layer){
+        if(!host_slots||host_selected||layer!=0)return;
+        const char*admit=std::getenv("LLAMADECODE_HOST_CACHE_ADMIT");
+        if(admit&&!std::strcmp(admit,"0"))return;
+        if(++host_observations<=32)return;
+        std::vector<int32_t>keys;
+        for(int32_t k=0;k<int32_t(host_frequency.size());++k)if(host_frequency[k])keys.push_back(k);
+        std::stable_sort(keys.begin(),keys.end(),[&](int32_t a,int32_t b){return host_frequency[a]>host_frequency[b];});
+        keys.resize(std::min<size_t>(host_slots,keys.size()));
+        for(auto key:keys)host_admitted[key]=1;
+        host_selected=true;
+        std::fprintf(stderr,"LLAMADECODE_HOST_WORKING_SET observed_passes=%u selected=%zu bounded_admission=1\n",host_observations-1,keys.size());
+    }
+    struct timer {
+        double &sum;std::chrono::steady_clock::time_point start=std::chrono::steady_clock::now();
+        explicit timer(double&s):sum(s){}
+        ~timer(){sum+=std::chrono::duration<double,std::milli>(std::chrono::steady_clock::now()-start).count();}
+    };
+    void release_host(){
+        if(host_slots)std::fprintf(stderr,"LLAMADECODE_HOST_CACHE_RELEASE slots=%u bytes=%llu before_prefill_or_teardown=1\n",host_slots,(unsigned long long)host_bytes);
+        release_host_rings();
+        if(host.clear)host.clear();host_slots=0;host_bytes=0;
+        host_frequency.fill(0);host_admitted.fill(0);host_observations=0;host_selected=false;
+    }
+    void store_host(int32_t key,const char*const bases[3],uint64_t slot,const std::array<uint64_t,3>&stride,void*stream){
+        if(!host_slots||key<0)return;
+        if(!host_selected){if(host_frequency[key]!=UINT32_MAX)++host_frequency[key];return;}
+        if(!host_admitted[key])return;
+        const uint32_t layer=uint32_t(key)/384;
+        if(host.find(layer,uint32_t(key)%384)>=0)return;
+        if(defer_copies){
+            // Skip a source this hook already overwrote (its bytes are still in flight).
+            if(bases==l2_base.data()&&std::find(l2_written.begin(),l2_written.end(),int32_t(slot))!=l2_written.end()){++host_dropped;return;}
+            if(pending_stores.size()>=store_ring_slots){++host_dropped;return;}
+            store_job j{key,{bases[0]+slot*stride[0],bases[1]+slot*stride[1],bases[2]+slot*stride[2]},
+                {routed[layer*3]->nb[2],routed[layer*3+1]->nb[2],routed[layer*3+2]->nb[2]},bases!=l2_base.data()};
+            pending_stores.push_back(j);return;
+        }
+        timer measured(host_store_ms);
+        const uint64_t sizes[3]={routed[layer*3]->nb[2],routed[layer*3+1]->nb[2],routed[layer*3+2]->nb[2]};
+        const char*src[3]={bases[0]+slot*stride[0],bases[1]+slot*stride[1],bases[2]+slot*stride[2]};
+#ifdef GGML_USE_CUDA
+        {timer measured_sync(host_sync_ms);require(cudaStreamSynchronize(static_cast<cudaStream_t>(stream))==cudaSuccess,"RAM expert victim synchronization failed");}
+#endif
+        require(host.store(layer,uint32_t(key)%384,src,sizes)==1,"RAM expert victim admission failed");
+        if(host.find(layer,uint32_t(key)%384)>=0)++host_stored;
+    }
+    // RAMFIX (owner 2026-10-29): RAM-tier data movement off the critical path.
+    // LLAMADECODE_HOST_ASYNC: 0 = the original synchronous path; 1 = VRAM->RAM copy-in on
+    // its own non-blocking stream (batched D2H, one event); 2 = also submit the DirectStorage
+    // batch first and upload RAM hits on a separate H2D stream while it is in flight, waiting
+    // per expert; 3 (default) = as 2 with one event per stream instead of per-expert waits.
+    static int host_async_level(){static const int level=[]{const char*v=std::getenv("LLAMADECODE_HOST_ASYNC");
+        const int n=!v||!*v?3:(v[0]>='0'&&v[0]<='3'&&!v[1])?v[0]-'0':-1;
+        if(n<0)throw std::invalid_argument("LLAMADECODE_HOST_ASYNC must be 0, 1, 2 or 3");
+        std::fprintf(stderr,"LLAMADECODE_HOST_ASYNC level=%d\n",n);return n;}();return level;}
+    ds4_external_host_cache_v2 host2{};bool host_v2=false;
+    double host_overlap_ms=0;uint64_t host_async_hits=0,host_dropped=0,host_direct_hits=0;
+    uint32_t upload_ring_slots=4,store_ring_slots=2;bool rings_ready=false;
+    uint64_t ring_width=0;std::array<uint64_t,3> ring_offset{};
+#ifdef GGML_USE_CUDA
+    struct ring_slot{char*p=nullptr;cudaEvent_t done=nullptr;};
+    std::vector<ring_slot> up_ring,in_ring;uint32_t up_next=0;
+    cudaStream_t h2d_stream=nullptr,d2h_stream=nullptr;cudaEvent_t ev_main=nullptr,ev_d2h=nullptr,ev_h2d=nullptr;
+#endif
+    bool host_async()const{return host_v2&&rings_ready&&host_slots&&host_async_level()>=1;}
+    uint64_t host_ring_bytes()const{return uint64_t(upload_ring_slots+store_ring_slots)*ring_width;}
+    void allocate_host_rings(){
+#ifdef GGML_USE_CUDA
+        auto ok=[](cudaError_t e,const char*what){require(e==cudaSuccess,what);};
+        ok(cudaStreamCreateWithFlags(&h2d_stream,cudaStreamNonBlocking),"RAM tier H2D stream");
+        ok(cudaStreamCreateWithFlags(&d2h_stream,cudaStreamNonBlocking),"RAM tier D2H stream");
+        for(auto*e:{&ev_main,&ev_d2h,&ev_h2d})ok(cudaEventCreateWithFlags(e,cudaEventDisableTiming),"RAM tier event");
+        // WDDM limits pinned memory per process; step the rings down, then fall back loudly to
+        // the synchronous tier path (level 0) instead of refusing the tier.
+        for(const auto sizes:{std::pair<uint32_t,uint32_t>{4,2},std::pair<uint32_t,uint32_t>{2,1}}){
+            upload_ring_slots=sizes.first;store_ring_slots=sizes.second;rings_ready=true;
+            up_ring.assign(upload_ring_slots,{});in_ring.assign(store_ring_slots,{});
+            for(auto*ring:{&up_ring,&in_ring})for(auto&r:*ring){
+                if(rings_ready&&cudaHostAlloc(reinterpret_cast<void**>(&r.p),size_t(ring_width),cudaHostAllocDefault)!=cudaSuccess){r.p=nullptr;rings_ready=false;(void)cudaGetLastError();}
+                if(rings_ready)ok(cudaEventCreateWithFlags(&r.done,cudaEventDisableTiming),"RAM tier staging event");}
+            if(rings_ready)break;
+            for(auto*ring:{&up_ring,&in_ring}){for(auto&r:*ring){if(r.p)cudaFreeHost(r.p);if(r.done)cudaEventDestroy(r.done);}ring->clear();}
+            std::fprintf(stderr,"LLAMADECODE_HOST_STAGING_REFUSED upload_slots=%u store_slots=%u bytes=%llu\n",upload_ring_slots,store_ring_slots,(unsigned long long)host_ring_bytes());
+        }
+        if(!rings_ready)std::fprintf(stderr,"LLAMADECODE_HOST_ASYNC_UNAVAILABLE reason=pinned_staging_refused path=synchronous_level0\n");
+#endif
+    }
+    void release_host_rings(){
+#ifdef GGML_USE_CUDA
+        if(h2d_stream)cudaStreamSynchronize(h2d_stream);if(d2h_stream)cudaStreamSynchronize(d2h_stream);
+        for(auto*ring:{&up_ring,&in_ring}){for(auto&r:*ring){if(r.p)cudaFreeHost(r.p);if(r.done)cudaEventDestroy(r.done);}ring->clear();}
+        for(auto*e:{&ev_main,&ev_d2h,&ev_h2d})if(*e){cudaEventDestroy(*e);*e=nullptr;}
+        if(h2d_stream)cudaStreamDestroy(h2d_stream);if(d2h_stream)cudaStreamDestroy(d2h_stream);h2d_stream=d2h_stream=nullptr;up_next=0;
+#endif
+    }
+    // Per-hook deferred work (async levels): victim copy-ins, VRAM slot copies, RAM-hit uploads.
+    struct store_job{int32_t key;const char*src[3];uint64_t sizes[3];bool l1_source;};
+    struct copy_job{bool to_l2;uint64_t dst_slot,src_slot;};
+    struct ram_job{uint32_t ram;char*dst[3];};
+    std::vector<store_job> pending_stores;std::vector<copy_job> pending_copies;std::vector<ram_job> pending_ram;
+    std::vector<int32_t> l2_written;bool defer_copies=false;
     void copy_slot(char*const dst[3],uint64_t dst_slot,const char*const src[3],uint64_t src_slot,void*stream,bool to_l2){
+        if(defer_copies){pending_copies.push_back({to_l2,dst_slot,src_slot});if(to_l2)l2_written.push_back(int32_t(dst_slot));return;}
 #ifdef GGML_USE_CUDA
         for(uint32_t k=0;k<3;++k)require(cudaMemcpyAsync(dst[k]+dst_slot*(to_l2?pool_max_stride[k]:pool_stride[k]),src[k]+src_slot*(to_l2?pool_stride[k]:pool_max_stride[k]),pool_stride[k],
             cudaMemcpyDeviceToDevice,static_cast<cudaStream_t>(stream))==cudaSuccess,"Expert L2 slot copy failed");
@@ -206,7 +320,11 @@ struct llama_dsv41_weight_provider::implementation {
         const auto assign_started=std::chrono::steady_clock::now();
         struct assign_timer{double&total;std::chrono::steady_clock::time_point t0;~assign_timer(){
             total+=std::chrono::duration<double,std::milli>(std::chrono::steady_clock::now()-t0).count();}}timing{assign_ms,assign_started};
+        timer measured(hook_ms);
+        select_host_working_set(layer);
         select_pool(layer);
+        hook_stream=stream;defer_copies=host_async();pending_stores.clear();pending_copies.clear();pending_ram.clear();l2_written.clear();
+        struct defer_reset{bool&d;~defer_reset(){d=false;}}defer_guard{defer_copies};
         std::vector<int32_t>unique;for(size_t i=0;i<count;++i){const auto id=ids[i];require(id>=0&&id<384,"Routed expert id out of range");if(std::find(unique.begin(),unique.end(),id)==unique.end())unique.push_back(id);}
         require(unique.size()<=pool_slots,"Routed experts exceed the cache pool");
         if(recency_lfu_enabled()){
@@ -241,15 +359,28 @@ struct llama_dsv41_weight_provider::implementation {
                     require(t!=from_l2&&!l2_in_use(t),"Expert L2 victim slot collides with its source");
                     if(!recency_lfu_enabled()||lfu_scores.admit(victim,l2_key[size_t(t)])){
                     l2_lru.splice(l2_lru.begin(),l2_lru,l2_pos[size_t(t)]);
-                    if(l2_key[size_t(t)]>=0)l2_of.erase(l2_key[size_t(t)]);
+                    if(l2_key[size_t(t)]>=0){store_host(l2_key[size_t(t)],l2_base.data(),uint64_t(t),pool_max_stride,stream);l2_of.erase(l2_key[size_t(t)]);}
                     copy_slot(l2_base.data(),uint64_t(t),l1,uint64_t(slot),stream,true);copied=true;l2_key[size_t(t)]=victim;l2_of[victim]=t;++l2_stored;
-                    }
-                }}
+                    }else store_host(victim,l1,uint64_t(slot),pool_stride,stream);
+                }else store_host(victim,l1,uint64_t(slot),pool_stride,stream);}
             slot_key[size_t(slot)]=key;key_slot[key]=slot;slot_of[e]=slot;
             if(from_l2>=0){
                 copy_slot(l1,uint64_t(slot),l2_base.data(),uint64_t(from_l2),stream,false);copied=true;
                 l2_of.erase(key);l2_key[size_t(from_l2)]=-1;l2_lru.splice(l2_lru.end(),l2_lru,l2_pos[size_t(from_l2)]);++l2_hits;
                 continue;
+            }
+            const int ram=host_slots?host.find(layer,uint32_t(e)):-1;
+            if(ram>=0&&defer_copies){
+                pending_ram.push_back({uint32_t(ram),{l1[0]+uint64_t(slot)*pool_stride[0],l1[1]+uint64_t(slot)*pool_stride[1],l1[2]+uint64_t(slot)*pool_stride[2]}});
+                ++host_hits;++host_async_hits;continue;
+            }
+            if(ram>=0){
+                timer measured_upload(host_upload_ms);
+#ifdef GGML_USE_CUDA
+                require(cudaStreamSynchronize(static_cast<cudaStream_t>(stream))==cudaSuccess,"RAM hit destination synchronization failed");
+#endif
+                char*dst[3]={l1[0]+uint64_t(slot)*pool_stride[0],l1[1]+uint64_t(slot)*pool_stride[1],l1[2]+uint64_t(slot)*pool_stride[2]};
+                require(host.upload(uint32_t(ram),dst,pool_stride.data())==1,"RAM cached expert upload failed");++host_hits;continue;
             }
             ++cache_misses;
             for(uint32_t k=0;k<3;++k){
@@ -267,6 +398,7 @@ struct llama_dsv41_weight_provider::implementation {
                 }else extents.push_back({add(file,uint64_t(e)*pool_stride[k]),dst,pool_stride[k],0});
             }
         }
+        if(defer_copies)flush_deferred(stream,copied);
 #ifdef GGML_USE_CUDA
         // Slot copies complete before DirectStorage overwrites any copied-from L1 slot
         // and before an external decoder (own stream) reads the copied-in slots.
@@ -277,11 +409,108 @@ struct llama_dsv41_weight_provider::implementation {
         if(!extents.empty()){
             uint64_t bytes=0;double fetch_ms=0;
             // A failed or partial fetch poisons the provider (guard); the slot table is then discarded with it.
-            require(wf_fetch_extents_direct(fetcher,0,extents.data(),int(extents.size()),stream,&bytes,&fetch_ms)&&!wf_has_failed(fetcher),
+            const bool overlap=defer_copies&&host_async_level()>=2;
+            require((overlap?wf_fetch_extents_direct_overlap(fetcher,0,extents.data(),int(extents.size()),stream,&bytes,&fetch_ms,
+                    [](void*self){auto*me=static_cast<implementation*>(self);me->overlap_host_work();},this):
+                wf_fetch_extents_direct(fetcher,0,extents.data(),int(extents.size()),stream,&bytes,&fetch_ms))&&!wf_has_failed(fetcher),
                 "Routed expert-cache fetch failed");
             cache_bytes+=bytes;cache_ms+=fetch_ms;fetched_total+=bytes;fetch_ms_total+=fetch_ms;
         }
+        if(defer_copies)finish_host_work(stream);
         return slot_of;
+    }
+    // Phase 1-2 (before DirectStorage): victim D2H copy-ins on their own stream after one
+    // event from the provider stream, then the VRAM slot copies ordered after them by one
+    // event. DirectStorage writes are outside CUDA ordering, so the existing host drain covers
+    // any L1 slot a copy reads or a copy-in reads before storage overwrites it.
+    void flush_deferred(void*stream,bool&copied){
+#ifdef GGML_USE_CUDA
+        const auto main=static_cast<cudaStream_t>(stream);
+        if(!pending_stores.empty()){timer measured(host_store_ms);
+            require(cudaEventRecord(ev_main,main)==cudaSuccess&&cudaStreamWaitEvent(d2h_stream,ev_main,0)==cudaSuccess,"RAM copy-in ordering failed");
+            for(size_t i=0;i<pending_stores.size();++i){const auto&j=pending_stores[i];char*dst=in_ring[i].p;
+                for(uint32_t k=0;k<3;++k)require(cudaMemcpyAsync(dst+ring_offset[k],j.src[k],size_t(j.sizes[k]),cudaMemcpyDeviceToHost,d2h_stream)==cudaSuccess,"RAM copy-in failed");}
+            require(cudaEventRecord(ev_d2h,d2h_stream)==cudaSuccess&&cudaStreamWaitEvent(main,ev_d2h,0)==cudaSuccess,"RAM copy-in event failed");
+            // Storage writes are outside CUDA ordering: only an L1-sourced copy-in needs the host drain below.
+            for(const auto&j:pending_stores)copied=copied||j.l1_source;
+        }
+        defer_copies=false;   // execute the slot copies now, in their original order
+        char*const l1[3]={static_cast<char*>(pool[0]->data),static_cast<char*>(pool[1]->data),static_cast<char*>(pool[2]->data)};
+        for(const auto&c:pending_copies)
+            if(c.to_l2)copy_slot(l2_base.data(),c.dst_slot,l1,c.src_slot,stream,true);
+            else copy_slot(l1,c.dst_slot,l2_base.data(),c.src_slot,stream,false);
+        defer_copies=true;
+        if(host_async_level()==1)upload_ram_hits(stream,false);
+#else
+        (void)stream;(void)copied;
+#endif
+    }
+    // Phase 3: RAM-hit uploads on the H2D stream (level 1 keeps them before storage, synchronous
+    // per hit as before), then publish the completed copy-ins. Runs while DirectStorage reads.
+    void upload_ram_hits(void*stream,bool async){
+#ifdef GGML_USE_CUDA
+        if(pending_ram.empty())return;timer measured(host_upload_ms);
+        const auto main=static_cast<cudaStream_t>(stream);
+        if(!async){
+            require(cudaStreamSynchronize(main)==cudaSuccess,"RAM hit destination synchronization failed");
+            for(const auto&j:pending_ram)require(host.upload(j.ram,j.dst,pool_stride.data())==1,"RAM cached expert upload failed");
+            pending_ram.clear();return;
+        }
+        require(cudaEventRecord(ev_main,main)==cudaSuccess&&cudaStreamWaitEvent(h2d_stream,ev_main,0)==cudaSuccess,"RAM upload ordering failed");
+        // Registered payload slots DMA straight from RAM (no CPU copy); others go through the pinned ring.
+        const uint32_t registered=host2.registered?uint32_t(host2.registered()):0u;
+        for(const auto&j:pending_ram){
+            if(j.ram<registered){
+                for(int k=0;k<3;++k){const char*src=host2.payload(j.ram,k);require(src,"RAM cached expert vanished");
+                    require(cudaMemcpyAsync(j.dst[k],src,size_t(pool_stride[size_t(k)]),cudaMemcpyHostToDevice,h2d_stream)==cudaSuccess,"RAM upload failed");}
+                ++host_direct_hits;
+                if(host_async_level()==2)require(cudaStreamSynchronize(h2d_stream)==cudaSuccess,"RAM per-expert upload wait failed");
+                continue;
+            }
+            {auto&r=up_ring[up_next];up_next=(up_next+1)%upload_ring_slots;
+            require(cudaEventSynchronize(r.done)==cudaSuccess,"RAM staging reuse wait failed");
+            for(int k=0;k<3;++k){const char*src=host2.payload(j.ram,k);require(src,"RAM cached expert vanished");
+                std::memcpy(r.p+ring_offset[size_t(k)],src,size_t(pool_stride[size_t(k)]));
+                require(cudaMemcpyAsync(j.dst[k],r.p+ring_offset[size_t(k)],size_t(pool_stride[size_t(k)]),cudaMemcpyHostToDevice,h2d_stream)==cudaSuccess,"RAM upload failed");}
+            require(cudaEventRecord(r.done,h2d_stream)==cudaSuccess,"RAM staging event failed");
+            if(host_async_level()==2)require(cudaStreamSynchronize(h2d_stream)==cudaSuccess,"RAM per-expert upload wait failed");}
+        }
+        require(cudaEventRecord(ev_h2d,h2d_stream)==cudaSuccess,"RAM upload event failed");
+#else
+        (void)stream;(void)async;
+#endif
+    }
+    bool ram_uploaded=false;
+    void overlap_host_work(){
+        const auto t0=std::chrono::steady_clock::now();
+        ram_uploaded=!pending_ram.empty();upload_ram_hits(hook_stream,true);pending_ram.clear();commit_stores();
+        host_overlap_ms+=std::chrono::duration<double,std::milli>(std::chrono::steady_clock::now()-t0).count();
+    }
+    void*hook_stream=nullptr;
+    void commit_stores(){
+#ifdef GGML_USE_CUDA
+        if(pending_stores.empty())return;timer measured(host_store_ms);
+        {timer measured_sync(host_sync_ms);require(cudaEventSynchronize(ev_d2h)==cudaSuccess,"RAM copy-in completion failed");
+        // A store may reuse a payload slot an in-flight upload still reads (registered payload).
+        if(ram_uploaded){timer measured_sync(host_sync_ms);require(cudaEventSynchronize(ev_h2d)==cudaSuccess,"RAM upload completion failed");}}
+        for(size_t i=0;i<pending_stores.size();++i){const auto&j=pending_stores[i];const uint32_t layer=uint32_t(j.key)/384,e=uint32_t(j.key)%384;
+            const char*src[3]={in_ring[i].p+ring_offset[0],in_ring[i].p+ring_offset[1],in_ring[i].p+ring_offset[2]};
+            require(host2.store_host(layer,e,src,j.sizes)==1,"RAM expert victim admission failed");
+            if(host.find(layer,e)>=0)++host_stored;}
+        pending_stores.clear();
+#endif
+    }
+    // After storage: if nothing overlapped (no misses this hook), do the work now; then the
+    // provider stream waits on the upload event (no host wait).
+    void finish_host_work(void*stream){
+#ifdef GGML_USE_CUDA
+        if(host_async_level()>=2&&!pending_ram.empty())overlap_host_work();
+        else if(!pending_stores.empty())commit_stores();
+        if(ram_uploaded)require(cudaStreamWaitEvent(static_cast<cudaStream_t>(stream),ev_h2d,0)==cudaSuccess,"RAM upload join failed");
+        ram_uploaded=false;
+#else
+        (void)stream;
+#endif
     }
     void select_pool(uint32_t layer){
         bool changed=false;for(uint32_t k=0;k<3;++k)changed=changed||pool[k]->type!=routed[layer*3+k]->type;
@@ -409,7 +638,7 @@ struct llama_dsv41_weight_provider::implementation {
         join_early();
         engram_prompt.reset();
         if(options.backend&&allocated)ggml_backend_synchronize(options.backend);
-        release_l2();
+        release_host();release_l2();
         if(fetcher){wf_stop(fetcher);wf_quiesce(fetcher);wf_destroy(fetcher);fetcher=nullptr;}
         mark_weight_stream(false);
         for(auto&s:stages)for(auto&e:s.entries){e.t->data=nullptr;e.t->buffer=nullptr;}
@@ -839,7 +1068,7 @@ bool llama_dsv41_weight_provider::restart_prompt(const config&options,std::strin
         require(!options.decode_layout||(p->options.compute_direct&&p->options.buffers==2&&!p->options.zero_padding_only),
             "Decode layout requires the strict two-bank direct fetch profile");
         const auto started=std::chrono::steady_clock::now();
-        p->release_l2();   // LLAMADECODE: the decode-only L2 returns its VRAM before the prefill plan is restored
+        p->release_host();p->release_l2();   // return decode tiers before prefill restores its plan
         wf_destroy(p->fetcher);p->fetcher=nullptr;
         for(auto&s:p->stages)for(auto&e:s.entries){e.t->data=nullptr;e.t->buffer=nullptr;}
         p->buffers.clear();p->decode_layout=options.decode_layout;p->experts_prebound=false;p->dense_held=-1;p->resident_bound=false;p->create_pipeline();
@@ -1189,23 +1418,89 @@ bool llama_dsv41_weight_provider::external_expert_slots(uint32_t layer,const int
 },error);}
 llama_dsv41_weight_provider::expert_cache_stats llama_dsv41_weight_provider::cache_stats()const{std::lock_guard<std::mutex>lock(p->mutex);
     expert_cache_stats s;s.slots=p->pool_slots;s.hits=p->cache_hits;s.misses=p->cache_misses;s.fetched_bytes=p->cache_bytes;s.fetch_ms=p->cache_ms;
-    s.l2_slots=p->l2_slots;s.l2_hits=p->l2_hits;s.l2_stored=p->l2_stored;s.assign_ms=p->assign_ms;s.copy_sync_ms=p->copy_sync_ms;return s;}
+    s.l2_slots=p->l2_slots;s.l2_hits=p->l2_hits;s.l2_stored=p->l2_stored;s.assign_ms=p->assign_ms;s.copy_sync_ms=p->copy_sync_ms;
+    s.host_slots=p->host_slots;s.host_hits=p->host_hits;s.host_stored=p->host_stored;s.host_bytes=p->host_bytes;
+    s.host_store_ms=p->host_store_ms;s.host_sync_ms=p->host_sync_ms;s.host_upload_ms=p->host_upload_ms;s.hook_ms=p->hook_ms;s.residency_ms=p->residency_ms;
+    s.host_overlap_ms=p->host_overlap_ms;s.host_async_hits=p->host_async_hits;s.host_dropped=p->host_dropped;s.host_direct_hits=p->host_direct_hits;return s;}
 bool llama_dsv41_weight_provider::decode_residency(uint32_t layer,uint8_t*tier,uint32_t experts)const{
     std::lock_guard<std::mutex>lock(p->mutex);
+    implementation::timer measured(p->residency_ms);
     if(!tier||experts!=384||layer>=40||!p->decode_layout)return false;
     std::memset(tier,0,experts);
     for(const auto key:p->slot_key)if(key>=0&&uint32_t(key)/384==layer)tier[key%384]=1;
     for(const auto key:p->l2_key)if(key>=0&&uint32_t(key)/384==layer)tier[key%384]=1;
+    if(p->host_slots)for(uint32_t e=0;e<experts;++e)if(!tier[e]&&p->host.find(layer,e)>=0)tier[e]=2;
     return true;
 }
+bool llama_dsv41_weight_provider::release_host_cache(std::string&error){return p->guard([&]{
+    require(!p->leased,"RAM expert release requires an idle provider");p->release_host();},error);}
+bool llama_dsv41_weight_provider::release_prefill_rows(std::string&error){return p->guard([&]{
+    require(!p->leased&&p->next==p->stage_count(),"Prefill row release requires a completed provider");
+    p->join_early();p->early.reset();p->engram_prompt.reset();p->row_cache.reset();
+},error);}
+bool llama_dsv41_weight_provider::configure_host_cache(const ds4_external_host_cache_v1&api,uint64_t limit,uint64_t floor,std::string&error,
+        const ds4_external_host_cache_v2*api2){return p->guard([&]{
+    require(p->decode_layout&&!p->leased&&api.resize&&api.find&&api.upload&&api.store&&api.clear,"Invalid RAM expert cache bridge");
+    p->host=api;if(api2&&api2->payload&&api2->store_host){p->host2=*api2;p->host_v2=true;}if(p->host_slots)return;
+#ifdef _WIN32
+    const char*e=std::getenv("LLAMADECODE_HOST_CACHE_MB");
+    // Qualification decides the shipping default. An explicit auto uses all
+    // admitted headroom, an integer is an exact upper bound, and 0 is off.
+    if(!e||!e[0]||!std::strcmp(e,"0"))return;
+    uint64_t requested=UINT64_MAX;
+    if(std::strcmp(e,"auto")){
+        char*end=nullptr;errno=0;const auto mb=std::strtoull(e,&end,10);
+        require(e[0]!='-'&&!errno&&end!=e&&!*end&&mb<=UINT64_MAX/mib,"LLAMADECODE_HOST_CACHE_MB must be auto or nonnegative MiB");requested=mb*mib;
+    }
+    MEMORYSTATUSEX memory{};memory.dwLength=sizeof(memory);
+    PROCESS_MEMORY_COUNTERS_EX process{};process.cb=sizeof(process);
+    require(GlobalMemoryStatusEx(&memory)&&GetProcessMemoryInfo(GetCurrentProcess(),reinterpret_cast<PROCESS_MEMORY_COUNTERS*>(&process),sizeof(process)),"Cannot measure RAM expert admission");
+    const uint64_t reserve=add(floor,512*mib),margin=256*mib;
+    const uint64_t physical=memory.ullAvailPhys>reserve+margin?memory.ullAvailPhys-reserve-margin:0;
+    const uint64_t rss=process.WorkingSetSize;
+    const uint64_t budget=limit>rss+margin?limit-rss-margin:0;
+    const uint64_t offer=std::min(requested,std::min(physical,budget));
+    require(p->pool_max_stride[0]==p->pool_max_stride[1],"RAM expert gate/up geometry mismatch");
+    const auto width=p->pool_max_stride[0]+p->pool_max_stride[1]+p->pool_max_stride[2];
+    const char*n=std::getenv("DS4_CUDA_STREAMING_HOST_CACHE_N");
+    p->ring_width=width;p->ring_offset={0,p->pool_max_stride[0],p->pool_max_stride[0]+p->pool_max_stride[1]};
+    const bool rings=p->host_v2&&p->host_async_level()>=1;
+    // The pinned staging rings come out of the same admitted RAM as the tier.
+    uint64_t capped=rings?(offer>p->host_ring_bytes()?offer-p->host_ring_bytes():0):offer;
+    if(n&&*n){char*end=nullptr;errno=0;const auto count=std::strtoull(n,&end,10);
+        require(n[0]!='-'&&!errno&&end!=n&&!*end&&count<=UINT64_MAX/width,"Invalid DS4_CUDA_STREAMING_HOST_CACHE_N");capped=std::min(capped,count*width);}
+    p->host_slots=api.resize(capped,p->pool_max_stride[0],p->pool_max_stride[2]);p->host_bytes=uint64_t(p->host_slots)*width;
+    if(p->host_slots&&rings){p->allocate_host_rings();p->host_bytes=add(p->host_bytes,p->host_ring_bytes());}
+    require(GlobalMemoryStatusEx(&memory)&&memory.ullAvailPhys>=reserve,"RAM expert allocation crossed physical reserve");
+    std::fprintf(stderr,"LLAMADECODE_HOST_CACHE slots=%u bytes=%llu offer=%llu host_limit=%llu rss_before=%llu available_after=%llu runtime_floor=%llu desktop_reserve=%llu\n",
+        p->host_slots,(unsigned long long)p->host_bytes,(unsigned long long)capped,(unsigned long long)limit,(unsigned long long)rss,
+        (unsigned long long)memory.ullAvailPhys,(unsigned long long)floor,(unsigned long long)(512*mib));
+#else
+    (void)limit;(void)floor;throw std::runtime_error("RAM expert cache requires Windows CUDA");
+#endif
+},error);}
 uint64_t llama_dsv41_weight_provider::decode_cache_slot_bytes()const{return p->pool_max_stride[0]+p->pool_max_stride[1]+p->pool_max_stride[2];}
 bool llama_dsv41_weight_provider::grow_decode_cache(uint64_t bytes,uint32_t*slots,std::string&error){return p->guard([&]{
     require(slots&&p->decode_layout&&p->pool[0]&&p->pool[0]->data&&!p->l2_buffer&&!p->leased,"Expert L2 requires an idle decode-layout provider without an L2");
     const uint64_t slot_bytes=p->pool_max_stride[0]+p->pool_max_stride[1]+p->pool_max_stride[2];
-    const uint32_t n=uint32_t(std::min<uint64_t>(bytes/slot_bytes,40ull*384-p->pool_slots));*slots=0;
+    uint32_t n=uint32_t(std::min<uint64_t>(bytes/slot_bytes,40ull*384-p->pool_slots));*slots=0;
+    if(const char*e=std::getenv("LLAMADECODE_L2_MAX_SLOTS")){
+        char*end=nullptr;errno=0;const auto cap=std::strtoul(e,&end,10);
+        require(*e&&*e!='-'&&!errno&&end!=e&&!*end&&cap<=40u*384u,"Invalid LLAMADECODE_L2_MAX_SLOTS");
+        n=std::min(n,uint32_t(cap));
+    }
     if(n<2){std::fprintf(stderr,"LLAMADECODE_L2 slots=0 offered_bytes=%llu\n",(unsigned long long)bytes);return;}
     const auto buft=ggml_backend_get_default_buffer_type(p->options.backend);
-    auto*buffer=ggml_backend_buft_alloc_buffer(buft,size_t(uint64_t(n)*slot_bytes));
+    // With the small owner-approved VRAM margin, WDDM can refuse the planned size while other
+    // desktop allocations come and go. Step down 256 MiB at a time (at most 2 GiB, loudly logged);
+    // the runtime reserve guard still refuses if free VRAM later falls below the reserve.
+    const uint32_t step=uint32_t(std::max<uint64_t>(1,(256ull<<20)/slot_bytes));
+    ggml_backend_buffer_t buffer=nullptr;
+    for(uint32_t attempt=0;attempt<=8&&n>=2;++attempt,n=n>step?n-step:0){
+        buffer=ggml_backend_buft_alloc_buffer(buft,size_t(uint64_t(n)*slot_bytes));
+        if(buffer)break;
+        std::fprintf(stderr,"LLAMADECODE_L2_ALLOC_REFUSED slots=%u bytes=%llu attempt=%u next_slots=%u\n",n,(unsigned long long)(uint64_t(n)*slot_bytes),attempt,n>step?n-step:0u);
+    }
     require(buffer,"Expert L2 VRAM allocation failed");p->l2_buffer.reset(buffer);
     auto*base=static_cast<char*>(ggml_backend_buffer_get_base(buffer));
     p->l2_base={base,base+uint64_t(n)*p->pool_max_stride[0],base+uint64_t(n)*(p->pool_max_stride[0]+p->pool_max_stride[1])};

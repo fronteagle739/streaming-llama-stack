@@ -3,6 +3,7 @@ from __future__ import annotations
 from contextlib import ExitStack
 import hashlib
 import json
+import math
 import os
 from pathlib import Path
 import re
@@ -52,6 +53,22 @@ def ctx_cache(cfg):
     if type(growable) is not bool:raise ValueError('ctx_cache_growable must be true or false')
     if growable and cfg.get('producer_keep_alive'):raise ValueError('ctx_cache_growable is not covered by the switch arena (producer_keep_alive)')
     return precision,growable
+
+
+def decode_host_budget(cfg, prefill_bytes):
+    """A decode tier may reuse prefill RAM, inside a separately admitted ceiling.
+
+    This ceiling does not enlarge the fold planner's prefill workspace. It is
+    admitted before launch and watched by the same producer and aggregate guard.
+    """
+    value=cfg.get('producer_decode_host_budget_gib')
+    if value is None:return prefill_bytes
+    if type(value) not in (int,float) or not math.isfinite(value) or value<=0:
+        raise ValueError('producer_decode_host_budget_gib must be finite and positive')
+    ceiling=max(prefill_bytes,int(value*(1<<30))//65536*65536)
+    if ceiling+(.5*(1<<30))>cfg['host_budget_gib']*(1<<30):
+        raise MemoryError('Decode host ceiling must leave 512 MiB for the controller inside host_budget_gib')
+    return ceiling
 
 LEGACY_SWEEP=49152
 def carry_bank_bytes(rows,compact=False):
@@ -392,7 +409,7 @@ class ComboProducer:
         if tier not in ('accurate','fast','ultra'):raise ValueError('Combo producer profile must be accurate, fast or ultra (original weights; no HYPER)')
         import psutil
         args,plan=prefill_arguments(cfg,len(tokens),psutil.virtual_memory().available)
-        self.prefill_plan=plan;host_bytes=plan['host_bytes']
+        self.prefill_plan=plan;host_bytes=decode_host_budget(cfg,plan['host_bytes'])
         if plan.get('policy')=='fold':   # owner fold policy: S-token sweeps, remainder folded into the last
             args['--prefill-sweep-tokens']=str(plan['sweep_tokens']);args['--prefill-fold-cap-tokens']=str(plan['fold_cap'])
             print('LLAMADECODE_PREFILL_FOLD sweep_tokens=%s primary_sweep_tokens=%d capacity=%d fold_cap=%d rebalance=%d%s'%(','.join(map(str,plan['sweeps'])),plan['sweep_tokens'],plan['capacity'],plan['fold_cap'],int(plan['rebalance']),
@@ -455,12 +472,17 @@ class ComboProducer:
                     owner.loading_process=process
                     try:return super()._initialize(*args,**kwargs)
                     finally:owner.loading_process=None
+            def admitted(job):
+                # A lost controller must leave a GPU owner recoverable. Memory
+                # and paging stops use its abort file and retirement barrier.
+                job.release_kill_on_close()
+                return protect_working_set(job,host_bytes,int(cfg['min_available_gib']*(1<<30)),
+                    int(cfg['host_budget_gib']*(1<<30)),receipt=self.directory/'resident-admission.json')
             self.process=PublishingProducer(session,argv,env,self.directory,host_bytes=host_bytes,
                 runtime_min_free_gib=runtime_floor,model_sha256=self.model_sha256,
                 physical_floor=int(cfg['min_available_gib']*(1<<30)),operation_seconds=min(1140,cfg['request_timeout_s']),stall_seconds=stall_seconds(cfg),
                 idle_seconds=cfg['lease_minutes']*60,native=native,cancelled=cancelled,native_mode=1,bootstrap=bootstrap,owner_epoch=epoch,
-                after_resume=lambda job:protect_working_set(job,host_bytes,int(cfg['min_available_gib']*(1<<30)),
-                    int(cfg['host_budget_gib']*(1<<30)),receipt=self.directory/'resident-admission.json'))
+                after_resume=admitted)
             if keep and self.process.ready.get('yoco_keep')!=keep:raise ValueError('Producer YOCO mode identity differs')
             self.checkpoint=self.process.ready['checkpoint']
             expected_position=(base[1]['position'] if base else 0)+len(tokens)

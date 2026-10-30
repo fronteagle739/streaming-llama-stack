@@ -4268,7 +4268,12 @@ static inline void q4_k_get_scale_min(int j, const uint8_t *q, uint8_t *sc, uint
     }
 }
 
-static void ds4_vec_dot_q4_K_q8_K(int n, float *s, const block_q4_K *x, const block_q8_K *y) {
+#ifdef DS4_EXTERNAL_DECODE
+#include "ds4_external_host_cache.h"
+static ds4_external_dot g_external_cpu_dot;
+static int g_external_cpu_verify;
+#endif
+static void ds4_vec_dot_q4_K_q8_K_builtin(int n, float *s, const block_q4_K *x, const block_q8_K *y) {
     const int nb = n / QK_K;
 
 #if defined(__ARM_NEON) && defined(__ARM_FEATURE_DOTPROD)
@@ -4358,6 +4363,20 @@ static void ds4_vec_dot_q4_K_q8_K(int n, float *s, const block_q4_K *x, const bl
 
     *s = sumf;
 #endif
+}
+
+static void ds4_vec_dot_q4_K_q8_K(int n,float*s,const block_q4_K*x,const block_q8_K*y){
+#ifdef DS4_EXTERNAL_DECODE
+    if(g_external_cpu_dot){
+        g_external_cpu_dot(n,s,0,x,0,y,0,1);
+        if(g_external_cpu_verify){
+            static volatile long calls=0;
+            if(_InterlockedIncrement(&calls)<=16){float ref;ds4_vec_dot_q4_K_q8_K_builtin(n,&ref,x,y);fprintf(stderr,"LLAMADECODE_HOST_CPU_DOT n=%d simd=%.9g scalar=%.9g\n",n,*s,ref);}
+        }
+        return;
+    }
+#endif
+    ds4_vec_dot_q4_K_q8_K_builtin(n,s,x,y);
 }
 
 static void ds4_vec_dot_q5_K_q8_K(int n, float *s, const block_q5_K *x, const block_q8_K *y) {

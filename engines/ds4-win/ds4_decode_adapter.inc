@@ -10,8 +10,9 @@
  *   - the canonical V4.1 state: raw rings, compressed/index caches and pool
  *     tails, bound as views (same layout and values as ds4-win's own);
  *   - the routed experts: a hook returns cache-pool bases and slot ids.
- * ds4-win allocates only its per-token scratch. No streaming, SSD tiers,
- * host caches, prefill workspace or draft model start here. */
+ * ds4-win allocates its per-token scratch. The optional versioned host-cache
+ * bridge reuses ds4's pinned cache for producer-owned expert victims. No
+ * standalone streamer, prefill workspace or draft model starts here. */
 #ifdef DS4_EXTERNAL_DECODE
 #if defined(_WIN32)
 #define DS4X_EXPORT __declspec(dllexport)
@@ -30,6 +31,53 @@ static struct {
 
 static void ds4x_set_error(char *error, size_t cap, const char *message) {
     if (error && cap) snprintf(error, cap, "%s", message);
+}
+
+DS4X_EXPORT int ds4x_host_cpu_v1(ds4_external_dot dot) {
+    if(!dot)return 0;
+    g_external_cpu_dot=dot;
+    const char*verify=getenv("LLAMADECODE_HOST_CPU_VERIFY");
+    g_external_cpu_verify=verify&&*verify&&strcmp(verify,"0");
+    ds4_threads_init();
+    fprintf(stderr,"LLAMADECODE_HOST_CPU threads=%u quant=Q4_K activation=Q8_K dispatched_ggml_dot=1\n",g_pool.n_threads);
+    return 1;
+}
+
+/* Reuse standalone ds4's persistent row pool, SwiGLU workers, Q8_K
+ * activation quantizer and down accumulation. The provider pins the borrowed
+ * RAM payloads until this call completes. Bounded stack scratch: < 100 KiB. */
+static block_q8_K g_external_trace_xq[5120/QK_K],g_external_trace_midq[6*2304/QK_K];
+static float g_external_trace_mid[6*2304];
+const void *ds4_external_cpu_trace(int which){
+    return which==0?(const void*)g_external_trace_xq:which==1?(const void*)g_external_trace_midq:(const void*)g_external_trace_mid;
+}
+int ds4_external_cpu_q4(float *out,const float *x,const char *const *gate,
+        const char *const *up,const char *const *down,const float *weights,
+        uint32_t n,uint32_t in_dim,uint32_t mid_dim,uint32_t out_dim,float clamp) {
+    if(!g_external_cpu_dot||!n||n>6||in_dim!=5120||mid_dim!=2304||out_dim!=5120)return 0;
+    block_q8_K xq[5120/QK_K],midq[6*2304/QK_K];
+    float mid[6*2304];
+    ds4_quantize_row_q8_K(x,xq,in_dim);
+    matvec_q4_k_mid_ctx g={0};g.mid=mid;g.xq=xq;g.clamp=clamp;
+    g.in_dim=in_dim;g.out_dim=mid_dim;g.n_expert=(int)n;
+    const uint64_t gate_row=(uint64_t)(in_dim/QK_K)*sizeof(block_q4_K);
+    const uint64_t down_row=(uint64_t)(mid_dim/QK_K)*sizeof(block_q4_K);
+    for(uint32_t i=0;i<n;++i){
+        g.gate_base[i]=(const uint8_t*)gate[i];g.up_base[i]=(const uint8_t*)up[i];
+        g.gate_row_bytes[i]=g.up_row_bytes[i]=gate_row;g.expert_weight[i]=weights[i];
+    }
+    ds4_parallel_for((uint64_t)n*mid_dim,matvec_q4_k_mid_worker,&g);
+    for(uint32_t i=0;i<n;++i)ds4_quantize_row_q8_K(mid+(uint64_t)i*mid_dim,midq+(uint64_t)i*(mid_dim/QK_K),mid_dim);
+    matvec_q4_k_accum_ctx d={0};d.out=out;d.in_dim=mid_dim;d.n_expert=(int)n;
+    for(uint32_t i=0;i<n;++i){d.base[i]=(const uint8_t*)down[i];d.row_bytes[i]=down_row;d.xq[i]=midq+(uint64_t)i*(mid_dim/QK_K);}
+    ds4_parallel_for(out_dim,matvec_q4_k_accum_worker,&d);
+    if(g_external_cpu_verify){
+        memcpy(g_external_trace_xq,xq,sizeof(xq));
+        memcpy(g_external_trace_midq,midq,n*(mid_dim/QK_K)*sizeof(block_q8_K));
+        memcpy(g_external_trace_mid,mid,n*mid_dim*sizeof(float));
+        static unsigned calls=0;if(calls++<16){double xn=0,mn=0,on=0;for(uint32_t i=0;i<in_dim;++i)xn+=x[i]*x[i];for(uint32_t i=0;i<n*mid_dim;++i)mn+=mid[i]*mid[i];for(uint32_t i=0;i<out_dim;++i)on+=out[i]*out[i];fprintf(stderr,"LLAMADECODE_HOST_CPU_FFN n=%u weight=%.9g x_norm=%.9g mid_norm=%.9g out_norm=%.9g\n",n,weights[0],sqrt(xn),sqrt(mn),sqrt(on));}
+    }
+    return 1;
 }
 
 /* Isolated vision worker: reuse Studio's original encoder, preprocessing,
@@ -316,6 +364,7 @@ DS4X_EXPORT void ds4x_close(void) {
     g_ds4x_affinity = false; g_cache_affinity_bias = 0.0f;g_cache_affinity_observe=false;
     ds4_gpu_external_decode_mode(0);
     model_close(&g_ds4x.model);
+    ds4_threads_shutdown();
     memset(&g_ds4x, 0, sizeof(g_ds4x));
 }
 #endif

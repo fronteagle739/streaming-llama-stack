@@ -13,7 +13,7 @@ spec = importlib.util.spec_from_file_location('dsv41_single', ROOT / 'scripts' /
 dsv41_single = importlib.util.module_from_spec(spec)
 spec.loader.exec_module(dsv41_single)
 
-GATED_ENV = {'DS4_DS_READ_PARTS': '8', 'LLAMADECODE_VRAM_RESERVE_MIB': '512',
+GATED_ENV = {'DS4_DS_READ_PARTS': '8', 'LLAMADECODE_VRAM_RESERVE_MIB': '128', 'LLAMADECODE_VRAM_MARGIN_MIB': '64',
              'LLAMADECODE_ENGRAM_EARLY': 'auto', 'LLAMADECODE_ENGRAM_CACHE_MB': '0',
              'LLAMADECODE_APPEND_DECODE_MAX': '0', 'LLAMADECODE_APPEND_RESIDENT_SWEEP': '1',
              'LLAMA_DSV41_INDEX_FP4': '1', 'DS4_CUDA_SINGLE_GPU_HC_GRAPHS': '1', 'LLAMADECODE_HOST_COPY_STAGING': 'auto',

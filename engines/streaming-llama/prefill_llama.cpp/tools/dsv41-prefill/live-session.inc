@@ -103,9 +103,15 @@ bool nvml_free_bytes(uint64_t&free_bytes,uint64_t&total_bytes){
     if(by_uuid(uuid,&device)!=0||info(device,&m)!=0)return false;
     free_bytes=m.free;total_bytes=m.total;return true;
 }
-// Physical VRAM reserve kept free beside the L2 (LLAMADECODE_VRAM_RESERVE_MIB, default 512 MiB).
+// Physical VRAM reserve kept free beside the L2 (LLAMADECODE_VRAM_RESERVE_MIB, default 128 MiB;
+// owner 2026-10-30: 128 MiB reserve + 64 MiB growth margin, 8/8 runs at 50K-200K without a breach).
 uint64_t decode_vram_reserve(){static const uint64_t r=[]{const char*e=std::getenv("LLAMADECODE_VRAM_RESERVE_MIB");
-    const long v=e&&*e?std::strtol(e,nullptr,10):512; /* measured: no transient dip below the post-L2 steady free (5 ms NVML, 43K run) */return uint64_t(std::max<long>(256,std::min<long>(v,8192)))<<20;}();return r;}
+    const long v=e&&*e?std::strtol(e,nullptr,10):128; /* measured: no transient dip below the post-L2 steady free (5 ms NVML, 43K run) */return uint64_t(std::max<long>(128,std::min<long>(v,8192)))<<20;}();return r;}
+// Decode-graph growth margin beside the reserve (LLAMADECODE_VRAM_MARGIN_MIB, default 64 MiB; the
+// measured post-L2 transient is ~25-30 MiB, and 128+0 breached the reserve in every run).
+// Owner 2026-10-29: the safety margin may be cut but not zeroed; reserve+margin >= 128 MiB.
+uint64_t decode_vram_margin(){static const uint64_t r=[]{const char*e=std::getenv("LLAMADECODE_VRAM_MARGIN_MIB");
+    const long v=e&&*e?std::strtol(e,nullptr,10):64;return uint64_t(std::max<long>(0,std::min<long>(v,8192)))<<20;}();return r;}
 // Headroom measurement: a 5 ms NVML sampler records the minimum free VRAM
 // (transient cuBLAS/graph/WDDM/other-process use) once the L2 is filled.
 struct vram_sampler{
@@ -143,7 +149,7 @@ void grow_decode_l2(llama_dsv41_sweep&sweep,const llama_dsv41_fixed_storage*fixe
     if(!provider->decode_layout()||provider->cache_stats().l2_slots)return;
     // Owner rule: keep a 2 GiB physical reserve (NVML free already excludes
     // Studio's idle context) plus a decode-graph growth margin.
-    const uint64_t margin=768ull<<20,floor=decode_vram_reserve();
+    const uint64_t margin=decode_vram_margin(),floor=decode_vram_reserve();
     const uint64_t freed=fixed->full_graph_reserve+fixed->full_hidden_bytes;
     const uint64_t now=ggml_gallocr_get_buffer_size(fixed->graph.get(),0)+fixed->hidden_bytes;
     (void)freed;(void)now;uint64_t offer=~0ull;
@@ -216,6 +222,11 @@ struct ds4_external {
     int(*x_affinity)(float,uint32_t,uint32_t,const char*,int(*)(void*,uint32_t,uint8_t*,uint32_t),void*)=nullptr;
     int(*x_prefill_ws)(uint32_t,char*,size_t)=nullptr;int(*x_prefill)(const int32_t*,uint32_t,uint32_t,const int32_t*,uint32_t,float*)=nullptr;
     int(*x_replace)(uint64_t,uint64_t,void*)=nullptr;uint64_t(*x_drop)()=nullptr; // keep-open (optional exports)
+    ds4_external_host_cache_v1 host_cache{};ds4_external_host_cache_v2 host_cache2{};bool have_host2=false;
+    void(*x_host_timing)(double*,uint64_t*)=nullptr;
+    uint64_t host_limit=0;
+    void grow_host(){if(host_cache.resize){std::string error;
+        success(provider->configure_host_cache(host_cache,host_limit,llama_dsv41_host_memory::runtime_min_free_bytes,error,have_host2?&host_cache2:nullptr),error);}}
     uint32_t prefill_rows=0; // multi-row workspace rows (0 = per-token appends)
     llama_dsv41_weight_provider*provider=nullptr;uint64_t registered=0,registered_bytes=0;
     using resident=llama_dsv41_ds4x_keep::resident;std::vector<resident>table; // what ds4 holds registered
@@ -267,6 +278,34 @@ struct ds4_external {
         require(module,"Cannot load ds4-decode.dll beside the producer");
         bind(x_open,"ds4x_open");bind(x_map,"ds4x_model_map");bind(x_register,"ds4x_register_weight");bind(x_bind,"ds4x_bind_state");
         bind(x_hook,"ds4x_set_expert_hook");bind(x_decode,"ds4x_decode");bind(x_close,"ds4x_close");bind(x_affinity,"ds4x_set_affinity");
+        x_host_timing=reinterpret_cast<decltype(x_host_timing)>(GetProcAddress(module,"ds4x_host_timing_v1"));
+        const char*ram=std::getenv("LLAMADECODE_HOST_CACHE_MB");
+        if(ram&&*ram&&std::strcmp(ram,"0")){
+            int(*api)(ds4_external_host_cache_v1*)=nullptr;bind(api,"ds4x_host_cache_v1");
+            require(api(&host_cache)==1,"ds4-decode RAM cache ABI refused");
+            int(*api2)(ds4_external_host_cache_v2*)=reinterpret_cast<int(*)(ds4_external_host_cache_v2*)>(GetProcAddress(module,"ds4x_host_cache_v2"));
+            have_host2=api2&&api2(&host_cache2)==1;
+            const char*mode=std::getenv("LLAMADECODE_HOST_MODE");
+            require(!mode||!std::strcmp(mode,"upload")||!std::strcmp(mode,"cpu")||!std::strcmp(mode,"mix"),"LLAMADECODE_HOST_MODE must be upload, cpu or mix");
+            if(mode&&std::strcmp(mode,"upload")){
+                int(*cpu)(ds4_external_dot)=nullptr;bind(cpu,"ds4x_host_cpu_v1");
+                // The GPU producer does not otherwise initialize the CPU
+                // backend. Its SIMD dot uses the CPU FP16 lookup table.
+                ggml_cpu_init();
+                const auto dot=ggml_get_type_traits_cpu(GGML_TYPE_Q4_K)->vec_dot;
+                std::array<uint8_t,144>qw{};std::array<uint8_t,292>qx{};
+                const uint16_t half_one=ggml_fp32_to_fp16(1.0f);const float one=1.0f;
+                std::memcpy(qw.data(),&half_one,2);std::memcpy(qx.data(),&one,4);
+                for(size_t i=4;i<8;++i)qw[i]=1;for(size_t i=12;i<16;++i)qw[i]=1;
+                std::fill(qw.begin()+16,qw.end(),uint8_t(0x11));
+                std::fill(qx.begin()+4,qx.begin()+260,uint8_t(1));
+                for(size_t i=260;i<292;i+=2){const int16_t sum=16;std::memcpy(qx.data()+i,&sum,2);}
+                float known=0;dot(256,&known,0,qw.data(),0,qx.data(),0,1);
+                require(std::isfinite(known)&&std::abs(known-256.0f)<0.001f,"CPU Q4_K dot known-answer check failed");
+                require(cpu(dot)==1,"CPU expert kernel registration failed");
+                std::fprintf(stderr,"LLAMADECODE_HOST_CPU_ISA avx2=%d avx512=%d\n",ggml_cpu_has_avx2(),ggml_cpu_has_avx512());
+            }
+        }
         if(append_multirow_enabled()){bind(x_prefill_ws,"ds4x_prefill_workspace");bind(x_prefill,"ds4x_prefill");}
         x_bind_ex=reinterpret_cast<decltype(x_bind_ex)>(GetProcAddress(module,"ds4x_bind_state_ex"));
         x_replace=reinterpret_cast<decltype(x_replace)>(GetProcAddress(module,"ds4x_replace_weight"));
@@ -278,8 +317,17 @@ struct ds4_external {
     // (Re)prepare on the current owner: decode layout, resident weights
     // registered at their device addresses, state views, expert hook.
     void prepare(llama_dsv41_sweep&sweep,const llama_dsv41_weight_provider::config&weights,uint32_t context){
-        load();std::string error;auto t0=clock_type::now();success(sweep.compact_for_external_decode(error),error);handoff.compact_ms=ms(t0);
+        load();std::string error;MEMORYSTATUSEX before{};before.dwLength=sizeof(before);
+        if(host_cache.resize)require(GlobalMemoryStatusEx(&before),"Prefill release RAM query failed");
+        auto t0=clock_type::now();success(sweep.compact_for_external_decode(error,bool(host_cache.resize)),error);handoff.compact_ms=ms(t0);
         provider=sweep.provider_for_external_decode();
+        host_limit=weights.job_host_bytes;
+        if(host_cache.resize){
+            success(provider->release_prefill_rows(error),error);
+            MEMORYSTATUSEX after{};after.dwLength=sizeof(after);require(GlobalMemoryStatusEx(&after),"Decode RAM query failed");
+            std::fprintf(stderr,"LLAMADECODE_PREFILL_HOST_RELEASE available_before=%llu available_after=%llu delta=%lld frontier_certificate_kept=1\n",
+                (unsigned long long)before.ullAvailPhys,(unsigned long long)after.ullAvailPhys,(long long)after.ullAvailPhys-(long long)before.ullAvailPhys);
+        }
         if(!provider->decode_layout()){
             handoff.rebuilt=true;
             // Banks were rebuilt by a prefill pass. Old path: close and reopen (re-register
@@ -346,15 +394,33 @@ struct ds4_external {
         if(position%16==0)check_decode_vram_reserve();
         double f0[4]{};uint64_t r0=0,b0=0;wf_extent_fetch_stats(f0,&r0,&b0);
         const auto before=provider->cache_stats();const auto started=std::chrono::steady_clock::now();
+        double cpu0[4]{};uint64_t count0[2]{};if(x_host_timing)x_host_timing(cpu0,count0);
         require(x_decode(token,position,tail.data(),3,logits.data())==1,"ds4-win decode step failed");
         const double decode_ms=std::chrono::duration<double,std::milli>(std::chrono::steady_clock::now()-started).count();
         success(sweep.commit_external_token(token,logits,error),error);
         const auto after=provider->cache_stats();double f1[4]{};uint64_t r1=0,b1=0;wf_extent_fetch_stats(f1,&r1,&b1);
-        std::fprintf(stderr,"LLAMADECODE_DS4X_TOKEN position=%u decode_ms=%.3f ds_bytes=%llu ds_ms=%.3f l1_hits=%llu l2_hits=%llu misses=%llu l1_slots=%u l2_slots=%u ds_submit_ms=%.3f ds_fence_ms=%.3f ds_verify_ms=%.3f ds_cuda_ms=%.3f ds_requests=%llu ds_batches=%llu assign_ms=%.3f copy_sync_ms=%.3f l2_stored=%llu\n",position,decode_ms,
+        double cpu1[4]{};uint64_t count1[2]{};if(x_host_timing)x_host_timing(cpu1,count1);
+        std::fprintf(stderr,"LLAMADECODE_TIER_TIME position=%u hook_ms=%.4f store_ms=%.4f victim_sync_ms=%.4f upload_ms=%.4f overlap_ms=%.4f async_hits=%llu direct_hits=%llu dropped=%llu residency_ms=%.4f cpu_ms=%.4f cpu_wait_ms=%.4f cpu_transfer_ms=%.4f cpu_merge_ms=%.4f cpu_experts=%llu\n",position,
+            after.hook_ms-before.hook_ms,after.host_store_ms-before.host_store_ms,after.host_sync_ms-before.host_sync_ms,
+            after.host_upload_ms-before.host_upload_ms,after.host_overlap_ms-before.host_overlap_ms,
+            (unsigned long long)(after.host_async_hits-before.host_async_hits),(unsigned long long)(after.host_direct_hits-before.host_direct_hits),(unsigned long long)(after.host_dropped-before.host_dropped),after.residency_ms-before.residency_ms,
+            cpu1[0]-cpu0[0],cpu1[1]-cpu0[1],cpu1[2]-cpu0[2],cpu1[3]-cpu0[3],(unsigned long long)(count1[0]-count0[0]));
+        // Opt-in bounded correctness trace. Original logits, sampled once per
+        // 32 positions; the caller supplies a scratch path and compares only
+        // identical token prefixes. No extra model evaluation or routing.
+        const char*trace=std::getenv("LLAMADECODE_LOGITS_TRACE");
+        if(trace&&*trace&&position%32==0){
+            auto*f=std::fopen(trace,"ab");require(f,"Cannot open decode logits trace");
+            const uint32_t header[3]={position,uint32_t(token),uint32_t(logits.size())};
+            const bool ok=std::fwrite(header,sizeof(header),1,f)==1&&std::fwrite(logits.data(),sizeof(float),logits.size(),f)==logits.size();
+            std::fclose(f);require(ok,"Decode logits trace write failed");
+        }
+        std::fprintf(stderr,"LLAMADECODE_DS4X_TOKEN position=%u decode_ms=%.3f ds_bytes=%llu ds_ms=%.3f l1_hits=%llu l2_hits=%llu misses=%llu l1_slots=%u l2_slots=%u ds_submit_ms=%.3f ds_fence_ms=%.3f ds_verify_ms=%.3f ds_cuda_ms=%.3f ds_requests=%llu ds_batches=%llu assign_ms=%.3f copy_sync_ms=%.3f l2_stored=%llu host_hits=%llu host_stored=%llu host_slots=%u host_bytes=%llu\n",position,decode_ms,
             (unsigned long long)(after.fetched_bytes-before.fetched_bytes),after.fetch_ms-before.fetch_ms,(unsigned long long)(after.hits-before.hits),
             (unsigned long long)(after.l2_hits-before.l2_hits),(unsigned long long)(after.misses-before.misses),after.slots,after.l2_slots,
             f1[0]-f0[0],f1[1]-f0[1],f1[2]-f0[2],f1[3]-f0[3],(unsigned long long)(r1-r0),(unsigned long long)(b1-b0),
-            after.assign_ms-before.assign_ms,after.copy_sync_ms-before.copy_sync_ms,(unsigned long long)(after.l2_stored-before.l2_stored));
+            after.assign_ms-before.assign_ms,after.copy_sync_ms-before.copy_sync_ms,(unsigned long long)(after.l2_stored-before.l2_stored),
+            (unsigned long long)(after.host_hits-before.host_hits),(unsigned long long)(after.host_stored-before.host_stored),after.host_slots,(unsigned long long)after.host_bytes);
     }
     // Multi-row append: `count` tokens at `position` in one ds4 prefill; the producer
     // commits them with the frontier logits (the per-token path's final state).
@@ -415,6 +481,7 @@ void run_live_session(std::unique_ptr<llama_dsv41_sweep>&sweep,
         const auto t_token=clock_type::now();
         ds4x.step(*sweep,weights.backend,token,current.frontier.position+uint32_t(index));
         if(index==0){const double token_ms=ms(t_token);const auto t_l2=clock_type::now();grow_decode_l2(*sweep,options.fixed.get(),weights.backend);
+            ds4x.grow_host(); // VRAM L2 is allocated before admitting the third tier
             ds4x.report_handoff(current.frontier.position,token_ms,ms(t_l2));}
         else if(index%16==0)check_decode_vram_reserve();
     };
@@ -738,6 +805,9 @@ void run_live_session(std::unique_ptr<llama_dsv41_sweep>&sweep,
                 reply({{"peer_synchronized",false},{"prompt_tokens",tokens.size()},{"prompt_processing_ms",append_ms},{"export_preparation_ms",0.0},{"append_via_decode",true},{"append_multirow",append_multirow_enabled()&&tokens.size()>=2}});
                 continue;
             }
+            // Return the decode-only host tier before even the speculative
+            // Engram loader allocates an append's prefill rows.
+            {std::string host_error;success(sweep->provider_for_external_decode()->release_host_cache(host_error),host_error);}
             // LLAMADECODE_ENGRAM_EARLY: this append's Engram rows start now, before
             // its open, start_request and layer-0 weight fetch (off: no-op).
             if(!command.contains("vision_spans_file")) {std::string early_error;success(sweep->start_append_engram(tokens,early_error),early_error);}
