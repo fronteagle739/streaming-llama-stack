@@ -62556,11 +62556,11 @@
     ],
     "doc": "E17 experiment diagnostic only: 1 allows bounded KV sampling over the private producer pipe; default off. It does not change cache storage or any preset.",
     "reads": [
-      "engines/streaming-llama/prefill_llama.cpp/tools/dsv41-prefill/live-session.inc:695"
+      "engines/streaming-llama/prefill_llama.cpp/tools/dsv41-prefill/live-session.inc:717"
     ],
     "code_defaults": [
       {
-        "source": "engines/streaming-llama/prefill_llama.cpp/tools/dsv41-prefill/live-session.inc:695",
+        "source": "engines/streaming-llama/prefill_llama.cpp/tools/dsv41-prefill/live-session.inc:717",
         "unset": "NULL from getenv; the literal consumer below supplies any fallback",
         "read": "const char*gate=std::getenv(\"LLAMADECODE_PERFEXP_KV_SAMPLES\");",
         "consumer": "        }else if(operation==\"perfexp_kv_samples\"){\n            dsv41_live::keys(command,{\"session\",\"model_sha256\",\"sequence\",\"operation\",\"base\",\"path\"});same_base();\n            const char*gate=std::getenv(\"LLAMADECODE_PERFEXP_KV_SAMPLES\");\n            require(gate&&!std::strcmp(gate,\"1\"),\"Experimental KV sampling is disabled\");\n            const auto path=std::filesystem::u8path(command.at(\"path\").get<std::string>());\n            require(path.is_absolute()&&!std::filesystem::exists(path),\"KV sample path must be absolute and new\");\n            HANDLE file=CreateFileW(path.c_str(),GENERIC_WRITE,0,nullptr,CREATE_NEW,FILE_ATTRIBUTE_NORMAL,nullptr);"
