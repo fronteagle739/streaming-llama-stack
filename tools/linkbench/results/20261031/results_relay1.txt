@@ -1,0 +1,31 @@
+# 10:55:09 --proto tcp --host 192.168.3.1 --port 47803 --nodelay --label relay-nodelay-fwd
+RESULT label=relay-nodelay-fwd proto=tcp flags=N---- size=8192 n=10000 p50_us=350.8 p90_us=453.0 p99_us=481.2 p999_us=550.6 max_us=658.7 min_us=271.9 mean_us=380.9 retx=0 lost=0
+RESULT label=relay-nodelay-fwd proto=tcp flags=N---- size=14336 n=10000 p50_us=445.5 p90_us=467.2 p99_us=536.5 p999_us=610.1 max_us=691.0 min_us=290.6 mean_us=433.3 retx=0 lost=0
+RESULT label=relay-nodelay-fwd proto=tcp flags=N---- size=28672 n=10000 p50_us=563.8 p90_us=648.7 p99_us=748.3 p999_us=795.9 max_us=902.3 min_us=374.7 mean_us=543.8 retx=0 lost=0
+# 10:55:29 --proto tcp --host 192.168.3.1 --port 47803 --nodelay --quickack --spin --prio --cpu 6 --label relay-tuned-fwd
+RESULT label=relay-tuned-fwd proto=tcp flags=NQSP- size=8192 n=10000 p50_us=206.4 p90_us=284.4 p99_us=321.5 p999_us=393.5 max_us=512.7 min_us=162.0 mean_us=222.1 retx=0 lost=0
+RESULT label=relay-tuned-fwd proto=tcp flags=NQSP- size=14336 n=10000 p50_us=268.6 p90_us=341.8 p99_us=409.9 p999_us=456.5 max_us=754.8 min_us=160.2 mean_us=262.8 retx=0 lost=0
+RESULT label=relay-tuned-fwd proto=tcp flags=NQSP- size=28672 n=10000 p50_us=314.1 p90_us=356.5 p99_us=436.0 p999_us=476.6 max_us=668.3 min_us=243.2 mean_us=321.9 retx=0 lost=0
+# 10:55:44 --proto tcp --host 192.168.3.1 --port 47803 --reverse --nodelay --label relay-nodelay-rev
+RESULT label=relay-nodelay-rev proto=tcp flags=N---R size=8192 n=10000 p50_us=311.0 p90_us=440.0 p99_us=452.0 p999_us=566.0 max_us=699.0 min_us=172.0 mean_us=341.2 retx=0 lost=0
+RESULT label=relay-nodelay-rev proto=tcp flags=N---R size=14336 n=10000 p50_us=441.0 p90_us=450.0 p99_us=563.0 p999_us=599.0 max_us=822.0 min_us=292.0 mean_us=433.8 retx=0 lost=0
+RESULT label=relay-nodelay-rev proto=tcp flags=N---R size=28672 n=10000 p50_us=520.0 p90_us=589.0 p99_us=663.0 p999_us=745.0 max_us=990.0 min_us=392.0 mean_us=511.8 retx=0 lost=0
+# 10:56:04 --proto tcp --host 192.168.3.1 --port 47803 --reverse --nodelay --quickack --spin --prio --cpu 6 --label relay-tuned-rev
+RESULT label=relay-tuned-rev proto=tcp flags=NQSPR size=8192 n=10000 p50_us=182.0 p90_us=310.0 p99_us=347.0 p999_us=375.0 max_us=413.0 min_us=163.0 mean_us=205.5 retx=0 lost=0
+RESULT label=relay-tuned-rev proto=tcp flags=NQSPR size=14336 n=10000 p50_us=313.0 p90_us=340.0 p99_us=376.0 p999_us=391.0 max_us=704.0 min_us=177.0 mean_us=305.5 retx=0 lost=0
+RESULT label=relay-tuned-rev proto=tcp flags=NQSPR size=28672 n=10000 p50_us=316.0 p90_us=367.0 p99_us=487.0 p999_us=506.0 max_us=523.0 min_us=266.0 mean_us=330.0 retx=0 lost=0
+# 10:56:19 mac loopback --nodelay
+RESULT label=mac-loopback-nodelay proto=tcp flags=N---- size=8192 n=10000 p50_us=61.0 p90_us=90.0 p99_us=123.0 p999_us=147.0 max_us=463.0 min_us=39.0 mean_us=69.6 retx=0 lost=0
+RESULT label=mac-loopback-nodelay proto=tcp flags=N---- size=14336 n=10000 p50_us=62.0 p90_us=96.0 p99_us=127.0 p999_us=151.0 max_us=509.0 min_us=38.0 mean_us=70.8 retx=0 lost=0
+RESULT label=mac-loopback-nodelay proto=tcp flags=N---- size=28672 n=10000 p50_us=77.0 p90_us=88.0 p99_us=108.0 p999_us=188.0 max_us=444.0 min_us=48.0 mean_us=73.9 retx=0 lost=0
+RESULT label=mac-loopback-relay-nodelay proto=tcp flags=N---- size=8192 n=10000 p50_us=106.0 p90_us=147.0 p99_us=164.0 p999_us=220.0 max_us=280.0 min_us=77.0 mean_us=116.6 retx=0 lost=0
+RESULT label=mac-loopback-relay-nodelay proto=tcp flags=N---- size=14336 n=10000 p50_us=104.0 p90_us=119.0 p99_us=143.0 p999_us=262.0 max_us=1037.0 min_us=82.0 mean_us=107.5 retx=0 lost=0
+RESULT label=mac-loopback-relay-nodelay proto=tcp flags=N---- size=28672 n=10000 p50_us=123.0 p90_us=179.0 p99_us=197.0 p999_us=269.0 max_us=393.0 min_us=81.0 mean_us=135.6 retx=0 lost=0
+# 10:56:38 mac loopback --nodelay --spin --prio
+RESULT label=mac-loopback-nodelayspinprio proto=tcp flags=N-SP- size=8192 n=10000 p50_us=64.0 p90_us=68.0 p99_us=79.0 p999_us=91.0 max_us=337.0 min_us=10.0 mean_us=56.9 retx=0 lost=0
+RESULT label=mac-loopback-nodelayspinprio proto=tcp flags=N-SP- size=14336 n=10000 p50_us=27.0 p90_us=52.0 p99_us=102.0 p999_us=118.0 max_us=386.0 min_us=10.0 mean_us=34.1 retx=0 lost=0
+RESULT label=mac-loopback-nodelayspinprio proto=tcp flags=N-SP- size=28672 n=10000 p50_us=88.0 p90_us=107.0 p99_us=130.0 p999_us=139.0 max_us=492.0 min_us=13.0 mean_us=65.2 retx=0 lost=0
+RESULT label=mac-loopback-relay-nodelayspinprio proto=tcp flags=N-SP- size=8192 n=10000 p50_us=110.0 p90_us=219.0 p99_us=244.0 p999_us=250.0 max_us=434.0 min_us=25.0 mean_us=129.0 retx=0 lost=0
+RESULT label=mac-loopback-relay-nodelayspinprio proto=tcp flags=N-SP- size=14336 n=10000 p50_us=33.0 p90_us=42.0 p99_us=222.0 p999_us=245.0 max_us=383.0 min_us=21.0 mean_us=41.8 retx=0 lost=0
+RESULT label=mac-loopback-relay-nodelayspinprio proto=tcp flags=N-SP- size=28672 n=10000 p50_us=97.0 p90_us=106.0 p99_us=116.0 p999_us=197.0 max_us=515.0 min_us=33.0 mean_us=77.2 retx=0 lost=0
+# 10:56:55 DONE

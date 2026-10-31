@@ -1,0 +1,77 @@
+# 10:49:25 --proto tcp --host 192.168.3.1 --port 47801 --label tcp-plain-fwd
+RESULT label=tcp-plain-fwd proto=tcp flags=----- size=8192 n=10000 p50_us=322.2 p90_us=339.9 p99_us=372.9 p999_us=438.6 max_us=1109.7 min_us=177.0 mean_us=321.4 retx=0 lost=0
+RESULT label=tcp-plain-fwd proto=tcp flags=----- size=14336 n=10000 p50_us=324.5 p90_us=389.1 p99_us=482.9 p999_us=537.6 max_us=898.1 min_us=238.0 mean_us=335.4 retx=0 lost=0
+RESULT label=tcp-plain-fwd proto=tcp flags=----- size=28672 n=10000 p50_us=454.3 p90_us=496.4 p99_us=568.4 p999_us=738.3 max_us=1468.0 min_us=259.8 mean_us=443.8 retx=0 lost=0
+# 10:49:43 --proto tcp --host 192.168.3.1 --port 47801 --nodelay --label tcp-nodelay-fwd
+RESULT label=tcp-nodelay-fwd proto=tcp flags=N---- size=8192 n=10000 p50_us=325.9 p90_us=442.8 p99_us=483.2 p999_us=584.0 max_us=278001.9 min_us=176.5 mean_us=377.2 retx=0 lost=0
+RESULT label=tcp-nodelay-fwd proto=tcp flags=N---- size=14336 n=10000 p50_us=448.3 p90_us=485.5 p99_us=556.0 p999_us=637.4 max_us=1063.8 min_us=265.1 mean_us=446.7 retx=0 lost=0
+RESULT label=tcp-nodelay-fwd proto=tcp flags=N---- size=28672 n=10000 p50_us=585.8 p90_us=682.3 p99_us=753.5 p999_us=825.0 max_us=1053.3 min_us=377.8 mean_us=598.5 retx=0 lost=0
+# 10:50:06 --proto tcp --host 192.168.3.1 --port 47801 --nodelay --quickack --label tcp-nodelay-qa-fwd
+RESULT label=tcp-nodelay-qa-fwd proto=tcp flags=NQ--- size=8192 n=10000 p50_us=319.6 p90_us=353.4 p99_us=387.5 p999_us=488.9 max_us=553.5 min_us=194.3 mean_us=320.3 retx=0 lost=0
+RESULT label=tcp-nodelay-qa-fwd proto=tcp flags=NQ--- size=14336 n=10000 p50_us=320.9 p90_us=366.6 p99_us=416.6 p999_us=493.2 max_us=590.4 min_us=234.9 mean_us=322.3 retx=0 lost=0
+RESULT label=tcp-nodelay-qa-fwd proto=tcp flags=NQ--- size=28672 n=10000 p50_us=447.4 p90_us=466.1 p99_us=508.0 p999_us=597.6 max_us=655.2 min_us=259.8 mean_us=447.5 retx=0 lost=0
+# 10:50:24 --proto tcp --host 192.168.3.1 --port 47801 --nodelay --quickack --spin --prio --cpu 6 --label tcp-tuned-fwd
+RESULT label=tcp-tuned-fwd proto=tcp flags=NQSP- size=8192 n=10000 p50_us=190.4 p90_us=199.5 p99_us=290.6 p999_us=341.6 max_us=547.1 min_us=154.2 mean_us=192.4 retx=0 lost=0
+RESULT label=tcp-tuned-fwd proto=tcp flags=NQSP- size=14336 n=10000 p50_us=202.5 p90_us=305.4 p99_us=329.5 p999_us=411.5 max_us=499.1 min_us=154.5 mean_us=231.1 retx=0 lost=0
+RESULT label=tcp-tuned-fwd proto=tcp flags=NQSP- size=28672 n=10000 p50_us=323.9 p90_us=334.7 p99_us=411.0 p999_us=475.4 max_us=914.7 min_us=214.7 mean_us=324.5 retx=0 lost=0
+# 10:50:38 --proto tcp --host 192.168.3.1 --port 47801 --nodelay --quickack --spin --prio --cpu 6 --bufs 4194304 --label tcp-tuned-4mbuf-fwd
+RESULT label=tcp-tuned-4mbuf-fwd proto=tcp flags=NQSP- size=8192 n=10000 p50_us=195.1 p90_us=203.6 p99_us=284.6 p999_us=350.8 max_us=500.7 min_us=158.6 mean_us=196.2 retx=0 lost=0
+RESULT label=tcp-tuned-4mbuf-fwd proto=tcp flags=NQSP- size=14336 n=10000 p50_us=210.1 p90_us=324.9 p99_us=362.2 p999_us=471.6 max_us=2141573.1 min_us=159.4 mean_us=509.3 retx=0 lost=0
+RESULT label=tcp-tuned-4mbuf-fwd proto=tcp flags=NQSP- size=28672 n=10000 p50_us=326.9 p90_us=460.1 p99_us=494.2 p999_us=565.5 max_us=646.3 min_us=265.0 mean_us=363.0 retx=0 lost=0
+# 10:50:55 --proto udp --host 192.168.3.1 --port 47802 --label udp-block-fwd
+RESULT label=udp-block-fwd proto=udp flags=----- size=8192 n=10000 p50_us=322.1 p90_us=441.3 p99_us=467.9 p999_us=570.9 max_us=779.0 min_us=230.5 mean_us=354.4 retx=0 lost=0
+RESULT label=udp-block-fwd proto=udp flags=----- size=14336 n=10000 p50_us=447.5 p90_us=569.9 p99_us=620.5 p999_us=695.9 max_us=1033.4 min_us=274.5 mean_us=460.5 retx=0 lost=0
+RESULT label=udp-block-fwd proto=udp flags=----- size=28672 n=10000 p50_us=754.5 p90_us=845.2 p99_us=905.4 p999_us=991.8 max_us=1509.0 min_us=418.4 mean_us=702.9 retx=0 lost=0
+# 10:51:17 --proto udp --host 192.168.3.1 --port 47802 --spin --prio --cpu 6 --label udp-spin-fwd
+RESULT label=udp-spin-fwd proto=udp flags=--SP- size=8192 n=10000 p50_us=182.9 p90_us=211.7 p99_us=311.5 p999_us=354.9 max_us=418.9 min_us=160.0 mean_us=193.4 retx=0 lost=0
+RESULT label=udp-spin-fwd proto=udp flags=--SP- size=14336 n=10000 p50_us=305.8 p90_us=315.9 p99_us=346.7 p999_us=436.3 max_us=510.7 min_us=186.6 mean_us=285.7 retx=0 lost=0
+RESULT label=udp-spin-fwd proto=udp flags=--SP- size=28672 n=10000 p50_us=357.3 p90_us=425.9 p99_us=474.6 p999_us=536.9 max_us=604.5 min_us=299.6 mean_us=366.1 retx=0 lost=0
+# 10:51:33 --proto udp --host 192.168.3.1 --port 47802 --spin --prio --cpu 6 --chunk 8972 --bufs 4194304 --label udp-spin-ipfrag-fwd
+RESULT label=udp-spin-ipfrag-fwd proto=udp flags=--SP- size=8192 n=10000 p50_us=187.9 p90_us=217.5 p99_us=313.5 p999_us=353.5 max_us=455.5 min_us=144.4 mean_us=196.7 retx=2 lost=0
+RESULT label=udp-spin-ipfrag-fwd proto=udp flags=--SP- size=14336 n=10000 p50_us=190.2 p90_us=289.3 p99_us=328.5 p999_us=374.4 max_us=436.2 min_us=167.2 mean_us=207.1 retx=0 lost=0
+RESULT label=udp-spin-ipfrag-fwd proto=udp flags=--SP- size=28672 n=10000 p50_us=313.6 p90_us=360.8 p99_us=716.8 p999_us=106360.8 max_us=234790.3 min_us=211.6 mean_us=921.1 retx=2569 lost=51
+# 10:51:53 --proto tcp --host 192.168.3.1 --port 47803 --nodelay --label relay-nodelay-fwd
+linkbench: hello ack (wsa=10054)
+# 10:51:53 --proto tcp --host 192.168.3.1 --port 47803 --nodelay --quickack --spin --prio --cpu 6 --label relay-tuned-fwd
+linkbench: hello ack (wsa=10054)
+# 10:51:53 --proto tcp --host 192.168.3.1 --port 47801 --reverse --label tcp-plain-rev
+RESULT label=tcp-plain-rev proto=tcp flags=----R size=8192 n=10000 p50_us=314.0 p90_us=321.0 p99_us=441.0 p999_us=455.0 max_us=848.0 min_us=175.0 mean_us=305.9 retx=0 lost=0
+RESULT label=tcp-plain-rev proto=tcp flags=----R size=14336 n=10000 p50_us=315.0 p90_us=343.0 p99_us=461.0 p999_us=570.0 max_us=701.0 min_us=279.0 mean_us=327.1 retx=0 lost=0
+RESULT label=tcp-plain-rev proto=tcp flags=----R size=28672 n=10000 p50_us=447.0 p90_us=457.0 p99_us=568.0 p999_us=695.0 max_us=24185.0 min_us=289.0 mean_us=448.2 retx=0 lost=0
+# 10:52:10 --proto tcp --host 192.168.3.1 --port 47801 --reverse --nodelay --label tcp-nodelay-rev
+RESULT label=tcp-nodelay-rev proto=tcp flags=N---R size=8192 n=10000 p50_us=315.0 p90_us=327.0 p99_us=439.0 p999_us=569.0 max_us=958.0 min_us=182.0 mean_us=316.1 retx=0 lost=0
+RESULT label=tcp-nodelay-rev proto=tcp flags=N---R size=14336 n=10000 p50_us=314.0 p90_us=326.0 p99_us=974.0 p999_us=4403.0 max_us=6895.0 min_us=185.0 mean_us=344.0 retx=0 lost=0
+RESULT label=tcp-nodelay-rev proto=tcp flags=N---R size=28672 n=10000 p50_us=408.0 p90_us=1056.0 p99_us=4030.0 p999_us=4981.0 max_us=5380.0 min_us=251.0 mean_us=601.4 retx=0 lost=0
+# 10:52:30 --proto tcp --host 192.168.3.1 --port 47801 --reverse --nodelay --quickack --label tcp-nodelay-qa-rev
+RESULT label=tcp-nodelay-qa-rev proto=tcp flags=NQ--R size=8192 n=10000 p50_us=313.0 p90_us=880.0 p99_us=4037.0 p999_us=4934.0 max_us=5493.0 min_us=161.0 mean_us=524.2 retx=0 lost=0
+RESULT label=tcp-nodelay-qa-rev proto=tcp flags=NQ--R size=14336 n=10000 p50_us=314.0 p90_us=938.0 p99_us=4398.0 p999_us=5123.0 max_us=5474.0 min_us=177.0 mean_us=560.0 retx=0 lost=0
+RESULT label=tcp-nodelay-qa-rev proto=tcp flags=NQ--R size=28672 n=10000 p50_us=318.0 p90_us=1019.0 p99_us=4586.0 p999_us=5264.0 max_us=5485.0 min_us=268.0 mean_us=602.1 retx=0 lost=0
+# 10:52:54 --proto tcp --host 192.168.3.1 --port 47801 --reverse --nodelay --quickack --spin --prio --cpu 6 --label tcp-tuned-rev
+RESULT label=tcp-tuned-rev proto=tcp flags=NQSPR size=8192 n=10000 p50_us=184.0 p90_us=447.0 p99_us=3484.0 p999_us=4524.0 max_us=4882.0 min_us=112.0 mean_us=348.2 retx=0 lost=0
+RESULT label=tcp-tuned-rev proto=tcp flags=NQSPR size=14336 n=10000 p50_us=300.0 p90_us=588.0 p99_us=3046.0 p999_us=4559.0 max_us=7846.0 min_us=140.0 mean_us=390.4 retx=0 lost=0
+RESULT label=tcp-tuned-rev proto=tcp flags=NQSPR size=28672 n=10000 p50_us=315.0 p90_us=832.0 p99_us=3087.0 p999_us=4330.0 max_us=5268.0 min_us=198.0 mean_us=483.4 retx=0 lost=0
+# 10:53:14 --proto tcp --host 192.168.3.1 --port 47801 --reverse --nodelay --quickack --spin --prio --cpu 6 --bufs 4194304 --label tcp-tuned-4mbuf-rev
+RESULT label=tcp-tuned-4mbuf-rev proto=tcp flags=NQSPR size=8192 n=10000 p50_us=183.0 p90_us=500.0 p99_us=2907.0 p999_us=3845.0 max_us=4266.0 min_us=100.0 mean_us=329.1 retx=0 lost=0
+RESULT label=tcp-tuned-4mbuf-rev proto=tcp flags=NQSPR size=14336 n=10000 p50_us=304.0 p90_us=643.0 p99_us=3002.0 p999_us=4031.0 max_us=7433.0 min_us=137.0 mean_us=392.2 retx=0 lost=0
+RESULT label=tcp-tuned-4mbuf-rev proto=tcp flags=NQSPR size=28672 n=10000 p50_us=316.0 p90_us=329.0 p99_us=2345.0 p999_us=3826.0 max_us=5290.0 min_us=193.0 mean_us=381.5 retx=0 lost=0
+# 10:53:32 --proto udp --host 192.168.3.1 --port 47802 --reverse --label udp-block-rev
+RESULT label=udp-block-rev proto=udp flags=----R size=8192 n=10000 p50_us=311.0 p90_us=329.0 p99_us=445.0 p999_us=566.0 max_us=1065.0 min_us=184.0 mean_us=320.7 retx=0 lost=0
+RESULT label=udp-block-rev proto=udp flags=----R size=14336 n=10000 p50_us=441.0 p90_us=568.0 p99_us=596.0 p999_us=792.0 max_us=3962.0 min_us=284.0 mean_us=451.4 retx=0 lost=0
+RESULT label=udp-block-rev proto=udp flags=----R size=28672 n=10000 p50_us=763.0 p90_us=844.0 p99_us=914.0 p999_us=1176.0 max_us=6168.0 min_us=427.0 mean_us=726.1 retx=0 lost=0
+# 10:53:54 --proto udp --host 192.168.3.1 --port 47802 --reverse --spin --prio --cpu 6 --label udp-spin-rev
+RESULT label=udp-spin-rev proto=udp flags=--SPR size=8192 n=10000 p50_us=310.0 p90_us=325.0 p99_us=343.0 p999_us=444.0 max_us=460.0 min_us=174.0 mean_us=280.2 retx=0 lost=0
+RESULT label=udp-spin-rev proto=udp flags=--SPR size=14336 n=10000 p50_us=320.0 p90_us=341.0 p99_us=349.0 p999_us=462.0 max_us=687.0 min_us=181.0 mean_us=322.5 retx=0 lost=0
+RESULT label=udp-spin-rev proto=udp flags=--SPR size=28672 n=10000 p50_us=429.0 p90_us=447.0 p99_us=475.0 p999_us=599.0 max_us=1216.0 min_us=326.0 mean_us=412.5 retx=0 lost=0
+# 10:54:11 --proto udp --host 192.168.3.1 --port 47802 --reverse --spin --prio --cpu 6 --chunk 8972 --bufs 4194304 --label udp-spin-ipfrag-rev
+RESULT label=udp-spin-ipfrag-rev proto=udp flags=--SPR size=8192 n=10000 p50_us=182.0 p90_us=313.0 p99_us=320.0 p999_us=425.0 max_us=444.0 min_us=165.0 mean_us=206.3 retx=0 lost=0
+RESULT label=udp-spin-ipfrag-rev proto=udp flags=--SPR size=14336 n=10000 p50_us=314.0 p90_us=319.0 p99_us=331.0 p999_us=442.0 max_us=455.0 min_us=174.0 mean_us=313.3 retx=0 lost=0
+RESULT label=udp-spin-ipfrag-rev proto=udp flags=--SPR size=28672 n=10000 p50_us=315.0 p90_us=321.0 p99_us=437.0 p999_us=495.0 max_us=1217.0 min_us=184.0 mean_us=317.5 retx=0 lost=0
+# 10:54:26 --proto tcp --host 192.168.3.1 --port 47803 --reverse --nodelay --label relay-nodelay-rev
+linkbench: hello ack (wsa=10054)
+# 10:54:26 --proto tcp --host 192.168.3.1 --port 47803 --reverse --nodelay --quickack --spin --prio --cpu 6 --label relay-tuned-rev
+linkbench: hello ack (wsa=10054)
+# 10:54:26 mac loopback --nodelay
+connect: Connection refused
+# 10:54:27 mac loopback --nodelay --spin --prio
+connect: Connection refused
+# 10:54:27 DONE

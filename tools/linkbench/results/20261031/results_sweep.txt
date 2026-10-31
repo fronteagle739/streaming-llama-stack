@@ -1,0 +1,16 @@
+RESULT label=sweep-tcp proto=tcp flags=NQSP- size=64 n=3000 p50_us=146.5 p90_us=154.0 p99_us=191.8 p999_us=238.1 max_us=249.5 min_us=103.8 mean_us=147.1 retx=0 lost=0
+RESULT label=sweep-tcp proto=tcp flags=NQSP- size=1400 n=3000 p50_us=147.3 p90_us=154.1 p99_us=201.3 p999_us=272.9 max_us=563.0 min_us=103.1 mean_us=148.2 retx=0 lost=0
+RESULT label=sweep-tcp proto=tcp flags=NQSP- size=2900 n=3000 p50_us=184.0 p90_us=195.0 p99_us=213.7 p999_us=268.5 max_us=405.3 min_us=152.6 mean_us=185.5 retx=0 lost=0
+RESULT label=sweep-tcp proto=tcp flags=NQSP- size=4400 n=3000 p50_us=191.2 p90_us=200.4 p99_us=239.5 p999_us=292.8 max_us=307.0 min_us=142.8 mean_us=190.8 retx=0 lost=0
+RESULT label=sweep-tcp proto=tcp flags=NQSP- size=8192 n=3000 p50_us=192.6 p90_us=203.3 p99_us=290.2 p999_us=325.1 max_us=424.6 min_us=159.1 mean_us=193.5 retx=0 lost=0
+RESULT label=sweep-tcp proto=tcp flags=NQSP- size=16384 n=3000 p50_us=300.5 p90_us=318.3 p99_us=339.4 p999_us=374.0 max_us=416.4 min_us=174.0 mean_us=269.7 retx=0 lost=0
+RESULT label=sweep-tcp proto=tcp flags=NQSP- size=24576 n=3000 p50_us=320.4 p90_us=328.4 p99_us=358.1 p999_us=388.5 max_us=397.2 min_us=195.2 mean_us=320.5 retx=0 lost=0
+RESULT label=sweep-tcp proto=tcp flags=NQSP- size=32768 n=3000 p50_us=321.8 p90_us=331.5 p99_us=382.7 p999_us=408.1 max_us=424.2 min_us=247.4 mean_us=322.2 retx=0 lost=0
+RESULT label=sweep-udp proto=udp flags=--SP- size=64 n=3000 p50_us=185.8 p90_us=189.7 p99_us=202.5 p999_us=220.4 max_us=243.1 min_us=94.3 mean_us=185.8 retx=0 lost=0
+RESULT label=sweep-udp proto=udp flags=--SP- size=1400 n=3000 p50_us=184.5 p90_us=189.5 p99_us=202.4 p999_us=247.6 max_us=272.7 min_us=138.2 mean_us=185.0 retx=0 lost=0
+RESULT label=sweep-udp proto=udp flags=--SP- size=2900 n=3000 p50_us=180.7 p90_us=192.3 p99_us=204.7 p999_us=241.3 max_us=375.6 min_us=147.8 mean_us=182.6 retx=0 lost=0
+RESULT label=sweep-udp proto=udp flags=--SP- size=4400 n=3000 p50_us=180.6 p90_us=186.0 p99_us=209.0 p999_us=270.0 max_us=285.3 min_us=152.8 mean_us=181.6 retx=0 lost=0
+RESULT label=sweep-udp proto=udp flags=--SP- size=8192 n=3000 p50_us=181.1 p90_us=188.3 p99_us=287.6 p999_us=310.6 max_us=326.7 min_us=164.4 mean_us=184.8 retx=0 lost=0
+RESULT label=sweep-udp proto=udp flags=--SP- size=16384 n=3000 p50_us=309.6 p90_us=317.8 p99_us=346.5 p999_us=393.5 max_us=413.4 min_us=212.6 mean_us=310.2 retx=0 lost=0
+RESULT label=sweep-udp proto=udp flags=--SP- size=24576 n=3000 p50_us=307.3 p90_us=319.4 p99_us=389.0 p999_us=437.0 max_us=503.6 min_us=267.2 mean_us=310.2 retx=0 lost=0
+RESULT label=sweep-udp proto=udp flags=--SP- size=32768 n=3000 p50_us=438.3 p90_us=447.3 p99_us=470.1 p999_us=579.3 max_us=2535.3 min_us=339.9 mean_us=438.9 retx=1 lost=0

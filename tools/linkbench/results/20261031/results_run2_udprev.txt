@@ -1,0 +1,9 @@
+RESULT label=udp-block-rev proto=udp flags=----R size=8192 n=10000 p50_us=312.0 p90_us=447.0 p99_us=504.0 p999_us=1713.0 max_us=128868.0 min_us=148.0 mean_us=443.5 retx=393 lost=0
+RESULT label=udp-block-rev proto=udp flags=----R size=14336 n=10000 p50_us=566.0 p90_us=576.0 p99_us=666.0 p999_us=1173.0 max_us=3102.0 min_us=288.0 mean_us=522.1 retx=1 lost=0
+RESULT label=udp-block-rev proto=udp flags=----R size=28672 n=10000 p50_us=670.0 p90_us=793.0 p99_us=880.0 p999_us=1210.0 max_us=4148.0 min_us=438.0 mean_us=679.2 retx=10 lost=0
+RESULT label=udp-spin-rev proto=udp flags=--SPR size=8192 n=10000 p50_us=306.0 p90_us=313.0 p99_us=329.0 p999_us=566.0 max_us=2351.0 min_us=150.0 mean_us=257.1 retx=7 lost=0
+RESULT label=udp-spin-rev proto=udp flags=--SPR size=14336 n=10000 p50_us=315.0 p90_us=337.0 p99_us=377.0 p999_us=2343.0 max_us=2411.0 min_us=179.0 mean_us=323.8 retx=19 lost=0
+RESULT label=udp-spin-rev proto=udp flags=--SPR size=28672 n=10000 p50_us=436.0 p90_us=445.0 p99_us=477.0 p999_us=2396.0 max_us=2595.0 min_us=294.0 mean_us=419.6 retx=11 lost=0
+RESULT label=udp-spin-ipfrag-rev proto=udp flags=--SPR size=8192 n=10000 p50_us=181.0 p90_us=312.0 p99_us=326.0 p999_us=475.0 max_us=2244.0 min_us=148.0 mean_us=203.1 retx=1 lost=0
+RESULT label=udp-spin-ipfrag-rev proto=udp flags=--SPR size=14336 n=10000 p50_us=311.0 p90_us=318.0 p99_us=347.0 p999_us=577.0 max_us=2344.0 min_us=152.0 mean_us=311.7 retx=8 lost=0
+RESULT label=udp-spin-ipfrag-rev proto=udp flags=--SPR size=28672 n=10000 p50_us=312.0 p90_us=324.0 p99_us=417.0 p999_us=2357.0 max_us=2396.0 min_us=177.0 mean_us=322.2 retx=33 lost=0

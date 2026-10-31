@@ -1,0 +1,8 @@
+RESULT label=win-loopback-tuned proto=tcp flags=N-SP- size=64 n=5000 p50_us=14.2 p90_us=16.0 p99_us=30.4 p999_us=45.9 max_us=94.1 min_us=13.8 mean_us=15.0 retx=0 lost=0
+RESULT label=win-loopback-tuned proto=tcp flags=N-SP- size=8192 n=5000 p50_us=17.0 p90_us=19.3 p99_us=36.6 p999_us=54.9 max_us=119.2 min_us=16.5 mean_us=18.0 retx=0 lost=0
+RESULT label=win-loopback-tuned proto=tcp flags=N-SP- size=14336 n=5000 p50_us=18.0 p90_us=19.3 p99_us=36.3 p999_us=57.3 max_us=74.2 min_us=17.5 mean_us=18.8 retx=0 lost=0
+RESULT label=win-loopback-tuned proto=tcp flags=N-SP- size=28672 n=5000 p50_us=20.8 p90_us=22.3 p99_us=40.0 p999_us=57.8 max_us=143.8 min_us=20.2 mean_us=21.7 retx=0 lost=0
+RESULT label=win-loopback-plain proto=tcp flags=----- size=64 n=5000 p50_us=24.4 p90_us=43.2 p99_us=86.4 p999_us=141.8 max_us=153.9 min_us=20.4 mean_us=29.9 retx=0 lost=0
+RESULT label=win-loopback-plain proto=tcp flags=----- size=8192 n=5000 p50_us=27.0 p90_us=51.6 p99_us=97.6 p999_us=151.2 max_us=349.4 min_us=23.3 mean_us=34.1 retx=0 lost=0
+RESULT label=win-loopback-plain proto=tcp flags=----- size=14336 n=5000 p50_us=29.3 p90_us=58.4 p99_us=106.6 p999_us=178.7 max_us=465.3 min_us=24.3 mean_us=37.8 retx=0 lost=0
+RESULT label=win-loopback-plain proto=tcp flags=----- size=28672 n=5000 p50_us=31.8 p90_us=52.4 p99_us=108.3 p999_us=174.4 max_us=194.1 min_us=27.8 mean_us=37.9 retx=0 lost=0
