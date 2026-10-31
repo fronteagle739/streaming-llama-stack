@@ -11350,6 +11350,7 @@ struct server_slot {
 #if DS4_NATIVE_FRONTIER_ENABLE && defined(__APPLE__)
     ds4_ns_session native_session;
     char native_conversation[65];
+    char native_notice[DS4_NS_NOTICE_CAP]; /* this turn's visible recovery notice (prefill_progress.notice) */
 #endif
     live_tool_state responses_live;
     live_tool_state anthropic_live;
@@ -14046,6 +14047,38 @@ static int server_prefill_quantum(server *s) {
     return server_prefill_quantum_for(s, generation_active);
 }
 
+#if DS4_NATIVE_FRONTIER_ENABLE && defined(__APPLE__)
+/* Retire a failed/invalid native state and start the slot's native session
+ * again from nothing; the next RTX use opens a new producer. The Mac session
+ * keeps whatever the failure site left valid (it invalidates what it must). */
+static void server_native_session_reset(server *s, server_slot *slot) {
+    ds4_ns_session *ns=&slot->native_session;
+    const bool reasoning=ns->include_history_reasoning,force=ns->force_remote;
+    char why[DS4_NS_DETAIL_CAP];snprintf(why,sizeof(why),"%s",ns->last_failure);
+    if(!ds4_ns_shutdown(ns))server_log(DS4_LOG_PREFILL,"native session reset: RTX cleanup unconfirmed (%s)",why);
+    pthread_mutex_lock(&s->inference_mu);
+    memset(ns,0,sizeof(*ns));ns->config=s->native_session;
+    ns->include_history_reasoning=reasoning;ns->force_remote=force;
+    snprintf(ns->last_failure,sizeof(ns->last_failure),"%s",why);
+    pthread_mutex_unlock(&s->inference_mu);
+}
+static void server_native_notice(server_slot *slot, const char *notice) {
+    if(!strstr(slot->native_notice,notice))ds4_ns_notice_append(slot->native_notice,sizeof(slot->native_notice),notice);
+}
+/* A failed RTX prefill: this turn prefills on the Mac instead, with a notice.
+ * False when the turn was cancelled or must exercise the RTX (qualification). */
+static bool server_native_fallback(server *s, server_slot *slot, const ds4_tokens *prompt, const char *err) {
+    ds4_ns_session *ns=&slot->native_session;
+    if(!ds4_ns_should_fallback(server_native_frontier_cancelled(slot),ns->force_remote))return false;
+    char notice[DS4_NS_NOTICE_CAP];ds4_ns_fallback_notice(notice,sizeof(notice),ns->last_failure[0]?ns->last_failure:err);
+    server_native_session_reset(s,slot);
+    server_native_notice(slot,notice);
+    server_log(DS4_LOG_PREFILL,"NATIVE_SESSION_FALLBACK route=mac tokens=%d live=%d notice=%s",prompt->len,ds4_session_pos(slot->session),notice);
+    ds4_session_report_progress(slot->session,"prefill_chunk",ds4_session_pos(slot->session),prompt->len);
+    return true;
+}
+#endif
+
 /* Synchronize one resident slot without monopolizing the model executor.  A
  * non-matching prompt is first rebuilt to one quantum; a matching checkpoint
  * advances from its current frontier. Absolute positions remain session-local,
@@ -14059,7 +14092,9 @@ static int server_session_sync(server *s, server_slot *slot,
         if (!server_prefill_enter(s,slot)) return DS4_SESSION_SYNC_INTERRUPTED;
         int rc=ds4_ns_prefill(&slot->native_session,slot->session,prompt,NULL,0,
             server_native_frontier_cancelled,slot,err,errlen);
-        server_prefill_leave(s);return rc;
+        server_prefill_leave(s);
+        if(rc==0||!server_native_fallback(s,slot,prompt,err))return rc;
+        if(err&&errlen)err[0]=0; /* this turn continues on the Mac-local path below */
     }
 #endif
     if (!s->batched_mode) {
@@ -14182,7 +14217,9 @@ static int server_session_sync_multimodal(server *s, server_slot *slot,
         if(!server_prefill_enter(s,slot))return DS4_SESSION_SYNC_INTERRUPTED;
         int rc=ds4_ns_prefill(&slot->native_session,slot->session,prompt,images,image_count,
             server_native_frontier_cancelled,slot,err,errlen);
-        server_prefill_leave(s);return rc;
+        server_prefill_leave(s);
+        if(rc==0||!server_native_fallback(s,slot,prompt,err))return rc;
+        if(err&&errlen)err[0]=0; /* this turn continues on the Mac-local path below */
     }
 #endif
     if (!s->batched_mode) {
@@ -14413,9 +14450,13 @@ static void server_progress_cb(void *ud, const char *event, int current, int tot
     double pct = display_total > 0 ? 100.0 * (double)display_current / (double)display_total : 100.0;
     double avg_tps = elapsed > 0.0 ? (double)display_current / elapsed : 0.0;
     if (p->stream && p->fd>=0 && p->request_job && p->request_job->req.api==API_OPENAI) {
-        char row[512];
-        int n=snprintf(row,sizeof(row),"data: {\"object\":\"chat.completion.chunk\",\"choices\":[],\"prefill_progress\":{\"tokens_total\":%d,\"tokens_done\":%d,\"elapsed_s\":%.3f},\"prompt_progress\":{\"total\":%d,\"cache\":%d,\"processed\":%d,\"time_ms\":%.3f}}\n\n",
-            p->prompt_tokens,current,elapsed,p->prompt_tokens,p->cached_tokens,current,elapsed*1000);
+        char row[1024],notice[400]="";
+#if DS4_NATIVE_FRONTIER_ENABLE && defined(__APPLE__)
+        /* A recovery (Mac fallback, conversation rebuild) is shown, never silent. Safe text: no escaping needed. */
+        if(p->slot&&p->slot->native_notice[0])snprintf(notice,sizeof(notice),",\"notice\":\"%s\"",p->slot->native_notice);
+#endif
+        int n=snprintf(row,sizeof(row),"data: {\"object\":\"chat.completion.chunk\",\"choices\":[],\"prefill_progress\":{\"tokens_total\":%d,\"tokens_done\":%d,\"elapsed_s\":%.3f%s},\"prompt_progress\":{\"total\":%d,\"cache\":%d,\"processed\":%d,\"time_ms\":%.3f}}\n\n",
+            p->prompt_tokens,current,elapsed,notice,p->prompt_tokens,p->cached_tokens,current,elapsed*1000);
         if(n<=0||(size_t)n>=sizeof(row)||!send_all(p->fd,row,(size_t)n)) {
             p->stream_failed=true;job_mark_cancelled(p->request_job);return;
         }
@@ -15191,7 +15232,7 @@ static void sampler_counts(uint64_t c[3 + 4 + 5]) {
 }
 
 static void generate_job_inner(server *s, server_slot *slot, job *j) {
-    char err[160];
+    char err[768]; /* room for the RTX's own refusal text */
     err[0] = '\0';
     /* Utility jobs are one-shot: drop whatever protocol state the previous
      * utility job remembered, so nothing below can continue from it. */
@@ -15205,6 +15246,7 @@ static void generate_job_inner(server *s, server_slot *slot, job *j) {
         http_error(j->fd,s->enable_cors,409,"Quality/speed requires the resident Metal expert policy on this decoder");return;
     }
 #if DS4_NATIVE_FRONTIER_ENABLE && defined(__APPLE__)
+    slot->native_notice[0]=0;
     if(s->native_session) {
         if(!j->req.native_conversation[0]) {
             http_error(j->fd,s->enable_cors,409,"Native streaming requires an explicit prompt_cache_key");return;
@@ -15227,7 +15269,13 @@ static void generate_job_inner(server *s, server_slot *slot, job *j) {
          * though ordinary prompts of this size use Mac-local prefill. */
         slot->native_session.force_remote=!strncmp(j->req.native_conversation,"slstack-qualification-",21);
         if(slot->native_session.poisoned) {
-            http_error(j->fd,s->enable_cors,409,"Native conversation state invalid; no automatic refill");return;
+            /* Rebuild instead of refusing every retry: retire the invalid native
+             * state; the ordinary prefill below re-prefills the history (Mac or
+             * RTX by size) from what the Mac session still validly holds. */
+            char notice[DS4_NS_NOTICE_CAP];ds4_ns_rebuild_notice(notice,sizeof(notice),slot->native_session.last_failure);
+            server_native_session_reset(s,slot);
+            server_native_notice(slot,notice);
+            server_log(DS4_LOG_PREFILL,"NATIVE_SESSION_REBUILD conversation=%s live=%d notice=%s",slot->native_conversation,ds4_session_pos(slot->session),notice);
         }
     }
 #endif

@@ -46,6 +46,7 @@ typedef struct {
     double last_sync_return,report_prev_ms,report_ready_ms,report_work_ms,report_total_ms;
     double verify_rate; /* DECODEFIX2: measured producer owner-verify bytes/s */
     bool remote_accepted; /* DECODEFIX2: Studio answered 202 to the start POST, so remote state exists */
+    char last_failure[DS4_NS_DETAIL_CAP]; /* why the RTX path last failed (its own text), for the recovery notices */
 } ds4_ns_session;
 static void ds4_ns_anchor_free(ds4_ns_anchor*a){free(a->logits);free(a->state);memset(a,0,sizeof(*a));}
 static uint64_t ds4_ns_fingerprint(const char*s){uint64_t v=0;for(unsigned i=0;i<16;i++)v=(v<<4)|(uint64_t)(s[i]<='9'?s[i]-'0':s[i]-'a'+10);return v;}
@@ -62,13 +63,21 @@ static bool ds4_ns_open(ds4_ns_session*s,ds4_nf_io*io,const char*method,const ch
     if(media)ds4_ns_put(&b,"Content-Type: %s\r\n",media);
     if(extra)ds4_ns_put(&b,"%s",extra);ds4_ns_put(&b,"\r\n");
     if(!b.ok){fprintf(stderr,"native session request header bound failed\n");return false;}
-    if(!ds4_nf_connect(c,io)){fprintf(stderr,"native session connect failed host=%s port=%u errno=%d remaining=%.3f cancelled=%d\n",c->host,ntohs(c->broker.sin_port),errno,io->deadline-ds4_nf_now(),io->cancelled?io->cancelled(io->cancel_ud):0);return false;}
+    if(!ds4_nf_connect(c,io)){const int e=errno;snprintf(io->detail,sizeof(io->detail),"cannot reach the RTX at %s:%u (errno %d: %s)",c->host,ntohs(c->broker.sin_port),e,strerror(e));errno=e;
+        fprintf(stderr,"native session connect failed host=%s port=%u errno=%d remaining=%.3f cancelled=%d\n",c->host,ntohs(c->broker.sin_port),errno,io->deadline-ds4_nf_now(),io->cancelled?io->cancelled(io->cancel_ud):0);return false;}
     if(!ds4_nf_send(io,h,(size_t)(b.p-h))){fprintf(stderr,"native session header send failed errno=%d\n",errno);return false;}return true;
 }
 static bool ds4_ns_body(ds4_nf_io*io,int expected,ds4_ns_reply*r){
     int status;uint64_t n;
     if(!ds4_nf_response(io,&status,&n)){fprintf(stderr,"native session HTTP response framing failed idle=%.3f remaining=%.3f errno=%d\n",ds4_nf_now()-io->last_activity,io->deadline-ds4_nf_now(),errno);return false;}
-    if(status!=expected||!n||n>DS4_NS_JSON_CAP){fprintf(stderr,"native session HTTP status=%d expected=%d bytes=%llu\n",status,expected,(unsigned long long)n);return false;}
+    if(status!=expected||!n||n>DS4_NS_JSON_CAP){
+        if(status!=expected){ /* keep the RTX's own refusal text (FastAPI {"detail":...}) */
+            char*t=n&&n<=DS4_NS_JSON_CAP?malloc((size_t)n):NULL;
+            if(t&&ds4_nf_read(io,t,(size_t)n))ds4_ns_http_detail(t,(size_t)n,status,io->detail,sizeof(io->detail));
+            else ds4_ns_http_detail(NULL,0,status,io->detail,sizeof(io->detail));
+            free(t);
+        }
+        fprintf(stderr,"native session HTTP status=%d expected=%d bytes=%llu detail=%s\n",status,expected,(unsigned long long)n,io->detail);return false;}
     char*text=malloc((size_t)n+1);if(!text)return false;
     bool ok=ds4_nf_read(io,text,(size_t)n);text[n]=0;
     if(ok)ok=ds4_ns_reply_parse(text,(size_t)n,r);
@@ -89,6 +98,8 @@ static bool ds4_ns_poll(ds4_ns_session*s,ds4_nf_io*io,const char*suffix,bool sta
         ds4_ns_disconnect(io);
         if(!ds4_ns_open(s,io,"GET",suffix,NULL,NULL,0)||!ds4_ns_body(io,200,r))return false;
         ds4_ns_disconnect(io);
+        if(strcmp(r->state,"ready")&&strcmp(r->state,"starting")&&strcmp(r->state,"running")&&strcmp(r->state,"complete"))
+            snprintf(io->detail,sizeof(io->detail),"RTX %s: %s",r->state,r->error[0]?r->error:"no reason given");
         if(io->progress_session&&r->prefill_total){
             if(strcmp(s->id,r->session)||r->prefill_total!=io->progress_total||r->prefill_processed>r->prefill_total)return false;
             if(!io->progress_reported||r->prefill_processed>io->progress_done){
@@ -514,7 +525,19 @@ static int ds4_ns_prefill(ds4_ns_session*s,ds4_session*session,const ds4_tokens*
     ok=true;
 done:
     {const double now=ds4_nf_now();fprintf(stderr,"NATIVE_SESSION_PHASE_MS phase=\"%s\" ms=%.3f total_ms=%.3f ok=%d\n",phase,(now-phase_t)*1000,(now-phase_t0)*1000,(int)ok);}
-    ds4_ns_disconnect(&io);if(!ok){fprintf(stderr,"native session failure phase=%s detail=%s\n",phase,err);ds4_ns_abort(s);ds4_session_invalidate(session);return ds4_nf_error(err,cap,"persistent prefill/hash/transport failed; no refill fallback");}return 0;
+    ds4_ns_disconnect(&io);
+    if(!ok){
+        /* Carry the real reason: the local error, else the RTX's own refusal text. */
+        const char*why=err[0]?err:io.detail[0]?io.detail:"no detail from the RTX or the transport";
+        ds4_ns_safe_text(s->last_failure,sizeof(s->last_failure),why,strlen(why));
+        fprintf(stderr,"native session failure phase=%s detail=%s\n",phase,s->last_failure);
+        /* Before any import the Mac session still holds exactly what it held. */
+        const bool local_intact=!strcmp(phase,"initial HTTP startup")||!strcmp(phase,"retire before full logical replay");
+        ds4_ns_abort(s);if(!local_intact)ds4_session_invalidate(session);
+        char msg[DS4_NS_DETAIL_CAP+96];snprintf(msg,sizeof(msg),"persistent prefill failed at %s: %s",phase,s->last_failure);
+        return ds4_nf_error(err,cap,msg);
+    }
+    return 0;
 }
 static void ds4_ns_renew(ds4_nf_io*io,double window){double d=ds4_nf_now()+window;if(io->deadline<d)io->deadline=d;}
 /* Hash verification can be silent while the independently guarded producer
@@ -725,7 +748,8 @@ static int ds4_ns_decode_blocking(ds4_ns_session*s,ds4_session*session,uint32_t 
         s->report_pending=true;s->report_async=0;s->report_force=force;s->report_position=position;s->report_tokens=position-old;s->report_queued=0;
         s->report_ready_ms=w.callback_started>0?(w.callback_started-t0)*1000:-1;s->report_work_ms=w.callback_started>0?(t1-w.callback_started)*1000:-1;
         return 0;}
-bad:ds4_ns_abort(s);ds4_session_invalidate(session);return ds4_nf_error(err,cap,"native decode synchronization failed; session invalidated");
+bad:ds4_ns_safe_text(s->last_failure,sizeof(s->last_failure),err[0]?err:"decode synchronization failed",DS4_NS_DETAIL_CAP);
+    ds4_ns_abort(s);ds4_session_invalidate(session);return ds4_nf_error(err,cap,"native decode synchronization failed; session invalidated");
 }
 /* Snapshot when >=32 rows are pending and the worker is idle, when the next
  * step could pass the 128-row delta bound, or when forced (end of turn, local
@@ -758,6 +782,7 @@ static int ds4_ns_decode_async(ds4_ns_session*s,ds4_session*session,uint32_t pos
     s->report_ready_ms=ready_ms;s->report_work_ms=(ds4_nf_now()-t0)*1000-(ready_ms>0?ready_ms:0);
     return 0;
 bad:fprintf(stderr,"native session failure phase=decode catch-up detail=%s\n",err);
+    ds4_ns_safe_text(s->last_failure,sizeof(s->last_failure),err[0]?err:"decode catch-up failed",DS4_NS_DETAIL_CAP);
     ds4_ns_abort(s);ds4_session_invalidate(session);return ds4_nf_error(err,cap,"native decode synchronization failed; session invalidated");
 }
 static int ds4_ns_decode_sync(ds4_ns_session*s,ds4_session*session,uint32_t position,bool force,
