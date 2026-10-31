@@ -208,6 +208,7 @@ typedef struct {
     bool progress_reported;
     ds4_nf_cancel_fn cancelled;
     void *cancel_ud;
+    char detail[512]; /* the peer's own refusal/failure text: log, chat error and notice */
 } ds4_nf_io;
 
 static double ds4_nf_now(void) {

@@ -2,6 +2,7 @@
 #define DS4_NATIVE_SESSION_JSON_H
 /* Included after the existing server JSON/native HTTP primitives. */
 #include "ds4_native_checkpoint.h"
+#include "ds4_native_session_recovery.h"
 #define DS4_NS_JSON_CAP 65536
 typedef struct {char *p;size_t left;bool ok;} ds4_ns_text;
 static void ds4_ns_put(ds4_ns_text*b,const char*fmt,...){
@@ -76,7 +77,8 @@ static bool ds4_ns_reply_parse(const char*text,size_t n,ds4_ns_reply*out){
 #define NS_UINT(name,index) if(!strcmp(key,#name)){bit=index;ok=ds4_nf_u64(&p,&r.name);}
 #define NS_BOOL(name,index) if(!strcmp(key,#name)){bit=index;ok=json_bool(&p,&r.name);}
         NS_STR(session,0) else NS_STR(model_sha256,1) else NS_STR(state,2) else NS_STR(status,3)
-        else NS_STR(kind,4) else NS_STR(error,5) else NS_UINT(sequence,6) else NS_UINT(next_sequence,7)
+        else NS_STR(kind,4) else if(!strcmp(key,"error")){bit=5;char*d=NULL;ok=json_string(&p,&d); /* RTX refusal text: any JSON string, kept as safe text */
+            if(ok)ds4_ns_safe_text(r.error,sizeof(r.error),d,strlen(d));free(d);} else NS_UINT(sequence,6) else NS_UINT(next_sequence,7)
         else NS_UINT(bytes,8) else NS_UINT(received_bytes,9) else NS_UINT(maximum_prefill_tokens,10)
         else NS_UINT(maximum_decode_tokens,11) else NS_UINT(control_host_bytes,12)
         else NS_BOOL(peer_synchronized,13) else NS_BOOL(closed,14)
