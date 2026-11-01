@@ -35876,9 +35876,8 @@ static int routed_moe_launch_impl(
         ds4db_resolve_kernel<<<1, 32, 0, s>>>((const int32_t *)selected->ptr, n_expert, layer_index, seq,
                                                g_ds4db_dev, (int32_t *)g_ds4x_slot_tensor.ptr);
         if (!cuda_ok(cudaGetLastError(), "doorbell resolve")) return 0;
-        if (cuStreamWaitValue32((CUstream)s, (CUdeviceptr)&g_ds4db_dev->bell, seq, CU_STREAM_WAIT_VALUE_GEQ) != CUDA_SUCCESS) {
-            fprintf(stderr, "LLAMADECODE_DOORBELL_WAIT_FAILED layer=%u\n", layer_index); return 0;
-        }
+        ds4db_wait_kernel<<<1, 32, 0, s>>>(g_ds4db_dev, seq, 1500000000ull);
+        if (!cuda_ok(cudaGetLastError(), "doorbell wait")) return 0;
         ds4db_fixup_kernel<<<1, 32, 0, s>>>(g_ds4db_dev, seq, (int32_t *)g_ds4x_slot_tensor.ptr, n_expert);
         if (!cuda_ok(cudaGetLastError(), "doorbell fixup")) return 0;
         (void)ds4_gpu_stage_mark(7);

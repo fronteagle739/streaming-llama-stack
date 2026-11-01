@@ -72,7 +72,7 @@ struct llama_dsv41_weight_provider::implementation {
     mutable std::mutex mutex;
     // DSV41BG doorbell: mapped host block shared with ds4-decode.dll, its pager thread.
     ds4db_shared*db=nullptr;std::thread pager;std::atomic<bool>pager_run{false};std::atomic<uint32_t>db_processed{0};
-    std::atomic<bool>db_failed{false};std::string db_error;std::vector<int32_t>db_shadow;void*pager_stream=nullptr;
+    std::atomic<bool>db_failed{false};std::atomic<bool>db_step_active{false};std::string db_error;std::vector<int32_t>db_shadow;void*pager_stream=nullptr;
     uint64_t db_records=0,db_misses=0;double db_service_ms=0;
     config options;
     capacity planned;
@@ -665,10 +665,13 @@ struct llama_dsv41_weight_provider::implementation {
         std::fprintf(stderr,"LLAMADECODE_DOORBELL_FAILED seq=%u reason=%s\n",seq,why.c_str());std::fflush(stderr);
     }
     void pager_loop(){
-        uint32_t next=db_processed.load()+1;uint32_t idle=0;
+        uint32_t next=db_processed.load()+1;uint32_t idle=0;auto idle_since=std::chrono::steady_clock::now();auto last_note=idle_since;uint32_t logged=0;
         while(pager_run.load(std::memory_order_relaxed)){
             ds4db_record&r=db->rec[next%DS4DB_RING];
             if(r.posted!=next){
+                if(db_step_active.load(std::memory_order_relaxed)){const auto now=std::chrono::steady_clock::now();
+                    if(now-idle_since>std::chrono::seconds(10)&&now-last_note>std::chrono::seconds(10)){last_note=now;
+                        std::fprintf(stderr,"LLAMADECODE_DOORBELL_STALL next=%u posted=%u bell=%u processed=%u ring_prev_posted=%u\n",next,r.posted,db->bell,db_processed.load(),db->rec[(next-1)%DS4DB_RING].posted);std::fflush(stderr);}}
                 if(++idle<4096){
 #if defined(_WIN32)
                     _mm_pause();
@@ -676,7 +679,8 @@ struct llama_dsv41_weight_provider::implementation {
                 }else std::this_thread::yield();
                 continue;
             }
-            idle=0;std::atomic_thread_fence(std::memory_order_acquire);
+            idle=0;idle_since=std::chrono::steady_clock::now();std::atomic_thread_fence(std::memory_order_acquire);
+            if(logged<3){++logged;std::fprintf(stderr,"LLAMADECODE_DOORBELL_RECORD seq=%u layer=%u n=%u miss=0x%x\n",next,r.layer,r.n,r.miss);std::fflush(stderr);}
             const uint32_t layer=r.layer,n=r.n,miss=r.miss;int32_t ids[DS4DB_MAX_K],dev_slots[DS4DB_MAX_K];
             if(n==0||n>DS4DB_MAX_K||layer>=40){doorbell_fail(next,"invalid doorbell record");return;}
             for(uint32_t i=0;i<n;++i){ids[i]=r.ids[i];dev_slots[i]=r.slots[i];}
@@ -1547,7 +1551,7 @@ bool llama_dsv41_weight_provider::doorbell_begin(void**host,const char**bases,ui
         for(uint32_t k=0;k<3;++k){bases[k]=static_cast<const char*>(p->pool[k]->data);
             bases[3+k]=p->l2_slots?p->l2_base[k]:nullptr;l2_stride[k]=p->pool_max_stride[k];}
         *l1_slots=p->pool_slots;*slot_count=p->pool_slots+p->l2_slots;
-        *last_seq=p->db_processed.load();*host=p->db;
+        *last_seq=p->db_processed.load();*host=p->db;p->db_step_active.store(true);
         if(!p->pager.joinable()){p->pager_run.store(true);p->pager=std::thread([impl=p.get()]{
 #if defined(_WIN32)
             SetThreadPriority(GetCurrentThread(),THREAD_PRIORITY_ABOVE_NORMAL);
@@ -1566,6 +1570,8 @@ bool llama_dsv41_weight_provider::doorbell_end(uint32_t posted_seq,std::string&e
 #endif
         }else std::this_thread::yield();
     }
+    p->db_step_active.store(false);
+    if(p->db->failed==2u&&!p->db_failed.load()){std::lock_guard<std::mutex>lock(p->mutex);p->db_error="GPU doorbell wait exceeded 1.5 s (pager stalled)";p->db_failed.store(true);}
     if(p->db_failed.load()){std::lock_guard<std::mutex>lock(p->mutex);error="Doorbell pager failed: "+p->db_error;return false;}
     return true;
 }

@@ -2807,6 +2807,29 @@
     ]
   },
   {
+    "var": "LLAMADECODE_DOORBELL",
+    "flag": null,
+    "default": null,
+    "code_default": "NULL from getenv; the literal consumer below supplies any fallback",
+    "classification": "advanced",
+    "scopes": [
+      "ds4-win",
+      "rtx-llama"
+    ],
+    "doc": "Single-engine decode: 1 resolves routed-expert cache hits on the GPU against a mapped residency map and waits on a mapped doorbell only for misses (served by a pager thread), so hits need no per-layer host sync. Packed FP4 only; the RAM tier and CPU lane keep the host hook",
+    "reads": [
+      "engines/streaming-llama/prefill_llama.cpp/tools/dsv41-prefill/live-session.inc:229"
+    ],
+    "code_defaults": [
+      {
+        "source": "engines/streaming-llama/prefill_llama.cpp/tools/dsv41-prefill/live-session.inc:229",
+        "unset": "NULL from getenv; the literal consumer below supplies any fallback",
+        "read": "static const bool requested=[]{const char*e=std::getenv(\"LLAMADECODE_DOORBELL\");return e&&e[0]=='1'&&!e[1];}();",
+        "consumer": "    bool doorbell_on(){\n        static const bool requested=[]{const char*e=std::getenv(\"LLAMADECODE_DOORBELL\");return e&&e[0]=='1'&&!e[1];}();\n        if(!requested)return false;\n        const char*why=!x_doorbell||!x_doorbell_seq?\"ds4-decode.dll lacks ds4x_set_doorbell\":host_cache.resize?\"RAM tier / CPU lane active\":nullptr;\n        static bool told=false;\n        if(!told){told=true;std::fprintf(stderr,\"LLAMADECODE_DOORBELL enabled=%d reason=%s\\n\",int(!why),why?why:\"in-stream resolve\");std::fflush(stderr);}\n        return !why;\n    }"
+      }
+    ]
+  },
+  {
     "var": "DS4X_STAGE_PROFILE",
     "flag": null,
     "default": null,

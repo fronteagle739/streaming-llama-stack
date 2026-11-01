@@ -29,6 +29,24 @@ __global__ static void ds4db_resolve_kernel(const int32_t *ids, uint32_t n, uint
     }
 }
 
+/* Wait for the bell inside the stream with a preemptible kernel. A stream
+ * memory wait (cuStreamWaitValue32) parks the context in the GPU front end;
+ * without hardware GPU scheduling (WDDM HwSchMode=1) the DirectStorage/D3D12
+ * copy that services the miss then never runs. A sleeping spin kernel is
+ * time-sliced instead. Bounded: after cap_ns it marks failed=2 (the caller
+ * poisons the session) so a stalled pager never reaches the WDDM TDR. */
+__global__ static void ds4db_wait_kernel(ds4db_shared *sh, uint32_t seq, unsigned long long cap_ns) {
+    if (threadIdx.x) return;
+    if ((int32_t)(sh->bell - seq) >= 0) return;
+    unsigned long long t0; asm volatile("mov.u64 %0, %%globaltimer;" : "=l"(t0));
+    for (;;) {
+        if ((int32_t)(sh->bell - seq) >= 0) return;
+        __nanosleep(2000);
+        unsigned long long t; asm volatile("mov.u64 %0, %%globaltimer;" : "=l"(t));
+        if (t - t0 > cap_ns) { sh->failed = 2u; __threadfence_system(); return; }
+    }
+}
+
 /* After the bell: copy the pager's slots for the missed ids. */
 __global__ static void ds4db_fixup_kernel(ds4db_shared *sh, uint32_t seq, int32_t *slots_dev, uint32_t n) {
     const uint32_t i = threadIdx.x;
