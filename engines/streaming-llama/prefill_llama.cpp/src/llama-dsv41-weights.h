@@ -182,6 +182,13 @@ public:
     uint64_t decode_cache_slot_bytes() const;
     // B5: tier[e]=1 for each of the layer's experts resident in L1 or L2.
     bool decode_residency(uint32_t layer,uint8_t *tier,uint32_t experts) const;
+    // DSV41BG doorbell: before a decode step, start/refresh the mapped residency map
+    // and pager thread and return the slot pool geometry; after it, wait until the
+    // pager has processed every record up to posted_seq (false if it failed).
+    bool doorbell_begin(void **host,const char **bases,uint64_t *l2_stride,uint32_t *l1_slots,uint32_t *slot_count,
+        uint32_t *last_seq,std::string &error);
+    bool doorbell_end(uint32_t posted_seq,std::string &error);
+    void doorbell_stats(uint64_t &records,uint64_t &misses,double &service_ms) const;
     expert_cache_stats cache_stats() const;
     bool decode_layout() const;
     bool routed_prefill(uint32_t layer) const;

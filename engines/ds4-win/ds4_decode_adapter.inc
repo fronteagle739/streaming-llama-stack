@@ -252,6 +252,19 @@ DS4X_EXPORT void ds4x_set_expert_hook(ds4_gpu_external_expert_hook hook, void *u
     ds4_gpu_set_external_expert_hook(hook, user);
 }
 
+/* DSV41BG doorbell (optional export): in-stream expert resolve against the
+ * caller's mapped ds4db_shared block; host == NULL turns it off. Call between
+ * decode steps only, with last_seq = the caller pager's last processed record. */
+int ds4_gpu_set_doorbell(void *host, const char *const *bases, const uint64_t *l2_stride,
+                         uint32_t l1_slots, uint32_t n_slots, uint32_t last_seq);
+uint32_t ds4_gpu_doorbell_seq(void);
+DS4X_EXPORT int ds4x_set_doorbell(void *host, const char *const *bases, const uint64_t *l2_stride,
+                                  uint32_t l1_slots, uint32_t n_slots, uint32_t last_seq) {
+    if (!g_ds4x.open) return 0;
+    return ds4_gpu_set_doorbell(host, bases, l2_stride, l1_slots, n_slots, last_seq);
+}
+DS4X_EXPORT uint32_t ds4x_doorbell_seq(void) { return ds4_gpu_doorbell_seq(); }
+
 /* Optional: in-place second-tier reads for kernel-native packed FP4 experts. */
 DS4X_EXPORT void ds4x_set_expert_hook_l2(ds4_gpu_external_expert_hook_l2 hook, void *user) {
     ds4_gpu_set_external_expert_hook_l2(hook, user);

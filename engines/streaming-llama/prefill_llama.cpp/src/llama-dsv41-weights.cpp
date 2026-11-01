@@ -11,6 +11,12 @@
 #include "llama-weight-fetcher.h"
 #include "llama-wf-bounded-policy.h"
 #include "llama-dsv41-recency-lfu.h"
+#include "../../../ds4-win/ds4_expert_doorbell.h"
+#include <atomic>
+#include <thread>
+#if defined(_WIN32)
+#include <immintrin.h>
+#endif
 
 #include <algorithm>
 #include <unordered_map>
@@ -64,6 +70,10 @@ struct llama_dsv41_weight_provider::implementation {
     struct entry{ggml_tensor*t;uint64_t file_offset,gpu_offset,allocation;};
     struct stage{std::vector<entry>entries;uint64_t bytes=0;};
     mutable std::mutex mutex;
+    // DSV41BG doorbell: mapped host block shared with ds4-decode.dll, its pager thread.
+    ds4db_shared*db=nullptr;std::thread pager;std::atomic<bool>pager_run{false};std::atomic<uint32_t>db_processed{0};
+    std::atomic<bool>db_failed{false};std::string db_error;std::vector<int32_t>db_shadow;void*pager_stream=nullptr;
+    uint64_t db_records=0,db_misses=0;double db_service_ms=0;
     config options;
     capacity planned;
     bool inspected=false,allocated=false,poisoned=false,leased=false;
@@ -631,7 +641,66 @@ struct llama_dsv41_weight_provider::implementation {
 #else
     void identity()const{throw std::runtime_error("Physical V4.1 weight streaming requires Windows");}
 #endif
+    // DSV41BG doorbell. The map mirrors L1 (slot) and L2 (pool_slots + slot) residency;
+    // written only while the decode stream is blocked behind a bell or idle.
+    void doorbell_rebuild_map(){
+        const uint32_t n=40u*384u;if(db_shadow.size()!=n)db_shadow.assign(n,-2);
+        std::vector<int32_t>want(n,-1);
+        for(const auto&kv:key_slot)if(kv.first>=0&&uint32_t(kv.first)<n)want[size_t(kv.first)]=kv.second;
+        for(const auto&kv:l2_of)if(kv.first>=0&&uint32_t(kv.first)<n)want[size_t(kv.first)]=int32_t(pool_slots)+kv.second;
+        for(uint32_t i=0;i<n;++i)if(want[i]!=db_shadow[i]){db->map[(i/384u)*db->experts+i%384u]=want[i];db_shadow[i]=want[i];}
+        std::atomic_thread_fence(std::memory_order_seq_cst);
+    }
+    void doorbell_stop(){
+        pager_run.store(false);if(pager.joinable())pager.join();
+#ifdef GGML_USE_CUDA
+        if(pager_stream){cudaStreamSynchronize(static_cast<cudaStream_t>(pager_stream));cudaStreamDestroy(static_cast<cudaStream_t>(pager_stream));pager_stream=nullptr;}
+        if(db){cudaFreeHost(db);db=nullptr;}
+#endif
+        db_shadow.clear();
+    }
+    void doorbell_fail(uint32_t seq,const std::string&why){
+        {std::lock_guard<std::mutex>lock(mutex);db_error=why;}
+        db_failed.store(true);db->failed=1;std::atomic_thread_fence(std::memory_order_seq_cst);db->bell=seq;   // unblock the stream; the session is poisoned
+        std::fprintf(stderr,"LLAMADECODE_DOORBELL_FAILED seq=%u reason=%s\n",seq,why.c_str());std::fflush(stderr);
+    }
+    void pager_loop(){
+        uint32_t next=db_processed.load()+1;uint32_t idle=0;
+        while(pager_run.load(std::memory_order_relaxed)){
+            ds4db_record&r=db->rec[next%DS4DB_RING];
+            if(r.posted!=next){
+                if(++idle<4096){
+#if defined(_WIN32)
+                    _mm_pause();
+#endif
+                }else std::this_thread::yield();
+                continue;
+            }
+            idle=0;std::atomic_thread_fence(std::memory_order_acquire);
+            const uint32_t layer=r.layer,n=r.n,miss=r.miss;int32_t ids[DS4DB_MAX_K],dev_slots[DS4DB_MAX_K];
+            if(n==0||n>DS4DB_MAX_K||layer>=40){doorbell_fail(next,"invalid doorbell record");return;}
+            for(uint32_t i=0;i<n;++i){ids[i]=r.ids[i];dev_slots[i]=r.slots[i];}
+            const auto t0=std::chrono::steady_clock::now();std::string error;bool consistent=true;
+            const bool ok=guard([&]{
+                const auto slot_of=assign_expert_slots(layer,ids,n,pager_stream,true);
+                for(uint32_t i=0;i<n;++i){const int32_t s=slot_of.at(ids[i]);
+                    if((miss>>i)&1u)r.slots[i]=s;else if(s!=dev_slots[i])consistent=false;}
+                if(miss){doorbell_rebuild_map();
+#ifdef GGML_USE_CUDA
+                    require(cudaStreamSynchronize(static_cast<cudaStream_t>(pager_stream))==cudaSuccess,"Doorbell pager stream synchronization failed");
+#endif
+                    ++db_misses;}
+                ++db_records;
+            },error);
+            if(!ok){doorbell_fail(next,error);return;}
+            if(!consistent){doorbell_fail(next,"device hit slot differs from the cache (map out of date)");return;}
+            if(miss){std::atomic_thread_fence(std::memory_order_seq_cst);db->bell=next;}
+            {std::lock_guard<std::mutex>lock(mutex);db_service_ms+=std::chrono::duration<double,std::milli>(std::chrono::steady_clock::now()-t0).count();}
+            db_processed.store(next);++next;
+        }
+    }
     ~implementation(){
+        doorbell_stop();
         invalidate();
 #ifdef _WIN32
         if(file!=INVALID_HANDLE_VALUE)CloseHandle(file);
@@ -1454,6 +1523,54 @@ bool llama_dsv41_weight_provider::external_expert_slots(uint32_t layer,const int
     *gate=static_cast<const char*>(p->pool[0]->data);*up=static_cast<const char*>(p->pool[1]->data);*down=static_cast<const char*>(p->pool[2]->data);
     *slot_count=p->pool_slots;
 },error);}
+bool llama_dsv41_weight_provider::doorbell_begin(void**host,const char**bases,uint64_t*l2_stride,uint32_t*l1_slots,uint32_t*slot_count,
+        uint32_t*last_seq,std::string&error){
+    if(p->db_failed.load()){std::lock_guard<std::mutex>lock(p->mutex);error="Doorbell pager failed: "+p->db_error;return false;}
+    return p->guard([&]{
+#ifndef GGML_USE_CUDA
+        throw std::runtime_error("Doorbell requires CUDA");
+#else
+        require(p->decode_layout&&!p->leased&&p->next==p->stage_count()&&host&&bases&&l2_stride&&l1_slots&&slot_count&&last_seq,
+            "Doorbell requires an idle decode-layout provider");
+        require(!p->host_slots,"Doorbell does not serve the RAM tier");
+        for(uint32_t l=0;l<40;++l)require(p->layers[l].ffn.native_fp4_layout,"Doorbell serves packed FP4 experts only");
+        if(!p->db){
+            void*block=nullptr;
+            require(cudaHostAlloc(&block,sizeof(ds4db_shared),cudaHostAllocMapped)==cudaSuccess,"Doorbell mapped block allocation failed");
+            std::memset(block,0,sizeof(ds4db_shared));p->db=static_cast<ds4db_shared*>(block);
+            p->db->version=DS4DB_VERSION;p->db->layers=40;p->db->experts=384;p->db->ring=DS4DB_RING;
+            for(uint32_t i=0;i<DS4DB_MAX_LAYERS*DS4DB_MAX_EXPERTS;++i)p->db->map[i]=-1;
+            p->db_shadow.assign(40u*384u,-1);
+            cudaStream_t s=nullptr;require(cudaStreamCreateWithFlags(&s,cudaStreamNonBlocking)==cudaSuccess,"Doorbell pager stream failed");p->pager_stream=s;
+        }
+        p->doorbell_rebuild_map();
+        for(uint32_t k=0;k<3;++k){bases[k]=static_cast<const char*>(p->pool[k]->data);
+            bases[3+k]=p->l2_slots?p->l2_base[k]:nullptr;l2_stride[k]=p->pool_max_stride[k];}
+        *l1_slots=p->pool_slots;*slot_count=p->pool_slots+p->l2_slots;
+        *last_seq=p->db_processed.load();*host=p->db;
+        if(!p->pager.joinable()){p->pager_run.store(true);p->pager=std::thread([impl=p.get()]{
+#if defined(_WIN32)
+            SetThreadPriority(GetCurrentThread(),THREAD_PRIORITY_ABOVE_NORMAL);
+#endif
+            impl->pager_loop();});}
+#endif
+    },error);
+}
+bool llama_dsv41_weight_provider::doorbell_end(uint32_t posted_seq,std::string&error){
+    if(!p->db){error="Doorbell not started";return false;}
+    uint32_t spins=0;
+    while(int32_t(posted_seq-p->db_processed.load())>0&&!p->db_failed.load()){
+        if(++spins<4096){
+#if defined(_WIN32)
+            _mm_pause();
+#endif
+        }else std::this_thread::yield();
+    }
+    if(p->db_failed.load()){std::lock_guard<std::mutex>lock(p->mutex);error="Doorbell pager failed: "+p->db_error;return false;}
+    return true;
+}
+void llama_dsv41_weight_provider::doorbell_stats(uint64_t&records,uint64_t&misses,double&service_ms)const{
+    std::lock_guard<std::mutex>lock(p->mutex);records=p->db_records;misses=p->db_misses;service_ms=p->db_service_ms;}
 llama_dsv41_weight_provider::expert_cache_stats llama_dsv41_weight_provider::cache_stats()const{std::lock_guard<std::mutex>lock(p->mutex);
     expert_cache_stats s;s.slots=p->pool_slots;s.hits=p->cache_hits;s.misses=p->cache_misses;s.fetched_bytes=p->cache_bytes;s.fetch_ms=p->cache_ms;
     s.l2_slots=p->l2_slots;s.l2_hits=p->l2_hits;s.l2_stored=p->l2_stored;s.assign_ms=p->assign_ms;s.copy_sync_ms=p->copy_sync_ms;

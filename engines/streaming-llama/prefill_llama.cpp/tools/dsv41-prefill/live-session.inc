@@ -222,6 +222,17 @@ struct ds4_external {
     int(*x_affinity)(float,uint32_t,uint32_t,const char*,int(*)(void*,uint32_t,uint8_t*,uint32_t),void*)=nullptr;
     int(*x_prefill_ws)(uint32_t,char*,size_t)=nullptr;int(*x_prefill)(const int32_t*,uint32_t,uint32_t,const int32_t*,uint32_t,float*)=nullptr;
     int(*x_replace)(uint64_t,uint64_t,void*)=nullptr;uint64_t(*x_drop)()=nullptr; // keep-open (optional exports)
+    int(*x_doorbell)(void*,const char*const*,const uint64_t*,uint32_t,uint32_t,uint32_t)=nullptr;uint32_t(*x_doorbell_seq)()=nullptr; // DSV41BG (optional exports)
+    // DSV41BG: in-stream expert resolve + mapped doorbell (LLAMADECODE_DOORBELL=1). Packed FP4,
+    // no RAM tier / CPU lane; otherwise the per-layer host hook is used and the reason is logged once.
+    bool doorbell_on(){
+        static const bool requested=[]{const char*e=std::getenv("LLAMADECODE_DOORBELL");return e&&e[0]=='1'&&!e[1];}();
+        if(!requested)return false;
+        const char*why=!x_doorbell||!x_doorbell_seq?"ds4-decode.dll lacks ds4x_set_doorbell":host_cache.resize?"RAM tier / CPU lane active":nullptr;
+        static bool told=false;
+        if(!told){told=true;std::fprintf(stderr,"LLAMADECODE_DOORBELL enabled=%d reason=%s\n",int(!why),why?why:"in-stream resolve");std::fflush(stderr);}
+        return !why;
+    }
     ds4_external_host_cache_v1 host_cache{};ds4_external_host_cache_v2 host_cache2{};bool have_host2=false;
     void(*x_host_timing)(double*,uint64_t*)=nullptr;
     uint64_t host_limit=0;
@@ -311,6 +322,8 @@ struct ds4_external {
         x_replace=reinterpret_cast<decltype(x_replace)>(GetProcAddress(module,"ds4x_replace_weight"));
         x_drop=reinterpret_cast<decltype(x_drop)>(GetProcAddress(module,"ds4x_drop_weights"));
         x_hook_l2=reinterpret_cast<decltype(x_hook_l2)>(GetProcAddress(module,"ds4x_set_expert_hook_l2"));
+        x_doorbell=reinterpret_cast<decltype(x_doorbell)>(GetProcAddress(module,"ds4x_set_doorbell"));
+        x_doorbell_seq=reinterpret_cast<decltype(x_doorbell_seq)>(GetProcAddress(module,"ds4x_doorbell_seq"));
         if(ds4x_keep_open()&&(!x_replace||!x_drop)){std::fprintf(stderr,"LLAMADECODE_DS4X_KEEP_OPEN unavailable reason=ds4-decode.dll lacks ds4x_replace_weight/ds4x_drop_weights; x_close+x_open\n");std::fflush(stderr);}
     }
     bool can_keep()const{return ds4x_keep_open()&&x_replace&&x_drop;}
@@ -395,7 +408,14 @@ struct ds4_external {
         double f0[4]{};uint64_t r0=0,b0=0;wf_extent_fetch_stats(f0,&r0,&b0);
         const auto before=provider->cache_stats();const auto started=std::chrono::steady_clock::now();
         double cpu0[4]{};uint64_t count0[2]{};if(x_host_timing)x_host_timing(cpu0,count0);
-        require(x_decode(token,position,tail.data(),3,logits.data())==1,"ds4-win decode step failed");
+        const bool bell=doorbell_on();
+        if(bell){void*h=nullptr;const char*b[6]{};uint64_t st[3]{};uint32_t l1=0,cnt=0,last=0;
+            success(provider->doorbell_begin(&h,b,st,&l1,&cnt,&last,error),error);
+            require(x_doorbell(h,b,st,l1,cnt,last)==1,"ds4x_set_doorbell refused the doorbell block");}
+        const int decoded=x_decode(token,position,tail.data(),3,logits.data());
+        if(bell){const uint32_t posted=x_doorbell_seq();(void)x_doorbell(nullptr,nullptr,nullptr,0,0,0);
+            success(provider->doorbell_end(posted,error),error);}
+        require(decoded==1,"ds4-win decode step failed");
         const double decode_ms=std::chrono::duration<double,std::milli>(std::chrono::steady_clock::now()-started).count();
         success(sweep.commit_external_token(token,logits,error),error);
         const auto after=provider->cache_stats();double f1[4]{};uint64_t r1=0,b1=0;wf_extent_fetch_stats(f1,&r1,&b1);

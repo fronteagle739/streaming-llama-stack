@@ -1491,6 +1491,18 @@ typedef int (*ds4_gpu_external_residency_hook)(void *user, uint32_t layer, uint8
 static ds4_gpu_external_residency_hook g_ds4x_residency_hook;
 static void *g_ds4x_residency_user;
 #endif
+#include "ds4_expert_doorbell.cuh"
+#ifdef DS4_EXTERNAL_DECODE
+/* DSV41BG doorbell (LLAMADECODE_DOORBELL): single-token packed FP4 layers resolve
+ * their experts in-stream against the caller's mapped residency map; the host
+ * hook runs only on a miss, in the caller's pager thread. Null = off. */
+static ds4db_shared *g_ds4db_dev = nullptr;
+static ds4db_shared *g_ds4db_host = nullptr;
+static const char *g_ds4db_bases[6];
+static uint64_t g_ds4db_l2_stride[3];
+static uint32_t g_ds4db_l1_slots = 0, g_ds4db_n_slots = 0, g_ds4db_seq = 0;
+static uint8_t *g_ds4db_tier_dev = nullptr;
+#endif
 static const char *cuda_model_range_ptr(const void *model_map, uint64_t offset, uint64_t bytes, const char *what, const char **kind_out = NULL) {
     if (kind_out) *kind_out = NULL;
     if (offset + bytes < offset) return NULL;
@@ -30323,7 +30335,7 @@ extern "C" int ds4_gpu_directional_steering_project_tensor(
 
 #include "ds4_cache_affinity.h"
 #include "ds4_cache_affinity_cuda.cuh"
-struct cuda_router_residency { uint8_t tier[384]; float ram_cost; };
+struct cuda_router_residency { uint8_t tier[384]; float ram_cost; const uint8_t *live_tier; };
 struct cuda_router_affinity_metrics {
     uint32_t vram, ram, changed, selections, displaced_count;
     int32_t displaced[6], original[6], selected_ids[6];
@@ -30340,7 +30352,7 @@ __global__ static void cache_affinity_rerank_kernel(
     for (uint32_t j = 0; j < used; j++) original[j] = sel[j];
     if (lambda > 0.0f)
         ds4_cache_affinity_select_tiered(sel, weights + (uint64_t)t * used,
-            probs + (uint64_t)t * experts, bias, residency.tier, lambda, experts, used, scale, residency.ram_cost);
+            probs + (uint64_t)t * experts, bias, (residency.live_tier?residency.live_tier:residency.tier), lambda, experts, used, scale, residency.ram_cost);
     cuda_router_affinity_metrics m = {};
     m.selections=used;
     const float *p=probs+(uint64_t)t*experts;
@@ -30353,8 +30365,8 @@ __global__ static void cache_affinity_rerank_kernel(
     for (uint32_t j = 0; j < used; j++) {
         const int32_t e = sel[j];
         if (e < 0 || (uint32_t)e >= experts) continue;
-        m.vram += residency.tier[e] == 1;
-        m.ram += residency.tier[e] == 2;
+        m.vram += (residency.live_tier?residency.live_tier:residency.tier)[e] == 1;
+        m.ram += (residency.live_tier?residency.live_tier:residency.tier)[e] == 2;
         bool found = false;
         for (uint32_t k = 0; k < used; k++) found |= original[k] == e;
         m.changed += !found;
@@ -30371,7 +30383,7 @@ __global__ static void cache_affinity_warp_kernel(
     int32_t original[6];
     if(threadIdx.x==0) for (uint32_t j = 0; j < used; j++) original[j] = sel[j];
     ds4_cache_affinity_select_warp(sel, weights + (uint64_t)t * used,
-        probs + (uint64_t)t * experts, bias, residency.tier, lambda, experts, used, scale, residency.ram_cost);
+        probs + (uint64_t)t * experts, bias, (residency.live_tier?residency.live_tier:residency.tier), lambda, experts, used, scale, residency.ram_cost);
     if(threadIdx.x)return;
     cuda_router_affinity_metrics m = {};
     m.selections=used;
@@ -30385,8 +30397,8 @@ __global__ static void cache_affinity_warp_kernel(
     for (uint32_t j = 0; j < used; j++) {
         const int32_t e = sel[j];
         if (e < 0 || (uint32_t)e >= experts) continue;
-        m.vram += residency.tier[e] == 1;
-        m.ram += residency.tier[e] == 2;
+        m.vram += (residency.live_tier?residency.live_tier:residency.tier)[e] == 1;
+        m.ram += (residency.live_tier?residency.live_tier:residency.tier)[e] == 2;
         bool found = false;
         for (uint32_t k = 0; k < used; k++) found |= original[k] == e;
         m.changed += !found;
@@ -30405,7 +30417,7 @@ __global__ static void cache_affinity_confidence_kernel(
     ds4_affinity_confidence confidence={};
     if (lambda > 0.0f)
         ds4_cache_affinity_select_confident(sel, weights + (uint64_t)t * used,
-            probs + (uint64_t)t * experts, bias, residency.tier, lambda, experts, used, scale, &confidence);
+            probs + (uint64_t)t * experts, bias, (residency.live_tier?residency.live_tier:residency.tier), lambda, experts, used, scale, &confidence);
     cuda_router_affinity_metrics m = {};
     m.selections=used;
     const float *p=probs+(uint64_t)t*experts;
@@ -30418,8 +30430,8 @@ __global__ static void cache_affinity_confidence_kernel(
     for (uint32_t j = 0; j < used; j++) {
         const int32_t e = sel[j];
         if (e < 0 || (uint32_t)e >= experts) continue;
-        m.vram += residency.tier[e] == 1;
-        m.ram += residency.tier[e] == 2;
+        m.vram += (residency.live_tier?residency.live_tier:residency.tier)[e] == 1;
+        m.ram += (residency.live_tier?residency.live_tier:residency.tier)[e] == 2;
         bool found = false;
         for (uint32_t k = 0; k < used; k++) found |= original[k] == e;
         m.changed += !found;
@@ -30438,7 +30450,7 @@ __global__ static void cache_affinity_hard_resident_kernel(
     for (uint32_t j = 0; j < used; j++) original[j] = sel[j];
     ds4_affinity_resident_decision decision={};
     ds4_cache_affinity_select_resident_confident(sel,weights+(uint64_t)t*used,
-        probs+(uint64_t)t*experts,bias,residency.tier,experts,used,scale,&decision);
+        probs+(uint64_t)t*experts,bias,(residency.live_tier?residency.live_tier:residency.tier),experts,used,scale,&decision);
     cuda_router_affinity_metrics m = {};
     m.selections=used;
     const float *p=probs+(uint64_t)t*experts;
@@ -30451,8 +30463,8 @@ __global__ static void cache_affinity_hard_resident_kernel(
     for (uint32_t j = 0; j < used; j++) {
         const int32_t e = sel[j];
         if (e < 0 || (uint32_t)e >= experts) continue;
-        m.vram += residency.tier[e] == 1;
-        m.ram += residency.tier[e] == 2;
+        m.vram += (residency.live_tier?residency.live_tier:residency.tier)[e] == 1;
+        m.ram += (residency.live_tier?residency.live_tier:residency.tier)[e] == 2;
         bool found = false;
         for (uint32_t k = 0; k < used; k++) found |= original[k] == e;
         m.changed += !found;
@@ -30502,7 +30514,12 @@ extern "C" int ds4_gpu_cache_affinity_router_tensor(
         fprintf(stderr, "LLAMADECODE_RAM_ROUTE_COST=%.3f\n", c); return c; }();
     if (ram_route_cost < 0.0f) return 0;
     if (external) residency.ram_cost = ram_route_cost;
-    if (external) {
+    if (external && g_ds4db_dev && rows == 1u && experts <= DS4DB_MAX_EXPERTS) {
+        /* Doorbell: residency from the live map when the reranker executes. */
+        ds4db_tier_kernel<<<(experts + 127u) / 128u, 128, 0, cuda_decode_stream()>>>(g_ds4db_dev, layer, g_ds4db_tier_dev, experts);
+        if (!cuda_ok(cudaGetLastError(), "doorbell residency")) return 0;
+        residency.live_tier = g_ds4db_tier_dev;
+    } else if (external) {
         if (!g_ds4x_residency_hook || !g_ds4x_residency_hook(g_ds4x_residency_user, layer, residency.tier, experts)) {
             fprintf(stderr, "LLAMADECODE_DS4X_RESIDENCY_FAILED layer=%u\n", layer); return 0;
         }
@@ -35841,7 +35858,40 @@ static int routed_moe_launch_impl(
     uint64_t external_l2_stride[3] = {0, 0, 0};
     uint32_t external_l1_slots = 0;
 #ifdef DS4_EXTERNAL_DECODE
-    if (g_ds4x_expert_hook) {
+    bool doorbell_taken = false;
+    if (g_ds4db_dev && n_tokens == 1u && mxfp4_path && g_ds4_fp4_packed_experts && g_ds4x_expert_hook_l2 &&
+        g_external_cpu_ids.empty() && !g_fp4_cpu_active && n_expert <= DS4DB_MAX_K) {
+        /* In-stream resolve: hits never leave the GPU; a miss waits on the bell
+         * while the caller's pager fetches it (no host sync on this thread). */
+        if (g_ds4x_slot_tensor.bytes < 64u * sizeof(int32_t)) {
+            if (g_ds4x_slot_tensor.ptr) { (void)cudaFree(g_ds4x_slot_tensor.ptr); g_ds4x_slot_tensor = {}; }
+            void *ptr = nullptr;
+            if (cudaMalloc(&ptr, 64u * sizeof(int32_t)) != cudaSuccess) return 0;
+            g_ds4x_slot_tensor.ptr = ptr; g_ds4x_slot_tensor.bytes = 64u * sizeof(int32_t);
+            g_ds4x_slot_tensor.owner = 0; g_ds4x_slot_tensor.device_id = -1;
+        }
+        const cudaStream_t s = cuda_decode_stream();
+        const uint32_t seq = ++g_ds4db_seq;
+        (void)ds4_gpu_stage_mark(6);
+        ds4db_resolve_kernel<<<1, 32, 0, s>>>((const int32_t *)selected->ptr, n_expert, layer_index, seq,
+                                               g_ds4db_dev, (int32_t *)g_ds4x_slot_tensor.ptr);
+        if (!cuda_ok(cudaGetLastError(), "doorbell resolve")) return 0;
+        if (cuStreamWaitValue32((CUstream)s, (CUdeviceptr)&g_ds4db_dev->bell, seq, CU_STREAM_WAIT_VALUE_GEQ) != CUDA_SUCCESS) {
+            fprintf(stderr, "LLAMADECODE_DOORBELL_WAIT_FAILED layer=%u\n", layer_index); return 0;
+        }
+        ds4db_fixup_kernel<<<1, 32, 0, s>>>(g_ds4db_dev, seq, (int32_t *)g_ds4x_slot_tensor.ptr, n_expert);
+        if (!cuda_ok(cudaGetLastError(), "doorbell fixup")) return 0;
+        (void)ds4_gpu_stage_mark(7);
+        external_gate = g_ds4db_bases[0]; external_up = g_ds4db_bases[1]; external_down = g_ds4db_bases[2];
+        for (int k = 0; k < 3; ++k) { external_l2[k] = g_ds4db_bases[3 + k]; external_l2_stride[k] = g_ds4db_l2_stride[k]; }
+        external_l1_slots = g_ds4db_l1_slots;
+        selected = &g_ds4x_slot_tensor;
+        n_total_expert = g_ds4db_n_slots;
+        allow_streaming = 0;
+        doorbell_taken = true;
+    }
+    if (doorbell_taken) {
+    } else if (g_ds4x_expert_hook) {
         /* The caller's expert cache supplies the routed experts' bytes: the
          * rows' ids become slots in its pool, read with the original strides.
          * A multi-row call (ds4x_prefill) asks for the union of its rows' experts
@@ -46256,4 +46306,24 @@ extern "C" void ds4_gpu_set_external_residency_hook(ds4_gpu_external_residency_h
 }
 /* B5: the router bias is a decode-phase feature; the DLL only decodes. */
 extern "C" void ds4_gpu_external_affinity_phase(int decode) { g_stream_expert_cache_phase_decode = decode != 0; }
+/* DSV41BG doorbell: host = the caller's cudaHostAllocMapped block (null turns it
+ * off); bases/l2_stride/l1/n_slots = the slot pool geometry (as the L2 hook
+ * returns it); last_seq = the last record the caller's pager has processed. */
+extern "C" int ds4_gpu_set_doorbell(void *host, const char *const *bases, const uint64_t *l2_stride,
+                                    uint32_t l1_slots, uint32_t n_slots, uint32_t last_seq) {
+    if (!host) { g_ds4db_dev = nullptr; g_ds4db_host = nullptr; return 1; }
+    ds4db_shared *sh = (ds4db_shared *)host;
+    if (sh->version != DS4DB_VERSION || sh->ring != DS4DB_RING || !bases || !l2_stride ||
+        !bases[0] || !bases[1] || !bases[2] || l1_slots > n_slots || !n_slots ||
+        (n_slots > l1_slots && (!bases[3] || !bases[4] || !bases[5]))) return 0;
+    void *dev = nullptr;
+    if (!cuda_ok(cudaHostGetDevicePointer(&dev, host, 0), "doorbell device alias")) return 0;
+    if (!g_ds4db_tier_dev && !cuda_ok(cudaMalloc((void **)&g_ds4db_tier_dev, DS4DB_MAX_EXPERTS), "doorbell tier")) return 0;
+    for (int k = 0; k < 6; ++k) g_ds4db_bases[k] = bases[k];
+    for (int k = 0; k < 3; ++k) g_ds4db_l2_stride[k] = l2_stride[k];
+    g_ds4db_l1_slots = l1_slots; g_ds4db_n_slots = n_slots; g_ds4db_seq = last_seq;
+    g_ds4db_host = sh; g_ds4db_dev = (ds4db_shared *)dev;
+    return 1;
+}
+extern "C" uint32_t ds4_gpu_doorbell_seq(void) { return g_ds4db_seq; }
 #endif
