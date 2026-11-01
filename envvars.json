@@ -2830,6 +2830,22 @@
     ]
   },
   {
+    "var": "LLAMADECODE_DOORBELL_WAIT",
+    "flag": null,
+    "default": null,
+    "code_default": "NULL from getenv; the spin-kernel wait is used",
+    "classification": "advanced",
+    "scopes": [
+      "ds4-win",
+      "rtx-llama"
+    ],
+    "doc": "Doorbell miss wait: a value starting with h polls the bell on the host (nothing parked on the GPU); a value starting with w uses cuStreamWaitValue32 on the bell; unset uses the sleeping spin kernel (fails after 30 s without the pager ringing the bell).",
+    "reads": [
+      "engines/ds4-win/ds4_cuda.cu:35879"
+    ],
+    "code_defaults": []
+  },
+  {
     "var": "DS4X_STAGE_PROFILE",
     "flag": null,
     "default": null,

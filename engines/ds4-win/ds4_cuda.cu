@@ -35876,8 +35876,32 @@ static int routed_moe_launch_impl(
         ds4db_resolve_kernel<<<1, 32, 0, s>>>((const int32_t *)selected->ptr, n_expert, layer_index, seq,
                                                g_ds4db_dev, (int32_t *)g_ds4x_slot_tensor.ptr);
         if (!cuda_ok(cudaGetLastError(), "doorbell resolve")) return 0;
-        ds4db_wait_kernel<<<1, 32, 0, s>>>(g_ds4db_dev, seq, 1500000000ull);
-        if (!cuda_ok(cudaGetLastError(), "doorbell wait")) return 0;
+        static const int ds4db_wait_mode = []{ const char *e = getenv("LLAMADECODE_DOORBELL_WAIT"); return (e && e[0] == 'w') ? 1 : (e && e[0] == 'h') ? 2 : 0; }();
+        static const bool ds4db_wait_logged = []{ fprintf(stderr, "LLAMADECODE_DOORBELL_WAIT_MODE mode=%s\n", ds4db_wait_mode == 1 ? "stream-wait-value" : ds4db_wait_mode == 2 ? "host-poll" : "spin-kernel"); fflush(stderr); return true; }();
+        (void)ds4db_wait_logged;
+        if (ds4db_wait_mode == 2) {
+            /* Host poll: nothing is parked or spinning on the GPU, so the D3D12 copies and
+             * pager stream copies that service a miss run freely. The first query flushes
+             * the WDDM submission batch so the resolve kernel starts. */
+            (void)cudaStreamQuery(s); (void)cudaGetLastError();
+            const auto ds4db_t0 = std::chrono::steady_clock::now();
+            for (uint32_t spin = 1; (int32_t)(g_ds4db_host->bell - seq) < 0; ++spin) {
+                if ((spin & 0xFFFFu) == 0u) {
+                    (void)cudaStreamQuery(s); (void)cudaGetLastError();
+                    if (std::chrono::steady_clock::now() - ds4db_t0 > std::chrono::seconds(30)) {
+                        fprintf(stderr, "LLAMADECODE_DOORBELL_WAIT_FAILED layer=%u seq=%u reason=no bell in 30 s\n", layer_index, seq); fflush(stderr);
+                        return 0;
+                    }
+                }
+            }
+        } else if (ds4db_wait_mode == 1) {
+            if (cuStreamWaitValue32((CUstream)s, (CUdeviceptr)&g_ds4db_dev->bell, seq, CU_STREAM_WAIT_VALUE_GEQ) != CUDA_SUCCESS) {
+                fprintf(stderr, "LLAMADECODE_DOORBELL_WAIT_FAILED layer=%u\n", layer_index); return 0;
+            }
+        } else {
+            ds4db_wait_kernel<<<1, 32, 0, s>>>(g_ds4db_dev, seq, 30000000000ull);
+            if (!cuda_ok(cudaGetLastError(), "doorbell wait")) return 0;
+        }
         ds4db_fixup_kernel<<<1, 32, 0, s>>>(g_ds4db_dev, seq, (int32_t *)g_ds4x_slot_tensor.ptr, n_expert);
         if (!cuda_ok(cudaGetLastError(), "doorbell fixup")) return 0;
         (void)ds4_gpu_stage_mark(7);

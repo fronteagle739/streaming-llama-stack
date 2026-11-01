@@ -1571,7 +1571,7 @@ bool llama_dsv41_weight_provider::doorbell_end(uint32_t posted_seq,std::string&e
         }else std::this_thread::yield();
     }
     p->db_step_active.store(false);
-    if(p->db->failed==2u&&!p->db_failed.load()){std::lock_guard<std::mutex>lock(p->mutex);p->db_error="GPU doorbell wait exceeded 1.5 s (pager stalled)";p->db_failed.store(true);}
+    if(p->db->failed==2u&&!p->db_failed.load()){std::lock_guard<std::mutex>lock(p->mutex);p->db_error="GPU doorbell wait exceeded its limit (pager stalled)";p->db_failed.store(true);}
     if(p->db_failed.load()){std::lock_guard<std::mutex>lock(p->mutex);error="Doorbell pager failed: "+p->db_error;return false;}
     return true;
 }
