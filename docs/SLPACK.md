@@ -3,7 +3,7 @@
 `.slpack` is a section container for streaming models. The envelope does not
 quantize tensors, change model arithmetic or select runtime features. Each
 architecture defines its tensor layouts and validates them independently.
-QFN's native routed expert payload retains every NVIDIA NVFP4 code, per16
+QFN's native routed expert payload retains every NVIDIA NVFP4 code, per 16
 UE4M3 scale, FP32 projection global and calibration byte. This claim applies
 to that relayout; it does not describe all dense or inherited auxiliary weights.
 
@@ -17,7 +17,7 @@ All integers are little-endian. The 64-byte header is:
 | 16 | u64 | Exact complete file length |
 | 24 | 40 bytes | Zero, reserved |
 
-The section table starts at byte64. Each128-byte descriptor contains:
+The section table starts at byte 64. Each 128-byte descriptor contains:
 
 | Offset within entry | Type | Meaning |
 | --- | --- | --- |
@@ -27,7 +27,7 @@ The section table starts at byte64. Each128-byte descriptor contains:
 | 80 | 32 bytes | SHA256 of the payload, including any internal tensor padding |
 | 112 | 16 bytes | Zero, reserved |
 
-The header and table reserve64KiB. Every section begins at a2MiB boundary;
+The header and table reserve 64 KiB. Every section begins at a 2 MiB boundary;
 gaps are zero filled. Descriptors are in physical order with unique names and
 no overlap. An empty payload is permitted and has SHA256 of the empty string.
 The file ends at the final payload byte, without trailing alignment padding.
@@ -40,20 +40,20 @@ section/file hash verifier. Its verification writer consumes fully regenerated
 payloads and checks them against a reference before calculating a new virtual
 envelope hash; it creates no full payload copy. Readback for derived sections
 requires matching generated and freshly authenticated reference section hashes.
-Metadata reads default to a32MiB cap. Large tensor
-payloads use4MiB streaming reads. Architecture readers may keep narrower
+Metadata reads default to a 32 MiB cap. Large tensor
+payloads use 4 MiB streaming reads. Architecture readers may keep narrower
 model-specific admission rules; envelope acceptance alone is not model support.
 
 The QFN native reader accepts the new envelope and has an explicit historical
-container compatibility path. Existing versions1/2, original quantization
+container compatibility path. Existing versions 1/2, original quantization
 types, calibrated input scales, MTP, profile, vision and tokenizer data remain
 available. New writers emit only the new envelope. Old metadata inside a
 migrated file is retained as provenance; changing the envelope does not rewrite
 its payload or erase its recorded source composition.
 
 For QFN, `experts.layout` v7 identifies
-`flashinfer-sm120-nvfp4-e16-expert-major-v1`. Each expert is2,764,816bytes:
-gate/up/down projections each occupy921,600bytes, followed by16 unchanged tail
+`flashinfer-sm120-nvfp4-e16-expert-major-v1`. Each expert is 2,764,816 bytes:
+gate/up/down projections each occupy 921,600 bytes, followed by 16 unchanged tail
 bytes. Values use adjacent E2M1 nibbles; scales are ordered `[K/64,N,4]`.
 `experts.input_scale` and its index retain the source calibrated activation
 globals. The reader continues to validate these descriptors independently

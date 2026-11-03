@@ -1,6 +1,6 @@
 # Reproducing model files
 
-Every recipe records its original Hugging Face repository, immutable40hex
+Every recipe records its original Hugging Face repository, immutable 40-character hexadecimal
 revision, full snapshot inventory, expected byte counts and SHA256 or Git-blob
 SHA1 identities. Model licensing and gated-source access remain the original
 source's terms. The source links are pinned, rather than links to a moving
@@ -8,9 +8,9 @@ default branch.
 
 | Recipe | Pinned source | Snapshot |
 | --- | --- | --- |
-| [QFN](../recipes/qfn-nvfp4.json) | [NVIDIA Qwen3.8 Flash Next NVFP4](https://huggingface.co/nvidia/Qwen3.8-Flash-Next-NVFP4/tree/fc694b54fb0174e0913e6adf86691ef85a4ead47) | 25files,132,734,506,847bytes |
-| [DSV4.1](../recipes/dsv41-flash.json) | [DeepSeek V4.1 Flash1017](https://huggingface.co/deepseek-ai/DeepSeek-V4.1-Flash-1017/tree/1bae0e1088993b9b82de08f59de5be5a34e42170) | 83files,510,311,045,295bytes |
-| [GLM](../recipes/glm53f-nvfp4.json) | [Huihui GLM5.3 Flash NVFP4](https://huggingface.co/edp1096/Huihui-GLM-5.3-Flash-abliterated-NVFP4/tree/25a335075327eb8edf863a2a8f779c32f0095808) | 47files,204,476,333,629bytes |
+| [QFN](../recipes/qfn-nvfp4.json) | [NVIDIA Qwen3.8 Flash Next NVFP4](https://huggingface.co/nvidia/Qwen3.8-Flash-Next-NVFP4/tree/fc694b54fb0174e0913e6adf86691ef85a4ead47) | 25 files, 132,734,506,847 bytes |
+| [DSV4.1](../recipes/dsv41-flash.json) | [DeepSeek V4.1 Flash 1017](https://huggingface.co/deepseek-ai/DeepSeek-V4.1-Flash-1017/tree/1bae0e1088993b9b82de08f59de5be5a34e42170) | 83 files, 510,311,045,295 bytes |
+| [GLM](../recipes/glm53f-nvfp4.json) | [Huihui GLM5.3 Flash NVFP4](https://huggingface.co/edp1096/Huihui-GLM-5.3-Flash-abliterated-NVFP4/tree/25a335075327eb8edf863a2a8f779c32f0095808) | 47 files, 204,476,333,629 bytes |
 
 Download only when a source is wanted and space is available:
 
@@ -39,7 +39,7 @@ for the delivered auxiliaries.
 The exact default auxiliary input is now available through a separate
 [pinned dependency recipe](../recipes/qfn-auxiliary.json). Its
 [upstream source attribution](https://huggingface.co/jesdga/Qwen3.8-Flash-Next-Basalt/tree/a229744b82e18c3e12057ab944062c0c713c7006)
-identifies the unmodified historical container. Its69,685,970,297-byte file has
+identifies the unmodified historical container. Its 69,685,970,297-byte file has
 SHA256 `dee4ae542817d73e4f7a56c448ef97cb7bb47ef92b8b2c5b7721ec0e8c25f76c`.
 That immutable upstream LFS identity matches the independently full-hashed
 auxiliary input. The current moving branch has a different artifact; use the
@@ -92,11 +92,11 @@ new metadata use a relative content identity. The original `OUTPUT.slpack.profil
 sidecar is retained alongside `profiles/PROFILE_SHA256.profile`; existing exact
 copies are reusable, and differing files are never overwritten.
 
-The reference native file is131,730,218,667bytes. Its recipe records all26
+The reference native file is 131,730,218,667 bytes. Its recipe records all 26
 payload-section hashes and the original container's historical whole-file
 hash. The independently verified new-envelope SHA256 is
 `0f6291a714839961007f0d130aa715b53d82f8d1e73cef9785700e83bce74fbe`,
-confirmed by a complete fresh file readback after only its12-byte envelope
+confirmed by a complete fresh file readback after only its 12-byte envelope
 prefix changed. The native reader's metadata, tokenizer and MTP admission check
 also passed. The complete fresh raw-import verification passed on 2026-11-03:
 all 25 pinned source files were authenticated again, all 26 sections
@@ -105,7 +105,7 @@ reference was independently read back. Its canonical output identity is:
 
 | Output scope | Bytes | SHA256 |
 | --- | --- | --- |
-| Default fresh import, canonical provenance policy1 | 131,730,218,740 | `195df4842abf2dd335ad706be6518611b2a433e806d98c4edcc8fe5e2b309a92` |
+| Default fresh import, canonical provenance policy 1 | 131,730,218,740 | `195df4842abf2dd335ad706be6518611b2a433e806d98c4edcc8fe5e2b309a92` |
 | Historical-provenance reference, new envelope | 131,730,218,667 | `0f6291a714839961007f0d130aa715b53d82f8d1e73cef9785700e83bce74fbe` |
 
 Compare the completed output verifier's byte count and SHA256 with
@@ -123,7 +123,7 @@ historical auxiliary artifact. The former missing auxiliary source dependency
 is resolved. NVIDIA's download alone does not contain the inherited tuned
 auxiliaries, so no raw-checkpoint-only full-file reproduction claim is made.
 
-**Determinism boundary:** new imports use canonical provenance policy1. Every
+**Determinism boundary:** new imports use canonical provenance policy 1. Every
 metadata field remains present. Format/version/tool identify the new importer;
 `checkpoint.dir` is the logical relative label `source`, and the auxiliary
 path is `auxiliary/sha256-METADATA_SHA256`. Its size, version, fingerprint,
@@ -178,8 +178,8 @@ Admit a 6 GiB job only with at least 10 GiB initially available physical RAM and
 retain the 4 GiB runtime floor. The observed peak is evidence for that run, not a
 guarantee for other machines. Plan roughly 133 GB source authentication reads, another
 full source conversion read, the inherited auxiliary reads and fingerprints,
-about2.3GB HC8 readback authentication, and one132GB reference pass. A fresh
-full auxiliary download verification adds70GB of reads. No full-size model
+about 2.3 GB HC8 readback authentication, and one 132 GB reference pass. A fresh
+full auxiliary download verification adds 70 GB of reads. No full-size model
 write occurs in this mode.
 
 For a locally archived original NVFP4 container, a complete native relayout can
@@ -212,7 +212,7 @@ See [the existing conversion documentation](DSV41_GGUF.md) for build prerequisit
 dry-run, native-FP4 expert/native-FP8 dense options, source pin and validation.
 
 The recipe gives the measured Q4 reference identity separately:
-518,596,067,328bytes,
+518,596,067,328 bytes,
 `2cc6bc254f22a0238020e61e931c0cac865218aada1eed9c0036d9f4031c6e5f`.
 The native-FP4 conversion's full output hash is unmeasured and remains null;
 the Q4 reference is not presented as its result. All supported original dense
@@ -230,7 +230,7 @@ separately, with 33 CPU fixtures passing. Their integration adoption, native
 build, full-model quality and final runtime qualification remain separate
 deliverables; that separate engine code is not included in this QFN package.
 
-The separate GLM source handoff has33 CPU fixtures. Its packer command refers
+The separate GLM source handoff has 33 CPU fixtures. Its packer command refers
 to that separate source branch; `scripts/glm53f_pack.py` is absent from this
 QFN review tree and is not a working executable route here. Native adoption,
 build, full pack/inverse/runtime qualification and expected output size/hash

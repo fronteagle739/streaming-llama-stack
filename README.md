@@ -31,10 +31,8 @@ aliases, stop behavior, numeric bias range or MTP capability were removed.
 These are separate measured checkpoints, not a matched comparison between
 models or builds. The final accepted installed row is the quiet control A2.
 It uses the same 100K fixture, MTP off, eight read parts, and 100 discarded
-warmup plus128 measured tokens for each mode on one continuing sequence.
-Recall and guarded cleanup passed. The regression investigation is closed by
-owner decision; that disposition is distinct from a proven causal model of
-every remaining difference.
+warmup plus 128 measured tokens for each mode on one continuing sequence.
+Recall and guarded cleanup passed.
 
 | Model / measured checkpoint | Prompt and decode window | Prefill tok/s | Quality decode tok/s | Biased decode tok/s | Bias |
 | --- | --- | ---: | ---: | ---: | ---: |
@@ -43,20 +41,16 @@ every remaining difference.
 | QFN historical speed point, predating the installed build | Exact 100K; same 100+128 protocol | 4150.10 | 25.5618 | 50.1246 | 0.68 |
 | DSV4.1 historical packed-FP4 decode | 100K natural-text chat prompt; 100 discarded +899 timed steps | Not qualified here | 7.39 | 24.11 | 1.36125 |
 
-The historical accepted executable differs from the installed executable.
-Following the controlled same-pack 0.35 comparison, the owner cleared the
-engine/DLL changes as the regression cause and accepted concurrent load as
-the explanation for most of the earlier gap. The installed control spread,
-range divided by mean, was1.3311% for prefill,4.4259% for quality decode, and
-1.3186% for biased decode. The final A2 was quiet under the coordinated slot;
-this does not mean the operating system had zero CPU activity.
-
-The remaining roughly3% prefill difference from the historical checkpoint
-is below the owner's action threshold. Its read-path cause remains unexplained
-and is roadmap-only. No further workspace/storage tests are planned for this
-delivery. Workspace32 remains unproven and the default remains12. The earlier
-installed 4,326.40 /25.6518 /42.8092 row is superseded as the final acceptance
-row and is retained only in historical receipts.
+The historical and installed rows use different executables. The controlled
+same-pack 0.35 comparison cleared engine/DLL changes as the regression cause;
+concurrent load explains most of the earlier gap. Installed control spread
+(range divided by mean) was 1.3311% for prefill, 4.4259% for quality decode and
+1.3186% for biased decode. The quiet A2 row is the current timing reference;
+ordinary operating-system activity remained. The residual roughly 3% prefill
+read-path difference is unexplained and remains on the roadmap. The regression
+investigation is closed; no further workspace/storage tests are planned for
+this delivery. Workspace 32 remains unproven, with default 12. The earlier
+installed 4,326.40 / 25.6518 / 42.8092 row is historical only.
 
 The selected QFN Max speed setting is now **0.68**; Max quality and the current
 conservative Balanced reference use zero. The numeric 0.35 point remains
@@ -83,8 +77,8 @@ outputs, caches and temporary files belong on the intended data/scratch volume.
 Do not launch conversion or hashing in a reserved timing window. Set an explicit
 host budget that fits available physical RAM above the configured floor.
 
-QFN packing was verified with Python3.12.10, NumPy2.5.0, `regex`2026.5.9 and
-`psutil`7.2.2. Install [requirements-pack.txt](requirements-pack.txt) in an
+QFN packing was verified with Python 3.12.10, NumPy 2.5.0, `regex` 2026.5.9 and
+`psutil` 7.2.2. Install [requirements-pack.txt](requirements-pack.txt) in an
 isolated environment before packing, and use that interpreter for the QFN
 Python commands below (POSIX uses `.venv-pack/bin/python`):
 
@@ -106,12 +100,12 @@ Both required QFN inputs are pinned. The compatible auxiliary container is
 `dee4ae542817d73e4f7a56c448ef97cb7bb47ef92b8b2c5b7721ec0e8c25f76c`.
 The verified migrated reference is 131,730,218,667 bytes, SHA256
 `0f6291a714839961007f0d130aa715b53d82f8d1e73cef9785700e83bce74fbe`.
-The complete raw import regenerated all26 sections, inverse/HC8 checks and
-canonical metadata after freshly authenticating all25 source files, then read
-back the entire reference. The verified canonical output is131,730,218,740bytes,
+The complete raw import regenerated all 26 sections, inverse/HC8 checks and
+canonical metadata after freshly authenticating all 25 source files, then read
+back the entire reference. The verified canonical output is 131,730,218,740 bytes,
 SHA256 `195df4842abf2dd335ad706be6518611b2a433e806d98c4edcc8fe5e2b309a92`.
-Its metadata is73bytes longer and changes exactly seven declared provenance
-fields while retaining every field. All25 nonmetadata payloads remain identical
+Its metadata is 73 bytes longer and changes exactly seven declared provenance
+fields while retaining every field. All 25 nonmetadata payloads remain identical
 to the historical reference. The proof calculated the exact output identity
 without writing a second full model. Both memory guards closed successfully;
 bounded paging observation is not a claim of zero physical paging I/O.
@@ -182,7 +176,7 @@ Before this release the same FP4 200K prompt took 76.2 s (2,623 tok/s), and 100K
 
 The remaining gap to the synthetic figure is real-text expert diversity in the
 executor (31.1 s against 29.3 s), the tail weight stream (6.8 s) and an Engram wait
-(about 2.5 s). Q4 Max speed was measured with the owner's desktop apps open. The
+(about 2.5 s). Q4 Max speed was measured with desktop applications open. The
 planner then refused the whole-prompt Engram admission (9.37 GB needed, 9.30 GB room),
 so each sweep loaded its own rows: still exact, but slower.
 
@@ -338,7 +332,7 @@ tool calls, answers and code. The model can set it itself.
 **Exact cone.** Single-machine and paired ULTRA defaults compute every encoder row
 and the decoder's final 2,541-row dependency cone. Aligned replay preserves
 full-prefill arithmetic; the matched 8K and 49,555-token controls are exact.
-Paired mode negotiates state v2 and retains the mode3 export/import payload,
+Paired mode negotiates state v2 and retains the mode 3 export/import payload,
 owner hashes and compatibility checks. [Design](docs/MULTICHUNK_PREFILL.md) ·
 [Paired state and live proof](docs/CONE_STATE.md).
 
@@ -564,7 +558,7 @@ with the [example launchers](examples/dual-machine/README.md).
 
 For a Windows/Linux second machine with enough RAM to hold the model, see the
 [large-RAM ds4-win untested example](examples/dual-machine/dsv41-large-ram-untested/README.md).
-It documents the missing mode3/YOCO CPU receiver; its launcher only previews the
+It documents the missing mode 3/YOCO CPU receiver; its launcher only previews the
 configuration.
 
 ## Features

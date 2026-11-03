@@ -137,13 +137,13 @@ printed its measured table and reasons, then published machine-bound local
 settings with a preserved backup, choosing 0 / 0 / 0.35. All 15 guarded stages
 completed. This short-context proof establishes that the calibration workflow
 runs; it is not a new 100K performance or calibration claim. Run at the intended
-context before replacing a production configuration. The [exact100K guide](../../docs/QFN_100K_REPRO.md) distinguishes its
+context before replacing a production configuration. The [exact 100K guide](../../docs/QFN_100K_REPRO.md) distinguishes its
 CPU protocol checks from pending native wrapper qualification.
 
 
 Current shipped QFN named modes are 0 / 0 / 0.68 for the native-packed NVFP4
-model/quant profile. The owner selected Max speed 0.68 on 2026-11-03 and requested
-no new 0.68 GUI or 100K tests. Its historical 100K evidence is 50.12 tok/s,
+model/quant profile. Max speed 0.68 was selected on 2026-11-03 from historical evidence;
+no new 0.68 GUI or 100K tests were run. Its historical 100K evidence is 50.12 tok/s,
 top-1 88.3%, KL 0.137 and predates the installed build. The short calibration
 workflow proof above selected 0.35 and remains historical evidence of the
 workflow; its measured table is unchanged. Continuous numeric bias values,

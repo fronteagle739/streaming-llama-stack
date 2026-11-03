@@ -49,17 +49,17 @@ Native controls take effect at token boundaries. The response reports requested 
 | `--cuda-visible-devices` | ds4-win: `{gpu_uuid}`; mac-ds4: `{gpu_uuid}`; rtx-llama: `{gpu_uuid}`; image: `{gpu_uuid}`; video: `{gpu_uuid}`; studio: `{gpu_uuid}`; mlx-serve: `{gpu_uuid}` | Explicit selected GPU UUID, never an inherited GPU selection. |
 | `--diffusers-cache` | ds4-win: `{runtime_root}/cache/diffusers_cache`; mac-ds4: `{runtime_root}/cache/diffusers_cache`; rtx-llama: `{runtime_root}/cache/diffusers_cache`; image: `{runtime_root}/cache/diffusers_cache`; video: `{runtime_root}/cache/diffusers_cache`; studio: `{runtime_root}/cache/diffusers_cache`; mlx-serve: `{runtime_root}/cache/diffusers_cache`; mac-mlx: `{runtime_root}/cache/diffusers_cache`; mac-llama: `{runtime_root}/cache/diffusers_cache`; mac-mference: `{runtime_root}/cache/diffusers_cache` | Runtime-local cache/temp directory; no model download is performed. |
 | `--diffusers-offline` | ds4-win: `1`; mac-ds4: `1`; rtx-llama: `1`; image: `1`; video: `1`; studio: `1`; mlx-serve: `1` | Keep inference offline and avoid global cache/bytecode writes. |
-| `--ds4-cache-affinity-bias` | ds4-win: `0` | CUDA expert-cache routing bias,0..1.36125.0 preserves baseline selection; live changes use the quality/speed tool. |
-| `--ds4-cache-affinity-calibrate` | Explicit runtime value | Record unbiased per-layer routing spreads and write their calibration when the engine closes. Use bias0 with at least16 decoded samples per layer. Restart with the resulting spread file for live quality controls. |
-| `--ds4-cache-affinity-spread-file` | ds4-win: `{affinity_spread_file}` | Per-model routing calibration. The packaged 1017 default contains40 numeric spread statistics, not weights, and is selected only for its full-file size/header fingerprint. The native verifier separately checks its mapped main-weight span excluding disk-only Engram, geometry and header. Explicit overrides select another calibration. |
-| `--ds4-cuda-cache-affinity-warp` | ds4-win: `1` | Use the qualified warp reranker for CUDA cache-affinity expert selection;0 selects the existing alternative. |
+| `--ds4-cache-affinity-bias` | ds4-win: `0` | CUDA expert-cache routing bias, 0..1.36125.0 preserves baseline selection; live changes use the quality/speed tool. |
+| `--ds4-cache-affinity-calibrate` | Explicit runtime value | Record unbiased per-layer routing spreads and write their calibration when the engine closes. Use bias 0 with at least 16 decoded samples per layer. Restart with the resulting spread file for live quality controls. |
+| `--ds4-cache-affinity-spread-file` | ds4-win: `{affinity_spread_file}` | Per-model routing calibration. The packaged 1017 default contains 40 numeric spread statistics, not weights, and is selected only for its full-file size/header fingerprint. The native verifier separately checks its mapped main-weight span excluding disk-only Engram, geometry and header. Explicit overrides select another calibration. |
+| `--ds4-cuda-cache-affinity-warp` | ds4-win: `1` | Use the qualified warp reranker for CUDA cache-affinity expert selection; 0 selects the existing alternative. |
 | `--ds4-cuda-ds-gpu-dest` | ds4-win: `1` | DS4_CUDA_DS_GPU_DEST: qualified preset/runtime setting; override for a different memory or arithmetic plan |
 | `--ds4-cuda-ds-overlap` | ds4-win: `1` | DS4_CUDA_DS_OVERLAP: qualified preset/runtime setting; override for a different memory or arithmetic plan |
 | `--ds4-cuda-prefill-edge-vram` | ds4-win: `0` | Keep 0: retain the native core in VRAM during prefill. Values enabling core eviction are refused by this memory-resident launcher. |
 | `--ds4-cuda-streaming-expert-cache-class-isolation` | ds4-win: `0` | DS4_CUDA_STREAMING_EXPERT_CACHE_CLASS_ISOLATION: qualified preset/runtime setting; override for a different memory or arithmetic plan |
 | `--ds4-cuda-streaming-expert-cache-reserve-gb` | ds4-win: `2` | DS4_CUDA_STREAMING_EXPERT_CACHE_RESERVE_GB: qualified preset/runtime setting; override for a different memory or arithmetic plan |
 | `--ds4-cuda-streaming-host-cache-n` | ds4-win: `0` | Expert-count upper bound for the host cache. On the single engine it optionally caps LLAMADECODE_HOST_CACHE_MB; unset leaves byte/physical admission authoritative. |
-| `--ds4-host-memory-budget-mb` | ds4-win: `{native_commit_mb}` | Windows native private-commit cap in MiB, including WDDM GPU backing. Defaults to the qualified45056MiB ceiling bounded by job_commit_gib; physical RSS is separately guarded by host_budget_gib. |
+| `--ds4-host-memory-budget-mb` | ds4-win: `{native_commit_mb}` | Windows native private-commit cap in MiB, including WDDM GPU backing. Defaults to the qualified 45056 MiB ceiling bounded by job_commit_gib; physical RSS is separately guarded by host_budget_gib. |
 | `--ds4-metal-disable-v41-layer-prefill` | mac-ds4: `1` | DS4_METAL_DISABLE_V41_LAYER_PREFILL: qualified preset/runtime setting; override for a different memory or arithmetic plan |
 | `--ds4-metal-wired-core-kv` | mac-ds4: `1` | Use anonymous owned, mlock-protected shared Metal core, KV and tensor storage; allocation or wiring failure refuses startup. The launcher requires this for native Mac inference. |
 | `--ds4-native-session` | Explicit runtime value | ds4 native session: supplied by authenticated native pairing; an inconsistent override refuses the handshake. |
@@ -108,8 +108,8 @@ Native controls take effect at token boundaries. The response reports requested 
 | `--llama-dsv41-cuda-graphs` | Explicit runtime value | Explicit streamed layer CUDA capture/update/replay experiment; requires compiled graph support and GGML_CUDA_DISABLE_GRAPHS=0; bounded one executable, no unsupported eager fallback. Production default remains eager. |
 | `--llama-dsv41-engram-gpu-decode` | Explicit runtime value | Upload the original 264-byte Engram rows and decode them on the GPU (bit-identical to the host decode, checked by the tile finite validator). Default enabled on the direct pinned tile path; 0 keeps the host decode and F32 upload. |
 | `--llama-dsv41-engram-prompt-overlap` | rtx-llama: `1`; qfn-engine: `1` | LLAMA_DSV41_ENGRAM_PROMPT_OVERLAP: qualified preset/runtime setting; override for a different memory or arithmetic plan |
-| `--flashinfer-batch-tokens` | Explicit runtime value | Opt-in ABI4 stored-MXFP4 expert chunk size, default4096. Encoder layers0-19 may widen to8192/16384; layer20 and the cone retain4K. Attention/router GEMMs stay4K; existing fused gather/MXFP8 quantization is reused. Exact provider/graph/physical admission remains mandatory;16K has only adapter qualification. |
-| `--dsv41-fused-hc` | rtx-llama: `2` | SM120 hc=4,20-iteration Sinkhorn:2(default) imports the DeepSeek fused algorithm with bit-exact native arithmetic;0 original graph;1 official rounding experiment. Other HC settings keep the original graph. |
+| `--flashinfer-batch-tokens` | Explicit runtime value | Opt-in ABI4 stored-MXFP4 expert chunk size, default 4096. Encoder layers 0-19 may widen to 8192/16384; layer 20 and the cone retain 4K. Attention/router GEMMs stay 4K; existing fused gather/MXFP8 quantization is reused. Exact provider/graph/physical admission remains mandatory; 16K has only adapter qualification. |
+| `--dsv41-fused-hc` | rtx-llama: `2` | SM120 hc=4,20-iteration Sinkhorn: 2(default) imports the DeepSeek fused algorithm with bit-exact native arithmetic; 0 original graph; 1 official rounding experiment. Other HC settings keep the original graph. |
 | `--llama-dsv41-get-rows-scalar` | Explicit runtime value | CUDA GET_ROWS of one-element F32/F16 rows (the indexer's streaming top-k value and ID gathers): one thread per gathered element instead of one 256-thread block per element. Identical values (same index, same cast). Default 1; 0 keeps the generic kernel. |
 | `--llama-dsv41-grouped-half` | Explicit runtime value | Grouped F16 dense projection (attn_output_a, 8 groups) as one graph node: per group the same F16 weight casts and the same cuBLAS call as the tagged F16 dense product, written into that group's slice of the output, so the result is bit-identical and the group concat tree is removed. Default 1; 0 keeps one product per group plus the concats. |
 | `--llama-dsv41-hc-bf16-residual` | Explicit runtime value | Keep the hyper-connection residual in BF16 between layers and between the attention and FFN sublayers (bit-identical: every carried residual is already BF16-rounded). Layers 1-36 read the resident BF16 bank directly and the attention sublayer writes BF16. Default 1; 0 restores the F32 unpack and F32 sublayer residual. |
@@ -120,10 +120,10 @@ Native controls take effect at token boundaries. The response reports requested 
 | `--llama-dsv41-skip-unused-tile-pin` | rtx-llama: `1` | LLAMA_DSV41_SKIP_UNUSED_TILE_PIN: qualified preset/runtime setting; override for a different memory or arithmetic plan |
 | `--llama-dsv41-sparse-hand` | Explicit runtime value | DSV4.1 token-tile sparse attention (TileLang mode 2): hand-written SM120 kernel with 32 heads per CTA, double-buffered 32-key tiles and the F32 query rounded to BF16 on load, instead of the embedded TileLang image (16 heads per CTA, one stage). Same BF16 MMA/F32 softmax arithmetic, different summation order (not bitwise identical). Default 1; 0 keeps the TileLang image. |
 | `--llama-dsv41-stream-topk-defer` | Explicit runtime value | Indexer streaming top-k for more than 131,072 keys: append each 8,192-key window's candidates to one pending buffer and merge only when it would exceed 8,192 columns and once at the end, instead of re-merging after every window. Identical IDs and order (same score-desc/global-ID-asc total order). Default 1; 0 restores the per-window running merge. |
-| `--dsv41-tilelang-attention` | rtx-llama: `2` | Sparse attention:2(default) packed-query SM120 TileLang grid with embedded pinned image;0 native control;1 legacy128-row adapter requiring its matching CUBIN. Mode2 stages query/KV once inside the existing768MiB pool. Qualified under owner KL tolerance; make it exact remains on the roadmap. |
+| `--dsv41-tilelang-attention` | rtx-llama: `2` | Sparse attention: 2(default) packed-query SM120 TileLang grid with embedded pinned image; 0 native control; 1 legacy 128-row adapter requiring its matching CUBIN. Mode 2 stages query/KV once inside the existing 768 MiB pool. Qualified under the documented KL tolerance; make it exact remains on the roadmap. |
 | `--llama-dsv41-topk-radix` | rtx-llama: `1` | LLAMA_DSV41_TOPK_RADIX: qualified preset/runtime setting; override for a different memory or arithmetic plan |
 | `--llama-dsv41-topk-select` | Explicit runtime value | With the exact radix top-k (LLAMA_DSV41_TOPK_RADIX=1), select the top 512 of each 8192-key tile by an MSB radix select on the same packed (value, index) keys and sort only those 512, instead of sorting the whole tile. Identical IDs and order (the key order is total); NaN/subnormal tiles keep the original network. Default 1; 0 keeps the full tile sort. |
-| `--dsv41-unpadded-cone` | Explicit runtime value | Experimental unpadded2541-row replay;0 preserves qualified tile shapes. Requires full-prefill bit-exact qualification. |
+| `--dsv41-unpadded-cone` | Explicit runtime value | Experimental unpadded 2541-row replay; 0 preserves qualified tile shapes. Requires full-prefill bit-exact qualification. |
 | `--llama-wf-ds-factory-staging-mib` | Explicit runtime value | OPUS22 experiment, default 256. DirectStorage factory staging size in MiB for the strict DSV4.1 producer; 512 stays inside the existing 512 MiB per-tier factory allowance, other values refuse. Same requests and bytes. |
 | `--llama-wf-ds-request-mib` | Explicit runtime value | OPUS22 experiment, unset by default (about layer/1000 bytes per DirectStorage request, clamped 512 KiB..32 MiB). 2, 4, 8, 16 or 32 fixes the request size in MiB for planning and the strict profile checks alike. Same bytes and destinations. |
 | `--llama-wf-ds-submit-threads` | Explicit runtime value | OPUS22 experiment, unset by default (DirectStorage chooses its submit threads). 1, 2 or 4 selects the existing strict TEST DirectStorage submit-thread profile when the launcher passes none. Same requests and bytes. |
@@ -136,11 +136,11 @@ Native controls take effect at token boundaries. The response reports requested 
 | `--pip-cache-dir` | ds4-win: `{runtime_root}/cache/pip_cache_dir`; mac-ds4: `{runtime_root}/cache/pip_cache_dir`; rtx-llama: `{runtime_root}/cache/pip_cache_dir`; image: `{runtime_root}/cache/pip_cache_dir`; video: `{runtime_root}/cache/pip_cache_dir`; studio: `{runtime_root}/cache/pip_cache_dir`; mlx-serve: `{runtime_root}/cache/pip_cache_dir`; mac-mlx: `{runtime_root}/cache/pip_cache_dir`; mac-llama: `{runtime_root}/cache/pip_cache_dir`; mac-mference: `{runtime_root}/cache/pip_cache_dir` | Runtime-local cache/temp directory; no model download is performed. |
 | `--pythondontwritebytecode` | ds4-win: `1`; mac-ds4: `1`; rtx-llama: `1`; image: `1`; video: `1`; studio: `1`; mlx-serve: `1`; mac-mlx: `1`; mac-llama: `1`; mac-mference: `1` | Keep inference offline and avoid global cache/bytecode writes. |
 | `--pythonpath` | ds4-win: `{library_pythonpath}`; mac-ds4: `{library_pythonpath}`; rtx-llama: `{library_pythonpath}`; image: `{library_pythonpath}`; video: `{library_pythonpath}`; studio: `{library_pythonpath}`; mlx-serve: `{library_pythonpath}`; mac-mlx: `{library_pythonpath}`; mac-llama: `{library_pythonpath}`; mac-mference: `{library_pythonpath}` | The stack and its vendored engine module paths. |
-| `--qfn-mmq-stream-k` | Explicit runtime value | 0/1: experimental QFN MMQ accumulation mode.0 selects complete-K output tiles in dense/routed and grouped MMQ;1/unset preserves upstream stream-k. Other models unchanged unless explicitly opted in. Prior engine batch-invariance failures remain reported. |
-| `--qfn-moe-chunk` | Explicit runtime value | Positive integer tokens, <= appended prompt length and admitted VRAM bound; used with QFN_MOE_PASS=1. Empty explicitly selects the engine's unset/automatic policy. Automatic sizing uses ggml lifetime-plan bytes plus16KiB/token backend allowance and512MiB margin. Invalid/unfit explicit numeric values fail loudly. |
-| `--qfn-moe-pass` | Explicit runtime value | 0/1: candidate separate routed/shared MoE pass after unchanged attention tiles; default0 retains the unfused control pending qualification. Enables prefill decode-cache release unless explicitly overridden. |
-| `--qfn-future-blas-workspace-mib` | Explicit runtime value | Persistent cuBLAS workspace in MiB for future-service model graphs. Integer1..256; default12 retains the delivered warm-chat fix. Admitted before automatic cache sizing and retained across warm graph parents. CUDA13.2 recommends32MiB on SM12x;32 is an unqualified regression-attribution candidate until measured. Does not disable the persistent-workspace warm-chat fix. |
-| `--qfn-fused-expert-reduce` | Explicit runtime value | Single CUDA kernel for F32 router-weighted expert reduction in prefill and decode. Preserves rounded products and ascending expert-slot additions, including strided views. Default on after byte-exact GPU/full-vocabulary gates and repeated exact100K gains; 0 retains the original MUL/ADD path. |
+| `--qfn-mmq-stream-k` | Explicit runtime value | 0/1: experimental QFN MMQ accumulation mode.0 selects complete-K output tiles in dense/routed and grouped MMQ; 1/unset preserves upstream stream-k. Other models unchanged unless explicitly opted in. Prior engine batch-invariance failures remain reported. |
+| `--qfn-moe-chunk` | Explicit runtime value | Positive integer tokens, <= appended prompt length and admitted VRAM bound; used with QFN_MOE_PASS=1. Empty explicitly selects the engine's unset/automatic policy. Automatic sizing uses ggml lifetime-plan bytes plus 16 KiB/token backend allowance and 512 MiB margin. Invalid/unfit explicit numeric values fail loudly. |
+| `--qfn-moe-pass` | Explicit runtime value | 0/1: candidate separate routed/shared MoE pass after unchanged attention tiles; default 0 retains the unfused control pending qualification. Enables prefill decode-cache release unless explicitly overridden. |
+| `--qfn-future-blas-workspace-mib` | Explicit runtime value | Persistent cuBLAS workspace in MiB for future-service model graphs. Integer 1..256; default 12 retains the delivered warm-chat fix. Admitted before automatic cache sizing and retained across warm graph parents. CUDA13.2 recommends 32 MiB on SM12x; 32 is an unqualified regression-attribution candidate until measured. Does not disable the persistent-workspace warm-chat fix. |
+| `--qfn-fused-expert-reduce` | Explicit runtime value | Single CUDA kernel for F32 router-weighted expert reduction in prefill and decode. Preserves rounded products and ascending expert-slot additions, including strided views. Default on after byte-exact GPU/full-vocabulary gates and repeated exact 100K gains; 0 retains the original MUL/ADD path. |
 | `--qfn-paired-gdn` | Explicit runtime value | Opt-in joined GDN qkv/gate projection over adjacent original Q6_K GPU rows; default off, refuses unsupported layouts, retains original scalar/reference path and all sampling/state capabilities. |
 | `--qfn-prefill-release-cache` | Explicit runtime value | 0/1: independently release the VRAM decode slab before prefill and restore identical capacity/prompt-ranked entries from the experts pack afterward. Unset follows QFN_MOE_PASS. Reload/reseed time counts toward TTFT; no capacity reduction fallback. |
 | `--qfn-v3-eager-op-trace` | Explicit runtime value | Optional eager-operation trace for QFN v3 diagnostics. Requires QFN_V3_CUDA_GRAPH=0 explicitly; capture is never silently disabled to permit tracing. |
@@ -169,7 +169,7 @@ Native controls take effect at token boundaries. The response reports requested 
 | `--xdg-cache-home` | ds4-win: `{runtime_root}/cache/xdg_cache_home`; mac-ds4: `{runtime_root}/cache/xdg_cache_home`; rtx-llama: `{runtime_root}/cache/xdg_cache_home`; image: `{runtime_root}/cache/xdg_cache_home`; video: `{runtime_root}/cache/xdg_cache_home`; studio: `{runtime_root}/cache/xdg_cache_home`; mlx-serve: `{runtime_root}/cache/xdg_cache_home`; mac-mlx: `{runtime_root}/cache/xdg_cache_home`; mac-llama: `{runtime_root}/cache/xdg_cache_home`; mac-mference: `{runtime_root}/cache/xdg_cache_home` | Runtime-local cache/temp directory; no model download is performed. |
 | `--zig-global-cache-dir` | ds4-win: `{runtime_root}/cache/zig_global_cache_dir`; mac-ds4: `{runtime_root}/cache/zig_global_cache_dir`; rtx-llama: `{runtime_root}/cache/zig_global_cache_dir`; image: `{runtime_root}/cache/zig_global_cache_dir`; video: `{runtime_root}/cache/zig_global_cache_dir`; studio: `{runtime_root}/cache/zig_global_cache_dir`; mlx-serve: `{runtime_root}/cache/zig_global_cache_dir`; mac-mlx: `{runtime_root}/cache/zig_global_cache_dir`; mac-llama: `{runtime_root}/cache/zig_global_cache_dir`; mac-mference: `{runtime_root}/cache/zig_global_cache_dir` | Runtime-local cache/temp directory; no model download is performed. |
 | `--zig-local-cache-dir` | ds4-win: `{runtime_root}/cache/zig_local_cache_dir`; mac-ds4: `{runtime_root}/cache/zig_local_cache_dir`; rtx-llama: `{runtime_root}/cache/zig_local_cache_dir`; image: `{runtime_root}/cache/zig_local_cache_dir`; video: `{runtime_root}/cache/zig_local_cache_dir`; studio: `{runtime_root}/cache/zig_local_cache_dir`; mlx-serve: `{runtime_root}/cache/zig_local_cache_dir`; mac-mlx: `{runtime_root}/cache/zig_local_cache_dir`; mac-llama: `{runtime_root}/cache/zig_local_cache_dir`; mac-mference: `{runtime_root}/cache/zig_local_cache_dir` | Runtime-local cache/temp directory; no model download is performed. |
-| `--qfn-native-nvfp4-share-gu-input` | Explicit runtime value | Experimental exact input sharing for native-packed long mode6 prefill. Flag1 requires every exported gate/up calibration pair to be bit-identical, checked at host admission and in the DLL; it reuses unchanged gate input/scale planes for up while retaining both GEMMs and independent down globals. Default0 retains separate quantizers, unequal-calibration packs, original modes and all short/decode arithmetic. Invalid values and long non-mode6 requests fail loudly. Source candidate only; GPU, whole-model and throughput qualification pending. |
+| `--qfn-native-nvfp4-share-gu-input` | Explicit runtime value | Experimental exact input sharing for native-packed long mode 6 prefill. Flag 1 requires every exported gate/up calibration pair to be bit-identical, checked at host admission and in the DLL; it reuses unchanged gate input/scale planes for up while retaining both GEMMs and independent down globals. Default 0 retains separate quantizers, unequal-calibration packs, original modes and all short/decode arithmetic. Invalid values and long non-mode 6 requests fail loudly. Source candidate only; GPU, whole-model and throughput qualification pending. |
 
 Budget placeholders use the admitted child budget: `{host_budget_bytes}`, `{host_budget_mb}`, `{physical_floor_bytes}` (admission) and `{runtime_floor_bytes}` (runtime). `{host_budget_gib}` and `{min_available_gib}` use GiB. User overrides are literal strings, including JSON and braces.
 
@@ -3324,7 +3324,7 @@ Source: `engines/ds4-win/ds4.c:84026`. Unset read: NULL from getenv; the literal
 
 ### DS4_CACHE_AFFINITY_BIAS
 
-CUDA expert-cache routing bias,0..1.36125.0 preserves baseline selection; live changes use the quality/speed tool.
+CUDA expert-cache routing bias, 0..1.36125.0 preserves baseline selection; live changes use the quality/speed tool.
 
 Scope: ds4-win. Class: preset.
 
@@ -3342,7 +3342,7 @@ Source: `engines/ds4-win/ds4.c:76348`. Unset read: NULL from getenv; the literal
 
 ### DS4_CACHE_AFFINITY_CALIBRATE
 
-Record unbiased per-layer routing spreads and write their calibration when the engine closes. Use bias0 with at least16 decoded samples per layer. Restart with the resulting spread file for live quality controls.
+Record unbiased per-layer routing spreads and write their calibration when the engine closes. Use bias 0 with at least 16 decoded samples per layer. Restart with the resulting spread file for live quality controls.
 
 Scope: ds4-win, rtx-llama. Class: runtime.
 
@@ -3504,7 +3504,7 @@ Source: `engines/ds4-win/ds4.c:76435`. Unset read: NULL from getenv; the literal
 
 ### DS4_CACHE_AFFINITY_SPREAD_FILE
 
-Per-model routing calibration. The packaged 1017 default contains40 numeric spread statistics, not weights, and is selected only for its full-file size/header fingerprint. The native verifier separately checks its mapped main-weight span excluding disk-only Engram, geometry and header. Explicit overrides select another calibration.
+Per-model routing calibration. The packaged 1017 default contains 40 numeric spread statistics, not weights, and is selected only for its full-file size/header fingerprint. The native verifier separately checks its mapped main-weight span excluding disk-only Engram, geometry and header. Explicit overrides select another calibration.
 
 Scope: ds4-win. Class: runtime-preset.
 
@@ -4396,7 +4396,7 @@ Source: `engines/ds4-win/ds4_cuda.cu:9651`. Unset read: NULL from getenv; the li
 
 ### DS4_CUDA_CACHE_AFFINITY_WARP
 
-Use the qualified warp reranker for CUDA cache-affinity expert selection;0 selects the existing alternative.
+Use the qualified warp reranker for CUDA cache-affinity expert selection; 0 selects the existing alternative.
 
 Scope: ds4-win. Class: preset.
 
@@ -8020,7 +8020,7 @@ Source: `engines/ds4-win/ds4.c:35556`. Unset read: NULL from getenv; the literal
 
 ### DS4_CUDA_HC_GRAPH_PROFILE
 
-E10 synchronizing-independent host encoding timer: 1 logs per-token HC call/replay counts and CPU encoding wall; default0. It is not GPU kernel duration or a full launch-overhead measurement.
+E10 synchronizing-independent host encoding timer: 1 logs per-token HC call/replay counts and CPU encoding wall; default 0. It is not GPU kernel duration or a full launch-overhead measurement.
 
 Scope: ds4-win, mac-ds4, rtx-llama. Class: advanced.
 
@@ -15772,7 +15772,7 @@ Source: `engines/ds4-win/ds4.c:90383`. Unset read: Wrapper/conditional default: 
 
 ### DS4_CUDA_SINGLE_GPU_HC_GRAPHS
 
-E10 default CUDA single-GPU V4.1 HC input graphs. Explicit0 keeps eager execution;1 captures position-independent HC mixes/norm before attention. Two exact matched pairs gain1.75-2.01% decode throughput. Engram layers, positions, cache writes and expert callbacks remain eager; dense-weight rebinding invalidates captures. Unsupported/Metal/ROCm paths remain unchanged.
+E10 default CUDA single-GPU V4.1 HC input graphs. Explicit 0 keeps eager execution; 1 captures position-independent HC mixes/norm before attention. Two exact matched pairs gain 1.75-2.01% decode throughput. Engram layers, positions, cache writes and expert callbacks remain eager; dense-weight rebinding invalidates captures. Unsupported/Metal/ROCm paths remain unchanged.
 
 Scope: ds4-win, mac-ds4, rtx-llama. Class: advanced.
 
@@ -20026,7 +20026,7 @@ Scope: mac-ds4. Class: advanced.
 
 ### DS4_DS41_CONCURRENT_FFN
 
-Scalar resident V4.1 FFN schedule: 0 retains original fused producers; 1 overlaps complete BF16 shared and routed products; 2 also queues independent deferred HC mix/split in the concurrent encoder. Every HC/router/shared/routed output and BF16 boundary is retained. Historical environment boolean spelling and debug modes0/1 remain; explicit2 selects the new schedule. Original quality, streaming, TP, geometry and ordinary batch paths remain supported.
+Scalar resident V4.1 FFN schedule: 0 retains original fused producers; 1 overlaps complete BF16 shared and routed products; 2 also queues independent deferred HC mix/split in the concurrent encoder. Every HC/router/shared/routed output and BF16 boundary is retained. Historical environment boolean spelling and debug modes 0/1 remain; explicit 2 selects the new schedule. Original quality, streaming, TP, geometry and ordinary batch paths remain supported.
 
 Scope: mac-ds4. Class: advanced.
 
@@ -20038,7 +20038,7 @@ Scope: mac-ds4. Class: advanced.
 
 ### DS4_DS41_DECODE_QUEUE2
 
-Commit V4.1 scalar decode layer 0 early, then every two layers (upstream a743c56). 0 retains the existing cadence.
+Commit V4.1 scalar decode layer 0 early, then every two layers (upstream a 743c56). 0 retains the existing cadence.
 
 Scope: mac-ds4. Class: advanced.
 
@@ -20260,7 +20260,7 @@ Scope: mac-ds4. Class: advanced.
 
 ### DS4_DS41_HC_JOIN_STATIC
 
-Use literal5120x4 scalar HC FFN join dimensions from upstream FIXED_SHAPES, retaining the fork BF16 block output, every HC stream and the original ordered FMA tree. Real scalar FFN steps also publish the exact16-byte pre carry in this same join, replacing its separate copy without removing any state. Opt-in; generic widths, optional add, aliasing, existing threadgroup controls and original join/copy remain supported.
+Use literal 5120x4 scalar HC FFN join dimensions from upstream FIXED_SHAPES, retaining the fork BF16 block output, every HC stream and the original ordered FMA tree. Real scalar FFN steps also publish the exact 16-byte pre carry in this same join, replacing its separate copy without removing any state. Opt-in; generic widths, optional add, aliasing, existing threadgroup controls and original join/copy remain supported.
 
 Scope: mac-ds4. Class: advanced.
 
@@ -20296,13 +20296,13 @@ Scope: mac-ds4. Class: advanced.
 
 ### DS4_DS41_INDEX_CANDIDATES
 
-Opt-in diagnostic compact masked scalar selection after layer20 when more than2048 blocks exist. NOT promoted for release: component score/rank checks pass but long full-model logit equality fails. The graph retains the original F32 scorer and all complete chronological score words; compact scores/list are separate budgeted scratch. Independent BF16/F32 compact score APIs remain available for diagnosis. GPU count/newest-block validation fails loudly before token publication and permits recovery. Original score/mask/radix controls and every state field, shorter contexts, quality, TP, streaming and batch path remain supported. Default0 retains the qualified original selector.
+Opt-in diagnostic compact masked scalar selection after layer 20 when more than 2048 blocks exist. NOT promoted for release: component score/rank checks pass but long full-model logit equality fails. The graph retains the original F32 scorer and all complete chronological score words; compact scores/list are separate budgeted scratch. Independent BF16/F32 compact score APIs remain available for diagnosis. GPU count/newest-block validation fails loudly before token publication and permits recovery. Original score/mask/radix controls and every state field, shorter contexts, quality, TP, streaming and batch path remain supported. Default 0 retains the qualified original selector.
 
 Scope: mac-ds4. Class: advanced.
 
 ### DS4_DS41_INDEX_CANDIDATE_CAPTURE
 
-Explicit directory for a one-shot bounded scalar index diagnostic at131072 or later. With index_candidates selected, retain the current full F32 scores/mask and512 selected indices plus an independent original-selector result. Four fixed filenames in this existing directory are overwritten; no weight file is opened or live graph value changed. Unset performs no capture. This diagnostic is not throughput evidence.
+Explicit directory for a one-shot bounded scalar index diagnostic at 131072 or later. With index_candidates selected, retain the current full F32 scores/mask and 512 selected indices plus an independent original-selector result. Four fixed filenames in this existing directory are overwritten; no weight file is opened or live graph value changed. Unset performs no capture. This diagnostic is not throughput evidence.
 
 Scope: mac-ds4. Class: advanced.
 
@@ -20320,7 +20320,7 @@ Scope: mac-ds4. Class: advanced.
 
 ### DS4_DS41_INDEX_SCHEDULE
 
-Scalar V4.1 index scheduling: 0 retains all original paths; 1 omits all-eligible block ranking/masked plans below 16385 compressed keys while retaining exact scores and masks; 2 additionally reads the checked BF16 key view through upstream wide/split scalar kernels from 8192 keys. Mode2 uses a different reduction order; original scalar/compact/stream controls remain available in mode0. Nonexact restored keys retain F32 wide support. Quality and TP retain their selected full paths. No cache/state information is removed.
+Scalar V4.1 index scheduling: 0 retains all original paths; 1 omits all-eligible block ranking/masked plans below 16385 compressed keys while retaining exact scores and masks; 2 additionally reads the checked BF16 key view through upstream wide/split scalar kernels from 8192 keys. Mode 2 uses a different reduction order; original scalar/compact/stream controls remain available in mode 0. Nonexact restored keys retain F32 wide support. Quality and TP retain their selected full paths. No cache/state information is removed.
 
 Scope: mac-ds4. Class: advanced.
 
@@ -20686,7 +20686,7 @@ Scope: mac-ds4. Class: advanced.
 
 ### DS4_DS41_TOPK_SHORT
 
-Use upstream exact shuffle block sort and staged/fused prefix merge for explicit scalar V4.1 top512 token selection below16384 keys. Opt-in; original sort and shuffle/prefix controls, long radix path, block selection, causal/ordinary batches and all state fields remain intact. Every selected index including ties and signed-zero input retains the original result.
+Use upstream exact shuffle block sort and staged/fused prefix merge for explicit scalar V4.1 top 512 token selection below 16384 keys. Opt-in; original sort and shuffle/prefix controls, long radix path, block selection, causal/ordinary batches and all state fields remain intact. Every selected index including ties and signed-zero input retains the original result.
 
 Scope: mac-ds4. Class: advanced.
 
@@ -20698,7 +20698,7 @@ Scope: mac-ds4. Class: advanced.
 
 ### DS4_DS41_VERIFY_BATCH_CORE
 
-Select verification attention schedule: absent/lever0 retains serial rows; historical environment presence (even string0) or lever1 retains the generic batch path; explicit environment2 or lever2 adds upstream indexed verify split attention, small-row tiled scoring and exact BF16 derived key views. Graph RAM admission includes all derived views and restore checks; non-BF16-exact restored caches retain original F32 scores. All historical modes remain selectable.
+Select verification attention schedule: absent/lever 0 retains serial rows; historical environment presence (even string 0) or lever 1 retains the generic batch path; explicit environment 2 or lever 2 adds upstream indexed verify split attention, small-row tiled scoring and exact BF16 derived key views. Graph RAM admission includes all derived views and restore checks; non-BF16-exact restored caches retain original F32 scores. All historical modes remain selectable.
 
 Scope: mac-ds4. Class: advanced.
 
@@ -20710,7 +20710,7 @@ Scope: mac-ds4. Class: advanced.
 
 ### DS4_DS41_VERIFY_OUTPUT
 
-Select upstream fbbe5c10 verification output schedule: 0 retains original products, 1 shares attention low/output weight passes for eligible2-8 DSpark rows, and 2 additionally joins eligible attention projection/HC and shared-down/routed-add/HC tails. Every projection, shared, block and carry output is retained. Exact row form retains scalar K walks and ordered FMA; optional ROWS_MMA uses upstream matrix reductions. Quality, streaming, TP, custom geometry and ordinary batches retain their complete original schedules.
+Select upstream fbbe5c10 verification output schedule: 0 retains original products, 1 shares attention low/output weight passes for eligible 2-8 DSpark rows, and 2 additionally joins eligible attention projection/HC and shared-down/routed-add/HC tails. Every projection, shared, block and carry output is retained. Exact row form retains scalar K walks and ordered FMA; optional ROWS_MMA uses upstream matrix reductions. Quality, streaming, TP, custom geometry and ordinary batches retain their complete original schedules.
 
 Scope: mac-ds4. Class: advanced.
 
@@ -21616,7 +21616,7 @@ static uint32_t ds4_dspark_scheduler_tail_min_tokens(void) {
 
 ### DS4_DSPARK_SCHEDULER_MIN_AVG_MILLI
 
-Retained peer decoder scheduler minimum average acceptance, in thousandths; native fallback1500 retained.
+Retained peer decoder scheduler minimum average acceptance, in thousandths; native fallback 1500 retained.
 
 Scope: ds4-peer. Class: advanced.
 
@@ -26842,7 +26842,7 @@ static cudaError_t cuda_host_allocation_result(cudaError_t result, size_t bytes,
 
 ### DS4_HOST_MEMORY_BUDGET_MB
 
-Windows native private-commit cap in MiB, including WDDM GPU backing. Defaults to the qualified45056MiB ceiling bounded by job_commit_gib; physical RSS is separately guarded by host_budget_gib.
+Windows native private-commit cap in MiB, including WDDM GPU backing. Defaults to the qualified 45056 MiB ceiling bounded by job_commit_gib; physical RSS is separately guarded by host_budget_gib.
 
 Scope: ds4-win. Class: preset.
 
@@ -63497,7 +63497,7 @@ Source: `engines/mlx-serve/src/flux.zig:2450`. Unset read: NULL from getenv; the
 
 ### FLUX_NOISE0
 
-flux noise0: engine setting; built-in default retained
+flux noise 0: engine setting; built-in default retained
 
 Scope: mlx-serve. Class: advanced.
 
@@ -69080,7 +69080,7 @@ bool abort_file_present(){
 
 ### LLAMADECODE_APPEND_DECODE_MAX
 
-Producer resident append toggle: 0 (default) keeps full sweeps. Opt in with 96 for the measured faster but numerically different single-token decode path. E2c observed follow-up KL up to0.01087 at bias0; accuracy attribution is in progress. Appends above the threshold keep the sweep.
+Producer resident append toggle: 0 (default) keeps full sweeps. Opt in with 96 for the measured faster but numerically different single-token decode path. E2c observed follow-up KL up to 0.01087 at bias 0; accuracy attribution is in progress. Appends above the threshold keep the sweep.
 
 Scope: rtx-llama. Class: preset.
 
@@ -69116,7 +69116,7 @@ bool ds4x_keep_open(){static const bool on=[]{const char*e=std::getenv("LLAMADEC
 
 ### LLAMADECODE_APPEND_RESIDENT_SWEEP
 
-E2c default resident-expert sweep for at most32 new tokens after resident decode. Set0 for full sweeps. The owner accepted measured follow-up KL0.0000235/0.000224/0.00250 at2K/8K/32K, with recall/top1 passing and append2.7-2.9s versus17.5-18.2s. Uses the original sweep policy, releases L2 before restoring prefill buffers, and keeps the existing cache type. Exactness remains a future target.
+E2c default resident-expert sweep for at most 32 new tokens after resident decode. Set 0 for full sweeps. Accepted measured follow-up KL 0.0000235/0.000224/0.00250 at 2K/8K/32K, with recall/top 1 passing and append 2.7-2.9 s versus 17.5-18.2 s. Uses the original sweep policy, releases L2 before restoring prefill buffers, and keeps the existing cache type. Exactness remains a future target.
 
 Scope: rtx-llama. Class: advanced.
 
@@ -69205,7 +69205,7 @@ bool collectable(const char*m){
 
 ### LLAMADECODE_CONE_TAIL_PREFETCH
 
-Opt-in exact next-layer routed-tail hint. Default0. When1, one worker predicts at most24 experts from the first four current routing rows, only into the next layer>=21 already-ready other compute bank. Uses the existing two weight banks and adds8MiB host admission for its stack and bounded metadata. A matching stage/bank/pass generation and completed CPU storage/error checks plus a consumer CUDA fence are required before adoption; actual routing still fetches every missing expert. No arithmetic, token, raw-history or checkpoint changes. Failed hints fail the request; release/restart/destruction join the worker.
+Opt-in exact next-layer routed-tail hint. Default 0. When 1, one worker predicts at most 24 experts from the first four current routing rows, only into the next layer>=21 already-ready other compute bank. Uses the existing two weight banks and adds 8 MiB host admission for its stack and bounded metadata. A matching stage/bank/pass generation and completed CPU storage/error checks plus a consumer CUDA fence are required before adoption; actual routing still fetches every missing expert. No arithmetic, token, raw-history or checkpoint changes. Failed hints fail the request; release/restart/destruction join the worker.
 
 Scope: rtx-llama. Class: advanced.
 
@@ -69763,7 +69763,7 @@ bool llama_dsv41_engram_early_enabled(){return llama_dsv41_engram_early_mode()!=
 
 ### LLAMADECODE_GRAPH_MATERIALIZE_PLAN
 
-Reuse the already admitted V4.1 graph lifetime plan when materializing buffers. Default1 avoids the repeated plan without changing arithmetic or admission; 0 retains the second-reserve control.
+Reuse the already admitted V4.1 graph lifetime plan when materializing buffers. Default 1 avoids the repeated plan without changing arithmetic or admission; 0 retains the second-reserve control.
 
 Scope: rtx-llama. Class: advanced.
 
@@ -69877,7 +69877,7 @@ Source: `engines/streaming-llama/prefill_llama.cpp/tools/dsv41-prefill/live-sess
 
 ### LLAMADECODE_HOST_COPY_STAGING
 
-E18 bounded64MiB pinned host transfer slot, allocated once per fixed run and reused by sweep executors. Auto selects it only when the logical tile plan spills beyond the resident hidden bank; short/full-resident plans keep direct copies.0 forces original tile registration;1 forces staging on supported fixed non-lookahead plans. Exact gather/scatter and completion checks remain; extra64MiB stays inside enforced host/device budgets.
+E18 bounded 64 MiB pinned host transfer slot, allocated once per fixed run and reused by sweep executors. Auto selects it only when the logical tile plan spills beyond the resident hidden bank; short/full-resident plans keep direct copies.0 forces original tile registration; 1 forces staging on supported fixed non-lookahead plans. Exact gather/scatter and completion checks remain; extra 64 MiB stays inside enforced host/device budgets.
 
 Scope: rtx-llama. Class: advanced.
 
@@ -70129,7 +70129,7 @@ Source: `engines/streaming-llama/prefill_llama.cpp/src/llama-weight-fetcher.cpp:
 
 ### LLAMADECODE_PREFILL_ROUTED
 
-Router-driven prefill expert reads: 0 off, 1 all layers, tail layers21-39. The single-engine launcher selects1 automatically for ULTRA prompts through2048 rows and tail with yoco_keep2541; larger full-layer passes retain overlapped eager reads. Explicit overrides win.
+Router-driven prefill expert reads: 0 off, 1 all layers, tail layers 21-39. The single-engine launcher selects 1 automatically for ULTRA prompts through 2048 rows and tail with yoco_keep2541; larger full-layer passes retain overlapped eager reads. Explicit overrides win.
 
 Scope: rtx-llama. Class: advanced.
 
@@ -70183,7 +70183,7 @@ Source: `engines/streaming-llama/prefill_llama.cpp/src/llama-dsv41-weights.cpp:1
 
 ### LLAMADECODE_SINGLEPASS_INDEX
 
-Opt-in grouped-prefill index frontier matching the legacy49152-row sweep schedule, including its folded tail. Preserves causal tiles and efficient N=1 index/selection shapes. The100K comparison was exact but neutral; remains off.
+Opt-in grouped-prefill index frontier matching the legacy 49152-row sweep schedule, including its folded tail. Preserves causal tiles and efficient N=1 index/selection shapes. The 100K comparison was exact but neutral; remains off.
 
 Scope: rtx-llama. Class: advanced.
 
@@ -70201,7 +70201,7 @@ Source: `engines/streaming-llama/prefill_llama.cpp/src/llama-dsv41-executor.cpp:
 
 ### LLAMADECODE_SINGLEPASS_PIN
 
-Experimental16384-row CUDA host-registration window in the existing locked carry bank. Copies still require the exact current lease. The100K candidate was slower and remains off; no new pageable staging or default change.
+Experimental 16384-row CUDA host-registration window in the existing locked carry bank. Copies still require the exact current lease. The 100K candidate was slower and remains off; no new pageable staging or default change.
 
 Scope: rtx-llama. Class: advanced.
 
@@ -74647,7 +74647,7 @@ Source: `engines/streaming-llama/prefill_llama.cpp/src/llama-dsv41-executor.cpp:
 
 ### LLAMA_DSV41_DENSE_FP8
 
-Opt-in Q8_0-to-FP8 lossy dense speed proxy, off unless1; requires native BF16 epilogue, prefill-only harness and extra admitted workspace.
+Opt-in Q8_0-to-FP8 lossy dense speed proxy, off unless 1; requires native BF16 epilogue, prefill-only harness and extra admitted workspace.
 
 Scope: rtx-llama. Class: advanced.
 
@@ -74869,7 +74869,7 @@ Source: `engines/streaming-llama/prefill_llama.cpp/ggml/src/ggml-cuda/mmq_id_com
 
 ### LLAMA_DSV41_FLASHINFER_BATCH_TOKENS
 
-Opt-in ABI4 stored-MXFP4 expert chunk size, default4096. Encoder layers0-19 may widen to8192/16384; layer20 and the cone retain4K. Attention/router GEMMs stay4K; existing fused gather/MXFP8 quantization is reused. Exact provider/graph/physical admission remains mandatory;16K has only adapter qualification.
+Opt-in ABI4 stored-MXFP4 expert chunk size, default 4096. Encoder layers 0-19 may widen to 8192/16384; layer 20 and the cone retain 4K. Attention/router GEMMs stay 4K; existing fused gather/MXFP8 quantization is reused. Exact provider/graph/physical admission remains mandatory; 16K has only adapter qualification.
 
 Scope: rtx-llama. Class: advanced.
 
@@ -74989,7 +74989,7 @@ Source: `engines/streaming-llama/prefill_llama.cpp/src/llama-dsv41-weights.cpp:7
 
 ### LLAMA_DSV41_FUSED_HC
 
-SM120 hc=4,20-iteration Sinkhorn:2(default) imports the DeepSeek fused algorithm with bit-exact native arithmetic;0 original graph;1 official rounding experiment. Other HC settings keep the original graph.
+SM120 hc=4,20-iteration Sinkhorn: 2(default) imports the DeepSeek fused algorithm with bit-exact native arithmetic; 0 original graph; 1 official rounding experiment. Other HC settings keep the original graph.
 
 Scope: rtx-llama. Class: advanced.
 
@@ -75127,7 +75127,7 @@ Source: `engines/streaming-llama/prefill_llama.cpp/tools/dsv41-prefill/main.cpp:
 
 ### LLAMA_DSV41_INDEX_FP4
 
-E6 default SM120 FP4/E8M0 MMA index scorer for the existing BF16 index profile. Set0 to retain BF16. Packs already quantized values exactly; every operation requires a conservative FP32 integer-sum certificate or falls back to original BF16 cuBLAS. At100K,prompt execution70.459 to67.746s, TTFT74.688 to71.891s,17full-vocabulary logit rows bit-identical, KL0 and retrieval pass. No stored KV change.
+E6 default SM120 FP4/E8M0 MMA index scorer for the existing BF16 index profile. Set 0 to retain BF16. Packs already quantized values exactly; every operation requires a conservative FP32 integer-sum certificate or falls back to original BF16 cuBLAS. At 100K,prompt execution 70.459 to 67.746 s, TTFT 74.688 to 71.891 s, 17full-vocabulary logit rows bit-identical, KL 0 and retrieval pass. No stored KV change.
 
 Scope: rtx-llama. Class: advanced.
 
@@ -75181,7 +75181,7 @@ void ggml_cuda_mul_mat_q4k_half_id_workspace(ggml_backend_cuda_context&ctx,const
 
 ### LLAMA_DSV41_PROFILE_STAGES
 
-Default0. Diagnostic semantic names for previously anonymous graph nodes, used with the existing synchronized per-node CUDA profiler. Preserves dispatch/boundary names, operations, operands and arithmetic flags. Construction walks add diagnostic CPU overhead; never use these profile walls as headline throughput.
+Default 0. Diagnostic semantic names for previously anonymous graph nodes, used with the existing synchronized per-node CUDA profiler. Preserves dispatch/boundary names, operations, operands and arithmetic flags. Construction walks add diagnostic CPU overhead; never use these profile walls as headline throughput.
 
 Scope: rtx-llama. Class: advanced.
 
@@ -75271,7 +75271,7 @@ Source: `engines/streaming-llama/prefill_llama.cpp/src/llama-dsv41-executor.cpp:
 
 ### LLAMA_DSV41_ROUTE_HISTOGRAM
 
-Diagnostic DSV4.1 per-tile counts for all384 routed experts. Retains and reads the actual top-six ids after synchronization; fresh graph bindings required. Do not mix diagnostic throughput into headline measurements.
+Diagnostic DSV4.1 per-tile counts for all 384 routed experts. Retains and reads the actual top-six ids after synchronization; fresh graph bindings required. Do not mix diagnostic throughput into headline measurements.
 
 Scope: rtx-llama. Class: advanced.
 
@@ -75373,7 +75373,7 @@ inline bool stream_topk_defer_enabled(){
 
 ### LLAMA_DSV41_TILELANG_ATTENTION
 
-Sparse attention:2(default) packed-query SM120 TileLang grid with embedded pinned image;0 native control;1 legacy128-row adapter requiring its matching CUBIN. Mode2 stages query/KV once inside the existing768MiB pool. Qualified under owner KL tolerance; make it exact remains on the roadmap.
+Sparse attention: 2(default) packed-query SM120 TileLang grid with embedded pinned image; 0 native control; 1 legacy 128-row adapter requiring its matching CUBIN. Mode 2 stages query/KV once inside the existing 768 MiB pool. Qualified under the documented KL tolerance; make it exact remains on the roadmap.
 
 Scope: rtx-llama. Class: advanced.
 
@@ -75403,7 +75403,7 @@ Source: `engines/streaming-llama/prefill_llama.cpp/ggml/src/ggml-cuda/dsv41-tile
 
 ### LLAMA_DSV41_TILELANG_CUBIN
 
-Optional ahead-of-time sparse-attention image override. Mode2 defaults to the embedded, digest-pinned SM120 image; mode1 requires the legacy sparse_attn_kernel__kernel image. Overrides must match the selected ABI.
+Optional ahead-of-time sparse-attention image override. Mode 2 defaults to the embedded, digest-pinned SM120 image; mode 1 requires the legacy sparse_attn_kernel__kernel image. Overrides must match the selected ABI.
 
 Scope: rtx-llama. Class: advanced.
 
@@ -75499,7 +75499,7 @@ static bool top_k_shared_keys_enabled(const int tile_size) {
 
 ### LLAMA_DSV41_UNPADDED_CONE
 
-Experimental unpadded2541-row replay;0 preserves qualified tile shapes. Requires full-prefill bit-exact qualification.
+Experimental unpadded 2541-row replay; 0 preserves qualified tile shapes. Requires full-prefill bit-exact qualification.
 
 Scope: rtx-llama. Class: advanced.
 
@@ -96103,7 +96103,7 @@ PYTORCH_CUDA_ALLOC_CONF: advanced engine setting; built-in default retained
 
 Scope: image, studio, video. Class: advanced.
 
-Source: `vendor/engines/cosmos_windows/weight_streaming/magi2_backend.py:13`. Unset read: 'max_split_size_mb:512,garbage_collection_threshold:0.7'.
+Source: `vendor/engines/cosmos_windows/weight_streaming/magi2_backend.py:13`. Unset read: 'max_split_size_mb: 512,garbage_collection_threshold: 0.7'.
 
 ```text
 import sys
@@ -96115,7 +96115,7 @@ from typing import List, Optional, Tuple
 from cosmos_windows.weight_streaming.magi2_prompt import DEFAULT_NEGATIVE_PROMPT, MAGI2_CLIP_SECONDS, MAGI2_MODES, load_prompt_text, magi2_enhance_presets, mode_config_defaults
 ```
 
-Source: `vendor/studio/studio/adapter.py:1600`. Unset read: 'max_split_size_mb:512,garbage_collection_threshold:0.7'.
+Source: `vendor/studio/studio/adapter.py:1600`. Unset read: 'max_split_size_mb: 512,garbage_collection_threshold: 0.7'.
 
 ```text
         if refiner_steps:
@@ -96399,7 +96399,7 @@ Source: `engines/streaming-llama/prefill_llama.cpp/tools/qfn-engine/qfn-op-test.
 
 ### QFN_MMQ_STREAM_K
 
-0/1: experimental QFN MMQ accumulation mode.0 selects complete-K output tiles in dense/routed and grouped MMQ;1/unset preserves upstream stream-k. Other models unchanged unless explicitly opted in. Prior engine batch-invariance failures remain reported.
+0/1: experimental QFN MMQ accumulation mode.0 selects complete-K output tiles in dense/routed and grouped MMQ; 1/unset preserves upstream stream-k. Other models unchanged unless explicitly opted in. Prior engine batch-invariance failures remain reported.
 
 Scope: qfn-engine. Class: advanced.
 
@@ -96417,7 +96417,7 @@ inline bool qfn_mmq_stream_k_enabled() {
 
 ### QFN_MOE_CHUNK
 
-Positive integer tokens, <= appended prompt length and admitted VRAM bound; used with QFN_MOE_PASS=1. Empty explicitly selects the engine's unset/automatic policy. Automatic sizing uses ggml lifetime-plan bytes plus16KiB/token backend allowance and512MiB margin. Invalid/unfit explicit numeric values fail loudly.
+Positive integer tokens, <= appended prompt length and admitted VRAM bound; used with QFN_MOE_PASS=1. Empty explicitly selects the engine's unset/automatic policy. Automatic sizing uses ggml lifetime-plan bytes plus 16 KiB/token backend allowance and 512 MiB margin. Invalid/unfit explicit numeric values fail loudly.
 
 Scope: qfn-engine. Class: advanced.
 
@@ -96435,7 +96435,7 @@ Source: `engines/streaming-llama/prefill_llama.cpp/tools/qfn-engine/qfn-engine.c
 
 ### QFN_MOE_PASS
 
-0/1: candidate separate routed/shared MoE pass after unchanged attention tiles; default0 retains the unfused control pending qualification. Enables prefill decode-cache release unless explicitly overridden.
+0/1: candidate separate routed/shared MoE pass after unchanged attention tiles; default 0 retains the unfused control pending qualification. Enables prefill decode-cache release unless explicitly overridden.
 
 Scope: qfn-engine. Class: advanced.
 
@@ -96453,7 +96453,7 @@ Source: `engines/streaming-llama/prefill_llama.cpp/tools/qfn-engine/qfn-engine.c
 
 ### QFN_FUTURE_BLAS_WORKSPACE_MIB
 
-Persistent cuBLAS workspace in MiB for future-service model graphs. Integer1..256; default12 retains the delivered warm-chat fix. Admitted before automatic cache sizing and retained across warm graph parents. CUDA13.2 recommends32MiB on SM12x;32 is an unqualified regression-attribution candidate until measured. Does not disable the persistent-workspace warm-chat fix.
+Persistent cuBLAS workspace in MiB for future-service model graphs. Integer 1..256; default 12 retains the delivered warm-chat fix. Admitted before automatic cache sizing and retained across warm graph parents. CUDA13.2 recommends 32 MiB on SM12x; 32 is an unqualified regression-attribution candidate until measured. Does not disable the persistent-workspace warm-chat fix.
 
 Scope: qfn-engine. Class: advanced.
 
@@ -96549,7 +96549,7 @@ Source: `engines/streaming-llama/prefill_llama.cpp/tools/qfn-engine/qfn-engine.c
 
 ### QFN_NATIVE_NVFP4_DECODE_RESIDUAL
 
-Experimental two-component gate/up/down activation quantization for short native-packed NVFP4 mode6 (nt1..4, including short final prefill); default0 retains original arithmetic. Reuses grouped FP4 GEMMs, adds products before SwiGLU/globals, uses extra persistent scratch and may reduce cache slots. Long prefill unchanged; short non-mode6 with1 fails. Both fused-mid schedules supported; numerical/performance qualification pending.
+Experimental two-component gate/up/down activation quantization for short native-packed NVFP4 mode 6 (nt1..4, including short final prefill); default 0 retains original arithmetic. Reuses grouped FP4 GEMMs, adds products before SwiGLU/globals, uses extra persistent scratch and may reduce cache slots. Long prefill unchanged; short non-mode 6 with 1 fails. Both fused-mid schedules supported; numerical/performance qualification pending.
 
 Scope: qfn-engine. Class: advanced.
 
@@ -96603,7 +96603,7 @@ Source: `engines/streaming-llama/prefill_llama.cpp/tools/qfn-engine/qfn-engine.c
 
 ### QFN_NATIVE_NVFP4_DECODE_VECTOR
 
-Opt-in DSV packed FP4 fused vector decode with dynamic Q8_1 activations and original QFN UE4M3 per16 weight scales/tails; requires explicit native-packed decode mode6, conflicts with FP4 residual activations. Both fused-mid schedules retained. No expert weight inversion; persistent activation scratch. Default0 pending full100K numerical/performance and sampler qualification.
+Opt-in DSV packed FP4 fused vector decode with dynamic Q8_1 activations and original QFN UE4M3 per 16 weight scales/tails; requires explicit native-packed decode mode 6, conflicts with FP4 residual activations. Both fused-mid schedules retained. No expert weight inversion; persistent activation scratch. Default 0 pending full 100K numerical/performance and sampler qualification.
 
 Scope: qfn-engine. Class: advanced.
 
@@ -96657,7 +96657,7 @@ Source: `engines/streaming-llama/prefill_llama.cpp/tools/qfn-engine/qfn-engine.c
 
 ### QFN_NATIVE_NVFP4_FUSED_MID
 
-Short native-packed NVFP4 mode6 fused SwiGLU/down pack; independent calibrated gate/up/down scales retained.
+Short native-packed NVFP4 mode 6 fused SwiGLU/down pack; independent calibrated gate/up/down scales retained.
 
 Scope: qfn-engine. Class: advanced.
 
@@ -96687,7 +96687,7 @@ Source: `engines/streaming-llama/flashinfer-sm120/qfn_native_nvfp4_check.py:575`
 
 ### QFN_FUSED_EXPERT_REDUCE
 
-Single CUDA kernel for F32 router-weighted expert reduction in prefill and decode. Preserves rounded products and ascending expert-slot additions, including strided views. Default on after byte-exact GPU/full-vocabulary gates and repeated exact100K gains; 0 retains the original MUL/ADD path.
+Single CUDA kernel for F32 router-weighted expert reduction in prefill and decode. Preserves rounded products and ascending expert-slot additions, including strided views. Default on after byte-exact GPU/full-vocabulary gates and repeated exact 100K gains; 0 retains the original MUL/ADD path.
 
 Scope: qfn-engine. Class: advanced.
 
@@ -96705,7 +96705,7 @@ Source: `engines/streaming-llama/prefill_llama.cpp/tools/qfn-engine/qfn-engine.c
 
 ### QFN_NATIVE_NVFP4_GROUP_PARALLEL
 
-Native-packed NVFP4 long mode6 route grouping: 0 retains original warp scan, 1 selects stable CTA256 contiguous-token grouping with fixed 2 KiB shared storage. Flag1 refuses long requests (nt>4) in modes0..5 at workspace/run admission instead of ignoring the policy. Short requests retain every existing supported mode and compact/vector path. Full route/tail validation retained. Experimental; CUDA grouping arrays and whole-model numeric/performance qualification required before default promotion.
+Native-packed NVFP4 long mode 6 route grouping: 0 retains original warp scan, 1 selects stable CTA256 contiguous-token grouping with fixed 2 KiB shared storage. Flag 1 refuses long requests (nt>4) in modes 0..5 at workspace/run admission instead of ignoring the policy. Short requests retain every existing supported mode and compact/vector path. Full route/tail validation retained. Experimental; CUDA grouping arrays and whole-model numeric/performance qualification required before default promotion.
 
 Scope: qfn-engine. Class: advanced.
 
@@ -104157,7 +104157,7 @@ Source: `engines/streaming-llama/prefill_llama.cpp/tools/qfn-engine/qfn-engine.c
 
 ### QFN_NATIVE_NVFP4_SHARE_GU_INPUT
 
-Experimental exact input sharing for native-packed long mode6 prefill. Flag1 requires every exported gate/up calibration pair to be bit-identical, checked at host admission and in the DLL; it reuses unchanged gate input/scale planes for up while retaining both GEMMs and independent down globals. Default0 retains separate quantizers, unequal-calibration packs, original modes and all short/decode arithmetic. Invalid values and long non-mode6 requests fail loudly. Source candidate only; GPU, whole-model and throughput qualification pending.
+Experimental exact input sharing for native-packed long mode 6 prefill. Flag 1 requires every exported gate/up calibration pair to be bit-identical, checked at host admission and in the DLL; it reuses unchanged gate input/scale planes for up while retaining both GEMMs and independent down globals. Default 0 retains separate quantizers, unequal-calibration packs, original modes and all short/decode arithmetic. Invalid values and long non-mode 6 requests fail loudly. Source candidate only; GPU, whole-model and throughput qualification pending.
 
 Scope: qfn-engine. Class: advanced.
 

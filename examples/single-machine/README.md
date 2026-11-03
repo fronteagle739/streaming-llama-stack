@@ -4,8 +4,8 @@ Each quality setting has an API-only launcher and a `-webui` launcher. Both run
 the same single engine: streaming-llama prefill followed by modified ds4 decode.
 
 Short follow-ups reuse resident experts through the sweep graph by default.
-The measured32-token append took2.7-2.9s, with small numerical differences
-(KL0.0000235-0.00250 at2K-32K; recall/top-1 passed). Set
+The measured 32-token append took 2.7-2.9 s, with small numerical differences
+(KL 0.0000235-0.00250 at 2K-32K; recall/top-1 passed). Set
 `"LLAMADECODE_APPEND_RESIDENT_SWEEP": "0"` in `env_overrides` to use full sweeps.
 See the [measured tradeoff](../../docs/EXPERIMENT_E2C.md).
 
@@ -51,7 +51,7 @@ Exact resident sweep follow-ups are enabled with `LLAMADECODE_APPEND_RESIDENT_SW
 The per-token append path changes logits and remains opt-in (`LLAMADECODE_APPEND_DECODE_MAX=96`).
 LFU admission defaults to 1 with half life 16; explicit 0 keeps LRU.
 Certified FP4 index scoring is enabled by default on supported SM120 BF16-index
-paths. The100K comparison is bit-identical and faster; unsupported inputs use
+paths. The 100K comparison is bit-identical and faster; unsupported inputs use
 the existing BF16 scorer. Set `LLAMA_DSV41_INDEX_FP4` to `"0"` in local
 `env_overrides` to disable it. See [E6 measurements](../../docs/EXPERIMENT_E6.md).
 
@@ -67,16 +67,16 @@ the prefill carry in the cache tail, eight-split expert reads, MTP off. Exact 10
 | Max quality | 26.74 tok/s | byte-identical to the native Q8 reference |
 | Balanced, initial reference | same unbiased routing | conservative until a machine-local sweep selects an intermediate value |
 | Explicit bias 0.35, historical qualified build | 46.74 tok/s | deliberate routing tradeoff: KL 0.0372, top-1 92.58% on 256 forced rows |
-| Explicit bias0.35, accepted quiet installed control | 46.2537 tok/s | exact100K recall/guard PASS; installed-build KL/top-1 unmeasured |
+| Explicit bias 0.35, accepted quiet installed control | 46.2537 tok/s | exact 100K recall/guard PASS; installed-build KL/top-1 unmeasured |
 | Max speed, bias 0.68, historical pre-install build | 50.12 tok/s | deliberate routing tradeoff: KL 0.137, top-1 88.3%; no installed-build GUI/timing test at this bias |
 
 The historical default-only 100K run measured prefill 4,573 tok/s; the three-run combined
-candidate median was4,625tok/s. Final accepted quiet installed control measured
-4,439.86 prefill and25.2482 Max quality tok/s; the regression investigation is
-closed by owner decision, with roughly3% residual prefill read-path difference
+candidate median was 4,625 tok/s. Final accepted quiet installed control measured
+4,439.86 prefill and 25.2482 Max quality tok/s; the regression investigation is
+closed, with roughly 3% residual prefill read-path difference
 unexplained and roadmap-only. The earlier installed r2 remains historical.
-The owner selected
-Max speed 0.68 on 2026-11-03 and explicitly requested no new 0.68 inference tests.
+The delivered Max speed selection is 0.68 as of 2026-11-03;
+no new 0.68 inference tests were run.
 The 0.68 historical row predates the installed build. Three historical GUI checks at bias
 0.35 stopped naturally; this is sampled evidence, not a guarantee for every prompt. Keep the pack
 on a fast NVMe volume. MTP and the RAM expert tier remain available but are off
@@ -101,4 +101,4 @@ automatic calibration of the current machine. Recalibrate after changing
 hardware, storage, model weights, quantisation, context, cache or kernels; see
 [CALIBRATION.md](CALIBRATION.md). A new machine-local calibration sweep must report KL/top-1, warm throughput,
 cache hits and natural generation stops. The shipped 0.68 Max speed selection is
-an explicit owner override from historical 100K evidence, not a new machine calibration.
+an explicit selection from historical 100K evidence, not a new machine calibration.

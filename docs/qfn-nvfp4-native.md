@@ -1,23 +1,23 @@
 # QFN native NVFP4 streaming
 
-Qualified defaults use `dsv-native` mode6 for prefill and decode, the refined
+Qualified defaults use `dsv-native` mode 6 for prefill and decode, the refined
 tensor-core prefill indexer, eight-split expert reads and MTP off. Packed expert
 bytes, persistent activation storage and a CUDA graph per token remain intact.
 The model format is Streaming Llama Pack (`.slpack`); see [format](SLPACK.md),
-[pinned recipes](SLPACK_RECIPES.md) and [exact100K reproduction](QFN_100K_REPRO.md).
+[pinned recipes](SLPACK_RECIPES.md) and [exact 100K reproduction](QFN_100K_REPRO.md).
 
-Named modes select0/0/0.68. The accepted installed0.35 control is a separately
-requested intermediate point, not a new0.68 measurement. At exact100K with100
-discarded warmup and128 measured tokens per mode on the same sequence, the final
-quiet installed control measured4,439.8570 prefill/25.2482 quality/46.2537tok/s
-at bias0.35, recall and guard PASS. Current installed KL/top-1 remain unmeasured.
-Historical0.68 measured50.1246tok/s, KL0.137320748/top-1 88.28125%, before the
-installed build. No new0.68 inference was run. [README evidence](../README.md)
-separates all checkpoints and the owner-accepted regression closure.
+Named modes select 0/0/0.68. The accepted installed 0.35 control is a separately
+requested intermediate point, not a new 0.68 measurement. At exact 100K with 100
+discarded warmup and 128 measured tokens per mode on the same sequence, the final
+quiet installed control measured 4,439.8570 prefill/25.2482 quality/46.2537 tok/s
+at bias 0.35, recall and guard PASS. Current installed KL/top-1 remain unmeasured.
+Historical 0.68 measured 50.1246 tok/s, KL 0.137320748/top-1 88.28125%, before the
+installed build. No new 0.68 inference was run. [README evidence](../README.md)
+separates all checkpoints and the regression closure.
 
 All arithmetic aliases, numeric bias values, samplers, stop behavior, MTP,
-RAM expert tiers and other runtime capabilities remain supported. Workspace12
-remains the default; the optional32MiB setting is unqualified. Fresh source
+RAM expert tiers and other runtime capabilities remain supported. Workspace 12
+remains the default; the optional 32 MiB setting is unqualified. Fresh source
 build and full three-model reproduction qualification remain incomplete.
 
 ## Retained reference and experimental arithmetic
@@ -29,15 +29,15 @@ drafter uses its separate Q2_0 descriptor and existing Q2_0 relayout/execution.
 
 `--nvfp4-mode dsv-native|native-q8|auto|w4a4|mmq|calibrated-w4a4` selects **main-expert prefill** arithmetic.
 `native-q8` is the retained numerical reference. The independent dynamic W4A4
-experiments below do not replace the qualified mode 6 default. `auto` uses upstream native q8_1 below1024
-caller rows and W4A4 from1024; `w4a4` explicitly requests W4A4 even for a short final bank
+experiments below do not replace the qualified mode 6 default. `auto` uses upstream native q8_1 below 1024
+caller rows and W4A4 from 1024; `w4a4` explicitly requests W4A4 even for a short final bank
 chunk. The native-q8 decode reference supports arbitrary physical cache slots.
 The independent `--nvfp4-decode-mode dsv-native|native-q8|calibrated-w4a4` optionally selects calibrated
 target decode, including MTP target verification; the copied Q2 drafter retains its original arithmetic.
 The front end propagates explicit `qfn_nvfp4_mode` and `qfn_nvfp4_decode_mode` settings;
 no sampler/MTP setting is changed. Either explicit mode for a non-NVFP4 main model fails loudly.
 
-W4A4 internally uses bounded16384-row windows while preserving the original caller phase,
+W4A4 internally uses bounded 16384-row windows while preserving the original caller phase,
 logical attention tile and selected separate-MoE chunk. This is not a changed public tile.
 The native q8_1, dynamic W4A4 and MMQ paths use their pinned upstream numerical policies.
 Explicit `mmq` selects the retained MMQ/F32-q8 candidate for main prefill, including final
@@ -56,13 +56,13 @@ the complete calibration metadata and independent calibrated ABI1 exports before
 The scalar array remains F32 on a stable GPU allocation admitted before cache sizing;
 each calibrated custom node depends on the actual layer `[3,512]` view. Optional calibrated
 decode retains separate logical calibration IDs and physical cache IDs. Its stream gathers every
-selected raw blob and calibration triplet into one compact route bank per row, preserving all16 tail
+selected raw blob and calibration triplet into one compact route bank per row, preserving all 16 tail
 bytes, output order and source calibrated gate/up/down quantization. The independent decode ABI
 and complete persistent workspace are required before cache admission; unsupported requests fail.
 Discarded replay/timeout attempts may use repeated safe physical slot-zero placeholders while
 their logical selections remain distinct. No cache policy, capacity request or RAM/MTP feature
 is reduced, and no failed calibrated request selects native-q8. The phase workspace query
-reserves the full requested chunk (calibrated:47,542,528B atT1,339,202,560B atT2048,
+reserves the full requested chunk (calibrated: 47,542,528B atT1,339,202,560B atT2048,
 2,382,369,280B atT16384). No activation field is dropped or replaced by a dynamic fallback.
 No model-matched full-engine numeric or performance claim follows from a successful build.
 
@@ -80,7 +80,7 @@ predicate without discarding temperature or filters. Actual NVIDIA add_bos=false
 Global EOS token IDs remain independent from per-request detokenized stop strings.
 
 The custom CUDA node returns unweighted F32 `[2560,K,T]` rows in router order. Its raw-I8
-source has2764816-byte stride, with all three921600-byte matrices and the16-byte tail.
+source has 2764816-byte stride, with all three 921600-byte matrices and the 16-byte tail.
 The adjacent `qfn-basalt-nvfp4.dll` is resolved by absolute executable path and must expose
 ABI1 workspace/prepare/run. DLL/ABI/format admission fails before GPU/model allocation.
 Kernel preparation precedes graph capture; missing support never selects CPU or another format.
@@ -95,7 +95,7 @@ for these discarded attempts and hot/repeated entries.
 
 Source pin, original license notices, complete vendored closure and C ABI are recorded in
 `engines/qfn-basalt-nvfp4/PROVENANCE.json` and its README. The integration follows the
-existing DSV4.1 native-FFN custom bridge and keeps ggml type40 reserved.
+existing DSV4.1 native-FFN custom bridge and keeps ggml type 40 reserved.
 
 ## Portable build prerequisites
 
@@ -132,8 +132,8 @@ CPU-only checks use the same executable: `--nvfp4-node-self-test`,
 `--sampling-self-test`, and `--pack-check --model FILE`. CUDA parity and full-model gates
 require the coordinator's exclusive GPU lease, memory/paging guard and explicit admission.
 The unfiltered stable `qfn-op-test.exe` retains all prior Q2_0, GDN, QSA, HC and V3 checks
-and adds actual NVFP4 CUSTOM dispatch at4 native-q8 rows and1024 W4A4 rows. It compares
+and adds actual NVFP4 CUSTOM dispatch at 4 native-q8 rows and 1024 W4A4 rows. It compares
 unweighted output with the same pinned DLL, validates external router multiply/sequential
 top-k reduction, and requires static CUDA capture/replay with stable inputs and scratch.
 These wiring checks supplement independent DLL arithmetic parity; they do not replace
-matched full-model numeric, MTP/append/state/recall or100K timing gates.
+matched full-model numeric, MTP/append/state/recall or 100K timing gates.

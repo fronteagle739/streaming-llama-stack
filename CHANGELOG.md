@@ -7,11 +7,11 @@
   canonical provenance, inverse checks and explicit memory supervision. Preserve
   dense quantization provenance, MTP, vision, profiles, sampler defaults and all
   supported runtime controls. Complete raw-source-plus-pinned-auxiliary proof
-  passed: all25 source pins/all26 regenerated sections, inverse/HC8 and complete
-  reference readback. Canonical131,730,218,740bytes has SHA256
+  passed: all 25 source pins/all 26 regenerated sections, inverse/HC8 and complete
+  reference readback. Canonical 131,730,218,740 bytes has SHA256
   `195df4842abf2dd335ad706be6518611b2a433e806d98c4edcc8fe5e2b309a92`.
   Seven declared provenance fields retain every metadata field; no second full
-  model copy was written. Pin Python3.12.10/NumPy2.5.0/regex2026.5.9/psutil7.2.2
+  model copy was written. Pin Python 3.12.10/NumPy 2.5.0/regex 2026.5.9/psutil 7.2.2
   through requirements-pack.txt. Dense/PLE quantization and the explicit
   auxiliary dependency remain; the complete pack is not raw-source lossless.
 - Add the audited exact 100K public-text fixture reconstruction and portable
@@ -21,19 +21,18 @@
 - Select QFN Max speed bias 0.68 from historical 100K evidence: 50.12 tok/s,
   mean KL 0.13732 and top-1 88.28125%. Those receipts predate the installed
   build. No new 0.68 inference was run. Retain numeric 0.35 and its prior data.
-- Accept the final quiet installed QFN control A2 at4,439.86 /25.2482 /
-  46.2537 tok/s (prefill /quality /bias-0.35), exact100K with100 warmup and128
+- Accept the final quiet installed QFN control A2 at 4,439.86 /25.2482 /
+  46.2537 tok/s (prefill /quality /bias-0.35), exact 100K with 100 warmup and 128
   measured tokens per mode, same sequence, MTP off/eight read parts, recall
-  and guard PASS. Keep the historical4,573.37 /26.7441 /46.7450 checkpoint
-  separate; supersede the earlier installed4,326.40 /25.6518 /42.8092 row.
-- Close the regression investigation by owner decision: engine/DLL changes
-  cleared, most earlier difference accepted as concurrent load. Control
-  range/mean spreads were1.3311% /4.4259% /1.3186%. The residual roughly3%
-  prefill read-path difference remains unexplained and roadmap-only, below
-  the owner's action threshold. Workspace32 and fresh-placement performance
-  remain unproven; no further workspace/storage tests for this delivery.
-  Current installed-build KL/top-1 remain queued rather than borrowed from
-  historical metrics.
+  and guard PASS. Keep the historical 4,573.37 /26.7441 /46.7450 checkpoint
+  separate; supersede the earlier installed 4,326.40 /25.6518 /42.8092 row.
+- Close the regression investigation after the controlled same-pack 0.35
+  comparison cleared engine/DLL changes; concurrent load explains most of the
+  earlier gap. Installed range/mean spreads were 1.3311% / 4.4259% / 1.3186%.
+  The residual roughly 3% prefill read-path difference remains unexplained and
+  on the roadmap. Workspace 32 and fresh-placement performance remain unproven;
+  no further workspace/storage tests are planned for this delivery. Current
+  installed-build KL/top-1 remain queued; historical metrics are separate.
 - Document both models' immutable Hugging Face links, conversion/launch commands,
   settings and evidence boundaries. DSV4.1's historical 100K decode is
   7.39 /24.11 tok/s with a 100-discarded +899-timed protocol. Its separate
